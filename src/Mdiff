@@ -1,5 +1,4 @@
 #!/usr/bin/ksh -p
-# $Id: Mdiff,v 1.6 1998/02/12 14:03:09 archiv Exp $
 # Author: J.E. Wulff
 #
 name=${0##*/}
@@ -8,11 +7,12 @@ files='[Mm]akefile* *.[chv]*'
 i=0
 e=0
 q=0
+li=0
 w=-w
 while true; do
     case $1 in
     -h*)
-	echo "Usage:	$name [-ieh] [+w] [-q] [directory] [file ...]" >&2
+	echo "Usage:	$name [-lieh] [+w] [-q] [directory] [file ...]" >&2
 	echo '	-i	identical files output:	==== file ====' >&2
 	echo '		default: ignore identical files in output' >&2
 	echo '	-e	nonexisting files put:	**** file does not exist' >&2
@@ -20,16 +20,42 @@ while true; do
 	echo '		if files exist output:	#### file ####' >&2
 	echo '	+w	whitespace (spaces and tabs) is significant' >&2
 	echo '		default: whitespace is ignored' >&2
+	echo '	-l	list names of files which differ' >&2
+	echo '	-li	list names of files which are identical' >&2
 	echo '	-q	quiet operation - return status only' >&2
 	echo '	-h	this help text' >&2
 	echo '	if first file argument is not a directory, .. is used' >&2
 	echo "	if no files are specified, '$files' is used" >&2
 	echo '	return status 0 (true) if all files are identical' >&2
 	echo '	return status n (false) number of files which differ' >&2
+	echo '$Id: Mdiff,v 1.7 1998/02/12 14:52:05 archiv Exp $' >&2
 	exit 2
 	;;
     -q*)
 	q=1
+	shift
+	;;
+    -l)
+	let "li|=1"
+	q=1
+	shift
+	;;
+    -li|-il)
+	li=3
+	q=1
+	shift
+	;;
+    -le|-el)
+	let "li|=1"
+	q=1
+	e=1
+	shift
+	;;
+    -lei|-lie|-eli|-eil|-ile|-iel)
+	li=3
+	q=1
+	e=1
+	i=1
 	shift
 	;;
     -e)
@@ -38,11 +64,13 @@ while true; do
 	;;
     -i)
 	i=1
+	let "li|=2"
 	shift
 	;;
     -ei|-ie)
 	e=1
 	i=1
+	let "li|=2"
 	shift
 	;;
     +w)
@@ -79,7 +107,11 @@ status=0
 for f in $files; do
     if [[ -f $dir/$f ]]; then
 	if cmp -s $f $dir/$f; then
-	    [[ $i = 0 ]] || echo "========== $f =========="
+	    if [[ $q = 0 ]]; then
+		[[ $i = 0 ]] || echo "========== $f =========="
+	    elif [[ $li = 3 ]]; then
+		echo $f
+	    fi
 	else
 	    let status+=1
 	    if [[ $q = 0 ]]; then
@@ -88,11 +120,13 @@ for f in $files; do
 		ls -lL $f
 		ls -lL $dir/$f
 		diff $w $f $dir
+	    elif [[ $li = 1 ]]; then
+		echo $f
 	    fi
 	fi
     elif [[ $e != 0 ]]; then
 	let status+=1
-	if [[ $q = 0 ]]; then
+	if [[ $q = 0 ]] || [[ $li > 0 ]]; then
 	    echo "********** $dir/$f does not exist"
 	fi
     fi
