@@ -1,4 +1,4 @@
-#! /usr/bin/perl -w
+#! /usr/bin/perl
 
 #################################################################
 #
@@ -35,7 +35,7 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix,v 1.7 2002/08/14 12:06:44 jw Exp $
+$Id: pplstfix,v 1.8 2002/10/19 23:33:47 jw Exp $
 .
 
 use vars qw($opt_h);

@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w -P
+#!/usr/bin/perl -P
 
 ########################################################################
 #
@@ -96,7 +96,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.26 2002/06/20 12:08:02 jw Exp $
+$Id: iCserver,v 1.27 2002/10/19 23:34:02 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_r $opt_h);

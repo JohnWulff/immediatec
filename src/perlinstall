@@ -20,20 +20,23 @@
 #	to
 #		#//define TIME_HIRES
 #	this allows the use of those scripts with reduced functionality
+#	Also backup each modified script with the extension .hires
+#
+#	Option -r restores original scripts from backups *.hires
 #
 ########################################################################
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-uh] [<srcdir>]' >&2
+    echo "Usage:	${0##*/}" >&2
     echo '		return the correct @INC path to install perl-modules' >&2
     echo '		error return if no @INC path found' >&2
-    echo '	Alternatively' >&2
+    echo "Or:	${0##*/} [-trh] [<srcdir>]" >&2
     echo '	-t	test and modify perlscripts if Time::HiRes not installed' >&2
-    echo '	-r	restore perlscripts to use Time::HiRes' >&2
+    echo '	-r	restore modified perlscripts to use Time::HiRes' >&2
     echo '		default source directory <srcdir> is .' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: perlinstall,v 1.7 2002/07/06 10:14:41 jw Exp $' >&2
+    echo '	$Id: perlinstall,v 1.8 2002/10/20 01:11:27 jw Exp $' >&2
 }
 
 srcdir='.'
@@ -57,14 +60,18 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-if [ -d $1 ]; then
+if [ -d "$1" ]; then
     srcdir=$1
     shift
 fi
 
-for d in /usr/lib/perl5/site_perl/5*; do
-    if [ -d "$d" ] && [ -d "$d/i586-linux" ]; then
-	perlPath=$d/i586-linux;	# find the highest version
+for d in $(perl -e 'print "@INC\n"'); do
+    if [ "$d" != '.' ] && [ -d "$d" ]; then
+	perlPath=$d;	# should always find direcory
+	temp="${perlPath#*site_perl}"
+	if [ "$perlPath" != "$temp" ]; then
+	    break;	# stop on the first site_perl entry
+	fi
     fi
 done
 
@@ -82,7 +89,7 @@ if [ -n "$t" ]; then
 elif [ -n "$r" ]; then
     # makes sure that repeated install and restore works
     for hires in ${srcdir}/*.hires; do
-	if [ -f $hires ]; then
+	if [ -f "$hires" ]; then
 	    script=${hires%.hires}
 	    echo "restore $hires to $script"
 	    mv -f $hires $script
