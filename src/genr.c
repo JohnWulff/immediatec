@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.30 2001/01/23 22:59:36 jw Exp $";
+"@(#)$Id: genr.c,v 1.31 2001/02/01 12:10:41 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -243,6 +243,34 @@ op_push(			/* reduce List_e stack to links */
     }
     return (rlp);
 } /* op_push */
+
+/********************************************************************
+ *
+ *	numeric constant push
+ *
+ *******************************************************************/
+
+int
+const_push(Lis * expr)
+{
+    char *	cp = expr->f;
+    char *	ep = expr->l;
+    int		bc = 30;
+    char	buf[30];
+    char *	bp = buf;
+    Symbol *	symp;
+    while (cp < ep) {
+	if (--bc == 0 || !isdigit(*bp++ = *cp++)) {
+	    return 1;			/* error - too big or not a digit */
+	}
+    }
+    *bp = 0;		/* terminate - there is room in buf */
+    if ((symp = lookup(buf)) == 0) {
+	symp = install(buf, NCONST, ARITH);	/* becomes NVAR */
+    }
+    expr->v = sy_push(symp);
+    return 0;				/* correct - no error */
+} /* const_push */
 
 /********************************************************************
  *

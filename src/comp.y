@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.37 2001/01/13 17:47:02 jw Exp $";
+"@(#)$Id: comp.y,v 1.38 2001/02/01 12:10:41 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -26,7 +26,8 @@ static void	yyerror(char *);	/* called for yacc syntax error */
 int		ynerrs;			/* count of yyerror() calls */
 		/* NOTE yynerrs is reset for every call to yaccpar() */
 static void	yyerrls(char *);	/* called for yacc error list */
-static void	warn1(void);
+static void	warnBit(void);
+static void	warnInt(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
 static char *	ccfrag;			/* flag for cexini CCFRAG syntax */
 static char	ccbuf[32];		/* buffer for NUMBER CCFRAG */
@@ -86,7 +87,7 @@ pu(int t, char * token, Lis * node)
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
 %type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn
-%type	<sym>	cstatic decl
+%type	<sym>	cstatic decl dasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
 %type	<list>	cref ctref dexpr
 %type	<val>	cblock declHead
@@ -122,6 +123,7 @@ simplestatement:
 	  decl			{ $$ = $1; }
 	| cstatic		{ $$ = $1; }
 	| asgn			{ $$ = $1; }
+	| dasgn			{ $$ = $1; }
 	| wasgn			{ $$ = $1; }
 	| xasgn			{ $$ = $1; }
 	| casgn			{ $$ = $1; }
@@ -130,8 +132,8 @@ simplestatement:
 
 decl	: declHead UNDEF	{
 		$$.v = $2.v;
-		$$.v->ftype = $1.v & 0xff;
-		$$.v->type = $1.v >> 8;
+		$$.v->ftype = $1.v & 0xff;	/* TYPE int ARITH or bit GATE */
+		$$.v->type = $1.v >> 8;		/* UNDEF for IMM TYPE */
 	    }
 	;
 
@@ -142,6 +144,7 @@ declHead			/* NOTE: stype gets type out of ftype */
 	| IMM TYPE		{ $$.v = stype = $2.v->ftype; }
 	| EXTERN IMM TYPE	{ $$.v = stype = $3.v->ftype; }
 	| decl ','		{ $$.v = stype;	/* first TYPE */ }
+	| dasgn ','		{ $$.v = stype;	/* first TYPE */ }
 	;
 
 aexpr	: expr			{
@@ -185,30 +188,45 @@ aexpr	: expr			{
 	    }
 	;
 
-wasgn	: WACT '=' aexpr	{
+wasgn	: WACT '=' aexpr	{			/* WACT = lex_act[OUTW] */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; warnInt(); YYERROR; }
 		$$.v = qp_asgn(&$1, &$3, ARITH);	/* assign to output word */
 	    }
 	;
 
-xasgn	: XACT '=' aexpr	{
+xasgn	: XACT '=' aexpr	{			/* XACT = lex_act[OUTX] */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
 		$$.v = qp_asgn(&$1, &$3, GATE);		/* assign to output bit */
 	    }
 	;
 
-asgn	: UNDEF '=' aexpr	{
+dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
+		if ($3.v == 0) {
+		    if ($1.v->ftype != ARITH) { $$.v = 0; warnBit(); YYERROR; }
+		    else if (const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
+		}
+		if ($1.v->type != UDF && $1.v->type != ERR) {
+		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
+		if (debug & 02) pu(0, "dasgn", (Lis*)&$$);
+	    }
+	;
+
+asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
+		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
 		$1.v->ftype = GATE;
 		$$.v = op_asgn(&$1, &$3, GATE);	/* UNDEF is default GATE */
 		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -218,24 +236,7 @@ asgn	: UNDEF '=' aexpr	{
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) {
-		    char *	cp = $3.f;
-		    char *	ep = $3.l;
-		    int		bc = 30;
-		    char	buf[30];
-		    char *	bp = buf;
-		    Symbol *	symp;
-		    while (cp < ep) {
-			if (--bc == 0 || !isdigit(*bp++ = *cp++)) {
-			    $$.v = 0; warn1(); YYERROR;
-			}
-		    }
-		    *bp = 0;		/* terminate - there is room in buf */
-		    if ((symp = lookup(buf)) == 0) {
-			symp = install(buf, NCONST, ARITH); /* becomes NVAR */
-		    }
-		    $3.v = sy_push(symp);	/* ZZZ is it safe to use $3.v ??? */
-		}
+		if ($3.v == 0 && const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -243,6 +244,7 @@ asgn	: UNDEF '=' aexpr	{
 		$$.v = op_asgn(&$1, &$3, ARITH);	/* arithmetic ALIAS */
 		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
+	;
 
 expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $1.l;
@@ -306,7 +308,7 @@ expr	: UNDEF			{
 	    }
 	| BFORCE '(' aexpr ',' lexpr ')'	{	/* F(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
-		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
 		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -314,19 +316,11 @@ expr	: UNDEF			{
 	    }
 	| expr '|' expr		{		/* binary | */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($1.v == 0) {
-		    $$.v = $3.v;
-		    if ($$.v && $$.v->le_sym->ftype != ARITH) {
-			warn1(); YYERROR;
-		    }
-		} else if ($3.v == 0) {
-		    $$.v = $1.v;
-		    if ($$.v->le_sym->ftype != ARITH) {
-			warn1(); YYERROR;
-		    }
-		} else if ($1.v->le_sym->ftype == ARITH &&
-		    $3.v->le_sym->ftype == ARITH) {
+		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
+		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise | */
+		} else if ($1.v == 0 || $3.v == 0) {
+		    warnBit(); YYERROR;
 		} else {
 		    $$.v = op_push(op_force($1.v, GATE),
 			OR, op_force($3.v, GATE));	/* logical | */
@@ -338,19 +332,11 @@ expr	: UNDEF			{
 	    }
 	| expr '^' expr		{		/* binary ^ */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($1.v == 0) {
-		    $$.v = $3.v;
-		    if ($$.v && $$.v->le_sym->ftype != ARITH) {
-			warn1(); YYERROR;
-		    }
-		} else if ($3.v == 0) {
-		    $$.v = $1.v;
-		    if ($$.v->le_sym->ftype != ARITH) {
-			warn1(); YYERROR;
-		    }
-		} else if ($1.v->le_sym->ftype == ARITH &&
-		    $3.v->le_sym->ftype == ARITH) {
+		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
+		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise ^ */
+		} else if ($1.v == 0 || $3.v == 0) {
+		    warnBit(); YYERROR;
 		} else {
 		    $$.v = op_xor(op_force($1.v, GATE),
 			op_force($3.v, GATE));		/* logical ^ */
@@ -362,19 +348,11 @@ expr	: UNDEF			{
 	    }
 	| expr '&' expr		{		/* binary & */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($1.v == 0) {
-		    $$.v = $3.v;
-		    if ($$.v && $$.v->le_sym->ftype != ARITH) {
-			warn1(); YYERROR;
-		    }
-		} else if ($3.v == 0) {
-		    $$.v = $1.v;
-		    if ($$.v->le_sym->ftype != ARITH) {
-			warn1(); YYERROR;
-		    }
-		} else if ($1.v->le_sym->ftype == ARITH &&
-		    $3.v->le_sym->ftype == ARITH) {
+		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
+		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise & */
+		} else if ($1.v == 0 || $3.v == 0) {
+		    warnBit(); YYERROR;
 		} else {
 		    $$.v = op_push(op_force($1.v, GATE),
 			AND, op_force($3.v, GATE));	/* logical & */
@@ -508,8 +486,8 @@ expr	: UNDEF			{
 
 lexpr	: aexpr ',' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($1.v == 0) { $$.v = $3.v; warn1(); YYERROR; }
-		if ($3.v == 0) { $$.v = $1.v; warn1(); YYERROR; }
+		if ($1.v == 0) { $$.v = $3.v; warnBit(); YYERROR; }
+		if ($3.v == 0) { $$.v = $1.v; warnBit(); YYERROR; }
 		if (($$.v = op_push(op_force($1.v, GATE),
 		    LOGC, op_not(op_force($3.v, GATE)))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1170,10 +1148,16 @@ warning(				/* print warning message */
 } /* warning */
 
 static void
-warn1(void)
+warnBit(void)
 {
-    warning("only immediate variables allowed", NULL);
-} /* warn1 */
+    warning("no constant allowed in bit expression", NULL);
+} /* warnBit */
+
+static void
+warnInt(void)
+{
+    warning("no imm variable to trigger arithmetic expression", NULL);
+} /* warnInt */
 
 void
 execerror(			/* recover from run-time error */

@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.13 2001/01/10 16:01:42 jw Exp $";
+"@(#)$Id: comp.h,v 1.14 2001/02/01 12:10:41 jw Exp $";
 /*
  *	"comp.h"
  *
@@ -66,6 +66,7 @@ extern List_e * op_force(		/* force linked Symbol to ftype */
 	    List_e *, uchar);		/*   lp, ftyp    */
 extern List_e *	op_push(		/* reduce List_e stack to links */
 	    List_e *, uchar, List_e *);	/*   left, typ, right   */
+extern int	const_push(Lis * expr);	/* numeric constant push */
 extern List_e *	op_xor(			/* special exclusive or push */
 	    List_e *, List_e *);	/*   left, right   */
 extern List_e *	op_not(List_e *);	/* logical negation */
