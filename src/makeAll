@@ -25,12 +25,14 @@ usage ()
     echo '	call make for icc, ict and libict.a with the correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
-    echo '	-c	make icc with YYDEBUG -t trace output possible' >&2
+    echo '	-c	make icc with YYDEBUG' >&2
+    echo '	-r	make icr with YYDEBUG -t trace output possible' >&2
     echo '	-t	make ict with YYDEBUG -t trace output possible' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain with YYDEBUG' >&2
-    echo '		see usage of icc, ict and applications for other options' >&2
-    echo '	-C	make icc only without modifying cexe.c' >&2
+    echo '	see usage of icc, icr, ict and applications for other options' >&2
+    echo '	-C	make icc only; generate an empty cexe.c' >&2
+    echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-L	make libict.a only' >&2
     echo '	-M	make lmain only' >&2
@@ -41,38 +43,51 @@ usage ()
     echo '	-z	make with -DLONG16        (make clean required first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.14 2003/12/30 17:13:04 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.15 2004/01/03 08:32:39 jw Exp $' >&2
+}
+
+makeIcr ()
+{
+    mv comp.o genr.o gram.o lexc.o link.o main.o outp.o rsff.o scan.o Make_tmp 2> /dev/null
+    if [ -d IcrObjs ]; then
+	mv IcrObjs/* .
+    else
+	mkdir IcrObjs
+    fi
+    make OPT="-DRUN$r$s$z" CFLAGS="$cflags" icr
+    mv comp.o genr.o gram.o lexc.o link.o main.o outp.o rsff.o scan.o IcrObjs
+    mv Make_tmp/* . 2> /dev/null
 }
 
 makeIct ()
 {
-    mv main.o comp.o genr.o gram.o lexc.o link.o rsff.o scan.o Make_tmp
-    if [ -d PptcObjs ]; then
-	mv PptcObjs/* .
+    mv comp.o genr.o gram.o ict.o lexc.o link.o main.o outp.o rsff.o scan.o tcpc.o Make_tmp 2> /dev/null
+    if [ -d IctObjs ]; then
+	mv IctObjs/* .
     else
-	mkdir PptcObjs
+	mkdir IctObjs
     fi
     make OPT="-DTCP$t$s$z" CFLAGS="$cflags" ict
-    mv main.o ict.o comp.o genr.o gram.o lexc.o link.o rsff.o scan.o PptcObjs
-    mv Make_tmp/* .
+    mv comp.o genr.o gram.o ict.o lexc.o link.o main.o outp.o rsff.o scan.o tcpc.o IctObjs
+    mv Make_tmp/* . 2> /dev/null
 }
 
 makeLib ()
 {
-    mv scid.o link.o rsff.o scan.o Make_tmp
-    if [ -d LoadObjs ]; then
-	mv LoadObjs/* .
+    mv ict.o link.o rsff.o scan.o tcpc.o  Make_tmp 2> /dev/null
+    if [ -d LibObjs ]; then
+	mv LibObjs/* .
     else
-	mkdir LoadObjs
+	mkdir LibObjs
     fi
     make OPT="-DLOAD -DTCP$l$s$z" CFLAGS="$cflags" libict.a
-    mv ict.o scid.o link.o rsff.o scan.o LoadObjs
-    mv Make_tmp/* .
+    mv ict.o link.o rsff.o scan.o tcpc.o  LibObjs
+    mv Make_tmp/* . 2> /dev/null
 }
 
 makeLmain ()
 {
-    mv gram.o lexc.o Make_tmp
+    mv gram.o lexc.o Make_tmp 2> /dev/null
     if [ -d LmainObjs ]; then
 	mv LmainObjs/* .
     else
@@ -80,17 +95,19 @@ makeLmain ()
     fi
     make OPT="-DLMAIN$m$s$z" CFLAGS="$cflags" lmain
     mv gram.o lexc.o LmainObjs
-    mv Make_tmp/* .
+    mv Make_tmp/* . 2> /dev/null
 }
 
 q=""
 c=""
+r=""
 t=""
 l=""
 m=""
 s=""
 z=""
 C=0
+R=0
 T=0
 L=0
 M=0
@@ -106,12 +123,14 @@ while [ $# -gt 0 ]; do
 	    q*)	q=1;;		# echo only - dont kill
 	    g*)	cflags="-g";;	# debugging, no optimisation
 	    c*)	c="-DYYDEBUG";;
+	    r*)	r=" -DYYDEBUG";;
 	    t*)	t=" -DYYDEBUG";;
 	    l*)	l=" -DYYDEBUG";;
 	    m*)	m=" -DYYDEBUG";;
 	    s*)	s=" -DINT_MAX=32767";;
 	    z*)	z=" -DLONG16";;
 	    C*)	C=1; ALL=0;;
+	    R*)	R=1; ALL=0;;
 	    T*)	T=1; ALL=0;;
 	    L*)	L=1; ALL=0;;
 	    M*)	M=1; ALL=0;;
@@ -134,16 +153,16 @@ if [ -f Make_tmp ]; then
 fi
 test -d Make_tmp || mkdir Make_tmp;
 
-if [ $ALL = 1 ]; then
-    if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
-	rm -f cexe.o
-	cp -p cexe.c_empty cexe.c
-    fi
-fi
-
 if [ $ALL = 1 ] || [ $C = 1 ]; then
     echo "make OPT=\"$c$s$z\" CFLAGS=\"$cflags\" icc"
     make OPT="$c$s$z" CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    if [ -z "$q" ]; then echo './icc -c < /dev/null		# make empty cexe.c'; fi
+    ./icc -c < /dev/null
+fi
+
+if [ $ALL = 1 ] || [ $R = 1 ]; then
+    echo "make OPT=\"-DRUN$r$s$z\" CFLAGS=\"$cflags\" icr"
+    makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $T = 1 ]; then

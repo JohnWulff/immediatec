@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.38 2003/12/30 15:42:10 jw Exp $";
+"@(#)$Id: load.c,v 1.39 2004/01/02 13:36:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -87,6 +87,39 @@ static const char *	usage =
 "                        typing q or ctrl-C quits run mode\n"
 "compiled by:\n"
 "%s\n";
+
+/********************************************************************
+ *
+ *	Constant compile typing data
+ *
+ *******************************************************************/
+
+char *		full_type[]  = { FULL_TYPE };
+char *		full_ftype[] = { FULL_FTYPE };
+unsigned char	types[]      = { TYPES };
+unsigned char	ftypes[]     = { FTYPES };
+char		os[]         = OPS;
+char		fos[]        = FOPS;
+
+unsigned char	bitMask[]    = {
+    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
+};
+
+/********************************************************************
+ *
+ *	I/O arrays also used at compile time
+ *
+ *******************************************************************/
+
+Gate *		IX_[IXD*8];		/* pointers to bit Input Gates */
+Gate *		IB_[IXD];		/* pointers to byte Input Gates */
+Gate *		IW_[IXD];		/* pointers to word Input Gates */
+#if INT_MAX != 32767 || defined (LONG16)
+Gate *		IL_[IXD];		/* pointers to long Input Gates */
+#endif
+Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
+unsigned char	QX_[IXD];		/* Output bit field slots */
+char		QT_[IXD];		/* Output type of slots */
 
 /********************************************************************
  *
@@ -210,7 +243,6 @@ main(
 	}
     }
     debug &= 03743;			/* allow only cases specified */
-    initIO();				/* catch memory access signal */	
 
 /********************************************************************
  *

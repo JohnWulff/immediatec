@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.36 2003/12/13 15:29:02 jw Exp $
+# @(#)$Id: Makefile.in,v 1.37 2004/01/03 07:39:37 jw Exp $
 
 ############################################################
 #
@@ -16,12 +16,13 @@
 #	use GNU make	28-Jul-96
 #	use GNU autoconf and configure	6-Mar-2001
 #
-#	to make icc, make with OPT='-DYYDEBUG'
+#	to make icc, make with OPT=''
+#	to make icr, make with OPT='-DRUN -DYYDEBUG'
 #	to make ict, remove all objects and make with OPT='-DTCP'
 #	to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
 #	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #
-#	auxiliary script makeAll -cm called for all: does this automatically
+#	auxiliary script makeAll -rm called for all: does this automatically
 #
 ############################################################
 
@@ -69,22 +70,26 @@ SHELL = /bin/sh
 
 ###########################################################
 
-COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) cexe.$(O) gram.$(O) lexc.$(O)
+COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O)
 POBJ =	link.$(O) rsff.$(O) scan.$(O)
 
 #### Standalone versions ###################################
+#### make icr and lmain with YYDEBUG, since they need it for normal operation
 
 all:
-	@$(srcdir)/makeAll -cm
+	@$(srcdir)/makeAll -rm
 
 quiet:
-	@$(srcdir)/makeAll -qcm
+	@$(srcdir)/makeAll -qrm
 
-icc:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
-	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
+icc:	$(srcdir)/Makefile main.$(O) scid.$(O) $(COBJ)
+	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) $(COBJ)
 
-ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
-	$(CC) $(LDFLAG) -o ict main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+icr:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAG) -o icr main.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
+
+ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAG) -o ict main.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
 
 #### Run-time library ######################################
 
@@ -132,10 +137,6 @@ $(srcdir)/scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(sr
 $(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
 	ident $(srcdir)/icc.v | $(srcdir)/README.tpl > $(srcdir)/../README;
 
-$(srcdir)/cexe.c:	$(srcdir)/cexe.h
-	sed -e '/^[A-Z]$$/d' $(srcdir)/cexe.h > $(srcdir)/cexe.c
-	cp -f $(srcdir)/cexe.c $(srcdir)/cexe.c_empty
-
 $(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.sed
 
 $(srcdir)/gram.c:	$(srcdir)/gram.y $(srcdir)/gram.sed
@@ -152,6 +153,7 @@ install:	installdirs
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL_PROGRAM} Msg.pm   `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc
+	${INSTALL_PROGRAM} icr      ${bindir}/${binprefix}icr
 	${INSTALL_PROGRAM} ict      ${bindir}/${binprefix}ict
 	${INSTALL_PROGRAM} iCbox    ${bindir}/${binprefix}iCbox
 	${INSTALL_PROGRAM} iClive   ${bindir}/${binprefix}iClive
@@ -169,6 +171,7 @@ uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)
 	rm -f `$(srcdir)/perlinstall`/Msg.pm
 	rm -f ${bindir}/${binprefix}icc
+	rm -f ${bindir}/${binprefix}icr
 	rm -f ${bindir}/${binprefix}ict
 	rm -f ${bindir}/${binprefix}iCbox
 	rm -f ${bindir}/${binprefix}iClive
@@ -180,7 +183,7 @@ uninstall:
 	rm -f ${prefix}/include/icc.h
 
 clean:
-	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a lmain
+	rm -rf *.$(O) comp.c gram.c lexc.c IcrObjs IctObjs LibObjs LmainObjs cexe.c scid.c core icc icr ict libict.a lmain
 
 distclean: clean
 	rm -f Makefile config.status config.log config.cache
@@ -193,7 +196,7 @@ init.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
 symb.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
 
 comp.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
-main.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+main.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h
 outp.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
 cexe.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
 

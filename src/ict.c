@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.35 2003/12/31 17:05:58 jw Exp $";
+"@(#)$Id: ict.c,v 1.36 2004/01/02 17:36:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -59,15 +59,6 @@ Gate *		c_list;			/* main clock list "iClock" */
 static Gate	flist;
 Gate *		f_list;			/* auxiliary function clock list */
 
-Gate *		IX_[IXD*8];		/* pointers to bit Input Gates */
-Gate *		IB_[IXD];		/* pointers to byte Input Gates */
-Gate *		IW_[IXD];		/* pointers to word Input Gates */
-#if INT_MAX != 32767 || defined (LONG16)
-Gate *		IL_[IXD];		/* pointers to long Input Gates */
-#endif
-Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
-unsigned char	QX_[IXD];		/* Output bit field slots */
-char		QT_[IXD];		/* Output type of slots */
 unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
 unsigned char	QMM;			/* Output cage mask for 1 rack */
 
@@ -76,9 +67,9 @@ unsigned char	pdata[IXD];		/* input differences */
 short		dis_cnt;
 short		error_flag;
 
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	scan_cnt;			/* count scan operations */
 unsigned	link_cnt;			/* count link operations */
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	glit_cnt;			/* count glitches */
 unsigned long	glit_nxt;			/* count glitch scan */
 #endif
@@ -119,6 +110,7 @@ icc(
     float	delay = 0.0;	/* timer processing stopped */
     int		retval;
 
+    initIO();				/* catch memory access signal */	
     if (outFP != stdout) {
 	fclose(outFP);
 #ifndef LOAD
@@ -306,20 +298,21 @@ icc(
 	}
 #endif
 
+	if (scan_cnt || link_cnt) {
+	    fprintf(outFP, "\n");
 #if YYDEBUG
-	if (debug & 0300) {		/* osc or detailed info */
-	    display();			/* inputs and outputs */
-	}
-
-	if ((scan_cnt || link_cnt) && (debug & 02000)) {
-	    if (glit_cnt) {
-		fprintf(outFP, "glitch = %u, %lu  ",
-		glit_cnt, glit_nxt);
+	    if (debug & 02000) {
+		fprintf(outFP, "scan = %5u  link = %5u",
+		    scan_cnt, link_cnt);
+		if (glit_cnt) {
+		    fprintf(outFP, "  glitch = %5u, %lu", glit_cnt, glit_nxt);
+		}
+		fprintf(outFP, "\n");
 	    }
-	    fprintf(outFP, "scan = %u  link = %u\n", scan_cnt, link_cnt);
-	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
-	}
+	    glit_cnt = glit_nxt =
 #endif
+	    scan_cnt = link_cnt = 0;
+	}
 
 /********************************************************************
  *

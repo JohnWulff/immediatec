@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.34 2003/12/31 16:16:06 jw Exp $";
+"@(#)$Id: rsff.c,v 1.35 2004/01/02 12:16:53 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -24,17 +24,6 @@ static const char rsff_c[] =
 #include	"icc.h"
 
 #define min(x,y) ((x) < (y) ? (x) : (y))
-
-char *		full_type[]  = { FULL_TYPE };
-char *		full_ftype[] = { FULL_FTYPE };
-unsigned char	types[]      = { TYPES };
-unsigned char	ftypes[]     = { FTYPES };
-char		os[]         = OPS;
-char		fos[]        = FOPS;
-
-unsigned char	bitMask[]    = {
-    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
-};
 
 unsigned char	bitIndex[]   = {
     0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	/* 0x01 0x02 0x04 0x08 */

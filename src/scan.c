@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.25 2003/12/30 13:36:39 jw Exp $";
+"@(#)$Id: scan.c,v 1.26 2004/01/02 17:34:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -149,9 +149,7 @@ scan_ar(Gate *	out_list)
 #else
 	    int exec;
 #endif
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    scan_cnt++;				/* count scan operations */
-#endif
 #if YYDEBUG && !defined(_WINDOWS)
 	    gx = gp;			/* save old gp in gx */
 	    if (debug & 0100) {
@@ -288,9 +286,7 @@ scan(Gate *	out_list)
 	val = (op->gt_val < 0) ? -1 : 1;
 	/* do twice: once with val, then whith -val */
 	while ((gp = *lp++) != 0) { /* scan non-inverted outputs */
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    scan_cnt++;				/* count scan operations */
-#endif
 #if YYDEBUG && !defined(_WINDOWS)
 	    gx = gp;			/* save old gp in gx */
 	    if (debug & 0100) {
@@ -312,9 +308,7 @@ scan(Gate *	out_list)
 	}
 	val = -val;				/* invert logic value */
 	while ((gp = *lp++) != 0) { /* scan inverted outputs */
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    scan_cnt++;				/* count scan operations */
-#endif
 #if YYDEBUG && !defined(_WINDOWS)
 	    gx = gp;			/* save old gp in gx */
 	    if (debug & 0100) {
@@ -399,9 +393,7 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 	gp->gt_prev = out_list;			/* list <== next */
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	scan_cnt++;				/* count scan operations */
-#endif
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, "\n%s:", op->gt_ids);
 #endif
@@ -619,9 +611,7 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 #else
 		int exec;
 #endif
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 		scan_cnt++;			/* count scan operations */
-#endif
 #if YYDEBUG && !defined(_WINDOWS)
 		gx = gp;			/* save old gp in gx */
 		if (debug & 0100) {
@@ -683,9 +673,7 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 	} else if (op->gt_fni == GATE) {
 	    while (*lp++);			/* ignore direct outputs */
 	    while ((gp = *lp++) != 0) {		/* do inverted outputs */
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 		scan_cnt++;			/* count scan operations */
-#endif
 #if YYDEBUG && !defined(_WINDOWS)
 		gx = gp;			/* save old gp in gx */
 		if (debug & 0100) {

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.19 2003/11/28 15:38:07 jw Exp $";
+"@(#)$Id: link.c,v 1.20 2004/01/02 17:35:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -106,9 +106,7 @@ link_ol(
 	if (debug & 0100) fprintf(outFP, "g<");
 #endif
     } else {
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	link_cnt++;				/* count link operations */
-#endif
 	if (gp->gt_fni < MIN_ACT) {	/* ARITH & GATE may oscillate */
 	    if (gp->gt_mark != mark_stamp) {	/* first link this cycle */
 		gp->gt_mark = mark_stamp;	/* yes, stamp the gate */

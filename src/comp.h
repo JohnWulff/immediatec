@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.39 2003/12/22 18:19:05 jw Exp $";
+"@(#)$Id: comp.h,v 1.40 2004/01/02 08:49:26 jw Exp $";
 
 #define NS	((char*)0)
 
@@ -141,19 +141,18 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define Eindex	2
 #define Lindex	3
 #define Oindex	4
-#define CIindex	5
-#define COindex	6
-#define Cindex	7
-#define H1index	8
-#define H2index	9
-#define T0index	10
-#define T1index	11
-#define T2index	12
-#define T3index	13
-#define T4index	14
-#define T5index	15
+#define COindex	5
+#define Cindex	6
+#define H1index	7
+#define H2index	8
+#define T0index	9
+#define T1index	10
+#define T2index	11
+#define T3index	12
+#define T4index	13
+#define T5index	14
 
-#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name,\
+#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, Cname, H1name, H2name,\
 				0, 0, 0, 0, 0, 0,
 
 extern FILE *	T0FP;

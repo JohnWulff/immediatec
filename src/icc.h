@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.48 2003/12/30 12:25:34 jw Exp $";
+"@(#)$Id: icc.h,v 1.49 2004/01/02 17:27:25 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -237,9 +237,9 @@ extern	Functp	clock_i[];
 
 extern unsigned short	mark_stamp;	/* incremented every scan */
 
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 extern unsigned	scan_cnt;			/* count scan operations */
 extern unsigned	link_cnt;			/* count link operations */
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 extern unsigned	glit_cnt;			/* count glitches */
 extern unsigned	long glit_nxt;			/* count glitch scan */
 #endif

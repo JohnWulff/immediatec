@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.80 2003/12/30 21:25:25 jw Exp $";
+"@(#)$Id: comp.y,v 1.81 2004/01/03 08:37:51 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1705,7 +1705,9 @@ compile(
 	/* pre-compile if iC files contains any #include, #define #if etc */
 	sprintf(execBuf, "grep -q '^[ \t]*#' %s", inpPath);
 	r = system(execBuf);		/* test with grep if #include in input */
-	if (debug & 02) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+#if YYDEBUG
+	if ((debug & 0402) == 0402) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+#endif
 	if (r == 0) {
 	    /* pass the input file through the C pre-compiler to resolve #includes */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
@@ -1715,7 +1717,9 @@ compile(
 	    }
 	    /* Cygnus does not understand cc - use gcc - pass comments with -C */
 	    sprintf(execBuf, "gcc -E -C -x c %s -o %s", inpPath, T0FN);
-	    if (debug & 02) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+#if YYDEBUG
+	    if ((debug & 0402) == 0402) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+#endif
 	    r = system(execBuf);	/* Pre-compile iC file */
 	    if (r != 0) {
 		ierror("compile: cannot run:", execBuf);
@@ -1827,7 +1831,11 @@ get(FILE* fp)
 		strncpy(prevNM, inpNM, BUFS);
 	    }
 	}
-	if ((debug & 010) && ((lexflag & C_BLOCK) == 0 || (debug & 02))) {
+	if ((debug & 010) && ((lexflag & C_BLOCK) == 0
+#if YYDEBUG
+							|| ((debug & 0402) == 0402)
+#endif
+						    )) {
 	    /********************************************************
 	     *  output source listing line in debugging output
 	     *  before any tokens are handed to the parser

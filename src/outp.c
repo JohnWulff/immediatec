@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.69 2003/12/30 12:30:42 jw Exp $";
+"@(#)$Id: outp.c,v 1.70 2004/01/03 06:00:30 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -308,7 +308,8 @@ listNet(unsigned * gate_count)
 	return 1;
     }
     return 0;
-} 							/* listNet */
+} /* listNet */
+#if defined(RUN) || defined(TCP)
 
 /********************************************************************
  *
@@ -535,6 +536,7 @@ buildNet(Gate ** igpp)
 
     return rc;		/* return code */
 } /* buildNet */
+#endif
 
 /********************************************************************
  *
@@ -1285,7 +1287,6 @@ c_compile(FILE * iFP)
     int		r;
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
-//fprintf(stderr, "c_compile: start\n"); fflush(stderr);
     lexflag = C_PARSE|C_FIRST|C_BLOCK;		/* output partial source listing */
 
     if (copyBlocks(iFP, T2FP, 01)) {
@@ -1331,7 +1332,6 @@ c_compile(FILE * iFP)
 	}
 	lexflag &= ~C_NO_COUNT;		/* count characters again */
     }
-//fprintf(stderr, "c_compile: start compile\n"); fflush(stderr);
     /* rewind intermediate file */
     if (fseek(T2FP, 0L, SEEK_SET) != 0) {
 	return T2index;
@@ -1344,10 +1344,8 @@ c_compile(FILE * iFP)
     if (c_parse() != 0) {
 	ierror("c_compile: Parse error\n", NULL);
     }
-//fprintf(stderr, "c_compile: end compile\n"); fflush(stderr);
     rewind(yyin);
     copyAdjust(yyin, T3FP);		/* output adjusted C-code */
-//fprintf(stderr, "c_compile end\n"); fflush(stderr);
     return 0;
 } /* c_compile */
 

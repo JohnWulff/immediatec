@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.39 2003/12/31 12:46:16 jw Exp $";
+"@(#)$Id: main.c,v 1.40 2004/01/03 08:46:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,49 +25,47 @@ static const char main_c[] =
 #include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
+#include	"cexe.h"
 
 extern const char	SC_ID[];
 
 static const char *	usage =
-"USAGE for compile mode:\n"
-"  %s [-aAc] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] [-P<path>] <iC_program>\n"
+"USAGE:\n"
+"  %s [-aAch] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] [-P<path>] <iC_program>\n"
 "      Options in compile mode only:\n"
 "        -o <outFN>      name of compiler output file - sets compile mode\n"
+"        -l <listFN>     name of list file  (default is stdout)\n"
+"        -e <errFN>      name of error file (default is stderr)\n"
 "        -a              append linking info for 2nd and later files\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
 "        -c              generate auxiliary file cexe.c to extend %s compiler\n"
 "                        (cannot be used if also compiling with -o)\n"
-"USAGE for run mode: (direct interpretation)\n"
-"  %s [-txh]"
-#ifdef TCP
-" [-m[m]] [-s <server>] [-p <port>] [-u <unitID>]\n      "
-#endif
-" [-l<list>] [-e<err>] [-d<debug>] [-P<path>] [-n<count>] <iC_program>\n"
-"      Options in both modes:\n"
-#ifdef TCP
-"        -s host ID of server      (default '%s')\n"
-"        -p service port of server (default '%s')\n"
-"        -u unit ID of this client (default '%s')\n"
-#endif
-"        -l <listFN>     name of list file  (default is stdout)\n"
-"        -e <errFN>      name of error file (default is stderr)\n"
 "        -d <debug>4000  supress listing alias post processor\n"
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
+#if defined(RUN) || defined(TCP)
+#if YYDEBUG && !defined(_WINDOWS)
 "                 +2000  display scan_cnt and link_cnt\n"
 #endif
 "                 +1000  I0 toggled every second\n"
 "                  +400  exit after initialisation\n"
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
+#if YYDEBUG && !defined(_WINDOWS)
 "                  +200  display loop info (+old style logic)\n"
 "                  +100  initialisation and run time info\n"
+#endif
 #endif
 "                   +40  net statistics\n"
 "                   +20  net topology\n"
 "                   +10  source listing\n"
 "                    +4  logic expansion\n"
 #if YYDEBUG
-"                    +2  logic generation (requires +400)\n"
-"                    +1  yacc debug info  (requires +400)\n"
+"                    +2  logic generation"
+#if defined(RUN) || defined(TCP)
+" (requires +400)"
+#endif
+"\n                    +1  yacc debug info"
+#if defined(RUN) || defined(TCP)
+"  (requires +400)"
+#endif
+"\n"
 #ifdef TCP
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
@@ -76,20 +74,32 @@ static const char *	usage =
 "        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
 "        <iC_program>    any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
-"      Options in run (interpreter) mode only:\n"
-"        -t              trace debug (equivalent to -d 100)\n"
-"                        can be toggled at run time by typing t\n"
-#endif
+"        -h              this help text\n"
+#if defined(RUN) || defined(TCP)
+"Extra options for run mode: (direct interpretation)\n"
+"  [-"
 #ifdef TCP
+"s <server>] [-p <port>] [-u <unitID>] [-m[m]"
+#endif
+#if YYDEBUG && !defined(_WINDOWS)
+"t"
+#endif
+"x] [-n<count>]\n"
+#ifdef TCP
+"        -s host ID of server      (default '%s')\n"
+"        -p service port of server (default '%s')\n"
+"        -u unit ID of this client (default '%s')\n"
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                        can be toggled at run time by typing m\n"
 #endif
+#if YYDEBUG && !defined(_WINDOWS)
+"        -t              trace debug (equivalent to -d 100)\n"
+"                        can be toggled at run time by typing t\n"
+#endif
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
 "                        can be changed at run time by typing x or d\n"
 "        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
-"        -h              this help text\n"
 "      An <iC_program> containing only logical expressions can be interpreted\n"
 "      with  %s -t <iC_program>. An <iC_program> containing arithmetic\n"
 "      expressions requires relinking of %s with a new cexe.c generated\n"
@@ -101,6 +111,7 @@ static const char *	usage =
 "      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
 #endif
 "      Typing q or ctrl-C quits run mode.\n"
+#endif
 "Copyright (C) 1985-2001 John E. Wulff     <john@je-wulff.de>\n"
 "%s\n";
 
@@ -118,8 +129,7 @@ extern	int	iCdebug;
 #define errFN	szNames[2]		/* error file name */
 #define listFN	szNames[3]		/* list file name */
 #define outFN	szNames[4]		/* C output file name */
-#define exiFN	szNames[5]		/* cexe input file name */
-#define excFN	szNames[6]		/* cexe C out file name */
+#define excFN	szNames[5]		/* cexe C out file name */
 char *		szNames[] = {		/* matches return in compile */
     INITIAL_FILE_NAMES
 };
@@ -129,7 +139,6 @@ char		inpNM[BUFS] = "stdin";	/* original input file name */
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 
-static FILE *	exiFP;			/* cexe in file pointer */
 static FILE *	excFP;			/* cexe C out file pointer */
 static char *	ppPath = "";		/* default pplstfix on PATH */
 
@@ -160,10 +169,42 @@ char		T5FN[] = "ic5.XXXXXX";
 
 static void	unlinkTfiles(void);
 
+/********************************************************************
+ *
+ *	Constant compile typing data
+ *
+ *******************************************************************/
+
+char *		full_type[]  = { FULL_TYPE };
+char *		full_ftype[] = { FULL_FTYPE };
+unsigned char	types[]      = { TYPES };
+unsigned char	ftypes[]     = { FTYPES };
+char		os[]         = OPS;
+char		fos[]        = FOPS;
+
+unsigned char	bitMask[]    = {
+    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
+};
 
 /********************************************************************
  *
- *	main program
+ *	I/O arrays also used at compile time
+ *
+ *******************************************************************/
+
+Gate *		IX_[IXD*8];		/* pointers to bit Input Gates */
+Gate *		IB_[IXD];		/* pointers to byte Input Gates */
+Gate *		IW_[IXD];		/* pointers to word Input Gates */
+#if INT_MAX != 32767 || defined (LONG16)
+Gate *		IL_[IXD];		/* pointers to long Input Gates */
+#endif
+Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
+unsigned char	QX_[IXD];		/* Output bit field slots */
+char		QT_[IXD];		/* Output type of slots */
+
+/********************************************************************
+ *
+ *	Main program
  *
  *******************************************************************/
 
@@ -215,6 +256,9 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
 		    debug |= debi;	/* short */
+#if !defined(RUN) && !defined(TCP)
+		    debug |= 0400;	/* always stops */
+#endif
 #if YYDEBUG
 		    if (debug & 0400) iCdebug = debug & 01;
 #endif
@@ -228,7 +272,7 @@ main(
 		    if (osc_max > 15) goto error;
 		    goto break2;
 		case 'o':
-		    if (exiFN == 0) {
+		    if (excFN == 0) {
 			if (! *++*argv) { --argc, ++argv; }
 			outFN = *argv;	/* compiler output file name */
 			goto break2;
@@ -247,7 +291,6 @@ main(
 		    goto break2;
 		case 'c':
 		    if (outFN == 0) {
-			exiFN = "cexe.h";
 			excFN = "cexe.c";
 		    } else {
 			fprintf(stderr,
@@ -273,11 +316,14 @@ main(
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, progname, progname, progname,
+		    fprintf(stderr, usage, progname, progname,
 #ifdef TCP
 		    hostNM, portNM, iccNM,
 #endif
-		    MARKMAX, progname, progname, progname, SC_ID);
+#if defined(RUN) || defined(TCP)
+		    MARKMAX, progname, progname, progname,
+#endif
+		    SC_ID);
 		    exit(1);
 		}
 	    } while (*++*argv);
@@ -287,7 +333,6 @@ main(
 	}
     }
     debug &= 07777;			/* allow only cases specified */
-    initIO();				/* catch memory access signal */
     iFlag = 0;
 
 /********************************************************************
@@ -360,81 +405,6 @@ main(
  *******************************************************************/
 
 	if ((r = listNet(gate_count)) == 0) {
-	    if (outFN == 0) {			/* not -o option */
-		if (exiFN) {			/* -c option */
-
-/********************************************************************
- *
- *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
- *
- *******************************************************************/
-
-		    if ((excFP = fopen(excFN, "w")) == NULL) {
-			r = COindex;
-		    } else if ((exiFP = fopen(exiFN, "r")) == NULL) {
-			r = CIindex;
-		    } else {
-			unsigned	linecnt = 1;
-			char		lineBuf[256];
-
-			/* copy C execution file Part 1 from beginning up to 'Q' */
-			while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
-			    if (*lineBuf == 'Q') break;
-			    fputs(lineBuf, excFP);
-			    linecnt++;
-			}
-			/* copy C intermediate file up to EOF to C output file */
-			copyXlate(excFP, excFN, &linecnt, 01);
-
-			/* rewind intermediate file T1FN again */
-			if (fseek(T1FP, 0L, SEEK_SET) != 0) {
-			    r = T1index;
-			} else {
-			    /* copy C execution file Part 2 from remainder up to 'V' */
-			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
-				if (*lineBuf == 'V') break;
-				fputs(lineBuf, excFP);
-				linecnt++;
-			    }
-			    /* copy C intermediate file up to EOF to C output file */
-			    copyXlate(excFP, excFN, &linecnt, 02);
-
-			    /* copy C execution file Part 3 from character after 'V 'up to EOF */
-			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
-				fputs(lineBuf, excFP);
-				linecnt++;
-			    }
-			}
-			if (debug & 040) {
-			    fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
-			}
-			fclose(exiFP);
-			fclose(excFP);
-		    }
-		} else
-
-/********************************************************************
- *
- *	Build a network of Gates and links for direct execution
- *
- *******************************************************************/
-
-		if ((r = buildNet(&igp)) == 0) {
-		    Symbol * sp = lookup("iClock");
-		    unlinkTfiles();
-
-/********************************************************************
- *
- *	Execute the compiled iC logic directly
- *
- *******************************************************************/
-
-		    assert (sp);		/* iClock initialized in init() */
-		    c_list = sp->u.gate;	/* initialise clock list */
-		    icc(igp, gate_count);	/* execute the compiled logic */
-		    /* never returns - exits via quit() */
-		}
-	    } else {
 
 /********************************************************************
  *
@@ -442,7 +412,75 @@ main(
  *
  *******************************************************************/
 
+	    if (outFN) {			/* -o option */
 		r = output(outFN);		/* generate network as C file */
+	    } else
+
+/********************************************************************
+*
+*	-c option: Output a C-file cexe.c to rebuild compiler with C-code
+*
+*******************************************************************/
+
+	    if (excFN) {			/* -c option */
+		if ((excFP = fopen(excFN, "w")) == NULL) {
+		    r = COindex;
+		} else {
+		    unsigned	linecnt = 1;
+
+		    /* write C execution file Part 1 */
+		    fprintf(excFP, cexe_part1);
+		    linecnt += cexe_lines1;
+		    /* copy C intermediate file up to EOF to C output file */
+		    copyXlate(excFP, excFN, &linecnt, 01);
+
+		    /* rewind intermediate file T1FN again */
+		    if (fseek(T1FP, 0L, SEEK_SET) != 0) {
+			r = T1index;
+		    } else {
+			/* write C execution file Part 2 */
+			fprintf(excFP, cexe_part2);
+			linecnt += cexe_lines2;
+			/* copy C intermediate file up to EOF to C output file */
+			copyXlate(excFP, excFN, &linecnt, 02);
+
+			/* write C execution file Part 3 */
+			fprintf(excFP, cexe_part3);
+			linecnt += cexe_lines3;
+			if (linecnt > (1 + cexe_lines1 + cexe_lines2 + cexe_lines3)) {
+			    fprintf(excFP, cexe_part4, inpNM, SC_ID);
+			    linecnt += cexe_lines4;
+			    if (debug & 040) {
+				fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
+			    }
+			}
+		    }
+		    fclose(excFP);
+		}
+#if defined(RUN) || defined(TCP)
+	    } else
+
+/********************************************************************
+*
+*	Build a network of Gates and links for direct execution
+*
+*******************************************************************/
+
+	    if ((r = buildNet(&igp)) == 0) {
+		Symbol * sp = lookup("iClock");
+		unlinkTfiles();
+
+/********************************************************************
+*
+*	Execute the compiled iC logic directly
+*
+*******************************************************************/
+
+		assert (sp);			/* iClock initialized in init() */
+		c_list = sp->u.gate;		/* initialise clock list */
+		icc(igp, gate_count);		/* execute the compiled logic */
+		/* never returns - exits via quit() */
+#endif
 	    }
 	}
 	if (r != 0) {

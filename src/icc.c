@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.23 2003/12/31 20:42:17 jw Exp $";
+"@(#)$Id: icc.c,v 1.24 2004/01/02 18:02:35 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -119,24 +119,15 @@ Gate *		c_list;			/* main clock list "iClock" */
 static Gate	flist;
 Gate *		f_list;			/* auxiliary function clock list */
 
-Gate *		IX_[IXD*8];		/* pointers to bit Input Gates */
-Gate *		IB_[IXD];		/* pointers to byte Input Gates */
-Gate *		IW_[IXD];		/* pointers to word Input Gates */
-#if INT_MAX != 32767 || defined (LONG16)
-Gate *		IL_[IXD];		/* pointers to long Input Gates */
-#endif
-Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
-unsigned char	QX_[IXD];		/* Output bit field slots */
-char		QT_[IXD];		/* Output type of slots */
 unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
 unsigned char	QMM;			/* Output cage mask for 1 rack */
 
 short		dis_cnt;
 short		error_flag;
 
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	scan_cnt;			/* count scan operations */
 unsigned	link_cnt;			/* count link operations */
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	glit_cnt;			/* count glitches */
 unsigned long	glit_nxt;			/* count glitch scan */
 #endif
@@ -175,6 +166,7 @@ icc(
     char	ybuf[YSIZE];	/* buffer for number */
     char *	yp;
 
+    initIO();				/* catch memory access signal */	
     error_flag = 0;
     alist0.gt_rlist = (Gate **)(a_list = &alist1);	/* initialise alternate */
     Out_init(a_list);
@@ -331,8 +323,9 @@ icc(
 		}
 		fprintf(outFP, "\n");
 	    }
+	    glit_cnt = glit_nxt =
 #endif
-	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
+	    scan_cnt = link_cnt = 0;
 	}
 
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
@@ -497,7 +490,6 @@ icc(
 	}
     }
 } /* icc */
-#if YYDEBUG
 
 /********************************************************************
  *
@@ -589,7 +581,6 @@ display(void)
     }
     fflush(outFP);
 } /* display */
-#endif
 #ifdef _MSDOS_
 
 /********************************************************************
