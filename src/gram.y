@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.11 2002/08/20 20:55:32 jw Exp $";
+"@(#)$Id: gram.y,v 1.12 2002/08/23 18:17:00 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -179,6 +179,9 @@ declaration					/* 5 */
 		sp = sp->next;		/* get next before Symbol is placed or deleted */
 		if ($1.symbol && $1.symbol->type == UDF) {
 		    sp1->type = CTYPE;		/* found a typedef */
+#ifdef CACHE
+		    sp1->ftype = CNEW;		/* found a new typedef */
+#endif
 #if YYDEBUG
 		    if ((debug & 0402) == 0402) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif

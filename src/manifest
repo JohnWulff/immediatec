@@ -1,4 +1,5 @@
-$Id: manifest,v 1.3 2002/07/31 17:37:37 jw Exp $
+$Id: manifest,v 1.4 2002/08/03 19:01:16 jw Exp $
+README
 doc/iC.doc
 doc/iC.html
 doc/iC.sdw
@@ -8,7 +9,7 @@ src/COPYING
 src/Makefile.in
 src/Mdiff
 src/Msg.pm
-src/README
+src/README.tpl
 src/Test/ORG/ErrorMessages.err
 src/Test/ORG/a0.c
 src/Test/ORG/a0.ic

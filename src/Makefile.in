@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.27 2002/08/07 21:10:38 jw Exp $
+# @(#)$Id: Makefile.in,v 1.28 2002/08/23 10:13:03 jw Exp $
 
 ############################################################
 #
@@ -127,8 +127,11 @@ lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	test -f $@ && touch $@
     endif
 
-scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed
-	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/../README
+	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/../README | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+
+../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
+	rm -f $(srcdir)/../README; ident $(srcdir)/icc.v | awk '/\$Id/ { print "g/#REV/s//"$$3"/"; split($$4,d,"/"); print "g/#DATE/s//"d[1]"."d[2]"."d[3]"/"; print "w $(srcdir)/../README"; print "q" }' | ed -s $(srcdir)/README.tpl
 
 cexe.c:	$(srcdir)/cexe.h
 	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > cexe.c

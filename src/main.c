@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.34 2002/08/19 12:37:25 jw Exp $";
+"@(#)$Id: main.c,v 1.35 2002/08/23 19:18:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -115,6 +115,9 @@ extern	int	iCdebug;
 #define excFN	szNames[6]		/* cexe C out file name */
 char *		szNames[] = {		/* matches return in compile */
     INITIAL_FILE_NAMES
+#ifdef CACHE
+    TCname,
+#endif
 };
 
 static FILE *	exiFP;			/* cexe in file pointer */
@@ -132,14 +135,17 @@ char * OutputMessage[] = {
     "%s: cannot open file %s in output\n",	/* [7] */
 };
 
-FILE *	typeCacheFP = NULL;
 FILE *	T1FP = NULL;
 FILE *	T2FP = NULL;
 FILE *	T3FP = NULL;
 FILE *	T4FP = NULL;
 FILE *	T5FP = NULL;
 
+#ifdef CACHE
+FILE *	typeCacheFP = NULL;
 char		typeCacheFN[] = TCname;
+#endif
+
 static char	T1FN[] = "/tmp/ic1.XXXXXX";
 static char	T2FN[] = "/tmp/ic2.XXXXXX";
 static char	T3FN[] = "/tmp/ic3.XXXXXX";
@@ -464,7 +470,6 @@ closeFiles: ;
 /********************************************************************
  *
  *	close and unlink temporary files T1FN T2FN T3FN
- *	T4FN is only a name und unlinked already
  *
  *******************************************************************/
 
@@ -487,6 +492,18 @@ unlinkTfiles(void)
 	fclose(T3FP);
 	if (!(debug & 04000)) {
 	    unlink(T3FN);
+	}
+    }
+    if (T4FP) {
+	fclose(T4FP);
+	if (!(debug & 04000)) {
+	    unlink(T4FN);
+	}
+    }
+    if (T5FP) {
+	fclose(T5FP);
+	if (!(debug & 04000)) {
+	    unlink(T5FN);
 	}
     }
 } /* unlinkTfiles */

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.14 2002/08/21 16:37:21 jw Exp $";
+"@(#)$Id: lexc.l,v 1.15 2002/08/23 20:25:20 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -181,6 +181,7 @@ static int	check_type(c_STYPE* u);
 
 static int gramOffset = 0;
 static int gramLine   = 1;
+static char* staticName = NULL;
 int column = 0;
 FILE* saveFP = NULL;
 
@@ -408,6 +409,7 @@ check_type(c_STYPE* u)
 
     if ((sp = lookup(buffer)) != 0) {
 	if ((sp->type & TM) <= MAX_LS) {
+	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
 	    while ((sp->type & TM) == ALIAS) {
 		sp = sp->list->le_sym;	/* with token of original */
 	    }
@@ -419,6 +421,7 @@ check_type(c_STYPE* u)
 	}
 	return YYERRCODE;		/* internal imm node is an error */
     }
+  inInclude:
     sp = (Symbol *) emalloc(sizeof(Symbol));
     sp->name = emalloc(c_leng + 1);	/* +1 for '\0' */
     strcpy(sp->name, c_text);
@@ -451,6 +454,7 @@ delete_sym(Token* tokp)
 	free(sp);
     }
 } /* delete_sym */
+#ifdef CACHE
 
 /********************************************************************
  *
@@ -574,17 +578,7 @@ readTypeCacheFile(void)
  *	5) continue C-parse until EOF - close T5FP - unlink ic5.XXXXXX
  *	   During the parse type_names are added to the ST with type CTYPE
  *	   and ftype CNEW. Mark CTYPE entries previously defined also.
- *
- *	executed in restoreCblocksStream()
- *	6) append a line to the cache file .iCcTypes.def with the
- *	   includeName and a list of all new type_names generated in step 5.
- *	   These are recognised because they have ftype == CNEW.
- *	   Set ftype to COLD for each type_name output. The cache is now
- *	   ready for this include file for the next iC file to be compiled.
- *	   For this compilation the ST is correct and the cache file does
- *	   not need to be read.
- *	7) revert yyin to the normal input file and continue C-parse of
- *	   iC generated C-blocks.
+ *	   save the includeName in staticName.
  *
  *	At the end of step step 4 we return from this function.
  *	On EOF the fact that T5FP != NULL leads us to step 6 and 7.
@@ -648,13 +642,12 @@ readTypesFromCache(char* includeName)
 	fprintf(T4FP, "#include %s\n", includeName);	/* a little C file !!! */
 	fflush(T4FP);
 
-//	sprintf(lineBuf, "gcc -E -x c %s -o xxx.i", T4FN);
 	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
 	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
-//	r = my_system(lineBuf);			/* Pre-compile C file */
 	r = system(lineBuf);			/* Pre-compile C file */
 	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);
-//	exit(0);
+	staticName = emalloc(strlen(includeName) + 1);	/* +1 for '\0' */
+	strcpy(staticName, includeName);
 
 	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
 	    error("readTypesFromCache: cannot open:", T5FN);
@@ -720,12 +713,54 @@ readTypesFromCache(char* includeName)
     return 0;
 } /* readTypesFromCache */
 
+/********************************************************************
+ *
+ *	Write out types to cache
+ *
+ *	executed in restoreCblocksStream()
+ *	6) append a line to the cache file .iCcTypes.def with the
+ *	   includeName and a list of all new type_names generated in step 5.
+ *	   These are recognised because they have ftype == CNEW.
+ *	   Set ftype to COLD for each type_name output. The cache is now
+ *	   ready for this include file for the next iC file to be compiled.
+ *	   For this compilation the ST is correct and the cache file does
+ *	   not need to be read.
+ *	7) revert yyin to the normal input file and continue C-parse of
+ *	   iC generated C-blocks.
+ *
+ *******************************************************************/
+
 FILE *
 restoreCblocksStream(void)
 {
+    Symbol *	sp;
+    Symbol **	hsp;
+
+    /* append to open cache file */
+    assert(typeCacheFP);
+    assert(staticName);
+    if (fseek(typeCacheFP, 0L, SEEK_END) == 0) {
+	fprintf(typeCacheFP, "%s", staticName);
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (sp = *hsp; sp; sp = sp->next) {
+		if (sp->type == CTYPE && sp->ftype == CNEW) {
+		    fprintf(typeCacheFP, " %s", sp->name);
+		    sp->ftype = COLD;	/* prevent output for next include */
+		}
+	    }
+	}
+	fprintf(typeCacheFP, "\n");	/* terminate line */
+	free(staticName);
+	staticName = NULL;
+    } else {
+	error("restoreCblocksStream: cannot seek to end ???:", typeCacheFN);
+    }
+
+    assert(T5FP);
     fclose(T5FP);
     T5FP = NULL;
     if (!(debug & 04000)) unlink(T5FN);
     if (debug & 02) fprintf(outFP, "####### close and unlink %s\n", T5FN);
     return (yyin = saveFP);			/* restore FILE* in get() after EOF */
 }
+#endif

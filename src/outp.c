@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.60 2002/08/21 11:43:31 jw Exp $";
+"@(#)$Id: outp.c,v 1.61 2002/08/23 19:23:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -24,6 +24,7 @@ static const char outp_c[] =
 #include	<stdlib.h>
 #include	<string.h>
 #include	<assert.h>
+#include	<errno.h>
 #include	"icc.h"
 #include	"comp.h"
 
@@ -1151,6 +1152,8 @@ end:
  * where nn is the following line number and fn the name of the iC file
  * NOTE: this line must be shorter than BUFS (currently 128).
  *       since %## is generated in the earlier code this should be OK
+ * NOTE: lineBuf[] must be large enough to hold a complete
+ *       pre-processor line for the following sscanf()s
  *
  *******************************************************************/
 
@@ -1160,7 +1163,9 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
     int		c;
     int		mask = 02;	/* default is functions or cases */
     int		lf = 0;		/* set by first non white space in a line */
+    int		fd;
     char *	lp;
+    char	lstBuf[BUFS];	/* include file name */
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
     /* rewind intermediate file */
@@ -1182,6 +1187,27 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    } else if (c != ' ' && c != '\t') {
 			lf = 1;			/* not white space */
 		    }
+#ifndef CACHE
+		} else
+		/********************************************************
+		 *  handle pre-processor #include <stdio.h> or "icc.h"
+		 ********************************************************/
+		if (sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
+		    if (T4FP == NULL) {
+			if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
+			    error("copyBlocks: cannot open:", T4FN);
+			    return T4index;			/* error opening temporary file */
+			}
+			if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
+			    error("copyBlocks: cannot make or unlink:", T5FN);
+			    perror("unlink");
+			    return T5index;			/* error unlinking temporary file */
+			}
+			if (debug & 02) fprintf(outFP, "####### ready to c_parse includes via %s %s\n", T4FN, T5FN);
+		    }
+		    if (debug & 02) fprintf(outFP, "####### c_parse #include %s\n", lstBuf);
+		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
+#endif
 		}
 	    }
 	}
@@ -1205,6 +1231,7 @@ int
 c_compile(FILE * iFP)
 {
     int		mask = 01;			/* copy literal blocks */
+    int		r;
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
 //fprintf(stderr, "c_compile: start\n"); fflush(stderr);
@@ -1222,8 +1249,32 @@ c_compile(FILE * iFP)
     if (outFlag == 0) {
 	fprintf(T2FP, "/*##*/}}\n");
     }
-//###    if (readTypeCacheFile()) return TCindex;
 
+    /********************************************************
+     *  handle pre-processor #include <stdio.h> or "icc.h"
+     ********************************************************/
+    if (T4FP) {
+	fflush(T4FP);
+	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
+	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
+	r = system(lineBuf);			/* Pre-compile C file */
+	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);
+
+	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
+	    error("c_compile: cannot open:", T5FN);
+	    perror("open");
+	    return T5index;
+	}
+	if (debug & 02) fprintf(outFP, "####### compile include files via %s %s\n", T4FN, T5FN);
+	yyin = T5FP;			/* lexc reads from include now */
+	yyout = outFP;			/* list file */
+	lexflag |= C_NO_COUNT;		/* do not count characters for include files */
+	lineno = 0;
+	if (c_parse() != 0) {
+	    error("c_compile: Parse error in includes\n", T5FN);
+	}
+	lexflag &= ~C_NO_COUNT;		/* count characters again */
+    }
 //fprintf(stderr, "c_compile: start compile\n"); fflush(stderr);
     /* rewind intermediate file */
     if (fseek(T2FP, 0L, SEEK_SET) != 0) {
@@ -1233,8 +1284,9 @@ c_compile(FILE * iFP)
     yyin = T2FP;
     yyout = outFP;			/* list file */
     copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
+    lineno = 0;
     if (c_parse() != 0) {
-//fprintf(stderr, "c_compile: Parse error\n"); fflush(stderr);
+	error("c_compile: Parse error\n", NULL);
     }
 //fprintf(stderr, "c_compile: end compile\n"); fflush(stderr);
     rewind(yyin);

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.73 2002/08/21 16:36:56 jw Exp $";
+"@(#)$Id: comp.y,v 1.74 2002/08/23 21:46:29 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -30,7 +30,7 @@
 
 /* "comp.y	3.70	95/02/03 Copyright (c) 1985-1993 by John E. Wulff" */
 
-static void	unget(char);		/* shares buffers with get() */
+static void	unget(int);		/* shares buffers with get() */
 static int	iClex(void);
 int		ynerrs;			/* count of yyerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
@@ -1606,13 +1606,16 @@ static int	lineflag = 1;		/* previous line was complete */
 static char *	errFilename;
 static int	errFlag = 0;
 static int	errRet = 0;
+static int	eofLineno = 0;
+static int	savedLineno = 0;
+static int	errline = 0;
 
 /********************************************************************
  *	lexflag is bitmapped and controls the input for lexers
  *******************************************************************/
 int		lexflag = 0;
 int		lineno = 0;		/* count first line on entry to get() */
-int		savedLineno = 0;
+
 int		c_number = 0;		/* case number for cexe.c */
 int		outFlag = 0;		/* global flag for compiled output */
 jmp_buf		begin;
@@ -1647,7 +1650,7 @@ compile(
     char *	errNM,			/* error file name */
     char *	outNM)			/* C output file name */
 {
-    lexflag = 0;			/* output all of source listing */
+    lineno = lexflag = 0;		/* output all of source listing */
 
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
 	return Lindex;
@@ -1694,28 +1697,38 @@ get(FILE* fp)
 	 *  NOTE: getp === NULL at start of file (chbuf has EOF line)
 	 ************************************************************/
 	if ((getp = fgets(chbuf, CBUFSZ, fp)) == NULL) {
-	    lineflag = 1;
+#ifdef CACHE
 	    if ((lexflag & C_PARSE) && T5FP) {
 		lineno = savedLineno;
 		lexflag &= ~(C_BLOCK|C_INCLUDE|C_NO_COUNT);	/* output source listing for lex */
-		fp = restoreCblocksStream();
+		fp = restoreCblocksStream();	/* update cache file */
 		continue;			/* back to C-blocks */
 	    }
-	    strcpy(chbuf, "*** EOF ***");	/* provide a listing line at EOF for errors */
+#else
+	    if ((lexflag & C_PARSE) == 0) {
+		eofLineno = lineno;
+	    } else {
+		lineno = eofLineno;
+	    }
+#endif
+	    errline = lineno;			/* no listing line at EOF */
+	    strcpy(chbuf, "*** EOF ***\n");	/* provide a listing line at EOF for errors */
 	    return (EOF);
 	}
+#ifdef CACHE
 	if (lexflag & C_INCLUDE) {
 	    lexflag |= C_BLOCK|C_NO_COUNT;	/* block listing and counting */
 	    lexflag &= ~C_INCLUDE;
 	}
+#endif
 	lineflag = chbuf[strlen(chbuf)-1] == '\n' ? 1 : 0;	/* this line terminated with \n */
 
 	if (prevflag && (lexflag & C_PARSE) && strncmp(chbuf, "##", 2) == 0) {
 	    lexflag |= C_BLOCK;			/* block source listing for lex */
 	    lineno = savedLineno;
-	    if ((debug & 0402) == 0402) fprintf(outFP, "####### ## lineno = %d\n", lineno);
+//	    if ((debug & 0402) == 0402) fprintf(outFP, "####### ## lineno = %d\n", lineno);
 	}
-	if ((lexflag & C_BLOCK) == 0 && (debug & 010)) {
+	if ((debug & 010) && ((lexflag & C_BLOCK) == 0 || (debug & 02))) {
 	    /********************************************************
 	     *  output source listing line in debugging output
 	     *  before any tokens are handed to the parser
@@ -1745,7 +1758,7 @@ get(FILE* fp)
 	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, lstBuf) == 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
-		if ((debug & 0402) == 0402) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, lstBuf);
+//		if ((debug & 0402) == 0402) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, lstBuf);
 		assert(strcmp(inpNM, lstBuf) == 0);
 		if ((debug & 010)) {
 		    if (lexflag & C_FIRST) {
@@ -1762,6 +1775,7 @@ get(FILE* fp)
 	    if (sscanf(chbuf, " # %d \"%[/A-Za-z_.0-9]\"", &temp1, lstBuf) == 2) {
 		lineno = temp1 - 1;
 		if ((debug & 0402) == 0402) fprintf(outFP, "####### # %d \"%s\"\n", temp1, lstBuf);
+#ifdef CACHE
 	    } else
 	    /********************************************************
 	     *  handle pre-processor #include <stdio.h> or "icc.h"
@@ -1770,12 +1784,15 @@ get(FILE* fp)
 		savedLineno = lineno;
 		if ((debug & 0402) == 0402) fprintf(outFP, "####### #include %s\n", lstBuf);
 		/* the first call to process an include file reads in the cache */
-		readTypesFromCache(lstBuf);	/* ZZZ error handling */
-		lexflag |= C_INCLUDE;		/* block counting gramOffset from next line */
-		if (((debug & 0402) == 0402) == 0) lexflag |= C_BLOCK;	/* block source listing for lex */
-		/* pass this line to lexc to get gramOffset correct */
+		if (readTypesFromCache(lstBuf)) return (EOF);	/* error */
 		/* if an include file has been opened yyin is now T5FP */
 		/* and the next line will be read from there */
+		if (T5FP) {
+		    lexflag |= C_INCLUDE;		/* block counting gramOffset from next line */
+		    if (((debug & 0402) == 0402) == 0) lexflag |= C_BLOCK;	/* block source listing for lex */
+		}
+		/* pass this line to lexc to get gramOffset correct */
+#endif
 	    }
 	}
     }
@@ -1798,11 +1815,15 @@ get(FILE* fp)
  *******************************************************************/
 
 static void
-unget(char c)
+unget(int c)
 {
-    assert(getp > chbuf);	/* TODO replace by execerror() */
-    *--getp = c;		/* use always insures 1 free place */
-    iCtext[--iCleng] = '\0';
+    if (c != EOF) {
+	if(getp <= chbuf) {
+	    execerror("unget: ???", NULL, __FILE__, __LINE__);
+	}
+	*--getp = c;		/* use always insures 1 free place */
+	iCtext[--iCleng] = '\0';
+    }
 } /* unget */
 
 /********************************************************************
@@ -1956,7 +1977,7 @@ iClex(void)
 	    }
 	    iClval.sym.l = stmtp += len;
 	} else {
-	    c1 = get(inFP);
+	    if ((c1 = get(inFP)) == EOF) goto found;	/* nothing after EOF */
 	    switch (c) {
 	    case '!':
 		if (c1 == '=') {
@@ -2106,8 +2127,6 @@ iClex(void)
 static void
 errLine(void)			/* error file not openend if no errors */
 {
-    static int	errline = 0;
-
     if (errFlag == 0) {
 	if (errFilename && errFP == stderr) {
 	    if ((errFP = fopen(errFilename, "w+")) == NULL) {
