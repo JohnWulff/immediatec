@@ -1,7 +1,7 @@
 #!/bin/bash
 ########################################################################
 #
-#	make iC test cases from pm.lst which may specify linking iC's
+#	make iC test cases from pm.lt which may specify linking iC's
 #
 ########################################################################
 
@@ -10,10 +10,10 @@ usage ()
     echo 'Usage:	'${0##*/}' [-h] [-v<N>]' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-h	this help text' >&2
-    echo 'uses iCmake -i to make each line of the list pm.lst' >&2
+    echo 'uses iCmake -I to make each line of the list pm.lt' >&2
     echo 'which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo 'but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
-    echo '	$Id: mm,v 1.4 2003/10/18 20:45:12 jw Exp $' >&2
+    echo '	$Id: mm,v 1.5 2003/11/28 18:37:49 jw Exp $' >&2
 }
 
 v=""
@@ -48,5 +48,5 @@ while true; do
     if [[ -z "$line" ]]; then
 	break
     fi
-    iCmake -i$v $line
-done < pm.lst 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/'
+    iCmake -I$v $line
+done < pm.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/'

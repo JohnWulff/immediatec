@@ -13,12 +13,12 @@ usage ()
     echo '	-min<MIN> minimum version to process (0 .. 9999)' >&2
     echo '	-max<MAX> maximum version to process (0 .. 9999)' >&2
     echo '	-h	this help text' >&2
-    echo 'uses iCmake -vN to make file ... for each version AlexN' >&2
+    echo 'uses iCmake -IvN to make file ... for each version AlexN' >&2
     echo 'N is an integer' >&2
     echo 'iC files are made from compiler ictN and libictN.a (icc.v version 1.N)' >&2
-    echo 'if no files are specified uses mm via pm.lst' >&2
+    echo 'if no files are specified uses mm via pm.lt' >&2
     echo 'directory AlexN must exist (generated files are saved there)' >&2
-    echo '	$Id: mz,v 1.9 2003/10/19 14:25:03 jw Exp $' >&2
+    echo '	$Id: mz,v 1.10 2003/11/28 18:40:24 jw Exp $' >&2
 }
 
 min=0
@@ -81,7 +81,7 @@ for w in $versions; do
 	    fi
 	done
 	if [[ -n "$*" ]]; then
-	    iCmake -v$v $*;
+	    iCmake -Iv$v $*;
 	    for f in $*; do
 		if [[ -n "$d" ]]; then
 		    Mdiff -ke $f.ic $f.lst $f.c $f.ini Alex$v
@@ -92,9 +92,9 @@ for w in $versions; do
 	else
 	    time mm -v$v > Init.out 2>&1
 	    if [[ -n "$d" ]]; then
-		Mdiff -ke $(cat pd.lst) Alex$v
+		Mdiff -ke $(cat pd.lt) Alex$v
 	    else
-		cp -p $(cat pd.lst) Alex$v 2> /dev/null
+		cp -p $(cat pd.lt) Alex$v 2> /dev/null
 	    fi
 	fi
     fi

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.77 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: comp.y,v 1.78 2003/12/05 15:45:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -203,6 +203,12 @@ valuevariable
 	 *
 	 * An extern type declaration of a particular variable may not
 	 * occurr after its simple declaration or its assignment.
+	 *
+	 * If a variable is declared extern in several sources which will
+	 * later be linked and that variable is erroneously declared and
+	 * assigned, either in immediate assignments or C assignments in
+	 * more than one source module, a linker error will occurr.
+	 * (Multiple definition of the variable).
 	 *
 	 ***********************************************************/
 
@@ -514,6 +520,8 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr '|' expr		{		/* binary | */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
@@ -521,8 +529,9 @@ expr	: UNDEF			{
 		} else if ($1.v == 0 || $3.v == 0) {
 		    errBit(); YYERROR;
 		} else {
-		    $$.v = op_push(op_force($1.v, GATE),
-			OR, op_force($3.v, GATE));	/* logical | */
+		    lpR = op_force($3.v, GATE);
+		    lpL = op_force($1.v, GATE);
+		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		}
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -532,6 +541,8 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr '^' expr		{		/* binary ^ */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
@@ -539,8 +550,9 @@ expr	: UNDEF			{
 		} else if ($1.v == 0 || $3.v == 0) {
 		    errBit(); YYERROR;
 		} else {
-		    $$.v = op_xor(op_force($1.v, GATE),
-			op_force($3.v, GATE));		/* logical ^ */
+		    lpR = op_force($3.v, GATE);
+		    lpL = op_force($1.v, GATE);
+		    $$.v = op_xor(lpL, lpR);		/* logical ^ */
 		}
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -550,6 +562,8 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr '&' expr		{		/* binary & */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
@@ -557,8 +571,9 @@ expr	: UNDEF			{
 		} else if ($1.v == 0 || $3.v == 0) {
 		    errBit(); YYERROR;
 		} else {
-		    $$.v = op_push(op_force($1.v, GATE),
-			AND, op_force($3.v, GATE));	/* logical & */
+		    lpR = op_force($3.v, GATE);
+		    lpL = op_force($1.v, GATE);
+		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		}
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -568,9 +583,12 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr CMP expr	{			/* == != < <= > >= */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = op_push(op_force($1.v, ARITH),
-		    ARN, op_force($3.v, ARITH))) != 0) {
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    $$.v = op_force($$.v, GATE);	/* default output */
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -579,9 +597,12 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr AOP expr		{		/* << >> / % */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = op_push(op_force($1.v, ARITH),
-		    ARN, op_force($3.v, ARITH))) != 0) {
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -589,9 +610,12 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr PM expr		{		/* binary + - */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = op_push(op_force($1.v, ARITH),
-		    ARN, op_force($3.v, ARITH))) != 0) {
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -599,9 +623,12 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr '*' expr		{		/* binary * */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = op_push(op_force($1.v, ARITH),
-		    ARN, op_force($3.v, ARITH))) != 0) {
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -623,18 +650,22 @@ expr	: UNDEF			{
 	| expr AA expr	{			/* binary && */
 		Symbol *	sp;
 		int		typ;
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist)) {
-		    $$.v = op_push(op_force($1.v, GATE),
-			AND, op_force($3.v, GATE));	/* logical & */
+		    lpR = op_force($3.v, GATE);
+		    lpL = op_force($1.v, GATE);
+		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		} else {
-		    $$.v = op_push(op_force($1.v, ARITH),
-			ARN, op_force($3.v, ARITH));	/* arithmetic && */
-		    $$.v = op_force($$.v, GATE);	/* default output */
+		    lpR = op_force($3.v, ARITH);
+		    lpL = op_force($1.v, ARITH);
+		    $$.v = op_push(lpL, ARN, lpR);	/* arithmetic && */
+		    $$.v = op_force($$.v, GATE);	/* default GATE output */
 		}
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -646,18 +677,22 @@ expr	: UNDEF			{
 	| expr OO expr	{			/* binary || */
 		Symbol *	sp;
 		int		typ;
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist)) {
-		    $$.v = op_push(op_force($1.v, GATE),
-			OR, op_force($3.v, GATE));	/* logical | */
+		    lpR = op_force($3.v, GATE);
+		    lpL = op_force($1.v, GATE);
+		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		} else {
-		    $$.v = op_push(op_force($1.v, ARITH),
-			ARN, op_force($3.v, ARITH));	/* arithmetic || */
-		    $$.v = op_force($$.v, GATE);	/* default output */
+		    lpR = op_force($3.v, ARITH);
+		    lpL = op_force($1.v, ARITH);
+		    $$.v = op_push(lpL, ARN, lpR);	/* arithmetic || */
+		    $$.v = op_force($$.v, GATE);	/* default GATE output */
 		}
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -667,10 +702,14 @@ expr	: UNDEF			{
 #endif
 	    }
 	| expr '?' expr ':' expr	{	/* ? : */
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $5.l;
-		if (($$.v = op_push(op_force($1.v, ARITH),
-		    ARN, op_push(op_force($3.v, ARITH),
-		    ARN, op_force($5.v, ARITH)))) != 0) {
+		lpR = op_force($5.v, ARITH);
+		lpL = op_force($3.v, ARITH);
+		lpR = op_push(lpL, ARN, lpR);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -711,11 +750,14 @@ expr	: UNDEF			{
 	;
 
 lexpr	: aexpr ',' aexpr		{
+		List_e *	lpL;
+		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v == 0) { $$.v = $3.v; errBit(); YYERROR; }
 		if ($3.v == 0) { $$.v = $1.v; errBit(); YYERROR; }
-		if (($$.v = op_push(op_force($1.v, GATE),
-		    LOGC, op_not(op_force($3.v, GATE)))) != 0) {
+		lpR = op_not(op_force($3.v, GATE));
+		lpL = op_force($1.v, GATE);
+		if (($$.v = op_push(lpL, LOGC, lpR)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1671,7 +1713,8 @@ compile(
 		perror("unlink");
 		return T0index;		/* error unlinking temporary file */
 	    }
-	    sprintf(execBuf, "cc -E -C -x c %s -o %s", inpPath, T0FN);
+	    /* Cygnus does not understand cc - use gcc - pass comments with -C */
+	    sprintf(execBuf, "gcc -E -C -x c %s -o %s", inpPath, T0FN);
 	    if (debug & 02) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
 	    r = system(execBuf);	/* Pre-compile iC file */
 	    if (r != 0) {
@@ -1749,7 +1792,7 @@ get(FILE* fp)
 	    /********************************************************
 	     *  handle C-pre-processor # 1 "/usr/include/stdio.h"
 	     ********************************************************/
-	    if (sscanf(chbuf, " # %d \"%[/A-Za-z_.0-9]\"", &temp1, inpNM) == 2) {
+	    if (sscanf(chbuf, " # %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
 		lineno = temp1 - 1;		/* handled in iC and C-code */
 		lexflag |= C_LINE;
 		if ((lexflag & C_PARSE) == 0) {
@@ -1769,7 +1812,7 @@ get(FILE* fp)
 	     *  C-compile
 	     *  handle pre-processor #line 1 "file.ic"
 	     ********************************************************/
-	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, inpNM) == 2) {
+	    if (sscanf(chbuf, " # line %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
 		if (lexflag & C_FIRST) {
@@ -2006,7 +2049,7 @@ iClex(void)
 	    } else if (qtoken) {
 		c = qtoken;			/* LOUT or AOUT */
 	    } else if (typ == ARNC || typ == LOGC || (dflag && typ == NCONST)) {
-		c = lex_typ[symp->type & TM];	/* NCONST via ALIAS ==> NVAR */
+		c = lex_typ[typ];		/* NCONST via ALIAS ==> NVAR */
 	    } else {
 		c = lex_act[symp->ftype];	/* alpha_numeric symbol */
 	    }

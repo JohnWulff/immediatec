@@ -12,9 +12,9 @@ usage ()
     echo '	-h	this help text' >&2
     echo 'uses icc -c to make a dedicated icc for each iCtarget' >&2
     echo 'output the listings produced to directory ListP' >&2
-    echo 'if no iCtargets are specified, make each line of file pe.lst' >&2
+    echo 'if no iCtargets are specified, make each line of file pe.lt' >&2
     echo 'in this case also output the common output to OutP' >&2
-    echo '	$Id: mp,v 1.7 2003/10/18 21:50:14 jw Exp $' >&2
+    echo '	$Id: mp,v 1.8 2003/11/28 18:39:05 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -51,7 +51,7 @@ if [[ $# != 0 ]]; then
 	fi
     done
 else
-    for f in $(cat pe.lst); do
+    for f in $(cat pe.lt); do
 	echo "$f.ic";
 	icc -c $f.ic > /dev/null 2>&1		# listing only with -d474
 	cd ..

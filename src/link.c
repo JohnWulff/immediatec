@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.18 2002/09/01 19:39:56 jw Exp $";
+"@(#)$Id: link.c,v 1.19 2003/11/28 15:38:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,6 +25,7 @@ static const char link_c[] =
 #include	"icc.h"
 
 unsigned short	mark_stamp = 1;		/* incremented every scan */
+static short	warn_cnt = 10;		/* limit the number of oscillator warnings */
 
 /* link a gate block into the output list */
 
@@ -115,12 +116,18 @@ link_ol(
 	    } else {
 		if (++gp->gt_mcnt >= osc_max) {	/* new alg: cnt 1 larger */
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0200) putc('#', outFP);
+		    if (debug & 0300) putc('#', outFP);
 #endif
 		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
+		    if (!(debug & 100) && warn_cnt > 0) {
+			warn_cnt--;		/* limit the number of warning messages */
+			fprintf(outFP,
+			    "Warning: %s has oscillated %d times - check iC program!!!\n",
+			    gp->gt_ids, gp->gt_mcnt);
+		    }
 		}
 #if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0200) fprintf(outFP, "%d", gp->gt_mcnt);
+		if (debug & 0300) fprintf(outFP, "%d", gp->gt_mcnt);
 #endif
 	    }
 	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.34 2003/10/12 20:57:47 jw Exp $
+# @(#)$Id: Makefile.in,v 1.35 2003/11/26 11:23:29 jw Exp $
 
 ############################################################
 #
@@ -180,7 +180,7 @@ uninstall:
 	rm -f ${prefix}/include/icc.h
 
 clean:
-	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a
+	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a lmain
 
 distclean: clean
 	rm -f Makefile config.status config.log config.cache

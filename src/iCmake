@@ -31,6 +31,7 @@ usage ()
     echo '	-n	generate no output, report ict compile errors only' >&2
     echo "		-s and -n generate 'cexe.c' for last file as a side effect" >&2
     echo '	-i	produce file.ini which records output of an initial run' >&2
+    echo '	-I	produce file.ini with full INITIALIZATION info (debug only)' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
     echo '	-q	quiet operation - return status only' >&2
@@ -38,7 +39,7 @@ usage ()
     echo '		(default use installed ict and -lict)' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.24 2003/10/03 18:45:13 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.25 2003/12/05 19:26:14 jw Exp $' >&2
 }
 
 link=0
@@ -48,12 +49,12 @@ a=""
 v=""
 b=""
 lib="-lict"
+dir="/usr/local/lib"
 d="-d474 -A"
-#d="-d4474 -A"
 x=""
 l=""
 q=0
-i=0
+i=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -85,12 +86,13 @@ while [ $# -gt 0 ]; do
 	    c*)	link=3;d="-A";;
 	    b*) link=4;;
 	    n*) link=5;d="-A";;
-	    i*)	i=1;;
+	    i*)	i=440;;
+	    I*)	i=540;;
 	    q*)	q=1;;
 	    v*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    v=$option
-		    lib=./libict$v.a
+		    lib=./libict$option.a
+		    v="$option -P./"
 		else
 		    lib=./libict.a
 		    v=" -P./"
@@ -98,8 +100,7 @@ while [ $# -gt 0 ]; do
 		b="./"
 		break;;
 	    6*)	d="-d476 -A";l="6";;
-#	    6*)	d="-d4476 -A";l="6";;
-	    x*)	x="1";;
+	    x*)	d="-d4474 -A";x="1";;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;
 	    esac
@@ -129,8 +130,8 @@ for f in $*; do
 	    rm -f $base.c $base
 	    if nice ${b}ict$v $d -o $base.c -l $base.lst$l $file; then
 		echo >> _list2.h	# terminate last line of #define \
-		if nice gcc -g -I. -o $base $base.c _list_.c $lib; then
-		    if [ "$i" = 1 ] && ! ./$base -d540 > $base.ini; then
+		if nice gcc -g -I. -L$dir -o $base $base.c _list_.c $lib; then
+		    if [ -n "$i" ] && ! ./$base -d$i > $base.ini; then
 			if [ "$q" = 0 ]; then
 			    echo "run time error in initial execution of '$base'" >&2
 			fi
@@ -228,8 +229,8 @@ if [ "$link" = 1 ]; then
 	    echo "link $first from$list"
 	fi
 	echo >> _list2.h	# terminate last line of #define \
-	if nice gcc -g -I. -o $first $list _list_.c $lib; then
-	    if [ "$i" = 1 ] && ! ./$first -d540 > $first.ini; then
+	if nice gcc -g -I. -L$dir -o $first $list _list_.c $lib; then
+	    if [ -n "$i" ] && ! ./$first -d$i > $first.ini; then
 		if [ "$q" = 0 ]; then
 		    echo "run time error in initial execution of '$first'" >&2
 		fi

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.18 2003/10/12 20:57:47 jw Exp $";
+"@(#)$Id: lexc.l,v 1.19 2003/11/25 15:18:14 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -106,6 +106,7 @@ static int	check_type(c_STYPE* u);
 "void"			{ count(&c_lval); return VOID; }
 (__)?volatile(__)?	{ count(&c_lval); return VOLATILE; }
 "while"			{ count(&c_lval); return WHILE; }
+(__)?builtin_va_list	{ count(&c_lval); return TYPE_NAME; }	/* type in GCC 3.2 */
 (__)?attribute(__)?	{ if (ignore(&c_lval)) yyterminate(); }
 (__)?asm(__)?		{ if (ignore(&c_lval)) yyterminate(); }
 (__)?extension(__)?	{ count(&c_lval); }		/* ignore */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.64 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: outp.c,v 1.65 2003/12/06 15:23:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -151,6 +151,7 @@ mN(Symbol * sp)
 
 unsigned short	Aflag;			/* -A flag signals ARITH alias */
 unsigned short	aflag;			/* -a on compile to append output */
+unsigned short	Tflag;			/* define _tVar in _list_.c _list1.h */
 
 static unsigned	block_total;		/* shared by listNet and buildNet */
 static unsigned	link_count;		/* shared by listNet and buildNet */
@@ -575,6 +576,9 @@ output(char * outfile)
 #include	\"%s\"\n\
 Gate **		i_list[] = { I_LIST 0, };\n\
 ", H1name, H2name);					/* list _list_.c */
+	if (Tflag) {			/* imm_identifier++ -- used in c_compile */
+	    fprintf(H1p, "int		_tVar;\n");
+	}
 	fclose(H1p);					/* list _list_.c */
     }
 
@@ -610,7 +614,7 @@ static char	COMPILER[] =\n\
 #endif\n\
 extern Gate *	_l_[];\n\
 ", inpNM, outfile, SC_ID, H1name);
-linecnt += 27;
+    linecnt += 26;
 
 /********************************************************************
  *
@@ -969,6 +973,9 @@ linecnt += 27;
     fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
     linecnt += 2;
     fprintf(H1p, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
+    if (Tflag) {			/* imm_identifier++ -- used in c_compile */
+	fprintf(H1p, "extern int	_tVar;\n");
+    }
     fprintf(H2p, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
 

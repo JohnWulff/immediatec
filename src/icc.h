@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.45 2002/09/01 19:59:55 jw Exp $";
+"@(#)$Id: icc.h,v 1.46 2003/12/06 15:01:46 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -144,6 +144,7 @@ extern void	icc(			/* initialise and execute */
 extern unsigned short	osc_max;
 extern unsigned short	Aflag;		/* -A flag signals ARITH alias */
 extern unsigned short	aflag;		/* -a flag signals append mode */
+extern unsigned short	Tflag;		/* define _tVar in _list_.c _list1.h */
 
 					/*   main.c   */
 extern const char *	progname;	/* name of this executable */

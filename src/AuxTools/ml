@@ -11,15 +11,15 @@ usage ()
     echo 'Usage:	'${0##*/}' [-h]' >&2
     echo '	-h	this help text' >&2
     echo 'make different lists in a Test directory' >&2
-    echo '	p.lst	# all for copying' >&2
-    echo '	pd.lst	# sources and derived for comparing' >&2
-    echo '	pe.lst	# executables only' >&2
-    echo '	pc.lst	# C files only' >&2
-    echo '	pi.lst	# ini files only' >&2
-    echo '	pl.lst	# lst files only' >&2
-    echo '	p6.lst	# lst6 files only' >&2
-    echo '	pp.lst	# iC files only' >&2
-    echo '	$Id: ml,v 1.6 2003/10/18 22:23:40 jw Exp $' >&2
+    echo '	p.lt	# all for copying' >&2
+    echo '	pd.lt	# sources, includes and derived for comparing' >&2
+    echo '	pe.lt	# executables only' >&2
+    echo '	pc.lt	# C files only' >&2
+    echo '	pi.lt	# ini files only' >&2
+    echo '	pl.lt	# lst files only' >&2
+    echo '	p6.lt	# lst6 files only' >&2
+    echo '	pp.lt	# iC files only' >&2
+    echo '	$Id: ml,v 1.7 2003/11/28 17:56:27 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -38,15 +38,26 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-mklst *.ic > p.lst	# all for copying
-mklst -d *.ic > pd.lst	# sources and derived for comparing
-mklst -e *.ic > pe.lst	# executables only
-mklst -c *.ic > pc.lst	# C files only
-mklst -i *.ic > pi.lst	# ini files only
-mklst -l *.ic > pl.lst	# lst files only
-mklst -6 *.ic > p6.lst	# lst6 files only
-mklst -p *.ic > pp.lst	# iC files only
+mklst *.i[ch] > p.lt	# all for copying
+mklst -d *.i[ch] > pd.lt	# sources, includes and derived for comparing
+mklst -e *.ic > pe.lt	# executables only
+mklst -c *.ic > pc.lt	# C files only
+mklst -i *.ic > pi.lt	# ini files only
+mklst -l *.ic > pl.lt	# lst files only
+mklst -6 *.ic > p6.lt	# lst6 files only
+mklst -p *.ic > pp.lt	# iC files only
 
-test -e OutP && echo OutP >> p.lst; echo OutP >> pd.lst;
-test -e OutT && echo OutT >> p.lst; echo OutT >> pd.lst;
-test -e Init.out && echo Init.out >> p.lst; echo Init.out >> pd.lst;
+if [[ -f OutP ]]; then
+    echo OutP >> p.lt
+    echo OutP >> pd.lt
+fi
+
+if [[ -f OutT ]]; then
+    echo OutT >> p.lt
+    echo OutT >> pd.lt
+fi
+
+if [[ -f Init.out ]]; then
+    echo Init.out >> p.lt
+    echo Init.out >> pd.lt
+fi

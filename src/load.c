@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.36 2002/09/02 10:13:23 jw Exp $";
+"@(#)$Id: load.c,v 1.37 2003/11/26 13:53:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -62,16 +62,13 @@ static const char *	usage =
 #endif
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "        -d <debug>2000  display scan_cnt and link_cnt\n"
-"                 +1000  I0 toggled every second\n"
-#else
-"        -d <debug>1000  I0 toggled every second\n"
-#endif
 "                  +400  exit after initialisation\n"
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "                  +200  display loop info (+old style logic)\n"
 "                  +100  initialisation and run time info\n"
+#else
+"        -d <debug> 400  exit after initialisation\n"
 #endif
-"                   +40  net statistics\n"
+"                   +40  load listing\n"
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
@@ -180,7 +177,7 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &df);
 		    debug |= df;	/* short */
-		    df &= 040;	/* net statistics */
+		    df &= 040;		/* load listing */
 		    goto break2;
 		case 't':
 		    debug |= 0100;	/* trace */
