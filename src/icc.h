@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.30 2001/04/14 13:32:05 jw Exp $";
+"@(#)$Id: icc.h,v 1.31 2001/04/15 06:39:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -18,33 +18,33 @@ static const char icc_h[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #ifdef _WINDOWS
-#define strlen(a)	lstrlen(a)
-#define strcpy(a,b)	lstrcpy(a,b)
-#define stpcpy(a,b)	(lstrcpy(a,b)+lstrlen(b))
-#define strcmp(a,b)	lstrcmp(a,b)
-#define sprintf		wsprintf
-#define calloc(a,b)	emalloc((a)*(b))
-#define free(a)		efree(a)
+#define	strlen(a)	lstrlen(a)
+#define	strcpy(a,b)	lstrcpy(a,b)
+#define	stpcpy(a,b)	(lstrcpy(a,b)+lstrlen(b))
+#define	strcmp(a,b)	lstrcmp(a,b)
+#define	sprintf		wsprintf
+#define	calloc(a,b)	emalloc((a)*(b))
+#define	free(a)		efree(a)
 extern void	efree(void *);
 #else
 #ifdef MSC
-#define stpcpy(a,b)	(strcpy(a,b)+strlen(b))
+#define	stpcpy(a,b)	(strcpy(a,b)+strlen(b))
 #endif
 #endif
 
 #ifndef PPGATESIZE
-#define PPGATESIZE 127		/* natural gate size for char val */
+#define	PPGATESIZE 127		/* natural gate size for char val */
 #endif
 
 #define	DIS_MAX	5		/* diplay heading after this many */
-#define IXD	32		/* number of slots in icc (<= 64) */
-#define TXD	1		/* number of system slots (timers etc) */
+#define	IXD	32		/* number of slots in icc (<= 64) */
+#define	TXD	1		/* number of system slots (timers etc) */
 
-#define Sizeof(x)	((sizeof x) / (sizeof x[0]))
+#define	Sizeof(x)	((sizeof x) / (sizeof x[0]))
 #ifndef DEQ
-#define Out_init(ol)	(ol->gt_list = (Gate **)(ol->gt_next = ol))
+#define	Out_init(ol)	(ol->gt_list = (Gate **)(ol->gt_next = ol))
 #else
-#define Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
+#define	Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
 #endif
 
 #define	NOT	1	/* used in List_e.le_val */
@@ -66,7 +66,7 @@ extern void	efree(void *);
 #define	EF	10
 #define	SW	11	/* NOTE: no output */
 #define	CF	12	/* NOTE: no output */
-#define NCONST	13	/* constant number */
+#define	NCONST	13	/* constant number */
 #define	INPW	14	/* arithmetic input */
 #define	INPX	15	/* logical input */
 
@@ -75,94 +75,96 @@ extern void	efree(void *);
 
 #define	ALIAS	18	/* non executable functions */
 #define	ERR	19	/* mark node which had error during generation */
-#define EXT	20	/* mark node declared as extern - stop assignment */
+#define	EXT	20	/* mark node declared as extern - stop assignment */
 
-#define KEYW	21	/* hold yacc token, used for compilation only */
+#define	KEYW	21	/* hold yacc token, used for compilation only */
 
-#define MAX_GT	SH	/* types < MAX_GT are driven by a value */
-#define MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
+#define	MAX_GT	SH	/* types < MAX_GT are driven by a value */
+#define	MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
 #define	MAX_OP	ALIAS	/* types < MAX_OP are executable */
-#define MAX_LS	KEYW	/* types < MAX_LS are generated */
+#define	MAX_LS	KEYW	/* types < MAX_LS are generated */
 
 /*	action function types symbol.ftype and Gate.gt_fni */
 
-#define UDFA	0	/* indices into action function arrays */
-#define ARITH	1	/* arithmetic gate */
-#define GATE	2	/* logical gate */
-#define D_SH	3	/* arithmetic action */
-#define F_SW	4	/* arithmetic action */
-#define CH_BIT	5	/* arithmetic action */
-#define RI_BIT	6	/* logical action */
-#define CLCK	7	/* logical action */
-#define TIMR	8	/* logical action */
-#define S_FF	9	/* logical action not needed 1001 */
-#define R_FF	10	/* logical action not needed 1010 */
-#define D_FF	11	/* logical action not needed 1011 */
-#define F_CF	12	/* logical action */
-#define OUTW	13	/* arithmetic output */
-#define OUTX	14	/* logical output */
-#define CLCKL	15	/* clock action */
-#define TIMRL	16	/* timer action */
+#define	UDFA	0	/* indices into action function arrays */
+#define	ARITH	1	/* arithmetic gate */
+#define	GATE	2	/* logical gate */
+#define	D_SH	3	/* arithmetic action */
+#define	F_SW	4	/* arithmetic action */
+#define	CH_BIT	5	/* arithmetic action */
+#define	RI_BIT	6	/* logical action */
+#define	CLCK	7	/* logical action */
+#define	TIMR	8	/* logical action */
+#define	S_FF	9	/* logical action not needed 1001 */
+#define	R_FF	10	/* logical action not needed 1010 */
+#define	D_FF	11	/* logical action not needed 1011 */
+#define	F_CF	12	/* logical action */
+#define	OUTW	13	/* arithmetic output */
+#define	OUTX	14	/* logical output */
+#define	CLCKL	15	/* clock action */
+#define	TIMRL	16	/* timer action */
 
-#define MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
-#define MIN_ACT	D_SH	/* ftypes >= MIN_ACT cause an action */
-#define MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
-#define MAX_FTY	TIMRL	/* ftypes >  MAX_FTY are ALIAS ftypes for live list */
+#define	MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
+#define	MIN_ACT	D_SH	/* ftypes >= MIN_ACT cause an action */
+#define	MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
+#define	MAX_FTY	TIMRL	/* ftypes >  MAX_FTY are ALIAS ftypes for live list */
 
-#define ARITH_ALIAS	MAX_FTY+ARITH		/* 17 */
-#define GATE_ALIAS	MAX_FTY+GATE		/* 18 */
-#define INV_ALIAS	MAX_FTY+GATE+NOT	/* 19 */
+#define	ARITH_ALIAS	MAX_FTY+ARITH		/* 17 */
+#define	GATE_ALIAS	MAX_FTY+GATE		/* 18 */
+#define	INV_ALIAS	MAX_FTY+GATE+NOT	/* 19 */
+#define	CLCKL_ALIAS	MAX_FTY+CLCKL		/* 31 */
+#define	TIMRL_ALIAS	MAX_FTY+TIMRL		/* 32 */
 
-#define ONCE_M	0x80	/* actions containing this bit only once */
-#define S_FF_M	0x01	/* masks in array bit2 for pass2 */
-#define R_FF_M	0x02
-#define D_FF_M	(S_FF_M | R_FF_M | ONCE_M)
-#define CH_B_M	0x04
-#define RI_B_M	0x08
-#define F_CF_M	0	/* has no slave node */
-#define OUTP_M	1	/* used to check that 1 input */
-#define CLCK_M	0x20
-#define TIMR_M	0x40
-#define D_SH_M	(0x10 | ONCE_M)
-#define INPT_M	0	/* only used for check so far */
+#define	ONCE_M	0x80	/* actions containing this bit only once */
+#define	S_FF_M	0x01	/* masks in array bit2 for pass2 */
+#define	R_FF_M	0x02
+#define	D_FF_M	(S_FF_M | R_FF_M | ONCE_M)
+#define	CH_B_M	0x04
+#define	RI_B_M	0x08
+#define	F_CF_M	0	/* has no slave node */
+#define	OUTP_M	1	/* used to check that 1 input */
+#define	CLCK_M	0x20
+#define	TIMR_M	0x40
+#define	D_SH_M	(0x10 | ONCE_M)
+#define	INPT_M	0	/* only used for check so far */
 
 /* list of types */
-#define FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
+#define	FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
 	"CLK","TIM","ALIAS","ERR","EXT","KEYW"
 
-#define OPS	".-+~&|%*#^/({=[<:!@?_;"	/* DEBUG display of types */
+#define	OPS	".-+~&|%*#^/({=[<:!@?_;"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
-#define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
+#define	FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
 	D_SH, D_FF, CH_BIT, RI_BIT, F_SW, F_CF, ARITH, ARITH, GATE,\
 	CLCK, TIMR, GATE, GATE, 0, 0
 
 /* compiler tokens corresponding to type */
-#define DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
+#define	DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, NVAR,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
-#define I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\
+#define	I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\
 	ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i,\
 	clock_i, clock_i, clock_i, clock_i,
 
 /* list of ftypes */
-#define FULL_FTYPE "UDFA","ARITH","GATE","D_SH","F_SW","CH_BIT","RI_BIT",\
+#define	FULL_FTYPE "UDFA","ARITH","GATE","D_SH","F_SW","CH_BIT","RI_BIT",\
 	"CLCK","TIMR","S_FF","R_FF","D_FF","F_CF","OUTW","OUTX",\
 	"CLCKL","TIMRL"
 
-#define FOPS	"UA HIVECTSRDFWX:!"	/* DEBUG display of ftypes */
+#define	FOPS	"UA HIVECTSRDFWX:!"	/* DEBUG display of ftypes */
 
 /* types corresponding to ftypes */
-#define TYPES	UDF, ARN, OR, SH, SW, VF, EF,\
+#define	TYPES	UDF, ARN, OR, SH, SW, VF, EF,\
 	CLK, TIM, FF, FF, FF, CF, ARN, AND,\
 	ERR, ERR
 
 /* compiler tokens corresponding to ftype */
-#define DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
+#define	DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
 	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, AOUT, LOUT,\
 	CVAR, TVAR
 
@@ -195,9 +197,9 @@ typedef struct Gate {			/* Gate */
 	int		gt_old;		/* old value for arithhmetic */
 } Gate;
 
-#define FL_GATE	0
-#define FL_CLK	1
-#define FL_TIME	2
+#define	FL_GATE	0
+#define	FL_CLK	1
+#define	FL_TIME	2
 			/* action gate output or C function pointer */
 #define	gt_funct	gt_list[FL_GATE]
 			/* clock list pointer */
@@ -248,8 +250,8 @@ extern Gate *		gx;	/* points to action Gate in chMbit and riMbit */
 extern short		dc;	/* debug display counter in scan and rsff */
 extern unsigned char	bitMask[];
 extern unsigned char	bitIndex[];
-#define B_WIDTH		257		/* marks output as Byte width */
-#define W_WIDTH		258		/* marks output as Word width */
+#define	B_WIDTH		257		/* marks output as Byte width */
+#define	W_WIDTH		258		/* marks output as Word width */
 
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	rMff(Gate *, Gate *);	/* R_FF master action on FF */
@@ -277,7 +279,7 @@ extern void	timerSfn(Gate *, Gate *);/* TIMR slave action on TIM */
 extern void	err_fn(Gate *, Gate *);	/* no master or slave function */
 
 extern void	null(void);		/* null function */
-#define null2	(Functp2)null		/* null function for funct lists */
+#define	null2	(Functp2)null		/* null function for funct lists */
 
 extern short	error_flag;
 
@@ -289,13 +291,13 @@ extern void	pass2(Gate *, int);	/* Pass2 init on gates */
 extern void	gate2(Gate *, int);	/* pass2 function init gates */
 extern void	i_ff2(Gate *, int);	/* called via output lists */
 extern void	pass4(Gate *, int);	/* Pass4 init on gates */
-#define null1	(Functp)null		/* null function for init lists */
+#define	null1	(Functp)null		/* null function for init lists */
 
 extern	Functp	gate_i[];
 extern	Functp	ff_i[];
 extern	Functp	clock_i[];
 
-#define MARKMAX 3		/* number of oscillations allowed */
+#define	MARKMAX 3		/* number of oscillations allowed */
 				/* should be odd so that a transition */
 				/* is seen in first cycle */
 
