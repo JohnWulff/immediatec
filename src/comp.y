@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.18 2000/11/23 16:24:47 jw Exp $";
+"@(#)$Id: comp.y,v 1.19 2000/11/25 13:25:56 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -29,7 +29,7 @@ static void	warn1(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
 static char *	ccfrag;			/* flag for cexini CCFRAG syntax */
 static char	ccbuf[32];		/* buffer for NUMBER CCFRAG */
-static int	stflag;			/* record states of static */
+static int	stflag = 0;		/* record states of static */
 unsigned int	stype;			/* to save TYPE in decl */
 %}
 
@@ -543,9 +543,9 @@ lexpr	: aexpr ',' aexpr		{
 
 value	: NUMBER		{ $$.v = $1.v;	/* terminates with , or ) */
 		$$.f = $1.f; $$.l = $1.l;
-		if ($$.v & 0x8000) {
-		    warning("time value must be <= 32767", NULL);
-		    $$.v = 32767;
+		if ($$.v > 32767) {	/* FIX unsigned int */
+		    warning("time value must be positive", NULL);
+		    $$.v = 32767;	/* FIX */
 		}
 		if (debug & 02) pu(2, "value", (Lis*)&$$);
 	    }
@@ -855,7 +855,7 @@ unget(char c)
 
 char *	cexeString[] = {
     "    case %d:\n",
-    "static int cexe_%d(void) {\n",
+    "static int cexe_%d(Gate * _cexe_gf) {\n",
 };
 
 static int
@@ -908,10 +908,12 @@ yylex(void)
 	    stflag &= ~0x08;			/* clear bit 3 */
 	}
 	fprintf(exoFP, ";\n");			/* terminate case */
-	if (outFlag != 0) {
-	    fprintf(exoFP, "}\n\n");		/* terminate function */
+	if (outFlag != 0 && (stflag & 0x02) == 0) {
+	    fprintf(exoFP, "}\n");		/* terminate function */
 	}
+	fprintf(exoFP, "\n");
 	yylval.val.v = c_number;		/* return case # */
+	stflag = 0;
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
@@ -1248,14 +1250,14 @@ copyCfrag(char s, char m, char e)
     int		match;
 
     for (brace = 0; (c = get()) != EOF; putc(c, exoFP)) {
-	if (c == s) {			/* '{' or '(' ")}" */
+	if (c == s) {			/* '{' or '(' */
 	    brace++;
 	} else if (c == m) {		/* ';' or ',' */
 	    if (brace <= 0) {
 		unget(c);		/* use for next token */
 		return m;
 	    }
-	} else if (c == e) {		/* "{(" ')' or '}' */
+	} else if (c == e) {		/* ')' or '}' */
 	    if (--brace <= 0) {
 		if (brace < 0) {
 		    unget(c);
