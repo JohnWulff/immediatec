@@ -19,34 +19,29 @@ $top->title("Simple");
 
 ########################################################################
 #
-#	Instantiate widgets and arrange them
+#	Generate a 2 buttons
 #
 ########################################################################
 
-$label = $top->Label(
-    text	=> 'hello',	# label properties
-    anchor	=> 'n',		# anchor text to "north"
-    relief	=> 'groove',	# border style
-    width	=> 10,		# characters wide
-    height	=> 3,		# characters high
-);
-$label->pack;	# give it a default place in the main window
-
-########################################################################
-#
-#	Generate a button
-#
-########################################################################
-
-$button = $top->Button(
+$button1 = $top->Button(
     text	=> 'John',
     command	=> sub {	# use a closure
-	$button->cget('text') eq 'John' ?
-	    $button->configure(text => 'Helene') :
-	    $button->configure(text => 'John');
+	$button1->cget('text') eq 'John' ?
+	    $button1->configure(text => 'Helene') :
+	    $button1->configure(text => 'John');
     }
 );
-$button->pack;	# give it a default place in the main window
+$button1->pack;	# give it a default place in the main window
+
+$button2 = $top->Button(
+    text	=> 'John',
+    command	=> sub {	# use a closure
+	$button2->cget('text') eq 'John' ?
+	    $button2->configure(text => 'David') :
+	    $button2->configure(text => 'John');
+    }
+);
+$button2->pack;	# give it a default place in the main window
 
 ########################################################################
 #
