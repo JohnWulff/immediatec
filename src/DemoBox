@@ -11,10 +11,11 @@
 use Tk;					# Slurp the module in
 use Msg;
 use strict;
+# use Devel::Peek 'Dump';		# ZZZ
 
 my @inputs;
 my @outputs;
-my $outByte;
+my $outByte = 0;		# initialize to a number for correct XOR
 
 #              mask index
 my %indices = (	1   => 0,
@@ -40,12 +41,11 @@ Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	-p port	service port of server (default '8778')
 	unitID	default is 'X0'
 	-t	trace debug messages
-	-d	extra receive debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.21 2001/01/20 11:00:37 jw Exp $
+$Id: DemoBox,v 1.22 2001/01/20 20:25:38 jw Exp $
 .
 
-use vars qw($opt_t $opt_d $opt_s $opt_p $opt_h);
+use vars qw($opt_t $opt_s $opt_p $opt_h);
 require "getopts.pl";
 &Getopts('tds:p:h');			# sets $opt_h if -h etc
 
@@ -157,7 +157,7 @@ if ($unitID =~ /^X/) {
     #	    -state       => 'disabled',\
 		-takefocus   => 0,\
 		-command     => sub {\
-				     print \"Inverting output $index on $unitID\\n\" if \$opt_t;\
+				     print \"Inverting output $index on Q$unitID\\n\" if \$opt_t;\
 				     \$outputs[$index] = [1,0]->[\$outputs[$index]];\
 				    },\
 	    )->pack(-side   => 'top',\
@@ -205,6 +205,7 @@ elsif ($unitID =~ /^[BW]/) {
 	    )->pack(-side   => 'top',
 		    -expand => 1,
 	    );
+	$outputs[0] = 0;
 }
 
 ########################################################################
@@ -247,19 +248,25 @@ sub rcvd_msg_from_server {
 	if ($unitID =~ /^X/) {
 	    if ($msg eq "R") {
 		for ($index = 0; $index < 8; $index++) {
-		    $outputs[$index] = 0;
+		    if ($outputs[$index]) {
+			print "init Q$unitID.$index 0 <-- 1\n" if $opt_t;
+			$outputs[$index] = 0;
+		    }
 		    if ($inputs[$index]) {
+			print "send I$unitID.$index 0 --> 1\n" if $opt_t;
 			$conn->send_now("$index,$inputs[$index]");
 		    }
 		}
+		$outByte = 0;
 	    } elsif ($msg =~ /^\d+$/) {
-		$mask = $outByte ^ $msg;
-		printf("%02x %02x\n", $msg, $mask) if $opt_d;
+		$mask = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
+#		Dump $mask;			# ZZZ
+		printf("Q%s %02x %02x\n", $unitID, $msg, $mask) if $opt_t;
 		if ($mask) {
 		    $index = $indices{$mask};
 		    if (defined $index) {
 			$value = ($msg & $mask) ? 1 : 0;
-			print "$index $value <-- $outputs[$index]\n" if $opt_d;
+			print "Q$unitID.$index $value <-- $outputs[$index]\n" if $opt_t;
 			$outputs[$index] = $value;
 		    } else {
 			# multiple change of input - should be rare
@@ -267,7 +274,7 @@ sub rcvd_msg_from_server {
 			for ($index = 0, $m = 1; $index < 8; $index++, $m <<= 1) {
 			    if ($mask & $m) {
 				$value = ($msg & $m) ? 1 : 0;
-				print "$index $value <-- $outputs[$index]\n" if $opt_d;
+				print "Q$unitID.$index $value <-- $outputs[$index]\n" if $opt_t;
 				$outputs[$index] = $value;
 			    }
 			}
@@ -279,13 +286,16 @@ sub rcvd_msg_from_server {
 	    }
 	} elsif ($unitID =~ /^[BW]/) {
 	    if ($msg eq "R") {
-		print "init 0 $outputs[0]\n" if $opt_d;
-		$outputs[0] = 0;
+		if ($outputs[0]) {
+		    print "init Q$unitID 0 <-- $outputs[0]\n" if $opt_t;
+		    $outputs[0] = 0;
+		}
 		if (length $inputs[0] and $inputs[0]) {
+		    print "send I$unitID 0 --> $inputs[0]\n" if $opt_t;
 		    $conn->send_now("$inputs[0]");
 		}
 	    } elsif ($msg =~ /^\d+$/) {
-		print "$msg $outputs[0]\n" if $opt_d;
+		print "Q$unitID $msg <-- $outputs[0]\n" if $opt_t;
 		$outputs[0] = $msg;
 	    } else {
 		print "$unitID received spurious message: '$msg'\n";
