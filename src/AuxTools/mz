@@ -8,11 +8,21 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-dh] file ...' >&2
+    echo 'Usage:	'${0##*/}' [-dh] [-min<MIN>] [-max<MAX>] file ...' >&2
     echo '	-d	diff previously made files' >&2
+    echo '	-min<MIN> minimum version to process (0 .. 9999)' >&2
+    echo '	-max<MAX> maximum version to process (0 .. 9999)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mz,v 1.7 2002/06/06 08:30:19 jw Exp $' >&2
+    echo 'uses iCmake -vN to make file ... for each version AlexN' >&2
+    echo 'N is an integer' >&2
+    echo 'iC files are made from compiler ictN and libictN.a (icc.v version 1.N)' >&2
+    echo 'if no files are specified uses mm via pm.lst' >&2
+    echo 'directory AlexN must exist (generated files are saved there)' >&2
+    echo '	$Id: mz,v 1.8 2003/10/12 19:48:04 jw Exp $' >&2
 }
+
+min=0
+max=9999
 
 while [[ $# > 0 ]]; do
     case $1 in
@@ -21,8 +31,23 @@ while [[ $# > 0 ]]; do
 	while [[ -n "$option" ]]; do
 	    case "$option" in
 	    d*)	d=diff;;
+	    min*)	option=${option#???}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		min="$option"
+		break;;
+	    max*)	option=${option#???}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		max="$option"
+		break;;
 	    h*)	usage; exit 255;;
-	    *) aflag="-$option"; break;;
+	    *)	echo "unknown flag -$option";
+		usage; exit 255;;
 	    esac
 	    option=${option#?}
 	done;;
@@ -45,22 +70,32 @@ fi
 versions=$(echo Alex??)
 
 for w in $versions; do
-    if [[ ! -L $w ]]; then
-	v=${w##*[a-z]}
+    v=${w##*[a-z]}
+    if [[ ! -L $w && $v -ge $min && $v -le $max && -f ict$v && -f libict$v.a ]]; then
 	echo "### $v ###"
 	for f in $*; do
 	    rm -f $f $f.lst $f.c $f.ini
 	    if [[ -z "$d" ]]; then
+		# in case this version does not make one of them
 		rm -f Alex$v/$f.lst Alex$v/$f.c Alex$v/$f.ini
 	    fi
 	done
-	iCmake -v$v $*;
-	for f in $*; do
+	if [[ -n "$*" ]]; then
+	    iCmake -v$v $*;
+	    for f in $*; do
+		if [[ -n "$d" ]]; then
+		    Mdiff -ke $f.ic $f.lst $f.c $f.ini Alex$v
+		else
+		    cp -p $f.ic $f.lst $f.c $f.ini Alex$v 2> /dev/null
+		fi
+	    done
+	else
+	    time mm -v$v > Init.out 2>&1
 	    if [[ -n "$d" ]]; then
-		Mdiff -ne $f.ic $f.lst $f.c $f.ini Alex$v
+		Mdiff -ke $(cat pd.lst) Alex$v
 	    else
-		cp $f.ic $f.lst $f.c $f.ini Alex$v
+		cp -p $(cat pd.lst) Alex$v 2> /dev/null
 	    fi
-	done
+	fi
     fi
 done
