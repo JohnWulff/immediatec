@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.32 2001/01/01 21:10:40 jw Exp $";
+"@(#)$Id: comp.y,v 1.33 2001/01/03 18:46:35 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -272,34 +272,31 @@ expr	: UNDEF			{
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| XACT		{
-		register List_e *	lp;
-		$$.f = $1.f; $$.l = $1.l;
-		if ((lp = $1.v->list) != 0) {
-		    $$.v = sy_push(lp->le_sym);		/* output driver */
-		    $$.v->le_val = lp->le_val;		/* copy inversion */
-		} else {
-		    /* output - modify later by following back link */
-#ifndef COMMENT
-		    $$.v = sy_push($1.v);
-#else
-		    List_e *	lp1;
+		Lis		li;
+		$$.f = li.f = $1.f; $$.l = li.l = $1.l;
+		if ((li.v = $1.v->list) == 0) {
 		    Symbol *	sp;
-		    char		temp[20];	/* must hold QXxxxxx.y_1 */
-		    lp = op_force(lp1 = sy_push($1.v), GATE);
-		    $1.v->list = lp;			/* ALIAS link */
-		    $1.v->type = ALIAS;
-		    sp = lp->le_sym;
-		    sy_pop(lp1);			/* delete forward link */
-		    sp->u.blist = 0;			/* cut forward link */
-		    if (debug & 02) {
-			free(sp->name);			/* free $x name space */
+		    char	temp[100];
+		    short	saveDebug;
+		    static int	xtn;
+
+		    sprintf(temp, "_Xtemp%d", ++xtn);
+		    sp = install(temp, INPW, OUTX);	/* temporary _X symbol */
+		    li.v = sy_push(sp);			/* provide a link to _X */
+		    saveDebug = debug;
+		    if ((debug & 06) == 04) {
+			debug &= ~04;			/* supress listing output */
 		    }
-		    sprintf(temp, "%s_1", $1.v->name);
-		    sp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
-		    strcpy(sp->name, temp);		/* predefined name */
-		    $$.v = lp;
-#endif
+		    li.v = qx_asgn(&$1, &li)->list;
+		    li.v->le_sym->type = UDF;		/* not really defined yet */
+		    debug = saveDebug;			/* restore listing output */
+		    unlink_sym(sp);			/* unlink _X symbol */
+		    free(sp->name);
+		    free(sp->list);
+		    free(sp);		/* free all references to X_ symbol */
 		}
+		$$.v = sy_push(li.v->le_sym);	/* output driver */
+		$$.v->le_val = li.v->le_val;	/* copy inversion */
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
@@ -1017,6 +1014,7 @@ yylex(void)
 	    }
 	    goto retfl;
 	} else if (isalpha(c) || c == '_') {
+	    uchar		wplus = 0;
 	    uchar		typ = UDF;
 	    uchar		ftyp = UDFA;
 	    uchar		y0[2];
@@ -1025,22 +1023,18 @@ yylex(void)
 
 	    while ((c = get()) != EOF && (isalnum(c) || c == '_'));
 	    if (sscanf(yytext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
-		if (y1[0] != 'X') {
-		    if (y0[0] == 'Q') {
-			ftyp = OUTW;			/* QBx or QWx */
-		    } else {
-			typ  = INPW;
-			ftyp = y0[0] == 'I' ? ARITH	/* IBx or IWx */
-					    : OUTX;	/* TBx or TWx */
-		    }
+		if (y1[0] == 'B' || y1[0] == 'W') {
+		    wplus = 1;
+		    goto foundQIT;
 		} else if (c == '.') {
 		    if (isdigit(c = get())) {	/* can only be QX%d. */
 			while (isdigit(c = get()));
+		    foundQIT:
 			if (y0[0] == 'Q') {
-			    ftyp = OUTX;
+			    ftyp = OUTX - wplus;	/* OUTX or OUTW */
 			} else {
-			    typ  = INPX;
-			    ftyp = GATE;
+			    typ = INPX - wplus;		/* INPX or INPW */
+			    ftyp = GATE - wplus;	/* GATE or ARITH */
 			}
 		    } else {
 			unget(c);		/* the non digit, not '.' */

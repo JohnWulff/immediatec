@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.18 2001/01/03 10:49:24 jw Exp $";
+"@(#)$Id: genr.c,v 1.19 2001/01/03 18:46:35 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -790,25 +790,28 @@ qx_asgn(
     Lis		li1;
     List_e *	lp;
     List_e *	lpf;
+    Symbol *	svv;
     Symbol *	fsp;
     Symbol *	bsp = 0;
 
-    if (sv->v->type != UDF && sv->v->type != ERR) {
-//	error("multiple assignment to imm bit:", sv->v->name);
-//	sv->v->type = ERR;	/* cannot execute properly */
-	/* TODO: test for proper multiple assignment or TBx ??? ZZZ */
-	sv->v->type = UDF;
-	lpf = sv->v->list;
-	assert(lpf);
-	bsp = lpf->le_sym;			/* save old symbol */
-	assert(bsp);
+    if ((svv = sv->v)->type != UDF) {
+	if (svv->type != ERR && (
+	    svv->ftype != OUTX ||
+	    (lpf = svv->list) == 0 ||
+	    (bsp = lpf->le_sym) == 0 ||
+	    bsp->type != UDF
+	)) {
+	    error("multiple assignment to imm bit or int:", svv->name);
+	    svv->type = ERR;	/* cannot execute properly */
+	}
+	svv->type = UDF;
 	unlink_sym(bsp);			/* unlink old symbol */
 	free(lpf);				/* old back link */
     }
     lpf = op_force(rl->v, GATE);
     fsp = lpf->le_sym;				/* aexpr symbol */
-    sv->v->list = sy_push(lpf->le_sym);		/* create back link */
-    sv->v->list->le_val = lpf->le_val;		/* copy inversion to back link */
+    svv->list = sy_push(lpf->le_sym);		/* create back link */
+    svv->list->le_val = lpf->le_val;		/* copy inversion to back link */
     li1.v = op_push((List_e *)0, UDF, lpf);	/* type <== AND */
     li1.v->le_sym->type = OR;			/* type <== OR */
     li1.f = rl->f;	/* for op_asgn */
@@ -822,6 +825,9 @@ qx_asgn(
 	 * copy all relevant data from $ symbol to old auxiliary output
 	 * including the $ name - this is renamed to original name in
 	 * op_asgn()
+	 *
+	 * cannot simply move output list to new $ symbol, since there may
+	 * be pointers to the old auxiliary output *bsp in the templist
 	 */
 	assert(fsp);
 	free(bsp->name);			/* old "QXx.y_1" string */
@@ -831,7 +837,7 @@ qx_asgn(
 	assert(fsp->list == 0);
 	lp = bsp->list;				/* take out this symbol */
 	assert(lp != 0);
-	assert(lp->le_sym == sv->v);		/* if not it was not first asgn */
+	assert(lp->le_sym == svv);		/* if not it was not first asgn */
 	bsp->list = lp->le_next;		/* 0 or old output list */ 
 	free(lp);				/* old forward link */
 	assert(bsp->u.blist == 0);
@@ -840,8 +846,8 @@ qx_asgn(
 	templist->next = bsp;
 	bsp->next = fsp->next;
 	rl->v->le_sym = bsp;			/* forward link */
-	assert(sv->v->list->le_sym == fsp);	/* not necessary - linked above */
-	sv->v->list->le_sym = bsp;
+	assert(svv->list->le_sym == fsp);	/* not necessary - linked above */
+	svv->list->le_sym = bsp;
 	free(fsp);				/* replaced $ symbol */
     }
     fsp = op_asgn(sv, &li1, OUTX);
