@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.69 2002/08/16 17:01:05 jw Exp $";
+"@(#)$Id: comp.y,v 1.70 2002/08/17 22:39:36 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1625,7 +1625,7 @@ FILE *		errFP;			/* error file pointer */
 
 /********************************************************************
  *
- *	compile an iC language source file whose name is in 'inpPath'
+ *	Compile an iC language source file whose name is in 'inpPath'
  *	if inpPath is a null pointer use standard input (stdin)
  *	a copy of the source file name (or stdin) is kept in inpNM for
  *	error messages. This name and the variable 'lineno' are
@@ -1668,6 +1668,12 @@ compile(
     return errRet;
 } /* compile */
 
+/********************************************************************
+ *
+ *	Get routine for iC and C grammars
+ *
+ *******************************************************************/
+
 int
 get(FILE* fp)
 {
@@ -1695,7 +1701,7 @@ get(FILE* fp)
 	if (lineflag && (lexflag & 04) && strncmp(getp, "##", 2) == 0) {
 	    lexflag |= 1;	/* block source listing for lex */
 	    lineno = savedLineno;
-fprintf(outFP, "####### ## lineno = %d\n", lineno);
+	    if (debug & 02) fprintf(outFP, "####### ## lineno = %d\n", lineno);
 	}
 	if ((lexflag & 01) == 0 && (debug & 010)) {
 	    /********************************************************
@@ -1711,7 +1717,7 @@ fprintf(outFP, "####### ## lineno = %d\n", lineno);
 	    savedLineno = lineno;
 	    lineno = temp1;
 	    lineflag = 0;
-fprintf(outFP, "####### #line %d \"%s\" inpNM = %s lineno = %d\n", temp1, inpBuf, inpNM, lineno);
+	    if (debug & 02) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, inpBuf);
 	    assert(strcmp(inpNM, inpBuf) == 0);
 //###	    inpNM = inpBuf;	/* another file name for messages */
 	    if ((lexflag & 04) == 0) {
@@ -1726,21 +1732,12 @@ fprintf(outFP, "####### #line %d \"%s\" inpNM = %s lineno = %d\n", temp1, inpBuf
 		}
 		lexflag &= ~03;			/* output source listing for lex */
 	    }
-	} else if (lineflag && sscanf(getp, " # include \"%[/A-Za-z_.0-9]\"", inpBuf) == 1) {
+	} else if (lineflag && sscanf(getp, " # include %[<\"/A-Za-z_.0-9>]", inpBuf) == 1) {
 	    if ((lexflag & 04) == 0) {
 		getp = fillp;	/* bypass this line in iClex() for now FIX */
 	    } else {
-		if ((debug & 010)) {
-fprintf(outFP, "####### #include \"%s\" inpNM = %s lineno = %d\n", inpBuf, inpNM, lineno);
-		}
-	    }
-	} else if (lineflag && sscanf(getp, " # include <%[/A-Za-z_.0-9]>", inpBuf) == 1) {
-	    if ((lexflag & 04) == 0) {
-		getp = fillp;	/* bypass this line in iClex() for now FIX */
-	    } else {
-		if ((debug & 010)) {
-fprintf(outFP, "####### #include <%s> inpNM = %s lineno = %d\n", inpBuf, inpNM, lineno);
-		}
+		if (debug & 02) fprintf(outFP, "####### #include %s\n", inpBuf);
+		readTypesFromCache(inpBuf);	/* ZZZ error handling */
 	    }
 	}
     }
@@ -1757,12 +1754,24 @@ fprintf(outFP, "####### #include <%s> inpNM = %s lineno = %d\n", inpBuf, inpNM, 
     return temp;
 } /* get */
 
+/********************************************************************
+ *
+ *	Unget for iC grammar only
+ *
+ *******************************************************************/
+
 static void
 unget(char c)
 {
     *--getp = c;		/* use always insures 1 free place */
     iCtext[--iCleng] = '\0';
 } /* unget */
+
+/********************************************************************
+ *
+ *	Lexer for iC grammar
+ *
+ *******************************************************************/
 
 char *	cexeString[] = {
     "    case %d:\n",
@@ -2049,6 +2058,13 @@ iClex(void)
     return 0;				/* EOF */
 } /* iClex */
 
+/********************************************************************
+ *
+ *	Output an error in source listing and error output
+ *	The error file errFP is opened with the first error
+ *
+ *******************************************************************/
+
 static void
 errLine(void)			/* error file not openend if no errors */
 {
@@ -2085,6 +2101,12 @@ errLine(void)			/* error file not openend if no errors */
     }
 } /* errLine */
 
+/********************************************************************
+ *
+ *	Common code for error messages
+ *
+ *******************************************************************/
+
 void
 errmess(				/* actual error message */
     char *	str0,
@@ -2110,6 +2132,13 @@ errmess(				/* actual error message */
 #endif
 } /* errmess */
 
+/********************************************************************
+ *
+ *	Error message
+ *	sets iClock type to ERR to prevent execution of generated code
+ *
+ *******************************************************************/
+
 void
 error(					/* print error message */
     char *	str1,
@@ -2119,6 +2148,12 @@ error(					/* print error message */
     errmess("Error", str1, str2);
 } /* error */
 
+/********************************************************************
+ *
+ *	Warning message
+ *
+ *******************************************************************/
+
 void
 warning(				/* print warning message */
     char *	str1,
@@ -2126,6 +2161,12 @@ warning(				/* print warning message */
 {
     errmess("Warning", str1, str2);
 } /* warning */
+
+/********************************************************************
+ *
+ *	Common error messages
+ *
+ *******************************************************************/
 
 static void
 errBit(void)
@@ -2138,6 +2179,12 @@ errInt(void)
 {
     error("no imm variable to trigger arithmetic expression", NULL);
 } /* errInt */
+
+/********************************************************************
+ *
+ *	Recovery from run-time errors
+ *
+ *******************************************************************/
 
 void
 execerror(			/* recover from run-time error */
@@ -2157,8 +2204,14 @@ execerror(			/* recover from run-time error */
     longjmp(begin, 0);
 } /* execerror */
 
+/********************************************************************
+ *
+ *	Called from yacc parser on error (mostly syntax error)
+ *
+ *******************************************************************/
+
 void
-yyerror(char *	s)		/* called for yacc syntax error */
+yyerror(char *	s)
 {
     char *	cp = chbuf;
     int		n, n1;

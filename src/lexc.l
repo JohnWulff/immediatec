@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.10 2002/08/16 10:06:08 jw Exp $";
+"@(#)$Id: lexc.l,v 1.11 2002/08/17 22:34:57 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -36,6 +36,7 @@ IS			(u|U|l|L)
 #include <ctype.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 #include "icc.h"
 #include "comp.h"
 #include "gram_tab.h"
@@ -438,3 +439,192 @@ delete_sym(Token* tokp)
 	free(sp);
     }
 } /* delete_sym */
+
+/********************************************************************
+ *
+ *	Read C-Symbols cache file and store names of available include
+ *	files and the file offset of the entries in the Symbol Table.
+ *
+ *	The cache file is left open for reading and when necessary, the
+ *	lines with the named include file can be accessed with an fseek
+ *	and the relevant type names read.
+ *
+ *	The entries for <stdio.h>, "icc.h" and "comp.h" should be read
+ *	straight away, since they are declared as includes for generated
+ *	C files.  It is not correct to read types for other include files
+ *	available in the cache, since they may clash.
+ *
+ *	Once an entry line has been read in, the symbol table entry is
+ *	marked with ftype = CRINC
+ *
+ *	Structure of C-Symbols cache file:	(by example)
+ *
+ *	<stdio.h> FILE size_t etc
+ *	"icc.h" [data stamp] Gate Functp2 Functp CFunctp
+ *	"comp.h" [data stamp] List_e Symbol Sym Lis Val Str
+ *	<stdlib.h> uint ulong etc
+ *	"../include/types.h" [data stamp] type1 type2
+ *		lines longer than TCBUFS are folded at the end of a type_name
+ *		follow up lines start with a space character.
+ *
+ *	Include files in angle brackets are assumed to be in the include
+ *	path and are not date stamped.
+ *
+ *	Other include files are local or have a path relative to the
+ *	local working directory.
+ *
+ *	The C-Symbols file is called "iCcTypes.def" and is in the
+ *	same path as the iC compiler called. It is writable by all.
+ *	It is a cache of all type_names used in include files in
+ *	C-Code for the computer installation.
+ *
+ *	PROBLEM: under Linux the path of the exected file is not available
+ *
+ *	The local file names should be in a file in the local directory.
+ *	Initial implementation: a local file for all includes.
+ *
+ *	Name of cache file defined in comp.h
+ *
+ *******************************************************************/
+
+int
+readTypeCacheFile(void)
+{
+    int		c;
+    int		ftype;
+    long	fileOffset;
+    Symbol *	sp;
+    char	nameBuf[BUFS];
+    char	lineBuf[TCBUFS];
+
+    if (typeCacheFP == NULL) {
+	/* open the cache file and leave it open for reading details */
+	if ((typeCacheFP = fopen(typeCacheFN, "r+")) == NULL) {
+	    if (errno != ENOENT || (typeCacheFP = fopen(typeCacheFN, "w+")) == NULL) {
+		perror("could not open file");
+		return TCindex;			/* error opening file */
+	    }
+	}
+    }
+
+    for (fileOffset = 0;			/* start of the file */
+	fgets(lineBuf, TCBUFS, typeCacheFP) != NULL;
+	fileOffset += strlen(lineBuf))		/* start of the next line */
+    {
+	if ((c = *lineBuf) == '<') {
+	    ftype = CGINC;			/* global include file */
+	} else if (c == '"') {
+	    ftype = CLINC;			/* local include file */
+	} else {
+	    if (c != ' ') {
+		goto formatError;		/* strange line */
+	    }
+	    continue;				/* ignore follow up lines */
+	}
+	if (sscanf(lineBuf, "%[<\"/A-Za-z_.0-9>]", nameBuf) == 1) {
+	    if (debug & 02) fprintf(outFP, "####### %s\n", nameBuf);
+	    /* store include file name in symbol table */
+	    if ((sp = lookup(nameBuf)) != 0) {
+		if (sp->type == CINC) {
+		    warning("readTypeCacheFile: multiple entry ???:", nameBuf);
+		} else {
+		    warning("readTypeCacheFile: wrong type in ST ???:", nameBuf);
+		}
+	    } else if ((sp = install(nameBuf, CINC, ftype)) != 0) {
+		sp->u.val = fileOffset;		/* new entry */
+	    } else {
+		error("readTypeCacheFile: could not store symbol:", nameBuf);
+		return TCindex;			/* error reading file */
+	    }
+	} else {
+	  formatError:
+	    error("readTypeCacheFile: strange line:", lineBuf);
+	    return TCindex;			/* error reading file */
+	}
+    }
+
+    /* process <stdio.h> "icc.h" and "comp.h" */
+    if (readTypesFromCache("<stdio.h>")) return TCindex;
+    if (readTypesFromCache("\"icc.h\"")) return TCindex;
+    if (readTypesFromCache("\"comp.h\"")) return TCindex;
+
+    return 0;
+} /* readTypeCacheFile */
+
+int
+readTypesFromCache(char* includeName)
+{
+    int		c;
+    int		fFlag;
+    long	fileOffset;
+    Symbol *	sp;
+    char*	tokenPtr;
+    char	lineBuf[TCBUFS];
+
+    if (typeCacheFP == NULL) {
+	/* open the cache file and leave it open for reading details */
+	if (readTypeCacheFile() != 0) {
+	    return TCindex;			/* error handling cache file */
+	}
+    }
+
+    /* read the relevant symbol table entry and get offset */
+    if ((sp = lookup(includeName)) == 0) {
+	/* c_compile the actual include file to extend the cache */
+	/* involves appending to cache file and installing in ST */
+	error("readTypesFromCache: wrong file ???:", includeName);
+	return TCindex;				/* cannot proceed */
+    } else if (sp->type != CINC) {
+	error("readTypesFromCache: wrong type in ST ???:", includeName);
+	return TCindex;				/* cannot proceed */
+    }
+
+    fileOffset = sp->u.val;
+    sp->ftype = CFINC;				/* entry has been read from file */
+    if (debug & 02) fprintf(outFP, "####### %s", includeName);
+    if (fseek(typeCacheFP, fileOffset, SEEK_SET) < 0) {
+	error("readTypesFromCache: wrong offset in ST ???:", includeName);
+	return TCindex;				/* cannot proceed */
+    }
+
+    fFlag = 0;
+    while (fgets(lineBuf, TCBUFS, typeCacheFP) != NULL) {
+	if ((c = *lineBuf) != ' ') {
+	    if (fFlag == 0 && (c == '<' || c == '"')) {
+		fFlag = 1;
+		/* first strtok() skips name entry */
+		if (strtok(lineBuf, " \n") == NULL) {
+		    error("readTypesFromCache: wrong first token ???:", lineBuf);
+		    return TCindex;				/* cannot proceed */
+		}
+		if (c == '"') {
+		    /* could handle date stamp here */
+		}
+		tokenPtr = strtok(NULL, " \n");	/* first type token */
+	    } else {
+		break;				/* next entry - ignore errors */
+	    }
+	} else {
+	    /* skip space at start of follow up line */
+	    tokenPtr = strtok(lineBuf + 1, " \n");	/* first token from follow up */
+	}
+	/* break up the type entries in the line */
+	while (tokenPtr && *tokenPtr != '\n') {
+	    if ((sp = lookup(tokenPtr)) != 0) {
+		if (sp->type != CTYPE) {
+		    warning("readTypesFromCache: wrong type in ST ???:", tokenPtr);
+		}
+		/* ignore multiple type_names from different includes - happens a lot */
+		if (debug & 02) fprintf(outFP, ";%s", tokenPtr);
+	    } else if ((sp = install(tokenPtr, CTYPE, COLD)) == 0) {
+		warning("readTypesFromCache: problem installing Symbol in ST ???:", tokenPtr);
+	    } else {
+		if (debug & 02) fprintf(outFP, ",%s", tokenPtr);
+	    }
+	    tokenPtr = strtok(NULL, " \n");	/* next type token */
+	}
+    }
+    if (debug & 02) fprintf(outFP, ":\n");
+
+    return 0;
+} /* readTypesFromCache */

@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.31 2002/08/16 12:57:56 jw Exp $";
+"@(#)$Id: main.c,v 1.32 2002/08/17 14:30:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -135,12 +135,15 @@ char * OutputMessage[] = {
 FILE *	T1FP;
 FILE *	T2FP;
 FILE *	T3FP;
+FILE *	typeCacheFP = NULL;
 
 static void	unlinkTfiles(void);
 static char	T1FN[] = "ic1.XXXXXX";
 static char	T2FN[] = "ic2.XXXXXX";
 static char	T3FN[] = "ic3.XXXXXX";
 static char	T4FN[] = "ic4.XXXXXX";
+
+char	typeCacheFN[] = TCname;
 
 
 /********************************************************************
@@ -158,6 +161,7 @@ main(
     int		r = 0;		/* return value of compile */
     int		ro = 4;		/* output message index */
 
+fprintf(stderr, "%s\n", *argv);
     /* Process the arguments */
     if ((progname = strrchr(*argv, '/')) == NULL) {
 	progname = *argv;

@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.31 2002/08/14 16:45:05 jw Exp $";
+"@(#)$Id: comp.h,v 1.32 2002/08/17 22:07:35 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -110,7 +110,9 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define Cname	"_list_.c"	/* unusual, not to be used for application name */
 #define H1name	"_list1.h"
 #define H2name	"_list2.h"
+#define TCname	"iCcTypes.def"
 
+/* index 0 not used */
 #define Iindex	1
 #define Eindex	2
 #define Lindex	3
@@ -124,12 +126,16 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define T2index	11
 #define T3index	12
 #define T4index	13
+#define TCindex	14
 
-#define INITIAL_FILE_NAMES 0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name, 0, 0, 0, 0,
+#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name,\
+				0, 0, 0, 0, TCname,
 
 extern FILE *	T1FP;
 extern FILE *	T2FP;
 extern FILE *	T3FP;
+extern FILE *	typeCacheFP;
+extern char	typeCacheFN[];
 
 					/*   outp.c   */
 #define BUFS	128
@@ -149,5 +155,8 @@ extern int	copyXlate(FILE *, char *, unsigned *, int);
 extern int	c_leng;
 extern int	column;
 extern void	delete_sym(Token* tokp);
+extern int	readTypeCacheFile(void);
+extern int	readTypesFromCache(char* includeName);
+#define TCBUFS	1024
 					/*   gram.y   */
 extern void	copyAdjust(FILE* iFP, FILE* oFP);
