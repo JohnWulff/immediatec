@@ -47,16 +47,16 @@ usage()
   echo '	-I	case insensitive and white space ignored' >&2
   echo '	-k	ignore lines containing the string $Id:' >&2
   echo '	-x <regex> ignore changes in lines that match regex' >&2
+  echo '	-C <command> shell command to generate a list of files.' >&2
+echo "	-Z	extra debugging output for $0 development" >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
   echo '	-	all further arguments are treated as files' >&2
-  echo '	if the first argument is not a file, the argument is  executed' >&2
-  echo '		as a shell command to generate a list of files.' >&2
   echo "	if no files or command is specified, '$defaultfiles' is used" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.27 2003/10/03 15:24:31 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.28 2003/10/03 16:09:04 archiv Exp $' >&2
 }
 
 ########################################################################
