@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.8 2000/11/08 15:47:41 jw Exp $";
+"@(#)$Id: comp.y,v 1.9 2000/11/11 13:36:37 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -741,7 +741,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 
 /* no assignment allowed for ffexpr - they stand alone */
 
-ffexpr	: IF '(' aexpr cref ')' cblock {	/* on (expr) { x++; } */
+ffexpr	: IF '(' aexpr cref ')' cblock {	/* if (expr) { x++; } */
 		register List_e	*lp1;
 		register uchar	tp;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }

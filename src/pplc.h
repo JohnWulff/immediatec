@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.8 2000/06/10 11:27:58 jw Exp $";
+"@(#)$Id: pplc.h,v 1.9 2000/11/11 13:36:37 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -186,7 +186,7 @@ typedef struct Gate {			/* Gate */
 
 typedef void		(*Functp2)(Gate *, Gate *);
 typedef void		(*Functp)(Gate *, int);
-typedef int		(*CFunctp)(void);	/* external C functions */
+typedef int		(*CFunctp)(Gate *);	/* external C functions */
 
 extern void	link_ol(		/* link a gate block into */
 		Gate *, Gate *);	/* an output or clock list */
@@ -283,6 +283,6 @@ extern Gate **		sTend;			/* end of dynamic array */
 extern unsigned long	sTstrLen;		/* length of symbol strings */
 extern Gate **		i_list[];		/* used to load several modules */
 #else
-extern int		c_exec(int pp_index);
+extern int		c_exec(int pp_index, Gate * gp);
 #endif
 extern int		assign(Gate * lv, int rv);

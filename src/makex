@@ -11,7 +11,7 @@ usage ()
     echo 'Usage:	'${0##*/} 'file ...' >&2
     echo '	-l	link all the iC files into one application' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.2 2000/05/31 15:51:38 jw Exp $' >&2
+    echo '	$Id: makex,v 1.3 2000/11/11 13:36:37 jw Exp $' >&2
 }
 
 link=0
@@ -53,7 +53,7 @@ for f in $*; do
     echo $file
     if [[ $link != 1 ]]; then
 	if pplc -d74 -o $base.c -l $base.lst $file; then
-	    gcc -o $base $base.c list.c load.a
+	    gcc -g -DYYDEBUG -o $base $base.c list.c load.a
 	fi
     else
 	if [[ $first != $base ]]; then
@@ -71,7 +71,7 @@ done
 if [[ $link = 1 ]]; then
     if [[ $flag = noerror ]]; then
 	echo "link $first from$list"
-	gcc -o $first $list list.c load.a
+	gcc -g -DYYDEBUG -o $first $list list.c load.a
     else
 	echo "pplc compile errors in $list" >&2
     fi

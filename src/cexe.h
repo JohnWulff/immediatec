@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.6 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: cexe.h,v 1.7 2000/11/11 13:36:37 jw Exp $";
 /********************************************************************
  *
  *	Routine to execute C code fragments in the PPLC system
@@ -17,7 +17,7 @@ static const char cexe_h[] =
 #define A(x,v) assign(lookup(#x)->u.gate, v)
 
 int
-c_exec(int pp_index)
+c_exec(int pp_index, Gate * gp)
 {
     switch (pp_index) {
 V
@@ -38,6 +38,7 @@ V
 	"\n%s: line %d: Function fragment without return ???\n",
 	__FILE__, __LINE__);
     quit(-2);
-#endif
+#else
     return 0;	/* for those cases where no return has been programmed */
+#endif
 } /* c_exec */

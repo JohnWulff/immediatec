@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.5 2000/05/28 10:11:22 jw Exp $";
+"@(#)$Id: link.c,v 1.6 2000/11/11 13:36:37 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -134,9 +134,9 @@ link_ol(
 		    format = "{%d}",
 #endif
 #ifdef LOAD
-		    ((CFunctp)(gp->gt_time))()
+		    ((CFunctp)(gp->gt_time))(gp)
 #else
-		    c_exec(-(int)gp->gt_time)
+		    c_exec(-(int)gp->gt_time, gp)	/* must pass both -/+ */
 #endif
 		    ) :
 #ifndef _WINDOWS 

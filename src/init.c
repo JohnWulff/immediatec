@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.4 2000/11/08 15:47:41 jw Exp $";
+"@(#)$Id: init.c,v 1.5 2000/11/11 13:36:37 jw Exp $";
 /*
  *	"init.c"
  *
@@ -24,7 +24,7 @@ Symbol		*clk;		/* default clock */
  *					u.val = compiler_token
  *					ftype used in compilation
  *
- *		 built-in symbols:	type for built-in
+ *		built-in symbols:	type for built-in
  *					ftype for built-in
  *
  *******************************************************************/
@@ -35,20 +35,16 @@ static struct {
     int		u_val;		/* yacc token for type KEYW */
     uchar	ftype;
 } builtins[] = {
+    /* name	type	u_val	ftype */
     "D",	KEYW,	BLTIN1,	D_FF,
     "SH",	KEYW,	BLTIN1,	D_SH,
     "CHANGE",	KEYW,	BLTIN1,	CH_BIT,
     "RISE",	KEYW,	BLTIN1,	RI_BIT,
     "SR",	KEYW,	BLTIN2,	S_FF,
     "on",	KEYW,	IF,	F_CF,
-#ifdef CHECK_OLD_SYNTAX 
-    "if",	KEYW,	CKEYW,	0,
-    "switch",	KEYW,	CKEYW,	0,
-#else
     "if",	KEYW,	IF,	F_CF,
     "else",	KEYW,	ELSE,	0,
     "switch",	KEYW,	SWITCH,	F_CF,
-#endif
     "C",	KEYW,	CBLTIN,	CLCK,
     "CLOCK",	KEYW,	CBLTIN,	CLCK,
     "T",	KEYW,	TBLTIN,	TIMR,
@@ -58,6 +54,7 @@ static struct {
     "L",	KEYW,	BLATCH,	0,
     "LATCH",	KEYW,	BLATCH,	0,
     "DL",	KEYW,	DLATCH,	D_FF,
+    "DLATCH",	KEYW,	DLATCH,	D_FF,
     "extern",	KEYW,	EXTERN,	0,
     "imm",	KEYW,	IMM,	0,
     "int",	KEYW,	TYPE,	ARITH,
@@ -71,11 +68,10 @@ void
 init(void)		/* install constants and built-ins */
 {
     int		io;
-    char	temp[8];
 
     for (io = 0; builtins[io].name; io++) {
 	clk = install(builtins[io].name, builtins[io].type, builtins[io].ftype);
-	clk->u.val = builtins[io].u_val;
+	clk->u.val = builtins[io].u_val;/* set u.val in Symbol just installed */
     }
     /* 'clk' with name "iClock" is default clock when loop finishes */
 }

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.6 2000/06/10 11:07:58 jw Exp $";
+"@(#)$Id: rsff.c,v 1.7 2000/11/11 13:36:37 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -323,11 +323,11 @@ Functp	ff_i[] = {pass1, pass2, i_ff3, pass4};
 
 /********************************************************************
  *
- *	Special function to detect a rising edge in the logic input
+ *	Master function to detect RISE in logical input.
  *		O1 = RISE(I1,clock);	// clock has been defined
  *		O2 = RISE(I2);		// iClock is default
- *	This function goes HI when its input goes HI and goes LO
- *	again with the next clock.
+ *	This function goes HI when its input goes HI (rising edge).
+ *	The function goes LO with the next clock in the slave action.
  *
  *******************************************************************/
 
@@ -352,10 +352,17 @@ riMbit(					/* RI_BIT master action on EF */
 		gx->gt_ids, gx->gt_val);
 	}
 #endif
-	gx->gt_val = -gx->gt_val;	/* immediate */
-	link_ol(gx, o_list);		/* set slave output */
+	gx->gt_val = -gx->gt_val;	/* immediate (glitch could reset here) */
+	link_ol(gx, o_list);		/* set or reset slave output */
     }
 } /* riMbit */
+
+/********************************************************************
+ *
+ *	Slave function for RISE in logical input.
+ *	The function goes LO again here
+ *
+ *******************************************************************/
 
 void
 ri_bit(					/* RI_BIT slave action */
@@ -371,7 +378,7 @@ ri_bit(					/* RI_BIT slave action */
 	    fprintf(outFP, "\tE %s %2d ==>", gp->gt_ids, gp->gt_val);
 	}
 #endif
-	gp->gt_val = 1;			/* reset slave output */
+	gp->gt_val = 1;			/* reset slave output to LO */
 	link_ol(gp, o_list);
 #ifndef _WINDOWS 
 	if (debug & 0100) {
@@ -384,11 +391,12 @@ ri_bit(					/* RI_BIT slave action */
 
 /********************************************************************
  *
- *	Special function to detect a change in the logic input
+ *	Master function for CHANGE in logical or arithmetic input.
  *		O3 = CHANGE(I4,clock);	// clock has been defined
  *		O4 = CHANGE(I4);	// iClock is default
- *	This function goes HI when its input changes from HI to LO or
- *	from LO to HI. The function goes LO again with the next clock.
+ *	This function goes HI when its logical input changes from
+ *	HI to LO or from LO to HI or its arithmetic input changes.
+ *	The function goes LO with the next clock in the slave action.
  *
  *******************************************************************/
 
@@ -412,9 +420,21 @@ chMbit(					/* CH_BIT master action on VF */
 	    gx->gt_ids, gx->gt_val);
     }
 #endif
-    gx->gt_val = -gx->gt_val;		/* immediate */
-    link_ol(gx, o_list);		/* set slave output */
+    gx->gt_val = -gx->gt_val;		/* immediate (glitch could reset here) */
+    link_ol(gx, o_list);		/* set or reset slave output */
 } /* chMbit */
+
+/********************************************************************
+ *
+ *	Slave function for CHANGE in logical or arithmetic input.
+ *	The function goes LO again here
+ *
+ *	All change nodes have storage for new and old, although only
+ *	those fired from ARN type really need it.
+ *	Up to this point changes in new back to old could have
+ *	caused this Gate to be unlinked (glitch), which is no change.
+ *
+ *******************************************************************/
 
 void
 ch_bit(					/* CH_BIT slave action */
@@ -423,13 +443,7 @@ ch_bit(					/* CH_BIT slave action */
 {
     register Gate *	gp;
 
-    /*
-     * all change nodes have storage for new and old, although only
-     * those fired from ARN type really need it.
-     * up to this point changes in new back to old could have
-     * caused this Gate to be unlinked (glitch), which is no change.
-     */
-    gf->gt_old = gf->gt_new;	/* now new value is fixed */
+    gf->gt_old = gf->gt_new;		/* now new value is fixed */
     gp = gf->gt_funct;
     if (gp->gt_val < 0) {
 #ifndef _WINDOWS 
@@ -437,7 +451,7 @@ ch_bit(					/* CH_BIT slave action */
 	    fprintf(outFP, "\tV %s %2d ==>", gp->gt_ids, gp->gt_val);
 	}
 #endif
-	gp->gt_val = 1;			/* reset slave output */
+	gp->gt_val = 1;			/* reset slave output to LO */
 	link_ol(gp, o_list);
 #ifndef _WINDOWS 
 	if (debug & 0100) {
@@ -478,18 +492,15 @@ f_cf(					/* F_CF slave action on CF */
     register Gate *	gf,
     register Gate *	out_list)
 {
-    register Gate *	gp;
-    char		val;
-
     if (gf->gt_val < 0) {
 #ifndef _WINDOWS 
 	if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
 #endif
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
-	((CFunctp)(gf->gt_funct))();
+	((CFunctp)(gf->gt_funct))(gf);
 #else
-	c_exec((int)gf->gt_funct);
+	c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('}', outFP);

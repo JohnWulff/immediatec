@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.3 1999/08/06 21:30:54 jw Exp $";
+"@(#)$Id: scan.c,v 1.4 2000/11/11 13:36:37 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -124,9 +124,9 @@ scan_ar(Gate	*out_list)
 	    }
 #endif
 #ifdef LOAD
-	    val = ((CFunctp)*(gp->gt_rlist))();
+	    val = ((CFunctp)*(gp->gt_rlist))(gp);
 #else
-	    val = c_exec((int)gp->gt_rlist);
+	    val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
 #endif
 	    /************************************************************
 	     *
@@ -523,9 +523,9 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 		}
 #endif
 #ifdef LOAD
-		val = ((CFunctp)*(gp->gt_rlist))();
+		val = ((CFunctp)*(gp->gt_rlist))(gp);
 #else
-		val = c_exec((int)gp->gt_rlist);
+		val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
 #endif
 
 		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH ||
