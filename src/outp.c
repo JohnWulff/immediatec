@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.39 2001/04/09 19:15:20 jw Exp $";
+"@(#)$Id: outp.c,v 1.40 2001/04/15 06:40:01 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -796,7 +796,8 @@ extern Gate *	l_[];\n\
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) == ALIAS && sp->list != 0 &&
-		((dc = sp->ftype) == GATE || (Aflag && dc == ARITH))) {
+		((dc = sp->ftype) == GATE ||
+		(Aflag && (dc == ARITH || dc == CLCKL || dc == TIMRL)))) {
 		modName = mN(sp);	/* modified string, byte and bit */
 		if (dc == ARITH) {
 		    fprintf(Fp, "Gate _%-7s", modName);	/* modify */
