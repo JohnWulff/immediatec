@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.7 1999/12/05 11:07:48 jw Exp $";
+"@(#)$Id: comp.y,v 1.8 2000/11/08 15:47:41 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -85,8 +85,8 @@ pu(int t, char * token, Lis * node)
 %}
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2
-%token	<sym>	CVAR CBLTIN TVAR TBLTIN BLTINF STATIC BLATCH BFORCE DLATCH
-%token	<sym>	EXTERN IMM TYPE CKEYW
+%token	<sym>	CVAR CBLTIN TVAR TBLTIN STATIC BLATCH BFORCE DLATCH
+%token	<sym>	EXTERN IMM TYPE CKEYW IF ELSE SWITCH
 %token	<val>	NUMBER CCNUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
 %type	<sym>	stmt asgn wasgn xasgn casgn tasgn cstatic decl
@@ -741,7 +741,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 
 /* no assignment allowed for ffexpr - they stand alone */
 
-ffexpr	: BLTINF '(' aexpr cref ')' cblock {	/* on (expr) { x++; } */
+ffexpr	: IF '(' aexpr cref ')' cblock {	/* on (expr) { x++; } */
 		register List_e	*lp1;
 		register uchar	tp;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
