@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.3 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: pplc.h,v 1.4 1999/08/04 18:28:55 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -280,3 +280,4 @@ extern unsigned long	sTstrLen;		/* length of symbol strings */
 #else
 extern int		c_exec(int pp_index);
 #endif
+extern int		assign(Gate * lv, int rv);

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.3 1999/08/02 21:26:19 jw Exp $";
+"@(#)$Id: rsff.c,v 1.4 1999/08/04 18:28:55 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -776,3 +776,27 @@ timer_fn(				/* Timer function */
 #endif
     }
 } /* timer_fn */
+
+/********************************************************************
+ *
+ *	Assign to an imm int node
+ *
+ *	The node is linked to a_list when rv != new && new == old.
+ *	If a second assignment occurs while node is still linked to
+ *	a_list (new != old), if rv != old new is simply updated
+ *	else node is unlinked and new updated, making new == old.
+ *	When rv == new, there is no change at all.
+ *
+ *******************************************************************/
+
+int
+assign(Gate * lv, int rv)
+{
+    if (rv != lv->gt_new) {
+	if (lv->gt_new == lv->gt_old || rv == lv->gt_old) {
+	    link_ol(lv, a_list);	/* first change or glitch */
+	}
+	lv->gt_new = rv;		/* first or later change */
+    }
+    return rv;
+} /* assign */

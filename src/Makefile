@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.4 1999/08/02 07:41:40 jw Exp $
+# @(#)$Id: Makefile,v 1.5 1999/08/04 18:28:55 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -16,8 +16,7 @@ SRC2 =	pplc.c pplt.c link.c rsff.c scan.c
 CSRCS =	$(SRC1) $(SRC2) $(SRC3)
 
 COBJ =	comp.o genr.o init.o symb.o outp.o cexe.o
-POBJ =	pplc.o link.o rsff.o scan.o
-TOBJ =	pplt.o link.o rsff.o scan.o
+POBJ =	link.o rsff.o scan.o
 
 CFLAGS = -g -DYYDEBUG $(OPT)
 YFLAGS = -d -v
@@ -25,11 +24,14 @@ LDFLAGS =
 
 #### Standalone versions ################################### !!! do last !!!
 
-pplc:	Makefile main.d main.o scid.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
-	cc $(LDFLAG) -o pplc main.o scid.o $(COBJ) $(POBJ)
+pplc:	Makefile main.d main.o scid.o pplc.d pplc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o pplc main.o scid.o pplc.o $(COBJ) $(POBJ)
 
-pplt:	Makefile main.d main.o scid.o $(COBJ:.o=.d) $(COBJ) $(TOBJ:.o=.d) $(TOBJ)
-	cc $(LDFLAG) -o pplt main.o scid.o $(COBJ) $(TOBJ)
+pplt:	Makefile main.d main.o scid.o pplt.d pplt.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o pplt main.o scid.o pplt.o $(COBJ) $(POBJ)
+
+load.a:	Makefile load.d load.o scid.o pplc.d pplc.o $(POBJ:.o=.d) $(POBJ)
+	ar -rv load.a load.o scid.o pplc.o $(POBJ)
 
 #### Compile objects #######################################
 

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.6 1999/08/02 21:26:19 jw Exp $";
+"@(#)$Id: outp.c,v 1.7 1999/08/04 18:28:55 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -391,6 +391,7 @@ static char	COMPILER[] =\n\
 #include	\"%s\"\n\
 \n\
 #define _(x) x.gt_old\n\
+#define A(x,v) assign(&x, v)\n\
 extern Gate *	l_[];\n\
 ", source, outfile, SC_ID, "x.h");
 

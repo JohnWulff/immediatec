@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.3 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: link.c,v 1.4 1999/08/04 18:28:55 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -124,7 +124,7 @@ link_ol(
 	     * value is 0 (ignore gt_val). This implements sample/hold
 	     */
 	    if (gp->gt_val > 0 && gp->gt_fni != D_SH || (time =
-#ifdef LOAD
+#if defined(LOAD) && defined (_MSDOS_)
 		(FP_SEG(gp->gt_time) != 0)
 #else
 		((int)gp->gt_time < 0)
