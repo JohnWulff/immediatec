@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.35 2003/11/26 11:23:29 jw Exp $
+# @(#)$Id: Makefile.in,v 1.36 2003/12/13 15:29:02 jw Exp $
 
 ############################################################
 #
@@ -133,7 +133,7 @@ $(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
 	ident $(srcdir)/icc.v | $(srcdir)/README.tpl > $(srcdir)/../README;
 
 $(srcdir)/cexe.c:	$(srcdir)/cexe.h
-	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > $(srcdir)/cexe.c
+	sed -e '/^[A-Z]$$/d' $(srcdir)/cexe.h > $(srcdir)/cexe.c
 	cp -f $(srcdir)/cexe.c $(srcdir)/cexe.c_empty
 
 $(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.sed

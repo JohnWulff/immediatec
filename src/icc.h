@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.46 2003/12/06 15:01:46 jw Exp $";
+"@(#)$Id: icc.h,v 1.47 2003/12/09 14:28:54 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -163,6 +163,7 @@ extern Functp *		i_lists[];
 extern Gate *		a_list;
 extern Gate *		o_list;
 extern Gate *		c_list;
+extern Gate *		f_list;
 
 extern unsigned int	bit2[];
 extern Gate *		gx;	/* points to action Gate in chMbit and riMbit */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.67 2003/12/12 14:23:18 jw Exp $";
+"@(#)$Id: outp.c,v 1.68 2003/12/17 10:11:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -604,6 +604,10 @@ static char	COMPILER[] =\n\
 #include	<icg.h>\n\
 #include	\"%s\"\n\
 \n\
+",	inpNM, outfile, SC_ID, H1name);
+    linecnt += 13;
+    if (ftell(T3FP)) {
+	fprintf(Fp, "\
 #ifdef ALIAS_ARITH\n\
 #define _AV(x) (x.gt_ini==-ALIAS ? ((Gate*)x.gt_rlist)->gt_new : x.gt_new)\n\
 #define _LV(x) (x.gt_ini==-ALIAS ? (((Gate*)x.gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
@@ -616,9 +620,13 @@ static char	COMPILER[] =\n\
 #define _AA(x,v) aAssign(&x, v)\n\
 #define _LA(x,v) lAssign(&x, v)\n\
 #endif\n\
+"	    );
+	linecnt += 12;
+    }
+    fprintf(Fp, "\
 extern Gate *	_l_[];\n\
-", inpNM, outfile, SC_ID, H1name);
-    linecnt += 26;
+"	);
+    linecnt += 1;
 
 /********************************************************************
  *
@@ -983,23 +991,25 @@ extern Gate *	_l_[];\n\
     fprintf(H2p, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
 
-    fprintf(Fp, "\n\
+    if (ftell(T3FP)) {
+	fprintf(Fp, "\n\
 /********************************************************************\n\
  *\n\
  *	Literal blocks and embedded C fragment functions\n\
  *\n\
  *******************************************************************/\n\
 \n");
-    linecnt += 7;
+	linecnt += 7;
 
-    /* copy C intermediate file up to EOF to C output file */
-    /* translate any imm variables and ALIAS references of type 'QB1_0' */
+	/* copy C intermediate file up to EOF to C output file */
+	/* translate any imm variables and ALIAS references of type 'QB1_0' */
 
-    if ((rc = copyXlate(Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
-	goto endm;
-    }
-    if ((rc = copyXlate(Fp, outfile, &linecnt, 02)) != 0) { /* copy functions */
-	goto endm;
+	if ((rc = copyXlate(Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
+	    goto endm;
+	}
+	if ((rc = copyXlate(Fp, outfile, &linecnt, 02)) != 0) { /* copy functions */
+	    goto endm;
+	}
     }
 
 /********************************************************************

@@ -24,6 +24,8 @@
 #   Author: John E. Wulff
 #   V1.1: 02.01.01 Written in the car between Siegen and Eisingen
 #   V1.4: 11.01.01 Major rewrite to handle new algorithm
+#   V1.7: 14.08.02 Change in header line
+#   V1.9: 12.12.03 Change IX0_0 etc to IX0.0 and _1 to 1 in C CODE
 #
 #################################################################
 
@@ -35,7 +37,8 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix,v 1.8 2002/10/19 23:33:47 jw Exp $
+	called from icc or ict compiler to adjust listing output
+$Id: pplstfix,v 1.9 2003/12/12 16:34:04 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -114,8 +117,11 @@ sub processFile {
 	    $empty = 0;
 	    next line;
 	}
-	if (!/^[\d*]/) {
-	    while (/([A-Za-z_][\w.]*)/g) {
+	if (/^[\d*]/) {					# 001 listing line
+	    s/\b([IQT]X\d+)_/$1./g;
+	    s/\b_(\d+)\b/$1/g;
+	} else {
+	    while (/([A-Za-z_][\w.]*)/g) {		# non listing line
 		if (defined($symbols{$1})) {
 		    push @array, $1, length $`;		# $word and $pos
 		}

@@ -138,22 +138,16 @@ Auxiliary scripts for testing compiler outputs
 		to reflect those which must be linked into an application
 
     mo:		#!/usr/bin/bash
-    		Usage: mo [file ...]	# if none uses $(cat pe.lt)
-		make an 'ict' compiler for each application and
+    		Usage: mo [-C] [file ...] # if none uses $(cat pm.lt)
+		make an 'ict' compiler for each iC application and
 		store the generated text files in directory ListT.
 		The generated standard and error outputs are
-		stored in the file OutT. This information can
+		stored in the file ListT/Init.out. This information can
 		then be diffed with runs of previous versions of
 		the iC system. (use Mdiff -k ... ListT)
 
-    mp:		#!/usr/bin/bash
-    		Usage: mp [file ...]	# if none uses $(cat pe.lt)
-		make an 'icc' compiler for each application and
-		store the generated text files in directory ListP.
-		The generated standard and error outputs are
-		stored in the file OutP. This information can
-		then be diffed with runs of previous versions of
-		the iC system. (use Mdiff -k ... ListP)
+		mo -C makes an 'icc' compiler for each application and
+		stores the generated text files in ListC
 
     mpv:	#!/usr/bin/bash
 		make (or diff) versions of icc ict and libict.a
@@ -171,4 +165,4 @@ Auxiliary scripts for testing compiler outputs
 		if no files are specified uses mm via pm.lt to make
 		all the applications in the Test2 directory
 
-$Id: Readme_develop,v 1.6 2003/11/28 18:32:47 jw Exp $
+$Id: Readme_develop,v 1.7 2003/12/14 06:47:17 jw Exp $

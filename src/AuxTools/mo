@@ -2,27 +2,36 @@
 
 ########################################################################
 #
-#	make OutT in test ict
+#	make a function version of ict or icc
 #
 ########################################################################
 
 usage ()
 {
     echo 'Usage:	'${0##*/}' [-h] [iCtarget ...]' >&2
+    echo '      -C	uses icc -c to make a dedicated icc for each iCtarget' >&2
+    echo '		output the listings produced to directory ListC' >&2
+    echo '      -T	uses ict -c to make a dedicated ict for each iCtarget' >&2
+    echo '		output the listings produced to directory ListT' >&2
+    echo '		(default option)' >&2
+    echo 'if no iCtargets are specified, each single entry of file pm.lt is' >&2
+    echo 'made; in this case also outputs the common output to Init.out and' >&2
+    echo 'restores a plain icc or ict at the end of the test run' >&2
     echo '	-h	this help text' >&2
-    echo 'uses ict -c to make a dedicated ict for each iCtarget' >&2
-    echo 'output the listings produced to directory ListT' >&2
-    echo 'if no iCtargets are specified, make each line of file pe.lt' >&2
-    echo 'in this case also output the common output to OutT' >&2
-    echo '	$Id: mo,v 1.10 2003/12/14 06:45:20 jw Exp $' >&2
+    echo '	$Id: mo,v 1.11 2003/12/14 06:47:17 jw Exp $' >&2
 }
 
-while [[ $# > 0 ]]; do
+ic='ict'
+op='T'
+
+while [ $# > 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
-	while [[ -n "$option" ]]; do
+	while [ -n "$option" ]; do
 	    case "$option" in
+	    C*)	ic='icc';op='C';;
+	    T*)	ic='ict';op='T';;
 	    h*)	usage; exit 255;;
 	    *)	echo "unknown flag -$option";
 		usage; exit 255;;
@@ -34,41 +43,55 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-test -d ListT || mkdir ListT;
+test -d List$op || mkdir List$op;
 
-if [[ $# != 0 ]]; then
+if [ $# != 0 ]; then
     for f in $*; do
-	echo "$f.ic";
-	ict -c -d474 -l ListT/$f.lst $f.ic
-	cp -f cexe.c ListT/$f.c
-	cd ..
-	rm -f cexe.o ict	# new cexe.o too soon for make sometimes
-	makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-	cd - > /dev/null
-	if [[ -f ../ict ]]; then	# use locally generated compiler
-	    ../ict -d500 $f.ic > ListT/$f.ini
-	else
-	    echo make ict failed
+	file=$f
+	base=${file%.*}
+	if [ "$file" = "$base" ]; then
+	    file="$base.ic"
+	fi
+	if [ -f "$file" ]; then
+	    echo "$file";
+	    $ic -c -d474 -l List$op/$base.lst $file
+	    cp -f cexe.c List$op/$base.c
+	    cd ..
+	    rm -f cexe.o $ic	# new cexe.o too soon for make sometimes
+	    makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	    cd - > /dev/null
+	    if [[ -f ../$ic ]]; then	# use locally generated compiler
+		../$ic -d500 $file > List$op/$base.ini
+	    else
+		echo make $ic failed
+	    fi
 	fi
     done
 else
-    for f in $(cat pe.lt); do
-	echo "$f.ic";
-	ict -c -d474 -l ListT/$f.lst $f.ic
-	cp -f cexe.c ListT/$f.c
-	cd ..
-	rm -f cexe.o ict	# new cexe.c too soon for make sometimes
-	makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-	cd - > /dev/null
-	if [[ -f ../ict ]]; then	# use locally generated compiler
-	    ../ict -d500 $f.ic > ListT/$f.ini
-	else
-	    echo make ict failed
+    for f in $(cat pm.lt); do
+	file=$f
+	base=${file%.*}
+	if [ "$file" = "$base" ]; then
+	    file="$base.ic"
 	fi
-    done > OutT 2>&1;
-    ict -c < /dev/null			# restore plain ict
+	if [ -f "$file" ]; then
+	    echo "$file";
+	    $ic -c -d474 -l List$op/$base.lst $file
+	    cp -f cexe.c List$op/$base.c
+	    cd ..
+	    rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
+	    makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	    cd - > /dev/null
+	    if [[ -f ../$ic ]]; then	# use locally generated compiler
+		../$ic -d500 $file > List$op/$base.ini
+	    else
+		echo make $ic failed
+	    fi
+	fi
+    done > List$op/Init.out 2>&1;
+    $ic -c < /dev/null			# restore plain icc or ict
     cd ..
-    rm -f cexe.o ict	# new cexe.c too soon for make sometimes
-    makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+    rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
+    makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
     cd - > /dev/null
 fi

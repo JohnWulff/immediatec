@@ -176,7 +176,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.28 2003/12/16 16:53:41 jw Exp $
+$Id: iClive,v 1.29 2003/12/21 23:26:44 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -195,7 +195,10 @@ if ($opt_h) {
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
-my $font = defined $opt_f ? $opt_f : '9x15';
+my $font = defined $opt_f ? $opt_f :
+			    $ENV{COMSPEC} ?	# defined on Windows 98 and Windows XP
+				'{Lucida Console} 10 normal' :
+				'9x15';		# Linux
 my $unitID = 'L0';
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
 my @activeSymbols;	# $activeSymbols[$index][0 .. 3] = ($ts,$val,$cs,[$sec,$usec])
@@ -205,7 +208,6 @@ my $conn;
 my $info = '';
 my $iCname = '';	# name of connected iC control program
 my $fileName = '';	# name of currently loaded file
-my $errorName = $ARGV[0] unless @ARGV < 1;
 my $searchText = '';
 my $oldContents = '';
 my $newName = 'unknown.ic';
@@ -220,11 +222,15 @@ my $fileTypes = [
     ['All Files',        ['*',             ],             ],
 ];
 
-my ($prevText, $prevMatch, @lines, $si);	# has to be global, 'our' not portable yet
-my @currentFiles = ();
-my $fileMenuLim = 10;
-my @currentSearches = ();
-my $searchMenuLim = 10;
+# in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
+my $scanPattern = '[~\s]*[\w]+(\.\w+)?\s*((~ )?---|=$)?';
+my $bMsg = '';
+my $sMsg = '';
+my @wIdx = ('', '');  # Indices surrounding the current word.
+my @lIdx = ('', '');  # Same for last word.
+
+# has to be global, 'our' not portable yet
+my ($prevText, $prevMatch, @lines, $si, $sj, $siWrap, $sjWrap, $top);
 
 ########################################################################
 #
@@ -260,7 +266,9 @@ $menuFile->command(-label => 'SaveAs', -command => \&saveAs_file);
 $menuFile->separator();
 $menuFile->command(-label => 'Quit',   -command => \&quit_program);
 $menuFile->separator();
-my $menuFileStart = 8;			    # first dynamic entry line 8
+my $menuFileStart = 8;				# first dynamic entry line 8
+my @currentFiles = ();
+my @lastFile = ();				# save last open file
 
 ########################################################################
 #	Make menu
@@ -271,8 +279,9 @@ my $make_mb   = $menuBar->Menubutton(-text        => 'Make',
 				    )->pack(-side => 'left',
 					    -padx => 2,
 					   );
-$make_mb->command(-label => 'Make C file',     -command => [ \&make_file, 0, 1 ]);
-$make_mb->command(-label => 'Make executable', -command => [ \&make_file, 0, 0 ]);
+$make_mb->command(-label => 'Make executable',      -command => [ \&make_file, 0, 0 ]);
+$make_mb->command(-label => 'Make unconditionally', -command => [ \&make_file, 0, 1 ]);
+$make_mb->command(-label => 'Make C file only',     -command => [ \&make_file, 0, 2 ]);
 
 ########################################################################
 #	Run or Stop button
@@ -310,11 +319,23 @@ my $menuSearch = $menuBar->Menubutton(-text        => 'Search',
 					    );
 my $matchType = "-exact";	# default, alternatives -nocase -regexp
 
-$menuSearch->command(-label => 'Search down (RETURN)',
-		     -command => [ \&search_text, 0, '', 0 ]);
-$menuSearch->command(-label => 'Search up (SHIFT-RET)',
-		     -command => [ \&search_text, 0, '', 1 ]);
-$menuSearch->separator();
+$menuSearch->command(-label       => 'Search down',
+		     -accelerator => 'RETURN',
+		     -command     => [ \&search_text, 0, undef, 0 ]);
+$menuSearch->command(-label       => 'Search up',
+		     -accelerator => 'SHIFT-RET',
+		     -command     => [ \&search_text, 0, undef, 1 ]);
+$menuSearch->command(-label       => 'Clear',
+		     -accelerator => 'CTRL-RET',
+		     -command     => [ \&search_text, 0, '',    0 ]);
+########################################################################
+#	Goto line number
+########################################################################
+$menuSearch->radiobutton(-label    => 'Go to line',
+			 -accelerator => 'ALT-RET',
+			 -value    => 'g',
+			 -variable => \$matchType,
+			 -command  => [ \&search_text ]);
 ########################################################################
 #	Exact match
 ########################################################################
@@ -344,7 +365,8 @@ $menuSearch->radiobutton(-label    => 'Regexp Ignore case',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text ]);
 $menuSearch->separator();
-my $menuSearchStart = 9;			    # first dynamic entry line 9
+my $menuSearchStart = 10;			    # first dynamic entry line 10
+my @currentSearches = ();
 
 ########################################################################
 #	Search entry
@@ -354,8 +376,52 @@ my $entrySearch = $menuBar->Entry(-width        => 20,
 				 )->pack(-side => 'left',
 					 -padx => 2,
 					);
-$entrySearch->bind('<KeyPress-Return>',       [ \&search_text, '', 0 ]); # search down
-$entrySearch->bind('<Shift-KeyPress-Return>', [ \&search_text, '', 1 ]); # search up
+$entrySearch->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
+$entrySearch->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
+$entrySearch->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
+$entrySearch->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+
+########################################################################
+#	Ini data for file and search menu lists
+########################################################################
+my %iniData = (
+    files	=> [
+	$menuFile,		# file menu
+	$menuFileStart,		# start of dynamic entries
+	\@currentFiles,		# save file menu entries
+	10,			# number of dynamic entries
+	\&open_file,		# call back for open file
+    ],
+    'last open file' => [
+	0,			# no menu
+	0,
+	\@lastFile,		# save last open file
+	1,
+	0,
+    ],
+    searches	=> [
+	$menuSearch,		# search menu
+	$menuSearchStart,	# start of dynamic entries
+	\@currentSearches,	# save search menu entries
+	10,			# number of dynamic entries
+	\&search_text,		# call back for search text
+    ],
+);
+
+my %matchExtensions = (
+    -exact	=> '',
+    -nocase	=> '	n',
+    -regexp	=> '	r',
+    rn		=> '	rn',
+    g		=> '	g',
+);
+my %matchRestores = (
+    e		=> '-exact',
+    n		=> '-nocase',
+    r		=> '-regexp',
+    rn		=> 'rn',
+    g		=> 'g',
+);
 
 ########################################################################
 #	Info bar
@@ -389,19 +455,21 @@ my $text = $mainWindow->Scrolled('Text',
 					-expand => 1,
 				       );
 #endif
+$text->bind('<KeyPress>', [ \&report_cursor ] );	# change in cursor position
+$text->bind('<Button-1>', [ \&report_cursor ] );	# change in cursor position
 
 ########################################################################
 #	Balloon widget
 ########################################################################
-my $balloon = $mainWindow->Balloon(-statusbar => $infoBar);
+my $balloon = $mainWindow->Balloon(-state => 'balloon');
 my $balloonAttached = 0;
 $mainWindow->OnDestroy(sub { $balloon->destroy; });
 
 ########################################################################
-#	Open the first file in the argument list
+#	Initialise file and search menu lists, open the first file
 ########################################################################
 
-open_file(0, $errorName) if $errorName;
+ini_program();
 
 ########################################################################
 #	Connect to iCserver
@@ -414,6 +482,30 @@ connect_to_server();
 ########################################################################
 
 MainLoop;
+
+########################################################################
+#	Display information on the info bar
+########################################################################
+
+sub info_display {
+    my ($colour, $text) = @_;
+    $infoBar->configure(-foreground => $colour);
+    $info = $text;
+} # info_display
+
+########################################################################
+#	Report the cursor position in the info bar
+########################################################################
+
+sub report_cursor {
+    my @m = $text->markNames();
+    foreach (@m) {
+	if (/insert/) {
+	    info_display('black', $text->index($_));
+	    last;
+	}
+    }
+} # report_cursor
 
 ########################################################################
 #
@@ -432,8 +524,8 @@ sub connect_to_server {
 	%symbolTable = ();
 	$conn->send_now("$unitID.1");	# request Symbol Table
     } else {
-	$infoBar->configure(-foreground => 'red');
-	$info = "Could not connect to $host:$port - no live listing - edit only";
+	info_display('red',
+	    "Could not connect to $host:$port - no live listing - edit only");
     }
 } # connect_to_server
 
@@ -450,10 +542,9 @@ sub rcvd_msg_from_server {
 	if (length $msg == 0) {
 	    $rConn->disconnect();
 	    $mainWindow->title("iClive $fileName");
-	    $infoBar->configure(-foreground => 'red');
-	    $info = $iCname ?
+	    info_display('red', $iCname ?
 		"$unitID disconnected from '$iCname' by server" :
-		"$unitID is not connected to a control program";
+		"$unitID is not connected to a control program");
 	    deleteAllTags();	# also clears @activeSymbols
 	    %symbolTable = ();	# clear symbol table so balloons dont show
 	    undef $iCname;
@@ -480,12 +571,17 @@ sub rcvd_msg_from_server {
 		    ## case the ST-offset is the index. (computed by counting)
 		    ## For ALIASes the index of the Gate to which the
 		    ## ALIAS resolves is transmitted as a 3rd value.
+		    ## For bit I/O names IX0.0 etc, add a second entry IX0_0
 		    ####################################################
 		    while ($entry = shift @symbols) {
 			my ($symbol, $ftype, $index) = split " ", $entry;
 			$index = $stIndex unless defined $index;
 			print "$index\t$symbol\t$ftype\n" if $opt_T;
 			@{ $symbolTable{$symbol} } = ($ftype, $index);
+			if ($symbol =~ s/^([IQT]X\d+)\.(\d+)/$1_$2/) {
+			    print "$index\t$symbol\t$ftype\n" if $opt_T;
+			    @{ $symbolTable{$symbol} } = ($ftype, $index);
+			}
 			$stIndex++;
 		    }
 		} elsif ($entry eq '2') {
@@ -496,8 +592,7 @@ sub rcvd_msg_from_server {
 		    ## the displayed text. (Assume it should match)
 		    ####################################################
 		    $iCname = shift @symbols;
-		    $infoBar->configure(-foreground => 'blue');
-		    $info = "$unitID connected to '$iCname' by server";
+		    info_display('blue', "$unitID connected to '$iCname' by server");
 		    ####################################################
 		    ## change text on run button to "Stop"
 		    ####################################################
@@ -641,19 +736,58 @@ sub restoreTag {
 #
 #		parameter 1:	(dummy)
 #		parameter 2:	newSearchText
-#				'' use $searchText from Entry widget
+#		    "		undef	use $searchText from Entry widget
+#		    "		''	clear the search
 #		parameter 3:	0  Search down	(default)
-#				1  Search up
+#		    "		1  Search up
+#		    "		2  Go to line
+#
+#	search_text() is mostly called from a pop up, which does not close,
+#	until search_text() has completed execution. If the search action
+#	involves scrolling, the text covered by the pop up before scrolling
+#	and not covered after scrolling is left blank.
+#
+#	To fix this, postpone the search and scrolling action until after
+#	search_text() has completed execution, by posting the callback
+#	search_now(). No actual delay is necessary.
 #
 ########################################################################
 
 sub search_text {
+    $text->after(0, [ \&search_now, @_ ]); # allow pop up to go away
+} # search_text
+
+sub search_now {
     my ($dummy, $newSearchText, $direction) = @_;
-    my $sd = $direction ? -1 : 1;		# scroll direction
-    my ($auxiliary, $current, $length, $i);
-    $searchText = $newSearchText if $newSearchText;
+    my ($option, $auxiliary, $current, $length, $i, $tmpText);
+    if (defined $newSearchText) {
+	($searchText, $option) = split(/\t/, $newSearchText);
+	$matchType = $option ? $matchRestores{$option} : '-exact';
+    }
+    if ($direction == 2 or $matchType eq 'g') {
+	## go to line $searchText
+	if ($searchText =~ s/^(\d+\.(\d+|end)|end).*$/$1/) {
+	    $current = "$1";
+	} elsif ($searchText =~ s/^(\d+).*$/$1/) {
+	    $current = "$1.0";
+	} else {
+	    info_display('red', "cannot go to line '$searchText'");
+	    return;
+	}
+    print "goto: '$searchText' '$current' '$matchType' $direction\n" if $opt_T;
+	$matchType = 'g';
+	$text->see($current);
+	if ($scanFlag) {
+	    $text->tagAdd('sel', "$current linestart", "$current lineend");
+	}
+	$text->markSet('insert', $current);
+	report_cursor();
+	$tmpText = "$searchText$matchExtensions{$matchType}";
+	check_menu($tmpText, 'searches');
+	return;
+    }
     if ($prevText ne $searchText or $prevMatch ne $matchType) {
-	print "pattern: '$searchText' '$prevText'\n" if $opt_T;
+	print "pattern: '$searchText' '$matchType'\n" if $opt_T;
 	$si = -1;			# see index
 	@lines = ();
 	$text->tagDelete('searchTag') if $prevText;
@@ -671,19 +805,18 @@ sub search_text {
 	while (1) {
 	    eval {
 		$current = $text->search(-count => \$length,
-				     $matchType, 
-				     $auxiliary,
-				     '--',
-				     $searchText,
-				     $current,
-				     'end',
-				    );
+					 $matchType, 
+					 $auxiliary,
+					 '--',
+					 $searchText,
+					 $current,	# start index
+					 'end',		# stop index
+					);
 	    };
 	    if ($@) {
 		chop $@;
 		$@ =~ s# at /usr.*##;
-		$infoBar->configure(-foreground => 'red');
-		$info = "ERROR: $@";		# error in search - report in info bar
+		info_display('red', "ERROR: $@");	# error in search
 		last;
 	    }
 	    last unless $current and $length;
@@ -697,38 +830,144 @@ sub search_text {
 	    $current = $text->index("$current + $length char");
 	}
 	$matchType = 'rn' if $auxiliary eq '-nocase';	# otherwise radio button skips
+	$tmpText = "$searchText$matchExtensions{$matchType}";
+	if (@lines != 0) {
+	    check_menu($tmpText, 'searches');
+	}
 	$prevText = $searchText;
 	$prevMatch = $matchType;
-	check_menu($searchText, $menuSearch, $menuSearchStart,
-		\@currentSearches, $searchMenuLim, \&search_text);
     }
-    if ($i = @lines) {
+    if (($i = @lines) != 0) {
+	my $sd = $direction ? -1 : 1;	# scroll direction
 	if ($si == -1) {
-	    $infoBar->configure(-foreground => 'dark green');
-	    $info = "/$searchText/ found $i times";
-	    $i = 0;
-	    $text->see($lines[$i]);
+	    info_display('dark green', "/$searchText/ found $i times");
+	    $top = "1.0";
+	    $text->see($top);		# position to top left corner
+	    print "see:  $si $sd '$top' $#lines\n" if $opt_T;
+	    $si = 0;			# index for downwards display
+	    $sj = $#lines;		# index for upwards display
+	    $siWrap = $sjWrap = 0;
+	} elsif ($sd == $siWrap) {
+	    info_display('dark red', "search hit BOTTOM, continuing at TOP");
+	} elsif ($sd == $sjWrap) {
+	    info_display('dark red', "search hit TOP, continuing at BOTTOM");
 	} else {
-	    for ($i = $si + $sd;
-		($i = $i > $#lines ? 0 : $i < 0 ? $#lines : $i) != $si;
-		$i += $sd) {
-		$current = $lines[$i];
-		unless ($text->dlineinfo($current)) {
-		    $text->see($lines[$i]);	# this line was previously invisible
-		    last;
-		} else {
-		    print "loop: $i $sd '$lines[$i]'\n" if $opt_T;
+	    $info = '';			# clears display_info
+	}
+	if ($sd == 1) {			# search downward
+	    $top = "$lines[$si] - 1 line";
+	    $text->see($top);		# position to top new search box
+    print "top:  $si $sd '$top'\n" if $opt_T;
+	    for ($i = $si + 1; $i <= $#lines; $i++) {
+		$current = "$lines[$i] + 1 line";
+		unless ($text->bbox($current)) {	# test not needed if once failed
+		    $text->see($current);		# this line was previously invisible
+    print "cur:  $i $sd '$current'\n" if $opt_T;
+		    unless ($text->bbox($top)) {
+			$top = $lines[$si];
+			$text->see($top);	# position to top new search box again
+    print "to1:  $i $sd '$top'\n" if $opt_T;
+			if (--$i > $si) {
+			    $current = $lines[$i];
+			    $text->see($current);	# this is last box still visible
+    print "cu1:  $i $sd '$current'\n" if $opt_T;
+			}
+			if ($si <= 0) {
+			    $sj = $#lines;
+			    $sjWrap = -$sd;
+			} else {
+			    $sj = $si - 1;
+			    $sjWrap = 0;
+			}
+			$si = $i + 1;
+			$siWrap = 0;
+    print "for loop break early $si\n" if $opt_T;
+			return;		# now show the new block of boxes
+		    }
+		} elsif ($opt_T) {
+		    print "loop: $i $sd '$current' '$top'\n";
 		}
 	    }
+	    $top = $lines[$si];
+	    $text->see($top);		# position to top new search box again
+    print "to2:  $i $sd '$top'\n" if $opt_T;
+	    if (--$i > $si) {
+		$current = $lines[$i];
+		$text->see($current);	# this is last box still visible
+    print "cu2:  $i $sd '$current'\n" if $opt_T;
+	    }
+	    if ($si <= 0) {
+		$sj = $#lines;
+		$sjWrap = -$sd;
+	    } else {
+		$sj = $si - 1;
+		$sjWrap = 0;
+	    }
+	    $si = 0;
+	    $siWrap = $sd;
+    print "for loop complete $si\n" if $opt_T;
+	} else {		# search upward
+	    $top = "$lines[$sj] + 1 line";
+	    $text->see($top);		# position to top new search box
+    print "top:  $sj $sd '$top'\n" if $opt_T;
+	    for ($i = $sj - 1; $i >= 0; $i--) {
+		$current = "$lines[$i] - 1 line";
+		unless ($text->bbox($current)) {	# test not needed if once failed
+		    $text->see($current);		# this line was previously invisible
+    print "cur:  $i $sd '$current'\n" if $opt_T;
+		    unless ($text->bbox($top)) {
+			$top = $lines[$sj];
+			$text->see($top);	# position to top new search box again
+    print "to1:  $i $sd '$top'\n" if $opt_T;
+			if (++$i < $sj) {
+			    $current = $lines[$i];
+			    $text->see($current);	# this is last box still visible
+    print "cu1:  $i $sd '$current'\n" if $opt_T;
+			}
+			if ($sj >= $#lines) {
+			    $si = 0;
+			    $siWrap = -$sd;
+			} else {
+			    $si = $sj + 1;
+			    $siWrap = 0;
+			}
+			$sj = $i - 1;
+			$sjWrap = 0;
+    print "for loop break early $sj\n" if $opt_T;
+			return;		# now show the new block of boxes
+		    }
+		} elsif ($opt_T) {
+		    print "loop: $i $sd '$current' '$top'\n";
+		}
+	    }
+	    $top = $lines[$sj];
+	    $text->see($top);		# position to top new search box again
+    print "to2:  $i $sd '$top'\n" if $opt_T;
+	    if (++$i > $sj) {
+		$current = $lines[$i];
+		$text->see($current);	# this is last box still visible
+    print "cu2:  $i $sd '$current'\n" if $opt_T;
+	    }
+	    if ($sj >= $#lines) {
+		$si = 0;
+		$siWrap = -$sd;
+	    } else {
+		$si = $sj + 1;
+		$siWrap = 0;
+	    }
+	    $sj = $#lines;
+	    $sjWrap = $sd;
+    print "for loop complete $sj\n" if $opt_T;
 	}
-	print "see:  $i $sd '$lines[$i]' '$#lines'\n" if $opt_T and $i != $si;
-	$si = $i;
-    } elsif ($si == -1 and not $@) {
-	$infoBar->configure(-foreground => 'red');
-	$info = $searchText ? "/$searchText/ not found" : "";
-	$si = 0;
+    } elsif ($si == -1 and not $@) {	# do not overwrite search eval error message
+	if ($searchText) {
+	    info_display('red', "/$searchText/ not found");
+	} else {
+	    info_display('dark red', "search cleared");
+	}
+	$si = 0;			# do not display this unless new search
     }
-} # search_text
+} # search_now
 
 ########################################################################
 #
@@ -782,13 +1021,8 @@ sub deleteAllTags {
 #
 ########################################################################
 
-my $bMsg = '';
-my $sMsg = '';
-my @wIdx = ('', '');  # Indices surrounding the current word.
-my @lIdx = ('', '');  # Same for last word.
-
 sub scan {
-    my ($search_pattern, $current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index);
+    my ($current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index);
 
     deleteAllTags();	# also clears @activeSymbols
 
@@ -798,17 +1032,15 @@ sub scan {
     } elsif ($conn and $iCname) {
 	$mainWindow->title("iClive $fileName $iCname");
 	if ($fileName !~ /\b$iCname\./) {
-	    $infoBar->configure(-foreground => 'red');
-	    $info = "WARNING: '$fileName' does not match connected control program '$iCname'"; 
+	    info_display('red',
+		"WARNING: '$fileName' does not match connected control program '$iCname'");
 	}
-
-	$search_pattern = '[~\s]*[\w]+(\.\w+)?\s*((~ )?---|=$)?';
 	$current = '1.0'; my $length = '0';
 	while (1) {
 	    $current = $text->search(-count => \$length,
 				     '-regexp',
 				     '--',
-				     $search_pattern,
+				     $scanPattern,
 				     $current,
 				     'end');
 	    last if (!$current);
@@ -940,7 +1172,7 @@ sub scan {
 	$text->configure(-state => 'disabled');
 	$scanFlag = 1;		# scan successful
     } else {
-	$info = "";
+	$info = '';		# clears display_info
 	connect_to_server();	# will call scan() if connect was successful
     }
 } # scan
@@ -962,7 +1194,7 @@ sub clearScan {
     $scanButton->configure(-text => 'Live');
     $scanFlag = 0;		# text has been cleared of all tags
     return if @_;		# called from disconnect
-    $info = "";
+    $info = '';			# clears display_info
     $conn->send_now("$unitID.4") if $conn;	# clear active symbols
 } # clearScan
 
@@ -1004,35 +1236,6 @@ sub check_save {
 
 ########################################################################
 #
-#	check_menu
-#		newEntry
-#		menuRef
-#		menuPos
-#		entriesArRef
-#		entriesLim
-#		commandRef
-#
-########################################################################
-
-sub check_menu {
-    my ($newEntry, $menuRef, $menuPos, $entriesArRef, $entriesLim, $commandRef) = @_;
-    my $entry;
-    foreach $entry (@$entriesArRef) {
-	if ($newEntry eq $entry) {
-	    return;				# avoid dual identical entries
-	}
-    }
-    push(@$entriesArRef, $newEntry);		# push a new entry at the back
-    $menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
-		      -command => [ $commandRef, 0, $newEntry ]);
-    if ($#$entriesArRef >= $entriesLim) {
-	$menuRef->menu->delete($menuPos);	# first dynamic menu entry
-	shift(@$entriesArRef);			# shift out the extra entry
-    }
-} # check_menu
-
-########################################################################
-#
 #	new_text clears the text area
 #
 ########################################################################
@@ -1071,6 +1274,7 @@ sub open_file {
     my ($unconditional, $fName) = @_;	# optional parameters
     if ($fName eq '') {
 	$fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
+	$fName =~ s#^C:/cygwin## or $fName =~ s#^([A-Z]):#/cygdrive/\l$1#;
 	$fName =~ s#^$cwd/##;
     }
     print "open_file: $unconditional $fName\n" if $opt_T;;
@@ -1085,24 +1289,20 @@ sub open_file {
 		while (<FH>) {
 		    $oldContents .= $_;
 		}
-		close (FH);
+		close(FH);
 		$text->insert("end", $oldContents);
 		my $length = length $oldContents;
 		$fileName = $fName;	# alter global $fileName
 		$mainWindow->title("iClive $fileName");
-		$infoBar->configure(-foreground => 'black');
-		$info = "File '$fileName', '$length' bytes loaded";
+		info_display('black', "File '$fileName', '$length' bytes loaded");
 		$prevText = '';		# start a new search
-		check_menu($fileName, $menuFile, $menuFileStart,
-		    \@currentFiles, $fileMenuLim, \&open_file);
+		check_menu($fileName, 'files');
 		return;			# global $fileName is altered
 	    }
-	    $infoBar->configure(-foreground => 'red');
-	    $info = "ERROR: Could not open $fName"; 
+	    info_display('red', "ERROR: Could not open $fName");
 	}
     } else {
-	$infoBar->configure(-foreground => 'red');
-	$info = "no file opened"; 
+	info_display('red', "no file opened");
     }
     return;				# global $fileName is not altered
 } # open_file
@@ -1128,20 +1328,16 @@ sub save_file {
 		$oldContents = $contents;
 		my $length = length $oldContents;
 		print FH $oldContents;
-		close (FH);
+		close(FH);
 		$mainWindow->title("iClive $fileName");
-		$infoBar->configure(-foreground => 'black');
-		$info = "File '$fileName', '$length' bytes saved";
-		check_menu($fileName, $menuFile, $menuFileStart,
-			\@currentFiles, $fileMenuLim, \&open_file);
+		info_display('black', "File '$fileName', '$length' bytes saved");
+		check_menu($fileName, 'files');
 	    } else {
-		$infoBar->configure(-foreground => 'red');
-		$info = "ERROR: Could not open '$fileName' for writing"; 
+		info_display('red', "ERROR: Could not open '$fileName' for writing");
 		$ret = 0;
 	    }
 	} else {
-	    $infoBar->configure(-foreground => 'blue');
-	    $info = "FILE '$fileName' has not changed - not written"; 
+		info_display('blue', "FILE '$fileName' has not changed - not written");
 	}
     } else {
 	$ret = saveAs_file();
@@ -1164,6 +1360,7 @@ sub saveAs_file {
     my $oldname = $fileName;
     $fileName = $mainWindow->getSaveFile(-filetypes => $fileTypes,
 					 -initialfile => $fileName);
+    $fileName =~ s#^C:/cygwin## or $fileName =~ s#^([A-Z]):#/cygdrive/\l$1#;
     $fileName =~ s#^$cwd/##;
     print "saveAs_file: $fileName\n" if $opt_T;;
     if ($fileName ne '') {
@@ -1173,8 +1370,7 @@ sub saveAs_file {
 	    $ret = 0;
 	}
     } else {
-	$infoBar->configure(-foreground => 'red');
-	$info = "no file saved"; 
+	info_display('red', "no file saved");
 	$fileName = $oldname;	# restore fileName
 	$ret = 0;
     }
@@ -1187,14 +1383,16 @@ sub saveAs_file {
 #	check if $fileName is an iC source (*.ic) and needs saving
 #	generate a new target file if target is older than $fileName
 #
-#	2nd parameter:	1   Make C file
-#			0   Make executable
+#	2nd parameter:	0   Make executable
+#			1   Make unconditionally
+#			2   Make C file only
 #
 ########################################################################
 
 sub make_file {
-    my $cFlag = $_[1];		# make C file if true
-    if (check_save()) {	# make sure check_save() has no regex matches
+    my $par2 = $_[1];		# make C file if true
+    if (check_save()) {		# make sure check_save() has no regex matches
+	my $errorName;
 	if ($fileName =~ /(^[\w\.\\\/]+)\.(lst?|c|ini)$/) {
 	    $errorName = "$1.ic";	# listing should never be modified
 	    open_file(1, $errorName);	# load the corresponding iC source unconditionally
@@ -1203,18 +1401,17 @@ sub make_file {
 	    clearScan();
 	}
 	if ($fileName !~ /(^[\w\.\\\/]+)\.ic/) {
-	    $infoBar->configure(-foreground => 'blue');
-	    $info = "WARNING: cannot make '$fileName' (must end in .ic)"; 
+	    info_display('blue', "WARNING: cannot make '$fileName' (must end in .ic)");
 	} else {
 	    my $baseName = $1;	# so that $1 is valid
-	    my $targetName = $cFlag ? "$baseName.c" : $baseName;
+	    my $targetName = $par2 == 2 ? "$baseName.c" : $baseName;
 	    my $ftime = (stat($fileName))[9];
 	    my $mtime = (stat($targetName))[9];
 	    my $ret = 0;
 	    $errorName = '';
-	    if ($mtime < $ftime) {
+	    if ($par2 == 1 or $mtime < $ftime) {
 		my @args = ("iCmake", $fileName);
-		if ($cFlag) {
+		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
 		print "system @args\n" if $opt_t;
@@ -1227,15 +1424,13 @@ sub make_file {
 		    $matchType = '-regexp';
 		    search_text();			# carry out the search setting markers
 		    $errorName = "$baseName.ic";	# to open iC file after inspecting listing
-		    $infoBar->configure(-foreground => 'red');
-		    $info = "ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)"; 
+		    info_display('red',
+			"ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)");
 		} else {
-		    $infoBar->configure(-foreground => 'dark green');
-		    $info = "'$targetName' successfully made"; 
+		    info_display('dark green', "'$targetName' successfully made");
 		}
 	    } else {
-		$infoBar->configure(-foreground => 'blue');
-		$info = "'$targetName' is up to date"; 
+		info_display('blue', "'$targetName' is up to date");
 	    }
 	}
     } # ELSE operation was cancelled by check_save()
@@ -1254,11 +1449,9 @@ sub run_file {
     if ($runFlag) {
 	stop_file();	# $runFlag = 0
     } elsif ($conn and $iCname) {
-	$infoBar->configure(-foreground => 'red');
-	$info = "$unitID is connected to '$iCname' (Stop it to run '$fileName')";
+	info_display('red', "$unitID is connected to '$iCname' (Stop it to run '$fileName')");
     } elsif ($fileName !~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
-	$infoBar->configure(-foreground => 'blue');
-	$info = "WARNING: cannot run '$fileName' (must end in .ic, .lst, ,c or .ini)"; 
+	info_display('blue', "WARNING: cannot run '$fileName' (must end in .ic .lst .c or .ini)");
     } elsif ($2 ne 'ic' or check_save()) {
 	deleteAllTags();	# also clears @activeSymbols
 	clearScan();
@@ -1267,14 +1460,11 @@ sub run_file {
 	my $ftime = (stat($fileName))[9];
 	my $mtime = (stat($processName))[9];
 	if (not -f _) {
-	    $infoBar->configure(-foreground => 'red');
-	    $info = "ERROR: no file named '$processName' (Make it first)"; 
+	    info_display('red', "ERROR: no file named '$processName' (Make it first)");
 	} elsif (not -x _) {
-	    $infoBar->configure(-foreground => 'red');
-	    $info = "ERROR: '$processName' not executable ??"; 
+	    info_display('red', "ERROR: '$processName' not executable ??");
 	} elsif ($mtime < $ftime) {
-	    $infoBar->configure(-foreground => 'blue');
-	    $info = "WARNING: '$processName' is older than '$fileName' (Make again)"; 
+	    info_display('blue', "WARNING: '$processName' is older than '$fileName' (Make again)");
 	} else {
 	    my $pid;
 	    FORK: {
@@ -1305,7 +1495,7 @@ sub run_file {
 
 ########################################################################
 #
-#	stop file after checking if file needs saving
+#	stop the control program if connected
 #
 ########################################################################
 
@@ -1315,23 +1505,135 @@ sub stop_file {
 	clearScan();
 	$conn->send_now("$unitID.5");	# stop control program
     } else {
-	$infoBar->configure(-foreground => 'red');
-	$info = "$unitID is not connected to a control program";
+	info_display('red', "$unitID is not connected to a control program");
     }
 } # stop_file
 
 ########################################################################
 #
+#	check_menu (newEntry, menuKey)
+#	    iniData{menuKey} ==> [
+#		menuRef,
+#		menuPos,
+#		entriesArRef,
+#		entriesLim,
+#		commandRef,
+#	    ])
+#
+########################################################################
+
+sub check_menu {
+    my ($newEntry, $menuKey) = @_;
+    print "check_menu: [$menuKey] '$newEntry'\n" if $opt_T;
+    my $menuData = $iniData{$menuKey};
+    my ($menuRef, $menuPos, $entriesArRef, $entriesLim, $commandRef) = @$menuData;
+    if ($menuRef) {
+	my $entry;
+	foreach $entry (@$entriesArRef) {
+	    if ($newEntry eq $entry) {
+		return;				# avoid dual identical entries
+	    }
+	}
+	push(@$entriesArRef, $newEntry);	# push a new entry at the back
+	$menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
+			  -command => [ $commandRef, 0, $newEntry ]);
+	if ($#$entriesArRef >= $entriesLim) {
+	    $menuRef->menu->delete($menuPos);	# first dynamic menu entry
+	    shift(@$entriesArRef);		# shift out the extra entry
+	}
+    } else {
+	push(@$entriesArRef, $newEntry);	# not a menu list
+    }
+} # check_menu
+
+########################################################################
+#
+#	initialise the program by reading ~/.iClive.ini if it exists
+#	and initialising file list and search list in menus
+#	IF there are no file arguments, open the last open file
+#	ELSE	open the first file in the argument list
+#		add any others to the file list menu
+#
+#	structure of ~/.iClive.ini
+#	[files]
+#		sort5.ic
+#		sort5.lst
+#		/tmp/trial.ic
+#	[last open file]
+#		sort5.ic
+#	[searches]
+#		pip			# default match type is -exact
+#		[files]			# a curious -exact match
+#		timer		n	# match type -nocase (<tab>n)
+#		QX[\d+]\.[\d+]	r	# match type -regexp (<tab>r)
+#		ix[\d+]\.[\d+]	rn	# is resolved to -regexp -nocase
+#
+#	since tabs cannot be entered in the search entry box (skips to text window)
+#	use <tab> followed by search option in the search menu list
+#	also precede each ini item by <tab>, since [files] may be a
+#	legitimate search expression (watch Goedel here)
+#
+########################################################################
+
+sub ini_program {
+    my ($home, $menuData, $menuKey, $entry, $initialFile);
+    ## restore file and search menu lists from ~/.iClive.ini
+    if (($home = $ENV{HOME}) ne '' and open(INI, "$home/.iClive.ini")) {
+	while (<INI>) {
+	    chomp;
+	    if (/^\[([\w ]+)\]$/) {
+		$menuKey = $1;			# key found
+		$menuData = $iniData{$menuKey};
+    print "ini_program: menuKey [$menuKey] found\n" if $opt_T;
+	    } elsif ($menuData and s/^\t(.*)$/$1/) {	# ini starts with <tab>
+		$entry = $_;
+		check_menu($entry, $menuKey);
+	    }
+	}
+	close(INI);
+    }	# ignore if ~/.iClive.ini cannot be opened or found
+    $initialFile = shift @ARGV;			# ARGV may be empty
+    $initialFile = shift @lastFile unless $initialFile;
+    open_file(0, $initialFile) if $initialFile;
+    foreach $initialFile (@ARGV) {
+	check_menu($initialFile, 'files');	# stuff the rest in the file menu list
+    }
+} # ini_program
+
+########################################################################
+#
 #	quit program after checking if file needs saving
+#	and current file and search menu lists have been written
 #
 ########################################################################
 
 sub quit_program {
+    my ($home, $menuKey, $entriesArRef, $entry);
     deleteAllTags();	# also clears @activeSymbols
     clearScan();
     if (check_save()) {
+	print "quit_program: fileName = '$fileName', lastFile = '@lastFile'\n" if $opt_T;
+	if ($fileName and $fileName ne $newName) {
+	    $lastFile[0] = $fileName;
+	}
+	## save file and search menu lists to ~/.iClive.ini
+	if (($home = $ENV{HOME}) ne '') {
+	    if (open(INI, ">$home/.iClive.ini")) {
+		foreach $menuKey (sort keys %iniData) {
+		    print INI "[$menuKey]\n";
+		    $entriesArRef = @{$iniData{$menuKey}}->[2];
+		    foreach $entry (@$entriesArRef) {
+			print INI "\t$entry\n" if $entry;
+		    };
+		}
+		close(INI);
+	    } else {
+		print STDERR "Can't open ~/.iClive.ini: $!\n";
+	    }
+	}
 	exit(0);
     }
+    ## continue if check_save() was cancelled
 } # quit_program
 #ifdef TIME_HIRES 
 

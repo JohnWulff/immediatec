@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.33 2002/10/04 19:54:35 jw Exp $";
+"@(#)$Id: ict.c,v 1.34 2003/12/11 09:56:27 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -49,13 +49,15 @@ static void	display(void);
 
 Functp	*i_lists[] = { I_LISTS };
 
-Gate		alist0;
-Gate		alist1;
-Gate *		a_list;			/* these lists are toggled */
-Gate		olist0;
-Gate		olist1;
-Gate *		o_list;			/* these lists are toggled */
-Gate *		c_list;			/* "iClock" */
+static Gate	alist0;			/* these lists are toggled */
+static Gate	alist1;
+Gate *		a_list;			/* arithmetic output action list */
+static Gate	olist0;			/* these lists are toggled */
+static Gate	olist1;
+Gate *		o_list;			/* logic output action list */
+Gate *		c_list;			/* main clock list "iClock" */
+static Gate	flist;
+Gate *		f_list;			/* auxiliary function clock list */
 
 Gate *		IX_[IXD*8];		/* pointers to Bit Input Gates */
 Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
@@ -158,9 +160,11 @@ icc(
     olist1.gt_rlist = (Gate **)(o_list = &olist0);	/* start with olist0 */
     Out_init(o_list);
 #ifdef LOAD
-    c_list = &iClock;				/* system clock list */
+    c_list = &iClock;			/* system clock list */
     /* TODO check c_list is a propoer list even if DEQ (also other places) */
 #endif
+    f_list = &flist;			/* function clock list */
+    Out_init(f_list);
 
 /********************************************************************
  *
@@ -288,7 +292,8 @@ icc(
 	do {
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list));
-	} while (scan_clk(c_list));	/* then scan clock list until empty */
+	    /* then scan clock lists once - f_list holds if-else-switch events */
+	} while (scan_clk(c_list) && scan_clk(f_list));
 	if (micro & 06) microPrint("Scan", 04);
 
 #ifdef LOAD 

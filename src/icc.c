@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.21 2003/12/11 09:55:39 jw Exp $";
+"@(#)$Id: icc.c,v 1.22 2003/12/13 16:05:59 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -239,25 +239,20 @@ icc(
 	}
 #endif
     }
-    if (error_flag) {
-	if (error_flag == 1) {
-	    fprintf(outFP, "\n*** Fatal Errors ***\n");
-	    exit(1);
-	}
-	fprintf(outFP, "\n*** Warnings ***\n");
-    }
-#if YYDEBUG
-    if (debug & 0100) fprintf(outFP, "\nPass 5:");
-#endif
-    if (o_list->gt_next == o_list) {			/* empty */
-	scan_clk(c_list) && scan_clk(f_list);		/* clock lists */
-    }
+
 #if YYDEBUG
     if (debug & 0100) {
 	fprintf(outFP, "\nInit complete =======\n");
     }
 #endif
 
+    if (error_flag) {
+	if (error_flag == 1) {
+	    fprintf(outFP, "\n*** Fatal Errors ***\n");
+	    quit(1);
+	}
+	fprintf(outFP, "\n*** Warnings ***\n");
+    }
     if (debug & 0400) {
 	quit(0);			/* terminate - no inputs */
     }

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.32 2002/09/01 20:05:46 jw Exp $";
+"@(#)$Id: rsff.c,v 1.33 2003/12/11 11:20:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -923,27 +923,33 @@ fSsw(					/* F_SW slave action on SW */
     Gate *	gf,
     Gate *	out_list)
 {
-    gf->gt_old = gf->gt_new;		/* now new value is fixed */
+    if (out_list == c_list) {
+	/* defer execution until f_list is scanned */
+	link_ol(gf, f_list);
+    } else {
+	assert(out_list == f_list);
+	gf->gt_old = gf->gt_new;		/* now new value is fixed */
 #if defined(TCP) && defined(LOAD)
-    if (gf->gt_live & 0x8000) {			/* value can change more than once */
-	liveData(gf->gt_live, gf->gt_new);	/* output final value here */
-    }
+	if (gf->gt_live & 0x8000) {		/* value can change more than once */
+	    liveData(gf->gt_live, gf->gt_new);	/* output final value here */
+	}
 #endif
-    /* execute C function as action procedure with side effects */
+	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, "\tF%p(", (CFunctp)gf->gt_funct);
+	if (debug & 0100) fprintf(outFP, "\tF%p(\n", (CFunctp)gf->gt_funct);
 #endif
-    ((CFunctp)(gf->gt_funct))(gf);
+	((CFunctp)(gf->gt_funct))(gf);
 #else
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, "\tF%d(", (int)gf->gt_funct);
+	if (debug & 0100) fprintf(outFP, "\tF%d(\n", (int)gf->gt_funct);
 #endif
-    c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
+	c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, ")\n");
+	if (debug & 0100) fprintf(outFP, ")\n");
 #endif
+    }
 } /* fSsw */
 
 /********************************************************************
@@ -1013,21 +1019,27 @@ fScf(					/* F_CF and F_CE slave action on CF */
     Gate *	gf,
     Gate *	out_list)
 {
-    /* execute C function as action procedure with side effects */
+    if (out_list == c_list) {
+	/* defer execution until f_list is scanned */
+	link_ol(gf, f_list);
+    } else {
+	assert(out_list == f_list);
+	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, "\tF%p{", (CFunctp)gf->gt_funct);
+	if (debug & 0100) fprintf(outFP, "\tF%p{\n", (CFunctp)gf->gt_funct);
 #endif
-    ((CFunctp)(gf->gt_funct))(gf);
+	((CFunctp)(gf->gt_funct))(gf);
 #else
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
+	if (debug & 0100) fprintf(outFP, "\tF%d{\n", (int)gf->gt_funct);
 #endif
-    c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
+	c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, "}\n");
+	if (debug & 0100) fprintf(outFP, "}\n");
 #endif
+    }
 } /* fScf */
 
 /********************************************************************
@@ -1409,7 +1421,7 @@ assign(Gate * gp, int rv)
 	    }
 	    gp->gt_new = rv;			/* first or later change */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
+	    if (debug & 0100) fprintf(outFP, " %d\n", gp->gt_new);
 #endif
 	}
     } else if (gp->gt_ini == -LOGC) {
@@ -1424,10 +1436,11 @@ assign(Gate * gp, int rv)
 	    link_ol(gp, o_list);		/* logic change or glitch */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
-		fprintf(outFP, " %d", gp->gt_val);
+		fprintf(outFP, " %d\n", gp->gt_val);
 	    }
 #endif
 	}
+	rv = rv != 0;				/* change to logic value 0 or 1 */
 #if !defined(_WINDOWS) || defined(LOAD)
     } else {
 	fprintf(errFP,

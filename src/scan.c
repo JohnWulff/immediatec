@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.23 2002/09/01 19:58:28 jw Exp $";
+"@(#)$Id: scan.c,v 1.24 2003/12/11 09:50:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -100,7 +100,7 @@ scan_ar(Gate *	out_list)
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
-	fprintf(outFP, "\narithmetic ==========");
+	fprintf(outFP, "\narith scan ==========");
     }
 #endif
     while ((op = out_list->gt_next) != out_list) {	/* scan outputs */
@@ -330,14 +330,23 @@ scan(Gate *	out_list)
  *	nodes on their lists will be linked to c_list extending the
  *	clock scan immediately.
  *
+ *	The execution of F_SW, F_CF and F_CE (IF ELSE or SWITCH) are
+ *	deferred until all other slave actions have been executed, by
+ *	linking them to f_list, which is scanned when c_list is empty.
+ *
+ *	All other slave actions act on GATE or ARITH (by D_SH only)
+ *	nodes which are linked to o_list or a_list in the slaveAct.
+ *
+ *	Finally f_list is scanned when all other actions are completed and
+ *	all slave outputs have their final value for this clock scan.
  *	F_SW, F_CF and F_CE execute C fragments as slaveAct when they
  *	are clocked. (IF ELSE or SWITCH). No output is linked directly
  *	to any action lists. The C fragments may assign to immediate
  *	gates of type LOGC or ARNC which are linked to the o_list or
  *	a_list respectively in the assignment if they change.
- *
- *	All other slave actions act on GATE or ARITH (by D_SH only)
- *	nodes which are linked to o_list or a_list in the slaveAct.
+ *	The execution of C fragments during the scan of f_list, is then
+ *	the start of a new run of combinatorial changes if immediate
+ *	variables are altered, apart from the side effects of the C code.
  *
  *******************************************************************/
 
@@ -354,7 +363,8 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
-	fprintf(outFP, "\nclock scan ==========");
+	fprintf(outFP, out_list == c_list ? "\nclock scan =========="
+					  : "\nfunct scan ==========");
     }
 #endif
     while ((op = out_list->gt_next) != out_list) {	/* scan outputs */
@@ -375,7 +385,8 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, "\n%s:", op->gt_ids);
 #endif
-	(*slaveAct[op->gt_fni])(op, o_list);	/* execute slave action */
+	/* only fScf() and fSsw() require out_list to switch to f_list */
+	(*slaveAct[op->gt_fni])(op, out_list);	/* execute slave action */
     }
     return 1;				/* list was not empty */
 } /* scan_clk */

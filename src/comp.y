@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.78 2003/12/05 15:45:13 jw Exp $";
+"@(#)$Id: comp.y,v 1.79 2003/12/12 17:34:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1815,12 +1815,12 @@ get(FILE* fp)
 	    if (sscanf(chbuf, " # line %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
-		if (lexflag & C_FIRST) {
+		if ((debug & 012) && lexflag & C_FIRST) {
 		    fprintf(outFP, "******* C CODE          ************************\n");
 		}
 		if (strcmp(inpNM, prevNM)) {
 		    lexflag &= ~C_BLOCK;	/* output #line for changed filename */
-		} else {
+		} else if (debug & 012) {
 		    fprintf(outFP, "\n");	/* seperate blocks in lex listing */
 		}
 		lexflag |= C_LINE|C_LINE1;	/* only in C-compile */
@@ -1835,6 +1835,7 @@ get(FILE* fp)
 	     ********************************************************/
 	    if ((lexflag & C_LINE) == 0) {
 		fprintf(outFP, "%03d\t%s", lineno, chbuf);
+		iFlag = 1;				/* may need correction by pplstfix */
 	    } else if ((lexflag & (C_PARSE|C_FIRST)) != C_FIRST) {
 		fprintf(outFP, "\t%s", chbuf);		/* # line or # 123 "name" */
 	    }
@@ -2004,11 +2005,11 @@ iClex(void)
 		    } else {
 			unget(c);		/* the non digit, not '.' */
 		    }
-		} else if (sscanf(iCtext, "%1[IQT]%1[BWX]%d__%d%1[A-Z_a-z]",
+		} else if (sscanf(iCtext, "%1[IQT]%1[BWX]%d_%d%1[A-Z_a-z]",
 		    y0, y1, &yn, &yt, y2) == 4) {
-		    ierror("Variables with __ clash with I/O", iCtext);
-						/* QX%d__%d not allowed */
-		}				/* QX%d__%dABC is OK - not I/O */
+		    ierror("Variables with _ clash with I/O", iCtext);
+						/* QX%d_%d not allowed */
+		}				/* QX%d_%dABC is OK - not I/O */
 
 		if (yn >= ixd) {
 		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:",
@@ -2037,7 +2038,7 @@ iClex(void)
 	    if ((symp = lookup(iCtext)) == 0) {
 		symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
 	    } else if (typ == ERR) {
-		symp->type = ERR;		/* mark ERROR in QX%d__%d */
+		symp->type = ERR;		/* mark ERROR in QX%d_%d */
 	    }
 	    iClval.sym.v = symp;		/* return actual symbol */
 	    while ((typ = symp->type) == ALIAS) {
