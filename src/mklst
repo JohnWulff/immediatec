@@ -11,20 +11,21 @@ use strict;
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [-decl6h] [file ...]
+Usage:	@<<<<<<< [-decl6ph] [file ...]
 	$named
 	-d	do not output base without extension
 	-e	output only base without extension
 	-c	output only base with .c extension
 	-l	output only base with .lst extension
 	-6	output only base with .lst6 extension
+	-p	output only base with .p extension
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.3 2001/01/13 17:44:12 jw Exp $
+$Id: mklst,v 1.4 2001/01/17 09:42:25 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_l $opt_6 $opt_h);
+use vars qw($opt_c $opt_d $opt_e $opt_l $opt_6 $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('cdel6h');			# sets $opt_h if -h etc
+&Getopts('cdel6ph');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -43,6 +44,8 @@ while ($ARGV = shift @ARGV) {
 	    print "$1.lst\n";
 	} elsif ($opt_6) {
 	    print "$1.lst6\n";
+	} elsif ($opt_p) {
+	    print "$1.p\n";
 	} else {
 	    print "$1\n$1.c\n$1.lst\n$1.p\n";
 	}
