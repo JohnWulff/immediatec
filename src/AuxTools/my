@@ -1,0 +1,12 @@
+#!/bin/bash
+# $Id: my,v 1.1 2004/02/02 11:57:14 jw Exp $
+for file in $(cat pp.lt); do
+    echo $file
+    f=${file%.*}
+    icc -d76 -l $f.lst6 $f.ic;
+done > /dev/null 2>&1
+for file in $(cat pp.lt); do
+    echo $file
+    f=${file%.*}
+    icc -d74 -A -l $f.lst -o $f.c $f.ic;
+done > Init.out 2>&1
