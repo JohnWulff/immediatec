@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.2 2002/07/07 14:15:16 jw Exp $";
+"@(#)$Id: gram.y,v 1.3 2002/07/10 21:15:29 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -22,9 +22,25 @@
  *
  *******************************************************************/
 
-#include	<stdio.h>
-
 #include	"gram.h"
+
+typedef struct LineEntry {
+    int		start;
+    int		op;
+    int		end;
+    int		type;
+} LineEntry;
+
+#define ENDSTACKSIZE	100
+static LineEntry	lineEntryArray[500];
+static LineEntry*	lep = lineEntryArray;
+static int		endStack[ENDSTACKSIZE];
+static int*		esp = endStack;
+
+static void	immVarFound(int start, int end, int type);
+static void	immAssignFound(int start, int operator, int end, int type);
+static int	pushEndStack(int value);
+static int	popEndStack(void);
 
 %}
 %union {		/* stack type */
@@ -359,6 +375,7 @@ assignment_expr
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    printf("<%d %d>", $$.start, $$.end);
+	    immAssignFound($1.start, $2.start, $3.end, 1);
 	}
 	| unary_expr assignment_operator assignment_expr {
 	    $$.start = $1.start;
@@ -1114,11 +1131,14 @@ identifier
 	: IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    printf("{%d %d}", $$.start, $$.end);
+	    immVarFound($$.start, $$.end, 1);
 	}
 	;
 %%
 
 #include <stdio.h>
+#include <assert.h>
 
 extern char yytext[];
 extern int column;
@@ -1129,3 +1149,88 @@ yyerror(char *s, ...)
 	fflush(stdout);
 	printf("\n%*s\n%*s\n", column, "^", column, s);
 }
+
+static void
+immVarFound(int start, int end, int type)
+{
+    lep->start = start;
+    lep->op    = 32767;
+    lep->end   = end;
+    lep->type  = type;
+    lep++;
+} /* immVarFound */
+
+static void
+immAssignFound(int start, int operator, int end, int type)
+{
+    LineEntry*	p;
+
+    for (p = lep - 1; p >= lineEntryArray; p-- ) {
+	printf("\n ***** <%d, %d, %d>", p->start, p->end, p->type);
+	if (p->start == start) {
+	    p->op    = operator;
+	    p->end   = end;
+	    if (p->type == type) {
+		p->type  = type + 2;	/* replace variable entry with assignment entry */
+		return;
+	    } else {
+		break;			/* Error: types don't match */
+	    }
+	} else if (p->start < start) {
+	    break;			/* Error: will not find start */
+	}
+    }
+    printf(" ERROR <%d, %d, %d>", start, end, type);
+} /* immAssignFound */
+
+static int
+pushEndStack(int value)
+{
+    assert(esp < &endStack[ENDSTACKSIZE]);
+    return *esp++ = value;
+} /* pushEndStack */
+
+static int
+popEndStack(void)
+{
+    assert(esp >= endStack);
+    return *--esp;
+} /* popEndStack */
+
+static char*	text[] = { "LV(", "AV(", "LA(", "AA(", };
+
+void
+copyAdjust(FILE* fp)
+{
+    int		c;
+    LineEntry*	p     = lineEntryArray;
+    int		start = p->start;
+    int		op    = 32767;		/* ZZZ FIX */
+    int		end   = 32767;		/* ZZZ FIX */
+    int		cnt   = 0;
+
+    lep->start = 32767;
+    lep++;
+
+    while ((c = getc(fp)) != EOF) {
+	while (cnt >= end) {
+	    putchar(')');		/* end found - output end */
+	    end = popEndStack();
+	}
+	if (cnt >= start) {
+	    pushEndStack(end);		/* push previous end */
+	    op    = p->op;		/* operator in this entry */
+	    end   = p->end;		/* end of this entry */
+	    printf(text[p->type]);	/* entry found - output start */
+	    p++;
+	    assert(start < p->start);
+	    start = p->start;		/* start of next entry */
+	}
+	if (cnt == op) {
+	    assert(c == '=');
+	    c = ',';			/* replace '=' by ',' */
+	}
+	putchar(c);
+	cnt++;
+    }
+} /* immVarFound */
