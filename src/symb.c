@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.3 1996/08/01 17:27:50 john Exp $";
+"@(#)$Id: symb.c,v 1.4 2000/11/27 11:29:23 jw Exp $";
 /*
  *	"symb.c"
  */
@@ -10,6 +10,7 @@ static const char symb_c[] =
 #include	<stdio.h>
 #include	<string.h>
 #include	<stdlib.h>
+#include	<assert.h>
 #include	"pplc.h"
 #include	"comp.h"
 #include	"y.tab.h"
@@ -179,4 +180,21 @@ install(				/* install string in symbol table */
     sp->type = typ;
     sp->ftype = ftyp;
     return (place_sym(sp));
+}
+
+Symbol *
+unlink_sym(register Symbol	*sp)	/* unlink Symbol from symbol table */
+{
+    register Symbol *	tsp;
+
+    if (sp) {
+	if ((tsp = lookup(sp->name)) != 0) {	/* locate sorted position */
+	    assert(tsp == sp);
+	    *spl = sp->next;		/* skip this Symbol, point previous to next */
+	    spl = 0;			/* force execution of lookup() for next call */
+	} else {
+	    error("trying to delete a Symbol not yet installed:", sp->name);
+	}
+    }
+    return (sp);	/* Symbol has not been deleted from heap yet */
 }

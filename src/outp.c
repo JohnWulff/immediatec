@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.12 2000/11/25 22:44:25 jw Exp $";
+"@(#)$Id: outp.c,v 1.13 2000/11/27 11:29:23 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -98,7 +98,7 @@ output(char * outfile)			/* emit code in C */
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
-    if (debug & 020) fprintf(outFP, "\nNET TOPLOGY\n");
+    if (debug & 020) fprintf(outFP, "\nNET TOPOLOGY\n");
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type < MAX_LS) {
@@ -133,7 +133,7 @@ output(char * outfile)			/* emit code in C */
 				tsp->name, os[tsp->type], lp->le_val);
 			    dc++;
 			} else {
-			    fprintf(outFP, "\t{ (%d)", lp->le_val);
+			    fprintf(outFP, "\t%c (%d)", os[types[sp->ftype]], lp->le_val);
 			}
 		    }
 		}

@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.4 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: comp.h,v 1.5 2000/11/27 11:29:23 jw Exp $";
 /*
  *	"comp.h"
  *
@@ -84,6 +84,7 @@ extern Symbol *	lookup(char *);		/* find string in symbol table */
 extern Symbol *	place_sym(Symbol *);	/* place sp in symbol table */
 extern Symbol *	install(
 		char *, uchar, uchar);	/* install Symbol in symbol table */
+extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 
 					/*   outp.c   */
 extern int	output(char *);		/* compiler output */

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.20 2000/11/25 22:44:25 jw Exp $";
+"@(#)$Id: comp.y,v 1.21 2000/11/27 11:29:23 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -568,12 +568,14 @@ ccexpr	: cexini CCFRAG		{ $$.v = $2.v; }	/* ccfrag must be set */
 	; 				/* before CCFRAG is fetched */
 
 cexini	: UNDEF			{
-		$1.v->ftype = ARITH;	/* this Gate becomes AVARC */
-		$1.v->type = ARNC;
-		ccfrag = $1.v->name;
+		ccfrag = $1.v->name;			/* UNDEF has not been declared or used */
+		unlink_sym($1.v);			/* unlink Symbol from symbol table */
+		free($1.v);				/* UNDEF is guaranteed to be on heap */
 	    }
+	| AVAR 			{ ccfrag = $1.v->name; }
 	| AVARC 		{ ccfrag = $1.v->name; }
 	| LVAR	 		{ ccfrag = $1.v->name; }	/* ZZZ */
+	| LVARC 		{ ccfrag = $1.v->name; }	/* ZZZ */
 	| CCNUMBER		{ ccfrag = ccbuf; }	/* copy of yytext */
 	| '(' 			{ ccfrag = $1.v; }	/* ')' */
 	| '\'' 			{ ccfrag = $1.v; }
