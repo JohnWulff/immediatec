@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.26 2002/08/05 19:57:16 jw Exp $";
+"@(#)$Id: main.c,v 1.27 2002/08/06 22:12:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -317,7 +317,7 @@ main(
 			    linecnt++;
 			}
 			/* copy C intermediate file up to EOF to C output file */
-			copyXlate(T1FP, excFP, excFN, &linecnt, 05);
+			copyXlate(T1FP, excFP, excFN, &linecnt, 01);
 
 			/* rewind intermediate file Tname again */
 			if (fseek(T1FP, 0L, SEEK_SET) != 0) {
@@ -330,7 +330,7 @@ main(
 				linecnt++;
 			    }
 			    /* copy C intermediate file up to EOF to C output file */
-			    copyXlate(T1FP, excFP, excFN, &linecnt, 06);
+			    copyXlate(T1FP, excFP, excFN, &linecnt, 02);
 
 			    /* copy C execution file Part 3 from character after 'V 'up to EOF */
 			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {

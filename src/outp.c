@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.53 2002/08/05 20:48:48 jw Exp $";
+"@(#)$Id: outp.c,v 1.54 2002/08/07 21:52:36 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -35,9 +35,26 @@ extern const char	SC_ID[];
  *	The routine returns a count of fields found.
  *	If count is less the 4 the unmodified name is returned in buf
  *	The count can be used to characterize IBx, QBx etc fields also
+ *	All fields are a null string ("") or 0 if not modified.
+ *	Return:	number of fields modified.
+ *	Fields:	iqt[]	single character I, Q or T in first position.
+ *		bwx[]	single character B, W or X in second position.
+ *		*bytep	int value of numerical field starting at pos. 3
+ *		*bitp	int value of numerical field folowing '.'
+ *		tail[]	any extra characters folowing numerical field.
+ *		buf[]	modified string if "X" type with '.' number
+ *			else unmodified name (or if outFlag == 0).
+ *		eg: IX123.7_5 returns 5, "I" in iqt, "X" in bwx,
+ *			    123 in bytep, 7 in bitp, "_5" in tail and
+ *			    "IX123__7_5" in buf.
  *
- *	Also convert plain numbers to numbers preceded by an underscore
- *	(do this first, so that the parameter values returned are correct)
+ *	Also converts plain numbers to numbers preceded by an underscore.
+ *	Stores the numerical value via parameter bytep.
+ *	Returned count is 1 for a plain integer and 2 for an integer
+ *	followed by extra characters. These are returned in tail.
+ *		eg: 123_5  returns 2, 123 in bytep, "_5" in tail and
+ *			   "_123_5" in buf.
+ *	(done first, so that the parameter values returned are correct)
  *
  *	bufLen should be >= 23 (sscanf format length)
  *
@@ -50,13 +67,15 @@ IEC1131(char * name, char * buf, int bufLen,
     int count;
 
     assert(bufLen >= 23);
-    if (outFlag && (count = sscanf(name, "%d%7s", bytep, tail)) == 1) {
-	snprintf(buf, bufLen-1, "_%d", *bytep);
+    iqt[0] = bwx[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
+    if (outFlag && (count = sscanf(name, "%d%7s", bytep, tail)) >= 1) {
+	snprintf(buf, bufLen-1, "_%d%s", *bytep, tail);
     } else if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
 			    iqt, bwx, bytep, bitp, tail)) >= 4) {
 	snprintf(buf, bufLen-1, "%s%s%d__%d%s",
 			    iqt, bwx, *bytep, *bitp, tail);
     } else {
+    //##tail NOT USED##	outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d%7s", iqt, bwx, bytep, tail));
 	strncpy(buf, name, bufLen-1);
     }
     return count;
@@ -70,13 +89,14 @@ IEC1131(char * name, char * buf, int bufLen,
  *
  *******************************************************************/
 
-static int
+int
 toIEC1131(char * name, char * buf, int bufLen,
 	char * iqt, char * bwx, int * bytep, int * bitp, char * tail)
 {
     int count;
 
     assert(bufLen >= 24);
+    iqt[0] = bwx[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
     if (outFlag && (count = sscanf(name, "_%d%7s", bytep, tail)) == 1) {
 	snprintf(buf, bufLen-1, "%d", *bytep);
     } else if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d__%5d%7s",
@@ -122,9 +142,7 @@ mN(Symbol * sp)
 {
     char * np = names[ix++];			/* alternate ix = 0, 1 or 2 */
     if (ix >= SZ) ix = 0;			/* rotate buffers */
-    iqt[0] = bwx[0] = byte = bit = 0;		/* clear for later check */
     if (sp == 0) return strncpy(np, "0", 2);	/* in case of suprises */
-    tail[0] = 0;
     cnt = IEC1131(sp->name, np, BUFS, iqt, bwx, &byte, &bit, tail);
     return np;
 } /* mN */
@@ -796,7 +814,7 @@ linecnt += 27;
 			li++;		/* space for pointer to delay time Gate */
 		    }
 		} else if (dc == OUTW) {
-		    if (iqt[0] == 'Q' &&
+		    if (iqt[0] == 'Q' &&	/* QB0_0 is cnt == 3 (no tail) */
 			bwx[0] != 'X' &&	/* can only be B or W */
 			cnt == 3 && byte < IXD) {
 			fprintf(Fp, " (Gate**)%d,", byte);
@@ -806,7 +824,7 @@ linecnt += 27;
 		    }
 		} else if (dc == OUTX) {
 		    if (iqt[0] == 'Q' &&
-			bwx[0] == 'X' &&
+			bwx[0] == 'X' &&	/* QX0.0_0 is cnt == 5 */
 			cnt == 5 && byte < IXD && bit < 8) {
 			/* OUTPUT byte part of bit pointer */
 			fprintf(Fp, " (Gate**)%d,", byte);
@@ -838,7 +856,7 @@ linecnt += 27;
 		    /* space for dual GATE list or ARITH with FUNCTION */
 		    li += 2;
 		} else if (typ == INPW) {
-		    if (iqt[0] == 'I' &&
+		    if (iqt[0] == 'I' &&	/* IB0 is cnt == 3 */
 			bwx[0] != 'X' &&	/* can only be B or W */
 			cnt == 3 && byte < IXD) {
 			fprintf(Fp, " &I%s_[%d],", bwx, byte);
@@ -847,7 +865,7 @@ linecnt += 27;
 		    }
 		} else if (typ == INPX) {
 		    if (iqt[0] != 'Q' &&	/* can only be I or T */
-			bwx[0] == 'X' &&
+			bwx[0] == 'X' &&	/* IX0.0 is cnt == 4 */
 			cnt == 4 && byte < IXD && bit < 8) {
 			fprintf(Fp, " &%sX_[%d],", iqt, byte * 8 + bit);
 		    } else {
@@ -1217,13 +1235,13 @@ fprintf(stderr, "copyXlate: start Pass %d\n", mode); fflush(stderr);
 	if (copyBlocks(iFP, T2FP, 01)) {
 	    return T1index;
 	}
-	if (mode & 04) {
+	if (outFlag == 0) {
 	    fprintf(T2FP, "/*##*/int c_exec(int pp_index) { switch (pp_index) {\n");
 	}
 	if (copyBlocks(iFP, T2FP, 02)) {
 	    return T1index;
 	}
-	if (mode & 04) {
+	if (outFlag == 0) {
 	    fprintf(T2FP, "/*##*/}}\n");
 	}
 
@@ -1234,14 +1252,14 @@ fprintf(stderr, "copyXlate: start compile\n"); fflush(stderr);
 	}
 
 	yyin = T2FP;
-//##	yyout = T3FP;		/* ZZZ should be list file */
+//	yyout = outFP;			/* list file */
 	copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
 	if (c_parse() != 0) {
 fprintf(stderr, "copyXlate: Parse error\n"); fflush(stderr);
 	}
 fprintf(stderr, "copyXlate: end compile\n"); fflush(stderr);
 	rewind(yyin);
-	copyAdjust(yyin, T3FP);
+	copyAdjust(yyin, T3FP);		/* output adjusted C-code */
     }
 
     /* rewind intermediate file */

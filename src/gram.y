@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.5 2002/08/05 20:31:40 jw Exp $";
+"@(#)$Id: gram.y,v 1.6 2002/08/08 11:09:12 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -30,10 +30,12 @@
 #include	"comp.h"
 
 typedef struct LineEntry {
-    unsigned int	start;
-    unsigned int	op;
-    unsigned int	end;
-    int			type;
+    unsigned int	pStart;
+    unsigned int	vStart;
+    unsigned int	equOp;
+    unsigned int	vEnd;
+    unsigned int	pEnd;
+    Symbol *		sp;
 } LineEntry;
 
 #define ENDSTACKSIZE	100
@@ -42,8 +44,9 @@ static LineEntry*	lep = lineEntryArray;
 static unsigned int	endStack[ENDSTACKSIZE];
 static unsigned int*	esp = endStack;
 
-static void		immVarFound(unsigned int start, unsigned int end, int type);
-static void		immAssignFound(unsigned int start, unsigned int operator, unsigned int end, int type);
+static void		immVarFound(unsigned int start, unsigned int end, Symbol* sp);
+static void		immAssignFound(unsigned int start, unsigned int operator,
+			    unsigned int end, Symbol* sp);
 static unsigned int	pushEndStack(unsigned int value);
 static unsigned int	popEndStack(void);
 
@@ -522,11 +525,11 @@ assignment_expr
 	| imm_identifier '=' assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
-	    $$.symbol = NULL;
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u>", $$.start, $$.end);
 #endif
-	    immAssignFound($1.start, $2.start, $3.end, 1);
+	    immAssignFound($1.start, $2.start, $3.end, $1.symbol);
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -627,7 +630,7 @@ declaration
 		if ($1.symbol && $1.symbol->type == UDF) {
 		    sp1->type = CTYPE;		/* found a typedef */
 #ifdef YYDEBUG
-		    if (debug & 04) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
+		    if ((debug & 0402) == 0402) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
 		    place_sym(sp1);
 		} else {
@@ -662,10 +665,10 @@ declaration_specifiers
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    sp = $2.symbol;		/* canot be in symbol table */
-	    assert(sp);			/* ERROR: initialized in yylex() */
+	    assert(sp);			/* ERROR: initialized in c_lex() */
 	    sp->type = CTYPE;		/* found a TYPE_NAME after extern etc */
 #ifdef YYDEBUG
-	    if (debug & 04) fprintf(outFP, "\nT %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+	    if ((debug & 0402) == 0402) fprintf(outFP, "\nT %-15s %d %d\n", sp->name, sp->type, sp->ftype);
 #endif
 	    place_sym(sp);
 	    $$.symbol = $1.symbol;	/* typedef information */
@@ -1625,9 +1628,9 @@ jump_statement
 	;
 
 file
-	: external_definition {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
+	: /* NOTHING allows an empty file required for iC */ {
+	    $$.start = 0;
+	    $$.end = 0;
 	    $$.symbol = NULL;
 	}
 	| file external_definition {
@@ -1690,32 +1693,22 @@ imm_identifier
 	: IMM_IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
-	    $$.symbol = NULL;
+	    $$.symbol = $1.symbol;
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]", $$.start, $$.end);
 #endif
-	    immVarFound($$.start, $$.end, 1);	/* type may be 1 or 2 for logical or arithmetic */
+	    assert($1.symbol->ftype == ARITH || $1.symbol->ftype == GATE);
+	    immVarFound($$.start, $$.end, $1.symbol);
 	}
 	| '(' imm_identifier ')' {
 	    /* stops this being a primary_expr which would lead to C assignment */
 	    $$.start = $1.start;
 	    $$.end = $3.end;
-	    $$.symbol = NULL;
+	    $$.symbol = $2.symbol;
 #if YYDEBUG
 	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}", $$.start, $$.end);
 #endif
-	    immVarFound($$.start, $$.end, 0);	/* moves start and end without changing type */
-	}
-	| '(' imm_identifier error ')' {
-	    /* stops this being a primary_expr which would lead to C assignment */
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-#if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}", $$.start, $$.end);
-#endif
-	    immVarFound($$.start, $$.end, 0);	/* moves start and end without changing type */
-	    yyclearin; yyerrok;
+	    immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	}
 	;
 
@@ -1726,12 +1719,13 @@ imm_identifier
  *******************************************************************/
 %%
 
-extern char yytext[];
 extern int column;
 #define LARGE (~0U>>2)
 
+static char*	macro[] = { MACRO_NAMES };
+
 void
-yyerror(char *fmt, ...)
+c_error(char *fmt, ...)
 {
     va_list ap;
 
@@ -1749,22 +1743,27 @@ yyerror(char *fmt, ...)
  *	immVarFound
  *
  *	The parser has found a bare immediate variable
- *	or an immediate variable in parenthesess
- *	(zany but allowed as an lvalue in C)
+ *	or an immediate variable in parentheses.
+ *	(zany but allowed as an lvalue in C) To locate parentheses,
+ *	only pStart and pEnd is adjusted. vStart and vEnd mark variable.
+ *
+ *	sp == 0 is used to signal parenthesized immediate variable.
  *
  *******************************************************************/
 
 static void
-immVarFound(unsigned int start, unsigned int end, int type)
+immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 {
-    if (type != 0) {
-	lep->op    = LARGE;
-	lep->type  = type;
-    } else {
+    if (sp) {
+	lep->vStart = start;
+	lep->equOp  = LARGE;			/* marks a value variable */
+	lep->vEnd   = end;
+	lep->sp     = sp;
+    } else {					/* parenthesized variable found */
 	--lep;					/* step back to previous entry */
     }
-    lep->start = start;
-    lep->end   = end;
+    lep->pStart = start;
+    lep->pEnd   = end;
     lep++;
 } /* immVarFound */
 
@@ -1776,36 +1775,52 @@ immVarFound(unsigned int start, unsigned int end, int type)
  *
  *	Backtrack along the immediate variables found so far, to find
  *	the one being assigned to here. Its 'lep' entry is modified.
+ *	Only pEnd is adjusted. vStart and vEnd stil mark variable.
  *
  *	If no suitable immediate variable is found it is a compiler
  *	error, because an immediate assignment should have a bare
  *	immediate variable as its first token (same start position)
+ *	Alternatively an immediate variable in parentheses is accepted.
+ *
+ *	Checked earlier that IMM_IDENTIFIER is ftype ARITH or GATE.
+ *
+ *	mType is derived from the ftype of the Symbol. It may only be
+ *	ARITH === 1, GATE === 2, ARITH+2 and GATE+2. (UDFA === 0 is an error)
  *
  *******************************************************************/
 
 static void
-immAssignFound(unsigned int start, unsigned int operator, unsigned int end, int type)
+immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symbol* sp)
 {
     LineEntry*	p;
+    int		mType;
+
+    assert(sp);
+    mType = sp->ftype;
 
     for (p = lep - 1; p >= lineEntryArray; p-- ) {
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "(%u %u %d)", p->start, p->end, p->type);
+	if ((debug & 0402) == 0402) fprintf(outFP, "%u(%u %u)%u", p->pStart, p->vStart, p->vEnd, p->pEnd);
 #endif
-	if (p->start == start) {
-	    p->op    = operator;
-	    p->end   = end;
-	    if (p->type == type) {
-		p->type  = type + 2;	/* replace variable entry with assignment entry */
+	if (p->pStart == start) {
+	    p->equOp  = operator;		/* marks an assignment expression */
+	    p->pEnd   = end;
+	    if (p->sp == sp) {
+		if (sp->type == UDF) {
+		    sp->type = (mType == ARITH) ? ARNC : LOGC;
+		} else if ((sp->type != ARNC || mType != ARITH) &&
+			   (sp->type != LOGC || mType != GATE)) {
+		    break;		/* Error: assignment to wrong type */
+		}
 		return;
 	    } else {
-		break;			/* Error: types don't match */
+		break;			/* Error: Symbols don't match */
 	    }
-	} else if (p->start < start) {
+	} else if (p->pStart < start) {
 	    break;			/* Error: will not find start */
 	}
     }
-    yyerror(" ERROR (%u, %u, %d)", start, end, type);
+    c_error(" ERROR (\"%s\" %u %u %d %d %p %p)", sp->name, start, end, sp->type, mType, sp, p->sp);
 } /* immAssignFound */
 
 /********************************************************************
@@ -1834,8 +1849,6 @@ popEndStack(void)
     return *--esp;
 } /* popEndStack */
 
-static char*	text[] = { "_LV(", "_AV(", "_LA(", "_AA(", };
-
 /********************************************************************
  *
  *	copyAdjustFile
@@ -1850,13 +1863,24 @@ copyAdjust(FILE* iFP, FILE* oFP)
 {
     int			c;
     LineEntry*		p       = lineEntryArray + 1;
-    unsigned int	start   = p->start;
-    unsigned int	op      = LARGE;
+    unsigned int	start   = p->pStart;
+    unsigned int	vstart  = LARGE;
+    unsigned int	vend    = LARGE;
+    unsigned int	equop   = LARGE;
     unsigned int	end     = LARGE;
     unsigned int	bytePos = 0;
+    Symbol *		sp      = NULL;
+    int			pFlag   = 1;
+    int			mType;
+    char		buffer[BUFS];	/* buffer for modified names */
+    char		iqt[2];		/* char buffers - space for 0 terminator */
+    char		bwx[2];
+    int			byte;
+    int			bit;
+    char		tail[8];	/* compiler generated suffix _123456 max */
 
-    lep++->start = LARGE;		/* guard value in case first immVarFound(0) */
-    lep->start   = LARGE;		/* value overwritten by first immVarfound */
+    lep++->pStart = LARGE;		/* guard value in case first immVarFound(0) */
+    lep->pStart   = LARGE;		/* value overwritten by first immVarfound */
 
     if (iFP == NULL) {
 	return;				/* initialize lineEntryArray */
@@ -1869,18 +1893,39 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	}
 	if (bytePos >= start) {
 	    pushEndStack(end);		/* push previous end */
-	    op    = p->op;		/* operator in this entry */
-	    end   = p->end;		/* end of this entry */
-	    fprintf(oFP, text[p->type]);	/* entry found - output start */
+	    vstart = p->vStart;		/* start of actual variable */
+	    vend   = p->vEnd;		/* end of actual variable */
+	    equop  = p->equOp;		/* operator in this entry */
+	    end    = p->pEnd;		/* end of this entry */
+	    sp     = p->sp;		/* associated Symbol */
+	    assert(sp);
+	    mType  = (equop == LARGE) ? sp->ftype : sp->ftype + MACRO_OFFSET;
+	    fprintf(oFP, macro[mType]);	/* entry found - output macro start */
 	    p++;
-	    assert(start < p->start);
-	    start = p->start;		/* start of next entry */
+	    assert(start <= vstart);
+	    assert(vstart < vend);
+	    assert(vend <= end);
+	    assert(bytePos < p->pStart);
+	    start = p->pStart;		/* start of next entry */
 	}
-	if (bytePos == op) {
+#ifndef LMAIN
+	if (bytePos == vstart) {
+	    assert(sp);
+	    IEC1131(sp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+	    fprintf(oFP, "%s", buffer);	/* output real Symbol name not ALIAS */
+	    pFlag = 0;
+	}
+	if (bytePos == vend) {
+	    pFlag = 1;
+	}
+#endif
+	if (bytePos == equop) {
 	    assert(c == '=');
 	    c = ',';			/* replace '=' by ',' */
 	}
-	putc(c, oFP);
+	if (pFlag) {
+	    putc(c, oFP);		/* output all except variables */
+	}
 	bytePos++;
     }
 } /* copyAdjust */

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.5 2002/08/05 12:35:34 jw Exp $";
+"@(#)$Id: lexc.l,v 1.6 2002/08/08 11:09:53 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -328,11 +328,11 @@ count(c_STYPE* u)
 
     u->tok.start = gramOffset;
 
-    for (i = 0; yytext[i] != '\0'; i++) {
-	if (yytext[i] == '\n') {
+    for (i = 0; c_text[i] != '\0'; i++) {
+	if (c_text[i] == '\n') {
 	    column = 0;
 	    gramLine++;
-	} else if (yytext[i] == '\t') {
+	} else if (c_text[i] == '\t') {
 	    column += 8 - (column % 8);
 	} else {
 	    column++;
@@ -353,8 +353,8 @@ count(c_STYPE* u)
  *
  *	If token is a CTYPE return TYPE_NAME
  *	Else if token is an immediate variable of ftype ARITH or GATE
- *		return IMM_ARITH or IMM_GATE respectively
- *		for any other imm variable return IMM_ERR
+ *		return IMM_IDENTIFIER with pointer to Symbol in tok
+ *		for any other imm variable return YYERRCODE
  *	Else token is a CWORD
  *		create a new Symbol and return CWORD
  *		when this Symbol is recognised as a CTYPE it is
@@ -366,32 +366,44 @@ count(c_STYPE* u)
 static int
 check_type(c_STYPE* u)
 {
-#ifdef FUDGE    /* fudge to test IMM_IDENTIFIER */
-    if (isupper(*yytext)) {
-	return IMM_IDENTIFIER;
-    }
-#else
     Symbol *	sp;
+#ifndef LMAIN
+    int			mType;
+    char		buffer[BUFS];	/* buffer for modified names */
+    char		iqt[2];		/* char buffers - space for 0 terminator */
+    char		bwx[2];
+    int			byte;
+    int			bit;
+    char		tail[8];	/* compiler generated suffix _123456 max */
 
-    if ((sp = lookup(yytext)) != 0) {
-	u->tok.symbol = sp;
-	if (sp->type <= MAX_LS) {
-	    return IMM_IDENTIFIER;
-	}
-	if (sp->type == CTYPE) {
+    toIEC1131(c_text, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+#else
+#define buffer		c_text
+#endif
+
+    if ((sp = lookup(buffer)) != 0) {
+	if ((sp->type & TM) <= MAX_LS) {
+	    while ((sp->type & TM) == ALIAS) {
+		sp = sp->list->le_sym;	/* with token of original */
+	    }
+	    if (sp->ftype == ARITH || sp->ftype == GATE) {
+		u->tok.symbol = sp;
+		return IMM_IDENTIFIER;
+	    }
+	} else if (sp->type == CTYPE) {
+	    u->tok.symbol = sp;
 	    return TYPE_NAME;
 	}
-	assert(0);
+	return YYERRCODE;		/* internal imm node is an error */
     }
     sp = (Symbol *) emalloc(sizeof(Symbol));
-    sp->name = emalloc(yyleng + 1);	/* +1 for '\0' */
-    strcpy(sp->name, yytext);
+    sp->name = emalloc(c_leng + 1);	/* +1 for '\0' */
+    strcpy(sp->name, c_text);
     sp->type = CWORD;
     sp->ftype = UDFA;
     u->tok.symbol = sp;			/* sp->next === NULL */
 #ifdef YYDEBUG
-    if (debug & 04) fprintf(outFP, "\nC %-15s %d %d\n", sp->name, sp->type, sp->ftype);
-#endif
+    if ((debug & 0402) == 0402) fprintf(outFP, "\nC %-15s %d %d\n", sp->name, sp->type, sp->ftype);
 #endif
     return IDENTIFIER;
 } /* check_type */
@@ -407,10 +419,10 @@ delete_sym(Token* tokp)
 {
     Symbol *	sp;
 
-    if ((sp = tokp->symbol) != NULL && sp->type > MAX_LS) {
+    if ((sp = tokp->symbol) != NULL && (sp->type & TM) > MAX_LS) {
 	tokp->symbol = NULL;
 #ifdef YYDEBUG
-	if (debug & 04) fprintf(outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+	if ((debug & 0402) == 0402) fprintf(outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
 #endif
 	free(sp->name);
 	free(sp);

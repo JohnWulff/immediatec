@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.27 2002/08/05 20:14:58 jw Exp $";
+"@(#)$Id: comp.h,v 1.28 2002/08/07 20:17:32 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -130,6 +130,9 @@ extern FILE *	T3FP;
 extern int	IEC1131(char * name, char * buf, int bufLen,
 			char * iqt, char * bwx, int * bytep,
 			int * bitp, char * tail);
+extern int	toIEC1131(char * name, char * buf, int bufLen,
+			  char * iqt, char * bwx, int * bytep,
+			  int * bitp, char * tail);
 
 extern int	listNet(unsigned * gate_count);	/* list generated network */
 extern int	buildNet(Gate ** igpp);	/* generate execution network */

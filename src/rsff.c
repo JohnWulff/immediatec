@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.29 2002/07/05 19:17:23 jw Exp $";
+"@(#)$Id: rsff.c,v 1.30 2002/08/08 08:10:50 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1396,18 +1396,18 @@ assign(Gate * gp, int rv)
 {
     if (gp->gt_ini == -ARNC) {
 	if (rv != gp->gt_new) {
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, "\tAA %s %d ==>", gp->gt_ids, gp->gt_new);
+	    }
+#endif
 	    if (gp->gt_new == gp->gt_old || rv == gp->gt_old) {
-#ifndef _WINDOWS 
-		if (debug & 0100) {
-		    fprintf(outFP, "\tAA %s %d ==>", gp->gt_ids, gp->gt_new);
-		}
-#endif
 		link_ol(gp, a_list);		/* arithmetic change or glitch */
-#ifndef _WINDOWS 
-		if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
-#endif
 	    }
 	    gp->gt_new = rv;			/* first or later change */
+#ifndef _WINDOWS 
+	    if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
+#endif
 	}
     } else if (gp->gt_ini == -LOGC) {
 	char val = rv ? -1 : 1;

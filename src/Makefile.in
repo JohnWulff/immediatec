@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.26 2002/08/05 17:25:47 jw Exp $
+# @(#)$Id: Makefile.in,v 1.27 2002/08/07 21:10:38 jw Exp $
 
 ############################################################
 #
@@ -84,11 +84,18 @@ icc:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
 ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
 	$(CC) $(LDFLAG) -o ict main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
 
+#### Run-time library ######################################
+
 libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	ar -rv libict.a load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 
+#### C-parser test #########################################
+#### rm -f gram.o lexc.o
+#### make OPT='-DLMAIN' lmain
+
 lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	$(CC) $(LDFLAG) -o lmain lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
+	rm -f gram.o lexc.o
 
 #### Compile objects #######################################
 

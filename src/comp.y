@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.64 2002/08/05 10:35:38 jw Exp $";
+"@(#)$Id: comp.y,v 1.65 2002/08/07 19:00:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1849,8 +1849,9 @@ iClex(void)
 	    while ((typ = symp->type) == ALIAS) {
 		symp = symp->list->le_sym;	/* with token of original */
 	    }
-	    if (typ == KEYW) {
-		c = symp->u.val;		/* reserved word */
+	    typ &= TM;
+	    if (typ >= KEYW) {
+		c = symp->u.val;		/* reserved word or C-type */
 	    } else if (qtoken) {
 		c = qtoken;			/* LOUT or AOUT */
 	    } else if (typ == ARNC || typ == LOGC || dflag && typ == NCONST) {

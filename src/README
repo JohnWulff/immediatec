@@ -1,5 +1,5 @@
 
-                         immediate C, iC rev 1.68
+                         immediate C, iC rev 1.80
 
                     Copyright (C) 1985-2002, John E. Wulff
                             All rights reserved.
@@ -60,12 +60,12 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev 1.68
+        Notes for the installation of icc rev 1.80
 
         1)  Unpack the archive in a suitable working directory with:
 
-                tar -xvzf icc_1.68.tar.gz
-                cd icc_1.68/src
+                tar -xvzf icc_1.80.tar.gz
+                cd icc_1.80/src
 
         2)  Excute the following:
 
@@ -114,7 +114,7 @@
 
         7)  Return to the immediate C installtion
 
-		cd icc_1.68/src	# or the correct icc src directory
+		cd icc_1.80/src	# or the correct icc src directory
 
         8)  To install the compiler, library and scripts execute the following
 	    as super user:
@@ -217,7 +217,7 @@
         
         Lots of success
 
-        John E. Wulff   05.June.2002     <john.wulff@inka.de>
+        John E. Wulff   08.August.2002     <john.wulff@inka.de>
 
 	NOTE for SuSE Linux 7.1:
 	The program 'iCbox' requires Tk800.022 if you have Perl 5.6.0.
@@ -234,4 +234,4 @@
 
 	SuSE Linux 7.2 distribution has Tk800.022 and works fine.
 
-        $Id: README,v 1.8 2002/06/05 19:46:14 jw Exp $
+        $Id: README,v 1.9 2002/08/08 21:28:52 jw Exp $
