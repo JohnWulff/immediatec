@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.9 2000/11/23 22:39:21 jw Exp $";
+"@(#)$Id: rsff.c,v 1.10 2000/11/24 14:44:45 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -236,7 +236,7 @@ dSsh(					/* D_SH slave action on SH */
 /********************************************************************
  *
  *	Pass 2 initialisation for clocked Gates via ftype S_FF - TIMR
- *	except F_CF in pass2().
+ *	except F_SW and F_CF in pass2().
  *
  *	Each action Gate ors a bit reserved for its action in gt_val
  *	of the function Gate on which it acts. If ONCE_M is set, that
@@ -464,7 +464,55 @@ chSbit(					/* CH_BIT slave action */
 
 /********************************************************************
  *
- *	Master function for IF() IF() ELSE and SWITCH().
+ *	Master function for SWITCH().
+ *
+ *******************************************************************/
+
+void
+fMsw(					/* F_SW master action */
+    register Gate *	gp,
+    Gate *		out_list)
+{
+    if (out_list == o_list) {
+	/* called from logic scan - convert d to a */
+	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
+    }
+    link_ol(gp, gp->gt_clk);		/* master action */
+} /* fMsw */
+
+/********************************************************************
+ *
+ *	Slave function for SWITCH().
+ *
+ *	Execute a C statement or C statement block when triggered
+ *	by a clocked logical or arithmetic change.
+ *		SWITCH (expr) { case 1: i = 1; break; ... }
+ *
+ *******************************************************************/
+
+void
+fSsw(					/* F_SW slave action on SW */
+    register Gate *	gf,
+    register Gate *	out_list)
+{
+    gf->gt_old = gf->gt_new;		/* now new value is fixed */
+#ifndef _WINDOWS 
+    if (debug & 0100) fprintf(outFP, "\tF%d(", (int)gf->gt_funct);
+#endif
+    /* execute C function as action procedure with side effects */
+#ifdef LOAD
+    ((CFunctp)(gf->gt_funct))(gf);
+#else
+    c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
+#endif
+#ifndef _WINDOWS 
+    if (debug & 0100) putc(')', outFP);
+#endif
+} /* fSsw */
+
+/********************************************************************
+ *
+ *	Master function for IF() IF() ELSE.
  *
  *******************************************************************/
 
@@ -473,24 +521,18 @@ fMcf(					/* F_CF master action */
     register Gate *	gp,
     Gate *		out_list)
 {
-    if (out_list == o_list) {
-	/* called from logic scan - convert d to a */
-	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
-    } else if (out_list == a_list) {
-	/* called from arithmetic scan - convert a to d */
-	gp->gt_val = gp->gt_new ? -1 : 1;
-    }
     link_ol(gp, gp->gt_clk);		/* master action */
 } /* fMcf */
 
 /********************************************************************
+ *
+ *	Slave function for IF() IF() ELSE.
  *
  *	Execute a C statement or C statement block when triggered
  *	by a clocked logical or arithmetic change.
  *		IF (expr,clock) x = y * cfn(z);	// iClock is default
  *		IF (expr) { for (i = 0; i < 10; i++) cfn(z); z++; }
  *		IF (expr) { i++; } ELSE { j--; }
- *		SWITCH (expr) { case 1: i = 1; break; ... }
  *
  *******************************************************************/
 
@@ -499,7 +541,6 @@ fScf(					/* F_CF slave action on CF */
     register Gate *	gf,
     register Gate *	out_list)
 {
-    gf->gt_old = gf->gt_new;		/* now new value is fixed */
 #ifndef _WINDOWS 
     if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
 #endif

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.6 2000/11/23 22:39:21 jw Exp $";
+"@(#)$Id: scan.c,v 1.7 2000/11/24 14:44:45 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -11,35 +11,43 @@ static const char scan_c[] =
 
 static void	link_c(register Gate * gp, Gate * out_list);
 
-/* the following 5 arrays are indexed by gt_fni is ftype */
+/********************************************************************
+ *
+ *	the following 5 arrays are indexed by gt_fni is ftype
+ *
+ *	UDFA	ARITH	GATE	D_SH	F_SW	CH_BIT	RI_BIT
+ *	CLCK	TIMR	S_FF	R_FF	D_FF	F_CF
+ *	OUTW	OUTX	CLCKL	TIMRL
+ *
+ *******************************************************************/
 
 Functp2		initAct[] = {		/* called in pass4 */
-			err_fn, arithMa, link_ol, link_c, link_c, link_c,
+			err_fn, arithMa, link_ol, link_c, link_c, link_c, link_c,
 			link_c, link_c, link_c, link_c, link_c, link_c,
 			outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		masterAct[] = {		/* called in scan and scan_ar */
-			err_fn, arithMa, link_ol, dMsh, riMbit, chMbit,
-			fMcf, fMfn, fMfn, sMff, rMff, dMff,
+			err_fn, arithMa, link_ol, dMsh, fMsw, chMbit, riMbit,
+			fMfn, fMfn, sMff, rMff, dMff, fMcf,
 			outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		slaveAct[] = {		/* called in scan_clk */
-			err_fn, err_fn, err_fn, dSsh, riSbit, chSbit,
-			fScf, clockSfn, timerSfn, sSff, rSff, dSff,
+			err_fn, err_fn, err_fn, dSsh, fSsw, chSbit, riSbit,
+			clockSfn, timerSfn, sSff, rSff, dSff, fScf,
 			err_fn, err_fn, err_fn, err_fn,
 		};
 
 Functp		init2[] = {		/* called in pass2 */
-			null1, gate2, gate2, i_ff2, i_ff2, i_ff2,
-			null1, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
+			null1, gate2, gate2, i_ff2, null1, i_ff2, i_ff2,
+			i_ff2, i_ff2, i_ff2, i_ff2, i_ff2, null1,
 			null1, null1, null1, null1,
 		};
 
 uchar	bit2[] = {		/* used in i_ff2() and i_ff3() */
-			0, INPT_M, INPT_M, D_SH_M, RI_B_M, CH_B_M,
-			F_CF_M, CLCK_M, TIMR_M, S_FF_M, R_FF_M, D_FF_M,
+			0, INPT_M, INPT_M, D_SH_M, F_CF_M, RI_B_M, CH_B_M,
+			CLCK_M, TIMR_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M,
 			OUTP_M, OUTP_M, 0, 0,
 		};
 
@@ -55,7 +63,7 @@ short		dc;	/* debug display counter in scan and rsff */
  *
  *	The target nodes gp can trigger both arithmetic and logical actions.
  *
- *	The actions ARITH, D_SH, F_CF and CH_BIT require arithmetic processing.
+ *	The actions ARITH, D_SH, F_SW and CH_BIT require arithmetic processing.
  *	CH_BIT has a logical value which is triggered for every change
  *	in numerical value. The change is stored in CH_BIT when slave fires.
  *	The remaining actions are first converted from int to bit
@@ -118,7 +126,7 @@ scan_ar(Gate	*out_list)
 		    putc('\n', outFP);
 		}
 		fprintf(outFP, "\t%s %d ==>", gp->gt_ids,
-		    gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_CF ||
+		    gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 		    gp->gt_new : gp->gt_val);
 	    }
@@ -136,7 +144,7 @@ scan_ar(Gate	*out_list)
 	     *
 	     ***********************************************************/
 
-	    if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_CF ||
+	    if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
 		if (val != gp->gt_new &&	/* first change or glitch */
 		((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
@@ -150,7 +158,7 @@ scan_ar(Gate	*out_list)
 	    }
 #ifndef _WINDOWS 
 	    if (debug & 0100) fprintf(outFP, " %d",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_CF ||
+		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
 		    gx->gt_new : gx->gt_val);
 #endif
@@ -273,7 +281,7 @@ scan(Gate	*out_list)
  *
  *	scan of nodes on a clock action list
  *
- *	The nodes gp on the c_list are all actions of ftype D_SH - D_FF
+ *	The nodes gp on the c_list are all actions of ftype D_SH - D_CF_IF
  *	or CLCKL or TIMRL.
  *
  *	The appropriate slaveAct function is executed in this scan.
@@ -517,7 +525,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 			putc('\n', outFP);
 		    }
 		    fprintf(outFP, "\t%s %d ==>", gp->gt_ids,
-			gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_CF ||
+			gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 			gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 			gp->gt_new : gp->gt_val);
 		}
@@ -528,7 +536,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 		val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
 #endif
 
-		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_CF ||
+		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
 		    if (val != gp->gt_new &&	/* first change or glitch */
 		    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
@@ -541,7 +549,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 		}
 #ifndef _WINDOWS 
 		if (debug & 0100) fprintf(outFP, " %d",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_CF ||
+		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
 		    gx->gt_new : gx->gt_val);
 #endif
