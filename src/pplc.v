@@ -1,16 +1,16 @@
-@(#)$Id: pplc.v,v 1.21 2000/11/28 14:40:28 jw Exp $
+@(#)$Id: pplc.v,v 1.22 2000/11/28 20:22:56 jw Exp $
 DemoBox         1.19    2000/11/06  20:30:33  jw      Exp
 DummyPPLC       1.4     2000/11/06  20:30:33  jw      Exp
 ICServer        1.9     2000/11/06  20:30:33  jw      Exp
 Makefile        1.10    2000/11/11  13:36:37  jw      Exp
 Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
 cexe.h          1.8     2000/11/25  22:44:25  jw      Exp
-comp.h          1.5     2000/11/27  11:29:23  jw      Exp
-comp.y          1.21    2000/11/27  11:29:23  jw      Exp
-genr.c          1.5     2000/11/24  14:44:45  jw      Exp
+comp.h          1.6     2000/11/28  20:22:35  jw      Exp
+comp.y          1.22    2000/11/28  20:22:35  jw      Exp
+genr.c          1.6     2000/11/28  20:22:35  jw      Exp
 ibsd.c          1.2     1999/08/06  21:13:31  jw      Exp
 ibsd.h          1.2     1999/08/06  21:13:31  jw      Exp
-init.c          1.7     2000/11/24  14:44:45  jw      Exp
+init.c          1.8     2000/11/28  20:22:35  jw      Exp
 link.c          1.6     2000/11/11  13:36:37  jw      Exp
 list.c          1.3     2000/05/31  15:51:38  jw      Exp
 load.c          1.9     2000/11/24  14:44:45  jw      Exp

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.7 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: init.c,v 1.8 2000/11/28 20:22:35 jw Exp $";
 /*
  *	"init.c"
  *
@@ -41,6 +41,7 @@ static struct {
     "CHANGE",	KEYW,	BLTIN1,	CH_BIT,
     "RISE",	KEYW,	BLTIN1,	RI_BIT,
     "SR",	KEYW,	BLTIN2,	S_FF,	/* R_FF for reset master */
+    "SRT",	KEYW,	BLTIN3,	S_FF,	/* monoflop with timed reset*/
     "IF",	KEYW,	IF,	F_CF,
     "if",	KEYW,	IF,	F_CF,
     "ELSE",	KEYW,	ELSE,	0,

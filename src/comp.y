@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.21 2000/11/27 11:29:23 jw Exp $";
+"@(#)$Id: comp.y,v 1.22 2000/11/28 20:22:35 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -77,7 +77,7 @@ pu(int t, char * token, Lis * node)
 
 %}
 
-%token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2
+%token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2 BLTIN3
 %token	<sym>	CVAR CBLTIN TVAR TBLTIN STATIC BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCNUMBER CCFRAG
@@ -594,49 +594,54 @@ cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
 
 fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| DLATCH '(' lexpr cref ')'	{		/* DL(set,reset) */
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' aexpr ')'	{
 		$$.f = $1.f; $$.l = $6.l;
-		$$.v = bltin(&$1, &$3, 0, &$5, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, &$5, 0, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
-	| BLTIN2 '(' aexpr ',' aexpr ',' cexpr ')' {
+	| BLTIN2 '(' aexpr ',' aexpr cref ')' {
+		$$.f = $1.f; $$.l = $7.l;
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
+		if (debug & 02) pu(1, "fexpr", &$$);
+	    }
+	| BLTIN2 '(' aexpr cref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $8.l;
-		$$.v = bltin(&$1, &$3, &$7, &$5, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
-	| BLTIN2 '(' aexpr cref ',' aexpr ',' cexpr ')' {
-		$$.f = $1.f; $$.l = $9.l;
-		$$.v = bltin(&$1, &$3, &$4, &$6, &$8, 0);
-		if (debug & 02) pu(1, "fexpr", &$$);
-	    }
-	| BLTIN2 '(' aexpr ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ',' texpr ',' value ')'	{
 		$$.f = $1.f; $$.l = $8.l;
-		$$.v = bltin(&$1, &$3, 0, 0, &$5, &$7); /* monoflop without reset */
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$7); /* monoflop without reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by iClock */
 	    }
-	| BLTIN2 '(' aexpr ',' aexpr ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr cref ',' texpr ',' value ')'	{
+		$$.f = $1.f; $$.l = $9.l;
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6, &$8); /* monoflop without reset */
+		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+	    }
+	| BLTIN3 '(' aexpr ',' aexpr ',' texpr ',' value ')'	{
 		$$.f = $1.f; $$.l = $10.l;
-		$$.v = bltin(&$1, &$3, 0, &$5, &$7, &$9); /* monoflop with reset */
+		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, &$9); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
 	    }
-	| BLTIN2 '(' aexpr cref ',' texpr ',' value ')'	{
-		$$.f = $1.f; $$.l = $9.l;
-		$$.v = bltin(&$1, &$3, &$4, 0, &$6, &$8); /* monoflop without reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
-	    }
-	| BLTIN2 '(' aexpr ',' aexpr cref ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ',' aexpr cref ',' texpr ',' value ')'	{
 		$$.f = $1.f; $$.l = $11.l;
-		$$.v = bltin(&$1, &$3, &$6, &$5, &$8, &$10); /* monoflop with reset */
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, &$8, &$10); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 	    }						/* reset clocked by iClock */
+	| BLTIN3 '(' aexpr cref ',' aexpr cref ',' texpr ',' value ')'	{
+		$$.f = $1.f; $$.l = $12.l;
+		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, &$9, &$11); /* monoflop with reset */
+		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+	    }						/* reset clocked by different clock */
 	;
 
 ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
@@ -644,7 +649,7 @@ ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 		fprintf(exoFP, "    if (_cexe_gf->gt_val < 0)\n");
 	    }
 	  cblock		{			/* { x++; } */
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$7);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, &$7);
 	    }
 	;
 
@@ -664,7 +669,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 		fprintf(exoFP, "    switch (_cexe_gf->gt_new)\n");
 	    }
 	  cblock		{			/* { x++; } */
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$7);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, &$7);
 		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
 	    }
 	;
@@ -688,13 +693,13 @@ cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 	;
 
 cfexpr	: CBLTIN '(' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 	    }
 	| CBLTIN '(' aexpr ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0);
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
 	    }
 	| CBLTIN '(' aexpr cref ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, 0);
+		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, 0, 0);
 	    }
 	;
 
@@ -717,13 +722,13 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 	;
 
 tfexpr	: TBLTIN '(' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 	    }
 	| TBLTIN '(' aexpr ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0);
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
 	    }
 	| TBLTIN '(' aexpr cref ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, 0);
+		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, 0, 0);
 	    }
 	;
 
