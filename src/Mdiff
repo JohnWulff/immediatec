@@ -22,6 +22,7 @@ usage()
   echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list names of files which differ' >&2
   echo '	-li	list names of files which are identical' >&2
+  echo '	-c	display diff output in context form' >&2
   echo '	-I	case insensitive and white space ignored' >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
@@ -31,7 +32,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.13 2000/07/01 22:56:23 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.14 2000/07/07 16:14:48 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -64,7 +65,7 @@ process()
 			echo "########## $f ##########"
 			ls -lL $f
 			ls -lL $dir/$f
-			diff $w $f $dir
+			diff $w $context $f $dir
 		    elif [[ $li = 1 ]]; then
 			echo $f
 		    fi
@@ -93,6 +94,7 @@ name=${0##*/}
 name=${name%.*}
 files='[Mm]akefile* *.[chv]*'
 i=0; e=0; q=0; li=0; w=-w; pipe=0
+context=''
 
 while [[ $# > 0 ]]; do
     case $1 in
@@ -104,6 +106,7 @@ while [[ $# > 0 ]]; do
 	    i*)	i=1; let "li|=2";;
 	    l*)	q=1; let "li|=1";;
 	    q*)	q=1;;
+	    c*) context="-c";;
 	    I*)	w=-wi;;
 	    h*)	usage; exit 255;;
 	    -*)	pipe=1;;
