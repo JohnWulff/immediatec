@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.3 2001/01/29 23:06:38 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.4 2001/01/31 17:53:10 jw Exp $";
 /********************************************************************
  *
  *	TCP/IC communication support
@@ -50,13 +50,14 @@ static struct timeval	mt1;
  *******************************************************************/
 
 void
-microReset(void)
+microReset(int mask)
 {
     gettimeofday(&mt0, 0);	/* reset for next measurement */
+    micro |= mask;
 } /* microReset */
 
 void
-microPrint(const char * str)
+microPrint(const char * str, int mask)
 {
     long	sec;
     long	usec;
@@ -71,6 +72,7 @@ microPrint(const char * str)
 	printf("%3d.%03d,%03d: %s\n", sec, usec/1000, usec%1000, str);
     }
     gettimeofday(&mt0, 0);	/* start of next measurement without print time */
+    micro &= ~mask;
 } /* microPrint */
 
 /********************************************************************

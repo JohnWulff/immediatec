@@ -1,5 +1,5 @@
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.3 2001/01/28 10:33:42 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.4 2001/01/31 17:53:10 jw Exp $";
 /********************************************************************
  *
  *	TCP/IC communication support
@@ -54,5 +54,5 @@ extern struct timeval	timeoutValue;
 extern int		sockFN;			/* TCPIP socket file number */
 
 extern int		micro;
-extern void		microPrint(const char * str);
-extern void		microReset(void);
+extern void		microPrint(const char * str, int mask);
+extern void		microReset(int mask);

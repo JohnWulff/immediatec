@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.15 2001/01/28 10:33:42 jw Exp $";
+"@(#)$Id: load.c,v 1.16 2001/01/31 17:53:10 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -52,14 +52,13 @@ FILE *		errFP;			/* error file pointer */
 static const char *	usage = "\
 USAGE: %s [-txh]"
 #ifdef TCP
-" [-s <server>] [-p <port>] [-u <unitID>] [-m]"
+" [-m[m]] [-s <server>] [-p <port>] [-u <unitID>]\n      "
 #endif
 " [-d<debug>] [-n<count>]\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n\
         -p service port of server (default '%s')\n\
-        -u unit ID of this client (default '%s')\n\
-	-m	microsecond timing info\n"
+        -u unit ID of this client (default '%s')\n"
 #endif
 "        -d <debug>2000  display scan_cnt and link_cnt\n\
                  +1000  I0 toggled every second\n\
@@ -68,9 +67,15 @@ USAGE: %s [-txh]"
                   +100  initialisation and run time info\n\
                    +40  net statistics\n\
         -t              trace debug (equivalent to -d 100)\n\
+                        can be toggled at run time typing t\n"
+#ifdef TCP
+"        -m	        microsecond timing info\n\
+        -mm	        more microsecond timing (internal time base)\n\
+                        can be toggled at run time typing m\n"
+#endif
+"        -x              arithmetic info in hexadecimal (default decimal)\n\
+                        can be changed at run time by typing x or d\n\
         -n <count>      maxinum loop count (default is %d, limit 15)\n\
-        -x              arithmetic info in hexadecimal (default decimal)\n\
-                        can be changed at run time with x or d\n\
         -h              this help text\n\
 			typing q or ctrl-C quits run time mode\n\
 compiled by:\n\
@@ -152,7 +157,7 @@ main(
 		    pplcNM = *argv;
 		    goto break2;
 		case 'm':
-		    micro = 1;		/* microsecond info */
+		    micro++;		/* microsecond info */
 		    break;
 #endif
 		case 'd':

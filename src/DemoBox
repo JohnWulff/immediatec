@@ -63,7 +63,7 @@ Usage:	@<<<<<< [-eth] [-s <host>] [-p <port>] [-RrIiOo <num>] [-l <len>] [<unitI
 		(Requires Module Time::HiRes available from CPAN)
 	-h	help, ouput this Usage text only
 	unitID	default is 'X0'
-$Id: DemoBox,v 1.27 2001/01/29 23:07:01 jw Exp $
+$Id: DemoBox,v 1.28 2001/01/31 17:53:43 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
@@ -173,7 +173,7 @@ if ($unitID =~ /^X/) {
 				     \&printMicroSeconds if \$opt_m;\
 				     print \"I$unitID.$index --> \$inputs[$index] (\$inByte)\\n\" if \$opt_t;\
 				     \$conn->send_now(\"\$inByte\");\
-				     \$t0 = \[gettimeofday\] if \$opt_m;
+#				     \$t0 = \[gettimeofday\] if \$opt_m;\
 				    },\
 	    )->pack(-side   => 'top',\
 		    -expand => 1,\
@@ -223,7 +223,7 @@ elsif ($unitID =~ /^[BW]/) {
 				 &printMicroSeconds if $opt_m;
 				 print "I$unitID --> $inByte\n" if $opt_t;
 				 $conn->send_now("$inByte");
-				 $t0 = [gettimeofday] if $opt_m;
+#				 $t0 = [gettimeofday] if $opt_m;
 			     }
 			    },
     )->pack(-side   => 'top',
@@ -328,7 +328,7 @@ sub rcvd_msg_from_server {
 	    }
 	}
     }
-    $t0 = [gettimeofday] if $opt_m;
+#    $t0 = [gettimeofday] if $opt_m;
 }
 
 ########################################################################
@@ -351,4 +351,5 @@ sub printMicroSeconds {
     } else {
 	printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
     }
+    $t0 = $t1;
 }

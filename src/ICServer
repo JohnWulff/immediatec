@@ -15,17 +15,16 @@
 #			X0 .. X31  from bit  I/O to server
 #			B0 .. B31  from byte I/O to server
 #			W0 .. W30  from word I/O to server
-#			P0         from PPLC and server
+#			P0         from PPLC to server
 #
-#	I/O values:	Index,Value	
-#			0,0 .. 7,1     from bit  I/O to server
-#			0,0 .. 0,255   from byte I/O to server
-#			0,0 .. 0,65535 from word I/O to server
+#	I/O values:	Value
+#			0 .. 255   from bit/byte I/O to server
+#			0 .. 65535 from word I/O to server
 #
-#			UnitID,Index,Value	
-#			X0,0,0 .. X31,7,1     from server to PPLC bit
-#			B0,0,0 .. B31,0,255   from server to PPLC byte
-#			W0,0,0 .. W30,0,65535 from server to PPLC word
+#			UnitID.Value
+#			X0.0 .. X31.255   from server to PPLC bit
+#			B0.0 .. B31.255   from server to PPLC byte
+#			W0.0 .. W30.65535 from server to PPLC word
 #
 #	The same formats are used from server to I/O and PPLC to server.
 #	The direction of transmission determines if an I/O messages
@@ -33,14 +32,14 @@
 #
 #	Each I/O value message constitutes an event which updates
 #	that value at the sink. Several messages may be grouped
-#	and seperated by semi-colons (;) { TODO - not yet implemented }
+#	and seperated by comma (,)
 #
-#	Byte and Word sources and sinks only have Index 0.
-#	Word source and sink Units must be even (W0 W2 W4 .. W30)
+#	Byte and Word sources may all numbers X0 X1 .. X31 B0 B1 .. B31
+#	Word source and sink Units must be even W0 W2 W4 .. W30
 #
 #	The Server receives messages from the I/O's, identifies the
 #	UnitID under which that I/O is registered and prefixes the
-#	UnitID and a comma to the message and sends it on to the PPLC.
+#	UnitID and a full stop to the message and sends it on to the PPLC.
 #
 #	Messages received from the PPLC are stripped of the leading
 #	UnitID and comma. The rest is sent to the I/O Unit corresponding
@@ -74,7 +73,7 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.14 2001/01/28 10:34:05 jw Exp $
+$Id: ICServer,v 1.15 2001/01/29 23:07:01 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
@@ -85,7 +84,7 @@ if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
-my ($t0, $t1, $sec, $usec);
+my ($t0, $t1);
 if ($opt_m) {
     use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
     $t0 = [gettimeofday];	# start of program
@@ -119,6 +118,7 @@ ARG: while ($ARGV = shift @ARGV) {
 	    my @call = split " ", $ARGV;
 	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
 	    splice @call, 1, 0, '-t' if defined $opt_t;
+	    splice @call, 1, 0, '-m' if defined $opt_m;
 	    print "@call\n";
 	    exec @call;
 	    exit;		# child process can't be executed
@@ -186,7 +186,7 @@ sub rcvd_msg_from_client {
 		} elsif (defined $connPPLC) {
 		    # pass clear input message to PPLC
 		    print "I$unitID 0 to P0\n" if $opt_t;
-		    $connPPLC->send_now("$unitID,0");
+		    $connPPLC->send_now("$unitID.0");
 		}
 		print "$unitID has disconnected\n";
 	    }
@@ -233,22 +233,24 @@ sub rcvd_msg_from_client {
 		}
 	    }
 	} elsif ($msg =~ /^[BWX]/) {			# bit or analog value messages from PPLC
-	    my ($uID, $value, $rest) = split /,/, $msg, 3;
-	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
-		if (defined $Connections{$uID}) {
-		    print "$unitID $value to Q$uID\n" if $opt_t;
-		    $Connections{$uID}->send_now("$value");
+	    for my $msg1 (split /,/, $msg) {		# break up multiple value messages
+		my ($uID, $value, $rest) = split /\./, $msg1, 3;
+		if ($unitID eq 'P0' and defined $value and not defined $rest) {
+		    if (defined $Connections{$uID}) {
+			print "$unitID $value to Q$uID\n" if $opt_t;
+			$Connections{$uID}->send_now("$value");
+		    } else {
+			print "$unitID $value to dummy Q$uID\n" if $opt_t;
+		    }
+		    $Values{$uID} = $value;		# save latest bit or analog value
 		} else {
-		    print "$unitID $value to dummy Q$uID\n" if $opt_t;
+		    print "ERROR: $msg1 from Unit $unitID ?? ignored\n";
 		}
-		$Values{$uID} = $value;			# save latest analog value
-	    } else {
-		print "ERROR: $msg from Unit $unitID ?? ignored\n";
 	    }
 	} elsif (defined $connPPLC) {			# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
 	    print "I$unitID $msg to P0\n" if $opt_t;
-	    $connPPLC->send_now("$unitID,$msg");
+	    $connPPLC->send_now("$unitID.$msg");
 	} else {
 	    print "I$unitID $msg to dummy P0\n" if $opt_t;
 	}

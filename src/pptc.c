@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.13 2001/01/29 23:06:38 jw Exp $";
+"@(#)$Id: pptc.c,v 1.14 2001/01/31 17:53:10 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -132,9 +132,9 @@ pplc(
 
     if ((debug & 0400) == 0) {
 	/* Start TCP/IP communication before any inputs are generated => outputs */
-	if (micro) microReset();
+	if (micro) microReset(04);
 	sockFN = connect_to_server(hostNM, portNM, pplcNM, delay);
-	if (micro) microPrint("connect to server");
+	if (micro) microPrint("connect to server", 0);
     }
 
 /********************************************************************
@@ -225,7 +225,7 @@ pplc(
  *******************************************************************/
 
     for ( ; ; ) {
-	if (micro) microPrint("Input");
+	if (micro & 06) microPrint("Input", 0);
 	if (++mark_stamp == 0) {	/* next generation for check */
 	    mark_stamp++;		/* leave out zero */
 	}
@@ -234,7 +234,7 @@ pplc(
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list));
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
-	if (micro) microPrint("Scan");
+	if (micro & 06) microPrint("Scan", 04);
 
 	if (debug & 0300) {		/* osc or detailed info */
 	    display();			/* inputs and outputs */
@@ -303,9 +303,9 @@ pplc(
 		offset += sprintf(&msg[offset], "%c%d.%d,", Qtype, slot, val);
 		if (offset > REPLY - 13) {	/* 12 is length of largest message */
 		    msg[offset - 1] = '\0';	/* clear last ',' */
-		    if (micro) microPrint("Send intermediate");
+		    if (micro) microPrint("Send intermediate", 0);
 		    send_msg_to_server(sockFN, msg);
-		    if (micro) microReset();
+		    if (micro) microReset(0);
 		    offset = 0;
 		}
 		slots &= ~mask;			/* clear rightmost slot in slots */
@@ -315,9 +315,9 @@ pplc(
 	}
 	if (offset > 0) {
 	    msg[offset - 1] = '\0';	/* clear last ',' */
-	    if (micro) microPrint("Send");
+	    if (micro) microPrint("Send", 0);
 	    send_msg_to_server(sockFN, msg);
-	    if (micro) microReset();
+	    if (micro) microReset(0);
 	}
 
 /********************************************************************
@@ -329,7 +329,7 @@ pplc(
 
 	for (cnt = 0; cnt == 0; ) {	/* stay in input loop if nothing linked */
 	    retval = wait_for_next_event(sockFN);	/* wait for inputs or timer */
-	    if (micro) microReset();
+	    if (micro & 02) microReset(0);
 
 	    if (retval == 0) {
 		timeoutCounter = timeoutValue;	/* will repeat if timeout with input */
@@ -359,6 +359,7 @@ pplc(
 		    /*
 		     *	TCP/IP input
 		     */
+		    if (micro) microReset(04);
 		    if (rcvd_msg_from_server(sockFN, rBuf, sizeof rBuf)) {
 			int		slot;
 			short		val;
@@ -423,7 +424,12 @@ pplc(
 		    if ((c = getchar()) == 'q' || c == EOF) {
 			quit(0);			/* quit normally */
 		    }
-		    if (debug & 0300) {			/* osc or detailed info */
+		    if (c == 't') {
+			debug ^= 0100;			/* toggle -t flag */
+		    } else if (c == 'm') {
+			micro++;			/* toggle more micro */
+			if (micro >= 3) micro = 0;
+		    } else if (debug & 0300) {		/* osc or detailed info */
 			unsigned short flag = xflag;
 			if (c == 'x') {
 			    flag = 1;			/* hexadecimal output */
