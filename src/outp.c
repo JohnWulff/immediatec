@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.66 2003/12/09 10:11:04 jw Exp $";
+"@(#)$Id: outp.c,v 1.67 2003/12/12 14:23:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -48,7 +48,7 @@ extern const char	SC_ID[];
  *			else unmodified name (or if outFlag == 0).
  *		eg: IX123.7_5 returns 5, "I" in iqt, "X" in bwx,
  *			    123 in bytep, 7 in bitp, "_5" in tail and
- *			    "IX123__7_5" in buf.
+ *			    "IX123_7_5" in buf.
  *
  *	Also converts plain numbers to numbers preceded by an underscore.
  *	Stores the numerical value via parameter bytep.
@@ -72,9 +72,11 @@ IEC1131(char * name, char * buf, int bufLen,
     iqt[0] = bwx[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
     if (outFlag && (count = sscanf(name, "%d%7s", bytep, tail)) >= 1) {
 	snprintf(buf, bufLen-1, "_%d%s", *bytep, tail);
-    } else if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
-			    iqt, bwx, bytep, bitp, tail)) >= 4) {
-	snprintf(buf, bufLen-1, "%s%s%d__%d%s",
+    } else if (outFlag &&
+	(count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
+			    iqt, bwx, bytep, bitp, tail)) >= 4 &&
+	*bwx == 'X') {
+	snprintf(buf, bufLen-1, "%s%s%d_%d%s",
 			    iqt, bwx, *bytep, *bitp, tail);
     } else {
     //##tail NOT USED##	outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d%7s", iqt, bwx, bytep, tail));
@@ -101,8 +103,10 @@ toIEC1131(char * name, char * buf, int bufLen,
     iqt[0] = bwx[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
     if (outFlag && (count = sscanf(name, "_%d%7s", bytep, tail)) == 1) {
 	snprintf(buf, bufLen-1, "%d", *bytep);
-    } else if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d__%5d%7s",
-			    iqt, bwx, bytep, bitp, tail)) >= 4) {
+    } else if (outFlag &&
+	(count = sscanf(name, "%1[IQT]%1[BWX]%5d_%5d%7s",
+			    iqt, bwx, bytep, bitp, tail)) >= 4 &&
+	*bwx == 'X') {
 	snprintf(buf, bufLen-1, "%s%s%d.%d%s",
 			    iqt, bwx, *bytep, *bitp, tail);
     } else {
