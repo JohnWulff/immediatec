@@ -81,7 +81,7 @@ Usage:
 	-l len	length of scales (default 170)
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.31 2001/03/07 12:30:10 jw Exp $
+$Id: iCbox,v 1.32 2001/03/21 19:43:38 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
@@ -201,7 +201,7 @@ if ($unitID =~ /^X/) {
 				   ."\&printMicroSeconds if \$opt_m;"
 #endif
 				   ."print \"I$unitID.$index --> \$inputs[$index] (\$inByte)\\n\" if \$opt_t;\
-				     \$conn->send_now(\"\$inByte\");\
+				     \$conn->send_now(\"$unitID.\$inByte\");\
 				    },\
 	    )->pack(-side   => 'top',\
 		    -expand => 1,\
@@ -212,7 +212,7 @@ if ($unitID =~ /^X/) {
     }
     if ($inByte) {
 	print "init I$unitID 0 --> $inByte\n" if $opt_t;
-	$conn->send_now("$inByte");
+	$conn->send_now("$unitID.$inByte");
     }
 
     for my $index (0 .. 7) {
@@ -264,7 +264,7 @@ elsif ($unitID =~ /^[BW]/) {
 				 &printMicroSeconds if $opt_m;
 #endif
 				 print "I$unitID --> $inByte\n" if $opt_t;
-				 $conn->send_now("$inByte");
+				 $conn->send_now("$unitID.$inByte");
 			     }
 			    },
     )->pack(-side   => 'top',
@@ -309,61 +309,64 @@ MainLoop;
 
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
-    my ($len, $diff, $mask, $index, $value);
 #ifdef TIME_HIRES 
     &printMicroSeconds if $opt_m;
 #endif
     if (defined $msg) {
-        $len = length $msg;
+        my $len = length $msg;
 	if ($len == 0) {
 	    $conn->disconnect();
 	    print "DemoBox $unitID disconnected by server\n";
 	    exit;
 	}
-	if ($unitID =~ /^X/) {
-	    if ($msg eq "R") {
-		print "$unitID rcvd R - reset from ICS\n" if $opt_t;
-		for $index (0 .. 7) {
+	my ($uID, $value, $rest) = split /\./, $msg, 3;
+	if ($uID ne $unitID or defined $rest) {
+	    warn "WARNING: $msg from ICS ?? ignored";
+	} elsif ($uID =~ /^X/) {
+	    if ($value eq "R") {
+		print "$uID rcvd R - reset from ICS\n" if $opt_t;
+		for my $index (0 .. 7) {
 		    if ($outputs[$index]) {
-			print "init Q$unitID.$index 0 <-- 1\n" if $opt_t;
+			print "init Q$uID.$index 0 <-- 1\n" if $opt_t;
 			$outputs[$index] = 0;
 		    }
 		}
 		$outByte = 0;
 		if ($inByte) {
-		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
-		    $conn->send_now("$inByte");
+		    print "send I$uID 0 --> $inByte\n" if $opt_t;
+		    $conn->send_now("$uID.$inByte");
 		}
-	    } elsif ($msg =~ /^\d+$/ and $msg < 256) {
-		$diff = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
+	    } elsif ($value =~ /^\d+$/ and $value < 256) {
+		my ($diff, $mask, $index, $val);
+		$diff = $outByte ^ $value;	# $outByte initialized to a number for correct XOR
 		while ($diff) {			# age old algorithm from CSR days
 		    $mask = $diff & -$diff;	# rightmost set bit from diff
 		    $index = $bitIndex[$mask];
-		    $value = ($msg & $mask) ? 1 : 0;
-		    print "Q$unitID.$index $value <-- $outputs[$index] ($msg)\n" if $opt_t;
-		    $outputs[$index] = $value;	# modify viewable output
+		    $val = ($value & $mask) ? 1 : 0;
+		    print "Q$uID.$index $val <-- $outputs[$index] ($value)\n" if $opt_t;
+		    $outputs[$index] = $val;	# modify viewable output
 		    $diff &= ~$mask;		# clear rightmost bit in diff
 		}
-		$outByte = $msg;		# ready for next message
+		$outByte = $value;		# ready for next message
 	    } else {
-		print "Q$unitID received spurious message: '$msg'\n";
+		warn "Q$uID received spurious message: '$msg'\n";
 	    }
-	} elsif ($unitID =~ /^[BW]/) {
-	    if ($msg eq "R") {
-		print "$unitID rcvd R - reset from ICS\n" if $opt_t;
+	} elsif ($uID =~ /^[BW]/) {
+	    if ($value eq "R") {
+		print "$uID rcvd R - reset from ICS\n" if $opt_t;
 		if ($outputs[0]) {
-		    print "init Q$unitID 0 <-- $outputs[0]\n" if $opt_t;
+		    print "init Q$uID 0 <-- $outputs[0]\n" if $opt_t;
 		    $outputs[0] = 0;
 		}
 		if (length $inByte and $inByte) {
-		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
-		    $conn->send_now("$inByte");
+		    print "send I$uID 0 --> $inByte\n" if $opt_t;
+		    $conn->send_now("$uID.$inByte");
 		}
-	    } elsif ($msg =~ /^-?\d+$/) {
-		print "Q$unitID $msg <-- $outputs[0]\n" if $opt_t;
-		$outputs[0] = $msg;
+	    } elsif ($value =~ /^-?\d+$/) {
+		print "Q$uID $value <-- $outputs[0]\n" if $opt_t;
+		$outputs[0] = $value;
 	    } else {
-		print "Q$unitID received spurious message: '$msg'\n";
+		warn "Q$uID received spurious message: '$msg'";
 	    }
 	}
     }
