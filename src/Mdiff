@@ -1,7 +1,15 @@
 #!/usr/bin/ksh -p
 ########################################################################
 #
-#	Mdiff - multiple diff
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john.wulff@inka.de>
+#
+#	Mdiff - multiple diff with precise list and status output
 #
 ########################################################################
 
@@ -11,15 +19,16 @@ usage()
   echo 'different project directories. Whitspace is normally ignored.\n' >&2
   echo 'Option -l allows the generation of lists of different or' >&2
   echo 'identical files in the two projects.\n' >&2
-  echo "Usage:	$name [+w] [-ieqlh] [file ...] [directory]" >&2
+  echo "Usage:	$name [+w] [-ienqlh] [file ...] [directory]" >&2
   echo '	+w	whitespace (spaces and tabs) is significant' >&2
   echo '		default: whitespace is ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
   echo '		default: ignore identical files in output' >&2
   echo '	-e	nonexisting files put:	**** file does not exist' >&2
-  echo '		default: ignore nonexisting files in output (unless only 1 file)' >&2
+  echo '		default: ignore nonexisting files in output' >&2
+  echo '		(unless only 1 file)' >&2
   echo '		if files exist output:	#### file ####' >&2
-  echo '	-t	no header text and date at start of report' >&2
+  echo '	-t	text and date header at start of report' >&2
   echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list names of files which differ' >&2
   echo '	-li	list names of files which are identical' >&2
@@ -33,8 +42,8 @@ usage()
   echo "	if no files are specified, '$files' is used" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
-  echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.16 2001/02/08 21:06:49 archiv Exp $' >&2
+  echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
+  echo '$Id: Mdiff,v 1.17 2001/03/08 19:23:30 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -45,7 +54,7 @@ usage()
 
 process()
 {
-    if [[ $t = 0 ]]; then
+    if [[ $t = 1 ]]; then
 	echo "Differences in directory $PWD and $dir"
 	date
     fi
@@ -53,8 +62,9 @@ process()
     status=0
     for f in $files; do
 	if [[ -f $f ]]; then
-	    if [[ -f $dir/$f ]]; then
-		if diff -q $w $f $dir > /dev/null; then
+	    d=${f##*/}
+	    if [[ -f $dir/$d ]]; then
+		if diff -q $w $f $dir/$d > /dev/null; then
 		    if [[ $q = 0 ]]; then
 			[[ $i = 0 ]] || echo "========== $f =========="
 		    elif [[ $li = 3 ]]; then
@@ -66,8 +76,8 @@ process()
 			echo
 			echo "########## $f ##########"
 			ls -lL $f
-			ls -lL $dir/$f
-			diff $w $context $f $dir
+			ls -lL $dir/$d
+			diff $w $context $f $dir/$d
 		    elif [[ $li = 1 ]]; then
 			echo $f
 		    fi
@@ -75,7 +85,7 @@ process()
 	    elif [[ $e != 0 ]]; then
 		let status+=1
 		if [[ $q = 0 ]] || [[ $li = 2 ]]; then
-		    echo "********** $dir/$f does not exist"
+		    echo "********** $dir/$d does not exist"
 		elif [[ $li = 1 ]]; then
 		    echo $f
 		fi
@@ -108,9 +118,9 @@ while [[ $# > 0 ]]; do
 	    case $option in
 	    e*)	e=1;;
 	    i*)	i=1; let "li|=2";;
-	    l*)	t=1; q=1; let "li|=1";;
+	    l*)	q=1; let "li|=1";;
 	    t*)	t=1;;
-	    q*)	t=1; q=1;;
+	    q*)	q=1;;
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wi;;
