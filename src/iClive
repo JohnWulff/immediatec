@@ -1,0 +1,428 @@
+#!/usr/bin/perl -P
+
+########################################################################
+#
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	LiveList for iC programs and listings
+#
+#	LiveList provides an edit window in which the text of a program
+#	or listing can be displayed and optionally edited and saved.
+#
+#	LiveList is normally a client of a running iC program. On startup
+#	it requests the symbol table of the running program. It returns
+#	a list of words from the symbol table on which it wants live
+#	updates of the state of the nodes, named by each word in the
+#	list. The running program then provides updates when the state
+#	of any node from the list changes as soon as possible after the
+#	change.
+#
+#	All words in the text which exactly match any token in the list
+#	are marked with a colour depending on the current state of the
+#	node - usually green for 0 and red for 1. Words in the list which
+#	are preceded by ~ or ! or which are followed by ~ show the inverse
+#	state of the node. These are called 'active' words.
+#
+#	When the mouse cursor sits on an active word the value of the
+#	node is displayed in a subwindow.
+#
+#	To be effective, the displayed text must be either the source of
+#	the running iC program or a text derived from that source, such
+#	as the iC listing. The LiveList then shows the logical statements
+#	of the source and the colours will show what the current state
+#	is. It is then easy to inspect the listing and relate states with
+#	the logic.
+#
+#	For measuring reaction times the Module Time::HiRes may be used.
+#	This activates the -m option.
+#	Make sure you have downloaded and installed Time::HiRes from CPAN
+#	Uncomment the C++ comment in the next line
+#//define TIME_HIRES
+#
+########################################################################
+
+use Tk;					# Slurp the module in
+use Msg;
+use strict;
+
+#  live colouring     false         true
+my @tagBackground = ('PaleGreen1', 'yellow',  );
+my @tagForeground = ('black'     , 'red'   ,  );
+my $is_logic = 0;             # 1 if check-button on
+my $info = '';
+my $filename = '';
+my $length = 0;
+
+my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
+my @invert =	(1, 0);		# invert logic sense
+my @bitIndex =	(
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x20
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x40
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x80
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+);
+
+########################################################################
+#
+#	Initialization
+#
+########################################################################
+
+my $named = $0; $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:
+@<<<<<<< [-tmh] [-s <host>] [-p <port>] [file ...]
+	$named
+	-s host	host name of server    (default 'localhost')
+	-p port	service port of server (default '8778')
+	-t	trace debug messages
+	-m	display elapsed time in seconds and microseconds
+	    (Requires Module Time::HiRes available from CPAN - see source)
+	-h	help, ouput this Usage text only
+Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
+							  '@'
+$Id: iClive,v 1.1 2001/03/19 14:21:32 jw Exp $
+.
+
+use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
+require "getopts.pl";
+&Getopts('tms:p:h');		# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+#ifdef TIME_HIRES 
+
+my ($t0, $t1, $sec, $usec);
+if ($opt_m) {
+    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    $t0 = [gettimeofday];	# start of program
+}
+#endif
+
+########################################################################
+#
+#	Connect to server
+#
+########################################################################
+
+my $host = defined $opt_s ? $opt_s : 'localhost';
+my $port = defined $opt_p ? $opt_p : 8778;
+my $unitID = 'L0';
+
+my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+die "Client could not connect to $host:$port\n" unless $conn;
+
+print "Connection $unitID at client.\n";
+$conn->send_now($unitID);	# register I/O
+
+$filename = $ARGV[0] unless @ARGV < 1;
+
+########################################################################
+#
+#	Create main window and menus
+#
+########################################################################
+
+my $mainWindow = MainWindow->new();
+$mainWindow->title("iC LiveList");
+
+########################################################################
+#	Menu bar
+########################################################################
+my $menuBar = $mainWindow->Frame()->pack('-side' => 'top', '-fill' => 'x');
+
+########################################################################
+#	File menu
+########################################################################
+my $menuFile = $menuBar->Menubutton('-text' => 'File',
+				    '-relief' => 'raised',
+				    '-borderwidth' => 2,
+				   )->pack('-side' => 'left',
+					   '-padx' => 2,
+					  );
+$menuFile->command('-label' => 'New',  '-command' => \&new_text);
+$menuFile->command('-label' => 'Load', '-command' => \&load_file);
+$menuFile->command('-label' => 'Save', '-command' => \&save_file);
+$menuFile->separator();
+$menuFile->command('-label' => 'Quit', '-command' => sub { exit(0); } );
+
+########################################################################
+#	Sections Menu
+########################################################################
+my $menuHeadings = $menuBar->Menubutton('-text' => 'Headings',
+				        '-relief' => 'raised',
+				        '-borderwidth' => 2,
+				       )->pack('-side' => 'left',
+					       '-padx' => 2,
+					      );
+$menuHeadings->separator();
+
+########################################################################
+#	Search menu 
+########################################################################
+my $search_mb = $menuBar->Menubutton('-text'         => 'Search',
+				      '-relief'       => 'raised',
+				      '-borderwidth'  => 2,
+				      )->pack('-side' => 'left',
+					      '-padx' => 2
+					     );
+my $match_type = "-regexp";
+my $ignore_case = 1;
+$search_mb->separator();
+########################################################################
+#	Regexp match
+########################################################################
+$search_mb->radiobutton('-label'    => 'Regexp match',
+			'-value'    => '-regexp',
+			'-variable' => \$match_type);
+########################################################################
+#	Exact match
+########################################################################
+$search_mb->radiobutton('-label'    => 'Exact match',
+			'-value'    => '-exact',
+			'-variable' => \$match_type);
+$search_mb->separator();
+########################################################################
+#	Ignore case
+########################################################################
+$search_mb->checkbutton('-label'    => 'Ignore case?',
+			'-variable' => \$ignore_case);
+$search_mb->separator();
+
+########################################################################
+#	Logic
+########################################################################
+$search_mb->checkbutton('-label'    => 'Logic',
+			'-variable' => \$is_logic,
+			'-command'  => \&logic);
+
+########################################################################
+#	Search entry
+########################################################################
+#my $search = $menuBar->entry('-width' => 20,);
+my $search = $menuBar->Entry('-width' => 20,
+#my $search = $mainWindow->Entry ('-width' => 20,
+			        )->pack('-side' => 'left',
+				        '-padx' => 2,
+				       );
+$search->bind('<KeyPress-Return>', \&search);
+
+########################################################################
+#	Info bar
+########################################################################
+$mainWindow->Label(-textvariable => \$info,
+		   -relief => 'ridge',
+		  )->pack(-side => 'bottom',
+		  	  -fill => 'x',
+		         );
+
+########################################################################
+#	Text window
+########################################################################
+my $text = $mainWindow->Scrolled('Text',
+		                 -scrollbars => 'osoe',
+		                 -background => 'cornsilk1',
+		                 -wrap => 'none',
+		                )->pack(-fill => 'both',
+			                -expand => 1,
+			               );
+
+########################################################################
+#
+#	Register read events
+#
+########################################################################
+
+$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+
+########################################################################
+#
+#	Sit in an infinite loop dispatching incoming events.
+#
+########################################################################
+
+MainLoop;
+
+########################################################################
+#
+#	Receive message from server - adjust outputs
+#
+########################################################################
+
+sub rcvd_msg_from_server {
+    my ($conn, $msg, $err) = @_;
+    my ($len, $diff, $mask, $index, $value);
+#ifdef TIME_HIRES 
+    &printMicroSeconds if $opt_m;
+#endif
+    if (defined $msg) {
+        $len = length $msg;
+	if ($len == 0) {
+	    $conn->disconnect();
+	    print "LiveList $unitID disconnected by server\n";
+	    exit;
+	}
+    }
+}
+
+########################################################################
+#
+#	Logic tagging
+#
+########################################################################
+
+my ($normal, $inverse);
+
+sub logic {
+print STDERR "is_logic = $is_logic '$normal' '$inverse'\n";
+    my $inv_logic = $is_logic ? 0 : 1;
+    $text->tagConfigure($normal, 
+			'-background' => $tagBackground[$is_logic], 
+			'-foreground' => $tagForeground[$is_logic]);
+    $text->tagConfigure($inverse, 
+			'-background' => $tagBackground[$inv_logic], 
+			'-foreground' => $tagForeground[$inv_logic]);
+}
+
+########################################################################
+#
+#	Search for a regular expression or exact match
+#
+########################################################################
+
+sub search {
+    my ($search_pattern, $word, $i, $iw, $inv);
+    $normal = $search->get();
+    $inverse = "$normal~";
+    $text->tagDelete($normal);
+    $text->tagDelete($inverse);
+    logic();
+    $word = $normal;
+    $word =~ s/\./\\./;
+    $search_pattern = "\[~!\\s\]*\\b$word\\b\\s*\((~ )?---)?";
+
+    my $current = '1.0'; my $length = '0';
+    while (1) {
+        if ($ignore_case) {
+            $current = $text->search('-count' => \$length,
+                                     $match_type, 
+                                     '-nocase',
+                                     '--',
+                                     $search_pattern,
+                                     $current,
+                                     'end');
+        } else {
+            $current = $text->search('-count' => \$length,
+                                     $match_type, 
+                                     '--',
+                                     $search_pattern,
+                                     $current,
+                                     'end');
+        }
+        last if (!$current);
+	$iw = $i = $text->get($current, "$current + $length char");
+	$i =~ s/([!~\t ]*)([\w.]+)([!~\t ]*)/$1$3/;
+	$word = $2;
+	$inv = '';
+	while ($i =~ m/[!~]/g) {
+	    $inv = $inv ? '' : '~';
+	}
+	$word .= $inv;
+print STDERR "word: $word '$iw'\n";
+        $text->tagAdd($word, $current, "$current + $length char");
+        $current = $text->index("$current + $length char");
+    }
+}
+
+########################################################################
+#
+#	new_text clears the text area
+#
+########################################################################
+
+sub new_text {
+  $text->delete("1.0", "end");
+  $info = "";
+}
+
+########################################################################
+#
+#	load_file checks to see what the filename is and loads it if possible
+#
+########################################################################
+
+sub load_file {
+    $info = "Loading file '$filename'...";
+    $text->delete("1.0", "end");
+    if (!open(FH, "$filename")) {
+    $text->insert("end", "ERROR: Could not open $filename\n"); 
+	return; 
+    }
+    $length = 0;
+    while (<FH>) {
+	$length += length $_;
+	$text->insert("end", $_);
+    }
+    close (FH);
+    $info = "File '$filename', '$length' bytes loaded";
+}
+
+########################################################################
+#
+#	save_file saves the file using the filename in the entry box
+#
+########################################################################
+
+sub save_file {
+    $info = "Saving '$filename'...";
+    open (FH, ">$filename");
+    my $contents = $text->get("1.0", "end - 1 chars");
+    $length = length $contents;
+    print FH $contents;
+    close (FH);
+    $info = "File '$filename', '$length' bytes saved";
+}
+#ifdef TIME_HIRES 
+
+########################################################################
+#
+#	Compute and print elapsed microseconds
+#
+########################################################################
+
+sub printMicroSeconds {
+    my ($sec, $usec);
+    $t1 = [gettimeofday];
+    $sec =  $t1->[0] - $t0->[0];
+    $usec = $t1->[1] - $t0->[1];
+    if ($usec < 0) {
+	$sec--;
+	$usec += 1000000;
+    }
+    if ($opt_t) {
+	printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+    } else {
+	printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+    }
+    $t0 = $t1;
+}
+#endif
