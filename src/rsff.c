@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.10 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: rsff.c,v 1.11 2000/11/25 22:44:25 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -496,17 +496,20 @@ fSsw(					/* F_SW slave action on SW */
     register Gate *	out_list)
 {
     gf->gt_old = gf->gt_new;		/* now new value is fixed */
+    /* execute C function as action procedure with side effects */
+#ifdef LOAD
+#ifndef _WINDOWS 
+    if (debug & 0100) fprintf(outFP, "\tF%p(", (CFunctp)gf->gt_funct);
+#endif
+    ((CFunctp)(gf->gt_funct))(gf);
+#else
 #ifndef _WINDOWS 
     if (debug & 0100) fprintf(outFP, "\tF%d(", (int)gf->gt_funct);
 #endif
-    /* execute C function as action procedure with side effects */
-#ifdef LOAD
-    ((CFunctp)(gf->gt_funct))(gf);
-#else
     c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
 #ifndef _WINDOWS 
-    if (debug & 0100) putc(')', outFP);
+    if (debug & 0100) fprintf(outFP, ")\n");
 #endif
 } /* fSsw */
 
@@ -541,17 +544,20 @@ fScf(					/* F_CF slave action on CF */
     register Gate *	gf,
     register Gate *	out_list)
 {
+    /* execute C function as action procedure with side effects */
+#ifdef LOAD
+#ifndef _WINDOWS 
+    if (debug & 0100) fprintf(outFP, "\tF%p{", (CFunctp)gf->gt_funct);
+#endif
+    ((CFunctp)(gf->gt_funct))(gf);
+#else
 #ifndef _WINDOWS 
     if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
 #endif
-    /* execute C function as action procedure with side effects */
-#ifdef LOAD
-    ((CFunctp)(gf->gt_funct))(gf);
-#else
     c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
 #ifndef _WINDOWS 
-    if (debug & 0100) putc('}', outFP);
+    if (debug & 0100) fprintf(outFP, "}\n");
 #endif
 } /* fScf */
 

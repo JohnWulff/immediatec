@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.11 2000/11/23 22:39:21 jw Exp $";
+"@(#)$Id: pplc.h,v 1.12 2000/11/24 14:44:45 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -56,17 +56,18 @@ extern void	efree(void *);
 #define	FF	8
 #define	VF	9
 #define	EF	10
-#define	CF	11	/* NOTE: no output */
-#define	INPW	12	/* arithmetic input */
-#define	INPX	13	/* logical input */
+#define	SW	11	/* NOTE: no output */
+#define	CF	12	/* NOTE: no output */
+#define	INPW	13	/* arithmetic input */
+#define	INPX	14	/* logical input */
 
-#define	CLK	14	/* functions which controll clock lists */
-#define	TIM	15
+#define	CLK	15	/* functions which controll clock lists */
+#define	TIM	16
 
-#define	ALIAS	16	/* non executable functions */
-#define	ERR	17
+#define	ALIAS	17	/* non executable functions */
+#define	ERR	18
 
-#define KEYW	18	/* hold yacc token, used for compilation only */
+#define KEYW	19	/* hold yacc token, used for compilation only */
 
 #define MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
@@ -77,21 +78,22 @@ extern void	efree(void *);
 /*	action function types symbol.ftype and Gate.gt_fni */
 
 #define UDFA	0	/* indices into action function arrays */
-#define ARITH	1
-#define GATE	2
-#define D_SH	3
-#define RI_BIT	4
-#define CH_BIT	5
-#define F_CF	6
-#define CLCK	7
-#define TIMR	8
-#define S_FF	9	/* 1001 */
-#define R_FF	10	/* 1010 */
-#define D_FF	11	/* 1011 */
-#define OUTW	12	/* arithmetic output */
-#define OUTX	13	/* logical output */
-#define CLCKL	14
-#define TIMRL	15
+#define ARITH	1	/* arithmetic gate */
+#define GATE	2	/* logical gate */
+#define D_SH	3	/* arithmetic action */
+#define F_SW	4	/* arithmetic action */
+#define CH_BIT	5	/* arithmetic action */
+#define RI_BIT	6	/* logical action */
+#define CLCK	7	/* logical action */
+#define TIMR	8	/* logical action */
+#define S_FF	9	/* logical action not needed 1001 */
+#define R_FF	10	/* logical action not needed 1010 */
+#define D_FF	11	/* logical action not needed 1011 */
+#define F_CF	12	/* logical action */
+#define OUTW	13	/* arithmetic output */
+#define OUTX	14	/* logical output */
+#define CLCKL	15
+#define TIMRL	16
 
 #define MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
 #define MIN_ACT	D_SH	/* ftypes >= MIN_ACT cause an action */
@@ -112,33 +114,33 @@ extern void	efree(void *);
 
 /* list of types */
 #define FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH","SH","FF",\
-	"VF","EF","CF","INPW","INPX","CLK","TIM","ALIAS","ERR","KEYW"
+	"VF","EF","SW","CF","INPW","INPX","CLK","TIM","ALIAS","ERR","KEYW"
 
 /* ftypes corresponding to types */
 #define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE, D_SH, D_FF,\
-	CH_BIT, RI_BIT, F_CF, ARITH, GATE, CLCK, TIMR, GATE, GATE, 0
+	CH_BIT, RI_BIT, F_SW, F_CF, ARITH, GATE, CLCK, TIMR, GATE, GATE, 0
 
 /* compiler tokens corresponding to type */
 #define DEF_TYP	UNDEF, AVARC, AVAR, LVARC, LVAR
 
 /* list of ftypes */
-#define FULL_FTYPE "UDFA","ARITH","GATE","D_SH","RI_BIT","CH_BIT","F_CF",\
-	"CLCK","TIMR","S_FF","R_FF","D_FF","OUTW","OUTX","CLCKL","TIMRL"
+#define FULL_FTYPE "UDFA","ARITH","GATE","D_SH","F_SW","CH_BIT","RI_BIT",\
+	"CLCK","TIMR","S_FF","R_FF","D_FF","F_CF","OUTW","OUTX","CLCKL","TIMRL"
 
 /* types corresponding to ftypes */
-#define TYPES	UDF, ARN, OR, SH, EF, VF, CF,\
-	CLK, TIM, FF, FF, FF, ARN, AND, ERR, ERR
+#define TYPES	UDF, ARN, OR, SH, SW, VF, EF,\
+	CLK, TIM, FF, FF, FF, CF, ARN, AND, ERR, ERR
 
 /* compiler tokens corresponding to ftype */
 #define DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
-	ACTION, ACTION, ACTION, ACTION, ACTION, WACT, XACT, CVAR, TVAR
+	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, WACT, XACT, CVAR, TVAR
 
-#define OPS	".-+~&|%*#^/{[<:!@?k"	/* DEBUG display of types */
-#define FOPS	"UA HEVFCTSRDWX:!"	/* DEBUG display of ftypes */
+#define OPS	".-+~&|%*#^/({[<:!@?k"	/* DEBUG display of types */
+#define FOPS	"UA HIVECTSRDFWX:!"	/* DEBUG display of ftypes */
 
-/* initialisation tables for different types (must have MAX_OP entries) */
+/* initialisation tables for different types (must have MAX_LS entries) */
 #define I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\
-	ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i,\
+	ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i,\
 	clock_i, clock_i, clock_i, clock_i,
 
 extern uchar	types[];		/*   comp.y   */
@@ -223,6 +225,7 @@ extern void	dMff(Gate *, Gate *);	/* D_FF master action on FF */
 extern void	dMsh(Gate *, Gate *);	/* D_SH master action on SH */
 extern void	chMbit(Gate *, Gate *);	/* CH_BIT master action on VF */
 extern void	riMbit(Gate *, Gate *);	/* RI_BIT master action on EF */
+extern void	fMsw(Gate *, Gate *);	/* F_SW master action */
 extern void	fMcf(Gate *, Gate *);	/* F_CF master action */
 extern void	fMfn(Gate *, Gate *);	/* CLCK TIMR master action */
 extern void	outMw(Gate *, Gate *);	/* OUTW master action */
@@ -235,6 +238,7 @@ extern void	dSff(Gate *, Gate *);	/* D_FF slave action on FF */
 extern void	dSsh(Gate *, Gate *);	/* D_SH slave action on SH */
 extern void	chSbit(Gate *, Gate *);	/* CH_BIT slave action on VF */
 extern void	riSbit(Gate *, Gate *);	/* RI_BIT slave action on EF */
+extern void	fSsw(Gate *, Gate *);	/* F_SW slave action on SW */
 extern void	fScf(Gate *, Gate *);	/* F_CF slave action on CF */
 extern void	clockSfn(Gate *, Gate *);/* CLCK slave action on CLK */
 extern void	timerSfn(Gate *, Gate *);/* TIMR slave action on TIM */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.11 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: outp.c,v 1.12 2000/11/25 22:44:25 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -352,7 +352,7 @@ output(char * outfile)			/* emit code in C */
 	char *		s1;
 	char *		source;
 	char *		module;
-	unsigned int	linecnt = 33;	/* MODIFY when changing format */
+	unsigned int	linecnt = 35;	/* MODIFY when changing format */
 
 	/* open output file */
 

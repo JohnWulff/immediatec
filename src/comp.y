@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.19 2000/11/25 13:25:56 jw Exp $";
+"@(#)$Id: comp.y,v 1.20 2000/11/25 22:44:25 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -83,7 +83,7 @@ pu(int t, char * token, Lis * node)
 %token	<val>	NUMBER CCNUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
 %type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn cstatic decl
-%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ffexpr cref
+%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr cref
 %type	<val>	cblock ccexpr value declHead
 %type	<str>	cstini cexini
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
@@ -637,16 +637,33 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 	    }						/* reset clocked by iClock */
 	;
 
+ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
+		fprintf(exoFP, cexeString[outFlag], ++c_number);
+		fprintf(exoFP, "    if (_cexe_gf->gt_val < 0)\n");
+	    }
+	  cblock		{			/* { x++; } */
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$7);
+	    }
+	;
+
 /* no assignment allowed for ffexpr - they stand alone */
 
-ffexpr	: IF '(' aexpr cref ')' cblock {		/* if (expr) { x++; } */
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
+ffexpr	: ifini				{		/* if (expr) { x++; } */
+		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
 	    }
-	| IF '(' aexpr cref ')' cblock ELSE cblock {
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
+	| ifini ELSE			{		/* { x++; } else */
+		fprintf(exoFP, "\n    else\n");
 	    }
-	| SWITCH '(' aexpr cref ')' cblock {
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
+	  cblock			{		/* { x--; } */
+		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
+	    }
+	| SWITCH '(' aexpr cref ')'	{		/* switch (expr) { case ...; } */
+		fprintf(exoFP, cexeString[outFlag], ++c_number);
+		fprintf(exoFP, "    switch (_cexe_gf->gt_new)\n");
+	    }
+	  cblock		{			/* { x++; } */
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$7);
+		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
 	    }
 	;
 
@@ -871,13 +888,7 @@ yylex(void)
 	    stflag |= 0x02;		/* set bit 1 */
 	} else {
 	    stflag |= 0x04;		/* set bit 2 */
-	    if ((stflag & 0x08) == 0) {
-		fprintf(exoFP, cexeString[outFlag], ++c_number);
-	    }
 	    fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
-	    if (*ccfrag != '{') {
-		fprintf(exoFP, "    return ");
-	    }
 	}
 	if (stflag & 0x01) {
 	    fprintf(exoFP, "	static");
@@ -896,9 +907,6 @@ yylex(void)
 		    stflag |= 0x08;		/* set bit 3 */
 		}
 	    } else {
-		if ((stflag & 0x10) == 0) {
-		    fprintf(exoFP, " return 0");
-		}
 		stflag &= ~0x18;		/* clear bit 3 and 4 */
 	    }
 	} else {
@@ -907,11 +915,9 @@ yylex(void)
 	    }
 	    stflag &= ~0x08;			/* clear bit 3 */
 	}
-	fprintf(exoFP, ";\n");			/* terminate case */
-	if (outFlag != 0 && (stflag & 0x02) == 0) {
-	    fprintf(exoFP, "}\n");		/* terminate function */
+	if (*ccfrag != '{' || (stflag & 0x02)) {
+	    fprintf(exoFP, ";\n");		/* terminate case */
 	}
-	fprintf(exoFP, "\n");
 	yylval.val.v = c_number;		/* return case # */
 	stflag = 0;
 	ccfrag = 0;

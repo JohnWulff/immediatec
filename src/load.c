@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.8 2000/11/12 21:12:30 jw Exp $";
+"@(#)$Id: load.c,v 1.9 2000/11/24 14:44:45 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -329,7 +329,7 @@ main(
 		op->gt_mark++;			/* count self */
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
 		    inError(op, 0);		/* no slave node or funct */
-		} else if (op->gt_fni != F_CF) {
+		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    gp->gt_val++;		/* slave node */
 		}
 		if ((gp = *lp) == 0) {
@@ -529,11 +529,11 @@ main(
 		}
 	    } else if (op->gt_fni < MAX_ACT) {
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
-		    inError(op, 0);		/* action D_SH to D_FF */
-		} else if (op->gt_fni == F_CF) {
-		    if (df) printf("	%p(),", gp);
-		} else {
+		    inError(op, 0);		/* action D_SH to F_CF */
+		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    if (df) printf("	%s,", gp->gt_ids);
+		} else {
+		    if (df) printf("	%p(),", gp);
 		}
 		if ((gp = *lp++) == 0) {
 		    inError(op, 0);

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.4 2000/11/16 14:19:55 jw Exp $";
+"@(#)$Id: genr.c,v 1.5 2000/11/24 14:44:45 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -103,7 +103,7 @@ op_force(		/* force linked Symbol to correct ftype */
 
     while (lp && (sp = lp->le_sym)->ftype != ftyp) {
 	if (sp->u.blist == 0 ||			/* not a $ symbol or */
-	    sp->type >= MAX_GT ||		/* SH, FF, EF, VF, CF or */
+	    sp->type >= MAX_GT ||		/* SH, FF, EF, VF, SW, CF or */
 	    sp->u.blist->le_sym == sp && sp->type == LATCH) { /* L(r,s) */
 	    lp1 = op_push(0, types[sp->ftype], lp);
 	    lp1->le_first = lp->le_first;
@@ -307,6 +307,7 @@ op_not(register List_e * right)		/* logical negation */
 	case FF:
 	case VF:
 	case EF:
+	case SW:
 	case CF:
 	    right->le_val ^= NOT;	/* negate logical value */
 	    				/* forces creation of alias */
@@ -599,7 +600,7 @@ op_asgn(			/* asign List_e stack to links */
 			fprintf(outFP, "\t%c", fos[sp->ftype]);
 		    }
 		}
-		if (gp->type == TIM || gp->ftype == F_CF) {
+		if (gp->type == TIM || gp->ftype == F_SW || gp->ftype == F_CF) {
 		    /* time or function case # */
 		    fprintf(outFP, "\t(%d)", lp->le_val);
 		}

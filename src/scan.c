@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.7 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: scan.c,v 1.8 2000/11/25 22:44:25 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -64,8 +64,9 @@ short		dc;	/* debug display counter in scan and rsff */
  *	The target nodes gp can trigger both arithmetic and logical actions.
  *
  *	The actions ARITH, D_SH, F_SW and CH_BIT require arithmetic processing.
- *	CH_BIT has a logical value which is triggered for every change
- *	in numerical value. The change is stored in CH_BIT when slave fires.
+ *	CH_BIT has a logical value which is triggered for every change in
+ *	numerical value. The change is stored in CH_BIT when slave is clocked.
+ *
  *	The remaining actions are first converted from int to bit
  *	and require logical processing only.
  *
@@ -132,7 +133,7 @@ scan_ar(Gate	*out_list)
 	    }
 #endif
 #ifdef LOAD
-	    val = ((CFunctp)*(gp->gt_rlist))(gp);
+	    val = ((CFunctp)*(gp->gt_rlist))(gp);	/* compute arith expression */
 #else
 	    val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
 #endif
@@ -281,15 +282,22 @@ scan(Gate	*out_list)
  *
  *	scan of nodes on a clock action list
  *
- *	The nodes gp on the c_list are all actions of ftype D_SH - D_CF_IF
+ *	The nodes gp on the c_list are all actions of ftype D_SH - F_CF
  *	or CLCKL or TIMRL.
  *
  *	The appropriate slaveAct function is executed in this scan.
  *	When the slave action is a CLCKL or TIMRL action, the action
  *	nodes on their lists will be linked to c_list extending the
  *	clock scan immediately.
- *	All other slave actions generate GATE or ARITH (by SH only)
- *	which are linked to o_list or a_list.
+ *
+ *	F_SW and F_CF execute C fragments as their slaveAct when they
+ *	are clocked. (IF ELSE or SWITCH). No output is linked directly
+ *	to any action lists. The C fragments may assign to immediate
+ *	gates of type LOGC or ARNC which are linked to the o_list or
+ *	a_list respectively in the assignment if they change.
+ *
+ *	All other slave actions act on GATE or ARITH (by D_SH only)
+ *	nodes which are linked to o_list or a_list in the slaveAct.
  *
  *******************************************************************/
 
@@ -531,7 +539,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 		}
 #endif
 #ifdef LOAD
-		val = ((CFunctp)*(gp->gt_rlist))(gp);
+		val = ((CFunctp)*(gp->gt_rlist))(gp);	/* compute arith expression */
 #else
 		val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
 #endif
@@ -555,7 +563,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 #endif
 	    }
 	} else if (op->gt_fni == GATE) {
-	    while (*lp++);			/* ignore gate outputs */
+	    while (*lp++);			/* ignore direct outputs */
 	    while ((gp = *lp++) != 0) {		/* do inverted outputs */
 #if !defined(_WINDOWS) || defined(LOAD)
 		scan_cnt++;			/* count scan operations */
@@ -572,7 +580,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 #endif
 		if (--gp->gt_val == 0) {		/* gate function */
 		    --gp->gt_val;
-		    (*initAct[gp->gt_fni])(gp, o_list);/* init action */
+		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
 		}
 #ifndef _WINDOWS 
 		if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);

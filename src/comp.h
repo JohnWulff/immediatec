@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.3 2000/11/16 14:19:55 jw Exp $";
+"@(#)$Id: comp.h,v 1.4 2000/11/24 14:44:45 jw Exp $";
 /*
  *	"comp.h"
  *
@@ -23,8 +23,8 @@ typedef	struct	List_e {	/* list element */
 
 typedef	struct Symbol {		/* symbol table entry */
     char *		name;	/* element name */
-    uchar		type;	/* AND OR LATCH FF CF CLK TIM */
-    uchar		ftype;	/* GATE S_FF R_FF D_FF F_CF CLCK TIMR */
+    uchar		type;	/* ARN AND OR LATCH FF CLK TIM ... */
+    uchar		ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
     List_e *		list;	/* output list pointer */
     union {
 	Gate *		gate;	/* AND OR */
