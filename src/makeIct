@@ -12,7 +12,7 @@
 #
 #	make ict with OPT=TCP
 #
-#	$Id: makeIct,v 1.6 2001/03/18 14:03:15 jw Exp $
+#	$Id: makeIct,v 1.7 2001/03/29 11:16:15 jw Exp $
 #
 ########################################################################
 
@@ -21,13 +21,13 @@ if [ -f Make_tmp ]; then
     exit 1;
 fi
 test -d Make_tmp || mkdir Make_tmp;
-mv main.o Make_tmp
+mv main.o scan.o Make_tmp
 if [ -d PptcObjs ]; then
     mv PptcObjs/* .
 else
     mkdir PptcObjs
 fi
 make OPT='-DTCP' ict
-mv main.o ict.o PptcObjs
+mv main.o ict.o scan.o PptcObjs
 mv Make_tmp/* .
 rmdir Make_tmp
