@@ -8,17 +8,27 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/} [-lh] [-v<N>] 'file ...' >&2
-    echo '	-l	link all the iC files into one application' >&2
+    echo 'Usage:	'${0##*/}' [-[l|s|c|b|n]6h] [-v<N>] file ...' >&2
+    echo '    (default)	link all files into independent executables' >&2
+    echo '	-l	link all files into one executable' >&2
+    echo '	-s	supress C output and executable, listing only' >&2
+    echo '	-c	generate C output only' >&2
+    echo '	-b	generate both listing and C output' >&2
+    echo '	-n	generate no output, report pplc compile errors only' >&2
+    echo '		-s and -n generate cexe.c for last file as a side effect' >&2
     echo '	-v<N>	use pplc<N> eg pplc1 pplc2 ...' >&2
+    echo '	-6	produce logic generation listing file.lst6' >&2
+    echo '		default listing is file.lst' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.4 2000/11/23 16:48:46 jw Exp $' >&2
+    echo '	$Id: makex,v 1.5 2001/01/08 14:35:56 jw Exp $' >&2
 }
 
 link=0
 flag=noerror
 a=""
 v=""
+d="-d74"
+l=""
 
 while [[ $# > 0 ]]; do
     case $1 in
@@ -27,6 +37,10 @@ while [[ $# > 0 ]]; do
 	while [[ -n "$option" ]]; do
 	    case "$option" in
 	    l*)	link=1;;
+	    s*)	link=2;;
+	    c*)	link=3;;
+	    b*) link=4;;
+	    n*) link=5;;
 	    v*)	option=${option#?};
 		if [[ -n $option ]]; then
 		    v=$option;
@@ -34,6 +48,7 @@ while [[ $# > 0 ]]; do
 		    shift; v=$1;
 		fi
 		break;;
+	    6*)	d="-d76";l="6";;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;
 	    esac
@@ -47,9 +62,6 @@ done
 for f in $*; do
     file=$f
     base=${file%.*}
-    if [[ -z $first ]]; then
-	first=$base
-    fi
     if [[ $file = $base ]]; then
 	file="$base.p"
     fi
@@ -59,21 +71,42 @@ for f in $*; do
 	exit 1;
     fi
     echo $file
-    if [[ $link != 1 ]]; then
-	if pplc$v -d74 -o $base.c -l $base.lst $file; then
+
+    case $link in
+    0)
+	if pplc$v $d -o $base.c -l $base.lst$l $file; then
 	    gcc -g -DYYDEBUG -o $base $base.c list.c load.a
-	fi
-    else
-	if [[ $first != $base ]]; then
-	    a="-a"
-	fi
-	if pplc$v $a -d74 -o $base.c -l $base.lst $file; then
+	else
+	    echo "pplc$v compile errors in '$file' - no executable '$base' generated" >&2
+	fi ;;
+    1)
+	if pplc$v $a $d -o $base.c -l $base.lst$l $file; then
 	    list="$list $base.c"
 	else
 	    list="$list ERROR:$base.c"
 	    flag=error
 	fi
-    fi
+	if [[ -z $first ]]; then
+	    first=$base
+	    a="-a"
+	fi ;;
+    2)
+	if ! pplc$v $d -c -l $base.lst$l $file; then
+	    echo "pplc$v compile errors in '$file'" >&2
+	fi ;;
+    3)
+	if ! pplc$v -o $base.c $file; then
+	    echo "pplc$v compile errors in '$file'" >&2
+	fi ;;
+    4)
+	if ! pplc$v $d -o $base.c -l $base.lst$l $file; then
+	    echo "pplc$v compile errors in '$file'" >&2
+	fi ;;
+    5)
+	if ! pplc$v -c $file; then
+	    echo "pplc$v compile errors in '$file'" >&2
+	fi ;;
+    esac
 done
 
 if [[ $link = 1 ]]; then
@@ -81,6 +114,6 @@ if [[ $link = 1 ]]; then
 	echo "link $first from$list"
 	gcc -g -DYYDEBUG -o $first $list list.c load.a
     else
-	echo "pplc$v compile errors in $list" >&2
+	echo "pplc$v compile errors in '$list'" >&2
     fi
 fi
