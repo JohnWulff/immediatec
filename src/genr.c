@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.12 2000/12/24 17:46:03 jw Exp $";
+"@(#)$Id: genr.c,v 1.13 2000/12/25 09:03:12 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -591,6 +591,10 @@ op_asgn(			/* asign List_e stack to links */
 	    if (debug & 04) {
 		if (gp->type >= MAX_LV) {
 		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, os[gp->type],
+			os[sp->type]);
+		} else if (gp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
+		    /* reference to a timer value - no link */
+		    fprintf(outFP, "\t%s\t%c<---%c", gp->name, fos[gp->ftype],
 			os[sp->type]);
 		} else if (gp->ftype != GATE) {
 		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, fos[gp->ftype],
