@@ -1,11 +1,23 @@
 static const char ibsd.c[] =
-"@(#)$Id: ibsd.c,v 1.3 2001/02/21 16:20:29 jw Exp $";
+"@(#)$Id: ibsd.c,v 1.4 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- * 	Treibersoftware für den IBS-COP
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john.wulff@inka.de>
+ *
+ *	ibsd.c
+ *	parallel plc - runtime support for Phoenix Contact COP card
+ *		       connected to InterBus-S field bus I/O system
+ *
+ * 	Treibersoftware fuer den IBS-COP
  *	15.8.94 / mg
  *
- *	Das Programm wird über die Download-Funktion von TDOS
+ *	Das Programm wird ueber die Download-Funktion von TDOS
  *	auf den COP gebracht und dort gestartet.
  *	Bei der Portierung der PPLC sind die Programmteile in
  *	das Laufzeitsystem einzubinden.
@@ -20,8 +32,8 @@ static const char ibsd.c[] =
 #include <conio.h>
 #include <string.h>
 
-#define P_8086		/* für Include-Dateien notwendig */
-#define C_TURBO_C	/* Syntax für stdtypes.h, s.S. 4-45 Handbuch */
+#define P_8086		/* fuer Include-Dateien notwendig */
+#define C_TURBO_C	/* Syntax fuer stdtypes.h, s.S. 4-45 Handbuch */
 
 #include <ibs_dos.h>
 #include <ddi_lib.h>
@@ -32,8 +44,8 @@ static const char ibsd.c[] =
 /*----------------------------------------------------------------- */
 /* Arrays zum Datenhandling zwischen PLC und IBS */
 /*----------------------------------------------------------------- */
-unsigned short DataIn[MAXBIN];		/* IBS binäre Eingaben */
-unsigned short DataOut[MAXBIN];		/* IBS binäre Ausgaben */
+unsigned short DataIn[MAXBIN];		/* IBS binaere Eingaben */
+unsigned short DataOut[MAXBIN];		/* IBS binaere Ausgaben */
 unsigned short WordInPCP[MAXWORD];	/* PCP Worteingaben */
 unsigned short WordOutPCP[MAXWORD];	/* PCP Wortausgaben */
 
@@ -98,8 +110,8 @@ execIBS(INT16 nodeHd, INT16 command, INT16 message)
     }
 
     /*----------------------------------------------------------------- */
-    /* Bestätigung des Kommandos abwarten */
-    /* !!!ACHTUNG!!! Muß durch Timer begrenzt werden! */
+    /* Bestaetigung des Kommandos abwarten */
+    /* !!!ACHTUNG!!! Muss durch Timer begrenzt werden! */
     /*----------------------------------------------------------------- */
 
     mxiAcc.msgType   = 0;	/* Message-Typ = 0, momentan ohne Bedeutung */
@@ -117,7 +129,7 @@ execIBS(INT16 nodeHd, INT16 command, INT16 message)
 
 /********************************************************************
  *
- * 	DDI-Treiber und Datenkanäle initialisieren
+ * 	DDI-Treiber und Datenkanaele initialisieren
  *
  *******************************************************************/
 
@@ -125,7 +137,7 @@ short
 InitDataLink(void)
 {
     /*----------------------------------------------------------------- */
-    /* Initialisierung der Treibersoftware für den COP */
+    /* Initialisierung der Treibersoftware fuer den COP */
     /*  - Boardnumber = 1 */
     /*  - IO-Address  = 120(hex) */
     /*  - MPM-Address = D000(hex) */
@@ -158,11 +170,11 @@ InitDataLink(void)
     liveData = (unsigned char *) calloc(lDlen, sizeof(unsigned char));
 
     /*----------------------------------------------------------------- */
-    /* Mailbox- und Data-Interface Kanäle (MXI und DTI) */
-    /* zum IBS-Master (Node 1) öffnen */
+    /* Mailbox- und Data-Interface Kanaele (MXI und DTI) */
+    /* zum IBS-Master (Node 1) oeffnen */
     /*  - Device-Names:     IBB1N1_M -> B1=Board1, N1=Node1, M=Mailbox */
     /*  		    IBB1N1_D -> B1=Board1, N1=Node1, D=Data */
-    /* zum Host-PC (Node 0) öffnen */
+    /* zum Host-PC (Node 0) oeffnen */
     /*  - Device-Names:     IBB1N0_M -> B1=Board1, N0=Node0, M=Mailbox */
     /*  		    IBB1N0_D -> B1=Board1, N0=Node0, D=Data */
     /*  - Zugriffsrechte:   DDI_RW (Lesen und Schreiben)  */
@@ -213,14 +225,14 @@ StopIBS(void)
     /*----------------------------------------------------------------- */
     /* Stop INTERBUS-S */
     /* Zum Abschalten der Ausgaben wird das Kommando AlarmStopRequest */
-    /* verwendet, IBSM_STOP_BUS_REQ hält nur den Bus an!!! */
+    /* verwendet, IBSM_STOP_BUS_REQ haelt nur den Bus an!!! */
     /*----------------------------------------------------------------- */
     execIBS(MastMxiNH, IBSM_ALRM_STOP_REQ, IBSM_ALRM_STOP_CNF);
 } /* StopIBS */
 
 /********************************************************************
  *
- * 	Verbindungen zu den Interfaces (Data & Mailbox) schließen
+ * 	Verbindungen zu den Interfaces (Data & Mailbox) schliessen
  *
  *******************************************************************/
 
@@ -234,13 +246,13 @@ CloseDataLink(void)
     /*----------------------------------------------------------------- */
     /* Treibersoftware entfernen und Programm beenden */
     /*----------------------------------------------------------------- */
-    ReleaseDDI();		/* setzt Interrupt Vektoren zurück */
+    ReleaseDDI();		/* setzt Interrupt Vektoren zurueck */
     return TRUE;
 } /* CloseDataLink */
 
 /********************************************************************
  *
- * 	Ausgabe der Prozeßdaten
+ * 	Ausgabe der Prozessdaten
  *
  *******************************************************************/
 
@@ -250,7 +262,7 @@ IBSsendData(void)
     T_DDI_DTI_ACCESS  dtiAcc;
 
     dtiAcc.address  = DTA_OFFST_IBS_MASTER;	/* Offset-Adresse */
-    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.length   = MAXBIN * 2; 		/* Groesse Datenbereich */
     dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
     dtiAcc.data     = (USIGN8 FAR *)DataOut; 	/* Adr. OUT-Data-Puffer */
 
@@ -260,7 +272,7 @@ IBSsendData(void)
 
 /********************************************************************
  *
- * 	Eingabe der Prozeßdaten
+ * 	Eingabe der Prozessdaten
  *
  *******************************************************************/
 
@@ -270,7 +282,7 @@ IBSrecvData(void)
     T_DDI_DTI_ACCESS  dtiAcc;
 
     dtiAcc.address  = DTA_OFFST_IBS_MASTER;	/* Offset-Adresse */
-    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.length   = MAXBIN * 2; 		/* Groesse Datenbereich */
     dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
     dtiAcc.data     = (USIGN8 FAR *)DataIn; 	/* Adr. IN-Data-Puffer */
 
@@ -290,7 +302,7 @@ sendData(void)
     T_DDI_DTI_ACCESS  dtiAcc;
 
     dtiAcc.address  = DTA_OFFST_COP_TO_PC;	/* Offset-Adresse */
-    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.length   = MAXBIN * 2; 		/* Groesse Datenbereich */
     dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
     dtiAcc.data     = (USIGN8 FAR *)HostDataOut;/* Adr. OUT-Data-Puffer */
 
@@ -310,7 +322,7 @@ recvData(void)
     T_DDI_DTI_ACCESS  dtiAcc;
 
     dtiAcc.address  = DTA_OFFST_COP_TO_PC;	/* Offset-Adresse */
-    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.length   = MAXBIN * 2; 		/* Groesse Datenbereich */
     dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
     dtiAcc.data     = (USIGN8 FAR *)HostDataIn;	/* Adr. IN-Data-Puffer */
 
@@ -322,7 +334,7 @@ recvData(void)
  *
  *	Nachricht zum Host-Pc senden
  *
- *	Rückgabewert:	Länge zu groß oder Fehler FALSE
+ *	Rueckgabewert:	Laenge zu gross oder Fehler FALSE
  *	sonst		TRUE
  *
  *******************************************************************/
@@ -345,8 +357,8 @@ sendMsg(unsigned int length)
  *
  *	Nachricht vom Host-Pc empfangen
  *
- *	Rückgabewert:	Keine Nachricht oder Fehler 0 (FALSE)
- *	oder		Länge der empfangenen Nachricht (TRUE)
+ *	Rueckgabewert:	Keine Nachricht oder Fehler 0 (FALSE)
+ *	oder		Laenge der empfangenen Nachricht (TRUE)
  *
  *******************************************************************/
 

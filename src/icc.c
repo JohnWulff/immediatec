@@ -1,12 +1,17 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.13 2001/02/21 16:20:29 jw Exp $";
+"@(#)$Id: icc.c,v 1.14 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- *	parallel plc - procedure
+ *	Copyright (C) 1985-2001  John E. Wulff
  *
- *	FOR Microsoft C
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
  *
- *	"icc.c	3.33	95/02/06"
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	icc.c
+ *	parallel plc - runtime execution with stdio test input only
  *
  *******************************************************************/
 

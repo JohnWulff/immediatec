@@ -1,14 +1,20 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.11 2001/02/21 16:20:29 jw Exp $";
+"@(#)$Id: link.c,v 1.12 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- *	"link.c"
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	link.c
  *	linked list routine
  *
  *	4-Aug-93	New mark algorithm using extra byte in Gate
  *	24-Jan-95	Faster algorithm for finding alternate list
- *
- *	"link.c	3.22	95/02/11"
  *
  *******************************************************************/
 

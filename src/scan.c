@@ -1,10 +1,22 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.11 2001/02/21 16:20:29 jw Exp $";
-/* scan output list, do gate function */
+"@(#)$Id: scan.c,v 1.12 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
+ *
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	scan.c
+ *	parallel plc - runtime execution - scan action lists
+ *		     - do gate function, master and slave actions
+ *
+ *******************************************************************/
 
 /* J.E. Wulff	3-Mar-85 */
-
-/* "scan.c	3.37	95/02/11" */
 
 #include	<stdio.h>
 #include	"icc.h"

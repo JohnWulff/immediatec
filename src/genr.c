@@ -1,12 +1,19 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.35 2001/02/21 16:20:29 jw Exp $";
-/************************************************************
- * 
- *	"genr.c"
+"@(#)$Id: genr.c,v 1.36 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
  *
- *	"genr.c	3.51	95/02/04"
+ *	Copyright (C) 1985-2001  John E. Wulff
  *
- ************************************************************/
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	genr.c
+ *	generator functions for icc compiler
+ *
+ *******************************************************************/
 
 #ifdef _WINDOWS
 #include	<windows.h>

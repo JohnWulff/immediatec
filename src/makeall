@@ -2,9 +2,17 @@
 
 ########################################################################
 #
-#	make icc icl ict ict.a
+#	Copyright (C) 2000-2001  John E. Wulff
 #
-#	$Id: makeall,v 1.4 2001/02/21 16:20:29 jw Exp $
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	make icc icl ict libict.a
+#
+#	$Id: makeall,v 1.5 2001/03/02 12:56:32 jw Exp $
 #
 ########################################################################
 
@@ -17,5 +25,5 @@ make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 # make icl 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 echo "make ict"
 makeIct 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-echo "make ict.a"
+echo "make libict.a"
 makeload 2>&1 | grep -iE '(error|warning|:[0-9]+:)'

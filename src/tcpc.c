@@ -1,7 +1,16 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.5 2001/02/21 16:20:29 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.6 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	tcpc.c
  *	TCP/IC communication support
  *
  *	M. J. Bach, The Design of the UNIX Operating System

@@ -1,13 +1,21 @@
-# @(#)$Id: Makefile,v 1.14 2001/02/21 16:20:29 jw Exp $
+# @(#)$Id: Makefile,v 1.15 2001/03/02 12:56:32 jw Exp $
+
 ############################################################
 #
-#	makefile for parallel plc
+#	Copyright (C) 1985-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	makefile for immediate C compilers and runtime library
 #	J.E. Wulff	14-Mar-87
-#	icc.m	3.31	95/03/02
 #
 #	use GNU make	28-Jul-96
 #
-#	to make ict.a, remove all objects and make with export OPT=-DLOAD
+#	to make libict.a, remove all objects and make with export OPT=-DLOAD
 #
 ############################################################
 
@@ -35,8 +43,8 @@ ict:	Makefile main.d main.o scid.o ict.d ict.o tcpc.d tcpc.o $(COBJ:.o=.d) $(COB
 icl:	Makefile main.d main.o scid.o icl.d icl.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
 	cc $(LDFLAG) -o icl main.o scid.o icl.o $(COBJ) $(POBJ)
 
-ict.a:	Makefile load.d load.o scid.o ict.d ict.o tcpc.d tcpc.o $(POBJ:.o=.d) $(POBJ)
-	ar -rv ict.a load.o scid.o ict.o tcpc.o $(POBJ)
+libict.a:	Makefile load.d load.o scid.o ict.d ict.o tcpc.d tcpc.o $(POBJ:.o=.d) $(POBJ)
+	ar -rv libict.a load.o scid.o ict.o tcpc.o $(POBJ)
 
 #### Compile objects #######################################
 

@@ -1,10 +1,21 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.24 2001/02/21 16:20:29 jw Exp $";
-/* parallel plc */
+"@(#)$Id: icc.h,v 1.25 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
+ *
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	icc.h
+ *	parallel plc - runtime execution header
+ *
+ *******************************************************************/
 
 /* J.E. Wulff	3-Mar-85 */
-
-/* " icc.h	3.53	95/02/15" */
 
 typedef unsigned char	uchar;
 
