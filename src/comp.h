@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.21 2002/06/26 19:40:38 jw Exp $";
+"@(#)$Id: comp.h,v 1.22 2002/06/27 15:51:54 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -106,4 +106,4 @@ extern int	IEC1131(char * name, char * buf, int bufLen,
 extern int	listNet(unsigned * gate_count);	/* list generated network */
 extern int	buildNet(Gate ** igpp);	/* generate execution network */
 extern int	output(char *);		/* generate network as C file */
-extern void	copyXlate(FILE * iFP, FILE * oFP, unsigned * lcp, int mode);
+extern void	copyXlate(FILE *, FILE *, char *, unsigned *, int);

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.30 2002/06/23 19:04:58 jw Exp $";
+"@(#)$Id: load.c,v 1.31 2002/06/27 12:11:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,6 +19,7 @@ static const char load_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<signal.h>
 #ifndef LOAD
 #error - must be compiled with LOAD defined to make a linkable library
 #else
@@ -204,6 +205,7 @@ main(
 	}
     }
     debug &= 03743;			/* allow only cases specified */
+    signal(SIGSEGV, quit);		/* catch memory access signal */	
 
 /********************************************************************
  *
@@ -364,10 +366,19 @@ main(
 			    gp->gt_mark++;	/* logic output at gp */
 			    link_count++;
 			} else {
-			    inError(__LINE__, op, gp, "logic node points back to non GATE");
+			    if (gp->gt_fni <= MAX_FTY && gp->gt_ini > -MAX_LS) {
+				inError(__LINE__, op, gp, "logic node points to non GATE");
+			    } else {
+				inError(__LINE__, op, 0, "logic node points to non Gate struct");
+			    }
+			    fprintf(stderr,
+				"ERROR %s: line %d: ftype = %d type = %d ???\n",
+				__FILE__, __LINE__, gp->gt_fni, gp->gt_ini);
+			    goto failed;	/* to avoid memory access error */
 			}
 		    }
 		} while ((i = -i) != 1);
+	    failed:
 		if (df) printf("\n");
 	    }
 	ag1:
@@ -526,7 +537,7 @@ main(
 
     if ((val = fp - ifp) != link_count) {
 	fprintf(stderr,
-	    "\n%s: line %d: link error %d vs link_count %d\n",
+	    "\nERROR: %s: line %d: link error %d vs link_count %d\n",
 	    __FILE__, __LINE__, val, link_count);
 	exit(3);
     }

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.56 2002/06/26 19:37:01 jw Exp $";
+"@(#)$Id: comp.y,v 1.57 2002/06/27 19:53:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1186,7 +1186,7 @@ ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 	 *	if (expr,tim,delay) { C code }
 	 ***********************************************************/
 ffexpr	: ifini				{		/* if (expr) { x++; } */
-		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
+		fprintf(exoFP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
 	    }
 	/************************************************************
 	 * if (aexpr[,(cexpr|texpr[,dexpr])]) { C code } else { C code }
@@ -1196,10 +1196,10 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	 *	if (expr,tim,delay) { C code } else { C code }
 	 ***********************************************************/
 	| ifini ELSE			{		/* { x++; } else */
-		fprintf(exoFP, "\n    else\n");
+		fprintf(exoFP, "    else\n");
 	    }
 	  cBlock			{		/* { x--; } */
-		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
+		fprintf(exoFP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
 	    }
 	/************************************************************
 	 * switch (aexpr[,(cexpr|texpr[,dexpr])]) { C switch code }
@@ -1214,7 +1214,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	    }
 	  cBlock		{			/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, &$7);
-		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
+		fprintf(exoFP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
 	    }
 	;
 
@@ -2070,6 +2070,13 @@ yyerror(char *	s)		/* called for yacc syntax error */
     }
 } /* yyerror */
 
+/********************************************************************
+ *
+ *	Copy a C fragment to exoFP for an lBlock and a cBlock
+ *	when yacc token CCFRAG is recognised in yylex()
+ *
+ *******************************************************************/
+
 static int
 copyCfrag(char s, char m, char e)
 	/* copy C action to the next ; , or closing brace or bracket */
@@ -2089,10 +2096,10 @@ copyCfrag(char s, char m, char e)
 	} else if (c == m) {		/* ';' or '%' or ',' */
 	    if (brace <= 0) {
 		unget(c);		/* use for next token */
-		return m;
+		return m;		/* no longer used */
 	    } else if (brace == 1 && c == '%') {
 		if ((c = get()) == '}') {
-		    fprintf(exoFP, "\n%%}\n");	/* output "\n%}\n" */
+		    fprintf(exoFP, "\n%%##\n\n%%}\n");	/* #line lineno "outNM"\n%} */
 		    unget(c);
 		    return m;
 		}
@@ -2101,14 +2108,13 @@ copyCfrag(char s, char m, char e)
 	    }
 	} else if (c == e) {		/* ')' or '}' */
 	    if (--brace <= 0) {
-		if (brace < 0) {
-		    unget(c);
-		    return e;
-		} else if (c == '}') {
+		/* ZZZ fix lineno and name */
+		if (brace == 0 && c == '}') {
 		    putc(c, exoFP);	/* output '}' */
-		    unget(c);
-		    return e;
 		}
+		fprintf(exoFP, "\n%%##\n");	/* #line lineno "outNM" */
+		unget(c);		/* should not return without '}' */
+		return e;
 	    }
 	} else switch (c) {
 

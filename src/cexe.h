@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.12 2002/06/03 13:11:04 jw Exp $";
+"@(#)$Id: cexe.h,v 1.13 2002/06/27 18:57:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -21,7 +21,6 @@ static const char cexe_h[] =
 #include "icc.h"
 #include "comp.h"
 
-#line 16 "cexe.h"
 #define _(x) Lookup(#x)->u.gate->gt_old
 #define A(x,v) assign(Lookup(#x)->u.gate, v)
 
@@ -44,13 +43,19 @@ Lookup(char *	string)	/* find string in symbol table at run time */
     }
     return sp;				/* found */
 } /* Lookup */
+
+/********************************************************************
+ *
+ *	Literal blocks and embedded C fragment cases
+ *
+ *******************************************************************/
+
 Q
 int
 c_exec(int pp_index, Gate * _cexe_gf)
 {
     switch (pp_index) {
 V
-#line 25 "cexe.h"
     default:
 #ifndef _WINDOWS
 	fflush(outFP);

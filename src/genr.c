@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.44 2002/06/24 11:15:49 jw Exp $";
+"@(#)$Id: genr.c,v 1.45 2002/06/27 19:48:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -738,9 +738,7 @@ op_asgn(				/* asign List_e stack to links */
 		fprintf(exoFP, cexeString[outFlag], ++c_number);
 		fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
 		fprintf(exoFP, "	return %s;\n", eBuf);
-		if (outFlag != 0) {
-		    fprintf(exoFP, "}\n\n");	/* terminate function */
-		}
+		fprintf(exoFP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
 		if (debug & 04) fprintf(outFP, "; (%d)\n", c_number);
 	    }
 	}

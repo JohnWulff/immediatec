@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.22 2002/06/05 19:46:14 jw Exp $";
+"@(#)$Id: main.c,v 1.23 2002/06/27 18:04:27 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -18,6 +18,7 @@ static const char main_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<signal.h>
 #include	<assert.h>
 #include	"icc.h"
 #include	"comp.h"
@@ -256,7 +257,9 @@ main(
 	}
     }
     debug &= 07777;			/* allow only cases specified */
+    signal(SIGSEGV, quit);		/* catch memory access signal */	
     iFlag = 0;
+
     if ((r = compile(inpFN, listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progname, szNames[r]);
     } else {
@@ -274,40 +277,37 @@ main(
 		    } else if ((exiFP = fopen(exiFN, "r")) == NULL) {
 			r = 5;
 		    } else {
-			int		c;
-			unsigned	linecnt = 0;	/* not neede here */
+			unsigned	linecnt = 1;
+			char		lineBuf[256];
 
 			/* copy C execution file Part 1 from beginning up to 'Q' */
-			while ((c = getc(exiFP)) != 'Q') {
-			    if (c == EOF) {
-				r = 5;	/* unexpected end of exiNM */
-				break;
-			    }
-			    putc(c, excFP);
+			while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
+			    if (*lineBuf == 'Q') break;
+			    fputs(lineBuf, excFP);
+			    linecnt++;
 			}
 			/* copy C intermediate file up to EOF to C output file */
 			/* translate any ALIAS references of type '_(QB1_0)' */
-			copyXlate(exoFP, excFP, &linecnt, 01);
+			copyXlate(exoFP, excFP, excFN, &linecnt, 01);
 
 			/* rewind intermediate file Tname again */
 			if (fseek(exoFP, 0L, SEEK_SET) != 0) {
 			    r = 7;
 			} else {
 			    /* copy C execution file Part 2 from remainder up to 'V' */
-			    while ((c = getc(exiFP)) != 'V') {
-				if (c == EOF) {
-				    r = 5;	/* unexpected end of exiNM */
-				    break;
-				}
-				putc(c, excFP);
+			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
+				if (*lineBuf == 'V') break;
+				fputs(lineBuf, excFP);
+				linecnt++;
 			    }
 			    /* copy C intermediate file up to EOF to C output file */
 			    /* translate any ALIAS references of type '_(QB1_0)' */
-			    copyXlate(exoFP, excFP, &linecnt, 02);
+			    copyXlate(exoFP, excFP, excFN, &linecnt, 02);
 
 			    /* copy C execution file Part 3 from character after 'V 'up to EOF */
-			    while ((c = getc(exiFP)) != EOF) {
-				putc(c, excFP);
+			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
+				fputs(lineBuf, excFP);
+				linecnt++;
 			    }
 			}
 			fclose(exiFP);
