@@ -1,87 +1,104 @@
 #!/usr/bin/ksh -p
-# $Id: Mdiff,v 1.5 1998/02/12 11:35:28 archiv Exp $
+# $Id: Mdiff,v 1.6 1998/02/12 14:03:09 archiv Exp $
 # Author: J.E. Wulff
 #
-files='*.[chv]* [Mm]akefile*'
-case $# in
-0)  echo "Usage:	$0 [-ei] [+w] [directory] [file ...]" >&2
-    echo '	-i	identical files output:	==== file ====' >&2
-    echo '		default: ignore identical files in output' >&2
-    echo '	-e	nonexisting files put:	**** file does not exist' >&2
-    echo '		default: ignore nonexisting files in output' >&2
-    echo '	if both files exist output:	#### file ####' >&2
-    echo '	+w	whitespace (spaces and tabs) is significant' >&2
-    echo '		default: whitespace is ignored' >&2
-    echo '	if first file argument is not a directory, .. is used' >&2
-    echo "	if no files are specified, '$files' is used" >&2
-    exit 1
-    ;;
-*)
-    i=0
-    e=0
-    w=-w
-    while true
-    do
-	case $1 in
-	-e)
-	    e=1
-	    shift
-	    ;;
-	-i)
-	    i=1
-	    shift
-	    ;;
-	-ei|-ie)
-	    e=1
-	    i=1
-	    shift
-	    ;;
-	+w)
-	    w=
-	    shift
-	    ;;
-	[+-]*)
-	    echo "$0: unexpected argument $1"
-	    exit 2
-	    ;;
-	*)
-	    break
-	    ;;
-	esac
-    done
-    if [ -d $1 ]
-    then
-	dir=$1
+name=${0##*/}
+name=${name%.*}
+files='[Mm]akefile* *.[chv]*'
+i=0
+e=0
+q=0
+w=-w
+while true; do
+    case $1 in
+    -h*)
+	echo "Usage:	$name [-ieh] [+w] [-q] [directory] [file ...]" >&2
+	echo '	-i	identical files output:	==== file ====' >&2
+	echo '		default: ignore identical files in output' >&2
+	echo '	-e	nonexisting files put:	**** file does not exist' >&2
+	echo '		default: ignore nonexisting files in output' >&2
+	echo '		if files exist output:	#### file ####' >&2
+	echo '	+w	whitespace (spaces and tabs) is significant' >&2
+	echo '		default: whitespace is ignored' >&2
+	echo '	-q	quiet operation - return status only' >&2
+	echo '	-h	this help text' >&2
+	echo '	if first file argument is not a directory, .. is used' >&2
+	echo "	if no files are specified, '$files' is used" >&2
+	echo '	return status 0 (true) if all files are identical' >&2
+	echo '	return status n (false) number of files which differ' >&2
+	exit 2
+	;;
+    -q*)
+	q=1
 	shift
-    else
-	dir=..
-    fi
-    if [ $# != 0 ]
-    then
-	files=$*
-    fi
+	;;
+    -e)
+	e=1
+	shift
+	;;
+    -i)
+	i=1
+	shift
+	;;
+    -ei|-ie)
+	e=1
+	i=1
+	shift
+	;;
+    +w)
+	w=
+	shift
+	;;
+    [+-]*)
+	echo "$name: unexpected argument $1"
+	exit 3
+	;;
+    *)
+	break
+	;;
+    esac
+done
+
+if [[ $# != 0 ]] && [[ -d $1 ]]; then
+    dir=$1
+    shift
+else
+    dir='..'
+fi
+
+if [[ $# != 0 ]]; then
+    files=$*
+fi
+
+if [[ $q = 0 ]]; then
     echo "Differences in directory $PWD and $dir"
     date
-    for f in $files
-    do
-	if [ $e != 0 ] || [ -f $dir/$f ]
-	then
-	    if cmp -s $f $dir/$f
-	    then
-		test $i = 0 || echo "========== $f =========="
-	    else
-		if [ $e = 0 ] || [ -f $dir/$f ]
-		then
-		    echo
-		    echo "########## $f ##########"
-		    ls -lL $f
-		    ls -lL $dir/$f
-		    diff $w $f $dir
-		else
-		    echo "********** $dir/$f does not exist"
-		fi
+fi
+
+status=0
+for f in $files; do
+    if [[ -f $dir/$f ]]; then
+	if cmp -s $f $dir/$f; then
+	    [[ $i = 0 ]] || echo "========== $f =========="
+	else
+	    let status+=1
+	    if [[ $q = 0 ]]; then
+		echo
+		echo "########## $f ##########"
+		ls -lL $f
+		ls -lL $dir/$f
+		diff $w $f $dir
 	    fi
 	fi
-    done
-    ;;
-esac
+    elif [[ $e != 0 ]]; then
+	let status+=1
+	if [[ $q = 0 ]]; then
+	    echo "********** $dir/$f does not exist"
+	fi
+    fi
+done
+if [[ $status != 0 ]] && [[ $q = 0 ]]; then
+    echo
+    echo "########## $status files differ ##########"
+fi
+return $status
