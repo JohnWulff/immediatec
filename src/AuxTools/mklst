@@ -1,0 +1,38 @@
+#! /usr/bin/perl
+
+#################################################################
+#
+#   Make a list of all files generated from *.p
+#
+#################################################################
+
+use strict;
+
+my $named = $0;
+$named =~ s#.*[/\\]##;		# delete directory names in path
+format STDERR =
+Usage:	@<<<<<<< [file ...]
+	$named
+	-d	do not output base without extension
+	-h	help, ouput this Usage text only
+$Id: mklst,v 1.1 2000/12/29 09:32:54 jw Exp $
+.
+
+use vars qw($opt_d $opt_h);
+require "getopts.pl";
+&Getopts('dh');			# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
+while ($ARGV = shift @ARGV) {
+    if ($ARGV =~ /(\w+)\.p/) {
+	if ($opt_d) {
+	    print "$1.c\n$1.lst\n$1.p\n";
+	} else {
+	    print "$1\n$1.c\n$1.lst\n$1.p\n";
+	}
+    }
+}
