@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.19 2001/01/03 18:46:35 jw Exp $";
+"@(#)$Id: genr.c,v 1.20 2001/01/03 22:14:43 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -871,13 +871,23 @@ qx_asgn(
  *
  *	return operator to use in built in iC functions
  *
+ *	this logic ensures that type is taken over if possible to
+ *	allow a gate to become an action gate without unnecessary
+ *	forcing of levels.
+ *
+ *	only if a gate is undefined or drives an output use a type
+ *	derived from the ftype.
+ *
+ *	Master gates lead to either ARN or OR
+ *
  *******************************************************************/
 
 static uchar
 bTyp(List_e * lp)
 {
-    register Symbol *	symp;
-    register uchar	tp;
+    Symbol *	symp;
+    uchar	tp;
+    uchar	ft;
 
     symp = lp->le_sym;
     while (symp->type == ALIAS) {
@@ -885,7 +895,9 @@ bTyp(List_e * lp)
     }
     tp = symp->type;
     return tp >= MAX_GT ? (tp == SH || tp == INPW ? ARN : OR)
-			: (tp == UDF ? types[symp->ftype] : tp);
+			: (tp == UDF || symp->list &&
+	((ft = symp->list->le_sym->ftype) == OUTX || ft == OUTW) ? types[symp->ftype]
+								 : tp);
 } /* bTyp */
 
 /********************************************************************
