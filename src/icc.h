@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.31 2001/04/15 06:39:24 jw Exp $";
+"@(#)$Id: icc.h,v 1.32 2001/04/18 12:00:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -75,14 +75,21 @@ extern void	efree(void *);
 
 #define	ALIAS	18	/* non executable functions */
 #define	ERR	19	/* mark node which had error during generation */
-#define	EXT	20	/* mark node declared as extern - stop assignment */
 
-#define	KEYW	21	/* hold yacc token, used for compilation only */
+#define	KEYW	20	/* hold yacc token, used for compilation only */
 
 #define	MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define	MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
 #define	MAX_OP	ALIAS	/* types < MAX_OP are executable */
 #define	MAX_LS	KEYW	/* types < MAX_LS are generated */
+
+			/* mark nodes declared as extern - stop assignment */
+#define	TM	31	/* 0x1f mask for type from EXT_TYPES */
+#define EXT_ARN	ARN+TM+1
+#define EXT_AND	AND+TM+1
+#define EXT_OR	OR+TM+1
+#define EXT_CLK	CLK+TM+1
+#define EXT_TIM	TIM+TM+1
 
 /*	action function types symbol.ftype and Gate.gt_fni */
 
@@ -131,20 +138,19 @@ extern void	efree(void *);
 /* list of types */
 #define	FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
-	"CLK","TIM","ALIAS","ERR","EXT","KEYW"
+	"CLK","TIM","ALIAS","ERR","KEYW"
 
-#define	OPS	".-+~&|%*#^/({=[<:!@?_;"	/* DEBUG display of types */
+#define	OPS	".-+~&|%*#^/({=[<:!@?;"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
 #define	FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
 	D_SH, D_FF, CH_BIT, RI_BIT, F_SW, F_CF, ARITH, ARITH, GATE,\
-	CLCK, TIMR, GATE, GATE, 0, 0
+	CLCK, TIMR, GATE, GATE, 0
 
 /* compiler tokens corresponding to type */
 #define	DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, NVAR,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE,
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define	I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\

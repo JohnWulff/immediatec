@@ -40,11 +40,10 @@
 #	It is then easy to inspect the listing and relate states with
 #	the logic.
 #
-#	For measuring reaction times the Module Time::HiRes may be used.
-#	This activates the -m option.
-#	Make sure you have downloaded and installed Time::HiRes from CPAN
-#	Uncomment the C++ comment in the next line
-#//define TIME_HIRES
+#	For measuring reaction times the Module Time::HiRes is used.
+#	This activates the -m option and flash display of short events.
+#	Make sure you have installed Time::HiRes (provided in this distribution)
+#define TIME_HIRES
 #
 ########################################################################
 
@@ -118,7 +117,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.15 2001/04/15 06:38:08 jw Exp $
+$Id: iClive,v 1.16 2001/05/06 19:09:47 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -608,9 +607,9 @@ sub deleteAllTags {
 #	the iC control program. Further updates occur, every time the
 #	state of an active symbol changes.
 #
-#	Attach the balloon processing while display is live.
-#	Balloon processing is detached for newly loaded file to allow
-#	clean editing.
+#	Attach balloon processing while display is live.
+#	Balloon processing is detached for a newly loaded file and when
+#	the scan is cleared to allow clean editing.
 #
 ########################################################################
 
@@ -707,64 +706,69 @@ sub scan {
 	    }
 	    $conn->send_now("$unitID.4$msg");		# send last active symbols
 
+	    ####################################################################
+	    # Attach balloon processing
+	    ####################################################################
+
 	    unless ($balloonAttached) {
 		$balloon->attach($text,
 		   -balloonmsg      => \$bMsg,
 		   -statusmsg       => \$sMsg,
 		   -balloonposition => 'mouse', # not used since postcommand returns real position
-		   -postcommand  => sub
-			{
-			    if ($wIdx[0] eq $wIdx[1]) {
-				# No word under mouse - dont post the balloon
-				return 0;
-			    } else {
-				my ($ftype, $index, $val);
-				# Have a word under mouse - change the message:
-				my $word = $text->get($wIdx[0], $wIdx[1]);
-				# Skip if it contains non-word chars
-				# or is not in Symbol Table
-				return 0 if $word =~ /\W/;
-				while (not defined ($index = $symbolTable{$word}[1])) {
-				    # Try if I/O like IX0.0 QX10.7 or TX0.0_14
-				    return 0 if $word !~ /^[IQT]X\d+$/;
-				    $word = $text->get($wIdx[0], "$wIdx[1] lineend");
-				    $word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
-				}
-				$ftype = $symbolTable{$word}[0];
-				$val = $activeSymbols[$index][1];
-				$val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
-				$bMsg = "$val";
-				$sMsg = "$word: $val";
-				$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
-				# Find a good place to put the balloon
-				# right below the last char in the word
-				my $i = $text->index("$wIdx[1] - 1 chars");
-				my @p = $text->bbox($i);
-				my $x = $text->rootx + $p[0] + $p[2] - 4;
-				my $y = $text->rooty + $p[1] + $p[3] + 2;
-				return "$x,$y";
+		   -postcommand     => sub {
+			if ($wIdx[0] eq $wIdx[1]) {
+			    # No word under mouse - dont post the balloon
+			    return 0;
+			} else {
+			    my ($ftype, $index, $val);
+			    # Have a word under mouse - change the message:
+			    my $word = $text->get($wIdx[0], $wIdx[1]);
+			    # Skip if it contains non-word chars or is not in Symbol Table
+			    return 0 if $word =~ /\W/;
+			    while (not defined ($index = $symbolTable{$word}[1])) {
+				# Try if I/O like IX0.0 QX10.7 or TX0.0_14
+				return 0 if $word !~ /^[IQT]X\d+$/;
+				$word = $text->get($wIdx[0], "$wIdx[1] lineend");
+				$word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
 			    }
-			},
-		   -motioncommand => sub
-			{
-			    my $x = $text->pointerx - $text->rootx;
-			    my $y = $text->pointery - $text->rooty;
-			    @wIdx = ($text->index("\@$x,$y wordstart"),
-				$text->index("\@$x,$y wordend"));
-			    if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
-				# Same word - dont cancel the balloon.
-				return 0;
-			    } else {
-				# New word under mouse
-				# cancel it so a new balloon will be posted.
-				$text->SelectionClear;
-				@lIdx = @wIdx;
-				return 1;
-			    }
-			},
+			    $ftype = $symbolTable{$word}[0];
+			    $val = $activeSymbols[$index][1];
+			    $val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
+			    $bMsg = "$val";
+			    $sMsg = "$word: $val";
+			    $text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
+			    # a good place to put the balloon is below the last char in the word
+			    my $i = $text->index("$wIdx[1] - 1 chars");
+			    my @p = $text->bbox($i);
+			    my $x = $text->rootx + $p[0] + $p[2] - 4;
+			    my $y = $text->rooty + $p[1] + $p[3] + 2;
+			    return "$x,$y";
+			}
+		    },
+		   -motioncommand   => sub {
+			my $x = $text->pointerx - $text->rootx;
+			my $y = $text->pointery - $text->rooty;
+			@wIdx = ($text->index("\@$x,$y wordstart"),
+			    $text->index("\@$x,$y wordend"));
+			if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
+			    # Same word - dont cancel the balloon.
+			    return 0;
+			} else {
+			    # New word under mouse
+			    # cancel it so a new balloon will be posted.
+			    $text->SelectionClear;
+			    @lIdx = @wIdx;
+			    return 1;
+			}
+		    },
 		);
 		$balloonAttached = 1;
 	    }
+
+	    ####################################################################
+	    # change text on scan button to "Clear"
+	    ####################################################################
+
 	    $scanButton->configure(-text => "Clear");
 	    $scanFlag = 1;		# scan successful
 	} else {
@@ -777,6 +781,7 @@ sub scan {
 ########################################################################
 #
 #	clearScan
+#	detach balloon processing
 #	prepare for scan
 #	clear active symbols for faster processing of connected controller
 #

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.51 2001/04/18 12:00:28 jw Exp $";
+"@(#)$Id: comp.y,v 1.52 2001/04/27 20:07:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -33,9 +33,8 @@ static int	yylex(void);
 static void	yyerror(char *);	/* called for yacc syntax error */
 int		ynerrs;			/* count of yyerror() calls */
 		/* NOTE yynerrs is reset for every call to yaccpar() */
-static void	yyerrls(char *);	/* called for yacc error list */
-static void	warnBit(void);
-static void	warnInt(void);
+static void	errBit(void);
+static void	errInt(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	dflag = 0;		/* record states dexpr */
@@ -56,7 +55,7 @@ char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 
 %{
 
-void
+static void
 pu(int t, char * token, Lis * node)
 {
     char *	cp;
@@ -88,6 +87,17 @@ pu(int t, char * token, Lis * node)
     fflush(outFP);
 } /* pu */
 
+static void
+pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
+{
+    fprintf(outFP, ">>>%s\t%s\t[%c%c %c] [%c%c %c] => [%c%c %c]\n",
+	token, s2->name,
+	os[(s1 >> 8)&TM], os[!!((s1 >> 8)&~TM)], fos[s1 & 0xff],
+	os[s2->type&TM], os[!!(s2->type&~TM)], fos[s2->ftype],
+	os[ss->type&TM], os[!!(ss->type&~TM)], fos[ss->ftype]);
+    fflush(outFP);
+} /* pd */
+
 %}
 
 	/************************************************************
@@ -101,8 +111,8 @@ pu(int t, char * token, Lis * node)
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
-%type	<sym>	program statement simplestatement lBlock variable
-%type	<sym>	decl extDecl asgn dasgn casgn tasgn
+%type	<sym>	program statement simplestatement lBlock variable valuevariable
+%type	<sym>	decl extDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
 %type	<list>	cref ctref ctdref dexpr funct params plist
 %type	<val>	cBlock declHead extDeclHead
@@ -143,10 +153,25 @@ statement
 simplestatement
 	: extDecl		{ $$ = $1; }
 	| decl			{ $$ = $1; }
-	| dasgn			{ $$ = $1; }
 	| asgn			{ $$ = $1; }
+	| dasgn			{ $$ = $1; }
 	| casgn			{ $$ = $1; }
+	| dcasgn		{ $$ = $1; }
 	| tasgn			{ $$ = $1; }
+	| dtasgn		{ $$ = $1; }
+	;
+
+variable
+	: valuevariable		{ $$ = $1; }		/* value variable */
+	| CVAR			{ $$ = $1; }		/* clock variable */
+	| TVAR			{ $$ = $1; }		/* timer variable */
+	;
+
+valuevariable
+	: LVAR			{ $$ = $1; }		/* logical bit variable */
+	| AVAR			{ $$ = $1; }		/* arithmetic variable */
+	| LOUT			{ $$ = $1; }		/* output bit variable */
+	| AOUT			{ $$ = $1; }		/* output arith. variable */
 	;
 
 	/************************************************************
@@ -156,12 +181,47 @@ simplestatement
 	 *	extern imm bit   b1;	extern imm int   a1;
 	 *	extern imm clock c1;	extern imm timer t1;
 	 *
+	 * The extern type declaration in iC declares that an immediate
+	 * variable has been assigned in another module and may be used
+	 * as an rvalue in immediate expressions in this module.
+	 *
+	 * Because of the single assignment rule, such an extern immediate
+	 * variable may normally not be assigned in this module.
+	 * To allow lists of extern immediate declarations of all variables
+	 * in a common include file, a simple immediate type declaration
+	 * after the extern immediate declaration (or after the #include
+	 * statement containing the extern immeditate type declaration)
+	 * declares that this variable will be assigned in the current
+	 * module and must be assigned in this module. The type (bit, int,
+	 * clock or timer) must match the type used previously in the
+	 * extern declaration.
+	 *
+	 * An extern type declaration of a particular variable may not
+	 * occurr after its simple declaration or its assignment.
+	 *
 	 ***********************************************************/
 
 extDecl	: extDeclHead UNDEF	{
+		Symbol t = *($2.v);
 		$$.v = $2.v;
 		$$.v->ftype = $1.v & 0xff;
 		$$.v->type = $1.v >> 8;
+		if (debug & 02) pd("extDecl", $$.v, $1.v, &t);
+	    }
+	| extDeclHead variable	{
+		Symbol t = *($2.v);
+		if ($2.v->ftype != ($1.v & 0xff)) {
+		    error("extern declaration does not match previous declaration:", $2.v->name);
+		    $2.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = $2.v;
+		if ($2.v->type == UDF) {		/* QXx.y QBz */
+		    $$.v->ftype = $1.v & 0xff;
+		    $$.v->type = $1.v >> 8;
+		} else if ($2.v->type != INPW && $2.v->type != INPX) {
+		    warning("extern declaration after assignment - ignored:", $2.v->name);
+		}
+		if (debug & 02) pd("extDecl", $$.v, $1.v, &t);
 	    }
 	;
 
@@ -184,12 +244,34 @@ extDeclHead
 	 *	imm bit   b1;		imm int   a1;
 	 *	imm clock c1;		imm timer t1;
 	 *
+	 * Multiple declarations of the same variable with the same
+	 * immediate type are silently ignored. If correctly declared
+	 * after an assignment a warning is still issued, except for
+	 * input variables which are never assigned, rather predeclared.
+	 *
 	 ***********************************************************/
 
 decl	: declHead UNDEF	{
+		Symbol t = *($2.v);
 		$$.v = $2.v;
 		$$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
 		$$.v->type = $1.v >> 8;		/* UDF for all TYPEs */
+		if (debug & 02) pd("decl", $$.v, $1.v, &t);
+	    }
+	| declHead variable	{
+		Symbol t = *($2.v);
+		if ($2.v->ftype != ($1.v & 0xff)) {
+		    error("declaration does not match previous declaration:", $2.v->name);
+		    $2.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = $2.v;
+		if (($2.v->type & ~TM) || $2.v->type == UDF) {
+		    $$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
+		    $$.v->type = $1.v >> 8;	/* UDF for all TYPEs */
+		} else if ($2.v->type != ERR && $2.v->type != INPW && $2.v->type != INPX) {
+		    warning("declaration after assignment - ignored:", $2.v->name);
+		}
+		if (debug & 02) pd("decl", $$.v, $1.v, &t);
 	    }
 	;
 
@@ -208,8 +290,8 @@ declHead
 dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) {
-		    if ($1.v->ftype != ARITH) { $$.v = 0; warnBit(); YYERROR; }
-		    else if (const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
+		    if ($1.v->ftype != ARITH) { $$.v = 0; errBit(); YYERROR; }
+		    else if (const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
 		}
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
@@ -228,14 +310,14 @@ dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 
 asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$1.v->ftype = GATE;	/* implicitly declared as 'imm bit' */
 		$$.v = op_asgn(&$1, &$3, GATE);	/* UNDEF is default GATE */
 		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -245,7 +327,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0 && const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
+		if ($3.v == 0 && const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -258,7 +340,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		Lis		li;
 		char		temp[30];
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -278,7 +360,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		Lis		li;
 		char		temp[20];
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warnInt(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; errInt(); YYERROR; }
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -321,12 +403,6 @@ aexpr	: expr			{
 	 *
 	 ***********************************************************/
 
-variable: LVAR			{ $$ = $1; }		/* logical bit variable */
-	| AVAR			{ $$ = $1; }		/* arithmetic variable */
-	| LOUT			{ $$ = $1; }		/* output bit variable */
-	| AOUT			{ $$ = $1; }		/* output arith. variable */
-	;
-
 expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
@@ -339,7 +415,7 @@ expr	: UNDEF			{
 		$$.v = 0;			/* no node, do not need value */
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
-	| variable			{
+	| valuevariable		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -350,8 +426,7 @@ expr	: UNDEF			{
 
 		if ($1.v == 0) YYERROR;			/* error in bltin() */
 		sp = $1.v->le_sym;
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = $1.v;
+		$$ = $1;
 		if (sp->ftype != ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
@@ -381,7 +456,7 @@ expr	: UNDEF			{
 	    }
 	| BFORCE '(' aexpr ',' lexpr ')'	{	/* F(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
-		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
+		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -393,7 +468,7 @@ expr	: UNDEF			{
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise | */
 		} else if ($1.v == 0 || $3.v == 0) {
-		    warnBit(); YYERROR;
+		    errBit(); YYERROR;
 		} else {
 		    $$.v = op_push(op_force($1.v, GATE),
 			OR, op_force($3.v, GATE));	/* logical | */
@@ -409,7 +484,7 @@ expr	: UNDEF			{
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise ^ */
 		} else if ($1.v == 0 || $3.v == 0) {
-		    warnBit(); YYERROR;
+		    errBit(); YYERROR;
 		} else {
 		    $$.v = op_xor(op_force($1.v, GATE),
 			op_force($3.v, GATE));		/* logical ^ */
@@ -425,7 +500,7 @@ expr	: UNDEF			{
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise & */
 		} else if ($1.v == 0 || $3.v == 0) {
-		    warnBit(); YYERROR;
+		    errBit(); YYERROR;
 		} else {
 		    $$.v = op_push(op_force($1.v, GATE),
 			AND, op_force($3.v, GATE));	/* logical & */
@@ -562,8 +637,8 @@ expr	: UNDEF			{
 
 lexpr	: aexpr ',' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($1.v == 0) { $$.v = $3.v; warnBit(); YYERROR; }
-		if ($3.v == 0) { $$.v = $1.v; warnBit(); YYERROR; }
+		if ($1.v == 0) { $$.v = $3.v; errBit(); YYERROR; }
+		if ($3.v == 0) { $$.v = $1.v; errBit(); YYERROR; }
 		if (($$.v = op_push(op_force($1.v, GATE),
 		    LOGC, op_not(op_force($3.v, GATE)))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -578,10 +653,16 @@ lexpr	: aexpr ',' aexpr		{
 	 *
 	 * A literal block may be used anywhere before, between or after
 	 * statements in an iC program. The contents of the literal block
-	 * will be copied to the generated C file between any expressions
-	 * generated by neighbouring statements. Thus it is sufficient
-	 * to declare something in a literal block just before the statement
-	 * using the declared symbols.
+	 * will be copied to the generated C file before any expressions
+	 * generated by immediate statements.
+	 *
+	 * The characters %# occurring at the start of a line in a literal
+	 * block will be converted to a plain #. This allows the use of
+	 * C-preprocessor statements in literal blocks which will be
+	 * resolved after the iC compilation. They must be written as
+	 * %#include
+	 * %#define
+	 * %#ifdef etc
 	 *
 	 ***********************************************************/
 
@@ -595,10 +676,13 @@ lBlock	: LHEAD			{ ccfrag = '%'; }	/* %{ literal block %} */
 	 *
 	 * A C block is used in if, if else and switch immediate expressions
 	 *
+	 * The characters %# occurring at the start of a line in a C block
+	 * will be converted to a plain #. See literal block above.
+	 *
 	 ***********************************************************/
 
 cBlock	: '{'			{ ccfrag = '{'; }	/* ccfrag must be set */
-	  CCFRAG '}'		{ $$.v = $3.v; }	/* count dummy yacc token */
+	  CCFRAG '}'		{ $$ = $3; }		/* count dummy yacc token */
 	;
 
 	/************************************************************
@@ -763,6 +847,18 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	 *
 	 ***********************************************************/
 
+dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
+		if ($1.v->ftype != CLCKL) {
+		    error("assigning clock to variable declared differently:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		} else if ($1.v->type != UDF && $1.v->type != CLK && $1.v->type != ERR) {
+		    error("assigning clock to variable assigned differently:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = op_asgn(&$1, &$3, CLCKL);
+	    }
+	;
+
 casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
 	| CVAR '=' cexpr	{
 		if ($1.v->type != UDF) {
@@ -780,9 +876,9 @@ cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = CLCKL;	/* clock list head */
-		$$.v = $1.v;
+		$$ = $1;
 	    }
-	| '(' cexpr ')'		{ $$.v = $2.v; }
+	| '(' cexpr ')'		{ $$ = $2; }
 	;
 
 cfexpr	: CBLTIN '(' aexpr cref ')'	{
@@ -802,6 +898,18 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 	 *
 	 ***********************************************************/
 
+dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
+		if ($1.v->ftype != TIMRL) {
+		    error("assigning timer to variable declared differently:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		} else if ($1.v->type != UDF && $1.v->type != TIM && $1.v->type != ERR) {
+		    error("assigning clock to variable assigned differently:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = op_asgn(&$1, &$3, TIMRL);
+	    }
+	;
+
 tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
 	| TVAR '=' texpr	{
 		if ($1.v->type != UDF) {
@@ -819,9 +927,9 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = TIMRL;	/* timer list head */
-		$$.v = $1.v;
+		$$ = $1;
 	    }
-	| '(' texpr ')'		{ $$.v = $2.v; }
+	| '(' texpr ')'		{ $$ = $2; }
 	;
 
 	/************************************************************
@@ -932,9 +1040,11 @@ static char *	fillp = chbuf;
 static char	yytext[YTOKSZ];		/* lex token */
 static int	yyleng;			/* length */
 static char	inpBuf[YTOKSZ];		/* alternate file name */
-static long	outBP = -1;		/* position in listing file */
 static int	lineflag;
 static char	tmpbuf[256];		/* buffer to build variable */
+static char *	errFilename;
+static int	errFlag = 0;
+static int	errRet = 0;
 
 int		lineno = 1;
 int		c_number = 0;		/* case number for cexe.c */
@@ -977,9 +1087,7 @@ compile(
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
 	return 3;
     }
-    if (errNM && (errFP = fopen(errNM, "w+")) == NULL) {
-	return 2;
-    }
+    errFilename = errNM;		/* open on first error */
     if (inpPath && (inFP = fopen(inpNM = inpPath, "r")) == NULL) {
 	return 1;
     }
@@ -988,18 +1096,18 @@ compile(
     }
     outFlag = outNM != 0;	/* global flag for compiled output */
     init();		/* initialise symbol table */
-    if (debug & 010) {	/* begin source listing */
+    if (debug & 016) {	/* begin source listing */
 	fprintf(outFP, "******* %-15s ************************\n", inpNM);
     }
     setjmp(begin);
     for (initcode(); yyparse(); initcode()) {
 	;
     }
-    if (debug & 010) {		/* end source listing */
+    if (debug & 016) {		/* end source listing */
 	fprintf(outFP, "************************************************\n");
     }
     if (inpPath) fclose(inFP);
-    return 0;
+    return errRet;
 } /* compile */
 
 static int
@@ -1023,10 +1131,7 @@ get(void)
 	lineflag = (*(fillp-1) == '\n') ? 1 : 0;
 	if (debug & 010) {	/* source listing in debugging output */
 	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
-	    if (lineflag == 0) {
-		putc('\n', outFP);
-	    }
-	    outBP = ftell(outFP);	/* note position in listing file */
+	    if (lineflag == 0) putc('\n', outFP);
 	}
 	/* handle pre-processor #line 1 "file.ic" */
 	if (sscanf(getp, "#line %d \"%[^\"]\"\n", &temp1, inpBuf) == 2) {
@@ -1306,22 +1411,59 @@ yylex(void)
 } /* yylex */
 
 static void
+errLine(void)			/* error file not openend if no errors */
+{
+    static int	errline = 0;
+
+    if (errFlag == 0) {
+	if (errFilename && errFP == stderr) {
+	    if ((errFP = fopen(errFilename, "w+")) == NULL) {
+		errFilename = 0;	/* cannot open errFilename */
+		errFP = stderr;		/* just output to stderr */
+		errRet = 2;		/* error return for compile() */
+	    } else {
+		errFlag = 1;		/* there is an error file */
+		fprintf(errFP, "******* %-15s ************************\n", inpNM);
+	    }
+	}
+	if (outFP != stdout) {
+	    errFlag = 1;		/* listing is not to stdout */
+	    if (!(debug & 016)) {	/* no source listing in debugging output */
+		fprintf(outFP, "******* %-15s ************************\n", inpNM);
+	    }
+	}
+    }
+    if (lineno != errline) {
+	errline = lineno;		/* dont print line twice */
+	if (!(debug & 010)) {	/* no source listing in debugging output */
+	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
+	    if (lineflag == 0) putc('\n', outFP);
+	}
+	if (errFlag) {
+	    fprintf(errFP, "%03d\t%s", lineno, chbuf);
+	    if (lineflag == 0)  putc('\n', errFP);
+	}
+    }
+} /* errLine */
+
+static void
 errmess(				/* actual error message */
     char *	str0,
     char *	str1,
     char *	str2)
 {
-    if (ftell(outFP) != outBP) {
-	fprintf(outFP, "%03d\t%s", lineno, chbuf);
-	if (lineflag == 0) {
-	    putc('\n', outFP);
-	}
-    }
+    errLine();
     fprintf(outFP, "*** %s: %s", str0, str1);
+    if (errFlag) fprintf(errFP, "*** %s: %s", str0, str1);
     if (str2) {
 	fprintf(outFP, " %s", str2);
+	if (errFlag) fprintf(errFP, " %s", str2);
+    } else {
+	putc('.', outFP);
+	if (errFlag) putc('.', errFP);
     }
-    fprintf(outFP, ". File %s, line %d\n", inpNM, lineno);
+    fprintf(outFP, " File %s, line %d\n", inpNM, lineno);
+    if (errFlag) fprintf(errFP, " File %s, line %d\n", inpNM, lineno);
 } /* errmess */
 
 void
@@ -1342,16 +1484,16 @@ warning(				/* print warning message */
 } /* warning */
 
 static void
-warnBit(void)
+errBit(void)
 {
-    warning("no constant allowed in bit expression", NULL);
-} /* warnBit */
+    error("no constant allowed in bit expression", NULL);
+} /* errBit */
 
 static void
-warnInt(void)
+errInt(void)
 {
-    warning("no imm variable to trigger arithmetic expression", NULL);
-} /* warnInt */
+    error("no imm variable to trigger arithmetic expression", NULL);
+} /* errInt */
 
 void
 execerror(			/* recover from run-time error */
@@ -1370,17 +1512,9 @@ yyerror(char *	s)		/* called for yacc syntax error */
     int		n, n1;
     char	erbuf[80];
 
-    if (ftell(outFP) != outBP) {
-	fprintf(outFP, "%03d\t%s", lineno, chbuf);
-	if (lineflag == 0) {
-	    putc('\n', outFP);
-	}
-    }
+    errLine();
     fprintf(outFP, "*** ");
-    if (errFP != stderr) {
-	fprintf(errFP, "%03d\t%s", lineno, chbuf);
-	fprintf(errFP, "*** ");
-    }
+    if (errFlag) fprintf(errFP, "*** ");
     for (n1 = 0, n = getp - cp - yyleng; n > 0; n--, cp++) {
 	n1++;
 	if (*cp == '\t') {
@@ -1394,29 +1528,22 @@ yyerror(char *	s)		/* called for yacc syntax error */
 	n1 += 4;
 	while (n1--) {
 	    putc('-', outFP);
-	    if (errFP != stderr) putc('-', errFP);
+	    if (errFlag) putc('-', errFP);
 	}
 	fprintf(outFP, "^ %s\n", erbuf);
-	if (errFP != stderr) fprintf(errFP, "^ %s\n", erbuf);
+	if (errFlag) fprintf(errFP, "^ %s\n", erbuf);
     } else {
 	fprintf(outFP, "%s ", erbuf);
-	if (errFP != stderr) fprintf(errFP, "%s ", erbuf);
+	if (errFlag) fprintf(errFP, "%s ", erbuf);
 	n1 -= n - 3;
 	while (n1--) {
 	    putc('-', outFP);
-	    if (errFP != stderr) putc('-', errFP);
+	    if (errFlag) putc('-', errFP);
 	}
 	fprintf(outFP, "^\n");
-	if (errFP != stderr) fprintf(errFP, "^\n");
+	if (errFlag) fprintf(errFP, "^\n");
     }
 } /* yyerror */
-
-static void
-yyerrls(char *	s)		/* called for yacc error list */
-{
-    fprintf(outFP, s);
-    if (errFP != stderr) fprintf(errFP, s);
-} /* yyerrls */
 
 static int
 copyCfrag(char s, char m, char e)

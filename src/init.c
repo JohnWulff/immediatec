@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.12 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: init.c,v 1.13 2001/04/14 13:32:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -23,7 +23,7 @@ static const char init_c[] =
 #include	"comp.h"
 #include	"y.tab.h"
 
-Symbol *	clk;		/* default clock */
+Symbol *	iclock;		/* default clock */
 
 /********************************************************************
  *
@@ -71,8 +71,10 @@ static struct {
   { "DLATCH",	KEYW,	DLATCH,	D_FF,	},
   { "extern",	KEYW,	EXTERN,	0,	},
   { "imm",	KEYW,	IMM,	0,	},
-  { "int",	KEYW,	TYPE,	ARITH,	},
   { "bit",	KEYW,	TYPE,	GATE,	},
+  { "clock",	KEYW,	TYPE,	CLCKL,	},
+  { "int",	KEYW,	TYPE,	ARITH,	},
+  { "timer",	KEYW,	TYPE,	TIMRL,	},
   { "static",	KEYW,	STATIC,	0,	},
   { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
   { 0,		0,	0,	0,	},
@@ -84,8 +86,8 @@ init(void)		/* install constants and built-ins */
     int		io;
 
     for (io = 0; builtins[io].name; io++) {
-	clk = install(builtins[io].name, builtins[io].type, builtins[io].ftype);
-	clk->u.val = builtins[io].u_val;/* set u.val in Symbol just installed */
+	iclock = install(builtins[io].name, builtins[io].type, builtins[io].ftype);
+	iclock->u.val = builtins[io].u_val;/* set u.val in Symbol just installed */
     }
-    /* 'clk' with name "iClock" is default clock when loop finishes */
+    /* 'iclock' with name "iClock" is default clock when loop finishes */
 }

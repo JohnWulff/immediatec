@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.40 2001/04/18 12:00:28 jw Exp $";
+"@(#)$Id: genr.c,v 1.41 2001/04/27 20:07:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -431,8 +431,10 @@ op_asgn(				/* asign List_e stack to links */
 #endif
     rsp = right->le_sym;
     if ((typ = var->type & TM) >= AND && typ != rsp->type & TM) {
-	error("type mismatch in multiple assignment:", var->name);
-	var->type = ERR;		/* reduce anyway to clear list */
+	if (typ != ERR) {
+	    error("type mismatch in multiple assignment:", var->name);
+	    var->type = ERR;		/* reduce anyway to clear list */
+	}
     } else {
 	var->type = rsp->type & TM;
 	if (var->ftype < MIN_ACT) {

@@ -1,5 +1,5 @@
 
-                         immediateC, iC rev 1.64
+                         immediateC, iC rev 1.65
 
                     Copyright (C) 1985-2001, John E. Wulff
                             All rights reserved.
@@ -60,12 +60,12 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev 1.64
+        Notes for the installation of icc rev 1.65
 
         1)  unpack the archive in a suitable working directory with
-                tar -xvzf icc_1.64.tgz
+                tar -xvzf icc_1.65.tar.gz
 
-        2)  cd icc_1.64/src
+        2)  cd icc_1.65/src
 
         3)  excute the following:
 
@@ -104,8 +104,14 @@
                 a0.ini  is used for testing. It is the initialisation
                         output when executing a0. (Not required later)
 
-        7)  If Perl/Tk is installed on the system the following starts
-            a very simple demonstration:
+        7)  The support programs iCbox, which provides simulated I/O and
+	    iClive, which provides program entry and debugging facilities
+	    require Perl-Tk800.022 (see note below) and Time::HiRes (which
+	    is included in this distribution). Install Time::HiRes by unpacking
+	    Time-HiRes-01.20.tar.gz and follow instructions in that package.
+
+	    When Perl/Tk and Time::HiRes is installed on the system the
+	    following starts a very simple demonstration:
 
                 iCserver 'iCbox X0' a0
 
@@ -123,7 +129,7 @@
 	    The script 'a012.sh' starts 'iCserver', 3 x 'iCbox' and 'a012'
 	    which sets all outputs from inputs like a0 above.
 
-	9)  The scripts 'bar1.sh' and 'bar2.sh' start demos showing running
+	9)  The scripts 'bar1.sh' or 'bar2.sh' start demos showing running
 	    lights moving every 50 ms. The lights should move smoothly on a
 	    100 MHz or faster computer. 'demo.sh' shows some logic processing.
 
@@ -165,7 +171,7 @@
         
         Lots of success
 
-        John E. Wulff   09.Mar.2001     <john.wulff@inka.de>
+        John E. Wulff   06.May.2001     <john.wulff@inka.de>
 
 	PS
 	The program 'iCbox' requires Tk800.022 if you have Perl 5.6.0.
@@ -181,9 +187,4 @@
 	works fine. If you have an older distribution of Perl (5.005)
 	this is not necessary.
 
-	I have also downloaded Time::HiRes from CPAN and installed it.
-	This allows iCserver and iCbox to output times between events
-	with microsecond resolution using the -m option. See the listings
-	for activating this feature.
-
-        $Id: README,v 1.5 2001/04/05 20:26:52 jw Exp $
+        $Id: README,v 1.6 2001/05/06 20:09:44 jw Exp $

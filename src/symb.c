@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.7 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: symb.c,v 1.8 2001/04/14 13:32:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -168,7 +168,7 @@ place_sym(Symbol *	sp)	/* place sp in symbol table */
 
     if (spl == 0 || (tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0) {
 	if (lookup(sp->name) != 0) {	/* locate sorted position */
-	    execerror("trying to place existing symbol:", sp->name);
+	    error("trying to place existing symbol:", sp->name);
 	}
     }
     sp->next = *spl;	/* point from this to next Symbol */

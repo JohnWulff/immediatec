@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.19 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: comp.h,v 1.20 2001/04/14 13:32:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -78,7 +78,7 @@ extern Symbol *	op_asgn(Sym *, Lis *,	/* asign List_e stack to links */
 extern List_e * bltin(			/* generate built in iC functions */
 	    Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* tr, Val* pVal);
 
-extern Symbol *	clk;			/*   init.c  */
+extern Symbol *	iclock;			/*   init.c  */
 extern void	init(void);		/* install constants and built-ins */
 
 					/*   symb.c   */

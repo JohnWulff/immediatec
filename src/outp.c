@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.41 2001/04/18 12:00:28 jw Exp $";
+"@(#)$Id: outp.c,v 1.42 2001/04/27 20:07:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -203,8 +203,11 @@ listNet(unsigned * gate_count)
     if (outFP != stdout) fclose(outFP);	/* this is end of listing output */
 #endif
     if (ynerrs || gate_count[ERR]) {
-	fprintf(errFP, "%d syntax + %d generate errors - cannot execute\n",
-	    ynerrs, gate_count[ERR]);
+	fprintf(errFP, "%s%s%s error%s - cannot execute\n",
+	    ynerrs			? "syntax"	: "",
+	    ynerrs && gate_count[ERR]	? " and "	: "",
+	    gate_count[ERR]		? "generate"	: "",
+	    ynerrs + gate_count[ERR] >1	? "s"		: "");
 	return 1;
     }
     return 0;
@@ -1004,8 +1007,16 @@ end:
  *	be resolved.
  *
  *	mode 01         Copy only literal blocks %{ ... %}
- *	mode 02 default Copy only functions or cases
- *	mode 03         Copy literal blocks and functions or cases
+ *	mode 02 default Copy only C blocks, functions or cases
+ *	mode 03         Copy literal blocks and C blocks
+ *
+ * The characters %# occurring at the start of a line in a literal or C
+ * block will be converted to a plain #. This allows the use of
+ * C-preprocessor statements in literal or C blocks which will be
+ * resolved after the iC compilation. They must be written as
+ * %#include
+ * %#define
+ * %#ifdef etc
  *
  *	TODO error generation
  *
@@ -1016,6 +1027,7 @@ copyXlate(FILE * iFP, FILE * oFP, unsigned * lcp, int mode)
 {
     int		c;
     int		mask = 02;	/* default is functions or cases */
+    int		lf = 0;		/* set by first non white space in a line */
     Symbol *	sp;
     char	lineBuf[256];
     char	buffer[256];
@@ -1029,41 +1041,47 @@ copyXlate(FILE * iFP, FILE * oFP, unsigned * lcp, int mode)
 	    mask = 02;				/* copy functions or cases */
 	} else if (mode & mask) {
 	    for (lp = lineBuf; (c = *lp++) != 0; ) {
-		putc(c, oFP);
-		if (c == '\n') {
-		    (*lcp)++;			/* count lines actually output */
-		} else if (c == '_') {
-		    if ((c = *lp++) == '(') {
-			putc(c, oFP);
-			/* accept any token which might be in the symbol table */
-			bp = buffer;
-			while ((c = *lp++) != 0 && (isalnum(c) || c == '_')) {
-			    *bp++ = c;
-			}
-			*bp = '\0';		/* terminate string */
-			if (c == ')') {
-			    /* token found - xlate it */
-			    if ((sp = lookup(buffer)) != 0) {
-				while (sp->type == ALIAS) {
-				    if (sp->ftype != ARITH) {
-					/* generate error */
+		if (lf || c != '%' || *lp != '#') {	/* converts %# to # */
+		    putc(c, oFP);
+		    if (c == '\n') {
+			(*lcp)++;		/* count lines actually output */
+			lf = 0;			/* start of a new line */
+		    } else if (c != ' ' && c != '\t') {
+			lf = 1;			/* not white space */
+			if (c == '_') {
+			    if ((c = *lp++) == '(') {
+				putc(c, oFP);
+				/* accept any token which might be in the symbol table */
+				bp = buffer;
+				while ((c = *lp++) != 0 && (isalnum(c) || c == '_')) {
+				    *bp++ = c;
+				}
+				*bp = '\0';	/* terminate string */
+				if (c == ')') {
+				    /* token found - xlate it */
+				    if ((sp = lookup(buffer)) != 0) {
+					while (sp->type == ALIAS) {
+					    if (sp->ftype != ARITH) {
+						/* generate error */
+					    }
+					    sp = sp->list->le_sym;	/* resolve ALIAS */
+					}
+					if (sp->ftype != ARITH) {
+					    /* CHECK may be type ARN or SH */
+					    /* generate error */
+					}
+					fputs(sp->name, oFP);
+				    } else {
+					/* generate error - symbol should at least be in table */
+					fputs(buffer, oFP);
 				    }
-				    sp = sp->list->le_sym;	/* resolve ALIAS */
+				} else {
+				    fputs(buffer, oFP);	/* strange but true */
 				}
-				if (sp->ftype != ARITH) {
-				    /* CHECK may be type ARN or SH */
-				    /* generate error */
-				}
-				fputs(sp->name, oFP);
-			    } else {
-				/* generate error - symbol should at least be in table */
-				fputs(buffer, oFP);
 			    }
-			} else {
-			    fputs(buffer, oFP);		/* strange but true */
+			    putc(c, oFP);	/* char after '_' or buffer */
 			}
 		    }
-		    putc(c, oFP);			/* char after '_' or buffer */
 		}
 	    }
 	}

@@ -17,9 +17,8 @@
 #
 #	For measuring reaction times the Module Time::HiRes may be used.
 #	This activates the -m option.
-#	Make sure you have downloaded and installed Time::HiRes from CPAN
-#	Uncomment the C++ comment in the next line
-#//define TIME_HIRES
+#	Make sure you have installed Time::HiRes (provided in this distribution)
+#define TIME_HIRES
 #
 ########################################################################
 
@@ -81,7 +80,7 @@ Usage:
 	-l len	length of scales (default 170)
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.33 2001/04/04 10:30:37 jw Exp $
+$Id: iCbox,v 1.34 2001/05/06 19:09:47 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);

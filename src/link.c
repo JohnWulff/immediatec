@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.14 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: link.c,v 1.15 2001/04/15 09:03:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -135,15 +135,16 @@ link_ol(
 	     */
 	    if ((gp->gt_val > 0 &&			/* 'LO' action gate and not */
 		(gp->gt_fni < D_SH || gp->gt_fni > CH_BIT) ||	/* D_SH .. CH_BIT */
-		(time = gp->gt_time->gt_old) == 0) &&	/* or required time is 0 */
-		(time = out_list->gt_old) == 0) {	/* and preset off time is 0 */
+		(time = gp->gt_time->gt_old) <= 0) &&	/* or required time is 0 or -ve */
+		(time = out_list->gt_old) <= 0) {	/* and preset off time is 0 */
 		out_list = c_list;			/* put on 'clock' list imme */
 	    } else {
 		/*
-		 * 'HI' action gate clocked by timer/counter
-		 * or alternate 'LO' action is to use preset time
-		 * which is equivalent to clocking if preset to 1.
+		 * 'HI' action gate clocked by timer/counter (time >= 1)
+		 * or alternate 'LO' action if preset time is 1 (TIMER1)
+		 * which is equivalent to normal clocking.
 		 * Link Gate gp into list sorted by time order.
+		 * Negative times are treated like 0 times.
 		 */
 #ifndef _WINDOWS 
 		if (debug & 0100) fprintf(outFP, "(%d)!", time);

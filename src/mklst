@@ -2,7 +2,7 @@
 
 #################################################################
 #
-#   Make a list of all files generated from *.p
+#   Make a list of all files generated from *.ic
 #
 #################################################################
 
@@ -13,15 +13,15 @@ $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
 Usage:	@<<<<<<< [-decl6ph] [file ...]
 	$named
-	-d	output .c .ini .lst .p - for comparisons
+	-d	output .c .ini .lst .ic - for comparisons
 	-e	output only base without extension
 	-c	output only base with .c extension
 	-i	output only base with .ini extension
 	-l	output only base with .lst extension
 	-6	output only base with .lst6 extension
-	-p	output only base with .p extension
+	-p	output only base with .ic extension
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.5 2001/02/04 17:41:16 jw Exp $
+$Id: mklst,v 1.6 2001/02/21 16:21:41 jw Exp $
 .
 
 use vars qw($opt_c $opt_d $opt_e $opt_i $opt_l $opt_6 $opt_p $opt_h);
@@ -34,9 +34,9 @@ if ($opt_h) {
 
 unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
 while ($ARGV = shift @ARGV) {
-    if ($ARGV =~ /(\w+)\.p/) {
+    if ($ARGV =~ /(\w+)\.ic/) {
 	if ($opt_d) {
-	    print "$1.c\n$1.ini\n$1.lst\n$1.p\n";
+	    print "$1.c\n$1.ini\n$1.lst\n$1.ic\n";
 	} elsif ($opt_e) {
 	    print "$1\n";
 	} elsif ($opt_c) {
@@ -48,9 +48,9 @@ while ($ARGV = shift @ARGV) {
 	} elsif ($opt_6) {
 	    print "$1.lst6\n";
 	} elsif ($opt_p) {
-	    print "$1.p\n";
+	    print "$1.ic\n";
 	} else {
-	    print "$1\n$1.c\n$1.ini\n$1.lst\n$1.p\n";
+	    print "$1\n$1.c\n$1.ini\n$1.lst\n$1.ic\n";
 	}
     }
 }

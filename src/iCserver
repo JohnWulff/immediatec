@@ -55,9 +55,8 @@
 #
 #	For measuring reaction times the Module Time::HiRes may be used.
 #	This activates the -m option.
-#	Make sure you have downloaded and installed Time::HiRes from CPAN
-#	Uncomment the C++ comment in the next line
-#//define TIME_HIRES
+#	Make sure you have installed Time::HiRes (provided in this distribution)
+#define TIME_HIRES
 #
 ########################################################################
 
@@ -91,7 +90,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.23 2001/04/04 10:30:37 jw Exp $
+$Id: iCserver,v 1.24 2001/05/06 19:09:47 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
