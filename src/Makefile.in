@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.19 2001/04/04 18:20:55 jw Exp $
+# @(#)$Id: Makefile.in,v 1.20 2001/06/03 20:09:24 jw Exp $
 
 ############################################################
 #
@@ -48,11 +48,11 @@ exec_prefix = @exec_prefix@
 
 # Where the installed binary goes.
 bindir = @bindir@
-binprefix = 
+binprefix =
 
 mandir = @mandir@
 manext = 1
-manprefix = 
+manprefix =
 
 #### End of system configuration section. ####
 
@@ -115,9 +115,10 @@ test:
 	@echo "compile and generate all executables from iC files in Test ..."
 	@${srcdir}/iCmake -v ${srcdir}/Test/*.ic
 	@echo "diffing generated files in Test with originals in Test/ORG* ..."
-	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK - do make install as su"; else echo "test FAILED - differences in listed files"; fi 
+	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files"; fi
 
 install:	installdirs
+	$(srcdir)/perlinstall -t $(srcdir) Msg.pm
 	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc
 	${INSTALL_PROGRAM} ict      ${bindir}/${binprefix}ict
 	${INSTALL_PROGRAM} iCbox    ${bindir}/${binprefix}iCbox
@@ -127,12 +128,12 @@ install:	installdirs
 	${INSTALL_PROGRAM} pplstfix ${bindir}/${binprefix}pplstfix
 	${INSTALL_DATA}    libict.a ${prefix}/lib/libict.a
 	${INSTALL_DATA}    icc.h    ${prefix}/include/icc.h
-	$(srcdir)/perlinstall Msg.pm
 
 installdirs:	${srcdir}/mkinstalldirs
 	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include
 
 uninstall:
+	$(srcdir)/perlinstall -ut $(srcdir) Msg.pm
 	rm -f ${bindir}/${binprefix}icc
 	rm -f ${bindir}/${binprefix}ict
 	rm -f ${bindir}/${binprefix}iCbox
@@ -142,7 +143,6 @@ uninstall:
 	rm -f ${bindir}/${binprefix}pplstfix
 	rm -f ${prefix}/lib/libict.a
 	rm -f ${prefix}/include/icc.h
-	$(srcdir)/perlinstall -u Msg.pm
 
 clean:
 	rm -rf *.$(O) LoadObjs PptcObjs cexe.c* scid.c core icc ict libict.a
@@ -159,8 +159,8 @@ main.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 cexe.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 
-ict.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h 
-load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h 
+ict.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h
+load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h
 
 icc.$(O):	$(srcdir)/icc.h
 link.$(O):	$(srcdir)/icc.h

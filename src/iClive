@@ -105,7 +105,7 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<<< [-tmh] [-s <host>] [-p <port>] [-f <font>] [file ...]
+@<<<<<<< [-tTmh] [-s <host>] [-p <port>] [-f <font>] [file ...]
 	$named
 	-s host	host name of server    (default 'localhost')
 	-p port	service port of server (default '8778')
@@ -115,9 +115,36 @@ Usage:
 	-m	display elapsed time in seconds and microseconds
 	    (Requires Module Time::HiRes available from CPAN - see source)
 	-h	help, ouput this Usage text only
+
+Menu buttons:
+    File/New	provide an empty page for editing.
+    File/Load	load the file named in the menu bar window.
+    File/Save	store the file named in the menu bar window.
+    File/Quit	quit the program.
+
+    Scan	scan the text in the text window and generate live markings
+    		for all words in the text, which represent variables in the
+		currently running program. (The text should be related)
+    Clear	clear the live markings in the text window. In this mode the
+    		text may be edited.
+
+    Search	select one of four search modes.
+    		A search in the edit window for a text or regular expression
+		in the menu bar window is initiated by the Return key, when
+		the focus is in the menu bar window.
+		All found items will be marked. Striking the Return key again
+		will display a section of the text containing found items
+		which were previously not displayed. Shift-Return will reverse
+		the direction of scrolling.
+Editing:
+    This program uses the Tk::Text widget, which is a full featured editor.
+    It is best to use the edit facilities when the 'live display' has been
+    cleared with the 'Clear' button. The edit facilities of this program are
+    described in the Tk::Text man page in the section 'BINDINGS' near the end.
+
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
-							  '@'
-$Id: iClive,v 1.16 2001/05/06 19:09:47 jw Exp $
+						  '@'
+$Id: iClive,v 1.17 2001/06/03 20:09:24 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);

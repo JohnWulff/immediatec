@@ -1,5 +1,5 @@
 
-                         immediateC, iC rev 1.65
+                         immediate C, iC rev 1.66
 
                     Copyright (C) 1985-2001, John E. Wulff
                             All rights reserved.
@@ -60,14 +60,14 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev 1.65
+        Notes for the installation of icc rev 1.66
 
-        1)  unpack the archive in a suitable working directory with
-                tar -xvzf icc_1.65.tar.gz
+        1)  Unpack the archive in a suitable working directory with:
 
-        2)  cd icc_1.65/src
+                tar -xvzf icc_1.66.tar.gz
+                cd icc_1.66/src
 
-        3)  excute the following:
+        2)  Excute the following:
 
                 configure  OR    ./configure # if super user
                 make       OR    make quiet  # to supress intermediate output
@@ -78,11 +78,46 @@
                 libict.a
             without any errors
 
-        4)  to test compile the iC files in Test execute:
+        3)  To test compile the iC files in Test execute:
 
 		make test
 
-        5)  to install the compiler execute the following as super user:
+	4)  It is recomended that you install the Perl package Time::Hires 
+	    included with this distribution unless it is already installed.
+	    This can be checked by executing the following at this point:
+
+	        iCserver -h
+
+	    Skip to point 8) if you get a help output and no error message.
+
+	    You can work without Time::Hires - the scripts iCbox, iCserver will
+	    not support the -m microsecond timing option and iClive will not
+	    display short signals by flashing colours. If you subsequently
+	    install Time::Hires, you have to execute make uninstall followed
+	    by another make install as su in the icc/src directory, since the
+	    Perl scripts are adjusted by make install to work with/without
+	    Time::HiRes depending on its presence.
+
+        6)  Unpack build and install the Time::HiRes archive in a suitable
+	    working directory with:
+
+                tar -xvzf Time-HiRes-01.20.tar.gz
+                cd Time-HiRes-01.20
+		perl Makefile.PL
+		make
+		make test
+		su               ### Password  ###
+		make install
+                exit             ### IMPORTANT ###
+		cd ..
+		rm -rf Time-HiRes-01.20	# unless you want to keep it
+
+        7)  Return to the immediate C installtion
+
+		cd icc_1.66/src	# or the correct icc src directory
+
+        8)  To install the compiler, library and scripts execute the following
+	    as super user:
 
                 su               ### Password  ###
                 make install
@@ -91,8 +126,10 @@
             this copies the essential executables to /usr/local/bin
             it also copies the include file icc.h to /usr/local/include
             libict.a to /usr/local/lib and Msg.pm to /usr/lib/perl5/site...
+	    
+	    (make uninstall as su will remove all these files)
 
-        6)  change to directory Test and compile a0.ic with iCmake
+        9)  Change to directory Test and compile a0.ic with iCmake
 
                 cd Test
                 iCmake a0.ic
@@ -104,39 +141,41 @@
                 a0.ini  is used for testing. It is the initialisation
                         output when executing a0. (Not required later)
 
-        7)  The support programs iCbox, which provides simulated I/O and
+        10) The support programs iCbox, which provides simulated I/O and
 	    iClive, which provides program entry and debugging facilities
-	    require Perl-Tk800.022 (see note below) and Time::HiRes (which
-	    is included in this distribution). Install Time::HiRes by unpacking
-	    Time-HiRes-01.20.tar.gz and follow instructions in that package.
+	    require Perl-Tk800.022 (see note below).
 
-	    When Perl/Tk and Time::HiRes is installed on the system the
-	    following starts a very simple demonstration:
+	    If you do not have Perl-Tk, install it from your Linux distribution
+	    CD's or the copy supplied with this distribution at this point.
+
+	    When Perl/Tk is installed on the system the following starts
+	    a very simple demonstration:
 
                 iCserver 'iCbox X0' a0
 
-            An "iCbox" with 8 inputs and 8 outputs is drawn.
+            An "iCbox" with 8 inputs and 8 outputs is displayed.
             Input IX0.0 can be turned on and off.
             Output QX0.0 follows the input, since program a0.ic simply
 	    assigns immediate inputs to corresponding outputs:
                 QX0.0 = IX0.0; ...
 	    stop with ctrl-C
 
-	8)  Make all iC executable in this directory by running
+	11) Make all iC executable in this directory by running
 
 		iCmake *.ic
 
 	    The script 'a012.sh' starts 'iCserver', 3 x 'iCbox' and 'a012'
 	    which sets all outputs from inputs like a0 above.
 
-	9)  The scripts 'bar1.sh' or 'bar2.sh' start demos showing running
-	    lights moving every 50 ms. The lights should move smoothly on a
-	    100 MHz or faster computer. 'demo.sh' shows some logic processing.
+	12) The scripts 'bar3.sh' start demos showing running lights moving
+	    every 100 ms. The lights should move smoothly on a 100 MHz or
+	    faster computer. 'bar1.sh' and 'bar2.sh' require a faster computer.
+	    'demo.sh' shows some logic processing.
 
-	10) Running 'iClive bar1.ic' as a seperate process, while 'bar1' is
+	13) Running 'iClive bar3.ic' as a seperate process, while 'bar3' is
 	    running, will display the source listing (in an edit window),
 	    connect to iCServer as an auxiliary I/O and receive updates
-	    of all variables from the running iC program (bar1). These
+	    of all variables from the running iC program (bar3). These
 	    updates will change the colours of all words, which are
 	    immediate variables.  (green/black = 0, yellow/red = 1)
 	    This "live listing" shows the current state of logical
@@ -144,7 +183,14 @@
 	    variables are displayed in a balloon, when the cursor rests
 	    on a variable. (Arithmetic variables have a blue background).
 
-	11) I have included a script called 'stop' from my private toolkit.
+	    The program iClive uses the Tk::Text widget, which is a full
+	    featured editor. It is best to use the edit facilities when the
+	    'live display' has been cleared with the 'Clear' button. (Live
+	    display can be turned back on when this button shows 'Scan').
+	    The edit facilities of iClive are described in the Tk::Text
+	    man page in the section 'BINDINGS' near the end.
+
+	14) I have included a script called 'stop' from my private toolkit.
 	    It can be used effectively to kill iCserver when it is
 	    executing in the background, which is appropriate for
 	    a server.
@@ -161,7 +207,7 @@
 	    'stop' is not a command on any Unix or Linux systems I know.
 	    If it does interfere I suggest renaming it to 'Stop'.
 
-        12) The StarOffice Word document doc/iC.sdw (or doc/iC.html)
+        15) The StarOffice Word document doc/iC.sdw (or doc/iC.html)
             provide an introduction to the Programming Language iC.
 
             There are currently no man pages (on my TODO list) but
@@ -171,7 +217,7 @@
         
         Lots of success
 
-        John E. Wulff   06.May.2001     <john.wulff@inka.de>
+        John E. Wulff   02.June.2001     <john.wulff@inka.de>
 
 	PS
 	The program 'iCbox' requires Tk800.022 if you have Perl 5.6.0.
@@ -187,4 +233,7 @@
 	works fine. If you have an older distribution of Perl (5.005)
 	this is not necessary.
 
-        $Id: README,v 1.6 2001/05/06 20:09:44 jw Exp $
+	PPS
+	The SuSE Linux 7.2 distribution has Tk800.022 and works fine.
+
+        $Id: README,v 1.7 2001/06/03 20:09:24 jw Exp $
