@@ -35,7 +35,7 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix,v 1.5 2001/03/02 12:56:32 jw Exp $
+$Id: pplstfix,v 1.6 2002/06/30 20:34:41 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -73,7 +73,7 @@ sub processFile {
     my ($empty, $removed, $count, $ar, $word, $pos, @array);
     %symbols = ();
 
-    # Pass 1: scan file for ALIAS and DALIAS definitions
+    # Pass 1: scan file for ALIAS definitions
 
     while (<IN>) {
 	if (/^NET TOPOLOGY$/) {
@@ -101,7 +101,7 @@ sub processFile {
 	}
     }
 
-    # Pass 2: resolve ALIAS and DALIAS occurences
+    # Pass 2: resolve ALIAS occurences
 
     seek(IN, 0, 0);
     $. = 0;
@@ -161,9 +161,6 @@ sub processFile {
 	    } else {
 		next line;
 	    }
-	}
-	if (/^DALIAS\t_ +(\d+)$/) {
-	    next line;
 	}
 	print $_;
     }

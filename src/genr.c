@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.47 2002/06/29 21:51:14 jw Exp $";
+"@(#)$Id: genr.c,v 1.48 2002/06/30 15:54:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -863,7 +863,7 @@ op_asgn(				/* asign List_e stack to links */
 
 /********************************************************************
  *
- *	return operator to use in built in iC functions
+ *	Return operator to use in built in iC functions
  *
  *	this logic ensures that type is taken over if possible to
  *	allow a gate to become an action gate without unnecessary
@@ -898,7 +898,60 @@ bTyp(List_e * lp)
 
 /********************************************************************
  *
- *	common code to generate built in iC functions
+ *	Push one parameter with its clock for a built in iC function
+ *
+ *******************************************************************/
+
+static List_e *
+para_push(
+    Sym* fname,
+    Lis* aex, Lis* crx,
+    Lis* cr3,
+    List_e* lp3,
+    unsigned char ft,				/* 0 or S_FF or R_FF */
+    List_e** alp1)
+{
+    List_e *	lp1;
+    List_e *	lp2;
+    List_e *	lpc;
+
+    /* lpc is either own clock crx->v or clock cloned from cr3->v or iClock */
+    lp1 = 0;
+    lpc = crx ? crx->v				/* individul clock or timer crx */
+	      : cr3 ? sy_push((lp1 = cr3->v->le_sym->u.blist) ? lp1->le_sym
+							      : cr3->v->le_sym)
+						/* or clone last clock or timer cr3 */
+		    : sy_push(iclock);		/* or clone default clock iClock */
+    if (lp1 && lp1->le_sym->ftype == TIMRL) {
+	lp1 = lp1->le_next;			/* type TIM, TIM|TM+1, UDF or ALIAS */
+	assert(lp1);				/* clone associated timer value */
+	assert(lp1->le_val == (unsigned) -1);
+	lpc = op_push(lpc, TIM, sy_push(lp1->le_sym));
+	lp2 = lpc->le_sym->u.blist;
+	assert(lp2 && lp2->le_next);
+	lp2 = lp2->le_next;
+	lp2->le_val = (unsigned) -1;		/* mark link as timer value */
+	lp2->le_first = lp1->le_first;		/* copy expr text */
+	lp2->le_last  = lp1->le_last;		/* copy expr termination */
+    }
+    lp1 = op_push(sy_push(fname->v), bTyp(aex->v), aex->v);
+    lp1->le_first = aex->f; lp1->le_last = aex->l;
+    if (ft) {
+	if (lp1->le_sym->ftype == D_FF ||	/* force ft for set or reset */
+	    lp1->le_sym->ftype == S_FF) {
+	    lp1->le_sym->ftype = ft;		/* right ftype for SR, DSR, DR */
+	} else if (lp1->le_sym->ftype == D_SH ||
+	    lp1->le_sym->ftype == S_SH) {
+	    lp1->le_sym->ftype = S_SH + ft - S_FF;/* right ftype for SHSR, SHR */
+	}
+    }
+    *alp1 = op_push(lpc, lp1->le_sym->type & TM, lp1);	/* return lp1 for pVal */
+    lp2 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
+    return lp3 ? op_push(lp3, types[lp3->le_sym->ftype], lp2) : lp2;
+}
+/********************************************************************
+ *
+ *	Common code to generate built in iC functions
  *
  *******************************************************************/
 
@@ -906,97 +959,40 @@ List_e *
 bltin(
     Sym* fname,					/* function name and ftype */
     Lis* ae1, Lis* cr1,				/* expression */
-    Lis* ae2, Lis* cr2,				/* set */
-    Lis* ae3, Lis* cr3,				/* reset */
-    Lis* crm,					/* mono-flop clock */
-    Val* pVal)					/* cblock# or off-delay */
+    Lis* ae2, Lis* cr2,				/* optional set */
+    Lis* ae3, Lis* cr3,				/* optional reset */
+    Lis* crm,					/* optional mono-flop clock */
+    Val* pVal)					/* optional cblock# or off-delay */
 {
     List_e *	lp1;
     List_e *	lp2;
     List_e *	lp3;
-    List_e *	lpc;
 
     if (ae1 == 0 || ae1->v == 0) {
-	warning("first paramater missing. builtin: ", fname->v->name);
+	warning("first parameter missing. builtin: ", fname->v->name);
 	return 0;				/* YYERROR in fexpr */
     }
-
-    if (ae1) {
-	/* lpc is either own clock cr1->v or a clock cloned from cr3->v */
-	lp1 = 0;
-	lpc = cr1 ? cr1->v			/* individul clock or timer cr1 */
-		  : cr3 ? sy_push((lp1 = cr3->v->le_sym->u.blist) ? lp1->le_sym
-								  : cr3->v->le_sym)
-						/* or clone last clock or timer cr3 */
-			: sy_push(iclock);	/* or clone default clock iClock */
-	if (lp1 && lp1->le_sym->ftype == TIMRL) {
-	    lp1 = lp1->le_next;			/* type TIM, TIM|32, UDF or ALIAS */
-	    assert(lp1);			/* clone associated timer value */
-	    assert(lp1->le_val == (unsigned) -1);
-	    lpc = op_push(lpc, TIM, sy_push(lp1->le_sym));
-	    lp2 = lpc->le_sym->u.blist;
-	    assert(lp2 && lp2->le_next);
-	    lp2 = lp2->le_next;
-	    lp2->le_val = (unsigned) -1;	/* mark link as timer value */
-	    lp2->le_first = lp1->le_first;	/* copy expr text */
-	    lp2->le_last  = lp1->le_last;	/* copy expr termination */
-	}
-    }
-
-    if (ae1->v->le_sym->type == LOGC) {		/* DLATCH(set,reset) */
-	lp1 = op_push(sy_push(ae1->v->le_sym), LOGC, ae1->v);
-	lp1->le_sym->type = LATCH;
-	lp1 = op_push(sy_push(fname->v), LATCH, lp1);
-	/* DLATCH output is transferred as feed back in op_asgn */
-    } else {
-	lp1 = op_push(sy_push(fname->v), bTyp(ae1->v), ae1->v);
-    }
-    lp1->le_first = ae1->f; lp1->le_last = ae1->l;
-    lp1 = op_push(lpc, lp1->le_sym->type & TM, lp1);
-    lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
+    lp3 = para_push(fname, ae1, cr1, cr3, 0, 0, &lp1);	/* lp1 needed for pVal */
 
     if (ae2) {
 	if (ae2->v == 0) {
-	    warning("second paramater missing. builtin: ", fname->v->name);
+	    warning("second parameter missing. builtin: ", fname->v->name);
 	    return 0;				/* YYERROR in fexpr */
 	}
-	lp2 = op_push(sy_push(fname->v), bTyp(ae2->v), ae2->v);
-	lp2->le_first = ae2->f; lp2->le_last = ae2->l;
-	if (lp2->le_sym->ftype == S_FF ||
-	    lp2->le_sym->ftype == D_FF) {
-	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR, DSR, DR */
-	} else if (lp2->le_sym->ftype == S_SH ||
-	    lp2->le_sym->ftype == D_SH) {
-	    lp2->le_sym->ftype = R_SH;		/* next ftype for SHSR, SHR */
-	}
-	lp2 = op_push(lpc, lp2->le_sym->type & TM, lp2);
-	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
-	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+	lp3 = para_push(fname, ae2, cr2, cr3, lp3, S_FF, &lp2);
     }
 
     if (ae3) {
 	if (ae3->v == 0) {
-	    warning("third paramater missing. builtin: ", fname->v->name);
+	    warning("third parameter missing. builtin: ", fname->v->name);
 	    return 0;				/* YYERROR in fexpr */
 	}
-	lp2 = op_push(sy_push(fname->v), bTyp(ae3->v), ae3->v);
-	lp2->le_first = ae3->f; lp2->le_last = ae3->l;
-	if (lp2->le_sym->ftype == S_FF ||
-	    lp2->le_sym->ftype == D_FF) {
-	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR, DSR, DR */
-	} else if (lp2->le_sym->ftype == S_SH ||
-	    lp2->le_sym->ftype == D_SH) {
-	    lp2->le_sym->ftype = R_SH;		/* next ftype for SHSR, SHR */
-	}
-	lp2 = op_push(cr3 ? cr3->v : sy_push(iclock), lp2->le_sym->type & TM, lp2);
-	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
-	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+	lp3 = para_push(fname, ae3, cr3, 0, lp3, R_FF, &lp2);	/* 0 stops cloning */
     }
 
     if (crm) {
-	/* extra Master is timed reset fed back from own output */
+	/* extra Master for mono-flop is reset fed back from own output */
 	lp1 = sy_push(ae1->v->le_sym);		/* use dummy ae1 fill link */
-
 	lp2 = op_push(sy_push(fname->v), UDF, lp1);
 	if (lp2->le_sym->ftype == S_FF) {
 	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
@@ -1007,6 +1003,7 @@ bltin(
 
 	lp1->le_sym = lp3->le_sym;		/* fix link from own */
     }
+
     if (pVal) {
 	/* cblock number for ffexpr or preset off delay for timer */
 	lp1->le_val = pVal->v;			/* unsigned int value for case # */

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.58 2002/06/29 20:17:36 jw Exp $";
+"@(#)$Id: comp.y,v 1.59 2002/06/30 11:44:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -780,7 +780,7 @@ cBlock	: '{'			{ ccfrag = '{'; }	/* ccfrag must be set */
 	/************************************************************
 	 *  [,(cexpr|texpr[,dexpr])]
 	 ***********************************************************/
-cref	: /* nothing */		{ $$.v = sy_push(iclock); }
+cref	: /* nothing */		{ $$.v = sy_push(iclock); }	/* needed for SRT */
 	| ',' ctref		{ $$ = $2; }		/* clock or timer */
 	;
 
@@ -864,8 +864,14 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	DL(..) DLATCH(set,reset,timSetReset,delaySetReset)
 	 ***********************************************************/
 	| DLATCH '(' lexpr cref ')'	{		/* DL(set,reset) */
+		Lis		li1 = $3;
+		List_e *	lp1;
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
+		lp1 = op_push(sy_push($3.v->le_sym), LOGC, $3.v);
+		lp1->le_sym->type = LATCH;
+		lp1 = op_push(sy_push($1.v), LATCH, lp1);
+		/* DLATCH output is transferred as feed back in op_asgn */
+		$$.v = bltin(&$1, &li1, &$4, 0, 0, 0, 0, 0, 0);
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
@@ -934,6 +940,31 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 #endif
 	    }
 	/************************************************************
+	 * DSR(aexpr,aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
+	 * SHSR(aexpr,aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
+	 *	DSR(..) SHSR(expr,set,clkSet,         reset)
+	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset)
+	 *	DSR(..) SHSR(expr,set,clkSet,         reset,clkReset)
+	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset,clkReset)
+	 *	DSR(..) SHSR(expr,set,clkSet,         reset,timReset)
+	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset,timReset)
+	 *	DSR(..) SHSR(expr,set,clkSet,         reset,timReset,delayReset)
+	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset,timReset,delayReset)
+	 * These cases have been left out deliberately, beause it is
+	 * not clear wether the default clock for 'expr' should be taken
+	 * from the set clock or the reset clock - causes syntax errors.
+	 * Therefore the user is forced to chose a clock for 'expr'.
+	 * The following code would do the job - has been tested - JW 020630
+	 * The clock for 'expr' is cloned from the reset clock.
+	| BLTIN3 '(' aexpr ',' aexpr ',' ctdref ',' aexpr cref ')' {
+		$$.f = $1.f; $$.l = $11.l;
+		$$.v = bltin(&$1, &$3, 0, &$5, &$7, &$9, &$10, 0, 0);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	 ***********************************************************/
+	/************************************************************
 	 * DSR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
 	 * SHSR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
 	 *	DSR(..) SHSR(expr,clkExpr,          set,reset)
@@ -987,16 +1018,16 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	JK(set,reset,timSetReset,delaySetReset)
 	 ***********************************************************/
 	| BLTINJ '(' aexpr ',' aexpr cref ')' {		/* JK(set,reset) */
-		Lis		liS;
-		Lis		liR;
+		Lis		liS = $3;	/* later = 0 ZZZ */
+		Lis		liR = $5;
 		List_e *	lpS;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $7.l;
-		liS.v = op_not(sy_push(&tSym));
+		liS.v = op_not(sy_push(&tSym));		/* temporary Gate */
 		if ((liS.v = op_push(liS.v, AND, op_force($3.v, GATE))) != 0) {
 		    liS.v->le_first = liS.f = 0; liS.v->le_last = liS.l = 0;
 		}
-		liR.v = sy_push(&tSym);
+		liR.v = sy_push(&tSym);			/* temporary Gate */
 		if ((liR.v = op_push(liR.v, AND, op_force($5.v, GATE))) != 0) {
 		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
 		}
@@ -1028,16 +1059,16 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	JK(set,timSet,delaySet,reset,timReset,delayReset)
 	 ***********************************************************/
 	| BLTINJ '(' aexpr ',' ctdref ',' aexpr cref ')' {
-		Lis		liS;
-		Lis		liR;
+		Lis		liS = $3;	/* later = 0 ZZZ */
+		Lis		liR = $7;
 		List_e *	lpS;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $9.l;
-		liS.v = op_not(sy_push(&tSym));
+		liS.v = op_not(sy_push(&tSym));		/* temporary Gate */
 		if ((liS.v = op_push(liS.v, AND, op_force($3.v, GATE))) != 0) {
 		    liS.v->le_first = liS.f = 0; liS.v->le_last = liS.l = 0;
 		}
-		liR.v = sy_push(&tSym);
+		liR.v = sy_push(&tSym);			/* temporary Gate */
 		if ((liR.v = op_push(liR.v, AND, op_force($7.v, GATE))) != 0) {
 		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
 		}

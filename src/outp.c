@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.48 2002/06/28 18:21:01 jw Exp $";
+"@(#)$Id: outp.c,v 1.49 2002/06/30 19:40:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -611,9 +611,7 @@ linecnt += 21;
 		    tsp->u.val = lp->le_val;	/* store timer preset off value */
 		}				/* temporarily in u (which is 0) */
 		if (dc == OUTW && (lp = sp->list) != 0) {
-		    fprintf(Hp, "#define %s	%s\n", 	/* header _list1.h *//* ZZZ no longer in use */
-			sp->name, lp->le_sym->name); /* back link to Hname */
-			/* important to use unmodified names here */
+		    assert(0);			/* #define no longer in use */
 		}
 	    } else if (typ < MAX_OP) {
 
@@ -755,8 +753,8 @@ linecnt += 21;
     linecnt += 7;
 
     li = 0;
-    nxs = "0";
-    sam = "";
+    nxs = "0";			/* 0 terminator for linked gate list */
+    sam = "";			/* no & for terminator in linked Gate list */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) > UDF && typ < MAX_OP && /* leave out EXT_TYPES */
@@ -778,10 +776,7 @@ linecnt += 21;
 		    }
 		    fprintf(Fp, "Gate %-8s = { %d, %d,", modName, dc, dc);
 		} else {
-		    if (sp->ftype == OUTW) {
-			assert(typ != NCONST);
-			fprintf(Fp, "Gate _%-7s", modName); /* modify */
-		    } else if (typ == NCONST) {
+		    if (typ == NCONST) {
 			/* NCONST Gate must be static because same constant */
 			/* may be used in several linked modules - not extern */
 			fprintf(Fp, "static Gate %-7s", modName);
@@ -874,7 +869,7 @@ linecnt += 21;
 		fprintf(Fp, " };\n");
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
-		sam = (dc == OUTW) ? "&_" : "&";
+		sam = "&";
 	    }
 	}
     }
@@ -900,13 +895,11 @@ linecnt += 21;
 		    gp = gp->list->le_sym;		/* point to original */
 		}
 		fprintf(Fp,
-		" = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s%s, %s%s, %d };\n",
-		full_type[typ], full_ftype[dc], sp->name,
-		(gp->ftype == OUTW) ? "_" : "",
-		mN(gp), sam, nxs, val);
+		    " = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s, %s%s, %d };\n",
+		    full_type[typ], full_ftype[dc], sp->name, mN(gp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
-		sam = "&";		/* ZZZZ */
+		sam = "&";
 	    }
 	}
     }
