@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.21 2004/01/05 15:36:28 jw Exp $";
+"@(#)$Id: lexc.l,v 1.22 2004/02/23 22:41:02 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -411,11 +411,11 @@ check_type(c_STYPE* u)
 #endif
 
     if ((sp = lookup(buffer)) != 0) {
-	if ((sp->type & TM) <= MAX_LS) {
+	if ((sp->type & ~EM) <= MAX_LS) {
 #ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
 #endif
-	    while ((sp->type & TM) == ALIAS) {
+	    while ((sp->type & ~EM) == ALIAS) {
 		sp = sp->list->le_sym;	/* with token of original */
 	    }
 	    u->tok.symbol = sp;

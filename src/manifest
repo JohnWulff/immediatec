@@ -1,4 +1,4 @@
-$Id: manifest,v 1.9 2004/02/02 08:12:29 jw Exp $
+$Id: manifest,v 1.10 2004/02/23 15:22:54 jw Exp $
 README
 doc/iC.doc
 doc/iC.html
@@ -100,10 +100,18 @@ src/Test0/ORG/sort5.c
 src/Test0/ORG/sort5.ic
 src/Test0/ORG/sort5.ini
 src/Test0/ORG/sort5.lst
+src/Test0/ORG/sort7.c
+src/Test0/ORG/sort7.ic
+src/Test0/ORG/sort7.ini
+src/Test0/ORG/sort7.lst
 src/Test0/ORG/sort8.c
 src/Test0/ORG/sort8.ic
 src/Test0/ORG/sort8.ini
 src/Test0/ORG/sort8.lst
+src/Test0/ORG/sr1.c
+src/Test0/ORG/sr1.ic
+src/Test0/ORG/sr1.ini
+src/Test0/ORG/sr1.lst
 src/Test0/a0.ic
 src/Test0/a012.ic
 src/Test0/a012.sh
@@ -131,7 +139,9 @@ src/Test0/n1.ic
 src/Test0/qf3.ic
 src/Test0/sort3.ic
 src/Test0/sort5.ic
+src/Test0/sort7.ic
 src/Test0/sort8.ic
+src/Test0/sr1.ic
 src/cexe.h
 src/comp.c
 src/comp.h

@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.43 2004/02/21 17:29:11 jw Exp $";
+"@(#)$Id: comp.h,v 1.44 2004/02/23 17:48:23 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -118,9 +118,15 @@ extern int	lineno;
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
+#ifndef EFENCE
 extern char	inpNM[];		/* currently scanned input file name */
 extern char	iCbuf[];		/* buffer to build imm statement size IMMBUFSIZE */
 extern char	iFunBuffer[];		/* buffer to build imm function symbols */
+#else
+extern char *	inpNM;			/* currently scanned input file name */
+extern char *	iCbuf;			/* buffer to build imm statement size IMMBUFSIZE */
+extern char *	iFunBuffer;		/* buffer to build imm function symbols */
+#endif
 extern char *	iFunEnd;		/* pointer to end */
 extern char *	iFunSymExt;		/* flags that function is being compiled */
 extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */

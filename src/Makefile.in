@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.40 2004/01/15 14:38:06 jw Exp $
+# @(#)$Id: Makefile.in,v 1.41 2004/02/24 20:19:59 jw Exp $
 
 ############################################################
 #
@@ -51,6 +51,12 @@ LDFLAGS = @LDFLAGS@
 YFLAGS = -d -v
 O=o
 
+ifeq ($(findstring EFENCE,$(OPT)),EFENCE)
+EL = -lefence
+else
+EL =
+endif
+
 LIBS = @LIBS@
 
 prefix = @prefix@
@@ -88,13 +94,13 @@ quiet:
 	@$(srcdir)/makeAll -qrm -o$(O)
 
 icc:	$(srcdir)/Makefile main.$(O) misc.$(O) scid.$(O) $(COBJ)
-	$(CC) $(LDFLAG) -o icc main.$(O) misc.$(O) scid.$(O) $(COBJ)
+	$(CC) $(LDFLAGS) -o icc main.$(O) misc.$(O) scid.$(O) $(COBJ) $(EL)
 
 icr:	$(srcdir)/Makefile main.$(O) misc.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
-	$(CC) $(LDFLAG) -o icr main.$(O) misc.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAGS) -o icr main.$(O) misc.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ) $(EL)
 
 ict:	$(srcdir)/Makefile main.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
-	$(CC) $(LDFLAG) -o ict main.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAGS) -o ict main.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ) $(EL)
 
 #### Run-time library ######################################
 
@@ -104,7 +110,7 @@ libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(
 #### C-parser test #########################################
 
 lmain:	$(srcdir)/Makefile lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
-	$(CC) $(LDFLAG) -o lmain lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
+	$(CC) $(LDFLAGS) -o lmain lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O) $(EL)
 
 #### Compile objects #######################################
 

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.38 2004/01/26 20:21:54 jw Exp $";
+"@(#)$Id: ict.c,v 1.39 2004/02/23 21:03:55 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -38,7 +38,6 @@ static const char ict_c[] =
 #define MAX_IO	8
 #define MAX_W	2
 #define INTR 0x1c    /* The clock tick interrupt */
-#define YSIZE	10
 
 #if YYDEBUG
 static void	display(void);
@@ -77,7 +76,11 @@ unsigned long	glit_nxt;			/* count glitch scan */
 int		sockFN;			/* TCP/IP socket file number */
 
 static int	msgOffset;		/* for message send */
+#ifndef EFENCE 
 static char	msgBuf[REPLY];
+#else	/* EFENCE */
+static char *	msgBuf;
+#endif	/* EFENCE */
 
 /********************************************************************
  *
@@ -107,6 +110,9 @@ icc(
     float	delay = 0.0;	/* timer processing stopped */
     int		retval;
 
+#ifdef EFENCE
+    msgBuf = emalloc(REPLY);
+#endif	/* EFENCE */
     initIO();				/* catch memory access signal */	
     if (outFP != stdout) {
 	fclose(outFP);
@@ -931,5 +937,8 @@ void quit(int sig)
 	fflush(errFP);
 	fclose(errFP);
     }
+#ifdef EFENCE
+    free(msgBuf);
+#endif	/* EFENCE */
     exit(sig);			/* really quit */
 } /* quit */

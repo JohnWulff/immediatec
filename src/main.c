@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.44 2004/02/21 17:29:11 jw Exp $";
+"@(#)$Id: main.c,v 1.45 2004/02/24 21:38:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -73,6 +73,11 @@ static const char *	usage =
 "        <iC_program>    any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
 "        -h              this help text\n"
+#ifdef EFENCE 
+"        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
+"        -B              export EF_PROTECT_BELOW which tests access BELOW \n"
+"        -F              export EF_PROTECT_FREE which tests access FREE \n"
+#endif	/* EFENCE */
 #if defined(RUN) || defined(TCP)
 "Extra options for run mode: (direct interpretation)\n"
 "  [-n<count>] [-"
@@ -146,7 +151,11 @@ char *		szNames[] = {		/* matches return in compile */
     INITIAL_FILE_NAMES
 };
 
+#ifndef EFENCE 
 char		inpNM[BUFS] = "stdin";	/* original input file name */
+#else
+char *		inpNM;
+#endif	/* EFENCE */
 
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
@@ -235,6 +244,13 @@ main(
     } else {
 	progname++;		/*  path has been stripped */
     }
+#ifdef EFENCE 
+    inpNM = emalloc(BUFS);
+    inpNM = strcpy(inpNM, "stdin");	/* original input file name */
+    iCbuf = emalloc(IMMBUFSIZE);	/* buffer to build imm statement */
+    iFunBuffer = emalloc(IBUFSIZE);	/* buffer to build imm function symbols */
+    iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
+#endif	/* EFENCE */
     T0FP = stdin;		/* input file pointer */
     outFP = stdout;		/* listing file pointer */
     errFP = stderr;		/* error file pointer */
@@ -325,6 +341,24 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    if (strlen(*argv)) ppPath = *argv;	/* path of pplstfix */
 		    goto break2;
+#ifdef EFENCE 
+		case 'E':
+		    xflag = inpNM[BUFS-1];
+		    xflag = inpNM[BUFS];
+		    xflag = inpNM[BUFS+1];
+		    xflag = inpNM[BUFS+2];
+		    xflag = inpNM[BUFS+3];	/* test Electric Fence ABOVE */
+		    goto error;			/* should cause SIGSEGV signal  */
+		case 'B':
+		    xflag = inpNM[0];
+		    xflag = inpNM[-1];		/* test Electric Fence BELOW */
+		    goto error;			/* SIGSEGV if EF_PROTECT_BELOW  */
+		case 'F':
+		    xflag = inpNM[0];
+		    free(inpNM);
+		    xflag = inpNM[0];		/* test Electric Fence FREE */
+		    goto error;			/* SIGSEGV if EF_PROTECT_FREE  */
+#endif	/* EFENCE */
 		default:
 		    fprintf(stderr,
 			"%s: unknown flag '%c'\n", progname, **argv);
@@ -541,6 +575,11 @@ unlinkTfiles(void)
 	    unlink(T5FN);
 	}
     }
+#ifdef EFENCE 
+    free(inpNM);		/* clean up for purify */
+    free(iCbuf);
+    free(iFunBuffer);
+#endif	/* EFENCE */
 } /* unlinkTfiles */
 
 /********************************************************************

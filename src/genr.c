@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.57 2004/02/21 17:29:11 jw Exp $";
+"@(#)$Id: genr.c,v 1.58 2004/02/25 15:38:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1190,7 +1190,14 @@ bltin(
  *
  *	Combined code for assignment of an aexpr to an
  *	UNDEF LVAR AVAR LOUT or AOUT
- *	also handles clock and timer for cloning
+ *	also handles clock and timer CVAR or TVAR
+ *	sv	assign to this Symbol
+ *	lv	expression to assign
+ *	ioTyp	0	for LVAR or AVAR
+ *		OUTX	for LOUT
+ *		OUTW	for AOUT
+ *		CLK	for CVAR
+ *		TIM	for TVAR
  *
  *******************************************************************/
 
@@ -1217,10 +1224,11 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 	    ierror("multiple assignment to wrong imm type:", sv->v->name);
 	}
 	sv->v->type = ERR;			/* cannot execute properly */
+	if (iFunSymExt) sv->v->list = 0;	/* do 2nd assignment for listing */
     }
     rsp = (debug & 020000) ? sv->v
 			   : op_asgn(sv, lv, ftyp);	/* new code before Output */
-    if (ioTyp) {
+    if (ioTyp >= MAX_ACT) {			/* OUTW or OUTX */
 	snprintf(temp, TSIZE, "%s_0", rsp->name);
 	sy.v = install(temp, UDF, ioTyp);	/* generate output Gate OUTX or OUTW */
 	li.v = sy_push(rsp);			/* provide a link to LOUT or AOUT */
@@ -1731,13 +1739,13 @@ checkDecl(Symbol * terminal)
 struct sF {
     struct sF *	saveFunBs;		/* base of previous save block or 0 */
     Symbol *	iCallHead;		/* function head seen at start of imm call */
-    List_e *	iFormNext;		/* next pointer when scanning formal paramaters */
+    List_e *	iFormNext;		/* next pointer when scanning formal parameters */
     List_e *	iFunClock;		/* temporary list of unresolved clock parameters */
     List_e *	iSav[1];		/* array for saving parameter links */
 };
 
 static struct sF *	saveFunBs = 0;	/* base pointer to save block for recursive calls */
-static List_e *		iFormNext = 0;	/* next pointer when scanning formal paramaters */
+static List_e *		iFormNext = 0;	/* next pointer when scanning formal parameters */
 static List_e *		iFunClock = 0;	/* temporary list of unresolved clock parameters */
 static Symbol *		cloneSymbol(Symbol * sp);
 static List_e *		cloneList(List_e * slp, Symbol * csp, Symbol * rsp);
@@ -1874,23 +1882,26 @@ handleRealParameter(List_e * plp, List_e * lp)
 	    } else
 	    if (rsp->ftype != ARITH) {
 		ierror("wrong parameter type for timer delay:", rsp->name);
-		return 0;			/* error */
+		sy_pop(rlp);			/* parameter not used */
+		rlp = 0;			/* error */
 	    }
-	    psp = plp->le_sym;			/* previous timer Symbol */
-	    assert(psp->ftype == TIMRL);
-	    /********************************************************************
-	     * when cloning formal clock, this link and ftype will indicate timer
-	     * which must be cloned differently - action gate must be linked to
-	     * le_next of delay link rather than to clock link which is now timer
-	     *******************************************************************/
-	    plp->le_next = rlp;			/* install delay with previous timer */
-	    rlp->le_val = (unsigned) -1;	/* mark link as timer value */
-	    while (iFunClock) {			/* find unresolved formal clock parameters */
-		iFunClock->le_sym = psp;	/* link unresloved clock to this timer */
-		clp = iFunClock->le_next;	/* next unresolved clock */
-		iFunClock->le_next = lp1 = sy_push(rsp);	/* clone a delay link */
-		lp1->le_val = (unsigned) -1;	/* mark link as timer value */
-		iFunClock = clp;
+	    if (rlp) {
+		psp = plp->le_sym;		/* previous timer Symbol */
+		assert(psp->ftype == TIMRL);
+		/********************************************************************
+		 * when cloning formal clock, this link and ftype will indicate timer
+		 * which must be cloned differently - action gate must be linked to
+		 * le_next of delay link rather than to clock link which is now timer
+		 *******************************************************************/
+		lp = plp->le_next = rlp;	/* install delay with previous timer */
+		rlp->le_val = (unsigned) -1;	/* mark link as timer value */
+		while (iFunClock) {		/* find unresolved formal clock parameters */
+		    iFunClock->le_sym = psp;	/* link unresloved clock to this timer */
+		    clp = iFunClock->le_next;	/* next unresolved clock */
+		    iFunClock->le_next = lp1 = sy_push(rsp); /* clone a delay link */
+		    lp1->le_val = (unsigned) -1; /* mark link as timer value */
+		    iFunClock = clp;
+		}
 	    }
 	} else {
 	    switch (formalType) {
@@ -1900,7 +1911,8 @@ handleRealParameter(List_e * plp, List_e * lp)
 		} else
 		if (rsp->ftype != ARITH) {
 		    ierror("wrong parameter type for int:", rsp->name);
-		    return 0;			/* error */
+		    sy_pop(rlp);		/* parameter not used */
+		    rlp = 0;			/* error */
 		}
 		break;
 	    case GATE:
@@ -1909,7 +1921,8 @@ handleRealParameter(List_e * plp, List_e * lp)
 		} else
 		if (rsp->ftype != GATE) {
 		    ierror("wrong parameter type for bit:", rsp->name);
-		    return 0;			/* error */
+		    sy_pop(rlp);		/* parameter not used */
+		    rlp = 0;			/* error */
 		}
 		break;
 	    case CLCKL:
@@ -1920,6 +1933,7 @@ handleRealParameter(List_e * plp, List_e * lp)
 			iFunClock->le_next = 0;	/* clean up list */
 			iFunClock = clp;
 		    }
+		    lp = rlp;			/* in case dummy iClock */
 		} else
 		if (rsp->ftype == TIMRL) {
 		    fsp->list = rlp;		/* link real to formal parameter */
@@ -1929,13 +1943,14 @@ handleRealParameter(List_e * plp, List_e * lp)
 		    fsp->list = clp = sy_push(0); /* clock is currently unresolved */
 		    clp->le_next = iFunClock;	/* because there is no clock parameter */
 		    iFunClock = clp;		/* resolve in function call */
-		    iFormNext = iFormNext->le_next; /* next formal paramater to process */
+		    iFormNext = iFormNext->le_next; /* next formal parameter to process */
 		    continue;			/* do not step to next real parameter */
 		}
 		break;
 	    case TIMRL:
 		if (rsp->ftype != TIMRL) {
 		    ierror("wrong parameter type for timer:", rsp->name);
+		    sy_pop(rlp);		/* parameter not used */
 		    rlp = 0;			/* error */
 		}
 		break;
@@ -1946,10 +1961,20 @@ handleRealParameter(List_e * plp, List_e * lp)
 	    }
 	    fsp->list = rlp;			/* link real to formal parameter */
 	}
-	iFormNext = iFormNext->le_next;		/* next formal paramater to process */
-	return lp ? 0 : rlp;			/* real parameter if final call */
+	iFormNext = iFormNext->le_next;		/* next formal parameter to process */
+	if (lp == 0) break;
+	return 0;
     }
-    ierror("called function has too many real parameters:", iCallHead ? iCallHead->name : 0);
+    if (lp) {
+	ierror("called function has too many real parameters:", rsp ? rsp->name : 0);
+    }
+    rsp = iclock;				/* default clock */
+    while (iFunClock) {				/* resolve formal clock parameters now */
+	iFunClock->le_sym = rsp;		/* link unresloved clock to this clock */
+	clp = iFunClock->le_next;		/* next unresolved clock */
+	iFunClock->le_next = 0;			/* clean up list */
+	iFunClock = clp;
+    }
     return 0;					/* error */
 } /* handleRealParameter */
 
@@ -1965,7 +1990,7 @@ handleRealParameter(List_e * plp, List_e * lp)
  *	generated function internal variables - to allow unique naming.
  *	This field le_val is zero when function is first compiled for
  *	each source. When a function is included in several sources
- *	the counter must be passed to later runs via _List1.h or environment.
+ *	the counter is passed to later runs via _List1.h.
  *
  *******************************************************************/
 
@@ -2009,14 +2034,14 @@ cloneFunction(Symbol * functionHead, List_e * plp)
      * previously parameter links where set up from formal to real parameters
      * find unresolved clock parameters (since real clock parameters optional)
      *******************************************************************/
-    while (iFormNext) {
-	if (handleRealParameter(plp, 0) == 0) break;
-    }
-    /********************************************************************
-     * real parameters have been scanned and checked against formal parameters
-     *******************************************************************/
-    if (iFormNext || iFunClock) {
-	ierror("called function has too few real parameters:", functionHead->name);
+    while (iFormNext || iFunClock) {
+	handleRealParameter(plp, 0);
+	if (iFormNext) {
+	    ierror("called function has too few real parameters:", functionHead->name);
+	    while (iFormNext) {
+		handleRealParameter(plp, 0);
+	    }
+	}
     }
     /********************************************************************
      * Clone the statements of the called function.

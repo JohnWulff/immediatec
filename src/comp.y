@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.84 2004/02/21 17:29:11 jw Exp $";
+"@(#)$Id: comp.y,v 1.85 2004/02/24 09:06:22 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -39,13 +39,19 @@ static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
 static Symbol	tSym = { "_tSym_", AND, GATE, };
+#ifndef EFENCE
 char		iCbuf[IMMBUFSIZE];	/* buffer to build imm statement */
 char		iFunBuffer[IBUFSIZE];	/* buffer to build imm function symbols */
 char *		iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
+#else		/* malloc for EFENCE in main() */
+char *		iCbuf;			/* buffer to build imm statement */
+char *		iFunBuffer;		/* buffer to build imm function symbols */
+char *		iFunEnd;		/* pointer to end */
+#endif	/* EFENCE */
 char *		iFunSymExt = 0;		/* pointer to imm function symbol Extension */
 static char *	iFunSyText = 0;		/* pointer to function symbol text when active */
 Sym		iRetSymbol;		/* .v is pointer to imm function return Symbol */
-static char *	stmtp = iCbuf;		/* manipulated in iClex() only */
+static char *	stmtp;			/* manipulated in iClex() only */
 static void	clrBuf(void);
 %}
 
@@ -74,8 +80,8 @@ clrBuf(void)
 void
 pu(int t, char * token, Lis * node)
 {
-    char *	cp;
-    char *	ep;
+    char *	t_first;
+    int		len;
 
     switch (t) {
     case 0:
@@ -99,11 +105,12 @@ pu(int t, char * token, Lis * node)
 	fprintf(outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
 	break;
     }
-    cp = node->f; ep = node->l;		/* now 100% portable with d and l at start of union */
-    while (cp < ep && isprint(*cp)) {
-	putc(*cp++, outFP);
+    if ((t_first = node->f) != 0 && (len = node->l - t_first) != 0) {
+	assert(t_first >= iCbuf && node->l < &iCbuf[IMMBUFSIZE]);
+	fprintf(outFP, "%-*.*s\n", len, len, t_first);
+    } else {
+	fprintf(outFP, "\n");
     }
-    putc('\n', outFP);
     fflush(outFP);
 } /* pu */
 
@@ -1813,11 +1820,8 @@ funcBody
 	: /* nothing */			{ $$.v = 0; clrBuf(); }
 	| funcBody funcStatement	{
 		$$.f = $1.f; $$.l = $2.l;
-#if YYDEBUG
-		clrBuf();
 		$$.v = 0;			/* $$.v is not required */
-		if ((debug & 0402) == 0402) pu(0, "funcBody", (Lis*)&$$);
-#endif
+		clrBuf();
 	    }
 	| funcBody error ';'	{ $$.v = 0; clrBuf(); iclock->type = ERR; yyerrok; }
 	;

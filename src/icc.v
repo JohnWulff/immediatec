@@ -1,18 +1,18 @@
-@(#)$Id: icc.v,v 1.102 2004/02/21 17:33:12 jw Exp $
+@(#)$Id: icc.v,v 1.103 2004/02/25 16:32:04 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
-Makefile.in     1.40    2004/01/15  14:38:06  jw      Exp
+Makefile.in     1.41    2004/02/24  20:19:59  jw      Exp
 Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
 README.tpl      1.12    2003/10/12  20:57:47  jw      Exp
 cexe.h          1.20    2004/01/15  15:05:47  jw      Exp
-comp.h          1.43    2004/02/21  17:29:11  jw      Exp
+comp.h          1.44    2004/02/23  17:48:23  jw      Exp
 comp.sed        1.3     2002/08/13  21:15:32  jw      Exp
-comp.y          1.84    2004/02/21  17:29:11  jw      Exp
+comp.y          1.85    2004/02/24  09:06:22  jw      Exp
 configure       1.4     2003/10/03  18:45:13  jw      Exp
 configure.in    1.3     2002/07/29  10:19:05  jw      Exp
-genr.c          1.57    2004/02/21  17:29:11  jw      Exp
+genr.c          1.58    2004/02/25  15:38:46  jw      Exp
 gram.sed        1.2     2002/08/13  21:15:55  jw      Exp
-gram.y          1.17    2004/01/26  20:35:44  jw      Exp
+gram.y          1.18    2004/02/24  15:53:02  jw      Exp
 iCbox           1.37    2003/12/29  17:05:59  jw      Exp
 iClive          1.31    2004/01/21  17:36:11  jw      Exp
 iCmake          1.28    2004/02/21  17:29:11  jw      Exp
@@ -20,16 +20,16 @@ iCserver        1.29    2003/12/28  20:55:53  jw      Exp
 icc.c           1.26    2004/01/26  18:54:04  jw      Exp
 icc.h           1.52    2004/02/21  17:29:11  jw      Exp
 icg.h           1.4     2004/01/25  19:21:29  jw      Exp
-ict.c           1.38    2004/01/26  20:21:54  jw      Exp
+ict.c           1.39    2004/02/23  21:03:55  jw      Exp
 init.c          1.24    2004/02/21  17:29:11  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
-lexc.l          1.21    2004/01/05  15:36:28  jw      Exp
+lexc.l          1.22    2004/02/23  22:41:02  jw      Exp
 link.c          1.22    2004/01/28  11:04:07  jw      Exp
 lmain.c         1.9     2004/01/26  19:44:47  jw      Exp
 load.c          1.41    2004/01/26  20:23:41  jw      Exp
-main.c          1.44    2004/02/21  17:29:11  jw      Exp
-makeAll         1.17    2004/02/21  17:29:11  jw      Exp
-manifest        1.9     2004/02/02  08:12:29  jw      Exp
+main.c          1.45    2004/02/24  21:38:04  jw      Exp
+makeAll         1.18    2004/02/24  20:23:47  jw      Exp
+manifest        1.10    2004/02/23  15:22:54  jw      Exp
 misc.c          1.1     2004/01/03  21:44:49  jw      Exp
 mkinstalldirs   1.1     2001/03/07  12:26:24  jw      Exp
 outp.c          1.73    2004/02/21  17:29:11  jw      Exp

@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.17 2004/01/26 20:35:44 jw Exp $";
+"@(#)$Id: gram.y,v 1.18 2004/02/24 15:53:02 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -1921,6 +1921,11 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
  *	mType is derived from the ftype of the Symbol. It may only be
  *	ARITH === 1, GATE === 2, ARITH+2 and GATE+2. (UDFA === 0 is an error)
  *
+ *	This did not work. jw 2004.02.23 found with Electric Fence 2.2.1
+ *	in arnc5.ic:
+ *		imm clock clk; if (IX0.1) { clk = 1; } // tries to use
+ *		macro[mType] with mType = CLCKL 18, type = ERR 19 // FIXED
+ *
  *******************************************************************/
 
 static void
@@ -2067,8 +2072,8 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	return;				/* lineEntryArray initialized */
     }
 
-    lep++->pStart = LARGE;		/* finalise lineEntryArray */
-    lep->pStart   = LARGE;		/* require 2 guard entries at the end */
+    lep++->pStart = lep->equOp = LARGE;		/* finalise lineEntryArray */
+    lep->pStart   = lep->equOp = LARGE;		/* require 2 guard entries at the end */
 
     bytePos = 0;
     p       = lineEntryArray + 1;	/* miss guard entry at start */
@@ -2109,7 +2114,9 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	    sp     = p->sp;		/* associated Symbol */
 	    ppi    = p->ppIdx;		/* pre/post-inc/dec character value */
 	    assert(sp);
-	    mType  = (equop == LARGE) ? sp->ftype : sp->ftype + MACRO_OFFSET;
+	    mType  = sp->type == ERR ? UDFA
+				     : (equop == LARGE) ? sp->ftype
+							: sp->ftype + MACRO_OFFSET;
 	    if (ppi >= 5) {
 		/* assignment macro must be printed outside of enclosing parentheses */
 		fprintf(oFP, macro[mType]);	/* entry found - output macro start */
