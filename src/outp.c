@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.25 2001/01/01 21:08:31 jw Exp $";
+    "@(#)$Id: outp.c,v 1.26 2001/01/09 19:23:19 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -65,13 +65,14 @@ IEC1131(char * name, char * buf, int bufLen,
  *	If name is not modified, name is copied to names and iqt[0]
  *	is cleared.
  *
- *	Because names[] has 2 static arrays, used in ping-pong fashion,
- *	a pointer to the current names entry can still be used after
- *	a 2nd call to mN(). Used in loops to provide previous name.
+ *	Because names[] has 3 static arrays, used in rotating-pong fashion,
+ *	a pointer to the current names entry can still be used after a 2nd
+ *	a 3rd call to mN(). Used in loops to provide previous name.
  *
  *******************************************************************/
 
-static char	names[2][BUFS];	/* ping pong buffer for modified names */
+#define SZ	4
+static char	names[SZ][BUFS];/* ping pong buffer for modified names */
 static int	ix;		/* index for accessing alternate arrays */
 static char	iqt[2];		/* char buffers - space for 0 terminator */
 static char	bwx[2];
@@ -83,7 +84,8 @@ static unsigned	cnt;		/* used as side-effect in OUTW - INPX */
 static char *
 mN(Symbol * sp)
 {
-    char * np = names[ix ^= 1];			/* alternate ix 1 and 0 */
+    char * np = names[ix++];			/* alternate ix = 0, 1 or 2 */
+    if (ix >= SZ) ix = 0;			/* rotate buffers */
     iqt[0] = bwx[0] = byte = bit = 0;		/* clear for later check */
     if (sp == 0) return strncpy(np, "0", 2);	/* in case of suprises */
     tail[0] = 0;
@@ -764,17 +766,18 @@ extern Gate *	l_[];\n\
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) == ALIAS && sp->list != 0 &&
 		((dc = sp->ftype) == GATE || (Aflag && dc == ARITH))) {
+		modName = mN(sp);	/* modified string, byte and bit */
 		if (dc == ARITH) {
-		    fprintf(Fp, "Gate _%-7s", sp->name);	/* modify */
+		    fprintf(Fp, "Gate _%-7s", modName);	/* modify */
 		} else {
-		    fprintf(Fp, "Gate %-8s", sp->name);
+		    fprintf(Fp, "Gate %-8s", modName);
 		}
 		fprintf(Fp,
 		" = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s, %s%s, %d };\n",
 		full_type[typ], full_ftype[dc], sp->name,
 		mN(sp->list->le_sym), sam, nxs, sp->list->le_val);
 		linecnt++;
-		nxs = sp->name;		/* previous Symbol name */
+		nxs = modName;		/* previous Symbol name */
 		sam = dc == ARITH ? "&_" : "&";
 	    }
 	}

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.25 2001/01/06 22:19:13 jw Exp $";
+"@(#)$Id: genr.c,v 1.26 2001/01/09 19:23:19 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -481,7 +481,7 @@ op_asgn(			/* asign List_e stack to links */
 	var->u.blist = right;		/* link var to right */
     }
 
-    atn = 0;
+    atn = (debug & 0100000) ? -1 : 0;	/* QW0_0 generated for qp_value ALIAS */
     sp = var;				/* start reduction with var */
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
     if (debug & 02) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
@@ -780,7 +780,7 @@ op_asgn(			/* asign List_e stack to links */
  *	Value from QXx.y	when ft == GATE
  *
  *	Once an output symbol has been assigned to with qp_asgn() an
- *	auxiliary gate named QW_1 etc points to the output QW1, which
+ *	auxiliary gate named QW1_1 etc points to the output QW1, which
  *	is the name used in expressions. yylex() returns QW1_1 by use
  *	of the backpointer generated from QW1 in qp_asgn(). In this
  *	case act->v->list != 0 and most of the code below is skipped.
@@ -788,11 +788,14 @@ op_asgn(			/* asign List_e stack to links */
  *	When an output gate is used for input, but has never been
  *	assigned to yet, act->v->list == 0 and the code below assigns
  *	the output gate from a temporary gate variable using qp_asgn().
- *	This ensures that the auxiliary driver gate QW1_1 etc exist.
+ *	This ensures that a provisional auxiliary driver gate exist.
+ *	This provisional driver gate is named QW1_0 etc.
  *
  *	Extra code in qp_asgn() re-assign the output gate again,
- *	without notifying a multiple assignment. All outputs from the
- *	previous auxiliary output driver are transferred.
+ *	without notifying a multiple assignment. The provisional driver
+ *	QW1_0 is made an ALIAS to the auxiliary driver generated in the
+ *	new assignment.  All outputs from the previous auxiliary output
+ *	driver (now an ALIAS) are transferred to the new auxiliary driver.
  *
  *	This use of output values before assignment is necessary in iC,
  *	to allow the implementation of feedback in single clocked
@@ -820,10 +823,13 @@ qp_value(Lis * expr, Sym * act, uchar ft)
 
     expr->f = li.f = act->f; expr->l = li.l = act->l;
     if ((li.v = act->v->list) == 0) {
-	Symbol *	sp;
+	Symbol *	sp;		/* output not yet assigned */
 	char		temp[100];
 	short		saveDebug;
 	static int	wtn;
+	char *		bp;
+	char *		cp;
+	char *		dp;
 
 	sprintf(temp, "_Wtemp%d", ++wtn);
 	sp = install(temp, INPW, OUTX);		/* temporary _W symbol */
@@ -837,10 +843,19 @@ qp_value(Lis * expr, Sym * act, uchar ft)
 	li.v->le_sym->type = UDF;		/* not really defined yet */
 	debug = saveDebug;			/* restore listing output */
 	if (ft == ARITH) {
-	    stmtp = act->f;			/* fix WACT name */
-	    expr->f = li.f = act->f =
-		stmtp += sprintf(stmtp, "_(%s)", li.v->le_sym->name);
-	    expr->l = li.l = act->l = stmtp;
+	    cp = temp;
+	    cp += sprintf(temp, "_(%s)", li.v->le_sym->name);
+	    bp = act->l;			/* copy rest of lexed statement */
+	    expr->l = li.l = act->l = act->f + (cp - temp);
+	    while (bp < stmtp) {
+		*cp++ = *bp++;
+	    }
+	    bp = temp;
+	    dp = act->f;			/* copy extended statement */
+	    while (bp < cp) {
+		*dp++ = *bp++;
+	    }
+	    stmtp = dp;				/* fix WACT name */
 	}
 	unlink_sym(sp);				/* unlink _W symbol */
 	free(sp->name);
@@ -857,21 +872,20 @@ qp_value(Lis * expr, Sym * act, uchar ft)
  *	Asign to QBx or QWx	when ft == ARITH
  *	Asign to QXx.y		when ft == GATE
  *
- *	Generates auxiliary driver gate named QBX_1 etc for each output.
- *	This driver is used for all inputs, since output gates of ftyp
- *	OUTW and OUTX cannot drive logic or arithmetic directly.
+ *	When the right expression of the assignment is a direct Symbol
+ *	that Symbol drives the output gate. This assignment generates
+ *	a backpointer in the output gate to the Symbol driving the output.
+ *	The backpointer is used to locate the actual logic or arithmetic
+ *	value, which that output represents. The backpointer may contain
+ *	a logic inversion. In this way the use of an output gate as input
+ *	is handled just like an ALIAS.
  *
- *	The auxiliary driver may be inverted if the driving gate is a
- *	function type SH, FF, VF or EF. In this case a post-processor
- *	pplstfix.pl is called to adjust earlier use of the unassigned
- *	gate, before it was known, that the value would be inverted
- *	and only if such a use actually occurs.
- *
- *	This postprocessor only affects the listing, not the generation
- *	of code. This algorithm was necessary because of the one pass
- *	nature of the compiler. NOTE: No automatic post-processing of
- *	listings to standard output occurs. In this case the listing
- *	contains two explanatory lines, how the listing is to b read.
+ *	In the more usual case, where the right expression is a logical
+ *	or arithmetic expression, that expression resolves into a gate,
+ *	which is named QW1_1 etc. This is the driver gate and is linked
+ *	to the actual output gate just as described above. The driver is
+ *	used for all inputs, since output gates of ftyp OUTW and OUTX
+ *	cannot drive logic or arithmetic directly.
  *
  *	Sym sv contains Symbol *v and char *f and *l to source
  *	Lis lr contains List_e *v and char *f and *l to source
@@ -887,10 +901,12 @@ qp_asgn(
     Lis		li1;
     List_e *	lp;
     List_e *	lpf;
-    List_e *	lpb;
+    List_e **	lpp;
     Symbol *	svv;
+    Symbol *	sp;
     Symbol *	fsp;
     Symbol *	bsp = 0;
+    List_e *	lpb = 0;
     uchar	oft = OUTW - ARITH + ft;	/* ensure order of ftypes is correct */
 
     if ((svv = sv->v)->type != UDF) {
@@ -905,7 +921,6 @@ qp_asgn(
 	} else {
 	    svv->type = UDF;
 	}
-	unlink_sym(bsp);			/* unlink old symbol */
 	free(lpf);				/* old back link */
     }
     lpf = op_force(rl->v, ft);			/* ARITH or GATE */
@@ -918,6 +933,13 @@ qp_asgn(
     li1.l = rl->l;	/* for op_asgn */
     if (bsp) {
 	/*
+	 *	QW1_0 is made an ALIAS to the auxiliary driver generated in the
+	 *	new assignment.  All outputs from the previous auxiliary output
+	 *	driver (now an ALIAS) are transferred to the new auxiliary driver.
+	 *
+	 * ALIAS should be complete before the op_asgn() below, so that any
+	 * inputs of its own output are resolved correctly in that assignment.
+	 *
 	 * replace the $ symbol which would be new auxiliary output
 	 * driver gate by the symbol created when that auxiliary output
 	 * was first used as input.
@@ -930,50 +952,34 @@ qp_asgn(
 	 * be pointers to the old auxiliary output *bsp in the templist
 	 */
 	assert(fsp);
-	free(bsp->name);			/* old "QXx.y_1" string */
-	bsp->name = fsp->name;			/* transfer $ name or 0 */
-	bsp->type = fsp->type;
-	bsp->ftype = fsp->ftype;		/* should be GATE or ALIAS */
-	assert(fsp->list == 0);
-	lp = bsp->list;				/* take out this symbol */
-	assert(lp != 0);
-	assert(lp->le_sym == svv);		/* if not it was not first asgn */
-	lpb = lp->le_next;			/* 0 or old output list */ 
-	bsp->list = 0;				/* make empty till after assignment */ 
-	free(lp);				/* old forward link */
-	assert(bsp->u.blist == 0);
-	bsp->u.blist = fsp->u.blist;
-	assert(templist->next == fsp);
-	templist->next = bsp;
-	bsp->next = fsp->next;
-	rl->v->le_sym = bsp;			/* forward link */
-	assert(svv->list->le_sym == fsp);	/* not necessary - linked above */
-	svv->list->le_sym = bsp;
-	free(fsp);				/* replaced $ symbol */
+	bsp->type = ALIAS;			/* convert old driver to ALIAS */
+	for (lpp = &bsp->list, lp = *lpp; lp; lpp = &lp->le_next, lp = *lpp) {
+	    if (lp->le_sym == svv) {
+		lp->le_sym = fsp;		/* is ALIAS to driver gate */
+		*lpp = lp->le_next;		/* rest of output list */ 
+		lp->le_next = 0;		/* ALIAS has backward link only */
+		lp->le_val = lpf->le_val;	/* handle inversion */
+		lpb = bsp->list;		/* old output list or 0 */ 
+		bsp->list = lp;			/* now link ALIAS correctly */
+		break;
+	    }
+	}
+	assert(lp != 0);			/* WHAT! no link to output ? */
     }
-    fsp = op_asgn(sv, &li1, oft);		/* oft is OUTW or OUTX */
-    if (bsp && lpb && (lp = bsp->list)) {
-	bsp->list = lpb;			/* put old output list first */
+    sp = op_asgn(sv, &li1, oft);		/* oft is OUTW or OUTX */
+    if (lpb && (lp = fsp->list)) {
+	fsp->list = lpb;			/* put old output list first */
 	while (lpb->le_next != 0) {
 	    lpb = lpb->le_next;
 	}
 	lpb->le_next = lp;			/* link new output at end of old */
-	if (ft == GATE && lpf->le_val == NOT) {
-	    for (lp = bsp->list; lp; lp = lp->le_next) {/* traverse output list */
-		if (lp != lpf) {		/* leave out own output */
-		    lp->le_val ^= NOT;		/* invert link */
-		}
-	    }
-	    if (debug & 04) {
-		iFlag = 1;			/* trigger post-processor */
-		/* The following text is searched for in post-processor pplstfix.pl */
-		fprintf(outFP, "\tprevious inputs '%s' must be inverted\n"
-		    "\texcept input '%s' to own output '%s'\n\n",
-		    bsp->name, bsp->name, lpf->le_sym->name);	/* DO NOT CHANGE */
-	    }
+	if (debug & 04) {			/* generate listing output */
+	    fprintf(outFP, "\t%s\t%c ---%c\t%s\n\n", fsp->name,
+		(fsp->ftype != GATE) ? fos[fsp->ftype] : w(lpf),
+		os[bsp->type], bsp->name);
 	}
     }
-    return fsp;
+    return sp;
 } /* qp_asgn */
 
 /********************************************************************

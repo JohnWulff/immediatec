@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.11 2000/12/07 18:31:14 jw Exp $";
+"@(#)$Id: load.c,v 1.12 2001/01/09 19:23:19 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -243,7 +243,7 @@ main(
 	    val++;				/* count node */
 	    if (op->gt_ini == -ARN) {
 		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
-		if (df) printf("%-8s%3d:", op->gt_ids, op->gt_ini);
+		if (df) printf(" %-8s%3d:", op->gt_ids, op->gt_ini);
 		lp++;			/* skip function vector */
 		while ((gp = *lp++) != 0) { /* for ARN scan 1 list */
 		    if (gp->gt_ini == -ALIAS) {	/* should not occurr */
@@ -265,28 +265,32 @@ main(
 		if (df) printf("\n");
 	    } else if (op->gt_ini > 0) {
 		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
-		if (df) printf("%-8s%3d:", op->gt_ids, op->gt_ini);
+		if (df) printf(" %-8s%3d:", op->gt_ids, op->gt_ini);
 		i = 1;			/* LOGIC nodes AND, OR or LATCH */
 		/* for LOGIC scan 2 lists with i = 1 and -1 */
 		do {
 		    while ((gp = *lp++) != 0) {
 			inversion = 0;
-			if (gp->gt_ini == -ALIAS ||
-			    gp->gt_fni == OUTX) {
-			    while (gp->gt_ini == -ALIAS ||
-				gp->gt_fni == OUTX) {
+			if (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
+			    while (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
 				if (gp->gt_ini == -ALIAS) {
+				    if (df) printf("	%s%s@,",	/* @ */
+					gp->gt_mark ? "~" : "", gp->gt_ids);
 				    inversion ^= gp->gt_mark;
 				    gp = (Gate*)gp->gt_rlist;
 				} else {
+				    unsigned iv = 0;			/* @ */
 				    if ((tlp = gp->gt_rlist) == 0) {
 					inError(__LINE__, op, gp);
 				    } else if ((tgp = *tlp++) == 0) {
+					iv = 1;				/* @ */
 					inversion ^= 1;
 					if ((tgp = *tlp++) == 0) {
 					    inError(__LINE__, op, gp);
 					}
 				    }
+				    if (df) printf("	%s%s>,",	/* @ */
+					iv ? "~" : "", gp->gt_ids);	/* @ */
 				    gp = tgp;
 				}
 			    }
@@ -304,8 +308,7 @@ main(
 			    *tlp = gp;	/* swap in real input */
 			}
 			if (df) printf("	%s%s,",
-			    (i >> 1) & 1 ^ inversion ? "~" : "",
-			    gp->gt_ids);
+			    (i >> 1) & 1 ^ inversion ? "~" : "", gp->gt_ids);
 			op->gt_val++;		/* count input */
 			if (gp->gt_fni == GATE) {
 			    gp->gt_mark++;	/* logic output at gp */
@@ -346,7 +349,7 @@ main(
 	    }
 	}
     }
-    if (df) printf("link count = %d\n", link_count);
+    if (df) printf(" link count = %d\n", link_count);
     if (errCount) {
 	exit(2);		/* pass 1 failed */
     }
@@ -385,7 +388,7 @@ main(
 
     if (df) printf("PASS 2\n");
     /* iClock has no input, needs no output - just report for completeness */
-    if (df) printf("%-8s %3d %3d\n", iClock.gt_ids, iClock.gt_val,
+    if (df) printf(" %-8s %3d %3d\n", iClock.gt_ids, iClock.gt_val,
 	iClock.gt_mark);
     *sTend++ = &iClock;			/* enter iClock into sTable */
     sTstrLen = strlen(iClock.gt_ids) + 1;	/* initialise length */
@@ -395,7 +398,7 @@ main(
 	    *sTend++ = op;		/* enter node into sTable */
 	    sTstrLen += strlen(op->gt_ids) + 1;	/* string length */
 	    if (op->gt_ini != -ALIAS) {
-		if (df) printf("%-8s %3d %3d\n",
+		if (df) printf(" %-8s %3d %3d\n",
 		    op->gt_ids, op->gt_val, op->gt_mark);
 		if (op->gt_ini != -NCONST) {
 		    if (op->gt_val == 0) {
@@ -506,7 +509,7 @@ main(
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
-	    if (df) printf("%-8s%3d%3d:",
+	    if (df) printf(" %-8s%3d%3d:",
 		op->gt_ids, op->gt_ini, op->gt_fni);
 	    if (op->gt_ini == -ARN) {
 		if ((gp = *op->gt_rlist) == 0) inError(__LINE__, op, 0);

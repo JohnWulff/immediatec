@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.5 2001/01/03 11:03:56 jw Exp $";
+"@(#)$Id: pptc.c,v 1.6 2001/01/09 19:23:19 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -139,8 +139,10 @@ pplc(
 	}				/* could optimise by varying delay */
     }
 
-    /* Start TCP/IP communication before any inputs are generated => outputs */
-    sockFN = connect_to_server(hostNM, portNM, pplcNM, delay);
+    if ((debug & 0400) == 0) {
+	/* Start TCP/IP communication before any inputs are generated => outputs */
+	sockFN = connect_to_server(hostNM, portNM, pplcNM, delay);
+    }
 
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
     for (pass = 0; pass < 4; pass++) {
@@ -182,7 +184,7 @@ pplc(
     }
 
     if (debug & 0400) {
-	exit(0);				/* terminate - no inputs */
+	quit(0);				/* terminate - no inputs */
     }
 
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
