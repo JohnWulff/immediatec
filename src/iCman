@@ -2,16 +2,27 @@
 use strict;
 #--------------------------------------------------------------
 # perlman: man page viewer in Perl
+# from "Advanced Perl Programming"
+#       by Sriram Srinivasan
+#
+# modified by John E. Wulff to act as a HELP viewer
+# for iC Project widgets
 #--------------------------------------------------------------
 use Tk;
 
-print STDERR "Scouting man directories\n";
-scout_man_dirs();
-print STDERR "Starting UI ...";
-create_ui();
-print STDERR "Done \n";
-MainLoop();
+if ($ARGV[0] =~ /^-+h/) {
+    print STDERR "Usage: perlman[ [<section>] manpage]\n";
+    print STDERR '$Id: iCman,v 1.5 2005/01/06 17:39:41 archiv Exp $', "\n";
+} else {
+    print STDERR "Scouting man directories\n";
+    scout_man_dirs();
+    print STDERR "Starting UI ...";
+    create_ui();
+    print STDERR "Done \n";
+    MainLoop();
+}
 exit(0);
+
 
 #-------------------------------------------------------------------
 my $menu_headings;        # "Headings" MenuButton
@@ -57,8 +68,10 @@ sub show_man {
         # If first character is a capital letter, it's likely a section
         if ($line =~ /^[A-Z]/) {  
             # Likely a section heading
-            ($mark = $line) =~ s/\s.*$//g;  # $mark has section title
-            my $index = $text->index('end');# note current end location
+            $mark = $line;			# $mark has section title
+	    chomp $mark;
+            $mark =~ s/(\w+( +\w+){0,2}).*/$1/;	# 3 words maximum
+            my $index = $text->index('end');	# note current end location
             # Give 'section' tag to the section title
             $text->insert('end', "$mark\n\n", 'section');
             # Create a menu entry. Have callback invoke text widget's
@@ -67,6 +80,28 @@ sub show_man {
                     '-label' => $mark,
                     '-command' => [sub {$text->see($_[0])},$index])
         } else {
+	    ## some correction of strange characters from 'rman' is required
+	    ## if ($line =~ /\[-\[l(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)(.)/) {
+	    ##  print "::$1:$2:$3::$4:$5:$6::$7:$8:$9::$10:$11:$12::\n";
+	    ##  my $o1 = ord $1;
+	    ##  my $o2 = ord $2;
+	    ##  my $o3 = ord $3;
+	    ##  my $o4 = ord $4;
+	    ##  my $o5 = ord $5;
+	    ##  my $o6 = ord $6;
+	    ##  my $o7 = ord $7;
+	    ##  my $o8 = ord $8;
+	    ##  my $o9 = ord $9;
+	    ##  my $o10 = ord $10;
+	    ##  my $o11 = ord $11;
+	    ##  my $o12 = ord $12;
+	    ##  print ">>$o1:$o2!$o3<<>>$o4:$o5!$o6<<>>$o7:$o8!$o9<<>>$o10:$o11!$o12<<\n";
+	    ##  printf ">>%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o:%3.3o<<\n",
+	    ##  $o1, $o2, $o3, $o4, $o5, $o6, $o7, $o8, $o9, $o10, $o11, $o12;
+	    ##  print "$line\n";
+	    ## }
+	    $line =~ s/\342\224\202/|/g;	# rman translates '|' into 226 148 130 ?!
+	    $line =~ s/\302-/-/g;	# precedes '-' for word syllabification from 'man'
             $text->insert('end', $line); # Ordinary text. Just insert.
         }
     }
@@ -178,6 +213,19 @@ sub create_ui {
     $search = $top->Entry ('-width' => 20,
                            )->pack('-side' => 'left');
     $search->bind('<KeyPress-Return>', \&search);
+
+    # Analyse command line ARGV
+    if (@ARGV) {
+	my ($section, $man) = @ARGV;	# classical man call sequence
+	if ($section) {
+	    if (is_valid_section("($section)") && $man) {	# 1 man
+		$show->insert('end', "$man($section)");
+	    } else {
+		$show->insert('end', $section);		# first parameter: man or man(1)
+	    }
+	    show_man();
+	}
+    }
 }
 
 sub is_valid_section {
