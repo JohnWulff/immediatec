@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.39 2001/04/14 13:32:05 jw Exp $";
+"@(#)$Id: genr.c,v 1.40 2001/04/18 12:00:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -113,7 +113,7 @@ op_force(		/* force linked Symbol to correct ftype */
 
     if (lp && (sp = lp->le_sym)->ftype != ftyp) {
 	if (sp->u.blist == 0 ||			/* not a $ symbol or */
-	    sp->type >= MAX_GT ||		/* SH, FF, EF, VF, SW, CF or */
+	    (sp->type & TM) >= MAX_GT ||	/* SH, FF, EF, VF, SW, CF or */
 	    sp->u.blist->le_sym == sp && sp->type == LATCH) { /* L(r,s) */
 	    lp1 = op_push(0, types[sp->ftype], lp);
 	    lp1->le_first = lp->le_first;
@@ -151,6 +151,7 @@ op_push(			/* reduce List_e stack to links */
     Symbol *		lsp;
     Symbol *		tsp;
     List_e *		lp;
+    int			typ;
 
     if (right == 0) {
 	if ((right = left) == 0) return 0;	/* nothing to push */
@@ -158,10 +159,11 @@ op_push(			/* reduce List_e stack to links */
     }
     rlp = right;
     sp = rlp->le_sym;
-    if (left && op > OR && op < MAX_LV && op != sp->type) {
+    typ = sp->type & TM;
+    if (left && op > OR && op < MAX_LV && op != typ) {
 	warning("function types incompatible", NS);
     }
-    if (sp->u.blist == 0 || op != sp->type) {
+    if (sp->u.blist == 0 || op != typ) {
 	/* right not a $ symbol or new operator - force new level */
 	sp = (Symbol *) emalloc(sizeof(Symbol));
 	sp->name = NS;		/* no name at present */
@@ -188,12 +190,12 @@ op_push(			/* reduce List_e stack to links */
 	    }
 	    sp->ftype |= lsp->ftype;	/* modify S_FF ==> D_FF */
 	}
-	if (lsp->type < MAX_LS) {
+	if ((typ = lsp->type & TM) < MAX_LS) {
 	    if ((lp = lsp->u.blist) == 0 ||	/* left not a $ symbol */
 		sp == lsp ||			/* or right == left */
-		lsp->type != op &&		/* or new operator */
-		lsp->type != TIM ||		/* but left is not a timer */
-		lsp->type == op &&		/* or old operator */
+		typ != op &&			/* or new operator */
+		typ != TIM ||			/* but left is not a timer */
+		typ == op &&			/* or old operator */
 		right->le_val == (unsigned) -1)	/* and right is a delay for timer */
 	    {
 		left->le_next = sp->u.blist;	/* extend expression */
@@ -334,6 +336,8 @@ op_not(List_e * right)		/* logical negation */
 	switch (sp->type) {			/* $ symbol */
 	case AND:
 	case OR:
+	case EXT_AND:
+	case EXT_OR:
 	    sp->type ^= (AND ^ OR);		/* de Morgans rule */
 	case LATCH:
 	    while (lp) {
@@ -343,14 +347,16 @@ op_not(List_e * right)		/* logical negation */
 		lp = lp->le_next;
 	    }
 	    break;
-	case ARN:
 	case ARNC:
+	case ARN:
+	case LOGC:
 	case SH:
 	case FF:
 	case VF:
 	case EF:
 	case SW:
 	case CF:
+	case EXT_ARN:
 	    right->le_val ^= NOT;	/* negate logical value */
 	    				/* forces creation of alias */
 	    break;			/* if assigned immediately */
@@ -403,6 +409,7 @@ op_asgn(				/* asign List_e stack to links */
     Symbol *	sr;
     char *	t_last = 0;
     char *	t_first = 0;
+    int		typ;
 
     right = op_force(rl->v, ft);	/* force Symbol on right to ftype ft */
     if (sv == 0) {
@@ -423,11 +430,11 @@ op_asgn(				/* asign List_e stack to links */
     }
 #endif
     rsp = right->le_sym;
-    if (var->type >= AND && var->type != rsp->type) {
+    if ((typ = var->type & TM) >= AND && typ != rsp->type & TM) {
 	error("type mismatch in multiple assignment:", var->name);
 	var->type = ERR;		/* reduce anyway to clear list */
     } else {
-	var->type = rsp->type;
+	var->type = rsp->type & TM;
 	if (var->ftype < MIN_ACT) {
 	    var->ftype = rsp->ftype;
 	}
@@ -475,8 +482,8 @@ op_asgn(				/* asign List_e stack to links */
 	if (debug & 04) {
 	    iFlag = 1;
 	    fprintf(outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
-		(rsp->type >= MAX_LV) ? os[rsp->type] : w(right),
-		os[var->type], var->name);
+		((typ = rsp->type & TM) >= MAX_LV) ? os[typ] : w(right),
+		os[var->type & TM], var->name);
 	}
 	if (sv == 0) {
 	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
@@ -491,8 +498,10 @@ op_asgn(				/* asign List_e stack to links */
     }
 
     if (rsp != (sp = templist)) {
+	if (sp == 0) goto FailTemplist;
 	while (rsp != sp->next) {
 	    if ((sp = sp->next) == 0) {			/* DEBUG */
+	      FailTemplist:
 		fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
 		execerror("right->le_sym not found in templist ???",
 		    right->le_sym->name);
@@ -502,7 +511,7 @@ op_asgn(				/* asign List_e stack to links */
 	rsp->next = templist;	/* link head to rsp */
 	templist = rsp;		/* now rsp is head of templist */
     }
-    if ((rsp->type == CLK || rsp->type == TIM) && var->ftype != rsp->ftype) {
+    if (((typ = rsp->type & TM) == CLK || typ == TIM) && var->ftype != rsp->ftype) {
 	warning("clock or timer assignment from wrong ftype:", var->name);
     }
 
@@ -609,7 +618,7 @@ op_asgn(				/* asign List_e stack to links */
 		    tlp->le_next = lp;	/* put new Symbol after last */
 		}
 		lp->le_sym = sp;	/* completely symmetrical */
-		if (gp->type < MAX_LV) {
+		if ((gp->type & TM) < MAX_LV) {
 		    gt_input++;		/* count the gate inputs */
 		}
 	    }
@@ -633,20 +642,20 @@ op_asgn(				/* asign List_e stack to links */
 		strcpy(gp->name, temp);	/* mark Symbol */
 	    }
 	    if (debug & 04) {
-		if (gp->type >= MAX_LV) {
-		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, os[gp->type],
-			os[sp->type]);
+		if ((typ = gp->type & TM) >= MAX_LV) {
+		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, os[typ],
+			os[sp->type & TM]);
 		} else if (gp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
 		    /* reference to a timer value - no link */
 		    fprintf(outFP, "\t%s\t%c<---%c", gp->name, fos[gp->ftype],
-			os[sp->type]);
+			os[sp->type & TM]);
 		} else if (gp->ftype != GATE) {
 		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, fos[gp->ftype],
-			os[sp->type]);
+			os[sp->type & TM]);
 		} else {
 		    if (sp->type == ALIAS) iFlag = 1;
 		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, w(lp),
-			os[sp->type]);
+			os[sp->type & TM]);
 		}
 		if (sflag) {
 		    fprintf(outFP, "\t%s", sp->name);
@@ -663,7 +672,7 @@ op_asgn(				/* asign List_e stack to links */
 		    fprintf(outFP, " (%d)", lp->le_val);
 		}
 	    }
-	    if (gp->ftype == ARITH && sp->type == ARN && lp->le_val != (unsigned) -1 &&
+	    if (gp->ftype == ARITH && (sp->type & TM) == ARN && lp->le_val != (unsigned) -1 &&
 		(gp->u.blist || gp->type == NCONST)) {
 		char	buffer[BUFS];	/* buffer for modified names */
 		char	iqt[2];		/* char buffers - space for 0 terminator */
@@ -709,7 +718,7 @@ op_asgn(				/* asign List_e stack to links */
 		warning("input equals output at gate:", sp->name);
 	    }
 	}					/* end output scan for 1 gate */
-	if (sp->type == ARN) {
+	if ((sp->type & TM) == ARN) {
 	    if (debug & 04) fprintf(outFP, "\t\t\t\t\t");
 	    while (t_first && t_first < t_last) {
 		if (*t_first != '#') {	/* transmogrified '=' */
@@ -756,7 +765,7 @@ op_asgn(				/* asign List_e stack to links */
 	    }
 	    if (sp) {
 		(void) place_sym(sp);	/* place sp in the symbol table */
-		if (sp->type == ARN) {
+		if ((sp->type & TM) == ARN) {
 		    assert(sp->list);
 		    t_first = sp->list->le_first;
 		    t_last = sp->list->le_last;
@@ -877,7 +886,7 @@ bTyp(List_e * lp)
     while (symp->type == ALIAS) {
 	symp = symp->list->le_sym;	/* with token of original */
     }
-    tp = symp->type;
+    tp = symp->type & TM;
     return tp >= MAX_GT ? (tp == SH || tp == INPW ? ARN : OR)
 			: tp == UDF ||
 			  symp->u.blist == 0 || 		  
@@ -912,7 +921,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 								  : cr1->v->le_sym)
 						/* or clone first clock or timer cr1 */
 			: sy_push(iclock);	/* or clone default clock iClock */
-	if (lp1 && lp1->le_sym->type == TIM) {
+	if (lp1 && (lp1->le_sym->type & TM) == TIM) {
 	    lp1 = lp1->le_next;
 	    assert(lp1);			/* clone associated timer value */
 	    assert(lp1->le_val == (unsigned) -1);
@@ -934,7 +943,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
     }
     lp1->le_first = ae1->f; lp1->le_last = ae1->l;
-    lp1 = op_push(cr1 ? cr1->v : sy_push(iclock), lp1->le_sym->type, lp1);
+    lp1 = op_push(cr1 ? cr1->v : sy_push(iclock), lp1->le_sym->type & TM, lp1);
     lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
 
     if (ae2) {
@@ -948,7 +957,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	if (lp2->le_sym->ftype == S_FF) {
 	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
 	}
-	lp2 = op_push(lpc, lp2->le_sym->type, lp2);
+	lp2 = op_push(lpc, lp2->le_sym->type & TM, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
     }
@@ -961,7 +970,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	if (lp2->le_sym->ftype == S_FF) {
 	    lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
 	}
-	lp2 = op_push(cr3->v, lp2->le_sym->type, lp2);
+	lp2 = op_push(cr3->v, lp2->le_sym->type & TM, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
 

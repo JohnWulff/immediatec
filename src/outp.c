@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.40 2001/04/15 06:40:01 jw Exp $";
+"@(#)$Id: outp.c,v 1.41 2001/04/18 12:00:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -101,6 +101,7 @@ unsigned short	aflag;			/* -a on compile to append output */
 
 static unsigned	block_total;		/* shared by listNet and buildNet */
 static unsigned	link_count;		/* shared by listNet and buildNet */
+static int	extFlag;		/* set if extern has been recognised */
 
 /********************************************************************
  *
@@ -126,12 +127,15 @@ listNet(unsigned * gate_count)
     if (debug & 020) fprintf(outFP, "\nNET TOPOLOGY\n");
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (sp->type < MAX_LS) {
-		gate_count[sp->type]++;
-		if (sp->type < MAX_OP) {
+	    if (sp->type & ~TM) {
+		extFlag = 1;
+	    }
+	    if ((typ = sp->type & TM) < MAX_LS) {
+		gate_count[typ]++;
+		if (typ < MAX_OP) {
 		    block_total++;
 		}
-		if (sp->type < MAX_LV &&	/* don't count outputs */
+		if (typ < MAX_LV &&	/* don't count outputs */
 		    sp->ftype != OUTX && sp->ftype != OUTW) {
 		    for (lp = sp->list; lp; lp = lp->le_next) {
 			if (sp->ftype >= MAX_AR || lp->le_val != (unsigned) -1) {
@@ -145,7 +149,7 @@ listNet(unsigned * gate_count)
 		}
 		if (debug & 020) {		/* print directed graph */
 		    fprintf(outFP, "\n%s\t%c  %c", sp->name,
-			os[sp->type], fos[sp->ftype]);
+			os[typ], fos[sp->ftype]);
 		    dc = 0;
 		    for (lp = sp->list; lp; lp = lp->le_next) {
 			Symbol * tsp = lp->le_sym;
@@ -160,15 +164,15 @@ listNet(unsigned * gate_count)
 			} else if (sp->ftype == TIMR && lp->le_val > 0) {
 			     /* timer preset off value */
 			    fprintf(outFP, "\t %s%c (%d)",
-				tsp->name, os[tsp->type], lp->le_val);
+				tsp->name, os[tsp->type & TM], lp->le_val);
 			} else if (sp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
 			    /* reference to a timer value - no link */
-			    fprintf(outFP, "\t<%s%c", tsp->name, os[tsp->type]);
+			    fprintf(outFP, "\t<%s%c", tsp->name, os[tsp->type & TM]);
 			} else {
 			    fprintf(outFP, "\t%c%s%c",
 				(sp->ftype == GATE || sp->ftype == OUTX) &&
 				lp->le_val ? '~' : ' ',
-				tsp->name, os[tsp->type]);
+				tsp->name, os[tsp->type & TM]);
 			}
 		    }
 		}
@@ -225,6 +229,11 @@ buildNet(Gate ** igpp)
     Gate *	gp;
     Gate **	fp;
     Gate **	ifp;
+
+    if (extFlag) {
+	fprintf(errFP, "extern declarations used - cannot execute\n");
+	return 1;	/* syntax or generate error */
+    }			/* no need to mask ->type & TM in buildNet() */
 
     /* initialise executable gates */
 
@@ -504,7 +513,11 @@ extern Gate *	l_[];\n\
 
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) < MAX_LV) {
+	    if ((typ = sp->type) == UDF || typ & ~TM) {
+		fprintf(Fp, "extern Gate	%s;\n", mN(sp));
+		linecnt++;
+	    }
+	    if ((typ &= TM) < MAX_LV) {
 		if ((dc = sp->ftype) == ARITH || dc == GATE) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			/* leave out timing controls */
@@ -525,11 +538,8 @@ extern Gate *	l_[];\n\
 		    tsp->u.val < lp->le_val) {
 		    tsp->u.val = lp->le_val;	/* store timer preset off value */
 		}				/* temporarily in u (which is 0) */
-		if (typ == UDF) {
-		    fprintf(Fp, "extern Gate	%s;\n", mN(sp));
-		    linecnt++;
-		} else if (dc == OUTW && (lp = sp->list) != 0) {
-		    fprintf(Hp, "#define %s	%s\n",
+		if (dc == OUTW && (lp = sp->list) != 0) {
+		    fprintf(Hp, "#define %s	%s\n", /* ZZZ no longer in use */
 			sp->name, lp->le_sym->name); /* back link to Hname */
 			/* important to use unmodified names here */
 		}
@@ -591,8 +601,8 @@ extern Gate *	l_[];\n\
 			sp->name);
 		    linecnt++;
 		} else if (sp->ftype == ARITH) {
-		    fprintf(Hp, "#define %s	%s\n",
-			mN(sp), mN(lp->le_sym));	/* ALIAS to Hname */
+		    fprintf(Hp, "#define %s	%s%s\n", mN(sp), /* ALIAS to Hname */
+			lp->le_sym->type == NCONST ? "_" : "", mN(lp->le_sym));
 		} else if (sp->ftype != GATE) {
 		    fprintf(Fp,
     "/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
@@ -606,7 +616,7 @@ extern Gate *	l_[];\n\
     /* do the timing controls last, to link them after their timer clock */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (sp->type < MAX_LV && sp->ftype < MAX_AR) {
+	    if ((sp->type & TM) < MAX_LV && sp->ftype < MAX_AR) {
 		for (lp = sp->list; lp; ) {
 		    if (lp->le_val == (unsigned) -1) {
 			tsp = lp->le_sym;		/* action gate */
@@ -674,7 +684,7 @@ extern Gate *	l_[];\n\
     sam = "";
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) > UDF && typ < MAX_OP &&
+	    if ((typ = sp->type) > UDF && typ < MAX_OP && /* leave out EXT_TYPES */
 		strcmp(sp->name, "iClock") != 0) {
 		mask = 0;
 		modName = mN(sp);	/* modified string, byte and bit */
@@ -711,7 +721,7 @@ extern Gate *	l_[];\n\
 			fprintf(Fp,
     "/* error in emitting code. Action gate '%s' has no clock */\n",
 			    sp->name);	/* ZZZ wrong format */
-		    } else if (lp->le_sym->type == TIM) {
+		    } else if ((lp->le_sym->type & TM) == TIM) {
 			li++;	/* space for pointer to time value Gate */
 		    }
 		} else if (dc == OUTW) {
@@ -888,7 +898,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) != UDF && typ < MAX_GT) {
+	    if ((typ = sp->type) > UDF && typ < MAX_GT) { /* leave aout EXT_TYPES */
 		int		len = 16;
 		char *	fs = strlen(sp->name) > 1 ? "\t" : "\t\t";
 
@@ -915,7 +925,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
 				fs, mN(tsp));		/* clock or timer */
-			    if (tsp->type == TIM && (lp = lp->le_next) != 0) {
+			    if ((tsp->type & TM) == TIM && (lp = lp->le_next) != 0) {
 				/* error message already in last loop */
 				len += strlen((tsp = lp->le_sym)->name) + 3;
 				fprintf(Fp, "%s&%s%s,",	/* time value */

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.50 2001/04/14 13:32:05 jw Exp $";
+"@(#)$Id: comp.y,v 1.51 2001/04/18 12:00:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -102,10 +102,10 @@ pu(int t, char * token, Lis * node)
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
 %type	<sym>	program statement simplestatement lBlock variable
-%type	<sym>	decl asgn dasgn casgn tasgn
+%type	<sym>	decl extDecl asgn dasgn casgn tasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
 %type	<list>	cref ctref ctdref dexpr funct params plist
-%type	<val>	cBlock declHead
+%type	<val>	cBlock declHead extDeclHead
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
@@ -132,20 +132,49 @@ program	: /* nothing */		{ $$.v = 0;  stmtp = yybuf; }
 	| program error ';'	{ $$.v = 0;  stmtp = yybuf; iclock->type = ERR; yyerrok; }
 	;
 
-statement:
-	  ';'			{ $$.v = 0;  }
+statement
+	: ';'			{ $$.v = 0;  }
 	| simplestatement ';'	{ $$   = $1; }
 	| ffexpr		{ $$.v = op_asgn(0, &$1, GATE); }
 	    /* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
 	| lBlock		{ $$.v = 0;  }
 	;
 
-simplestatement:
-	  decl			{ $$ = $1; }
-	| asgn			{ $$ = $1; }
+simplestatement
+	: extDecl		{ $$ = $1; }
+	| decl			{ $$ = $1; }
 	| dasgn			{ $$ = $1; }
+	| asgn			{ $$ = $1; }
 	| casgn			{ $$ = $1; }
 	| tasgn			{ $$ = $1; }
+	;
+
+	/************************************************************
+	 *
+	 * Extern type declarations - no assignment in the same source
+	 *
+	 *	extern imm bit   b1;	extern imm int   a1;
+	 *	extern imm clock c1;	extern imm timer t1;
+	 *
+	 ***********************************************************/
+
+extDecl	: extDeclHead UNDEF	{
+		$$.v = $2.v;
+		$$.v->ftype = $1.v & 0xff;
+		$$.v->type = $1.v >> 8;
+	    }
+	;
+
+extDeclHead
+	: EXTERN IMM TYPE	{
+		int	ftyp;
+		ftyp = $3.v->ftype;
+		if (ftyp >= CLCKL) {		/* check that CLCKL TIMRL */
+		    ftyp -= CLCKL - CLCK;	/* and CLCK and TIMR are adjacent */
+		}
+		$$.v = stype = $3.v->ftype | (types[ftyp] | TM+1) << 8;
+	    }
+	| extDecl ','		{ $$.v = stype;	/* first TYPE */ }
 	;
 
 	/************************************************************
@@ -155,47 +184,39 @@ simplestatement:
 	 *	imm bit   b1;		imm int   a1;
 	 *	imm clock c1;		imm timer t1;
 	 *
-	 * Extern type declerations - no assignment in the same source
-	 *
-	 *	extern imm bit   b1;	extern imm int   a1;
-	 *	extern imm clock c1;	extern imm timer t1;
-	 *
 	 ***********************************************************/
 
 decl	: declHead UNDEF	{
 		$$.v = $2.v;
-		$$.v->ftype = $1.v & 0xff;	/* TYPE int ARITH or bit GATE */
-		$$.v->type = $1.v >> 8;		/* UNDEF for IMM TYPE */
+		$$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
+		$$.v->type = $1.v >> 8;		/* UDF for all TYPEs */
 	    }
 	;
 
-declHead			/* NOTE: stype gets type out of ftype */
-	: TYPE			{		/* ARNC or LOGC */
-		$$.v = stype = $1.v->ftype | types[$1.v->ftype] << 8;
-	    }
-	| IMM TYPE		{ $$.v = stype = $2.v->ftype; }
-	| EXTERN IMM TYPE	{ $$.v = stype = $3.v->ftype; }
+declHead
+	: IMM TYPE		{ $$.v = stype = $2.v->ftype; }
 	| decl ','		{ $$.v = stype;	/* first TYPE */ }
 	| dasgn ','		{ $$.v = stype;	/* first TYPE */ }
 	;
 
 	/************************************************************
 	 *
-	 * Assignment as an expression - dasgn is NOT an aexpr
+	 * Assignment combined with a declaration
 	 *
 	 ***********************************************************/
 
-aexpr	: expr			{
-		$$ = $1;
-		if ($$.v != 0) {
-		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
+		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v == 0) {
+		    if ($1.v->ftype != ARITH) { $$.v = 0; warnBit(); YYERROR; }
+		    else if (const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
 		}
-	    }
-	| asgn			{
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = sy_push($1.v);
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "aexpr", &$$);
+		if ($1.v->type != UDF && $1.v->type != ERR) {
+		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
+		if (debug & 02) pu(0, "dasgn", (Lis*)&$$);
 	    }
 	;
 
@@ -208,7 +229,7 @@ aexpr	: expr			{
 asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
-		$1.v->ftype = GATE;
+		$1.v->ftype = GATE;	/* implicitly declared as 'imm bit' */
 		$$.v = op_asgn(&$1, &$3, GATE);	/* UNDEF is default GATE */
 		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
@@ -274,18 +295,23 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 	    }
 	;
 
-dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
-		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) {
-		    if ($1.v->ftype != ARITH) { $$.v = 0; warnBit(); YYERROR; }
-		    else if (const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
+	/************************************************************
+	 *
+	 * Assignment as an expression - dasgn is NOT an aexpr
+	 *
+	 ***********************************************************/
+
+aexpr	: expr			{
+		$$ = $1;
+		if ($$.v != 0) {
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if ($1.v->type != UDF && $1.v->type != ERR) {
-		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
-		if (debug & 02) pu(0, "dasgn", (Lis*)&$$);
+	    }
+	| asgn			{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = sy_push($1.v);
+		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		if (debug & 02) pu(1, "aexpr", &$$);
 	    }
 	;
 
@@ -326,7 +352,7 @@ expr	: UNDEF			{
 		sp = $1.v->le_sym;
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = $1.v;
-		if (sp->ftype != ftypes[sp->type]) {
+		if (sp->ftype != ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
@@ -456,12 +482,13 @@ expr	: UNDEF			{
 
 	| expr AA expr	{			/* binary && */
 		Symbol *	sp;
+		int		typ;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
-		    (sp->type > ARN || sp->type == UDF || !sp->u.blist) &&
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
-		    (sp->type > ARN || sp->type == UDF || !sp->u.blist)) {
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist)) {
 		    $$.v = op_push(op_force($1.v, GATE),
 			AND, op_force($3.v, GATE));	/* logical & */
 		} else {
@@ -476,12 +503,13 @@ expr	: UNDEF			{
 	    }
 	| expr OO expr	{			/* binary || */
 		Symbol *	sp;
+		int		typ;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
-		    (sp->type > ARN || sp->type == UDF || !sp->u.blist) &&
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
-		    (sp->type > ARN || sp->type == UDF || !sp->u.blist)) {
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist)) {
 		    $$.v = op_push(op_force($1.v, GATE),
 			OR, op_force($3.v, GATE));	/* logical | */
 		} else {
@@ -507,9 +535,10 @@ expr	: UNDEF			{
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
 		if ($2.v) {
+		    int typ;
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
-			((sp->type != ARNC && sp->type != ARN &&
-			sp->type != SH) || sp->u.blist == 0)) {
+			(((typ = sp->type & TM) != ARNC && typ != ARN &&
+			typ != SH) || sp->u.blist == 0)) {
 						/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
 		    } else {
@@ -747,7 +776,7 @@ cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 	| casgn			{ $$.v = sy_push($1.v); }
 	| cfexpr		{
 		Symbol *	sp = $1.v->le_sym;
-		if (sp->ftype != ftypes[sp->type]) {
+		if (sp->ftype != ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = CLCKL;	/* clock list head */
@@ -786,7 +815,7 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 	| tasgn			{ $$.v = sy_push($1.v); }
 	| tfexpr		{
 		Symbol *	sp = $1.v->le_sym;
-		if (sp->ftype != ftypes[sp->type]) {
+		if (sp->ftype != ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = TIMRL;	/* timer list head */
@@ -887,7 +916,13 @@ plist	: aexpr			{
 	    }
 	;
 
-%%	/* end of grammar */
+	/************************************************************
+	 *
+	 * end of iC grammar
+	 *
+	 ***********************************************************/
+
+%%
 
 #define CBUFSZ 125			/* listing just fits on 132  cols */
 #define YTOKSZ 66
@@ -1128,7 +1163,7 @@ yylex(void)
 	    } else if (qtoken) {
 		c = qtoken;			/* LOUT or AOUT */
 	    } else if (typ == ARNC || typ == LOGC || dflag && typ == NCONST) {
-		c = lex_typ[symp->type];	/* NCONST via ALIAS ==> NVAR */
+		c = lex_typ[symp->type & TM];	/* NCONST via ALIAS ==> NVAR */
 	    } else {
 		c = lex_act[symp->ftype];	/* alpha_numeric symbol */
 	    }
