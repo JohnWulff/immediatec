@@ -43,7 +43,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.18 2001/03/16 17:32:53 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.19 2001/03/19 07:07:27 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -54,45 +54,45 @@ usage()
 
 process()
 {
-    if [[ $t = 1 ]]; then
+    if [ "$t" = 1 ]; then
 	echo "Differences in directory $PWD and $dir"
 	date
     fi
 
     status=0
     for f in $files; do
-	if [[ -f $f ]]; then
+	if [ -f "$f" ]; then
 	    d=${f##*/}
-	    if [[ -f $dir/$d ]]; then
+	    if [ -f "$dir/$d" ]; then
 		if diff -q $w $f $dir/$d > /dev/null; then
-		    if [[ $q = 0 ]]; then
-			[[ $i = 0 ]] || echo "========== $f =========="
-		    elif [[ $li = 3 ]]; then
+		    if [ "$q" = 0 ]; then
+			[ "$i" = 0 ] || echo "========== $f =========="
+		    elif [ "$li" = 3 ]; then
 			echo $f
 		    fi
 		else
 		    let status+=1
-		    if [[ $q = 0 ]]; then
+		    if [ "$q" = 0 ]; then
 			echo
 			echo "########## $f ##########"
 			ls -lL $f
 			ls -lL $dir/$d
 			diff $w $context $f $dir/$d
-		    elif [[ $li = 1 ]]; then
+		    elif [ "$li" = 1 ]; then
 			echo $f
 		    fi
 		fi
-	    elif [[ $e != 0 ]]; then
+	    elif [ "$e" != 0 ]; then
 		let status+=1
-		if [[ $q = 0 ]] || [[ $li = 2 ]]; then
+		if [ "$q" = 0 ] || [ "$li" = 2 ]; then
 		    echo "********** $dir/$d does not exist"
-		elif [[ $li = 1 ]]; then
+		elif [ "$li" = 1 ]; then
 		    echo $f
 		fi
 	    fi
 	fi
     done
-    if [[ $status != 0 ]] && [[ $q = 0 ]]; then
+    if [ "$status" != 0 ] && [ "$q" = 0 ]; then
 	echo
 	echo "########## $status files differ ##########"
     fi
@@ -110,11 +110,11 @@ files='[Mm]akefile* *.[chv]*'
 i=0; e=0; t=0; q=0; li=0; w=-w; pipe=0
 context=''
 
-while [[ $# > 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
-	while [[ -n $option ]]; do
+	while [ -n "$option" ]; do
 	    case $option in
 	    e*)	e=1;;
 	    i*)	i=1; let "li|=2";;
@@ -139,27 +139,27 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $# -eq 0 ]]; then
+if [ $# = 0 ]; then
     dir='..'
-elif [[ -d $1 ]]; then
+elif [ -d "$1" ]; then
     dir=$1			# first argument is directory (backwards compatible)
     shift
-    if [[ $# != 0 ]]; then
+    if [ $# != 0 ]; then
 	files=$*
-	if [[ $# -eq 1 ]]; then
+	if [ $# = 1 ]; then
 	    e=1;		# for single file argument, check if other file exists
 	fi
     fi
 else
     files=''			# there must be at least 1 nondirectory
-    if [[ $# -le 2 ]]; then
+    if [ $# -le 2 ]; then
 	e=1;			# for single file argument, check if other file exists
     fi
-    while [[ $# -gt 1 ]]; do
+    while [ $# -gt 1 ]; do
 	files="$files $1"
 	shift
     done
-    if [[ -d $1 ]]; then
+    if [ -d "$1" ]; then
 	dir=$1			# last argument is directory
     else
 	dir='..'
@@ -167,7 +167,7 @@ else
     fi
 fi
 
-if [[ $pipe = 0 ]]; then
+if [ "$pipe" = 0 ]; then
     process
 else
     process | less

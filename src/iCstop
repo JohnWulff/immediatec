@@ -34,7 +34,7 @@ usage()
   echo '          named directories in their program path are killed. (A feature)' >&2
   echo " EXAMPLE: $name -a bin; stops all programs out of /bin/ /usr/bin/ ..." >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: iCstop,v 1.5 2001/03/16 17:32:53 archiv Exp $' >&2
+  echo '$Id: iCstop,v 1.6 2001/03/19 07:07:27 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -45,7 +45,7 @@ usage()
 
 processNumbers()
 {
-    if [[ -z "$a" ]]; then
+    if [ -z "$a" ]; then
 	ps | grep -w $p | awk '{ printf (" %s", $1) }'
     else
 	ps$a | grep -w $p | egrep -vw "(egrep|$name)" | awk '{ printf (" %s", $1) }'
@@ -62,15 +62,15 @@ process()
 {
     status=0
     for p in $programs; do
-	if [[ $l != 1 || -x $p && -f $p ]]; then
+	if [ "$l" != 1 ] || [ -x $p -a -f $p ]; then
 	    pids=$(processNumbers)
-	    if [[ -n "$pids" ]]; then
-		if [[ $e != 1 ]]; then
+	    if [ -n "$pids" ]; then
+		if [ "$e" != 1 ]; then
 		    kill $s$pids
-		    if [[ -n $(processNumbers) ]]; then
+		    if [ -n $(processNumbers) ]; then
 			sleep 1		# some processes take a little time to die
 			pids1=$(processNumbers)
-			if [[ -n "$pids1" ]]; then
+			if [ -n "$pids1" ]; then
 			    echo "$p:$pids kill $sd,$pids1 NOT killed; try stop -9"
 			    let status=$status+1
 			    continue
@@ -99,14 +99,14 @@ s=""
 a=""
 sd="-15"
 
-while [[ $# > 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -[0-9]*) s="$1"; sd="$1";;	# last signal wins if more than one
     -a)  a=" a";;	# all processes including those of other users
     -ax) a=" ax";;	# all processes including those not controlled by a terminal
     -*)	option=${1#?}
-	while [[ -n $option ]]; do
+	while [ -n "$option" ]; do
 	    case $option in
 	    e*)	e=1;;	# echo only - dont kill
 	    l*)	l=1;;	# local programs only
@@ -123,7 +123,7 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $# == 0 ]]; then
+if [ $# = 0 ]; then
     programs=*
     l=1			# local programs only
 else
