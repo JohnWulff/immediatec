@@ -1,0 +1,51 @@
+#!/usr/bin/perl -w
+
+########################################################################
+#
+#	Dummy PPLC client for testing ICServer and DemoBox
+#
+########################################################################
+
+use Msg;
+use strict;
+
+my $host = 'localhost';
+my $port = 8080;
+
+my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+		       
+die "Client could not connect to $host:$port\n" unless $conn;
+print "Connection successful.\n";
+my $connected = 1;
+
+$conn->send_now("P0");		# register PPLC
+
+while ($connected) {
+    for my $unitID (qw(X0 X1 X2 X3)) {
+	my $x = int rand 8;
+	my $y = int rand 2;
+	my $msg = "$unitID,$x,$y";
+	$conn->send_now($msg);
+#	print "$msg from P0\n";
+    }
+    Msg->event_loop(0.01);
+}
+
+########################################################################
+#
+#	Receive message from server
+#
+########################################################################
+
+sub rcvd_msg_from_server {
+    my ($conn, $msg, $err) = @_;
+    if (defined $msg) {
+	if (length $msg != 0) {
+	    print "$msg\n";
+	} else {
+	    $conn->disconnect();
+	    $connected = 0;
+	    print "DummyPPLC disconnected by server\n";
+	}
+    }
+}
