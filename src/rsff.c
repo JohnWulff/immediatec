@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.15 2001/01/20 22:47:00 jw Exp $";
+"@(#)$Id: rsff.c,v 1.16 2001/01/25 08:55:41 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -13,6 +13,29 @@ static const char rsff_c[] =
 #ifdef TCP 
 #include	"tcpc.h"
 #endif
+
+unsigned char	bitMask[] = {
+    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
+};
+
+unsigned char	bitIndex[] = {
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	/* 0x01 0x02 0x04 0x08 */
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	/* 0x10 */
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x20 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x40 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x80 */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
 
 /********************************************************************
  *
@@ -566,7 +589,7 @@ fScf(					/* F_CF slave action on CF */
 
 /********************************************************************
  *
- *	Output to a word or byte whose byte address is in gt_list.
+ *	Output to a word or byte whose slot index is in gt_list.
  *		gt_mark == 1 means 1 byte is output
  *		gt_mark == 2 means 2 bytes or 1 word is output
  *
@@ -588,14 +611,18 @@ outMw(					/* OUTW master action */
     register Gate *	gp,		/* NOTE: there is no slave action */
     Gate *		out_list)
 {
-    int	val;
+    int			val;
+    int			slot;
+    int			cage;
+    uchar		mask;
 #ifdef TCP 
-    int			unit;
     char		msg[16];
 
-    unit = (uchar*)gp->gt_list - QX_;
 #endif
-    assert(gp->gt_list && gp->gt_mark & 0xff);
+    slot = (int)gp->gt_list;
+    mask = (uchar)gp->gt_mark;
+    assert(slot < IXD && mask);
+    cage = slot >> 3;			/* IXD must be <= 64 for this scheme */
 #ifdef MIXED
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
@@ -605,22 +632,26 @@ outMw(					/* OUTW master action */
 #endif
 
     val = gp->gt_old = gp->gt_new;	/* update gt_old since no link_ol */
-    if (gp->gt_mark == 1) {
+    if (mask == 1) {
 #ifndef _WINDOWS
 	val &= 0xff;			/* for display only */
 #endif
-	*(char*)gp->gt_list = val;	/* output byte */
+	QX_[slot] = val;		/* output byte to slot */
+	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
+	QMM |= bitMask[cage & 0x7];		/* mark the rack */
 #ifdef TCP 
 	if ((debug & 0400) == 0) {
-	    sprintf(msg, "B%d,%d", unit, val);
+	    sprintf(msg, "B%d,%d", slot, val);
 	    send_msg_to_server(sockFN, msg);
 	}
 #endif
-    } else if (gp->gt_mark == 2) {
-	*(int*)gp->gt_list = val;	/* output word */
+    } else if (mask == 2) {
+	*(int*)&QX_[slot] = val;	/* output word to slot and slot+1 */
+	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
+	QMM |= bitMask[cage & 0x7];		/* mark the rack */
 #ifdef TCP 
 	if ((debug & 0400) == 0) {
-	    sprintf(msg, "W%d,%d", unit, val);
+	    sprintf(msg, "W%d,%d", slot, val);
 	    send_msg_to_server(sockFN, msg);
 	}
 #endif
@@ -636,7 +667,7 @@ outMw(					/* OUTW master action */
 
 /********************************************************************
  *
- *	Output a bit to a bit field whose byte address is in gt_list.
+ *	Output a bit to a bit field whose slot index is in gt_list.
  *		gt_mark contains the bit position as a bit mask.
  *
  *	For initialisation purposes this ftype OUTX Gate is acted on
@@ -656,15 +687,17 @@ outMx(					/* OUTX master action */
     register Gate *	gp,		/* NOTE: there is no slave action */
     Gate *		out_list)
 {
-    uchar		field;
+    int			slot;
+    int			cage;
+    uchar		mask;
 #ifdef TCP 
-    int			unit;
     char		msg[16];
 
-    unit = (uchar*)gp->gt_list - QX_;
 #endif
-    field = (uchar)gp->gt_mark;
-    assert(gp->gt_list && field);
+    slot = (int)gp->gt_list;
+    mask = (uchar)gp->gt_mark;
+    assert(slot < IXD && mask);
+    cage = slot >> 3;			/* IXD must be <= 64 for this scheme */
 #ifdef MIXED
     if (out_list == a_list) {
 	/* called from arithmetic scan - convert a to d */
@@ -673,19 +706,21 @@ outMx(					/* OUTX master action */
     }
 #endif
     if (gp->gt_val & 0x80) {		/* output action */
-	*(uchar*)gp->gt_list |= field;	/* set bit */
+	QX_[slot] |= mask;		/* set bit at slot,mask */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('1', outFP);
 #endif
     } else {
-	*(uchar*)gp->gt_list &= ~field;	/* clear bit */
+	QX_[slot] &= ~mask;		/* clear bit at slot,mask */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('0', outFP);
 #endif
     }
+    QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
+    QMM |= bitMask[cage & 0x7];		/* mark the rack */
 #ifdef TCP 
     if ((debug & 0400) == 0) {
-	sprintf(msg, "X%d,%u", unit, *(uchar*)gp->gt_list);
+	sprintf(msg, "X%d,%u", slot, QX_[slot]);
 	send_msg_to_server(sockFN, msg);
     }
 #endif
