@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl -w -P
 
 ########################################################################
 #
@@ -37,13 +37,19 @@
 #	Byte and Word sources may all numbers X0 X1 .. X31 B0 B1 .. B31
 #	Word source and sink Units must be even W0 W2 W4 .. W30
 #
-#	The Server receives messages from the I/O's, identifies the
+#	The Server receives messages from the I/Os, identifies the
 #	UnitID under which that I/O is registered and prefixes the
 #	UnitID and a full stop to the message and sends it on to the ICT.
 #
 #	Messages received from the ICT are stripped of the leading
 #	UnitID and comma. The rest is sent to the I/O Unit corresponding
 #	to the UnitID stripped from the message.
+#
+#	For measuring reaction times the Module Time::HiRes may be used.
+#	This activates the -m option.
+#	Make sure you have downloaded and installed Time::HiRes from CPAN
+#	Uncomment the C++ comment in the next line
+#//define TIME_HIRES
 #
 ########################################################################
 
@@ -69,11 +75,11 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	-p port	service port for server and all clients (default '8778')
 	-t	trace messages for debugging
 	-m	display elapsed time in seconds and microseconds
-		(Requires Module Time::HiRes available from CPAN)
+	    (Requires Module Time::HiRes available from CPAN - see source)
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.16 2001/02/21 16:21:04 jw Exp $
+$Id: ICServer,v 1.17 2001/03/01 13:12:11 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
@@ -83,12 +89,14 @@ require "getopts.pl";
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
+#ifdef TIME_HIRES 
 
 my ($t0, $t1);
 if ($opt_m) {
     use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
     $t0 = [gettimeofday];	# start of program
 }
+#endif
 
 ########################################################################
 #
@@ -121,7 +129,7 @@ ARG: while ($ARGV = shift @ARGV) {
 	    splice @call, 1, 0, '-m' if defined $opt_m;
 	    print "@call\n";
 	    exec @call;
-	    exit;		# child process can't be executed
+	    exit;		# child process cannot be executed
 	} elsif ($! =~ /No more process/) {
 	    # EAGAIN, recoverable fork error
 	    sleep 5;
@@ -157,6 +165,7 @@ sub login_proc {
 
 sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
+#ifdef TIME_HIRES 
     my ($sec, $usec);
     if ($opt_m) {
 	$t1 = [gettimeofday];
@@ -172,10 +181,11 @@ sub rcvd_msg_from_client {
 	    printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
 	}
     }
+#endif
     if (defined $msg) {
 	my $unitID = $UnitIDs{$conn};
 	my $len = length $msg;
-# print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
+#	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
 	if ($len == 0) {
 	    if (defined $unitID and exists $Connections{$unitID}) {
 		delete $Connections{$unitID};
@@ -255,7 +265,9 @@ sub rcvd_msg_from_client {
 	    print "I$unitID $msg to dummy C0\n" if $opt_t;
 	}
     }
+#ifdef TIME_HIRES 
     if ($opt_m) {
 	$t0 = [gettimeofday];
     }
+#endif
 }
