@@ -73,7 +73,7 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.11 2001/01/20 11:00:37 jw Exp $
+$Id: ICServer,v 1.12 2001/01/22 20:27:41 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -136,7 +136,7 @@ Msg->event_loop();
 
 sub login_proc {
     my ($conn, $host, $port) = @_;
-    print "Connection    at server. $conn $host:$port\n";
+    print "Connection $host:$port at server\n";
     # Unconditionally accept an incoming connection request
     $UnitIDs{$conn} = undef;
     return \&rcvd_msg_from_client;
@@ -183,13 +183,12 @@ sub rcvd_msg_from_client {
 		    foreach $con1 (sort keys %UnitIDs) {
 			$uID = $UnitIDs{$con1};
 			if (defined $uID) {
-			    print"$uID [$Connections{$uID}] ";
 			    if ($uID =~ /^[BWX]/) {
 				if (defined $Connections{$uID}) {
 				    $Connections{$uID}->send_now("R");
-				    print "R to $uID\n" if $opt_t;
+				    print "$msg R to $uID\n" if $opt_t;
 				} else {
-				    print "R to dummy $uID\n" if $opt_t;
+				    print "$msg R to dummy $uID\n" if $opt_t;
 				}
 				$Values{$uID} = 0;	# save latest bit or analog value
 			    }
@@ -198,12 +197,12 @@ sub rcvd_msg_from_client {
 		}
 		$UnitIDs{$conn} = $msg;
 		$Connections{$msg} = $conn;
-		print "Registered $msg at server. $conn\n";
+		print "Registered $msg at server\n";
 		if ($msg =~ /^[BWX]/) {			# saved bit or analog value from PPLC
 		    $value = $Values{$msg};
 		    if ($value) {
 			$Connections{$msg}->send_now("$value");
-			print "$value to $msg\n" if $opt_t;
+			print "IS $value to Q$msg\n" if $opt_t;
 		    }
 		}
 	    }
@@ -212,9 +211,9 @@ sub rcvd_msg_from_client {
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
 		if (defined $Connections{$uID}) {
 		    $Connections{$uID}->send_now("$value");
-		    print "$value to $uID\n" if $opt_t;
+		    print "$unitID $value to Q$uID\n" if $opt_t;
 		} else {
-		    print "$value to dummy $uID\n" if $opt_t;
+		    print "$unitID $value to dummy Q$uID\n" if $opt_t;
 		}
 		$Values{$uID} = $value;			# save latest analog value
 	    } else {
@@ -223,9 +222,9 @@ sub rcvd_msg_from_client {
 	} elsif (defined $connPPLC) {			# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
 	    $connPPLC->send_now("$unitID,$msg");
-	    print "$unitID,$msg to   P0\n" if $opt_t;
+	    print "I$unitID $msg to P0\n" if $opt_t;
 	} else {
-	    print "$unitID,$msg to dummy P0\n" if $opt_t;
+	    print "I$unitID $msg to dummy P0\n" if $opt_t;
 	}
     }
 }

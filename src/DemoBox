@@ -11,14 +11,16 @@
 use Tk;					# Slurp the module in
 use Msg;
 use strict;
-# use Devel::Peek 'Dump';		# ZZZ
+#use Devel::Peek 'Dump';		# ZZZ
 
 my @inputs;
 my @outputs;
-my $outByte = 0;		# initialize to a number for correct XOR
+my $inByte =	0;		# initialize to a number for correct OR
+my $outByte =	0;		# initialize to a number for correct XOR
 
 my @indices;			# initialize on startup
-my @masks = (1, 2, 4, 8, 16, 32, 64, 128);
+my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
+my @invert =	(1, 0);		# invert logic sense
 
 ########################################################################
 #
@@ -35,7 +37,7 @@ Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	unitID	default is 'X0'
 	-t	trace debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.23 2001/01/21 11:32:37 jw Exp $
+$Id: DemoBox,v 1.24 2001/01/22 20:27:41 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -71,9 +73,9 @@ my $unitID = (@ARGV >= 1) ? $ARGV[0] : 'X0';
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client could not connect to $host:$port\n" unless $conn;
-print "Connection $unitID at client.\n";
 
 $conn->send_now($unitID);		# register I/O
+print "Connection $unitID at client.\n";
 
 ########################################################################
 #
@@ -87,18 +89,11 @@ $mainWindow->Label(-text => "iC Demo Box")->pack;
 
 $mainWindow->Button(-text    => "Exit",
 		    -command => sub {
-					if ($unitID =~ /^[X]/) {
-					    for my $index (0 .. 7) {
-						if ($inputs[$index]) {
-						    print "   $index,0 from $unitID\n" if $opt_t;
-						    $conn->send_now("$index,0");
-						}
-					    }
-					} elsif ($unitID =~ /^[BW]/ and $inputs[0]) {
-					    print "   0 from $unitID\n" if $opt_t;
+					if ($unitID =~ /^[BWX]/ and $inByte) {
 					    $conn->send_now("0");
+					    print "   0 from $unitID\n" if $opt_t;
 					}
-					sleep 1;
+#					sleep 1;
 					exit;
 				    },
 		   )->pack(-side   => 'bottom', 
@@ -150,8 +145,13 @@ if ($unitID =~ /^X/) {
 		-variable    => \\\$inputs[\$index],\
 		-selectcolor => 'green',\
 		-command     => sub {\
-				     print \"   $index,\$inputs[$index] from $unitID\\n\" if \$opt_t;\
-				     \$conn->send_now(\"$index,\$inputs[$index]\");\
+				     if (\$inputs[$index]) {\
+					 \$inByte |= $masks[$index];	# set bit\
+				     } else {\
+					 \$inByte &= ~$masks[$index];	# clear bit\
+				     }\
+				     \$conn->send_now(\"\$inByte\");\
+				     print \"   $index,\$inputs[$index] (\$inByte) from $unitID\\n\" if \$opt_t;\
 				    },\
 	    )->pack(-side   => 'top',\
 		    -expand => 1,\
@@ -168,11 +168,11 @@ if ($unitID =~ /^X/) {
 		-text        => \$output,\
 		-variable    => \\\$outputs[\$index],\
 		-selectcolor => 'red',\
-    #	    -state       => 'disabled',\
+#		-state       => 'disabled',\
 		-takefocus   => 0,\
 		-command     => sub {\
 				     print \"Inverting output $index on Q$unitID\\n\" if \$opt_t;\
-				     \$outputs[$index] = [1,0]->[\$outputs[$index]];\
+				     \$outputs[$index] = \$invert[\$outputs[$index]];\
 				    },\
 	    )->pack(-side   => 'top',\
 		    -expand => 1,\
@@ -198,11 +198,11 @@ elsif ($unitID =~ /^[BW]/) {
 #		-label       => $input,
 		-from        => 0,
 		-to          => 100,
-		-variable    => \$inputs[0],
+		-variable    => \$inByte,
 		-command     => sub {
-				     if (length $inputs[0]) {
-					 print "   $inputs[0] from $unitID\n" if $opt_t;
-					 $conn->send_now("$inputs[0]");
+				     if (length $inByte) {
+					 $conn->send_now("$inByte");
+					 print "   $inByte from $unitID\n" if $opt_t;
 				     }
 				    },
 	    )->pack(-side   => 'top',
@@ -254,7 +254,7 @@ sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
         my $len = length ($msg);
-# print "($len)$msg\n";
+#	print "($len)$msg\n";
 	if ($len == 0) {
 	    $conn->disconnect();
 	    print "DemoBox $unitID disconnected by server\n";
@@ -267,19 +267,19 @@ sub rcvd_msg_from_server {
 			print "init Q$unitID.$index 0 <-- 1\n" if $opt_t;
 			$outputs[$index] = 0;
 		    }
-		    if ($inputs[$index]) {
-			print "send I$unitID.$index 0 --> 1\n" if $opt_t;
-			$conn->send_now("$index,$inputs[$index]");
-		    }
 		}
 		$outByte = 0;
+		if ($inByte) {
+		    $conn->send_now("$inByte");
+		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
+		}
 	    } elsif ($msg =~ /^\d+$/) {
 		my $mask = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
 #		Dump $mask;			# ZZZ
-		printf("Q%s %02x %02x\n", $unitID, $msg, $mask) if $opt_t;
+#		printf("Q%s %02x %02x\n", $unitID, $msg, $mask) if $opt_t;
 		for my $index (@{$indices[$mask]}) {
 		    my $value = ($msg & $masks[$index]) ? 1 : 0;
-		    print "Q$unitID.$index $value <-- $outputs[$index]\n" if $opt_t;
+		    print "Q$unitID.$index $value <-- $outputs[$index] ($msg)\n" if $opt_t;
 		    $outputs[$index] = $value;
 		}
 		$outByte = $msg;
@@ -292,9 +292,9 @@ sub rcvd_msg_from_server {
 		    print "init Q$unitID 0 <-- $outputs[0]\n" if $opt_t;
 		    $outputs[0] = 0;
 		}
-		if (length $inputs[0] and $inputs[0]) {
-		    print "send I$unitID 0 --> $inputs[0]\n" if $opt_t;
-		    $conn->send_now("$inputs[0]");
+		if (length $inByte and $inByte) {
+		    $conn->send_now("$inByte");
+		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
 		}
 	    } elsif ($msg =~ /^\d+$/) {
 		print "Q$unitID $msg <-- $outputs[0]\n" if $opt_t;

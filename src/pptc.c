@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.7 2001/01/14 22:37:40 jw Exp $";
+"@(#)$Id: pptc.c,v 1.8 2001/01/22 20:29:02 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -58,6 +58,8 @@ Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
 Gate *		IW_[IXD];		/* pointers to Word Input Gates */
 Gate *		TX_[TXD*8];		/* pointers to System Bit Gates */
 unsigned char	QX_[IXD];		/* Output bit field */
+
+unsigned char	pdata[IXD];		/* input differences */
 
 short		dis_cnt;
 short		error_flag;
@@ -262,7 +264,7 @@ pplc(
  *
  *******************************************************************/
 
-	for (cnt = 0; cnt == 0; ) {
+	for (cnt = 0; cnt == 0; ) {		/* stay in loop if nothing linked */
 	    retval = wait_for_next_event(sockFN);	/* inputs or timer */
 
 	    if (retval == 0) {
@@ -297,18 +299,29 @@ pplc(
 			unsigned int	unit;
 			unsigned int	index;
 			int		val;
+			unsigned char	dif;
 
 			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, pplcNM);
-			if (sscanf(rBuf, "X%d,%d,%d", &unit, &index, &val) == 3) {
-			    if (unit < IXD && index < 8 && (gp = IX_[unit*8+index]) != NULL) {
-				val = val ? -1 : 1;
-				if (val != gp->gt_val) {
-				    gp->gt_val = val;		 /* changed input */
-				    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
-				    link_ol(gp, o_list);
-				    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
-				    cnt++;
-				}
+			if (sscanf(rBuf, "X%d,%d", &unit, &val) == 2) {
+			    if (unit < IXD && (dif = val ^ pdata[unit]) != 0) {
+				Gate ** ip = &IX_[(unit<<3)+8];	/* unit * 8 + 8 */
+				pdata[unit] = val;		/* ready for next scan */
+				do {				/* assert dif != 0 */
+				    /* ignore Gate if no change in bit or not programmed */
+				    if ((gp = *--ip) != 0 && (dif & 0x80)) {
+					if ((val ^ gp->gt_val) & 0x80) {
+					    /* relies on input initialized to +1 !!!!!! */
+					    /* and no other function modifies gp_gt_val */
+					    gp->gt_val = - gp->gt_val;	/* complement input */
+					    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+					    link_ol(gp, o_list);	/* fire Input Gate */
+					    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+					    cnt++;
+					    /* o_list will be scanned before next input */
+					}
+				    }
+				    val <<= 1;
+				} while (dif <<= 1);
 			    }
 			} else if (sscanf(rBuf, "B%d,%d", &unit, &val) == 2) {
 			    if (unit < IXD && (gp = IB_[unit]) != NULL) {
