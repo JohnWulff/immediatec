@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.23 2000/11/28 22:25:56 jw Exp $";
+"@(#)$Id: comp.y,v 1.24 2000/12/02 14:49:28 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -78,13 +78,15 @@ pu(int t, char * token, Lis * node)
 %}
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2 BLTIN3
-%token	<sym>	CVAR CBLTIN TVAR TBLTIN STATIC BLATCH BFORCE DLATCH
+%token	<sym>	CVAR CBLTIN TVAR TBLTIN NVAR STATIC BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
-%token	<val>	NUMBER CCNUMBER CCFRAG
+%token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
-%type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn cstatic decl
-%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr cref ctref
-%type	<val>	cblock ccexpr value declHead
+%type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn
+%type	<sym>	cstatic decl
+%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
+%type	<list>	cref ctref
+%type	<val>	cblock ccexpr declHead tval
 %type	<str>	cstini cexini
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
@@ -254,12 +256,7 @@ expr	: UNDEF			{
 	    }
 	| NUMBER		{
 		$$.f = $1.f; $$.l = $1.l;
-		$$.v = 0;			/* no node */
-		if (debug & 02) pu(1, "expr", &$$);
-	    }
-	| CCNUMBER		{
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = 0;			/* no node */
+		$$.v = 0;			/* no node, do not need value */
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| LVAR			{
@@ -541,7 +538,7 @@ lexpr	: aexpr ',' aexpr		{
 	    }
 	;
 
-value	: NUMBER		{ $$.v = $1.v;	/* terminates with , or ) */
+tval	: NUMBER		{ $$.v = $1.v;	/* terminates with , or ) */
 		$$.f = $1.f; $$.l = $1.l;
 		if ($$.v > 32767) {	/* FIX unsigned int */
 		    warning("time value must be positive", NULL);
@@ -576,7 +573,7 @@ cexini	: UNDEF			{
 	| AVARC 		{ ccfrag = $1.v->name; }
 	| LVAR	 		{ ccfrag = $1.v->name; }	/* ZZZ */
 	| LVARC 		{ ccfrag = $1.v->name; }	/* ZZZ */
-	| CCNUMBER		{ ccfrag = ccbuf; }	/* copy of yytext */
+	| NUMBER		{ ccfrag = ccbuf; }	/* copy of yytext */
 	| '(' 			{ ccfrag = $1.v; }	/* ')' */
 	| '\'' 			{ ccfrag = $1.v; }
 	| AOP 			{ ccfrag = $1.v; }	/* all unary */
@@ -591,7 +588,7 @@ cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
 	;
 
 ctref	: ',' cexpr		{ $$.v = $2.v; }	/* other clock */
-	| ',' texpr ',' value	{ $$.v = $2.v;		/* timer clock */
+	| ',' texpr ',' tval	{ $$.v = $2.v;		/* timer clock */
 				  $$.v->le_val = $4.v; }/* time value */
 	;
 
@@ -620,34 +617,34 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
-	| BLTIN3 '(' aexpr ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ',' texpr ',' tval ')'	{
 		$$.f = $1.f; $$.l = $8.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$7); /* monoflop without reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by iClock */
 	    }
-	| BLTIN3 '(' aexpr ctref ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ctref ',' texpr ',' tval ')'	{
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6, &$8); /* monoflop without reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 	    }
-	| BLTIN3 '(' aexpr ',' aexpr ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ',' aexpr ',' texpr ',' tval ')'	{
 		$$.f = $1.f; $$.l = $10.l;
 		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, &$9); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
 	    }
-	| BLTIN3 '(' aexpr ',' aexpr ctref ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ',' aexpr ctref ',' texpr ',' tval ')'	{
 		$$.f = $1.f; $$.l = $11.l;
 		$$.v = bltin(&$1, &$3, &$6, &$5, 0, &$8, &$10); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by same clock or timer */
 	    }
-	| BLTIN3 '(' aexpr ctref ',' aexpr ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ctref ',' aexpr ',' texpr ',' tval ')'	{
 		Lis	lis1;
 		$$.f = $1.f; $$.l = $11.l;
 		lis1.v = sy_push(clk);			/* iClock to avoid shift reduce conflict */
 		$$.v = bltin(&$1, &$3, &$4, &$6, &lis1, &$8, &$10); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 	    }						/* reset clocked by iClock */
-	| BLTIN3 '(' aexpr ctref ',' aexpr ctref ',' texpr ',' value ')'	{
+	| BLTIN3 '(' aexpr ctref ',' aexpr ctref ',' texpr ',' tval ')'	{
 		$$.f = $1.f; $$.l = $12.l;
 		$$.v = bltin(&$1, &$3, &$4, &$6, &$7, &$9, &$11); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
@@ -969,10 +966,8 @@ yylex(void)
 	    }
 	    while ((c = get()) != EOF && isxdigit(c));
 	    unget(c);
-	    if (c != ',' && c != ')') {
+	    if (sscanf(yytext, format, &yylval.val.v, yytext) == 1) {
 		strncpy(ccbuf, yytext, sizeof ccbuf - 1); /* for cblock */
-		c = CCNUMBER;
-	    } else if (sscanf(yytext, format, &yylval.val.v, yytext) == 1) {
 		c = NUMBER;
 	    } else {
 		c = LEXERR;
