@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.9 2000/12/02 07:52:25 jw Exp $";
+"@(#)$Id: main.c,v 1.10 2000/12/23 13:21:37 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -207,10 +207,30 @@ main(
     }
     if ((r = compile(listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
-    } else if (exiFN == 0 && (r = output(outFN)) != 0) {
-	fprintf(stderr, OutputMessage[r < 4 ? r : 4], progFN, szNames[r]);
-	r += 10;
+    } else {
+	Gate *		igp;
+	unsigned	gate_count[MAX_LS];	/* accessed by pplc() */
+
+	if ((r = listNet(gate_count)) == 0 && exiFN == 0) {
+	    if (outFN == 0) {
+
+		if ((r = buildNet(&igp)) == 0) {/* generate execution network */
+		    c_list = (lookup("iClock"))->u.gate;/* initialise clock list */
+		    pplc(igp, gate_count);	/* execute the compiled logic */
+		}
+	    } else {
+		r = output(outFN);		/* generate network as C file */
+	    }
+	}
+	if (r != 0) {
+	    fprintf(stderr, OutputMessage[r < 4 ? r : 4], progFN, szNames[r]);
+	    r += 10;
+	}
     }
+#ifndef _WINDOWS
+    if (outFP != stdout) fclose(outFP);
+#endif
+    if (errFP != stderr) fclose(errFP);
     if (exoFP) {
 	fclose(exoFP);
 	if (exoFN && exiFN == 0) {
