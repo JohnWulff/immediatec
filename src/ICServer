@@ -63,19 +63,21 @@ my $connPPLC;
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<<< [-s <host>] [-p <port>] [-h] [<list of client calls>]
+Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	$named
 	-s host	ID of server (default '0.0.0.0')
 	-p port	service port for server and all clients
+		(default 8080)
+	-t	trace messages for debugging
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.6 2000/05/30 22:02:32 jw Exp $
+$Id: ICServer,v 1.7 2000/06/02 08:21:50 jw Exp $
 .
 
-use vars qw($opt_s $opt_p $opt_h);
+use vars qw($opt_t $opt_s $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('s:p:h');			# sets $opt_h if -h etc
+&Getopts('ts:p:h');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -108,6 +110,7 @@ ARG: while ($ARGV = shift @ARGV) {
 	    # dispatch child process
 	    my @call = split " ", $ARGV;
 	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
+	    splice @call, 1, 0, '-t' if defined $opt_t;
 	    print "@call\n";
 	    exec @call;
 	    exit;		# child process can't be executed
@@ -155,7 +158,10 @@ sub rcvd_msg_from_client {
 		delete $Connections{$unitID};
 		delete $UnitIDs{$conn};
 		$conn->disconnect();
-		print "DemoBox $unitID disconnected\n";
+		if ($unitID =~ /^P/) {
+		    $connPPLC = undef;
+		}
+		print "$unitID has disconnected\n";
 	    }
 	} elsif ($msg =~ /^[XBWP]\d+$/) {	# X0 X1 .. B0 .. W0 .. P0
 	    if (exists $Connections{$msg}) {
@@ -181,19 +187,19 @@ sub rcvd_msg_from_client {
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
 		if (defined $Connections{$uID}) {
 		    $Connections{$uID}->send_now("$index,$value");
-#		    print "$index,$value to $uID\n";
+		    print "$index,$value to $uID\n" if $opt_t;
 		} else {
-#		    print "$index,$value to dummy $uID\n";
-		}		# silently ignore disconnected I/O's
+		    print "$index,$value to dummy $uID\n" if $opt_t;
+		}
 	    } else {
 		print "ERROR: $msg from Unit $unitID ?? ignored\n";
 	    }
 	} elsif (defined $connPPLC) {		# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
 	    $connPPLC->send_now("$unitID,$msg");
-	    print "$unitID,$msg to   P0\n";
+	    print "$unitID,$msg to   P0\n" if $opt_t;
 	} else {
-	    print "$unitID,$msg to dummy P0\n";
-	}			# silently ignore disconnected PPLC
+	    print "$unitID,$msg to dummy P0\n" if $opt_t;
+	}
     }
 }
