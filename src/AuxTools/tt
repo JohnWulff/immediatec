@@ -1,0 +1,30 @@
+#!/bin/bash
+echo "##### Test0"
+make test
+
+cd Test1
+echo "##### Test1"
+mm > Init.out 2>&1
+Mdiff -kl $(cat pd.lt) X105
+echo "##### Test1 -y20000"
+mm -y20000 > Init.out 2>&1
+Mdiff -kl $(cat pd.lt) X105_20000
+
+cd ../Test2
+echo "##### Test2"
+my
+Mdiff -kl $(cat p[d6].lt) X105
+echo "##### Test2 -y20000"
+my -y20000
+Mdiff -kl $(cat p[d6].lt) X105_20000
+
+
+cd ../Test3
+echo "##### Test3"
+my
+Mdiff -kl $(cat p[d6].lt) X105
+echo "##### Test3 -y20000"
+my -y20000
+Mdiff -kl $(cat p[d6].lt) X105_20000
+
+cd ..
