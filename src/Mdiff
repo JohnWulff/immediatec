@@ -11,13 +11,13 @@ usage()
   echo 'different project directories. Whitspace is normally ignored.\n' >&2
   echo 'Option -l allows the generation of lists of different or' >&2
   echo 'identical files in the two projects.\n' >&2
-  echo "Usage:	$name [+w] [-ieqlh] [directory] [file ...]" >&2
+  echo "Usage:	$name [+w] [-ieqlh] [file ...] [directory]" >&2
   echo '	+w	whitespace (spaces and tabs) is significant' >&2
   echo '		default: whitespace is ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
   echo '		default: ignore identical files in output' >&2
   echo '	-e	nonexisting files put:	**** file does not exist' >&2
-  echo '		default: ignore nonexisting files in output' >&2
+  echo '		default: ignore nonexisting files in output (unless only 1 file)' >&2
   echo '		if files exist output:	#### file ####' >&2
   echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list names of files which differ' >&2
@@ -30,7 +30,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.11 1998/11/17 22:09:54 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.12 1999/02/28 15:23:19 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -118,16 +118,34 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $# != 0 ]] && [[ -d $1 ]]; then
-    dir=$1
-    shift
-else
+if [[ $# -eq 0 ]]; then
     dir='..'
+elif [[ -d $1 ]]; then
+    dir=$1			# first argument is directory (backwards compatible)
+    shift
+    if [[ $# != 0 ]]; then
+	files=$*
+	if [[ $# -eq 1 ]]; then
+	    e=1;		# for single file argument, check if other file exists
+	fi
+    fi
+else
+    files=''			# there must be at least 1 nondirectory
+    if [[ $# -le 2 ]]; then
+	e=1;			# for single file argument, check if other file exists
+    fi
+    while [[ $# -gt 1 ]]; do
+	files="$files $1"
+	shift
+    done
+    if [[ -d $1 ]]; then
+	dir=$1			# last argument is directory
+    else
+	dir='..'
+	files="$files $1"
+    fi
 fi
 
-if [[ $# != 0 ]]; then
-    files=$*
-fi
 if [[ $pipe = 0 ]]; then
     process
 else
