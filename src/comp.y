@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.41 2001/02/07 19:30:40 jw Exp $";
+"@(#)$Id: comp.y,v 1.42 2001/02/08 20:23:59 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -29,9 +29,8 @@ static void	yyerrls(char *);	/* called for yacc error list */
 static void	warnBit(void);
 static void	warnInt(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
-static char *	ccfrag;			/* flag for cexini CCFRAG syntax */
+static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static char	ccbuf[32];		/* buffer for NUMBER CCFRAG */
-static int	stflag = 0;		/* record states of static */
 static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
@@ -82,17 +81,22 @@ pu(int t, char * token, Lis * node)
 
 %}
 
+	/************************************************************
+	 *
+	 * iC token types
+	 *
+	 ***********************************************************/
+
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2 BLTIN3
 %token	<sym>	CVAR CBLTIN TVAR TBLTIN TBLTI1 NVAR STATIC BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
 %type	<sym>	program statement simplestatement lBlock
-%type	<sym>	cstatic decl asgn wasgn xasgn casgn tasgn dasgn
+%type	<sym>	decl asgn wasgn xasgn casgn tasgn dasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
 %type	<list>	cref ctref ctdref dexpr funct params plist
-%type	<val>	cblock declHead
-%type	<str>	cstini cexini
+%type	<val>	cBlock declHead
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
@@ -107,6 +111,12 @@ pu(int t, char * token, Lis * node)
 %nonassoc <str>	NOTL PPMM	/* unary operators ! ~ ++ -- (+ - & *) */
 %right	<str>	PR 		/* structure operators -> . */
 %%
+
+	/************************************************************
+	 *
+	 * iC grammar
+	 *
+	 ***********************************************************/
 
 program	: /* nothing */		{ $$.v = 0;  stmtp = yybuf; }
 	| program statement	{ $$   = $2; stmtp = yybuf; }
@@ -123,7 +133,6 @@ statement:
 
 simplestatement:
 	  decl			{ $$ = $1; }
-	| cstatic		{ $$ = $1; }
 	| asgn			{ $$ = $1; }
 	| dasgn			{ $$ = $1; }
 	| wasgn			{ $$ = $1; }
@@ -131,6 +140,12 @@ simplestatement:
 	| casgn			{ $$ = $1; }
 	| tasgn			{ $$ = $1; }
 	;
+
+	/************************************************************
+	 *
+	 * Immediate type declaration - may be combined wit dasgn
+	 *
+	 ***********************************************************/
 
 decl	: declHead UNDEF	{
 		$$.v = $2.v;
@@ -148,6 +163,12 @@ declHead			/* NOTE: stype gets type out of ftype */
 	| decl ','		{ $$.v = stype;	/* first TYPE */ }
 	| dasgn ','		{ $$.v = stype;	/* first TYPE */ }
 	;
+
+	/************************************************************
+	 *
+	 * Assignment as an expression - dasgn is NOT an aexpr
+	 *
+	 ***********************************************************/
 
 aexpr	: expr			{
 		$$ = $1;
@@ -189,6 +210,12 @@ aexpr	: expr			{
 		if (debug & 02) pu(1, "aexpr", &$$);
 	    }
 	;
+
+	/************************************************************
+	 *
+	 * Different forms of assignment
+	 *
+	 ***********************************************************/
 
 wasgn	: WACT '=' aexpr	{			/* WACT = lex_act[OUTW] */
 		$$.f = $1.f; $$.l = $3.l;
@@ -247,6 +274,12 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
 	;
+
+	/************************************************************
+	 *
+	 * Expressions - includes unclocked built in functions
+	 *
+	 ***********************************************************/
 
 expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $1.l;
@@ -517,40 +550,35 @@ lexpr	: aexpr ',' aexpr		{
 	 *
 	 ***********************************************************/
 
-lBlock	: LHEAD			{ ccfrag = "%"; }	/* %{ literal block %} */
+lBlock	: LHEAD			{ ccfrag = '%'; }	/* %{ literal block %} */
 	  CCFRAG '}'		{ $$.v = 0; }
 	;
 
-cblock	: '{'			{ ccfrag = "{"; }	/* ccfrag must be set */
+	/************************************************************
+	 *
+	 * C block { ......... }
+	 *
+	 * A C block is used in if, if else and switch immediate expressions
+	 *
+	 ***********************************************************/
+
+cBlock	: '{'			{ ccfrag = '{'; }	/* ccfrag must be set */
 	  CCFRAG '}'		{ $$.v = $3.v; }	/* count dummy yacc token */
-	| cexini		{ stflag |= 0x10; }
-	  CCFRAG ';'		{ $$.v = $3.v; }	/* count dummy yacc token */
 	;
 
-cstatic	: cstini CCFRAG		{ $$.v = 0; }	/* ccfrag must be set */
-	; 
-
-cstini	: STATIC 		{ ccfrag = "{"; stflag |= 0x01; }
-	; 
-
-cexini	: UNDEF			{
-		ccfrag = $1.v->name;			/* UNDEF has not been declared or used */
-		unlink_sym($1.v);			/* unlink Symbol from symbol table */
-		free($1.v);				/* UNDEF is guaranteed to be on heap */
-	    }
-	| AVAR 			{ ccfrag = $1.v->name; }
-	| AVARC 		{ ccfrag = $1.v->name; }
-	| LVAR	 		{ ccfrag = $1.v->name; }	/* ZZZ */
-	| LVARC 		{ ccfrag = $1.v->name; }	/* ZZZ */
-	| NUMBER		{ ccfrag = ccbuf; }	/* copy of yytext */
-	| '(' 			{ ccfrag = $1.v; }	/* ')' */
-	| '\'' 			{ ccfrag = $1.v; }
-	| AOP 			{ ccfrag = $1.v; }	/* all unary */
-	| PM 			{ ccfrag = $1.v; }
-	| PPMM 			{ ccfrag = $1.v; }
-	| '&' 			{ ccfrag = $1.v; }	/* address of */
-	| '*' 			{ ccfrag = $1.v; }	/* pointer to */
-	; 
+	/************************************************************
+	 *
+	 * Clock and Timer parameters
+	 *
+	 * default clock is iClock if last clock parameter in list
+	 *
+	 * timer parameters must specify a delay, which is either
+	 * number (NVAR), an Alias for a number or an immediate expression
+	 * which is forced to ftype ARITH
+	 *
+	 * default timer delay is 1 if last clock parameter in list
+	 *
+	 ***********************************************************/
 
 cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
 	| ',' ctref		{ $$ = $2; }		/* clock or timer */
@@ -593,6 +621,16 @@ dexpr	: NVAR			{
 		$$.v->le_val = (unsigned) -1;	/* mark link as timer value */
 	    }
 	;
+
+	/************************************************************
+	 *
+	 * Built in iC functions
+	 *
+	 * These built in functions follow C syntax
+	 *
+	 * the actual function names are defined in file init.c
+	 *
+	 ***********************************************************/
 
 fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $5.l;
@@ -648,16 +686,22 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 	    }						/* reset clocked by different clock or timer */
 	;
 
+	/************************************************************
+	 *
+	 * if, if else and switch immediate expressions
+	 *
+	 * no assignment allowed for ffexpr - they stand alone
+	 *
+	 ***********************************************************/
+
 ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 		fprintf(exoFP, cexeString[outFlag], ++c_number);
 		fprintf(exoFP, "    if (_cexe_gf->gt_val < 0)\n");
 	    }
-	  cblock		{			/* { x++; } */
+	  cBlock		{			/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, &$7);
 	    }
 	;
-
-/* no assignment allowed for ffexpr - they stand alone */
 
 ffexpr	: ifini				{		/* if (expr) { x++; } */
 		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
@@ -665,18 +709,24 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	| ifini ELSE			{		/* { x++; } else */
 		fprintf(exoFP, "\n    else\n");
 	    }
-	  cblock			{		/* { x--; } */
+	  cBlock			{		/* { x--; } */
 		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
 	    }
 	| SWITCH '(' aexpr cref ')'	{		/* switch (expr) { case ...; } */
 		fprintf(exoFP, cexeString[outFlag], ++c_number);
 		fprintf(exoFP, "    switch (_cexe_gf->gt_new)\n");
 	    }
-	  cblock		{			/* { x++; } */
+	  cBlock		{			/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, &$7);
 		fprintf(exoFP, "\n    return 0;\n%s", outFlag ? "}\n" : "");
 	    }
 	;
+
+	/************************************************************
+	 *
+	 * Clock built in expression
+	 *
+	 ***********************************************************/
 
 casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
 	| CVAR '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL);
@@ -706,6 +756,12 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, 0);
 	    }
 	;
+
+	/************************************************************
+	 *
+	 * Timer built in expression
+	 *
+	 ***********************************************************/
 
 tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
 	| TVAR '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL);
@@ -951,51 +1007,12 @@ yylex(void)
     int	c, c1;
 
     if (ccfrag) {
-	if (*ccfrag == '%') {
-	    c1 = '%';
-	    ccfrag = "{";
-	} else {
-	    c1 = ';';
-	}
-	if ((stflag & 0x05) == 0x01) {
-	    if ((stflag & 0x2) == 0) {
-		fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
-	    }
-	    stflag |= 0x02;		/* set bit 1 */
-	} else {
-	    stflag |= 0x04;		/* set bit 2 */
-	    fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
-	}
-	if (stflag & 0x01) {
-	    fprintf(exoFP, "	static");
-	} else if (strlen(ccfrag) == 1) {
-	    unget(*ccfrag);	/* takes care of ( and ' at start */
-	} else {
-	    fprintf(exoFP, ccfrag);
-	}
-	if (*ccfrag == '{' || (stflag & 0x10)) {
-	    if (copyCfrag('{', c1, '}') == 0) {
-		return 0;	/* copy C block or statement */
-	    }
-	    if (stflag & 0x01) {
-		stflag &= ~0x01;		/* clear bit 0 */
-		if (stflag & 0x04) {
-		    stflag |= 0x08;		/* set bit 3 */
-		}
-	    } else {
-		stflag &= ~0x18;		/* clear bit 3 and 4 */
-	    }
-	} else {
-	    if (copyCfrag('(', ',', ')') == 0) {
-		return 0;	/* copy C expression */
-	    }
-	    stflag &= ~0x08;			/* clear bit 3 */
-	}
-	if (*ccfrag != '{' || (stflag & 0x02)) {
-	    fprintf(exoFP, ";\n");		/* terminate case */
+	fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
+	unget('{');
+	if (copyCfrag('{', ccfrag == '%' ? '%' : ';', '}') == 0) {
+	    return 0;	/* copy C block or statement */
 	}
 	yylval.val.v = c_number;		/* return case # */
-	stflag = 0;
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
@@ -1044,11 +1061,11 @@ yylex(void)
 	    }
 	    goto retfl;
 	} else if (isalpha(c) || c == '_') {
-	    uchar		wplus = 0;
-	    uchar		typ = UDF;
-	    uchar		ftyp = UDFA;
-	    uchar		y0[2];
-	    uchar		y1[2];
+	    unsigned char	wplus = 0;
+	    unsigned char	typ = UDF;
+	    unsigned char	ftyp = UDFA;
+	    unsigned char	y0[2];
+	    unsigned char	y1[2];
 	    int			yn;
 
 	    while ((c = get()) != EOF && (isalnum(c) || c == '_'));

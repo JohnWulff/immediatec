@@ -4,10 +4,13 @@
 #
 #	make pplc pplt pptc load.a
 #
-#	$Id: makeall,v 1.2 2001/01/06 16:56:57 jw Exp $
+#	$Id: makeall,v 1.3 2001/02/06 18:41:58 jw Exp $
 #
 ########################################################################
 
+if ! cmp -s cexe.c cexe.c_empty; then
+    cp -p cexe.c_empty cexe.c
+fi
 echo "make pplc"
 make pplc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 #echo "make pplc"
