@@ -292,14 +292,34 @@ sub set_event_handler {
     }
 }
 
+########################################################################
+#
+#	Modification John Wulff 2000.05.27
+#	select time_out is 0 if loop_count is defined
+#	else undef - which maintains previous functionality
+#
+#	if loop_count has a fractional part interpret it as
+#	the time_out value and set loop_count to 1
+#	- useful for timed message loops
+#
+########################################################################
+
 sub event_loop {
     my ($pkg, $loop_count) = @_; # event_loop(1) to process events once
     my ($conn, $r, $w, $rset, $wset);
+    my $time_out = $loop_count;
+    if (defined($loop_count)) {
+	if ($time_out == int $time_out) {
+	    $time_out = 0;
+	} else {
+	    $loop_count = 1;
+	}
+    }
     while (1) {
         # Quit the loop if no handles left to process
         last unless ($rd_handles->count() || $wt_handles->count());
         ($rset, $wset) =
-            IO::Select->select ($rd_handles, $wt_handles, undef, undef);
+            IO::Select->select ($rd_handles, $wt_handles, undef, $time_out);
         foreach $r (@$rset) {
             &{$rd_callbacks{$r}} ($r) if exists $rd_callbacks{$r};
         }
