@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.2 2002/07/08 12:17:31 jw Exp $";
+"@(#)$Id: lexc.l,v 1.3 2002/07/08 15:09:36 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -33,6 +33,8 @@ IS			(u|U|l|L)*
 
 %{
 #include <stdio.h>
+#include "icc.h"
+#include "comp.h"
 #include "gram.h"
 #include "gram_tab.h"
 
@@ -134,32 +136,33 @@ void count (c_STYPE* u);
 "|"			{ count(&c_lval); return('|'); }
 "?"			{ count(&c_lval); return('?'); }
 
-[ \t\v\n\f]		{ count(&c_lval); }
+[ \t\v\n\f]+		{ count(&c_lval); }
 .			{ count(&c_lval); /* ignore bad characters */ }
 
 %%
 
 yywrap()
 {
-	return(1);
+    return(1);
 }
 
 comment()
 {
-	char c, c1;
+    char c, c1;
 
 loop:
-	while ((c = input()) != '*' && c != 0)
-		putchar(c);
+    while ((c = input()) != '*' && c != 0) {
+	putchar(c);
+    }
 
-	if ((c1 = input()) != '/' && c != 0)
-	{
-		unput(c1);
-		goto loop;
-	}
+    if ((c1 = input()) != '/' && c != 0) {
+	unput(c1);
+	goto loop;
+    }
 
-	if (c != 0)
-		putchar(c1);
+    if (c != 0) {
+	putchar(c1);
+    }
 }
 
 static int gramOffset = 0;
@@ -200,9 +203,5 @@ int check_type()
 *	return(IDENTIFIER);
 */
 
-/*
-*	it actually will only return IDENTIFIER
-*/
-
-	return(IDENTIFIER);
+    return(IDENTIFIER);
 }
