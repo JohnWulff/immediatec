@@ -2,12 +2,49 @@
 
 ########################################################################
 #
-#	iCserver
+#	ICServer
 #
 #	Server which can accept any number of I/O clients
 #	and initially one controller (planned are many)
 #
 #	John E. Wulff	28-May-2000
+#
+#	Protocol between I/O and PPLC clients and server:
+#
+#	Registration:	UnitID
+#			X0 .. X31  from bit  I/O to server
+#			B0 .. B31  from byte I/O to server
+#			W0 .. W30  from word I/O to server
+#			P0         from PPLC and server
+#
+#	I/O values:	Index,Value	
+#			0,0 .. 7,1     from bit  I/O to server
+#			0,0 .. 0,255   from byte I/O to server
+#			0,0 .. 0,65535 from word I/O to server
+#
+#			UnitID,Index,Value	
+#			X0,0,0 .. X31,7,1     from server to PPLC bit
+#			B0,0,0 .. B31,0,255   from server to PPLC byte
+#			W0,0,0 .. W30,0,65535 from server to PPLC word
+#
+#	The same formats are used from server to I/O and PPLC to server.
+#	The direction of transmission determines if an I/O messages
+#	is input or output.
+#
+#	Each I/O value message constitutes an event which updates
+#	that value at the sink. Several messages may be grouped
+#	and seperated by semi-colons (;) { TODO - not yet implemented }
+#
+#	Byte and Word sources and sinks only have Index 0.
+#	Word source and sink Units must be even (W0 W2 W4 .. W30)
+#
+#	The Server receives messages from the I/O's, identifies the
+#	UnitID under which that I/O is registered and prefixes the
+#	UnitID and a comma to the message and sends it on to the PPLC.
+#
+#	Messages received from the PPLC are stripped of the leading
+#	UnitID and comma. The rest is sent to the I/O Unit corresponding
+#	to the UnitID stripped from the message.
 #
 ########################################################################
 
@@ -18,8 +55,9 @@ my $host = '0.0.0.0';
 my $port = 8080;
 my $prog;
 
-my %externalIDs = ();
-my %connections = ();
+my %UnitIDs = ();
+my %Connections = ();
+my $connPPLC;
 
 ########################################################################
 #
@@ -32,7 +70,7 @@ format STDERR =
 Usage:	@<<<<<< [-h]
 	$named
 	-h	help, ouput this Usage text only
-$Id: ICServer,v 1.2 2000/05/28 17:20:47 jw Exp $
+$Id: ICServer,v 1.3 2000/05/28 21:01:33 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -54,9 +92,9 @@ print "Server created. Waiting for events\n";
 while (1) {
     my $conn;
     Msg->event_loop(0.01);
-    for my $xID (keys %connections) {
-	$conn = $connections{$xID};
-	if (defined $externalIDs{$conn}) {
+    for my $unitID (keys %Connections) {
+	$conn = $Connections{$unitID};
+	if (defined $UnitIDs{$conn}) {
 	    my $x = int rand 8;
 	    my $y = int rand 2;
 	    my $msg = "$x,$y";
@@ -78,7 +116,7 @@ sub login_proc {
     my ($conn, $host, $port) = @_;
     print "Connection successful.  $conn,$host,$port\n";
     # Unconditionally accept an incoming connection request
-    $externalIDs{$conn} = undef;
+    $UnitIDs{$conn} = undef;
     return \&rcvd_msg_from_client;
 }
 
@@ -92,34 +130,52 @@ sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
 	my $len = length $msg;
-	if ($len < 40) {
-	    print "($len)$msg $conn\n";
-	    if ($len == 0) {
-		my $xID = $externalIDs{$conn};
-		if (defined $xID and exists $connections{$xID}) {
-		    delete $connections{$xID};
-		    delete $externalIDs{$conn};
-		    $conn->disconnect();
-		    print "DemoBox $xID disconnected\n";
-		}
-	    } elsif ($msg =~ /^[A-Z]/) {
-		if (exists $connections{$msg}) {
-		    delete $externalIDs{$conn};
-		    $conn->disconnect();
-		    print "Trying to attach same DemoBox twice - disconnected\n";
-		} else {
-		    $externalIDs{$conn} = $msg;	# input/output ID
-		    $connections{$msg} = $conn;	# input/output ID
-		    print "CONNECTED ($len)$msg $conn\n";
-		}
-	    } else {
-		# returning message
-		$conn->send_now($msg);
-		print "$msg $conn\n";
+	my $unitID = $UnitIDs{$conn};
+	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
+	if ($len == 0) {
+	    if (defined $unitID and exists $Connections{$unitID}) {
+		delete $Connections{$unitID};
+		delete $UnitIDs{$conn};
+		$conn->disconnect();
+		print "DemoBox $unitID disconnected\n";
 	    }
+	} elsif ($msg =~ /^[XBWP]\d+$/) {	# X0 X1 .. B0 .. W0 .. P0
+	    if (exists $Connections{$msg}) {
+		delete $UnitIDs{$conn};
+		$conn->disconnect();
+		print "Trying to attach a device twice - disconnected\n";
+	    } else {
+		if ($msg =~ /^P/) {
+		    if (defined $connPPLC) {
+			delete $UnitIDs{$conn};
+			$conn->disconnect();
+			print "Trying to attach a second PPLC - disconnected\n";
+			return;
+		    }
+		    $connPPLC = $conn;		# the PPLC connection
+		}
+		$UnitIDs{$conn} = $msg;
+		$Connections{$msg} = $conn;
+		print "CONNECTED ($len)$msg $conn\n";
+	    }
+	} elsif ($msg =~ /^[XBW]/) {		# value messages from PPLC
+	    my ($unitID, $index, $value, $rest) = split /,/, $msg, 4;
+	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
+		if (defined $Connections{$unitID}) {
+		    $Connections{$unitID}->send_now("$index,$value");
+		    print "$index,$value to $unitID\n";
+		} else {
+		    print "$index,$value to dummy $unitID\n";
+		}		# silently ignore disconnected I/O's
+	    } else {
+		print "ERROR: $msg from Unit $unitID ?? ignored";
+	    }
+	} elsif (defined $connPPLC) {		# value messages from I/O
+	    # pass message to PPLC (without checking syntax)
+	    $connPPLC->send_now("$unitID,$msg");
+	    print "$unitID,$msg to P0\n";
 	} else {
-	    my $msg1 = substr $msg, 0, 37;
-	    print "($len)$msg1... $conn\n";
-	}
+	    print "$unitID,$msg to dummy P0\n";
+	}			# silently ignore disconnected PPLC
     }
 }
