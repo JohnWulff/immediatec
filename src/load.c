@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.22 2001/03/17 00:22:05 jw Exp $";
+"@(#)$Id: load.c,v 1.23 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -44,13 +44,6 @@ int		micro = 0;
 unsigned short	xflag;
 unsigned short	osc_max = MARKMAX;
 
-char *		full_type[] = { FULL_TYPE };
-char *		full_ftype[] = { FULL_FTYPE };
-uchar		types[] = { TYPES };
-uchar		ftypes[] = { FTYPES };
-char		os[] = OPS;
-char		fos[] = FOPS;
-
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 
@@ -93,7 +86,7 @@ static const char *	usage =
  *******************************************************************/
 
 static int
-cmp_gt_ids( const Gate **a, const Gate **b)
+cmp_gt_ids( const Gate ** a, const Gate ** b)
 {
     return( strcmp((*a)->gt_ids, (*b)->gt_ids) );
 }
@@ -122,10 +115,10 @@ inError(int line, Gate * op, Gate * gp)
 int
 main(
     int		argc,
-    char * *	argv)
+    char **	argv)
 {
-    register Gate *	op;
-    register Gate *	gp;
+    Gate *	op;
+    Gate *	gp;
     Gate ***	oppp;
     Gate **	opp;
     Gate **	lp;
