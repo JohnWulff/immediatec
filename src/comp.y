@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.11 2000/11/12 22:29:42 jw Exp $";
+"@(#)$Id: comp.y,v 1.12 2000/11/14 07:36:07 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -81,12 +81,12 @@ pu(int t, char * token, Lis * node)
 /* bTyp() returns operator to use in BUILT IN FUNCTIONS */
 
 uchar
-bTyp(Lis list)
+bTyp(List_e * lp)
 {
     register Symbol *	symp;
     register uchar	tp;
 
-    symp = list.v->le_sym;
+    symp = lp->le_sym;
     while (symp->type == ALIAS) {
 	symp = symp->list->le_sym;	/* with token of original */
     }
@@ -616,7 +616,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		register List_e	*lp1;
 		$$.f = $1.f; $$.l = $5.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		$$.v = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
@@ -637,11 +637,11 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		register List_e	*lp2;
 		$$.f = $1.f; $$.l = $6.l;
 		if ($3.v == 0 || $5.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push(sy_push(clk), lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($5), $5.v);
+		lp2 = op_push(sy_push($1.v), bTyp($5.v), $5.v);
 		lp2->le_first = $5.f; lp2->le_last = $5.l;
 		lp2->le_sym->ftype += 1;	/* next ftype */
 		lp2 = op_push(sy_push(clk), lp2->le_sym->type, lp2);
@@ -654,11 +654,11 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		register List_e	*lp2;
 		$$.f = $1.f; $$.l = $8.l;
 		if ($3.v == 0 || $5.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($7.v, lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($5), $5.v);
+		lp2 = op_push(sy_push($1.v), bTyp($5.v), $5.v);
 		lp2->le_first = $5.f; lp2->le_last = $5.l;
 		lp2->le_sym->ftype += 1;	/* next ftype */
 		lp2 = op_push(sy_push($7.v->le_sym), lp2->le_sym->type, lp2);
@@ -671,11 +671,11 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		register List_e	*lp2;
 		$$.f = $1.f; $$.l = $10.l;
 		if ($3.v == 0 || $7.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($5.v, lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($7), $7.v);
+		lp2 = op_push(sy_push($1.v), bTyp($7.v), $7.v);
 		lp2->le_first = $7.f; lp2->le_last = $7.l;
 		lp2->le_sym->ftype += 1;	/* next ftype */
 		lp2 = op_push($9.v, lp2->le_sym->type, lp2);
@@ -690,7 +690,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		/* monoflop without reset */
 		$$.f = $1.f; $$.l = $8.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push(sy_push(clk), lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
@@ -712,11 +712,11 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		/* monoflop without reset */
 		$$.f = $1.f; $$.l = $10.l;
 		if ($3.v == 0 || $5.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push(sy_push(clk), lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($5), $5.v);
+		lp2 = op_push(sy_push($1.v), bTyp($5.v), $5.v);
 		lp2->le_first = $5.f; lp2->le_last = $5.l;
 		lp2->le_sym->ftype += 1;	/* next ftype */
 		lp2 = op_push(sy_push(clk), lp2->le_sym->type, lp2);
@@ -740,7 +740,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 ffexpr	: IF '(' aexpr cref ')' cblock {	/* if (expr) { x++; } */
 		register List_e	*lp1;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		$$.v = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
@@ -769,7 +769,7 @@ cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		register List_e	*lp1;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		$$.v = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
@@ -779,11 +779,11 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		register List_e	*lp2;
 		List_e *	 lpc;
 		if ($3.v == 0 || $5.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($6.v, lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($5), $5.v);
+		lp2 = op_push(sy_push($1.v), bTyp($5.v), $5.v);
 		lp2->le_first = $5.f; lp2->le_last = $5.l;
 		lp2 = op_push(lpc = sy_push($6.v->le_sym),
 		    lp2->le_sym->type, lp2);
@@ -795,11 +795,11 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		register List_e	*lp1;
 		register List_e	*lp2;
 		if ($3.v == 0 || $6.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($6), $6.v);
+		lp2 = op_push(sy_push($1.v), bTyp($6.v), $6.v);
 		lp2->le_first = $6.f; lp2->le_last = $6.l;
 		lp2 = op_push($7.v, lp2->le_sym->type, lp2);
 		lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
@@ -828,7 +828,7 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 tfexpr	: TBLTIN '(' aexpr cref ')'	{
 		register List_e	*lp1;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		$$.v = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
@@ -838,11 +838,11 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 		register List_e	*lp2;
 		List_e *	 lpc;
 		if ($3.v == 0 || $5.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($6.v, lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($5), $5.v);
+		lp2 = op_push(sy_push($1.v), bTyp($5.v), $5.v);
 		lp2->le_first = $5.f; lp2->le_last = $5.l;
 		lp2 = op_push(lpc = sy_push($6.v->le_sym),
 		    lp2->le_sym->type, lp2);
@@ -854,11 +854,11 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 		register List_e	*lp1;
 		register List_e	*lp2;
 		if ($3.v == 0 || $6.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		lp1 = op_push(sy_push($1.v), bTyp($3), $3.v);
+		lp1 = op_push(sy_push($1.v), bTyp($3.v), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		lp1 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		lp2 = op_push(sy_push($1.v), bTyp($6), $6.v);
+		lp2 = op_push(sy_push($1.v), bTyp($6.v), $6.v);
 		lp2->le_first = $6.f; lp2->le_last = $6.l;
 		lp2 = op_push($7.v, lp2->le_sym->type, lp2);
 		lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
