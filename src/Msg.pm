@@ -1,3 +1,5 @@
+# $Id: Msg.pm,v 1.3 2000/05/30 22:10:09 jw Exp $
+
 package Msg;
 use strict;
 use IO::Select;

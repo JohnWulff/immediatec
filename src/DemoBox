@@ -23,12 +23,12 @@ format STDERR =
 Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	$named
 	-s host	ID of server (default 'localhost')
-	-p port	service port of server (default '8080')
+	-p port	service port of server (default '8778')
 	unitID	default is 'X0'
 	-t	trace debug messages
 	-d	extra receive debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.18 2000/06/02 11:13:18 jw Exp $
+$Id: DemoBox,v 1.19 2000/11/06 20:30:33 jw Exp $
 .
 
 use vars qw($opt_t $opt_d $opt_s $opt_p $opt_h);
@@ -46,7 +46,7 @@ if ($opt_h) {
 ########################################################################
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
-my $port = defined $opt_p ? $opt_p : 8080;
+my $port = defined $opt_p ? $opt_p : 8778;
 my $unitID = (@ARGV >= 1) ? $ARGV[0] : 'X0';
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);

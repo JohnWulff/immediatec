@@ -67,12 +67,12 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	$named
 	-s host	ID of server (default '0.0.0.0')
 	-p port	service port for server and all clients
-		(default 8080)
+		(default '8778')
 	-t	trace messages for debugging
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.8 2000/06/02 11:13:18 jw Exp $
+$Id: ICServer,v 1.9 2000/11/06 20:30:33 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -90,7 +90,7 @@ if ($opt_h) {
 ########################################################################
 
 my $host = defined $opt_s ? $opt_s : '0.0.0.0';
-my $port = defined $opt_p ? $opt_p : 8080;
+my $port = defined $opt_p ? $opt_p : 8778;
 
 Msg->new_server($host, $port, \&login_proc);
 print "Server created. Waiting for events\n";
