@@ -1,90 +1,66 @@
 #!/usr/bin/ksh -p
-# Author: J.E. Wulff
+########################################################################
 #
+#	Mdiff - multiple diff
+#
+#	Generate a full report of differences between the files in two
+#	different project directories. Whitspace is normally ignored.
+#
+#	Option -l allows the generation of lists of different or
+#	identical files in the two projects.
+#
+########################################################################
+
+usage()
+{
+    echo "Usage:	$name [+w] [-ieqlh] [directory] [file ...]" >&2
+    echo '	+w	whitespace (spaces and tabs) is significant' >&2
+    echo '		default: whitespace is ignored' >&2
+    echo '	-i	identical files output:	==== file ====' >&2
+    echo '		default: ignore identical files in output' >&2
+    echo '	-e	nonexisting files put:	**** file does not exist' >&2
+    echo '		default: ignore nonexisting files in output' >&2
+    echo '		if files exist output:	#### file ####' >&2
+    echo '	-q	quiet operation - return status only' >&2
+    echo '	-l	list names of files which differ' >&2
+    echo '	-li	list names of files which are identical' >&2
+    echo '	-h	this help text' >&2
+    echo '	-	all further arguments are treated as files' >&2
+    echo '	if first file argument is not a directory, .. is used' >&2
+    echo "	if no files are specified, '$files' is used" >&2
+    echo '	return status 0 (true) if all files are identical' >&2
+    echo '	return status n (false) number of files which differ' >&2
+    echo '	Author: J.E. Wulff (John.Wulff@inka.de)' >&2
+    echo '	$Id: Mdiff,v 1.8 1998/02/13 14:33:57 archiv Exp $' >&2
+}
+
 name=${0##*/}
 name=${name%.*}
 files='[Mm]akefile* *.[chv]*'
-i=0
-e=0
-q=0
-li=0
-w=-w
-while true; do
+i=0; e=0; q=0; li=0; w=-w
+
+while [[ $# > 0 ]]; do
     case $1 in
-    -h*)
-	echo "Usage:	$name [-lieh] [+w] [-q] [directory] [file ...]" >&2
-	echo '	-i	identical files output:	==== file ====' >&2
-	echo '		default: ignore identical files in output' >&2
-	echo '	-e	nonexisting files put:	**** file does not exist' >&2
-	echo '		default: ignore nonexisting files in output' >&2
-	echo '		if files exist output:	#### file ####' >&2
-	echo '	+w	whitespace (spaces and tabs) is significant' >&2
-	echo '		default: whitespace is ignored' >&2
-	echo '	-l	list names of files which differ' >&2
-	echo '	-li	list names of files which are identical' >&2
-	echo '	-q	quiet operation - return status only' >&2
-	echo '	-h	this help text' >&2
-	echo '	if first file argument is not a directory, .. is used' >&2
-	echo "	if no files are specified, '$files' is used" >&2
-	echo '	return status 0 (true) if all files are identical' >&2
-	echo '	return status n (false) number of files which differ' >&2
-	echo '$Id: Mdiff,v 1.7 1998/02/12 14:52:05 archiv Exp $' >&2
-	exit 2
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n $option ]]; do
+	    case $option in
+	    e*)	e=1;;
+	    i*)	i=1; let "li|=2";;
+	    l*)	q=1; let "li|=1";;
+	    q*)	q=1;;
+	    h*)	usage; exit 255;;
+	    *)	x=${option#?}; option=${option%$x}
+	    	echo "$name: unexpected option $option in $1"
+		usage; exit 254;;
+	    esac
+	    option=${option#?}
+	done
 	;;
-    -q*)
-	q=1
-	shift
-	;;
-    -l)
-	let "li|=1"
-	q=1
-	shift
-	;;
-    -li|-il)
-	li=3
-	q=1
-	shift
-	;;
-    -le|-el)
-	let "li|=1"
-	q=1
-	e=1
-	shift
-	;;
-    -lei|-lie|-eli|-eil|-ile|-iel)
-	li=3
-	q=1
-	e=1
-	i=1
-	shift
-	;;
-    -e)
-	e=1
-	shift
-	;;
-    -i)
-	i=1
-	let "li|=2"
-	shift
-	;;
-    -ei|-ie)
-	e=1
-	i=1
-	let "li|=2"
-	shift
-	;;
-    +w)
-	w=
-	shift
-	;;
-    [+-]*)
-	echo "$name: unexpected argument $1"
-	exit 3
-	;;
-    *)
-	break
-	;;
+    +w) w=;;
+    *)	break;;
     esac
+    shift
 done
 
 if [[ $# != 0 ]] && [[ -d $1 ]]; then
