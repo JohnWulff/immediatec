@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.4 1999/08/04 18:28:55 jw Exp $";
+"@(#)$Id: rsff.c,v 1.5 2000/06/02 11:15:42 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -7,7 +7,9 @@ static const char rsff_c[] =
 /* "rsff.c	3.32	95/02/11" */
 
 #include	<stdio.h>
+#include	<assert.h>
 #include	"pplc.h"
+#include	"tcpc.h"
 
 /********************************************************************
  *
@@ -525,7 +527,13 @@ outMw(					/* OUTW master action */
     Gate *		out_list)
 {
     int	val;
+#ifdef TCP 
+    int			unit;
+    char		msg[16];
 
+    unit = (uchar*)gp->gt_list - QX_;
+#endif
+    assert(gp->gt_list && gp->gt_mark & 0xff);
 #ifdef MIXED
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
@@ -533,14 +541,23 @@ outMw(					/* OUTW master action */
 	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
     }
 #endif
+
     val = gp->gt_old = gp->gt_new;	/* update gt_old since no link_ol */
     if (gp->gt_mark == 1) {
 #ifndef _WINDOWS
 	val &= 0xff;			/* for display only */
 #endif
 	*(char*)gp->gt_list = val;	/* output byte */
+#ifdef TCP 
+	sprintf(msg, "B%d,%d", unit, val);
+	send_msg_to_server(sockFN, msg);
+#endif
     } else if (gp->gt_mark == 2) {
 	*(int*)gp->gt_list = val;	/* output word */
+#ifdef TCP 
+	sprintf(msg, "W%d,%d", unit, val);
+	send_msg_to_server(sockFN, msg);
+#endif
 #ifndef _WINDOWS
     } else {
 	val = 0;			/* error - no output */
@@ -573,6 +590,17 @@ outMx(					/* OUTX master action */
     register Gate *	gp,		/* NOTE: there is no slave action */
     Gate *		out_list)
 {
+#ifdef TCP 
+    char		msg[16];
+    int			unit;
+    unsigned int	index;
+    unsigned int	field;
+    unsigned int	mask;
+
+    unit = (uchar*)gp->gt_list - QX_;
+    field = gp->gt_mark;
+#endif
+    assert(gp->gt_list && gp->gt_mark & 0xff);
 #ifdef MIXED
     if (out_list == a_list) {
 	/* called from arithmetic scan - convert a to d */
@@ -580,15 +608,22 @@ outMx(					/* OUTX master action */
 	gp->gt_val = gp->gt_old ? -1 : 1;
     }
 #endif
+#ifdef TCP 
+    /* TODO - output bitmask directly */
+    for (index = 0, mask = 1; index < 8; index++, mask <<= 1) {
+	if (field & mask) break;
+    }
+    sprintf(msg, "X%d,%d,%d", unit, index, (int)((unsigned char)gp->gt_val >> 7));
+    send_msg_to_server(sockFN, msg);
+#endif
+
     if (gp->gt_val & 0x80) {		/* output action */
-	*(uchar*)gp->gt_list |=
-	(uchar)gp->gt_mark;		/* set bit */
+	*(uchar*)gp->gt_list |= (uchar)gp->gt_mark;	/* set bit */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('1', outFP);
 #endif
     } else {
-	*(uchar*)gp->gt_list &=
-	~(uchar)gp->gt_mark;		/* clear bit */
+	*(uchar*)gp->gt_list &= ~(uchar)gp->gt_mark;	/* clear bit */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('0', outFP);
 #endif

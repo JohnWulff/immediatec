@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.7 2000/05/31 10:45:07 jw Exp $
+# @(#)$Id: Makefile,v 1.8 2000/06/02 11:15:42 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -31,14 +31,14 @@ all:	pplc pptc
 pplc:	Makefile main.d main.o scid.o pplc.d pplc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
 	cc $(LDFLAG) -o pplc main.o scid.o pplc.o $(COBJ) $(POBJ)
 
-pptc:	Makefile main.d main.o scid.o pptc.d pptc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
-	cc $(LDFLAG) -o pptc main.o scid.o pptc.o $(COBJ) $(POBJ)
+pptc:	Makefile main.d main.o scid.o pptc.d pptc.o tcpc.d tcpc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o pptc main.o scid.o pptc.o tcpc.o $(COBJ) $(POBJ)
 
 pplt:	Makefile main.d main.o scid.o pplt.d pplt.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
 	cc $(LDFLAG) -o pplt main.o scid.o pplt.o $(COBJ) $(POBJ)
 
-load.a:	Makefile load.d load.o scid.o pptc.d pptc.o $(POBJ:.o=.d) $(POBJ)
-	ar -rv load.a load.o scid.o pptc.o $(POBJ)
+load.a:	Makefile load.d load.o scid.o pptc.d pptc.o tcpc.d tcpc.o $(POBJ:.o=.d) $(POBJ)
+	ar -rv load.a load.o scid.o pptc.o tcpc.o $(POBJ)
 
 #### Compile objects #######################################
 

@@ -1,5 +1,5 @@
 static const char pplt_c[] =
-"@(#)$Id: pplt.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: pplt.c,v 1.2 1999/08/06 21:30:54 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -140,10 +140,15 @@ pplc(
 #endif
     }
     if (error_flag) {
+	if (error_flag == 1) {
 #ifndef _WINDOWS
-	fprintf(outFP, "\n*** Fatal Error ***\n");
+	    fprintf(outFP, "\n*** Fatal Errors ***\n");
 #endif
-	return;
+	    return;
+	}
+#ifndef _WINDOWS
+	fprintf(outFP, "\n*** Warnings ***\n");
+#endif
     }
 #ifndef _WINDOWS
     if (debug & 0100) fprintf(outFP, "\nPass 5:");
@@ -158,12 +163,12 @@ pplc(
 #endif
     if ((gp = TX_[0]) != 0) {
 #ifndef _WINDOWS
-	if (debug & 0100) fprintf(outFP, "\t%s  1 ==>", gp->gt_ids);
+	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
 #endif
 	gp->gt_val = -1;			/* set EOP initially */
 	link_ol(gp, o_list);			/* fire Input Gate */
 #ifndef _WINDOWS
-	if (debug & 0100) fprintf(outFP, " -1\n");
+	if (debug & 0100) fprintf(outFP, " -1");
 #endif
     }
 

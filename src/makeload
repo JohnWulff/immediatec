@@ -4,7 +4,7 @@
 #
 #	make the load.a lib with OPT=LOAD
 #
-#	$Id: makeload,v 1.1 2000/05/31 16:01:17 jw Exp $
+#	$Id: makeload,v 1.2 2000/06/02 11:15:42 jw Exp $
 #
 ########################################################################
 
@@ -16,9 +16,9 @@ if [[ -d LoadObjs ]]; then
 else
     mkdir LoadObjs
 fi
-export OPT=-DLOAD
+export OPT="-DLOAD $TCP"
 make load.a
-export OPT=
+export OPT=$TCP
 mv pptc.o link.o rsff.o scan.o LoadObjs
 mv Make_tmp/* .
 rmdir Make_tmp
