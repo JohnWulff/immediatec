@@ -25,12 +25,13 @@
 #
 #	All words in the text which exactly match any token in the list
 #	are marked with a colour depending on the current state of the
-#	node - usually green for 0 and red for 1. Words in the list which
-#	are preceded by ~ or ! or which are followed by ~ show the inverse
-#	state of the node. These are called 'active' words.
+#	node - usually green for 0 and red for 1. These are called 'active'
+#	words. Active words in the list which are preceded by ~ or ! or
+#	which are followed by ~ show the inverse state of the node.
 #
 #	When the mouse cursor sits on an active word the value of the
-#	node is displayed in a subwindow.
+#	node is displayed in a subwindow. This is useful for displaying
+#	the current value of arithmetic nodes.
 #
 #	To be effective, the displayed text must be either the source of
 #	the running iC program or a text derived from that source, such
@@ -43,7 +44,7 @@
 #	This activates the -m option.
 #	Make sure you have downloaded and installed Time::HiRes from CPAN
 #	Uncomment the C++ comment in the next line
-#//define TIME_HIRES
+#define TIME_HIRES
 #
 ########################################################################
 
@@ -51,9 +52,10 @@ use Tk;					# Slurp the module in
 use Msg;
 use strict;
 
-#  live colouring     false 0       true 1
-my @tagBackground = ('PaleGreen1', 'yellow',  );
-my @tagForeground = ('black'     , 'red'   ,  );
+#  live colouring     false 0          true 1
+my @tagArithmetic = ('LightSkyBlue1', 'LightSkyBlue1',);
+my @tagBackground = ('PaleGreen1'   , 'yellow'       ,);
+my @tagForeground = ('black'        , 'red'          ,);
 
 my $is_logic = 0;             # 1 if check-button on
 my $info = '';
@@ -90,22 +92,23 @@ my @bitIndex =	(
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<<< [-tmh] [-s <host>] [-p <port>] [file ...]
+@<<<<<<< [-tmh] [-s <host>] [-p <port>] [-f <font>] [file ...]
 	$named
 	-s host	host name of server    (default 'localhost')
 	-p port	service port of server (default '8778')
+	-f font	font to use in Text window (default '9x15')
 	-t	trace debug messages
 	-m	display elapsed time in seconds and microseconds
 	    (Requires Module Time::HiRes available from CPAN - see source)
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.2 2001/03/23 12:15:36 jw Exp $
+$Id: iClive,v 1.3 2001/03/24 21:01:48 jw Exp $
 .
 
-use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
+use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
 require "getopts.pl";
-&Getopts('tms:p:h');		# sets $opt_h if -h etc
+&Getopts('tms:p:f:h');		# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -127,13 +130,19 @@ if ($opt_m) {
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
+my $font = defined $opt_f ? $opt_f : '9x15';
 my $unitID = 'L0';
+my %symbolTable = ();
+my %activeSymbols;
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-die "Client could not connect to $host:$port\n" unless $conn;
-
-print "Connection $unitID at client.\n";
-$conn->send_now($unitID);	# register I/O
+if ($conn) {
+    print "Connection $unitID at client.\n";
+    $conn->send_now($unitID);	# register I/O
+    $conn->send_now("$unitID.1");	# request Symbol Table
+} else {
+    print "$named could not connect to $host:$port\nEdit only - no live listing\n";
+}
 
 $filename = $ARGV[0] unless @ARGV < 1;
 
@@ -167,25 +176,25 @@ $menuFile->separator();
 $menuFile->command('-label' => 'Quit', '-command' => sub { exit(0); } );
 
 ########################################################################
-#	Sections Menu
+#	Scan Menu
 ########################################################################
-my $menuHeadings = $menuBar->Menubutton('-text' => 'Headings',
-				        '-relief' => 'raised',
-				        '-borderwidth' => 2,
-				       )->pack('-side' => 'left',
-					       '-padx' => 2,
-					      );
-$menuHeadings->separator();
+my $menuScan = $menuBar->Button('-text'        => 'Scan',
+				    '-relief'      => 'raised',
+				    '-borderwidth' => 2,
+				    '-command'     => \&scan,
+				   )->pack('-side' => 'left',
+					   '-padx' => 2,
+					  );
 
 ########################################################################
 #	Search menu 
 ########################################################################
 my $search_mb = $menuBar->Menubutton('-text'         => 'Search',
-				      '-relief'       => 'raised',
-				      '-borderwidth'  => 2,
-				      )->pack('-side' => 'left',
-					      '-padx' => 2
-					     );
+				     '-relief'       => 'raised',
+				     '-borderwidth'  => 2,
+				     )->pack('-side' => 'left',
+					     '-padx' => 2
+					    );
 my $match_type = "-regexp";
 my $ignore_case = 1;
 $search_mb->separator();
@@ -219,9 +228,7 @@ $search_mb->checkbutton('-label'    => 'Logic',
 ########################################################################
 #	Search entry
 ########################################################################
-#my $search = $menuBar->entry('-width' => 20,);
 my $search = $menuBar->Entry('-width' => 20,
-#my $search = $mainWindow->Entry ('-width' => 20,
 			        )->pack('-side' => 'left',
 				        '-padx' => 2,
 				       );
@@ -243,6 +250,7 @@ my $text = $mainWindow->Scrolled('Text',
 		                 -scrollbars => 'osoe',
 		                 -background => 'cornsilk1',
 		                 -wrap => 'none',
+		                 -font => $font,
 		                )->pack(-fill => 'both',
 			                -expand => 1,
 			               );
@@ -253,7 +261,7 @@ my $text = $mainWindow->Scrolled('Text',
 #
 ########################################################################
 
-$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); }) if $conn;
 
 ########################################################################
 #
@@ -266,6 +274,7 @@ MainLoop;
 ########################################################################
 #
 #	Receive message from server - adjust outputs
+#	(these will only occurr if $conn)
 #
 ########################################################################
 
@@ -281,6 +290,22 @@ sub rcvd_msg_from_server {
 	    $conn->disconnect();
 	    print "LiveList $unitID disconnected by server\n";
 	    exit;
+	}
+# print "$msg\n";
+	my @symbols = split /;/, $msg;		# break up message
+	my $entry = shift @symbols;		# first entry is an operation
+	if ($entry =~ /$unitID\.(\d+)/) {
+	    if (($entry = $1) eq '1') {
+		while ($entry = shift @symbols) {
+		    my ($symbol, $ftype) = split " ", $entry;
+# print "$symbol	$ftype\n";
+		    $symbolTable{$symbol} = $ftype;
+		}
+	    } elsif ($entry eq '2') {
+		scan();
+	    }
+	} else {
+	    print "Spurious operation '$entry' for $unitID ???\n";
 	}
     }
 }
@@ -319,7 +344,7 @@ sub search {
     logic();
     $word = $normal;
     $word =~ s/\./\\./;
-    $search_pattern = "\[~!\\s\]*\\b$word\\b\\s*\((~ )?---)?";
+    $search_pattern = "\[~!\\s\]*\\b$word\\b\\s*((~ )?---)?";
 
     my $current = '1.0'; my $length = '0';
     while (1) {
@@ -350,6 +375,52 @@ sub search {
 	$word .= $inv;
 print STDERR "word: $word '$iw'\n";
         $text->tagAdd($word, $current, "$current + $length char");
+        $current = $text->index("$current + $length char");
+    }
+}
+
+########################################################################
+#
+#	Scan text for symbols in %symbolTable, adding a tag for each
+#	symbol found
+#
+########################################################################
+
+sub scan {
+    my ($search_pattern, $word, $i, $iw, $inv);
+    # delete all tags for previous active symbols
+    foreach my $symbol (keys %activeSymbols) {
+	$text->tagDelete($symbol);
+    }
+    %activeSymbols = ();	# delete all previous active symbols
+    $search_pattern = '[~!\s]*[A-Za-z][\w.]*\s*((~ )?---)?';
+
+    my $current = '1.0'; my $length = '0';
+    while (1) {
+	$current = $text->search('-count' => \$length,
+				 '-regexp', 
+				 '--',
+				 $search_pattern,
+				 $current,
+				 'end');
+        last if (!$current);
+	$iw = $i = $text->get($current, "$current + $length char");
+	$i =~ s/([!~\t ]*)([\w.]+)([!~\t ]*)/$1$3/;
+	if ($symbolTable{$2}) {
+	    $word = $2;			# word is in the symbol table
+	    $inv = 0;
+	    while ($i =~ m/[!~]/g) {
+		$inv ^= 1;
+	    }
+	    $word .= '~' if $inv;
+# print "word: $word '$iw'\n";
+	    unless ($activeSymbols{$word}++) {
+		$text->tagConfigure($word, 
+				    '-background' => $tagBackground[$inv], 
+				    '-foreground' => $tagForeground[$inv]);
+	    }
+	    $text->tagAdd($word, $current, "$current + $length char");
+	}
         $current = $text->index("$current + $length char");
     }
 }
