@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.45 2004/02/24 21:38:04 jw Exp $";
+"@(#)$Id: main.c,v 1.46 2004/03/17 14:38:35 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -54,18 +54,18 @@ static const char *	usage =
 "                    +4  logic expansion\n"
 #if YYDEBUG && !defined(_WINDOWS)
 #if defined(RUN) || defined(TCP)
-"                  |402  logic generation (exits after initialisation)\n"
+"                 +0402  logic generation (exits after initialisation)\n"
 #ifdef YACC
-"                  |401  yacc debug info  (on stdout only)\n"
+"                 +0401  iC yacc debug info  (on stdout only) (+4401 C yacc)\n"
 #else	/* BISON */
-"                  |401  bison debug info (on stderr only)\n"
+"                 +0401  iC bison debug info (on stderr only) (+4401 C bison)\n"
 #endif	/* YACC */
 #else	/* not RUN and not TCP */
-"                    +2  logic generation\n"
+"                    +2  logic generation                     (+4002 Symbol Table)\n"
 #ifdef YACC
-"                    +1  yacc debug info  (on stdout only)\n"
+"                    +1  iC yacc debug info  (on stdout only) (+4001 C yacc)\n"
 #else	/* BISON */
-"                    +1  bison debug info (on stderr only)\n"
+"                    +1  iC bison debug info (on stderr only) (+4001 C bison)\n"
 #endif	/* YACC */
 #endif	/* RUN or TCP */
 #endif	/* YYDEBUG and not _WINDOWS */
@@ -140,6 +140,7 @@ unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
 #if YYDEBUG
 extern	int	iCdebug;
+extern	int	c_debug;
 #endif	/* YYDEBUG */
 
 #define inpFN	szNames[1]		/* input file name */
@@ -183,7 +184,7 @@ FILE *	T5FP = NULL;
 
 char		T0FN[] = "ic0.XXXXXX";
 static char	T1FN[] = "ic1.XXXXXX";
-static char	T2FN[] = "ic2.XXXXXX";
+char		T2FN[] = "ic2.XXXXXX";
 static char	T3FN[] = "ic3.XXXXXX";
 char		T4FN[] = "ic4.XXXXXX";	/* must be in current directory */
 char		T5FN[] = "ic5.XXXXXX";
@@ -199,6 +200,7 @@ static void	unlinkTfiles(void);
 char *		full_type[]  = { FULL_TYPE };
 char *		full_ftype[] = { FULL_FTYPE };
 unsigned char	types[]      = { TYPES };
+unsigned char	ctypes[]     = { CTYPES };
 unsigned char	ftypes[]     = { FTYPES };
 char		os[]         = OPS;
 char		fos[]        = FOPS;
@@ -222,6 +224,51 @@ Gate *		IL_[IXD];		/* pointers to long Input Gates */
 Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
 unsigned char	QX_[IXD];		/* Output bit field slots */
 char		QT_[IXD];		/* Output type of slots */
+
+/********************************************************************
+ *
+ *	Open auxiliary files T4FN and T5FN
+ *			make and open T4FN; rewind if it exists
+ *	mode == 1:	make and open T5FN; rewind if it exists
+ *	mode == 0:	make and close T5FN; gcc -E call will overwrite it
+ *
+ *******************************************************************/
+
+int
+openT4T5(int mode)
+{
+    int		fd;
+
+    if (T4FP == NULL) {
+	if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
+	    ierror("openT4T5: cannot open:", T4FN);
+	    return T4index;			/* error opening temporary file */
+	}
+	if (mode) {
+	    if ((fd = mkstemp(T5FN)) < 0 || (T5FP = fdopen(fd, "w+")) == 0) {
+		ierror("openT4T5: cannot open:", T5FN);
+		return T5index;			/* error opening temporary file */
+	    }
+	} else
+	if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
+	    ierror("openT4T5: cannot make or unlink:", T5FN);
+	    perror("unlink");
+	    return T5index;			/* error unlinking temporary file */
+	}
+    } else {
+	fclose (T4FP);				/* overwrite intermediate file */
+	if ((T4FP = fopen(T4FN, "w+")) == NULL) {
+	    return T4index;			/* error re-opening temporary file */
+	}
+	if (T5FP) fclose (T5FP);		/* overwrite intermediate file */
+	if (mode) {
+	    if ((T5FP = fopen(T5FN, "w+")) == NULL) {
+		return T5index;			/* error re-opening temporary file */
+	    }
+	}
+    }
+    return 0;
+} /* openT4T5 */
 
 /********************************************************************
  *
@@ -251,6 +298,9 @@ main(
     iFunBuffer = emalloc(IBUFSIZE);	/* buffer to build imm function symbols */
     iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
 #endif	/* EFENCE */
+    functionUseSize = FUNUSESIZE;	/* initialise function use database */
+    functionUse = (int*)realloc(NULL, functionUseSize * sizeof(int));
+    memset(functionUse, '\0', functionUseSize);
     T0FP = stdin;		/* input file pointer */
     outFP = stdout;		/* listing file pointer */
     errFP = stderr;		/* error file pointer */
@@ -288,7 +338,13 @@ main(
 		    debug |= 0400;	/* always stops */
 #endif	/* not RUN and not TCP */
 #if YYDEBUG
-		    if (debug & 0400) iCdebug = debug & 01;
+		    if (debug & 0400) {
+			if (debug & 04000) {
+			    c_debug = debug & 01;
+			} else {
+			    iCdebug = debug & 01;
+			}
+		    }
 #endif	/* YYDEBUG */
 		    goto break2;
 		case 't':
@@ -429,7 +485,7 @@ main(
      *	in the iC code, an attempt to assign to it in the C-code is an
      *	error.
      *******************************************************************/
-    if ((r = c_compile(T1FP)) != 0) {
+    if ((r = c_compile(T1FP, T3FP, C_PARSE|C_FIRST|C_BLOCK, 0)) != 0) {
 	ro = 6;				/* C-compile error */
     } else {
 #if defined(RUN) || defined(TCP)
@@ -444,7 +500,7 @@ main(
 	     *	-o option: Output a C-file of all Gates, C-code and links
 	     *******************************************************************/
 	    if (outFN) {			/* -o option */
-		r = output(outFN);		/* generate network as C file */
+		r = output(T3FP, outFN);	/* generate network as C file */
 	    } else
 	    /********************************************************************
 	     *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
@@ -458,28 +514,21 @@ main(
 		    /* write C execution file Part 1 */
 		    fprintf(excFP, cexe_part1);
 		    linecnt += cexe_lines1;
-		    /* copy C intermediate file up to EOF to C output file */
-		    copyXlate(excFP, excFN, &linecnt, 01);
-
-		    /* rewind intermediate file T1FN again */
-		    if (fseek(T1FP, 0L, SEEK_SET) != 0) {
-			r = T1index;
-		    } else {
-			/* write C execution file Part 2 */
-			fprintf(excFP, cexe_part2);
-			linecnt += cexe_lines2;
-			/* copy C intermediate file up to EOF to C output file */
-			copyXlate(excFP, excFN, &linecnt, 02);
-
-			/* write C execution file Part 3 */
-			fprintf(excFP, cexe_part3);
-			linecnt += cexe_lines3;
-			if (linecnt > (1 + cexe_lines1 + cexe_lines2 + cexe_lines3)) {
-			    fprintf(excFP, cexe_part4, inpNM, SC_ID);
-			    linecnt += cexe_lines4;
-			    if (debug & 010) {
-				fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
-			    }
+		    /* copy literal blocks from C intermediate file to C output file */
+		    copyXlate(T3FP, excFP, excFN, &linecnt, 01);
+		    /* write C execution file Part 2 */
+		    fprintf(excFP, cexe_part2);
+		    linecnt += cexe_lines2;
+		    /* copy called function cases from C intermediate file to C output file */
+		    copyXlate(T3FP, excFP, excFN, &linecnt, 02);
+		    /* write C execution file Part 3 */
+		    fprintf(excFP, cexe_part3);
+		    linecnt += cexe_lines3;
+		    if (linecnt > (1 + cexe_lines1 + cexe_lines2 + cexe_lines3)) {
+			fprintf(excFP, cexe_part4, inpNM, SC_ID);
+			linecnt += cexe_lines4;
+			if (debug & 010) {
+			    fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
 			}
 		    }
 		    fclose(excFP);
@@ -565,6 +614,7 @@ unlinkTfiles(void)
     }
     if (T4FP) {
 	fclose(T4FP);
+	T4FP = 0;
 	if (!(debug & 04000)) {
 	    unlink(T4FN);
 	}
@@ -580,6 +630,7 @@ unlinkTfiles(void)
     free(iCbuf);
     free(iFunBuffer);
 #endif	/* EFENCE */
+    free(functionUse);
 } /* unlinkTfiles */
 
 /********************************************************************

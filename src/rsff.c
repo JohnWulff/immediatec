@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.36 2004/01/26 20:06:37 jw Exp $";
+"@(#)$Id: rsff.c,v 1.37 2004/03/04 12:32:21 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -84,7 +84,10 @@ unsigned char	bitIndex[]   = {
  *		gx	special slave	pointer globally shared with scan.c
  *		ma	Master Actions	pointer to Gate array, pointing to
  *					associated slave, clock and time
- *		out_list 2nd argument	only used in IF ELSE and SWITCH
+ *		out_list 2nd argument	used in D_SH, CH_BIT, F_SW and OUTW
+ *					to select logic ar arithmetic input
+ *		out_list 2nd argument	used in IF ELSE and SWITCH to select
+ *					deferred action f_list
  *
  *******************************************************************/
 
@@ -130,24 +133,21 @@ sSff(					/* S_FF slave action on FF */
 {
     Gate *	gs;
 
-    if (gm->gt_val < 0) {
-	gs = gm->gt_funct;
-	if (gs->gt_val > 0) {
+    assert(gm->gt_val < 0);		/* S FF receives -1 ==> 1 ??? */
+    gs = gm->gt_funct;
+    if (gs->gt_val > 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-		fprintf(outFP, "\tS %s %2d ==>", gs->gt_ids, gs->gt_val);
-	    }
-#endif
-	    gs->gt_val = -1;		/* set slave output */
-	    link_ol(gs, o_list);
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-		fprintf(outFP, " %d", gs->gt_val);
-	    }
-#endif
+	if (debug & 0100) {
+	    fprintf(outFP, "\tS %s %2d ==>", gs->gt_ids, gs->gt_val);
 	}
-    } else {
-	assert(0);			/* S FF receives -1 ==> 1 ??? */
+#endif
+	gs->gt_val = -1;		/* set slave output */
+	link_ol(gs, o_list);
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) {
+	    fprintf(outFP, " %d", gs->gt_val);
+	}
+#endif
     }
 } /* sSff */
 
@@ -193,24 +193,21 @@ rSff(					/* R_FF slave action on FF */
 {
     Gate *	gs;
 
-    if (gm->gt_val < 0) {
-	gs = gm->gt_funct;
-	if (gs->gt_val < 0) {
+    assert(gm->gt_val < 0);		/* R FF receives -1 ==> 1 ??? */
+    gs = gm->gt_funct;
+    if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-		fprintf(outFP, "\tR %s %2d ==>", gs->gt_ids, gs->gt_val);
-	    }
-#endif
-	    gs->gt_val = 1;		/* reset slave output */
-	    link_ol(gs, o_list);
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-		fprintf(outFP, " %d", gs->gt_val);
-	    }
-#endif
+	if (debug & 0100) {
+	    fprintf(outFP, "\tR %s %2d ==>", gs->gt_ids, gs->gt_val);
 	}
-    } else {
-	assert(0);			/* R FF receives -1 ==> 1 ??? */
+#endif
+	gs->gt_val = 1;			/* reset slave output */
+	link_ol(gs, o_list);
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) {
+	    fprintf(outFP, " %d", gs->gt_val);
+	}
+#endif
     }
 } /* rSff */
 
@@ -275,7 +272,8 @@ dSff(					/* D_FF slave action on FF */
 /********************************************************************
  *
  *	Sample/hold function with SH(arithmetic_expr)
- *				  SH(arithmetic_expr, set, reset)
+ *				  SHR(arithmetic_expr, reset)
+ *				  SHSR(arithmetic_expr, set, reset)
  *
  *	Sample/hold is the arithmetic analog of a flip/flop
  *	The delay function transfers the arithmetic input at the
@@ -283,36 +281,13 @@ dSff(					/* D_FF slave action on FF */
  *	Set and reset set the slave to -1 (all 1s) or 0 (all 0s)
  *	on the next clock. Set and reset have priority over delay.
  *
- *	Explanation of the locking algorithm used below.
- *
- *	Values in slave node gt_val for different valuse in gt_new:
- *
- *	    +4  0000 0100  all other +ve values are not used
- *	    +3  0000 0011  gt_new =  0, set/reset master occurred
- *	    +2  0000 0010  intermediate, set/reset master occurred
- *	    +1  0000 0001  gt_new =  0
- *	     0  0000 0000  intermediate
- *	    -1  1111 1111  gt_new = -1, set/reset master occurred
- *	    -2  1111 1110  not used
- *	    -3  1111 1101  gt_new = -1
- *	    -4  1111 1100  all other -ve values are not used
- *		bit1---^   (mask is 0x02)
- *
- *	Inital value from gate3() is +1 which is given.
- *
- *	Intermediate values for gt_new are 1 to -2 for which both
- *	a set and reset action can be fired because gt_val is 0.
- *
- *	gt_val.bit1 records that set/reset master has occurred.
- *
- *	After a set action a subsequent reset before the next clock
- *	would be blocked, because gt_val is then +2.
- *
- *	Independent of this, a second set or reset action is blocked
- *	by testing gt_val.bit1.
- *
- *	Care must be taken that gt_val.bit1 is cleared when a glitch
- *	occurrs on a set or reset input; otherwise there is a deadlock.
+ *	As of version 1.37 (icc_1.104) SH with reset or with set/reset
+ *	were implemented as system defined functions in init.c.
+ *	This change means that no locking between data, set and reset
+ *	inputs is necessary at this level. This change was prompted by
+ *	similar changes in the D flip/flop with reset or set/reset,
+ *	which did nor really work correctly, because it had no locking
+ *	code in this file.
  *
  *******************************************************************/
 
@@ -332,20 +307,30 @@ dMsh(					/* D_SH master action on SH */
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
 	gm->gt_new = gm->gt_val < 0 ? 1 : 0;
-	/*
+	/********************************************************************
 	 * since new is only modified here and since gt_val has changed,
 	 * new must differ from old (no need to check).
 	 * old will be modified during arithmetic scan, although that
 	 * would not be necessary for this action.
-	 */
+	 *******************************************************************/
     }
 #if defined(TCP) && defined(LOAD)
     if (gm->gt_live & 0x8000) {			/* misses all but first change */
 	liveData(gm->gt_live, gm->gt_new);	/* and return to old value */
     }
 #endif
+    /********************************************************************
+     * SH master action is only called if gt_new has changed first time
+     * versus gt_old or changed back, which is a glitch. This is already
+     * tested in scan_ar() unlike D master action which has to do it here.
+     * Nevertheles the action must only be linked, if the new value will
+     * changes the master, since that can be manipulated by set or reset.
+     *******************************************************************/
     gs = gm->gt_funct;
-    if ((gs->gt_val & 0x02) == 0) {
+    if (
+	(gm->gt_new != gs->gt_new)		/* any change */
+	^ (gm->gt_next != 0)			/* xor glitch */
+    ) {
 	link_ol(gm, gm->gt_clk);		/* master action */
     }
 } /* dMsh */
@@ -369,31 +354,26 @@ dSsh(					/* D_SH slave action on SH */
     }
 #endif
     gs = gm->gt_funct;
-    /*
-     * Although master gm is still on clock list, master may not differ from
-     * slave output because of S_SH or R_SH actions.
-     */
-    if ((gs->gt_val & 0x02) == 0 && gm->gt_new != gs->gt_new) {
-#if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-	    fprintf(outFP, "\tSH %s %ld ==>", gs->gt_ids, gs->gt_new);
-#else
-	    fprintf(outFP, "\tSH %s %d ==>", gs->gt_ids, gs->gt_new);
-#endif
-	}
-#endif
-	gs->gt_new = gm->gt_old = gm->gt_new; /* transfer value to slave */
-	gs->gt_val = gs->gt_new ? (gs->gt_new == -1 ? -3 : 0) : 1;
-	link_ol(gs, a_list);	/* fire new arithmetic action */
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (debug & 0100) fprintf(outFP, " %ld", gs->gt_new);
+	if (debug & 0100) fprintf(outFP, "\tSH %s %ld ==>", gs->gt_ids, gs->gt_new);
 #else
-	if (debug & 0100) fprintf(outFP, " %d", gs->gt_new);
+	if (debug & 0100) fprintf(outFP, "\tSH %s %d ==>", gs->gt_ids, gs->gt_new);
 #endif
 #endif
-    }
+    /********************************************************************
+     * since gm is still on clock list gt_new must differ from gt_old
+     *******************************************************************/
+    gs->gt_new = gm->gt_old = gm->gt_new;	/* transfer value to slave */
+    link_ol(gs, a_list);			/* fire new arithmetic action */
+
+#if YYDEBUG && !defined(_WINDOWS)
+#if INT_MAX == 32767 && defined (LONG16)
+    if (debug & 0100) fprintf(outFP, " %ld", gs->gt_new);
+#else
+    if (debug & 0100) fprintf(outFP, " %d", gs->gt_new);
+#endif
+#endif
 } /* dSsh */
 
 /********************************************************************
@@ -407,9 +387,7 @@ sMsh(					/* S_SH master action on SH */
     Gate *	gm,
     Gate *	out_list)
 {
-    Gate *	gs;
     Gate **	ma;
-    Gate *	gdm;
 
 #if defined(TCP) && defined(LOAD)
     if (gm->gt_live & 0x8000) {
@@ -418,40 +396,11 @@ sMsh(					/* S_SH master action on SH */
 #endif
     if (
 	(
-	    (gs = (ma = gm->gt_list)[FL_GATE])->gt_val >= 0	/* 0 for intermediate SH */
-	    && gm->gt_val < 0		/* anything to set */
-	    && (gs->gt_val & 0x02) == 0	/* no previous master reset action */
+	    (ma = gm->gt_list)[FL_GATE]->gt_new != -1 &&
+	    gm->gt_val < 0		/* anything to set */
 	) ||
-	gm->gt_next			/* or glitch, which clears bit1 */
+	gm->gt_next			/* or glitch */
     ) {
-	if (gs->gt_val & 0x02) {
-	    gs->gt_val &= ~0x02;	/* glitch - clear S_SH action in slave node */
-	    /* the SH function should have a delay master - works with set/rest only */
-	    if ((gdm = (Gate*)gs->gt_rlist) &&	/* delay master for this slave */
-		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
-#if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-		    fprintf(outFP, "{sMsh %s %ld ==>", gdm->gt_ids, gdm->gt_old);
-#else
-		    fprintf(outFP, "{sMsh %s %d ==>", gdm->gt_ids, gdm->gt_old);
-#endif
-		}
-#endif
-		dMsh(gdm, a_list);	/* link or unlink delay master now */
-#if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-		    fprintf(outFP, " %ld}", gdm->gt_new);
-#else
-		    fprintf(outFP, " %d}", gdm->gt_new);
-#endif
-		}
-#endif
-	    }
-	} else {
-	    gs->gt_val |= 0x02;		/* mark S_SH action in slave node */
-	}
 	link_ol(gm, ma[FL_CLK]);	/* master action */
     }
 } /* sMsh */
@@ -459,11 +408,6 @@ sMsh(					/* S_SH master action on SH */
 /********************************************************************
  *
  *	Slave set action S_SH on sample/hold SH
- *
- *	With this action the value is changed and this must be stored
- *	in gt_old of the associated delay master. This is needed mainly
- *	when gt_new changes back to the original value. This would not
- *	be the correct target unless changed here.
  *
  *******************************************************************/
 
@@ -473,66 +417,26 @@ sSsh(					/* S_SH slave action on SH */
     Gate *	out_list)
 {
     Gate *	gs;
-    Gate *	gdm;
 
-    if (gm->gt_val < 0) {
-	gs = gm->gt_funct;
-	gs->gt_val &= ~0x02;		/* clear set slave action flag */
-	if (gs->gt_new != -1) {
+    assert(gm->gt_val < 0);		/* S SH receives -1 ==> 1 ??? */
+    gs = gm->gt_funct;
+    if (gs->gt_new != -1) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-		fprintf(outFP, "\tS SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (debug & 0100) fprintf(outFP, "\tS SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
 #else
-		fprintf(outFP, "\tS SH %s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (debug & 0100) fprintf(outFP, "\tS SH %s %2d ==>", gs->gt_ids, gs->gt_new);
 #endif
-	    }
 #endif
-	    if (gs->gt_next) {
-		gs->gt_new = gs->gt_old;	/* glitch SH slave output */
-		gs->gt_val = gs->gt_new ? (gs->gt_new == -1 ? -3 : 0) : 1;
-	    } else {
-		gs->gt_new = -1;		/* set SH slave output */
-		gs->gt_val = -3;		/* set logic output also */
-	    }
-	    /* the SH function should have a delay master - works with set/rest only */
-	    if ((gdm = (Gate*)gs->gt_rlist)) {	/* delay master for this slave */
-		gdm->gt_old = gs->gt_new;	/* adjust delay master */
-		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
+	gs->gt_new = -1;		/* set SH slave output */
+	link_ol(gs, a_list);
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-			fprintf(outFP, "{sSsh %s %ld ==>", gdm->gt_ids, gdm->gt_old);
+	if (debug & 0100) fprintf(outFP, " %ld", gs->gt_new);
 #else
-			fprintf(outFP, "{sSsh %s %d ==>", gdm->gt_ids, gdm->gt_old);
+	if (debug & 0100) fprintf(outFP, " %d", gs->gt_new);
 #endif
-		    }
 #endif
-		    dMsh(gdm, a_list);		/* link or unlink delay master now */
-#if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-			fprintf(outFP, " %ld}", gdm->gt_new);
-#else
-			fprintf(outFP, " %d}", gdm->gt_new);
-#endif
-		    }
-#endif
-		}
-	    }
-	    link_ol(gs, a_list);
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-		fprintf(outFP, " %ld", gs->gt_new);
-#else
-		fprintf(outFP, " %d", gs->gt_new);
-#endif
-	    }
-#endif
-	}
-    } else {
-	assert(0);			/* S SH receives -1 ==> 1 ??? */
     }
 } /* sSsh */
 
@@ -547,9 +451,7 @@ rMsh(					/* R_SH master action on SH */
     Gate *	gm,
     Gate *	out_list)
 {
-    Gate *	gs;
     Gate **	ma;
-    Gate *	gdm;
 
 #if defined(TCP) && defined(LOAD)
     if (gm->gt_live & 0x8000) {
@@ -558,40 +460,11 @@ rMsh(					/* R_SH master action on SH */
 #endif
     if (
 	(
-	    (gs = (ma = gm->gt_list)[FL_GATE])->gt_val <= 0	/* 0 for intermediate SH */
-	    && gm->gt_val < 0		/* anything to reset */
-	    && (gs->gt_val & 0x02) == 0	/* no previous master set action */
+	    (ma = gm->gt_list)[FL_GATE]->gt_new != 0 &&
+	    gm->gt_val < 0		/* anything to reset */
 	) ||
-	gm->gt_next			/* or glitch, which clears bit1 */
+	gm->gt_next			/* or glitch */
     ) {
-	if (gs->gt_val & 0x02) {
-	    gs->gt_val &= ~0x02;	/* glitch - clear R_SH action in slave node */
-	    /* the SH function should have a delay master - works with set/rest only */
-	    if ((gdm = (Gate*)gs->gt_rlist) &&	/* delay master for this slave */
-		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
-#if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-		    fprintf(outFP, "{rMsh %s %ld ==>", gdm->gt_ids, gdm->gt_old);
-#else
-		    fprintf(outFP, "{rMsh %s %d ==>", gdm->gt_ids, gdm->gt_old);
-#endif
-		}
-#endif
-		dMsh(gdm, a_list);	/* link or unlink delay master now */
-#if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-		    fprintf(outFP, " %ld}", gdm->gt_new);
-#else
-		    fprintf(outFP, " %d}", gdm->gt_new);
-#endif
-		}
-#endif
-	    }
-	} else {
-	    gs->gt_val |= 0x02;		/* mark R_SH action in slave node */
-	}
 	link_ol(gm, ma[FL_CLK]);	/* master action */
     }
 } /* rMsh */
@@ -599,11 +472,6 @@ rMsh(					/* R_SH master action on SH */
 /********************************************************************
  *
  *	Slave reset action R_SH on sample/hold SH
- *
- *	With this action the value is changed and this must be stored
- *	in gt_old of the associated delay master. This is needed mainly
- *	when gt_new changes back to the original value. This would not
- *	be the correct target unless changed here.
  *
  *******************************************************************/
 
@@ -613,66 +481,26 @@ rSsh(					/* R_SH slave action on SH */
     Gate *	out_list)
 {
     Gate *	gs;
-    Gate *	gdm;
 
-    if (gm->gt_val < 0) {
-	gs = gm->gt_funct;
-	gs->gt_val &= ~0x02;		/* clear reset slave action flag */
-	if (gs->gt_new != 0) {
+    assert(gm->gt_val < 0);		/* S SH receives -1 ==> 1 ??? */
+    gs = gm->gt_funct;
+    if (gs->gt_new != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-		fprintf(outFP, "\tR SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (debug & 0100) fprintf(outFP, "\tS SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
 #else
-		fprintf(outFP, "\tR SH %s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (debug & 0100) fprintf(outFP, "\tS SH %s %2d ==>", gs->gt_ids, gs->gt_new);
 #endif
-	    }
 #endif
-	    if (gs->gt_next) {
-		gs->gt_new = gs->gt_old;	/* glitch SH slave output */
-		gs->gt_val = gs->gt_new ? (gs->gt_new == -1 ? -3 : 0) : 1;
-	    } else {
-		gs->gt_new = 0;			/* reset SH slave output */
-		gs->gt_val = 1;			/* reset logic output also */
-	    }
-	    /* the SH function should have a delay master - works with set/rest only */
-	    if ((gdm = (Gate*)gs->gt_rlist)) {	/* delay master for this slave */
-		gdm->gt_old = gs->gt_new;	/* adjust delay master */
-		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
+	gs->gt_new = 0;		/* reset SH slave output */
+	link_ol(gs, a_list);
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-			fprintf(outFP, "{rSsh %s %ld ==>", gdm->gt_ids, gdm->gt_old);
+	if (debug & 0100) fprintf(outFP, " %ld", gs->gt_new);
 #else
-			fprintf(outFP, "{rSsh %s %d ==>", gdm->gt_ids, gdm->gt_old);
+	if (debug & 0100) fprintf(outFP, " %d", gs->gt_new);
 #endif
-		    }
 #endif
-		    dMsh(gdm, a_list);		/* link or unlink delay master now */
-#if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-			fprintf(outFP, " %ld}", gdm->gt_new);
-#else
-			fprintf(outFP, " %d}", gdm->gt_new);
-#endif
-		    }
-#endif
-		}
-	    }
-	    link_ol(gs, a_list);
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-		fprintf(outFP, " %ld", gs->gt_new);
-#else
-		fprintf(outFP, " %d", gs->gt_new);
-#endif
-	    }
-#endif
-	}
-    } else {
-	assert(0);			/* R SH receives -1 ==> 1 ??? */
     }
 } /* rSsh */
 
@@ -873,30 +701,33 @@ chMbit(					/* CH_BIT master action on VF */
     Gate **	ma;
 
 #if defined(TCP) && defined(LOAD)
-    if (gm->gt_live & 0x8000) {			/* misses all but first change */
-	liveData(gm->gt_live, gm->gt_ini < 0 ?	/* and return to old value */
-	gm->gt_new : gm->gt_val < 0 ? 1 : 0);	/* live is active */
+    if (gm->gt_live & 0x8000) {			/* display all changes */
+	liveData(gm->gt_live, gm->gt_ini < 0 ? gm->gt_new
+					     : gm->gt_val < 0 ? 1 : 0);
     }
 #endif
-    gx = (ma = gm->gt_list)[FL_GATE];	/* ignore input */
-    link_ol(gm, ma[FL_CLK]);		/* master action */
+    if (out_list == o_list ||			/* logic or arithmetic change */
+	((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0))) {
+	gx = (ma = gm->gt_list)[FL_GATE];	/* ignore input */
+	link_ol(gm, ma[FL_CLK]);		/* master action */
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) {
+	if (debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-	fprintf(outFP, " %ld", out_list != o_list? gm->gt_new : (long)gm->gt_val);
+	    fprintf(outFP, " %ld", out_list != o_list? gm->gt_new : (long)gm->gt_val);
 #else
-	fprintf(outFP, " %d", out_list != o_list? gm->gt_new : gm->gt_val);
+	    fprintf(outFP, " %d", out_list != o_list? gm->gt_new : gm->gt_val);
 #endif
-	if (dc++ >= 4) {
-	    dc = 1;
-	    putc('\n', outFP);
+	    if (dc++ >= 4) {
+		dc = 1;
+		putc('\n', outFP);
+	    }
+	    fprintf(outFP, "\t%s %2d V=>",
+		gx->gt_ids, gx->gt_val);
 	}
-	fprintf(outFP, "\t%s %2d V=>",
-	    gx->gt_ids, gx->gt_val);
-    }
 #endif
-    gx->gt_val = -gx->gt_val;		/* immediate (glitch could reset here) */
-    link_ol(gx, o_list);		/* set or reset slave output */
+	gx->gt_val = -gx->gt_val;		/* immediate (glitch could reset here) */
+	link_ol(gx, o_list);			/* set or reset slave output */
+    }
 } /* chMbit */
 
 /********************************************************************
@@ -912,13 +743,13 @@ chMbit(					/* CH_BIT master action on VF */
  *******************************************************************/
 
 void
-chSbit(					/* CH_BIT slave action */
+chSbit(						/* CH_BIT slave action */
     Gate *	gm,
     Gate *	out_list)
 {
     Gate *	gs;
 
-    gm->gt_old = gm->gt_new;		/* now new value is fixed */
+    gm->gt_old = gm->gt_new;			/* now new value is fixed */
 #if defined(TCP) && defined(LOAD)
     if (gm->gt_live & 0x8000) {			/* value can change more than once */
 	liveData(gm->gt_live, gm->gt_ini < 0 ?	/* output final value here */
@@ -932,7 +763,7 @@ chSbit(					/* CH_BIT slave action */
 	    fprintf(outFP, "\tV %s %2d ==>", gs->gt_ids, gs->gt_val);
 	}
 #endif
-	gs->gt_val = 1;			/* reset slave output to LO */
+	gs->gt_val = 1;				/* reset slave output to LO */
 	link_ol(gs, o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
@@ -963,7 +794,9 @@ fMsw(					/* F_SW master action */
 	liveData(gm->gt_live, gm->gt_new);	/* and return to old value */
     }
 #endif
-    link_ol(gm, gm->gt_clk);		/* master action */
+    if ((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0)) {
+	link_ol(gm, gm->gt_clk);		/* master action */
+    }
 } /* fMsw */
 
 /********************************************************************
@@ -1141,63 +974,65 @@ outMw(					/* OUTW master action */
     int		cage;
     int		mask;
 
-    slot = (int)gm->gt_list;
-    mask = gm->gt_mark;
-    assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
-    cage = slot >> 3;			/* test here because of cage algorithm */
+    if (gm->gt_new != gm->gt_old) {
+	slot = (int)gm->gt_list;
+	mask = gm->gt_mark;
+	assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
+	cage = slot >> 3;		/* test here because of cage algorithm */
 #ifdef MIXED
-    if (out_list == o_list) {
-	/* called from logic scan - convert d to a */
-	/* MIXED mode is currently not compiled - ERROR */
-	gm->gt_new = gm->gt_val < 0 ? 1 : 0;
-    }
+	if (out_list == o_list) {
+	    /* called from logic scan - convert d to a */
+	    /* MIXED mode is currently not compiled - ERROR */
+	    gm->gt_new = gm->gt_val < 0 ? 1 : 0;
+	}
 #endif
 
-    val = gm->gt_old = gm->gt_new;	/* update gt_old since no link_ol */
+	val = gm->gt_old = gm->gt_new;	/* update gt_old since no link_ol */
 #if defined(TCP) && defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	liveData(gm->gt_live, val);	/* live is active */
-    }
+	if (gm->gt_live & 0x8000) {
+	    liveData(gm->gt_live, val);	/* live is active */
+	}
 #endif
-    if (mask == B_WIDTH) {
+	if (mask == B_WIDTH) {
 #ifndef _WINDOWS
-	val &= 0xff;			/* for display only */
+	    val &= 0xff;		/* for display only */
 #endif
-	QX_[slot] = val;		/* output byte to slot */
+	    QX_[slot] = val;		/* output byte to slot */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "%d", val & 0xff);	/* byte */
+	    if (debug & 0100) fprintf(outFP, "%d", val & 0xff);	/* byte */
 #endif
-    } else if (mask == W_WIDTH) {
+	} else if (mask == W_WIDTH) {
 #ifndef _WINDOWS
-	val &= 0xffff;			/* for display only */
+	    val &= 0xffff;		/* for display only */
 #endif
-	assert((slot & 0x01) == 0);	/* even I/O word address */
-	*(short*)&QX_[slot] = val;	/* output word to slot and slot+1 */
+	    assert((slot & 0x01) == 0);	/* even I/O word address */
+	    *(short*)&QX_[slot] = val;	/* output word to slot and slot+1 */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "%hd", (short)val);	/* word */
+	    if (debug & 0100) fprintf(outFP, "%hd", (short)val);	/* word */
 #endif
 #if INT_MAX != 32767 || defined (LONG16)
-    } else if (mask == L_WIDTH) {
-	assert((slot & 0x03) == 0);	/* 4 byte I/O long address */
+	} else if (mask == L_WIDTH) {
+	    assert((slot & 0x03) == 0);	/* 4 byte I/O long address */
 #if INT_MAX == 32767
-	*(long*)&QX_[slot] = val;	/* output long from slot to slot+3 */
+	    *(long*)&QX_[slot] = val;	/* output long from slot to slot+3 */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "%ld", val);	/* long */
+	    if (debug & 0100) fprintf(outFP, "%ld", val);	/* long */
 #endif
 #else
-	*(int*)&QX_[slot] = val;	/* output long from slot to slot+3 */
+	    *(int*)&QX_[slot] = val;	/* output long from slot to slot+3 */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "%d", val);	/* long */
+	    if (debug & 0100) fprintf(outFP, "%d", val);	/* long */
 #endif
 #endif
 #endif
 #ifndef _WINDOWS
-    } else {
-	val = 0;			/* error - no output */
+	} else {
+	    val = 0;			/* error - no output */
 #endif
+	}
+	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
+	QMM |= bitMask[cage & 0x7];		/* mark the rack */
     }
-    QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
-    QMM |= bitMask[cage & 0x7];		/* mark the rack */
 } /* outMw */
 
 /********************************************************************
@@ -1311,66 +1146,63 @@ clockSfn(				/* Clock function */
     Gate *	out_list)
 {
     Gate *	gs;
-    /*
-     * the clock list is controlled by a control block which is the
-     * Gate structure which goes with this function
-     */
-    if (gm->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS) || defined(DEQ)
-	Gate *	tp;
+    Gate *	tp;
 #endif
 #ifdef DEQ
-	Gate *	np;
+    Gate *	np;
 #endif
+    /********************************************************************
+     * the clock list is controlled by a control block which is the
+     * Gate structure which goes with this function
+     *******************************************************************/
 
-	gs = gm->gt_funct;
+    assert(gm->gt_val < 0);		/* C clock receives -1 ==> 1 ??? */
+    gs = gm->gt_funct;
+#if YYDEBUG && !defined(_WINDOWS)
+    if (debug & 0100) {
+	fprintf(outFP, "\tC %s", gs->gt_ids);
+    }
+#endif
+    gs->gt_val = -1;				/* set for visualization only */
+#if defined(TCP) && defined(LOAD)
+    if (gs->gt_live & 0x8000) {
+	liveData(gs->gt_live, 1L);		/* live is active */
+    }
+#endif
+    if (gs->gt_next != gs) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
-	    fprintf(outFP, "\tC %s", gs->gt_ids);
-	}
-#endif
-	gs->gt_val = -1;		/* set for visualization only */
-#if defined(TCP) && defined(LOAD)
-	if (gs->gt_live & 0x8000) {
-	    liveData(gs->gt_live, 1L);	/* live is active */
-	}
-#endif
-	if (gs->gt_next != gs) {
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-		int	dc = 0;		/* functions which are clocked */
-		for (tp = gs->gt_next; tp != gs; tp = tp->gt_next) {
-		    if (dc++ >= 8) {
-			dc = 1;
-			fprintf(outFP, "\n\t");
-		    }
-		    fprintf(outFP, "\t%s", tp->gt_ids);
+	    int	dc = 0;				/* functions which are clocked */
+	    for (tp = gs->gt_next; tp != gs; tp = tp->gt_next) {
+		if (dc++ >= 8) {
+		    dc = 1;
+		    fprintf(outFP, "\n\t");
 		}
+		fprintf(outFP, "\t%s", tp->gt_ids);
 	    }
+	}
 #endif
 #ifndef DEQ
-	    ((Gate *)c_list->gt_list)->gt_next = gs->gt_next;
-	    c_list->gt_list = gs->gt_list;  	/* link gs */
-	    ((Gate *)c_list->gt_list)->gt_next = c_list;    /* to c_list */
+	((Gate *)c_list->gt_list)->gt_next = gs->gt_next;
+	c_list->gt_list = gs->gt_list; 		 	/* link gs */
+	((Gate *)c_list->gt_list)->gt_next = c_list;    /* to c_list */
 #else
-	    /* link chain of Gates on clock list gs to end of c_list */
-	    tp = c_list->gt_prev;		/* save c_list.previous */
-	    tp->gt_next = np = gs->gt_next;	/* c_list.last ==> new */
-	    np->gt_prev = tp;			/* c_list.last <== new */
-	    tp = gs->gt_prev;			/* save gs.previous */
-	    tp->gt_next = c_list;		/* gs.last ==> c_list */
-	    c_list->gt_prev = tp;		/* gs.last <== c_list */
+	/* link chain of Gates on clock list gs to end of c_list */
+	tp = c_list->gt_prev;			/* save c_list.previous */
+	tp->gt_next = np = gs->gt_next;		/* c_list.last ==> new */
+	np->gt_prev = tp;			/* c_list.last <== new */
+	tp = gs->gt_prev;			/* save gs.previous */
+	tp->gt_next = c_list;			/* gs.last ==> c_list */
+	c_list->gt_prev = tp;			/* gs.last <== c_list */
 #endif
-	    Out_init(gs);			/* relink empty gs */
-	}
-#ifdef LEVEL
-	if ((gs = gm->gt_clk) != c_list) {
-	    link_ol(gm, gs);
-	}
-#endif
-    } else {
-	assert(0);			/* C clock receives -1 ==> 1 ??? */
+	Out_init(gs);				/* relink empty gs */
     }
+#ifdef LEVEL
+    if ((gs = gm->gt_clk) != c_list) {
+	link_ol(gm, gs);
+    }
+#endif
 } /* clockSfn */
 
 Functp	clock_i[] = {pass1, null1, i_ff3, null1};	/* no output lists */
@@ -1393,76 +1225,73 @@ timerSfn(				/* Timer function */
     Gate *	out_list)
 {
     Gate *	gs;
-    /*
+    Gate *	tp;			/* functions which are timed */
+    Gate *	np;
+    /********************************************************************
      * the timer list is controlled by a control block which is the
      * Gate structure which goes with this function
-     */
-    if (gm->gt_val < 0) {
-	Gate *	tp;			/* functions which are timed */
-	Gate *	np;
+     *******************************************************************/
 
-	gs = gm->gt_funct;
+    assert(gm->gt_val < 0);		/* T timer receives -1 ==> 1 ??? */
+    gs = gm->gt_funct;
+#if YYDEBUG && !defined(_WINDOWS)
+    if (debug & 0100) {
+	fprintf(outFP, "\tT %s", gs->gt_ids);
+    }
+#endif
+    gs->gt_val = -1;				/* set for visualization only */
+#if defined(TCP) && defined(LOAD)
+    if (gs->gt_live & 0x8000) {
+	liveData(gs->gt_live, 1L);		/* live is active */
+    }
+#endif
+    if ((np = gs->gt_next) != gs) {
+#if YYDEBUG && !defined(_WINDOWS)
+	int	dc = 1;	/* allow for (time) */
+#endif
+	np->gt_mark--;				/* count down first element */
+
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
-	    fprintf(outFP, "\tT %s", gs->gt_ids);
+	    fprintf(outFP, "\t(%d)", np->gt_mark);
 	}
 #endif
-	gs->gt_val = -1;		/* set for visualization only */
-#if defined(TCP) && defined(LOAD)
-	if (gs->gt_live & 0x8000) {
-	    liveData(gs->gt_live, 1L);	/* live is active */
-	}
-#endif
-	if ((np = gs->gt_next) != gs) {
-#if YYDEBUG && !defined(_WINDOWS)
-	    int	dc = 1;	/* allow for (time) */
-#endif
-	    np->gt_mark--;		/* count down first element */
-
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (debug & 0100) {
-		fprintf(outFP, "\t(%d)", np->gt_mark);
-	    }
-#endif
-	    if (np->gt_mark == 0) {
+	if (np->gt_mark == 0) {
 #ifdef DEQ
-		/* link head of timer chain gs to end of c_list */
-		tp = c_list->gt_prev;		/* save c_list.previous */
-		tp->gt_next = np;		/* c_list.last ==> new */
-		np->gt_prev = tp;		/* c_list.last <== new */
+	    /* link head of timer chain gs to end of c_list */
+	    tp = c_list->gt_prev;		/* save c_list.previous */
+	    tp->gt_next = np;			/* c_list.last ==> new */
+	    np->gt_prev = tp;			/* c_list.last <== new */
 #endif
-		do {
-		    tp = np;
+	    do {
+		tp = np;
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0100) {
-			if (dc++ >= 8) {
-			    dc = 1;
-			    fprintf(outFP, "\n\t");
-			}
-			fprintf(outFP, "\t%s", tp->gt_ids);
+		if (debug & 0100) {
+		    if (dc++ >= 8) {
+			dc = 1;
+			fprintf(outFP, "\n\t");
 		    }
-#endif
-		} while ((np = tp->gt_next) != gs && np->gt_mark == 0);
-#ifndef DEQ
-		((Gate *)c_list->gt_list)->gt_next = gs->gt_next;/* => new */
-		gs->gt_next = np;		/* timer => rest */
-		c_list->gt_list = (Gate **)tp;	/* clock last => new last */
-		tp->gt_next = c_list;    	/* new last => c_list */
-		if (np == gs) {			/* last entry ? */
-		    gs->gt_list = (Gate **)np;	/*  yes, fix timer last */
+		    fprintf(outFP, "\t%s", tp->gt_ids);
 		}
-#else
-		/* link tail of timer chain which is due to c_list */
-		tp->gt_next = c_list;		/* gs.last ==> c_list */
-		c_list->gt_prev = tp;		/* gs.last <== c_list */
-		/* the re-linking of gs works correctly also if np == gs */
-		gs->gt_next = np;		/* gs ==> new new */
-		np->gt_prev = gs;		/* gs <== new new */
 #endif
+	    } while ((np = tp->gt_next) != gs && np->gt_mark == 0);
+#ifndef DEQ
+	    ((Gate *)c_list->gt_list)->gt_next = gs->gt_next;/* => new */
+	    gs->gt_next = np;			/* timer => rest */
+	    c_list->gt_list = (Gate **)tp;	/* clock last => new last */
+	    tp->gt_next = c_list;    		/* new last => c_list */
+	    if (np == gs) {			/* last entry ? */
+		gs->gt_list = (Gate **)np;	/*  yes, fix timer last */
 	    }
+#else
+	    /* link tail of timer chain which is due to c_list */
+	    tp->gt_next = c_list;		/* gs.last ==> c_list */
+	    c_list->gt_prev = tp;		/* gs.last <== c_list */
+	    /* the re-linking of gs works correctly also if np == gs */
+	    gs->gt_next = np;			/* gs ==> new new */
+	    np->gt_prev = gs;			/* gs <== new new */
+#endif
 	}
-    } else {
-	assert(0);			/* T timer receives -1 ==> 1 ??? */
     }
 } /* timerSfn */
 

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.41 2004/01/26 20:23:41 jw Exp $";
+"@(#)$Id: load.c,v 1.42 2004/03/07 17:32:41 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -102,6 +102,7 @@ static const char *	usage =
 char *		full_type[]  = { FULL_TYPE };
 char *		full_ftype[] = { FULL_FTYPE };
 unsigned char	types[]      = { TYPES };
+unsigned char	ctypes[]     = { CTYPES };
 unsigned char	ftypes[]     = { FTYPES };
 char		os[]         = OPS;
 char		fos[]        = FOPS;

@@ -30,8 +30,9 @@ usage ()
     echo '	-t	make ict with YYDEBUG -t trace output possible' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain with YYDEBUG' >&2
-    echo '	-d	make all targets with DEQ option' >&2
+    echo '	-d	make all targets with DEQ option defined' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
+    echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	see usage of icc, icr, ict and applications for other options' >&2
     echo '	-C	make icc only; generate an empty cexe.c' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
@@ -46,7 +47,7 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.18 2004/02/24 20:23:47 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.19 2004/02/26 18:05:14 jw Exp $' >&2
 }
 
 makeIcr ()
@@ -57,7 +58,7 @@ makeIcr ()
     else
 	mkdir IcrObjs
     fi
-    make OPT="-DRUN$r$d$e$s$z" CFLAGS="$cflags" icr
+    make OPT="-DRUN$r$d$e$o$s$z" CFLAGS="$cflags" icr
     mv comp.$O genr.$O gram.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -70,7 +71,7 @@ makeIct ()
     else
 	mkdir IctObjs
     fi
-    make OPT="-DTCP$t$d$e$s$z" CFLAGS="$cflags" ict
+    make OPT="-DTCP$t$d$e$o$s$z" CFLAGS="$cflags" ict
     mv comp.$O genr.$O gram.$O ict.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -83,7 +84,7 @@ makeLib ()
     else
 	mkdir LibObjs
     fi
-    make OPT="-DLOAD -DTCP$l$d$e$s$z" CFLAGS="$cflags" libict.a
+    make OPT="-DLOAD -DTCP$l$d$e$o$s$z" CFLAGS="$cflags" libict.a
     mv ict.$O link.$O rsff.$O scan.$O tcpc.$O  LibObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -96,7 +97,7 @@ makeLmain ()
     else
 	mkdir LmainObjs
     fi
-    make OPT="-DLMAIN$m$d$e$s$z" CFLAGS="$cflags" lmain
+    make OPT="-DLMAIN$m$d$e$o$s$z" CFLAGS="$cflags" lmain
     mv gram.$O lexc.$O LmainObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -119,6 +120,7 @@ M=0
 ALL=1
 cflags="-O2"			# optimisation, no debugging info
 O="o"
+o=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -135,6 +137,13 @@ while [ $# -gt 0 ]; do
 	    m*)	m=" -DYYDEBUG";;
 	    d*)	d=" -DDEQ";;
 	    e*)	e=" -DEFENCE";;
+	    D*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		o=" -D$option"
+		break;;
 	    s*)	s=" -DINT_MAX=32767";;
 	    z*)	z=" -DLONG16";;
 	    C*)	C=1; ALL=0;;
@@ -169,8 +178,8 @@ fi
 test -d Make_tmp || mkdir Make_tmp;
 
 if [ $ALL = 1 ] || [ $C = 1 ]; then
-    echo "make OPT=\"$c$d$e$s$z\" CFLAGS=\"$cflags\" icc"
-    make OPT="$c$d$e$s$z" CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    echo "make OPT=\"$c$d$e$o$s$z\" CFLAGS=\"$cflags\" icc"
+    make OPT="$c$d$e$o$s$z" CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
     rm -f /tmp/cexe.c
     test -f cexe.c && mv cexe.c /tmp			# current cexe.c for comparison
     ./icc -c -d20000 < /dev/null
@@ -183,22 +192,22 @@ if [ $ALL = 1 ] || [ $C = 1 ]; then
 fi
 
 if [ $ALL = 1 ] || [ $R = 1 ]; then
-    echo "make OPT=\"-DRUN$r$d$e$s$z\" CFLAGS=\"$cflags\" icr"
+    echo "make OPT=\"-DRUN$r$d$e$o$s$z\" CFLAGS=\"$cflags\" icr"
     makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $T = 1 ]; then
-    echo "make OPT=\"-DTCP$t$d$e$s$z\" CFLAGS=\"$cflags\" ict"
+    echo "make OPT=\"-DTCP$t$d$e$o$s$z\" CFLAGS=\"$cflags\" ict"
     makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $L = 1 ]; then
-    echo "make OPT=\"-DLOAD -DTCP$l$d$e$s$z\" CFLAGS=\"$cflags\" libict.a"
+    echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$z\" CFLAGS=\"$cflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $M = 1 ]; then
-    echo "make OPT=\"-DLMAIN$m$d$e$s$z\" CFLAGS=\"$cflags\" lmain"
+    echo "make OPT=\"-DLMAIN$m$d$e$o$s$z\" CFLAGS=\"$cflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 

@@ -19,17 +19,22 @@ static const char cexe_part1[] = "\
  *******************************************************************/\n\
 \n\
 static const char cexe_h[] =\n\
-\"@(#)$Id: cexe.h,v 1.20 2004/01/15 15:05:47 jw Exp $\";\n\
+\"@(#)$Id: cexe.h,v 1.21 2004/03/19 17:49:29 jw Exp $\";\n\
 \n\
 #include	<stdio.h>\n\
 #include	\"icg.h\"\n\
 #include	\"icc.h\"\n\
 #include	\"comp.h\"\n\
 \n\
-#define _AV(x) Lookup(#x)->u_gate->gt_new\n\
-#define _LV(x) (Lookup(#x)->u_gate->gt_val < 0 ? 1 : 0)\n\
-#define _AA(x,v) aAssign(Lookup(#x)->u_gate, v)\n\
-#define _LA(x,v) lAssign(Lookup(#x)->u_gate, v)\n\
+#define _MV(n) _cexe_gf->gt_rlist[n]->gt_new\n\
+#define _AV(n) _cexe_gf->gt_list[n]->gt_new\n\
+#define _LV(n) (_cexe_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define _AA(n,v) aAssign(_cexe_gf->gt_list[n], v)\n\
+#define _LA(n,v) aAssign(_cexe_gf->gt_list[n], v)\n\
+#define _AVL(x) Lookup(#x)->u_gate->gt_new\n\
+#define _LVL(x) (Lookup(#x)->u_gate->gt_val < 0 ? 1 : 0)\n\
+#define _AAL(x,v) aAssign(Lookup(#x)->u_gate, v)\n\
+#define _LAL(x,v) lAssign(Lookup(#x)->u_gate, v)\n\
 \n\
 #if INT_MAX == 32767 && defined (LONG16)\n\
 static long	_tVar;\n\
@@ -64,7 +69,7 @@ Lookup(char *	string)	/* find string in symbol table at run time */\n\
  *******************************************************************/\n\
 \n\
 ";
-static const int cexe_lines1 = 52;
+static const int cexe_lines1 = 57;
 
 static const char cexe_part2[] = "\
 #if INT_MAX == 32767 && defined (LONG16)\n\

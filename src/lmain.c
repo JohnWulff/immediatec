@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.9 2004/01/26 19:44:47 jw Exp $";
+"@(#)$Id: lmain.c,v 1.10 2004/03/12 18:18:34 jw Exp $";
 /********************************************************************
  *
  *	Standalone check of gram.y and lexc.l C compiler
@@ -16,7 +16,7 @@ static const char lmain_c[] =
 static const char *	usage =
 "USAGE: %s [-leh] [-d<debug>] <C_program>\n"
 "        -l <listFN>     name of list file  (default is stdout)\n"
-"        -d <debug>  10  source listing\n"
+"        -d <debug>  40  source listing\n"
 #if YYDEBUG
 "                   +20  symbol table after parse\n"
 "                    +4  debugging info\n"

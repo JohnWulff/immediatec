@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.18 2004/02/24 15:53:02 jw Exp $";
+"@(#)$Id: gram.y,v 1.19 2004/03/19 16:02:52 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -54,19 +54,20 @@ static unsigned int	endStack[ENDSTACKSIZE];
 static unsigned int *	esp = endStack;
 
 static void		immVarFound(unsigned int start, unsigned int end, Symbol* sp);
+static void		immVarRemove(unsigned int start, unsigned int end, Symbol* sp);
 static void		immAssignFound(unsigned int start, unsigned int operator,
 			    unsigned int end, Symbol* sp, int ppi);
 static unsigned int	pushEndStack(unsigned int value);
 static unsigned int	popEndStack(void);
 
-static Symbol	typedefSymbol = { "typedef", UDF, UDFA, };
+static Symbol		typedefSymbol = { "typedef", UDF, UDFA, };
 
 #ifdef LMAIN
-static void	yyerror(char *s, ...);
+static void		yyerror(char *s, ...);
 #endif
 %}
 %union {					/* stack type */
-    Token	tok;
+    Token		tok;
 }
 
 %token	<tok> IDENTIFIER IMM_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
@@ -88,7 +89,7 @@ static void	yyerror(char *s, ...);
 %type	<tok> struct_declaration specifier_qualifier_list struct_declarator_list
 %type	<tok> struct_declarator enum_specifier enumerator_list_comma enumerator_list
 %type	<tok> enumerator declarator direct_declarator pointer type_qualifier_list
-%type	<tok> parameter_type_list parameter_identifier_list parameter_list
+%type	<tok> parameter_head parameter_type_list parameter_identifier_list parameter_list
 %type	<tok> parameter_declaration identifier_list initializer initializer_list
 %type	<tok> type_name abstract_declarator direct_abstract_declarator statement
 %type	<tok> labeled_statement expression_statement compound_statement statement_list
@@ -147,12 +148,22 @@ function_definition				/* 3 */
 	    $$.end = $2.end;
 	    delete_sym(&$1);
 	    $$.symbol = NULL;
+#ifndef LMAIN
+	    clearParaList(0);			/* restore all overloaded parameters */
+#endif
 	}
-	| declaration_specifiers declarator function_body {
+	| declaration_specifiers declarator {
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as function name */
+#endif
+	}
+					    function_body {
 	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
+	    $$.end = $4.end;
+	    delete_sym(&$2);			/* not deleted if imm */
+#ifndef LMAIN
+	    clearParaList(0);			/* restore all overloaded parameters */
+#endif
 	}
 	;
 
@@ -174,6 +185,9 @@ declaration					/* 5 */
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    $$.symbol = NULL;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
+#endif
 	}
 	| declaration_specifiers init_declarator_list ';' {
 	    Symbol *	sp;
@@ -189,18 +203,26 @@ declaration					/* 5 */
 #if YYDEBUG
 		    if ((debug & 0402) == 0402) fprintf(outFP, "P %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
-		    place_sym(sp1);
+		    if (lookup(sp1->name) == 0) {
+			place_sym(sp1);
+		    }
 		} else {
-		    $$.symbol = sp1;	/* use $$ as transport Token for delete_sym */
+		    $$.symbol = sp1;		/* use $$ as transport Token for delete_sym */
 		    delete_sym(&$$);
 		}
 	    }
 	    $$.symbol = NULL;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
+#endif
 	}
 	| declaration_specifiers error ';' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
+#endif
 	    yyclearin; yyerrok;
 	}
 	;
@@ -223,11 +245,21 @@ declaration_specifiers				/* 7 -- at least 1 type */
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
+#ifndef LMAIN
+	    if (lexflag & C_FUNCTION) {
+		lexflag |= C_PARA;		/* function internal C var is coming */
+	    }
+#endif
 	}
 	| storage_class_specifier specifier_qualifier_list {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    $$.symbol = $1.symbol;		/* typedef information */
+#ifndef LMAIN
+	    if (lexflag & C_FUNCTION) {
+		lexflag |= C_PARA;		/* function internal C var is coming */
+	    }
+#endif
 	}
 	;
 
@@ -440,10 +472,12 @@ init_declarator_list				/* 15 */
 	    $$.end = $3.end;
 	    sp = $$.symbol = $1.symbol;
 	    assert(sp);			/* ERROR: initialized in : init_declarator */
-	    while (sp->next) {
-		sp = sp->next;
+	    if (sp->type == CWORD) {
+		while (sp->next) {
+		    sp = sp->next;
+		}
+		sp->next = $3.symbol;	/* place in a list */
 	    }
-	    sp->next = $3.symbol;
 	}
 	;
 
@@ -609,16 +643,33 @@ declarator					/* 25 */
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    if (($1.symbol->type & TM) < MAX_LS &&
+		$1.symbol->v_glist == 0) {
+		immVarRemove($1.start, $1.end, $1.symbol);
+	    }
+#endif
 	}
 	| pointer direct_declarator {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    $$.symbol = $2.symbol;
+#ifndef LMAIN
+	    if (($2.symbol->type & TM) < MAX_LS &&
+		$2.symbol->v_glist == 0) {
+		immVarRemove($2.start, $2.end, $2.symbol);
+	    }
+#endif
 	}
 	;
 
 direct_declarator				/* 26 */
 	: IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
+	}
+	| imm_identifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = $1.symbol;
@@ -656,38 +707,67 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 	    yyclearin; yyerrok;
 	}
-	| direct_declarator '(' ')' {
+	| parameter_head ')' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
+#endif
+	}
+	| parameter_head error ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
+#endif
+	    yyclearin; yyerrok;
 	}
-	| direct_declarator '(' error ')' {
+	| parameter_head parameter_type_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
+#endif
+	}
+	| parameter_head parameter_type_list error ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
+#endif
 	    yyclearin; yyerrok;
 	}
-	| direct_declarator '(' parameter_type_list ')' {
+	| parameter_head parameter_identifier_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
+#endif
+	}
+	| parameter_head parameter_identifier_list error ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = $1.symbol;
-	}
-	| direct_declarator '(' parameter_type_list error ')' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
+#endif
 	    yyclearin; yyerrok;
 	}
-	| direct_declarator '(' parameter_identifier_list ')' {
+	;
+
+parameter_head					/* 26a */
+	: direct_declarator '('	{
 	    $$.start = $1.start;
-	    $$.end = $4.end;
+	    $$.end = $2.end;
 	    $$.symbol = $1.symbol;
-	}
-	| direct_declarator '(' parameter_identifier_list error ')' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = $1.symbol;
-	    yyclearin; yyerrok;
+#ifndef LMAIN
+	    clearParaList(1);			/* imm vars are temporarily overloaded */
+#endif
 	}
 	;
 
@@ -741,7 +821,7 @@ parameter_type_list				/* 29 */
 	;
 
 parameter_identifier_list			/* 30 */
-	: identifier_list {
+	: identifier_list {			/* K&R C parameter list without types */
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
@@ -781,7 +861,7 @@ parameter_declaration				/* 32 */
 	;
 
 identifier_list					/* 33 */
-	: IDENTIFIER {
+	: IDENTIFIER {				/* K&R C parameter list without types */
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    delete_sym(&$1);
@@ -1232,9 +1312,6 @@ assignment_expression				/* 48 */
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
-#if ! defined LMAIN && YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "@\n");
-#endif
 	}
 	/* imm_unary_expression can never be lvalue - use imm_identifier */
 	| imm_identifier assignment_operator assignment_expression {
@@ -1242,9 +1319,10 @@ assignment_expression				/* 48 */
 	    $$.end = $3.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u = %u>\n", $$.start, $$.end);
+	    if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u = %u>\n", $$.start, $$.end);
 #endif
-	    immAssignFound($1.start, $2.start, $3.end, $1.symbol, 5);
+	    if ($1.symbol->v_glist == 0)
+		immAssignFound($1.start, $2.start, $3.end, $1.symbol, 5);
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1575,7 +1653,8 @@ imm_unary_expression				/* 63a */
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\n<++%u %u>\n", $$.start, $$.end);
 #endif
-	    immAssignFound($2.start, $1.start, $2.end, $2.symbol, 0);
+	    if ($2.symbol->v_glist == 0)
+		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 0);
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1586,7 +1665,8 @@ imm_unary_expression				/* 63a */
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\n<--%u %u>\n", $$.start, $$.end);
 #endif
-	    immAssignFound($2.start, $1.start, $2.end, $2.symbol, 1);
+	    if ($2.symbol->v_glist == 0)
+		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 1);
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1706,7 +1786,8 @@ imm_postfix_expression				/* 65a */
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u++>\n", $$.start, $$.end);
 #endif
-	    immAssignFound($1.start, $2.start, $2.end, $1.symbol, 2);
+	    if ($1.symbol->v_glist == 0)
+		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 2);
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1717,7 +1798,8 @@ imm_postfix_expression				/* 65a */
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u-->\n", $$.start, $$.end);
 #endif
-	    immAssignFound($1.start, $2.start, $2.end, $1.symbol, 3);
+	    if ($1.symbol->v_glist == 0)
+		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 3);
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1797,9 +1879,10 @@ imm_identifier					/* 69 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]\n", $$.start, $$.end);
+	    if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]\n", $$.start, $$.end);
 #endif
-	    immVarFound($$.start, $$.end, $1.symbol);
+	    if ($$.symbol->v_glist == 0)
+		immVarFound($$.start, $$.end, $1.symbol);
 #endif
 	}
 	| '(' imm_identifier ')' {
@@ -1811,7 +1894,8 @@ imm_identifier					/* 69 */
 #if YYDEBUG
 	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}\n", $$.start, $$.end);
 #endif
-	    immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+	    if ($$.symbol->v_glist == 0)
+		immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 #endif
 	}
 	;
@@ -1895,6 +1979,36 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 
 /********************************************************************
  *
+ *	immVarRemove
+ *
+ *	The parser has found a bare immediate variable which is being
+ *	declared as a C variable in C code. Remove it from the
+ *	lineEntryArray and mark it so it is returned as a C-IDENTIFIER
+ *	either globally or for the duration of this function. This
+ *	effectively hides the imm Symbol with the same name in C code.
+ *
+ *******************************************************************/
+
+static void
+immVarRemove(unsigned int start, unsigned int end, Symbol* sp)
+{
+    --lep;				/* step back to previous entry */
+    if(lep->pStart == start && lep->pEnd == end) {
+	markParaList(sp);		/* mark imm Symbol so it is hidden */
+	lep->pStart = lep->equOp = LARGE;
+    } else {
+#if YYDEBUG
+	if ((debug & 0402) == 0402)
+	    fprintf(outFP, "stack position (remove): start %u (%u) end %u (%u) Symbol %s\n",
+	    lep->pStart, start, lep->pEnd, end, lep->sp->name);
+#endif
+	ierror("C name which is an imm variable cannot be hidden:", sp->name);
+	lep++;				/* do not remove */
+    }
+} /* immVarRemove */
+
+/********************************************************************
+ *
  *	immAssignFound
  *
  *	The parser has found an assignment to an immediate variable
@@ -1955,7 +2069,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 		typ = sp->type & TM;
 		mType = sp->ftype;
 		if (typ == UDF) {
-		    sp->type = (mType == ARITH) ? ARNC : LOGC;
+		    sp->type = ctypes[mType];	/* must be ARNC or LOGC */
 		} else if ((typ != ARNC || mType != ARITH) &&
 			   (typ != LOGC || mType != GATE) &&
 			   (typ != ERR)) {	/* avoids multiple error messages */
@@ -2024,10 +2138,13 @@ popEndStack(void)
  *	Use the byte postions stored in lineEntryArray to insert
  *	macro calls for immediate variables and assignments
  *
+ *	'lp' points to the ffexpr head when called as an auxiliary
+ *	compile of one if - else or switch C fragment. Else NULL
+ *
  *******************************************************************/
 
 void
-copyAdjust(FILE* iFP, FILE* oFP)
+copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 {
     int			c;
     LineEntry*		p;
@@ -2042,9 +2159,15 @@ copyAdjust(FILE* iFP, FILE* oFP)
     int			pFlag;
     int			ppi;
     Symbol *		sp;
+    Symbol *		fsp;
+    List_e *		lp1;
+    List_e *		lp2;
+    int			lNr = 0;
+    int			sNr = 0;
 #ifdef LEAS
     Symbol **		hsp;
 #endif
+    int			ml;
     int			mType;
     char		buffer[BUFS];	/* buffer for modified names */
     char		iqt[2];		/* char buffers - space for 0 terminator */
@@ -2070,6 +2193,23 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	lep++;
 	lep->pStart = lep->equOp = LARGE;	/* value overwritten by first immVarFound */
 	return;				/* lineEntryArray initialized */
+    }
+
+    if (lp) {					/* ffexpr head link */
+	assert(lp->le_val>>8 && lp->le_next == 0); /* must have function # and callled only once */
+	fsp = lp->le_sym;			/* master - must be ftype F_CF, F_CE or F_SW */
+	assert(fsp && (fsp->ftype == F_CF || fsp->ftype == F_CE || fsp->ftype == F_SW));
+	lp1 = fsp->u_blist;
+	assert(lp1);
+	fsp = lp1->le_sym;			/* clock for ffexpr head */
+	assert(fsp);
+	if (fsp->ftype == CLCKL) {
+	    lNr = 2;				/* start of value list for C fragment */
+	} else if (fsp->ftype == TIMRL) {
+	    lNr = 3;				/* extra space for timer delay */
+	} else {
+	    assert(0);				/* must be a clock */
+	}
     }
 
     lep++->pStart = lep->equOp = LARGE;		/* finalise lineEntryArray */
@@ -2114,12 +2254,13 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	    sp     = p->sp;		/* associated Symbol */
 	    ppi    = p->ppIdx;		/* pre/post-inc/dec character value */
 	    assert(sp);
+	    ml     = lp		     ? 0		: MACRO_LITERAL;
 	    mType  = sp->type == ERR ? UDFA
 				     : (equop == LARGE) ? sp->ftype
 							: sp->ftype + MACRO_OFFSET;
 	    if (ppi >= 5) {
 		/* assignment macro must be printed outside of enclosing parentheses */
-		fprintf(oFP, macro[mType]);	/* entry found - output macro start */
+		fprintf(oFP, macro[ml+mType]);	/* entry found - output macro start */
 	    }
 #if YYDEBUG
 	    if ((debug & 0402) == 0402) fprintf(outFP, "strt bytePos = %u, earlyop = %u, equop = %u, ppi = %d, sp =>%s\n", bytePos, earlyop, equop, ppi, sp->name);
@@ -2141,7 +2282,28 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	}
 	if (bytePos == vstart) {
 	    assert(sp);
-	    IEC1131(sp->name, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+	    if (lp) {
+		lp1 = lp;
+    		sNr = lNr;
+		while ((lp2 = lp1->le_next) != 0) {
+		    if (sp == lp2->le_sym) {
+			assert(lp2->le_val == sNr);
+			break;			/* variable occurred previously */
+		    }
+		    sNr++;
+		    lp1 = lp2;
+		}
+		if (lp2 == 0) {
+		    lp2 = sy_push(sp);		/* new variable in this C fragment */
+		    lp2->le_val = sNr;		/* offset in list */
+		    lp1->le_next = lp2;		/* place at end of list */
+		}
+		snprintf(buffer, sizeof buffer, "%d", sNr);
+		functionUse[0] |= F_FFEXPR;	/* flag for copying macro */
+	    } else {
+		IEC1131(sp->name, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+		functionUse[0] |= F_LITERAL;	/* flag for copying macro */
+	    }
 	    if (ppi >= 5) {
 		fprintf(oFP, "%s", buffer);	/* output real Symbol name not ALIAS */
 	    } else {
@@ -2149,12 +2311,12 @@ copyAdjust(FILE* iFP, FILE* oFP)
 		if (ppi < 2){
 		    /* pre-increment/decrement */
 		    fprintf(oFP, "%s%s , %s%s) %c 1",
-			macro[mType], buffer, macro[sp->ftype], buffer, idOp[ppi]);
+			macro[ml+mType], buffer, macro[ml+sp->ftype], buffer, idOp[ppi]);
 		} else {
 		    /* post-increment/decrement */
 		    Tflag = 1;		/* triggers definition/declaration of _tVar in _list_.c/_list1.h */
 		    fprintf(oFP, "(%s%s , (_tVar = %s%s)) %c 1), _tVar",
-			macro[mType], buffer, macro[sp->ftype], buffer, idOp[ppi]);
+			macro[ml+mType], buffer, macro[ml+sp->ftype], buffer, idOp[ppi]);
 		}
 	    }
 	    pFlag = 0;
@@ -2173,7 +2335,7 @@ copyAdjust(FILE* iFP, FILE* oFP)
 		    assert(sp);
 		    assert(strchr("+-*/%&^|><", c));
 		    /* output variable as value for operator assignment axpression*/
-		    fprintf(oFP, ", %s%s) ", macro[sp->ftype], buffer);
+		    fprintf(oFP, ", %s%s) ", macro[ml+sp->ftype], buffer);
 		    endop = equop + ((c == '>' || c == '<') ? 2 : 1);
 		}
 	    } else {

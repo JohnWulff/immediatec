@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.73 2004/02/21 17:29:11 jw Exp $";
+"@(#)$Id: outp.c,v 1.74 2004/03/18 14:20:21 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -200,14 +200,15 @@ listNet(unsigned * gate_count)
     Symbol **	hsp;
     short	dc;
     short	typ;
+    int		undefined;
     long	byte_total;
 
-    byte_total = link_count = block_total = 0;	/* init each time */
+    byte_total = link_count = block_total = undefined = 0;	/* init each time */
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
 #if YYDEBUG	/* ############################################### */
-    if (debug & 01) {
+    if ((debug & 04002) == 04002) {
 	int hspn = 0;
 	int hspf = 0;
 	fprintf(outFP, "******* SYMBOL TABLE    ************************\n");
@@ -217,7 +218,28 @@ listNet(unsigned * gate_count)
 		    fprintf(outFP, "%3d:", hspn);
 		    hspf = 1;
 		}
-		fprintf(outFP, " %s", sp->name);
+		if (sp && sp->name) {
+		    fprintf(outFP, "\n\t%-20s %-6s %-2s %-2s %-6s",
+			sp->name,
+			full_type[sp->type & TM],
+			sp->type & EM ? "EM" : "",
+			sp->type & FM ? "FM" : "",
+			full_ftype[sp->ftype]);
+		    if ((sp->type & ~FM) == ALIAS) {
+			Symbol * sp1 = sp;
+			List_e * lp1;
+			Symbol * sp2;
+			while (sp1 &&
+			    ((sp1->type == ALIAS && (lp1 = sp1->list) != 0) ||
+			    (sp1->type == (ALIAS|FM) && (lp1 = sp1->u_blist) != 0)) &&
+			    (sp2 = lp1->le_sym) != 0) {
+			    fprintf(outFP, " %s ", sp2->name);
+			    sp1 = sp2;
+			}
+		    }
+		} else {
+		    fprintf(outFP, "\n\t*** BAD Symbol");
+		}
 	    }
 	    hspn++;
 	    if (hspf != 0) {
@@ -265,8 +287,10 @@ listNet(unsigned * gate_count)
 			}
 			if (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) {
 			    /* case number of "if" or "switch" C fragment */
-			    fprintf(outFP, "\t%c (%d)",
-				os[types[sp->ftype]], lp->le_val);
+			    if (lp->le_val >= 0x100) {
+				fprintf(outFP, "\t%c (%d)",
+				    os[types[sp->ftype]], lp->le_val >> 8);
+			    }
 			} else if (sp->ftype == TIMR && lp->le_val > 0) {
 			     /* timer preset off value */
 			    fprintf(outFP, "\t %s%c (%d)",
@@ -288,6 +312,10 @@ listNet(unsigned * gate_count)
 		} else if (typ == ERR) {
 		    ierror("gate:", sp->name);
 		}
+	    } else if (typ == (UDF|FM)) {
+		undefined++;	/* cannot execute if function internal gate not defined */
+//		ierror("undefined gate in function:", sp->name);
+		warning("undefined gate in function:", sp->name);
 	    }
 	}
     }
@@ -308,11 +336,11 @@ listNet(unsigned * gate_count)
 	fprintf(outFP, "\t%8ld bytes\n", byte_total);
     }
     if (debug & 076) fprintf(outFP, "\ncompiled by:\n%s\n", SC_ID);
-    if (gate_count[UDF]) {
+    if ((undefined += gate_count[UDF]) > 0) {
 	char undBuf[32];
 	snprintf(undBuf, 32, "%d undefined gate%s",
-	    gate_count[UDF],
-	    gate_count[UDF] > 1 ? "s" : "");
+	    undefined,
+	    undefined > 1 ? "s" : "");
 	warning(undBuf, NS);
     }
     if (ynerrs || gate_count[ERR]) {
@@ -391,7 +419,7 @@ buildNet(Gate ** igpp)
 						continue; /* timer value link */
 					    }
 					    lp->le_sym->u_gate->gt_rlist =
-					    (Gate**)lp->le_val;
+					    (Gate**)(lp->le_val >> 8);
 					} else if (val != lp->le_val) {
 					    continue;	/* not right value */
 					}
@@ -567,7 +595,7 @@ buildNet(Gate ** igpp)
  *******************************************************************/
 
 int
-output(char * outfile)
+output(FILE * iFP, char * outfile)
 {
     Symbol *	sp;
     Symbol *	gp;
@@ -580,6 +608,7 @@ output(char * outfile)
     unsigned	mask;
     Symbol *	tsp;
     List_e *	tlp;
+    List_e *	nlp;
     List_e **	lpp;
     char *	modName;
     char *	nxs;
@@ -593,6 +622,7 @@ output(char * outfile)
     char *	module;
     unsigned	linecnt = 1;
     int		aliasArithFlag = 0;
+    int		fflag;
 
     /* open output file */
 
@@ -647,22 +677,71 @@ static char	COMPILER[] =\n\
 \n\
 ",	inpNM, outfile, SC_ID, H1name);
     linecnt += 13;
-    if (ftell(T3FP)) {
+    if (functionUse[0] & F_CALLED) {		/* has any function been called ? */
 	fprintf(Fp, "\
 #ifdef ALIAS_ARITH\n\
-#define _AV(x) (x.gt_ini==-ALIAS ? ((Gate*)x.gt_rlist)->gt_new : x.gt_new)\n\
-#define _LV(x) (x.gt_ini==-ALIAS ? (((Gate*)x.gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
-				 : (x.gt_val < 0 ? 1 : 0))\n\
-#define _AA(x,v) aAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
-#define _LA(x,v) lAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
+");	linecnt += 1;
+	if (functionUse[0] & (F_ARITHM|F_FFEXPR)) {
+	    fprintf(Fp, "\
+static Gate *	_Mt;\n\
+");	    linecnt += 1;
+	}
+	if (functionUse[0] & F_ARITHM) {
+	    fprintf(Fp, "\
+#define _MV(n) ((_Mt=_cexe_gf->gt_rlist[n])->gt_ini==-ALIAS ? ((Gate*)_Mt->gt_rlist)->gt_new\\\n\
+							    : _Mt->gt_new)\n\
+");	    linecnt += 2;
+	}
+	if (functionUse[0] & F_FFEXPR) {
+	    fprintf(Fp, "\
+#define _AV(n) ((_Mt=_cexe_gf->gt_list[n])->gt_ini==-ALIAS  ? ((Gate*)_Mt->gt_rlist)->gt_new\\\n\
+							    : _Mt->gt_new)\n\
+#define _LV(n) ((_Mt=_cexe_gf->gt_list[n])->gt_ini==-ALIAS  ? (((Gate*)_Mt->gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
+							    : (_Mt->gt_val < 0 ? 1 : 0))\n\
+#define _AA(n,v) aAssign((_Mt=_cexe_gf->gt_list[n])->gt_ini==-ALIAS\\\n\
+							    ? ((Gate*)_Mt->gt_rlist)\\\n\
+							    : _Mt, v)\n\
+#define _LA(n,v) aAssign((_Mt=_cexe_gf->gt_list[n])->gt_ini==-ALIAS\\\n\
+							    ? ((Gate*)_Mt->gt_rlist)\\\n\
+							    : _Mt, v)\n\
+");	    linecnt += 10;
+	}
+	if (functionUse[0] & F_LITERAL) {
+	    fprintf(Fp, "\
+#define _AVL(x) (x.gt_ini==-ALIAS ? ((Gate*)x.gt_rlist)->gt_new : x.gt_new)\n\
+#define _LVL(x) (x.gt_ini==-ALIAS ? (((Gate*)x.gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
+				  : (x.gt_val < 0 ? 1 : 0))\n\
+#define _AAL(x,v) aAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
+#define _LAL(x,v) lAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
+");	    linecnt += 5;
+	}
+	fprintf(Fp, "\
 #else\n\
-#define _AV(x) x.gt_new\n\
-#define _LV(x) (x.gt_val < 0 ? 1 : 0)\n\
-#define _AA(x,v) aAssign(&x, v)\n\
-#define _LA(x,v) lAssign(&x, v)\n\
+");	linecnt += 1;
+	if (functionUse[0] & F_ARITHM) {
+	    fprintf(Fp, "\
+#define _MV(n) _cexe_gf->gt_rlist[n]->gt_new\n\
+");	    linecnt += 1;
+	}
+	if (functionUse[0] & F_FFEXPR) {
+	    fprintf(Fp, "\
+#define _AV(n) _cexe_gf->gt_list[n]->gt_new\n\
+#define _LV(n) (_cexe_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define _AA(n,v) aAssign(_cexe_gf->gt_list[n], v)\n\
+#define _LA(n,v) aAssign(_cexe_gf->gt_list[n], v)\n\
+");	    linecnt += 4;
+	}
+	if (functionUse[0] & F_LITERAL) {
+	    fprintf(Fp, "\
+#define _AVL(x) x.gt_new\n\
+#define _LVL(x) (x.gt_val < 0 ? 1 : 0)\n\
+#define _AAL(x,v) aAssign(&x, v)\n\
+#define _LAL(x,v) lAssign(&x, v)\n\
+");	    linecnt += 4;
+	}
+	fprintf(Fp, "\
 #endif\n\
-"	    );
-	linecnt += 12;
+");	linecnt += 1;
     }
     fprintf(Fp, "\
 extern Gate *	_l_[];\n\
@@ -672,6 +751,7 @@ extern Gate *	_l_[];\n\
 /********************************************************************
  *
  *	reverse action links to input links for simple Gates
+ *	for Gates of ftype ARITH, keep the links in ascending order
  *
  *******************************************************************/
 
@@ -682,18 +762,38 @@ extern Gate *	_l_[];\n\
 		linecnt++;
 	    }
 	    if ((typ &= ~EM) < MAX_LV) {
-		if ((dc = sp->ftype) == ARITH || dc == GATE) {
+		if ((dc = sp->ftype) == ARITH) {
+		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
+			List_e **	tlpp;
+			/* leave out timing controls */
+			if ((val = lp->le_val) != (unsigned) -1) {
+			    tsp = lp->le_sym;	/* reverse action links */
+			    for (tlpp = &tsp->u_blist;
+				(tlp = *tlpp) != 0 && tlp->le_val <= val;
+				tlpp = &tlp->le_next) {
+				assert(val != tlp->le_val);
+			    }
+			    *tlpp = lp;			/* to input links */
+			    *lpp = lp->le_next;
+			    lp->le_sym = sp;
+			    lp->le_next = tlp;		/* lpp is not changed */
+			} else {
+			    lpp = &lp->le_next;		/* lpp to next link */
+			}
+		    }
+		} else if (dc == GATE) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			/* leave out timing controls */
 			if (lp->le_val != (unsigned) -1) {
-			    tsp = lp->le_sym;	/* reverse action links */
+			    tsp = lp->le_sym;		/* reverse action links */
 			    tlp = tsp->u_blist;
-			    tsp->u_blist = lp;	/* to input links */
+			    tsp->u_blist = lp;		/* to input links */
 			    *lpp = lp->le_next;
 			    lp->le_sym = sp;
-			    lp->le_next = tlp;	/* lpp is not changed */
+			    lp->le_next = tlp;		/* lpp is not changed */
 			} else {
-			    lpp = &lp->le_next;	/* lpp to next link */
+			    assert(0);
+			    lpp = &lp->le_next;		/* lpp to next link */
 			}
 		    }
 		} else if (dc == TIMR &&
@@ -739,7 +839,9 @@ extern Gate *	_l_[];\n\
 			errorEmit(Fp, errorBuf, &linecnt);
 			break;
 		    }
-		    if (tlp->le_next) {
+		    if ((nlp = tlp->le_next) != 0 &&
+			(sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE)
+		    ) {
 			snprintf(errorBuf, sizeof errorBuf,
 			    "Action gate '%s' on clock list '%s' has more than 1 output",
 			    tsp->name, sp->name);
@@ -749,7 +851,7 @@ extern Gate *	_l_[];\n\
 		    tlp->le_next = lp;
 		    sp->list = lp->le_next;
 		    lp->le_sym = sp;
-		    lp->le_next = 0;
+		    lp->le_next = nlp;			/* restore ffexpr value list */
 		}
 	    } else if (typ == ALIAS) {
 		if ((lp = sp->list) == 0) {
@@ -774,6 +876,7 @@ extern Gate *	_l_[];\n\
 		    errorEmit(Fp, errorBuf, &linecnt);
 		}
 	    }
+	    // assert(sp->v_elist == 0);
 	}
     }
 
@@ -805,7 +908,9 @@ extern Gate *	_l_[];\n\
 			    errorEmit(Fp, errorBuf, &linecnt);
 			    break;
 			}
-			if (tlp->le_next) {
+			if ((nlp = tlp->le_next) != 0 &&
+			    (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE)
+			) {
 			    snprintf(errorBuf, sizeof errorBuf,
 				"Action gate '%s' controlled by timer '%s' has more than output and clock",
 				tsp->name, sp->name);
@@ -815,7 +920,7 @@ extern Gate *	_l_[];\n\
 			tlp->le_next = lp;
 			sp->list = lp->le_next;
 			lp->le_sym = sp;
-			lp->le_next = 0;
+			lp->le_next = nlp;		/* restore ffexpr value list */
 			lp = sp->list;
 		    } else {
 			lp = lp->le_next;
@@ -886,6 +991,14 @@ extern Gate *	_l_[];\n\
 		    if ((lp = sp->list->le_next) != 0 &&
 			(lp->le_sym->type & ~EM) == TIM) {
 			li++;		/* space for pointer to delay time Gate */
+			lp = lp->le_next;	/* point past delay time */
+		    }
+		    assert(lp);
+		    if (dc == F_SW || dc == F_CF || dc == F_CE) {
+			/* Function Pointer for "if" or "switch" */
+			while ((lp = lp->le_next) != 0) {
+			    li++;		/* count C var on list */
+			}
 		    }
 		} else if (dc == OUTW) {
 		    if (iqt[0] == 'Q' &&	/* QB0_0 is cnt == 3 (no tail) */
@@ -1046,7 +1159,7 @@ extern Gate *	_l_[];\n\
     fprintf(H2p, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
 
-    if (ftell(T3FP)) {
+    if (functionUse[0] & F_CALLED) {		/* has any function been called ? */
 	fprintf(Fp, "\n\
 /********************************************************************\n\
  *\n\
@@ -1059,10 +1172,10 @@ extern Gate *	_l_[];\n\
 	/* copy C intermediate file up to EOF to C output file */
 	/* translate any imm variables and ALIAS references of type 'QB1_0' */
 
-	if ((rc = copyXlate(Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
+	if ((rc = copyXlate(iFP, Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
 	    goto endm;
 	}
-	if ((rc = copyXlate(Fp, outfile, &linecnt, 02)) != 0) { /* copy functions */
+	if ((rc = copyXlate(iFP, Fp, outfile, &linecnt, 02)) != 0) { /* copy called functions */
 	    goto endm;
 	}
     }
@@ -1088,7 +1201,8 @@ static Gate *	_l_[] = {\n");
     lc = 0;			/* count links */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) > UDF && typ < MAX_GT) { /* leave out EXT_TYPES */
+	    if ((typ = sp->type) == ARN ||		/* leave out UDF, ARNC, LOGC */
+		(typ >= AND && typ < MAX_GT)) {		/* leave out EXT_TYPES */
 		int		len = 16;
 		char *	fs = strlen(sp->name) > 1 ? "\t" : "\t\t";
 
@@ -1100,11 +1214,13 @@ static Gate *	_l_[] = {\n");
 			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
 		    } else {
+			fflag = 0;
 			if (lp->le_sym == 0) {	/* dc == F_SW, F_CF or F_CE */
+			    assert(dc == F_SW || dc == F_CF || dc == F_CE);
 			    /* Function Pointer for "if" or "switch" */
+			    fflag = 1;
 			    len += 17;	/* assume len of %d is 2 */
-			    fprintf(Fp, "%s(Gate*)_c_%d,",
-				fs, lp->le_val);
+			    fprintf(Fp, "%s(Gate*)_c_%d,", fs, lp->le_val >> 8);
 			} else {
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
@@ -1113,14 +1229,16 @@ static Gate *	_l_[] = {\n");
 			lc++;
 			fs = " ";
 			if ((lp = lp->le_next) == 0) {
-			    len += 3;		/* 0 filler - no clock or timer */
+			    len += 3;			/* 0 filler - no clock or timer */
 			    fprintf(Fp, "%s0,", fs);
 			    snprintf(errorBuf, sizeof errorBuf,
 				"Action gate '%s' has no clock or timer",
 				sp->name);
 			    errorEmit(Fp, errorBuf, &linecnt);
+			    fflag = 0;			/* do not try to scan C var list */
 			} else {
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
+			    assert((tsp->type & ~EM) == CLK || (tsp->type & ~EM) == TIM);
 			    fprintf(Fp, "%s&%s,",
 				fs, mN(tsp));		/* clock or timer */
 			    if ((tsp->type & ~EM) == TIM) {
@@ -1134,11 +1252,23 @@ static Gate *	_l_[] = {\n");
 					"Action gate '%s' has timer '%s' with no delay",
 					sp->name, tsp->name );
 				    errorEmit(Fp, errorBuf, &linecnt);
+				    fflag = 0;		/* do not try to scan C var list */
 				}
 				lc++;
 			    }
 			}
 			lc++;
+			if (fflag) {			/* if else or switch */
+			    while (lp = lp->le_next) {	/* scan C var list */
+				tsp = lp->le_sym;
+				while (tsp->type == ALIAS) {
+				    tsp = tsp->list->le_sym;	/* point to original */
+				}
+				len += strlen(tsp->name) + 3;
+				fprintf(Fp, "%s&%s,", fs, mN(tsp));
+				lc++;
+			    }
+			}
 			fs = "\t";
 			len += 8; len &= 0xfff8;
 		    }
@@ -1155,21 +1285,35 @@ static Gate *	_l_[] = {\n");
 			/* Function Pointer at start of input list */
 			len += 17;	/* assume len of %d is 2 */
 			if (lp->le_val) {
-			    fprintf(Fp, "%s(Gate*)_c_%d,", fs, lp->le_val);
+			    fprintf(Fp, "%s(Gate*)_c_%d,", fs, lp->le_val >> 8);
 			} else {
 			    fprintf(Fp, "%s(Gate*)0,", fs);	/* OUTW */
 			}
 			lc++;
 			fs = " ";
-			val = NOT;	/* force single input list */
 		    }
-		    goto n1;
-		}
+		    for (lp = sp->u_blist; lp; lp = lp->le_next) {
+			len += strlen(lp->le_sym->name) + 3;
+			if (len > 73) {
+			    fs = "\n\t\t";
+			    linecnt++;
+			    len = 16 + strlen(lp->le_sym->name) + 3;
+			}
+			/* check order of arithmetic input index from op_asgn() */
+			assert(lp->le_val == 0 || ++val == (lp->le_val & 0xff));
+			fprintf(Fp, "%s&%s,", fs, mN(lp->le_sym));
+			lc++;
+			fs = " ";
+		    }
+		    fprintf(Fp, "%s0,", fs);
+		    lc++;
+		    len += 3;
+		    fs = " ";
+		} else
 		if (typ >= AND && typ < MAX_GT) {
-		n1:
 		    do {
 			for (lp = sp->u_blist; lp; lp = lp->le_next) {
-			    if (lp->le_val == val || typ == ARN) {
+			    if (lp->le_val == val) {
 				len += strlen(lp->le_sym->name) + 3;
 				if (len > 73) {
 				    fs = "\n\t\t";
@@ -1251,13 +1395,14 @@ end:
  *
  *******************************************************************/
 
+static int	 precompileFlag = 0;
+
 static int
 copyBlocks(FILE * iFP, FILE * oFP, int mode)
 {
     int		c;
     int		mask = 02;	/* default is functions or cases */
     int		lf = 0;		/* set by first non white space in a line */
-    int		fd;
     char *	lp;
     char	lstBuf[BUFS];	/* include file name */
     char	lineBuf[BUFS];	/* can be smaller than a line */
@@ -1286,20 +1431,14 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		 *  handle pre-processor #include <stdio.h> or "icc.h"
 		 ********************************************************/
 		if (sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
-		    if (T4FP == NULL) {
-			if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
-			    ierror("copyBlocks: cannot open:", T4FN);
-			    return T4index;			/* error opening temporary file */
-			}
-			if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
-			    ierror("copyBlocks: cannot make or unlink:", T5FN);
-			    perror("unlink");
-			    return T5index;			/* error unlinking temporary file */
-			}
-			if (debug & 02) fprintf(outFP, "####### ready to c_parse includes via %s %s\n", T4FN, T5FN);
+		    if(iFP == T4FP) {
+			ierror("copyBlocks: if else or switch has:", lstBuf);
+			continue;
 		    }
+		    if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
 		    if (debug & 02) fprintf(outFP, "####### c_parse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
+		    precompileFlag++;
 		}
 	    }
 	}
@@ -1314,28 +1453,39 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
  *	## in C comment delimiters
  *	and output to T2FP.
  *
+ *	For auxiliary parse of iC if - else and switch functions
+ *	iFP == T4FP which have no need for C - pre-processor includes
+ *
  *******************************************************************/
 
 extern FILE* yyin;
 extern FILE* yyout;
 
 int
-c_compile(FILE * iFP)
+c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 {
     int		r;				/* copy literal blocks */
     char	lineBuf[BUFS];			/* can be smaller than a line */
 
-    lexflag = C_PARSE|C_FIRST|C_BLOCK;		/* output partial source listing */
+    lexflag = flag;				/* output partial source listing */
 
+    if (ftell(T2FP)) {
+	fclose (T2FP);				/* overwrite intermediate file */
+	if ((T2FP = fopen(T2FN, "w+")) == NULL) {
+	    return T2index;
+	}
+    }
     if (copyBlocks(iFP, T2FP, 01)) {
 	return T1index;
     }
-    if (outFlag == 0) {
+    if (outFlag == 0) {				/* -c option to produce cexe.c */
 #if INT_MAX == 32767 && defined (LONG16)
 	fprintf(T2FP, "/*##*/long c_exec(int pp_index) { switch (pp_index) {\n");
 #else
 	fprintf(T2FP, "/*##*/int c_exec(int pp_index) { switch (pp_index) {\n");
 #endif
+    } else {
+	fprintf(T2FP, "/*##*/\n");		/* -o option - seperate blocks */
     }
     if (copyBlocks(iFP, T2FP, 02)) {
 	return T1index;
@@ -1343,11 +1493,11 @@ c_compile(FILE * iFP)
     if (outFlag == 0) {
 	fprintf(T2FP, "/*##*/}}\n");
     }
-
-    /********************************************************
-     *  handle pre-processor #include <stdio.h> or "icc.h"
-     ********************************************************/
-    if (T4FP) {
+    if (precompileFlag) {
+	/********************************************************
+	 *  handle pre-processor #include <stdio.h> and "icc.h" etc
+	 *  add CTYPE's as symbols to iC symbol table for main C-parse
+	 ********************************************************/
 	fflush(T4FP);
 	/* Cygnus does not understand cc - use gcc */
 	snprintf(lineBuf, sizeof lineBuf, "gcc -E -x c %s -o %s", T4FN, T5FN);
@@ -1365,25 +1515,25 @@ c_compile(FILE * iFP)
 	yyout = outFP;			/* list file */
 	lexflag |= C_PARSE|C_NO_COUNT|C_FIRST;	/* do not count characters for include files */
 	gramOffset = lineno = 0;
-	if (c_parse() != 0) {
+	if (c_parse() != 0) {		/* C parse headers to obtain CTYPE's in ST */
 	    ierror("c_compile: Parse error in includes\n", T5FN);
 	}
 	lexflag &= ~C_NO_COUNT;		/* count characters again */
     }
-    /* rewind intermediate file */
-    if (fseek(T2FP, 0L, SEEK_SET) != 0) {
+    if (fseek(T2FP, 0L, SEEK_SET) != 0) { /* rewind intermediate file */
 	return T2index;
     }
-
-    yyin = T2FP;
-    yyout = outFP;			/* list file */
-    copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
+    copyAdjust(NULL, NULL, lp);		/* initialize lineEntryArray */
     gramOffset = lineno = 0;
-    if (c_parse() != 0) {
+    yyin = T2FP;			/* C input to C parser */
+    yyout = outFP;			/* list file */
+    if (c_parse() != 0) {		/* actual C parser call */
 	ierror("c_compile: Parse error\n", NULL);
     }
-    rewind(yyin);
-    copyAdjust(yyin, T3FP);		/* output adjusted C-code */
+    if (fseek(T2FP, 0L, SEEK_SET) != 0) { /* rewind intermediate file */
+	return T2index;
+    }
+    copyAdjust(T2FP, oFP, lp);		/* output adjusted C-code */
     return 0;
 } /* c_compile */
 
@@ -1395,25 +1545,33 @@ c_compile(FILE * iFP)
  *******************************************************************/
 
 int
-copyXlate(FILE * oFP, char * outfile, unsigned * lcp, int mode)
+copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
 {
     int		mask = 01;			/* copy literal blocks */
+    int		flag = 1;
+    int		cFn;				/* C function number */
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
-    /* rewind intermediate file */
-    if (fseek(T3FP, 0L, SEEK_SET) != 0) {
+    if (fseek(iFP, 0L, SEEK_SET) != 0) {	/* rewind intermediate file */
 	return T3index;
     }
 
-    while (fgets(lineBuf, sizeof lineBuf, T3FP)) {
+    while (fgets(lineBuf, sizeof lineBuf, iFP)) {
 	if (strncmp(lineBuf, "/*##*/", 6) == 0) {
 	    mask = 02;				/* copy functions or cases */
 	} else if (mode & mask) {
-	    (*lcp)++;				/* count lines actually output */
-	    if (strcmp(lineBuf, "##\n") == 0) {
-		fprintf(oFP, "#line %d \"%s\"\n", *lcp, outfile);
-	    } else {
-		fputs(lineBuf, oFP);
+	    if (mask == 02 &&			/* do not look in literals - mode 01 */
+		sscanf(lineBuf, cexeString[outFlag], &cFn) == 1) {
+		assert(cFn < functionUseSize);
+		flag = functionUse[cFn];	/* has this function or case been called ? */
+	    }
+	    if (flag || outfile == 0) {		/* skip functions or cases not called */
+		if (lcp) (*lcp)++;		/* count lines actually output */
+		if (outfile && strcmp(lineBuf, "##\n") == 0) {
+		    fprintf(oFP, "#line %d \"%s\"\n", *lcp, outfile);
+		} else {
+		    fputs(lineBuf, oFP);
+		}
 	    }
 	}
     }

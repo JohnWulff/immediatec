@@ -176,7 +176,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.31 2004/01/21 17:36:11 jw Exp $
+$Id: iClive,v 1.32 2004/02/26 10:42:00 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -229,7 +229,25 @@ my $sMsg = '';
 my @wIdx = ('', '');  # Indices surrounding the current word.
 my @lIdx = ('', '');  # Same for last word.
 
-my @icon = (
+# has to be global, 'our' not portable yet
+my ($prevText, $prevMatch, @lines, $si, $sj, $siWrap, $sjWrap, $top, $home);
+
+########################################################################
+#
+#	Create main window and menus
+#
+#	NOTE: parameters in -command => [ ] closures are taken from the
+#	      time the command was executed - not when event takes place
+#
+########################################################################
+
+my $mainWindow = MainWindow->new();
+$mainWindow->title("iClive");
+if (($home = $ENV{HOME}) ne '' and open(INI, ">$home/.iClive.bit")) {
+    print INI << "EOF";		# generate the minimise icon file
+\#define ic_width 48
+\#define ic_height 48
+static unsigned char ic_bits[] = {
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1c,
@@ -253,23 +271,11 @@ my @icon = (
    0xf8, 0x03, 0x00, 0xf8, 0xff, 0x0f, 0xf8, 0x03, 0x00, 0xe0, 0xff, 0x03,
    0x00, 0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
-
-# has to be global, 'our' not portable yet
-my ($prevText, $prevMatch, @lines, $si, $sj, $siWrap, $sjWrap, $top);
-
-########################################################################
-#
-#	Create main window and menus
-#
-#	NOTE: parameters in -command => [ ] closures are taken from the
-#	      time the command was executed - not when event takes place
-#
-########################################################################
-
-my $mainWindow = MainWindow->new();
-$mainWindow->title("iClive");
-$mainWindow->iconbitmap('@/home/jw/Manly/ic/src/ic.bit');
+   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+EOF
+    close(INI);
+    $mainWindow->iconbitmap("\@$home/.iClive.bit");
+}
 
 ########################################################################
 #	Menu bar

@@ -16,12 +16,13 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.44 2004/02/23 17:48:23 jw Exp $";
+"@(#)$Id: comp.h,v 1.45 2004/03/18 22:40:02 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256
 #define	IBUFSIZE	512
 #define	IMMBUFSIZE	1024
+#define	FUNUSESIZE	64
 
 #define	NOT	1		/* used in List_e.le_val */
 #define FEEDBACK
@@ -39,9 +40,6 @@ typedef	struct Symbol {		/* symbol table entry */
     unsigned char	type;	/* ARN AND OR LATCH FF CLK TIM ... */
     unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
     List_e *		list;	/* output list pointer */
-#ifdef FEEDBACK
-    List_e *		elist;	/* feedback list pointer */
-#endif	/* FEEDBACK */
 #if ! YYDEBUG
     union {
 #endif
@@ -50,6 +48,12 @@ typedef	struct Symbol {		/* symbol table entry */
 	unsigned int	val;	/* used to hold function number etc. */
 #if ! YYDEBUG
     } u;
+    union {
+#endif
+	List_e *	elist;	/* feedback list pointer */
+	struct Symbol *	glist;	/* mark symbols in C compile */
+#if ! YYDEBUG
+    } v;
 #endif
     struct Symbol *	next;	/* to link to another */
 } Symbol;
@@ -58,10 +62,14 @@ typedef	struct Symbol {		/* symbol table entry */
 #define u_gate		u.gate
 #define u_blist		u.blist
 #define u_val		u.val
+#define v_elist		v.elist
+#define v_glist		v.glist
 #else				/* easier for debugging */
 #define u_gate		gate
 #define u_blist		blist
 #define u_val		val
+#define v_elist		elist
+#define v_glist		glist
 #endif
 
 /* for use in a union identical first elements can be accesed */
@@ -89,7 +97,7 @@ extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */
 #ifndef LMAIN
 extern void yyerror(char * s);		/* called for yacc syntax error */
-extern int  get(FILE* fp);		/* character input shared with lexc.l */
+extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
 #endif
 extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
@@ -105,6 +113,9 @@ extern int	lexflag;
  *  C_NO_COUNT	010	-	010	c_parse blocks counting chars
  *  C_LINE	020	-	020	# 1 or # line seen
  *  C_LINE1	040	-	040	# line seen
+ *  C_BLOCK1	0100	-	0100	block c_parse listing completely
+ *  C_PARA	0200	-	0200	C function parameters are being collected
+ *  C_FUNCTION	0400	-	0400	C function is being parsed
  *******************************************************************/
 #define C_PARSE		01
 #define C_FIRST		02
@@ -112,12 +123,35 @@ extern int	lexflag;
 #define C_NO_COUNT	010
 #define C_LINE		020
 #define C_LINE1		040
+#define C_BLOCK1	0100
+#define C_PARA		0200
+#define C_FUNCTION	0400
 
 extern int	lineno;
 					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
+extern int *	functionUse;		/* database to record function calls */
+extern int	functionUseSize;	/* dynamic size adjusted with realloc */
+/********************************************************************
+ * functionUse[x] is a dynamic array, which records the number of
+ * calls for each C function x = 1 2 3 ... generated. If a C function
+ * is generated in an iC function definition, which is never called,
+ * this count is 0 and the function is not copied into the generated C code.
+ *
+ * functionUse[0] records the type of function called:
+ *	bit	value	description
+ * F_CALLED	01	any type of call
+ * F_ARITHM	02	imm reference in an immediate arithmetic expression
+ * F_FFEXPR	04	imm reference in an immediate if else or switch
+ * F_LITERAL	010	imm reference generated in a literal block
+ *******************************************************************/
+#define F_CALLED	01
+#define F_ARITHM	02
+#define F_FFEXPR	04
+#define F_LITERAL	010
+
 #ifndef EFENCE
 extern char	inpNM[];		/* currently scanned input file name */
 extern char	iCbuf[];		/* buffer to build imm statement size IMMBUFSIZE */
@@ -161,6 +195,7 @@ extern int	const_push(Lis * expr);	/* numeric constant push */
 extern List_e *	op_xor(			/* special exclusive or push */
 	    List_e *, List_e *);	/*   left, right   */
 extern List_e *	op_not(List_e *);	/* logical negation */
+extern void	writeCexeString(FILE * oFP, int cn);
 extern Symbol *	op_asgn(Sym *, Lis *,	/* asign List_e stack to links */
 	    unsigned char);		/*   var, right, ftyp   */
 extern List_e * bltin(			/* generate built in iC functions */
@@ -219,8 +254,10 @@ extern FILE *	T4FP;
 extern FILE *	T5FP;
 
 extern char	T0FN[];
+extern char	T2FN[];
 extern char	T4FN[];
 extern char	T5FN[];
+extern int	openT4T5(int mode);
 
 					/*   outp.c   */
 #define BUFS	128
@@ -233,15 +270,19 @@ extern int	toIEC1131(char * name, char * buf, int bufLen,
 
 extern int	listNet(unsigned * gate_count);	/* list generated network */
 extern int	buildNet(Gate ** igpp);	/* generate execution network */
-extern int	output(char *);		/* generate network as C file */
-extern int	c_compile(FILE *);
-extern int	copyXlate(FILE *, char *, unsigned *, int);
+extern int	output(FILE * iFP, char * outfile); /* generate network as C file */
+extern int	c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
+extern int	copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 					/*   lexc.l   */
 extern int	c_leng;
 extern int	column;
 extern int	gramOffset;
 extern void	delete_sym(Token* tokp);
+#ifndef LMAIN
+extern void	markParaList(Symbol * sp); /* mark Symbol as parameter on glist */
+extern void	clearParaList(int flag); /* clear parameter list from extraneous entries */
+#endif
 					/*   gram.y   */
 extern int	c_parse(void);		/* generated yacc parser function */
-extern void	copyAdjust(FILE* iFP, FILE* oFP);
+extern void	copyAdjust(FILE* iFP, FILE* oFP, List_e* lp);
 #endif	/* COMP_H */

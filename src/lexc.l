@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.22 2004/02/23 22:41:02 jw Exp $";
+"@(#)$Id: lexc.l,v 1.23 2004/03/19 16:03:00 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -26,6 +26,7 @@ static const char lexc_c[] =
 %}
 D			[0-9]
 L			[a-zA-Z_]
+S			[$a-zA-Z_0-9]
 H			[a-fA-F0-9]
 E			[Ee][+-]?{D}+
 FS			(f|F|l|L)
@@ -47,13 +48,15 @@ static int	cpp_comment(c_STYPE* u);
 static int	preprocess(c_STYPE* u);
 static int	ignore(c_STYPE* u);
 static void	count(c_STYPE* u);
-static int	check_type(c_STYPE* u);
+static int	check_type(c_STYPE* u, int qtoken);
+static Symbol	markerSymbol = { "marker", UDF, UDFA, };
+static Symbol *	paraList = &markerSymbol;
 
 #ifndef LMAIN
 #define YY_INPUT(buf,result,max_size) \
 {\
     int c = '*', n;\
-    for ( n = 0; n < max_size && (c = get( yyin )) != EOF && c != '\n'; ++n )\
+    for ( n = 0; n < max_size && (c = get( yyin, 1 )) != EOF && c != '\n'; ++n )\
 	    buf[n] = (char) c;\
     if ( c == '\n' )\
 	    buf[n++] = (char) c;\
@@ -115,8 +118,9 @@ static int	check_type(c_STYPE* u);
 "__LINE__"		{ count(&c_lval); return CONSTANT; }	/* no need to identify octal */
 "__FILE__"		{ count(&c_lval); return STRING_LITERAL; }
 
-(I|Q|T)X{D}+\.{D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval); }
-{L}({L}|{D})*		{ count(&c_lval); return check_type(&c_lval); }
+(I|Q)(B|W|L){D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval, 1); }
+(I|Q|T)X{D}+\.{D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval, 1); }
+{L}{S}*				{ count(&c_lval); return check_type(&c_lval, 0); }
 
 0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 0xac8 0XAC8UL */
 {D}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 12 12l 12u 12UL */
@@ -393,27 +397,46 @@ count(c_STYPE* u)
  *******************************************************************/
 
 static int
-check_type(c_STYPE* u)
+check_type(c_STYPE* u, int qtoken)
 {
-    Symbol *	sp;
+    Symbol *	sp = 0;
 #ifndef LMAIN
-    int			mType;
-    char		buffer[BUFS];	/* buffer for modified names */
-    char		iqt[2];		/* char buffers - space for 0 terminator */
-    char		xbwl[2];
-    int			byte;
-    int			bit;
-    char		tail[8];	/* compiler generated suffix _123456 max */
+    int		mType;
+    char	buffer[BUFS];		/* buffer for modified names */
+    char	iqt[2];			/* char buffers - space for 0 terminator */
+    char	xbwl[2];
+    int		byte;
+    int		bit;
+    char	tail[8];		/* compiler generated suffix _123456 max */
 
     toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+    if (iFunSymExt && !qtoken) {
+	if (iRetSymbol.v && strcmp(c_text, "this") == 0) {
+	    sp = iRetSymbol.v;		/* function return Symbol */
+	} else {
+	    strncpy(iFunSymExt, c_text, iFunEnd - iFunSymExt);
+	    sp = lookup(iFunBuffer);	/* maybe function internal Symbol */
+	    *iFunSymExt = '\0';
+	}
+    }
+    if (sp ||
 #else
 #define buffer		c_text
+    if (
 #endif
-
-    if ((sp = lookup(buffer)) != 0) {
+	(sp = lookup(buffer)) != 0) {
 	if ((sp->type & ~EM) <= MAX_LS) {
 #ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
+	    if ((lexflag & C_BLOCK1) == 0) {
+		if ((lexflag & C_PARA) == C_PARA) {
+		    markParaList(sp);	/* mark Symbol as parameter on glist */
+		}
+		if (sp->v_glist) {
+		    u->tok.symbol = sp;
+		    return IDENTIFIER;	/* name of imm variable temporarily C parameter */
+		}
+	    }
 #endif
 	    while ((sp->type & ~EM) == ALIAS) {
 		sp = sp->list->le_sym;	/* with token of original */
@@ -459,3 +482,53 @@ delete_sym(Token* tokp)
 	free(sp);
     }
 } /* delete_sym */
+#ifndef LMAIN
+
+/********************************************************************
+ *
+ *	Mark an imm Symbol as a parameter or function internal C variable
+ *	on glist. The immediate Symbol is hidden till the end of the
+ *	current C-function, when clearParaList() will clear the list.
+ *	The same Symbol may appear several times - check for duplicates.
+ *
+ *	Alternatively mark an imm Symbol as a global C variable, which
+ *	will be hidden in all subsequent literal blocks and C functions.
+ *
+ *******************************************************************/
+
+void
+markParaList(Symbol * sp)
+{
+    if (sp->v_glist == 0) {			/* already marked ? */
+	if ((lexflag & C_FUNCTION) == 0) {
+	    sp->v_glist = &markerSymbol;	/* mark C globally */
+	} else {
+	    sp->v_glist = paraList;		/* mark on paraList */
+	    paraList = sp;
+	}
+    }
+} /* markParaList */
+
+/********************************************************************
+ *
+ *	Clear parameter list from C function internal entries
+ *
+ *******************************************************************/
+
+void
+clearParaList(int flag)
+{
+    Symbol * sp;
+
+    while (paraList != &markerSymbol) {
+	sp = paraList->v_glist;
+	paraList->v_glist = 0;
+	paraList = sp;
+    }
+    if (flag) {
+	lexflag |= (C_PARA|C_FUNCTION);
+    } else {
+	lexflag &= ~(C_PARA|C_FUNCTION);
+    }
+} /* clearParaList */
+#endif

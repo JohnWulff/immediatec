@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.26 2004/01/02 17:34:19 jw Exp $";
+"@(#)$Id: scan.c,v 1.27 2004/03/10 09:46:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -151,7 +151,7 @@ scan_ar(Gate *	out_list)
 #endif
 	    scan_cnt++;				/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-	    gx = gp;			/* save old gp in gx */
+	    gx = gp;				/* save old gp in gx */
 	    if (debug & 0100) {
 		if (dc++ >= 4) {
 		    dc = 1;
@@ -172,15 +172,15 @@ scan_ar(Gate *	out_list)
 #endif
 #ifdef LOAD
 	    if ((exec = (CFunctp)*(gp->gt_rlist)) != 0) {
-		val = exec(gp);		/* compute arith expression */
+		val = exec(gp);			/* compute arith expression */
 	    }
 #else
 	    if ((exec = (int)gp->gt_rlist) != 0) {
-		val = c_exec(exec, gp);	/* must pass both -/+ */
+		val = c_exec(exec, gp);		/* must pass both -/+ */
 	    }
 #endif
 	    else {
-		val = op->gt_old;	/* pass value to master output */
+		val = op->gt_new;		/* pass value to master output */
 	    }
 	    /************************************************************
 	     *
@@ -190,10 +190,9 @@ scan_ar(Gate *	out_list)
 
 	    if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
-		if (val != gp->gt_new &&	/* first change or glitch */
-		((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
-		    /* arithmetic master action */
-		    (*masterAct[gp->gt_fni])(gp, a_list);
+		if (val != gp->gt_new) {
+		    gp->gt_new = val;
+		    (*masterAct[gp->gt_fni])(gp, a_list); /* arithmetic master action */
 		}
 	    } else if ((val = val ? -1 : 1) != gp->gt_val) {
 		gp->gt_val = val;	/* convert val to logic value */
@@ -642,13 +641,13 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		}
 #endif
 		else {
-		    val = op->gt_old;		/* pass value to master output */
+		    val = op->gt_new;		/* pass value to master output */
 		}
 
 		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
-		    if (val != gp->gt_new &&	/* first change or glitch */
-		    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
+		    if (val != gp->gt_new) {
+			gp->gt_new = val;
 			/* arithmetic init action same as master action */
 			(*initAct[gp->gt_fni])(gp, a_list);
 		    }
@@ -781,5 +780,7 @@ arithMa(				/* ARITH master action */
 #endif
 #endif
     }
-    link_ol(gp, a_list);		/* link to arithmetic list */
+    if ((gp->gt_new != gp->gt_old) ^ (gp->gt_next != 0)) {
+	link_ol(gp, a_list);		/* link to arithmetic list */
+    }
 } /* arithMa */

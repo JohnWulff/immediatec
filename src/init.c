@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.24 2004/02/21 17:29:11 jw Exp $";
+"@(#)$Id: init.c,v 1.25 2004/03/10 09:39:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -50,6 +50,8 @@ static struct bi builtinsOld[] = {
     /* name	type	uVal	ftype */
   { "DR",	KEYW,	BLTIN2,	D_FF,	}, /* D flip-flop with reset */
   { "DSR",	KEYW,	BLTIN3,	D_FF,	}, /* D flip-flop with set/reset */
+  { "SHR",	KEYW,	BLTIN2,	D_SH,	}, /* sample and hold with reset */
+  { "SHSR",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with set/reset */
 //{ "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
   { "JK",	KEYW,	BLTINJ,	S_FF,	}, /* R_FF for reset master */
   { "L",	KEYW,	BLATCH,	0,	},
@@ -65,8 +67,8 @@ static struct bi builtins[] = {
   { "DR_",	KEYW,	BLTIN2,	D_FF,	}, /* D flip-flop with simple reset */
   { "DSR_",	KEYW,	BLTIN3,	D_FF,	}, /* D flip-flop with simple set/reset */
   { "SH",	KEYW,	BLTIN1,	D_SH,	}, /* sample and hold */
-  { "SHR",	KEYW,	BLTIN2,	D_SH,	}, /* sample and hold with reset */
-  { "SHSR",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with set/reset */
+  { "SHR_",	KEYW,	BLTIN2,	D_SH,	}, /* sample and hold with simple reset */
+  { "SHSR_",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with simple set/reset */
   { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	}, /* pulse on anlog or digital change */
   { "RISE",	KEYW,	BLTIN1,	RI_BIT,	}, /* pulse on digital rising edge */
   { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
@@ -147,7 +149,7 @@ init(void)		/* install constants and built-ins */
  *	Suggestion: make internally declared immediate variables 1 char long
  *		 to keep generated listing names short. 'i' is a good choice.
  *
- *	A listing of these functions can be generated with -d10044
+ *	A listing of these functions can be generated with    -d10044
  *	Old style imm functions without these definitions use -d20000
  *
  *******************************************************************/
@@ -163,6 +165,10 @@ imm bit DR(bit dat, clock dcl, bit res, clock rcl) {\n\
 imm bit DSR(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
     imm bit i = set | res;\n\
     return DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl); }\n\
+imm int SHR(int dat, clock dcl, bit res, clock rcl) {\n\
+    return SHR_( res ? this : dat, dcl, res, rcl); }\n\
+imm int SHSR(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
+    return SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
 imm bit L(bit set, bit res) {\n\
     return F(this, set, res); }\n\
 imm bit DL(bit set, bit res, clock clk) {\n\
