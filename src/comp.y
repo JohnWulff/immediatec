@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.48 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: comp.y,v 1.49 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -59,8 +59,8 @@ char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 void
 pu(int t, char * token, Lis * node)
 {
-    register char *	cp;
-    register char *	ep;
+    char *	cp;
+    char *	ep;
 
     switch (t) {
     case 0:
@@ -312,7 +312,7 @@ expr	: UNDEF			{
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| fexpr			{
-		register Symbol *	sp;
+		Symbol *	sp;
 
 		if ($1.v == 0) YYERROR;			/* error in bltin() */
 		sp = $1.v->le_sym;
@@ -447,7 +447,7 @@ expr	: UNDEF			{
 	 ***********************************************************/
 
 	| expr AA expr	{			/* binary && */
-		register Symbol * sp;
+		Symbol *	sp;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
@@ -467,7 +467,7 @@ expr	: UNDEF			{
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr OO expr	{			/* binary || */
-		register Symbol * sp;
+		Symbol *	sp;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
@@ -496,7 +496,7 @@ expr	: UNDEF			{
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| NOTL expr 		{		/* unary ~ or ! */
-		register Symbol * sp;
+		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
 		if ($2.v) {
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
@@ -734,7 +734,7 @@ casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
 cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 	| casgn			{ $$.v = sy_push($1.v); }
 	| cfexpr		{
-		register Symbol *	sp = $1.v->le_sym;
+		Symbol *	sp = $1.v->le_sym;
 		if (sp->ftype != ftypes[sp->type]) {
 		    warning("not enough arguments for function", sp->name);
 		}
@@ -769,7 +769,7 @@ tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
 texpr	: TVAR			{ $$.v = sy_push($1.v); }
 	| tasgn			{ $$.v = sy_push($1.v); }
 	| tfexpr		{
-		register Symbol *	sp = $1.v->le_sym;
+		Symbol *	sp = $1.v->le_sym;
 		if (sp->ftype != ftypes[sp->type]) {
 		    warning("not enough arguments for function", sp->name);
 		}
@@ -954,8 +954,8 @@ compile(
 static int
 get(void)
 {
-    register int	temp;
-    int			temp1;
+    int		temp;
+    int		temp1;
 
     while (getp >= fillp) {
 	if (lineflag) {
@@ -1024,8 +1024,8 @@ yylex(void)
     }
     yyleng = 0;
     while ((c = get()) !=  EOF) {
-	register Symbol *	symp;
-	register List_e *	lp;
+	Symbol *	symp;
+	List_e *	lp;
 	if (c == ' ' || c == '\t' || c == '\n') {
 	    yyleng = 0;
 	    continue;			/* ignore white space */
@@ -1312,7 +1312,7 @@ execerror(			/* recover from run-time error */
 } /* execerror */
 
 static void
-yyerror(register char * s)	/* called for yacc syntax error */
+yyerror(char *	s)		/* called for yacc syntax error */
 {
     char *	cp = chbuf;
     int		n, n1;
@@ -1360,7 +1360,7 @@ yyerror(register char * s)	/* called for yacc syntax error */
 } /* yyerror */
 
 static void
-yyerrls(register char * s)	/* called for yacc error list */
+yyerrls(char *	s)		/* called for yacc error list */
 {
     fprintf(outFP, s);
     if (errFP != stderr) fprintf(errFP, s);

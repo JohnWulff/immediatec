@@ -81,7 +81,7 @@ Usage:
 	-l len	length of scales (default 170)
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.32 2001/03/21 19:43:38 jw Exp $
+$Id: iCbox,v 1.33 2001/04/04 10:30:37 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
@@ -118,7 +118,7 @@ if ($unitID =~ /^[XBW]/) {
     $inByte &= 0xff if $unitID =~ /^[XB]/;
 }
 else {
-    die "DemoBox $unitID could not be made\n";
+    die "iCbox $unitID could not be made\n";
 }
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
@@ -316,7 +316,7 @@ sub rcvd_msg_from_server {
         my $len = length $msg;
 	if ($len == 0) {
 	    $conn->disconnect();
-	    print "DemoBox $unitID disconnected by server\n";
+	    print "iCbox $unitID disconnected by server\n";
 	    exit;
 	}
 	my ($uID, $value, $rest) = split /\./, $msg, 3;

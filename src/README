@@ -1,5 +1,5 @@
 
-                         immediateC, iC rev 1.63
+                         immediateC, iC rev 1.64
 
                     Copyright (C) 1985-2001, John E. Wulff
                             All rights reserved.
@@ -60,12 +60,12 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev 1.63
+        Notes for the installation of icc rev 1.64
 
         1)  unpack the archive in a suitable working directory with
-                tar -xvzf icc_1.63.tgz
+                tar -xvzf icc_1.64.tgz
 
-        2)  cd icc_1.63/src
+        2)  cd icc_1.64/src
 
         3)  excute the following:
 
@@ -92,10 +92,10 @@
             it also copies the include file icc.h to /usr/local/include
             libict.a to /usr/local/lib and Msg.pm to /usr/lib/perl5/site...
 
-        6)  change to directory Test and compile a0.ic with ICMake
+        6)  change to directory Test and compile a0.ic with iCmake
 
                 cd Test
-                ICMake a0.ic
+                iCmake a0.ic
 
             This should make a0.lst a0.c a0 and a0.ini
                 a0.lst  is a listing
@@ -107,43 +107,55 @@
         7)  If Perl/Tk is installed on the system the following starts
             a very simple demonstration:
 
-                ICServer 'DemoBox X0' a0
+                iCserver 'iCbox X0' a0
 
-            A DemoBox with 8 inputs and 8 outputs is drawn.
+            An "iCbox" with 8 inputs and 8 outputs is drawn.
             Input IX0.0 can be turned on and off.
-            Output QX0.0 should follow the input, since program a0.ic
-            starts with
-                QX0.0 = IX0.0;
+            Output QX0.0 follows the input, since program a0.ic simply
+	    assigns immediate inputs to corresponding outputs:
+                QX0.0 = IX0.0; ...
 	    stop with ctrl-C
 
 	8)  Make all iC executable in this directory by running
 
-		ICMake *.ic
+		iCmake *.ic
 
-	    The script 'a012.sh' starts ICServer, 3 DemoBoxes and 'a012'
+	    The script 'a012.sh' starts 'iCserver', 3 x 'iCbox' and 'a012'
 	    which sets all outputs from inputs like a0 above.
 
 	9)  The scripts 'bar1.sh' and 'bar2.sh' start demos showing running
 	    lights moving every 50 ms. The lights should move smoothly on a
 	    100 MHz or faster computer. 'demo.sh' shows some logic processing.
 
-        10) I have included a script called 'stop' from my private toolkit.
-	    It can be used effectively to kill ICServer when it is executing
-	    in the background, which is appropriate for a server.
+	10) Running 'iClive bar1.ic' as a seperate process, while 'bar1' is
+	    running, will display the source listing (in an edit window),
+	    connect to iCServer as an auxiliary I/O and receive updates
+	    of all variables from the running iC program (bar1). These
+	    updates will change the colours of all words, which are
+	    immediate variables.  (green/black = 0, yellow/red = 1)
+	    This "live listing" shows the current state of logical
+	    relationships in statements of the iC program. Arithmetic
+	    variables are displayed in a balloon, when the cursor rests
+	    on a variable. (Arithmetic variables have a blue background).
 
-		ICServer &
+	11) I have included a script called 'stop' from my private toolkit.
+	    It can be used effectively to kill iCserver when it is
+	    executing in the background, which is appropriate for
+	    a server.
+
+		iCserver &
 		.....
-		../stop ICServer	# local copy of 'stop'
+		../stop iCserver	# local copy of 'stop'
 
 	    I have tried to use 'kill' with named processes as described in
 	    the 'kill' manpage, but it does not seem to work, even called as
-	    'command kill ICServer'.
+	    'command kill iCserver'.
 	    You will have to install 'stop' manually in a PATH directory to
 	    use it anywhere in your system. (see 'stop -h' for help)
 	    'stop' is not a command on any Unix or Linux systems I know.
 	    If it does interfere I suggest renaming it to 'Stop'.
 
-        11) The StarOffice Word document doc/iC.sdw (or its .doc derivative)
+        12) The StarOffice Word document doc/iC.sdw (or doc/iC.html)
             provide an introduction to the Programming Language iC.
 
             There are currently no man pages (on my TODO list) but
@@ -156,22 +168,22 @@
         John E. Wulff   09.Mar.2001     <john.wulff@inka.de>
 
 	PS
-	The program DemoBox requires Tk800.022 if you have Perl 5.6.0.
+	The program 'iCbox' requires Tk800.022 if you have Perl 5.6.0.
 	The SuSE Linux 7.1 which I have just installed has Tk800.014
-	in combination with Perl 5.6.0. With this constellation, DemoBox
+	in combination with Perl 5.6.0. With this constellation, iCbox
 	produces 20 lines of warnings every time a virtual button is
 	pressed, which executes $tcp_conn->send_now() from a Tk callback
 	function. Tk800.014 has 'require fileevent', which appears
 	to go awry. (should use 'use'!!). Strangely the transmissions
 	work - the voluminous 'croak' outputs are only warnings.
 	
-	If you download Tk800-022 from CPAN and install it, DemoBox
+	If you download Tk800-022 from CPAN and install it, iCbox
 	works fine. If you have an older distribution of Perl (5.005)
 	this is not necessary.
 
 	I have also downloaded Time::HiRes from CPAN and installed it.
-	This allows ICServer and DemoBox to output times between events
+	This allows iCserver and iCbox to output times between events
 	with microsecond resolution using the -m option. See the listings
 	for activating this feature.
 
-        $Id: README,v 1.4 2001/03/16 17:52:06 jw Exp $
+        $Id: README,v 1.5 2001/04/05 20:26:52 jw Exp $

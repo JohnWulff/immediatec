@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.24 2001/04/04 10:30:37 jw Exp $";
+"@(#)$Id: ict.c,v 1.25 2001/04/07 10:35:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -478,22 +478,28 @@ icc(
 				}
 				strcpy(msgBuf, "L0.1");
 				msgOffset = 4;		/* strlen(msgBuf) */
+				/* to maintain index correlation send all symbols */
 				for (opp = sTable; opp < sTend; opp++) {
 				    int		len;
 				    int		rest;
-				    int		fni = 0;
+				    int		fni;
 				    int		inverse = 0;
-				    Gate *	gx = gp = *opp;
-				    /* to maintain index correlation send all symbols */
-				    while (gx->gt_ini == -ALIAS) {
-					inverse ^= gx->gt_mark;	/* holds ALIAS inversion flag */
-					gx = (Gate*)gx->gt_rlist;	/* resolve ALIAS */
-					fni = MAX_FTY + gx->gt_fni + inverse;
-				    }
+				    char *	ids;
 
-				    while (rest = REPLY - msgOffset, (len = fni ?	/* original ID with index */
-					snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", gp->gt_ids, fni, gx->gt_live) :
-					snprintf(&msgBuf[msgOffset], rest, ";%s %d", gp->gt_ids, gp->gt_fni)
+				    gp = *opp;
+				    ids = gp->gt_ids;
+				    fni = gp->gt_fni;
+				    while (gp->gt_ini == -ALIAS) {
+					inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+					gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+					fni = MAX_FTY + gp->gt_fni + inverse;
+				    }
+				    if (fni == CH_BIT && gp->gt_ini >= 0) {
+					fni = RI_BIT;		/* AND - LATCH, display as logic signal */
+				    }
+				    while (rest = REPLY - msgOffset, (len = fni > MAX_FTY ?
+					snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
+					snprintf(&msgBuf[msgOffset], rest, ";%s %d", ids, fni)
 					) < 0 || len >= rest) {
 					msgBuf[msgOffset] = '\0';		/* terminate */
 					if (micro) microPrint("Send Symbols intermediate", 0);

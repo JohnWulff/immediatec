@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.18 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: comp.h,v 1.19 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -31,8 +31,8 @@ typedef	struct	List_e {	/* list element */
 
 typedef	struct Symbol {		/* symbol table entry */
     char *		name;	/* element name */
-    uchar		type;	/* ARN AND OR LATCH FF CLK TIM ... */
-    uchar		ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
+    unsigned char	type;	/* ARN AND OR LATCH FF CLK TIM ... */
+    unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
     List_e *		list;	/* output list pointer */
     union {
 	Gate *		gate;	/* AND OR */
@@ -66,15 +66,15 @@ extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
 extern Symbol *	sy_pop(List_e *);	/* delete List element left over */
 extern List_e * op_force(		/* force linked Symbol to ftype */
-	    List_e *, uchar);		/*   lp, ftyp    */
-extern List_e *	op_push(		/* reduce List_e stack to links */
-	    List_e *, uchar, List_e *);	/*   left, typ, right   */
+	    List_e *, unsigned char);	/*   lp, ftyp    */
+extern List_e *	op_push(List_e *,	/* reduce List_e stack to links */
+	    unsigned char, List_e *);	/*   left, typ, right   */
 extern int	const_push(Lis * expr);	/* numeric constant push */
 extern List_e *	op_xor(			/* special exclusive or push */
 	    List_e *, List_e *);	/*   left, right   */
 extern List_e *	op_not(List_e *);	/* logical negation */
-extern Symbol *	op_asgn(		/* asign List_e stack to links */
-	    Sym *, Lis *, uchar);	/*   var, right, ftyp   */
+extern Symbol *	op_asgn(Sym *, Lis *,	/* asign List_e stack to links */
+	    unsigned char);		/*   var, right, ftyp   */
 extern List_e * bltin(			/* generate built in iC functions */
 	    Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* tr, Val* pVal);
 
@@ -87,8 +87,8 @@ extern Symbol *	symlist[];		/* symbol table: linked lists */
 extern void *	emalloc(unsigned);	/* check return from malloc */
 extern Symbol *	lookup(char *);		/* find string in symbol table */
 extern Symbol *	place_sym(Symbol *);	/* place sp in symbol table */
-extern Symbol *	install(
-		char *, uchar, uchar);	/* install Symbol in symbol table */
+extern Symbol *	install( char *, unsigned char,
+		    unsigned char);	/* install Symbol in symbol table */
 extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 
 					/*   main.c   */

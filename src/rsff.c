@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.23 2001/04/04 18:20:55 jw Exp $";
+"@(#)$Id: rsff.c,v 1.24 2001/04/09 19:15:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -263,8 +263,8 @@ dMsh(					/* D_SH master action on SH */
 	 */
     }
 #if defined(TCP) && defined(LOAD)
-    if (gp->gt_live & 0x8000) {
-	liveData(gp->gt_live, gp->gt_new);	/* live is active */
+    if (gp->gt_live & 0x8000) {			/* misses all but first change */
+	liveData(gp->gt_live, gp->gt_new);	/* and return to old value */
     }
 #endif
     link_ol(gp, gp->gt_clk);		/* master action */
@@ -278,6 +278,11 @@ dSsh(					/* D_SH slave action on SH */
     Gate *	gp;
     short	val;
 
+#if defined(TCP) && defined(LOAD)
+    if (gf->gt_live & 0x8000) {			/* value can change more than once */
+	liveData(gf->gt_live, gf->gt_new);	/* output final value here */
+    }
+#endif
     gp = gf->gt_funct;
 #ifndef _WINDOWS 
     if (debug & 0100) {
@@ -474,8 +479,8 @@ chMbit(					/* CH_BIT master action on VF */
     Gate **	fa;
 
 #if defined(TCP) && defined(LOAD)
-    if (gp->gt_live & 0x8000) {
-	liveData(gp->gt_live,(out_list != o_list) ?
+    if (gp->gt_live & 0x8000) {			/* misses all but first change */
+	liveData(gp->gt_live, gp->gt_ini < 0 ?	/* and return to old value */
 	gp->gt_new : gp->gt_val < 0 ? 1 : 0);	/* live is active */
     }
 #endif
@@ -516,6 +521,12 @@ chSbit(					/* CH_BIT slave action */
     Gate *	gp;
 
     gf->gt_old = gf->gt_new;		/* now new value is fixed */
+#if defined(TCP) && defined(LOAD)
+    if (gf->gt_live & 0x8000) {			/* value can change more than once */
+	liveData(gf->gt_live, gf->gt_ini < 0 ?	/* output final value here */
+	gf->gt_new : gf->gt_val < 0 ? 1 : 0);
+    }
+#endif
     gp = gf->gt_funct;
     if (gp->gt_val < 0) {
 #ifndef _WINDOWS 
@@ -550,8 +561,8 @@ fMsw(					/* F_SW master action */
 	gp->gt_new = gp->gt_val < 0 ? 1 : 0;
     }
 #if defined(TCP) && defined(LOAD)
-    if (gp->gt_live & 0x8000) {
-	liveData(gp->gt_live, gp->gt_new);	/* live is active */
+    if (gp->gt_live & 0x8000) {			/* misses all but first change */
+	liveData(gp->gt_live, gp->gt_new);	/* and return to old value */
     }
 #endif
     link_ol(gp, gp->gt_clk);		/* master action */
@@ -573,6 +584,11 @@ fSsw(					/* F_SW slave action on SW */
     Gate *	out_list)
 {
     gf->gt_old = gf->gt_new;		/* now new value is fixed */
+#if defined(TCP) && defined(LOAD)
+    if (gf->gt_live & 0x8000) {			/* value can change more than once */
+	liveData(gf->gt_live, gf->gt_new);	/* output final value here */
+    }
+#endif
     /* execute C function as action procedure with side effects */
 #ifdef LOAD
 #ifndef _WINDOWS 

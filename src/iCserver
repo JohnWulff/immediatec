@@ -1,0 +1,304 @@
+#!/usr/bin/perl -w -P
+
+########################################################################
+#
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	iCserver
+#
+#	Server which can accept any number of iC I/O clients
+#	and initially one iC controller ICC (planned are many)
+#
+#	John E. Wulff	28-May-2000
+#
+#	Protocol between I/O and ICC clients and server:
+#
+#	Registration:	UnitID
+#			X0 .. X31  from bit  I/O to server
+#			B0 .. B31  from byte I/O to server
+#			W0 .. W30  from word I/O to server
+#			C0         from ICC to server
+#
+#	I/O values:	Value
+#			0 .. 255   from bit/byte I/O to server
+#			0 .. 65535 from word I/O to server
+#
+#			UnitID.Value
+#			X0.0 .. X31.255   from server to ICC bit
+#			B0.0 .. B31.255   from server to ICC byte
+#			W0.0 .. W30.65535 from server to ICC word
+#
+#	The same formats are used from server to I/O and ICC to server.
+#	The direction of transmission determines if an I/O messages
+#	is input or output.
+#
+#	Each I/O value message constitutes an event which updates
+#	that value at the sink. Several messages may be grouped
+#	and seperated by comma (,)
+#
+#	Byte source and sink Units may be X0 X1 X2 .. X31 B0 B1 B2 .. B31
+#	Word source and sink Units must be even W0 W2 W4 .. W30
+#
+#	The Server receives messages from the I/Os, identifies the
+#	UnitID under which that I/O is registered and prefixes the
+#	UnitID and a full stop to the message and sends it on to the ICC.
+#
+#	Messages received from the ICC are stripped of the leading
+#	UnitID and comma. The rest is sent to the I/O Unit corresponding
+#	to the UnitID stripped from the message.
+#
+#	For measuring reaction times the Module Time::HiRes may be used.
+#	This activates the -m option.
+#	Make sure you have downloaded and installed Time::HiRes from CPAN
+#	Uncomment the C++ comment in the next line
+#//define TIME_HIRES
+#
+########################################################################
+
+use Msg;
+use strict;
+
+my %UnitIDs = ();
+my %Connections = ();
+my %Values = ();
+my $connICC;
+
+########################################################################
+#
+#	Initialization
+#
+########################################################################
+
+my $named = $0; $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
+	$named
+	-s host	address of server - clients must specify the same address
+		     unless (default '0.0.0.0' which accepts any client)
+	-p port	service port of server for all clients  (default '8778')
+	-t	trace messages for debugging
+	-m	display elapsed time in seconds and microseconds
+	    (Requires Module Time::HiRes available from CPAN - see source)
+	-h	help, ouput this Usage text only
+	NOTE:	if a client call has arguments, the call must be quoted
+		eg: @<<<<<<< 'iCbox X1'
+		$named
+Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
+							  '@'
+$Id: iCserver,v 1.23 2001/04/04 10:30:37 jw Exp $
+.
+
+use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
+require "getopts.pl";
+&Getopts('tms:p:h');			# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+#ifdef TIME_HIRES 
+
+my ($t0, $t1);
+if ($opt_m) {
+    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    $t0 = [gettimeofday];	# start of program
+}
+#endif
+
+########################################################################
+#
+#	Server
+#
+########################################################################
+
+my $host = defined $opt_s ? $opt_s : '0.0.0.0';
+my $port = defined $opt_p ? $opt_p : 8778;
+
+Msg->new_server($host, $port, \&login_proc);
+print "Server created. Waiting for events\n";
+
+########################################################################
+#
+#	Start clients named in argument list
+#
+########################################################################
+
+my $pid;
+ARG: while ($ARGV = shift @ARGV) {
+    FORK: {
+	sleep 1 if defined $pid;
+	next ARG if ($pid = fork);
+	if (defined $pid) {	# $pid is zero if defined
+	    # dispatch child process
+	    my @call = split " ", $ARGV;
+	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
+	    splice @call, 1, 0, '-t' if defined $opt_t;
+	    splice @call, 1, 0, '-m' if defined $opt_m;
+	    print "@call\n";
+	    exec @call;
+	    exit;		# child process cannot be executed
+	} elsif ($! =~ /No more process/) {
+	    # EAGAIN, recoverable fork error
+	    sleep 5;
+	    redo FORK;
+	} else {
+	    # weird fork error
+	    die "Can't fork: $!\n";
+	}
+    }
+}
+
+Msg->event_loop();
+
+########################################################################
+#
+#	Login procedure
+#
+########################################################################
+
+sub login_proc {
+    my ($conn, $host, $port) = @_;
+    print "Connection $host:$port at server\n";
+    # Unconditionally accept an incoming connection request
+    $UnitIDs{$conn} = undef;
+    return \&rcvd_msg_from_client;
+}
+
+########################################################################
+#
+#	Receive message from client
+#
+########################################################################
+
+sub rcvd_msg_from_client {
+    my ($conn, $msg, $err) = @_;
+#ifdef TIME_HIRES 
+    my ($sec, $usec);
+    if ($opt_m) {
+	$t1 = [gettimeofday];
+	$sec =  $t1->[0] - $t0->[0];
+	$usec = $t1->[1] - $t0->[1];
+	if ($usec < 0) {
+	    $sec--;
+	    $usec += 1000000;
+	}
+	if ($opt_t) {
+	    printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	} else {
+	    printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	}
+    }
+#endif
+    if (defined $msg) {
+	my @unitIDs = sort keys %{ $UnitIDs{$conn} };	# all unitIDs
+	my $unitID = $unitIDs[0];			# first unitID
+	my $len = length $msg;
+# print "($len)$msg", defined $unitID ? " $unitID\n" : " ID?\n";
+	if ($len == 0) {
+	    if (defined $unitID and exists $Connections{$unitID}) {
+		delete $Connections{$unitID};
+		delete $UnitIDs{$conn};		# all unitIDs for this connection
+		$conn->disconnect();
+		if ($unitID =~ /^C/) {
+		    $connICC = undef;
+		    if ($Connections{'L0'}) {
+			delete $UnitIDs{$Connections{'L0'}};
+			$Connections{'L0'}->disconnect();	# stop live display
+			delete $Connections{'L0'};
+		    }
+		} elsif (defined $connICC) {
+		    # pass clear input message to ICC
+		    print "I$unitID 0 to C0\n" if $opt_t;
+		    $connICC->send_now("$unitID.0");
+		}
+		print "$unitID has disconnected\n";
+	    }
+	} else {
+	    foreach my $msg1 (split /,/, $msg) {	# break up multiple messages
+		my ($uID, $value) = split /\./, $msg1, 2;
+		if (defined $value) {
+		    if (not defined $connICC) {
+			print "I$uID $value to dummy C0\n" if $opt_t;
+		    } elsif ($conn eq $connICC) {
+			############################################################
+			# value from ICC to I/O
+			############################################################
+			if (defined $Connections{$uID}) {
+			    print "$unitID $value to Q$uID\n" if $opt_t;
+			    $Connections{$uID}->send_now("$uID.$value");
+			} else {
+			    print "$unitID $value to dummy Q$uID\n" if $opt_t;
+			}
+			$Values{$uID} = $value;	# save latest bit or analog value
+		    } else {
+			############################################################
+			# value from I/O to ICC
+			############################################################
+			print "I$uID $value to C0\n" if $opt_t;
+			$connICC->send_now("$msg1");
+		    }
+		} elsif ($msg1 !~ /^[XBWCL]\d+$/) {	# X0 X1 .. B0 .. W0 .. C0 L0
+		    warn "WARNING: $msg1 from Unit $unitID ?? ignored";
+		} elsif (exists $Connections{$msg1}) {
+		    delete $UnitIDs{$conn}{$msg1};
+		    $conn->disconnect();
+		    warn "Trying to attach $msg1 twice - disconnected\n";
+		} else {
+		    ############################################################
+		    # registration
+		    ############################################################
+		    if ($msg1 =~ /^C/) {
+			if (defined $connICC) {
+			    delete $UnitIDs{$conn}{$msg1};
+			    $conn->disconnect();
+			    warn "Trying to attach $msg1 twice - disconnected\n";
+			    next;
+			}
+			$connICC = $conn;		# the ICC connection
+			############################################################
+			# new ICC connected - reset all the attached I/Os
+			############################################################
+			foreach my $con1 (sort keys %UnitIDs) {
+			    foreach $uID (sort keys %{ $UnitIDs{$con1} }) {
+				if ($uID =~ /^[BWX]/) {
+				    if (defined $Connections{$uID}) {
+					print "ICS R to $uID\n" if $opt_t;
+					$Connections{$uID}->send_now("$uID.R");
+				    } else {
+					print "ICS R to dummy $uID\n" if $opt_t;
+				    }
+				    $Values{$uID} = 0;	# save latest bit or analog value
+				}
+			    }
+			}
+		    }
+		    if ($connICC or $msg1 !~ /^L/) {
+			$UnitIDs{$conn}{$msg1} = $msg1;
+			$Connections{$msg1} = $conn;
+			print "Registered $msg1 at server\n";
+			if ($connICC and $msg1 =~ /^[BWX]/) {
+			    $value = $Values{$msg1};	# saved bit or analog value from ICC
+			    if ($value) {
+				print "ICS $value to Q$msg1\n" if $opt_t;
+				$Connections{$msg1}->send_now("$msg1.$value");
+			    }
+			}
+		    } else {
+			$conn->disconnect();	# live display must have a controller
+			warn "Trying to attach $msg1 when no controller - disconnected\n";
+		    }
+		}
+	    }
+	}
+    }
+#ifdef TIME_HIRES 
+    if ($opt_m) {
+	$t0 = [gettimeofday];
+    }
+#endif
+}

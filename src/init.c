@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.11 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: init.c,v 1.12 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -23,7 +23,7 @@ static const char init_c[] =
 #include	"comp.h"
 #include	"y.tab.h"
 
-Symbol		*clk;		/* default clock */
+Symbol *	clk;		/* default clock */
 
 /********************************************************************
  *
@@ -39,10 +39,10 @@ Symbol		*clk;		/* default clock */
  *******************************************************************/
 
 static struct {
-    char	*name;
-    uchar	type;
-    int		u_val;		/* yacc token for type KEYW */
-    uchar	ftype;
+    char *		name;
+    unsigned char	type;
+    int			u_val;		/* yacc token for type KEYW */
+    unsigned char	ftype;
 } builtins[] = {
     /* name	type	u_val	ftype */
   { "D",	KEYW,	BLTIN1,	D_FF,	},

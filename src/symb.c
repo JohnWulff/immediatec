@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.6 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: symb.c,v 1.7 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -28,7 +28,7 @@ static const char symb_c[] =
 
 /* "symb.c	3.09	95/01/13" */
 
-Symbol		*symlist[HASHSIZ];	/* symbol table: linked lists */
+Symbol *	symlist[HASHSIZ];	/* symbol table: linked lists */
 
 typedef struct hts {
     char first;
@@ -51,9 +51,9 @@ hts	hta[] =	{
 };
 
 static int
-hash(register char	*string)	/* hash a string to table index */
+hash(char *	string)	/* hash a string to table index */
 {
-    register char	ch;
+    char	ch;
     unsigned	hsh;
     unsigned	correct;
     unsigned	i;
@@ -83,10 +83,10 @@ hash(register char	*string)	/* hash a string to table index */
 }
 
 void *
-emalloc(register unsigned	nbytes)	/* check return from malloc */
+emalloc(unsigned	nbytes)	/* check return from malloc */
 {
-    register char	*bp;
-    register char	*tp;
+    char *	bp;
+    char *	tp;
 #ifdef _WINDOWS
 #if defined(_LARGE_) || defined(_HUGE_)
     GLOBALHANDLE		hglobal;
@@ -123,7 +123,7 @@ emalloc(register unsigned	nbytes)	/* check return from malloc */
  *******************************************************************/
 
 void
-efree(void *p)
+efree(void *	p)
 {
 #if defined(_LARGE_) || defined(_HUGE_)
     GLOBALHANDLE		hglobal;
@@ -144,10 +144,10 @@ efree(void *p)
 static Symbol **	spl;
 
 Symbol *
-lookup(register char	*string)	/* find string in symbol table */
+lookup(char *	string)	/* find string in symbol table */
 {
-    register Symbol	*sp;
-    int			i = 1;		/* must be != 0 in case empty */
+    Symbol *	sp;
+    int		i = 1;		/* must be != 0 in case empty */
 
     spl = &symlist[hash(string)];
     for (sp = *spl; sp != 0; spl = &sp->next, sp = *spl) {
@@ -162,9 +162,9 @@ lookup(register char	*string)	/* find string in symbol table */
 }
 
 Symbol *
-place_sym(register Symbol	*sp)	/* place sp in symbol table */
+place_sym(Symbol *	sp)	/* place sp in symbol table */
 {
-    register Symbol *	tsp;
+    Symbol *	tsp;
 
     if (spl == 0 || (tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0) {
 	if (lookup(sp->name) != 0) {	/* locate sorted position */
@@ -179,11 +179,11 @@ place_sym(register Symbol	*sp)	/* place sp in symbol table */
 
 Symbol *
 install(				/* install string in symbol table */
-    register char	*string,
-    uchar		typ,
-    uchar		ftyp)
+    char *		string,
+    unsigned char	typ,
+    unsigned char	ftyp)
 {
-    register Symbol	*sp;
+    Symbol *		sp;
 
     sp = (Symbol *) emalloc(sizeof(Symbol));
     sp->name = emalloc(strlen(string)+1);	/* +1 for '\0' */
@@ -194,9 +194,9 @@ install(				/* install string in symbol table */
 }
 
 Symbol *
-unlink_sym(register Symbol	*sp)	/* unlink Symbol from symbol table */
+unlink_sym(Symbol *	sp)	/* unlink Symbol from symbol table */
 {
-    register Symbol *	tsp;
+    Symbol *	tsp;
 
     if (sp) {
 	if ((tsp = lookup(sp->name)) != 0) {	/* locate sorted position */

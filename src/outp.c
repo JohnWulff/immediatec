@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.38 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: outp.c,v 1.39 2001/04/09 19:15:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -810,8 +810,10 @@ extern Gate *	l_[];\n\
 		    gp = gp->list->le_sym;		/* point to original */
 		}
 		fprintf(Fp,
-		" = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s, %s%s, %d };\n",
-		full_type[typ], full_ftype[dc], sp->name, mN(gp), sam, nxs, val);
+		" = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s%s, %s%s, %d };\n",
+		full_type[typ], full_ftype[dc], sp->name,
+		(gp->ftype == OUTW || gp->type == NCONST) ? "_" : "",
+		mN(gp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
 		sam = dc == ARITH ? "&_" : "&";

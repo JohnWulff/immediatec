@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.28 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: icc.h,v 1.29 2001/04/01 08:23:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -106,6 +106,11 @@ extern void	efree(void *);
 #define MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
 #define MIN_ACT	D_SH	/* ftypes >= MIN_ACT cause an action */
 #define MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
+#define MAX_FTY	TIMRL	/* ftypes >  MAX_FTY are ALIAS ftypes for live list */
+
+#define ARITH_ALIAS	MAX_FTY+ARITH		/* 17 */
+#define GATE_ALIAS	MAX_FTY+GATE		/* 18 */
+#define INV_ALIAS	MAX_FTY+GATE+NOT	/* 19 */
 
 #define ONCE_M	0x80	/* actions containing this bit only once */
 #define S_FF_M	0x01	/* masks in array bit2 for pass2 */
@@ -166,7 +171,6 @@ extern char *		full_type[];
 extern char *		full_ftype[];
 extern unsigned char	types[];	/*   comp.y   */
 extern unsigned char	ftypes[];
-extern unsigned char	atypes[];
 extern char		os[];
 extern char		fos[];
 extern FILE *		inFP;		/* input file pointer */
@@ -218,6 +222,7 @@ extern unsigned short	Aflag;		/* -A flag signals ARITH alias */
 extern unsigned short	aflag;		/* -a flag signals append mode */
 
 					/*   main.c   */
+extern const char *	progname;	/* name of this executable */
 extern unsigned short	xflag;		/* -x flag signals hexadecimal output */
 extern unsigned short	iFlag;		/* inversion correction needed */
 extern int		inversionCorrection(void);

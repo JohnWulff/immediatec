@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.20 2001/03/17 00:22:05 jw Exp $";
+"@(#)$Id: main.c,v 1.21 2001/04/01 08:23:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -17,6 +17,7 @@ static const char main_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<string.h>
 #include	"icc.h"
 #include	"comp.h"
 #ifdef TCP
@@ -91,6 +92,7 @@ static const char *	usage =
 "Copyright (C) 1985-2001 John E. Wulff     <john@je-wulff.de>\n"
 "%s\n";
 
+const char *	progname;		/* name of this executable */
 short		debug = 0;
 #ifdef TCP
 int		micro = 0;
@@ -102,7 +104,6 @@ unsigned short	osc_max = MARKMAX;
 extern	int	yydebug;
 #endif
 
-#define progFN	szNames[0]		/* for error messages */
 #define inpFN	szNames[1]		/* input file name */
 #define errFN	szNames[2]		/* error file name */
 #define listFN	szNames[3]		/* list file name */
@@ -136,10 +137,16 @@ char * OutputMessage[] = {
 int
 main(
     int		argc,
-    char * *	argv)
+    char **	argv)
 {
     int		r;		/* return value of compile */
-    progFN = *argv;		/* Process the arguments */
+
+    /* Process the arguments */
+    if ((progname = strrchr(*argv, '/')) == NULL) {
+	progname = *argv;
+    } else {
+	progname++;		/*  path has been stripped */
+    }
     inFP = stdin;		/* input file pointer */
     outFP = stdout;		/* listing file pointer */
     errFP = stderr;		/* error file pointer */
@@ -178,7 +185,7 @@ main(
 #endif
 		    goto break2;
 		case 't':
-		    debug = 0100;		/* trace only */
+		    if (debug == 0) debug = 0100;	/* trace only */
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -193,7 +200,7 @@ main(
 			goto break2;
 		    } else {
 			fprintf(stderr,
-			    "%s: cannot use both -c and -o option\n", progFN);
+			    "%s: cannot use both -c and -o option\n", progname);
 			goto error;
 		    }
 		case 'l':
@@ -210,7 +217,7 @@ main(
 			excFN = "cexe.c";
 		    } else {
 			fprintf(stderr,
-			    "%s: cannot use both -o and -c option\n", progFN);
+			    "%s: cannot use both -o and -c option\n", progname);
 			goto error;
 		    }
 		case 'A':
@@ -228,15 +235,15 @@ main(
 		    goto break2;
 		default:
 		    fprintf(stderr,
-			"%s: unknown flag '%c'\n", progFN, **argv);
+			"%s: unknown flag '%c'\n", progname, **argv);
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, progFN, progFN, progFN,
+		    fprintf(stderr, usage, progname, progname, progname,
 #ifdef TCP
 		    hostNM, portNM, iccNM,
 #endif
-		    MARKMAX, progFN, progFN, progFN, SC_ID);
+		    MARKMAX, progname, progname, progname, SC_ID);
 		    exit(1);
 		}
 	    } while (*++*argv);
@@ -248,7 +255,7 @@ main(
     debug &= 07777;			/* allow only cases specified */
     iFlag = 0;
     if ((r = compile(inpFN, listFN, errFN, outFN, exiFN, exoFN)) != 0) {
-	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
+	fprintf(stderr, OutputMessage[4], progname, szNames[r]);
     } else {
 	Gate *		igp;
 	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
@@ -312,7 +319,7 @@ main(
 	    }
 	}
 	if (r != 0) {
-	    fprintf(stderr, OutputMessage[r < 4 ? r : 4], progFN, szNames[r]);
+	    fprintf(stderr, OutputMessage[r < 4 ? r : 4], progname, szNames[r]);
 	    r += 10;
 	}
     }
@@ -368,7 +375,7 @@ inversionCorrection(void)
 	}
 	if (r != 0) {
 	    fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
-		progFN, exStr);
+		progname, exStr);
 	}
     }
     return r;

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.37 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: genr.c,v 1.38 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -60,9 +60,9 @@ initcode(void)			/* initialize for code generation */
  *******************************************************************/
 
 List_e *
-sy_push(register Symbol * var)	/* create List element for variable */
+sy_push(Symbol * var)	/* create List element for variable */
 {
-    register List_e *	lp;
+    List_e *	lp;
 
     lp = (List_e *) emalloc(sizeof(List_e));
     lp->le_sym = var;	/* point to variables Symbol entry */
@@ -82,9 +82,9 @@ sy_push(register Symbol * var)	/* create List element for variable */
  *******************************************************************/
 
 Symbol *
-sy_pop(register List_e * lp)	/* delete List element left over */
+sy_pop(List_e * lp)	/* delete List element left over */
 {
-    register Symbol *	sp;
+    Symbol *	sp;
 
     sp = lp->le_sym;	/* point to variables Symbol entry */
     free(lp);
@@ -105,11 +105,11 @@ sy_pop(register List_e * lp)	/* delete List element left over */
 
 List_e *
 op_force(		/* force linked Symbol to correct ftype */
-    register List_e *	lp,
-    register uchar	ftyp)
+    List_e *		lp,
+    unsigned char	ftyp)
 {
-    register Symbol *	sp;
-    register List_e *	lp1;
+    Symbol *		sp;
+    List_e *		lp1;
 
     if (lp && (sp = lp->le_sym)->ftype != ftyp) {
 	if (sp->u.blist == 0 ||			/* not a $ symbol or */
@@ -141,12 +141,12 @@ op_force(		/* force linked Symbol to correct ftype */
 
 List_e *
 op_push(			/* reduce List_e stack to links */
-    register List_e *	left,
-    register uchar	op,
+    List_e *		left,
+    unsigned char	op,
     List_e *		right)
 {
-    register List_e *	rlp;
-    register Symbol *	sp;	/* current temporary Symbol */
+    List_e *		rlp;
+    Symbol *		sp;	/* current temporary Symbol */
     char 		temp[8];
     Symbol *		lsp;
     Symbol *		tsp;
@@ -287,13 +287,13 @@ const_push(Lis * expr)
 
 List_e *
 op_xor(				/* special exclusive or push */
-    register List_e *	left,
-    register List_e *	right)
+    List_e *	left,
+    List_e *	right)
 {
-    register List_e *	inv_left;
-    register List_e *	inv_right;
-    List_e*		lp1;
-    List_e*		lp2;
+    List_e *	inv_left;
+    List_e *	inv_right;
+    List_e*	lp1;
+    List_e*	lp2;
 
     inv_left = sy_push(left->le_sym);	/* duplicate arg list entries */
     inv_right = sy_push(right->le_sym);
@@ -321,12 +321,12 @@ op_xor(				/* special exclusive or push */
  *******************************************************************/
 
 List_e *
-op_not(register List_e * right)		/* logical negation */
+op_not(List_e * right)		/* logical negation */
 {
-    register Symbol *	sp;
-    register List_e *	lp;
-    register Symbol *	ssp;
-    register List_e *	llp;
+    Symbol *	sp;
+    List_e *	lp;
+    Symbol *	ssp;
+    List_e *	llp;
 
     if (!(lp = (sp = right->le_sym)->u.blist)) {
 	right->le_val ^= NOT;		/* negate logical value */
@@ -380,31 +380,31 @@ op_not(register List_e * right)		/* logical negation */
  *
  *	Sym sv contains Symbol *v and char *f and *l to source
  *	Lis lr contains List_e *v and char *f and *l to source
- *	uchar ft is the ftype which right must be forced to
+ *	unsigned char ft is the ftype which right must be forced to
  *
  *******************************************************************/
 
 Symbol *
-op_asgn(			/* asign List_e stack to links */
-    Sym *	sv,		/* may be 0 for ffexpr */
-    Lis *	rl,
-    uchar	ft)
+op_asgn(				/* asign List_e stack to links */
+    Sym *		sv,		/* may be 0 for ffexpr */
+    Lis *		rl,
+    unsigned char	ft)
 {
-    register Symbol *	var;
-    register Symbol *	sp;
-    register List_e *	lp;
-    register Symbol *	gp;
-    register Symbol *	rsp;
-    register List_e *	tlp;
-    List_e *		right;
-    char		temp[100];
-    short		atn;
-    short		sflag;
-    Symbol *		sr;
-    char *		t_last = 0;
-    char *		t_first = 0;
+    Symbol *	var;
+    Symbol *	sp;
+    List_e *	lp;
+    Symbol *	gp;
+    Symbol *	rsp;
+    List_e *	tlp;
+    List_e *	right;
+    char	temp[100];
+    short	atn;
+    short	sflag;
+    Symbol *	sr;
+    char *	t_last = 0;
+    char *	t_first = 0;
 
-    right = op_force(rl->v, ft);   /* force Symbol on right to ftype ft */
+    right = op_force(rl->v, ft);	/* force Symbol on right to ftype ft */
     if (sv == 0) {
 	/* null var - generate a temporary Symbol of type UNDEF */
 	var = (Symbol *) emalloc(sizeof(Symbol));
@@ -866,12 +866,12 @@ op_asgn(			/* asign List_e stack to links */
  *
  *******************************************************************/
 
-static uchar
+static unsigned char
 bTyp(List_e * lp)
 {
-    Symbol *	symp;
-    uchar	tp;
-    uchar	ft;
+    Symbol *		symp;
+    unsigned char	tp;
+    unsigned char	ft;
 
     symp = lp->le_sym;
     while (symp->type == ALIAS) {

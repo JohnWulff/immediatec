@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.13 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: link.c,v 1.14 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -29,12 +29,12 @@ unsigned short	mark_stamp = 1;		/* incremented every scan */
 
 void
 link_ol(
-    register Gate	*gp,
-    register Gate	*out_list)
+    Gate *		gp,
+    Gate *		out_list)
 {
-    register Gate *	tp;
-    register Gate *	np;
-    Gate*		ap;
+    Gate *		tp;
+    Gate *		np;
+    Gate *		ap;
     unsigned short	diff;
     int			time;
 #ifndef _WINDOWS 

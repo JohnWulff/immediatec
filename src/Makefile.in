@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.18 2001/03/17 00:22:05 jw Exp $
+# @(#)$Id: Makefile.in,v 1.19 2001/04/04 18:20:55 jw Exp $
 
 ############################################################
 #
@@ -113,17 +113,18 @@ $(srcdir)/comp.c:	$(srcdir)/comp.y
 
 test:
 	@echo "compile and generate all executables from iC files in Test ..."
-	@${srcdir}/ICMake -v ${srcdir}/Test/*.ic
+	@${srcdir}/iCmake -v ${srcdir}/Test/*.ic
 	@echo "diffing generated files in Test with originals in Test/ORG* ..."
 	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK - do make install as su"; else echo "test FAILED - differences in listed files"; fi 
 
 install:	installdirs
 	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc
 	${INSTALL_PROGRAM} ict      ${bindir}/${binprefix}ict
+	${INSTALL_PROGRAM} iCbox    ${bindir}/${binprefix}iCbox
+	${INSTALL_PROGRAM} iClive   ${bindir}/${binprefix}iClive
+	${INSTALL_PROGRAM} iCmake   ${bindir}/${binprefix}iCmake
+	${INSTALL_PROGRAM} iCserver ${bindir}/${binprefix}iCserver
 	${INSTALL_PROGRAM} pplstfix ${bindir}/${binprefix}pplstfix
-	${INSTALL_PROGRAM} ICServer ${bindir}/${binprefix}ICServer
-	${INSTALL_PROGRAM} DemoBox  ${bindir}/${binprefix}DemoBox
-	${INSTALL_PROGRAM} ICMake   ${bindir}/${binprefix}ICMake
 	${INSTALL_DATA}    libict.a ${prefix}/lib/libict.a
 	${INSTALL_DATA}    icc.h    ${prefix}/include/icc.h
 	$(srcdir)/perlinstall Msg.pm
@@ -134,10 +135,11 @@ installdirs:	${srcdir}/mkinstalldirs
 uninstall:
 	rm -f ${bindir}/${binprefix}icc
 	rm -f ${bindir}/${binprefix}ict
+	rm -f ${bindir}/${binprefix}iCbox
+	rm -f ${bindir}/${binprefix}iClive
+	rm -f ${bindir}/${binprefix}iCmake
+	rm -f ${bindir}/${binprefix}iCserver
 	rm -f ${bindir}/${binprefix}pplstfix
-	rm -f ${bindir}/${binprefix}ICServer
-	rm -f ${bindir}/${binprefix}DemoBox
-	rm -f ${bindir}/${binprefix}ICMake
 	rm -f ${prefix}/lib/libict.a
 	rm -f ${prefix}/include/icc.h
 	$(srcdir)/perlinstall -u Msg.pm

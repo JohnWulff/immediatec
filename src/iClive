@@ -65,6 +65,9 @@ my $t0 = [gettimeofday];	# start of program
 #	The last bit of cs selects the false/true colours.
 #	The last ftype INV_ALIAS has an odd 'cs' which inverts the colours.
 #
+#	To display clocks and glitches, the foreground is flashed white
+#	for 50 milliseconds. Flashing the background looks confusing.
+#
 ########################################################################
 
 my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# cs[ftype]
@@ -74,11 +77,21 @@ my @tagBackground = ('PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
 		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
 		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
+							# cs+8 no change
+		     'PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
+		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
+		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
+		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
 		    );
 my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'black'        , 'red'          ,  # 2 3 ARITH
 		     'black'        , 'white'        ,  # 4 5 CLCKL
 		     'black'        , 'white'        ,  # 6 7 TIMRL
+							# cs+8 flash glitch
+		     'white'        , 'white'        ,  # 0 1 GATE
+		     'white'        , 'white'        ,  # 2 3 ARITH
+		     'white'        , 'black'        ,  # 4 5 CLCKL
+		     'white'        , 'black'        ,  # 6 7 TIMRL
 		    );
 
 ########################################################################
@@ -102,7 +115,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.13 2001/04/07 18:51:04 jw Exp $
+$Id: iClive,v 1.14 2001/04/09 19:15:20 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -164,15 +177,16 @@ $menuFile->separator();
 $menuFile->command('-label' => 'Quit', '-command' => sub { exit(0); } );
 
 ########################################################################
-#	Scan Menu
+#	Scan or Clear button
 ########################################################################
-my $menuScan = $menuBar->Button('-text'        => 'Scan',
-				    '-relief'      => 'raised',
-				    '-borderwidth' => 2,
-				    '-command'     => \&scan,
-				   )->pack('-side' => 'left',
-					   '-padx' => 2,
-					  );
+my $scanButton = $menuBar->Button('-text'        => 'Scan',
+				  '-relief'      => 'raised',
+				  '-borderwidth' => 2,
+				  '-command'     => \&scan,
+			         )->pack('-side' => 'left',
+				         '-padx' => 2,
+				        );
+my $scanFlag = 0;		# text is initially cleared
 
 ########################################################################
 #	Search menu 
@@ -312,10 +326,7 @@ sub rcvd_msg_from_server {
 	    %symbolTable = ();	# clear symbol table so balloons dont show
 	    undef $iCname;
 	    undef $conn;
-	    if ($balloonAttached) {
-		$balloon->detach($text);
-		$balloonAttached = 0;
-	    }
+	    clearScan(1);	# detach balloon
 	} else {
 	    print "$msg\n" if $opt_t;
 	    my @symbols = split /;/, $msg;	# break up message
@@ -370,8 +381,9 @@ sub rcvd_msg_from_server {
 			    if ($tRest < 10) {
 				colourTag("$index", $cs);	# normal colour
 			    } else {
+				colourTag("$index", $cs + 8);	# flash glitch
 				# delay the colour change to make it visible
-				$text->after($tRest, [ \&colourTag, "$index", $cs ]);
+				$text->after(50, [ \&colourTag, "$index", $cs ]);
 			    }
 #else
 			    colourTag("$index", $cs);		# normal colour
@@ -383,15 +395,27 @@ sub rcvd_msg_from_server {
 			}
 			if ($activeSymbols[$index][0] & 02) {
 #ifdef TIME_HIRES 
+			    $cs ^= 1;				# complement colour
 			    if ($tRest < 10) {
-				colourTag("$index~", $cs ^ 1);	# complement colour
+				colourTag("$index~", $cs);
 			    } else {
+				colourTag("$index~", $cs + 8);	# flash glitch
 				# delay the colour change to make it visible
-				$text->after($tRest, [ \&colourTag, "$index~", $cs ^ 1 ]);
+				$text->after(50, [ \&colourTag, "$index~", $cs ]);
 			    }
 #else
 			    colourTag("$index~", $cs ^ 1);	# complement colour
 #endif
+			}
+			if ($activeSymbols[$index][0] & 04) {
+			    my $tag = "$index=";
+			    my @ranges = $text->tagRanges($tag);
+# print "value at index $index: $activeSymbols[$index][1] '@ranges'\n";
+			    for (my $i = 0; $i < @ranges; $i += 2) {
+				my ($beg, $end) = @ranges[$i, $i+1];
+				$text->delete($beg, $end);
+				$text->insert($beg, " $value", $tag);
+			    }
 			}
 #ifdef TIME_HIRES 
 			printMicroSeconds() if $opt_m;
@@ -524,6 +548,7 @@ sub deleteAllTags {
 	    if ($opt_T) {
 		print(" $index")    if $ts & 01;	# normal
 		print(" $index~")   if $ts & 02;	# inverted
+		print(" $index=")   if $ts & 04;	# value
 		print(" deleted\n");
 	    }
 	    if ($ts & 01) {
@@ -531,6 +556,14 @@ sub deleteAllTags {
 	    }
 	    if ($ts & 02) {
 		$text->tagDelete("$index~");
+	    }
+	    if ($ts & 04) {
+		my $tag = "$index=";
+		my @ranges = $text->tagRanges($tag);
+		for (my $i = 0; $i < @ranges; $i += 2) {
+		    $text->delete(@ranges[$i, $i+1]);
+		}
+		$text->tagDelete($tag);
 	    }
 	}
     }
@@ -563,158 +596,186 @@ sub scan {
 
     deleteAllTags();	# also clears @activeSymbols
 
-    if ($conn) {
-	if ($filename =~ /$iCname/) {
-	    $mainWindow->title("iClive $filename $iCname");
-	} else {
-	    $infoBar->configure(-foreground => 'red');
-	    $info = "WARNING: '$filename' does not match connected control program '$iCname'"; 
-	}
-
-	$search_pattern = '[~\s]*[A-Z_a-z][\w]*(\.\w+)?\s*((~ )?---)?';
-	$current = '1.0'; my $length = '0';
-	while (1) {
-	    $current = $text->search('-count' => \$length,
-				     '-regexp', 
-				     '--',
-				     $search_pattern,
-				     $current,
-				     'end');
-	    last if (!$current);
-	    $iw = $i = $text->get($current, "$current + $length char");
-	    $i =~ s/([~\t ]*)([\w.]+)([~\t ]*)/$1$3/;
-	    if ($symbolTable{$2}) {
-		($ftype, $index) = @{ $symbolTable{$2} };
-		if (defined $index and $ftype) {
-		    $tag = $index;
-		    $word = $2;			# word is in the symbol table
-		    $cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
-#ifdef TIME_HIRES 
-		    @{ $activeSymbols[$index] }[1 .. 3] = (0, $cs & ~01, [gettimeofday]);
-#else
-		    @{ $activeSymbols[$index] }[1, 2] = (0, $cs & ~01);	# clear inv
-#endif
-		    while ($i =~ m/[!~]/g) {
-			$cs ^= 1;		# complement initial colour selection
-		    }
-		    $tag .= '~' if ($ts = $cs & 01); # adjust tag name if inverted
-		    $ts++;			# convert to a mask 0 => 01, 1 => 02
-		    print "$tag	$word	'$iw'\n" if $opt_T;
-		    unless ($activeSymbols[$index][0] & $ts) {
-			$activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
-			colourTag($tag, $cs);	# initial tag colour
-		    }
-		    $text->tagAdd($tag, $current, "$current + $length char");
-		} else {
-		    $infoBar->configure(-foreground => 'CadetBlue');
-		    $info = "SYSTEM WARNING: \$symbolTable{$2} $symbolTable{$2}[ '$index' , '$ftype' ]";
-		}
-	    }
-	    $current = $text->index("$current + $length char");
-	}
-
-	####################################################################
-	# Send list of active symbols to the iC control process. Only the
-	# state (logic or arithmetic) for the symbols in this list need to
-	# be updated for this display, since the others are not displayed.
-	# It is immaterial for the control program in which logic
-	# sense the symbol is displayed, except for inverted ALIASes.
-	####################################################################
-
-	my $msg = "";
-	foreach $index (0 .. $#activeSymbols) {
-	    if ($activeSymbols[$index][0]) {
-		print "$index\n" if $opt_T;
-		if (length $msg > 391) {		# REPLY - 9 in icc.h
-		    $conn->send_now("$unitID.3$msg");	# intermediate active symbols
-		    $msg = "";
-		}
-		$msg .= ";$index";
-	    }
-	}
-	$conn->send_now("$unitID.4$msg");		# send last active symbols
-
-	unless ($balloonAttached) {
-	    $balloon->attach($text,
-	       -balloonmsg      => \$bMsg,
-	       -statusmsg       => \$sMsg,
-	       -balloonposition => 'mouse', # not used since postcommand returns real position
-	       -postcommand  => sub
-		    {
-			if ($wIdx[0] eq $wIdx[1]) {
-			    # No word under mouse - dont post the balloon
-			    return 0;
-			} else {
-			    my ($ftype, $index, $val);
-			    # Have a word under mouse - change the message:
-			    my $word = $text->get($wIdx[0], $wIdx[1]);
-			    # Skip if it contains non-word chars
-			    # or is not in Symbol Table
-			    return 0 if $word =~ /\W/;
-			    while (not defined ($index = $symbolTable{$word}[1])) {
-				# Try if I/O like IX0.0 QX10.7 or TX0.0_14
-				return 0 if $word !~ /^[IQT]X\d+$/;
-				$word = $text->get($wIdx[0], "$wIdx[1] lineend");
-				$word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
-			    }
-			    $ftype = $symbolTable{$word}[0];
-			    $val = $activeSymbols[$index][1];
-			    $val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
-			    $bMsg = "$val";
-			    $sMsg = "$word: $val";
-			    $text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
-			    # Find a good place to put the balloon
-			    # right below the last char in the word
-			    my $i = $text->index("$wIdx[1] - 1 chars");
-			    my @p = $text->bbox($i);
-			    my $x = $text->rootx + $p[0] + $p[2] - 4;
-			    my $y = $text->rooty + $p[1] + $p[3] + 2;
-			    return "$x,$y";
-			}
-		    },
-	       -motioncommand => sub
-		    {
-			my $x = $text->pointerx - $text->rootx;
-			my $y = $text->pointery - $text->rooty;
-			@wIdx = ($text->index("\@$x,$y wordstart"),
-			    $text->index("\@$x,$y wordend"));
-			if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
-			    # Same word - dont cancel the balloon.
-			    return 0;
-			} else {
-			    # New word under mouse
-			    # cancel it so a new balloon will be posted.
-			    $text->SelectionClear;
-			    @lIdx = @wIdx;
-			    return 1;
-			}
-		    },
-	    );
-	    $balloonAttached = 1;
-	}
+    if ($scanFlag) {
+	clearScan();	# $scanFlag = 0
     } else {
-	$info = "";
-	connect_to_server();	# will call scan() if connect was successful
+	if ($conn) {
+	    if ($filename =~ /$iCname/) {
+		$mainWindow->title("iClive $filename $iCname");
+	    } else {
+		$infoBar->configure(-foreground => 'red');
+		$info = "WARNING: '$filename' does not match connected control program '$iCname'"; 
+	    }
+
+	    $search_pattern = '[~\s]*[A-Z_a-z][\w]*(\.\w+)?\s*((~ )?---|=$)?';
+	    $current = '1.0'; my $length = '0';
+	    while (1) {
+		$current = $text->search('-count' => \$length,
+					 '-regexp', 
+					 '--',
+					 $search_pattern,
+					 $current,
+					 'end');
+		last if (!$current);
+		$iw = $i = $text->get($current, "$current + $length char");
+		$i =~ s/([~\t ]*)([\w.]+)([~\t ]*)/$1$3/;
+		if ($symbolTable{$2}) {
+		    ($ftype, $index) = @{ $symbolTable{$2} };
+		    if (defined $index and $ftype) {
+			$tag = $index;
+			$word = $2;			# word is in the symbol table
+			$cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
+#ifdef TIME_HIRES 
+			@{ $activeSymbols[$index] }[1 .. 3] = (0, $cs & ~01, [gettimeofday]);
+#else
+			@{ $activeSymbols[$index] }[1, 2] = (0, $cs & ~01);	# clear inv
+#endif
+			while ($i =~ m/~/g) {
+			    $cs ^= 1;		# complement initial colour selection
+			}
+			$tag .= '~' if ($ts = $cs & 01); # adjust tag name if inverted
+			$ts++;			# convert to a mask 0 => 01, 1 => 02
+			print "$tag	$word	'$iw'\n" if $opt_T;
+			unless ($activeSymbols[$index][0] & $ts) {
+			    $activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
+			    colourTag($tag, $cs);	# initial tag colour
+			}
+			$text->tagAdd($tag, $current, "$current + $length char");
+			if ($iw =~ /[\w.]+\s*=$/) {
+			    $tag = "$index=";
+			    print "$tag	$word	'$iw'\n" if $opt_T;
+			    unless ($activeSymbols[$index][0] & 04) {
+				$activeSymbols[$index][0] |= 04; # for analog value display
+				colourTag($tag, 2);	# ARITH tag colour never changed
+			    }
+			    $text->insert("$current lineend", " 0", $tag);
+			}
+		    } else {
+			$infoBar->configure(-foreground => 'CadetBlue');
+			$info = "SYSTEM WARNING: \$symbolTable{$2} $symbolTable{$2}[ '$index' , '$ftype' ]";
+		    }
+		}
+		$current = $text->index("$current + $length char");
+	    }
+
+	    ####################################################################
+	    # Send list of active symbols to the iC control process. Only the
+	    # state (logic or arithmetic) for the symbols in this list need to
+	    # be updated for this display, since the others are not displayed.
+	    # It is immaterial for the control program in which logic
+	    # sense the symbol is displayed, except for inverted ALIASes.
+	    ####################################################################
+
+	    my $msg = "";
+	    foreach $index (0 .. $#activeSymbols) {
+		if ($activeSymbols[$index][0]) {
+		    print "$index\n" if $opt_T;
+		    if (length $msg > 391) {		# REPLY - 9 in icc.h
+			$conn->send_now("$unitID.3$msg");	# intermediate active symbols
+			$msg = "";
+		    }
+		    $msg .= ";$index";
+		}
+	    }
+	    $conn->send_now("$unitID.4$msg");		# send last active symbols
+
+	    unless ($balloonAttached) {
+		$balloon->attach($text,
+		   -balloonmsg      => \$bMsg,
+		   -statusmsg       => \$sMsg,
+		   -balloonposition => 'mouse', # not used since postcommand returns real position
+		   -postcommand  => sub
+			{
+			    if ($wIdx[0] eq $wIdx[1]) {
+				# No word under mouse - dont post the balloon
+				return 0;
+			    } else {
+				my ($ftype, $index, $val);
+				# Have a word under mouse - change the message:
+				my $word = $text->get($wIdx[0], $wIdx[1]);
+				# Skip if it contains non-word chars
+				# or is not in Symbol Table
+				return 0 if $word =~ /\W/;
+				while (not defined ($index = $symbolTable{$word}[1])) {
+				    # Try if I/O like IX0.0 QX10.7 or TX0.0_14
+				    return 0 if $word !~ /^[IQT]X\d+$/;
+				    $word = $text->get($wIdx[0], "$wIdx[1] lineend");
+				    $word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
+				}
+				$ftype = $symbolTable{$word}[0];
+				$val = $activeSymbols[$index][1];
+				$val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
+				$bMsg = "$val";
+				$sMsg = "$word: $val";
+				$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
+				# Find a good place to put the balloon
+				# right below the last char in the word
+				my $i = $text->index("$wIdx[1] - 1 chars");
+				my @p = $text->bbox($i);
+				my $x = $text->rootx + $p[0] + $p[2] - 4;
+				my $y = $text->rooty + $p[1] + $p[3] + 2;
+				return "$x,$y";
+			    }
+			},
+		   -motioncommand => sub
+			{
+			    my $x = $text->pointerx - $text->rootx;
+			    my $y = $text->pointery - $text->rooty;
+			    @wIdx = ($text->index("\@$x,$y wordstart"),
+				$text->index("\@$x,$y wordend"));
+			    if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
+				# Same word - dont cancel the balloon.
+				return 0;
+			    } else {
+				# New word under mouse
+				# cancel it so a new balloon will be posted.
+				$text->SelectionClear;
+				@lIdx = @wIdx;
+				return 1;
+			    }
+			},
+		);
+		$balloonAttached = 1;
+	    }
+	    $scanButton->configure(-text => "Clear");
+	    $scanFlag = 1;		# scan successful
+	} else {
+	    $info = "";
+	    connect_to_server();	# will call scan() if connect was successful
+	}
     }
 }
 
 ########################################################################
 #
-#	new_text clears the text area
-#	detach ballloon to allow editing
+#	clearScan
+#	prepare for scan
 #	clear active symbols for faster processing of connected controller
+#
+########################################################################
+
+sub clearScan {
+    if ($balloonAttached) {
+	$balloon->detach($text);
+	$balloonAttached = 0;
+    }
+    $scanButton->configure(-text => "Scan");
+    $scanFlag = 0;		# text has been cleared of all tags
+    return if @_;		# called from disconnect
+    $info = "";
+    $conn->send_now("$unitID.4") if $conn;	# clear active symbols
+}
+
+########################################################################
+#
+#	new_text clears the text area
 #
 ########################################################################
 
 sub new_text {
     deleteAllTags();	# also clears @activeSymbols
-    if ($balloonAttached) {
-	$balloon->detach($text);
-	$balloonAttached = 0;
-    }
+    clearScan();
     $text->delete("1.0", "end");
-    $info = "";
-    $conn->send_now("$unitID.4") if $conn;	# clear active symbols
 }
 
 ########################################################################
@@ -728,7 +789,7 @@ sub load_file {
     if ($newname) {
 	$filename = $newname;
     }
-    if (!open(FH, "$filename")) {
+    unless (open(FH, "$filename")) {
 	$infoBar->configure(-foreground => 'red');
 	$info = "ERROR: Could not open $filename"; 
 	return; 
@@ -760,7 +821,13 @@ sub load_file {
 ########################################################################
 
 sub save_file {
-    open (FH, ">$filename");
+    deleteAllTags();	# also clears @activeSymbols
+    clearScan();	# take away all live text
+    unless (open(FH, ">$filename")) {
+	$infoBar->configure(-foreground => 'red');
+	$info = "ERROR: Could not open $filename for writing"; 
+	return; 
+    }
     my $contents = $text->get("1.0", "end - 1 chars");
     my $length = length $contents;
     print FH $contents;

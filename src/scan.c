@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.14 2001/03/29 11:16:15 jw Exp $";
+"@(#)$Id: scan.c,v 1.15 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -57,7 +57,7 @@ Functp		init2[] = {		/* called in pass2 */
 			null1, null1, null1, null1,
 		};
 
-uchar	bit2[] = {		/* used in i_ff2() and i_ff3() */
+unsigned char	bit2[] = {		/* used in i_ff2() and i_ff3() */
 			0, INPT_M, INPT_M, D_SH_M, F_CF_M, CH_B_M, RI_B_M,
 			CLCK_M, TIMR_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M,
 			OUTP_M, OUTP_M, 0, 0,
@@ -85,12 +85,12 @@ short		dc;	/* debug display counter in scan and rsff */
  *******************************************************************/
 
 int
-scan_ar(Gate	*out_list)
+scan_ar(Gate *	out_list)
 {
-    Gate	**lp;
-    Gate	*gp;
+    Gate **	lp;
+    Gate *	gp;
     int		val;
-    Gate	*op;
+    Gate *	op;
 
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
@@ -126,9 +126,9 @@ scan_ar(Gate	*out_list)
 	    dc = 0;
 	}
 #endif
-#ifdef TCP
+#if defined(TCP) && defined(LOAD)
 	if (op->gt_live & 0x8000) {
-	    liveData(op->gt_live, op->gt_old);	/* live is active */
+	    liveData(op->gt_live, op->gt_new);	/* live is active */
 	}
 #endif
 	lp = op->gt_list;
@@ -216,12 +216,12 @@ scan_ar(Gate	*out_list)
  *******************************************************************/
 
 int
-scan(Gate	*out_list)
+scan(Gate *	out_list)
 {
-    Gate	**lp;
-    Gate	*gp;
+    Gate **	lp;
+    Gate *	gp;
     int		val;
-    Gate	*op;
+    Gate *	op;
 
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
@@ -249,7 +249,7 @@ scan(Gate	*out_list)
 	    dc = 0;
 	}
 #endif
-#ifdef TCP
+#if defined(TCP) && defined(LOAD)
 	if (op->gt_live & 0x8000) {
 	    liveData(op->gt_live, op->gt_val < 0 ? 1 : 0);	/* live is active */
 	}
@@ -336,11 +336,11 @@ scan(Gate	*out_list)
  *******************************************************************/
 
 int
-scan_clk(Gate	*out_list)	/* scan a clock list */
+scan_clk(Gate *	out_list)	/* scan a clock list */
 {
-    Gate	*op;
+    Gate *	op;
 #ifdef DEQ
-    Gate	*gp;
+    Gate *	gp;
 #endif
 
     if (out_list->gt_next == out_list) {
@@ -385,6 +385,9 @@ void
 pass1(Gate * op, int typ)	/* Pass1 init on gates */
 {
     op->gt_mcnt = 0;			/* clear gate value */
+#ifndef LOAD
+    op->gt_ini = -typ;			/* overwritten for AND OR LATCH types */
+#endif
 #ifndef DEQ
     op->gt_next = 0;			/* clear link */
 #else
@@ -421,8 +424,8 @@ void
 gate2(Gate * op, int typ)		/* pass2 function init gates */
 {
     int	cnt;
-    Gate	**lp;
-    Gate	*gp;
+    Gate **	lp;
+    Gate *	gp;
 
     if ((lp = op->gt_list) != 0) {
 	cnt = (op->gt_fni < MAX_AR) ? 1 : 2;
@@ -456,14 +459,14 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
  *	of pass 3.
  *
  *	For the reverse logic check the initial value of gt_val is
- *	saved in gt_ini.
+ *	saved in gt_ini for AND OR and LATCH.
  *
  *******************************************************************/
 
 void
 gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 {
-    uchar opt = os[typ];
+    unsigned char opt = os[typ];
     if (gp->gt_mcnt == 0) {
 	fprintf(outFP,
 	    "\nWarning:    %c	%s\thas no input connections",
@@ -488,22 +491,21 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	case UDF:
 	case LOGC:
 	case AND:
-	    gp->gt_val = gp->gt_mcnt;	/* AND set to number of inputs */
+	    gp->gt_ini = gp->gt_val = gp->gt_mcnt;	/* AND set to number of inputs */
 	    break;
 	case ARNC:
 	case ARN:
 	    gp->gt_new = gp->gt_old = 0;
 	case OR:
-	    gp->gt_val = 1;		/* set OR gates to +1 */
+	    gp->gt_ini = gp->gt_val = 1;		/* set OR gates to +1 */
 	    break;
 	case LATCH:
-	    gp->gt_val = (int)(gp->gt_mcnt + 1) >> 1;	/* set LATCH gates */
+	    gp->gt_ini = gp->gt_val = (int)(gp->gt_mcnt + 1) >> 1;	/* set LATCH gates */
 	    break;
 	default:
 	    gp->gt_val = 0;		/* should not happen */
 	    break;
 	}
-	gp->gt_ini = gp->gt_val;	/* used for reverse logic check */
 	gp->gt_mcnt = 0;		/* clear gt_mcnt */
 #endif
 	gp->gt_live = 0;		/* clear live flag */
@@ -543,8 +545,8 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
 void
 pass4(Gate * op, int typ)	/* Pass4 init on gates */
 {
-    Gate	**lp;
-    Gate	*gp;
+    Gate **	lp;
+    Gate *	gp;
     int		val;
 
     if (op->gt_fni < MIN_ACT) {		/* UDFA, ARITH, GATE */

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.23 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: load.c,v 1.24 2001/04/01 08:23:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -36,7 +36,7 @@ Gate **		sTend;			/* end of dynamic array */
 unsigned long	sTstrLen;		/* length of symbol strings */
 
 unsigned	errCount;
-char *		progname;
+const char *	progname;		/* name of this executable */
 short		debug = 0;
 #ifdef TCP
 int		micro = 0;
@@ -133,7 +133,12 @@ main(
     int		i;
     unsigned	df = 0;
 
-    progname = *argv;		/* Process the arguments */
+    /* Process the arguments */
+    if ((progname = strrchr(*argv, '/')) == NULL) {
+	progname = *argv;
+    } else {
+	progname++;		/*  path has been stripped */
+    }
     outFP = stdout;		/* listing file pointer */
     errFP = stderr;		/* error file pointer */
     while (--argc > 0) {
@@ -165,7 +170,7 @@ main(
 		    df &= 040;	/* net statistics */
 		    goto break2;
 		case 't':
-		    debug = 0100;		/* trace only */
+		    if (debug == 0) debug = 0100;	/* trace only */
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -194,6 +199,7 @@ main(
 	    goto error;
 	}
     }
+    debug &= 03740;			/* allow only cases specified */
 
 /********************************************************************
  *

@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.8 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.9 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -26,9 +26,9 @@ static const char RCS_Id[] =
 #include <errno.h>
 #include "tcpc.h"
 
-const char*	hostNM = "localhost";	/* 127.0.0.1 */
-const char*	portNM = "8778";	/* iC service */
-const char*	iccNM  = "C0";		/* icc name */
+const char *	hostNM = "localhost";	/* 127.0.0.1 */
+const char *	portNM = "8778";	/* iC service */
+const char *	iccNM  = "C0";		/* icc name */
 float		timeout = 0.05;		/* default 50 ms on 50 ms off */
 
 fd_set		rdfds;
@@ -94,9 +94,9 @@ microPrint(const char * str, int mask)
  *******************************************************************/
 
 int
-connect_to_server(const char*	host,
-		  const char*	port,
-		  const char*	icc,
+connect_to_server(const char *	host,
+		  const char *	port,
+		  const char *	icc,
 		  float		delay)
 {
     int			sock;
@@ -191,7 +191,7 @@ wait_for_next_event(int maxFN)
  *******************************************************************/
 
 static int
-rcvd_buffer_from_server(int sock, char* buf, int length)
+rcvd_buffer_from_server(int sock, char * buf, int length)
 {
     int		len;
 
@@ -217,7 +217,7 @@ rcvd_buffer_from_server(int sock, char* buf, int length)
  *******************************************************************/
 
 int
-rcvd_msg_from_server(int sock, char* buf, int maxLen)
+rcvd_msg_from_server(int sock, char * buf, int maxLen)
 {
     NetBuffer	netBuf;
     int		len;
@@ -248,7 +248,7 @@ rcvd_msg_from_server(int sock, char* buf, int maxLen)
  *******************************************************************/
 
 void
-send_msg_to_server(int sock, const char* msg)
+send_msg_to_server(int sock, const char * msg)
 {
     NetBuffer	netBuf;
     size_t	len = strlen(msg);
