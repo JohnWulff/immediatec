@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.34 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: icc.h,v 1.35 2002/06/19 21:10:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -96,31 +96,27 @@ extern void	efree(void *);
 #define	UDFA	0	/* indices into action function arrays */
 #define	ARITH	1	/* arithmetic gate */
 #define	GATE	2	/* logical gate */
-#define	D_SH	3	/* arithmetic action */
-#define	F_SW	4	/* arithmetic action */
-#define	CH_BIT	5	/* arithmetic action */
-#define	RI_BIT	6	/* logical action */
-#define	CLCK	7	/* logical action */
-#define	TIMR	8	/* logical action */
+#define	RI_BIT	3	/* logical action */
+#define	CH_BIT	4	/* arithmetic action */
+#define	S_SH	5	/* arithmetic action */
+#define	R_SH	6	/* arithmetic action */
+#define	D_SH	7	/* arithmetic action */
+#define	F_SW	8	/* arithmetic action */
 #define	S_FF	9	/* logical action not needed 1001 */
 #define	R_FF	10	/* logical action not needed 1010 */
 #define	D_FF	11	/* logical action not needed 1011 */
 #define	F_CF	12	/* logical action */
-#define	OUTW	13	/* arithmetic output */
-#define	OUTX	14	/* logical output */
-#define	CLCKL	15	/* clock action */
-#define	TIMRL	16	/* timer action */
+#define	CLCK	13	/* logical action */
+#define	TIMR	14	/* logical action */
+#define	OUTW	15	/* arithmetic output */
+#define	OUTX	16	/* logical output */
+#define	CLCKL	17	/* clock action */
+#define	TIMRL	18	/* timer action */
 
 #define	MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
-#define	MIN_ACT	D_SH	/* ftypes >= MIN_ACT cause an action */
+#define	MIN_ACT	RI_BIT	/* ftypes >= MIN_ACT cause an action */
 #define	MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
 #define	MAX_FTY	TIMRL	/* ftypes >  MAX_FTY are ALIAS ftypes for live list */
-
-#define	ARITH_ALIAS	MAX_FTY+ARITH		/* 17 */
-#define	GATE_ALIAS	MAX_FTY+GATE		/* 18 */
-#define	INV_ALIAS	MAX_FTY+GATE+NOT	/* 19 */
-#define	CLCKL_ALIAS	MAX_FTY+CLCKL		/* 31 */
-#define	TIMRL_ALIAS	MAX_FTY+TIMRL		/* 32 */
 
 #define	ONCE_M	0x80	/* actions containing this bit only once */
 #define	S_FF_M	0x01	/* masks in array bit2 for pass2 */
@@ -158,19 +154,19 @@ extern void	efree(void *);
 	clock_i, clock_i, clock_i, clock_i,
 
 /* list of ftypes */
-#define	FULL_FTYPE "UDFA","ARITH","GATE","D_SH","F_SW","CH_BIT","RI_BIT",\
-	"CLCK","TIMR","S_FF","R_FF","D_FF","F_CF","OUTW","OUTX",\
+#define	FULL_FTYPE "UDFA","ARITH","GATE","RI_BIT","CH_BIT","S_SH","R_SH","D_SH",\
+	"F_SW","S_FF","R_FF","D_FF","F_CF","CLCK","TIMR","OUTW","OUTX",\
 	"CLCKL","TIMRL"
 
-#define	FOPS	"UA HIVECTSRDFWX:!"	/* DEBUG display of ftypes */
+#define	FOPS	"UA EVsrHISRDFCTWX:!"	/* DEBUG display of ftypes */
 
 /* types corresponding to ftypes */
-#define	TYPES	UDF, ARN, OR, SH, SW, VF, EF,\
-	CLK, TIM, FF, FF, FF, CF, ARN, AND,\
+#define	TYPES	UDF, ARN, OR, EF, VF, SH, SH, SH, SW,\
+	FF, FF, FF, CF, CLK, TIM, ARN, AND,\
 	ERR, ERR
 
 /* compiler tokens corresponding to ftype */
-#define	DEF_ACT	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
+#define	DEF_ACT	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, AOUT, LOUT,\
 	CVAR, TVAR
 
