@@ -2,9 +2,9 @@
 
 ########################################################################
 #
-#	make a function version of ict or icc
+#	make a function version of icr or ict
 #
-#	make a new ict or icc only if the iC file has functions
+#	make a new icr or ict only if the iC file has functions
 #
 ########################################################################
 
@@ -12,29 +12,30 @@ usage ()
 {
     echo 'Usage:	'${0##*/}' [-CTszh] [iCtarget ...]' >&2
     echo 'Must be executed in the iC development environment or one of its subdirectories.' >&2
-    echo 'Makes a dedicated icc or ict compiler with integrated arithmetic functions' >&2
+    echo 'Makes a dedicated icr or ict compiler with integrated arithmetic functions' >&2
     echo 'from iCtarget if iCtarget has arithmetic variables or literal blocks. ' >&2
-    echo '      -C	uses icc -c to make a dedicated icc for each iCtarget' >&2
-    echo '		output the listings produced to directory ListC (also -c)' >&2
-    echo '      -T	uses ict -c to make a dedicated ict for each iCtarget' >&2
+    echo '	-R	uses icr -c to make a dedicated icr for each iCtarget' >&2
+    echo '		output the listings produced to directory ListR' >&2
+    echo '	-r	make icr with YYDEBUG -t trace output possible' >&2
+    echo '	-T	uses ict -c to make a dedicated ict for each iCtarget' >&2
     echo '		output the listings produced to directory ListT' >&2
-    echo '		(default option)' >&2
-    echo '	-s	make with -DINT_MAX=32767 (makeAll with this option first)' >&2
+    echo '	-t	make ict with YYDEBUG -t trace output possible (default)' >&2
+    echo '	-s	make with -DINT_MAX=32767 (make clean; makeAll first)' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
-    echo '	-z	make with -DLONG16        (makeAll with this option first)' >&2
+    echo '	-z	make with -DLONG16        (make clean; makeAll first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo 'if no iCtargets are specified, each single entry of file pa.lt is made' >&2
-    echo '   outputs the common output to ListC/ListC.out or ListT/ListC.out' >&2
-    echo '   restores a plain icc or ict at the end of the test run' >&2
+    echo '   outputs the common output to ListR/ListR.out or ListT/ListT.out' >&2
+    echo '   restores a plain icr or ict at the end of the test run' >&2
     echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.14 2004/01/01 17:20:21 jw Exp $' >&2
+    echo '	$Id: mo,v 1.15 2004/01/03 11:03:19 jw Exp $' >&2
 }
 
 ic='ict'
-op='T'
+op='Tt'
 p='T'
 list='pa.lt'
 
@@ -44,10 +45,10 @@ while [ $# -gt 0 ]; do
     -*)	option=${1#?}
 	while [ -n "$option" ]; do
 	    case "$option" in
-	    c*)	ic='icc';op='C';p='C';;
-	    C*)	ic='icc';op='C';p='C';;
-	    t*)	ic='ict';op='T';p='T';;
+	    R*)	ic='icr';op='R';p='R';;
+	    r*)	ic='icr';op='Rr';p='R';;
 	    T*)	ic='ict';op='T';p='T';;
+	    t*)	ic='ict';op='Tt';p='T';;
 	    m*)	list='pm.lt';;
 	    s*)	op="${op}s";;
 	    z*)	op="${op}z";;
@@ -87,7 +88,6 @@ cd - > /dev/null
 
 if [ $# != 0 ]; then
     test -d List$p || mkdir List$p;
-    ln -fs $devp/cexe.h .		# ZZZ this will not be necessary with fixed iC compilers
     for f in $*; do
 	file=$f
 	base=${file%.*}
@@ -96,7 +96,7 @@ if [ $# != 0 ]; then
 	    if $ic -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
 		echo "$file";
 		cp -f cexe.c List$p/$base.c
-		mv -f cexe.c $devp
+		mv -f cexe.c $devp 2> /dev/null
 		cd $devp
 		rm -f cexe.o $ic	# new cexe.o too soon for make sometimes
 		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
@@ -115,7 +115,6 @@ if [ $# != 0 ]; then
     done
 elif [ -f $list ]; then
     test -d List$p || mkdir List$p;
-    ln -fs $devp/cexe.h .		# ZZZ this will not be necessary with fixed iC compilers
     for f in $(cat $list); do
 	file=$f
 	base=${file%.*}
@@ -124,7 +123,7 @@ elif [ -f $list ]; then
 	    if $ic -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
 		echo "$file";
 		cp -f cexe.c List$p/$base.c
-		mv -f cexe.c $devp
+		mv -f cexe.c $devp 2> /dev/null
 		cd $devp
 		rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
 		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
@@ -143,7 +142,7 @@ elif [ -f $list ]; then
     done > List$p/List$p.out 2>&1;
     if [ -f /tmp/cexe.c ]; then
 	cp /tmp/cexe.c .
-	cd $devp			# restore plain icc or ict
+	cd $devp			# restore plain icr or ict
 	rm -f cexe.o $ic		# new cexe.c too soon for make sometimes
 	makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 	cd - > /dev/null

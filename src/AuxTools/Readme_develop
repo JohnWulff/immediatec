@@ -14,22 +14,24 @@ Building the distribution is described in detail in README. The usual
 steps followed in Linux projects has been adopted: tar -x, configure,
 make, make test, make install.
 
-This builds and installs four components from the sources:
+This builds and installs 5 components from the C sources:
 
-    icc		the iC compiler with integrated run-time character
+    icc		the stand-alone iC compiler
+
+    icr		an iC compiler with integrated run-time keyboard
 		I/O test environment (was used mainly under DOS)
 
-    ict		the iC compiler with integrated run-time TCP/IP
+    ict		an iC compiler with integrated run-time TCP/IP
 		test environment (used with networking components)
 
     libict.a	a static library to build stand alone applications
-		from iC sources for the TCP/IP test environment
+		from iC sources for the TCP/IP support environment
 
     lmain	lmain only tests the internal C-parser and is not
 		required for any other purpose
 
 Additionally a number of Perl scripts are installed to establish
-a TCP/IP networking environment for testing iC applications:
+a TCP/IP networking environment for running iC applications:
 
     iCserver	a network server for communicating I/O components
 		with running iC applications (currently 1).
@@ -52,18 +54,17 @@ appropriate host names with the -s <host> option.  The default networking
 port is '8778'. Another port can be selected with the -p <port> option.
 
     iCmake	make one or more iC application(s) from iC source(s).
-		Each source file is compiled using 'ict' which
+		Each source file is compiled using 'icc' which
 		generates a C file, which in turn is compiled and
 		linked with 'libict.a' generating the application.
 
 All components and the generated applications will display detailed
-usage texts when called with the -h flag.
+usage texts when called with the -h option.
 
 Scripts:
 
     configure:	#! /bin/sh
-		Generated from autoconf and modified to make 'yacc'
-		rather than 'bison' the first choice YACC compiler.
+		Generated from autoconf.
 		Generates 'Makefile' from 'makefile.in'
 
     install.sh:	#!/bin/sh
@@ -81,25 +82,26 @@ Scripts:
 
     iCbox:	#!/usr/bin/perl -P
     iClive:	#!/usr/bin/perl -P
-    iCmake:	#!/bin/sh
+    iCmake:	#!/bin/bash
     iCserver:	#!/usr/bin/perl -P
 
-    makeAll:	#!/bin/sh
+    makeAll:	#!/bin/bash
 		calls 'make' with the correct environment to make
-		icc, ict, libict.a and lmain
+		icc, icr, ict, libict.a and lmain
 		-q quiet, output only headings and error messages
     		-g compile for debugging and no optimisation (default -O2)
 		-h full help text
 
 		calls 'make' with OPT=''  to make icc           (OPT+=YYDEBUG if -c)
+		calls 'make' with OPT=RUN to make icr           (OPT+=YYDEBUG if -r)
 		calls 'make' with OPT=TCP to make ict           (OPT+=YYDEBUG if -t)
 		calls 'make' with OPT=LOAD TCP to make libict.a (OPT+=YYDEBUG if -l)
 		calls 'make' with OPT=LMAIN to make lmain       (OPT+=YYDEBUG if -m)
-		"make" or "make all" calls makeAll -cm
-		"make quiet" calls makeAll -qcm
+		"make" or "make all" calls makeAll -rm
+		"make quiet" calls makeAll -qrm
 		use makeAll directly if different options are required
 
-    m:		#!/bin/sh
+    m:		#!/bin/bash
 		make all iC components for debugging and install them
 		optionally make all iC applications with the new libict.a
 
@@ -138,16 +140,16 @@ Auxiliary scripts for testing compiler outputs
 		to reflect those which must be linked into an application
 
     mo:		#!/usr/bin/bash
-    		Usage: mo [-C] [file ...] # if none uses $(cat pm.lt)
+    		Usage: mo [-tTrRm] [file ...] # if none uses $(cat pa.lt)
 		make an 'ict' compiler for each iC application and
 		store the generated text files in directory ListT.
 		The generated standard and error outputs are
 		stored in the file ListT/Init.out. This information can
 		then be diffed with runs of previous versions of
-		the iC system. (use Mdiff -k ... ListT)
+		the iC system. (use Mdiff -k ListT/*.* ListT/Alex.)
 
-		mo -C makes an 'icc' compiler for each application and
-		stores the generated text files in ListC
+		mo -r makes an 'icr' compiler for each application and
+		stores the generated text files in ListR
 
     mpv:	#!/usr/bin/bash
 		make (or diff) versions of icc ict and libict.a
@@ -165,4 +167,4 @@ Auxiliary scripts for testing compiler outputs
 		if no files are specified uses mm via pm.lt to make
 		all the applications in the Test2 directory
 
-$Id: Readme_develop,v 1.7 2003/12/14 06:47:17 jw Exp $
+$Id: Readme_develop,v 1.8 2004/01/03 11:38:37 jw Exp $
