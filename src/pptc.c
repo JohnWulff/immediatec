@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.9 2001/01/23 22:59:36 jw Exp $";
+"@(#)$Id: pptc.c,v 1.10 2001/01/25 08:55:41 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -57,7 +57,9 @@ Gate *		IX_[IXD*8];		/* pointers to Bit Input Gates */
 Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
 Gate *		IW_[IXD];		/* pointers to Word Input Gates */
 Gate *		TX_[TXD*8];		/* pointers to System Bit Gates */
-unsigned char	QX_[IXD];		/* Output bit field */
+unsigned char	QX_[IXD];		/* Output bit field slots */
+unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
+unsigned char	QMM;			/* Output cage mask for 1 rack */
 
 unsigned char	pdata[IXD];		/* input differences */
 
@@ -95,7 +97,6 @@ pplc(
     Gate *	gp;
     Functp	init_fa;
     int		tcnt = D10;
-    int		val;
     char *	format;		/* number format */
     char	ybuf[YSIZE];	/* buffer for number */
     char *	yp;
@@ -282,40 +283,43 @@ pplc(
 		     *	TCP/IP input
 		     */
 		    if (rcvd_msg_from_server(sockFN, rBuf, sizeof rBuf)) {
-			unsigned int	unit;
-			unsigned int	index;
+			int		slot;
 			int		val;
-			unsigned char	dif;
+			int		index;
+			int		mask;
+			int		diff;
 
 			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, pplcNM);
-			if (sscanf(rBuf, "X%d,%d", &unit, &val) == 2) {
-			    if (unit < IXD && (dif = val ^ pdata[unit]) != 0) {
-				Gate ** ip = &IX_[(unit<<3)+8];	/* unit * 8 + 8 */
-				pdata[unit] = val;		/* ready for next scan */
-				do {				/* assert dif != 0 */
-				    /* ignore Gate if no change in bit or not programmed */
-				    if ((gp = *--ip) != 0 && (dif & 0x80)) {
-					if ((val ^ gp->gt_val) & 0x80) {
-					    /* relies on input initialized to +1 !!!!!! */
-					    /* and no other function modifies gp_gt_val */
-					    gp->gt_val = - gp->gt_val;	/* complement input */
-					    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
-					    link_ol(gp, o_list);	/* fire Input Gate */
-					    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
-					    cnt++;
-					    /* o_list will be scanned before next input */
-					}
+			if (sscanf(rBuf, "X%d,%d", &slot, &val) == 2) {
+			    if (slot < IXD) {
+				diff = val ^ pdata[slot];
+				pdata[slot] = val;		/* ready for next scan */
+				slot <<= 3;			/* convert to bit index */
+				while (diff) {		/* age old algorithm from CSR days */
+				    mask = diff & -diff;	/* rightmost bit set in diff */
+				    index = bitIndex[mask];	/* mask has only 1 bit set */
+				    /* ignore Gate if not programmed  or no change in bit */
+				    if ((gp = IX_[slot+index]) != 0 &&
+					((gp->gt_val & 0x80) ^ (val & mask ? 0x80 : 0x00))) {
+					/* relies on input initialized to +1 !!!!!! */
+					/* and no other function modifies gp_gt_val */
+					gp->gt_val = - gp->gt_val;	/* complement input */
+					if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+					link_ol(gp, o_list);	/* fire Input Gate */
+					if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+					cnt++;
+					/* o_list will be scanned before next input */
 				    }
-				    val <<= 1;
-				} while (dif <<= 1);
+				    diff &= ~mask;		/* clear rightmost bit in diff */
+				}			/* loops only once for every 1 in diff */
 			    }
-			} else if (sscanf(rBuf, "B%d,%d", &unit, &val) == 2) {
-			    if (unit < IXD && (gp = IB_[unit]) != NULL) {
-				val &= 0xff;		/* limit to byte value */
+			} else if (sscanf(rBuf, "B%d,%d", &slot, &val) == 2) {
+			    if (slot < IXD && (gp = IB_[slot]) != NULL) {
+				val &= 0xff;			/* limit to byte val */
 				goto wordIn;
 			    }
-			} else if (sscanf(rBuf, "W%d,%d", &unit, &val) == 2) {
-			    if (unit < IXD && (gp = IW_[unit]) != NULL) {
+			} else if (sscanf(rBuf, "W%d,%d", &slot, &val) == 2) {
+			    if (slot < IXD && (gp = IW_[slot]) != NULL) {
 			    wordIn:
 				if (val != gp->gt_new &&	/* first change or glitch */
 				((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
