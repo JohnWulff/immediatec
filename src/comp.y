@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.38 2001/02/01 12:10:41 jw Exp $";
+"@(#)$Id: comp.y,v 1.39 2001/02/03 17:10:28 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -33,13 +33,14 @@ static char *	ccfrag;			/* flag for cexini CCFRAG syntax */
 static char	ccbuf[32];		/* buffer for NUMBER CCFRAG */
 static int	stflag = 0;		/* record states of static */
 static int	dflag = 0;		/* record states dexpr */
-unsigned int	stype;			/* to save TYPE in decl */
+static unsigned int stype;		/* to save TYPE in decl */
+static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
 %}
 
 %union {		/* stack type */
     Sym		sym;			/* symbol table pointer */
     Lis		list;			/* linked list elements */
-    Val		val;			/* long numerical values */
+    Val		val;			/* int numerical values */
     Str		str;			/* one character array */
     /* allows storing character as yylval.val.v (2nd byte is NULL) */
     /* then char array can be referenced as $1.v, single char as $1.v[0] */
@@ -82,14 +83,14 @@ pu(int t, char * token, Lis * node)
 %}
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2 BLTIN3
-%token	<sym>	CVAR CBLTIN TVAR TBLTIN NVAR STATIC BLATCH BFORCE DLATCH
+%token	<sym>	CVAR CBLTIN TVAR TBLTIN TBLTI1 NVAR STATIC BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
 %type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn
 %type	<sym>	cstatic decl dasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
-%type	<list>	cref ctref dexpr
+%type	<list>	cref ctref ctdref dexpr
 %type	<val>	cblock declHead
 %type	<str>	cstini cexini
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
@@ -528,19 +529,34 @@ cexini	: UNDEF			{
 	; 
 
 cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
-	| ',' ctref		{ $$ = $2; }		/* other clock or timer */
+	| ',' ctref		{ $$ = $2; }		/* clock or timer */
 	;
 
-ctref	: cexpr			{ $$ = $1; }		/* other clock */
-	| texpr ','		{ dflag = 1; }		/* timer clock */
-	  dexpr			{
+ctref	: ctdref		{ $$ = $1; }		/* clock or timer with delay */
+	| texpr			{			/* timer */
+		Symbol *	sp;			/* with implicit delay of 1 */
+		List_e *	lp;
+		char		one[] = "1";
+		if ((sp = lookup(one)) == 0) {
+		    sp = install(one, NCONST, ARITH);	/* becomes NVAR */
+		}
+		lp = sy_push(sp);
+		lp->le_val = (unsigned) -1;		/* mark link as timer value */
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = op_push($1.v, TIM, lp);
+	    }
+	;
+
+ctdref	: cexpr			{ $$ = $1; }		/* clock */
+	| texpr ','		{ dflag = 1; }		/* timer */
+	  dexpr			{			/* with delay expression */
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = op_push($1.v, TIM, $4.v);
 	    }
 	;			/* TODO link instead - works for const NUMBER only */
 
 dexpr	: NVAR			{
-		register Symbol *	sp = $1.v;
+		Symbol *	sp = $1.v;
 		while (sp->type == ALIAS) {
 		    sp = sp->list->le_sym;	/* get token of original */
 		}
@@ -564,17 +580,12 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
-	| BLTIN2 '(' aexpr ',' aexpr ')'	{
-		$$.f = $1.f; $$.l = $6.l;
-		$$.v = bltin(&$1, &$3, 0, &$5, 0, 0, 0);
+	| BLTIN2 '(' aexpr ',' aexpr cref ')' {
+		$$.f = $1.f; $$.l = $7.l;
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
-	| BLTIN2 '(' aexpr ',' aexpr ',' ctref ')' {
-		$$.f = $1.f; $$.l = $8.l;
-		$$.v = bltin(&$1, &$3, &$7, &$5, 0, 0, 0);
-		if (debug & 02) pu(1, "fexpr", &$$);
-	    }
-	| BLTIN2 '(' aexpr ',' ctref ',' aexpr cref ')' {
+	| BLTIN2 '(' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
@@ -584,7 +595,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, 0); /* monoflop without reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by iClock */
 	    }
-	| BLTIN3 '(' aexpr ',' ctref ',' ctref ')'	{
+	| BLTIN3 '(' aexpr ',' ctdref ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $8.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, 0); /* monoflop without reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
@@ -594,19 +605,19 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, 0); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
 	    }
-	| BLTIN3 '(' aexpr ',' aexpr ',' ctref ',' ctref ')'	{
+	| BLTIN3 '(' aexpr ',' aexpr ',' ctdref ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $10.l;
 		$$.v = bltin(&$1, &$3, &$7, &$5, 0, &$9, 0); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by same clock or timer */
 	    }
-	| BLTIN3 '(' aexpr ',' ctref ',' aexpr ',' ctref ')'	{
+	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctref ')'	{
 		Lis	lis1;
 		$$.f = $1.f; $$.l = $10.l;
 		lis1.v = sy_push(clk);			/* iClock to avoid shift reduce conflict */
 		$$.v = bltin(&$1, &$3, &$5, &$7, &lis1, &$9, 0); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 	    }						/* reset clocked by iClock */
-	| BLTIN3 '(' aexpr ',' ctref ',' aexpr ',' ctref ',' ctref ')'	{
+	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctdref ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $12.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, &$11, 0); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
@@ -664,13 +675,10 @@ cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 	    }
-	| CBLTIN '(' aexpr ',' aexpr ')'	{
-		$$.v = bltin(&$1, &$3, 0, &$5, 0, 0, 0);
+	| CBLTIN '(' aexpr ',' aexpr cref ')'	{
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
 	    }
-	| CBLTIN '(' aexpr ',' aexpr ',' ctref ')'	{
-		$$.v = bltin(&$1, &$3, &$7, &$5, 0, 0, 0);
-	    }
-	| CBLTIN '(' aexpr ',' ctref ',' aexpr cref ')'	{
+	| CBLTIN '(' aexpr ',' ctdref ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, 0);
 	    }
 	;
@@ -693,17 +701,42 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 	| '(' texpr ')'		{ $$.v = $2.v; }
 	;
 
+	/************************************************************
+	 *
+	 * Timers (TIMER or T) have a preset off delay of 0.
+	 * Such timers will clock with iClock on the falling edge of
+	 * the master gate. They wil clock with iClock on the rising
+	 * edge if the on delay is 0.
+	 *
+	 ***********************************************************/
+
 tfexpr	: TBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 	    }
-	| TBLTIN '(' aexpr ',' aexpr ')'	{
-		$$.v = bltin(&$1, &$3, 0, &$5, 0, 0, 0);
+	| TBLTIN '(' aexpr ',' aexpr cref ')'	{
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
 	    }
-	| TBLTIN '(' aexpr ',' aexpr ',' ctref ')'	{
-		$$.v = bltin(&$1, &$3, &$7, &$5, 0, 0, 0);
-	    }
-	| TBLTIN '(' aexpr ',' ctref ',' aexpr cref ')'	{
+	| TBLTIN '(' aexpr ',' ctdref ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, 0);
+	    }
+
+	/************************************************************
+	 *
+	 * Alternate timers (TIMER1 or T1) have a preset off delay of 1.
+	 * Such timers will clock with the next timer pulse on the
+	 * falling edge of the master gate. They wil clock with the
+	 * next timer pulse on the rising edge if the on delay is 0.
+	 *
+	 ***********************************************************/
+
+	| TBLTI1 '(' aexpr cref ')'	{
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, &val1);
+	    }
+	| TBLTI1 '(' aexpr ',' aexpr cref ')'	{
+		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, &val1);
+	    }
+	| TBLTI1 '(' aexpr ',' ctdref ',' aexpr cref ')'	{
+		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, &val1);
 	    }
 	;
 
@@ -914,14 +947,14 @@ yylex(void)
 		    if ((symp = lookup(yytext)) == 0) {
 			symp = install(yytext, NCONST, ARITH); /* becomes NVAR */
 		    }
-		    yylval.sym.v = symp;		/* return actual symbol */
 		    if (symp->type == NCONST && symp->ftype == ARITH) {
+			yylval.sym.v = symp;		/* return actual symbol */
 			c = NVAR;			/* numeric symbol */
 		    } else {
 			c = NUMBER;			/* used in arith expression */
 		    }
 		} else {
-		    c = NUMBER;
+		    c = NUMBER;				/* value in yylval.val.v */
 		}
 	    } else {
 		c = LEXERR;

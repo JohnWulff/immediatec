@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.9 2001/01/10 22:51:01 jw Exp $";
+"@(#)$Id: link.c,v 1.10 2001/02/03 17:10:04 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -127,26 +127,20 @@ link_ol(
 	     * to CH_BIT which is the CHANGE action. CHANGE times on both
 	     * edges, both for arithmetic as well as for logical input.
 	     */
-	    if ((gp->gt_val > 0 && (gp->gt_fni < D_SH || gp->gt_fni > CH_BIT)) ||
-		(time = gp->gt_time->gt_old
-#ifndef _WINDOWS 
-		, (debug & 0100) ? fprintf(outFP, "(%d)", time) : 0, time
-#endif
-		) == 0) {
-
-		/* 'LO' action gate or required time == 0 */
-#ifndef TIMEROFF1
-		out_list = c_list;	/* put on 'clock' list imme */
+	    if ((gp->gt_val > 0 &&			/* 'LO' action gate and not */
+		(gp->gt_fni < D_SH || gp->gt_fni > CH_BIT) ||	/* D_SH .. CH_BIT */
+		(time = gp->gt_time->gt_old) == 0) &&	/* or required time is 0 */
+		(time = out_list->gt_old) == 0) {	/* and preset off time is 0 */
+		out_list = c_list;			/* put on 'clock' list imme */
 	    } else {
-#else
-		/* Alternate action is to sort with time = 1 */
-		time = 1;		/* equivalent to clocking */
-	    }
-#endif
-		/* 'HI' action gate clocked by timer/counter */
-		/* link Gate gp into list sorted by time order */
+		/*
+		 * 'HI' action gate clocked by timer/counter
+		 * or alternate 'LO' action is to use preset time
+		 * which is equivalent to clocking if preset to 1.
+		 * Link Gate gp into list sorted by time order.
+		 */
 #ifndef _WINDOWS 
-		if (debug & 0100) putc('!', outFP);
+		if (debug & 0100) fprintf(outFP, "(%d)!", time);
 #endif
 		tp = out_list;
 		diff = 0;
@@ -185,9 +179,7 @@ link_ol(
 		/* if np == out_list, out_list->gt_mark gets -diff */
 #endif
 		return;			/* sorted link action complete */
-#ifndef TIMEROFF1
 	    }
-#endif
 	}
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('>', outFP);

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.8 2000/11/28 20:22:35 jw Exp $";
+"@(#)$Id: init.c,v 1.9 2001/02/03 17:10:04 jw Exp $";
 /*
  *	"init.c"
  *
@@ -36,35 +36,37 @@ static struct {
     uchar	ftype;
 } builtins[] = {
     /* name	type	u_val	ftype */
-    "D",	KEYW,	BLTIN1,	D_FF,
-    "SH",	KEYW,	BLTIN1,	D_SH,
-    "CHANGE",	KEYW,	BLTIN1,	CH_BIT,
-    "RISE",	KEYW,	BLTIN1,	RI_BIT,
-    "SR",	KEYW,	BLTIN2,	S_FF,	/* R_FF for reset master */
-    "SRT",	KEYW,	BLTIN3,	S_FF,	/* monoflop with timed reset*/
-    "IF",	KEYW,	IF,	F_CF,
-    "if",	KEYW,	IF,	F_CF,
-    "ELSE",	KEYW,	ELSE,	0,
-    "else",	KEYW,	ELSE,	0,
-    "SWITCH",	KEYW,	SWITCH,	F_SW,
-    "switch",	KEYW,	SWITCH,	F_SW,
-    "C",	KEYW,	CBLTIN,	CLCK,
-    "CLOCK",	KEYW,	CBLTIN,	CLCK,
-    "T",	KEYW,	TBLTIN,	TIMR,
-    "TIMER",	KEYW,	TBLTIN,	TIMR,	/* there is no default timer */
-    "F",	KEYW,	BFORCE,	0,
-    "FORCE",	KEYW,	BFORCE,	0,
-    "L",	KEYW,	BLATCH,	0,
-    "LATCH",	KEYW,	BLATCH,	0,
-    "DL",	KEYW,	DLATCH,	D_FF,
-    "DLATCH",	KEYW,	DLATCH,	D_FF,
-    "extern",	KEYW,	EXTERN,	0,
-    "imm",	KEYW,	IMM,	0,
-    "int",	KEYW,	TYPE,	ARITH,
-    "bit",	KEYW,	TYPE,	GATE,
-    "static",	KEYW,	STATIC,	0,
-    "iClock",	CLK,	0,	CLCKL,	/* must be last non-zero entry */
-    0,		0,	0,	0,
+  { "D",	KEYW,	BLTIN1,	D_FF,	},
+  { "SH",	KEYW,	BLTIN1,	D_SH,	},
+  { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	},
+  { "RISE",	KEYW,	BLTIN1,	RI_BIT,	},
+  { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
+  { "SRT",	KEYW,	BLTIN3,	S_FF,	}, /* monoflop with timed reset*/
+  { "IF",	KEYW,	IF,	F_CF,	},
+  { "if",	KEYW,	IF,	F_CF,	},
+  { "ELSE",	KEYW,	ELSE,	0,	},
+  { "else",	KEYW,	ELSE,	0,	},
+  { "SWITCH",	KEYW,	SWITCH,	F_SW,	},
+  { "switch",	KEYW,	SWITCH,	F_SW,	},
+  { "C",	KEYW,	CBLTIN,	CLCK,	},
+  { "CLOCK",	KEYW,	CBLTIN,	CLCK,	},
+  { "T",	KEYW,	TBLTIN,	TIMR,	}, /* there is no default timer */
+  { "TIMER",	KEYW,	TBLTIN,	TIMR,	}, /* normal timer with preset off 0 */
+  { "T1",	KEYW,	TBLTI1,	TIMR,	}, /* alternate timer with preset off 1 */
+  { "TIMER1",	KEYW,	TBLTI1,	TIMR,	}, /* alternate timer with preset off 1 */
+  { "F",	KEYW,	BFORCE,	0,	},
+  { "FORCE",	KEYW,	BFORCE,	0,	},
+  { "L",	KEYW,	BLATCH,	0,	},
+  { "LATCH",	KEYW,	BLATCH,	0,	},
+  { "DL",	KEYW,	DLATCH,	D_FF,	},
+  { "DLATCH",	KEYW,	DLATCH,	D_FF,	},
+  { "extern",	KEYW,	EXTERN,	0,	},
+  { "imm",	KEYW,	IMM,	0,	},
+  { "int",	KEYW,	TYPE,	ARITH,	},
+  { "bit",	KEYW,	TYPE,	GATE,	},
+  { "static",	KEYW,	STATIC,	0,	},
+  { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
+  { 0,		0,	0,	0,	},
 };
 
 void

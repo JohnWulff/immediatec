@@ -1,2 +1,2 @@
-@(#)$Id: AuxTools.v,v 1.47 2001/01/18 21:47:52 jw Exp $
-mklst           1.4     2001/01/17  09:42:25  jw      Exp
+@(#)$Id: AuxTools.v,v 1.55 2001/02/03 17:16:02 jw Exp $
+mklst           1.5     2001/02/04  17:41:16  jw      Exp

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.30 2001/01/25 21:53:13 jw Exp $";
+    "@(#)$Id: outp.c,v 1.31 2001/02/03 17:10:04 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -155,6 +155,10 @@ listNet(unsigned * gate_count)
 			    /* case number of "if" or "switch" C fragment */
 			    fprintf(outFP, "\t%c (%d)",
 				os[types[sp->ftype]], lp->le_val);
+			} else if (sp->ftype == TIMR && lp->le_val > 0) {
+			     /* timer preset off value */
+			    fprintf(outFP, "\t %s%c (%d)",
+				tsp->name, os[tsp->type], lp->le_val);
 			} else if (sp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
 			    /* reference to a timer value - no link */
 			    fprintf(outFP, "\t<%s%c", tsp->name, os[tsp->type]);
@@ -292,9 +296,17 @@ buildNet(Gate ** igpp)
 				/* relies on action gates */
 				/* having only one output */
 				lp = sp->list;
-				tsp = lp->le_sym;
-				/* F_SW or F_CF action gate points to function */
-				*fp++ = tsp ? tsp->u.gate : (Gate*)lp->le_val;
+				if ((tsp = lp->le_sym) != 0) {
+				    if (sp->ftype == TIMR &&
+					tsp->u.gate->gt_old < lp->le_val) {
+					/* transfer timer preset off value */
+					tsp->u.gate->gt_old = lp->le_val;
+				    }
+				    *fp++ = tsp->u.gate;
+				} else {
+				    /* F_SW or F_CF action gate points to function */
+				    *fp++ = (Gate*)lp->le_val;
+				}
 				/* room for clock or timer entry */
 				*fp++ = 0;
 				/* room for time value */
@@ -501,7 +513,12 @@ extern Gate *	l_[];\n\
 			    lpp = &lp->le_next;	/* lpp to next link */
 			}
 		    }
-		}
+		} else if (dc == TIMR &&
+		    (lp = sp->list) != 0 &&
+		    (tsp = lp->le_sym) != 0 &&
+		    tsp->u.val < lp->le_val) {
+		    tsp->u.val = lp->le_val;	/* store timer preset off value */
+		}				/* temporarily in u (which is 0) */
 		if (typ == UDF) {
 		    fprintf(Fp, "extern Gate	%s;\n", mN(sp));
 		    linecnt++;
@@ -646,26 +663,27 @@ extern Gate *	l_[];\n\
  *******************************************************************/\n\
 \n");
 
-    mask = li = 0;
+    li = 0;
     nxs = "0";
     sam = "";
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) > UDF && typ < MAX_OP &&
 		strcmp(sp->name, "iClock") != 0) {
+		mask = 0;
 		modName = mN(sp);	/* modified string, byte and bit */
-		if (typ >= AND && typ < MAX_GT) {
-		    if (typ == AND || typ == LATCH) {
-			dc = 0;
+		if (typ >= AND && typ < MAX_GT) {	/* AND OR LATCH */
+		    if (typ == OR) {
+			dc = 1;				/* typ == OR */
+		    } else {
+			dc = 0;				/* typ == AND LATCH */
 			for (lp = sp->u.blist; lp; lp = lp->le_next) {
-			    dc++;	/* space in input list */
+			    dc++;			/* space in input list */
 			}
 			if (typ == LATCH) {
 			    dc++;
-			    dc >>= 1;
+			    dc >>= 1;			/* halve for LATCH */
 			}
-		    } else {
-			dc = 1;	/* typ == OR */
 		    }
 		    fprintf(Fp, "Gate %-8s = { %d, %d,", modName, dc, dc);
 		} else {
@@ -688,7 +706,7 @@ extern Gate *	l_[];\n\
     "/* error in emitting code. Action gate '%s' has no clock */\n",
 			    sp->name);	/* ZZZ wrong format */
 		    } else if (lp->le_sym->type == TIM) {
-			li++;	/* space for TIME or time function */
+			li++;	/* space for pointer to time value Gate */
 		    }
 		} else if (dc == OUTW) {
 		    if (iqt[0] == 'Q' &&
@@ -714,6 +732,12 @@ extern Gate *	l_[];\n\
 		    }
 		} else {
 		    fprintf(Fp, " 0,");		/* no gt_list */
+		    if (dc == TIMRL) {
+			if (sp->u.val > 0) {
+			    mask = sp->u.val;
+			    sp->u.val = 0;	/* restore temporary u to 0 */
+			}
+		    }
 		}
 		if (typ == ARN || (typ >= AND && typ < MAX_GT)) {
 		    fprintf(Fp, " &l_[%d],", li);	/* gt_rlist */
@@ -752,7 +776,6 @@ extern Gate *	l_[];\n\
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
 		sam = (dc == OUTW || typ == NCONST) ? "&_" : "&";
-		mask = 0;
 	    }
 	}
     }
