@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.10 2000/11/12 21:12:30 jw Exp $";
+"@(#)$Id: pplc.h,v 1.11 2000/11/23 22:39:21 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -223,7 +223,8 @@ extern void	dMff(Gate *, Gate *);	/* D_FF master action on FF */
 extern void	dMsh(Gate *, Gate *);	/* D_SH master action on SH */
 extern void	chMbit(Gate *, Gate *);	/* CH_BIT master action on VF */
 extern void	riMbit(Gate *, Gate *);	/* RI_BIT master action on EF */
-extern void	fMfn(Gate *, Gate *);	/* F_CF CLCK TIMR master action */
+extern void	fMcf(Gate *, Gate *);	/* F_CF master action */
+extern void	fMfn(Gate *, Gate *);	/* CLCK TIMR master action */
 extern void	outMw(Gate *, Gate *);	/* OUTW master action */
 extern void	outMx(Gate *, Gate *);	/* OUTX master action */
 extern void	arithMa(Gate *, Gate *);/* ARITH master action */

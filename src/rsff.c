@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.8 2000/11/12 21:12:30 jw Exp $";
+"@(#)$Id: rsff.c,v 1.9 2000/11/23 22:39:21 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -464,26 +464,33 @@ chSbit(					/* CH_BIT slave action */
 
 /********************************************************************
  *
- *	Master function for on() CLOCK() and TIMER().
+ *	Master function for IF() IF() ELSE and SWITCH().
  *
  *******************************************************************/
 
 void
-fMfn(					/* F_CF CLCK TIMR master action */
+fMcf(					/* F_CF master action */
     register Gate *	gp,
     Gate *		out_list)
 {
-    if ( gp->gt_val < 0 || gp->gt_next) {
-	link_ol(gp, gp->gt_clk);	/* master action */
+    if (out_list == o_list) {
+	/* called from logic scan - convert d to a */
+	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
+    } else if (out_list == a_list) {
+	/* called from arithmetic scan - convert a to d */
+	gp->gt_val = gp->gt_new ? -1 : 1;
     }
-} /* fMfn */
+    link_ol(gp, gp->gt_clk);		/* master action */
+} /* fMcf */
 
 /********************************************************************
  *
  *	Execute a C statement or C statement block when triggered
- *	by a clocked logical condition.
- *		on (expr,clock) x = y * cfn(z);	// iClock is default
- *		on (expr) { for (i = 0; i < 10; i++) cfn(z); z++; }
+ *	by a clocked logical or arithmetic change.
+ *		IF (expr,clock) x = y * cfn(z);	// iClock is default
+ *		IF (expr) { for (i = 0; i < 10; i++) cfn(z); z++; }
+ *		IF (expr) { i++; } ELSE { j--; }
+ *		SWITCH (expr) { case 1: i = 1; break; ... }
  *
  *******************************************************************/
 
@@ -492,27 +499,19 @@ fScf(					/* F_CF slave action on CF */
     register Gate *	gf,
     register Gate *	out_list)
 {
-    if (gf->gt_val < 0) {
+    gf->gt_old = gf->gt_new;		/* now new value is fixed */
 #ifndef _WINDOWS 
-	if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
+    if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
 #endif
-	/* execute C function as action procedure with side effects */
+    /* execute C function as action procedure with side effects */
 #ifdef LOAD
-	((CFunctp)(gf->gt_funct))(gf);
+    ((CFunctp)(gf->gt_funct))(gf);
 #else
-	c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
+    c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
 #ifndef _WINDOWS 
-	if (debug & 0100) putc('}', outFP);
+    if (debug & 0100) putc('}', outFP);
 #endif
-#if !defined(_WINDOWS) || defined(LOAD)
-    } else {
-	fprintf(errFP,
-	    "\n%s: line %d: F%d cFunction %s receives -1 ==> 1 ???\n",
-	    __FILE__, __LINE__, (int)gf->gt_funct, gf->gt_ids);
-	quit(-1);
-#endif
-    }
 } /* fScf */
 
 /********************************************************************
@@ -618,7 +617,7 @@ outMx(					/* OUTX master action */
     if (out_list == a_list) {
 	/* called from arithmetic scan - convert a to d */
 	/* MIXED mode is currently not compiled - ERROR */
-	gp->gt_val = gp->gt_old ? -1 : 1;
+	gp->gt_val = gp->gt_new ? -1 : 1;
     }
 #endif
 #ifdef TCP 
@@ -642,6 +641,22 @@ outMx(					/* OUTX master action */
 #endif
     }
 } /* outMx */
+
+/********************************************************************
+ *
+ *	Master function for CLOCK() and TIMER().
+ *
+ *******************************************************************/
+
+void
+fMfn(					/* CLCK TIMR master action */
+    register Gate *	gp,
+    Gate *		out_list)
+{
+    if ( gp->gt_val < 0 || gp->gt_next) {
+	link_ol(gp, gp->gt_clk);	/* master action */
+    }
+} /* fMfn */
 
 /********************************************************************
  *

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.17 2000/11/23 11:32:57 jw Exp $";
+"@(#)$Id: comp.y,v 1.18 2000/11/23 16:24:47 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -101,23 +101,24 @@ pu(int t, char * token, Lis * node)
 %right	<str>	PR 		/* structure operators -> . */
 %%
 
-program	: /* nothing */		{ stmtp = yybuf; $$.v = 0; }
-	| program statement	{ $$ = $2; stmtp = yybuf; }
-	| program error ';'	{ clk->type = ERR; stmtp = yybuf; yyerrok; }
+program	: /* nothing */		{ $$.v = 0;  stmtp = yybuf; }
+	| program statement	{ $$   = $2; stmtp = yybuf; }
+	| program error ';'	{ $$.v = 0;  stmtp = yybuf; clk->type = ERR; yyerrok; }
 	;
 
 statement:
-	  simplestatement ';'
-		/* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
-	| ffexpr		{ $$.v = op_asgn(0, &$1, GATE); stmtp = yybuf; }
+	  ';'			{ $$.v = 0;  }
+	| simplestatement ';'	{ $$   = $1; }
+	| ffexpr		{ $$.v = op_asgn(0, &$1, GATE); }
+	    /* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
 	;
 
 simplestatement:
-	  decl			{ $$ = $1; stmtp = yybuf; }
-	| cstatic		{ $$ = $1; stmtp = yybuf; }
-	| asgn			{ $$ = $1; stmtp = yybuf; }
-	| wasgn			{ $$ = $1; stmtp = yybuf; }
-	| xasgn			{ $$ = $1; stmtp = yybuf; }
+	  decl			{ $$ = $1; }
+	| cstatic		{ $$ = $1; }
+	| asgn			{ $$ = $1; }
+	| wasgn			{ $$ = $1; }
+	| xasgn			{ $$ = $1; }
 	| casgn			{ $$ = $1; }
 	| tasgn			{ $$ = $1; }
 	;
