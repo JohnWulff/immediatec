@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.28 2001/01/13 17:47:02 jw Exp $";
+    "@(#)$Id: outp.c,v 1.29 2001/01/25 08:55:41 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -20,11 +20,6 @@ static const char outp_c[] =
 #define Lname	"inc2.h"
 
 extern const char	SC_ID[];
-
-unsigned short	bitmask[] = {
-    0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
-    0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000, 0x8000,
-};
 
 /********************************************************************
  *
@@ -309,7 +304,7 @@ buildNet(Gate ** igpp)
 			    } else if (sp->ftype == OUTW) {
 				if (sscanf(gp->gt_ids, "Q%1[BW]%d",
 				    bw, &byte) == 2 && byte < IXD) {
-				    gp->gt_list = (Gate**)&QX_[byte];
+				    gp->gt_list = (Gate**)byte;
 				    gp->gt_mark = bw[0] == 'B' ? 1 : 2;
 				} else {
 				    goto outErr;
@@ -317,14 +312,14 @@ buildNet(Gate ** igpp)
 			    } else if (sp->ftype == OUTX) {
 				if (sscanf(gp->gt_ids, "QX%d.%d",
 				    &byte, &bit) == 2 &&
-				    byte < IXD && bit < 16) {
+				    byte < IXD && bit < 8) {
 				    /* OUTPUT bit pointer */
-				    gp->gt_list = (Gate**)&QX_[byte];
-				    gp->gt_mark = bitmask[bit];
+				    gp->gt_list = (Gate**)byte;
+				    gp->gt_mark = bitMask[bit];
 				} else {
 				outErr:
 		    warning("OUTPUT configuration too small for:", gp->gt_ids);
-				    gp->gt_list = (Gate**)&QX_[0];
+				    gp->gt_list = (Gate**)0;
 				    gp->gt_mark = 0;	/* no change in bits */
 				}
 			    } else {
@@ -699,7 +694,7 @@ extern Gate *	l_[];\n\
 		    if (iqt[0] == 'Q' &&
 			bwx[0] != 'X' &&	/* can only be B or W */
 			cnt == 3 && byte < IXD) {
-			fprintf(Fp, " (Gate**)&QX_[%d],", byte);
+			fprintf(Fp, " (Gate**)%d,", byte);
 			mask = bwx[0] == 'B' ? 1 : 2;
 		    } else {
 			goto OutErr;
@@ -707,13 +702,13 @@ extern Gate *	l_[];\n\
 		} else if (dc == OUTX) {
 		    if (iqt[0] == 'Q' &&
 			bwx[0] == 'X' &&
-			cnt == 4 && byte < IXD && bit < 16) {
+			cnt == 4 && byte < IXD && bit < 8) {
 			/* OUTPUT byte part of bit pointer */
-			fprintf(Fp, " (Gate**)&QX_[%d],", byte);
-			mask = bitmask[bit];
+			fprintf(Fp, " (Gate**)%d,", byte);
+			mask = bitMask[bit];
 		    } else {
 		    OutErr:
-			fprintf(Fp, " (Gate**)&QX_[0],\n"
+			fprintf(Fp, " (Gate**)0,\n"
     "/* error in emitting code. OUT configuration error %s */\n", sp->name);
 			mask = 0;	/* no output because mask is 0x00 */
 		    }
@@ -751,7 +746,7 @@ extern Gate *	l_[];\n\
 		}
 		fprintf(Fp, " %s%s", sam, nxs);
 		if (mask != 0) {
-		    fprintf(Fp, ", %d", mask);	/* bitmask for OUT */
+		    fprintf(Fp, ", %d", mask);	/* bitMask for OUT */
 		}
 		fprintf(Fp, " };\n");
 		linecnt++;
