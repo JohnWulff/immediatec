@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.4 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: pplc.c,v 1.5 1999/08/06 15:43:37 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -171,6 +171,24 @@ pplc(
 	errFP = stderr;			/* standard error from here */
     }
 
+#ifdef _MSDOS_
+#ifdef MSC 
+    oldhandler = _dos_getvect(INTR);	/* save the old interrupt vector */
+#else
+    oldhandler = getvect(INTR);		/* save the old interrupt vector */
+#endif
+#else	/* Linux */
+    /* Setup fd sets */
+    FD_ZERO (&selectinfds);
+    maxfd = 0;
+    FD_SET (fileno (stdin), &selectinfds);
+    maxfd = max (maxfd, fileno (stdin));
+    if ( ioctl(0, TCGETA, &ttyparms) == -1 )   {
+	fprintf(stderr, "Cannot get termio from stdin\n");
+	quit(-5);
+    }
+#endif
+
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
     for (pass = 0; pass < 4; pass++) {
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
@@ -214,30 +232,9 @@ pplc(
     }
 
     if (debug & 0400) {
-	fprintf(outFP, "\n");
 	exit(0);				/* terminate - no inputs */
     }
 
-#ifdef _MSDOS_
-#ifdef MSC 
-    oldhandler = _dos_getvect(INTR);	/* save the old interrupt vector */
-#else
-    oldhandler = getvect(INTR);		/* save the old interrupt vector */
-#endif
-#else	/* Linux */
-    /* Setup fd sets */
-    FD_ZERO (&selectinfds);
-    maxfd = 0;
-    FD_SET (fileno (stdin), &selectinfds);
-    maxfd = max (maxfd, fileno (stdin));
-    if ( ioctl(0, TCGETA, &ttyparms) == -1 )   {
-	fprintf(stderr, "Cannot get termio from stdin\n");
-	quit(-5);
-    }
-    memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
-    ttyparmh.c_lflag &= ~(ECHO | ICANON);
-    if (ioctl(0, TCSETA, &ttyparmh) == -1) quit(-6);
-#endif
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
     if (debug & 03000) {
 #ifdef _MSDOS_
@@ -250,6 +247,11 @@ pplc(
 	top = &to;				/* activate select timeout */
 #endif
     }
+#ifndef _MSDOS_
+    memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
+    ttyparmh.c_lflag &= ~(ECHO | ICANON);
+    if (ioctl(0, TCSETA, &ttyparmh) == -1) quit(-6);
+#endif
 
     dis_cnt = DIS_MAX;
     for ( ; ; ) {
@@ -544,6 +546,9 @@ void quit(int sig)
 #ifndef _MSDOS_
     if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
 #endif
-    fprintf(errFP, "\nQuit with sig = %d\n", sig);
+    fprintf(errFP, "\n");
+    if (sig) {
+	fprintf(errFP, "Quit with sig = %d\n", sig);
+    }
     exit(sig);			/* really quit */
 } /* quit */
