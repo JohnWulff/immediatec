@@ -1,5 +1,5 @@
 static const char ibsd_h[] =
-"@(#)$Id: ibsd.h,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: ibsd.h,v 1.2 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  * 	Headerfile zur Treibersoftware für den IBS-COP
@@ -20,20 +20,20 @@ static const char ibsd_h[] =
 extern "C" {
 #endif
 
-//-----------------------------------------------------------------
-// Definitionen
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Definitionen */
+/*----------------------------------------------------------------- */
 #define TRUE		1
 #define FALSE		0
-#define MAXBIN		2048 / 16	// Binärdaten werden als Worte
-					// im Speicher abgelegt
-#define MAXWORD		2048		// Anzahl Worte zum Master
-#define MAXMAIL		256		// Größe der Master Mailbox
+#define MAXBIN		2048 / 16	/* Binärdaten werden als Worte */
+					/* im Speicher abgelegt */
+#define MAXWORD		2048		/* Anzahl Worte zum Master */
+#define MAXMAIL		256		/* Größe der Master Mailbox */
 
-//-----------------------------------------------------------------
-// Definitionen für COP / Host-PC Kommunikation
-//-----------------------------------------------------------------
-#define HOSTMAIL	256		// Größe der Host Mailbox
+/*----------------------------------------------------------------- */
+/* Definitionen für COP / Host-PC Kommunikation */
+/*----------------------------------------------------------------- */
+#define HOSTMAIL	256		/* Größe der Host Mailbox */
 #define MSG_ERROR		0x00
 #define GET_SYMBOL_TABLE	0x01
 #define GET_NEXT		0x02
@@ -42,16 +42,16 @@ extern "C" {
 #define PUT_LIVE_CMD	0x05
 #define GET_LIVE_DATA	0x06
 
-//-----------------------------------------------------------------
-// Macros zum Datenaustausch mit der PLC
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Macros zum Datenaustausch mit der PLC */
+/*----------------------------------------------------------------- */
 
-// Definition of the control structure for message buffers
+/* Definition of the control structure for message buffers */
 
 typedef struct MsgBuf {
-    short		cnt;	// number of bytes in the buffer
-    unsigned char *	ptr;	// current buffer pointer
-    unsigned char *	base;	// &HostInMailX[4], X is In or OUT
+    short		cnt;	/* number of bytes in the buffer */
+    unsigned char *	ptr;	/* current buffer pointer */
+    unsigned char *	base;	/* &HostInMailX[4], X is In or OUT */
 } MsgBuf;
 
 /********************************************************************
@@ -97,50 +97,50 @@ typedef struct MsgBuf {
 
 #define putMsg(c)	putM(c,outMsg)
 
-extern int	fillMsg (MsgBuf * inM);	// used by getM() macro
-extern int	flushMsg(MsgBuf *outM);	// used by putM() macro
+extern int	fillMsg (MsgBuf * inM);	/* used by getM() macro */
+extern int	flushMsg(MsgBuf *outM);	/* used by putM() macro */
 
 extern MsgBuf *	inMsg;
 extern MsgBuf *	outMsg;
 
-//-----------------------------------------------------------------
-// Strukturen zum Datenaustausch mit der PLC
-//-----------------------------------------------------------------
-extern unsigned short DataIn[MAXBIN];		// IBS binäre Eingaben
-extern unsigned short DataOut[MAXBIN];		// IBS binäre Ausgaben
+/*----------------------------------------------------------------- */
+/* Strukturen zum Datenaustausch mit der PLC */
+/*----------------------------------------------------------------- */
+extern unsigned short DataIn[MAXBIN];		/* IBS binäre Eingaben */
+extern unsigned short DataOut[MAXBIN];		/* IBS binäre Ausgaben */
 
-extern unsigned short HostDataIn[MAXBIN];	// Host in Daten
-extern unsigned short HostDataOut[MAXBIN];	// Host out Daten
+extern unsigned short HostDataIn[MAXBIN];	/* Host in Daten */
+extern unsigned short HostDataOut[MAXBIN];	/* Host out Daten */
 
-extern unsigned char HostInMail[HOSTMAIL];	// Host in Mailbox
-extern unsigned char HostOutMail[HOSTMAIL];	// Host out Mailbox
+extern unsigned char HostInMail[HOSTMAIL];	/* Host in Mailbox */
+extern unsigned char HostOutMail[HOSTMAIL];	/* Host out Mailbox */
 
-//-----------------------------------------------------------------
-// Funktionsdeklarationen
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Funktionsdeklarationen */
+/*----------------------------------------------------------------- */
 extern short InitDataLink(void);
 extern short CloseDataLink(void);
 extern short StartIBS(void);
 extern short StopIBS(void);
-extern short IBSsendData(void);		// IBS binäre Ausgabe
-extern short IBSrecvData(void);		// IBS binäre Eingabe
+extern short IBSsendData(void);		/* IBS binäre Ausgabe */
+extern short IBSrecvData(void);		/* IBS binäre Eingabe */
 
-extern short sendData(void);		// Host Ausgabe
-extern short recvData(void);		// Host Eingabe
+extern short sendData(void);		/* Host Ausgabe */
+extern short recvData(void);		/* Host Eingabe */
 extern short sendMsg(unsigned int length);
 extern short recvMsg(void);
 extern void recvLiveCmd(void);
 extern void scanLiveCmd(void);
 
-//-----------------------------------------------------------------
-// Funktionsdeklarationen nur fuer COP
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Funktionsdeklarationen nur fuer COP */
+/*----------------------------------------------------------------- */
 extern int ibsdrv(void);
 extern void scanIn(void);
 
-//-----------------------------------------------------------------
-// Funktionsdeklarationen nur fuer PC
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Funktionsdeklarationen nur fuer PC */
+/*----------------------------------------------------------------- */
 extern unsigned short	getSymbolTable(void);
 extern unsigned short	lookupST(char * name);
 extern char *		sTname(unsigned short sTx);

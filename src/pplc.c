@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.5 1999/08/06 15:43:37 jw Exp $";
+"@(#)$Id: pplc.c,v 1.6 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -97,6 +97,8 @@ kbhit(void)
 #endif
 
 Functp	*i_lists[] = { I_LISTS };
+#ifdef LOAD
+#endif
 
 Gate		alist0;
 Gate		alist1;
@@ -214,8 +216,11 @@ pplc(
 #endif
     }
     if (error_flag) {
-	fprintf(outFP, "\n*** Fatal Error ***\n");
-	exit(1);
+	if (error_flag == 1) {
+	    fprintf(outFP, "\n*** Fatal Errors ***\n");
+	    exit(1);
+	}
+	fprintf(outFP, "\n*** Warnings ***\n");
     }
     if (debug & 0100) fprintf(outFP, "\nPass 5:");
     if (o_list->gt_next == o_list) {			/* empty */
@@ -223,12 +228,6 @@ pplc(
     }
     if (debug & 0100) {
 	fprintf(outFP, "\nInit complete =======\n");
-    }
-    if ((gp = TX_[0]) != 0) {
-	if (debug & 0100) fprintf(outFP, "\t%s  1 ==>", gp->gt_ids);
-	gp->gt_val = -1;			/* set EOP initially */
-	link_ol(gp, o_list);			/* fire Input Gate */
-	if (debug & 0100) fprintf(outFP, " -1\n");
     }
 
     if (debug & 0400) {
@@ -252,6 +251,13 @@ pplc(
     ttyparmh.c_lflag &= ~(ECHO | ICANON);
     if (ioctl(0, TCSETA, &ttyparmh) == -1) quit(-6);
 #endif
+
+    if ((gp = TX_[0]) != 0) {
+	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
+	gp->gt_val = -1;			/* set EOP initially */
+	link_ol(gp, o_list);			/* fire Input Gate */
+	if (debug & 0100) fprintf(outFP, " -1");
+    }
 
     dis_cnt = DIS_MAX;
     for ( ; ; ) {
@@ -543,6 +549,7 @@ void quit(int sig)
 #endif
 #endif
     }
+    fflush(outFP);
 #ifndef _MSDOS_
     if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
 #endif

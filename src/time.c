@@ -1,5 +1,5 @@
 static const char time_c[] =
-"@(#)$Id: time.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: time.c,v 1.2 1999/08/06 21:30:54 jw Exp $";
 /********************************************************************
  *
  * 	Timer 0 wird als Zeitbasis der PPLC benutzt (1ms). 
@@ -45,8 +45,9 @@ void tinit(void)
 void trestore(void)
 {
 
-//  outportb(0x21, inportb(0x21) | 1);		/* Int-maske IRQ0 disable */
-//  !!! Nicht benutzen, Turbo-Debugger hängt sich auf !!!
+/* Int-maske IRQ0 disable */
+/*  outportb(0x21, inportb(0x21) | 1); */
+/*  !!! Nicht benutzen, Turbo-Debugger hängt sich auf !!! */
 
 						/* 8253, counter 0: */
     outportb(CT_CMD, COUNTER0+SQWAVE);		/* Squarewave fuer Interrupt */

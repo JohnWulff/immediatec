@@ -1,5 +1,5 @@
 static const char pccop_c[] =
-"@(#)$Id: pccop.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: pccop.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  * 	Datenaustausch PC --> COP
@@ -19,16 +19,16 @@ static const char pccop_c[] =
 #include <conio.h>
 #include <string.h>
 
-#define P_8086		// für Include-Dateien notwendig
-#define C_TURBO_C	// Syntax für stdtypes.h, s.S. 4-45 Handbuch
+#define P_8086		/* für Include-Dateien notwendig */
+#define C_TURBO_C	/* Syntax für stdtypes.h, s.S. 4-45 Handbuch */
 
 #include <ibs_dos.h>
 #include <ddi_lib.h>
 #include "ibsd.h"
 
-//-----------------------------------------------------------------
-// Funktionsdeklarationen
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Funktionsdeklarationen */
+/*----------------------------------------------------------------- */
 short InitDataLink(void);
 short CloseDataLink(void);
 short recvData(void);
@@ -37,30 +37,30 @@ short recvMsg(void);
 short sendMsg(unsigned int length);
 unsigned short	getSymbolTable(void);
 
-//-----------------------------------------------------------------
-// Arrays zum Datenhandling zwischen PC und COP
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Arrays zum Datenhandling zwischen PC und COP */
+/*----------------------------------------------------------------- */
 
-unsigned short HostDataIn[MAXBIN];	// Host in Daten
-unsigned short HostDataOut[MAXBIN];	// Host out Daten
+unsigned short HostDataIn[MAXBIN];	/* Host in Daten */
+unsigned short HostDataOut[MAXBIN];	/* Host out Daten */
 
-unsigned char HostInMail[HOSTMAIL];	// Host in Mailbox
-unsigned char HostOutMail[HOSTMAIL];	// Host out Mailbox
+unsigned char HostInMail[HOSTMAIL];	/* Host in Mailbox */
+unsigned char HostOutMail[HOSTMAIL];	/* Host out Mailbox */
 
-//-----------------------------------------------------------------
-// Node-Handles, werden mit der Funktion DDI_DevOpenNode ermittelt
-//-----------------------------------------------------------------
-static INT16   HostDtiNH;    // Node-Handle fuer Host Data-Interface
-static INT16   HostMxiNH;    // Node-Handle fuer Host Mailbox-Interface
+/*----------------------------------------------------------------- */
+/* Node-Handles, werden mit der Funktion DDI_DevOpenNode ermittelt */
+/*----------------------------------------------------------------- */
+static INT16   HostDtiNH;    /* Node-Handle fuer Host Data-Interface */
+static INT16   HostMxiNH;    /* Node-Handle fuer Host Mailbox-Interface */
 
 typedef struct sT {
-	char *		name;		// variable name
-	unsigned short	use;		// use count
-	unsigned char	type;		// Symbol type
+	char *		name;		/* variable name */
+	unsigned short	use;		/* use count */
+	unsigned char	type;		/* Symbol type */
 } sT;
 
 static long	sTstrLen;
-static sT *	sTable;	// dynamic array for symbol table from COP
+static sT *	sTable;	/* dynamic array for symbol table from COP */
 static sT *	sTend;
 static int	ec = 0;
 
@@ -80,7 +80,7 @@ main(void)
 	exit(1);
     }
 
-    recvMsg();	// take out possible message - fails first time
+    recvMsg();	/* take out possible message - fails first time */
 
     if (getSymbolTable()) {
 	for (sTp = sTable; sTp < sTend; sTp++) {
@@ -94,7 +94,7 @@ main(void)
     }
     if (ec) fprintf(stderr, "\nError code: %02X\n", ec);
     return ec;
-} // main
+} /* main */
 
 /********************************************************************
  *
@@ -106,14 +106,14 @@ main(void)
 short
 InitDataLink(void)
 {
-//-----------------------------------------------------------------
-// Kanäle zum Mailbox- und Data-Interface (MXI und DTI) öffnen
-// Parameter :
-//  - Device-Names: 	IBB1N2_M -> B1=Board1, N2=Node2, M=Mailbox
-//  			IBB1N2_D -> B1=Board1, N2=Node2, D=Data
-//  - Zugriffsrechte :  DDI_RW (Lesen und Schreiben)
-//  - Zeiger auf Variable fuer Node-Handle
-//-----------------------------------------------------------------
+/*----------------------------------------------------------------- */
+/* Kanäle zum Mailbox- und Data-Interface (MXI und DTI) öffnen */
+/* Parameter : */
+/*  - Device-Names: 	IBB1N2_M -> B1=Board1, N2=Node2, M=Mailbox */
+/*  			IBB1N2_D -> B1=Board1, N2=Node2, D=Data */
+/*  - Zugriffsrechte :  DDI_RW (Lesen und Schreiben) */
+/*  - Zeiger auf Variable fuer Node-Handle */
+/*----------------------------------------------------------------- */
 
     if ((ec = DDI_DevOpenNode("IBB1N2_M", DDI_RW, &HostMxiNH)) != ERR_OK) {
 	fprintf(stderr, "DDI_DevOpenNode IBB1N2_M\n");
@@ -131,7 +131,7 @@ InitDataLink(void)
     printf("HostDtiNH = %d\n", HostDtiNH);
 #endif
     return TRUE;
-} // InitDataLink
+} /* InitDataLink */
 
 /********************************************************************
  *
@@ -145,7 +145,7 @@ CloseDataLink(void)
     if (DDI_DevCloseNode(HostMxiNH) != ERR_OK) return FALSE;
     if (DDI_DevCloseNode(HostDtiNH) != ERR_OK) return FALSE;
     return TRUE;
-} // CloseDataLink
+} /* CloseDataLink */
 
 /********************************************************************
  *
@@ -158,14 +158,14 @@ sendData(void)
 {
     T_DDI_DTI_ACCESS  dtiAcc;
 
-    dtiAcc.address  = DTA_OFFST_PC_TO_COP;	// Offset-Adresse
-    dtiAcc.length   = MAXBIN * 2; 		// Größe Datenbereich
-    dtiAcc.dataCons = DTI_DATA_WORD; 		// Datenkonsistenz: Word
-    dtiAcc.data     = (USIGN8 FAR *)HostDataOut;// Adr. OUT-Data-Puffer
+    dtiAcc.address  = DTA_OFFST_PC_TO_COP;	/* Offset-Adresse */
+    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
+    dtiAcc.data     = (USIGN8 FAR *)HostDataOut;/* Adr. OUT-Data-Puffer */
 
     if (DDI_DTI_WriteData(HostDtiNH, &dtiAcc) != ERR_OK) return FALSE;
     return TRUE;
-} // sendData
+} /* sendData */
 
 /********************************************************************
  *
@@ -178,14 +178,14 @@ recvData(void)
 {
     T_DDI_DTI_ACCESS  dtiAcc;
 
-    dtiAcc.address  = DTA_OFFST_PC_TO_COP;	// Offset-Adresse
-    dtiAcc.length   = MAXBIN * 2; 		// Größe Datenbereich
-    dtiAcc.dataCons = DTI_DATA_WORD; 		// Datenkonsistenz: Word
-    dtiAcc.data     = (USIGN8 FAR *)HostDataIn;	// Adr. IN-Data-Puffer
+    dtiAcc.address  = DTA_OFFST_PC_TO_COP;	/* Offset-Adresse */
+    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
+    dtiAcc.data     = (USIGN8 FAR *)HostDataIn;	/* Adr. IN-Data-Puffer */
 		
     if (DDI_DTI_ReadData(HostDtiNH, &dtiAcc) != ERR_OK) return FALSE;
     return TRUE;
-} // recvData
+} /* recvData */
 
 /********************************************************************
  *
@@ -202,13 +202,13 @@ sendMsg(unsigned int length)
     T_DDI_MXI_ACCESS	mxiAcc;
 
     if (length > HOSTMAIL) return FALSE;
-    mxiAcc.msgType   = 0;    		// Message-Typ = 0, (n.u.)
-    mxiAcc.DDIUserID = 0;		// DDIUser-ID = 0, (n.u.)
-    mxiAcc.msgLength = length;		// Laenge in Bytes
-    mxiAcc.msgBlk    = HostOutMail;	// Puffer Messageblock
+    mxiAcc.msgType   = 0;    		/* Message-Typ = 0, (n.u.) */
+    mxiAcc.DDIUserID = 0;		/* DDIUser-ID = 0, (n.u.) */
+    mxiAcc.msgLength = length;		/* Laenge in Bytes */
+    mxiAcc.msgBlk    = HostOutMail;	/* Puffer Messageblock */
     if ((ec = DDI_MXI_SndMessage(HostMxiNH, &mxiAcc)) != ERR_OK) return FALSE;
     return TRUE;
-} // sendMsg
+} /* sendMsg */
 
 /********************************************************************
  *
@@ -224,16 +224,16 @@ recvMsg(void)
 {
     T_DDI_MXI_ACCESS	mxiAcc;
 
-    mxiAcc.msgType   = 0;    		// Message-Typ = 0, (n.u.)
-    mxiAcc.DDIUserID = 0;		// DDIUser-ID = 0, (n.u.)
-    mxiAcc.msgLength = HOSTMAIL; 	// Laenge in Bytes
-    mxiAcc.msgBlk    = HostInMail;	// Puffer Messageblock
+    mxiAcc.msgType   = 0;    		/* Message-Typ = 0, (n.u.) */
+    mxiAcc.DDIUserID = 0;		/* DDIUser-ID = 0, (n.u.) */
+    mxiAcc.msgLength = HOSTMAIL; 	/* Laenge in Bytes */
+    mxiAcc.msgBlk    = HostInMail;	/* Puffer Messageblock */
 
     if (DDI_MXI_RcvMessage(HostMxiNH, &mxiAcc) != ERR_OK) {
-	return 0;			// ERR_NO_MSG oder anderer Fehler
+	return 0;			/* ERR_NO_MSG oder anderer Fehler */
     }
-    return mxiAcc.msgLength;		// muss mindestens 1 Byte sein
-} // recvMsg
+    return mxiAcc.msgLength;		/* muss mindestens 1 Byte sein */
+} /* recvMsg */
 
 /********************************************************************
  *
@@ -262,25 +262,25 @@ getSymbolTable(void)
 	return 0;
     }
     for (i = 16384; (ln = recvMsg()) == 0 && --i; );
-    if (i == 0) { ec = 0x9B; return 0; }	// timeout error
+    if (i == 0) { ec = 0x9B; return 0; }	/* timeout error */
 #ifdef TEST
     printf("ln = %d %04x %d\n", ln,
 	IB_GetMsgCode(HostInMail), IB_GetMsgCode(HostInMail+2));
 #endif
     if ((USIGN16)IB_GetMsgCode(HostInMail) != ACKNOWLEDGE) return 0;
-    mp = &HostInMail[4];			// mailbox buffer
-    sTlength = *((unsigned *)mp)++;		// length of ST
-    sTstrLen = *((long *)mp)++;			// length of text
+    mp = &HostInMail[4];			/* mailbox buffer */
+    sTlength = *((unsigned *)mp)++;		/* length of ST */
+    sTstrLen = *((long *)mp)++;			/* length of text */
 #ifdef TEST
     printf("sTlength = %d sTstrLen = %ld\n", sTlength, sTstrLen);
 #endif
 
     sTable = (sT *) calloc(sTlength, sizeof(sT));
-    sTend = sTable + sTlength;			// allocate symbol table
+    sTend = sTable + sTlength;			/* allocate symbol table */
     cp = (char *) calloc(sTstrLen, sizeof(char));
 
     for (sTp = sTable; sTp < sTend; sTp++) {
-	sTp->name = cp;				// point to string copy
+	sTp->name = cp;				/* point to string copy */
 	n = 0;
 	do {
 	    if (n && sTstrLen-- <= 0) {
@@ -298,16 +298,16 @@ getSymbolTable(void)
 		    return 0;
 		}
 		for (i = 16384; (ln = recvMsg()) == 0 && --i; );
-		if (i == 0) { ec = 0x9B; return 0; }	// timeout error
+		if (i == 0) { ec = 0x9B; return 0; }	/* timeout error */
 #ifdef TEST
 		printf("ln = %d %04x %d\n", ln,
 		    IB_GetMsgCode(HostInMail), IB_GetMsgCode(HostInMail+2));
 #endif
 		if ((USIGN16)IB_GetMsgCode(HostInMail) != ACKNOWLEDGE) return 0;
-		mp = &HostInMail[4];		// mailbox buffer
+		mp = &HostInMail[4];		/* mailbox buffer */
 	    }
-	} while ((n || ((sTp->type = *mp++), 1)) &&	// always true
-	    ++n == 0 || (*cp++ = *mp++) != 0);	// copy string including null
+	} while ((n || ((sTp->type = *mp++), 1)) &&	/* always true */
+	    ++n == 0 || (*cp++ = *mp++) != 0);	/* copy string including null */
     }
 #ifdef TEST
     printf("sendMsg GET_END\n");
@@ -319,4 +319,4 @@ getSymbolTable(void)
     }
     /* no ACKNOWLEDGE expected */
     return sTlength;
-} // getSymbolTable
+} /* getSymbolTable */

@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.1 2000/05/28 13:54:31 jw Exp $";
+"@(#)$Id: pptc.c,v 1.2 2000/06/02 11:15:42 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -25,6 +25,7 @@ static const char pptc_c[] =
 #include <signal.h>
 #include <ctype.h>
 #include "pplc.h"
+#include "tcpc.h"
 
 #define MAX_IO	8
 #define MAX_W	2
@@ -33,47 +34,14 @@ static const char pptc_c[] =
 
 static void	display(void);
 static unsigned	time_cnt;			/* count time in ticks */
-static short	flag1C;
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define ENTER	'\n'
-static fd_set	selectinfds;		/* Set of fd for input (stdin, sync) */
-static fd_set	readfds;		/* Read mask for select system call */
-static int	maxfd;			/* Highest fd in selectinfds */
-static struct timeval	timeOut = { 0, 50000 };	/* 50 mS */
-static struct timeval	to;
-static struct timeval *	top;
 
 static struct termio	ttyparms;
 static struct termio	ttyparmh;
 
 # define max(x, y) ((x) > (y) ? (x) : (y))
-
-static int
-kbhit(void)
-{
-    fd_set	infds = selectinfds;
-    int		stat;
-
-    /* Wait until stdin is ready */
-    do {
-	readfds = infds;
-	if (top && top->tv_sec == 0 && top->tv_usec == 0) {
-	    *top = timeOut;
-	}
-    } while ((stat = select (maxfd + 1, &readfds, 0, 0, top)) == -1
-	   && errno == EINTR);
-    if (stat == -1) {
-	fprintf(stderr, "error in select\n");
-    } else if (stat == 0) {
-	time_cnt++;			/* count time in ticks */
-	/* increase the global counter */
-	if (debug & 01000) {		/* 1/20 second on, 1/20 second off */
-	    flag1C = 1;
-	}
-    }
-    return stat;			/* can only be 0 or 1 */
-} /* kbhit */
 
 Functp	*i_lists[] = { I_LISTS };
 
@@ -99,6 +67,8 @@ unsigned	link_cnt;			/* count link operations */
 unsigned	glit_cnt;			/* count glitches */
 unsigned long	glit_nxt;			/* count glitch scan */
 
+int		sockFN;			/* TCP/IP socket file number */
+
 /********************************************************************
  *
  *	Procedure pplc
@@ -122,11 +92,13 @@ pplc(
 #endif
     Gate *	gp;
     Functp	init_fa;
-    int		tcnt = 3;
+    int		tcnt = D10;
     int		val;
     char *	format;		/* number format */
     char	ybuf[YSIZE];	/* buffer for number */
     char *	yp;
+    float	delay = 0.0;	/* timer processing stopped */
+    int		retval;
 
     error_flag = 0;
     (Gate*)alist0.gt_rlist = a_list = &alist1;	/* initialise alternate */
@@ -150,15 +122,19 @@ pplc(
 	errFP = stderr;			/* standard error from here */
     }
 
-    /* Setup fd sets */
-    FD_ZERO (&selectinfds);
-    maxfd = 0;
-    FD_SET (fileno (stdin), &selectinfds);
-    maxfd = max (maxfd, fileno (stdin));
     if ( ioctl(0, TCGETA, &ttyparms) == -1 )   {
 	fprintf(stderr, "Cannot get termio from stdin\n");
 	quit(-5);
     }
+
+    for (cnt = 1; cnt < 8; cnt++) {
+	if (TX_[cnt] != NULL) {		/* any of the 7 timers programmed ? */
+	    delay = timeout;		/* yes - setup timer processing */
+	}				/* could optimise by varying delay */
+    }
+
+    /* Start TCP/IP communication before any inputs are generated => outputs */
+    sockFN = connect_to_server(hostNM, portNM, pplcNM, delay);
 
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
     for (pass = 0; pass < 4; pass++) {
@@ -204,14 +180,11 @@ pplc(
     }
 
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
-    if (debug & 03000) {
-	top = &to;				/* activate select timeout */
-    }
     memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
     ttyparmh.c_lflag &= ~(ECHO | ICANON);
     if (ioctl(0, TCSETA, &ttyparmh) == -1) quit(-6);
 
-    if ((gp = TX_[0]) != 0) {
+    if ((gp = TX_[0]) != NULL) {
 	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
 	gp->gt_val = -1;			/* set EOP initially */
 	link_ol(gp, o_list);			/* fire Input Gate */
@@ -219,6 +192,10 @@ pplc(
     }
 
     dis_cnt = DIS_MAX;
+    if (debug & 0300) {			/* osc or detailed info */
+	display();			/* inputs and outputs */
+    }
+
     for ( ; ; ) {
 	if (++mark_stamp == 0) {	/* next generation for check */
 	    mark_stamp++;		/* leave out zero */
@@ -227,12 +204,10 @@ pplc(
 	time_cnt = 0;			/* clear time count */
 
 	do {
-	    c = ENTER;
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list)) {
 		if (debug & 0300) {	/* osc or detailed info */
 		    display();		/* inputs and outputs */
-		    c = 0;
 		}
 	    }
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
@@ -267,133 +242,100 @@ pplc(
 	    }
 	}
 
-	if (c == ENTER) {
-	    display();				/* inputs and outputs */
-	}
+/********************************************************************
+ *
+ *	handle inputs
+ *
+ *******************************************************************/
 
-    TestInput:
-	while (!kbhit() && !flag1C);		/* check inputs */
-	cnt = 1;
-	if (flag1C) {				/* 1/D10 second timer */
-	    flag1C = 0;
-	    if ((gp = TX_[1]) != 0) {		/* 100 millisecond timer */
-		fprintf(outFP, " %s ", gp->gt_ids);
-		gp->gt_val = - gp->gt_val;	/* complement input */
-		link_ol(gp, o_list);
-		putc(gp->gt_val < 0 ? '1' : '0', outFP);
-		cnt = 0;			/* TX.1 changed */
-	    }
-	    if (--tcnt == 0) {
-		tcnt = D10;
-		if ((gp = TX_[2]) != 0) {	/* 1 second timer */
-		    fprintf(outFP, " %s ", gp->gt_ids);
+	for (cnt = 0; cnt == 0; ) {
+	    retval = wait_for_next_event(sockFN);	/* inputs or timer */
+
+	    if (retval == 0) {
+		timeoutCounter = timeoutValue;	/* will repeat if timeout with input */
+		/*
+		 *	TIMERS here every 100 milliseconds
+		 */
+		if ((gp = TX_[4]) != 0) {		/* 100 millisecond timer */
+		    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
 		    gp->gt_val = - gp->gt_val;	/* complement input */
 		    link_ol(gp, o_list);
-		    putc(gp->gt_val < 0 ? '1' : '0', outFP);
-		    cnt = 0;			/* TX.2 changed */
+		    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+		    cnt++;
 		}
-	    }
-	    if (cnt) {
-		goto TestInput;			/* neither TX.1 nor TX.2 */
-	    }
-	} else {
-	    while (cnt) {
-		if ((c = getch()) == 'q' || c == EOF) {
-		    quit(0);			/* quit normally */
-		}
-		if (c != ENTER) {
-		    putc(c, outFP);		/* echo */
-		}
-		if (c >= '0' && c < '0' + MAX_IO) {
-		    if ((gp = IX_[c - '0']) != 0) {
-			gp->gt_val = -gp->gt_val; /* complement input */
+		if (--tcnt == 0) {
+		    tcnt = D10;
+		    if ((gp = TX_[5]) != 0) {	/* 1 second timer */
+			if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+			gp->gt_val = - gp->gt_val;	/* complement input */
 			link_ol(gp, o_list);
-			if (debug & 0100) {
-			    putc(gp->gt_val < 0 ? '1' : '0', outFP);
-			}
-			cnt--;			/* apply input ? */
+			if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+			cnt++;
 		    }
-		} else if (c == '+') {
-		    cnt++;			/* 1 extra input */
-		} else if (c == '-') {
-		    if (--cnt <= 0) cnt = 1;	/* at least 1 more in */
-		} else if (c == 'b') {
-		    if ((gp = IB_[1]) != 0) {
-			goto wordIn;
-		    } else {
-			goto wordEr;		/* input not configured */
-		    }
-		} else if (c == 'w') {
-		    if ((gp = IW_[2]) != 0) {
-		    wordIn:
-			yp = ybuf;
-			if ((c = getch()) == '-') {
-			    putc(c, outFP);		/* echo */
-			    *yp++ = c;
-			    c = getch();
-			}
-			if (c == '0') {			/* oct or hex or 0 */
-			    putc(c, outFP);		/* echo */
-			    if ((c = getch()) == 'x' || c == 'X') {
-				putc(c, outFP);		/* echo */
-				format = "%x%s";	/* hexadecimal */
-			    } else {
-				format = "%o%s";	/* octal */
-				*yp++ = '0';		/* may be a single 0 */
-				ungetch(c);
+		}
+	    } else if (retval > 0) {
+		if (FD_ISSET(sockFN, &rdfds)) {
+		    char	rBuf[16];
+		    /*
+		     *	TCP/IP input
+		     */
+		    if (rcvd_msg_from_server(sockFN, rBuf, sizeof rBuf)) {
+			unsigned int	unit;
+			unsigned int	index;
+			int		val;
+
+			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, pplcNM);
+			if (sscanf(rBuf, "X%d,%d,%d", &unit, &index, &val) == 3) {
+			    if (unit < IXD && index < 8 && (gp = IX_[unit*8+index]) != NULL) {
+				val = val ? -1 : 1;
+				if (val != gp->gt_val) {
+				    gp->gt_val = val;		 /* changed input */
+				    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+				    link_ol(gp, o_list);
+				    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+				    cnt++;
+				}
+			    }
+			} else if (sscanf(rBuf, "B%d,%d", &unit, &val) == 2) {
+			    if (unit < IXD && (gp = IB_[unit]) != NULL) {
+				val &= 0xff;		/* limit to byte value */
+				goto wordIn;
+			    }
+			} else if (sscanf(rBuf, "W%d,%d", &unit, &val) == 2) {
+			    if (unit < IXD && (gp = IW_[unit]) != NULL) {
+			    wordIn:
+				if (val != gp->gt_new &&	/* first change or glitch */
+				((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
+				    /* arithmetic master action */
+				    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+				    link_ol(gp, a_list);	/* no ACTIONs */
+				    if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+				    cnt++;
+				}
 			    }
 			} else {
-			    format = "%d%s";		/* decimal */
-			    ungetch(c);
+			    fprintf(errFP, "ERROR: %s rcvd %s ???\n", rBuf, pplcNM);
 			}
-			while ((c = getch()) != EOF && yp < &ybuf[YSIZE-1] &&
-			    (isxdigit(c) || c == '\b')) {
-			    if (c == '\b') {
-				if (yp > ybuf) {
-				    fprintf(outFP, "\b \b");
-				    yp--;
-				} else {
-				    break;
-				}
-			    } else {
-				putc(c, outFP);		/* echo */
-				*yp++ = c;
-			    }
-			}
-			*yp = 0;		/* string terminator */
-			if (sscanf(ybuf, format, &val, ybuf) != 1) goto wordEr;
-			if (c != ENTER && c != EOF) ungetch(c);
-			putc(c, outFP);		/* echo */
-			if (gp == IB_[1]) {
-			    val &= 0xff;	/* reduce to byte */
-			}
-
-			if (val != gp->gt_new && /* first change or glitch */
-			((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
-			    /* arithmetic master action */
-			    link_ol(gp, a_list);	/* no ACTIONs */
-			}
-			cnt--;
 		    } else {
-		    wordEr:
-			putc('?', outFP);	/* input not configured */
-			c = ENTER;
-			cnt = 0;
+			close(sockFN);
+			fprintf(errFP, "\n%s disconnected by server\n", pplcNM);
+			quit(0);			/* quit normally */
 		    }
-		} else if (c == 'x') {
-		    aaflag = 0;			/* hexadecimal output */
-		    c = ENTER;
-		    cnt = 0;
-		} else if (c == 'd') {
-		    aaflag = 1;			/* decimal output */
-		    c = ENTER;
-		    cnt = 0;
-		} else if (c == ENTER) {
-		    cnt = 0;			/* terminate and scan */
+		} else if (FD_ISSET(0, &rdfds)) {	/* unlikely to have both */
+		    /*
+		     *	STDIN
+		     */
+		    if ((c = getch()) == 'q' || c == EOF) {
+			quit(0);			/* quit normally */
+		    }
+		    /* ignore the rest for now */
 		}
+	    } else {				/* retval -1 */
+		perror("ERROR: select failed");
+		quit(1);				/* ZZZ change number */
 	    }
 	}
-    }
+    } /* for ( ; ; ) */
 } /* pplc */
 
 /********************************************************************
@@ -415,8 +357,8 @@ display(void)
 	for (n = 0; n < 10; n++) {
 	    if ((gp = IX_[n]) != 0) fprintf(outFP, " I%d", n);
 	}
-	if (IB_[1] != 0) printf("  IB1");
-	if (IW_[2] != 0) printf("    IW2");
+	if (IB_[1] != 0) fprintf(outFP, "  IB1");
+	if (IW_[2] != 0) fprintf(outFP, "    IW2");
 	fprintf(outFP, "   ");
 	for (n = 0; n < MAX_IO; n++) {
 	    fprintf(outFP, " Q%d", n);
@@ -431,11 +373,11 @@ display(void)
     }
     /* display IB1 and IW2 if active */
     if (aaflag) {
-	if ((gp = IB_[1]) != 0) printf(" %4d", gp->gt_old & 0xff);
-	if ((gp = IW_[2]) != 0) printf(" %6d", gp->gt_old);
+	if ((gp = IB_[1]) != 0) fprintf(outFP, " %4d", gp->gt_old & 0xff);
+	if ((gp = IW_[2]) != 0) fprintf(outFP, " %6d", gp->gt_old);
     } else {
-	if ((gp = IB_[1]) != 0) printf("   %02x", gp->gt_old & 0xff);
-	if ((gp = IW_[2]) != 0) printf("   %04x", gp->gt_old);
+	if ((gp = IB_[1]) != 0) fprintf(outFP, "   %02x", gp->gt_old & 0xff);
+	if ((gp = IW_[2]) != 0) fprintf(outFP, "   %04x", gp->gt_old);
     }
     fprintf(outFP, "   ");
     data = *(unsigned short*)QX_;
@@ -463,13 +405,15 @@ display(void)
 
 void quit(int sig)
 {
-    if (debug & 03000) {
-    }
     fflush(outFP);
     if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
     fprintf(errFP, "\n");
     if (sig) {
 	fprintf(errFP, "Quit with sig = %d\n", sig);
+    }
+    if (errFP != stderr) {
+	fflush(errFP);
+	fclose(errFP);
     }
     exit(sig);			/* really quit */
 } /* quit */

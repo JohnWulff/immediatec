@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.2 1999/08/02 21:26:19 jw Exp $";
+"@(#)$Id: scan.c,v 1.3 1999/08/06 21:30:54 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -388,6 +388,7 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
     } else {
 	fprintf(outFP,
 	    "\nWarning:	gate %s has no output list", gp->gt_ids);
+	    error_flag = 2;		/* can execute with this warning */
     }
 } /* gate2 */
 
@@ -417,6 +418,7 @@ gate3(register Gate * gp, int typ)	/* Pass3 init on gates */
 	fprintf(outFP,
 	    "\nWarning:    %c	%s\thas no input connections",
 	    opt, gp->gt_ids);
+	    error_flag = 2;		/* can execute with this warning */
     } else {
 #ifndef _WINDOWS 
 	if (debug & 0100) {

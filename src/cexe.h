@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.5 1999/08/04 18:28:55 jw Exp $";
+"@(#)$Id: cexe.h,v 1.6 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  *	Routine to execute C code fragments in the PPLC system
@@ -24,6 +24,7 @@ V
 #line 25 "cexe.h"
     default:
 #ifndef _WINDOWS
+	fflush(outFP);
 	fprintf(errFP,
 	    "\n%s: line %d: F%d C function unknown\n",
 	    __FILE__, __LINE__, pp_index);
@@ -32,6 +33,7 @@ V
 	break;
     }
 #ifndef _WINDOWS
+    fflush(outFP);
     fprintf(errFP,
 	"\n%s: line %d: Function fragment without return ???\n",
 	__FILE__, __LINE__);

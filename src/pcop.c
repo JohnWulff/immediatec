@@ -1,5 +1,5 @@
 static const char pcop_c[] =
-"@(#)$Id: pcop.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: pcop.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -18,8 +18,8 @@ static const char pcop_c[] =
 #include <dos.h>
 #include <signal.h>
 
-#define P_8086		// für Include-Dateien notwendig
-#define C_TURBO_C	// Syntax für stdtypes.h, s.S. 4-45 Handbuch
+#define P_8086		/* für Include-Dateien notwendig */
+#define C_TURBO_C	/* Syntax für stdtypes.h, s.S. 4-45 Handbuch */
 
 #include <ibs_dos.h>
 #include <ddi_lib.h>
@@ -142,8 +142,11 @@ pplc(
 #endif
     }
     if (error_flag) {
-	fprintf(outFP, "\n*** Fatal Error ***\n");
-	return;
+	if (error_flag == 1) {
+	    fprintf(outFP, "\n*** Fatal Errors ***\n");
+	    return;
+	}
+	fprintf(outFP, "\n*** Warnings ***\n");
     }
 
     if (debug & 0100) fprintf(outFP, "\nPass 5:");
