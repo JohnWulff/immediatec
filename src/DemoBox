@@ -14,6 +14,17 @@ use strict;
 
 my @inputs;
 my @outputs;
+my $outByte;
+
+#              mask index
+my %indices = (	1   => 0,
+		2   => 1,
+		4   => 2,
+		8   => 3,
+		16  => 4,
+		32  => 5,
+		64  => 6,
+		128 => 7,);
 
 ########################################################################
 #
@@ -31,7 +42,7 @@ Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	-t	trace debug messages
 	-d	extra receive debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.20 2001/01/18 13:35:46 jw Exp $
+$Id: DemoBox,v 1.21 2001/01/20 11:00:37 jw Exp $
 .
 
 use vars qw($opt_t $opt_d $opt_s $opt_p $opt_h);
@@ -70,17 +81,9 @@ $mainWindow->Label(-text => "iC Demo Box")->pack;
 
 $mainWindow->Button(-text    => "Exit",
 		    -command => sub {
-					if ($unitID =~ /^X/) {
-					    my ($index);
-					    for ($index = 0; $index < 8; $index++) {
-						if ($inputs[$index]) {
-						    $conn->send_now("$index,0");
-						}
-					    }
-					} elsif ($unitID =~ /^[BW]/) {
-					    if (length $inputs[0] and $inputs[0]) {
-						$conn->send_now("0");
-					    }
+					if ($unitID =~ /^[BWX]/ and
+					    length $inputs[0] and $inputs[0]) {
+					    $conn->send_now("0");
 					}
 					exit;
 				    },
@@ -233,7 +236,7 @@ MainLoop;
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
-	my ($index, $value);
+	my ($index, $mask, $value);
         my $len = length ($msg);
 # print "($len)$msg\n";
 	if ($len == 0) {
@@ -249,10 +252,30 @@ sub rcvd_msg_from_server {
 			$conn->send_now("$index,$inputs[$index]");
 		    }
 		}
+	    } elsif ($msg =~ /^\d+$/) {
+		$mask = $outByte ^ $msg;
+		printf("%02x %02x\n", $msg, $mask) if $opt_d;
+		if ($mask) {
+		    $index = $indices{$mask};
+		    if (defined $index) {
+			$value = ($msg & $mask) ? 1 : 0;
+			print "$index $value <-- $outputs[$index]\n" if $opt_d;
+			$outputs[$index] = $value;
+		    } else {
+			# multiple change of input - should be rare
+			my $m;
+			for ($index = 0, $m = 1; $index < 8; $index++, $m <<= 1) {
+			    if ($mask & $m) {
+				$value = ($msg & $m) ? 1 : 0;
+				print "$index $value <-- $outputs[$index]\n" if $opt_d;
+				$outputs[$index] = $value;
+			    }
+			}
+		    }
+		    $outByte = $msg;
+		}
 	    } else {
-		($index, $value) = split /,/, $msg;
-		print "$index $value $outputs[$index]\n" if $opt_d;
-		$outputs[$index] = $value;
+		print "$unitID received spurious message: '$msg'\n";
 	    }
 	} elsif ($unitID =~ /^[BW]/) {
 	    if ($msg eq "R") {
