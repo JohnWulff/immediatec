@@ -22,10 +22,13 @@
 #   it is a neat feature, which is easy to maintain.
 #
 #   Author: John E. Wulff
-#   V1.1: 02.01.01 Written in the car between Siegen and Eisingen
-#   V1.4: 11.01.01 Major rewrite to handle new algorithm
-#   V1.7: 14.08.02 Change in header line
-#   V1.9: 12.12.03 Change IX0_0 etc to IX0.0 and _1 to 1 in C CODE
+#   V1.1:  02.01.01 Written in the car between Siegen and Eisingen
+#   V1.4:  11.01.01 Major rewrite to handle new algorithm
+#   V1.7:  14.08.02 Change in header line
+#   V1.9:  12.12.03 Change IX0_0 etc to IX0.0 and _1 to 1 in C CODE
+#   V1.10: 07.01.04 Be more precise - do not change QX0_0t to  QX0.0t
+#		    Allow Alias of numbers (NCONST =)
+#		    Change Alias in C CODE listing line
 #
 #################################################################
 
@@ -38,10 +41,11 @@ Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
 	called from icc or ict compiler to adjust listing output
-$Id: pplstfix,v 1.9 2003/12/12 16:34:04 jw Exp $
+$Id: pplstfix,v 1.10 2004/01/22 22:51:17 jw Exp $
 .
 
 use vars qw($opt_h);
+# print STDERR "pplstfix: $named @ARGV\n";
 require "getopts.pl";
 &Getopts('h');			# sets $opt_h if -h etc
 
@@ -73,7 +77,7 @@ while ($ARGV = shift @ARGV) {
 
 sub processFile {
     my ($line, $alias, $xlate, $type, $ftype, $inver, %symbols);
-    my ($empty, $removed, $count, $ar, $word, $pos, @array);
+    my ($empty, $removed, $count, $ar, $word, $pos, @array, $cFlag);
     %symbols = ();
 
     # Pass 1: scan file for ALIAS definitions
@@ -85,7 +89,9 @@ sub processFile {
     }
 
     while (<IN>) {
-	if (/^([A-Za-z_][\w.]*)\t([_@])  ([ A-Z])\t([ ~])([A-Za-z_][\w.]*).$/) {
+	# allow alias of numbers (change jw 040112)
+	# type '_' no longer exists - could be cleaned up
+	if (/^([A-Za-z_][\w.\$]*)\t([_@])  ([ A-Z])\t([ ~])(\w[\w.\$]*).$/) {
 	    # NET TOPOLOGY line found eg:QB0_0	_  A	~QB0_1*
 	    $line  = $.;
 	    $alias = $1;
@@ -118,10 +124,13 @@ sub processFile {
 	    next line;
 	}
 	if (/^[\d*]/) {					# 001 listing line
-	    s/\b([IQT]X\d+)_/$1./g;
+	    s/\b([IQT]X\d+)_(\d+(_\d+)?)\b/$1.$2/g;
 	    s/\b_(\d+)\b/$1/g;
+	    goto cCode if $cFlag;
+	    $cFlag = 1 if /C CODE/;			# change ALIAS's in C CODE listing lines
 	} else {
-	    while (/([A-Za-z_][\w.]*)/g) {		# non listing line
+	  cCode:
+	    while (/([A-Za-z_][\w.\$]*)/g) {		# non listing line or C CODE
 		if (defined($symbols{$1})) {
 		    push @array, $1, length $`;		# $word and $pos
 		}
