@@ -1,5 +1,5 @@
 static const char ibsd.c[] =
-"@(#)$Id: ibsd.c,v 1.4 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: ibsd.c,v 1.5 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -516,10 +516,10 @@ scanLiveCmd(void)		/* generate live data */
 	unsigned char	data = 0;
 
 	if ((cmd = *lcp++) != 0) {
-	    register Gate **	ip = opp;
-	    register Gate *	gp;
-	    int			mask = 1;
-	    int			inversion;
+	    Gate **	ip = opp;
+	    Gate *	gp;
+	    int		mask = 1;
+	    int		inversion;
 
 	    do {			/* assert cmd != 0 */
 		if (cmd & 1) {

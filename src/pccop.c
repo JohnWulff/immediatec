@@ -1,5 +1,5 @@
 static const char pccop_c[] =
-"@(#)$Id: pccop.c,v 1.3 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: pccop.c,v 1.4 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -255,8 +255,8 @@ recvMsg(void)
 unsigned short
 getSymbolTable(void)
 {
-    register char *	mp;
-    register char *	cp;
+    char *		mp;
+    char *		cp;
     unsigned short	sTlength;
     sT *		sTp;
     int			ln;

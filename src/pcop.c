@@ -1,5 +1,5 @@
 static const char pcop_c[] =
-"@(#)$Id: pcop.c,v 1.4 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: pcop.c,v 1.5 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -41,7 +41,7 @@ static const char pcop_c[] =
 #define INTERRUPT	interrupt
 #endif
 
-Functp	*i_lists[] = { I_LISTS };
+Functp *	i_lists[] = { I_LISTS };
 
 #define INTR 0x0f				/* nummer des interrupts */
 #define CM 20
@@ -103,7 +103,7 @@ pplc(
 #else
     unsigned	cnt;
     unsigned *	gcp;
-    Functp * *	ilp;
+    Functp **	ilp;
 #endif
     Gate *	gp;
     Functp	init_fa;
@@ -191,7 +191,7 @@ pplc(
  *******************************************************************/
 
     for ( ; ; ) {
-	register char *	cp;
+	char *	cp;
 	unsigned long	l;
 	int		c;
 	int		af;
@@ -278,14 +278,14 @@ quit(int sig)
 void
 scanIn(void)
 {
-    register Gate *	gp;
-    unsigned char*	DIp;
-    unsigned char*	DOp;
-    unsigned char*	idp;
-    unsigned char*	odp;
-    unsigned char*	pdp;
-    unsigned short*	sdp;
-    unsigned short*	cdp;
+    Gate *	gp;
+    unsigned char *	DIp;
+    unsigned char *	DOp;
+    unsigned char *	idp;
+    unsigned char *	odp;
+    unsigned char *	pdp;
+    unsigned short *	sdp;
+    unsigned short *	cdp;
     Gate **		igp;
     Gate **		iBp;
     Gate **		iWp;
@@ -354,7 +354,7 @@ scanIn(void)
 	slotMask = *sdp++ & *cdp++;	/* only configured input slots */
 	while (slotMask != 0) {
 	    if (slotMask & 0x0001) {	/* ignore if no change in slot */
-		register Gate ** ip = isp;
+		Gate ** ip = isp;
 		pData = (iData = *idp++) ^ *pdp;
 		*pdp++ = iData;		/* ready for next scan */
 		/* cdata COULD weed out slots not programmed initially */
@@ -464,7 +464,7 @@ scanIn(void)
 void INTERRUPT
 isrtimer(void)
 {
-    register Gate *	gp;
+    Gate *	gp;
 
 #ifdef LOAD
     time_cnt++;				/* count time in ms */
