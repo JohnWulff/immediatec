@@ -45,7 +45,7 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.16 2004/02/02 10:18:27 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.17 2004/02/21 17:29:11 jw Exp $' >&2
 }
 
 makeIcr ()
@@ -170,7 +170,7 @@ if [ $ALL = 1 ] || [ $C = 1 ]; then
     make OPT="$c$d$s$z" CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
     rm -f /tmp/cexe.c
     test -f cexe.c && mv cexe.c /tmp			# current cexe.c for comparison
-    ./icc -c < /dev/null
+    ./icc -c -d20000 < /dev/null
     if cmp -s cexe.c /tmp/cexe.c; then
 	mv /tmp/cexe.c .				# restore version with old date
     else

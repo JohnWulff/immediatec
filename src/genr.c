@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.56 2004/02/02 07:56:27 jw Exp $";
+"@(#)$Id: genr.c,v 1.57 2004/02/21 17:29:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -39,8 +39,11 @@ static short	ttn;			/* for generating temp f object name */
 #if YYDEBUG
 static short	tn;
 #endif
-char		eBuf[EBSIZE];		/* temporary expression text buffer */
+static char	eBuf[EBSIZE];		/* temporary expression text buffer */
+static char	One[] = "1";		/* name for constant 1 Symbol */
 static Symbol *	iCallHead = 0;		/* function head seen at start of imm call */
+static Symbol *	varList = 0;		/* list of temp Symbols while compiling function */
+static List_e *	stmtList = 0;		/* list of statement Symbols making function body */
 
 /********************************************************************
  *
@@ -164,6 +167,7 @@ op_push(			/* reduce List_e stack to links */
     Symbol *		lsp;
     Symbol *		tsp;
     List_e *		lp;
+    List_e *		tlp;
     int			typ;
 #if YYDEBUG
     char 		temp[TSIZE];
@@ -180,6 +184,26 @@ op_push(			/* reduce List_e stack to links */
 	warning("function types incompatible", NS);
     }
     if (sp->u_blist == 0 || op != typ) {
+#ifdef FEEDBACK
+	if ((lp = sp->elist) != 0 && (sp->name == 0
+#else	/* FEEDBACK */
+	if ((lp = sp->list) != 0 && (sp->name == 0
+#endif	/* FEEDBACK */
+#if YYDEBUG
+						    || *(sp->name) == '$'
+#endif
+	)) {					/* not marked symbol */
+#ifdef FEEDBACK
+	    sp->elist = 0;			/* clear the feedback list */
+#else	/* FEEDBACK */
+	    sp->list = 0;			/* clear the feedback list */
+#endif	/* FEEDBACK */
+	    while (lp) {			/* list with feedback to this Symbol */
+		tlp = lp->le_next;		/* next link to a feedback Symbol */
+		sy_pop(lp);			/* delete a feedback list link */
+		lp = tlp;
+	    }
+	}
 	/* right not a $ symbol or new operator - force new level */
 	sp = (Symbol *) emalloc(sizeof(Symbol));
 	sp->name = NS;		/* no name at present */
@@ -207,6 +231,26 @@ op_push(			/* reduce List_e stack to links */
 	    sp->ftype |= lsp->ftype;	/* modify S_FF ==> D_FF */
 	}
 	if ((typ = lsp->type & TM) < MAX_LS) {
+#ifdef FEEDBACK
+	    if ((lp = lsp->elist) != 0 && (lsp->name == 0
+#else	/* FEEDBACK */
+	    if ((lp = lsp->list) != 0 && (lsp->name == 0
+#endif	/* FEEDBACK */
+#if YYDEBUG
+							|| *(lsp->name) == '$'
+#endif
+	    )) {				/* not marked symbol */
+#ifdef FEEDBACK
+		lsp->elist = 0;			/* clear the feedback list */
+#else	/* FEEDBACK */
+		lsp->list = 0;			/* clear the feedback list */
+#endif	/* FEEDBACK */
+		while (lp) {			/* list with feedback to this Symbol */
+		    tlp = lp->le_next;		/* next link to a feedback Symbol */
+		    sy_pop(lp);			/* delete a feedback list link */
+		    lp = tlp;
+		}
+	    }
 	    if ((lp = lsp->u_blist) == 0 ||	/* left not a $ symbol */
 		sp == lsp ||			/* or right == left */
 		(typ != op &&			/* or new operator */
@@ -306,7 +350,7 @@ const_push(Lis * expr)
     }
     snprintf(buf, TSIZE, "%ld", value);
     if ((symp = lookup(buf)) == 0) {	/* install name of decimal conversion */
-	symp = install(buf, NCONST, ARITH); /* becomes NVAR */
+	symp = install(buf, NCONST, ARITH);
     }
     expr->v = sy_push(symp);
     return 0;				/* correct - no error */
@@ -402,6 +446,9 @@ op_not(List_e * right)		/* logical negation */
 	    right->le_val ^= NOT;	/* negate logical value */
 	    				/* forces creation of alias */
 	    break;			/* if assigned immediately */
+	case ALIAS:			/* unresolved alias from negated function */
+	    lp->le_val ^= NOT;		/* negate via alias */
+	    break;
 	case INPW:
 	case INPX:
 	    execerror("INPUT has other inputs in op_not() ???", sp->name, __FILE__, __LINE__);
@@ -440,12 +487,12 @@ op_asgn(				/* asign List_e stack to links */
     short	atn;
     short	sflag;
     Symbol *	sr;
-    char *	t_last = 0;
     char *	t_first = 0;
+    char *	t_last = 0;
     int		typ;
     char	temp[TSIZE];
 
-    varList = 0;			/* start of a new function expression */
+    assert(varList == 0);		/* checks that collectStatement has been executed */
     right = op_force(rl->v, ft);	/* force Symbol on right to ftype ft */
     if (sv == 0) {
 	/* null var - generate a temporary Symbol of type UNDEF */
@@ -457,6 +504,11 @@ op_asgn(				/* asign List_e stack to links */
     } else {
 	var = sv->v;			/* Symbol * var */
 	sflag = 1;			/* print output name */
+    }
+    assert(var->name);
+    if (iFunSymExt && strncmp(var->name, iFunBuffer, iFunSymExt - iFunBuffer) != 0) {
+	ierror("assignment to a variable which does not belong to this function:", var->name);
+	var->type = ERR;		/* reduce anyway to clear list */
     }
 #if YYDEBUG
     if ((debug & 0402) == 0402) {
@@ -524,13 +576,9 @@ op_asgn(				/* asign List_e stack to links */
 	}
 	if (sv == 0) {
 	    execerror("ALIAS points to temp ???", var->name, __FILE__, __LINE__);
-	} else
-if (iCallHead == 0)
-	{
-	    t_first = sv->f; t_last = sv->l;	/* full text of var */
-	    while (t_first && t_first < t_last) {
-		*t_first++ = '#';		/* mark left var, leave ALIAS */
-	    }
+	} else if ((t_first = sv->f) != 0) {
+	    assert(t_first >= iCbuf && sv->l < &iCbuf[IMMBUFSIZE]);
+	    memset(t_first, '#', sv->l - t_first);	/* mark left var, leave ALIAS */
 	}
 	return (var);			/* needs no reduction */
     }
@@ -551,6 +599,61 @@ if (iCallHead == 0)
     if (((typ = rsp->type & TM) == CLK || typ == TIM) && var->ftype != rsp->ftype) {
 	warning("clock or timer assignment from wrong ftype:", var->name);
     }
+#ifdef FEEDBACK
+    if ((lp = rsp->elist) != 0 && (rsp->name == 0
+#else	/* FEEDBACK */
+    if ((lp = rsp->list) != 0 && (rsp->name == 0
+#endif	/* FEEDBACK */
+#if YYDEBUG
+						|| *(rsp->name) == '$'
+#endif
+    )) {				/* not marked symbol */
+#ifdef FEEDBACK
+	rsp->elist = 0;			/* clear the feedback list */
+#else	/* FEEDBACK */
+	rsp->list = 0;			/* clear the feedback list */
+#endif	/* FEEDBACK */
+	while (lp) {			/* list of Symbols with feedback to this Symbol */
+	    sp = lp->le_sym;		/* points to Symbol with feedback */
+	    tlp = sp->u_blist;		/* input list */
+	    atn = 0;
+	    while (tlp) {
+		sr = tlp->le_sym;	/* input Symbol */
+		if (sr == rsp) {
+		    tlp->le_sym = var;	/* change feedback to var - watch negation */
+		    atn++;		/* must have 1 feedback */
+#if YYDEBUG
+		    if ((debug & 0402) == 0402) {
+			fprintf(outFP, "*** feedback at %s from %s to %s\n",
+			    sr->name ? sr->name : "(null)",
+			    sp->name ? sp->name : "(null)",
+			    var->name ? var->name : "(null)");
+			fflush(outFP);
+		    }
+#endif
+		}
+		tlp = tlp->le_next;	/* next input link */
+	    }
+	    assert(atn);		/* checks there is a feedback */
+	    tlp = lp->le_next;		/* next link to a feedback Symbol */
+	    sy_pop(lp);			/* delete a feedback list link */
+	    lp = tlp;
+	}
+    }
+#ifndef FEEDBACK
+    for (sp = templist; sp; sp = sp->next) {
+	if ((lp = sp->list) != 0) {
+	    warning("temporary has output before assignment", sp->name);
+	    while (lp) {		/* list with feedback to this Symbol */
+		sr = lp->le_sym;
+		assert(sr);
+		fprintf(outFP, "*** feedback link to: %s\n", sr->name ? sr->name : "(null)");
+		fflush(outFP);
+		lp = lp->le_next;	/* next link to a feedback Symbol */
+	    }
+	}
+    }
+#endif	/* FEEDBACK */
 
     sr = rsp->u_blist->le_sym;		/* gate linked to var */
     if (right->le_val == (NOT^NOT)) {
@@ -566,16 +669,21 @@ if (iCallHead == 0)
     atn = 0;
     sp = var;				/* start reduction with var */
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
+    assert((t_first == 0 || t_first >= iCbuf) && t_last < &iCbuf[IMMBUFSIZE]);
 #if YYDEBUG
-    if (
-iCallHead == 0 &&
-	(debug & 0402) == 0402) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
+    if ((debug & 0402) == 0402) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
 #endif
     do {				/* marked symbol */
+	List_e*	saveBlist;
 	int	gt_input;
 	char *	ep = eBuf;		/* temporary expression buffer */
 	char *	en = &eBuf[EBSIZE];	/* end of temporary expression buffer */
-	List_e*	saveBlist;
+	char *	cp;
+#if YYDEBUG
+	if ((debug & 0402) == 0402) {
+	    memset(eBuf, '\0', EBSIZE);
+	}
+#endif
 	if (debug & 04) {
 	    fprintf(outFP, "\n");
 	}
@@ -586,45 +694,61 @@ iCallHead == 0 &&
 	    if ((gp = lp->le_sym) == rsp && var->type != ALIAS) {
 		gp = var;		/* link points to right */
 	    }
-	    if (iFunSymExt == 0) {			/* global reduction only */
-		while (gp->type == ALIAS) {		/* not for var ALIAS */
-		    lp->le_val ^= gp->list->le_val;	/* negate if necessary */
-		    gp = gp->list->le_sym;		/* point to original */
+	    while (gp->type == ALIAS) {		/* not for var ALIAS */
+		if ((tlp = gp->list) == 0 && (tlp = gp->u_blist) == 0) {
+		    assert(0);			/* ALIAS without left or right link */
 		}
-		if (sp == gp && sp->ftype >= MIN_ACT) {
-		    if (sp->type == LATCH && sp->ftype == D_FF) {
-			gp = sp->list->le_sym;	/* feedback via D output */
-		    } else if (gt_input) {
-			warning("input equals output at function gate:", sp->name);
-		    } else {
-			/****************************************************
-			 * no logical inputs yet: can split function and logic
-			 *
-			 *	O1 = CLOCK(L(I1, I2));
-			 *			clock	: ---%	O1_1	C ---:	O1
-			 *	O1_2	  ---%	O1_2	  ---|	O1_1
-			 *	I1	  ---%	O1_2
-			 *	I2	~ ---%	O1_2	<--- new gp
-			 ***************************************************/
-			gp = (Symbol *) emalloc(sizeof(Symbol));
-			gp->name = NS;			/* no name at present */
-    #if YYDEBUG
-			if ((debug & 0402) == 0402) {	/* DEBUG name */
-			    snprintf(temp, TSIZE, "$%d", ++tn);
-			    gp->name = emalloc(strlen(temp)+1);
-			    strcpy(gp->name, temp);
-			}
-    #endif
-			gp->type = sp->type;
-			gp->ftype = GATE;
-			sp->type = OR;			/* OR default for 1 input */
-			gp->next = templist;		/* put at front of list */
-			templist = gp;
-			gp->u_blist = tlp = sy_push(gp);/* link self */
-			tlp->le_next = sp->u_blist;	/* rest of inputs on sp */
-			sp->u_blist = 0;
+		lp->le_val ^= tlp->le_val;	/* negate if necessary */
+		gp = tlp->le_sym;		/* point to original */
+	    }
+	    if (iFunSymExt && (debug & 020000) &&
+		gp->type == LATCH && gp->ftype == D_FF && gp->list == 0) {
+		gp->list = sy_push(sp);		/* extra link for feedback */
+	    }
+	    if (sp == gp && sp->ftype >= MIN_ACT) {
+		if (sp->type == LATCH && sp->ftype == D_FF) {
+		    assert(sp->list);
+		    gp = sp->list->le_sym;	/* feedback via D output */
+		    if (iFunSymExt) {
+			sy_pop(sp->list);	/* delete extra link for feedback */
+			sp->list = 0;		/* restore feedback head */
+		    }
+		} else if (gt_input || sp->type != LATCH) {
+		    warning("input equals output at function gate:", sp->name);
+		} else {
+		    /****************************************************
+		     * no logical inputs yet: can split function and logic
+		     *
+		     *	O1 = CLOCK(L(I1, I2));
+		     *			clock	: ---%	O1_1	C ---:	O1
+		     *	O1_2	  ---%	O1_2	  ---|	O1_1
+		     *	I1	  ---%	O1_2
+		     *	I2	~ ---%	O1_2	<--- new gp
+		     ***************************************************/
+		    gp = (Symbol *) emalloc(sizeof(Symbol));
+		    gp->name = NS;			/* no name at present */
+#if YYDEBUG
+		    if ((debug & 0402) == 0402) {	/* DEBUG name */
+			snprintf(temp, TSIZE, "$%d", ++tn);
+			gp->name = emalloc(strlen(temp)+1);
+			strcpy(gp->name, temp);
+		    }
+#endif
+		    gp->type = sp->type;
+		    gp->ftype = GATE;
+		    sp->type = OR;			/* OR default for 1 input */
+		    gp->next = templist;		/* put at front of list */
+		    templist = gp;
+		    gp->u_blist = tlp = sy_push(gp);	/* link self */
+		    tlp->le_next = sp->u_blist;		/* rest of inputs on sp */
+		    sp->u_blist = 0;			/* this link scan now complete */
+		    if (iFunSymExt) {
+			lp->le_sym = gp;
+			lp->le_next = 0;
 		    }
 		}
+	    }
+	    if (iFunSymExt == 0) {			/* global reduction only */
 		if (sp->type == ALIAS) {
 		    /* var was made an ALIAS because of FF negation */
 		    gp->list = tlp = sp->list;		/* start of left list */
@@ -645,7 +769,7 @@ iCallHead == 0 &&
 			gp->list = lp;			/* this is the first Symbol */
 		    } else {
 			/* loop to find duplicate link (possibly inverted) */
-		      loop:				/* special loop with test in middle */
+		      loop:					/* special loop with test in middle */
 			if (tlp->le_sym == sp) {
 			    if (gp->ftype == OUTW || gp->ftype == OUTX) {
 				warning("input equals output at output gate:", gp->name);
@@ -663,11 +787,11 @@ iCallHead == 0 &&
 			tlp->le_next = lp;		/* put new Symbol after last */
 		    }
 		    lp->le_sym = sp;			/* completely symmetrical */
-		    if ((gp->type & TM) < MAX_LV) {
-			gt_input++;			/* count the gate inputs */
-		    }
 		}
 	    }						/* end of global reduction only */
+	    if ((gp->type & TM) < MAX_LV) {
+		gt_input++;				/* count the gate inputs */
+	    }
 	    if (! gp->name
 #if YYDEBUG
 		|| *(gp->name) == '$'
@@ -727,6 +851,17 @@ iCallHead == 0 &&
 		int	bit;
 		char	tail[8];			/* compiler generated suffix _123456 max */
 
+		cp = ep;
+		if (t_first) {				/* end of arith */
+		    assert(t_first >= iCbuf && lp->le_first < &iCbuf[IMMBUFSIZE]);
+		    while (t_first < lp->le_first) {
+			if (*t_first != '#') {		/* transmogrified '=' */
+			    *ep++ = *t_first;
+			}
+			t_first++;
+		    }
+		}
+		*ep = 0;
 		if (debug & 04) {
 		    /* only logic gate or SH can be aux expression */
 		    if (sflag) {
@@ -737,22 +872,12 @@ iCallHead == 0 &&
 		    } else {
 			fprintf(outFP, "\t\t\t");
 		    }
+		    fprintf(outFP, "%s%s", cp, gp->name);/* expression till now */
 		}
-if (iCallHead == 0) {
-		while (t_first && t_first < lp->le_first) {	/* end of arith */
-		    if (*t_first != '#') {		/* transmogrified '=' */
-			if (debug & 04) putc(*t_first, outFP);
-			*ep++ = *t_first;
-		    }
-		    t_first++;
-		}
-		if (debug & 04) fprintf(outFP, "%s", gp->name);
 		/* modify numbers, IXx.x and QXx.x names for compiled output only */
-	    				/* CHECK if ep changes now _() is missing */
 		IEC1131(gp->name, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 		ep += snprintf(ep, en - ep, "%s", buffer);
 		t_first = lp->le_last;			/* skip logic expr's */
-}
 	    }
 	    if (debug & 04) {
 		fprintf(outFP, "\n");
@@ -763,18 +888,19 @@ if (iCallHead == 0) {
 	    }
 	}						/* end output scan for 1 gate */
 	if (iFunSymExt) sp->u_blist = saveBlist;
-	if (
-iCallHead == 0 &&
-	    (sp->type & TM) == ARN) {
-	    if (debug & 04) fprintf(outFP, "\t\t\t\t\t");
-	    while (t_first && t_first < t_last) {
-		if (*t_first != '#') {			/* transmogrified '=' */
-		    if (debug & 04) putc(*t_first, outFP);
-		    *ep++ = *t_first;
+	if ((sp->type & TM) == ARN) {
+	    cp = ep;
+	    if (t_first) {
+		assert(t_first >= iCbuf && t_last < &iCbuf[IMMBUFSIZE]);
+		while (t_first < t_last) {
+		    if (*t_first != '#') {		/* transmogrified '=' */
+			*ep++ = *t_first;
+		    }
+		    t_first++;
 		}
-		t_first++;
 	    }
 	    *ep++ = 0;
+	    if (debug & 04) fprintf(outFP, "\t\t\t\t\t%s", cp);
 							/* start case or function */
 	    if (sp->ftype != OUTW) {			/* output cexe function */
 		fprintf(T1FP, cexeString[outFlag], ++c_number);
@@ -811,13 +937,10 @@ iCallHead == 0 &&
 	    if (sp) {
 		if (iFunSymExt == 0) {
 		    (void) place_sym(sp);/* place sp in the symbol table (changes sp->next) */
-		    if (
-iCallHead == 0 &&
-			(sp->type & TM) == ARN) {
+		    if ((sp->type & TM) == ARN) {
 			assert(sp->list);
 			t_first = sp->list->le_first;
 			t_last = sp->list->le_last;
-			assert(t_first && t_last);
 		    }
 		} else {
 		    sp->next = varList;	/* put newly marked Symbol on function varList */
@@ -826,15 +949,13 @@ iCallHead == 0 &&
 	    }
 	}
     } while (sp);			/* 1 symbol resolved */
-
-    /*
+    /********************************************************************
      * right Symbol must remain intact until after reduction, because
      * there may be a reference to it which is tested in if(gp == rsp).
      * When rsp is freed before reduction, rsp may point to a newly
      * generated Symbol, which is not a reference to right Symbol.
      * Therefore free here.
-     */
-
+     *******************************************************************/
     if (right->le_val == (NOT^NOT)) {
 	sy_pop(right);			/* right Symbol and List_e */
 #if YYDEBUG
@@ -844,24 +965,18 @@ iCallHead == 0 &&
 #endif
 	free(rsp);			/* free right Symbol */
     }
-    if (debug & 04) {
-	fprintf(outFP, "\n");
-    }
-
-    /*
+    if (debug & 04) fprintf(outFP, "\n");
+    /********************************************************************
      * A Symbol is marked by storing a pointer value in ->name
      * which points to a string which does not start with $.
      * Only marked symbols are reduced.
      * Any remaining new Symbols on 'templist' must belong to an outer
      * assignment which will be reduced later.
-     */
-
-if (iCallHead == 0) {
-    t_first = rl->f; t_last = rl->l;	/* full text of expression */
-    while (t_first && t_first < t_last) {
-	*t_first++ = '#';		/* mark embedded assignments */
+     *******************************************************************/
+    if ((t_first = rl->f) != 0) {	/* full text of expression */
+	assert(t_first >= iCbuf && rl->l < &iCbuf[IMMBUFSIZE]);
+	memset(t_first, '#', rl->l - t_first);	/* mark embedded assignments */
     }
-}
     if (sv == 0) {
 	lp = sr->list;			/* link action to temp */
 	if (lp->le_sym != var || lp->le_next) {
@@ -880,8 +995,8 @@ if (iCallHead == 0) {
     }
     if (iFunSymExt) {
 	assert(var->list == 0);		/* function target is not linked into temp logic */
-	var->list = var->u_blist;
-	var->u_blist = 0;
+	var->list = var->u_blist;	/* save in ->list till end of function definition */
+	var->u_blist = 0;		/* must be cleared for op_push like normal op_asgn */
     }
     return (sv->v);
 } /* op_asgn */
@@ -1075,6 +1190,7 @@ bltin(
  *
  *	Combined code for assignment of an aexpr to an
  *	UNDEF LVAR AVAR LOUT or AOUT
+ *	also handles clock and timer for cloning
  *
  *******************************************************************/
 
@@ -1083,6 +1199,7 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 {
     Sym		sy;
     Lis		li;
+    Symbol *	rsp;
     int		ftyp;
     char	temp[TSIZE];
 
@@ -1101,25 +1218,514 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 	}
 	sv->v->type = ERR;			/* cannot execute properly */
     }
+    rsp = (debug & 020000) ? sv->v
+			   : op_asgn(sv, lv, ftyp);	/* new code before Output */
     if (ioTyp) {
-	snprintf(temp, TSIZE, "%s_0", sv->v->name);
+	snprintf(temp, TSIZE, "%s_0", rsp->name);
 	sy.v = install(temp, UDF, ioTyp);	/* generate output Gate OUTX or OUTW */
-	li.v = sy_push(sv->v);			/* provide a link to LOUT or AOUT */
+	li.v = sy_push(rsp);			/* provide a link to LOUT or AOUT */
 	if ((li.v = op_push(0, types[ftyp], li.v)) != 0) {
 	    li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
 	}
-	op_asgn(&sy, &li, ftyp);
+	op_asgn(&sy, &li, ftyp);		/* Output assignment */
     }
-    return op_asgn(sv, lv, ftyp);
+    if (debug & 020000) rsp =  op_asgn(sv, lv, ftyp);	/* old code after Output */
+    if (iFunSymExt) collectStatement(rsp);	/* update varList in definition stmtList */
+    return rsp;
 } /* assignExpression */
 
 /********************************************************************
  *
- *	Code for generating immediate function calls
+ *	Implicit delay of 1 tick for ctref : texpr ; without delay
+ *	(cexpr|texpr[,dexpr])
+ *
+ *******************************************************************/
+
+List_e *
+delayOne(List_e * tp)
+{
+    Symbol *	sp;				/* with implicit delay of 1 */
+    List_e *	lp;
+    if ((sp = lookup(One)) == 0) {
+	sp = install(One, NCONST, ARITH);
+    }
+    lp = sy_push(sp);
+    lp->le_val = (unsigned) -1;			/* mark link as timer value */
+    return op_push(tp, TIM, lp);
+} /* delayOne */
+
+/********************************************************************
+ ********************************************************************
+ *
+ * class DefineFunction
+ *
+ *	Code for generating the template for an immediate function.
+ *
+ * Algorithm:
+ *	The UNDEF function head Symbol for a function definition
+ *	called <fName> is marked with type IFUNCT which will return
+ *	YACC type VFUNCTION, IFUNCTION, CFUNCTION, or TFUNCTION from iClex
+ *	when the function name <fName> later appears as a function call in
+ *	subsequent code.
+ *
+ *	A void function VFUNCTION is returned if the ftype is UDFA. For
+ *	a value function IFUNCTION is returned for ftypes ARITH or GATE
+ *	and CFUNCTION or TFUNCTION for CKLCK or TIMRL respectively. For
+ *	a value function called "fun", a Symbol named "fun$" is installed
+ *	and made known via Sym iRetSymbol to the return statement.
+ *	A text buffer iFunBuffer holds the text "fun$" and a pointer
+ *	iFunSymExt is set to point just past the $ symbol.
+ *
+ *	When scanning the formal parameter list or when declaring immediate
+ *	variables in the body of a function (signalled by iFunSymExt
+ *	being set), the name of the item is concatenated to the "fun$"
+ *	string and a new undefined Symbol with this extended name is
+ *	installed in the Symbol Table. That puts the formal parameter
+ *	names and variables declared in a function in a private name space
+ *	for that function. Only the function name is global and may not
+ *	clash with any other global name.
+ *
+ *	The Symbols in the parameter list are linked to 'list' of the
+ *	function head Symbol. A linked statement list of declarations and
+ *	assignments are linked to 'blist' of the function head Symbol.
+ *	These are the possible return Symbol, any assignable parameters
+ *	and variables declared inside the function. When the function
+ *	definition has been completely compiled, both lists are checked to
+ *	see if they contain any undefined Symbols. If this is the case, an
+ *	assignment is missing in the function.
+ *
+ *	Each assignment head has an expression net linked to it, which will
+ *	link back to value parameters (or assignment parameters or even the
+ *	return Symbol used as values) or function internal or global immediate
+ *	variables. The expression net is unresolved at this stage.
+ *
+ *	Any global variables (even ones finally declared and assigned in the
+ *	same file), which are to be used as values in the expressions of a
+ *	function, must be declared extern in the function. This means that
+ *	in a function, any variable must be declared before it is used. The
+ *	possible options are:
+ *	1)  imm <type> functionName(<parameter list>) for value functions
+ *	    the name of the function return object in expressions is "this".
+ *	2a) assign <type> <name> for an assign parameter or
+ *	2b) <type> <name> for a value parameter, both in the comma seperated
+ *	    parameter list.
+ *	3)  imm <type> <name> in the body of the function declares a function
+ *	    internal variable which will be cloned with different names in
+ *	    different instances, when the function is called.
+ *	4)  extern <type> <name> means that name will be assigned outside the
+ *	    function. Such a global variable may not be declared or assigned
+ *	    before its declaration in the function. After the function definition
+ *	    it must be declared in the source in which it will be assigned.
+ *	The upshot is, that any variable used in a function must be declared
+ *	before it is used in a function. This was found to be more important
+ *	for functions, where bugs can easily creep in when one assumes a
+ *	certain variable is function internal, but was not declared as such
+ *	and it is then accidentally compiled as global. This would not become
+ *	evident until the function is used. It also makes the use of global
+ *	variables in a function a little bit more onerous, which it should be,
+ *	since their use can cause loss of a broad overview. By having the extern
+ *	declaration, at least one knows which names are used for what in each
+ *	function. Breaking this rule will cause a warning - not an error.
+ *
+ ********************************************************************
+ *******************************************************************/
+
+/********************************************************************
+ *
+ *	Set up the function definition head Symbol before any parameters
+ *	have been parsed.
+ *
+ *	iFunBuffef contains the function head name for the whole of the
+ *		   definition.
+ *	iFunSymExt points past the $ in the name and is the place where
+ *		   local name extensions can temprarily be written.
+ *		   It also flags, that a function is being defined.
+ *
+ *	For a value function also set up the return Symbol
+ *
+ *******************************************************************/
+
+Symbol *
+functionHead(unsigned int typeVal, Symbol * funTrigger, int retFlag)
+{
+    unsigned char	typ;
+    unsigned char	ftyp = typeVal & 0xff;	/* UDFA GATE ARITH CLCKL TIMRL */
+
+    funTrigger->type = IFUNCT;			/* function head */
+    funTrigger->ftype = ftyp;			/* void bit int clock timer */
+    iFunSymExt = strncpy(iFunBuffer, funTrigger->name, IBUFSIZE);
+    iFunSymExt += strlen(iFunBuffer);		/* point past text */
+    if (iFunEnd - iFunSymExt < 32) {
+	execerror("iFunBuffer for function symbol too small", funTrigger->name, __FILE__, __LINE__);
+    }
+    *iFunSymExt++ = '$';			/* append '$' */
+    if (retFlag) {
+	if ((iRetSymbol.v = lookup(iFunBuffer)) == 0) {
+	    iRetSymbol.v = install(iFunBuffer, UDF, ftyp);	/* return Symbol */
+	}
+#if YYDEBUG
+	if ((debug & 0402) == 0402) {
+	    fprintf(outFP, "iFunHead: imm %s %s\n",
+		full_ftype[ftyp], iRetSymbol.v->name);
+	    fflush(outFP);
+	}
+#endif
+    } else {
+	iRetSymbol.v = 0;			/* void function has no return Symbol */
+#if YYDEBUG
+	if ((debug & 0402) == 0402) {
+	    fprintf(outFP, "vFunHead: imm %s %s\n", full_ftype[ftyp], funTrigger->name);
+	    fflush(outFP);
+	}
+#endif
+    }
+    assert(stmtList == 0);			/* function definitions cannot nest */
+    return funTrigger;
+} /* functionHead */
+
+/********************************************************************
+ *
+ *	Collect statements in the function body
+ *
+ *	this function is also called for cloned statements from a
+ *	nested function call
+ *
+ *******************************************************************/
+
+List_e *
+collectStatement(Symbol * funcStatement)
+{
+    List_e *		slp;			/* link for statement Symbol */
+    List_e *		vlp;			/* link for varList */
+    Symbol *		sp;
+    unsigned char	typ;
+
+    if ((sp = funcStatement) != 0) {		/* miss a void function call */
+	if ((typ = sp->type) <= MAX_OP) {
+#if YYDEBUG
+	    if ((debug & 0402) == 0402) {
+		fprintf(outFP, "collectStatement: %s type: %s, ftype: %s\n",
+		    sp->name, full_type[typ&TM], full_ftype[sp->ftype]);
+		fflush(outFP);
+	    }
+#endif
+	    if (stmtList == 0) {		/* list reset for each new function */
+		stmtList = slp = sy_push(sp);	/* first link in statement list */
+		slp->le_next = sy_push(varList);
+	    } else {
+		slp = stmtList;
+		vlp = slp->le_next;
+		while (slp->le_sym != sp && vlp->le_next) {
+		    slp = vlp->le_next;
+		    vlp = slp->le_next;
+		    assert(vlp);
+		}
+		if (slp->le_sym != sp) {	/* new statement Symbol ? */
+		    vlp->le_next = slp = sy_push(sp);	/* yes */
+		    slp->le_next = sy_push(varList); /* link to end of list */
+		} else if (varList) {
+		    vlp->le_sym = varList;	/* not set in declaration */
+		}
+	    }
+	} else if ((typ & EM) == 0 && typ != ERR) {	/* ignore extern */
+	    fprintf(outFP, "type: %s, ftype: %s\n",
+		full_type[typ&TM], full_ftype[sp->ftype]);
+	    ierror("function statement is not int, bit, clock or timer:", sp->name);
+	    sp->type = (sp->type & FM) | ERR;
+	}
+	varList = 0;				/* ready for next function assignment */
+    }
+    return stmtList;
+} /* collectStatement */
+
+/********************************************************************
+ *
+ *	Value function return statement
+ *
+ *******************************************************************/
+
+Symbol *
+returnStatement(Lis * actexpr)
+{
+    List_e *	lp;
+    Symbol *	sp;
+    int		retType;
+
+    if (iRetSymbol.v) {
+	retType = iRetSymbol.v->ftype;
+	if ((lp = actexpr->v) == 0 || (sp = lp->le_sym) == 0) {
+	    ierror("no expression to return:", iFunBuffer);
+	} else {
+	    switch (retType) {
+	    case ARITH:
+	    case GATE:
+		if (sp->ftype != ARITH && sp->ftype != GATE) {
+		    ierror("wrong return type for int or bit:", iFunBuffer);
+		}
+		break;
+	    case CLCKL:
+	    case TIMRL:
+		if (sp->ftype != retType) {
+		    ierror("wrong return type for clock or timer:", iFunBuffer);
+		}
+		break;
+	    default:
+		ierror("wrong type for function return:", iFunBuffer);
+		break;
+	    }
+	}
+	sp = op_asgn(&iRetSymbol, actexpr, retType);
+    } else {
+	sp = 0;
+	ierror("return statement in void function:", iFunBuffer);
+    }
+    return sp;
+} /* returnStatement */
+
+/********************************************************************
+ *
+ *	Finalise the function definition after parameters and function
+ *	body have been parsed.
+ *
+ *******************************************************************/
+
+Symbol *
+functionDefinition(Symbol * iFunHead, List_e * fParams)
+{
+    List_e *	lp;
+    Symbol *	sp;
+    int		instanceNum;			/* save early union u.val u.blist */
+    int		saveCount = 0;			/* count parameter links for saving */
+
+    instanceNum = iFunHead->u_val;		/* read from file if -a option */
+    if (iRetSymbol.v) {
+	if (iRetSymbol.v->type == UDF) {
+	    ierror("no return statement in function:", iFunHead->name);
+	}
+	assert(iRetSymbol.v->u_blist == 0);	/* state after expression reduction */
+	iRetSymbol.v->u_blist = iRetSymbol.v->list;
+	iRetSymbol.v->type |= FM;		/* mark return Symbol */
+	iRetSymbol.v->list = sy_push(iFunHead);	/* with own function head */
+	iRetSymbol.v = 0;			/* no need to report as undefined */
+    }
+    iFunSymExt = 0;				/* end of function compilation */
+    iFunHead->u_blist = lp = stmtList;		/* global value */
+    stmtList = 0;
+    while (lp) {				/* mark function statement list */
+	sp = lp->le_sym;			/* assign and internal declarations */
+	assert(sp);
+	if (sp->type == UDF) {			/* assigns are marked twice */
+	    ierror("undefined gate in function:", sp->name);
+	}
+	if (sp->u_blist) {
+	    assert(sp->list && sp->list->le_sym == iFunHead);	/* marked return */
+	} else {
+	    sp->u_blist = sp->list;		/* expression now ready for cloning */
+	    sp->type |= FM;			/* mark as function Symbol */
+	    sp->list = 0;			/* clear pointer to real Symbol */
+	    saveCount++;			/* space for saving nested decl */
+	}
+	lp = lp->le_next;			/* next varList link */
+	assert(lp);				/* statement list is in pairs */
+	sp = lp->le_sym;			/* first varList Symbol */
+	while (sp) {				/* varList my be empty */
+	    free(sp->name);			/* free name space generated for listing name */
+	    sp->name = 0;			/* mark the Symbol as function internal (no '$') */
+	    sp->list = 0;			/* clear internal Symbol pointers */
+	    sp = sp->next;			/* next varList Symbol */
+	}
+	lp = lp->le_next;			/* next statement link */
+    }
+    iFunHead->list = lp = fParams;		/* yacc stack value */
+    while (lp) {				/* mark formal parameter list */
+	sp = lp->le_sym;			/* assign and value parameters */
+	assert(sp);
+	if (sp->type == UDF) {
+	    ierror("undefined gate in function:", sp->name);
+	}
+	if (sp->list) {				/* link for real parameters */
+	    ierror("trying to assign to a value parameter:", sp->name);
+	}
+	sp->type |= FM;				/* mark as function Symbol */
+	saveCount++;				/* space for saving nested para */
+	lp = lp->le_next;			/* next formal parameter link */
+    }
+    lp = iFunHead->u_blist;	/* save 2 numbers in first elements of statement list */
+    if (lp) {			/* any sensible function has at least 1 statement */
+	lp->le_val = instanceNum;		/* allows call to number instances */
+	lp = lp->le_next;			/* first varList link */
+	assert(lp);				/* must be a pair */
+	lp->le_val = saveCount;			/* allows call to get save block */
+    } else {
+	ierror("function has no statements!", iFunHead->name);
+    }
+#if YYDEBUG
+    if ((debug & 0402) == 0402) {
+	fprintf(outFP, "iFunDef:  imm %s %s\n", full_ftype[iFunHead->ftype], iFunHead->name);
+	fflush(outFP);
+    }
+#endif
+    return iFunHead;				/* yacc stack value */
+} /* fuctionDefinition */
+
+/********************************************************************
+ *
+ *	Clear a previous function definition by deleting all its data
+ *	objects
+ *
+ *******************************************************************/
+
+Symbol *
+clearFunDef(Symbol * functionHead)
+{
+    List_e *		lp;
+    List_e *		slp;
+    List_e *		vlp;
+    List_e *		lp1;
+    Symbol *		sp;
+    Symbol *		vsp;
+    int			instanceNum;		/* restore instance number later */
+
+    /********************************************************************
+     * Pass 1: statement list
+     *******************************************************************/
+    slp = functionHead->u_blist;		/* start of statement list */
+    if (slp == 0) {
+	return functionHead;			/* already cleared */
+    }
+    warning("existing function definition is deleted:", functionHead->name);
+    functionHead->u_blist = 0;			/* clear for next definition */
+    instanceNum = slp->le_val;			/* this function call instance number */
+    while (slp) {
+	sp = slp->le_sym;			/* formal satement head Symbol */
+	assert(sp);
+	lp = sp->u_blist;				/* cloned expression links */
+	while (lp) {
+	    lp1 = lp->le_next;			/* next expression link */
+	    free(lp);				/* delete expression link */
+	    lp = lp1;
+	}
+	lp = sp->list;			/* possible link to function head */
+	while (lp) {
+	    lp1 = lp->le_next;			/* next expression link */
+	    free(lp);				/* delete expression link */
+	    lp = lp1;				/* has no follow ups - but just in case */
+	}
+	unlink_sym(sp);				/* unlink Symbol from symbol table */
+	free(sp->name);
+	free(sp);				/* delete formal statement head Symbol */
+	vlp = slp->le_next;			/* next varList link */
+	free(slp);				/* delete statement link */
+	assert(vlp);				/* statement list is in pairs */
+	vsp = vlp->le_sym;			/* varList of temp Symbols */
+	while (vsp) {				/* varList may be empty */
+	    lp = vsp->u_blist;				/* cloned expression links */
+	    while (lp) {
+		lp1 = lp->le_next;			/* next expression link */
+		free(lp);				/* delete expression link */
+		lp = lp1;
+	    }
+	    sp = vsp->next;			/* next varList Symbol */
+	    free(vsp);				/* delete varList Symbol which has no name */
+	    vsp = sp;				/* and is not in the Symbol Table */
+	}
+	slp = vlp->le_next;			/* next statement link */
+	free(vlp);				/* delete varList link */
+    }
+    /********************************************************************
+     * Pass 2: parameter list
+     * links to real parameters were deleted at the end of a call
+     *******************************************************************/
+    slp = functionHead->list;		/* parameter list */
+    functionHead->list = 0;			/* clear for next definition */
+    while (slp) {
+	sp = slp->le_sym;			/* formal parameter Symbol */
+	assert(sp && sp->list == 0);		/* call leaves link to real para cleared */
+	unlink_sym(sp);				/* unlink Symbol from symbol table */
+	free(sp->name);
+	free(sp);				/* delete formal parameter Symbol */
+	vlp = slp->le_next;
+	free(slp);				/* delete formal parameter link */
+	slp = vlp;
+    }
+    functionHead->u_val = instanceNum;		/* in case instances of old definition */
+    functionHead->ftype = UDFA;			/* in case new def has different TYPE */
+    /********************************************************************
+     * now ready for a new definition
+     *******************************************************************/
+    return functionHead;
+} /* clearFunDef */
+
+/********************************************************************
+ *
+ *	Check if a terminal Symbol in a function expression is declared
+ *	extern if global.
+ *
+ *	Normal global variables must be declared extern in or before
+ *	use in a function.  Like all variables declared extern, these
+ *	must be declared again simply before they are assigned.
+ *
+ *	I/O variables are universally global and do not need to be
+ *	declared extern (Input variables cannot be declared extern)
+ *	Output variables can be declared extern, but don't need to be
+ *	because if they are they need to be declared again, which would
+ *	be confusing. This is only done if Output variables are assigned
+ *	in a different source. The the source in which they are used
+ *	need an extern declaration to prevent them being flagged as
+ *	undefined.
+ *
+ *	iClock ia a universal global variable which needs no external
+ *	declaration.
+ *
+ *******************************************************************/
+
+List_e *
+checkDecl(Symbol * terminal)
+{
+    int		typ;
+
+    if (iFunSymExt &&
+	strncmp(terminal->name, iFunBuffer, iFunSymExt - iFunBuffer) &&
+	((typ = terminal->type) & EM) == 0 &&
+	typ != INPX &&
+	typ != INPW &&
+	terminal != iclock) {
+	warning("global variable not declared extern:", terminal->name);
+    }
+    return sy_push(terminal);			/* link for expression expansion */
+} /* checkDecl */
+
+/********************************************************************
+ ********************************************************************
+ *
+ * class CallFunction
+ *
+ *	Code for cloning a copy of an immediate function in a call.
+ *	The copy may be a directly executable immediate connection net
+ *	or part of another function definition, when that definition
+ *	contains a nested call.
  *
  *	save global variables for nested function calls
  *	save all links in parameter and statement lists for recursive calls
  *
+ * Function Calls:
+ *	When a void or value function is called, its real parameter list
+ *	is scanned and type checked against the list of formal prameters
+ *	linked to the function head Symbol. Links from formal to real
+ *	parameters and statement heads are via 'list' in the formal Symbol,
+ *	which are marked with type|FM. The return Symbol 'list' is linked back
+ *	to the function head Symbol.
+ *
+ *	If that is OK, the assignment head list is scanned and each associated
+ *	net is cloned, replacing any value parameters by links to the real
+ *	parameter Symbols. For each assignment head the unfinished assignment
+ *	is now carried out with the cloned net, which gives temporary names
+ *	associated with each real assignment variable to internal Symbols.
+ *	Also the full logic of assigning to variables which have already been
+ *	used as values is thus taken care of. Internal Variables do not have
+ *	a link in 'list', and a Symbol to assign to must be cloned for them.
+ *
+ ********************************************************************
  *******************************************************************/
 
 struct sF {
@@ -1134,7 +1740,7 @@ static struct sF *	saveFunBs = 0;	/* base pointer to save block for recursive ca
 static List_e *		iFormNext = 0;	/* next pointer when scanning formal paramaters */
 static List_e *		iFunClock = 0;	/* temporary list of unresolved clock parameters */
 static Symbol *		cloneSymbol(Symbol * sp);
-static List_e *		cloneList(List_e * slp, Symbol * rsp);
+static List_e *		cloneList(List_e * slp, Symbol * csp, Symbol * rsp);
 
 Symbol *
 pushFunCall(Symbol * functionHead)
@@ -1147,16 +1753,16 @@ pushFunCall(Symbol * functionHead)
     int			saveCount;
     int			cF;
 
-    lp = functionHead->list;
+    lp = functionHead->u_blist;
     if (lp == 0) {
-	return;					/* report error later - no popFunCall */
+	return 0;				/* report error later - no popFunCall */
     }
     lp = lp->le_next;				/* first varList link */
     assert(lp);					/* must be a pair */
     saveCount = lp->le_val;			/* allows call to store save block */
     saveFunBs = (struct sF *) emalloc(sizeof(struct sF) - 1 + saveCount * sizeof(void *));
     saveFunBs->saveFunBs = oldSFunBs;
-    saveFunBs->iCallHead = iCallHead;
+    saveFunBs->iCallHead = iCallHead;		/* will be set up during the call */
     saveFunBs->iFormNext = iFormNext;
     saveFunBs->iFunClock = iFunClock;
     /* other variables are saved in pushFunParameter() */
@@ -1168,24 +1774,24 @@ pushFunCall(Symbol * functionHead)
      * Pass 1: parameter list
      *******************************************************************/
     cF = 0;
-    lp = functionHead->u_blist;			/* parameter list */
+    lp = functionHead->list;			/* parameter list */
     while (lp) {
 	sp = lp->le_sym;
 	assert(sp);
-	saveFunBs->iSav[cF++] = sp->u_blist;	/* save parameter template link */
+	saveFunBs->iSav[cF++] = sp->list;	/* save parameter template link */
 	lp = lp->le_next;
     }
     /********************************************************************
      * Pass 2: statement list
      *******************************************************************/
-    lp = functionHead->list;			/* statement list */
+    lp = functionHead->u_blist;			/* statement list */
     while (lp) {
 	sp = lp->le_sym;
 	assert(sp);
-	sp1 = ((lp1 = sp->u_blist) != 0) ? lp1->le_sym : 0;
+	sp1 = ((lp1 = sp->list) != 0) ? lp1->le_sym : 0;
 	if (sp1 != functionHead) {		/* bypass return link */
-	    saveFunBs->iSav[cF++] = sp->u_blist;/* save declaration or assign link */
-	    sp->u_blist = 0;			/* clear link */
+	    saveFunBs->iSav[cF++] = sp->list;/* save declaration or assign link */
+	    sp->list = 0;			/* clear link */
 	}
 	lp = lp->le_next;			/* next varList link */
 	assert(lp);				/* statement list is in pairs */
@@ -1195,10 +1801,10 @@ pushFunCall(Symbol * functionHead)
     /********************************************************************
      * Pass 3: parameter list again - clear links now
      *******************************************************************/
-    lp = functionHead->u_blist;			/* parameter list */
+    lp = functionHead->list;			/* parameter list */
     while (lp) {
 	sp = lp->le_sym;
-	sp->u_blist = 0;			/* clear parameter link */
+	sp->list = 0;			/* clear parameter link */
 	lp = lp->le_next;
     }
     /********************************************************************
@@ -1206,7 +1812,7 @@ pushFunCall(Symbol * functionHead)
      *******************************************************************/
     iCallHead = functionHead;			/* make avalable globally */
     assert(iCallHead);				/* must have a function head */
-    iFormNext = iCallHead->u_blist;		/* first formal parameter - may be 0 */
+    iFormNext = iCallHead->list;		/* first formal parameter - may be 0 */
     iFunClock = 0;				/* no unresolved clock parameters */
     return functionHead;
 } /* pushFunCall */
@@ -1245,7 +1851,7 @@ handleRealParameter(List_e * plp, List_e * lp)
     if (lp == 0) {				/* final call from cloneFunction() */
 	if (plp) {				/* to clear unresolved formal parameters */
 	    if ((rsp = lookup(One)) == 0) {	/* default delay 1 after last timer parameter */
-		rsp = install(One, NCONST, ARITH); /* becomes NVAR */
+		rsp = install(One, NCONST, ARITH);
 	    }
 	} else {
 	    rsp = iclock;			/* default iClock if no real clock parameter */
@@ -1316,12 +1922,11 @@ handleRealParameter(List_e * plp, List_e * lp)
 		    }
 		} else
 		if (rsp->ftype == TIMRL) {
-		    fsp->u_blist = rlp;		/* link real to formal parameter */
-		    dFlag = 1;			/* get delay as an NVAR object */
+		    fsp->list = rlp;		/* link real to formal parameter */
 						/* - not next formal parameter */
 		    return rlp;			/* current real timer parameter */
 		} else {
-		    fsp->u_blist = clp = sy_push(0); /* clock is currently unresolved */
+		    fsp->list = clp = sy_push(0); /* clock is currently unresolved */
 		    clp->le_next = iFunClock;	/* because there is no clock parameter */
 		    iFunClock = clp;		/* resolve in function call */
 		    iFormNext = iFormNext->le_next; /* next formal paramater to process */
@@ -1333,14 +1938,13 @@ handleRealParameter(List_e * plp, List_e * lp)
 		    ierror("wrong parameter type for timer:", rsp->name);
 		    rlp = 0;			/* error */
 		}
-		dFlag = 1;			/* as an NVAR object */
 		break;
 	    default:
 		ierror("wrong type for function call parameter:", rsp->name);
 		rlp = 0;			/* error */
 		break;
 	    }
-	    fsp->u_blist = rlp;			/* link real to formal parameter */
+	    fsp->list = rlp;			/* link real to formal parameter */
 	}
 	iFormNext = iFormNext->le_next;		/* next formal paramater to process */
 	return lp ? 0 : rlp;			/* real parameter if final call */
@@ -1383,18 +1987,21 @@ cloneFunction(Symbol * functionHead, List_e * plp)
     Sym			sv;			/* Sym to assign cloned expression to */
     Lis			sl;			/* Lis pointing to cloned expression */
     int			instanceNum;		/* this function call instance number */
+    int			instanceFlg;
     int			saveCount;		/* saveFunPt,iFormHead,iFormNext,iFunClock */
     int			cF;
     struct sF *		oldSFunBs;
+    char *		cp;
     char		temp[TSIZE];
 
-    slp = lp = functionHead->list;	/* get 2 numbers in first elements of statement list */
+    slp = lp = functionHead->u_blist;	/* get 2 numbers in first elements of statement list */
     if (slp == 0) {
 	ierror("called function has no statements - cannot execute!", functionHead->name);
 	return 0;
     }
     assert(saveFunBs);				/* no pop without previous push */
-    instanceNum = ++lp->le_val;			/* this function call instance number */
+    instanceNum = lp->le_val + 1;		/* this function call instance number */
+    instanceFlg = 0;				/* update only if it was used */
     lp = lp->le_next;				/* first varList link */
     assert(lp);					/* must be a pair */
     saveCount = lp->le_val;			/* allows call to store save block */
@@ -1413,16 +2020,18 @@ cloneFunction(Symbol * functionHead, List_e * plp)
     }
     /********************************************************************
      * Clone the statements of the called function.
-     * Scan the statement list starting at the function head in 2 passes.
+     * Scan the statement list starting at the function head in 3 passes.
      * There ar two links per statement:
      *    the first link points to the statement head
      *    the second link points to varList for the statement
-     * Pass 1: a) reconstitute templist from Symbols on varList.
+     * Pass 1: a) reconstitute templist from Symbols on varList and clone
+     *		  each varList Symbol.
      *         b) clone the function internal statement heads to make
      *            them available to all other expressions.
      *         c) clone the return statement head to make it available
      *            to all other expressions.
      *******************************************************************/
+    rsp = 0;					/* return must be set in a value function */
     while (slp) {
 	vlp = slp->le_next;
 	assert(vlp);				/* statement list is in pairs */
@@ -1438,57 +2047,116 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	/********************************************************************
 	 * clone the expression head associated with this statement
 	 * u_blist == 0 indicates a function internal Symbol
+	 * by doing this after varList, cloned head is at front of templist
 	 *******************************************************************/
 	ssp = slp->le_sym;			/* expression head template */
-	if ((lp = ssp->u_blist) == 0) {
-	    snprintf(temp, TSIZE, "%s_%d", ssp->name, instanceNum);
-	    *(strchr(temp, '$')) = '_';		/* replace '$' by '_' in cloned object */
-	    sv.v = install(temp, UDF, ssp->ftype); /* Symbol for declared variable */
-	    ssp->u_blist = sy_push(sv.v);	/* link internal cloned Symbol to template */
+	assert(ssp);				/* check in Pass 1 only */
+	assert(ssp->name);
+	if ((lp = ssp->list) == 0) {		/* function internal variable */
+	    if (iFunSymExt) {
+		int	n = 0;			/* cloned in a function definition */
+		cp = strchr(ssp->name, '$');	/* locate original extension */
+		assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		strncpy(iFunSymExt, cp+1, iFunEnd - iFunSymExt);/* copy ext to new fun name */
+		cp = iFunBuffer + strlen(iFunBuffer);		/* end of new var name */
+		while (lookup(iFunBuffer) != 0) {
+		    /********************************************************************
+		     * Different instances of the same extension can occurr for multiple
+		     * calls of the same function in one function definition or for the
+		     * same name used in different functions called in the definition.
+		     * This heuristic assumes there are not hundreds of instances in
+		     * one function definition. (Even a very large number will work -
+		     * the temporaries generated from it are _1 etc) eg: fun$i123456_1
+		     * The heuristic can handle extensions ending in numerals - it will
+		     * keep trying until it finds one with a different numeral.
+		     * The heuristic handles multiply nested function calls reasonably.
+		     * These names do not touch the instance number until the function
+		     * is finally called, when an instance number will be appended.
+		     * This scheme als sees to it, that the same template is generated
+		     * in each file it is used in - providing the set of functions is the
+		     * same. This helps analysis of the generated code.
+		     *******************************************************************/
+		    snprintf(cp, iFunEnd - cp, "%d", ++n);	/* simply count up */
+		}
+		sv.v = install(iFunBuffer, UDF, ssp->ftype);
+		*iFunSymExt = '\0';
+		collectStatement(sv.v);		/* put in definition stmtList like a decl */
+	    } else {
+		/********************************************************************
+		 * Naming for global internal names needs instanceNum, because names
+		 * may be generated in several independent source files, unlike names
+		 * in function definitions above, which are contained in one file.
+		 *******************************************************************/
+		snprintf(temp, TSIZE, "%s_%d", ssp->name, instanceNum);
+		instanceFlg++;			/* instanceNum was used so update */
+		cp = strchr(temp, '$');		/* locate original extension */
+		assert(cp);			/* has failed during development */
+		*cp = '_';			/* replace '$' by '_' in cloned object */
+		assert(lookup(temp) == 0);	/* must be a new Symbol for correct algorithm */
+		sv.v = install(temp, UDF, ssp->ftype); /* Symbol for declared variable */
+	    }
+	    ssp->list = sy_push(sv.v);		/* link internal cloned Symbol to template */
 	} else
-	if (lp != 0 && lp->le_sym == functionHead) {
+	if (lp->le_sym == functionHead) {
 	    rsp = cloneSymbol(ssp);		/* clone return expression head Symbol */
-	}
+	}					/* assign parameters alrady have a link */
 	slp = vlp->le_next;			/* next statement */
     }
     /********************************************************************
-     * Pass 2:
+     * Pass 2: scan again and clone the expression for each statement
      *******************************************************************/
-    slp = functionHead->list;
+    slp = functionHead->u_blist;
     while (slp) {
 	vlp = slp->le_next;
 	ssp = slp->le_sym;			/* expression head template */
 	assert(ssp->type & FM);			/* marked statement list head Symbol */
-	assert(ssp->list);			/* link to expression net */
+	assert(ssp->u_blist);			/* link to formal expression net */
 	/********************************************************************
 	 * clone the expression head associated with this statement
 	 *******************************************************************/
-	lp = ssp->u_blist;
-	assert(lp);				/* internal Symbols linked in pass 1 */
-	if (lp->le_sym == functionHead) {
-	    rsp->u_blist =			/* return Symbol */
-	    cloneList(ssp->list, rsp);		/* clone the rest of the expression */
+	lp = ssp->list;				/* link to real return, assign parameter or */
+	assert(lp);				/* internal Symbol linked in pass 1 */
+	if ((sv.v = lp->le_sym) == functionHead) {
+	    assert(rsp);			/* return Symbol was set in Pass 1 */
+	    rsp->u_blist = cloneList(ssp->u_blist, rsp, rsp); /* clone the rest of the expression */
 	    rlp = sy_push(rsp);			/* set up function return link */
-	} else {
-	    unsigned char	y1[2];
-	    int			yn;
-	    int			ftyp;
-	    int			ioTyp;
-	    sv.v = lp->le_sym;			/* assign parameter or internal Symbol */
+	} else {				/* assign parameter or internal Symbol */
 	    assert(sv.v);			/* ZZZ what happens to link if not used ??? */
 	    csp = cloneSymbol(ssp);		/* clone parameter expression head Symbol */
-	    csp->u_blist =
-	    cloneList(ssp->list, rsp);		/* clone the rest of the expression */
+	    csp->u_blist = cloneList(ssp->u_blist, csp, rsp); /* clone the rest of the expression */
+	    assert(sv.v->u_blist == 0);		/* will be assigning to it */
+	    sv.v->u_blist = sy_push(csp);	/* link to expression head for Pass 3 */
+	}
+	slp = vlp->le_next;			/* next statement */
+    }
+    /********************************************************************
+     * Pass 3: assign internally declared variables and assign parameters
+     *******************************************************************/
+    slp = functionHead->u_blist;
+    while (slp) {
+	vlp = slp->le_next;
+	ssp = slp->le_sym;			/* expression head template */
+	lp = ssp->list;				/* link to real Symbol */
+	assert(lp);				/* internal Symbols linked in pass 1 */
+	if ((sv.v = lp->le_sym) != functionHead) {
+	    unsigned char	y1[2];		/* assign parameter or internal Symbol */
+	    int			yn;
+	    int			ioTyp;
 	    /********************************************************************
-	     * assign the expression associated with this statement
+	     * assign the expression associated with this assign para or internal statement
 	     * an output can only be recognised by its name: Q[XBWL]%d
 	     *******************************************************************/
-	    sl.v = sy_push(csp);		/* link to expression head */
+	    sl.v = sv.v->u_blist;		/* link to expression head */
+	    sv.v->u_blist = 0;			/* restore for op_asgn */
+	    if (lp->le_val == NOT && sv.v->ftype == GATE) {
+		op_not(sl.v);			/* negated assign parameter */
+	    }
 	    if (sscanf(sv.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
 		ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
 	    } else {
 		ioTyp = 0;			/* flags that no I/O is generated */
 	    }
+	    sv.f = sv.l = sl.f = sl.l = 0;	/* clear internal expression text */
 	    assignExpression(&sv, &sl, ioTyp);	/* assign to internal variable or parameter */
 #if YYDEBUG
 	    if ((debug & 0402) == 0402) pu(0, "clone", (Lis*)&sv);
@@ -1500,39 +2168,42 @@ cloneFunction(Symbol * functionHead, List_e * plp)
      * Cloning is now complete
      * Free links and restore internal pointers in function template.
      * The order is the same as in pushFunCall() to restore correctly.
-     * Assign parameter links are restored in Pass 3 with other parameters.
-     * Declaration and assigns are restored in Pass 4 (assigns are restored twice).
-     * Pass 3: parameter list
+     * Assign parameter links are restored in Pass 4 with other parameters.
+     * Declaration and assigns are restored in Pass 5 (assigns are restored twice).
      *******************************************************************/
     cF = 0;
-    lp = functionHead->u_blist;			/* parameter list */
+    /********************************************************************
+     * Pass 4: Clean up parameter list
+     *******************************************************************/
+    lp = functionHead->list;			/* parameter list */
     while (lp) {
 	sp = lp->le_sym;
 	assert(sp);
-	lp1 = sp->u_blist;
+	lp1 = sp->list;
 	while (lp1) {
 	    lp2 = lp1->le_next;
 	    sy_pop(lp1);			/* free link pushed in handleRealParameter */
 	    lp1 = lp2;
 	}
-	sp->u_blist = saveFunBs->iSav[cF++];	/* restore previous parameter template link */
+	sp->list = saveFunBs->iSav[cF++];	/* restore previous parameter template link */
 	lp = lp->le_next;
     }
     /********************************************************************
-     * Pass 4: statement list
+     * Pass 5: Clean up statement list
      *******************************************************************/
-    slp = functionHead->list;			/* statement list */
+    slp = functionHead->u_blist;		/* statement list */
+    if (instanceFlg) slp->le_val = instanceNum;	/* update function call instance number */
     while (slp) {
 	sp = slp->le_sym;
 	assert(sp);
-	sp1 = ((lp1 = sp->u_blist) != 0) ? lp1->le_sym : 0;
+	sp1 = ((lp1 = sp->list) != 0) ? lp1->le_sym : 0;
 	if (sp1 != functionHead) {		/* bypass return link */
 	    while (lp1) {
 		lp2 = lp1->le_next;
 		sy_pop(lp1);			/* free link pushed in cloneFunction */
 		lp1 = lp2;
 	    }
-	    sp->u_blist = saveFunBs->iSav[cF++];/* restore declaration and assign link */
+	    sp->list = saveFunBs->iSav[cF++];/* restore declaration and assign link */
 	}
 	vlp = slp->le_next;			/* next varList link */
 	assert(vlp);				/* statement list is in pairs */
@@ -1593,7 +2264,7 @@ cloneSymbol(Symbol * sp)
  *******************************************************************/
 
 static List_e *
-cloneList(List_e * slp, Symbol * rsp)
+cloneList(List_e * slp, Symbol * csp, Symbol * rsp)
 {
     List_e *		rlp = 0;		/* return pointer */
     List_e *		tlp = 0;		/* temp pointer */
@@ -1601,24 +2272,38 @@ cloneList(List_e * slp, Symbol * rsp)
     List_e *		nlp;			/* next cloned list link */
     Symbol *		ssp;			/* current source Symbol */
     Symbol *		nsp;			/* cloned new Symbol */
-    static Symbol *	first_rsp;
+    unsigned int	nval;			/* logical sign of a real parameter */
+    char *		first;			/* catch arithmetic text */
+    char *		last;
+    static unsigned	recursions = 0;
 
-    if (rsp) {
-	first_rsp = rsp;			/* feedback Symbol */
-    }
+    assert(recursions < 1000);
+    recursions++;
     while (slp) {
 	ssp = slp->le_sym;
 	assert(ssp);
-	if (ssp->type & FM) {			/* parameter or declared value */
-	    if ((nlp = ssp->u_blist) != 0) {
-		nsp = nlp->le_sym;		/* pointer to real para set up before */
-		if (nsp == iCallHead) {
-		    nsp = first_rsp;		/* apply feedback */
+	if (ssp->type & FM) {			/* formal parameter or declared value */
+	    if ((nlp = ssp->list) != 0 &&	/* link to real Symbol */
+		(nsp = nlp->le_sym) != 0) {	/* real Symbol cloned before */
+		nval = nlp->le_val;		/* logical sign of a real GATE parameter */
+		first = nlp->le_first;		/* transfer arithmetic text */
+		last = nlp->le_last;
+		assert(ssp->ftype == GATE || nval == 0);
+		if (nsp == iCallHead) {		/* iCallHead used as dummy real return */
+		    nsp = rsp;			/* real return Symbol of current statement */
+#ifdef FEEDBACK
+		    nlp = nsp->elist;		/* feedback list */
+		    nsp->elist = sy_push(csp);
+		    nsp->elist->le_next = nlp;
+#else	/* FEEDBACK */
+		    nlp = nsp->list;		/* feedback list */
+		    nsp->list = sy_push(csp);
+		    nsp->list->le_next = nlp;
+#endif	/* FEEDBACK */
 		    nlp = 0;
 		} else {
 		    nlp = nlp->le_next;		/* possible timer parameter link */
 		}
-		assert(nsp);
 	    } else {
 		ierror("no link from formal to real parameter:", ssp->name);
 		break;				/* cannot continue */
@@ -1627,17 +2312,23 @@ cloneList(List_e * slp, Symbol * rsp)
 	if (ssp->name) {			/* global variable Symbol */
 	    nsp = ssp;				/* pointer to global variable */
 	    nlp = 0;
+	    nval = 0;
+	    first = last = 0;
 	} else {				/* function internal Symbol ->name == 0 */
-	    nsp = (Symbol*)ssp->list;		/* direct link set up in cloneFunction */
+	    nsp = (Symbol*)ssp->list;		/* link set up in cloneFunction varList scan */
 	    assert(nsp);
-	    assert(nsp->u_blist == 0);
-	    nsp->u_blist =
-	    cloneList(ssp->u_blist, 0);		/* clone internal expression recursively */
+	    if (nsp->u_blist == 0) {		/* clone internal expression recursively */
+		nsp->u_blist = slp;		/* set in case of tight feedback */
+		nsp->u_blist = cloneList(ssp->u_blist, nsp, rsp); /* unless in parallel branch */
+	    }
 	    nlp = 0;
+	    nval = 0;
+	    first = last = 0;
 	}
 	clp = sy_push(nsp);			/* clone one list element */
-	clp->le_val = slp->le_val;		/* negation or arithmetic index in para */
-	/* ZZZ copy le_first and le_last */
+	clp->le_val = slp->le_val ^ nval;	/* negation or arithmetic index in para */
+	clp->le_first = first;			/* transfer arithmetic text */
+	clp->le_last = last;
 	if (tlp == 0) {
 	    tlp = rlp = clp;			/* first element is returned */
 	} else {
@@ -1648,11 +2339,13 @@ cloneList(List_e * slp, Symbol * rsp)
 	    assert(nsp);
 	    clp = sy_push(nsp);			/* clone follow up delay element */
 	    clp->le_val = nlp->le_val;		/* negation or arithmetic index in delay */
-	    /* ZZZ copy le_first and le_last */
+	    clp->le_first = nlp->le_first;	/* transfer arithmetic text */
+	    clp->le_last = nlp->le_last;
 	    tlp = tlp->le_next = clp;		/* also link delay element */
-	    nlp = nlp->le_next;			/* ZZZ 0 unless other parameter expression */
+	    nlp = nlp->le_next;			/* 0 unless other parameter expression */
 	}
 	slp = slp->le_next;			/* next formal list element */
     }
+    --recursions;
     return rlp;					/* first link in cloned chain */
 } /* cloneList */

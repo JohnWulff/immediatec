@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.43 2004/01/26 19:49:10 jw Exp $";
+"@(#)$Id: main.c,v 1.44 2004/02/21 17:29:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -348,24 +348,19 @@ main(
 	    if (strlen(*argv)) inpFN = *argv;
 	}
     }
-    debug &= 07777;			/* allow only cases specified */
+    debug &= 037777;			/* allow only cases specified */
     iFlag = 0;
-
-/********************************************************************
- *
- *	Generate and open temporary files T1FN T2FN T3FN
- *	T0FN, T4FN and T5FN are only used if iC and/or C-include files
- *	are actually parsed
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Generate and open temporary files T1FN T2FN T3FN
+     *	T0FN, T4FN and T5FN are only used if iC and/or C-include files
+     *	are actually parsed
+     *******************************************************************/
     szNames[T0index] = T0FN;
     szNames[T1index] = T1FN;
     szNames[T2index] = T2FN;
     szNames[T3index] = T3FN;
     szNames[T4index] = T4FN;
     szNames[T5index] = T5FN;
-
     if ((fd = mkstemp(T1FN)) < 0 || (T1FP = fdopen(fd, "w+")) == 0) {
 	r = T1index;			/* error opening temporary file */
     } else if ((fd = mkstemp(T2FN)) < 0 || (T2FP = fdopen(fd, "w+")) == 0) {
@@ -373,41 +368,33 @@ main(
     } else if ((fd = mkstemp(T3FN)) < 0 || (T3FP = fdopen(fd, "w+")) == 0) {
 	r = T3index;			/* error opening temporary file */
     } else
-
-/********************************************************************
- *
- *	Call the iC compiler which builds a Symbol table and a logic
- *	net made up of the same Symbol structures linked by List_e's
- *
- *	As a side effect, all C-code fragments made up of literal blocks
- *	and C-actions are collected in the temporary file T1FN
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Call the iC compiler which builds a Symbol table and a logic
+     *	net made up of the same Symbol structures linked by List_e's
+     *
+     *	As a side effect, all C-code fragments made up of literal blocks
+     *	and C-actions are collected in the temporary file T1FN
+     *******************************************************************/
     if ((r = compile(inpFN, listFN, errFN, outFN)) != 0) {
 	ro = 5;				/* compile error */
     } else
-
-/********************************************************************
- *
- *	Regroup the generated C-code into literal blocks first, followed
- *	by C-actions. This is necessary to get all C-declarations at the
- *	start of the C-code.
- *
- *	Call the C compiler which recognizes any variables declared as
- *	imm bit or imm int variables. These variables can be used as
- *	values anywhere in the C-code and appropriate modification is
- *	carried out. Immediate variables which have been declared but
- *	not yet assigned may be (multiply) assigned to in the C-code.
- *	Such assignment expressions are recognised and converted to
- *	function calls.
- *
- *	If an immediate variable has already been (singly) assigned to
- *	in the iC code, an attempt to assign to it in the C-code is an
- *	error.
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Regroup the generated C-code into literal blocks first, followed
+     *	by C-actions. This is necessary to get all C-declarations at the
+     *	start of the C-code.
+     *
+     *	Call the C compiler which recognizes any variables declared as
+     *	imm bit or imm int variables. These variables can be used as
+     *	values anywhere in the C-code and appropriate modification is
+     *	carried out. Immediate variables which have been declared but
+     *	not yet assigned may be (multiply) assigned to in the C-code.
+     *	Such assignment expressions are recognised and converted to
+     *	function calls.
+     *
+     *	If an immediate variable has already been (singly) assigned to
+     *	in the iC code, an attempt to assign to it in the C-code is an
+     *	error.
+     *******************************************************************/
     if ((r = c_compile(T1FP)) != 0) {
 	ro = 6;				/* C-compile error */
     } else {
@@ -415,31 +402,19 @@ main(
 	Gate *		igp;
 #endif	/* RUN or TCP */
 	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
-
-/********************************************************************
- *
- *	List network topology and statistics - this completes listing
- *
- *******************************************************************/
-
+	/********************************************************************
+	 *	List network topology and statistics - this completes listing
+	 *******************************************************************/
 	if ((r = listNet(gate_count)) == 0) {
-
-/********************************************************************
- *
- *	-o option: Output a C-file of all Gates, C-code and links
- *
- *******************************************************************/
-
+	    /********************************************************************
+	     *	-o option: Output a C-file of all Gates, C-code and links
+	     *******************************************************************/
 	    if (outFN) {			/* -o option */
 		r = output(outFN);		/* generate network as C file */
 	    } else
-
-/********************************************************************
-*
-*	-c option: Output a C-file cexe.c to rebuild compiler with C-code
-*
-*******************************************************************/
-
+	    /********************************************************************
+	     *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
+	     *******************************************************************/
 	    if (excFN) {			/* -c option */
 		if ((excFP = fopen(excFN, "w")) == NULL) {
 		    r = COindex;
@@ -477,30 +452,27 @@ main(
 		}
 #if defined(RUN) || defined(TCP)
 	    } else
-
-/********************************************************************
-*
-*	Build a network of Gates and links for direct execution
-*
-*******************************************************************/
-
+	    /********************************************************************
+	     *	Build a network of Gates and links for direct execution
+	     *******************************************************************/
 	    if ((r = buildNet(&igp)) == 0) {
 		Symbol * sp = lookup("iClock");
 		unlinkTfiles();
-
-/********************************************************************
-*
-*	Execute the compiled iC logic directly
-*
-*******************************************************************/
-
+		/********************************************************************
+		 *	Execute the compiled iC logic directly
+		 *******************************************************************/
 		assert (sp);			/* iClock initialized in init() */
 		c_list = sp->u_gate;		/* initialise clock list */
 		icc(igp, gate_count);		/* execute the compiled logic */
-		/* never returns - exits via quit() */
+		/********************************************************************
+		 * never returns - exits via quit()
+		 *******************************************************************/
 #endif	/* RUN or TCP */
 	    }
 	}
+	/********************************************************************
+	 *	iC and C compilation, listing and generated C output complete
+	 *******************************************************************/
 	if (r != 0) {
 	    ro = 7;				/* error in output */
 	    fprintf(stderr, OutputMessage[r < 4 ? r : 7], progname, szNames[r]);
@@ -511,7 +483,6 @@ main(
     if (r != 0) {
 	fprintf(stderr, OutputMessage[ro], progname, szNames[r]);
     }
-
 closeFiles: ;
     if (outFP != stdout) {
 	fflush(outFP);

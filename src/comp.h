@@ -16,12 +16,15 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.42 2004/02/01 22:33:52 jw Exp $";
+"@(#)$Id: comp.h,v 1.43 2004/02/21 17:29:11 jw Exp $";
 
-#define NS	((char*)0)
-#define	TSIZE	256
+#define NS		((char*)0)
+#define	TSIZE		256
+#define	IBUFSIZE	512
+#define	IMMBUFSIZE	1024
 
-#define	NOT	1	/* used in List_e.le_val */
+#define	NOT	1		/* used in List_e.le_val */
+#define FEEDBACK
 
 typedef	struct	List_e {	/* list element */
     struct Symbol *	le_sym;
@@ -36,6 +39,9 @@ typedef	struct Symbol {		/* symbol table entry */
     unsigned char	type;	/* ARN AND OR LATCH FF CLK TIM ... */
     unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
     List_e *		list;	/* output list pointer */
+#ifdef FEEDBACK
+    List_e *		elist;	/* feedback list pointer */
+#endif	/* FEEDBACK */
 #if ! YYDEBUG
     union {
 #endif
@@ -93,8 +99,8 @@ extern int	lexflag;
  *	lexflag is bitmapped and controls the input for lexers
  *
  *	bit	mask	iCparse	c_parse	function
- *  C_PARSE	01	0	01	select parser
- *  C_FIRST	02	-	02	set for first line of listing
+ *  C_PARSE	01	00	01	select parser
+ *  C_FIRST	02	02	02	set for first line of listing
  *  C_BLOCK	04	-	04	block c_parse source listing
  *  C_NO_COUNT	010	-	010	c_parse blocks counting chars
  *  C_LINE	020	-	020	# 1 or # line seen
@@ -112,18 +118,32 @@ extern int	lineno;
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
-extern char	inpNM[];		/* original input file name */
-extern int	dFlag;			/* convert number to NVAR object */
+extern char	inpNM[];		/* currently scanned input file name */
+extern char	iCbuf[];		/* buffer to build imm statement size IMMBUFSIZE */
+extern char	iFunBuffer[];		/* buffer to build imm function symbols */
+extern char *	iFunEnd;		/* pointer to end */
 extern char *	iFunSymExt;		/* flags that function is being compiled */
-extern Symbol *	varList;		/* list of temp Symbols while compiling function */
-extern char	One[];			/* name for constant 1 Symbol */
+extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
 extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
 	    Sym * sv, Lis * lv, int ioTyp);
+extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
+extern Symbol *	functionHead(		/* set up the function definition head */
+	    unsigned int typeVal, Symbol * funTrigger, int retFlag);
+extern List_e *	collectStatement(	/* collect statements in the function body */
+	    Symbol * funcStatement);
+extern Symbol *	returnStatement(	/* value function return statement */
+	    Lis * actexpr);
+extern Symbol *	functionDefinition(	/* finalise function definition */
+	    Symbol * iFunHead, List_e * fParams);
 extern Symbol *	pushFunCall(Symbol *);	/* save global variables for nested function calls */
 extern List_e * handleRealParameter(	/* handle a real parameter of a called function */
 	    List_e * plp, List_e * alp);
 extern List_e *	cloneFunction(		/* clone a function template in a function call */
 	    Symbol * functionHead, List_e * plp);
+extern Symbol *	clearFunDef(		/* clear a previous function definition */
+	    Symbol * functionHead);
+extern List_e *	checkDecl(		/* check decleration of a function terminal */
+	    Symbol * terminal);
 extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
 extern Symbol *	sy_pop(List_e *);	/* delete List element left over */
@@ -150,6 +170,7 @@ extern void	pu(int t, char * token, Lis * node);
 
 extern Symbol *	iclock;			/*   init.c  */
 extern void	init(void);		/* install constants and built-ins */
+extern const char initialFunctions[];	/* iC system function definitions */
 
 					/*   symb.c   */
 #define	HASHSIZ 54*16			/* for new sorted list algorithm */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.72 2004/01/28 12:02:04 jw Exp $";
+"@(#)$Id: outp.c,v 1.73 2004/02/21 17:29:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1189,6 +1189,18 @@ static Gate *	_l_[] = {\n");
 		}
 		fprintf(Fp, "\n");
 		linecnt++;
+	    } else if (typ == IFUNCT &&			/* function has occurred */
+		(lp = sp->u_blist) != 0 &&		/* and been defined in this module */
+		(val = lp->le_val) != 0) {		/* and has been called */
+		/********************************************************************
+		 * The instance number is only incremented for those calls, in which
+		 * at least one local variable name with an instance number extension
+		 * is generated and the function has actually been called.
+		 * In case a module does not define a particular function, it cannot
+		 * have been called in this module, and no new instance number update
+		 * need be written.
+		 *******************************************************************/
+		fprintf(H1p, "/* %s\t%d */\n", sp->name, val);	/* header _list1.h */
 	    }
 	}
     }
@@ -1208,7 +1220,7 @@ endm:
 endh:
     fclose(H2p);	/* close the list header file in case other actions */
 endl:
-    fclose(Fp);	/* close the C output file in case other actions */
+    fclose(Fp);		/* close the C output file in case other actions */
 end:
     return rc;		/* return code */
 } /* output */
