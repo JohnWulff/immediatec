@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.22 2001/04/01 08:23:14 jw Exp $";
+"@(#)$Id: rsff.c,v 1.23 2001/04/04 18:20:55 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -821,7 +821,7 @@ clockSfn(				/* Clock function */
     Gate *	gf,
     Gate *	out_list)
 {
-    Gate *	sp;
+    Gate *	gp;
     /*
      * the clock list is controlled by a control block which is the
      * Gate structure which goes with this function
@@ -830,18 +830,23 @@ clockSfn(				/* Clock function */
 	Gate *	tp;
 	Gate *	np;
 
-	sp = gf->gt_funct;
+	gp = gf->gt_funct;
 #ifndef _WINDOWS 
 	if (debug & 0100) {
-	    fprintf(outFP, "\tC %s", sp->gt_ids);
+	    fprintf(outFP, "\tC %s", gp->gt_ids);
 	}
 #endif
-	sp->gt_val = -1;		/* set for visualization only */
-	if (sp->gt_next != sp) {
+	gp->gt_val = -1;		/* set for visualization only */
+#if defined(TCP) && defined(LOAD)
+	if (gp->gt_live & 0x8000) {
+	    liveData(gp->gt_live, 1);	/* live is active */
+	}
+#endif
+	if (gp->gt_next != gp) {
 #ifndef _WINDOWS 
 	    if (debug & 0100) {
 		int	dc = 0;		/* functions which are clocked */
-		for (tp = sp->gt_next; tp != sp; tp = tp->gt_next) {
+		for (tp = gp->gt_next; tp != gp; tp = tp->gt_next) {
 		    if (dc++ >= 8) {
 			dc = 1;
 			fprintf(outFP, "\n\t");
@@ -851,24 +856,24 @@ clockSfn(				/* Clock function */
 	    }
 #endif
 #ifndef DEQ
-	    ((Gate *)c_list->gt_list)->gt_next = sp->gt_next;
-	    c_list->gt_list = sp->gt_list;  	/* link sp */
+	    ((Gate *)c_list->gt_list)->gt_next = gp->gt_next;
+	    c_list->gt_list = gp->gt_list;  	/* link gp */
 	    ((Gate *)c_list->gt_list)->gt_next = c_list;    /* to c_list */
 #else
-	    /* link chain of Gates on clock list sp to end of c_list */
+	    /* link chain of Gates on clock list gp to end of c_list */
 	    tp = c_list->gt_prev;		/* save c_list.previous */
-	    tp->gt_next = np = sp->gt_next;	/* c_list.last ==> new */
+	    tp->gt_next = np = gp->gt_next;	/* c_list.last ==> new */
 	    np->gt_prev = tp;			/* c_list.last <== new */
-	    tp = sp->gt_prev;			/* save sp.previous */
-	    tp->gt_next = c_list;		/* sp.last ==> c_list */
-	    c_list->gt_prev = tp;		/* sp.last <== c_list */
+	    tp = gp->gt_prev;			/* save gp.previous */
+	    tp->gt_next = c_list;		/* gp.last ==> c_list */
+	    c_list->gt_prev = tp;		/* gp.last <== c_list */
 #endif
-	    Out_init(sp);			/* relink empty sp */
+	    Out_init(gp);			/* relink empty gp */
 	}
 #if !defined(_WINDOWS) || defined(LOAD)
 #ifdef LEVEL
-	if ((sp = gf->gt_clk) != c_list) {
-	    link_ol(gf, sp);
+	if ((gp = gf->gt_clk) != c_list) {
+	    link_ol(gf, gp);
 	}
 #endif
     } else {
@@ -899,7 +904,7 @@ timerSfn(				/* Timer function */
     Gate *	gf,
     Gate *	out_list)
 {
-    Gate *	sp;
+    Gate *	gp;
     /*
      * the timer list is controlled by a control block which is the
      * Gate structure which goes with this function
@@ -908,14 +913,19 @@ timerSfn(				/* Timer function */
 	Gate *	tp;			/* functions which are timed */
 	Gate *	np;
 
-	sp = gf->gt_funct;
+	gp = gf->gt_funct;
 #ifndef _WINDOWS 
 	if (debug & 0100) {
-	    fprintf(outFP, "\tT %s", sp->gt_ids);
+	    fprintf(outFP, "\tT %s", gp->gt_ids);
 	}
 #endif
-	sp->gt_val = -1;		/* set for visualization only */
-	if ((np = sp->gt_next) != sp) {
+	gp->gt_val = -1;		/* set for visualization only */
+#if defined(TCP) && defined(LOAD)
+	if (gp->gt_live & 0x8000) {
+	    liveData(gp->gt_live, 1);	/* live is active */
+	}
+#endif
+	if ((np = gp->gt_next) != gp) {
 	    int	dc = 1;	/* allow for (time) */
 
 	    np->gt_mark--;		/* count down first element */
@@ -926,7 +936,7 @@ timerSfn(				/* Timer function */
 #endif
 	    if (np->gt_mark == 0) {
 #ifdef DEQ
-		/* link head of timer chain sp to end of c_list */
+		/* link head of timer chain gp to end of c_list */
 		tp = c_list->gt_prev;		/* save c_list.previous */
 		tp->gt_next = np;		/* c_list.last ==> new */
 		np->gt_prev = tp;		/* c_list.last <== new */
@@ -942,22 +952,22 @@ timerSfn(				/* Timer function */
 			fprintf(outFP, "\t%s", tp->gt_ids);
 		    }
 #endif
-		} while ((np = tp->gt_next) != sp && np->gt_mark == 0);
+		} while ((np = tp->gt_next) != gp && np->gt_mark == 0);
 #ifndef DEQ
-		((Gate *)c_list->gt_list)->gt_next = sp->gt_next;/* => new */
-		sp->gt_next = np;		/* timer => rest */
+		((Gate *)c_list->gt_list)->gt_next = gp->gt_next;/* => new */
+		gp->gt_next = np;		/* timer => rest */
 		c_list->gt_list = (Gate **)tp;	/* clock last => new last */
 		tp->gt_next = c_list;    	/* new last => c_list */
-		if (np == sp) {			/* last entry ? */
-		    sp->gt_list = (Gate **)np;	/*  yes, fix timer last */
+		if (np == gp) {			/* last entry ? */
+		    gp->gt_list = (Gate **)np;	/*  yes, fix timer last */
 		}
 #else
 		/* link tail of timer chain which is due to c_list */
-		tp->gt_next = c_list;		/* sp.last ==> c_list */
-		c_list->gt_prev = tp;		/* sp.last <== c_list */
-		/* the re-linking of sp works correctly also if np == sp */
-		sp->gt_next = np;		/* sp ==> new new */
-		np->gt_prev = sp;		/* sp <== new new */
+		tp->gt_next = c_list;		/* gp.last ==> c_list */
+		c_list->gt_prev = tp;		/* gp.last <== c_list */
+		/* the re-linking of gp works correctly also if np == gp */
+		gp->gt_next = np;		/* gp ==> new new */
+		np->gt_prev = gp;		/* gp <== new new */
 #endif
 	    }
 	}
