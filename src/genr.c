@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.21 2001/01/06 14:55:58 jw Exp $";
+"@(#)$Id: genr.c,v 1.22 2001/01/06 15:01:46 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -787,6 +787,7 @@ qw_asgn(
     Lis		li1;
     List_e *	lp;
     List_e *	lpf;
+    List_e *	lpb;
     Symbol *	svv;
     Symbol *	fsp;
     Symbol *	bsp = 0;
@@ -835,7 +836,7 @@ qw_asgn(
 	lp = bsp->list;				/* take out this symbol */
 	assert(lp != 0);
 	assert(lp->le_sym == svv);		/* if not it was not first asgn */
-	lpf = lp->le_next;			/* 0 or old output list */ 
+	lpb = lp->le_next;			/* 0 or old output list */ 
 	bsp->list = 0;				/* make empty till after assignment */ 
 	free(lp);				/* old forward link */
 	assert(bsp->u.blist == 0);
@@ -849,12 +850,12 @@ qw_asgn(
 	free(fsp);				/* replaced $ symbol */
     }
     fsp = op_asgn(sv, &li1, OUTW);		/* CHANGE */
-    if (bsp && lpf && (lp = bsp->list)) {
-	bsp->list = lpf;			/* put old output list first */
-	while (lpf->le_next != 0) {
-	    lpf = lpf->le_next;
+    if (bsp && lpb && (lp = bsp->list)) {
+	bsp->list = lpb;			/* put old output list first */
+	while (lpb->le_next != 0) {
+	    lpb = lpb->le_next;
 	}
-	lpf->le_next = lp;			/* link new autput list at end of old */
+	lpb->le_next = lp;			/* link new output at end of old */
     }
     return fsp;
 } /* qw_asgn */
@@ -876,6 +877,7 @@ qx_asgn(
     Lis		li1;
     List_e *	lp;
     List_e *	lpf;
+    List_e *	lpb;
     Symbol *	svv;
     Symbol *	fsp;
     Symbol *	bsp = 0;
@@ -924,7 +926,8 @@ qx_asgn(
 	lp = bsp->list;				/* take out this symbol */
 	assert(lp != 0);
 	assert(lp->le_sym == svv);		/* if not it was not first asgn */
-	bsp->list = lp->le_next;		/* 0 or old output list */ 
+	lpb = lp->le_next;			/* 0 or old output list */ 
+	bsp->list = 0;				/* make empty till after assignment */ 
 	free(lp);				/* old forward link */
 	assert(bsp->u.blist == 0);
 	bsp->u.blist = fsp->u.blist;
@@ -937,17 +940,24 @@ qx_asgn(
 	free(fsp);				/* replaced $ symbol */
     }
     fsp = op_asgn(sv, &li1, OUTX);
-    if (bsp && lpf->le_val != NOT ^ NOT) {	/* TODO: adjust for arithmetic nodes */
-	for (lp = bsp->list; lp; lp = lp->le_next) {	/* traverse output list */
-	    if (lp != lpf) {			/* leave out own output */
-		lp->le_val ^= NOT;		/* invert link */
-	    }
+    if (bsp && lpb && (lp = bsp->list)) {
+	bsp->list = lpb;			/* put old output list first */
+	while (lpb->le_next != 0) {
+	    lpb = lpb->le_next;
 	}
-	if (debug & 04) {
-	    iFlag = 1;				/* do inversion correction */
-	    fprintf(outFP, "\tprevious inputs '%s' must be inverted\n"
-		"\texcept input '%s' to own output '%s'\n\n",
-		bsp->name, bsp->name, lpf->le_sym->name);
+	lpb->le_next = lp;			/* link new output at end of old */
+	if (lpf->le_val != NOT ^ NOT) {
+	    for (lp = bsp->list; lp; lp = lp->le_next) {/* traverse output list */
+		if (lp != lpf) {			/* leave out own output */
+		    lp->le_val ^= NOT;		/* invert link */
+		}
+	    }
+	    if (debug & 04) {
+		iFlag = 1;				/* do inversion correction */
+		fprintf(outFP, "\tprevious inputs '%s' must be inverted\n"
+		    "\texcept input '%s' to own output '%s'\n\n",
+		    bsp->name, bsp->name, lpf->le_sym->name);
+	    }
 	}
     }
     return fsp;
