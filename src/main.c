@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.47 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: main.c,v 1.48 2004/04/13 12:33:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -464,6 +464,7 @@ main(
      *
      *	As a side effect, all C-code fragments made up of literal blocks
      *	and C-actions are collected in the temporary file T1FN
+     *	Also as a side effect outFlag is set if outFN is set (-o option)
      *******************************************************************/
     if ((r = compile(inpFN, listFN, errFN, outFN)) != 0) {
 	ro = 5;				/* compile error */
@@ -499,7 +500,7 @@ main(
 	    /********************************************************************
 	     *	-o option: Output a C-file of all Gates, C-code and links
 	     *******************************************************************/
-	    if (outFN) {			/* -o option */
+	    if (outFlag) {			/* -o option */
 		r = output(T3FP, outFN);	/* generate network as C file */
 	    } else
 	    /********************************************************************

@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.27 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: icc.c,v 1.28 2004/05/13 09:14:59 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -119,6 +119,8 @@ Gate *		o_list;			/* logic output action list */
 Gate *		c_list;			/* main clock list "iClock" */
 static Gate	flist;
 Gate *		f_list;			/* auxiliary function clock list */
+static Gate	slist;
+Gate *		s_list;			/* send bit and byte outputs */
 
 unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
 unsigned char	QMM;			/* Output cage mask for 1 rack */
@@ -182,6 +184,8 @@ icc(
 #endif
     f_list = &flist;			/* function clock list */
     Out_init(f_list);
+    s_list = &slist;			/* send outputs */
+    Out_init(s_list);
 
     if (outFP != stdout) {
 	fclose(outFP);
@@ -301,12 +305,37 @@ icc(
 
 	time_cnt = 0;			/* clear time count */
 
-	do {
-	    /* scan arithmetic and logic output lists until empty */
-	    while (scan_ar(a_list) || scan(o_list));
-	    /* then scan clock list once and repeat until clock list empty */
-	    /* only then scan f_list, which holds if-else-switch events */
-	} while (scan_clk(c_list) || scan_clk(f_list));
+	/********************************************************************
+	 *  New I/O handling and the sequencing of different action lists
+	 *
+	 *  1   initialisation - put EOP on o_list
+	 *      # actions after an idle period:
+	 *  2   Loop:   scan a_list unless empty
+	 *                 INPW ARITH to a_list
+	 *                 comparisons to o_list
+	 *                 clocked actions to c_list via own clock list
+	 *  3          scan o_list; goto Loop unless empty
+	 *                 bits used in arithmetic to a_list (less common)
+	 *                 clocked actions to c_list via own clock list
+	 *  4          scan c_list; goto Loop unless empty
+	 *                 put ARITH and GATE actions on a_list and o_list
+	 *                 defer 'if else switch' C actions to f_list
+	 *  5          scan f_list; goto Loop unless empty
+	 *                 C actions can generate now ARITH and GATE actions
+	 *  6   scan s_list			# only one scan is required
+	 *          do OUTW Gates building send string
+	 *      send output string with final outputs only
+	 *      switch to alternate a_list and o_list
+	 *      idle - wait for next input
+	 *      read new input and link INPW Gates directly to a_list
+	 *      or via traMb to o_list
+	 *  Loop algorithms with for or do while - continue are all incorrect
+	 *******************************************************************/
+      Loop:
+	if (a_list != a_list->gt_next) { scan_ar (a_list);            }
+	if (o_list != o_list->gt_next) { scan    (o_list); goto Loop; }
+	if (c_list != c_list->gt_next) { scan_clk(c_list); goto Loop; }
+	if (f_list != f_list->gt_next) { scan_clk(f_list); goto Loop; }
 
 	if (scan_cnt || link_cnt) {
 	    fprintf(outFP, "\n");
@@ -323,18 +352,14 @@ icc(
 #endif
 	    scan_cnt = link_cnt = 0;
 	}
-
-/********************************************************************
- *
- *	Switch to alternate lists
- *
- *	alternate list contains all those gates which were marked in
- *	the previous scan and which were active more than
- *	MARKMAX times. These are oscillators which wil be
- *	scanned again in the next cycle.
- *
- *******************************************************************/
-
+	/********************************************************************
+	 *  Switch to alternate lists
+	 *
+	 *  alternate list contains all those gates which were marked in
+	 *  the previous scan and which were active more than
+	 *  MARKMAX times. These are oscillators which wil be
+	 *  scanned again in the next cycle.
+	 *******************************************************************/
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
 	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
 
@@ -359,13 +384,9 @@ icc(
 	}
 #endif
 	display();				/* inputs and outputs */
-
-/********************************************************************
- *
- *	Input from keyboard and time input if used
- *
- *******************************************************************/
-
+	/********************************************************************
+	 *  Input from keyboard and time input if used
+	 *******************************************************************/
     TestInput:
 	while (!kbhit() && !flag1C);		/* check inputs */
 	cnt = 1;
@@ -518,7 +539,7 @@ icc(
 
 /********************************************************************
  *
- *	display inputs & outputs
+ *	Display inputs & outputs
  *
  *******************************************************************/
 
@@ -644,7 +665,7 @@ void interrupt handler1C(void)
 
 /********************************************************************
  *
- *	initialize IO
+ *	Initialize IO
  *
  *******************************************************************/
 

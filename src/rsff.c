@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.37 2004/03/04 12:32:21 jw Exp $";
+"@(#)$Id: rsff.c,v 1.38 2004/05/12 09:09:09 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,23 +25,30 @@ static const char rsff_c[] =
 
 #define min(x,y) ((x) < (y) ? (x) : (y))
 
+/********************************************************************
+ *
+ *	bitIndex[] is a 256 byte array, whose values represent the
+ *	bit position 0 - 7 of the rightmost 1 bit of the array index
+ *
+ *******************************************************************/
+
 unsigned char	bitIndex[]   = {
-    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	/* 0x01 0x02 0x04 0x08 */
-    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	/* 0x10 */
-    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x20 */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x40 */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x80 */
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+ 0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
 };
 
 /********************************************************************
@@ -935,6 +942,46 @@ fScf(					/* F_CF and F_CE slave action on CF */
 
 /********************************************************************
  *
+ *	Distribute received logical input byte to correct
+ *	logical input bit Gate
+ *
+ *******************************************************************/
+
+int
+traMb(					/* TRAB master action */
+    Gate *	gm,			/* NOTE: there is no slave action */
+    Gate *	out_list)
+{
+    int		diff;
+    int		index;
+    int		mask;
+    int		val;
+    int		count;
+    Gate *	gs;
+
+    count = 0;
+    diff = gm->gt_new ^ gm->gt_old;
+    assert (diff && !(diff & ~0xff));
+    while (diff) {
+	index = bitIndex[diff];		/* returns 0 - 7 for values 1 - 255 */
+	assert(index < 8);		/* ZZZ can be removed after initial testing */
+	mask  = bitMask[index];		/* returns hex 01 02 04 08 10 20 40 80 */
+	if ((gs = gm->gt_list[index]) != 0) {		/* is bit Gate allocated ? */
+	    val   = (gm->gt_new & mask) ? -1 : 1;	/* yes */
+	    if (gs->gt_val != val) {
+		gs->gt_val = val;
+		link_ol(gs, o_list);	/* fire input bit Gate */
+		count++;		/* count Gates linked */
+	    }
+	}
+	diff &= ~mask;			/* clear the bit just processed */
+    }
+    gm->gt_old = gm->gt_new;
+    return count;			/* used to adjust YYDEBUG output */
+} /* traMb */
+
+/********************************************************************
+ *
  *	Output to a word or byte whose slot index is in gt_list.
  *		gt_mark == B_WIDTH means 1 byte is output
  *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
@@ -979,14 +1026,6 @@ outMw(					/* OUTW master action */
 	mask = gm->gt_mark;
 	assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
 	cage = slot >> 3;		/* test here because of cage algorithm */
-#ifdef MIXED
-	if (out_list == o_list) {
-	    /* called from logic scan - convert d to a */
-	    /* MIXED mode is currently not compiled - ERROR */
-	    gm->gt_new = gm->gt_val < 0 ? 1 : 0;
-	}
-#endif
-
 	val = gm->gt_old = gm->gt_new;	/* update gt_old since no link_ol */
 #if defined(TCP) && defined(LOAD)
 	if (gm->gt_live & 0x8000) {
@@ -1037,18 +1076,8 @@ outMw(					/* OUTW master action */
 
 /********************************************************************
  *
- *	Output a bit to a bit field whose slot index is in gt_list.
+ *	Transfer this output bit to the associated byte output Gate
  *		gt_mark contains the bit position as an 8 bit mask.
- *
- *	For initialisation purposes this ftype OUTX Gate is acted on
- *	by exactly one GATE node defined in an output assignment.
- *	This must line up with OUTP_M (1). This is checked in i_ff3().
- *		QX0.0 = O0;	// output O0 to bit 0.0
- *	O0 can be used as a logical value (ftype is GATE) and may be
- *	any logical or arithmetic function, including INPUT.
- *
- *	NOTE: This action does not act on a clocked slave object.
- *	      and the node is not linked to any action or clock list
  *
  *******************************************************************/
 
@@ -1057,39 +1086,41 @@ outMx(					/* OUTX master action */
     Gate *	gm,			/* NOTE: there is no slave action */
     Gate *	out_list)
 {
-    int			slot;
-    int			cage;
-    unsigned char	mask;
+    int		mask;
+    int		val;
+    Gate *	gs;
 
-    slot = (int)gm->gt_list;
-    mask = (unsigned char)gm->gt_mark;
-    assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
-    cage = slot >> 3;			/* test here because of cage algorithm */
-#ifdef MIXED
-    if (out_list == a_list) {
-	/* called from arithmetic scan - convert a to d */
-	/* MIXED mode is currently not compiled - ERROR */
-	gm->gt_val = gm->gt_new ? -1 : 1;
-    }
-#endif
+    gs = (Gate*)(gm->gt_list);			/* OUTW Gate */
+    mask = gm->gt_mark;
 #if defined(TCP) && defined(LOAD)
     if (gm->gt_live & 0x8000) {
 	liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
     }
 #endif
-    if (gm->gt_val < 0) {		/* output action */
-	QX_[slot] |= mask;		/* set bit at slot,mask */
+    val = gs->gt_new;
+    if (gm->gt_val < 0) {			/* output action */
+	val |= mask;				/* set bit in byte Gate */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('1', outFP);
 #endif
     } else {
-	QX_[slot] &= ~mask;		/* clear bit at slot,mask */
+	val &= ~mask;				/* clear bit in byte gate */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('0', outFP);
 #endif
     }
-    QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
-    QMM |= bitMask[cage & 0x7];		/* mark the rack */
+    if (val != gs->gt_new) {			/* could use assert */
+	gs->gt_new = val;
+	if (
+	    (gs->gt_old != gs->gt_new)		/* any change */
+	    ^ (gs->gt_next != 0)		/* xor glitch */
+	) {
+	    link_ol(gs, s_list);		/* master action to send list */
+//	    link_ol(gs, a_list);		/* ZZZ master action to arith list */
+	}
+    } else {
+	assert(0);				/* ZZZ change to assert above */
+    }
 } /* outMx */
 
 /********************************************************************
@@ -1153,16 +1184,15 @@ clockSfn(				/* Clock function */
     Gate *	np;
 #endif
     /********************************************************************
-     * the clock list is controlled by a control block which is the
+     * the clock list is controlled by a control block which is the slave
      * Gate structure which goes with this function
      *******************************************************************/
-
     assert(gm->gt_val < 0);		/* C clock receives -1 ==> 1 ??? */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) {
-	fprintf(outFP, "\tC %s", gs->gt_ids);
-    }
+	if (debug & 0100) {
+	    fprintf(outFP, "\tC %s", gs->gt_ids);
+	}
 #endif
     gs->gt_val = -1;				/* set for visualization only */
 #if defined(TCP) && defined(LOAD)
@@ -1170,10 +1200,10 @@ clockSfn(				/* Clock function */
 	liveData(gs->gt_live, 1L);		/* live is active */
     }
 #endif
-    if (gs->gt_next != gs) {
+    if (gs->gt_next != gs) {			/* skip if this clock list empty */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
-	    int	dc = 0;				/* functions which are clocked */
+	    dc = 0;				/* functions which are clocked */
 	    for (tp = gs->gt_next; tp != gs; tp = tp->gt_next) {
 		if (dc++ >= 8) {
 		    dc = 1;
@@ -1198,11 +1228,6 @@ clockSfn(				/* Clock function */
 #endif
 	Out_init(gs);				/* relink empty gs */
     }
-#ifdef LEVEL
-    if ((gs = gm->gt_clk) != c_list) {
-	link_ol(gm, gs);
-    }
-#endif
 } /* clockSfn */
 
 Functp	clock_i[] = {pass1, null1, i_ff3, null1};	/* no output lists */
@@ -1228,10 +1253,9 @@ timerSfn(				/* Timer function */
     Gate *	tp;			/* functions which are timed */
     Gate *	np;
     /********************************************************************
-     * the timer list is controlled by a control block which is the
+     * the timer list is controlled by a control block which is the slave
      * Gate structure which goes with this function
      *******************************************************************/
-
     assert(gm->gt_val < 0);		/* T timer receives -1 ==> 1 ??? */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
@@ -1245,14 +1269,11 @@ timerSfn(				/* Timer function */
 	liveData(gs->gt_live, 1L);		/* live is active */
     }
 #endif
-    if ((np = gs->gt_next) != gs) {
-#if YYDEBUG && !defined(_WINDOWS)
-	int	dc = 1;	/* allow for (time) */
-#endif
+    if ((np = gs->gt_next) != gs) {		/* skip if this clock list empty */
 	np->gt_mark--;				/* count down first element */
-
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
+	    dc = 1;					/* allow for (time) */
 	    fprintf(outFP, "\t(%d)", np->gt_mark);
 	}
 #endif

@@ -18,7 +18,7 @@
 #ifndef ICG_H
 #define ICG_H
 static const char icg_h[] =
-"@(#)$Id: icg.h,v 1.4 2004/01/25 19:21:29 jw Exp $";
+"@(#)$Id: icg.h,v 1.5 2004/04/18 12:49:21 jw Exp $";
 
 #ifndef INT_MAX
 #include	<limits.h>
@@ -44,21 +44,22 @@ static const char icg_h[] =
 #define	CF	12	/* IF clocked action NOTE: no output */
 		    /* values from extermal sources */
 #define	NCONST	13	/* constant number */
-#define	INPW	14	/* arithmetic input */
-#define	INPX	15	/* logical input */
+#define	INPB	14	/* byte input from bit output OUTX */
+#define	INPW	15	/* arithmetic input */
+#define	INPX	(INPW+1) /* logical input */
 		    /* clock functions controlling clock lists */
-#define	CLK	16	/* CLOCK clocked action */
-#define	TIM	17	/* TIMER clocked action */
+#define	CLK	17	/* CLOCK clocked action */
+#define	TIM	18	/* TIMER clocked action */
 		    /* non executable functions */
-#define	ALIAS	18	/* non executable functions */
-#define	ERR	19	/* mark node which had error during generation */
+#define	ALIAS	19	/* non executable functions */
+#define	ERR	20	/* mark node which had error during generation */
 		    /* for compilation only */
-#define	KEYW	20	/* hold yacc token, used for compilation only */
+#define	KEYW	21	/* hold yacc token, used for compilation only */
 		    /* for C-compilation only */
-#define	CTYPE	21	/* C Types */
-#define	CWORD	22	/* C tokens used temporarily */
+#define	CTYPE	22	/* C Types */
+#define	CWORD	23	/* C tokens used temporarily */
 
-#define	IFUNCT	23	/* immediate function type */
+#define	IFUNCT	24	/* immediate function type */
 
 #define	MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define	MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
@@ -80,8 +81,8 @@ static const char icg_h[] =
 
 #define	UDFA	0	/* indices into action function arrays */
 		    /* unclocked immediate outputs */
-#define	ARITH	1	/* arithmetic output */
-#define	GATE	2	/* logical output */
+#define	ARITH	1	/* arithmetic action */
+#define	GATE	(ARITH+1) /* logical action */
 		    /* clocked actions used internally */
 #define	RI_BIT	3	/* RISE logical action */
 #define	CH_BIT	4	/* CHANGE logical or arithmetic action */
@@ -97,11 +98,12 @@ static const char icg_h[] =
 #define	CLCK	14	/* CLOCK logical action */
 #define	TIMR	15	/* TIMER logical action */
 		    /* outputs to external sinks */
-#define	OUTW	16	/* arithmetic output */
-#define	OUTX	17	/* logical output */
+#define	TRAB	16	/* logical input byte transferred to INPX */
+#define	OUTW	17	/* arithmetic output */
+#define	OUTX	18	/* logical output */
 		    /* clock outputs */
-#define	CLCKL	18	/* clock action */
-#define	TIMRL	19	/* timer action */
+#define	CLCKL	19	/* clock action */
+#define	TIMRL	20	/* timer action */
 
 typedef struct Gate {			/* Gate */
 	char		gt_val;		/* forward logic value */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.75 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: outp.c,v 1.76 2004/05/15 13:55:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -834,7 +834,12 @@ extern Gate *	_l_[];\n\
 		linecnt++;
 	    }
 	    if ((typ &= ~EM) < MAX_LV) {
-		if ((dc = sp->ftype) == ARITH) {
+		dc = sp->ftype;
+		if (typ == INPX) {
+		    assert(dc == GATE || dc == ARITH);
+		    assert(sp->u_blist == 0);
+		}
+		if (dc == ARITH) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			List_e **	tlpp;
 			/* leave out timing controls */
@@ -853,7 +858,8 @@ extern Gate *	_l_[];\n\
 			    lpp = &lp->le_next;		/* lpp to next link */
 			}
 		    }
-		} else if (dc == GATE) {
+		} else
+		if (dc == GATE) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			/* leave out timing controls */
 			if (lp->le_val != (unsigned) -1) {
@@ -868,16 +874,19 @@ extern Gate *	_l_[];\n\
 			    lpp = &lp->le_next;		/* lpp to next link */
 			}
 		    }
-		} else if (dc == TIMR &&
+		} else
+		if (dc == OUTX) {
+		    assert(typ == OR);
+		} else
+		if (dc == TIMR &&
 		    (lp = sp->list) != 0 &&
 		    (tsp = lp->le_sym) != 0 &&
 		    tsp->u_val < lp->le_val) {
 		    tsp->u_val = lp->le_val;	/* store timer preset off value */
 		}				/* temporarily in u (which is 0) */
-		if (dc == OUTW && (lp = sp->list) != 0) {
-		    assert(0);			/* #define no longer in use */
-		}
-	    } else if (typ < MAX_OP) {
+		assert(dc != OUTW || sp->list == 0);	/* #define no longer in use */
+	    } else
+	    if (typ < MAX_OP) {
 		/********************************************************************
 		 * this initialisation of clock references relies on gates which
 		 * execute a function ftype != GATE having only one output which
@@ -921,7 +930,8 @@ extern Gate *	_l_[];\n\
 		    lp->le_sym = sp;
 		    lp->le_next = nlp;			/* restore ffexpr value list */
 		}
-	    } else if (typ == ALIAS) {
+	    } else
+	    if (typ == ALIAS) {
 		if ((lp = sp->list) == 0) {
 		    snprintf(errorBuf, sizeof errorBuf,
 			"Alias '%s' has no output",
@@ -1021,6 +1031,11 @@ extern Gate *	_l_[];\n\
 		strcmp(sp->name, "iClock") != 0) {
 		mask = 0;
 		modName = mN(sp);	/* modified string, byte and bit */
+		/********************************************************************
+		 * mN() sets cnt, iqt, xbwl, byte and bit via IEC1131() as side effect
+		 * generate gt_val (initial gate count) and
+		 * gt_ini (-type except for AND OR LATCH, which repeat gate count)
+		 *******************************************************************/
 		if (typ >= AND && typ < MAX_GT) {	/* AND OR LATCH */
 		    if (typ == OR) {
 			dc = 1;				/* typ == OR */
@@ -1045,8 +1060,10 @@ extern Gate *	_l_[];\n\
 		    }
 		    fprintf(Fp, " = { 1, -%s,", full_type[typ]);	/* -gt_ini */
 		}
+		/* generate gt_fni (ftype), gt_mcnt (0) and gt_ids */
 		fprintf(Fp, " %s, 0, \"%s\",",
 		    full_ftype[dc = sp->ftype], sp->name);
+		/* generate gt_list */
 		if (dc >= MIN_ACT && dc < MAX_ACT) {
 		    /* gt_list */
 		    fprintf(Fp, " &_l_[%d],", li);
@@ -1063,36 +1080,29 @@ extern Gate *	_l_[];\n\
 			    li++;		/* count C var on list */
 			}
 		    }
-		} else if (dc == OUTW) {
+		} else
+		if (dc == OUTW) {
 		    if (iqt[0] == 'Q' &&	/* QB0_0 is cnt == 3 (no tail) */
 			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3 && byte < IXD) {
-			fprintf(Fp, " (Gate**)%d,", byte);
-			mask = xbwl[0] == 'B' ? B_WIDTH :
-			       xbwl[0] == 'W' ? W_WIDTH :
-#if INT_MAX != 32767 || defined (LONG16)
-			       xbwl[0] == 'L' ? L_WIDTH :
-#endif
-						0;
+			fprintf(Fp, " 0,");
 		    } else {
 			goto OutErr;
 		    }
-		} else if (dc == OUTX) {
+		} else
+		if (dc == OUTX) {
 		    if (iqt[0] == 'Q' &&
 			xbwl[0] == 'X' &&	/* QX0.0_0 is cnt == 5 */
 			cnt == 5 && byte < IXD && bit < 8) {
-			/* OUTPUT byte part of bit pointer */
-			fprintf(Fp, " (Gate**)%d,", byte);
-			mask = bitMask[bit];
+			fprintf(Fp, " 0,");
 		    } else {
 		    OutErr:
-			fprintf(Fp, " (Gate**)0,\n");
+			fprintf(Fp, " 0,\n");
 			linecnt++;
 			snprintf(errorBuf, sizeof errorBuf,
 			    "OUTPUT byte or bit address exceeds limit: %s",
 			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
-			mask = 0;	/* no output because mask is 0x00 */
 		    }
 		} else {
 		    fprintf(Fp, " 0,");		/* no gt_list */
@@ -1103,26 +1113,29 @@ extern Gate *	_l_[];\n\
 			}
 		    }
 		}
+		/* generate gt_rlist */
 		if (typ == ARN || (typ >= AND && typ < MAX_GT)) {
 		    fprintf(Fp, " &_l_[%d],", li);	/* gt_rlist */
 		    for (lp = sp->u_blist; lp; lp = lp->le_next) {
-			li++;	/* space in input list */
+			li++;			/* space in input list */
 		    }
 		    /* space for dual GATE list or ARITH with FUNCTION */
 		    li += 2;
-		} else if (typ == INPW) {
+		} else
+		if (typ == INPW) {
 		    if (iqt[0] == 'I' &&	/* IB0 is cnt == 3 */
 			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3 && byte < IXD) {
-			fprintf(Fp, " &I%s_[%d],", xbwl, byte);
+			fprintf(Fp, " 0,");
 		    } else {
 			goto InErr;
 		    }
-		} else if (typ == INPX) {
+		} else
+		if (typ == INPX) {
 		    if (iqt[0] != 'Q' &&	/* can only be 'I' or 'T' */
 			xbwl[0] == 'X' &&	/* IX0.0 is cnt == 4 */
 			cnt == 4 && byte < IXD && bit < 8) {
-			fprintf(Fp, " &%sX_[%d],", iqt, byte * 8 + bit);
+			fprintf(Fp, " 0,");
 		    } else {
 		    InErr:
 			fprintf(Fp, " 0,\n");
@@ -1135,7 +1148,9 @@ extern Gate *	_l_[];\n\
 		} else {
 		    fprintf(Fp, " 0,");		/* no gt_rlist */
 		}
+		/* generate gt_next, which points to previous Gate */
 		fprintf(Fp, " %s%s", sam, nxs);
+		/* optionally generate timer pre-set value in gt_mark */
 		if (mask != 0) {
 		    fprintf(Fp, ", %d", mask);	/* bitMask for OUT */
 		}

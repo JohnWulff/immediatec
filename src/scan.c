@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.28 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: scan.c,v 1.29 2004/05/13 09:18:49 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -26,42 +26,42 @@ static void	link_c(Gate * gp, Gate * out_list);
 
 /********************************************************************
  *
- *	The following 5 arrays are indexed by gt_fni is ftype
+ *	The following 5 arrays are indexed by gt_fni (is ftype)
  *
  *	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
  *	F_SW	S_FF	R_FF	D_FF	F_CF	F_CE	CLCK	TIMR
- *	OUTW	OUTX	CLCKL	TIMRL
+ *	TRAB	OUTW	OUTX	CLCKL	TIMRL
  *
  *******************************************************************/
 
 Functp2		initAct[] = {		/* called in pass4 */
 		    err_fn, arithMa, link_ol, link_c, chMbit, link_c, link_c, dMsh,
 		    link_c, link_c, link_c, link_c, link_c, link_c, link_c, link_c,
-		    outMw, outMx, err_fn, err_fn,
+		    err_fn, outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		masterAct[] = {		/* called in scan, scan_ar and pass4 */
 		    err_fn, arithMa, link_ol, riMbit, chMbit, sMsh, rMsh, dMsh,
 		    fMsw, sMff, rMff, dMff, fMcf, fMce, fMfn, fMfn,
-		    outMw, outMx, err_fn, err_fn,
+		    err_fn, outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		slaveAct[] = {		/* called in scan_clk */
 		    err_fn, err_fn, err_fn, riSbit, chSbit, sSsh, rSsh, dSsh,
 		    fSsw, sSff, rSff, dSff, fScf, fScf, clockSfn, timerSfn,
-		    err_fn, err_fn, err_fn, err_fn,
+		    err_fn, err_fn, err_fn, err_fn, err_fn,
 		};
 
 Functp		init2[] = {		/* called in pass2 */
 		    null1, gate2, gate2, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
 		    null1, i_ff2, i_ff2, i_ff2, null1, null1, i_ff2, i_ff2,
-		    null1, null1, null1, null1,
+		    null1, null1, null1, null1, null1,
 		};
 
 unsigned int	bit2[] = {		/* used in i_ff2() and i_ff3() */
 		    0, INPT_M, INPT_M, RI_B_M, CH_B_M, S_SH_M, R_SH_M, D_SH_M,
 		    F_CW_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, F_CF_M, CLCK_M, TIMR_M,
-		    OUTP_M, OUTP_M, 0, 0,
+		    0, OUTP_M, 0, 0, 0,	/* TRAB and OUTX ==> 0 jw 040417 */
 		};
 
 Gate *		gx;	/* used to point to action Gate in chMbit riMbit */
@@ -87,7 +87,7 @@ short		dc;	/* debug display counter in scan and rsff */
  *
  *******************************************************************/
 
-int
+void
 scan_ar(Gate *	out_list)
 {
 #if INT_MAX == 32767 && defined (LONG16)
@@ -99,9 +99,6 @@ scan_ar(Gate *	out_list)
     Gate **		lp;
     Gate *		op;
 
-    if (out_list->gt_next == out_list) {
-	return 0;			/* list was empty */
-    }
 #if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, "\narith scan ==========");
@@ -213,7 +210,6 @@ scan_ar(Gate *	out_list)
 #endif
 	}
     }
-    return 1;				/* list was not empty */
 } /* scan_ar */
 
 /********************************************************************
@@ -234,7 +230,7 @@ scan_ar(Gate *	out_list)
  *
  *******************************************************************/
 
-int
+void
 scan(Gate *	out_list)
 {
     int			val;
@@ -242,9 +238,6 @@ scan(Gate *	out_list)
     Gate **		lp;
     Gate *		op;
 
-    if (out_list->gt_next == out_list) {
-	return 0;			/* list was empty */
-    }
 #if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, "\nlogic scan ==========");
@@ -326,7 +319,6 @@ scan(Gate *	out_list)
 #endif
 	}
     }
-    return 1;				/* list was not empty */
 } /* scan */
 
 /********************************************************************
@@ -361,7 +353,7 @@ scan(Gate *	out_list)
  *
  *******************************************************************/
 
-int
+void
 scan_clk(Gate *	out_list)	/* scan a clock list */
 {
     Gate *	op;
@@ -369,9 +361,6 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
     Gate *	gp;
 #endif
 
-    if (out_list->gt_next == out_list) {
-	return 0;			/* list was empty */
-    }
 #if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, out_list == c_list ? "\nclock scan =========="
@@ -397,8 +386,43 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 	/* only fScf() and fSsw() require out_list to switch to f_list */
 	(*slaveAct[op->gt_fni])(op, out_list);	/* execute slave action */
     }
-    return 1;				/* list was not empty */
 } /* scan_clk */
+
+/********************************************************************
+ *
+ *	scan_snd
+ *
+ *******************************************************************/
+
+void
+scan_snd(Gate *	out_list)
+{
+    Gate *	op;
+
+#if YYDEBUG && !defined(_WINDOWS)
+    if (debug & 0100) {
+	fprintf(outFP, "\nsend scan ==========");
+    }
+#endif
+    while ((op = out_list->gt_next) != out_list) {
+#ifndef DEQ
+	out_list->gt_next = op->gt_next;		/* unlink from */
+	op->gt_next = 0;				/* output list */
+	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
+	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
+	}
+#else
+	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
+	gp->gt_prev = out_list;			/* list <== next */
+	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
+#endif
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) fprintf(outFP, "\n%s:\t", op->gt_ids);
+#endif
+	outMw(op, 0);				/* Master action is always outMw() */
+	scan_cnt++;				/* count scan operations */
+    }
+} /* scan_snd */
 
 /********************************************************************
  *
