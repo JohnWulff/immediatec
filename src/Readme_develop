@@ -14,16 +14,19 @@ Building the distribution is described in detail in README. The usual
 steps followed in Linux projects has been adopted: tar -x, configure,
 make, make test, make install.
 
-This builds and installs three components from the sources:
+This builds and installs four components from the sources:
 
     icc		the iC compiler with integrated run-time character
-		I/O test environment (used mainly under DOS)
+		I/O test environment (was used mainly under DOS)
 
     ict		the iC compiler with integrated run-time TCP/IP
 		test environment (used with networking components)
 
     libict.a	a static library to build stand alone applications
 		from iC sources for the TCP/IP test environment
+
+    lmain	lmain only tests the internal C-parser and is not
+		required for any other purpose
 
 Additionally a number of Perl and sh scripts are installed to establish
 a TCP/IP networking environment for testing iC applications:
@@ -79,11 +82,16 @@ Scripts:
     iCserver:	#!/usr/bin/perl -w -P
 
     makeAll:	#!/bin/sh
-		calls 'make' with the correct environments to make
-		icc, ict and libict.a
-		calls 'make' with OPT=YYDEBUG to make icc
-		calls 'make' with OPT=TCP to make ict
-		calls 'make' with OPT=LOAD TCP to make libict.a
+		calls 'make' with the correct environment to make
+		icc, ict, libict.a and lmain
+		-q output only headings and error messages
+		calls 'make' with OPT=''  to make icc           (OPT+=YYDEBUG if -c)
+		calls 'make' with OPT=TCP to make ict           (OPT+=YYDEBUG if -t)
+		calls 'make' with OPT=LOAD TCP to make libict.a (OPT+=YYDEBUG if -l)
+		calls 'make' with OPT=LMAIN to make lmain       (OPT+=YYDEBUG if -m)
+		"make" or "make all" calls makeAll -cm
+		"make quiet" calls makeAll -qcm
+		use makeAll directly if different options are required
 
     pplstfix:	#! /usr/bin/perl -w
 		Postprocessor used to fix forward references in
@@ -136,4 +144,4 @@ Auxiliary scripts for testing compiler outputs
 		(these are made with mpv) assumes version directories
 		Test/Alex??
 
-$Id: Readme_develop,v 1.2 2002/09/02 17:45:58 jw Exp $
+$Id: Readme_develop,v 1.3 2002/10/07 12:00:37 jw Exp $

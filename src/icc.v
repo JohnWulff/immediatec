@@ -1,14 +1,14 @@
-@(#)$Id: icc.v,v 1.91 2002/09/03 17:50:32 jw Exp $
+@(#)$Id: icc.v,v 1.92 2002/10/19 21:24:03 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
-Makefile.in     1.31    2002/09/03  17:35:46  jw      Exp
+Makefile.in     1.32    2002/10/08  16:28:02  jw      Exp
 Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
 README.tpl      1.11    2002/08/26  19:03:45  jw      Exp
-Readme_develop  1.2     2002/09/02  17:45:58  jw      Exp
+Readme_develop  1.3     2002/10/07  12:00:37  jw      Exp
 cexe.h          1.16    2002/08/26  19:45:22  jw      Exp
 comp.h          1.37    2002/08/26  21:56:19  jw      Exp
 comp.sed        1.3     2002/08/13  21:15:32  jw      Exp
-comp.y          1.75    2002/08/26  19:05:06  jw      Exp
+comp.y          1.76    2002/10/08  21:23:21  jw      Exp
 configure       1.3     2002/07/29  10:18:53  jw      Exp
 configure.in    1.3     2002/07/29  10:19:05  jw      Exp
 genr.c          1.53    2002/08/26  19:05:20  jw      Exp
@@ -18,10 +18,10 @@ iCbox           1.35    2002/06/03  13:14:26  jw      Exp
 iClive          1.25    2002/08/26  19:05:59  jw      Exp
 iCmake          1.22    2002/09/02  18:38:29  jw      Exp
 iCserver        1.26    2002/06/20  12:08:02  jw      Exp
-icc.c           1.19    2002/09/02  10:08:10  jw      Exp
+icc.c           1.20    2002/10/04  19:53:35  jw      Exp
 icc.h           1.45    2002/09/01  19:59:55  jw      Exp
 icg.h           1.2     2002/08/26  22:05:38  jw      Exp
-ict.c           1.32    2002/09/01  20:02:43  jw      Exp
+ict.c           1.33    2002/10/04  19:54:35  jw      Exp
 init.c          1.22    2002/08/26  20:41:47  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
 lexc.l          1.16    2002/08/26  20:16:37  jw      Exp
@@ -30,10 +30,10 @@ lmain.c         1.7     2002/08/26  19:11:25  jw      Exp
 load.c          1.36    2002/09/02  10:13:23  jw      Exp
 m               1.1     2002/09/02  09:19:13  jw      Exp
 main.c          1.37    2002/09/02  11:24:21  jw      Exp
-makeAll         1.11    2002/09/03  17:30:13  jw      Exp
-manifest        1.6     2002/09/02  17:46:31  jw      Exp
+makeAll         1.12    2002/10/07  15:30:38  jw      Exp
+manifest        1.7     2002/10/08  16:47:55  jw      Exp
 mkinstalldirs   1.1     2001/03/07  12:26:24  jw      Exp
-outp.c          1.62    2002/08/26  20:11:06  jw      Exp
+outp.c          1.63    2002/10/08  11:08:33  jw      Exp
 pawk.a          1.3     2002/08/26  16:41:34  jw      Exp
 perlinstall     1.7     2002/07/06  10:14:41  jw      Exp
 pplstfix        1.7     2002/08/14  12:06:44  jw      Exp

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.32 2002/09/01 20:02:43 jw Exp $";
+"@(#)$Id: ict.c,v 1.33 2002/10/04 19:54:35 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -94,6 +94,7 @@ icc(
     Gate *	g_lists,
     unsigned *	gate_count)
 {
+    int		i;
     short	pass;
     int		c;
     short	typ;
@@ -177,6 +178,9 @@ icc(
     msgOffset = 4;			/* strlen(msgBuf) */
 #endif
 
+    for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
+	QX_[i] = 0;			/* output size X, B or W during compilation */
+    }
     for (pass = 0; pass < 4; pass++) {
 #if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);

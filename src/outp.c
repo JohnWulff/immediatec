@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.62 2002/08/26 20:11:06 jw Exp $";
+"@(#)$Id: outp.c,v 1.63 2002/10/08 11:08:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -158,8 +158,8 @@ static int	extFlag;		/* set if extern has been recognised */
 
 /********************************************************************
  *
- *	errorEmit outputs an error line in the generated code
- *	and an error message
+ *	errorEmit outputs a warning line in the generated code
+ *	and an error message in the listing
  *
  *******************************************************************/
 
@@ -168,7 +168,7 @@ static char	errorBuf[256];	/* used for error lines in emitting code */
 static void
 errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
 {
-    fprintf(Fp, "/* error in emitting code. %s */\n", errorMsg);
+    fprintf(Fp, "#warning \"iC: %s\"\n", errorMsg);
     (*lcp)++;		/* count lines actually output */
     errmess("ErrorEmit", errorMsg, NS);	/* error sets iClock->type to ERR */
 } /* errorEmit */
@@ -394,8 +394,7 @@ buildNet(Gate ** igpp)
 					TX_[byte * 8 + bit] = gp;
 				    } else {
 				    inErr:
-		    warning("INPUT configuration too small for:", sp->name);
-				    /* ZZZ set some error bit to stop exec */
+		    error("INPUT byte or bit address exceeds limit:", sp->name);
 				    }
 				}
 			    } else if (sp->ftype < MAX_ACT) {
@@ -437,12 +436,12 @@ buildNet(Gate ** igpp)
 				    QT_[byte] = 'X';
 				} else {
 				outErr:
-		    warning("OUTPUT configuration too small for:", gp->gt_ids);
+		    error("OUTPUT byte or bit address exceeds limit:", gp->gt_ids);
 				    gp->gt_list = (Gate**)0;
 				    gp->gt_mark = 0;	/* no change in bits */
 				}
 			    } else {
-		    warning("OUTPUT strange ftype:", gp->gt_ids);
+		    error("OUTPUT strange ftype:", gp->gt_ids);
 			    }
 			    gp++;
 			} else if (typ < MAX_OP) {
@@ -471,6 +470,10 @@ buildNet(Gate ** igpp)
 		}
 	    }
 	}
+	if (iclock->type == ERR) {
+	    gp++;			/* error - count iClock */
+	    rc = 1;			/* generate error */
+	}
 	if ((val = gp - *igpp) == block_total) {
 	    gp = *igpp;			/* repeat to initialise timer links */
 	    for (typ = 0; typ < MAX_OP; typ++) {	/* keep gp in same order */
@@ -492,6 +495,10 @@ buildNet(Gate ** igpp)
 			}
 		    }
 		}
+	    }
+	    if (iclock->type == ERR) {
+		gp++;			/* error - count iClock */
+		rc = 1;			/* generate error */
 	    }
 	}
     }
@@ -844,7 +851,7 @@ linecnt += 27;
 			fprintf(Fp, " (Gate**)0,\n");
 			linecnt++;
 			snprintf(errorBuf, sizeof errorBuf,
-			    "OUT configuration error %s",
+			    "OUTPUT byte or bit address exceeds limit: %s",
 			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
 			mask = 0;	/* no output because mask is 0x00 */
@@ -883,7 +890,7 @@ linecnt += 27;
 			fprintf(Fp, " 0,\n");
 			linecnt++;
 			snprintf(errorBuf, sizeof errorBuf,
-			    "IN configuration error %s",
+			    "INPUT byte or bit address exceeds limit: %s",
 			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
 		    }

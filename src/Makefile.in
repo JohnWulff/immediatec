@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.31 2002/09/03 17:35:46 jw Exp $
+# @(#)$Id: Makefile.in,v 1.32 2002/10/08 16:28:02 jw Exp $
 
 ############################################################
 #
@@ -146,7 +146,7 @@ test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test ..."
 	@-${srcdir}/iCmake -iv ${srcdir}/Test/*.ic > ${srcdir}/Test/ErrorMessages.err 2>&1
 	@echo "diffing generated files in ${srcdir}/Test with originals in ${srcdir}/Test/ORG ..."
-	@if ${srcdir}/Mdiff -kle ${srcdir}/Test/*.* ${srcdir}/Test/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test/ORG"; fi
+	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test/ORG"; fi
 
 install:	installdirs
 	$(srcdir)/perlinstall -t $(srcdir)

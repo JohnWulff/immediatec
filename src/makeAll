@@ -21,13 +21,14 @@ usage ()
     echo 'Usage:	'${0##*/}' [-qh]' >&2
     echo '	call make for icc, ict and libict.a with the correct options' >&2
     echo '	-q	output only headings and error messages' >&2
+    echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-c	make icc with YYDEBUG -t trace output possible' >&2
     echo '	-t	make ict with YYDEBUG -t trace output possible' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain with YYDEBUG' >&2
     echo '		see usage of icc, ict and applications for other options' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.11 2002/09/03 17:30:13 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.12 2002/10/07 15:30:38 jw Exp $' >&2
 }
 
 makeIct ()
@@ -38,7 +39,7 @@ makeIct ()
     else
 	mkdir PptcObjs
     fi
-    make OPT="-DTCP$t" ict
+    make OPT="-DTCP$t" CFLAGS="$cflags" ict
     mv main.o ict.o comp.o genr.o gram.o lexc.o link.o rsff.o scan.o PptcObjs
     mv Make_tmp/* .
 }
@@ -51,7 +52,7 @@ makeLib ()
     else
 	mkdir LoadObjs
     fi
-    make OPT="-DLOAD -DTCP$l" libict.a
+    make OPT="-DLOAD -DTCP$l" CFLAGS="$cflags" libict.a
     mv ict.o scid.o link.o rsff.o scan.o LoadObjs
     mv Make_tmp/* .
 }
@@ -64,7 +65,7 @@ makeLmain ()
     else
 	mkdir LmainObjs
     fi
-    make OPT="-DLMAIN$m" lmain
+    make OPT="-DLMAIN$m" CFLAGS="$cflags" lmain
     mv gram.o lexc.o LmainObjs
     mv Make_tmp/* .
 }
@@ -74,6 +75,7 @@ c=""
 t=""
 l=""
 m=""
+cflags="-O2"			# optimisation, no debugging info
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -81,7 +83,8 @@ while [ $# -gt 0 ]; do
     -*)	option=${1#?}
 	while [ -n "$option" ]; do
 	    case $option in
-	    q*)	q=1;;	# echo only - dont kill
+	    q*)	q=1;;		# echo only - dont kill
+	    g*)	cflags="-g";;	# debugging, no optimisation
 	    c*)	c="-DYYDEBUG";;
 	    t*)	t=" -DYYDEBUG";;
 	    l*)	l=" -DYYDEBUG";;
@@ -110,13 +113,13 @@ if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
     cp -p cexe.c_empty cexe.c
 fi
 
-echo "make OPT=$c icc"
-make OPT=$c icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-echo "make OPT=-DTCP$t ict"
+echo "make OPT=$c CFLAGS=$cflags icc"
+make OPT=$c CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+echo "make OPT=-DTCP$t CFLAGS=$cflags ict"
 makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-echo "make OPT=-DLOAD -DTCP$l libict.a"
+echo "make OPT=-DLOAD -DTCP$l CFLAGS=$cflags libict.a"
 makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-echo "make OPT=-DLMAIN$m lmain"
+echo "make OPT=-DLMAIN$m CFLAGS=$cflags lmain"
 makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 
 rmdir Make_tmp

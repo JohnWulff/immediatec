@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.75 2002/08/26 19:05:06 jw Exp $";
+"@(#)$Id: comp.y,v 1.76 2002/10/08 21:23:21 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1914,45 +1914,83 @@ iClex(void)
 	} else if (isalpha(c) || c == '_') {
 	    unsigned char	wplus = 0;
 	    unsigned int	qtoken = 0;
+	    unsigned short	qmask = 0;
+	    unsigned short	iomask = 0xf;		/* output Q */
 	    unsigned char	typ = UDF;
 	    unsigned char	ftyp = UDFA;
+	    int			ixd = IXD;
 	    unsigned char	y0[2];
 	    unsigned char	y1[2];
 	    int			yn;
+	    int			yt;
+	    unsigned char	y2[2];
 
 	    while ((c = get(T0FP)) != EOF && (isalnum(c) || c == '_'));
 	    if (sscanf(iCtext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
-		if (y1[0] == 'B' || y1[0] == 'W') {
+		char tempBuf[TSIZE];	/* make long enough for format below */
+		if (y1[0] == 'B') {
 		    wplus = 1;
+		    qmask = 0x02;			/* QB or IB */
+		    goto foundQIT;
+		} else if (y1[0] == 'W') {
+		    wplus = 1;
+		    qmask = 0x0404;			/* QW or IW */
 		    goto foundQIT;
 		} else if (c == '.') {
-		    if (isdigit(c = get(T0FP))) {	/* can only be QX%d. */
-			while (isdigit(c = get(T0FP)));
+		    int c1, i1;
+		    if (isdigit(c1 = c = get(T0FP))) {	/* can only be QX%d. */
+			for (i1 = 0; isdigit(c = get(T0FP)); i1++);
+			if (c1 >= '8' || i1 > 0) {
+			    error("I/O bit address must be less than 8:", iCtext);
+			}
+			qmask = 0x01;			/* QX, IX or TX */
 		    foundQIT:
 			ftyp = GATE - wplus;		/* GATE or ARITH */
 			if (y0[0] == 'Q') {
 			    qtoken = lex_act[OUTX - wplus]; /* LOUT or AOUT */
 			} else {
 			    typ = INPX - wplus;		/* INPX or INPW */
+			    if (y0[0] != 'T') {
+				qmask <<= 4;		/* IX, IB or IW */
+				iomask <<= 4;		/* input I */
+			    } else {
+				qmask = iomask = 0;	/* TX (TB or TW) */
+				ixd = y1[0] == 'X' ? 1 : 0;	/* TX0.7 is max */
+			    }
 			}
 		    } else {
 			unget(c);		/* the non digit, not '.' */
 		    }
 		} else if (sscanf(iCtext, "%1[IQT]%1[BWX]%d__%d%1[A-Z_a-z]",
-		    y0, y1, &yn, &yn, y1) == 4) {
-		    warning("Variables with __ clash with I/O", iCtext);
-		    typ = ERR;			/* QX%d__%d not allowed */
-		}				/* QX%d__%d_ABC is OK */
-		if (yn >= IXD) {
-		    char tempBuf[TSIZE];		/* make long enough for format below */
-		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:", IXD);
+		    y0, y1, &yn, &yt, y2) == 4) {
+		    error("Variables with __ clash with I/O", iCtext);
+						/* QX%d__%d not allowed */
+		}				/* QX%d__%dABC is OK - not I/O */
+
+		if (yn >= ixd) {
+		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:",
+			ixd);
 		    error(tempBuf, iCtext);	/* hard error if outside range */
+		} else			/* test rest if yn < ixd (array bounds) */
+		if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
+		    error("WORD I/O must have even byte address:", iCtext);
+		} else			/* and yn is even for word addresses */
+		if (qmask & 0x4444) {
+		    if (*(unsigned short*)&QX_[yn] & ~qmask & iomask) {
+			error("I/O addresses more than 1 of bit, byte or word:",
+			    iCtext);		/* mixed mode warning */
+		    }
+		    *(unsigned short*)&QX_[yn] |= qmask; /* note word I/O */
+		} else
+		if (qmask) {
+		    if (QX_[yn] & ~qmask & iomask) {
+			error("I/O addresses more than 1 of bit, byte or word:",
+			    iCtext);		/* mixed mode warning */
+		    }
+		    QX_[yn] |= qmask;		/* note bit or byte I/O */
 		}
 	    }
 	    unget(c);
-	    if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
-		error("WORD I/O must have even byte address:", iCtext);
-	    }
 	    if ((symp = lookup(iCtext)) == 0) {
 		symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
 	    } else if (typ == ERR) {

@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.19 2002/09/02 10:08:10 jw Exp $";
+"@(#)$Id: icc.c,v 1.20 2002/10/04 19:53:35 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -144,6 +144,7 @@ icc(
     Gate *	g_lists,
     unsigned *	gate_count)
 {
+    int		i;
     short	pass;
     short	c;
     short	typ;
@@ -206,6 +207,9 @@ icc(
 #if YYDEBUG
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
 #endif
+    for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
+	QX_[i] = 0;			/* output size X, B or W during compilation */
+    }
     for (pass = 0; pass < 4; pass++) {
 #if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
