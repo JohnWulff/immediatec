@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.8 2000/06/10 11:27:58 jw Exp $";
+"@(#)$Id: main.c,v 1.9 2000/12/02 07:52:25 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -25,6 +25,7 @@ USAGE for compile mode:\n\
         -a              append linking info for 2nd and later files\n\
         -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n\
         -c              generate auxiliary file cexe.c to extend pplc compiler\n\
+                        (cannot be used if also compiling with -o)\n\
 USAGE for run mode:\n\
   %s [-txh]"
 #ifdef TCP
@@ -149,11 +150,16 @@ main(
 		    if (osc_max > 15) goto error;
 		    goto break2;
 		case 'o':
-		    if (! *++*argv) { --argc, ++argv; }
-		    outFN = *argv;	/* compiler output file name */
-		    exiFN = 0;
-		    exoFN = "cexe.tmp";
-		    goto break2;
+		    if (exiFN == 0) {
+			if (! *++*argv) { --argc, ++argv; }
+			outFN = *argv;	/* compiler output file name */
+			exoFN = "cexe.tmp";
+			goto break2;
+		    } else {
+			fprintf(stderr,
+			    "%s: cannot use both -c and -o option\n", progFN);
+			goto error;
+		    }
 		case 'l':
 		    if (! *++*argv) { --argc, ++argv; }
 		    listFN = *argv;	/* listing file name */
@@ -166,6 +172,10 @@ main(
 		    if (outFN == 0) {
 			exiFN = "cexe.h";
 			exoFN = "cexe.c";
+		    } else {
+			fprintf(stderr,
+			    "%s: cannot use both -o and -c option\n", progFN);
+			goto error;
 		    }
 		case 'A':
 		    Aflag = 1;		/* generate ARITH ALIAS in outFN */
@@ -197,10 +207,15 @@ main(
     }
     if ((r = compile(listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
-    } else if ((r = output(outFN)) != 0) {
+    } else if (exiFN == 0 && (r = output(outFN)) != 0) {
 	fprintf(stderr, OutputMessage[r < 4 ? r : 4], progFN, szNames[r]);
 	r += 10;
     }
-    if (exoFP) fclose(exoFP);
+    if (exoFP) {
+	fclose(exoFP);
+	if (exoFN && exiFN == 0) {
+	    unlink("cexe.tmp");
+	}
+    }
     return (r);	/* 1 - 6 compile errors, 11 - 16 output errors */
 } /* main */

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.8 2000/11/25 22:44:25 jw Exp $";
+"@(#)$Id: scan.c,v 1.9 2000/12/04 09:45:22 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -46,7 +46,7 @@ Functp		init2[] = {		/* called in pass2 */
 		};
 
 uchar	bit2[] = {		/* used in i_ff2() and i_ff3() */
-			0, INPT_M, INPT_M, D_SH_M, F_CF_M, RI_B_M, CH_B_M,
+			0, INPT_M, INPT_M, D_SH_M, F_CF_M, CH_B_M, RI_B_M,
 			CLCK_M, TIMR_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M,
 			OUTP_M, OUTP_M, 0, 0,
 		};

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.9 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: load.c,v 1.10 2000/12/04 09:45:22 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -78,7 +78,8 @@ compiled by:\n\
  *
  *******************************************************************/
 
-int cmp_gt_ids( const Gate **a, const Gate **b)
+static int
+cmp_gt_ids( const Gate **a, const Gate **b)
 {
     return( strcmp((*a)->gt_ids, (*b)->gt_ids) );
 }
@@ -89,11 +90,12 @@ int cmp_gt_ids( const Gate **a, const Gate **b)
  *
  *******************************************************************/
 
-void
-inError(Gate * op, Gate * gp)
+static void
+inError(int line, Gate * op, Gate * gp)
 {
     fprintf(stderr,
-	"	ERROR op = %s gp = %s\n", op->gt_ids, gp ? gp->gt_ids : "0");
+	"ERROR %s: line %d: op = %s gp = %s\n",
+	    __FILE__, line, op->gt_ids, gp ? gp->gt_ids : "'null'");
     errCount++;
 } /* inError */
 
@@ -240,7 +242,7 @@ main(
 	for (op = *opp; op != 0; op = op->gt_next) {
 	    val++;				/* count node */
 	    if (op->gt_ini == -ARN) {
-		if ((lp = op->gt_rlist) == 0) { inError(op, 0); goto ag1; }
+		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
 		if (df) printf("%-8s%3d:", op->gt_ids, op->gt_ini);
 		lp++;			/* skip function vector */
 		while ((gp = *lp++) != 0) { /* for ARN scan 1 list */
@@ -257,12 +259,12 @@ main(
 			gp->gt_mark++;	/* arithmetic output at gp */
 			link_count++;
 		    } else {
-			inError(op, gp);
+			inError(__LINE__, op, gp);
 		    }
 		}
 		if (df) printf("\n");
 	    } else if (op->gt_ini > 0) {
-		if ((lp = op->gt_rlist) == 0) { inError(op, 0); goto ag1; }
+		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
 		if (df) printf("%-8s%3d:", op->gt_ids, op->gt_ini);
 		i = 1;			/* LOGIC nodes AND, OR or LATCH */
 		/* for LOGIC scan 2 lists with i = 1 and -1 */
@@ -278,11 +280,11 @@ main(
 				    gp = (Gate*)gp->gt_rlist;
 				} else {
 				    if ((tlp = gp->gt_rlist) == 0) {
-					inError(op, gp);
+					inError(__LINE__, op, gp);
 				    } else if ((tgp = *tlp++) == 0) {
 					inversion ^= 1;
 					if ((tgp = *tlp++) == 0) {
-					    inError(op, gp);
+					    inError(__LINE__, op, gp);
 					}
 				    }
 				    gp = tgp;
@@ -309,7 +311,7 @@ main(
 			    gp->gt_mark++;	/* logic output at gp */
 			    link_count++;
 			} else {
-			    inError(op, gp);
+			    inError(__LINE__, op, gp);
 			}
 		    }
 		} while ((i = -i) != 1);
@@ -319,7 +321,7 @@ main(
 	    if (op->gt_ini != -ALIAS &&
 		(op->gt_fni == ARITH || op->gt_fni == GATE)) {
 		if (op->gt_list != 0) {
-		    inError(op, 0);
+		    inError(__LINE__, op, 0);
 		}
 		link_count++;			/* 1 terminator for ARITH */
 		if (op->gt_fni == GATE) {
@@ -328,18 +330,18 @@ main(
 	    } else if (op->gt_fni >= MIN_ACT && op->gt_fni < MAX_ACT) {
 		op->gt_mark++;			/* count self */
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
-		    inError(op, 0);		/* no slave node or funct */
+		    inError(__LINE__, op, 0);		/* no slave node or funct */
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    gp->gt_val++;		/* slave node */
 		}
 		if ((gp = *lp) == 0) {
-		    inError(op, 0);		/* no clock reference */
+		    inError(__LINE__, op, 0);		/* no clock reference */
 		} else {
 		    gp->gt_mark++;		/* clock node */
 		}
 	    } else if (op->gt_fni == OUTW || op->gt_fni == OUTX) {
 		if ((lp = op->gt_list) == 0) {
-		    inError(op, 0);		/* no output pointer */
+		    inError(__LINE__, op, 0);		/* no output pointer */
 		}
 	    }
 	}
@@ -505,18 +507,18 @@ main(
 	    if (df) printf("%-8s%3d%3d:",
 		op->gt_ids, op->gt_ini, op->gt_fni);
 	    if (op->gt_ini == -ARN) {
-		if ((gp = *op->gt_rlist) == 0) inError(op, 0);
+		if ((gp = *op->gt_rlist) == 0) inError(__LINE__, op, 0);
 		if (df) printf("	%p()", gp);
 	    } else if (op->gt_ini == -INPW || op->gt_ini == -INPX) {
 		if ((lp = op->gt_rlist) == 0) {
-		    inError(op, 0);
+		    inError(__LINE__, op, 0);
 		} else {
 		    *lp = op;		/* forward input link */
 		}
 		if (df) printf("	%p[]", lp);
 	    }
 	    if (op->gt_fni == UDFA) {
-		inError(op, 0);			/* UDFA */
+		inError(__LINE__, op, 0);			/* UDFA */
 	    } else if (op->gt_fni < MIN_ACT) {
 		lp = op->gt_list;		/* ARITH or GATE */
 		while ((gp = *lp++) != 0) {
@@ -529,14 +531,14 @@ main(
 		}
 	    } else if (op->gt_fni < MAX_ACT) {
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
-		    inError(op, 0);		/* action D_SH to F_CF */
+		    inError(__LINE__, op, 0);		/* action D_SH to F_CF */
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    if (df) printf("	%s,", gp->gt_ids);
 		} else {
 		    if (df) printf("	%p(),", gp);
 		}
 		if ((gp = *lp++) == 0) {
-		    inError(op, 0);
+		    inError(__LINE__, op, 0);
 		} else {
 		    if (df) printf("	%s,", gp->gt_ids);
 		    if (gp->gt_fni == TIMRL) {
@@ -545,16 +547,16 @@ main(
 		}
 	    } else if (op->gt_fni < CLCKL) {
 		if ((lp = op->gt_list) == 0) {
-		    inError(op, 0);		/* OUTW or OUTX */
+		    inError(__LINE__, op, 0);		/* OUTW or OUTX */
 		} else {
 		    if (df) printf("	%p[]	0x%02x", lp, op->gt_mark);
 		}
 	    } else if (op->gt_fni <= TIMRL) {
 		if ((lp = op->gt_list) != 0) {
-		    inError(op, 0);		/* CLCKL or TIMRL */
+		    inError(__LINE__, op, 0);		/* CLCKL or TIMRL */
 		}
 	    } else {
-		inError(op, 0);			/* unknown ftype */
+		inError(__LINE__, op, 0);			/* unknown ftype */
 	    }
 	    if (df) printf("\n");
 	}

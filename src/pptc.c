@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.3 2000/06/10 11:27:58 jw Exp $";
+"@(#)$Id: pptc.c,v 1.4 2000/12/04 09:45:22 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -204,10 +204,12 @@ pplc(
 	time_cnt = 0;			/* clear time count */
 
 	do {
+	    c = ENTER;
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list)) {
 		if (debug & 0300) {	/* osc or detailed info */
 		    display();		/* inputs and outputs */
+		    c = 0;
 		}
 	    }
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
@@ -240,6 +242,10 @@ pplc(
 	    for (gp = o_list->gt_next; gp != o_list; gp = gp->gt_next) {
 		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
+	}
+
+	if ((debug & 0300) && c == ENTER) {	/* osc or detailed info */
+	    display();				/* inputs and outputs */
 	}
 
 /********************************************************************

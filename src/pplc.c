@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.7 2000/06/10 11:27:58 jw Exp $";
+"@(#)$Id: pplc.c,v 1.8 2000/12/04 09:45:22 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -308,7 +308,7 @@ pplc(
 	    }
 	}
 
-	if (c == ENTER) {
+	if ((debug & 0300) && c == ENTER) {	/* osc or detailed info */
 	    display();				/* inputs and outputs */
 	}
 

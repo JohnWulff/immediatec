@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.6 2000/11/28 20:22:35 jw Exp $";
+"@(#)$Id: genr.c,v 1.7 2000/12/04 09:45:22 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -767,7 +767,7 @@ bTyp(List_e * lp)
  *******************************************************************/
 
 List_e *
-bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* tr, Val* pVal)
+bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 {
     List_e *	lp1;
     List_e *	lp2;
@@ -807,28 +807,23 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* tr, Val* pVal)
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
     }
 
-    if (pVal) {
-	if (tr == 0) {
-	    /* cblock for ffexpr */
-	    lp1->le_val = pVal->v;		/* unsigned int value for case # */
-	} else if (tr->v->le_sym->type == TIM) {
-	    /* extra Master is timed reset fed back from own output */
-	    lp1 = sy_push(ae1->v->le_sym);	/* use dummy ae1 fill link */
+    if (cr3) {
+	/* extra Master is timed reset fed back from own output */
+	lp1 = sy_push(ae1->v->le_sym);	/* use dummy ae1 fill link */
 
-	    lp2 = op_push(sy_push(sym->v), UDF, lp1);
-	    if (lp2->le_sym->ftype == S_FF) {
-		lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
-	    }
-	    lp2 = op_push(tr->v, lp2->le_sym->type, lp2);
-	    lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
-	    lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
-
-	    lp1->le_sym = lp3->le_sym;		/* fix link from own */
-	    tr->v->le_val = pVal->v;		/* unsigned int value for time */
-	} else {
-	    warning("not a timer clock for monoflop:", sym->v->name);
-	    return 0;
+	lp2 = op_push(sy_push(sym->v), UDF, lp1);
+	if (lp2->le_sym->ftype == S_FF) {
+	    lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
 	}
+	lp2 = op_push(cr3->v, lp2->le_sym->type, lp2);
+	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
+	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+
+	lp1->le_sym = lp3->le_sym;		/* fix link from own */
+    }
+    if (pVal) {
+	/* cblock for ffexpr */
+	lp1->le_val = pVal->v;		/* unsigned int value for case # */
     }
     return lp3;
 } /* bltin */

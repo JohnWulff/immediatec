@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.12 2000/11/24 14:44:45 jw Exp $";
+"@(#)$Id: pplc.h,v 1.13 2000/12/04 09:45:22 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -58,16 +58,17 @@ extern void	efree(void *);
 #define	EF	10
 #define	SW	11	/* NOTE: no output */
 #define	CF	12	/* NOTE: no output */
-#define	INPW	13	/* arithmetic input */
-#define	INPX	14	/* logical input */
+#define NCONST	13	/* constant number */
+#define	INPW	14	/* arithmetic input */
+#define	INPX	15	/* logical input */
 
-#define	CLK	15	/* functions which controll clock lists */
-#define	TIM	16
+#define	CLK	16	/* functions which controll clock lists */
+#define	TIM	17
 
-#define	ALIAS	17	/* non executable functions */
-#define	ERR	18
+#define	ALIAS	18	/* non executable functions */
+#define	ERR	19
 
-#define KEYW	19	/* hold yacc token, used for compilation only */
+#define KEYW	20	/* hold yacc token, used for compilation only */
 
 #define MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
@@ -92,8 +93,8 @@ extern void	efree(void *);
 #define F_CF	12	/* logical action */
 #define OUTW	13	/* arithmetic output */
 #define OUTX	14	/* logical output */
-#define CLCKL	15
-#define TIMRL	16
+#define CLCKL	15	/* clock action */
+#define TIMRL	16	/* timer action */
 
 #define MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
 #define MIN_ACT	D_SH	/* ftypes >= MIN_ACT cause an action */
@@ -113,35 +114,43 @@ extern void	efree(void *);
 #define INPT_M	0	/* only used for check so far */
 
 /* list of types */
-#define FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH","SH","FF",\
-	"VF","EF","SW","CF","INPW","INPX","CLK","TIM","ALIAS","ERR","KEYW"
+#define FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
+	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
+	"CLK","TIM","ALIAS","ERR","KEYW"
+
+#define OPS	".-+~&|%*#^/({=[<:!@?k"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
-#define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE, D_SH, D_FF,\
-	CH_BIT, RI_BIT, F_SW, F_CF, ARITH, GATE, CLCK, TIMR, GATE, GATE, 0
+#define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
+	D_SH, D_FF, CH_BIT, RI_BIT, F_SW, F_CF, ARITH, ARITH, GATE,\
+	CLCK, TIMR, GATE, GATE, 0
 
 /* compiler tokens corresponding to type */
-#define DEF_TYP	UNDEF, AVARC, AVAR, LVARC, LVAR
-
-/* list of ftypes */
-#define FULL_FTYPE "UDFA","ARITH","GATE","D_SH","F_SW","CH_BIT","RI_BIT",\
-	"CLCK","TIMR","S_FF","R_FF","D_FF","F_CF","OUTW","OUTX","CLCKL","TIMRL"
-
-/* types corresponding to ftypes */
-#define TYPES	UDF, ARN, OR, SH, SW, VF, EF,\
-	CLK, TIM, FF, FF, FF, CF, ARN, AND, ERR, ERR
-
-/* compiler tokens corresponding to ftype */
-#define DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
-	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, WACT, XACT, CVAR, TVAR
-
-#define OPS	".-+~&|%*#^/({[<:!@?k"	/* DEBUG display of types */
-#define FOPS	"UA HIVECTSRDFWX:!"	/* DEBUG display of ftypes */
+#define DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, NVAR,\
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\
-	ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i,\
+	ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i, ff_i,\
 	clock_i, clock_i, clock_i, clock_i,
+
+/* list of ftypes */
+#define FULL_FTYPE "UDFA","ARITH","GATE","D_SH","F_SW","CH_BIT","RI_BIT",\
+	"CLCK","TIMR","S_FF","R_FF","D_FF","F_CF","OUTW","OUTX",\
+	"CLCKL","TIMRL"
+
+#define FOPS	"UA HIVECTSRDFWX:!"	/* DEBUG display of ftypes */
+
+/* types corresponding to ftypes */
+#define TYPES	UDF, ARN, OR, SH, SW, VF, EF,\
+	CLK, TIM, FF, FF, FF, CF, ARN, AND,\
+	ERR, ERR
+
+/* compiler tokens corresponding to ftype */
+#define DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
+	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, WACT, XACT,\
+	CVAR, TVAR
 
 extern uchar	types[];		/*   comp.y   */
 extern uchar	ftypes[];

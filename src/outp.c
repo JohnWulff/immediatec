@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.13 2000/11/27 11:29:23 jw Exp $";
+"@(#)$Id: outp.c,v 1.14 2000/12/04 09:45:22 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -545,7 +545,7 @@ extern Gate *	l_[];\n\
 			}
 			fprintf(Fp, "Gate %-8s = { %d, %d,", modName, dc, dc);
 		    } else {
-			if (sp->ftype == OUTW) {
+			if (sp->ftype == OUTW || typ == NCONST) {
 			    fprintf(Fp, "Gate _%-7s", modName); /* modify */
 			} else {
 			    fprintf(Fp, "Gate %-8s", modName);
@@ -566,7 +566,7 @@ extern Gate *	l_[];\n\
 			} else if (lp->le_sym->type == TIM) {
 			    li++;	/* space for TIME or time function */
 			}
-		    } else if (sp->ftype == OUTW) {
+		    } else if (dc == OUTW) {
 			if (iqt[0] == 'Q' &&
 			    bwx[0] != 'X' &&	/* can only be B or W */
 			    cnt == 3 && byte < IXD) {
@@ -627,7 +627,7 @@ extern Gate *	l_[];\n\
 		    fprintf(Fp, " };\n");
 		    linecnt++;
 		    nxs = modName;		/* previous Symbol name */
-		    sam = dc == OUTW ? "&_" : "&";
+		    sam = (dc == OUTW || typ == NCONST) ? "&_" : "&";
 		    mask = 0;
 		}
 	    }
