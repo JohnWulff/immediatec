@@ -2,10 +2,18 @@
 
 ########################################################################
 #
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
 #	ICServer
 #
-#	Server which can accept any number of I/O clients
-#	and initially one controller (planned are many)
+#	Server which can accept any number of iC I/O clients
+#	and initially one iC controller (planned are many)
 #
 #	John E. Wulff	28-May-2000
 #
@@ -34,7 +42,7 @@
 #	that value at the sink. Several messages may be grouped
 #	and seperated by comma (,)
 #
-#	Byte and Word sources may all numbers X0 X1 .. X31 B0 B1 .. B31
+#	Byte source and sink Units may be X0 X1 X2 .. X31 B0 B1 B2 .. B31
 #	Word source and sink Units must be even W0 W2 W4 .. W30
 #
 #	The Server receives messages from the I/Os, identifies the
@@ -69,17 +77,21 @@ my $connICT;
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
+Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 	$named
-	-s host	ID of server (default '0.0.0.0')
-	-p port	service port for server and all clients (default '8778')
+	-s host	address of server - clients must specify the same address
+		     unless (default '0.0.0.0' which accepts any client)
+	-p port	service port of server for all clients  (default '8778')
 	-t	trace messages for debugging
 	-m	display elapsed time in seconds and microseconds
 	    (Requires Module Time::HiRes available from CPAN - see source)
 	-h	help, ouput this Usage text only
-	NOTE:	if a client call has arguments the call
-		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.17 2001/03/01 13:12:11 jw Exp $
+	NOTE:	if a client call has arguments, the call must be quoted
+		eg: @<<<<<<< 'DemoBox X1'
+		$named
+Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
+							  '@'
+$Id: ICServer,v 1.18 2001/03/02 12:57:20 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);

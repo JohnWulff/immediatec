@@ -10,20 +10,20 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	make icc icl ict libict.a
+#	make icc ict libict.a
 #
-#	$Id: makeall,v 1.5 2001/03/02 12:56:32 jw Exp $
+#	$Id: makeall,v 1.6 2001/03/07 12:30:06 jw Exp $
 #
 ########################################################################
 
-if ! cmp -s cexe.c cexe.c_empty; then
+if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
+    rm -f cexe.o
     cp -p cexe.c_empty cexe.c
 fi
 echo "make icc"
-make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-#echo "make icl"
-# make icl 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+make icc 2>&1 | if [ "$1" != '-e' ]; then grep -iE "(error|warning|up to date|:[0-9]+:)"; else cat; fi
 echo "make ict"
-makeIct 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+makeIct  2>&1 | if [ "$1" != '-e' ]; then grep -iE "(error|warning|up to date|:[0-9]+:)"; else cat; fi
 echo "make libict.a"
-makeload 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+makeload 2>&1 | if [ "$1" != '-e' ]; then grep -iE "(error|warning|up to date|:[0-9]+:)"; else cat; fi
+true

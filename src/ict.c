@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.16 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: ict.c,v 1.17 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -47,8 +47,6 @@ static void	display(void);
 
 static struct termio	ttyparms;
 static struct termio	ttyparmh;
-
-# define max(x, y) ((x) > (y) ? (x) : (y))
 
 Functp	*i_lists[] = { I_LISTS };
 
@@ -153,13 +151,13 @@ icc(
  *******************************************************************/
 
     error_flag = 0;
-    (Gate*)alist0.gt_rlist = a_list = &alist1;	/* initialise alternate */
+    alist0.gt_rlist = (Gate **)(a_list = &alist1);	/* initialise alternate */
     Out_init(a_list);
-    (Gate*)alist1.gt_rlist = a_list = &alist0;	/* start with alist0 */
+    alist1.gt_rlist = (Gate **)(a_list = &alist0);	/* start with alist0 */
     Out_init(a_list);
-    (Gate*)olist0.gt_rlist = o_list = &olist1;	/* initialise alternate */
+    olist0.gt_rlist = (Gate **)(o_list = &olist1);	/* initialise alternate */
     Out_init(o_list);
-    (Gate*)olist1.gt_rlist = o_list = &olist0;	/* start with olist0 */
+    olist1.gt_rlist = (Gate **)(o_list = &olist0);	/* start with olist0 */
     Out_init(o_list);
 #ifdef LOAD
     c_list = &iClock;				/* system clock list */

@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.25 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: icc.h,v 1.26 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -44,9 +44,9 @@ extern void	efree(void *);
 
 #define Sizeof(x)	((sizeof x) / (sizeof x[0]))
 #ifndef DEQ
-#define Out_init(ol)	(Gate *)ol->gt_list = ol->gt_next = ol
+#define Out_init(ol)	(ol->gt_list = (Gate **)(ol->gt_next = ol))
 #else
-#define Out_init(ol)	ol->gt_next = ol->gt_prev = ol
+#define Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
 #endif
 
 #define	NOT	1	/* used in List_e.le_val */

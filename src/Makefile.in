@@ -1,0 +1,157 @@
+# @(#)$Id: Makefile.in,v 1.16 2001/03/07 12:30:06 jw Exp $
+
+############################################################
+#
+#	Copyright (C) 1985-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	makefile for immediate C compilers and runtime library
+#	J.E. Wulff	14-Mar-87
+#
+#	use GNU make	28-Jul-96
+#	use GNU autoconf and configure	6-Mar-2001
+#
+#	to make ict, remove all objects and make with export OPT='-DTCP'
+#	to make libict.a, remove all objects and make with export OPT='-DLOAD -DTCP'
+#
+#	auxiliary scripts makeall, makeIct makeload do this automatically
+#
+############################################################
+
+#### Start of system configuration section. ####
+
+srcdir = @srcdir@
+VPATH = @srcdir@
+
+CC = @CC@
+AWK = @AWK@
+YACC = @YACC@
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+
+CFLAGS = @CFLAGS@
+CFLAGS_COMPILE_ONLY = -c -DYYDEBUG $(OPT)
+LDFLAGS = @LDFLAGS@
+YFLAGS = -d -v
+O=o
+
+LIBS = @LIBS@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+# Where the installed binary goes.
+bindir = @bindir@
+binprefix = 
+
+mandir = @mandir@
+manext = 1
+manprefix = 
+
+#### End of system configuration section. ####
+
+SHELL = /bin/sh
+
+# This rule allows us to supply the necessary -D options
+# in addition to whatever the user asks for.
+.c.$(O):
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $<
+
+###########################################################
+
+COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) cexe.$(O)
+POBJ =	link.$(O) rsff.$(O) scan.$(O)
+
+#### Standalone versions ###################################
+
+all:
+	@$(srcdir)/makeall
+
+icc:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
+
+ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAG) -o ict main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+
+libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
+	ar -rv libict.a load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
+
+#### Compile objects #######################################
+
+.y.c:
+    ifneq ($(YACC),)
+	$(SHELL) -ec 'if [ -f y.tab.h ]; then mv -f y.tab.h y.tab.t; fi'
+	rm -f y.tab.c $@
+	$(YACC) $(YFLAGS) $<
+	cp y.tab.c $@
+	$(SHELL) -ec 'if cmp -s y.tab.h y.tab.t; then mv y.tab.t y.tab.h; fi'
+	rm -f y.tab.t
+	chmod -w y.tab.h y.tab.c $@
+    else
+	@echo "System has no yacc, bison or byacc - install one of them"
+	@echo "Otherwise do not modify $< - use $@ in distribution"
+	test -f $@ && touch $@
+    endif
+
+scid.c:	icc.v $(srcdir)/Makefile pawk.a
+	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+
+cexe.c:	$(srcdir)/cexe.h
+	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > cexe.c
+	cp -f cexe.c cexe.c_empty
+
+$(srcdir)/comp.c:	$(srcdir)/comp.y
+
+install:	installdirs
+	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc
+	${INSTALL_PROGRAM} ict      ${bindir}/${binprefix}ict
+	${INSTALL_PROGRAM} pplstfix ${bindir}/${binprefix}pplstfix
+	${INSTALL_PROGRAM} ICServer ${bindir}/${binprefix}ICServer
+	${INSTALL_PROGRAM} DemoBox  ${bindir}/${binprefix}DemoBox
+	${INSTALL_PROGRAM} ICMake   ${bindir}/${binprefix}ICMake
+	${INSTALL_DATA}    libict.a ${prefix}/lib/libict.a
+	${INSTALL_DATA}    icc.h    ${prefix}/include/icc.h
+	$(srcdir)/perlinstall Msg.pm
+
+installdirs: mkinstalldirs
+	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include
+
+uninstall:
+	rm -f ${bindir}/${binprefix}icc
+	rm -f ${bindir}/${binprefix}ict
+	rm -f ${bindir}/${binprefix}pplstfix
+	rm -f ${bindir}/${binprefix}ICServer
+	rm -f ${bindir}/${binprefix}DemoBox
+	rm -f ${bindir}/${binprefix}ICMake
+	rm -f ${prefix}/lib/libict.a
+	rm -f ${prefix}/include/icc.h
+	$(srcdir)/perlinstall -u Msg.pm
+
+clean:
+	rm -rf *.$(O) LoadObjs PptcObjs cexe.c* core icc ict libict.a
+
+distclean: clean
+	rm -f Makefile config.status config.log config.cache
+
+genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
+init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
+symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
+
+comp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+main.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+cexe.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+
+ict.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h 
+load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h 
+
+icc.$(O):	$(srcdir)/icc.h
+link.$(O):	$(srcdir)/icc.h
+rsff.$(O):	$(srcdir)/icc.h
+scan.$(O):	$(srcdir)/icc.h

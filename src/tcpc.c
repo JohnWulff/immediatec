@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.6 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.7 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -230,7 +230,9 @@ rcvd_msg_from_server(int sock, char* buf, int maxLen)
 	}
 	maxLen = len;
 	if ((len = rcvd_buffer_from_server(sock, netBuf.buffer, maxLen)) == maxLen) {
-//	    printf("       received %2d bytes: '%-*.*s'\n", len, len, len, netBuf.buffer);
+#ifdef COMMENT
+	    printf("       received %2d bytes: '%-*.*s'\n", len, len, len, netBuf.buffer);
+#endif
 	    memcpy(buf, netBuf.buffer, len);
 	    buf[len] = '\0';
 	}

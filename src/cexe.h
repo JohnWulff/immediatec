@@ -1,10 +1,17 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.10 2001/02/21 16:20:29 jw Exp $";
+"@(#)$Id: cexe.h,v 1.11 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- *	Routine to execute C code fragments in the iC system
+ *	Copyright (C) 1985-2001  John E. Wulff
  *
- *	"cexe.h	1.06	95/01/31"
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	cexe.h
+ *	template to generate extensions to the icc compiler
  *
  *******************************************************************/
 
@@ -15,7 +22,7 @@ static const char cexe_h[] =
 #line 16 "cexe.h"
 #define _(x) lookup(#x)->u.gate->gt_old
 #define A(x,v) assign(lookup(#x)->u.gate, v)
-U
+Q
 int
 c_exec(int pp_index, Gate * _cexe_gf)
 {

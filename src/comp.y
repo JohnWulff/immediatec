@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.46 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: comp.y,v 1.47 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -41,6 +41,8 @@ static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
+static char	yybuf[1024];		/* buffer to build imm statement */
+char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 %}
 
 %union {		/* stack type */
@@ -881,7 +883,6 @@ static int	yyleng;			/* length */
 static char	inpBuf[YTOKSZ];		/* alternate file name */
 static long	outBP = -1;		/* position in listing file */
 static int	lineflag;
-static char	yybuf[1024];		/* buffer to build imm statement */
 static char	tmpbuf[256];		/* buffer to build variable */
 
 int		lineno = 1;
@@ -896,7 +897,6 @@ FILE *		inFP;			/* input file pointer */
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 FILE *		exoFP;			/* cexe out file pointer */
-char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 
 /********************************************************************
  *

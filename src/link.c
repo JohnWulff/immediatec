@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.12 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: link.c,v 1.13 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -85,7 +85,7 @@ link_ol(
 	np = tp->gt_next = gp->gt_next;		/* unlink from */
 	gp->gt_next = 0;			/* activity list */
 	if (np == ap) {				/* last entry ? */
-	    (Gate *)ap->gt_list = tp;		/* adjust pointer */
+	    ap->gt_list = (Gate **)tp;		/* adjust pointer */
 	} else if (ap->gt_fni == TIMRL) {	/* correct timer list ? */
 	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to old */
 	    gp->gt_mark += diff;		/* time remaining */
@@ -151,7 +151,7 @@ link_ol(
 		tp = out_list;
 		diff = 0;
 		while ((np = tp->gt_next) != out_list &&
-		    (diff += np->gt_mark) <= time) {
+		    (int)(diff += np->gt_mark) <= time) {
 		    tp = np;		/* scan along time sorted list */
 		}
 #ifndef DEQ
@@ -162,7 +162,7 @@ link_ol(
 		if (np != out_list) {
 		    np->gt_mark -= gp->gt_mark;	/* adjust diff new to old */
 		} else {
-		    (Gate *)out_list->gt_list = gp;	/* list => new */
+		    out_list->gt_list = (Gate **)gp;	/* list => new */
 #ifndef NOCHECK
 		    /* check that algorithm is correct */
 		    if (out_list->gt_mark != 0) {
@@ -193,7 +193,7 @@ link_ol(
 #ifndef DEQ
 	((Gate *)out_list->gt_list)->gt_next = gp;	/* old => new */
 	gp->gt_next = out_list;				/* new => list */
-	(Gate *)out_list->gt_list = gp;			/* list => new */
+	out_list->gt_list = (Gate **)gp;		/* list => new */
 #else
 	tp = out_list->gt_prev;			/* save previous */
 	out_list->gt_prev = tp->gt_next = gp;	/* list, previous ==> new */

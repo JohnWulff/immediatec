@@ -1,8 +1,18 @@
-#! /usr/bin/perl
+#! /usr/bin/perl -w
 
 #################################################################
 #
-#   Fix iC listing, eliminating aliases
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	pplstfix
+#   Fix iC listing, eliminating aliases and other discrepencies
+#   which are soooo much easier in Perl than in C
 #
 #   Aliases appear in the listing because of one pass compiler
 #   limitations. Aliases are completely eliminated from the
@@ -25,7 +35,7 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix,v 1.4 2001/01/13 17:47:02 jw Exp $
+$Id: pplstfix,v 1.5 2001/03/02 12:56:32 jw Exp $
 .
 
 use vars qw($opt_h);

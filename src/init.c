@@ -1,10 +1,19 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.10 2001/02/21 16:20:29 jw Exp $";
-/*
- *	"init.c"
+"@(#)$Id: init.c,v 1.11 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
  *
- *	"init.c	3.28	95/01/20"
- */
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	init.c
+ *	parallel plc - initialise compiler symbol table with keywords
+ *
+ *******************************************************************/
 
 #ifdef _WINDOWS
 #include	<windows.h>

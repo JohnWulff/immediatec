@@ -1,11 +1,19 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.16 2001/02/12 15:23:18 jw Exp $";
-/*
- *	"comp.h"
+"@(#)$Id: comp.h,v 1.17 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
  *
- *	"comp.h		3.31	95/01/20"
- */
-
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	comp.h
+ *	header for icc compiler
+ *
+ *******************************************************************/
 
 #ifndef YYMAXDEPTH
 #define YYMAXDEPTH (PPGATESIZE*3)		/* yacc stack size */
@@ -88,6 +96,11 @@ extern Symbol *	install(
 		char *, uchar, uchar);	/* install Symbol in symbol table */
 extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 
+					/*   main.c   */
+#define Tname	"_cexe_.tmp"
+#define Cname	"_list_.c"	/* unusual, not to be used for application name */
+#define Hname	"_list1.h"
+#define Lname	"_list2.h"
 					/*   outp.c   */
 #define BUFS	128
 extern int	IEC1131(char * name, char * buf, int bufLen,

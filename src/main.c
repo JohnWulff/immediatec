@@ -1,11 +1,19 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.17 2001/02/21 16:20:29 jw Exp $";
-/*
- *	"main.c"
- *	compiler for icc
+"@(#)$Id: main.c,v 1.18 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
  *
- *	"main.c	1.10	95/02/09"
- */
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	main.c
+ *	command line interpretation and starter for icc compiler
+ *
+ *******************************************************************/
 
 #include	<stdio.h>
 #include	<stdlib.h>
@@ -93,8 +101,8 @@ char *		szFile_g;		/* file name to process */
 #define exiFN	szNames[5]		/* cexe input file name */
 #define excFN	szNames[6]		/* cexe C out file name */
 #define exoFN	szNames[7]		/* cexe output file name */
-char *		szNames[8] = {		/* matches return in compile */
-    	0, 0, 0, 0, 0, 0, 0, "cexe.tmp",
+char *		szNames[11] = {		/* matches return in compile */
+    	0, 0, 0, 0, 0, 0, 0, Tname, Cname, Hname, Lname,
 };
 
 static FILE *	exiFP;			/* cexe in file pointer */
@@ -171,7 +179,7 @@ main(
 		    if (exiFN == 0) {
 			if (! *++*argv) { --argc, ++argv; }
 			outFN = *argv;	/* compiler output file name */
-			exoFN = "cexe.tmp";
+			exoFN = Tname;
 			goto break2;
 		    } else {
 			fprintf(stderr,
@@ -234,7 +242,7 @@ main(
 	if ((r = listNet(gate_count)) == 0) {
 	    if (outFN == 0) {
 		if (exiFN != 0 && exoFP) {
-		    /* rewind intermediate file cexe.tmp */
+		    /* rewind intermediate file Tname */
 		    if (fseek(exoFP, 0L, SEEK_SET) != 0) {
 			r = 7;
 		    } else if ((excFP = fopen(excFN, "w")) == NULL) {
@@ -245,8 +253,8 @@ main(
 			int		c;
 			unsigned	linecnt = 0;	/* not neede here */
 
-			/* copy C execution file Part 1 from beginning up to 'U' */
-			while ((c = getc(exiFP)) != 'U') {
+			/* copy C execution file Part 1 from beginning up to 'Q' */
+			while ((c = getc(exiFP)) != 'Q') {
 			    if (c == EOF) {
 				r = 5;	/* unexpected end of exiNM */
 				break;
@@ -257,7 +265,7 @@ main(
 			/* translate any ALIAS references of type '_(QB1_0)' */
 			copyXlate(exoFP, excFP, &linecnt, 01);
 
-			/* rewind intermediate file cexe.tmp again */
+			/* rewind intermediate file Tname again */
 			if (fseek(exoFP, 0L, SEEK_SET) != 0) {
 			    r = 7;
 			} else {
@@ -307,7 +315,7 @@ main(
     if (exoFP) {
 	fclose(exoFP);
 	if (exoFN && !(debug & 04000)) {
-	    unlink("cexe.tmp");
+	    unlink(Tname);
 	}
     }
     return (r);	/* 1 - 6 compile errors, 11 - 16 output errors */

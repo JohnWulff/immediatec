@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.35 2001/03/02 15:05:24 jw Exp $";
+"@(#)$Id: outp.c,v 1.36 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -79,8 +79,8 @@ static char	names[SZ][BUFS];/* ping pong buffer for modified names */
 static int	ix;		/* index for accessing alternate arrays */
 static char	iqt[2];		/* char buffers - space for 0 terminator */
 static char	bwx[2];
-static unsigned	byte;
-static unsigned	bit;
+static int	byte;
+static int	bit;
 static char	tail[8];	/* compiler generated suffix _123456 max */
 static unsigned	cnt;		/* used as side-effect in OUTW - INPX */
 

@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.14 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: icc.c,v 1.15 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -160,13 +160,13 @@ icc(
     char *	yp;
 
     error_flag = 0;
-    (Gate*)alist0.gt_rlist = a_list = &alist1;	/* initialise alternate */
+    alist0.gt_rlist = (Gate **)(a_list = &alist1);	/* initialise alternate */
     Out_init(a_list);
-    (Gate*)alist1.gt_rlist = a_list = &alist0;	/* start with alist0 */
+    alist1.gt_rlist = (Gate **)(a_list = &alist0);	/* start with alist0 */
     Out_init(a_list);
-    (Gate*)olist0.gt_rlist = o_list = &olist1;	/* initialise alternate */
+    olist0.gt_rlist = (Gate **)(o_list = &olist1);	/* initialise alternate */
     Out_init(o_list);
-    (Gate*)olist1.gt_rlist = o_list = &olist0;	/* start with olist0 */
+    olist1.gt_rlist = (Gate **)(o_list = &olist0);	/* start with olist0 */
     Out_init(o_list);
 #ifdef LOAD
     c_list = &iClock;				/* system clock list */
@@ -196,8 +196,8 @@ icc(
     FD_ZERO (&selectinfds);
     maxfd = 0;
     FD_SET (fileno (stdin), &selectinfds);
-    maxfd = max (maxfd, fileno (stdin));
-    if ( ioctl(0, TCGETA, &ttyparms) == -1 )   {
+    maxfd = max(maxfd, (int)fileno(stdin));
+    if (ioctl(0, TCGETA, &ttyparms) == -1)   {
 	fprintf(stderr, "Cannot get termio from stdin\n");
 	quit(-5);
     }

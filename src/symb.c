@@ -1,8 +1,19 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.5 2001/02/21 16:20:29 jw Exp $";
-/*
- *	"symb.c"
- */
+"@(#)$Id: symb.c,v 1.6 2001/03/02 12:56:32 jw Exp $";
+/********************************************************************
+ *
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	symb.c
+ *	parallel plc - symbol table lookup and insert
+ *
+ *******************************************************************/
 
 #ifdef _WINDOWS
 #include	<windows.h>

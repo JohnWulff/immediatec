@@ -10,34 +10,38 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	makeinstall
+#	perlinstall
 #
-#	install icc icl ict libict.a etc	must be super user
-#
-#	$Id: perlinstall,v 1.2 2001/03/02 22:21:36 jw Exp $
+#	install Msg.pm in @INC path	must be super user
 #
 ########################################################################
 
-if [[ -d /usr/local/bin ]]; then
-    cp -f icc ict pplstfix ICServer DemoBox ICMake /usr/local/bin
-    echo 'copied icc ict pplstfix ICServer DemoBox ICMake ==> /usr/local/bin'
-else
-    echo 'NO /usr/local/bin - installation failed'
-fi
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-uh] file ...' >&2
+    echo '		install (cp) the files to the @INC path' >&2
+    echo '	-u	uninstall (rm) the files from the @INC path' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: perlinstall,v 1.3 2001/03/07 12:30:06 jw Exp $' >&2
+}
 
-if [[ -d /usr/local/lib ]]; then
-    cp -f libict.a /usr/local/lib
-    echo 'copied libict.a ==> /usr/local/lib'
-else
-    echo 'NO /usr/local/lib - installation failed'
-fi
+u=''
 
-if [[ -d /usr/local/include ]]; then
-    cp -f icc.h /usr/local/include
-    echo 'copied icc.h ==> /usr/local/include'
-else
-    echo 'NO /usr/local/include - installation failed'
-fi
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    u*)	u=uninstall;;
+	    h*)	usage; exit 255;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
 
 for d in /usr/lib/perl5/site_perl/5*; do
     if [[ -d $d && -d $d/i586-linux ]]; then
@@ -46,8 +50,18 @@ for d in /usr/lib/perl5/site_perl/5*; do
 done
 
 if [[ -n $perlPath ]]; then
-    cp -f Msg.pm $perlPath
-    echo "copied Msg.pm ==> $perlPath"
+    if [[ -z $u ]]; then
+	for f in $*; do
+	    cp -f $f $perlPath
+	    echo "copied Msg.pm ==> $perlPath"
+	done
+    else
+	for f in $*; do
+	    rm -f $perlPath/$f
+	    echo "deleted $perlPath/$f"
+	done
+    fi
 else
     echo 'NO /usr/lib/perl5/site_perl/5*/i586-linux - installation failed'
+    exit 1
 fi

@@ -1,13 +1,18 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.20 2001/02/21 16:20:29 jw Exp $";
+"@(#)$Id: load.c,v 1.21 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- *	load.c
+ *	Copyright (C) 1985-2001  John E. Wulff
  *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	load.c
  *	This module prepares the data structures for the run time
  *	system from the loaded data and calls the icc execution.
- *
- *	"load.c	1.01	95/02/15"
  *
  *******************************************************************/
 

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.19 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: rsff.c,v 1.20 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -789,7 +789,7 @@ clockSfn(				/* Clock function */
 #endif
 #ifndef DEQ
 	    ((Gate *)c_list->gt_list)->gt_next = sp->gt_next;
-	    (Gate *)c_list->gt_list = (Gate *)sp->gt_list;  /* link sp */
+	    c_list->gt_list = sp->gt_list;  	/* link sp */
 	    ((Gate *)c_list->gt_list)->gt_next = c_list;    /* to c_list */
 #else
 	    /* link chain of Gates on clock list sp to end of c_list */
@@ -883,10 +883,10 @@ timerSfn(				/* Timer function */
 #ifndef DEQ
 		((Gate *)c_list->gt_list)->gt_next = sp->gt_next;/* => new */
 		sp->gt_next = np;		/* timer => rest */
-		(Gate *)c_list->gt_list = tp;	/* clock last => new last */
+		c_list->gt_list = (Gate **)tp;	/* clock last => new last */
 		tp->gt_next = c_list;    	/* new last => c_list */
 		if (np == sp) {			/* last entry ? */
-		    (Gate *)sp->gt_list = np;	/*  yes, fix timer last */
+		    sp->gt_list = (Gate **)np;	/*  yes, fix timer last */
 		}
 #else
 		/* link tail of timer chain which is due to c_list */

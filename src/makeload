@@ -2,9 +2,17 @@
 
 ########################################################################
 #
-#	make the ict.a lib with OPT=LOAD
+#	Copyright (C) 2000-2001  John E. Wulff
 #
-#	$Id: makeload,v 1.7 2001/02/21 16:20:29 jw Exp $
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john.wulff@inka.de>
+#
+#	make the libict.a library with OPT=LOAD
+#
+#	$Id: makeload,v 1.8 2001/03/02 12:56:32 jw Exp $
 #
 ########################################################################
 
@@ -19,7 +27,7 @@ if [[ -d LoadObjs ]]; then
 else
     mkdir LoadObjs
 fi
-make OPT='-DLOAD -DTCP' ict.a
+make OPT='-DLOAD -DTCP' libict.a
 mv ict.o link.o rsff.o scan.o LoadObjs
 mv Make_tmp/* .
 rmdir Make_tmp

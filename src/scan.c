@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.12 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: scan.c,v 1.13 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -105,7 +105,7 @@ scan_ar(Gate	*out_list)
 	out_list->gt_next = op->gt_next;		/* unlink from */
 	op->gt_next = 0;				/* output list */
 	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    (Gate *)out_list->gt_list = out_list;	/* fix pointer */
+	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
 	}
 #else
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -231,7 +231,7 @@ scan(Gate	*out_list)
 	out_list->gt_next = op->gt_next;		/* unlink from */
 	op->gt_next = 0;				/* output list */
 	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    (Gate *)out_list->gt_list = out_list;	/* fix pointer */
+	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
 	}
 #else
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -346,7 +346,7 @@ scan_clk(Gate	*out_list)	/* scan a clock list */
 	out_list->gt_next = op->gt_next;		/* unlink from */
 	op->gt_next = 0;				/* output list */
 	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    (Gate *)out_list->gt_list = out_list;	/* fix pointer */
+	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
 	}
 #else
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -487,7 +487,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	    gp->gt_val = 1;		/* set OR gates to +1 */
 	    break;
 	case LATCH:
-	    gp->gt_val = (gp->gt_mcnt + 1) >> 1;	/* set LATCH gates */
+	    gp->gt_val = (int)(gp->gt_mcnt + 1) >> 1;	/* set LATCH gates */
 	    break;
 	default:
 	    gp->gt_val = 0;		/* should not happen */

@@ -1,5 +1,14 @@
 #!/usr/bin/perl -P
+
 ########################################################################
+#
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
 #
 #	iC generic Demo Box
 #	adapted from
@@ -69,7 +78,9 @@ Usage:	@<<<<<< [-eth] [-s <host>] [-p <port>] [-RrIiOo <num>] [-l <len>] [<unitI
 	    (Requires Module Time::HiRes available from CPAN - see source)
 	-h	help, ouput this Usage text only
 	unitID	default is 'X0'
-$Id: DemoBox,v 1.29 2001/03/01 13:12:11 jw Exp $
+Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
+							  '@'
+$Id: DemoBox,v 1.30 2001/03/02 12:57:20 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);

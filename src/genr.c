@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.36 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: genr.c,v 1.37 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -668,8 +668,8 @@ op_asgn(			/* asign List_e stack to links */
 		char	buffer[BUFS];	/* buffer for modified names */
 		char	iqt[2];		/* char buffers - space for 0 terminator */
 		char	bwx[2];
-		unsigned	byte;
-		unsigned	bit;
+		int	byte;
+		int	bit;
 		char	tail[8];	/* compiler generated suffix _123456 max */
 
 		if (debug & 04) {
@@ -900,7 +900,10 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
     List_e *	lp3;
     List_e *	lpc;
 
-    if (ae1 == 0 || ae1->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
+    if (ae1 == 0 || ae1->v == 0) {
+	warning("first paramater missing. builtin: ", sym->v->name);
+	return 0;				/* YYERROR in fexpr */
+    }
 
     if (ae2) {
 	lp1 = 0;
@@ -935,7 +938,10 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
     lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
 
     if (ae2) {
-	if (ae2->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
+	if (ae2->v == 0) {
+	    warning("second paramater missing. builtin: ", sym->v->name);
+	    return 0;				/* YYERROR in fexpr */
+	}
 
 	lp2 = op_push(sy_push(sym->v), bTyp(ae2->v), ae2->v);
 	lp2->le_first = ae2->f; lp2->le_last = ae2->l;
