@@ -10,12 +10,12 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	LiveList for iC programs and listings
+#	iClive display for iC sources and listings
 #
-#	LiveList provides an edit window in which the text of a program
+#	iClive provides an edit window in which the text of a source
 #	or listing can be displayed and optionally edited and saved.
 #
-#	LiveList is normally a client of a running iC program. On startup
+#	iClive is normally a client of a running iC program. On startup
 #	it requests the symbol table of the running program. It returns
 #	a list of words from the symbol table on which it wants live
 #	updates of the state of the nodes, named by each word in the
@@ -35,9 +35,9 @@
 #
 #	To be effective, the displayed text must be either the source of
 #	the running iC program or a text derived from that source, such
-#	as the iC listing. The LiveList then shows the logical statements
-#	of the source and the colours will show what the current state
-#	is. It is then easy to inspect the listing and relate states with
+#	as the iC listing. iClive then shows the logical statements of
+#	the source and the colours will show what the current state is.
+#	It is then easy to inspect the listing and relate states with
 #	the logic.
 #
 #	For measuring reaction times the Module Time::HiRes may be used.
@@ -91,7 +91,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.8 2001/04/02 19:23:45 jw Exp $
+$Id: iClive,v 1.9 2001/04/04 10:30:37 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -138,7 +138,7 @@ $filename = $ARGV[0] unless @ARGV < 1;
 ########################################################################
 
 my $mainWindow = MainWindow->new();
-$mainWindow->title("iC LiveList");
+$mainWindow->title("iClive");
 
 ########################################################################
 #	Menu bar
@@ -309,7 +309,7 @@ $balloon->attach($text,
 load_file() if $filename;
 
 ########################################################################
-#	Connect to ICServer
+#	Connect to iCserver
 ########################################################################
 
 connect_to_server();
@@ -322,9 +322,9 @@ MainLoop;
 
 ########################################################################
 #
-#	Connect to ICServer and request Symbol Table
+#	Connect to iCserver
 #	Register read events
-#	Register I/O at ICServer and request Symbol Table
+#	Register I/O at iCserver and request Symbol Table
 #
 ########################################################################
 
@@ -563,7 +563,9 @@ sub scan {
     deleteAllTags();	# also clears @activeSymbols
 
     if ($conn) {
-	if ($filename !~ /$iCname/) {
+	if ($filename =~ /$iCname/) {
+	    $mainWindow->title("iClive $filename $iCname");
+	} else {
 	    $infoBar->configure(-foreground => 'red');
 	    $info = "'$filename' does not match connected control program '$iCname'"; 
 	}
@@ -668,6 +670,7 @@ sub load_file {
 	$text->insert("end", $_);
     }
     close (FH);
+    $mainWindow->title("iClive $filename");
     if ($newname and $filename !~ /$iCname/) {
 	$infoBar->configure(-foreground => 'red');
 	$info = $iCname ?
