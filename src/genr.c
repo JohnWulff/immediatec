@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.3 1998/10/02 11:15:55 john Exp $";
+"@(#)$Id: genr.c,v 1.4 2000/11/16 14:19:55 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -737,3 +737,97 @@ op_asgn(			/* asign List_e stack to links */
     }
     return (sv->v);
 } /* op_asgn */
+
+/********************************************************************
+ *
+ *	return operator to use in built in iC functions
+ *
+ *******************************************************************/
+
+static uchar
+bTyp(List_e * lp)
+{
+    register Symbol *	symp;
+    register uchar	tp;
+
+    symp = lp->le_sym;
+    while (symp->type == ALIAS) {
+	symp = symp->list->le_sym;	/* with token of original */
+    }
+    tp = symp->type;
+    return tp >= MAX_GT ? (tp == SH || tp == INPW ? ARN : OR)
+			: (tp == UDF ? types[symp->ftype] : tp);
+} /* bTyp */
+
+/********************************************************************
+ *
+ *	common code to generate built in iC functions
+ *
+ *******************************************************************/
+
+List_e *
+bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Val* pVal)
+{
+    List_e *	lp1;
+    List_e *	lp2;
+    List_e *	lp3;
+    List_e *	lpc = 0;
+
+    if (ae1 == 0 || ae1->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
+
+    if (ae1->v->le_sym->type == LOGC) {
+	lp1 = op_push(sy_push(ae1->v->le_sym), LOGC, ae1->v);
+	lp1->le_sym->type = LATCH;
+	lp1 = op_push(sy_push(sym->v), LATCH, lp1);
+    } else {
+	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
+    }
+    lp1->le_first = ae1->f; lp1->le_last = ae1->l;
+    lp1 = op_push(cr1 ? cr1->v : sy_push(clk), lp1->le_sym->type, lp1);
+    lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
+
+    if (ae2) {
+	if (ae2->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
+
+	lp2 = op_push(sy_push(sym->v), bTyp(ae2->v), ae2->v);
+	lp2->le_first = ae2->f; lp2->le_last = ae2->l;
+	if (lp2->le_sym->ftype == S_FF) {
+	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
+	}
+ 	/* Monoflop cannot use non-default clock for optional reset ae2 */
+	lp2 = op_push(
+	    cr2 && !pVal ? cr2->v		/* individul clock or timer cr2 */
+			 : cr1 ? (lpc = sy_push(cr1->v->le_sym))
+						/* or clone first clock or timer cr1 */
+			       : sy_push(clk),	/* or clone default clock iClock */
+	    lp2->le_sym->type, lp2);
+	if (lpc) lpc->le_val = cr1->v->le_val;	/* transfer cr1 timer value to clone */
+	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
+	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+    }
+
+    if (pVal) {
+	if (cr2 == 0) {
+	    /* cblock for ffexpr */
+	    lp1->le_val = pVal->v;		/* unsigned int value for case # */
+	} else if (cr2->v->le_sym->type == TIM) {
+	    /* extra Master is timed reset fed back from own output */
+	    lp1 = sy_push(ae1->v->le_sym);	/* use dummy ae1 fill link */
+
+	    lp2 = op_push(sy_push(sym->v), UDF, lp1);
+	    if (lp2->le_sym->ftype == S_FF) {
+		lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
+	    }
+	    lp2 = op_push(cr2->v, lp2->le_sym->type, lp2);
+	    lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
+	    lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+
+	    lp1->le_sym = lp3->le_sym;		/* fix link from own */
+	    cr2->v->le_val = pVal->v;		/* unsigned int value for time */
+	} else {
+	    warning("not a timer clock for monoflop:", sym->v->name);
+	    return 0;
+	}
+    }
+    return lp3;
+} /* bltin */
