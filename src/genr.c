@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.54 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: genr.c,v 1.55 2003/12/22 18:19:32 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -677,7 +677,7 @@ op_asgn(				/* asign List_e stack to links */
 		(gp->u.blist || gp->type == NCONST)) {
 		char	buffer[BUFS];	/* buffer for modified names */
 		char	iqt[2];		/* char buffers - space for 0 terminator */
-		char	bwx[2];
+		char	xbwl[2];
 		int	byte;
 		int	bit;
 		char	tail[8];	/* compiler generated suffix _123456 max */
@@ -703,7 +703,7 @@ op_asgn(				/* asign List_e stack to links */
 		if (debug & 04) fprintf(outFP, "%s", gp->name);
 		/* modify numbers, IXx.x and QXx.x names for compiled output only */
 	    				/* CHECK if ep changes now _() is missing */
-		IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+		IEC1131(gp->name, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 		ep += sprintf(ep, "%s", buffer);
 		t_first = lp->le_last;	/* skip logic expr's */
 	    }

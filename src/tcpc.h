@@ -22,7 +22,12 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.9 2002/08/26 18:06:23 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.10 2003/12/30 18:39:05 jw Exp $";
+
+/* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
+#if INT_MAX == 32767
+#define MY_INT_MAX
+#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -32,6 +37,12 @@ static const char tcpc_h[] =
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+/* restore the command line definition of INT_MAX if it was 32767 for simulated 16 bit */
+#ifdef MY_INT_MAX
+#undef INT_MAX
+#define INT_MAX 32767
+#endif
 
 #define REQUEST	400		/* max size of request, in bytes */
 #define REPLY	400		/* max size of reply, in bytes */

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.37 2003/11/26 13:53:18 jw Exp $";
+"@(#)$Id: load.c,v 1.38 2003/12/30 15:42:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -22,11 +22,11 @@ static const char load_c[] =
 #ifndef LOAD
 #error - must be compiled with LOAD defined to make a linkable library
 #else
-#include	"icg.h"
-#include	"icc.h"
 #ifdef TCP
 #include	"tcpc.h"
 #endif
+#include	"icg.h"
+#include	"icc.h"
 
 #define STS	1
 
@@ -432,7 +432,12 @@ main(
 		int	slot;
 		int	width;
 		if ((slot = (int)op->gt_list) < IXD && (width = op->gt_mark) != 0) {
-		    QT_[slot] = width == B_WIDTH ? 'B' : width == W_WIDTH ? 'W' : 0;
+		    QT_[slot] = width == B_WIDTH ? 'B' :
+				width == W_WIDTH ? 'W' :
+#if INT_MAX != 32767 || defined (LONG16)
+				width == L_WIDTH ? 'L' :
+#endif
+						    0;
 		} else {
 		    inError(__LINE__, op, 0, "no valid output word definition");
 		}
@@ -501,7 +506,11 @@ main(
 		if (df) {
 		    printf(" %-8s %3d %3d", op->gt_ids, op->gt_val, op->gt_mark);
 		    if (op->gt_old) {
+#if INT_MAX == 32767 && defined (LONG16)
+			printf(" %3ld\n", op->gt_old);	/* delay references */
+#else
 			printf(" %3d\n", op->gt_old);	/* delay references */
+#endif
 		    } else {
 			printf("\n");
 		    }
@@ -659,6 +668,10 @@ main(
 			aName = "IB_";
 		    } else if ((i = lp - IW_) >= 0 && i < IXD) {
 			aName = "IW_";
+#if INT_MAX != 32767 || defined (LONG16)
+		    } else if ((i = lp - IL_) >= 0 && i < IXD) {
+			aName = "IL_";
+#endif
 		    } else if ((i = lp - TX_) >= 0 && i < TXD*8) {
 			aName = "TX_";
 		    }
@@ -734,7 +747,11 @@ main(
 		    inError(__LINE__, op, 0, "clock or timer with initial forward list");
 		}
 		if (op->gt_fni == TIMRL && op->gt_old > 0) {
+#if INT_MAX == 32767 && defined (LONG16)
+		    if (df) printf("	(%ld)", op->gt_old);
+#else
 		    if (df) printf("	(%d)", op->gt_old);
+#endif
 		}
 	    } else {
 		inError(__LINE__, op, 0, "unknown output type (ftype)");

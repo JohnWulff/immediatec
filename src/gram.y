@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.15 2003/12/07 02:12:41 jw Exp $";
+"@(#)$Id: gram.y,v 1.16 2003/12/22 18:19:53 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -2040,7 +2040,7 @@ copyAdjust(FILE* iFP, FILE* oFP)
     int			mType;
     char		buffer[BUFS];	/* buffer for modified names */
     char		iqt[2];		/* char buffers - space for 0 terminator */
-    char		bwx[2];
+    char		xbwl[2];
     int			byte;
     int			bit;
     char		tail[8];	/* compiler generated suffix _123456 max */
@@ -2131,7 +2131,7 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	}
 	if (bytePos == vstart) {
 	    assert(sp);
-	    IEC1131(sp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+	    IEC1131(sp->name, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 	    if (ppi >= 5) {
 		fprintf(oFP, "%s", buffer);	/* output real Symbol name not ALIAS */
 	    } else {

@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.38 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: main.c,v 1.39 2003/12/31 12:46:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,12 +19,12 @@ static const char main_c[] =
 #include	<stdlib.h>
 #include	<string.h>
 #include	<assert.h>
-#include	"icg.h"
-#include	"icc.h"
-#include	"comp.h"
 #ifdef TCP
 #include	"tcpc.h"
 #endif
+#include	"icg.h"
+#include	"icc.h"
+#include	"comp.h"
 
 extern const char	SC_ID[];
 
@@ -96,9 +96,9 @@ static const char *	usage =
 "      by %s -c <iC_program> before <iC_program> can be interpreted.\n"
 #ifndef TCP
 "      Typing 0 to 7 toggles simulated inputs IX0.0 to IX0.7\n"
-"      Typing b<number> or w<number> alters simulated inputs IB1 or IW2\n"
-"              <number> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
-"      Programmed outputs QX0.0 to QX0.7, QB1 and QW2 are displayed.\n"
+"      Typing b<num> w<num> or l<num> alters simulated inputs IB1, IW2 or IL4\n"
+"              <num> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
+"      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
 #endif
 "      Typing q or ctrl-C quits run mode.\n"
 "Copyright (C) 1985-2001 John E. Wulff     <john@je-wulff.de>\n"

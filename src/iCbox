@@ -61,7 +61,8 @@ format STDERR =
 Usage:
 @<<<<<< [-etmh] [-s <host>] [-p <port>] [-RrIiOo <num>] [-l <len>] [<ID> [<ini>]]
 	$named
-	ID	X0 X1 .. X31, B0 B1 .. B31, W0 W2 .. W30 (default is X0)
+	ID	X0 X1 .. X63, B0 B1 .. B63, W0 W2 .. W62 , L0 L4 .. L60
+		default ID is X0
 	ini	initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
 	-s host	host name of server    (default 'localhost')
 	-p port	service port of server (default '8778')
@@ -80,14 +81,14 @@ Usage:
 	-l len	length of scales (default 170)
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.36 2003/10/12 20:57:47 jw Exp $
+$Id: iCbox,v 1.37 2003/12/29 17:05:59 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
 require "getopts.pl";
 &Getopts('tmes:p:r:i:o:R:I:O:l:h');	# sets $opt_h if -h etc
 
-if ($opt_h) {
+if ($opt_h or @ARGV > 2) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 #ifdef TIME_HIRES 
@@ -113,11 +114,18 @@ my $outByte =	0;		# initialize to a number for correct XOR
 
 ## accept unitID starting with X or B and any IO-address number
 ## accept unitID starting with W and only even IO-address numbers
+## accept unitID starting with L and IO-address on a 4 byte boundary
 
-if (($unitID =~ /^([XBW])(\d+)$/) and ($1 ne "W" or ($2 & 0x01) == 0)) {
+if (($unitID =~ /^([XBWL])(\d+)$/) and
+    ($1 ne "L" or ($2 & 0x03) == 0) and
+    ($1 ne "W" or ($2 & 0x01) == 0)) {
     $inByte = oct($inByte) if $inByte =~ /^0/;	# handles 017 0xf 0b1111
     $inByte = int($inByte);	# initialize to a number for correct AND/OR
-    $inByte &= 0xff if $unitID =~ /^[XB]/;
+    if ($1 eq 'W') {
+	$inByte &= 0xffff;
+    } elsif ($1 eq 'X' or $1 eq 'B') {
+	$inByte &= 0xff;
+    }
 }
 else {
     die "iCbox $unitID could not be made\n";
@@ -245,7 +253,7 @@ if ($unitID =~ /^X/) {
 #
 ########################################################################
 
-elsif ($unitID =~ /^[BW]/) {
+elsif ($unitID =~ /^[BWL]/) {
 
     $opt_R = 0 unless $opt_R;		# default from 0
     $opt_r = 100 unless $opt_r;		# default to 100
@@ -323,13 +331,13 @@ sub rcvd_msg_from_server {
 	}
 	my ($uID, $value, $rest) = split /\./, $msg, 3;
 	if ($uID ne $unitID or defined $rest) {
-	    warn "WARNING: $msg from ICS ?? ignored";
+	    warn "WARNING: $msg from iCserver ?? ignored";
 	} elsif ($uID =~ /^X/) {
 	    if ($value eq "R") {
-		print "$uID rcvd R - reset from ICS\n" if $opt_t;
+		print "$uID rcvd R - reset from iCserver\n" if $opt_t;
 		for my $index (0 .. 7) {
 		    if ($outputs[$index]) {
-			print "init Q$uID.$index 0 <-- 1\n" if $opt_t;
+			print "init Q$uID 0 <-- $outputs[$index]\n" if $opt_t;
 			$outputs[$index] = 0;
 		    }
 		}
@@ -353,9 +361,9 @@ sub rcvd_msg_from_server {
 	    } else {
 		warn "Q$uID received spurious message: '$msg'\n";
 	    }
-	} elsif ($uID =~ /^[BW]/) {
+	} elsif ($uID =~ /^[BWL]/) {
 	    if ($value eq "R") {
-		print "$uID rcvd R - reset from ICS\n" if $opt_t;
+		print "$uID rcvd R - reset from iCserver\n" if $opt_t;
 		if ($outputs[0]) {
 		    print "init Q$uID 0 <-- $outputs[0]\n" if $opt_t;
 		    $outputs[0] = 0;

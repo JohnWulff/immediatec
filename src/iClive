@@ -176,7 +176,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.29 2003/12/21 23:26:44 jw Exp $
+$Id: iClive,v 1.30 2003/12/31 11:16:07 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -199,7 +199,7 @@ my $font = defined $opt_f ? $opt_f :
 			    $ENV{COMSPEC} ?	# defined on Windows 98 and Windows XP
 				'{Lucida Console} 10 normal' :
 				'9x15';		# Linux
-my $unitID = 'L0';
+my $unitID = 'D0';	# live Display unit 0
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
 my @activeSymbols;	# $activeSymbols[$index][0 .. 3] = ($ts,$val,$cs,[$sec,$usec])
 my $stIndex = 0;
@@ -476,6 +476,12 @@ ini_program();
 ########################################################################
 
 connect_to_server();
+
+########################################################################
+#	Ignore any processes forked with the Run button
+########################################################################
+
+$SIG{CHLD} = 'IGNORE';
 
 ########################################################################
 #	Sit in an infinite loop dispatching incoming events.

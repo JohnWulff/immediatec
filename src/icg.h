@@ -18,7 +18,11 @@
 #ifndef ICG_H
 #define ICG_H
 static const char icg_h[] =
-"@(#)$Id: icg.h,v 1.2 2002/08/26 22:05:38 jw Exp $";
+"@(#)$Id: icg.h,v 1.3 2003/12/30 15:50:24 jw Exp $";
+
+#ifndef INT_MAX
+#include	<limits.h>
+#endif
 
 /*	Function types 'op' 'Symbol.type' and display */
 
@@ -108,17 +112,29 @@ typedef struct Gate {			/* Gate */
 #ifdef DEQ
 	struct Gate *	gt_prev;	/* previous link */
 #endif
+#if INT_MAX == 32767 && defined (LONG16)
+	long		gt_new;		/* new value for arithhmetic */
+	long		gt_old;		/* old value for arithhmetic */
+#else
 	int		gt_new;		/* new value for arithhmetic */
 	int		gt_old;		/* old value for arithhmetic */
+#endif
 } Gate;
 
 extern Gate		iClock;		/* System clock */
-extern Gate *		IX_[];		/* pointers to Bit Input Gates */
-extern Gate *		IB_[];		/* pointers to Byte Input Gates */
-extern Gate *		IW_[];		/* pointers to Word Input Gates */
-extern Gate *		TX_[];		/* pointers to System Bit Gates */
+extern Gate *		IX_[];		/* pointers to bit Input Gates */
+extern Gate *		IB_[];		/* pointers to byte Input Gates */
+extern Gate *		IW_[];		/* pointers to word Input Gates */
+#if INT_MAX != 32767 || defined (LONG16)
+extern Gate *		IL_[];		/* pointers to long Input Gates */
+#endif
+extern Gate *		TX_[];		/* pointers to bit System Gates */
 
 #define aAssign		assign
 #define lAssign		assign
+#if INT_MAX == 32767 && defined (LONG16)
+extern long		assign(Gate * lv, long rv);
+#else
 extern int		assign(Gate * lv, int rv);
+#endif
 #endif	/* ICG_H */

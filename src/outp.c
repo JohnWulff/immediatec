@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.68 2003/12/17 10:11:03 jw Exp $";
+"@(#)$Id: outp.c,v 1.69 2003/12/30 12:30:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -39,14 +39,14 @@ extern const char	SC_ID[];
  *	The count can be used to characterize IBx, QBx etc fields also
  *	All fields are a null string ("") or 0 if not modified.
  *	Return:	number of fields modified.
- *	Fields:	iqt[]	single character I, Q or T in first position.
- *		bwx[]	single character B, W or X in second position.
+ *	Fields:	iqt[]	single character 'I', 'Q' or 'T' in first position.
+ *		xbwl[]	single character 'X', 'B', 'W' or 'L' in second position.
  *		*bytep	int value of numerical field starting at pos. 3
  *		*bitp	int value of numerical field folowing '.'
  *		tail[]	any extra characters folowing numerical field.
  *		buf[]	modified string if "X" type with '.' number
  *			else unmodified name (or if outFlag == 0).
- *		eg: IX123.7_5 returns 5, "I" in iqt, "X" in bwx,
+ *		eg: IX123.7_5 returns 5, "I" in iqt, "X" in xbwl,
  *			    123 in bytep, 7 in bitp, "_5" in tail and
  *			    "IX123_7_5" in buf.
  *
@@ -64,22 +64,22 @@ extern const char	SC_ID[];
 
 int
 IEC1131(char * name, char * buf, int bufLen,
-	char * iqt, char * bwx, int * bytep, int * bitp, char * tail)
+	char * iqt, char * xbwl, int * bytep, int * bitp, char * tail)
 {
     int count;
 
     assert(bufLen >= 23);
-    iqt[0] = bwx[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
+    iqt[0] = xbwl[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
     if (outFlag && (count = sscanf(name, "%d%7s", bytep, tail)) >= 1) {
 	snprintf(buf, bufLen-1, "_%d%s", *bytep, tail);
     } else if (outFlag &&
-	(count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
-			    iqt, bwx, bytep, bitp, tail)) >= 4 &&
-	*bwx == 'X') {
+	(count = sscanf(name, "%1[IQT]%1[XBWL]%5d.%5d%7s",
+			    iqt, xbwl, bytep, bitp, tail)) >= 4 &&
+	*xbwl == 'X') {
 	snprintf(buf, bufLen-1, "%s%s%d_%d%s",
-			    iqt, bwx, *bytep, *bitp, tail);
+			    iqt, xbwl, *bytep, *bitp, tail);
     } else {
-    //##tail NOT USED##	outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d%7s", iqt, bwx, bytep, tail));
+    //##tail NOT USED##	outFlag && (count = sscanf(name, "%1[IQT]%1[XBWL]%5d%7s", iqt, xbwl, bytep, tail));
 	strncpy(buf, name, bufLen-1);
     }
     return count;
@@ -95,20 +95,20 @@ IEC1131(char * name, char * buf, int bufLen,
 
 int
 toIEC1131(char * name, char * buf, int bufLen,
-	char * iqt, char * bwx, int * bytep, int * bitp, char * tail)
+	char * iqt, char * xbwl, int * bytep, int * bitp, char * tail)
 {
     int count;
 
     assert(bufLen >= 24);
-    iqt[0] = bwx[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
+    iqt[0] = xbwl[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
     if (outFlag && (count = sscanf(name, "_%d%7s", bytep, tail)) == 1) {
 	snprintf(buf, bufLen-1, "%d", *bytep);
     } else if (outFlag &&
-	(count = sscanf(name, "%1[IQT]%1[BWX]%5d_%5d%7s",
-			    iqt, bwx, bytep, bitp, tail)) >= 4 &&
-	*bwx == 'X') {
+	(count = sscanf(name, "%1[IQT]%1[XBWL]%5d_%5d%7s",
+			    iqt, xbwl, bytep, bitp, tail)) >= 4 &&
+	*xbwl == 'X') {
 	snprintf(buf, bufLen-1, "%s%s%d.%d%s",
-			    iqt, bwx, *bytep, *bitp, tail);
+			    iqt, xbwl, *bytep, *bitp, tail);
     } else {
 	strncpy(buf, name, bufLen-1);
     }
@@ -121,7 +121,7 @@ toIEC1131(char * name, char * buf, int bufLen,
  *	modified string in alternate arrays of names[].
  *
  *	As a side-effect this routine provides the 1st letter of the
- *	modified name in iqt[], the 2nd letter in bwx[] and the 1st
+ *	modified name in iqt[], the 2nd letter in xbwl[] and the 1st
  *	and possible the 2nd number in byte and bit respectively.
  *
  *	If name is not modified, name is copied to names and iqt[0]
@@ -137,7 +137,7 @@ toIEC1131(char * name, char * buf, int bufLen,
 static char	names[SZ][BUFS];/* ping pong buffer for modified names */
 static int	ix;		/* index for accessing alternate arrays */
 static char	iqt[2];		/* char buffers - space for 0 terminator */
-static char	bwx[2];
+static char	xbwl[2];
 static int	byte;
 static int	bit;
 static char	tail[8];	/* compiler generated suffix _123456 max */
@@ -149,7 +149,7 @@ mN(Symbol * sp)
     char * np = names[ix++];			/* alternate ix = 0, 1 or 2 */
     if (ix >= SZ) ix = 0;			/* rotate buffers */
     if (sp == 0) return strncpy(np, "0", 2);	/* in case of suprises */
-    cnt = IEC1131(sp->name, np, BUFS, iqt, bwx, &byte, &bit, tail);
+    cnt = IEC1131(sp->name, np, BUFS, iqt, xbwl, &byte, &bit, tail);
     return np;
 } /* mN */
 
@@ -325,7 +325,7 @@ buildNet(Gate ** igpp)
     short	typ;
     unsigned	val;
     unsigned	rc = 0;		/* return code */
-    char	bw[2];		/* "B" or "W" */
+    char	bwl[2];		/* "B" or "W" */
     Gate *	gp;
     Gate **	fp;
     Gate **	ifp;
@@ -378,12 +378,20 @@ buildNet(Gate ** igpp)
 				} while (val ^= NOT);
 
 				if (typ == INPW) {
-				    if (sscanf(gp->gt_ids, "I%1[BW]%d",
-					bw, &byte) == 2 && byte < IXD) {
-					if (bw[0] == 'B') {
+				    if (sscanf(gp->gt_ids, "I%1[BWL]%d",
+					bwl, &byte) == 2 && byte < IXD) {
+					if (bwl[0] == 'B') {
 					    IB_[byte] = gp;
-					} else {
+					} else if (bwl[0] == 'W') {
 					    IW_[byte] = gp;
+					} else if (bwl[0] == 'L') {
+#if INT_MAX != 32767 || defined (LONG16)
+					    IL_[byte] = gp;
+#else
+		    ierror("32 bit INPUT not supported in 16 bit environment:", sp->name);
+#endif
+					} else {
+					    assert(0);	/* must be 'B', 'W' or 'L' */
 					}
 				    } else {
 					goto inErr;
@@ -425,11 +433,16 @@ buildNet(Gate ** igpp)
 				/* ZZZ modify later to do this only for */
 				/* ZZZ action gates controlled by a TIMER */
 			    } else if (sp->ftype == OUTW) {
-				if (sscanf(gp->gt_ids, "Q%1[BW]%d", bw, &byte) == 2 &&
+				if (sscanf(gp->gt_ids, "Q%1[BWL]%d", bwl, &byte) == 2 &&
 				    byte < IXD) {
 				    gp->gt_list = (Gate**)byte;
-				    gp->gt_mark = bw[0] == 'B' ? B_WIDTH : W_WIDTH;
-				    QT_[byte] = bw[0];	/* 'B' or 'W' */
+				    gp->gt_mark = bwl[0] == 'B' ? B_WIDTH :
+						  bwl[0] == 'W' ? W_WIDTH :
+#if INT_MAX != 32767 || defined (LONG16)
+						  bwl[0] == 'L' ? L_WIDTH :
+#endif
+								  0;
+				    QT_[byte] = bwl[0];	/* 'B', 'W' or 'L' */
 				} else {
 				    goto outErr;
 				}
@@ -581,7 +594,11 @@ output(char * outfile)
 Gate **		i_list[] = { I_LIST 0, };\n\
 ", H1name, H2name);					/* list _list_.c */
 	if (Tflag) {			/* imm_identifier++ -- used in c_compile */
+#if INT_MAX == 32767 && defined (LONG16)
+	    fprintf(H1p, "long		_tVar;\n");
+#else
 	    fprintf(H1p, "int		_tVar;\n");
+#endif
 	}
 	fclose(H1p);					/* list _list_.c */
     }
@@ -848,16 +865,21 @@ extern Gate *	_l_[];\n\
 		    }
 		} else if (dc == OUTW) {
 		    if (iqt[0] == 'Q' &&	/* QB0_0 is cnt == 3 (no tail) */
-			bwx[0] != 'X' &&	/* can only be B or W */
+			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3 && byte < IXD) {
 			fprintf(Fp, " (Gate**)%d,", byte);
-			mask = bwx[0] == 'B' ? B_WIDTH : W_WIDTH;
+			mask = xbwl[0] == 'B' ? B_WIDTH :
+			       xbwl[0] == 'W' ? W_WIDTH :
+#if INT_MAX != 32767 || defined (LONG16)
+			       xbwl[0] == 'L' ? L_WIDTH :
+#endif
+						0;
 		    } else {
 			goto OutErr;
 		    }
 		} else if (dc == OUTX) {
 		    if (iqt[0] == 'Q' &&
-			bwx[0] == 'X' &&	/* QX0.0_0 is cnt == 5 */
+			xbwl[0] == 'X' &&	/* QX0.0_0 is cnt == 5 */
 			cnt == 5 && byte < IXD && bit < 8) {
 			/* OUTPUT byte part of bit pointer */
 			fprintf(Fp, " (Gate**)%d,", byte);
@@ -890,15 +912,15 @@ extern Gate *	_l_[];\n\
 		    li += 2;
 		} else if (typ == INPW) {
 		    if (iqt[0] == 'I' &&	/* IB0 is cnt == 3 */
-			bwx[0] != 'X' &&	/* can only be B or W */
+			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3 && byte < IXD) {
-			fprintf(Fp, " &I%s_[%d],", bwx, byte);
+			fprintf(Fp, " &I%s_[%d],", xbwl, byte);
 		    } else {
 			goto InErr;
 		    }
 		} else if (typ == INPX) {
-		    if (iqt[0] != 'Q' &&	/* can only be I or T */
-			bwx[0] == 'X' &&	/* IX0.0 is cnt == 4 */
+		    if (iqt[0] != 'Q' &&	/* can only be 'I' or 'T' */
+			xbwl[0] == 'X' &&	/* IX0.0 is cnt == 4 */
 			cnt == 4 && byte < IXD && bit < 8) {
 			fprintf(Fp, " &%sX_[%d],", iqt, byte * 8 + bit);
 		    } else {
@@ -986,7 +1008,11 @@ extern Gate *	_l_[];\n\
     linecnt += 2;
     fprintf(H1p, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
     if (Tflag) {			/* imm_identifier++ -- used in c_compile */
+#if INT_MAX == 32767 && defined (LONG16)
+	fprintf(H1p, "extern long	_tVar;\n");
+#else
 	fprintf(H1p, "extern int	_tVar;\n");
+#endif
     }
     fprintf(H2p, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
@@ -1266,7 +1292,11 @@ c_compile(FILE * iFP)
 	return T1index;
     }
     if (outFlag == 0) {
+#if INT_MAX == 32767 && defined (LONG16)
+	fprintf(T2FP, "/*##*/long c_exec(int pp_index) { switch (pp_index) {\n");
+#else
 	fprintf(T2FP, "/*##*/int c_exec(int pp_index) { switch (pp_index) {\n");
+#endif
     }
     if (copyBlocks(iFP, T2FP, 02)) {
 	return T1index;

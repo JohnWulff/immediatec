@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.47 2003/12/09 14:28:54 jw Exp $";
+"@(#)$Id: icc.h,v 1.48 2003/12/30 12:25:34 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -29,7 +29,7 @@ extern void	efree(void *);
 #endif
 
 #ifndef PPGATESIZE
-#define	PPGATESIZE 127		/* natural gate size for char val */
+#define	PPGATESIZE 127		/* natural gate size for char gt_val */
 #endif
 
 #define	DIS_MAX	5		/* diplay heading after this many */
@@ -133,7 +133,11 @@ extern short		debug;		/* from -do argument in call to main */
 
 typedef void		(*Functp2)(Gate *, Gate *);
 typedef void		(*Functp)(Gate *, int);
+#if INT_MAX == 32767 && defined (LONG16)
+typedef long		(*CFunctp)(Gate *);	/* external C functions */
+#else
 typedef int		(*CFunctp)(Gate *);	/* external C functions */
+#endif
 
 extern void	link_ol(		/* link a gate block into */
 		Gate *, Gate *);	/* an output or clock list */
@@ -172,8 +176,11 @@ extern short		dc;	/* debug display counter in scan and rsff */
 #endif
 extern unsigned char	bitMask[];
 extern unsigned char	bitIndex[];
-#define	B_WIDTH		257		/* marks output as Byte width */
-#define	W_WIDTH		258		/* marks output as Word width */
+#define	B_WIDTH		257		/* marks output as byte width */
+#define	W_WIDTH		258		/* marks output as word width */
+#if INT_MAX != 32767 || defined (LONG16)
+#define	L_WIDTH		259		/* marks output as long width */
+#endif
 
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	rMff(Gate *, Gate *);	/* R_FF master action on FF */
@@ -246,8 +253,16 @@ extern Gate **		sTend;			/* end of dynamic array */
 extern unsigned long	sTstrLen;		/* length of symbol strings */
 extern Gate **		i_list[];		/* used to load several modules */
 #else
+#if INT_MAX == 32767 && defined (LONG16)
+extern long		c_exec(int pp_index, Gate * gp);
+#else
 extern int		c_exec(int pp_index, Gate * gp);
 #endif
+#endif
 
+#if INT_MAX == 32767 && defined (LONG16)
+extern void		liveData(unsigned short index, long value);
+#else
 extern void		liveData(unsigned short index, int value);
+#endif
 #endif	/* ICC_H */

@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.38 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: comp.h,v 1.39 2003/12/22 18:19:05 jw Exp $";
 
 #define NS	((char*)0)
 
@@ -170,10 +170,10 @@ extern char	T5FN[];
 					/*   outp.c   */
 #define BUFS	128
 extern int	IEC1131(char * name, char * buf, int bufLen,
-			char * iqt, char * bwx, int * bytep,
+			char * iqt, char * xbwl, int * bytep,
 			int * bitp, char * tail);
 extern int	toIEC1131(char * name, char * buf, int bufLen,
-			  char * iqt, char * bwx, int * bytep,
+			  char * iqt, char * xbwl, int * bytep,
 			  int * bitp, char * tail);
 
 extern int	listNet(unsigned * gate_count);	/* list generated network */

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.24 2003/12/11 09:50:24 jw Exp $";
+"@(#)$Id: scan.c,v 1.25 2003/12/30 13:36:39 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -90,8 +90,12 @@ short		dc;	/* debug display counter in scan and rsff */
 int
 scan_ar(Gate *	out_list)
 {
-    register int	val;
-    register Gate *	gp;
+#if INT_MAX == 32767 && defined (LONG16)
+    long		val;
+#else
+    int			val;
+#endif
+    Gate *		gp;
     Gate **		lp;
     Gate *		op;
 
@@ -125,7 +129,11 @@ scan_ar(Gate *	out_list)
 	op->gt_old = op->gt_new;	/* now new value is fixed */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+	    fprintf(outFP, "\n%s: %ld", op->gt_ids, op->gt_new);
+#else
 	    fprintf(outFP, "\n%s: %d", op->gt_ids, op->gt_new);
+#endif
 	    dc = 0;
 	}
 #endif
@@ -151,10 +159,17 @@ scan_ar(Gate *	out_list)
 		    dc = 1;
 		    putc('\n', outFP);
 		}
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(outFP, "\t%s %ld ==>", gp->gt_ids,
+		    gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
+		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
+		    gp->gt_new : (long)gp->gt_val);
+#else
 		fprintf(outFP, "\t%s %d ==>", gp->gt_ids,
 		    gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 		    gp->gt_new : gp->gt_val);
+#endif
 	    }
 #endif
 #ifdef LOAD
@@ -173,8 +188,6 @@ scan_ar(Gate *	out_list)
 	     *
 	     *	For any C_expressions, the computed value is returned.
 	     *
-	     *	At the moment only int's are treated (ZZZ).
-	     *
 	     ***********************************************************/
 
 	    if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
@@ -191,10 +204,17 @@ scan_ar(Gate *	out_list)
 	    }
 #if YYDEBUG && !defined(_WINDOWS)
 	    /* global gx is modified in arithmetic chMbit() master action */
+#if INT_MAX == 32767 && defined (LONG16)
+	    if (debug & 0100) fprintf(outFP, " %ld",
+		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gx->gt_fni == F_SW ||
+		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
+		    gx->gt_new : (long)gx->gt_val);
+#else
 	    if (debug & 0100) fprintf(outFP, " %d",
 		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gx->gt_fni == F_SW ||
 		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
 		    gx->gt_new : gx->gt_val);
+#endif
 #endif
 	}
     }
@@ -222,8 +242,8 @@ scan_ar(Gate *	out_list)
 int
 scan(Gate *	out_list)
 {
-    register int	val;
-    register Gate *	gp;
+    int			val;
+    Gate *		gp;
     Gate **		lp;
     Gate *		op;
 
@@ -578,7 +598,11 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 {
     Gate **	lp;
     Gate *	gp;
+#if INT_MAX == 32767 && defined (LONG16)
+    long	val;
+#else
     int		val;
+#endif
 
     if (op->gt_fni < MIN_ACT) {		/* UDFA, ARITH, GATE */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -605,10 +629,17 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 			dc = 1;
 			putc('\n', outFP);
 		    }
+#if INT_MAX == 32767 && defined (LONG16)
+		    fprintf(outFP, "\t%s %ld ==>", gp->gt_ids,
+			gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
+			gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
+			gp->gt_new : (long)gp->gt_val);
+#else
 		    fprintf(outFP, "\t%s %d ==>", gp->gt_ids,
 			gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 			gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 			gp->gt_new : gp->gt_val);
+#endif
 		}
 #endif
 #ifdef LOAD
@@ -636,10 +667,17 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
+#if INT_MAX == 32767 && defined (LONG16)
+		if (debug & 0100) fprintf(outFP, " %ld",
+		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
+		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
+		    gx->gt_new : (long)gx->gt_val);
+#else
 		if (debug & 0100) fprintf(outFP, " %d",
 		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
 		    gx->gt_new : gx->gt_val);
+#endif
 #endif
 	    }
 	} else if (op->gt_fni == GATE) {
@@ -736,7 +774,11 @@ arithMa(				/* ARITH master action */
 {
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
-	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
+#if INT_MAX == 32767 && defined (LONG16)
+	gp->gt_new = (long)((unsigned char)gp->gt_val >> 7);
+#else
+	gp->gt_new = ((unsigned char)gp->gt_val >> 7);
+#endif
 	/*
 	 * since new is only modified here and since gt_val has changed,
 	 * new must differ from old (no need to check).
@@ -744,7 +786,11 @@ arithMa(				/* ARITH master action */
 	 * would not be necessary for this action.
 	 */
 #if YYDEBUG && !defined(_WINDOWS)
+#if INT_MAX == 32767 && defined (LONG16)
+	if (debug & 0100) fprintf(outFP, "%ld", gp->gt_new);
+#else
 	if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+#endif
 #endif
     }
     link_ol(gp, a_list);		/* link to arithmetic list */

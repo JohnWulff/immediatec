@@ -21,7 +21,7 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-qh]' >&2
+    echo 'Usage:	'${0##*/}' [-qgctlmCTLMszh]' >&2
     echo '	call make for icc, ict and libict.a with the correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
@@ -34,8 +34,14 @@ usage ()
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-L	make libict.a only' >&2
     echo '	-M	make lmain only' >&2
+    echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
+    echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
+    echo '		simulates compilation for a 16 bit system, which does' >&2
+    echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
+    echo '	-z	make with -DLONG16        (make clean required first)' >&2
+    echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.13 2003/10/12 20:57:47 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.14 2003/12/30 17:13:04 jw Exp $' >&2
 }
 
 makeIct ()
@@ -46,7 +52,7 @@ makeIct ()
     else
 	mkdir PptcObjs
     fi
-    make OPT="-DTCP$t" CFLAGS="$cflags" ict
+    make OPT="-DTCP$t$s$z" CFLAGS="$cflags" ict
     mv main.o ict.o comp.o genr.o gram.o lexc.o link.o rsff.o scan.o PptcObjs
     mv Make_tmp/* .
 }
@@ -59,7 +65,7 @@ makeLib ()
     else
 	mkdir LoadObjs
     fi
-    make OPT="-DLOAD -DTCP$l" CFLAGS="$cflags" libict.a
+    make OPT="-DLOAD -DTCP$l$s$z" CFLAGS="$cflags" libict.a
     mv ict.o scid.o link.o rsff.o scan.o LoadObjs
     mv Make_tmp/* .
 }
@@ -72,7 +78,7 @@ makeLmain ()
     else
 	mkdir LmainObjs
     fi
-    make OPT="-DLMAIN$m" CFLAGS="$cflags" lmain
+    make OPT="-DLMAIN$m$s$z" CFLAGS="$cflags" lmain
     mv gram.o lexc.o LmainObjs
     mv Make_tmp/* .
 }
@@ -82,6 +88,8 @@ c=""
 t=""
 l=""
 m=""
+s=""
+z=""
 C=0
 T=0
 L=0
@@ -101,6 +109,8 @@ while [ $# -gt 0 ]; do
 	    t*)	t=" -DYYDEBUG";;
 	    l*)	l=" -DYYDEBUG";;
 	    m*)	m=" -DYYDEBUG";;
+	    s*)	s=" -DINT_MAX=32767";;
+	    z*)	z=" -DLONG16";;
 	    C*)	C=1; ALL=0;;
 	    T*)	T=1; ALL=0;;
 	    L*)	L=1; ALL=0;;
@@ -132,22 +142,22 @@ if [ $ALL = 1 ]; then
 fi
 
 if [ $ALL = 1 ] || [ $C = 1 ]; then
-    echo "make OPT=$c CFLAGS=$cflags icc"
-    make OPT=$c CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    echo "make OPT=\"$c$s$z\" CFLAGS=\"$cflags\" icc"
+    make OPT="$c$s$z" CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $T = 1 ]; then
-    echo "make OPT=-DTCP$t CFLAGS=$cflags ict"
+    echo "make OPT=\"-DTCP$t$s$z\" CFLAGS=\"$cflags\" ict"
     makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $L = 1 ]; then
-    echo "make OPT=-DLOAD -DTCP$l CFLAGS=$cflags libict.a"
+    echo "make OPT=\"-DLOAD -DTCP$l$s$z\" CFLAGS=\"$cflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $M = 1 ]; then
-    echo "make OPT=-DLMAIN$m CFLAGS=$cflags lmain"
+    echo "make OPT=\"-DLMAIN$m$s$z\" CFLAGS=\"$cflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 

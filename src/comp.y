@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.79 2003/12/12 17:34:48 jw Exp $";
+"@(#)$Id: comp.y,v 1.80 2003/12/30 21:25:25 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1886,7 +1886,11 @@ unget(int c)
 
 char *	cexeString[] = {
     "    case %d:\n",
+#if INT_MAX == 32767 && defined (LONG16)
+    "static long _c_%d(Gate * _cexe_gf) {\n",
+#else
     "static int _c_%d(Gate * _cexe_gf) {\n",
+#endif
 };
 
 static int
@@ -1958,8 +1962,8 @@ iClex(void)
 	} else if (isalpha(c) || c == '_') {
 	    unsigned char	wplus = 0;
 	    unsigned int	qtoken = 0;
-	    unsigned short	qmask = 0;
-	    unsigned short	iomask = 0xf;		/* output Q */
+	    unsigned long	qmask = 0;		/* mask to id bit, byte, word or long */
+	    unsigned long	iomask = 0;		/* output Q is 0x0f, input I is 0xf0 */
 	    unsigned char	typ = UDF;
 	    unsigned char	ftyp = UDFA;
 	    int			ixd = IXD;
@@ -1970,24 +1974,37 @@ iClex(void)
 	    unsigned char	y2[2];
 
 	    while ((c = get(T0FP)) != EOF && (isalnum(c) || c == '_'));
-	    if (sscanf(iCtext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
+	    if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d", y0, y1, &yn) == 3) {
 		char tempBuf[TSIZE];	/* make long enough for format below */
 		if (y1[0] == 'B') {
 		    wplus = 1;
 		    qmask = 0x02;			/* QB or IB */
+		    iomask = 0x0f;
 		    goto foundQIT;
 		} else if (y1[0] == 'W') {
 		    wplus = 1;
 		    qmask = 0x0404;			/* QW or IW */
+		    iomask = 0x0f0f;
 		    goto foundQIT;
+		} else if (y1[0] == 'L') {
+#if INT_MAX != 32767 || defined (LONG16)
+		    wplus = 1;
+		    qmask = 0x08080808;			/* QL or IL */
+		    iomask = 0x0f0f0f0f;
+		    goto foundQIT;
+#else
+		    ierror("32 bit I/O not supported in 16 bit environment:", iCtext);
+#endif
 		} else if (c == '.') {
-		    int c1, i1;
+		    int c1, i1;				/* QXn. or IXn. */
 		    if (isdigit(c1 = c = get(T0FP))) {	/* can only be QX%d. */
 			for (i1 = 0; isdigit(c = get(T0FP)); i1++);
 			if (c1 >= '8' || i1 > 0) {
 			    ierror("I/O bit address must be less than 8:", iCtext);
+			} else {
+			    qmask = 0x01;		/* QX, IX or TX */
+			    iomask = 0x0f;
 			}
-			qmask = 0x01;			/* QX, IX or TX */
 		    foundQIT:
 			ftyp = GATE - wplus;		/* GATE or ARITH */
 			if (y0[0] == 'Q') {
@@ -1995,7 +2012,7 @@ iClex(void)
 			} else {
 			    typ = INPX - wplus;		/* INPX or INPW */
 			    if (y0[0] != 'T') {
-				qmask <<= 4;		/* IX, IB or IW */
+				qmask <<= 4;		/* IX, IB, IW or IL */
 				iomask <<= 4;		/* input I */
 			    } else {
 				qmask = iomask = 0;	/* TX (TB or TW) */
@@ -2005,7 +2022,7 @@ iClex(void)
 		    } else {
 			unget(c);		/* the non digit, not '.' */
 		    }
-		} else if (sscanf(iCtext, "%1[IQT]%1[BWX]%d_%d%1[A-Z_a-z]",
+		} else if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d_%d%1[A-Z_a-z]",
 		    y0, y1, &yn, &yt, y2) == 4) {
 		    ierror("Variables with _ clash with I/O", iCtext);
 						/* QX%d_%d not allowed */
@@ -2018,7 +2035,17 @@ iClex(void)
 		} else			/* test rest if yn < ixd (array bounds) */
 		if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
 		    ierror("WORD I/O must have even byte address:", iCtext);
-		} else			/* and yn is even for word addresses */
+		} else			/* test rest if yn < ixd (array bounds) */
+		if (wplus && y1[0] == 'L' && (yn & 0x03) != 0) {
+		    ierror("LONG I/O address must be on 4 byte boundary:", iCtext);
+		} else			/* and yn is on correct byte boundary */
+		if (qmask & 0x88888888) {
+		    if (*(unsigned long*)&QX_[yn] & ~qmask & iomask) {
+			ierror("I/O addresses more than 1 of bit, byte or word:",
+			    iCtext);		/* mixed mode warning */
+		    }
+		    *(unsigned long*)&QX_[yn] |= qmask; /* note long I/O */
+		} else
 		if (qmask & 0x4444) {
 		    if (*(unsigned short*)&QX_[yn] & ~qmask & iomask) {
 			ierror("I/O addresses more than 1 of bit, byte or word:",

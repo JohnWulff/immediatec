@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.19 2003/11/25 15:18:14 jw Exp $";
+"@(#)$Id: lexc.l,v 1.20 2003/12/22 18:20:08 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -400,12 +400,12 @@ check_type(c_STYPE* u)
     int			mType;
     char		buffer[BUFS];	/* buffer for modified names */
     char		iqt[2];		/* char buffers - space for 0 terminator */
-    char		bwx[2];
+    char		xbwl[2];
     int			byte;
     int			bit;
     char		tail[8];	/* compiler generated suffix _123456 max */
 
-    toIEC1131(c_text, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+    toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 #else
 #define buffer		c_text
 #endif

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.33 2003/12/11 11:20:13 jw Exp $";
+"@(#)$Id: rsff.c,v 1.34 2003/12/31 16:16:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -261,7 +261,7 @@ dSff(					/* D_FF slave action on FF */
     Gate *	out_list)
 {
     Gate *	gp;
-    short	val;
+    char	val;
 
     gp = gf->gt_funct;
     if ((val = (gf->gt_val < 0) ? -1 : 1) != gp->gt_val) {
@@ -370,7 +370,6 @@ dSsh(					/* D_SH slave action on SH */
     Gate *	out_list)
 {
     Gate *	gp;
-    short	val;
 
 #if defined(TCP) && defined(LOAD)
     if (gf->gt_live & 0x8000) {			/* value can change more than once */
@@ -385,14 +384,22 @@ dSsh(					/* D_SH slave action on SH */
     if ((gp->gt_val & 0x02) == 0 && gf->gt_new != gp->gt_new) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+	    fprintf(outFP, "\tSH %s %ld ==>", gp->gt_ids, gp->gt_new);
+#else
 	    fprintf(outFP, "\tSH %s %d ==>", gp->gt_ids, gp->gt_new);
+#endif
 	}
 #endif
 	gp->gt_new = gf->gt_old = gf->gt_new; /* transfer value to slave */
 	gp->gt_val = gp->gt_new ? (gp->gt_new == -1 ? -3 : 0) : 1;
 	link_ol(gp, a_list);	/* fire new arithmetic action */
 #if YYDEBUG && !defined(_WINDOWS)
+#if INT_MAX == 32767 && defined (LONG16)
+	if (debug & 0100) fprintf(outFP, " %ld", gp->gt_new);
+#else
 	if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
+#endif
 #endif
     }
 } /* dSsh */
@@ -430,13 +437,21 @@ sMsh(					/* S_SH master action on SH */
 		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
 #if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		    fprintf(outFP, "{%s %ld ==>", gdm->gt_ids, gdm->gt_old);
+#else
 		    fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+#endif
 		}
 #endif
 		dMsh(gdm, a_list);	/* link or unlink delay master now */
 #if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		    fprintf(outFP, " %ld}", gdm->gt_new);
+#else
 		    fprintf(outFP, " %d}", gdm->gt_new);
+#endif
 		}
 #endif
 	    }
@@ -472,7 +487,11 @@ sSsh(					/* S_SH slave action on SH */
 	if (gp->gt_new != -1) {
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(outFP, "\tS SH %s %2ld ==>", gp->gt_ids, gp->gt_new);
+#else
 		fprintf(outFP, "\tS SH %s %2d ==>", gp->gt_ids, gp->gt_new);
+#endif
 	    }
 #endif
 	    if (gp->gt_next) {
@@ -488,13 +507,21 @@ sSsh(					/* S_SH slave action on SH */
 		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
 #if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+			fprintf(outFP, "{%s %ld ==>", gdm->gt_ids, gdm->gt_old);
+#else
 			fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+#endif
 		    }
 #endif
 		    dMsh(gdm, a_list);		/* link or unlink delay master now */
 #if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+			fprintf(outFP, " %ld}", gdm->gt_new);
+#else
 			fprintf(outFP, " %d}", gdm->gt_new);
+#endif
 		    }
 #endif
 		}
@@ -502,7 +529,11 @@ sSsh(					/* S_SH slave action on SH */
 	    link_ol(gp, a_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(outFP, " %ld", gp->gt_new);
+#else
 		fprintf(outFP, " %d", gp->gt_new);
+#endif
 	    }
 #endif
 	}
@@ -549,13 +580,21 @@ rMsh(					/* R_SH master action on SH */
 		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
 #if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		    fprintf(outFP, "{%s %ld ==>", gdm->gt_ids, gdm->gt_old);
+#else
 		    fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+#endif
 		}
 #endif
 		dMsh(gdm, a_list);	/* link or unlink delay master now */
 #if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		    fprintf(outFP, " %ld}", gdm->gt_new);
+#else
 		    fprintf(outFP, " %d}", gdm->gt_new);
+#endif
 		}
 #endif
 	    }
@@ -591,7 +630,11 @@ rSsh(					/* R_SH slave action on SH */
 	if (gp->gt_new != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(outFP, "\tR SH %s %2ld ==>", gp->gt_ids, gp->gt_new);
+#else
 		fprintf(outFP, "\tR SH %s %2d ==>", gp->gt_ids, gp->gt_new);
+#endif
 	    }
 #endif
 	    if (gp->gt_next) {
@@ -607,13 +650,21 @@ rSsh(					/* R_SH slave action on SH */
 		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
 #if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+			fprintf(outFP, "{%s %ld ==>", gdm->gt_ids, gdm->gt_old);
+#else
 			fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+#endif
 		    }
 #endif
 		    dMsh(gdm, a_list);		/* link or unlink delay master now */
 #if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+			fprintf(outFP, " %ld}", gdm->gt_new);
+#else
 			fprintf(outFP, " %d}", gdm->gt_new);
+#endif
 		    }
 #endif
 		}
@@ -621,7 +672,11 @@ rSsh(					/* R_SH slave action on SH */
 	    link_ol(gp, a_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(outFP, " %ld", gp->gt_new);
+#else
 		fprintf(outFP, " %d", gp->gt_new);
+#endif
 	    }
 #endif
 	}
@@ -711,7 +766,11 @@ i_ff3(Gate * gp, int typ)		/* Pass3 init on FF etc. */
 	if (typ == SH || typ == INPW) {
 	    gp->gt_new = gp->gt_old = 0;	/* clear arithmetic */
 	} else if (typ == NCONST) {
+#if INT_MAX == 32767 && defined (LONG16)
+	    gp->gt_new = gp->gt_old = atol(gp->gt_ids);	/* constant */
+#else
 	    gp->gt_new = gp->gt_old = atoi(gp->gt_ids);	/* constant */
+#endif
 	}
     } else {
 	gp->gt_val = 0;		/* used in visualization */
@@ -828,7 +887,11 @@ chMbit(					/* CH_BIT master action on VF */
     link_ol(gp, fa[FL_CLK]);		/* master action */
 #if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+	fprintf(outFP, " %ld", out_list != o_list? gp->gt_new : (long)gp->gt_val);
+#else
 	fprintf(outFP, " %d", out_list != o_list? gp->gt_new : gp->gt_val);
+#endif
 	if (dc++ >= 4) {
 	    dc = 1;
 	    putc('\n', outFP);
@@ -1047,16 +1110,19 @@ fScf(					/* F_CF and F_CE slave action on CF */
  *	Output to a word or byte whose slot index is in gt_list.
  *		gt_mark == B_WIDTH means 1 byte is output
  *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
+ *		gt_mark == L_WIDTH means 4 bytes or 1 long is output
  *
  *	For initialisation purposes this ftype OUTW node is acted on
- *	by exactly one ARITH node defined in a output assignment.
+ *	by exactly one ARITH node defined in an output assignment.
  *	This must line up with OUTP_M (1). This is checked in i_ff3().
  *		QB1 = b1;	// output b1 to byte at QX_[1]
  *		QW2 = w2;	// output w2 to word at QX_[2]
- *	b1  or w2 can be used as arithmetic values (ftype is ARITH)
+ *		QL4 = l4;	// output l4 to word at QX_[4]
+ *	b1, w2  or l4 can be used as arithmetic values (ftype is ARITH)
  *	and may be any logical or arithmetic function, including INPUT.
  *
  *	NOTE: for word output the I/O address (slot) must be even.
+ *	      for long output the I/O address must be on a 4 byte boundary.
  *	      The I/O address (slot) must be < IXD (max 64).
  *	      These are checked by the compiler in iClex() and by
  *	      iCbox and iCserver since rev 1.68
@@ -1071,7 +1137,11 @@ outMw(					/* OUTW master action */
     Gate *	gp,			/* NOTE: there is no slave action */
     Gate *	out_list)
 {
+#if INT_MAX == 32767 && defined (LONG16)
+    long	val;
+#else
     int		val;
+#endif
     int		slot;
     int		cage;
     int		mask;
@@ -1099,21 +1169,40 @@ outMw(					/* OUTW master action */
 	val &= 0xff;			/* for display only */
 #endif
 	QX_[slot] = val;		/* output byte to slot */
-	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
-	QMM |= bitMask[cage & 0x7];		/* mark the rack */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) fprintf(outFP, "%d", val & 0xff);	/* byte */
+#endif
     } else if (mask == W_WIDTH) {
+#ifndef _WINDOWS
+	val &= 0xffff;			/* for display only */
+#endif
 	assert((slot & 0x01) == 0);	/* even I/O word address */
 	*(short*)&QX_[slot] = val;	/* output word to slot and slot+1 */
-	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
-	QMM |= bitMask[cage & 0x7];		/* mark the rack */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) fprintf(outFP, "%hd", (short)val);	/* word */
+#endif
+#if INT_MAX != 32767 || defined (LONG16)
+    } else if (mask == L_WIDTH) {
+	assert((slot & 0x03) == 0);	/* 4 byte I/O long address */
+#if INT_MAX == 32767
+	*(long*)&QX_[slot] = val;	/* output long from slot to slot+3 */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) fprintf(outFP, "%ld", val);	/* long */
+#endif
+#else
+	*(int*)&QX_[slot] = val;	/* output long from slot to slot+3 */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) fprintf(outFP, "%d", val);	/* long */
+#endif
+#endif
+#endif
 #ifndef _WINDOWS
     } else {
 	val = 0;			/* error - no output */
 #endif
     }
-#if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) fprintf(outFP, "%d", val);	/* byte or word */
-#endif
+    QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
+    QMM |= bitMask[cage & 0x7];		/* mark the rack */
 } /* outMw */
 
 /********************************************************************
@@ -1244,7 +1333,7 @@ clockSfn(				/* Clock function */
 	gp->gt_val = -1;		/* set for visualization only */
 #if defined(TCP) && defined(LOAD)
 	if (gp->gt_live & 0x8000) {
-	    liveData(gp->gt_live, 1);	/* live is active */
+	    liveData(gp->gt_live, 1L);	/* live is active */
 	}
 #endif
 	if (gp->gt_next != gp) {
@@ -1327,7 +1416,7 @@ timerSfn(				/* Timer function */
 	gp->gt_val = -1;		/* set for visualization only */
 #if defined(TCP) && defined(LOAD)
 	if (gp->gt_live & 0x8000) {
-	    liveData(gp->gt_live, 1);	/* live is active */
+	    liveData(gp->gt_live, 1L);	/* live is active */
 	}
 #endif
 	if ((np = gp->gt_next) != gp) {
@@ -1406,14 +1495,23 @@ timerSfn(				/* Timer function */
  *
  *******************************************************************/
 
+#if INT_MAX == 32767 && defined (LONG16)
+long
+assign(Gate * gp, long rv)
+#else
 int
 assign(Gate * gp, int rv)
+#endif
 {
     if (gp->gt_ini == -ARNC) {
 	if (rv != gp->gt_new) {
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(outFP, "\tAA %s %ld ==>", gp->gt_ids, gp->gt_new);
+#else
 		fprintf(outFP, "\tAA %s %d ==>", gp->gt_ids, gp->gt_new);
+#endif
 	    }
 #endif
 	    if (gp->gt_new == gp->gt_old || rv == gp->gt_old) {
@@ -1421,7 +1519,11 @@ assign(Gate * gp, int rv)
 	    }
 	    gp->gt_new = rv;			/* first or later change */
 #if YYDEBUG && !defined(_WINDOWS)
+#if INT_MAX == 32767 && defined (LONG16)
+	    if (debug & 0100) fprintf(outFP, " %ld\n", gp->gt_new);
+#else
 	    if (debug & 0100) fprintf(outFP, " %d\n", gp->gt_new);
+#endif
 #endif
 	}
     } else if (gp->gt_ini == -LOGC) {

@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.17 2003/12/09 11:09:10 jw Exp $";
+"@(#)$Id: cexe.h,v 1.18 2003/12/30 12:53:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -27,7 +27,11 @@ static const char cexe_h[] =
 #define _AA(x,v) aAssign(Lookup(#x)->u.gate, v)
 #define _LA(x,v) lAssign(Lookup(#x)->u.gate, v)
 
+#if INT_MAX == 32767 && defined (LONG16)
+static long	_tVar;
+#else
 static int	_tVar;
+#endif
 
 static Symbol *
 Lookup(char *	string)	/* find string in symbol table at run time */
@@ -56,7 +60,11 @@ Lookup(char *	string)	/* find string in symbol table at run time */
  *******************************************************************/
 
 Q
+#if INT_MAX == 32767 && defined (LONG16)
+long
+#else
 int
+#endif
 c_exec(int pp_index, Gate * _cexe_gf)
 {
     switch (pp_index) {

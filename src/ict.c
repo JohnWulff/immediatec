@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.34 2003/12/11 09:56:27 jw Exp $";
+"@(#)$Id: ict.c,v 1.35 2003/12/31 17:05:58 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -31,9 +31,9 @@ static const char ict_c[] =
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
+#include	"tcpc.h"
 #include	"icg.h"
 #include	"icc.h"
-#include	"tcpc.h"
 
 #define MAX_IO	8
 #define MAX_W	2
@@ -59,10 +59,13 @@ Gate *		c_list;			/* main clock list "iClock" */
 static Gate	flist;
 Gate *		f_list;			/* auxiliary function clock list */
 
-Gate *		IX_[IXD*8];		/* pointers to Bit Input Gates */
-Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
-Gate *		IW_[IXD];		/* pointers to Word Input Gates */
-Gate *		TX_[TXD*8];		/* pointers to System Bit Gates */
+Gate *		IX_[IXD*8];		/* pointers to bit Input Gates */
+Gate *		IB_[IXD];		/* pointers to byte Input Gates */
+Gate *		IW_[IXD];		/* pointers to word Input Gates */
+#if INT_MAX != 32767 || defined (LONG16)
+Gate *		IL_[IXD];		/* pointers to long Input Gates */
+#endif
+Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
 unsigned char	QX_[IXD];		/* Output bit field slots */
 char		QT_[IXD];		/* Output type of slots */
 unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
@@ -178,7 +181,7 @@ icc(
 
 #ifdef LOAD 
     /* if (debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
-    strcpy(msgBuf, "L0.3");		/* header for live data */
+    strcpy(msgBuf, "D0.3");		/* header for live data */
     msgOffset = 4;			/* strlen(msgBuf) */
 #endif
 
@@ -285,7 +288,7 @@ icc(
 	}
 
 #ifdef LOAD 
-	strcpy(msgBuf, "L0.3");		/* header for live data */
+	strcpy(msgBuf, "D0.3");		/* header for live data */
 	msgOffset = 4;			/* strlen(msgBuf) */
 #endif
 
@@ -310,10 +313,10 @@ icc(
 
 	if ((scan_cnt || link_cnt) && (debug & 02000)) {
 	    if (glit_cnt) {
-		fprintf(outFP, "glitch = %d, %ld  ",
+		fprintf(outFP, "glitch = %u, %lu  ",
 		glit_cnt, glit_nxt);
 	    }
-	    fprintf(outFP, "scan = %d  link = %d\n", scan_cnt, link_cnt);
+	    fprintf(outFP, "scan = %u  link = %u\n", scan_cnt, link_cnt);
 	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
 	}
 #endif
@@ -369,12 +372,25 @@ icc(
 	    while (slots) {
 		int mask = slots & -slots;	/* rightmost slot set in slots */
 		int slot = cageOffset + bitIndex[mask];
-		short val;
+#if INT_MAX == 32767 && defined (LONG16)
+		long val;
+#else
+		int val;
+#endif
 		char Qtype = QT_[slot];
 		assert(Qtype);			/* make sure slot is programmed */
-		val = Qtype == 'W' ? *(short*)&QX_[slot] : QX_[slot];
-		while ((len = snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
-		    "%c%d.%d,", Qtype, slot, val)) < 0 || len > rest) { /* use > because of -1 truncation */
+		val = Qtype == 'L' ? *(long*)&QX_[slot] :
+		      Qtype == 'W' ? *(short*)&QX_[slot] : QX_[slot];
+		while ((len =
+#if INT_MAX == 32767 && defined (LONG16)
+			snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+			    "%c%d.%ld,", Qtype, slot, val)
+#else
+			snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+			    "%c%d.%d,", Qtype, slot, val)
+#endif
+			) < 0 || len > rest	/* use > because of -1 truncation */
+		    ) {
 		    msgBuf[msgOffset - 1] = '\0';	/* clear last ',' */
 		    if (micro) microPrint("Send intermediate", 0);
 		    send_msg_to_server(sockFN, msgBuf);
@@ -444,7 +460,11 @@ icc(
 		    if (micro) microReset(04);
 		    if (rcvd_msg_from_server(sockFN, rBuf, sizeof rBuf)) {
 			int		slot;
-			short		val;
+#if INT_MAX == 32767 && defined (LONG16)
+			long		val;
+#else
+			int		val;
+#endif
 			int		index;
 			int		mask;
 			int		diff;
@@ -455,7 +475,14 @@ icc(
 #if YYDEBUG
 			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, iccNM);
 #endif
-			if (sscanf(rBuf, "%1[XBWL]%d.%hd", utype, &slot, &val) == 3 && slot < IXD) {		
+			if (
+#if INT_MAX == 32767 && defined (LONG16)
+				sscanf(rBuf, "%1[XBWLD]%d.%ld", utype, &slot, &val)
+#else
+				sscanf(rBuf, "%1[XBWLD]%d.%d", utype, &slot, &val)
+#endif
+				== 3 && slot < IXD
+			    ) {		
 			    switch (*utype) {
 			    case 'X':				/* bit input */
 				val &= 0xff;			/* safety measure */
@@ -487,13 +514,22 @@ icc(
 
 			    case 'B':				/* 8 bit byte input */
 				if ((gp = IB_[slot]) != NULL) {
-				    val &= 0xff;		/* limit to byte val */
+				    val &= 0xff;		/* reduce to byte */
 				    goto wordIn;
 				}
 				break;
 
 			    case 'W':				/* 16 bit word input */
 				if ((gp = IW_[slot]) != NULL) {
+				    val = (short)val;		/* reduce to signed word */
+#if INT_MAX != 32767 || defined (LONG16)
+				    goto wordIn;
+				}
+				break;
+
+			    case 'L':				/* 32 bit long input */
+				if ((gp = IL_[slot]) != NULL) {
+#endif
 			    wordIn:
 				    if (val != gp->gt_new &&	/* first change or glitch */
 				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
@@ -503,7 +539,11 @@ icc(
 #endif
 					link_ol(gp, a_list);	/* no actions */
 #if YYDEBUG
+#if INT_MAX == 32767 && defined (LONG16)
+					if (debug & 0100) fprintf(outFP, "%ld", gp->gt_new);
+#else
 					if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+#endif
 #endif
 					cnt++;
 				    }
@@ -511,8 +551,8 @@ icc(
 				break;
 #ifdef LOAD
 
-			    case 'L':				/* live input */
-				if (slot != 0) goto RcvError;	/* unknown L? slot */
+			    case 'D':				/* live input */
+				if (slot != 0) goto RcvError;	/* unknown D? slot */
 
 				switch (val) {
 				case 0:		/* GET_END */
@@ -530,7 +570,7 @@ icc(
 					(*opp)->gt_live = index++;	/* index and live inhibit */
 					index &= 0x7fff;		/* rolls over if > 32768 Symbols */
 				    }
-				    strcpy(msgBuf, "L0.1");
+				    strcpy(msgBuf, "D0.1");
 				    msgOffset = 4;		/* strlen(msgBuf) */
 				    /* to maintain index correlation send all symbols */
 				    for (opp = sTable; opp < sTend; opp++) {
@@ -571,7 +611,7 @@ icc(
 					if (micro) microReset(0);
 				    }
 				    /* end of symbol table - execute scan */
-				    snprintf(&msgBuf[0], REPLY, "L0.2;%s", progname);
+				    snprintf(&msgBuf[0], REPLY, "D0.2;%s", progname);
 				    if (micro) microPrint("Send Scan Command", 0);
 				    send_msg_to_server(sockFN, msgBuf);
 				    liveFlag = 1;		/* live inhibit bits are set */
@@ -586,11 +626,11 @@ icc(
 					}
 					liveFlag = 0;	/* do not set again until case 4 received */
 				    }
-				    strcpy(msgBuf, "L0.3");	/* header for live data */
+				    strcpy(msgBuf, "D0.3");	/* header for live data */
 				    msgOffset = 4;		/* strlen(msgBuf) */
 				    cp = rBuf;
 				    while ((cp = strchr(cp, ';')) != NULL) {
-					int		value;
+					long		value;
 					int		fni;
 					index = atoi(++cp);
 					assert(index < sTend - sTable);	/* check index is in range */
@@ -598,7 +638,7 @@ icc(
 					gp->gt_live |= 0x8000;	/* set live active */
 					value = ((fni = gp->gt_fni) == ARITH || fni == D_SH || fni == F_SW ||
 					    fni == OUTW || fni == CH_BIT && gp->gt_ini == -ARN) ?
-					    gp->gt_old : gp->gt_val < 0 ? 1 : 0;
+					    gp->gt_new : gp->gt_val < 0 ? 1 : 0;
 					if (value) {
 					    liveData(gp->gt_live, value);	/* initial active live values */
 					}
@@ -606,7 +646,7 @@ icc(
 				    /*
 				     * send a reply for each block received because
 				     * a scan may occurr between received blocks which
-				     * also sends an L0.3 block
+				     * also sends an D0.3 block
 				     */
 				    if (msgOffset > 4) {
 					send_msg_to_server(sockFN, msgBuf);
@@ -624,13 +664,13 @@ icc(
 				    break;
 
 				default:
-				    goto RcvError;		/* unknown L0.? case */
+				    goto RcvError;		/* unknown D0.? case */
 				}
 				break;
 #endif
 
 			    default:
-				goto RcvError;			/* unkikely if sscanf %1[XBWL] OK */
+				goto RcvError;			/* unkikely if sscanf %1[XBWLD] OK */
 			    }
 			} else {
 			  RcvError:
@@ -648,6 +688,7 @@ icc(
 		    if ((c = getchar()) == EOF) {
 			FD_CLR(0, &infds);		/* ignore EOF - happens in bg */
 		    } else if (c == 'q') {
+			fprintf(errFP, "\n%s stopped from the terminal\n", iccNM);
 			quit(0);			/* quit normally */
 #if YYDEBUG
 		    } else if (c == 't') {
@@ -672,7 +713,7 @@ icc(
 		}
 	    } else {				/* retval -1 */
 		perror("ERROR: select failed");
-		quit(1);				/* ZZZ change number */
+		quit(1);
 	    }
 	}
     } /* for ( ; ; ) */
@@ -685,15 +726,27 @@ icc(
  *******************************************************************/
 
 void
+#if INT_MAX == 32767 && defined (LONG16)
+liveData(unsigned short index, long value)
+#else
 liveData(unsigned short index, int value)
+#endif
 {
     int len;
     int rest;
-    while ((len = snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
-	";%hu %d", index & 0x7fff, value)) < 0 || len >= rest) {
+    while ((len =
+#if INT_MAX == 32767 && defined (LONG16)
+	    snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+		";%hu %ld", index & 0x7fff, value)
+#else
+	    snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+		";%hu %d", index & 0x7fff, value)
+#endif
+	    ) < 0 || len >= rest
+	) {
 	msgBuf[msgOffset] = '\0';		/* terminate */
 	send_msg_to_server(sockFN, msgBuf);
-	msgOffset = 4;				/* msg = "L0.3" */
+	msgOffset = 4;				/* msg = "D0.3" */
     }
     msgOffset += len;
 } /* liveData */
@@ -720,11 +773,17 @@ display(void)
 	}
 	if (IB_[1] != 0) fprintf(outFP, "  IB1");
 	if (IW_[2] != 0) fprintf(outFP, "    IW2");
+#if INT_MAX != 32767 || defined (LONG16)
+	if (IL_[4] != 0) fprintf(outFP, "      IL4");
+#endif
 	fprintf(outFP, "   ");
 	for (n = 0; n < MAX_IO; n++) {
 	    fprintf(outFP, " Q%d", n);
 	}
 	fprintf(outFP, "  QB1    QW2");
+#if INT_MAX != 32767 || defined (LONG16)
+	fprintf(outFP, "      QL4");
+#endif
     }
     fprintf(outFP, "\n");			/* display outputs */
     for (n = 0; n < 10; n++) {
@@ -732,13 +791,27 @@ display(void)
 	    fprintf(outFP, "  %c", gp->gt_val < 0 ? '1' : '0');
 	}
     }
-    /* display IB1 and IW2 if active */
+    /* display IB1, IW2 and IL4 if active */
     if (!xflag) {
-	if ((gp = IB_[1]) != 0) fprintf(outFP, " %4d", gp->gt_old & 0xff);
-	if ((gp = IW_[2]) != 0) fprintf(outFP, " %6d", gp->gt_old);
+	if ((gp = IB_[1]) != 0) fprintf(outFP, " %4d", gp->gt_new & 0xff);
+	if ((gp = IW_[2]) != 0) fprintf(outFP, " %6hd", (short)gp->gt_new);
+#if INT_MAX == 32767
+#if defined (LONG16)
+	if ((gp = IL_[4]) != 0) fprintf(outFP, " %8ld", gp->gt_new);
+#endif
+#else
+	if ((gp = IL_[4]) != 0) fprintf(outFP, " %8d", gp->gt_new);
+#endif
     } else {
-	if ((gp = IB_[1]) != 0) fprintf(outFP, "   %02x", gp->gt_old & 0xff);
-	if ((gp = IW_[2]) != 0) fprintf(outFP, "   %04x", gp->gt_old & 0xffff);
+	if ((gp = IB_[1]) != 0) fprintf(outFP, "   %02x", gp->gt_new & 0xff);
+	if ((gp = IW_[2]) != 0) fprintf(outFP, "   %04x", gp->gt_new & 0xffff);
+#if INT_MAX == 32767
+#if defined (LONG16)
+	if ((gp = IL_[4]) != 0) fprintf(outFP, " %08lx", gp->gt_new);
+#endif
+#else
+	if ((gp = IL_[4]) != 0) fprintf(outFP, " %08x", gp->gt_new);
+#endif
     }
     fprintf(outFP, "   ");
     data = *(unsigned short*)QX_;
@@ -746,11 +819,27 @@ display(void)
 	fprintf(outFP, "  %c", (data & 0x0001) ? '1' : '0');
 	data >>= 1;				/* scan output bits */
     }
-    /* display QB1 and QW2 */
+    /* display QB1, QW2 and QL4 */
     if (!xflag) {
-	fprintf(outFP, " %4d %6d\n", QX_[1], *(short*)&QX_[2]);
+#if INT_MAX == 32767
+#if defined (LONG16)
+	fprintf(outFP, " %4d %6hd %8ld\n", QX_[1], *(short*)&QX_[2], *(long*)&QX_[4]);
+#else
+	fprintf(outFP, " %4d %6hd\n", QX_[1], *(short*)&QX_[2]);	/* no QL4 */
+#endif
+#else
+	fprintf(outFP, " %4d %6hd %8d\n", QX_[1], *(short*)&QX_[2], *(int*)&QX_[4]);
+#endif
     } else {
-	fprintf(outFP, "   %02x   %04x\n", QX_[1], *(unsigned short*)&QX_[2]);
+#if INT_MAX == 32767
+#if defined (LONG16)
+	fprintf(outFP, "   %02x   %04hx %08lx\n", QX_[1], *(short*)&QX_[2], *(long*)&QX_[4]);
+#else
+	fprintf(outFP, "   %02x   %04hx\n", QX_[1], *(short*)&QX_[2]);	/* no QL4 */
+#endif
+#else
+	fprintf(outFP, "   %02x   %04hx %08x\n", QX_[1], *(short*)&QX_[2], *(int*)&QX_[4]);
+#endif
     }
     fflush(outFP);
 } /* display */
