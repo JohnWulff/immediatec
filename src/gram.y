@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.9 2002/08/14 16:43:45 jw Exp $";
+"@(#)$Id: gram.y,v 1.10 2002/08/16 13:27:33 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -85,7 +85,7 @@ static void	yyerror(char *s, ...);
 %type	<tok> logical_and_expr logical_or_expr conditional_expr assignment_expr
 %type	<tok> assignment_operator expr constant_expr declaration declaration_specifiers
 %type	<tok> init_declarator_list init_declarator storage_class_specifier
-%type	<tok> type_specifier struct_or_union_specifier struct_or_union
+%type	<tok> type_specifier struct_or_union_specifier struct_or_union_tag struct_or_union
 %type	<tok> struct_declaration_list struct_declaration struct_declarator_list
 %type	<tok> struct_declarator enum_specifier enumerator_list enumerator declarator
 %type	<tok> declarator2 pointer type_specifier_list parameter_identifier_list
@@ -529,10 +529,8 @@ assignment_expr
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
-#ifndef LMAIN
-#if YYDEBUG
+#if ! defined LMAIN && YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "@");
-#endif
 #endif
 	}
 	| imm_identifier '=' assignment_expr {
@@ -644,7 +642,7 @@ declaration
 		sp = sp->next;		/* get next before Symbol is placed or deleted */
 		if ($1.symbol && $1.symbol->type == UDF) {
 		    sp1->type = CTYPE;		/* found a typedef */
-#ifdef YYDEBUG
+#if YYDEBUG
 		    if ((debug & 0402) == 0402) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
 		    place_sym(sp1);
@@ -672,20 +670,6 @@ declaration_specifiers
 	| storage_class_specifier type_specifier_list {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
-	    $$.symbol = $1.symbol;	/* typedef information */
-	}
-	| storage_class_specifier identifier {
-	    /* this is a fudge to catch undefined types - make it optional */
-	    Symbol *	sp;
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    sp = $2.symbol;		/* canot be in symbol table */
-	    assert(sp);			/* ERROR: initialized in c_lex() */
-	    sp->type = CTYPE;		/* found a TYPE_NAME after extern etc */
-#ifdef YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "\nT %-15s %d %d\n", sp->name, sp->type, sp->ftype);
-#endif
-	    place_sym(sp);
 	    $$.symbol = $1.symbol;	/* typedef information */
 	}
 	;
@@ -846,34 +830,46 @@ type_specifier
 	;
 
 struct_or_union_specifier
-	: struct_or_union identifier '{' struct_declaration_list '}' {
+	: struct_or_union_tag {
 	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    delete_sym(&$2);
+	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| struct_or_union identifier '{' struct_declaration_list error '}' {
-	    $$.start = $1.start;
-	    $$.end = $6.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| struct_or_union '{' struct_declaration_list '}' {
+	| struct_or_union_tag '{' struct_declaration_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = NULL;
 	}
-	| struct_or_union '{' struct_declaration_list error '}' {
+	| struct_or_union_tag '{' struct_declaration_list error '}' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
 	    yyclearin; yyerrok;
+	}
+	;
+
+struct_or_union_tag
+	: struct_or_union {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| struct_or_union identifier {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	/* struct or union tags have a different name space to types */
+	| struct_or_union TYPE_NAME {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	/* struct or union tags have a different name space to imm */
+	| struct_or_union imm_identifier {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
 	    $$.symbol = NULL;
 	}
 	;
@@ -1741,8 +1737,12 @@ imm_identifier
 static void
 yyerror(char *s, ...)
 {
+#if YYDEBUG
+    if (debug & 036) {
 	fflush(stdout);
 	printf("\n%*s\n%*s\n", column, "^", column, s);
+    }
+#endif
 }
 #else
 

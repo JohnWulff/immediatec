@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.30 2002/08/14 08:38:52 jw Exp $";
+"@(#)$Id: main.c,v 1.31 2002/08/16 12:57:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -60,7 +60,7 @@ static const char *	usage =
 "                   +20  net topology\n"
 "                   +10  source listing\n"
 "                    +4  logic expansion\n"
-#ifdef YYDEBUG
+#if YYDEBUG
 "                    +2  logic generation (requires +400)\n"
 "                    +1  yacc debug info  (requires +400)\n"
 #endif
@@ -103,7 +103,7 @@ int		micro = 0;
 unsigned short	xflag;
 unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
-#ifdef YYDEBUG
+#if YYDEBUG
 extern	int	iCdebug;
 #endif
 
@@ -197,7 +197,7 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
 		    debug |= debi;	/* short */
-#ifdef YYDEBUG
+#if YYDEBUG
 		    if (debug & 0400) iCdebug = debug & 01;
 #endif
 		    goto break2;

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.9 2002/08/14 16:30:24 jw Exp $";
+"@(#)$Id: lexc.l,v 1.10 2002/08/16 10:06:08 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -59,10 +59,10 @@ static int	check_type(c_STYPE* u);
 	    YY_FATAL_ERROR( "input in flex scanner failed" );\
     result = n;\
 }
-#endif
 
 #define ECHO
 #define YY_NO_UNPUT
+#endif
 
 %}
 
@@ -205,6 +205,9 @@ c_comment(c_STYPE* u)
     do {		/* start C style comment */
 	while (c != '*') {
 	    gramOffset++;
+#if YYDEBUG && defined LMAIN
+	    if (debug & 010) putc(c, yyout);
+#endif
 	    if (c == '\n') {
 		column = 0;
 		gramLine++;
@@ -217,11 +220,17 @@ c_comment(c_STYPE* u)
 	}
 	column++;		/* count '*' */
 	gramOffset++;
+#if YYDEBUG && defined LMAIN
+	if (debug & 010) putc(c, yyout);
+#endif
     } while ((c = input()) != '/');
 
     if (c == EOF) return 1;
     column++;			/* count '/' */
     gramOffset++;
+#if YYDEBUG && defined LMAIN
+    if (debug & 010) putc(c, yyout);
+#endif
 
     return 0;
 } /* c_comment */
@@ -242,6 +251,9 @@ cpp_comment(c_STYPE* u)
     do {			/* start C++ style comment */
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
+#if YYDEBUG && defined LMAIN
+	if (debug & 010) putc(c, yyout);
+#endif
     } while (c != '\n');
     column = 0;
     gramLine++;
@@ -267,6 +279,9 @@ preprocess(c_STYPE* u)
 	    prev = c;
 	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
 	    gramOffset++;
+#if YYDEBUG && defined LMAIN
+	    if (debug & 010) putc(c, yyout);
+#endif
 	} while (c != '\n');
 	column = 0;
 	gramLine++;
@@ -292,6 +307,9 @@ ignore(c_STYPE* u)
     for (;;) {
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
+#if YYDEBUG && defined LMAIN
+	if (debug & 010) putc(c, yyout);
+#endif
 	if (c == '\n') {
 	    column = 0;
 	    gramLine++;
@@ -335,6 +353,10 @@ count(c_STYPE* u)
     }
 
     u->tok.end = gramOffset;
+
+#if YYDEBUG && defined LMAIN
+    if (debug & 010) { ECHO; }
+#endif
 } /* count */
 
 /********************************************************************
@@ -390,10 +412,8 @@ check_type(c_STYPE* u)
     sp->type = CWORD;
     sp->ftype = UDFA;
     u->tok.symbol = sp;			/* sp->next === NULL */
-#ifndef LMAIN
-#ifdef YYDEBUG
+#if YYDEBUG && defined LMAIN
     if ((debug & 0402) == 0402) fprintf(outFP, "\nC %-15s %d %d\n", sp->name, sp->type, sp->ftype);
-#endif
 #endif
     return IDENTIFIER;
 } /* check_type */
@@ -411,10 +431,8 @@ delete_sym(Token* tokp)
 
     if ((sp = tokp->symbol) != NULL && (sp->type & TM) > MAX_LS) {
 	tokp->symbol = NULL;
-#ifndef LMAIN
-#ifdef YYDEBUG
+#if YYDEBUG && defined LMAIN
 	if ((debug & 0402) == 0402) fprintf(outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
-#endif
 #endif
 	free(sp->name);
 	free(sp);

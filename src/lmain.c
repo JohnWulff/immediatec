@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.5 2002/08/14 16:32:34 jw Exp $";
+"@(#)$Id: lmain.c,v 1.6 2002/08/16 13:22:58 jw Exp $";
 /********************************************************************
  *
  *	simple driver for MKS yacc
@@ -15,7 +15,7 @@ static const char *	usage =
 "USAGE: %s [-leh] [-d<debug>] <C_program>\n"
 "        -l <listFN>     name of list file  (default is stdout)\n"
 "        -d <debug>  10  source listing\n"
-#ifdef YYDEBUG
+#if YYDEBUG
 "                   +20  symbol table after parse\n"
 "                    +4  debugging info\n"
 "                    +2  generation of insert markers\n"
@@ -33,7 +33,7 @@ const char *	progname;		/* name of this executable */
 const char *	inpFN = 0;		/* name of input file */
 const char *	listFN = 0;		/* name of list file */
 short		debug = 0400;
-#ifdef YYDEBUG
+#if YYDEBUG
 extern	int	c_debug;
 #endif
 
@@ -62,7 +62,7 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
 		    debug |= debi;	/* short */
-#ifdef YYDEBUG
+#if YYDEBUG
 		    if (debug & 0400) c_debug = debug & 01;
 #endif
 		    goto break2;
@@ -103,17 +103,13 @@ main(
 	return -1;
     }
 
-    if (lookup("Gate") == 0) {
-	install("Gate", CTYPE, UDFA);
-    }
-//    copyAdjust(NULL, stdout);		/* initialize lineEntryArray */
     r = c_parse();
     if (r == 0) {
-#ifdef YYDEBUG
-	if (debug & 020) {
-	    Symbol *	sp;
-	    Symbol **	hsp;
+	Symbol *	sp;
+	Symbol **	hsp;
 
+#if YYDEBUG
+	if (debug & 020) {
 	    fprintf(outFP, "\nSYMBOL TABLE\n\n");
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		for (sp = *hsp; sp; sp = sp->next) {
@@ -121,9 +117,18 @@ main(
 		}
 	    }
 	}
+	if ((debug & ~0400) == 0) {
 #endif
-//	rewind(yyin);
-//	copyAdjust(yyin, stdout);
+	/* output list of TYPE_NAMEs as a space seperated list terminated by a new line */
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (sp = *hsp; sp; sp = sp->next) {
+		fprintf(outFP, " %s", sp->name);
+	    }
+	}
+	fprintf(outFP, "\n");
+#if YYDEBUG
+	}
+#endif
     }
     return r;
 } /* main */

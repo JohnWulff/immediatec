@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.68 2002/08/14 12:56:55 jw Exp $";
+"@(#)$Id: comp.y,v 1.69 2002/08/16 17:01:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -57,7 +57,7 @@ char *		stmtp = iCbuf;		/* manipulated in iClex() only */
 
 %{
 
-#ifdef YYDEBUG
+#if YYDEBUG
 static void
 pu(int t, char * token, Lis * node)
 {
@@ -1695,6 +1695,7 @@ get(FILE* fp)
 	if (lineflag && (lexflag & 04) && strncmp(getp, "##", 2) == 0) {
 	    lexflag |= 1;	/* block source listing for lex */
 	    lineno = savedLineno;
+fprintf(outFP, "####### ## lineno = %d\n", lineno);
 	}
 	if ((lexflag & 01) == 0 && (debug & 010)) {
 	    /********************************************************
@@ -1706,13 +1707,15 @@ get(FILE* fp)
 	    if (lineflag == 0) putc('\n', outFP);
 	}
 	/* handle pre-processor #line 1 "file.ic" */
-	if (lineflag && sscanf(getp, "#line %d \"%[^\"]\"\n", &temp1, inpBuf) == 2) {
+	if (lineflag && sscanf(getp, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, inpBuf) == 2) {
 	    savedLineno = lineno;
 	    lineno = temp1;
 	    lineflag = 0;
-	    inpNM = inpBuf;	/* another file name for messages */
+fprintf(outFP, "####### #line %d \"%s\" inpNM = %s lineno = %d\n", temp1, inpBuf, inpNM, lineno);
+	    assert(strcmp(inpNM, inpBuf) == 0);
+//###	    inpNM = inpBuf;	/* another file name for messages */
 	    if ((lexflag & 04) == 0) {
-		getp = fillp;	/* pass to iClex() */
+		getp = fillp;	/* bypass this line in iClex() */
 	    } else {
 		if ((debug & 010)) {
 		    if (lexflag & 02) {
@@ -1722,6 +1725,22 @@ get(FILE* fp)
 		    }
 		}
 		lexflag &= ~03;			/* output source listing for lex */
+	    }
+	} else if (lineflag && sscanf(getp, " # include \"%[/A-Za-z_.0-9]\"", inpBuf) == 1) {
+	    if ((lexflag & 04) == 0) {
+		getp = fillp;	/* bypass this line in iClex() for now FIX */
+	    } else {
+		if ((debug & 010)) {
+fprintf(outFP, "####### #include \"%s\" inpNM = %s lineno = %d\n", inpBuf, inpNM, lineno);
+		}
+	    }
+	} else if (lineflag && sscanf(getp, " # include <%[/A-Za-z_.0-9]>", inpBuf) == 1) {
+	    if ((lexflag & 04) == 0) {
+		getp = fillp;	/* bypass this line in iClex() for now FIX */
+	    } else {
+		if ((debug & 010)) {
+fprintf(outFP, "####### #include <%s> inpNM = %s lineno = %d\n", inpBuf, inpNM, lineno);
+		}
 	    }
 	}
     }
@@ -2277,7 +2296,7 @@ copyCfrag(char s, char m, char e)
 	    }
 	    break;
 	}
-	putc(c, T1FP);			/* output to cexe.tmp */
+	putc(c, T1FP);			/* output to T1FN */
     }
 eof_error:
     iCleng = 1;				/* error pointer at EOF */
