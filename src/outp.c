@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.58 2002/08/17 14:10:07 jw Exp $";
+"@(#)$Id: outp.c,v 1.59 2002/08/18 15:32:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1222,9 +1222,7 @@ c_compile(FILE * iFP)
     if (outFlag == 0) {
 	fprintf(T2FP, "/*##*/}}\n");
     }
-    if (readTypeCacheFile()) {
-	return TCindex;
-    }
+//###    if (readTypeCacheFile()) return TCindex;
 
 //fprintf(stderr, "c_compile: start compile\n"); fflush(stderr);
     /* rewind intermediate file */

@@ -1,4 +1,4 @@
-@(#)$Id: icc.v,v 1.85 2002/08/17 22:39:03 jw Exp $
+@(#)$Id: icc.v,v 1.86 2002/08/18 23:36:10 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 Makefile.in     1.27    2002/08/07  21:10:38  jw      Exp
@@ -6,9 +6,9 @@ Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
 README          1.9     2002/08/08  21:28:52  jw      Exp
 Readme_develop  1.1     2002/06/05  11:29:31  jw      Exp
 cexe.h          1.15    2002/08/06  08:46:49  jw      Exp
-comp.h          1.32    2002/08/17  22:07:35  jw      Exp
+comp.h          1.33    2002/08/18  20:53:01  jw      Exp
 comp.sed        1.3     2002/08/13  21:15:32  jw      Exp
-comp.y          1.70    2002/08/17  22:39:36  jw      Exp
+comp.y          1.71    2002/08/18  21:04:47  jw      Exp
 configure       1.3     2002/07/29  10:18:53  jw      Exp
 configure.in    1.3     2002/07/29  10:19:05  jw      Exp
 genr.c          1.52    2002/08/16  13:01:36  jw      Exp
@@ -23,17 +23,17 @@ icc.h           1.42    2002/08/17  21:37:14  jw      Exp
 ict.c           1.30    2002/08/13  10:34:14  jw      Exp
 init.c          1.21    2002/08/06  10:55:23  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
-lexc.l          1.11    2002/08/17  22:34:57  jw      Exp
+lexc.l          1.12    2002/08/18  23:36:19  jw      Exp
 link.c          1.16    2002/06/19  21:37:40  jw      Exp
 lmain.c         1.6     2002/08/16  13:22:58  jw      Exp
 load.c          1.34    2002/08/13  09:02:26  jw      Exp
-main.c          1.32    2002/08/17  14:30:42  jw      Exp
+main.c          1.33    2002/08/18  22:05:25  jw      Exp
 makeAll         1.9     2001/03/18  14:03:15  jw      Exp
 makeIct         1.8     2001/03/30  17:31:20  jw      Exp
 makeLib         1.10    2001/03/18  14:03:15  jw      Exp
 manifest        1.3     2002/07/31  17:37:37  jw      Exp
 mkinstalldirs   1.1     2001/03/07  12:26:24  jw      Exp
-outp.c          1.58    2002/08/17  14:10:07  jw      Exp
+outp.c          1.59    2002/08/18  15:32:56  jw      Exp
 pawk.a          1.2     1996/07/30  20:24:24  john    Exp
 perlinstall     1.7     2002/07/06  10:14:41  jw      Exp
 pplstfix        1.7     2002/08/14  12:06:44  jw      Exp

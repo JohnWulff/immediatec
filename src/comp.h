@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.32 2002/08/17 22:07:35 jw Exp $";
+"@(#)$Id: comp.h,v 1.33 2002/08/18 20:53:01 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -110,7 +110,7 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define Cname	"_list_.c"	/* unusual, not to be used for application name */
 #define H1name	"_list1.h"
 #define H2name	"_list2.h"
-#define TCname	"iCcTypes.def"
+#define TCname	".iCcTypes.def"
 
 /* index 0 not used */
 #define Iindex	1
@@ -122,20 +122,26 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define Cindex	7
 #define H1index	8
 #define H2index	9
-#define T1index	10
-#define T2index	11
-#define T3index	12
-#define T4index	13
-#define TCindex	14
+#define TCindex	10
+#define T1index	11
+#define T2index	12
+#define T3index	13
+#define T4index	14
+#define T5index	15
 
-#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name,\
-				0, 0, 0, 0, TCname,
+#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name, TCname,\
+				0, 0, 0, 0, 0,
 
+extern FILE *	typeCacheFP;
 extern FILE *	T1FP;
 extern FILE *	T2FP;
 extern FILE *	T3FP;
-extern FILE *	typeCacheFP;
+extern FILE *	T4FP;
+extern FILE *	T5FP;
+
 extern char	typeCacheFN[];
+extern char	T4FN[];
+extern char	T5FN[];
 
 					/*   outp.c   */
 #define BUFS	128
@@ -157,6 +163,7 @@ extern int	column;
 extern void	delete_sym(Token* tokp);
 extern int	readTypeCacheFile(void);
 extern int	readTypesFromCache(char* includeName);
+extern void	restoreCblocksStream(void);
 #define TCBUFS	1024
 					/*   gram.y   */
 extern void	copyAdjust(FILE* iFP, FILE* oFP);

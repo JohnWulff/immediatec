@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.32 2002/08/17 14:30:42 jw Exp $";
+"@(#)$Id: main.c,v 1.33 2002/08/18 22:05:25 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -132,18 +132,21 @@ char * OutputMessage[] = {
     "%s: cannot open file %s in output\n",	/* [7] */
 };
 
-FILE *	T1FP;
-FILE *	T2FP;
-FILE *	T3FP;
 FILE *	typeCacheFP = NULL;
+FILE *	T1FP = NULL;
+FILE *	T2FP = NULL;
+FILE *	T3FP = NULL;
+FILE *	T4FP = NULL;
+FILE *	T5FP = NULL;
+
+char		typeCacheFN[] = TCname;
+static char	T1FN[] = "/tmp/ic1.XXXXXX";
+static char	T2FN[] = "/tmp/ic2.XXXXXX";
+static char	T3FN[] = "/tmp/ic3.XXXXXX";
+char		T4FN[] = "/tmp/ic4.XXXXXX";
+char		T5FN[] = "/tmp/ic5.XXXXXX";
 
 static void	unlinkTfiles(void);
-static char	T1FN[] = "ic1.XXXXXX";
-static char	T2FN[] = "ic2.XXXXXX";
-static char	T3FN[] = "ic3.XXXXXX";
-static char	T4FN[] = "ic4.XXXXXX";
-
-char	typeCacheFN[] = TCname;
 
 
 /********************************************************************
@@ -161,7 +164,6 @@ main(
     int		r = 0;		/* return value of compile */
     int		ro = 4;		/* output message index */
 
-fprintf(stderr, "%s\n", *argv);
     /* Process the arguments */
     if ((progname = strrchr(*argv, '/')) == NULL) {
 	progname = *argv;
@@ -279,7 +281,7 @@ fprintf(stderr, "%s\n", *argv);
 /********************************************************************
  *
  *	Generate and open temporary files T1FN T2FN T3FN
- *	T4FN is only a name
+ *	T4FN and T5FN are only used if C-include files are actually parsed
  *
  *******************************************************************/
 
@@ -287,21 +289,14 @@ fprintf(stderr, "%s\n", *argv);
     szNames[T2index] = T2FN;
     szNames[T3index] = T3FN;
     szNames[T4index] = T4FN;
+    szNames[T5index] = T5FN;
 
-    if ((fd = mkstemp(T1FN)) < 0 ||
-	(T1FP = fdopen(fd, "w+")) == 0) {
+    if ((fd = mkstemp(T1FN)) < 0 || (T1FP = fdopen(fd, "w+")) == 0) {
 	r = T1index;			/* error opening temporary file */
-    } else if ((fd = mkstemp(T2FN)) < 0 ||
-	(T2FP = fdopen(fd, "w+")) == 0) {
+    } else if ((fd = mkstemp(T2FN)) < 0 || (T2FP = fdopen(fd, "w+")) == 0) {
 	r = T2index;			/* error opening temporary file */
-    } else if ((fd = mkstemp(T3FN)) < 0 ||
-	(T3FP = fdopen(fd, "w+")) == 0) {
+    } else if ((fd = mkstemp(T3FN)) < 0 || (T3FP = fdopen(fd, "w+")) == 0) {
 	r = T3index;			/* error opening temporary file */
-    } else if ((fd = mkstemp(T4FN)) < 0 ||
-	unlink(T4FN) < 0) {
-	fprintf(stderr, "cannot unlink %s\n", T4FN);
-	perror("unlink");
-	r = T4index;			/* error unlinking temporary file */
     } else
 
 /********************************************************************

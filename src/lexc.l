@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.11 2002/08/17 22:34:57 jw Exp $";
+"@(#)$Id: lexc.l,v 1.12 2002/08/18 23:36:19 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -473,7 +473,7 @@ delete_sym(Token* tokp)
  *	Other include files are local or have a path relative to the
  *	local working directory.
  *
- *	The C-Symbols file is called "iCcTypes.def" and is in the
+ *	The C-Symbols file is called ".iCcTypes.def" and is in the
  *	same path as the iC compiler called. It is writable by all.
  *	It is a cache of all type_names used in include files in
  *	C-Code for the computer installation.
@@ -543,19 +543,104 @@ readTypeCacheFile(void)
 	}
     }
 
-    /* process <stdio.h> "icc.h" and "comp.h" */
-    if (readTypesFromCache("<stdio.h>")) return TCindex;
-    if (readTypesFromCache("\"icc.h\"")) return TCindex;
-    if (readTypesFromCache("\"comp.h\"")) return TCindex;
-
     return 0;
 } /* readTypeCacheFile */
+
+/********************************************************************
+ *
+ *	Read types from the cache
+ *
+ *	If a particular include file is not yet in the cache file, it
+ *	has to be processed by the C-parser to determine any type_names.
+ *
+ *	To do this the following steps are executed:
+ *
+ *	1) write a #include statement to the temporary file ic4.XXXXXX
+ *	2) execute 'cc -E ic4.XXXXXX > ic5.XXXXXX' as a system call
+ *	3) unlink ic4.XXXXXX
+ *	4) open ic5.XXXXXX for reading on T5FP and associate it with yyin
+ *	5) continue C-parse until EOF - close T5FP - unlink ic5.XXXXXX
+ *	   During the parse type_names are added to the ST with type CTYPE
+ *	   and ftype CNEW. Mark CTYPE entries previously defined also.
+ *
+ *	executed in restoreCblocksStream()
+ *	6) append a line to the cache file .iCcTypes.def with the
+ *	   includeName and a list of all new type_names generated in step 5.
+ *	   These are recognised because they have ftype == CNEW.
+ *	   Set ftype to COLD for each type_name output. The cache is now
+ *	   ready for this include file for the next iC file to be compiled.
+ *	   For this compilation the ST is correct and the cache file does
+ *	   not need to be read.
+ *	7) revert yyin to the normal input file and continue C-parse of
+ *	   iC generated C-blocks.
+ *
+ *	At the end of step step 4 we return from this function.
+ *	On EOF the fact that T5FP != NULL leads us to step 6 and 7.
+ *	After reverting yyin to normal input the next get() will access
+ *	the next line in the C-blocks.
+ *
+ *	The reason include files have to be handled in the stream of
+ *	normal compilation is the fact, that some include files declare
+ *	types, which are required for the correct C-compilation of later
+ *	include files. If this is not done various syntax errors occurr
+ *	which have nothing to do with the iC compilation - all we want
+ *	to achieve is to extract type_names from the include files - but
+ *	such syntax errors are a nuisance and hard to control.
+ *
+ *	For this pass a simpler tool, which recognises only typedef
+ *	statements would have sufficed. But since a lot of the full
+ *	C-grammar is needed to handle immediate expressions, it is
+ *	easier to use the full compiler here also - particularly
+ *	since typedef statements are quite complex with struct, pointer
+ *	array and function declarations.
+ *
+ *******************************************************************/
+
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+int
+my_system (char *command)
+{
+    int pid, status;
+
+    if (command == 0) {
+       return 1;
+    }
+    pid = fork();
+    if (pid == -1) {
+       return -1;
+    }
+    if (pid == 0) {
+       char *argv[4];
+       char *environ[1];
+       argv[0] = "sh";
+       argv[1] = "-c";
+       argv[2] = command;
+       argv[3] = 0;
+       environ[0] = 0;
+       execve("/bin/sh", argv, environ);
+       exit(127);
+    }
+    do {
+       if (waitpid(pid, &status, 0) == -1) {
+	   if (errno != EINTR) {
+	       return -1;
+	   }
+       } else {
+	   return status;
+       }
+    } while(1);
+}
 
 int
 readTypesFromCache(char* includeName)
 {
     int		c;
     int		fFlag;
+    int		fd;
+    int		r;
     long	fileOffset;
     Symbol *	sp;
     char*	tokenPtr;
@@ -572,8 +657,38 @@ readTypesFromCache(char* includeName)
     if ((sp = lookup(includeName)) == 0) {
 	/* c_compile the actual include file to extend the cache */
 	/* involves appending to cache file and installing in ST */
-	error("readTypesFromCache: wrong file ???:", includeName);
-	return TCindex;				/* cannot proceed */
+	if (T4FP == NULL) {
+	    if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
+		error("readTypesFromCache: cannot open:", T4FN);
+		return T4index;			/* error opening temporary file */
+	    }
+	    if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
+		error("readTypesFromCache: cannot make or unlink:", T5FN);
+		perror("unlink");
+		return T5index;			/* error unlinking temporary file */
+	    }
+	} else {
+	    rewind(T4FP);
+	}
+	if (debug & 02) fprintf(outFP, "####### open include file %s via %s %s\n", includeName, T4FN, T5FN);
+	fprintf(T4FP, "#include %s\n", includeName);	/* a little C file !!! */
+
+	sprintf(lineBuf, "gcc -E -x c %s -o xxx.i", T4FN);
+//	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
+	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
+	r = my_system(lineBuf);			/* Pre-compile C file */
+//	r = system(lineBuf);			/* Pre-compile C file */
+	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);
+	exit(0);
+
+	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
+	    error("readTypesFromCache: cannot open:", T5FN);
+	    perror("open");
+	    return T5index;
+	}
+	if (debug & 02) fprintf(outFP, "####### compile include file %s via %s %s\n", includeName, T4FN, T5FN);
+	yyin = T5FP;				/* lexc reads from include now */
+	return 0;				/* T5FP acts as flag */
     } else if (sp->type != CINC) {
 	error("readTypesFromCache: wrong type in ST ???:", includeName);
 	return TCindex;				/* cannot proceed */
@@ -628,3 +743,12 @@ readTypesFromCache(char* includeName)
 
     return 0;
 } /* readTypesFromCache */
+
+void
+restoreCblocksStream(void)
+{
+    fclose(T5FP);
+    if (!(debug & 04000)) unlink(T5FN);
+    if (debug & 02) fprintf(outFP, "####### close and unlink %s\n", T5FN);
+    yyin = T2FP;
+}

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.70 2002/08/17 22:39:36 jw Exp $";
+"@(#)$Id: comp.y,v 1.71 2002/08/18 21:04:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1597,13 +1597,12 @@ plist	: aexpr			{
 #define CBUFSZ 125			/* listing just fits on 132  cols */
 #define YTOKSZ 66
 #endif
-static char	chbuf[CBUFSZ];
-static char *	getp = chbuf;
-static char *	fillp = chbuf;
+static char	chbuf[CBUFSZ];		/* used in get() errline() andd yyerror() */
+static char *	getp = NULL;		/* used in get() unget() andd yyerror() */
 static char	iCtext[YTOKSZ];		/* lex token */
 static int	iCleng;			/* length */
 static char	inpBuf[YTOKSZ];		/* alternate file name */
-static int	lineflag = 0;
+static int	lineflag = 1;		/* previous line was complete */
 static char	tmpbuf[256];		/* buffer to build variable */
 static char *	errFilename;
 static int	errFlag = 0;
@@ -1677,28 +1676,31 @@ compile(
 int
 get(FILE* fp)
 {
-    int		temp;
+    int		c;
     int		temp1;
+    int		prevflag;
 
-    while (getp >= fillp) {
+    while (getp == NULL || (c = *getp++) == 0) {
+	if ((prevflag = lineflag) != 0 && (lexflag & 01) == 0) {
+	    lineno++;			/* count previous line */
+	}
 	/************************************************************
 	 *  getp has reached end of previous chbuf filling
 	 *  fill chbuf with a new line
+	 *  NOTE: getp === NULL at start of file (chbuf has EOF line)
 	 ************************************************************/
-	if (lineflag && (lexflag & 01) == 0) {
-	    lineno++;
-	}
-	for (getp = fillp = chbuf; fillp < &chbuf[sizeof(chbuf)-1]
-	    && (temp = getc(fp)) != EOF
-	    && (*fillp++ = temp) != '\n'; );
-	if (fillp == chbuf) {
-	    lineflag = 0;
-	    strcpy(chbuf, "*** EOF ***");
+	if ((getp = fgets(chbuf, CBUFSZ, fp)) == NULL) {
+	    lineflag = 1;
+	    if ((lexflag & 04) && T5FP) {
+		restoreCblocksStream();
+		continue;			/* back to C-blocks */
+	    }
+	    strcpy(chbuf, "*** EOF ***");	/* provide a listing line at EOF for errors */
 	    return (EOF);
 	}
-	*fillp = '\0';
-	lineflag = (*(fillp-1) == '\n') ? 1 : 0;
-	if (lineflag && (lexflag & 04) && strncmp(getp, "##", 2) == 0) {
+	lineflag = chbuf[strlen(chbuf)-1] == '\n' ? 1 : 0;	/* this line terminated with \n */
+
+	if (prevflag && (lexflag & 04) && strncmp(chbuf, "##", 2) == 0) {
 	    lexflag |= 1;	/* block source listing for lex */
 	    lineno = savedLineno;
 	    if (debug & 02) fprintf(outFP, "####### ## lineno = %d\n", lineno);
@@ -1710,48 +1712,66 @@ get(FILE* fp)
 	     *  then messages appear neatly after the listing line
 	     ********************************************************/
 	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
-	    if (lineflag == 0) putc('\n', outFP);
+	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
 	}
-	/* handle pre-processor #line 1 "file.ic" */
-	if (lineflag && sscanf(getp, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, inpBuf) == 2) {
-	    savedLineno = lineno;
-	    lineno = temp1;
-	    lineflag = 0;
-	    if (debug & 02) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, inpBuf);
-	    assert(strcmp(inpNM, inpBuf) == 0);
-//###	    inpNM = inpBuf;	/* another file name for messages */
-	    if ((lexflag & 04) == 0) {
-		getp = fillp;	/* bypass this line in iClex() */
-	    } else {
-		if ((debug & 010)) {
-		    if (lexflag & 02) {
-			fprintf(outFP, "******* C CODE          ************************\n\n");
-		    } else {
-			fprintf(outFP, "\n");	/* seperate blocks in lex listing */
+	/********************************************************
+	 *  handle different preprocessor lines
+	 *  identify leading '#' for efficiency
+	 *  NOTE: chbuf[] must be large enough to hold a complete line
+	 *        for the following sscanf()s
+	 ********************************************************/
+	if (prevflag && sscanf(chbuf, " %1s", inpBuf) == 1 && *inpBuf == '#') {
+	    /********************************************************
+	     *  handle pre-processor #line 1 "file.ic"
+	     ********************************************************/
+	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, inpBuf) == 2) {
+		savedLineno = lineno;
+		lineno = temp1;
+		lineflag = 0;
+		if (debug & 02) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, inpBuf);
+		assert(strcmp(inpNM, inpBuf) == 0);
+		if ((lexflag & 04) == 0) {
+		    getp = NULL;			/* bypass this line */
+		} else {
+		    if ((debug & 010)) {
+			if (lexflag & 02) {
+			    fprintf(outFP, "******* C CODE          ************************\n\n");
+			} else {
+			    fprintf(outFP, "\n");	/* seperate blocks in lex listing */
+			}
 		    }
+		    lexflag &= ~03;			/* output source listing for lex */
 		}
-		lexflag &= ~03;			/* output source listing for lex */
-	    }
-	} else if (lineflag && sscanf(getp, " # include %[<\"/A-Za-z_.0-9>]", inpBuf) == 1) {
-	    if ((lexflag & 04) == 0) {
-		getp = fillp;	/* bypass this line in iClex() for now FIX */
-	    } else {
-		if (debug & 02) fprintf(outFP, "####### #include %s\n", inpBuf);
-		readTypesFromCache(inpBuf);	/* ZZZ error handling */
+	    } else
+	    /********************************************************
+	     *  handle pre-processor #include <stdio.h> or "icc.h"
+	     ********************************************************/
+	    if (sscanf(chbuf, " # include %[<\"/A-Za-z_.0-9>]", inpBuf) == 1) {
+		if ((lexflag & 04) == 0) {
+		    /* TODO process includes in iC compilation */
+		    /* handle only local includes - not full C-precompiler features */
+		    getp = NULL;			/* bypass this line */
+		} else {
+		    if (debug & 02) fprintf(outFP, "####### #include %s\n", inpBuf);
+		    /* the first call to process an include file reads in the cache */
+		    readTypesFromCache(inpBuf);	/* ZZZ error handling */
+		    /* pass this line to lexc to get gramOffset correct */
+		    /* if an include file has been opened yyin is now T5FP */
+		    /* and the next line will be read from there */
+		}
 	    }
 	}
     }
     /****************************************************************
-     *  extract 1 character at a time from chbuf and return it
+     *  return 1 character at a time from chbuf and return it
      *  transfer it to the token buffer iCtext and count iCleng if not lex
      ****************************************************************/
-    temp = *getp++;
     if ((lexflag & 04) == 0) {
-	iCtext[iCleng++] = temp;
+	iCtext[iCleng++] = c;			/* iC compile via iCparse() */
 	if (iCleng >= sizeof(iCtext)) iCleng--;
 	iCtext[iCleng] = '\0';
     }
-    return temp;
+    return c;
 } /* get */
 
 /********************************************************************
@@ -1763,6 +1783,7 @@ get(FILE* fp)
 static void
 unget(char c)
 {
+    assert(getp > chbuf);	/* TODO replace by execerror() */
     *--getp = c;		/* use always insures 1 free place */
     iCtext[--iCleng] = '\0';
 } /* unget */
@@ -2092,11 +2113,11 @@ errLine(void)			/* error file not openend if no errors */
 	errline = lineno;		/* dont print line twice */
 	if (!(debug & 010)) {	/* no source listing in debugging output */
 	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
-	    if (lineflag == 0) putc('\n', outFP);
+	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
 	}
 	if (errFlag) {
 	    fprintf(errFP, "%03d\t%s", lineno, chbuf);
-	    if (lineflag == 0)  putc('\n', errFP);
+	    if (lineflag == 0)  putc('\n', errFP);	/* current line not complete */
 	}
     }
 } /* errLine */
