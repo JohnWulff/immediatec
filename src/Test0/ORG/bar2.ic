@@ -1,0 +1,150 @@
+/********************************************************************
+ *
+ *	bar2.ic - vertical bar demo
+ *
+ *	QX0 to QX3 output the values of shift registers clocked by
+ *	internally generated clocks. They look like running lights
+ *	when displayed.
+ *
+ *	By changing the input sliders IB4 to IB7 the clocking speed
+ *	on QX0 is set to IB4 * 50 ms, QX1 is set to IB5 * 50 ms etc.
+ *	A value of 0 on inputs IB4 to IB7 lets you clock the running
+ *	lights manually via inputs IX0.0 to IX3.0.
+ *
+ *	Outputs QX8.0 to QX8.3 indicate the direction of the running
+ *	lights on QX0 to QX4 - just to show a bit of internal logic.
+ *
+ *******************************************************************/
+
+imm timer t = TIMER(TX0.4, ~TX0.4);	/* 50 ms timer */
+
+/* Bar0 */
+
+imm int d0 = IB4;
+imm bit f0 = IB4;
+
+imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+imm clock c0 = CLOCK(b0);
+
+imm bit m00 = SR(~up0      , up0 & ~m01, c0);
+imm bit m01 = SR(~up0 & m00, up0 & ~m02, c0);
+imm bit m02 = SR(~up0 & m01, up0 & ~m03, c0);
+imm bit m03 = SR(~up0 & m02, up0 & ~m04, c0);
+imm bit m04 = SR(~up0 & m03, up0 & ~m05, c0);
+imm bit m05 = SR(~up0 & m04, up0 & ~m06, c0);
+imm bit m06 = SR(~up0 & m05, up0 & ~m07, c0);
+imm bit m07 = SR(~up0 & m06, up0       , c0);
+
+imm bit up0 = SR(~m07 & m06, m00 & ~m01, c0);
+
+QX0.0 = m00;
+QX0.1 = m01;
+QX0.2 = m02;
+QX0.3 = m03;
+QX0.4 = m04;
+QX0.5 = m05;
+QX0.6 = m06;
+QX0.7 = m07;
+
+QB4   = d0;
+
+/* Bar1 */
+
+imm int d1 = IB5;
+imm bit f1 = IB5;
+
+imm bit b1 = D(~b1 & f1, t, d1) | CHANGE(IX1.0 & ~f1);
+imm clock c1 = CLOCK(b1);
+
+imm bit m10 = SR(~up1      , up1 & ~m11, c1);
+imm bit m11 = SR(~up1 & m10, up1 & ~m12, c1);
+imm bit m12 = SR(~up1 & m11, up1 & ~m13, c1);
+imm bit m13 = SR(~up1 & m12, up1 & ~m14, c1);
+imm bit m14 = SR(~up1 & m13, up1 & ~m15, c1);
+imm bit m15 = SR(~up1 & m14, up1 & ~m16, c1);
+imm bit m16 = SR(~up1 & m15, up1 & ~m17, c1);
+imm bit m17 = SR(~up1 & m16, up1       , c1);
+
+imm bit up1 = SR(~m17 & m16, m10 & ~m11, c1);
+
+QX1.0 = m10;
+QX1.1 = m11;
+QX1.2 = m12;
+QX1.3 = m13;
+QX1.4 = m14;
+QX1.5 = m15;
+QX1.6 = m16;
+QX1.7 = m17;
+
+QB5   = d1;
+
+/* Bar2 */
+
+imm int d2 = IB6;
+imm bit f2 = IB6;
+
+imm bit b2 = D(~b2 & f2, t, d2) | CHANGE(IX2.0 & ~f2);
+imm clock c2 = CLOCK(b2);
+
+imm bit m20 = SR(~up2      , up2 & ~m21, c2);
+imm bit m21 = SR(~up2 & m20, up2 & ~m22, c2);
+imm bit m22 = SR(~up2 & m21, up2 & ~m23, c2);
+imm bit m23 = SR(~up2 & m22, up2 & ~m24, c2);
+imm bit m24 = SR(~up2 & m23, up2 & ~m25, c2);
+imm bit m25 = SR(~up2 & m24, up2 & ~m26, c2);
+imm bit m26 = SR(~up2 & m25, up2 & ~m27, c2);
+imm bit m27 = SR(~up2 & m26, up2       , c2);
+
+imm bit up2 = SR(~m27 & m26, m20 & ~m21, c2);
+
+QX2.0 = m20;
+QX2.1 = m21;
+QX2.2 = m22;
+QX2.3 = m23;
+QX2.4 = m24;
+QX2.5 = m25;
+QX2.6 = m26;
+QX2.7 = m27;
+
+QB6   = d2;
+
+/* Bar3 */
+
+imm int d3 = IB7;
+imm bit f3 = IB7;
+
+imm bit b3 = D(~b3 & f3, t, d3) | CHANGE(IX3.0 & ~f3);
+imm clock c3 = CLOCK(b3);
+
+imm bit m30 = SR(~up3      , up3 & ~m31, c3);
+imm bit m31 = SR(~up3 & m30, up3 & ~m32, c3);
+imm bit m32 = SR(~up3 & m31, up3 & ~m33, c3);
+imm bit m33 = SR(~up3 & m32, up3 & ~m34, c3);
+imm bit m34 = SR(~up3 & m33, up3 & ~m35, c3);
+imm bit m35 = SR(~up3 & m34, up3 & ~m36, c3);
+imm bit m36 = SR(~up3 & m35, up3 & ~m37, c3);
+imm bit m37 = SR(~up3 & m36, up3       , c3);
+
+imm bit up3 = SR(~m37 & m36, m30 & ~m31, c3);
+
+QX3.0 = m30;
+QX3.1 = m31;
+QX3.2 = m32;
+QX3.3 = m33;
+QX3.4 = m34;
+QX3.5 = m35;
+QX3.6 = m36;
+QX3.7 = m37;
+
+QB7   = d3;
+
+/* misc outputs */
+
+QX8.0 = up0;
+QX8.1 = up1;
+QX8.2 = up2;
+QX8.3 = up3;
+QX8.4 = f0;
+QX8.5 = f1;
+QX8.6 = f2;
+QX8.7 = f3;

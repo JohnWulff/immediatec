@@ -1,0 +1,1 @@
+imm bit QX0.0 = IX0.0 & IX0.1;

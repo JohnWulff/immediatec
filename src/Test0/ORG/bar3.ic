@@ -1,0 +1,58 @@
+/********************************************************************
+ *
+ *	bar3.ic - vertical bar demo
+ *
+ *	QX0 outputs the value of a shift register made up of SR flip
+ *	flops m0 to m7. These are clocked by an internally generated
+ *	clock c0. It looks like running lights when displayed.
+ *
+ *	By changing the input IB1 the clocking speed on m0 to m7,
+ *	which is output on QX0.0 to QX0.7 is set to IB1 * 50 ms.
+ *	A value of 0 on input IB1 lets you clock the running
+ *	lights manually via input IX0.0
+ *
+ *	Output QX2.0 indicates the direction of the running
+ *	lights on QX0 - just to show a bit of internal logic.
+ *
+ *******************************************************************/
+
+imm timer t = TIMER(TX0.4);
+
+imm int d0 = IB1;			// IB1 =
+imm bit f0 = IB1;			// d0  =
+
+imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+imm clock c0 = CLOCK(b0);
+
+imm bit m0 = SR(~up     , up & ~m1, c0);
+imm bit m1 = SR(~up & m0, up & ~m2, c0);
+imm bit m2 = SR(~up & m1, up & ~m3, c0);
+imm bit m3 = SR(~up & m2, up & ~m4, c0);
+imm bit m4 = SR(~up & m3, up & ~m5, c0);
+imm bit m5 = SR(~up & m4, up & ~m6, c0);
+imm bit m6 = SR(~up & m5, up & ~m7, c0);
+imm bit m7 = SR(~up & m6, up      , c0);
+
+imm bit up = SR(~up & m7, up & ~m0, c0);
+
+QX0.0 = m0;
+QX0.1 = m1;
+QX0.2 = m2;
+QX0.3 = m3;
+QX0.4 = m4;
+QX0.5 = m5;
+QX0.6 = m6;
+QX0.7 = m7;
+
+QX2.0 = up;
+QX2.4 = f0;
+
+QB1   = d0;				// QB1 =
+imm int a;				// a   =
+QX2.5 = D(~QX2.5, c1 = CLOCK(b1 = CHANGE(a = d0/5)));
+
+QX2.6 = (IX2.0 & IX2.1 & IX2.2) |
+        (IX2.3 & IX2.4 & IX2.5) ;
+QX2.7 = IX2.6 ^ IX2.7 |
+	a < 10;
+QX2.3 = D(IX2.0, t, 10);
