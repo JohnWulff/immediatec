@@ -20,7 +20,7 @@ usage ()
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '		default listing is file.lst' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.7 2001/02/04 17:41:16 jw Exp $' >&2
+    echo '	$Id: makex,v 1.8 2001/02/08 20:21:45 jw Exp $' >&2
 }
 
 link=0
@@ -76,7 +76,7 @@ for f in $*; do
     0)
 	rm -f $base.c $base
 	if nice pplc$v $d -o $base.c -l $base.lst$l $file; then
-	    if nice gcc -g -DYYDEBUG -o $base $base.c list.c load.a; then
+	    if nice gcc -g -DYYDEBUG -o $base $base.c list.c load$v.a; then
 		$base -d540 > $base.ini
 	    fi
 	else
@@ -119,7 +119,7 @@ if [[ $link = 1 ]]; then
     if [[ $flag = noerror ]]; then
 	rm -f $first
 	echo "link $first from$list"
-	if nice gcc -g -DYYDEBUG -o $first $list list.c load.a; then
+	if nice gcc -g -DYYDEBUG -o $first $list list.c load$v.a; then
 	    $first -d540 > $first.ini
 	fi
     else
