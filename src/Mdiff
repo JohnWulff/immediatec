@@ -1,5 +1,5 @@
-#!/bin/ksh -p
-# $Id: Mdiff,v 1.3 1998/01/09 13:15:27 archiv Exp $
+#!/usr/bin/ksh -p
+# $Id: Mdiff,v 1.4 1998/01/25 12:11:59 archiv Exp $
 # Author: J.E. Wulff
 #
 case $# in
