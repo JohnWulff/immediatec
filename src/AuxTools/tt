@@ -13,6 +13,8 @@ usage()
   echo '	-c	copy files to <directory>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full diff output)' >&2
   echo '	-x <regex> ignore changes in lines that match regex' >&2
+  echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
+  echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo '	-	all further arguments are treated as files' >&2
@@ -24,7 +26,7 @@ usage()
   echo "	If a 2nd <directory> is specified the files in all 1st <directory>" >&2
   echo "	will be compared with files in the 2nd <directory> with Mdiff -k" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.5 2005/01/24 19:34:43 jw Exp $' >&2
+  echo '$Id: tt,v 1.6 2005/03/16 18:30:33 jw Exp $' >&2
 }
 
 ########################################################################
@@ -40,6 +42,7 @@ v=""
 y=""
 l=""
 c=""
+A=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -58,6 +61,8 @@ while [ $# -gt 0 ]; do
 		fi
 		break;;
 	    l*)	l="$l -l";;
+	    A*)	A="$A -A";;
+	    S*)	A="$A -S";;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
@@ -94,8 +99,8 @@ if [ -n "$1" ]; then
 	cd $t
 	if [ -z "$d2" ]; then
 	    if [ -z "$c" ]; then
-		echo; echo "========== $t mm$v"
-		time mm$v > Init.out 2>&1
+		echo; echo "========== $t mm$v$A"
+		time mm$v$A > Init.out 2>&1
 	    fi
 	    if [ -d "$d1$y" ]; then
 		echo; echo "========== $t Mdiff -k$l * $d1$y"
@@ -122,8 +127,8 @@ if [ -n "$1" ]; then
 	    cd $t
 	    if [ -z "$d2" ]; then
 		if [ -z "$c" ]; then
-		    echo; echo "========== $t my$v"
-		    time my$v
+		    echo; echo "========== $t my$v$A"
+		    time my$v$A
 		fi
 		if [ -d "$d1$y" ]; then
 		    echo; echo "========== $t Mdiff -k$l * $d1$y"
