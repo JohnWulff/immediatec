@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.37 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: outp.c,v 1.38 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -96,12 +96,6 @@ mN(Symbol * sp)
     return np;
 } /* mN */
 
-char *		full_type[] = { FULL_TYPE };
-char *		full_ftype[] = { FULL_FTYPE };
-uchar		types[] = { TYPES };
-uchar		ftypes[] = { FTYPES };
-char		os[] = OPS;
-char		fos[] = FOPS;
 unsigned short	Aflag;			/* -A flag signals ARITH alias */
 unsigned short	aflag;			/* -a on compile to append output */
 

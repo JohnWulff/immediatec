@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.21 2001/03/29 11:16:15 jw Exp $";
+"@(#)$Id: ict.c,v 1.22 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -165,6 +165,12 @@ icc(
 
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
 
+#ifdef LOAD 
+    /* if (debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
+    strcpy(msgBuf, "L0.3");		/* header for live data */
+    msgOffset = 4;			/* strlen(msgBuf) */
+#endif
+
     for (pass = 0; pass < 4; pass++) {
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
 #ifdef LOAD
@@ -235,6 +241,14 @@ icc(
 	if (debug & 0100) fprintf(outFP, " -1");
     }
 
+#ifdef LOAD 
+    if (msgOffset > 4) {
+	msgBuf[msgOffset] = '\0';		/* terminate */
+	send_msg_to_server(sockFN, msgBuf);
+	if (micro) microReset(0);
+    }
+#endif
+
     dis_cnt = DIS_MAX;
 
 /********************************************************************
@@ -248,8 +262,11 @@ icc(
 	if (++mark_stamp == 0) {	/* next generation for check */
 	    mark_stamp++;		/* leave out zero */
 	}
+
+#ifdef LOAD 
 	strcpy(msgBuf, "L0.3");		/* header for live data */
 	msgOffset = 4;			/* strlen(msgBuf) */
+#endif
 
 	do {
 	    /* scan arithmetic and logic output lists until empty */
@@ -257,12 +274,13 @@ icc(
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
 	if (micro & 06) microPrint("Scan", 04);
 
+#ifdef LOAD 
 	if (msgOffset > 4) {
 	    msgBuf[msgOffset] = '\0';		/* terminate */
-printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 	    send_msg_to_server(sockFN, msgBuf);
 	    if (micro) microReset(0);
 	}
+#endif
 
 	if (debug & 0300) {		/* osc or detailed info */
 	    display();			/* inputs and outputs */
@@ -441,10 +459,11 @@ printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 			    }
 #ifdef LOAD
 			} else if (sscanf(rBuf, "L%d.%hd", &slot, &val) == 2 && slot == 0) {
-			    msgOffset = 0;
-
 			    switch (val) {
 			    case 0:		/* GET_END */
+				for (opp = sTable; opp < sTend; opp++) {
+				    (*opp)->gt_live &= 0x7fff;	/* clear live active */
+				}
 				printf("Symbol Table no longer required\n");
 				break;
 
@@ -460,7 +479,6 @@ printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 				    /* to maintain index correctly send all symbols */
 				    if (msgOffset > REPLY - 6 - strlen(gp->gt_ids)) {	/* -11 id, */
 					msgBuf[msgOffset] = '\0';		/* terminate */
-			printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 					if (micro) microPrint("Send Symbols intermediate", 0);
 					send_msg_to_server(sockFN, msgBuf);
 					if (micro) microReset(0);
@@ -470,7 +488,6 @@ printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 				}
 				if (msgOffset > 4) {
 				    msgBuf[msgOffset] = '\0';		/* terminate */
-		    printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 				    if (micro) microPrint("Send Symbols", 0);
 				    send_msg_to_server(sockFN, msgBuf);
 				    if (micro) microReset(0);
@@ -483,19 +500,37 @@ printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 				break;
 
 			    case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
+			    case 4:		/* LAST_ACTIVE_SYMBOLS */
 				if (liveFlag) {
 				    for (opp = sTable; opp < sTend; opp++) {
 					(*opp)->gt_live &= 0x7fff;	/* clear live active */
 				    }
 				    liveFlag = 0;	/* do not set again until case 4 received */
 				}
-			    case 4:		/* LAST_ACTIVE_SYMBOLS */
-		    printf("RCV %d lenth of rBuf = %d\n", val, strlen(rBuf));
+				strcpy(msgBuf, "L0.3");		/* header for live data */
+				msgOffset = 4;			/* strlen(msgBuf) */
 				cp = rBuf;
 				while ((cp = strchr(cp, ';')) != NULL) {
+				    int		value;
 				    index = atoi(++cp);
 				    assert(index < sTend - sTable);	/* check index is in range */
-				    sTable[index]->gt_live |= 0x8000;	/* set live active */
+				    gp = sTable[index];
+				    gp->gt_live |= 0x8000;		/* set live active */
+				    value = ((typ = -gp->gt_ini) >= 0 && atypes[typ]) ?
+					gp->gt_old : gp->gt_val < 0 ? 1 : 0;
+				    if (value) {
+					liveData(gp->gt_live, value);	/* initial active live values */
+				    }
+				}
+				/*
+				 * send a reply for each block received because
+				 * a scan may occurr between received blocks which
+				 * also sends an L0.3 block
+				 */
+				if (msgOffset > 4) {
+				    msgBuf[msgOffset] = '\0';		/* terminate */
+				    send_msg_to_server(sockFN, msgBuf);
+				    if (micro) microReset(0);
 				}
 				if (val == 4) {
 				    liveFlag = 1;		/* live inhibit bits are correct */
@@ -561,7 +596,6 @@ liveData(unsigned short index, int value)
 {
     if (msgOffset > REPLY - 18) {		/* ;32767 -2147483000 */
 	msgBuf[msgOffset] = '\0';		/* terminate */
-printf("lenth of msgBuf = %d\n", strlen(msgBuf));
 	send_msg_to_server(sockFN, msgBuf);
 	msgOffset = 4;				/* msg = "L0.3" */
     }
