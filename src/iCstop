@@ -34,21 +34,24 @@ usage()
   echo '          named directories in their program path are killed. (A feature)' >&2
   echo " EXAMPLE: $name -a bin; stops all programs out of /bin/ /usr/bin/ ..." >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: iCstop,v 1.6 2001/03/19 07:07:27 archiv Exp $' >&2
+  echo '$Id: iCstop,v 1.7 2002/06/02 14:21:12 archiv Exp $' >&2
 }
 
 ########################################################################
 #
 #	execute ps and determine process numbers of program names
 #
+#	cannot kill <defunct> processes - so ignore them -
+#	they will die, when the parent process is stopped
+#
 ########################################################################
 
 processNumbers()
 {
     if [ -z "$a" ]; then
-	ps | grep -w $p | awk '{ printf (" %s", $1) }'
+	ps | grep -w $p | grep -v '<defunct>' | awk '{ printf (" %s", $1) }'
     else
-	ps$a | grep -w $p | egrep -vw "(egrep|$name)" | awk '{ printf (" %s", $1) }'
+	ps$a | grep -w $p | egrep -vw "(grep|$name|<defunct>)" | awk '{ printf (" %s", $1) }'
     fi
 }
 
@@ -67,7 +70,7 @@ process()
 	    if [ -n "$pids" ]; then
 		if [ "$e" != 1 ]; then
 		    kill $s$pids
-		    if [ -n $(processNumbers) ]; then
+		    if [ -n "$(processNumbers)" ]; then
 			sleep 1		# some processes take a little time to die
 			pids1=$(processNumbers)
 			if [ -n "$pids1" ]; then
