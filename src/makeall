@@ -2,20 +2,20 @@
 
 ########################################################################
 #
-#	make pplc pplt pptc load.a
+#	make icc icl ict ict.a
 #
-#	$Id: makeall,v 1.3 2001/02/06 18:41:58 jw Exp $
+#	$Id: makeall,v 1.4 2001/02/21 16:20:29 jw Exp $
 #
 ########################################################################
 
 if ! cmp -s cexe.c cexe.c_empty; then
     cp -p cexe.c_empty cexe.c
 fi
-echo "make pplc"
-make pplc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-#echo "make pplc"
-# make pplt 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-echo "make pptc"
-makepptc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-echo "make load.a"
+echo "make icc"
+make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+#echo "make icl"
+# make icl 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+echo "make ict"
+makeIct 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+echo "make ict.a"
 makeload 2>&1 | grep -iE '(error|warning|:[0-9]+:)'

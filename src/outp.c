@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.33 2001/02/12 15:23:18 jw Exp $";
+    "@(#)$Id: outp.c,v 1.34 2001/02/21 16:20:29 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -13,7 +13,7 @@ static const char outp_c[] =
 #include	<stdlib.h>
 #include	<string.h>
 #include	<assert.h>
-#include	"pplc.h"
+#include	"icc.h"
 #include	"comp.h"
 
 #define Hname	"inc1.h"
@@ -482,7 +482,7 @@ static char	COMPILER[] =\n\
 \"%s\";\n\
 \n\
 #include	<stdio.h>\n\
-#include	<pplc.h>\n\
+#include	<icc.h>\n\
 #include	\"%s\"\n\
 \n\
 #define _(x) x.gt_old\n\

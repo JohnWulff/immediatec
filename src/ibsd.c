@@ -1,5 +1,5 @@
 static const char ibsd.c[] =
-"@(#)$Id: ibsd.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: ibsd.c,v 1.3 2001/02/21 16:20:29 jw Exp $";
 /********************************************************************
  *
  * 	Treibersoftware für den IBS-COP
@@ -27,7 +27,7 @@ static const char ibsd.c[] =
 #include <ddi_lib.h>
 
 #include "ibsd.h"
-#include "pplc.h"
+#include "icc.h"
 
 /*----------------------------------------------------------------- */
 /* Arrays zum Datenhandling zwischen PLC und IBS */

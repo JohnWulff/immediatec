@@ -1,15 +1,15 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.9 2001/02/12 15:23:18 jw Exp $";
+"@(#)$Id: cexe.h,v 1.10 2001/02/21 16:20:29 jw Exp $";
 /********************************************************************
  *
- *	Routine to execute C code fragments in the PPLC system
+ *	Routine to execute C code fragments in the iC system
  *
  *	"cexe.h	1.06	95/01/31"
  *
  *******************************************************************/
 
 #include <stdio.h>
-#include "pplc.h"
+#include "icc.h"
 #include "comp.h"
 
 #line 16 "cexe.h"

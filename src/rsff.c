@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.17 2001/01/25 21:53:13 jw Exp $";
+"@(#)$Id: rsff.c,v 1.18 2001/02/21 16:20:29 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -9,7 +9,7 @@ static const char rsff_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<assert.h>
-#include	"pplc.h"
+#include	"icc.h"
 
 unsigned char	bitMask[] = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.9 2001/02/03 17:10:04 jw Exp $";
+"@(#)$Id: init.c,v 1.10 2001/02/21 16:20:29 jw Exp $";
 /*
  *	"init.c"
  *
@@ -10,7 +10,7 @@ static const char init_c[] =
 #include	<windows.h>
 #endif
 #include	<stdio.h>
-#include	"pplc.h"
+#include	"icc.h"
 #include	"comp.h"
 #include	"y.tab.h"
 

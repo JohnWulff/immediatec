@@ -1,5 +1,5 @@
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.4 2001/01/31 17:53:10 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.5 2001/02/21 16:20:29 jw Exp $";
 /********************************************************************
  *
  *	TCP/IC communication support
@@ -37,12 +37,12 @@ void	read_stream(int, char *, int);
 #endif
 
 extern const char *	hostNM;		/* 127.0.0.1 */
-extern const char *	portNM;		/* pplc service */
-extern const char *	pplcNM;		/* pplc name */
+extern const char *	portNM;		/* icc service */
+extern const char *	iccNM;		/* icc name */
 extern float		timeout;	/* in seconds */
 
 extern int		connect_to_server(const char* host, const char* port,
-					  const char* pplc, float delay);
+					  const char* icc, float delay);
 extern int		wait_for_next_event(int maxFN);
 extern int		rcvd_msg_from_server(int sock, char* buf, int maxLen);
 extern void		send_msg_to_server(int sock, const char* msg);

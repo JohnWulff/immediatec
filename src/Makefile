@@ -1,19 +1,19 @@
-# @(#)$Id: Makefile,v 1.13 2001/02/06 18:41:58 jw Exp $
+# @(#)$Id: Makefile,v 1.14 2001/02/21 16:20:29 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
 #	J.E. Wulff	14-Mar-87
-#	pplc.m	3.31	95/03/02
+#	icc.m	3.31	95/03/02
 #
 #	use GNU make	28-Jul-96
 #
-#	to make load.a, remove all objects and make with export OPT=-DLOAD
+#	to make ict.a, remove all objects and make with export OPT=-DLOAD
 #
 ############################################################
 
 YSRCS =	comp.y
 SRC1 =	comp.c main.c genr.c init.c symb.c outp.c cexe.c
-SRC2 =	pplc.c pptc.c pplt.c link.c rsff.c scan.c
+SRC2 =	icc.c ict.c icl.c link.c rsff.c scan.c
 SRC3 =	load.c
 CSRCS =	$(SRC1) $(SRC2) $(SRC3)
 
@@ -26,17 +26,17 @@ LDFLAGS =
 
 #### Standalone versions ################################### !!! do last !!!
 
-pplc:	Makefile main.d main.o scid.o pplc.d pplc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
-	cc $(LDFLAG) -o pplc main.o scid.o pplc.o $(COBJ) $(POBJ)
+icc:	Makefile main.d main.o scid.o icc.d icc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o icc main.o scid.o icc.o $(COBJ) $(POBJ)
 
-pptc:	Makefile main.d main.o scid.o pptc.d pptc.o tcpc.d tcpc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
-	cc $(LDFLAG) -o pptc main.o scid.o pptc.o tcpc.o $(COBJ) $(POBJ)
+ict:	Makefile main.d main.o scid.o ict.d ict.o tcpc.d tcpc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o ict main.o scid.o ict.o tcpc.o $(COBJ) $(POBJ)
 
-pplt:	Makefile main.d main.o scid.o pplt.d pplt.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
-	cc $(LDFLAG) -o pplt main.o scid.o pplt.o $(COBJ) $(POBJ)
+icl:	Makefile main.d main.o scid.o icl.d icl.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o icl main.o scid.o icl.o $(COBJ) $(POBJ)
 
-load.a:	Makefile load.d load.o scid.o pptc.d pptc.o tcpc.d tcpc.o $(POBJ:.o=.d) $(POBJ)
-	ar -rv load.a load.o scid.o pptc.o tcpc.o $(POBJ)
+ict.a:	Makefile load.d load.o scid.o ict.d ict.o tcpc.d tcpc.o $(POBJ:.o=.d) $(POBJ)
+	ar -rv ict.a load.o scid.o ict.o tcpc.o $(POBJ)
 
 #### Compile objects #######################################
 
@@ -52,11 +52,11 @@ load.a:	Makefile load.d load.o scid.o pptc.d pptc.o tcpc.d tcpc.o $(POBJ:.o=.d) 
 %.d: %.c
 	$(SHELL) -ec '$(CC) -MM $(CPPFLAGS) $< | sed '\''s/$*.o[ :]*/$@ &/g'\'' > $@'
 
-scid.c:	pplc.v Makefile pawk.a
-	rm -f scid.c; ident pplc.v Makefile | grep '$Id' | awk -f pawk.a > scid.c; chmod -w scid.c
+scid.c:	icc.v Makefile pawk.a
+	rm -f scid.c; ident icc.v Makefile | grep '$Id' | awk -f pawk.a > scid.c; chmod -w scid.c
 
 cexe.c:	cexe.h
-	pplc -c /dev/null	# generate cexe.c with no functions
+	icc -c /dev/null	# generate cexe.c with no functions
 	cp -f cexe.c cexe.c_empty
 
 comp.c:	comp.y

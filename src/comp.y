@@ -1,9 +1,9 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.44 2001/02/12 15:23:18 jw Exp $";
+"@(#)$Id: comp.y,v 1.45 2001/02/21 16:20:29 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
- *	compiler for pplc
+ *	compiler for icc
  *
  *******************************************************************/
 
@@ -14,7 +14,7 @@
 #include	<setjmp.h>
 #include	<assert.h>
 
-#include	"pplc.h"
+#include	"icc.h"
 #include	"comp.h"
 
 /* "comp.y	3.70	95/02/03 Copyright (c) 1985-1993 by John E. Wulff" */

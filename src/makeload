@@ -2,9 +2,9 @@
 
 ########################################################################
 #
-#	make the load.a lib with OPT=LOAD
+#	make the ict.a lib with OPT=LOAD
 #
-#	$Id: makeload,v 1.6 2001/01/13 19:27:58 jw Exp $
+#	$Id: makeload,v 1.7 2001/02/21 16:20:29 jw Exp $
 #
 ########################################################################
 
@@ -19,7 +19,7 @@ if [[ -d LoadObjs ]]; then
 else
     mkdir LoadObjs
 fi
-make OPT='-DLOAD -DTCP' load.a
-mv pptc.o link.o rsff.o scan.o LoadObjs
+make OPT='-DLOAD -DTCP' ict.a
+mv ict.o link.o rsff.o scan.o LoadObjs
 mv Make_tmp/* .
 rmdir Make_tmp

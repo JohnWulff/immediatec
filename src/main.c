@@ -1,15 +1,15 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.16 2001/02/12 15:23:18 jw Exp $";
+"@(#)$Id: main.c,v 1.17 2001/02/21 16:20:29 jw Exp $";
 /*
  *	"main.c"
- *	compiler for pplc
+ *	compiler for icc
  *
  *	"main.c	1.10	95/02/09"
  */
 
 #include	<stdio.h>
 #include	<stdlib.h>
-#include	"pplc.h"
+#include	"icc.h"
 #include	"comp.h"
 #ifdef TCP
 #include	"tcpc.h"
@@ -24,7 +24,7 @@ USAGE for compile mode:\n\
         -o <outFN>      name of compiler output file - sets compile mode\n\
         -a              append linking info for 2nd and later files\n\
         -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n\
-        -c              generate auxiliary file cexe.c to extend pplc compiler\n\
+        -c              generate auxiliary file cexe.c to extend icc compiler\n\
                         (cannot be used if also compiling with -o)\n\
 USAGE for run mode:\n\
   %s [-txh]"
@@ -145,7 +145,7 @@ main(
 		    goto break2;
 		case 'u':
 		    if (! *++*argv) { --argc, ++argv; }
-		    pplcNM = *argv;
+		    iccNM = *argv;
 		    goto break2;
 		case 'm':
 		    micro++;		/* microsecond info */
@@ -212,7 +212,7 @@ main(
 		error:
 		    fprintf(stderr, usage, progFN, progFN,
 #ifdef TCP
-		    hostNM, portNM, pplcNM,
+		    hostNM, portNM, iccNM,
 #endif
 		    MARKMAX, SC_ID);
 		    exit(1);
@@ -229,7 +229,7 @@ main(
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
     } else {
 	Gate *		igp;
-	unsigned	gate_count[MAX_LS];	/* accessed by pplc() */
+	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
 
 	if ((r = listNet(gate_count)) == 0) {
 	    if (outFN == 0) {
@@ -283,7 +283,7 @@ main(
 		    }
 		} else if ((r = buildNet(&igp)) == 0) {/* generate execution network */
 		    c_list = (lookup("iClock"))->u.gate;/* initialise clock list */
-		    pplc(igp, gate_count);	/* execute the compiled logic */
+		    icc(igp, gate_count);	/* execute the compiled logic */
 		}
 	    } else {
 		r = output(outFN);		/* generate network as C file */
@@ -335,7 +335,8 @@ inversionCorrection(void)
 
     if ((debug & 04024) == 024) {	/* not suppressed, NET TOPOLOGY and LOGIC */
 	r = 1;
-	if (mktemp(tempName)) {
+	if (mkstemp(tempName)) {
+	    unlink(tempName);		/* mktemp() is deemed dangerous */
 	    r = rename(listFN, tempName); /* inversion correction needed */
 	    if (r == 0) {
 		sprintf(exStr, "pplstfix %s > %s", tempName, listFN);

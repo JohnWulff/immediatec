@@ -11,7 +11,7 @@ usage ()
     echo 'Usage:	'${0##*/}' [-dh] file ...' >&2
     echo '	-d	diff previously made files' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mz,v 1.5 2001/02/08 20:23:10 jw Exp $' >&2
+    echo '	$Id: mz,v 1.6 2001/02/21 16:21:41 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -32,8 +32,8 @@ while [[ $# > 0 ]]; do
 done
 
 for f in $*; do
-    if [[ ! -e $f.p ]]; then
-	echo "source $f.p does not exist"
+    if [[ ! -e $f.ic ]]; then
+	echo "source $f.ic does not exist"
 	er=1
     fi
 done
@@ -54,12 +54,12 @@ for w in $versions; do
 		rm -f Alex$v/$f.lst Alex$v/$f.c Alex$v/$f.ini
 	    fi
 	done
-	makex -v$v $*;
+	ICMake -v$v $*;
 	for f in $*; do
 	    if [[ -n "$d" ]]; then
-		mdiff -ne $f.p $f.lst $f.c $f.ini Alex$v
+		mdiff -ne $f.ic $f.lst $f.c $f.ini Alex$v
 	    else
-		cp $f.p $f.lst $f.c $f.ini Alex$v
+		cp $f.ic $f.lst $f.c $f.ini Alex$v
 	    fi
 	done
     fi

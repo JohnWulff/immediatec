@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.10 2001/02/11 14:05:14 jw Exp $";
+"@(#)$Id: scan.c,v 1.11 2001/02/21 16:20:29 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -7,7 +7,7 @@ static const char scan_c[] =
 /* "scan.c	3.37	95/02/11" */
 
 #include	<stdio.h>
-#include	"pplc.h"
+#include	"icc.h"
 
 static void	link_c(Gate * gp, Gate * out_list);
 
