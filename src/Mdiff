@@ -16,13 +16,14 @@
 usage()
 {
   echo >&2
-  echo 'Generate a full report of differences between a list of files and files' >&2
-  echo 'with the same name in another directory. Whitspace is normally ignored.' >&2
+  echo 'Generate a full report of differences between a list of files  in the' >&2
+  echo 'current directory and files with the same name in another directory.' >&2
   echo >&2
-  echo 'Option -l allows the generation of lists of different or' >&2
-  echo 'identical or non-existing files in the two projects.' >&2
+  echo 'Option -l allows the generation of lists of different or identical files in' >&2
+  echo 'the two directories or a list of non-existing files in the second directory.' >&2
+  echo 'These 3 lists are exclusive subsets of the complete set of selected files.' >&2
   echo >&2
-  echo "Usage:	$name [+w] [-ietqlckIh] [-x<regex>] [file ...] [directory]" >&2
+  echo "Usage:	$name [+w] [-ietqlckIh] [-x<regex>] [file ...|command] [directory]" >&2
   echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
   echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
@@ -31,6 +32,7 @@ usage()
   echo '		default: ignore non-existing files in output' >&2
   echo '			 (unless only 1 file)' >&2
   echo '		if files differ output:	#### file ####' >&2
+  echo '			 followed by the output of diff' >&2
   echo '	-t	text and date header at start of report' >&2
   echo '	-p	full path in file names for directory (default removed)' >&2
   echo '	-q	quiet operation - return status only' >&2
@@ -44,12 +46,14 @@ usage()
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
   echo '	-	all further arguments are treated as files' >&2
-  echo '	if last argument is not a directory, .. is used' >&2
-  echo "	if no files are specified, '$files' is used" >&2
+  echo '	(for backward compatibility first argument may be directory)' >&2
+  echo '	if the first argument is not a file, the argument is  executed' >&2
+  echo '		as a shell command to generate a list of files.' >&2
+  echo "	if no files or command is specified, '$defaultfiles' is used" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.24 2002/07/08 14:26:07 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.25 2002/07/13 15:43:07 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -75,7 +79,17 @@ process()
 		d=${f##*/}
 	    fi
 	    if [ -f "$dir/$d" ]; then
-		if diff -q $w $f $dir/$d > /dev/null; then
+		if [ $f -ef $dir/$d ]; then
+		    f1=${f%/*}
+		    if [ "$f" = "$f1" ]; then
+			f1="."
+		    fi
+		    d1="$dir/$d"
+		    f2=${d1%/*}
+		    echo "$name: paths $f1 and $f2 are identical - ignored" >&2
+		    status=-1
+		    break
+		elif diff -q $w $f $dir/$d > /dev/null; then
 		    if [ "$q" = 0 ]; then
 			[ "$i" = 0 ] || echo "========== $f =========="
 		    elif [ "$li" = 3 ]; then
@@ -117,8 +131,9 @@ process()
 
 name=${0##*/}
 name=${name%.*}
-i=0; e=0; t=0; p=0; q=0; li=0; w=-wB; pipe=0
+i=0; e=0; t=0; p=0; q=0; li=0; w=-wB; pipe=0; recursive=0;
 context=''
+defaultfiles='[Mm]akefile* *.[achimlyv]*'
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -135,6 +150,8 @@ while [ $# -gt 0 ]; do
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wBi;;
+	    r*)	recursive=1;;
+	    R*)	recursive=1;;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
@@ -157,34 +174,59 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-files='[Mm]akefile* *.[chyv]*'
-if [ $# = 0 ]; then
-    directory='..'
-elif [ -d "$1" ]; then
-    directory=$1		# first argument is directory (backwards compatible)
-    shift
-    if [ $# != 0 ]; then
-	files=$*
-	if [ $# = 1 ] && [ $q = 0 ]; then
-	    e=1;		# for single file argument, check if other file exists
+dircount=0
+filecount=0
+command=''
+directory=''
+dirargs=''
+files=''
+while [ $# != 0 ]; do
+    if [ -f "$1" ]; then
+	files="$files $1"
+	let filecount+=1
+    elif [ -d "$1" ]; then
+	if [ -n "$directory" ]; then
+	    dirargs="$dirargs $directory"
+	    let dircount+=1
 	fi
-    fi
-else
-    files=''			# there must be at least 1 nondirectory
-    if [ $# -le 2 ] && [ $q = 0 ]; then
-	e=1;			# for single file argument, check if other file exists
-    fi
-    while [ $# -gt 1 ]; do
-	files="$files $1"
-	shift
-    done
-    if [ -d "$1" ]; then
-	directory=$1		# last argument is directory
+	directory=$1		# last directory in args is other directory
     else
-	directory='..'
-	files="$files $1"
+	command=$1		# attempt to use as a command to get list of files
     fi
+    shift
+done
+
+if [ -z "$directory" ]; then
+    echo "$name: there must be at least one directory argument" >&2
+    usage
+    exit 253
 fi
+
+if [ $filecount = 0 ]; then
+    for c in $command; do
+	break
+    done
+    if [ -n "$c" ]; then
+	tmp=${c#[a-zA-Z_]*}
+	if [ $tmp != $c ]; then
+	    files=`$command`
+	else
+	    files=$command
+	    command=''
+	fi
+    else
+	files=$defaultfiles
+    fi
+elif [ $filecount = 1 ] && [ $q = 0 ]; then
+    e=1;			# for single file argument, check if other file exists
+fi
+
+# echo "files: $files"
+# echo "dirs:  $dirargs"
+# echo "dir:   $directory"
+# echo "n:   $filecount $dircount $e"
+# for f in $files; do echo $f; done
+# exit
 
 if [ "$pipe" = 0 ]; then
     process
