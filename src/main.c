@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.6 1999/12/05 11:07:48 jw Exp $";
+"@(#)$Id: main.c,v 1.7 2000/05/31 15:51:38 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -43,23 +43,28 @@ pplc [-d<debug>] [-n<count>] [-o<out>] [-l<list>] [-e<err>] [-xa] <iC_program>\n
 "		    +2	logic generation\n\
 		    +1	yacc debug info\n"
 #endif
-"	-n <count>	maxinum loop count (default is %d, limit 15)\n\
-	-o <outFN>	name of compiler output file\n\
+"	-o <outFN>	name of compiler output file - sets compile mode\n\
 	-l <listFN>	name of list file  (default is stdout)\n\
 	-e <errFN>	name of error file (default is stderr)\n\
-	-x		generate auxiliary file cexe.c to extend compiler\n\
-	-a		output ARITHMETIC ALIAS nodes for symbol debugging\n\
+	-a		append linking info for 2nd and later files\n\
+	-A		compile output ARITHMETIC ALIAS nodes for symbol debugging\n\
+Flags when using run mode instead of compile mode
+	-n <count>	maxinum loop count (default is %d, limit 15)\n\
+	-a		start run time arithmetic info in decimal\n\
+			can be changed at run time with d or x\n\
+	-x		generate auxiliary file cexe.c to extend pplc compiler\n\
 	-h		this help text\n\
+\n\
 	<iC_program>	any iC language program file (extension .p)\n\
 			- or default is stdin\n\
 ";
 
 char * OutputMessage[] = {
     0,					/* [0] no error */
-    "%s: syntax or generate errors",	/* [1] */
-    "%s: block count error",		/* [2] */
-    "%s: link count error",		/* [3] */
-    "%s: cannot open file %s",		/* [4] */
+    "%s: syntax or generate errors\n",	/* [1] */
+    "%s: block count error\n",		/* [2] */
+    "%s: link count error\n",		/* [3] */
+    "%s: cannot open file %s\n",	/* [4] */
 };
 
 
@@ -120,8 +125,11 @@ main(
 			exiFN = "cexe.h";
 			exoFN = "cexe.c";
 		    }
+		case 'A':
+		    Aaflag = 1;		/* generate ARITH ALIAS in outFN */
+		    break;
 		case 'a':
-		    aaflag = 1;		/* generate ARITH ALIAS in outFN */
+		    aaflag = 1;		/* decimal display or append for compile */
 		    break;
 		default:
 		    fprintf(stderr,

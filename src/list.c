@@ -1,12 +1,12 @@
 static const char list_c[] =
-"@(#)$Id: list.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: list.c,v 1.3 2000/05/31 15:51:38 jw Exp $";
 /********************************************************************
  *
  *	list.c
  *
  *	This module prepares provides an array for linking modules
  *	This source must be compiled every time when linking modules
- *	with load.a library to pick up info from list.h
+ *	with load.a library to pick up info from inc1.h and inc2.h
  *
  *******************************************************************/
 

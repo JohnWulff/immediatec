@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.4 1999/12/05 11:07:48 jw Exp $";
+"@(#)$Id: load.c,v 1.5 2000/05/31 10:45:07 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -42,7 +42,7 @@ FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 
 static char *	usage = "USAGE:\n\
-%s [-d<debug>] [-n<count>] [-a]\n\
+%s [-d<debug>] [-n<count>] [-ah]\n\
 	-d <debug>2000	display scan_cnt and link_cnt\n\
 		  +400	exit after initialisation\n\
 		  +200	display loop info (+old style logic)\n\
@@ -51,6 +51,7 @@ static char *	usage = "USAGE:\n\
 	-n <count>	maxinum loop count (default is %d, limit 15)\n\
 	-a		start run time arithmetic info in decimal\n\
 			can be changed at run time with d or x\n\
+	-h		this help text\n\
 ";
 
 /********************************************************************
@@ -130,6 +131,7 @@ main(
 		default:
 		    fprintf(stderr,
 			"%s: unknown flag '%c'\n", progname, **argv);
+		case 'h':
 		case '?':
 		error:
 		    fprintf(stderr, usage, progname, MARKMAX);

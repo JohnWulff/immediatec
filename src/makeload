@@ -1,0 +1,24 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	make the load.a lib with OPT=LOAD
+#
+#	$Id: makeload,v 1.1 2000/05/31 16:01:17 jw Exp $
+#
+########################################################################
+
+if [[ -e Make_tmp ]]; then echo 'Make_tmp exists ??? - nothing made'; exit 1; fi
+mkdir Make_tmp
+mv pptc.o link.o rsff.o scan.o Make_tmp
+if [[ -d LoadObjs ]]; then
+    mv LoadObjs/* .
+else
+    mkdir LoadObjs
+fi
+export OPT=-DLOAD
+make load.a
+export OPT=
+mv pptc.o link.o rsff.o scan.o LoadObjs
+mv Make_tmp/* .
+rmdir Make_tmp

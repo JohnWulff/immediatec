@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.8 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: outp.c,v 1.9 2000/05/31 15:51:38 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -74,7 +74,9 @@ uchar		ftypes[] = { FTYPES };
 char		os[] = OPS;
 char		fos[] = FOPS;
 unsigned	gate_count[MAX_LS];	/* accessed by pplc() */
-unsigned short	aaflag;			/* can be set to output ARITH ALIAS */
+unsigned short	Aaflag;			/* -A flag signals ARITH alias */
+unsigned short	aaflag;			/* -a on compile to append output */
+		
 
 int
 output(char * outfile)			/* emit code in C */
@@ -357,14 +359,14 @@ output(char * outfile)			/* emit code in C */
 	    rc = 4; goto end;
 	}
 
-	if ((Hp = fopen(Hname, "a")) == 0) {
+	if ((Hp = fopen(Hname, aaflag ? "a" : "w")) == 0) {
 	    rc = 4; goto endh;
 	}
 
-	if ((Lp = fopen(Lname, "a")) == 0) {
+	if ((Lp = fopen(Lname, aaflag ? "a" : "w")) == 0) {
 	    rc = 4; goto endl;
 	}
-	fprintf(Lp, "#define	I_LIST\\\n");
+	if (! aaflag) fprintf(Lp, "#define	I_LIST\\\n");
 
 	/* rewind intermediate file */
 
@@ -633,7 +635,7 @@ extern Gate *	l_[];\n\
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
 		if ((typ = sp->type) == ALIAS && sp->list != 0 &&
-		    ((dc = sp->ftype) == GATE || aaflag && dc == ARITH)) {
+		    ((dc = sp->ftype) == GATE || Aaflag && dc == ARITH)) {
 		    if (dc == ARITH) {
 			fprintf(Fp, "Gate _%-7s", sp->name);	/* modify */
 		    } else {

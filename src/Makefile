@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.6 1999/08/06 21:13:31 jw Exp $
+# @(#)$Id: Makefile,v 1.7 2000/05/31 10:45:07 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -7,11 +7,13 @@
 #
 #	use GNU make	28-Jul-96
 #
+#	to make load.a, remove all objects and make with export OPT=-DLOAD
+#
 ############################################################
 
 YSRCS =	comp.y
 SRC1 =	comp.c main.c genr.c init.c symb.c outp.c cexe.c
-SRC2 =	pplc.c pplt.c link.c rsff.c scan.c
+SRC2 =	pplc.c pptc.c pplt.c link.c rsff.c scan.c
 #SRC3 =	pcop.c ibsd.c time.c load.c
 CSRCS =	$(SRC1) $(SRC2) $(SRC3)
 
@@ -24,14 +26,19 @@ LDFLAGS =
 
 #### Standalone versions ################################### !!! do last !!!
 
+all:	pplc pptc
+
 pplc:	Makefile main.d main.o scid.o pplc.d pplc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
 	cc $(LDFLAG) -o pplc main.o scid.o pplc.o $(COBJ) $(POBJ)
+
+pptc:	Makefile main.d main.o scid.o pptc.d pptc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o pptc main.o scid.o pptc.o $(COBJ) $(POBJ)
 
 pplt:	Makefile main.d main.o scid.o pplt.d pplt.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
 	cc $(LDFLAG) -o pplt main.o scid.o pplt.o $(COBJ) $(POBJ)
 
-load.a:	Makefile load.d load.o scid.o pplc.d pplc.o $(POBJ:.o=.d) $(POBJ)
-	ar -rv load.a load.o scid.o pplc.o $(POBJ)
+load.a:	Makefile load.d load.o scid.o pptc.d pptc.o $(POBJ:.o=.d) $(POBJ)
+	ar -rv load.a load.o scid.o pptc.o $(POBJ)
 
 #### Compile objects #######################################
 

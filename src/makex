@@ -9,9 +9,14 @@
 usage ()
 {
     echo 'Usage:	'${0##*/} 'file ...' >&2
+    echo '	-l	link all the iC files into one application' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.1 2000/05/31 13:46:47 jw Exp $' >&2
+    echo '	$Id: makex,v 1.2 2000/05/31 15:51:38 jw Exp $' >&2
 }
+
+link=0
+flag=noerror
+a=""
 
 while [[ $# > 0 ]]; do
     case $1 in
@@ -19,6 +24,8 @@ while [[ $# > 0 ]]; do
     -*)	option=${1#?}
 	while [[ -n "$option" ]]; do
 	    case "$option" in
+	    l*)	link=1
+		;;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;
 	    esac
@@ -32,17 +39,40 @@ done
 for f in $*; do
     file=$f
     base=${file%.*}
+    if [[ -z $first ]]; then
+	first=$base
+    fi
     if [[ $file = $base ]]; then
 	file="$base.p"
     fi
     if [[ ! -f $file ]]; then
-	echo "iC file $file does not exist"
+	echo "iC file $file does not exist" >&2
 	usage
 	exit 1;
     fi
     echo $file
-    rm -f inc1.h inc2.h
-    if pplc -d74 -o $base.c -l $base.lst $file; then
-	gcc -o $base $base.c list.c load.a
+    if [[ $link != 1 ]]; then
+	if pplc -d74 -o $base.c -l $base.lst $file; then
+	    gcc -o $base $base.c list.c load.a
+	fi
+    else
+	if [[ $first != $base ]]; then
+	    a="-a"
+	fi
+	if pplc $a -d74 -o $base.c -l $base.lst $file; then
+	    list="$list $base.c"
+	else
+	    list="$list ERROR:$base.c"
+	    flag=error
+	fi
     fi
 done
+
+if [[ $link = 1 ]]; then
+    if [[ $flag = noerror ]]; then
+	echo "link $first from$list"
+	gcc -o $first $list list.c load.a
+    else
+	echo "pplc compile errors in $list" >&2
+    fi
+fi
