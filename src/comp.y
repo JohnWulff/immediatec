@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.9 2000/11/11 13:36:37 jw Exp $";
+"@(#)$Id: comp.y,v 1.10 2000/11/12 21:12:30 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -602,9 +602,14 @@ cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
 fexpr	: BLTIN1 '(' aexpr cref ')' {
 		register List_e	*lp1;
 		register uchar	tp;
+		register Symbol *	symp;
 		$$.f = $1.f; $$.l = $5.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		tp = $3.v->le_sym->type;		/* single input */
+		symp = $3.v->le_sym;
+		while (symp->type == ALIAS) {
+		    symp = symp->list->le_sym;	/* with token of original */
+		}
+		tp = symp->type;		/* single input */
 		lp1 = op_push(sy_push($1.v), BTYP($3), $3.v);
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);

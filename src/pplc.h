@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.9 2000/11/11 13:36:37 jw Exp $";
+"@(#)$Id: pplc.h,v 1.10 2000/11/12 21:12:30 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -228,15 +228,15 @@ extern void	outMw(Gate *, Gate *);	/* OUTW master action */
 extern void	outMx(Gate *, Gate *);	/* OUTX master action */
 extern void	arithMa(Gate *, Gate *);/* ARITH master action */
 
-extern void	s_ff(Gate *, Gate *);	/* S_FF slave action on FF */
-extern void	r_ff(Gate *, Gate *);	/* R_FF slave action on FF */
-extern void	d_ff(Gate *, Gate *);	/* D_FF slave action on FF */
-extern void	d_sh(Gate *, Gate *);	/* D_SH slave action on SH */
-extern void	ch_bit(Gate *, Gate *);	/* CH_BIT slave action on VF */
-extern void	ri_bit(Gate *, Gate *);	/* RI_BIT slave action on EF */
-extern void	f_cf(Gate *, Gate *);	/* F_CF slave action on CF */
-extern void	clock_fn(Gate *, Gate *);/* CLCK slave action on CLK */
-extern void	timer_fn(Gate *, Gate *);/* TIMR slave action on TIM */
+extern void	sSff(Gate *, Gate *);	/* S_FF slave action on FF */
+extern void	rSff(Gate *, Gate *);	/* R_FF slave action on FF */
+extern void	dSff(Gate *, Gate *);	/* D_FF slave action on FF */
+extern void	dSsh(Gate *, Gate *);	/* D_SH slave action on SH */
+extern void	chSbit(Gate *, Gate *);	/* CH_BIT slave action on VF */
+extern void	riSbit(Gate *, Gate *);	/* RI_BIT slave action on EF */
+extern void	fScf(Gate *, Gate *);	/* F_CF slave action on CF */
+extern void	clockSfn(Gate *, Gate *);/* CLCK slave action on CLK */
+extern void	timerSfn(Gate *, Gate *);/* TIMR slave action on TIM */
 extern void	err_fn(Gate *, Gate *);	/* no master or slave function */
 
 extern void	null(void);		/* null function */

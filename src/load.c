@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.7 2000/06/10 11:27:58 jw Exp $";
+"@(#)$Id: load.c,v 1.8 2000/11/12 21:12:30 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -173,7 +173,7 @@ main(
 #ifdef TCP
 		    hostNM, portNM, pplcNM,
 #endif
-		    MARKMAX);
+		    MARKMAX, SC_ID);
 		    exit(1);
 		}
 	    } while (*++*argv);

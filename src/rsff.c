@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.7 2000/11/11 13:36:37 jw Exp $";
+"@(#)$Id: rsff.c,v 1.8 2000/11/12 21:12:30 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -65,7 +65,7 @@ sMff(					/* S_FF master action on FF */
 } /* sMff */
 
 void
-s_ff(					/* S_FF slave action on FF */
+sSff(					/* S_FF slave action on FF */
     register Gate *	gf,
     Gate *		out_list)
 {
@@ -95,7 +95,7 @@ s_ff(					/* S_FF slave action on FF */
 	quit(-1);
 #endif
     }
-} /* s_ff */
+} /* sSff */
 
 void
 rMff(					/* R_FF master action on FF */
@@ -114,7 +114,7 @@ rMff(					/* R_FF master action on FF */
 } /* rMff */
 
 void
-r_ff(					/* R_FF slave action on FF */
+rSff(					/* R_FF slave action on FF */
     register Gate *	gf,
     Gate *		out_list)
 {
@@ -144,7 +144,7 @@ r_ff(					/* R_FF slave action on FF */
 	quit(-1);
 #endif
     }
-} /* r_ff */
+} /* rSff */
 
 void
 dMff(					/* D_FF master action on FF */
@@ -163,7 +163,7 @@ dMff(					/* D_FF master action on FF */
 } /* dMff */
 
 void
-d_ff(					/* D_FF slave action on FF */
+dSff(					/* D_FF slave action on FF */
     register Gate *	gf,
     Gate *		out_list)
 {
@@ -185,7 +185,7 @@ d_ff(					/* D_FF slave action on FF */
 	}
 #endif
     }
-} /* d_ff */
+} /* dSff */
 
 /********************************************************************
  *
@@ -212,7 +212,7 @@ dMsh(					/* D_SH master action on SH */
 } /* dMsh */
 
 void
-d_sh(					/* D_SH slave action on SH */
+dSsh(					/* D_SH slave action on SH */
     register Gate *	gf,
     Gate *		out_list)
 {
@@ -231,7 +231,7 @@ d_sh(					/* D_SH slave action on SH */
 #ifndef _WINDOWS 
     if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
 #endif
-} /* d_sh */
+} /* dSsh */
 
 /********************************************************************
  *
@@ -365,7 +365,7 @@ riMbit(					/* RI_BIT master action on EF */
  *******************************************************************/
 
 void
-ri_bit(					/* RI_BIT slave action */
+riSbit(					/* RI_BIT slave action */
     register Gate *	gf,
     register Gate *	out_list)
 {
@@ -387,7 +387,7 @@ ri_bit(					/* RI_BIT slave action */
 	/* on startup a reset action comes when EF is LO */
 #endif
     }
-} /* ri_bit */
+} /* riSbit */
 
 /********************************************************************
  *
@@ -437,7 +437,7 @@ chMbit(					/* CH_BIT master action on VF */
  *******************************************************************/
 
 void
-ch_bit(					/* CH_BIT slave action */
+chSbit(					/* CH_BIT slave action */
     register Gate *	gf,
     register Gate *	out_list)
 {
@@ -460,7 +460,7 @@ ch_bit(					/* CH_BIT slave action */
 	/* on startup a reset action comes when VF is LO */
 #endif
     }
-} /* ch_bit */
+} /* chSbit */
 
 /********************************************************************
  *
@@ -488,7 +488,7 @@ fMfn(					/* F_CF CLCK TIMR master action */
  *******************************************************************/
 
 void
-f_cf(					/* F_CF slave action on CF */
+fScf(					/* F_CF slave action on CF */
     register Gate *	gf,
     register Gate *	out_list)
 {
@@ -513,7 +513,7 @@ f_cf(					/* F_CF slave action on CF */
 	quit(-1);
 #endif
     }
-} /* f_cf */
+} /* fScf */
 
 /********************************************************************
  *
@@ -671,7 +671,7 @@ outMx(					/* OUTX master action */
  *******************************************************************/
 
 void
-clock_fn(				/* Clock function */
+clockSfn(				/* Clock function */
     register Gate *	gf,
     register Gate *	out_list)
 {
@@ -732,7 +732,7 @@ clock_fn(				/* Clock function */
 	quit(-1);
 #endif
     }
-} /* clock_fn */
+} /* clockSfn */
 
 Functp	clock_i[] = {pass1, null1, i_ff3, null1};	/* no output lists */
 
@@ -749,7 +749,7 @@ Functp	clock_i[] = {pass1, null1, i_ff3, null1};	/* no output lists */
  *******************************************************************/
 
 void
-timer_fn(				/* Timer function */
+timerSfn(				/* Timer function */
     register Gate *	gf,
     register Gate *	out_list)
 {
@@ -823,7 +823,7 @@ timer_fn(				/* Timer function */
 	quit(-1);
 #endif
     }
-} /* timer_fn */
+} /* timerSfn */
 
 /********************************************************************
  *
