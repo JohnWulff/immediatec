@@ -6,6 +6,38 @@
 #
 ########################################################################
 
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-h]' >&2
+    echo '	-h	this help text' >&2
+    echo 'make different lists in a Test directory' >&2
+    echo '	p.lst	# all for copying' >&2
+    echo '	pd.lst	# sources and derived for comparing' >&2
+    echo '	pe.lst	# executables only' >&2
+    echo '	pc.lst	# C files only' >&2
+    echo '	pi.lst	# ini files only' >&2
+    echo '	pl.lst	# lst files only' >&2
+    echo '	p6.lst	# lst6 files only' >&2
+    echo '	pp.lst	# iC files only' >&2
+    echo '	$Id: ml,v 1.5 2003/10/12 19:48:04 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    h*)	usage; exit 255;;
+	    *) aflag="-$option"; break;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
 mklst *.ic > p.lst	# all for copying
 mklst -d *.ic > pd.lst	# sources and derived for comparing
 mklst -e *.ic > pe.lst	# executables only
@@ -13,8 +45,8 @@ mklst -c *.ic > pc.lst	# C files only
 mklst -i *.ic > pi.lst	# ini files only
 mklst -l *.ic > pl.lst	# lst files only
 mklst -6 *.ic > p6.lst	# lst6 files only
-mklst -p *.ic > pp.lst	# icc files only
+mklst -p *.ic > pp.lst	# iC files only
 
 test -e OutP && echo OutP >> p.lst; echo OutP >> pd.lst;
 test -e OutT && echo OutT >> p.lst; echo OutT >> pd.lst;
-test -e OutX && echo OutX >> p.lst; echo OutX >> pd.lst;
+test -e Init.out && echo Init.out >> p.lst; echo Init.out >> pd.lst;

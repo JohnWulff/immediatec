@@ -1,0 +1,72 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	make OutT in test ict
+#
+########################################################################
+
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-h] [iCtarget ...]' >&2
+    echo '	-h	this help text' >&2
+    echo 'uses ict -c to make a dedicated ict for each iCtarget' >&2
+    echo 'output the listings produced to directory ListT' >&2
+    echo 'if no iCtargets are specified, make each line of file pe.lst' >&2
+    echo 'in this case also output the common output to OutT' >&2
+    echo '	$Id: mo,v 1.7 2003/10/12 19:48:04 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    h*)	usage; exit 255;;
+	    *)	echo "unknown flag -$option";
+		usage; exit 255;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
+test -d ListT || mkdir ListT;
+
+if [[ $# != 0 ]]; then
+    for f in $*; do
+	echo "$f.ic";
+	ict -c $f.ic > /dev/null 2>&1		# listing only with -d474
+	cd ..
+	rm -f cexe.o ict	# new cexe.o too soon for make sometimes
+	makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	cd - > /dev/null
+	if [[ -f ../ict ]]; then	# use locally generated compiler
+	    ../ict -d474 -l ListT/$f.lst $f.ic;
+	else
+	    echo make ict failed
+	fi
+    done
+else
+    for f in $(cat pe.lst); do
+	echo "$f.ic";
+	ict -c $f.ic > /dev/null 2>&1		# listing only with -d474
+	cd ..
+	rm -f cexe.o ict	# new cexe.c too soon for make sometimes
+	makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	cd - > /dev/null
+	if [[ -f ../ict ]]; then	# use locally generated compiler
+	    ../ict -d474 -l ListT/$f.lst $f.ic;
+	else
+	    echo make ict failed
+	fi
+    done > OutT 2>&1;
+    ict -c < /dev/null			# restore plain ict
+    cd ..
+    rm -f cexe.o ict	# new cexe.c too soon for make sometimes
+    makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+    cd - > /dev/null
+fi

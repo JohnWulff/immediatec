@@ -1,13 +1,52 @@
+#!/usr/bin/ksh -p
 ########################################################################
 #
-#	make test cases
+#	make iC test cases from pm.lst which may specify linking iC's
 #
 ########################################################################
 
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-h] [-v<N>]' >&2
+    echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
+    echo '	-h	this help text' >&2
+    echo 'uses iCmake -i to make each line of the list pm.lst' >&2
+    echo 'which has mostly individual lines naming one source eg. xxx.ic' >&2
+    echo 'but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
+    echo '	$Id: mm,v 1.3 2003/10/12 19:48:04 jw Exp $' >&2
+}
+
+v=""
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    v*)	option=${option#?}
+		if [ -n "$option" ]; then
+		    v=" -v$option"
+		else
+		    echo "-v must specify an option";
+		    usage; exit 254;
+		fi
+		break;;
+	    h*)	usage; exit 255;;
+	    *)	echo "unknown flag -$option";
+		usage; exit 255;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
 while true; do
     read line
-    if [ -z "$line" ]; then
+    if [[ -z "$line" ]]; then
 	break
     fi
-    iCmake -i $line
+    iCmake -i$v $line
 done < pm.lst 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/'

@@ -6,6 +6,34 @@
 #
 ########################################################################
 
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-h] [iCtarget ...]' >&2
+    echo '	-h	this help text' >&2
+    echo 'uses icc -c to make a dedicated icc for each iCtarget' >&2
+    echo 'output the listings produced to directory ListP' >&2
+    echo 'if no iCtargets are specified, make each line of file pe.lst' >&2
+    echo 'in this case also output the common output to OutP' >&2
+    echo '	$Id: mp,v 1.6 2003/10/12 19:48:04 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    h*)	usage; exit 255;;
+	    *)	echo "unknown flag -$option";
+		usage; exit 255;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
 test -d ListP || mkdir ListP;
 
 if [[ $# != 0 ]]; then
@@ -14,7 +42,7 @@ if [[ $# != 0 ]]; then
 	icc -c $f.ic > /dev/null 2>&1		# listing only with -d474
 	cd ..
 	rm -f cexe.o icc	# new cexe.o too soon for make sometimes
-	make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	makeAll -C 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 	cd - > /dev/null
 	if [[ -f ../icc ]]; then	# use locally generated compiler
 	    ../icc -d474 -l ListP/$f.lst $f.ic;
@@ -28,7 +56,7 @@ else
 	icc -c $f.ic > /dev/null 2>&1		# listing only with -d474
 	cd ..
 	rm -f cexe.o icc	# new cexe.c too soon for make sometimes
-	make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	makeAll -C 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 	cd - > /dev/null
 	if [[ -f ../icc ]]; then	# use locally generated compiler
 	    ../icc -d474 -l ListP/$f.lst $f.ic;
@@ -39,6 +67,6 @@ else
     icc -c < /dev/null			# restore plain icc
     cd ..
     rm -f cexe.o icc	# new cexe.c too soon for make sometimes
-    make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+    makeAll -C 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
     cd - > /dev/null
 fi
