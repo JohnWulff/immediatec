@@ -1,9 +1,10 @@
 #!/usr/bin/ksh -p
-# $Id: Mdiff,v 1.4 1998/01/25 12:11:59 archiv Exp $
+# $Id: Mdiff,v 1.5 1998/02/12 11:35:28 archiv Exp $
 # Author: J.E. Wulff
 #
+files='*.[chv]* [Mm]akefile*'
 case $# in
-0)  echo "Usage:	$0 [-ei] [+w] [directory] file ..." >&2
+0)  echo "Usage:	$0 [-ei] [+w] [directory] [file ...]" >&2
     echo '	-i	identical files output:	==== file ====' >&2
     echo '		default: ignore identical files in output' >&2
     echo '	-e	nonexisting files put:	**** file does not exist' >&2
@@ -12,6 +13,7 @@ case $# in
     echo '	+w	whitespace (spaces and tabs) is significant' >&2
     echo '		default: whitespace is ignored' >&2
     echo '	if first file argument is not a directory, .. is used' >&2
+    echo "	if no files are specified, '$files' is used" >&2
     exit 1
     ;;
 *)
@@ -54,10 +56,8 @@ case $# in
     else
 	dir=..
     fi
-    if [ $# = 0 ]
+    if [ $# != 0 ]
     then
-	files='*.[chv]* [Mm]akefile'
-    else
 	files=$*
     fi
     echo "Differences in directory $PWD and $dir"
