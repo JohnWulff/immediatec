@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.33 2001/01/03 18:46:35 jw Exp $";
+"@(#)$Id: comp.y,v 1.34 2001/01/06 14:55:58 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -12,6 +12,7 @@
 #include	<string.h>
 #include	<ctype.h>
 #include	<setjmp.h>
+#include	<assert.h>	/* QQQ */
 
 #include	"pplc.h"
 #include	"comp.h"
@@ -73,7 +74,8 @@ pu(int t, char * token, Lis * node)
     while (cp < ep) {
 	putc(*cp++, outFP);
     }
-	putc('\n', outFP);
+    putc('\n', outFP);
+    fflush(outFP);
 } /* pu */
 
 %}
@@ -184,20 +186,9 @@ aexpr	: expr			{
 	;
 
 wasgn	: WACT '=' aexpr	{
-		Lis	li1;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		if ($1.v->type != UDF && $1.v->type != ERR) {
-		    error("multiple assignment to imm bit:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		li1.v = op_force($3.v, ARITH);
-		li1.f = $3.f;	/* for op_asgn */
-		li1.l = $3.l;	/* for op_asgn */
-		$1.v->list = sy_push(li1.v->le_sym);	/* create back link */
-		li1.v = op_push((List_e *)0, UDF, li1.v);
-		li1.v->le_sym->type = ARN;		/* type <== ARN */
-		$$.v = op_asgn(&$1, &li1, OUTW);
+		$$.v = qw_asgn(&$1, &$3);
 	    }
 	;
 
@@ -271,6 +262,39 @@ expr	: UNDEF			{
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
+	| WACT		{
+		Lis		li;
+		$$.f = li.f = $1.f; $$.l = li.l = $1.l;
+		if ((li.v = $1.v->list) == 0) {
+		    Symbol *	sp;
+		    char	temp[100];
+		    short	saveDebug;
+		    static int	wtn;
+
+		    sprintf(temp, "_Wtemp%d", ++wtn);
+		    sp = install(temp, INPW, OUTX);	/* temporary _W symbol */
+		    li.v = sy_push(sp);			/* provide a link to _W */
+		    saveDebug = debug;
+		    if ((debug & 06) == 04) {
+			debug &= ~04;			/* supress listing output */
+		    }
+		    li.v = qw_asgn(&$1, &li)->list;
+		    li.v->le_sym->type = UDF;		/* not really defined yet */
+		    debug = saveDebug;			/* restore listing output */
+		    stmtp = $1.f;			/* fix WACT name */
+		    $$.f = li.f = $1.f =
+			stmtp += sprintf(stmtp, "_(%s)", li.v->le_sym->name);
+		    $$.l = li.l = $1.l = stmtp;
+		    unlink_sym(sp);			/* unlink _W symbol */
+		    free(sp->name);
+		    sy_pop(sp->list);
+		    free(sp);		/* free all references to W_ symbol */
+		}
+		$$.v = sy_push(li.v->le_sym);	/* output driver */
+		$$.v->le_val = li.v->le_val;	/* copy function number */
+		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		if (debug & 02) pu(1, "expr", &$$);
+	    }
 	| XACT		{
 		Lis		li;
 		$$.f = li.f = $1.f; $$.l = li.l = $1.l;
@@ -292,7 +316,7 @@ expr	: UNDEF			{
 		    debug = saveDebug;			/* restore listing output */
 		    unlink_sym(sp);			/* unlink _X symbol */
 		    free(sp->name);
-		    free(sp->list);
+		    sy_pop(sp->list);
 		    free(sp);		/* free all references to X_ symbol */
 		}
 		$$.v = sy_push(li.v->le_sym);	/* output driver */
@@ -303,18 +327,6 @@ expr	: UNDEF			{
 	| AVAR			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
-	    }
-	| WACT		{
-		register List_e *	lp;
-		$$.f = $1.f; $$.l = $1.l;
-		if ((lp = $1.v->list) != 0) {
-		    $$.v = sy_push(lp->le_sym);		/* output driver */
-		} else {
-		    /* output - modify later by applying generated macro */
-		    $$.v = sy_push($1.v);
-		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
