@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.25 2002/07/05 19:17:23 jw Exp $";
+"@(#)$Id: main.c,v 1.26 2002/08/05 19:57:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -114,9 +114,8 @@ extern	int	iCdebug;
 #define outFN	szNames[4]		/* C output file name */
 #define exiFN	szNames[5]		/* cexe input file name */
 #define excFN	szNames[6]		/* cexe C out file name */
-#define exoFN	szNames[7]		/* cexe output file name */
-char *		szNames[11] = {		/* matches return in compile */
-    	0, 0, 0, 0, 0, 0, 0, Tname, Cname, Hname, Lname,
+char *		szNames[] = {		/* matches return in compile */
+    INITIAL_FILE_NAMES
 };
 
 static FILE *	exiFP;			/* cexe in file pointer */
@@ -129,7 +128,18 @@ char * OutputMessage[] = {
     "%s: block count error\n",		/* [2] */
     "%s: link count error\n",		/* [3] */
     "%s: cannot open file %s\n",	/* [4] */
+    "%s: cannot open file %s in compile\n",	/* [5] */
+    "%s: cannot open file %s in output\n",	/* [6] */
 };
+
+FILE *	T1FP;
+FILE *	T2FP;
+FILE *	T3FP;
+    
+static char	T1FN[] = "ic1.XXXXXX";
+static char	T2FN[] = "ic2.XXXXXX";
+static char	T3FN[] = "ic3.XXXXXX";
+static char	T4FN[] = "ic4.XXXXXX";
 
 
 /********************************************************************
@@ -143,7 +153,9 @@ main(
     int		argc,
     char **	argv)
 {
-    int		r;		/* return value of compile */
+    int		fd;
+    int		r = 0;		/* return value of compile */
+    int		ro = 4;		/* output message index */
 
     /* Process the arguments */
     if ((progname = strrchr(*argv, '/')) == NULL) {
@@ -200,7 +212,6 @@ main(
 		    if (exiFN == 0) {
 			if (! *++*argv) { --argc, ++argv; }
 			outFN = *argv;	/* compiler output file name */
-			exoFN = Tname;
 			goto break2;
 		    } else {
 			fprintf(stderr,
@@ -259,23 +270,42 @@ main(
     debug &= 07777;			/* allow only cases specified */
     signal(SIGSEGV, quit);		/* catch memory access signal */	
     iFlag = 0;
+    
+    szNames[T1index] = T1FN;
+    szNames[T2index] = T2FN;
+    szNames[T3index] = T3FN;
+    szNames[T4index] = T4FN;
 
-    if ((r = compile(inpFN, listFN, errFN, outFN, exiFN, exoFN)) != 0) {
-	fprintf(stderr, OutputMessage[4], progname, szNames[r]);
+    if ((fd = mkstemp(T1FN)) < 0 ||
+	(T1FP = fdopen(fd, "w+")) == 0) {
+	r = T1index;			/* error opening temporary file */
+    } else if ((fd = mkstemp(T2FN)) < 0 ||
+	(T2FP = fdopen(fd, "w+")) == 0) {
+	r = T2index;			/* error opening temporary file */
+    } else if ((fd = mkstemp(T3FN)) < 0 ||
+	(T3FP = fdopen(fd, "w+")) == 0) {
+	r = T3index;			/* error opening temporary file */
+    } else if ((fd = mkstemp(T4FN)) < 0 ||
+	unlink(T4FN) < 0) {
+	fprintf(stderr, "cannot unlink %s\n", T4FN);
+	perror("unlink");
+	r = T4index;			/* error opening temporary file */
+    } else if ((r = compile(inpFN, listFN, errFN, outFN)) != 0) {
+	ro = 5;				/* compile error */
     } else {
 	Gate *		igp;
 	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
 
 	if ((r = listNet(gate_count)) == 0) {
 	    if (outFN == 0) {
-		if (exiFN != 0 && exoFP) {
-		    /* rewind intermediate file Tname */
-		    if (fseek(exoFP, 0L, SEEK_SET) != 0) {
-			r = 7;
+		if (exiFN != 0 && T1FP) {
+		    /* rewind intermediate file T1FN */
+		    if (fseek(T1FP, 0L, SEEK_SET) != 0) {
+			r = T1index;
 		    } else if ((excFP = fopen(excFN, "w")) == NULL) {
-			r = 6;
+			r = COindex;
 		    } else if ((exiFP = fopen(exiFN, "r")) == NULL) {
-			r = 5;
+			r = CIindex;
 		    } else {
 			unsigned	linecnt = 1;
 			char		lineBuf[256];
@@ -287,12 +317,11 @@ main(
 			    linecnt++;
 			}
 			/* copy C intermediate file up to EOF to C output file */
-			/* translate any ALIAS references of type '_(QB1_0)' */
-			copyXlate(exoFP, excFP, excFN, &linecnt, 01);
+			copyXlate(T1FP, excFP, excFN, &linecnt, 05);
 
 			/* rewind intermediate file Tname again */
-			if (fseek(exoFP, 0L, SEEK_SET) != 0) {
-			    r = 7;
+			if (fseek(T1FP, 0L, SEEK_SET) != 0) {
+			    r = T1index;
 			} else {
 			    /* copy C execution file Part 2 from remainder up to 'V' */
 			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
@@ -301,8 +330,7 @@ main(
 				linecnt++;
 			    }
 			    /* copy C intermediate file up to EOF to C output file */
-			    /* translate any ALIAS references of type '_(QB1_0)' */
-			    copyXlate(exoFP, excFP, excFN, &linecnt, 02);
+			    copyXlate(T1FP, excFP, excFN, &linecnt, 06);
 
 			    /* copy C execution file Part 3 from character after 'V 'up to EOF */
 			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
@@ -327,14 +355,19 @@ main(
 	    }
 	}
 	if (r != 0) {
-	    fprintf(stderr, OutputMessage[r < 4 ? r : 4], progname, szNames[r]);
+	    ro = 6;				/* error in output */
+	    fprintf(stderr, OutputMessage[r < 4 ? r : 6], progname, szNames[r]);
 	    r += 10;
+	    goto closeFiles;
 	}
     }
+    if (r != 0) {
+	fprintf(stderr, OutputMessage[ro], progname, szNames[r]);
+    }
+
+closeFiles: ;
     if (outFP != stdout) {
-#ifndef _WINDOWS
 	fclose(outFP);
-#endif
 	if (listFN && iFlag) {
 	    if (inversionCorrection() != 0) {
 		r += 100;
@@ -343,10 +376,22 @@ main(
 	}
     }
     if (errFP != stderr) fclose(errFP);
-    if (exoFP) {
-	fclose(exoFP);
-	if (exoFN && !(debug & 04000)) {
-	    unlink(Tname);
+    if (T1FP) {
+	fclose(T1FP);
+	if (!(debug & 04000)) {
+	    unlink(T1FN);
+	}
+    }
+    if (T2FP) {
+	fclose(T2FP);
+	if (!(debug & 04000)) {
+	    unlink(T2FN);
+	}
+    }
+    if (T3FP) {
+	fclose(T3FP);
+	if (!(debug & 04000)) {
+	    unlink(T3FN);
 	}
     }
     return (r);	/* 1 - 6 compile errors, 11 - 16 output errors, 1xx pplstfix error */
@@ -374,7 +419,7 @@ inversionCorrection(void)
 
     if ((debug & 04024) == 024) {	/* not suppressed, NET TOPOLOGY and LOGIC */
 	r = 1;
-	if (mkstemp(tempName)) {
+	if (mkstemp(tempName) >= 0) {
 	    unlink(tempName);		/* mktemp() is deemed dangerous */
 	    r = rename(listFN, tempName); /* inversion correction needed */
 	    if (r == 0) {

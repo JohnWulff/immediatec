@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.26 2002/07/30 15:36:48 jw Exp $";
+"@(#)$Id: comp.h,v 1.27 2002/08/05 20:14:58 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -50,19 +50,19 @@ typedef struct Token {		/* Token for gram.y grammar */
     Symbol *		symbol;
 } Token;
 
-extern int	compile( char *, char *,
-    char *, char *, char *, char *);	/* compile iC language source */
+extern int  compile(char *, char *,
+		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
 extern void error(char *, char *);	/* print error message */ 
 extern void warning(char *, char *);	/* print warning message */
-extern void execerror(char *, char *);	/* recover from run-time error */ 
+extern void execerror(char *, char *,
+		    char *, int);	/* recover from run-time error */
 extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 
 extern int	lineno;			/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
-extern FILE *	exoFP;			/* cexe out file pointer */
 extern char *	cexeString[];		/* case or function string */
 extern char *	inpNM;			/* original input file name */
 extern char *	stmtp;			/* pointer into iCbuf */
@@ -101,10 +101,30 @@ extern Symbol *	install( char *, unsigned char,
 extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 
 					/*   main.c   */
-#define Tname	"_cexe_.tmp"
 #define Cname	"_list_.c"	/* unusual, not to be used for application name */
-#define Hname	"_list1.h"
-#define Lname	"_list2.h"
+#define H1name	"_list1.h"
+#define H2name	"_list2.h"
+
+#define Iindex	1
+#define Eindex	2
+#define Lindex	3
+#define Oindex	4
+#define CIindex	5
+#define COindex	6
+#define Cindex	7
+#define H1index	8
+#define H2index	9
+#define T1index	10
+#define T2index	11
+#define T3index	12
+#define T4index	13
+
+#define INITIAL_FILE_NAMES 0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name, 0, 0, 0, 0,
+
+extern FILE *	T1FP;
+extern FILE *	T2FP;
+extern FILE *	T3FP;
+
 					/*   outp.c   */
 #define BUFS	128
 extern int	IEC1131(char * name, char * buf, int bufLen,
@@ -114,6 +134,8 @@ extern int	IEC1131(char * name, char * buf, int bufLen,
 extern int	listNet(unsigned * gate_count);	/* list generated network */
 extern int	buildNet(Gate ** igpp);	/* generate execution network */
 extern int	output(char *);		/* generate network as C file */
-extern void	copyXlate(FILE *, FILE *, char *, unsigned *, int);
+extern int	copyXlate(FILE *, FILE *, char *, unsigned *, int);
 					/*   lexc.l   */
 extern void	delete_sym(Token* tokp);
+					/*   gram.y   */
+extern void	copyAdjust(FILE* iFP, FILE* oFP);

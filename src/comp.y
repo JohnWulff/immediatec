@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.63 2002/07/29 09:29:43 jw Exp $";
+"@(#)$Id: comp.y,v 1.64 2002/08/05 10:35:38 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1250,8 +1250,8 @@ fexpr	: BLTIN3 '(' aexpr cref ')' {			/* DSR(expr); SHSR(expr) */
 	 ***********************************************************/
 
 ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
-		fprintf(exoFP, cexeString[outFlag], ++c_number);
-		fprintf(exoFP, "    if (_cexe_gf->gt_val < 0)\n");
+		fprintf(T1FP, cexeString[outFlag], ++c_number);
+		fprintf(T1FP, "    if (_cexe_gf->gt_val < 0)\n");
 	    }
 	  cBlock		{			/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
@@ -1266,7 +1266,7 @@ ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 	 *	if (expr,tim,delay) { C code }
 	 ***********************************************************/
 ffexpr	: ifini				{		/* if (expr) { x++; } */
-		fprintf(exoFP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
+		fprintf(T1FP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
 	    }
 	/************************************************************
 	 * if (aexpr[,(cexpr|texpr[,dexpr])]) { C code } else { C code }
@@ -1285,10 +1285,10 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 		sp = lp->le_sym;		/* master - currently ftype F_CF */
 		assert(sp);
 		sp->ftype = $2.v->ftype;	/* make it ftype F_CE from ELSE */
-		fprintf(exoFP, "    else\n");
+		fprintf(T1FP, "    else\n");
 	    }
 	  cBlock			{		/* { x--; } */
-		fprintf(exoFP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
+		fprintf(T1FP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
 	    }
 	/************************************************************
 	 * switch (aexpr[,(cexpr|texpr[,dexpr])]) { C switch code }
@@ -1298,12 +1298,12 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	 *	switch (expr,tim,delay) { C switch code }
 	 ***********************************************************/
 	| SWITCH '(' aexpr cref ')'	{		/* switch (expr) { case ...; } */
-		fprintf(exoFP, cexeString[outFlag], ++c_number);
-		fprintf(exoFP, "    switch (_cexe_gf->gt_new)\n");
+		fprintf(T1FP, cexeString[outFlag], ++c_number);
+		fprintf(T1FP, "    switch (_cexe_gf->gt_new)\n");
 	    }
 	  cBlock		{			/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
-		fprintf(exoFP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
+		fprintf(T1FP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
 	    }
 	;
 
@@ -1545,8 +1545,9 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 
 funct	: UNDEF '(' params ')'	{
 		$$.f = $1.f; $$.l = $4.l;
-		assert($1.f[0] == '_' && $1.f[1] == '(' && $1.l[-1] == ')');
-		$1.f[0] = $1.f[1] = $1.l[-1] = '#';
+	    				/* CHECK if iCbuf changes now _() is missing */
+//		assert($1.f[0] == '_' && $1.f[1] == '(' && $1.l[-1] == ')');
+//		$1.f[0] = $1.f[1] = $1.l[-1] = '#';
 		if (lookup($1.v->name)) {	/* may be unlinked in same expr */
 		    unlink_sym($1.v);		/* unlink Symbol from symbol table */
 		    free($1.v->name);
@@ -1621,7 +1622,6 @@ char *		inpNM = "stdin";	/* original input file name */
 FILE *		inFP = 0;		/* input file pointer - stdin default */
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
-FILE *		exoFP;			/* cexe out file pointer */
 
 /********************************************************************
  *
@@ -1644,19 +1644,14 @@ compile(
     char *	inpPath,		/* input file path */
     char *	lstNM,			/* list file name */
     char *	errNM,			/* error file name */
-    char *	outNM,			/* C output file name */
-    char *	exiNM,			/* cexe input file name */
-    char *	exoNM)			/* cexe C output file name */
+    char *	outNM)			/* C output file name */
 {
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
-	return 3;
+	return Lindex;
     }
     errFilename = errNM;		/* open on first error */
     if (inpPath && (inFP = fopen(inpNM = inpPath, "r")) == NULL) {
-	return 1;
-    }
-    if ((exoFP = fopen(exoNM, "w+")) == NULL) {
-	return 7;
+	return Iindex;
     }
     outFlag = outNM != 0;	/* global flag for compiled output */
     init();		/* initialise symbol table */
@@ -1745,9 +1740,9 @@ iClex(void)
 
     if (ccfrag) {
 	if (ccfrag == '%') {
-	    fprintf(exoFP, "%%{\n");	/* output "%{\n" now */
+	    fprintf(T1FP, "%%{\n");	/* output "%{\n" now */
 	}
-	fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
+	fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
 	unget('{');
 	if (copyCfrag('{', ccfrag == '%' ? '%' : ';', '}') == 0) {
 	    ccfrag = 0;
@@ -1867,8 +1862,9 @@ iClex(void)
 		symp = lp->le_sym;		/* original via backptr */
 	    }
 	    iClval.sym.f = stmtp;	/* original name for expressions */
+	    				/* CHECK if iCbuf changes now _() is missing */
 	    if ((len = snprintf(stmtp, rest = &iCbuf[IMMBUFSIZE] - stmtp,
-				"_(%s)", symp->name)) < 0 || len >= rest) {
+				"%s", symp->name)) < 0 || len >= rest) {
 		iCbuf[IMMBUFSIZE-1] = '\0';
 		len = rest - 1;			/* text + NUL which fits */
 		error("statement too long at: ", symp->name);
@@ -2025,18 +2021,18 @@ errLine(void)			/* error file not openend if no errors */
 	    if ((errFP = fopen(errFilename, "w+")) == NULL) {
 		errFilename = 0;	/* cannot open errFilename */
 		errFP = stderr;		/* just output to stderr */
-		errRet = 2;		/* error return for compile() */
+		errRet = Eindex;	/* error return for compile() */
 	    } else {
 		errFlag = 1;		/* there is an error file */
-		fprintf(errFP, "******* %-15s ************************\n", inpNM);
 	    }
 	}
 	if (outFP != stdout) {
-	    errFlag = 1;		/* listing is not to stdout */
+	    errFlag = 1;		/* errors to errFilename or stderr */
 	    if (!(debug & 016)) {	/* no source listing in debugging output */
 		fprintf(outFP, "******* %-15s ************************\n", inpNM);
 	    }
 	}
+	if (errFlag) fprintf(errFP, "******* %-15s ************************\n", inpNM);
     }
     if (lineno != errline) {
 	errline = lineno;		/* dont print line twice */
@@ -2108,9 +2104,17 @@ errInt(void)
 void
 execerror(			/* recover from run-time error */
     char *	str1,
-    char *	str2)
+    char *	str2,
+    char *	file,
+    int		line)
 {
     errmess("Execerror", str1, str2);
+    fprintf(outFP, "in source file: %s line %d\n", file, line);
+    fflush(outFP);
+    if (errFlag) {
+	fprintf(errFP, "in source file: %s line %d\n", file, line);
+	fflush(errFP);
+    }
     fseek(inFP, 0L, 2);	/* flush rest of file */
     longjmp(begin, 0);
 } /* execerror */
@@ -2162,7 +2166,7 @@ iCerror(char *	s)		/* called for yacc syntax error */
 
 /********************************************************************
  *
- *	Copy a C fragment to exoFP for an lBlock and a cBlock
+ *	Copy a C fragment to T1FP for an lBlock and a cBlock
  *	when yacc token CCFRAG is recognised in iClex()
  *
  *******************************************************************/
@@ -2189,7 +2193,7 @@ copyCfrag(char s, char m, char e)
 		return m;		/* no longer used */
 	    } else if (brace == 1 && c == '%') {
 		if ((c = get()) == '}') {
-		    fprintf(exoFP, "\n%%##\n\n%%}\n");	/* #line lineno "outNM"\n%} */
+		    fprintf(T1FP, "\n%%##\n\n%%}\n");	/* #line lineno "outNM"\n%} */
 		    unget(c);
 		    return m;
 		}
@@ -2200,27 +2204,27 @@ copyCfrag(char s, char m, char e)
 	    if (--brace <= 0) {
 		/* ZZZ fix lineno and name */
 		if (brace == 0 && c == '}') {
-		    putc(c, exoFP);	/* output '}' */
+		    putc(c, T1FP);	/* output '}' */
 		}
-		fprintf(exoFP, "\n%%##\n");	/* #line lineno "outNM" */
+		fprintf(T1FP, "\n%%##\n");	/* #line lineno "outNM" */
 		unget(c);		/* should not return without '}' */
 		return e;
 	    }
 	} else switch (c) {
 
 	case '/':			/* look for comments */
-	    putc(c, exoFP);
+	    putc(c, T1FP);
 	    if ((c = get()) == '/') {
 		do {			/* start C++ style comment */
-		    putc(c, exoFP);
+		    putc(c, T1FP);
 		    if ((c = get()) == EOF) goto eof_error;
 		} while (c != '\n');
 	    } else if (c == '*') {
 		do {			/* start C style comment */
-		    putc(c, exoFP);
+		    putc(c, T1FP);
 		    while (c != '*') {
 			if ((c = get()) == EOF) goto eof_error;
-			putc(c, exoFP);
+			putc(c, T1FP);
 		    }
 		} while ((c = get()) != '/');
 	    } else {
@@ -2236,20 +2240,20 @@ copyCfrag(char s, char m, char e)
 	    match = '"';
 
 	string:
-	    putc(c, exoFP);
+	    putc(c, T1FP);
 	    while ((c = get()) != match) {
 		if (c == '\\') {
-		    putc(c, exoFP);
+		    putc(c, T1FP);
 		    if ((c = get()) == EOF) goto eof_error;
 		} else if (c == '\n') {
 		    iCleng = 1;		/* error pointer at newline */
 		    iCerror("C code: newline in \" \" or ' ', error");
 		} else if (c == EOF)  goto eof_error;
-		putc(c, exoFP);
+		putc(c, T1FP);
 	    }
 	    break;
 	}
-	putc(c, exoFP);			/* output to cexe.tmp */
+	putc(c, T1FP);			/* output to cexe.tmp */
     }
 eof_error:
     iCleng = 1;				/* error pointer at EOF */

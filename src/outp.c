@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.52 2002/08/01 12:46:31 jw Exp $";
+"@(#)$Id: outp.c,v 1.53 2002/08/05 20:48:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -508,8 +508,8 @@ output(char * outfile)
     int		li;		/* link index into connection list */
     int		lc;		/* link count in connection list */
     FILE *	Fp;		/* C output file */
-    FILE *	Hp;		/* list _list_.c + header _list1.h */
-    FILE *	Lp;		/* list header _list2.h */
+    FILE *	H1p;		/* list _list_.c + header _list1.h */
+    FILE *	H2p;		/* list header _list2.h */
     char *	s1;
     char *	module;
     unsigned	linecnt = 1;
@@ -518,38 +518,32 @@ output(char * outfile)
     /* open output file */
 
     if ((Fp = fopen(outfile, "w")) == 0) {
-	rc = 4; goto end;
+	rc = Oindex; goto end;
     }
 
-    if ((Lp = fopen(Lname, aflag ? "a" : "w")) == 0) {	/* list header _list2.h */
-	rc = 10; goto endl;
+    if ((H2p = fopen(H2name, aflag ? "a" : "w")) == 0) {	/* list header _list2.h */
+	rc = H2index; goto endl;
     }
 
     if (aflag == 0) {
-	fprintf(Lp, "#define	I_LIST\\\n");		/* list header _list2.h */
+	fprintf(H2p, "#define	I_LIST\\\n");		/* list header _list2.h */
 
 	/* write _list_.c once, so that it is locally present */
-	if ((Hp = fopen(Cname, "w")) == 0) {		/* list _list_.c */
-	    rc = 8; goto endh;
+	if ((H1p = fopen(Cname, "w")) == 0) {		/* list _list_.c */
+	    rc = Cindex; goto endh;
 	}
-	fprintf(Hp, "\
+	fprintf(H1p, "\
 #include	<stdio.h>\n\
 #include	<icc.h>\n\
 #include	\"%s\"\n\
 #include	\"%s\"\n\
 Gate **		i_list[] = { I_LIST 0 };\n\
-", Hname, Lname);					/* list _list_.c */
-	fclose(Hp);					/* list _list_.c */
+", H1name, H2name);					/* list _list_.c */
+	fclose(H1p);					/* list _list_.c */
     }
 
-    if ((Hp = fopen(Hname, aflag ? "a" : "w")) == 0) {	/* header _list1.h */
-	rc = 9; goto endh;
-    }
-
-    /* rewind intermediate file */
-
-    if (fseek(exoFP, 0L, SEEK_SET) != 0) {
-	rc = 7; goto endm;
+    if ((H1p = fopen(H1name, aflag ? "a" : "w")) == 0) {	/* header _list1.h */
+	rc = H1index; goto endh;
     }
 
     fprintf(Fp, "\
@@ -580,8 +574,8 @@ static char	COMPILER[] =\n\
 #define _LA(x,v) lAssign(&x, v)\n\
 #endif\n\
 extern Gate *	l_[];\n\
-", inpNM, outfile, SC_ID, Hname);
-linecnt += 21;
+", inpNM, outfile, SC_ID, H1name);
+linecnt += 27;
 
 /********************************************************************
  *
@@ -678,7 +672,7 @@ linecnt += 21;
 		    errorEmit(Fp, errorBuf, &linecnt);
 		} else if (sp->ftype == ARITH) {
 		    if (aliasArithFlag == 0) {
-			fprintf(Hp, "#define ALIAS_ARITH\n");	/* header _list1.h */
+			fprintf(H1p, "#define ALIAS_ARITH\n");	/* header _list1.h */
 			aliasArithFlag = 1;
 		    }
 		} else if (sp->ftype != GATE && sp->ftype != CLCKL && sp->ftype != TIMRL) {
@@ -920,16 +914,14 @@ linecnt += 21;
     linecnt += 7;
 
     /* copy C intermediate file up to EOF to C output file */
-    /* translate any ALIAS references of type '_(QB1_0)' */
+    /* translate any imm variables and ALIAS references of type 'QB1_0' */
 
-    copyXlate(exoFP, Fp, outfile, &linecnt, 01);	/* copy literal blocks */
-
-    /* rewind intermediate file */
-    if (fseek(exoFP, 0L, SEEK_SET) != 0) {
-	rc = 7; goto endm;
+    if ((rc = copyXlate(T1FP, Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
+	goto endm;
     }
-
-    copyXlate(exoFP, Fp, outfile, &linecnt, 02);	/* copy functions */
+    if ((rc = copyXlate(T1FP, Fp, outfile, &linecnt, 02)) != 0) { /* copy functions */
+	goto endm;
+    }
 
 /********************************************************************
  *
@@ -983,8 +975,8 @@ linecnt += 21;
     }
     fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
     linecnt += 2;
-    fprintf(Hp, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
-    fprintf(Lp, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
+    fprintf(H1p, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
+    fprintf(H2p, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
 
 /********************************************************************
@@ -1124,9 +1116,9 @@ endm:
     if (debug & 040) {
 	fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", outfile, linecnt-1);
     }
-    fclose(Hp);	/* close the header file in case other actions */
+    fclose(H1p);	/* close the header file in case other actions */
 endh:
-    fclose(Lp);	/* close the list header file in case other actions */
+    fclose(H2p);	/* close the list header file in case other actions */
 endl:
     fclose(Fp);	/* close the C output file in case other actions */
 end:
@@ -1135,10 +1127,8 @@ end:
 
 /********************************************************************
  *
- *	copy C intermediate file up to EOF to C output file translate
- *	any ALIAS references of type '_(abcd0)' or '_(QB10_0)'.
- *	Any arithmetic variable name may be an ALIAS and must
- *	be resolved.
+ *	copy C intermediate file up to EOF to C output file.
+ *	Translate any ALIAS references as part of C compile phase.
  *
  *	mode 01         Copy only literal blocks %{ ... %}
  *	mode 02 default Copy only C blocks, functions or cases
@@ -1152,25 +1142,26 @@ end:
  * %#define
  * %#ifdef etc
  *
+ * lines starting with %## will be replaced by #line nn "fn"
+ * where nn is the following line number and fn the name of the iC file
+ * NOTE: this line must be shorter than BUFS (currently 128).
+ *       since %## is generated in the earlier code this should be OK
+ *
  *******************************************************************/
 
-void
-copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
+static int
+copyBlocks(FILE * iFP, FILE * oFP, int mode)
 {
     int		c;
     int		mask = 02;	/* default is functions or cases */
     int		lf = 0;		/* set by first non white space in a line */
-    Symbol *	sp;
-    char	lineBuf[256];
-    char	buffer[BUFS];
     char *	lp;
-    char *	bp;
-    char	modified[BUFS];	/* buffer for modified names */
-    char	iqt[2];		/* char buffers - space for 0 terminator */
-    char	bwx[2];
-    int		byte;
-    int		bit;
-    char	tail[8];	/* compiler generated suffix _123456 max */
+    char	lineBuf[BUFS];	/* can be smaller than a line */
+
+    /* rewind intermediate file */
+    if (fseek(iFP, 0L, SEEK_SET) != 0) {
+	return T1index;
+    }
 
     while (fgets(lineBuf, sizeof lineBuf, iFP)) {
 	if (strcmp(lineBuf, "%{\n") == 0) {
@@ -1182,66 +1173,95 @@ copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
 		if (lf || c != '%' || *lp != '#') {	/* converts %# to # */
 		    putc(c, oFP);
 		    if (c == '\n') {
-			(*lcp)++;		/* count lines actually output */
 			lf = 0;			/* start of a new line */
 		    } else if (c != ' ' && c != '\t') {
 			lf = 1;			/* not white space */
-			if (c == '_') {
-			    if ((c = *lp++) == '(') {
-				putc(c, oFP);
-				/* accept any token which might be in the symbol table */
-				bp = buffer;
-				while ((c = *lp++) != 0 &&
-				    bp < &buffer[BUFS] &&
-				    (isalnum(c) || c == '_')) {
-				    *bp++ = c;
-				}
-				*bp = '\0';	/* terminate string */
-				if (c == ')') {
-				    /* token found - xlate it */
-				    /* modify IXx__x etc to IXx.x */
-				    toIEC1131(buffer, modified, BUFS, iqt, bwx, &byte, &bit, tail);
-				    if ((sp = lookup(modified)) != 0) {
-					while (sp->type == ALIAS) {
-					    if (sp->ftype != ARITH) {
-						snprintf(errorBuf, sizeof errorBuf,
-						    "copyXlate: @'%s' not ARITH",
-						    sp->name);
-						errorEmit(oFP, errorBuf, lcp);
-					    }
-					    sp = sp->list->le_sym;	/* resolve ALIAS */
-					}
-					IEC1131(sp->name, modified, BUFS, iqt, bwx, &byte, &bit, tail);
-					fputs(modified, oFP);
-					putc(c, oFP);	/* ')' */
-					if (sp->ftype != ARITH) {
-					    snprintf(errorBuf, sizeof errorBuf,
-						"copyXlate: '%s' not ARITH but ftype %s",
-						sp->name, full_ftype[sp->ftype]);
-					    errorEmit(oFP, errorBuf, lcp);
-					}
-				    } else {
-					fputs(buffer, oFP);
-					putc(c, oFP);	/* ')' */
-					snprintf(errorBuf, sizeof errorBuf,
-					    "copyXlate: '%s' not in symbol table ???",
-					    buffer);
-					errorEmit(oFP, errorBuf, lcp);
-				    }
-				} else {
-				    fputs(buffer, oFP);	/* strange but true */
-				    putc(c, oFP);	/* char after buffer */
-				}
-			    } else {
-				putc(c, oFP);	/* char after '_' */
-			    }
-			}
 		    }
-		} else if (*(lp + 1) == '#') {
-		    while (*lp++ != '\n');	/* %##...\n */
-		    fprintf(oFP, "#line %d \"%s\"\n", ++(*lcp), outfile);
 		}
 	    }
 	}
     }
+    return 0;
+} /* copyBlocks */
+
+/********************************************************************
+ *
+ *	mode 01         Copy only literal blocks %{ ... %}
+ *	mode 02 default Copy only C blocks, functions or cases
+ *	mode 03         Copy literal blocks and C blocks
+ *
+ *	mode 05         Copy only literal blocks %{ ... %} for cexe.c
+ *	mode 06 default Copy only C blocks, functions or cases for cexe.c
+ *
+ * To handle immediate variables in C code, the output of the first
+ * two passes of copyBlocks is seperated by a line containing
+ * ## in C comment delimiters
+ * and output to T2FP.
+ *
+ * Then this code is parsed by the C compiler and afterwards split on
+ * ## in comments and output to oFP
+ *
+ *******************************************************************/
+
+extern FILE* yyin;
+extern FILE* yyout;
+
+int
+copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
+{
+    int		mask = 01;			/* copy literal blocks */
+    char	lineBuf[BUFS];	/* can be smaller than a line */
+
+fprintf(stderr, "copyXlate: start Pass %d\n", mode); fflush(stderr);
+    if (mode & 01) {
+	if (copyBlocks(iFP, T2FP, 01)) {
+	    return T1index;
+	}
+	if (mode & 04) {
+	    fprintf(T2FP, "/*##*/int c_exec(int pp_index) { switch (pp_index) {\n");
+	}
+	if (copyBlocks(iFP, T2FP, 02)) {
+	    return T1index;
+	}
+	if (mode & 04) {
+	    fprintf(T2FP, "/*##*/}}\n");
+	}
+
+fprintf(stderr, "copyXlate: start compile\n"); fflush(stderr);
+	/* rewind intermediate file */
+	if (fseek(T2FP, 0L, SEEK_SET) != 0) {
+	    return T2index;
+	}
+
+	yyin = T2FP;
+//##	yyout = T3FP;		/* ZZZ should be list file */
+	copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
+	if (c_parse() != 0) {
+fprintf(stderr, "copyXlate: Parse error\n"); fflush(stderr);
+	}
+fprintf(stderr, "copyXlate: end compile\n"); fflush(stderr);
+	rewind(yyin);
+	copyAdjust(yyin, T3FP);
+    }
+
+    /* rewind intermediate file */
+    if (fseek(T3FP, 0L, SEEK_SET) != 0) {
+	return T3index;
+    }
+
+    while (fgets(lineBuf, sizeof lineBuf, T3FP)) {
+	if (strncmp(lineBuf, "/*##*/", 6) == 0) {
+	    mask = 02;				/* copy functions or cases */
+	} else if (mode & mask) {
+	    (*lcp)++;				/* count lines actually output */
+	    if (strcmp(lineBuf, "##\n") == 0) {
+		fprintf(oFP, "#line %d \"%s\"\n", *lcp, outfile);
+	    } else {
+		fputs(lineBuf, oFP);
+	    }
+	}
+    }
+
+fprintf(stderr, "copyXlate: end Pass %d\n", mode); fflush(stderr);
+    return 0;
 } /* copyXlate */

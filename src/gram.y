@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.4 2002/08/03 16:47:17 jw Exp $";
+"@(#)$Id: gram.y,v 1.5 2002/08/05 20:31:40 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -89,6 +89,12 @@ static Symbol	typedefSymbol = { "typedef", UDF, UDFA, };
 
 %start file
 %%
+
+/********************************************************************
+ *
+ *	start of C grammar
+ *
+ *******************************************************************/
 
 primary_expr
 	: identifier {
@@ -1712,6 +1718,12 @@ imm_identifier
 	    yyclearin; yyerrok;
 	}
 	;
+
+/********************************************************************
+ *
+ *	end of C grammar
+ *
+ *******************************************************************/
 %%
 
 extern char yytext[];
@@ -1796,12 +1808,24 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, int 
     yyerror(" ERROR (%u, %u, %d)", start, end, type);
 } /* immAssignFound */
 
+/********************************************************************
+ *
+ *	pushEndStack
+ *
+ *******************************************************************/
+
 static unsigned int
 pushEndStack(unsigned int value)
 {
     assert(esp < &endStack[ENDSTACKSIZE]);
     return *esp++ = value;
 } /* pushEndStack */
+
+/********************************************************************
+ *
+ *	popEndStack
+ *
+ *******************************************************************/
 
 static unsigned int
 popEndStack(void)
@@ -1810,10 +1834,19 @@ popEndStack(void)
     return *--esp;
 } /* popEndStack */
 
-static char*	text[] = { "LV(", "AV(", "LA(", "AA(", };
+static char*	text[] = { "_LV(", "_AV(", "_LA(", "_AA(", };
+
+/********************************************************************
+ *
+ *	copyAdjustFile
+ *
+ *	use the byte postions stored in lineEntryArray to insert
+ *	to insert macro brackets for immediate variables and assignments
+ *
+ *******************************************************************/
 
 void
-copyAdjust(FILE* fp)
+copyAdjust(FILE* iFP, FILE* oFP)
 {
     int			c;
     LineEntry*		p       = lineEntryArray + 1;
@@ -1825,20 +1858,20 @@ copyAdjust(FILE* fp)
     lep++->start = LARGE;		/* guard value in case first immVarFound(0) */
     lep->start   = LARGE;		/* value overwritten by first immVarfound */
 
-    if (fp == NULL) {
+    if (iFP == NULL) {
 	return;				/* initialize lineEntryArray */
     }
 
-    while ((c = getc(fp)) != EOF) {
+    while ((c = getc(iFP)) != EOF) {
 	while (bytePos >= end) {
-	    putchar(')');		/* end found - output end */
+	    putc(')', oFP);		/* end found - output end */
 	    end = popEndStack();
 	}
 	if (bytePos >= start) {
 	    pushEndStack(end);		/* push previous end */
 	    op    = p->op;		/* operator in this entry */
 	    end   = p->end;		/* end of this entry */
-	    printf(text[p->type]);	/* entry found - output start */
+	    fprintf(oFP, text[p->type]);	/* entry found - output start */
 	    p++;
 	    assert(start < p->start);
 	    start = p->start;		/* start of next entry */
@@ -1847,7 +1880,7 @@ copyAdjust(FILE* fp)
 	    assert(c == '=');
 	    c = ',';			/* replace '=' by ',' */
 	}
-	putchar(c);
+	putc(c, oFP);
 	bytePos++;
     }
 } /* copyAdjust */

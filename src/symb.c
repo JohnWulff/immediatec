@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.10 2002/07/29 10:31:31 jw Exp $";
+"@(#)$Id: symb.c,v 1.11 2002/08/05 12:00:52 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -91,21 +91,21 @@ emalloc(unsigned	nbytes)	/* check return from malloc */
     GLOBALHANDLE		hglobal;
 
     if ((hglobal = GlobalAlloc(GMEM_FIXED | GMEM_ZEROINIT, nbytes)) == 0) {
-	execerror("out of memory", (char *) 0);	/* ZZZ */
+	execerror("out of memory", NS, __FILE__, __LINE__);
     }
     bp = GlobalLock(hglobal);		/* actual pointer */
 #else
     LOCALHANDLE		hlocal;
 
     if ((hlocal = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, nbytes)) == 0) {
-	execerror("out of memory", (char *) 0);	/* ZZZ */
+	execerror("out of memory", NS, __FILE__, __LINE__);
     }
     bp = LocalLock(hlocal);		/* actual pointer */
 #endif
 #else
 
     if ((bp = malloc(nbytes)) == NULL) {
-//#	execerror("out of memory", NULL);
+//# FIX when lmain complete	execerror("out of memory", NS, __FILE__, __LINE__);
     }
 #endif
     memset(bp, 0, nbytes);	/* when free() is used memory can be non zero */

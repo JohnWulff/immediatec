@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.25 2002/07/29 13:04:13 jw Exp $
+# @(#)$Id: Makefile.in,v 1.26 2002/08/05 17:25:47 jw Exp $
 
 ############################################################
 #
@@ -67,7 +67,7 @@ SHELL = /bin/sh
 
 ###########################################################
 
-COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) cexe.$(O)
+COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) cexe.$(O) gram.$(O) lexc.$(O)
 POBJ =	link.$(O) rsff.$(O) scan.$(O)
 
 #### Standalone versions ###################################

@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.3 2002/08/01 13:47:03 jw Exp $";
+"@(#)$Id: lmain.c,v 1.4 2002/08/05 20:16:24 jw Exp $";
 /********************************************************************
  *
  *	simple driver for MKS yacc
@@ -25,8 +25,6 @@ static const char *	usage =
 "        -h              this help text\n"
 "Copyright (C) 1985-2002 John E. Wulff     <john@je-wulff.de>\n"
 "%s\n";
-
-extern void copyAdjust(FILE* fp);
 
 FILE *	yyin;
 FILE *	yyout;
@@ -105,7 +103,10 @@ main(
 	return -1;
     }
 
-    copyAdjust(NULL);			/* initialize lineEntryArray */
+    if (lookup("Gate") == 0) {
+	install("Gate", CTYPE, UDFA);
+    }
+    copyAdjust(NULL, stdout);		/* initialize lineEntryArray */
 //    for (; c_parse();) {
 //	;
 //    }
@@ -125,7 +126,7 @@ main(
 	}
 #endif
 	rewind(yyin);
-	copyAdjust(yyin);
+	copyAdjust(yyin, stdout);
     }
     return r;
 } /* main */

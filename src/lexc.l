@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.4 2002/08/03 13:49:37 jw Exp $";
+"@(#)$Id: lexc.l,v 1.5 2002/08/05 12:35:34 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -48,6 +48,7 @@ IS			(u|U|l|L)
 
 static int	c_comment(c_STYPE* u);
 static int	cpp_comment(c_STYPE* u);
+static int	preprocess(c_STYPE* u);
 static int	ignore(c_STYPE* u);
 static void	count(c_STYPE* u);
 static int	check_type(c_STYPE* u);
@@ -56,6 +57,7 @@ static int	check_type(c_STYPE* u);
 %%
 "/*"			{ if (c_comment(&c_lval)) yyterminate(); }
 "//"			{ if (cpp_comment(&c_lval)) yyterminate(); }
+^[ \t]*#		{ if (preprocess(&c_lval)) yyterminate(); }
 
 "auto"			{ count(&c_lval); return AUTO; }
 "break"			{ count(&c_lval); return BREAK; }
@@ -243,6 +245,35 @@ cpp_comment(c_STYPE* u)
     } while (c != '\n');
     column = 0;
     gramLine++;
+    return 0;
+} /* cpp_comment */
+
+/********************************************************************
+ *
+ *	Pre-processor line - more lines if last character is '\'
+ *
+ *******************************************************************/
+
+static int
+preprocess(c_STYPE* u)
+{
+    char c;
+    char prev = 0;
+
+    count(u);			/* count and ECHO "#" */
+
+    do {			/* pre processeor line */
+	do {
+	    prev = c;
+	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
+	    gramOffset++;
+#if YYDEBUG
+	    if (debug & 010) putc(c, yyout);
+#endif
+	} while (c != '\n');
+	column = 0;
+	gramLine++;
+    } while (prev == '\\');
     return 0;
 } /* cpp_comment */
 

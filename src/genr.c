@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.50 2002/07/07 09:25:12 jw Exp $";
+"@(#)$Id: genr.c,v 1.51 2002/08/05 10:40:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -219,8 +219,7 @@ op_push(			/* reduce List_e stack to links */
 		    while (tsp->next != lsp) {
 			tsp = tsp->next;
 			if (tsp == 0) {
-			    fprintf(outFP, "%s: line %d\t", __FILE__,__LINE__);
-			    execerror("left temp not found ???\n", NS);
+			    execerror("left temp not found ???\n", NS, __FILE__, __LINE__);
 			}
 		    }
 		    tsp->next = lsp->next;		/* unlink lsp from templist */
@@ -363,12 +362,10 @@ op_not(List_e * right)		/* logical negation */
 	    break;			/* if assigned immediately */
 	case INPW:
 	case INPX:
-	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
-	    execerror("INPUT has other inputs in op_not() ???", sp->name);
+	    execerror("INPUT has other inputs in op_not() ???", sp->name, __FILE__, __LINE__);
 	    break;
 	default:
-	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
-	    execerror("negation of non-logical value attempted", sp->name);
+	    execerror("negation of non-logical value attempted", sp->name, __FILE__, __LINE__);
 	    break;
 	}
     }
@@ -459,9 +456,8 @@ op_asgn(				/* asign List_e stack to links */
 	    }
 	    right->le_val ^= rsp->list->le_val;
 	    if (!(rsp = rsp->list->le_sym)) {
-		fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
 		execerror("ALIAS points to nothing ???",
-		right->le_sym->name);
+		right->le_sym->name, __FILE__, __LINE__);
 	    }
 	    right->le_sym = rsp;
 	}
@@ -489,8 +485,7 @@ op_asgn(				/* asign List_e stack to links */
 		os[var->type & TM], var->name);
 	}
 	if (sv == 0) {
-	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
-	    execerror("ALIAS points to temp ???", var->name);
+	    execerror("ALIAS points to temp ???", var->name, __FILE__, __LINE__);
 	} else {
 	    t_first = sv->f; t_last = sv->l;	/* full text of var */
 	    while (t_first && t_first < t_last) {
@@ -505,9 +500,8 @@ op_asgn(				/* asign List_e stack to links */
 	while (rsp != sp->next) {
 	    if ((sp = sp->next) == 0) {			/* DEBUG */
 	      FailTemplist:
-		fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
 		execerror("right->le_sym not found in templist ???",
-		    right->le_sym->name);
+		    right->le_sym->name, __FILE__, __LINE__);
 	    }
 	}
 	sp->next = rsp->next;	/* link tail to head in front of rsp */
@@ -705,10 +699,11 @@ op_asgn(				/* asign List_e stack to links */
 		    }
 		    t_first++;
 		}
-		if (debug & 04) fprintf(outFP, "_(%s)", gp->name);
+		if (debug & 04) fprintf(outFP, "%s", gp->name);
 		/* modify numbers, IXx.x and QXx.x names for compiled output only */
+	    				/* CHECK if ep changes now _() is missing */
 		IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
-		ep += sprintf(ep, "_(%s)", buffer);
+		ep += sprintf(ep, "%s", buffer);
 		t_first = lp->le_last;	/* skip logic expr's */
 	    }
 	    if (debug & 04) {
@@ -731,10 +726,10 @@ op_asgn(				/* asign List_e stack to links */
 	    *ep++ = 0;
 						/* start case or function */
 	    if (sp->ftype != OUTW) {	/* output cexe function */
-		fprintf(exoFP, cexeString[outFlag], ++c_number);
-		fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
-		fprintf(exoFP, "	return %s;\n", eBuf);
-		fprintf(exoFP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
+		fprintf(T1FP, cexeString[outFlag], ++c_number);
+		fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
+		fprintf(T1FP, "	return %s;\n", eBuf);
+		fprintf(T1FP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
 		if (debug & 04) fprintf(outFP, "; (%d)\n", c_number);
 	    }
 	}
@@ -810,8 +805,7 @@ op_asgn(				/* asign List_e stack to links */
     if (sv == 0) {
 	lp = sr->list;			/* link action to temp */
 	if (lp->le_sym != var || lp->le_next) {
-	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
-	    execerror("error in unlinking temp:", var->name);
+	    execerror("error in unlinking temp:", var->name, __FILE__, __LINE__);
 	}
 	lp->le_sym = 0;			/* erase reference to temp */
 #ifdef YYDEBUG
