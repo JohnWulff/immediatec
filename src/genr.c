@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.14 2000/12/26 22:14:06 jw Exp $";
+"@(#)$Id: genr.c,v 1.15 2000/12/28 15:17:18 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -62,6 +62,7 @@ sy_push(register Symbol * var)	/* create List element for variable */
 #ifdef YYDEBUG
     if (debug & 02) {
 	fprintf(outFP, "++%s\n", var->name);
+	fflush(outFP);
     }
 #endif
     return (lp);	/* return pointer to List_e to yacc */
@@ -83,6 +84,7 @@ sy_pop(register List_e * lp)	/* delete List element left over */
 #ifdef YYDEBUG
     if (debug & 02) {
 	fprintf(outFP, "  %s--\n", sp->name);
+	fflush(outFP);
     }
 #endif
     return (sp);	/* return pointer to Symbol to yacc */
@@ -102,7 +104,7 @@ op_force(		/* force linked Symbol to correct ftype */
     register Symbol *	sp;
     register List_e *	lp1;
 
-    while (lp && (sp = lp->le_sym)->ftype != ftyp) {
+    if (lp && (sp = lp->le_sym)->ftype != ftyp) {
 	if (sp->u.blist == 0 ||			/* not a $ symbol or */
 	    sp->type >= MAX_GT ||		/* SH, FF, EF, VF, SW, CF or */
 	    sp->u.blist->le_sym == sp && sp->type == LATCH) { /* L(r,s) */
@@ -116,10 +118,10 @@ op_force(		/* force linked Symbol to correct ftype */
 	if (debug & 02) {
 	    fprintf(outFP, "\tforce %s from %s to %s\n",
 		sp->name, full_ftype[sp->ftype], full_ftype[ftyp]);
+	    fflush(outFP);
 	}
 #endif
 	sp->ftype = ftyp;	/* convert old or new to ftyp */
-	break;
     }
     return (lp);	/* return 0 or link to old or new Symbol */
 } /* op_force */
@@ -183,7 +185,9 @@ op_push(			/* reduce List_e stack to links */
 	    if ((lp = lsp->u.blist) == 0 ||	/* left not a $ symbol */
 		sp == lsp ||			/* or right == left */
 		lsp->type != op &&		/* or new operator */
-		lsp->type < MAX_LV)		/* but left is not a clock */
+		lsp->type != TIM ||		/* but left is not a timer */
+		lsp->type == op &&		/* or old operator */
+		right->le_val == (unsigned) -1)	/* and right is a delay for timer */
 	    {
 		left->le_next = sp->u.blist;	/* extend expression */
 		sp->u.blist = left;		/* link left of expr */
@@ -191,13 +195,10 @@ op_push(			/* reduce List_e stack to links */
 		if (debug & 02) {
 		    fprintf(outFP, "\t%c%s %c %c%s\n",
 			v(left), os[op], v(right));
+		    fflush(outFP);
 		}
 #endif
-	    } else {
-		/*
-		 * left is a $ symbol and same operator or clock type
-		 * merge left into right
-		 */
+	    } else {	/* left is a $ symbol and ... - merge left into right */
 		while (lp->le_next) {
 		    lp = lp->le_next;
 		}
@@ -220,6 +221,7 @@ op_push(			/* reduce List_e stack to links */
 		if (debug & 02) {
 		    fprintf(outFP, "\t%c%s %c %c%s\n",
 			v(left), os[op], v(right));
+		    fflush(outFP);
 		}
 		sy_pop(left);			/* left Link_e */
 		if (debug & 02) {
@@ -236,6 +238,7 @@ op_push(			/* reduce List_e stack to links */
 #ifdef YYDEBUG
     } else if (debug & 02) {		/* fexpr : sexpr { left is 0 } */
 	fprintf(outFP, "\t(0) %c %c%s\n", os[op], v(right));
+	fflush(outFP);
 #endif
     }
     return (rlp);
@@ -330,6 +333,7 @@ op_not(register List_e * right)		/* logical negation */
 #ifdef YYDEBUG
     if (debug & 02) {
 	fprintf(outFP, "    ~%s\n", right->le_sym->name);
+	fflush(outFP);
     }
 #endif
     return (right);
@@ -380,6 +384,7 @@ op_asgn(			/* asign List_e stack to links */
 #ifdef YYDEBUG
     if (debug & 02) {
 	fprintf(outFP, "\t  %s = %c%s\n", var->name, v(right));
+	fflush(outFP);
     }
 #endif
     rsp = right->le_sym;
@@ -436,6 +441,7 @@ op_asgn(			/* asign List_e stack to links */
 	    fprintf(outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
 		(rsp->type >= MAX_LV) ? os[rsp->type] : w(right),
 		os[var->type], var->name);
+	    fflush(outFP);
 	}
 	if (sv == 0) {
 	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
@@ -484,6 +490,7 @@ op_asgn(			/* asign List_e stack to links */
 	char *	ep = eBuf;		/* temporary expression buffer */
 	if (debug & 04) {
 	    fprintf(outFP, "\n");
+	    fflush(outFP);
 	}
 	gt_input = 0;
 	while ((lp = sp->u.blist) != 0) {
@@ -649,6 +656,7 @@ op_asgn(			/* asign List_e stack to links */
 	    }
 	    if (debug & 04) {
 		fprintf(outFP, "\n");
+		fflush(outFP);
 		sflag = debug & 0200;
 	    }
 	    if (sp == gp && (sp->type != LATCH || lp->le_val != NOT ^ NOT)) {
@@ -727,6 +735,7 @@ op_asgn(			/* asign List_e stack to links */
     }
     if (debug & 04) {
 	fprintf(outFP, "\n");
+	fflush(outFP);
     }
 
     /*
@@ -750,6 +759,7 @@ op_asgn(			/* asign List_e stack to links */
 	lp->le_sym = 0;			/* erase reference to temp */
 	if (debug & 02) {
 	    fprintf(outFP, "\t  %s deleted\n\n", var->name);
+	    fflush(outFP);
 	}
 	free(var->name);		/* free name space */
 	free(var);			/* temporary Symbol */
