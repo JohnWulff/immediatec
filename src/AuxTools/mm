@@ -10,12 +10,13 @@ usage ()
     echo 'Usage:	'${0##*/}' [-h] [-v<N>] [-y<opt>]' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+    echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
     echo 'uses iCmake -I -v<N> -y<opt> to make each line of the list pm.lt' >&2
     echo 'which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo 'but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
-    echo '	$Id: mm,v 1.6 2004/02/08 10:56:41 jw Exp $' >&2
+    echo '	$Id: mm,v 1.7 2004/02/20 14:54:03 jw Exp $' >&2
 }
 
 v=""
@@ -43,6 +44,7 @@ while [[ $# > 0 ]]; do
 		    usage; exit 254;
 		fi
 		break;;
+	    x*)	v="$v -x";;
 	    z*)	z=1;v="$v -z";;
 	    h*)	usage; exit 255;;
 	    *)	echo "unknown flag -$option";
@@ -65,3 +67,4 @@ while true; do
     fi
     iCmake -I$v $line
 done < pm.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/'
+rm -rf ic[0-9].*

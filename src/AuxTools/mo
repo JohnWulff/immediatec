@@ -26,14 +26,16 @@ usage ()
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
     echo '	-z	make with -DLONG16        (make clean; makeAll first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
+    echo '	-y<opt>	call ic[rt] with extra -d<opt> orred into normal -d474' >&2
     echo 'if no iCtargets are specified, each single entry of file pa.lt is made' >&2
     echo '   outputs the common output to ListR/ListR.out or ListT/ListT.out' >&2
     echo '   restores a plain icr or ict at the end of the test run' >&2
     echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.16 2004/01/14 10:48:22 jw Exp $' >&2
+    echo '	$Id: mo,v 1.17 2004/02/21 17:10:16 jw Exp $' >&2
 }
 
+v=""
 ic='ict'
 op='Tt'
 p='T'
@@ -52,6 +54,14 @@ while [ $# -gt 0 ]; do
 	    m*)	list='pm.lt';;
 	    s*)	op="${op}s";;
 	    z*)	op="${op}z";;
+	    y*)	option=${option#?}
+		if [ -n "$option" ]; then
+		    v="$v -d$option"
+		else
+		    echo "-y must specify an option";
+		    usage; exit 254;
+		fi
+		break;;
 	    h*)	usage; exit 255;;
 	    *)	echo "unknown flag -$option" >&2
 		usage; exit 255;;
@@ -91,7 +101,7 @@ if [ $# != 0 ]; then
 	base=${file%.*}
 	file="$base.ic"
 	if [ -f "$file" ]; then
-	    if $ic -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
 		echo "$file";
 		cp -f cexe.c List$p/$base.c
 		mv -f cexe.c $devp 2> /dev/null
@@ -100,7 +110,7 @@ if [ $# != 0 ]; then
 		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 		cd - > /dev/null
 		if [ -x $devp/$ic ]; then	# use newly generated compiler
-		    $devp/$ic -d500 $file > List$p/$base.ini
+		    $devp/$ic$v -d500 $file > List$p/$base.ini
 		else
 		    echo "make $ic from $file failed"
 		fi
@@ -118,7 +128,7 @@ elif [ -f $list ]; then
 	base=${file%.*}
 	file="$base.ic"
 	if [ -f "$file" ]; then
-	    if $ic -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
 		echo "$file";
 		cp -f cexe.c List$p/$base.c
 		mv -f cexe.c $devp 2> /dev/null
@@ -127,7 +137,7 @@ elif [ -f $list ]; then
 		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 		cd - > /dev/null
 		if [ -x $devp/$ic ]; then	# use newly generated compiler
-		    $devp/$ic -d500 $file > List$p/$base.ini
+		    $devp/$ic$v -d500 $file > List$p/$base.ini
 		else
 		    echo "make $ic from $file failed"
 		fi

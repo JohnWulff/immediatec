@@ -19,7 +19,7 @@ usage ()
     echo '	pl.lt	# lst files only' >&2
     echo '	p6.lt	# lst6 files only' >&2
     echo '	pp.lt	# iC files only' >&2
-    echo '	$Id: ml,v 1.7 2003/11/28 17:56:27 jw Exp $' >&2
+    echo '	$Id: ml,v 1.8 2004/02/24 09:34:36 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -47,17 +47,11 @@ mklst -l *.ic > pl.lt	# lst files only
 mklst -6 *.ic > p6.lt	# lst6 files only
 mklst -p *.ic > pp.lt	# iC files only
 
-if [[ -f OutP ]]; then
-    echo OutP >> p.lt
-    echo OutP >> pd.lt
-fi
-
-if [[ -f OutT ]]; then
-    echo OutT >> p.lt
-    echo OutT >> pd.lt
-fi
-
 if [[ -f Init.out ]]; then
     echo Init.out >> p.lt
     echo Init.out >> pd.lt
+fi
+
+if [[ -f Init.out6 ]]; then
+    echo Init.out6 >> p6.lt
 fi
