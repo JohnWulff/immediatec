@@ -1,4 +1,4 @@
-$Id: manifest,v 1.2 2002/07/08 13:05:51 jw Exp $
+$Id: manifest,v 1.3 2002/07/31 17:37:37 jw Exp $
 doc/iC.doc
 doc/iC.html
 doc/iC.sdw
@@ -125,7 +125,6 @@ src/configure
 src/configure.in
 src/genr.c
 src/gram.c
-src/gram.h
 src/gram.sed
 src/gram.y
 src/gram_tab.h

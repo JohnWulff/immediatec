@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.25 2002/07/05 19:17:23 jw Exp $";
+"@(#)$Id: comp.h,v 1.26 2002/07/30 15:36:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -38,10 +38,17 @@ typedef	struct Symbol {		/* symbol table entry */
     struct Symbol *	next;	/* to link to another */
 } Symbol;
 
-typedef struct { Symbol * v;	char *f; char *l; }	Sym;
-typedef struct { List_e * v;	char *f; char *l; }	Lis;
-typedef struct { unsigned int v; char *f; char *l; }	Val;
-typedef struct { char v[2];	char *f; char *l; }	Str;
+/* for use in a union identical first elements can be accesed */
+typedef struct { char *f; char *l; Symbol * v;     } Sym;
+typedef struct { char *f; char *l; List_e * v;     } Lis;
+typedef struct { char *f; char *l; unsigned int v; } Val;
+typedef struct { char *f; char *l; char v[2];      } Str;
+
+typedef struct Token {		/* Token for gram.y grammar */
+    unsigned int	start;
+    unsigned int	end;
+    Symbol *		symbol;
+} Token;
 
 extern int	compile( char *, char *,
     char *, char *, char *, char *);	/* compile iC language source */
@@ -108,3 +115,5 @@ extern int	listNet(unsigned * gate_count);	/* list generated network */
 extern int	buildNet(Gate ** igpp);	/* generate execution network */
 extern int	output(char *);		/* generate network as C file */
 extern void	copyXlate(FILE *, FILE *, char *, unsigned *, int);
+					/*   lexc.l   */
+extern void	delete_sym(Token* tokp);

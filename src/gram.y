@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.3 2002/07/10 21:15:29 jw Exp $";
+"@(#)$Id: gram.y,v 1.4 2002/08/03 16:47:17 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -22,38 +22,44 @@
  *
  *******************************************************************/
 
-#include	"gram.h"
+#include	<stdio.h>
+#include	<assert.h>
+#include	<stdarg.h>
+
+#include	"icc.h"
+#include	"comp.h"
 
 typedef struct LineEntry {
-    int		start;
-    int		op;
-    int		end;
-    int		type;
+    unsigned int	start;
+    unsigned int	op;
+    unsigned int	end;
+    int			type;
 } LineEntry;
 
 #define ENDSTACKSIZE	100
 static LineEntry	lineEntryArray[500];
 static LineEntry*	lep = lineEntryArray;
-static int		endStack[ENDSTACKSIZE];
-static int*		esp = endStack;
+static unsigned int	endStack[ENDSTACKSIZE];
+static unsigned int*	esp = endStack;
 
-static void	immVarFound(int start, int end, int type);
-static void	immAssignFound(int start, int operator, int end, int type);
-static int	pushEndStack(int value);
-static int	popEndStack(void);
+static void		immVarFound(unsigned int start, unsigned int end, int type);
+static void		immAssignFound(unsigned int start, unsigned int operator, unsigned int end, int type);
+static unsigned int	pushEndStack(unsigned int value);
+static unsigned int	popEndStack(void);
 
+static Symbol	typedefSymbol = { "typedef", UDF, UDFA, };
 %}
 %union {		/* stack type */
     Token	tok;
 }
 
-%token	<tok> IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
+%token	<tok> IDENTIFIER IMM_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
 %token	<tok> PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token	<tok> AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	<tok> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token	<tok> XOR_ASSIGN OR_ASSIGN TYPE_NAME
 
-%token	<tok> TYPEDEF EXTERN STATIC AUTO REGISTER
+%token	<tok> TYPEDEF TYPEOF EXTERN STATIC AUTO REGISTER
 %token	<tok> CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID
 %token	<tok> STRUCT UNION ENUM ELIPSIS RANGE
 
@@ -75,9 +81,10 @@ static int	popEndStack(void);
 %type	<tok> declaration_list statement_list expression_statement selection_statement
 %type	<tok> iteration_statement jump_statement file external_definition
 %type	<tok> function_definition function_body identifier
+%type	<tok> imm_identifier string_literal enumerator_list_comma
 
 %type	<tok>	'{' '[' '(' ')' ']' '}'
-%right	<tok>	'=' ':' ';'
+%right	<tok>	'=' ':' ';' ','
 %right	<tok>	'&' '*' '+' '-' '~' '!'
 
 %start file
@@ -87,18 +94,53 @@ primary_expr
 	: identifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	| CONSTANT {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
-	| STRING_LITERAL {
+	| string_literal {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '(' expr ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' expr error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '(' compound_statement ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' compound_statement error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+string_literal
+	: STRING_LITERAL {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| string_literal STRING_LITERAL {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -106,34 +148,62 @@ postfix_expr
 	: primary_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| postfix_expr '[' expr ']' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| postfix_expr '[' expr error ']' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| postfix_expr '(' ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| postfix_expr '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| postfix_expr '(' argument_expr_list ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| postfix_expr '(' argument_expr_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| postfix_expr '.' identifier {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$3);
+	    $$.symbol = NULL;
 	}
 	| postfix_expr PTR_OP identifier {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$3);
+	    $$.symbol = NULL;
 	}
 	| postfix_expr INC_OP {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| postfix_expr DEC_OP {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -141,10 +211,12 @@ argument_expr_list
 	: assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| argument_expr_list ',' assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -152,26 +224,43 @@ unary_expr
 	: postfix_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| imm_identifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| INC_OP unary_expr {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| DEC_OP unary_expr {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| unary_operator cast_expr {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| SIZEOF unary_expr {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| SIZEOF '(' type_name ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| SIZEOF '(' type_name error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -179,26 +268,32 @@ unary_operator
 	: '&' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '*' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '+' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '-' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '~' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '!' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -206,10 +301,18 @@ cast_expr
 	: unary_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '(' type_name ')' cast_expr {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| '(' type_name error ')' cast_expr {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -217,18 +320,22 @@ multiplicative_expr
 	: cast_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| multiplicative_expr '*' cast_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| multiplicative_expr '/' cast_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| multiplicative_expr '%' cast_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -236,14 +343,17 @@ additive_expr
 	: multiplicative_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| additive_expr '+' multiplicative_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| additive_expr '-' multiplicative_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -251,14 +361,17 @@ shift_expr
 	: additive_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| shift_expr LEFT_OP additive_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| shift_expr RIGHT_OP additive_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -266,22 +379,27 @@ relational_expr
 	: shift_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| relational_expr '<' shift_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| relational_expr '>' shift_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| relational_expr LE_OP shift_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| relational_expr GE_OP shift_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -289,14 +407,17 @@ equality_expr
 	: relational_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| equality_expr EQ_OP relational_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	| equality_expr NE_OP relational_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -304,10 +425,12 @@ and_expr
 	: equality_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| and_expr '&' equality_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -315,10 +438,12 @@ exclusive_or_expr
 	: and_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| exclusive_or_expr '^' and_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -326,10 +451,12 @@ inclusive_or_expr
 	: exclusive_or_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| inclusive_or_expr '|' exclusive_or_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -337,10 +464,12 @@ logical_and_expr
 	: inclusive_or_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| logical_and_expr AND_OP inclusive_or_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -348,10 +477,12 @@ logical_or_expr
 	: logical_and_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| logical_or_expr OR_OP logical_and_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -359,10 +490,12 @@ conditional_expr
 	: logical_or_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| logical_or_expr '?' logical_or_expr ':' conditional_expr {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -370,17 +503,24 @@ assignment_expr
 	: conditional_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
-	}
-	| identifier '=' assignment_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    printf("<%d %d>", $$.start, $$.end);
-	    immAssignFound($1.start, $2.start, $3.end, 1);
+	    $$.symbol = NULL;
 	}
 	| unary_expr assignment_operator assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
-	    printf("@");
+	    $$.symbol = NULL;
+#if YYDEBUG
+	if ((debug & 0402) == 0402) fprintf(outFP, "@");
+#endif
+	}
+	| imm_identifier '=' assignment_expr {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+#if YYDEBUG
+	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u>", $$.start, $$.end);
+#endif
+	    immAssignFound($1.start, $2.start, $3.end, 1);
 	}
 	;
 
@@ -388,46 +528,57 @@ assignment_operator
 	: '=' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| MUL_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| DIV_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| MOD_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| ADD_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| SUB_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| LEFT_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| RIGHT_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| AND_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| XOR_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| OR_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -435,10 +586,12 @@ expr
 	: assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| expr ',' assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -446,6 +599,7 @@ constant_expr
 	: conditional_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -453,29 +607,62 @@ declaration
 	: declaration_specifiers ';' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| declaration_specifiers init_declarator_list ';' {
+	    Symbol *	sp;
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    sp = $2.symbol;
+	    assert(sp);			/* ERROR: initialized in : init_declarator */
+	    while (sp) {
+		Symbol * sp1 = sp;
+		sp = sp->next;		/* get next before Symbol is placed or deleted */
+		if ($1.symbol && $1.symbol->type == UDF) {
+		    sp1->type = CTYPE;		/* found a typedef */
+#ifdef YYDEBUG
+		    if (debug & 04) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
+#endif
+		    place_sym(sp1);
+		} else {
+		    $$.symbol = sp1;	/* use $$ as transport Token for delete_sym */
+		    delete_sym(&$$);
+		}
+	    }
+	    $$.symbol = NULL;
+	}
+	| declaration_specifiers error ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
 declaration_specifiers
-	: storage_class_specifier {
+	: type_specifier_list {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
-	| storage_class_specifier declaration_specifiers {
+	| storage_class_specifier type_specifier_list {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = $1.symbol;	/* typedef information */
 	}
-	| type_specifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	}
-	| type_specifier declaration_specifiers {
+	| storage_class_specifier identifier {
+	    /* this is a fudge to catch undefined types - make it optional */
+	    Symbol *	sp;
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    sp = $2.symbol;		/* canot be in symbol table */
+	    assert(sp);			/* ERROR: initialized in yylex() */
+	    sp->type = CTYPE;		/* found a TYPE_NAME after extern etc */
+#ifdef YYDEBUG
+	    if (debug & 04) fprintf(outFP, "\nT %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+#endif
+	    place_sym(sp);
+	    $$.symbol = $1.symbol;	/* typedef information */
 	}
 	;
 
@@ -483,10 +670,18 @@ init_declarator_list
 	: init_declarator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
 	}
 	| init_declarator_list ',' init_declarator {
+	    Symbol *	sp;
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    sp = $$.symbol = $1.symbol;
+	    assert(sp);			/* ERROR: initialized in : init_declarator */
+	    while (sp->next) {
+		sp = sp->next;
+	    }
+	    sp->next = $3.symbol;
 	}
 	;
 
@@ -494,10 +689,12 @@ init_declarator
 	: declarator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
 	}
 	| declarator '=' initializer {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
 	}
 	;
 
@@ -505,22 +702,22 @@ storage_class_specifier
 	: TYPEDEF {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = &typedefSymbol;
 	}
 	| EXTERN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| STATIC {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| AUTO {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
-	}
-	| REGISTER {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -528,58 +725,99 @@ type_specifier
 	: CHAR {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| SHORT {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| INT {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| LONG {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| SIGNED {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| UNSIGNED {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| FLOAT {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| DOUBLE {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| CONST {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| VOLATILE {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| VOID {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| REGISTER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| struct_or_union_specifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| enum_specifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| TYPE_NAME {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEOF '(' unary_expr ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEOF '(' unary_expr error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| TYPEOF '(' type_name ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEOF '(' type_name error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -587,14 +825,32 @@ struct_or_union_specifier
 	: struct_or_union identifier '{' struct_declaration_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	| struct_or_union identifier '{' struct_declaration_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $6.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| struct_or_union '{' struct_declaration_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| struct_or_union '{' struct_declaration_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| struct_or_union identifier {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -602,21 +858,25 @@ struct_or_union
 	: STRUCT {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| UNION {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
 struct_declaration_list
-	: struct_declaration {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
+	: /* NOTHING */ {
+	    $$.start = 0;
+	    $$.end = 0;
+	    $$.symbol = NULL;
 	}
 	| struct_declaration_list struct_declaration {
-	    $$.start = $1.start;
+	    $$.start = $1.start ? $1.start : $2.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -624,6 +884,13 @@ struct_declaration
 	: type_specifier_list struct_declarator_list ';' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| type_specifier_list error ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -631,10 +898,12 @@ struct_declarator_list
 	: struct_declarator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| struct_declarator_list ',' struct_declarator {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -642,29 +911,65 @@ struct_declarator
 	: declarator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	| ':' constant_expr {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| declarator ':' constant_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	;
 
 enum_specifier
-	: ENUM '{' enumerator_list '}' {
+	: ENUM '{' enumerator_list_comma '}' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
 	}
-	| ENUM identifier '{' enumerator_list '}' {
+	| ENUM '{' enumerator_list_comma error '}' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| ENUM identifier '{' enumerator_list_comma '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	| ENUM identifier '{' enumerator_list_comma error '}' {
+	    $$.start = $1.start;
+	    $$.end = $6.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| ENUM identifier {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	;
+
+enumerator_list_comma
+	: enumerator_list {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| enumerator_list ',' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -672,10 +977,12 @@ enumerator_list
 	: enumerator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| enumerator_list ',' enumerator {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -683,10 +990,14 @@ enumerator
 	: identifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	| identifier '=' constant_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -694,10 +1005,12 @@ declarator
 	: declarator2 {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
 	}
 	| pointer declarator2 {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = $2.symbol;
 	}
 	;
 
@@ -705,30 +1018,73 @@ declarator2
 	: identifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
 	}
 	| '(' declarator ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = $2.symbol;
+	}
+	| '(' declarator error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $2.symbol;
+	    yyclearin; yyerrok;
 	}
 	| declarator2 '[' ']' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+	}
+	| declarator2 '[' error ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
 	}
 	| declarator2 '[' constant_expr ']' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	}
+	| declarator2 '[' constant_expr error ']' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
 	}
 	| declarator2 '(' ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+	}
+	| declarator2 '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
 	}
 	| declarator2 '(' parameter_type_list ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	}
+	| declarator2 '(' parameter_type_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
 	}
 	| declarator2 '(' parameter_identifier_list ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	}
+	| declarator2 '(' parameter_identifier_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -736,18 +1092,22 @@ pointer
 	: '*' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '*' type_specifier_list {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| '*' pointer {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| '*' type_specifier_list pointer {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -755,10 +1115,12 @@ type_specifier_list
 	: type_specifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| type_specifier_list type_specifier {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -766,10 +1128,12 @@ parameter_identifier_list
 	: identifier_list {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| identifier_list ',' ELIPSIS {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -777,10 +1141,14 @@ identifier_list
 	: identifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	| identifier_list ',' identifier {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$3);
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -788,10 +1156,12 @@ parameter_type_list
 	: parameter_list {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| parameter_list ',' ELIPSIS {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -799,10 +1169,12 @@ parameter_list
 	: parameter_declaration {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| parameter_list ',' parameter_declaration {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -810,10 +1182,13 @@ parameter_declaration
 	: type_specifier_list declarator {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
 	}
 	| type_name {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -821,10 +1196,12 @@ type_name
 	: type_specifier_list {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| type_specifier_list abstract_declarator {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -832,14 +1209,17 @@ abstract_declarator
 	: pointer {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| abstract_declarator2 {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| pointer abstract_declarator2 {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -847,38 +1227,101 @@ abstract_declarator2
 	: '(' abstract_declarator ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' abstract_declarator error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '[' ']' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '[' error ']' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '[' constant_expr ']' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '[' constant_expr error ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| abstract_declarator2 '[' ']' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| abstract_declarator2 '[' error ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| abstract_declarator2 '[' constant_expr ']' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| abstract_declarator2 '[' constant_expr error ']' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '(' ')' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '(' parameter_type_list ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' parameter_type_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| abstract_declarator2 '(' ')' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| abstract_declarator2 '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| abstract_declarator2 '(' parameter_type_list ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| abstract_declarator2 '(' parameter_type_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -886,14 +1329,29 @@ initializer
 	: assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| '{' initializer_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '{' initializer_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '{' initializer_list ',' '}' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| '{' initializer_list error ',' '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -901,10 +1359,12 @@ initializer_list
 	: initializer {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| initializer_list ',' initializer {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -912,26 +1372,32 @@ statement
 	: labeled_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| compound_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| expression_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| selection_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| iteration_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| jump_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -939,14 +1405,18 @@ labeled_statement
 	: identifier ':' statement {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	| CASE constant_expr ':' statement {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
 	}
 	| DEFAULT ':' statement {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -954,18 +1424,46 @@ compound_statement
 	: '{' '}' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '{' error '}' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '{' statement_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '{' statement_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '{' declaration_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '{' declaration_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	| '{' declaration_list statement_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| '{' declaration_list statement_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -973,10 +1471,12 @@ declaration_list
 	: declaration {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| declaration_list declaration {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -984,10 +1484,12 @@ statement_list
 	: statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| statement_list statement {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -995,10 +1497,18 @@ expression_statement
 	: ';' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| expr ';' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| expr error ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -1006,14 +1516,17 @@ selection_statement
 	: IF '(' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
+	    $$.symbol = NULL;
 	}
 	| IF '(' expr ')' statement ELSE statement {
 	    $$.start = $1.start;
 	    $$.end = $7.end;
+	    $$.symbol = NULL;
 	}
 	| SWITCH '(' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -1021,42 +1534,52 @@ iteration_statement
 	: WHILE '(' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
+	    $$.symbol = NULL;
 	}
 	| DO statement WHILE '(' expr ')' ';' {
 	    $$.start = $1.start;
 	    $$.end = $7.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' ';' ';' ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $6.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' ';' ';' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $7.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' ';' expr ';' ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $7.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' ';' expr ';' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $8.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' expr ';' ';' ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $7.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' expr ';' ';' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $7.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' expr ';' expr ';' ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $8.end;
+	    $$.symbol = NULL;
 	}
 	| FOR '(' expr ';' expr ';' expr ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $9.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -1064,22 +1587,34 @@ jump_statement
 	: GOTO identifier ';' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
 	}
 	| CONTINUE ';' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| BREAK ';' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| RETURN ';' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	| RETURN expr ';' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| RETURN expr error ';' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -1087,10 +1622,12 @@ file
 	: external_definition {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| file external_definition {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -1098,10 +1635,12 @@ external_definition
 	: function_definition {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| declaration {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -1109,10 +1648,14 @@ function_definition
 	: declarator function_body {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
 	}
 	| declaration_specifiers declarator function_body {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -1120,10 +1663,12 @@ function_body
 	: compound_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.symbol = NULL;
 	}
 	| declaration_list compound_statement {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.symbol = NULL;
 	}
 	;
 
@@ -1131,42 +1676,110 @@ identifier
 	: IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
-	    printf("{%d %d}", $$.start, $$.end);
-	    immVarFound($$.start, $$.end, 1);
+	    $$.symbol = $1.symbol;
+	}
+	;
+
+imm_identifier
+	: IMM_IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+#if YYDEBUG
+	if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]", $$.start, $$.end);
+#endif
+	    immVarFound($$.start, $$.end, 1);	/* type may be 1 or 2 for logical or arithmetic */
+	}
+	| '(' imm_identifier ')' {
+	    /* stops this being a primary_expr which would lead to C assignment */
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+#if YYDEBUG
+	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}", $$.start, $$.end);
+#endif
+	    immVarFound($$.start, $$.end, 0);	/* moves start and end without changing type */
+	}
+	| '(' imm_identifier error ')' {
+	    /* stops this being a primary_expr which would lead to C assignment */
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+#if YYDEBUG
+	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}", $$.start, $$.end);
+#endif
+	    immVarFound($$.start, $$.end, 0);	/* moves start and end without changing type */
+	    yyclearin; yyerrok;
 	}
 	;
 %%
 
-#include <stdio.h>
-#include <assert.h>
-
 extern char yytext[];
 extern int column;
+#define LARGE (~0U>>2)
 
 void
-yyerror(char *s, ...)
+yyerror(char *fmt, ...)
 {
-	fflush(stdout);
-	printf("\n%*s\n%*s\n", column, "^", column, s);
+    va_list ap;
+
+    va_start(ap, fmt);
+
+    fflush(outFP);
+    fprintf(outFP, "\n%*s\n", column, "^");
+    vfprintf(outFP, fmt, ap);
+    va_end(ap);
+    fprintf(outFP, "\n");
 }
 
+/********************************************************************
+ *
+ *	immVarFound
+ *
+ *	The parser has found a bare immediate variable
+ *	or an immediate variable in parenthesess
+ *	(zany but allowed as an lvalue in C)
+ *
+ *******************************************************************/
+
 static void
-immVarFound(int start, int end, int type)
+immVarFound(unsigned int start, unsigned int end, int type)
 {
+    if (type != 0) {
+	lep->op    = LARGE;
+	lep->type  = type;
+    } else {
+	--lep;					/* step back to previous entry */
+    }
     lep->start = start;
-    lep->op    = 32767;
     lep->end   = end;
-    lep->type  = type;
     lep++;
 } /* immVarFound */
 
+/********************************************************************
+ *
+ *	immAssignFound
+ *
+ *	The parser has found an assignment to an immediate variable
+ *
+ *	Backtrack along the immediate variables found so far, to find
+ *	the one being assigned to here. Its 'lep' entry is modified.
+ *
+ *	If no suitable immediate variable is found it is a compiler
+ *	error, because an immediate assignment should have a bare
+ *	immediate variable as its first token (same start position)
+ *
+ *******************************************************************/
+
 static void
-immAssignFound(int start, int operator, int end, int type)
+immAssignFound(unsigned int start, unsigned int operator, unsigned int end, int type)
 {
     LineEntry*	p;
 
     for (p = lep - 1; p >= lineEntryArray; p-- ) {
-	printf("\n ***** <%d, %d, %d>", p->start, p->end, p->type);
+#if YYDEBUG
+	if ((debug & 0402) == 0402) fprintf(outFP, "(%u %u %d)", p->start, p->end, p->type);
+#endif
 	if (p->start == start) {
 	    p->op    = operator;
 	    p->end   = end;
@@ -1180,17 +1793,17 @@ immAssignFound(int start, int operator, int end, int type)
 	    break;			/* Error: will not find start */
 	}
     }
-    printf(" ERROR <%d, %d, %d>", start, end, type);
+    yyerror(" ERROR (%u, %u, %d)", start, end, type);
 } /* immAssignFound */
 
-static int
-pushEndStack(int value)
+static unsigned int
+pushEndStack(unsigned int value)
 {
     assert(esp < &endStack[ENDSTACKSIZE]);
     return *esp++ = value;
 } /* pushEndStack */
 
-static int
+static unsigned int
 popEndStack(void)
 {
     assert(esp >= endStack);
@@ -1202,22 +1815,26 @@ static char*	text[] = { "LV(", "AV(", "LA(", "AA(", };
 void
 copyAdjust(FILE* fp)
 {
-    int		c;
-    LineEntry*	p     = lineEntryArray;
-    int		start = p->start;
-    int		op    = 32767;		/* ZZZ FIX */
-    int		end   = 32767;		/* ZZZ FIX */
-    int		cnt   = 0;
+    int			c;
+    LineEntry*		p       = lineEntryArray + 1;
+    unsigned int	start   = p->start;
+    unsigned int	op      = LARGE;
+    unsigned int	end     = LARGE;
+    unsigned int	bytePos = 0;
 
-    lep->start = 32767;
-    lep++;
+    lep++->start = LARGE;		/* guard value in case first immVarFound(0) */
+    lep->start   = LARGE;		/* value overwritten by first immVarfound */
+
+    if (fp == NULL) {
+	return;				/* initialize lineEntryArray */
+    }
 
     while ((c = getc(fp)) != EOF) {
-	while (cnt >= end) {
+	while (bytePos >= end) {
 	    putchar(')');		/* end found - output end */
 	    end = popEndStack();
 	}
-	if (cnt >= start) {
+	if (bytePos >= start) {
 	    pushEndStack(end);		/* push previous end */
 	    op    = p->op;		/* operator in this entry */
 	    end   = p->end;		/* end of this entry */
@@ -1226,11 +1843,11 @@ copyAdjust(FILE* fp)
 	    assert(start < p->start);
 	    start = p->start;		/* start of next entry */
 	}
-	if (cnt == op) {
+	if (bytePos == op) {
 	    assert(c == '=');
 	    c = ',';			/* replace '=' by ',' */
 	}
 	putchar(c);
-	cnt++;
+	bytePos++;
     }
-} /* immVarFound */
+} /* copyAdjust */

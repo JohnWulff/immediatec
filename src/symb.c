@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.9 2002/07/06 08:18:15 jw Exp $";
+"@(#)$Id: symb.c,v 1.10 2002/07/29 10:31:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -85,8 +85,7 @@ hash(char *	string)	/* hash a string to table index */
 void *
 emalloc(unsigned	nbytes)	/* check return from malloc */
 {
-    char *	bp;
-    char *	tp;
+    void *	bp;
 #ifdef _WINDOWS
 #if defined(_LARGE_) || defined(_HUGE_)
     GLOBALHANDLE		hglobal;
@@ -94,25 +93,23 @@ emalloc(unsigned	nbytes)	/* check return from malloc */
     if ((hglobal = GlobalAlloc(GMEM_FIXED | GMEM_ZEROINIT, nbytes)) == 0) {
 	execerror("out of memory", (char *) 0);	/* ZZZ */
     }
-    bp = tp = GlobalLock(hglobal);		/* actual pointer */
+    bp = GlobalLock(hglobal);		/* actual pointer */
 #else
     LOCALHANDLE		hlocal;
 
     if ((hlocal = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, nbytes)) == 0) {
 	execerror("out of memory", (char *) 0);	/* ZZZ */
     }
-    bp = tp = LocalLock(hlocal);		/* actual pointer */
+    bp = LocalLock(hlocal);		/* actual pointer */
 #endif
 #else
 
-    if ((bp = tp = (char *)malloc(nbytes)) == 0) {
-	execerror("out of memory", (char *) 0);
+    if ((bp = malloc(nbytes)) == NULL) {
+//#	execerror("out of memory", NULL);
     }
 #endif
-    while (nbytes--) {
-	*tp++ = 0;	/* when free() is used memory can be non zero */
-    }
-    return (bp);
+    memset(bp, 0, nbytes);	/* when free() is used memory can be non zero */
+    return bp;
 }
 #ifdef _WINDOWS
 

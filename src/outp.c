@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.51 2002/07/05 17:00:45 jw Exp $";
+"@(#)$Id: outp.c,v 1.52 2002/08/01 12:46:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -34,7 +34,7 @@ extern const char	SC_ID[];
  *	IEC1131() modifies IEC-1131 bit names in the buffer buf
  *	The routine returns a count of fields found.
  *	If count is less the 4 the unmodified name is returned in buf
- *	The count can be used to charecterize IBx, QBx etc fields also
+ *	The count can be used to characterize IBx, QBx etc fields also
  *
  *	Also convert plain numbers to numbers preceded by an underscore
  *	(do this first, so that the parameter values returned are correct)
@@ -568,11 +568,17 @@ static char	COMPILER[] =\n\
 #include	\"%s\"\n\
 \n\
 #ifdef ALIAS_ARITH\n\
-#define _(x) (x.gt_ini==-ALIAS?((Gate*)x.gt_rlist)->gt_old:x.gt_old)\n\
+#define _AV(x) (x.gt_ini==-ALIAS ? ((Gate*)x.gt_rlist)->gt_old : x.gt_old)\n\
+#define _LV(x) (x.gt_ini==-ALIAS ? (((Gate*)x.gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
+				 : (x.gt_val < 0 ? 1 : 0))\n\
+#define _AA(x,v) aAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
+#define _LA(x,v) lAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
 #else\n\
-#define _(x) x.gt_old\n\
+#define _AV(x) x.gt_old\n\
+#define _LV(x) (x.gt_val < 0 ? 1 : 0)\n\
+#define _AA(x,v) aAssign(&x, v)\n\
+#define _LA(x,v) lAssign(&x, v)\n\
 #endif\n\
-#define _A(x,v) assign(&x, v)\n\
 extern Gate *	l_[];\n\
 ", inpNM, outfile, SC_ID, Hname);
 linecnt += 21;
@@ -933,8 +939,8 @@ linecnt += 21;
 
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-//#	    if ((typ = sp->type) == ARNC || typ == LOGC) {
-	    if ((typ = sp->type) == UDF || typ == LOGC) {
+	    if ((typ = sp->type) == ARNC || typ == LOGC) {
+//#	    if ((typ = sp->type) == UDF || typ == LOGC)
 		modName = mN(sp);	/* modified string, byte and bit */
 		dc = sp->ftype;
 		fprintf(Fp, "Gate %-8s", modName);
@@ -961,7 +967,8 @@ linecnt += 21;
  *
  *******************************************************************/
 
-    module = strdup(inpNM);		/* source file name */
+    module = emalloc(strlen(inpNM)+1);	/* +1 for '\0' */
+    strcpy(module, inpNM);		/* source file name */
     if ((s1 = strrchr(module, '.')) != 0) {
 	*s1 = '\0';			/* module name without extensions */
     }

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.24 2002/07/08 14:54:01 jw Exp $
+# @(#)$Id: Makefile.in,v 1.25 2002/07/29 13:04:13 jw Exp $
 
 ############################################################
 #
@@ -87,8 +87,8 @@ ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
 libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	ar -rv libict.a load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 
-lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O)
-	$(CC) $(LDFLAG) -o lmain lmain.$(O) lexc.$(O) gram.$(O)
+lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
+	$(CC) $(LDFLAG) -o lmain lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 
 #### Compile objects #######################################
 
@@ -120,8 +120,8 @@ lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O)
 	test -f $@ && touch $@
     endif
 
-scid.c:	icc.v $(srcdir)/Makefile pawk.a comp.sed
-	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile $(srcdir)/comp.sed | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed
+	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
 
 cexe.c:	$(srcdir)/cexe.h
 	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > cexe.c
@@ -194,6 +194,6 @@ link.$(O):	$(srcdir)/icc.h
 rsff.$(O):	$(srcdir)/icc.h
 scan.$(O):	$(srcdir)/icc.h
 
-gram.$(O):	$(srcdir)/gram.h
-lexc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram.h gram_tab.h
-lmain.$(O):	$(srcdir)/gram.h
+gram.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+lexc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h gram_tab.h
+lmain.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h

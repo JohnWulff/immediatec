@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.62 2002/07/05 19:17:23 jw Exp $";
+"@(#)$Id: comp.y,v 1.63 2002/07/29 09:29:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -42,7 +42,7 @@ static int	copyCfrag(char, char, char);	/* copy C action */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
-static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
+static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
 static Symbol	tSym = { "_tSym_", AND, GATE, };
 static char	iCbuf[IMMBUFSIZE];	/* buffer to build imm statement */
 char *		stmtp = iCbuf;		/* manipulated in iClex() only */
@@ -84,7 +84,7 @@ pu(int t, char * token, Lis * node)
 	fprintf(outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
 	break;
     }
-    cp = node->f; ep = node->l;
+    cp = node->f; ep = node->l;		/* now 100% portable with d and l at start of union */
     while (cp < ep) {
 	putc(*cp++, outFP);
     }
@@ -1549,6 +1549,7 @@ funct	: UNDEF '(' params ')'	{
 		$1.f[0] = $1.f[1] = $1.l[-1] = '#';
 		if (lookup($1.v->name)) {	/* may be unlinked in same expr */
 		    unlink_sym($1.v);		/* unlink Symbol from symbol table */
+		    free($1.v->name);
 		    free($1.v);
 		}
 		$$.v = $3.v;
