@@ -1,10 +1,9 @@
-# $Id: comp.sed,v 1.2 2002/07/07 08:40:03 jw Exp $
+# $Id: comp.sed,v 1.3 2002/08/13 21:15:32 jw Exp $
 s/yyparse/iCparse/g
 s/yylex/iClex/g
 s/yyleng/iCleng/g
 s/yytext/iCtext/g
 s/yybuf/iCbuf/g
-s/yyerror/iCerror/g
 s/yychar/iCchar/g
 s/yyval/iCval/g
 s/yylval/iClval/g

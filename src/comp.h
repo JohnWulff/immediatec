@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.29 2002/08/08 23:25:47 jw Exp $";
+"@(#)$Id: comp.h,v 1.30 2002/08/13 22:45:32 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -50,6 +50,7 @@ typedef struct Token {		/* Token for gram.y grammar */
     Symbol *		symbol;
 } Token;
 
+					/*  comp.y  */
 extern int  compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
@@ -57,10 +58,13 @@ extern void error(char *, char *);	/* print error message */
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */
+extern void yyerror(char * s);		/* called for yacc syntax error */
+extern int  get(FILE* fp);		/* character input shared with lexc.l */
 extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
-
-extern int	lineno;			/*   genr.c  */
+extern int	lexflag;
+extern int	lineno;
+					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
@@ -140,6 +144,8 @@ extern int	output(char *);		/* generate network as C file */
 extern int	c_compile(FILE *);
 extern int	copyXlate(FILE *, char *, unsigned *, int);
 					/*   lexc.l   */
+extern int	c_leng;
+extern int	column;
 extern void	delete_sym(Token* tokp);
 					/*   gram.y   */
 extern void	copyAdjust(FILE* iFP, FILE* oFP);

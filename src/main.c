@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.28 2002/08/08 23:25:33 jw Exp $";
+"@(#)$Id: main.c,v 1.29 2002/08/13 10:01:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -18,7 +18,6 @@ static const char main_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
-#include	<signal.h>
 #include	<assert.h>
 #include	"icc.h"
 #include	"comp.h"
@@ -137,6 +136,7 @@ FILE *	T1FP;
 FILE *	T2FP;
 FILE *	T3FP;
     
+static void	unlinkTfiles(void);
 static char	T1FN[] = "ic1.XXXXXX";
 static char	T2FN[] = "ic2.XXXXXX";
 static char	T3FN[] = "ic3.XXXXXX";
@@ -269,7 +269,7 @@ main(
 	}
     }
     debug &= 07777;			/* allow only cases specified */
-    signal(SIGSEGV, quit);		/* catch memory access signal */	
+    initIO();				/* catch memory access signal */	
     iFlag = 0;
     
     szNames[T1index] = T1FN;
@@ -378,9 +378,11 @@ main(
 		    }
 		} else if ((r = buildNet(&igp)) == 0) {/* generate execution network */
 		    Symbol * sp = lookup("iClock");
+		    unlinkTfiles();
 		    assert (sp);		/* iClock initialized in init() */
 		    c_list = sp->u.gate;	/* initialise clock list */
 		    icc(igp, gate_count);	/* execute the compiled logic */
+		    /* never returns - exits via quit() */
 		}
 	    } else {
 		r = output(outFN);		/* generate network as C file */
@@ -399,6 +401,7 @@ main(
 
 closeFiles: ;
     if (outFP != stdout) {
+	fflush(outFP);
 	fclose(outFP);
 	if (listFN && iFlag) {
 	    if (inversionCorrection() != 0) {
@@ -407,7 +410,24 @@ closeFiles: ;
 	    iFlag = 0;
 	}
     }
-    if (errFP != stderr) fclose(errFP);
+    if (errFP != stderr) {
+	fflush(errFP);
+	fclose(errFP);
+    }
+    unlinkTfiles();
+    return (r);	/* 1 - 6 compile errors, 11 - 16 output errors, 1xx pplstfix error */
+} /* main */
+
+/********************************************************************
+ *
+ *	close and unlink temporary files T1FN T2FN T3FN
+ *	T4FN is only a name und unlinked already
+ *
+ *******************************************************************/
+
+static void
+unlinkTfiles(void)
+{
     if (T1FP) {
 	fclose(T1FP);
 	if (!(debug & 04000)) {
@@ -426,8 +446,7 @@ closeFiles: ;
 	    unlink(T3FN);
 	}
     }
-    return (r);	/* 1 - 6 compile errors, 11 - 16 output errors, 1xx pplstfix error */
-} /* main */
+} /* inversionCorrection */
 
 /********************************************************************
  *

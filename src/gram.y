@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.7 2002/08/09 22:00:41 jw Exp $";
+"@(#)$Id: gram.y,v 1.8 2002/08/13 21:14:34 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -39,10 +39,17 @@ typedef struct LineEntry {
 } LineEntry;
 
 #define ENDSTACKSIZE	100
-static LineEntry	lineEntryArray[500];
-static LineEntry*	lep = lineEntryArray;
+// #define LEAS		2
+#define LEAI		170
+static LineEntry *	lineEntryArray = NULL;
+static LineEntry *	lep = NULL;		/* associated array allocated from heap */
+#ifdef LEAS
+static unsigned int	udfCount = LEAS + 2;	/* start with guard value space */
+#else
+static unsigned int	udfCount = LEAI;	/* 170 is approx 4 kB */
+#endif
 static unsigned int	endStack[ENDSTACKSIZE];
-static unsigned int*	esp = endStack;
+static unsigned int *	esp = endStack;
 
 static void		immVarFound(unsigned int start, unsigned int end, Symbol* sp);
 static void		immAssignFound(unsigned int start, unsigned int operator,
@@ -1723,6 +1730,7 @@ extern int column;
 
 static char*	macro[] = { MACRO_NAMES };
 
+/*######################
 void
 c_error(char *fmt, ...)
 {
@@ -1736,15 +1744,16 @@ c_error(char *fmt, ...)
     va_end(ap);
     fprintf(outFP, "\n");
 }
+########################*/
 
 /********************************************************************
  *
  *	immVarFound
  *
- *	The parser has found a bare immediate variable
- *	or an immediate variable in parentheses.
- *	(zany but allowed as an lvalue in C) To locate parentheses,
- *	only pStart and pEnd is adjusted. vStart and vEnd mark variable.
+ *	The parser has found a bare immediate variable or an immediate
+ *	variable in parentheses. (zany but allowed as an lvalue in C)
+ *	To locate parentheses, only pStart and pEnd are adjusted.
+ *	vStart and vEnd still mark the original variable.
  *
  *	sp == 0 is used to signal parenthesized immediate variable.
  *
@@ -1753,21 +1762,32 @@ c_error(char *fmt, ...)
 static void
 immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 {
+    LineEntry *	newArray;
+
     if (sp) {
-	lep->vStart = start;
-	lep->equOp  = LARGE;			/* marks a value variable */
-	lep->vEnd   = end;
+	lep->vStart = start;		/* of an imm variable */
+	lep->equOp  = LARGE;		/* marks a value variable */
+	lep->vEnd   = end;		/* of an imm variable */
 	lep->sp     = sp;
 	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
 	    error("C-statement tries to access an imm type not bit or int:", sp->name);
-	    sp->type = ERR;	/* cannot execute properly */
+	    sp->type = ERR;		/* cannot execute properly */
 	}
-    } else {					/* parenthesized variable found */
-	--lep;					/* step back to previous entry */
+//fprintf(stderr, "immVarFound: %p %s\n", lep, sp->name); fflush(stderr);
+    } else {				/* parenthesized variable found */
+	--lep;				/* step back to previous entry */
     }
-    lep->pStart = start;
-    lep->pEnd   = end;
+    lep->pStart = start;		/* of possible parentheses */
+    lep->pEnd   = end;			/* of possible parentheses */
     lep++;
+    if (lep > &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
+	udfCount += LEAI;			/* increase the size of the array */
+	newArray = (LineEntry*)realloc(lineEntryArray, udfCount * sizeof(LineEntry));
+	assert(newArray);		/* FIX with quit */
+	lep += newArray - lineEntryArray;
+	lineEntryArray = newArray;	/* Array has been successfully resized */
+//fprintf(stderr, "immVarFound: %d re-allocated for lineEntryArray %p\n", udfCount, lineEntryArray); fflush(stderr);
+    }
 } /* immVarFound */
 
 /********************************************************************
@@ -1778,7 +1798,8 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
  *
  *	Backtrack along the immediate variables found so far, to find
  *	the one being assigned to here. Its 'lep' entry is modified.
- *	Only pEnd is adjusted. vStart and vEnd stil mark variable.
+ *	Only pEnd is adjusted. vStart and vEnd still mark the variable
+ *	being assigned to.
  *
  *	If no suitable immediate variable is found it is a compiler
  *	error, because an immediate assignment should have a bare
@@ -1795,7 +1816,7 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 static void
 immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symbol* sp)
 {
-    LineEntry*	p;
+    LineEntry *	p;
     int		mType;
     int		typ;
 
@@ -1832,7 +1853,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    break;			/* Error: will not find start */
 	}
     }
-    c_error(" ERROR (\"%s\" %u %u %d %d %p %p)", sp->name, start, end, sp->type, sp->ftype, sp, p->sp);
+//    c_error(" ERROR (\"%s\" %u %u %d %d %p %p)", sp->name, start, end, sp->type, sp->ftype, sp, p->sp);
 } /* immAssignFound */
 
 /********************************************************************
@@ -1865,8 +1886,21 @@ popEndStack(void)
  *
  *	copyAdjustFile
  *
- *	use the byte postions stored in lineEntryArray to insert
- *	to insert macro brackets for immediate variables and assignments
+ *	Allocation of the lineEntryArray[] is carried out if iFP == 0.
+ *
+ *	There is one entry for every occurence of an immediate variable
+ *	in the C code. Since only immediate variables which are still
+ *	unassigned by the time the C-parse is executed are proper
+ *	candidates and if 10 times this number is allowed for, the array
+ *	is unlikely to overflow. This count is available by counting
+ *	Symbols of type == UDF. This is also done later in listNet(),
+ *	but we need the value earlier.
+ *
+ *	Also other imm variables are used as values, so a generous
+ *	first guess and realloc() in immVarFound is a better choice.
+ *
+ *	Use the byte postions stored in lineEntryArray to insert
+ *	macro calls for immediate variables and assignments
  *
  *******************************************************************/
 
@@ -1874,15 +1908,16 @@ void
 copyAdjust(FILE* iFP, FILE* oFP)
 {
     int			c;
-    LineEntry*		p       = lineEntryArray + 1;
-    unsigned int	start   = p->pStart;
-    unsigned int	vstart  = LARGE;
-    unsigned int	vend    = LARGE;
-    unsigned int	equop   = LARGE;
-    unsigned int	end     = LARGE;
-    unsigned int	bytePos = 0;
-    Symbol *		sp      = NULL;
-    int			pFlag   = 1;
+    LineEntry*		p;
+    unsigned int	start;
+    unsigned int	vstart;
+    unsigned int	vend;
+    unsigned int	equop;
+    unsigned int	end;
+    unsigned int	bytePos;
+    int			pFlag;
+    Symbol *		sp;
+    Symbol **		hsp;
     int			mType;
     char		buffer[BUFS];	/* buffer for modified names */
     char		iqt[2];		/* char buffers - space for 0 terminator */
@@ -1891,12 +1926,38 @@ copyAdjust(FILE* iFP, FILE* oFP)
     int			bit;
     char		tail[8];	/* compiler generated suffix _123456 max */
 
-    lep++->pStart = LARGE;		/* guard value in case first immVarFound(0) */
-    lep->pStart   = LARGE;		/* value overwritten by first immVarfound */
-
     if (iFP == NULL) {
-	return;				/* initialize lineEntryArray */
+#ifdef LEAS
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (sp = *hsp; sp; sp = sp->next) {
+		if ((sp->type & TM) == UDF) {
+//fprintf(stderr, "copyAdjust: %d: %2d %s\n", udfCount, sp->type, sp->name); fflush(stderr);
+		    udfCount += LEAS;
+		}
+	    }
+	}
+#endif
+	lineEntryArray = (LineEntry*)realloc(NULL, udfCount * sizeof(LineEntry));
+	assert(lineEntryArray);		/* FIX with quit */
+//fprintf(stderr, "copyAdjust: %d allocated for lineEntryArray      %p\n", udfCount, lineEntryArray); fflush(stderr);
+	lep = lineEntryArray;
+	lep++->pStart = LARGE;		/* guard value in case first immVarFound(0) */
+	lep->pStart   = LARGE;		/* value overwritten by first immVarfound */
+	return;				/* lineEntryArray initialized */
     }
+
+    lep++->pStart = LARGE;		/* finalise lineEntryArray */
+    lep->pStart   = LARGE;		/* require 2 guard entries at the end */
+
+    p       = lineEntryArray + 1;	/* miss guard entry at start */
+    start   = p->pStart;
+    vstart  = LARGE;
+    vend    = LARGE;
+    equop   = LARGE;
+    end     = LARGE;
+    bytePos = 0;
+    pFlag   = 1;
+    sp      = NULL;
 
     while ((c = getc(iFP)) != EOF) {
 	while (bytePos >= end) {
@@ -1940,4 +2001,5 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	}
 	bytePos++;
     }
+//fprintf(stderr, "copyAdjust: %d used for lineEntryArray\n", lep - lineEntryArray); fflush(stderr);
 } /* copyAdjust */

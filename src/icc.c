@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.16 2002/05/16 14:28:43 jw Exp $";
+"@(#)$Id: icc.c,v 1.17 2002/08/13 10:40:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -197,10 +197,7 @@ icc(
     maxfd = 0;
     FD_SET (fileno (stdin), &selectinfds);
     maxfd = max(maxfd, (int)fileno(stdin));
-    if (ioctl(0, TCGETA, &ttyparms) == -1)   {
-	fprintf(stderr, "Cannot get termio from stdin\n");
-	quit(-5);
-    }
+    /* ttyparms initialised in initIO() called from main or load */
 #endif
 
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
@@ -243,10 +240,10 @@ icc(
     }
 
     if (debug & 0400) {
-	quit(0);				/* terminate - no inputs */
+	quit(0);			/* terminate - no inputs */
     }
-
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
+
     if (debug & 03000) {
 #ifdef _MSDOS_
 #ifdef MSC 
@@ -544,6 +541,26 @@ void interrupt handler1C(void)
 
 /********************************************************************
  *
+ *	initialize IO
+ *
+ *******************************************************************/
+
+void initIO(void)
+{
+    signal(SIGSEGV, quit);		/* catch memory access signal */	
+#ifdef _MSDOS_
+    oldhandler = NULL;
+#else	/* Linux */
+    /* Linux only */
+    if (ioctl(0, TCGETA, &ttyparms) == -1)   {
+	fprintf(stderr, "Cannot get termio from stdin\n");
+	quit(-5);
+    }
+#endif
+}
+
+/********************************************************************
+ *
  *	Quit program with 'q' or ctrlC or Break via signal SIGINT
  *	or program abort on detected bugs.
  *
@@ -551,25 +568,28 @@ void interrupt handler1C(void)
 
 void quit(int sig)
 {
-    if (debug & 03000) {
+    fflush(outFP);
 #ifdef _MSDOS_
+    if (oldhandler && debug & 03000) {
 	/* reset the old interrupt handler */
 #ifdef MSC 
 	_dos_setvect(INTR, oldhandler);
 #else
 	setvect(INTR, oldhandler);
 #endif
-#endif
     }
-    fflush(outFP);
-#ifndef _MSDOS_
+#else	/* Linux */
     if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
 #endif
     if ((debug & 0400) == 0) {
 	fprintf(errFP, "\n");
     }
-    if (sig) {
+    if (sig > SIGINT) {
 	fprintf(errFP, "Quit with sig = %d\n", sig);
+    }
+    if (errFP != stderr) {
+	fflush(errFP);
+	fclose(errFP);
     }
     exit(sig);			/* really quit */
 } /* quit */

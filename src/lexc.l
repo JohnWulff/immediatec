@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.7 2002/08/09 20:56:23 jw Exp $";
+"@(#)$Id: lexc.l,v 1.8 2002/08/14 00:01:33 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -42,122 +42,136 @@ IS			(u|U|l|L)
 
 static int	c_comment(c_STYPE* u);
 static int	cpp_comment(c_STYPE* u);
-static int	preprocess(c_STYPE* u, int echo);
+static int	preprocess(c_STYPE* u);
 static int	ignore(c_STYPE* u);
-static void	count(c_STYPE* u, int echo);
+static void	count(c_STYPE* u);
 static int	check_type(c_STYPE* u);
+
+#define YY_INPUT(buf,result,max_size) \
+{\
+    int c = '*', n;\
+    for ( n = 0; n < max_size && (c = get( yyin )) != EOF && c != '\n'; ++n )\
+	    buf[n] = (char) c;\
+    if ( c == '\n' )\
+	    buf[n++] = (char) c;\
+    if ( c == EOF && ferror( yyin ) )\
+	    YY_FATAL_ERROR( "input in flex scanner failed" );\
+    result = n;\
+}
+
+#define ECHO
+#define YY_NO_UNPUT
+
 %}
 
 %%
 "/*"			{ if (c_comment(&c_lval)) yyterminate(); }
 "//"			{ if (cpp_comment(&c_lval)) yyterminate(); }
-^##			{ if (preprocess(&c_lval, 0)) yyterminate(); }
-^#line			{ if (preprocess(&c_lval, 0)) yyterminate(); }
-^[ \t]*#		{ if (preprocess(&c_lval, 1)) yyterminate(); }
+^[ \t]*#		{ if (preprocess(&c_lval)) yyterminate(); }
 
-"auto"			{ count(&c_lval, 1); return AUTO; }
-"break"			{ count(&c_lval, 1); return BREAK; }
-"case"			{ count(&c_lval, 1); return CASE; }
-"char"			{ count(&c_lval, 1); return CHAR; }
-(__)?const(__)?		{ count(&c_lval, 1); return CONST; }
-"continue"		{ count(&c_lval, 1); return CONTINUE; }
-"default"		{ count(&c_lval, 1); return DEFAULT; }
-"do"			{ count(&c_lval, 1); return DO; }
-"double"		{ count(&c_lval, 1); return DOUBLE; }
-"else"			{ count(&c_lval, 1); return ELSE; }
-"enum"			{ count(&c_lval, 1); return ENUM; }
-"extern"		{ count(&c_lval, 1); return EXTERN; }
-"float"			{ count(&c_lval, 1); return FLOAT; }
-"for"			{ count(&c_lval, 1); return FOR; }
-"goto"			{ count(&c_lval, 1); return GOTO; }
-"if"			{ count(&c_lval, 1); return IF; }
-"int"			{ count(&c_lval, 1); return INT; }
-"long"			{ count(&c_lval, 1); return LONG; }
-"register"		{ count(&c_lval, 1); return REGISTER; }
-"return"		{ count(&c_lval, 1); return RETURN; }
-"short"			{ count(&c_lval, 1); return SHORT; }
-(__)?signed(__)?	{ count(&c_lval, 1); return SIGNED; }
-"sizeof"		{ count(&c_lval, 1); return SIZEOF; }
-"static"		{ count(&c_lval, 1); return STATIC; }
-"struct"		{ count(&c_lval, 1); return STRUCT; }
-"switch"		{ count(&c_lval, 1); return SWITCH; }
-"typedef"		{ count(&c_lval, 1); return TYPEDEF; }
-(__)?typeof(__)?	{ count(&c_lval, 1); return TYPEOF; }
-"union"			{ count(&c_lval, 1); return UNION; }
-(__)?unsigned(__)?	{ count(&c_lval, 1); return UNSIGNED; }
-"void"			{ count(&c_lval, 1); return VOID; }
-(__)?volatile(__)?	{ count(&c_lval, 1); return VOLATILE; }
-"while"			{ count(&c_lval, 1); return WHILE; }
+"auto"			{ count(&c_lval); return AUTO; }
+"break"			{ count(&c_lval); return BREAK; }
+"case"			{ count(&c_lval); return CASE; }
+"char"			{ count(&c_lval); return CHAR; }
+(__)?const(__)?		{ count(&c_lval); return CONST; }
+"continue"		{ count(&c_lval); return CONTINUE; }
+"default"		{ count(&c_lval); return DEFAULT; }
+"do"			{ count(&c_lval); return DO; }
+"double"		{ count(&c_lval); return DOUBLE; }
+"else"			{ count(&c_lval); return ELSE; }
+"enum"			{ count(&c_lval); return ENUM; }
+"extern"		{ count(&c_lval); return EXTERN; }
+"float"			{ count(&c_lval); return FLOAT; }
+"for"			{ count(&c_lval); return FOR; }
+"goto"			{ count(&c_lval); return GOTO; }
+"if"			{ count(&c_lval); return IF; }
+"int"			{ count(&c_lval); return INT; }
+"long"			{ count(&c_lval); return LONG; }
+"register"		{ count(&c_lval); return REGISTER; }
+"return"		{ count(&c_lval); return RETURN; }
+"short"			{ count(&c_lval); return SHORT; }
+(__)?signed(__)?	{ count(&c_lval); return SIGNED; }
+"sizeof"		{ count(&c_lval); return SIZEOF; }
+"static"		{ count(&c_lval); return STATIC; }
+"struct"		{ count(&c_lval); return STRUCT; }
+"switch"		{ count(&c_lval); return SWITCH; }
+"typedef"		{ count(&c_lval); return TYPEDEF; }
+(__)?typeof(__)?	{ count(&c_lval); return TYPEOF; }
+"union"			{ count(&c_lval); return UNION; }
+(__)?unsigned(__)?	{ count(&c_lval); return UNSIGNED; }
+"void"			{ count(&c_lval); return VOID; }
+(__)?volatile(__)?	{ count(&c_lval); return VOLATILE; }
+"while"			{ count(&c_lval); return WHILE; }
 (__)?attribute(__)?	{ if (ignore(&c_lval)) yyterminate(); }
 (__)?asm(__)?		{ if (ignore(&c_lval)) yyterminate(); }
-(__)?extension(__)?	{ count(&c_lval, 1); }		/* ignore */
-(__)?inline(__)?	{ count(&c_lval, 1); }		/* ignore */
-(__)?restrict(__)?	{ count(&c_lval, 1); }		/* ignore */
+(__)?extension(__)?	{ count(&c_lval); }		/* ignore */
+(__)?inline(__)?	{ count(&c_lval); }		/* ignore */
+(__)?restrict(__)?	{ count(&c_lval); }		/* ignore */
 
-(I|Q|T)X{D}+\.{D}+	{ count(&c_lval, 1); return check_type(&c_lval); }
-{L}({L}|{D})*		{ count(&c_lval, 1); return check_type(&c_lval); }
+(I|Q|T)X{D}+\.{D}+	{ count(&c_lval); return check_type(&c_lval); }
+{L}({L}|{D})*		{ count(&c_lval); return check_type(&c_lval); }
 
-"__LINE__"		{ count(&c_lval, 1); return CONSTANT; }	/* no need to identify octal */
-0[xX]{H}+{IS}*		{ count(&c_lval, 1); return CONSTANT; }	/* 0xac8 0XAC8UL */
-{D}+{IS}*		{ count(&c_lval, 1); return CONSTANT; }	/* 12 12l 12u 12UL */
-'(\\.|[^\\'])+'		{ count(&c_lval, 1); return CONSTANT; }	/* '\n' 'A' 'ABC' */
+"__LINE__"		{ count(&c_lval); return CONSTANT; }	/* no need to identify octal */
+0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 0xac8 0XAC8UL */
+{D}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 12 12l 12u 12UL */
+'(\\.|[^\\'])+'		{ count(&c_lval); return CONSTANT; }	/* '\n' 'A' 'ABC' */
 
-{D}+{E}{FS}?		{ count(&c_lval, 1); return CONSTANT; }	/* 12e2 12e2f 12E2L */
-{D}*"."{D}+({E})?{FS}?	{ count(&c_lval, 1); return CONSTANT; }	/* .1 0.1 1.0 1.0e2 */
-{D}+"."{D}*({E})?{FS}?	{ count(&c_lval, 1); return CONSTANT; }	/* 1. 1.e2 */
+{D}+{E}{FS}?		{ count(&c_lval); return CONSTANT; }	/* 12e2 12e2f 12E2L */
+{D}*"."{D}+({E})?{FS}?	{ count(&c_lval); return CONSTANT; }	/* .1 0.1 1.0 1.0e2 */
+{D}+"."{D}*({E})?{FS}?	{ count(&c_lval); return CONSTANT; }	/* 1. 1.e2 */
 
-"__FILE__"		{ count(&c_lval, 1); return STRING_LITERAL; }
-\"(\\.|[^\\"])*\"	{ count(&c_lval, 1); return STRING_LITERAL; }
+"__FILE__"		{ count(&c_lval); return STRING_LITERAL; }
+\"(\\.|[^\\"])*\"	{ count(&c_lval); return STRING_LITERAL; }
 
-">>="			{ count(&c_lval, 1); return RIGHT_ASSIGN; }
-"<<="			{ count(&c_lval, 1); return LEFT_ASSIGN; }
-"+="			{ count(&c_lval, 1); return ADD_ASSIGN; }
-"-="			{ count(&c_lval, 1); return SUB_ASSIGN; }
-"*="			{ count(&c_lval, 1); return MUL_ASSIGN; }
-"/="			{ count(&c_lval, 1); return DIV_ASSIGN; }
-"%="			{ count(&c_lval, 1); return MOD_ASSIGN; }
-"&="			{ count(&c_lval, 1); return AND_ASSIGN; }
-"^="			{ count(&c_lval, 1); return XOR_ASSIGN; }
-"|="			{ count(&c_lval, 1); return OR_ASSIGN; }
-">>"			{ count(&c_lval, 1); return RIGHT_OP; }
-"<<"			{ count(&c_lval, 1); return LEFT_OP; }
-"++"			{ count(&c_lval, 1); return INC_OP; }
-"--"			{ count(&c_lval, 1); return DEC_OP; }
-"->"			{ count(&c_lval, 1); return PTR_OP; }
-"&&"			{ count(&c_lval, 1); return AND_OP; }
-"||"			{ count(&c_lval, 1); return OR_OP; }
-"<="			{ count(&c_lval, 1); return LE_OP; }
-">="			{ count(&c_lval, 1); return GE_OP; }
-"=="			{ count(&c_lval, 1); return EQ_OP; }
-"!="			{ count(&c_lval, 1); return NE_OP; }
-"..."			{ count(&c_lval, 1); return ELIPSIS; }
-";"			{ count(&c_lval, 1); return ';'; }
-"{"			{ count(&c_lval, 1); return '{'; }
-"}"			{ count(&c_lval, 1); return '}'; }
-","			{ count(&c_lval, 1); return ','; }
-":"			{ count(&c_lval, 1); return ':'; }
-"="			{ count(&c_lval, 1); return '='; }
-"("			{ count(&c_lval, 1); return '('; }
-")"			{ count(&c_lval, 1); return ')'; }
-"["			{ count(&c_lval, 1); return '['; }
-"]"			{ count(&c_lval, 1); return ']'; }
-"."			{ count(&c_lval, 1); return '.'; }
-"&"			{ count(&c_lval, 1); return '&'; }
-"!"			{ count(&c_lval, 1); return '!'; }
-"~"			{ count(&c_lval, 1); return '~'; }
-"-"			{ count(&c_lval, 1); return '-'; }
-"+"			{ count(&c_lval, 1); return '+'; }
-"*"			{ count(&c_lval, 1); return '*'; }
-"/"			{ count(&c_lval, 1); return '/'; }
-"%"			{ count(&c_lval, 1); return '%'; }
-"<"			{ count(&c_lval, 1); return '<'; }
-">"			{ count(&c_lval, 1); return '>'; }
-"^"			{ count(&c_lval, 1); return '^'; }
-"|"			{ count(&c_lval, 1); return '|'; }
-"?"			{ count(&c_lval, 1); return '?'; }
+">>="			{ count(&c_lval); return RIGHT_ASSIGN; }
+"<<="			{ count(&c_lval); return LEFT_ASSIGN; }
+"+="			{ count(&c_lval); return ADD_ASSIGN; }
+"-="			{ count(&c_lval); return SUB_ASSIGN; }
+"*="			{ count(&c_lval); return MUL_ASSIGN; }
+"/="			{ count(&c_lval); return DIV_ASSIGN; }
+"%="			{ count(&c_lval); return MOD_ASSIGN; }
+"&="			{ count(&c_lval); return AND_ASSIGN; }
+"^="			{ count(&c_lval); return XOR_ASSIGN; }
+"|="			{ count(&c_lval); return OR_ASSIGN; }
+">>"			{ count(&c_lval); return RIGHT_OP; }
+"<<"			{ count(&c_lval); return LEFT_OP; }
+"++"			{ count(&c_lval); return INC_OP; }
+"--"			{ count(&c_lval); return DEC_OP; }
+"->"			{ count(&c_lval); return PTR_OP; }
+"&&"			{ count(&c_lval); return AND_OP; }
+"||"			{ count(&c_lval); return OR_OP; }
+"<="			{ count(&c_lval); return LE_OP; }
+">="			{ count(&c_lval); return GE_OP; }
+"=="			{ count(&c_lval); return EQ_OP; }
+"!="			{ count(&c_lval); return NE_OP; }
+"..."			{ count(&c_lval); return ELIPSIS; }
+";"			{ count(&c_lval); return ';'; }
+"{"			{ count(&c_lval); return '{'; }
+"}"			{ count(&c_lval); return '}'; }
+","			{ count(&c_lval); return ','; }
+":"			{ count(&c_lval); return ':'; }
+"="			{ count(&c_lval); return '='; }
+"("			{ count(&c_lval); return '('; }
+")"			{ count(&c_lval); return ')'; }
+"["			{ count(&c_lval); return '['; }
+"]"			{ count(&c_lval); return ']'; }
+"."			{ count(&c_lval); return '.'; }
+"&"			{ count(&c_lval); return '&'; }
+"!"			{ count(&c_lval); return '!'; }
+"~"			{ count(&c_lval); return '~'; }
+"-"			{ count(&c_lval); return '-'; }
+"+"			{ count(&c_lval); return '+'; }
+"*"			{ count(&c_lval); return '*'; }
+"/"			{ count(&c_lval); return '/'; }
+"%"			{ count(&c_lval); return '%'; }
+"<"			{ count(&c_lval); return '<'; }
+">"			{ count(&c_lval); return '>'; }
+"^"			{ count(&c_lval); return '^'; }
+"|"			{ count(&c_lval); return '|'; }
+"?"			{ count(&c_lval); return '?'; }
 
-[ \t\v\n\f]+		{ count(&c_lval, 1); }
-.			{ count(&c_lval, 1); /* ignore bad characters */ }
+[ \t\v\n\f]+		{ count(&c_lval); }
+.			{ count(&c_lval); /* ignore bad characters */ }
 
 %%
 
@@ -182,14 +196,13 @@ c_comment(c_STYPE* u)
 {
     int c;
 
-    count(u, 1);			/* count and ECHO "/*" */
+    count(u);			/* count "/*" */
 
     if ((c = input()) == EOF) return 1;
 
     do {		/* start C style comment */
 	while (c != '*') {
 	    gramOffset++;
-	    if (debug & 010) putc(c, yyout);
 	    if (c == '\n') {
 		column = 0;
 		gramLine++;
@@ -202,13 +215,11 @@ c_comment(c_STYPE* u)
 	}
 	column++;		/* count '*' */
 	gramOffset++;
-	if (debug & 010) putc(c, yyout);
     } while ((c = input()) != '/');
 
     if (c == EOF) return 1;
     column++;			/* count '/' */
     gramOffset++;
-    if (debug & 010) putc(c, yyout);
 
     return 0;
 } /* c_comment */
@@ -224,12 +235,11 @@ cpp_comment(c_STYPE* u)
 {
     int c;
 
-    count(u, 1);			/* count and ECHO "//" */
+    count(u);			/* count "//" */
 
     do {			/* start C++ style comment */
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
-	if (debug & 010) putc(c, yyout);
     } while (c != '\n');
     column = 0;
     gramLine++;
@@ -240,29 +250,21 @@ cpp_comment(c_STYPE* u)
  *
  *	Pre-processor line - more lines if last character is '\'
  *
- *	lines starting with
- *	#line
- *	or containing only
- *	##
- *	are not echoed	- see lex regular expressions above
- *	this keeps these iC generated lins out of the listing
- *
  *******************************************************************/
 
 static int
-preprocess(c_STYPE* u, int echo)
+preprocess(c_STYPE* u)
 {
     int c = 0;
     int prev;
 
-    count(u, echo);		/* count and ECHO "#" */
+    count(u);			/* count "#" */
 
     do {			/* pre processeor line */
 	do {
 	    prev = c;
 	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
 	    gramOffset++;
-	    if (echo && (debug & 010)) putc(c, yyout);
 	} while (c != '\n');
 	column = 0;
 	gramLine++;
@@ -283,12 +285,11 @@ ignore(c_STYPE* u)
     int c;
     int  bracketCount = 0;
 
-    count(u, 1);			/* count and ECHO "__atribute__" */
+    count(u);			/* count "__atribute__" */
 
     for (;;) {
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
-	if (debug & 010) putc(c, yyout);
 	if (c == '\n') {
 	    column = 0;
 	    gramLine++;
@@ -313,7 +314,7 @@ ignore(c_STYPE* u)
  *******************************************************************/
 
 static void
-count(c_STYPE* u, int echo)
+count(c_STYPE* u)
 {
     int i;
 
@@ -332,8 +333,6 @@ count(c_STYPE* u, int echo)
     }
 
     u->tok.end = gramOffset;
-
-    if (echo && (debug & 010)) { ECHO; }
 } /* count */
 
 /********************************************************************

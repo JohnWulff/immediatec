@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.55 2002/08/09 21:54:19 jw Exp $";
+"@(#)$Id: outp.c,v 1.56 2002/08/13 23:12:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -198,7 +198,9 @@ listNet(unsigned * gate_count)
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
-    if (debug & 020) fprintf(outFP, "\nNET TOPOLOGY\n\n");
+    if (debug & 020) {
+	fprintf(outFP, "\n******* NET TOPOLOGY    ************************\n\n");
+    }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type & ~TM) {
@@ -263,7 +265,7 @@ listNet(unsigned * gate_count)
     if (debug & 040) {
 	byte_total = (long)block_total * sizeof(Gate)
 		   + (long)link_count * sizeof(Gate *);
-	fprintf(outFP, "\nNET STATISTICS\n\n");
+	fprintf(outFP, "\n******* NET STATISTICS  ************************\n\n");
 	for (typ = 0; typ < MAX_LS; typ++) {
 	    if (gate_count[typ]) {
 		fprintf(outFP, "%s\t%c %6d%s\n", full_type[typ], os[typ],
@@ -1204,6 +1206,8 @@ c_compile(FILE * iFP)
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
 //fprintf(stderr, "c_compile: start\n"); fflush(stderr);
+    lexflag = 07;			/* output partial source listing */
+
     if (copyBlocks(iFP, T2FP, 01)) {
 	return T1index;
     }

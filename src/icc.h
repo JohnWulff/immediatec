@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.40 2002/08/06 13:43:25 jw Exp $";
+"@(#)$Id: icc.h,v 1.41 2002/08/13 09:25:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -326,9 +326,8 @@ extern unsigned	glit_cnt;			/* count glitches */
 extern unsigned	long glit_nxt;			/* count glitch scan */
 #endif
 
-#ifndef _WINDOWS 
+extern void	initIO(void);	/* init signal and correct interrupt vectors */
 extern void	quit(int sig);	/* quit with correct interrupt vectors */
-#endif
 
 #ifdef LOAD
 extern Gate **		sTable;			/* pointer to dynamic array */

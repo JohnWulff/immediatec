@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.66 2002/08/09 00:40:31 jw Exp $";
+"@(#)$Id: comp.y,v 1.67 2002/08/13 23:11:44 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -30,11 +30,9 @@
 
 /* "comp.y	3.70	95/02/03 Copyright (c) 1985-1993 by John E. Wulff" */
 
-static int	get(void);
-static void	unget(char);
+static void	unget(char);		/* shares buffers with get() */
 static int	iClex(void);
-static void	iCerror(char *);	/* called for yacc syntax error */
-int		ynerrs;			/* count of iCerror() calls */
+int		ynerrs;			/* count of yyerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 static void	errBit(void);
 static void	errInt(void);
@@ -1611,6 +1609,7 @@ static char *	errFilename;
 static int	errFlag = 0;
 static int	errRet = 0;
 
+int		lexflag = 0;
 int		lineno = 1;
 int		c_number = 0;		/* case number for cexe.c */
 int		outFlag = 0;		/* global flag for compiled output */
@@ -1646,6 +1645,8 @@ compile(
     char *	errNM,			/* error file name */
     char *	outNM)			/* C output file name */
 {
+    lexflag = 0;			/* output all of source listing */
+
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
 	return Lindex;
     }
@@ -1662,15 +1663,12 @@ compile(
     for (initcode(); iCparse(); initcode()) {
 	;
     }
-    if (debug & 016) {		/* end source listing */
-	fprintf(outFP, "************************************************\n");
-    }
     if (inpPath) fclose(inFP);
     return errRet;
 } /* compile */
 
-static int
-get(void)
+int
+get(FILE* fp)
 {
     int		temp;
     int		temp1;
@@ -1684,7 +1682,7 @@ get(void)
 	    lineno++;
 	}
 	for (getp = fillp = chbuf; fillp < &chbuf[sizeof(chbuf)-1]
-	    && (temp = getc(inFP)) != EOF
+	    && (temp = getc(fp)) != EOF
 	    && (*fillp++ = temp) != '\n'; );
 	if (fillp == chbuf) {
 	    lineflag = 0;
@@ -1693,7 +1691,10 @@ get(void)
 	}
 	*fillp = '\0';
 	lineflag = (*(fillp-1) == '\n') ? 1 : 0;
-	if (debug & 010) {
+	if (lineflag && (lexflag & 04) && strncmp(getp, "##", 2) == 0) {
+	    lexflag |= 1;	/* block source listing for lex */
+	}
+	if ((lexflag & 01) == 0 && (debug & 010)) {
 	    /********************************************************
 	     *  output source listing line in debugging output
 	     *  before any tokens are handed to the parser
@@ -1703,20 +1704,34 @@ get(void)
 	    if (lineflag == 0) putc('\n', outFP);
 	}
 	/* handle pre-processor #line 1 "file.ic" */
-	if (sscanf(getp, "#line %d \"%[^\"]\"\n", &temp1, inpBuf) == 2) {
+	if (lineflag && sscanf(getp, "#line %d \"%[^\"]\"\n", &temp1, inpBuf) == 2) {
 	    lineno = temp1;
 	    lineflag = 0;
 	    inpNM = inpBuf;	/* another file name for messages */
-	    getp = fillp;	/* do not pass to iClex() */
+	    if ((lexflag & 04) == 0) {
+		getp = fillp;	/* do not pass to iClex() */
+	    } else {
+		if ((debug & 010)) {
+		    if (lexflag & 02) {
+			fprintf(outFP, "******* C CODE          ************************\n\n");
+		    } else {
+			fprintf(outFP, "\n");	/* seperate blocks in lex listing */
+		    }
+		}
+		lexflag &= ~03;			/* output source listing for lex */
+	    }
 	}
     }
     /****************************************************************
      *  extract 1 character at a time from chbuf and return it
-     *  transfer it to the token buffer iCtext and count iCleng
+     *  transfer it to the token buffer iCtext and count iCleng if not lex
      ****************************************************************/
-    iCtext[iCleng++] = temp = *getp++;
-    if (iCleng >= sizeof(iCtext)) iCleng--;
-    iCtext[iCleng] = '\0';
+    temp = *getp++;
+    if ((lexflag & 04) == 0) {
+	iCtext[iCleng++] = temp;
+	if (iCleng >= sizeof(iCtext)) iCleng--;
+	iCtext[iCleng] = '\0';
+    }
     return temp;
 } /* get */
 
@@ -1754,7 +1769,7 @@ iClex(void)
 	goto retfl;
     }
     iCleng = 0;
-    while ((c = get()) !=  EOF) {
+    while ((c = get(inFP)) !=  EOF) {
 	Symbol *	symp;
 	List_e *	lp;
 	int		len;
@@ -1767,7 +1782,7 @@ iClex(void)
 	if (isdigit(c)) {
 	    char *	format;		/* number */
 	    if (c == '0') {		/* oct or hex or 0 */
-		if ((c = get()) == 'x') {
+		if ((c = get(inFP)) == 'x') {
 		    format = "0x%x%s";	/* hexadecimal */
 		} else if (c == 'X') {
 		    format = "0X%x%s";	/* hexadecimal */
@@ -1778,7 +1793,7 @@ iClex(void)
 	    } else {
 		format = "%d%s";	/* decimal */
 	    }
-	    while ((c = get()) != EOF && isxdigit(c));
+	    while ((c = get(inFP)) != EOF && isxdigit(c));
 	    unget(c);
 	    if (sscanf(iCtext, format, &iClval.val.v, iCtext) == 1) {
 		if (dflag) {
@@ -1807,14 +1822,14 @@ iClex(void)
 	    unsigned char	y1[2];
 	    int			yn;
 
-	    while ((c = get()) != EOF && (isalnum(c) || c == '_'));
+	    while ((c = get(inFP)) != EOF && (isalnum(c) || c == '_'));
 	    if (sscanf(iCtext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
 		if (y1[0] == 'B' || y1[0] == 'W') {
 		    wplus = 1;
 		    goto foundQIT;
 		} else if (c == '.') {
-		    if (isdigit(c = get())) {	/* can only be QX%d. */
-			while (isdigit(c = get()));
+		    if (isdigit(c = get(inFP))) {	/* can only be QX%d. */
+			while (isdigit(c = get(inFP)));
 		    foundQIT:
 			ftyp = GATE - wplus;		/* GATE or ARITH */
 			if (y0[0] == 'Q') {
@@ -1872,7 +1887,7 @@ iClex(void)
 	    }
 	    iClval.sym.l = stmtp += len;
 	} else {
-	    c1 = get();
+	    c1 = get(inFP);
 	    switch (c) {
 	    case '!':
 		if (c1 == '=') {
@@ -1882,8 +1897,8 @@ iClex(void)
 		c = NOTL;				/* ! or ~ */
 		break;
 	    case '%':
-		if (c1 == '{') {
-		    c = LHEAD; goto found;		/* %{ */
+		if (c1 == '{') {			/*    >>> '}' */
+		    c = LHEAD; goto found;		/* %{ >>> %} */
 		} else if (c1 == '=') {
 		    c = OPE; goto found;		/* %= */
 		}
@@ -1925,14 +1940,14 @@ iClex(void)
 	    case '/':
 		if (c1 == '/') {
 		    do {		/* start C++ style comment */
-			if ((c1 = get()) == EOF) return 0;
+			if ((c1 = get(inFP)) == EOF) return 0;
 		    } while (c1 != '\n');
 		} else if (c1 == '*') {
 		    do {		/* start C style comment */
 			while (c1 != '*') {
-			    if ((c1 = get()) == EOF) return 0;
+			    if ((c1 = get(inFP)) == EOF) return 0;
 			}
-		    } while ((c1 = get()) != '/');
+		    } while ((c1 = get(inFP)) != '/');
 		} else if (c1 == '=') {
 		    c = OPE; goto found;		/* /= */
 		} else {
@@ -1943,7 +1958,7 @@ iClex(void)
 		continue;
 	    case '<':
 		if (c1 == '<') {
-		    if ((c1 = get()) == '=') {
+		    if ((c1 = get(inFP)) == '=') {
 			c = OPE; goto found;		/* <<= */
 		    }
 		    c = AOP;				/* << */
@@ -1961,7 +1976,7 @@ iClex(void)
 		break;
 	    case '>':
 		if (c1 == '>') {
-		    if ((c1 = get()) == '=') {
+		    if ((c1 = get(inFP)) == '=') {
 			c = OPE; goto found;		/* >>= */
 		    }
 		    c = AOP;				/* >> */
@@ -2120,8 +2135,8 @@ execerror(			/* recover from run-time error */
     longjmp(begin, 0);
 } /* execerror */
 
-static void
-iCerror(char *	s)		/* called for yacc syntax error */
+void
+yyerror(char *	s)		/* called for yacc syntax error */
 {
     char *	cp = chbuf;
     int		n, n1;
@@ -2130,7 +2145,12 @@ iCerror(char *	s)		/* called for yacc syntax error */
     errLine();
     fprintf(outFP, "*** ");	/* do not change - used as search key in iClive */
     if (errFlag) fprintf(errFP, "*** ");
-    for (n1 = 0, n = getp - cp - iCleng; n > 0; n--, cp++) {
+    if ((lexflag & 04) == 0) {
+	n = getp - chbuf - iCleng;
+    } else {
+	n = column - c_leng;
+    }
+    for (n1 = 0; n > 0; n--, cp++) {
 	n1++;
 	if (*cp == '\t') {
 	    while (n1 % 8) {
@@ -2163,7 +2183,7 @@ iCerror(char *	s)		/* called for yacc syntax error */
 	fprintf(outFP, "^\n");
 	if (errFlag) fprintf(errFP, "^\n");
     }
-} /* iCerror */
+} /* yyerror */
 
 /********************************************************************
  *
@@ -2181,10 +2201,10 @@ copyCfrag(char s, char m, char e)
     int		match;
     int		count;
 
-    for (brace = 0; (c = get()) != EOF; ) {
+    for (brace = 0; (c = get(inFP)) != EOF; ) {
 	if (c == s) {			/* '{' or '(' */
 	    if (brace++ == 0 && m == '%') {	/* don't output "%{\w" */
-		while ((c = get()) == ' ' || c == '\t');
+		while ((c = get(inFP)) == ' ' || c == '\t');
 		unget(c);
 		continue;
 	    }
@@ -2193,7 +2213,7 @@ copyCfrag(char s, char m, char e)
 		unget(c);		/* use for next token */
 		return m;		/* no longer used */
 	    } else if (brace == 1 && c == '%') {
-		if ((c = get()) == '}') {
+		if ((c = get(inFP)) == '}') {
 		    fprintf(T1FP, "\n%%##\n\n%%}\n");	/* #line lineno "outNM"\n%} */
 		    unget(c);
 		    return m;
@@ -2215,19 +2235,19 @@ copyCfrag(char s, char m, char e)
 
 	case '/':			/* look for comments */
 	    putc(c, T1FP);
-	    if ((c = get()) == '/') {
+	    if ((c = get(inFP)) == '/') {
 		do {			/* start C++ style comment */
 		    putc(c, T1FP);
-		    if ((c = get()) == EOF) goto eof_error;
+		    if ((c = get(inFP)) == EOF) goto eof_error;
 		} while (c != '\n');
 	    } else if (c == '*') {
 		do {			/* start C style comment */
 		    putc(c, T1FP);
 		    while (c != '*') {
-			if ((c = get()) == EOF) goto eof_error;
+			if ((c = get(inFP)) == EOF) goto eof_error;
 			putc(c, T1FP);
 		    }
-		} while ((c = get()) != '/');
+		} while ((c = get(inFP)) != '/');
 	    } else {
 		unget(c);
 	    }
@@ -2242,13 +2262,13 @@ copyCfrag(char s, char m, char e)
 
 	string:
 	    putc(c, T1FP);
-	    while ((c = get()) != match) {
+	    while ((c = get(inFP)) != match) {
 		if (c == '\\') {
 		    putc(c, T1FP);
-		    if ((c = get()) == EOF) goto eof_error;
+		    if ((c = get(inFP)) == EOF) goto eof_error;
 		} else if (c == '\n') {
 		    iCleng = 1;		/* error pointer at newline */
-		    iCerror("C code: newline in \" \" or ' ', error");
+		    yyerror("C code: newline in \" \" or ' ', error");
 		} else if (c == EOF)  goto eof_error;
 		putc(c, T1FP);
 	    }
@@ -2258,6 +2278,6 @@ copyCfrag(char s, char m, char e)
     }
 eof_error:
     iCleng = 1;				/* error pointer at EOF */
-    iCerror("C code: EOF, error");
+    yyerror("C code: EOF, error");
     return 0;				/* EOF */
 } /* copyCfrag */

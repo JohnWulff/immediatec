@@ -1,10 +1,9 @@
-# $Id: gram.sed,v 1.1 2002/07/07 08:40:41 jw Exp $
+# $Id: gram.sed,v 1.2 2002/08/13 21:15:55 jw Exp $
 s/yyparse/c_parse/g
 s/yylex/c_lex/g
 s/yyleng/c_leng/g
 s/yytext/c_text/g
 s/yybuf/c_buf/g
-s/yyerror/c_error/g
 s/yychar/c_char/g
 s/yyval/c_val/g
 s/yylval/c_lval/g

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.29 2002/07/01 10:10:10 jw Exp $";
+"@(#)$Id: ict.c,v 1.30 2002/08/13 10:34:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -28,7 +28,6 @@ static const char ict_c[] =
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/time.h>
-#include <termio.h>
 #include <signal.h>
 #include <ctype.h>
 #include <assert.h>
@@ -207,10 +206,10 @@ icc(
 	fprintf(outFP, "\n*** Warnings ***\n");
     }
     if (debug & 0400) {
-	quit(0);				/* terminate - no inputs */
+	quit(0);			/* terminate - no inputs */
     }
-
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
+
 #ifdef SIGTTIN 
     /*
      * The following behaviour was observed on Linux kernel 2.2
@@ -706,6 +705,17 @@ display(void)
     }
     fflush(outFP);
 } /* display */
+
+/********************************************************************
+ *
+ *	initialize IO
+ *
+ *******************************************************************/
+
+void initIO(void)
+{
+    signal(SIGSEGV, quit);		/* catch memory access signal */	
+}
 
 /********************************************************************
  *

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.20 2002/07/05 17:00:45 jw Exp $";
+"@(#)$Id: scan.c,v 1.21 2002/08/13 12:08:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -504,6 +504,8 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	    gp->gt_new = gp->gt_old = 0;
 	    /* fall through */
 	case LOGC:
+	    gp->gt_val = 1;
+	    break;
 	case OR:
 	    gp->gt_ini = gp->gt_val = 1;		/* set OR gates to +1 */
 	    break;

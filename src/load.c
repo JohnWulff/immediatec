@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.33 2002/07/05 17:00:45 jw Exp $";
+"@(#)$Id: load.c,v 1.34 2002/08/13 09:02:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,7 +19,6 @@ static const char load_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
-#include	<signal.h>
 #ifndef LOAD
 #error - must be compiled with LOAD defined to make a linkable library
 #else
@@ -205,7 +204,7 @@ main(
 	}
     }
     debug &= 03743;			/* allow only cases specified */
-    signal(SIGSEGV, quit);		/* catch memory access signal */	
+    initIO();				/* catch memory access signal */	
 
 /********************************************************************
  *
