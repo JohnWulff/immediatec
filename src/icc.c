@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.29 2005/01/16 16:37:05 jw Exp $";
+"@(#)$Id: icc.c,v 1.30 2005/01/26 15:16:22 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -21,7 +21,7 @@ static const char icc_c[] =
 #include	<stdlib.h>
 #include	<errno.h>
 #include	<string.h>
-#ifdef _MSDOS_
+#ifdef	_MSDOS_
 #include	<dos.h>
 #include	<conio.h>
 #else	/* Linux */
@@ -33,8 +33,10 @@ static const char icc_c[] =
 #endif
 #include	<signal.h>
 #include	<ctype.h>
-#include	"icg.h"
 #include	"icc.h"
+#ifdef	LOAD
+#error - must be compiled without LOAD defined to make an executable compiler
+#endif	/* LOAD */
 
 /***NOTE: This is an interrupt service
  routine. You cannot compile this program
@@ -42,17 +44,15 @@ static const char icc_c[] =
  get an executable file that operates
  correctly. */
 
-#define MAX_IO	8
 #define MAX_W	2
 #define INTR	0x1c			/* The clock tick interrupt */
 #define YSIZE	13			/* - and 10 dec digits or 12 oct digits */
 
-static void	display(void);
 static unsigned	time_cnt;		/* count time in ticks */
 static short	flag1C;
 
-#ifdef _MSDOS_
-#ifdef MSC
+#ifdef	_MSDOS_
+#ifdef	MSC
 void (interrupt far *oldhandler)();
 void interrupt far handler1C(void);
 #else
@@ -82,12 +82,12 @@ static struct termio	ttyparmh;
 static int
 kbhit(void)
 {
-    fd_set	infds = selectinfds;
+    fd_set	iC_infds = selectinfds;
     int		stat;
 
     /* Wait until stdin is ready */
     do {
-	readfds = infds;
+	readfds = iC_infds;
 	if (top && top->tv_sec == 0 && top->tv_usec == 0) {
 	    *top = timeOut;
 	}
@@ -98,51 +98,47 @@ kbhit(void)
     } else if (stat == 0) {
 	time_cnt++;			/* count time in ticks */
 	/* increase the global counter */
-	if (debug & 01000) {		/* 1/20 second on, 1/20 second off */
-	    flag1C = 1;
-	}
+	flag1C = 1;			/* 1/20 second on, 1/20 second off */
     }
     return stat;			/* can only be 0 or 1 */
 } /* kbhit */
 #endif
 
-Functp	*i_lists[] = { I_LISTS };
-#ifdef LOAD
-#endif
+iC_Functp	*iC_i_lists[] = { I_LISTS };
 
 static Gate	alist0;			/* these lists are toggled */
 static Gate	alist1;
-Gate *		a_list;			/* arithmetic output action list */
+Gate *		iC_a_list;		/* arithmetic output action list */
 static Gate	olist0;			/* these lists are toggled */
 static Gate	olist1;
-Gate *		o_list;			/* logic output action list */
-Gate *		c_list;			/* main clock list "iClock" */
+Gate *		iC_o_list;		/* logic output action list */
+Gate *		iC_c_list;		/* main clock list "iClock" */
 static Gate	flist;
-Gate *		f_list;			/* auxiliary function clock list */
+Gate *		iC_f_list;		/* auxiliary function clock list */
 static Gate	slist;
-Gate *		s_list;			/* send bit and byte outputs */
+Gate *		iC_s_list;		/* send bit and byte outputs */
 
-unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
-unsigned char	QMM;			/* Output cage mask for 1 rack */
+unsigned char	iC_QM_[IXD/8];		/* Output slot mask per cage */
+unsigned char	iC_QMM;			/* Output cage mask for 1 rack */
 
-short		dis_cnt;
-short		error_flag;
+static int	dis_cnt;
+short		iC_error_flag;
 
-unsigned	scan_cnt;			/* count scan operations */
-unsigned	link_cnt;			/* count link operations */
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
-unsigned	glit_cnt;			/* count glitches */
-unsigned long	glit_nxt;			/* count glitch scan */
+unsigned	iC_scan_cnt;		/* count scan operations */
+unsigned	iC_link_cnt;		/* count link operations */
+#if	YYDEBUG && !defined(_WINDOWS)
+unsigned	iC_glit_cnt;		/* count glitches */
+unsigned long	glit_nxt;		/* count glitch scan */
 #endif
 
 /********************************************************************
  *
- *	Procedure icc
+ *	Procedure iC_icc
  *
  *******************************************************************/
 
 void
-icc(
+iC_icc(
     Gate *	g_lists,
     unsigned	gate_count[])
 {
@@ -152,57 +148,57 @@ icc(
     short	typ;
     int		cn;
     int		cnt;
-#ifdef LOAD
-    Gate **	opp;
-#else
+    Gate **	tim = &iC_TX_[0];	/* pointers to 8 system gates TX[0] to TX[7] */
     unsigned *	gcp;
-    Functp * *	ilp;
-#endif
+    iC_Functp * *	ilp;
     Gate *	gp;
-    Functp	init_fa;
-    int		tcnt = 3;
-#if INT_MAX == 32767 && defined (LONG16)
+    iC_Functp	init_fa;
+    int		tcnt = 1;
+#if	INT_MAX == 32767 && defined (LONG16)
     long	val;
 #else
     int	val;
 #endif
-    char *	format;		/* number format */
-    char	ybuf[YSIZE];	/* buffer for number */
+    char *	format;			/* number format */
+    char	ybuf[YSIZE];		/* buffer for number */
     char *	yp;
 
-    initIO();				/* catch memory access signal */	
-    error_flag = 0;
-    alist0.gt_rlist = (Gate **)(a_list = &alist1);	/* initialise alternate */
-    Out_init(a_list);
-    alist1.gt_rlist = (Gate **)(a_list = &alist0);	/* start with alist0 */
-    Out_init(a_list);
-    olist0.gt_rlist = (Gate **)(o_list = &olist1);	/* initialise alternate */
-    Out_init(o_list);
-    olist1.gt_rlist = (Gate **)(o_list = &olist0);	/* start with olist0 */
-    Out_init(o_list);
-#ifdef LOAD
-    c_list = &iClock;			/* system clock list */
-#endif
-    f_list = &flist;			/* function clock list */
-    Out_init(f_list);
-    s_list = &slist;			/* send outputs */
-    Out_init(s_list);
+    iC_initIO();			/* catch memory access signal */	
+    iC_error_flag = 0;
+    alist0.gt_rlist = (Gate **)(iC_a_list = &alist1);	/* initialise alternate */
+    Out_init(iC_a_list);
+    alist1.gt_rlist = (Gate **)(iC_a_list = &alist0);	/* start with alist0 */
+    Out_init(iC_a_list);
+    olist0.gt_rlist = (Gate **)(iC_o_list = &olist1);	/* initialise alternate */
+    Out_init(iC_o_list);
+    olist1.gt_rlist = (Gate **)(iC_o_list = &olist0);	/* start with olist0 */
+    Out_init(iC_o_list);
+    iC_f_list = &flist;			/* function clock list */
+    Out_init(iC_f_list);
+    iC_s_list = &slist;			/* send outputs */
+    Out_init(iC_s_list);
 
-    if (outFP != stdout) {
-	fclose(outFP);
+    if (iC_outFP != stdout) {
+	fclose(iC_outFP);
 	if (iFlag) {
-	    inversionCorrection();
+	    iC_inversionCorrection();
 	    iFlag = 0;
 	}
-	outFP = stdout;			/* standard output from here */
+	iC_outFP = stdout;		/* standard output from here */
     }
-    if (errFP != stderr) {
-	fclose(errFP);
-	errFP = stderr;			/* standard error from here */
+    if (iC_errFP != stderr) {
+	fclose(iC_errFP);
+	iC_errFP = stderr;		/* standard error from here */
+    }
+    for (cnt = 1; cnt < 8; cnt++) {
+	if (tim[cnt] != NULL) {		/* any of the 7 timers programmed ? */
+	    top = &to;			/* activate select timeout */
+	    break;			/* could optimise by varying delay */
+	}
     }
 
-#ifdef _MSDOS_
-#ifdef MSC 
+#ifdef	_MSDOS_
+#ifdef	MSC 
     oldhandler = _dos_getvect(INTR);	/* save the old interrupt vector */
 #else
     oldhandler = getvect(INTR);		/* save the old interrupt vector */
@@ -215,68 +211,55 @@ icc(
     maxfd = max(maxfd, (int)fileno(stdin));
 #endif
 
-#if YYDEBUG
-    if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
+#if	YYDEBUG
+    if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
 #endif
     for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
-	QX_[i] = 0;			/* output size X, B or W during compilation */
+	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
     }
     for (pass = 0; pass < 4; pass++) {
-#if YYDEBUG
-	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
+#if	YYDEBUG
+	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
 #endif
-#ifdef LOAD
-	for (opp = sTable; opp < sTend; opp++) {
-	    gp = *opp;
-	    typ = gp->gt_ini > 0 ? AND : -gp->gt_ini;
-	    if (typ < MAX_OP) {
-		init_fa = i_lists[typ][pass];
-		(*init_fa)(gp, typ);	/* initialise for this pass */
-	    }
-	}
-#else
 	gp = g_lists;
 	gcp = gate_count;
-	ilp = i_lists;
+	ilp = iC_i_lists;
 	for (typ = 0; typ < MAX_OP; typ++) {
 	    init_fa = (*ilp++)[pass];
 	    for (cnt = *gcp++; cnt; cnt--) {
 		(*init_fa)(gp++, typ);	/* initialise for this pass */
 	    }
 	}
-#endif
     }
 
-#if YYDEBUG
-    if (debug & 0100) {
-	fprintf(outFP, "\nInit complete =======\n");
+#if	YYDEBUG
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, "\nInit complete =======\n");
     }
 #endif
 
-    if (error_flag) {
-	if (error_flag == 1) {
-	    fprintf(outFP, "\n*** Fatal Errors ***\n");
-	    quit(1);
+    if (iC_error_flag) {
+	if (iC_error_flag == 1) {
+	    fprintf(iC_outFP, "\n*** Fatal Errors ***\n");
+	    iC_quit(1);
 	}
-	fprintf(outFP, "\n*** Warnings ***\n");
+	fprintf(iC_outFP, "\n*** Warnings ***\n");
     }
-    if (debug & 0400) {
-	quit(0);			/* terminate - no inputs */
+    if (iC_debug & 0400) {
+	iC_quit(0);			/* terminate - no inputs */
     }
-    signal(SIGINT, quit);		/* catch ctrlC and Break */	
+    signal(SIGINT, iC_quit);		/* catch ctrlC and Break */	
 
-    if (debug & 03000) {
-#ifdef _MSDOS_
-#ifdef MSC 
+    if (iC_debug & 03000) {
+#ifdef	_MSDOS_
+#ifdef	MSC 
 	_dos_setvect(INTR, handler1C);	/* install the new interrupt handler */
 #else
 	setvect(INTR, handler1C);	/* install the new interrupt handler */
-#endif
-#else	/* Linux */
-	top = &to;				/* activate select timeout */
-#endif
+#endif	/* MSC */
+#endif	/* _MSDOS_ */
     }
-#ifndef _MSDOS_
+#ifndef	_MSDOS_
     if (ioctl(0, TCGETA, &ttyparms) == -1)   {
 	fprintf(stderr, "Cannot get termio from stdin\n");
 	exit(-5);
@@ -285,23 +268,23 @@ icc(
     memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
     ttyparmh.c_lflag &= ~(ECHO | ICANON);
     if (ioctl(0, TCSETA, &ttyparmh) == -1) exit(-6);
-#endif
+#endif	/* _MSDOS_ */
 
-    if ((gp = TX_[0]) != 0) {
-#if YYDEBUG
-	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
+    if ((gp = tim[0]) != 0) {
+#if	YYDEBUG
+	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
 #endif
-	gp->gt_val = -1;			/* set EOP once as first action */
-	link_ol(gp, o_list);			/* fire EOP Input Gate */
-#if YYDEBUG
-	if (debug & 0100) fprintf(outFP, " -1");
+	gp->gt_val = -1;		/* set EOP once as first action */
+	iC_link_ol(gp, iC_o_list);	/* fire EOP Input Gate */
+#if	YYDEBUG
+	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
 #endif
     }
 
     dis_cnt = DIS_MAX;
     for ( ; ; ) {
-	if (++mark_stamp == 0) {	/* next generation for check */
-	    mark_stamp++;		/* leave out zero */
+	if (++iC_mark_stamp == 0) {	/* next generation for check */
+	    iC_mark_stamp++;		/* leave out zero */
 	}
 
 	time_cnt = 0;			/* clear time count */
@@ -333,26 +316,26 @@ icc(
 	 *  Loop algorithms with for or do while - continue are all incorrect
 	 *******************************************************************/
       Loop:
-	if (a_list != a_list->gt_next) { scan_ar (a_list);            }
-	if (o_list != o_list->gt_next) { scan    (o_list); goto Loop; }
-	if (c_list != c_list->gt_next) { scan_clk(c_list); goto Loop; }
-	if (f_list != f_list->gt_next) { scan_clk(f_list); goto Loop; }
-	if (s_list != s_list->gt_next) { scan_snd(s_list);            }
+	if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);            }
+	if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); goto Loop; }
+	if (iC_c_list != iC_c_list->gt_next) { iC_scan_clk(iC_c_list); goto Loop; }
+	if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); goto Loop; }
+	if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);            }
 
-	if (scan_cnt || link_cnt) {
-	    fprintf(outFP, "\n");
-#if YYDEBUG
-	    if (debug & 02000) {
-		fprintf(outFP, "scan = %5u  link = %5u  time = %5u ms",
-		    scan_cnt, link_cnt, time_cnt);
-		if (glit_cnt) {
-		    fprintf(outFP, "  glitch = %5u, %lu", glit_cnt, glit_nxt);
+	if (iC_scan_cnt || iC_link_cnt) {
+	    fprintf(iC_outFP, "\n");
+#if	YYDEBUG
+	    if (iC_debug & 02000) {
+		fprintf(iC_outFP, "scan = %5u  link = %5u  time = %5u ms",
+		    iC_scan_cnt, iC_link_cnt, time_cnt);
+		if (iC_glit_cnt) {
+		    fprintf(iC_outFP, "  glitch = %5u, %lu", iC_glit_cnt, glit_nxt);
 		}
-		fprintf(outFP, "\n");
+		fprintf(iC_outFP, "\n");
 	    }
-	    glit_cnt = glit_nxt =
+	    iC_glit_cnt = glit_nxt =
 #endif
-	    scan_cnt = link_cnt = 0;
+	    iC_scan_cnt = iC_link_cnt = 0;
 	}
 	/********************************************************************
 	 *  Switch to alternate lists
@@ -362,30 +345,30 @@ icc(
 	 *  MARKMAX times. These are oscillators which wil be
 	 *  scanned again in the next cycle.
 	 *******************************************************************/
-	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
-	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
+	iC_a_list = (Gate*)iC_a_list->gt_rlist;	/* alternate arithmetic list */
+	iC_o_list = (Gate*)iC_o_list->gt_rlist;	/* alternate logic list */
 
-	if (osc_gp) {
-	    fprintf(outFP,
+	if (iC_osc_gp) {
+	    fprintf(iC_outFP,
 		"*** Warning: %s has oscillated %d times - check iC program!!!\n",
-		osc_gp->gt_ids, osc_gp->gt_mcnt);
-	    osc_gp = NULL;
+		iC_osc_gp->gt_ids, iC_osc_gp->gt_mcnt);
+	    iC_osc_gp = NULL;
 	}
 
-#if YYDEBUG
-	if ((debug & 0200) &&
-	    (a_list->gt_next != a_list || o_list->gt_next != o_list)) {
-	    fprintf(outFP, "OSC =");
-	    for (gp = a_list->gt_next; gp != a_list; gp = gp->gt_next) {
-		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
+#if	YYDEBUG
+	if ((iC_debug & 0200) &&
+	    (iC_a_list->gt_next != iC_a_list || iC_o_list->gt_next != iC_o_list)) {
+	    fprintf(iC_outFP, "OSC =");
+	    for (gp = iC_a_list->gt_next; gp != iC_a_list; gp = gp->gt_next) {
+		fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
-	    for (gp = o_list->gt_next; gp != o_list; gp = gp->gt_next) {
-		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
+	    for (gp = iC_o_list->gt_next; gp != iC_o_list; gp = gp->gt_next) {
+		fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
-	    fprintf(outFP, "\n");
+	    fprintf(iC_outFP, "\n");
 	}
 #endif
-	display();				/* inputs and outputs */
+	iC_display(&dis_cnt, DIS_MAX);		/* inputs and outputs */
 	/********************************************************************
 	 *  Input from keyboard and time input if used
 	 *******************************************************************/
@@ -395,23 +378,76 @@ icc(
 	cn = 1;
 	if (flag1C) {				/* 1/D10 second timer */
 	    flag1C = 0;
-	    if ((gp = TX_[1]) != 0) {		/* 100 millisecond timer */
-		fprintf(outFP, " %s ", gp->gt_ids);
+	    /********************************************************************
+	     *  TIMERS here every 100 milliseconds
+	     *******************************************************************/
+	    if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
+#if	YYDEBUG
+		if (iC_debug & 01000) {
+		    Gate **	lp;
+		    Gate *	tp;
+		    int	cn1 = 2;
+		    lp = gp->gt_list;		/* test if any clock or timer is active */
+		    do {			/* for normal and inverted */
+			while ((tp = *lp++) != 0) {
+			    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+				tp = *((Gate **)tp->gt_list);
+				if (tp->gt_next != tp) {
+				    goto linkT4;	/* found an active clock or timer */
+				}
+			    } else {
+				goto linkT4;	/* found a link to non clock or timer */
+			    }
+			}
+		    } while (--cn1);
+		    goto skipT4;		/* excuse spaghetti - faster without flag */
+		}
+	    linkT4:
+		if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+#endif	/* YYDEBUG */
 		gp->gt_val = - gp->gt_val;	/* complement input */
-		link_ol(gp, o_list);
-		putc(gp->gt_val < 0 ? '1' : '0', outFP);
-		cn = 0;				/* TX.1 changed */
-		cnt++;				/* count inputs */
+		iC_link_ol(gp, iC_o_list);
+		cn = 0;				/* TX0.4 changed */
+		cnt++;
+#if	YYDEBUG
+		if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+	    skipT4: ;
+#endif	/* YYDEBUG */
 	    }
-	    if (--tcnt == 0) {
+	    if (--tcnt <= 0) {
 		tcnt = D10;
-		if ((gp = TX_[2]) != 0) {	/* 1 second timer */
-		    fprintf(outFP, " %s ", gp->gt_ids);
+		if ((gp = tim[5]) != 0) {	/* 1 second timer */
+#if	YYDEBUG
+		    if (iC_debug & 01000) {
+			Gate **	lp;
+			Gate *	tp;
+			int	cn1 = 2;
+			lp = gp->gt_list;	/* test if any clock or timer is active */
+			do {			/* for normal and inverted */
+			    while ((tp = *lp++) != 0) {
+				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+				    tp = *((Gate **)tp->gt_list);
+				    if (tp->gt_next != tp) {
+					goto linkT5; /* found an active clock or timer */
+				    }
+				} else {
+				    goto linkT5;	/* found a link to non clock or timer */
+				}
+			    }
+			} while (--cn1);
+			goto skipT5;		/* excuse spaghetti - faster without flag */
+		    }
+		linkT5:
+		    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+#endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;	/* complement input */
-		    link_ol(gp, o_list);
-		    putc(gp->gt_val < 0 ? '1' : '0', outFP);
-		    cn = 0;			/* TX.2 changed */
-		    cnt++;			/* count inputs */
+		    iC_link_ol(gp, iC_o_list);
+		    cn = 0;			/* TX0.5 changed */
+		    cnt++;
+#if	YYDEBUG
+		    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+		skipT5: ;
+#endif	/* YYDEBUG */
 		}
 	    }
 	    if (cn) {
@@ -420,58 +456,58 @@ icc(
 	} else {
 	    while (cn) {
 		if ((c = getch()) == 'q' || c == EOF) {
-		    fprintf(errFP, "\n'%s' stopped from terminal\n", progname);
-		    quit(0);			/* quit normally */
+		    fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_progname);
+		    iC_quit(0);			/* quit normally */
 		}
 		if (c != ENTER) {
-		    putc(c, outFP);		/* echo */
+		    putc(c, iC_outFP);		/* echo */
 		}
 		if (c >= '0' && c < '0' + MAX_IO) {
-		    if ((gp = IX_[c - '0']) != 0) {
-			putc('+', outFP);	/* acknowledge input */
+		    if ((gp = iC_IX_[c - '0']) != 0) {
+			putc('+', iC_outFP);	/* acknowledge input */
 			gp->gt_val = -gp->gt_val; /* complement input */
-			link_ol(gp, o_list);
-#if YYDEBUG
-			if (debug & 0100) {
-			    putc(gp->gt_val < 0 ? '1' : '0', outFP);
+			iC_link_ol(gp, iC_o_list);
+#if	YYDEBUG
+			if (iC_debug & 0100) {
+			    putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
 			}
 #endif
 			cn--;			/* apply input ? */
 			cnt++;			/* count inputs */
 		    } else {
-			putc('?', outFP);	/* input not configured */
+			putc('?', iC_outFP);	/* input not configured */
 		    }
 		} else if (c == '+') {
 		    cn++;			/* 1 extra input */
 		} else if (c == '-') {
 		    if (--cn <= 0) cn = 1;	/* at least 1 more in */
 		} else if (c == 'b') {
-		    if ((gp = IB_[1]) != 0) {	/* b byte input to IB1 */
+		    if ((gp = iC_IB_[1]) != 0) {	/* b byte input to IB1 */
 			goto wordIn;
 		    }
 		    goto wordEr;		/* input not configured */
 		} else if (c == 'w') {
-		    if ((gp = IW_[2]) != 0) {	/* w word input to IW2 */
-#if INT_MAX != 32767 || defined (LONG16)
+		    if ((gp = iC_IW_[2]) != 0) {	/* w word input to IW2 */
+#if	INT_MAX != 32767 || defined (LONG16)
 			goto wordIn;
 		    }
 		    goto wordEr;		/* input not configured */
 		} else if (c == 'l') {
-		    if ((gp = IL_[4]) != 0) {	/* l long input to IL4 */
+		    if ((gp = iC_IL_[4]) != 0) {	/* l long input to IL4 */
 #endif
 		    wordIn:
 			yp = ybuf;
 			if ((c = getch()) == '0') {	/* initial 0 is oct or hex */
-			    putc(c, outFP);		/* echo */
+			    putc(c, iC_outFP);		/* echo */
 			    if ((c = getch()) == 'x' || c == 'X') {
-				putc(c, outFP);		/* echo */
-#if INT_MAX == 32767 && defined (LONG16)
+				putc(c, iC_outFP);	/* echo */
+#if	INT_MAX == 32767 && defined (LONG16)
 				format = "%lx%s";	/* hexadecimal */
 #else
 				format = "%x%s";	/* hexadecimal */
 #endif
 			    } else {
-#if INT_MAX == 32767 && defined (LONG16)
+#if	INT_MAX == 32767 && defined (LONG16)
 				format = "%lo%s";	/* octal */
 #else
 				format = "%o%s";	/* octal */
@@ -480,12 +516,12 @@ icc(
 				ungetch(c);
 			    }
 			} else {
-			    if (c == '-') {	/* optional dec minus sign */
-				putc(c, outFP);		/* echo */
+			    if (c == '-') {		/* optional dec minus sign */
+				putc(c, iC_outFP);	/* echo */
 				*yp++ = c;
 				c = getch();
 			    }
-#if INT_MAX == 32767 && defined (LONG16)
+#if	INT_MAX == 32767 && defined (LONG16)
 			    format = "%ld%s";		/* decimal */
 #else
 			    format = "%d%s";		/* decimal */
@@ -499,147 +535,56 @@ icc(
 			) {
 			    if (c == '\b' || c == '\177') {
 				if (yp > ybuf) {	/* backspace or del */
-				    fprintf(outFP, "\b \b");
+				    fprintf(iC_outFP, "\b \b");
 				    yp--;
 				} else {
 				    break;
 				}
 			    } else {
-				putc(c, outFP);		/* echo */
+				putc(c, iC_outFP);	/* echo */
 				*yp++ = c;
 			    }
 			}
-			*yp = 0;		/* string terminator */
+			*yp = 0;			/* string terminator */
 			if (sscanf(ybuf, format, &val, ybuf) != 1) goto wordEr;
-			putc('+', outFP);	/* acknowledge input */
-			if (gp == IB_[1]) {
-			    val &= 0xff;	/* reduce to byte */
-			} else if (gp == IW_[2]) {
-			    val = (short)val;	/* reduce to signed word */
+			putc('+', iC_outFP);		/* acknowledge input */
+			if (gp == iC_IB_[1]) {
+			    val &= 0xff;		/* reduce to byte */
+			} else if (gp == iC_IW_[2]) {
+			    val = (short)val;		/* reduce to signed word */
 			}
 			if (val != gp->gt_new && /* first change or glitch */
 			((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
 			    /* arithmetic master action */
-			    link_ol(gp, a_list);	/* no actions */
+			    iC_link_ol(gp, iC_a_list);	/* no actions */
 			}
 			cn--;
-			cnt++;			/* count inputs */
+			cnt++;				/* count inputs */
 		    } else {
 		    wordEr:
-			putc('?', outFP);	/* input not configured */
+			putc('?', iC_outFP);		/* input not configured */
 		    }
 		} else if (c == 'x') {
-		    xflag = 1;			/* hexadecimal output */
+		    iC_xflag = 1;			/* hexadecimal output */
 		    cn = 0;
 		} else if (c == 'd') {
-		    xflag = 0;			/* decimal output */
+		    iC_xflag = 0;			/* decimal output */
 		    cn = 0;
 		} else if (c == ENTER) {
 		    cn = 0;
 		} else {
-		    putc('?', outFP);		/* not a valid input character */
+		    putc('?', iC_outFP);		/* not a valid input character */
 		}
 	    }
 	}
 	/* if many inputs change simultaneously increase oscillator limit */
-	osc_lim = (cnt << 1) + 1;			/* (cnt * 2) + 1 */
-	if (osc_lim < osc_max) {
-	    osc_lim = osc_max;			/* cnt = 1, osc_lim = 3 default */
+	iC_osc_lim = (cnt << 1) + 1;			/* (cnt * 2) + 1 */
+	if (iC_osc_lim < iC_osc_max) {
+	    iC_osc_lim = iC_osc_max;			/* cnt = 1, osc_lim = 3 default */
 	}
     }
-} /* icc */
-
-/********************************************************************
- *
- *	Display inputs & outputs
- *
- *******************************************************************/
-
-static void
-display(void)
-{
-    int			n;
-    Gate *		gp;
-    unsigned short	data;
-
-    if (dis_cnt++ >= DIS_MAX) {		/* display header line */
-	dis_cnt = 1;
-	for (n = 0; n < 10; n++) {
-	    if ((gp = IX_[n]) != 0) fprintf(outFP, " I%d", n);
-	}
-	if (IB_[1] != 0) fprintf(outFP, "  IB1");
-	if (IW_[2] != 0) fprintf(outFP, "    IW2");
-#if INT_MAX != 32767 || defined (LONG16)
-	if (IL_[4] != 0) fprintf(outFP, "      IL4");
-#endif
-	fprintf(outFP, "   ");
-	for (n = 0; n < MAX_IO; n++) {
-	    fprintf(outFP, " Q%d", n);
-	}
-	fprintf(outFP, "  QB1    QW2");
-#if INT_MAX != 32767 || defined (LONG16)
-	fprintf(outFP, "      QL4");
-#endif
-	fprintf(outFP, "\n");
-    }
-    for (n = 0; n < 10; n++) {
-	if ((gp = IX_[n]) != 0) {
-	    fprintf(outFP, "  %c", gp->gt_val < 0 ? '1' : '0');
-	}
-    }
-    /* display IB1, IW2 and IL4 if active */
-    if (!xflag) {
-	if ((gp = IB_[1]) != 0) fprintf(outFP, " %4d", gp->gt_new & 0xff);
-	if ((gp = IW_[2]) != 0) fprintf(outFP, " %6hd", (short)gp->gt_new);
-#if INT_MAX == 32767
-#if defined (LONG16)
-	if ((gp = IL_[4]) != 0) fprintf(outFP, " %8ld", gp->gt_new);
-#endif
-#else
-	if ((gp = IL_[4]) != 0) fprintf(outFP, " %8d", gp->gt_new);
-#endif
-    } else {
-	if ((gp = IB_[1]) != 0) fprintf(outFP, "   %02x", gp->gt_new & 0xff);
-	if ((gp = IW_[2]) != 0) fprintf(outFP, "   %04x", gp->gt_new & 0xffff);
-#if INT_MAX == 32767
-#if defined (LONG16)
-	if ((gp = IL_[4]) != 0) fprintf(outFP, " %08lx", gp->gt_new);
-#endif
-#else
-	if ((gp = IL_[4]) != 0) fprintf(outFP, " %08x", gp->gt_new);
-#endif
-    }
-    fprintf(outFP, "   ");
-    data = *(unsigned short*)QX_;
-    for (n = 0; n < MAX_IO; n++) {
-	fprintf(outFP, "  %c", (data & 0x0001) ? '1' : '0');
-	data >>= 1;				/* scan output bits */
-    }
-    /* display QB1, QW2 and QL4 */
-    if (!xflag) {
-#if INT_MAX == 32767
-#if defined (LONG16)
-	fprintf(outFP, " %4d %6hd %8ld\n", QX_[1], *(short*)&QX_[2], *(long*)&QX_[4]);
-#else
-	fprintf(outFP, " %4d %6hd\n", QX_[1], *(short*)&QX_[2]);	/* no QL4 */
-#endif
-#else
-	fprintf(outFP, " %4d %6hd %8d\n", QX_[1], *(short*)&QX_[2], *(int*)&QX_[4]);
-#endif
-    } else {
-#if INT_MAX == 32767
-#if defined (LONG16)
-	fprintf(outFP, "   %02x   %04hx %08lx\n", QX_[1], *(short*)&QX_[2], *(long*)&QX_[4]);
-#else
-	fprintf(outFP, "   %02x   %04hx\n", QX_[1], *(short*)&QX_[2]);	/* no QL4 */
-#endif
-#else
-	fprintf(outFP, "   %02x   %04hx %08x\n", QX_[1], *(short*)&QX_[2], *(int*)&QX_[4]);
-#endif
-    }
-    fflush(outFP);
-} /* display */
-#ifdef _MSDOS_
+} /* iC_icc */
+#ifdef	_MSDOS_
 
 /********************************************************************
  *
@@ -649,24 +594,24 @@ display(void)
 
 int count1C = 0;
 
-#ifdef MSC 
+#ifdef	MSC 
 void interrupt far handler1C(void)
 #else
 void interrupt handler1C(void)
 #endif
 {
-#ifndef MSC 
+#ifndef	MSC 
     /* disable interrupts during the handling of the interrupt */
     disable();
 #endif
-    time_cnt++;				/* count time in ticks */
+    time_cnt++;						/* count time in ticks */
     /* increase the global counter */
-    if (debug & 01000 &&
-	count1C++ >= 6) {	/* roughly 1/3 second on, 1/3 second off */
+    if (iC_debug & 01000 &&
+	count1C++ >= 6) {			/* roughly 1/3 second on, 1/3 second off */
 	count1C = 0;
 	flag1C = 1;
     }
-#ifndef MSC 
+#ifndef	MSC 
     /* reenable interrupts at the end of the handler */
     enable();
 #endif
@@ -681,10 +626,10 @@ void interrupt handler1C(void)
  *
  *******************************************************************/
 
-void initIO(void)
+void iC_initIO(void)
 {
-    signal(SIGSEGV, quit);		/* catch memory access signal */	
-#ifdef _MSDOS_
+    signal(SIGSEGV, iC_quit);			/* catch memory access signal */	
+#ifdef	_MSDOS_
     oldhandler = NULL;
 #endif
 }
@@ -696,13 +641,13 @@ void initIO(void)
  *
  *******************************************************************/
 
-void quit(int sig)
+void iC_quit(int sig)
 {
-    fflush(outFP);
-#ifdef _MSDOS_
-    if (oldhandler && debug & 03000) {
+    fflush(iC_outFP);
+#ifdef	_MSDOS_
+    if (oldhandler && iC_debug & 03000) {
 	/* reset the old interrupt handler */
-#ifdef MSC 
+#ifdef	MSC 
 	_dos_setvect(INTR, oldhandler);
 #else
 	setvect(INTR, oldhandler);
@@ -714,13 +659,13 @@ void quit(int sig)
     }
 #endif
     if (sig == SIGINT) {
-	fprintf(errFP, "\n'%s' stopped by interrupt from terminal\n", progname);
+	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_progname);
     } else if (sig == SIGSEGV) {
-	fprintf(errFP, "\n'%s' stopped by 'Invalid memory reference'\n", progname);
+	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_progname);
     }
-    if (errFP != stderr) {
-	fflush(errFP);
-	fclose(errFP);
+    if (iC_errFP != stderr) {
+	fflush(iC_errFP);
+	fclose(iC_errFP);
     }
-    exit(sig);			/* really quit */
-} /* quit */
+    exit(sig);					/* really quit */
+} /* iC_quit */
