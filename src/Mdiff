@@ -16,28 +16,29 @@
 usage()
 {
   echo >&2
-  echo 'Generate a full report of differences between the files in two' >&2
-  echo 'different project directories. Whitspace is normally ignored.' >&2
+  echo 'Generate a full report of differences between a list of files and files' >&2
+  echo 'with the same name in another directory. Whitspace is normally ignored.' >&2
   echo >&2
   echo 'Option -l allows the generation of lists of different or' >&2
-  echo 'identical files in the two projects.' >&2
+  echo 'identical or non-existing files in the two projects.' >&2
   echo >&2
   echo "Usage:	$name [+w] [-ietqlckIh] [-x<regex>] [file ...] [directory]" >&2
   echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
   echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
   echo '		default: ignore identical files in output' >&2
-  echo '	-e	nonexisting files put:	**** file does not exist' >&2
-  echo '		default: ignore nonexisting files in output' >&2
-  echo '		(unless only 1 file)' >&2
-  echo '		if files exist output:	#### file ####' >&2
+  echo '	-e	non-existing files put:	**** file does not exist' >&2
+  echo '		default: ignore non-existing files in output' >&2
+  echo '			 (unless only 1 file)' >&2
+  echo '		if files differ output:	#### file ####' >&2
   echo '	-t	text and date header at start of report' >&2
   echo '	-q	quiet operation - return status only' >&2
-  echo '	-l	list names of files which differ' >&2
-  echo '	-li	list names of files which are identical' >&2
+  echo '	-l	list files which differ - no other output' >&2
+  echo '	-li	list files which are identical' >&2
+  echo '	-le	list files which are non-existing in directory' >&2
   echo '	-c	display diff output in context form' >&2
-  echo '	-k	ignore lines containing the string $Id:' >&2
   echo '	-I	case insensitive and white space ignored' >&2
+  echo '	-k	ignore lines containing the string $Id:' >&2
   echo '	-x <regex> ignore changes in lines that match regex' >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
@@ -47,7 +48,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.21 2002/06/28 19:17:45 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.22 2002/07/01 18:19:43 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -82,13 +83,13 @@ process()
 			ls -lL $f
 			ls -lL $dir/$d
 			diff $w $context $f $dir/$d
-		    elif [ "$li" = 1 ]; then
+		    elif [ "$li" = 1 ] && [ "$e" = 0 ]; then
 			echo $f
 		    fi
 		fi
 	    elif [ "$e" != 0 ]; then
 		let status+=1
-		if [ "$q" = 0 ] || [ "$li" = 2 ]; then
+		if [ "$q" = 0 ]; then
 		    echo "********** $dir/$d does not exist"
 		elif [ "$li" = 1 ]; then
 		    echo $f
@@ -110,7 +111,6 @@ process()
 
 name=${0##*/}
 name=${name%.*}
-files='[Mm]akefile* *.[chyv]*'
 i=0; e=0; t=0; q=0; li=0; w=-wB; pipe=0
 context=''
 
@@ -122,9 +122,9 @@ while [ $# -gt 0 ]; do
 	    case $option in
 	    e*)	e=1;;
 	    i*)	i=1; let "li|=2";;
-	    l*)	q=1; let "li|=1";;
+	    l*)	t=0; q=1; let "li|=1";;
 	    t*)	t=1;;
-	    q*)	q=1;;
+	    q*)	t=0; q=1;;
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wBi;;
@@ -150,6 +150,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+files='[Mm]akefile* *.[chyv]*'
 if [ $# = 0 ]; then
     dir='..'
 elif [ -d "$1" ]; then
