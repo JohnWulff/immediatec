@@ -31,7 +31,7 @@ usage()
     echo '	return status 0 (true) if all files are identical' >&2
     echo '	return status n (false) number of files which differ' >&2
     echo '	Author: J.E. Wulff (John.Wulff@inka.de)' >&2
-    echo '	$Id: Mdiff,v 1.8 1998/02/13 14:33:57 archiv Exp $' >&2
+    echo '	$Id: Mdiff,v 1.9 1998/02/15 21:47:45 archiv Exp $' >&2
 }
 
 name=${0##*/}
@@ -81,29 +81,31 @@ fi
 
 status=0
 for f in $files; do
-    if [[ -f $dir/$f ]]; then
-	if cmp -s $f $dir/$f; then
-	    if [[ $q = 0 ]]; then
-		[[ $i = 0 ]] || echo "========== $f =========="
-	    elif [[ $li = 3 ]]; then
-		echo $f
+    if [[ -f $f ]]; then
+	if [[ -f $dir/$f ]]; then
+	    if cmp -s $f $dir/$f; then
+		if [[ $q = 0 ]]; then
+		    [[ $i = 0 ]] || echo "========== $f =========="
+		elif [[ $li = 3 ]]; then
+		    echo $f
+		fi
+	    else
+		let status+=1
+		if [[ $q = 0 ]]; then
+		    echo
+		    echo "########## $f ##########"
+		    ls -lL $f
+		    ls -lL $dir/$f
+		    diff $w $f $dir
+		elif [[ $li = 1 ]]; then
+		    echo $f
+		fi
 	    fi
-	else
+	elif [[ $e != 0 ]]; then
 	    let status+=1
-	    if [[ $q = 0 ]]; then
-		echo
-		echo "########## $f ##########"
-		ls -lL $f
-		ls -lL $dir/$f
-		diff $w $f $dir
-	    elif [[ $li = 1 ]]; then
-		echo $f
+	    if [[ $q = 0 ]] || [[ $li > 0 ]]; then
+		echo "********** $dir/$f does not exist"
 	    fi
-	fi
-    elif [[ $e != 0 ]]; then
-	let status+=1
-	if [[ $q = 0 ]] || [[ $li > 0 ]]; then
-	    echo "********** $dir/$f does not exist"
 	fi
     fi
 done
