@@ -2,13 +2,23 @@
 
 ########################################################################
 #
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
 #	make an executable file from an iC file
+#
+#	Use cc rather than gcc, to make this script usable on every Unix
 #
 ########################################################################
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-[l|s|c|b|n]6h] [-v<N>] file ...' >&2
+    echo 'Usage:	'${0##*/}' [-[l|s|c|b|n]6h] [-v[<N>]] file ...' >&2
     echo '    (default)	link all files into independent executables' >&2
     echo '	-l	link all files into one executable' >&2
     echo '	-s	supress C output and executable, listing only' >&2
@@ -16,18 +26,20 @@ usage ()
     echo '	-b	generate both listing and C output' >&2
     echo '	-n	generate no output, report icc compile errors only' >&2
     echo '		-s and -n generate cexe.c for last file as a side effect' >&2
-    echo '	-v<N>	use icc<N> eg icc1 icc2 ...' >&2
+    echo '	-v	use libict.a in local directory (default is installed -lict)' >&2
+    echo '	-v<N>	use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '		default listing is file.lst' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: ICMake,v 1.12 2001/03/07 12:30:06 jw Exp $' >&2
+    echo '	$Id: ICMake,v 1.13 2001/03/11 15:10:19 jw Exp $' >&2
 }
 
 link=0
 flag=noerror
 a=""
 v=""
+lib="-lict"
 d="-d74"
 l=""
 
@@ -45,8 +57,9 @@ while [[ $# > 0 ]]; do
 	    v*)	option=${option#?};
 		if [[ -n $option ]]; then
 		    v=$option;
+		    lib=libict$v.a;
 		else
-		    shift; v=$1;
+		    lib=libict.a;
 		fi
 		break;;
 	    6*)	d="-d76";l="6";;
@@ -78,14 +91,8 @@ for f in $*; do
     0)
 	rm -f $base.c $base
 	if nice icc$v $d -o $base.c -l $base.lst$l $file; then
-	    if [[ -z "$v" ]]; then
-		if nice cc -g -DYYDEBUG -o $base $base.c _list_.c -lict; then
-		    $base -d540 > $base.ini
-		fi
-	    else
-		if nice cc -g -DYYDEBUG -o $base $base.c _list_.c ict$v.a; then
-		    $base -d540 > $base.ini
-		fi
+	    if nice cc -g -I. -DYYDEBUG -o $base $base.c _list_.c $lib; then
+		$base -d540 > $base.ini
 	    fi
 	else
 	    echo "icc$v compile errors in '$file' - no executable '$base' generated" >&2
@@ -127,14 +134,8 @@ if [[ $link = 1 ]]; then
     if [[ $flag = noerror ]]; then
 	rm -f $first
 	echo "link $first from$list"
-	if [[ -z "$v" ]]; then
-	    if nice cc -g -DYYDEBUG -o $first $list _list_.c -lict; then
-		$first -d540 > $first.ini
-	    fi
-	else
-	    if nice cc -g -DYYDEBUG -o $first $list _list_.c ict$v.a; then
-		$first -d540 > $first.ini
-	    fi
+	if nice cc -g -I. -DYYDEBUG -o $first $list _list_.c $lib; then
+	    $first -d540 > $first.ini
 	fi
     else
 	echo "icc$v compile errors in '$list'" >&2
