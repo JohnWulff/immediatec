@@ -142,9 +142,14 @@ sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
         my $len = length ($msg);
-        print "($len)$msg\n";
+#	print "($len)$msg\n";
+	if ($len == 0) {
+	    $conn->disconnect();
+	    print "DemoBox $xID disconnected by server\n";
+	    exit;
+	}
 	my ($index, $value) = split /,/, $msg;
-	print "$index $value $outputs[$index]\n";
+#	print "$index $value $outputs[$index]\n";
 	$outputs[$index] = $value;
     }
 }
