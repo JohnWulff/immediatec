@@ -70,7 +70,7 @@ format STDERR =
 Usage:	@<<<<<< [-h]
 	$named
 	-h	help, ouput this Usage text only
-$Id: ICServer,v 1.3 2000/05/28 21:01:33 jw Exp $
+$Id: ICServer,v 1.4 2000/05/28 22:16:08 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -89,22 +89,7 @@ if ($opt_h) {
 
 Msg->new_server($host, $port, \&login_proc);
 print "Server created. Waiting for events\n";
-while (1) {
-    my $conn;
-    Msg->event_loop(0.01);
-    for my $unitID (keys %Connections) {
-	$conn = $Connections{$unitID};
-	if (defined $UnitIDs{$conn}) {
-	    my $x = int rand 8;
-	    my $y = int rand 2;
-	    my $msg = "$x,$y";
-#	    print "$msg $conn\n";
-	    $conn->send_now($msg);
-	} else {
-	    print "$conn disconnected\n";
-	}
-    }
-}
+Msg->event_loop();
 
 ########################################################################
 #
@@ -131,7 +116,7 @@ sub rcvd_msg_from_client {
     if (defined $msg) {
 	my $len = length $msg;
 	my $unitID = $UnitIDs{$conn};
-	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
+#	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
 	if ($len == 0) {
 	    if (defined $unitID and exists $Connections{$unitID}) {
 		delete $Connections{$unitID};
@@ -159,16 +144,16 @@ sub rcvd_msg_from_client {
 		print "CONNECTED ($len)$msg $conn\n";
 	    }
 	} elsif ($msg =~ /^[XBW]/) {		# value messages from PPLC
-	    my ($unitID, $index, $value, $rest) = split /,/, $msg, 4;
+	    my ($uID, $index, $value, $rest) = split /,/, $msg, 4;
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
-		if (defined $Connections{$unitID}) {
-		    $Connections{$unitID}->send_now("$index,$value");
-		    print "$index,$value to $unitID\n";
+		if (defined $Connections{$uID}) {
+		    $Connections{$uID}->send_now("$index,$value");
+#		    print "$index,$value to $uID\n";
 		} else {
-		    print "$index,$value to dummy $unitID\n";
+#		    print "$index,$value to dummy $uID\n";
 		}		# silently ignore disconnected I/O's
 	    } else {
-		print "ERROR: $msg from Unit $unitID ?? ignored";
+		print "ERROR: $msg from Unit $unitID ?? ignored\n";
 	    }
 	} elsif (defined $connPPLC) {		# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
