@@ -148,7 +148,7 @@ Editing:
 
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 						  '@'
-$Id: iClive,v 1.18 2002/06/03 13:14:26 jw Exp $
+$Id: iClive,v 1.19 2002/06/12 06:30:46 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -214,15 +214,16 @@ $menuFile->separator();
 $menuFile->command('-label' => 'Quit',   '-command' => \&quit_program);
 
 ########################################################################
-#	Make button
+#	Make menu
 ########################################################################
-my $makeButton = $menuBar->Button('-text'        => 'Make',
-				  '-relief'      => 'raised',
-				  '-borderwidth' => 2,
-				  '-command'     => \&make_file,
-			         )->pack('-side' => 'left',
-				         '-padx' => 2,
-				        );
+my $make_mb   = $menuBar->Menubutton('-text'        => 'Make',
+				     '-relief'      => 'raised',
+				     '-borderwidth' => 2,
+				    )->pack('-side' => 'left',
+					    '-padx' => 2,
+					   );
+$make_mb->command('-label' => 'Make C file',     '-command' => [ \&make_file, 0, 1 ]);
+$make_mb->command('-label' => 'Make executable', '-command' => [ \&make_file, 0, 0 ]);
 
 ########################################################################
 #	Run or Stop button
@@ -251,12 +252,12 @@ my $scanFlag = 0;		# text is initially cleared
 ########################################################################
 #	Search menu 
 ########################################################################
-my $search_mb = $menuBar->Menubutton('-text'         => 'Search',
-				     '-relief'       => 'raised',
-				     '-borderwidth'  => 2,
-				     )->pack('-side' => 'left',
-					     '-padx' => 2
-					    );
+my $search_mb = $menuBar->Menubutton('-text'        => 'Search',
+				     '-relief'      => 'raised',
+				     '-borderwidth' => 2,
+				    )->pack('-side' => 'left',
+					    '-padx' => 2,
+					   );
 my $match_type = "-exact";	# default, alternatives -nocase -regexp
 
 $search_mb->command('-label' => 'Search down', '-command' => [ \&search, 0, 1 ]);
@@ -558,8 +559,11 @@ sub restoreTag {
 #
 #	when called as a callback from bind('<Return>', [ \&search, 1 ])
 #	the first parameter $_[0] is Tk::Entry=HASH(0x...)
-#	use second parameter $_[1] (1 or -1)
 #	provide a dummy first paramater when called directly
+#	use second parameter $_[1] (1 or -1)
+#
+#	2nd parameter:	1   Search down
+#			-1  Search up
 #
 ########################################################################
 
@@ -1042,13 +1046,17 @@ sub saveAs_file {
 
 ########################################################################
 #
-#	make the executable file generated from $filename
+#	Make a target file generated from $filename (C file or executable)
 #	check if $filename is an iC source (*.ic) and needs saving
-#	generate executable file if old executable older than $filename
+#	generate a new target file if target is older than $filename
+#
+#	2nd parameter:	1   Make C file
+#			0   Make executable
 #
 ########################################################################
 
 sub make_file {
+    my $cFlag = $_[1];		# make C file if true
     if ($filename =~ /(\w+)\.lst6?/) {
 	$search_text = "$1.ic";	# listing should never be modified
 	load_file(1);		# load the corresponding iC source unconditionally
@@ -1060,32 +1068,36 @@ sub make_file {
 	$infoBar->configure(-foreground => 'blue');
 	$info = "WARNING: cannot make '$filename' (must end in .ic)"; 
     } elsif (check_save()) {	# make sure check_save() has no regex matches
-	my $processName = $1;	# so that $1 is valid
+	my $baseName = $1;	# so that $1 is valid
+	my $targetName = $cFlag ? "$baseName.c" : $baseName;
 	my $ftime = (stat($filename))[9];
-	my $mtime = (stat($processName))[9];
+	my $mtime = (stat($targetName))[9];
 	my $ret = 0;
 	$errorname = '';
 	if ($mtime < $ftime) {
 	    my @args = ("iCmake", $filename);
+	    if ($cFlag) {
+		splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
+	    }
 	    print "system @args\n" if $opt_t;
 	    $ret = system(@args) >> 8;
 	    if ($ret) {
 		$errorname = $filename;
-		$search_text = "$processName.lst";
+		$search_text = "$baseName.lst";
 		load_file();		# load the listing file (iC is up to date)
 		$search_text = '^\*\*\* ';	# regular expression to find errors in listing
 		$prev_text = '';		# start a new search
 		$match_type = '-regexp';
 		search();			# carry out the search setting markers
 		$infoBar->configure(-foreground => 'red');
-		$info = "ERROR: '$processName' cannot be made from '$errorname' (return = $ret)"; 
+		$info = "ERROR: '$targetName' cannot be made from '$errorname' (return = $ret)"; 
 	    } else {
 		$infoBar->configure(-foreground => 'blue');
-		$info = "'$processName' successfully made"; 
+		$info = "'$targetName' successfully made"; 
 	    }
 	} else {
 	    $infoBar->configure(-foreground => 'blue');
-	    $info = "'$processName' is up to date"; 
+	    $info = "'$targetName' is up to date"; 
 	}
     } # ELSE operation was cancelled by check_save()
 }

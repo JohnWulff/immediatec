@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.25 2002/06/05 19:46:14 jw Exp $";
+"@(#)$Id: load.c,v 1.26 2002/06/12 06:30:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -128,6 +128,7 @@ main(
     Gate **	slp;
     Gate **	tlp;
     Gate *	tgp;
+    Gate *	ttgp;
     unsigned	inversion;
     unsigned	val;
     unsigned	link_count = 0;
@@ -217,7 +218,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) printf("PASS 0\n");
+    if (df) { printf("PASS 0\n"); fflush(stdout); }
     for (oppp = i_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
 	    op->gt_val = op->gt_ini == -INPW || op->gt_ini == -INPX ? -1 : 0;
@@ -258,13 +259,17 @@ main(
  *	1 extra link for ARITH nodes and 2 extra links for GATE nodes.
  *	These are space for the activity list terminators.
  *
- *	Resolve inputs from GATE ALIAS nodes and OUTW nodes, which
- *	may occurr because of multiple modules linked together.
+ *	Resolve inputs from ARITH and GATE ALIAS nodes and OUTW nodes,
+ *	which may occurr because of multiple modules linked together.
+ *	In particular adjust each member of an ARITH ALIAS chain, so that
+ *	it points to the final input. This is needed for execution of
+ *	cexe_n() functions, where inputs can only resove 1 level of ALIAS.
+ *
  *	After this pass the input lists contain no aliases.
  *
  *******************************************************************/
 
-    if (df) printf("PASS 1\n");
+    if (df) { printf("PASS 1\n"); fflush(stdout); }
     val = 1;					/* count iClock */
     for (oppp = i_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
@@ -272,19 +277,27 @@ main(
 	    if (op->gt_ini == -ARN) {
 		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
 		if (df) printf(" %-8s%3d:", op->gt_ids, op->gt_ini);
-		lp++;			/* skip function vector */
-		while ((gp = *lp++) != 0) { /* for ARN scan 1 list */
-		    if (gp->gt_ini == -ALIAS) {	/* should not occurr */
+		lp++;				/* skip function vector */
+		while ((gp = *lp++) != 0) {	/* for ARN scan 1 list */
+		    if (gp->gt_ini == -ALIAS) {	/* resolve arithmetic ALIAS */
+			tgp = gp;		/* remember start of ALIAS chain */
 			while (gp->gt_ini == -ALIAS) {
+			    if (df) printf("	%s@", gp->gt_ids);
 			    gp = (Gate*)gp->gt_rlist;	/* adjust */
 			}
 			tlp = lp - 1;
-			*tlp = gp;	/* swap in real input */
+			*tlp = gp;		/* swap in real input */
+			/* adjust ALIAS chain, so that each ALIAS points to real input */
+			while (tgp->gt_ini == -ALIAS) {
+			    ttgp = (Gate*)tgp->gt_rlist;
+			    tgp->gt_rlist = (Gate**)gp;	/* point to final input gate */
+			    tgp = ttgp;
+			}
 		    }
 		    if (df) printf("	%s,", gp->gt_ids);
-		    op->gt_val++;	/* count input */
+		    op->gt_val++;		/* count input */
 		    if (gp->gt_fni == ARITH) {
-			gp->gt_mark++;	/* arithmetic output at gp */
+			gp->gt_mark++;		/* arithmetic output at gp */
 			link_count++;
 		    } else {
 			inError(__LINE__, op, gp);
@@ -298,11 +311,11 @@ main(
 		/* for LOGIC scan 2 lists with i = 1 and -1 */
 		do {
 		    while ((gp = *lp++) != 0) {
-			inversion = 0;
+			inversion = 0;		/* resolve logical ALIAS */
 			if (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
 			    while (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
 				if (gp->gt_ini == -ALIAS) {
-				    if (df) printf("	%s%s@,",	/* @ */
+				    if (df) printf("	%s%s@",		/* @ */
 					gp->gt_mark ? "~" : " ", gp->gt_ids);
 				    inversion ^= gp->gt_mark;
 				    gp = (Gate*)gp->gt_rlist;
@@ -435,7 +448,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) printf("PASS 2\n");
+    if (df) { printf("PASS 2\n"); fflush(stdout); }
     /* iClock has no input, needs no output - just report for completeness */
     if (df) printf(" %-8s %3d %3d\n", iClock.gt_ids, iClock.gt_val,
 	iClock.gt_mark);
@@ -506,7 +519,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) printf("PASS 3\n");
+    if (df) { printf("PASS 3\n"); fflush(stdout); }
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini > 0) {
@@ -526,7 +539,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) printf("PASS 4\n");
+    if (df) { printf("PASS 4\n"); fflush(stdout); }
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS && op->gt_fni == GATE) {
@@ -544,7 +557,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) printf("PASS 5\n");
+    if (df) { printf("PASS 5\n"); fflush(stdout); }
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini == -ARN || op->gt_ini > 0) {
@@ -565,7 +578,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) printf("PASS 6\n");
+    if (df) { printf("PASS 6\n"); fflush(stdout); }
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
@@ -599,10 +612,10 @@ main(
 		}
 	    }
 	    if (op->gt_fni == UDFA) {
-		inError(__LINE__, op, 0);			/* UDFA */
+		inError(__LINE__, op, 0);		/* UDFA */
 	    } else if (op->gt_fni < MIN_ACT) {
 		if (df) {
-		lp = op->gt_list;		/* ARITH or GATE */
+		lp = op->gt_list;			/* ARITH or GATE */
 		    while ((gp = *lp++) != 0) {
 			printf("	%s,", gp->gt_ids);
 		    }
@@ -613,7 +626,8 @@ main(
 		    }
 		}
 	    } else if (op->gt_fni < MAX_ACT) {
-		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
+		if ((lp = op->gt_list) == 0 ||		/* D_SH F_SW ... F_CF */
+		    (gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0);		/* no action D_SH to F_CF */
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    if (df) printf("	%s,", gp->gt_ids);
@@ -626,12 +640,35 @@ main(
 		}
 		if ((gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0);		/* no clock or timer */
+		} else if (gp->gt_fni != CLCKL && gp->gt_fni != TIMRL) {
+		    inError(__LINE__, op, gp);		/* strange clock or timer */
 		} else {
-		    if (df) printf("	%s,", gp->gt_ids);
+		    if (gp->gt_ini == -ALIAS) {		/* resolve clock/timer alias */
+			while (gp->gt_ini == -ALIAS) {
+			    if (df) printf("	%s@", gp->gt_ids);
+			    gp = (Gate*)gp->gt_rlist;	/* adjust */
+			}
+			tlp = lp - 1;
+			*tlp = gp;			/* swap in real clock or timer */
+		    }
+		    if ((gp->gt_fni != CLCKL || gp->gt_ini != -CLK) &&
+			(gp->gt_fni != TIMRL || gp->gt_ini != -TIM)) {
+			inError(__LINE__, op, gp);	/* strange clock or timer */
+	fprintf(stderr, "fni = %d ini = %d\n", gp->gt_fni, gp->gt_ini);
+		    }
+		    if (df) printf("	%c%s,", os[-gp->gt_ini], gp->gt_ids);
 		    if (gp->gt_fni == TIMRL) {
 			if ((gp = *lp++) == 0) {
-			    inError(__LINE__, op, 0);	/* no clock or timer */
+			    inError(__LINE__, op, 0);	/* no timer delay */
 			} else {
+			    if (gp->gt_ini == -ALIAS) {	/* resolve arithmetic alias */
+				while (gp->gt_ini == -ALIAS) {
+				    if (df) printf("	%s@", gp->gt_ids);
+				    gp = (Gate*)gp->gt_rlist;	/* adjust */
+				}
+				tlp = lp - 1;
+				*tlp = gp;		/* swap in real input */
+			    }
 			    if (df) printf("	<%s,", gp->gt_ids);
 			}
 		    }
