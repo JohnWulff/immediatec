@@ -52,6 +52,22 @@ use Tk;					# Slurp the module in
 use Msg;
 use Tk::Balloon;
 use strict;
+#ifdef TIME_HIRES 
+use Time::HiRes qw(sleep gettimeofday tv_interval);
+my $t0 = [gettimeofday];	# start of program
+#endif
+
+########################################################################
+#
+#	Colour selection for background/foreground and false/true
+#	$colourSelect[ftype] must match the definitions in 'icc.h'
+#	Different ftypes select the 'cs' index to select four colours.
+#	The last bit of cs selects the false/true colours.
+#	The last ftype INV_ALIAS has an odd 'cs' which inverts the colours.
+#
+########################################################################
+
+my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# cs[ftype]
 
 #  live colouring     false 0          true 1             cs  ftype
 my @tagBackground = ('PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
@@ -64,11 +80,6 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'black'        , 'white'        ,  # 4 5 CLCKL
 		     'black'        , 'white'        ,  # 6 7 TIMRL
 		    );
-my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# cs[ftype]
-
-my $info = '';
-my $filename = '';
-my $iCname = '';
 
 ########################################################################
 #
@@ -91,7 +102,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.12 2001/04/07 10:35:07 jw Exp $
+$Id: iClive,v 1.13 2001/04/07 18:51:04 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -101,14 +112,6 @@ require "getopts.pl";
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
-#ifdef TIME_HIRES 
-
-my ($t0, $t1, $sec, $usec);
-if ($opt_m) {
-    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
-    $t0 = [gettimeofday];	# start of program
-}
-#endif
 
 ########################################################################
 #
@@ -121,9 +124,13 @@ my $port = defined $opt_p ? $opt_p : 8778;
 my $font = defined $opt_f ? $opt_f : '9x15';
 my $unitID = 'L0';
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
-my @activeSymbols;	# $activeSymbols[$index][0 .. 2] = ($ts, $cs, $val)
+my @activeSymbols;	# $activeSymbols[$index][0 .. 3] = ($ts,$val,$cs,[$sec,$usec])
 my $stIndex = 0;
 my $conn;
+
+my $info = '';
+my $iCname = '';
+my $filename = '';
 
 $filename = $ARGV[0] unless @ARGV < 1;
 
@@ -347,35 +354,48 @@ sub rcvd_msg_from_server {
 		    ####################################################
 		    while ($entry = shift @symbols) {
 			my ($index, $value) = split " ", $entry;
-			my $cs = $activeSymbols[$index][1];
-			$cs ^= 1 if $value;			# change colour
-			$activeSymbols[$index][2] = $value;	# for value display
-			if ($activeSymbols[$index][0] & 01) {
-			    $text->tagConfigure("$index", 
-						'-background' => $tagBackground[$cs], 
-						'-foreground' => $tagForeground[$cs]);
-			    if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
-				$text->after(50, sub {	# turn off after 50 ms.
-					my $cs = $cs & ~01;	# restore 0 colour
-					$text->tagConfigure("$index", 
-						'-background' => $tagBackground[$cs], 
-						'-foreground' => $tagForeground[$cs]);
-				    }
-				);
-			    }
 #ifdef TIME_HIRES 
-			    printMicroSeconds() if $opt_m;
+			my $tNew;
+			my ($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
+			$activeSymbols[$index][3] = $tNew = [gettimeofday];
+			my $tRest = 50 - int(tv_interval($tOld, $tNew) * 1000);	# ms.
+# print "index: $index value: $value rest: $tRest\n";
+#else
+			my $cs = $activeSymbols[$index][2];
 #endif
+			$cs ^= 1 if $value;			# change colour
+			$activeSymbols[$index][1] = $value;	# for value display
+			if ($activeSymbols[$index][0] & 01) {
+#ifdef TIME_HIRES 
+			    if ($tRest < 10) {
+				colourTag("$index", $cs);	# normal colour
+			    } else {
+				# delay the colour change to make it visible
+				$text->after($tRest, [ \&colourTag, "$index", $cs ]);
+			    }
+#else
+			    colourTag("$index", $cs);		# normal colour
+#endif
+			    if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
+				# turn colour off after 50 ms.
+				$text->after(50, [ \&colourTag, "$index", $cs & ~01 ]);
+			    }
 			}
 			if ($activeSymbols[$index][0] & 02) {
-			    $cs ^= 1;				# complement colour
-			    $text->tagConfigure("$index~", 
-						'-background' => $tagBackground[$cs], 
-						'-foreground' => $tagForeground[$cs]);
 #ifdef TIME_HIRES 
-			    printMicroSeconds() if $opt_m;
+			    if ($tRest < 10) {
+				colourTag("$index~", $cs ^ 1);	# complement colour
+			    } else {
+				# delay the colour change to make it visible
+				$text->after($tRest, [ \&colourTag, "$index~", $cs ^ 1 ]);
+			    }
+#else
+			    colourTag("$index~", $cs ^ 1);	# complement colour
 #endif
 			}
+#ifdef TIME_HIRES 
+			printMicroSeconds() if $opt_m;
+#endif
 			print "$index	$value\n" if $opt_t;
 		    }
 		} else {
@@ -386,6 +406,21 @@ sub rcvd_msg_from_server {
 	    }
 	}
     }
+}
+
+########################################################################
+#
+#	Change the tag colours
+#
+########################################################################
+
+sub colourTag {
+    my ($tag, $cs) = @_;
+# print "colourTag: $tag $cs\n";
+    $text->tagConfigure($tag,
+			'-background' => $tagBackground[$cs], 
+			'-foreground' => $tagForeground[$cs],
+		       );
 }
 
 ########################################################################
@@ -491,17 +526,12 @@ sub deleteAllTags {
 		print(" $index~")   if $ts & 02;	# inverted
 		print(" deleted\n");
 	    }
-	    ############################################################
-	    # due to ALIASes tagDelete would be called more than once
-	    # hence the undef below
-	    ############################################################
 	    if ($ts & 01) {
 		$text->tagDelete("$index");
 	    }
 	    if ($ts & 02) {
 		$text->tagDelete("$index~");
 	    }
-	    undef @{ activeSymbols[$index] };
 	}
     }
     @activeSymbols = ();	# delete all previous active symbols
@@ -559,19 +589,20 @@ sub scan {
 		    $tag = $index;
 		    $word = $2;			# word is in the symbol table
 		    $cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
-		    @{ $activeSymbols[$index] }[1, 2] = ($cs & ~01, 0);	# clear inv
+#ifdef TIME_HIRES 
+		    @{ $activeSymbols[$index] }[1 .. 3] = (0, $cs & ~01, [gettimeofday]);
+#else
+		    @{ $activeSymbols[$index] }[1, 2] = (0, $cs & ~01);	# clear inv
+#endif
 		    while ($i =~ m/[!~]/g) {
-			$cs ^= 1;		# complement colour selection
+			$cs ^= 1;		# complement initial colour selection
 		    }
 		    $tag .= '~' if ($ts = $cs & 01); # adjust tag name if inverted
 		    $ts++;			# convert to a mask 0 => 01, 1 => 02
 		    print "$tag	$word	'$iw'\n" if $opt_T;
 		    unless ($activeSymbols[$index][0] & $ts) {
 			$activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
-			$text->tagConfigure($tag, 
-					    '-background' => $tagBackground[$cs], 
-					    '-foreground' => $tagForeground[$cs]
-					   );
+			colourTag($tag, $cs);	# initial tag colour
 		    }
 		    $text->tagAdd($tag, $current, "$current + $length char");
 		} else {
@@ -627,7 +658,7 @@ sub scan {
 				$word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
 			    }
 			    $ftype = $symbolTable{$word}[0];
-			    $val = $activeSymbols[$index][2];
+			    $val = $activeSymbols[$index][1];
 			    $val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
 			    $bMsg = "$val";
 			    $sMsg = "$word: $val";
@@ -746,19 +777,8 @@ sub save_file {
 ########################################################################
 
 sub printMicroSeconds {
-    my ($sec, $usec);
-    $t1 = [gettimeofday];
-    $sec =  $t1->[0] - $t0->[0];
-    $usec = $t1->[1] - $t0->[1];
-    if ($usec < 0) {
-	$sec--;
-	$usec += 1000000;
-    }
-    if ($opt_t) {
-	printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
-    } else {
-	printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
-    }
-    $t0 = [gettimeofday];	# $t0 = $t1;
+    my $ti = tv_interval $t0, [gettimeofday];
+    printf "%10.6f%s", $ti, $opt_t ? ": " : "\n";
+    $t0 = [gettimeofday];
 }
 #endif
