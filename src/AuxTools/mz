@@ -1,0 +1,26 @@
+#!/usr/bin/ksh -p
+
+case $# in
+    0)	echo "USAGE mz base1 base2 base3 ..."
+	exit 1;;
+esac
+
+for f in $*; do
+    if [[ ! -e $f.p ]]; then
+	echo "source $f.p does not exist"
+	er=1
+    fi
+done
+
+if [[ -n "$er" ]]; then
+    exit 2;
+fi
+
+for v in 36 37 38 39 40 41 42 43 44 45 46 47 50 51; do
+    echo "### $v ###"
+    makex -v$v $*;
+    for f in $*; do
+	echo $f
+	cp $f.p $f.lst $f.c Alex$v
+    done
+done
