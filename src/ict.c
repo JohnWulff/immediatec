@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.18 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: ict.c,v 1.19 2001/03/24 21:01:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -427,8 +427,52 @@ icc(
 				    cnt++;
 				}
 			    }
+#ifdef LOAD
+			} else if (sscanf(rBuf, "L%d.%hd", &slot, &val) == 2 && slot == 0) {
+			    int offset = 0;
+
+			    switch (val) {
+			    case 0:		/* GET_END */
+				printf("Symbol Table no longer required\n");
+				break;
+
+			    case 1:		/* GET_SYMBOL_TABLE */
+				printf("Symbol Table requested\n");
+				strcpy(msg, "L0.1;");
+				offset = 5;		/* strlen(msg) */
+				for (opp = sTable; opp < sTend; opp++) {
+				    gp = *opp;
+				    if (gp->gt_ini != -NCONST) {
+					if (offset > REPLY - 6 - strlen(gp->gt_ids)) {	/* -11 id, */
+					    msg[offset - 1] = '\0';		/* clear last ',' */
+			    printf("lenth of msg = %d\n", strlen(msg));
+					    if (micro) microPrint("Send Symbols intermediate", 0);
+					    send_msg_to_server(sockFN, msg);
+					    if (micro) microReset(0);
+					    offset = 5;
+					}
+					offset += sprintf(&msg[offset], "%s %d;", gp->gt_ids, gp->gt_ini);
+				    }
+				}
+				if (offset > 5) {
+				    msg[offset - 1] = '\0';	/* clear last ',' */
+		    printf("lenth of msg = %d\n", strlen(msg));
+				    if (micro) microPrint("Send Symbols", 0);
+				    send_msg_to_server(sockFN, msg);
+				    if (micro) microReset(0);
+				}
+				if (micro) microPrint("Send Scan Command", 0);
+				send_msg_to_server(sockFN, "L0.2");
+				if (micro) microReset(0);
+				break;
+
+			    default:
+				fprintf(errFP, "ERROR: %s rcvd at %s ???\n", rBuf, iccNM);
+				break;
+			    }
+#endif
 			} else {
-			    fprintf(errFP, "ERROR: %s rcvd %s ???\n", rBuf, iccNM);
+			    fprintf(errFP, "ERROR: %s rcvd at %s ???\n", rBuf, iccNM);
 			}
 		    } else {
 			close(sockFN);
