@@ -51,9 +51,10 @@ use Tk;					# Slurp the module in
 use Msg;
 use strict;
 
-#  live colouring     false         true
+#  live colouring     false 0       true 1
 my @tagBackground = ('PaleGreen1', 'yellow',  );
 my @tagForeground = ('black'     , 'red'   ,  );
+
 my $is_logic = 0;             # 1 if check-button on
 my $info = '';
 my $filename = '';
@@ -99,7 +100,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.1 2001/03/19 14:21:32 jw Exp $
+$Id: iClive,v 1.2 2001/03/23 12:15:36 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
