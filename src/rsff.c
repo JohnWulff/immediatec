@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.13 2000/12/25 18:11:41 jw Exp $";
+"@(#)$Id: rsff.c,v 1.14 2001/01/14 22:37:40 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -611,14 +611,18 @@ outMw(					/* OUTW master action */
 #endif
 	*(char*)gp->gt_list = val;	/* output byte */
 #ifdef TCP 
-	sprintf(msg, "B%d,%d", unit, val);
-	send_msg_to_server(sockFN, msg);
+	if ((debug & 0400) == 0) {
+	    sprintf(msg, "B%d,%d", unit, val);
+	    send_msg_to_server(sockFN, msg);
+	}
 #endif
     } else if (gp->gt_mark == 2) {
 	*(int*)gp->gt_list = val;	/* output word */
 #ifdef TCP 
-	sprintf(msg, "W%d,%d", unit, val);
-	send_msg_to_server(sockFN, msg);
+	if ((debug & 0400) == 0) {
+	    sprintf(msg, "W%d,%d", unit, val);
+	    send_msg_to_server(sockFN, msg);
+	}
 #endif
 #ifndef _WINDOWS
     } else {
@@ -671,12 +675,15 @@ outMx(					/* OUTX master action */
     }
 #endif
 #ifdef TCP 
-    /* TODO - output bitmask directly */
-    for (index = 0, mask = 1; index < 8; index++, mask <<= 1) {
-	if (field & mask) break;
+    if ((debug & 0400) == 0) {
+	/* TODO - output bitmask directly */
+	for (index = 0, mask = 1; index < 8; index++, mask <<= 1) {
+	    if (field & mask) break;
+	}
+	sprintf(msg, "X%d,%d,%d",
+	    unit, index, (int)((unsigned char)gp->gt_val >> 7));
+	send_msg_to_server(sockFN, msg);
     }
-    sprintf(msg, "X%d,%d,%d", unit, index, (int)((unsigned char)gp->gt_val >> 7));
-    send_msg_to_server(sockFN, msg);
 #endif
 
     if (gp->gt_val & 0x80) {		/* output action */

@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.9 2001/01/03 10:49:24 jw Exp $";
+"@(#)$Id: pplc.c,v 1.10 2001/01/14 22:37:40 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -235,7 +235,7 @@ pplc(
     }
 
     if (debug & 0400) {
-	exit(0);				/* terminate - no inputs */
+	quit(0);				/* terminate - no inputs */
     }
 
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
@@ -557,7 +557,9 @@ void quit(int sig)
 #ifndef _MSDOS_
     if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
 #endif
-    fprintf(errFP, "\n");
+    if ((debug & 0400) == 0) {
+	fprintf(errFP, "\n");
+    }
     if (sig) {
 	fprintf(errFP, "Quit with sig = %d\n", sig);
     }

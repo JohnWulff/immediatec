@@ -53,6 +53,7 @@ use strict;
 
 my %UnitIDs = ();
 my %Connections = ();
+my %Values = ();
 my $connPPLC;
 
 ########################################################################
@@ -72,7 +73,7 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.9 2000/11/06 20:30:33 jw Exp $
+$Id: ICServer,v 1.10 2001/01/18 21:44:59 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -152,7 +153,7 @@ sub rcvd_msg_from_client {
     if (defined $msg) {
 	my $unitID = $UnitIDs{$conn};
 	my $len = length $msg;
-#	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
+# print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
 	if ($len == 0) {
 	    if (defined $unitID and exists $Connections{$unitID}) {
 		delete $Connections{$unitID};
@@ -164,6 +165,7 @@ sub rcvd_msg_from_client {
 		print "$unitID has disconnected\n";
 	    }
 	} elsif ($msg =~ /^[XBWP]\d+$/) {	# X0 X1 .. B0 .. W0 .. P0
+	    my ($con1, $uID, $index, $value, $mes1);
 	    if (exists $Connections{$msg}) {
 		delete $UnitIDs{$conn};
 		$conn->disconnect();
@@ -177,12 +179,49 @@ sub rcvd_msg_from_client {
 			return;
 		    }
 		    $connPPLC = $conn;		# the PPLC connection
+		    # new PPLC connected - reset all the attached I/Os
+		    foreach $con1 (sort keys %UnitIDs) {
+			$uID = $UnitIDs{$con1};
+			if (defined $uID) {
+			    print"$uID [$Connections{$uID}] ";
+			    if (defined $Connections{$uID}) {
+				if ($uID =~ /^[BWX]/) {
+				    $Connections{$uID}->send_now("R");
+				    print "R to $uID\n" if $opt_t;
+				}
+			    } else {
+				print "R to dummy $uID\n" if $opt_t;
+			    }
+			    if ($uID =~ /^X/) {
+				for ($index = 0; $index < 8; $index++) {
+				    $Values{"$uID,$index"} = 0;	# save latest bit value
+				}
+			    } elsif ($uID =~ /^[BW]/) {
+				$Values{$uID} = 0;		# save latest analog value
+			    }
+			}
+		    }
 		}
 		$UnitIDs{$conn} = $msg;
 		$Connections{$msg} = $conn;
 		print "Registered $msg at server. $conn\n";
+		if ($msg =~ /^X/) {			# saved bit values from PPLC
+		    for ($index = 0; $index < 8; $index++) {
+			$value = $Values{"$msg,$index"};
+			if ($value) {
+			    $Connections{$msg}->send_now("$index,$value");
+			    print "$index,$value to $msg\n" if $opt_t;
+			}
+		    }
+		} elsif ($msg =~ /^[BW]/) {		# saved analog value from PPLC
+		    $value = $Values{$msg};
+		    if ($value) {
+			$Connections{$msg}->send_now("$value");
+			print "$value to $msg\n" if $opt_t;
+		    }
+		}
 	    }
-	} elsif ($msg =~ /^X/) {		# bit value messages from PPLC
+	} elsif ($msg =~ /^X/) {			# bit value messages from PPLC
 	    my ($uID, $index, $value, $rest) = split /,/, $msg, 4;
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
 		if (defined $Connections{$uID}) {
@@ -191,10 +230,11 @@ sub rcvd_msg_from_client {
 		} else {
 		    print "$index,$value to dummy $uID\n" if $opt_t;
 		}
+		$Values{"$uID,$index"} = $value;	# save latest bit value
 	    } else {
 		print "ERROR: $msg from Unit $unitID ?? ignored\n";
 	    }
-	} elsif ($msg =~ /^[BW]/) {		# analog value messages from PPLC
+	} elsif ($msg =~ /^[BW]/) {			# analog value messages from PPLC
 	    my ($uID, $value, $rest) = split /,/, $msg, 3;
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
 		if (defined $Connections{$uID}) {
@@ -203,10 +243,11 @@ sub rcvd_msg_from_client {
 		} else {
 		    print "$value to dummy $uID\n" if $opt_t;
 		}
+		$Values{$uID} = $value;			# save latest analog value
 	    } else {
 		print "ERROR: $msg from Unit $unitID ?? ignored\n";
 	    }
-	} elsif (defined $connPPLC) {		# value messages from I/O
+	} elsif (defined $connPPLC) {			# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
 	    $connPPLC->send_now("$unitID,$msg");
 	    print "$unitID,$msg to   P0\n" if $opt_t;

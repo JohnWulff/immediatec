@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.28 2001/01/13 17:47:02 jw Exp $";
+"@(#)$Id: genr.c,v 1.29 2001/01/14 22:37:40 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -959,10 +959,13 @@ qp_asgn(
     if (bsp) {
 	if (lpb) {
 	    if ((lp = fsp->list) != 0) {
+		unsigned int inv = (ft == GATE) ? lpf->le_val : 0;
 		fsp->list = lpb;		/* put old output list first */
 		while (lpb->le_next != 0) {
+		    lpb->le_val ^= inv;		/* invert link in old list */
 		    lpb = lpb->le_next;
 		}
+		lpb->le_val ^= inv;		/* invert last link in old list*/
 		lpb->le_next = lp;		/* link new output at end of old */
 		if (debug & 04) {		/* generate listing output */
 		    iFlag = 1;

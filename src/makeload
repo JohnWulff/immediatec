@@ -4,7 +4,7 @@
 #
 #	make the load.a lib with OPT=LOAD
 #
-#	$Id: makeload,v 1.5 2001/01/11 18:42:26 jw Exp $
+#	$Id: makeload,v 1.6 2001/01/13 19:27:58 jw Exp $
 #
 ########################################################################
 
@@ -13,7 +13,7 @@ if [[ -f Make_tmp ]]; then
     exit 1;
 fi
 test -d Make_tmp || mkdir Make_tmp;
-mv pptc.o link.o rsff.o scan.o Make_tmp
+mv link.o rsff.o scan.o Make_tmp
 if [[ -d LoadObjs ]]; then
     mv LoadObjs/* .
 else

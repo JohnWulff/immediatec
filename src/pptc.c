@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.6 2001/01/09 19:23:19 jw Exp $";
+"@(#)$Id: pptc.c,v 1.7 2001/01/14 22:37:40 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -434,7 +434,9 @@ void quit(int sig)
 {
     fflush(outFP);
     if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
-    fprintf(errFP, "\n");
+    if ((debug & 0400) == 0) {
+	fprintf(errFP, "\n");
+    }
     if (sig) {
 	fprintf(errFP, "Quit with sig = %d\n", sig);
     }

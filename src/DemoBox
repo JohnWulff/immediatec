@@ -12,6 +12,9 @@ use Tk;					# Slurp the module in
 use Msg;
 use strict;
 
+my @inputs;
+my @outputs;
+
 ########################################################################
 #
 #	Initialization
@@ -28,7 +31,7 @@ Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	-t	trace debug messages
 	-d	extra receive debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.19 2000/11/06 20:30:33 jw Exp $
+$Id: DemoBox,v 1.20 2001/01/18 13:35:46 jw Exp $
 .
 
 use vars qw($opt_t $opt_d $opt_s $opt_p $opt_h);
@@ -66,7 +69,21 @@ $mainWindow->title("iC");
 $mainWindow->Label(-text => "iC Demo Box")->pack;
 
 $mainWindow->Button(-text    => "Exit",
-		    -command => sub { exit },
+		    -command => sub {
+					if ($unitID =~ /^X/) {
+					    my ($index);
+					    for ($index = 0; $index < 8; $index++) {
+						if ($inputs[$index]) {
+						    $conn->send_now("$index,0");
+						}
+					    }
+					} elsif ($unitID =~ /^[BW]/) {
+					    if (length $inputs[0] and $inputs[0]) {
+						$conn->send_now("0");
+					    }
+					}
+					exit;
+				    },
 		   )->pack(-side   => 'bottom', 
 			   -expand => 1,
 			   -fill   => 'x',
@@ -106,9 +123,6 @@ my $outFrame = $mainWindow->Frame(-label       => $outLabel,
 #	Generate 8 input checkbuttons and 8 output checkbuttons
 #
 ########################################################################
-
-my @inputs;
-my @outputs;
 
 if ($unitID =~ /^X/) {
     for (my $index = 0; $index < 8; $index++) {
@@ -219,32 +233,40 @@ MainLoop;
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
+	my ($index, $value);
         my $len = length ($msg);
-#	print "($len)$msg\n";
+# print "($len)$msg\n";
 	if ($len == 0) {
 	    $conn->disconnect();
 	    print "DemoBox $unitID disconnected by server\n";
 	    exit;
 	}
 	if ($unitID =~ /^X/) {
-	    my ($index, $value) = split /,/, $msg;
-	    print "$index $value $outputs[$index]\n" if $opt_d;
-	    $outputs[$index] = $value;
+	    if ($msg eq "R") {
+		for ($index = 0; $index < 8; $index++) {
+		    $outputs[$index] = 0;
+		    if ($inputs[$index]) {
+			$conn->send_now("$index,$inputs[$index]");
+		    }
+		}
+	    } else {
+		($index, $value) = split /,/, $msg;
+		print "$index $value $outputs[$index]\n" if $opt_d;
+		$outputs[$index] = $value;
+	    }
 	} elsif ($unitID =~ /^[BW]/) {
-	    print "$msg $outputs[0]\n" if $opt_d;
-	    $outputs[0] = $msg;
-	} else {
-	    print "$unitID received spurious message: '$msg'\n";
+	    if ($msg eq "R") {
+		print "init 0 $outputs[0]\n" if $opt_d;
+		$outputs[0] = 0;
+		if (length $inputs[0] and $inputs[0]) {
+		    $conn->send_now("$inputs[0]");
+		}
+	    } elsif ($msg =~ /^\d+$/) {
+		print "$msg $outputs[0]\n" if $opt_d;
+		$outputs[0] = $msg;
+	    } else {
+		print "$unitID received spurious message: '$msg'\n";
+	    }
 	}
     }
 }
-__END__
-
-while (Tk::MainWindow->Count) {
-    DoOneEvent(0);
-    print "#";
-}
-print "\nQuit\n";
-$mainWindow->fileevent($conn->{sock}, 'readable', undef);
-$conn->disconnect();
-Msg->event_loop();
