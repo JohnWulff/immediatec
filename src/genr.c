@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.22 2001/01/06 15:01:46 jw Exp $";
+"@(#)$Id: genr.c,v 1.23 2001/01/06 17:49:13 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -772,7 +772,24 @@ op_asgn(			/* asign List_e stack to links */
  
 /********************************************************************
  *
- *	asign to QBx or QWx
+ *	Asign to QBx or QWx	when ft == ARITH
+ *	Asign to QXx.y		when ft == GATE
+ *
+ *	Generates auxiliary driver gate named QBX_1 etc for each output.
+ *	This driver is used for all inputs, since output gates of ftyp
+ *	OUTW and OUTX cannot drive logic or arithmetic directly.
+ *
+ *	The auxiliary driver may be inverted if the driving gate is a
+ *	function type SH, FF, VF or EF. In this case a post-processor
+ *	pplstfix.pl is called to adjust earlier use of the unassigned
+ *	gate, before it was known, that the value would be inverted
+ *	and only if such a use actually occurs.
+ *
+ *	This postprocessor only affects the listing, not the generation
+ *	of code. This algorithm was necessary because of the one pass
+ *	nature of the compiler. NOTE: No automatic post-processing of
+ *	listings to standard output occurs. In this case the listing
+ *	contains two explanatory lines, how the listing is to b read.
  *
  *	Sym sv contains Symbol *v and char *f and *l to source
  *	Lis lr contains List_e *v and char *f and *l to source
@@ -780,9 +797,10 @@ op_asgn(			/* asign List_e stack to links */
  *******************************************************************/
 
 Symbol *
-qw_asgn(
+qp_asgn(
     Sym *	sv,
-    Lis *	rl)
+    Lis *	rl,
+    uchar	ft)
 {
     Lis		li1;
     List_e *	lp;
@@ -791,10 +809,11 @@ qw_asgn(
     Symbol *	svv;
     Symbol *	fsp;
     Symbol *	bsp = 0;
+    uchar	oft = OUTW - ARITH + ft;	/* ensure order of ftypes is correct */
 
     if ((svv = sv->v)->type != UDF) {
 	if (svv->type != ERR && (
-	    svv->ftype != OUTW ||	/* CHANGE */
+	    svv->ftype != oft ||		/* oft is OUTW or OUTX */
 	    (lpf = svv->list) == 0 ||
 	    (bsp = lpf->le_sym) == 0 ||
 	    bsp->type != UDF
@@ -806,12 +825,12 @@ qw_asgn(
 	unlink_sym(bsp);			/* unlink old symbol */
 	free(lpf);				/* old back link */
     }
-    lpf = op_force(rl->v, ARITH);	/* CHANGE */
+    lpf = op_force(rl->v, ft);			/* ARITH or GATE */
     fsp = lpf->le_sym;				/* aexpr symbol */
     svv->list = sy_push(lpf->le_sym);		/* create back link */
     svv->list->le_val = lpf->le_val;		/* copy inversion to back link */
     li1.v = op_push((List_e *)0, UDF, lpf);	/* type <== AND */
-    li1.v->le_sym->type = ARN;			/* type <== ARN */	/* CHANGE */
+    li1.v->le_sym->type = types[ft];		/* type <== ARN or OR */
     li1.f = rl->f;	/* for op_asgn */
     li1.l = rl->l;	/* for op_asgn */
     if (bsp) {
@@ -849,119 +868,30 @@ qw_asgn(
 	svv->list->le_sym = bsp;
 	free(fsp);				/* replaced $ symbol */
     }
-    fsp = op_asgn(sv, &li1, OUTW);		/* CHANGE */
+    fsp = op_asgn(sv, &li1, oft);		/* oft is OUTW or OUTX */
     if (bsp && lpb && (lp = bsp->list)) {
 	bsp->list = lpb;			/* put old output list first */
 	while (lpb->le_next != 0) {
 	    lpb = lpb->le_next;
 	}
 	lpb->le_next = lp;			/* link new output at end of old */
-    }
-    return fsp;
-} /* qw_asgn */
- 
-/********************************************************************
- *
- *	asign to QXx.y
- *
- *	Sym sv contains Symbol *v and char *f and *l to source
- *	Lis lr contains List_e *v and char *f and *l to source
- *
- *******************************************************************/
-
-Symbol *
-qx_asgn(
-    Sym *	sv,
-    Lis *	rl)
-{
-    Lis		li1;
-    List_e *	lp;
-    List_e *	lpf;
-    List_e *	lpb;
-    Symbol *	svv;
-    Symbol *	fsp;
-    Symbol *	bsp = 0;
-
-    if ((svv = sv->v)->type != UDF) {
-	if (svv->type != ERR && (
-	    svv->ftype != OUTX ||
-	    (lpf = svv->list) == 0 ||
-	    (bsp = lpf->le_sym) == 0 ||
-	    bsp->type != UDF
-	)) {
-	    error("multiple assignment to imm bit or int:", svv->name);
-	    svv->type = ERR;	/* cannot execute properly */
-	}
-	svv->type = UDF;
-	unlink_sym(bsp);			/* unlink old symbol */
-	free(lpf);				/* old back link */
-    }
-    lpf = op_force(rl->v, GATE);
-    fsp = lpf->le_sym;				/* aexpr symbol */
-    svv->list = sy_push(lpf->le_sym);		/* create back link */
-    svv->list->le_val = lpf->le_val;		/* copy inversion to back link */
-    li1.v = op_push((List_e *)0, UDF, lpf);	/* type <== AND */
-    li1.v->le_sym->type = OR;			/* type <== OR */
-    li1.f = rl->f;	/* for op_asgn */
-    li1.l = rl->l;	/* for op_asgn */
-    if (bsp) {
-	/*
-	 * replace the $ symbol which would be new auxiliary output
-	 * driver gate by the symbol created when that auxiliary output
-	 * was first used as input.
-	 *
-	 * copy all relevant data from $ symbol to old auxiliary output
-	 * including the $ name - this is renamed to original name in
-	 * op_asgn()
-	 *
-	 * cannot simply move output list to new $ symbol, since there may
-	 * be pointers to the old auxiliary output *bsp in the templist
-	 */
-	assert(fsp);
-	free(bsp->name);			/* old "QXx.y_1" string */
-	bsp->name = fsp->name;			/* transfer $ name or 0 */
-	bsp->type = fsp->type;
-	bsp->ftype = fsp->ftype;		/* should be GATE or ALIAS */
-	assert(fsp->list == 0);
-	lp = bsp->list;				/* take out this symbol */
-	assert(lp != 0);
-	assert(lp->le_sym == svv);		/* if not it was not first asgn */
-	lpb = lp->le_next;			/* 0 or old output list */ 
-	bsp->list = 0;				/* make empty till after assignment */ 
-	free(lp);				/* old forward link */
-	assert(bsp->u.blist == 0);
-	bsp->u.blist = fsp->u.blist;
-	assert(templist->next == fsp);
-	templist->next = bsp;
-	bsp->next = fsp->next;
-	rl->v->le_sym = bsp;			/* forward link */
-	assert(svv->list->le_sym == fsp);	/* not necessary - linked above */
-	svv->list->le_sym = bsp;
-	free(fsp);				/* replaced $ symbol */
-    }
-    fsp = op_asgn(sv, &li1, OUTX);
-    if (bsp && lpb && (lp = bsp->list)) {
-	bsp->list = lpb;			/* put old output list first */
-	while (lpb->le_next != 0) {
-	    lpb = lpb->le_next;
-	}
-	lpb->le_next = lp;			/* link new output at end of old */
-	if (lpf->le_val != NOT ^ NOT) {
+	if (ft == GATE && lpf->le_val == NOT) {
 	    for (lp = bsp->list; lp; lp = lp->le_next) {/* traverse output list */
-		if (lp != lpf) {			/* leave out own output */
+		if (lp != lpf) {		/* leave out own output */
 		    lp->le_val ^= NOT;		/* invert link */
 		}
 	    }
 	    if (debug & 04) {
-		iFlag = 1;				/* do inversion correction */
+		iFlag = 1;			/* trigger post-processor */
+		/* The following text is searched for in post-processor pplstfix.pl */
 		fprintf(outFP, "\tprevious inputs '%s' must be inverted\n"
 		    "\texcept input '%s' to own output '%s'\n\n",
-		    bsp->name, bsp->name, lpf->le_sym->name);
+		    bsp->name, bsp->name, lpf->le_sym->name);	/* DO NOT CHANGE */
 	    }
 	}
     }
     return fsp;
-} /* qx_asgn */
+} /* qp_asgn */
 
 /********************************************************************
  *
