@@ -26,19 +26,21 @@ usage ()
     echo '	-b	generate both listing and C output' >&2
     echo '	-n	generate no output, report icc compile errors only' >&2
     echo '		-s and -n generate cexe.c for last file as a side effect' >&2
-    echo '	-v	use libict.a in local directory (default is installed -lict)' >&2
+    echo '	-v	use icc and libict.a in local directory' >&2
+    echo '		(default use installed icc and -lict)' >&2
     echo '	-v<N>	use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '		default listing is file.lst' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: ICMake,v 1.13 2001/03/11 15:10:19 jw Exp $' >&2
+    echo '	$Id: ICMake,v 1.14 2001/03/11 17:16:32 jw Exp $' >&2
 }
 
 link=0
 flag=noerror
 a=""
 v=""
+b=""
 lib="-lict"
 d="-d74"
 l=""
@@ -61,6 +63,7 @@ while [[ $# > 0 ]]; do
 		else
 		    lib=libict.a;
 		fi
+		b="./"
 		break;;
 	    6*)	d="-d76";l="6";;
 	    A*)	d="$d -A";;
@@ -90,16 +93,16 @@ for f in $*; do
     case $link in
     0)
 	rm -f $base.c $base
-	if nice icc$v $d -o $base.c -l $base.lst$l $file; then
+	if nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
 	    if nice cc -g -I. -DYYDEBUG -o $base $base.c _list_.c $lib; then
 		$base -d540 > $base.ini
 	    fi
 	else
-	    echo "icc$v compile errors in '$file' - no executable '$base' generated" >&2
+	    echo "${b}icc$v compile errors in '$file' - no executable '$base' generated" >&2
 	fi ;;
     1)
 	rm -f $base.c
-	if nice icc$v $a $d -o $base.c -l $base.lst$l $file; then
+	if nice ${b}icc$v $a $d -o $base.c -l $base.lst$l $file; then
 	    list="$list $base.c"
 	else
 	    list="$list ERROR:$base.c"
@@ -110,22 +113,22 @@ for f in $*; do
 	    a="-a"
 	fi ;;
     2)
-	if ! nice icc$v $d -c -l $base.lst$l $file; then
-	    echo "icc$v compile errors in '$file'" >&2
+	if ! nice ${b}icc$v $d -c -l $base.lst$l $file; then
+	    echo "${b}icc$v compile errors in '$file'" >&2
 	fi ;;
     3)
 	rm -f $base.c
-	if ! nice icc$v -o $base.c $file; then
-	    echo "icc$v compile errors in '$file'" >&2
+	if ! nice ${b}icc$v -o $base.c $file; then
+	    echo "${b}icc$v compile errors in '$file'" >&2
 	fi ;;
     4)
 	rm -f $base.c
-	if ! nice icc$v $d -o $base.c -l $base.lst$l $file; then
-	    echo "icc$v compile errors in '$file'" >&2
+	if ! nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
+	    echo "${b}icc$v compile errors in '$file'" >&2
 	fi ;;
     5)
-	if ! nice icc$v -c $file; then
-	    echo "icc$v compile errors in '$file'" >&2
+	if ! nice ${b}icc$v -c $file; then
+	    echo "${b}icc$v compile errors in '$file'" >&2
 	fi ;;
     esac
 done
@@ -138,6 +141,6 @@ if [[ $link = 1 ]]; then
 	    $first -d540 > $first.ini
 	fi
     else
-	echo "icc$v compile errors in '$list'" >&2
+	echo "${b}icc$v compile errors in '$list'" >&2
     fi
 fi

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.17 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: ict.c,v 1.18 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -44,9 +44,6 @@ static void	display(void);
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define ENTER	'\n'
-
-static struct termio	ttyparms;
-static struct termio	ttyparmh;
 
 Functp	*i_lists[] = { I_LISTS };
 
@@ -124,11 +121,6 @@ icc(
     if (errFP != stderr) {
 	fclose(errFP);
 	errFP = stderr;			/* standard error from here */
-    }
-
-    if ( ioctl(0, TCGETA, &ttyparms) == -1 )   {
-	fprintf(stderr, "Cannot get termio from stdin\n");
-	quit(-5);
     }
 
     for (cnt = 1; cnt < 8; cnt++) {
@@ -212,9 +204,28 @@ icc(
     }
 
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
-    memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
-    ttyparmh.c_lflag &= ~(ECHO | ICANON);
-    if (ioctl(0, TCSETA, &ttyparmh) == -1) quit(-6);
+#ifdef SIGTTIN 
+    /*
+     * The following behaviour was observed on Linux kernel 2.2
+     * When this process is running in the background, and a command
+     * (even a command which does not exist) is run from the bash from
+     * the same terminal on which this process was started, then this
+     * process is sent signal SIGTTIN. If the signal SIGTTIN is ignored,
+     * then stdin receives EOF (a few thousand times) every time a
+     * character is entered at the terminal.
+     *
+     * To prevent this process from hanging when run in the background,
+     * SIGTTIN is ignored, and when the first EOF is received on stdin,
+     * FD_CLR(0, &infds) is executed to stop selects on stdin from then on.
+     * This means, that stdin can still be used normally for the q, t, x, d
+     * and m command when the process is run in the foreground, and behaves
+     * correctly (does not STOP mysteriously) when run in the background.
+     *
+     * This means that such a process cannot be stopped with q, only with
+     * ctrl-C, when it has been brought to the foregroung with fg.
+     */
+    signal(SIGTTIN, SIG_IGN);		/* ignore tty input signal in bg */
+#endif
 
     if ((gp = TX_[0]) != NULL) {
 	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
@@ -428,10 +439,11 @@ icc(
 		    /*
 		     *	STDIN
 		     */
-		    if ((c = getchar()) == 'q' || c == EOF) {
+		    if ((c = getchar()) == EOF) {
+			FD_CLR(0, &infds);		/* ignore EOF - happens in bg */
+		    } else if (c == 'q') {
 			quit(0);			/* quit normally */
-		    }
-		    if (c == 't') {
+		    } else if (c == 't') {
 			debug ^= 0100;			/* toggle -t flag */
 		    } else if (c == 'm') {
 			micro++;			/* toggle more micro */
@@ -444,7 +456,6 @@ icc(
 			    flag = 0;			/* decimal output */
 			}
 			if (flag != xflag) {
-			    putc(c, outFP);
 			    xflag = flag;
 			    display();			/* inputs and outputs */
 			}
@@ -525,11 +536,10 @@ display(void)
 void quit(int sig)
 {
     fflush(outFP);
-    if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
     if ((debug & 0400) == 0) {
 	fprintf(errFP, "\n");
     }
-    if (sig) {
+    if (sig > SIGINT) {
 	fprintf(errFP, "Quit with sig = %d\n", sig);
     }
     if (errFP != stderr) {

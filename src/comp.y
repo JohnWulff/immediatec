@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.47 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: comp.y,v 1.48 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -892,19 +892,19 @@ jmp_buf		begin;
 int		lex_typ[] = { DEF_TYP };/* tokens corresponding to type */
 int		lex_act[] = { DEF_ACT };/* tokens corresponding to ftype */
 
-char *		inpNM = "standard input";/* original input file name */
-FILE *		inFP;			/* input file pointer */
+char *		inpNM = "stdin";	/* original input file name */
+FILE *		inFP = 0;		/* input file pointer - stdin default */
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 FILE *		exoFP;			/* cexe out file pointer */
 
 /********************************************************************
  *
- *	compile an iC language source file whose name is in 'szFile_g'
- *	if szFile_g is a null pointer use standard input (stdin)
- *	a copy of the source file name is kept in inpNM for
+ *	compile an iC language source file whose name is in 'inpPath'
+ *	if inpPath is a null pointer use standard input (stdin)
+ *	a copy of the source file name (or stdin) is kept in inpNM for
  *	error messages. This name and the variable 'lineno' are
- *	modified by a #line "file.p" 1 pre-processor directive.
+ *	modified by a #line 1 "file.ic" pre-processor directive.
  *
  *	listing text is directed to 'lstNM' (default stdout)
  *	error   text is directed to 'errNM' (default stderr)
@@ -915,7 +915,13 @@ FILE *		exoFP;			/* cexe out file pointer */
  *******************************************************************/
 
 int
-compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
+compile(
+    char *	inpPath,		/* input file path */
+    char *	lstNM,			/* list file name */
+    char *	errNM,			/* error file name */
+    char *	outNM,			/* C output file name */
+    char *	exiNM,			/* cexe input file name */
+    char *	exoNM)			/* cexe C output file name */
 {
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
 	return 3;
@@ -923,7 +929,7 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
     if (errNM && (errFP = fopen(errNM, "w+")) == NULL) {
 	return 2;
     }
-    if (szFile_g && (inFP = fopen(inpNM = szFile_g, "r")) == NULL) {
+    if (inpPath && (inFP = fopen(inpNM = inpPath, "r")) == NULL) {
 	return 1;
     }
     if ((exoFP = fopen(exoNM, "w+")) == NULL) {
@@ -941,7 +947,7 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
     if (debug & 010) {		/* end source listing */
 	fprintf(outFP, "************************************************\n");
     }
-    if (szFile_g) fclose(inFP);
+    if (inpPath) fclose(inFP);
     return 0;
 } /* compile */
 
@@ -971,7 +977,7 @@ get(void)
 	    }
 	    outBP = ftell(outFP);	/* note position in listing file */
 	}
-	/* handle pre-processor #line 1 "file.p" */
+	/* handle pre-processor #line 1 "file.ic" */
 	if (sscanf(getp, "#line %d \"%[^\"]\"\n", &temp1, inpBuf) == 2) {
 	    lineno = temp1;
 	    lineflag = 0;

@@ -1,5 +1,5 @@
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.6 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.7 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -58,6 +58,7 @@ extern int		rcvd_msg_from_server(int sock, char* buf, int maxLen);
 extern void		send_msg_to_server(int sock, const char* msg);
 
 extern fd_set		rdfds;
+extern fd_set		infds;
 extern struct timeval	timeoutCounter;
 extern struct timeval	timeoutValue;
 

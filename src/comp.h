@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.17 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: comp.h,v 1.18 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -47,13 +47,8 @@ typedef struct { List_e * v;	char *f; char *l; }	Lis;
 typedef struct { unsigned int v; char *f; char *l; }	Val;
 typedef struct { char v[2];	char *f; char *l; }	Str;
 
-extern int	compile(
-    char *, char *, char *, char *, char *);	/* comile L language source */
-#ifdef _WINDOWS 
-extern char	szFile_g[];		/* L source file name */
-#else
-extern char *	szFile_g;		/* L source file name */
-#endif
+extern int	compile( char *, char *,
+    char *, char *, char *, char *);	/* compile iC language source */
 extern void error(char *, char *);	/* print error message */ 
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *);	/* recover from run-time error */ 

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.16 2001/03/07 12:30:06 jw Exp $
+# @(#)$Id: Makefile.in,v 1.17 2001/03/11 15:10:19 jw Exp $
 
 ############################################################
 #
@@ -19,7 +19,7 @@
 #	to make ict, remove all objects and make with export OPT='-DTCP'
 #	to make libict.a, remove all objects and make with export OPT='-DLOAD -DTCP'
 #
-#	auxiliary scripts makeall, makeIct makeload do this automatically
+#	auxiliary scripts makeAll, makeIct makeLib do this automatically
 #
 ############################################################
 
@@ -71,7 +71,10 @@ POBJ =	link.$(O) rsff.$(O) scan.$(O)
 #### Standalone versions ###################################
 
 all:
-	@$(srcdir)/makeall
+	@$(srcdir)/makeAll
+
+quiet:
+	@$(srcdir)/makeAll -q
 
 icc:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
 	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
@@ -108,6 +111,12 @@ cexe.c:	$(srcdir)/cexe.h
 
 $(srcdir)/comp.c:	$(srcdir)/comp.y
 
+test:
+	@echo "compile and generate all executables from iC files in Test ..."
+	@${srcdir}/ICMake -v ${srcdir}/Test/*.ic
+	@echo "diffing generated files in Test with originals in Test/ORG* ..."
+	@if ${srcdir}/Mdiff -kle ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK - do make install as su"; else echo "test FAILED - differences in listed files"; fi 
+
 install:	installdirs
 	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc
 	${INSTALL_PROGRAM} ict      ${bindir}/${binprefix}ict
@@ -119,7 +128,7 @@ install:	installdirs
 	${INSTALL_DATA}    icc.h    ${prefix}/include/icc.h
 	$(srcdir)/perlinstall Msg.pm
 
-installdirs: mkinstalldirs
+installdirs:	${srcdir}/mkinstalldirs
 	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include
 
 uninstall:
@@ -134,7 +143,7 @@ uninstall:
 	$(srcdir)/perlinstall -u Msg.pm
 
 clean:
-	rm -rf *.$(O) LoadObjs PptcObjs cexe.c* core icc ict libict.a
+	rm -rf *.$(O) LoadObjs PptcObjs cexe.c* scid.c core icc ict libict.a
 
 distclean: clean
 	rm -f Makefile config.status config.log config.cache

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.36 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: outp.c,v 1.37 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -442,7 +442,6 @@ output(char * outfile)
     FILE *	Hp;
     FILE *	Lp;
     char *	s1;
-    char *	source;
     char *	module;
     unsigned	linecnt = 35;	/* MODIFY when changing format */
 
@@ -483,18 +482,6 @@ Gate **		i_list[] = { I_LIST 0 };\n\
 	rc = 7; goto endm;
     }
 
-    if ((s1 = strrchr(szFile_g, '/')) != 0) {
-	s1++;			/* UNIX file name without path */
-    } else {
-	s1 = szFile_g;
-    }
-
-    if ((source = strrchr(s1, '\\')) != 0) {
-	source++;			/* MS-DOS file name without path */
-    } else {
-	source = s1;
-    }
-
     fprintf(Fp, "\
 /********************************************************************\n\
  *\n\
@@ -513,7 +500,7 @@ static char	COMPILER[] =\n\
 #define _(x) x.gt_old\n\
 #define A(x,v) assign(&x, v)\n\
 extern Gate *	l_[];\n\
-", source, outfile, SC_ID, Hname);
+", inpNM, outfile, SC_ID, Hname);
 
 /********************************************************************
  *
@@ -838,9 +825,25 @@ extern Gate *	l_[];\n\
 	}
     }
 
-    module = strdup(source);	/* source file name without path */
-    if ((s1 = strchr(module, '.')) != 0) {
+    module = strdup(inpNM);		/* source file name */
+    if ((s1 = strrchr(module, '.')) != 0) {
 	*s1 = '\0';			/* module name without extensions */
+    }
+    /*
+     * The following algorithm fails if two files are linked with names
+     * 'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
+     * A multiple define error occurs for the name 'ab_cd_i_list' at link time.
+     * The same error occurs if unfortunate path combinations are used
+     * eg: ab/cd.ic and either of the above
+     */
+    while ((s1 = strchr(module, '/')) != 0) {
+	*s1 = '_';			/*  replace all '/'s with '_' */
+    }
+    while ((s1 = strchr(module, '\\')) != 0) {
+	*s1 = '_';			/*  replace all '\'s with '_' */
+    }
+    while ((s1 = strchr(module, '.')) != 0) {
+	*s1 = '_';			/*  replace further '.'s with '_' */
     }
 
     fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);

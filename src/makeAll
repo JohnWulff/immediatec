@@ -1,0 +1,42 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	Copyright (C) 2000-2001  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	make icc ict libict.a
+#
+#	use egrep rather than grep -E so it works on older Unix systems
+#
+########################################################################
+
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-qh]' >&2
+    echo '	call make for icc, ict and libict.a with the correct options' >&2
+    echo '	-q	output only headings and error messages' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: makeAll,v 1.7 2001/03/11 15:10:19 jw Exp $' >&2
+}
+
+case $1 in
+    -h)	usage; exit 255;;
+esac
+
+if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
+    rm -f cexe.o
+    cp -p cexe.c_empty cexe.c
+fi
+echo "make icc"
+make icc 2>&1 | if [ "$1" = '-q' ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+echo "make ict"
+makeIct  2>&1 | if [ "$1" = '-q' ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+echo "make libict.a"
+makeLib  2>&1 | if [ "$1" = '-q' ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+true

@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.7 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.8 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -32,6 +32,7 @@ const char*	iccNM  = "C0";		/* icc name */
 float		timeout = 0.05;		/* default 50 ms on 50 ms off */
 
 fd_set		rdfds;
+fd_set		infds;
 struct timeval	timeoutCounter;
 struct timeval	timeoutValue;
 
@@ -46,7 +47,6 @@ typedef struct NetBuffer {
     char	buffer[REPLY];
 } NetBuffer;
 
-static fd_set		infds;
 static struct timeval *	ptv = NULL;
 static struct timeval	mt0;
 static struct timeval	mt1;
@@ -154,7 +154,7 @@ connect_to_server(const char*	host,
     send_msg_to_server(sock, icc);	/* register iC */
 
     FD_ZERO(&infds);	/* should be done centrally if more than 1 connect */
-    FD_SET(0, &infds);			/* watch stdin for inputs */
+    FD_SET(0, &infds);			/* watch stdin for inputs - FD_CLR on EOF */
     FD_SET(sock, &infds);		/* watch sock for inputs */
 
     timeoutValue.tv_sec = (int)delay;

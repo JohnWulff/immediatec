@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.18 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: main.c,v 1.19 2001/03/11 15:10:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -92,12 +92,11 @@ unsigned short	osc_max = MARKMAX;
 extern	int	yydebug;
 #endif
 
-char *		szFile_g;		/* file name to process */
 #define progFN	szNames[0]		/* for error messages */
 #define inpFN	szNames[1]		/* input file name */
 #define errFN	szNames[2]		/* error file name */
 #define listFN	szNames[3]		/* list file name */
-#define outFN	szNames[4]		/* compiler output file name */
+#define outFN	szNames[4]		/* C output file name */
 #define exiFN	szNames[5]		/* cexe input file name */
 #define excFN	szNames[6]		/* cexe C out file name */
 #define exoFN	szNames[7]		/* cexe output file name */
@@ -141,7 +140,7 @@ main(
 		    int	debi;
 
 		case '\0':
-		    szFile_g = 0;	/* - is standard input */
+		    inpFN = 0;	/* - is standard input */
 #ifdef TCP
 		case 's':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -228,12 +227,12 @@ main(
 	    } while (*++*argv);
 	    break2: ;
 	} else {
-	    inpFN = szFile_g = *argv;
+	    inpFN = *argv;
 	}
     }
     debug &= 07777;			/* allow only cases specified */
     iFlag = 0;
-    if ((r = compile(listFN, errFN, outFN, exiFN, exoFN)) != 0) {
+    if ((r = compile(inpFN, listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
     } else {
 	Gate *		igp;
