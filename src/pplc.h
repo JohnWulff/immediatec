@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.19 2001/01/10 22:51:01 jw Exp $";
+"@(#)$Id: pplc.h,v 1.20 2001/01/25 08:55:41 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -28,7 +28,7 @@ extern void	efree(void *);
 #endif
 
 #define	DIS_MAX	5		/* diplay heading after this many */
-#define IXD	32		/* number of slots in pplt */
+#define IXD	32		/* number of slots in pplc (<= 64) */
 #define TXD	1		/* number of system slots (timers etc) */
 
 #define Sizeof(x)	((sizeof x) / (sizeof x[0]))
@@ -217,7 +217,9 @@ extern Gate *	IX_[];			/* pointers to Bit Input Gates */
 extern Gate *	IB_[];			/* pointers to Byte Input Gates */
 extern Gate *	IW_[];			/* pointers to Word Input Gates */
 extern Gate *	TX_[];			/* pointers to System Bit Gates */
-extern uchar	QX_[];			/* Output bit field */
+extern uchar	QX_[];			/* Output bit field slots */
+extern uchar	QM_[];			/* Output slot mask per cage */
+extern uchar	QMM;			/* Output cage mask for 1 rack */
 extern uchar	idata[];		/* Input bit field */
 extern uchar	pdata[];		/* rest used only locally */
 extern Functp *	i_lists[];
@@ -229,6 +231,8 @@ extern Gate *	c_list;
 extern uchar	bit2[];
 extern Gate *	gx;	/* points to action Gate in chMbit and riMbit */
 extern short	dc;	/* debug display counter in scan and rsff */
+extern unsigned char	bitMask[];
+extern unsigned char	bitIndex[];
 
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	rMff(Gate *, Gate *);	/* R_FF master action on FF */
