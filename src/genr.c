@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.29 2001/01/14 22:37:40 jw Exp $";
+"@(#)$Id: genr.c,v 1.30 2001/01/23 22:59:36 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -1016,9 +1016,11 @@ bTyp(List_e * lp)
     }
     tp = symp->type;
     return tp >= MAX_GT ? (tp == SH || tp == INPW ? ARN : OR)
-			: (tp == UDF || symp->list &&
-	((ft = symp->list->le_sym->ftype) == OUTX || ft == OUTW) ? types[symp->ftype]
-								 : tp);
+			: tp == UDF ||
+			  symp->u.blist == 0 || 		  
+    symp->list &&
+    ((ft = symp->list->le_sym->ftype) == OUTX || ft == OUTW) ? types[symp->ftype]
+							     : tp;
 } /* bTyp */
 
 /********************************************************************

@@ -30,19 +30,19 @@ my @invert =	(1, 0);		# invert logic sense
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
+Usage:	@<<<<<< [-teh] [-s <host>] [-p <port>] [<unitID>]
 	$named
 	-s host	ID of server (default 'localhost')
 	-p port	service port of server (default '8778')
 	unitID	default is 'X0'
 	-t	trace debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.24 2001/01/22 20:27:41 jw Exp $
+$Id: DemoBox,v 1.25 2001/01/23 23:04:13 jw Exp $
 .
 
-use vars qw($opt_t $opt_s $opt_p $opt_h);
+use vars qw($opt_t $opt_e $opt_s $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('tds:p:h');			# sets $opt_h if -h etc
+&Getopts('tes:p:h');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -74,12 +74,12 @@ my $unitID = (@ARGV >= 1) ? $ARGV[0] : 'X0';
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client could not connect to $host:$port\n" unless $conn;
 
-$conn->send_now($unitID);		# register I/O
 print "Connection $unitID at client.\n";
+$conn->send_now($unitID);		# register I/O
 
 ########################################################################
 #
-#	Create main window and Exit button
+#	Create main window and optional Exit button
 #
 ########################################################################
 
@@ -88,18 +88,11 @@ $mainWindow->title("iC");
 $mainWindow->Label(-text => "iC Demo Box")->pack;
 
 $mainWindow->Button(-text    => "Exit",
-		    -command => sub {
-					if ($unitID =~ /^[BWX]/ and $inByte) {
-					    $conn->send_now("0");
-					    print "   0 from $unitID\n" if $opt_t;
-					}
-#					sleep 1;
-					exit;
-				    },
+		    -command => sub { exit; },
 		   )->pack(-side   => 'bottom', 
 			   -expand => 1,
 			   -fill   => 'x',
-			  );
+			  ) if $opt_e;
 
 ########################################################################
 #
@@ -150,8 +143,8 @@ if ($unitID =~ /^X/) {
 				     } else {\
 					 \$inByte &= ~$masks[$index];	# clear bit\
 				     }\
+				     print \"I$unitID.$index --> \$inputs[$index] (\$inByte)\\n\" if \$opt_t;\
 				     \$conn->send_now(\"\$inByte\");\
-				     print \"   $index,\$inputs[$index] (\$inByte) from $unitID\\n\" if \$opt_t;\
 				    },\
 	    )->pack(-side   => 'top',\
 		    -expand => 1,\
@@ -198,11 +191,12 @@ elsif ($unitID =~ /^[BW]/) {
 #		-label       => $input,
 		-from        => 0,
 		-to          => 100,
+		-length      => 170,
 		-variable    => \$inByte,
 		-command     => sub {
 				     if (length $inByte) {
+					 print "I$unitID --> $inByte\n" if $opt_t;
 					 $conn->send_now("$inByte");
-					 print "   $inByte from $unitID\n" if $opt_t;
 				     }
 				    },
 	    )->pack(-side   => 'top',
@@ -215,6 +209,7 @@ elsif ($unitID =~ /^[BW]/) {
 #		-label       => $output,
 		-from        => 0,
 		-to          => 100,
+		-length      => 170,
 		-variable    => \$outputs[0],
 		-state       => 'disabled',
 		-takefocus   => 0,
@@ -270,8 +265,8 @@ sub rcvd_msg_from_server {
 		}
 		$outByte = 0;
 		if ($inByte) {
-		    $conn->send_now("$inByte");
 		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
+		    $conn->send_now("$inByte");
 		}
 	    } elsif ($msg =~ /^\d+$/) {
 		my $mask = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
@@ -293,8 +288,8 @@ sub rcvd_msg_from_server {
 		    $outputs[0] = 0;
 		}
 		if (length $inByte and $inByte) {
-		    $conn->send_now("$inByte");
 		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
+		    $conn->send_now("$inByte");
 		}
 	    } elsif ($msg =~ /^\d+$/) {
 		print "Q$unitID $msg <-- $outputs[0]\n" if $opt_t;

@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.8 2001/01/22 20:29:02 jw Exp $";
+"@(#)$Id: pptc.c,v 1.9 2001/01/23 22:59:36 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -83,7 +83,7 @@ pplc(
     unsigned *	gate_count)
 {
     short	pass;
-    short	c;
+    int		c;
     short	typ;
     int		cnt;
 #ifdef LOAD
@@ -170,21 +170,16 @@ pplc(
 	}
 #endif
     }
-    if (error_flag) {
-	if (error_flag == 1) {
-	    fprintf(outFP, "\n*** Fatal Errors ***\n");
-	    exit(1);
-	}
-	fprintf(outFP, "\n*** Warnings ***\n");
-    }
-    if (debug & 0100) fprintf(outFP, "\nPass 5:");
-    if (o_list->gt_next == o_list) {			/* empty */
-	scan_clk(c_list);				/* clock list */
-    }
     if (debug & 0100) {
 	fprintf(outFP, "\nInit complete =======\n");
     }
-
+    if (error_flag) {
+	if (error_flag == 1) {
+	    fprintf(outFP, "\n*** Fatal Errors ***\n");
+	    quit(1);
+	}
+	fprintf(outFP, "\n*** Warnings ***\n");
+    }
     if (debug & 0400) {
 	quit(0);				/* terminate - no inputs */
     }
@@ -202,9 +197,6 @@ pplc(
     }
 
     dis_cnt = DIS_MAX;
-    if (debug & 0300) {			/* osc or detailed info */
-	display();			/* inputs and outputs */
-    }
 
     for ( ; ; ) {
 	if (++mark_stamp == 0) {	/* next generation for check */
@@ -214,15 +206,13 @@ pplc(
 	time_cnt = 0;			/* clear time count */
 
 	do {
-	    c = ENTER;
 	    /* scan arithmetic and logic output lists until empty */
-	    while (scan_ar(a_list) || scan(o_list)) {
-		if (debug & 0300) {	/* osc or detailed info */
-		    display();		/* inputs and outputs */
-		    c = 0;
-		}
-	    }
+	    while (scan_ar(a_list) || scan(o_list));
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
+
+	if (debug & 0300) {		/* osc or detailed info */
+	    display();			/* inputs and outputs */
+	}
 
 	/*
 	 *	alternate list contains all those gates which were marked in
@@ -252,10 +242,6 @@ pplc(
 	    for (gp = o_list->gt_next; gp != o_list; gp = gp->gt_next) {
 		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
-	}
-
-	if ((debug & 0300) && c == ENTER) {	/* osc or detailed info */
-	    display();				/* inputs and outputs */
 	}
 
 /********************************************************************
@@ -356,7 +342,7 @@ pplc(
 			quit(0);			/* quit normally */
 		    }
 		    if (debug & 0300) {			/* osc or detailed info */
-			unsigned short flag;
+			unsigned short flag = xflag;
 			if (c == 'x') {
 			    flag = 1;			/* hexadecimal output */
 			} else if (c == 'd') {
@@ -427,11 +413,9 @@ display(void)
     }
     /* display QB1 and QW2 */
     if (!xflag) {
-	fprintf(outFP, " %4d %6d   : ",
-	    QX_[1], *(unsigned short*)&QX_[2]);
+	fprintf(outFP, " %4d %6d\n", QX_[1], *(unsigned short*)&QX_[2]);
     } else {
-	fprintf(outFP, "   %02x   %04x   : ",
-	    QX_[1], *(unsigned short*)&QX_[2]);
+	fprintf(outFP, "   %02x   %04x\n", QX_[1], *(unsigned short*)&QX_[2]);
     }
     fflush(outFP);
 } /* display */

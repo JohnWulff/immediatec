@@ -73,7 +73,7 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.12 2001/01/22 20:27:41 jw Exp $
+$Id: ICServer,v 1.13 2001/01/23 23:04:13 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -161,6 +161,10 @@ sub rcvd_msg_from_client {
 		$conn->disconnect();
 		if ($unitID =~ /^P/) {
 		    $connPPLC = undef;
+		} elsif (defined $connPPLC) {
+		    # pass clear input message to PPLC
+		    print "I$unitID 0 to P0\n" if $opt_t;
+		    $connPPLC->send_now("$unitID,0");
 		}
 		print "$unitID has disconnected\n";
 	    }
@@ -185,8 +189,8 @@ sub rcvd_msg_from_client {
 			if (defined $uID) {
 			    if ($uID =~ /^[BWX]/) {
 				if (defined $Connections{$uID}) {
-				    $Connections{$uID}->send_now("R");
 				    print "$msg R to $uID\n" if $opt_t;
+				    $Connections{$uID}->send_now("R");
 				} else {
 				    print "$msg R to dummy $uID\n" if $opt_t;
 				}
@@ -201,8 +205,8 @@ sub rcvd_msg_from_client {
 		if ($msg =~ /^[BWX]/) {			# saved bit or analog value from PPLC
 		    $value = $Values{$msg};
 		    if ($value) {
+			print "ICS $value to Q$msg\n" if $opt_t;
 			$Connections{$msg}->send_now("$value");
-			print "IS $value to Q$msg\n" if $opt_t;
 		    }
 		}
 	    }
@@ -210,8 +214,8 @@ sub rcvd_msg_from_client {
 	    my ($uID, $value, $rest) = split /,/, $msg, 3;
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
 		if (defined $Connections{$uID}) {
-		    $Connections{$uID}->send_now("$value");
 		    print "$unitID $value to Q$uID\n" if $opt_t;
+		    $Connections{$uID}->send_now("$value");
 		} else {
 		    print "$unitID $value to dummy Q$uID\n" if $opt_t;
 		}
@@ -221,8 +225,8 @@ sub rcvd_msg_from_client {
 	    }
 	} elsif (defined $connPPLC) {			# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
-	    $connPPLC->send_now("$unitID,$msg");
 	    print "I$unitID $msg to P0\n" if $opt_t;
+	    $connPPLC->send_now("$unitID,$msg");
 	} else {
 	    print "I$unitID $msg to dummy P0\n" if $opt_t;
 	}
