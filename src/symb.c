@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: symb.c,v 1.2 1996/07/30 20:24:24 john Exp $";
 /*
  *	"symb.c"
  */
@@ -12,7 +12,7 @@ static const char symb_c[] =
 #include	<stdlib.h>
 #include	"pplc.h"
 #include	"comp.h"
-#include	"y_tab.h"
+#include	"y.tab.h"
 
 /* "symb.c	3.09	95/01/13" */
 

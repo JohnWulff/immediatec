@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: outp.c,v 1.2 1996/07/30 20:24:24 john Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -306,7 +306,7 @@ output(char * outfile)			/* emit code in C */
 				lp->le_sym->u.gate->gt_clk = gp;
 				if (typ == TIM) {
 				    /* Header is a Timer, store time value */
-				    (ushort)lp->le_sym->u.gate->gt_time =
+				    (unsigned int)lp->le_sym->u.gate->gt_time =
 					lp->le_val;
 				}
 			    }
