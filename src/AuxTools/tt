@@ -8,10 +8,11 @@
 
 usage()
 {
-  echo "Usage: $name <directory>[ <directory>]" >&2
+  echo "Usage: $name [-lczh][ -y<opt>][ -x<regex>] <directory>[ <directory>]" >&2
   echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+  echo '	-c	copy files to <directory>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full diff output)' >&2
-  echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
+  echo '	-x <regex> ignore changes in lines that match regex' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo '	-	all further arguments are treated as files' >&2
@@ -23,7 +24,7 @@ usage()
   echo "	If a 2nd <directory> is specified the files in all 1st <directory>" >&2
   echo "	will be compared with files in the 2nd <directory> with Mdiff -k" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.4 2005/01/20 15:14:54 jw Exp $' >&2
+  echo '$Id: tt,v 1.5 2005/01/24 19:34:43 jw Exp $' >&2
 }
 
 ########################################################################
@@ -38,6 +39,7 @@ name=${name%.*}
 v=""
 y=""
 l=""
+c=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -45,6 +47,7 @@ while [ $# -gt 0 ]; do
     -*)	option=${1#?}
 	while [ -n "$option" ]; do
 	    case $option in
+	    c*)	c="c";;
 	    y*)	option=${option#?}
 		if [ -n "$option" ]; then
 		    v="$v -y$option"
@@ -54,8 +57,14 @@ while [ $# -gt 0 ]; do
 		    usage; exit 254;
 		fi
 		break;;
-	    l*)	l="l";;
-	    x*)	v="$v -x";;
+	    l*)	l="$l -l";;
+	    x*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		l="$l -x $option"
+		break;;
 	    z*)	v="$v -z";;
 	    h*)	usage; exit 255;;
 	    *)	x=${option#?}; option=${option%$x}
@@ -75,7 +84,7 @@ if [ -n "$1" ]; then
     d2=$2
 
     echo; date
-    if [ -z "$y" -a -z "$d2" ]; then
+    if [ -z "$y" -a -z "$c" -a -z "$d2" ]; then
 	echo; echo "========== Test0 make test"; echo
 	time make test
     fi
@@ -84,8 +93,10 @@ if [ -n "$1" ]; then
     if [ -d "$t" ]; then
 	cd $t
 	if [ -z "$d2" ]; then
-	    echo; echo "========== $t mm$v"
-	    time mm$v > Init.out 2>&1
+	    if [ -z "$c" ]; then
+		echo; echo "========== $t mm$v"
+		time mm$v > Init.out 2>&1
+	    fi
 	    if [ -d "$d1$y" ]; then
 		echo; echo "========== $t Mdiff -k$l * $d1$y"
 		time Mdiff -k$l $(cat pd.lt) $d1$y
@@ -110,11 +121,13 @@ if [ -n "$1" ]; then
 	if [ -d "$t" ]; then
 	    cd $t
 	    if [ -z "$d2" ]; then
-		echo; echo "========== $t my$v"
-		time my$v
+		if [ -z "$c" ]; then
+		    echo; echo "========== $t my$v"
+		    time my$v
+		fi
 		if [ -d "$d1$y" ]; then
 		    echo; echo "========== $t Mdiff -k$l * $d1$y"
-		    time Mdiff -k$l $(cat p[d6].lt) $d1$y
+		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d6].lt) $d1$y
 		else
 		    mkdir $d1$y
 		    echo; echo "========== $t cp * $d1$y"
@@ -123,7 +136,7 @@ if [ -n "$1" ]; then
 	    elif [ -d "$d1$y" -a -d "$d2$y" ]; then
 		cd $d1$y
 		echo; echo "========== $t Mdiff -k$l $d1$y/* $d2$y"
-		time Mdiff -k$l $(cat ../p[d6].lt) ../$d2$y
+		time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d6].lt) ../$d2$y
 		cd ..
 	    else
 		echo "ERROR: if two <directories> are specified they must exist" >&2
