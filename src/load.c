@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.12 2001/01/09 19:23:19 jw Exp $";
+"@(#)$Id: load.c,v 1.13 2001/01/25 08:55:41 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -338,13 +338,13 @@ main(
 		    gp->gt_val++;		/* slave node */
 		}
 		if ((gp = *lp) == 0) {
-		    inError(__LINE__, op, 0);		/* no clock reference */
+		    inError(__LINE__, op, 0);	/* no clock reference */
 		} else {
 		    gp->gt_mark++;		/* clock node */
 		}
 	    } else if (op->gt_fni == OUTW || op->gt_fni == OUTX) {
-		if ((lp = op->gt_list) == 0) {
-		    inError(__LINE__, op, 0);		/* no output pointer */
+		if ((int)op->gt_list >= IXD || op->gt_mark == 0) {
+		    inError(__LINE__, op, 0);	/* no output bit mask */
 		}
 	    }
 	}
@@ -551,17 +551,14 @@ main(
 		    }
 		}
 	    } else if (op->gt_fni < CLCKL) {
-		if ((lp = op->gt_list) == 0) {
-		    inError(__LINE__, op, 0);		/* OUTW or OUTX */
-		} else {
-		    if (df) printf("	%p[]	0x%02x", lp, op->gt_mark);
-		}
+		/* consistency of OUTW and OUTX checked in Pass 1 */
+		if (df) printf("	QX_[%d]	0x%02x", (int)op->gt_list, op->gt_mark);
 	    } else if (op->gt_fni <= TIMRL) {
-		if ((lp = op->gt_list) != 0) {
+		if (op->gt_list != 0) {
 		    inError(__LINE__, op, 0);		/* CLCKL or TIMRL */
 		}
 	    } else {
-		inError(__LINE__, op, 0);			/* unknown ftype */
+		inError(__LINE__, op, 0);		/* unknown ftype */
 	    }
 	    if (df) printf("\n");
 	}
