@@ -1,0 +1,30 @@
+# $Id: comp.sed,v 1.1 2002/07/04 15:35:53 jw Exp $
+s/yyparse/iCparse/g
+s/yylex/iClex/g
+s/yyleng/iCleng/g
+s/yytext/iCtext/g
+s/yybuf/iCbuf/g
+s/yyerror/iCerror/g
+s/yychar/iCchar/g
+s/yyval/iCval/g
+s/yylval/iClval/g
+s/yydebug/iCdebug/g
+s/yynerrs/iCnerrs/g
+s/yyerrflag/iCerrflag/g
+s/yyss/iCss/g
+s/yyssp/iCssp/g
+s/yyvs/iCvs/g
+s/yyvsp/iCvsp/g
+s/yylhs/iClhs/g
+s/yylen/iClen/g
+s/yydefred/iCdefred/g
+s/yydgoto/iCdgoto/g
+s/yysindex/iCsindex/g
+s/yyrindex/iCrindex/g
+s/yygindex/iCgindex/g
+s/yytable/iCtable/g
+s/yycheck/iCcheck/g
+s/yyname/iCname/g
+s/yyrule/iCrule/g
+s/#define YYPREFIX "yy"/#define YYPREFIX "iC"/g
+s/YYSTYPE/iCSTYPE/g
