@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.31 2001/02/01 12:10:41 jw Exp $";
+"@(#)$Id: genr.c,v 1.32 2001/02/03 17:10:04 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -645,9 +645,13 @@ op_asgn(			/* asign List_e stack to links */
 			fprintf(outFP, "\t%c", fos[sp->ftype]);
 		    }
 		}
-		if (gp->ftype == F_SW || gp->ftype == F_CF) {
-		    /* function case # */
-		    fprintf(outFP, "\t(%d)", lp->le_val);
+		if (gp->ftype == F_SW || gp->ftype == F_CF ||
+		    (gp->ftype == TIMR && lp->le_val > 0)) {
+		    /*
+		     * case number of "if" or "switch" C fragment
+		     * or timer preset off value
+		     */
+		    fprintf(outFP, " (%d)", lp->le_val);
 		}
 	    }
 	    if (gp->ftype == ARITH && sp->type == ARN &&
@@ -1123,7 +1127,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp1->le_sym = lp3->le_sym;		/* fix link from own */
     }
     if (pVal) {
-	/* cblock for ffexpr */
+	/* cblock for ffexpr or preset off delay for timer */
 	lp1->le_val = pVal->v;		/* unsigned int value for case # */
     }
     return lp3;

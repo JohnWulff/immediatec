@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.16 2001/01/31 17:53:10 jw Exp $";
+"@(#)$Id: load.c,v 1.17 2001/02/03 17:10:04 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -206,6 +206,8 @@ main(
  *	and ALIAS nodes which hold inversion flag in gt_mark.
  *	INPW and INPX nodes have gt_val initialised to -1.
  *
+ *	Transfer timer preset value in gt_mark to gt_old for run time
+ *
  *******************************************************************/
 
     if (df) printf("PASS 0\n");
@@ -214,6 +216,9 @@ main(
 	    op->gt_val = op->gt_ini == -INPW || op->gt_ini == -INPX ? -1 : 0;
 	    if (op->gt_ini != -ALIAS &&
 		op->gt_fni != OUTW && op->gt_fni != OUTX) {
+		if (op->gt_fni == TIMRL) {
+		    op->gt_old = op->gt_mark;
+		}
 		op->gt_mark = 0;
 	    }
 	}
@@ -287,7 +292,7 @@ main(
 			    while (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
 				if (gp->gt_ini == -ALIAS) {
 				    if (df) printf("	%s%s@,",	/* @ */
-					gp->gt_mark ? "~" : "", gp->gt_ids);
+					gp->gt_mark ? "~" : " ", gp->gt_ids);
 				    inversion ^= gp->gt_mark;
 				    gp = (Gate*)gp->gt_rlist;
 				} else {
@@ -302,7 +307,7 @@ main(
 					}
 				    }
 				    if (df) printf("	%s%s>,",	/* @ */
-					iv ? "~" : "", gp->gt_ids);	/* @ */
+					iv ? "~" : " ", gp->gt_ids);	/* @ */
 				    gp = tgp;
 				}
 			    }
@@ -320,7 +325,7 @@ main(
 			    *tlp = gp;	/* swap in real input */
 			}
 			if (df) printf("	%s%s,",
-			    (i >> 1) & 1 ^ inversion ? "~" : "", gp->gt_ids);
+			    (i >> 1) & 1 ^ inversion ? "~" : " ", gp->gt_ids);
 			op->gt_val++;		/* count input */
 			if (gp->gt_fni == GATE) {
 			    gp->gt_mark++;	/* logic output at gp */
@@ -536,41 +541,47 @@ main(
 		op->gt_ids, op->gt_ini, op->gt_fni);
 	    if (op->gt_ini == -ARN) {
 		if ((gp = *op->gt_rlist) == 0) inError(__LINE__, op, 0);
-		if (df) printf("	%p()", gp);
+		if (df) printf("	%p()", gp);	/* cexe_n */
 	    } else if (op->gt_ini == -INPW || op->gt_ini == -INPX) {
 		if ((lp = op->gt_rlist) == 0) {
 		    inError(__LINE__, op, 0);
 		} else {
 		    *lp = op;		/* forward input link */
 		}
-		if (df) printf("	%p[]", lp);
+		if (df) printf("	IX_[%d]", lp - &IX_[0]);
 	    }
 	    if (op->gt_fni == UDFA) {
 		inError(__LINE__, op, 0);			/* UDFA */
 	    } else if (op->gt_fni < MIN_ACT) {
+		if (df) {
 		lp = op->gt_list;		/* ARITH or GATE */
-		while ((gp = *lp++) != 0) {
-		    if (df) printf("	%s,", gp->gt_ids);
-		}
-		if (op->gt_fni == GATE) {
 		    while ((gp = *lp++) != 0) {
-			if (df) printf("	~%s,", gp->gt_ids);
+			printf("	%s,", gp->gt_ids);
+		    }
+		    if (op->gt_fni == GATE) {
+			while ((gp = *lp++) != 0) {
+			    printf("	~%s,", gp->gt_ids);
+			}
 		    }
 		}
 	    } else if (op->gt_fni < MAX_ACT) {
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
-		    inError(__LINE__, op, 0);		/* action D_SH to F_CF */
+		    inError(__LINE__, op, 0);		/* no action D_SH to F_CF */
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    if (df) printf("	%s,", gp->gt_ids);
 		} else {
-		    if (df) printf("	%p(),", gp);
+		    if (df) printf("	%p(),", gp);	/* cexe_n */
 		}
 		if ((gp = *lp++) == 0) {
-		    inError(__LINE__, op, 0);
+		    inError(__LINE__, op, 0);		/* no clock or timer */
 		} else {
 		    if (df) printf("	%s,", gp->gt_ids);
 		    if (gp->gt_fni == TIMRL) {
-			if (df) printf("	%p(),", *lp);
+			if ((gp = *lp++) == 0) {
+			    inError(__LINE__, op, 0);	/* no clock or timer */
+			} else {
+			    if (df) printf("	<%s,", gp->gt_ids);
+			}
 		    }
 		}
 	    } else if (op->gt_fni < CLCKL) {
@@ -579,6 +590,9 @@ main(
 	    } else if (op->gt_fni <= TIMRL) {
 		if (op->gt_list != 0) {
 		    inError(__LINE__, op, 0);		/* CLCKL or TIMRL */
+		}
+		if (op->gt_fni == TIMRL && op->gt_old > 0) {
+		    if (df) printf("	(%d)", op->gt_old);
 		}
 	    } else {
 		inError(__LINE__, op, 0);		/* unknown ftype */
