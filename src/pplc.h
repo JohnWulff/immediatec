@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: pplc.h,v 1.3 1999/08/02 07:41:40 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -7,9 +7,6 @@ static const char pplc_h[] =
 /* " pplc.h	3.53	95/02/15" */
 
 typedef unsigned char	uchar;
-#ifndef _LINUX_TYPES_H
-typedef unsigned short	ushort;
-#endif
 
 #ifdef _WINDOWS
 #define strlen(a)	lstrlen(a)
@@ -163,7 +160,7 @@ typedef struct Gate {			/* Gate */
 	struct Gate **	gt_list;	/* forward logic list */
 	struct Gate **	gt_rlist;	/* reverse logic list */
 	struct Gate *	gt_next;	/* forward link */
-	ushort		gt_mark;	/* mark for stamping gate */
+	unsigned short	gt_mark;	/* mark for stamping gate */
 #ifdef DEQ
 	struct Gate *	gt_prev;	/* previous link */
 #endif
@@ -183,7 +180,7 @@ typedef struct Gate {			/* Gate */
 					/* clock list pointer */
 #define	gt_time		gt_list[FL_TIME]
 			/* initial count for timers and counters */
-			/* Usage: (ushort)gp->gt_time */
+			/* Usage: (unsigned short)gp->gt_time */
 	/* this order is required for initialisation */
 
 typedef void		(*Functp2)(Gate *, Gate *);
@@ -196,8 +193,8 @@ extern void	link_ol(		/* link a gate block into */
 extern void	pplc(			/* initialise and execute */
 		Gate *, unsigned *);	/*   g_lists, gate_count   */
 
-extern ushort	osc_max;
-extern ushort	aaflag;			/* -a flag signals decimal output */
+extern unsigned short	osc_max;
+extern unsigned short	aaflag;		/* -a flag signals decimal output */
 
 extern Gate	iClock;			/* System clock */
 extern Gate *	IX_[];			/* pointers to Bit Input Gates */
@@ -263,7 +260,7 @@ extern	Functp	clock_i[];
 
 /* parallel plc */
 /* parallel plc */
-extern ushort	mark_stamp;	/* incremented every scan */
+extern unsigned short	mark_stamp;	/* incremented every scan */
 
 #if !defined(_WINDOWS) || defined(LOAD)
 extern unsigned	scan_cnt;			/* count scan operations */

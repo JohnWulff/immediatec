@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.3 1996/08/01 17:35:19 john Exp $
+# @(#)$Id: Makefile,v 1.4 1999/08/02 07:41:40 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -19,7 +19,7 @@ COBJ =	comp.o genr.o init.o symb.o outp.o cexe.o
 POBJ =	pplc.o link.o rsff.o scan.o
 TOBJ =	pplt.o link.o rsff.o scan.o
 
-CFLAGS = -g -DYYDEBUG
+CFLAGS = -g -DYYDEBUG $(OPT)
 YFLAGS = -d -v
 LDFLAGS =
 

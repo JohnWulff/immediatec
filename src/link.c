@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: link.c,v 1.3 1999/08/02 07:41:40 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -17,7 +17,7 @@ static const char link_c[] =
 #include	<stdio.h>
 #include	"pplc.h"
 
-ushort	mark_stamp = 1;		/* incremented every scan */
+unsigned short	mark_stamp = 1;		/* incremented every scan */
 
 /* link a gate block into the output list */
 
@@ -29,7 +29,7 @@ link_ol(
     register Gate *	tp;
     register Gate *	np;
     Gate*		ap;
-    ushort		diff;
+    unsigned short	diff;
     int			time;
 #ifndef _WINDOWS 
     char *		format;

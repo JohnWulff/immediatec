@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.2 1998/10/02 11:15:55 john Exp $";
+"@(#)$Id: comp.y,v 1.3 1999/08/02 07:41:40 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -7,6 +7,9 @@
  *
  *******************************************************************/
 
+#ifndef _MSDOS_
+#define _GNU_SOURCE
+#endif
 #ifdef _WINDOWS 
 #include	<windows.h>
 #endif

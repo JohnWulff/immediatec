@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.4 1998/10/02 11:15:55 john Exp $";
+"@(#)$Id: outp.c,v 1.5 1999/08/02 07:41:40 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -17,7 +17,7 @@ static const char outp_c[] =
 
 extern char	SC_ID[];
 
-ushort	bitmask[] = {
+unsigned short	bitmask[] = {
     0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
     0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000, 0x8000,
 };
@@ -71,7 +71,7 @@ uchar		ftypes[] = { FTYPES };
 char		os[] = OPS;
 char		fos[] = FOPS;
 unsigned	gate_count[MAX_LS];	/* accessed by pplc() */
-ushort		aaflag;			/* can be set to output ARITH ALIAS */
+unsigned short	aaflag;			/* can be set to output ARITH ALIAS */
 
 int
 output(char * outfile)			/* emit code in C */
@@ -735,12 +735,13 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 			    fprintf(Fp,
     "// error in emitting code. ARITHMETIC gate '%s' has no function\n",
 				sp->name);
+			} else {
+			    /* Function Pointer at start of input list */
+			    len += 17;	/* assume len of %d is 2 */
+			    fprintf(Fp, "%s(Gate*)cexe_%d,", fs, lp->le_val);
+			    fs = " ";
+			    val = NOT;	/* force single input list */
 			}
-			/* Function Pointer at start of input list */
-			len += 17;	/* assume len of %d is 2 */
-			fprintf(Fp, "%s(Gate*)cexe_%d,", fs, lp->le_val);
-			fs = " ";
-			val = NOT;	/* force single input list */
 			goto n1;
 		    }
 		    if (typ >= AND && typ < MAX_GT) {

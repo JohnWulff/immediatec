@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.3 1998/10/02 11:15:55 john Exp $";
+"@(#)$Id: pplc.c,v 1.4 1999/08/02 07:41:40 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -14,6 +14,7 @@ static const char pplc_c[] =
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 #ifdef _MSDOS_
 #include <dos.h>
 #include <conio.h>

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: load.c,v 1.2 1999/08/02 07:41:40 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -30,8 +30,8 @@ extern Gate **	i_list[];
 unsigned	errCount;
 char *		progname;
 short		debug;
-ushort		aaflag;
-ushort		osc_max = MARKMAX;
+unsigned short	aaflag;
+unsigned short	osc_max = MARKMAX;
 
 char *		full_type[] = { FULL_TYPE };
 char *		full_ftype[] = { FULL_FTYPE };

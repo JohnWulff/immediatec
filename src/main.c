@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.2 1996/07/30 16:41:47 john Exp $";
+"@(#)$Id: main.c,v 1.3 1999/08/02 07:41:40 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -24,7 +24,7 @@ char *		szNames[7] = {		/* matches return in compile */
     	0, 0, 0, 0, 0, 0, "cexe.tmp",
 };
 short		debug = 0;
-ushort		osc_max = MARKMAX;
+unsigned short	osc_max = MARKMAX;
 #ifdef YYDEBUG
 extern	int	yydebug;
 #endif
