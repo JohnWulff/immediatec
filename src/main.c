@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.12 2001/01/08 14:48:17 jw Exp $";
+"@(#)$Id: main.c,v 1.13 2001/01/13 17:47:02 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -40,7 +40,8 @@ USAGE for run mode:\n\
 #endif
 "        -l <listFN>     name of list file  (default is stdout)\n\
         -e <errFN>      name of error file (default is stderr)\n\
-        -d <debug>2000  display scan_cnt and link_cnt\n\
+        -d <debug>4000  supress listing alias post processor\n\
+                 +2000  display scan_cnt and link_cnt\n\
                  +1000  I0 toggled every second\n\
                   +400  exit after initialisation\n\
                   +200  display loop info (+old style logic)\n\
@@ -81,10 +82,14 @@ char *		szFile_g;		/* file name to process */
 #define listFN	szNames[3]		/* list file name */
 #define outFN	szNames[4]		/* compiler output file name */
 #define exiFN	szNames[5]		/* cexe input file name */
-#define exoFN	szNames[6]		/* cexe output file name */
-char *		szNames[7] = {		/* matches return in compile */
-    	0, 0, 0, 0, 0, 0, "cexe.tmp",
+#define excFN	szNames[6]		/* cexe C out file name */
+#define exoFN	szNames[7]		/* cexe output file name */
+char *		szNames[8] = {		/* matches return in compile */
+    	0, 0, 0, 0, 0, 0, 0, "cexe.tmp",
 };
+
+static FILE *	exiFP;			/* cexe in file pointer */
+static FILE *	excFP;			/* cexe C out file pointer */
 
 char * OutputMessage[] = {
     0,					/* [0] no error */
@@ -172,7 +177,7 @@ main(
 		case 'c':
 		    if (outFN == 0) {
 			exiFN = "cexe.h";
-			exoFN = "cexe.c";
+			excFN = "cexe.c";
 		    } else {
 			fprintf(stderr,
 			    "%s: cannot use both -o and -c option\n", progFN);
@@ -206,7 +211,7 @@ main(
 	    inpFN = szFile_g = *argv;
 	}
     }
-    debug &= 03777;			/* allow only cases specified */
+    debug &= 07777;			/* allow only cases specified */
     iFlag = 0;
     if ((r = compile(listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
@@ -214,10 +219,39 @@ main(
 	Gate *		igp;
 	unsigned	gate_count[MAX_LS];	/* accessed by pplc() */
 
-	if ((r = listNet(gate_count)) == 0 && exiFN == 0) {
+	if ((r = listNet(gate_count)) == 0) {
 	    if (outFN == 0) {
+		if (exiFN != 0 && exoFP) {
+		    /* rewind intermediate file cexe.tmp */
+		    if (fseek(exoFP, 0L, SEEK_SET) != 0) {
+			r = 7;
+		    } else if ((excFP = fopen(excFN, "w")) == NULL) {
+			r = 6;
+		    } else if ((exiFP = fopen(exiFN, "r")) == NULL) {
+			r = 5;
+		    } else {
+			int		c;
+			unsigned	linecnt = 0;	/* not neede here */
 
-		if ((r = buildNet(&igp)) == 0) {/* generate execution network */
+			/* copy C execution file Part 1 from beginning up to 'V' */
+			while ((c = getc(exiFP)) != 'V') {
+			    if (c == EOF) {
+				r = 5;	/* unexpected end of exiNM */
+				break;
+			    }
+			    putc(c, excFP);
+			}
+			/* copy C intermediate file up to EOF to C output file */
+			/* translate any ALIAS references of type '_(QB1_0)' */
+			copyXlate(exoFP, excFP, &linecnt);
+			/* copy C execution file Part 2 from character after 'V 'up to EOF */
+			while ((c = getc(exiFP)) != EOF) {
+			    putc(c, excFP);
+			}
+			fclose(exiFP);
+			fclose(excFP);
+		    }
+		} else if ((r = buildNet(&igp)) == 0) {/* generate execution network */
 		    c_list = (lookup("iClock"))->u.gate;/* initialise clock list */
 		    pplc(igp, gate_count);	/* execute the compiled logic */
 		}
@@ -242,7 +276,7 @@ main(
     if (errFP != stderr) fclose(errFP);
     if (exoFP) {
 	fclose(exoFP);
-	if (exoFN && exiFN == 0) {
+	if (exoFN) {
 	    unlink("cexe.tmp");
 	}
     }
@@ -251,12 +285,14 @@ main(
 
 /********************************************************************
  *
- *	Wrapper to call perl script 'pplstfix.pl' as a post-processor
- *	to modify listings with output inversions.
- *	These show the wrong input inversion status for gates which
- *	have been used as input before the output has been assigned
- *	to an inverted function gate. These corrections affect only
- *	the listing. The output is correctly compiled.
+ *	Wrapper to call perl script 'pplstfix' as a post-processor
+ *	to modify listings to resolve aliases. These occurr in the
+ *	listing if an output is used, before it is defined as an alias.
+ *
+ *	In particular the automatic alias allocation associated with
+ *	outputs used as inputs, before that output is assigned to, is
+ *	cleared up in the listing. These changes affect only the
+ *	listing. The output is correctly compiled.
  *
  *******************************************************************/
 
@@ -265,19 +301,22 @@ inversionCorrection(void)
 {
     char	exStr[256];	
     char	tempName[] = "pplstfix.XXXXXX";
-    int		r = 1;
+    int		r = 0;
 
-    if (mktemp(tempName)) {
-	r = rename(listFN, tempName); /* inversion correction needed */
-	if (r == 0) {
-	    sprintf(exStr, "pplstfix.pl %s > %s", tempName, listFN);
-	    r = system(exStr);		/* pplstfix.pl must be in $PATH */
-	    unlink(tempName);
+    if ((debug & 04024) == 024) {	/* not suppressed, NET TOPOLOGY and LOGIC */
+	r = 1;
+	if (mktemp(tempName)) {
+	    r = rename(listFN, tempName); /* inversion correction needed */
+	    if (r == 0) {
+		sprintf(exStr, "pplstfix %s > %s", tempName, listFN);
+		r = system(exStr);		/* pplstfix must be in $PATH */
+		unlink(tempName);
+	    }
 	}
-    }
-    if (r != 0) {
-	fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
-	    progFN, exStr);
+	if (r != 0) {
+	    fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
+		progFN, exStr);
+	}
     }
     return r;
 } /* inversionCorrection */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.27 2001/01/10 16:01:42 jw Exp $";
+    "@(#)$Id: outp.c,v 1.28 2001/01/13 17:47:02 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -448,7 +448,7 @@ output(char * outfile)
     /* rewind intermediate file */
 
     if (fseek(exoFP, 0L, SEEK_SET) != 0) {
-	rc = 6; goto endm;
+	rc = 7; goto endm;
     }
 
     if ((s1 = strrchr(szFile_g, '/')) != 0) {

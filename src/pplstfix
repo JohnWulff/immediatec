@@ -1,0 +1,160 @@
+#! /usr/bin/perl
+
+#################################################################
+#
+#   Fix iC listing, eliminating aliases
+#
+#   Aliases appear in the listing because of one pass compiler
+#   limitations. Aliases are completely eliminated from the
+#   executable code, and should therefore not confuse readers
+#   of the listings. This correction is now no longer necessary
+#   as it was for V1.1, which corrected real naming errors, but
+#   it is a neat feature, which is easy to maintain.
+#
+#   Author: John E. Wulff
+#   V1.1: 02.01.01 Written in the car between Siegen and Eisingen
+#   V1.4: 11.01.01 Major rewrite to handle new algorithm
+#
+#################################################################
+
+use strict;
+
+my $named = $0;
+$named =~ s#.*[/\\]##;		# delete directory names in path
+format STDERR =
+Usage:	@<<<<<<< [file ...]
+	$named
+	-h	help, ouput this Usage text only
+$Id: pplstfix,v 1.4 2001/01/13 17:47:02 jw Exp $
+.
+
+use vars qw($opt_h);
+require "getopts.pl";
+&Getopts('h');			# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+my (%inv);
+%inv = ("~", " ", " ", "~");	# inversion symbols in listing
+
+while ($ARGV = shift @ARGV) {
+    unless (open (IN, $ARGV)) {
+	warn "can't open input $ARGV";
+	next;
+    }
+    processFile();
+    close(IN);
+}
+
+####################################################################
+#
+#	process one file
+#
+#	QX1.7	|  X	 v5@
+#	i7_7	@   	 IX7.7<
+#	v5	@   	~v5_1#
+#
+####################################################################
+
+sub processFile {
+    my ($line, $alias, $xlate, $type, $ftype, $inver, %symbols);
+    my ($empty, $removed, $count, $ar, $word, $pos, @array);
+    %symbols = ();
+
+    # Pass 1: scan file for ALIAS and DALIAS definitions
+
+    while (<IN>) {
+	if (/^NET TOPOLOGY$/) {
+	    last;
+	}
+    }
+
+    while (<IN>) {
+	if (/^([A-Za-z_][\w.]*)\t([_@])  ([ A-Z])\t([ ~])([A-Za-z_][\w.]*).$/) {
+	    # NET TOPOLOGY line found eg:QB0_0	_  A	~QB0_1*
+	    $line  = $.;
+	    $alias = $1;
+	    $type  = $2;
+	    $ftype = $3;
+	    $inver = ($4 eq '~') ? 1 : 0;
+	    $xlate = $5;
+	    if ($alias ne $xlate) {
+		$symbols{$alias} = [ $line, $xlate, $type, $ftype, $inver ];
+	    } else {
+		printf("Generate error line%d: ALIAS '%s' translates to itself '%s'\n", $line, $alias, $xlate);
+	    }
+	}
+	if (/^NET STATISTICS$/) {
+	    last;
+	}
+    }
+
+    # Pass 2: resolve ALIAS and DALIAS occurences
+
+    seek(IN, 0, 0);
+    $. = 0;
+    @array = ();
+    $empty = 0;
+    $removed = 0;
+  line:
+    while (<IN>) {
+	if ($empty and /^$/) {
+	    $empty = 0;
+	    next line;
+	}
+	if (!/^[\d*]/) {
+	    while (/([A-Za-z_][\w.]*)/g) {
+		if (defined($symbols{$1})) {
+		    push @array, $1, length $`;		# $word and $pos
+		}
+	    }
+	    while (@array) {
+		# start with the last word found, so positions are correct
+		$pos = pop @array;			# position of word
+		$word = $xlate = pop @array;		# value of word
+		$inver = 0;
+		while (defined($ar = $symbols{$xlate})) {
+		    $line  = $ar->[0];
+		    $type  = $ar->[2];
+		    if (/---_/ or $line == $. and $type eq '_') {
+			@array = ();			# should be clear anyway
+			next line;			# ignore type '_'
+		    }
+		    if (/---@/ or $line == $.) {
+			if ($word !~ /Q.*_0/ or /^\$/) {# keep $x lines
+			    print $_;			# keep type '@' except Q.._0
+			} elsif (/^\t/) {
+			    $empty = 1;			# delete ALIAS definition
+			} else {
+			    $removed++;			# reduce ALIAS count
+			}
+			@array = ();			# should be clear anyway
+			next line;
+		    }
+		    $xlate = $ar->[1];
+		    if ($ar->[3] eq ' ') {		# ftype is GATE
+			$inver ^= $ar->[4];		# invert
+		    }
+		}
+		substr($_, $pos, length $word) = $xlate;
+	    }
+	    if ($inver) {				# for first word in line
+		s/([ ~]) ---/$inv{$1} ---/;		# swap ' ' and '~'
+		$inver = 0;
+	    }
+	}
+	if (/^ALIAS\t@ +(\d+)$/) {
+	    if (($count = $1 - $removed) > 0) {
+		s/\d+/$count/;
+	    } else {
+		next line;
+	    }
+	}
+	if (/^DALIAS\t_ +(\d+)$/) {
+	    next line;
+	}
+	print $_;
+    }
+} # processFile

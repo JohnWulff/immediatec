@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.27 2001/01/10 16:01:42 jw Exp $";
+"@(#)$Id: genr.c,v 1.28 2001/01/13 17:47:02 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -438,6 +438,7 @@ op_asgn(			/* asign List_e stack to links */
 	}
 	var->list = right;		/* alias points to original */
 	if (debug & 04) {
+	    iFlag = 1;
 	    fprintf(outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
 		(rsp->type >= MAX_LV) ? os[rsp->type] : w(right),
 		os[var->type], var->name);
@@ -606,6 +607,7 @@ op_asgn(			/* asign List_e stack to links */
 		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, fos[gp->ftype],
 			os[sp->type]);
 		} else {
+		    if (sp->type == ALIAS) iFlag = 1;
 		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, w(lp),
 			os[sp->type]);
 		}
@@ -826,14 +828,12 @@ qp_value(Lis * expr, Sym * act, uchar ft)
 	Symbol *	sp;		/* output not yet assigned */
 	char		temp[100];
 	short		saveDebug;
-	static int	wtn;
 	char *		bp;
 	char *		cp;
 	char *		dp;
 
-	sprintf(temp, "_Wtemp%d", ++wtn);
-	sp = install(temp, INPW, OUTX);		/* temporary _W symbol */
-	li.v = sy_push(sp);			/* provide a link to _W */
+	sp = install("__Tmp_0", INPW, OUTX);	/* temporary __Tmp symbol */
+	li.v = sy_push(sp);			/* provide a link to __Tmp */
 	saveDebug = debug;
 	if ((debug & 06) == 04) {
 	    debug &= ~04;			/* supress listing output */
@@ -857,7 +857,7 @@ qp_value(Lis * expr, Sym * act, uchar ft)
 	    }
 	    stmtp = dp;				/* fix WACT name */
 	}
-	unlink_sym(sp);				/* unlink _W symbol */
+	unlink_sym(sp);				/* unlink __Tmp symbol */
 	free(sp->name);
 	sy_pop(sp->list);
 	free(sp);			/* free all references to W_ symbol */
@@ -965,6 +965,7 @@ qp_asgn(
 		}
 		lpb->le_next = lp;		/* link new output at end of old */
 		if (debug & 04) {		/* generate listing output */
+		    iFlag = 1;
 		    fprintf(outFP, "\t%s\t%c ---%c\t%s\n\n", fsp->name,
 			(fsp->ftype != GATE) ? fos[fsp->ftype] : w(lpf),
 			os[bsp->type], bsp->name);
@@ -977,6 +978,7 @@ qp_asgn(
 	    free(bsp);				/* free all references to ALIAS */
 	} else {
 	    /* these symbol table entries are needed to edit cexe.tmp */
+	    if (debug & 04) iFlag = 1;
 	    bsp->type = DALIAS;			/* deleted arithmetic ALIAS */
 	}
     }

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.36 2001/01/06 19:36:28 jw Exp $";
+"@(#)$Id: comp.y,v 1.37 2001/01/13 17:47:02 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -755,7 +755,6 @@ char *		inpNM = "standard input";/* original input file name */
 FILE *		inFP;			/* input file pointer */
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
-FILE *		exiFP;			/* cexe in file pointer */
 FILE *		exoFP;			/* cexe out file pointer */
 char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 
@@ -778,8 +777,6 @@ char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 int
 compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
 {
-    int	c;
-
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
 	return 3;
     }
@@ -790,19 +787,7 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
 	return 1;
     }
     if ((exoFP = fopen(exoNM, "w+")) == NULL) {
-	return 6;
-    }
-    if (exiNM != 0) {
-	if ((exiFP = fopen(exiNM, "r")) == NULL) {
-	    return 5;
-	}
-	/* copy C execution file Part 1 from beginning up to 'V' */
-	while ((c = getc(exiFP)) != 'V') {
-	    if (c == EOF) {
-		return 5;	/* unexpected end of exiNM */
-	    }
-	    putc(c, exoFP);
-	}
+	return 7;
     }
     outFlag = outNM != 0;	/* global flag for compiled output */
     init();		/* initialise symbol table */
@@ -815,13 +800,6 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
     }
     if (debug & 010) {		/* end source listing */
 	fprintf(outFP, "************************************************\n");
-    }
-    if (exiNM != 0) {
-	/* copy C execution file Part 2 from character after 'V 'up to EOF */
-	while ((c = getc(exiFP)) != EOF) {
-	    putc(c, exoFP);
-	}
-	fclose(exiFP);
     }
     if (szFile_g) fclose(inFP);
     return 0;
