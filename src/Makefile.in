@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.37 2004/01/03 07:39:37 jw Exp $
+# @(#)$Id: Makefile.in,v 1.38 2004/01/03 21:50:22 jw Exp $
 
 ############################################################
 #
@@ -82,24 +82,24 @@ all:
 quiet:
 	@$(srcdir)/makeAll -qrm
 
-icc:	$(srcdir)/Makefile main.$(O) scid.$(O) $(COBJ)
-	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) $(COBJ)
+icc:	$(srcdir)/Makefile main.$(O) misc.$(O) scid.$(O) $(COBJ)
+	$(CC) $(LDFLAG) -o icc main.$(O) misc.$(O) scid.$(O) $(COBJ)
 
-icr:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
-	$(CC) $(LDFLAG) -o icr main.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
+icr:	$(srcdir)/Makefile main.$(O) misc.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAG) -o icr main.$(O) misc.$(O) scid.$(O) icc.$(O) cexe.$(O) $(COBJ) $(POBJ)
 
-ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
-	$(CC) $(LDFLAG) -o ict main.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+ict:	$(srcdir)/Makefile main.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
+	$(CC) $(LDFLAG) -o ict main.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O) $(COBJ) $(POBJ)
 
 #### Run-time library ######################################
 
-libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
-	ar -rv libict.a load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
+libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
+	ar -rv libict.a load.$(O) misc.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 
 #### C-parser test #########################################
 
-lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
-	$(CC) $(LDFLAG) -o lmain lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
+lmain:	$(srcdir)/Makefile lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
+	$(CC) $(LDFLAG) -o lmain lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
 
 #### Compile objects #######################################
 
@@ -211,3 +211,5 @@ scan.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
 gram.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
 lexc.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h gram_tab.h
 lmain.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+
+misc.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
