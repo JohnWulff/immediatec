@@ -44,7 +44,7 @@
 #	This activates the -m option.
 #	Make sure you have downloaded and installed Time::HiRes from CPAN
 #	Uncomment the C++ comment in the next line
-#define TIME_HIRES
+#//define TIME_HIRES
 #
 ########################################################################
 
@@ -57,12 +57,12 @@ use strict;
 my @tagBackground = ('PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
 		     'gray60'       , 'gray60'       ,  # 4 5 CLCKL
-		     'LightSkyBlue1', 'LightSkyBlue1',  # 6 7 TIMRL
+		     'sienna2'      , 'sienna2'      ,  # 6 7 TIMRL
 		    );
 my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'black'        , 'red'          ,  # 2 3 ARITH
 		     'black'        , 'white'        ,  # 4 5 CLCKL
-		     'black'        , 'red'          ,  # 6 7 TIMRL
+		     'black'        , 'white'        ,  # 6 7 TIMRL
 		    );
 my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# ftype
 
@@ -91,7 +91,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.7 2001/04/02 06:30:40 jw Exp $
+$Id: iClive,v 1.8 2001/04/02 19:23:45 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -120,9 +120,8 @@ my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $font = defined $opt_f ? $opt_f : '9x15';
 my $unitID = 'L0';
-my %symbolTable = ();	# $symbolTable{$symbol}     = [$ftype, $index]
-my @activeSymbols;	# $activeSymbols[$index][0] = $ftype if active (never 0)
-			# $activeSymbols[$index][1] = $ftype if inverse active
+my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
+my @activeSymbols;	# $activeSymbols[$index][0 .. 2] = ($ts, $cs, $val)
 my $stIndex = 0;
 my $conn;
 
@@ -259,21 +258,21 @@ $balloon->attach($text,
 				# No word under mouse - dont post the balloon
 				return 0;
 			    } else {
+				my ($ftype, $index, $val);
 				# Have a word under mouse - change the message:
 				my $word = $text->get($wIdx[0], $wIdx[1]);
 				# Skip if it contains non-word chars
 				# or is not in Symbol Table
 				return 0 if $word =~ /\W/;
-				my $idx = $symbolTable{$word}[1];
-				unless (defined $idx) {
-				    # Try if I/O like IX0.0 QX0.0 or TX0.0
-				    if ($word =~ /^[IQT]X\d/) {
-					$word = $text->get($wIdx[0], "$wIdx[1] + 2 chars");
-					$idx = $symbolTable{$word}[1];
-				    }
-				    return 0 unless defined $idx;
+				while (not defined ($index = $symbolTable{$word}[1])) {
+				    # Try if I/O like IX0.0 QX10.7 or TX0.0_14
+				    return 0 if $word !~ /^[IQT]X\d+$/;
+				    $word = $text->get($wIdx[0], "$wIdx[1] lineend");
+				    $word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
 				}
-				my $val = $activeSymbols[$idx][2];
+				$ftype = $symbolTable{$word}[0];
+				$val = $activeSymbols[$index][2];
+				$val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
 				$bMsg = "$val";
 				$sMsg = "$word: $val";
 				$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
@@ -403,22 +402,22 @@ sub rcvd_msg_from_server {
 		    ####################################################
 		    while ($entry = shift @symbols) {
 			my ($index, $value) = split " ", $entry;
-			my $is = $activeSymbols[$index][3];
-			$is ^= 1 if $value;			# change colour
-			my $inv = $is ^ 1;
+			my $cs = $activeSymbols[$index][1];
+			$cs ^= 1 if $value;			# change colour
 			$activeSymbols[$index][2] = $value;	# for value display
-			if ($activeSymbols[$index][0]) {
+			if ($activeSymbols[$index][0] & 01) {
 			    $text->tagConfigure("$index", 
-						'-background' => $tagBackground[$is], 
-						'-foreground' => $tagForeground[$is]);
+						'-background' => $tagBackground[$cs], 
+						'-foreground' => $tagForeground[$cs]);
 #ifdef TIME_HIRES 
 			    printMicroSeconds() if $opt_m;
 #endif
 			}
-			if ($activeSymbols[$index][1]) {
+			if ($activeSymbols[$index][0] & 02) {
+			    $cs ^= 1;				# complement colour
 			    $text->tagConfigure("$index~", 
-						'-background' => $tagBackground[$inv], 
-						'-foreground' => $tagForeground[$inv]);
+						'-background' => $tagBackground[$cs], 
+						'-foreground' => $tagForeground[$cs]);
 #ifdef TIME_HIRES 
 			    printMicroSeconds() if $opt_m;
 #endif
@@ -522,27 +521,25 @@ sub search {
 ########################################################################
 
 sub deleteAllTags {
-    foreach my $symbol (keys %symbolTable) {
-	my $index = $symbolTable{$symbol}[1];
-	if ($activeSymbols[$index]) {
+    foreach my $index (0 .. $#activeSymbols) {
+	my $ts = $activeSymbols[$index][0];
+	if ($ts) {
 	    if ($opt_t) {
-		print("$symbol");
-		print(" $index")    if $activeSymbols[$index][0];
-		print(" $index~")   if $activeSymbols[$index][1];
+		print(" $index")    if $ts & 01;	# normal
+		print(" $index~")   if $ts & 02;	# inverted
 		print(" deleted\n");
 	    }
 	    ############################################################
 	    # due to ALIASes tagDelete would be called more than once
-	    # hence the undefs below
+	    # hence the undef below
 	    ############################################################
-	    if ($activeSymbols[$index][0]) {
-		undef $activeSymbols[$index][0];
+	    if ($ts & 01) {
 		$text->tagDelete("$index");
 	    }
-	    if ($activeSymbols[$index][1]) {
-		undef $activeSymbols[$index][1];
+	    if ($ts & 02) {
 		$text->tagDelete("$index~");
 	    }
+	    undef @{ activeSymbols[$index] };
 	}
     }
     @activeSymbols = ();	# delete all previous active symbols
@@ -561,7 +558,7 @@ sub deleteAllTags {
 ########################################################################
 
 sub scan {
-    my ($search_pattern, $current, $word, $i, $iw, $tag, $inv, $ftype, $index);
+    my ($search_pattern, $current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index);
 
     deleteAllTags();	# also clears @activeSymbols
 
@@ -585,23 +582,28 @@ sub scan {
 	    $i =~ s/([!~\t ]*)([\w.]+)([!~\t ]*)/$1$3/;
 	    if ($symbolTable{$2}) {
 		($ftype, $index) = @{ $symbolTable{$2} };
-		$tag = $index;
-		$word = $2;			# word is in the symbol table
-		$activeSymbols[$index][2] = 0;		# initial value
-							# initial colour
-		$inv = $activeSymbols[$index][3] = $colourSelect[$ftype];
-		while ($i =~ m/[!~]/g) {
-		    $inv ^= 1;
+		if (defined $index and $ftype) {
+		    $tag = $index;
+		    $word = $2;			# word is in the symbol table
+		    $cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
+		    @{ $activeSymbols[$index] }[1, 2] = ($cs, 0);
+		    while ($i =~ m/[!~]/g) {
+			$cs ^= 1;		# complement colour selection
+		    }
+		    $tag .= '~' if ($ts = $cs & 01); # adjust tag name if inverted
+		    $ts++;			# convert to a mask 0 => 01, 1 => 02
+		    print "$tag	$word	'$iw'\n" if $opt_t;
+		    unless ($activeSymbols[$index][0] & $ts) {
+			$activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
+			$text->tagConfigure($tag, 
+					    '-background' => $tagBackground[$cs], 
+					    '-foreground' => $tagForeground[$cs]
+					   );
+		    }
+		    $text->tagAdd($tag, $current, "$current + $length char");
+		} else {
+		    print "ERROR: \$symbolTable{$2} $symbolTable{$2}[ '$index' , '$ftype' ]\n";
 		}
-		$tag .= '~' if $inv & 1;
-		print "$tag	$word	'$iw'\n" if $opt_t;
-		unless ($activeSymbols[$index][$inv & 1]) {	# ZZZ take out masking
-		    $activeSymbols[$index][$inv & 1] = $ftype;
-		    $text->tagConfigure($tag, 
-					'-background' => $tagBackground[$inv], 
-					'-foreground' => $tagForeground[$inv]);
-		}
-		$text->tagAdd($tag, $current, "$current + $length char");
 	    }
 	    $current = $text->index("$current + $length char");
 	}
@@ -616,7 +618,7 @@ sub scan {
 
 	my $msg = "";
 	foreach $index (0 .. $#activeSymbols) {
-	    if ($activeSymbols[$index]) {
+	    if ($activeSymbols[$index][0]) {
 		print "$index\n" if $opt_t;
 		if (length $msg > 391) {		# REPLY - 9 in icc.h
 		    $conn->send_now("$unitID.3$msg");	# intermediate active symbols
