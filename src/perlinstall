@@ -1,0 +1,27 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	install icc icl ict ict.a etc	must be super user
+#
+#	$Id: perlinstall,v 1.1 2001/02/21 22:21:18 jw Exp $
+#
+########################################################################
+
+if [ -d /usr/local/bin ]; then
+    cp -f icc ict pplstfix ICServer DemoBox ICMake /usr/local/bin
+else
+    echo 'NO /usr/local/bin - installation failed'
+fi
+
+if [ -d /usr/local/lib ]; then
+    cp -f ict.a /usr/local/lib
+else
+    echo 'NO /usr/local/lib - installation failed'
+fi
+
+if [ -d /usr/local/bin ]; then
+    cp -f icc.h /usr/local/include
+else
+    echo 'NO /usr/local/include - installation failed'
+fi
