@@ -91,7 +91,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: ICServer,v 1.20 2001/03/23 12:15:36 jw Exp $
+$Id: ICServer,v 1.21 2001/03/24 21:01:48 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
@@ -215,11 +215,7 @@ sub rcvd_msg_from_client {
 	    }
 	} else {
 	    foreach my $msg1 (split /,/, $msg) {	# break up multiple messages
-		my ($uID, $value, $rest) = split /\./, $msg1, 3;
-		if (defined $rest) {
-		    warn "WARNING: $msg1 from Unit $unitID ?? ignored";
-		    next;
-		}
+		my ($uID, $value) = split /\./, $msg1, 2;
 		if (defined $value) {
 		    if (not defined $connICC) {
 			print "I$uID $value to dummy C0\n" if $opt_t;
