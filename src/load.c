@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.39 2004/01/02 13:36:47 jw Exp $";
+"@(#)$Id: load.c,v 1.40 2004/01/05 16:57:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -50,39 +50,44 @@ FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 
 static const char *	usage =
-"USAGE: %s [-txh]"
+"USAGE: %s [-"
+#if YYDEBUG
+"t"
+#endif
+"xh]"
 #ifdef TCP
 " [-m[m]] [-s <server>] [-p <port>] [-u <unitID>]\n      "
 #endif
-" [-d<debug>] [-n<count>]\n"
+" [-n<count>] [-d<debug>]\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n"
 "        -p service port of server (default '%s')\n"
 "        -u unit ID of this client (default '%s')\n"
 #endif
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
+"        -n <count>      maximum oscilator count (default is %d, limit 15)\n"
+#if YYDEBUG
 "        -d <debug>2000  display scan_cnt and link_cnt\n"
+"                 +1000  do not trace non-active timers TX0.n\n"
 "                  +400  exit after initialisation\n"
-"                  +200  display loop info (+old style logic)\n"
-"                  +100  initialisation and run time info\n"
+"                  +200  display oscillator info\n"
+"                  +100  initialisation and run time trace\n"
 #else
 "        -d <debug> 400  exit after initialisation\n"
 #endif
 "                   +40  load listing\n"
-#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
+#if YYDEBUG
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
 "        -t              trace debug (equivalent to -d 100)\n"
-"                        can be toggled at run time typing t\n"
+"                        can be toggled at run time by typing t\n"
 #endif
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
-"                        can be toggled at run time typing m\n"
+"                        can be toggled at run time by typing m\n"
 #endif
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
 "                        can be changed at run time by typing x or d\n"
-"        -n <count>      maximum oscilator count (default is %d, limit 15)\n"
 "        -h              this help text\n"
 "                        typing q or ctrl-C quits run mode\n"
 "compiled by:\n"

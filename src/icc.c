@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.24 2004/01/02 18:02:35 jw Exp $";
+"@(#)$Id: icc.c,v 1.25 2004/01/04 20:36:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -303,14 +303,9 @@ icc(
 	do {
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list));
-	    /* then scan clock lists once - f_list holds if-else-switch events */
-	} while (scan_clk(c_list) && scan_clk(f_list));
-	/*
-	 *	alternate list contains all those gates which were marked in
-	 *	the previous scan and which were active more than
-	 *	MARKMAX times. These are oscillators which wil be
-	 *	scanned again in the next cycle.
-	 */
+	    /* then scan clock list once and repeat until clock list empty */
+	    /* only then scan f_list, which holds if-else-switch events */
+	} while (scan_clk(c_list) || scan_clk(f_list));
 
 	if (scan_cnt || link_cnt) {
 	    fprintf(outFP, "\n");
@@ -328,8 +323,27 @@ icc(
 	    scan_cnt = link_cnt = 0;
 	}
 
+/********************************************************************
+ *
+ *	Switch to alternate lists
+ *
+ *	alternate list contains all those gates which were marked in
+ *	the previous scan and which were active more than
+ *	MARKMAX times. These are oscillators which wil be
+ *	scanned again in the next cycle.
+ *
+ *******************************************************************/
+
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
 	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
+
+	if (osc_gp) {
+	    fprintf(outFP,
+		"*** Warning: %s has oscillated %d times - check iC program!!!\n",
+		osc_gp->gt_ids, osc_gp->gt_mcnt);
+	    osc_gp = NULL;
+	}
+
 #if YYDEBUG
 	if ((debug & 0200) &&
 	    (a_list->gt_next != a_list || o_list->gt_next != o_list)) {
@@ -344,6 +358,12 @@ icc(
 	}
 #endif
 	display();				/* inputs and outputs */
+
+/********************************************************************
+ *
+ *	Input from keyboard and time input if used
+ *
+ *******************************************************************/
 
     TestInput:
 	while (!kbhit() && !flag1C);		/* check inputs */
@@ -373,6 +393,7 @@ icc(
 	} else {
 	    while (cnt) {
 		if ((c = getch()) == 'q' || c == EOF) {
+		    fprintf(errFP, "\n%s stopped from terminal\n", progname);
 		    quit(0);			/* quit normally */
 		}
 		if (c != ENTER) {
@@ -655,11 +676,10 @@ void quit(int sig)
 	if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
     }
 #endif
-    if ((debug & 0400) == 0) {
-	fprintf(errFP, "\n");
-    }
-    if (sig > SIGINT) {
-	fprintf(errFP, "Quit with sig = %d\n", sig);
+    if (sig == SIGINT) {
+	fprintf(errFP, "\n%s stopped by interrupt from terminal\n", progname);
+    } else if (sig == SIGSEGV) {
+	fprintf(errFP, "\n%s stopped by 'Invalid memory reference'\n", progname);
     }
     if (errFP != stderr) {
 	fflush(errFP);

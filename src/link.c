@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.20 2004/01/02 17:35:20 jw Exp $";
+"@(#)$Id: link.c,v 1.21 2004/01/04 15:06:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,7 +25,8 @@ static const char link_c[] =
 #include	"icc.h"
 
 unsigned short	mark_stamp = 1;		/* incremented every scan */
-static short	warn_cnt = 10;		/* limit the number of oscillator warnings */
+Gate *		osc_gp = NULL;		/* report oscillations */
+static short	warn_cnt = OSC_WARN_CNT;/* limit the number of oscillator warnings */
 
 /* link a gate block into the output list */
 
@@ -80,7 +81,7 @@ link_ol(
 		}
 		ap =  tp;
 #if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0200) putc('@', outFP); /* alternate found */
+		if ((debug & 0300) == 0300) putc('@', outFP); /* alternate found */
 #endif
 	    }
 	}
@@ -114,18 +115,20 @@ link_ol(
 	    } else {
 		if (++gp->gt_mcnt >= osc_max) {	/* new alg: cnt 1 larger */
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0300) putc('#', outFP);
+		    if ((debug & 0300) == 0300) putc('#', outFP);
 #endif
 		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
-		    if (!(debug & 100) && warn_cnt > 0) {
+		    if (warn_cnt > 0
+#if YYDEBUG && !defined(_WINDOWS)
+				    && !(debug & 0200)
+#endif
+		    ) {
 			warn_cnt--;		/* limit the number of warning messages */
-			fprintf(outFP,
-			    "Warning: %s has oscillated %d times - check iC program!!!\n",
-			    gp->gt_ids, gp->gt_mcnt);
+			osc_gp = gp;		/* report oscillations */
 		    }
 		}
 #if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0300) fprintf(outFP, "%d", gp->gt_mcnt);
+		if ((debug & 0300) == 0300) fprintf(outFP, "%d", gp->gt_mcnt);
 #endif
 	    }
 	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */

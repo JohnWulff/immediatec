@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.13 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: symb.c,v 1.14 2004/01/03 21:21:57 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -82,62 +82,6 @@ hash(char *	string)	/* hash a string to table index */
     }
     return (hsh >> 2);		/* divide by 4, range 54 * 64 / 4 */
 }
-
-void *
-emalloc(unsigned	nbytes)	/* check return from malloc */
-{
-    void *	bp;
-#ifdef _WINDOWS
-#if defined(_LARGE_) || defined(_HUGE_)
-    GLOBALHANDLE		hglobal;
-
-    if ((hglobal = GlobalAlloc(GMEM_FIXED | GMEM_ZEROINIT, nbytes)) == 0) {
-	execerror("out of memory", NS, __FILE__, __LINE__);
-    }
-    bp = GlobalLock(hglobal);		/* actual pointer */
-#else
-    LOCALHANDLE		hlocal;
-
-    if ((hlocal = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, nbytes)) == 0) {
-	execerror("out of memory", NS, __FILE__, __LINE__);
-    }
-    bp = LocalLock(hlocal);		/* actual pointer */
-#endif
-#else
-
-    if ((bp = malloc(nbytes)) == NULL) {
-//# FIX when lmain complete	execerror("out of memory", NS, __FILE__, __LINE__);
-    }
-#endif
-    memset(bp, 0, nbytes);	/* when free() is used memory can be non zero */
-    return bp;
-}
-#ifdef _WINDOWS
-
-/********************************************************************
- *
- * if free under windows gives trouble, make this a null function
- *
- *******************************************************************/
-
-void
-efree(void *	p)
-{
-#if defined(_LARGE_) || defined(_HUGE_)
-    GLOBALHANDLE		hglobal;
-
-    hglobal = GlobalHandle(p);	/* retrieve the handle */
-    GlobalUnlock(hglobal);
-    GlobalFree(hglobal);		/* big deal */
-#else
-    LOCALHANDLE		hlocal;
-
-    hlocal = LocalHandle(p);	/* retrieve the handle */
-    LocalUnlock(hlocal);
-    LocalFree(hlocal);		/* big deal */
-#endif
-} /* efree */
-#endif
 
 static Symbol **	spl;
 

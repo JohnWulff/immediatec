@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.20 2003/12/22 18:20:08 jw Exp $";
+"@(#)$Id: lexc.l,v 1.21 2004/01/05 15:36:28 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -213,7 +213,7 @@ c_comment(c_STYPE* u)
 	while (c != '*') {
 	    gramOffset++;
 #if YYDEBUG && defined LMAIN
-	    if (debug & 010) putc(c, yyout);
+	    if (debug & 040) putc(c, yyout);
 #endif
 	    if (c == '\n') {
 		column = 0;
@@ -228,7 +228,7 @@ c_comment(c_STYPE* u)
 	column++;		/* count '*' */
 	gramOffset++;
 #if YYDEBUG && defined LMAIN
-	if (debug & 010) putc(c, yyout);
+	if (debug & 040) putc(c, yyout);
 #endif
     } while ((c = input()) != '/');
 
@@ -236,7 +236,7 @@ c_comment(c_STYPE* u)
     column++;			/* count '/' */
     gramOffset++;
 #if YYDEBUG && defined LMAIN
-    if (debug & 010) putc(c, yyout);
+    if (debug & 040) putc(c, yyout);
 #endif
 
     return 0;
@@ -261,7 +261,7 @@ cpp_comment(c_STYPE* u)
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
 #if YYDEBUG && defined LMAIN
-	if (debug & 010) putc(c, yyout);
+	if (debug & 040) putc(c, yyout);
 #endif
     } while (c != '\n');
     column = 0;
@@ -291,7 +291,7 @@ preprocess(c_STYPE* u)
 	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
 	    gramOffset++;
 #if YYDEBUG && defined LMAIN
-	    if (debug & 010) putc(c, yyout);
+	    if (debug & 040) putc(c, yyout);
 #endif
 	} while (c != '\n');
 	column = 0;
@@ -319,7 +319,7 @@ ignore(c_STYPE* u)
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
 #if YYDEBUG && defined LMAIN
-	if (debug & 010) putc(c, yyout);
+	if (debug & 040) putc(c, yyout);
 #endif
 	if (c == '\n') {
 	    column = 0;
@@ -372,7 +372,7 @@ count(c_STYPE* u)
     u->tok.end = gramOffset;
 
 #if YYDEBUG && defined LMAIN
-    if (debug & 010) { ECHO; }
+    if (debug & 040) { ECHO; }
 #endif
 } /* count */
 

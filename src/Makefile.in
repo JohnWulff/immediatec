@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.38 2004/01/03 21:50:22 jw Exp $
+# @(#)$Id: Makefile.in,v 1.39 2004/01/06 11:50:05 jw Exp $
 
 ############################################################
 #
@@ -36,12 +36,17 @@ AWK = @AWK@
 LEX = @LEX@
 LEXLIB = @LEXLIB@
 YACC = @YACC@
+ifeq ($(YACC),yacc)
+Y = -DYACC
+else
+Y =
+endif
 INSTALL = @INSTALL@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_DATA = @INSTALL_DATA@
 
 CFLAGS = @CFLAGS@
-CFLAGS_COMPILE_ONLY = -c $(OPT)
+CFLAGS_COMPILE_ONLY = -c $(OPT) $(Y)
 LDFLAGS = @LDFLAGS@
 YFLAGS = -d -v
 O=o

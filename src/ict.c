@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.36 2004/01/02 17:36:24 jw Exp $";
+"@(#)$Id: ict.c,v 1.37 2004/01/05 12:33:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -287,8 +287,9 @@ icc(
 	do {
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list));
-	    /* then scan clock lists once - f_list holds if-else-switch events */
-	} while (scan_clk(c_list) && scan_clk(f_list));
+	    /* then scan clock list once and repeat until clock list empty */
+	    /* only then scan f_list, which holds if-else-switch events */
+	} while (scan_clk(c_list) || scan_clk(f_list));
 	if (micro & 06) microPrint("Scan", 04);
 
 #ifdef LOAD 
@@ -298,9 +299,9 @@ icc(
 	}
 #endif
 
-	if (scan_cnt || link_cnt) {
-	    fprintf(outFP, "\n");
 #if YYDEBUG
+	if (scan_cnt || link_cnt) {
+	    if (debug & 0100) fprintf(outFP, "\n");
 	    if (debug & 02000) {
 		fprintf(outFP, "scan = %5u  link = %5u",
 		    scan_cnt, link_cnt);
@@ -310,9 +311,9 @@ icc(
 		fprintf(outFP, "\n");
 	    }
 	    glit_cnt = glit_nxt =
-#endif
 	    scan_cnt = link_cnt = 0;
 	}
+#endif
 
 /********************************************************************
  *
@@ -328,16 +329,27 @@ icc(
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
 	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
 
+	if (osc_gp) {
+	    fprintf(outFP,
+		"*** Warning: %s has oscillated %d times - check iC program!!!\n",
+		osc_gp->gt_ids, osc_gp->gt_mcnt);
+	    osc_gp = NULL;
+	}
+
 #if YYDEBUG
-	if ((debug & 0200) &&
-	    (a_list->gt_next != a_list || o_list->gt_next != o_list)) {
-	    fprintf(outFP, "\nOSC =");
-	    for (gp = a_list->gt_next; gp != a_list; gp = gp->gt_next) {
-		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
+	if (debug & 0300) {			/* osc or detailed info */
+	    if ((debug & 0200) &&
+		(o_list->gt_next != o_list || a_list->gt_next != a_list)) {
+		fprintf(outFP, "OSC =");
+		for (gp = a_list->gt_next; gp != a_list; gp = gp->gt_next) {
+		    fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
+		}
+		for (gp = o_list->gt_next; gp != o_list; gp = gp->gt_next) {
+		    fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
+		}
+		fprintf(outFP, "\n");
 	    }
-	    for (gp = o_list->gt_next; gp != o_list; gp = gp->gt_next) {
-		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
-	    }
+	    display();				/* inputs and outputs */
 	}
 #endif
 
@@ -408,6 +420,15 @@ icc(
  *	Input from external input modules and time input if used
  *	Wait for input in a select statement most of the time
  *
+ *	The debug facility -d1000 stops linking the 100 msec and 1 second
+ *	TIMERS TX_[4] and TX_[5] when they are connected directly to
+ *	the slave input of a clock or timer Gate and that clock or timer
+ *	has no Gates on the clock list it controls - ie nothing will happen.
+ *	This stops continuous output when tracing logic (-d100 or -t) when
+ *	these internal TIMERS produce no change.
+ *	It also reduces the data traffic to iClive and reduces flashing of
+ *	clocks and timers controlled by internal TIMERS.
+ *
  *******************************************************************/
 
 	for (cnt = 0; cnt == 0; ) {	/* stay in input loop if nothing linked */
@@ -421,6 +442,26 @@ icc(
 		 */
 		if ((gp = TX_[4]) != 0) {		/* 100 millisecond timer */
 #if YYDEBUG
+		    if (debug & 01000) {
+			Gate **	lp;
+			Gate *	tp;
+			int	cn1 = 2;
+			lp = gp->gt_list;	/* test if any clock or timer is active */
+			do {				/* for normal and inverted */
+			    while ((tp = *lp++) != 0) {
+				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+				    tp = *((Gate **)tp->gt_list);
+				    if (tp->gt_next != tp) {
+					goto linkT4;	/* found an active clock or timer */
+				    }
+				} else {
+				    goto linkT4;	/* found a link to non clock or timer */
+				}
+			    }
+			} while (--cn1);
+			goto skipT4;		/* excuse spaghetti - faster without flag */
+		    }
+		linkT4:
 		    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
 #endif
 		    gp->gt_val = - gp->gt_val;	/* complement input */
@@ -429,11 +470,32 @@ icc(
 		    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
 #endif
 		    cnt++;
+		skipT4: ;
 		}
 		if (--tcnt == 0) {
 		    tcnt = D10;
 		    if ((gp = TX_[5]) != 0) {	/* 1 second timer */
 #if YYDEBUG
+			if (debug & 01000) {
+			    Gate **	lp;
+			    Gate *	tp;
+			    int	cn1 = 2;
+			    lp = gp->gt_list;	/* test if any clock or timer is active */
+			    do {			/* for normal and inverted */
+				while ((tp = *lp++) != 0) {
+				    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+					tp = *((Gate **)tp->gt_list);
+					if (tp->gt_next != tp) {
+					    goto linkT5; /* found an active clock or timer */
+					}
+				    } else {
+					goto linkT5;	/* found a link to non clock or timer */
+				    }
+				}
+			    } while (--cn1);
+			    goto skipT5;	/* excuse spaghetti - faster without flag */
+			}
+		    linkT5:
 			if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
 #endif
 			gp->gt_val = - gp->gt_val;	/* complement input */
@@ -442,6 +504,7 @@ icc(
 			if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
 #endif
 			cnt++;
+		    skipT5: ;
 		    }
 		}
 	    } else if (retval > 0) {
@@ -465,9 +528,6 @@ icc(
 			int		liveFlag;
 			char		utype[4];		/* need 2 with NUL */
 
-#if YYDEBUG
-			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, iccNM);
-#endif
 			if (
 #if INT_MAX == 32767 && defined (LONG16)
 				sscanf(rBuf, "%1[XBWLD]%d.%ld", utype, &slot, &val)
@@ -681,7 +741,7 @@ icc(
 		    if ((c = getchar()) == EOF) {
 			FD_CLR(0, &infds);		/* ignore EOF - happens in bg */
 		    } else if (c == 'q') {
-			fprintf(errFP, "\n%s stopped from the terminal\n", iccNM);
+			fprintf(errFP, "\n%s stopped from terminal\n", iccNM);
 			quit(0);			/* quit normally */
 #if YYDEBUG
 		    } else if (c == 't') {
@@ -760,7 +820,6 @@ display(void)
 
     if (dis_cnt++ >= DIS_MAX) {		/* display header line */
 	dis_cnt = 1;
-	fprintf(outFP, "\n");
 	for (n = 0; n < 10; n++) {
 	    if ((gp = IX_[n]) != 0) fprintf(outFP, " I%d", n);
 	}
@@ -777,8 +836,8 @@ display(void)
 #if INT_MAX != 32767 || defined (LONG16)
 	fprintf(outFP, "      QL4");
 #endif
+	fprintf(outFP, "\n");
     }
-    fprintf(outFP, "\n");			/* display outputs */
     for (n = 0; n < 10; n++) {
 	if ((gp = IX_[n]) != 0) {
 	    fprintf(outFP, "  %c", gp->gt_val < 0 ? '1' : '0');
@@ -859,11 +918,10 @@ void initIO(void)
 void quit(int sig)
 {
     fflush(outFP);
-    if ((debug & 0400) == 0) {
-	fprintf(errFP, "\n");
-    }
-    if (sig > SIGINT) {
-	fprintf(errFP, "Quit with sig = %d\n", sig);
+    if (sig == SIGINT) {
+	fprintf(errFP, "\n%s stopped by interrupt from terminal\n", iccNM);
+    } else if (sig == SIGSEGV) {
+	fprintf(errFP, "\n%s stopped by 'Invalid memory reference'\n", iccNM);
     }
     if (errFP != stderr) {
 	fflush(errFP);

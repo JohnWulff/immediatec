@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.70 2004/01/03 06:00:30 jw Exp $";
+"@(#)$Id: outp.c,v 1.71 2004/01/05 15:38:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -186,7 +186,7 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
  *	buildNet() or output().
  *
  *	if (debug & 020) list the generated network
- *	if (debug & 040) list network statistics
+ *	if (debug & 010) list network statistics
  *	output warnings and error statistics - terminate if fatal
  *
  *******************************************************************/
@@ -270,7 +270,7 @@ listNet(unsigned * gate_count)
 	}
     }
 
-    if (debug & 040) {
+    if (debug & 010) {
 	byte_total = (long)block_total * sizeof(Gate)
 		   + (long)link_count * sizeof(Gate *);
 	/* do not change spelling - used in 'pplstfix' */
@@ -1174,7 +1174,7 @@ static Gate *	_l_[] = {\n");
 	errorEmit(Fp, errorBuf, &linecnt);
     }
 endm:
-    if (debug & 040) {
+    if (debug & 010) {
 	fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", outfile, linecnt-1);
     }
     fclose(H1p);	/* close the header file in case other actions */

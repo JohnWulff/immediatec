@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.81 2004/01/03 08:37:51 jw Exp $";
+"@(#)$Id: comp.y,v 1.82 2004/01/05 15:35:54 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1734,7 +1734,7 @@ compile(
     }
     strncpy(prevNM, inpNM, BUFS);
     outFlag = outNM != 0;		/* global flag for compiled output */
-    if (debug & 016) {			/* begin source listing */
+    if (debug & 046) {			/* begin source listing */
 	fprintf(outFP, "******* %-15s ************************\n", inpNM);
     }
     setjmp(begin);
@@ -1819,19 +1819,19 @@ get(FILE* fp)
 	    if (sscanf(chbuf, " # line %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
-		if ((debug & 012) && lexflag & C_FIRST) {
+		if ((debug & 042) && lexflag & C_FIRST) {
 		    fprintf(outFP, "******* C CODE          ************************\n");
 		}
 		if (strcmp(inpNM, prevNM)) {
 		    lexflag &= ~C_BLOCK;	/* output #line for changed filename */
-		} else if (debug & 012) {
+		} else if (debug & 042) {
 		    fprintf(outFP, "\n");	/* seperate blocks in lex listing */
 		}
 		lexflag |= C_LINE|C_LINE1;	/* only in C-compile */
 		strncpy(prevNM, inpNM, BUFS);
 	    }
 	}
-	if ((debug & 010) && ((lexflag & C_BLOCK) == 0
+	if ((debug & 040) && ((lexflag & C_BLOCK) == 0
 #if YYDEBUG
 							|| ((debug & 0402) == 0402)
 #endif
@@ -2264,7 +2264,7 @@ errLine(void)			/* error file not openend if no errors */
 	}
 	if (outFP != stdout) {
 	    errFlag = 1;		/* errors to errFilename or stderr */
-	    if (!(debug & 016)) {	/* no source listing in debugging output */
+	    if (!(debug & 046)) {	/* no source listing in debugging output */
 		fprintf(outFP, "******* %-15s ************************\n", inpNM);
 	    }
 	}
@@ -2272,7 +2272,7 @@ errLine(void)			/* error file not openend if no errors */
     }
     if (lineno != errline) {
 	errline = lineno;		/* dont print line twice */
-	if (!(debug & 010) || (lexflag & C_BLOCK)) {	/* no source listing in debugging output */
+	if (!(debug & 040) || (lexflag & C_BLOCK)) {	/* no source listing in debugging output */
 	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
 	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
 	}

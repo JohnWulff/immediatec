@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.41 2004/01/05 16:58:18 jw Exp $";
+"@(#)$Id: main.c,v 1.42 2004/01/06 11:57:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -32,14 +32,17 @@ extern const char	SC_ID[];
 static const char *	usage =
 "USAGE:\n"
 "  %s [-aAch] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] [-P<path>] <iC_program>\n"
-"      Options in compile mode only:\n"
-"        -o <outFN>      name of compiler output file - sets compile mode\n"
-"        -l <listFN>     name of list file  (default is stdout)\n"
-"        -e <errFN>      name of error file (default is stderr)\n"
+#if defined(RUN) || defined(TCP)
+"Options in compile mode (-o or -c):\n"
+#endif	/* RUN or TCP */
+"        -o <out>        name of generated C output file\n"
+"        -c              generate C source cexe.c to extend 'icr' or 'ict' compiler\n"
+"                        (cannot be used if also compiling with -o)\n"
+"        -l <list>       name of list file  (default none, '' is stdout)\n"
+"                        default listing, net topology, stats and logic expansion\n"
+"        -e <err>        name of error file (default is stderr)\n"
 "        -a              append linking info for 2nd and later files\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
-"        -c              generate auxiliary file cexe.c to extend %s compiler\n"
-"                        (cannot be used if also compiling with -o)\n"
 "        -d <debug>4000  supress listing alias post processor (save temp files)\n"
 #if defined(RUN) || defined(TCP)
 "                  +400  exit after initialisation\n"
@@ -51,10 +54,18 @@ static const char *	usage =
 #if YYDEBUG && !defined(_WINDOWS)
 #if defined(RUN) || defined(TCP)
 "                  |402  logic generation (exits after initialisation)\n"
-"                  |401  yacc debug info  (listing on stdout only)\n"
+#ifdef YACC
+"                  |401  yacc debug info  (on stdout only)\n"
+#else	/* BISON */
+"                  |401  bison debug info (on stderr only)\n"
+#endif	/* YACC */
 #else	/* not RUN and not TCP */
 "                    +2  logic generation\n"
-"                    +1  yacc debug info  (listing on stdout only)\n"
+#ifdef YACC
+"                    +1  yacc debug info  (on stdout only)\n"
+#else	/* BISON */
+"                    +1  bison debug info (on stderr only)\n"
+#endif	/* YACC */
 #endif	/* RUN or TCP */
 #endif	/* YYDEBUG and not _WINDOWS */
 "        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
@@ -238,15 +249,15 @@ main(
 #ifdef TCP
 		case 's':
 		    if (! *++*argv) { --argc, ++argv; }
-		    hostNM = *argv;
+		    if (strlen(*argv)) hostNM = *argv;
 		    goto break2;
 		case 'p':
 		    if (! *++*argv) { --argc, ++argv; }
-		    portNM = *argv;
+		    if (strlen(*argv)) portNM = *argv;
 		    goto break2;
 		case 'u':
 		    if (! *++*argv) { --argc, ++argv; }
-		    iccNM = *argv;
+		    if (strlen(*argv)) iccNM = *argv;
 		    goto break2;
 		case 'm':
 		    micro++;		/* microsecond info */
@@ -274,7 +285,7 @@ main(
 		case 'o':
 		    if (excFN == 0) {
 			if (! *++*argv) { --argc, ++argv; }
-			outFN = *argv;	/* compiler output file name */
+			if (strlen(*argv)) outFN = *argv;	/* compiler output file name */
 			goto break2;
 		    } else {
 			fprintf(stderr,
@@ -283,11 +294,14 @@ main(
 		    }
 		case 'l':
 		    if (! *++*argv) { --argc, ++argv; }
-		    listFN = *argv;	/* listing file name */
+		    if (strlen(*argv)) listFN = *argv;	/* listing file name */
+		    if ((debug & 077) == 0) {
+			debug |= 074;	/* default listing, topology, stats and logic expansion */
+		    }
 		    goto break2;
 		case 'e':
 		    if (! *++*argv) { --argc, ++argv; }
-		    errFN = *argv;	/* error file name */
+		    if (strlen(*argv)) errFN = *argv;	/* error file name */
 		    goto break2;
 		case 'c':
 		    if (outFN == 0) {
@@ -308,7 +322,7 @@ main(
 		    break;
 		case 'P':
 		    if (! *++*argv) { --argc, ++argv; }
-		    ppPath = *argv;	/* path of pplstfix */
+		    if (strlen(*argv)) ppPath = *argv;	/* path of pplstfix */
 		    goto break2;
 		default:
 		    fprintf(stderr,
@@ -316,7 +330,7 @@ main(
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, progname, progname,
+		    fprintf(stderr, usage, progname,
 #if defined(RUN) || defined(TCP)
 		    MARKMAX,
 #ifdef TCP
@@ -330,7 +344,7 @@ main(
 	    } while (*++*argv);
 	    break2: ;
 	} else {
-	    inpFN = *argv;
+	    if (strlen(*argv)) inpFN = *argv;
 	}
     }
     debug &= 07777;			/* allow only cases specified */

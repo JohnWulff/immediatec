@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.49 2004/01/02 17:27:25 jw Exp $";
+"@(#)$Id: icc.h,v 1.50 2004/01/04 14:42:56 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -130,6 +130,7 @@ extern char		fos[];
 extern FILE *		outFP;		/* output file pointer */
 extern FILE *		errFP;		/* error file pointer */
 extern short		debug;		/* from -do argument in call to main */
+extern void *	emalloc(unsigned);	/* check return from malloc */
 
 typedef void		(*Functp2)(Gate *, Gate *);
 typedef void		(*Functp)(Gate *, int);
@@ -234,8 +235,10 @@ extern	Functp	clock_i[];
 #define	MARKMAX 3		/* number of oscillations allowed */
 				/* should be odd so that a transition */
 				/* is seen in first cycle */
+#define	OSC_WARN_CNT 10		/* number of oscillation warnings */
 
-extern unsigned short	mark_stamp;	/* incremented every scan */
+extern unsigned short	mark_stamp;		/* incremented every scan */
+extern Gate *		osc_gp;			/* report oscillations */
 
 extern unsigned	scan_cnt;			/* count scan operations */
 extern unsigned	link_cnt;			/* count link operations */

@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.40 2004/01/02 08:49:26 jw Exp $";
+"@(#)$Id: comp.h,v 1.41 2004/01/03 21:24:17 jw Exp $";
 
 #define NS	((char*)0)
 
@@ -124,7 +124,6 @@ extern void	init(void);		/* install constants and built-ins */
 					/*   symb.c   */
 #define	HASHSIZ 54*16			/* for new sorted list algorithm */
 extern Symbol *	symlist[];		/* symbol table: linked lists */
-extern void *	emalloc(unsigned);	/* check return from malloc */
 extern Symbol *	lookup(char *);		/* find string in symbol table */
 extern Symbol *	place_sym(Symbol *);	/* place sp in symbol table */
 extern Symbol *	install( char *, unsigned char,
