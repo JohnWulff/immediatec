@@ -66,7 +66,7 @@ use Msg;
 use strict;
 
 my %UnitIDs = ();	# indexed by $conn - stores hash of UnitIDs
-			# I0 I1 ... connected at this connection
+			## I0 I1 ... connected at this connection
 my %Connections = ();	# indexed by UnitId I0 I1 ... stores connection
 my %IOs = ();		# indexed by UnitNo as byte address
 my %Values = ();	# indexed by UnitId I0 I1 ... stores latest value
@@ -96,7 +96,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.27 2002/10/19 23:34:02 jw Exp $
+$Id: iCserver,v 1.28 2003/10/12 20:57:47 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_r $opt_h);
@@ -142,7 +142,7 @@ ARG: while ($ARGV = shift @ARGV) {
 	sleep 1 if defined $pid;
 	next ARG if ($pid = fork);
 	if (defined $pid) {	# $pid is zero if defined
-	    # dispatch child process
+	    ## dispatch child process
 	    my @call = split " ", $ARGV;
 	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
 	    splice @call, 1, 0, '-t' if defined $opt_t;
@@ -151,11 +151,11 @@ ARG: while ($ARGV = shift @ARGV) {
 	    exec @call;
 	    exit;		# child process cannot be executed
 	} elsif ($! =~ /No more process/) {
-	    # EAGAIN, recoverable fork error
+	    ## EAGAIN, recoverable fork error
 	    sleep 5;
 	    redo FORK;
 	} else {
-	    # weird fork error
+	    ## weird fork error
 	    die "Can't fork: $!\n";
 	}
     }
@@ -172,7 +172,7 @@ Msg->event_loop();
 sub login_proc {
     my ($conn, $host, $port) = @_;
     print "Connection $host:$port at server\n";
-    # Unconditionally accept an incoming connection request
+    ## Unconditionally accept an incoming connection request
     $UnitIDs{$conn} = undef;
     return \&rcvd_msg_from_client;
 }
@@ -209,8 +209,8 @@ sub rcvd_msg_from_client {
 # print "($len)$msg", defined $unitID ? " $unitID\n" : " ID?\n";
 	if ($len == 0) {
 	    ############################################################
-	    # Client $conn has signalled shutdown - disconnect client
-	    # take appropriate actions on other clients
+	    ## Client $conn has signalled shutdown - disconnect client
+	    ## take appropriate actions on other clients
 	    ############################################################
 	    if (defined $unitID and exists $Connections{$unitID}) {
 		delete $Connections{$unitID};
@@ -233,7 +233,7 @@ sub rcvd_msg_from_client {
 			print "L0 disconnected - live display stopped\n" if $opt_t;
 		    }
 		    ############################################################
-		    # ICC disconnected - optionally reset all the attached I/Os
+		    ## ICC disconnected - optionally reset all the attached I/Os
 		    ############################################################
 		    if ($opt_r) {
 			foreach my $con1 (sort keys %UnitIDs) {
@@ -252,7 +252,7 @@ sub rcvd_msg_from_client {
 			}
 		    }
 		} elsif (defined $connICC) {
-		    # pass clear input message to ICC
+		    ## pass clear input message to ICC
 		    print "I$unitID 0 to C0\n" if $opt_t;
 		    $connICC->send_now("$unitID.0");		# all inputs 0
 		}
@@ -268,7 +268,7 @@ sub rcvd_msg_from_client {
 			print "I$uID $value to dummy C0\n" if $opt_t;
 		    } elsif ($conn eq $connICC) {
 			############################################################
-			# $msg1: 2.4 value 4 from ICC to I/O Q2
+			## $msg1: 2.4 value 4 from ICC to I/O Q2
 			############################################################
 			if (defined $Connections{$uID}) {
 			    print "$unitID $value to Q$uID\n" if $opt_t;
@@ -279,7 +279,7 @@ sub rcvd_msg_from_client {
 			$Values{$uID} = $value;	# save latest bit or analog value
 		    } else {
 			############################################################
-			# $msg1: 3.5 value 5 from I/O I3 to ICC
+			## $msg1: 3.5 value 5 from I/O I3 to ICC
 			############################################################
 			print "I$uID $value to C0\n" if $opt_t;
 			$connICC->send_now("$msg1");
@@ -295,11 +295,11 @@ sub rcvd_msg_from_client {
 		    warn "Trying to attach $msg1 twice - disconnected\n";
 		} else {
 		    ############################################################
-		    # registration
+		    ## registration
 		    ############################################################
 		    if ($msg1 =~ /^C/) {
 			############################################################
-			# C0 optionally followed by max number of I/Os
+			## C0 optionally followed by max number of I/Os
 			############################################################
 			$msg1 = "C$unitNo";		# take away max I/Os
 			if (defined $connICC) {
@@ -318,7 +318,7 @@ sub rcvd_msg_from_client {
 			    }
 			}
 			############################################################
-			# new ICC connected - reset all the attached I/Os
+			## new ICC connected - reset all the attached I/Os
 			############################################################
 			foreach my $con1 (sort keys %UnitIDs) {
 			    foreach $uID (sort keys %{ $UnitIDs{$con1} }) {
@@ -349,7 +349,7 @@ sub rcvd_msg_from_client {
 		    if (defined $unitNo and (not defined $maxIOs or $unitNo < $maxIOs) and
 			($connICC or $msg1 !~ /^L/)) {
 			############################################################
-			# B0 B1 ... B63 W0 W2 ... W62 X0 X1 ... X63 L0 C0
+			## B0 B1 ... B63 W0 W2 ... W62 X0 X1 ... X63 L0 C0
 			############################################################
 			$UnitIDs{$conn}{$msg1} = $msg1;
 			$Connections{$msg1} = $conn;

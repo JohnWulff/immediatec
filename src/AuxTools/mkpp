@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/bash
 
 ########################################################################
 #
@@ -11,7 +11,7 @@ usage ()
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
     echo '	-d	diff previously made files' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mkpp,v 1.4 2001/03/30 15:19:46 jw Exp $' >&2
+    echo '	$Id: mkpp,v 1.5 2003/10/18 22:13:32 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do

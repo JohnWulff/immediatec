@@ -12,6 +12,9 @@
 #
 #	make icc ict libict.a lmain
 #
+#	make these individually with -C -T -L and -M flags
+#	when any of these are set, cexe.c is not modified
+#
 #	use egrep rather than grep -E so it works on older Unix systems
 #
 ########################################################################
@@ -27,8 +30,12 @@ usage ()
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain with YYDEBUG' >&2
     echo '		see usage of icc, ict and applications for other options' >&2
+    echo '	-C	make icc only without modifying cexe.c' >&2
+    echo '	-T	make ict only without modifying cexe.c' >&2
+    echo '	-L	make libict.a only' >&2
+    echo '	-M	make lmain only' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.12 2002/10/07 15:30:38 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.13 2003/10/12 20:57:47 jw Exp $' >&2
 }
 
 makeIct ()
@@ -75,6 +82,11 @@ c=""
 t=""
 l=""
 m=""
+C=0
+T=0
+L=0
+M=0
+ALL=1
 cflags="-O2"			# optimisation, no debugging info
 
 while [ $# -gt 0 ]; do
@@ -89,6 +101,10 @@ while [ $# -gt 0 ]; do
 	    t*)	t=" -DYYDEBUG";;
 	    l*)	l=" -DYYDEBUG";;
 	    m*)	m=" -DYYDEBUG";;
+	    C*)	C=1; ALL=0;;
+	    T*)	T=1; ALL=0;;
+	    L*)	L=1; ALL=0;;
+	    M*)	M=1; ALL=0;;
 	    h*)	usage; exit 255;;
 	    *)	x=${option#?}; option=${option%$x}
 	    	echo "$name: unexpected option $option in $1" >&2
@@ -108,19 +124,32 @@ if [ -f Make_tmp ]; then
 fi
 test -d Make_tmp || mkdir Make_tmp;
 
-if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
-    rm -f cexe.o
-    cp -p cexe.c_empty cexe.c
+if [ $ALL = 1 ]; then
+    if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
+	rm -f cexe.o
+	cp -p cexe.c_empty cexe.c
+    fi
 fi
 
-echo "make OPT=$c CFLAGS=$cflags icc"
-make OPT=$c CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-echo "make OPT=-DTCP$t CFLAGS=$cflags ict"
-makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-echo "make OPT=-DLOAD -DTCP$l CFLAGS=$cflags libict.a"
-makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-echo "make OPT=-DLMAIN$m CFLAGS=$cflags lmain"
-makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+if [ $ALL = 1 ] || [ $C = 1 ]; then
+    echo "make OPT=$c CFLAGS=$cflags icc"
+    make OPT=$c CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
+if [ $ALL = 1 ] || [ $T = 1 ]; then
+    echo "make OPT=-DTCP$t CFLAGS=$cflags ict"
+    makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
+if [ $ALL = 1 ] || [ $L = 1 ]; then
+    echo "make OPT=-DLOAD -DTCP$l CFLAGS=$cflags libict.a"
+    makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
+if [ $ALL = 1 ] || [ $M = 1 ]; then
+    echo "make OPT=-DLMAIN$m CFLAGS=$cflags lmain"
+    makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
 
 rmdir Make_tmp
 true

@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/bash
 
 ########################################################################
 #
@@ -14,7 +14,7 @@ usage ()
     echo 'output the listings produced to directory ListP' >&2
     echo 'if no iCtargets are specified, make each line of file pe.lst' >&2
     echo 'in this case also output the common output to OutP' >&2
-    echo '	$Id: mp,v 1.6 2003/10/12 19:48:04 jw Exp $' >&2
+    echo '	$Id: mp,v 1.7 2003/10/18 21:50:14 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do

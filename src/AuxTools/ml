@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/bash
 
 ########################################################################
 #
@@ -19,7 +19,7 @@ usage ()
     echo '	pl.lst	# lst files only' >&2
     echo '	p6.lst	# lst6 files only' >&2
     echo '	pp.lst	# iC files only' >&2
-    echo '	$Id: ml,v 1.5 2003/10/12 19:48:04 jw Exp $' >&2
+    echo '	$Id: ml,v 1.6 2003/10/18 22:23:40 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do

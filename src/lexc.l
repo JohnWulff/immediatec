@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.17 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: lexc.l,v 1.18 2003/10/12 20:57:47 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -114,7 +114,7 @@ static int	check_type(c_STYPE* u);
 "__LINE__"		{ count(&c_lval); return CONSTANT; }	/* no need to identify octal */
 "__FILE__"		{ count(&c_lval); return STRING_LITERAL; }
 
-(I|Q|T)X{D}+\.{D}+	{ count(&c_lval); return check_type(&c_lval); }
+(I|Q|T)X{D}+\.{D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval); }
 {L}({L}|{D})*		{ count(&c_lval); return check_type(&c_lval); }
 
 0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 0xac8 0XAC8UL */

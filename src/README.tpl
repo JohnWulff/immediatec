@@ -1,7 +1,24 @@
+#!/usr/bin/perl
+########################################################################
+#   Self extracting README which adjusts to the current version of
+#   icc.v, which contains a parts list of the whole of the iC project.
+#   icc.v is maintained under source control and the version number
+#   of icc.v is used as the version number of the iC release.
+#   Call: 	ident icc.v | README.tpl > ../README
+#   $Id: README.tpl,v 1.12 2003/10/12 20:57:47 jw Exp $
+########################################################################
 
-                         immediate C, iC rev #REV
+while (<>) {
+    ($ID, $NAME, $REV, $DATE) = split if length > 20;	# ident string
+}
+($YEAR, $MONTH, $DAY) = split "/", $DATE;
 
-                    Copyright (C) 1985-2002, John E. Wulff
+########################################################################
+print <<EOF;
+
+                         immediate C, iC rev $REV
+
+                    Copyright (C) 1985-$YEAR, John E. Wulff
                             All rights reserved.
 
     This program is free software; you can redistribute it and/or modify
@@ -45,7 +62,7 @@
     library and your code are in the same binary file is, in this case,
     a form of mere aggregation.) This is my interpretation of the GPL.
     If you still have concerns or difficulties understanding my intent,
-    feel free to contact me at <john.wulff@inka.de>.
+    feel free to contact me at <john\@je-wulff.de>.
 
     Of course, the Artistic License spells all this out for your protection,
     so you may prefer to use that.
@@ -60,12 +77,12 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev #REV
+        Notes for the installation of icc rev $REV
 
         1)  Unpack the archive in a suitable working directory with:
 
-                tar -xvzf icc_#REV.tar.gz
-                cd icc_#REV/src
+                tar -xvzf icc_$REV.tgz
+                cd icc_$REV/src
 
         2)  Excute the following:
 
@@ -82,7 +99,7 @@
 
 		make test
 
-	4)  It is recomended that you install the Perl package Time::Hires 
+	4)  It is recomended that you install the Perl package Time::HiRes 
 	    included with this distribution unless it is already installed.
 	    This can be checked by executing the following at this point:
 
@@ -90,10 +107,10 @@
 
 	    Skip to point 8) if you get a help output and no error message.
 
-	    You can work without Time::Hires - the scripts iCbox, iCserver will
+	    You can work without Time::HiRes - the scripts iCbox, iCserver will
 	    not support the -m microsecond timing option and 'iClive' will not
 	    display short signals by flashing colours. If you subsequently
-	    install Time::Hires, you have to execute make uninstall followed
+	    install Time::HiRes, you have to execute make uninstall followed
 	    by another make install as su in the icc/src directory, since the
 	    Perl scripts are adjusted by make install to work with/without
 	    Time::HiRes depending on its presence.
@@ -114,7 +131,7 @@
 
         7)  Return to the immediate C installtion
 
-		cd icc_#REV/src	# or the correct icc src directory
+		cd icc_$REV/src	# or the correct icc src directory
 
         8)  To install the compiler, library and scripts execute the following
 	    as super user:
@@ -217,13 +234,13 @@
         
         Lots of success
 
-        John E. Wulff   #DATE     <john.wulff@inka.de>
+        John E. Wulff   $YEAR.$MONTH.$DAY     <john\@je-wulff.de>
 
 	NOTE for SuSE Linux 7.1:
 	The program 'iCbox' requires Tk800.022 if you have Perl 5.6.0.
 	SuSE Linux 7.1 has Tk800.014 in combination with Perl 5.6.0.
 	With this constellation, iCbox produces 20 lines of warnings every
-	time a virtual button is pressed, which executes $tcp_conn->send_now()
+	time a virtual button is pressed, which executes \$tcp_conn->send_now()
 	from a Tk callback function. Tk800.014 has 'require fileevent', which
 	appears to go awry. (should use 'use'!!). Strangely the transmissions
 	work - the voluminous 'croak' outputs are only warnings.
@@ -233,5 +250,5 @@
 	this is not necessary.
 
 	SuSE Linux 7.2 distribution has Tk800.022 and works fine.
-
-        $Id: README.tpl,v 1.11 2002/08/26 19:03:45 jw Exp $
+EOF
+########################################################################

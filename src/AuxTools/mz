@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/bash
 
 ########################################################################
 #
@@ -18,7 +18,7 @@ usage ()
     echo 'iC files are made from compiler ictN and libictN.a (icc.v version 1.N)' >&2
     echo 'if no files are specified uses mm via pm.lst' >&2
     echo 'directory AlexN must exist (generated files are saved there)' >&2
-    echo '	$Id: mz,v 1.8 2003/10/12 19:48:04 jw Exp $' >&2
+    echo '	$Id: mz,v 1.9 2003/10/19 14:25:03 jw Exp $' >&2
 }
 
 min=0

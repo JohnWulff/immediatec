@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.33 2003/10/03 18:45:13 jw Exp $
+# @(#)$Id: Makefile.in,v 1.34 2003/10/12 20:57:47 jw Exp $
 
 ############################################################
 #
@@ -101,7 +101,7 @@ lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 .l.c:
     ifneq ($(LEX),)
 	rm -f $@
-	$(LEX) -t $< | sed -f $(srcdir)/$*.sed > $@
+	$(LEX) -t $< | sed -f $(srcdir)/gram.sed > $@
 	chmod -w $@
     else
 	@echo "System has no lex or flex - install one of them"
@@ -126,27 +126,27 @@ lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	test -f $@ && touch $@
     endif
 
-scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix $(srcdir)/../README
-	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+$(srcdir)/scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix $(srcdir)/../README
+	rm -f $(srcdir)/scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix | $(AWK) -f $(srcdir)/pawk.a > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
-../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
-	rm -f $(srcdir)/../README; ident $(srcdir)/icc.v | awk '/\$Id/ { print "g/#REV/s//"$$3"/"; split($$4,d,"/"); print "g/#DATE/s//"d[1]"."d[2]"."d[3]"/"; print "w $(srcdir)/../README"; print "q" }' | ed -s $(srcdir)/README.tpl
+$(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
+	ident $(srcdir)/icc.v | $(srcdir)/README.tpl > $(srcdir)/../README;
 
-cexe.c:	$(srcdir)/cexe.h
-	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > cexe.c
-	cp -f cexe.c cexe.c_empty
+$(srcdir)/cexe.c:	$(srcdir)/cexe.h
+	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > $(srcdir)/cexe.c
+	cp -f $(srcdir)/cexe.c $(srcdir)/cexe.c_empty
 
-$(srcdir)/comp.c:	$(srcdir)/comp.y
+$(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.sed
 
-$(srcdir)/gram.c:	$(srcdir)/gram.y
+$(srcdir)/gram.c:	$(srcdir)/gram.y $(srcdir)/gram.sed
 
-$(srcdir)/lexc.c:	$(srcdir)/lexc.l
+$(srcdir)/lexc.c:	$(srcdir)/lexc.l $(srcdir)/gram.sed
 
 test:
-	@echo "compile and generate all executables from iC files in ${srcdir}/Test ..."
-	@-${srcdir}/iCmake -iv ${srcdir}/Test/*.ic > ${srcdir}/Test/ErrorMessages.err 2>&1
-	@echo "diffing generated files in ${srcdir}/Test with originals in ${srcdir}/Test/ORG ..."
-	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test/ORG"; fi
+	@echo "compile and generate all executables from iC files in ${srcdir}/Test0 ..."
+	@-${srcdir}/iCmake -iv ${srcdir}/Test0/*.ic > ${srcdir}/Test0/ErrorMessages.err 2>&1
+	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
+	@if ${srcdir}/Mdiff -kl ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 install:	installdirs
 	$(srcdir)/perlinstall -t $(srcdir)
@@ -160,6 +160,7 @@ install:	installdirs
 	${INSTALL_PROGRAM} pplstfix ${bindir}/${binprefix}pplstfix
 	${INSTALL_DATA}    libict.a ${prefix}/lib/libict.a
 	${INSTALL_DATA}    icg.h    ${prefix}/include/icg.h
+	${INSTALL_DATA}    icg.h    ${prefix}/include/icc.h
 
 installdirs:	${srcdir}/mkinstalldirs
 	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include
@@ -176,6 +177,7 @@ uninstall:
 	rm -f ${bindir}/${binprefix}pplstfix
 	rm -f ${prefix}/lib/libict.a
 	rm -f ${prefix}/include/icg.h
+	rm -f ${prefix}/include/icc.h
 
 clean:
 	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a

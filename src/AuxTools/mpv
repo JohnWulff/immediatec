@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/bash
 
 ########################################################################
 #
@@ -14,7 +14,7 @@ usage ()
     echo 'make versions of icc ict and libict.a in Test2' >&2
     echo 'from project sources of older versions in icc.v_<ver>' >&2
     echo 'if directory icc.v_<ver> does not exist, cov makes it' >&2
-    echo '	$Id: mpv,v 1.4 2003/10/12 19:48:04 jw Exp $' >&2
+    echo '	$Id: mpv,v 1.5 2003/10/19 12:59:27 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do

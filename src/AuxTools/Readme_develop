@@ -117,11 +117,25 @@ Auxiliary scripts for testing compiler outputs
     mkpp:	#!/usr/bin/ksh -p
 		make (or diff) version files for previous versions
 		of the iC system. Uses 'mkv' of John Wulff's version
-		control system.  Execute in directory Test;
+		control system.  Execute in directory Test2;
 		assumes version directories Alex??
 
     ml:		#!/usr/bin/ksh -p
 		make lists for icc compiler tests; uses 'mklst'
+		    mklst *.ic    > p.lst	# all for copying
+		    mklst -d *.ic > pd.lst	# sources and derived for comparing
+		    mklst -e *.ic > pe.lst	# executables only
+		    mklst -c *.ic > pc.lst	# C files only
+		    mklst -i *.ic > pi.lst	# ini files only
+		    mklst -l *.ic > pl.lst	# lst files only
+		    mklst -6 *.ic > p6.lst	# lst6 files only
+		    mklst -p *.ic > pp.lst	# icc files only
+
+    mm:		#!/usr/bin/ksh -p
+		Usage: mm [-h] [-v<N>]
+		make iC test cases from pm.lst which may specify linking iC's
+		pm.lst must be edited manually from pp.lst (.ic files only)
+		to reflect those which must be linked into an application
 
     mo:		#!/usr/bin/ksh -p
     		Usage: mo [file ...]	# if none uses $(cat pe.lst)
@@ -144,14 +158,17 @@ Auxiliary scripts for testing compiler outputs
     mpv:	#!/usr/bin/ksh -p
 		make (or diff) versions of icc ict and libict.a
 		named in a parameter list or all versions;
-		assumes version directories Test/Alex??
+		assumes version directories Test2/Alex??
 
     mz:		#!/usr/bin/ksh -p
+		Usage: mz [-dh] [-min<MIN>] [-max<MAX>] file ...
 		make (or diff) iC applications in previous versions.
 		Uses iCmake -v<version> to make individual applications
 		This assumes that previous versions of ict<version>,
 		pplstfix<version> and libict<version>.a are available.
 		(these are made with mpv) assumes version directories
-		Test/Alex??
+		Test2/Alex??
+		if no files are specified uses mm via pm.lst to make
+		all the applications in the Test2 directory
 
-$Id: Readme_develop,v 1.4 2003/10/03 18:45:13 jw Exp $
+$Id: Readme_develop,v 1.5 2003/10/12 20:57:47 jw Exp $
