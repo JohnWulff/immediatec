@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.6 2002/08/08 11:09:12 jw Exp $";
+"@(#)$Id: gram.y,v 1.7 2002/08/09 22:00:41 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -1697,7 +1697,6 @@ imm_identifier
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]", $$.start, $$.end);
 #endif
-	    assert($1.symbol->ftype == ARITH || $1.symbol->ftype == GATE);
 	    immVarFound($$.start, $$.end, $1.symbol);
 	}
 	| '(' imm_identifier ')' {
@@ -1759,6 +1758,10 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 	lep->equOp  = LARGE;			/* marks a value variable */
 	lep->vEnd   = end;
 	lep->sp     = sp;
+	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
+	    error("C-statement tries to access an imm type not bit or int:", sp->name);
+	    sp->type = ERR;	/* cannot execute properly */
+	}
     } else {					/* parenthesized variable found */
 	--lep;					/* step back to previous entry */
     }
@@ -1794,9 +1797,9 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 {
     LineEntry*	p;
     int		mType;
+    int		typ;
 
     assert(sp);
-    mType = sp->ftype;
 
     for (p = lep - 1; p >= lineEntryArray; p-- ) {
 #if YYDEBUG
@@ -1806,11 +1809,20 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    p->equOp  = operator;		/* marks an assignment expression */
 	    p->pEnd   = end;
 	    if (p->sp == sp) {
-		if (sp->type == UDF) {
+		typ = sp->type & TM;
+		mType = sp->ftype;
+		if (typ == UDF) {
 		    sp->type = (mType == ARITH) ? ARNC : LOGC;
-		} else if ((sp->type != ARNC || mType != ARITH) &&
-			   (sp->type != LOGC || mType != GATE)) {
-		    break;		/* Error: assignment to wrong type */
+		} else if ((typ != ARNC || mType != ARITH) &&
+			   (typ != LOGC || mType != GATE) &&
+			   (typ != ERR)) {	/* avoids multiple error messages */
+		    if ((typ == ARN && mType == ARITH) ||
+		        (typ >= AND && typ <= LATCH && mType == GATE)) {
+			error("C-assignment to an imm variable already assigned in iC code:", sp->name);
+		    } else {
+			error("C-assignment to an incompatible imm type:", sp->name);
+		    }
+		    sp->type = ERR;	/* cannot execute properly */
 		}
 		return;
 	    } else {
@@ -1820,7 +1832,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    break;			/* Error: will not find start */
 	}
     }
-    c_error(" ERROR (\"%s\" %u %u %d %d %p %p)", sp->name, start, end, sp->type, mType, sp, p->sp);
+    c_error(" ERROR (\"%s\" %u %u %d %d %p %p)", sp->name, start, end, sp->type, sp->ftype, sp, p->sp);
 } /* immAssignFound */
 
 /********************************************************************

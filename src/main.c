@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.27 2002/08/06 22:12:11 jw Exp $";
+"@(#)$Id: main.c,v 1.28 2002/08/08 23:25:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -128,8 +128,9 @@ char * OutputMessage[] = {
     "%s: block count error\n",		/* [2] */
     "%s: link count error\n",		/* [3] */
     "%s: cannot open file %s\n",	/* [4] */
-    "%s: cannot open file %s in compile\n",	/* [5] */
-    "%s: cannot open file %s in output\n",	/* [6] */
+    "%s: cannot open file %s in iC compile\n",	/* [5] */
+    "%s: cannot open file %s in C compile\n",	/* [6] */
+    "%s: cannot open file %s in output\n",	/* [7] */
 };
 
 FILE *	T1FP;
@@ -290,19 +291,50 @@ main(
 	fprintf(stderr, "cannot unlink %s\n", T4FN);
 	perror("unlink");
 	r = T4index;			/* error opening temporary file */
-    } else if ((r = compile(inpFN, listFN, errFN, outFN)) != 0) {
+    } else
+
+/********************************************************************
+ *
+ *	Call the iC compiler which builds a Symbol table and a logic
+ *	net made up of the same Symbol structures linked by List_e's
+ *
+ *	As a side effect, all C-code fragments made up of literal blocks
+ *	and C-actions are collected in the temporary file T1FN
+ *
+ *******************************************************************/
+
+    if ((r = compile(inpFN, listFN, errFN, outFN)) != 0) {
 	ro = 5;				/* compile error */
+    } else
+
+/********************************************************************
+ *
+ *	Regroup the generated C-code int literal blocks first, followed
+ *	by C-actions. This is necessary to get all declarations at the
+ *	start of the C-code.
+ *
+ *	Call the C compiler which recognizes any variables declared as
+ *	imm bit or imm int variables. These variables can be used as
+ *	values anywhere in the C-code and appropriate modification is
+ *	carried out. Immediate variables which have been declared but
+ *	not yet assigned may be assigned to in the C-code. Such assignment
+ *	expressions are recognised and converted to a function calls.
+ *
+ *	If an immediate variable has already been assigned in the iC
+ *	code, an attempt to assign it in the C-code is an error.
+ *
+ *******************************************************************/
+
+    if ((r = c_compile(T1FP)) != 0) {
+	ro = 6;				/* C-compile error */
     } else {
 	Gate *		igp;
 	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
 
 	if ((r = listNet(gate_count)) == 0) {
 	    if (outFN == 0) {
-		if (exiFN != 0 && T1FP) {
-		    /* rewind intermediate file T1FN */
-		    if (fseek(T1FP, 0L, SEEK_SET) != 0) {
-			r = T1index;
-		    } else if ((excFP = fopen(excFN, "w")) == NULL) {
+		if (exiFN) {			/* -c option */
+		    if ((excFP = fopen(excFN, "w")) == NULL) {
 			r = COindex;
 		    } else if ((exiFP = fopen(exiFN, "r")) == NULL) {
 			r = CIindex;
@@ -317,9 +349,9 @@ main(
 			    linecnt++;
 			}
 			/* copy C intermediate file up to EOF to C output file */
-			copyXlate(T1FP, excFP, excFN, &linecnt, 01);
+			copyXlate(excFP, excFN, &linecnt, 01);
 
-			/* rewind intermediate file Tname again */
+			/* rewind intermediate file T1FN again */
 			if (fseek(T1FP, 0L, SEEK_SET) != 0) {
 			    r = T1index;
 			} else {
@@ -330,7 +362,7 @@ main(
 				linecnt++;
 			    }
 			    /* copy C intermediate file up to EOF to C output file */
-			    copyXlate(T1FP, excFP, excFN, &linecnt, 02);
+			    copyXlate(excFP, excFN, &linecnt, 02);
 
 			    /* copy C execution file Part 3 from character after 'V 'up to EOF */
 			    while (fgets(lineBuf, sizeof lineBuf, exiFP)) {
@@ -355,8 +387,8 @@ main(
 	    }
 	}
 	if (r != 0) {
-	    ro = 6;				/* error in output */
-	    fprintf(stderr, OutputMessage[r < 4 ? r : 6], progname, szNames[r]);
+	    ro = 7;				/* error in output */
+	    fprintf(stderr, OutputMessage[r < 4 ? r : 7], progname, szNames[r]);
 	    r += 10;
 	    goto closeFiles;
 	}

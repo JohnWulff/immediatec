@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.65 2002/08/07 19:00:10 jw Exp $";
+"@(#)$Id: comp.y,v 1.66 2002/08/09 00:40:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1729,7 +1729,7 @@ unget(char c)
 
 char *	cexeString[] = {
     "    case %d:\n",
-    "static int cexe_%d(Gate * _cexe_gf) {\n",
+    "static int _c_%d(Gate * _cexe_gf) {\n",
 };
 
 static int

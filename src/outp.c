@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.54 2002/08/07 21:52:36 jw Exp $";
+"@(#)$Id: outp.c,v 1.55 2002/08/09 21:54:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -173,8 +173,14 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
 
 /********************************************************************
  *
- *	list the generated network
- *	list network statistics
+ *	Gather information on total memory required for generation
+ *	including link count and gate count for each type of Gate.
+ *	This must be done after the iC and C compile phase but before
+ *	buildNet() or output().
+ *
+ *	if (debug & 020) list the generated network
+ *	if (debug & 040) list network statistics
+ *	output warnings and error statistics - terminate if fatal
  *
  *******************************************************************/
 
@@ -591,7 +597,7 @@ static char	COMPILER[] =\n\
 #define _AA(x,v) aAssign(&x, v)\n\
 #define _LA(x,v) lAssign(&x, v)\n\
 #endif\n\
-extern Gate *	l_[];\n\
+extern Gate *	_l_[];\n\
 ", inpNM, outfile, SC_ID, H1name);
 linecnt += 27;
 
@@ -807,7 +813,7 @@ linecnt += 27;
 		    full_ftype[dc = sp->ftype], sp->name);
 		if (dc >= MIN_ACT && dc < MAX_ACT) {
 		    /* gt_list */
-		    fprintf(Fp, " &l_[%d],", li);
+		    fprintf(Fp, " &_l_[%d],", li);
 		    li += 2;	/* space for action or function pointer + clock */
 		    if ((lp = sp->list->le_next) != 0 &&
 			(lp->le_sym->type & TM) == TIM) {
@@ -849,7 +855,7 @@ linecnt += 27;
 		    }
 		}
 		if (typ == ARN || (typ >= AND && typ < MAX_GT)) {
-		    fprintf(Fp, " &l_[%d],", li);	/* gt_rlist */
+		    fprintf(Fp, " &_l_[%d],", li);	/* gt_rlist */
 		    for (lp = sp->u.blist; lp; lp = lp->le_next) {
 			li++;	/* space in input list */
 		    }
@@ -922,48 +928,6 @@ linecnt += 27;
 	}
     }
 
-    fprintf(Fp, "\n\
-/********************************************************************\n\
- *\n\
- *	Literal blocks and embedded C fragment functions\n\
- *\n\
- *******************************************************************/\n\
-\n");
-    linecnt += 7;
-
-    /* copy C intermediate file up to EOF to C output file */
-    /* translate any imm variables and ALIAS references of type 'QB1_0' */
-
-    if ((rc = copyXlate(T1FP, Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
-	goto endm;
-    }
-    if ((rc = copyXlate(T1FP, Fp, outfile, &linecnt, 02)) != 0) { /* copy functions */
-	goto endm;
-    }
-
-/********************************************************************
- *
- *	output LOGC and ARNC gates
- *
- *******************************************************************/
-
-    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
-	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) == ARNC || typ == LOGC) {
-//#	    if ((typ = sp->type) == UDF || typ == LOGC)
-		modName = mN(sp);	/* modified string, byte and bit */
-		dc = sp->ftype;
-		fprintf(Fp, "Gate %-8s", modName);
-		fprintf(Fp,
-		    " = { 1, -%s, %s, 0, \"%s\", 0, 0, %s%s };\n",
-		    full_type[typ], full_ftype[dc], sp->name, sam, nxs);
-		linecnt++;
-		nxs = modName;		/* previous Symbol name */
-		sam = "&";
-	    }
-	}
-    }
-
 /********************************************************************
  *
  *	generate linked list header, for linking several independently
@@ -997,6 +961,25 @@ linecnt += 27;
     fprintf(H2p, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
 
+    fprintf(Fp, "\n\
+/********************************************************************\n\
+ *\n\
+ *	Literal blocks and embedded C fragment functions\n\
+ *\n\
+ *******************************************************************/\n\
+\n");
+    linecnt += 7;
+
+    /* copy C intermediate file up to EOF to C output file */
+    /* translate any imm variables and ALIAS references of type 'QB1_0' */
+
+    if ((rc = copyXlate(Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
+	goto endm;
+    }
+    if ((rc = copyXlate(Fp, outfile, &linecnt, 02)) != 0) { /* copy functions */
+	goto endm;
+    }
+
 /********************************************************************
  *
  *	produce initialised connection lists
@@ -1012,7 +995,7 @@ linecnt += 27;
  *\n\
  *******************************************************************/\n\
 \n\
-static Gate *	l_[] = {\n");
+static Gate *	_l_[] = {\n");
     linecnt += 8;
 
     lc = 0;			/* count links */
@@ -1033,7 +1016,7 @@ static Gate *	l_[] = {\n");
 			if (lp->le_sym == 0) {	/* dc == F_SW, F_CF or F_CE */
 			    /* Function Pointer for "if" or "switch" */
 			    len += 17;	/* assume len of %d is 2 */
-			    fprintf(Fp, "%s(Gate*)cexe_%d,",
+			    fprintf(Fp, "%s(Gate*)_c_%d,",
 				fs, lp->le_val);
 			} else {
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
@@ -1085,7 +1068,7 @@ static Gate *	l_[] = {\n");
 			/* Function Pointer at start of input list */
 			len += 17;	/* assume len of %d is 2 */
 			if (lp->le_val) {
-			    fprintf(Fp, "%s(Gate*)cexe_%d,", fs, lp->le_val);
+			    fprintf(Fp, "%s(Gate*)_c_%d,", fs, lp->le_val);
 			} else {
 			    fprintf(Fp, "%s(Gate*)0,", fs);	/* OUTW */
 			}
@@ -1204,20 +1187,10 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 
 /********************************************************************
  *
- *	mode 01         Copy only literal blocks %{ ... %}
- *	mode 02 default Copy only C blocks, functions or cases
- *	mode 03         Copy literal blocks and C blocks
- *
- *	mode 05         Copy only literal blocks %{ ... %} for cexe.c
- *	mode 06 default Copy only C blocks, functions or cases for cexe.c
- *
- * To handle immediate variables in C code, the output of the first
- * two passes of copyBlocks is seperated by a line containing
- * ## in C comment delimiters
- * and output to T2FP.
- *
- * Then this code is parsed by the C compiler and afterwards split on
- * ## in comments and output to oFP
+ *	To handle immediate variables in C code, the output of the first
+ *	two passes of copyBlocks is seperated by a line containing
+ *	## in C comment delimiters
+ *	and output to T2FP.
  *
  *******************************************************************/
 
@@ -1225,42 +1198,56 @@ extern FILE* yyin;
 extern FILE* yyout;
 
 int
-copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
+c_compile(FILE * iFP)
 {
     int		mask = 01;			/* copy literal blocks */
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
-fprintf(stderr, "copyXlate: start Pass %d\n", mode); fflush(stderr);
-    if (mode & 01) {
-	if (copyBlocks(iFP, T2FP, 01)) {
-	    return T1index;
-	}
-	if (outFlag == 0) {
-	    fprintf(T2FP, "/*##*/int c_exec(int pp_index) { switch (pp_index) {\n");
-	}
-	if (copyBlocks(iFP, T2FP, 02)) {
-	    return T1index;
-	}
-	if (outFlag == 0) {
-	    fprintf(T2FP, "/*##*/}}\n");
-	}
-
-fprintf(stderr, "copyXlate: start compile\n"); fflush(stderr);
-	/* rewind intermediate file */
-	if (fseek(T2FP, 0L, SEEK_SET) != 0) {
-	    return T2index;
-	}
-
-	yyin = T2FP;
-//	yyout = outFP;			/* list file */
-	copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
-	if (c_parse() != 0) {
-fprintf(stderr, "copyXlate: Parse error\n"); fflush(stderr);
-	}
-fprintf(stderr, "copyXlate: end compile\n"); fflush(stderr);
-	rewind(yyin);
-	copyAdjust(yyin, T3FP);		/* output adjusted C-code */
+//fprintf(stderr, "c_compile: start\n"); fflush(stderr);
+    if (copyBlocks(iFP, T2FP, 01)) {
+	return T1index;
     }
+    if (outFlag == 0) {
+	fprintf(T2FP, "/*##*/int c_exec(int pp_index) { switch (pp_index) {\n");
+    }
+    if (copyBlocks(iFP, T2FP, 02)) {
+	return T1index;
+    }
+    if (outFlag == 0) {
+	fprintf(T2FP, "/*##*/}}\n");
+    }
+
+//fprintf(stderr, "c_compile: start compile\n"); fflush(stderr);
+    /* rewind intermediate file */
+    if (fseek(T2FP, 0L, SEEK_SET) != 0) {
+	return T2index;
+    }
+
+    yyin = T2FP;
+    yyout = outFP;			/* list file */
+    copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
+    if (c_parse() != 0) {
+//fprintf(stderr, "c_compile: Parse error\n"); fflush(stderr);
+    }
+//fprintf(stderr, "c_compile: end compile\n"); fflush(stderr);
+    rewind(yyin);
+    copyAdjust(yyin, T3FP);		/* output adjusted C-code */
+//fprintf(stderr, "c_compile end\n"); fflush(stderr);
+    return 0;
+} /* c_compile */
+
+/********************************************************************
+ *
+ *	Then this code is parsed by the C compiler and afterwards split on
+ *	## in comments and output to oFP
+ *
+ *******************************************************************/
+
+int
+copyXlate(FILE * oFP, char * outfile, unsigned * lcp, int mode)
+{
+    int		mask = 01;			/* copy literal blocks */
+    char	lineBuf[BUFS];	/* can be smaller than a line */
 
     /* rewind intermediate file */
     if (fseek(T3FP, 0L, SEEK_SET) != 0) {
@@ -1279,7 +1266,5 @@ fprintf(stderr, "copyXlate: end compile\n"); fflush(stderr);
 	    }
 	}
     }
-
-fprintf(stderr, "copyXlate: end Pass %d\n", mode); fflush(stderr);
     return 0;
 } /* copyXlate */
