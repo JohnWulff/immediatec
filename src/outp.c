@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.45 2002/06/12 06:30:46 jw Exp $";
+"@(#)$Id: outp.c,v 1.46 2002/06/26 19:42:58 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -102,6 +102,22 @@ unsigned short	aflag;			/* -a on compile to append output */
 static unsigned	block_total;		/* shared by listNet and buildNet */
 static unsigned	link_count;		/* shared by listNet and buildNet */
 static int	extFlag;		/* set if extern has been recognised */
+
+/********************************************************************
+ *
+ *	errorEmit outputs an error line in the generated code
+ *	and an error message
+ *
+ *******************************************************************/
+
+static char	errorBuf[256];	/* used for error lines in emitting code */
+
+void
+errorEmit(FILE* Fp, char* errorMsg)
+{
+    fprintf(Fp, "/* error in emitting code. %s */\n", errorMsg);
+    errmess("ErrorEmit", errorMsg, NS);	/* error sets iClock->type to ERR */
+} /* errorEmit */
 
 /********************************************************************
  *
@@ -626,12 +642,11 @@ linecnt = 21;
 			fprintf(Hp, "#define ALIAS_ARITH\n");	/* header _list1.h */
 			aliasArithFlag = 1;
 		    }
-//####		    fprintf(Hp, "#define %s	%s%s\n", mN(sp), /* ALIAS to Hname */
-//####			lp->le_sym->type == NCONST ? "_" : "", mN(lp->le_sym));	/* header _list1.h */
-		} else if (sp->ftype != GATE) {
-		    fprintf(Fp,
-    "/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
+		} else if (sp->ftype != GATE && sp->ftype != CLCKL && sp->ftype != TIMRL) {
+		    sprintf(errorBuf,
+			"Alias '%s' has wrong ftype %s",
 			sp->name, full_ftype[sp->ftype]);
+		    errorEmit(Fp, errorBuf);
 		    linecnt++;
 		}
 	    }

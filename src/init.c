@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.16 2002/06/24 10:42:31 jw Exp $";
+"@(#)$Id: init.c,v 1.17 2002/06/25 14:33:01 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -47,13 +47,15 @@ static struct {
     /* name	type	u_val	ftype */
   { "D",	KEYW,	BLTIN1,	D_FF,	}, /* D flip-flop */
   { "DR",	KEYW,	BLTIN2,	D_FF,	}, /* D flip-flop with reset */
+  { "DSR",	KEYW,	BLTIN3,	D_FF,	}, /* D flip-flop with set/reset */
   { "SH",	KEYW,	BLTIN1,	D_SH,	}, /* sample and hold */
   { "SHR",	KEYW,	BLTIN2,	D_SH,	}, /* sample and hold with reset */
+  { "SHSR",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with set/reset */
   { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	}, /* pulse on anlog or digital change */
   { "RISE",	KEYW,	BLTIN1,	RI_BIT,	}, /* pulse on digital rising edge */
   { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
   { "JK",	KEYW,	BLTINJ,	S_FF,	}, /* R_FF for reset master */
-  { "SRT",	KEYW,	BLTIN3,	S_FF,	}, /* monoflop with timed reset*/
+  { "SRT",	KEYW,	BLTINT,	S_FF,	}, /* monoflop with timed reset*/
   { "IF",	KEYW,	IF,	F_CF,	},
   { "if",	KEYW,	IF,	F_CF,	},
   { "ELSE",	KEYW,	ELSE,	0,	},
