@@ -6,22 +6,80 @@
 #
 ########################################################################
 
+usage()
+{
+  echo "Usage: $name <directory>" >&2
+  echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+  echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
+  echo '	-z	echo compiler calls with all options for debugging' >&2
+  echo '	-h	this help text' >&2
+  echo '	-	all further arguments are treated as files' >&2
+  echo "	<directory> and <directory>_20000 in" >&2
+  echo "	directory Test1, Test2, Test3 etc" >&2
+  echo "	should contain comparison data." >&2
+  echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
+  echo '$Id: tt,v 1.3 2005/01/18 23:05:42 jw Exp $' >&2
+}
+
+########################################################################
+#
+#	main
+#
+########################################################################
+
+name=${0##*/}
+name=${name%.*}
+
+v=""
+y=""
+
+while [ $# -gt 0 ]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [ -n "$option" ]; do
+	    case $option in
+	    y*)	option=${option#?}
+		if [ -n "$option" ]; then
+		    v="$v -y$option"
+		    y="_$option"
+		else
+		    echo "-y must specify an option";
+		    usage; exit 254;
+		fi
+		break;;
+	    x*)	v="$v -x";;
+	    z*)	v="$v -z";;
+	    h*)	usage; exit 255;;
+	    *)	x=${option#?}; option=${option%$x}
+	    	echo "$name: unexpected option $option in $1" >&2
+		usage; exit 254;;
+	    esac
+	    option=${option#?}
+	done
+	;;
+    *)	break;;
+    esac
+    shift
+done
+
 if [ -n "$1" ]; then
-    echo "##### Test0 make test"
-    time make test
+    date
+    if [ -z "$y" ]; then
+	echo "##### Test0 make test"
+	time make test
+    fi
 
     t=Test1
     if [ -d "$t" ]; then
 	cd $t
-	if [ -d "$1" ]; then
-	    echo "##### $t mm"
-	    time mm > Init.out 2>&1
-	    time Mdiff -kl $(cat pd.lt) $1
-	fi
-	if [ -d "${1}_20000" ]; then
-	    echo "##### $t mm -y20000"
-	    time mm -y20000 > Init.out 2>&1
-	    time Mdiff -kl $(cat pd.lt) "${1}_20000"
+	echo "##### $t mm$v"
+	time mm$v > Init.out 2>&1
+	if [ -d "$1$y" ]; then
+	    time Mdiff -kl $(cat pd.lt) $1$y
+	else
+	    mkdir $1$y
+	    cp $(cat pd.lt) $1$y
 	fi
 	cd ..
     fi
@@ -29,24 +87,19 @@ if [ -n "$1" ]; then
     for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
 	if [ -d "$t" ]; then
 	    cd $t
-	    if [ -d "$1" ]; then
-		echo "##### $t my"
-		time my
-		time Mdiff -kl $(cat p[d6].lt) $1
-	    fi
-	    if [ -d "${1}_20000" ]; then
-		echo "##### $t my -y20000"
-		time my -y20000
-		time Mdiff -kl $(cat p[d6].lt) "${1}_20000"
+	    echo "##### $t my$v"
+	    time my$v
+	    if [ -d "$1$y" ]; then
+		time Mdiff -kl $(cat p[d6].lt) $1$y
+	    else
+		mkdir $1$y
+		cp $(cat p[d6].lt) $1$y
 	    fi
 	    cd ..
 	fi
     done
     echo "##### end"
 else
-    echo "Usage: $0 <directory>" >&2
-    echo "<directory> and <directory>_20000 in" >&2
-    echo "directory Test1, Test2, Test3 etc" >&2
-    echo "should contain comparison data." >&2
-    exit 1
+    usage
+    exit 255
 fi
