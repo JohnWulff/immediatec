@@ -59,17 +59,25 @@ Usage:	@<<<<<< [-eth] [-s <host>] [-p <port>] [-RrIiOo <num>] [-l <len>] [<unitI
 	-l len	length of scales (default 170)
 	-e	exit button
 	-t	trace debug messages
+	-m	display elapsed time in seconds and microseconds
+		(Requires Module Time::HiRes available from CPAN)
 	-h	help, ouput this Usage text only
 	unitID	default is 'X0'
-$Id: DemoBox,v 1.26 2001/01/25 21:48:58 jw Exp $
+$Id: DemoBox,v 1.27 2001/01/29 23:07:01 jw Exp $
 .
 
-use vars qw($opt_e $opt_t $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
+use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
 require "getopts.pl";
-&Getopts('tes:p:r:i:o:R:I:O:l:h');	# sets $opt_h if -h etc
+&Getopts('tmes:p:r:i:o:R:I:O:l:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+my ($t0, $t1, $sec, $usec);
+if ($opt_m) {
+    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    $t0 = [gettimeofday];	# start of program
 }
 
 $opt_R = 0 unless $opt_R;	# default from 0
@@ -162,8 +170,10 @@ if ($unitID =~ /^X/) {
 				     } else {\
 					 \$inByte &= ~$masks[$index];	# clear bit\
 				     }\
+				     \&printMicroSeconds if \$opt_m;\
 				     print \"I$unitID.$index --> \$inputs[$index] (\$inByte)\\n\" if \$opt_t;\
 				     \$conn->send_now(\"\$inByte\");\
+				     \$t0 = \[gettimeofday\] if \$opt_m;
 				    },\
 	    )->pack(-side   => 'top',\
 		    -expand => 1,\
@@ -210,8 +220,10 @@ elsif ($unitID =~ /^[BW]/) {
 	-variable    => \$inByte,
 	-command     => sub {
 			     if (length $inByte) {
+				 &printMicroSeconds if $opt_m;
 				 print "I$unitID --> $inByte\n" if $opt_t;
 				 $conn->send_now("$inByte");
+				 $t0 = [gettimeofday] if $opt_m;
 			     }
 			    },
     )->pack(-side   => 'top',
@@ -261,6 +273,7 @@ MainLoop;
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     my ($len, $diff, $mask, $index, $value);
+    &printMicroSeconds if $opt_m;
     if (defined $msg) {
         $len = length $msg;
 	if ($len == 0) {
@@ -307,12 +320,35 @@ sub rcvd_msg_from_server {
 		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
 		    $conn->send_now("$inByte");
 		}
-	    } elsif ($msg =~ /^\d+$/) {
+	    } elsif ($msg =~ /^-?\d+$/) {
 		print "Q$unitID $msg <-- $outputs[0]\n" if $opt_t;
 		$outputs[0] = $msg;
 	    } else {
 		print "Q$unitID received spurious message: '$msg'\n";
 	    }
 	}
+    }
+    $t0 = [gettimeofday] if $opt_m;
+}
+
+########################################################################
+#
+#	Compute and print elapsed microseconds
+#
+########################################################################
+
+sub printMicroSeconds {
+    my ($sec, $usec);
+    $t1 = [gettimeofday];
+    $sec =  $t1->[0] - $t0->[0];
+    $usec = $t1->[1] - $t0->[1];
+    if ($usec < 0) {
+	$sec--;
+	$usec += 1000000;
+    }
+    if ($opt_t) {
+	printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+    } else {
+	printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
     }
 }
