@@ -19,7 +19,7 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix.pl,v 1.1 2001/01/02 19:35:42 jw Exp $
+$Id: pplstfix.pl,v 1.2 2001/01/02 19:42:44 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -73,6 +73,7 @@ sub processFile {
 
     seek(IN, 0, 0);
     $. = 0;
+  line:
     while (<IN>) {
 	if (/(Q[BWX][\d._]+)/ and defined($symbols{$1})) {
 	    # assume only one relevant Qvariable per line
@@ -83,12 +84,14 @@ sub processFile {
 	    $fsp = $ar->[1];
 	    if ($line == $.) {
 		delete $symbols{$bsp};
-	    } elsif (! /\b$fsp\b/) {
+		$_ = <IN>;
+		$_ = <IN>;			# ignore 3 inserted lines
+		next line;
+	    }
+	    if (! /\b$fsp\b/) {			# don't modify own output
 		s/([ ~]) ---/$inv{$1} ---/;	# swap ' ' and '~'
 	    }
 	}
-	if ($. < $line or $. > $line + 2) {
-	    print $_;
-	}
+	print $_;
     }
 } # processFile
