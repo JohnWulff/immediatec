@@ -1,5 +1,5 @@
 static const char pcop_c[] =
-"@(#)$Id: pcop.c,v 1.3 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: pcop.c,v 1.4 2001/03/07 12:30:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -29,7 +29,7 @@ static const char pcop_c[] =
 #include <ddi_lib.h>
 #include "pplc.h"
 #include "ibsd.h"
-#include "time.h"
+#include "ticop.h"
 
 #ifdef MSC
 #define getvect(x)	_dos_getvect(x)
