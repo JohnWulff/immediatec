@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.15 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: scan.c,v 1.16 2002/06/19 20:29:57 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -27,40 +27,40 @@ static void	link_c(Gate * gp, Gate * out_list);
  *
  *	the following 5 arrays are indexed by gt_fni is ftype
  *
- *	UDFA	ARITH	GATE	D_SH	F_SW	CH_BIT	RI_BIT
- *	CLCK	TIMR	S_FF	R_FF	D_FF	F_CF
+ *	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
+ *	F_SW	S_FF	R_FF	D_FF	F_CF	CLCK	TIMR
  *	OUTW	OUTX	CLCKL	TIMRL
  *
  *******************************************************************/
 
 Functp2		initAct[] = {		/* called in pass4 */
-			err_fn, arithMa, link_ol, link_c, link_c, link_c, link_c,
-			link_c, link_c, link_c, link_c, link_c, link_c,
-			outMw, outMx, err_fn, err_fn,
+		    err_fn, arithMa, link_ol, link_c, link_c, link_c, link_c, link_c,
+		    link_c, link_c, link_c, link_c, link_c, link_c, link_c,
+		    outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		masterAct[] = {		/* called in scan, scan_ar and pass4 */
-			err_fn, arithMa, link_ol, dMsh, fMsw, chMbit, riMbit,
-			fMfn, fMfn, sMff, rMff, dMff, fMcf,
-			outMw, outMx, err_fn, err_fn,
+		    err_fn, arithMa, link_ol, riMbit, chMbit, dMsh, dMsh, dMsh,
+		    fMsw, sMff, rMff, dMff, fMcf, fMfn, fMfn,
+		    outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		slaveAct[] = {		/* called in scan_clk */
-			err_fn, err_fn, err_fn, dSsh, fSsw, chSbit, riSbit,
-			clockSfn, timerSfn, sSff, rSff, dSff, fScf,
-			err_fn, err_fn, err_fn, err_fn,
+		    err_fn, err_fn, err_fn, riSbit, chSbit, dSsh, dSsh, dSsh,
+		    fSsw, sSff, rSff, dSff, fScf, clockSfn, timerSfn,
+		    err_fn, err_fn, err_fn, err_fn,
 		};
 
 Functp		init2[] = {		/* called in pass2 */
-			null1, gate2, gate2, i_ff2, null1, i_ff2, i_ff2,
-			i_ff2, i_ff2, i_ff2, i_ff2, i_ff2, null1,
-			null1, null1, null1, null1,
+		    null1, gate2, gate2, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
+		    null1, i_ff2, i_ff2, i_ff2, null1, i_ff2, i_ff2,
+		    null1, null1, null1, null1,
 		};
 
 unsigned char	bit2[] = {		/* used in i_ff2() and i_ff3() */
-			0, INPT_M, INPT_M, D_SH_M, F_CF_M, CH_B_M, RI_B_M,
-			CLCK_M, TIMR_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M,
-			OUTP_M, OUTP_M, 0, 0,
+		    0, INPT_M, INPT_M, RI_B_M, CH_B_M, D_SH_M, D_SH_M, D_SH_M,
+		    F_CF_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, CLCK_M, TIMR_M,
+		    OUTP_M, OUTP_M, 0, 0,
 		};
 
 Gate *		gx;	/* used to point to action Gate in chMbit riMbit */
