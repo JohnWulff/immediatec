@@ -1,0 +1,70 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	make versions of pplc pptc and load.a
+#
+########################################################################
+
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
+    echo '	-d	diff pplc.v in versions' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: mpv,v 1.1 2002/05/19 14:40:05 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    d*)	d=diff;;
+	    h*)	usage; exit 255;;
+	    *) aflag="-$option"; break;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
+if [[ $# != 0 ]]; then
+    versions=$*
+else
+    versions=$(echo Test/Alex??)
+fi
+
+if [[ -n "$d" ]]; then
+    for w in $versions; do
+	if [[ ! -L $w ]]; then
+	    v=${w##*[a-z]}
+	    echo "### $v ###"
+	    co -p1.$v pplc.v | diff - pplc.v_1.$v/pplc.v
+	fi
+    done
+    exit
+fi
+
+for w in $versions; do
+    if [[ ! -L $w ]]; then
+	v=${w##*[a-z]}
+	echo "### $v ###"
+	if [[ ! -d pplc.v_1.$v ]]; then
+	    cov -r1.$v pplc.v
+	    cp cexe.c cexe.c_empty y.tab.h pplc.v_1.$v
+	fi
+	cd pplc.v_1.$v
+	if [[ ! -e makeall ]]; then ln -s ../makeall .; fi
+	if [[ ! -e makepptc ]]; then ln -s ../makeall .; fi
+	if [[ ! -e makeload ]]; then ln -s ../makeall .; fi
+	makeall
+	cp pplc ../Test/pplc$v
+	cp pptc ../Test/pptc$v
+	cp load.a ../Test/load$v.a
+	mkv pplc pptc load.a > ../Test/pplc$v.v
+	cd ..
+    fi
+done
