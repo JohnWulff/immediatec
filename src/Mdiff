@@ -32,6 +32,7 @@ usage()
   echo '			 (unless only 1 file)' >&2
   echo '		if files differ output:	#### file ####' >&2
   echo '	-t	text and date header at start of report' >&2
+  echo '	-p	full path in file names for directory (default removed)' >&2
   echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list files which differ - no other output' >&2
   echo '	-li	list files which are identical' >&2
@@ -48,7 +49,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.23 2002/07/05 18:14:23 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.24 2002/07/08 14:26:07 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -59,6 +60,7 @@ usage()
 
 process()
 {
+    dir=${directory%*/}
     if [ "$t" = 1 ]; then
 	echo "Differences in directory $PWD and $dir"
 	date
@@ -67,7 +69,11 @@ process()
     status=0
     for f in $files; do
 	if [ -f "$f" ]; then
-	    d=${f##*/}
+	    if [ "$p" != 0 ]; then
+		d=$f
+	    else
+		d=${f##*/}
+	    fi
 	    if [ -f "$dir/$d" ]; then
 		if diff -q $w $f $dir/$d > /dev/null; then
 		    if [ "$q" = 0 ]; then
@@ -111,7 +117,7 @@ process()
 
 name=${0##*/}
 name=${name%.*}
-i=0; e=0; t=0; q=0; li=0; w=-wB; pipe=0
+i=0; e=0; t=0; p=0; q=0; li=0; w=-wB; pipe=0
 context=''
 
 while [ $# -gt 0 ]; do
@@ -124,6 +130,7 @@ while [ $# -gt 0 ]; do
 	    i*)	i=1; let "li|=2";;
 	    l*)	t=0; q=1; let "li|=1";;
 	    t*)	t=1;;
+	    p*)	p=1;;
 	    q*)	t=0; q=1;;
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
@@ -152,9 +159,9 @@ done
 
 files='[Mm]akefile* *.[chyv]*'
 if [ $# = 0 ]; then
-    dir='..'
+    directory='..'
 elif [ -d "$1" ]; then
-    dir=$1			# first argument is directory (backwards compatible)
+    directory=$1		# first argument is directory (backwards compatible)
     shift
     if [ $# != 0 ]; then
 	files=$*
@@ -172,9 +179,9 @@ else
 	shift
     done
     if [ -d "$1" ]; then
-	dir=$1			# last argument is directory
+	directory=$1		# last argument is directory
     else
-	dir='..'
+	directory='..'
 	files="$files $1"
     fi
 fi
