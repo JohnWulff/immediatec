@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.31 2000/12/26 22:14:06 jw Exp $";
+"@(#)$Id: comp.y,v 1.32 2001/01/01 21:10:40 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -202,21 +202,9 @@ wasgn	: WACT '=' aexpr	{
 	;
 
 xasgn	: XACT '=' aexpr	{
-		Lis	li1;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		if ($1.v->type != UDF && $1.v->type != ERR) {
-		    error("multiple assignment to imm bit:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		li1.v = op_force($3.v, GATE);
-		li1.f = $3.f;	/* for op_asgn */
-		li1.l = $3.l;	/* for op_asgn */
-		$1.v->list = sy_push(li1.v->le_sym);	/* create back link */
-		$1.v->list->le_val = li1.v->le_val;	/* copy inversion */
-		li1.v = op_push((List_e *)0, UDF, li1.v); /* type <== AND */
-		li1.v->le_sym->type = OR;		/* type <== OR */
-		$$.v = op_asgn(&$1, &li1, OUTX);
+		$$.v = qx_asgn(&$1, &$3);
 	    }
 	;
 
@@ -291,7 +279,26 @@ expr	: UNDEF			{
 		    $$.v->le_val = lp->le_val;		/* copy inversion */
 		} else {
 		    /* output - modify later by following back link */
+#ifndef COMMENT
 		    $$.v = sy_push($1.v);
+#else
+		    List_e *	lp1;
+		    Symbol *	sp;
+		    char		temp[20];	/* must hold QXxxxxx.y_1 */
+		    lp = op_force(lp1 = sy_push($1.v), GATE);
+		    $1.v->list = lp;			/* ALIAS link */
+		    $1.v->type = ALIAS;
+		    sp = lp->le_sym;
+		    sy_pop(lp1);			/* delete forward link */
+		    sp->u.blist = 0;			/* cut forward link */
+		    if (debug & 02) {
+			free(sp->name);			/* free $x name space */
+		    }
+		    sprintf(temp, "%s_1", $1.v->name);
+		    sp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
+		    strcpy(sp->name, temp);		/* predefined name */
+		    $$.v = lp;
+#endif
 		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		if (debug & 02) pu(1, "expr", &$$);
@@ -1010,7 +1017,6 @@ yylex(void)
 	    }
 	    goto retfl;
 	} else if (isalpha(c) || c == '_') {
-	    uchar		wplus = 0;
 	    uchar		typ = UDF;
 	    uchar		ftyp = UDFA;
 	    uchar		y0[2];
@@ -1019,18 +1025,22 @@ yylex(void)
 
 	    while ((c = get()) != EOF && (isalnum(c) || c == '_'));
 	    if (sscanf(yytext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
-		if (y1[0] == 'B' || y1[0] == 'W') {
-		    wplus = 1;
-		    goto foundQIT;
+		if (y1[0] != 'X') {
+		    if (y0[0] == 'Q') {
+			ftyp = OUTW;			/* QBx or QWx */
+		    } else {
+			typ  = INPW;
+			ftyp = y0[0] == 'I' ? ARITH	/* IBx or IWx */
+					    : OUTX;	/* TBx or TWx */
+		    }
 		} else if (c == '.') {
 		    if (isdigit(c = get())) {	/* can only be QX%d. */
 			while (isdigit(c = get()));
-		    foundQIT:
 			if (y0[0] == 'Q') {
-			    ftyp = OUTX - wplus;	/* OUTX or OUTW */
+			    ftyp = OUTX;
 			} else {
-			    typ = INPX - wplus;		/* INPX or INPW */
-			    ftyp = GATE - wplus;	/* GATE or ARITH */
+			    typ  = INPX;
+			    ftyp = GATE;
 			}
 		    } else {
 			unget(c);		/* the non digit, not '.' */

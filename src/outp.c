@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.24 2000/12/29 17:26:59 jw Exp $";
+    "@(#)$Id: outp.c,v 1.25 2001/01/01 21:08:31 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -412,8 +412,9 @@ output(char * outfile)
     unsigned	val;
     unsigned	rc = 0;		/* return code */
     unsigned	mask;
-    Symbol	*tsp;
-    List_e	*tlp;
+    Symbol *	tsp;
+    List_e *	tlp;
+    List_e **	lpp;
     char *	modName;
     char *	nxs;
     char *	sam;
@@ -490,17 +491,17 @@ extern Gate *	l_[];\n\
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) < MAX_LV) {
 		if ((dc = sp->ftype) == ARITH || dc == GATE) {
-		    for (lp = sp->list; lp; ) {
+		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
+			/* leave out timing controls */
 			if (lp->le_val != (unsigned) -1) {
 			    tsp = lp->le_sym;	/* reverse action links */
 			    tlp = tsp->u.blist;
 			    tsp->u.blist = lp;	/* to input links */
-			    sp->list = lp->le_next;
+			    *lpp = lp->le_next;
 			    lp->le_sym = sp;
-			    lp->le_next = tlp;
-			    lp = sp->list;
+			    lp->le_next = tlp;	/* lpp is not changed */
 			} else {
-			    lp = lp->le_next;
+			    lpp = &lp->le_next;	/* lpp to next link */
 			}
 		    }
 		}

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.16 2000/12/29 20:16:52 jw Exp $";
+"@(#)$Id: genr.c,v 1.17 2001/01/01 21:10:40 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -772,6 +772,93 @@ op_asgn(			/* asign List_e stack to links */
     }
     return (sv->v);
 } /* op_asgn */
+ 
+/********************************************************************
+ *
+ *	asign to QXx.y
+ *
+ *	Sym sv contains Symbol *v and char *f and *l to source
+ *	Lis lr contains List_e *v and char *f and *l to source
+ *
+ *******************************************************************/
+
+Symbol *
+qx_asgn(
+    Sym *	sv,
+    Lis *	rl)
+{
+    Lis		li1;
+    List_e *	lp;
+    List_e *	lpf;
+    Symbol *	fsp;
+    Symbol *	bsp = 0;
+
+    if (sv->v->type != UDF && sv->v->type != ERR) {
+//	error("multiple assignment to imm bit:", sv->v->name);
+//	sv->v->type = ERR;	/* cannot execute properly */
+	/* TODO: test for proper multiple assignment or TBx ??? ZZZ */
+	sv->v->type = UDF;
+	lpf = sv->v->list;
+	assert(lpf);
+	bsp = lpf->le_sym;			/* save old symbol */
+	assert(bsp);
+	unlink_sym(bsp);			/* unlink old symbol */
+	free(lpf);				/* old back link */
+    }
+    lpf = op_force(rl->v, GATE);
+    fsp = lpf->le_sym;				/* aexpr symbol */
+    sv->v->list = sy_push(lpf->le_sym);		/* create back link */
+    sv->v->list->le_val = lpf->le_val;		/* copy inversion to back link */
+    li1.v = op_push((List_e *)0, UDF, lpf);	/* type <== AND */
+    li1.v->le_sym->type = OR;			/* type <== OR */
+    li1.f = rl->f;	/* for op_asgn */
+    li1.l = rl->l;	/* for op_asgn */
+    if (bsp) {
+	/*
+	 * replace the $ symbol which would be new auxiliary output
+	 * driver gate by the symbol created when that auxiliary output
+	 * was first used as input.
+	 *
+	 * copy all relevant data from $ symbol to old auxiliary output
+	 * including the $ name - this is renamed to original name in
+	 * op_asgn()
+	 */
+	assert(fsp);
+	free(bsp->name);			/* old "QXx.y_1" string */
+	bsp->name = fsp->name;			/* transfer $ name or 0 */
+	bsp->type = fsp->type;
+	bsp->ftype = fsp->ftype;		/* should be GATE or ALIAS */
+	assert(fsp->list == 0);
+	lp = bsp->list;				/* take out this symbol */
+	assert(lp != 0);
+	assert(lp->le_sym == sv->v);		/* if not it was not first asgn */
+	bsp->list = lp->le_next;		/* 0 or old output list */ 
+	free(lp);				/* old forward link */
+	assert(bsp->u.blist == 0);
+	bsp->u.blist = fsp->u.blist;
+	assert(templist->next == fsp);
+	templist->next = bsp;
+	bsp->next = fsp->next;
+	rl->v->le_sym = bsp;			/* forward link */
+	assert(sv->v->list->le_sym == fsp);	/* not necessary - linked above */
+	sv->v->list->le_sym = bsp;
+	free(fsp);				/* replaced $ symbol */
+    }
+    fsp = op_asgn(sv, &li1, OUTX);
+    if (bsp && lpf->le_val != NOT ^ NOT) {	/* TODO: adjust for arithmetic nodes */
+	for (lp = bsp->list; lp; lp = lp->le_next) {	/* traverse output list */
+	    if (lp != lpf) {			/* leave out own output */
+		lp->le_val ^= NOT;		/* invert link */
+	    }
+	}
+	if (debug & 04) {
+	    fprintf(outFP, "\tprevious inputs '%s' must be inverted\n"
+		"\texcept input '%s' to own output '%s'\n\n",
+		bsp->name, bsp->name, lpf->le_sym->name);
+	}
+    }
+    return fsp;
+} /* qx_asgn */
 
 /********************************************************************
  *
