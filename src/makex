@@ -1,0 +1,48 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	make an executable file from an iC file
+#
+########################################################################
+
+usage ()
+{
+    echo 'Usage:	'${0##*/} 'file ...' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: makex,v 1.1 2000/05/31 13:46:47 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    h*)	usage; exit 255;;
+	    *) aflag="-$option"; break;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
+for f in $*; do
+    file=$f
+    base=${file%.*}
+    if [[ $file = $base ]]; then
+	file="$base.p"
+    fi
+    if [[ ! -f $file ]]; then
+	echo "iC file $file does not exist"
+	usage
+	exit 1;
+    fi
+    echo $file
+    rm -f inc1.h inc2.h
+    if pplc -d74 -o $base.c -l $base.lst $file; then
+	gcc -o $base $base.c list.c load.a
+    fi
+done
