@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.1 1996/08/01 13:33:58 john Exp $";
+"@(#)$Id: comp.y,v 1.2 1998/10/02 11:15:55 john Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -1056,7 +1056,7 @@ yylex(void)
 		fprintf(exoFP, cexeString[outFlag], ++c_number);
 	    }
 	    fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
-	    if (*ccfrag != '{' /*}*/) {
+	    if (*ccfrag != '{') {
 		fprintf(exoFP, "    return ");
 	    }
 	}
@@ -1067,7 +1067,7 @@ yylex(void)
 	} else {
 	    fprintf(exoFP, ccfrag);
 	}
-	if (*ccfrag == '{' /*}*/ || (stflag & 0x10)) {
+	if (*ccfrag == '{' || (stflag & 0x10)) {
 	    if (copyCfrag('{', ';', '}') == 0) {
 		return 0;	/* copy C block or statement */
 	    }
@@ -1441,7 +1441,7 @@ copyCfrag(char s, char m, char e)
 		if (brace < 0) {
 		    unget(c);
 		    return e;
-		} else if (c == /*{*/ '}') {
+		} else if (c == '}') {
 		    putc(c, exoFP);
 		    unget(c);
 		    return e;

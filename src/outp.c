@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.3 1996/08/01 17:27:50 john Exp $";
+"@(#)$Id: outp.c,v 1.4 1998/10/02 11:15:55 john Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -127,7 +127,7 @@ output(char * outfile)			/* emit code in C */
 				tsp->name, os[tsp->type], lp->le_val);
 			    dc++;
 			} else {
-			    fprintf(outFP, "\t{ (%d)", lp->le_val); /* } */
+			    fprintf(outFP, "\t{ (%d)", lp->le_val);
 			}
 		    }
 		}
@@ -530,15 +530,14 @@ extern Gate *	l_[];\n\
 			} else {
 			    dc = 1;	/* typ == OR */
 			}
-			fprintf(Fp, "Gate %-8s = { %d, %d,",	/* } */
-			    modName, dc, dc);
+			fprintf(Fp, "Gate %-8s = { %d, %d,", modName, dc, dc);
 		    } else {
 			if (sp->ftype == OUTW) {
 			    fprintf(Fp, "Gate _%-7s", modName); /* modify */
 			} else {
 			    fprintf(Fp, "Gate %-8s", modName);
 			}
-			fprintf(Fp, " = { 1, -%s,", full_type[typ]); /* } */
+			fprintf(Fp, " = { 1, -%s,", full_type[typ]);
 		    }
 		    fprintf(Fp, " %s, 0, \"%s\",",
 			full_ftype[dc = sp->ftype], sp->name);
@@ -612,7 +611,7 @@ extern Gate *	l_[];\n\
 		    if (mask != 0) {
 			fprintf(Fp, ", %d", mask);	/* bitmask for OUT */
 		    }
-		    fprintf(Fp, /* { */ " };\n");
+		    fprintf(Fp, " };\n");
 		    linecnt++;
 		    nxs = modName;		/* previous Symbol name */
 		    sam = dc == OUTW ? "&_" : "&";

@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: pplc.c,v 1.3 1998/10/02 11:15:55 john Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -14,6 +14,16 @@ static const char pplc_c[] =
 
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _MSDOS_
+#include <dos.h>
+#include <conio.h>
+#else	/* Linux */
+#define getch() getchar()
+#define ungetch(x) ungetc(x, stdin)
+#include <sys/types.h>
+#include <sys/time.h>
+#include <termio.h>
+#endif
 #include <signal.h>
 #include <ctype.h>
 #include "pplc.h"
@@ -29,8 +39,11 @@ static const char pplc_c[] =
 #define INTR 0x1c    /* The clock tick interrupt */
 #define YSIZE	10
 
-void display(void);
-#ifdef DOS
+static void	display(void);
+static unsigned	time_cnt;			/* count time in ticks */
+static short	flag1C;
+
+#ifdef _MSDOS_
 #ifdef MSC
 void (interrupt far *oldhandler)();
 void interrupt far handler1C(void);
@@ -38,6 +51,48 @@ void interrupt far handler1C(void);
 void interrupt (*oldhandler)(void);
 void interrupt handler1C(void);
 #endif
+#define D10	3			/* 1/3 second interrupts under MSDOS */
+#define ENTER	'\r'
+#else	/* Linux */
+#define D10	10			/* 1/10 second select timeout under Linux */
+#define ENTER	'\n'
+static fd_set	selectinfds;		/* Set of fd for input (stdin, sync) */
+static fd_set	readfds;		/* Read mask for select system call */
+static int	maxfd;			/* Highest fd in selectinfds */
+static struct timeval	timeOut = { 0, 50000 };	/* 50 mS */
+static struct timeval	to;
+static struct timeval *	top;
+
+static struct termio	ttyparms;
+static struct termio	ttyparmh;
+
+# define max(x, y) ((x) > (y) ? (x) : (y))
+
+static int
+kbhit(void)
+{
+    fd_set	infds = selectinfds;
+    int		stat;
+
+    /* Wait until stdin is ready */
+    do {
+	readfds = infds;
+	if (top && top->tv_sec == 0 && top->tv_usec == 0) {
+	    *top = timeOut;
+	}
+    } while ((stat = select (maxfd + 1, &readfds, 0, 0, top)) == -1
+	   && errno == EINTR);
+    if (stat == -1) {
+	fprintf(stderr, "error in select\n");
+    } else if (stat == 0) {
+	time_cnt++;			/* count time in ticks */
+	/* increase the global counter */
+	if (debug & 01000) {		/* 1/20 second on, 1/20 second off */
+	    flag1C = 1;
+	}
+    }
+    return stat;			/* can only be 0 or 1 */
+} /* kbhit */
 #endif
 
 Functp	*i_lists[] = { I_LISTS };
@@ -58,13 +113,17 @@ unsigned char	QX_[IXD];		/* Output bit field */
 
 short		dis_cnt;
 short		error_flag;
-short		flag1C;
 
 unsigned	scan_cnt;			/* count scan operations */
 unsigned	link_cnt;			/* count link operations */
 unsigned	glit_cnt;			/* count glitches */
 unsigned long	glit_nxt;			/* count glitch scan */
-unsigned	time_cnt;			/* count time in ticks */
+
+/********************************************************************
+ *
+ *	Procedure pplc
+ *
+ *******************************************************************/
 
 void
 pplc(
@@ -158,21 +217,36 @@ pplc(
 	exit(0);				/* terminate - no inputs */
     }
 
-#ifdef DOS
+#ifdef _MSDOS_
 #ifdef MSC 
     oldhandler = _dos_getvect(INTR);	/* save the old interrupt vector */
 #else
     oldhandler = getvect(INTR);		/* save the old interrupt vector */
 #endif
+#else	/* Linux */
+    /* Setup fd sets */
+    FD_ZERO (&selectinfds);
+    maxfd = 0;
+    FD_SET (fileno (stdin), &selectinfds);
+    maxfd = max (maxfd, fileno (stdin));
+    if ( ioctl(0, TCGETA, &ttyparms) == -1 )   {
+	fprintf(stderr, "Cannot get termio from stdin\n");
+	quit(-5);
+    }
+    memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
+    ttyparmh.c_lflag &= ~(ECHO | ICANON);
+    if (ioctl(0, TCSETA, &ttyparmh) == -1) quit(-6);
 #endif
     signal(SIGINT, quit);		/* catch ctrlC and Break */	
     if (debug & 03000) {
-#ifdef DOS
+#ifdef _MSDOS_
 #ifdef MSC 
 	_dos_setvect(INTR, handler1C);	/* install the new interrupt handler */
 #else
 	setvect(INTR, handler1C);	/* install the new interrupt handler */
 #endif
+#else	/* Linux */
+	top = &to;				/* activate select timeout */
 #endif
     }
 
@@ -185,7 +259,7 @@ pplc(
 	time_cnt = 0;			/* clear time count */
 
 	do {
-	    c = '\r';
+	    c = ENTER;
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list)) {
 		if (debug & 0300) {	/* osc or detailed info */
@@ -225,36 +299,42 @@ pplc(
 	    }
 	}
 
-	if (c == '\r') {
+	if (c == ENTER) {
 	    display();				/* inputs and outputs */
 	}
 
-	if (flag1C) {				/* 1/3 second timer */
+    TestInput:
+	while (!kbhit() && !flag1C);		/* check inputs */
+	cnt = 1;
+	if (flag1C) {				/* 1/D10 second timer */
 	    flag1C = 0;
-	    if (c != '\r') {
-		display();			/* before interrupt */
-	    }
 	    if ((gp = TX_[1]) != 0) {		/* 100 millisecond timer */
 		fprintf(outFP, " %s ", gp->gt_ids);
 		gp->gt_val = - gp->gt_val;	/* complement input */
 		link_ol(gp, o_list);
 		putc(gp->gt_val < 0 ? '1' : '0', outFP);
+		cnt = 0;			/* TX.1 changed */
 	    }
 	    if (--tcnt == 0) {
-		tcnt = 3;			/* 1 second timer */
+		tcnt = D10;
 		if ((gp = TX_[2]) != 0) {	/* 1 second timer */
 		    fprintf(outFP, " %s ", gp->gt_ids);
 		    gp->gt_val = - gp->gt_val;	/* complement input */
 		    link_ol(gp, o_list);
 		    putc(gp->gt_val < 0 ? '1' : '0', outFP);
+		    cnt = 0;			/* TX.2 changed */
 		}
 	    }
-	    c = '\r';
+	    if (cnt) {
+		goto TestInput;			/* neither TX.1 nor TX.2 */
+	    }
 	} else {
-	    cnt = 1;
 	    while (cnt) {
-		if ((c = getchar()) == 'q' || c == EOF) {
+		if ((c = getch()) == 'q' || c == EOF) {
 		    quit(0);			/* quit normally */
+		}
+		if (c != ENTER) {
+		    putc(c, outFP);		/* echo */
 		}
 		if (c >= '0' && c < '0' + MAX_IO) {
 		    if ((gp = IX_[c - '0']) != 0) {
@@ -279,26 +359,26 @@ pplc(
 		    if ((gp = IW_[2]) != 0) {
 		    wordIn:
 			yp = ybuf;
-			if ((c = getchar()) == '-') {
+			if ((c = getch()) == '-') {
 			    putc(c, outFP);		/* echo */
 			    *yp++ = c;
-			    c = getchar();
+			    c = getch();
 			}
 			if (c == '0') {			/* oct or hex or 0 */
 			    putc(c, outFP);		/* echo */
-			    if ((c = getchar()) == 'x' || c == 'X') {
+			    if ((c = getch()) == 'x' || c == 'X') {
 				putc(c, outFP);		/* echo */
 				format = "%x%s";	/* hexadecimal */
 			    } else {
 				format = "%o%s";	/* octal */
 				*yp++ = '0';		/* may be a single 0 */
-				ungetc(c, stdin);
+				ungetch(c);
 			    }
 			} else {
 			    format = "%d%s";		/* decimal */
-			    ungetc(c, stdin);
+			    ungetch(c);
 			}
-			while ((c = getchar()) != EOF && yp < &ybuf[YSIZE-1] &&
+			while ((c = getch()) != EOF && yp < &ybuf[YSIZE-1] &&
 			    (isxdigit(c) || c == '\b')) {
 			    if (c == '\b') {
 				if (yp > ybuf) {
@@ -314,7 +394,7 @@ pplc(
 			}
 			*yp = 0;		/* string terminator */
 			if (sscanf(ybuf, format, &val, ybuf) != 1) goto wordEr;
-			if (c != '\r' && c != EOF) ungetc(c, stdin);
+			if (c != ENTER && c != EOF) ungetch(c);
 			putc(c, outFP);		/* echo */
 			if (gp == IB_[1]) {
 			    val &= 0xff;	/* reduce to byte */
@@ -329,18 +409,18 @@ pplc(
 		    } else {
 		    wordEr:
 			putc('?', outFP);	/* input not configured */
-			c = '\r';
+			c = ENTER;
 			cnt = 0;
 		    }
 		} else if (c == 'x') {
 		    aaflag = 0;			/* hexadecimal output */
-		    c = '\r';
+		    c = ENTER;
 		    cnt = 0;
 		} else if (c == 'd') {
 		    aaflag = 1;			/* decimal output */
-		    c = '\r';
+		    c = ENTER;
 		    cnt = 0;
-		} else if (c == '\r') {
+		} else if (c == ENTER) {
 		    cnt = 0;			/* terminate and scan */
 		}
 	    }
@@ -354,7 +434,7 @@ pplc(
  *
  *******************************************************************/
 
-void
+static void
 display(void)
 {
     int			n;
@@ -403,8 +483,9 @@ display(void)
 	fprintf(outFP, "   %02x   %04x   : ",
 	    QX_[1], *(unsigned short*)&QX_[2]);
     }
+    fflush(outFP);
 } /* display */
-#ifdef DOS
+#ifdef _MSDOS_
 
 /********************************************************************
  *
@@ -450,7 +531,7 @@ void interrupt handler1C(void)
 void quit(int sig)
 {
     if (debug & 03000) {
-#ifdef DOS
+#ifdef _MSDOS_
 	/* reset the old interrupt handler */
 #ifdef MSC 
 	_dos_setvect(INTR, oldhandler);
@@ -459,6 +540,9 @@ void quit(int sig)
 #endif
 #endif
     }
+#ifndef _MSDOS_
+    if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
+#endif
     fprintf(errFP, "\nQuit with sig = %d\n", sig);
     exit(sig);			/* really quit */
 } /* quit */

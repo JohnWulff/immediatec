@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.2 1996/07/30 20:24:23 john Exp $";
+"@(#)$Id: cexe.h,v 1.3 1998/10/02 11:15:55 john Exp $";
 /********************************************************************
  *
  *	Routine to execute C code fragments in the PPLC system
@@ -12,8 +12,8 @@ static const char cexe_h[] =
 #include "pplc.h"
 #include "comp.h"
 
+#line 16 "cexe.h"
 #define _(x) lookup(#x)->u.gate->gt_old
-
 static int x, y, z;
 static Gate* px;
 extern int getCount(void);
@@ -24,7 +24,7 @@ c_exec(int pp_index)
 {
     switch (pp_index) {
 V
-#line 28 "cexe.c"
+#line 25 "cexe.h"
     default:
 #ifndef _WINDOWS
 	fprintf(errFP,

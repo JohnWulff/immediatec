@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: genr.c,v 1.3 1998/10/02 11:15:55 john Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -649,7 +649,7 @@ op_asgn(			/* asign List_e stack to links */
 	    fprintf(exoFP, cexeString[outFlag], ++c_number);
 	    fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
 	    fprintf(exoFP, "	return %s;\n", eBuf);
-	    if (outFlag != 0) {			/* { */
+	    if (outFlag != 0) {
 		fprintf(exoFP, "}\n\n");	/* terminate function */
 	    }
 	    if (debug & 04) fprintf(outFP, "; (%d)\n", c_number);
