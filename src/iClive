@@ -50,12 +50,21 @@
 
 use Tk;					# Slurp the module in
 use Msg;
+use Tk::Balloon;
 use strict;
 
-#  live colouring     false 0          true 1
-my @tagArithmetic = ('LightSkyBlue1', 'LightSkyBlue1',);
-my @tagBackground = ('PaleGreen1'   , 'yellow'       ,);
-my @tagForeground = ('black'        , 'red'          ,);
+#  live colouring     false 0          true 1                ftype
+my @tagBackground = ('PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
+		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
+		     'gray60'       , 'gray60'       ,  # 4 5 CLCKL
+		     'LightSkyBlue1', 'LightSkyBlue1',  # 6 7 TIMRL
+		    );
+my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
+		     'black'        , 'red'          ,  # 2 3 ARITH
+		     'black'        , 'white'        ,  # 4 5 CLCKL
+		     'black'        , 'red'          ,  # 6 7 TIMRL
+		    );
+my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# ftype
 
 my $is_logic = 0;             # 1 if check-button on
 my $info = '';
@@ -82,7 +91,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.6 2001/04/01 08:23:14 jw Exp $
+$Id: iClive,v 1.7 2001/04/02 06:30:40 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -226,11 +235,73 @@ my $infoBar = $mainWindow->Label(-textvariable => \$info,
 my $text = $mainWindow->Scrolled('Text',
 		                 -scrollbars => 'osoe',
 		                 -background => 'cornsilk1',
-		                 -wrap => 'none',
-		                 -font => $font,
-		                )->pack(-fill => 'both',
+		                 -wrap       => 'none',
+		                 -font       => $font,
+		                )->pack(-fill   => 'both',
 			                -expand => 1,
 			               );
+
+########################################################################
+#	Balloon widget
+########################################################################
+my $balloon = $mainWindow->Balloon(-statusbar => $infoBar);
+
+my $bMsg = '';
+my $sMsg = '';
+my @wIdx = ('', '');  # Indices surrounding the current word.
+my @lIdx = ('', '');  # Same for last word.
+
+$balloon->attach($text,
+   -balloonmsg      => \$bMsg,
+   -statusmsg       => \$sMsg,
+   -balloonposition => 'mouse', # Not really used since postcommand returns real position
+   -postcommand  => sub {   if ($wIdx[0] eq $wIdx[1]) {
+				# No word under mouse - dont post the balloon
+				return 0;
+			    } else {
+				# Have a word under mouse - change the message:
+				my $word = $text->get($wIdx[0], $wIdx[1]);
+				# Skip if it contains non-word chars
+				# or is not in Symbol Table
+				return 0 if $word =~ /\W/;
+				my $idx = $symbolTable{$word}[1];
+				unless (defined $idx) {
+				    # Try if I/O like IX0.0 QX0.0 or TX0.0
+				    if ($word =~ /^[IQT]X\d/) {
+					$word = $text->get($wIdx[0], "$wIdx[1] + 2 chars");
+					$idx = $symbolTable{$word}[1];
+				    }
+				    return 0 unless defined $idx;
+				}
+				my $val = $activeSymbols[$idx][2];
+				$bMsg = "$val";
+				$sMsg = "$word: $val";
+				$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
+				# Find a good place to put the balloon
+				# right below the last char in the word
+				my $i = $text->index("$wIdx[1] - 1 chars");
+				my @p = $text->bbox($i);
+				my $x = $text->rootx + $p[0] + $p[2] - 4;
+				my $y = $text->rooty + $p[1] + $p[3] + 2;
+				return "$x,$y";
+			    }
+			},
+   -motioncommand => sub {  my $x = $text->pointerx - $text->rootx;
+			    my $y = $text->pointery - $text->rooty;
+			    @wIdx = ($text->index("\@$x,$y wordstart"),
+				$text->index("\@$x,$y wordend"));
+			    if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
+				# Same word - dont cancel the balloon.
+				return 0;
+			    } else {
+				# New word under mouse
+				# cancel it so a new balloon will be posted.
+				$text->SelectionClear;
+				@lIdx = @wIdx;
+				return 1;
+			    }
+			},
+		);
 
 ########################################################################
 #	Open the first file in the argument list
@@ -264,6 +335,7 @@ sub connect_to_server {
 	print "Connection $unitID at client.\n";
 	$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 	$conn->send_now($unitID);	# register I/O
+	%symbolTable = ();
 	$conn->send_now("$unitID.1");	# request Symbol Table
     } else {
 	$infoBar->configure(-foreground => 'red');
@@ -287,11 +359,14 @@ sub rcvd_msg_from_server {
 	if (length $msg == 0) {
 	    $rConn->disconnect();
 	    $infoBar->configure(-foreground => 'red');
-	    $info = "$unitID disconnected by server";
-	    deleteAllTags();
+	    $info = $iCname ?
+		"$unitID disconnected from '$iCname' by server" :
+		"$unitID not connected to a control program";
+	    deleteAllTags();	# also clears @activeSymbols
+	    undef $iCname;
 	    undef $conn;
 	} else {
-	    print "$msg\n" if $opt_t;
+#	    print "$msg\n" if $opt_t;
 	    my @symbols = split /;/, $msg;	# break up message
 	    my $entry = shift @symbols;		# first entry is an operation
 	    if ($entry =~ /$unitID\.(\d+)/) {
@@ -308,7 +383,7 @@ sub rcvd_msg_from_server {
 			my ($symbol, $ftype, $index) = split " ", $entry;
 			$index = $stIndex unless defined $index;
 			print "$index\t$symbol\t$ftype\n" if $opt_t;
-			push @{ $symbolTable{$symbol} }, $ftype, $index;
+			@{ $symbolTable{$symbol} } = ($ftype, $index);
 			$stIndex++;
 		    }
 		} elsif ($entry eq '2') {
@@ -328,7 +403,8 @@ sub rcvd_msg_from_server {
 		    ####################################################
 		    while ($entry = shift @symbols) {
 			my ($index, $value) = split " ", $entry;
-			my $is = $value ? 1 : 0;
+			my $is = $activeSymbols[$index][3];
+			$is ^= 1 if $value;			# change colour
 			my $inv = $is ^ 1;
 			$activeSymbols[$index][2] = $value;	# for value display
 			if ($activeSymbols[$index][0]) {
@@ -347,7 +423,7 @@ sub rcvd_msg_from_server {
 			    printMicroSeconds() if $opt_m;
 #endif
 			}
-			print "$index	$value\n" if $opt_t;
+#			print "$index	$value\n" if $opt_t;
 		    }
 		} else {
 		    goto Spurious;
@@ -485,11 +561,11 @@ sub deleteAllTags {
 ########################################################################
 
 sub scan {
+    my ($search_pattern, $current, $word, $i, $iw, $tag, $inv, $ftype, $index);
+
+    deleteAllTags();	# also clears @activeSymbols
+
     if ($conn) {
-	my ($search_pattern, $current, $word, $i, $iw, $tag, $inv, $ftype, $index);
-
-	deleteAllTags();
-
 	if ($filename !~ /$iCname/) {
 	    $infoBar->configure(-foreground => 'red');
 	    $info = "'$filename' does not match connected control program '$iCname'"; 
@@ -511,15 +587,16 @@ sub scan {
 		($ftype, $index) = @{ $symbolTable{$2} };
 		$tag = $index;
 		$word = $2;			# word is in the symbol table
-		$inv = $ftype == 19 ? 1 : 0;	# 19 is inverted logical ALIAS
+		$activeSymbols[$index][2] = 0;		# initial value
+							# initial colour
+		$inv = $activeSymbols[$index][3] = $colourSelect[$ftype];
 		while ($i =~ m/[!~]/g) {
 		    $inv ^= 1;
 		}
-		$tag .= '~' if $inv;
+		$tag .= '~' if $inv & 1;
 		print "$tag	$word	'$iw'\n" if $opt_t;
-		unless ($activeSymbols[$index][$inv]) {
-		    $activeSymbols[$index][$inv] = $ftype;	# TODO use to adjust background
-		    $activeSymbols[$index][2] = 0;		# initial value
+		unless ($activeSymbols[$index][$inv & 1]) {	# ZZZ take out masking
+		    $activeSymbols[$index][$inv & 1] = $ftype;
 		    $text->tagConfigure($tag, 
 					'-background' => $tagBackground[$inv], 
 					'-foreground' => $tagForeground[$inv]);
@@ -573,8 +650,10 @@ sub new_text {
 ########################################################################
 
 sub load_file {
-    $infoBar->configure(-foreground => 'black');
-    $info = "Loading file '$filename'...";
+    my $newname = $search->get();
+    if ($newname) {
+	$filename = $newname;
+    }
     $text->delete("1.0", "end");
     if (!open(FH, "$filename")) {
 	$infoBar->configure(-foreground => 'red');
@@ -587,7 +666,15 @@ sub load_file {
 	$text->insert("end", $_);
     }
     close (FH);
-    $info = "File '$filename', '$length' bytes loaded";
+    if ($newname and $filename !~ /$iCname/) {
+	$infoBar->configure(-foreground => 'red');
+	$info = $iCname ?
+	    "'$filename' does not match connected control program '$iCname'" :
+	    "$unitID not connected to a control program";
+    } else {
+	$infoBar->configure(-foreground => 'black');
+	$info = "File '$filename', '$length' bytes loaded";
+    }
 }
 
 ########################################################################
@@ -597,13 +684,12 @@ sub load_file {
 ########################################################################
 
 sub save_file {
-    $infoBar->configure(-foreground => 'black');
-    $info = "Saving '$filename'...";
     open (FH, ">$filename");
     my $contents = $text->get("1.0", "end - 1 chars");
     my $length = length $contents;
     print FH $contents;
     close (FH);
+    $infoBar->configure(-foreground => 'black');
     $info = "File '$filename', '$length' bytes saved";
 }
 #ifdef TIME_HIRES 
