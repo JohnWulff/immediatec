@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.26 2001/01/09 19:23:19 jw Exp $";
+    "@(#)$Id: outp.c,v 1.27 2001/01/10 16:01:42 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -802,10 +802,8 @@ extern Gate *	l_[];\n\
 \n");
 
     /* copy C intermediate file up to EOF to C output file */
-    while ((c = getc(exoFP)) != EOF) {
-	putc(c, Fp);
-	if (c == '\n') linecnt++;
-    }
+    /* translate any ALIAS references of type '_(QB1_0)' */
+    copyXlate(exoFP, Fp, &linecnt);
 
 /********************************************************************
  *
@@ -920,3 +918,59 @@ endh:
 end:
     return rc;		/* return code */
 } /* output */
+
+/********************************************************************
+ *
+ *	copy C intermediate file up to EOF to C output file translate
+ *	any ALIAS references of type '_(abcd0)' or '_(QB10_0)'.
+ *	Any arithmetic variable name may be an ALIAS and must
+ *	be resolved.
+ *
+ *******************************************************************/
+
+void
+copyXlate(FILE * iFP, FILE * oFP, unsigned * lcp)
+{
+    int		c;
+    Symbol *	sp;
+    char	buffer[256];
+    char *	bp;
+
+    while ((c = getc(iFP)) != EOF) {
+	putc(c, oFP);
+	if (c == '\n') {
+	    (*lcp)++;
+	} else if (c == '_') {
+	    if ((c = getc(iFP)) == '(') {
+		putc(c, oFP);
+		/* accept any token which might be in the symbol table */
+		bp = buffer;
+		while ((c = getc(iFP)) != EOF && (isalnum(c) || c == '_')) {
+		    *bp++ = c;
+		}
+		*bp = '\0';			/* terminate string */
+		if (c == ')') {
+		    /* token found - xlate it */
+		    if ((sp = lookup(buffer)) != 0) {
+			while (sp->type == ALIAS || sp->type == DALIAS) {
+			    if (sp->ftype != ARITH) {
+				/* generate error */
+			    }
+			    sp = sp->list->le_sym;	/* resolve ALIAS */
+			}
+			if (sp->ftype != ARITH) {	/* CHECK may be type ARN or SH */
+			    /* generate error */
+			}
+			fputs(sp->name, oFP);
+		    } else {
+			/* generate error - symbol should at least be in table */
+			fputs(buffer, oFP);
+		    }
+		} else {
+		    fputs(buffer, oFP);		/* strange but true */
+		}
+	    }
+	    putc(c, oFP);			/* char after '_' or buffer */
+	}
+    }
+} /* copyXlate */

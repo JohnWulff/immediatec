@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.17 2001/01/03 10:49:24 jw Exp $";
+"@(#)$Id: pplc.h,v 1.18 2001/01/10 16:01:42 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -68,6 +68,7 @@ extern void	efree(void *);
 #define	ERR	19
 
 #define KEYW	20	/* hold yacc token, used for compilation only */
+#define	DALIAS	21	/* ALIAS that has been deleted - needed for editing */
 
 #define MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
@@ -114,19 +115,19 @@ extern void	efree(void *);
 /* list of types */
 #define FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
-	"CLK","TIM","ALIAS","ERR","KEYW"
+	"CLK","TIM","ALIAS","ERR","KEYW","DALIAS"
 
-#define OPS	".-+~&|%*#^/({=[<:!@?k"	/* DEBUG display of types */
+#define OPS	".-+~&|%*#^/({=[<:!@?kd"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
 #define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
 	D_SH, D_FF, CH_BIT, RI_BIT, F_SW, F_CF, ARITH, ARITH, GATE,\
-	CLCK, TIMR, GATE, GATE, 0
+	CLCK, TIMR, GATE, GATE, 0, 0
 
 /* compiler tokens corresponding to type */
 #define DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, NVAR,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.26 2001/01/09 19:23:19 jw Exp $";
+"@(#)$Id: genr.c,v 1.27 2001/01/10 16:01:42 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -933,23 +933,12 @@ qp_asgn(
     li1.l = rl->l;	/* for op_asgn */
     if (bsp) {
 	/*
-	 *	QW1_0 is made an ALIAS to the auxiliary driver generated in the
-	 *	new assignment.  All outputs from the previous auxiliary output
-	 *	driver (now an ALIAS) are transferred to the new auxiliary driver.
+	 * QW1_0 is made an ALIAS to the auxiliary driver generated in the
+	 * new assignment.  All outputs from the previous auxiliary output
+	 * driver (now an ALIAS) are transferred to the new auxiliary driver.
 	 *
 	 * ALIAS should be complete before the op_asgn() below, so that any
 	 * inputs of its own output are resolved correctly in that assignment.
-	 *
-	 * replace the $ symbol which would be new auxiliary output
-	 * driver gate by the symbol created when that auxiliary output
-	 * was first used as input.
-	 *
-	 * copy all relevant data from $ symbol to old auxiliary output
-	 * including the $ name - this is renamed to original name in
-	 * op_asgn()
-	 *
-	 * cannot simply move output list to new $ symbol, since there may
-	 * be pointers to the old auxiliary output *bsp in the templist
 	 */
 	assert(fsp);
 	bsp->type = ALIAS;			/* convert old driver to ALIAS */
@@ -967,16 +956,28 @@ qp_asgn(
 	assert(lp != 0);			/* WHAT! no link to output ? */
     }
     sp = op_asgn(sv, &li1, oft);		/* oft is OUTW or OUTX */
-    if (lpb && (lp = fsp->list)) {
-	fsp->list = lpb;			/* put old output list first */
-	while (lpb->le_next != 0) {
-	    lpb = lpb->le_next;
-	}
-	lpb->le_next = lp;			/* link new output at end of old */
-	if (debug & 04) {			/* generate listing output */
-	    fprintf(outFP, "\t%s\t%c ---%c\t%s\n\n", fsp->name,
-		(fsp->ftype != GATE) ? fos[fsp->ftype] : w(lpf),
-		os[bsp->type], bsp->name);
+    if (bsp) {
+	if (lpb) {
+	    if ((lp = fsp->list) != 0) {
+		fsp->list = lpb;		/* put old output list first */
+		while (lpb->le_next != 0) {
+		    lpb = lpb->le_next;
+		}
+		lpb->le_next = lp;		/* link new output at end of old */
+		if (debug & 04) {		/* generate listing output */
+		    fprintf(outFP, "\t%s\t%c ---%c\t%s\n\n", fsp->name,
+			(fsp->ftype != GATE) ? fos[fsp->ftype] : w(lpf),
+			os[bsp->type], bsp->name);
+		}
+	    }
+	} else if (bsp->ftype >= MAX_AR) {
+	    unlink_sym(bsp);			/* ALIAS not required */
+	    free(bsp->name);
+	    sy_pop(bsp->list);
+	    free(bsp);				/* free all references to ALIAS */
+	} else {
+	    /* these symbol table entries are needed to edit cexe.tmp */
+	    bsp->type = DALIAS;			/* deleted arithmetic ALIAS */
 	}
     }
     return sp;
