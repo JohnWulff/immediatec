@@ -40,6 +40,16 @@
 #	It is then easy to inspect the listing and relate states with
 #	the logic.
 #
+#	This program uses the Tk::Text widget, an extension Tk::TextUndo
+#	may be used to provide an UNDO facility while editing. This
+#	extension has disadvantages for the 'live display' - it is 7 times
+#	slower in making arithmetic updates and it causes the window to
+#	jump to the last updated text for value changes in the control
+#	program. This makes the 'live display' hard to interpret. This does
+#	not happen with Tk::Text. If you want to activate the UNDO facility
+#	uncomment 'define' in the next line. (not recommended)
+#//define TEXT_UNDO
+#
 #	For measuring reaction times the Module Time::HiRes is used.
 #	This activates the -m option and flash display of short events.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
@@ -49,7 +59,12 @@
 
 use Tk;					# Slurp the module in
 use Msg;
-use Tk::TextUndo;
+#ifdef TEXT_UNDO
+use Tk::TextUndo;	# 7 times slower for live display
+my $undoBinding = '                (Control-u is <<Undo>>)';
+#else
+my $undoBinding = '';
+#endif
 use Tk::Balloon;
 use Tk::Dialog;
 use strict;
@@ -125,30 +140,33 @@ Menu buttons:
     File/SaveAs store the file by the name in the menu bar window.
     File/Quit	quit the program.
 
+    Make	make either the C file or the exutable program from the
+		currently displayed iC program text.
+
+    Run/Stop	run or stop the executable program generated from the
+		currently displayed iC program text.
+
     Live	scan the text in the text window and generate live markings
-    		for all words in the text, which represent variables in the
-		currently running program. (The text should be related)
-    Edit	clear the live markings in the text window. In this mode the
-    		text may be edited.
+    		for all words, which represent variables in the currently
+		running program - which should be generated from the text to
+		make a meaningful display. Text is 'read only' in this mode.
 
-    Search	select one of four search modes.
-    		A search in the edit window for a text or regular expression
-		in the menu bar window is initiated by the Return key, when
-		the focus is in the menu bar window.
-		All found items will be marked. Striking the Return key again
-		will display a section of the text containing found items
-		which were previously not displayed. Shift-Return will reverse
-		the direction of scrolling.
-Editing:
-    This program uses the Tk::TextUndo widget, an extension of Tk::Text.
-    In 'Live' mode when a 'live display' is shown the text is read only.
-    When the 'Edit' button is pressed this program is a full featured editor. 
-    The edit facilities of this program are described in the Tk::Text man
-    page in the section 'BINDINGS' near the end. (Control-u is <<Undo>>)
+    Edit	clears the live markings in the text window. In this mode the
+    		text may be edited with the facilities of Tk::Text, which is
+		a full featured editor. The edit facilities are described in
+		the Tk::Text man page in the section 'BINDINGS' near the end.
+@<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+		$undoBinding
+    Search	the text in the text window. It may be scanned for an exact
+		match or for a regular expression in the entry window next
+		to the button. All found items will be marked. Repeating
+		'Search down' will display a section of the text containing
+		found items which were previously not displayed. 'Search up'
+		will reverse the direction of scrolling.
 
-Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
+Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.19 2002/06/12 06:30:46 jw Exp $
+$Id: iClive,v 1.20 2002/06/12 20:14:41 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -311,16 +329,26 @@ my $infoBar = $mainWindow->Label(-textvariable => \$info,
 ########################################################################
 #	Text window
 ########################################################################
+#ifdef TEXT_UNDO
 my $text = $mainWindow->Scrolled('TextUndo',
-		                 -scrollbars => 'osoe',
-		                 -background => 'cornsilk1',
-		                 -wrap       => 'none',
-		                 -font       => $font,
-		                )->pack(-fill   => 'both',
-			                -expand => 1,
-			               );
-
+				 -scrollbars => 'osoe',
+				 -background => 'cornsilk1',
+				 -wrap       => 'none',
+				 -font       => $font,
+				)->pack(-fill   => 'both',
+					-expand => 1,
+				       );
 $text->eventAdd('<<Undo>>' => '<Control-u>');	# extra Undo binding
+#else
+my $text = $mainWindow->Scrolled('Text',
+				 -scrollbars => 'osoe',
+				 -background => 'cornsilk1',
+				 -wrap       => 'none',
+				 -font       => $font,
+				)->pack(-fill   => 'both',
+					-expand => 1,
+				       );
+#endif
 
 ########################################################################
 #	Balloon widget
@@ -378,9 +406,6 @@ sub connect_to_server {
 
 sub rcvd_msg_from_server {
     my ($rConn, $msg, $err) = @_;
-#ifdef TIME_HIRES 
-    printMicroSeconds() if $opt_m;
-#endif
     if (defined $msg) {
 	if (length $msg == 0) {
 	    $rConn->disconnect();
@@ -400,7 +425,10 @@ sub rcvd_msg_from_server {
 	    $runButton->configure(-text => "Run ");
 	    $runFlag = 0;
 	} else {
-	    print "$msg\n" if $opt_t;
+#ifdef TIME_HIRES 
+	    printMicroSeconds() if $opt_m;
+#endif
+	    print "rcvd '$msg'\n" if $opt_t;
 	    my @symbols = split /;/, $msg;	# break up message
 	    my $entry = shift @symbols;		# first entry is an operation
 	    if ($entry =~ /$unitID\.(\d+)/) {
@@ -442,6 +470,7 @@ sub rcvd_msg_from_server {
 		    # New data values
 		    # Data value entries consist of ST-index and value
 		    ####################################################
+		    my $normalFlag = 0;		# state currently diasabled
 		    while ($entry = shift @symbols) {
 			my ($index, $value) = split " ", $entry;
 #ifdef TIME_HIRES 
@@ -490,18 +519,23 @@ sub rcvd_msg_from_server {
 			    my $tag = "$index=";
 			    my @ranges = $text->tagRanges($tag);
 # print "value at index $index: $activeSymbols[$index][1] '@ranges'\n";
-			    $text->configure(-state => 'normal');
+			    unless ($normalFlag) {
+				$text->configure(-state => 'normal');
+				$normalFlag = 1;	# state normal until loop end
+			    }
 			    for (my $i = 0; $i < @ranges; $i += 2) {
 				my ($beg, $end) = @ranges[$i, $i+1];
 				$text->delete($beg, $end);
 				$text->insert($beg, " $value", $tag);
 			    }
-			    $text->configure(-state => 'disabled');
 			}
 #ifdef TIME_HIRES 
 			printMicroSeconds() if $opt_m;
 #endif
 			print "$index	$value\n" if $opt_t;
+		    }
+		    if ($normalFlag) {
+			$text->configure(-state => 'disabled');
 		    }
 		} else {
 		    goto Spurious;
@@ -509,6 +543,10 @@ sub rcvd_msg_from_server {
 	    } else {
 		Spurious: warn "$unitID: spurious operation '$entry' ???\n";
 	    }
+#ifdef TIME_HIRES 
+	    printMicroSeconds() if $opt_m;
+#endif
+	    print "rcvd end\n" if $opt_t;
 	}
     }
 }
@@ -715,7 +753,7 @@ sub scan {
 	clearScan();	# $scanFlag = 0
     } elsif ($conn and $iCname) {
 	$mainWindow->title("iClive $filename $iCname");
-	if ($filename !~ /$iCname/) {
+	if ($filename !~ /\b$iCname\./) {
 	    $infoBar->configure(-foreground => 'red');
 	    $info = "WARNING: '$filename' does not match connected control program '$iCname'"; 
 	}
@@ -952,19 +990,26 @@ sub load_file {
 	clearScan();
 	if ($unconditional or check_save()) {
 	    my $oldname = $filename;
-	    if ($search_text =~ /^\w+(\.\w+)?/) {
+	    # handle Unix / and Windows \ directory path seperators
+	    if ($search_text =~ /^[\w\\\/]+(\.\w+)?/) {
 		$filename = $search_text;
 	    } elsif ($errorname) {
 		$filename = $errorname;
 		$errorname = '';
 	    }
 	    stat($filename);
-	    if (-f _ and -r _) {
-		$text->Load($filename);
-		$oldContents = $text->get("1.0", "end - 1 chars");
+	    if (-f _ and -r _ and open(FH, "$filename")) {
+		$text->delete("1.0", "end");		# clear the text area
+		$oldContents = '';
+		while (<FH>) {
+		    $oldContents .= $_;
+		}
+		close (FH);
+		$text->insert("end", $oldContents);
+		my $length = length $oldContents;
 		$mainWindow->title("iClive $filename");
 		$infoBar->configure(-foreground => 'black');
-		$info = "File '$filename' loaded";
+		$info = "File '$filename', '$length' bytes loaded";
 	    } else {
 		$infoBar->configure(-foreground => 'red');
 		$info = "ERROR: Could not open $filename"; 
@@ -1057,14 +1102,14 @@ sub saveAs_file {
 
 sub make_file {
     my $cFlag = $_[1];		# make C file if true
-    if ($filename =~ /(\w+)\.lst6?/) {
+    if ($filename =~ /(^[\w\\\/]+)\.lst6?/) {
 	$search_text = "$1.ic";	# listing should never be modified
 	load_file(1);		# load the corresponding iC source unconditionally
     } else {
 	deleteAllTags();	# also clears @activeSymbols
 	clearScan();
     }
-    if ($filename !~ /(\w+)\.ic/) {
+    if ($filename !~ /(^[\w\\\/]+)\.ic/) {
 	$infoBar->configure(-foreground => 'blue');
 	$info = "WARNING: cannot make '$filename' (must end in .ic)"; 
     } elsif (check_save()) {	# make sure check_save() has no regex matches
@@ -1117,7 +1162,7 @@ sub run_file {
     } elsif ($conn and $iCname) {
 	$infoBar->configure(-foreground => 'red');
 	$info = "$unitID is connected to '$iCname' (Stop it to run '$filename')";
-    } elsif ($filename !~ /(\w+)\.ic/) {
+    } elsif ($filename !~ /(^[\w\\\/]+)\.ic/) {
 	$infoBar->configure(-foreground => 'blue');
 	$info = "WARNING: cannot run '$filename' (must end in .ic)"; 
     } elsif (check_save()) {
