@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2001  John E. Wulff
+#	Copyright (C) 2000-2005  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -12,45 +12,10 @@
 #
 #	iClive display for iC sources and listings
 #
-#	iClive provides an edit window in which the text of a source
-#	or listing can be displayed and optionally edited and saved.
-#
-#	iClive is normally a client of a running iC program. On startup
-#	it requests the symbol table of the running program. It returns
-#	a list of words from the symbol table on which it wants live
-#	updates of the state of the nodes, named by each word in the
-#	list. The running program then provides updates when the state
-#	of any node from the list changes as soon as possible after the
-#	change.
-#
-#	All words in the text which exactly match any token in the list
-#	are marked with a colour depending on the current state of the
-#	node - usually green for 0 and red for 1. These are called 'active'
-#	words. Active words in the list which are preceded by ~ or ! or
-#	which are followed by ~ show the inverse state of the node.
-#
-#	When the mouse cursor sits on an active word the value of the
-#	node is displayed in a balloon window. This is useful for displaying
-#	the current value of arithmetic nodes.
-#
-#	To be effective, the displayed text must be either the source of
-#	the running iC program or a text derived from that source, such
-#	as the iC listing. iClive then shows the logical statements of
-#	the source and the colours will show what the current state is.
-#	It is then easy to inspect the listing and relate states with
-#	the logic.
-#
-#	This program uses the Tk::Text widget, an extension Tk::TextUndo
-#	may be used to provide an UNDO facility while editing. This
-#	extension has disadvantages for the 'live display' - it is 7 times
-#	slower in making arithmetic updates and it causes the window to
-#	jump to the last updated text for value changes in the control
-#	program. This makes the 'live display' hard to interpret. This does
-#	not happen with Tk::Text. If you want to activate the UNDO facility
-#	use the -u option (recommended only for editing)
+#	A full description is in the POD documentation at the end
 #
 #	For measuring reaction times the Module Time::HiRes is used.
-#	This activates the -m option and flash display of short events.
+#	This is activated by the -m option.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
 #
 ########################################################################
@@ -63,6 +28,7 @@ use Tk::Balloon;
 use Tk::Dialog;
 use Cwd;
 use strict;
+use warnings;
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 my $t0 = [gettimeofday];	# start of program
 my %delayedColour;	# colour that should be restored after a flash
@@ -87,6 +53,9 @@ my %delayedColour;	# colour that should be restored after a flash
 #	F_SW	S_FF	R_FF	D_FF	F_CF	F_CE	CLCK	TIMR	8-15
 #	TRAB	OUTW	OUTX	CLCKL	TIMRL				16-20
 #	MAX_FTY	+ARITH	+GATE	+GATE+INV  ...	+CLCKL	+TIMRL		21-24...40-41
+#
+#	ftype-abbreviations are used for debugging to list the Symbol Table.
+#	They are also indexed by gt_fni (holds ftype). (lines up with FOPS in icc.h)
 #
 ########################################################################
 
@@ -116,6 +85,12 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'white'        , 'white'        ,  # 6 7 TIMRL
 		    );
 
+my @abbrevSelect  = ( 'U','A',' ','E','V','s','r','H','I','S','R','D','F','G',
+		      'C','T','B','W','X',':','!',      # as[ftype] 0 - 20
+		      '?','Aa','ga','ia','?','?','?','?','?','?','?','?','?','?',
+		      '?','?','?','?','?',':a','!a',    # ALIASes  21 - 41
+		    );
+
 ########################################################################
 #
 #	Initialization
@@ -125,65 +100,81 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<<< [-tTmuh] [-s <host>] [-p <port>] [-f <font>] [file ...]
+@<<<<<<<[ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
  $named
-        -s host host name of server    (default 'localhost')
-        -p port service port of server (default '8778')
-        -f font font to use in Text window (default '9x15')
-        -u      activate undo edit facility (not recommended if Live display
-                is used, because display may skip to parts which change)
-        -m      display elapsed time in seconds and microseconds
-            (Requires Module Time::HiRes available from CPAN - see source)
-        -t      trace run time changes
-        -T      trace static debug messages
-        -h      help, ouput this Usage text only
+        [ -g <geometry>][ <file> ...]
+    -s host host name of server    (default 'localhost')
+    -p port service port of server (default '8778')
+    -i inst initial instance selection (default ''; 1 to 3 numeric chars)
+    -f font font to use in Text window (default '9x15')
+    -g geom geometry for main window (default '748x436')
+    -u      activate undo edit facility (not recommended if Live display
+            is used, because display may skip to lines which change)
+    -m      output elapsed time in seconds and microseconds
+    -t      trace output run time changes in target application
+    -T      trace output static debug messages
+    -h      help, ouput this Usage text only
+    file ... one or more iC source files. The first will be opened. The
+            rest will be stored in the File menu for later selection. If
+            the built application is running, Live display is activated.
 
-Menu buttons:
-    File/New    provide an empty page for editing.
-    File/Open   load the file named in the menu bar window.
-    File/Save   store the file previously opened if modified
-    File/SaveAs store the file by the name in the menu bar window.
-    File/Quit   quit the program.
+ Menu buttons:
+    [File] New  provide a new empty file for editing.
+         Open   open and load the selected file.
+         Save   save the current file if modified.
+         SaveAs store the file at the selected path.
+         Quit   quit the program.
 
-    Build       build either the C file or the exutable program from the
+    [Build]     build either the C file or the executable application
+                from the currently displayed iC program text.
+
+    [Run/Stop]  run or stop the executable application built from the
                 currently displayed iC program text.
 
-    Run/Stop    run or stop the executable program generated from the
-                currently displayed iC program text.
+    [ -]        select no instance or -0 to -9 or extra instance passed
+                with -i option. Run and Live use the selected instance.
 
-    Live        scan the text in the text window and generate live markings
-                for all words, which represent variables in the currently
-                running program - which should be generated from the text to
-                make a meaningful display. Text is 'read only' in this mode.
+    [Live	scan the text and generate live markings for all words,
+		which represent variables in the currently running
+		application - which should be built from the text
+		to make a meaningful display. Text is 'read only'
+		in this mode.
+    /Edit]      clears live markings in the text window. In this mode the
+                text may be edited with the facilities of Tk::Text,
+                which is a full featured editor. The edit facilities
+                are described in the Tk::Text man page in the section
+                'BINDINGS' near the end.  If called with the -u option,
+                ctrl-U is the <<Undo>> binding.
 
-    Edit        clears the live markings in the text window. In this mode the
-                text may be edited with the facilities of Tk::Text, which is
-                a full featured editor. The edit facilities are described in
-                the Tk::Text man page in the section 'BINDINGS' near the end.
-                If called with the -u option, ctrl-U is the <<Undo>> binding.
+    [Search]    the the text window. It may be scanned for an exact match
+                or for a regular expression in the entry window next to
+                the button. All found items will be marked. Repeating
+                'Search down' or RETURN will display a section of
+                the text containing found items which were previously
+                not displayed.  'Search up' or SHIFT-RETURN reverses
+                the direction of scrolling.  Another option is to Go
+                to a line entered in the entry window.
 
-    Search      the text in the text window. It may be scanned for an exact
-                match or for a regular expression in the entry window next
-                to the button. All found items will be marked. Repeating
-                'Search down' or RETURN will display a section of the text
-                containing found items which were previously not displayed.
-                'Search up' or SHIFT-RETURN reverses the direction of scrolling.
+    [Help]      display the man page
 
-Copyright (C) 2000-2002  John E. Wulff          <john@je-wulff.de>
+Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.34 2004/11/10 17:47:56 jw Exp $
+$Id: iClive,v 1.35 2005/01/17 13:40:31 jw Exp $
 .
 
-use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_u $opt_h);
+use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_i $opt_f $opt_g $opt_u $opt_X $opt_h);
 require "getopts.pl";
-&Getopts('tTms:p:f:uh');	# sets $opt_h if -h etc
+&Getopts('tTms:p:i:f:g:uXh');	# sets $opt_h if -h etc
 
+exit -1 if $opt_X;		# called in forked process if first exec fails
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
+my $u = '';
 if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
+    $u = ' -u';			# show -u option in title when editing
 }
 
 ########################################################################
@@ -192,26 +183,37 @@ if ($opt_u) {
 #
 ########################################################################
 
+our $shucks = 0;
+$SIG{PIPE} = \&catch_zap;	# catch signal in syswrite() in Msg.pm line 103
+
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $font = defined $opt_f ? $opt_f :
 			    $ENV{COMSPEC} ?	# defined on Windows 98 and Windows XP
 				'{Lucida Console} 10 normal' :
 				'9x15';		# Linux
-my $unitID = 'D0';	# live Display unit 0
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
+my $maxSymbolLength = 4;
 my @activeSymbols;	# $activeSymbols[$index][0 .. 3] = ($ts,$val,$cs,[$sec,$usec])
 my $stIndex = 0;
 my $conn;
 
-my $info = '';
-my $iCname = '';	# name of connected iC control program
-my $fileName = '';	# name of currently loaded file
+my $info = '';		# info messages in status bar
+my $infoDisplaying = 0;
+my @infoMessages = ();
+
+my $fileName = '';	# name of currently loaded file (should be iC or derivative)
+my $procName = '';	# name of runnable iC control program
+my $instName = '';	# name of runnable iC control program with instance extension
+my $regName = '';
+my $runName = '';	# name of running iC control program
+my $C_channel = 0;	# receiver channel from control program
+my $D_channel = 0;	# sender channel to control program
 my $searchText = '';
 my $oldContents = '';
 my $newName = 'unknown.ic';
 my $cwd = cwd;
-print "cwd = $cwd\n" if $opt_T;;
+print "cwd = $cwd\n" if $opt_T;
 
 my $fileTypes = [
     ['iC Source Files',  ['.ic',  '.ih',   ], ['TEXT', ], ],
@@ -223,10 +225,9 @@ my $fileTypes = [
 
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
 my $scanPattern = '[~\s]*[\w]+(\.\w+)?\s*((~ )?---|=$)?';
-my $bMsg = '';
-my $sMsg = '';
-my @wIdx = ('', '');  # Indices surrounding the current word.
-my @lIdx = ('', '');  # Same for last word.
+my $bMsg = '';		# balloon message
+my @wIdx = ('', '');	# Indices surrounding the current word.
+my @lIdx = ('', '');	# Same for last word.
 
 # has to be global, 'our' not portable yet
 my ($prevText, $prevMatch, @lines, $si, $sj, $siWrap, $sjWrap, $top, $home);
@@ -241,39 +242,77 @@ my ($prevText, $prevMatch, @lines, $si, $sj, $siWrap, $sjWrap, $top, $home);
 ########################################################################
 
 my $mainWindow = MainWindow->new();
-$mainWindow->title("iClive");
-if (($home = $ENV{HOME}) ne '' and open(INI, ">$home/.iClive.bit")) {
-    print INI << "EOF";		# generate the minimise icon file
+if ($opt_g) {
+    if ($opt_g =~ /^=?(\d+x\d+)?([+-]\d+[+-]\d+)?$/) {
+	$opt_g = '540x418+0+320' if $opt_g eq '=';	# special in lower left corner
+	$mainWindow->geometry($opt_g);
+    } else {
+	warn "bad geometry string '$opt_g' - ignored\n";
+    }
+}
+$mainWindow->title("$named$u");
+
+if (($home = $ENV{HOME}) ne '') {
+    if (($opt_T or not -f "$home/.$named.bit") and open(INI, ">$home/.$named.bit")) {
+	print "$named: generate a new minimise icon file\n";
+	print INI << "EOF";
+/* minimise icon 'iC' for iClive */
 \#define ic_width 48
 \#define ic_height 48
 static unsigned char ic_bits[] = {
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1c,
-   0x00, 0x00, 0x00, 0x00, 0x7f, 0x1c, 0x00, 0x00, 0x00, 0xe0, 0xff, 0x1f,
-   0x00, 0x00, 0x00, 0xf8, 0xff, 0x1f, 0x00, 0x00, 0x00, 0xfe, 0xff, 0x1f,
-   0x00, 0x00, 0x00, 0xff, 0xff, 0x1f, 0x00, 0x00, 0x80, 0x7f, 0x00, 0x1f,
-   0xe0, 0x00, 0xc0, 0x1f, 0x00, 0x1c, 0xf0, 0x01, 0xe0, 0x07, 0x00, 0x18,
-   0xf8, 0x03, 0xf0, 0x03, 0x00, 0x00, 0xf8, 0x03, 0xf0, 0x01, 0x00, 0x00,
-   0xf8, 0x03, 0xf8, 0x00, 0x00, 0x00, 0xf0, 0x01, 0xf8, 0x00, 0x00, 0x00,
-   0xe0, 0x00, 0x7c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x7c, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x3c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x3e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3e, 0x00, 0x00, 0x00,
-   0xf8, 0x03, 0x3e, 0x00, 0x00, 0x00, 0xf8, 0x03, 0x3e, 0x00, 0x00, 0x00,
-   0xf8, 0x03, 0x3e, 0x00, 0x00, 0x00, 0xf8, 0x03, 0x3e, 0x00, 0x00, 0x00,
-   0xf8, 0x03, 0x3c, 0x00, 0x00, 0x00, 0xf8, 0x03, 0x7c, 0x00, 0x00, 0x00,
-   0xf8, 0x03, 0x7c, 0x00, 0x00, 0x00, 0xf8, 0x03, 0xf8, 0x00, 0x00, 0x00,
-   0xf8, 0x03, 0xf8, 0x00, 0x00, 0x00, 0xf8, 0x03, 0xf0, 0x01, 0x00, 0x00,
-   0xf8, 0x03, 0xf0, 0x03, 0x00, 0x00, 0xf8, 0x03, 0xe0, 0x07, 0x00, 0x18,
-   0xf8, 0x03, 0xc0, 0x1f, 0x00, 0x1c, 0xf8, 0x03, 0x80, 0x7f, 0x00, 0x1f,
-   0xf8, 0x03, 0x00, 0xff, 0xff, 0x1f, 0xf8, 0x03, 0x00, 0xfe, 0xff, 0x1f,
-   0xf8, 0x03, 0x00, 0xf8, 0xff, 0x0f, 0xf8, 0x03, 0x00, 0xe0, 0xff, 0x03,
-   0x00, 0x00, 0x00, 0x00, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x1c,
+    0xe0, 0x00, 0x00, 0x00, 0x7f, 0x1c,
+    0xf0, 0x01, 0x00, 0xe0, 0xff, 0x1f,
+    0xf8, 0x03, 0x00, 0xf8, 0xff, 0x1f,
+    0xf8, 0x03, 0x00, 0xfe, 0xff, 0x1f,
+    0xf8, 0x03, 0x00, 0xff, 0xff, 0x1f,
+    0xf0, 0x01, 0x80, 0x7f, 0x00, 0x1f,
+    0xe0, 0x00, 0xc0, 0x1f, 0x00, 0x1c,
+    0x00, 0x00, 0xe0, 0x07, 0x00, 0x18,
+    0x00, 0x00, 0xf0, 0x03, 0x00, 0x00,
+    0x00, 0x00, 0xf0, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
+    0xf8, 0x01, 0x7c, 0x00, 0x00, 0x00,
+    0xf8, 0x01, 0x7c, 0x00, 0x00, 0x00,
+    0xf8, 0x01, 0x3c, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x3c, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x7c, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0x7c, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0xf8, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0xf8, 0x00, 0x00, 0x00,
+    0xf0, 0x01, 0xf0, 0x01, 0x00, 0x00,
+    0xf0, 0x01, 0xf0, 0x03, 0x00, 0x00,
+    0xf0, 0x01, 0xe0, 0x07, 0x00, 0x18,
+    0xf0, 0x01, 0xc0, 0x1f, 0x00, 0x1c,
+    0xf0, 0x01, 0x80, 0x7f, 0x00, 0x1f,
+    0xf0, 0x01, 0x00, 0xff, 0xff, 0x1f,
+    0xf8, 0x03, 0x00, 0xfe, 0xff, 0x1f,
+    0xf8, 0x03, 0x00, 0xf8, 0xff, 0x0f,
+    0xf8, 0x03, 0x00, 0xe0, 0xff, 0x03,
+    0x00, 0x00, 0x00, 0x00, 0x7f, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
 EOF
-    close(INI);
-    $mainWindow->iconbitmap("\@$home/.iClive.bit");
+	close(INI);
+    }
+    $mainWindow->iconbitmap("\@$home/.$named.bit");
 }
 
 ########################################################################
@@ -315,6 +354,14 @@ $build_mb->command(-label => 'Build executable',  -command => [ \&build_file, 0,
 $build_mb->command(-label => 'Save &Build unconditionally',
 						  -command => [ \&build_file, 0, 1 ]);
 $build_mb->command(-label => 'Build C file only', -command => [ \&build_file, 0, 2 ]);
+if ($opt_T) {
+    $build_mb->command(-label => 'T to iCserver',         -command =>
+						sub { conn_send_now('T') if $conn; });
+    $build_mb->command(-label => 'Symbol Table by name',  -command =>
+							[ \&output_symbol_table, 0, 0 ]);
+    $build_mb->command(-label => 'Symbol Table by index', -command =>
+							[ \&output_symbol_table, 0, 1 ]);
+}
 my $makeName = '';
 my $restartFlag = 0;
 
@@ -323,18 +370,60 @@ my $restartFlag = 0;
 ########################################################################
 my $runButton  = $menuBar->Button(-text        => 'Run ',
 				  -relief      => 'raised',
+				  -width       => 4,
 				  -borderwidth => 2,
 				  -command     => \&run_file,
 			         )->pack(-side => 'left',
 				         -padx => 2,
 				        );
-my $runFlag = 0;
+
+########################################################################
+#	Instance button
+########################################################################
+my ($instanceText, $instance, $oldInstance);
+my @instanceOptions = (
+    [""  , ''],
+    ["-0", 0 ],
+    ["-1", 1 ],
+    ["-2", 2 ],
+    ["-3", 3 ],
+    ["-4", 4 ],
+    ["-5", 5 ],
+    ["-6", 6 ],
+    ["-7", 7 ],
+    ["-8", 8 ],
+    ["-9", 9 ]
+);
+
+$instanceText = $instance = '';
+if (defined $opt_i and $opt_i ne '') {
+    if ($opt_i =~ /^\d{1,3}$/) {	# INSTSIZE 3 defined in icc.h
+	$instance = $opt_i;
+	$instanceText = "-$instance";
+	if (length $instance > 1) {
+	    push @instanceOptions, [$instanceText, $instance];
+	}
+    } else {
+	warn "$named: badly formed option -i $opt_i - ignored\n";
+    }
+}
+$oldInstance = $instanceText;
+print "instanceText=$instanceText, instance=$instance\n" if $opt_T;
+
+my $instButton  = $menuBar->Optionmenu(-command      => \&change_instance,
+				       -textvariable => \$instanceText,
+				       -variable     => \$instance,
+				       -options      => \@instanceOptions
+				      )->pack(-side => 'left',
+					      -padx => 2,
+					     );
 
 ########################################################################
 #	Live or Edit button
 ########################################################################
 my $scanButton = $menuBar->Button(-text        => 'Live',
 				  -relief      => 'raised',
+				  -width       => 4,
 				  -borderwidth => 2,
 				  -command     => \&scan,
 			         )->pack(-side => 'left',
@@ -370,35 +459,35 @@ $menuSearch->radiobutton(-label    => 'Go to line',
 			 -accelerator => 'ALT-RET',
 			 -value    => 'g',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text ]);
+			 -command  => [ \&search_text, 0, undef, 2 ]);
 ########################################################################
 #	Exact match
 ########################################################################
 $menuSearch->radiobutton(-label    => 'Exact match',
 			 -value    => '-exact',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text ]);
+			 -command  => [ \&search_text, 0, undef, 0 ]);
 ########################################################################
 #	Ignore case
 ########################################################################
 $menuSearch->radiobutton(-label    => 'Ignore case',
 			 -value    => '-nocase',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text ]);
+			 -command  => [ \&search_text, 0, undef, 0 ]);
 ########################################################################
 #	Regexp match
 ########################################################################
 $menuSearch->radiobutton(-label    => 'Regexp match',
 			 -value    => '-regexp',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text ]);
+			 -command  => [ \&search_text, 0, undef, 0 ]);
 ########################################################################
 #	Regexp match - Ignore case
 ########################################################################
 $menuSearch->radiobutton(-label    => 'Regexp Ignore case',
-			 -value    => 'rn',
+			 -value    => 'ri',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text ]);
+			 -command  => [ \&search_text, 0, undef, 0 ]);
 $menuSearch->separator();
 my $menuSearchStart = 10;			    # first dynamic entry line 10
 my @currentSearches = ();
@@ -417,6 +506,20 @@ $entrySearch->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # 
 $entrySearch->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
 
 ########################################################################
+#	Help button
+########################################################################
+my $helpButton = $menuBar->Button(-text        => 'Help',
+				  -relief      => 'raised',
+				  -borderwidth => 2,
+				  -command     =>
+					sub {
+					    fork_and_exec('perlman', $named);
+					},
+			         )->pack(-side => 'right',
+				         -padx => 2,
+				        );
+
+########################################################################
 #	Ini data for file and search menu lists
 ########################################################################
 my %iniData = (
@@ -430,8 +533,8 @@ my %iniData = (
     'last open file' => [
 	0,			# no menu
 	0,
-	\@lastFile,		# save last open file
-	1,
+	\@lastFile,		# save last open file and instance
+	0,			# (not used)
 	0,
     ],
     searches	=> [
@@ -445,16 +548,16 @@ my %iniData = (
 
 my %matchExtensions = (
     -exact	=> '',
-    -nocase	=> '	n',
+    -nocase	=> '	i',
     -regexp	=> '	r',
-    rn		=> '	rn',
+    ri		=> '	ri',
     g		=> '	g',
 );
 my %matchRestores = (
     e		=> '-exact',
-    n		=> '-nocase',
+    i		=> '-nocase',
     r		=> '-regexp',
-    rn		=> 'rn',
+    ri		=> 'ri',
     g		=> 'g',
 );
 
@@ -511,7 +614,7 @@ ini_program();
 #	Connect to iCserver
 ########################################################################
 
-connect_to_server();
+register_at_server();
 
 ########################################################################
 #	Sit in an infinite loop dispatching incoming events.
@@ -521,13 +624,33 @@ MainLoop;
 
 ########################################################################
 #	Display information on the info bar
+#	(make sure all displays to info bar go via this routine)
+#	Parameter 1:	delay in milliseconds
+#	Parameter 2:	colour (change if $message ne '')
+#	Parameter 3:	message text
+#
+#	messages  are queued and displayed at <delay> ms intervals
 ########################################################################
 
 sub info_display {
-    my ($colour, $text) = @_;
-    $infoBar->configure(-foreground => $colour);
-    $info = $text;
+    push @infoMessages, @_;	# must always be 3 parameters
+    display_callback() unless $infoDisplaying;	# wait if displaying
 } # info_display
+
+sub display_callback {
+    my ($delay, $colour, $message);
+    while (@infoMessages) {
+	($delay, $colour, $message) = splice @infoMessages, 0, 3;	# shift 3
+	$infoBar->configure(-foreground => $colour) if $message ne '';
+	$info = $message;	# display now
+	if ($delay) {
+	    $infoDisplaying = 1;
+	    $text->after($delay, \&display_callback);	# call self in delay ms
+	    return;
+	}
+    }
+    $infoDisplaying = 0;	# current display will stay - ready for imm change
+} # display_callback
 
 ########################################################################
 #	Report the cursor position in the info bar
@@ -537,7 +660,7 @@ sub report_cursor {
     my @m = $text->markNames();
     foreach (@m) {
 	if (/insert/) {
-	    info_display('black', $text->index($_));
+	    info_display(0, 'black', $text->index($_));
 	    last;
 	}
     }
@@ -545,25 +668,91 @@ sub report_cursor {
 
 ########################################################################
 #
-#	Connect to iCserver
-#	Register read events
-#	Register I/O at iCserver and request Symbol Table
+#	Send message to $conn now
 #
 ########################################################################
 
-sub connect_to_server {
-    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-    if ($conn) {
-	print "Connection $unitID at client.\n";
-	$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
-	$conn->send_now($unitID);	# register I/O
-	%symbolTable = ();
-	$conn->send_now("$unitID.1");	# request Symbol Table
-    } else {
-	info_display('red',
-	    "Could not connect to $host:$port - no live listing - edit only");
+sub conn_send_now {
+    my ($msg) = @_;
+    eval {
+	$conn->send_now($msg);
+    }; warn "eval: $@" if $@;
+}  # conn_send_now
+
+########################################################################
+#
+#	Register at iCserver
+#	connection is maintained until iClive shuts down or iCserver disconnects
+#
+#	Register read events
+#	Register I/O at iCserver and request Symbol Table if $scanFlag is set
+#
+########################################################################
+
+sub register_at_server {
+    unless ($conn) {
+	$conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+	if ($conn) {
+	    print "Connection $named at server.\n";
+	    $mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+	    info_display(2000, 'blue', "Connection to '$host:$port'");
+	}
     }
-} # connect_to_server
+    if ($conn) {
+	if ($regName eq '') {
+	    my $ret = '';
+	    my $Registrations = "N-$instName,RC$instName,SD$instName";
+	    $regName = $instName;		# register but may not connect to application
+	    print "$named: Registrations: $Registrations\n" if $opt_T;
+	    conn_send_now($Registrations);
+	    info_display(2000, 'blue', "Register as '-$instName'");	# ZZZ
+	    my ($tmsg, $terr) = $conn->rcv_now();
+no warnings;
+	    print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
+	    my $i = 0;
+	    REPEAT:
+	    if ($tmsg !~ /^(\d+),(\d+)$/) {		# analyse registration reply now
+		rcvd_msg_from_server($conn, $tmsg, $terr);
+		($tmsg, $terr) = $conn->rcv_now();
+		print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
+		die "registration failed\n" if ++$i >= 3;
+		goto REPEAT;
+	    }
+use warnings;
+	    $C_channel = $1;	# receiver channel from control program
+	    $D_channel = $2;	# sender channel to control program
+	    print "$named: registered: C_channel = $C_channel, D_channel = $D_channel\n" if $opt_T;
+	    conn_send_now("$D_channel:7,$D_channel:0");
+	}
+    } else {
+	FAILED_TO_REGISTER: info_display(2000, 'red',
+	    "Could not connect to '$host:$port' - no live listing - edit only");
+    }
+} # register_at_server
+
+sub catch_zap {
+    my $signame = shift;
+    $shucks++;
+    die "shucks $shucks: Somebody sent me a SIG$signame: $!";
+} # catch_zap
+
+########################################################################
+#
+#	Unregister current session from iCserver
+#
+########################################################################
+
+sub unregister_from_server {
+    if ($regName ne '') {
+	print "$named: unregister '$regName' '$D_channel:0'.\n" if $opt_T;
+	conn_send_now("$D_channel:0");
+	my $UnRegistrations = "n-$regName,rC$regName,sD$regName";
+	$regName = '';
+	print "$named: UnRegistrations: $UnRegistrations\n" if $opt_T;
+	conn_send_now($UnRegistrations);
+    }
+    clear_all();
+} # unregister_from_server
 
 ########################################################################
 #
@@ -574,144 +763,207 @@ sub connect_to_server {
 
 sub rcvd_msg_from_server {
     my ($rConn, $msg, $err) = @_;
+    die "named: rcvd on a strange connection '$rConn', should be '$conn'\n$msg\n" if $rConn ne $conn;
     if (defined $msg) {
-	if (length $msg == 0) {
-	    $rConn->disconnect();
-	    $mainWindow->title("iClive $fileName");
-	    info_display('red', $iCname ?
-		"$unitID disconnected from '$iCname' by server" :
-		"$unitID is not connected to a running control program");
-	    deleteAllTags();	# also clears @activeSymbols
-	    %symbolTable = ();	# clear symbol table so balloons dont show
-	    undef $iCname;
-	    undef $conn;
-	    clearScan(1);	# detach balloon
-	    $runFlag = 0;
+	my $len = length $msg;
+print "($len)$msg< iCserver\n" if $opt_T;
+	if ($len == 0) {
+	    print "$named: rcvd zero length message - disconnect\n" if $opt_T;
+	    info_display(2000, 'red', "$named: disconnected by iCserver");
+	    unregister_from_server();
+	    $scanFlag = 0;
+	    $scanButton->configure(-text => 'Live');
+	    $regName = $runName = '';
+	    $runButton->configure(-text => 'Run ');
+	    $mainWindow->title("$named$u $fileName");
 	    $makeName = '';
-	    if ($restartFlag) {
-		$restartFlag = 0;
-		run_file();	# restart after scan detects out of date build
-	    } else {
-		####################################################
-		## change text on run button to "Run"
-		####################################################
-		$runButton->configure(-text => "Run ");
-	    }
+	    $conn->disconnect;		# should only happen when iCserver shuts down
+	    $conn = 0;
+	    info_display(2000, 'red', "iCserver has disconnected $named from '$host:$port'");
 	} else {
+	    my ($msg1);
 	    printMicroSeconds() if $opt_m;
 	    print "rcvd '$msg'\n" if $opt_t;
-	    my @symbols = split /;/, $msg;	# break up message
-	    my $entry = shift @symbols;		# first entry is an operation
-	    if ($entry =~ /$unitID\.(\d+)/) {
-		if (($entry = $1) eq '1') {
-		    ####################################################
-		    ## Symbol Table block
-		    ## Symbol table entries consist of two or three words.
-		    ## Usually symbol-id and ftype are received. In this
-		    ## case the ST-offset is the index. (computed by counting)
-		    ## For ALIASes the index of the Gate to which the
-		    ## ALIAS resolves is transmitted as a 3rd value.
-		    ## For bit I/O names IX0.0 etc, add a second entry IX0_0
-		    ## For number constants 0 1 etc, add a second entry _0 _1
-		    ####################################################
-		    while ($entry = shift @symbols) {
-			my ($symbol, $ftype, $index) = split " ", $entry;
-			$index = $stIndex unless defined $index;
-			print "$index\t$symbol\t$ftype\n" if $opt_T;
-			@{ $symbolTable{$symbol} } = ($ftype, $index);
-			if ($symbol =~ s/^([IQT]X\d+)\.(\d+)(_\d+)?$/$1_$2$3/) {
+	    foreach $msg1 (split /,/, $msg) {	# break up comma seperated multiple messages
+		my @symbols = split /;/, $msg1;	# break up message
+		my $entry = shift @symbols;		# first entry is an operation
+		if ($entry =~ /$C_channel\:(\d+)/) {
+		    if (($entry = $1) eq '1') {
+			print "received '$C_channel:1'\n" if $opt_T;
+			####################################################
+			## Symbol Table block
+			## Symbol table entries consist of two or three words.
+			## Usually symbol-id and ftype are received. In this
+			## case the ST-offset is the index. (computed by counting)
+			## For ALIASes the index of the Gate to which the
+			## ALIAS resolves is transmitted as a 3rd value.
+			## For bit I/O names IX0.0 etc, add a second entry IX0_0
+			## For number constants 0 1 etc, add a second entry _0 _1
+			####################################################
+			while ($entry = shift @symbols) {
+			    my ($symbol, $ftype, $index) = split " ", $entry;
+			    my ($l);
+			    $index = $stIndex unless defined $index;
 			    print "$index\t$symbol\t$ftype\n" if $opt_T;
 			    @{ $symbolTable{$symbol} } = ($ftype, $index);
+			    if ($symbol =~ s/^([IQT]X\d+)\.(\d+(_\d+)?)$/$1_$2/) {
+				print "$index\t$symbol\t$ftype\n" if $opt_T;
+				@{ $symbolTable{$symbol} } = ($ftype, $index);
+			    }
+			    if ($symbol =~ s/^(\d+)$/_$1/) {
+				print "$index\t$symbol\t$ftype\n" if $opt_T;
+				@{ $symbolTable{$symbol} } = ($ftype, $index);
+			    }
+			    if ($opt_T and ($l = length $symbol) > $maxSymbolLength) {
+				$maxSymbolLength = $l;
+			    }
+			    $stIndex++;
 			}
-			if ($symbol =~ s/^(\d+)$/_$1/) {
-			    print "$index\t$symbol\t$ftype\n" if $opt_T;
-			    @{ $symbolTable{$symbol} } = ($ftype, $index);
-			}
-			$stIndex++;
 		    }
-		} elsif ($entry eq '2') {
-		    ####################################################
-		    ## End of Symbol Table
-		    ## The 2nd entry is the name of the running iC program.
-		    ## This name allows a check against the file name of
-		    ## the displayed text. (Assume it should match)
-		    ####################################################
-		    $iCname = shift @symbols;
-		    info_display('blue', "$unitID connected to '$iCname' by server");
-		    ####################################################
-		    ## change text on run button to "Stop"
-		    ####################################################
-		    $runButton->configure(-text => "Stop");
-		    $runFlag = 1;		# run successful
-		    $stIndex = 0;		# ready for next reception
-		    scan();
-		} elsif ($entry eq '3') {
-		    ####################################################
-		    ## New data values
-		    ## Data value entries consist of ST-index and value
-		    ####################################################
-		    my $normalFlag = 0;		# state currently diasabled
-		    while ($entry = shift @symbols) {
-			my ($index, $value) = split " ", $entry;
-			my ($tRest, $cs, $tNew, $tOld);
-			($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
-			$activeSymbols[$index][3] = $tNew = [gettimeofday];
-			$tRest = 50 - int(tv_interval($tOld, $tNew) * 1000);	# ms.
+		    elsif ($entry eq '2') {
+			print "received '$C_channel:2'\n" if $opt_T;
+			####################################################
+			## Application is running
+			## The 2nd entry is the name of the running iC program.
+			## This name allows a check against the file name of
+			## the displayed text. (Assume it should match)
+			## change text on run button to 'Stop'
+			####################################################
+			$runName = shift @symbols;
+			$mainWindow->title("$named$u $fileName $runName");
+			info_display(2000, 'blue', "'$runName' is running");
+			$runButton->configure(-text => 'Stop');
+			if ($scanFlag) {
+			    %symbolTable = ();
+			    print "Request Symbol Table '$D_channel:1'.\n" if $opt_T;
+			    conn_send_now("$D_channel:1");	# request Symbol Table
+			}
+		    }
+		    elsif ($entry eq '3') {
+			print "received '$C_channel:3'\n" if $opt_T;
+no warnings;
+			####################################################
+			## New data values
+			## Data value entries consist of ST-index and value
+			####################################################
+			my $normalFlag = 0;		# state currently diasabled
+			while ($entry = shift @symbols) {
+			    my ($index, $value) = split " ", $entry;
+			    my ($tRest, $cs, $tNew, $tOld);
+			    ($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
+			    $activeSymbols[$index][3] = $tNew = [gettimeofday];
+			    $tRest = 50 - int(tv_interval($tOld, $tNew) * 1000);	# ms.
 # print "index: $index value: $value rest: $tRest\n";
-			$cs ^= 1 if $value;			# change colour
-			$activeSymbols[$index][1] = $value;	# for value display
-			if ($activeSymbols[$index][0] & 01) {
-			    if ($tRest < 10) {
-				colourTag("$index", $cs);	# normal colour
-			    } else {
-				colourTag("$index", $cs | 010);	# flash glitch
-				## delay the colour change to make it visible
-				$text->after(50, [ \&restoreTag, "$index" ]);
+			    $cs ^= 1 if $value;			# change colour
+			    $activeSymbols[$index][1] = $value;	# for value display
+			    if ($activeSymbols[$index][0] & 01) {
+				if ($tRest < 10) {
+				    colourTag("$index", $cs);	# normal colour
+				} else {
+				    colourTag("$index", $cs | 010);	# flash glitch
+				    ## delay the colour change to make it visible
+				    $text->after(50, [ \&restoreTag, "$index" ]);
+				}
+				if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
+				    ## turn colour off after 50 ms.
+				    $text->after(50, [ \&colourTag, "$index", $cs & ~01 ]);
+				}
 			    }
-			    if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
-				## turn colour off after 50 ms.
-				$text->after(50, [ \&colourTag, "$index", $cs & ~01 ]);
+			    if ($activeSymbols[$index][0] & 02) {
+				$cs ^= 1;				# complement colour
+				if ($tRest < 10) {
+				    colourTag("$index~", $cs);	# latest $cs is saved
+				} else {
+				    colourTag("$index~", $cs | 010);# flash glitch
+				    ## delay the colour change to make it visible
+				    $text->after(50, [ \&restoreTag, "$index~" ]);
+				}
 			    }
-			}
-			if ($activeSymbols[$index][0] & 02) {
-			    $cs ^= 1;				# complement colour
-			    if ($tRest < 10) {
-				colourTag("$index~", $cs);	# latest $cs is saved
-			    } else {
-				colourTag("$index~", $cs | 010);# flash glitch
-				## delay the colour change to make it visible
-				$text->after(50, [ \&restoreTag, "$index~" ]);
-			    }
-			}
-			if ($activeSymbols[$index][0] & 04) {
-			    my $tag = "$index=";
-			    my @ranges = $text->tagRanges($tag);
+			    if ($activeSymbols[$index][0] & 04) {
+				my $tag = "$index=";
+				my @ranges = $text->tagRanges($tag);
 # print "value at index $index: $activeSymbols[$index][1] '@ranges'\n";
-			    unless ($normalFlag) {
-				$text->configure(-state => 'normal');
-				$normalFlag = 1;	# state normal until loop end
+				unless ($normalFlag) {
+				    $text->configure(-state => 'normal');
+				    $normalFlag = 1;	# state normal until loop end
+				}
+				for (my $i = 0; $i < @ranges; $i += 2) {
+				    my ($beg, $end) = @ranges[$i, $i+1];
+				    $text->delete($beg, $end);
+				    $text->insert($beg, " $value", $tag);
+				}
 			    }
-			    for (my $i = 0; $i < @ranges; $i += 2) {
-				my ($beg, $end) = @ranges[$i, $i+1];
-				$text->delete($beg, $end);
-				$text->insert($beg, " $value", $tag);
-			    }
+			    printMicroSeconds() if $opt_m;
+			    print "$index	$value\n" if $opt_t;
 			}
+			if ($normalFlag) {
+			    $text->configure(-state => 'disabled');
+			}
+use warnings;
+		    }
+		    elsif ($entry eq '4') {
+			####################################################
+			## End of Symbol Table
+			####################################################
+			info_display(2000, 'blue', "'$runName' Symbol Table received");
+			$stIndex = 0;		# ready for next reception
+			print "received '$C_channel:4'\n" if $opt_T;
 			printMicroSeconds() if $opt_m;
-			print "$index	$value\n" if $opt_t;
+			do_scan();
 		    }
-		    if ($normalFlag) {
-			$text->configure(-state => 'disabled');
+		    elsif ($entry eq '5') {
+			####################################################
+			## Application has stopped - received :5
+			####################################################
+			print "received '$C_channel:5'\n" if $opt_T;
+			info_display(2000, 'blue', $regName ne '' ?
+			    "'$regName' was stopped" :
+			    "application was stopped - not registered !?");
+			clear_all();
+			$runName = '';
+			$mainWindow->title("$named$u $fileName");
+			$makeName = '';
+			if ($restartFlag) {
+			    $restartFlag = 0;
+			    run_file();	# restart after scan detects out of date build
+			} else {
+			    ####################################################
+			    ## change text on run button to 'Run '
+			    ####################################################
+			    $runButton->configure(-text => 'Run ');
+			}
+			if ($scanFlag) {
+			    $scanButton->configure(-text => 'wait');
+			}
 		    }
-		} else {
-		    goto Spurious;
+		    elsif ($entry ne '0') {	# ignore :0 messages
+			print "received '$C_channel:$entry'\n" if $opt_T;
+			goto Spurious;
+		    }
 		}
-	    } else {
-		Spurious: warn "$unitID: spurious operation '$entry' ???\n";
+		elsif ($entry =~ /0:(\d+)/) {	# channel 0:1; warning from iCserver
+		    if (($entry = $1) eq '1') {
+			####################################################
+			## Warning from iCserver. $msg is 0:1;<warning message>
+			####################################################
+			$msg =~ /^0:1;(.*)/;
+			print "$named: Warning: $1\n" if $opt_T;
+			info_display(2000, 'red', $1);
+			last;	# used whole of $msg - ignore splits on ',' and ';'
+		    }
+		    elsif ($entry ne '0') {	# ignore :0 messages
+			goto Spurious;
+		    }
+		}
+		else {
+		    Spurious: warn "$named: spurious operation '$entry' ???\n";
+		}
+		printMicroSeconds() if $opt_m;
 	    }
-	    printMicroSeconds() if $opt_m;
 	    print "rcvd end\n" if $opt_t;
 	}
+    } else {
+	print "undefined message< iCserver\n" if $opt_T;
     }
 } # rcvd_msg_from_server
 
@@ -785,6 +1037,7 @@ sub search_text {
     $text->after(0, [ \&search_now, @_ ]); # allow pop up to go away
 } # search_text
 
+no warnings;
 sub search_now {
     my ($dummy, $newSearchText, $direction) = @_;
     my ($option, $auxiliary, $current, $length, $i, $tmpText);
@@ -799,7 +1052,7 @@ sub search_now {
 	} elsif ($searchText =~ s/^(\d+).*$/$1/) {
 	    $current = "$1.0";
 	} else {
-	    info_display('red', "cannot go to line '$searchText'");
+	    info_display(0, 'red', "cannot go to line '$searchText'");
 	    return;
 	}
     print "goto: '$searchText' '$current' '$matchType' $direction\n" if $opt_T;
@@ -822,7 +1075,7 @@ sub search_now {
 	$text->tagConfigure('searchTag',
 			    -background => 'gray', 
 			   );
-	if ($matchType eq 'rn') {
+	if ($matchType eq 'ri') {
 	    $matchType = '-regexp';
 	    $auxiliary = '-nocase';
 	} else {
@@ -844,7 +1097,7 @@ sub search_now {
 	    if ($@) {
 		chop $@;
 		$@ =~ s# at /usr.*##;
-		info_display('red', "ERROR: $@");	# error in search
+		info_display(0, 'red', "ERROR: $@");	# error in search
 		last;
 	    }
 	    last unless $current and $length;
@@ -857,7 +1110,7 @@ sub search_now {
 	    push @lines, $current;
 	    $current = $text->index("$current + $length char");
 	}
-	$matchType = 'rn' if $auxiliary eq '-nocase';	# otherwise radio button skips
+	$matchType = 'ri' if $auxiliary eq '-nocase';	# otherwise radio button skips
 	$tmpText = "$searchText$matchExtensions{$matchType}";
 	if (@lines != 0) {
 	    check_menu($tmpText, 'searches');
@@ -868,7 +1121,7 @@ sub search_now {
     if (($i = @lines) != 0) {
 	my $sd = $direction ? -1 : 1;	# scroll direction
 	if ($si == -1) {
-	    info_display('dark green', "/$searchText/ found $i times");
+	    info_display(0, 'dark green', "/$searchText/ found $i times");
 	    $top = "1.0";
 	    $text->see($top);		# position to top left corner
 	    print "see:  $si $sd '$top' $#lines\n" if $opt_T;
@@ -876,11 +1129,11 @@ sub search_now {
 	    $sj = $#lines;		# index for upwards display
 	    $siWrap = $sjWrap = 0;
 	} elsif ($sd == $siWrap) {
-	    info_display('dark red', "search hit BOTTOM, continuing at TOP");
+	    info_display(0, 'dark red', "search hit BOTTOM, continuing at TOP");
 	} elsif ($sd == $sjWrap) {
-	    info_display('dark red', "search hit TOP, continuing at BOTTOM");
+	    info_display(0, 'dark red', "search hit TOP, continuing at BOTTOM");
 	} else {
-	    $info = '';			# clears display_info
+	    info_display(0, 'black', '');	# clears display_info
 	}
 	if ($sd == 1) {			# search downward
 	    $top = "$lines[$si] - 1 line";
@@ -893,7 +1146,7 @@ sub search_now {
     print "cur:  $i $sd '$current'\n" if $opt_T;
 		    unless ($text->bbox($top)) {
 			$top = $lines[$si];
-			$text->see($top);	# position to top new search box again
+			$text->see($top);		# position to top new search box again
     print "to1:  $i $sd '$top'\n" if $opt_T;
 			if (--$i > $si) {
 			    $current = $lines[$i];
@@ -988,14 +1241,27 @@ sub search_now {
     print "for loop complete $sj\n" if $opt_T;
 	}
     } elsif ($si == -1 and not $@) {	# do not overwrite search eval error message
-	if ($searchText) {
-	    info_display('red', "/$searchText/ not found");
+	if ($searchText ne '') {
+	    info_display(0, 'red', "/$searchText/ not found");
 	} else {
-	    info_display('dark red', "search cleared");
+	    info_display(0, 'dark red', "search cleared");
 	}
 	$si = 0;			# do not display this unless new search
     }
 } # search_now
+use warnings;
+
+########################################################################
+#
+#	clear_all()
+#
+########################################################################
+
+sub clear_all {
+    deleteAllTags();	# also clears @activeSymbols
+    %symbolTable = ();	# clear symbol table so balloons dont show
+    clear_scan(1);	# detach balloon
+} # clear_all
 
 ########################################################################
 #
@@ -1035,7 +1301,78 @@ sub deleteAllTags {
 
 ########################################################################
 #
-#	Scan text for symbols in %symbolTable, adding a tag for each
+#	Live/Edit - switch between clear_scan and do_scan
+#
+########################################################################
+
+sub scan {
+    deleteAllTags();	# also clears @activeSymbols
+    if ($scanFlag) {
+	reset_scan();
+    } elsif ($conn) {
+	$scanFlag = 1;
+	$scanButton->configure(-text => 'wait');
+	if ($runName ne '') {
+	    print "Request Symbol Table '$D_channel:1'.\n" if $opt_T;
+	    conn_send_now("$D_channel:1");	# request Symbol Table
+	}
+    } else {
+	print "not connected ???\n" if $opt_T;
+	register_now();
+    }
+} # scan
+
+########################################################################
+#
+#	reset_scan
+#	reset $scanFlag and then clear_scan()
+#		parameter 1:	1  skips clear active symbols in application
+#
+########################################################################
+
+sub reset_scan {
+    if ($scanFlag) {
+	$scanFlag = 0;
+	$scanButton->configure(-text => 'Live');
+	if ($runName ne '') {
+	    clear_scan(@_);
+	}
+    }
+} # reset_scan
+
+########################################################################
+#
+#	clear_scan
+#	detach balloon processing
+#	prepare for scan
+#	clear active symbols for faster processing of connected controller
+#		parameter 1:	1  skips clear active symbols in application
+#
+########################################################################
+
+sub clear_scan {
+    if ($balloonAttached) {
+	$balloon->detach($text);
+	$balloonAttached = 0;
+    }
+    unless (@_) {		# skip if parameter 1 set
+	info_display(0, 'black', '');	# clears display_info
+	if ($conn) {
+	    ####################################################################
+	    ## clear active symbols in connected iC controller process
+	    ## reset last D_channel value in iCserver
+	    ####################################################################
+	    if ($runName ne '') {
+		print "clear_scan() sends '$D_channel:5,$D_channel:0'\n" if $opt_T;
+		conn_send_now("$D_channel:5,$D_channel:0");
+	    }
+	}
+    }
+} # clear_scan
+
+########################################################################
+#
+#	do_scan text for symbols in %symbolTable, adding a tag for each
 #	symbol found and another for the inverted symbol, if required.
 #
 #	The colouring for each symbol found is initially set to logic 0.
@@ -1049,16 +1386,15 @@ sub deleteAllTags {
 #
 ########################################################################
 
-sub scan {
-    my ($current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index);
-
-    deleteAllTags();	# also clears @activeSymbols
-
-    if ($scanFlag) {
-	$mainWindow->title("iClive $fileName");
-	clearScan();	# $scanFlag = 0
-    } elsif ($conn and $iCname) {
-	if ($makeName) {
+sub do_scan {
+    my ($current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index, $t);
+    if (defined $instName and $instName ne '') {
+	if ($instName ne $regName) {
+	    unregister_from_server();
+	    register_now();	# register at new process
+	    return;
+	}
+	if (defined $makeName and $makeName ne '') {
 	    my $dialog = $text->Dialog (-title   => 'Modified build',
 					-bitmap  => 'question',
 					-text    => 'Start up to date build?',
@@ -1073,15 +1409,17 @@ sub scan {
 	    if ($answer eq 'Cancel') {
 		return 0;			# cancel operation
 	    } elsif ($answer eq 'Yes') {
-		stop_file();			# $runFlag = 0
+		stop_file();			# $runName = ''
 		$restartFlag = 1;		# restart after receiving stopped message
 		return 0;
 	    }
 	}
-	$mainWindow->title("iClive $fileName $iCname");
-	if ($fileName !~ /\b$iCname\./) {
-	    info_display('red',
-		"WARNING: '$fileName' does not match connected control program '$iCname'");
+	if ($fileName !~ /\b$procName\./) {
+	    info_display(2000, 'red',
+		"WARNING: '$fileName' does not match connected control program '$runName'");
+	    $scanFlag = 0;
+	    $scanButton->configure(-text => 'Live');
+	    return;
 	}
 	$current = '1.0'; my $length = '0';
 	while (1) {
@@ -1107,7 +1445,8 @@ sub scan {
 		    $tag .= '~' if ($ts = $cs & 01); # adjust tag name if inverted
 		    $ts++;			# convert to a mask 0 => 01, 1 => 02
 		    print "$tag	$word	'$iw'\n" if $opt_T;
-		    unless ($activeSymbols[$index][0] & $ts) {
+		    unless (($t = $activeSymbols[$index][0]) and ($t & $ts)) {
+			## using $t | $ts causes warning of uninitialised value in (|)
 			$activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
 			colourTag($tag, $cs);	# initial tag colour
 		    }
@@ -1136,18 +1475,19 @@ sub scan {
 	## sense the symbol is displayed, except for inverted ALIASes.
 	####################################################################
 
-	my $msg = "";
+	my $msg = '';
 	foreach $index (0 .. $#activeSymbols) {
 	    if ($activeSymbols[$index][0]) {
 		print "$index\n" if $opt_T;
-		if (length $msg > 391) {		# REPLY - 9 in icg.h
-		    $conn->send_now("$unitID.3$msg");	# intermediate active symbols
-		    $msg = "";
+		if (length $msg > 391) {			# REPLY - 9 in icg.h
+		    conn_send_now("$D_channel:3$msg");	# intermediate active symbols
+		    $msg = '';
 		}
 		$msg .= ";$index";
 	    }
 	}
-	$conn->send_now("$unitID.4$msg");		# send last active symbols
+	conn_send_now("$D_channel:4$msg");		# send last active symbols
+	conn_send_now("$D_channel:0");			# reset last value in iCserver
 
 	####################################################################
 	## Attach balloon processing
@@ -1156,35 +1496,45 @@ sub scan {
 	unless ($balloonAttached) {
 	    $balloon->attach($text,
 	       -balloonmsg      => \$bMsg,
-	       -statusmsg       => \$sMsg,
 	       -balloonposition => 'mouse', # not used since postcommand returns real position
 	       -postcommand     => sub {
 		    if ($wIdx[0] eq $wIdx[1]) {
 			## No word under mouse - dont post the balloon
 			return 0;
 		    } else {
-			my ($ftype, $index, $val);
+			my ($word, $stem, $ftype, $index, $val);
 			## Have a word under mouse - change the message:
-			my $word = $text->get($wIdx[0], $wIdx[1]);
+			$word = $stem = $text->get($wIdx[0], $wIdx[1]);
 			## Skip if it contains non-word chars or is not in Symbol Table
 			return 0 if $word =~ /\W/;
-			while (not defined ($index = $symbolTable{$word}[1])) {
-			    ## Try if I/O like IX0.0 QX10.7 or TX0.0_14
-			    return 0 if $word !~ /^[IQT]X\d+$/;
+			if ($word =~ /^[IQT]X\d+$/) {
+			    ## Try bit I/O like IX0.0 QX10.7 or TX0.0_14
 			    $word = $text->get($wIdx[0], "$wIdx[1] lineend");
-			    $word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
+			    if ($word !~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/) {
+				$word = $stem;	# false attempt - restore stem
+			    }
+			    ## Try bit I/O first
+			    ## otherwise analog value of stem is displayed
+			}
+			if (not defined ($index = $symbolTable{$word}[1])) {
+			    if ($word eq $stem or	# now try stem
+				not defined ($index = $symbolTable{$stem}[1])) {
+				return 0;		# not found in S.T.
+			    }
+			    $word = $stem;		# stem was found in S.T.
 			}
 			$ftype = $symbolTable{$word}[0];
-			$val = $activeSymbols[$index][1];
+			$val = $activeSymbols[$index][1]; $val = 0 unless $val;
 			$val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
 			$bMsg = "$val";
-			$sMsg = "$word: $val";
 			$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
 			## a good place to put the balloon is below the last char in the word
 			my $i = $text->index("$wIdx[1] - 1 chars");
 			my @p = $text->bbox($i);
+no warnings;
 			my $x = $text->rootx + $p[0] + $p[2] - 4;
 			my $y = $text->rooty + $p[1] + $p[3] + 2;
+use warnings;
 			return "$x,$y";
 		    }
 		},
@@ -1216,31 +1566,22 @@ sub scan {
 	$text->configure(-state => 'disabled');
 	$scanFlag = 1;		# scan successful
     } else {
-	$info = '';		# clears display_info
-	connect_to_server();	# will call scan() if connect was successful
+	info_display(2000, 'red', "no current runnable proces");
     }
-} # scan
+} # do_scan
 
 ########################################################################
 #
-#	clearScan
-#	detach balloon processing
-#	prepare for scan
-#	clear active symbols for faster processing of connected controller
+#	register_now
 #
 ########################################################################
 
-sub clearScan {
-    if ($balloonAttached) {
-	$balloon->detach($text);
-	$balloonAttached = 0;
-    }
-    $scanButton->configure(-text => 'Live');
-    $scanFlag = 0;		# text has been cleared of all tags
-    return if @_;		# called from disconnect
-    $info = '';			# clears display_info
-    $conn->send_now("$unitID.4") if $conn;	# clear active symbols
-} # clearScan
+sub register_now {
+    $scanFlag = 1;
+    $scanButton->configure(-text => 'wait');
+    register_at_server();
+    # will call do_scan() if connect was successful via Request S.T and :2 reply
+} # register_now
 
 ########################################################################
 #
@@ -1249,8 +1590,12 @@ sub clearScan {
 #	IF contents has changed AND Button 'Yes' is pressed
 #		saves $fileName
 #		changes entry box text to $fileName if successful
-#	ELSE does nothing
-#	no regex matches allowed for build_file()
+#		returns 1 if successful else 0
+#	ELSE
+#		does nothing
+#		returns 0 if 'Cancel' else 1 ('No')
+#
+#	no regex matches allowed for run_file()
 #
 ########################################################################
 
@@ -1258,6 +1603,9 @@ sub check_save {
     my $ret = 1;
     my $contents = $text->get("1.0", "end - 1 chars");	# whole text
     if ($contents ne $oldContents) {
+	my $l1 = length $contents;
+	my $l2 = length $oldContents;
+	print "length contents = $l1, length oldContents = $l2\n";
 	my $dialog = $text->Dialog (-title   => 'Modified file',
 				    -bitmap  => 'question',
 				    -text    => 'Save modified file?',
@@ -1286,12 +1634,12 @@ sub check_save {
 
 sub new_text {
     deleteAllTags();	# also clears @activeSymbols
-    clearScan();
+    reset_scan();
     if (check_save()) {
 	$text->delete("1.0", "end");
 	$oldContents = '';
 	$fileName = $newName;
-	$mainWindow->title("iClive $fileName");
+	$mainWindow->title("$named$u $fileName $runName");
     }
 } # new_text
 
@@ -1316,15 +1664,21 @@ sub new_text {
 
 sub open_file {
     my ($unconditional, $fName) = @_;	# optional parameters
-    if ($fName eq '') {
+    unless (defined $fName and $fName ne '') {
 	$fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
+	unless (defined $fName and $fName ne '') {
+	    info_display(2000, 'red', "no file opened");
+	    return;			# global $fileName is not altered
+	}
 	$fName =~ s#^C:/cygwin## or $fName =~ s#^([A-Z]):#/cygdrive/\l$1#;
 	$fName =~ s#^$cwd/##;
     }
-    print "open_file: $unconditional $fName\n" if $opt_T;;
-    if ($fName ne '') {
-	deleteAllTags();		# also clears @activeSymbols
-	clearScan();
+    if ($fName ne $fileName) {
+	print "open_file: $unconditional $fName\n" if $opt_T;
+	if ($scanFlag) {
+	    deleteAllTags();		# required here to clear = values in text
+	    clear_scan();
+	}
 	if ($unconditional or check_save()) {
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "$fName")) {
@@ -1337,18 +1691,23 @@ sub open_file {
 		$text->insert("end", $oldContents);
 		my $length = length $oldContents;
 		$fileName = $fName;	# alter global $fileName
-		$mainWindow->title("iClive $fileName");
-		info_display('black', "File '$fileName', '$length' bytes loaded");
+		$mainWindow->title("$named$u $fileName $runName");
+		info_display(2000, 'black', "File '$fileName', '$length' bytes loaded");
+		if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
+		    $procName = $1;
+		    $instName = "$procName$instanceText";
+		    change_instance();
+		}
 		$prevText = '';		# start a new search
 		check_menu($fileName, 'files');
 		return;			# global $fileName is altered
 	    }
-	    info_display('red', "ERROR: Could not open $fName");
+	    info_display(2000, 'red', "ERROR: Could not open $fName");
 	}
-    } else {
-	info_display('red', "no file opened");
+	if ($scanFlag) {
+	    do_scan();
+	}
     }
-    return;				# global $fileName is not altered
 } # open_file
 
 ########################################################################
@@ -1362,10 +1721,10 @@ sub open_file {
 
 sub save_file {
     my $ret = 1;
-    if ($fileName and $fileName ne $newName) {
+    if (defined $fileName and $fileName ne $newName and $fileName ne '') {
 	my ($unconditional) = @_;	# optional parameter
 	deleteAllTags();	# also clears @activeSymbols
-	clearScan();	# take away all live text
+	reset_scan(1);		# take away all live text
 	my $contents = $text->get("1.0", "end - 1 chars");
 	if ($unconditional or $contents ne $oldContents) {
 	    if (open(FH, ">$fileName")) {
@@ -1373,15 +1732,15 @@ sub save_file {
 		my $length = length $oldContents;
 		print FH $oldContents;
 		close(FH);
-		$mainWindow->title("iClive $fileName");
-		info_display('black', "File '$fileName', '$length' bytes saved");
+		$mainWindow->title("$named$u $fileName $runName");
+		info_display(2000, 'black', "File '$fileName', '$length' bytes saved");
 		check_menu($fileName, 'files');
 	    } else {
-		info_display('red', "ERROR: Could not open '$fileName' for writing");
+		info_display(2000, 'red', "ERROR: Could not open '$fileName' for writing");
 		$ret = 0;
 	    }
 	} else {
-		info_display('blue', "FILE '$fileName' has not changed - not written");
+	    info_display(2000, 'blue', "FILE '$fileName' has not changed - not written");
 	}
     } else {
 	$ret = saveAs_file();
@@ -1401,21 +1760,29 @@ sub save_file {
 
 sub saveAs_file {
     my $ret = 1;
-    my $oldname = $fileName;
+    my $oldName = $fileName;
     $fileName = $mainWindow->getSaveFile(-filetypes => $fileTypes,
 					 -initialfile => $fileName);
     $fileName =~ s#^C:/cygwin## or $fileName =~ s#^([A-Z]):#/cygdrive/\l$1#;
     $fileName =~ s#^$cwd/##;
-    print "saveAs_file: $fileName\n" if $opt_T;;
-    if ($fileName ne '') {
-	if (save_file($fileName ne $oldname) == 0) {
-	    $fileName = $oldname;	# restore fileName
-	    $mainWindow->title("iClive $fileName");
+    print "saveAs_file: $fileName\n" if $opt_T;
+    if (defined $fileName and $fileName ne '') {
+	if (save_file($fileName ne $oldName) == 0) {
+	    ## could not save $fileName
+	    $fileName = $oldName;	# restore fileName
+	    $mainWindow->title("$named$u $fileName $runName");
 	    $ret = 0;
+	} elsif ($fileName ne $oldName) {
+	    if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
+		$procName = $1;
+		$instName = "$procName$instanceText";
+		change_instance();
+	    }
+	    $prevText = '';		# start a new search
 	}
     } else {
-	info_display('red', "no file saved");
-	$fileName = $oldname;	# restore fileName
+	info_display(2000, 'red', "no file saved");
+	$fileName = $oldName;	# restore fileName
 	$ret = 0;
     }
     return $ret;
@@ -1426,6 +1793,7 @@ sub saveAs_file {
 #	Build a target file generated from $fileName (C file or executable)
 #	check if $fileName is an iC source (*.ic) and needs saving
 #	generate a new target file if target is older than $fileName
+#	or unconditional build was specified.
 #
 #	2nd parameter:	0   Build executable
 #			1   Save & Build unconditionally
@@ -1436,67 +1804,90 @@ sub saveAs_file {
 sub build_file {
     my $par2 = $_[1];
     my $saved = 0;
-    if ($par2 == 1) {
-	$saved = save_file(1);	# save unconditionally
+    if ($fileName !~ /(^[\w\.\\\/]+)\.ic/) {
+	info_display(2000, 'blue', "WARNING: cannot build '$fileName' (must end in .ic)");
     } else {
-	$saved = check_save();	# make sure check_save() has no regex matches
-    }
-    if ($saved) {
-	my $errorName;
-	if ($fileName =~ /(^[\w\.\\\/]+)\.(lst?|c|ini)$/) {
-	    $errorName = "$1.ic";	# listing should never be modified
-	    open_file(1, $errorName);	# load the corresponding iC source unconditionally
+	my $baseName = $1;
+	deleteAllTags();		# also clears @activeSymbols
+	reset_scan(1);			# must be done before save_file, because live expands text
+	if ($par2 == 1) {
+	    $saved = save_file(1);	# save unconditionally
 	} else {
-	    deleteAllTags();	# also clears @activeSymbols
-	    clearScan();
+	    $saved = check_save();
 	}
-	if ($fileName !~ /(^[\w\.\\\/]+)\.ic/) {
-	    info_display('blue', "WARNING: cannot build '$fileName' (must end in .ic)");
-	} else {
-	    my $baseName = $1;	# so that $1 is valid
+	if ($saved) {
 	    my $targetName = $par2 == 2 ? "$baseName.c" : $baseName;
-	    my $ftime = (stat($fileName))[9];
-	    my $mtime = (stat($targetName))[9];
+	    my $ftime = (stat($fileName))[9]; $ftime = 0 unless defined $ftime;
+	    my $mtime = (stat($targetName))[9]; $mtime = 0 unless defined $mtime;
 	    my $ret = 0;
-	    $errorName = '';
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", $fileName);
+		my @args = ("iCmake", "-q", $fileName);
 		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
-		print "system @args\n" if $opt_t;
+		print "system @args\n" if $opt_T;
 		$ret = system(@args) >> 8;
 		$SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
 		if ($ret) {
-		    $errorName = "$baseName.lst";
-		    info_display('red',
-			"ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)");
-		    print STDERR "ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)";
+		    info_display(2000, 'red',
+			"ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)");
+		    warn "ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)\n";
 		    sleep 2;
-		    open_file(0, $errorName);	# load the listing file (iC is up to date)
+		    my $listName = "$baseName.lst";
+		    open_file(0, $listName);	# load the listing file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
 		    $matchType = '-regexp';
-		    search_text();			# carry out the search setting markers
-		    $errorName = "$baseName.ic";	# to open iC file after inspecting listing
+		    search_text(0, undef, 0);	# carry out the search setting markers
 		} else {
-		    if ($runFlag) {
-			$makeName = $targetName;	# running proces is not current build
+		    if ($runName ne '') {
+			$makeName = $targetName;# running proces is not current build
 		    }
-		    info_display('dark green', "'$targetName' successfully made");
+		    info_display(2000, 'dark green', "'$targetName' successfully built");
 		}
 	    } else {
-		info_display('blue', "'$targetName' is up to date");
+		info_display(2000, 'blue', "'$targetName' is up to date");
 	    }
-	}
-    } # ELSE operation was cancelled by check_save() or file could not be saved
+	} # ELSE operation was cancelled by check_save() or file could not be saved
+    }
 } # build_file
 
 ########################################################################
 #
-#	run the executable file generated from $fileName
+#	Fork a new process - ignore CHLD signal
+#	Parameters: call + arguments
+#
+########################################################################
+
+sub fork_and_exec {
+    ## ignore CHLD signal of processes forked
+    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
+    my $pid;
+    FORK: {
+	if ($pid = fork) {
+	    ## parent process
+	    sleep 0.2;	# wait for control program to be activated as child process
+	} elsif (defined $pid) {	# $pid is zero if defined
+	    ## dispatch child process
+	    exec @_;			# does not return unless exec failure
+	    warn "forked child process exited - failure exec '@_'\n";
+	    exec ("$named", '-X');	# cleanly exit overlay child process
+	} elsif ($! =~ /No more process/) {
+	    ## EAGAIN, recoverable fork error
+	    sleep 5;
+	    redo FORK;
+	} else {
+	    ## weird fork error
+	    die "Can't fork: $!\n";
+	}
+    }
+} # fork_and_exec
+
+########################################################################
+#
+#	stop or run the executable file generated from $fileName
 #	check if $fileName is an iC source (*.ic) and needs saving
 #	generate name of executable file from $fileName
 #	run executable if it exists, is executable and newer than source
@@ -1504,51 +1895,38 @@ sub build_file {
 ########################################################################
 
 sub run_file {
-    if ($runFlag) {
-	stop_file();				# $runFlag = 0
-    } elsif ($conn and $iCname) {
-	info_display('red', "$unitID is connected to '$iCname' (Stop it to run '$fileName')");
+    if ($runName ne '') {
+	## running - stop application
+	stop_file();
     } elsif ($fileName !~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
-	info_display('blue', "WARNING: cannot run '$fileName' (must end in .ic .lst .c or .ini)");
+	info_display(2000, 'blue', "WARNING: cannot run '$fileName' (must end in .ic .lst .c or .ini)");
     } elsif ($2 ne 'ic' or check_save()) {
-	deleteAllTags();			# also clears @activeSymbols
-	clearScan();
 	my $processName = $1;
-	print "run_file: $processName from $fileName\n" if $opt_T;;
+	deleteAllTags();			# also clears @activeSymbols
+	clear_scan(1);
+	print "run_file: $processName from $fileName\n" if $opt_T;
 	my $ftime = (stat($fileName))[9];
 	my $mtime = (stat($processName))[9];
 	if (not -f _) {
-	    info_display('red', "ERROR: no file named '$processName' (Build it first)");
+	    info_display(2000, 'red', "ERROR: no file named '$processName' (Build it first)");
 	} elsif (not -x _) {
-	    info_display('red', "ERROR: '$processName' not executable ??");
+	    info_display(2000, 'red', "ERROR: '$processName' not executable ??");
 	} elsif ($mtime < $ftime) {
-	    info_display('blue', "WARNING: '$processName' is older than '$fileName' (Build again)");
+	    info_display(2000, 'blue', "WARNING: '$processName' is older than '$fileName' (Build again)");
 	} else {
-	    ## ignore CHLD signal of processes forked with the Run button
-	    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
-	    my $pid;
-	    FORK: {
-		if ($pid = fork) {
-		    ## parent process
-		    sleep 0.2;	# wait for control program to be activated as child process
-		    scan();	# make live connection with the new control program
-		} elsif (defined $pid) {	# $pid is zero if defined
-		    ## dispatch child process
-		    my @call = ($processName);
-		    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
-		    splice @call, 1, 0, '-t' if defined $opt_t;
-		    splice @call, 1, 0, '-m' if defined $opt_m;
-		    print "@call\n";
-		    exec @call;
-		} elsif ($! =~ /No more process/) {
-		    ## EAGAIN, recoverable fork error
-		    sleep 5;
-		    redo FORK;
-		} else {
-		    ## weird fork error
-		    die "Can't fork: $!\n";
-		}
-	    }
+	    ## generate the call
+	    $makeName = '';	# up to date build is running (unless deliberate No save)
+	    my @call = ($processName);
+	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
+	    splice @call, 1, 0, '-t' if defined $opt_t;
+	    splice @call, 1, 0, '-m' if defined $opt_m;
+	    splice @call, 1, 0, "-i$instance" if $instance ne '';
+	    print "@call\n";
+	    ## fork and exec the call
+	    fork_and_exec(@call);	# if application starts it will send back <ch>:2;<name>
+	    $procName = $processName;
+	    $instName = "$procName$instanceText";
+	    register_at_server();	# in case newly started
 	}
     } # ELSE operation was cancelled by check_save()
 } # run_file
@@ -1560,17 +1938,45 @@ sub run_file {
 ########################################################################
 
 sub stop_file {
-    if ($conn and $iCname) {
-	deleteAllTags();	# also clears @activeSymbols
-	clearScan();
-	$conn->send_now("$unitID.5");	# stop control program
-    } else {
-	info_display('red', "$unitID is not connected to a running control program");
-    }
+    info_display(2000, 'blue', "'$runName' stopping");
+    if ($scanFlag) {
+	conn_send_now("$D_channel:5");		# GET_END - clear S.T.
+	$scanButton->configure(-text => 'wait');	# was 'Edit'
+    }				# leave scanButton as 'Edit' if not $scanFlag
+    conn_send_now("$D_channel:6,$D_channel:0");	# STOP_PROGRAM
+    # receives "$C_channel:5" from application when it quits - sets 'Run ' then
 } # stop_file
 
 ########################################################################
 #
+#	change instance selection
+#
+########################################################################
+
+sub change_instance {
+    if ($instName ne $regName or $oldInstance ne $instanceText) {
+	print "$named: change_instance from '$oldInstance' to '$instanceText'\n" if $opt_T;
+	$instName = "$procName$instanceText";
+	print "$named: from regName '$regName' to instName '$instName'\n" if $opt_T;
+	unregister_from_server();
+	register_at_server();
+	####################################################
+	## change text on run button to 'Run '
+	####################################################
+	$runButton->configure(-text => 'Run ');
+	$runName = '';		# if :2 is received will change back to <name>
+	$mainWindow->title("$named$u $fileName");
+	$oldInstance = $instanceText;
+	if ($scanFlag) {
+	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
+	    $scanButton->configure(-text => 'wait');
+	}
+    }
+} # change_instance
+
+########################################################################
+#
+#	Enter a new value into a particular menu if check shows not duplicate
 #	check_menu (newEntry, menuKey)
 #	    iniData{menuKey} ==> [
 #		menuRef,
@@ -1624,9 +2030,9 @@ sub check_menu {
 #	[searches]
 #		pip			# default match type is -exact
 #		[files]			# a curious -exact match
-#		timer		n	# match type -nocase (<tab>n)
+#		timer		i	# match type -nocase (<tab>i)
 #		QX[\d+]\.[\d+]	r	# match type -regexp (<tab>r)
-#		ix[\d+]\.[\d+]	rn	# is resolved to -regexp -nocase
+#		ix[\d+]\.[\d+]	ri	# is resolved to -regexp -nocase
 #
 #	since tabs cannot be entered in the search entry box (skips to text window)
 #	use <tab> followed by search option in the search menu list
@@ -1638,13 +2044,13 @@ sub check_menu {
 sub ini_program {
     my ($home, $menuData, $menuKey, $entry, $initialFile);
     ## restore file and search menu lists from ~/.iClive.ini
-    if (($home = $ENV{HOME}) ne '' and open(INI, "$home/.iClive.ini")) {
+    if (($home = $ENV{HOME}) ne '' and open(INI, "$home/.$named.ini")) {
 	while (<INI>) {
 	    chomp;
 	    if (/^\[([\w ]+)\]$/) {
 		$menuKey = $1;			# key found
 		$menuData = $iniData{$menuKey};
-    print "ini_program: menuKey [$menuKey] found\n" if $opt_T;
+		print "ini_program: menuKey [$menuKey] found\n" if $opt_T;
 	    } elsif ($menuData and s/^\t(.*)$/$1/) {	# ini starts with <tab>
 		$entry = $_;
 		check_menu($entry, $menuKey);
@@ -1653,8 +2059,22 @@ sub ini_program {
 	close(INI);
     }	# ignore if ~/.iClive.ini cannot be opened or found
     $initialFile = shift @ARGV;			# ARGV may be empty
-    $initialFile = shift @lastFile unless $initialFile;
-    open_file(0, $initialFile) if $initialFile;
+    unless (defined $initialFile and $initialFile ne '') {
+	$initialFile = shift @lastFile;
+	if (not defined $opt_i and @lastFile) {
+	    $instance = shift @lastFile;
+	    if (defined $instance and $instance ne '') {
+		$instanceText = "-$instance";
+		if ($instance !~ /^[0-9]$/) {
+		    push @instanceOptions, [$instanceText, $instance];
+		    $instButton->configure(-options => \@instanceOptions);
+		}
+	    }
+	}
+    }
+    if (defined $initialFile and $initialFile ne '') {
+	open_file(0, $initialFile);
+    }
     foreach $initialFile (@ARGV) {
 	check_menu($initialFile, 'files');	# stuff the rest in the file menu list
     }
@@ -1670,26 +2090,38 @@ sub ini_program {
 sub quit_program {
     my ($home, $menuKey, $entriesArRef, $entry);
     deleteAllTags();	# also clears @activeSymbols
-    clearScan();
+    clear_scan();
     if (check_save()) {
-	print "quit_program: fileName = '$fileName', lastFile = '@lastFile'\n" if $opt_T;
-	if ($fileName and $fileName ne $newName) {
-	    $lastFile[0] = $fileName;
+	@lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
+	if (defined $fileName and $fileName ne $newName and $fileName ne '') {
+	    push @lastFile, $fileName;
+	    if ($instance ne '') {
+		push @lastFile, $instance;
+	    }
 	}
 	## save file and search menu lists to ~/.iClive.ini
 	if (($home = $ENV{HOME}) ne '') {
-	    if (open(INI, ">$home/.iClive.ini")) {
+	    if (open(INI, ">$home/.$named.ini")) {
 		foreach $menuKey (sort keys %iniData) {
 		    print INI "[$menuKey]\n";
-		    $entriesArRef = @{$iniData{$menuKey}}->[2];
+		    $entriesArRef = @{$iniData{$menuKey}}[2];
 		    foreach $entry (@$entriesArRef) {
-			print INI "\t$entry\n" if $entry;
+			print INI "\t$entry\n" if defined $entry and $entry ne '';
 		    };
 		}
 		close(INI);
 	    } else {
-		print STDERR "Can't open ~/.iClive.ini: $!\n";
+		die "ERROR: Can't open ~/.$named.ini: $!\n";
 	    }
+	}
+	print "$named: quit\n" if $opt_T;
+	if ($runName ne '') {
+	    print "quit_program() sends '$D_channel:7,$D_channel:0'\n" if $opt_T;
+	    conn_send_now("$D_channel:7,$D_channel:0");
+	    ####################################################
+	    ## causes application to send C_channel:2;<name>
+	    ## is available in iCserver for next iClive start
+	    ####################################################
 	}
 	exit(0);
     }
@@ -1698,7 +2130,7 @@ sub quit_program {
 
 ########################################################################
 #
-#	Compute and print elapsed microseconds
+#	Compute and print elapsed microseconds (activated by $opt_m)
 #
 ########################################################################
 
@@ -1707,3 +2139,203 @@ sub printMicroSeconds {
     printf "%10.6f%s", $ti, $opt_t ? ": " : "\n";
     $t0 = [gettimeofday];
 } # printMicroSeconds
+
+########################################################################
+#
+#	Output Symbol Table for debugging purposes (activated by $opt_T)
+#
+#	parameter 1	(ignore)
+#	parameter 2	sorting order: 0 by name	1 by index
+#
+########################################################################
+
+sub output_symbol_table {
+    my $par2 = $_[1];
+    if ($runName ne '') {
+	my ($symbol, $index, $previndex);
+	$previndex = -1;
+	if ($par2 == 0) {
+	    print "\nSymbol Table '$runName' by name\n";
+	    print "-- ", "-" x $maxSymbolLength, " ----\n";
+	    printf "%2s %-*s %4s\n", "ft", $maxSymbolLength, " name", "ix ";
+	    print "-- ", "-" x $maxSymbolLength, " ----\n";
+	    foreach $symbol (sort keys %symbolTable) {
+		printf "%2s %-*s %4d\n",
+		    $abbrevSelect[$symbolTable{$symbol}[0]],
+		    $maxSymbolLength, $symbol,
+		    $symbolTable{$symbol}[1];
+	    }
+	}
+	elsif ($par2 == 1) {
+	    print "\nSymbol Table '$runName' by index\n";
+	    print "---- -- ", "-" x $maxSymbolLength, " -- ", "-" x $maxSymbolLength, "\n";
+	    printf "%4s %2s %-*s %2s %-*s .. ...\n", "ix ",
+		"ft", $maxSymbolLength, " name",
+		"ft", $maxSymbolLength, " name";
+	    print "---- -- ", "-" x $maxSymbolLength, " -- ", "-" x $maxSymbolLength;
+	    foreach $symbol (sort {
+				$symbolTable{$a}[1] <=> $symbolTable{$b}[1]
+				||
+				$a cmp $b
+			    } keys %symbolTable)
+	    {
+		$index = $symbolTable{$symbol}[1];
+		if ($index != $previndex) {
+		    printf "\n%4d %2s %-*s", $index,
+			$abbrevSelect[$symbolTable{$symbol}[0]],
+			$maxSymbolLength, $symbol;
+		    $previndex = $index;
+		} else {
+		    printf " %2s %-*s",
+			$abbrevSelect[$symbolTable{$symbol}[0]],
+			$maxSymbolLength, $symbol;
+		}
+	    }
+	    print "\n";
+	}
+    } else {
+	info_display(2000, 'red', "No Symbol Table - not connected to a running control program");
+    }
+} # output_symbol_table
+__END__
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ iClive - an editor and live debugger for iC clients
+
+=head1 SYNOPSIS
+
+ iClive [ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
+        [ -g <geometry>][ <file> ...]
+    -s host host name of server    (default 'localhost')
+    -p port service port of server (default '8778')
+    -i inst initial instance selection (default ''; 1 to 3 numeric chars)
+    -f font font to use in Text window (default '9x15')
+    -g geom geometry for main window (default '748x436')
+    -u      activate undo edit facility (not recommended if Live display
+            is used, because display may skip to lines which change)
+    -m      output elapsed time in seconds and microseconds
+    -t      trace output run time changes in target application
+    -T      trace output static debug messages
+    -h      help, ouput this Usage text only
+    file ... one or more iC source files. The first will be opened. The
+            rest will be stored in the File menu for later selection. If
+            the built application is running, Live display is activated.
+
+=head1 DESCRIPTION
+
+ Menu buttons:
+    [File] New  provide a new empty file for editing.
+         Open   open and load the selected file.
+         Save   save the current file if modified.
+         SaveAs store the file at the selected path.
+         Quit   quit the program.
+
+    [Build]     build either the C file or the executable application
+                from the currently displayed iC program text.
+
+    [Run/Stop]  run or stop the executable application built from the
+                currently displayed iC program text.
+
+    [ -]        select no instance or -0 to -9 or extra instance passed
+                with -i option. Run and Live use the selected instance.
+
+    [Live	scan the text and generate live markings for all words,
+		which represent variables in the currently running
+		application - which should be built from the text
+		to make a meaningful display. Text is 'read only'
+		in this mode.
+    /Edit]      clears live markings in the text window. In this mode the
+                text may be edited with the facilities of Tk::Text,
+                which is a full featured editor. The edit facilities
+                are described in the Tk::Text man page in the section
+                'BINDINGS' near the end.  If called with the -u option,
+                ctrl-U is the <<Undo>> binding.
+
+    [Search]    the the text window. It may be scanned for an exact match
+                or for a regular expression in the entry window next to
+                the button. All found items will be marked. Repeating
+                'Search down' or RETURN will display a section of
+                the text containing found items which were previously
+                not displayed.  'Search up' or SHIFT-RETURN reverses
+                the direction of scrolling.  Another option is to Go
+                to a line entered in the entry window.
+
+    [Help]      display this man page
+
+B<iClive> provides an edit window in which the text of a source or listing
+can be displayed and optionally edited and saved. In Text mode the line
+number and column of the cursor are shown in the bottom status bar.
+
+B<iClive> is normally a client of a running iC application. On startup it
+requests the symbol table of the application. It returns a list of
+words from the symbol table on which it wants live updates of the state
+of the nodes, named by each word in the list. The application then
+provides updates to B<iClive> when the state of any node from the list
+changes as soon as possible after the change.
+
+All words in the text which exactly match any token in the list are
+marked with a colour depending on the current state of the node.
+Logical nodes are B<green/black> for B<false> and B<yellow/red> for
+B<true>.  Logical active words in the list which are preceded by ~
+or ! or which are followed by ~ show the inverse state of the node.
+Arithmetic nodes are B<blue>, clocks B<brown> and timers B<dark green>.
+Clocks and timers flash briefly (50 ms) every time they fire.  All coloured
+nodes are called 'active' words, because they display the live state of
+these nodes in the running application.
+
+When the mouse cursor sits on an active word the value of the node is
+displayed in a balloon window. This is useful for displaying the current
+value of arithmetic nodes. A line terminated with an active word followed
+by an equal sign will be followed by the value of the word in a live display.
+
+    eg.  // offset =
+    will be displayed as
+         // offset = 15
+    (this construct is usually commented with //)
+
+To be effective, the displayed text must be either the source of the
+running iC application or a text derived from that source, such as the iC
+listing.  Whenever a new iC text or another instance is selected, B<iClive>
+will automatically attach itself to the selected application (provided it
+is running).  B<iClive> shows the logical statements of the source and the
+colours will show what the current state is.  It is easy to inspect
+such a live listing and relate states with the logic of the application.
+
+This program uses the Tk::Text widget, an extension Tk::TextUndo may
+be used to provide an UNDO facility while editing. This extension has
+disadvantages for the 'live display' - it is 7 times slower in making
+arithmetic updates and it causes the window to jump to the last updated
+text for value changes in the control application. This makes the 'live
+display' hard to interpret. This does not happen with Tk::Text. If you
+want to activate the UNDO facility use the -u option (recommended only
+for editing)
+
+For measuring reaction times the Module Time::HiRes is used.  This
+activates the -m option and flash display of short events.  Make sure
+you have installed Time::HiRes (provided in this distribution)
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<icc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.

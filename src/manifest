@@ -1,9 +1,9 @@
-$Id: manifest,v 1.10 2004/02/23 15:22:54 jw Exp $
+$Id: manifest,v 1.11 2005/01/17 19:53:13 jw Exp $
 README
 doc/iC.doc
 doc/iC.html
 doc/iC.sdw
-doc/icc.sdc
+doc/icc.sxc
 src/ARTISTIC
 src/COPYING
 src/Makefile.in
@@ -19,7 +19,6 @@ src/Test0/ORG/a012.c
 src/Test0/ORG/a012.ic
 src/Test0/ORG/a012.ini
 src/Test0/ORG/a012.lst
-src/Test0/ORG/a012.sh
 src/Test0/ORG/alex10.c
 src/Test0/ORG/alex10.ic
 src/Test0/ORG/alex10.ini
@@ -28,17 +27,14 @@ src/Test0/ORG/bar1.c
 src/Test0/ORG/bar1.ic
 src/Test0/ORG/bar1.ini
 src/Test0/ORG/bar1.lst
-src/Test0/ORG/bar1.sh
 src/Test0/ORG/bar2.c
 src/Test0/ORG/bar2.ic
 src/Test0/ORG/bar2.ini
 src/Test0/ORG/bar2.lst
-src/Test0/ORG/bar2.sh
 src/Test0/ORG/bar3.c
 src/Test0/ORG/bar3.ic
 src/Test0/ORG/bar3.ini
 src/Test0/ORG/bar3.lst
-src/Test0/ORG/bar3.sh
 src/Test0/ORG/biterr.ic
 src/Test0/ORG/biterr.lst
 src/Test0/ORG/dasgnq.c
@@ -49,7 +45,6 @@ src/Test0/ORG/demo.c
 src/Test0/ORG/demo.ic
 src/Test0/ORG/demo.ini
 src/Test0/ORG/demo.lst
-src/Test0/ORG/demo.sh
 src/Test0/ORG/f10.c
 src/Test0/ORG/f10.ic
 src/Test0/ORG/f10.ini
@@ -182,7 +177,7 @@ src/perlinstall
 src/pplstfix
 src/rsff.c
 src/scan.c
-src/stop
+src/iCstop
 src/symb.c
 src/tcpc.c
 src/tcpc.h

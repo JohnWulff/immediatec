@@ -1,8 +1,8 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.22 2004/01/28 11:04:07 jw Exp $";
+"@(#)$Id: link.c,v 1.23 2005/01/16 15:38:43 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -108,7 +108,7 @@ link_ol(
 		gp->gt_mark = mark_stamp;	/* yes, stamp the gate */
 		gp->gt_mcnt = 0;		/*      clear mark count */
 	    } else {
-		if (++gp->gt_mcnt >= osc_max) {	/* new alg: cnt 1 larger */
+		if (++gp->gt_mcnt >= osc_lim) {	/* new alg: cnt 1 larger */
 #if YYDEBUG && !defined(_WINDOWS)
 		    if ((debug & 0300) == 0300) putc('#', outFP);
 #endif
@@ -123,7 +123,8 @@ link_ol(
 		    }
 		}
 #if YYDEBUG && !defined(_WINDOWS)
-		if ((debug & 0300) == 0300) fprintf(outFP, "%d", gp->gt_mcnt);
+//####		if ((debug & 0300) == 0300) fprintf(outFP, "%d", gp->gt_mcnt);
+		if ((debug & 0300) == 0300) fprintf(outFP, "%d,%d", gp->gt_mcnt,osc_lim);
 #endif
 	    }
 	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */

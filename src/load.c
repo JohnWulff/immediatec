@@ -1,8 +1,8 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.44 2004/11/10 17:47:56 jw Exp $";
+"@(#)$Id: load.c,v 1.45 2005/01/16 15:24:57 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -45,6 +45,7 @@ short		debug = 0;
 int		micro = 0;
 unsigned short	xflag;
 unsigned short	osc_max = MARKMAX;
+unsigned short	osc_lim = MARKMAX;
 
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
@@ -58,14 +59,13 @@ static const char *	usage =
 #endif
 "xh]"
 #ifdef TCP
-" [-m[m]] [-s <server>] [-p <port>] [-u <unitID>] [-i <instance>]\n"
+" [-m[m]] [-s <server>] [-p <port>] [-i <instance_id>]\n"
 #endif
 " [-n<count>] [-d<debug>]\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n"
 "        -p service port of server (default '%s')\n"
-"        -u unit ID of this client (default '%s')\n"
-"        -i instance number of this client (default '%s')\n"
+"        -i instance id of this client (default '%s'; 1 to %d numeric digits)\n"
 #endif
 "        -n <count>      maximum oscilator count (default is %d, limit 15)\n"
 #if YYDEBUG
@@ -78,6 +78,7 @@ static const char *	usage =
 "        -d <debug> 400  exit after initialisation\n"
 #endif
 "                   +40  load listing\n"
+"                    +4  extra install debug info\n"
 #if YYDEBUG
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
@@ -94,7 +95,9 @@ static const char *	usage =
 "        -h              this help text\n"
 "                        typing q or ctrl-C quits run mode\n"
 "compiled by:\n"
-"%s\n";
+"%s\n"
+"Copyright (C) 1985-2005 John E. Wulff     <john@je-wulff.de>\n"
+;
 
 /********************************************************************
  *
@@ -120,13 +123,13 @@ unsigned char	bitMask[]    = {
  *
  *******************************************************************/
 
-Gate *		IX_[IXD*8];		/* pointers to bit Input Gates */
+Gate *		IX_[IXD];		/* pointers to bit Input byte Gates */
 Gate *		IB_[IXD];		/* pointers to byte Input Gates */
 Gate *		IW_[IXD];		/* pointers to word Input Gates */
 #if INT_MAX != 32767 || defined (LONG16)
 Gate *		IL_[IXD];		/* pointers to long Input Gates */
 #endif
-Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
+Gate *		TX_[TXD];		/* pointers to bit System byte Gates */
 unsigned char	QX_[IXD];		/* Output bit field slots */
 char		QT_[IXD];		/* Output type of slots */
 
@@ -199,6 +202,10 @@ main(
     } else {
 	progname++;		/*  path has been stripped */
     }
+#ifdef TCP
+    iccNM = emalloc(strlen(progname)+INSTSIZE+2);	/* +2 for '-...\0' */
+    strcpy(iccNM, progname);
+#endif
     outFP = stdout;		/* listing file pointer */
     errFP = stderr;		/* error file pointer */
     while (--argc > 0) {
@@ -215,9 +222,17 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    portNM = *argv;
 		    goto break2;
-		case 'u':
+		case 'i':
 		    if (! *++*argv) { --argc, ++argv; }
-		    iccNM = *argv;
+		    if ((eLen = strlen(*argv)) > INSTSIZE ||
+			eLen != strspn(*argv, "0123456789")) {
+			fprintf(stderr, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
+			    *argv, INSTSIZE);
+		    } else {
+			iidNM = emalloc(INSTSIZE+1);	/* +1 for '\0' */
+			strncpy(iidNM, *argv, INSTSIZE);
+			snprintf(iccNM + strlen(iccNM), INSTSIZE+2, "-%s", iidNM);
+		    }
 		    goto break2;
 		case 'm':
 		    micro++;		/* microsecond info */
@@ -234,7 +249,7 @@ main(
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
-		    osc_max = atoi(*argv);
+		    osc_lim = osc_max = atoi(*argv);
 		    if (osc_max > 15) goto error;
 		    goto break2;
 		case 'x':
@@ -248,7 +263,7 @@ main(
 		error:
 		    fprintf(stderr, usage, progname,
 #ifdef TCP
-		    hostNM, portNM, iccNM, iccNM,
+		    hostNM, portNM, iidNM, INSTSIZE,
 #endif
 		    MARKMAX, SC_ID);
 		    exit(-1);
@@ -259,7 +274,7 @@ main(
 	    goto error;
 	}
     }
-    debug &= 03743;			/* allow only cases specified */
+    debug &= 03747;			/* allow only cases specified */
 
 /********************************************************************
  *
@@ -891,7 +906,9 @@ main(
 		    QT_[byte] = xbwl[0];
 		    switch (xbwl[0]) {
 		    case 'X':
-			if (i > 2) goto outErr;
+			if (i > 2) goto outErr;	/* no tail _0 allowed for QXn */
+			op->gt_mark = X_WIDTH;
+			break;
 		    case 'B':
 			op->gt_mark = B_WIDTH;
 			break;

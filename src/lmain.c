@@ -1,7 +1,16 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.10 2004/03/12 18:18:34 jw Exp $";
+"@(#)$Id: lmain.c,v 1.11 2004/12/22 17:01:55 jw Exp $";
 /********************************************************************
  *
+ *	Copyright (C) 1985-2005  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	lmain.c
  *	Standalone check of gram.y and lexc.l C compiler
  *
  *******************************************************************/
@@ -27,7 +36,7 @@ static const char *	usage =
 #endif
 "        <C_program>    any C language program file (extension .c)\n"
 "        -h              this help text\n"
-"Copyright (C) 1985-2002 John E. Wulff     <john@je-wulff.de>\n"
+"Copyright (C) 1985-2005 John E. Wulff     <john@je-wulff.de>\n"
 "%s\n";
 
 FILE *	yyin;

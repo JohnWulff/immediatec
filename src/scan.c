@@ -1,8 +1,8 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.29 2004/05/13 09:18:49 jw Exp $";
+"@(#)$Id: scan.c,v 1.30 2004/12/22 16:59:26 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -419,7 +419,7 @@ scan_snd(Gate *	out_list)
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, "\n%s:\t", op->gt_ids);
 #endif
-	outMw(op, 0);				/* Master action is always outMw() */
+	outMw(op, out_list);			/* Master action is always outMw() */
 	scan_cnt++;				/* count scan operations */
     }
 } /* scan_snd */

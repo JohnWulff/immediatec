@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2001  John E. Wulff
+#	Copyright (C) 2000-2005  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -26,12 +26,21 @@ use Tk;			# The graphical user interface toolkit perl/Tk
 use Msg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use strict;
+use warnings;
 
 my @inputs;
 my @outputs;
+my @ArgNames;		# stores IO names and initialisers in argument list order
+my @ChannelNames;	# stores IO names with instance for each registered channel
+my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
+my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
+my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
+my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
+my %IONames;		# stores channel for each IO name (aux use in initial pass)
+my $UnitRegistrations;	# stores the registration string
+my $frameCount;		# number of frames in the box
 
 my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
-my @invert =	(1, 0);		# invert logic sense
 my @bitIndex =	(
     0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
     4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
@@ -60,36 +69,50 @@ my @bitIndex =	(
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<< [-etmh] [-s <host>] [-p <port>] [-RrIiOo <num>] [-l <len>] [<ID> [<ini>]]
+@<<<<<< [-dtmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>][ -c <colm>]
 	$named
-	ID	X0 X1 .. X63, B0 B1 .. B63, W0 W2 .. W62 , L0 L4 .. L60
-		default ID is X0
-	ini	initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+	[ -RrJjOo <num>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
+	ID	X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
+		Any ID can be preceded by 'I' or 'Q' in which case
+		only that input or output is generated (default is both)
+		default ID is X0 generating input IX0 and output QX0
+		A range of ID's can be specified with -; eg IX0-IX7
+	ID-inst	Each ID can be followed by -<inst>, where <inst> consists
+		of up to 3 numeric digits (usually 1 digit).
+		Such an appended instance code takes precedence over the
+		general instance specified with the -i <inst> (see below).
+	ID=ini	initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+		applies only to input ID's. One =ini applies to each input
+		in a range of ID's; eg X5-X7=3 inits IX5 IX6 and IX7 to 3.
 	-s host	host name of server    (default 'localhost')
 	-p port	service port of server (default '8778')
+	-n name	registration name (default first full ID)
+	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
+				    $named
+	-c colm	maximum number of columns in a row (default 12)
+	-f file	read ID parametes from this file
+	-d	display external inputs IMn only (no ini values allowed)
 	-t	trace debug messages
 	-m	display elapsed time in seconds and microseconds
-	    (Requires Module Time::HiRes available from CPAN - see source)
-	-e	optional exit button
 	-h	help, ouput this Usage text only
-	The following options apply to analog units with ID Bx or Wy only
+    The following options apply to analog units with ID Bx, Wy or Lz only
 	-R num	from for input and output (default 0)
-	-I num	from for input only
+	-J num	from for input only
 	-O num	from for output only
 	-r num	to for input and output (default 100)
-	-i num	to for input only
+	-j num	to for input only
 	-o num	to for output only
 	-l len	length of scales (default 170)
-Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
+Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.38 2004/11/10 17:47:56 jw Exp $
+$Id: iCbox,v 1.39 2005/01/09 15:47:59 jw Exp $
 .
 
-use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
+use vars qw($opt_d $opt_t $opt_T $opt_m $opt_s $opt_p $opt_n $opt_i $opt_c $opt_r $opt_j $opt_o $opt_R $opt_J $opt_O $opt_l $opt_f $opt_h);
 require "getopts.pl";
-&Getopts('tmes:p:r:i:o:R:I:O:l:h');	# sets $opt_h if -h etc
+&Getopts('dtTms:p:n:i:c:r:j:o:R:J:O:l:f:h');	# sets $opt_h if -h etc
 
-if ($opt_h or @ARGV > 2) {
+if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
@@ -99,195 +122,367 @@ if ($opt_m) {
     $t0 = [gettimeofday];	# start of program
 }
 
+$opt_R = 0 unless $opt_R;	# default from 0
+$opt_r = 100 unless $opt_r;	# default to 100
+$opt_J = $opt_R unless $opt_J;	# from for input
+$opt_O = $opt_R unless $opt_O;	# from for output
+$opt_j = $opt_r unless $opt_j;	# to for input
+$opt_o = $opt_r unless $opt_o;	# to for output
+$opt_l = 170 unless $opt_l;	# default length 170
+$opt_c = 12 unless $opt_c;	# default maximum number of columns 12
+
+my $QX        = $opt_d ? qr/^[IQ]X/        : qr/^QX/;
+my $Q_BWL_    = $opt_d ? qr/^[IQ][BWL]/    : qr/^Q[BWL]/;
+my $Q__XBWL__ = $opt_d ? qr/^[IQ]([XBWL])/ : qr/^Q([XBWL])/;
+
+my $instance = '';
+if (defined $opt_i and $opt_i ne '') {
+    if ($opt_i =~ /^\d{1,3}$/) {	# INSTSIZE 3 defined in icc.h
+	$instance = "-$opt_i";
+	print "instance = '$instance'\n" if $opt_t;
+    } else {
+	warn "$named: badly formed option -i $opt_i - ignored\n";
+    }
+}
+
 ########################################################################
 #
-#	Connect to server
+#	Analyse ID parameters
+#
+#	X0 X2	generates inputs and outputs IX0 QX0 IX2 QX2 in that order
+#	B0-B2	generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
+#	IW3 IW7	generates only inputs IW3 and IW7
+#	QL4-QL7 generates only outputs QL4 QL5 QL6 and QL7
+#
+#	Combined input/output or input-only parameters can be initialised
+#	with =<number>.
+#	<number> may be decimal, octal, hexadecimal or binary as follows:
+#	X10=15 X11=017 IX12=0xf IX13=0b1111	all equal decimal 15
+#	only decimal initialisers may be preceded by a minus sign
+#	IW10=-100	initialises IW10 with -100
+#
+#	An initialiser may be placed after the second parameter of a range.
+#	Every input in the range will be initalised to the same value.
+#	IW20-IW27=100	initialises IW20 IW21 .. IW27 with 100
+#	X20-X27=0x3a	initialises IX20 IX21 .. IX27 with 0x3a
+#	Outputs cannot be initialised.
+#
+#	Parameter, range and initialiser must be written without spaces
+#	in the command line unless they are quoted. In the optional
+#	INI file which can be read with the -f option, white space can
+#	be placed between parameter, range and initialiser. They must
+#	only be all in one line. Any extraneous text is ignored (comments).
+#
+########################################################################
+
+if ($opt_f) {
+    open IN, $opt_f or die "can't open ID file $opt_f! $!";
+    while (<IN>) {		# read next entry from ID file into $_
+	print "$opt_f: $_" if $opt_t;
+	chomp;			# $_ is an ID line
+	while (/([IQ]?[XBWL]\d+\s*(-(\d{1,3}))?\s*(-\s*[IQ]?[XBWL]\d+\s*(-(\d{1,3}))?\s*)?(=\s*[- abcdefABCDEFx\d]+)?)/g) {
+	    push(@ARGV, $1);	# put next ID on end of @ARGV
+	}
+	## any garbage in the file is skipped - treated as comments
+    }
+    close IN;
+}
+unshift(@ARGV, 'X0') unless @ARGV;	# default name X0
+print "ARGV:", join(':', @ARGV), ":\n" if $opt_t;
+
+my ($argv);
+while ($argv = shift @ARGV) {
+    my ($start_iq_xbwl, $start_n, $si, $ini, $end_n, $ei, $id, @list);
+    if ($argv =~ /^((([IQ]?)[XBWL])(\d+)(-(\d{1,3}))?)\s*(-\s*(([IQ]?[XBWL])(\d+)(-(\d{1,3}))?)\s*)?(=\s*(-?[abcdefABCDEFx\d]+))?$/g) {
+	my ($n);
+	$ini = "0";
+	$start_iq_xbwl = $2;
+	$start_n = $end_n = $4;
+	$si = defined $5 ? $5 : '';		# start instance
+	if ($8) {		# end
+	    $ei = defined $11 ? $11 : '';	# end instance
+	    if (not $9 or	# end_iq_xbwl
+		$start_iq_xbwl ne $9 or
+		not $10 or	# end_n
+		$start_n > $10 or
+		$si ne $ei)	# start must equal end instance
+	    {
+		goto ARG_WARN;	# iq_xbwl not identical or negative range
+	    } else {
+		$end_n = $10;
+	    }
+	}
+	if ($14) {		# initialiser
+	    if ($3 and $3 eq 'Q') {
+		warn "$named: $argv: output argument cannot be initialised - ignore initialiser\n";
+	    } else {
+		$ini = $14;		# = 0b111
+	    }
+	}
+	unless ($si) {
+	    $si = $instance;
+	}
+	foreach $n ($start_n .. $end_n) {
+	    if ($3) {			# start_iq
+		@list = ("$start_iq_xbwl$n$si");	# generate individual I/O's
+	    } else {
+		@list = ("I$start_iq_xbwl$n$si", "Q$start_iq_xbwl$n$si");	# both I/O's
+	    }
+	    foreach $id (@list) {
+		if ($IONames{$id}) {
+		    print "\n" if $opt_t;
+		    warn "$named: $id occurs twice - ignore second instance\n";
+		} else {
+		    $IONames{$id} = -1;		# mark as unregistered IO
+		    if ($ini =~ /^-\s*0/) {
+			$ini = 0;
+			print "\n" if $opt_t;
+			warn "$named: $argv: bin, oct or hex numbers may not be signed - ignore initialiser\n";
+			print " $id=$ini" if $opt_t;
+		    } else {
+			print " $id=$ini" if $opt_t;
+			$ini = oct($ini) if $ini =~ /^0/;	# handles 017 0xf 0b1111
+			$ini = int($ini);	# initialize to a number for correct AND/OR
+		    }
+		    push @ArgNames, $id, $ini;	# argument order for generating widgets
+		}
+	    }
+	}
+	print "\n" if $opt_t;
+    } else {
+	ARG_WARN: warn "$named: $argv: badly formed ID argument - ignored\n";
+    }
+}
+print "LIST: @ArgNames\n" if $opt_t;
+exit unless @ArgNames or die "$named: no valid arguments - cannot make any boxes\n";
+
+%IONames = ();		# clear for channel entries
+
+########################################################################
+#
+#	Connect to server and register I/O's
 #
 ########################################################################
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
-my $unitID = (@ARGV >= 1) ? $ARGV[0] : 'X0';
-my $inByte = (@ARGV >= 2) ? $ARGV[1] : 0;
-my $outByte =	0;		# initialize to a number for correct XOR
+my $name = $opt_n ? $opt_n : $ArgNames[0];
+$named = "$name$instance";	# use individual ID for warnings from now on
+$UnitRegistrations = "N$name$instance";
 
-## accept unitID starting with X or B and any IO-address number
-## accept unitID starting with W and only even IO-address numbers
-## accept unitID starting with L and IO-address on a 4 byte boundary
-
-if (($unitID =~ /^([XBWL])(\d+)$/) and
-    ($1 ne "L" or ($2 & 0x03) == 0) and
-    ($1 ne "W" or ($2 & 0x01) == 0)) {
-    $inByte = oct($inByte) if $inByte =~ /^0/;	# handles 017 0xf 0b1111
-    $inByte = int($inByte);	# initialize to a number for correct AND/OR
-    if ($1 eq 'W') {
-	$inByte &= 0xffff;
-    } elsif ($1 eq 'X' or $1 eq 'B') {
-	$inByte &= 0xff;
-    }
-}
-else {
-    die "iCbox $unitID could not be made\n";
-}
+my ($unitID, $inByte, $outByte, $frame, $label, $direction, $i);
+my $register = 1;	# tested in rcvd_msg_from_server() for registration reply
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-die "Client could not connect to $host:$port\n" unless $conn;
+die "Client '$name$instance' could not connect to $host:$port\n" unless $conn;
 
-print "Connection $unitID at client.\n";
-$conn->send_now($unitID);	# register I/O
+for ($i = 0; $i < @ArgNames; $i += 2) {
+    ($unitID, $inByte) = @ArgNames[$i, $i+1];	# next 2 values
+    $direction = $label = '';
+    if ($unitID =~ /^I/) {
+	$direction = $opt_d ? 'R' : 'S';
+    } elsif ($unitID =~ /^Q/) {
+	$direction = 'R';
+    } else {
+	die "$named: invalid argument '$unitID' - internal error";
+    }
+    if ($direction) {
+	$UnitRegistrations .= ",$direction$unitID";
+	print "register: $direction$unitID	inByte = $inByte\n" if $opt_t;
+    }
+}
+
+print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+$conn->send_now($UnitRegistrations);
+
+my ($tmsg, $terr) = $conn->rcv_now();
+print "$named: Reply: $tmsg\n" if $opt_t;
+rcvd_msg_from_server($conn, $tmsg, $terr);	# analyse registration string now
+############# TODO pull out registration analysis from rcvd_msg_from_server() ################
+exit unless $frameCount or die "$named: no valid registrations - cannot make any frames\n";
 
 ########################################################################
 #
-#	Create main window and optional Exit button
+#	Create main window
 #
 ########################################################################
 
 my $mainWindow = MainWindow->new();
-$mainWindow->title("iC");
-$mainWindow->Label(-text => "iC Demo Box")->pack;
+$mainWindow->title("$name$instance");
 
-$mainWindow->Button(-text    => "Exit",
-		    -command => sub { exit; },
-		   )->pack(-side   => 'bottom', 
-			   -expand => 1,
-			   -fill   => 'x',
-			  ) if $opt_e;
-
-########################################################################
-#
-#	Generate an input and an output frame
-#
-########################################################################
-
-my $inLabel = "input";
-my $outLabel = "output";
-if ($unitID !~ /^X/) {
-    $inLabel = "in I$unitID";
-    $outLabel = "out Q$unitID";
+my ($ch, $maxColumn);
+my ($row, $column) = (0, 0);
+if ($frameCount > $opt_c*2) {
+    $maxColumn = int(($frameCount + 2) / 3);
+} elsif ($frameCount > $opt_c) {
+    $maxColumn = int(($frameCount + 1) / 2);
+} else {
+    $maxColumn = $frameCount;
 }
-
-my $inFrame  = $mainWindow->Frame(-label       => $inLabel,
-				  -relief      => 'groove',
-				  -borderwidth => 2,
-				 )->pack(-side   => 'left', 
-				         -expand => 'y',
-				         -fill   => 'y',
-				        );
-
-my $outFrame = $mainWindow->Frame(-label       => $outLabel,
-				  -relief      => 'groove',
-				  -borderwidth => 2,
-				 )->pack(-side   => 'right', 
-				         -expand => 'y',
-				         -fill   => 'y',
-				        );
+print "frameCount = $frameCount maxColumn = $maxColumn\n" if $opt_t;
 
 ########################################################################
 #
-#	Generate 8 input checkbuttons and 8 output checkbuttons
+#	For each argument generate a frame with
 #
 ########################################################################
 
-if ($unitID =~ /^X/) {
-    for my $index (0 .. 7) {
-	my $input = "I$unitID.$index";
-	my $makeCheckbutton = "\
-	    if (\$inByte & $masks[$index]) {\
-		\$inputs[$index] = 1;\
-	    }\
-	    \$inFrame->Checkbutton(\
-		-text        => \$input,\
-		-variable    => \\\$inputs[\$index],\
+for ($i = 0; $i < @ArgNames; $i += 2) {
+    ($unitID, $inByte) = @ArgNames[$i, $i+1];	# next 2 values
+    $direction = $label = '';
+    if ($unitID =~ /^I/) {
+	$direction = $opt_d ? 'R' : 'S';
+    } elsif ($unitID =~ /^Q/) {
+	$direction = 'R';
+    } else {
+	goto WARN_REG_ID;
+    }
+    if ($direction) {
+	$ch = $IONames{"$direction$unitID"};
+	$label = "$unitID";
+	if (not defined $ch) {
+	    print "$named: [$row:$column] label = '$label' ch not defined\n" if $opt_t;
+	    next;			# multiple input not registered
+	}
+    }
+    print "$named: [$row:$column] label = '$label' in = '$inByte' ch = '$ch'\n" if $opt_t;
+
+    $frame  = $mainWindow->Frame(-label       => $label,
+				 -relief      => 'groove',
+				 -borderwidth => 2,
+				)->grid(-row    => $row, 
+				        -column => $column,
+				        -sticky => 'nsew',
+				       );
+    $column++;
+    if ($column >= $maxColumn) {
+	$column = 0;
+	$row++;
+    }
+
+########################################################################
+#
+#	either 8 output checkbuttons
+#
+########################################################################
+
+    my ($index, $text);
+    if ($unitID =~ /$QX/) {		# /^QX/ or /^[IQ]X/ if $opt_d
+	for $index (0 .. 7) {
+	    $text = "'.$index'";
+	    my $makeOutCheckbutton = "\
+	    \$frame->Checkbutton(\
+		-text               => $text,\
+		-variable           => \\\$ChannelsQX[$ch][$index],\
+		-selectcolor        => 'red',\
+		-takefocus          => 0,\
+		-state              => 'disabled',\
+		-disabledforeground => 'black',\
+				)->pack(-side   => 'top',\
+					-expand => 1,\
+				       );\
+	    ";
+	    ## print $makeOutCheckbutton if $opt_t;
+	    eval $makeOutCheckbutton;
+	    print $@;
+	    ## ChannelsQ[$ch] initialised to 0 on registration
+	}
+    }
+
+########################################################################
+#
+#	or 8 input checkbuttons
+#
+########################################################################
+
+    elsif ($unitID =~ /^IX/) {
+	for $index (0 .. 7) {
+	    $text = "'.$index'";
+	    my $makeInCheckbutton = "\
+	    \$frame->Checkbutton(\
+		-text        => $text,\
+		-variable    => \\\$ChannelsIX[$ch][$index],\
 		-selectcolor => 'green',\
 		-command     => sub {\
-				     if (\$inputs[$index]) {\
-					 \$inByte |= $masks[$index];	# set bit\n\
+				     my \$val = \$ChannelsI[$ch];\
+				     if (\$ChannelsIX[$ch][$index]) {\
+					 \$val |= $masks[$index];  # set bit\n\
 				     } else {\
-					 \$inByte &= ~$masks[$index];	# clear bit\n\
+					 \$val &= ~$masks[$index]; # clear bit\n\
 				     }\
-				     "
-				   ."\&printMicroSeconds if \$opt_m;"
-				   ."print \"I$unitID.$index --> \$inputs[$index] (\$inByte)\\n\" if \$opt_t;\
-				     \$conn->send_now(\"$unitID.\$inByte\");\
+				     if (\$val != \$ChannelsI[$ch]) {\
+					 \&printMicroSeconds if \$opt_m;\
+					 print \"$named: $ch:\$val	> $label\\n\" if \$opt_t;\
+					 \$conn->send_now(\"$ch:\$val\");\
+					 \$ChannelsI[$ch] = \$val;\
+				     }\
 				    },\
-	    )->pack(-side   => 'top',\
-		    -expand => 1,\
-	    );\
-	";
-	eval $makeCheckbutton;
-	print $@;
+				)->pack(-side   => 'top',\
+					-expand => 1,\
+				       );\
+	    ";
+	    ## print $makeInCheckbutton if $opt_t;
+	    eval $makeInCheckbutton;
+	    print $@;
+	}
+	print "$named: $ch:$ChannelsI[$ch]	> $label\n" if $opt_t;
+	$conn->send_now("$ch:$ChannelsI[$ch]");	# executed at build time
     }
-    if ($inByte) {
-	print "init I$unitID 0 --> $inByte\n" if $opt_t;
-	$conn->send_now("$unitID.$inByte");
-    }
-
-    for my $index (0 .. 7) {
-	my $output = "Q$unitID.$index";
-	my $makeCheckbutton = "\
-	    \$outFrame->Checkbutton(\
-		-text        => \$output,\
-		-variable    => \\\$outputs[\$index],\
-		-selectcolor => 'red',\
-		-takefocus   => 0,\
-		-command     => sub {\
-				     print \"Inverting output $index on Q$unitID\\n\" if \$opt_t;\
-				     \$outputs[$index] = \$invert[\$outputs[$index]];\
-				    },\
-	    )->pack(-side   => 'top',\
-		    -expand => 1,\
-	    );\
-	";
-	eval $makeCheckbutton;
-	print $@;
-	$outputs[$index] = 0;
-    }
-}
 
 ########################################################################
 #
-#	Generate 1 input analog scale and 1 output analog scale
+#	or 1 analog output scale
 #
 ########################################################################
 
-elsif ($unitID =~ /^[BWL]/) {
+    elsif ($unitID =~ /$Q_BWL_/) {		# /^Q[BWL]/ or /^[IQ][BWL]/ if $opt_d
+	$frame->Scale(
+	    -from        => $opt_O,
+	    -to          => $opt_o,
+	    -length      => $opt_l,
+	    -troughcolor => 'IndianRed1',
+	    -width       => '4m',
+	    -variable    => \$ChannelsQ[$ch],
+	    -state       => 'disabled',
+	    -takefocus   => 0,
+		      )->pack(-side   => 'top',
+			      -expand => 1,
+			     );
+    }
 
-    $opt_R = 0 unless $opt_R;		# default from 0
-    $opt_r = 100 unless $opt_r;		# default to 100
-    $opt_I = $opt_R unless $opt_I;	# from for input
-    $opt_O = $opt_R unless $opt_O;	# from for output
-    $opt_i = $opt_r unless $opt_i;	# to for input
-    $opt_o = $opt_r unless $opt_o;	# to for output
-    $opt_l = 170 unless $opt_l;		# default length 170
+########################################################################
+#
+#	or 1 analog input scale
+#
+########################################################################
 
-    $inFrame->Scale(
-	-from        => $opt_I,
-	-to          => $opt_i,
-	-length      => $opt_l,
-	-variable    => \$inByte,
-	-command     => sub {
-			     if (length $inByte) {
-				 &printMicroSeconds if $opt_m;
-				 print "I$unitID --> $inByte\n" if $opt_t;
-				 $conn->send_now("$unitID.$inByte");
-			     }
-			    },
-    )->pack(-side   => 'top',
-	    -expand => 1,
-    );
+    elsif ($unitID =~ /^I[BWL]/) {
+	my $makeInScaleCheckbutton = "\
+	\$frame->Scale(\
+	    -from        => \$opt_J,\
+	    -to          => \$opt_j,\
+	    -length      => \$opt_l,\
+	    -troughcolor => 'light green',\
+	    -width       => '4m',\
+	    -variable    => \\\$ChannelsI[$ch],\
+	    -command     => sub {\
+				 &printMicroSeconds if \$opt_m;\
+				 print \"$named: $ch:\$ChannelsI[$ch]	> $label\\n\" if \$opt_t;\
+				 \$conn->send_now(\"$ch:\$ChannelsI[$ch]\");\
+				},\
+		      )->pack(-side   => 'top',\
+			      -expand => 1,\
+			     );\
+	";
+	## print $makeInScaleCheckbutton if $opt_t;
+	eval $makeInScaleCheckbutton;
+	print $@;
+    }
 
-    $outFrame->Scale(
-	-from        => $opt_O,
-	-to          => $opt_o,
-	-length      => $opt_l,
-	-variable    => \$outputs[0],
-	-state       => 'disabled',
-	-takefocus   => 0,
-    )->pack(-side   => 'top',
-	    -expand => 1,
-    );
-
-    $outputs[0] = 0;
+    else {
+	WARN_REG_ID: warn "$named: badly formed ID '$unitID' - ignored\n";
+	next;		# should die - internal error
+    }
 }
 
 ########################################################################
@@ -317,60 +512,102 @@ sub rcvd_msg_from_server {
     &printMicroSeconds if $opt_m;
     if (defined $msg) {
         my $len = length $msg;
+	print "($len)$msg<\n" if $opt_T;
 	if ($len == 0) {
 	    $conn->disconnect();
-	    print "iCbox $unitID disconnected by server\n";
+	    print "$named: disconnected by server\n";
 	    exit;
 	}
-	my ($uID, $value, $rest) = split /\./, $msg, 3;
-	if ($uID ne $unitID or defined $rest) {
-	    warn "WARNING: $msg from iCserver ?? ignored";
-	} elsif ($uID =~ /^X/) {
-	    if ($value eq "R") {
-		print "$uID rcvd R - reset from iCserver\n" if $opt_t;
-		for my $index (0 .. 7) {
-		    if ($outputs[$index]) {
-			print "init Q$uID 0 <-- $outputs[$index]\n" if $opt_t;
-			$outputs[$index] = 0;
+	my ($msg1, $channel, $value, $old, $bitRef, $uID, $in, $regId, $j);
+	$j = 0;
+	$frameCount = 0 if $register;		# TODO fix when registration is pulled forward
+	foreach $msg1 (split /,/, $msg) {	# break up comma seperated multiple messages
+	    if ($msg1 =~ /^(\d+):(.*)$/) {
+		## $1 is channel : $2 is value
+		$channel = $1;
+		$value   = $2;
+		$old = $ChannelsQ[$channel];
+		if (defined $old) {
+		    if ($value != $old) {
+			print "$named: $msg1	< $ChannelNames[$channel]\n" if $opt_t;
+			$bitRef = $ChannelsQX[$channel];
+			if (defined $bitRef) {
+			    my ($diff, $mask, $index, $val);
+			    $diff = $old ^ $value;	# $old initialized to a number for correct XOR
+			    while ($diff) {		# age old algorithm from CSR days
+				$mask = $diff & -$diff;	# rightmost set bit from diff
+				$index = $bitIndex[$mask];
+				$val = ($value & $mask) ? 1 : 0;
+				${$bitRef}[$index] = $val;	# modify viewable output
+				$diff &= ~$mask;		# clear rightmost bit in diff
+			    }
+			}
+			$ChannelsQ[$channel] = $value;	# ready for next message
+		    }
+		} else {
+		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
+		}
+	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
+		## $1 is channel
+		$channel = $1;
+		($uID, $in) = @ArgNames[$j, $j+1];	# next 2 values
+		defined $uID or
+		    die "$named: too many registration replies from iCserver - system error";
+		print "$named: $j: registering '$uID' on channel '$channel'\n" if $opt_t;
+		$j += 2;
+		my $dir = '';
+		if ($uID =~ /$Q__XBWL__/) {	# /^Q([XBWL])/ or /^[IQ]([XBWL])/ if $opt_d
+		    if ($channel == 0) {
+			warn "$named: trying to register receiver '$uID' at channel 0 - error\n";
+			next;
+		    }
+		    $dir = 'R';
+		    $frameCount++;
+		    if ($channel < 0) {
+			$channel = -$channel;
+			print "$named: registering receiver '$uID' on channel $channel twice - equivalence\n" if $opt_t;
+		    } else {
+			$ChannelsQ[$channel] = 0;	# initial value and Q definition
+			## when this array element is defined, it is a Q[XBWL] receiver
+			if ($1 eq 'X') {
+			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
+			    ## when this array slice is defined, channel is a QXn.m
+			    ## Q[BWL]n have this slice undefined for their channel
+			}
 		    }
 		}
-		$outByte = 0;
-		if ($inByte) {
-		    print "send I$uID 0 --> $inByte\n" if $opt_t;
-		    $conn->send_now("$uID.$inByte");
+		elsif ($uID =~ /^I([XBWL])/) {
+		    if ($channel <= 0) {
+			warn "$named: trying to register sender '$uID' twice - not allowed\n";
+			next;
+		    }
+		    $dir = 'S';
+		    $frameCount++;
+		    $ChannelsI[$channel] = $in;	# initial value and I definition
+		    ## when this array element is defined, it is a I[XBWL] sender
+		    if ($1 eq 'X') {
+			for my $index (0 .. 7) {
+			    $ChannelsIX[$channel][$index] = ($in & $masks[$index]) ? 1 : 0;
+			}
+			## when this array slice is defined, channel is a IXn.m
+			## I[BWL]n have this slice undefined for their channel
+		    }
 		}
-	    } elsif ($value =~ /^\d+$/ and $value < 256) {
-		my ($diff, $mask, $index, $val);
-		$diff = $outByte ^ $value;	# $outByte initialized to a number for correct XOR
-		while ($diff) {			# age old algorithm from CSR days
-		    $mask = $diff & -$diff;	# rightmost set bit from diff
-		    $index = $bitIndex[$mask];
-		    $val = ($value & $mask) ? 1 : 0;
-		    print "Q$uID.$index $val <-- $outputs[$index] ($value)\n" if $opt_t;
-		    $outputs[$index] = $val;	# modify viewable output
-		    $diff &= ~$mask;		# clear rightmost bit in diff
+		if ($dir) {
+		    $regId = "$dir$uID";
+		    $ChannelNames[$channel] = "$uID";
+		    $IONames{$regId} = $channel;
+		    ## build only boxes whose IONames entry is defined
+		    print "register: $regId	channel = $channel	in = $in\n" if $opt_t;
 		}
-		$outByte = $value;		# ready for next message
 	    } else {
-		warn "Q$uID received spurious message: '$msg'\n";
+		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
 	    }
-	} elsif ($uID =~ /^[BWL]/) {
-	    if ($value eq "R") {
-		print "$uID rcvd R - reset from iCserver\n" if $opt_t;
-		if ($outputs[0]) {
-		    print "init Q$uID 0 <-- $outputs[0]\n" if $opt_t;
-		    $outputs[0] = 0;
-		}
-		if (length $inByte and $inByte) {
-		    print "send I$uID 0 --> $inByte\n" if $opt_t;
-		    $conn->send_now("$uID.$inByte");
-		}
-	    } elsif ($value =~ /^-?\d+$/) {
-		print "Q$uID $value <-- $outputs[0]\n" if $opt_t;
-		$outputs[0] = $value;
-	    } else {
-		warn "Q$uID received spurious message: '$msg'";
-	    }
+	}
+	if ($j) {
+	    $j == scalar @ArgNames or
+		die "$named: $j: not enough registration replies from iCserver - system error";
+	    $register = 0;	# correct number of registration replies have been received
 	}
     }
 }
@@ -399,3 +636,116 @@ sub printMicroSeconds {
 	$t0 = $t1;
     }
 }
+__END__
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ iCbox - a TK-widget to provide virtual digital and analog I/O
+
+=head1 SYNOPSIS
+
+ iCbox [-dtmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>][ -c <colm>]
+       [ -RrJjOo <num>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
+    ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
+            Any ID can be preceded by 'I' or 'Q' in which case
+            only that input or output is generated (default is both)
+            default ID is X0 generating input IX0 and output QX0
+            A range of ID's can be specified with -; eg IX0-IX7
+    ID-inst Each ID can be followed by -<inst>, where <inst> consists
+            of up to 3 numeric charactes (usually 1 digit).
+            Such an appended instance code takes precedence over the
+            general instance specified with the -i <inst> (see below).
+    ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+            applies only to input ID's. One =ini applies to each input
+            in a range of ID's; eg X5-X7=3 inits IX5 IX6 and IX7 to 3.
+    -s host host name of server    (default 'localhost')
+    -p port service port of server (default '8778')
+    -n name registration name (default first full ID)
+    -i inst instance ID for this iCbox (3  alphanumerics maximum)
+    -c colm maximum number of columns in a row (default 12)
+    -f file read additional ID parametes from this file
+    -d      display external inputs IMn only (no ini values allowed)
+    -t      trace debug messages
+    -m      display elapsed time in seconds and microseconds
+    -h      help, ouput this Usage text only
+ The following options apply to analog units with ID Bx, Wy or Lz only
+    -R num  from for input and output (default 0)
+    -J num  from for input only
+    -O num  from for output only
+    -r num  to for input and output (default 100)
+    -j num  to for input only
+    -o num  to for output only
+    -l len  length of scales (default 170)
+
+=head1 DESCRIPTION
+
+ ID parameters
+
+ X0 X2    generates inputs and outputs IX0 QX0 IX2 QX2 in that order
+ B0-B2    generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
+ IW3 IW7  generates only inputs IW3 and IW7
+ QL4-QL7  generates outputs QL4 QL5 QL6 QL7
+
+ Combined input/output or input-only parameters can be initialised
+ with =<number>.
+ <number> may be decimal, octal, hexadecimal or binary as follows:
+ X10=15 X11=017 IX12=0xf IX13=0b1111    all equal decimal 15
+ only decimal initialisers may be preceded by a minus sign
+ IW10=-100 initialises IW10 with -100
+
+ An initialiser may be placed after the second parameter of a range.
+ Every input in the range will be initalised to the same value.
+ IW20-IW27=100  initialises IW20 IW21 .. IW27 with 100
+ X20-X27=0x3a   initialises IX20 IX21 .. IX27 with 0x3a
+ Outputs cannot be initialised.
+
+ID-parameter, range and initialiser must be written without spaces
+in the command line unless they are quoted. In the optional
+INI file which can be read with the -f option, white space can
+be placed between parameter, range and initialiser. They must
+only be all in one line. Any extraneous text is ignored (comments).
+
+A seperate frame is generated for each input and output ID; two frames
+for an ID not specifying I or Q. Each frame is labelled with the ID
+followed by the optional instance; eg IX0 or IX0-1. The number of frames
+is limited to 12, to prevent the whole widget becoming too wide. On the
+other hand the number of rows is also limited to 3 (has precedence). The
+number of frames in a row (columns) may be specified with the -c option.
+
+Digital frames have a vertical row of 8 Checkbuttons labelled .0 .1 ... .7
+for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set and
+may be pressed on and off; Output Checkbuttons are red when set and display
+an external value only - they cannot be pressed.
+
+Analog frames have a vertical slider labelles 0 to 100 by default. Analog inputs
+have a green slider - analog outputs a red slider. Only input sliders can be
+moved manually.
+
+An iCbox generated with the -d option will make input frames which behave
+like outputs (except for the labels). This is useful for monitoring real
+external inputs (and outputs).
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<icc(1)>, L<iClive(1)>, L<iCserver(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.

@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -19,7 +19,7 @@ static const char cexe_part1[] = "\
  *******************************************************************/\n\
 \n\
 static const char cexe_h[] =\n\
-\"@(#)$Id: cexe.h,v 1.21 2004/03/19 17:49:29 jw Exp $\";\n\
+\"@(#)$Id: cexe.h,v 1.22 2004/12/22 16:53:52 jw Exp $\";\n\
 \n\
 #include	<stdio.h>\n\
 #include	\"icg.h\"\n\

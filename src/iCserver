@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2001  John E. Wulff
+#	Copyright (C) 2000-2005  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -12,56 +12,10 @@
 #
 #	iCserver
 #
-#	Server which can accept any number of iC I/O clients
-#	and initially one iC Controller iCC (planned are many)
+#	The full specification is in the POD documentation at the end
 #
-#	John E. Wulff	28-May-2000
-#
-#	Protocol between I/O and iCC clients and server:
-#
-#	Registration:	UnitID
-#			X0 .. X63  from bit  I/O to server
-#			B0 .. B63  from byte I/O to server
-#			W0 .. W62  from word I/O to server (even only)
-#			L0 .. L60  from long I/O to server (4 byte boundary)
-#			C0 .. C7   from iCC to server
-#			D0 .. D7   from live display to server
-#
-#	I/O values:	Value
-#			0 .. 255    from bit/byte I/O to server
-#			0 .. 65535  from word I/O to server
-#			0 .. 2^32-1 from word I/O to server
-#
-#			UnitID.Value
-#			X0.0 .. X63.255    from server to iCC bit
-#			B0.0 .. B63.255    from server to iCC byte
-#			W0.0 .. W62.65535  from server to iCC word
-#			L0.0 .. L60.2^32-1 from server to iCC long
-#			D0.x .. D7.x       from server to iCC live display
-#					   where x is variable length message
-#
-#	The same formats are used from server to I/O and iCC to server.
-#	The direction of transmission determines if an I/O messages
-#	is input or output.
-#
-#	Each I/O value message constitutes an event which updates
-#	that value at the sink. Several messages may be grouped
-#	and seperated by comma (,)
-#
-#	Byte source and sink Units may be X0 X1 X2 .. X63 and B0 B1 B2 .. B63
-#	Word source and sink Units must be even W0 W2 W4 .. W62
-#	Long source and sink Units must be on 4 byte boundaries W0 W4 W8 .. W60
-#
-#	The Server receives messages from the I/Os, identifies the
-#	UnitID under which that I/O is registered and prefixes the
-#	UnitID and a full stop to the message and sends it on to the iCC.
-#
-#	Messages received from the iCC are stripped of the leading
-#	UnitID and comma. The rest is sent to the I/O Unit corresponding
-#	to the UnitID stripped from the message.
-#
-#	For measuring reaction times the Module Time::HiRes may be used.
-#	This activates the -m option.
+#	For measuring reaction times the Module Time::HiRes is used.
+#	This is activated by the -m option.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
 #
 ########################################################################
@@ -69,14 +23,24 @@
 use Msg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use strict;
+use warnings;
 
-my %UnitIDs = ();	# indexed by $conn - stores hash of UnitIDs
-			## I0 I1 ... connected at this connection
-my %Connections = ();	# indexed by UnitId I0 I1 ... stores connection
-my %IOs = ();		# indexed by UnitNo as byte address
-my %Values = ();	# indexed by UnitId I0 I1 ... stores latest value
-my $connICC;		# connection of the iC Control client iCC
-my $maxIOs = undef;	# maximum no of IO addresses allowed by iCC
+my %Clients = ();	# indexed by $name - existence of named client (duplicate clients)
+my %Channels = ();	# indexed by $name - points to correct channel (duplicate channels)
+my %Equivalences = ();	# indexed by $name - points to names with same channel
+my %EquivChannels = ();	# indexed by $name - points to channel of equivalent names
+my %ClientNames = ();	# indexed by $conn - points to client name for a connection
+my @Senders = ();	# indexed by $channel ... stores send connection, name and current value
+			# [ 0: conn, 1: name, 2: value ]
+my @Receivers = ();	# indexed by $channel ... stores receive connections and names
+			# [ [ 0: conn1, 1: name1 ], [ 2: conn2, 3: name2 ] ... ]
+my %ReceiverData = ();	# indexed by $conn - holds $conn, channel:value data pairs
+my $numberOfConnections = 0;
+my $maxChannel = 0;
+my $ackString = '';
+my $iniString = '';
+my @AutoVivify = ();
+my $AutoDebug = '';
 
 ########################################################################
 #
@@ -86,36 +50,105 @@ my $maxIOs = undef;	# maximum no of IO addresses allowed by iCC
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
+Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	$named
+		[ -G <dbg>][ <list of equivalences>][ <list of client calls>]
 	-s host	address of server - clients must specify the same address
 		     unless (default '0.0.0.0' which accepts any client)
 	-p port	service port of server for all clients  (default '8778')
-	-r	reset registered outputs when controller disconnects
+	-f file	read options, equivalences and client calls from this file
+	-a	autovivify I/O clients for missing I/O's with cmd
+	-A cmd	use <cmd> to autovivify I/O clients (default 'iCbox')
+	-g      autovivify debugger when an iC control application registers
+	-G dbg	use <dbg> to autovivify debugger (default 'iClive')
+	-r	reset registered receivers when sender disconnects
+	-k	kill previous client, when a new client with the same
+		name registers (default: do not accept the new client)
 	-t	trace messages for debugging
 	-m	display elapsed time in seconds and microseconds
-	    (Requires Module Time::HiRes available from CPAN - see source)
+	<list of equivalences>
+		eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
+	<list of client calls>
+		eg: 'iCbox X0-X3' 'iCbox X10' sort
+		if a client call has arguments, the call must be quoted
 	-h	help, ouput this Usage text only
-	NOTE:	if a client call has arguments, the call must be quoted
-		eg: @<<<<<<< 'iCbox X1'
-		$named
-Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
+Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.30 2004/11/10 17:47:56 jw Exp $
+$Id: iCserver,v 1.31 2005/01/17 14:08:01 jw Exp $
 .
 
-use vars qw($opt_t $opt_m $opt_s $opt_p $opt_r $opt_h);
+use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
 require "getopts.pl";
-&Getopts('tms:p:rh');			# sets $opt_h if -h etc
+&Getopts('agkrtTms:p:f:A:G:h');	# sets $opt_h if -h etc
+$| = 1 if $opt_t or $opt_m;	# otherwise STDOUT is not flushed if piped
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
+if (defined $opt_A) {
+    $opt_a = 1;
+} else {
+    $opt_A = 'iCbox';
+}
+if (defined $opt_G) {
+    $opt_g = 1;
+} else {
+    $opt_G = 'iClive';
+}
+
+########################################################################
+#
+#	Analyse equivalences and client call parameters
+#
+#	Equivalences consist of two or more identifiers seperated by an
+#	equal sign (=).
+#
+#	Client calls consist of an identifier optionally followed by a
+#	spaced seperated list of parameters.
+#
+#	Identifiers match /[\.\d\w_]+/
+#
+#	Individual equivalences and client calls must be written without
+#	spaces in the command line unless they are quoted. In the optional
+#	INI file which can be read with the -f option, each equivalence
+#	and client call must be placed in one line. White spaces may be
+#	used in equivalence lines and must be used to seperate a client
+#	call from its parameters. Client calls need not be quoted in the
+#	INI file. If quoted it is stripped before pushing on @ARGV.
+#
+#	Comments are started with any other character than .\d\w_
+#
+########################################################################
+
+if ($opt_f) {
+    open IN, $opt_f or die "can't open ID file $opt_f! $!";
+    while (<IN>) {		# read next entry from ID file into $_
+	print "$opt_f: $_" if $opt_t;
+	chomp;			# $_
+	if (/^\s*(["']?)([.\d\w_][^"']*)/) {
+	    push(@ARGV, $2);	# put next ID on end of @ARGV
+	}
+	## any garbage in the file is skipped - treated as comments
+    }
+    close IN;
+}
+print "ARGV:", join(':', @ARGV), ":\n" if $opt_t and @ARGV;
+
 my ($t0, $t1);
 if ($opt_m) {
     use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
     $t0 = [gettimeofday];	# start of program
+}
+
+$SIG{PIPE} = \&catch_zap;		# signal 13
+if ($opt_t) {
+    $SIG{HUP}  = \&catch_zap;	# signal 1
+    $SIG{USR1} = \&catch_zap;	# signal 10	(stop -10 iCserver)
+    $SIG{USR2} = \&catch_zap;	# signal 12	(stop -12 iCserver)
+} else {
+    $SIG{USR1} = 'IGNORE';	# signal 10	(stop -10 iCserver)
+    $SIG{USR2} = 'IGNORE';	# signal 12	(stop -12 iCserver)
 }
 
 ########################################################################
@@ -132,21 +165,50 @@ print "Server created. Waiting for events\n";
 
 ########################################################################
 #
-#	Start clients named in argument list
+#	Allocate equivalences and start clients named in argument list
 #
 #	start each argument as a seperate process after splicing in
 #	optional global switches -p <port> -t -m
 #
 ########################################################################
 
-my $pid;
-ARG: while ($ARGV = shift @ARGV) {
+my ($argv, $pid);
+    while ($argv = shift @ARGV) {
+    if ($argv =~ /^\s*([\.\d\w_][-\.\d\w_]*)\s*=/) {	# recognise equivalence
+	my ($nm, $nn, $ch);
+	$nm = $1;
+	print "equivalence '$argv'\n" if $opt_t;
+	$ch = allocate_channel($nm);		# allocate new channel for first identifier
+	push @{$Equivalences{$nm}}, $ch;	# channel
+	$EquivChannels{$nm} = $nm;		# used in AutoVivify
+	while ($argv =~ /=\s*([\.\d\w_][-\.\d\w_]*)/g) {
+	    $nn = $1;
+	    allocate_channel($nn, $ch);		# allocate same channel for next identifier
+	    push @{$Equivalences{$nm}}, $nn;	# equivalent name
+	    $EquivChannels{$nn} = $nm;		# used in AutoVivify
+	}
+    } else {
+	exec_process($argv);
+    }
+}
+
+Msg->event_loop();
+
+########################################################################
+#
+#	Fork and exec another process
+#
+########################################################################
+
+sub exec_process {
+    my ($argv) = @_;
+    print "exec '$argv'\n" if $opt_t;
     FORK: {
 	sleep 1 if defined $pid;
-	next ARG if ($pid = fork);
+	return if ($pid = fork);
 	if (defined $pid) {	# $pid is zero if defined
 	    ## dispatch child process
-	    my @call = split " ", $ARGV;
+	    my @call = split " ", $argv;
 	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
 	    splice @call, 1, 0, '-t' if defined $opt_t;
 	    splice @call, 1, 0, '-m' if defined $opt_m;
@@ -159,12 +221,25 @@ ARG: while ($ARGV = shift @ARGV) {
 	    redo FORK;
 	} else {
 	    ## weird fork error
-	    die "Can't fork: $!\n";
+	    die "$named: Can't fork: $!\n";
 	}
     }
-}
+} # exec_process
 
-Msg->event_loop();
+########################################################################
+#
+#	Catch and report stray signals
+#
+########################################################################
+
+sub catch_zap {
+    my $signame = shift;
+    if ($signame =~ /^USR1/) {
+	print_tables();
+    } else {
+	die "$named: Caught SIG$signame: $!";
+    }
+} # catch_zap
 
 ########################################################################
 #
@@ -175,20 +250,235 @@ Msg->event_loop();
 sub login_proc {
     my ($conn, $host, $port) = @_;
     print "Connection $host:$port at server\n";
-    ## Unconditionally accept an incoming connection request
-    $UnitIDs{$conn} = undef;	# $conn accepted but no registration yet
     return \&rcvd_msg_from_client;
-}
+} # login_proc
+
+########################################################################
+#
+#	Disconnect a client
+#
+#	undef $Senders[$channel][0] for all channels at this $conn
+#	splice out all @{$Receivers[$channel]} entries with this $conn
+#
+########################################################################
+
+sub disconnect {
+    my ($conn, $sender) = @_;
+    my ($channel, $con, $receiver, $rflag);
+    $sender = $ClientNames{$conn} unless defined $sender;
+    if (defined $sender) {
+	print "$sender: client no. $numberOfConnections unregistering now\n" if $opt_t;
+	%ReceiverData = ();		# clear all keys and entries
+	for ($channel = 0; $channel <= $maxChannel; $channel++) {
+	    $rflag = 0;
+	    if (defined ($con = $Senders[$channel][0]) and $con eq $conn) {
+		$Senders[$channel][0] = undef;	# no need to splice out only array entry
+		if ($opt_r and $Senders[$channel][2] != 0) {
+		    $rflag = 1;
+		    $Senders[$channel][2] = 0;			# reset sender
+		}
+		print "$sender: S $channel undef\n" if $opt_t;
+	    }
+	    if ($rflag) {
+		# scan once before slicing out any array elements
+		foreach $receiver (@{$Receivers[$channel]}) {
+		    $con = $$receiver[0];
+		    if ($con ne $conn) {
+			pushReceiverData($con, "$channel:0");	# reset receiver
+		    }
+		}
+	    }
+	    my $i = 0;
+	    foreach $receiver (@{$Receivers[$channel]}) {
+		if ($$receiver[0] eq $conn) {
+		    splice @{$Receivers[$channel]}, $i, 1;
+		    print "$sender: R $channel spliced out\n" if $opt_t;
+		    ############################################################
+		    ## checked that there are no multiple Receiver entries
+		    ## with the same $conn when registering
+		    ############################################################
+		    last;
+		}
+		$i++;		# index of next entry to be spliced out
+	    }
+	}
+	delete $ClientNames{$conn};
+	delete $Clients{$sender};
+	$numberOfConnections--;
+	if ($numberOfConnections <= 0) {
+	    ############################################################
+	    ## This was last connection - clear all arrays and hashes
+	    ## this prevents channel numbers getting higher and higher
+	    ############################################################
+	    %Clients = ();
+	    %Channels = ();
+	    %ClientNames = ();
+	    @Senders = ();
+	    @Receivers = ();
+	    $maxChannel = 0;
+	    ############################################################
+	    ## Re-constitute equivalences obtainened from initial ARGV
+	    ############################################################
+	    if (scalar(keys(%Equivalences))) {
+		my ($nm, $nn, $ch, $others);
+		foreach $nm (sort { $Equivalences{$a}[0] <=> $Equivalences{$b}[0] } keys %Equivalences) {
+		    $ch = allocate_channel($nm);	# allocate new channel for first identifier
+		    if ($ch != $Equivalences{$nm}[0]) {
+			warnD("$named: ch: $ch != $Equivalences{$nm}[0] - System error\n");
+		    }
+		    foreach $nn (@{$Equivalences{$nm}}[1 .. $#{$Equivalences{$nm}}]) {
+			allocate_channel($nn, $ch);	# allocate same channel for next identifier
+		    }
+		}
+	    }
+	    print "$named: last client has unregistered\n" if $opt_t;
+	}
+    } else {
+	warnD("the connection $conn is not currently registered - system error");
+    }
+    $conn->disconnect();
+} # disconnect
+
+########################################################################
+#
+#	Warning sent to Debug (iClive) registered on channel 0
+#
+########################################################################
+
+sub warnD {
+    my ($warnMsg) = @_;
+    my ($name, $channel, $aref, $receiver, $rconn);
+    warn $warnMsg;		# normal terminal warning
+    chomp $warnMsg;
+    if ($aref = $Receivers[0]) {	# channel 0 for error messages
+	foreach $receiver (@$aref) {
+	    $rconn = $$receiver[0];
+	    print "$named: sent warning => $ClientNames{$rconn}\n" if $opt_t;
+	    $rconn->send_now("0:1;$warnMsg");
+	}
+    }
+} # warnD
+
+############################################################
+#
+#	Allocate a channel to a name
+#
+#	This gives each Sender and Receiver pair an index called
+#	$channel in the working arrays @Senders and @Receivers.
+#	Each data transmission starts with this channel number.
+#	Some differing names may use the same channel (equivalences).
+#
+############################################################
+
+sub allocate_channel {
+    my ($name, $channel) = @_;
+    my $ch;
+no warnings;
+    print "$named: allocate_channel $name, '$channel'\n" if $opt_t;
+use warnings;
+    unless (defined ($ch = $Channels{$name}) and defined $channel) {
+	$channel = $ch unless defined $channel;
+	$channel = ++$maxChannel unless defined $channel;
+	$Channels{$name} = $channel;
+    } else {
+	warnD("$named: attempting to allocate channel for $name twice\n");
+    }
+    return $channel;
+} # allocate_channel
+
+############################################################
+#
+#	Print tables of ClientNames and registered Senders and Receivers
+#	Also print table of equivalences if any are defined
+#
+############################################################
+
+sub print_tables {
+    my ($con, $channel, $receiver);
+    print "$named: Table of ClientNames and registered Senders and Receivers\n";
+    foreach $con (sort { $ClientNames{$a} cmp $ClientNames{$b} } keys %ClientNames) {
+	print "$ClientNames{$con}	$con\n";
+    }
+    if (scalar(keys(%Equivalences))) {
+	my ($nm, $nn, $others);
+	print "ch:	Equivalences\n";
+	foreach $nm (sort { $Equivalences{$a}[0] <=> $Equivalences{$b}[0] } keys %Equivalences) {
+	    $others = join "\t", @{$Equivalences{$nm}}[1 .. $#{$Equivalences{$nm}}];
+	    print "$Equivalences{$nm}[0]:	$nm	$others\n";
+	}
+    }
+    print "ch:	Sender	name	value	Recv[0]	name[0]	Recv[1]	name[1]	...\n";
+    for ($channel = 0; $channel <= $maxChannel; $channel++) {
+	my ($chName, $name, $value, $rcon, $rName, @rCons) = ();
+	if (not defined ($con = $Senders[$channel][0]) or
+	    not defined ($chName = $ClientNames{$con})) {
+	    $chName = "<undef>";
+	}
+	unless (defined ($name = $Senders[$channel][1])) {
+	    $name = "<undef>";
+	}
+	unless (defined ($value = $Senders[$channel][2])) {
+	    $value = "<undef>";
+	} elsif (length $value > 7) {
+	    $value =~ s/(......).*/$1>/;
+	}
+	foreach $receiver (@{$Receivers[$channel]}) {
+	    if ($rcon = $$receiver[0]) {
+		unless (defined ($rName = $ClientNames{$rcon})) {
+		    $rName = "<undef>";
+		}
+		push @rCons, $rName, $$receiver[1];
+	    }
+	}
+	$rName = @rCons ? join "\t", @rCons : "<no receivers>";
+	if ($chName ne "<undef>" or $name ne "<undef>" or $value ne "<undef>") {
+	    print "$channel:	$chName	$name	$value	$rName\n";
+	} elsif (@rCons) {
+	    if ($channel == 0) {
+		print "$channel:				$rName\n";
+	    } else {
+		print "$channel:	<no sender>		$rName\n";
+	    }
+	}
+    }
+} # print_tables
+
+########################################################################
+#
+#	Push connection and messages
+#
+########################################################################
+
+sub pushReceiverData {
+    my ($rconn, $msg1) = @_;
+    unless (defined $ReceiverData{$rconn}) {
+	## this is the first message for this receiver
+	push @{$ReceiverData{$rconn}}, $rconn;	# save real connection
+    }
+    push @{$ReceiverData{$rconn}}, $msg1;	# collect messages for sending
+} # pushReceiverData
 
 ########################################################################
 #
 #	Receive message from client
+#
+#	connection $conn identifies the sender
+#	message $msg has the following characteristics:
+#	. undefined		ignore
+#	. zero length		client has signalled shutdown
+#	. comma seperated list	break up into individual items $msg1
+#	each item $msg1 has the following charecteristics:
+#	. matches /^[NSR]/	registration item
+#	. matches /\d+:\d+/	split into $channel and $value, send
+#				value to all receivers for the channel
+#	. else eror
 #
 ########################################################################
 
 sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
     my ($sec, $usec);
+    my ($con, $msg1, $aref, $direction, $name, $channel, $sender, $receiver, $rconn, $ini);
     if ($opt_m) {
 	$t1 = [gettimeofday];
 	$sec =  $t1->[0] - $t0->[0];
@@ -204,183 +494,838 @@ sub rcvd_msg_from_client {
 	}
     }
     if (defined $msg) {
-	my @unitIDs = sort keys %{ $UnitIDs{$conn} };	# all unitIDs
-	my $unitID = $unitIDs[0];			# first unitID
 	my $len = length $msg;
-# print "($len)$msg", defined $unitID ? " $unitID\n" : " ID?\n";
+no warnings;
+	$sender = $ClientNames{$conn};
+	print "($len)$msg< '$sender'\n" if $opt_T;
+use warnings;
 	if ($len == 0) {
 	    ############################################################
 	    ## Client $conn has signalled shutdown - disconnect client
-	    ## take appropriate actions on other clients
+	    ## clear all entries for $conn in @Senders and @Receivers
 	    ############################################################
-	    if (defined $unitID and exists $Connections{$unitID}) {
-		delete $Connections{$unitID};
-		delete $UnitIDs{$conn};		# all unitIDs for this connection
-		$conn->disconnect();
-		if ($unitID =~ /^([XBWL])(\d+)$/) {
-		    my $unitNo = $2;
-		    delete $IOs{$unitNo};
-		    if ($1 eq 'W') {
-			delete $IOs{$unitNo+1};
+	    disconnect($conn);
+	}
+	else {
+	    foreach $msg1 (split /,/, $msg) {	# break up multiple messages
+		if ($msg1 =~ /^(\d+):(.*)$/) {	# data message
+		    ## $1 is channel : $2 is value
+		    $channel = $1;
+		    $con = $Senders[$channel][0];
+		    if (not defined $con or $con eq $conn) {
+			$Senders[$channel][2] = $2;	# latest value in case lost connection
+			if ($aref = $Receivers[$channel]) {
+			    foreach $receiver (@$aref) {
+				$rconn = $$receiver[0];
+				pushReceiverData($rconn, $msg1);
+			    }
+			}
+			if ($opt_t and (not $aref or not @$aref)) {
+			    print "$ClientNames{$conn} $msg1 => dummy\n" if $opt_t;	# not registered
+			}
+		    } else {
+    print "conn = $conn, channel [0] = $Senders[$channel][0]\n";
+			warnD("$ClientNames{$Senders[$channel][0]} $msg1 received on wrong connection $ClientNames{$conn}\n");
 		    }
 		}
-		if ($unitID =~ /^C/) {
-		    $connICC = undef;
-		    $maxIOs = undef;
-		    if ($Connections{'D0'}) {
-			delete $UnitIDs{$Connections{'D0'}};
-			$Connections{'D0'}->disconnect();	# stop live display
-			delete $Connections{'D0'};
-			print "D0 disconnected - live display stopped\n" if $opt_t;
+		elsif ($msg1 =~ /^N(.+)/) {
+		    $name = $1;
+		    $con = $Clients{$name};
+		    if ($con) {
+			############################################################
+			## a client with the same name was previously registered
+			############################################################
+			unless ($opt_k) {
+			    ############################################################
+			    ## kill the new client and report error
+			    ############################################################
+			    warnD("trying to register client '$name' twice - aborted\n");
+			    $conn->disconnect();	# new client was not registered yet
+			    last;			# killed new client process
+			}
+			############################################################
+			## -k option: unregister and disconnect previous instance
+			## proceed with new registration
+			############################################################
+			warnD("kill previous client '$name' - restarted\n");
+			disconnect($con, $name);	# kills old client process
+			if ($channel = $Channels{"D$name"}) {
+			    $iniString = "$channel:1";	# get S.T. from new client
+			}
 		    }
-		    ############################################################
-		    ## iCC disconnected - optionally reset all the attached I/Os
-		    ############################################################
-		    if ($opt_r) {
-			foreach my $con1 (sort keys %UnitIDs) {
-			    my $uID;
-			    foreach $uID (sort keys %{ $UnitIDs{$con1} }) {
-				if ($uID =~ /^[XBWL](\d+)$/) {
-				    unless (defined $Connections{$uID}) {
-					print "iCserver R to dummy $uID\n" if $opt_t;
+		    $Clients{$name} = $conn;		# client by this name exists now
+		    $ClientNames{$conn} = $name;	# name may change for iClive connections
+		    if ($name =~ /^-/) {
+			foreach $receiver (@{$Receivers[0]}) {
+			    if ($$receiver[0] eq $conn) {
+				$$receiver[1] = $name;			# name has changed
+				goto ALREADY_REGISTRERD;
+			    }
+			}
+			push @{$Receivers[0]}, [ $conn, $name ];	# warning registration
+		    }
+		    ALREADY_REGISTRERD:
+		    $numberOfConnections++;
+		    print "$name: client no. $numberOfConnections registering now\n" if $opt_t;
+		}
+		elsif ($msg1 =~ /^([SR])(.+)/) {
+		    $direction  = $1;
+		    $name = $2;
+		    $channel = allocate_channel($name);
+		    my $ack = $channel;		# used to build acknowledge string
+		    if ($direction eq 'S') {
+			if ($Senders[$channel][0]) {
+			    ############################################################
+			    ## A client is trying to register a sender twice
+			    ############################################################
+			    $ack = -$channel;
+			    warnD("$ClientNames{$conn}: trying to register S $name for channel $channel twice - aborted\n");
+			    # has registered name and may already have registered some receivers
+			    disconnect($conn);
+			    $ackString = '';
+			    last;
+			}
+			############################################################
+			## Register a new Sender
+			## sends all registered receivers on the channel a 0 value
+			## (this also works for iClive - NOP)
+			############################################################
+			$Senders[$channel][0] = $conn;
+			$Senders[$channel][1] = $name;
+			$Senders[$channel][2] = 0;		# default initial value
+			if ($aref = $Receivers[$channel]) {
+			    foreach $receiver (@$aref) {
+				$rconn = $$receiver[0];
+				if ($rconn) {
+				    pushReceiverData($rconn, "$channel:0");	# send initial value 0
+				} else {
+				    warn "$named: sender '$name' not connected when rgistering\n";
+				}
+			    }
+			} else {				# no receiver registered
+			    if ($opt_a and
+				$name =~ /^Q[XBWL]\d+/ and	# not part of an equivalence
+				not $EquivChannels{$name}) {	# not even first for senders
+				push @AutoVivify, $name;
+				print "Autovivify sender '$name'\n" if $opt_T;
+			    }
+			    if ($opt_g and			# C_channel only as trigger
+				$name =~ /^C(\w+)(-(\d{1,3}))?$/ and
+				not $EquivChannels{$name} and	# not part of an equivalence
+				not $AutoDebug) {		# only 1 per application
+				if (defined $3) {
+				    $AutoDebug = "$opt_G -i$3 $1.ic";
+				} else {
+				    $AutoDebug = "$opt_G $1.ic";
+				}
+				print "AutoDebug: '$AutoDebug' for sender '$name'\n" if $opt_T;
+			    }
+			}
+		    } elsif ($direction eq 'R') {
+			############################################################
+			## ignore duplicate Receiver entries for this $conn
+			############################################################
+			foreach $receiver (@{$Receivers[$channel]}) {
+			    if ($$receiver[0] eq $conn) {
+				# happens if receiver equivalences in the same client
+				$ack = -$channel;		# not an error in iCbox
+				print "Register R $name for channel $channel at '$ClientNames{$conn}' twice\n" if $opt_t;
+			    }
+			}
+			if ($ack > 0) {
+			    push @{$Receivers[$channel]}, [ $conn, $name ];	# actual R registration
+			    if ($Senders[$channel][0]) {	# is sender registered ?
+				$ini = $Senders[$channel][2];	# yes - current value
+				if ($ini) {
+				    ############################################################
+				    ## sender is registered and has either initial value 0 or other
+				    ## current value - send new receiver value different to 0
+				    ## if sender is already registered
+				    ############################################################
+				    $ini = "$channel:$ini";
+				    if ($iniString) {
+					$iniString = join ',', $iniString, $ini;
 				    } else {
-					print "iCserver R to $uID\n" if $opt_t;
-					$Connections{$uID}->send_now("$uID.R");
+					$iniString = $ini;
 				    }
-				    $Values{$uID} = 0;	# save latest bit or analog value
+				}
+			    }
+			    elsif ($opt_a and			# no, sender not registered
+				$name =~ /^I[XBWL]\d+/) {
+				my $base = $EquivChannels{$name};
+				unless (defined $base) {
+				    $base = $name;
+				}
+				elsif ($base !~ /^I[XBWL]\d+/) {
+				    $base = '';			# not an input
+				}
+				if ($base) {
+				    push @AutoVivify, $base;
+				    print "Autovivify receiver '$base'\n" if $opt_T;
 				}
 			    }
 			}
 		    }
-		} elsif (defined $connICC) {
-		    ## pass clear input message to iCC
-		    print "I$unitID 0 to C0\n" if $opt_t;
-		    $connICC->send_now("$unitID.0");		# all inputs 0
-		}
-		print "$unitID has disconnected\n";
-	    }
-	} else {
-	    foreach my $msg1 (split /,/, $msg) {	# break up multiple messages
-		my ($uID, $value) = split /\./, $msg1, 2;
-		my $unitNo = undef;
-		my $max = undef;
-		if (defined $value) {
-		    if (not defined $connICC) {
-			print "I$uID $value to dummy C0\n" if $opt_t;
-		    } elsif ($conn eq $connICC) {
-			############################################################
-			## $msg1: 2.4 value 4 from iCC to I/O Q2
-			############################################################
-			if (defined $Connections{$uID}) {
-			    print "$unitID $value to Q$uID\n" if $opt_t;
-			    $Connections{$uID}->send_now("$uID.$value");
-			} else {
-			    print "$unitID $value to dummy Q$uID\n" if $opt_t;
-			}
-			$Values{$uID} = $value;	# save latest bit or analog value
+		    if ($ackString) {
+			$ackString = join ',', $ackString, $ack;
 		    } else {
-			############################################################
-			## $msg1: 3.5 value 5 from I/O I3 to iCC
-			############################################################
-			print "I$uID $value to C0\n" if $opt_t;
-			$connICC->send_now("$msg1");
+			$ackString = $ack;
 		    }
-		} elsif ($msg1 !~ /^[XBWLCD](\d+)( (\d+))?$/ or	# X0 X1 .. B0 .. W0 .. C0 D0 64
-		    (($max = $3), ($unitNo = $1) & 1) == 1 and $msg1 =~ /^W/) {
-		    warn "WARNING: $msg1: badly formed UnitID or odd WORD address";
-		} elsif (exists $Connections{$msg1} or
-		    $msg1 =~ /^[XBWL]/ and exists $IOs{$unitNo} or
-		    $msg1 =~ /^W/ and exists $IOs{$unitNo+1}) {
-		    delete $UnitIDs{$conn}{$msg1};
-		    $conn->disconnect();
-		    warn "Trying to attach $msg1 twice - disconnected\n";
-		} else {
-		    ############################################################
-		    ## registration
-		    ############################################################
-		    if ($msg1 =~ /^C/) {
+		    print "$ClientNames{$conn}: $direction $name	$ack\n" if $opt_t;
+		}
+		elsif ($msg1 =~ /^n(.+)/) {
+		    $name = $1;
+		    $con = $Clients{$name};
+		    unless ($con) {
 			############################################################
-			## C0 optionally followed by max number of I/Os
+			## no client with this name was previously registered
 			############################################################
-			$msg1 = "C$unitNo";		# take away max I/Os
-			if (defined $connICC) {
-			    delete $UnitIDs{$conn}{$msg1};
-			    $conn->disconnect();
-			    warn "Trying to attach $msg1 twice - disconnected\n";
-			    next;
+			warnD("$name: no client with n $name was previously registered\n");
+		    }
+		    print "$name: client no. $numberOfConnections unregistering now\n" if $opt_t;
+		    delete $ClientNames{$conn};
+		    delete $Clients{$name};
+		    $numberOfConnections--;
+		}
+		elsif ($msg1 =~ /^([sr])(.+)/) {
+		    $direction  = $1;
+		    $name = $2;
+		    unless (defined ($channel = $Channels{$name})) {
+			warnD("$ClientNames{$conn}: trying to unregister $name not previously registered - aborted\n");
+		    }
+		    if ($direction eq 's') {
+			unless ($Senders[$channel][0]) {
+			    warnD("$ClientNames{$conn}: trying to unregister s $name not registered as sender - aborted\n");
 			}
-			$connICC = $conn;		# the iCC connection
-			$maxIOs = $max;
-			if ($opt_t) {
-			    if (defined $maxIOs) {
-				print "maxIOs = $maxIOs\n";
+			############################################################
+			## Unregister a previously registered Sender
+			############################################################
+			if (defined ($con = $Senders[$channel][0]) and $con eq $conn) {
+			    $Senders[$channel][0] = undef;	# no need to splice out only array entry
+			    print "$sender: s $channel undef\n" if $opt_t;
+			} else {
+			    warnD("$ClientNames{$conn}: trying to unregister s $name not registered as sender - aborted\n");
+			}
+			## leave name
+			$Senders[$channel][2] = 0;	# reset initial value
+		    } elsif ($direction eq 'r') {
+			############################################################
+			## check that there are no Receiver entries with this $conn
+			############################################################
+			my $i = 0;
+			foreach $receiver (@{$Receivers[$channel]}) {
+			    if ($$receiver[0] eq $conn) {
+				splice @{$Receivers[$channel]}, $i, 1;
+				print "$sender: r $channel spliced out\n" if $opt_t;
+				############################################################
+				## checked that there are no multiple Receiver entries
+				## with the same $conn when registering
+				## only used for iClive which only registers one receiver
+				## but use full algorithm just in case of future clients
+				############################################################
+				last;
 			    } else {
-				print "maxIOs not defined\n";
-			    }
-			}
-			############################################################
-			## new iCC connected - reset all the attached I/Os
-			############################################################
-			foreach my $con1 (sort keys %UnitIDs) {
-			    foreach $uID (sort keys %{ $UnitIDs{$con1} }) {
-				if ($uID =~ /^[XBWL](\d+)$/) {
-				    my $uIdNo = $1;
-				    unless (defined $Connections{$uID}) {
-					print "iCserver R to dummy $uID\n" if $opt_t;
-				    } elsif (defined $maxIOs and $uIdNo >= $maxIOs) {
-					warn "iCserver disconnects $uID because >= $maxIOs\n";
-					if (exists $Connections{$uID}) {
-					    $Connections{$uID}->disconnect();
-					    delete $Connections{$uID};
-					    delete $UnitIDs{$con1};		# all unitIDs for this connection
-					    delete $IOs{$uIdNo};
-					    if ($uID =~ /^W/) {
-						delete $IOs{$uIdNo+1};
-					    }
-					}
-				    } else {
-					print "iCserver R to $uID\n" if $opt_t;
-					$Connections{$uID}->send_now("$uID.R");
-				    }
-				    $Values{$uID} = 0;	# save latest bit or analog value
-				}
+				$i++;		# index of next entry to be spliced out
 			    }
 			}
 		    }
-		    if (defined $unitNo and (not defined $maxIOs or $unitNo < $maxIOs) and
-			($connICC or $msg1 !~ /^D/)) {
-			############################################################
-			## B0 B1 ... B63 W0 W2 ... W62 X0 X1 ... X63 D0 C0
-			############################################################
-			$UnitIDs{$conn}{$msg1} = $msg1;
-			$Connections{$msg1} = $conn;
-			if ($msg1 =~ /^([XBWL])/) {
-			    $IOs{$unitNo} = 1;
-			    if ($1 eq 'W') {
-				$IOs{$unitNo+1} = 1;
-			    }
-			}
-			print "Registered $msg1 at server\n";
-			if ($connICC and $msg1 =~ /^[XBWL]/) {
-			    $value = $Values{$msg1};	# saved bit or analog value from iCC
-			    if ($value) {
-				print "iCserver $value to Q$msg1\n" if $opt_t;
-				$Connections{$msg1}->send_now("$msg1.$value");
-			    }
-			}
-		    } else {
-			$conn->disconnect();	# live display must have a controller
-			if ($msg1 =~ /^D/) {
-			    warn "Trying to attach $msg1 when no controller - disconnected\n";
-			} else {
-			    warn "Trying to attach $msg1 when >= $maxIOs - disconnected\n";
-			}
-		    }
+		}
+		elsif ($msg1 eq 'T' and $opt_t) {
+		    print_tables();
+		}
+	    }
+	    $sender = $ClientNames{$conn};
+	    if ($ackString) {
+		print "ACK: $ackString => $sender\n" if $opt_t;
+		$conn->send_now($ackString);	# registration acknowledgment
+		$ackString = '';
+		if ($iniString) {
+		    ## must be independent xmission, because different rcv call in client
+		    print "INI: $iniString => $sender\n" if $opt_t;
+		    $conn->send_now($iniString);	# registration initialisation
+		    $iniString = '';
+		}
+		if (@AutoVivify) {
+		    my $autovivify = join ' ', sort {
+			my ($ha, $na, $hb, $nb);
+			$a =~ /([A-Z]+)(\d+)/; $ha = $1; $na = $2;
+			$b =~ /([A-Z]+)(\d+)/; $hb = $1; $nb = $2;
+			## print "$a $ha $na	$b $hb $nb\n" if $opt_T;
+			$na <=> $nb || $ha cmp $hb;
+		    } @AutoVivify;
+		    $autovivify = "$opt_A -n$sender-IO $autovivify";
+		    print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
+		    exec_process($autovivify);
+		    @AutoVivify = ();
+		}
+		if ($AutoDebug) {
+		    print "AUTODEBUG: '$AutoDebug'\n" if $opt_t;
+		    exec_process($AutoDebug);
+		    $AutoDebug = '';
 		}
 	    }
 	}
+	############################################################
+	## Scan destination connections for which data was collected
+	############################################################
+	foreach my $c (keys %ReceiverData) {	# only the unique string key for connection
+	    $aref = $ReceiverData{$c};
+	    $rconn  = shift @$aref;		# the real connection object
+	    if (defined $rconn) {
+		$msg1 = join ',', @$aref;	# one or more channel:value pairs
+		print "$sender $msg1 => $ClientNames{$c}\n" if $opt_t;
+		$rconn->send_now("$msg1");	# send channel:value pairs to destination
+	    } else {
+		warnD("no message to send to connection '$c' ???\n");
+	    }
+	}
+	%ReceiverData = ();		# clear all keys and entries for next receive
     }
     if ($opt_m) {
 	$t0 = [gettimeofday];
     }
-}
+} # rcvd_msg_from_client
+__END__
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ iCserver - the central server for iC clients
+
+=head1 SYNOPSIS
+
+ iCserver [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+          [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
+    -s host address of server - clients must specify the same address
+            unless (default '0.0.0.0' which accepts any client)
+    -p port service port of server for all clients  (default '8778')
+    -f file read options, equivalences and client calls from this file
+    -a      autovivify I/O clients for missing I/O's with cmd
+    -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
+    -g      autovivify debugger when an iC control application registers
+    -G dbg  use <dbg> to autovivify debugger (default 'iClive')
+    -r      reset registered receivers when sender disconnects
+    -k      kill previous client, when a new client with the same
+            name registers (default: do not accept the new client)
+    -t      trace messages for debugging
+    -m      display elapsed time in seconds and microseconds
+    <list of equivalences>
+            eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
+    <list of client calls>
+            eg: 'iCbox X0-X3' 'iCbox X10' sort
+            if a client call has arguments, the call must be quoted
+    -h  help, ouput this Usage text only
+
+=head1 DESCRIPTION
+
+iCserver acts as a router for a number of iC clients in a network, who
+send data to each other. Each client connects via TCP/IP to iCserver on
+a specified port (8778 default at the moment).  Only one iCserver on one
+port may run in a network.  It is possible to run several iCservers on
+different ports.  Clients can connect either via 'localhost' (default
+for iC clients) when they run on the same processor as iCserver or via
+the host address of the processor iCserver is running on.  On connection
+each client registers itself with iCserver.
+
+Additional functionality in iCserver.
+
+ a) equivalence - or interconnection of different I/O addresses in
+    iCserver. This option puts two or more entries in the Hash and
+    assigns them a common channel number. Send or receive entries
+    associated with the channel are undefined at this stage. Then
+    when registration of one of the equivalence names occurrs,
+    the common channel number is used. With this option different
+    IEC-1131 addresses can be assigned to the same channel, thereby
+    making them equivalent or interconnecting them.
+
+    This functionality is required when the output of one iC control
+    application is to be input for another instance if the same
+    control application.  Several equivalences may be specified. The
+    order of the equivalence is not relevant (it is not an assignment).
+    For correct autovivification outputs should be named first though.
+
+    Example 1:
+	iCserver QX7-0=IX7-1 QX7-1=IX7-0
+
+    This connects QX7 of instance 0 with IX7 of instance 1 via a common
+    channel and QX7 of instance 1 with IX7 of instance 0 via another
+    channel. Equivalencing an output and an input of the same instance
+    is possible but rather useless and much slower than using internal
+    variables (it may be useful for testing).
+
+    Equivalencing is also required if one external I/O source must be
+    connected to the input of more than one iC control application.
+
+    Example 2:
+	iCserver IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
+
+    This sets up common inputs IX8 and IX9 to two instances of the same
+    controller. Naming the other inputs with the same base IEC-1131
+    address is not necessary but highly advisable for transparency in
+    the documentation. The first address is used for autovivifying an
+    iCbox if it does not exist already. Autovivification does not take
+    place for a channel, until a receiver has been registered for that
+    channel and all other registrations have taken place.
+
+    Equivalencing two or more output addresses (Q...) will lead to
+    an error, if both output addresses register as senders in an iC
+    control application - this would lead to two or more senders on
+    the same channel. When the second or later output sender registers,
+    the error will be reported. A similar error will be reported if a
+    second external input device in an equivalence chain is registered
+    as a second sender. This would happen if both IX8 and IX8-0 were
+    started as iCboxes after the equivalence statement in Example
+    2 above.
+
+ b) client calls - a list of calls with their parameters allow iCserver
+    to start a number of clients as seperate processes like
+    a shell.  These are usually all the I/O client(s) and control
+    application(s) to make up a complete control system. By providing
+    this functionality in iCserver, all the information for starting
+    a control system is grouped in one place.
+
+    Example 3:
+	'iCbox -n sorter-IO IX0 QX0 QX1' sorter
+
+    This starts two clients - iCbox and the control application sorter.
+    Calls with parameters must be quoted on the command line.
+
+ c) -f option - execute a file with iCserver options at startup.
+    For very large equivalence tables a file defining equivalences and
+    possibly other iCserver options can be used.
+
+	iCserver -f <equivalence_file>
+
+    Format of the equivalence file:
+	<equivalence_line>
+	<equivalence_line>
+	...
+	<other_options>
+
+    Example same as Example 1, 2 and 3 above with extra options:
+	QX7-0 = IX7-1
+	QX7-1 = IX7-0
+	IX8 = IX8-0 = IX8-1
+	IX9 = IX9-0 = IX9-1
+	iCbox -n sorter-IO IX0 QX0 QX1
+	sorter
+
+    All equivalences must be defined before any registrations at
+    iCserver take place. Since equivalences are declared as iCserver
+    parameters or with the -f option this will happen automatically
+    at iCserver startup.
+
+    Formally equivalences consist of two or more identifiers seperated
+    by an equal sign '='.
+
+    Client calls consist of an identifier optionally followed by a space
+    seperated list of parameters.
+
+    Identifiers match /[\.\d\w_]+/
+
+    Individual equivalences and client calls must be written without
+    spaces in the command line unless they are quoted. In the optional
+    INI file which can be read with the -f option, each equivalence
+    and client call must be placed in a seperate line. White spaces
+    may be used in equivalence lines and must be used to seperate a
+    client call from its parameters. Client calls need not be quoted
+    in the INI file.
+
+    Comments are started with any other character than [.\d\w_],
+    usually #
+
+ d) -a option - automatic startup of iCboxes (Autovivification)
+    When a control program registers its I/O's, iCserver -a starts up a
+    matching iCbox for all complementary I/O's, which have not already
+    been registered. With this option, clients must be started in a
+    particular order:
+
+    i)  iCserver -a - always first anyway.
+
+    ii) any manually started I/O's with real I/O or specific ranges etc
+        or because of equivalances.
+
+    iii)control application(s) which causes iCserver to autovivify any
+	missing I/O's as iCboxes with default ranges.
+
+    Note: the -a option would be incompatible with a scenario, where
+    several control clients communicate via equivalenced channels.
+    To overcome this problem, a heuristic is used, where no outputs QNm
+    are autovivified, if they occurr anywhere in an equivalence list.
+    If an Input INm occurs in an equivalence list, the first variable
+    in the equivalence list is autovivified instead, as long as that
+    is also an input.
+
+    Note: when a control program exits (disconnects from iCserver)
+    the I/O's are not disconnected. They can be reused by a restarted
+    control application. When iCserver exits, all connected clients
+    are closed (see current implementation).
+
+ e) -k option - if a sender registers with the same name as one already
+    registered, kill the previously registerd sender, rather than
+    reporting an error. This allows a recompiled version of an iC
+    application to be started, while an old version is still running -
+    the old one will quitly be killed. This should not be done in a
+    production system.
+
+ f) -g option - automatically start iClive xxx.ic when SCxxx registers.
+
+=head1 SPECIFICATION
+
+ 1) On connection to iCserver each client register by supplying the
+    following registration information:
+
+    a)  The name of the client device.
+
+	<name_op><client_name>[-<instance>]
+
+	<name_op>
+	N signifies, that the named client registers with iCserver.
+	n signifies, that the named client unregisters from iCserver.
+
+	<client_name>
+	The client_name must be unique. For iC applications the control
+	program register with the name it is called with. The iClive
+	debug program registers with the name of the iC application
+	it is connected to preceded by a '-'. The leading - is used
+	by iClive to detect live registrations, which may register
+	and unregister with different names, to monitor different
+	iC applications.
+
+    b)	the type of data it is sending or receiving and the physical
+	address in IEC-1131 format:
+
+	<send_receive><input_output><type><address>[-<instance>]
+
+	<send_receive>
+	S signifies, that the client sends data to iCserver.
+	R signifies, that the client receives data from iCserver.
+	s sender unregisters from iCserver (used by iClive only)
+	r receiver unregisters from iCserver (used by iClive only)
+
+	The middle 3 fields are the IEC-1131 code used in iC programs
+	to identify (address) a particular input or output.
+
+	C, D and M are not IEC-1131 conforming. They are used internally
+	for communicating with debugging and monitoring clients.  C and
+	D are followed by the name of the control client instead of an
+	IEC-1131 address. The name may be followed by an -<instance>.
+
+	<input_output>
+	I date is input to an iC control client.
+	Q data is output from an iC control client.
+
+	C debug data is output from an iC control client to iClive
+	D debug data is input to an iC control client from iClive
+	M signifies a monitor device (none implemented so far).
+
+	<type>
+	X signifies 8 bits of single bit data.
+		bit addresses are not used in the registration or
+		transmission of X senders and receivers. 8 bits are
+		always transmitted as 1 byte and the clients insert
+		or extract modified bits as necessary.
+	B signifies 8 bits or 1 byte of numerical data.
+	W signifies 16 bits or 2 bytes of numerical data.
+	L signifies 32 bits or 4 bytes of numerical data.
+	H signifies 64 bits (not implemented on 32 bit processors)
+
+	<address>
+	This number is the numerical IEC-1131 address. Unlike previous
+	implementations, each data type has its own address space,
+	which is independent of the others. Also the numbering of W
+	(16 bit) addresses is continuous 0, 1, 2, 3 and not 0, 2,
+	4, 6 as in previous implemetations. The same applies to L
+	(32 bit) addresses.
+
+	-<instance>
+	An optional instance number allows the registrations of several
+	instances of the same control program. Its use is explained in
+	detail later.
+
+	Examples:
+	SIX0   8 single bits IX0.0 to IX0.7 sent from an external source
+	RIX0   8 single bits IX0.0 to IX0.7 received by an iC controller
+	SQX9   8 single bits IX9.0 to IX9.7 sent from an iC controller
+	RQX9   8 single bits IX9.0 to IX9.7 received by an external sink
+
+	SIB10  single byte IB10 sent from an external source
+	RIB10  single byte IB10 received by an iC controller
+	SQB15  single byte QB15 sent from an iC controller
+	RQB15  single byte QB15 received by an external sink
+
+	SIW10  single word IW10 sent from an external source
+	RIW10  single word IW10 received by an iC controller
+	SQW15  single word QW15 sent from an iC controller
+	RQW15  single word QW15 received by an external sink
+
+	SIL10  single long IL10 sent from an external source
+	RIL10  single long IL10 received by an iC controller
+	SQL15  single long QL15 sent from an iC controller
+	RQL15  single long QL15 received by an external sink
+
+    c)  The name registration followed by the individual sender and
+	receiver registration codes are sent as one comma separated
+	list. iCserver acknowledges this with a comma separated list of
+	channel numbers used for each sender or receiver.
+
+ 2) As indicated under <address> above, each data type QX, QB, QW, QL
+    and QH as well as IX, IB, IW, IL and IH define their own
+    address space in iC control applications. This differs form the
+    implementations 1.1 to 1.105, which defined a joint address space
+    for inputs and a seperate but joint address space for outputs where
+    16 bit words had to have an even byte address and 32 bit long
+    addresses had to be divisble by four. Also the control software
+    had to check that different types of data did not overlap and that
+    a maxinum address was not exceeded.  This will not be necessary
+    with this new specification. Using the overlap for obscure control
+    purposes was never implemented fully (sending worked, receiving
+    did not). Its use is deemed to be too obscure to be maintained,
+    and the new specification should be much easier to handle.
+
+    In the new specification <address> simply indexes sparse arrays
+    of bytes, words, longs (or 64 bit huge integers on a 64 bit
+    machine). They are allocated by name to a channel number in
+    iCserver and only the channel numbers are used by the clients after
+    registration.
+
+    Nevertheless it may be advisable to maintain the currently
+    implemented checks on maximum I/O address and checks on word
+    and long boundaries as well as overlaps between bit, byte, word
+    and long fields as a compile option. This may be useful for real
+    I/O implementations in which the input and output fields are two
+    contiguous byte fields. Since this code is currently in place,
+    it is easier to change it to an option, than to discard it now
+    and to re-implement it later.
+
+ 3) One client device has one two way TCP/IC connection to iCserver,
+    but it can register for any number of send and/or receive
+    addresses. For example the simple iCbox currently registered as X0,
+    supplying 8 bits if input data and sinking 8 bits of output data,
+    will now register itself as SIX0,RQX0. SIX0 is the source of the
+    signals IX0.0 to IX0.7 and RQX0 is the sink of QX0.0 to QX0.7.
+    An iC control application handling those two signal groups will
+    register itself as RIX0,SQX0.  RIX0 for receiving IX0.0 to IX0.7
+    and SQX0 for sending QX0.0 to QX0.7.
+
+    This scheme makes I/O devices and controllers identical as far as
+    iCserver data handling is concerned. and opens the possibility,
+    that one iC control application can communicate data to another via
+    the iCserver network. This is a definite requirement when multiple
+    iC applications are involved in an overall project. A more obscure
+    use would be sending data from an external input directly to an
+    external output. More realistic would be using an iCbox output to
+    monitor the data going to another client doing real output.
+
+    A shorter Registration code was used previously but registration
+    happens only once at startup and so a more comprehensive
+    registration code is preferable. The new specification allows
+    fast interpretation - S and R are seperated first. It is also
+    readable for debugging.
+
+ 4) To allow monitoring and to allow several iC control applications to
+    react to input from a single source, iCserver supports the receive
+    registration of the same address from several clients. iCserver
+    will then send the same data to each of those clients, when it
+    is received from its source by iCserver for distribution.
+
+ 5) On the other hand, only one client may register as the sender for
+    a particular address. If iCserver did not catch this as an error,
+    serious malfunction would occurr, if several clients were to
+    send data, which would then be overwritten inconsistently at the
+    destination sinks.
+
+ 6) Communication with debugging devices (iClive) is regulated with two
+    alternative types; 'C' for controller and 'D' for debugger.
+    There can be several instances of iClive running together, but
+    only one for each control program. They are addressed by the
+    program name, not an IEC-1131 address. A control program named
+    'sorter' would connect with iClive as follows:
+
+        iC program                 iClive
+	 Nsorter,                 N-sorter,
+	 SCsorter,     ====>      RCsorter,
+	 RDsorter     <====       SDsorter
+
+    Each unit registers for both send and receive, since the data
+    handling for send and receive are handled in seperate sections of
+    iCserver and a live display needs both. This means that no special
+    treatment of live display registration and data parsing is needed.
+
+    As an alternative to a live display, a plot program (iCplot) could
+    be connected. Since both could not be connected simultaneously
+    if they were controlled by the 'D' identification an alternative
+    for such a client programs is 'M' for monitor. Since live display
+    requires a lot of support from a running application, which should
+    not have to be duplicated for a monitor, yet other alternatives
+    may be required. One is to integrate the 'plot' function into
+    iClive. For specification purposes, all the alternatives are
+    covered.
+
+ 7) Allow every application to be started by specifying an optional
+    <instance> parameter (see 1), which is appended to all registration
+    names or addresses. The same instance number is also appended
+    to the addresses of I/O clients communicating with a particular
+    controller instance. Such a set of a controller and I/O clients
+    with a common instance number are a set, which communicate with
+    each other. The instance parameter is passed to each client with
+    the calling parameter -i<instance>.
+
+    Example without instance number:
+        sorter     # (using IX0, QX0, QX1) will register with:
+	    Nsorter,SCsorter,RDsorter,RIX0,SQX0,SQX1
+	iCbox      IX0 QX0 QX1           # will register with:
+	    NIX0,SIX0,RQX0,RQX1
+	iClive     sorter                # will register with:
+	    N-sorter,RCsorter,SDsorter
+
+    Example of a first instance:
+        sorter -i0 # (using IX0, QX0, QX1) will register with:
+	    Nsorter-0,SCsorter-0,RDsorter-0,RIX0-0,SQX0-0,SQX1-0
+	iCbox  -i0 IX0 QX0 QX1           # will register with:
+	    NIX0-0,SIX0-0,RQX0-0,RQX1-0
+	iClive -i0 sorter                # will register with:
+	    N-sorter-0,RCsorter-0,SDsorter-0
+
+    Example of a second instance:
+        sorter -i1 # (using IX0, QX0, QX1) will register with:
+	    Nsorter-1,SCsorter-1,RDsorter-1,RIX0-1,SQX0-1,SQX1-1
+	iCbox  -i1 IX0 QX0 QX1           # will register with:
+	    NIX0-1,SIX0-1,RQX0-1,RQX1-1
+	iClive -i1 sorter                # will register with:
+	    N-sorter-1,RCsorter-1,SDsorter-1
+
+    Although mixed registrations, in which clients of the same name
+    are used with and without instance numbers as shown above will work
+    correctly, this will cause confusion in the project documentation
+    and iCserver will issue a warning if it occurrs.
+
+ 8) Registration of clients from the view of iCserver
+
+    a)	A client connects to iCserver, which accepts and issues a
+	$conn object (see current code).
+
+    b)	The client sends a Message with all its registrations in a comma
+	sperated list to iCserver (see specification).
+
+    c)	In iCserver the <input_output><type><address>[-<instance] are
+	used as a key in a hash table, which associates a unique
+	channel number with the key. The key is the identification or
+	name of a communication pair and is unique. The associated
+	channel number is an index in an array which holds run-time
+	details for the communication pair or channel. <send_receive>
+	select the correct entries in that array.
+
+	iCserver maps each name against the Hash %clientNames,
+	which returns the correct channel number if it has already
+	been allocated. All further data transfers in iCserver and
+	the clients use the channel number to identify a particular
+	communication pair.
+
+    d)	iCserver acknowledges registration of a client by sending a
+	comma seperated list of channel numbers in the same order as
+	the registration names. If a particular registration name
+	cannot be registered correctly, the comma seperated list
+	contains a negative error number for that entry.
+
+ 9) Registration from the view of clients
+
+    a)	When a client starts, it connects to iCserver (which must
+	be running) and sends its registration string.
+
+    b)	When the client receives the positive acknowledgement string,
+	which will be the first message received, it pairs off the
+	registration names and the channel numbers received in the
+	acknowledgement. The details depend on the client application.
+
+	For the first example in section 7, the following tables will
+	be set up in the different clients:
+
+         client  name        channel  direction
+        sorter
+		Csorter		1	S
+		Dsorter		2	R
+		IX0		3	R
+		QX0		4	S
+		QX1		5	S
+	iCbox
+		IX0		3	S
+		QX0		4	R
+		QX1		5	R
+	iClive
+		Csorter		1	R
+		Dsorter		2	S
+
+ 10)When registration is complete, iCserver can determine, that each
+    channel has one and only one sender and at least one receiver. If a
+    project is run only as a simulation, a missing sender or receiver
+    may not matter and only a warning is issued. If a project drives
+    real I/O's an error must be reported by iCserver. The option flag
+    -w turns such error messages into warning messages only.
+
+ 11)Formats of data messages between iCserver and clients follow a
+    uniform pattern:
+
+    <channel_number>:<data_value> in a comma seperated list for a number
+    of simultaneous values on different channels to the same client.
+
+    <channel_number> is always a simple decimal string identifying the
+    unique channel allocated by iCserver.
+
+    <data_value> is a decimal value with a - sign for negative values
+    in case of the numeric types X, B, W, L (or H). iClive uses a more
+    complex data format consisting of a semi-colon seperated list of
+    data pairs (see specification of iClive).
+
+    Examples:
+	4:1,5:2		# set QX0.0 and QX1.1 in the example above
+	2:4;2 128;5 48	# a type 4 live data telegram for iClive
+
+ 12)Unregistering a client.
+
+    A client must be able to unregister itself, without disrupting a
+    running process, particularly if it is only a secondary receiver.
+    This will happen when a client closes a TCP/IP connection (see
+    current implementation). When a client is disconnected, keep the
+    Hash entry for the channel number in case it connects again.
+
+For measuring reaction times the Module Time::HiRes is used.
+This activates the -m option and flash display of short events.
+Make sure you have installed Time::HiRes (provided in this distribution)
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff> with L<iC Project> in the
+subject field.
+
+Error and warning messages for transmissions to missing clients have
+not been implemented yet (-w option).
+
+Mixed instance warning not yet implemented.
+
+No provision so far for sending registration messages and replies as
+multiple messages when size exceeds TCP/IP transmission size of 1400.
+This limits one client to approx 250 I/Os. iClive Data-messages are already
+sent as multiple messages if too long.
+
+The Specification supplements the Description of iCserver and may be
+useful in understanding its workings.
+
+=head1 SEE ALSO
+
+L<icc(1)>, L<iCbox(1)>, L<iClive(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.

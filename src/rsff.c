@@ -1,8 +1,8 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.38 2004/05/12 09:09:09 jw Exp $";
+"@(#)$Id: rsff.c,v 1.39 2005/01/16 20:14:37 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -22,6 +22,9 @@ static const char rsff_c[] =
 #include	<assert.h>
 #include	"icg.h"
 #include	"icc.h"
+#ifdef TCP
+#include	"tcpc.h"
+#endif /* TCP */
 
 #define min(x,y) ((x) < (y) ? (x) : (y))
 
@@ -939,9 +942,11 @@ fScf(					/* F_CF and F_CE slave action on CF */
 #endif
     }
 } /* fScf */
+#if defined(TCP) && defined(LOAD)
 
 /********************************************************************
  *
+ * NEW
  *	Distribute received logical input byte to correct
  *	logical input bit Gate
  *
@@ -977,11 +982,165 @@ traMb(					/* TRAB master action */
 	diff &= ~mask;			/* clear the bit just processed */
     }
     gm->gt_old = gm->gt_new;
+    if (gm->gt_live & 0x8000) {
+	liveData(gm->gt_live, gm->gt_old);	/* live is active */
+    }
     return count;			/* used to adjust YYDEBUG output */
 } /* traMb */
 
 /********************************************************************
  *
+ * NEW
+ *	Output to a word or byte whose Channel index is in gt_list.
+ *		gt_mark == B_WIDTH means 1 byte is output
+ *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
+ *		gt_mark == L_WIDTH means 4 bytes or 1 long is output
+ *
+ *	For initialisation purposes this ftype OUTW node is acted on
+ *	by exactly one ARITH node defined in an output assignment.
+ *	This must line up with OUTP_M (1). This is checked in i_ff3().
+ *		QB1 = b1;	// output b1 to byte at QX_[1]
+ *		QW2 = w2;	// output w2 to word at QX_[2]
+ *		QL4 = l4;	// output l4 to word at QX_[4]
+ *	b1, w2  or l4 can be used as arithmetic values (ftype is ARITH)
+ *	and may be any logical or arithmetic function, including INPUT.
+ *
+ *	An ftype OUTW node QXn is also acted on by all bit outputs QXn.m.
+ *	These execute outMx(), which links its output directly to s_list.
+ *	These extra nodes are generated at load time - not compiled.
+ *
+ *	NOTE: This action does not act on a clocked slave object.
+ *	      It was linked to s_list, which is scanned only once when
+ *	      all other lists have been scanned. This ensures each output
+ *	      is only sent once to the external I/O's per cycle when it
+ *	      really changes. Glitches do not appear in the output.
+ *
+ *		out_list 2nd argument	used to defer action to s_list
+ *
+ *******************************************************************/
+
+void
+outMw(					/* NEW OUTW master action */
+    Gate *	gm,			/* NOTE: there is no slave action */
+    Gate *	out_list)
+{
+#if INT_MAX == 32767 && defined (LONG16)
+    long	val;
+#else
+    int		val;
+#endif
+    int		mask;
+    int		channel;
+    int		rest;
+    int		len;
+
+    if (out_list == a_list) {
+	/* defer execution until s_list is scanned */
+	if (
+	    (gm->gt_old != gm->gt_new)		/* any change */
+	    ^ (gm->gt_next != 0)		/* xor glitch */
+	) {
+	    link_ol(gm, s_list);		/* master action to send list */
+	}
+    } else {
+	assert(out_list == s_list);
+	assert(gm->gt_new != gm->gt_old);
+
+	channel = gm->gt_channel;	/* TODO change to gt_list */
+	assert(channel > 0);		/* -1 is error, 0 is not registered */
+	mask = gm->gt_mark;
+	val = gm->gt_old = gm->gt_new;	/* update gt_old since no link_ol */
+	if (gm->gt_live & 0x8000) {
+	    liveData(gm->gt_live, val);	/* live is active */
+	}
+	if (mask == X_WIDTH) {
+#ifndef _WINDOWS 
+	    val &= 0xff;		/* for display only */
+#endif
+	    len = snprintf(&outBuf[outOffset], rest = REQUEST - outOffset,
+		"%d:%d,", channel, val);	/* TODO overflow */
+	    outOffset += len;
+	} else if (mask == B_WIDTH) {
+#ifndef _WINDOWS 
+	    val &= 0xff;		/* for display only */
+#endif
+	    len = snprintf(&outBuf[outOffset], rest = REQUEST - outOffset,
+		"%d:%hhd,", channel, (char)val);	/* TODO overflow */
+	    outOffset += len;
+	} else if (mask == W_WIDTH) {
+#ifndef _WINDOWS 
+	    val &= 0xffff;		/* for display only */
+#endif
+	    len = snprintf(&outBuf[outOffset], rest = REQUEST - outOffset,
+		"%d:%hd,", channel, (short)val);	/* TODO overflow */
+	    outOffset += len;
+#if INT_MAX != 32767 || defined (LONG16)
+	} else if (mask == L_WIDTH) {
+#if INT_MAX == 32767
+	    len = snprintf(&outBuf[outOffset], rest = REQUEST - outOffset,
+		"%d:%ld,", channel, (long)val);	/* TODO overflow */
+#else
+	    len = snprintf(&outBuf[outOffset], rest = REQUEST - outOffset,
+		"%d:%d,", channel, val);	/* TODO overflow */
+#endif
+	    outOffset += len;
+#endif
+#ifndef _WINDOWS
+	} else {
+	    val = 0;			/* error - no output */
+#endif
+	}
+    }
+} /* outMw */
+
+/********************************************************************
+ *
+ * NEW
+ *	Transfer this output bit to the associated byte output Gate
+ *		gt_mark contains the bit position as an 8 bit mask.
+ *
+ *******************************************************************/
+
+void
+outMx(					/* NEW OUTX master action */
+    Gate *	gm,			/* NOTE: there is no slave action */
+    Gate *	out_list)
+{
+    int		mask;
+    int		val;
+    Gate *	gs;
+
+    gs = (Gate*)(gm->gt_list);			/* OUTW Gate */
+    mask = gm->gt_mark;
+    if (gm->gt_live & 0x8000) {
+	liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+    val = gs->gt_new;
+    if (gm->gt_val < 0) {			/* output action */
+	val |= mask;				/* set bit in byte Gate */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) putc('1', outFP);
+#endif
+    } else {
+	val &= ~mask;				/* clear bit in byte gate */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (debug & 0100) putc('0', outFP);
+#endif
+    }
+    assert(val != gs->gt_new);			/* should only fire when there is a change */
+    gs->gt_new = val;
+    if (
+	(gs->gt_old != gs->gt_new)		/* any change */
+	^ (gs->gt_next != 0)			/* xor glitch */
+    ) {
+	link_ol(gs, s_list);			/* master action to send list */
+    }
+} /* outMx */
+#else /* defined(TCP) && defined(LOAD) */
+
+/********************************************************************
+ *
+ * OLD - from 1.37
  *	Output to a word or byte whose slot index is in gt_list.
  *		gt_mark == B_WIDTH means 1 byte is output
  *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
@@ -1008,7 +1167,7 @@ traMb(					/* TRAB master action */
  *******************************************************************/
 
 void
-outMw(					/* OUTW master action */
+outMw(					/* OLD OUTW master action */
     Gate *	gm,			/* NOTE: there is no slave action */
     Gate *	out_list)
 {
@@ -1026,12 +1185,15 @@ outMw(					/* OUTW master action */
 	mask = gm->gt_mark;
 	assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
 	cage = slot >> 3;		/* test here because of cage algorithm */
-	val = gm->gt_old = gm->gt_new;	/* update gt_old since no link_ol */
-#if defined(TCP) && defined(LOAD)
-	if (gm->gt_live & 0x8000) {
-	    liveData(gm->gt_live, val);	/* live is active */
+#ifdef MIXED
+	if (out_list == o_list) {
+	    /* called from logic scan - convert d to a */
+	    /* MIXED mode is currently not compiled - ERROR */
+	    gm->gt_new = gm->gt_val < 0 ? 1 : 0;
 	}
 #endif
+
+	val = gm->gt_old = gm->gt_new;	/* update gt_old since no link_ol */
 	if (mask == B_WIDTH) {
 #ifndef _WINDOWS
 	    val &= 0xff;		/* for display only */
@@ -1076,52 +1238,57 @@ outMw(					/* OUTW master action */
 
 /********************************************************************
  *
- *	Transfer this output bit to the associated byte output Gate
+ * OLD
+ *	Output a bit to a bit field whose slot index is in gt_list.
  *		gt_mark contains the bit position as an 8 bit mask.
+ *
+ *	For initialisation purposes this ftype OUTX Gate is acted on
+ *	by exactly one GATE node defined in an output assignment.
+ *	This must line up with OUTP_M (1). This is checked in i_ff3().
+ *		QX0.0 = O0;	// output O0 to bit 0.0
+ *	O0 can be used as a logical value (ftype is GATE) and may be
+ *	any logical or arithmetic function, including INPUT.
+ *
+ *	NOTE: This action does not act on a clocked slave object.
+ *	      and the node is not linked to any action or clock list
  *
  *******************************************************************/
 
 void
-outMx(					/* OUTX master action */
+outMx(					/* OLD OUTX master action */
     Gate *	gm,			/* NOTE: there is no slave action */
     Gate *	out_list)
 {
-    int		mask;
-    int		val;
-    Gate *	gs;
+    int			slot;
+    int			cage;
+    unsigned char	mask;
 
-    gs = (Gate*)(gm->gt_list);			/* OUTW Gate */
-    mask = gm->gt_mark;
-#if defined(TCP) && defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
+    slot = (int)gm->gt_list;
+    mask = (unsigned char)gm->gt_mark;
+    assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
+    cage = slot >> 3;			/* test here because of cage algorithm */
+#ifdef MIXED
+    if (out_list == a_list) {
+	/* called from arithmetic scan - convert a to d */
+	/* MIXED mode is currently not compiled - ERROR */
+	gm->gt_val = gm->gt_new ? -1 : 1;
     }
 #endif
-    val = gs->gt_new;
-    if (gm->gt_val < 0) {			/* output action */
-	val |= mask;				/* set bit in byte Gate */
+    if (gm->gt_val < 0) {		/* output action */
+	QX_[slot] |= mask;		/* set bit at slot,mask */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('1', outFP);
 #endif
     } else {
-	val &= ~mask;				/* clear bit in byte gate */
+	QX_[slot] &= ~mask;		/* clear bit at slot,mask */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('0', outFP);
 #endif
     }
-    if (val != gs->gt_new) {			/* could use assert */
-	gs->gt_new = val;
-	if (
-	    (gs->gt_old != gs->gt_new)		/* any change */
-	    ^ (gs->gt_next != 0)		/* xor glitch */
-	) {
-	    link_ol(gs, s_list);		/* master action to send list */
-//	    link_ol(gs, a_list);		/* ZZZ master action to arith list */
-	}
-    } else {
-	assert(0);				/* ZZZ change to assert above */
-    }
+    QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
+    QMM |= bitMask[cage & 0x7];		/* mark the rack */
 } /* outMx */
+#endif /* defined(TCP) && defined(LOAD) */
 
 /********************************************************************
  *

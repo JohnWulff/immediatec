@@ -1,8 +1,8 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.28 2004/05/13 09:14:59 jw Exp $";
+"@(#)$Id: icc.c,v 1.29 2005/01/16 16:37:05 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -150,6 +150,7 @@ icc(
     short	pass;
     short	c;
     short	typ;
+    int		cn;
     int		cnt;
 #ifdef LOAD
     Gate **	opp;
@@ -290,8 +291,8 @@ icc(
 #if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
 #endif
-	gp->gt_val = -1;			/* set EOP initially */
-	link_ol(gp, o_list);			/* fire Input Gate */
+	gp->gt_val = -1;			/* set EOP once as first action */
+	link_ol(gp, o_list);			/* fire EOP Input Gate */
 #if YYDEBUG
 	if (debug & 0100) fprintf(outFP, " -1");
 #endif
@@ -336,6 +337,7 @@ icc(
 	if (o_list != o_list->gt_next) { scan    (o_list); goto Loop; }
 	if (c_list != c_list->gt_next) { scan_clk(c_list); goto Loop; }
 	if (f_list != f_list->gt_next) { scan_clk(f_list); goto Loop; }
+	if (s_list != s_list->gt_next) { scan_snd(s_list);            }
 
 	if (scan_cnt || link_cnt) {
 	    fprintf(outFP, "\n");
@@ -387,9 +389,10 @@ icc(
 	/********************************************************************
 	 *  Input from keyboard and time input if used
 	 *******************************************************************/
+	cnt = 0;
     TestInput:
 	while (!kbhit() && !flag1C);		/* check inputs */
-	cnt = 1;
+	cn = 1;
 	if (flag1C) {				/* 1/D10 second timer */
 	    flag1C = 0;
 	    if ((gp = TX_[1]) != 0) {		/* 100 millisecond timer */
@@ -397,7 +400,8 @@ icc(
 		gp->gt_val = - gp->gt_val;	/* complement input */
 		link_ol(gp, o_list);
 		putc(gp->gt_val < 0 ? '1' : '0', outFP);
-		cnt = 0;			/* TX.1 changed */
+		cn = 0;				/* TX.1 changed */
+		cnt++;				/* count inputs */
 	    }
 	    if (--tcnt == 0) {
 		tcnt = D10;
@@ -406,16 +410,17 @@ icc(
 		    gp->gt_val = - gp->gt_val;	/* complement input */
 		    link_ol(gp, o_list);
 		    putc(gp->gt_val < 0 ? '1' : '0', outFP);
-		    cnt = 0;			/* TX.2 changed */
+		    cn = 0;			/* TX.2 changed */
+		    cnt++;			/* count inputs */
 		}
 	    }
-	    if (cnt) {
-		goto TestInput;			/* neither TX.1 nor TX.2 */
+	    if (cn) {
+		goto TestInput;			/* neither TX.1 nor TX.2 fired */
 	    }
 	} else {
-	    while (cnt) {
+	    while (cn) {
 		if ((c = getch()) == 'q' || c == EOF) {
-		    fprintf(errFP, "\n%s stopped from terminal\n", progname);
+		    fprintf(errFP, "\n'%s' stopped from terminal\n", progname);
 		    quit(0);			/* quit normally */
 		}
 		if (c != ENTER) {
@@ -431,14 +436,15 @@ icc(
 			    putc(gp->gt_val < 0 ? '1' : '0', outFP);
 			}
 #endif
-			cnt--;			/* apply input ? */
+			cn--;			/* apply input ? */
+			cnt++;			/* count inputs */
 		    } else {
 			putc('?', outFP);	/* input not configured */
 		    }
 		} else if (c == '+') {
-		    cnt++;			/* 1 extra input */
+		    cn++;			/* 1 extra input */
 		} else if (c == '-') {
-		    if (--cnt <= 0) cnt = 1;	/* at least 1 more in */
+		    if (--cn <= 0) cn = 1;	/* at least 1 more in */
 		} else if (c == 'b') {
 		    if ((gp = IB_[1]) != 0) {	/* b byte input to IB1 */
 			goto wordIn;
@@ -516,23 +522,29 @@ icc(
 			    /* arithmetic master action */
 			    link_ol(gp, a_list);	/* no actions */
 			}
-			cnt--;
+			cn--;
+			cnt++;			/* count inputs */
 		    } else {
 		    wordEr:
 			putc('?', outFP);	/* input not configured */
 		    }
 		} else if (c == 'x') {
 		    xflag = 1;			/* hexadecimal output */
-		    cnt = 0;
+		    cn = 0;
 		} else if (c == 'd') {
 		    xflag = 0;			/* decimal output */
-		    cnt = 0;
+		    cn = 0;
 		} else if (c == ENTER) {
-		    cnt = 0;
+		    cn = 0;
 		} else {
 		    putc('?', outFP);		/* not a valid input character */
 		}
 	    }
+	}
+	/* if many inputs change simultaneously increase oscillator limit */
+	osc_lim = (cnt << 1) + 1;			/* (cnt * 2) + 1 */
+	if (osc_lim < osc_max) {
+	    osc_lim = osc_max;			/* cnt = 1, osc_lim = 3 default */
 	}
     }
 } /* icc */
@@ -702,9 +714,9 @@ void quit(int sig)
     }
 #endif
     if (sig == SIGINT) {
-	fprintf(errFP, "\n%s stopped by interrupt from terminal\n", progname);
+	fprintf(errFP, "\n'%s' stopped by interrupt from terminal\n", progname);
     } else if (sig == SIGSEGV) {
-	fprintf(errFP, "\n%s stopped by 'Invalid memory reference'\n", progname);
+	fprintf(errFP, "\n'%s' stopped by 'Invalid memory reference'\n", progname);
     }
     if (errFP != stderr) {
 	fflush(errFP);

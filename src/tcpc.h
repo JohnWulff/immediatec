@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.10 2003/12/30 18:39:05 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.11 2004/12/22 17:00:05 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -44,8 +44,8 @@ static const char tcpc_h[] =
 #define INT_MAX 32767
 #endif
 
-#define REQUEST	400		/* max size of request, in bytes */
-#define REPLY	400		/* max size of reply, in bytes */
+#define REQUEST	1400		/* max size of request, in bytes */
+#define REPLY	1400		/* max size of reply, in bytes */
 
 #define UDP_SERV_PORT	7777	/* UDP server's wel-known port */
 #define TCP_SERV_PORT	8888	/* TCP server's wel-known port */
@@ -62,11 +62,11 @@ void	read_stream(int, char *, int);
 
 extern const char *	hostNM;		/* 127.0.0.1 */
 extern const char *	portNM;		/* icc service */
-extern const char *	iccNM;		/* icc name */
+extern char *		iccNM;		/* icc name qualified with instance */
+extern char *		iidNM;		/* instance id */
 extern float		timeout;	/* in seconds */
 
-extern int		connect_to_server(const char* host, const char* port,
-					  const char* icc, float delay, int maxIOs);
+extern int		connect_to_server(const char* host, const char* port, float delay);
 extern int		wait_for_next_event(int maxFN);
 extern int		rcvd_msg_from_server(int sock, char* buf, int maxLen);
 extern void		send_msg_to_server(int sock, const char* msg);
@@ -75,8 +75,6 @@ extern fd_set		rdfds;
 extern fd_set		infds;
 extern struct timeval	timeoutCounter;
 extern struct timeval	timeoutValue;
-
-extern int		sockFN;			/* TCPIP socket file number */
 
 extern int		micro;
 extern void		microPrint(const char * str, int mask);

@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -18,7 +18,7 @@
 #ifndef ICG_H
 #define ICG_H
 static const char icg_h[] =
-"@(#)$Id: icg.h,v 1.5 2004/04/18 12:49:21 jw Exp $";
+"@(#)$Id: icg.h,v 1.6 2004/12/22 16:56:27 jw Exp $";
 
 #ifndef INT_MAX
 #include	<limits.h>
@@ -126,6 +126,7 @@ typedef struct Gate {			/* Gate */
 	int		gt_new;		/* new value for arithhmetic */
 	int		gt_old;		/* old value for arithhmetic */
 #endif
+	int		gt_channel;	/* TODO use gt_list to store channel */
 } Gate;
 
 extern Gate		iClock;		/* System clock */

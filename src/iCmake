@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2001  John E. Wulff
+#	Copyright (C) 2000-2005  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -12,23 +12,25 @@
 #
 #	make an executable file from an iC file
 #
-#	Use cc rather than gcc, to make this script usable on every Unix
-#	Cygnus does not understand cc - use gcc
+#	Cygnus does not understand cc - CC=gcc
+#	On other systems use            CC=cc
 #
 ########################################################################
+
+CC=gcc
 
 usage ()
 {
     echo 'Usage:' >&2
-    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] [-d<dir>] [-y<opt>] file.ic ...' >&2
-    echo '    (default)	link all iCfiles file.ic ... into independent executables' >&2
-    echo '		output names are base names of the iCfiles (file ...)' >&2
-    echo '	-l	link all iCfiles into one executable' >&2
-    echo '		default output name is base name of the first iCfile' >&2
+    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] [-d<dir>] [-y<opt>] file ...' >&2
+    echo '    (default)	link all iC-files file.ic ... into independent executables' >&2
+    echo '		output names are base names of the iC-files (file ...)' >&2
+    echo '	-l	link all iC-files into one executable' >&2
+    echo '		default output name is base name of the first iC-file' >&2
     echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
     echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
     echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
-    echo '	-b	generate both listing and C output' >&2
+    echo '	-b	generate both listings and C outputs' >&2
     echo '	-n	generate no output, report icc compile errors only' >&2
     echo "		-s and -n generate 'cexe.c' for last file as a side effect" >&2
     echo '	-i	produce file.ini which records output of an initial run' >&2
@@ -38,17 +40,19 @@ usage ()
     echo '	-q	quiet operation - return status only' >&2
     echo '	-v	use icc, pplstfix and libict.a in local directory' >&2
     echo '	-v<N>	use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...' >&2
-    echo '	-d<dir>	use icc and (pplstfix libict.a unless -v first) in directory <dir>' >&2
-    echo '		(default use installed icc and -lict)' >&2
+    echo '	-d<dir>	use icc and (pplstfix libict.a unless -v first) in directory' >&2
+    echo '		<dir> (default use installed icc and -lict)' >&2
     echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+    echo "	-N	No nice with calls of icc and $CC compilers (default is nice)" >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.28 2004/02/21 17:29:11 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.29 2005/01/06 13:08:25 jw Exp $' >&2
 }
 
 link=0
 status=0
 list=""
+nice="nice"
 a=""
 v=""
 b=""
@@ -91,6 +95,7 @@ while [ $# -gt 0 ]; do
 	    c*)	link=3;d="-A";;
 	    b*) link=4;;
 	    n*) link=5;d="-A";;
+	    N*) nice="";;
 	    i*)	i=440;;
 	    I*)	i=540;;
 	    q*)	q=1;;
@@ -159,12 +164,12 @@ for f in $*; do
 	    if [ "$z" = 1 ]; then
 		echo "${b}icc$v $d -o $base.c -l $base.lst$l $file" >&2
 	    fi
-	    if nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
+	    if $nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
 		echo >> _list2.h	# terminate last line of #define \
 		if [ "$z" = 1 ]; then
-		    echo "gcc -g -I. $ldir -o $base $base.c _list_.c $lib" >&2
+		    echo "$CC -g -I. $ldir -o $base $base.c _list_.c $lib" >&2
 		fi
-		if nice gcc -g -I. $ldir -o $base $base.c _list_.c $lib; then
+		if $nice $CC -g -I. $ldir -o $base $base.c _list_.c $lib; then
 		    if [ -n "$i" ] && ! ./$base -d$i > $base.ini; then
 			if [ "$q" = 0 ]; then
 			    echo "run time error in initial execution of '$base'" >&2
@@ -173,7 +178,7 @@ for f in $*; do
 		    fi
 		else
 		    if [ "$q" = 0 ]; then
-			echo "gcc compile errors in '$base.c' - no executable '$base' generated" >&2
+			echo "$CC compile errors in '$base.c' - no executable '$base' generated" >&2
 		    fi
 		    let status+=1
 		fi
@@ -188,7 +193,7 @@ for f in $*; do
 	    if [ "$z" = 1 ]; then
 		echo "${b}icc$v $a $d -o $base.c -l $base.lst$l $file" >&2
 	    fi
-	    if nice ${b}icc$v $a $d -o $base.c -l $base.lst$l $file; then
+	    if $nice ${b}icc$v $a $d -o $base.c -l $base.lst$l $file; then
 		list="$list $base.c"
 	    else
 		list="$list ERROR:$base.c"
@@ -206,7 +211,7 @@ for f in $*; do
 	    if [ "$z" = 1 ]; then
 		echo "${b}icc$v $d -c -l $base.lst$l $file" >&2
 	    fi
-	    if ! nice ${b}icc$v $d -c -l $base.lst$l $file; then
+	    if ! $nice ${b}icc$v $d -c -l $base.lst$l $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}icc$v compile errors in '$file'" >&2
 		fi
@@ -221,7 +226,7 @@ for f in $*; do
 	    if [ "$z" = 1 ]; then
 		echo "${b}icc$v $d -o $base.c $file" >&2
 	    fi
-	    if ! nice ${b}icc$v $d -o $base.c $file; then
+	    if ! $nice ${b}icc$v $d -o $base.c $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}icc$v compile errors in '$file'" >&2
 		fi
@@ -236,7 +241,7 @@ for f in $*; do
 	    if [ "$z" = 1 ]; then
 		echo "${b}icc$v $d -o $base.c -l $base.lst$l $file" >&2
 	    fi
-	    if ! nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
+	    if ! $nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}icc$v compile errors in '$file'" >&2
 		fi
@@ -250,7 +255,7 @@ for f in $*; do
 	    if [ "$z" = 1 ]; then
 		echo "${b}icc$v $d -c $file" >&2
 	    fi
-	    if ! nice ${b}icc$v $d -c $file; then
+	    if ! $nice ${b}icc$v $d -c $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}icc$v compile errors in '$file'" >&2
 		fi
@@ -279,9 +284,9 @@ if [ "$link" = 1 ]; then
 	fi
 	echo >> _list2.h	# terminate last line of #define \
 	if [ "$z" = 1 ]; then
-	    echo "gcc -g -I. $ldir -o $first $list _list_.c $lib" >&2
+	    echo "$CC -g -I. $ldir -o $first $list _list_.c $lib" >&2
 	fi
-	if nice gcc -g -I. $ldir -o $first $list _list_.c $lib; then
+	if $nice $CC -g -I. $ldir -o $first $list _list_.c $lib; then
 	    if [ -n "$i" ] && ! ./$first -d$i > $first.ini; then
 		if [ "$q" = 0 ]; then
 		    echo "run time error in initial execution of '$first'" >&2
@@ -290,7 +295,7 @@ if [ "$link" = 1 ]; then
 	    fi
 	else
 	    if [ "$q" = 0 ]; then
-		echo "gcc link errors in '$list' - no executable '$first' generated" >&2
+		echo "$CC link errors in '$list' - no executable '$first' generated" >&2
 	    fi
 	    let status+=1
 	fi
@@ -310,3 +315,69 @@ fi
 #     echo "########## $status errors ##########"
 # fi
 exit $status
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ iCmake - make one or more iC applications
+
+=head1 SYNOPSIS
+
+ iCmake [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] [-d<dir>] [-y<opt>] file ...
+  (default) link all iC-files file.ic ... into independent executables
+            output names are base names of the iC-files (file ...)
+    -l	    link all iC-files into one executable
+            default output name is base name of the first iC-file
+    -o<exe> place output in file 'exe' (implies -l if first option)
+    -s	    generate listings file.lst .. only (-o target.lst optional)
+    -c	    generate C outputs file.c ... only (-o target.c optional)
+    -b	    generate both listings and C outputs
+    -n	    generate no output, report icc compile errors only
+            -s and -n generate 'cexe.c' for last file as a side effect
+    -i	    produce file.ini which records output of an initial run
+    -I	    produce file.ini with full INITIALIZATION info (debug only)
+    -6	    produce logic generation listing file.lst6
+    -x	    auxiliary files _list1.h _list2.h _list_.c not deleted
+    -q	    quiet operation - return status only
+    -v	    use icc, pplstfix and libict.a in local directory
+    -v<N>   use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...
+    -d<dir> use icc and (pplstfix libict.a unless -v first) in directory
+            <dir> (default use installed icc and -lict)
+    -y<opt> call icc with extra -d<opt> orred into normal -d474
+    -N	    No nice with calls of icc and gcc compilers (default is nice)
+    -z	    echo compiler calls with all options for debugging
+    -h	    this help text
+
+=head1 DESCRIPTION
+
+iCmake is a shell script to compile iC sources into C sources using the
+icc compiler.  These in turn are compiled and linked into an executable
+iC applications (currently using gcc - this can be changed).
+
+Various options allow partial compilation and generation of listings.
+
+returns 0 (true) for no errors or the number of errors (false)
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<icc(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCbox(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.

@@ -1,8 +1,8 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.25 2004/03/10 09:39:33 jw Exp $";
+"@(#)$Id: init.c,v 1.26 2004/12/22 16:56:52 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -52,7 +52,15 @@ static struct bi builtinsOld[] = {
   { "DSR",	KEYW,	BLTIN3,	D_FF,	}, /* D flip-flop with set/reset */
   { "SHR",	KEYW,	BLTIN2,	D_SH,	}, /* sample and hold with reset */
   { "SHSR",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with set/reset */
-//{ "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
+#ifdef SR_X 
+  /*
+   * define here if SR(set, res) is cross checked in initialFunctions
+   * SRX(set, res) always has this feature
+   * cross checked SR is not the default because of extra code generated
+   * which is normally not needed - SRX is provided if it is required
+   */
+  { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
+#endif
   { "JK",	KEYW,	BLTINJ,	S_FF,	}, /* R_FF for reset master */
   { "L",	KEYW,	BLATCH,	0,	},
   { "LATCH",	KEYW,	BLATCH,	0,	},
@@ -71,7 +79,9 @@ static struct bi builtins[] = {
   { "SHSR_",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with simple set/reset */
   { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	}, /* pulse on anlog or digital change */
   { "RISE",	KEYW,	BLTIN1,	RI_BIT,	}, /* pulse on digital rising edge */
+#ifndef SR_X 
   { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
+#endif
   { "SR_",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
   { "SRT",	KEYW,	BLTINT,	S_FF,	}, /* monoflop with timed reset*/
   { "IF",	KEYW,	IF,	F_CF,	},
@@ -112,6 +122,9 @@ init(void)		/* install constants and built-ins */
     char	funName[BUFS];
     char	lineBuf[BUFS];
 
+    if (debug & 010000) {
+	fprintf(outFP, "initialFunctions:\n%s\n", initialFunctions);
+    }
     if (debug & 020000) {
 	for (io = 0; builtinsOld[io].name; io++) {
 	    sp = install(builtinsOld[io].name, builtinsOld[io].type, builtinsOld[io].ftype);
@@ -156,6 +169,14 @@ init(void)		/* install constants and built-ins */
 
 const char initialFunctions[] = "\
 /* iC system function definitions */\n\
+"
+#ifdef SR_X 
+"\
+imm bit SR(bit set, clock scl, bit res, clock rcl) {\n\
+    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
+"
+#endif
+"\
 imm bit SRX(bit set, clock scl, bit res, clock rcl) {\n\
     return SR_(set & ~res, scl, ~set & res, rcl); }\n\
 imm bit JK(bit set, clock scl, bit res, clock rcl) {\n\
@@ -174,8 +195,18 @@ imm bit L(bit set, bit res) {\n\
 imm bit DL(bit set, bit res, clock clk) {\n\
     return D(F(this, set, res), clk); }\n\
 imm bit LATCH(bit s, bit r) {\n\
-    return L(s, r); }\n\
+    return F(this, s, r); }\n\
 imm bit DLATCH(bit s, bit r, clock c) {\n\
-    return DL(s, r, c); }\n\
+    return D(F(this, s, r), c); }\n\
 /* end iC system function definitions */\n\
 ";
+
+/********************************************************************
+ *  Nested functions for test puposes - they work and produce identical
+ *  output as above - not necessary for production.
+ *
+ *  imm bit LATCH(bit s, bit r) {\n\
+ *      return L(s, r); }\n\
+ *  imm bit DLATCH(bit s, bit r, clock c) {\n\
+ *      return DL(s, r, c); }\n\
+ *******************************************************************/

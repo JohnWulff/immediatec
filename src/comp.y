@@ -1,8 +1,8 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.87 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: comp.y,v 1.88 2004/12/22 17:11:41 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -27,7 +27,7 @@
 #include	"icc.h"
 #include	"comp.h"
 
-/* "comp.y	3.70	95/02/03 Copyright (c) 1985-1993 by John E. Wulff" */
+/* "comp.y	3.70	95/02/03 Copyright (C) 1985-1993 by John E. Wulff" */
 
 static void	unget(int);		/* shares buffers with get() */
 static long	getNumber(void);	/* shares buffers with get() */

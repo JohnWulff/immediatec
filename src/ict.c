@@ -1,8 +1,8 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.42 2004/11/10 17:47:56 jw Exp $";
+"@(#)$Id: ict.c,v 1.43 2005/01/17 14:55:23 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -25,6 +25,7 @@ static const char ict_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<time.h>
 #include	<errno.h>
 #include	<sys/types.h>
 #include	<sys/time.h>
@@ -69,21 +70,33 @@ unsigned char	pdata[IXD];		/* input differences */
 short		dis_cnt;
 short		error_flag;
 
-unsigned	scan_cnt;			/* count scan operations */
-unsigned	link_cnt;			/* count link operations */
+unsigned	scan_cnt;		/* count scan operations */
+unsigned	link_cnt;		/* count link operations */
 #if	YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
-unsigned	glit_cnt;			/* count glitches */
-unsigned long	glit_nxt;			/* count glitch scan */
+unsigned	glit_cnt;		/* count glitches */
+unsigned long	glit_nxt;		/* count glitch scan */
 #endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 
-int		sockFN;			/* TCP/IP socket file number */
+static int	sockFN = 0;		/* TCP/IP socket file number */
 
-static int	msgOffset;		/* for message send */
+static int	msgOffset = 0;		/* for message send */
+static int	regOffset = 0;		/* for register send */
+static int	liveOffset = 0;		/* for live header */
 #ifndef EFENCE 
-static char	msgBuf[REPLY];
+static char	msgBuf[REQUEST];
+static char	regBuf[REQUEST];
+char		outBuf[REQUEST];
+char		rpyBuf[REPLY];
+int		outOffset;
 #else	/* EFENCE */
 static char *	msgBuf;
+static char *	regBuf;
+char *		outBuf;
+static char *	rpyBuf;
 #endif	/* EFENCE */
+static int	maxChannels = 0;
+static int	C_channel = 0;		/* channel for sending messages to Debug */
+static Gate	D_gate;			/* Gate on channel for receiving messages from Debug */
 
 /********************************************************************
  *
@@ -101,8 +114,11 @@ icc(
     int		c;
     short	typ;
     int		cnt;
+    int		index;
 #ifdef	LOAD
     Gate **	opp;
+    char *	cp;
+    Gate **	Channels;
 #else	/* LOAD */
     unsigned *	gcp;
     Functp * *	ilp;
@@ -110,12 +126,14 @@ icc(
     Gate *	gp;
     Gate **	tim = timNull;	/* point to array of 8 null pointers */
     Functp	init_fa;
-    int		tcnt = D10;
+    int		tcnt = 1;
     float	delay = 0.0;	/* timer processing stopped */
     int		retval;
-
 #ifdef	EFENCE
-    msgBuf = emalloc(REPLY);
+    msgBuf = emalloc(REQUEST);
+    regBuf = emalloc(REQUEST);
+    outBuf = emalloc(REQUEST);
+    rpyBuf = emalloc(REPLY);
 #endif	/* EFENCE */
     initIO();				/* catch memory access signal */	
     if (outFP != stdout) {
@@ -147,8 +165,122 @@ icc(
     if ((debug & 0400) == 0) {
 	/* Start TCP/IP communication before any inputs are generated => outputs */
 	if (micro) microReset(04);
-	sockFN = connect_to_server(hostNM, portNM, iccNM, delay, IXD);
+	sockFN = connect_to_server(hostNM, portNM, delay);
+#ifndef	LOAD
+	snprintf(regBuf, REQUEST, "%s %d", "C0", IXD);
+	send_msg_to_server(sockFN, regBuf);	/* register C0 with IXD as maxIOs */
 	if (micro) microPrint("connect to server", 0);
+#else	/* LOAD */
+	char *		tbp = regBuf;
+	int		tbc = REQUEST;
+	int		cn  = 0;
+	char *		tbt;
+	int		i;
+	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
+
+	if (debug & 04) fprintf(outFP, "%s: I/O registration objects\n", iccNM);
+	for (i = 0; i < 3; i++) {
+	    tbp += cn;
+	    tbc -= cn;
+	    cn = snprintf(tbp, tbc, "%s%s", sr[i], iccNM);
+	}
+	/* use last string to initialise name "D<progname>[-<instance>]" for D_gate */
+	D_gate.gt_ids = emalloc(cn-1);			/* including '\0' */
+	strncpy(D_gate.gt_ids, tbp+2, cn-1);		/* +2 leave out ",R" */
+	D_gate.gt_new = -2;	/* changes - not equal 0 - 5 for debug messages */
+	D_gate.gt_old = -1;	/* never changes - not equal 0 - 5 for debug messages */
+//#####if	YYDEBUG
+//####	if (debug & 0100) fprintf(outFP, "Initialise D_gate: '%s', gt_new = %d, gt_old = %d\n",
+//####			    D_gate.gt_ids, D_gate.gt_new, D_gate.gt_old);
+//#####endif	/* YYDEBUG */
+
+	for (opp = sTable; opp < sTend; opp++) {
+	    gp = *opp;
+	    tbp += cn;
+	    tbc -= cn;
+	    cn = 0;
+	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T') {	/* suppress TX0 */
+		cn = snprintf(tbp, tbc, ",R%s", gp->gt_ids);	/* read input at controller */
+	    } else
+	    if (gp->gt_fni == OUTW) {
+		cn = snprintf(tbp, tbc, ",S%s", gp->gt_ids);	/* send output at controller */
+		if (gp->gt_ini == -ARN) {
+		    if ((tbt = strrchr(tbp, '_')) != NULL && *(tbt+1) == '0') {
+			*tbt = '\0';	/* strip trailing "_0" from internal output name */
+			cn -= 2;
+			assert(cn > 0);
+		    } else {
+			fprintf(errFP, "\n%s: illformed output name '%s'\n", iccNM, tbp + 1);
+			quit(3);
+		    }
+		}
+	    }
+	    if (cn > 0) {
+		if (debug & 04) fprintf(outFP,
+		    "%s	%d	%d\n", gp->gt_ids, (int)gp->gt_ini, (int)gp->gt_fni);
+		if (strlen(iidNM) > 0) {
+		    cn += snprintf(tbp + cn, tbc - cn, "-%s", iidNM);	/* append instance id */
+		}
+	    }
+	    if (cn >= tbc) {
+		fprintf(errFP, "\n%s: buffer '%s' has overflowed %d %d\n", iccNM, regBuf, cn, tbc);
+		quit(4);
+	    }
+	}
+	if (debug & 04) fprintf(outFP, "register:%s\n", regBuf);
+	send_msg_to_server(sockFN, regBuf);		/* register controller and IOs */
+	if (micro) microPrint("connect to server", 0);
+	/* receive registration reply */
+	if (rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
+	    if (micro) microPrint("reply from server", 0);
+	    if (debug & 04) fprintf(outFP, "reply:%s\n", rpyBuf);
+	    cp = rpyBuf - 1;
+	    do {
+		index = atoi(++cp);
+		if (index > maxChannels) {
+		    maxChannels = index;
+		}
+	    } while ((cp = strchr(cp, ',')) != NULL);
+	    maxChannels++;	/* size of array Channels[] determined from received msg */
+	    Channels = (Gate **)calloc(maxChannels, sizeof(Gate *));
+	    // C channel index - messages from controller to debugger
+	    C_channel = atoi(rpyBuf);
+	    assert(C_channel > 0 && C_channel < maxChannels);
+	    // D channel index - messages from debugger to controller
+	    cp = strchr(rpyBuf, ',');
+	    assert(cp);
+	    index = atoi(++cp);
+	    assert(index > 0 && index < maxChannels);
+	    Channels[index] = &D_gate;				/* ==> Debug input */
+	    // remaining input and output channel indices matching registrations
+	    cp = strchr(cp, ',');
+	    for (opp = sTable; opp < sTend; opp++) {
+		gp = *opp;
+		if (gp->gt_ini == -INPW && *gp->gt_ids != 'T' ||	/* suppress TX0 */
+		    gp->gt_fni == OUTW) {
+		    assert(cp);
+		    index = atoi(++cp);
+		    assert(index > 0 && index < maxChannels);
+		    if (gp->gt_ini == -INPW) {
+			Channels[index] = gp;				/* ==> Input */
+		    } else
+		    if (gp->gt_fni == OUTW) {
+			// TODO gp->gt_list = (Gate **)index;
+			gp->gt_channel = index;				/* <== Output */
+		    }
+		    cp = strchr(cp, ',');
+		}
+	    }
+	    assert(cp == NULL);
+	    if (debug & 04) fprintf(outFP, "reply: Channels %d\n", maxChannels);
+	    regOffset = snprintf(regBuf, REQUEST, "%d:2;%s", C_channel, iccNM);
+	    if (micro) microPrint("Send application name", 0);
+	    send_msg_to_server(sockFN, regBuf);				/* Application Name */
+	} else {
+	    fprintf(errFP, "\n'%s' disconnected by server\n", iccNM);
+	    quit(0);			/* quit normally */
+	}
+#endif	/* LOAD */
     }
 
 /********************************************************************
@@ -183,8 +315,15 @@ icc(
 
 #ifdef	LOAD 
     /* if (debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
-    strcpy(msgBuf, "D0.3");		/* header for live data */
-    msgOffset = 4;			/* strlen(msgBuf) */
+    /* header for live data */
+    /********************************************************************
+     *  Initialise msgBuf for live data collection before initialisation
+     *  liveOffset may also be used with messages in regBuf because they
+     *  use the same channel number and all relevant messages have only
+     *  one command digit.
+     *  Message in msgBuf is ignored of debug &0400 stops process after init
+     *******************************************************************/
+    msgOffset = liveOffset = snprintf(msgBuf, REQUEST, "%d:3", C_channel);
 #endif	/* LOAD */
 
     for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
@@ -261,19 +400,13 @@ icc(
 #if	YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
-	gp->gt_val = -1;			/* set EOP initially */
-	link_ol(gp, o_list);			/* fire Input Gate */
+	gp->gt_val = -1;			/* set EOP once as first action */
+	link_ol(gp, o_list);			/* fire EOP Input Gate */
 #if	YYDEBUG
 	if (debug & 0100) fprintf(outFP, " -1");
 #endif	/* YYDEBUG */
     }
 
-#ifdef	LOAD 
-    if (msgOffset > 4) {
-	send_msg_to_server(sockFN, msgBuf);
-	if (micro) microReset(0);
-    }
-#endif	/* LOAD */
     dis_cnt = DIS_MAX;
     /********************************************************************
      *  Operational loop
@@ -283,11 +416,6 @@ icc(
 	if (++mark_stamp == 0) {	/* next generation for check */
 	    mark_stamp++;		/* leave out zero */
 	}
-
-#ifdef	LOAD 
-	strcpy(msgBuf, "D0.3");		/* header for live data */
-	msgOffset = 4;			/* strlen(msgBuf) */
-#endif	/* LOAD */
 
 	/********************************************************************
 	 *  New I/O handling and the sequencing of different action lists
@@ -321,12 +449,20 @@ icc(
 	if (c_list != c_list->gt_next) { scan_clk(c_list); goto Loop; }
 	if (f_list != f_list->gt_next) { scan_clk(f_list); goto Loop; }
 	if (s_list != s_list->gt_next) { scan_snd(s_list);            }
+
 #ifdef	LOAD 
-	if (micro & 06) microPrint("Scan", 04);
-	if (msgOffset > 4) {
+	/********************************************************************
+	 *  Send live data collected in msgBuf during initialisation
+	 *  and previous loop to iCserver
+	 *******************************************************************/
+	if (msgOffset > liveOffset) {
 	    send_msg_to_server(sockFN, msgBuf);
 	    if (micro) microReset(0);
 	}
+	/********************************************************************
+	 *  Initialise msgBuf for live data collection during next loop
+	 *******************************************************************/
+	msgOffset = liveOffset;				/* msg = "C_channel:3" */
 #endif	/* LOAD */
 
 #if	YYDEBUG
@@ -378,16 +514,21 @@ icc(
 	    display();				/* inputs and outputs */
 	}
 #endif	/* YYDEBUG */
-	/********************************************************************
-	 *  Output to external output modules
-	 *
-	 *  QMM and all QM_[] bytes are initially clear (global variables)
-	 *  bits are set in QMM and QM_[] in preceding scans by outMw
-	 *  to mark cages and slots
-	 *  QMM and all QM_[] are left clear after the following loops
-	 *
-	 *  Use 8 bit masks for fast conversion of mask to index via bitIndex[]
-	 *******************************************************************/
+#ifndef	LOAD
+
+/********************************************************************
+ *
+ *	Output to external output modules
+ *
+ *	QMM and all QM_[] bytes are initially clear (global variables)
+ *	bits are set in QMM and QM_[] in preceding scans by outMw and outMx
+ *	to mark cages and slots
+ *	QMM and all QM_[] are left clear after the following loops
+ *
+ *	Use 8 bit masks for fast conversion of mask to index via bitIndex[]
+ *
+ *******************************************************************/
+
 	msgOffset = 0;
 	while (QMM) {			/* rack with bit set for every cage */
 	    int len;
@@ -399,23 +540,23 @@ icc(
 	    while (slots) {
 		int mask = slots & -slots;	/* rightmost slot set in slots */
 		int slot = cageOffset + bitIndex[mask];
-#if	INT_MAX == 32767 && defined (LONG16)
+#if INT_MAX == 32767 && defined (LONG16)
 		long val;
-#else	/* INT_MAX == 32767 && defined (LONG16) */
+#else
 		int val;
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
+#endif
 		char Qtype = QT_[slot];
 		assert(Qtype);			/* make sure slot is programmed */
 		val = Qtype == 'L' ? *(long*)&QX_[slot] :
 		      Qtype == 'W' ? *(short*)&QX_[slot] : QX_[slot];
 		while ((len =
-#if	INT_MAX == 32767 && defined (LONG16)
+#if INT_MAX == 32767 && defined (LONG16)
 			snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
 			    "%c%d.%ld,", Qtype, slot, val)
-#else	/* INT_MAX == 32767 && defined (LONG16) */
+#else
 			snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
 			    "%c%d.%d,", Qtype, slot, val)
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
+#endif
 			) < 0 || len > rest	/* use > because of -1 truncation */
 		    ) {
 		    msgBuf[msgOffset - 1] = '\0';	/* clear last ',' */
@@ -436,6 +577,21 @@ icc(
 	    send_msg_to_server(sockFN, msgBuf);
 	    if (micro) microReset(0);
 	}
+#else	/* LOAD */
+
+	/********************************************************************
+	 *  Send output data collected in outBuf to iCserver
+	 *******************************************************************/
+	if (outOffset > 1) {		/* if any item it is at least 2 long 'x,' */
+	    outBuf[outOffset - 1] = '\0';	/* clear last ',' */
+	    if (micro) microPrint("New Send", 0);
+	    send_msg_to_server(sockFN, outBuf);
+	    memset(outBuf, 0, REQUEST);		/* clear for next data from outMw() */
+	    outOffset = 0;
+	    if (micro) microReset(0);
+	}
+#endif	/* LOAD */
+
 	/********************************************************************
 	 *  Input from external input modules and time input if used
 	 *  Wait for input in a select statement most of the time
@@ -490,7 +646,7 @@ icc(
 		skipT4: ;
 #endif	/* YYDEBUG */
 		}
-		if (--tcnt == 0) {
+		if (--tcnt <= 0) {
 		    tcnt = D10;
 		    if ((gp = tim[5]) != 0) {	/* 1 second timer */
 #if	YYDEBUG
@@ -527,55 +683,62 @@ icc(
 		}
 	    } else if (retval > 0) {
 		if (FD_ISSET(sockFN, &rdfds)) {
-		    char	rBuf[REPLY];
 		    /********************************************************************
 		     *  TCP/IP input
 		     *******************************************************************/
 		    if (micro) microReset(04);
-		    if (rcvd_msg_from_server(sockFN, rBuf, sizeof rBuf)) {
+		    if (rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
 			int		slot;
 #if	INT_MAX == 32767 && defined (LONG16)
 			long		val;
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 			int		val;
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-			int		index;
 			int		mask;
 			int		diff;
 			int		count;
-#ifdef	LOAD
-			char *		cp;
-			int		liveFlag;
-#endif	/* LOAD */
+//#####if	YYDEBUG
+//####			if (debug & 0100) fprintf(outFP, "%s:rpyBuf'%s'\n", iccNM, rpyBuf);
+//#####endif	/* YYDEBUG */
+#ifndef	LOAD
 			char		utype[4];		/* need 2 with NUL */
 
+// ########## OLD Input
 			if (
 #if	INT_MAX == 32767 && defined (LONG16)
-				sscanf(rBuf, "%1[XBWLD]%d.%ld", utype, &slot, &val)
+				sscanf(rpyBuf, "%1[XBWLD]%d.%ld", utype, &slot, &val)
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-				sscanf(rBuf, "%1[XBWLD]%d.%d", utype, &slot, &val)
+				sscanf(rpyBuf, "%1[XBWLD]%d.%d", utype, &slot, &val)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 				== 3 && slot < IXD
-			    ) {		
+			    ) {
 			    switch (*utype) {
-
-			    case 'X':				/* 8 bit input */
-				if ((gp = IX_[slot]) != NULL) {
-				    val &= 0xff;		/* reduce to byte */
-				    if (val != gp->gt_new &&	/* first change or glitch */
-				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
-					/* arithmetic master action */
-#if	YYDEBUG
-					if (debug & 0100) fprintf(outFP, "%s<\t", gp->gt_ids);
-#endif	/* YYDEBUG */
-					count = traMb(gp, 0);	/* distribute bits directly */
-#if	YYDEBUG
-					if (debug & 0100) fprintf(outFP, "%d%s",
-							    gp->gt_new, count ? "" : "\n");
-#endif	/* YYDEBUG */
+			    case 'X':				/* bit input */
+				val &= 0xff;			/* safety measure */
+				diff = val ^ pdata[slot];
+				pdata[slot] = val;		/* ready for next scan */
+				slot <<= 3;			/* convert to bit index */
+				while (diff) {		/* age old algorithm from CSR days */
+				    mask = diff & -diff;	/* rightmost bit set in diff */
+				    index = bitIndex[mask];	/* mask has only 1 bit set */
+				    /* ignore Gate if not programmed  or no change in bit */
+				    if ((gp = IX_[slot+index]) != 0 &&
+					((gp->gt_val & 0x80) ^ (val & mask ? 0x80 : 0x00))) {
+					/* relies on input initialized to +1 !!!!!! */
+					/* and no other function modifies gp_gt_val */
+					gp->gt_val = - gp->gt_val;	/* complement input */
+#if YYDEBUG
+					if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+#endif
+					link_ol(gp, o_list);	/* fire Input Gate */
+#if YYDEBUG
+					if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+#endif
 					cnt++;
+					/* o_list will be scanned before next input */
 				    }
-				}
+				    diff &= ~mask;		/* clear rightmost bit in diff */
+				}				/* loops only once for every 1 in diff */
 				break;
 
 			    case 'B':				/* 8 bit byte input */
@@ -606,6 +769,7 @@ icc(
 					link_ol(gp, a_list);	/* no actions */
 #if	YYDEBUG
 #if	INT_MAX == 32767 && defined (LONG16)
+					/* TODO - format for byte, word or long */
 					if (debug & 0100) fprintf(outFP, "%ld", gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 					if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
@@ -615,141 +779,227 @@ icc(
 				    }
 				}
 				break;
-#ifdef	LOAD
-
-			    case 'D':				/* live input */
-				if (slot != 0) goto RcvError;	/* unknown D? slot */
-
-				switch (val) {
-				case 0:		/* GET_END */
-				    for (opp = sTable; opp < sTend; opp++) {
-					(*opp)->gt_live &= 0x7fff;	/* clear live active */
-				    }
-				    printf("Symbol Table no longer required\n");
-				    break;
-
-				case 1:		/* GET_SYMBOL_TABLE */
-				    printf("Symbol Table requested\n");
-				    /* prepare index entries first to allow ALIAS back-references */
-				    index = 0;
-				    for (opp = sTable; opp < sTend; opp++) {
-					(*opp)->gt_live = index++;	/* index and live inhibit */
-					index &= 0x7fff;		/* rolls over if > 32768 Symbols */
-				    }
-				    strcpy(msgBuf, "D0.1");
-				    msgOffset = 4;		/* strlen(msgBuf) */
-				    /* to maintain index correlation send all symbols */
-				    for (opp = sTable; opp < sTend; opp++) {
-					int		len;
-					int		rest;
-					int		fni;
-					int		inverse = 0;
-					char *	ids;
-
-					gp = *opp;
-					ids = gp->gt_ids;
-					fni = gp->gt_fni;
-					while (gp->gt_ini == -ALIAS) {
-					    if (gp->gt_fni == GATE) {
-						inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
-					    }
-					    gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
-					    fni = MAX_FTY + gp->gt_fni + inverse;
-					}
-					if (fni == CH_BIT && gp->gt_ini >= 0) {
-					    fni = RI_BIT;		/* AND - LATCH, display as logic signal */
-					}
-					while (rest = REPLY - msgOffset, (len = fni >= MAX_FTY ?
-					    snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
-					    snprintf(&msgBuf[msgOffset], rest, ";%s %d", ids, fni)
-					    ) < 0 || len >= rest) {
-					    msgBuf[msgOffset] = '\0';		/* terminate */
-					    if (micro) microPrint("Send Symbols intermediate", 0);
-					    send_msg_to_server(sockFN, msgBuf);
-					    if (micro) microReset(0);
-					    msgOffset = 4;
-					}
-					msgOffset += len;
-				    }
-				    if (msgOffset > 4) {
-					if (micro) microPrint("Send Symbols", 0);
-					send_msg_to_server(sockFN, msgBuf);
-					if (micro) microReset(0);
-				    }
-				    /* end of symbol table - execute scan */
-				    snprintf(&msgBuf[0], REPLY, "D0.2;%s", progname);
-				    if (micro) microPrint("Send Scan Command", 0);
-				    send_msg_to_server(sockFN, msgBuf);
-				    liveFlag = 1;		/* live inhibit bits are set */
-				    if (micro) microReset(0);
-				    break;
-
-				case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
-				case 4:		/* LAST_ACTIVE_SYMBOLS */
-				    if (liveFlag) {
-					for (opp = sTable; opp < sTend; opp++) {
-					    (*opp)->gt_live &= 0x7fff;	/* clear live active */
-					}
-					liveFlag = 0;	/* do not set again until case 4 received */
-				    }
-				    strcpy(msgBuf, "D0.3");	/* header for live data */
-				    msgOffset = 4;		/* strlen(msgBuf) */
-				    cp = rBuf;
-				    while ((cp = strchr(cp, ';')) != NULL) {
-					long		value;
-					int		fni;
-					index = atoi(++cp);
-					assert(index < sTend - sTable);	/* check index is in range */
-					gp = sTable[index];
-					gp->gt_live |= 0x8000;	/* set live active */
-					value = (
-					    (fni = gp->gt_fni) == ARITH ||
-					    fni == D_SH ||
-					    fni == F_SW ||
-					    fni == OUTW ||
-					    (fni == CH_BIT && gp->gt_ini == -ARN)) ?  gp->gt_new
-					    /* CH_BIT is int if ARN else bit */	   : gp->gt_val < 0 ? 1
-												    : 0;
-					if (value) {
-					    liveData(gp->gt_live, value);	/* initial active live values */
-					}
-				    }
-				    /********************************************************************
-				     *  send a reply for each block received because
-				     *  a scan may occurr between received blocks which
-				     *  also sends an D0.3 block
-				     *******************************************************************/
-				    if (msgOffset > 4) {
-					send_msg_to_server(sockFN, msgBuf);
-					if (micro) microReset(0);
-				    }
-				    if (val == 4) {
-					liveFlag = 1;		/* live inhibit bits are correct */
-				    }
-				    break;
-
-				case 5:		/* STOP PROGRAM */
-				    close(sockFN);
-				    fprintf(errFP, "\n%s stopped by debugger\n", iccNM);
-				    quit(0);			/* quit normally */
-				    break;
-
-				default:
-				    goto RcvError;		/* unknown D0.? case */
-				}
-				break;
-#endif	/* LOAD */
 
 			    default:
 				goto RcvError;			/* unkikely if sscanf %1[XBWLD] OK */
 			    }
-			} else {
+			}
+// ########## NEW Input
+#else	/* LOAD */
+			static int	liveFlag;
+
+			if (isdigit(rpyBuf[0])) {
+			    cp = rpyBuf - 1;
+			    do {
+				int n;
+				if (
+#if	INT_MAX == 32767 && defined (LONG16)
+				    (n = sscanf(++cp, "%d:%ld", &slot, &val))
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+				    (n = sscanf(++cp, "%d:%d", &slot, &val))
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+				    == 2 &&
+				    slot > 0	&&
+				    slot < maxChannels &&
+				    (gp = Channels[slot]) != NULL
+				) {
+				    if (debug & 04) fprintf(outFP, "%4d %-15s val=%3d new=%3d old=%3d next=%p\n",
+					slot, gp->gt_ids, val, gp->gt_new, gp->gt_old, gp->gt_next);	/* only INT_MAX != 32767 */
+				    if (val != gp->gt_new &&	/* first change or glitch */
+				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
+					/* arithmetic master action */
+//#####if	YYDEBUG
+//#### 					if (debug & 0100) fprintf(outFP, "INPUT: %s, ini=%d fni=%d\n", gp ? gp->gt_ids : "null", gp->gt_ini, gp->gt_fni);
+//#####endif	/* YYDEBUG */
+					if (gp->gt_fni == TRAB) {
+#if	YYDEBUG
+					    if (debug & 0100) fprintf(outFP, "%s<\t", gp->gt_ids);
+#endif	/* YYDEBUG */
+					    count = traMb(gp, 0);	/* distribute bits directly */
+#if	YYDEBUG
+					    if (debug & 0100) fprintf(outFP, "%d%s",
+							    gp->gt_new, count ? "" : "\n");
+#endif	/* YYDEBUG */
+					    cnt += count;	/* extra number of fired gates */
+					} else
+					if (gp->gt_ini == -INPW) {
+#if	YYDEBUG
+					    if (debug & 0100) fprintf(outFP, "%s[\t", gp->gt_ids);
+#endif	/* YYDEBUG */
+					    link_ol(gp, a_list);	/* no actions */
+#if	YYDEBUG
+#if	INT_MAX == 32767 && defined (LONG16)
+					    /* TODO - format for byte, word or long */
+					    if (debug & 0100) fprintf(outFP, "%ld", gp->gt_new);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+					    if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+#endif	/* YYDEBUG */
+					    cnt++;
+					} else
+					if (gp->gt_fni == UDFA) {	/* D_gate initialised type */
+//#####if	YYDEBUG
+//####					    if (debug & 0100) fprintf(outFP, "D_gate: n = %d, channel = %d, val = %d, gp = %s, ini = %d, fni = %d\n",
+//####						n, slot, (int)val, gp ? gp->gt_ids : "null", gp->gt_ini, gp->gt_fni);
+//#####endif	/* YYDEBUG */
+					    gp->gt_new = 0;	/* allow repeated 1-6 commands */
+					    switch (val) {
+					    case 0:		/* IGNORE */
+						break;
+
+					    case 1:		/* GET_SYMBOL_TABLE */
+						printf("Symbol Table requested by '%s'\n", iccNM);
+						/* prepare index entries first to allow ALIAS back-references */
+						index = 0;
+						for (opp = sTable; opp < sTend; opp++) {
+						    (*opp)->gt_live = index++;	/* index and live inhibit */
+						    index &= 0x7fff;		/* rolls over if > 32768 Symbols */
+						}
+						regOffset = snprintf(regBuf, REQUEST, "%d:1", C_channel);
+						/* to maintain index correlation send all symbols */
+						for (opp = sTable; opp < sTend; opp++) {
+						    int		len;
+						    int		rest;
+						    int		fni;
+						    int		inverse = 0;
+						    char *	ids;
+
+						    gp = *opp;
+						    ids = gp->gt_ids;
+						    fni = gp->gt_fni;
+						    while (gp->gt_ini == -ALIAS) {
+							if (gp->gt_fni == GATE) {
+							    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+							}
+							gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+							fni = MAX_FTY + gp->gt_fni + inverse;
+						    }
+						    if (fni == CH_BIT && gp->gt_ini >= 0) {
+							fni = RI_BIT;		/* AND - LATCH, display as logic signal */
+						    }
+						    while (rest = REQUEST - regOffset, (len = fni >= MAX_FTY ?
+							snprintf(&regBuf[regOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
+							snprintf(&regBuf[regOffset], rest, ";%s %d", ids, fni)
+							) < 0 || len >= rest) {
+							regBuf[regOffset] = '\0';		/* terminate */
+							if (micro) microPrint("Send Symbols intermediate", 0);
+							send_msg_to_server(sockFN, regBuf);
+							if (micro) microReset(0);
+							regOffset = liveOffset;
+						    }
+						    regOffset += len;
+						}
+						if (regOffset > liveOffset) {
+						    if (micro) microPrint("Send Symbols", 0);
+						    send_msg_to_server(sockFN, regBuf);
+						    if (micro) microReset(0);
+						}
+						/* end of symbol table - execute scan - follow with '0' to leave in iCserver */
+						regOffset = snprintf(regBuf, REQUEST, "%d:4,%d:0", C_channel, C_channel);
+						if (micro) microPrint("Send Scan Command", 0);
+						send_msg_to_server(sockFN, regBuf);
+						liveFlag = 1;		/* live inhibit bits are set */
+						if (micro) microReset(0);
+						break;
+
+					    case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
+					    case 4:		/* LAST_ACTIVE_SYMBOLS */
+						if (liveFlag) {
+						    for (opp = sTable; opp < sTend; opp++) {
+							(*opp)->gt_live &= 0x7fff;	/* clear live active */
+						    }
+						    liveFlag = 0;	/* do not set again until case 4 received */
+						}
+						/********************************************************************
+						 *  Send live data just in case there was also an input in this loop
+						 *  (should go straight to scan())
+						 *******************************************************************/
+						if (msgOffset > liveOffset) {
+						    send_msg_to_server(sockFN, msgBuf);
+						    if (micro) microReset(0);
+						}
+						msgOffset = liveOffset;		/* msg = "C_channel:3" */
+						char * cp1 = rpyBuf;
+						while ((cp1 = strchr(cp1, ';')) != NULL) {
+						    long		value;
+						    int		fni;
+						    index = atoi(++cp1);
+						    assert(index < sTend - sTable);	/* check index is in range */
+						    gp = sTable[index];
+						    gp->gt_live |= 0x8000;	/* set live active */
+						    value = (
+							(fni = gp->gt_fni) == ARITH ||
+							fni == D_SH ||
+							fni == F_SW ||
+							fni == TRAB ||
+							fni == OUTW ||
+							(fni == CH_BIT && gp->gt_ini == -ARN)) ? gp->gt_new
+							/* CH_BIT is int if ARN else bit */    : gp->gt_val < 0 ? 1
+														: 0;
+						    if (debug & 04) fprintf(outFP, "%4d %-15s %d\n",
+							index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
+						    if (value) {
+							liveData(gp->gt_live, value);	/* initial active live values */
+						    }
+						}
+						/********************************************************************
+						 *  Send live data collected in msgBuf during RECEIVE_ACTIVE_TELEGRAMS
+						 *  because scan() is only executed when another input occurs.
+						 *  a scan may occurr between received blocks which
+						 *  also sends a live C_channel:3 block
+						 *******************************************************************/
+						if (msgOffset > liveOffset) {
+						    send_msg_to_server(sockFN, msgBuf);
+						    if (micro) microReset(0);
+						}
+						msgOffset = liveOffset;		/* msg = "C_channel:3" */
+						if (val == 4) {
+						    liveFlag = 1;		/* live inhibit bits are correct */
+						}
+						break;
+
+					    case 5:		/* GET_END */
+						for (opp = sTable; opp < sTend; opp++) {
+						    (*opp)->gt_live &= 0x7fff;	/* clear live active */
+						}
+						liveFlag = 0;
+						printf("Symbol Table no longer required by '%s'\n", iccNM);
+						/* leave '0' for iCserver */
+						regOffset = snprintf(regBuf, REQUEST, "%d:0", C_channel);
+						send_msg_to_server(sockFN, regBuf);
+						if (micro) microReset(0);
+						break;
+
+					    case 6:		/* STOP PROGRAM */
+						fprintf(errFP, "\n'%s' stopped by debugger\n", iccNM);
+						quit(0);			/* quit normally */
+						break;
+
+					    case 7:		/* DEBUGGER STOPPED */
+						fprintf(errFP, "\nDebugger has stopped\n", iccNM);
+						regOffset = snprintf(regBuf, REQUEST, "%d:2;%s", C_channel, iccNM);
+						if (micro) microPrint("Send application name", 0);
+						send_msg_to_server(sockFN, regBuf);	/* Application Name for next debugger start */
+						break;
+
+					    default:
+						goto RcvError;		/* unknown C_channel:? case */
+					    }
+					} else goto RcvError;
+				    }
+				} else {
+				    fprintf(errFP, "n = %d, channel = %d, maxChannels = %d, gp = %s\n", n, slot, maxChannels, gp ? gp->gt_ids : "null");
+				    goto RcvError;
+				}
+			    } while ((cp = strchr(cp, ',')) != NULL);
+			}
+#endif	/* LOAD */
+			else {
 			  RcvError:
-			    fprintf(errFP, "ERROR: %s rcvd at %s ???\n", rBuf, iccNM);
+			    fprintf(errFP, "ERROR: '%s' rcvd at '%s' ???\n", rpyBuf, iccNM);
 			}
 		    } else {
-			close(sockFN);
-			fprintf(errFP, "\n%s disconnected by server\n", iccNM);
+			fprintf(errFP, "\n'%s' disconnected by server\n", iccNM);
 			quit(0);			/* quit normally */
 		    }
 		} else if (FD_ISSET(0, &rdfds)) {	/* unlikely to have both */
@@ -759,7 +1009,7 @@ icc(
 		    if ((c = getchar()) == EOF) {
 			FD_CLR(0, &infds);		/* ignore EOF - happens in bg */
 		    } else if (c == 'q') {
-			fprintf(errFP, "\n%s stopped from terminal\n", iccNM);
+			fprintf(errFP, "\n'%s' stopped from terminal\n", iccNM);
 			quit(0);			/* quit normally */
 #if	YYDEBUG
 		    } else if (c == 't') {
@@ -786,6 +1036,11 @@ icc(
 		perror("ERROR: select failed");
 		quit(1);
 	    }
+	    /* if many inputs change simultaneously increase oscillator limit */
+	    osc_lim = (cnt << 1) + 1;			/* (cnt * 2) + 1 */
+	    if (osc_lim < osc_max) {
+		osc_lim = osc_max;			/* cnt = 1, osc_lim = 3 default */
+	    }
 	}
     } /* for ( ; ; ) */
 } /* icc */
@@ -807,17 +1062,20 @@ liveData(unsigned short index, int value)
     int rest;
     while ((len =
 #if	INT_MAX == 32767 && defined (LONG16)
-	    snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+	    snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
 		";%hu %ld", index & 0x7fff, value)
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-	    snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+	    snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
 		";%hu %d", index & 0x7fff, value)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	    ) < 0 || len >= rest
 	) {
+	/********************************************************************
+	 *  Send live data collected in msgBuf before it overflows to iCserver
+	 *******************************************************************/
 	msgBuf[msgOffset] = '\0';		/* terminate */
 	send_msg_to_server(sockFN, msgBuf);
-	msgOffset = 4;				/* msg = "D0.3" */
+	msgOffset = liveOffset;				/* msg = "C_channel:3" */
     }
     msgOffset += len;
 } /* liveData */
@@ -939,17 +1197,32 @@ void initIO(void)
 
 void quit(int sig)
 {
+    struct timespec ms200 = { 0, 200000000, };
+
+    if (sockFN) {
+	if (C_channel) {
+	    /* disconnect iClive - follow with '0' for iCserver */
+	    regOffset = snprintf(regBuf, REQUEST, "%d:5,%d:0", C_channel, C_channel);
+	    send_msg_to_server(sockFN, regBuf);
+	    if (micro) microReset(0);
+	    nanosleep(&ms200, NULL);
+	}
+	close(sockFN);			/* close connection to iCserver */
+    }
     fflush(outFP);
     if (sig == SIGINT) {
-	fprintf(errFP, "\n%s stopped by interrupt from terminal\n", iccNM);
+	fprintf(errFP, "\n'%s' stopped by interrupt from terminal\n", iccNM);
     } else if (sig == SIGSEGV) {
-	fprintf(errFP, "\n%s stopped by 'Invalid memory reference'\n", iccNM);
+	fprintf(errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iccNM);
     }
     if (errFP != stderr) {
 	fflush(errFP);
 	fclose(errFP);
     }
 #ifdef	EFENCE
+    free(rpyBuf);
+    free(outBuf);
+    free(regBuf);
     free(msgBuf);
 #endif	/* EFENCE */
     exit(sig);			/* really quit */

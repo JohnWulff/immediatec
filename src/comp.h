@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.46 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: comp.h,v 1.47 2004/12/22 16:54:02 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256

@@ -1,8 +1,8 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.49 2004/11/10 17:47:56 jw Exp $";
+"@(#)$Id: main.c,v 1.50 2005/01/16 15:25:50 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -33,7 +33,7 @@ extern const char	SC_ID[];
 
 static const char *	usage =
 "USAGE:\n"
-"  %s [-aAch] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] [-P<path>] <iC_program>\n"
+"  %s [-aAch] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] [-P<path>] <iC_source>\n"
 #if defined(RUN) || defined(TCP)
 "Options in compile mode (-o or -c):\n"
 #endif	/* RUN or TCP */
@@ -69,9 +69,11 @@ static const char *	usage =
 "                    +1  iC bison debug info (on stderr only) (+4001 C bison)\n"
 #endif	/* YACC */
 #endif	/* RUN or TCP */
+"                +10044  generate listing of compiler internal functions\n"
+"                +20000  use old style imm functions - no internal functions\n"
 #endif	/* YYDEBUG and not _WINDOWS */
 "        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
-"        <iC_program>    any iC language program file (extension .ic)\n"
+"        <iC_source>     any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
 "        -h              this help text\n"
 #ifdef EFENCE 
@@ -118,10 +120,10 @@ static const char *	usage =
 #endif	/* YYDEBUG and not _WINDOWS */
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
 "                        can be changed at run time by typing x or d\n"
-"      An <iC_program> containing only logical expressions can be interpreted\n"
-"      with  %s -t <iC_program>. An <iC_program> containing arithmetic\n"
+"      An <iC_source> containing only logical expressions can be interpreted\n"
+"      with  %s -t <iC_source>. An <iC_source> containing arithmetic\n"
 "      expressions requires relinking of %s with a new cexe.c generated\n"
-"      by %s -c <iC_program> before <iC_program> can be interpreted.\n"
+"      by %s -c <iC_source> before <iC_source> can be interpreted.\n"
 #ifndef TCP
 "      Typing 0 to 7 toggles simulated inputs IX0.0 to IX0.7\n"
 "      Typing b<num> w<num> or l<num> alters simulated inputs IB1, IW2 or IL4\n"
@@ -130,8 +132,9 @@ static const char *	usage =
 #endif	/* not TCP */
 "      Typing q or ctrl-C quits run mode.\n"
 #endif	/* RUN or TCP */
-"Copyright (C) 1985-2001 John E. Wulff     <john@je-wulff.de>\n"
-"%s\n";
+"%s\n"
+"Copyright (C) 1985-2005 John E. Wulff     <john@je-wulff.de>\n"
+;
 
 const char *	progname;		/* name of this executable */
 short		debug = 0;
@@ -139,6 +142,7 @@ int		micro = 0;
 unsigned short	xflag;
 unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
+unsigned short	osc_lim = MARKMAX;
 #if YYDEBUG
 extern	int	iCdebug;
 extern	int	c_debug;
@@ -353,7 +357,7 @@ main(
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
-		    osc_max = atoi(*argv);
+		    osc_lim = osc_max = atoi(*argv);
 		    if (osc_max > 15) goto error;
 		    goto break2;
 		case 'o':
@@ -680,3 +684,102 @@ inversionCorrection(void)
     }
     return r;
 } /* inversionCorrection */
+
+#ifdef POD /* ############ POD to generate man page ################################## */
+
+=head1 NAME
+
+ icc - the immediate-C to C compiler
+
+=head1 SYNOPSIS
+
+ icc [-aAch] [-o<out>] [-l<lst>] [-e<err>] [-d<deb>] [-P<ppl>] <src.ic>
+    -o <out> name of generated C output file
+    -c       generate C source cexe.c to extend 'icr' or 'ict' compiler
+             (cannot be used if also compiling with -o)
+    -l <lst> name of list file  (default none, '' is stdout)
+             default listing, net topology, stats and logic expansion
+    -e <err> name of error file (default is stderr)
+    -a       append linking info for 2nd and later files
+    -A       compile output ARITHMETIC ALIAS nodes for symbol debugging
+    -d <deb>
+       4000  supress listing alias post processor (save temp files)
+        +40  source listing
+        +20  net topology
+        +10  net statistics
+         +4  logic expansion
+         +2  logic generation                     (+4002 Symbol Table)
+         +1  iC bison debug info (on stderr only) (+4001 C bison)
+    -P <ppl> Path of script pplstfix when not on PATH (usually ./)
+    <src.ic> iC language source file (extension .ic)
+    -        or default: take iC source from stdin
+    -h       this help text
+
+=head1 DESCRIPTION
+
+B<icc> translates an iC-source (extension: .ic) into a C file which can
+be compiled with a C compiler and linked with the iC project run time
+library B<libict.a> (link option -lict) to produce an executable which
+communicates via TCP/IP with B<iCserver> and associated I/O-clients -
+usually B<iCbox>.
+
+B<icc> reads and translates one iC-source eg file.ic. If no options are
+specified, only compilation errors (if any) are reported on 'stderr'.
+
+Before translation starts, file.ic is optionally passed through the
+C-precompiler if it contains any lines starting with '#'.
+
+Immediate-C code consists of immediate statements and C literal blocks.
+Immediate statements translate into data tables for use at run time
+and C-actions generated by the immediate B<if>, B<else> and B<switch>
+statements. C literal blocks are C code enclosed in B<%{> and B<%}>
+braces.
+
+C code in C-actions and literal blocks is copied nearly verbatim into the
+target C file. Any C-preprocessor statements for the C-code in C-actions
+and literal blocks must have a B<%> immediately preceding the leading
+B<#>, eg B<%#include "f.h">. The B<'%'> is stripped before being copied
+to the target.
+
+The generated C-code is re-grouped into literal blocks first, followed
+by C-actions. This is necessary to place all C-declarations in literal
+blocks before any C-actions, which may require them.
+
+In a next pass an integrated special-purpose C compiler is run (preceded
+by a pass through the C-preprocessor, if necessary), which recognizes
+any variables declared as B<imm bit> or B<imm int> in the embedded
+C-code.  These variables can be used as values anywhere in the C-code
+and appropriate modification is carried out. Immediate variables which
+have been declared but not yet assigned may be (multiple) assigned to in
+the C-code.  Such assignment expressions are recognised and converted
+to function calls.  If an immediate variable has already been (single)
+assigned to in an immediate statement, an attempt to assign to it in
+the C-code is an error. A syntax check of the embedded C code with
+appropriate error messages is a by-product of this procedure.
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<iCmake(1)>, L<makeAll(1)>, L<iCserver(1)>, L<iCbox(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.
+
+=cut
+
+#endif

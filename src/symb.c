@@ -1,8 +1,8 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.15 2004/01/26 20:08:13 jw Exp $";
+"@(#)$Id: symb.c,v 1.16 2004/12/22 16:59:33 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.

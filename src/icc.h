@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.55 2004/05/13 09:15:49 jw Exp $";
+"@(#)$Id: icc.h,v 1.56 2005/01/16 15:26:27 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -31,6 +31,7 @@ extern void	efree(void *);
 #ifndef PPGATESIZE
 #define	PPGATESIZE 127		/* natural gate size for char gt_val */
 #endif
+#define	INSTSIZE 3		/* limit instance to 3 characters */
 
 #define	DIS_MAX	5		/* diplay heading after this many */
 #define	IXD	64		/* number of slots in icc (<= 64) */
@@ -155,6 +156,7 @@ extern void	icc(			/* initialise and execute */
 		Gate * g_lists, unsigned gate_count[]);
 
 extern unsigned short	osc_max;
+extern unsigned short	osc_lim;
 extern unsigned short	Aflag;		/* -A flag signals ARITH alias */
 extern unsigned short	aflag;		/* -a flag signals append mode */
 extern unsigned short	Tflag;		/* define _tVar in _list_.c _list1.h */
@@ -173,6 +175,11 @@ extern unsigned char	idata[];	/* Input bit field */
 extern unsigned char	pdata[];	/* rest used only locally */
 extern Functp *		i_lists[];
 
+// NEW Output
+extern char		outBuf[];
+extern int		outOffset;
+// END NEW Output
+
 extern Gate *		a_list;
 extern Gate *		o_list;
 extern Gate *		c_list;
@@ -186,10 +193,12 @@ extern short		dc;	/* debug display counter in scan and rsff */
 #endif
 extern unsigned char	bitMask[];
 extern unsigned char	bitIndex[];
-#define	B_WIDTH		257		/* marks output as byte width */
-#define	W_WIDTH		258		/* marks output as word width */
+#define	X_WIDTH		256		/* marks output as byte width unsigned */
+#define	B_WIDTH		257		/* marks output as byte width signed */
+#define	W_WIDTH		258		/* marks output as word width signed */
 #if INT_MAX != 32767 || defined (LONG16)
-#define	L_WIDTH		259		/* marks output as long width */
+#define	L_WIDTH		259		/* marks output as long width signed */
+#define	H_WIDTH		260		/* marks output as long long width signed */
 #endif
 
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */

@@ -1,8 +1,8 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.13 2004/01/26 20:11:02 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.14 2005/01/16 19:49:56 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -28,11 +28,10 @@ static const char RCS_Id[] =
 #include	"icg.h"
 #include	"icc.h"
 
-#define TBSIZE 32
-
 const char *	hostNM = "localhost";	/* 127.0.0.1 */
 const char *	portNM = "8778";	/* iC service */
-const char *	iccNM  = "C0";		/* icc name */
+char *		iccNM  = "C0";		/* icc name qualified with instance */
+char *		iidNM  = "";		/* instance id */
 float		timeout = 0.05;		/* default 50 ms on 50 ms off */
 
 fd_set		rdfds;
@@ -91,7 +90,7 @@ microPrint(const char * str, int mask)
 /********************************************************************
  *
  *	Connect to server 'host' and 'port' as a client
- *	Register with server as 'icc'
+ *	Use 'iccNM' for messages (do not register with server)
  *	Set timeout value with 'delay' 
  *	Return:	socket file number
  *
@@ -100,15 +99,12 @@ microPrint(const char * str, int mask)
 int
 connect_to_server(const char *	host,
 		  const char *	port,
-		  const char *	icc,
-		  float		delay,
-		  int		maxIOs)
+		  float		delay)
 {
     int			sock;
     struct in_addr	sin_addr;
     unsigned short int	sin_port;
     struct sockaddr_in	server;
-    char		tempBuf[TBSIZE];
 
     if (isdigit(*host)) {
 	if (inet_aton(host, &sin_addr) == 0) {
@@ -149,16 +145,13 @@ connect_to_server(const char *	host,
 
     if (connect(sock, (SA)&server, sizeof(server)) < 0) {
 	fprintf(stderr, "ERROR in %s: client could not be connected to server '%s:%d'\n",
-	    icc, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+	    iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	perror("connect failed");
 	quit(1);
     }
 
-    printf("Connection %s %d to server '%s:%d'\n",
-	icc, maxIOs, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-
-    snprintf(tempBuf, TBSIZE, "%s %d", icc, maxIOs);
-    send_msg_to_server(sock, tempBuf);	/* register CO with maxIOs */
+    printf("'%s' connected to server at '%s:%d'\n",
+	iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
     FD_ZERO(&infds);	/* should be done centrally if more than 1 connect */
     FD_SET(0, &infds);			/* watch stdin for inputs - FD_CLR on EOF */
@@ -229,10 +222,11 @@ rcvd_msg_from_server(int sock, char * buf, int maxLen)
     NetBuffer	netBuf;
     int		len;
 
-    if ((len = rcvd_buffer_from_server(sock, (char*)&netBuf.length, sizeof netBuf.length)) == sizeof netBuf.length) {
-	len = ntohl(netBuf.length);
+    if ((len = rcvd_buffer_from_server(sock, (char*)&netBuf.length, sizeof netBuf.length))
+	    == sizeof netBuf.length) {		/* get 4 bytes of length to start with */
+	len = ntohl(netBuf.length);		/* length in host byte order */
 	if (len >= maxLen) {
-	    fprintf(stderr, "ERROR in %s: received message is too long: %d\n", iccNM, len);
+	    fprintf(stderr, "ERROR in %s: received message is too long: %d >= %d\n", iccNM, len, maxLen);
 	    len = maxLen - 1;
 	}
 	maxLen = len;
@@ -263,7 +257,7 @@ send_msg_to_server(int sock, const char * msg)
     size_t	len = strlen(msg);
 
     if (len >= sizeof netBuf.buffer) {
-	fprintf(stderr, "ERROR in %s: message to send is too long: %d\n", iccNM, len);
+	fprintf(stderr, "ERROR in %s: message to send is too long: %d >= %d\n", iccNM, len, sizeof netBuf.length);
 	len = sizeof netBuf.buffer - 1;
     } else
 #if YYDEBUG

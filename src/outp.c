@@ -1,8 +1,8 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.76 2004/05/15 13:55:10 jw Exp $";
+"@(#)$Id: outp.c,v 1.77 2005/01/16 19:08:22 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -24,6 +24,7 @@ static const char outp_c[] =
 #include	<stdlib.h>
 #include	<unistd.h>
 #include	<string.h>
+#include	<ctype.h>
 #include	<assert.h>
 #include	<errno.h>
 #include	"icg.h"
@@ -378,7 +379,7 @@ listNet(unsigned gate_count[])
     }
     return 0;
 } /* listNet */
-#if defined(RUN) || defined(TCP)
+#if defined(RUN) || defined(TCP) && ! defined(LOAD)
 
 /********************************************************************
  *
@@ -662,7 +663,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 
     return rc;		/* return code */
 } /* buildNet */
-#endif
+#endif /* defined(RUN) || defined(TCP) && ! defined(LOAD) */
 
 /********************************************************************
  *
@@ -1196,23 +1197,31 @@ extern Gate *	_l_[];\n\
      *
      *	The following algorithm fails if two files are linked with names
      *	'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
-     *	A multiple define error occurs for the name 'ab_cd_i_list' at link time.
+     *	A multiple define error occurs for the name '_ab_cd_i_list' at link time.
      *	The same error occurs if unfortunate path combinations are used
      *	eg: ab/cd.ic and either of the above
+     *	Spaces and non-alpha-numeric characters are treated the same way
+     *
+     *	To allow file names starting with numerals (YUK) precede the generated
+     *	variable names with a '_' in that case only (does not break regression tests)
+     *	eg: 0.ic generates _0_i_list
+     *	This example generates the executable 0, which requires special
+     *	handling in Perl scripts (particularly iClive)
      *******************************************************************/
-    module = emalloc(strlen(inpNM)+1);	/* +1 for '\0' */
-    strcpy(module, inpNM);		/* source file name */
+    module = emalloc(strlen(inpNM)+1);	/* +2 for possible leading '_' and '\0' */
+    if (isdigit(*inpNM)) {
+	*module = '_';
+	strcpy(module + 1, inpNM);	/* _<source file name> */
+    } else {
+	strcpy(module, inpNM);		/* <source file name> */
+    }
     if ((s1 = strrchr(module, '.')) != 0) {
 	*s1 = '\0';			/* module name without extensions */
     }
-    while ((s1 = strchr(module, '/')) != 0) {
-	*s1 = '_';			/*  replace all '/'s with '_' */
-    }
-    while ((s1 = strchr(module, '\\')) != 0) {
-	*s1 = '_';			/*  replace all '\'s with '_' */
-    }
-    while ((s1 = strchr(module, '.')) != 0) {
-	*s1 = '_';			/*  replace further '.'s with '_' */
+    for (s1 = module; *s1 != 0; s1++) {
+	if (! isalnum(*s1) && *s1 != '_') {
+	    *s1 = '_';			/*  replace all non-alnums with '_' */
+	}
     }
     fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
     linecnt += 2;

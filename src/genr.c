@@ -1,8 +1,8 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.61 2004/11/10 17:47:56 jw Exp $";
+"@(#)$Id: genr.c,v 1.62 2004/12/22 16:54:22 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2001  John E. Wulff
+ *	Copyright (C) 1985-2005  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
