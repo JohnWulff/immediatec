@@ -84,6 +84,9 @@ my %delayedColour;	# colour that should be restored after a flash
 #
 #	To display clocks and glitches, the foreground is flashed white
 #	for 50 milliseconds. Flashing the background looks confusing.
+#	Uses Tk::After. Flash 2 clocks in a row white. This happens if
+#	CLOCK or TIMER has 2 slave gates which are fired together.
+#	
 #
 ########################################################################
 
@@ -109,8 +112,8 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 							# cs|010 flash glitch
 		     'white'        , 'white'        ,  # 0 1 GATE
 		     'white'        , 'white'        ,  # 2 3 ARITH
-		     'white'        , 'black'        ,  # 4 5 CLCKL
-		     'white'        , 'black'        ,  # 6 7 TIMRL
+		     'white'        , 'white'        ,  # 4 5 CLCKL
+		     'white'        , 'white'        ,  # 6 7 TIMRL
 		    );
 
 ########################################################################
@@ -166,7 +169,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.21 2002/06/14 19:59:59 jw Exp $
+$Id: iClive,v 1.22 2002/06/17 11:35:39 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
