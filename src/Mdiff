@@ -23,7 +23,7 @@ usage()
   echo 'the two directories or a list of non-existing files in the second directory.' >&2
   echo 'These 3 lists are exclusive subsets of the complete set of selected files.' >&2
   echo >&2
-  echo "Usage:	$name [+w] [-ietqlckIh] [-x<regex>] [file ...|command] [directory]" >&2
+  echo "Usage:	$name [+w] [-ietqlckILh] [-x<regex>] [-d<dir>] [file ...|command] directory" >&2
   echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
   echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
@@ -33,12 +33,16 @@ usage()
   echo '			 (unless only 1 file)' >&2
   echo '		if files differ output:	#### file ####' >&2
   echo '			 followed by the output of diff' >&2
-  echo '	-t	text and date header at start of report' >&2
-  echo '	-p	full path in file names for directory (default removed)' >&2
-  echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list files which differ - no other output' >&2
   echo '	-li	list files which are identical' >&2
   echo '	-le	list files which are non-existing in directory' >&2
+  echo '	-d<dir>	use directory <dir> instead of current directory' >&2
+  echo '	-p	full path in file names for directory (default removed)' >&2
+  echo '	-r	recursively Mdiff all directories in arg list except last' >&2
+  echo '	-L	compare files and directories which are symbolic links' >&2
+  echo '		default: ignore symbolic links (treated as non-existing)' >&2
+  echo '	-t	text and date header at start of report' >&2
+  echo '	-q	quiet operation - return status only' >&2
   echo '	-c	display diff output in context form' >&2
   echo '	-I	case insensitive and white space ignored' >&2
   echo '	-k	ignore lines containing the string $Id:' >&2
@@ -46,81 +50,297 @@ usage()
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
   echo '	-	all further arguments are treated as files' >&2
-  echo '	(for backward compatibility first argument may be directory)' >&2
   echo '	if the first argument is not a file, the argument is  executed' >&2
   echo '		as a shell command to generate a list of files.' >&2
   echo "	if no files or command is specified, '$defaultfiles' is used" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.25 2002/07/13 15:43:07 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.26 2002/07/26 19:01:28 archiv Exp $' >&2
 }
 
 ########################################################################
 #
-#	all echo's to stdin are in process which may be piped
+#	generate an optional header
 #
 ########################################################################
 
-process()
+header()
 {
-    dir=${directory%*/}
-    if [ "$t" = 1 ]; then
-	echo "Differences in directory $PWD and $dir"
-	date
-    fi
-
-    status=0
-    for f in $files; do
-	if [ -f "$f" ]; then
-	    if [ "$p" != 0 ]; then
-		d=$f
+    if [ $headFlag = 0 ]; then
+	if [ "$t" = 0 ]; then
+	    if [ "$headCnt" = 0 ]; then
+		date
 	    else
-		d=${f##*/}
+		echo
 	    fi
-	    if [ -f "$dir/$d" ]; then
-		if [ $f -ef $dir/$d ]; then
-		    f1=${f%/*}
-		    if [ "$f" = "$f1" ]; then
-			f1="."
+	    echo "Differences in $PWD/$1 and $PWD/$2"
+	fi
+	headFlag=1
+	let headCnt+=1
+    fi
+}
+
+########################################################################
+#
+#	all echo's to stdin are in processFiles which may be piped
+#
+########################################################################
+
+processFiles()
+{
+    local t1="${1%/}/"
+    local td="${t1#./*}"
+    t1="${td%/}"
+    shift
+    local dir="${1%*/}"
+    shift
+    headFlag=0
+    local status=0
+    local f1
+    local f2
+
+    for f in $*; do
+	local tdSf="$td$f"
+	if [ -f $tdSf ]; then
+	    if [ ! -L $tdSf ] || [ "$Link" != 0 ]; then
+		local dirsSf="$dir/$f"
+		if [ "$p" = 0 ]; then
+		    dirsSf="$dir/${f##*/}"
+		fi
+		if [ -f $dirsSf ]; then
+		    if [ $tdSf -ef $dirsSf ]; then
+			if [ ! -L $tdSf ] && [ ! -L $dirsSf ]; then
+			    f1=${f%/*}
+			    if [ "$f" = "$f1" ]; then
+				f1="."
+			    fi
+			    f2=${dirsSf%/*}
+			    echo "$name: paths $td$f1 and $f2 are identical - ignored" >&2
+			    status=-1
+			    break
+			fi
+		    elif [ -L $dirsSf ] && [ "$Link" = 0 ]; then
+			if [ "$e" != 0 ]; then
+			    let status+=1
+			    if [ "$q" = 0 ]; then
+				header "$t1" "$dir"
+				echo "********** $dirsSf is a symbolic link"
+			    elif [ "$li" = 1 ]; then
+				echo $tdSf
+			    fi
+			fi
+		    elif diff -q $w $tdSf $dirsSf > /dev/null; then
+			if [ "$q" = 0 ]; then
+			    if [ "$i" != 0 ]; then
+				header "$t1" "$dir"
+				echo "========== $tdSf =========="
+			    fi
+			elif [ "$li" = 3 ]; then
+			    echo $tdSf
+			fi
+		    else
+			let status+=1
+			if [ "$q" = 0 ]; then
+			    header "$t1" "$dir"
+			    echo
+			    echo "########## $tdSf ##########"
+			    if [ -z "$context" ]; then
+				ls -lL $tdSf
+				ls -lL $dirsSf
+			    fi
+			    diff $w $context $tdSf $dirsSf
+			elif [ "$li" = 1 ] && [ "$e" = 0 ]; then
+			    echo $tdSf
+			fi
 		    fi
-		    d1="$dir/$d"
-		    f2=${d1%/*}
-		    echo "$name: paths $f1 and $f2 are identical - ignored" >&2
-		    status=-1
-		    break
-		elif diff -q $w $f $dir/$d > /dev/null; then
-		    if [ "$q" = 0 ]; then
-			[ "$i" = 0 ] || echo "========== $f =========="
-		    elif [ "$li" = 3 ]; then
-			echo $f
-		    fi
-		else
+		elif [ "$e" != 0 ]; then
 		    let status+=1
 		    if [ "$q" = 0 ]; then
-			echo
-			echo "########## $f ##########"
-			ls -lL $f
-			ls -lL $dir/$d
-			diff $w $context $f $dir/$d
-		    elif [ "$li" = 1 ] && [ "$e" = 0 ]; then
-			echo $f
+			header "$t1" "$dir"
+			echo "********** $dirsSf does not exist"
+		    elif [ "$li" = 1 ]; then
+			echo $tdSf
 		    fi
-		fi
-	    elif [ "$e" != 0 ]; then
-		let status+=1
-		if [ "$q" = 0 ]; then
-		    echo "********** $dir/$d does not exist"
-		elif [ "$li" = 1 ]; then
-		    echo $f
 		fi
 	    fi
 	fi
     done
     if [ "$status" != 0 ] && [ "$q" = 0 ]; then
 	echo
-	echo "########## $status files differ ##########"
+	local files_differ="files differ"
+	if [ "$status" = 1 ]; then
+	    files_differ="file differs"
+	fi
+	if [ -z "$td" ]; then
+	    echo "########## $status $files_differ ##########"
+	else
+	    echo "########## $status $files_differ in $td ##########"
+	fi
     fi
+    return $status
+}
+
+########################################################################
+#
+#	handle directories recursively
+#
+########################################################################
+
+processDirectory()
+{
+    local this=$1
+    shift
+    local fileArgs=''
+    local fileParams=''
+    local fileCnt=0
+    local directory=''
+    local ff=''
+    local status=0
+    local f1
+    local f2
+    local d
+    local dd
+
+    while [ $# -gt 0 ]; do
+	f1=${1#$this/}
+	f2="${f1%/}"
+test "$Z" = 1 && echo "this $this 1 '$1' f1 '$f1' f2 '$f2' command '$command'"
+	if [ -d "$1" ]; then
+	    directory=$f2	# last directory in args is other directory
+	elif [ "$level" = 0 ]; then
+	    if [ -f "$this/$f2" ]; then
+		fileArgs="$fileArgs $f2"
+		fileParams="$fileParams $1"
+		let fileCnt+=1
+	    elif [ "$fileCnt = 0" ] && [ -z "$command" ]; then
+		command="$1"		# attempt to use as a command to get list of fileArgs
+	    elif [ -n "$command" ]; then
+		fileParams="$fileParams $command $1"
+		let fileCnt+=2
+		command=''
+	    else
+		fileParams="$fileParams $1"
+		let fileCnt+=1
+	    fi
+	else
+	    fileParams="$fileParams $1"
+	    ff="$1"
+test "$Z" = 1 && echo "ff: '$ff'"
+	fi
+	shift
+    done
+test "$Z" = 1 && echo "ff1: $fileCnt: '$ff'"
+
+    if [ $fileCnt = 0 ]; then
+	if [ -z "$ff" ] || [ "$ff" = " " ]; then
+	    if [ -n "$command" ]; then
+		local tmp=${command#[a-zA-Z_]*}
+test "$Z" = 1 && echo "$PWD: '$tmp' '$command'"
+		if [ "$tmp" != "$command" ]; then
+		    cd $this		# first character of command is a letter
+		    if ff=`$command 2> /dev/null`; then
+test "$Z" = 1 && echo "ct: '$ff'"
+			cd -
+		    else
+			cd -
+			ff="$this/$command"
+test "$Z" = 1 && echo "ct failed: '$ff'"
+		    fi
+		else
+		    ff="$this/$command"
+test "$Z" = 1 && echo "tc: '$ff'"
+		fi
+	    else
+		ff="$this/$defaultfiles"
+test "$Z" = 1 && echo "td: '$ff'"
+	    fi
+	fi
+    fi
+test "$Z" = 1 && echo "ff2: $fileCnt: '$ff'"
+test "$Z" = 1 && echo "$PWD: '$command' '$this':" $ff
+    
+    if [ -n "$ff" ]; then
+	for f1 in $ff; do
+	    f2=${f1#$this/}
+	    if [ -f "$this/$f2" ]; then
+		fileArgs="$fileArgs $f2"
+		let fileCnt+=1
+test "$Z" = 1 && echo "for ff: $fileCnt: $fileArgs"
+	    fi
+	done
+    fi
+
+    if [ "$level" = 0 ]; then
+	if [ -z "$directory" ]; then
+	    echo "$name: there must be at least one directory argument" >&2
+	    usage
+	    exit 253		# call provides directory at other levels
+	fi
+	if [ $fileCnt = 0 ] && [ $recursive = 0 ]; then
+	    echo "$name: there are no files or directories to compare" >&2
+	    exit 252		# can be empty at other levels
+	fi
+    fi
+
+    if [ $fileCnt -gt 0 ]; then
+	if [ $fileCnt = 1 ] && [ $q = 0 ] && [ $recursive = 0 ]; then
+	    e=1;		# for single file argument, check if other file exists
+	fi
+	processFiles $this $directory $fileArgs; let status+=$?
+    fi
+    if [ $recursive = 1 ]; then
+	let level+=1
+	for d in $this/*; do
+	    if [ -d $d ]; then
+		if [ "$Link" != 0 ] || [ ! -L $d ]; then
+		    let dc+=1
+		    dd=${d#$this/}
+		    if [ -d $directory/$dd ]; then
+			if [ "$Link" != 0 ] || [ ! -L $directory/$dd ]; then
+test "$Z" = 1 && echo "processDirectory $this/$dd $fileParams $directory/$dd;"
+			    processDirectory $this/$dd "$fileParams" $directory/$dd; let status+=$?
+			elif [ "$e" != 0 ]; then
+			    let status+=1
+			    if [ "$q" = 0 ]; then
+				echo "********** $directory/$dd/ is a symbolic link"
+			    elif [ "$li" = 1 ]; then
+				echo $directory/$dd/
+			    fi
+			fi
+		    elif [ "$e" != 0 ]; then
+			let status+=1
+			local td="$this/$dd"
+			local t1="${td%/}/"
+			td="${t1#./*}"
+			t1="${td%/}"
+			if [ "$q" = 0 ]; then
+			    headFlag=0
+			    header "$t1" "$directory/$dd"
+			    echo "********** $directory/$dd/ does not exist"
+			elif [ "$li" = 1 ]; then
+			    echo "$t1/"
+			fi
+		    fi
+		fi
+	    fi
+	done
+	let level-=1
+    fi
+
+    if [ "$level" = 0 ] && [ "$dc" != 0 ] && [ "$status" != 0 ] && [ "$q" = 0 ]; then
+	echo
+	files_differ="files differ"
+	if [ "$status" = 1 ]; then
+	    files_differ="file differs"
+	fi
+	directories="directories"
+	if [ "$headCnt" = 1 ]; then
+	    directories="directory"
+	fi
+	echo "########## $status $files_differ in $headCnt $directories ##########"
+    fi
+    return $status
 }
 
 ########################################################################
@@ -131,9 +351,14 @@ process()
 
 name=${0##*/}
 name=${name%.*}
-i=0; e=0; t=0; p=0; q=0; li=0; w=-wB; pipe=0; recursive=0;
+i=0; e=0; t=1; p=0; q=0; li=0; w=-wB; pipe=0;
+recursive=0; level=0; Link=0; headCnt=0;
 context=''
-defaultfiles='[Mm]akefile* *.[achimlyv]*'
+defaultfiles='*.[achimlyv]*'
+command=''
+thisdir='.'
+dc=0
+status=0
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -143,15 +368,24 @@ while [ $# -gt 0 ]; do
 	    case $option in
 	    e*)	e=1;;
 	    i*)	i=1; let "li|=2";;
-	    l*)	t=0; q=1; let "li|=1";;
-	    t*)	t=1;;
+	    l*)	t=1; q=1; let "li|=1";;
+	    t*)	t=$q;;
 	    p*)	p=1;;
-	    q*)	t=0; q=1;;
+	    q*)	t=1; q=1;;
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wBi;;
 	    r*)	recursive=1;;
 	    R*)	recursive=1;;
+	    L*)	Link=1;;
+Z*)	Z=1;;
+	    d*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		thisdir="./$option"
+		break;;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
@@ -173,65 +407,10 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-
-dircount=0
-filecount=0
-command=''
-directory=''
-dirargs=''
-files=''
-while [ $# != 0 ]; do
-    if [ -f "$1" ]; then
-	files="$files $1"
-	let filecount+=1
-    elif [ -d "$1" ]; then
-	if [ -n "$directory" ]; then
-	    dirargs="$dirargs $directory"
-	    let dircount+=1
-	fi
-	directory=$1		# last directory in args is other directory
-    else
-	command=$1		# attempt to use as a command to get list of files
-    fi
-    shift
-done
-
-if [ -z "$directory" ]; then
-    echo "$name: there must be at least one directory argument" >&2
-    usage
-    exit 253
-fi
-
-if [ $filecount = 0 ]; then
-    for c in $command; do
-	break
-    done
-    if [ -n "$c" ]; then
-	tmp=${c#[a-zA-Z_]*}
-	if [ $tmp != $c ]; then
-	    files=`$command`
-	else
-	    files=$command
-	    command=''
-	fi
-    else
-	files=$defaultfiles
-    fi
-elif [ $filecount = 1 ] && [ $q = 0 ]; then
-    e=1;			# for single file argument, check if other file exists
-fi
-
-# echo "files: $files"
-# echo "dirs:  $dirargs"
-# echo "dir:   $directory"
-# echo "n:   $filecount $dircount $e"
-# for f in $files; do echo $f; done
-# exit
+test "$Z" = 1 && echo "processDirectory $thisdir" "$@"
 
 if [ "$pipe" = 0 ]; then
-    process
+    processDirectory $thisdir "$@"
 else
-    process | less
+    processDirectory $thisdir "$@" | less
 fi
-
-exit $status
