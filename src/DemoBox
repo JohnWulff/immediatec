@@ -17,15 +17,8 @@ my @inputs;
 my @outputs;
 my $outByte = 0;		# initialize to a number for correct XOR
 
-#              mask index
-my %indices = (	1   => 0,
-		2   => 1,
-		4   => 2,
-		8   => 3,
-		16  => 4,
-		32  => 5,
-		64  => 6,
-		128 => 7,);
+my @indices;			# initialize on startup
+my @masks = (1, 2, 4, 8, 16, 32, 64, 128);
 
 ########################################################################
 #
@@ -42,7 +35,7 @@ Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	unitID	default is 'X0'
 	-t	trace debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.22 2001/01/20 20:25:38 jw Exp $
+$Id: DemoBox,v 1.23 2001/01/21 11:32:37 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -52,6 +45,19 @@ require "getopts.pl";
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
+
+# initialize array @indices
+
+for my $mask (0 .. 255) {
+    my @tmp;
+    for my $index (0 .. 7) {
+	if ($mask & $masks[$index]) {
+	    push @tmp, $index;
+	}
+    }
+    $indices[$mask] = [ @tmp ];
+}
+# for my $mask (0 .. 255) { print "$mask\t[ @{$indices[$mask]} ],\n"; }
 
 ########################################################################
 #
@@ -81,10 +87,18 @@ $mainWindow->Label(-text => "iC Demo Box")->pack;
 
 $mainWindow->Button(-text    => "Exit",
 		    -command => sub {
-					if ($unitID =~ /^[BWX]/ and
-					    length $inputs[0] and $inputs[0]) {
+					if ($unitID =~ /^[X]/) {
+					    for my $index (0 .. 7) {
+						if ($inputs[$index]) {
+						    print "   $index,0 from $unitID\n" if $opt_t;
+						    $conn->send_now("$index,0");
+						}
+					    }
+					} elsif ($unitID =~ /^[BW]/ and $inputs[0]) {
+					    print "   0 from $unitID\n" if $opt_t;
 					    $conn->send_now("0");
 					}
+					sleep 1;
 					exit;
 				    },
 		   )->pack(-side   => 'bottom', 
@@ -128,7 +142,7 @@ my $outFrame = $mainWindow->Frame(-label       => $outLabel,
 ########################################################################
 
 if ($unitID =~ /^X/) {
-    for (my $index = 0; $index < 8; $index++) {
+    for my $index (0 .. 7) {
 	my $input = "I$unitID.$index";
 	my $makeCheckbutton = "\
 	    \$inFrame->Checkbutton(\
@@ -147,7 +161,7 @@ if ($unitID =~ /^X/) {
 	print $@;
     }
 
-    for (my $index = 0; $index < 8; $index++) {
+    for my $index (0 .. 7) {
 	my $output = "Q$unitID.$index";
 	my $makeCheckbutton = "\
 	    \$outFrame->Checkbutton(\
@@ -186,8 +200,10 @@ elsif ($unitID =~ /^[BW]/) {
 		-to          => 100,
 		-variable    => \$inputs[0],
 		-command     => sub {
-#				     print "   $inputs[0] from $unitID\n" if $opt_t;
-				     $conn->send_now("$inputs[0]") if length $inputs[0];
+				     if (length $inputs[0]) {
+					 print "   $inputs[0] from $unitID\n" if $opt_t;
+					 $conn->send_now("$inputs[0]");
+				     }
 				    },
 	    )->pack(-side   => 'top',
 		    -expand => 1,
@@ -237,7 +253,6 @@ MainLoop;
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
-	my ($index, $mask, $value);
         my $len = length ($msg);
 # print "($len)$msg\n";
 	if ($len == 0) {
@@ -247,7 +262,7 @@ sub rcvd_msg_from_server {
 	}
 	if ($unitID =~ /^X/) {
 	    if ($msg eq "R") {
-		for ($index = 0; $index < 8; $index++) {
+		for my $index (0 .. 7) {
 		    if ($outputs[$index]) {
 			print "init Q$unitID.$index 0 <-- 1\n" if $opt_t;
 			$outputs[$index] = 0;
@@ -259,28 +274,15 @@ sub rcvd_msg_from_server {
 		}
 		$outByte = 0;
 	    } elsif ($msg =~ /^\d+$/) {
-		$mask = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
+		my $mask = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
 #		Dump $mask;			# ZZZ
 		printf("Q%s %02x %02x\n", $unitID, $msg, $mask) if $opt_t;
-		if ($mask) {
-		    $index = $indices{$mask};
-		    if (defined $index) {
-			$value = ($msg & $mask) ? 1 : 0;
-			print "Q$unitID.$index $value <-- $outputs[$index]\n" if $opt_t;
-			$outputs[$index] = $value;
-		    } else {
-			# multiple change of input - should be rare
-			my $m;
-			for ($index = 0, $m = 1; $index < 8; $index++, $m <<= 1) {
-			    if ($mask & $m) {
-				$value = ($msg & $m) ? 1 : 0;
-				print "Q$unitID.$index $value <-- $outputs[$index]\n" if $opt_t;
-				$outputs[$index] = $value;
-			    }
-			}
-		    }
-		    $outByte = $msg;
+		for my $index (@{$indices[$mask]}) {
+		    my $value = ($msg & $masks[$index]) ? 1 : 0;
+		    print "Q$unitID.$index $value <-- $outputs[$index]\n" if $opt_t;
+		    $outputs[$index] = $value;
 		}
+		$outByte = $msg;
 	    } else {
 		print "$unitID received spurious message: '$msg'\n";
 	    }

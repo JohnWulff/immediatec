@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.14 2001/01/14 22:37:40 jw Exp $";
+"@(#)$Id: rsff.c,v 1.15 2001/01/20 22:47:00 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -656,17 +656,15 @@ outMx(					/* OUTX master action */
     register Gate *	gp,		/* NOTE: there is no slave action */
     Gate *		out_list)
 {
+    uchar		field;
 #ifdef TCP 
-    char		msg[16];
     int			unit;
-    unsigned int	index;
-    unsigned int	field;
-    unsigned int	mask;
+    char		msg[16];
 
     unit = (uchar*)gp->gt_list - QX_;
-    field = gp->gt_mark;
 #endif
-    assert(gp->gt_list && gp->gt_mark & 0xff);
+    field = (uchar)gp->gt_mark;
+    assert(gp->gt_list && field);
 #ifdef MIXED
     if (out_list == a_list) {
 	/* called from arithmetic scan - convert a to d */
@@ -674,29 +672,23 @@ outMx(					/* OUTX master action */
 	gp->gt_val = gp->gt_new ? -1 : 1;
     }
 #endif
-#ifdef TCP 
-    if ((debug & 0400) == 0) {
-	/* TODO - output bitmask directly */
-	for (index = 0, mask = 1; index < 8; index++, mask <<= 1) {
-	    if (field & mask) break;
-	}
-	sprintf(msg, "X%d,%d,%d",
-	    unit, index, (int)((unsigned char)gp->gt_val >> 7));
-	send_msg_to_server(sockFN, msg);
-    }
-#endif
-
     if (gp->gt_val & 0x80) {		/* output action */
-	*(uchar*)gp->gt_list |= (uchar)gp->gt_mark;	/* set bit */
+	*(uchar*)gp->gt_list |= field;	/* set bit */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('1', outFP);
 #endif
     } else {
-	*(uchar*)gp->gt_list &= ~(uchar)gp->gt_mark;	/* clear bit */
+	*(uchar*)gp->gt_list &= ~field;	/* clear bit */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('0', outFP);
 #endif
     }
+#ifdef TCP 
+    if ((debug & 0400) == 0) {
+	sprintf(msg, "X%d,%u", unit, *(uchar*)gp->gt_list);
+	send_msg_to_server(sockFN, msg);
+    }
+#endif
 } /* outMx */
 
 /********************************************************************
