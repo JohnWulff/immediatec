@@ -9,5 +9,5 @@ while true; do
     if [ -z "$line" ]; then
 	break
     fi
-    iCmake $line
+    iCmake -i $line
 done < pm.lst 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/'

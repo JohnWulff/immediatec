@@ -11,7 +11,7 @@ test -d ListP || mkdir ListP;
 if [[ $# != 0 ]]; then
     for f in $*; do
 	echo "$f.ic";
-	icc -c $f.ic		# listing only with -d474
+	icc -c $f.ic > /dev/null 2>&1		# listing only with -d474
 	cd ..
 	rm -f cexe.o icc	# new cexe.o too soon for make sometimes
 	make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
@@ -26,7 +26,7 @@ if [[ $# != 0 ]]; then
 else
     for f in $(cat pe.lst); do
 	echo "$f.ic";
-	icc -c $f.ic		# listing only with -d474
+	icc -c $f.ic > /dev/null 2>&1		# listing only with -d474
 	cd ..
 	rm -f cexe.o icc	# new cexe.c too soon for make sometimes
 	make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
@@ -38,4 +38,9 @@ else
 	    cd Test
 	fi
     done > OutP 2>&1;
+    icc -c < /dev/null			# restore plain icc
+    cd ..
+    rm -f cexe.o icc	# new cexe.c too soon for make sometimes
+    make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+    cd Test
 fi
