@@ -48,7 +48,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.22 2002/07/01 18:19:43 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.23 2002/07/05 18:14:23 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -158,13 +158,13 @@ elif [ -d "$1" ]; then
     shift
     if [ $# != 0 ]; then
 	files=$*
-	if [ $# = 1 ]; then
+	if [ $# = 1 ] && [ $q = 0 ]; then
 	    e=1;		# for single file argument, check if other file exists
 	fi
     fi
 else
     files=''			# there must be at least 1 nondirectory
-    if [ $# -le 2 ]; then
+    if [ $# -le 2 ] && [ $q = 0 ]; then
 	e=1;			# for single file argument, check if other file exists
     fi
     while [ $# -gt 1 ]; do
