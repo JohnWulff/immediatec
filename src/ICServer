@@ -1,0 +1,103 @@
+#!/usr/bin/perl -w
+
+########################################################################
+#
+#	iCserver
+#
+#	Server which can accept any number of I/O clients
+#	and initially one controller (planned are many)
+#
+#	John E. Wulff	28-May-2000
+#
+########################################################################
+
+use Msg;
+use strict;
+
+my $host = '0.0.0.0';
+my $port = 8080;
+my $prog;
+
+my %externalIDs = ();
+my %connections = ();
+
+########################################################################
+#
+#	Server
+#
+########################################################################
+
+Msg->new_server($host, $port, \&login_proc);
+print "Server created. Waiting for events\n";
+while (1) {
+    my $conn;
+    Msg->event_loop(0.01);
+    for my $xID (keys %connections) {
+	$conn = $connections{$xID};
+	if (defined $externalIDs{$conn}) {
+	    my $x = int rand 8;
+	    my $y = int rand 2;
+	    my $msg = "$x,$y";
+#	    print "$msg $conn\n";
+	    $conn->send_now($msg);
+	} else {
+	    print "$conn disconnected\n";
+	}
+    }
+}
+
+########################################################################
+#
+#	Login procedure
+#
+########################################################################
+
+sub login_proc {
+    my ($conn, $host, $port) = @_;
+    print "Connection successful.  $conn,$host,$port\n";
+    # Unconditionally accept an incoming connection request
+    $externalIDs{$conn} = undef;
+    return \&rcvd_msg_from_client;
+}
+
+########################################################################
+#
+#	Receive message from client
+#
+########################################################################
+
+sub rcvd_msg_from_client {
+    my ($conn, $msg, $err) = @_;
+    if (defined $msg) {
+	my $len = length $msg;
+	if ($len < 40) {
+	    print "($len)$msg $conn\n";
+	    if ($len == 0) {
+		my $xID = $externalIDs{$conn};
+		if (defined $xID and exists $connections{$xID}) {
+		    delete $connections{$xID};
+		    delete $externalIDs{$conn};
+		    $conn->disconnect();
+		    print "DemoBox $xID disconnected\n";
+		}
+	    } elsif ($msg =~ /^[A-Z]/) {
+		if (exists $connections{$msg}) {
+		    delete $externalIDs{$conn};
+		    $conn->disconnect();
+		    print "Trying to attach same DemoBox twice - disconnected\n";
+		} else {
+		    $externalIDs{$conn} = $msg;	# input/output ID
+		    $connections{$msg} = $conn;	# input/output ID
+		    print "CONNECTED ($len)$msg $conn\n";
+		}
+	    } else {
+		# returning message
+		$conn->send_now($msg);
+		print "$msg $conn\n";
+	    }
+	} else {
+	    my $msg1 = substr $msg, 0, 37;
+	    print "($len)$msg1... $conn\n";
+	}
+    }
+}
