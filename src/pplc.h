@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.20 2001/01/25 08:55:41 jw Exp $";
+"@(#)$Id: pplc.h,v 1.21 2001/01/25 21:53:13 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -218,6 +218,7 @@ extern Gate *	IB_[];			/* pointers to Byte Input Gates */
 extern Gate *	IW_[];			/* pointers to Word Input Gates */
 extern Gate *	TX_[];			/* pointers to System Bit Gates */
 extern uchar	QX_[];			/* Output bit field slots */
+extern char	QT_[IXD];		/* Output type of slots */
 extern uchar	QM_[];			/* Output slot mask per cage */
 extern uchar	QMM;			/* Output cage mask for 1 rack */
 extern uchar	idata[];		/* Input bit field */
@@ -233,6 +234,8 @@ extern Gate *	gx;	/* points to action Gate in chMbit and riMbit */
 extern short	dc;	/* debug display counter in scan and rsff */
 extern unsigned char	bitMask[];
 extern unsigned char	bitIndex[];
+#define B_WIDTH	257			/* marks output as Byte width */
+#define W_WIDTH	258			/* marks output as Word width */
 
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	rMff(Gate *, Gate *);	/* R_FF master action on FF */

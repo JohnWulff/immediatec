@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.10 2001/01/25 08:55:41 jw Exp $";
+"@(#)$Id: pptc.c,v 1.11 2001/01/25 21:53:13 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -17,13 +17,12 @@ static const char pptc_c[] =
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#define getch() getchar()
-#define ungetch(x) ungetc(x, stdin)
 #include <sys/types.h>
 #include <sys/time.h>
 #include <termio.h>
 #include <signal.h>
 #include <ctype.h>
+#include <assert.h>
 #include "pplc.h"
 #include "tcpc.h"
 
@@ -58,6 +57,7 @@ Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
 Gate *		IW_[IXD];		/* pointers to Word Input Gates */
 Gate *		TX_[TXD*8];		/* pointers to System Bit Gates */
 unsigned char	QX_[IXD];		/* Output bit field slots */
+char		QT_[IXD];		/* Output type of slots */
 unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
 unsigned char	QMM;			/* Output cage mask for 1 rack */
 
@@ -103,19 +103,6 @@ pplc(
     float	delay = 0.0;	/* timer processing stopped */
     int		retval;
 
-    error_flag = 0;
-    (Gate*)alist0.gt_rlist = a_list = &alist1;	/* initialise alternate */
-    Out_init(a_list);
-    (Gate*)alist1.gt_rlist = a_list = &alist0;	/* start with alist0 */
-    Out_init(a_list);
-    (Gate*)olist0.gt_rlist = o_list = &olist1;	/* initialise alternate */
-    Out_init(o_list);
-    (Gate*)olist1.gt_rlist = o_list = &olist0;	/* start with olist0 */
-    Out_init(o_list);
-#ifdef LOAD
-    c_list = &iClock;				/* system clock list */
-#endif
-
     if (outFP != stdout) {
 	fclose(outFP);
 #ifndef LOAD
@@ -147,7 +134,34 @@ pplc(
 	sockFN = connect_to_server(hostNM, portNM, pplcNM, delay);
     }
 
+/********************************************************************
+ *
+ *	Initialise the work lists to empty lists
+ *
+ *******************************************************************/
+
+    error_flag = 0;
+    (Gate*)alist0.gt_rlist = a_list = &alist1;	/* initialise alternate */
+    Out_init(a_list);
+    (Gate*)alist1.gt_rlist = a_list = &alist0;	/* start with alist0 */
+    Out_init(a_list);
+    (Gate*)olist0.gt_rlist = o_list = &olist1;	/* initialise alternate */
+    Out_init(o_list);
+    (Gate*)olist1.gt_rlist = o_list = &olist0;	/* start with olist0 */
+    Out_init(o_list);
+#ifdef LOAD
+    c_list = &iClock;				/* system clock list */
+    /* TODO check c_list is a propoer list even if DEQ (also other places) */
+#endif
+
+/********************************************************************
+ *
+ *	Carry out 4 Passes to initialise all Gates
+ *
+ *******************************************************************/
+
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
+
     for (pass = 0; pass < 4; pass++) {
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
 #ifdef LOAD
@@ -171,9 +185,11 @@ pplc(
 	}
 #endif
     }
+
     if (debug & 0100) {
 	fprintf(outFP, "\nInit complete =======\n");
     }
+
     if (error_flag) {
 	if (error_flag == 1) {
 	    fprintf(outFP, "\n*** Fatal Errors ***\n");
@@ -199,6 +215,12 @@ pplc(
 
     dis_cnt = DIS_MAX;
 
+/********************************************************************
+ *
+ *	Operational loop
+ *
+ *******************************************************************/
+
     for ( ; ; ) {
 	if (++mark_stamp == 0) {	/* next generation for check */
 	    mark_stamp++;		/* leave out zero */
@@ -215,13 +237,6 @@ pplc(
 	    display();			/* inputs and outputs */
 	}
 
-	/*
-	 *	alternate list contains all those gates which were marked in
-	 *	the previous scan and which were active more than
-	 *	MARKMAX times. These are oscillators which wil be
-	 *	scanned again in the next cycle.
-	 */
-
 	if ((scan_cnt || link_cnt) && (debug & 02000)) {
 	    fprintf(outFP, "\nscan = %5d  link = %5d  time = %5d ms  ",
 		scan_cnt, link_cnt, time_cnt);
@@ -232,8 +247,20 @@ pplc(
 	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
 	}
 
+/********************************************************************
+ *
+ *	Switch to alternate lists
+ *
+ *	alternate list contains all those gates which were marked in
+ *	the previous scan and which were active more than
+ *	MARKMAX times. These are oscillators which wil be
+ *	scanned again in the next cycle.
+ *
+ *******************************************************************/
+
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
 	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
+
 	if ((debug & 0200) &&
 	    (a_list->gt_next != a_list || o_list->gt_next != o_list)) {
 	    fprintf(outFP, "\nOSC =");
@@ -247,12 +274,47 @@ pplc(
 
 /********************************************************************
  *
- *	handle inputs
+ *	Output to external output modules
+ *
+ *	QMM and all QM_[] bytes are initially clear (global variables)
+ *	bits are set in QMM and QM_[] in preceding scans by outMw and outMx
+ *	to mark cages and slots
+ *	QMM and all QM_[] are left clear after the following loops
+ *
+ *	Use 8 bit masks for fast conversion of mask to index via bitIndex[]
  *
  *******************************************************************/
 
-	for (cnt = 0; cnt == 0; ) {		/* stay in loop if nothing linked */
-	    retval = wait_for_next_event(sockFN);	/* inputs or timer */
+	while (QMM) {			/* rack with bit set for every cage */
+	    int mask = QMM & -QMM;		/* rightmost cage set in QMM */
+	    int cage = bitIndex[mask];		/* mask has only 1 bit set */
+	    int slots = QM_[cage];
+	    int cageOffset = cage << 3;		/* cage has 8 slots */
+	    while (slots) {
+		char	msg[16];
+		int mask = slots & -slots;	/* rightmost slot set in slots */
+		int slot = cageOffset + bitIndex[mask];
+		char Qtype = QT_[slot];
+		unsigned int val = Qtype == 'W' ? *(short*)&QX_[slot] : QX_[slot];
+		/* TODO - change system to make QT_ unnecessary */
+		assert(Qtype);			/* make sure slot is programmed */
+		sprintf(msg, "%c%d,%u", Qtype, slot, val);
+		send_msg_to_server(sockFN, msg);
+		slots &= ~mask;			/* clear rightmost slot in slots */
+	    }
+	    QM_[cage] = slots;			/* clear QM_[cage] */
+	    QMM &= ~mask;		/* clear rightmost cage in QMM */
+	}
+
+/********************************************************************
+ *
+ *	Input from external input modules and time input if used
+ *	Wait for input in a select statement most of the time
+ *
+ *******************************************************************/
+
+	for (cnt = 0; cnt == 0; ) {	/* stay in input loop if nothing linked */
+	    retval = wait_for_next_event(sockFN);	/* wait for inputs or timer */
 
 	    if (retval == 0) {
 		timeoutCounter = timeoutValue;	/* will repeat if timeout with input */
@@ -342,7 +404,7 @@ pplc(
 		    /*
 		     *	STDIN
 		     */
-		    if ((c = getch()) == 'q' || c == EOF) {
+		    if ((c = getchar()) == 'q' || c == EOF) {
 			quit(0);			/* quit normally */
 		    }
 		    if (debug & 0300) {			/* osc or detailed info */

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.13 2001/01/25 08:55:41 jw Exp $";
+"@(#)$Id: load.c,v 1.14 2001/01/25 21:53:13 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -342,8 +342,19 @@ main(
 		} else {
 		    gp->gt_mark++;		/* clock node */
 		}
-	    } else if (op->gt_fni == OUTW || op->gt_fni == OUTX) {
-		if ((int)op->gt_list >= IXD || op->gt_mark == 0) {
+	    } else if (op->gt_fni == OUTW) {
+		int	slot;
+		int	width;
+		if ((slot = (int)op->gt_list) < IXD && (width = op->gt_mark) != 0) {
+		    QT_[slot] = width == B_WIDTH ? 'B' : width == W_WIDTH ? 'W' : 0;
+		} else {
+		    inError(__LINE__, op, 0);	/* no output word definition */
+		}
+	    } else if (op->gt_fni == OUTX) {
+		int	slot;
+		if ((slot = (int)op->gt_list) < IXD && op->gt_mark) {
+		    QT_[slot] = 'X';
+		} else {
 		    inError(__LINE__, op, 0);	/* no output bit mask */
 		}
 	    }

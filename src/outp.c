@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.29 2001/01/25 08:55:41 jw Exp $";
+    "@(#)$Id: outp.c,v 1.30 2001/01/25 21:53:13 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -302,20 +302,20 @@ buildNet(Gate ** igpp)
 				/* ZZZ modify later to do this only for */
 				/* ZZZ action gates controlled by a TIMER */
 			    } else if (sp->ftype == OUTW) {
-				if (sscanf(gp->gt_ids, "Q%1[BW]%d",
-				    bw, &byte) == 2 && byte < IXD) {
+				if (sscanf(gp->gt_ids, "Q%1[BW]%d", bw, &byte) == 2 &&
+				    byte < IXD) {
 				    gp->gt_list = (Gate**)byte;
-				    gp->gt_mark = bw[0] == 'B' ? 1 : 2;
+				    gp->gt_mark = bw[0] == 'B' ? B_WIDTH : W_WIDTH;
+				    QT_[byte] = bw[0];	/* 'B' or 'W' */
 				} else {
 				    goto outErr;
 				}
 			    } else if (sp->ftype == OUTX) {
-				if (sscanf(gp->gt_ids, "QX%d.%d",
-				    &byte, &bit) == 2 &&
+				if (sscanf(gp->gt_ids, "QX%d.%d", &byte, &bit) == 2 &&
 				    byte < IXD && bit < 8) {
-				    /* OUTPUT bit pointer */
 				    gp->gt_list = (Gate**)byte;
 				    gp->gt_mark = bitMask[bit];
+				    QT_[byte] = 'X';
 				} else {
 				outErr:
 		    warning("OUTPUT configuration too small for:", gp->gt_ids);
@@ -695,7 +695,7 @@ extern Gate *	l_[];\n\
 			bwx[0] != 'X' &&	/* can only be B or W */
 			cnt == 3 && byte < IXD) {
 			fprintf(Fp, " (Gate**)%d,", byte);
-			mask = bwx[0] == 'B' ? 1 : 2;
+			mask = bwx[0] == 'B' ? B_WIDTH : W_WIDTH;
 		    } else {
 			goto OutErr;
 		    }

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.16 2001/01/25 08:55:41 jw Exp $";
+"@(#)$Id: rsff.c,v 1.17 2001/01/25 21:53:13 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -10,9 +10,6 @@ static const char rsff_c[] =
 #include	<stdlib.h>
 #include	<assert.h>
 #include	"pplc.h"
-#ifdef TCP 
-#include	"tcpc.h"
-#endif
 
 unsigned char	bitMask[] = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
@@ -590,8 +587,8 @@ fScf(					/* F_CF slave action on CF */
 /********************************************************************
  *
  *	Output to a word or byte whose slot index is in gt_list.
- *		gt_mark == 1 means 1 byte is output
- *		gt_mark == 2 means 2 bytes or 1 word is output
+ *		gt_mark == B_WIDTH means 1 byte is output
+ *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
  *
  *	For initialisation purposes this ftype OUTW node is acted on
  *	by exactly one ARITH node defined in a output assignment.
@@ -614,13 +611,10 @@ outMw(					/* OUTW master action */
     int			val;
     int			slot;
     int			cage;
-    uchar		mask;
-#ifdef TCP 
-    char		msg[16];
+    int			mask;
 
-#endif
     slot = (int)gp->gt_list;
-    mask = (uchar)gp->gt_mark;
+    mask = gp->gt_mark;
     assert(slot < IXD && mask);
     cage = slot >> 3;			/* IXD must be <= 64 for this scheme */
 #ifdef MIXED
@@ -632,29 +626,17 @@ outMw(					/* OUTW master action */
 #endif
 
     val = gp->gt_old = gp->gt_new;	/* update gt_old since no link_ol */
-    if (mask == 1) {
+    if (mask == B_WIDTH) {
 #ifndef _WINDOWS
 	val &= 0xff;			/* for display only */
 #endif
 	QX_[slot] = val;		/* output byte to slot */
 	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
 	QMM |= bitMask[cage & 0x7];		/* mark the rack */
-#ifdef TCP 
-	if ((debug & 0400) == 0) {
-	    sprintf(msg, "B%d,%d", slot, val);
-	    send_msg_to_server(sockFN, msg);
-	}
-#endif
-    } else if (mask == 2) {
-	*(int*)&QX_[slot] = val;	/* output word to slot and slot+1 */
+    } else if (mask == W_WIDTH) {
+	*(short*)&QX_[slot] = val;	/* output word to slot and slot+1 */
 	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
 	QMM |= bitMask[cage & 0x7];		/* mark the rack */
-#ifdef TCP 
-	if ((debug & 0400) == 0) {
-	    sprintf(msg, "W%d,%d", slot, val);
-	    send_msg_to_server(sockFN, msg);
-	}
-#endif
 #ifndef _WINDOWS
     } else {
 	val = 0;			/* error - no output */
@@ -668,7 +650,7 @@ outMw(					/* OUTW master action */
 /********************************************************************
  *
  *	Output a bit to a bit field whose slot index is in gt_list.
- *		gt_mark contains the bit position as a bit mask.
+ *		gt_mark contains the bit position as an 8 bit mask.
  *
  *	For initialisation purposes this ftype OUTX Gate is acted on
  *	by exactly one GATE node defined in an output assignment.
@@ -690,10 +672,7 @@ outMx(					/* OUTX master action */
     int			slot;
     int			cage;
     uchar		mask;
-#ifdef TCP 
-    char		msg[16];
 
-#endif
     slot = (int)gp->gt_list;
     mask = (uchar)gp->gt_mark;
     assert(slot < IXD && mask);
@@ -718,12 +697,6 @@ outMx(					/* OUTX master action */
     }
     QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
     QMM |= bitMask[cage & 0x7];		/* mark the rack */
-#ifdef TCP 
-    if ((debug & 0400) == 0) {
-	sprintf(msg, "X%d,%u", slot, QX_[slot]);
-	send_msg_to_server(sockFN, msg);
-    }
-#endif
 } /* outMx */
 
 /********************************************************************

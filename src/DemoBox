@@ -11,16 +11,32 @@
 use Tk;					# Slurp the module in
 use Msg;
 use strict;
-#use Devel::Peek 'Dump';		# ZZZ
 
 my @inputs;
 my @outputs;
 my $inByte =	0;		# initialize to a number for correct OR
 my $outByte =	0;		# initialize to a number for correct XOR
 
-my @indices;			# initialize on startup
 my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
 my @invert =	(1, 0);		# invert logic sense
+my @bitIndex =	(
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x20
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x40
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x80
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+);
 
 ########################################################################
 #
@@ -30,36 +46,39 @@ my @invert =	(1, 0);		# invert logic sense
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<< [-teh] [-s <host>] [-p <port>] [<unitID>]
+Usage:	@<<<<<< [-eth] [-s <host>] [-p <port>] [-RrIiOo <num>] [-l <len>] [<unitID>]
 	$named
 	-s host	ID of server (default 'localhost')
 	-p port	service port of server (default '8778')
-	unitID	default is 'X0'
+	-R num	from for input and output (default 0)
+	-I num	from for input only
+	-O num	from for output only
+	-r num	to for input and output (default 100)
+	-i num	to for input only
+	-o num	to for output only
+	-l len	length of scales (default 170)
+	-e	exit button
 	-t	trace debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.25 2001/01/23 23:04:13 jw Exp $
+	unitID	default is 'X0'
+$Id: DemoBox,v 1.26 2001/01/25 21:48:58 jw Exp $
 .
 
-use vars qw($opt_t $opt_e $opt_s $opt_p $opt_h);
+use vars qw($opt_e $opt_t $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
 require "getopts.pl";
-&Getopts('tes:p:h');			# sets $opt_h if -h etc
+&Getopts('tes:p:r:i:o:R:I:O:l:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
-# initialize array @indices
-
-for my $mask (0 .. 255) {
-    my @tmp;
-    for my $index (0 .. 7) {
-	if ($mask & $masks[$index]) {
-	    push @tmp, $index;
-	}
-    }
-    $indices[$mask] = [ @tmp ];
-}
-# for my $mask (0 .. 255) { print "$mask\t[ @{$indices[$mask]} ],\n"; }
+$opt_R = 0 unless $opt_R;	# default from 0
+$opt_r = 100 unless $opt_r;	# default to 100
+$opt_I = $opt_R unless $opt_I;	# from for input
+$opt_O = $opt_R unless $opt_O;	# from for output
+$opt_i = $opt_r unless $opt_i;	# to for input
+$opt_o = $opt_r unless $opt_o;	# to for output
+$opt_l = 170 unless $opt_l;	# default length 170
 
 ########################################################################
 #
@@ -161,7 +180,6 @@ if ($unitID =~ /^X/) {
 		-text        => \$output,\
 		-variable    => \\\$outputs[\$index],\
 		-selectcolor => 'red',\
-#		-state       => 'disabled',\
 		-takefocus   => 0,\
 		-command     => sub {\
 				     print \"Inverting output $index on Q$unitID\\n\" if \$opt_t;\
@@ -185,38 +203,33 @@ if ($unitID =~ /^X/) {
 
 elsif ($unitID =~ /^[BW]/) {
 
-	my $input = "I$unitID";
+    $inFrame->Scale(
+	-from        => $opt_I,
+	-to          => $opt_i,
+	-length      => $opt_l,
+	-variable    => \$inByte,
+	-command     => sub {
+			     if (length $inByte) {
+				 print "I$unitID --> $inByte\n" if $opt_t;
+				 $conn->send_now("$inByte");
+			     }
+			    },
+    )->pack(-side   => 'top',
+	    -expand => 1,
+    );
 
-	    $inFrame->Scale(
-#		-label       => $input,
-		-from        => 0,
-		-to          => 100,
-		-length      => 170,
-		-variable    => \$inByte,
-		-command     => sub {
-				     if (length $inByte) {
-					 print "I$unitID --> $inByte\n" if $opt_t;
-					 $conn->send_now("$inByte");
-				     }
-				    },
-	    )->pack(-side   => 'top',
-		    -expand => 1,
-	    );
+    $outFrame->Scale(
+	-from        => $opt_O,
+	-to          => $opt_o,
+	-length      => $opt_l,
+	-variable    => \$outputs[0],
+	-state       => 'disabled',
+	-takefocus   => 0,
+    )->pack(-side   => 'top',
+	    -expand => 1,
+    );
 
-	my $output = "Q$unitID";
-
-	    $outFrame->Scale(
-#		-label       => $output,
-		-from        => 0,
-		-to          => 100,
-		-length      => 170,
-		-variable    => \$outputs[0],
-		-state       => 'disabled',
-		-takefocus   => 0,
-	    )->pack(-side   => 'top',
-		    -expand => 1,
-	    );
-	$outputs[0] = 0;
+    $outputs[0] = 0;
 }
 
 ########################################################################
@@ -247,9 +260,9 @@ MainLoop;
 
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
+    my ($len, $diff, $mask, $index, $value);
     if (defined $msg) {
-        my $len = length ($msg);
-#	print "($len)$msg\n";
+        $len = length $msg;
 	if ($len == 0) {
 	    $conn->disconnect();
 	    print "DemoBox $unitID disconnected by server\n";
@@ -257,7 +270,8 @@ sub rcvd_msg_from_server {
 	}
 	if ($unitID =~ /^X/) {
 	    if ($msg eq "R") {
-		for my $index (0 .. 7) {
+		print "$unitID rcvd R - reset from ICS\n" if $opt_t;
+		for $index (0 .. 7) {
 		    if ($outputs[$index]) {
 			print "init Q$unitID.$index 0 <-- 1\n" if $opt_t;
 			$outputs[$index] = 0;
@@ -268,21 +282,23 @@ sub rcvd_msg_from_server {
 		    print "send I$unitID 0 --> $inByte\n" if $opt_t;
 		    $conn->send_now("$inByte");
 		}
-	    } elsif ($msg =~ /^\d+$/) {
-		my $mask = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
-#		Dump $mask;			# ZZZ
-#		printf("Q%s %02x %02x\n", $unitID, $msg, $mask) if $opt_t;
-		for my $index (@{$indices[$mask]}) {
-		    my $value = ($msg & $masks[$index]) ? 1 : 0;
+	    } elsif ($msg =~ /^\d+$/ and $msg < 256) {
+		$diff = $outByte ^ $msg;	# $outByte initialized to a number for correct XOR
+		while ($diff) {			# age old algorithm from CSR days
+		    $mask = $diff & -$diff;	# rightmost set bit from diff
+		    $index = $bitIndex[$mask];
+		    $value = ($msg & $mask) ? 1 : 0;
 		    print "Q$unitID.$index $value <-- $outputs[$index] ($msg)\n" if $opt_t;
-		    $outputs[$index] = $value;
+		    $outputs[$index] = $value;	# modify viewable output
+		    $diff &= ~$mask;		# clear rightmost bit in diff
 		}
-		$outByte = $msg;
+		$outByte = $msg;		# ready for next message
 	    } else {
-		print "$unitID received spurious message: '$msg'\n";
+		print "Q$unitID received spurious message: '$msg'\n";
 	    }
 	} elsif ($unitID =~ /^[BW]/) {
 	    if ($msg eq "R") {
+		print "$unitID rcvd R - reset from ICS\n" if $opt_t;
 		if ($outputs[0]) {
 		    print "init Q$unitID 0 <-- $outputs[0]\n" if $opt_t;
 		    $outputs[0] = 0;
@@ -295,7 +311,7 @@ sub rcvd_msg_from_server {
 		print "Q$unitID $msg <-- $outputs[0]\n" if $opt_t;
 		$outputs[0] = $msg;
 	    } else {
-		print "$unitID received spurious message: '$msg'\n";
+		print "Q$unitID received spurious message: '$msg'\n";
 	    }
 	}
     }

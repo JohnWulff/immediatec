@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.11 2000/12/07 18:31:14 jw Exp $
+# @(#)$Id: Makefile,v 1.12 2001/01/25 21:53:13 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -14,7 +14,7 @@
 YSRCS =	comp.y
 SRC1 =	comp.c main.c genr.c init.c symb.c outp.c cexe.c
 SRC2 =	pplc.c pptc.c pplt.c link.c rsff.c scan.c
-#SRC3 =	pcop.c ibsd.c time.c load.c
+SRC3 =	load.c
 CSRCS =	$(SRC1) $(SRC2) $(SRC3)
 
 COBJ =	comp.o genr.o init.o symb.o outp.o cexe.o
