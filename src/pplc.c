@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.8 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: pplc.c,v 1.9 2001/01/03 10:49:24 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -166,6 +166,10 @@ pplc(
 
     if (outFP != stdout) {
 	fclose(outFP);
+	if (iFlag) {
+	    inversionCorrection();
+	    iFlag = 0;
+	}
 	outFP = stdout;			/* standard output from here */
     }
     if (errFP != stderr) {

@@ -19,7 +19,7 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix.pl,v 1.2 2001/01/02 19:42:44 jw Exp $
+$Id: pplstfix.pl,v 1.3 2001/01/03 10:45:01 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -64,7 +64,7 @@ sub processFile {
 		$fsp = $2;
 		$symbols{$bsp} = [ $line, $fsp ];
 	    } else {
-		warn("Error: $named: $.: $_");
+		die("Error: $named: $.: $_");
 	    }
 	}
     }

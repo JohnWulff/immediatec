@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.16 2000/12/24 09:03:24 jw Exp $";
+"@(#)$Id: pplc.h,v 1.17 2001/01/03 10:49:24 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -204,7 +204,11 @@ extern void	pplc(			/* initialise and execute */
 extern unsigned short	osc_max;
 extern unsigned short	Aflag;		/* -A flag signals ARITH alias */
 extern unsigned short	aflag;		/* -a flag signals append mode */
+
+					/*   main.c   */
 extern unsigned short	xflag;		/* -x flag signals hexadecimal output */
+extern unsigned short	iFlag;		/* inversion correction needed */
+extern int		inversionCorrection(void);
 
 extern Gate	iClock;			/* System clock */
 extern Gate *	IX_[];			/* pointers to Bit Input Gates */

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.17 2001/01/01 21:10:40 jw Exp $";
+"@(#)$Id: genr.c,v 1.18 2001/01/03 10:49:24 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -852,6 +852,7 @@ qx_asgn(
 	    }
 	}
 	if (debug & 04) {
+	    iFlag = 1;				/* do inversion correction */
 	    fprintf(outFP, "\tprevious inputs '%s' must be inverted\n"
 		"\texcept input '%s' to own output '%s'\n\n",
 		bsp->name, bsp->name, lpf->le_sym->name);

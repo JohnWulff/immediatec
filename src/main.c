@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.10 2000/12/23 13:21:37 jw Exp $";
+"@(#)$Id: main.c,v 1.11 2001/01/03 10:49:24 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -68,6 +68,7 @@ Copyright (C) 1985-2001 John E. Wulff     <john.wulff@inka.de>\n\
 
 short		debug = 0;
 unsigned short	xflag;
+unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
 #ifdef YYDEBUG
 extern	int	yydebug;
@@ -75,7 +76,7 @@ extern	int	yydebug;
 
 char *		szFile_g;		/* file name to process */
 #define progFN	szNames[0]		/* for error messages */
-#define inpFN	szNames[1]		/* list file name */
+#define inpFN	szNames[1]		/* input file name */
 #define errFN	szNames[2]		/* error file name */
 #define listFN	szNames[3]		/* list file name */
 #define outFN	szNames[4]		/* compiler output file name */
@@ -205,6 +206,7 @@ main(
 	    inpFN = szFile_g = *argv;
 	}
     }
+    iFlag = 0;
     if ((r = compile(listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
     } else {
@@ -227,9 +229,15 @@ main(
 	    r += 10;
 	}
     }
+    if (outFP != stdout) {
 #ifndef _WINDOWS
-    if (outFP != stdout) fclose(outFP);
+	fclose(outFP);
 #endif
+	if (r == 0 && listFN && iFlag) {
+	    r = inversionCorrection();
+	    iFlag = 0;
+	}
+    }
     if (errFP != stderr) fclose(errFP);
     if (exoFP) {
 	fclose(exoFP);
@@ -239,3 +247,36 @@ main(
     }
     return (r);	/* 1 - 6 compile errors, 11 - 16 output errors */
 } /* main */
+
+/********************************************************************
+ *
+ *	Wrapper to call perl script 'pplstfix.pl' as a post-processor
+ *	to modify listings with output inversions.
+ *	These show the wrong input inversion status for gates which
+ *	have been used as input before the output has been assigned
+ *	to an inverted function gate. These corrections affect only
+ *	the listing. The output is correctly compiled.
+ *
+ *******************************************************************/
+
+int
+inversionCorrection(void)
+{
+    char	exStr[256];	
+    char	tempName[] = "pplstfix.XXXXXX";
+    int		r = 1;
+
+    if (mktemp(tempName)) {
+	r = rename(listFN, tempName); /* inversion correction needed */
+	if (r == 0) {
+	    sprintf(exStr, "pplstfix.pl %s > %s", tempName, listFN);
+	    r = system(exStr);		/* pplstfix.pl must be in $PATH */
+	    unlink(tempName);
+	}
+    }
+    if (r != 0) {
+	fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
+	    progFN, exStr);
+    }
+    return r;
+} /* inversionCorrection */

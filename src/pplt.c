@@ -1,5 +1,5 @@
 static const char pplt_c[] =
-"@(#)$Id: pplt.c,v 1.2 1999/08/06 21:30:54 jw Exp $";
+"@(#)$Id: pplt.c,v 1.3 2001/01/03 10:49:24 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -110,6 +110,19 @@ pplc(
 #ifdef LOAD
     c_list = &iClock;				/* system clock list */
 #endif
+
+    if (outFP != stdout) {
+	fclose(outFP);
+	if (iFlag) {
+	    inversionCorrection();
+	    iFlag = 0;
+	}
+	outFP = stdout;			/* standard output from here */
+    }
+    if (errFP != stderr) {
+	fclose(errFP);
+	errFP = stderr;			/* standard error from here */
+    }
 
 #ifndef _WINDOWS
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
