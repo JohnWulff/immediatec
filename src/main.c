@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.11 2001/01/03 10:49:24 jw Exp $";
+"@(#)$Id: main.c,v 1.12 2001/01/08 14:48:17 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -206,6 +206,7 @@ main(
 	    inpFN = szFile_g = *argv;
 	}
     }
+    debug &= 03777;			/* allow only cases specified */
     iFlag = 0;
     if ((r = compile(listFN, errFN, outFN, exiFN, exoFN)) != 0) {
 	fprintf(stderr, OutputMessage[4], progFN, szNames[r]);
