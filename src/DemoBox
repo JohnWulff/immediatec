@@ -18,12 +18,13 @@ use Msg;
 #
 ########################################################################
 
-my $host = (@ARGV == 3) ? $ARGV[2] : 'localhost';
+my $host = (@ARGV == 2) ? $ARGV[1] : 'localhost';
 my $port = 8080;
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client could not connect to $host:$port\n" unless $conn;
 print "Connection successful.\n";
+$conn->send_now($ARGV[0]) if $ARGV[0];
 
 ########################################################################
 #
@@ -32,15 +33,15 @@ print "Connection successful.\n";
 ########################################################################
 
 my $mainWindow = MainWindow->new();
-$mainWindow->title("iC Demo Box");
+$mainWindow->title("iC");
 $mainWindow->Label(-text => "iC Demo Box")->pack;
 
-$mainWindow->Button(-text => "Exit",
-            -command => sub { exit },
-	    )->pack(-side   => 'bottom', 
-		    -expand => 1,
-		    -fill   => 'x',
-		   );
+$mainWindow->Button(-text    => "Exit",
+		    -command => sub { exit },
+		   )->pack(-side   => 'bottom', 
+			   -expand => 1,
+			   -fill   => 'x',
+			  );
 
 ########################################################################
 #
@@ -73,7 +74,7 @@ my $outFrame = $mainWindow->Frame(-label       => 'outputs',
 my @inputs;
 
 for (my $index = 0; $index < 8; $index++) {
-    my $input = "$ARGV[0].$index";
+    my $input = "I$ARGV[0].$index";
     $makeCheckbutton = "\
 	\$inFrame->Checkbutton(\
 	    -text        => \$input,\
@@ -94,7 +95,7 @@ for (my $index = 0; $index < 8; $index++) {
 my @outputs;
 
 for (my $index = 0; $index < 8; $index++) {
-    my $output = "$ARGV[1].$index";
+    my $output = "Q$ARGV[0].$index";
     $makeCheckbutton = "\
 	\$outFrame->Checkbutton(\
 	    -text        => \$output,\
