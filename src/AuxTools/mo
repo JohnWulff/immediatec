@@ -4,15 +4,18 @@
 #
 #	make a function version of ict or icc
 #
+#	make a new ict or icc only if the iC file has functions
+#
 ########################################################################
 
 usage ()
 {
     echo 'Usage:	'${0##*/}' [-CTszh] [iCtarget ...]' >&2
+    echo 'Must be executed in the iC development environment or one of its subdirectories.' >&2
     echo 'Makes a dedicated icc or ict compiler with integrated arithmetic functions' >&2
-    echo 'from iCtarget for the run-time environment. ' >&2
+    echo 'from iCtarget if iCtarget has arithmetic variables or literal blocks. ' >&2
     echo '      -C	uses icc -c to make a dedicated icc for each iCtarget' >&2
-    echo '		output the listings produced to directory ListC' >&2
+    echo '		output the listings produced to directory ListC (also -c)' >&2
     echo '      -T	uses ict -c to make a dedicated ict for each iCtarget' >&2
     echo '		output the listings produced to directory ListT' >&2
     echo '		(default option)' >&2
@@ -22,29 +25,34 @@ usage ()
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
     echo '	-z	make with -DLONG16        (makeAll with this option first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
-    echo 'if no iCtargets are specified, each single entry of file pm.lt is made' >&2
-    echo '   outputs the common output to ListC/Init.out or ListT/Init.out' >&2
+    echo 'if no iCtargets are specified, each single entry of file pa.lt is made' >&2
+    echo '   outputs the common output to ListC/ListC.out or ListT/ListC.out' >&2
     echo '   restores a plain icc or ict at the end of the test run' >&2
+    echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.13 2003/12/30 17:23:51 jw Exp $' >&2
+    echo '	$Id: mo,v 1.14 2004/01/01 17:20:21 jw Exp $' >&2
 }
 
 ic='ict'
 op='T'
 p='T'
+list='pa.lt'
 
-while [ $# > 0 ]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
 	while [ -n "$option" ]; do
 	    case "$option" in
+	    c*)	ic='icc';op='C';p='C';;
 	    C*)	ic='icc';op='C';p='C';;
+	    t*)	ic='ict';op='T';p='T';;
 	    T*)	ic='ict';op='T';p='T';;
+	    m*)	list='pm.lt';;
 	    s*)	op="${op}s";;
 	    z*)	op="${op}z";;
 	    h*)	usage; exit 255;;
-	    *)	echo "unknown flag -$option";
+	    *)	echo "unknown flag -$option" >&2
 		usage; exit 255;;
 	    esac
 	    option=${option#?}
@@ -54,55 +62,92 @@ while [ $# > 0 ]; do
     shift
 done
 
-test -d List$p || mkdir List$p;
+devp=$(pwd)
+while [ -n "$devp" ]; do
+    if [ -x $devp/$ic ]; then
+	break				# iC compiler found
+    fi
+    newp=${devp%/*}
+    if [ "$newp" = "$devp" ]; then
+	break				# in case of C: in Windows
+    fi
+    devp=$newp
+done
+if [ ! -x $devp/$ic ]; then
+    echo "no '$ic' found in '$(pwd)' or one of its subdirectories" >&2
+    echo "maybe you need to make '$ic' first ???" >&2
+    exit 254
+fi
+
+cd $devp
+    $ic -c < /dev/null			# uses installed iC compiler
+    rm -f /tmp/cexe.c			# with local cexe.h
+    cp cexe.c /tmp			# empty cexe.c
+cd - > /dev/null
 
 if [ $# != 0 ]; then
+    test -d List$p || mkdir List$p;
+    ln -fs $devp/cexe.h .		# ZZZ this will not be necessary with fixed iC compilers
     for f in $*; do
 	file=$f
 	base=${file%.*}
-	if [ "$file" = "$base" ]; then
-	    file="$base.ic"
-	fi
+	file="$base.ic"
 	if [ -f "$file" ]; then
-	    echo "$file";
-	    $ic -c -d474 -l List$p/$base.lst $file
-	    cp -f cexe.c List$p/$base.c
-	    cd ..
-	    rm -f cexe.o $ic	# new cexe.o too soon for make sometimes
-	    makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-	    cd - > /dev/null
-	    if [[ -f ../$ic ]]; then	# use locally generated compiler
-		../$ic -d500 $file > List$p/$base.ini
+	    if $ic -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+		echo "$file";
+		cp -f cexe.c List$p/$base.c
+		mv -f cexe.c $devp
+		cd $devp
+		rm -f cexe.o $ic	# new cexe.o too soon for make sometimes
+		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+		cd - > /dev/null
+		if [ -x $devp/$ic ]; then	# use newly generated compiler
+		    $devp/$ic -d500 $file > List$p/$base.ini
+		else
+		    echo "make $ic from $file failed"
+		fi
 	    else
-		echo make $ic failed
+		rm List$p/$base.lst	# only keep listings with functions or literals
 	    fi
+	else
+	    echo "ERROR: $file does not exist - no $ic made"
 	fi
     done
-else
-    for f in $(cat pm.lt); do
+elif [ -f $list ]; then
+    test -d List$p || mkdir List$p;
+    ln -fs $devp/cexe.h .		# ZZZ this will not be necessary with fixed iC compilers
+    for f in $(cat $list); do
 	file=$f
 	base=${file%.*}
-	if [ "$file" = "$base" ]; then
-	    file="$base.ic"
-	fi
+	file="$base.ic"
 	if [ -f "$file" ]; then
-	    echo "$file";
-	    $ic -c -d474 -l List$p/$base.lst $file
-	    cp -f cexe.c List$p/$base.c
-	    cd ..
-	    rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
-	    makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-	    cd - > /dev/null
-	    if [[ -f ../$ic ]]; then	# use locally generated compiler
-		../$ic -d500 $file > List$p/$base.ini
+	    if $ic -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+		echo "$file";
+		cp -f cexe.c List$p/$base.c
+		mv -f cexe.c $devp
+		cd $devp
+		rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
+		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+		cd - > /dev/null
+		if [ -x $devp/$ic ]; then	# use newly generated compiler
+		    $devp/$ic -d500 $file > List$p/$base.ini
+		else
+		    echo "make $ic from $file failed"
+		fi
 	    else
-		echo make $ic failed
+		rm List$p/$base.lst	# only keep listings with functions or literals
 	    fi
+	else
+	    echo "ERROR: $file does not exist - no $ic made" >&2
 	fi
-    done > List$p/Init.out 2>&1;
-    $ic -c < /dev/null			# restore plain icc or ict
-    cd ..
-    rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
-    makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-    cd - > /dev/null
+    done > List$p/List$p.out 2>&1;
+    if [ -f /tmp/cexe.c ]; then
+	cp /tmp/cexe.c .
+	cd $devp			# restore plain icc or ict
+	rm -f cexe.o $ic		# new cexe.c too soon for make sometimes
+	makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	cd - > /dev/null
+    fi
+else
+    echo "ERROR: no list of test iC sources '$list' found - no $ic made" >&2
 fi
