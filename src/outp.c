@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.23 2000/12/26 22:14:06 jw Exp $";
+    "@(#)$Id: outp.c,v 1.24 2000/12/29 17:26:59 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -252,17 +252,16 @@ buildNet(Gate ** igpp)
 				    for (lp = sp->list; lp; lp = lp->le_next) {
 					if (sp->ftype < MAX_AR) {
 					    if (lp->le_val == (unsigned) -1) {
-						continue;	/* timer value link */
+						continue; /* timer value link */
 					    }
 					    lp->le_sym->u.gate->gt_rlist =
 					    (Gate**)lp->le_val;
 					} else if (val != lp->le_val) {
-					    break;	/* not right value */
+					    continue;	/* not right value */
 					}
 					*fp++ = lp->le_sym->u.gate;
 				    }
-				    /* gate list terminator */
-				    *fp++ = 0;
+				    *fp++ = 0;		/* gate list terminator */
 				} while (val ^= NOT);
 
 				if (typ == INPW) {
@@ -850,7 +849,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 			    /* error message already in last loop */
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
-				fs, tsp->name);		/* clock or timer */
+				fs, mN(tsp));		/* clock or timer */
 			    if (tsp->type == TIM && (lp = lp->le_next) != 0) {
 				/* error message already in last loop */
 				len += strlen((tsp = lp->le_sym)->name) + 3;

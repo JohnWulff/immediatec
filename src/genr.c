@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.15 2000/12/28 15:17:18 jw Exp $";
+"@(#)$Id: genr.c,v 1.16 2000/12/29 20:16:52 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -649,9 +649,14 @@ op_asgn(			/* asign List_e stack to links */
 		    t_first++;
 		}
 		if (debug & 04) fprintf(outFP, "_(%s)", gp->name);
-		/* modify IXx.x and QXx.x names for compiled output only */
-		IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
-		ep += sprintf(ep, "_(%s%s)", gp->type == NCONST ? "_" : "", buffer);
+		if (outFlag == 0) {
+		    ep += sprintf(ep, "_(%s)", gp->name);	/* -c compile */
+		} else {
+		    /* modify IXx.x and QXx.x names for compiled output only */
+		    IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+		    ep += sprintf(ep, "_(%s%s)", gp->type == NCONST ? "_"
+								    : "", buffer);
+		}
 		t_first = lp->le_last;	/* skip logic expr's */
 	    }
 	    if (debug & 04) {

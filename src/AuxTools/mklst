@@ -14,13 +14,14 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-d	do not output base without extension
+	-e	output only base without extension
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.1 2000/12/29 09:32:54 jw Exp $
+$Id: mklst,v 1.2 2000/12/29 11:49:49 jw Exp $
 .
 
-use vars qw($opt_d $opt_h);
+use vars qw($opt_d $opt_e $opt_h);
 require "getopts.pl";
-&Getopts('dh');			# sets $opt_h if -h etc
+&Getopts('deh');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -31,6 +32,8 @@ while ($ARGV = shift @ARGV) {
     if ($ARGV =~ /(\w+)\.p/) {
 	if ($opt_d) {
 	    print "$1.c\n$1.lst\n$1.p\n";
+	} elsif ($opt_e) {
+	    print "$1\n";
 	} else {
 	    print "$1\n$1.c\n$1.lst\n$1.p\n";
 	}
