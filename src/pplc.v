@@ -1,4 +1,4 @@
-@(#)$Id: pplc.v,v 1.8 1999/12/05 11:09:10 jw Exp $
+@(#)$Id: pplc.v,v 1.9 2000/05/28 10:12:17 jw Exp $
 Makefile        1.6     1999/08/06  21:13:31  jw      Exp
 cexe.h          1.6     1999/08/06  21:13:31  jw      Exp
 comp.h          1.2     1996/08/01  17:27:50  john    Exp
@@ -7,7 +7,7 @@ genr.c          1.3     1998/10/02  11:15:55  john    Exp
 ibsd.c          1.2     1999/08/06  21:13:31  jw      Exp
 ibsd.h          1.2     1999/08/06  21:13:31  jw      Exp
 init.c          1.2     1996/07/30  20:24:24  john    Exp
-link.c          1.4     1999/08/04  18:28:55  jw      Exp
+link.c          1.5     2000/05/28  10:11:22  jw      Exp
 list.c          1.2     1999/08/06  21:13:31  jw      Exp
 load.c          1.4     1999/12/05  11:07:48  jw      Exp
 main.c          1.6     1999/12/05  11:07:48  jw      Exp

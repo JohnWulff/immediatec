@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.4 1999/08/04 18:28:55 jw Exp $";
+"@(#)$Id: link.c,v 1.5 2000/05/28 10:11:22 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -151,56 +151,58 @@ link_ol(
 		/* 'LO' action gate or required time == 0 */
 #ifndef TIMEROFF1
 		out_list = c_list;	/* put on 'clock' list imme */
-		goto link;
+	    } else {
 #else
 		/* Alternate action is to sort with time = 1 */
 		time = 1;		/* equivalent to clocking */
-#endif
 	    }
-	    /* 'HI' action gate clocked by timer/counter */
-	    /* link Gate gp into list sorted by time order */
+#endif
+		/* 'HI' action gate clocked by timer/counter */
+		/* link Gate gp into list sorted by time order */
 #ifndef _WINDOWS 
-	    if (debug & 0100) putc('!', outFP);
+		if (debug & 0100) putc('!', outFP);
 #endif
-	    tp = out_list;
-	    diff = 0;
-	    while ((np = tp->gt_next) != out_list &&
-		(diff += np->gt_mark) <= time) {
-		tp = np;		/* scan along time sorted list */
-	    }
-#ifndef DEQ
-	    tp->gt_next = gp;			/* old => new */
-	    gp->gt_next = np;			/* new => next */
-	    diff -= np->gt_mark;		/* full time to previous */
-	    gp->gt_mark = time - diff;		/* diff previous to new */
-	    if (np != out_list) {
-		np->gt_mark -= gp->gt_mark;	/* adjust diff new to old */
-	    } else {
-		(Gate *)out_list->gt_list = gp;	/* list => new */
-#ifndef NOCHECK
-		/* check that algorithm is correct */
-		if (out_list->gt_mark != 0) {
-		    fprintf(errFP,
-		"\n%s: line %d: TIMER %s gt_mark is %d, should be 0)\n",
-		    __FILE__, __LINE__, out_list->gt_ids, out_list->gt_mark);
-		    quit(-1);
+		tp = out_list;
+		diff = 0;
+		while ((np = tp->gt_next) != out_list &&
+		    (diff += np->gt_mark) <= time) {
+		    tp = np;		/* scan along time sorted list */
 		}
-#endif
-	    }
-#else
-	    np->gt_prev = tp->gt_next = gp;	/* next, previous ==> new */
-	    gp->gt_next = np;			/* new ==> next */
-	    gp->gt_prev = tp;			/* previous <== newious */
-	    if (np != out_list) {
+#ifndef DEQ
+		tp->gt_next = gp;			/* old => new */
+		gp->gt_next = np;			/* new => next */
 		diff -= np->gt_mark;		/* full time to previous */
-	    }
-	    gp->gt_mark = time - diff;		/* diff previous to new */
-	    np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
-	    /* if np == out_list, out_list->gt_mark gets -diff */
+		gp->gt_mark = time - diff;		/* diff previous to new */
+		if (np != out_list) {
+		    np->gt_mark -= gp->gt_mark;	/* adjust diff new to old */
+		} else {
+		    (Gate *)out_list->gt_list = gp;	/* list => new */
+#ifndef NOCHECK
+		    /* check that algorithm is correct */
+		    if (out_list->gt_mark != 0) {
+			fprintf(errFP,
+		    "\n%s: line %d: TIMER %s gt_mark is %d, should be 0)\n",
+			__FILE__, __LINE__, out_list->gt_ids, out_list->gt_mark);
+			quit(-1);
+		    }
 #endif
-	    return;			/* sorted link action complete */
+		}
+#else
+		np->gt_prev = tp->gt_next = gp;	/* next, previous ==> new */
+		gp->gt_next = np;			/* new ==> next */
+		gp->gt_prev = tp;			/* previous <== newious */
+		if (np != out_list) {
+		    diff -= np->gt_mark;		/* full time to previous */
+		}
+		gp->gt_mark = time - diff;		/* diff previous to new */
+		np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
+		/* if np == out_list, out_list->gt_mark gets -diff */
+#endif
+		return;			/* sorted link action complete */
+#ifndef TIMEROFF1
+	    }
+#endif
 	}
-    link:
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('>', outFP);
 #endif
