@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.76 2002/10/08 21:23:21 jw Exp $";
+"@(#)$Id: comp.y,v 1.77 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -218,7 +218,7 @@ extDecl	: extDeclHead UNDEF	{
 	| extDeclHead variable	{
 		Symbol t = *($2.v);
 		if ($2.v->ftype != ($1.v & 0xff)) {
-		    error("extern declaration does not match previous declaration:", $2.v->name);
+		    ierror("extern declaration does not match previous declaration:", $2.v->name);
 		    $2.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = $2.v;
@@ -272,7 +272,7 @@ decl	: declHead UNDEF	{
 	| declHead variable	{
 		Symbol t = *($2.v);
 		if ($2.v->ftype != ($1.v & 0xff)) {
-		    error("declaration does not match previous declaration:", $2.v->name);
+		    ierror("declaration does not match previous declaration:", $2.v->name);
 		    $2.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = $2.v;
@@ -307,7 +307,7 @@ dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 		    else if (const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
 		}
 		if ($1.v->type != UDF) {
-		    error("multiple assignment to imm type:", $1.v->name);
+		    ierror("multiple assignment to imm type:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
@@ -336,7 +336,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		if ($1.v->type != UDF) {
-		    error("multiple assignment to imm bit:", $1.v->name);
+		    ierror("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, GATE);
@@ -348,7 +348,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0 && const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
 		if ($1.v->type != UDF) {
-		    error("multiple assignment to imm int:", $1.v->name);
+		    ierror("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, ARITH);
@@ -363,7 +363,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		if ($1.v->type != UDF) {
-		    error("multiple assignment to imm bit:", $1.v->name);
+		    ierror("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		snprintf(temp, TSIZE, "%s_0", $1.v->name);
@@ -385,7 +385,7 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; errInt(); YYERROR; }
 		if ($1.v->type != UDF) {
-		    error("multiple assignment to imm int:", $1.v->name);
+		    ierror("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		snprintf(temp, TSIZE, "%s_0", $1.v->name);
@@ -931,7 +931,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	DSR(..) SHSR(expr,tim)
 	 *	DSR(..) SHSR(expr,tim,delay)
 	 ***********************************************************/
-fexpr	: BLTIN3 '(' aexpr cref ')' {			/* DSR(expr); SHSR(expr) */
+	| BLTIN3 '(' aexpr cref ')' {			/* DSR(expr); SHSR(expr) */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
 #if YYDEBUG
@@ -1314,10 +1314,10 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 
 dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 		if ($1.v->ftype != CLCKL) {
-		    error("assigning clock to variable declared differently:", $1.v->name);
+		    ierror("assigning clock to variable declared differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		} else if ($1.v->type != UDF && $1.v->type != CLK) {
-		    error("assigning clock to variable assigned differently:", $1.v->name);
+		    ierror("assigning clock to variable assigned differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, CLCKL);
@@ -1327,7 +1327,7 @@ dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
 	| CVAR '=' cexpr	{
 		if ($1.v->type != UDF) {
-		    error("multiple assignment clock:", $1.v->name);
+		    ierror("multiple assignment clock:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, CLCKL);
@@ -1394,10 +1394,10 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 
 dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 		if ($1.v->ftype != TIMRL) {
-		    error("assigning timer to variable declared differently:", $1.v->name);
+		    ierror("assigning timer to variable declared differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		} else if ($1.v->type != UDF && $1.v->type != TIM) {
-		    error("assigning timer to variable assigned differently:", $1.v->name);
+		    ierror("assigning timer to variable assigned differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, TIMRL);
@@ -1407,7 +1407,7 @@ dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
 	| TVAR '=' texpr	{
 		if ($1.v->type != UDF) {
-		    error("multiple assignment timer:", $1.v->name);
+		    ierror("multiple assignment timer:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, TIMRL);
@@ -1657,7 +1657,7 @@ compile(
 	return Lindex;
     }
     errFilename = errNM;		/* open on first error */
-    init();				/* initialise symbol table - allows error() */
+    init();				/* initialise symbol table - allows ierror() */
     if (inpPath) {
 	strncpy(inpNM, inpPath, BUFS);
 	/* pre-compile if iC files contains any #include, #define #if etc */
@@ -1667,7 +1667,7 @@ compile(
 	if (r == 0) {
 	    /* pass the input file through the C pre-compiler to resolve #includes */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
-		error("compile: cannot make or unlink:", T0FN);
+		ierror("compile: cannot make or unlink:", T0FN);
 		perror("unlink");
 		return T0index;		/* error unlinking temporary file */
 	    }
@@ -1675,7 +1675,7 @@ compile(
 	    if (debug & 02) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
 	    r = system(execBuf);	/* Pre-compile iC file */
 	    if (r != 0) {
-		error("compile: cannot run:", execBuf);
+		ierror("compile: cannot run:", execBuf);
 		return T0index;
 	    }
 	    if ((T0FP = fopen(T0FN, "r")) == NULL) {
@@ -1762,7 +1762,7 @@ get(FILE* fp)
 	    if ((lexflag & C_PARSE) == 0) {
 		/* TODO process pre-processor lines in iC compilation */
 		/* handle only local includes - not full C-precompiler features */
-		error("get: stray # line in iC ???", NULL);
+		ierror("get: stray # line in iC ???", NULL);
 		getp = NULL;			/* bypass this line in iC */
 	    } else
 	    /********************************************************
@@ -1941,7 +1941,7 @@ iClex(void)
 		    if (isdigit(c1 = c = get(T0FP))) {	/* can only be QX%d. */
 			for (i1 = 0; isdigit(c = get(T0FP)); i1++);
 			if (c1 >= '8' || i1 > 0) {
-			    error("I/O bit address must be less than 8:", iCtext);
+			    ierror("I/O bit address must be less than 8:", iCtext);
 			}
 			qmask = 0x01;			/* QX, IX or TX */
 		    foundQIT:
@@ -1963,28 +1963,28 @@ iClex(void)
 		    }
 		} else if (sscanf(iCtext, "%1[IQT]%1[BWX]%d__%d%1[A-Z_a-z]",
 		    y0, y1, &yn, &yt, y2) == 4) {
-		    error("Variables with __ clash with I/O", iCtext);
+		    ierror("Variables with __ clash with I/O", iCtext);
 						/* QX%d__%d not allowed */
 		}				/* QX%d__%dABC is OK - not I/O */
 
 		if (yn >= ixd) {
 		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:",
 			ixd);
-		    error(tempBuf, iCtext);	/* hard error if outside range */
+		    ierror(tempBuf, iCtext);	/* hard error if outside range */
 		} else			/* test rest if yn < ixd (array bounds) */
 		if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
-		    error("WORD I/O must have even byte address:", iCtext);
+		    ierror("WORD I/O must have even byte address:", iCtext);
 		} else			/* and yn is even for word addresses */
 		if (qmask & 0x4444) {
 		    if (*(unsigned short*)&QX_[yn] & ~qmask & iomask) {
-			error("I/O addresses more than 1 of bit, byte or word:",
+			ierror("I/O addresses more than 1 of bit, byte or word:",
 			    iCtext);		/* mixed mode warning */
 		    }
 		    *(unsigned short*)&QX_[yn] |= qmask; /* note word I/O */
 		} else
 		if (qmask) {
 		    if (QX_[yn] & ~qmask & iomask) {
-			error("I/O addresses more than 1 of bit, byte or word:",
+			ierror("I/O addresses more than 1 of bit, byte or word:",
 			    iCtext);		/* mixed mode warning */
 		    }
 		    QX_[yn] |= qmask;		/* note bit or byte I/O */
@@ -2019,7 +2019,7 @@ iClex(void)
 				"%s", symp->name)) < 0 || len >= rest) {
 		iCbuf[IMMBUFSIZE-1] = '\0';
 		len = rest - 1;			/* text + NUL which fits */
-		error("statement too long at: ", symp->name);
+		ierror("statement too long at: ", symp->name);
 	    }
 	    iClval.sym.l = stmtp += len;
 	} else {
@@ -2153,7 +2153,7 @@ iClex(void)
 	    if (len >= rest) {
 		iCbuf[IMMBUFSIZE-1] = '\0';
 		len = rest -1;
-		error("statement too long at: ", iCtext);
+		ierror("statement too long at: ", iCtext);
 	    }
 	    iClval.val.l = stmtp = strncpy(stmtp, iCtext, len) + len;
 	}
@@ -2243,13 +2243,13 @@ errmess(				/* actual error message */
  *******************************************************************/
 
 void
-error(					/* print error message */
+ierror(					/* print error message */
     char *	str1,
     char *	str2)
 {
     iclock->type = ERR;			/* prevent execution */
     errmess("Error", str1, str2);
-} /* error */
+} /* ierror */
 
 /********************************************************************
  *
@@ -2274,13 +2274,13 @@ warning(				/* print warning message */
 static void
 errBit(void)
 {
-    error("no constant allowed in bit expression", NULL);
+    ierror("no constant allowed in bit expression", NULL);
 } /* errBit */
 
 static void
 errInt(void)
 {
-    error("no imm variable to trigger arithmetic expression", NULL);
+    ierror("no imm variable to trigger arithmetic expression", NULL);
 } /* errInt */
 
 /********************************************************************

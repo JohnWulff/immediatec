@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.53 2002/08/26 19:05:20 jw Exp $";
+"@(#)$Id: genr.c,v 1.54 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -431,7 +431,7 @@ op_asgn(				/* asign List_e stack to links */
     rsp = right->le_sym;
     if ((typ = var->type & TM) >= AND && typ != rsp->type & TM) {
 	if (typ != ERR) {
-	    error("type mismatch in multiple assignment:", var->name);
+	    ierror("type mismatch in multiple assignment:", var->name);
 	    var->type = ERR;		/* reduce anyway to clear list */
 	}
     } else {
@@ -452,7 +452,7 @@ op_asgn(				/* asign List_e stack to links */
 	while (rsp->type == ALIAS) {	/* scan down list of aliases */
 	    if (var == rsp) {
 		var->type = ERR;	/* error found */
-		error("circular list of aliases:", var->name);
+		ierror("circular list of aliases:", var->name);
 		break;			/* circular list of aliases */
 	    }
 	    right->le_val ^= rsp->list->le_val;
@@ -737,7 +737,7 @@ op_asgn(				/* asign List_e stack to links */
 	sflag = 1;			/* print output name */
 	if (gt_input > PPGATESIZE) {
 	    sp->type = ERR;		/* cannot execute properly */
-	    error("too many inputs on gate:", sp->name);
+	    ierror("too many inputs on gate:", sp->name);
 	}
 	if ((gp = sp = templist) != 0) {
 	    if (sp->name

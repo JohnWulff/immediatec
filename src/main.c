@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.37 2002/09/02 11:24:21 jw Exp $";
+"@(#)$Id: main.c,v 1.38 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -534,22 +534,27 @@ inversionCorrection(void)
 {
     char	exStr[256];
     char	tempName[] = "pplstfix.XXXXXX";
+    int		fd;
     int		r = 0;
 
     if ((debug & 04024) == 024) {	/* not suppressed, NET TOPOLOGY and LOGIC */
-	r = 1;
-	if (mkstemp(tempName) >= 0) {
-	    unlink(tempName);		/* mktemp() is deemed dangerous */
-	    r = rename(listFN, tempName); /* inversion correction needed */
-	    if (r == 0) {
-		sprintf(exStr, "%spplstfix %s > %s", ppPath, tempName, listFN);
-		r = system(exStr);
-		unlink(tempName);
+	/* mktemp() is deemed dangerous */
+	/* Cygnus won't unlink till file is closed */
+	if ((fd = mkstemp(tempName)) < 0 ||
+	    close(fd) < 0 ||
+	    unlink(tempName) < 0 ||
+	    rename(listFN, tempName) < 0 /* inversion correction needed */
+	) {
+	    fprintf(stderr, "%s: rename(%s, %s) failed\n",
+		progname, listFN, tempName);
+	} else {
+	    sprintf(exStr, "%spplstfix%s %s > %s", ppPath, progname + strcspn(progname, "0123456789"), tempName, listFN);
+	    r = system(exStr);
+	    unlink(tempName);
+	    if (r != 0) {
+		fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
+		    progname, exStr);
 	    }
-	}
-	if (r != 0) {
-	    fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
-		progname, exStr);
 	}
     }
     return r;

@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.12 2002/08/26 19:13:17 jw Exp $";
+"@(#)$Id: symb.c,v 1.13 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -166,7 +166,7 @@ place_sym(Symbol *	sp)	/* place sp in symbol table */
 
     if (spl == 0 || (tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0) {
 	if (lookup(sp->name) != 0) {	/* locate sorted position */
-	    error("trying to place existing symbol:", sp->name);
+	    ierror("trying to place existing symbol:", sp->name);
 	}
     }
     sp->next = *spl;	/* point from this to next Symbol */
@@ -202,7 +202,7 @@ unlink_sym(Symbol *	sp)	/* unlink Symbol from symbol table */
 	    *spl = sp->next;		/* skip this Symbol, point previous to next */
 	    spl = 0;			/* force execution of lookup() for next call */
 	} else {
-	    error("trying to delete a Symbol not yet installed:", sp->name);
+	    ierror("trying to delete a Symbol not yet installed:", sp->name);
 	}
     }
     return (sp);	/* Symbol has not been deleted from heap yet */

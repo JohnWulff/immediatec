@@ -175,7 +175,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.25 2002/08/26 19:05:59 jw Exp $
+$Id: iClive,v 1.26 2003/10/03 23:35:19 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -1195,7 +1195,8 @@ sub run_file {
 	    FORK: {
 		if ($pid = fork) {
 		    # parent process
-		    scan();	# make connection with the new control program
+		    sleep 0.1;	# wait for control program to be activated as child process
+		    scan();	# make live connection with the new control program
 		} elsif (defined $pid) {	# $pid is zero if defined
 		    # dispatch child process
 		    my @call = ($processName);

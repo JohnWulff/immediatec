@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.32 2002/10/08 16:28:02 jw Exp $
+# @(#)$Id: Makefile.in,v 1.33 2003/10/03 18:45:13 jw Exp $
 
 ############################################################
 #
@@ -101,7 +101,7 @@ lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 .l.c:
     ifneq ($(LEX),)
 	rm -f $@
-	lex -t $< | sed -f $(srcdir)/$*.sed > $@
+	$(LEX) -t $< | sed -f $(srcdir)/$*.sed > $@
 	chmod -w $@
     else
 	@echo "System has no lex or flex - install one of them"
@@ -178,7 +178,7 @@ uninstall:
 	rm -f ${prefix}/include/icg.h
 
 clean:
-	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs cexe.c* scid.c core icc ict libict.a
+	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a
 
 distclean: clean
 	rm -f Makefile config.status config.log config.cache

@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: configure,v 1.3 2002/07/29 10:18:53 jw Exp $
+# $Id: configure,v 1.4 2003/10/03 18:45:13 jw Exp $
 # make yacc the first choice - CHANGE from autoconf John Wulff
 # leave YACC as empty string if none found - CHANGE from autoconf John Wulff
 
@@ -638,7 +638,7 @@ fi
 fi
 
 # make yacc the first choice - CHANGE from autoconf John Wulff
-for ac_prog in yacc 'bison -y' byacc
+for ac_prog in 'bison -y' yacc byacc
 do
 # Extract the first word of "$ac_prog", so it can be a program name with args.
 set dummy $ac_prog; ac_word=$2

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.63 2002/10/08 11:08:33 jw Exp $";
+"@(#)$Id: outp.c,v 1.64 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -259,7 +259,7 @@ listNet(unsigned * gate_count)
 		if (typ == UDF) {
 		    warning("undefined gate:", sp->name);
 		} else if (typ == ERR) {
-		    error("gate:", sp->name);
+		    ierror("gate:", sp->name);
 		}
 	    }
 	}
@@ -299,7 +299,7 @@ listNet(unsigned * gate_count)
 	    ynerrs && gate_count[ERR]	? " and "	: "",
 	    gate_count[ERR]		?  genBuf	: "",
 	    ynerrs + gate_count[ERR] >1	? "s"		: "");
-	error(errBuf, NS);
+	ierror(errBuf, NS);
 	return 1;
     }
     return 0;
@@ -394,7 +394,7 @@ buildNet(Gate ** igpp)
 					TX_[byte * 8 + bit] = gp;
 				    } else {
 				    inErr:
-		    error("INPUT byte or bit address exceeds limit:", sp->name);
+		    ierror("INPUT byte or bit address exceeds limit:", sp->name);
 				    }
 				}
 			    } else if (sp->ftype < MAX_ACT) {
@@ -436,12 +436,12 @@ buildNet(Gate ** igpp)
 				    QT_[byte] = 'X';
 				} else {
 				outErr:
-		    error("OUTPUT byte or bit address exceeds limit:", gp->gt_ids);
+		    ierror("OUTPUT byte or bit address exceeds limit:", gp->gt_ids);
 				    gp->gt_list = (Gate**)0;
 				    gp->gt_mark = 0;	/* no change in bits */
 				}
 			    } else {
-		    error("OUTPUT strange ftype:", gp->gt_ids);
+		    ierror("OUTPUT strange ftype:", gp->gt_ids);
 			    }
 			    gp++;
 			} else if (typ < MAX_OP) {
@@ -1200,11 +1200,11 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		if (sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
 		    if (T4FP == NULL) {
 			if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
-			    error("copyBlocks: cannot open:", T4FN);
+			    ierror("copyBlocks: cannot open:", T4FN);
 			    return T4index;			/* error opening temporary file */
 			}
 			if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
-			    error("copyBlocks: cannot make or unlink:", T5FN);
+			    ierror("copyBlocks: cannot make or unlink:", T5FN);
 			    perror("unlink");
 			    return T5index;			/* error unlinking temporary file */
 			}
@@ -1259,13 +1259,14 @@ c_compile(FILE * iFP)
      ********************************************************/
     if (T4FP) {
 	fflush(T4FP);
-	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
+	/* Cygnus does not understand cc - use gcc */
+	sprintf(lineBuf, "gcc -E -x c %s -o %s", T4FN, T5FN);
 	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
 	r = system(lineBuf);			/* Pre-compile C file */
 	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);
 
 	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
-	    error("c_compile: cannot open:", T5FN);
+	    ierror("c_compile: cannot open:", T5FN);
 	    perror("open");
 	    return T5index;
 	}
@@ -1275,7 +1276,7 @@ c_compile(FILE * iFP)
 	lexflag |= C_PARSE|C_NO_COUNT|C_FIRST;	/* do not count characters for include files */
 	gramOffset = lineno = 0;
 	if (c_parse() != 0) {
-	    error("c_compile: Parse error in includes\n", T5FN);
+	    ierror("c_compile: Parse error in includes\n", T5FN);
 	}
 	lexflag &= ~C_NO_COUNT;		/* count characters again */
     }
@@ -1290,7 +1291,7 @@ c_compile(FILE * iFP)
     copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
     gramOffset = lineno = 0;
     if (c_parse() != 0) {
-	error("c_compile: Parse error\n", NULL);
+	ierror("c_compile: Parse error\n", NULL);
     }
 //fprintf(stderr, "c_compile: end compile\n"); fflush(stderr);
     rewind(yyin);

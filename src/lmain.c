@@ -1,8 +1,8 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.7 2002/08/26 19:11:25 jw Exp $";
+"@(#)$Id: lmain.c,v 1.8 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
- *	simple driver for MKS yacc
+ *	Standalone check of gram.y and lexc.l C compiler
  *
  *******************************************************************/
 
@@ -21,6 +21,8 @@ static const char *	usage =
 "                    +4  debugging info\n"
 "                    +2  generation of insert markers\n"
 "                    +1  yacc debug info\n"
+#else
+"                        output space seperated list of typenames\n"
 #endif
 "        <C_program>    any C language program file (extension .c)\n"
 "        -h              this help text\n"

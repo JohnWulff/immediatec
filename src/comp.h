@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.37 2002/08/26 21:56:19 jw Exp $";
+"@(#)$Id: comp.h,v 1.38 2003/10/03 18:45:13 jw Exp $";
 
 #define NS	((char*)0)
 
@@ -60,7 +60,7 @@ extern int  iCparse(void);		/* generated yacc parser function */
 extern int  compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
-extern void error(char *, char *);	/* print error message */ 
+extern void ierror(char *, char *);	/* print error message */
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */

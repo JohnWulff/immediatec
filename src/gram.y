@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.13 2002/08/26 19:55:49 jw Exp $";
+"@(#)$Id: gram.y,v 1.14 2003/10/03 18:45:13 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -1754,13 +1754,23 @@ imm_identifier					/* 69 */
 static void
 yyerror(char *s, ...)
 {
-#if YYDEBUG
-    if (debug & 036) {
-	fflush(stdout);
-	printf("\n%*s\n%*s\n", column, "^", column, s);
+    fflush(stdout);
+    fprintf(stderr, "\n%*s\n%*s\n", column, "^", column, s);
+} /* yyerror */
+
+void
+ierror(					/* print error message */
+    char *	str1,
+    char *	str2)
+{
+    fflush(stdout);
+    fprintf(stderr, "*** Error: %s", str1);
+    if (str2) {
+	fprintf(stderr, " %s", str2);
+    } else {
+	putc('.', stderr);
     }
-#endif
-}
+} /* ierror */
 #else
 
 extern int column;
@@ -1792,7 +1802,7 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 	lep->vEnd   = end;		/* of an imm variable */
 	lep->sp     = sp;
 	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
-	    error("C-statement tries to access an imm type not bit or int:", sp->name);
+	    ierror("C-statement tries to access an imm type not bit or int:", sp->name);
 	    sp->type = ERR;		/* cannot execute properly */
 	}
     } else {				/* parenthesized variable found */
@@ -1859,9 +1869,9 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 			   (typ != ERR)) {	/* avoids multiple error messages */
 		    if ((typ == ARN && mType == ARITH) ||
 		        (typ >= AND && typ <= LATCH && mType == GATE)) {
-			error("C-assignment to an imm variable already assigned in iC code:", sp->name);
+			ierror("C-assignment to an imm variable already assigned in iC code:", sp->name);
 		    } else {
-			error("C-assignment to an incompatible imm type:", sp->name);
+			ierror("C-assignment to an incompatible imm type:", sp->name);
 		    }
 		    sp->type = ERR;	/* cannot execute properly */
 		}
