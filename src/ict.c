@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.22 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: ict.c,v 1.23 2001/04/01 08:23:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -243,7 +243,6 @@ icc(
 
 #ifdef LOAD 
     if (msgOffset > 4) {
-	msgBuf[msgOffset] = '\0';		/* terminate */
 	send_msg_to_server(sockFN, msgBuf);
 	if (micro) microReset(0);
     }
@@ -276,7 +275,6 @@ icc(
 
 #ifdef LOAD 
 	if (msgOffset > 4) {
-	    msgBuf[msgOffset] = '\0';		/* terminate */
 	    send_msg_to_server(sockFN, msgBuf);
 	    if (micro) microReset(0);
 	}
@@ -335,6 +333,8 @@ icc(
 
 	msgOffset = 0;
 	while (QMM) {			/* rack with bit set for every cage */
+	    int len;
+	    int rest;
 	    int mask = QMM & -QMM;		/* rightmost cage set in QMM */
 	    int cage = bitIndex[mask];		/* mask has only 1 bit set */
 	    int slots = QM_[cage];
@@ -342,18 +342,19 @@ icc(
 	    while (slots) {
 		int mask = slots & -slots;	/* rightmost slot set in slots */
 		int slot = cageOffset + bitIndex[mask];
+		short val;
 		char Qtype = QT_[slot];
-		short val = Qtype == 'W' ? *(short*)&QX_[slot]
-						: QX_[slot];
 		assert(Qtype);			/* make sure slot is programmed */
-		msgOffset += sprintf(&msgBuf[msgOffset], "%c%d.%d,", Qtype, slot, val);
-		if (msgOffset > REPLY - 13) {	/* 12 is length of largest message */
+		val = Qtype == 'W' ? *(short*)&QX_[slot] : QX_[slot];
+		while ((len = snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+		    "%c%d.%d,", Qtype, slot, val)) < 0 || len > rest) { /* use > because of -1 truncation */
 		    msgBuf[msgOffset - 1] = '\0';	/* clear last ',' */
 		    if (micro) microPrint("Send intermediate", 0);
 		    send_msg_to_server(sockFN, msgBuf);
 		    if (micro) microReset(0);
 		    msgOffset = 0;
 		}
+		msgOffset += len;
 		slots &= ~mask;			/* clear rightmost slot in slots */
 	    }
 	    QM_[cage] = slots;			/* clear QM_[cage] */
@@ -469,33 +470,49 @@ icc(
 
 			    case 1:		/* GET_SYMBOL_TABLE */
 				printf("Symbol Table requested\n");
-				strcpy(msgBuf, "L0.1");
-				msgOffset = 4;		/* strlen(msgBuf) */
+				/* prepare index entries first to allow ALIAS back-references */
 				index = 0;
 				for (opp = sTable; opp < sTend; opp++) {
-				    gp = *opp;
-				    gp->gt_live = index++;	/* index and live inhibit */
-				    index &= 0x7fff;		/* rolls over if > 32767 Symbols */
-				    /* to maintain index correctly send all symbols */
-				    if (msgOffset > REPLY - 6 - strlen(gp->gt_ids)) {	/* -11 id, */
+				    (*opp)->gt_live = index++;	/* index and live inhibit */
+				    index &= 0x7fff;		/* rolls over if > 32768 Symbols */
+				}
+				strcpy(msgBuf, "L0.1");
+				msgOffset = 4;		/* strlen(msgBuf) */
+				for (opp = sTable; opp < sTend; opp++) {
+				    int		len;
+				    int		rest;
+				    int		fni = 0;
+				    int		inverse = 0;
+				    Gate *	gx = gp = *opp;
+				    /* to maintain index correlation send all symbols */
+				    while (gx->gt_ini == -ALIAS) {
+					inverse ^= gx->gt_mark;	/* holds ALIAS inversion flag */
+					gx = (Gate*)gx->gt_rlist;	/* resolve ALIAS */
+					fni = MAX_FTY + gx->gt_fni + inverse;
+				    }
+
+				    while (rest = REPLY - msgOffset, (len = fni ?	/* original ID with index */
+					snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", gp->gt_ids, fni, gx->gt_live) :
+					snprintf(&msgBuf[msgOffset], rest, ";%s %d", gp->gt_ids, gp->gt_fni)
+					) < 0 || len >= rest) {
 					msgBuf[msgOffset] = '\0';		/* terminate */
 					if (micro) microPrint("Send Symbols intermediate", 0);
 					send_msg_to_server(sockFN, msgBuf);
 					if (micro) microReset(0);
 					msgOffset = 4;
 				    }
-				    msgOffset += sprintf(&msgBuf[msgOffset], ";%s %d", gp->gt_ids, gp->gt_ini);
+				    msgOffset += len;
 				}
 				if (msgOffset > 4) {
-				    msgBuf[msgOffset] = '\0';		/* terminate */
 				    if (micro) microPrint("Send Symbols", 0);
 				    send_msg_to_server(sockFN, msgBuf);
 				    if (micro) microReset(0);
 				}
-				if (micro) microPrint("Send Scan Command", 0);
 				/* end of symbol table - execute scan */
-				send_msg_to_server(sockFN, "L0.2");
-				liveFlag = 1;			/* live inhibit bits are set */
+				snprintf(&msgBuf[0], REPLY, "L0.2;%s", progname);
+				if (micro) microPrint("Send Scan Command", 0);
+				send_msg_to_server(sockFN, msgBuf);
+				liveFlag = 1;		/* live inhibit bits are set */
 				if (micro) microReset(0);
 				break;
 
@@ -512,11 +529,13 @@ icc(
 				cp = rBuf;
 				while ((cp = strchr(cp, ';')) != NULL) {
 				    int		value;
+				    int		fni;
 				    index = atoi(++cp);
 				    assert(index < sTend - sTable);	/* check index is in range */
 				    gp = sTable[index];
 				    gp->gt_live |= 0x8000;		/* set live active */
-				    value = ((typ = -gp->gt_ini) >= 0 && atypes[typ]) ?
+				    value = ((fni = gp->gt_fni) == ARITH || fni == D_SH || fni == F_SW ||
+					fni == OUTW || fni == CH_BIT && gp->gt_ini == -ARN) ?
 					gp->gt_old : gp->gt_val < 0 ? 1 : 0;
 				    if (value) {
 					liveData(gp->gt_live, value);	/* initial active live values */
@@ -528,7 +547,6 @@ icc(
 				 * also sends an L0.3 block
 				 */
 				if (msgOffset > 4) {
-				    msgBuf[msgOffset] = '\0';		/* terminate */
 				    send_msg_to_server(sockFN, msgBuf);
 				    if (micro) microReset(0);
 				}
@@ -538,11 +556,11 @@ icc(
 				break;
 
 			    default:
-				fprintf(errFP, "ERROR: %s rcvd at %s ???\n", rBuf, iccNM);
-				break;
+				goto RcvError;
 			    }
 #endif
 			} else {
+			  RcvError:
 			    fprintf(errFP, "ERROR: %s rcvd at %s ???\n", rBuf, iccNM);
 			}
 		    } else {
@@ -594,12 +612,15 @@ icc(
 void
 liveData(unsigned short index, int value)
 {
-    if (msgOffset > REPLY - 18) {		/* ;32767 -2147483000 */
+    int len;
+    int rest;
+    while ((len = snprintf(&msgBuf[msgOffset], rest = REPLY - msgOffset,
+	";%hu %d", index & 0x7fff, value)) < 0 || len >= rest) {
 	msgBuf[msgOffset] = '\0';		/* terminate */
 	send_msg_to_server(sockFN, msgBuf);
 	msgOffset = 4;				/* msg = "L0.3" */
     }
-    msgOffset += sprintf(&msgBuf[msgOffset], ";%hu %d", index & 0x7fff, value);
+    msgOffset += len;
 } /* liveData */
 
 /********************************************************************
