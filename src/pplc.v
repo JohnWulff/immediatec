@@ -1,4 +1,4 @@
-@(#)$Id: pplc.v,v 1.44 2001/01/10 16:01:55 jw Exp $
+@(#)$Id: pplc.v,v 1.45 2001/01/10 22:54:00 jw Exp $
 DemoBox         1.19    2000/11/06  20:30:33  jw      Exp
 DummyPPLC       1.4     2000/11/06  20:30:33  jw      Exp
 ICServer        1.9     2000/11/06  20:30:33  jw      Exp
@@ -11,7 +11,7 @@ genr.c          1.27    2001/01/10  16:01:42  jw      Exp
 ibsd.c          1.2     1999/08/06  21:13:31  jw      Exp
 ibsd.h          1.2     1999/08/06  21:13:31  jw      Exp
 init.c          1.8     2000/11/28  20:22:35  jw      Exp
-link.c          1.8     2000/12/25  18:11:41  jw      Exp
+link.c          1.9     2001/01/10  22:51:01  jw      Exp
 list.c          1.3     2000/05/31  15:51:38  jw      Exp
 load.c          1.12    2001/01/09  19:23:19  jw      Exp
 main.c          1.12    2001/01/08  14:48:17  jw      Exp
@@ -22,7 +22,7 @@ outp.c          1.27    2001/01/10  16:01:42  jw      Exp
 pawk.a          1.2     1996/07/30  20:24:24  john    Exp
 piot.h          1.2     1999/08/06  21:13:31  jw      Exp
 pplc.c          1.9     2001/01/03  10:49:24  jw      Exp
-pplc.h          1.18    2001/01/10  16:01:42  jw      Exp
+pplc.h          1.19    2001/01/10  22:51:01  jw      Exp
 pplstfix.pl     1.3     2001/01/03  10:45:01  jw      Exp
 pplt.c          1.3     2001/01/03  10:49:24  jw      Exp
 pptc.c          1.6     2001/01/09  19:23:19  jw      Exp

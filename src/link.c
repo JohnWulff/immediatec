@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.8 2000/12/25 18:11:41 jw Exp $";
+"@(#)$Id: link.c,v 1.9 2001/01/10 22:51:01 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -122,8 +122,13 @@ link_ol(
 	     *
 	     * action D_SH is always timed, even when arithmetic
 	     * value is 0 (ignore gt_val). This implements sample/hold
+	     *
+	     * the same applies to F_SW which is the 'switch' action and
+	     * to CH_BIT which is the CHANGE action. CHANGE times on both
+	     * edges, both for arithmetic as well as for logical input.
 	     */
-	    if ((gp->gt_val > 0 && gp->gt_fni != D_SH) || (time = gp->gt_time->gt_old
+	    if ((gp->gt_val > 0 && (gp->gt_fni < D_SH || gp->gt_fni > CH_BIT)) ||
+		(time = gp->gt_time->gt_old
 #ifndef _WINDOWS 
 		, (debug & 0100) ? fprintf(outFP, "(%d)", time) : 0, time
 #endif
