@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.27 2002/07/01 15:20:08 jw Exp $";
+"@(#)$Id: rsff.c,v 1.28 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1375,7 +1375,7 @@ timerSfn(				/* Timer function */
 
 /********************************************************************
  *
- *	Assign to an imm int node
+ *	Assign to an imm int node of type ARNC
  *
  *	The node is linked to a_list when rv != new && new == old.
  *	If a second assignment occurs while node is still linked to
@@ -1383,16 +1383,55 @@ timerSfn(				/* Timer function */
  *	else node is unlinked and new updated, making new == old.
  *	When rv == new, there is no change at all.
  *
+ *	Assign to an imm bit node of type LOGC
+ *
+ *	The node is linked to o_list when rv, interpreted as a logic
+ *	value (0 is rv == 0, 1 is rv != 0) changes from its previous
+ *	value.
+ *
  *******************************************************************/
 
 int
-assign(Gate * lv, int rv)
+assign(Gate * gp, int rv)
 {
-    if (rv != lv->gt_new) {
-	if (lv->gt_new == lv->gt_old || rv == lv->gt_old) {
-	    link_ol(lv, a_list);	/* first change or glitch */
+    if (gp->gt_ini == -ARNC) {
+	if (rv != gp->gt_new) {
+	    if (gp->gt_new == gp->gt_old || rv == gp->gt_old) {
+#ifndef _WINDOWS 
+		if (debug & 0100) {
+		    fprintf(outFP, "\tAA %s %d ==>", gp->gt_ids, gp->gt_new);
+		}
+#endif
+		link_ol(gp, a_list);		/* arithmetic change or glitch */
+#ifndef _WINDOWS 
+		if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
+#endif
+	    }
+	    gp->gt_new = rv;			/* first or later change */
 	}
-	lv->gt_new = rv;		/* first or later change */
+    } else if (gp->gt_ini == -LOGC) {
+	char val = rv ? -1 : 1;
+	if (gp->gt_val != val) {
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, "\tLA %s %2d ==>", gp->gt_ids, gp->gt_val);
+	    }
+#endif
+	    gp->gt_val = val;
+	    link_ol(gp, o_list);		/* logic change or glitch */
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, " %d", gp->gt_val);
+	    }
+#endif
+	}
+#if !defined(_WINDOWS) || defined(LOAD)
+    } else {
+	fprintf(errFP,
+	    "\n%s: line %d: C assignment to type not ARNC or LOGC ???\n",
+	    __FILE__, __LINE__, gp->gt_ids);
+	quit(-1);
+#endif
     }
     return rv;
 } /* assign */

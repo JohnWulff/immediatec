@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.60 2002/07/01 15:11:26 jw Exp $";
+"@(#)$Id: comp.y,v 1.61 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -877,17 +877,17 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 #endif
 	    }
 	/************************************************************
+	 * SR(aexpr,aexpr[,(cexpr|texpr[,dexpr])])
+	 *	SR(set,reset)
+	 *	SR(set,reset,clkSetReset)
+	 *	SR(set,reset,timSetReset)
+	 *	SR(set,reset,timSetReset,delaySetReset)
 	 * DR(aexpr,aexpr[,(cexpr|texpr[,dexpr])])
 	 * SHR(aexpr,aexpr[,(cexpr|texpr[,dexpr])])
 	 *	DR(..) SHR(expr,reset)
 	 *	DR(..) SHR(expr,reset,clkExprReset)
 	 *	DR(..) SHR(expr,reset,timExprReset)
 	 *	DR(..) SHR(expr,reset,timExprReset,delayExprReset)
-	 * SR(aexpr,aexpr[,(cexpr|texpr[,dexpr])])
-	 *	SR(set,reset)
-	 *	SR(set,reset,clkSetReset)
-	 *	SR(set,reset,timSetReset)
-	 *	SR(set,reset,timSetReset,delaySetReset)
 	 ***********************************************************/
 	| BLTIN2 '(' aexpr ',' aexpr cref ')' {		/* SR(set,reset); DR(expr,reset) */
 		$$.f = $1.f; $$.l = $7.l;
@@ -897,6 +897,15 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 #endif
 	    }
 	/************************************************************
+	 * SR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
+	 *	SR(set,clkSet,         reset)
+	 *	SR(set,clkSet,         reset,clkReset)
+	 *	SR(set,clkSet,         reset,timReset)
+	 *	SR(set,clkSet,         reset,timReset,delayReset)
+	 *	SR(set,timSet,delaySet,reset)
+	 *	SR(set,timSet,delaySet,reset,clkReset)
+	 *	SR(set,timSet,delaySet,reset,timReset)
+	 *	SR(set,timSet,delaySet,reset,timReset,delayReset)
 	 * DR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
 	 * SHR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
 	 *	DR(..) SHR(expr,clkExpr,          reset)
@@ -907,17 +916,57 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	DR(..) SHR(expr,timExpr,delayExpr,reset,clkReset)
 	 *	DR(..) SHR(expr,timExpr,delayExpr,reset,timReset)
 	 *	DR(..) SHR(expr,timExpr,delayExpr,reset,timReset,delayReset)
-	 * SR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
-	 *	SR(set,clkSet,         reset)
-	 *	SR(set,clkSet,         reset,clkReset)
-	 *	SR(set,clkSet,         reset,timReset)
-	 *	SR(set,clkSet,         reset,timReset,delayReset)
-	 *	SR(set,timSet,delaySet,reset)
-	 *	SR(set,timSet,delaySet,reset,clkReset)
-	 *	SR(set,timSet,delaySet,reset,timReset)
-	 *	SR(set,timSet,delaySet,reset,timReset,delayReset)
 	 ***********************************************************/
 	| BLTIN2 '(' aexpr ',' ctdref ',' aexpr cref ')' {
+		$$.f = $1.f; $$.l = $9.l;
+		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	/************************************************************
+	 * DSR(aexpr[,(cexpr|texpr[,dexpr])])
+	 * SHSR(aexpr[,(cexpr|texpr[,dexpr])])
+	 *	DSR(..) SHSR(expr)
+	 *	DSR(..) SHSR(expr,clk)
+	 *	DSR(..) SHSR(expr,tim)
+	 *	DSR(..) SHSR(expr,tim,delay)
+	 ***********************************************************/
+fexpr	: BLTIN3 '(' aexpr cref ')' {			/* DSR(expr); SHSR(expr) */
+		$$.f = $1.f; $$.l = $5.l;
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	/************************************************************
+	 * DSR(aexpr,aexpr[,(cexpr|texpr[,dexpr])])
+	 * SHSR(aexpr,aexpr[,(cexpr|texpr[,dexpr])])
+	 *	DSR(..) SHSR(expr,reset)
+	 *	DSR(..) SHSR(expr,reset,clkExprReset)
+	 *	DSR(..) SHSR(expr,reset,timExprReset)
+	 *	DSR(..) SHSR(expr,reset,timExprReset,delayExprReset)
+	 ***********************************************************/
+	| BLTIN3 '(' aexpr ',' aexpr cref ')' {
+		$$.f = $1.f; $$.l = $7.l;
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	/************************************************************
+	 * DSR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
+	 * SHSR(aexpr,(cexpr|texpr,dexpr),aexpr[,(cexpr|texpr[,dexpr])])
+	 *	DSR(..) SHSR(expr,clkExpr,          reset)
+	 *	DSR(..) SHSR(expr,clkExpr,          reset,clkReset)
+	 *	DSR(..) SHSR(expr,clkExpr,          reset,timReset)
+	 *	DSR(..) SHSR(expr,clkExpr,          reset,timReset,delayReset)
+	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset)
+	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset,clkReset)
+	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset,timReset)
+	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset,timReset,delayReset)
+	 ***********************************************************/
+	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
 #if YYDEBUG
