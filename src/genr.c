@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.20 2001/01/03 22:14:43 jw Exp $";
+"@(#)$Id: genr.c,v 1.21 2001/01/06 14:55:58 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -441,7 +441,6 @@ op_asgn(			/* asign List_e stack to links */
 	    fprintf(outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
 		(rsp->type >= MAX_LV) ? os[rsp->type] : w(right),
 		os[var->type], var->name);
-	    fflush(outFP);
 	}
 	if (sv == 0) {
 	    fprintf(outFP, "%s: line %d\t", __FILE__, __LINE__);
@@ -485,14 +484,14 @@ op_asgn(			/* asign List_e stack to links */
     atn = 0;
     sp = var;				/* start reduction with var */
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
+    if (debug & 02) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
     do {				/* marked symbol */
 	int	gt_input;
 	char *	ep = eBuf;		/* temporary expression buffer */
 	if (debug & 04) {
 	    fprintf(outFP, "\n");
-	    fflush(outFP);
 	}
-	gt_input = 0;
+	gt_input = 0;			/* output scan for 1 gate */
 	while ((lp = sp->u.blist) != 0) {
 	    sp->u.blist = lp->le_next;
 	    if ((gp = lp->le_sym) == rsp && var->type != ALIAS) {
@@ -562,7 +561,7 @@ op_asgn(			/* asign List_e stack to links */
 			    warning("gate has input and inverse:", gp->name);
 			} else {
 			    sy_pop(lp);	/* ignore duplicate link */
-			    continue;	/* continue with next link */
+			    continue;	/* output scan for 1 gate */
 			}
 		    }
 		    if (tlp->le_next) {
@@ -661,13 +660,12 @@ op_asgn(			/* asign List_e stack to links */
 	    }
 	    if (debug & 04) {
 		fprintf(outFP, "\n");
-		fflush(outFP);
 		sflag = debug & 0200;
 	    }
 	    if (sp == gp && (sp->type != LATCH || lp->le_val != NOT ^ NOT)) {
 		warning("input equals output at gate:", sp->name);
 	    }
-	}
+	}					/* end output scan for 1 gate */
 	if (sp->type == ARN) {
 	    if (debug & 04) fprintf(outFP, "\t\t\t\t\t");
 	    while (t_first && t_first < t_last) {
@@ -740,7 +738,6 @@ op_asgn(			/* asign List_e stack to links */
     }
     if (debug & 04) {
 	fprintf(outFP, "\n");
-	fflush(outFP);
     }
 
     /*
@@ -772,6 +769,95 @@ op_asgn(			/* asign List_e stack to links */
     }
     return (sv->v);
 } /* op_asgn */
+ 
+/********************************************************************
+ *
+ *	asign to QBx or QWx
+ *
+ *	Sym sv contains Symbol *v and char *f and *l to source
+ *	Lis lr contains List_e *v and char *f and *l to source
+ *
+ *******************************************************************/
+
+Symbol *
+qw_asgn(
+    Sym *	sv,
+    Lis *	rl)
+{
+    Lis		li1;
+    List_e *	lp;
+    List_e *	lpf;
+    Symbol *	svv;
+    Symbol *	fsp;
+    Symbol *	bsp = 0;
+
+    if ((svv = sv->v)->type != UDF) {
+	if (svv->type != ERR && (
+	    svv->ftype != OUTW ||	/* CHANGE */
+	    (lpf = svv->list) == 0 ||
+	    (bsp = lpf->le_sym) == 0 ||
+	    bsp->type != UDF
+	)) {
+	    error("multiple assignment to imm bit or int:", svv->name);
+	    svv->type = ERR;	/* cannot execute properly */
+	}
+	svv->type = UDF;
+	unlink_sym(bsp);			/* unlink old symbol */
+	free(lpf);				/* old back link */
+    }
+    lpf = op_force(rl->v, ARITH);	/* CHANGE */
+    fsp = lpf->le_sym;				/* aexpr symbol */
+    svv->list = sy_push(lpf->le_sym);		/* create back link */
+    svv->list->le_val = lpf->le_val;		/* copy inversion to back link */
+    li1.v = op_push((List_e *)0, UDF, lpf);	/* type <== AND */
+    li1.v->le_sym->type = ARN;			/* type <== ARN */	/* CHANGE */
+    li1.f = rl->f;	/* for op_asgn */
+    li1.l = rl->l;	/* for op_asgn */
+    if (bsp) {
+	/*
+	 * replace the $ symbol which would be new auxiliary output
+	 * driver gate by the symbol created when that auxiliary output
+	 * was first used as input.
+	 *
+	 * copy all relevant data from $ symbol to old auxiliary output
+	 * including the $ name - this is renamed to original name in
+	 * op_asgn()
+	 *
+	 * cannot simply move output list to new $ symbol, since there may
+	 * be pointers to the old auxiliary output *bsp in the templist
+	 */
+	assert(fsp);
+	free(bsp->name);			/* old "QXx.y_1" string */
+	bsp->name = fsp->name;			/* transfer $ name or 0 */
+	bsp->type = fsp->type;
+	bsp->ftype = fsp->ftype;		/* should be GATE or ALIAS */
+	assert(fsp->list == 0);
+	lp = bsp->list;				/* take out this symbol */
+	assert(lp != 0);
+	assert(lp->le_sym == svv);		/* if not it was not first asgn */
+	lpf = lp->le_next;			/* 0 or old output list */ 
+	bsp->list = 0;				/* make empty till after assignment */ 
+	free(lp);				/* old forward link */
+	assert(bsp->u.blist == 0);
+	bsp->u.blist = fsp->u.blist;
+	assert(templist->next == fsp);
+	templist->next = bsp;
+	bsp->next = fsp->next;
+	rl->v->le_sym = bsp;			/* forward link */
+	assert(svv->list->le_sym == fsp);	/* not necessary - linked above */
+	svv->list->le_sym = bsp;
+	free(fsp);				/* replaced $ symbol */
+    }
+    fsp = op_asgn(sv, &li1, OUTW);		/* CHANGE */
+    if (bsp && lpf && (lp = bsp->list)) {
+	bsp->list = lpf;			/* put old output list first */
+	while (lpf->le_next != 0) {
+	    lpf = lpf->le_next;
+	}
+	lpf->le_next = lp;			/* link new autput list at end of old */
+    }
+    return fsp;
+} /* qw_asgn */
  
 /********************************************************************
  *
