@@ -1,0 +1,25 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	make pptc with OPT=TCP
+#
+#	$Id: makepptc,v 1.1 2001/01/13 19:27:47 jw Exp $
+#
+########################################################################
+
+if [[ -f Make_tmp ]]; then
+    echo 'Error makepptc: Make_tmp exists as file ??? - nothing made' >&2
+    exit 1;
+fi
+test -d Make_tmp || mkdir Make_tmp;
+mv main.o rsff.o Make_tmp
+if [[ -d PptcObjs ]]; then
+    mv PptcObjs/* .
+else
+    mkdir PptcObjs
+fi
+make OPT='-DTCP' pptc
+mv main.o pptc.o rsff.o PptcObjs
+mv Make_tmp/* .
+rmdir Make_tmp
