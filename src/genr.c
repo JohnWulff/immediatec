@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.23 2001/01/06 17:49:13 jw Exp $";
+"@(#)$Id: genr.c,v 1.24 2001/01/06 19:36:28 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -769,6 +769,83 @@ op_asgn(			/* asign List_e stack to links */
     }
     return (sv->v);
 } /* op_asgn */
+ 
+/********************************************************************
+ *
+ *	Value from QBx or QWx	when ft == ARITH
+ *	Value from QXx.y	when ft == GATE
+ *
+ *	Once an output symbol has been assigned to with qp_asgn() an
+ *	auxiliary gate named QW_1 etc points to the output QW1, which
+ *	is the name used in expressions. yylex() returns QW1_1 by use
+ *	of the backpointer generated from QW1 in qp_asgn(). In this
+ *	case act->v->list != 0 and most of the code below is skipped.
+ *
+ *	When an output gate is used for input, but has never been
+ *	assigned to yet, act->v->list == 0 and the code below assigns
+ *	the output gate from a temporary gate variable using qp_asgn().
+ *	This ensures that the auxiliary driver gate QW1_1 etc exist.
+ *
+ *	Extra code in qp_asgn() re-assign the output gate again,
+ *	without notifying a multiple assignment. All outputs from the
+ *	previous auxiliary output driver are transferred.
+ *
+ *	This use of output values before assignment is necessary in iC,
+ *	to allow the implementation of feedback in single clocked
+ *	expressions. eg: the following output word of 1 second counts
+ *
+ *		QW1 = SH(QW1 + 1, clock1Second);
+ *
+ *	The same could of course be realised by using a counter
+ *	variable and assigning the output independently. But this way
+ *	the compiler does the job - which is what it should do.
+ *
+ *	With this implementation, the fact that outputs are not full
+ *	logic or arithmetic values is completely hidden from the user,
+ *	which removes unnecessary errors in user code.
+ *
+ *	Lis expr contains List_e *v and char *f and *l to source
+ *	Sym act contains Symbol *v and char *f and *l to source
+ *
+ *******************************************************************/
+
+void
+qp_value(Lis * expr, Sym * act, uchar ft)
+{
+    Lis		li;
+
+    expr->f = li.f = act->f; expr->l = li.l = act->l;
+    if ((li.v = act->v->list) == 0) {
+	Symbol *	sp;
+	char		temp[100];
+	short		saveDebug;
+	static int	wtn;
+
+	sprintf(temp, "_Wtemp%d", ++wtn);
+	sp = install(temp, INPW, OUTX);		/* temporary _W symbol */
+	li.v = sy_push(sp);			/* provide a link to _W */
+	saveDebug = debug;
+	if ((debug & 06) == 04) {
+	    debug &= ~04;			/* supress listing output */
+	}
+	li.v = qp_asgn(act, &li, ft)->list;	/* ft is ARITH or GATE */
+	li.v->le_sym->type = UDF;		/* not really defined yet */
+	debug = saveDebug;			/* restore listing output */
+	if (ft == ARITH) {
+	    stmtp = act->f;			/* fix WACT name */
+	    expr->f = li.f = act->f =
+		stmtp += sprintf(stmtp, "_(%s)", li.v->le_sym->name);
+	    expr->l = li.l = act->l = stmtp;
+	}
+	unlink_sym(sp);				/* unlink _W symbol */
+	free(sp->name);
+	sy_pop(sp->list);
+	free(sp);			/* free all references to W_ symbol */
+    }
+    expr->v = sy_push(li.v->le_sym);	/* link to output driver */
+    expr->v->le_val = li.v->le_val;	/* copy function number or inversion */
+    expr->v->le_first = expr->f; expr->v->le_last = expr->l;
+} /* qp_value */
  
 /********************************************************************
  *

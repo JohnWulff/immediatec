@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.11 2001/01/06 17:49:13 jw Exp $";
+"@(#)$Id: comp.h,v 1.12 2001/01/06 19:36:28 jw Exp $";
 /*
  *	"comp.h"
  *
@@ -58,6 +58,7 @@ extern int	outFlag;		/* global flag for compiled output */
 extern FILE *	exoFP;			/* cexe out file pointer */
 extern char *	cexeString[];		/* case or function string */
 extern char *	inpNM;			/* original input file name */
+extern char *	stmtp;			/* pointer into yybuf */
 extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
 extern Symbol *	sy_pop(List_e *);	/* delete List element left over */
@@ -70,6 +71,8 @@ extern List_e *	op_xor(			/* special exclusive or push */
 extern List_e *	op_not(List_e *);	/* logical negation */
 extern Symbol *	op_asgn(		/* asign List_e stack to links */
 	    Sym *, Lis *, uchar);	/*   var, right, ftyp   */
+extern void	qp_value(		/* value from QBx, QWx or QXx.y */
+	    Lis *, Sym *, uchar);	/* expr, act, ftyp      */
 extern Symbol *	qp_asgn(		/* asign to QBx, QWx or QXx.y */
 	    Sym *, Lis *, uchar);	/*   var, right, ftyp   */
 extern List_e * bltin(			/* generate built in iC functions */

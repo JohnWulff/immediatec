@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.34 2001/01/06 14:55:58 jw Exp $";
+"@(#)$Id: comp.y,v 1.36 2001/01/06 19:36:28 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -188,14 +188,14 @@ aexpr	: expr			{
 wasgn	: WACT '=' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		$$.v = qw_asgn(&$1, &$3);
+		$$.v = qp_asgn(&$1, &$3, ARITH);	/* assign to output word */
 	    }
 	;
 
 xasgn	: XACT '=' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
-		$$.v = qx_asgn(&$1, &$3);
+		$$.v = qp_asgn(&$1, &$3, GATE);		/* assign to output bit */
 	    }
 	;
 
@@ -263,65 +263,11 @@ expr	: UNDEF			{
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| WACT		{
-		Lis		li;
-		$$.f = li.f = $1.f; $$.l = li.l = $1.l;
-		if ((li.v = $1.v->list) == 0) {
-		    Symbol *	sp;
-		    char	temp[100];
-		    short	saveDebug;
-		    static int	wtn;
-
-		    sprintf(temp, "_Wtemp%d", ++wtn);
-		    sp = install(temp, INPW, OUTX);	/* temporary _W symbol */
-		    li.v = sy_push(sp);			/* provide a link to _W */
-		    saveDebug = debug;
-		    if ((debug & 06) == 04) {
-			debug &= ~04;			/* supress listing output */
-		    }
-		    li.v = qw_asgn(&$1, &li)->list;
-		    li.v->le_sym->type = UDF;		/* not really defined yet */
-		    debug = saveDebug;			/* restore listing output */
-		    stmtp = $1.f;			/* fix WACT name */
-		    $$.f = li.f = $1.f =
-			stmtp += sprintf(stmtp, "_(%s)", li.v->le_sym->name);
-		    $$.l = li.l = $1.l = stmtp;
-		    unlink_sym(sp);			/* unlink _W symbol */
-		    free(sp->name);
-		    sy_pop(sp->list);
-		    free(sp);		/* free all references to W_ symbol */
-		}
-		$$.v = sy_push(li.v->le_sym);	/* output driver */
-		$$.v->le_val = li.v->le_val;	/* copy function number */
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		qp_value(&$$, &$1, ARITH);		/* value from output word */
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| XACT		{
-		Lis		li;
-		$$.f = li.f = $1.f; $$.l = li.l = $1.l;
-		if ((li.v = $1.v->list) == 0) {
-		    Symbol *	sp;
-		    char	temp[100];
-		    short	saveDebug;
-		    static int	xtn;
-
-		    sprintf(temp, "_Xtemp%d", ++xtn);
-		    sp = install(temp, INPW, OUTX);	/* temporary _X symbol */
-		    li.v = sy_push(sp);			/* provide a link to _X */
-		    saveDebug = debug;
-		    if ((debug & 06) == 04) {
-			debug &= ~04;			/* supress listing output */
-		    }
-		    li.v = qx_asgn(&$1, &li)->list;
-		    li.v->le_sym->type = UDF;		/* not really defined yet */
-		    debug = saveDebug;			/* restore listing output */
-		    unlink_sym(sp);			/* unlink _X symbol */
-		    free(sp->name);
-		    sy_pop(sp->list);
-		    free(sp);		/* free all references to X_ symbol */
-		}
-		$$.v = sy_push(li.v->le_sym);	/* output driver */
-		$$.v->le_val = li.v->le_val;	/* copy inversion */
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		qp_value(&$$, &$1, GATE);		/* value from output bit */
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| AVAR			{
@@ -785,6 +731,19 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 
 %%	/* end of grammar */
 
+#define CBUFSZ 125			/* listing just fits on 132  cols */
+#define YTOKSZ 66
+static char	chbuf[CBUFSZ];
+static char *	getp = chbuf;
+static char *	fillp = chbuf;
+static char	yytext[YTOKSZ];		/* lex token */
+static int	yyleng;			/* length */
+static char	inpBuf[YTOKSZ];		/* alternate file name */
+static long	outBP = -1;		/* position in listing file */
+static int	lineflag;
+static char	yybuf[1024];		/* buffer to build imm statement */
+static char	tmpbuf[256];		/* buffer to build variable */
+
 int		lineno = 1;
 int		c_number = 0;		/* case number for cexe.c */
 int		outFlag = 0;		/* global flag for compiled output */
@@ -798,10 +757,11 @@ FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 FILE *		exiFP;			/* cexe in file pointer */
 FILE *		exoFP;			/* cexe out file pointer */
+char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 
 /********************************************************************
  *
- *	compile an L language source file whose name is in 'szFile_g'
+ *	compile an iC language source file whose name is in 'szFile_g'
  *	if szFile_g is a null pointer use standard input (stdin)
  *	a copy of the source file name is kept in inpNM for
  *	error messages. This name and the variable 'lineno' are
@@ -811,7 +771,7 @@ FILE *		exoFP;			/* cexe out file pointer */
  *	error   text is directed to 'errNM' (default stderr)
  *
  *	a prototype for C function execution is read and extended
- *	with the C fragments possibly contained in the L program
+ *	with the C fragments possibly contained in the iC program
  *
  *******************************************************************/
 
@@ -866,20 +826,6 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
     if (szFile_g) fclose(inFP);
     return 0;
 } /* compile */
-
-#define CBUFSZ 125			/* listing just fits on 132 */
-#define YTOKSZ 66
-static char	chbuf[CBUFSZ];
-static char *	getp = chbuf;
-static char *	fillp = chbuf;
-static char	yytext[YTOKSZ];		/* lex token */
-static int	yyleng;			/* length */
-static char	inpBuf[YTOKSZ];		/* alternate file name */
-static long	outBP = -1;		/* position in listing file */
-static int	lineflag;
-static char	yybuf[1024];		/* buffer to build imm statement */
-static char	tmpbuf[256];		/* buffer to build variable */
-static char *	stmtp = yybuf;		/* pointer into yybuf */
 
 static int
 get(void)
