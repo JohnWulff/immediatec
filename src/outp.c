@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.19 2000/12/24 09:03:24 jw Exp $";
+    "@(#)$Id: outp.c,v 1.20 2000/12/24 17:46:03 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -135,7 +135,9 @@ listNet(unsigned * gate_count)
 		if (sp->type < MAX_LV &&	/* don't count outputs */
 		    sp->ftype != OUTX && sp->ftype != OUTW) {
 		    for (lp = sp->list; lp; lp = lp->le_next) {
-			link_count++;
+			if (sp->ftype >= MAX_AR || lp->le_val != (unsigned) -1) {
+			    link_count++;
+			}
 		    }
 		    link_count++;	/* for terminator */
 		    if (sp->ftype >= MAX_AR) {
@@ -147,19 +149,22 @@ listNet(unsigned * gate_count)
 			os[sp->type], fos[sp->ftype]);
 		    dc = 0;
 		    for (lp = sp->list; lp; lp = lp->le_next) {
-			Symbol * tsp = lp->le_sym;
-			if (dc++ >= 8) {
-			    dc = 1;
-			    fprintf(outFP, "\n\t");
-			}
-			if (sp->ftype == F_SW || sp->ftype == F_CF) {
-			    /* case number of if or switch C fragment */
-			    fprintf(outFP, "\t%c (%d)", os[types[sp->ftype]], lp->le_val);
-			} else {
-			    fprintf(outFP, "\t%c%s%c",
-				(sp->ftype == GATE || sp->ftype == OUTX) &&
-				lp->le_val ? '~' : ' ',
-				tsp->name, os[tsp->type]);
+			if (sp->ftype >= MAX_AR || lp->le_val != (unsigned) -1) {
+			    Symbol * tsp = lp->le_sym;
+			    if (dc++ >= 8) {
+				dc = 1;
+				fprintf(outFP, "\n\t");
+			    }
+			    if (sp->ftype == F_SW || sp->ftype == F_CF) {
+				/* case number of if or switch C fragment */
+				fprintf(outFP, "\t%c (%d)",
+				    os[types[sp->ftype]], lp->le_val);
+			    } else {
+				fprintf(outFP, "\t%c%s%c",
+				    (sp->ftype == GATE || sp->ftype == OUTX) &&
+				    lp->le_val ? '~' : ' ',
+				    tsp->name, os[tsp->type]);
+			    }
 			}
 		    }
 		}
@@ -245,14 +250,15 @@ buildNet(Gate ** igpp)
 				do {	/* go through list twice for LVs */
 				    for (lp = sp->list; lp; lp = lp->le_next) {
 					if (sp->ftype < MAX_AR) {
+					    if (lp->le_val == (unsigned) -1) {
+						continue;	/* timer value link */
+					    }
 					    lp->le_sym->u.gate->gt_rlist =
 					    (Gate**)lp->le_val;
-					    goto storeLink;
+					} else if (val != lp->le_val) {
+					    break;	/* not right value */
 					}
-					if (val == lp->le_val) {
-					storeLink:
-					    *fp++ = lp->le_sym->u.gate;
-					}
+					*fp++ = lp->le_sym->u.gate;
 				    }
 				    /* gate list terminator */
 				    *fp++ = 0;

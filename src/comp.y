@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.29 2000/12/22 19:15:52 jw Exp $";
+"@(#)$Id: comp.y,v 1.30 2000/12/24 17:46:03 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -606,10 +606,12 @@ dexpr	: NVAR			{
 		    sp = sp->list->le_sym;	/* get token of original */
 		}
 		$$.v = sy_push(sp);
+		$$.v->le_val = (unsigned) -1;	/* mark link as timer value */
 	    }
 	| aexpr			{
 		$$ = $1;
 		$$.v = op_force($1.v, ARITH);
+		$$.v->le_val = (unsigned) -1;	/* mark link as timer value */
 	    }
 	;
 

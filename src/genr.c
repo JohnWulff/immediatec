@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.11 2000/12/22 19:15:52 jw Exp $";
+"@(#)$Id: genr.c,v 1.12 2000/12/24 17:46:03 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -540,7 +540,8 @@ op_asgn(			/* asign List_e stack to links */
 	    } else {
 		/* link Symbols to the end of gp->list to maintain order */
 		lp->le_next = 0;
-		if (gp->ftype == ARITH /* && gp->u.blist ZZZ */) {
+					/* && gp->u.blist ZZZ */
+		if (gp->ftype == ARITH && lp->le_val != (unsigned) -1) {
 		    lp->le_val = c_number + 1;	/* arith case # */
 		}
 		if ((tlp = gp->list) == 0) {
@@ -797,8 +798,12 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 						/* or clone first clock or timer cr1 */
 			: sy_push(clk);		/* or clone default clock iClock */
 	if (lpt && lpt->le_sym->type == TIM) {
-	    assert(lpt->le_next);		/* clone timer value as well */
+	    assert(lpt->le_next);		/* clone associated timer value */
+	    assert(lpt->le_next->le_val == (unsigned) -1);
 	    lpc = op_push(lpc, TIM, sy_push(lpt->le_next->le_sym));
+	    lpt = lpc->le_sym->u.blist;
+	    assert(lpt && lpt->le_next);
+	    lpt->le_next->le_val = (unsigned) -1;/* mark link as timer value */
 	}
     }
 
