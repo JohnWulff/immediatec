@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.30 2000/12/24 17:46:03 jw Exp $";
+"@(#)$Id: comp.y,v 1.31 2000/12/26 22:14:06 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -254,7 +254,6 @@ asgn	: UNDEF '=' aexpr	{
 		    *bp = 0;		/* terminate - there is room in buf */
 		    if ((symp = lookup(buf)) == 0) {
 			symp = install(buf, NCONST, ARITH); /* becomes NVAR */
-			symp->u.val = atoi(buf);	/* transfer value */
 		    }
 		    $3.v = sy_push(symp);	/* ZZZ is it safe to use $3.v ??? */
 		}
@@ -996,7 +995,6 @@ yylex(void)
 		if (dflag) {
 		    if ((symp = lookup(yytext)) == 0) {
 			symp = install(yytext, NCONST, ARITH); /* becomes NVAR */
-			symp->u.val = yylval.val.v;	/* transfer value */
 		    }
 		    yylval.sym.v = symp;		/* return actual symbol */
 		    if (symp->type == NCONST && symp->ftype == ARITH) {

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.13 2000/12/25 09:03:12 jw Exp $";
+"@(#)$Id: genr.c,v 1.14 2000/12/26 22:14:06 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -614,7 +614,8 @@ op_asgn(			/* asign List_e stack to links */
 		    fprintf(outFP, "\t(%d)", lp->le_val);
 		}
 	    }
-	    if (gp->ftype == ARITH && sp->type == ARN && gp->u.blist) {
+	    if (gp->ftype == ARITH && sp->type == ARN &&
+		(gp->u.blist || gp->type == NCONST)) {
 		char	buffer[BUFS];	/* buffer for modified names */
 		char	iqt[2];		/* char buffers - space for 0 terminator */
 		char	bwx[2];

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.22 2000/12/25 18:11:41 jw Exp $";
+    "@(#)$Id: outp.c,v 1.23 2000/12/26 22:14:06 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -491,13 +491,18 @@ extern Gate *	l_[];\n\
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) < MAX_LV) {
 		if ((dc = sp->ftype) == ARITH || dc == GATE) {
-		    for (lp = sp->list; lp; lp = sp->list) {
-			tsp = lp->le_sym;	/* reverse action links */
-			tlp = tsp->u.blist;
-			tsp->u.blist = lp;	/* to input links */
-			sp->list = lp->le_next;
-			lp->le_sym = sp;
-			lp->le_next = tlp;
+		    for (lp = sp->list; lp; ) {
+			if (lp->le_val != (unsigned) -1) {
+			    tsp = lp->le_sym;	/* reverse action links */
+			    tlp = tsp->u.blist;
+			    tsp->u.blist = lp;	/* to input links */
+			    sp->list = lp->le_next;
+			    lp->le_sym = sp;
+			    lp->le_next = tlp;
+			    lp = sp->list;
+			} else {
+			    lp = lp->le_next;
+			}
 		    }
 		}
 		if (typ == UDF) {
@@ -573,6 +578,54 @@ extern Gate *	l_[];\n\
     "/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
 			sp->name, full_ftype[sp->ftype]);
 		    linecnt++;
+		}
+	    }
+	}
+    }
+
+    /* do the timing controls last, to link them after their timer clock */
+    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	for (sp = *hsp; sp; sp = sp->next) {
+	    if (sp->type < MAX_LV && sp->ftype < MAX_AR) {
+		for (lp = sp->list; lp; ) {
+		    if (lp->le_val == (unsigned) -1) {
+			tsp = lp->le_sym;		/* action gate */
+			if (tsp->ftype == GATE) {
+			    fprintf(Fp,
+    "/* error in emitting code. Simple gate '%s' controlled by timer '%s' */\n",
+				tsp->name, sp->name);
+			    linecnt++;
+			    break;
+			}
+			if ((tlp = tsp->list) == 0) {
+			    fprintf(Fp,
+    "/* error in emitting code. Action gate '%s' controlled by timer '%s' has no output */\n",
+				tsp->name, sp->name);
+			    linecnt++;
+			    break;
+			}
+			if ((tlp = tlp->le_next) == 0) {
+			    fprintf(Fp,
+    "/* error in emitting code. Action gate '%s' controlled by timer '%s' has no clock */\n",
+				tsp->name, sp->name);
+			    linecnt++;
+			    break;
+			}
+			if (tlp->le_next) {
+			    fprintf(Fp,
+    "/* error in emitting code. Action gate '%s' controlled by timer '%s' has more than output and clock */\n",
+				tsp->name, sp->name);
+			    linecnt++;
+			    break;
+			}
+			tlp->le_next = lp;
+			sp->list = lp->le_next;
+			lp->le_sym = sp;
+			lp->le_next = 0;
+			lp = sp->list;
+		    } else {
+			lp = lp->le_next;
+		    }
 		}
 	    }
 	}
@@ -783,7 +836,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 			    sp->name);
 		    } else {
 			if (lp->le_sym == 0) {	/* dc == F_SW or F_CF */
-			    /* Function Pointer for on construct */
+			    /* Function Pointer for "if" or "switch" */
 			    len += 17;	/* assume len of %d is 2 */
 			    fprintf(Fp, "%s(Gate*)cexe_%d,",
 				fs, lp->le_val);
@@ -797,19 +850,12 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 			    /* error message already in last loop */
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
-				fs, tsp->name);		/* clock */
-			    if (tsp->type == TIM) {
-				if ((signed)lp->le_val < 0) {
-				    /* Function Pointer for timer */
-				    len += 17;
-				    fprintf(Fp, "%s(Gate*)cexe_%d,",
-					fs, -lp->le_val);
-				} else {
-				    /* Numeric value for timer */
-				    len += 13;
-				    fprintf(Fp, "%s(Gate*)%d,",
-					fs, lp->le_val);
-				}
+				fs, tsp->name);		/* clock or timer */
+			    if (tsp->type == TIM && (lp = lp->le_next) != 0) {
+				/* error message already in last loop */
+				len += strlen((tsp = lp->le_sym)->name) + 3;
+				fprintf(Fp, "%s&%s%s,",	/* time value */
+				    fs, tsp->type == NCONST ? "_" : "", mN(tsp));
 			    }
 			}
 			fs = "\t";
