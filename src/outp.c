@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.18 2000/12/23 13:21:37 jw Exp $";
+    "@(#)$Id: outp.c,v 1.19 2000/12/24 09:03:24 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -132,45 +132,36 @@ listNet(unsigned * gate_count)
 		if (sp->type < MAX_OP) {
 		    block_total++;
 		}
+		if (sp->type < MAX_LV &&	/* don't count outputs */
+		    sp->ftype != OUTX && sp->ftype != OUTW) {
+		    for (lp = sp->list; lp; lp = lp->le_next) {
+			link_count++;
+		    }
+		    link_count++;	/* for terminator */
+		    if (sp->ftype >= MAX_AR) {
+			link_count++;	/* 2nd terminator for inverted */
+		    }			/* or time for TIMER action */
+		}
 		if (debug & 020) {		/* print directed graph */
 		    fprintf(outFP, "\n%s\t%c  %c", sp->name,
 			os[sp->type], fos[sp->ftype]);
 		    dc = 0;
-		}
-		for (lp = sp->list; lp; lp = lp->le_next) {
-		    if (sp->type < MAX_LV &&	/* don't count back links */
-			sp->ftype != OUTX && sp->ftype != OUTW) {
-			link_count++;
-		    }
-		    if (debug & 020) {
+		    for (lp = sp->list; lp; lp = lp->le_next) {
 			Symbol * tsp = lp->le_sym;
 			if (dc++ >= 8) {
 			    dc = 1;
 			    fprintf(outFP, "\n\t");
 			}
-			if (sp->type != TIM &&
-			    sp->ftype != F_SW && sp->ftype != F_CF) {
+			if (sp->ftype == F_SW || sp->ftype == F_CF) {
+			    /* case number of if or switch C fragment */
+			    fprintf(outFP, "\t%c (%d)", os[types[sp->ftype]], lp->le_val);
+			} else {
 			    fprintf(outFP, "\t%c%s%c",
 				(sp->ftype == GATE || sp->ftype == OUTX) &&
 				lp->le_val ? '~' : ' ',
 				tsp->name, os[tsp->type]);
-			} else if (tsp) {
-			    fprintf(outFP, "\t %s%c\t(%d)",
-				tsp->name, os[tsp->type], lp->le_val);
-			    dc++;
-			} else {
-			    fprintf(outFP, "\t%c (%d)", os[types[sp->ftype]], lp->le_val);
 			}
 		    }
-		}
-		if (sp->type < MAX_LV &&	/* don't count outputs */
-		    sp->ftype != OUTX && sp->ftype != OUTW) {
-		    link_count++;	/* for terminator */
-		    /* ZZZ modify later to do this only for */
-		    /* ZZZ action gates controlled by a TIMER */
-		    if (sp->ftype >= MAX_AR) {
-			link_count++;	/* 2nd terminator for inverted */
-		    }			/* or time for TIMER action */
 		}
 	    }
 	}
@@ -293,6 +284,20 @@ buildNet(Gate ** igpp)
 				    /* ZZZ set some error bit to stop exec */
 				    }
 				}
+			    } else if (sp->ftype < MAX_ACT) {
+				Symbol * tsp;	/* D_SH - F_CF */
+				/* relies on action gates */
+				/* having only one output */
+				lp = sp->list;
+				tsp = lp->le_sym;
+				/* F_SW or F_CF action gate points to function */
+				*fp++ = tsp ? tsp->u.gate : (Gate*)lp->le_val;
+				/* room for clock or timer entry */
+				*fp++ = 0;
+				/* room for time value */
+				*fp++ = 0;
+				/* ZZZ modify later to do this only for */
+				/* ZZZ action gates controlled by a TIMER */
 			    } else if (sp->ftype == OUTW) {
 				if (sscanf(gp->gt_ids, "Q%1[BW]%d",
 				    bw, &byte) == 2 && byte < IXD) {
@@ -315,19 +320,7 @@ buildNet(Gate ** igpp)
 				    gp->gt_mark = 0;	/* no change in bits */
 				}
 			    } else {
-				Symbol * tsp;	/* D_SH - D_FF */
-				/* relies on action gates */
-				/* having only one output */
-				lp = sp->list;
-				tsp = lp->le_sym;
-				/* F_SW or F_CF action gate points to function */
-				*fp++ = tsp ? tsp->u.gate : (Gate*)lp->le_val;
-				/* room for clock or timer entry */
-				*fp++ = 0;
-				/* room for time value */
-				*fp++ = 0;
-				/* ZZZ modify later to do this only for */
-				/* ZZZ action gates controlled by a TIMER */
+		    warning("OUTPUT strange ftype:", gp->gt_ids);
 			    }
 			    gp++;
 			} else if (typ < MAX_OP) {
@@ -338,7 +331,7 @@ buildNet(Gate ** igpp)
 			     * this initialisation of clock references relies
 			     * on gates which execute a function ftype != GATE
 			     * having only one output which is in the first
-			     * location of the function list (fl_gate). The
+			     * location of the function list (FL_GATE). The
 			     * clock reference is put in the second location
 			     * which was previously cleared by a terminator.
 			     * The 3rd location holds a pointer to a Gate of
@@ -445,11 +438,11 @@ output(char * outfile)
 
     fprintf(Fp, "\
 /********************************************************************\n\
-*\n\
-*	SOURCE:   %s\n\
-*	OUTPUT:   %s\n\
-*\n\
-*******************************************************************/\n\
+ *\n\
+ *	SOURCE:   %s\n\
+ *	OUTPUT:   %s\n\
+ *\n\
+ *******************************************************************/\n\
 \n\
 static char	COMPILER[] =\n\
 \"%s\";\n\
@@ -464,10 +457,10 @@ extern Gate *	l_[];\n\
 ", source, outfile, SC_ID, Hname);
 
 /********************************************************************
-*
-*	reverse action links to input links for simple Gates
-*
-*******************************************************************/
+ *
+ *	reverse action links to input links for simple Gates
+ *
+ *******************************************************************/
 
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
@@ -490,43 +483,43 @@ extern Gate *	l_[];\n\
 			sp->name, lp->le_sym->name); /* back link to Hname */
 			/* important to use unmodified names here */
 		}
-	    } else if (typ == CLK || typ == TIM) {
+	    } else if (typ < MAX_OP) {
 
 /********************************************************************
-*
-*	this initialisation of clock references relies on gates which
-*	execute a function ftype != GATE having only one output which
-*	is in the first location of the function list (fl_gate).
-*	The clock reference is put in the second location which was
-*	previously cleared by a terminator. The 3rd location holds a
-*	time value for timers.
-*	During execution of an action this pointer is used to find the
-*	correct clock block, which is used as the head of a clock list
-*	to which the action is linked. The actual clock block is made
-*	empty in the following, and action blocks are linked to it
-*	dynamically at run time.
-*
-*******************************************************************/
+ *
+ *	this initialisation of clock references relies on gates which
+ *	execute a function ftype != GATE having only one output which
+ *	is in the first location of the function list (FL_GATE).
+ *	The clock reference is put in the second location which was
+ *	previously cleared by a terminator. The 3rd location holds a
+ *	pointer to a Gate of ftype ARITH holding a time value (ARN or NCONST).
+ *	During execution of an action this pointer is used to find the
+ *	correct clock block, which is used as the head of a clock list
+ *	to which the action is linked. The actual clock block is made
+ *	empty in the following, and action blocks are linked to it
+ *	dynamically at run time.
+ *
+ *******************************************************************/
 
 		for (lp = sp->list; lp; lp = sp->list) {
 		    tsp = lp->le_sym;		/* action gate */
 		    if (tsp->ftype == GATE) {
 			fprintf(Fp,
-"/* error in emitting code. Simple gate '%s' on clock list '%s' */\n",
+    "/* error in emitting code. Simple gate '%s' on clock list '%s' */\n",
 			    tsp->name, sp->name);
 			linecnt++;
 			break;
 		    }
 		    if ((tlp = tsp->list) == 0) {
 			fprintf(Fp,
-"/* error in emitting code. Action gate '%s' on clock list '%s' has no output */\n",
+    "/* error in emitting code. Action gate '%s' on clock list '%s' has no output */\n",
 			    tsp->name, sp->name);
 			linecnt++;
 			break;
 		    }
 		    if (tlp->le_next) {
 			fprintf(Fp,
-"/* error in emitting code. Action gate '%s' on clock list '%s' has more than 1 output */\n",
+    "/* error in emitting code. Action gate '%s' on clock list '%s' has more than 1 output */\n",
 			    tsp->name, sp->name);
 			linecnt++;
 			break;
@@ -539,12 +532,12 @@ extern Gate *	l_[];\n\
 	    } else if (typ == ALIAS) {
 		if ((lp = sp->list) == 0) {
 		    fprintf(Fp,
-"/* error in emitting code. Alias '%s' has no output */\n",
+    "/* error in emitting code. Alias '%s' has no output */\n",
 			sp->name);
 		    linecnt++;
 		} else if (lp->le_next) {
 		    fprintf(Fp,
-"/* error in emitting code. Alias '%s' has more than 1 output */\n",
+    "/* error in emitting code. Alias '%s' has more than 1 output */\n",
 			sp->name);
 		    linecnt++;
 		} else if (sp->ftype == ARITH) {
@@ -552,7 +545,7 @@ extern Gate *	l_[];\n\
 			mN(sp), mN(lp->le_sym));	/* ALIAS to Hname */
 		} else if (sp->ftype != GATE) {
 		    fprintf(Fp,
-"/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
+    "/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
 			sp->name, full_ftype[sp->ftype]);
 		    linecnt++;
 		}
@@ -561,21 +554,21 @@ extern Gate *	l_[];\n\
     }
 
 /********************************************************************
-*
-*	output executable gates
-*
-*	this modifies the symbol table entries
-*	the CLK and TIM list Symbols are reconnected
-*	to the action Gates which they control
-*
-*******************************************************************/
+ *
+ *	output executable gates
+ *
+ *	this modifies the symbol table entries
+ *	the CLK and TIM list Symbols are reconnected
+ *	to the action Gates which they control
+ *
+ *******************************************************************/
 
     fprintf(Fp, "\n\
 /********************************************************************\n\
-*\n\
-*	Gate list\n\
-*\n\
-*******************************************************************/\n\
+ *\n\
+ *	Gate list\n\
+ *\n\
+ *******************************************************************/\n\
 \n");
 
     mask = li = 0;
@@ -617,7 +610,7 @@ extern Gate *	l_[];\n\
 		    li += 2;
 		    if ((lp = sp->list->le_next) == 0) {
 			fprintf(Fp,
-"/* error in emitting code. Action gate '%s' has no clock */\n",
+    "/* error in emitting code. Action gate '%s' has no clock */\n",
 			    sp->name);	/* ZZZ wrong format */
 		    } else if (lp->le_sym->type == TIM) {
 			li++;	/* space for TIME or time function */
@@ -641,7 +634,7 @@ extern Gate *	l_[];\n\
 		    } else {
 		    OutErr:
 			fprintf(Fp, " (Gate**)&QX_[0],\n"
-"/* error in emitting code. OUT configuration error %s */\n", sp->name);
+    "/* error in emitting code. OUT configuration error %s */\n", sp->name);
 			mask = 0;	/* no output because mask is 0x00 */
 		    }
 		} else {
@@ -670,7 +663,7 @@ extern Gate *	l_[];\n\
 		    } else {
 		    InErr:
 			fprintf(Fp, " 0,\n"
-"/* error in emitting code. IN configuration error %s */\n", sp->name);
+    "/* error in emitting code. IN configuration error %s */\n", sp->name);
 			linecnt += 2;
 		    }
 		} else {
@@ -721,10 +714,10 @@ extern Gate *	l_[];\n\
 
     fprintf(Fp, "\n\
 /********************************************************************\n\
-*\n\
-*	Embedded C fragment functions\n\
-*\n\
-*******************************************************************/\n\
+ *\n\
+ *	Embedded C fragment functions\n\
+ *\n\
+ *******************************************************************/\n\
 \n");
 
     /* copy C intermediate file up to EOF to C output file */
@@ -734,20 +727,20 @@ extern Gate *	l_[];\n\
     }
 
 /********************************************************************
-*
-*	produce initialised connection lists
-*	using modified symbol table
-*
-*******************************************************************/
+ *
+ *	produce initialised connection lists
+ *	using modified symbol table
+ *
+ *******************************************************************/
 
     if (li == 0) goto endm;	/* MS-C does not hack 0 length array - gcc does */
     fprintf(Fp, "\
 #line %d \"%s\"\n\
 /********************************************************************\n\
-*\n\
-*	Connection lists\n\
-*\n\
-*******************************************************************/\n\
+ *\n\
+ *	Connection lists\n\
+ *\n\
+ *******************************************************************/\n\
 \n\
 static Gate *	l_[] = {\n", linecnt, outfile);
 
@@ -761,7 +754,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 		if ((dc = sp->ftype) >= MIN_ACT && dc < MAX_ACT) {
 		    if ((lp = sp->list) == 0) {
 			fprintf(Fp,
-"/* error in emitting code. ACTION gate '%s' has no action list */\n",
+    "/* error in emitting code. ACTION gate '%s' has no action list */\n",
 			    sp->name);
 		    } else {
 			if (lp->le_sym == 0) {	/* dc == F_SW or F_CF */
@@ -803,7 +796,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 		if (typ == ARN) {
 		    if ((lp = sp->u.blist) == 0) {
 			fprintf(Fp,
-"/* error in emitting code. ARITHMETIC gate '%s' has no function */\n",
+    "/* error in emitting code. ARITHMETIC gate '%s' has no function */\n",
 			    sp->name);
 		    } else {
 			/* Function Pointer at start of input list */

@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.15 2000/12/22 19:15:52 jw Exp $";
+"@(#)$Id: pplc.h,v 1.16 2000/12/24 09:03:24 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -183,14 +183,12 @@ typedef struct Gate {			/* Gate */
 #define FL_GATE	0
 #define FL_CLK	1
 #define FL_TIME	2
+			/* action gate output or C function pointer */
 #define	gt_funct	gt_list[FL_GATE]
-					/* function output gate */
-					/* or C function pointer */
+			/* clock list pointer */
 #define	gt_clk		gt_list[FL_CLK]
-					/* clock list pointer */
+			/* gate holding time value (ARN or NCONST) */
 #define	gt_time		gt_list[FL_TIME]
-			/* initial count for timers and counters */
-			/* Usage: (unsigned short)gp->gt_time */
 	/* this order is required for initialisation */
 
 typedef void		(*Functp2)(Gate *, Gate *);
