@@ -1,4 +1,4 @@
-$Id: manifest,v 1.1 2002/06/06 09:23:00 jw Exp $
+$Id: manifest,v 1.2 2002/07/08 13:05:51 jw Exp $
 doc/iC.doc
 doc/iC.html
 doc/iC.sdw
@@ -118,10 +118,17 @@ src/Test/sort5.ic
 src/cexe.h
 src/comp.c
 src/comp.h
+src/comp.sed
 src/comp.y
+src/comp_tab.h
 src/configure
 src/configure.in
 src/genr.c
+src/gram.c
+src/gram.h
+src/gram.sed
+src/gram.y
+src/gram_tab.h
 src/iCbox
 src/iClive
 src/iCmake
@@ -132,7 +139,11 @@ src/icc.v
 src/ict.c
 src/init.c
 src/install.sh
+src/lexc.c
+src/lexc.l
+src/lexc.sed
 src/link.c
+src/lmain.c
 src/load.c
 src/main.c
 src/makeAll
@@ -150,4 +161,3 @@ src/stop
 src/symb.c
 src/tcpc.c
 src/tcpc.h
-src/y.tab.h

@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.37 2002/07/01 15:22:46 jw Exp $";
+"@(#)$Id: icc.h,v 1.38 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -140,7 +140,7 @@ extern void	efree(void *);
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
 	"CLK","TIM","ALIAS","ERR","KEYW"
 
-#define	OPS	".-+~&|%*#^/({=[<:!@?;"	/* DEBUG display of types */
+#define	OPS	".-+\"&|%*#^/({=[<:!@?;"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
 #define	FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.22 2002/07/05 19:17:23 jw Exp $
+# @(#)$Id: Makefile.in,v 1.23 2002/07/08 13:00:16 jw Exp $
 
 ############################################################
 #
@@ -30,6 +30,8 @@ VPATH = @srcdir@
 
 CC = @CC@
 AWK = @AWK@
+LEX = @LEX@
+LEXLIB = @LEXLIB@
 YACC = @YACC@
 INSTALL = @INSTALL@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -85,22 +87,36 @@ ict:	$(srcdir)/Makefile main.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(COBJ) $(POBJ)
 libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	ar -rv libict.a load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 
+lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O)
+	$(CC) $(LDFLAG) -o lmain lmain.$(O) lexc.$(O) gram.$(O)
+
 #### Compile objects #######################################
+
+.l.c:
+    ifneq ($(LEX),)
+	rm -f $@
+	lex -t $< | sed -f $(srcdir)/$*.sed > $@
+	chmod -w $@
+    else
+	@echo "System has no lex or flex - install one of them"
+	@echo "Otherwise do not modify $< - use $@ in distribution"
+	test -f $@ && touch $@
+    endif
 
 .y.c:
     ifneq ($(YACC),)
-	$(SHELL) -ec 'if [ -f y.tab.h ]; then mv -f y.tab.h y.tab.t; fi'
+	$(SHELL) -ec 'if [ -f $(*)_tab.h ]; then mv -f $(*)_tab.h y.tab.t; fi'
 	rm -f y.tab.c $@
 	$(YACC) $(YFLAGS) $<
 	sed -f $(srcdir)/$*.sed y.tab.c > $@
-	sed -f $(srcdir)/$*.sed y.tab.h > y.tab.t1
-	mv y.tab.t1 y.tab.h
-	$(SHELL) -ec 'if cmp -s y.tab.h y.tab.t; then mv y.tab.t y.tab.h; fi'
-	rm -f y.tab.t
-	chmod -w y.tab.h y.tab.c $@
+	sed -f $(srcdir)/$*.sed y.tab.h > $(*)_tab.h
+	$(SHELL) -ec 'if cmp -s $(*)_tab.h y.tab.t; then mv y.tab.t $(*)_tab.h; fi'
+	rm -f y.tab.t y.tab.h y.tab.c
+	chmod -w $(*)_tab.h $@
+	mv y.output $*.output
     else
 	@echo "System has no yacc, bison or byacc - install one of them"
-	@echo "Otherwise do not modify $< - use $@ in distribution"
+	@echo "Otherwise do not modify $< - use $@ and $(*)_tab.h in distribution"
 	test -f $@ && touch $@
     endif
 
@@ -113,6 +129,10 @@ cexe.c:	$(srcdir)/cexe.h
 
 $(srcdir)/comp.c:	$(srcdir)/comp.y
 
+$(srcdir)/gram.c:	$(srcdir)/gram.y
+
+$(srcdir)/lexc.c:	$(srcdir)/lexc.l
+
 test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test ..."
 	@-${srcdir}/iCmake -iv ${srcdir}/Test/*.ic > ${srcdir}/Test/ErrorMessages.err 2>&1
@@ -120,7 +140,8 @@ test:
 	@if ${srcdir}/Mdiff -kle ${srcdir}/Test/*.* ${srcdir}/Test/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test/ORG"; fi
 
 install:	installdirs
-	$(srcdir)/perlinstall -t $(srcdir) Msg.pm
+	$(srcdir)/perlinstall -t $(srcdir)
+	${INSTALL_PROGRAM} Msg.pm   `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc
 	${INSTALL_PROGRAM} ict      ${bindir}/${binprefix}ict
 	${INSTALL_PROGRAM} iCbox    ${bindir}/${binprefix}iCbox
@@ -135,7 +156,8 @@ installdirs:	${srcdir}/mkinstalldirs
 	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include
 
 uninstall:
-	$(srcdir)/perlinstall -ut $(srcdir) Msg.pm
+	$(srcdir)/perlinstall -r $(srcdir)
+	rm -f `$(srcdir)/perlinstall`/Msg.pm
 	rm -f ${bindir}/${binprefix}icc
 	rm -f ${bindir}/${binprefix}ict
 	rm -f ${bindir}/${binprefix}iCbox
@@ -147,7 +169,7 @@ uninstall:
 	rm -f ${prefix}/include/icc.h
 
 clean:
-	rm -rf *.$(O) LoadObjs PptcObjs cexe.c* scid.c core icc ict libict.a
+	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs cexe.c* scid.c core icc ict libict.a
 
 distclean: clean
 	rm -f Makefile config.status config.log config.cache
@@ -155,9 +177,9 @@ distclean: clean
 distribution:
 	@rev=`grep 'icc\.v,v' ${srcdir}/icc.v | awk '{ print $$3; }'`; echo "making icc_$$rev.tgz"; cd ${srcdir}/../..; tar -czhf icc_$$rev.tgz `sed -n -e '/^[a-z_A-Z]/ s/^/'icc_$$rev'\//p' icc_$$rev/src/manifest`; cd -;
 
-genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
-init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
-symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
+genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
+init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
+symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
 
 comp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 main.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
@@ -171,3 +193,7 @@ icc.$(O):	$(srcdir)/icc.h
 link.$(O):	$(srcdir)/icc.h
 rsff.$(O):	$(srcdir)/icc.h
 scan.$(O):	$(srcdir)/icc.h
+
+gram.$(O):	$(srcdir)/gram.h
+lexc.$(O):	$(srcdir)/gram.h gram_tab.h
+lmain.$(O):	$(srcdir)/gram.h

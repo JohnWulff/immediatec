@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.28 2002/07/05 17:00:45 jw Exp $";
+"@(#)$Id: rsff.c,v 1.29 2002/07/05 19:17:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1045,7 +1045,7 @@ fScf(					/* F_CF and F_CE slave action on CF */
  *
  *	NOTE: for word output the I/O address (slot) must be even.
  *	      The I/O address (slot) must be < IXD (max 64).
- *	      These are checked by the compiler in yylex() and by
+ *	      These are checked by the compiler in iClex() and by
  *	      iCbox and iCserver since rev 1.68
  *
  *	NOTE: This action does not act on a clocked slave object.

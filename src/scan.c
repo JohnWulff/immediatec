@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.19 2002/07/01 15:21:41 jw Exp $";
+"@(#)$Id: scan.c,v 1.20 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -456,8 +456,8 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
  *	Pass 3 initialisation for Gates. Called directly for types.
  *
  *	The connection count is reported and a Warning issued if zero.
- *	For AND, UDF and LOGC the initial value for gt_val is this count.
- *	For OR, ARNC and ARN the initial value for gt_val is set to +1.
+ *	For AND and UDF the initial value for gt_val is this count. For
+ *	ARN, ARNC, LOGC and OR the initial value for gt_val is set to +1.
  *	For a 2 input LATCH the initial value for gt_val is set to +2.
  *	Multi input LATCHes are handled correctly (not supported yet).
  *	In all cases this corresponds to the state when all inputs
@@ -474,7 +474,7 @@ void
 gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 {
     unsigned char opt = os[typ];
-    if (gp->gt_mcnt == 0) {
+    if (gp->gt_mcnt == 0 && typ != LOGC && typ != ARNC) {
 	fprintf(outFP,
 	    "\nWarning:    %c	%s\thas no input connections",
 	    opt, gp->gt_ids);
@@ -487,7 +487,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	}
 #endif
 #ifdef LOAD
-	if (typ == ARN || typ == ARNC) {
+	if (typ == ARN || typ == ARNC || typ == LOGC) {
 	    gp->gt_new = gp->gt_old = 0;
 	    gp->gt_val = 1;
 	} else {
@@ -496,7 +496,6 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 #else
 	switch (typ) {
 	case UDF:
-	case LOGC:
 	case AND:
 	    gp->gt_ini = gp->gt_val = gp->gt_mcnt;	/* AND set to number of inputs */
 	    break;
@@ -504,6 +503,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	case ARN:
 	    gp->gt_new = gp->gt_old = 0;
 	    /* fall through */
+	case LOGC:
 	case OR:
 	    gp->gt_ini = gp->gt_val = 1;		/* set OR gates to +1 */
 	    break;

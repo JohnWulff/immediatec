@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.50 2002/07/01 09:55:25 jw Exp $";
+"@(#)$Id: outp.c,v 1.51 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -572,7 +572,7 @@ static char	COMPILER[] =\n\
 #else\n\
 #define _(x) x.gt_old\n\
 #endif\n\
-#define A(x,v) assign(&x, v)\n\
+#define _A(x,v) assign(&x, v)\n\
 extern Gate *	l_[];\n\
 ", inpNM, outfile, SC_ID, Hname);
 linecnt += 21;
@@ -904,33 +904,6 @@ linecnt += 21;
 	}
     }
 
-    module = strdup(inpNM);		/* source file name */
-    if ((s1 = strrchr(module, '.')) != 0) {
-	*s1 = '\0';			/* module name without extensions */
-    }
-    /*
-     * The following algorithm fails if two files are linked with names
-     * 'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
-     * A multiple define error occurs for the name 'ab_cd_i_list' at link time.
-     * The same error occurs if unfortunate path combinations are used
-     * eg: ab/cd.ic and either of the above
-     */
-    while ((s1 = strchr(module, '/')) != 0) {
-	*s1 = '_';			/*  replace all '/'s with '_' */
-    }
-    while ((s1 = strchr(module, '\\')) != 0) {
-	*s1 = '_';			/*  replace all '\'s with '_' */
-    }
-    while ((s1 = strchr(module, '.')) != 0) {
-	*s1 = '_';			/*  replace further '.'s with '_' */
-    }
-
-    fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
-    linecnt += 2;
-    fprintf(Hp, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
-    fprintf(Lp, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
-    free(module);
-
     fprintf(Fp, "\n\
 /********************************************************************\n\
  *\n\
@@ -954,13 +927,68 @@ linecnt += 21;
 
 /********************************************************************
  *
+ *	output LOGC and ARNC gates
+ *
+ *******************************************************************/
+
+    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	for (sp = *hsp; sp; sp = sp->next) {
+//#	    if ((typ = sp->type) == ARNC || typ == LOGC) {
+	    if ((typ = sp->type) == UDF || typ == LOGC) {
+		modName = mN(sp);	/* modified string, byte and bit */
+		dc = sp->ftype;
+		fprintf(Fp, "Gate %-8s", modName);
+		fprintf(Fp,
+		    " = { 1, -%s, %s, 0, \"%s\", 0, 0, %s%s };\n",
+		    full_type[typ], full_ftype[dc], sp->name, sam, nxs);
+		linecnt++;
+		nxs = modName;		/* previous Symbol name */
+		sam = "&";
+	    }
+	}
+    }
+
+/********************************************************************
+ *
+ *	generate linked list header, for linking several independently
+ *	compiled modules
+ *
+ *	The following algorithm fails if two files are linked with names
+ *	'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
+ *	A multiple define error occurs for the name 'ab_cd_i_list' at link time.
+ *	The same error occurs if unfortunate path combinations are used
+ *	eg: ab/cd.ic and either of the above
+ *
+ *******************************************************************/
+
+    module = strdup(inpNM);		/* source file name */
+    if ((s1 = strrchr(module, '.')) != 0) {
+	*s1 = '\0';			/* module name without extensions */
+    }
+    while ((s1 = strchr(module, '/')) != 0) {
+	*s1 = '_';			/*  replace all '/'s with '_' */
+    }
+    while ((s1 = strchr(module, '\\')) != 0) {
+	*s1 = '_';			/*  replace all '\'s with '_' */
+    }
+    while ((s1 = strchr(module, '.')) != 0) {
+	*s1 = '_';			/*  replace further '.'s with '_' */
+    }
+    fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
+    linecnt += 2;
+    fprintf(Hp, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
+    fprintf(Lp, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
+    free(module);
+
+/********************************************************************
+ *
  *	produce initialised connection lists
  *	using modified symbol table
  *
  *******************************************************************/
 
     if (li == 0) goto endm;	/* MS-C does not hack 0 length array - gcc does */
-    fprintf(Fp, "\
+    fprintf(Fp, "\n\
 /********************************************************************\n\
  *\n\
  *	Connection lists\n\
@@ -968,7 +996,7 @@ linecnt += 21;
  *******************************************************************/\n\
 \n\
 static Gate *	l_[] = {\n");
-    linecnt += 7;
+    linecnt += 8;
 
     lc = 0;			/* count links */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {

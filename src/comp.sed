@@ -1,4 +1,4 @@
-# $Id: comp.sed,v 1.1 2002/07/04 15:35:53 jw Exp $
+# $Id: comp.sed,v 1.2 2002/07/07 08:40:03 jw Exp $
 s/yyparse/iCparse/g
 s/yylex/iClex/g
 s/yyleng/iCleng/g
@@ -28,3 +28,4 @@ s/yyname/iCname/g
 s/yyrule/iCrule/g
 s/#define YYPREFIX "yy"/#define YYPREFIX "iC"/g
 s/YYSTYPE/iCSTYPE/g
+s/y\.tab\.c/comp.c/g

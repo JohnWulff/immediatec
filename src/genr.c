@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.49 2002/07/01 09:31:51 jw Exp $";
+"@(#)$Id: genr.c,v 1.50 2002/07/07 09:25:12 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -26,7 +26,7 @@ static const char genr_c[] =
 #include	<assert.h>
 #include	"icc.h"
 #include	"comp.h"
-#include	"y.tab.h"
+#include	"comp_tab.h"
 
 #define v(lp)	(lp->le_val) ? '~' : ' ', lp->le_sym->name
 #define w(lp)	(lp->le_val) ? '~' : ' '

@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.24 2002/06/28 11:58:03 jw Exp $";
+"@(#)$Id: main.c,v 1.25 2002/07/05 19:17:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -105,7 +105,7 @@ unsigned short	xflag;
 unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
 #ifdef YYDEBUG
-extern	int	yydebug;
+extern	int	iCdebug;
 #endif
 
 #define inpFN	szNames[1]		/* input file name */
@@ -185,7 +185,7 @@ main(
 		    sscanf(*argv, "%o", &debi);
 		    debug |= debi;	/* short */
 #ifdef YYDEBUG
-		    if (debug & 0400) yydebug = debug & 01;
+		    if (debug & 0400) iCdebug = debug & 01;
 #endif
 		    goto break2;
 		case 't':

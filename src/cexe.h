@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.13 2002/06/27 18:57:37 jw Exp $";
+"@(#)$Id: cexe.h,v 1.14 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -22,7 +22,7 @@ static const char cexe_h[] =
 #include "comp.h"
 
 #define _(x) Lookup(#x)->u.gate->gt_old
-#define A(x,v) assign(Lookup(#x)->u.gate, v)
+#define _A(x,v) assign(Lookup(#x)->u.gate, v)
 
 static Symbol *
 Lookup(char *	string)	/* find string in symbol table at run time */

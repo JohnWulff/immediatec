@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.61 2002/07/05 17:00:45 jw Exp $";
+"@(#)$Id: comp.y,v 1.62 2002/07/05 19:17:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -32,10 +32,10 @@
 
 static int	get(void);
 static void	unget(char);
-static int	yylex(void);
-static void	yyerror(char *);	/* called for yacc syntax error */
-int		ynerrs;			/* count of yyerror() calls */
-		/* NOTE yynerrs is reset for every call to yaccpar() */
+static int	iClex(void);
+static void	iCerror(char *);	/* called for yacc syntax error */
+int		ynerrs;			/* count of iCerror() calls */
+		/* NOTE iCnerrs is reset for every call to yaccpar() */
 static void	errBit(void);
 static void	errInt(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
@@ -44,8 +44,8 @@ static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
 static Symbol	tSym = { "_tSym_", AND, GATE, };
-static char	yybuf[IMMBUFSIZE];	/* buffer to build imm statement */
-char *		stmtp = yybuf;		/* manipulated in yylex() only */
+static char	iCbuf[IMMBUFSIZE];	/* buffer to build imm statement */
+char *		stmtp = iCbuf;		/* manipulated in iClex() only */
 %}
 
 %union {		/* stack type */
@@ -53,7 +53,7 @@ char *		stmtp = yybuf;		/* manipulated in yylex() only */
     Lis		list;			/* linked list elements */
     Val		val;			/* int numerical values */
     Str		str;			/* one character array */
-    /* allows storing character as yylval.val.v (2nd byte is NULL) */
+    /* allows storing character as iClval.val.v (2nd byte is NULL) */
     /* then char array can be referenced as $1.v, single char as $1.v[0] */
 }
 
@@ -143,9 +143,9 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 	 *
 	 ***********************************************************/
 
-program	: /* nothing */		{ $$.v = 0;  stmtp = yybuf; }
-	| program statement	{ $$   = $2; stmtp = yybuf; }
-	| program error ';'	{ $$.v = 0;  stmtp = yybuf; iclock->type = ERR; yyerrok; }
+program	: /* nothing */		{ $$.v = 0;  stmtp = iCbuf; }
+	| program statement	{ $$   = $2; stmtp = iCbuf; }
+	| program error ';'	{ $$.v = 0;  stmtp = iCbuf; iclock->type = ERR; yyerrok; }
 	;
 
 statement
@@ -1600,8 +1600,8 @@ plist	: aexpr			{
 static char	chbuf[CBUFSZ];
 static char *	getp = chbuf;
 static char *	fillp = chbuf;
-static char	yytext[YTOKSZ];		/* lex token */
-static int	yyleng;			/* length */
+static char	iCtext[YTOKSZ];		/* lex token */
+static int	iCleng;			/* length */
 static char	inpBuf[YTOKSZ];		/* alternate file name */
 static int	lineflag = 0;
 static char	tmpbuf[256];		/* buffer to build variable */
@@ -1663,7 +1663,7 @@ compile(
 	fprintf(outFP, "******* %-15s ************************\n", inpNM);
     }
     setjmp(begin);
-    for (initcode(); yyparse(); initcode()) {
+    for (initcode(); iCparse(); initcode()) {
 	;
     }
     if (debug & 016) {		/* end source listing */
@@ -1711,16 +1711,16 @@ get(void)
 	    lineno = temp1;
 	    lineflag = 0;
 	    inpNM = inpBuf;	/* another file name for messages */
-	    getp = fillp;	/* do not pass to yylex() */
+	    getp = fillp;	/* do not pass to iClex() */
 	}
     }
     /****************************************************************
      *  extract 1 character at a time from chbuf and return it
-     *  transfer it to the token buffer yytext and count yyleng
+     *  transfer it to the token buffer iCtext and count iCleng
      ****************************************************************/
-    yytext[yyleng++] = temp = *getp++;
-    if (yyleng >= sizeof(yytext)) yyleng--;
-    yytext[yyleng] = '\0';
+    iCtext[iCleng++] = temp = *getp++;
+    if (iCleng >= sizeof(iCtext)) iCleng--;
+    iCtext[iCleng] = '\0';
     return temp;
 } /* get */
 
@@ -1728,7 +1728,7 @@ static void
 unget(char c)
 {
     *--getp = c;		/* use always insures 1 free place */
-    yytext[--yyleng] = '\0';
+    iCtext[--iCleng] = '\0';
 } /* unget */
 
 char *	cexeString[] = {
@@ -1737,7 +1737,7 @@ char *	cexeString[] = {
 };
 
 static int
-yylex(void)
+iClex(void)
 {
     int		c;
     int		c1;
@@ -1752,12 +1752,12 @@ yylex(void)
 	    ccfrag = 0;
 	    return 0;	/* EOF in copy C block or statement */
 	}
-	yylval.val.v = c_number;	/* return case # */
+	iClval.val.v = c_number;	/* return case # */
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
     }
-    yyleng = 0;
+    iCleng = 0;
     while ((c = get()) !=  EOF) {
 	Symbol *	symp;
 	List_e *	lp;
@@ -1765,7 +1765,7 @@ yylex(void)
 	int		rest;
 
 	if (c == ' ' || c == '\t' || c == '\n') {
-	    yyleng = 0;
+	    iCleng = 0;
 	    continue;			/* ignore white space */
 	}
 	if (isdigit(c)) {
@@ -1784,19 +1784,19 @@ yylex(void)
 	    }
 	    while ((c = get()) != EOF && isxdigit(c));
 	    unget(c);
-	    if (sscanf(yytext, format, &yylval.val.v, yytext) == 1) {
+	    if (sscanf(iCtext, format, &iClval.val.v, iCtext) == 1) {
 		if (dflag) {
-		    if ((symp = lookup(yytext)) == 0) {
-			symp = install(yytext, NCONST, ARITH); /* becomes NVAR */
+		    if ((symp = lookup(iCtext)) == 0) {
+			symp = install(iCtext, NCONST, ARITH); /* becomes NVAR */
 		    }
 		    if (symp->type == NCONST && symp->ftype == ARITH) {
-			yylval.sym.v = symp;		/* return actual symbol */
+			iClval.sym.v = symp;		/* return actual symbol */
 			c = NVAR;			/* numeric symbol */
 		    } else {
 			c = NUMBER;			/* used in arith expression */
 		    }
 		} else {
-		    c = NUMBER;				/* value in yylval.val.v */
+		    c = NUMBER;				/* value in iClval.val.v */
 		}
 	    } else {
 		c = LEXERR;
@@ -1812,7 +1812,7 @@ yylex(void)
 	    int			yn;
 
 	    while ((c = get()) != EOF && (isalnum(c) || c == '_'));
-	    if (sscanf(yytext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
+	    if (sscanf(iCtext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
 		if (y1[0] == 'B' || y1[0] == 'W') {
 		    wplus = 1;
 		    goto foundQIT;
@@ -1829,27 +1829,27 @@ yylex(void)
 		    } else {
 			unget(c);		/* the non digit, not '.' */
 		    }
-		} else if (sscanf(yytext, "%1[IQT]%1[BWX]%d__%d%1[A-Z_a-z]",
+		} else if (sscanf(iCtext, "%1[IQT]%1[BWX]%d__%d%1[A-Z_a-z]",
 		    y0, y1, &yn, &yn, y1) == 4) {
-		    warning("Variables with __ clash with I/O", yytext);
+		    warning("Variables with __ clash with I/O", iCtext);
 		    typ = ERR;			/* QX%d__%d not allowed */
 		}				/* QX%d__%d_ABC is OK */
 		if (yn >= IXD) {
 		    char tempBuf[TSIZE];		/* make long enough for format below */
 		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:", IXD);
-		    error(tempBuf, yytext);	/* hard error if outside range */
+		    error(tempBuf, iCtext);	/* hard error if outside range */
 		}
 	    }
 	    unget(c);
 	    if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
-		error("WORD I/O must have even byte address:", yytext);
+		error("WORD I/O must have even byte address:", iCtext);
 	    }
-	    if ((symp = lookup(yytext)) == 0) {
-		symp = install(yytext, typ, ftyp); /* usually UDF UDFA */
+	    if ((symp = lookup(iCtext)) == 0) {
+		symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
 	    } else if (typ == ERR) {
 		symp->type = ERR;		/* mark ERROR in QX%d__%d */
 	    }
-	    yylval.sym.v = symp;		/* return actual symbol */
+	    iClval.sym.v = symp;		/* return actual symbol */
 	    while ((typ = symp->type) == ALIAS) {
 		symp = symp->list->le_sym;	/* with token of original */
 	    }
@@ -1865,14 +1865,14 @@ yylex(void)
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {
 		symp = lp->le_sym;		/* original via backptr */
 	    }
-	    yylval.sym.f = stmtp;	/* original name for expressions */
-	    if ((len = snprintf(stmtp, rest = &yybuf[IMMBUFSIZE] - stmtp,
+	    iClval.sym.f = stmtp;	/* original name for expressions */
+	    if ((len = snprintf(stmtp, rest = &iCbuf[IMMBUFSIZE] - stmtp,
 				"_(%s)", symp->name)) < 0 || len >= rest) {
-		yybuf[IMMBUFSIZE-1] = '\0';
+		iCbuf[IMMBUFSIZE-1] = '\0';
 		len = rest - 1;			/* text + NUL which fits */
 		error("statement too long at: ", symp->name);
 	    }
-	    yylval.sym.l = stmtp += len;
+	    iClval.sym.l = stmtp += len;
 	} else {
 	    c1 = get();
 	    switch (c) {
@@ -1941,7 +1941,7 @@ yylex(void)
 		    c = AOP;				/* / */
 		    break;
 		}
-		yyleng = 0;			/* end of comment */
+		iCleng = 0;			/* end of comment */
 		continue;
 	    case '<':
 		if (c1 == '<') {
@@ -1959,7 +1959,7 @@ yylex(void)
 		if (c1 == '=') {
 		    c = CMP; goto found;		/* == */
 		}
-		*yytext = '#';	/* to recognise <= => transmogrify = */
+		*iCtext = '#';	/* to recognise <= => transmogrify = */
 		break;
 	    case '>':
 		if (c1 == '>') {
@@ -1991,28 +1991,28 @@ yylex(void)
 	    }
 	    unget(c1);
 	found:
-	    yylval.val.v = c;		/* return to yacc as is */
+	    iClval.val.v = c;		/* return to yacc as is */
 	retfl:
-	    yylval.val.f = stmtp;	/* all sources are yylval.val */
+	    iClval.val.f = stmtp;	/* all sources are iClval.val */
 	    if ((c == PM || c == PPMM) &&
-		stmtp > yybuf && *(stmtp-1) == *yytext) {
+		stmtp > iCbuf && *(stmtp-1) == *iCtext) {
 		*stmtp++ = ' ';		/* space between + + and - - */
 					/* 1 byte will always fit */
 	    }
-	    rest = &yybuf[IMMBUFSIZE] - stmtp;
-	    len = strlen(yytext);
+	    rest = &iCbuf[IMMBUFSIZE] - stmtp;
+	    len = strlen(iCtext);
 	    if (len >= rest) {
-		yybuf[IMMBUFSIZE-1] = '\0';
+		iCbuf[IMMBUFSIZE-1] = '\0';
 		len = rest -1;
-		error("statement too long at: ", yytext);
+		error("statement too long at: ", iCtext);
 	    }
-	    yylval.val.l = stmtp = strncpy(stmtp, yytext, len) + len;
+	    iClval.val.l = stmtp = strncpy(stmtp, iCtext, len) + len;
 	}
 	dflag = 0;
 	return c;			/* return token to yacc */
     }
     return 0;				/* EOF */
-} /* yylex */
+} /* iClex */
 
 static void
 errLine(void)			/* error file not openend if no errors */
@@ -2115,7 +2115,7 @@ execerror(			/* recover from run-time error */
 } /* execerror */
 
 static void
-yyerror(char *	s)		/* called for yacc syntax error */
+iCerror(char *	s)		/* called for yacc syntax error */
 {
     char *	cp = chbuf;
     int		n, n1;
@@ -2124,7 +2124,7 @@ yyerror(char *	s)		/* called for yacc syntax error */
     errLine();
     fprintf(outFP, "*** ");	/* do not change - used as search key in iClive */
     if (errFlag) fprintf(errFP, "*** ");
-    for (n1 = 0, n = getp - cp - yyleng; n > 0; n--, cp++) {
+    for (n1 = 0, n = getp - cp - iCleng; n > 0; n--, cp++) {
 	n1++;
 	if (*cp == '\t') {
 	    while (n1 % 8) {
@@ -2157,12 +2157,12 @@ yyerror(char *	s)		/* called for yacc syntax error */
 	fprintf(outFP, "^\n");
 	if (errFlag) fprintf(errFP, "^\n");
     }
-} /* yyerror */
+} /* iCerror */
 
 /********************************************************************
  *
  *	Copy a C fragment to exoFP for an lBlock and a cBlock
- *	when yacc token CCFRAG is recognised in yylex()
+ *	when yacc token CCFRAG is recognised in iClex()
  *
  *******************************************************************/
 
@@ -2241,8 +2241,8 @@ copyCfrag(char s, char m, char e)
 		    putc(c, exoFP);
 		    if ((c = get()) == EOF) goto eof_error;
 		} else if (c == '\n') {
-		    yyleng = 1;		/* error pointer at newline */
-		    yyerror("C code: newline in \" \" or ' ', error");
+		    iCleng = 1;		/* error pointer at newline */
+		    iCerror("C code: newline in \" \" or ' ', error");
 		} else if (c == EOF)  goto eof_error;
 		putc(c, exoFP);
 	    }
@@ -2251,7 +2251,7 @@ copyCfrag(char s, char m, char e)
 	putc(c, exoFP);			/* output to cexe.tmp */
     }
 eof_error:
-    yyleng = 1;				/* error pointer at EOF */
-    yyerror("C code: EOF, error");
+    iCleng = 1;				/* error pointer at EOF */
+    iCerror("C code: EOF, error");
     return 0;				/* EOF */
 } /* copyCfrag */

@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.24 2002/06/30 08:51:48 jw Exp $";
+"@(#)$Id: comp.h,v 1.25 2002/07/05 19:17:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -14,10 +14,6 @@ static const char comp_h[] =
  *	header for icc compiler
  *
  *******************************************************************/
-
-#ifndef YYMAXDEPTH
-#define YYMAXDEPTH (PPGATESIZE*3)		/* yacc stack size */
-#endif
 
 #define NS	((char*)0)
 
@@ -53,8 +49,8 @@ extern void errmess(char *, char *, char *);	/* actual error message */
 extern void error(char *, char *);	/* print error message */ 
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *);	/* recover from run-time error */ 
-extern int	ynerrs;			/* count of yyerror() calls */
-		/* NOTE yynerrs is reset for every call to yaccpar() */
+extern int	ynerrs;			/* count of iCerror() calls */
+		/* NOTE iCnerrs is reset for every call to yaccpar() */
 
 extern int	lineno;			/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
@@ -62,7 +58,7 @@ extern int	outFlag;		/* global flag for compiled output */
 extern FILE *	exoFP;			/* cexe out file pointer */
 extern char *	cexeString[];		/* case or function string */
 extern char *	inpNM;			/* original input file name */
-extern char *	stmtp;			/* pointer into yybuf */
+extern char *	stmtp;			/* pointer into iCbuf */
 extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
 extern Symbol *	sy_pop(List_e *);	/* delete List element left over */

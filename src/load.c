@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.32 2002/07/01 10:10:30 jw Exp $";
+"@(#)$Id: load.c,v 1.33 2002/07/05 17:00:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -501,7 +501,7 @@ main(
 			printf("\n");
 		    }
 		}
-		if (op->gt_val == 0) {
+		if (op->gt_val == 0 && op->gt_ini != -LOGC && op->gt_ini != -ARNC) {
 		    fprintf(stderr, "WARNING '%s' has no input\n", op->gt_ids);
 		}
 		if (op->gt_mark == 0 && op->gt_old == 0) {

@@ -12,9 +12,9 @@
 #
 #	perlinstall
 #
-#	Install perl-module-files in @INC path	# must be super user
+#	Return @INC path to install perl-module-files with 'install'
 #
-#	Optionally (-t) test for the avalability of Time::HiRes
+#	Alternatively (-t) test for the avalability of Time::HiRes
 #	If it is not avalable, modify perl scripts containing the line
 #		#define TIME_HIRES
 #	to
@@ -25,18 +25,20 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-uh] [srcdir] file ...' >&2
-    echo '		install (cp) the files in srcdir to the @INC path' >&2
-    echo '		default source directory srcdir is .' >&2
+    echo 'Usage:	'${0##*/}' [-uh] [<srcdir>]' >&2
+    echo '		return the correct @INC path to install perl-modules' >&2
+    echo '		error return if no @INC path found' >&2
+    echo '	Alternatively' >&2
     echo '	-t	test and modify perlscripts if Time::HiRes not installed' >&2
-    echo '	-u	uninstall (rm) the files from the @INC path' >&2
+    echo '	-r	restore perlscripts to use Time::HiRes' >&2
+    echo '		default source directory <srcdir> is .' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: perlinstall,v 1.6 2001/06/03 20:09:24 jw Exp $' >&2
+    echo '	$Id: perlinstall,v 1.7 2002/07/06 10:14:41 jw Exp $' >&2
 }
 
 srcdir='.'
 t=''
-u=''
+r=''
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -45,7 +47,7 @@ while [ $# -gt 0 ]; do
 	while [ -n "$option" ]; do
 	    case "$option" in
 	    t*)	t=time_hires;;
-	    u*)	u=uninstall;;
+	    r*)	r=restore;;
 	    h*)	usage; exit 255;;
 	    esac
 	    option=${option#?}
@@ -66,42 +68,29 @@ for d in /usr/lib/perl5/site_perl/5*; do
     fi
 done
 
-if [ -n "$perlPath" ]; then
-    if [ -z "$u" ]; then
-	for f in $*; do
-	    cp -f ${srcdir}/$f $perlPath
-	    echo "copied ${srcdir}/$f ==> $perlPath/$f"
-	done
-    else
-	for f in $*; do
-	    rm -f $perlPath/$f
-	    echo "deleted $perlPath/$f"
-	done
-    fi
-else
-    echo 'NO /usr/lib/perl5/site_perl/5*/i586-linux - installation failed'
-    exit 1
-fi
-
 if [ -n "$t" ]; then
-    if [ -z "$u" ]; then
-	if ! ${srcdir}/iCserver -h 2> /dev/null; then
-	    echo "modify the following perlscripts to work without Time::HiRes"
-	    for script in `grep -l '#define TIME_HIRES' ${srcdir}/iC*`; do
-		echo $script
-		mv $script ${script}.hires
-		sed '/#define TIME_HIRES/ s/define/\/\/define/' ${script}.hires > $script
-		chmod 555 $script
-	    done
-	fi
-    else
-	# makes sure that repeated install and uninstall works
-	for hires in ${srcdir}/*.hires; do
-	    if [ -f $hires ]; then
-		script=${hires%.hires}
-		echo "restore $hires to $script"
-		mv -f $hires $script
-	    fi
+    if ! ${srcdir}/iCserver -h 2> /dev/null; then
+	# iCserver returned false, TIME_HIRES is not installed - modify
+	echo "modify the following perlscripts to work without Time::HiRes"
+	for script in `grep -l '#define TIME_HIRES' ${srcdir}/iC*`; do
+	    echo $script
+	    mv $script ${script}.hires
+	    sed '/#define TIME_HIRES/ s/define/\/\/define/' ${script}.hires > $script
+	    chmod 555 $script
 	done
     fi
+elif [ -n "$r" ]; then
+    # makes sure that repeated install and restore works
+    for hires in ${srcdir}/*.hires; do
+	if [ -f $hires ]; then
+	    script=${hires%.hires}
+	    echo "restore $hires to $script"
+	    mv -f $hires $script
+	fi
+    done
+elif [ -n "$perlPath" ]; then
+    echo $perlPath
+else
+    echo 'NO /usr/lib/perl5/site_perl/5*/i586-linux - installation failed' >&2
+    exit 1
 fi

@@ -1,0 +1,31 @@
+# $Id: gram.sed,v 1.1 2002/07/07 08:40:41 jw Exp $
+s/yyparse/c_parse/g
+s/yylex/c_lex/g
+s/yyleng/c_leng/g
+s/yytext/c_text/g
+s/yybuf/c_buf/g
+s/yyerror/c_error/g
+s/yychar/c_char/g
+s/yyval/c_val/g
+s/yylval/c_lval/g
+s/yydebug/c_debug/g
+s/yynerrs/c_nerrs/g
+s/yyerrflag/c_errflag/g
+s/yyss/c_ss/g
+s/yyssp/c_ssp/g
+s/yyvs/c_vs/g
+s/yyvsp/c_vsp/g
+s/yylhs/c_lhs/g
+s/yylen/c_len/g
+s/yydefred/c_defred/g
+s/yydgoto/c_dgoto/g
+s/yysindex/c_sindex/g
+s/yyrindex/c_rindex/g
+s/yygindex/c_gindex/g
+s/yytable/c_table/g
+s/yycheck/c_check/g
+s/yyname/c_name/g
+s/yyrule/c_rule/g
+s/#define YYPREFIX "yy"/#define YYPREFIX "c_"/g
+s/YYSTYPE/c_STYPE/g
+s/y\.tab\.c/gram.c/g

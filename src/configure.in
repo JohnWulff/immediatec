@@ -1,9 +1,10 @@
 dnl Process this file with autoconf to produce a configure script.
-dnl $Id: configure.in,v 1.1 2001/03/07 11:10:52 jw Exp $
+dnl $Id: configure.in,v 1.2 2002/07/08 11:50:03 jw Exp $
 AC_INIT(cexe.h)
 
 dnl Checks for programs.
 AC_PROG_AWK
+AC_PROG_LEX
 AC_PROG_YACC
 AC_PROG_CC
 dnl added to produce install stuff - CHANGE from autoscan John Wulff
