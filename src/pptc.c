@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.2 2000/06/02 11:15:42 jw Exp $";
+"@(#)$Id: pptc.c,v 1.3 2000/06/10 11:27:58 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -328,6 +328,19 @@ pplc(
 		    if ((c = getch()) == 'q' || c == EOF) {
 			quit(0);			/* quit normally */
 		    }
+		    if (debug & 0300) {			/* osc or detailed info */
+			unsigned short flag;
+			if (c == 'x') {
+			    flag = 1;			/* hexadecimal output */
+			} else if (c == 'd') {
+			    flag = 0;			/* decimal output */
+			}
+			if (flag != xflag) {
+			    putc(c, outFP);
+			    xflag = flag;
+			    display();			/* inputs and outputs */
+			}
+		    }
 		    /* ignore the rest for now */
 		}
 	    } else {				/* retval -1 */
@@ -372,7 +385,7 @@ display(void)
 	}
     }
     /* display IB1 and IW2 if active */
-    if (aaflag) {
+    if (!xflag) {
 	if ((gp = IB_[1]) != 0) fprintf(outFP, " %4d", gp->gt_old & 0xff);
 	if ((gp = IW_[2]) != 0) fprintf(outFP, " %6d", gp->gt_old);
     } else {
@@ -386,7 +399,7 @@ display(void)
 	data >>= 1;				/* scan output bits */
     }
     /* display QB1 and QW2 */
-    if (aaflag) {
+    if (!xflag) {
 	fprintf(outFP, " %4d %6d   : ",
 	    QX_[1], *(unsigned short*)&QX_[2]);
     } else {

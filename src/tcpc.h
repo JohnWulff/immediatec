@@ -1,5 +1,5 @@
-static const char cliserv_h[] =
-"@(#)$Id: tcpc.h,v 1.1 2000/06/10 10:03:42 jw Exp $";
+static const char tcpc_h[] =
+"@(#)$Id: tcpc.h,v 1.2 2000/06/10 11:27:58 jw Exp $";
 /********************************************************************
  *
  *	TCP/IC communication support

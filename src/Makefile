@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.8 2000/06/02 11:15:42 jw Exp $
+# @(#)$Id: Makefile,v 1.9 2000/06/10 11:27:58 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -25,8 +25,6 @@ YFLAGS = -d -v
 LDFLAGS =
 
 #### Standalone versions ################################### !!! do last !!!
-
-all:	pplc pptc
 
 pplc:	Makefile main.d main.o scid.o pplc.d pplc.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
 	cc $(LDFLAG) -o pplc main.o scid.o pplc.o $(COBJ) $(POBJ)

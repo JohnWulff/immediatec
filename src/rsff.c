@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.5 2000/06/02 11:15:42 jw Exp $";
+"@(#)$Id: rsff.c,v 1.6 2000/06/10 11:07:58 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -9,7 +9,9 @@ static const char rsff_c[] =
 #include	<stdio.h>
 #include	<assert.h>
 #include	"pplc.h"
+#ifdef TCP 
 #include	"tcpc.h"
+#endif
 
 /********************************************************************
  *

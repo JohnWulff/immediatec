@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.6 2000/06/04 10:08:14 jw Exp $";
+"@(#)$Id: load.c,v 1.7 2000/06/10 11:27:58 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -15,8 +15,13 @@ static const char load_c[] =
 #include	<stdlib.h>
 #include	<string.h>
 #include	"pplc.h"
+#ifdef TCP
+#include	"tcpc.h"
+#endif
 
 #define STS	1
+
+extern const char	SC_ID[];
 
 typedef int (*fptr)(const void*, const void*);
 
@@ -28,7 +33,7 @@ unsigned long	sTstrLen;		/* length of symbol strings */
 unsigned	errCount;
 char *		progname;
 short		debug;
-unsigned short	aaflag;
+unsigned short	xflag;
 unsigned short	osc_max = MARKMAX;
 
 char *		full_type[] = { FULL_TYPE };
@@ -41,18 +46,31 @@ char		fos[] = FOPS;
 FILE *		outFP;			/* listing file pointer */
 FILE *		errFP;			/* error file pointer */
 
-static char *	usage = "USAGE:\n\
-%s [-d<debug>] [-n<count>] [-ah]\n\
-	-d <debug>2000	display scan_cnt and link_cnt\n\
-		  +400	exit after initialisation\n\
-		  +200	display loop info (+old style logic)\n\
-		  +100	initialisation and run time info\n\
-		   +40	net statistics\n\
-	-n <count>	maxinum loop count (default is %d, limit 15)\n\
-	-a		start run time arithmetic info in decimal\n\
-			can be changed at run time with d or x\n\
-	-h		this help text\n\
-";
+static const char *	usage = "\
+USAGE: %s [-txh]"
+#ifdef TCP
+" [-s <server>] [-p <port>] [-u <unitID>]"
+#endif
+" [-d<debug>] [-n<count>]\n"
+#ifdef TCP
+"        -s host ID of server      (default '%s')\n\
+        -p service port of server (default '%s')\n\
+        -u unit ID of this client (default '%s')\n"
+#endif
+"        -d <debug>2000  display scan_cnt and link_cnt\n\
+                 +1000  I0 toggled every second\n\
+                  +400  exit after initialisation\n\
+                  +200  display loop info (+old style logic)\n\
+                  +100  initialisation and run time info\n\
+                   +40  net statistics\n\
+        -t              trace debug (equivalent to -d 100)\n\
+        -n <count>      maxinum loop count (default is %d, limit 15)\n\
+        -x              arithmetic info in hexadecimal (default decimal)\n\
+                        can be changed at run time with x or d\n\
+        -h              this help text\n\
+			typing q or ctrl-C quits run time mode\n\
+compiled by:\n\
+%s\n";
 
 /********************************************************************
  *
@@ -114,22 +132,36 @@ main(
 	    ++*argv;
 	    do {
 		switch (**argv) {
-		case 't':
-			debug = 0100;		/* trace only */
-			break;
+#ifdef TCP
+		case 's':
+		    if (! *++*argv) { --argc, ++argv; }
+		    hostNM = *argv;
+		    goto break2;
+		case 'p':
+		    if (! *++*argv) { --argc, ++argv; }
+		    portNM = *argv;
+		    goto break2;
+		case 'u':
+		    if (! *++*argv) { --argc, ++argv; }
+		    pplcNM = *argv;
+		    goto break2;
+#endif
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &df);
 		    debug = df;		/* short */
 		    df &= 040;	/* net statistics */
 		    goto break2;
+		case 't':
+		    debug = 0100;		/* trace only */
+		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
 		    osc_max = atoi(*argv);
 		    if (osc_max > 15) goto error;
 		    goto break2;
-		case 'a':
-		    aaflag = 1;		/* start with decimal output */
+		case 'x':
+		    xflag = 1;		/* start with hexadecimal output */
 		    break;
 		default:
 		    fprintf(stderr,
@@ -137,7 +169,11 @@ main(
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, progname, MARKMAX);
+		    fprintf(stderr, usage, progname,
+#ifdef TCP
+		    hostNM, portNM, pplcNM,
+#endif
+		    MARKMAX);
 		    exit(1);
 		}
 	    } while (*++*argv);

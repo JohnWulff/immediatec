@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.6 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: pplc.c,v 1.7 2000/06/10 11:27:58 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -422,11 +422,11 @@ pplc(
 			cnt = 0;
 		    }
 		} else if (c == 'x') {
-		    aaflag = 0;			/* hexadecimal output */
+		    xflag = 1;			/* hexadecimal output */
 		    c = ENTER;
 		    cnt = 0;
 		} else if (c == 'd') {
-		    aaflag = 1;			/* decimal output */
+		    xflag = 0;			/* decimal output */
 		    c = ENTER;
 		    cnt = 0;
 		} else if (c == ENTER) {
@@ -471,7 +471,7 @@ display(void)
 	}
     }
     /* display IB1 and IW2 if active */
-    if (aaflag) {
+    if (!xflag) {
 	if ((gp = IB_[1]) != 0) printf(" %4d", gp->gt_old & 0xff);
 	if ((gp = IW_[2]) != 0) printf(" %6d", gp->gt_old);
     } else {
@@ -485,7 +485,7 @@ display(void)
 	data >>= 1;				/* scan output bits */
     }
     /* display QB1 and QW2 */
-    if (aaflag) {
+    if (!xflag) {
 	fprintf(outFP, " %4d %6d   : ",
 	    QX_[1], *(unsigned short*)&QX_[2]);
     } else {

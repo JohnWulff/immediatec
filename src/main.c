@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.7 2000/05/31 15:51:38 jw Exp $";
+"@(#)$Id: main.c,v 1.8 2000/06/10 11:27:58 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -11,6 +11,66 @@ static const char main_c[] =
 #include	<stdlib.h>
 #include	"pplc.h"
 #include	"comp.h"
+#ifdef TCP
+#include	"tcpc.h"
+#endif
+
+extern const char	SC_ID[];
+
+static const char *	usage = "\
+USAGE for compile mode:\n\
+  %s [-aAc] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] <iC_program>\n\
+       Options in compile mode only:\n\
+        -o <outFN>      name of compiler output file - sets compile mode\n\
+        -a              append linking info for 2nd and later files\n\
+        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n\
+        -c              generate auxiliary file cexe.c to extend pplc compiler\n\
+USAGE for run mode:\n\
+  %s [-txh]"
+#ifdef TCP
+" [-s <server>] [-p <port>] [-u <unitID>]"
+#endif
+" [-l<list>] [-e<err>] [-d<debug>] [-n<count>] <iC_program>\n\
+       Options in both modes:\n"
+#ifdef TCP
+"        -s host ID of server      (default '%s')\n\
+        -p service port of server (default '%s')\n\
+        -u unit ID of this client (default '%s')\n"
+#endif
+"        -l <listFN>     name of list file  (default is stdout)\n\
+        -e <errFN>      name of error file (default is stderr)\n\
+        -d <debug>2000  display scan_cnt and link_cnt\n\
+                 +1000  I0 toggled every second\n\
+                  +400  exit after initialisation\n\
+                  +200  display loop info (+old style logic)\n\
+                  +100  initialisation and run time info\n\
+                   +40  net statistics\n\
+                   +20  net topology\n\
+                   +10  source listing\n\
+                    +4  logic expansion\n"
+#ifdef YYDEBUG
+"                    +2  logic generation\n\
+                    +1  yacc debug info\n"
+#endif
+"       Options in run mode only:\n\
+        -t              trace debug (equivalent to -d 100)\n\
+        -n <count>      maxinum loop count (default is %d, limit 15)\n\
+        -x              arithmetic info in hexadecimal (default decimal)\n\
+                        can be changed at run time with x or d\n\
+        -h              this help text\n\
+\n\
+        <iC_program>    any iC language program file (extension .iC)\n\
+                        - or default is stdin\n\
+			typing q or ctrl-C quits run time mode\n\
+Copyright (C) 1985-2001 John E. Wulff     <john.wulff@inka.de>\n\
+%s\n";
+
+short		debug = 0;
+unsigned short	xflag;
+unsigned short	osc_max = MARKMAX;
+#ifdef YYDEBUG
+extern	int	yydebug;
+#endif
 
 char *		szFile_g;		/* file name to process */
 #define progFN	szNames[0]		/* for error messages */
@@ -23,41 +83,6 @@ char *		szFile_g;		/* file name to process */
 char *		szNames[7] = {		/* matches return in compile */
     	0, 0, 0, 0, 0, 0, "cexe.tmp",
 };
-short		debug = 0;
-unsigned short	osc_max = MARKMAX;
-#ifdef YYDEBUG
-extern	int	yydebug;
-#endif
-static char *	usage = "USAGE:\n\
-pplc [-d<debug>] [-n<count>] [-o<out>] [-l<list>] [-e<err>] [-xa] <iC_program>\n\
-	-d <debug>2000	display scan_cnt and link_cnt\n\
-		 +1000	I0 toggled every second\n\
-		  +400	exit after initialisation\n\
-		  +200	display loop info (+old style logic)\n\
-		  +100	initialisation and run time info\n\
-		   +40	net statistics\n\
-		   +20	net topology\n\
-		   +10	source listing\n\
-		    +4	logic expansion\n"
-#ifdef YYDEBUG
-"		    +2	logic generation\n\
-		    +1	yacc debug info\n"
-#endif
-"	-o <outFN>	name of compiler output file - sets compile mode\n\
-	-l <listFN>	name of list file  (default is stdout)\n\
-	-e <errFN>	name of error file (default is stderr)\n\
-	-a		append linking info for 2nd and later files\n\
-	-A		compile output ARITHMETIC ALIAS nodes for symbol debugging\n\
-Flags when using run mode instead of compile mode
-	-n <count>	maxinum loop count (default is %d, limit 15)\n\
-	-a		start run time arithmetic info in decimal\n\
-			can be changed at run time with d or x\n\
-	-x		generate auxiliary file cexe.c to extend pplc compiler\n\
-	-h		this help text\n\
-\n\
-	<iC_program>	any iC language program file (extension .p)\n\
-			- or default is stdin\n\
-";
 
 char * OutputMessage[] = {
     0,					/* [0] no error */
@@ -93,6 +118,20 @@ main(
 
 		case '\0':
 		    szFile_g = 0;	/* - is standard input */
+#ifdef TCP
+		case 's':
+		    if (! *++*argv) { --argc, ++argv; }
+		    hostNM = *argv;
+		    goto break2;
+		case 'p':
+		    if (! *++*argv) { --argc, ++argv; }
+		    portNM = *argv;
+		    goto break2;
+		case 'u':
+		    if (! *++*argv) { --argc, ++argv; }
+		    pplcNM = *argv;
+		    goto break2;
+#endif
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
@@ -101,6 +140,9 @@ main(
 		    yydebug = debug & 01;
 #endif
 		    goto break2;
+		case 't':
+		    debug = 0100;		/* trace only */
+		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
 		    osc_max = atoi(*argv);
@@ -120,16 +162,19 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    errFN = *argv;	/* error file name */
 		    goto break2;
-		case 'x':
+		case 'c':
 		    if (outFN == 0) {
 			exiFN = "cexe.h";
 			exoFN = "cexe.c";
 		    }
 		case 'A':
-		    Aaflag = 1;		/* generate ARITH ALIAS in outFN */
+		    Aflag = 1;		/* generate ARITH ALIAS in outFN */
 		    break;
 		case 'a':
-		    aaflag = 1;		/* decimal display or append for compile */
+		    aflag = 1;		/* append for compile */
+		    break;
+		case 'x':
+		    xflag = 1;		/* start with hexadecimal display */
 		    break;
 		default:
 		    fprintf(stderr,
@@ -137,7 +182,11 @@ main(
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, MARKMAX);
+		    fprintf(stderr, usage, progFN, progFN,
+#ifdef TCP
+		    hostNM, portNM, pplcNM,
+#endif
+		    MARKMAX, SC_ID);
 		    exit(1);
 		}
 	    } while (*++*argv);
