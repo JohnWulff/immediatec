@@ -20,7 +20,7 @@ usage ()
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '		default listing is file.lst' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.5 2001/01/08 14:35:56 jw Exp $' >&2
+    echo '	$Id: makex,v 1.6 2001/02/03 16:15:04 jw Exp $' >&2
 }
 
 link=0
@@ -74,13 +74,15 @@ for f in $*; do
 
     case $link in
     0)
-	if pplc$v $d -o $base.c -l $base.lst$l $file; then
-	    gcc -g -DYYDEBUG -o $base $base.c list.c load.a
+	rm -f $base.c
+	if nice pplc$v $d -o $base.c -l $base.lst$l $file; then
+	    nice gcc -g -DYYDEBUG -o $base $base.c list.c load.a
 	else
 	    echo "pplc$v compile errors in '$file' - no executable '$base' generated" >&2
 	fi ;;
     1)
-	if pplc$v $a $d -o $base.c -l $base.lst$l $file; then
+	rm -f $base.c
+	if nice pplc$v $a $d -o $base.c -l $base.lst$l $file; then
 	    list="$list $base.c"
 	else
 	    list="$list ERROR:$base.c"
@@ -91,19 +93,21 @@ for f in $*; do
 	    a="-a"
 	fi ;;
     2)
-	if ! pplc$v $d -c -l $base.lst$l $file; then
+	if ! nice pplc$v $d -c -l $base.lst$l $file; then
 	    echo "pplc$v compile errors in '$file'" >&2
 	fi ;;
     3)
-	if ! pplc$v -o $base.c $file; then
+	rm -f $base.c
+	if ! nice pplc$v -o $base.c $file; then
 	    echo "pplc$v compile errors in '$file'" >&2
 	fi ;;
     4)
-	if ! pplc$v $d -o $base.c -l $base.lst$l $file; then
+	rm -f $base.c
+	if ! nice pplc$v $d -o $base.c -l $base.lst$l $file; then
 	    echo "pplc$v compile errors in '$file'" >&2
 	fi ;;
     5)
-	if ! pplc$v -c $file; then
+	if ! nice pplc$v -c $file; then
 	    echo "pplc$v compile errors in '$file'" >&2
 	fi ;;
     esac
@@ -112,7 +116,7 @@ done
 if [[ $link = 1 ]]; then
     if [[ $flag = noerror ]]; then
 	echo "link $first from$list"
-	gcc -g -DYYDEBUG -o $first $list list.c load.a
+	nice gcc -g -DYYDEBUG -o $first $list list.c load.a
     else
 	echo "pplc$v compile errors in '$list'" >&2
     fi
