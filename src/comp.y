@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.28 2000/12/20 18:21:11 jw Exp $";
+"@(#)$Id: comp.y,v 1.29 2000/12/22 19:15:52 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -1062,7 +1062,7 @@ yylex(void)
 		symp = lp->le_sym;		/* original via backptr */
 	    }
 	    yylval.sym.f = stmtp;	/* original name for expressions */
-	    yylval.sym.l = stmtp += sprintf(stmtp, "_(%s)", (LPSTR)symp->name);
+	    yylval.sym.l = stmtp += sprintf(stmtp, "_(%s)", symp->name);
 	} else {
 	    c1 = get();
 	    switch (c) {
@@ -1271,7 +1271,7 @@ yyerror(register char * s)	/* called for yacc syntax error */
 	    }
 	}
     }
-    n = sprintf(erbuf, "%s %d in %s", (LPSTR)s, ++ynerrs, (LPSTR)inpNM);
+    n = sprintf(erbuf, "%s %d in %s", s, ++ynerrs, inpNM);
     if (n1 < n + 5) {
 	n1 += 4;
 	while (n1--) {

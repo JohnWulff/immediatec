@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.16 2000/12/21 21:19:00 jw Exp $";
+"@(#)$Id: outp.c,v 1.17 2000/12/22 19:15:52 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -12,6 +12,7 @@ static const char outp_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<assert.h>
 #include	"pplc.h"
 #include	"comp.h"
 
@@ -24,6 +25,33 @@ unsigned short	bitmask[] = {
     0x0001, 0x0002, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080,
     0x0100, 0x0200, 0x0400, 0x0800, 0x1000, 0x2000, 0x4000, 0x8000,
 };
+
+/********************************************************************
+ *
+ *	IEC1131() modifies IEC-1131 bit names in the buffer buf
+ *	The routine returns a count of fields found.
+ *	If count is less the 4 the unmodified name is returned in buf
+ *	The count can be used to charecterize IBx, QBx etc fields also
+ *
+ *	bufLen should be >= 21 (sscanf format length)
+ *
+ *******************************************************************/
+
+int
+IEC1131(char * name, char * buf, int bufLen,
+	char * iqt, char * bwx, int * bytep, int * bitp, char * tail)
+{
+    int count;
+
+    assert(bufLen >= 21);
+    if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
+				iqt, bwx, bytep, bitp, tail)) >= 4) {
+	sprintf(buf, "%s%s%d__%d%s", iqt, bwx, *bytep, *bitp, tail);
+    } else {
+	strncpy(buf, name, bufLen - 1);
+    }
+    return count;
+} /* IEC1131 */
 
 /********************************************************************
  *
@@ -43,7 +71,7 @@ unsigned short	bitmask[] = {
  *
  *******************************************************************/
 
-static char	names[2][128];	/* ping pong buffer for modified names */
+static char	names[2][BUFS];	/* ping pong buffer for modified names */
 static int	ix;		/* index for accessing alternate arrays */
 static char	iqt[2];		/* char buffers - space for 0 terminator */
 static char	bwx[2];
@@ -59,12 +87,8 @@ mN(Symbol * sp)
     iqt[0] = bwx[0] = byte = bit = 0;		/* clear for later check */
     if (sp == 0) return strncpy(np, "0", 2);	/* in case of suprises */
     tail[0] = 0;
-    if ((cnt = sscanf(sp->name, "%1[IQT]%1[BWX]%5d.%5d%7s",
-	iqt, bwx, &byte, &bit, tail)) >= 4) {
-	sprintf(np, "%s%s%d__%d%s", iqt, bwx, byte, bit, tail);
-	return np;
-    } 
-    return strncpy(np, sp->name, 127);
+    cnt = IEC1131(sp->name, np, BUFS, iqt, bwx, &byte, &bit, tail);
+    return np;
 } /* mN */
 
 char *		full_type[] = { FULL_TYPE };

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.10 2000/12/21 19:42:12 jw Exp $";
+"@(#)$Id: genr.c,v 1.11 2000/12/22 19:15:52 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -583,7 +583,7 @@ op_asgn(			/* asign List_e stack to links */
 		    free(gp->name);		/* free name space */
 		}
 #endif
-		sprintf(temp, "%s_%d", (LPSTR)var->name, ++atn);
+		sprintf(temp, "%s_%d", var->name, ++atn);
 		gp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
 		strcpy(gp->name, temp);	/* mark Symbol */
 	    }
@@ -610,6 +610,13 @@ op_asgn(			/* asign List_e stack to links */
 		}
 	    }
 	    if (gp->ftype == ARITH && sp->type == ARN && gp->u.blist) {
+		char	buffer[BUFS];	/* buffer for modified names */
+		char	iqt[2];		/* char buffers - space for 0 terminator */
+		char	bwx[2];
+		unsigned	byte;
+		unsigned	bit;
+		char	tail[8];	/* compiler generated suffix _123456 max */
+
 		if (debug & 04) {
 		    /* only logic gate or SH can be aux expression */
 		    if (sflag) {
@@ -629,7 +636,9 @@ op_asgn(			/* asign List_e stack to links */
 		    t_first++;
 		}
 		if (debug & 04) fprintf(outFP, "_(%s)", gp->name);
-		ep += sprintf(ep, "_(%s)", (LPSTR)gp->name);
+		/* modify IXx.x and QXx.x names for compiled output only */
+		IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+		ep += sprintf(ep, "_(%s%s)", gp->type == NCONST ? "_" : "", buffer);
 		t_first = lp->le_last;	/* skip logic expr's */
 	    }
 	    if (debug & 04) {

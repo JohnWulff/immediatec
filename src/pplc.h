@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.14 2000/12/20 18:21:11 jw Exp $";
+"@(#)$Id: pplc.h,v 1.15 2000/12/22 19:15:52 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -18,7 +18,6 @@ typedef unsigned char	uchar;
 #define free(a)		efree(a)
 extern void	efree(void *);
 #else
-#define LPSTR		char*
 #ifdef MSC
 #define stpcpy(a,b)	(strcpy(a,b)+strlen(b))
 #endif

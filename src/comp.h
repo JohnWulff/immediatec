@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.6 2000/11/28 20:22:35 jw Exp $";
+"@(#)$Id: comp.h,v 1.7 2000/12/22 19:15:52 jw Exp $";
 /*
  *	"comp.h"
  *
@@ -88,3 +88,7 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 
 					/*   outp.c   */
 extern int	output(char *);		/* compiler output */
+#define BUFS	128
+extern int	IEC1131(char * name, char * buf, int bufLen,
+			char * iqt, char * bwx, int * bytep,
+			int * bitp, char * tail);
