@@ -23,7 +23,7 @@ usage()
   echo 'the two directories or a list of non-existing files in the second directory.' >&2
   echo 'These 3 lists are exclusive subsets of the complete set of selected files.' >&2
   echo >&2
-  echo "Usage:	$name [+w] [-ietqlckILh] [-x<regex>] [-d<dir>] [file ...|command] directory" >&2
+  echo "Usage:	$name [+w] [-ietqlckILZh] [-x<regex>] [-d<dir>] [-C<command>|file ...] directory" >&2
   echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
   echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
@@ -56,7 +56,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.26 2002/07/26 19:01:28 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.27 2003/10/03 15:24:31 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -99,6 +99,10 @@ processFiles()
     local status=0
     local f1
     local f2
+test "$Z" = 1 && echo "td: '$td'"
+test "$Z" = 1 && echo "t1: '$t1'"
+test "$Z" = 1 && echo "dir: '$dir'"
+test "$Z" = 1 && echo "processFiles \$*: '$*'"
 
     for f in $*; do
 	local tdSf="$td$f"
@@ -211,18 +215,9 @@ test "$Z" = 1 && echo "this $this 1 '$1' f1 '$f1' f2 '$f2' command '$command'"
 	elif [ "$level" = 0 ]; then
 	    if [ -f "$this/$f2" ]; then
 		fileArgs="$fileArgs $f2"
-		fileParams="$fileParams $1"
-		let fileCnt+=1
-	    elif [ "$fileCnt = 0" ] && [ -z "$command" ]; then
-		command="$1"		# attempt to use as a command to get list of fileArgs
-	    elif [ -n "$command" ]; then
-		fileParams="$fileParams $command $1"
-		let fileCnt+=2
-		command=''
-	    else
-		fileParams="$fileParams $1"
-		let fileCnt+=1
 	    fi
+	    fileParams="$fileParams $1"
+	    let fileCnt+=1
 	else
 	    fileParams="$fileParams $1"
 	    ff="$1"
@@ -287,6 +282,7 @@ test "$Z" = 1 && echo "for ff: $fileCnt: $fileArgs"
 	if [ $fileCnt = 1 ] && [ $q = 0 ] && [ $recursive = 0 ]; then
 	    e=1;		# for single file argument, check if other file exists
 	fi
+test "$Z" = 1 && echo "call processFiles \$this: '$this' \$directory: '$directory' \$fileArgs: '$fileArgs'"
 	processFiles $this $directory $fileArgs; let status+=$?
     fi
     if [ $recursive = 1 ]; then
@@ -392,6 +388,13 @@ Z*)	Z=1;;
 		    option=$1
 		fi
 		w="$w -I $option"
+		break;;
+	    C*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		command="$option"
 		break;;
 	    h*)	usage; exit 255;;
 	    -*)	pipe=1;;
