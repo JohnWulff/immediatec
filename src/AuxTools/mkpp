@@ -1,0 +1,8 @@
+#!/usr/bin/ksh -p
+
+for file in pplc*; do
+    base=${file%.*}
+    if [[ $file = $base ]]; then
+	mkv $file | grep -Ff mkpp.pp > $file.v
+    fi
+done
