@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.10 2000/06/10 11:27:58 jw Exp $";
+"@(#)$Id: outp.c,v 1.11 2000/11/24 14:44:45 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -122,7 +122,8 @@ output(char * outfile)			/* emit code in C */
 			    dc = 1;
 			    fprintf(outFP, "\n\t");
 			}
-			if (sp->type != TIM && sp->ftype != F_CF) {
+			if (sp->type != TIM &&
+			    sp->ftype != F_SW && sp->ftype != F_CF) {
 			    fprintf(outFP, "\t%c%s%c",
 				(sp->ftype == GATE || sp->ftype == OUTX) &&
 				lp->le_val ? '~' : ' ',
@@ -283,7 +284,7 @@ output(char * outfile)			/* emit code in C */
 				/* having only one output */
 				lp = sp->list;
 				tsp = lp->le_sym;
-				/* F_CF action gate points to function */
+				/* F_SW or F_CF action gate points to function */
 				*fp++ = tsp ? tsp->u.gate : (Gate*)lp->le_val;
 				/* room for clock or timer entry */
 				*fp++ = 0;
@@ -707,7 +708,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
     "/* error in emitting code. ACTION gate '%s' has no action list */\n",
 				sp->name);
 			} else {
-			    if (lp->le_sym == 0) {	/* dc == F_CF */
+			    if (lp->le_sym == 0) {	/* dc == F_SW or F_CF */
 				/* Function Pointer for on construct */
 				len += 17;	/* assume len of %d is 2 */
 				fprintf(Fp, "%s(Gate*)cexe_%d,",
