@@ -55,6 +55,7 @@ use strict;
 #ifdef TIME_HIRES 
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 my $t0 = [gettimeofday];	# start of program
+my %delayedColour;	# colour that should be restored after a flash
 #endif
 
 ########################################################################
@@ -63,21 +64,23 @@ my $t0 = [gettimeofday];	# start of program
 #	$colourSelect[ftype] must match the definitions in 'icc.h'
 #	Different ftypes select the 'cs' index to select four colours.
 #	The last bit of cs selects the false/true colours.
-#	The last ftype INV_ALIAS has an odd 'cs' which inverts the colours.
+#	The ftype INV_ALIAS has an odd 'cs' which inverts the colours.
 #
 #	To display clocks and glitches, the foreground is flashed white
 #	for 50 milliseconds. Flashing the background looks confusing.
 #
 ########################################################################
 
-my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# cs[ftype]
+my @colourSelect  = ( 0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,  # cs[ftype] 0 - 16
+			2,0,1,0,0,0,0,0,0,0,0,0,0,0,4,6,  # ALIAS    17 - 32
+		    );
 
 #  live colouring     false 0          true 1             cs  ftype
 my @tagBackground = ('PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
 		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
 		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
-							# cs+8 no change
+							# cs|010 no change
 		     'PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
 		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
@@ -87,7 +90,7 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'black'        , 'red'          ,  # 2 3 ARITH
 		     'black'        , 'white'        ,  # 4 5 CLCKL
 		     'black'        , 'white'        ,  # 6 7 TIMRL
-							# cs+8 flash glitch
+							# cs|010 flash glitch
 		     'white'        , 'white'        ,  # 0 1 GATE
 		     'white'        , 'white'        ,  # 2 3 ARITH
 		     'white'        , 'black'        ,  # 4 5 CLCKL
@@ -115,7 +118,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.14 2001/04/09 19:15:20 jw Exp $
+$Id: iClive,v 1.15 2001/04/15 06:38:08 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -381,9 +384,9 @@ sub rcvd_msg_from_server {
 			    if ($tRest < 10) {
 				colourTag("$index", $cs);	# normal colour
 			    } else {
-				colourTag("$index", $cs + 8);	# flash glitch
+				colourTag("$index", $cs | 010);	# flash glitch
 				# delay the colour change to make it visible
-				$text->after(50, [ \&colourTag, "$index", $cs ]);
+				$text->after(50, [ \&restoreTag, "$index" ]);
 			    }
 #else
 			    colourTag("$index", $cs);		# normal colour
@@ -397,11 +400,11 @@ sub rcvd_msg_from_server {
 #ifdef TIME_HIRES 
 			    $cs ^= 1;				# complement colour
 			    if ($tRest < 10) {
-				colourTag("$index~", $cs);
+				colourTag("$index~", $cs);	# latest $cs is saved
 			    } else {
-				colourTag("$index~", $cs + 8);	# flash glitch
+				colourTag("$index~", $cs | 010);# flash glitch
 				# delay the colour change to make it visible
-				$text->after(50, [ \&colourTag, "$index~", $cs ]);
+				$text->after(50, [ \&restoreTag, "$index~" ]);
 			    }
 #else
 			    colourTag("$index~", $cs ^ 1);	# complement colour
@@ -445,6 +448,31 @@ sub colourTag {
 			'-background' => $tagBackground[$cs], 
 			'-foreground' => $tagForeground[$cs],
 		       );
+#ifdef TIME_HIRES 
+    $delayedColour{$tag} = $cs;		# save colour for end of flash
+}
+
+########################################################################
+#
+#	Restore the tag colour after a flash
+#
+#	If the value in %delayedColour were not used, another change
+#	before the 50 ms flash is finished may come in and the end of
+#	flash will then restore to the second last change. Now the
+#	colour is saved in &colourTag and the end of the flash will
+#	restore the very latest change.
+#
+########################################################################
+
+sub restoreTag {
+    my ($tag) = @_;
+    my $cs = $delayedColour{$tag} & 07;	# latest colour ignoring flash
+# print "restoreTag: $tag $cs\n";
+    $text->tagConfigure($tag,
+			'-background' => $tagBackground[$cs], 
+			'-foreground' => $tagForeground[$cs],
+		       );
+#endif
 }
 
 ########################################################################
