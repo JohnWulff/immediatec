@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 ########################################################################
 #
 #	Example 14-1 Simple UI Code
@@ -7,6 +7,21 @@
 ########################################################################
 
 use Tk;					# Slurp the module in
+use Msg;
+use strict;
+
+########################################################################
+#
+#	Connect to server
+#
+########################################################################
+
+my $host = 'localhost';
+my $port = 8080;
+
+my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+die "Client could not connect to $host:$port\n" unless $conn;
+print "Connection successful.\n";
 
 ########################################################################
 #
@@ -14,8 +29,9 @@ use Tk;					# Slurp the module in
 #
 ########################################################################
 
-$top = MainWindow->new();
+my $top = MainWindow->new();
 $top->title("Simple");
+my $i = 0;
 
 ########################################################################
 #
@@ -27,7 +43,11 @@ foreach my $color (qw(PeachPuff1 LightBlue1 SeaGreen2 Yellow1 PeachPuff1 LightBl
 	my $button = $top->Button(
 		-text    => $color,
 		-width   => 10,
-		-command => sub {$top->configure(-background => lc($color))},
+		-command => sub {
+				$top->configure(-background => lc($color));
+				$i++; print "Sending msg $i\n";
+				$conn->send_now($color);
+			    },
 	);
 	$button->pack(qw(-side top -expand yes -pady 2));
 }
@@ -38,4 +58,12 @@ foreach my $color (qw(PeachPuff1 LightBlue1 SeaGreen2 Yellow1 PeachPuff1 LightBl
 #
 ########################################################################
 
-MainLoop();
+# MainLoop;
+
+while (Tk::MainWindow->Count) {
+    DoOneEvent(0);
+    print "#";
+    Msg->event_loop(1);
+}
+$conn->disconnect();
+Msg->event_loop();
