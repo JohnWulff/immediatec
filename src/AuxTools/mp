@@ -2,46 +2,46 @@
 
 ########################################################################
 #
-#	make OutP in Test pplc
+#	make OutP in Test icc
 #
 ########################################################################
 
 cd ..
-test -f pplc && pplc -c < /dev/null || test -f pptc && pptc -c < /dev/null
-make pplc > /dev/null		# up to date pplc under all circs
-cp pplc pplc.bak
+test -f icc && icc -c < /dev/null || test -f ict && ict -c < /dev/null
+make icc > /dev/null		# up to date icc under all circs
+cp icc icc.bak
 cd Test
 test -d ListP || mkdir ListP;
 
 if [[ $# != 0 ]]; then
     for f in $*; do
-	echo "$f.p";
-	pplc -c $f.p		# listing only with -d474
+	echo "$f.ic";
+	icc -c $f.ic		# listing only with -d474
 	cd ..
-	rm -f cexe.o pplc	# new cexe.o too soon for make sometimes
-	make pplc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-	if [[ -f pplc ]]; then
+	rm -f cexe.o icc	# new cexe.o too soon for make sometimes
+	make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	if [[ -f icc ]]; then
 	    cd Test
-	    pplc -d474 -l ListP/$f.lst $f.ic;
+	    icc -d474 -l ListP/$f.lst $f.ic;
 	else
-	    cp pplc.bak pplc;
-	    echo make pplc failed
+	    cp icc.bak icc;
+	    echo make icc failed
 	    cd Test
 	fi
     done
 else
     for f in $(cat pe.lst); do
 	echo "$f.ic";
-	pplc -c $f.ic		# listing only with -d474
+	icc -c $f.ic		# listing only with -d474
 	cd ..
-	rm -f cexe.o pplc	# new cexe.c too soon for make sometimes
-	make pplc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
-	if [[ -f pplc ]]; then
+	rm -f cexe.o icc	# new cexe.c too soon for make sometimes
+	make icc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	if [[ -f icc ]]; then
 	    cd Test
-	    pplc -d474 -l ListP/$f.lst $f.ic;
+	    icc -d474 -l ListP/$f.lst $f.ic;
 	else
-	    cp pplc.bak pplc;
-	    echo make pplc failed
+	    cp icc.bak icc;
+	    echo make icc failed
 	    cd Test
 	fi
     done > OutP 2>&1;

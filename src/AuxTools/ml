@@ -2,18 +2,18 @@
 
 ########################################################################
 #
-#	make lists for pplc Test
+#	make lists for icc Test
 #
 ########################################################################
 
-mklst *.p > p.lst	# all for copying
-mklst -d *.p > pd.lst	# sources and derived for comparing
-mklst -e *.p > pe.lst	# executables only
-mklst -c *.p > pc.lst	# C files only
-mklst -i *.p > pi.lst	# ini files only
-mklst -l *.p > pl.lst	# lst files only
-mklst -6 *.p > p6.lst	# lst6 files only
-mklst -p *.p > pp.lst	# pplc files only
+mklst *.ic > p.lst	# all for copying
+mklst -d *.ic > pd.lst	# sources and derived for comparing
+mklst -e *.ic > pe.lst	# executables only
+mklst -c *.ic > pc.lst	# C files only
+mklst -i *.ic > pi.lst	# ini files only
+mklst -l *.ic > pl.lst	# lst files only
+mklst -6 *.ic > p6.lst	# lst6 files only
+mklst -p *.ic > pp.lst	# icc files only
 
 test -e OutP && echo OutP >> p.lst; echo OutP >> pd.lst;
 test -e OutT && echo OutT >> p.lst; echo OutT >> pd.lst;
