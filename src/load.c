@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.26 2002/06/12 06:30:46 jw Exp $";
+"@(#)$Id: load.c,v 1.27 2002/06/13 12:30:21 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -315,8 +315,8 @@ main(
 			if (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
 			    while (gp->gt_ini == -ALIAS || gp->gt_fni == OUTX) {
 				if (gp->gt_ini == -ALIAS) {
-				    if (df) printf("	%s%s@",		/* @ */
-					gp->gt_mark ? "~" : " ", gp->gt_ids);
+				    if (df) printf("	%c%s@",		/* @ */
+					inversion ? '~' : ' ', gp->gt_ids);
 				    inversion ^= gp->gt_mark;
 				    gp = (Gate*)gp->gt_rlist;
 				} else {
@@ -330,8 +330,8 @@ main(
 					    inError(__LINE__, op, gp);
 					}
 				    }
-				    if (df) printf("	%s%s>,",	/* @ */
-					iv ? "~" : " ", gp->gt_ids);	/* @ */
+				    if (df) printf("	%c%s>,",	/* @ */
+					iv ? '~' : ' ', gp->gt_ids);	/* @ */
 				    gp = tgp;
 				}
 			    }
@@ -348,8 +348,8 @@ main(
 			    }
 			    *tlp = gp;	/* swap in real input */
 			}
-			if (df) printf("	%s%s,",
-			    (i >> 1) & 1 ^ inversion ? "~" : " ", gp->gt_ids);
+			if (df) printf("	%c%s,",
+			    (i >> 1) & 1 ^ inversion ? '~' : ' ', gp->gt_ids);
 			op->gt_val++;		/* count input */
 			if (gp->gt_fni == GATE) {
 			    gp->gt_mark++;	/* logic output at gp */
@@ -448,7 +448,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) { printf("PASS 2\n"); fflush(stdout); }
+    if (df) { printf("PASS 2 - symbol table\n"); fflush(stdout); }
     /* iClock has no input, needs no output - just report for completeness */
     if (df) printf(" %-8s %3d %3d\n", iClock.gt_ids, iClock.gt_val,
 	iClock.gt_mark);
@@ -489,6 +489,17 @@ main(
 		if (op->gt_fni != OUTW && op->gt_fni != OUTX) {
 		    op->gt_mark = 0;	/* must be cleared for run-time */
 		}
+	    } else if (df) {
+		int inverse = 0;		/* print ALIAS in symbol table */
+		gp = op;
+		printf(" %s@	", gp->gt_ids);
+		while (gp->gt_ini == -ALIAS) {
+		    if (gp->gt_fni == GATE) {
+			inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+		    }
+		    gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+		}
+		printf("%c%s\n", inverse ? '~' : ' ', gp->gt_ids);
 	    }
 	}
     }
