@@ -1,4 +1,4 @@
-#!/opt/bin/perl
+#!/usr/bin/perl
 use strict;
 #--------------------------------------------------------------
 # perlman: man page viewer in Perl
@@ -71,7 +71,7 @@ sub show_man {
         }
     }
     if ( ! $lines_added ) {
-        $text->insert('end', "Sorry. No information found on $man");
+	$text->insert('end', "Sorry. No information found on $man$section");
     }
     close(F);
 }
@@ -81,7 +81,7 @@ sub get_command_line {
                               # Unix command-line
     if ($section) {
         $section =~ s/[()]//g; # remove parens
-        return "man -s $section $man 2> /dev/null | rman |";
+        return "man -S $section $man 2> /dev/null | rman |";
     } else {
         return "man $man 2> /dev/null | rman |";
     }
@@ -156,8 +156,10 @@ sub create_ui {
     
     # TEXT STUFF
 
-    $text = $top->Text ('-width' =>  80, 
-                        '-height' => 40)->pack();
+    $text = $top->Text ('-width'  => 80, 
+                        '-height' => 40,
+			'-background' => 'cornsilk1'
+			)->pack();
     $text->tagConfigure('section', 
                         '-font' => '-adobe-helvetica-bold-r-normal--14-140-75-75-p-82-iso8859-1');
     $text->bind('<Double-1>', \&pick_word);
@@ -276,7 +278,7 @@ sub scout_man_dirs {
         foreach $section_dir (@section_dirs) {
             chdir $section_dir || next;
             ($section = $section_dir) =~ s/^man//;
-            push (@{$sections{$section}}, <*.$section>);
+            push (@{$sections{$section}}, <*.$section*>);
             chdir "..";
         }
         chdir "..";
