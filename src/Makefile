@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.5 1999/08/04 18:28:55 jw Exp $
+# @(#)$Id: Makefile,v 1.6 1999/08/06 21:13:31 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -37,9 +37,9 @@ load.a:	Makefile load.d load.o scid.o pplc.d pplc.o $(POBJ:.o=.d) $(POBJ)
 
 %.c: %.y
 	mv -f y.tab.h y.tab.t
-	rm -f y.tab.c
+	rm -f y.tab.c $@
 	$(YACC.y) $< 
-	cp -f y.tab.c $@
+	cp y.tab.c $@
 	$(SHELL) -ec 'if cmp -s y.tab.h y.tab.t; then mv y.tab.t y.tab.h; fi'
 	rm -f y.tab.t
 	chmod -w y.tab.h y.tab.c $@

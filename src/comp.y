@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.5 1999/08/06 15:43:37 jw Exp $";
+"@(#)$Id: comp.y,v 1.6 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -7,9 +7,6 @@
  *
  *******************************************************************/
 
-#ifndef _MSDOS_
-#define _GNU_SOURCE
-#endif
 #ifdef _WINDOWS 
 #include	<windows.h>
 #endif
@@ -729,7 +726,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 		$$.v = op_push(lp1, types[lp1->le_sym->ftype], lp2);
 		/* 3rd input is timed reset fed back from own output */
-	//	tp = $$.v->le_sym->type;
+	/*	tp = $$.v->le_sym->type; */
 		lp3 = sy_push($3.v->le_sym);	/* use dummy $3.v fill link */
 		lp2 = op_push(sy_push($1.v), UDF, lp3);
 		lp2->le_sym->ftype += 1;	/* next ftype */
@@ -1309,7 +1306,7 @@ yylex(void)
 		stmtp > yybuf && *(stmtp-1) == *yytext) {
 		*stmtp++ = ' ';		/* space between + + and - - */
 	    }
-	    yylval.val.l = stmtp = stpcpy(stmtp, yytext);
+	    yylval.val.l = stmtp = strcpy(stmtp, yytext) + strlen(yytext);
 	}
 	return c;			/* return token to yacc */
     }

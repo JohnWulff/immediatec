@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.2 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: load.c,v 1.3 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -24,8 +24,6 @@ Gate		iClock = { -1, -CLK, CLCKL, 0, "iClock" };	/* active */
 Gate **		sTable;			/* pointer to dynamic array */
 Gate **		sTend;			/* end of dynamic array */
 unsigned long	sTstrLen;		/* length of symbol strings */
-
-extern Gate **	i_list[];
 
 unsigned	errCount;
 char *		progname;

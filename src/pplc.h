@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.4 1999/08/04 18:28:55 jw Exp $";
+"@(#)$Id: pplc.h,v 1.5 1999/08/06 21:13:31 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -205,6 +205,7 @@ extern uchar	QX_[];			/* Output bit field */
 extern uchar	idata[];		/* Input bit field */
 extern uchar	pdata[];		/* rest used only locally */
 extern Functp *	i_lists[];
+
 extern Gate *	a_list;
 extern Gate *	o_list;
 extern Gate *	c_list;
@@ -277,6 +278,7 @@ extern void	quit(int sig);	/* quit with correct interrupt vectors */
 extern Gate **		sTable;			/* pointer to dynamic array */
 extern Gate **		sTend;			/* end of dynamic array */
 extern unsigned long	sTstrLen;		/* length of symbol strings */
+extern Gate **		i_list[];		/* used to load several modules */
 #else
 extern int		c_exec(int pp_index);
 #endif

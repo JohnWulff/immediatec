@@ -1,5 +1,5 @@
 static const char list_c[] =
-"@(#)$Id: list.c,v 1.1 1999/08/06 19:10:37 jw Exp $";
+"@(#)$Id: list.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
 /********************************************************************
  *
  *	list.c
@@ -10,7 +10,9 @@ static const char list_c[] =
  *
  *******************************************************************/
 
-#include	"list.h"
+#include	<stdio.h>
+#include	<pplc.h>
+#include	"inc1.h"
+#include	"inc2.h"
 
-Gate **		i_list[] = { I_LIST
-				, 0 };	/* load several modules */
+Gate **		i_list[] = { I_LIST 0 };	/* load several modules */

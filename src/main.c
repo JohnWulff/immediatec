@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.4 1999/08/02 21:26:19 jw Exp $";
+"@(#)$Id: main.c,v 1.5 1999/08/06 21:13:31 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -55,11 +55,11 @@ pplc [-d<debug>] [-n<count>] [-o<out>] [-l<list>] [-e<err>] [-xa] <iC_program>\n
 ";
 
 char * OutputMessage[] = {
-    0,					// [0] no error
-    "%s: syntax or generate errors",	// [1]
-    "%s: block count error",		// [2]
-    "%s: link count error",		// [3]
-    "%s: cannot open file %s",		// [4]
+    0,					/* [0] no error */
+    "%s: syntax or generate errors",	/* [1] */
+    "%s: block count error",		/* [2] */
+    "%s: link count error",		/* [3] */
+    "%s: cannot open file %s",		/* [4] */
 };
 
 

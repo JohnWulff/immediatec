@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.7 1999/08/04 18:28:55 jw Exp $";
+"@(#)$Id: outp.c,v 1.8 1999/08/06 21:13:31 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -14,6 +14,9 @@ static const char outp_c[] =
 #include	<string.h>
 #include	"pplc.h"
 #include	"comp.h"
+
+#define Hname	"inc1.h"
+#define Lname	"inc2.h"
 
 extern char	SC_ID[];
 
@@ -342,6 +345,7 @@ output(char * outfile)			/* emit code in C */
 	int		c;
 	FILE *		Fp;
 	FILE *		Hp;
+	FILE *		Lp;
 	char *		s1;
 	char *		source;
 	char *		module;
@@ -353,9 +357,14 @@ output(char * outfile)			/* emit code in C */
 	    rc = 4; goto end;
 	}
 
-	if ((Hp = fopen("x.h", "a")) == 0) {
+	if ((Hp = fopen(Hname, "a")) == 0) {
 	    rc = 4; goto endh;
 	}
+
+	if ((Lp = fopen(Lname, "a")) == 0) {
+	    rc = 4; goto endl;
+	}
+	fprintf(Lp, "#define	I_LIST\\\n");
 
 	/* rewind intermediate file */
 
@@ -393,7 +402,7 @@ static char	COMPILER[] =\n\
 #define _(x) x.gt_old\n\
 #define A(x,v) assign(&x, v)\n\
 extern Gate *	l_[];\n\
-", source, outfile, SC_ID, "x.h");
+", source, outfile, SC_ID, Hname);
 
 /********************************************************************
  *
@@ -419,7 +428,7 @@ extern Gate *	l_[];\n\
 			linecnt++;
 		    } else if (dc == OUTW && (lp = sp->list) != 0) {
 			fprintf(Hp, "#define %s	%s\n",
-			    sp->name, lp->le_sym->name); /* back link to x.h */
+			    sp->name, lp->le_sym->name); /* back link to Hname */
 			    /* important to use unmodified names here */
 		    }
 		} else if (typ == CLK || typ == TIM) {
@@ -444,21 +453,21 @@ extern Gate *	l_[];\n\
 			tsp = lp->le_sym;		/* action gate */
 			if (tsp->ftype == GATE) {
 			    fprintf(Fp,
-    "// error in emitting code. Simple gate '%s' on clock list '%s'\n",
+    "/* error in emitting code. Simple gate '%s' on clock list '%s' */\n",
 				tsp->name, sp->name);
 			    linecnt++;
 			    break;
 			}
 			if ((tlp = tsp->list) == 0) {
 			    fprintf(Fp,
-    "// error in emitting code. Action gate '%s' on clock list '%s' has no output\n",
+    "/* error in emitting code. Action gate '%s' on clock list '%s' has no output */\n",
 				tsp->name, sp->name);
 			    linecnt++;
 			    break;
 			}
 			if (tlp->le_next) {
 			    fprintf(Fp,
-    "// error in emitting code. Action gate '%s' on clock list '%s' has more than 1 output\n",
+    "/* error in emitting code. Action gate '%s' on clock list '%s' has more than 1 output */\n",
 				tsp->name, sp->name);
 			    linecnt++;
 			    break;
@@ -471,20 +480,20 @@ extern Gate *	l_[];\n\
 		} else if (typ == ALIAS) {
 		    if ((lp = sp->list) == 0) {
 			fprintf(Fp,
-"// error in emitting code. Alias '%s' has no output\n",
+"/* error in emitting code. Alias '%s' has no output */\n",
 			    sp->name);
 			linecnt++;
 		    } else if (lp->le_next) {
 			fprintf(Fp,
-"// error in emitting code. Alias '%s' has more than 1 output\n",
+"/* error in emitting code. Alias '%s' has more than 1 output */\n",
 			    sp->name);
 			linecnt++;
 		    } else if (sp->ftype == ARITH) {
 			fprintf(Hp, "#define %s	%s\n",
-			    mN(sp), mN(lp->le_sym));	/* ALIAS to x.h */
+			    mN(sp), mN(lp->le_sym));	/* ALIAS to Hname */
 		    } else if (sp->ftype != GATE) {
 			fprintf(Fp,
-"// error in emitting code. Alias '%s' has wrong ftype %s\n",
+"/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
 			    sp->name, full_ftype[sp->ftype]);
 			linecnt++;
 		    }
@@ -549,7 +558,7 @@ extern Gate *	l_[];\n\
 			li += 2;
 			if ((lp = sp->list->le_next) == 0) {
 			    fprintf(Fp,
-"// error in emitting code. Action gate '%s' has no clock\n",
+"/* error in emitting code. Action gate '%s' has no clock */\n",
 				sp->name);	/* ZZZ wrong format */
 			} else if (lp->le_sym->type == TIM) {
 			    li++;	/* space for TIME or time function */
@@ -572,8 +581,8 @@ extern Gate *	l_[];\n\
 			    mask = bitmask[bit];
 			} else {
 			OutErr:
-			    fprintf(Fp, " (Gate**)&QX_[0],\n\
-// error in emitting code. OUT configuration error %s\n", sp->name);
+			    fprintf(Fp, " (Gate**)&QX_[0],\n"
+"/* error in emitting code. OUT configuration error %s */\n", sp->name);
 			    mask = 0;	/* no output because mask is 0x00 */
 			}
 		    } else {
@@ -601,8 +610,8 @@ extern Gate *	l_[];\n\
 			    fprintf(Fp, " &%sX_[%d],", iqt, byte * 8 + bit);
 			} else {
 			InErr:
-			    fprintf(Fp, " 0,\n\
-// error in emitting code. IN configuration error %s\n", sp->name);
+			    fprintf(Fp, " 0,\n"
+"/* error in emitting code. IN configuration error %s */\n", sp->name);
 			    linecnt += 2;
 			}
 		    } else {
@@ -646,8 +655,9 @@ extern Gate *	l_[];\n\
 	    *s1 = '\0';			/* module name without extensions */
 	}
 
-	fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n",
-					module, sam, nxs);
+	fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
+	fprintf(Hp, "extern Gate *	%s_i_list;\n", module);
+	fprintf(Lp, "	&%s_i_list,\\\n", module);
 	free(module);
 
 	fprintf(Fp, "\n\
@@ -692,7 +702,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 		    if ((dc = sp->ftype) >= MIN_ACT && dc < MAX_ACT) {
 			if ((lp = sp->list) == 0) {
 			    fprintf(Fp,
-    "// error in emitting code. ACTION gate '%s' has no action list\n",
+    "/* error in emitting code. ACTION gate '%s' has no action list */\n",
 				sp->name);
 			} else {
 			    if (lp->le_sym == 0) {	/* dc == F_CF */
@@ -734,7 +744,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 		    if (typ == ARN) {
 			if ((lp = sp->u.blist) == 0) {
 			    fprintf(Fp,
-    "// error in emitting code. ARITHMETIC gate '%s' has no function\n",
+    "/* error in emitting code. ARITHMETIC gate '%s' has no function */\n",
 				sp->name);
 			} else {
 			    /* Function Pointer at start of input list */
@@ -771,6 +781,8 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 	}
 	fprintf(Fp, "};\n");
     endm:
+	fclose(Lp);	/* close the list header file in case other actions */
+    endl:
 	fclose(Hp);	/* close the header file in case other actions */
     endh:
 	fclose(Fp);	/* close the output file in case other actions */
