@@ -80,18 +80,24 @@ my %delayedColour;	# colour that should be restored after a flash
 #	$colourSelect[ftype] must match the definitions in 'icc.h'
 #	Different ftypes select the 'cs' index to select four colours.
 #	The last bit of cs selects the false/true colours.
-#	The ftype INV_ALIAS has an odd 'cs' which inverts the colours.
+#	The ftype INV_A has an odd 'cs' which inverts the colours.
 #
 #	To display clocks and glitches, the foreground is flashed white
 #	for 50 milliseconds. Flashing the background looks confusing.
 #	Uses Tk::After. Flash 2 clocks in a row white. This happens if
 #	CLOCK or TIMER has 2 slave gates which are fired together.
 #	
+#	the following array is indexed by gt_fni is ftype (see icc.h)
+#	
+#	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
+#	F_SW	S_FF	R_FF	D_FF	F_CF	CLCK	TIMR
+#	OUTW	OUTX	CLCKL	TIMRL
+#	ARITH_A	GATE_A	INV_A	...	CLCKL_A	TIMRL_A
 #
 ########################################################################
 
-my @colourSelect  = ( 0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,  # cs[ftype] 0 - 16
-			2,0,1,0,0,0,0,0,0,0,0,0,0,0,4,6,  # ALIAS    17 - 32
+my @colourSelect  = ( 0,2,0,0,2,0,0,2,2,0,0,0,0,0,0,2,0,4,6, # cs[ftype] 0 - 18
+			2,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,4,6, # ALIAS    19 - 36
 		    );
 
 #  live colouring     false 0          true 1             cs  ftype
@@ -169,7 +175,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.22 2002/06/17 11:35:39 jw Exp $
+$Id: iClive,v 1.23 2002/06/19 20:44:13 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);

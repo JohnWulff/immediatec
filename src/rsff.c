@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.25 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: rsff.c,v 1.26 2002/06/23 16:24:59 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -89,6 +89,12 @@ unsigned char	bitIndex[]   = {
  *
  *******************************************************************/
 
+/********************************************************************
+ *
+ *	Master set action S_FF on flip/flop FF
+ *
+ *******************************************************************/
+
 void
 sMff(					/* S_FF master action on FF */
     Gate *	gp,
@@ -104,11 +110,17 @@ sMff(					/* S_FF master action on FF */
     if (
 	(fa = gp->gt_list)[FL_GATE]->gt_val > 0
 	&& gp->gt_val < 0		/* anything to set */
-	|| gp->gt_next
+	|| gp->gt_next			/* or glitch */
     ) {
 	link_ol(gp, fa[FL_CLK]);	/* master action */
     }
 } /* sMff */
+
+/********************************************************************
+ *
+ *	Slave set action S_FF on flip/flop FF
+ *
+ *******************************************************************/
 
 void
 sSff(					/* S_FF slave action on FF */
@@ -143,6 +155,12 @@ sSff(					/* S_FF slave action on FF */
     }
 } /* sSff */
 
+/********************************************************************
+ *
+ *	Master reset action R_FF on flip/flop FF
+ *
+ *******************************************************************/
+
 void
 rMff(					/* R_FF master action on FF */
     Gate *	gp,
@@ -158,11 +176,17 @@ rMff(					/* R_FF master action on FF */
     if (
 	(fa = gp->gt_list)[FL_GATE]->gt_val < 0
 	&& gp->gt_val < 0		/* anything to reset */
-	|| gp->gt_next
+	|| gp->gt_next			/* or glitch */
     ) {
 	link_ol(gp, fa[FL_CLK]);	/* master action */
     }
 } /* rMff */
+
+/********************************************************************
+ *
+ *	Slave reset action R_FF on flip/flop FF
+ *
+ *******************************************************************/
 
 void
 rSff(					/* R_FF slave action on FF */
@@ -197,6 +221,12 @@ rSff(					/* R_FF slave action on FF */
     }
 } /* rSff */
 
+/********************************************************************
+ *
+ *	Master delay action D_FF on flip/flop FF
+ *
+ *******************************************************************/
+
 void
 dMff(					/* D_FF master action on FF */
     Gate *	gp,
@@ -212,11 +242,17 @@ dMff(					/* D_FF master action on FF */
     if (
 	((fa = gp->gt_list)[FL_GATE]->gt_val < 0)
 	^ (gp->gt_val < 0)		/* any change */
-	^ (gp->gt_next != 0)
+	^ (gp->gt_next != 0)		/* xor glitch */
     ) {
 	link_ol(gp, fa[FL_CLK]);	/* master action */
     }
 } /* dMff */
+
+/********************************************************************
+ *
+ *	Slave delay action D_FF on flip/flop FF
+ *
+ *******************************************************************/
 
 void
 dSff(					/* D_FF slave action on FF */
@@ -245,18 +281,64 @@ dSff(					/* D_FF slave action on FF */
 
 /********************************************************************
  *
- *	Sample/hold function with D(arithmetic expr)
+ *	Sample/hold function with SH(arithmetic_expr)
+ *				  SH(arithmetic_expr, set, reset)
+ *
+ *	Sample/hold is the arithmetic analog of a flip/flop
+ *	The delay function transfers the arithmetic input at the
+ *	master to the slave on the next clock.
+ *	Set and reset set the slave to -1 (all 1s) or 0 (all 0s)
+ *	on the next clock. Set and reset have priority over delay.
+ *
+ *	Explanation of the locking algorithm used below.
+ *
+ *	Values in slave node gt_val for different valuse in gt_new:
+ *
+ *	    +4  0000 0100  all other +ve values are not used
+ *	    +3  0000 0011  gt_new =  0, set/reset master occurred
+ *	    +2  0000 0010  intermdiate, set/reset master occurred
+ *	    +1  0000 0001  gt_new =  0
+ *	     0  0000 0000  intermdiate
+ *	    -1  1111 1111  gt_new = -1, set/reset master occurred
+ *	    -2  1111 1110  not used
+ *	    -3  1111 1101  gt_new = -1
+ *	    -4  1111 1100  all other -ve values are not used
+ *		bit1---^   (mask is 0x02)
+ *
+ *	Inital value from gate3() is +1 which is given.
+ *
+ *	Intermediate values for gt_new are 1 to -2 for which both
+ *	a set and reset action can be fired because gt_val is 0.
+ *
+ *	gt_val.bit1 records that set/reset master has occurred.
+ *
+ *	After a set action a subsequent reset before the next clock
+ *	would be blocked, because gt_val is then +2.
+ *
+ *	Independent of this, a second set or reset action is blocked
+ *	by testing gt_val.bit1.
+ *
+ *	Care must be taken that gt_val.bit1 is cleared when a glitch
+ *	occurrs on a set or reset input; otherwise there is a deadlock.
+ *
+ *******************************************************************/
+
+/********************************************************************
+ *
+ *	Master delay D_SH on sample/hold SH
  *
  *******************************************************************/
 
 void
 dMsh(					/* D_SH master action on SH */
-    Gate *	gp,
+    Gate *	gf,
     Gate *	out_list)
 {
+    Gate *	gp;
+
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
-	gp->gt_new = gp->gt_val < 0 ? 1 : 0;
+	gf->gt_new = gf->gt_val < 0 ? 1 : 0;
 	/*
 	 * since new is only modified here and since gt_val has changed,
 	 * new must differ from old (no need to check).
@@ -265,12 +347,21 @@ dMsh(					/* D_SH master action on SH */
 	 */
     }
 #if defined(TCP) && defined(LOAD)
-    if (gp->gt_live & 0x8000) {			/* misses all but first change */
-	liveData(gp->gt_live, gp->gt_new);	/* and return to old value */
+    if (gf->gt_live & 0x8000) {			/* misses all but first change */
+	liveData(gf->gt_live, gf->gt_new);	/* and return to old value */
     }
 #endif
-    link_ol(gp, gp->gt_clk);		/* master action */
+    gp = gf->gt_funct;
+    if ((gp->gt_val & 0x02) == 0) {
+	link_ol(gf, gf->gt_clk);		/* master action */
+    }
 } /* dMsh */
+
+/********************************************************************
+ *
+ *	Slave delay action D_SH on sample/hold SH
+ *
+ *******************************************************************/
 
 void
 dSsh(					/* D_SH slave action on SH */
@@ -286,25 +377,269 @@ dSsh(					/* D_SH slave action on SH */
     }
 #endif
     gp = gf->gt_funct;
+    /*
+     * Although master gf is still on clock list, master may not differ from
+     * slave output because of S_SH or R_SH actions.
+     */
+    if ((gp->gt_val & 0x02) == 0 && gf->gt_new != gp->gt_new) {
 #ifndef _WINDOWS 
-    if (debug & 0100) {
-	fprintf(outFP, "\tSH %s %d ==>", gp->gt_ids, gp->gt_new);
+	if (debug & 0100) {
+	    fprintf(outFP, "\tSH %s %d ==>", gp->gt_ids, gp->gt_new);
+	}
+#endif
+	gp->gt_new = gf->gt_old = gf->gt_new; /* transfer value to slave */
+	gp->gt_val = gp->gt_new ? (gp->gt_new == -1 ? -3 : 0) : 1;
+	link_ol(gp, a_list);	/* fire new arithmetic action */
+#ifndef _WINDOWS 
+	if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
+#endif
+    }
+} /* dSsh */
+
+/********************************************************************
+ *
+ *	Master set action S_SH on sample/hold SH
+ *
+ *******************************************************************/
+
+void
+sMsh(					/* S_SH master action on SH */
+    Gate *	gf,
+    Gate *	out_list)
+{
+    Gate *	gp;
+    Gate **	fa;
+    Gate *	gdm;
+
+#if defined(TCP) && defined(LOAD)
+    if (gf->gt_live & 0x8000) {
+	liveData(gf->gt_live, gf->gt_val < 0 ? 1 : 0);	/* live is active */
     }
 #endif
-    /* since gf is still on clock list gt_new must differ from gt_old */
-    gp->gt_new = gf->gt_old = gf->gt_new; /* transfer value to slave */
-    link_ol(gp, a_list);	/* fire new arithmetic action */
+    if (
+	(gp = (fa = gf->gt_list)[FL_GATE])->gt_val >= 0	/* 0 for intermediate SH */
+	&& gf->gt_val < 0		/* anything to set */
+	&& (gp->gt_val & 0x02) == 0	/* no previous master reset action */
+	|| gf->gt_next			/* or glitch, which clears bit1 */
+    ) {
+	if (gp->gt_val & 0x02) {
+	    gp->gt_val &= ~0x02;	/* glitch - clear S_SH action in slave node */
+	    /* the SH function should have a delay master - works with set/rest only */
+	    if ((gdm = (Gate*)gp->gt_rlist) &&	/* delay master for this slave */
+		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
 #ifndef _WINDOWS 
-    if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
+		if (debug & 0100) {
+		    fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+		}
 #endif
-} /* dSsh */
+		dMsh(gdm, a_list);	/* link or unlink delay master now */
+#ifndef _WINDOWS 
+		if (debug & 0100) {
+		    fprintf(outFP, " %d}", gdm->gt_new);
+		}
+#endif
+	    }
+	} else {
+	    gp->gt_val |= 0x02;		/* mark S_SH action in slave node */
+	}
+	link_ol(gf, fa[FL_CLK]);	/* master action */
+    }
+} /* sMsh */
+
+/********************************************************************
+ *
+ *	Slave set action S_SH on sample/hold SH
+ *
+ *	With this action the value is changed and this must be stored
+ *	in gt_old of the associated delay master. This is needed mainly
+ *	when gt_new changes back to the original value. This would not
+ *	be the correct target unless changed here.
+ *
+ *******************************************************************/
+
+void
+sSsh(					/* S_SH slave action on SH */
+    Gate *	gf,
+    Gate *	out_list)
+{
+    Gate *	gp;
+    Gate *	gdm;
+
+    if (gf->gt_val < 0) {
+	gp = gf->gt_funct;
+	gp->gt_val &= ~0x02;		/* clear set slave action flag */
+	if (gp->gt_new != -1) {
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, "\tS SH %s %2d ==>", gp->gt_ids, gp->gt_new);
+	    }
+#endif
+	    if (gp->gt_next) {
+		gp->gt_new = gp->gt_old;	/* glitch SH slave output */
+		gp->gt_val = gp->gt_new ? (gp->gt_new == -1 ? -3 : 0) : 1;
+	    } else {
+		gp->gt_new = -1;		/* set SH slave output */
+		gp->gt_val = -3;		/* set logic output also */
+	    }
+	    /* the SH function should have a delay master - works with set/rest only */
+	    if (gdm = (Gate*)gp->gt_rlist) {	/* delay master for this slave */
+		gdm->gt_old = gp->gt_new;	/* adjust delay master */
+		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
+#ifndef _WINDOWS 
+		    if (debug & 0100) {
+			fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+		    }
+#endif
+		    dMsh(gdm, a_list);		/* link or unlink delay master now */
+#ifndef _WINDOWS 
+		    if (debug & 0100) {
+			fprintf(outFP, " %d}", gdm->gt_new);
+		    }
+#endif
+		}
+	    }
+	    link_ol(gp, a_list);
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, " %d", gp->gt_new);
+	    }
+#endif
+	}
+#if !defined(_WINDOWS) || defined(LOAD)
+    } else {
+	fprintf(errFP,
+	    "\n%s: line %d: S SH %s receives -1 ==> 1 ???\n",
+	    __FILE__, __LINE__, gp->gt_ids);
+	quit(-1);
+#endif
+    }
+} /* sSsh */
+
+/********************************************************************
+ *
+ *	Master reset action R_SH on sample/hold SH
+ *
+ *******************************************************************/
+
+void
+rMsh(					/* R_SH master action on SH */
+    Gate *	gf,
+    Gate *	out_list)
+{
+    Gate *	gp;
+    Gate **	fa;
+    Gate *	gdm;
+
+#if defined(TCP) && defined(LOAD)
+    if (gf->gt_live & 0x8000) {
+	liveData(gf->gt_live, gf->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
+    if (
+	(gp = (fa = gf->gt_list)[FL_GATE])->gt_val <= 0	/* 0 for intermediate SH */
+	&& gf->gt_val < 0		/* anything to reset */
+	&& (gp->gt_val & 0x02) == 0	/* no previous master set action */
+	|| gf->gt_next			/* or glitch, which clears bit1 */
+    ) {
+	if (gp->gt_val & 0x02) {
+	    gp->gt_val &= ~0x02;	/* glitch - clear R_SH action in slave node */
+	    /* the SH function should have a delay master - works with set/rest only */
+	    if ((gdm = (Gate*)gp->gt_rlist) &&	/* delay master for this slave */
+		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
+#ifndef _WINDOWS 
+		if (debug & 0100) {
+		    fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+		}
+#endif
+		dMsh(gdm, a_list);	/* link or unlink delay master now */
+#ifndef _WINDOWS 
+		if (debug & 0100) {
+		    fprintf(outFP, " %d}", gdm->gt_new);
+		}
+#endif
+	    }
+	} else {
+	    gp->gt_val |= 0x02;		/* mark R_SH action in slave node */
+	}
+	link_ol(gf, fa[FL_CLK]);	/* master action */
+    }
+} /* rMsh */
+
+/********************************************************************
+ *
+ *	Slave reset action R_SH on sample/hold SH
+ *
+ *	With this action the value is changed and this must be stored
+ *	in gt_old of the associated delay master. This is needed mainly
+ *	when gt_new changes back to the original value. This would not
+ *	be the correct target unless changed here.
+ *
+ *******************************************************************/
+
+void
+rSsh(					/* R_SH slave action on SH */
+    Gate *	gf,
+    Gate *	out_list)
+{
+    Gate *	gp;
+    Gate *	gdm;
+
+    if (gf->gt_val < 0) {
+	gp = gf->gt_funct;
+	gp->gt_val &= ~0x02;		/* clear reset slave action flag */
+	if (gp->gt_new != 0) {
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, "\tR SH %s %2d ==>", gp->gt_ids, gp->gt_new);
+	    }
+#endif
+	    if (gp->gt_next) {
+		gp->gt_new = gp->gt_old;	/* glitch SH slave output */
+		gp->gt_val = gp->gt_new ? (gp->gt_new == -1 ? -3 : 0) : 1;
+	    } else {
+		gp->gt_new = 0;			/* reset SH slave output */
+		gp->gt_val = 1;			/* reset logic output also */
+	    }
+	    /* the SH function should have a delay master - works with set/rest only */
+	    if (gdm = (Gate*)gp->gt_rlist) {	/* delay master for this slave */
+		gdm->gt_old = gp->gt_new;	/* adjust delay master */
+		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
+#ifndef _WINDOWS 
+		    if (debug & 0100) {
+			fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
+		    }
+#endif
+		    dMsh(gdm, a_list);		/* link or unlink delay master now */
+#ifndef _WINDOWS 
+		    if (debug & 0100) {
+			fprintf(outFP, " %d}", gdm->gt_new);
+		    }
+#endif
+		}
+	    }
+	    link_ol(gp, a_list);
+#ifndef _WINDOWS 
+	    if (debug & 0100) {
+		fprintf(outFP, " %d", gp->gt_new);
+	    }
+#endif
+	}
+#if !defined(_WINDOWS) || defined(LOAD)
+    } else {
+	fprintf(errFP,
+	    "\n%s: line %d: R SH %s receives -1 ==> 1 ???\n",
+	    __FILE__, __LINE__, gp->gt_ids);
+	quit(-1);
+#endif
+    }
+} /* rSsh */
 
 /********************************************************************
  *
  *	Pass 2 initialisation for clocked Gates via ftype S_FF - TIMR
  *	except F_SW and F_CF in pass2().
  *
- *	Each action Gate ors a bit reserved for its action in gt_val
+ *	Each action Gate ors a bit reserved for its action in gt_mcnt
  *	of the function Gate on which it acts. If ONCE_M is set, that
  *	action may only occurr once.
  *
@@ -317,10 +652,12 @@ void
 i_ff2(Gate * op, int typ)		/* called via output lists */
 {
     Gate *		gp;
-    unsigned char	mask;		/* action bit mask */
+    unsigned int	mask;		/* action bit mask */
 
     if ((gp = op->gt_funct) != 0) {
-	if (gp->gt_mcnt & ONCE_M & (mask = bit2[op->gt_fni])) {
+	mask = bit2[op->gt_fni];
+	/* with this test D actions must occurr before S and R actions */
+	if ((mask & ONCE_M) && gp->gt_mcnt == (mask &= ~ONCE_M)) {
 	    fprintf(outFP,
 	"\nError:    %c\t%s\thas %c input action more than once (%.4x:%.4x)",
 		os[types[op->gt_fni]], gp->gt_ids,
@@ -348,14 +685,14 @@ i_ff2(Gate * op, int typ)		/* called via output lists */
 void
 i_ff3(Gate * gp, int typ)		/* Pass3 init on FF etc. */
 {
-    unsigned char	mask;		/* action bit mask */
+    unsigned int	mask;		/* action bit mask */
     char		opt;
 
     if (gp != c_list) {			/* iClock has no inputs */
 	mask = bit2[ftypes[typ]] & ~ONCE_M;/* action bit mask required */
 	opt = os[typ];
 	/* accept only the right number of compatible inputs */
-	if ((gp->gt_mcnt & ~ONCE_M) != mask) {
+	if (gp->gt_mcnt != mask) {
 	    fprintf(outFP,
 	    "\nError:    %c	%s\thas %s inputs (%.4x:%.4x)",
 		opt, gp->gt_ids, gp->gt_mcnt ? "incompatible" : "no",

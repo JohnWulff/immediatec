@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.44 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: outp.c,v 1.45 2002/06/12 06:30:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -223,7 +223,7 @@ listNet(unsigned * gate_count)
 	return 1;
     }
     return 0;
-} /* listNet */
+} 							/* listNet */
 
 /********************************************************************
  *
@@ -457,11 +457,12 @@ output(char * outfile)
     char *	sam;
     int		li;
     FILE *	Fp;
-    FILE *	Hp;
-    FILE *	Lp;
+    FILE *	Hp;		/* list _list_.c + header _list1.h */
+    FILE *	Lp;		/* list header _list2.h */
     char *	s1;
     char *	module;
-    unsigned	linecnt = 35;	/* MODIFY when changing format */
+    unsigned	linecnt;
+    int		aliasArithFlag = 0;
 
     /* open output file */
 
@@ -469,15 +470,15 @@ output(char * outfile)
 	rc = 4; goto end;
     }
 
-    if ((Lp = fopen(Lname, aflag ? "a" : "w")) == 0) {
+    if ((Lp = fopen(Lname, aflag ? "a" : "w")) == 0) {	/* list header _list2.h */
 	rc = 10; goto endl;
     }
 
     if (aflag == 0) {
-	fprintf(Lp, "#define	I_LIST\\\n");
+	fprintf(Lp, "#define	I_LIST\\\n");		/* list header _list2.h */
 
-	/* write _list0.c once, so that it is locally present */
-	if ((Hp = fopen(Cname, "w")) == 0) {
+	/* write _list_.c once, so that it is locally present */
+	if ((Hp = fopen(Cname, "w")) == 0) {		/* list _list_.c */
 	    rc = 8; goto endh;
 	}
 	fprintf(Hp, "\
@@ -486,11 +487,11 @@ output(char * outfile)
 #include	\"%s\"\n\
 #include	\"%s\"\n\
 Gate **		i_list[] = { I_LIST 0 };\n\
-", Hname, Lname);
-	fclose(Hp);
+", Hname, Lname);					/* list _list_.c */
+	fclose(Hp);					/* list _list_.c */
     }
 
-    if ((Hp = fopen(Hname, aflag ? "a" : "w")) == 0) {
+    if ((Hp = fopen(Hname, aflag ? "a" : "w")) == 0) {	/* header _list1.h */
 	rc = 9; goto endh;
     }
 
@@ -515,10 +516,15 @@ static char	COMPILER[] =\n\
 #include	<icc.h>\n\
 #include	\"%s\"\n\
 \n\
+#ifdef ALIAS_ARITH\n\
+#define _(x) (x.gt_ini==-ALIAS?((Gate*)x.gt_rlist)->gt_old:x.gt_old)\n\
+#else\n\
 #define _(x) x.gt_old\n\
+#endif\n\
 #define A(x,v) assign(&x, v)\n\
 extern Gate *	l_[];\n\
 ", inpNM, outfile, SC_ID, Hname);
+linecnt = 21;
 
 /********************************************************************
  *
@@ -554,7 +560,7 @@ extern Gate *	l_[];\n\
 		    tsp->u.val = lp->le_val;	/* store timer preset off value */
 		}				/* temporarily in u (which is 0) */
 		if (dc == OUTW && (lp = sp->list) != 0) {
-		    fprintf(Hp, "#define %s	%s\n", /* ZZZ no longer in use */
+		    fprintf(Hp, "#define %s	%s\n", 	/* header _list1.h *//* ZZZ no longer in use */
 			sp->name, lp->le_sym->name); /* back link to Hname */
 			/* important to use unmodified names here */
 		}
@@ -616,8 +622,12 @@ extern Gate *	l_[];\n\
 			sp->name);
 		    linecnt++;
 		} else if (sp->ftype == ARITH) {
-		    fprintf(Hp, "#define %s	%s%s\n", mN(sp), /* ALIAS to Hname */
-			lp->le_sym->type == NCONST ? "_" : "", mN(lp->le_sym));
+		    if (aliasArithFlag == 0) {
+			fprintf(Hp, "#define ALIAS_ARITH\n");	/* header _list1.h */
+			aliasArithFlag = 1;
+		    }
+//####		    fprintf(Hp, "#define %s	%s%s\n", mN(sp), /* ALIAS to Hname */
+//####			lp->le_sym->type == NCONST ? "_" : "", mN(lp->le_sym));	/* header _list1.h */
 		} else if (sp->ftype != GATE) {
 		    fprintf(Fp,
     "/* error in emitting code. Alias '%s' has wrong ftype %s */\n",
@@ -693,6 +703,7 @@ extern Gate *	l_[];\n\
  *\n\
  *******************************************************************/\n\
 \n");
+    linecnt += 7;
 
     li = 0;
     nxs = "0";
@@ -718,8 +729,13 @@ extern Gate *	l_[];\n\
 		    }
 		    fprintf(Fp, "Gate %-8s = { %d, %d,", modName, dc, dc);
 		} else {
-		    if (sp->ftype == OUTW || typ == NCONST) {
+		    if (sp->ftype == OUTW) {
+			assert(typ != NCONST);
 			fprintf(Fp, "Gate _%-7s", modName); /* modify */
+		    } else if (typ == NCONST) {
+			/* NCONST Gate must be static because same constant */
+			/* may be used in several linked modules - not extern */
+			fprintf(Fp, "static Gate _%-7s", modName); /* modify */
 		    } else {
 			fprintf(Fp, "Gate %-8s", modName);
 		    }
@@ -824,11 +840,7 @@ extern Gate *	l_[];\n\
 		((dc = sp->ftype) == GATE ||
 		(Aflag && (dc == ARITH || dc == CLCKL || dc == TIMRL)))) {
 		modName = mN(sp);	/* modified string, byte and bit */
-		if (dc == ARITH) {
-		    fprintf(Fp, "Gate _%-7s", modName);	/* modify */
-		} else {
-		    fprintf(Fp, "Gate %-8s", modName);
-		}
+		fprintf(Fp, "Gate %-8s", modName);	/* ZZZZ */
 		val = sp->list->le_val;
 		gp = sp->list->le_sym;
 		while (gp->type == ALIAS) {
@@ -842,7 +854,7 @@ extern Gate *	l_[];\n\
 		mN(gp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
-		sam = dc == ARITH ? "&_" : "&";
+		sam = "&";		/* ZZZZ */
 	    }
 	}
     }
@@ -869,8 +881,9 @@ extern Gate *	l_[];\n\
     }
 
     fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n", module, sam, nxs);
-    fprintf(Hp, "extern Gate *	%s_i_list;\n", module);
-    fprintf(Lp, "	&%s_i_list,\\\n", module);
+    linecnt += 2;
+    fprintf(Hp, "extern Gate *	%s_i_list;\n", module);	/* header _list1.h */
+    fprintf(Lp, "	&%s_i_list,\\\n", module);	/* list header _list2.h */
     free(module);
 
     fprintf(Fp, "\n\
@@ -880,6 +893,7 @@ extern Gate *	l_[];\n\
  *\n\
  *******************************************************************/\n\
 \n");
+    linecnt += 9;		/* includes 2 lines at #line */
 
     /* copy C intermediate file up to EOF to C output file */
     /* translate any ALIAS references of type '_(QB1_0)' */
@@ -1006,7 +1020,7 @@ endm:
 endh:
     fclose(Lp);	/* close the list header file in case other actions */
 endl:
-    fclose(Fp);	/* close the output file in case other actions */
+    fclose(Fp);	/* close the C output file in case other actions */
 end:
     return rc;		/* return code */
 } /* output */

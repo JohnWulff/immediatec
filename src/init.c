@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.14 2002/05/16 14:28:43 jw Exp $";
+"@(#)$Id: init.c,v 1.15 2002/06/19 17:50:12 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -45,11 +45,13 @@ static struct {
     unsigned char	ftype;
 } builtins[] = {
     /* name	type	u_val	ftype */
-  { "D",	KEYW,	BLTIN1,	D_FF,	},
-  { "SH",	KEYW,	BLTIN1,	D_SH,	},
-  { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	},
-  { "RISE",	KEYW,	BLTIN1,	RI_BIT,	},
+  { "D",	KEYW,	BLTIN1,	D_FF,	}, /* D flip-flop */
+  { "DR",	KEYW,	BLTIN2,	D_FF,	}, /* D flip-flop with reset */
+  { "SH",	KEYW,	BLTIN1,	D_SH,	}, /* sample and hold */
+  { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	}, /* pulse on anlog or digital change */
+  { "RISE",	KEYW,	BLTIN1,	RI_BIT,	}, /* pulse on digital rising edge */
   { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
+  { "JK",	KEYW,	BLTINJ,	S_FF,	}, /* R_FF for reset master */
   { "SRT",	KEYW,	BLTIN3,	S_FF,	}, /* monoflop with timed reset*/
   { "IF",	KEYW,	IF,	F_CF,	},
   { "if",	KEYW,	IF,	F_CF,	},

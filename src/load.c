@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.29 2002/06/20 09:34:00 jw Exp $";
+"@(#)$Id: load.c,v 1.30 2002/06/23 19:04:58 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -101,11 +101,11 @@ cmp_gt_ids( const Gate ** a, const Gate ** b)
  *******************************************************************/
 
 static void
-inError(int line, Gate * op, Gate * gp)
+inError(int line, Gate * op, Gate * gp, const char* errMsg)
 {
     fprintf(stderr,
-	"ERROR %s: line %d: op = %s gp = %s\n",
-	    __FILE__, line, op->gt_ids, gp ? gp->gt_ids : "'null'");
+	"ERROR %s: line %d: op = %s gp = %s; %s\n",
+	    __FILE__, line, op->gt_ids, gp ? gp->gt_ids : "'null'", errMsg);
     errCount++;
 } /* inError */
 
@@ -239,7 +239,8 @@ main(
 /********************************************************************
  *
  *	All the activity lists for action nodes are already correctly
- *	compiled and do not need to be altered.
+ *	compiled and do not need to be altered except for a link from
+ *	the SH slave gate to the corresponding delay master in gt_rlist.
  *
  *	PASS 1
  *
@@ -277,7 +278,10 @@ main(
 	for (op = *opp; op != 0; op = op->gt_next) {
 	    val++;				/* count node */
 	    if (op->gt_ini == -ARN) {
-		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
+		if ((lp = op->gt_rlist) == 0) {
+		    inError(__LINE__, op, 0, "arithmetic node with no forward list");
+		    goto ag1;
+		}
 		if (df) printf(" %-8s%3d:", op->gt_ids, op->gt_ini);
 		lp++;				/* skip function vector */
 		while ((gp = *lp++) != 0) {	/* for ARN scan 1 list */
@@ -302,12 +306,15 @@ main(
 			gp->gt_mark++;		/* arithmetic output at gp */
 			link_count++;
 		    } else {
-			inError(__LINE__, op, gp);
+			inError(__LINE__, op, gp, "arithmetic node points back to non ARITH");
 		    }
 		}
 		if (df) printf("\n");
 	    } else if (op->gt_ini > 0) {
-		if ((lp = op->gt_rlist) == 0) { inError(__LINE__, op, 0); goto ag1; }
+		if ((lp = op->gt_rlist) == 0) {
+		    inError(__LINE__, op, 0, "logic node with no forward list");
+		    goto ag1;
+		}
 		if (df) printf(" %-8s%3d:", op->gt_ids, op->gt_ini);
 		i = 1;			/* LOGIC nodes AND, OR or LATCH */
 		/* for LOGIC scan 2 lists with i = 1 and -1 */
@@ -324,12 +331,12 @@ main(
 				} else {
 				    unsigned iv = 0;			/* @ */
 				    if ((tlp = gp->gt_rlist) == 0) {
-					inError(__LINE__, op, gp);
+					inError(__LINE__, op, gp, "ALIAS without link list");
 				    } else if ((tgp = *tlp++) == 0) {
 					iv = 1;				/* @ */
 					inversion ^= 1;
 					if ((tgp = *tlp++) == 0) {
-					    inError(__LINE__, op, gp);
+					    inError(__LINE__, op, gp, "ALIAS without link node");
 					}
 				    }
 				    if (df) printf("	%c%s>,",	/* @ */
@@ -357,7 +364,7 @@ main(
 			    gp->gt_mark++;	/* logic output at gp */
 			    link_count++;
 			} else {
-			    inError(__LINE__, op, gp);
+			    inError(__LINE__, op, gp, "logic node points back to non GATE");
 			}
 		    }
 		} while ((i = -i) != 1);
@@ -367,7 +374,7 @@ main(
 	    if (op->gt_ini != -ALIAS &&
 		(op->gt_fni == ARITH || op->gt_fni == GATE)) {
 		if (op->gt_list != 0) {
-		    inError(__LINE__, op, 0);
+		    inError(__LINE__, op, 0, "no forward list for ARITH or GATE");
 		}
 		link_count++;			/* 1 terminator for ARITH */
 		if (op->gt_fni == GATE) {
@@ -376,12 +383,19 @@ main(
 	    } else if (op->gt_fni >= MIN_ACT && op->gt_fni < MAX_ACT) {
 		op->gt_mark++;			/* count self */
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
-		    inError(__LINE__, op, 0);		/* no slave node or funct */
+		    inError(__LINE__, op, 0, "no slave node or funct for action");
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
-		    gp->gt_val++;		/* slave node */
+		    gp->gt_val++;		/* mark slave node */
+		    if (op->gt_fni == D_SH) {
+			if (gp->gt_rlist) {
+			    inError(__LINE__, op, gp, "backlink for D_SH slave already installed");
+			} else {
+			    (Gate*)gp->gt_rlist = op;	/* back pointer to delay master */
+			}
+		    }
 		}
 		if ((gp = *lp++) == 0 || (gp->gt_fni != CLCKL && gp->gt_fni != TIMRL)) {
-		    inError(__LINE__, op, 0);	/* no clock reference */
+		    inError(__LINE__, op, 0, "action has no clock or timer");
 		} else {
 		    while (gp->gt_ini == -ALIAS) {
 			gp = (Gate*)gp->gt_rlist;	/* adjust */
@@ -389,7 +403,7 @@ main(
 		    gp->gt_mark++;		/* clock ir timer node */
 		    if (gp->gt_fni == TIMRL) {
 			if ((gp = *lp++) == 0) {
-			    inError(__LINE__, op, 0);	/* no timer delay */
+			    inError(__LINE__, op, 0, "timed action has no delay");
 			} else {
 			    while (gp->gt_ini == -ALIAS) {
 				gp = (Gate*)gp->gt_rlist;	/* adjust */
@@ -404,14 +418,14 @@ main(
 		if ((slot = (int)op->gt_list) < IXD && (width = op->gt_mark) != 0) {
 		    QT_[slot] = width == B_WIDTH ? 'B' : width == W_WIDTH ? 'W' : 0;
 		} else {
-		    inError(__LINE__, op, 0);	/* no output word definition */
+		    inError(__LINE__, op, 0, "no valid output word definition");
 		}
 	    } else if (op->gt_fni == OUTX) {
 		int	slot;
 		if ((slot = (int)op->gt_list) < IXD && op->gt_mark) {
 		    QT_[slot] = 'X';
 		} else {
-		    inError(__LINE__, op, 0);	/* no output bit mask */
+		    inError(__LINE__, op, 0, "no valid output bit definition");
 		}
 	    }
 	}
@@ -616,7 +630,7 @@ main(
 #endif
 	    } else if (op->gt_ini == -INPW || op->gt_ini == -INPX) {
 		if ((lp = op->gt_rlist) == 0) {
-		    inError(__LINE__, op, 0);
+		    inError(__LINE__, op, 0, "no forward input link");
 		} else {
 		    *lp = op;		/* forward input link */
 		}
@@ -636,7 +650,7 @@ main(
 		}
 	    }
 	    if (op->gt_fni == UDFA) {
-		inError(__LINE__, op, 0);		/* UDFA */
+		inError(__LINE__, op, 0, "has undefined output type UDFA");
 	    } else if (op->gt_fni < MIN_ACT) {
 		if (df) {
 		lp = op->gt_list;			/* ARITH or GATE */
@@ -650,9 +664,9 @@ main(
 		    }
 		}
 	    } else if (op->gt_fni < MAX_ACT) {
-		if ((lp = op->gt_list) == 0 ||		/* D_SH F_SW ... F_CF */
+		if ((lp = op->gt_list) == 0 ||		/* RI_BIT to TIMR */
 		    (gp = *lp++) == 0) {
-		    inError(__LINE__, op, 0);		/* no action D_SH to F_CF */
+		    inError(__LINE__, op, 0, "no slave for master action RI_BIT to TIMR");
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    if (df) printf("	%s,", gp->gt_ids);
 		} else {
@@ -663,9 +677,9 @@ main(
 #endif
 		}
 		if ((gp = *lp++) == 0) {
-		    inError(__LINE__, op, 0);		/* no clock or timer */
+		    inError(__LINE__, op, 0, "no clock or timer for master action");
 		} else if (gp->gt_fni != CLCKL && gp->gt_fni != TIMRL) {
-		    inError(__LINE__, op, gp);		/* strange clock or timer */
+		    inError(__LINE__, op, gp, "strange clock or timer");
 		} else {
 		    if (gp->gt_ini == -ALIAS) {		/* resolve clock/timer alias */
 			while (gp->gt_ini == -ALIAS) {
@@ -677,13 +691,12 @@ main(
 		    }
 		    if ((gp->gt_fni != CLCKL || gp->gt_ini != -CLK) &&
 			(gp->gt_fni != TIMRL || gp->gt_ini != -TIM)) {
-			inError(__LINE__, op, gp);	/* strange clock or timer */
-			fprintf(stderr, "fni = %d ini = %d\n", gp->gt_fni, gp->gt_ini);
+			inError(__LINE__, op, gp, "clock or timer master does not match slave");
 		    }
 		    if (df) printf("	%c%s,", os[-gp->gt_ini], gp->gt_ids);
 		    if (gp->gt_fni == TIMRL) {
 			if ((gp = *lp++) == 0) {
-			    inError(__LINE__, op, 0);	/* no timer delay */
+			    inError(__LINE__, op, 0, "timed action has no delay");
 			} else {
 			    if (gp->gt_ini == -ALIAS) {	/* resolve arithmetic alias */
 				while (gp->gt_ini == -ALIAS) {
@@ -702,13 +715,13 @@ main(
 		if (df) printf("	QX_[%d]	0x%02x", (int)op->gt_list, op->gt_mark);
 	    } else if (op->gt_fni <= TIMRL) {
 		if (op->gt_list != 0) {
-		    inError(__LINE__, op, 0);		/* CLCKL or TIMRL */
+		    inError(__LINE__, op, 0, "clock or timer with initial forward list");
 		}
 		if (op->gt_fni == TIMRL && op->gt_old > 0) {
 		    if (df) printf("	(%d)", op->gt_old);
 		}
 	    } else {
-		inError(__LINE__, op, 0);		/* unknown ftype */
+		inError(__LINE__, op, 0, "unknown output type (ftype)");
 	    }
 	    if (df) printf("\n");
 	} else if (df) {

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.15 2001/04/15 09:03:37 jw Exp $";
+"@(#)$Id: link.c,v 1.16 2002/06/19 21:37:40 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -134,7 +134,7 @@ link_ol(
 	     * edges, both for arithmetic as well as for logical input.
 	     */
 	    if ((gp->gt_val > 0 &&			/* 'LO' action gate and not */
-		(gp->gt_fni < D_SH || gp->gt_fni > CH_BIT) ||	/* D_SH .. CH_BIT */
+		(gp->gt_fni != CH_BIT && gp->gt_fni != D_SH && gp->gt_fni != F_SW) ||
 		(time = gp->gt_time->gt_old) <= 0) &&	/* or required time is 0 or -ve */
 		(time = out_list->gt_old) <= 0) {	/* and preset off time is 0 */
 		out_list = c_list;			/* put on 'clock' list imme */

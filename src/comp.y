@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.54 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: comp.y,v 1.55 2002/06/19 11:21:44 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -43,6 +43,7 @@ static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
+static Symbol	tSym = { "_tSym_", AND, GATE, };
 static char	yybuf[IMMBUFSIZE];	/* buffer to build imm statement */
 char *		stmtp = yybuf;		/* manipulated in yylex() only */
 %}
@@ -111,7 +112,7 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 	 *
 	 ***********************************************************/
 
-%token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLTIN1 BLTIN2 BLTIN3
+%token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLTIN1 BLTIN2 BLTINJ BLTIN3
 %token	<sym>	CVAR CBLTIN TVAR TBLTIN TBLTI1 NVAR BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCFRAG
@@ -818,7 +819,7 @@ dexpr	: NVAR			{
 	 *
 	 ***********************************************************/
 
-fexpr	: BLTIN1 '(' aexpr cref ')' {
+fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
 #if YYDEBUG
@@ -832,7 +833,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
-	| BLTIN2 '(' aexpr ',' aexpr cref ')' {
+	| BLTIN2 '(' aexpr ',' aexpr cref ')' {		/* SR(set,reset); DR(expr,reset) */
 		$$.f = $1.f; $$.l = $7.l;
 		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
 #if YYDEBUG
@@ -846,7 +847,67 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
-	| BLTIN3 '(' aexpr ',' ctref ')'	{
+	| BLTINJ '(' aexpr ',' aexpr cref ')' {		/* JK(set,reset) */
+		Lis		liS;
+		Lis		liR;
+		List_e *	lpS;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $7.l;
+		liS.v = op_not(sy_push(&tSym));
+		if ((liS.v = op_push(liS.v, AND, op_force($3.v, GATE))) != 0) {
+		    liS.v->le_first = liS.f = 0; liS.v->le_last = liS.l = 0;
+		}
+		liR.v = sy_push(&tSym);
+		if ((liR.v = op_push(liR.v, AND, op_force($5.v, GATE))) != 0) {
+		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
+		}
+		$$.v = bltin(&$1, &liS, &$6, &liR, 0, 0, 0);
+		lpS = liS.v->le_sym->u.blist;
+		while (lpS && lpS->le_sym != &tSym) {
+		    lpS = lpS->le_next;
+		}
+		assert(lpS);
+		lpR = liR.v->le_sym->u.blist;
+		while (lpR && lpR->le_sym != &tSym) {
+		    lpR = lpR->le_next;
+		}
+		assert(lpR);
+		lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	| BLTINJ '(' aexpr ',' ctdref ',' aexpr cref ')' {
+		Lis		liS;
+		Lis		liR;
+		List_e *	lpS;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $9.l;
+		liS.v = op_not(sy_push(&tSym));
+		if ((liS.v = op_push(liS.v, AND, op_force($3.v, GATE))) != 0) {
+		    liS.v->le_first = liS.f = 0; liS.v->le_last = liS.l = 0;
+		}
+		liR.v = sy_push(&tSym);
+		if ((liR.v = op_push(liR.v, AND, op_force($7.v, GATE))) != 0) {
+		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
+		}
+		$$.v = bltin(&$1, &liS, &$5, &liR, &$8, 0, 0);
+		lpS = liS.v->le_sym->u.blist;
+		while (lpS && lpS->le_sym != &tSym) {
+		    lpS = lpS->le_next;
+		}
+		assert(lpS);
+		lpR = liR.v->le_sym->u.blist;
+		while (lpR && lpR->le_sym != &tSym) {
+		    lpR = lpR->le_next;
+		}
+		assert(lpR);
+		lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	| BLTIN3 '(' aexpr ',' ctref ')'	{		/* SRT(set,reset,tim,delay) */
 		$$.f = $1.f; $$.l = $6.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, 0); /* monoflop without reset */
 #if YYDEBUG

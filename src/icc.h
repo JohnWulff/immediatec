@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.35 2002/06/19 21:10:10 jw Exp $";
+"@(#)$Id: icc.h,v 1.36 2002/06/21 15:42:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -118,18 +118,21 @@ extern void	efree(void *);
 #define	MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
 #define	MAX_FTY	TIMRL	/* ftypes >  MAX_FTY are ALIAS ftypes for live list */
 
-#define	ONCE_M	0x80	/* actions containing this bit only once */
+#define	ONCE_M	0x100	/* actions containing this bit only once */
 #define	S_FF_M	0x01	/* masks in array bit2 for pass2 */
 #define	R_FF_M	0x02
 #define	D_FF_M	(S_FF_M | R_FF_M | ONCE_M)
 #define	CH_B_M	0x04
 #define	RI_B_M	0x08
+#define	S_SH_M	0x10
+#define	R_SH_M	0x20
+#define	D_SH_M	(S_SH_M | R_SH_M | ONCE_M)
+#define	CLCK_M	0x40
+#define	TIMR_M	0x80
 #define	F_CF_M	0	/* has no slave node */
-#define	OUTP_M	1	/* used to check that 1 input */
-#define	CLCK_M	0x20
-#define	TIMR_M	0x40
-#define	D_SH_M	(0x10 | ONCE_M)
+#define	F_CW_M	0	/* has no slave node */
 #define	INPT_M	0	/* only used for check so far */
+#define	OUTP_M	1	/* used to check that 1 input */
 
 /* list of types */
 #define	FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
@@ -247,7 +250,7 @@ extern Gate *		a_list;
 extern Gate *		o_list;
 extern Gate *		c_list;
 
-extern unsigned char	bit2[];
+extern unsigned int	bit2[];
 extern Gate *		gx;	/* points to action Gate in chMbit and riMbit */
 extern short		dc;	/* debug display counter in scan and rsff */
 extern unsigned char	bitMask[];
@@ -258,6 +261,8 @@ extern unsigned char	bitIndex[];
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	rMff(Gate *, Gate *);	/* R_FF master action on FF */
 extern void	dMff(Gate *, Gate *);	/* D_FF master action on FF */
+extern void	sMsh(Gate *, Gate *);	/* S_SH master action on SH */
+extern void	rMsh(Gate *, Gate *);	/* R_SH master action on SH */
 extern void	dMsh(Gate *, Gate *);	/* D_SH master action on SH */
 extern void	chMbit(Gate *, Gate *);	/* CH_BIT master action on VF */
 extern void	riMbit(Gate *, Gate *);	/* RI_BIT master action on EF */
@@ -271,6 +276,8 @@ extern void	arithMa(Gate *, Gate *);/* ARITH master action */
 extern void	sSff(Gate *, Gate *);	/* S_FF slave action on FF */
 extern void	rSff(Gate *, Gate *);	/* R_FF slave action on FF */
 extern void	dSff(Gate *, Gate *);	/* D_FF slave action on FF */
+extern void	sSsh(Gate *, Gate *);	/* S_SH slave action on SH */
+extern void	rSsh(Gate *, Gate *);	/* R_SH slave action on SH */
 extern void	dSsh(Gate *, Gate *);	/* D_SH slave action on SH */
 extern void	chSbit(Gate *, Gate *);	/* CH_BIT slave action on VF */
 extern void	riSbit(Gate *, Gate *);	/* RI_BIT slave action on EF */

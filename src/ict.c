@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.27 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: ict.c,v 1.28 2002/06/12 06:30:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -499,7 +499,9 @@ icc(
 					ids = gp->gt_ids;
 					fni = gp->gt_fni;
 					while (gp->gt_ini == -ALIAS) {
-					    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+					    if (gp->gt_fni == GATE) {
+						inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+					    }
 					    gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
 					    fni = MAX_FTY + gp->gt_fni + inverse;
 					}

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.16 2002/06/19 20:29:57 jw Exp $";
+"@(#)$Id: scan.c,v 1.17 2002/06/22 22:24:08 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -40,13 +40,13 @@ Functp2		initAct[] = {		/* called in pass4 */
 		};
 
 Functp2		masterAct[] = {		/* called in scan, scan_ar and pass4 */
-		    err_fn, arithMa, link_ol, riMbit, chMbit, dMsh, dMsh, dMsh,
+		    err_fn, arithMa, link_ol, riMbit, chMbit, sMsh, rMsh, dMsh,
 		    fMsw, sMff, rMff, dMff, fMcf, fMfn, fMfn,
 		    outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		slaveAct[] = {		/* called in scan_clk */
-		    err_fn, err_fn, err_fn, riSbit, chSbit, dSsh, dSsh, dSsh,
+		    err_fn, err_fn, err_fn, riSbit, chSbit, sSsh, rSsh, dSsh,
 		    fSsw, sSff, rSff, dSff, fScf, clockSfn, timerSfn,
 		    err_fn, err_fn, err_fn, err_fn,
 		};
@@ -57,9 +57,9 @@ Functp		init2[] = {		/* called in pass2 */
 		    null1, null1, null1, null1,
 		};
 
-unsigned char	bit2[] = {		/* used in i_ff2() and i_ff3() */
-		    0, INPT_M, INPT_M, RI_B_M, CH_B_M, D_SH_M, D_SH_M, D_SH_M,
-		    F_CF_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, CLCK_M, TIMR_M,
+unsigned int	bit2[] = {		/* used in i_ff2() and i_ff3() */
+		    0, INPT_M, INPT_M, RI_B_M, CH_B_M, S_SH_M, R_SH_M, D_SH_M,
+		    F_CW_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, CLCK_M, TIMR_M,
 		    OUTP_M, OUTP_M, 0, 0,
 		};
 
@@ -187,8 +187,9 @@ scan_ar(Gate *	out_list)
 		(*masterAct[gp->gt_fni])(gp, o_list);
 	    }
 #ifndef _WINDOWS 
+	    /* global gx is modified in arithmetic chMbit() master action */
 	    if (debug & 0100) fprintf(outFP, " %d",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
+		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gx->gt_fni == F_SW ||
 		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
 		    gx->gt_new : gx->gt_val);
 #endif
@@ -282,6 +283,7 @@ scan(Gate *	out_list)
 		(*masterAct[gp->gt_fni])(gp, o_list);/* master action */
 	    }
 #ifndef _WINDOWS 
+	    /* global gx is modified in riMbit() and chMbit() master action */
 	    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
 #endif
 	}
@@ -305,6 +307,7 @@ scan(Gate *	out_list)
 		(*masterAct[gp->gt_fni])(gp, o_list);/* master action */
 	    }
 #ifndef _WINDOWS 
+	    /* global gx is modified in riMbit() and chMbit() master action */
 	    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
 #endif
 	}
@@ -480,7 +483,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	}
 #endif
 #ifdef LOAD
-	if (typ == ARN) {
+	if (typ == ARN || typ == ARNC) {
 	    gp->gt_new = gp->gt_old = 0;
 	    gp->gt_val = 1;
 	} else {
@@ -496,6 +499,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	case ARNC:
 	case ARN:
 	    gp->gt_new = gp->gt_old = 0;
+	    /* fall through */
 	case OR:
 	    gp->gt_ini = gp->gt_val = 1;		/* set OR gates to +1 */
 	    break;

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.42 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: genr.c,v 1.43 2002/06/19 17:54:27 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -551,7 +551,7 @@ op_asgn(				/* asign List_e stack to links */
 		gp = gp->list->le_sym;		/* point to original */
 	    }
 	    if (sp == gp && sp->ftype >= MIN_ACT) {
-		if (sp->ftype == D_FF) {
+		if (sp->type == LATCH && sp->ftype == D_FF) {
 		    gp = sp->list->le_sym;	/* feedback via D output */
 		} else if (gt_input) {
 		    warning("input equals output at function gate:", sp->name);
@@ -847,7 +847,7 @@ op_asgn(				/* asign List_e stack to links */
  *	inversion.
  *
  *	The actual output action is handled by an auxiliary node of
- *	ftype AOUT or LOUT, which is linked to the output value node,
+ *	ftype OUTW or OUTX, which is linked to the output value node,
  *	carrying the name of the output. This auxiliary node is never
  *	and can never be used as an input value.
  *
@@ -946,6 +946,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp1 = op_push(sy_push(ae1->v->le_sym), LOGC, ae1->v);
 	lp1->le_sym->type = LATCH;
 	lp1 = op_push(sy_push(sym->v), LATCH, lp1);
+	/* DLATCH output is transferred as feed back in op_asgn */
     } else {
 	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
     }
@@ -961,8 +962,9 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 
 	lp2 = op_push(sy_push(sym->v), bTyp(ae2->v), ae2->v);
 	lp2->le_first = ae2->f; lp2->le_last = ae2->l;
-	if (lp2->le_sym->ftype == S_FF) {
-	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
+	if (lp2->le_sym->ftype == S_FF ||
+	    lp2->le_sym->ftype == D_FF) {
+	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR, DR */
 	}
 	lp2 = op_push(lpc, lp2->le_sym->type & TM, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);

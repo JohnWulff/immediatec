@@ -18,28 +18,31 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-[l|s|c|b|n]i6xqh] [-v[<N>]] file ...' >&2
-    echo '    (default)	link all files into independent executables' >&2
-    echo '	-l	link all files into one executable' >&2
-    echo '	-i	produce file.ini which records output of an initial run' >&2
-    echo '	-s	supress C output and executable, listing only' >&2
-    echo '	-c	generate C output only' >&2
+    echo 'Usage:	'${0##*/}' [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] file.ic ...' >&2
+    echo '    (default)	link all iCfiles file.ic ... into independent executables' >&2
+    echo '		output names are base names of the iCfiles (file ...)' >&2
+    echo '	-l	link all iCfiles into one executable' >&2
+    echo '		default output name is base name of the first iCfile' >&2
+    echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
+    echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
+    echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
     echo '	-b	generate both listing and C output' >&2
     echo '	-n	generate no output, report ict compile errors only' >&2
-    echo '		-s and -n generate cexe.c for last file as a side effect' >&2
+    echo "		-s and -n generate 'cexe.c' for last file as a side effect" >&2
+    echo '	-i	produce file.ini which records output of an initial run' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
-    echo '		default listing is file.lst' >&2
     echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
     echo '	-q	quiet operation - return status only' >&2
     echo '	-v	use ict, pplstfix and libict.a in local directory' >&2
     echo '		(default use installed ict and -lict)' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.19 2002/06/05 19:46:14 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.20 2002/06/13 08:39:24 jw Exp $' >&2
 }
 
 link=0
 status=0
+list=""
 a=""
 v=""
 b=""
@@ -57,19 +60,38 @@ while [ $# -gt 0 ]; do
 	while [ -n "$option" ]; do
 	    case "$option" in
 	    l*)	link=1;;
+	    o*) if [ "$link" = 0 ]; then
+		    link=1
+		fi
+		option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		if [ -n "$option" ]; then
+		    first=$option
+		    base=${first%.*}
+		    if [ "$first" = "$base.ic" ]; then
+			echo "parameter error - target '$first' has extension .ic" >&2
+			exit 1
+		    fi
+		else
+		    usage; exit 255
+		fi
+		break;;
 	    s*)	link=2;;
-	    c*)	link=3;;
+	    c*)	link=3;d="-A";;
 	    b*) link=4;;
-	    n*) link=5;;
+	    n*) link=5;d="-A";;
 	    i*)	i=1;;
 	    q*)	q=1;;
-	    v*)	option=${option#?};
+	    v*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    v=$option;
-		    lib=./libict$v.a;
+		    v=$option
+		    lib=./libict$v.a
 		else
-		    lib=./libict.a;
-		    v=" -P./";
+		    lib=./libict.a
+		    v=" -P./"
 		fi
 		b="./"
 		break;;
@@ -123,18 +145,22 @@ for f in $*; do
 		let status+=1
 	    fi ;;
 	1)
-	    rm -f $base.c
+	    rm -f $base.c		# in case read only
 	    if nice ${b}ict$v $a $d -o $base.c -l $base.lst$l $file; then
 		list="$list $base.c"
 	    else
 		list="$list ERROR:$base.c"
 		let status+=1
 	    fi
+	    a="-a"	# append linking info for 2nd and later files
 	    if [ -z "$first" ]; then
 		first=$base
-		a="-a"
 	    fi ;;
 	2)
+	    if [ -n "$first" ]; then
+		base=${first%.*}
+		first=''		# -o applied only to first file
+	    fi
 	    if ! nice ${b}ict$v $d -c -l $base.lst$l $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}ict$v compile errors in '$file'" >&2
@@ -142,14 +168,22 @@ for f in $*; do
 		let status+=1
 	    fi ;;
 	3)
+	    if [ -n "$first" ]; then
+		base=${first%.*}
+		first=''		# -o applied only to first file
+	    fi
 	    rm -f $base.c
-	    if ! nice ${b}ict$v -o $base.c $file; then
+	    if ! nice ${b}ict$v $d -o $base.c $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}ict$v compile errors in '$file'" >&2
 		fi
 		let status+=1
 	    fi ;;
 	4)
+	    if [ -n "$first" ]; then
+		echo "output file '$first' ignored" >&2
+		first=''
+	    fi
 	    rm -f $base.c
 	    if ! nice ${b}ict$v $d -o $base.c -l $base.lst$l $file; then
 		if [ "$q" = 0 ]; then
@@ -158,7 +192,11 @@ for f in $*; do
 		let status+=1
 	    fi ;;
 	5)
-	    if ! nice ${b}ict$v -c $file; then
+	    if [ -n "$first" ]; then
+		echo "output file '$first' ignored" >&2
+		first=''
+	    fi
+	    if ! nice ${b}ict$v $d -c $file; then
 		if [ "$q" = 0 ]; then
 		    echo "${b}ict$v compile errors in '$file'" >&2
 		fi
@@ -175,7 +213,12 @@ for f in $*; do
 done
 
 if [ "$link" = 1 ]; then
-    if [ "$status" = 0 ]; then
+    if [ -z "$list" ]; then
+	if [ "$q" = 0 ]; then
+	    echo "parameter error - no iC source files" >&2
+	fi
+	let status+=1
+    elif [ "$status" = 0 ]; then
 	rm -f $first
 	if [ "$q" = 0 ]; then
 	    echo "link $first from$list"
