@@ -30,6 +30,10 @@
 #		    Allow Alias of numbers (NCONST =)
 #		    Change Alias in C CODE listing line
 #   V1.11: 27.01.04 Re-format listing using longest identifier
+#   V1.12: 07.03.04 format output spacing, even for variables not in
+#		    NET TOPOLOGY list
+#   V1.13: 22.12.04 Change Copyright to include 2005
+#   V1.14: 02.03.05 Accept negative constansts
 #
 #################################################################
 
@@ -40,15 +44,16 @@ $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
+	-l	produce log file 'pplstfix.log'
 	-h	help, ouput this Usage text only
-	called from icc or ict compiler to adjust listing output
-$Id: pplstfix,v 1.13 2004/12/22 16:59:00 jw Exp $
+	called from icc, icr or ict compiler to adjust listing output
+$Id: pplstfix,v 1.14 2005/03/05 16:07:06 jw Exp $
 .
 
-use vars qw($opt_h);
+use vars qw($opt_l $opt_h);
 # print STDERR "pplstfix: $named @ARGV\n";
 require "getopts.pl";
-&Getopts('h');			# sets $opt_h if -h etc
+&Getopts('lh');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -57,13 +62,12 @@ if ($opt_h) {
 my (%inv);
 %inv = ("~", " ", " ", "~");	# inversion symbols in listing
 
-my $OPS  = "[-.+\"&|%*#^/({=[<:!@?;twi]";	# DEBUG display of types from icc.h
-my $LOPS = "[UA EVsrHISRDFGCTWX:!~]";		# DEBUG display of ftypes or negation
-my $FOPS = "[UA EVsrHISRDFGCTWX:!]";		# DEBUG display of ftypes from icc.h
-my $logic    = qr/^\t([A-Za-z_][\w.\$]*)\t($LOPS)[< ]---($OPS)(\t([A-Za-z_][\w.\$]*)(\t($FOPS))?)?/;
-my $topology = qr/^([A-Za-z_][\w.\$]*)\t($OPS)  ($FOPS)(\t([ ~])(\w[\w.\$]*).+)?/;
-my $target   = qr/($OPS)\t([A-Za-z_][\w.\$]*)(\t($FOPS))?/;
+my $OPS  = qr"[-.+\"^&|%*#/>({=\][<:!@?ktwi]";	# DEBUG display of types from icc.h
+my $LOPS = qr"[UA _EsrHVSRDIFGCTBWX:!~]";	# DEBUG display of ftypes or negation
+my $FOPS = qr"[UA _EsrHVSRDIFGCTBWX:!]";	# DEBUG display of ftypes from icc.h
+my $target   = qr/($OPS)\t([A-Za-z_][\w.\$]*|-\d+)(\t($FOPS))?/o;
 
+open LOG, ">pplstfix.log" or die "Can't create 'pplstfix.log': $!" if $opt_l;
 while ($ARGV = shift @ARGV) {
     unless (open (IN, $ARGV)) {
 	warn "can't open input $ARGV";
@@ -72,6 +76,7 @@ while ($ARGV = shift @ARGV) {
     processFile();
     close(IN);
 }
+close LOG if $opt_l;
 
 ####################################################################
 #
@@ -92,27 +97,35 @@ sub processFile {
 
     # Pass 1: scan file for ALIAS definitions
     #         also determine length of longest variable name
+    # scan iC listing and C CODE
 
+    print LOG "##### Pass1 iC listing and C CODE\n" if $opt_l;
     while (<IN>) {
 	if (/\bNET TOPOLOGY\b/) {
 	    last;
 	}
-	if (/$logic/) {
+	# logic
+	if (/^\t([A-Za-z_][\w.\$]*|-\d+)\t($LOPS)[< ]---($OPS)(\t([A-Za-z_][\w.\$]*|-\d+)(\t($FOPS))?)?/o) {
 	    if (($len = length $1) > $maxLength) {
 		$maxLength = $len;
 	    }
 	    if (($len = length $5) > $maxLength) {
 		$maxLength = $len;
 	    }
+	    print LOG "$.:	$1	$5\n" if $opt_l;
 	}
     }
 
+    # scan NET TOPOLOGY
+
+    print LOG "##### Pass1 NET TOPOLOGY\n" if $opt_l;
     while (<IN>) {
 	if (/\bNET STATISTICS\b/) {
 	    last;
 	}
 	# allow alias of numbers (change jw 040112)
-	if (/$topology/) {
+	# topology
+	if (/^([A-Za-z_][\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t([ ~])(\w[\w.\$]*|-\d+).+)?/o) {
 	    if ($2 eq '@') {
 		# NET TOPOLOGY line found eg:QB0_0	@  A	~QB0_1*
 		$line  = $.;
@@ -130,11 +143,15 @@ sub processFile {
 	    if (($len = length $1) > $maxLength) {
 		$maxLength = $len;
 	    }
+	    print LOG "$.:	$1	$2 $3 $5 $6\n" if $opt_l;
 	}
     }
 
+    # terminate at NET STATISTICS
+
     # Pass 2: resolve ALIAS occurences
 
+    print LOG "##### Pass2\n" if $opt_l;
     seek(IN, 0, 0);
     $. = 0;
     @array = ();
@@ -151,14 +168,16 @@ sub processFile {
 	}
 	if (/^[\d*]/ and $cFlag < 2) {			# 001 listing or *** Error line
 	    s/\b([IQT]X\d+)_(\d+(_\d+)?)\b/$1.$2/g;
+	    s/\b__(\d+)\b/-$1/g;
 	    s/\b_(\d+)\b/$1/g;
 	    goto cCode if $cFlag == 1;
 	} else {
 	  cCode:
-	    while (/([A-Za-z_][\w.\$]*)/g) {		# non listing line or C CODE
+	    while (/([A-Za-z_][\w.\$]*|-\d+)/g) {	# non listing line or C CODE
 		if (defined($symbols{$1})) {
 		    push @array, $1, length $`;		# $word and $pos
 		}
+		print LOG "$.:	$1\n" if $opt_l;
 	    }
 	    while (@array) {
 		# start with the last word found, so positions are correct
@@ -174,13 +193,13 @@ sub processFile {
 		    }
 		    if (/---@/ or $line == $.) {
 			if ($word !~ /Q.*_0/ or /^\$/) {# keep $x lines
-			    if (/^\t*(\w[\w.\$]*)\t/) {
+			    if (/^\t*(\w[\w.\$]*|-\d+)\t/) {
 				$firstWord = $1;
 				$len = $maxLength + 1 - length $firstWord;
 				$len = 1 if $len < 1;	# should never happen
 				$spaces = ' ' x $len;
-				s/^(\t*\w[\w.\$]*)\t/$1$spaces/;
-				m/$target/;
+				s/^(\t*)(\w[\w.\$]*|-\d+)\t/$1$2$spaces/;
+				m/$target/o;
 				if (length $3) {
 				    $firstWord = $2;
 				    $len = $maxLength + 1 - length $firstWord;
@@ -211,13 +230,13 @@ sub processFile {
 		s/([ ~]) ---/$inv{$1} ---/;		# swap ' ' and '~'
 		$inver = 0;
 	    }
-	    if (/^\t*(\w[\w.\$]*)\t/ and $cFlag != 1) {
+	    if (/^\t*(\w[\w.\$]*|-\d+)\t/ and $cFlag != 1) {
 		$firstWord = $1;
 		$len = $maxLength + 1 - length $firstWord;
 		$len = 1 if $len < 1;			# should never happen
 		$spaces = ' ' x $len;
-		s/^(\t*\w[\w.\$]*)\t/$1$spaces/;
-		m/$target/;
+		s/^(\t*)(\w[\w.\$]*|-\d+)\t/$1$2$spaces/;
+		m/$target/o;
 		if (length $3) {
 		    $firstWord = $2;
 		    $len = $maxLength + 1 - length $firstWord;
