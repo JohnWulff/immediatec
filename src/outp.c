@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.15 2000/12/04 10:51:12 jw Exp $";
+"@(#)$Id: outp.c,v 1.16 2000/12/21 21:19:00 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -770,8 +770,13 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 					fs = "\n\t\t";
 					len = 16 + strlen(lp->le_sym->name) + 3;
 				    }
-				    fprintf(Fp,
-					"%s&%s,", fs, mN(lp->le_sym));
+				    if (lp->le_sym->type == NCONST) {
+					fprintf(Fp,
+					    "%s&_%s,", fs, mN(lp->le_sym));	/* modify */
+				    } else {
+					fprintf(Fp,
+					    "%s&%s,", fs, mN(lp->le_sym));
+				    }
 				    fs = " ";
 				}
 			    }

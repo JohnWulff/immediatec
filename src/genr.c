@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.9 2000/12/20 18:21:11 jw Exp $";
+"@(#)$Id: genr.c,v 1.10 2000/12/21 19:42:12 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -16,6 +16,7 @@ static const char genr_c[] =
 #include	<stdlib.h>
 #endif
 #include	<string.h>
+#include	<assert.h>
 #include	"pplc.h"
 #include	"comp.h"
 #include	"y.tab.h"
@@ -202,15 +203,19 @@ op_push(			/* reduce List_e stack to links */
 		}
 		lp->le_next = sp->u.blist;	/* move connect list */
 		sp->u.blist = lsp->u.blist;	/* in the right order */
-		tsp = templist;			/* scan templist */
-		while (tsp->next != lsp) {
-		    tsp = tsp->next;
-		    if (tsp == 0) {
-			fprintf(outFP, "%s: line %d\t", __FILE__,__LINE__);
-			execerror("left temp not found ???\n", NS);
+		if (templist != lsp) {
+		    tsp = templist;			/* scan templist */
+		    while (tsp->next != lsp) {
+			tsp = tsp->next;
+			if (tsp == 0) {
+			    fprintf(outFP, "%s: line %d\t", __FILE__,__LINE__);
+			    execerror("left temp not found ???\n", NS);
+			}
 		    }
+		    tsp->next = lsp->next;		/* unlink lsp from templist */
+		} else {
+		    templist = lsp->next;		/* unlink first object */
 		}
-		tsp->next = lsp->next;		/* unlink temp from list */
 #ifdef YYDEBUG
 		if (debug & 02) {
 		    fprintf(outFP, "\t%c%s %c %c%s\n",
@@ -599,8 +604,8 @@ op_asgn(			/* asign List_e stack to links */
 			fprintf(outFP, "\t%c", fos[sp->ftype]);
 		    }
 		}
-		if (gp->type == TIM || gp->ftype == F_SW || gp->ftype == F_CF) {
-		    /* time or function case # */
+		if (gp->ftype == F_SW || gp->ftype == F_CF) {
+		    /* function case # */
 		    fprintf(outFP, "\t(%d)", lp->le_val);
 		}
 	    }
@@ -776,6 +781,18 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 
     if (ae1 == 0 || ae1->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
 
+    if (ae2) {
+	lpc = cr2 ? cr2->v			/* individul clock or timer cr2 */
+		  : cr1 ? sy_push((lpt = cr1->v->le_sym->u.blist) ? lpt->le_sym
+								  : cr1->v->le_sym)
+						/* or clone first clock or timer cr1 */
+			: sy_push(clk);		/* or clone default clock iClock */
+	if (lpt && lpt->le_sym->type == TIM) {
+	    assert(lpt->le_next);		/* clone timer value as well */
+	    lpc = op_push(lpc, TIM, sy_push(lpt->le_next->le_sym));
+	}
+    }
+
     if (ae1->v->le_sym->type == LOGC) {		/* DLATCH(set,reset) */
 	lp1 = op_push(sy_push(ae1->v->le_sym), LOGC, ae1->v);
 	lp1->le_sym->type = LATCH;
@@ -784,8 +801,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
     }
     lp1->le_first = ae1->f; lp1->le_last = ae1->l;
-    lpc = cr1 ? cr1->v : sy_push(clk);
-    lp1 = op_push(lpc, lp1->le_sym->type, lp1);
+    lp1 = op_push(cr1 ? cr1->v : sy_push(clk), lp1->le_sym->type, lp1);
     lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
 
     if (ae2) {
@@ -796,13 +812,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	if (lp2->le_sym->ftype == S_FF) {
 	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
 	}
- 	/* Monoflop cannot use non-default clock for optional reset ae2 */
-	lpc = cr2 ? cr2->v			/* individul clock or timer cr2 */
-		  : cr1 ? (lpt = sy_push(cr1->v->le_sym))
-						/* or clone first clock or timer cr1 */
-			: sy_push(clk);		/* or clone default clock iClock */
 	lp2 = op_push(lpc, lp2->le_sym->type, lp2);
-	if (lpt) lpt->le_val = cr1->v->le_val;	/* transfer cr1 timer value to clone */
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
     }
@@ -815,8 +825,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	if (lp2->le_sym->ftype == S_FF) {
 	    lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
 	}
-	lpc = cr3->v;
-	lp2 = op_push(lpc, lp2->le_sym->type, lp2);
+	lp2 = op_push(cr3->v, lp2->le_sym->type, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
 
