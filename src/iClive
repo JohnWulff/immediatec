@@ -81,7 +81,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.4 2001/03/28 08:59:11 jw Exp $
+$Id: iClive,v 1.5 2001/03/29 11:16:15 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -110,8 +110,9 @@ my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $font = defined $opt_f ? $opt_f : '9x15';
 my $unitID = 'L0';
-my %symbolTable = ();	# $symbolTable{$symbol} = [$ftype, $index]
-my @activeSymbols;	# $activeSymbols[index] = $ftype if active
+my %symbolTable = ();	# $symbolTable{$symbol}     = [$ftype, $index]
+my @activeSymbols;	# $activeSymbols[$index][0] = $ftype if active (never 0)
+			# $activeSymbols[$index][1] = $ftype if inverse active
 my $recvIndex = 0;
 
 my ($normal, $inverse);
@@ -264,38 +265,61 @@ MainLoop;
 ########################################################################
 
 sub rcvd_msg_from_server {
-    my ($conn, $msg, $err) = @_;
-    my ($len, $diff, $mask, $index, $value);
+    my ($rConn, $msg, $err) = @_;
 #ifdef TIME_HIRES 
-    &printMicroSeconds if $opt_m;
+    printMicroSeconds() if $opt_m;
 #endif
     if (defined $msg) {
-        $len = length $msg;
-	if ($len == 0) {
-	    $conn->disconnect();
+	if (length $msg == 0) {
+	    $rConn->disconnect();
 	    print "LiveList $unitID disconnected by server\n";
-	    exit;
-	}
-# print "$msg\n";
-	my @symbols = split /;/, $msg;		# break up message
-	my $entry = shift @symbols;		# first entry is an operation
-	if ($entry =~ /$unitID\.(\d+)/) {
-	    if (($entry = $1) eq '1') {
-		# Symbol table block
-		while ($entry = shift @symbols) {
-		    my ($symbol, $ftype) = split " ", $entry;
-# print "$symbol	$ftype\n";
-#		    $symbolTable{$symbol}[0] = $ftype;	# TODO combine t assignments
-#		    $symbolTable{$symbol}[1] = $recvIndex++;
-		    push @{ $symbolTable{$symbol} }, $ftype, $recvIndex++;
-		}
-	    } elsif ($entry eq '2') {
-		# End of symbol table
-		$recvIndex = 0;		# ready for next block
-		scan();
-	    }
+	    deleteAllTags();
+	    undef $conn;
 	} else {
-	    print "Spurious operation '$entry' for $unitID ???\n";
+	    print "$msg\n" if $opt_t;
+	    my @symbols = split /;/, $msg;		# break up message
+	    my $entry = shift @symbols;		# first entry is an operation
+	    if ($entry =~ /$unitID\.(\d+)/) {
+		if (($entry = $1) eq '1') {
+		    # Symbol table block
+		    while ($entry = shift @symbols) {
+			my ($symbol, $ftype) = split " ", $entry;
+			print "$symbol	$ftype\n" if $opt_t;
+			push @{ $symbolTable{$symbol} }, $ftype, $recvIndex++;
+		    }
+		} elsif ($entry eq '2') {
+		    # End of symbol table
+		    $recvIndex = 0;		# ready for next block
+		    scan();
+		} elsif ($entry eq '3') {
+		    # New data values
+		    while ($entry = shift @symbols) {
+			my ($index, $value) = split " ", $entry;
+			my $is = $value ? 1 : 0;
+			my $inv = $is ^ 1;
+			$activeSymbols[$index][2] = $value;	# for value display
+			if ($activeSymbols[$index][0]) {
+			    $text->tagConfigure("$index", 
+						'-background' => $tagBackground[$is], 
+						'-foreground' => $tagForeground[$is]);
+#ifdef TIME_HIRES 
+			    printMicroSeconds() if $opt_m;
+#endif
+			}
+			if ($activeSymbols[$index][1]) {
+			    $text->tagConfigure("$index~", 
+						'-background' => $tagBackground[$inv], 
+						'-foreground' => $tagForeground[$inv]);
+#ifdef TIME_HIRES 
+			    printMicroSeconds() if $opt_m;
+#endif
+			}
+			print "$index	$value\n" if $opt_t;
+		    }
+		}
+	    } else {
+		print "Spurious operation '$entry' for $unitID ???\n";
+	    }
 	}
     }
 }
@@ -307,17 +331,27 @@ sub rcvd_msg_from_server {
 ########################################################################
 
 sub logic {
-print STDERR "is_logic = $is_logic '$normal' '$inverse'\n";
     my $inv_logic = $is_logic ^ 1;
-printMicroSeconds() if $opt_m;
-    $text->tagConfigure($normal, 
-			'-background' => $tagBackground[$is_logic], 
-			'-foreground' => $tagForeground[$is_logic]);
-printMicroSeconds() if $opt_m;
-    $text->tagConfigure($inverse, 
-			'-background' => $tagBackground[$inv_logic], 
-			'-foreground' => $tagForeground[$inv_logic]);
-printMicroSeconds() if $opt_m;
+#ifdef TIME_HIRES 
+    printMicroSeconds() if $opt_m;
+#endif
+    if ($activeSymbols[0][0]) {
+	$text->tagConfigure($normal, 
+			    '-background' => $tagBackground[$is_logic], 
+			    '-foreground' => $tagForeground[$is_logic]);
+#ifdef TIME_HIRES 
+	printMicroSeconds() if $opt_m;
+#endif
+    }
+    if ($activeSymbols[0][1]) {
+	$text->tagConfigure($inverse, 
+			    '-background' => $tagBackground[$inv_logic], 
+			    '-foreground' => $tagForeground[$inv_logic]);
+#ifdef TIME_HIRES 
+	printMicroSeconds() if $opt_m;
+#endif
+    }
+    print "is_logic = $is_logic '$normal' '$inverse'\n if $opt_t";
 }
 
 ########################################################################
@@ -328,7 +362,6 @@ printMicroSeconds() if $opt_m;
 
 sub search {
     my ($search_pattern, $word, $i, $iw, $inv);
-print "search\n";
     $normal = $search->get();
     $inverse = "$normal~";
     $text->tagDelete($normal);
@@ -365,7 +398,7 @@ print "search\n";
 	    $inv = $inv ? '' : '~';
 	}
 	$word .= $inv;
-print STDERR "word: $word '$iw'\n";
+	print "word: $word '$iw'\n" if $opt_t;
         $text->tagAdd($word, $current, "$current + $length char");
         $current = $text->index("$current + $length char");
     }
@@ -373,73 +406,100 @@ print STDERR "word: $word '$iw'\n";
 
 ########################################################################
 #
+#	Delete all tags for previous active symbols
+#
+########################################################################
+
+sub deleteAllTags {
+    foreach my $symbol (keys %symbolTable) {
+	my $index = $symbolTable{$symbol}[1];
+	if ($activeSymbols[$index]) {
+	    if ($opt_t) {
+		print("$symbol");
+		print(" $index")    if $activeSymbols[$index][0];
+		print(" $index~")   if $activeSymbols[$index][1];
+		print(" deleted\n");
+	    }
+	    $text->tagDelete("$index")  if $activeSymbols[$index][0];
+	    $text->tagDelete("$index~") if $activeSymbols[$index][1];
+	}
+    }
+    @activeSymbols = ();	# delete all previous active symbols
+}
+
+########################################################################
+#
 #	Scan text for symbols in %symbolTable, adding a tag for each
 #	symbol found
+#
+#	The colouring for each symbol found is initially set to logic 0.
+#	Any active symbols which are not 0 are updated immediately by
+#	the iC control program.
 #
 ########################################################################
 
 sub scan {
-    my ($search_pattern, $word, $i, $iw, $tag, $inv, $ftype, $index);
-    # delete all tags for previous active symbols
-    foreach my $symbol (keys %symbolTable) {
-	$index = $symbolTable{$symbol}[1];
-	if ($activeSymbols[$index]) {
-print("$symbol	$index $index~ deleted\n");
-	    $text->tagDelete($index);
-	    $text->tagDelete("$index~");
-	}
-    }
-    @activeSymbols = ();	# delete all previous active symbols
+    if ($conn) {
+	my ($search_pattern, $current, $word, $i, $iw, $tag, $inv, $ftype, $index);
 
-    $search_pattern = '[~!\s]*[A-Za-z][\w.]*\s*((~ )?---)?';
+	deleteAllTags();
+	$search_pattern = '[~!\s]*[A-Za-z][\w.]*\s*((~ )?---)?';
 
-    my $current = '1.0'; my $length = '0';
-print "scan symbol table '$normal' '$inverse'\n";
-    while (1) {
-	$current = $text->search('-count' => \$length,
-				 '-regexp', 
-				 '--',
-				 $search_pattern,
-				 $current,
-				 'end');
-        last if (!$current);
-	$iw = $i = $text->get($current, "$current + $length char");
-	$i =~ s/([!~\t ]*)([\w.]+)([!~\t ]*)/$1$3/;
-	if ($symbolTable{$2}) {
-	    ($ftype, $index) = @{ $symbolTable{$2} };
-	    $tag = $index;
-	    $word = $2;			# ZZZ word is in the symbol table
-	    $inv = 0;
-	    while ($i =~ m/[!~]/g) {
-		$inv ^= 1;
+	$current = '1.0'; my $length = '0';
+	while (1) {
+	    $current = $text->search('-count' => \$length,
+				     '-regexp', 
+				     '--',
+				     $search_pattern,
+				     $current,
+				     'end');
+	    last if (!$current);
+	    $iw = $i = $text->get($current, "$current + $length char");
+	    $i =~ s/([!~\t ]*)([\w.]+)([!~\t ]*)/$1$3/;
+	    if ($symbolTable{$2}) {
+		($ftype, $index) = @{ $symbolTable{$2} };
+		$tag = $index;
+		$word = $2;			# ZZZ word is in the symbol table
+		$inv = 0;
+		while ($i =~ m/[!~]/g) {
+		    $inv ^= 1;
+		}
+		$tag .= '~' if $inv;
+		print "$tag	$word	'$iw'\n" if $opt_t;
+		unless ($activeSymbols[$index][$inv]) {
+		    $activeSymbols[$index][$inv] = $ftype;	# TODO use to adjust background
+		    $activeSymbols[$index][2] = 0;		# initial value
+		    $text->tagConfigure($tag, 
+					'-background' => $tagBackground[$inv], 
+					'-foreground' => $tagForeground[$inv]);
+		}
+		$text->tagAdd($tag, $current, "$current + $length char");
 	    }
-	    $tag .= '~' if $inv;
-print "$tag	$word	'$iw'\n";
-	    unless ($activeSymbols[$index]) {
-		$activeSymbols[$index] = $ftype;	# TODO use to adjust background
-		$text->tagConfigure("$index", 
-				    '-background' => $tagBackground[0], 
-				    '-foreground' => $tagForeground[0]);
-		$text->tagConfigure("$index~", 
-				    '-background' => $tagBackground[1], 
-				    '-foreground' => $tagForeground[1]);
-	    }
-	    $text->tagAdd($tag, $current, "$current + $length char");
+	    $current = $text->index("$current + $length char");
 	}
-        $current = $text->index("$current + $length char");
-    }
 
-    ####################################################################
-    # send list of active symbols to iC control process
-    # only the state (logic or arithmetic) for the symbols in this list
-    # need to be updated for this display
-    # it is immaterial for the control program in which logic
-    # sense the symbol is displayed
-    ####################################################################
-    foreach $index (0 .. $#activeSymbols) {
-	if (defined ($ftype = $activeSymbols[$index])) {
-printf("%4d %s\n", $index, $ftype);
+	####################################################################
+	# send list of active symbols to iC control process
+	# only the state (logic or arithmetic) for the symbols in this list
+	# need to be updated for this display
+	# it is immaterial for the control program in which logic
+	# sense the symbol is displayed
+	####################################################################
+
+	my $msg = "";
+	foreach $index (0 .. $#activeSymbols) {
+	    if ($activeSymbols[$index]) {
+		print "$index\n" if $opt_t;
+		if (length $msg > 391) {
+		    $conn->send_now("$unitID.3$msg");	# intermediate active symbols
+		    $msg = "";
+		}
+		$msg .= ";$index";
+	    }
 	}
+	$conn->send_now("$unitID.4$msg");		# send last active symbols
+    } else {
+	$info = "$unitID not connected";
     }
 }
 
