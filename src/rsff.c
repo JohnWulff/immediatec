@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.20 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: rsff.c,v 1.21 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -22,11 +22,19 @@ static const char rsff_c[] =
 #include	<assert.h>
 #include	"icc.h"
 
-unsigned char	bitMask[] = {
+char *		full_type[]  = { FULL_TYPE };
+char *		full_ftype[] = { FULL_FTYPE };
+unsigned char	types[]      = { TYPES };
+unsigned char	ftypes[]     = { FTYPES };
+unsigned char	atypes[]     = { ATYPES };
+char		os[]         = OPS;
+char		fos[]        = FOPS;
+
+unsigned char	bitMask[]    = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
 };
 
-unsigned char	bitIndex[] = {
+unsigned char	bitIndex[]   = {
     0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	/* 0x01 0x02 0x04 0x08 */
     4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	/* 0x10 */
     5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	/* 0x20 */
@@ -82,11 +90,16 @@ unsigned char	bitIndex[] = {
 
 void
 sMff(					/* S_FF master action on FF */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
-    register Gate **	fa;
+    Gate **	fa;
 
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     if (
 	(fa = gp->gt_list)[FL_GATE]->gt_val > 0
 	&& gp->gt_val < 0		/* anything to set */
@@ -98,10 +111,10 @@ sMff(					/* S_FF master action on FF */
 
 void
 sSff(					/* S_FF slave action on FF */
-    register Gate *	gf,
-    Gate *		out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	gp;
+    Gate *	gp;
 
     if (gf->gt_val < 0) {
 	gp = gf->gt_funct;
@@ -131,11 +144,16 @@ sSff(					/* S_FF slave action on FF */
 
 void
 rMff(					/* R_FF master action on FF */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
-    register Gate **	fa;
+    Gate **	fa;
 
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     if (
 	(fa = gp->gt_list)[FL_GATE]->gt_val < 0
 	&& gp->gt_val < 0		/* anything to reset */
@@ -147,10 +165,10 @@ rMff(					/* R_FF master action on FF */
 
 void
 rSff(					/* R_FF slave action on FF */
-    register Gate *	gf,
-    Gate *		out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	gp;
+    Gate *	gp;
 
     if (gf->gt_val < 0) {
 	gp = gf->gt_funct;
@@ -180,11 +198,16 @@ rSff(					/* R_FF slave action on FF */
 
 void
 dMff(					/* D_FF master action on FF */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
-    register Gate **	fa;
+    Gate **	fa;
 
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     if (
 	((fa = gp->gt_list)[FL_GATE]->gt_val < 0)
 	^ (gp->gt_val < 0)		/* any change */
@@ -196,11 +219,11 @@ dMff(					/* D_FF master action on FF */
 
 void
 dSff(					/* D_FF slave action on FF */
-    register Gate *	gf,
-    Gate *		out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	gp;
-    register short	val;
+    Gate *	gp;
+    short	val;
 
     gp = gf->gt_funct;
     if ((val = (gf->gt_val < 0) ? -1 : 1) != gp->gt_val) {
@@ -227,12 +250,12 @@ dSff(					/* D_FF slave action on FF */
 
 void
 dMsh(					/* D_SH master action on SH */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
-	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
+	gp->gt_new = gp->gt_val < 0 ? 1 : 0;
 	/*
 	 * since new is only modified here and since gt_val has changed,
 	 * new must differ from old (no need to check).
@@ -240,16 +263,21 @@ dMsh(					/* D_SH master action on SH */
 	 * would not be necessary for this action.
 	 */
     }
-    link_ol(gp, gp->gt_clk);	/* master action */
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_new);	/* live is active */
+    }
+#endif
+    link_ol(gp, gp->gt_clk);		/* master action */
 } /* dMsh */
 
 void
 dSsh(					/* D_SH slave action on SH */
-    register Gate *	gf,
-    Gate *		out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	gp;
-    register short	val;
+    Gate *	gp;
+    short	val;
 
     gp = gf->gt_funct;
 #ifndef _WINDOWS 
@@ -280,10 +308,10 @@ dSsh(					/* D_SH slave action on SH */
  *******************************************************************/
 
 void
-i_ff2(register Gate * op, int typ)	/* called via output lists */
+i_ff2(Gate * op, int typ)		/* called via output lists */
 {
-    register Gate *	gp;
-    uchar		mask;		/* action bit mask */
+    Gate *		gp;
+    unsigned char	mask;		/* action bit mask */
 
     if ((gp = op->gt_funct) != 0) {
 	if (gp->gt_mcnt & ONCE_M & (mask = bit2[op->gt_fni])) {
@@ -312,9 +340,9 @@ i_ff2(register Gate * op, int typ)	/* called via output lists */
  *******************************************************************/
 
 void
-i_ff3(register Gate * gp, int typ)	/* Pass3 init on FF etc. */
+i_ff3(Gate * gp, int typ)		/* Pass3 init on FF etc. */
 {
-    uchar		mask;		/* action bit mask */
+    unsigned char	mask;		/* action bit mask */
     char		opt;
 
     if (gp != c_list) {			/* iClock has no inputs */
@@ -367,11 +395,16 @@ Functp	ff_i[] = {pass1, pass2, i_ff3, pass4};
 
 void
 riMbit(					/* RI_BIT master action on EF */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
-    register Gate **	fa;
+    Gate **	fa;
 
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     gx = (fa = gp->gt_list)[FL_GATE];
     if (gp->gt_val < 0 || gp->gt_next) {
 	link_ol(gp, fa[FL_CLK]);	/* master action */
@@ -400,10 +433,10 @@ riMbit(					/* RI_BIT master action on EF */
 
 void
 riSbit(					/* RI_BIT slave action */
-    register Gate *	gf,
-    register Gate *	out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	gp;
+    Gate *	gp;
 
     gp = gf->gt_funct;
     if (gp->gt_val < 0) {
@@ -436,11 +469,17 @@ riSbit(					/* RI_BIT slave action */
 
 void
 chMbit(					/* CH_BIT master action on VF */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
-    register Gate **	fa;
+    Gate **	fa;
 
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live,(out_list != o_list) ?
+	gp->gt_new : gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     gx = (fa = gp->gt_list)[FL_GATE];	/* ignore input */
     link_ol(gp, fa[FL_CLK]);		/* master action */
 #ifndef _WINDOWS 
@@ -472,10 +511,10 @@ chMbit(					/* CH_BIT master action on VF */
 
 void
 chSbit(					/* CH_BIT slave action */
-    register Gate *	gf,
-    register Gate *	out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	gp;
+    Gate *	gp;
 
     gf->gt_old = gf->gt_new;		/* now new value is fixed */
     gp = gf->gt_funct;
@@ -504,13 +543,18 @@ chSbit(					/* CH_BIT slave action */
 
 void
 fMsw(					/* F_SW master action */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
-	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
+	gp->gt_new = gp->gt_val < 0 ? 1 : 0;
     }
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_new);	/* live is active */
+    }
+#endif
     link_ol(gp, gp->gt_clk);		/* master action */
 } /* fMsw */
 
@@ -526,8 +570,8 @@ fMsw(					/* F_SW master action */
 
 void
 fSsw(					/* F_SW slave action on SW */
-    register Gate *	gf,
-    register Gate *	out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
     gf->gt_old = gf->gt_new;		/* now new value is fixed */
     /* execute C function as action procedure with side effects */
@@ -555,9 +599,14 @@ fSsw(					/* F_SW slave action on SW */
 
 void
 fMcf(					/* F_CF master action */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     link_ol(gp, gp->gt_clk);		/* master action */
 } /* fMcf */
 
@@ -575,8 +624,8 @@ fMcf(					/* F_CF master action */
 
 void
 fScf(					/* F_CF slave action on CF */
-    register Gate *	gf,
-    register Gate *	out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
     /* execute C function as action procedure with side effects */
 #ifdef LOAD
@@ -616,13 +665,13 @@ fScf(					/* F_CF slave action on CF */
 
 void
 outMw(					/* OUTW master action */
-    register Gate *	gp,		/* NOTE: there is no slave action */
-    Gate *		out_list)
+    Gate *	gp,		/* NOTE: there is no slave action */
+    Gate *	out_list)
 {
-    int			val;
-    int			slot;
-    int			cage;
-    int			mask;
+    int		val;
+    int		slot;
+    int		cage;
+    int		mask;
 
     slot = (int)gp->gt_list;
     mask = gp->gt_mark;
@@ -632,11 +681,16 @@ outMw(					/* OUTW master action */
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
 	/* MIXED mode is currently not compiled - ERROR */
-	gp->gt_new = (int)((unsigned char)gp->gt_val >> 7);
+	gp->gt_new = gp->gt_val < 0 ? 1 : 0;
     }
 #endif
 
     val = gp->gt_old = gp->gt_new;	/* update gt_old since no link_ol */
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, val);	/* live is active */
+    }
+#endif
     if (mask == B_WIDTH) {
 #ifndef _WINDOWS
 	val &= 0xff;			/* for display only */
@@ -677,15 +731,15 @@ outMw(					/* OUTW master action */
 
 void
 outMx(					/* OUTX master action */
-    register Gate *	gp,		/* NOTE: there is no slave action */
-    Gate *		out_list)
+    Gate *	gp,		/* NOTE: there is no slave action */
+    Gate *	out_list)
 {
     int			slot;
     int			cage;
-    uchar		mask;
+    unsigned char	mask;
 
     slot = (int)gp->gt_list;
-    mask = (uchar)gp->gt_mark;
+    mask = (unsigned char)gp->gt_mark;
     assert(slot < IXD && mask);
     cage = slot >> 3;			/* IXD must be <= 64 for this scheme */
 #ifdef MIXED
@@ -695,7 +749,12 @@ outMx(					/* OUTX master action */
 	gp->gt_val = gp->gt_new ? -1 : 1;
     }
 #endif
-    if (gp->gt_val & 0x80) {		/* output action */
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
+    if (gp->gt_val < 0) {		/* output action */
 	QX_[slot] |= mask;		/* set bit at slot,mask */
 #ifndef _WINDOWS 
 	if (debug & 0100) putc('1', outFP);
@@ -718,9 +777,14 @@ outMx(					/* OUTX master action */
 
 void
 fMfn(					/* CLCK TIMR master action */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
     if ( gp->gt_val < 0 || gp->gt_next) {
 	link_ol(gp, gp->gt_clk);	/* master action */
     }
@@ -755,17 +819,17 @@ fMfn(					/* CLCK TIMR master action */
 
 void
 clockSfn(				/* Clock function */
-    register Gate *	gf,
-    register Gate *	out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	sp;
+    Gate *	sp;
     /*
      * the clock list is controlled by a control block which is the
      * Gate structure which goes with this function
      */
     if (gf->gt_val < 0) {
-	register Gate *	tp;
-	register Gate *	np;
+	Gate *	tp;
+	Gate *	np;
 
 	sp = gf->gt_funct;
 #ifndef _WINDOWS 
@@ -777,7 +841,7 @@ clockSfn(				/* Clock function */
 	if (sp->gt_next != sp) {
 #ifndef _WINDOWS 
 	    if (debug & 0100) {
-		register int	dc = 0;	/* functions which are clocked */
+		int	dc = 0;		/* functions which are clocked */
 		for (tp = sp->gt_next; tp != sp; tp = tp->gt_next) {
 		    if (dc++ >= 8) {
 			dc = 1;
@@ -833,17 +897,17 @@ Functp	clock_i[] = {pass1, null1, i_ff3, null1};	/* no output lists */
 
 void
 timerSfn(				/* Timer function */
-    register Gate *	gf,
-    register Gate *	out_list)
+    Gate *	gf,
+    Gate *	out_list)
 {
-    register Gate *	sp;
+    Gate *	sp;
     /*
      * the timer list is controlled by a control block which is the
      * Gate structure which goes with this function
      */
     if (gf->gt_val < 0) {
-	register Gate *	tp;	/* functions which are timed */
-	register Gate *	np;
+	Gate *	tp;			/* functions which are timed */
+	Gate *	np;
 
 	sp = gf->gt_funct;
 #ifndef _WINDOWS 
@@ -853,7 +917,7 @@ timerSfn(				/* Timer function */
 #endif
 	sp->gt_val = -1;		/* set for visualization only */
 	if ((np = sp->gt_next) != sp) {
-	    register int	dc = 1;	/* allow for (time) */
+	    int	dc = 1;	/* allow for (time) */
 
 	    np->gt_mark--;		/* count down first element */
 #ifndef _WINDOWS 

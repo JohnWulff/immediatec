@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.27 2001/03/29 11:16:15 jw Exp $";
+"@(#)$Id: icc.h,v 1.28 2001/03/30 17:31:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -16,8 +16,6 @@ static const char icc_h[] =
  *******************************************************************/
 
 /* J.E. Wulff	3-Mar-85 */
-
-typedef unsigned char	uchar;
 
 #ifdef _WINDOWS
 #define strlen(a)	lstrlen(a)
@@ -129,6 +127,9 @@ extern void	efree(void *);
 
 #define OPS	".-+~&|%*#^/({=[<:!@?;"	/* DEBUG display of types */
 
+/* arithmetic types */
+#define ATYPES	0,1,1,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0
+
 /* ftypes corresponding to types */
 #define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
 	D_SH, D_FF, CH_BIT, RI_BIT, F_SW, F_CF, ARITH, ARITH, GATE,\
@@ -161,22 +162,23 @@ extern void	efree(void *);
 	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, AOUT, LOUT,\
 	CVAR, TVAR
 
-extern uchar	types[];		/*   comp.y   */
-extern uchar	ftypes[];
-extern char *	full_type[];
-extern char *	full_ftype[];
-extern char	os[];
-extern char	fos[];
-extern FILE *	inFP;			/* input file pointer */
-extern FILE *	outFP;			/* output file pointer */
-extern FILE *	errFP;			/* error file pointer */
-extern short	debug;	/* from -do argument in call to main */
+extern char *		full_type[];
+extern char *		full_ftype[];
+extern unsigned char	types[];	/*   comp.y   */
+extern unsigned char	ftypes[];
+extern unsigned char	atypes[];
+extern char		os[];
+extern char		fos[];
+extern FILE *		inFP;		/* input file pointer */
+extern FILE *		outFP;		/* output file pointer */
+extern FILE *		errFP;		/* error file pointer */
+extern short		debug;		/* from -do argument in call to main */
 
 typedef struct Gate {			/* Gate */
 	char		gt_val;		/* forward logic value */
 	char		gt_ini;		/* initial logic value */
-	uchar		gt_fni;		/* function index */
-	uchar		gt_mcnt;	/* mark counter */
+	unsigned char	gt_fni;		/* function index */
+	unsigned char	gt_mcnt;	/* mark counter */
 	char *		gt_ids;		/* id string */
 	struct Gate **	gt_list;	/* forward logic list */
 	struct Gate **	gt_rlist;	/* reverse logic list */
@@ -220,30 +222,30 @@ extern unsigned short	xflag;		/* -x flag signals hexadecimal output */
 extern unsigned short	iFlag;		/* inversion correction needed */
 extern int		inversionCorrection(void);
 
-extern Gate	iClock;			/* System clock */
-extern Gate *	IX_[];			/* pointers to Bit Input Gates */
-extern Gate *	IB_[];			/* pointers to Byte Input Gates */
-extern Gate *	IW_[];			/* pointers to Word Input Gates */
-extern Gate *	TX_[];			/* pointers to System Bit Gates */
-extern uchar	QX_[];			/* Output bit field slots */
-extern char	QT_[IXD];		/* Output type of slots */
-extern uchar	QM_[];			/* Output slot mask per cage */
-extern uchar	QMM;			/* Output cage mask for 1 rack */
-extern uchar	idata[];		/* Input bit field */
-extern uchar	pdata[];		/* rest used only locally */
-extern Functp *	i_lists[];
+extern Gate		iClock;		/* System clock */
+extern Gate *		IX_[];		/* pointers to Bit Input Gates */
+extern Gate *		IB_[];		/* pointers to Byte Input Gates */
+extern Gate *		IW_[];		/* pointers to Word Input Gates */
+extern Gate *		TX_[];		/* pointers to System Bit Gates */
+extern unsigned char	QX_[];		/* Output bit field slots */
+extern char		QT_[IXD];	/* Output type of slots */
+extern unsigned char	QM_[];		/* Output slot mask per cage */
+extern unsigned char	QMM;		/* Output cage mask for 1 rack */
+extern unsigned char	idata[];	/* Input bit field */
+extern unsigned char	pdata[];	/* rest used only locally */
+extern Functp *		i_lists[];
 
-extern Gate *	a_list;
-extern Gate *	o_list;
-extern Gate *	c_list;
+extern Gate *		a_list;
+extern Gate *		o_list;
+extern Gate *		c_list;
 
-extern uchar	bit2[];
-extern Gate *	gx;	/* points to action Gate in chMbit and riMbit */
-extern short	dc;	/* debug display counter in scan and rsff */
+extern unsigned char	bit2[];
+extern Gate *		gx;	/* points to action Gate in chMbit and riMbit */
+extern short		dc;	/* debug display counter in scan and rsff */
 extern unsigned char	bitMask[];
 extern unsigned char	bitIndex[];
-#define B_WIDTH	257			/* marks output as Byte width */
-#define W_WIDTH	258			/* marks output as Word width */
+#define B_WIDTH		257		/* marks output as Byte width */
+#define W_WIDTH		258		/* marks output as Word width */
 
 extern void	sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	rMff(Gate *, Gate *);	/* R_FF master action on FF */
