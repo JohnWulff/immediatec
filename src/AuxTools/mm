@@ -12,11 +12,13 @@ usage ()
     echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
     echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
+    echo '	-N	No nice with calls of icc and gcc compilers (default is nice)' >&2
     echo '	-h	this help text' >&2
-    echo 'uses iCmake -I -v<N> -y<opt> to make each line of the list pm.lt' >&2
-    echo 'which has mostly individual lines naming one source eg. xxx.ic' >&2
-    echo 'but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
-    echo '	$Id: mm,v 1.7 2004/02/20 14:54:03 jw Exp $' >&2
+    echo '	uses iCmake -I -v<N> -y<opt> to make each line of the list pm.lt' >&2
+    echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
+    echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
+    echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
+    echo '$Id: mm,v 1.8 2005/01/17 19:23:18 jw Exp $' >&2
 }
 
 v=""
@@ -45,6 +47,7 @@ while [[ $# > 0 ]]; do
 		fi
 		break;;
 	    x*)	v="$v -x";;
+	    N*)	v="$v -N";;
 	    z*)	z=1;v="$v -z";;
 	    h*)	usage; exit 255;;
 	    *)	echo "unknown flag -$option";
