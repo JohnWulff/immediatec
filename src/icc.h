@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.26 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: icc.h,v 1.27 2001/03/29 11:16:15 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -182,6 +182,7 @@ typedef struct Gate {			/* Gate */
 	struct Gate **	gt_rlist;	/* reverse logic list */
 	struct Gate *	gt_next;	/* forward link */
 	unsigned short	gt_mark;	/* mark for stamping gate */
+	unsigned short	gt_live;	/* live flag and index */
 #ifdef DEQ
 	struct Gate *	gt_prev;	/* previous link */
 #endif
@@ -316,3 +317,5 @@ extern Gate **		i_list[];		/* used to load several modules */
 extern int		c_exec(int pp_index, Gate * gp);
 #endif
 extern int		assign(Gate * lv, int rv);
+
+extern void		liveData(unsigned short index, int value);

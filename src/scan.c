@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.13 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: scan.c,v 1.14 2001/03/29 11:16:15 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -39,7 +39,7 @@ Functp2		initAct[] = {		/* called in pass4 */
 			outMw, outMx, err_fn, err_fn,
 		};
 
-Functp2		masterAct[] = {		/* called in scan and scan_ar */
+Functp2		masterAct[] = {		/* called in scan, scan_ar and pass4 */
 			err_fn, arithMa, link_ol, dMsh, fMsw, chMbit, riMbit,
 			fMfn, fMfn, sMff, rMff, dMff, fMcf,
 			outMw, outMx, err_fn, err_fn,
@@ -124,6 +124,11 @@ scan_ar(Gate	*out_list)
 	if (debug & 0100) {
 	    fprintf(outFP, "\n%s: %d", op->gt_ids, op->gt_new);
 	    dc = 0;
+	}
+#endif
+#ifdef TCP
+	if (op->gt_live & 0x8000) {
+	    liveData(op->gt_live, op->gt_old);	/* live is active */
 	}
 #endif
 	lp = op->gt_list;
@@ -242,6 +247,11 @@ scan(Gate	*out_list)
 	if (debug & 0100) {
 	    fprintf(outFP, "\n%s:", op->gt_ids);
 	    dc = 0;
+	}
+#endif
+#ifdef TCP
+	if (op->gt_live & 0x8000) {
+	    liveData(op->gt_live, op->gt_val < 0 ? 1 : 0);	/* live is active */
 	}
 #endif
 	lp = op->gt_list;
@@ -496,6 +506,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	gp->gt_ini = gp->gt_val;	/* used for reverse logic check */
 	gp->gt_mcnt = 0;		/* clear gt_mcnt */
 #endif
+	gp->gt_live = 0;		/* clear live flag */
     }
 } /* gate3 */
 
