@@ -1,12 +1,58 @@
 #!/bin/bash
-# $Id: my,v 1.1 2004/02/02 11:57:14 jw Exp $
+
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-h] [-y<opt>]' >&2
+    echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+    echo '	-z	echo compiler calls with all options for debugging' >&2
+    echo '	-h	this help text' >&2
+    echo 'uses icc -d76 -y<opt> x.ic to make each line of the list pp.lt' >&2
+    echo 'uses icc -d74 -y<opt> -o x.c x.ic to make each line of the list pp.lt' >&2
+    echo '	$Id: my,v 1.2 2004/02/08 11:22:24 jw Exp $' >&2
+}
+
+v=""
+z=0
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    y*)	option=${option#?}
+		if [ -n "$option" ]; then
+		    v="$v -d$option"
+		else
+		    echo "-y must specify an option";
+		    usage; exit 254;
+		fi
+		break;;
+	    z*)	z=1;;
+	    h*)	usage; exit 255;;
+	    *)	echo "unknown flag -$option";
+		usage; exit 255;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+# $Id: my,v 1.2 2004/02/08 11:22:24 jw Exp $
 for file in $(cat pp.lt); do
     echo $file
     f=${file%.*}
-    icc -d76 -l $f.lst6 $f.ic;
-done > /dev/null 2>&1
+    if [ "$z" = 1 ]; then
+	echo "icc -d76$v -l $f.lst6 $f.ic" >&2
+    fi
+    icc -d76$v -l $f.lst6 $f.ic;
+done > Init.out6 2>&1
 for file in $(cat pp.lt); do
     echo $file
     f=${file%.*}
-    icc -d74 -A -l $f.lst -o $f.c $f.ic;
+    if [ "$z" = 1 ]; then
+	echo "icc -d74$v -A -l $f.lst -o $f.c $f.ic" >&2
+    fi
+    icc -d74$v -A -l $f.lst -o $f.c $f.ic;
 done > Init.out 2>&1
