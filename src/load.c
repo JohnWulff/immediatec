@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.28 2002/06/14 15:10:08 jw Exp $";
+"@(#)$Id: load.c,v 1.29 2002/06/20 09:34:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -497,15 +497,15 @@ main(
 		}
 	    } else if (df) {
 		int inverse = 0;		/* print ALIAS in symbol table */
+		printf(" %s@	", op->gt_ids);
 		gp = op;
-		printf(" %s@	", gp->gt_ids);
 		while (gp->gt_ini == -ALIAS) {
 		    if (gp->gt_fni == GATE) {
 			inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
 		    }
 		    gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
 		}
-		printf("%c%s\n", inverse ? '~' : ' ', gp->gt_ids);
+		printf("%s%s\n", inverse ? "~" : " ", gp->gt_ids);
 	    }
 	}
     }
@@ -599,8 +599,15 @@ main(
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
-	    if (df) printf(" %-8s%3d%3d:",
-		op->gt_ids, op->gt_ini, op->gt_fni);
+	    if (df) {
+		if (op->gt_ini < 0) {
+		    printf(" %-8s%6s%7s:", op->gt_ids,
+			full_type[-op->gt_ini], full_ftype[op->gt_fni]);
+		} else {
+		    printf(" %-8s%6d%7s:", op->gt_ids,
+			op->gt_ini, full_ftype[op->gt_fni]);
+		}
+	    }
 	    if (op->gt_ini == -ARN) {
 #ifdef HEXADDRESS
 		if (df) printf("	%p()", gp);	/* cexe_n */
@@ -704,6 +711,18 @@ main(
 		inError(__LINE__, op, 0);		/* unknown ftype */
 	    }
 	    if (df) printf("\n");
+	} else if (df) {
+	    int inverse = 0;		/* print ALIAS in symbol table */
+	    gp = op;
+	    printf(" %-8s%6s%7s:", op->gt_ids,
+		full_type[-op->gt_ini], full_ftype[op->gt_fni]);
+	    while (gp->gt_ini == -ALIAS) {
+		if (gp->gt_fni == GATE) {
+		    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+		}
+		gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+	    }
+	    printf("	%s%s\n", inverse ? "~" : "", gp->gt_ids);
 	}
     }
     if (errCount) {
