@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.53 2004/03/15 16:00:14 jw Exp $";
+"@(#)$Id: icc.h,v 1.54 2004/04/04 20:11:16 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -152,7 +152,7 @@ extern void	link_ol(		/* link a gate block into */
 		Gate *, Gate *);	/* an output or clock list */
 
 extern void	icc(			/* initialise and execute */
-		Gate *, unsigned *);	/*   g_lists, gate_count   */
+		Gate * g_lists, unsigned gate_count[]);
 
 extern unsigned short	osc_max;
 extern unsigned short	Aflag;		/* -A flag signals ARITH alias */

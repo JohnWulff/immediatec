@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.45 2004/03/18 22:40:02 jw Exp $";
+"@(#)$Id: comp.h,v 1.46 2004/04/04 20:11:16 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -50,24 +50,27 @@ typedef	struct Symbol {		/* symbol table entry */
     } u;
     union {
 #endif
+	unsigned int	cnt;	/* used to hold link_count in listNet() */
 	List_e *	elist;	/* feedback list pointer */
 	struct Symbol *	glist;	/* mark symbols in C compile */
 #if ! YYDEBUG
     } v;
 #endif
-    struct Symbol *	next;	/* to link to another */
+    struct Symbol *	next;	/* to link to another Symbol, mostly in ST */
 } Symbol;
 
 #if ! YYDEBUG
 #define u_gate		u.gate
 #define u_blist		u.blist
 #define u_val		u.val
+#define v_cnt		v.cnt
 #define v_elist		v.elist
 #define v_glist		v.glist
 #else				/* easier for debugging */
 #define u_gate		gate
 #define u_blist		blist
 #define u_val		val
+#define v_cnt		cnt
 #define v_elist		elist
 #define v_glist		glist
 #endif
@@ -268,9 +271,10 @@ extern int	toIEC1131(char * name, char * buf, int bufLen,
 			  char * iqt, char * xbwl, int * bytep,
 			  int * bitp, char * tail);
 
-extern int	listNet(unsigned * gate_count);	/* list generated network */
-extern int	buildNet(Gate ** igpp);	/* generate execution network */
-extern int	output(FILE * iFP, char * outfile); /* generate network as C file */
+extern int	listNet(unsigned gate_count[]);		/* list generated network */
+extern int	buildNet(Gate ** igpp,			/* generate execution network */
+			    unsigned gate_count[]);
+extern int	output(FILE * iFP, char * outfile);	/* generate network as C file */
 extern int	c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 					/*   lexc.l   */

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.39 2004/02/23 21:03:55 jw Exp $";
+"@(#)$Id: ict.c,v 1.40 2004/04/04 20:11:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -91,7 +91,7 @@ static char *	msgBuf;
 void
 icc(
     Gate *	g_lists,
-    unsigned *	gate_count)
+    unsigned	gate_count[])
 {
     int		i;
     short	pass;

@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.26 2004/01/26 18:54:04 jw Exp $";
+"@(#)$Id: icc.c,v 1.27 2004/04/04 20:11:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -142,7 +142,7 @@ unsigned long	glit_nxt;			/* count glitch scan */
 void
 icc(
     Gate *	g_lists,
-    unsigned *	gate_count)
+    unsigned	gate_count[])
 {
     int		i;
     short	pass;

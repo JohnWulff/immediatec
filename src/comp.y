@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.86 2004/03/17 17:22:47 jw Exp $";
+"@(#)$Id: comp.y,v 1.87 2004/04/04 20:11:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -2434,7 +2434,7 @@ getNumber(void)
  *******************************************************************/
 
 char *	cexeString[] = {
-    "    case %d:\n",
+    "/**/case %d:\n",			/* begin with empty comment for uniqueness */
 #if INT_MAX == 32767 && defined (LONG16)
     "static long _c_%d(Gate * _cexe_gf) {\n",
 #else

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.74 2004/03/18 14:20:21 jw Exp $";
+"@(#)$Id: outp.c,v 1.75 2004/04/04 20:11:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -193,9 +193,10 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
  *******************************************************************/
 
 int
-listNet(unsigned * gate_count)
+listNet(unsigned gate_count[])
 {
     Symbol *	sp;
+    Symbol *	tsp;
     List_e *	lp;
     Symbol **	hsp;
     short	dc;
@@ -255,6 +256,11 @@ listNet(unsigned * gate_count)
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
+	    sp->v_cnt = 0;		/* v_elist & v_glist no longer needed */
+	}
+    }
+    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type & EM) {
 		extFlag = 1;
 	    }
@@ -266,8 +272,13 @@ listNet(unsigned * gate_count)
 		if (typ < MAX_LV &&	/* don't count outputs */
 		    sp->ftype != OUTX && sp->ftype != OUTW) {
 		    for (lp = sp->list; lp; lp = lp->le_next) {
-			if (sp->ftype >= MAX_AR || lp->le_val != (unsigned) -1) {
+			if (lp->le_val != (unsigned) -1) {
 			    link_count++;
+			    if (sp->ftype < MAX_AR && lp->le_val != 0) {
+				tsp = lp->le_sym;	/* arithmetic function */
+				assert(tsp && (tsp->type == ARN || tsp->type == ERR));
+				tsp->v_cnt++;		/* count reverse parameter */
+			    }
 			}
 		    }
 		    link_count++;	/* for terminator */
@@ -280,7 +291,7 @@ listNet(unsigned * gate_count)
 			os[typ], fos[sp->ftype]);
 		    dc = 0;
 		    for (lp = sp->list; lp; lp = lp->le_next) {
-			Symbol * tsp = lp->le_sym;
+			tsp = lp->le_sym;
 			if (dc++ >= 8) {
 			    dc = 1;
 			    fprintf(outFP, "\n\t");
@@ -314,9 +325,17 @@ listNet(unsigned * gate_count)
 		}
 	    } else if (typ == (UDF|FM)) {
 		undefined++;	/* cannot execute if function internal gate not defined */
-//		ierror("undefined gate in function:", sp->name);
-		warning("undefined gate in function:", sp->name);
+		ierror("undefined gate in function:", sp->name);
 	    }
+	}
+    }
+    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	for (sp = *hsp; sp; sp = sp->next) {
+	    if (sp->v_cnt) {
+		assert(sp->type == ARN || sp->type == ERR);
+		link_count += sp->v_cnt + 1;	/* space for reverse links + function # */
+	    }
+	    sp->v_cnt = 0;
 	}
     }
 
@@ -363,21 +382,26 @@ listNet(unsigned * gate_count)
 
 /********************************************************************
  *
- *	generate execution network
+ *	Generate execution network for icr or ict direct execution
+ *	igpp ==> array of Gates generated with calloc(block_total)
+ *	gate_count splits this array into different type Gates in icc()
  *
  *******************************************************************/
 
 int
-buildNet(Gate ** igpp)
+buildNet(Gate ** igpp, unsigned gate_count[])
 {
     Symbol *	sp;
+    Symbol *	tsp;
     List_e *	lp;
     Symbol **	hsp;
     short	typ;
     unsigned	val;
+    unsigned	i;
     unsigned	rc = 0;		/* return code */
     char	bwl[2];		/* "B" or "W" */
     Gate *	gp;
+    Gate *	tgp;
     Gate **	fp;
     Gate **	ifp;
 
@@ -392,17 +416,20 @@ buildNet(Gate ** igpp)
     ifp = fp = (Gate **)calloc(link_count, sizeof(Gate *));	/* links */
 
     for (typ = 0; typ < MAX_OP; typ++) {
+	val = 0;
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
 		if (sp->type == typ) {
 		    gp->gt_fni = sp->ftype;	/* basic gate first */
 		    gp->gt_ids = sp->name;	/* gate to symbol name */
 		    sp->u_gate = gp++;		/* symbol to gate */
+		    val++;
 		}
 	    }
 	}
+	assert(val == gate_count[typ]);		/* check once only */
     }
-    if ((val = gp - *igpp) == block_total) {
+    if ((gp - *igpp) == block_total) {
 	gp = *igpp;				/* repeat to initialise links */
 	for (typ = 0; typ <= MAX_OP; typ++) {	/* include ALIAS */
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
@@ -418,10 +445,15 @@ buildNet(Gate ** igpp)
 					    if (lp->le_val == (unsigned) -1) {
 						continue; /* timer value link */
 					    }
-					    lp->le_sym->u_gate->gt_rlist =
-					    (Gate**)(lp->le_val >> 8);
+					    tsp = lp->le_sym;
+					    assert(tsp && tsp->u_gate);
+					    tgp = tsp->u_gate;
+					    if (lp->le_val != 0) {
+						assert(tsp->type == ARN || tsp->type == ERR);
+						tgp->gt_new++;	/* count ARITH inputs */
+					    }
 					} else if (val != lp->le_val) {
-					    continue;	/* not right value */
+					    continue;	/* not right logical value */
 					}
 					*fp++ = lp->le_sym->u_gate;
 				    }
@@ -462,27 +494,42 @@ buildNet(Gate ** igpp)
 				    }
 				}
 			    } else if (sp->ftype < MAX_ACT) {
-				Symbol * tsp;	/* D_SH - F_CF */
-				/* relies on action gates */
-				/* having only one output */
+				/* D_SH - TIMR relies on action gates having only one output */
 				lp = sp->list;
 				if ((tsp = lp->le_sym) != 0) {
+				    tgp = tsp->u_gate;
+				    assert(tgp);
 				    if (sp->ftype == TIMR &&
-					tsp->u_gate->gt_old < lp->le_val) {
+					tgp->gt_old < lp->le_val) {
 					/* transfer timer preset off value */
-					tsp->u_gate->gt_old = lp->le_val;
+					tgp->gt_old = lp->le_val;
 				    }
-				    *fp++ = tsp->u_gate;
+				    *fp++ = tgp;
+				    *fp++ = 0;		/* room for clock or timer entry */
+				    *fp++ = 0;		/* room for time delay */
+				    /* ZZZ modify later to do this only for */
+				    /* ZZZ action gates controlled by a TIMER */
 				} else {
 				    /* F_SW, F_CF or F_CE action gate points to function */
-				    *fp++ = (Gate*)lp->le_val;
+				    assert((sp->ftype == F_SW ||
+					    sp->ftype == F_CF ||
+					    sp->ftype == F_CE) &&
+					   (lp->le_val & 0xff) == 0);
+				    fp[0] = (Gate*)(lp->le_val >> 8);
+				    fp[1] = 0;	/* room for clock or timer entry */
+				    fp[2] = 0;	/* room for time delay or first parameter */
+				    i   = 3;			/* offset for above */
+				    val = 1;
+				    while ((lp = lp->le_next) != 0) {
+					assert(val < lp->le_val);
+					val = lp->le_val;
+					tsp = lp->le_sym;
+					assert(tsp && tsp->u_gate);
+					fp[val] = tsp->u_gate;
+					i++;			/* count parameters */
+				    }
+				    fp += i;			/* space for above entries */
 				}
-				/* room for clock or timer entry */
-				*fp++ = 0;
-				/* room for time value */
-				*fp++ = 0;
-				/* ZZZ modify later to do this only for */
-				/* ZZZ action gates controlled by a TIMER */
 			    } else if (sp->ftype == OUTW) {
 				if (sscanf(gp->gt_ids, "Q%1[BWL]%d", bwl, &byte) == 2 &&
 				    byte < IXD) {
@@ -517,7 +564,7 @@ buildNet(Gate ** igpp)
 			    /* CLK || TIM list headers - convert to ftype */
 			    gp->gt_fni = typ == CLK ? CLCKL
 				       : typ == TIM ? TIMRL : 0;
-			    /*
+			    /****************************************************
 			     * this initialisation of clock references relies
 			     * on gates which execute a function ftype != GATE
 			     * having only one output which is in the first
@@ -525,11 +572,10 @@ buildNet(Gate ** igpp)
 			     * clock reference is put in the second location
 			     * which was previously cleared by a terminator.
 			     * The 3rd location holds a pointer to a Gate of
-			     * ftype ARITH holding a time value (ARN or NCONST).
+			     * ftype ARITH holding a time delay (ARN or NCONST).
 			     * All action gates were initialised first, because
 			     * typ < MAX_LV were done first.
-			     */
-
+			     ****************************************************/
 			    for (lp = sp->list; lp; lp = lp->le_next) {
 				lp->le_sym->u_gate->gt_clk = gp;
 			    }
@@ -543,24 +589,54 @@ buildNet(Gate ** igpp)
 	    gp++;			/* error - count iClock */
 	    rc = 1;			/* generate error */
 	}
-	if ((val = gp - *igpp) == block_total) {
+	if ((gp - *igpp) == block_total) {
 	    gp = *igpp;			/* repeat to initialise timer links */
 	    for (typ = 0; typ < MAX_OP; typ++) {	/* keep gp in same order */
 		for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		    for (sp = *hsp; sp; sp = sp->next) {
 			if (sp->type == typ) {
-			    if (sp->ftype < MAX_AR) {
-				/*
-				 * The 3rd location holds a pointer to a Gate of
-				 * ftype ARITH holding a time value (ARN or NCONST).
-				 */
+			    if (sp->ftype < MAX_AR) {	/* Arithmetic Gate */
 				for (lp = sp->list; lp; lp = lp->le_next) {
-				    if (lp->le_val == (unsigned) -1) {
-					lp->le_sym->u_gate->gt_time = gp;
+				    tsp = lp->le_sym;
+				    assert(tsp && tsp->u_gate);
+				    if ((val = lp->le_val) != 0) {
+					tgp = tsp->u_gate;
+					if (val == (unsigned) -1) {
+					    /**************************************************
+					     * The 3rd location holds a pointer to a Gate of
+					     * ftype ARITH holding a time delay (ARN or NCONST).
+					     **************************************************/
+					    tgp->gt_time = gp;
+					} else {
+					    /**************************************************
+					     * ftype ARITH - generate backward input list
+					     **************************************************/
+					    i = val & 0xff;
+					    val >>= 8;
+					    assert((tsp->type == ARN || tsp->type == ERR) &&
+						   val && i && i <= tgp->gt_new);
+					    if (tgp->gt_rlist == 0) {
+						tgp->gt_rlist = fp;
+						fp += tgp->gt_new + 1;
+						tgp->gt_rlist[0] = (Gate*)val;
+					    } else {
+						assert((Gate*)val == tgp->gt_rlist[0]);
+					    }
+					    tgp->gt_rlist[i] = gp;
+					}
 				    }
 				}
 			    }
 			    gp++;
+			}
+		    }
+		}
+	    }
+	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+		for (sp = *hsp; sp; sp = sp->next) {
+		    if ((tgp = sp->u_gate) != 0) {
+			if (tgp->gt_new != 0) {
+			    tgp->gt_new = 0;		/* restore gt_new */
 			}
 		    }
 		}
@@ -590,7 +666,7 @@ buildNet(Gate ** igpp)
 
 /********************************************************************
  *
- *	generate network as C file
+ *	Generate network as C file
  *
  *******************************************************************/
 
@@ -747,14 +823,10 @@ static Gate *	_Mt;\n\
 extern Gate *	_l_[];\n\
 "	);
     linecnt += 1;
-
-/********************************************************************
- *
- *	reverse action links to input links for simple Gates
- *	for Gates of ftype ARITH, keep the links in ascending order
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Reverse action links to input links for simple Gates
+     *	for Gates of ftype ARITH, keep the links in ascending order
+     *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) == UDF || typ & EM) {
@@ -806,23 +878,19 @@ extern Gate *	_l_[];\n\
 		    assert(0);			/* #define no longer in use */
 		}
 	    } else if (typ < MAX_OP) {
-
-/********************************************************************
- *
- *	this initialisation of clock references relies on gates which
- *	execute a function ftype != GATE having only one output which
- *	is in the first location of the function list (FL_GATE).
- *	The clock reference is put in the second location which was
- *	previously cleared by a terminator. The 3rd location holds a
- *	pointer to a Gate of ftype ARITH holding a time value (ARN or NCONST).
- *	During execution of an action this pointer is used to find the
- *	correct clock block, which is used as the head of a clock list
- *	to which the action is linked. The actual clock block is made
- *	empty in the following, and action blocks are linked to it
- *	dynamically at run time.
- *
- *******************************************************************/
-
+		/********************************************************************
+		 * this initialisation of clock references relies on gates which
+		 * execute a function ftype != GATE having only one output which
+		 * is in the first location of the function list (FL_GATE).
+		 * The clock reference is put in the second location which was
+		 * previously cleared by a terminator. The 3rd location holds a
+		 * pointer to a Gate of ftype ARITH holding a time delay (ARN or NCONST).
+		 * During execution of an action this pointer is used to find the
+		 * correct clock block, which is used as the head of a clock list
+		 * to which the action is linked. The actual clock block is made
+		 * empty in the following, and action blocks are linked to it
+		 * dynamically at run time.
+		 *******************************************************************/
 		for (lp = sp->list; lp; lp = sp->list) {
 		    tsp = lp->le_sym;		/* action gate */
 		    if (tsp->ftype == GATE) {
@@ -876,7 +944,6 @@ extern Gate *	_l_[];\n\
 		    errorEmit(Fp, errorBuf, &linecnt);
 		}
 	    }
-	    // assert(sp->v_elist == 0);
 	}
     }
 
@@ -929,17 +996,13 @@ extern Gate *	_l_[];\n\
 	    }
 	}
     }
-
-/********************************************************************
- *
- *	output executable gates
- *
- *	this modifies the symbol table entries
- *	the CLK and TIM list Symbols are reconnected
- *	to the action Gates which they control
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Output executable gates
+     *
+     *	This modifies the symbol table entries
+     *	the CLK and TIM list Symbols are reconnected
+     *	to the action Gates which they control
+     *******************************************************************/
     fprintf(Fp, "\n\
 /********************************************************************\n\
  *\n\
@@ -980,7 +1043,7 @@ extern Gate *	_l_[];\n\
 		    } else {
 			fprintf(Fp, "Gate %-8s", modName);
 		    }
-		    fprintf(Fp, " = { 1, -%s,", full_type[typ]);
+		    fprintf(Fp, " = { 1, -%s,", full_type[typ]);	/* -gt_ini */
 		}
 		fprintf(Fp, " %s, 0, \"%s\",",
 		    full_ftype[dc = sp->ftype], sp->name);
@@ -1083,14 +1146,10 @@ extern Gate *	_l_[];\n\
 	    }
 	}
     }
-
-/********************************************************************
- *
- *	Do ALIASes last to avoid forward references of Gates in gt_list
- *	Resolve multiple ALIASes here for the same reason.
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Do ALIASes last to avoid forward references of Gates in gt_list
+     *	Resolve multiple ALIASes here for the same reason.
+     *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) == ALIAS && sp->list != 0 &&
@@ -1113,25 +1172,19 @@ extern Gate *	_l_[];\n\
 	    }
 	}
     }
-
-    /*
-     * link counting in output() counts reverse links and is thus very different to listNet()
-     * therefore cannot compare link_count and li
-     */
-
-/********************************************************************
- *
- *	generate linked list header, for linking several independently
- *	compiled modules
- *
- *	The following algorithm fails if two files are linked with names
- *	'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
- *	A multiple define error occurs for the name 'ab_cd_i_list' at link time.
- *	The same error occurs if unfortunate path combinations are used
- *	eg: ab/cd.ic and either of the above
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	Link counting in output() counts all reverse links and is thus very
+     *	different to listNet() therefore cannot compare link_count and li
+     *
+     *	Generate linked list header, for linking several independently
+     *	compiled modules
+     *
+     *	The following algorithm fails if two files are linked with names
+     *	'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
+     *	A multiple define error occurs for the name 'ab_cd_i_list' at link time.
+     *	The same error occurs if unfortunate path combinations are used
+     *	eg: ab/cd.ic and either of the above
+     *******************************************************************/
     module = emalloc(strlen(inpNM)+1);	/* +1 for '\0' */
     strcpy(module, inpNM);		/* source file name */
     if ((s1 = strrchr(module, '.')) != 0) {
@@ -1179,14 +1232,10 @@ extern Gate *	_l_[];\n\
 	    goto endm;
 	}
     }
-
-/********************************************************************
- *
- *	produce initialised connection lists
- *	using modified symbol table
- *
- *******************************************************************/
-
+    /********************************************************************
+     *	produce initialised connection lists
+     *	using modified symbol table
+     *******************************************************************/
     if (li == 0) goto endm;	/* MS-C does not hack 0 length array - gcc does */
     fprintf(Fp, "\n\
 /********************************************************************\n\

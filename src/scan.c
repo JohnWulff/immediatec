@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.27 2004/03/10 09:46:13 jw Exp $";
+"@(#)$Id: scan.c,v 1.28 2004/04/04 20:11:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -36,7 +36,7 @@ static void	link_c(Gate * gp, Gate * out_list);
 
 Functp2		initAct[] = {		/* called in pass4 */
 		    err_fn, arithMa, link_ol, link_c, chMbit, link_c, link_c, dMsh,
-		    fMsw, link_c, link_c, link_c, link_c, link_c, link_c, link_c,
+		    link_c, link_c, link_c, link_c, link_c, link_c, link_c, link_c,
 		    outMw, outMx, err_fn, err_fn,
 		};
 
@@ -146,8 +146,6 @@ scan_ar(Gate *	out_list)
 	while ((gp = *lp++) != 0) {
 #ifdef LOAD
 	    CFunctp exec;
-#else
-	    int exec;
 #endif
 	    scan_cnt++;				/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -175,8 +173,8 @@ scan_ar(Gate *	out_list)
 		val = exec(gp);			/* compute arith expression */
 	    }
 #else
-	    if ((exec = (int)gp->gt_rlist) != 0) {
-		val = c_exec(exec, gp);		/* must pass both -/+ */
+	    if (gp->gt_rlist) {
+		val = c_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
 	    }
 #endif
 	    else {
@@ -582,6 +580,12 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
  *	slave may be simultaneously acted on by S_SH or R_SH, which
  *	should come first on start up.
  *
+ *	Clocked 'switch' (F_SW) and 'else' actions (F_CE) require special
+ *	treatment. They must be executed once on startup, even if the
+ *	input is 0, because the switch or else C fragment may assign
+ *	values, even when the input is 0. Clocked 'if' (F_CF) does not
+ *	need this.
+ *
  *******************************************************************/
 
 void
@@ -607,8 +611,6 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 	    while ((gp = *lp++) != 0) {	/* do arithmetic outputs */
 #ifdef LOAD
 		CFunctp exec;
-#else
-		int exec;
 #endif
 		scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -636,24 +638,33 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    val = exec(gp);		/* compute arith expression */
 		}
 #else
-		if ((exec = (int)gp->gt_rlist) != 0) {
-		    val = c_exec(exec, gp);	/* must pass both -/+ */
+		if (gp->gt_rlist) {
+		    val = c_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
 		}
 #endif
 		else {
 		    val = op->gt_new;		/* pass value to master output */
 		}
 
-		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
+		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
 		    if (val != gp->gt_new) {
 			gp->gt_new = val;
-			/* arithmetic init action same as master action */
 			(*initAct[gp->gt_fni])(gp, a_list);
 		    }
+		} else if (gp->gt_fni == F_SW) {
+		    gp->gt_new = val;		/* store new value, even if unchanged */
+		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
+			(*initAct[gp->gt_fni])(gp, a_list);	/* link_c() */
+		    }
+		} else if (gp->gt_fni == F_CE) {
+		    gp->gt_val = val ? -1 : 1;	/* convert val to logic value */
+		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
+			(*initAct[gp->gt_fni])(gp, a_list);	/* link_c() */
+		    }
 		} else if ((val = val ? -1 : 1) != gp->gt_val) {
-		    gp->gt_val = val;	/* convert val to logic value */
-		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
+		    gp->gt_val = val;		/* convert val to logic value */
+		    (*initAct[gp->gt_fni])(gp, o_list);		/* init action */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
@@ -670,7 +681,27 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 #endif
 	    }
 	} else if (op->gt_fni == GATE) {
-	    while (*lp++);			/* ignore direct outputs */
+	    while ((gp = *lp++) != 0) {		/* ignore direct outputs except F_SW F_CE */
+		if (gp->gt_fni == F_SW || gp->gt_fni == F_CE) {
+		    scan_cnt++;			/* count scan operations */
+#if YYDEBUG && !defined(_WINDOWS)
+		    gx = gp;			/* save old gp in gx */
+		    if (debug & 0100) {
+			if (dc++ >= 4) {
+			    dc = 1;
+			    putc('\n', outFP);
+			}
+			fprintf(outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
+		    }
+#endif
+		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
+			(*initAct[gp->gt_fni])(gp, o_list);	/* link_c() */
+		    }
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
+#endif
+		}
+	    }
 	    while ((gp = *lp++) != 0) {		/* do inverted outputs */
 		scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -683,7 +714,14 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    fprintf(outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
 		}
 #endif
-		if (--gp->gt_val == 0) {		/* gate function */
+		if (gp->gt_fni == F_SW || gp->gt_fni == F_CE) {
+		    if (--gp->gt_val == 0) {	/* gate function */
+			--gp->gt_val;
+		    }
+		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
+			(*initAct[gp->gt_fni])(gp, o_list);	/* link_c() */
+		    }
+		} else if (--gp->gt_val == 0) {	/* gate function */
 		    --gp->gt_val;
 		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
 		}

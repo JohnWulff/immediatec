@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.59 2004/03/18 14:19:08 jw Exp $";
+"@(#)$Id: genr.c,v 1.60 2004/04/04 20:11:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -814,7 +814,7 @@ op_asgn(				/* asign List_e stack to links */
 		}
 		if (gp->ftype == ARITH &&		/* && gp->u_blist ZZZ */
 		    sp->ftype != OUTW &&
-		    sp->ftype != ALIAS) {
+		    sp->type != ALIAS) {
 		    int	val;
 		    if ((val = lp->le_val) == (unsigned) -1) {
 			gt_input--;			/* delay is not an arithmetic input */
