@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.27 2002/06/13 12:30:21 jw Exp $";
+"@(#)$Id: load.c,v 1.28 2002/06/14 15:10:08 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -221,7 +221,9 @@ main(
     if (df) { printf("PASS 0\n"); fflush(stdout); }
     for (oppp = i_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
-	    op->gt_val = op->gt_ini == -INPW || op->gt_ini == -INPX ? -1 : 0;
+	    op->gt_val = (op->gt_ini == -NCONST	||
+			  op->gt_ini == -INPW	||
+			  op->gt_ini == -INPX	) ? -1 : 0;
 	    if (op->gt_ini != -ALIAS &&
 		op->gt_fni != OUTW && op->gt_fni != OUTX) {
 		if (op->gt_fni == TIMRL) {
@@ -378,14 +380,20 @@ main(
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    gp->gt_val++;		/* slave node */
 		}
-		if ((gp = *lp++) == 0) {
+		if ((gp = *lp++) == 0 || (gp->gt_fni != CLCKL && gp->gt_fni != TIMRL)) {
 		    inError(__LINE__, op, 0);	/* no clock reference */
 		} else {
-		    gp->gt_mark++;		/* clock node */
+		    while (gp->gt_ini == -ALIAS) {
+			gp = (Gate*)gp->gt_rlist;	/* adjust */
+		    }
+		    gp->gt_mark++;		/* clock ir timer node */
 		    if (gp->gt_fni == TIMRL) {
 			if ((gp = *lp++) == 0) {
 			    inError(__LINE__, op, 0);	/* no timer delay */
 			} else {
+			    while (gp->gt_ini == -ALIAS) {
+				gp = (Gate*)gp->gt_rlist;	/* adjust */
+			    }
 			    gp->gt_old++;		/* timer delay */
 			}
 		    }
@@ -448,7 +456,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) { printf("PASS 2 - symbol table\n"); fflush(stdout); }
+    if (df) { printf("PASS 2 - symbol table: name inputs outputs delay-references\n"); fflush(stdout); }
     /* iClock has no input, needs no output - just report for completeness */
     if (df) printf(" %-8s %3d %3d\n", iClock.gt_ids, iClock.gt_val,
 	iClock.gt_mark);
@@ -468,13 +476,11 @@ main(
 			printf("\n");
 		    }
 		}
-		if (op->gt_ini != -NCONST) {
-		    if (op->gt_val == 0) {
-			fprintf(stderr, "WARNING '%s' has no input\n", op->gt_ids);
-		    }
-		    if (op->gt_mark == 0 && op->gt_old == 0) {
-			fprintf(stderr, "WARNING '%s' has no output\n", op->gt_ids);
-		    }
+		if (op->gt_val == 0) {
+		    fprintf(stderr, "WARNING '%s' has no input\n", op->gt_ids);
+		}
+		if (op->gt_mark == 0 && op->gt_old == 0) {
+		    fprintf(stderr, "WARNING '%s' has no output\n", op->gt_ids);
 		}
 		if (op->gt_fni == ARITH) {
 		    op->gt_old = 0;	/* clear for run time */
@@ -589,7 +595,7 @@ main(
  *
  *******************************************************************/
 
-    if (df) { printf("PASS 6\n"); fflush(stdout); }
+    if (df) { printf("PASS 6 - name gt_ini gt_fni:\n"); fflush(stdout); }
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
@@ -665,7 +671,7 @@ main(
 		    if ((gp->gt_fni != CLCKL || gp->gt_ini != -CLK) &&
 			(gp->gt_fni != TIMRL || gp->gt_ini != -TIM)) {
 			inError(__LINE__, op, gp);	/* strange clock or timer */
-	fprintf(stderr, "fni = %d ini = %d\n", gp->gt_fni, gp->gt_ini);
+			fprintf(stderr, "fni = %d ini = %d\n", gp->gt_fni, gp->gt_ini);
 		    }
 		    if (df) printf("	%c%s,", os[-gp->gt_ini], gp->gt_ids);
 		    if (gp->gt_fni == TIMRL) {
