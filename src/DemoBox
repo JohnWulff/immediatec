@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
 ########################################################################
 #
 #	Example 14-1 Simple UI Code
@@ -58,11 +58,7 @@ foreach my $color (qw(PeachPuff1 LightBlue1 SeaGreen2 Yellow1 PeachPuff1 LightBl
 #
 ########################################################################
 
-open (F, "/tmp/foo");
-$top->fileevent(F, 'readable', \&read_file);
-
-# my $idleR = $top->fileevent($conn->{sock}, 'readable', sub { });
-# my $idleR = $top->fileevent($conn->{sock}, 'readable', \&empty);
+$top->fileevent($conn->{sock}, 'readable', sub { });
 
 ########################################################################
 #
@@ -77,8 +73,8 @@ while (Tk::MainWindow->Count) {
     print "#";
     Msg->event_loop(1);
 }
-print "Quit\n";
-# my $idleR = $top->fileevent($conn->{sock}, 'readable', undef);
+print "\nQuit\n";
+$top->fileevent($conn->{sock}, 'readable', undef);
 $conn->disconnect();
 Msg->event_loop();
 
@@ -93,21 +89,5 @@ sub rcvd_msg_from_server {
     if (defined $msg) {
         my $len = length ($msg);
         print "($len)\n";
-    }
-}
-
-sub empty { }
-
-sub read_file {
-    my $buf;
-
-    if (my $n = sysread(F, $buf, 4)) {
-	print "$buf\n";
-    } elsif (eof(F)) {
-	$top->fileevent(F, 'readable', undef);
-	print "EOF\n";
-    } else {
-	print "ERROR $n !!!\n";
-	$top->fileevent(F, 'readable', undef);
     }
 }
