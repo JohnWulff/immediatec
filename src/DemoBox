@@ -10,7 +10,32 @@
 
 use Tk;					# Slurp the module in
 use Msg;
-#use strict;
+use strict;
+
+########################################################################
+#
+#	Initialization
+#
+########################################################################
+
+my $named = $0; $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:	@<<<<<< [-s <host>] [-p <port>] [-h] [<unitID>]
+	$named
+	-s host	ID of server (default 'localhost')
+	-p port	service port of server (default '8080')
+	unitID	default is 'X0'
+	-h	help, ouput this Usage text only
+$Id: DemoBox,v 1.16 2000/05/29 13:32:09 jw Exp $
+.
+
+use vars qw($opt_s $opt_p $opt_h);
+require "getopts.pl";
+&Getopts('s:p:h');			# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
 
 ########################################################################
 #
@@ -18,13 +43,15 @@ use Msg;
 #
 ########################################################################
 
-my $host = (@ARGV == 2) ? $ARGV[1] : 'localhost';
-my $port = 8080;
+my $host = defined $opt_s ? $opt_s : 'localhost';
+my $port = defined $opt_p ? $opt_p : 8080;
+my $unitID = (@ARGV >= 1) ? $ARGV[0] : 'X0';
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client could not connect to $host:$port\n" unless $conn;
-print "Connection successful.\n";
-$conn->send_now($ARGV[0]) if $ARGV[0];
+print "Connection $unitID at client.\n";
+
+$conn->send_now($unitID);		# register I/O
 
 ########################################################################
 #
@@ -74,14 +101,14 @@ my $outFrame = $mainWindow->Frame(-label       => 'outputs',
 my @inputs;
 
 for (my $index = 0; $index < 8; $index++) {
-    my $input = "I$ARGV[0].$index";
-    $makeCheckbutton = "\
+    my $input = "I$unitID.$index";
+    my $makeCheckbutton = "\
 	\$inFrame->Checkbutton(\
 	    -text        => \$input,\
 	    -variable    => \\\$inputs[\$index],\
 	    -selectcolor => 'green',\
 	    -command     => sub {\
-				 print \"Sending msg $index\\n\";\
+				 print \"   $index,\$inputs[$index] from $unitID\\n\";\
 				 \$conn->send_now(\"$index,\$inputs[$index]\");\
 				},\
 	)->pack(-side   => 'top',\
@@ -95,8 +122,8 @@ for (my $index = 0; $index < 8; $index++) {
 my @outputs;
 
 for (my $index = 0; $index < 8; $index++) {
-    my $output = "Q$ARGV[0].$index";
-    $makeCheckbutton = "\
+    my $output = "Q$unitID.$index";
+    my $makeCheckbutton = "\
 	\$outFrame->Checkbutton(\
 	    -text        => \$output,\
 	    -variable    => \\\$outputs[\$index],\
@@ -104,7 +131,7 @@ for (my $index = 0; $index < 8; $index++) {
 #	    -state       => 'disabled',\
 	    -takefocus   => 0,\
 	    -command     => sub {\
-				 print \"Inverting outputs $index\\n\";\
+				 print \"Inverting output $index on $unitID\\n\";\
 				 \$outputs[$index] = [1,0]->[\$outputs[$index]];\
 				},\
 	)->pack(-side   => 'top',\
@@ -145,7 +172,7 @@ sub rcvd_msg_from_server {
 #	print "($len)$msg\n";
 	if ($len == 0) {
 	    $conn->disconnect();
-	    print "DemoBox $xID disconnected by server\n";
+	    print "DemoBox $unitID disconnected by server\n";
 	    exit;
 	}
 	my ($index, $value) = split /,/, $msg;

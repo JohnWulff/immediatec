@@ -51,10 +51,6 @@
 use Msg;
 use strict;
 
-my $host = '0.0.0.0';
-my $port = 8080;
-my $prog;
-
 my %UnitIDs = ();
 my %Connections = ();
 my $connPPLC;
@@ -67,15 +63,19 @@ my $connPPLC;
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<< [-h]
+Usage:	@<<<<<<< [-s <host>] [-p <port>] [-h] [<list of client calls>]
 	$named
+	-s host	ID of server (default '0.0.0.0')
+	-p port	service port for server and all clients
 	-h	help, ouput this Usage text only
-$Id: ICServer,v 1.4 2000/05/28 22:16:08 jw Exp $
+	NOTE:	if a client call has arguments the call
+		must be quoted. eg: 'DemoBox X0'
+$Id: ICServer,v 1.5 2000/05/29 13:32:09 jw Exp $
 .
 
-use vars qw($opt_h);
+use vars qw($opt_s $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('h');			# sets $opt_h if -h etc
+&Getopts('s:p:h');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -87,8 +87,41 @@ if ($opt_h) {
 #
 ########################################################################
 
+my $host = defined $opt_s ? $opt_s : '0.0.0.0';
+my $port = defined $opt_p ? $opt_p : 8080;
+
 Msg->new_server($host, $port, \&login_proc);
 print "Server created. Waiting for events\n";
+
+########################################################################
+#
+#	Start clients named in argument list
+#
+########################################################################
+
+ARG: while ($ARGV = shift @ARGV) {
+    FORK: {
+	my $pid;
+	sleep 1;
+	next ARG if ($pid = fork);
+	if (defined $pid) {	# $pid is zero if defined
+	    # dispatch child process
+	    my @call = split " ", $ARGV;
+	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
+	    print "@call\n";
+	    exec @call;
+	    exit;		# child process can't be executed
+	} elsif ($! =~ /No more process/) {
+	    # EAGAIN, recoverable fork error
+	    sleep 5;
+	    redo FORK;
+	} else {
+	    # weird fork error
+	    die "Can't fork: $!\n";
+	}
+    }
+}
+
 Msg->event_loop();
 
 ########################################################################
@@ -99,7 +132,7 @@ Msg->event_loop();
 
 sub login_proc {
     my ($conn, $host, $port) = @_;
-    print "Connection successful.  $conn,$host,$port\n";
+    print "Connection    at server. $conn $host:$port\n";
     # Unconditionally accept an incoming connection request
     $UnitIDs{$conn} = undef;
     return \&rcvd_msg_from_client;
@@ -114,8 +147,8 @@ sub login_proc {
 sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
-	my $len = length $msg;
 	my $unitID = $UnitIDs{$conn};
+	my $len = length $msg;
 #	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
 	if ($len == 0) {
 	    if (defined $unitID and exists $Connections{$unitID}) {
@@ -141,7 +174,7 @@ sub rcvd_msg_from_client {
 		}
 		$UnitIDs{$conn} = $msg;
 		$Connections{$msg} = $conn;
-		print "CONNECTED ($len)$msg $conn\n";
+		print "Registered $msg at server. $conn\n";
 	    }
 	} elsif ($msg =~ /^[XBW]/) {		# value messages from PPLC
 	    my ($uID, $index, $value, $rest) = split /,/, $msg, 4;
@@ -158,7 +191,7 @@ sub rcvd_msg_from_client {
 	} elsif (defined $connPPLC) {		# value messages from I/O
 	    # pass message to PPLC (without checking syntax)
 	    $connPPLC->send_now("$unitID,$msg");
-	    print "$unitID,$msg to P0\n";
+	    print "$unitID,$msg to   P0\n";
 	} else {
 	    print "$unitID,$msg to dummy P0\n";
 	}			# silently ignore disconnected PPLC
