@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.21 2002/06/06 12:17:51 jw Exp $
+# @(#)$Id: Makefile.in,v 1.22 2002/07/05 19:17:23 jw Exp $
 
 ############################################################
 #
@@ -92,7 +92,9 @@ libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	$(SHELL) -ec 'if [ -f y.tab.h ]; then mv -f y.tab.h y.tab.t; fi'
 	rm -f y.tab.c $@
 	$(YACC) $(YFLAGS) $<
-	cp y.tab.c $@
+	sed -f $(srcdir)/$*.sed y.tab.c > $@
+	sed -f $(srcdir)/$*.sed y.tab.h > y.tab.t1
+	mv y.tab.t1 y.tab.h
 	$(SHELL) -ec 'if cmp -s y.tab.h y.tab.t; then mv y.tab.t y.tab.h; fi'
 	rm -f y.tab.t
 	chmod -w y.tab.h y.tab.c $@
@@ -102,8 +104,8 @@ libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	test -f $@ && touch $@
     endif
 
-scid.c:	icc.v $(srcdir)/Makefile pawk.a
-	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+scid.c:	icc.v $(srcdir)/Makefile pawk.a comp.sed
+	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile $(srcdir)/comp.sed | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
 
 cexe.c:	$(srcdir)/cexe.h
 	sed -e '/^[A-Z]$$/s///' $(srcdir)/cexe.h > cexe.c
