@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.17 2001/02/03 17:10:04 jw Exp $";
+"@(#)$Id: load.c,v 1.18 2001/02/04 17:37:21 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -218,6 +218,8 @@ main(
 		op->gt_fni != OUTW && op->gt_fni != OUTX) {
 		if (op->gt_fni == TIMRL) {
 		    op->gt_old = op->gt_mark;
+		} else {
+		    op->gt_old = 0;
 		}
 		op->gt_mark = 0;
 	    }
@@ -241,7 +243,9 @@ main(
  *	For each ARN and LOGIC node op accumulate count of outputs in
  *	gp->gt_mark, where gp is each of the nodes which is input to op.
  *	Also accumulate total count in link_count and the input count
- *	in op->gt_val for a consistency check.
+ *	in op->gt_val for a consistency check. For timer delay references
+ *	accumulate the count in gp->gt_old (this is an ARITH node) without
+ *	also accumulating a link_count, since there is no link.
  *
  *	For each ARITH and GATE node op, which is not an ALIAS, count
  *	1 extra link for ARITH nodes and 2 extra links for GATE nodes.
@@ -354,10 +358,17 @@ main(
 		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
 		    gp->gt_val++;		/* slave node */
 		}
-		if ((gp = *lp) == 0) {
+		if ((gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0);	/* no clock reference */
 		} else {
 		    gp->gt_mark++;		/* clock node */
+		    if (gp->gt_fni == TIMRL) {
+			if ((gp = *lp++) == 0) {
+			    inError(__LINE__, op, 0);	/* no timer delay */
+			} else {
+			    gp->gt_old++;		/* timer delay */
+			}
+		    }
 		}
 	    } else if (op->gt_fni == OUTW) {
 		int	slot;
@@ -407,6 +418,9 @@ main(
  *	position of the last terminator for ARITH and GATE nodes.
  *	store this value in op->gt_list and clear the last terminator.
  *
+ *	Using op->gt_val check the node has inputs.
+ *	Using op->gt_mark or op->gt_old check the node has outputs.
+ *
  *	Maintain a long value sTstrLen which reports how much space
  *	must be allocated to hold a copy of all the ID strings.
  *	The length of a pointer array for such a symbol table is
@@ -426,18 +440,29 @@ main(
 	    *sTend++ = op;		/* enter node into sTable */
 	    sTstrLen += strlen(op->gt_ids) + 1;	/* string length */
 	    if (op->gt_ini != -ALIAS) {
-		if (df) printf(" %-8s %3d %3d\n",
-		    op->gt_ids, op->gt_val, op->gt_mark);
+		if (df) {
+		    printf(" %-8s %3d %3d", op->gt_ids, op->gt_val, op->gt_mark);
+		    if (op->gt_old) {
+			printf(" %3d\n", op->gt_old);	/* delay references */
+		    } else {
+			printf("\n");
+		    }
+		}
 		if (op->gt_ini != -NCONST) {
 		    if (op->gt_val == 0) {
 			fprintf(stderr, "WARNING '%s' has no input\n", op->gt_ids);
 		    }
-		    if (op->gt_mark == 0) {
+		    if (op->gt_mark == 0 && op->gt_old == 0) {
 			fprintf(stderr, "WARNING '%s' has no output\n", op->gt_ids);
 		    }
 		}
-		if (op->gt_fni == ARITH || op->gt_fni == GATE) {
-		    fp += op->gt_mark + (op->gt_fni == GATE);
+		if (op->gt_fni == ARITH) {
+		    op->gt_old = 0;	/* clear for run time */
+		    fp += op->gt_mark;
+		    *fp = 0;		/* last output terminator */
+		    op->gt_list = fp++;
+		} else if (op->gt_fni == GATE) {
+		    fp += op->gt_mark + 1;
 		    *fp = 0;		/* last output terminator */
 		    op->gt_list = fp++;
 		}
@@ -548,7 +573,20 @@ main(
 		} else {
 		    *lp = op;		/* forward input link */
 		}
-		if (df) printf("	IX_[%d]", lp - &IX_[0]);
+		if (df) {
+		    int		i;
+		    char *	aName = "??_";
+		    if ((i = lp - IX_) >= 0 && i < IXD*8) {
+			aName = "IX_";
+		    } else if ((i = lp - IB_) >= 0 && i < IXD) {
+			aName = "IB_";
+		    } else if ((i = lp - IW_) >= 0 && i < IXD) {
+			aName = "IW_";
+		    } else if ((i = lp - TX_) >= 0 && i < TXD*8) {
+			aName = "TX_";
+		    }
+		    printf("	%s[%d]", aName, i);
+		}
 	    }
 	    if (op->gt_fni == UDFA) {
 		inError(__LINE__, op, 0);			/* UDFA */

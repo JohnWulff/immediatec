@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.32 2001/02/03 17:10:04 jw Exp $";
+"@(#)$Id: genr.c,v 1.33 2001/02/04 17:37:21 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -750,8 +750,10 @@ op_asgn(			/* asign List_e stack to links */
 	    if (sp) {
 		(void) place_sym(sp);	/* place sp in the symbol table */
 		if (sp->type == ARN) {
+		    assert(sp->list);
 		    t_first = sp->list->le_first;
 		    t_last = sp->list->le_last;
+		    assert(t_first && t_last);
 		}
 	    }
 	}
@@ -1068,23 +1070,27 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
     List_e *	lp2;
     List_e *	lp3;
     List_e *	lpc;
-    List_e *	lpt = 0;
 
     if (ae1 == 0 || ae1->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
 
     if (ae2) {
+	lp1 = 0;
 	lpc = cr2 ? cr2->v			/* individul clock or timer cr2 */
-		  : cr1 ? sy_push((lpt = cr1->v->le_sym->u.blist) ? lpt->le_sym
+		  : cr1 ? sy_push((lp1 = cr1->v->le_sym->u.blist) ? lp1->le_sym
 								  : cr1->v->le_sym)
 						/* or clone first clock or timer cr1 */
 			: sy_push(clk);		/* or clone default clock iClock */
-	if (lpt && lpt->le_sym->type == TIM) {
-	    assert(lpt->le_next);		/* clone associated timer value */
-	    assert(lpt->le_next->le_val == (unsigned) -1);
-	    lpc = op_push(lpc, TIM, sy_push(lpt->le_next->le_sym));
-	    lpt = lpc->le_sym->u.blist;
-	    assert(lpt && lpt->le_next);
-	    lpt->le_next->le_val = (unsigned) -1;/* mark link as timer value */
+	if (lp1 && lp1->le_sym->type == TIM) {
+	    lp1 = lp1->le_next;
+	    assert(lp1);			/* clone associated timer value */
+	    assert(lp1->le_val == (unsigned) -1);
+	    lpc = op_push(lpc, TIM, sy_push(lp1->le_sym));
+	    lp2 = lpc->le_sym->u.blist;
+	    assert(lp2 && lp2->le_next);
+	    lp2 = lp2->le_next;
+	    lp2->le_val = (unsigned) -1;	/* mark link as timer value */
+	    lp2->le_first = lp1->le_first;	/* copy expr text */
+	    lp2->le_last  = lp1->le_last;	/* copy expr termination */
 	}
     }
 
