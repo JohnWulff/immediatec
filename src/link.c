@@ -1,0 +1,218 @@
+static const char link_c[] =
+"@(#)$Id: link.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+/********************************************************************
+ *
+ *	"link.c"
+ *	linked list routine
+ *
+ *	4-Aug-93	New mark algorithm using extra byte in Gate
+ *	24-Jan-95	Faster algorithm for finding alternate list
+ *
+ *	"link.c	3.22	95/02/11"
+ *
+ *******************************************************************/
+
+/* J.E. Wulff	3-Mar-85 */
+
+#include	<stdio.h>
+#include	"pplc.h"
+
+ushort	mark_stamp = 1;		/* incremented every scan */
+
+/* link a gate block into the output list */
+
+void
+link_ol(
+    register Gate	*gp,
+    register Gate	*out_list)
+{
+    register Gate *	tp;
+    register Gate *	np;
+    Gate*		ap;
+    ushort		diff;
+    int			time;
+#ifndef _WINDOWS 
+    char *		format;
+#endif
+
+    if (gp->gt_next) {
+#if !defined(_WINDOWS) || defined(LOAD)
+	glit_cnt++;				/* count glitches */
+#endif
+#ifndef DEQ
+	ap = tp = out_list;			/* glitch */
+	diff = 0;				/* save time remaining */
+	while (tp->gt_next != gp) {		/* find previous entry */
+#if !defined(_WINDOWS) || defined(LOAD)
+	    glit_nxt++;				/* count glitch scan */
+#endif
+	    diff += tp->gt_mark;		/* makes sense for TIM */
+	    if ((tp = tp->gt_next) == ap) {	/* end of one list */
+		/**********************************************************
+		 *
+		 *	find glitch in alternate list - rare
+		 *
+		 *	the list heads for o_list and a_list and their
+		 *	alternate list heads have pointers to their
+		 *	respective alternate list heads in gt_rlist.
+		 *
+		 *	all clock or timer nodes are list heads which
+		 *	have *c_list as their alternate in gt_rlist.
+		 *
+		 *	*clist (iClock) has 0 in gt_rlist for termination
+		 *
+		 *********************************************************/
+		if ((tp = tp->gt_rlist) == out_list || tp == 0) {
+#if !defined(_WINDOWS) || defined(LOAD)
+		    fprintf(errFP,
+    "\n%s: line %d: cannot find '%s' entry in '%s' or '%s' after glitch\n",
+    __FILE__, __LINE__, gp->gt_ids, out_list->gt_ids, ap->gt_ids);
+#endif
+		    quit(-1);
+		}
+		ap =  tp;
+#ifndef _WINDOWS 
+		if (debug & 0200) putc('@', outFP); /* alternate found */
+#endif
+	    }
+	}
+	np = tp->gt_next = gp->gt_next;		/* unlink from */
+	gp->gt_next = 0;			/* activity list */
+	if (np == ap) {				/* last entry ? */
+	    (Gate *)ap->gt_list = tp;		/* adjust pointer */
+	} else if (ap->gt_fni == TIM) {		/* correct timer list ? */
+	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to old */
+	    gp->gt_mark += diff;		/* time remaining */
+	}
+#else
+	tp = gp->gt_prev;			/* glitch - previous */
+	tp->gt_next = np = gp->gt_next;		/* previous ==> next */
+	np->gt_prev = tp;			/* previous <== next */
+	gp->gt_next = gp->gt_prev = 0;		/* unlink Gate */
+	if (out_list->gt_fni == TIM) {		/* correct timer list ? */
+	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to next */
+	    /* ignore time remaining in gp */
+	}
+#endif
+#ifndef _WINDOWS 
+	if (debug & 0100) fprintf(outFP, "g<");
+#endif
+    } else {
+#if !defined(_WINDOWS) || defined(LOAD)
+	link_cnt++;				/* count link operations */
+#endif
+	if (gp->gt_fni < MIN_ACT) {	/* ARITH & GATE may oscillate */
+	    if (gp->gt_mark != mark_stamp) {	/* first link this cycle */
+		gp->gt_mark = mark_stamp;	/* yes, stamp the gate */
+		gp->gt_mcnt = 0;		/*      clear mark count */
+	    } else {
+		if (++gp->gt_mcnt >= osc_max) {	/* new alg: cnt 1 larger */
+#ifndef _WINDOWS 
+		    if (debug & 0200) putc('#', outFP);
+#endif
+		    out_list = out_list->gt_rlist; /* link gate next cycle */
+		}
+#ifndef _WINDOWS 
+		if (debug & 0200) fprintf(outFP, "%d", gp->gt_mcnt);
+#endif
+	    }
+	} else if (out_list->gt_fni == TIM) {	/* rest are actions */
+	    /*
+	     * except OUTW or OUTX which is never linked to TIM - ignore
+	     *
+	     * action D_SH is always timed, even when arithmetic
+	     * value is 0 (ignore gt_val). This implements sample/hold
+	     */
+	    if (gp->gt_val > 0 && gp->gt_fni != D_SH || (time =
+#ifdef LOAD
+		(FP_SEG(gp->gt_time) != 0)
+#else
+		((int)gp->gt_time < 0)
+#endif
+		? (
+#ifndef _WINDOWS 
+		    format = "{%d}",
+#endif
+#ifdef LOAD
+		    ((CFunctp)(gp->gt_time))()
+#else
+		    c_exec(-(int)gp->gt_time)
+#endif
+		    ) :
+#ifndef _WINDOWS 
+		    (format = "(%d)",
+#endif
+		    (int)gp->gt_time
+#ifndef _WINDOWS 
+		), (debug & 0100) ? fprintf(outFP, format, time) : 0, time
+#endif
+		) == 0) {
+
+		/* 'LO' action gate or required time == 0 */
+#ifndef TIMEROFF1
+		out_list = c_list;	/* put on 'clock' list imme */
+		goto link;
+#else
+		/* Alternate action is to sort with time = 1 */
+		time = 1;		/* equivalent to clocking */
+#endif
+	    }
+	    /* 'HI' action gate clocked by timer/counter */
+	    /* link Gate gp into list sorted by time order */
+#ifndef _WINDOWS 
+	    if (debug & 0100) putc('!', outFP);
+#endif
+	    tp = out_list;
+	    diff = 0;
+	    while ((np = tp->gt_next) != out_list &&
+		(diff += np->gt_mark) <= time) {
+		tp = np;		/* scan along time sorted list */
+	    }
+#ifndef DEQ
+	    tp->gt_next = gp;			/* old => new */
+	    gp->gt_next = np;			/* new => next */
+	    diff -= np->gt_mark;		/* full time to previous */
+	    gp->gt_mark = time - diff;		/* diff previous to new */
+	    if (np != out_list) {
+		np->gt_mark -= gp->gt_mark;	/* adjust diff new to old */
+	    } else {
+		(Gate *)out_list->gt_list = gp;	/* list => new */
+#ifndef NOCHECK
+		/* check that algorithm is correct */
+		if (out_list->gt_mark != 0) {
+		    fprintf(errFP,
+		"\n%s: line %d: TIMER %s gt_mark is %d, should be 0)\n",
+		    __FILE__, __LINE__, out_list->gt_ids, out_list->gt_mark);
+		    quit(-1);
+		}
+#endif
+	    }
+#else
+	    np->gt_prev = tp->gt_next = gp;	/* next, previous ==> new */
+	    gp->gt_next = np;			/* new ==> next */
+	    gp->gt_prev = tp;			/* previous <== newious */
+	    if (np != out_list) {
+		diff -= np->gt_mark;		/* full time to previous */
+	    }
+	    gp->gt_mark = time - diff;		/* diff previous to new */
+	    np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
+	    /* if np == out_list, out_list->gt_mark gets -diff */
+#endif
+	    return;			/* sorted link action complete */
+	}
+    link:
+#ifndef _WINDOWS 
+	if (debug & 0100) putc('>', outFP);
+#endif
+#ifndef DEQ
+	((Gate *)out_list->gt_list)->gt_next = gp;	/* old => new */
+	gp->gt_next = out_list;				/* new => list */
+	(Gate *)out_list->gt_list = gp;			/* list => new */
+#else
+	tp = out_list->gt_prev;			/* save previous */
+	out_list->gt_prev = tp->gt_next = gp;	/* list, previous ==> new */
+	gp->gt_next = out_list;			/* new ==> list */
+	gp->gt_prev = tp;			/* previous <== new */
+#endif
+    }
+} /* link_ol */
