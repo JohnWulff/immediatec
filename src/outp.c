@@ -1,10 +1,21 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.34 2001/02/21 16:20:29 jw Exp $";
-/* parallel plc - output code or run machine */
+"@(#)$Id: outp.c,v 1.35 2001/03/02 15:05:24 jw Exp $";
+/********************************************************************
+ *
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john@je-wulff.de>
+ *
+ *	outp.c
+ *	parallel plc - output code or run machine
+ *
+ *******************************************************************/
 
 /* J.E. Wulff	24-April-89 */
-
-/* "outp.c	1.45	95/02/14" */
 
 #ifdef _WINDOWS
 #include <windows.h>
@@ -15,9 +26,6 @@ static const char outp_c[] =
 #include	<assert.h>
 #include	"icc.h"
 #include	"comp.h"
-
-#define Hname	"inc1.h"
-#define Lname	"inc2.h"
 
 extern const char	SC_ID[];
 
@@ -189,6 +197,7 @@ listNet(unsigned * gate_count)
 	fprintf(outFP, "\t%8u links\n", link_count);
 	fprintf(outFP, "\t%8ld bytes\n", byte_total);
     }
+    if (debug & 076) fprintf(outFP, "\ncompiled by:\n%s\n", SC_ID);
     if (gate_count[UDF]) {
 	warning("undefined gates and functions", NS);
     }
@@ -443,14 +452,30 @@ output(char * outfile)
 	rc = 4; goto end;
     }
 
-    if ((Hp = fopen(Hname, aflag ? "a" : "w")) == 0) {
-	rc = 4; goto endh;
+    if ((Lp = fopen(Lname, aflag ? "a" : "w")) == 0) {
+	rc = 10; goto endl;
     }
 
-    if ((Lp = fopen(Lname, aflag ? "a" : "w")) == 0) {
-	rc = 4; goto endl;
+    if (aflag == 0) {
+	fprintf(Lp, "#define	I_LIST\\\n");
+
+	/* write _list0.c once, so that it is locally present */
+	if ((Hp = fopen(Cname, "w")) == 0) {
+	    rc = 8; goto endh;
+	}
+	fprintf(Hp, "\
+#include	<stdio.h>\n\
+#include	<icc.h>\n\
+#include	\"%s\"\n\
+#include	\"%s\"\n\
+Gate **		i_list[] = { I_LIST 0 };\n\
+", Hname, Lname);
+	fclose(Hp);
     }
-    if (! aflag) fprintf(Lp, "#define	I_LIST\\\n");
+
+    if ((Hp = fopen(Hname, aflag ? "a" : "w")) == 0) {
+	rc = 9; goto endh;
+    }
 
     /* rewind intermediate file */
 
@@ -952,10 +977,10 @@ static Gate *	l_[] = {\n", linecnt, outfile);
     }
     fprintf(Fp, "};\n");
 endm:
-    fclose(Lp);	/* close the list header file in case other actions */
-endl:
     fclose(Hp);	/* close the header file in case other actions */
 endh:
+    fclose(Lp);	/* close the list header file in case other actions */
+endl:
     fclose(Fp);	/* close the output file in case other actions */
 end:
     return rc;		/* return code */
