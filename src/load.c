@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.5 2000/05/31 10:45:07 jw Exp $";
+"@(#)$Id: load.c,v 1.6 2000/06/04 10:08:14 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -114,6 +114,9 @@ main(
 	    ++*argv;
 	    do {
 		switch (**argv) {
+		case 't':
+			debug = 0100;		/* trace only */
+			break;
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &df);

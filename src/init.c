@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: init.c,v 1.3 2000/06/04 10:08:14 jw Exp $";
 /*
  *	"init.c"
  *
@@ -40,6 +40,13 @@ static struct {
     "CHANGE",	KEYW,	BLTIN1,	CH_BIT,
     "RISE",	KEYW,	BLTIN1,	RI_BIT,
     "SR",	KEYW,	BLTIN2,	S_FF,
+#ifdef CHECK_OLD_SYNTAX 
+    "switch",	KEYW,	CKEYW,	0,
+    "if",	KEYW,	CKEYW,	0,
+#else
+    "switch",	KEYW,	BLTINF,	F_CF,
+    "if",	KEYW,	BLTINF,	F_CF,
+#endif
     "on",	KEYW,	BLTINF,	F_CF,
     "C",	KEYW,	CBLTIN,	CLCK,
     "CLOCK",	KEYW,	CBLTIN,	CLCK,
@@ -55,8 +62,6 @@ static struct {
     "int",	KEYW,	TYPE,	ARITH,
     "bit",	KEYW,	TYPE,	GATE,
     "static",	KEYW,	STATIC,	0,
-    "switch",	KEYW,	CKEYW,	0,
-    "if",	KEYW,	CKEYW,	0,
     "iClock",	CLK,	0,	CLCKL,	/* must be last non-zero entry */
     0,		0,	0,	0,
 };
