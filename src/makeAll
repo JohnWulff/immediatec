@@ -24,7 +24,7 @@ usage ()
     echo '	in the correct path (default ./)' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.9 2001/03/18 14:03:15 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.10 2002/09/02 12:33:14 jw Exp $' >&2
 }
 
 q=""
@@ -59,7 +59,7 @@ if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
     cp -p cexe.c_empty cexe.c
 fi
 echo "make icc"
-make icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+make OPT='-DYYDEBUG' icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 echo "make ict"
 ${path}makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 echo "make libict.a"
