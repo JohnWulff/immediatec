@@ -1,0 +1,284 @@
+#!/usr/bin/perl
+################################################################
+## Draw a lift model
+################################################################
+use Tk;
+use strict;
+use warnings;
+
+########################################################################
+#
+#	Initialization
+#
+########################################################################
+
+my $named = $0; $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:
+@<<<<<< [-tmTh]
+	$named
+	-d del	delay between cage steps in milliseconds
+	-t	trace debug messages
+	-m	display elapsed time in seconds and microseconds
+	-T	extra static debug messages
+	-h	help, ouput this Usage text only
+Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
+							  '@'
+$Id: iClift,v 1.1 2005/02/15 18:25:43 jw Exp $ uses Tk-@<<<<<<<<<
+							$Tk::VERSION
+.
+
+use vars qw($opt_d $opt_t $opt_m $opt_T $opt_h);
+require "getopts.pl";
+&Getopts('d:tmTh');	# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+my ($t0, $t1, $sec, $usec);
+if ($opt_m) {
+    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    $t0 = [gettimeofday];	# start of program
+}
+
+my $thickness = 1;
+$opt_d = 10 unless defined $opt_d;
+my $cageD = $opt_d;
+
+my $mw = MainWindow->new;
+$mw->title('Lift Model');
+
+my $f = $mw->Frame(-relief   => 'groove',
+		-bd     => 2,
+	       )->pack(
+		-side => 'left',
+		-fill => 'y'
+	       );
+
+my $c = $mw->Scrolled('Canvas',
+		-cursor => 'crosshair',
+		-width  => 370,
+		-height => 700,
+	       )->pack(
+		-side => 'left',
+		-fill => 'both',
+		-expand => 1,
+	       );
+my $canvas = $c->Subwidget('canvas');
+
+my $cageId;
+my $cage      = draw_cage($canvas, 165, 215, 110, 145);
+my $leftDoor  = draw_door($canvas, 165, 220, 55, 145, 4, -1);
+my $rightDoor = draw_door($canvas, 165, 220, 55, 145, 4, 1);
+my $wall      = draw_wall($canvas, 165, 215, 300, 200);
+
+$mw->bind('<Key-Up>',	  [ \&move_cage, $canvas, $cage, 1      ]);	# cage up
+$mw->bind('<Key-Down>',	  [ \&move_cage, $canvas, $cage, -1     ]);	# cage down
+$mw->bind('<Key-Prior>',  [ \&move_cage, $canvas, $cage, 5      ]);	# cage up fast
+$mw->bind('<Key-Next>',	  [ \&move_cage, $canvas, $cage, -5     ]);	# cage down fast
+$mw->bind('<Key-Home>',	  [ \&move_cage, $canvas, $cage, 1,  $cageD, \$cageId ]);	# cage up continuous
+$mw->bind('<Key-End>',	  [ \&move_cage, $canvas, $cage, -1, $cageD, \$cageId ]);	# cage down continuous
+$mw->bind('<Key-Return>', [ \&move_cage, $canvas, $cage, 0, 0,   \$cageId ]);	# stop cage continuous
+$mw->bind('<Key-Right>',  [ \&move_door, $canvas, $leftDoor, $rightDoor, 1  ]);	# open doors
+$mw->bind('<Key-Left>',	  [ \&move_door, $canvas, $leftDoor, $rightDoor, -1 ]);	# close doors
+$mw->bind('<Key-q>',	  sub { exit(0); });	# quit
+
+MainLoop;
+
+########################################################################
+#
+#	Draw a wall with an opening for a lift door
+#	This widget sits in front of lift cage and lift doors and wall doors
+#
+#	Coordinate system: x = 0	centre of lift shaft
+#			   y = 0	floor level
+#	Note: all y coordinates are reversed like engineering drawings
+#
+########################################################################
+
+sub draw_wall {
+    my ($canv, $x, $y, $width, $height) = @_;
+    print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
+    $x = $canv->canvasx($x);
+    $y = $canv->canvasy($y);
+    print "lift_wall: x,y = '$x,$y' w = '$width' h = '$height'\n" if $opt_T;
+
+    my $width_2    = $width * 0.5;
+    my $width_4    = $width * 0.167;
+
+    my $xLeft      = $x - $width_2;
+    my $xRight     = $x + $width_2;
+    my $yTop       = $y - $height;
+    my $yBott      = $y;
+    my $yDoorTop   = $y - $height * .667;
+    my $xDoorLeft  = $x - $width_4;
+    my $xDoorRight = $x + $width_4;
+
+    my @coordinates = (
+	$xLeft,		$yTop,		# 0
+	$xRight,	$yTop,		# 1
+	$xRight,	$yBott,		# 2
+	$xDoorRight,	$yBott,		# 3
+	$xDoorRight,	$yDoorTop,	# 4
+	$xDoorLeft,	$yDoorTop,	# 5
+	$xDoorLeft,	$yBott,		# 6
+	$xLeft,		$yBott,		# 7
+    );
+
+    return $canv->createPolygon (
+	@coordinates,
+	-width => $thickness,
+	-tags => 'wall',
+	-fill => 'cornsilk1',
+	-outline => 'black',
+    );
+} # draw_wall
+
+########################################################################
+#
+#	Draw a lift door to close half the opening in the wall
+#
+########################################################################
+
+sub draw_door {
+    my ($canv, $x, $y, $width, $height, $offset, $direction) = @_;
+    print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
+    $x = $canv->canvasx($x);
+    $y = $canv->canvasy($y);
+    print "lift_door: x,y = '$x,$y' w = '$width' h = '$height' o = '$offset' d = '$direction'\n" if $opt_T;
+
+    my $xOutside   = $x + ($direction == 1 ? $width  : -$width);
+    my $xMiddle    = $x + ($direction == 1 ? $offset : -$offset);
+    my $yTop       = $y - $height;
+    my $yBott      = $y;
+
+    my @coordinates = (
+	$xOutside,	$yTop,	# 0
+	$xMiddle,	$yBott,	# 1
+    );
+
+    return $canv->createRectangle (
+	@coordinates,
+	-width => $thickness,
+	-tags => 'door',
+	-fill => 'light green',
+	-outline => 'black',
+    );
+} # draw_door
+
+########################################################################
+#
+#	Move door open or closed
+#	Parameter 1:	id	canvas identification
+#	Parameter 2:	id	left door identification
+#	Parameter 3:	id	right door identification
+#	Parameter 4:	1..n	number of increments to open
+#			-1..-n	number of increments to close
+#
+########################################################################
+
+sub move_door {
+    my ($dummy, $canv, $leftD, $rightD, $inc) = @_;
+    &printMicroSeconds;
+    print "door increment = '$inc'\n" if $opt_t;
+    $canv->move($leftD, $inc, 0);
+    $canv->move($rightD, -$inc, 0);
+} # move_door
+
+########################################################################
+#
+#	Move cage up or down
+#	Parameter 1:	id	canvas identification
+#	Parameter 2:	id	cage identification
+#	Parameter 3:	1..n	number of increments to move up
+#			-1..-n	number of increments to move down
+#	Parameter 4:	undef	move once
+#			ms	number of milliseconds between steps
+#				of continuous motion
+#			0	stop continous motion
+#	Parameter 5:	idRef	reference to id returned by repeat
+#
+########################################################################
+
+no warnings;
+sub move_cage {
+    my ($dummy, $canv, $cag, $inc, $tim, $idR) = @_;
+    &printMicroSeconds;
+    if (defined $tim) {
+	if ($$idR) {
+	    $$idR->cancel();	# stop continuous cage movement
+	    $$idR = undef;
+	}
+	elsif ($tim) {
+	    $$idR = $canv->repeat($tim, [ \&move_cage, $dummy, $canv, $cag, $inc, ]); # no time
+	}
+	print "cage time = '$tim' id = '$$idR'\n" if $opt_t;
+    } else {
+	print "cage increment = '$inc'\n" if $opt_t;
+	if ($inc) {
+	    $canv->move($cag, 0, -$inc);
+	}
+    }
+} # move_cage
+use warnings;
+
+########################################################################
+#
+#	Draw a lift cage
+#
+########################################################################
+
+sub draw_cage {
+    my ($canv, $x, $y, $width, $height) = @_;
+    print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
+    $x = $canv->canvasx($x);
+    $y = $canv->canvasy($y);
+    print "lift_cage: x,y = '$x,$y' w = '$width'\n" if $opt_T;
+
+    my $width_2    = $width * 0.5;
+    my $xLeft      = $x - $width_2;
+    my $xRight     = $x + $width_2;
+    my $yTop       = $y - $height;
+    my $yBott      = $y;
+
+    my @coordinates = (
+	$xLeft,		$yTop,	# 0
+	$xRight,	$yBott,	# 1
+    );
+
+    return $canv->createRectangle (
+	@coordinates,
+	-width => $thickness,
+	-tags => 'cage',
+	-fill => 'yellow',
+	-outline => 'black',
+    );
+} # draw_cage
+
+########################################################################
+#
+#	Compute and print elapsed microseconds
+#
+########################################################################
+
+sub printMicroSeconds {
+    if ($opt_m) {
+	my ($sec, $usec);
+	$t1 = [gettimeofday];
+	$sec =  $t1->[0] - $t0->[0];
+	$usec = $t1->[1] - $t0->[1];
+	if ($usec < 0) {
+	    $sec--;
+	    $usec += 1000000;
+	}
+	if ($opt_t) {
+	    printf "L%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	} else {
+	    printf "L%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	}
+	$t0 = $t1;
+    } elsif ($opt_t) {
+	print "L: ";
+    }
+}
