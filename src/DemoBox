@@ -23,14 +23,26 @@ $top->title("Simple");
 #
 ########################################################################
 
-$l = $top->Label(
-	    text	=> 'hello',	# label properties
-	    anchor	=> 'n',		# anchor text to "north"
-	    relief	=> 'groove',	# border style
-	    width	=> 10,		# characters wide
-	    height	=> 3,		# characters high
-	);
-$l->pack;	# give it a default place in the main window
+$label = $top->Label(
+    text	=> 'hello',	# label properties
+    anchor	=> 'n',		# anchor text to "north"
+    relief	=> 'groove',	# border style
+    width	=> 10,		# characters wide
+    height	=> 3,		# characters high
+);
+$label->pack;	# give it a default place in the main window
+
+########################################################################
+#
+#	Generate a button
+#
+########################################################################
+
+$button = $top->Button(
+    text	=> 'John',
+    command	=> \&change_label,
+);
+$button->pack;	# give it a default place in the main window
 
 ########################################################################
 #
@@ -39,3 +51,16 @@ $l->pack;	# give it a default place in the main window
 ########################################################################
 
 MainLoop();
+
+########################################################################
+#
+#	Callback function
+#
+########################################################################
+
+sub change_label
+{
+    $button->cget('text') eq 'John'	   ?
+	$button->configure(text => 'Helene') :
+	$button->configure(text => 'John');
+}
