@@ -70,7 +70,7 @@ Usage:	@<<<<<<< [-s <host>] [-p <port>] [-h] [<list of client calls>]
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.5 2000/05/29 13:32:09 jw Exp $
+$Id: ICServer,v 1.6 2000/05/30 22:02:32 jw Exp $
 .
 
 use vars qw($opt_s $opt_p $opt_h);
@@ -99,10 +99,10 @@ print "Server created. Waiting for events\n";
 #
 ########################################################################
 
+my $pid;
 ARG: while ($ARGV = shift @ARGV) {
     FORK: {
-	my $pid;
-	sleep 1;
+	sleep 1 if defined $pid;
 	next ARG if ($pid = fork);
 	if (defined $pid) {	# $pid is zero if defined
 	    # dispatch child process

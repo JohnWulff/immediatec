@@ -21,9 +21,9 @@ Usage:	@<<<<<<<< [-s <host>] [-p <port>] [-h] [<delay>]
 	$named
 	-s host	ID of server (default 'localhost')
 	-p port	service port of server (default '8080')
-	delay	random output every <delay> seconds
+	delay	random output every <delay> seconds eg 2.5
 	-h	help, ouput this Usage text only
-$Id: DummyPPLC,v 1.2 2000/05/29 13:32:09 jw Exp $
+$Id: DummyPPLC,v 1.3 2000/05/30 22:02:32 jw Exp $
 .
 
 use vars qw($opt_s $opt_p $opt_h);
