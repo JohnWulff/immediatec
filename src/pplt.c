@@ -1,5 +1,5 @@
 static const char pplt_c[] =
-"@(#)$Id: pplt.c,v 1.3 2001/01/03 10:49:24 jw Exp $";
+"@(#)$Id: pplt.c,v 1.4 2001/01/25 08:55:41 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -56,7 +56,9 @@ Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
 Gate *		IW_[IXD];		/* pointers to Word Input Gates */
 Gate *		TX_[TXD*8];		/* pointers to System Bit Gates */
 unsigned char	idata[IXD];		/* Input bit field */
-unsigned char	QX_[IXD];		/* Output bit field */
+unsigned char	QX_[IXD];		/* Output bit field slots */
+unsigned char	QM_[IXD/8];		/* Output slot mask per cage */
+unsigned char	QMM;			/* Output cage mask for 1 rack */
 unsigned char	pdata[IXD];		/* rest used only locally */
 unsigned short	sdata[(IXD-1)/(sizeof(unsigned short)*8)+1];
 unsigned short	cdata[(IXD-1)/(sizeof(unsigned short)*8)+1];
