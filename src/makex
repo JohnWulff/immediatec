@@ -19,8 +19,9 @@ usage ()
     echo '	-v<N>	use pplc<N> eg pplc1 pplc2 ...' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '		default listing is file.lst' >&2
+    echo '	-A	compile output ARITHMETIC ALIAS nodes' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.8 2001/02/08 20:21:45 jw Exp $' >&2
+    echo '	$Id: makex,v 1.9 2001/02/20 18:03:47 jw Exp $' >&2
 }
 
 link=0
@@ -49,6 +50,7 @@ while [[ $# > 0 ]]; do
 		fi
 		break;;
 	    6*)	d="-d76";l="6";;
+	    A*)	d="$d -A";;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;
 	    esac
