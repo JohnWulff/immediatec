@@ -1,0 +1,49 @@
+#!/usr/bin/ksh -p
+
+########################################################################
+#
+#	make OutP in Test pplc
+#
+########################################################################
+
+cd ..
+test -f pplc && pplc -c < /dev/null || test -f pptc && pptc -c < /dev/null
+make pplc > /dev/null		# up to date pplc under all circs
+cp pplc pplc.bak
+cd Test
+test -d ListP || mkdir ListP;
+
+if [[ $# != 0 ]]; then
+    for f in $*; do
+	echo "$f.p";
+	pplc -c $f.p		# listing only with -d474
+	cd ..
+	rm -f cexe.o pplc	# new cexe.o too soon for make sometimes
+	make pplc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	if [[ -f pplc ]]; then
+	    cd Test
+	    pplc -d474 -l ListP/$f.lst $f.ic;
+	else
+	    cp pplc.bak pplc;
+	    echo make pplc failed
+	    cd Test
+	fi
+    done
+else
+    for f in $(cat pe.lst); do
+	echo "$f.ic";
+	pplc -c $f.ic		# listing only with -d474
+	cd ..
+	rm -f cexe.o pplc	# new cexe.c too soon for make sometimes
+	make pplc 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	if [[ -f pplc ]]; then
+	    cd Test
+	    pplc -d474 -l ListP/$f.lst $f.ic;
+	else
+	    cp pplc.bak pplc;
+	    echo make pplc failed
+	    cd Test
+	fi
+    done > OutP 2>&1;
+    aa
+fi
