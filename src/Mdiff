@@ -1,43 +1,52 @@
 #!/bin/ksh
-# $Id: Mdiff,v 1.1 1998/01/08 14:12:06 archiv Exp $
+# $Id: Mdiff,v 1.2 1998/01/09 12:47:12 archiv Exp $
+# Author: J.E. Wulff
+#
 case $# in
-0)  echo Aufruf: $0 '[-ei] [+w] [Verzeichnis] Datei ...' >&2
-    echo '        -i	identical files are output thus:  ==== file ====' >&2
-    echo '        	default: ignore identical files in output' >&2
-    echo '        -e	nonexisting files are output thus:  #### file ####' >&2
-    echo '        	default: ignore nonexisting files in output' >&2
-    echo '        +w	whitespace (spaces and tabs) is significant' >&2
-    echo '        	default: whitespace is ignored' >&2
-    echo '        if first file argument is not a directory, .. is used' >&2
-    exit -1
+0)  echo "Usage:	$0 [-ei] [+w] [directory] file ..." >&2
+    echo '	-i	identical files output:	==== file ====' >&2
+    echo '		default: ignore identical files in output' >&2
+    echo '	-e	nonexisting files put:	**** file does not exist' >&2
+    echo '		default: ignore nonexisting files in output' >&2
+    echo '	if both files exist output:	#### file ####' >&2
+    echo '	+w	whitespace (spaces and tabs) is significant' >&2
+    echo '		default: whitespace is ignored' >&2
+    echo '	if first file argument is not a directory, .. is used' >&2
+    exit 1
     ;;
 *)
     i=0
     e=0
     w=-w
-    case $1 in
-    -e)
-	e=1
-	shift
-	;;
-    -i)
-	i=1
-	shift
-	;;
-    -ei|-ie)
-	e=1
-	i=1
-	shift
-	;;
-    +w)
-	w=
-	shift
-	;;
-    [+-]*)
-	echo 'unexpected argument $1'
-	exit -2
-	;;
-    esac
+    while true
+    do
+	case $1 in
+	-e)
+	    e=1
+	    shift
+	    ;;
+	-i)
+	    i=1
+	    shift
+	    ;;
+	-ei|-ie)
+	    e=1
+	    i=1
+	    shift
+	    ;;
+	+w)
+	    w=
+	    shift
+	    ;;
+	[+-]*)
+	    echo "$0: unexpected argument $1"
+	    exit 2
+	    ;;
+	*)
+	    break
+	    ;;
+	esac
+    done
     if [ -d $1 ]
     then
 	dir=$1
@@ -51,7 +60,7 @@ case $# in
     else
 	files=$*
     fi
-    echo UNTERSCHIEDE in Verzeichnis $PWD und $dir
+    echo "Differences in directory $PWD and $dir"
     date
     for f in $files
     do
@@ -59,13 +68,18 @@ case $# in
 	then
 	    if cmp -s $f $dir/$f
 	    then
-		test $i = 0 || echo '==========' $f '=========='
+		test $i = 0 || echo "========== $f =========="
 	    else
-		echo
-		echo '##########' $f '##########'
-		ls -lL $f
-		ls -lL $dir/$f
-		diff $w $f $dir
+		if [ $e = 0 ] || [ -f $dir/$f ]
+		then
+		    echo
+		    echo "########## $f ##########"
+		    ls -lL $f
+		    ls -lL $dir/$f
+		    diff $w $f $dir
+		else
+		    echo "********** $dir/$f does not exist"
+		fi
 	    fi
 	fi
     done
