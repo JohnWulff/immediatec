@@ -13,28 +13,28 @@
 #	ICServer
 #
 #	Server which can accept any number of iC I/O clients
-#	and initially one iC controller (planned are many)
+#	and initially one iC controller ICC (planned are many)
 #
 #	John E. Wulff	28-May-2000
 #
-#	Protocol between I/O and ICT clients and server:
+#	Protocol between I/O and ICC clients and server:
 #
 #	Registration:	UnitID
 #			X0 .. X31  from bit  I/O to server
 #			B0 .. B31  from byte I/O to server
 #			W0 .. W30  from word I/O to server
-#			C0         from ICT to server
+#			C0         from ICC to server
 #
 #	I/O values:	Value
 #			0 .. 255   from bit/byte I/O to server
 #			0 .. 65535 from word I/O to server
 #
 #			UnitID.Value
-#			X0.0 .. X31.255   from server to ICT bit
-#			B0.0 .. B31.255   from server to ICT byte
-#			W0.0 .. W30.65535 from server to ICT word
+#			X0.0 .. X31.255   from server to ICC bit
+#			B0.0 .. B31.255   from server to ICC byte
+#			W0.0 .. W30.65535 from server to ICC word
 #
-#	The same formats are used from server to I/O and ICT to server.
+#	The same formats are used from server to I/O and ICC to server.
 #	The direction of transmission determines if an I/O messages
 #	is input or output.
 #
@@ -47,9 +47,9 @@
 #
 #	The Server receives messages from the I/Os, identifies the
 #	UnitID under which that I/O is registered and prefixes the
-#	UnitID and a full stop to the message and sends it on to the ICT.
+#	UnitID and a full stop to the message and sends it on to the ICC.
 #
-#	Messages received from the ICT are stripped of the leading
+#	Messages received from the ICC are stripped of the leading
 #	UnitID and comma. The rest is sent to the I/O Unit corresponding
 #	to the UnitID stripped from the message.
 #
@@ -67,7 +67,7 @@ use strict;
 my %UnitIDs = ();
 my %Connections = ();
 my %Values = ();
-my $connICT;
+my $connICC;
 
 ########################################################################
 #
@@ -91,7 +91,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: ICServer,v 1.18 2001/03/02 12:57:20 jw Exp $
+$Id: ICServer,v 1.19 2001/03/21 19:43:38 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
@@ -197,84 +197,92 @@ sub rcvd_msg_from_client {
     if (defined $msg) {
 	my $unitID = $UnitIDs{$conn};
 	my $len = length $msg;
-#	print "($len)$msg", defined $unitID ? " $unitID\n" : "\n";
+# print "($len)$msg", defined $unitID ? " $unitID\n" : " ID?\n";
 	if ($len == 0) {
 	    if (defined $unitID and exists $Connections{$unitID}) {
 		delete $Connections{$unitID};
 		delete $UnitIDs{$conn};
 		$conn->disconnect();
 		if ($unitID =~ /^C/) {
-		    $connICT = undef;
-		} elsif (defined $connICT) {
-		    # pass clear input message to ICT
+		    $connICC = undef;
+		} elsif (defined $connICC) {
+		    # pass clear input message to ICC
 		    print "I$unitID 0 to C0\n" if $opt_t;
-		    $connICT->send_now("$unitID.0");
+		    $connICC->send_now("$unitID.0");
 		}
 		print "$unitID has disconnected\n";
 	    }
-	} elsif ($msg =~ /^[XBWC]\d+$/) {	# X0 X1 .. B0 .. W0 .. C0
-	    my ($con1, $uID, $value, $mes1);
-	    if (exists $Connections{$msg}) {
-		delete $UnitIDs{$conn};
-		$conn->disconnect();
-		print "Trying to attach a device twice - disconnected\n";
-	    } else {
-		if ($msg =~ /^C/) {
-		    if (defined $connICT) {
-			delete $UnitIDs{$conn};
-			$conn->disconnect();
-			print "Trying to attach a second ICT - disconnected\n";
-			return;
+	} else {
+	    foreach my $msg1 (split /,/, $msg) {	# break up multiple messages
+		my ($uID, $value, $rest) = split /\./, $msg1, 3;
+		if (defined $rest) {
+		    warn "WARNING: $msg1 from Unit $unitID ?? ignored";
+		    next;
+		}
+		if (defined $value) {
+		    if ($unitID eq 'C0') {
+			############################################################
+			# handle a value from ICC to I/O
+			############################################################
+			if (defined $Connections{$uID}) {
+			    print "$unitID $value to Q$uID\n" if $opt_t;
+			    $Connections{$uID}->send_now("$uID.$value");
+			} else {
+			    print "$unitID $value to dummy Q$uID\n" if $opt_t;
+			}
+			$Values{$uID} = $value;	# save latest bit or analog value
+		    } elsif (defined $connICC) {
+			############################################################
+			# handle a value from I/O to ICC
+			############################################################
+			print "I$uID $value to C0\n" if $opt_t;
+			$connICC->send_now("$msg1");
+		    } else {
+			print "I$uID $value to dummy C0\n" if $opt_t;
 		    }
-		    $connICT = $conn;		# the ICT connection
-		    # new ICT connected - reset all the attached I/Os
-		    foreach $con1 (sort keys %UnitIDs) {
-			$uID = $UnitIDs{$con1};
-			if (defined $uID) {
-			    if ($uID =~ /^[BWX]/) {
-				if (defined $Connections{$uID}) {
-				    print "$msg R to $uID\n" if $opt_t;
-				    $Connections{$uID}->send_now("R");
-				} else {
-				    print "$msg R to dummy $uID\n" if $opt_t;
+		} elsif ($msg1 !~ /^[XBWCL]\d+$/) {	# X0 X1 .. B0 .. W0 .. C0
+		    warn "WARNING: $msg1 from Unit $unitID ?? ignored";
+		} elsif (exists $Connections{$msg1}) {	### handle a Registration
+		    delete $UnitIDs{$conn};
+		    $conn->disconnect();
+		    warn "Trying to attach $msg1 twice - disconnected\n";
+		} else {
+		    if ($msg1 =~ /^C/) {
+			if (defined $connICC) {
+			    delete $UnitIDs{$conn};
+			    $conn->disconnect();
+			    warn "Trying to attach $msg1 twice - disconnected\n";
+			    next;
+			}
+			$connICC = $conn;		# the ICC connection
+			# new ICC connected - reset all the attached I/Os
+			foreach my $con1 (sort keys %UnitIDs) {
+			    $uID = $UnitIDs{$con1};
+			    if (defined $uID) {
+				if ($uID =~ /^[BWX]/) {
+				    if (defined $Connections{$uID}) {
+					print "ICS R to $uID\n" if $opt_t;
+					$Connections{$uID}->send_now("$uID.R");
+				    } else {
+					print "ICS R to dummy $uID\n" if $opt_t;
+				    }
+				    $Values{$uID} = 0;	# save latest bit or analog value
 				}
-				$Values{$uID} = 0;	# save latest bit or analog value
 			    }
 			}
 		    }
-		}
-		$UnitIDs{$conn} = $msg;
-		$Connections{$msg} = $conn;
-		print "Registered $msg at server\n";
-		if ($msg =~ /^[BWX]/) {			# saved bit or analog value from ICT
-		    $value = $Values{$msg};
-		    if ($value) {
-			print "ICS $value to Q$msg\n" if $opt_t;
-			$Connections{$msg}->send_now("$value");
+		    $UnitIDs{$conn} = $msg1;
+		    $Connections{$msg1} = $conn;
+		    print "Registered $msg1 at server\n";
+		    if ($connICC and $msg1 =~ /^[BWX]/) {	# saved bit or analog value from ICC
+			$value = $Values{$msg1};
+			if ($value) {
+			    print "ICS $value to Q$msg1\n" if $opt_t;
+			    $Connections{$msg1}->send_now("$msg1.$value");
+			}
 		    }
 		}
 	    }
-	} elsif ($msg =~ /^[BWX]/) {			# bit or analog value messages from ICT
-	    for my $msg1 (split /,/, $msg) {		# break up multiple value messages
-		my ($uID, $value, $rest) = split /\./, $msg1, 3;
-		if ($unitID eq 'C0' and defined $value and not defined $rest) {
-		    if (defined $Connections{$uID}) {
-			print "$unitID $value to Q$uID\n" if $opt_t;
-			$Connections{$uID}->send_now("$value");
-		    } else {
-			print "$unitID $value to dummy Q$uID\n" if $opt_t;
-		    }
-		    $Values{$uID} = $value;		# save latest bit or analog value
-		} else {
-		    print "ERROR: $msg1 from Unit $unitID ?? ignored\n";
-		}
-	    }
-	} elsif (defined $connICT) {			# value messages from I/O
-	    # pass message to ICT (without checking syntax)
-	    print "I$unitID $msg to C0\n" if $opt_t;
-	    $connICT->send_now("$unitID.$msg");
-	} else {
-	    print "I$unitID $msg to dummy C0\n" if $opt_t;
 	}
     }
 #ifdef TIME_HIRES 
