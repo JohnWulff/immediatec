@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.23 2001/04/01 08:23:14 jw Exp $";
+"@(#)$Id: ict.c,v 1.24 2001/04/04 10:30:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -11,9 +11,9 @@ static const char ict_c[] =
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	ict.c
- *	parallel plc - runtime execution with TCP/IP I/O to ICServer
+ *	parallel plc - runtime execution with TCP/IP I/O to iCserver
  *
- *	Standalone run-time version for TCP/IP DemoBoxes.
+ *	Standalone run-time version for TCP/IP communication.
  *	Alternatively to produce compiled applications
  *	linked with libict.a produced with LOAD option
  *
