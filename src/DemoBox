@@ -1,0 +1,41 @@
+#!/usr/bin/perl
+########################################################################
+#
+#	Example 14-1 Simple UI Code
+#	Sriram Srinivasan: Advanced Perl p. 224
+#
+########################################################################
+
+use Tk;					# Slurp the module in
+
+########################################################################
+#
+#	Create main window
+#
+########################################################################
+
+$top = MainWindow->new();
+$top->title("Simple");
+
+########################################################################
+#
+#	Instantiate widgets and arrange them
+#
+########################################################################
+
+$l = $top->Label(
+	    text	=> 'hello',	# label properties
+	    anchor	=> 'n',		# anchor text to "north"
+	    relief	=> 'groove',	# border style
+	    width	=> 10,		# characters wide
+	    height	=> 3,		# characters high
+	);
+$l->pack;	# give it a default place in the main window
+
+########################################################################
+#
+#	Sit in an infinite loop dispatching incoming events.
+#
+########################################################################
+
+MainLoop();
