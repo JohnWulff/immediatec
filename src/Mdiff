@@ -15,11 +15,14 @@
 
 usage()
 {
-  echo '\nGenerate a full report of differences between the files in two' >&2
-  echo 'different project directories. Whitspace is normally ignored.\n' >&2
+  echo >&2
+  echo 'Generate a full report of differences between the files in two' >&2
+  echo 'different project directories. Whitspace is normally ignored.' >&2
+  echo >&2
   echo 'Option -l allows the generation of lists of different or' >&2
-  echo 'identical files in the two projects.\n' >&2
-  echo "Usage:	$name [+w] [-ienqlh] [file ...] [directory]" >&2
+  echo 'identical files in the two projects.' >&2
+  echo >&2
+  echo "Usage:	$name [+w] [-ietqlckIh] [file ...] [directory]" >&2
   echo '	+w	whitespace (spaces and tabs) is significant' >&2
   echo '		default: whitespace is ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
@@ -38,12 +41,12 @@ usage()
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
   echo '	-	all further arguments are treated as files' >&2
-  echo '	if first file argument is not a directory, .. is used' >&2
+  echo '	if last argument is not a directory, .. is used' >&2
   echo "	if no files are specified, '$files' is used" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.19 2001/03/19 07:07:27 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.20 2002/06/02 14:19:33 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -106,7 +109,7 @@ process()
 
 name=${0##*/}
 name=${name%.*}
-files='[Mm]akefile* *.[chv]*'
+files='[Mm]akefile* *.[chyv]*'
 i=0; e=0; t=0; q=0; li=0; w=-w; pipe=0
 context=''
 
