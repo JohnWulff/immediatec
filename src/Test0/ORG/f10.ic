@@ -1,0 +1,36 @@
+%{
+%#include <stdlib.h>
+static int Div(int numer, int denom);
+static int Remainder(int numer, int denom);
+%}
+
+QB0 = rand() + IB1;
+QB1 = IB1 + rand();
+QB2 = abs(IB1);
+
+%{
+%#define max(x,y) ((x) > (y) ? (x) : (y))
+%#define min(x,y) ((x) < (y) ? (x) : (y))
+%}
+
+QB3 = min(IB1, IB2);
+QB4 = min(20, IB2);
+QB5 = max(IB1, 10);
+QB6 = min(20, max(IB2, 10));
+QB7 = min(max(IX0.0 & IX0.1 | IX0.2, IB2), 20);
+QW8 = Div(IW8, 10) + IW10;
+QW10 = Remainder(IW8, 10) + IW10;
+
+%{
+static int
+Div(int numer, int denom)
+{
+    return denom ? div(numer, denom).quot : 0;
+}
+
+static int
+Remainder(int numer, int denom)
+{
+    return denom ? div(numer, denom).rem : 0;
+}
+%}

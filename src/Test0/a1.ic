@@ -1,0 +1,18 @@
+/********************************************************************
+ *
+ *	copy input to output for bit byte and word input
+ *
+ *******************************************************************/
+
+QX0.0 = IX0.0;	// handle bit values 0 and 1
+QX0.1 = IX0.1;
+QX0.2 = IX0.2;
+QX0.3 = IX0.3;
+QX0.4 = IX0.4;
+QX0.5 = IX0.5;
+QX0.6 = IX0.6;
+QX0.7 = IX0.7;
+
+QB1 = IB1;	// handle unsigned values in the range 0 to 255
+
+QW2 = IW2;	// handle signed values in the range -32568 to 32567
