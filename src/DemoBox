@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 ########################################################################
 #
+#	iC generic Demo Box
+#	adapted from
 #	Example 14-1 Simple UI Code
 #	Sriram Srinivasan: Advanced Perl p. 224
 #
@@ -25,7 +27,7 @@ print "Connection successful.\n";
 
 ########################################################################
 #
-#	Create main window
+#	Create main window and Exit button
 #
 ########################################################################
 
@@ -35,77 +37,82 @@ $mainWindow->Label(-text => "iC Demo Box")->pack;
 
 $mainWindow->Button(-text => "Exit",
             -command => sub { exit },
-	   )->pack(-side   => 'bottom', 
-		   -expand => 1,
-		   -fill   => 'x',
-		  );
-
-my $inputs  = $mainWindow->Frame(
-				)->pack(-side   => 'left', 
-				        -expand => 'y',
-				        -fill   => 'y',
-				       );
-$inputs->Label(-text => 'inputs',)->pack;
-
-my $outputs = $mainWindow->Frame(
-				)->pack(-side   => 'right', 
-				        -expand => 'y',
-				        -fill   => 'y',
-				       );
-$outputs->Label(-text => 'outputs',)->pack;
+	    )->pack(-side   => 'bottom', 
+		    -expand => 1,
+		    -fill   => 'x',
+		   );
 
 ########################################################################
 #
-#	Generate many Checkbuttons
+#	Generate an input and an output frame
 #
 ########################################################################
 
-my @input;
-my $index = 0;
-foreach my $input (qw(I0 I1 I2 I3 I4 I5 I6 I7)) {  
+my $inFrame  = $mainWindow->Frame(-label       => 'inputs',
+				  -relief      => 'groove',
+				  -borderwidth => 2,
+				 )->pack(-side   => 'left', 
+				         -expand => 'y',
+				         -fill   => 'y',
+				        );
 
+my $outFrame = $mainWindow->Frame(-label       => 'outputs',
+				  -relief      => 'groove',
+				  -borderwidth => 2,
+				 )->pack(-side   => 'right', 
+				         -expand => 'y',
+				         -fill   => 'y',
+				        );
+
+########################################################################
+#
+#	Generate 8 input checkbuttons and 8 output checkbuttons
+#
+########################################################################
+
+my @inputs;
+
+for (my $index = 0; $index < 8; $index++) {
+    my $input = "$ARGV[0].$index";
     $makeCheckbutton = "\
-	\$inputs->Checkbutton(\
-		-text     => \$input,\
-		-variable => \\\$input[\$index],\
-		-command  => sub {\
-				print \"Sending msg $index\\n\";\
-				\$conn->send_now(\"$index,\$input[$index]\");\
-			     },\
+	\$inFrame->Checkbutton(\
+	    -text        => \$input,\
+	    -variable    => \\\$inputs[\$index],\
+	    -selectcolor => 'green',\
+	    -command     => sub {\
+				 print \"Sending msg $index\\n\";\
+				 \$conn->send_now(\"$index,\$inputs[$index]\");\
+				},\
 	)->pack(-side   => 'top',\
-		-anchor => 'w',\
 		-expand => 1,\
 	);\
     ";
-
     eval $makeCheckbutton;
     print $@;
-    $index++;
 }
 
-my @output;
-my $index = 0;
-foreach my $output (qw(O0 O1 O2 O3 O4 O5 O6 O7)) {  
+my @outputs;
 
+for (my $index = 0; $index < 8; $index++) {
+    my $output = "$ARGV[1].$index";
     $makeCheckbutton = "\
-	\$outputs->Checkbutton(\
-		-text     => \$output,\
-		-variable => \\\$output[\$index],\
-#		-state    => 'disabled',\
-		-command  => sub {\
-				print \"Inverting output $index\\n\";\
-				\$output[$index] = [1,0]->[\$output[$index]];\
-			     },\
+	\$outFrame->Checkbutton(\
+	    -text        => \$output,\
+	    -variable    => \\\$outputs[\$index],\
+	    -selectcolor => 'red',\
+#	    -state       => 'disabled',\
+	    -takefocus   => 0,\
+	    -command     => sub {\
+				 print \"Inverting outputs $index\\n\";\
+				 \$outputs[$index] = [1,0]->[\$outputs[$index]];\
+				},\
 	)->pack(-side   => 'top',\
-		-anchor => 'e',\
 		-expand => 1,\
 	);\
     ";
-
     eval $makeCheckbutton;
     print $@;
-    $output[$index] = 0;
-    $index++;
+    $outputs[$index] = 0;
 }
 
 ########################################################################
@@ -146,7 +153,7 @@ sub rcvd_msg_from_server {
         my $len = length ($msg);
         print "($len)$msg\n";
 	my ($index, $value) = split /,/, $msg;
-	print "$index $value $output[$index]\n";
-	$output[$index] = $value;
+	print "$index $value $outputs[$index]\n";
+	$outputs[$index] = $value;
     }
 }
