@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.14 2001/01/25 21:53:13 jw Exp $";
+"@(#)$Id: load.c,v 1.15 2001/01/28 10:33:42 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -32,7 +32,10 @@ unsigned long	sTstrLen;		/* length of symbol strings */
 
 unsigned	errCount;
 char *		progname;
-short		debug;
+short		debug = 0;
+#ifdef TCP
+int		micro = 0;
+#endif
 unsigned short	xflag;
 unsigned short	osc_max = MARKMAX;
 
@@ -49,13 +52,14 @@ FILE *		errFP;			/* error file pointer */
 static const char *	usage = "\
 USAGE: %s [-txh]"
 #ifdef TCP
-" [-s <server>] [-p <port>] [-u <unitID>]"
+" [-s <server>] [-p <port>] [-u <unitID>] [-m]"
 #endif
 " [-d<debug>] [-n<count>]\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n\
         -p service port of server (default '%s')\n\
-        -u unit ID of this client (default '%s')\n"
+        -u unit ID of this client (default '%s')\n\
+	-m	microsecond timing info\n"
 #endif
 "        -d <debug>2000  display scan_cnt and link_cnt\n\
                  +1000  I0 toggled every second\n\
@@ -147,6 +151,9 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    pplcNM = *argv;
 		    goto break2;
+		case 'm':
+		    micro = 1;		/* microsecond info */
+		    break;
 #endif
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }

@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.11 2001/01/25 21:53:13 jw Exp $";
+"@(#)$Id: pptc.c,v 1.12 2001/01/28 10:33:42 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -32,7 +32,6 @@ static const char pptc_c[] =
 #define YSIZE	10
 
 static void	display(void);
-static unsigned	time_cnt;			/* count time in ticks */
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define ENTER	'\n'
@@ -131,7 +130,9 @@ pplc(
 
     if ((debug & 0400) == 0) {
 	/* Start TCP/IP communication before any inputs are generated => outputs */
+	if (micro) microReset();
 	sockFN = connect_to_server(hostNM, portNM, pplcNM, delay);
+	if (micro) microPrint("connect to server");
     }
 
 /********************************************************************
@@ -222,28 +223,27 @@ pplc(
  *******************************************************************/
 
     for ( ; ; ) {
+	if (micro) microPrint("Input");
 	if (++mark_stamp == 0) {	/* next generation for check */
 	    mark_stamp++;		/* leave out zero */
 	}
-
-	time_cnt = 0;			/* clear time count */
 
 	do {
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list));
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
+	if (micro) microPrint("Scan");
 
 	if (debug & 0300) {		/* osc or detailed info */
 	    display();			/* inputs and outputs */
 	}
 
 	if ((scan_cnt || link_cnt) && (debug & 02000)) {
-	    fprintf(outFP, "\nscan = %5d  link = %5d  time = %5d ms  ",
-		scan_cnt, link_cnt, time_cnt);
 	    if (glit_cnt) {
-		fprintf(outFP, "glitch = %5d, %ld  ",
+		fprintf(outFP, "glitch = %d, %ld  ",
 		glit_cnt, glit_nxt);
 	    }
+	    fprintf(outFP, "scan = %d  link = %d\n", scan_cnt, link_cnt);
 	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
 	}
 
@@ -299,7 +299,9 @@ pplc(
 		/* TODO - change system to make QT_ unnecessary */
 		assert(Qtype);			/* make sure slot is programmed */
 		sprintf(msg, "%c%d,%u", Qtype, slot, val);
+		if (micro) microPrint("Send start");
 		send_msg_to_server(sockFN, msg);
+		if (micro) microPrint("Send complete");
 		slots &= ~mask;			/* clear rightmost slot in slots */
 	    }
 	    QM_[cage] = slots;			/* clear QM_[cage] */
@@ -315,6 +317,7 @@ pplc(
 
 	for (cnt = 0; cnt == 0; ) {	/* stay in input loop if nothing linked */
 	    retval = wait_for_next_event(sockFN);	/* wait for inputs or timer */
+	    if (micro) microReset();
 
 	    if (retval == 0) {
 		timeoutCounter = timeoutValue;	/* will repeat if timeout with input */

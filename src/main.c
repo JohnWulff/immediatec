@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.13 2001/01/13 17:47:02 jw Exp $";
+"@(#)$Id: main.c,v 1.14 2001/01/28 10:33:42 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -29,14 +29,15 @@ USAGE for compile mode:\n\
 USAGE for run mode:\n\
   %s [-txh]"
 #ifdef TCP
-" [-s <server>] [-p <port>] [-u <unitID>]"
+" [-s <server>] [-p <port>] [-u <unitID>] [-m]"
 #endif
 " [-l<list>] [-e<err>] [-d<debug>] [-n<count>] <iC_program>\n\
        Options in both modes:\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n\
         -p service port of server (default '%s')\n\
-        -u unit ID of this client (default '%s')\n"
+        -u unit ID of this client (default '%s')\n\
+	-m	microsecond timing info\n"
 #endif
 "        -l <listFN>     name of list file  (default is stdout)\n\
         -e <errFN>      name of error file (default is stderr)\n\
@@ -68,6 +69,9 @@ Copyright (C) 1985-2001 John E. Wulff     <john.wulff@inka.de>\n\
 %s\n";
 
 short		debug = 0;
+#ifdef TCP
+int		micro = 0;
+#endif
 unsigned short	xflag;
 unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
@@ -138,6 +142,9 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    pplcNM = *argv;
 		    goto break2;
+		case 'm':
+		    micro = 1;		/* microsecond info */
+		    break;
 #endif
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }

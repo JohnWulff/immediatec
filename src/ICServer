@@ -67,21 +67,28 @@ format STDERR =
 Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	$named
 	-s host	ID of server (default '0.0.0.0')
-	-p port	service port for server and all clients
-		(default '8778')
+	-p port	service port for server and all clients (default '8778')
 	-t	trace messages for debugging
+	-m	display elapsed time in seconds and microseconds
+		(Requires Module Time::HiRes available from CPAN)
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.13 2001/01/23 23:04:13 jw Exp $
+$Id: ICServer,v 1.14 2001/01/28 10:34:05 jw Exp $
 .
 
-use vars qw($opt_t $opt_s $opt_p $opt_h);
+use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('ts:p:h');			# sets $opt_h if -h etc
+&Getopts('tms:p:h');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+my ($t0, $t1, $sec, $usec);
+if ($opt_m) {
+    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    $t0 = [gettimeofday];	# start of program
 }
 
 ########################################################################
@@ -150,6 +157,21 @@ sub login_proc {
 
 sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
+    my ($sec, $usec);
+    if ($opt_m) {
+	$t1 = [gettimeofday];
+	$sec =  $t1->[0] - $t0->[0];
+	$usec = $t1->[1] - $t0->[1];
+	if ($usec < 0) {
+	    $sec--;
+	    $usec += 1000000;
+	}
+	if ($opt_t) {
+	    printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	} else {
+	    printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	}
+    }
     if (defined $msg) {
 	my $unitID = $UnitIDs{$conn};
 	my $len = length $msg;
@@ -230,5 +252,8 @@ sub rcvd_msg_from_client {
 	} else {
 	    print "I$unitID $msg to dummy P0\n" if $opt_t;
 	}
+    }
+    if ($opt_m) {
+	$t0 = [gettimeofday];
     }
 }

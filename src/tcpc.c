@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.1 2000/06/10 11:27:37 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.2 2001/01/28 10:33:42 jw Exp $";
 /********************************************************************
  *
  *	TCP/IC communication support
@@ -39,6 +39,39 @@ typedef struct NetBuffer {
 
 static fd_set		infds;
 static struct timeval *	ptv = NULL;
+static struct timeval	mt0;
+static struct timeval	mt1;
+
+/********************************************************************
+ *
+ *	Reset microsecend timer at program start
+ *	Print microseconds since last call to microPrint
+ *
+ *******************************************************************/
+
+void
+microReset(void)
+{
+    gettimeofday(&mt0, 0);	/* reset for next measurement */
+} /* microReset */
+
+void
+microPrint(const char * str)
+{
+    long	sec;
+    long	usec;
+
+    if (gettimeofday(&mt1, 0) == 0) {
+	sec = mt1.tv_sec - mt0.tv_sec;
+	usec = mt1.tv_usec - mt0.tv_usec;
+	if (usec < 0) {
+	    sec--;
+	    usec += 1000000;
+	}
+	printf("%3d.%03d,%03d: %s\n", sec, usec/1000, usec%1000, str);
+    }
+    gettimeofday(&mt0, 0);	/* start of next measurement without print time */
+} /* microPrint */
 
 /********************************************************************
  *
