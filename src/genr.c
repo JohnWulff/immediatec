@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.24 2001/01/06 19:36:28 jw Exp $";
+"@(#)$Id: genr.c,v 1.25 2001/01/06 22:19:13 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -676,14 +676,18 @@ op_asgn(			/* asign List_e stack to links */
 		t_first++;
 	    }
 	    *ep++ = 0;
-					    /* start case or function */
-	    fprintf(exoFP, cexeString[outFlag], ++c_number);
-	    fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
-	    fprintf(exoFP, "	return %s;\n", eBuf);
-	    if (outFlag != 0) {
-		fprintf(exoFP, "}\n\n");	/* terminate function */
+						/* start case or function */
+	    if ((debug & 0100000) == 0) {	/* output cexe function */
+		fprintf(exoFP, cexeString[outFlag], ++c_number);
+		fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
+		fprintf(exoFP, "	return %s;\n", eBuf);
+		if (outFlag != 0) {
+		    fprintf(exoFP, "}\n\n");	/* terminate function */
+		}
+		if (debug & 04) fprintf(outFP, "; (%d)\n", c_number);
+	    } else {
+		if (debug & 04) fprintf(outFP, "; (dummy assignment)\n");
 	    }
-	    if (debug & 04) fprintf(outFP, "; (%d)\n", c_number);
 	}
 	sflag = 1;			/* print output name */
 	if (gt_input > PPGATESIZE) {
@@ -828,6 +832,7 @@ qp_value(Lis * expr, Sym * act, uchar ft)
 	if ((debug & 06) == 04) {
 	    debug &= ~04;			/* supress listing output */
 	}
+	debug |= 0100000;			/* supress cexe output */
 	li.v = qp_asgn(act, &li, ft)->list;	/* ft is ARITH or GATE */
 	li.v->le_sym->type = UDF;		/* not really defined yet */
 	debug = saveDebug;			/* restore listing output */
@@ -896,9 +901,10 @@ qp_asgn(
 	    bsp->type != UDF
 	)) {
 	    error("multiple assignment to imm bit or int:", svv->name);
-	    svv->type = ERR;	/* cannot execute properly */
+	    svv->type = ERR;			/* cannot execute properly */
+	} else {
+	    svv->type = UDF;
 	}
-	svv->type = UDF;
 	unlink_sym(bsp);			/* unlink old symbol */
 	free(lpf);				/* old back link */
     }
