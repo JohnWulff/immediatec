@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.29 2002/08/26 19:03:29 jw Exp $
+# @(#)$Id: Makefile.in,v 1.30 2002/09/01 20:31:16 jw Exp $
 
 ############################################################
 #
@@ -38,7 +38,7 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_DATA = @INSTALL_DATA@
 
 CFLAGS = @CFLAGS@
-CFLAGS_COMPILE_ONLY = -c -DYYDEBUG $(OPT)
+CFLAGS_COMPILE_ONLY = -c $(OPT)
 LDFLAGS = @LDFLAGS@
 YFLAGS = -d -v
 O=o
