@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.29 2002/08/13 10:01:03 jw Exp $";
+"@(#)$Id: main.c,v 1.30 2002/08/14 08:38:52 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -135,7 +135,7 @@ char * OutputMessage[] = {
 FILE *	T1FP;
 FILE *	T2FP;
 FILE *	T3FP;
-    
+
 static void	unlinkTfiles(void);
 static char	T1FN[] = "ic1.XXXXXX";
 static char	T2FN[] = "ic2.XXXXXX";
@@ -269,9 +269,16 @@ main(
 	}
     }
     debug &= 07777;			/* allow only cases specified */
-    initIO();				/* catch memory access signal */	
+    initIO();				/* catch memory access signal */
     iFlag = 0;
-    
+
+/********************************************************************
+ *
+ *	Generate and open temporary files T1FN T2FN T3FN
+ *	T4FN is only a name
+ *
+ *******************************************************************/
+
     szNames[T1index] = T1FN;
     szNames[T2index] = T2FN;
     szNames[T3index] = T3FN;
@@ -290,7 +297,7 @@ main(
 	unlink(T4FN) < 0) {
 	fprintf(stderr, "cannot unlink %s\n", T4FN);
 	perror("unlink");
-	r = T4index;			/* error opening temporary file */
+	r = T4index;			/* error unlinking temporary file */
     } else
 
 /********************************************************************
@@ -309,19 +316,21 @@ main(
 
 /********************************************************************
  *
- *	Regroup the generated C-code int literal blocks first, followed
- *	by C-actions. This is necessary to get all declarations at the
+ *	Regroup the generated C-code into literal blocks first, followed
+ *	by C-actions. This is necessary to get all C-declarations at the
  *	start of the C-code.
  *
  *	Call the C compiler which recognizes any variables declared as
  *	imm bit or imm int variables. These variables can be used as
  *	values anywhere in the C-code and appropriate modification is
  *	carried out. Immediate variables which have been declared but
- *	not yet assigned may be assigned to in the C-code. Such assignment
- *	expressions are recognised and converted to a function calls.
+ *	not yet assigned may be (multiply) assigned to in the C-code.
+ *	Such assignment expressions are recognised and converted to
+ *	function calls.
  *
- *	If an immediate variable has already been assigned in the iC
- *	code, an attempt to assign it in the C-code is an error.
+ *	If an immediate variable has already been (singly) assigned to
+ *	in the iC code, an attempt to assign to it in the C-code is an
+ *	error.
  *
  *******************************************************************/
 
@@ -331,9 +340,22 @@ main(
 	Gate *		igp;
 	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
 
+/********************************************************************
+ *
+ *	List network topology and statistics - this completes listing
+ *
+ *******************************************************************/
+
 	if ((r = listNet(gate_count)) == 0) {
-	    if (outFN == 0) {
+	    if (outFN == 0) {			/* not -o option */
 		if (exiFN) {			/* -c option */
+
+/********************************************************************
+ *
+ *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
+ *
+ *******************************************************************/
+
 		    if ((excFP = fopen(excFN, "w")) == NULL) {
 			r = COindex;
 		    } else if ((exiFP = fopen(exiFN, "r")) == NULL) {
@@ -376,15 +398,37 @@ main(
 			fclose(exiFP);
 			fclose(excFP);
 		    }
-		} else if ((r = buildNet(&igp)) == 0) {/* generate execution network */
+		} else
+
+/********************************************************************
+ *
+ *	Build a network of Gates and links for direct execution
+ *
+ *******************************************************************/
+
+		if ((r = buildNet(&igp)) == 0) {
 		    Symbol * sp = lookup("iClock");
 		    unlinkTfiles();
+
+/********************************************************************
+ *
+ *	Execute the compiled iC logic directly
+ *
+ *******************************************************************/
+
 		    assert (sp);		/* iClock initialized in init() */
 		    c_list = sp->u.gate;	/* initialise clock list */
 		    icc(igp, gate_count);	/* execute the compiled logic */
 		    /* never returns - exits via quit() */
 		}
 	    } else {
+
+/********************************************************************
+ *
+ *	-o option: Output a C-file of all Gates, C-code and links
+ *
+ *******************************************************************/
+
 		r = output(outFN);		/* generate network as C file */
 	    }
 	}
@@ -446,7 +490,7 @@ unlinkTfiles(void)
 	    unlink(T3FN);
 	}
     }
-} /* inversionCorrection */
+} /* unlinkTfiles */
 
 /********************************************************************
  *
@@ -464,7 +508,7 @@ unlinkTfiles(void)
 int
 inversionCorrection(void)
 {
-    char	exStr[256];	
+    char	exStr[256];
     char	tempName[] = "pplstfix.XXXXXX";
     int		r = 0;
 

@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.30 2002/08/13 22:45:32 jw Exp $";
+"@(#)$Id: comp.h,v 1.31 2002/08/14 16:45:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -58,8 +58,10 @@ extern void error(char *, char *);	/* print error message */
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */
+#ifndef LMAIN
 extern void yyerror(char * s);		/* called for yacc syntax error */
 extern int  get(FILE* fp);		/* character input shared with lexc.l */
+#endif
 extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 extern int	lexflag;

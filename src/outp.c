@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.56 2002/08/13 23:12:31 jw Exp $";
+"@(#)$Id: outp.c,v 1.57 2002/08/14 12:10:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -199,6 +199,7 @@ listNet(unsigned * gate_count)
 	gate_count[typ] = 0;
     }
     if (debug & 020) {
+	/* do not change spelling - used in 'pplstfix' */
 	fprintf(outFP, "\n******* NET TOPOLOGY    ************************\n\n");
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
@@ -265,6 +266,7 @@ listNet(unsigned * gate_count)
     if (debug & 040) {
 	byte_total = (long)block_total * sizeof(Gate)
 		   + (long)link_count * sizeof(Gate *);
+	/* do not change spelling - used in 'pplstfix' */
 	fprintf(outFP, "\n******* NET STATISTICS  ************************\n\n");
 	for (typ = 0; typ < MAX_LS; typ++) {
 	    if (gate_count[typ]) {

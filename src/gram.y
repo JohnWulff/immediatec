@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.8 2002/08/13 21:14:34 jw Exp $";
+"@(#)$Id: gram.y,v 1.9 2002/08/14 16:43:45 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -58,6 +58,10 @@ static unsigned int	pushEndStack(unsigned int value);
 static unsigned int	popEndStack(void);
 
 static Symbol	typedefSymbol = { "typedef", UDF, UDFA, };
+
+#ifdef LMAIN
+static void	yyerror(char *s, ...);
+#endif
 %}
 %union {		/* stack type */
     Token	tok;
@@ -525,17 +529,21 @@ assignment_expr
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
+#ifndef LMAIN
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "@");
+#endif
 #endif
 	}
 	| imm_identifier '=' assignment_expr {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+#ifndef LMAIN
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u>", $$.start, $$.end);
 #endif
 	    immAssignFound($1.start, $2.start, $3.end, $1.symbol);
+#endif
 	    $$.symbol = NULL;
 	}
 	;
@@ -1701,20 +1709,24 @@ imm_identifier
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = $1.symbol;
+#ifndef LMAIN
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]", $$.start, $$.end);
 #endif
 	    immVarFound($$.start, $$.end, $1.symbol);
+#endif
 	}
 	| '(' imm_identifier ')' {
 	    /* stops this being a primary_expr which would lead to C assignment */
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = $2.symbol;
+#ifndef LMAIN
 #if YYDEBUG
 	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}", $$.start, $$.end);
 #endif
 	    immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+#endif
 	}
 	;
 
@@ -1725,26 +1737,19 @@ imm_identifier
  *******************************************************************/
 %%
 
+#ifdef LMAIN
+static void
+yyerror(char *s, ...)
+{
+	fflush(stdout);
+	printf("\n%*s\n%*s\n", column, "^", column, s);
+}
+#else
+
 extern int column;
 #define LARGE (~0U>>2)
 
 static char*	macro[] = { MACRO_NAMES };
-
-/*######################
-void
-c_error(char *fmt, ...)
-{
-    va_list ap;
-
-    va_start(ap, fmt);
-
-    fflush(outFP);
-    fprintf(outFP, "\n%*s\n", column, "^");
-    vfprintf(outFP, fmt, ap);
-    va_end(ap);
-    fprintf(outFP, "\n");
-}
-########################*/
 
 /********************************************************************
  *
@@ -1853,7 +1858,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    break;			/* Error: will not find start */
 	}
     }
-//    c_error(" ERROR (\"%s\" %u %u %d %d %p %p)", sp->name, start, end, sp->type, sp->ftype, sp, p->sp);
+    execerror("C-assignment: Symbol not found ???", sp->name, __FILE__, __LINE__);
 } /* immAssignFound */
 
 /********************************************************************
@@ -1981,7 +1986,6 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	    assert(bytePos < p->pStart);
 	    start = p->pStart;		/* start of next entry */
 	}
-#ifndef LMAIN
 	if (bytePos == vstart) {
 	    assert(sp);
 	    IEC1131(sp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
@@ -1991,7 +1995,6 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	if (bytePos == vend) {
 	    pFlag = 1;
 	}
-#endif
 	if (bytePos == equop) {
 	    assert(c == '=');
 	    c = ',';			/* replace '=' by ',' */
@@ -2003,3 +2006,4 @@ copyAdjust(FILE* iFP, FILE* oFP)
     }
 //fprintf(stderr, "copyAdjust: %d used for lineEntryArray\n", lep - lineEntryArray); fflush(stderr);
 } /* copyAdjust */
+#endif

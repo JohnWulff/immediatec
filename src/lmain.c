@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.4 2002/08/05 20:16:24 jw Exp $";
+"@(#)$Id: lmain.c,v 1.5 2002/08/14 16:32:34 jw Exp $";
 /********************************************************************
  *
  *	simple driver for MKS yacc
@@ -106,10 +106,7 @@ main(
     if (lookup("Gate") == 0) {
 	install("Gate", CTYPE, UDFA);
     }
-    copyAdjust(NULL, stdout);		/* initialize lineEntryArray */
-//    for (; c_parse();) {
-//	;
-//    }
+//    copyAdjust(NULL, stdout);		/* initialize lineEntryArray */
     r = c_parse();
     if (r == 0) {
 #ifdef YYDEBUG
@@ -125,8 +122,8 @@ main(
 	    }
 	}
 #endif
-	rewind(yyin);
-	copyAdjust(yyin, stdout);
+//	rewind(yyin);
+//	copyAdjust(yyin, stdout);
     }
     return r;
 } /* main */

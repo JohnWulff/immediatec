@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.8 2002/08/14 00:01:33 jw Exp $";
+"@(#)$Id: lexc.l,v 1.9 2002/08/14 16:30:24 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -47,6 +47,7 @@ static int	ignore(c_STYPE* u);
 static void	count(c_STYPE* u);
 static int	check_type(c_STYPE* u);
 
+#ifndef LMAIN
 #define YY_INPUT(buf,result,max_size) \
 {\
     int c = '*', n;\
@@ -58,6 +59,7 @@ static int	check_type(c_STYPE* u);
 	    YY_FATAL_ERROR( "input in flex scanner failed" );\
     result = n;\
 }
+#endif
 
 #define ECHO
 #define YY_NO_UNPUT
@@ -388,8 +390,10 @@ check_type(c_STYPE* u)
     sp->type = CWORD;
     sp->ftype = UDFA;
     u->tok.symbol = sp;			/* sp->next === NULL */
+#ifndef LMAIN
 #ifdef YYDEBUG
     if ((debug & 0402) == 0402) fprintf(outFP, "\nC %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+#endif
 #endif
     return IDENTIFIER;
 } /* check_type */
@@ -407,8 +411,10 @@ delete_sym(Token* tokp)
 
     if ((sp = tokp->symbol) != NULL && (sp->type & TM) > MAX_LS) {
 	tokp->symbol = NULL;
+#ifndef LMAIN
 #ifdef YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+#endif
 #endif
 	free(sp->name);
 	free(sp);

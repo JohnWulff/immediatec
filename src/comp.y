@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.67 2002/08/13 23:11:44 jw Exp $";
+"@(#)$Id: comp.y,v 1.68 2002/08/14 12:56:55 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1611,6 +1611,7 @@ static int	errRet = 0;
 
 int		lexflag = 0;
 int		lineno = 1;
+int		savedLineno = 0;
 int		c_number = 0;		/* case number for cexe.c */
 int		outFlag = 0;		/* global flag for compiled output */
 jmp_buf		begin;
@@ -1678,7 +1679,7 @@ get(FILE* fp)
 	 *  getp has reached end of previous chbuf filling
 	 *  fill chbuf with a new line
 	 ************************************************************/
-	if (lineflag) {
+	if (lineflag && (lexflag & 01) == 0) {
 	    lineno++;
 	}
 	for (getp = fillp = chbuf; fillp < &chbuf[sizeof(chbuf)-1]
@@ -1693,6 +1694,7 @@ get(FILE* fp)
 	lineflag = (*(fillp-1) == '\n') ? 1 : 0;
 	if (lineflag && (lexflag & 04) && strncmp(getp, "##", 2) == 0) {
 	    lexflag |= 1;	/* block source listing for lex */
+	    lineno = savedLineno;
 	}
 	if ((lexflag & 01) == 0 && (debug & 010)) {
 	    /********************************************************
@@ -1705,11 +1707,12 @@ get(FILE* fp)
 	}
 	/* handle pre-processor #line 1 "file.ic" */
 	if (lineflag && sscanf(getp, "#line %d \"%[^\"]\"\n", &temp1, inpBuf) == 2) {
+	    savedLineno = lineno;
 	    lineno = temp1;
 	    lineflag = 0;
 	    inpNM = inpBuf;	/* another file name for messages */
 	    if ((lexflag & 04) == 0) {
-		getp = fillp;	/* do not pass to iClex() */
+		getp = fillp;	/* pass to iClex() */
 	    } else {
 		if ((debug & 010)) {
 		    if (lexflag & 02) {

@@ -35,7 +35,7 @@ format STDERR =
 Usage:	@<<<<<<< [file ...]
 	$named
 	-h	help, ouput this Usage text only
-$Id: pplstfix,v 1.6 2002/06/30 20:34:41 jw Exp $
+$Id: pplstfix,v 1.7 2002/08/14 12:06:44 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -76,7 +76,7 @@ sub processFile {
     # Pass 1: scan file for ALIAS definitions
 
     while (<IN>) {
-	if (/^NET TOPOLOGY$/) {
+	if (/\bNET TOPOLOGY\b/) {
 	    last;
 	}
     }
@@ -96,7 +96,7 @@ sub processFile {
 		printf("Generate error line%d: ALIAS '%s' translates to itself '%s'\n", $line, $alias, $xlate);
 	    }
 	}
-	if (/^NET STATISTICS$/) {
+	if (/\bNET STATISTICS\b/) {
 	    last;
 	}
     }
