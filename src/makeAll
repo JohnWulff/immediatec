@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/bash
 
 ########################################################################
 #
@@ -18,25 +18,50 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-qh]' >&2
+    echo 'Usage:	'${0##*/}' [-qh] [path]' >&2
     echo '	call make for icc, ict and libict.a with the correct options' >&2
+    echo '	path is optionally supplied by Makefile for executing scripts' >&2
+    echo '	in the correct path (default ./)' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.7 2001/03/11 15:10:19 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.8 2001/03/17 00:20:17 jw Exp $' >&2
 }
 
-case $1 in
-    -h)	usage; exit 255;;
-esac
+q=""
+path="./"
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n $option ]]; do
+	    case $option in
+	    q*)	q=1;;	# echo only - dont kill
+	    h*)	usage; exit 255;;
+	    *)	x=${option#?}; option=${option%$x}
+	    	echo "$name: unexpected option $option in $1" >&2
+		usage; exit 254;;
+	    esac
+	    option=${option#?}
+	done
+	;;
+    *)	break;;
+    esac
+    shift
+done
+
+if [[ $# > 0 ]]; then
+    path=$1
+fi
 
 if test -f cexe.c_empty && ! cmp -s cexe.c cexe.c_empty; then
     rm -f cexe.o
     cp -p cexe.c_empty cexe.c
 fi
 echo "make icc"
-make icc 2>&1 | if [ "$1" = '-q' ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+make icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 echo "make ict"
-makeIct  2>&1 | if [ "$1" = '-q' ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+${path}makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 echo "make libict.a"
-makeLib  2>&1 | if [ "$1" = '-q' ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+${path}makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 true
