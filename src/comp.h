@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.33 2002/08/18 20:53:01 jw Exp $";
+"@(#)$Id: comp.h,v 1.34 2002/08/19 09:30:12 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -163,7 +163,7 @@ extern int	column;
 extern void	delete_sym(Token* tokp);
 extern int	readTypeCacheFile(void);
 extern int	readTypesFromCache(char* includeName);
-extern void	restoreCblocksStream(void);
+extern FILE *	restoreCblocksStream(void);
 #define TCBUFS	1024
 					/*   gram.y   */
 extern void	copyAdjust(FILE* iFP, FILE* oFP);

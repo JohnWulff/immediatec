@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.71 2002/08/18 21:04:47 jw Exp $";
+"@(#)$Id: comp.y,v 1.72 2002/08/19 12:33:40 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1601,7 +1601,7 @@ static char	chbuf[CBUFSZ];		/* used in get() errline() andd yyerror() */
 static char *	getp = NULL;		/* used in get() unget() andd yyerror() */
 static char	iCtext[YTOKSZ];		/* lex token */
 static int	iCleng;			/* length */
-static char	inpBuf[YTOKSZ];		/* alternate file name */
+static char	lstBuf[YTOKSZ];		/* listing file name */
 static int	lineflag = 1;		/* previous line was complete */
 static char	tmpbuf[256];		/* buffer to build variable */
 static char *	errFilename;
@@ -1609,7 +1609,7 @@ static int	errFlag = 0;
 static int	errRet = 0;
 
 int		lexflag = 0;
-int		lineno = 1;
+int		lineno = 0;		/* count first line on entry to get() */
 int		savedLineno = 0;
 int		c_number = 0;		/* case number for cexe.c */
 int		outFlag = 0;		/* global flag for compiled output */
@@ -1656,6 +1656,7 @@ compile(
     }
     outFlag = outNM != 0;	/* global flag for compiled output */
     init();		/* initialise symbol table */
+    strncpy(lstBuf, inpNM, YTOKSZ);
     if (debug & 016) {	/* begin source listing */
 	fprintf(outFP, "******* %-15s ************************\n", inpNM);
     }
@@ -1679,9 +1680,10 @@ get(FILE* fp)
     int		c;
     int		temp1;
     int		prevflag;
+    char	tempBuf[2];
 
     while (getp == NULL || (c = *getp++) == 0) {
-	if ((prevflag = lineflag) != 0 && (lexflag & 01) == 0) {
+	if ((prevflag = lineflag) != 0) {
 	    lineno++;			/* count previous line */
 	}
 	/************************************************************
@@ -1692,7 +1694,9 @@ get(FILE* fp)
 	if ((getp = fgets(chbuf, CBUFSZ, fp)) == NULL) {
 	    lineflag = 1;
 	    if ((lexflag & 04) && T5FP) {
-		restoreCblocksStream();
+		lineno = savedLineno;
+		lexflag &= ~01;			/* output source listing for lex */
+		fp = restoreCblocksStream();
 		continue;			/* back to C-blocks */
 	    }
 	    strcpy(chbuf, "*** EOF ***");	/* provide a listing line at EOF for errors */
@@ -1720,16 +1724,15 @@ get(FILE* fp)
 	 *  NOTE: chbuf[] must be large enough to hold a complete line
 	 *        for the following sscanf()s
 	 ********************************************************/
-	if (prevflag && sscanf(chbuf, " %1s", inpBuf) == 1 && *inpBuf == '#') {
+	if (prevflag && sscanf(chbuf, " %1s", tempBuf) == 1 && *tempBuf == '#') {
 	    /********************************************************
 	     *  handle pre-processor #line 1 "file.ic"
 	     ********************************************************/
-	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, inpBuf) == 2) {
+	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, lstBuf) == 2) {
 		savedLineno = lineno;
-		lineno = temp1;
-		lineflag = 0;
-		if (debug & 02) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, inpBuf);
-		assert(strcmp(inpNM, inpBuf) == 0);
+		lineno = temp1 - 1;
+		if (debug & 02) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, lstBuf);
+		assert(strcmp(inpNM, lstBuf) == 0);
 		if ((lexflag & 04) == 0) {
 		    getp = NULL;			/* bypass this line */
 		} else {
@@ -1744,17 +1747,29 @@ get(FILE* fp)
 		}
 	    } else
 	    /********************************************************
+	     *  handle C-pre-processor # 1 "/usr/include/stdio.h"
+	     ********************************************************/
+	    if (sscanf(chbuf, " # %d \"%[/A-Za-z_.0-9]\"", &temp1, lstBuf) == 2) {
+		lineno = temp1 - 1;
+		if (debug & 02) fprintf(outFP, "####### # %d \"%s\"\n", temp1, lstBuf);
+		if ((lexflag & 04) == 0) {
+		    getp = NULL;			/* bypass this line */
+		}
+	    } else
+	    /********************************************************
 	     *  handle pre-processor #include <stdio.h> or "icc.h"
 	     ********************************************************/
-	    if (sscanf(chbuf, " # include %[<\"/A-Za-z_.0-9>]", inpBuf) == 1) {
+	    if (sscanf(chbuf, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
+		savedLineno = lineno;
 		if ((lexflag & 04) == 0) {
 		    /* TODO process includes in iC compilation */
 		    /* handle only local includes - not full C-precompiler features */
 		    getp = NULL;			/* bypass this line */
 		} else {
-		    if (debug & 02) fprintf(outFP, "####### #include %s\n", inpBuf);
+		    if (debug & 02) fprintf(outFP, "####### #include %s\n", lstBuf);
 		    /* the first call to process an include file reads in the cache */
-		    readTypesFromCache(inpBuf);	/* ZZZ error handling */
+		    readTypesFromCache(lstBuf);	/* ZZZ error handling */
+		    if ((debug & 02) == 0) lexflag |= 1;	/* block source listing for lex */
 		    /* pass this line to lexc to get gramOffset correct */
 		    /* if an include file has been opened yyin is now T5FP */
 		    /* and the next line will be read from there */
@@ -2111,7 +2126,7 @@ errLine(void)			/* error file not openend if no errors */
     }
     if (lineno != errline) {
 	errline = lineno;		/* dont print line twice */
-	if (!(debug & 010)) {	/* no source listing in debugging output */
+	if (!(debug & 010) || (lexflag & 01)) {	/* no source listing in debugging output */
 	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
 	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
 	}
@@ -2145,11 +2160,11 @@ errmess(				/* actual error message */
 	if (errFlag) putc('.', errFP);
     }
 #ifdef NEWSTYLE
-    fprintf(outFP, " '%s'\n", inpNM);
-    if (errFlag) fprintf(errFP, " '%s'\n", inpNM);
+    fprintf(outFP, " '%s'\n", lstBuf);
+    if (errFlag) fprintf(errFP, " '%s'\n", lstBuf);
 #else
-    fprintf(outFP, " File %s, line %d\n", inpNM, lineno);
-    if (errFlag) fprintf(errFP, " File %s, line %d\n", inpNM, lineno);
+    fprintf(outFP, " File %s, line %d\n", lstBuf, lineno);
+    if (errFlag) fprintf(errFP, " File %s, line %d\n", lstBuf, lineno);
 #endif
 } /* errmess */
 
@@ -2256,9 +2271,9 @@ yyerror(char *	s)
     }
     ynerrs++;
 #ifdef NEWSTYLE
-    n = snprintf(erbuf, TSIZE, "%s '%s'", s, inpNM);
+    n = snprintf(erbuf, TSIZE, "%s '%s'", s, lstBuf);
 #else
-    n = snprintf(erbuf, TSIZE, "%s %d in %s", s, ynerrs, inpNM);
+    n = snprintf(erbuf, TSIZE, "%s %d in %s", s, ynerrs, lstBuf);
 #endif
     if (n1 < n + 5) {
 	n1 += 4;

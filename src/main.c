@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.33 2002/08/18 22:05:25 jw Exp $";
+"@(#)$Id: main.c,v 1.34 2002/08/19 12:37:25 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -143,7 +143,7 @@ char		typeCacheFN[] = TCname;
 static char	T1FN[] = "/tmp/ic1.XXXXXX";
 static char	T2FN[] = "/tmp/ic2.XXXXXX";
 static char	T3FN[] = "/tmp/ic3.XXXXXX";
-char		T4FN[] = "/tmp/ic4.XXXXXX";
+char		T4FN[] = "ic4.XXXXXX";	/* must be in current directory */
 char		T5FN[] = "/tmp/ic5.XXXXXX";
 
 static void	unlinkTfiles(void);

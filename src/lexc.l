@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.12 2002/08/18 23:36:19 jw Exp $";
+"@(#)$Id: lexc.l,v 1.13 2002/08/19 09:30:32 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -181,6 +181,7 @@ static int	check_type(c_STYPE* u);
 static int gramOffset = 0;
 static int gramLine   = 1;
 int column = 0;
+FILE* saveFP = NULL;
 
 int
 yywrap(void)
@@ -596,44 +597,6 @@ readTypeCacheFile(void)
  *
  *******************************************************************/
 
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-int
-my_system (char *command)
-{
-    int pid, status;
-
-    if (command == 0) {
-       return 1;
-    }
-    pid = fork();
-    if (pid == -1) {
-       return -1;
-    }
-    if (pid == 0) {
-       char *argv[4];
-       char *environ[1];
-       argv[0] = "sh";
-       argv[1] = "-c";
-       argv[2] = command;
-       argv[3] = 0;
-       environ[0] = 0;
-       execve("/bin/sh", argv, environ);
-       exit(127);
-    }
-    do {
-       if (waitpid(pid, &status, 0) == -1) {
-	   if (errno != EINTR) {
-	       return -1;
-	   }
-       } else {
-	   return status;
-       }
-    } while(1);
-}
-
 int
 readTypesFromCache(char* includeName)
 {
@@ -672,14 +635,15 @@ readTypesFromCache(char* includeName)
 	}
 	if (debug & 02) fprintf(outFP, "####### open include file %s via %s %s\n", includeName, T4FN, T5FN);
 	fprintf(T4FP, "#include %s\n", includeName);	/* a little C file !!! */
+	fflush(T4FP);
 
-	sprintf(lineBuf, "gcc -E -x c %s -o xxx.i", T4FN);
-//	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
+//	sprintf(lineBuf, "gcc -E -x c %s -o xxx.i", T4FN);
+	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
 	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
-	r = my_system(lineBuf);			/* Pre-compile C file */
-//	r = system(lineBuf);			/* Pre-compile C file */
+//	r = my_system(lineBuf);			/* Pre-compile C file */
+	r = system(lineBuf);			/* Pre-compile C file */
 	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);
-	exit(0);
+//	exit(0);
 
 	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
 	    error("readTypesFromCache: cannot open:", T5FN);
@@ -687,6 +651,7 @@ readTypesFromCache(char* includeName)
 	    return T5index;
 	}
 	if (debug & 02) fprintf(outFP, "####### compile include file %s via %s %s\n", includeName, T4FN, T5FN);
+	saveFP = yyin;
 	yyin = T5FP;				/* lexc reads from include now */
 	return 0;				/* T5FP acts as flag */
     } else if (sp->type != CINC) {
@@ -744,11 +709,12 @@ readTypesFromCache(char* includeName)
     return 0;
 } /* readTypesFromCache */
 
-void
+FILE *
 restoreCblocksStream(void)
 {
     fclose(T5FP);
+    T5FP = NULL;
     if (!(debug & 04000)) unlink(T5FN);
     if (debug & 02) fprintf(outFP, "####### close and unlink %s\n", T5FN);
-    yyin = T2FP;
+    return (yyin = saveFP);			/* restore FILE* in get() after EOF */
 }
