@@ -166,7 +166,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.20 2002/06/12 20:14:41 jw Exp $
+$Id: iClive,v 1.21 2002/06/14 19:59:59 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -321,10 +321,10 @@ $search->bind('<Shift-KeyPress-Return>', [ \&search, -1 ]);	# scroll up
 #	Info bar
 ########################################################################
 my $infoBar = $mainWindow->Label(-textvariable => \$info,
-		   -relief => 'ridge',
-		  )->pack(-side => 'bottom',
-		  	  -fill => 'x',
-		         );
+				 -relief       => 'ridge',
+				)->pack(-side => 'bottom',
+					-fill => 'x',
+				       );
 
 ########################################################################
 #	Text window
@@ -758,7 +758,7 @@ sub scan {
 	    $info = "WARNING: '$filename' does not match connected control program '$iCname'"; 
 	}
 
-	$search_pattern = '[~\s]*[A-Z_a-z][\w]*(\.\w+)?\s*((~ )?---|=$)?';
+	$search_pattern = '[~\s]*[\w]+(\.\w+)?\s*((~ )?---|=$)?';
 	$current = '1.0'; my $length = '0';
 	while (1) {
 	    $current = $text->search('-count' => \$length,
@@ -801,13 +801,9 @@ sub scan {
 			}
 			$text->insert("$current lineend", " 0", $tag);
 		    }
-		} else {
-		    $infoBar->configure(-foreground => 'CadetBlue');
-		    $index = '<undef>' if not defined $index;
-		    $info = "SYSTEM WARNING: symbolTable{$2}  index = $index ftype = $ftype";
-		    warn "$info\n";
-
 		}
+		# ELSE - there may be spurious words in symbolTable with undefined data
+		#        as explained in "Programming Perl 3rd ed. page 254" - IGNORE
 	    }
 	    $current = $text->index("$current + $length char");
 	}
@@ -946,9 +942,14 @@ sub check_save {
 	$search_text = $filename;
 	my $dialog = $text->Dialog (-title   => 'Modified file',
 				    -bitmap  => 'question',
-				    -text    => 'Save previous modified file?',
+				    -text    => 'Save modified file?',
 				    -buttons => [qw(Yes No Cancel)],
 				   );
+	my $dialogBar = $dialog->Label(-textvariable => \$filename,
+				       -relief       => 'ridge',
+				      )->pack(-side => 'bottom',
+					      -fill => 'x',
+					     );
 	my $answer = $dialog->Show();
 	if ($answer eq 'Cancel') {
 	    $ret = 0;			# cancel operation
@@ -991,7 +992,7 @@ sub load_file {
 	if ($unconditional or check_save()) {
 	    my $oldname = $filename;
 	    # handle Unix / and Windows \ directory path seperators
-	    if ($search_text =~ /^[\w\\\/]+(\.\w+)?/) {
+	    if ($search_text =~ /^[\w\.\\\/]+(\.\w+)?/) {
 		$filename = $search_text;
 	    } elsif ($errorname) {
 		$filename = $errorname;
@@ -1102,14 +1103,14 @@ sub saveAs_file {
 
 sub make_file {
     my $cFlag = $_[1];		# make C file if true
-    if ($filename =~ /(^[\w\\\/]+)\.lst6?/) {
+    if ($filename =~ /(^[\w\.\\\/]+)\.lst6?/) {
 	$search_text = "$1.ic";	# listing should never be modified
 	load_file(1);		# load the corresponding iC source unconditionally
     } else {
 	deleteAllTags();	# also clears @activeSymbols
 	clearScan();
     }
-    if ($filename !~ /(^[\w\\\/]+)\.ic/) {
+    if ($filename !~ /(^[\w\.\\\/]+)\.ic/) {
 	$infoBar->configure(-foreground => 'blue');
 	$info = "WARNING: cannot make '$filename' (must end in .ic)"; 
     } elsif (check_save()) {	# make sure check_save() has no regex matches
@@ -1162,7 +1163,7 @@ sub run_file {
     } elsif ($conn and $iCname) {
 	$infoBar->configure(-foreground => 'red');
 	$info = "$unitID is connected to '$iCname' (Stop it to run '$filename')";
-    } elsif ($filename !~ /(^[\w\\\/]+)\.ic/) {
+    } elsif ($filename !~ /(^[\w\.\\\/]+)\.ic/) {
 	$infoBar->configure(-foreground => 'blue');
 	$info = "WARNING: cannot run '$filename' (must end in .ic)"; 
     } elsif (check_save()) {
