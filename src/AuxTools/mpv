@@ -2,17 +2,19 @@
 
 ########################################################################
 #
-#	make versions of icc ict and libict.a in Test0
+#	make versions of icc ict and libict.a in Test2
 #
 ########################################################################
 
 usage ()
 {
-    echo 'make versions of icc ict and libict.a in Test0' >&2
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
     echo '	-d	diff icc.v in versions' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mpv,v 1.3 2002/06/06 08:58:04 jw Exp $' >&2
+    echo 'make versions of icc ict and libict.a in Test2' >&2
+    echo 'from project sources of older versions in icc.v_<ver>' >&2
+    echo 'if directory icc.v_<ver> does not exist, cov makes it' >&2
+    echo '	$Id: mpv,v 1.4 2003/10/12 19:48:04 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -35,7 +37,7 @@ done
 if [[ $# != 0 ]]; then
     versions=$*
 else
-    versions=$(echo Test0/Alex??)
+    versions=$(echo Test2/Alex??)
 fi
 
 if [[ -n "$d" ]]; then
@@ -55,17 +57,24 @@ for w in $versions; do
 	echo "### $v ###"
 	if [[ ! -d icc.v_1.$v ]]; then
 	    cov -r1.$v icc.v
-	    cp cexe.c cexe.c_empty y.tab.h icc.v_1.$v
 	fi
 	cd icc.v_1.$v
+	rm -rf *.o comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a
+	rm -f Makefile config.status config.log config.cache
 	if [[ ! -e makeAll ]]; then ln -s ../makeAll .; fi
-	if [[ ! -e makeIct ]]; then ln -s ../makeIct .; fi
-	if [[ ! -e makeLib ]]; then ln -s ../makeLib .; fi
-	makeAll
-	cp icc ../Test0/icc$v
-	cp ict ../Test0/ict$v
-	cp libict.a ../Test0/libict$v.a
-	mkv icc ict libict.a > ../Test0/icc$v.v
+	if [[ -e configure ]]; then configure; fi
+	if [[ $v -lt 92 ]]; then
+	    makeAll
+	else
+	    makeAll -gctl
+	fi
+	cp icc ../Test2/icc$v
+	cp ict ../Test2/ict$v
+	cp libict.a ../Test2/libict$v.a
+	if [[ -f pplstfix ]]; then
+	    cp -f pplstfix ../Test2/pplstfix$v
+	fi
+	mkv $(archived) > ../Test2/icc$v.v
 	cd ..
     fi
 done
