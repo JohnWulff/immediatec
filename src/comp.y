@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.26 2000/12/07 18:31:14 jw Exp $";
+"@(#)$Id: comp.y,v 1.27 2000/12/17 19:53:26 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -594,7 +594,9 @@ cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
 
 ctref	: cexpr			{ $$.v = $1.v; }	/* other clock */
 	| texpr ','		{ $$.v = $1.v; dflag = 1; }	/* timer clock */
-	  dexpr			{ $$.v->le_val = $4.v->le_sym->u.val; } /* time value */
+	  dexpr			{
+		$$.v->le_val = $4.v->le_sym->u.val;	/* time value */
+	    }
 	;			/* TODO link instead - works for const NUMBER only */
 
 dexpr	: NVAR			{
@@ -604,7 +606,10 @@ dexpr	: NVAR			{
 		}
 		$$.v = sy_push(sp);
 	    }
-	| aexpr			{ $$.v = $1.v; }	/* TODO time value not correct */
+	| aexpr			{
+		$$ = $1;
+		$$.v = op_push((List_e*)0, ARN, $1.v);
+	    }
 	;
 
 fexpr	: BLTIN1 '(' aexpr cref ')' {
@@ -994,7 +999,7 @@ yylex(void)
 		    if (symp->type == NCONST && symp->ftype == ARITH) {
 			c = NVAR;			/* numeric symbol */
 		    } else {
-			c = NUMBER;			/* unlikely */
+			c = NUMBER;			/* used in arith expression */
 		    }
 		} else {
 		    c = NUMBER;
@@ -1182,6 +1187,7 @@ yylex(void)
 	    }
 	    yylval.val.l = stmtp = strcpy(stmtp, yytext) + strlen(yytext);
 	}
+	dflag = 0;
 	return c;			/* return token to yacc */
     }
     return (0);		/* EOF */
