@@ -69,7 +69,6 @@ my @colourSelect  = (0,2,0,2,2,2,0,0,0,0,0,0,0,2,0,4,6,2,0,1);	# cs[ftype]
 my $info = '';
 my $filename = '';
 my $iCname = '';
-my $dy = 50;	# turn-off delay for CLOCK and TIMER - depends on file length
 
 ########################################################################
 #
@@ -92,7 +91,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.11 2001/04/05 16:44:37 jw Exp $
+$Id: iClive,v 1.12 2001/04/07 10:35:07 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -240,63 +239,8 @@ my $text = $mainWindow->Scrolled('Text',
 #	Balloon widget
 ########################################################################
 my $balloon = $mainWindow->Balloon(-statusbar => $infoBar);
-
-my $bMsg = '';
-my $sMsg = '';
-my @wIdx = ('', '');  # Indices surrounding the current word.
-my @lIdx = ('', '');  # Same for last word.
-
-$balloon->attach($text,
-   -balloonmsg      => \$bMsg,
-   -statusmsg       => \$sMsg,
-   -balloonposition => 'mouse', # Not really used since postcommand returns real position
-   -postcommand  => sub {   if ($wIdx[0] eq $wIdx[1]) {
-				# No word under mouse - dont post the balloon
-				return 0;
-			    } else {
-				my ($ftype, $index, $val);
-				# Have a word under mouse - change the message:
-				my $word = $text->get($wIdx[0], $wIdx[1]);
-				# Skip if it contains non-word chars
-				# or is not in Symbol Table
-				return 0 if $word =~ /\W/;
-				while (not defined ($index = $symbolTable{$word}[1])) {
-				    # Try if I/O like IX0.0 QX10.7 or TX0.0_14
-				    return 0 if $word !~ /^[IQT]X\d+$/;
-				    $word = $text->get($wIdx[0], "$wIdx[1] lineend");
-				    $word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
-				}
-				$ftype = $symbolTable{$word}[0];
-				$val = $activeSymbols[$index][2];
-				$val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
-				$bMsg = "$val";
-				$sMsg = "$word: $val";
-				$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
-				# Find a good place to put the balloon
-				# right below the last char in the word
-				my $i = $text->index("$wIdx[1] - 1 chars");
-				my @p = $text->bbox($i);
-				my $x = $text->rootx + $p[0] + $p[2] - 4;
-				my $y = $text->rooty + $p[1] + $p[3] + 2;
-				return "$x,$y";
-			    }
-			},
-   -motioncommand => sub {  my $x = $text->pointerx - $text->rootx;
-			    my $y = $text->pointery - $text->rooty;
-			    @wIdx = ($text->index("\@$x,$y wordstart"),
-				$text->index("\@$x,$y wordend"));
-			    if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
-				# Same word - dont cancel the balloon.
-				return 0;
-			    } else {
-				# New word under mouse
-				# cancel it so a new balloon will be posted.
-				$text->SelectionClear;
-				@lIdx = @wIdx;
-				return 1;
-			    }
-			},
-		);
+my $balloonAttached = 0;
+$mainWindow->OnDestroy(sub { $balloon->destroy; });
 
 ########################################################################
 #	Open the first file in the argument list
@@ -358,8 +302,13 @@ sub rcvd_msg_from_server {
 		"$unitID disconnected from '$iCname' by server" :
 		"$unitID not connected to a control program";
 	    deleteAllTags();	# also clears @activeSymbols
+	    %symbolTable = ();	# clear symbol table so balloons dont show
 	    undef $iCname;
 	    undef $conn;
+	    if ($balloonAttached) {
+		$balloon->detach($text);
+		$balloonAttached = 0;
+	    }
 	} else {
 	    print "$msg\n" if $opt_t;
 	    my @symbols = split /;/, $msg;	# break up message
@@ -406,7 +355,7 @@ sub rcvd_msg_from_server {
 						'-background' => $tagBackground[$cs], 
 						'-foreground' => $tagForeground[$cs]);
 			    if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
-				$text->after($dy, sub {	# turn off after 50 ms.
+				$text->after(50, sub {	# turn off after 50 ms.
 					my $cs = $cs & ~01;	# restore 0 colour
 					$text->tagConfigure("$index", 
 						'-background' => $tagBackground[$cs], 
@@ -568,7 +517,16 @@ sub deleteAllTags {
 #	the iC control program. Further updates occur, every time the
 #	state of an active symbol changes.
 #
+#	Attach the balloon processing while display is live.
+#	Balloon processing is detached for newly loaded file to allow
+#	clean editing.
+#
 ########################################################################
+
+my $bMsg = '';
+my $sMsg = '';
+my @wIdx = ('', '');  # Indices surrounding the current word.
+my @lIdx = ('', '');  # Same for last word.
 
 sub scan {
     my ($search_pattern, $current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index);
@@ -617,7 +575,7 @@ sub scan {
 		    }
 		    $text->tagAdd($tag, $current, "$current + $length char");
 		} else {
-		    $infoBar->configure(-foreground => 'green');
+		    $infoBar->configure(-foreground => 'CadetBlue');
 		    $info = "SYSTEM WARNING: \$symbolTable{$2} $symbolTable{$2}[ '$index' , '$ftype' ]";
 		}
 	    }
@@ -644,6 +602,65 @@ sub scan {
 	    }
 	}
 	$conn->send_now("$unitID.4$msg");		# send last active symbols
+
+	unless ($balloonAttached) {
+	    $balloon->attach($text,
+	       -balloonmsg      => \$bMsg,
+	       -statusmsg       => \$sMsg,
+	       -balloonposition => 'mouse', # not used since postcommand returns real position
+	       -postcommand  => sub
+		    {
+			if ($wIdx[0] eq $wIdx[1]) {
+			    # No word under mouse - dont post the balloon
+			    return 0;
+			} else {
+			    my ($ftype, $index, $val);
+			    # Have a word under mouse - change the message:
+			    my $word = $text->get($wIdx[0], $wIdx[1]);
+			    # Skip if it contains non-word chars
+			    # or is not in Symbol Table
+			    return 0 if $word =~ /\W/;
+			    while (not defined ($index = $symbolTable{$word}[1])) {
+				# Try if I/O like IX0.0 QX10.7 or TX0.0_14
+				return 0 if $word !~ /^[IQT]X\d+$/;
+				$word = $text->get($wIdx[0], "$wIdx[1] lineend");
+				$word =~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/;
+			    }
+			    $ftype = $symbolTable{$word}[0];
+			    $val = $activeSymbols[$index][2];
+			    $val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
+			    $bMsg = "$val";
+			    $sMsg = "$word: $val";
+			    $text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
+			    # Find a good place to put the balloon
+			    # right below the last char in the word
+			    my $i = $text->index("$wIdx[1] - 1 chars");
+			    my @p = $text->bbox($i);
+			    my $x = $text->rootx + $p[0] + $p[2] - 4;
+			    my $y = $text->rooty + $p[1] + $p[3] + 2;
+			    return "$x,$y";
+			}
+		    },
+	       -motioncommand => sub
+		    {
+			my $x = $text->pointerx - $text->rootx;
+			my $y = $text->pointery - $text->rooty;
+			@wIdx = ($text->index("\@$x,$y wordstart"),
+			    $text->index("\@$x,$y wordend"));
+			if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
+			    # Same word - dont cancel the balloon.
+			    return 0;
+			} else {
+			    # New word under mouse
+			    # cancel it so a new balloon will be posted.
+			    $text->SelectionClear;
+			    @lIdx = @wIdx;
+			    return 1;
+			}
+		    },
+	    );
+	    $balloonAttached = 1;
+	}
     } else {
 	$info = "";
 	connect_to_server();	# will call scan() if connect was successful
@@ -653,12 +670,20 @@ sub scan {
 ########################################################################
 #
 #	new_text clears the text area
+#	detach ballloon to allow editing
+#	clear active symbols for faster processing of connected controller
 #
 ########################################################################
 
 sub new_text {
-  $text->delete("1.0", "end");
-  $info = "";
+    deleteAllTags();	# also clears @activeSymbols
+    if ($balloonAttached) {
+	$balloon->detach($text);
+	$balloonAttached = 0;
+    }
+    $text->delete("1.0", "end");
+    $info = "";
+    $conn->send_now("$unitID.4") if $conn;	# clear active symbols
 }
 
 ########################################################################
@@ -672,12 +697,12 @@ sub load_file {
     if ($newname) {
 	$filename = $newname;
     }
-    $text->delete("1.0", "end");
     if (!open(FH, "$filename")) {
 	$infoBar->configure(-foreground => 'red');
 	$info = "ERROR: Could not open $filename"; 
 	return; 
     }
+    new_text();				# clear the text area
     my $length = 0;
     while (<FH>) {
 	$length += length $_;
@@ -693,7 +718,6 @@ sub load_file {
     } else {
 	$infoBar->configure(-foreground => 'black');
 	$info = "File '$filename', '$length' bytes loaded";
-	$dy = 50 + $length / 50;	# heuristic to flash CLOCK and TIMER gates
     }
     $prev_pattern = '';			# start a new search
 }
