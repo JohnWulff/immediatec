@@ -91,7 +91,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: ICServer,v 1.21 2001/03/24 21:01:48 jw Exp $
+$Id: ICServer,v 1.22 2001/04/01 08:23:14 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
@@ -206,6 +206,11 @@ sub rcvd_msg_from_client {
 		$conn->disconnect();
 		if ($unitID =~ /^C/) {
 		    $connICC = undef;
+		    if ($Connections{'L0'}) {
+			delete $UnitIDs{$Connections{'L0'}};
+			$Connections{'L0'}->disconnect();	# stop live display
+			delete $Connections{'L0'};
+		    }
 		} elsif (defined $connICC) {
 		    # pass clear input message to ICC
 		    print "I$unitID 0 to C0\n" if $opt_t;
@@ -272,15 +277,20 @@ sub rcvd_msg_from_client {
 			    }
 			}
 		    }
-		    $UnitIDs{$conn}{$msg1} = $msg1;
-		    $Connections{$msg1} = $conn;
-		    print "Registered $msg1 at server\n";
-		    if ($connICC and $msg1 =~ /^[BWX]/) {	# saved bit or analog value from ICC
-			$value = $Values{$msg1};
-			if ($value) {
-			    print "ICS $value to Q$msg1\n" if $opt_t;
-			    $Connections{$msg1}->send_now("$msg1.$value");
+		    if ($connICC or $msg1 !~ /^L/) {
+			$UnitIDs{$conn}{$msg1} = $msg1;
+			$Connections{$msg1} = $conn;
+			print "Registered $msg1 at server\n";
+			if ($connICC and $msg1 =~ /^[BWX]/) {
+			    $value = $Values{$msg1};	# saved bit or analog value from ICC
+			    if ($value) {
+				print "ICS $value to Q$msg1\n" if $opt_t;
+				$Connections{$msg1}->send_now("$msg1.$value");
+			    }
 			}
+		    } else {
+			$conn->disconnect();	# live display must have a controller
+			warn "Trying to attach $msg1 when no controller - disconnected\n";
 		    }
 		}
 	    }

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.21 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: rsff.c,v 1.22 2001/04/01 08:23:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -26,7 +26,6 @@ char *		full_type[]  = { FULL_TYPE };
 char *		full_ftype[] = { FULL_FTYPE };
 unsigned char	types[]      = { TYPES };
 unsigned char	ftypes[]     = { FTYPES };
-unsigned char	atypes[]     = { ATYPES };
 char		os[]         = OPS;
 char		fos[]        = FOPS;
 
