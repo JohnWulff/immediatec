@@ -1,15 +1,15 @@
-@(#)$Id: icc.v,v 1.73 2002/06/27 22:00:00 jw Exp $
+@(#)$Id: icc.v,v 1.74 2002/06/28 22:00:00 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 Makefile.in     1.21    2002/06/06  12:17:51  jw      Exp
 Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
 README          1.8     2002/06/05  19:46:14  jw      Exp
 cexe.h          1.13    2002/06/27  18:57:37  jw      Exp
-comp.h          1.22    2002/06/27  15:51:54  jw      Exp
-comp.y          1.57    2002/06/27  19:53:33  jw      Exp
+comp.h          1.23    2002/06/29  20:12:10  jw      Exp
+comp.y          1.58    2002/06/29  20:17:36  jw      Exp
 configure       1.1     2001/03/07  11:10:52  jw      Exp
 configure.in    1.1     2001/03/07  11:10:52  jw      Exp
-genr.c          1.46    2002/06/28  18:22:38  jw      Exp
+genr.c          1.47    2002/06/29  21:51:14  jw      Exp
 iCbox           1.35    2002/06/03  13:14:26  jw      Exp
 iClive          1.23    2002/06/19  20:44:13  jw      Exp
 iCmake          1.20    2002/06/13  08:39:24  jw      Exp

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.46 2002/06/28 18:22:38 jw Exp $";
+"@(#)$Id: genr.c,v 1.47 2002/06/29 21:51:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -176,14 +176,14 @@ op_push(			/* reduce List_e stack to links */
 #endif
 	sp->type = op != UDF ? op : AND; /* operator OR or AND (default) */
 	sp->ftype = rlp->le_sym->ftype;	 /* used in op_xor() with op UDF */
-	sp->next = templist;	/* put at front of list */
+	sp->next = templist;	/* put at front of templist */
 	templist = sp;
-	rlp->le_next = sp->u.blist;
+	rlp->le_next = 0;	/* sp->u.blist is 0 for new sp */
 	sp->u.blist = rlp;	/* link right of expression */
 	rlp = sy_push(sp);	/* push new list element on stack */
     }
     if (left) {
-	lsp = left->le_sym;
+	lsp = left->le_sym;	/* test works correctly with ftype - handles ALIAS */
 	if (lsp->ftype >= MIN_ACT && lsp->ftype < MAX_ACT) {
 	    if (sp->ftype < S_FF) {
 		sp->ftype = 0;	/* OK for any value of GATE */
@@ -194,6 +194,7 @@ op_push(			/* reduce List_e stack to links */
 	    if ((lp = lsp->u.blist) == 0 ||	/* left not a $ symbol */
 		sp == lsp ||			/* or right == left */
 		typ != op &&			/* or new operator */
+			/* ZZZ watch this when typ is ALIAS or UDF */
 		typ != TIM ||			/* but left is not a timer */
 		typ == op &&			/* or old operator */
 		right->le_val == (unsigned) -1)	/* and right is a delay for timer */
@@ -902,7 +903,13 @@ bTyp(List_e * lp)
  *******************************************************************/
 
 List_e *
-bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
+bltin(
+    Sym* fname,					/* function name and ftype */
+    Lis* ae1, Lis* cr1,				/* expression */
+    Lis* ae2, Lis* cr2,				/* set */
+    Lis* ae3, Lis* cr3,				/* reset */
+    Lis* crm,					/* mono-flop clock */
+    Val* pVal)					/* cblock# or off-delay */
 {
     List_e *	lp1;
     List_e *	lp2;
@@ -910,19 +917,20 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
     List_e *	lpc;
 
     if (ae1 == 0 || ae1->v == 0) {
-	warning("first paramater missing. builtin: ", sym->v->name);
+	warning("first paramater missing. builtin: ", fname->v->name);
 	return 0;				/* YYERROR in fexpr */
     }
 
-    if (ae2) {
+    if (ae1) {
+	/* lpc is either own clock cr1->v or a clock cloned from cr3->v */
 	lp1 = 0;
-	lpc = cr2 ? cr2->v			/* individul clock or timer cr2 */
-		  : cr1 ? sy_push((lp1 = cr1->v->le_sym->u.blist) ? lp1->le_sym
-								  : cr1->v->le_sym)
-						/* or clone first clock or timer cr1 */
+	lpc = cr1 ? cr1->v			/* individul clock or timer cr1 */
+		  : cr3 ? sy_push((lp1 = cr3->v->le_sym->u.blist) ? lp1->le_sym
+								  : cr3->v->le_sym)
+						/* or clone last clock or timer cr3 */
 			: sy_push(iclock);	/* or clone default clock iClock */
-	if (lp1 && (lp1->le_sym->type & TM) == TIM) {
-	    lp1 = lp1->le_next;
+	if (lp1 && lp1->le_sym->ftype == TIMRL) {
+	    lp1 = lp1->le_next;			/* type TIM, TIM|32, UDF or ALIAS */
 	    assert(lp1);			/* clone associated timer value */
 	    assert(lp1->le_val == (unsigned) -1);
 	    lpc = op_push(lpc, TIM, sy_push(lp1->le_sym));
@@ -938,22 +946,21 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
     if (ae1->v->le_sym->type == LOGC) {		/* DLATCH(set,reset) */
 	lp1 = op_push(sy_push(ae1->v->le_sym), LOGC, ae1->v);
 	lp1->le_sym->type = LATCH;
-	lp1 = op_push(sy_push(sym->v), LATCH, lp1);
+	lp1 = op_push(sy_push(fname->v), LATCH, lp1);
 	/* DLATCH output is transferred as feed back in op_asgn */
     } else {
-	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
+	lp1 = op_push(sy_push(fname->v), bTyp(ae1->v), ae1->v);
     }
     lp1->le_first = ae1->f; lp1->le_last = ae1->l;
-    lp1 = op_push(cr1 ? cr1->v : sy_push(iclock), lp1->le_sym->type & TM, lp1);
+    lp1 = op_push(lpc, lp1->le_sym->type & TM, lp1);
     lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
 
     if (ae2) {
 	if (ae2->v == 0) {
-	    warning("second paramater missing. builtin: ", sym->v->name);
+	    warning("second paramater missing. builtin: ", fname->v->name);
 	    return 0;				/* YYERROR in fexpr */
 	}
-
-	lp2 = op_push(sy_push(sym->v), bTyp(ae2->v), ae2->v);
+	lp2 = op_push(sy_push(fname->v), bTyp(ae2->v), ae2->v);
 	lp2->le_first = ae2->f; lp2->le_last = ae2->l;
 	if (lp2->le_sym->ftype == S_FF ||
 	    lp2->le_sym->ftype == D_FF) {
@@ -967,23 +974,42 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
     }
 
-    if (cr3) {
-	/* extra Master is timed reset fed back from own output */
-	lp1 = sy_push(ae1->v->le_sym);	/* use dummy ae1 fill link */
-
-	lp2 = op_push(sy_push(sym->v), UDF, lp1);
-	if (lp2->le_sym->ftype == S_FF) {
-	    lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
+    if (ae3) {
+	if (ae3->v == 0) {
+	    warning("third paramater missing. builtin: ", fname->v->name);
+	    return 0;				/* YYERROR in fexpr */
 	}
-	lp2 = op_push(cr3->v, lp2->le_sym->type & TM, lp2);
+	lp2 = op_push(sy_push(fname->v), bTyp(ae3->v), ae3->v);
+	lp2->le_first = ae3->f; lp2->le_last = ae3->l;
+	if (lp2->le_sym->ftype == S_FF ||
+	    lp2->le_sym->ftype == D_FF) {
+	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR, DSR, DR */
+	} else if (lp2->le_sym->ftype == S_SH ||
+	    lp2->le_sym->ftype == D_SH) {
+	    lp2->le_sym->ftype = R_SH;		/* next ftype for SHSR, SHR */
+	}
+	lp2 = op_push(cr3 ? cr3->v : sy_push(iclock), lp2->le_sym->type & TM, lp2);
+	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
+	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+    }
+
+    if (crm) {
+	/* extra Master is timed reset fed back from own output */
+	lp1 = sy_push(ae1->v->le_sym);		/* use dummy ae1 fill link */
+
+	lp2 = op_push(sy_push(fname->v), UDF, lp1);
+	if (lp2->le_sym->ftype == S_FF) {
+	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
+	}
+	lp2 = op_push(crm->v, lp2->le_sym->type & TM, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
 
 	lp1->le_sym = lp3->le_sym;		/* fix link from own */
     }
     if (pVal) {
-	/* cblock for ffexpr or preset off delay for timer */
-	lp1->le_val = pVal->v;		/* unsigned int value for case # */
+	/* cblock number for ffexpr or preset off delay for timer */
+	lp1->le_val = pVal->v;			/* unsigned int value for case # */
     }
     return lp3;
 } /* bltin */
