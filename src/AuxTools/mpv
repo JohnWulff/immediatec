@@ -2,16 +2,17 @@
 
 ########################################################################
 #
-#	make versions of icc ict and libict.a
+#	make versions of icc ict and libict.a in Test0
 #
 ########################################################################
 
 usage ()
 {
+    echo 'make versions of icc ict and libict.a in Test0' >&2
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
     echo '	-d	diff icc.v in versions' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mpv,v 1.2 2002/06/06 08:30:19 jw Exp $' >&2
+    echo '	$Id: mpv,v 1.3 2002/06/06 08:58:04 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -34,7 +35,7 @@ done
 if [[ $# != 0 ]]; then
     versions=$*
 else
-    versions=$(echo Test/Alex??)
+    versions=$(echo Test0/Alex??)
 fi
 
 if [[ -n "$d" ]]; then
@@ -61,10 +62,10 @@ for w in $versions; do
 	if [[ ! -e makeIct ]]; then ln -s ../makeIct .; fi
 	if [[ ! -e makeLib ]]; then ln -s ../makeLib .; fi
 	makeAll
-	cp icc ../Test/icc$v
-	cp ict ../Test/ict$v
-	cp libict.a ../Test/libict$v.a
-	mkv icc ict libict.a > ../Test/icc$v.v
+	cp icc ../Test0/icc$v
+	cp ict ../Test0/ict$v
+	cp libict.a ../Test0/libict$v.a
+	mkv icc ict libict.a > ../Test0/icc$v.v
 	cd ..
     fi
 done
