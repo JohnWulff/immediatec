@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.29 2001/04/01 08:23:14 jw Exp $";
+"@(#)$Id: icc.h,v 1.30 2001/04/14 13:32:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -74,9 +74,10 @@ extern void	efree(void *);
 #define	TIM	17
 
 #define	ALIAS	18	/* non executable functions */
-#define	ERR	19
+#define	ERR	19	/* mark node which had error during generation */
+#define EXT	20	/* mark node declared as extern - stop assignment */
 
-#define KEYW	20	/* hold yacc token, used for compilation only */
+#define KEYW	21	/* hold yacc token, used for compilation only */
 
 #define MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
@@ -128,22 +129,20 @@ extern void	efree(void *);
 /* list of types */
 #define FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
-	"CLK","TIM","ALIAS","ERR","KEYW"
+	"CLK","TIM","ALIAS","ERR","EXT","KEYW"
 
-#define OPS	".-+~&|%*#^/({=[<:!@?;"	/* DEBUG display of types */
-
-/* arithmetic types */
-#define ATYPES	0,1,1,0,0,0,0,1,0,0,0,1,0,1,1,0,0,0,0,0,0
+#define OPS	".-+~&|%*#^/({=[<:!@?_;"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
 #define FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
 	D_SH, D_FF, CH_BIT, RI_BIT, F_SW, F_CF, ARITH, ARITH, GATE,\
-	CLCK, TIMR, GATE, GATE, 0
+	CLCK, TIMR, GATE, GATE, 0, 0
 
 /* compiler tokens corresponding to type */
 #define DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, NVAR,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
+	YYERRCODE,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\

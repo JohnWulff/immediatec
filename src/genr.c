@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.38 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: genr.c,v 1.39 2001/04/14 13:32:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -502,8 +502,8 @@ op_asgn(				/* asign List_e stack to links */
 	rsp->next = templist;	/* link head to rsp */
 	templist = rsp;		/* now rsp is head of templist */
     }
-    if ((rsp->type == CLK || rsp->type == TIM) && var->list) {
-	warning("clock or timer has been used as variable:", var->name);
+    if ((rsp->type == CLK || rsp->type == TIM) && var->ftype != rsp->ftype) {
+	warning("clock or timer assignment from wrong ftype:", var->name);
     }
 
     sr = rsp->u.blist->le_sym;		/* gate linked to var */
@@ -663,7 +663,7 @@ op_asgn(				/* asign List_e stack to links */
 		    fprintf(outFP, " (%d)", lp->le_val);
 		}
 	    }
-	    if (gp->ftype == ARITH && sp->type == ARN &&
+	    if (gp->ftype == ARITH && sp->type == ARN && lp->le_val != (unsigned) -1 &&
 		(gp->u.blist || gp->type == NCONST)) {
 		char	buffer[BUFS];	/* buffer for modified names */
 		char	iqt[2];		/* char buffers - space for 0 terminator */
@@ -911,7 +911,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 		  : cr1 ? sy_push((lp1 = cr1->v->le_sym->u.blist) ? lp1->le_sym
 								  : cr1->v->le_sym)
 						/* or clone first clock or timer cr1 */
-			: sy_push(clk);		/* or clone default clock iClock */
+			: sy_push(iclock);	/* or clone default clock iClock */
 	if (lp1 && lp1->le_sym->type == TIM) {
 	    lp1 = lp1->le_next;
 	    assert(lp1);			/* clone associated timer value */
@@ -934,7 +934,7 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
     }
     lp1->le_first = ae1->f; lp1->le_last = ae1->l;
-    lp1 = op_push(cr1 ? cr1->v : sy_push(clk), lp1->le_sym->type, lp1);
+    lp1 = op_push(cr1 ? cr1->v : sy_push(iclock), lp1->le_sym->type, lp1);
     lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
 
     if (ae2) {

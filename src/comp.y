@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.49 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: comp.y,v 1.50 2001/04/14 13:32:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -129,7 +129,7 @@ pu(int t, char * token, Lis * node)
 
 program	: /* nothing */		{ $$.v = 0;  stmtp = yybuf; }
 	| program statement	{ $$   = $2; stmtp = yybuf; }
-	| program error ';'	{ $$.v = 0;  stmtp = yybuf; clk->type = ERR; yyerrok; }
+	| program error ';'	{ $$.v = 0;  stmtp = yybuf; iclock->type = ERR; yyerrok; }
 	;
 
 statement:
@@ -150,7 +150,15 @@ simplestatement:
 
 	/************************************************************
 	 *
-	 * Immediate type declaration - may be combined wit dasgn
+	 * Immediate type declaration - may be combined with dasgn
+	 *
+	 *	imm bit   b1;		imm int   a1;
+	 *	imm clock c1;		imm timer t1;
+	 *
+	 * Extern type declerations - no assignment in the same source
+	 *
+	 *	extern imm bit   b1;	extern imm int   a1;
+	 *	extern imm clock c1;	extern imm timer t1;
 	 *
 	 ***********************************************************/
 
@@ -578,7 +586,7 @@ cBlock	: '{'			{ ccfrag = '{'; }	/* ccfrag must be set */
 	 *
 	 ***********************************************************/
 
-cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
+cref	: /* nothing */		{ $$.v = sy_push(iclock); }
 	| ',' ctref		{ $$ = $2; }		/* clock or timer */
 	;
 
@@ -673,7 +681,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctref ')'	{
 		Lis	lis1;
 		$$.f = $1.f; $$.l = $10.l;
-		lis1.v = sy_push(clk);			/* iClock to avoid shift reduce conflict */
+		lis1.v = sy_push(iclock);		/* to avoid shift reduce conflict */
 		$$.v = bltin(&$1, &$3, &$5, &$7, &lis1, &$9, 0); /* monoflop with reset */
 		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 	    }						/* reset clocked by iClock */
@@ -727,8 +735,12 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	 ***********************************************************/
 
 casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
-	| CVAR '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL);
-		  warning("multiple assignment clock:", $1.v->name); }
+	| CVAR '=' cexpr	{
+		if ($1.v->type != UDF) {
+		    error("multiple assignment clock:", $1.v->name);
+		}
+		$$.v = op_asgn(&$1, &$3, CLCKL);
+	    }
 	;
 
 cexpr	: CVAR			{ $$.v = sy_push($1.v); }
@@ -762,8 +774,12 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 	 ***********************************************************/
 
 tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
-	| TVAR '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL);
-		  warning("multiple assignment timer:", $1.v->name); }
+	| TVAR '=' texpr	{
+		if ($1.v->type != UDF) {
+		    error("multiple assignment timer:", $1.v->name);
+		}
+		$$.v = op_asgn(&$1, &$3, TIMRL);
+	    }
 	;
 
 texpr	: TVAR			{ $$.v = sy_push($1.v); }
@@ -783,7 +799,7 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 	 *
 	 * Timers (TIMER or T) have a preset off delay of 0.
 	 * Such timers will clock with iClock on the falling edge of
-	 * the master gate. They wil clock with iClock on the rising
+	 * the master gate. They will clock with iClock on the rising
 	 * edge if the on delay is 0.
 	 *
 	 ***********************************************************/
@@ -1278,6 +1294,7 @@ error(					/* print error message */
     char *	str1,
     char *	str2)
 {
+    iclock->type = ERR;			/* prevent execution */
     errmess("Error", str1, str2);
 } /* error */
 
