@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.1 1996/07/30 16:18:20 john Exp $
+# @(#)$Id: Makefile,v 1.2 1996/07/30 20:28:43 john Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -23,13 +23,14 @@ TOBJ =	pplt.o link.o rsff.o scan.o scid.o
 #### Standalone versions ################################### !!! do last !!!
 
 pplc:	Makefile $(POBJ) $(COBJ) main.o
-	cc $(LFLAG) -o $* $(POBJ) $(COBJ) main.o
+	cc $(LFLAG) -o pplc $(POBJ) $(COBJ) main.o
 
 pplt:	Makefile $(TOBJ) $(COBJ) main.o
 	cc $(LFLAG) -o $* $(TOBJ) $(COBJ) main.o
 
 #### Compile objects #######################################
 CFLAG = -g
+LFLAG = -g
 
 .yac.o:
 	mv $*.yac $*.c
@@ -41,14 +42,17 @@ CFLAG = -g
 
 .y.yac:
 	chmod +w y.tab.h
-	cp -m y.tab.h y.tab.t
+	cp -p y.tab.h y.tab.t
 	yacc -d -v $*.y
-	awk -f c:/usr/lib/yt.awk y.tab.h > y.token
-	sed -f c:/usr/lib/yg.sed y.output > y.tab.s
-	awk -f c:/usr/lib/yg.awk y.tab.s > y.tab.a
+	awk -f ~/lib/yt.awk y.tab.h > y.token
+	sed -f ~/lib/yg.sed y.output > y.tab.s
+	awk -f ~/lib/yg.awk y.tab.s > y.tab.a
 	sort +0.2n y.tab.a > y.tab.s
 	uniq y.tab.s > y.gramm
 	cat y.token y.gramm y.tab.c > $*.yac
 #	sh cmp_cp y.tab.h y.tab.t
 	chmod -w y.tab.h
 	rm y.tab.c y.tab.a y.tab.s y.tab.t
+
+scid.c:	pplc.v Makefile pawk.a
+	ident pplc.v Makefile | grep '$Id' | awk -f pawk.a > scid.c
