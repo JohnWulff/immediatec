@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.19 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: main.c,v 1.20 2001/03/17 00:22:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,61 +25,71 @@ static const char main_c[] =
 
 extern const char	SC_ID[];
 
-static const char *	usage = "\
-USAGE for compile mode:\n\
-  %s [-aAc] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] <iC_program>\n\
-       Options in compile mode only:\n\
-        -o <outFN>      name of compiler output file - sets compile mode\n\
-        -a              append linking info for 2nd and later files\n\
-        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n\
-        -c              generate auxiliary file cexe.c to extend icc compiler\n\
-                        (cannot be used if also compiling with -o)\n\
-USAGE for run mode:\n\
-  %s [-txh]"
+static const char *	usage =
+"USAGE for compile mode:\n"
+"  %s [-aAc] [-o<out>] [-l<list>] [-e<err>] [-d<debug>] [-P<path>] <iC_program>\n"
+"      Options in compile mode only:\n"
+"        -o <outFN>      name of compiler output file - sets compile mode\n"
+"        -a              append linking info for 2nd and later files\n"
+"        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
+"        -c              generate auxiliary file cexe.c to extend %s compiler\n"
+"                        (cannot be used if also compiling with -o)\n"
+"USAGE for run mode: (direct interpretation)\n"
+"  %s [-txh]"
 #ifdef TCP
 " [-m[m]] [-s <server>] [-p <port>] [-u <unitID>]\n      "
 #endif
-" [-l<list>] [-e<err>] [-d<debug>] [-n<count>] <iC_program>\n\
-       Options in both modes:\n"
+" [-l<list>] [-e<err>] [-d<debug>] [-P<path>] [-n<count>] <iC_program>\n"
+"      Options in both modes:\n"
 #ifdef TCP
-"        -s host ID of server      (default '%s')\n\
-        -p service port of server (default '%s')\n\
-        -u unit ID of this client (default '%s')\n"
+"        -s host ID of server      (default '%s')\n"
+"        -p service port of server (default '%s')\n"
+"        -u unit ID of this client (default '%s')\n"
 #endif
-"        -l <listFN>     name of list file  (default is stdout)\n\
-        -e <errFN>      name of error file (default is stderr)\n\
-        -d <debug>4000  supress listing alias post processor\n\
-                 +2000  display scan_cnt and link_cnt\n\
-                 +1000  I0 toggled every second\n\
-                  +400  exit after initialisation\n\
-                  +200  display loop info (+old style logic)\n\
-                  +100  initialisation and run time info\n\
-                   +40  net statistics\n\
-                   +20  net topology\n\
-                   +10  source listing\n\
-                    +4  logic expansion\n"
+"        -l <listFN>     name of list file  (default is stdout)\n"
+"        -e <errFN>      name of error file (default is stderr)\n"
+"        -d <debug>4000  supress listing alias post processor\n"
+"                 +2000  display scan_cnt and link_cnt\n"
+"                 +1000  I0 toggled every second\n"
+"                  +400  exit after initialisation\n"
+"                  +200  display loop info (+old style logic)\n"
+"                  +100  initialisation and run time info\n"
+"                   +40  net statistics\n"
+"                   +20  net topology\n"
+"                   +10  source listing\n"
+"                    +4  logic expansion\n"
 #ifdef YYDEBUG
-"                    +2  logic generation\n\
-                    +1  yacc debug info\n"
+"                    +2  logic generation\n"
+"                    +1  yacc debug info\n"
 #endif
-"       Options in run mode only:\n\
-        -t              trace debug (equivalent to -d 100)\n\
-                        can be toggled at run time typing t\n"
+"        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
+"        <iC_program>    any iC language program file (extension .ic)\n"
+"        -               or default: take iC source from stdin\n"
+"      Options in run (interpreter) mode only:\n"
+"        -t              trace debug (equivalent to -d 100)\n"
+"                        can be toggled at run time by typing t\n"
 #ifdef TCP
-"        -m	        microsecond timing info\n\
-        -mm	        more microsecond timing (internal time base)\n\
-                        can be toggled at run time typing m\n"
+"        -m              microsecond timing info\n"
+"        -mm             more microsecond timing (internal time base)\n"
+"                        can be toggled at run time by typing m\n"
 #endif
-"        -x              arithmetic info in hexadecimal (default decimal)\n\
-                        can be changed at run time by typing x or d\n\
-        -n <count>      maxinum loop count (default is %d, limit 15)\n\
-        -h              this help text\n\
-\n\
-        <iC_program>    any iC language program file (extension .iC)\n\
-                        - or default is stdin\n\
-			typing q or ctrl-C quits run time mode\n\
-Copyright (C) 1985-2001 John E. Wulff     <john.wulff@inka.de>\n\
-%s\n";
+"        -x              arithmetic info in hexadecimal (default decimal)\n"
+"                        can be changed at run time by typing x or d\n"
+"        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
+"        -h              this help text\n"
+"      An <iC_program> containing only logical expressions can be interpreted\n"
+"      with  %s -t <iC_program>. An <iC_program> containing arithmetic\n"
+"      expressions requires relinking of %s with a new cexe.c generated\n"
+"      by %s -c <iC_program> before <iC_program> can be interpreted.\n"
+#ifndef TCP
+"      Typing 0 to 7 toggles simulated inputs IX0.0 to IX0.7\n"
+"      Typing b<number> or w<number> alters simulated inputs IB1 or IW2\n"
+"              <number> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
+"      Programmed outputs QX0.0 to QX0.7, QB1 and QW2 are displayed.\n"
+#endif
+"      Typing q or ctrl-C quits run mode.\n"
+"Copyright (C) 1985-2001 John E. Wulff     <john@je-wulff.de>\n"
+"%s\n";
 
 short		debug = 0;
 #ifdef TCP
@@ -106,6 +116,7 @@ char *		szNames[11] = {		/* matches return in compile */
 
 static FILE *	exiFP;			/* cexe in file pointer */
 static FILE *	excFP;			/* cexe C out file pointer */
+static char *	ppPath = "";		/* default pplstfix on PATH */
 
 char * OutputMessage[] = {
     0,					/* [0] no error */
@@ -211,17 +222,21 @@ main(
 		case 'x':
 		    xflag = 1;		/* start with hexadecimal display */
 		    break;
+		case 'P':
+		    if (! *++*argv) { --argc, ++argv; }
+		    ppPath = *argv;	/* path of pplstfix */
+		    goto break2;
 		default:
 		    fprintf(stderr,
 			"%s: unknown flag '%c'\n", progFN, **argv);
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, progFN, progFN,
+		    fprintf(stderr, usage, progFN, progFN, progFN,
 #ifdef TCP
 		    hostNM, portNM, iccNM,
 #endif
-		    MARKMAX, SC_ID);
+		    MARKMAX, progFN, progFN, progFN, SC_ID);
 		    exit(1);
 		}
 	    } while (*++*argv);
@@ -346,8 +361,8 @@ inversionCorrection(void)
 	    unlink(tempName);		/* mktemp() is deemed dangerous */
 	    r = rename(listFN, tempName); /* inversion correction needed */
 	    if (r == 0) {
-		sprintf(exStr, "pplstfix %s > %s", tempName, listFN);
-		r = system(exStr);		/* pplstfix must be in $PATH */
+		sprintf(exStr, "%spplstfix %s > %s", ppPath, tempName, listFN);
+		r = system(exStr);
 		unlink(tempName);
 	    }
 	}

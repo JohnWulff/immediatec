@@ -24,17 +24,17 @@ usage ()
     echo '	in the correct path (default ./)' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.8 2001/03/17 00:20:17 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.9 2001/03/18 14:03:15 jw Exp $' >&2
 }
 
 q=""
 path="./"
 
-while [[ $# > 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
-	while [[ -n $option ]]; do
+	while [ -n "$option" ]; do
 	    case $option in
 	    q*)	q=1;;	# echo only - dont kill
 	    h*)	usage; exit 255;;
@@ -50,7 +50,7 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $# > 0 ]]; then
+if [ $# -gt 0 ]; then
     path=$1
 fi
 

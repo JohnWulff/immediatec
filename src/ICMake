@@ -33,7 +33,7 @@ usage ()
     echo '		default listing is file.lst' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: ICMake,v 1.15 2001/03/17 00:20:17 jw Exp $' >&2
+    echo '	$Id: ICMake,v 1.16 2001/03/18 14:03:15 jw Exp $' >&2
 }
 
 link=0
@@ -45,11 +45,11 @@ lib="-lict"
 d="-d74"
 l=""
 
-while [[ $# > 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
-	while [[ -n "$option" ]]; do
+	while [ -n "$option" ]; do
 	    case "$option" in
 	    l*)	link=1;;
 	    s*)	link=2;;
@@ -57,7 +57,7 @@ while [[ $# > 0 ]]; do
 	    b*) link=4;;
 	    n*) link=5;;
 	    v*)	option=${option#?};
-		if [[ -n $option ]]; then
+		if [ -n "$option" ]; then
 		    v=$option;
 		    lib=libict$v.a;
 		else
@@ -81,10 +81,10 @@ done
 for f in $*; do
     file=$f
     base=${file%.*}
-    if [[ $file = $base ]]; then
+    if [ "$file" = "$base" ]; then
 	file="$base.ic"
     fi
-    if [[ ! -f $file ]]; then
+    if [ ! -f "$file" ]; then
 	echo "iC file $file does not exist" >&2
 	usage
 	exit 1;
@@ -109,7 +109,7 @@ for f in $*; do
 	    list="$list ERROR:$base.c"
 	    flag=error
 	fi
-	if [[ -z $first ]]; then
+	if [ -z "$first" ]; then
 	    first=$base
 	    a="-a"
 	fi ;;
@@ -134,8 +134,8 @@ for f in $*; do
     esac
 done
 
-if [[ $link = 1 ]]; then
-    if [[ $flag = noerror ]]; then
+if [ "$link" = 1 ]; then
+    if [ "$flag" = noerror ]; then
 	rm -f $first
 	echo "link $first from$list"
 	if nice cc -g -I. -DYYDEBUG -o $first $list _list_.c $lib; then

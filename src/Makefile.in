@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.17 2001/03/11 15:10:19 jw Exp $
+# @(#)$Id: Makefile.in,v 1.18 2001/03/17 00:22:05 jw Exp $
 
 ############################################################
 #
@@ -71,10 +71,10 @@ POBJ =	link.$(O) rsff.$(O) scan.$(O)
 #### Standalone versions ###################################
 
 all:
-	@$(srcdir)/makeAll
+	@$(srcdir)/makeAll $(srcdir)/
 
 quiet:
-	@$(srcdir)/makeAll -q
+	@$(srcdir)/makeAll -q $(srcdir)/
 
 icc:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
 	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
@@ -115,7 +115,7 @@ test:
 	@echo "compile and generate all executables from iC files in Test ..."
 	@${srcdir}/ICMake -v ${srcdir}/Test/*.ic
 	@echo "diffing generated files in Test with originals in Test/ORG* ..."
-	@if ${srcdir}/Mdiff -kle ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK - do make install as su"; else echo "test FAILED - differences in listed files"; fi 
+	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK - do make install as su"; else echo "test FAILED - differences in listed files"; fi 
 
 install:	installdirs
 	${INSTALL_PROGRAM} icc      ${bindir}/${binprefix}icc

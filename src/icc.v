@@ -1,12 +1,12 @@
-@(#)$Id: icc.v,v 1.62 2001/03/11 17:19:46 jw Exp $
+@(#)$Id: icc.v,v 1.63 2001/03/18 14:04:32 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 DemoBox         1.31    2001/03/07  12:30:10  jw      Exp
-ICMake          1.14    2001/03/11  17:16:32  jw      Exp
+ICMake          1.16    2001/03/18  14:03:15  jw      Exp
 ICServer        1.18    2001/03/02  12:57:20  jw      Exp
-Makefile.in     1.17    2001/03/11  15:10:19  jw      Exp
+Makefile.in     1.18    2001/03/17  00:22:05  jw      Exp
 Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
-README          1.3     2001/03/11  15:10:19  jw      Exp
+README          1.4     2001/03/16  17:52:06  jw      Exp
 cexe.h          1.11    2001/03/02  12:56:32  jw      Exp
 comp.h          1.18    2001/03/11  15:10:19  jw      Exp
 comp.y          1.48    2001/03/11  15:10:19  jw      Exp
@@ -19,15 +19,15 @@ ict.c           1.18    2001/03/11  15:10:19  jw      Exp
 init.c          1.11    2001/03/02  12:56:32  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
 link.c          1.13    2001/03/07  12:30:06  jw      Exp
-load.c          1.21    2001/03/02  12:56:32  jw      Exp
-main.c          1.19    2001/03/11  15:10:19  jw      Exp
-makeAll         1.7     2001/03/11  15:10:19  jw      Exp
-makeIct         1.4     2001/03/02  12:56:32  jw      Exp
-makeload        1.8     2001/03/02  12:56:32  jw      Exp
+load.c          1.22    2001/03/17  00:22:05  jw      Exp
+main.c          1.20    2001/03/17  00:22:05  jw      Exp
+makeAll         1.9     2001/03/18  14:03:15  jw      Exp
+makeIct         1.6     2001/03/18  14:03:15  jw      Exp
+makeLib         1.10    2001/03/18  14:03:15  jw      Exp
 mkinstalldirs   1.1     2001/03/07  12:26:24  jw      Exp
 outp.c          1.37    2001/03/11  15:10:19  jw      Exp
 pawk.a          1.2     1996/07/30  20:24:24  john    Exp
-perlinstall     1.3     2001/03/07  12:30:06  jw      Exp
+perlinstall     1.5     2001/03/18  14:03:15  jw      Exp
 pplstfix        1.5     2001/03/02  12:56:32  jw      Exp
 rsff.c          1.20    2001/03/07  12:30:06  jw      Exp
 scan.c          1.13    2001/03/07  12:30:06  jw      Exp

@@ -1,5 +1,5 @@
 
-                         immediateC, iC rev 1.62
+                         immediateC, iC rev 1.63
 
                     Copyright (C) 1985-2001, John E. Wulff
                             All rights reserved.
@@ -60,12 +60,12 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev 1.62
+        Notes for the installation of icc rev 1.63
 
         1)  unpack the archive in a suitable working directory with
-                tar -xvzf icc_1.62.tgz
+                tar -xvzf icc_1.63.tgz
 
-        2)  cd icc_1.62/src
+        2)  cd icc_1.63/src
 
         3)  excute the following:
 
@@ -174,4 +174,4 @@
 	with microsecond resolution using the -m option. See the listings
 	for activating this feature.
 
-        $Id: README,v 1.3 2001/03/11 15:10:19 jw Exp $
+        $Id: README,v 1.4 2001/03/16 17:52:06 jw Exp $

@@ -22,16 +22,16 @@ usage ()
     echo '		install (cp) the files to the @INC path' >&2
     echo '	-u	uninstall (rm) the files from the @INC path' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: perlinstall,v 1.4 2001/03/16 16:51:34 jw Exp $' >&2
+    echo '	$Id: perlinstall,v 1.5 2001/03/18 14:03:15 jw Exp $' >&2
 }
 
 u=''
 
-while [[ $# > 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
-	while [[ -n "$option" ]]; do
+	while [ -n "$option" ]; do
 	    case "$option" in
 	    u*)	u=uninstall;;
 	    h*)	usage; exit 255;;
@@ -44,13 +44,13 @@ while [[ $# > 0 ]]; do
 done
 
 for d in /usr/lib/perl5/site_perl/5*; do
-    if [[ -d $d && -d $d/i586-linux ]]; then
+    if [ -d "$d" ] && [ -d "$d/i586-linux" ]; then
 	perlPath=$d/i586-linux;	# find the highest version
     fi
 done
 
-if [[ -n $perlPath ]]; then
-    if [[ -z $u ]]; then
+if [ -n "$perlPath" ]; then
+    if [ -z "$u" ]; then
 	for f in $*; do
 	    cp -f $f $perlPath
 	    echo "copied Msg.pm ==> $perlPath"

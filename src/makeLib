@@ -10,24 +10,24 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john.wulff@inka.de>
 #
-#	make ict with OPT=TCP
+#	make the libict.a library with OPT=LOAD
 #
-#	$Id: makeIct,v 1.6 2001/03/18 14:03:15 jw Exp $
+#	$Id: makeLib,v 1.10 2001/03/18 14:03:15 jw Exp $
 #
 ########################################################################
 
 if [ -f Make_tmp ]; then
-    echo 'Error makeIct: Make_tmp exists as file ??? - nothing made' >&2
+    echo 'Error makeload: Make_tmp exists as file ??? - nothing made' >&2
     exit 1;
 fi
 test -d Make_tmp || mkdir Make_tmp;
-mv main.o Make_tmp
-if [ -d PptcObjs ]; then
-    mv PptcObjs/* .
+mv link.o rsff.o scan.o Make_tmp
+if [ -d LoadObjs ]; then
+    mv LoadObjs/* .
 else
-    mkdir PptcObjs
+    mkdir LoadObjs
 fi
-make OPT='-DTCP' ict
-mv main.o ict.o PptcObjs
+make OPT='-DLOAD -DTCP' libict.a
+mv ict.o link.o rsff.o scan.o LoadObjs
 mv Make_tmp/* .
 rmdir Make_tmp
