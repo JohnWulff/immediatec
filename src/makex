@@ -21,7 +21,7 @@ usage ()
     echo '		default listing is file.lst' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makex,v 1.10 2001/02/21 16:21:41 jw Exp $' >&2
+    echo '	$Id: makex,v 1.11 2001/03/02 12:57:54 jw Exp $' >&2
 }
 
 link=0
@@ -78,8 +78,14 @@ for f in $*; do
     0)
 	rm -f $base.c $base
 	if nice icc$v $d -o $base.c -l $base.lst$l $file; then
-	    if nice gcc -g -DYYDEBUG -o $base $base.c list.c ict$v.a; then
-		$base -d540 > $base.ini
+	    if [[ -z "$v" ]]; then
+		if nice gcc -g -DYYDEBUG -o $base $base.c _list_.c -lict; then
+		    $base -d540 > $base.ini
+		fi
+	    else
+		if nice gcc -g -DYYDEBUG -o $base $base.c _list_.c ict$v.a; then
+		    $base -d540 > $base.ini
+		fi
 	    fi
 	else
 	    echo "icc$v compile errors in '$file' - no executable '$base' generated" >&2
@@ -121,8 +127,14 @@ if [[ $link = 1 ]]; then
     if [[ $flag = noerror ]]; then
 	rm -f $first
 	echo "link $first from$list"
-	if nice gcc -g -DYYDEBUG -o $first $list list.c ict$v.a; then
-	    $first -d540 > $first.ini
+	if [[ -z "$v" ]]; then
+	    if nice gcc -g -DYYDEBUG -o $first $list _list_.c -lict; then
+		$first -d540 > $first.ini
+	    fi
+	else
+	    if nice gcc -g -DYYDEBUG -o $first $list _list_.c ict$v.a; then
+		$first -d540 > $first.ini
+	    fi
 	fi
     else
 	echo "icc$v compile errors in '$list'" >&2
