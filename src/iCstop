@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 ########################################################################
 #
 #	Copyright (C) 2000-2001  John E. Wulff
@@ -34,7 +34,7 @@ usage()
   echo '          named directories in their program path are killed. (A feature)' >&2
   echo " EXAMPLE: $name -a bin; stops all programs out of /bin/ /usr/bin/ ..." >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: iCstop,v 1.7 2002/06/02 14:21:12 archiv Exp $' >&2
+  echo '$Id: iCstop,v 1.8 2003/10/05 17:41:34 archiv Exp $' >&2
 }
 
 ########################################################################

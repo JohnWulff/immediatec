@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 ########################################################################
 #
 #	Copyright (C) 2000-2001  John E. Wulff
@@ -56,7 +56,7 @@ echo "	-Z	extra debugging output for $0 development" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.28 2003/10/03 16:09:04 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.29 2003/10/05 17:41:34 archiv Exp $' >&2
 }
 
 ########################################################################
