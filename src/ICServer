@@ -23,6 +23,28 @@ my %connections = ();
 
 ########################################################################
 #
+#	Initialization
+#
+########################################################################
+
+my $named = $0; $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:	@<<<<<< [-h]
+	$named
+	-h	help, ouput this Usage text only
+$Id: ICServer,v 1.2 2000/05/28 17:20:47 jw Exp $
+.
+
+use vars qw($opt_h);
+require "getopts.pl";
+&Getopts('h');			# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+########################################################################
+#
 #	Server
 #
 ########################################################################
