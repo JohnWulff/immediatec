@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.36 2002/08/26 18:58:51 jw Exp $";
+"@(#)$Id: main.c,v 1.37 2002/09/02 11:24:21 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -52,11 +52,15 @@ static const char *	usage =
 "        -l <listFN>     name of list file  (default is stdout)\n"
 "        -e <errFN>      name of error file (default is stderr)\n"
 "        -d <debug>4000  supress listing alias post processor\n"
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "                 +2000  display scan_cnt and link_cnt\n"
+#endif
 "                 +1000  I0 toggled every second\n"
 "                  +400  exit after initialisation\n"
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "                  +200  display loop info (+old style logic)\n"
 "                  +100  initialisation and run time info\n"
+#endif
 "                   +40  net statistics\n"
 "                   +20  net topology\n"
 "                   +10  source listing\n"
@@ -64,17 +68,19 @@ static const char *	usage =
 #if YYDEBUG
 "                    +2  logic generation (requires +400)\n"
 "                    +1  yacc debug info  (requires +400)\n"
-#endif
 #ifdef TCP
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
 #endif
+#endif
 "        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
 "        <iC_program>    any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "      Options in run (interpreter) mode only:\n"
 "        -t              trace debug (equivalent to -d 100)\n"
 "                        can be toggled at run time by typing t\n"
+#endif
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"

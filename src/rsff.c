@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.31 2002/08/26 19:12:51 jw Exp $";
+"@(#)$Id: rsff.c,v 1.32 2002/09/01 20:05:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -133,14 +133,14 @@ sSff(					/* S_FF slave action on FF */
     if (gf->gt_val < 0) {
 	gp = gf->gt_funct;
 	if (gp->gt_val > 0) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\tS %s %2d ==>", gp->gt_ids, gp->gt_val);
 	    }
 #endif
 	    gp->gt_val = -1;		/* set slave output */
 	    link_ol(gp, o_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, " %d", gp->gt_val);
 	    }
@@ -199,14 +199,14 @@ rSff(					/* R_FF slave action on FF */
     if (gf->gt_val < 0) {
 	gp = gf->gt_funct;
 	if (gp->gt_val < 0) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\tR %s %2d ==>", gp->gt_ids, gp->gt_val);
 	    }
 #endif
 	    gp->gt_val = 1;		/* reset slave output */
 	    link_ol(gp, o_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, " %d", gp->gt_val);
 	    }
@@ -265,14 +265,14 @@ dSff(					/* D_FF slave action on FF */
 
     gp = gf->gt_funct;
     if ((val = (gf->gt_val < 0) ? -1 : 1) != gp->gt_val) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\tD %s %2d ==>", gp->gt_ids, gp->gt_val);
 	}
 #endif
 	gp->gt_val = val;		/* transfer val to slave */
 	link_ol(gp, o_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, " %d", gp->gt_val);
 	}
@@ -383,7 +383,7 @@ dSsh(					/* D_SH slave action on SH */
      * slave output because of S_SH or R_SH actions.
      */
     if ((gp->gt_val & 0x02) == 0 && gf->gt_new != gp->gt_new) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\tSH %s %d ==>", gp->gt_ids, gp->gt_new);
 	}
@@ -391,7 +391,7 @@ dSsh(					/* D_SH slave action on SH */
 	gp->gt_new = gf->gt_old = gf->gt_new; /* transfer value to slave */
 	gp->gt_val = gp->gt_new ? (gp->gt_new == -1 ? -3 : 0) : 1;
 	link_ol(gp, a_list);	/* fire new arithmetic action */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
 #endif
     }
@@ -428,13 +428,13 @@ sMsh(					/* S_SH master action on SH */
 	    /* the SH function should have a delay master - works with set/rest only */
 	    if ((gdm = (Gate*)gp->gt_rlist) &&	/* delay master for this slave */
 		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
 		    fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
 		}
 #endif
 		dMsh(gdm, a_list);	/* link or unlink delay master now */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
 		    fprintf(outFP, " %d}", gdm->gt_new);
 		}
@@ -470,7 +470,7 @@ sSsh(					/* S_SH slave action on SH */
 	gp = gf->gt_funct;
 	gp->gt_val &= ~0x02;		/* clear set slave action flag */
 	if (gp->gt_new != -1) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\tS SH %s %2d ==>", gp->gt_ids, gp->gt_new);
 	    }
@@ -486,13 +486,13 @@ sSsh(					/* S_SH slave action on SH */
 	    if (gdm = (Gate*)gp->gt_rlist) {	/* delay master for this slave */
 		gdm->gt_old = gp->gt_new;	/* adjust delay master */
 		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
 			fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
 		    }
 #endif
 		    dMsh(gdm, a_list);		/* link or unlink delay master now */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
 			fprintf(outFP, " %d}", gdm->gt_new);
 		    }
@@ -500,7 +500,7 @@ sSsh(					/* S_SH slave action on SH */
 		}
 	    }
 	    link_ol(gp, a_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, " %d", gp->gt_new);
 	    }
@@ -547,13 +547,13 @@ rMsh(					/* R_SH master action on SH */
 	    /* the SH function should have a delay master - works with set/rest only */
 	    if ((gdm = (Gate*)gp->gt_rlist) &&	/* delay master for this slave */
 		((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0))) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
 		    fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
 		}
 #endif
 		dMsh(gdm, a_list);	/* link or unlink delay master now */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) {
 		    fprintf(outFP, " %d}", gdm->gt_new);
 		}
@@ -589,7 +589,7 @@ rSsh(					/* R_SH slave action on SH */
 	gp = gf->gt_funct;
 	gp->gt_val &= ~0x02;		/* clear reset slave action flag */
 	if (gp->gt_new != 0) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\tR SH %s %2d ==>", gp->gt_ids, gp->gt_new);
 	    }
@@ -605,13 +605,13 @@ rSsh(					/* R_SH slave action on SH */
 	    if (gdm = (Gate*)gp->gt_rlist) {	/* delay master for this slave */
 		gdm->gt_old = gp->gt_new;	/* adjust delay master */
 		if ((gdm->gt_new != gdm->gt_old) ^ (gdm->gt_next != 0)) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
 			fprintf(outFP, "{%s %d ==>", gdm->gt_ids, gdm->gt_old);
 		    }
 #endif
 		    dMsh(gdm, a_list);		/* link or unlink delay master now */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
 			fprintf(outFP, " %d}", gdm->gt_new);
 		    }
@@ -619,7 +619,7 @@ rSsh(					/* R_SH slave action on SH */
 		}
 	    }
 	    link_ol(gp, a_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, " %d", gp->gt_new);
 	    }
@@ -699,7 +699,7 @@ i_ff3(Gate * gp, int typ)		/* Pass3 init on FF etc. */
 		opt, gp->gt_ids, gp->gt_mcnt ? "incompatible" : "no",
 		gp->gt_mcnt, mask);
 	    error_flag = 1;		/* cannot execute with this error */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	} else if (debug & 0100) {
 	    fprintf(outFP, "\n	    %c	%s:\t%.4x inputs",
 		opt, gp->gt_ids, gp->gt_mcnt);
@@ -752,7 +752,7 @@ riMbit(					/* RI_BIT master action on EF */
     gx = (fa = gp->gt_list)[FL_GATE];
     if (gp->gt_val < 0 || gp->gt_next) {
 	link_ol(gp, fa[FL_CLK]);	/* master action */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, " %d", gp->gt_val);
 	    if (dc++ >= 4) {
@@ -784,14 +784,14 @@ riSbit(					/* RI_BIT slave action */
 
     gp = gf->gt_funct;
     if (gp->gt_val < 0) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\tE %s %2d ==>", gp->gt_ids, gp->gt_val);
 	}
 #endif
 	gp->gt_val = 1;			/* reset slave output to LO */
 	link_ol(gp, o_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, " %d", gp->gt_val);
 	}
@@ -826,7 +826,7 @@ chMbit(					/* CH_BIT master action on VF */
 #endif
     gx = (fa = gp->gt_list)[FL_GATE];	/* ignore input */
     link_ol(gp, fa[FL_CLK]);		/* master action */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, " %d", out_list != o_list? gp->gt_new : gp->gt_val);
 	if (dc++ >= 4) {
@@ -869,14 +869,14 @@ chSbit(					/* CH_BIT slave action */
 #endif
     gp = gf->gt_funct;
     if (gp->gt_val < 0) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\tV %s %2d ==>", gp->gt_ids, gp->gt_val);
 	}
 #endif
 	gp->gt_val = 1;			/* reset slave output to LO */
 	link_ol(gp, o_list);
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, " %d", gp->gt_val);
 	}
@@ -931,17 +931,17 @@ fSsw(					/* F_SW slave action on SW */
 #endif
     /* execute C function as action procedure with side effects */
 #ifdef LOAD
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, "\tF%p(", (CFunctp)gf->gt_funct);
 #endif
     ((CFunctp)(gf->gt_funct))(gf);
 #else
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, "\tF%d(", (int)gf->gt_funct);
 #endif
     c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, ")\n");
 #endif
 } /* fSsw */
@@ -1015,17 +1015,17 @@ fScf(					/* F_CF and F_CE slave action on CF */
 {
     /* execute C function as action procedure with side effects */
 #ifdef LOAD
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, "\tF%p{", (CFunctp)gf->gt_funct);
 #endif
     ((CFunctp)(gf->gt_funct))(gf);
 #else
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, "\tF%d{", (int)gf->gt_funct);
 #endif
     c_exec((int)gf->gt_funct, gf);	/* must pass both -/+ */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, "}\n");
 #endif
 } /* fScf */
@@ -1099,7 +1099,7 @@ outMw(					/* OUTW master action */
 	val = 0;			/* error - no output */
 #endif
     }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) fprintf(outFP, "%d", val);	/* byte or word */
 #endif
 } /* outMw */
@@ -1148,12 +1148,12 @@ outMx(					/* OUTX master action */
 #endif
     if (gp->gt_val < 0) {		/* output action */
 	QX_[slot] |= mask;		/* set bit at slot,mask */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('1', outFP);
 #endif
     } else {
 	QX_[slot] &= ~mask;		/* clear bit at slot,mask */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('0', outFP);
 #endif
     }
@@ -1224,7 +1224,7 @@ clockSfn(				/* Clock function */
 	Gate *	np;
 
 	gp = gf->gt_funct;
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\tC %s", gp->gt_ids);
 	}
@@ -1236,7 +1236,7 @@ clockSfn(				/* Clock function */
 	}
 #endif
 	if (gp->gt_next != gp) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		int	dc = 0;		/* functions which are clocked */
 		for (tp = gp->gt_next; tp != gp; tp = tp->gt_next) {
@@ -1307,7 +1307,7 @@ timerSfn(				/* Timer function */
 	Gate *	np;
 
 	gp = gf->gt_funct;
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\tT %s", gp->gt_ids);
 	}
@@ -1319,10 +1319,12 @@ timerSfn(				/* Timer function */
 	}
 #endif
 	if ((np = gp->gt_next) != gp) {
+#if YYDEBUG && !defined(_WINDOWS)
 	    int	dc = 1;	/* allow for (time) */
-
+#endif
 	    np->gt_mark--;		/* count down first element */
-#ifndef _WINDOWS 
+
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\t(%d)", np->gt_mark);
 	    }
@@ -1336,7 +1338,7 @@ timerSfn(				/* Timer function */
 #endif
 		do {
 		    tp = np;
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0100) {
 			if (dc++ >= 8) {
 			    dc = 1;
@@ -1397,7 +1399,7 @@ assign(Gate * gp, int rv)
 {
     if (gp->gt_ini == -ARNC) {
 	if (rv != gp->gt_new) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\tAA %s %d ==>", gp->gt_ids, gp->gt_new);
 	    }
@@ -1406,21 +1408,21 @@ assign(Gate * gp, int rv)
 		link_ol(gp, a_list);		/* arithmetic change or glitch */
 	    }
 	    gp->gt_new = rv;			/* first or later change */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) fprintf(outFP, " %d", gp->gt_new);
 #endif
 	}
     } else if (gp->gt_ini == -LOGC) {
 	char val = rv ? -1 : 1;
 	if (gp->gt_val != val) {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, "\tLA %s %2d ==>", gp->gt_ids, gp->gt_val);
 	    }
 #endif
 	    gp->gt_val = val;
 	    link_ol(gp, o_list);		/* logic change or glitch */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (debug & 0100) {
 		fprintf(outFP, " %d", gp->gt_val);
 	    }

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.22 2002/08/26 19:13:00 jw Exp $";
+"@(#)$Id: scan.c,v 1.23 2002/09/01 19:58:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -65,7 +65,9 @@ unsigned int	bit2[] = {		/* used in i_ff2() and i_ff3() */
 		};
 
 Gate *		gx;	/* used to point to action Gate in chMbit riMbit */
+#if YYDEBUG && !defined(_WINDOWS)
 short		dc;	/* debug display counter in scan and rsff */
+#endif
 
 /********************************************************************
  *
@@ -88,15 +90,15 @@ short		dc;	/* debug display counter in scan and rsff */
 int
 scan_ar(Gate *	out_list)
 {
-    Gate **	lp;
-    Gate *	gp;
-    int		val;
-    Gate *	op;
+    register int	val;
+    register Gate *	gp;
+    Gate **		lp;
+    Gate *		op;
 
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
     }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, "\narithmetic ==========");
     }
@@ -121,7 +123,7 @@ scan_ar(Gate *	out_list)
 	 * change in the function results would occurr.
 	 */
 	op->gt_old = op->gt_new;	/* now new value is fixed */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\n%s: %d", op->gt_ids, op->gt_new);
 	    dc = 0;
@@ -139,10 +141,10 @@ scan_ar(Gate *	out_list)
 #else
 	    int exec;
 #endif
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    scan_cnt++;				/* count scan operations */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    gx = gp;			/* save old gp in gx */
 	    if (debug & 0100) {
 		if (dc++ >= 4) {
@@ -187,7 +189,7 @@ scan_ar(Gate *	out_list)
 		/* logic master action */
 		(*masterAct[gp->gt_fni])(gp, o_list);
 	    }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    /* global gx is modified in arithmetic chMbit() master action */
 	    if (debug & 0100) fprintf(outFP, " %d",
 		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gx->gt_fni == F_SW ||
@@ -220,15 +222,15 @@ scan_ar(Gate *	out_list)
 int
 scan(Gate *	out_list)
 {
-    Gate **	lp;
-    Gate *	gp;
-    int		val;
-    Gate *	op;
+    register int	val;
+    register Gate *	gp;
+    Gate **		lp;
+    Gate *		op;
 
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
     }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, "\nlogic scan ==========");
     }
@@ -245,7 +247,7 @@ scan(Gate *	out_list)
 	gp->gt_prev = out_list;			/* list <== next */
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\n%s:", op->gt_ids);
 	    dc = 0;
@@ -266,10 +268,10 @@ scan(Gate *	out_list)
 	val = (op->gt_val < 0) ? -1 : 1;
 	/* do twice: once with val, then whith -val */
 	while ((gp = *lp++) != 0) { /* scan non-inverted outputs */
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    scan_cnt++;				/* count scan operations */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    gx = gp;			/* save old gp in gx */
 	    if (debug & 0100) {
 		if (dc++ >= 4) {
@@ -283,17 +285,17 @@ scan(Gate *	out_list)
 		gp->gt_val = val;		/* val is logic value */
 		(*masterAct[gp->gt_fni])(gp, o_list);/* master action */
 	    }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    /* global gx is modified in riMbit() and chMbit() master action */
 	    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
 #endif
 	}
 	val = -val;				/* invert logic value */
 	while ((gp = *lp++) != 0) { /* scan inverted outputs */
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    scan_cnt++;				/* count scan operations */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    gx = gp;			/* save old gp in gx */
 	    if (debug & 0100) {
 		if (dc++ >= 4) {
@@ -307,7 +309,7 @@ scan(Gate *	out_list)
 		gp->gt_val = val;		/* val is inverted value */
 		(*masterAct[gp->gt_fni])(gp, o_list);/* master action */
 	    }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	    /* global gx is modified in riMbit() and chMbit() master action */
 	    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
 #endif
@@ -350,7 +352,7 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
     }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
     if (debug & 0100) {
 	fprintf(outFP, "\nclock scan ==========");
     }
@@ -367,10 +369,10 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 	gp->gt_prev = out_list;			/* list <== next */
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	scan_cnt++;				/* count scan operations */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, "\n%s:", op->gt_ids);
 #endif
 	(*slaveAct[op->gt_fni])(op, o_list);	/* execute slave action */
@@ -481,7 +483,7 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	    opt, gp->gt_ids);
 	    error_flag = 2;		/* can execute with this warning */
     } else {
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\n	    %c	%s:\t%d inputs",
 		opt, gp->gt_ids, gp->gt_mcnt);
@@ -568,7 +570,7 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
     int		val;
 
     if (op->gt_fni < MIN_ACT) {		/* UDFA, ARITH, GATE */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) {
 	    fprintf(outFP, "\ninit %s:", op->gt_ids);
 	    dc = 0;
@@ -582,10 +584,10 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 #else
 		int exec;
 #endif
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 		scan_cnt++;			/* count scan operations */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		gx = gp;			/* save old gp in gx */
 		if (debug & 0100) {
 		    if (dc++ >= 4) {
@@ -622,7 +624,7 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    gp->gt_val = val;	/* convert val to logic value */
 		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
 		}
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) fprintf(outFP, " %d",
 		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
@@ -632,10 +634,10 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 	} else if (op->gt_fni == GATE) {
 	    while (*lp++);			/* ignore direct outputs */
 	    while ((gp = *lp++) != 0) {		/* do inverted outputs */
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 		scan_cnt++;			/* count scan operations */
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		gx = gp;			/* save old gp in gx */
 		if (debug & 0100) {
 		    if (dc++ >= 4) {
@@ -649,11 +651,11 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    --gp->gt_val;
 		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
 		}
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
 #endif
 	    }
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	} else {
 	    if (debug & 0100) fprintf(outFP, " ftype UDFA ???");
 #endif
@@ -730,7 +732,7 @@ arithMa(				/* ARITH master action */
 	 * old will be modified during arithmetic scan, although that
 	 * would not be necessary for this action.
 	 */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
 #endif
     }

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.17 2002/08/26 19:11:06 jw Exp $";
+"@(#)$Id: link.c,v 1.18 2002/09/01 19:39:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -43,14 +43,14 @@ link_ol(
 #endif
 
     if (gp->gt_next) {
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	glit_cnt++;				/* count glitches */
 #endif
 #ifndef DEQ
 	ap = tp = out_list;			/* glitch */
 	diff = 0;				/* save time remaining */
 	while (tp->gt_next != gp) {		/* find previous entry */
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    glit_nxt++;				/* count glitch scan */
 #endif
 	    diff += tp->gt_mark;		/* makes sense for TIMRL */
@@ -78,7 +78,7 @@ link_ol(
 		    quit(-1);
 		}
 		ap =  tp;
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0200) putc('@', outFP); /* alternate found */
 #endif
 	    }
@@ -101,11 +101,11 @@ link_ol(
 	    /* ignore time remaining in gp */
 	}
 #endif
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) fprintf(outFP, "g<");
 #endif
     } else {
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	link_cnt++;				/* count link operations */
 #endif
 	if (gp->gt_fni < MIN_ACT) {	/* ARITH & GATE may oscillate */
@@ -114,12 +114,12 @@ link_ol(
 		gp->gt_mcnt = 0;		/*      clear mark count */
 	    } else {
 		if (++gp->gt_mcnt >= osc_max) {	/* new alg: cnt 1 larger */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (debug & 0200) putc('#', outFP);
 #endif
 		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
 		}
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0200) fprintf(outFP, "%d", gp->gt_mcnt);
 #endif
 	    }
@@ -147,7 +147,7 @@ link_ol(
 		 * Link Gate gp into list sorted by time order.
 		 * Negative times are treated like 0 times.
 		 */
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) fprintf(outFP, "(%d)!", time);
 #endif
 		tp = out_list;
@@ -189,7 +189,7 @@ link_ol(
 		return;			/* sorted link action complete */
 	    }
 	}
-#ifndef _WINDOWS 
+#if YYDEBUG && !defined(_WINDOWS)
 	if (debug & 0100) putc('>', outFP);
 #endif
 #ifndef DEQ

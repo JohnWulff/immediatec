@@ -1,0 +1,13 @@
+#!/bin/sh
+make quiet
+make install
+for file in $*; do
+    base=${file%.*}
+    if [ -f "$base.c" ]; then
+	echo "cc -g -I. -o $base $base.c _list_.c -lict"
+	cc -g -I. -o $base $base.c _list_.c -lict
+    else
+	echo "### $base.c does not exist - not compiled"
+    fi
+done
+# $Id: m,v 1.1 2002/09/02 09:19:13 jw Exp $

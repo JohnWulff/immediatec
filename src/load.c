@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.35 2002/08/26 19:11:39 jw Exp $";
+"@(#)$Id: load.c,v 1.36 2002/09/02 10:13:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -60,16 +60,24 @@ static const char *	usage =
 "        -p service port of server (default '%s')\n"
 "        -u unit ID of this client (default '%s')\n"
 #endif
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "        -d <debug>2000  display scan_cnt and link_cnt\n"
 "                 +1000  I0 toggled every second\n"
+#else
+"        -d <debug>1000  I0 toggled every second\n"
+#endif
 "                  +400  exit after initialisation\n"
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "                  +200  display loop info (+old style logic)\n"
 "                  +100  initialisation and run time info\n"
+#endif
 "                   +40  net statistics\n"
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
 "        -t              trace debug (equivalent to -d 100)\n"
 "                        can be toggled at run time typing t\n"
+#endif
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"

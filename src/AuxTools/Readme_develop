@@ -81,12 +81,9 @@ Scripts:
     makeAll:	#!/bin/sh
 		calls 'make' with the correct environments to make
 		icc, ict and libict.a
-
-    makeIct:	#!/bin/sh
+		calls 'make' with OPT=YYDEBUG to make icc
 		calls 'make' with OPT=TCP to make ict
-
-    makeLib:	#!/bin/sh
-		calls 'make' with OPT=TCP to make libict.a
+		calls 'make' with OPT=LOAD TCP to make libict.a
 
     pplstfix:	#! /usr/bin/perl -w
 		Postprocessor used to fix forward references in
@@ -139,4 +136,4 @@ Auxiliary scripts for testing compiler outputs
 		(these are made with mpv) assumes version directories
 		Test/Alex??
 
-$Id: Readme_develop,v 1.1 2002/06/05 11:29:31 jw Exp $
+$Id: Readme_develop,v 1.2 2002/09/02 17:45:58 jw Exp $

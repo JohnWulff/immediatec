@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.30 2002/09/01 20:31:16 jw Exp $
+# @(#)$Id: Makefile.in,v 1.31 2002/09/03 17:35:46 jw Exp $
 
 ############################################################
 #
@@ -10,16 +10,18 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	makefile for immediate C compilers and runtime library
+#	Makefile for immediate C compilers and runtime library
 #	J.E. Wulff	14-Mar-87
 #
 #	use GNU make	28-Jul-96
 #	use GNU autoconf and configure	6-Mar-2001
 #
-#	to make ict, remove all objects and make with export OPT='-DTCP'
-#	to make libict.a, remove all objects and make with export OPT='-DLOAD -DTCP'
+#	to make icc, make with OPT='-DYYDEBUG'
+#	to make ict, remove all objects and make with OPT='-DTCP'
+#	to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
+#	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #
-#	auxiliary scripts makeAll, makeIct makeLib do this automatically
+#	auxiliary script makeAll -cm called for all: does this automatically
 #
 ############################################################
 
@@ -73,10 +75,10 @@ POBJ =	link.$(O) rsff.$(O) scan.$(O)
 #### Standalone versions ###################################
 
 all:
-	@$(srcdir)/makeAll $(srcdir)/
+	@$(srcdir)/makeAll -cm
 
 quiet:
-	@$(srcdir)/makeAll -q $(srcdir)/
+	@$(srcdir)/makeAll -qcm
 
 icc:	$(srcdir)/Makefile main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
 	$(CC) $(LDFLAG) -o icc main.$(O) scid.$(O) icc.$(O) $(COBJ) $(POBJ)
@@ -90,12 +92,9 @@ libict.a:	$(srcdir)/Makefile load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	ar -rv libict.a load.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 
 #### C-parser test #########################################
-#### rm -f gram.o lexc.o
-#### make OPT='-DLMAIN' lmain
 
 lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	$(CC) $(LDFLAG) -o lmain lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
-	rm -f gram.o lexc.o
 
 #### Compile objects #######################################
 

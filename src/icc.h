@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.44 2002/08/26 22:05:24 jw Exp $";
+"@(#)$Id: icc.h,v 1.45 2002/09/01 19:59:55 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -165,7 +165,9 @@ extern Gate *		c_list;
 
 extern unsigned int	bit2[];
 extern Gate *		gx;	/* points to action Gate in chMbit and riMbit */
+#if YYDEBUG && !defined(_WINDOWS)
 extern short		dc;	/* debug display counter in scan and rsff */
+#endif
 extern unsigned char	bitMask[];
 extern unsigned char	bitIndex[];
 #define	B_WIDTH		257		/* marks output as Byte width */
@@ -226,7 +228,7 @@ extern	Functp	clock_i[];
 
 extern unsigned short	mark_stamp;	/* incremented every scan */
 
-#if !defined(_WINDOWS) || defined(LOAD)
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 extern unsigned	scan_cnt;			/* count scan operations */
 extern unsigned	link_cnt;			/* count link operations */
 extern unsigned	glit_cnt;			/* count glitches */

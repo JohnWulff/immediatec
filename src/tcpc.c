@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.11 2002/08/26 19:13:50 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.12 2002/09/01 19:30:09 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -239,9 +239,11 @@ rcvd_msg_from_server(int sock, char * buf, int maxLen)
 	if ((len = rcvd_buffer_from_server(sock, netBuf.buffer, maxLen)) == maxLen) {
 	    memcpy(buf, netBuf.buffer, len);
 	    buf[len] = '\0';
+#if YYDEBUG
 	    if (debug & 02) {
 		fprintf(outFP, "%s < '%s'\n", iccNM, buf);	/* trace recv buffer */
 	    }
+#endif
 	}
     }
     return len;
@@ -264,9 +266,11 @@ send_msg_to_server(int sock, const char * msg)
 	fprintf(stderr, "ERROR in %s: message to send is too long: %d\n", iccNM, len);
 	len = sizeof netBuf.buffer - 1;
     } else
+#if YYDEBUG
     if (debug & 01) {
 	fprintf(outFP, "%s > '%s'\n", iccNM, msg);		/* trace send buffer */
     }
+#endif
     memcpy(netBuf.buffer, msg, len + 1);
     netBuf.length = htonl(len);
     len += sizeof netBuf.length;

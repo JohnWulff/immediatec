@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.18 2002/08/26 19:06:46 jw Exp $";
+"@(#)$Id: icc.c,v 1.19 2002/09/02 10:08:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -126,10 +126,12 @@ unsigned char	QMM;			/* Output cage mask for 1 rack */
 short		dis_cnt;
 short		error_flag;
 
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	scan_cnt;			/* count scan operations */
 unsigned	link_cnt;			/* count link operations */
 unsigned	glit_cnt;			/* count glitches */
 unsigned long	glit_nxt;			/* count glitch scan */
+#endif
 
 /********************************************************************
  *
@@ -201,9 +203,13 @@ icc(
     /* ttyparms initialised in initIO() called from main or load */
 #endif
 
+#if YYDEBUG
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
+#endif
     for (pass = 0; pass < 4; pass++) {
+#if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
+#endif
 #ifdef LOAD
 	for (opp = sTable; opp < sTend; opp++) {
 	    gp = *opp;
@@ -232,13 +238,17 @@ icc(
 	}
 	fprintf(outFP, "\n*** Warnings ***\n");
     }
+#if YYDEBUG
     if (debug & 0100) fprintf(outFP, "\nPass 5:");
+#endif
     if (o_list->gt_next == o_list) {			/* empty */
 	scan_clk(c_list);				/* clock list */
     }
+#if YYDEBUG
     if (debug & 0100) {
 	fprintf(outFP, "\nInit complete =======\n");
     }
+#endif
 
     if (debug & 0400) {
 	quit(0);			/* terminate - no inputs */
@@ -263,10 +273,14 @@ icc(
 #endif
 
     if ((gp = TX_[0]) != 0) {
+#if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
+#endif
 	gp->gt_val = -1;			/* set EOP initially */
 	link_ol(gp, o_list);			/* fire Input Gate */
+#if YYDEBUG
 	if (debug & 0100) fprintf(outFP, " -1");
+#endif
     }
 
     dis_cnt = DIS_MAX;
@@ -281,10 +295,12 @@ icc(
 	    c = ENTER;
 	    /* scan arithmetic and logic output lists until empty */
 	    while (scan_ar(a_list) || scan(o_list)) {
+#if YYDEBUG
 		if (debug & 0300) {	/* osc or detailed info */
 		    display();		/* inputs and outputs */
 		    c = 0;
 		}
+#endif
 	    }
 	} while (scan_clk(c_list));	/* then scan clock list until empty */
 
@@ -295,6 +311,7 @@ icc(
 	 *	scanned again in the next cycle.
 	 */
 
+#if YYDEBUG
 	if ((scan_cnt || link_cnt) && (debug & 02000)) {
 	    fprintf(outFP, "\nscan = %5d  link = %5d  time = %5d ms  ",
 		scan_cnt, link_cnt, time_cnt);
@@ -304,9 +321,11 @@ icc(
 	    }
 	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
 	}
+#endif
 
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
 	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
+#if YYDEBUG
 	if ((debug & 0200) &&
 	    (a_list->gt_next != a_list || o_list->gt_next != o_list)) {
 	    fprintf(outFP, "\nOSC =");
@@ -321,6 +340,7 @@ icc(
 	if ((debug & 0300) && c == ENTER) {	/* osc or detailed info */
 	    display();				/* inputs and outputs */
 	}
+#endif
 
     TestInput:
 	while (!kbhit() && !flag1C);		/* check inputs */
@@ -359,9 +379,11 @@ icc(
 		    if ((gp = IX_[c - '0']) != 0) {
 			gp->gt_val = -gp->gt_val; /* complement input */
 			link_ol(gp, o_list);
+#if YYDEBUG
 			if (debug & 0100) {
 			    putc(gp->gt_val < 0 ? '1' : '0', outFP);
 			}
+#endif
 			cnt--;			/* apply input ? */
 		    }
 		} else if (c == '+') {
@@ -446,6 +468,7 @@ icc(
 	}
     }
 } /* icc */
+#if YYDEBUG
 
 /********************************************************************
  *
@@ -504,6 +527,7 @@ display(void)
     }
     fflush(outFP);
 } /* display */
+#endif
 #ifdef _MSDOS_
 
 /********************************************************************

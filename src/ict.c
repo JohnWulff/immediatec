@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.31 2002/08/26 19:09:29 jw Exp $";
+"@(#)$Id: ict.c,v 1.32 2002/09/01 20:02:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -40,7 +40,9 @@ static const char ict_c[] =
 #define INTR 0x1c    /* The clock tick interrupt */
 #define YSIZE	10
 
+#if YYDEBUG
 static void	display(void);
+#endif
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define ENTER	'\n'
@@ -69,10 +71,12 @@ unsigned char	pdata[IXD];		/* input differences */
 short		dis_cnt;
 short		error_flag;
 
+#if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	scan_cnt;			/* count scan operations */
 unsigned	link_cnt;			/* count link operations */
 unsigned	glit_cnt;			/* count glitches */
 unsigned long	glit_nxt;			/* count glitch scan */
+#endif
 
 int		sockFN;			/* TCP/IP socket file number */
 
@@ -163,7 +167,9 @@ icc(
  *
  *******************************************************************/
 
+#if YYDEBUG
     if (debug & 0100) fprintf(outFP, "\nINITIALISATION\n");
+#endif
 
 #ifdef LOAD 
     /* if (debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
@@ -172,7 +178,9 @@ icc(
 #endif
 
     for (pass = 0; pass < 4; pass++) {
+#if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nPass %d:", pass + 1);
+#endif
 #ifdef LOAD
 	for (opp = sTable; opp < sTend; opp++) {
 	    gp = *opp;
@@ -195,9 +203,11 @@ icc(
 #endif
     }
 
+#if YYDEBUG
     if (debug & 0100) {
 	fprintf(outFP, "\nInit complete =======\n");
     }
+#endif
 
     if (error_flag) {
 	if (error_flag == 1) {
@@ -235,10 +245,14 @@ icc(
 #endif
 
     if ((gp = TX_[0]) != NULL) {
+#if YYDEBUG
 	if (debug & 0100) fprintf(outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
+#endif
 	gp->gt_val = -1;			/* set EOP initially */
 	link_ol(gp, o_list);			/* fire Input Gate */
+#if YYDEBUG
 	if (debug & 0100) fprintf(outFP, " -1");
+#endif
     }
 
 #ifdef LOAD 
@@ -280,6 +294,7 @@ icc(
 	}
 #endif
 
+#if YYDEBUG
 	if (debug & 0300) {		/* osc or detailed info */
 	    display();			/* inputs and outputs */
 	}
@@ -292,6 +307,7 @@ icc(
 	    fprintf(outFP, "scan = %d  link = %d\n", scan_cnt, link_cnt);
 	    scan_cnt = link_cnt = glit_cnt = glit_nxt = 0;
 	}
+#endif
 
 /********************************************************************
  *
@@ -307,6 +323,7 @@ icc(
 	a_list = (Gate*)a_list->gt_rlist;	/* alternate arithmetic list */
 	o_list = (Gate*)o_list->gt_rlist;	/* alternate logic list */
 
+#if YYDEBUG
 	if ((debug & 0200) &&
 	    (a_list->gt_next != a_list || o_list->gt_next != o_list)) {
 	    fprintf(outFP, "\nOSC =");
@@ -317,6 +334,7 @@ icc(
 		fprintf(outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
 	}
+#endif
 
 /********************************************************************
  *
@@ -384,19 +402,27 @@ icc(
 		 *	TIMERS here every 100 milliseconds
 		 */
 		if ((gp = TX_[4]) != 0) {		/* 100 millisecond timer */
+#if YYDEBUG
 		    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+#endif
 		    gp->gt_val = - gp->gt_val;	/* complement input */
 		    link_ol(gp, o_list);
+#if YYDEBUG
 		    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+#endif
 		    cnt++;
 		}
 		if (--tcnt == 0) {
 		    tcnt = D10;
 		    if ((gp = TX_[5]) != 0) {	/* 1 second timer */
+#if YYDEBUG
 			if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+#endif
 			gp->gt_val = - gp->gt_val;	/* complement input */
 			link_ol(gp, o_list);
+#if YYDEBUG
 			if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+#endif
 			cnt++;
 		    }
 		}
@@ -417,7 +443,9 @@ icc(
 			int		liveFlag;
 			char		utype[4];		/* need 2 with NUL */
 
+#if YYDEBUG
 			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, iccNM);
+#endif
 			if (sscanf(rBuf, "%1[XBWL]%d.%hd", utype, &slot, &val) == 3 && slot < IXD) {		
 			    switch (*utype) {
 			    case 'X':				/* bit input */
@@ -434,9 +462,13 @@ icc(
 					/* relies on input initialized to +1 !!!!!! */
 					/* and no other function modifies gp_gt_val */
 					gp->gt_val = - gp->gt_val;	/* complement input */
+#if YYDEBUG
 					if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+#endif
 					link_ol(gp, o_list);	/* fire Input Gate */
+#if YYDEBUG
 					if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
+#endif
 					cnt++;
 					/* o_list will be scanned before next input */
 				    }
@@ -457,9 +489,13 @@ icc(
 				    if (val != gp->gt_new &&	/* first change or glitch */
 				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
 					/* arithmetic master action */
+#if YYDEBUG
 					if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+#endif
 					link_ol(gp, a_list);	/* no actions */
+#if YYDEBUG
 					if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+#endif
 					cnt++;
 				    }
 				}
@@ -604,6 +640,7 @@ icc(
 			FD_CLR(0, &infds);		/* ignore EOF - happens in bg */
 		    } else if (c == 'q') {
 			quit(0);			/* quit normally */
+#if YYDEBUG
 		    } else if (c == 't') {
 			debug ^= 0100;			/* toggle -t flag */
 		    } else if (c == 'm') {
@@ -620,6 +657,7 @@ icc(
 			    xflag = flag;
 			    display();			/* inputs and outputs */
 			}
+#endif
 		    }
 		    /* ignore the rest for now */
 		}
@@ -650,6 +688,7 @@ liveData(unsigned short index, int value)
     }
     msgOffset += len;
 } /* liveData */
+#if YYDEBUG
 
 /********************************************************************
  *
@@ -706,6 +745,7 @@ display(void)
     }
     fflush(outFP);
 } /* display */
+#endif
 
 /********************************************************************
  *

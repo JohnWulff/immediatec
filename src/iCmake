@@ -37,7 +37,7 @@ usage ()
     echo '		(default use installed ict and -lict)' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.21 2002/08/26 12:56:28 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.22 2002/09/02 18:38:29 jw Exp $' >&2
 }
 
 link=0
@@ -47,7 +47,7 @@ a=""
 v=""
 b=""
 lib="-lict"
-d="-d74 -A"
+d="-d474 -A"
 x=""
 l=""
 q=0
