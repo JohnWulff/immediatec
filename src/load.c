@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.31 2002/06/27 12:11:06 jw Exp $";
+"@(#)$Id: load.c,v 1.32 2002/07/01 10:10:30 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -366,7 +366,7 @@ main(
 			    gp->gt_mark++;	/* logic output at gp */
 			    link_count++;
 			} else {
-			    if (gp->gt_fni <= MAX_FTY && gp->gt_ini > -MAX_LS) {
+			    if (gp->gt_fni < MAX_FTY && gp->gt_ini > -MAX_LS) {
 				inError(__LINE__, op, gp, "logic node points to non GATE");
 			    } else {
 				inError(__LINE__, op, 0, "logic node points to non Gate struct");
@@ -395,7 +395,7 @@ main(
 		op->gt_mark++;			/* count self */
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0, "no slave node or funct for action");
-		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
+		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF && op->gt_fni != F_CE) {
 		    gp->gt_val++;		/* mark slave node */
 		    if (op->gt_fni == D_SH) {
 			if (gp->gt_rlist) {
@@ -678,7 +678,7 @@ main(
 		if ((lp = op->gt_list) == 0 ||		/* RI_BIT to TIMR */
 		    (gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0, "no slave for master action RI_BIT to TIMR");
-		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF) {
+		} else if (op->gt_fni != F_SW && op->gt_fni != F_CF && op->gt_fni != F_CE) {
 		    if (df) printf("	%s,", gp->gt_ids);
 		} else {
 #ifdef HEXADDRESS

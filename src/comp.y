@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.59 2002/06/30 11:44:31 jw Exp $";
+"@(#)$Id: comp.y,v 1.60 2002/07/01 15:11:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1227,6 +1227,15 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	 *	if (expr,tim,delay) { C code } else { C code }
 	 ***********************************************************/
 	| ifini ELSE			{		/* { x++; } else */
+		Symbol *	sp;
+		List_e *	lp;
+		sp = $1.v->le_sym;		/* slave, deleted later */
+		assert(sp);
+		lp = sp->u.blist;
+		assert(lp);
+		sp = lp->le_sym;		/* master - currently ftype F_CF */
+		assert(sp);
+		sp->ftype = $2.v->ftype;	/* make it ftype F_CE from ELSE */
 		fprintf(exoFP, "    else\n");
 	    }
 	  cBlock			{		/* { x--; } */

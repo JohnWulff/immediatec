@@ -90,14 +90,14 @@ my %delayedColour;	# colour that should be restored after a flash
 #	the following array is indexed by gt_fni is ftype (see icc.h)
 #	
 #	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
-#	F_SW	S_FF	R_FF	D_FF	F_CF	CLCK	TIMR
+#	F_SW	S_FF	R_FF	D_FF	F_CF	F_CE	CLCK	TIMR
 #	OUTW	OUTX	CLCKL	TIMRL
 #	ARITH_A	GATE_A	INV_A	...	CLCKL_A	TIMRL_A
 #
 ########################################################################
 
-my @colourSelect  = ( 0,2,0,0,2,0,0,2,2,0,0,0,0,0,0,2,0,4,6, # cs[ftype] 0 - 18
-			2,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,4,6, # ALIAS    19 - 36
+my @colourSelect  = ( 0,2,0,0,2,0,0,2,2,0,0,0,0,0,0,0,2,0,4,6, # cs[ftype] 0 - 19
+		      0,2,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,6, # ALIAS    20 - 39
 		    );
 
 #  live colouring     false 0          true 1             cs  ftype
@@ -175,7 +175,7 @@ Menu buttons:
 
 Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
 						  '@'
-$Id: iClive,v 1.23 2002/06/19 20:44:13 jw Exp $
+$Id: iClive,v 1.24 2002/07/01 14:20:23 jw Exp $
 .
 
 use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);

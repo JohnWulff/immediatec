@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.17 2002/06/25 14:33:01 jw Exp $";
+"@(#)$Id: init.c,v 1.18 2002/07/01 09:50:53 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -58,8 +58,8 @@ static struct {
   { "SRT",	KEYW,	BLTINT,	S_FF,	}, /* monoflop with timed reset*/
   { "IF",	KEYW,	IF,	F_CF,	},
   { "if",	KEYW,	IF,	F_CF,	},
-  { "ELSE",	KEYW,	ELSE,	0,	},
-  { "else",	KEYW,	ELSE,	0,	},
+  { "ELSE",	KEYW,	ELSE,	F_CE,	},
+  { "else",	KEYW,	ELSE,	F_CE,	},
   { "SWITCH",	KEYW,	SWITCH,	F_SW,	},
   { "switch",	KEYW,	SWITCH,	F_SW,	},
   { "C",	KEYW,	CBLTIN,	CLCK,	},

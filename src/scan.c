@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.18 2002/06/24 16:05:51 jw Exp $";
+"@(#)$Id: scan.c,v 1.19 2002/07/01 15:21:41 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -28,38 +28,38 @@ static void	link_c(Gate * gp, Gate * out_list);
  *	The following 5 arrays are indexed by gt_fni is ftype
  *
  *	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
- *	F_SW	S_FF	R_FF	D_FF	F_CF	CLCK	TIMR
+ *	F_SW	S_FF	R_FF	D_FF	F_CF	F_CE	CLCK	TIMR
  *	OUTW	OUTX	CLCKL	TIMRL
  *
  *******************************************************************/
 
 Functp2		initAct[] = {		/* called in pass4 */
 		    err_fn, arithMa, link_ol, link_c, chMbit, link_c, link_c, dMsh,
-		    fMsw, link_c, link_c, link_c, link_c, link_c, link_c,
+		    fMsw, link_c, link_c, link_c, link_c, link_c, link_c, link_c,
 		    outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		masterAct[] = {		/* called in scan, scan_ar and pass4 */
 		    err_fn, arithMa, link_ol, riMbit, chMbit, sMsh, rMsh, dMsh,
-		    fMsw, sMff, rMff, dMff, fMcf, fMfn, fMfn,
+		    fMsw, sMff, rMff, dMff, fMcf, fMce, fMfn, fMfn,
 		    outMw, outMx, err_fn, err_fn,
 		};
 
 Functp2		slaveAct[] = {		/* called in scan_clk */
 		    err_fn, err_fn, err_fn, riSbit, chSbit, sSsh, rSsh, dSsh,
-		    fSsw, sSff, rSff, dSff, fScf, clockSfn, timerSfn,
+		    fSsw, sSff, rSff, dSff, fScf, fScf, clockSfn, timerSfn,
 		    err_fn, err_fn, err_fn, err_fn,
 		};
 
 Functp		init2[] = {		/* called in pass2 */
 		    null1, gate2, gate2, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
-		    null1, i_ff2, i_ff2, i_ff2, null1, i_ff2, i_ff2,
+		    null1, i_ff2, i_ff2, i_ff2, null1, null1, i_ff2, i_ff2,
 		    null1, null1, null1, null1,
 		};
 
 unsigned int	bit2[] = {		/* used in i_ff2() and i_ff3() */
 		    0, INPT_M, INPT_M, RI_B_M, CH_B_M, S_SH_M, R_SH_M, D_SH_M,
-		    F_CW_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, CLCK_M, TIMR_M,
+		    F_CW_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, F_CF_M, CLCK_M, TIMR_M,
 		    OUTP_M, OUTP_M, 0, 0,
 		};
 
@@ -327,7 +327,7 @@ scan(Gate *	out_list)
  *	nodes on their lists will be linked to c_list extending the
  *	clock scan immediately.
  *
- *	F_SW and F_CF execute C fragments as their slaveAct when they
+ *	F_SW, F_CF and F_CE execute C fragments as slaveAct when they
  *	are clocked. (IF ELSE or SWITCH). No output is linked directly
  *	to any action lists. The C fragments may assign to immediate
  *	gates of type LOGC or ARNC which are linked to the o_list or

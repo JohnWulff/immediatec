@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.36 2002/06/21 15:42:13 jw Exp $";
+"@(#)$Id: icc.h,v 1.37 2002/07/01 15:22:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -106,17 +106,18 @@ extern void	efree(void *);
 #define	R_FF	10	/* logical action not needed 1010 */
 #define	D_FF	11	/* logical action not needed 1011 */
 #define	F_CF	12	/* logical action */
-#define	CLCK	13	/* logical action */
-#define	TIMR	14	/* logical action */
-#define	OUTW	15	/* arithmetic output */
-#define	OUTX	16	/* logical output */
-#define	CLCKL	17	/* clock action */
-#define	TIMRL	18	/* timer action */
+#define	F_CE	13	/* logical action */
+#define	CLCK	14	/* logical action */
+#define	TIMR	15	/* logical action */
+#define	OUTW	16	/* arithmetic output */
+#define	OUTX	17	/* logical output */
+#define	CLCKL	18	/* clock action */
+#define	TIMRL	19	/* timer action */
 
 #define	MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
 #define	MIN_ACT	RI_BIT	/* ftypes >= MIN_ACT cause an action */
 #define	MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
-#define	MAX_FTY	TIMRL	/* ftypes >  MAX_FTY are ALIAS ftypes for live list */
+#define	MAX_FTY	TIMRL+1	/* ftypes >= MAX_FTY are ALIAS ftypes for live list */
 
 #define	ONCE_M	0x100	/* actions containing this bit only once */
 #define	S_FF_M	0x01	/* masks in array bit2 for pass2 */
@@ -158,19 +159,19 @@ extern void	efree(void *);
 
 /* list of ftypes */
 #define	FULL_FTYPE "UDFA","ARITH","GATE","RI_BIT","CH_BIT","S_SH","R_SH","D_SH",\
-	"F_SW","S_FF","R_FF","D_FF","F_CF","CLCK","TIMR","OUTW","OUTX",\
+	"F_SW","S_FF","R_FF","D_FF","F_CF","F_CE","CLCK","TIMR","OUTW","OUTX",\
 	"CLCKL","TIMRL"
 
-#define	FOPS	"UA EVsrHISRDFCTWX:!"	/* DEBUG display of ftypes */
+#define	FOPS	"UA EVsrHISRDFGCTWX:!"	/* DEBUG display of ftypes */
 
 /* types corresponding to ftypes */
 #define	TYPES	UDF, ARN, OR, EF, VF, SH, SH, SH, SW,\
-	FF, FF, FF, CF, CLK, TIM, ARN, AND,\
+	FF, FF, FF, CF, CF, CLK, TIM, ARN, AND,\
 	ERR, ERR
 
 /* compiler tokens corresponding to ftype */
 #define	DEF_ACT	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, AOUT, LOUT,\
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, AOUT, LOUT,\
 	CVAR, TVAR
 
 extern char *		full_type[];
@@ -268,6 +269,7 @@ extern void	chMbit(Gate *, Gate *);	/* CH_BIT master action on VF */
 extern void	riMbit(Gate *, Gate *);	/* RI_BIT master action on EF */
 extern void	fMsw(Gate *, Gate *);	/* F_SW master action */
 extern void	fMcf(Gate *, Gate *);	/* F_CF master action */
+extern void	fMce(Gate *, Gate *);	/* F_CE master action */
 extern void	fMfn(Gate *, Gate *);	/* CLCK TIMR master action */
 extern void	outMw(Gate *, Gate *);	/* OUTW master action */
 extern void	outMx(Gate *, Gate *);	/* OUTX master action */
@@ -282,7 +284,7 @@ extern void	dSsh(Gate *, Gate *);	/* D_SH slave action on SH */
 extern void	chSbit(Gate *, Gate *);	/* CH_BIT slave action on VF */
 extern void	riSbit(Gate *, Gate *);	/* RI_BIT slave action on EF */
 extern void	fSsw(Gate *, Gate *);	/* F_SW slave action on SW */
-extern void	fScf(Gate *, Gate *);	/* F_CF slave action on CF */
+extern void	fScf(Gate *, Gate *);	/* F_CF F_CE slave action on CF */
 extern void	clockSfn(Gate *, Gate *);/* CLCK slave action on CLK */
 extern void	timerSfn(Gate *, Gate *);/* TIMR slave action on TIM */
 extern void	err_fn(Gate *, Gate *);	/* no master or slave function */

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.49 2002/06/30 19:40:07 jw Exp $";
+"@(#)$Id: outp.c,v 1.50 2002/07/01 09:55:25 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -207,7 +207,7 @@ listNet(unsigned * gate_count)
 			    dc = 1;
 			    fprintf(outFP, "\n\t");
 			}
-			if (sp->ftype == F_SW || sp->ftype == F_CF) {
+			if (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) {
 			    /* case number of "if" or "switch" C fragment */
 			    fprintf(outFP, "\t%c (%d)",
 				os[types[sp->ftype]], lp->le_val);
@@ -381,7 +381,7 @@ buildNet(Gate ** igpp)
 				    }
 				    *fp++ = tsp->u.gate;
 				} else {
-				    /* F_SW or F_CF action gate points to function */
+				    /* F_SW, F_CF or F_CE action gate points to function */
 				    *fp++ = (Gate*)lp->le_val;
 				}
 				/* room for clock or timer entry */
@@ -985,7 +985,7 @@ static Gate *	l_[] = {\n");
 			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
 		    } else {
-			if (lp->le_sym == 0) {	/* dc == F_SW or F_CF */
+			if (lp->le_sym == 0) {	/* dc == F_SW, F_CF or F_CE */
 			    /* Function Pointer for "if" or "switch" */
 			    len += 17;	/* assume len of %d is 2 */
 			    fprintf(Fp, "%s(Gate*)cexe_%d,",

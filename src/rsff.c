@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.26 2002/06/23 16:24:59 jw Exp $";
+"@(#)$Id: rsff.c,v 1.27 2002/07/01 15:20:08 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -637,7 +637,7 @@ rSsh(					/* R_SH slave action on SH */
 /********************************************************************
  *
  *	Pass 2 initialisation for clocked Gates via ftype S_FF - TIMR
- *	except F_SW and F_CF in pass2().
+ *	except F_SW, F_CF and F_CE in pass2().
  *
  *	Each action Gate ors a bit reserved for its action in gt_mcnt
  *	of the function Gate on which it acts. If ONCE_M is set, that
@@ -947,7 +947,9 @@ fSsw(					/* F_SW slave action on SW */
 
 /********************************************************************
  *
- *	Master function for IF() IF() ELSE.
+ *	Master function for IF()
+ *
+ *	IF (expr) { ; }			triggers slave on rising edge only
  *
  *******************************************************************/
 
@@ -961,8 +963,37 @@ fMcf(					/* F_CF master action */
 	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
     }
 #endif
-    link_ol(gp, gp->gt_clk);		/* master action */
+    if (
+	gp->gt_val < 0  ||		/* rising edge */
+	gp->gt_next			/* or glitch */
+    ) {
+	link_ol(gp, gp->gt_clk);	/* master action */
+    }
 } /* fMcf */
+
+/********************************************************************
+ *
+ *	Master function for IF() ELSE
+ *
+ *	IF (expr) { ; } ELSE { ; }	triggers slave on both edges
+ *
+ *	The same C code fragment is executed on bothe edges. The code
+ *	fragment has an if else test to decide which code to execute.
+ *
+ *******************************************************************/
+
+void
+fMce(					/* F_CE master action */
+    Gate *	gp,
+    Gate *	out_list)
+{
+#if defined(TCP) && defined(LOAD)
+    if (gp->gt_live & 0x8000) {
+	liveData(gp->gt_live, gp->gt_val < 0 ? 1 : 0);	/* live is active */
+    }
+#endif
+    link_ol(gp, gp->gt_clk);		/* master action */
+} /* fMce */
 
 /********************************************************************
  *
@@ -977,7 +1008,7 @@ fMcf(					/* F_CF master action */
  *******************************************************************/
 
 void
-fScf(					/* F_CF slave action on CF */
+fScf(					/* F_CF and F_CE slave action on CF */
     Gate *	gf,
     Gate *	out_list)
 {

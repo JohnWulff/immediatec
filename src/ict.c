@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.28 2002/06/12 06:30:46 jw Exp $";
+"@(#)$Id: ict.c,v 1.29 2002/07/01 10:10:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -508,7 +508,7 @@ icc(
 					if (fni == CH_BIT && gp->gt_ini >= 0) {
 					    fni = RI_BIT;		/* AND - LATCH, display as logic signal */
 					}
-					while (rest = REPLY - msgOffset, (len = fni > MAX_FTY ?
+					while (rest = REPLY - msgOffset, (len = fni >= MAX_FTY ?
 					    snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
 					    snprintf(&msgBuf[msgOffset], rest, ";%s %d", ids, fni)
 					    ) < 0 || len >= rest) {

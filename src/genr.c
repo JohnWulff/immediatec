@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.48 2002/06/30 15:54:42 jw Exp $";
+"@(#)$Id: genr.c,v 1.49 2002/07/01 09:31:51 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -669,7 +669,7 @@ op_asgn(				/* asign List_e stack to links */
 			fprintf(outFP, "\t%c", fos[sp->ftype]);
 		    }
 		}
-		if (gp->ftype == F_SW || gp->ftype == F_CF ||
+		if (gp->ftype == F_SW || gp->ftype == F_CF || gp->ftype == F_CE ||
 		    (gp->ftype == TIMR && lp->le_val > 0)) {
 		    /*
 		     * case number of "if" or "switch" C fragment
