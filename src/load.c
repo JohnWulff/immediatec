@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.3 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: load.c,v 1.4 1999/12/05 11:07:48 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -38,8 +38,8 @@ uchar		ftypes[] = { FTYPES };
 char		os[] = OPS;
 char		fos[] = FOPS;
 
-FILE *		outFP = stdout;		/* listing file pointer */
-FILE *		errFP = stderr;		/* error file pointer */
+FILE *		outFP;			/* listing file pointer */
+FILE *		errFP;			/* error file pointer */
 
 static char *	usage = "USAGE:\n\
 %s [-d<debug>] [-n<count>] [-a]\n\
@@ -106,6 +106,8 @@ main(
     unsigned	df = 0;
 
     progname = *argv;		/* Process the arguments */
+    outFP = stdout;		/* listing file pointer */
+    errFP = stderr;		/* error file pointer */
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;

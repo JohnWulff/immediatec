@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.5 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: pplc.h,v 1.6 1999/12/05 11:07:48 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -147,6 +147,7 @@ extern char *	full_type[];
 extern char *	full_ftype[];
 extern char	os[];
 extern char	fos[];
+extern FILE *	inFP;			/* input file pointer */
 extern FILE *	outFP;			/* output file pointer */
 extern FILE *	errFP;			/* error file pointer */
 extern short	debug;	/* from -do argument in call to main */

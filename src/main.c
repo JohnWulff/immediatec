@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.5 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: main.c,v 1.6 1999/12/05 11:07:48 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -76,6 +76,9 @@ main(
 {
     int		r;		/* return value of compile */
     progFN = *argv;		/* Process the arguments */
+    inFP = stdin;		/* input file pointer */
+    outFP = stdout;		/* listing file pointer */
+    errFP = stderr;		/* error file pointer */
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.6 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: comp.y,v 1.7 1999/12/05 11:07:48 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -898,9 +898,9 @@ int		lex_typ[] = { DEF_TYP };/* tokens corresponding to type */
 int		lex_act[] = { DEF_ACT };/* tokens corresponding to ftype */
 
 char *		inpNM = "standard input";/* original input file name */
-FILE *		fin = stdin;		/* input file pointer */
-FILE *		outFP = stdout;		/* listing file pointer */
-FILE *		errFP = stderr;		/* error file pointer */
+FILE *		inFP;			/* input file pointer */
+FILE *		outFP;			/* listing file pointer */
+FILE *		errFP;			/* error file pointer */
 FILE *		exiFP;			/* cexe in file pointer */
 FILE *		exoFP;			/* cexe out file pointer */
 
@@ -931,7 +931,7 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
     if (errNM && (errFP = fopen(errNM, "w+")) == NULL) {
 	return 2;
     }
-    if (szFile_g && (fin = fopen(inpNM = szFile_g, "r")) == NULL) {
+    if (szFile_g && (inFP = fopen(inpNM = szFile_g, "r")) == NULL) {
 	return 1;
     }
     if ((exoFP = fopen(exoNM, "w+")) == NULL) {
@@ -968,7 +968,7 @@ compile(char *lstNM, char *errNM, char *outNM, char *exiNM, char *exoNM)
 	}
 	fclose(exiFP);
     }
-    if (szFile_g) fclose(fin);
+    if (szFile_g) fclose(inFP);
     return 0;
 } /* compile */
 
@@ -997,7 +997,7 @@ get(void)
 	    lineno++;
 	}
 	for (getp = fillp = chbuf; fillp < &chbuf[sizeof(chbuf)-1]
-	    && (temp = getc(fin)) != EOF
+	    && (temp = getc(inFP)) != EOF
 	    && (*fillp++ = temp) != '\n'; );
 	if (fillp == chbuf) {
 	    strcpy(chbuf, "*** EOF ***\n");
@@ -1360,7 +1360,7 @@ execerror(			/* recover from run-time error */
     char *	str2)
 {
     errmess("Execerror", str1, str2);
-    fseek(fin, 0L, 2);	/* flush rest of file */
+    fseek(inFP, 0L, 2);	/* flush rest of file */
     longjmp(begin, 0);
 } /* execerror */
 
