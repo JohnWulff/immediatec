@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.15 2000/11/19 17:19:08 jw Exp $";
+"@(#)$Id: comp.y,v 1.16 2000/11/21 18:31:40 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -79,13 +79,13 @@ pu(int t, char * token, Lis * node)
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2
 %token	<sym>	CVAR CBLTIN TVAR TBLTIN STATIC BLATCH BFORCE DLATCH
-%token	<sym>	EXTERN IMM TYPE CKEYW IF ELSE SWITCH
+%token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCNUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
 %type	<sym>	stmt asgn wasgn xasgn casgn tasgn cstatic decl
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ffexpr cref
 %type	<val>	cblock ccexpr value declHead
-%type	<str>	cbkini cstini cexini
+%type	<str>	cstini cexini
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
@@ -114,15 +114,13 @@ stmt	: /* nothing */		{ stmtp = yybuf; $$.v = 0; }
 	| stmt xasgn ';'	{ $$.v = $2.v; stmtp = yybuf; return (1); }
 	| stmt xasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
 		/* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
-	| stmt ffexpr '}'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; return (1); }
-	| stmt ffexpr error '}'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; yyerrok; }
-	| stmt ffexpr ';'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; return (1); }
-	| stmt ffexpr error ';'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; yyerrok; }
+	| stmt ffexpr		{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; return (1); }
 	| stmt casgn ';'	{ $$.v = $2.v; return (1); }
 	| stmt casgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
 	| stmt tasgn ';'	{ $$.v = $2.v; return (1); }
 	| stmt tasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
 	| stmt error ';'	{ clk->type = ERR; stmtp = yybuf; yyerrok; }
+	| stmt error '}'	{ clk->type = ERR; stmtp = yybuf; yyerrok; }
 	;
 
 decl	: declHead UNDEF	{
@@ -554,13 +552,10 @@ value	: NUMBER		{ $$.v = $1.v;	/* terminates with , or ) */
 	| ccexpr		{ $$.v = -$1.v; }	/* case # */
 	;
 
-cblock	: cbkini CCFRAG		{ $$.v = $2.v; }	/* ccfrag must be set */
+cblock	: '{'			{ ccfrag = "{"; }	/* ccfrag must be set */
+	  CCFRAG '}'		{ $$.v = $3.v; }	/* count dummy yacc token */
 	| cexini		{ stflag |= 0x10; }
-	  CCFRAG		{ $$.v = $3.v; }
-	; 
-
-cbkini	: '{' 			{ ccfrag = $1.v; }	/* '}' */
-	| CKEYW			{ ccfrag = "{";		/* "}" */ }
+	  CCFRAG ';'		{ $$.v = $3.v; }	/* count dummy yacc token */
 	;
 
 cstatic	: cstini CCFRAG		{ $$.v = 0; }	/* ccfrag must be set */
@@ -647,7 +642,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 ffexpr	: IF '(' aexpr cref ')' cblock {		/* if (expr) { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
 	    }
-	| IF '(' aexpr cref ')' cblock '}' ELSE cblock {
+	| IF '(' aexpr cref ')' cblock ELSE cblock {
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
 	    }
 	| SWITCH '(' aexpr cref ')' cblock {
