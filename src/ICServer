@@ -72,7 +72,7 @@ Usage:	@<<<<<<< [-th] [-s <host>] [-p <port>] [<list of client calls>]
 	-h	help, ouput this Usage text only
 	NOTE:	if a client call has arguments the call
 		must be quoted. eg: 'DemoBox X0'
-$Id: ICServer,v 1.7 2000/06/02 08:21:50 jw Exp $
+$Id: ICServer,v 1.8 2000/06/02 11:13:18 jw Exp $
 .
 
 use vars qw($opt_t $opt_s $opt_p $opt_h);
@@ -182,7 +182,7 @@ sub rcvd_msg_from_client {
 		$Connections{$msg} = $conn;
 		print "Registered $msg at server. $conn\n";
 	    }
-	} elsif ($msg =~ /^[XBW]/) {		# value messages from PPLC
+	} elsif ($msg =~ /^X/) {		# bit value messages from PPLC
 	    my ($uID, $index, $value, $rest) = split /,/, $msg, 4;
 	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
 		if (defined $Connections{$uID}) {
@@ -190,6 +190,18 @@ sub rcvd_msg_from_client {
 		    print "$index,$value to $uID\n" if $opt_t;
 		} else {
 		    print "$index,$value to dummy $uID\n" if $opt_t;
+		}
+	    } else {
+		print "ERROR: $msg from Unit $unitID ?? ignored\n";
+	    }
+	} elsif ($msg =~ /^[BW]/) {		# analog value messages from PPLC
+	    my ($uID, $value, $rest) = split /,/, $msg, 3;
+	    if ($unitID eq 'P0' and defined $value and not defined $rest) {
+		if (defined $Connections{$uID}) {
+		    $Connections{$uID}->send_now("$value");
+		    print "$value to $uID\n" if $opt_t;
+		} else {
+		    print "$value to dummy $uID\n" if $opt_t;
 		}
 	    } else {
 		print "ERROR: $msg from Unit $unitID ?? ignored\n";

@@ -20,19 +20,20 @@ use strict;
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<< [-th] [-s <host>] [-p <port>] [<unitID>]
+Usage:	@<<<<<< [-tdh] [-s <host>] [-p <port>] [<unitID>]
 	$named
 	-s host	ID of server (default 'localhost')
 	-p port	service port of server (default '8080')
 	unitID	default is 'X0'
-	-t	trace messages for debuuging
+	-t	trace debug messages
+	-d	extra receive debug messages
 	-h	help, ouput this Usage text only
-$Id: DemoBox,v 1.17 2000/06/02 08:21:50 jw Exp $
+$Id: DemoBox,v 1.18 2000/06/02 11:13:18 jw Exp $
 .
 
-use vars qw($opt_t $opt_s $opt_p $opt_h);
+use vars qw($opt_t $opt_d $opt_s $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('ts:p:h');			# sets $opt_h if -h etc
+&Getopts('tds:p:h');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -77,7 +78,14 @@ $mainWindow->Button(-text    => "Exit",
 #
 ########################################################################
 
-my $inFrame  = $mainWindow->Frame(-label       => 'inputs',
+my $inLabel = "input";
+my $outLabel = "output";
+if ($unitID !~ /^X/) {
+    $inLabel = "in I$unitID";
+    $outLabel = "out Q$unitID";
+}
+
+my $inFrame  = $mainWindow->Frame(-label       => $inLabel,
 				  -relief      => 'groove',
 				  -borderwidth => 2,
 				 )->pack(-side   => 'left', 
@@ -85,7 +93,7 @@ my $inFrame  = $mainWindow->Frame(-label       => 'inputs',
 				         -fill   => 'y',
 				        );
 
-my $outFrame = $mainWindow->Frame(-label       => 'outputs',
+my $outFrame = $mainWindow->Frame(-label       => $outLabel,
 				  -relief      => 'groove',
 				  -borderwidth => 2,
 				 )->pack(-side   => 'right', 
@@ -100,48 +108,86 @@ my $outFrame = $mainWindow->Frame(-label       => 'outputs',
 ########################################################################
 
 my @inputs;
-
-for (my $index = 0; $index < 8; $index++) {
-    my $input = "I$unitID.$index";
-    my $makeCheckbutton = "\
-	\$inFrame->Checkbutton(\
-	    -text        => \$input,\
-	    -variable    => \\\$inputs[\$index],\
-	    -selectcolor => 'green',\
-	    -command     => sub {\
-				 print \"   $index,\$inputs[$index] from $unitID\\n\" if \$opt_t;\
-				 \$conn->send_now(\"$index,\$inputs[$index]\");\
-				},\
-	)->pack(-side   => 'top',\
-		-expand => 1,\
-	);\
-    ";
-    eval $makeCheckbutton;
-    print $@;
-}
-
 my @outputs;
 
-for (my $index = 0; $index < 8; $index++) {
-    my $output = "Q$unitID.$index";
-    my $makeCheckbutton = "\
-	\$outFrame->Checkbutton(\
-	    -text        => \$output,\
-	    -variable    => \\\$outputs[\$index],\
-	    -selectcolor => 'red',\
-#	    -state       => 'disabled',\
-	    -takefocus   => 0,\
-	    -command     => sub {\
-				 print \"Inverting output $index on $unitID\\n\" if \$opt_t;\
-				 \$outputs[$index] = [1,0]->[\$outputs[$index]];\
-				},\
-	)->pack(-side   => 'top',\
-		-expand => 1,\
-	);\
-    ";
-    eval $makeCheckbutton;
-    print $@;
-    $outputs[$index] = 0;
+if ($unitID =~ /^X/) {
+    for (my $index = 0; $index < 8; $index++) {
+	my $input = "I$unitID.$index";
+	my $makeCheckbutton = "\
+	    \$inFrame->Checkbutton(\
+		-text        => \$input,\
+		-variable    => \\\$inputs[\$index],\
+		-selectcolor => 'green',\
+		-command     => sub {\
+				     print \"   $index,\$inputs[$index] from $unitID\\n\" if \$opt_t;\
+				     \$conn->send_now(\"$index,\$inputs[$index]\");\
+				    },\
+	    )->pack(-side   => 'top',\
+		    -expand => 1,\
+	    );\
+	";
+	eval $makeCheckbutton;
+	print $@;
+    }
+
+    for (my $index = 0; $index < 8; $index++) {
+	my $output = "Q$unitID.$index";
+	my $makeCheckbutton = "\
+	    \$outFrame->Checkbutton(\
+		-text        => \$output,\
+		-variable    => \\\$outputs[\$index],\
+		-selectcolor => 'red',\
+    #	    -state       => 'disabled',\
+		-takefocus   => 0,\
+		-command     => sub {\
+				     print \"Inverting output $index on $unitID\\n\" if \$opt_t;\
+				     \$outputs[$index] = [1,0]->[\$outputs[$index]];\
+				    },\
+	    )->pack(-side   => 'top',\
+		    -expand => 1,\
+	    );\
+	";
+	eval $makeCheckbutton;
+	print $@;
+	$outputs[$index] = 0;
+    }
+}
+
+########################################################################
+#
+#	Generate 1 input analog scale and 1 output analog scale
+#
+########################################################################
+
+elsif ($unitID =~ /^[BW]/) {
+
+	my $input = "I$unitID";
+
+	    $inFrame->Scale(
+#		-label       => $input,
+		-from        => 0,
+		-to          => 100,
+		-variable    => \$inputs[0],
+		-command     => sub {
+#				     print "   $inputs[0] from $unitID\n" if $opt_t;
+				     $conn->send_now("$inputs[0]") if length $inputs[0];
+				    },
+	    )->pack(-side   => 'top',
+		    -expand => 1,
+	    );
+
+	my $output = "Q$unitID";
+
+	    $outFrame->Scale(
+#		-label       => $output,
+		-from        => 0,
+		-to          => 100,
+		-variable    => \$outputs[0],
+		-state       => 'disabled',
+		-takefocus   => 0,
+	    )->pack(-side   => 'top',
+		    -expand => 1,
+	    );
 }
 
 ########################################################################
@@ -149,6 +195,10 @@ for (my $index = 0; $index < 8; $index++) {
 #	Register read events
 #
 ########################################################################
+
+else {
+    die "DemoBox $unitID could not be made\n";
+}
 
 $mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 
@@ -176,9 +226,16 @@ sub rcvd_msg_from_server {
 	    print "DemoBox $unitID disconnected by server\n";
 	    exit;
 	}
-	my ($index, $value) = split /,/, $msg;
-#	print "$index $value $outputs[$index]\n";
-	$outputs[$index] = $value;
+	if ($unitID =~ /^X/) {
+	    my ($index, $value) = split /,/, $msg;
+	    print "$index $value $outputs[$index]\n" if $opt_d;
+	    $outputs[$index] = $value;
+	} elsif ($unitID =~ /^[BW]/) {
+	    print "$msg $outputs[0]\n" if $opt_d;
+	    $outputs[0] = $msg;
+	} else {
+	    print "$unitID received spurious message: '$msg'\n";
+	}
     }
 }
 __END__
