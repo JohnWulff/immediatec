@@ -40,7 +40,11 @@ $label->pack;	# give it a default place in the main window
 
 $button = $top->Button(
     text	=> 'John',
-    command	=> \&change_label,
+    command	=> sub {	# use a closure
+	$button->cget('text') eq 'John' ?
+	    $button->configure(text => 'Helene') :
+	    $button->configure(text => 'John');
+    }
 );
 $button->pack;	# give it a default place in the main window
 
@@ -51,16 +55,3 @@ $button->pack;	# give it a default place in the main window
 ########################################################################
 
 MainLoop();
-
-########################################################################
-#
-#	Callback function
-#
-########################################################################
-
-sub change_label
-{
-    $button->cget('text') eq 'John'	   ?
-	$button->configure(text => 'Helene') :
-	$button->configure(text => 'John');
-}
