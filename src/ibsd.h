@@ -1,8 +1,20 @@
 static const char ibsd_h[] =
-"@(#)$Id: ibsd.h,v 1.2 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: ibsd.h,v 1.3 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- * 	Headerfile zur Treibersoftware für den IBS-COP
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john.wulff@inka.de>
+ *
+ *	ibsd.h
+ *	parallel plc - runtime support for Phoenix Contact COP card
+ *		       connected to InterBus-S field bus I/O system
+ *
+ * 	Headerfile zur Treibersoftware fuer den IBS-COP
  *	20.9.94 / mg
  *
  *******************************************************************/
@@ -25,15 +37,15 @@ extern "C" {
 /*----------------------------------------------------------------- */
 #define TRUE		1
 #define FALSE		0
-#define MAXBIN		2048 / 16	/* Binärdaten werden als Worte */
+#define MAXBIN		2048 / 16	/* Binaerdaten werden als Worte */
 					/* im Speicher abgelegt */
 #define MAXWORD		2048		/* Anzahl Worte zum Master */
-#define MAXMAIL		256		/* Größe der Master Mailbox */
+#define MAXMAIL		256		/* Groesse der Master Mailbox */
 
 /*----------------------------------------------------------------- */
-/* Definitionen für COP / Host-PC Kommunikation */
+/* Definitionen fuer COP / Host-PC Kommunikation */
 /*----------------------------------------------------------------- */
-#define HOSTMAIL	256		/* Größe der Host Mailbox */
+#define HOSTMAIL	256		/* Groesse der Host Mailbox */
 #define MSG_ERROR		0x00
 #define GET_SYMBOL_TABLE	0x01
 #define GET_NEXT		0x02
@@ -106,8 +118,8 @@ extern MsgBuf *	outMsg;
 /*----------------------------------------------------------------- */
 /* Strukturen zum Datenaustausch mit der PLC */
 /*----------------------------------------------------------------- */
-extern unsigned short DataIn[MAXBIN];		/* IBS binäre Eingaben */
-extern unsigned short DataOut[MAXBIN];		/* IBS binäre Ausgaben */
+extern unsigned short DataIn[MAXBIN];		/* IBS binaere Eingaben */
+extern unsigned short DataOut[MAXBIN];		/* IBS binaere Ausgaben */
 
 extern unsigned short HostDataIn[MAXBIN];	/* Host in Daten */
 extern unsigned short HostDataOut[MAXBIN];	/* Host out Daten */
@@ -122,8 +134,8 @@ extern short InitDataLink(void);
 extern short CloseDataLink(void);
 extern short StartIBS(void);
 extern short StopIBS(void);
-extern short IBSsendData(void);		/* IBS binäre Ausgabe */
-extern short IBSrecvData(void);		/* IBS binäre Eingabe */
+extern short IBSsendData(void);		/* IBS binaere Ausgabe */
+extern short IBSrecvData(void);		/* IBS binaere Eingabe */
 
 extern short sendData(void);		/* Host Ausgabe */
 extern short recvData(void);		/* Host Eingabe */
