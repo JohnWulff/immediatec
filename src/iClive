@@ -60,28 +60,6 @@ my @tagForeground = ('black'        , 'red'          ,);
 my $is_logic = 0;             # 1 if check-button on
 my $info = '';
 my $filename = '';
-my $length = 0;
-
-my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
-my @invert =	(1, 0);		# invert logic sense
-my @bitIndex =	(
-    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
-    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
-    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x20
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x40
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x80
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-);
 
 ########################################################################
 #
@@ -103,7 +81,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.3 2001/03/24 21:01:48 jw Exp $
+$Id: iClive,v 1.4 2001/03/28 08:59:11 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -132,8 +110,13 @@ my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $font = defined $opt_f ? $opt_f : '9x15';
 my $unitID = 'L0';
-my %symbolTable = ();
-my %activeSymbols;
+my %symbolTable = ();	# $symbolTable{$symbol} = [$ftype, $index]
+my @activeSymbols;	# $activeSymbols[index] = $ftype if active
+my $recvIndex = 0;
+
+my ($normal, $inverse);
+$normal = "0";
+$inverse = "0~";
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 if ($conn) {
@@ -265,10 +248,12 @@ $mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); }) i
 
 ########################################################################
 #
+#	Open the first file in the argument list
 #	Sit in an infinite loop dispatching incoming events.
 #
 ########################################################################
 
+load_file() if $filename;
 MainLoop;
 
 ########################################################################
@@ -296,12 +281,17 @@ sub rcvd_msg_from_server {
 	my $entry = shift @symbols;		# first entry is an operation
 	if ($entry =~ /$unitID\.(\d+)/) {
 	    if (($entry = $1) eq '1') {
+		# Symbol table block
 		while ($entry = shift @symbols) {
 		    my ($symbol, $ftype) = split " ", $entry;
 # print "$symbol	$ftype\n";
-		    $symbolTable{$symbol} = $ftype;
+#		    $symbolTable{$symbol}[0] = $ftype;	# TODO combine t assignments
+#		    $symbolTable{$symbol}[1] = $recvIndex++;
+		    push @{ $symbolTable{$symbol} }, $ftype, $recvIndex++;
 		}
 	    } elsif ($entry eq '2') {
+		# End of symbol table
+		$recvIndex = 0;		# ready for next block
 		scan();
 	    }
 	} else {
@@ -316,17 +306,18 @@ sub rcvd_msg_from_server {
 #
 ########################################################################
 
-my ($normal, $inverse);
-
 sub logic {
 print STDERR "is_logic = $is_logic '$normal' '$inverse'\n";
-    my $inv_logic = $is_logic ? 0 : 1;
+    my $inv_logic = $is_logic ^ 1;
+printMicroSeconds() if $opt_m;
     $text->tagConfigure($normal, 
 			'-background' => $tagBackground[$is_logic], 
 			'-foreground' => $tagForeground[$is_logic]);
+printMicroSeconds() if $opt_m;
     $text->tagConfigure($inverse, 
 			'-background' => $tagBackground[$inv_logic], 
 			'-foreground' => $tagForeground[$inv_logic]);
+printMicroSeconds() if $opt_m;
 }
 
 ########################################################################
@@ -337,6 +328,7 @@ print STDERR "is_logic = $is_logic '$normal' '$inverse'\n";
 
 sub search {
     my ($search_pattern, $word, $i, $iw, $inv);
+print "search\n";
     $normal = $search->get();
     $inverse = "$normal~";
     $text->tagDelete($normal);
@@ -387,15 +379,22 @@ print STDERR "word: $word '$iw'\n";
 ########################################################################
 
 sub scan {
-    my ($search_pattern, $word, $i, $iw, $inv);
+    my ($search_pattern, $word, $i, $iw, $tag, $inv, $ftype, $index);
     # delete all tags for previous active symbols
-    foreach my $symbol (keys %activeSymbols) {
-	$text->tagDelete($symbol);
+    foreach my $symbol (keys %symbolTable) {
+	$index = $symbolTable{$symbol}[1];
+	if ($activeSymbols[$index]) {
+print("$symbol	$index $index~ deleted\n");
+	    $text->tagDelete($index);
+	    $text->tagDelete("$index~");
+	}
     }
-    %activeSymbols = ();	# delete all previous active symbols
+    @activeSymbols = ();	# delete all previous active symbols
+
     $search_pattern = '[~!\s]*[A-Za-z][\w.]*\s*((~ )?---)?';
 
     my $current = '1.0'; my $length = '0';
+print "scan symbol table '$normal' '$inverse'\n";
     while (1) {
 	$current = $text->search('-count' => \$length,
 				 '-regexp', 
@@ -407,21 +406,40 @@ sub scan {
 	$iw = $i = $text->get($current, "$current + $length char");
 	$i =~ s/([!~\t ]*)([\w.]+)([!~\t ]*)/$1$3/;
 	if ($symbolTable{$2}) {
-	    $word = $2;			# word is in the symbol table
+	    ($ftype, $index) = @{ $symbolTable{$2} };
+	    $tag = $index;
+	    $word = $2;			# ZZZ word is in the symbol table
 	    $inv = 0;
 	    while ($i =~ m/[!~]/g) {
 		$inv ^= 1;
 	    }
-	    $word .= '~' if $inv;
-# print "word: $word '$iw'\n";
-	    unless ($activeSymbols{$word}++) {
-		$text->tagConfigure($word, 
-				    '-background' => $tagBackground[$inv], 
-				    '-foreground' => $tagForeground[$inv]);
+	    $tag .= '~' if $inv;
+print "$tag	$word	'$iw'\n";
+	    unless ($activeSymbols[$index]) {
+		$activeSymbols[$index] = $ftype;	# TODO use to adjust background
+		$text->tagConfigure("$index", 
+				    '-background' => $tagBackground[0], 
+				    '-foreground' => $tagForeground[0]);
+		$text->tagConfigure("$index~", 
+				    '-background' => $tagBackground[1], 
+				    '-foreground' => $tagForeground[1]);
 	    }
-	    $text->tagAdd($word, $current, "$current + $length char");
+	    $text->tagAdd($tag, $current, "$current + $length char");
 	}
         $current = $text->index("$current + $length char");
+    }
+
+    ####################################################################
+    # send list of active symbols to iC control process
+    # only the state (logic or arithmetic) for the symbols in this list
+    # need to be updated for this display
+    # it is immaterial for the control program in which logic
+    # sense the symbol is displayed
+    ####################################################################
+    foreach $index (0 .. $#activeSymbols) {
+	if (defined ($ftype = $activeSymbols[$index])) {
+printf("%4d %s\n", $index, $ftype);
+	}
     }
 }
 
@@ -449,7 +467,7 @@ sub load_file {
     $text->insert("end", "ERROR: Could not open $filename\n"); 
 	return; 
     }
-    $length = 0;
+    my $length = 0;
     while (<FH>) {
 	$length += length $_;
 	$text->insert("end", $_);
@@ -468,7 +486,7 @@ sub save_file {
     $info = "Saving '$filename'...";
     open (FH, ">$filename");
     my $contents = $text->get("1.0", "end - 1 chars");
-    $length = length $contents;
+    my $length = length $contents;
     print FH $contents;
     close (FH);
     $info = "File '$filename', '$length' bytes saved";
@@ -495,6 +513,6 @@ sub printMicroSeconds {
     } else {
 	printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
     }
-    $t0 = $t1;
+    $t0 = [gettimeofday];	# $t0 = $t1;
 }
 #endif
