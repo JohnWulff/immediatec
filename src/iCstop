@@ -1,0 +1,89 @@
+#!/usr/bin/ksh -p
+########################################################################
+#
+#   Stop instances of running programs by sending them kill SIGTERM (15)
+#   or kill -1 to kill -29 as specified by parameter
+#
+########################################################################
+
+usage()
+{
+  echo "Usage:	$name [-leh] [-1|-2|..|-29] program ..." >&2
+  echo '	-1 ..	signal -1 to -29' >&2
+  echo '	-l	local programs only' >&2
+  echo '	-e	echo PIDs only - dont kill programs' >&2
+  echo '	-h	this help text' >&2
+  echo '	-	all further arguments are treated as programs' >&2
+  echo '   if no programs are specified all local programs are killed' >&2
+  echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
+  echo '$Id: iCstop,v 1.1 2000/11/11 11:00:13 archiv Exp $' >&2
+}
+
+########################################################################
+#
+#	all echo's to stdin are in process which may be piped
+#
+########################################################################
+
+process()
+{
+    status=0
+    for p in $programs; do
+	if [[ $l != 1 || -x $p && -f $p ]]; then
+	    pids=$(ps | grep $p | awk '{ printf (" %s", $1) }')
+	    if [[ -n "$pids" ]]; then
+		if [[ $e != 1 ]]; then
+		    echo "$p:$pids killed"
+		    kill $s$pids
+		else
+		    echo "$p:$pids NOT killed"
+		fi
+	    fi
+	fi
+    done
+}
+
+########################################################################
+#
+#	main
+#
+########################################################################
+
+name=${0##*/}
+name=${name%.*}
+e=""
+l=""
+s=""
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -[0-9]*) s="$1";;	# last signal wins if more than one
+    -*)	option=${1#?}
+	while [[ -n $option ]]; do
+	    case $option in
+	    e*)	e=1;;	# ech only - dont kill
+	    l*)	l=1;;	# local programs only
+	    h*)	usage; exit 255;;
+	    *)	x=${option#?}; option=${option%$x}
+	    	echo "$name: unexpected option $option in $1" >&2
+		usage; exit 254;;
+	    esac
+	    option=${option#?}
+	done
+	;;
+    *)	break;;
+    esac
+    shift
+done
+
+if [[ $# == 0 ]]; then
+    programs=*
+    l=1			# local programs only
+else
+    programs=$*
+fi
+
+process
+
+return $status
