@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.15 2001/01/31 17:53:10 jw Exp $";
+"@(#)$Id: main.c,v 1.16 2001/02/12 15:23:18 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -245,8 +245,8 @@ main(
 			int		c;
 			unsigned	linecnt = 0;	/* not neede here */
 
-			/* copy C execution file Part 1 from beginning up to 'V' */
-			while ((c = getc(exiFP)) != 'V') {
+			/* copy C execution file Part 1 from beginning up to 'U' */
+			while ((c = getc(exiFP)) != 'U') {
 			    if (c == EOF) {
 				r = 5;	/* unexpected end of exiNM */
 				break;
@@ -255,10 +255,28 @@ main(
 			}
 			/* copy C intermediate file up to EOF to C output file */
 			/* translate any ALIAS references of type '_(QB1_0)' */
-			copyXlate(exoFP, excFP, &linecnt);
-			/* copy C execution file Part 2 from character after 'V 'up to EOF */
-			while ((c = getc(exiFP)) != EOF) {
-			    putc(c, excFP);
+			copyXlate(exoFP, excFP, &linecnt, 01);
+
+			/* rewind intermediate file cexe.tmp again */
+			if (fseek(exoFP, 0L, SEEK_SET) != 0) {
+			    r = 7;
+			} else {
+			    /* copy C execution file Part 2 from remainder up to 'V' */
+			    while ((c = getc(exiFP)) != 'V') {
+				if (c == EOF) {
+				    r = 5;	/* unexpected end of exiNM */
+				    break;
+				}
+				putc(c, excFP);
+			    }
+			    /* copy C intermediate file up to EOF to C output file */
+			    /* translate any ALIAS references of type '_(QB1_0)' */
+			    copyXlate(exoFP, excFP, &linecnt, 02);
+
+			    /* copy C execution file Part 3 from character after 'V 'up to EOF */
+			    while ((c = getc(exiFP)) != EOF) {
+				putc(c, excFP);
+			    }
 			}
 			fclose(exiFP);
 			fclose(excFP);
@@ -288,7 +306,7 @@ main(
     if (errFP != stderr) fclose(errFP);
     if (exoFP) {
 	fclose(exoFP);
-	if (exoFN) {
+	if (exoFN && !(debug & 04000)) {
 	    unlink("cexe.tmp");
 	}
     }

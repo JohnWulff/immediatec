@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.32 2001/02/11 14:05:14 jw Exp $";
+    "@(#)$Id: outp.c,v 1.33 2001/02/12 15:23:18 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -414,6 +414,7 @@ int
 output(char * outfile)
 {
     Symbol *	sp;
+    Symbol *	gp;
     List_e *	lp;
     Symbol **	hsp;
     short	dc;
@@ -428,7 +429,6 @@ output(char * outfile)
     char *	nxs;
     char *	sam;
     int		li;
-    int		c;
     FILE *	Fp;
     FILE *	Hp;
     FILE *	Lp;
@@ -779,7 +779,14 @@ extern Gate *	l_[];\n\
 	    }
 	}
     }
-    /* the following assumes I/O names are objects, never aliases */
+
+/********************************************************************
+ *
+ *	Do ALIASes last to avoid forward references of Gates in gt_list
+ *	Resolve multiple ALIASes here for the same reason.
+ *
+ *******************************************************************/
+
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) == ALIAS && sp->list != 0 &&
@@ -790,10 +797,15 @@ extern Gate *	l_[];\n\
 		} else {
 		    fprintf(Fp, "Gate %-8s", modName);
 		}
+		val = sp->list->le_val;
+		gp = sp->list->le_sym;
+		while (gp->type == ALIAS) {
+		    val ^= gp->list->le_val;		/* negate if necessary */
+		    gp = gp->list->le_sym;		/* point to original */
+		}
 		fprintf(Fp,
 		" = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s, %s%s, %d };\n",
-		full_type[typ], full_ftype[dc], sp->name,
-		mN(sp->list->le_sym), sam, nxs, sp->list->le_val);
+		full_type[typ], full_ftype[dc], sp->name, mN(gp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
 		sam = dc == ARITH ? "&_" : "&";
@@ -821,7 +833,15 @@ extern Gate *	l_[];\n\
 
     /* copy C intermediate file up to EOF to C output file */
     /* translate any ALIAS references of type '_(QB1_0)' */
-    copyXlate(exoFP, Fp, &linecnt);
+
+    copyXlate(exoFP, Fp, &linecnt, 01);		/* copy literal blocks */
+
+    /* rewind intermediate file */
+    if (fseek(exoFP, 0L, SEEK_SET) != 0) {
+	rc = 7; goto endm;
+    }
+
+    copyXlate(exoFP, Fp, &linecnt, 02);		/* copy functions */
 
 /********************************************************************
  *
@@ -948,51 +968,69 @@ end:
  *	Any arithmetic variable name may be an ALIAS and must
  *	be resolved.
  *
+ *	mode 01         Copy only literal blocks %{ ... %}
+ *	mode 02 default Copy only functions or cases
+ *	mode 03         Copy literal blocks and functions or cases
+ *
+ *	TODO error generation
+ *
  *******************************************************************/
 
 void
-copyXlate(FILE * iFP, FILE * oFP, unsigned * lcp)
+copyXlate(FILE * iFP, FILE * oFP, unsigned * lcp, int mode)
 {
     int		c;
+    int		mask = 02;	/* default is functions or cases */
     Symbol *	sp;
+    char	lineBuf[256];
     char	buffer[256];
+    char *	lp;
     char *	bp;
 
-    while ((c = getc(iFP)) != EOF) {
-	putc(c, oFP);
-	if (c == '\n') {
-	    (*lcp)++;
-	} else if (c == '_') {
-	    if ((c = getc(iFP)) == '(') {
+    while (fgets(lineBuf, sizeof lineBuf, iFP)) {
+	if (strcmp(lineBuf, "%{\n") == 0) {
+	    mask = 01;				/* copy literal blocks */
+	} else if (strcmp(lineBuf, "%}\n") == 0) {
+	    mask = 02;				/* copy functions or cases */
+	} else if (mode & mask) {
+	    for (lp = lineBuf; (c = *lp++) != 0; ) {
 		putc(c, oFP);
-		/* accept any token which might be in the symbol table */
-		bp = buffer;
-		while ((c = getc(iFP)) != EOF && (isalnum(c) || c == '_')) {
-		    *bp++ = c;
-		}
-		*bp = '\0';			/* terminate string */
-		if (c == ')') {
-		    /* token found - xlate it */
-		    if ((sp = lookup(buffer)) != 0) {
-			while (sp->type == ALIAS || sp->type == DALIAS) {
-			    if (sp->ftype != ARITH) {
-				/* generate error */
+		if (c == '\n') {
+		    (*lcp)++;			/* count lines actually output */
+		} else if (c == '_') {
+		    if ((c = *lp++) == '(') {
+			putc(c, oFP);
+			/* accept any token which might be in the symbol table */
+			bp = buffer;
+			while ((c = *lp++) != 0 && (isalnum(c) || c == '_')) {
+			    *bp++ = c;
+			}
+			*bp = '\0';		/* terminate string */
+			if (c == ')') {
+			    /* token found - xlate it */
+			    if ((sp = lookup(buffer)) != 0) {
+				while (sp->type == ALIAS) {
+				    if (sp->ftype != ARITH) {
+					/* generate error */
+				    }
+				    sp = sp->list->le_sym;	/* resolve ALIAS */
+				}
+				if (sp->ftype != ARITH) {
+				    /* CHECK may be type ARN or SH */
+				    /* generate error */
+				}
+				fputs(sp->name, oFP);
+			    } else {
+				/* generate error - symbol should at least be in table */
+				fputs(buffer, oFP);
 			    }
-			    sp = sp->list->le_sym;	/* resolve ALIAS */
+			} else {
+			    fputs(buffer, oFP);		/* strange but true */
 			}
-			if (sp->ftype != ARITH) {	/* CHECK may be type ARN or SH */
-			    /* generate error */
-			}
-			fputs(sp->name, oFP);
-		    } else {
-			/* generate error - symbol should at least be in table */
-			fputs(buffer, oFP);
 		    }
-		} else {
-		    fputs(buffer, oFP);		/* strange but true */
+		    putc(c, oFP);			/* char after '_' or buffer */
 		}
 	    }
-	    putc(c, oFP);			/* char after '_' or buffer */
 	}
     }
 } /* copyXlate */

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.43 2001/02/11 14:05:14 jw Exp $";
+"@(#)$Id: comp.y,v 1.44 2001/02/12 15:23:18 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -995,12 +995,15 @@ yylex(void)
     int	c, c1;
 
     if (ccfrag) {
+	if (ccfrag == '%') {
+	    fprintf(exoFP, "%%{\n");	/* output "%{\n" now */
+	}
 	fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
 	unget('{');
 	if (copyCfrag('{', ccfrag == '%' ? '%' : ';', '}') == 0) {
 	    return 0;	/* copy C block or statement */
 	}
-	yylval.val.v = c_number;		/* return case # */
+	yylval.val.v = c_number;	/* return case # */
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
@@ -1356,6 +1359,7 @@ copyCfrag(char s, char m, char e)
     int		brace;
     int		c;
     int		match;
+    int		count;
 
     for (brace = 0; (c = get()) != EOF; ) {
 	if (c == s) {			/* '{' or '(' */
@@ -1370,7 +1374,7 @@ copyCfrag(char s, char m, char e)
 		return m;
 	    } else if (brace == 1 && c == '%') {
 		if ((c = get()) == '}') {
-		    putc('\n', exoFP);	/* replace "*}" by CR */
+		    fprintf(exoFP, "\n%%}\n");	/* output "\n%}\n" */
 		    unget(c);
 		    return m;
 		}
@@ -1383,7 +1387,7 @@ copyCfrag(char s, char m, char e)
 		    unget(c);
 		    return e;
 		} else if (c == '}') {
-		    putc(c, exoFP);
+		    putc(c, exoFP);	/* output '}' */
 		    unget(c);
 		    return e;
 		}
