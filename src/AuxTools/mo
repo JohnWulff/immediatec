@@ -14,7 +14,7 @@ usage ()
     echo 'output the listings produced to directory ListT' >&2
     echo 'if no iCtargets are specified, make each line of file pe.lt' >&2
     echo 'in this case also output the common output to OutT' >&2
-    echo '	$Id: mo,v 1.9 2003/11/28 18:38:38 jw Exp $' >&2
+    echo '	$Id: mo,v 1.10 2003/12/14 06:45:20 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -39,13 +39,14 @@ test -d ListT || mkdir ListT;
 if [[ $# != 0 ]]; then
     for f in $*; do
 	echo "$f.ic";
-	ict -c $f.ic > /dev/null 2>&1		# listing only with -d474
+	ict -c -d474 -l ListT/$f.lst $f.ic
+	cp -f cexe.c ListT/$f.c
 	cd ..
 	rm -f cexe.o ict	# new cexe.o too soon for make sometimes
 	makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 	cd - > /dev/null
 	if [[ -f ../ict ]]; then	# use locally generated compiler
-	    ../ict -d474 -l ListT/$f.lst $f.ic;
+	    ../ict -d500 $f.ic > ListT/$f.ini
 	else
 	    echo make ict failed
 	fi
@@ -53,13 +54,14 @@ if [[ $# != 0 ]]; then
 else
     for f in $(cat pe.lt); do
 	echo "$f.ic";
-	ict -c $f.ic > /dev/null 2>&1		# listing only with -d474
+	ict -c -d474 -l ListT/$f.lst $f.ic
+	cp -f cexe.c ListT/$f.c
 	cd ..
 	rm -f cexe.o ict	# new cexe.c too soon for make sometimes
 	makeAll -T 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
 	cd - > /dev/null
 	if [[ -f ../ict ]]; then	# use locally generated compiler
-	    ../ict -d474 -l ListT/$f.lst $f.ic;
+	    ../ict -d500 $f.ic > ListT/$f.ini
 	else
 	    echo make ict failed
 	fi
