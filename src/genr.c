@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.8 2000/12/07 18:31:14 jw Exp $";
+"@(#)$Id: genr.c,v 1.9 2000/12/20 18:21:11 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -148,7 +148,7 @@ op_push(			/* reduce List_e stack to links */
     }
     rlp = right;
     sp = rlp->le_sym;
-    if (op > OR && left && op != sp->type) {
+    if (left && op > OR && op < MAX_LV && op != sp->type) {
 	warning("function types incompatible", NS);
     }
     if (sp->u.blist == 0 || op != sp->type) {
@@ -179,12 +179,11 @@ op_push(			/* reduce List_e stack to links */
 	    sp->ftype |= lsp->ftype;	/* modify S_FF ==> D_FF */
 	}
 	if (lsp->type < MAX_LS) {
-	    if ((lp = lsp->u.blist) == 0 || op != lsp->type || sp == lsp) {
-		/*
-		 * left not a $ symbol
-		 * or new operator
-		 * or left == right
-		 */
+	    if ((lp = lsp->u.blist) == 0 ||	/* left not a $ symbol */
+		sp == lsp ||			/* or right == left */
+		lsp->type != op &&		/* or new operator */
+		lsp->type < MAX_LV)		/* but left is not a clock */
+	    {
 		left->le_next = sp->u.blist;	/* extend expression */
 		sp->u.blist = left;		/* link left of expr */
 #ifdef YYDEBUG
@@ -195,7 +194,7 @@ op_push(			/* reduce List_e stack to links */
 #endif
 	    } else {
 		/*
-		 * left is a $ symbol and same operator
+		 * left is a $ symbol and same operator or clock type
 		 * merge left into right
 		 */
 		while (lp->le_next) {
@@ -438,7 +437,7 @@ op_asgn(			/* asign List_e stack to links */
 	    execerror("ALIAS points to temp ???", var->name);
 	} else {
 	    t_first = sv->f; t_last = sv->l;	/* full text of var */
-	    while (t_first < t_last) {
+	    while (t_first && t_first < t_last) {
 		*t_first++ = '#';		/* mark left var, leave ALIAS */
 	    }
 	}
@@ -605,7 +604,7 @@ op_asgn(			/* asign List_e stack to links */
 		    fprintf(outFP, "\t(%d)", lp->le_val);
 		}
 	    }
-	    if (gp->ftype == ARITH && gp->u.blist) {
+	    if (gp->ftype == ARITH && sp->type == ARN && gp->u.blist) {
 		if (debug & 04) {
 		    /* only logic gate or SH can be aux expression */
 		    if (sflag) {
@@ -617,7 +616,7 @@ op_asgn(			/* asign List_e stack to links */
 			fprintf(outFP, "\t\t\t");
 		    }
 		}
-		while (t_first < lp->le_first) {	/* end of arith */
+		while (t_first && t_first < lp->le_first) {	/* end of arith */
 		    if (*t_first != '#') {	/* transmogrified '=' */
 			if (debug & 04) putc(*t_first, outFP);
 			*ep++ = *t_first;
@@ -638,7 +637,7 @@ op_asgn(			/* asign List_e stack to links */
 	}
 	if (sp->type == ARN) {
 	    if (debug & 04) fprintf(outFP, "\t\t\t\t\t");
-	    while (t_first < t_last) {
+	    while (t_first && t_first < t_last) {
 		if (*t_first != '#') {	/* transmogrified '=' */
 		    if (debug & 04) putc(*t_first, outFP);
 		    *ep++ = *t_first;
@@ -719,7 +718,7 @@ op_asgn(			/* asign List_e stack to links */
      */
 
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
-    while (t_first < t_last) {
+    while (t_first && t_first < t_last) {
 	*t_first++ = '#';		/* mark embedded assignments */
     }
     if (sv == 0) {
@@ -772,11 +771,12 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
     List_e *	lp1;
     List_e *	lp2;
     List_e *	lp3;
-    List_e *	lpc = 0;
+    List_e *	lpc;
+    List_e *	lpt = 0;
 
     if (ae1 == 0 || ae1->v == 0) { warn(1); return 0; }	/* YYERROR in fexpr */
 
-    if (ae1->v->le_sym->type == LOGC) {
+    if (ae1->v->le_sym->type == LOGC) {		/* DLATCH(set,reset) */
 	lp1 = op_push(sy_push(ae1->v->le_sym), LOGC, ae1->v);
 	lp1->le_sym->type = LATCH;
 	lp1 = op_push(sy_push(sym->v), LATCH, lp1);
@@ -784,7 +784,8 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp1 = op_push(sy_push(sym->v), bTyp(ae1->v), ae1->v);
     }
     lp1->le_first = ae1->f; lp1->le_last = ae1->l;
-    lp1 = op_push(cr1 ? cr1->v : sy_push(clk), lp1->le_sym->type, lp1);
+    lpc = cr1 ? cr1->v : sy_push(clk);
+    lp1 = op_push(lpc, lp1->le_sym->type, lp1);
     lp3 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
 
     if (ae2) {
@@ -796,13 +797,12 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
 	}
  	/* Monoflop cannot use non-default clock for optional reset ae2 */
-	lp2 = op_push(
-	    cr2 ? cr2->v			/* individul clock or timer cr2 */
-		: cr1 ? (lpc = sy_push(cr1->v->le_sym))
+	lpc = cr2 ? cr2->v			/* individul clock or timer cr2 */
+		  : cr1 ? (lpt = sy_push(cr1->v->le_sym))
 						/* or clone first clock or timer cr1 */
-		      : sy_push(clk),	/* or clone default clock iClock */
-	    lp2->le_sym->type, lp2);
-	if (lpc) lpc->le_val = cr1->v->le_val;	/* transfer cr1 timer value to clone */
+			: sy_push(clk);		/* or clone default clock iClock */
+	lp2 = op_push(lpc, lp2->le_sym->type, lp2);
+	if (lpt) lpt->le_val = cr1->v->le_val;	/* transfer cr1 timer value to clone */
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
     }
@@ -815,7 +815,8 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	if (lp2->le_sym->ftype == S_FF) {
 	    lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
 	}
-	lp2 = op_push(cr3->v, lp2->le_sym->type, lp2);
+	lpc = cr3->v;
+	lp2 = op_push(lpc, lp2->le_sym->type, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
 

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.27 2000/12/17 19:53:26 jw Exp $";
+"@(#)$Id: comp.y,v 1.28 2000/12/20 18:21:11 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -589,13 +589,14 @@ cexini	: UNDEF			{
 	; 
 
 cref	: /* nothing */		{ $$.v = sy_push(clk); }/* iClock */
-	| ',' ctref		{ $$.v = $2.v; }	/* other clock or timer */
+	| ',' ctref		{ $$ = $2; }		/* other clock or timer */
 	;
 
-ctref	: cexpr			{ $$.v = $1.v; }	/* other clock */
-	| texpr ','		{ $$.v = $1.v; dflag = 1; }	/* timer clock */
+ctref	: cexpr			{ $$ = $1; }		/* other clock */
+	| texpr ','		{ dflag = 1; }		/* timer clock */
 	  dexpr			{
-		$$.v->le_val = $4.v->le_sym->u.val;	/* time value */
+		$$.f = $1.f; $$.l = $4.l;
+		$$.v = op_push($1.v, TIM, $4.v);
 	    }
 	;			/* TODO link instead - works for const NUMBER only */
 
@@ -608,7 +609,7 @@ dexpr	: NVAR			{
 	    }
 	| aexpr			{
 		$$ = $1;
-		$$.v = op_push((List_e*)0, ARN, $1.v);
+		$$.v = op_force($1.v, ARITH);
 	    }
 	;
 

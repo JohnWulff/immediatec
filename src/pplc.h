@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.13 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: pplc.h,v 1.14 2000/12/20 18:21:11 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -72,7 +72,6 @@ extern void	efree(void *);
 
 #define MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
-#define	MAX_CK	CLK	/* types >= MAX_CK controll clock lists  */
 #define	MAX_OP	ALIAS	/* types < MAX_OP are executable */
 #define MAX_LS	KEYW	/* types < MAX_LS are generated */
 

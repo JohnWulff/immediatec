@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.11 2000/11/25 22:44:25 jw Exp $";
+"@(#)$Id: rsff.c,v 1.12 2000/12/20 18:21:11 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -302,7 +302,7 @@ i_ff3(register Gate * gp, int typ)	/* Pass3 init on FF etc. */
 #endif
 	}
     }
-    if (typ < MAX_CK) {
+    if (typ < MAX_LV) {
 	gp->gt_val = 1;		/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gp->gt_new = gp->gt_old = 0;	/* clear arithmetic */
