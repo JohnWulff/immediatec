@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.65 2003/12/06 15:23:20 jw Exp $";
+"@(#)$Id: outp.c,v 1.66 2003/12/09 10:11:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -601,13 +601,13 @@ static char	COMPILER[] =\n\
 #include	\"%s\"\n\
 \n\
 #ifdef ALIAS_ARITH\n\
-#define _AV(x) (x.gt_ini==-ALIAS ? ((Gate*)x.gt_rlist)->gt_old : x.gt_old)\n\
+#define _AV(x) (x.gt_ini==-ALIAS ? ((Gate*)x.gt_rlist)->gt_new : x.gt_new)\n\
 #define _LV(x) (x.gt_ini==-ALIAS ? (((Gate*)x.gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
 				 : (x.gt_val < 0 ? 1 : 0))\n\
 #define _AA(x,v) aAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
 #define _LA(x,v) lAssign(x.gt_ini==-ALIAS ? (Gate*)x.gt_rlist : &x, v)\n\
 #else\n\
-#define _AV(x) x.gt_old\n\
+#define _AV(x) x.gt_new\n\
 #define _LV(x) (x.gt_val < 0 ? 1 : 0)\n\
 #define _AA(x,v) aAssign(&x, v)\n\
 #define _LA(x,v) lAssign(&x, v)\n\
