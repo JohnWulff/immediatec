@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.16 2000/11/21 18:31:40 jw Exp $";
+"@(#)$Id: comp.y,v 1.17 2000/11/23 11:32:57 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -82,7 +82,7 @@ pu(int t, char * token, Lis * node)
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCNUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND
-%type	<sym>	stmt asgn wasgn xasgn casgn tasgn cstatic decl
+%type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn cstatic decl
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ffexpr cref
 %type	<val>	cblock ccexpr value declHead
 %type	<str>	cstini cexini
@@ -101,26 +101,25 @@ pu(int t, char * token, Lis * node)
 %right	<str>	PR 		/* structure operators -> . */
 %%
 
-stmt	: /* nothing */		{ stmtp = yybuf; $$.v = 0; }
-	| stmt ';'		/* null statement */
-	| stmt decl ';'		{ $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt decl error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt cstatic ';'	{ $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt cstatic error ';'{ clk->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt asgn ';'		{ $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt asgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt wasgn ';'	{ $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt wasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt xasgn ';'	{ $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt xasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
+program	: /* nothing */		{ stmtp = yybuf; $$.v = 0; }
+	| program statement	{ $$ = $2; stmtp = yybuf; }
+	| program error ';'	{ clk->type = ERR; stmtp = yybuf; yyerrok; }
+	;
+
+statement:
+	  simplestatement ';'
 		/* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
-	| stmt ffexpr		{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; return (1); }
-	| stmt casgn ';'	{ $$.v = $2.v; return (1); }
-	| stmt casgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt tasgn ';'	{ $$.v = $2.v; return (1); }
-	| stmt tasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt error ';'	{ clk->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt error '}'	{ clk->type = ERR; stmtp = yybuf; yyerrok; }
+	| ffexpr		{ $$.v = op_asgn(0, &$1, GATE); stmtp = yybuf; }
+	;
+
+simplestatement:
+	  decl			{ $$ = $1; stmtp = yybuf; }
+	| cstatic		{ $$ = $1; stmtp = yybuf; }
+	| asgn			{ $$ = $1; stmtp = yybuf; }
+	| wasgn			{ $$ = $1; stmtp = yybuf; }
+	| xasgn			{ $$ = $1; stmtp = yybuf; }
+	| casgn			{ $$ = $1; }
+	| tasgn			{ $$ = $1; }
 	;
 
 decl	: declHead UNDEF	{
