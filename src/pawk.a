@@ -1,0 +1,15 @@
+BEGIN {
+	x = 1;
+    }
+
+    {
+	printf "static const char pawk%d[] =\n", x;
+	x++;
+	printf "\t\"@%s %s;\"\n", "(#)", $0;
+    }
+
+END {
+	printf "static const char pawk%d[] =\n", x;
+	x++;
+	printf "\t\"@(#) $Id: pawk.a,v 1.1 1996/07/30 16:15:12 john Exp $\";\n";
+    }
