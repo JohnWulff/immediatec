@@ -19,6 +19,7 @@ usage()
   echo '	-e	nonexisting files put:	**** file does not exist' >&2
   echo '		default: ignore nonexisting files in output (unless only 1 file)' >&2
   echo '		if files exist output:	#### file ####' >&2
+  echo '	-t	no header text and date at start of report' >&2
   echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list names of files which differ' >&2
   echo '	-li	list names of files which are identical' >&2
@@ -33,7 +34,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.15 2000/11/28 22:32:10 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.16 2001/02/08 21:06:49 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -44,7 +45,7 @@ usage()
 
 process()
 {
-    if [[ $q = 0 ]]; then
+    if [[ $t = 0 ]]; then
 	echo "Differences in directory $PWD and $dir"
 	date
     fi
@@ -73,8 +74,10 @@ process()
 		fi
 	    elif [[ $e != 0 ]]; then
 		let status+=1
-		if [[ $q = 0 ]] || [[ $li > 0 ]]; then
+		if [[ $q = 0 ]] || [[ $li = 2 ]]; then
 		    echo "********** $dir/$f does not exist"
+		elif [[ $li = 1 ]]; then
+		    echo $f
 		fi
 	    fi
 	fi
@@ -94,7 +97,7 @@ process()
 name=${0##*/}
 name=${name%.*}
 files='[Mm]akefile* *.[chv]*'
-i=0; e=0; q=0; li=0; w=-w; pipe=0
+i=0; e=0; t=0; q=0; li=0; w=-w; pipe=0
 context=''
 
 while [[ $# > 0 ]]; do
@@ -105,8 +108,9 @@ while [[ $# > 0 ]]; do
 	    case $option in
 	    e*)	e=1;;
 	    i*)	i=1; let "li|=2";;
-	    l*)	q=1; let "li|=1";;
-	    q*)	q=1;;
+	    l*)	t=1; q=1; let "li|=1";;
+	    t*)	t=1;;
+	    q*)	t=1; q=1;;
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wi;;
