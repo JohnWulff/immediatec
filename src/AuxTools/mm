@@ -7,16 +7,19 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-h] [-v<N>]' >&2
+    echo 'Usage:	'${0##*/}' [-h] [-v<N>] [-y<opt>]' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
+    echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+    echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo 'uses iCmake -I to make each line of the list pm.lt' >&2
+    echo 'uses iCmake -I -v<N> -y<opt> to make each line of the list pm.lt' >&2
     echo 'which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo 'but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
-    echo '	$Id: mm,v 1.5 2003/11/28 18:37:49 jw Exp $' >&2
+    echo '	$Id: mm,v 1.6 2004/02/08 10:56:41 jw Exp $' >&2
 }
 
 v=""
+z=0
 
 while [[ $# > 0 ]]; do
     case $1 in
@@ -26,12 +29,21 @@ while [[ $# > 0 ]]; do
 	    case "$option" in
 	    v*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    v=" -v$option"
+		    v="$v -v$option"
 		else
 		    echo "-v must specify an option";
 		    usage; exit 254;
 		fi
 		break;;
+	    y*)	option=${option#?}
+		if [ -n "$option" ]; then
+		    v="$v -y$option"
+		else
+		    echo "-y must specify an option";
+		    usage; exit 254;
+		fi
+		break;;
+	    z*)	z=1;v="$v -z";;
 	    h*)	usage; exit 255;;
 	    *)	echo "unknown flag -$option";
 		usage; exit 255;;
@@ -47,6 +59,9 @@ while true; do
     read line
     if [[ -z "$line" ]]; then
 	break
+    fi
+    if [ "$z" = 1 ]; then
+	echo "iCmake -I$v $line" >&2
     fi
     iCmake -I$v $line
 done < pm.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/'
