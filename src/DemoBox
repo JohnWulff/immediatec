@@ -30,26 +30,68 @@ print "Connection successful.\n";
 ########################################################################
 
 my $top = MainWindow->new();
-$top->title("Simple");
-my $i = 0;
+$top->title("iC Demo Box");
+$top->Label(-text => "iC Demo Box")->pack;
+
+$top->Button(-text => "Exit",
+            -command => sub { exit },
+	   )->pack(-side   => 'bottom', 
+		   -expand => 1,
+		   -fill   => 'x',
+		  );
 
 ########################################################################
 #
-#	Generate many buttons
+#	Generate many Checkbuttons
 #
 ########################################################################
 
-foreach my $color (qw(PeachPuff1 LightBlue1 SeaGreen2 Yellow1 PeachPuff1 LightBlue1 SeaGreen2 Yellow1)) {  
-	my $button = $top->Button(
-		-text    => $color,
-		-width   => 10,
-		-command => sub {
-				$top->configure(-background => lc($color));
-				$i++; print "Sending msg $i\n";
-				$conn->send_now($color);
-			    },
-	);
-	$button->pack(qw(-side top -expand yes -pady 2));
+my @input;
+my $index = 0;
+foreach my $input (qw(I0 I1 I2 I3 I4 I5 I6 I7)) {  
+
+    $makeCheckbutton = "\
+	\$top->Checkbutton(\
+		-text     => \$input,\
+		-variable => \\\$input[\$index],\
+		-command  => sub {\
+				print \"Sending msg $index\\n\";\
+				\$conn->send_now(\"$index,\$input[$index]\");\
+			     },\
+	)->pack(-side   => 'top',\
+		-anchor => 'w',\
+		-expand => 1,\
+	);\
+    ";
+
+    eval $makeCheckbutton;
+    print $@;
+    $index++;
+}
+
+my @output;
+my $index = 0;
+foreach my $output (qw(O0 O1 O2 O3 O4 O5 O6 O7)) {  
+
+    $makeCheckbutton = "\
+	\$top->Checkbutton(\
+		-text     => \$output,\
+		-variable => \\\$output[\$index],\
+#		-state    => 'disabled',\
+		-command  => sub {\
+				print \"Inverting output $index\\n\";\
+				\$output[$index] = [1,0]->[\$output[$index]];\
+			     },\
+	)->pack(-side   => 'top',\
+		-anchor => 'e',\
+		-expand => 1,\
+	);\
+    ";
+
+    eval $makeCheckbutton;
+    print $@;
+    $output[$index] = 0;
+    $index++;
 }
 
 ########################################################################
@@ -70,10 +112,10 @@ $top->fileevent($conn->{sock}, 'readable', sub { });
 
 while (Tk::MainWindow->Count) {
     DoOneEvent(0);
-    print "#";
+    # print "#";
     Msg->event_loop(1);
 }
-print "\nQuit\n";
+# print "\nQuit\n";
 $top->fileevent($conn->{sock}, 'readable', undef);
 $conn->disconnect();
 Msg->event_loop();
@@ -88,6 +130,9 @@ sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
     if (defined $msg) {
         my $len = length ($msg);
-        print "($len)\n";
+        print "($len)$msg\n";
+	my ($index, $value) = split /,/, $msg;
+	print "$index $value $output[$index]\n";
+	$output[$index] = $value;
     }
 }
