@@ -2,26 +2,52 @@
 
 ########################################################################
 #
-#	install icc icl ict ict.a etc	must be super user
+#	Copyright (C) 2000-2001  John E. Wulff
 #
-#	$Id: perlinstall,v 1.1 2001/02/21 22:21:18 jw Exp $
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	makeinstall
+#
+#	install icc icl ict libict.a etc	must be super user
+#
+#	$Id: perlinstall,v 1.2 2001/03/02 22:21:36 jw Exp $
 #
 ########################################################################
 
-if [ -d /usr/local/bin ]; then
+if [[ -d /usr/local/bin ]]; then
     cp -f icc ict pplstfix ICServer DemoBox ICMake /usr/local/bin
+    echo 'copied icc ict pplstfix ICServer DemoBox ICMake ==> /usr/local/bin'
 else
     echo 'NO /usr/local/bin - installation failed'
 fi
 
-if [ -d /usr/local/lib ]; then
-    cp -f ict.a /usr/local/lib
+if [[ -d /usr/local/lib ]]; then
+    cp -f libict.a /usr/local/lib
+    echo 'copied libict.a ==> /usr/local/lib'
 else
     echo 'NO /usr/local/lib - installation failed'
 fi
 
-if [ -d /usr/local/bin ]; then
+if [[ -d /usr/local/include ]]; then
     cp -f icc.h /usr/local/include
+    echo 'copied icc.h ==> /usr/local/include'
 else
     echo 'NO /usr/local/include - installation failed'
+fi
+
+for d in /usr/lib/perl5/site_perl/5*; do
+    if [[ -d $d && -d $d/i586-linux ]]; then
+	perlPath=$d/i586-linux;	# find the highest version
+    fi
+done
+
+if [[ -n $perlPath ]]; then
+    cp -f Msg.pm $perlPath
+    echo "copied Msg.pm ==> $perlPath"
+else
+    echo 'NO /usr/lib/perl5/site_perl/5*/i586-linux - installation failed'
 fi
