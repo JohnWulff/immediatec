@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.24 2001/04/01 08:23:14 jw Exp $";
+"@(#)$Id: load.c,v 1.25 2002/06/05 19:46:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,6 +19,9 @@ static const char load_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#ifndef LOAD
+#error - must be compiled with LOAD defined to make a linkable library
+#else
 #include	"icc.h"
 #ifdef TCP
 #include	"tcpc.h"
@@ -38,9 +41,7 @@ unsigned long	sTstrLen;		/* length of symbol strings */
 unsigned	errCount;
 const char *	progname;		/* name of this executable */
 short		debug = 0;
-#ifdef TCP
 int		micro = 0;
-#endif
 unsigned short	xflag;
 unsigned short	osc_max = MARKMAX;
 
@@ -64,6 +65,8 @@ static const char *	usage =
 "                  +200  display loop info (+old style logic)\n"
 "                  +100  initialisation and run time info\n"
 "                   +40  net statistics\n"
+"                    +2  trace I/O receive buffer\n"
+"                    +1  trace I/O send buffer\n"
 "        -t              trace debug (equivalent to -d 100)\n"
 "                        can be toggled at run time typing t\n"
 #ifdef TCP
@@ -166,11 +169,11 @@ main(
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &df);
-		    debug = df;		/* short */
+		    debug |= df;	/* short */
 		    df &= 040;	/* net statistics */
 		    goto break2;
 		case 't':
-		    if (debug == 0) debug = 0100;	/* trace only */
+		    debug |= 0100;	/* trace */
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -199,7 +202,7 @@ main(
 	    goto error;
 	}
     }
-    debug &= 03740;			/* allow only cases specified */
+    debug &= 03743;			/* allow only cases specified */
 
 /********************************************************************
  *
@@ -655,3 +658,4 @@ main(
     icc(&iClock, &errCount);	/* try it like this */
     return 0;
 } /* main */
+#endif

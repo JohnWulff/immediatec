@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.26 2002/05/16 14:28:43 jw Exp $";
+"@(#)$Id: ict.c,v 1.27 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -133,7 +133,7 @@ icc(
     if ((debug & 0400) == 0) {
 	/* Start TCP/IP communication before any inputs are generated => outputs */
 	if (micro) microReset(04);
-	sockFN = connect_to_server(hostNM, portNM, iccNM, delay);
+	sockFN = connect_to_server(hostNM, portNM, iccNM, delay, IXD);
 	if (micro) microPrint("connect to server", 0);
     }
 
@@ -415,10 +415,12 @@ icc(
 			int		diff;
 			char *		cp;
 			int		liveFlag;
+			char		utype[4];		/* need 2 with NUL */
 
 			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, iccNM);
-			if (sscanf(rBuf, "X%d.%hd", &slot, &val) == 2) {
-			    if (slot < IXD) {
+			if (sscanf(rBuf, "%1[XBWL]%d.%hd", utype, &slot, &val) == 3 && slot < IXD) {		
+			    switch (*utype) {
+			    case 'X':				/* bit input */
 				val &= 0xff;			/* safety measure */
 				diff = val ^ pdata[slot];
 				pdata[slot] = val;		/* ready for next scan */
@@ -439,132 +441,150 @@ icc(
 					/* o_list will be scanned before next input */
 				    }
 				    diff &= ~mask;		/* clear rightmost bit in diff */
-				}			/* loops only once for every 1 in diff */
-			    }
-			} else if (sscanf(rBuf, "B%d.%hd", &slot, &val) == 2) {
-			    if (slot < IXD && (gp = IB_[slot]) != NULL) {
-				val &= 0xff;			/* limit to byte val */
-				goto wordIn;
-			    }
-			} else if (sscanf(rBuf, "W%d.%hd", &slot, &val) == 2) {
-			    if (slot < IXD && (gp = IW_[slot]) != NULL) {
+				}				/* loops only once for every 1 in diff */
+				break;
+
+			    case 'B':				/* 8 bit byte input */
+				if ((gp = IB_[slot]) != NULL) {
+				    val &= 0xff;		/* limit to byte val */
+				    goto wordIn;
+				}
+				break;
+
+			    case 'W':				/* 16 bit word input */
+				if ((gp = IW_[slot]) != NULL) {
 			    wordIn:
-				if (val != gp->gt_new &&	/* first change or glitch */
-				((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
-				    /* arithmetic master action */
-				    if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
-				    link_ol(gp, a_list);	/* no actions */
-				    if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
-				    cnt++;
+				    if (val != gp->gt_new &&	/* first change or glitch */
+				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
+					/* arithmetic master action */
+					if (debug & 0100) fprintf(outFP, " %s ", gp->gt_ids);
+					link_ol(gp, a_list);	/* no actions */
+					if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+					cnt++;
+				    }
 				}
-			    }
+				break;
 #ifdef LOAD
-			} else if (sscanf(rBuf, "L%d.%hd", &slot, &val) == 2 && slot == 0) {
-			    switch (val) {
-			    case 0:		/* GET_END */
-				for (opp = sTable; opp < sTend; opp++) {
-				    (*opp)->gt_live &= 0x7fff;	/* clear live active */
-				}
-				printf("Symbol Table no longer required\n");
-				break;
 
-			    case 1:		/* GET_SYMBOL_TABLE */
-				printf("Symbol Table requested\n");
-				/* prepare index entries first to allow ALIAS back-references */
-				index = 0;
-				for (opp = sTable; opp < sTend; opp++) {
-				    (*opp)->gt_live = index++;	/* index and live inhibit */
-				    index &= 0x7fff;		/* rolls over if > 32768 Symbols */
-				}
-				strcpy(msgBuf, "L0.1");
-				msgOffset = 4;		/* strlen(msgBuf) */
-				/* to maintain index correlation send all symbols */
-				for (opp = sTable; opp < sTend; opp++) {
-				    int		len;
-				    int		rest;
-				    int		fni;
-				    int		inverse = 0;
-				    char *	ids;
+			    case 'L':				/* live input */
+				if (slot != 0) goto RcvError;	/* unknown L? slot */
 
-				    gp = *opp;
-				    ids = gp->gt_ids;
-				    fni = gp->gt_fni;
-				    while (gp->gt_ini == -ALIAS) {
-					inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
-					gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
-					fni = MAX_FTY + gp->gt_fni + inverse;
-				    }
-				    if (fni == CH_BIT && gp->gt_ini >= 0) {
-					fni = RI_BIT;		/* AND - LATCH, display as logic signal */
-				    }
-				    while (rest = REPLY - msgOffset, (len = fni > MAX_FTY ?
-					snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
-					snprintf(&msgBuf[msgOffset], rest, ";%s %d", ids, fni)
-					) < 0 || len >= rest) {
-					msgBuf[msgOffset] = '\0';		/* terminate */
-					if (micro) microPrint("Send Symbols intermediate", 0);
-					send_msg_to_server(sockFN, msgBuf);
-					if (micro) microReset(0);
-					msgOffset = 4;
-				    }
-				    msgOffset += len;
-				}
-				if (msgOffset > 4) {
-				    if (micro) microPrint("Send Symbols", 0);
-				    send_msg_to_server(sockFN, msgBuf);
-				    if (micro) microReset(0);
-				}
-				/* end of symbol table - execute scan */
-				snprintf(&msgBuf[0], REPLY, "L0.2;%s", progname);
-				if (micro) microPrint("Send Scan Command", 0);
-				send_msg_to_server(sockFN, msgBuf);
-				liveFlag = 1;		/* live inhibit bits are set */
-				if (micro) microReset(0);
-				break;
-
-			    case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
-			    case 4:		/* LAST_ACTIVE_SYMBOLS */
-				if (liveFlag) {
+				switch (val) {
+				case 0:		/* GET_END */
 				    for (opp = sTable; opp < sTend; opp++) {
 					(*opp)->gt_live &= 0x7fff;	/* clear live active */
 				    }
-				    liveFlag = 0;	/* do not set again until case 4 received */
-				}
-				strcpy(msgBuf, "L0.3");		/* header for live data */
-				msgOffset = 4;			/* strlen(msgBuf) */
-				cp = rBuf;
-				while ((cp = strchr(cp, ';')) != NULL) {
-				    int		value;
-				    int		fni;
-				    index = atoi(++cp);
-				    assert(index < sTend - sTable);	/* check index is in range */
-				    gp = sTable[index];
-				    gp->gt_live |= 0x8000;		/* set live active */
-				    value = ((fni = gp->gt_fni) == ARITH || fni == D_SH || fni == F_SW ||
-					fni == OUTW || fni == CH_BIT && gp->gt_ini == -ARN) ?
-					gp->gt_old : gp->gt_val < 0 ? 1 : 0;
-				    if (value) {
-					liveData(gp->gt_live, value);	/* initial active live values */
+				    printf("Symbol Table no longer required\n");
+				    break;
+
+				case 1:		/* GET_SYMBOL_TABLE */
+				    printf("Symbol Table requested\n");
+				    /* prepare index entries first to allow ALIAS back-references */
+				    index = 0;
+				    for (opp = sTable; opp < sTend; opp++) {
+					(*opp)->gt_live = index++;	/* index and live inhibit */
+					index &= 0x7fff;		/* rolls over if > 32768 Symbols */
 				    }
-				}
-				/*
-				 * send a reply for each block received because
-				 * a scan may occurr between received blocks which
-				 * also sends an L0.3 block
-				 */
-				if (msgOffset > 4) {
+				    strcpy(msgBuf, "L0.1");
+				    msgOffset = 4;		/* strlen(msgBuf) */
+				    /* to maintain index correlation send all symbols */
+				    for (opp = sTable; opp < sTend; opp++) {
+					int		len;
+					int		rest;
+					int		fni;
+					int		inverse = 0;
+					char *	ids;
+
+					gp = *opp;
+					ids = gp->gt_ids;
+					fni = gp->gt_fni;
+					while (gp->gt_ini == -ALIAS) {
+					    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+					    gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+					    fni = MAX_FTY + gp->gt_fni + inverse;
+					}
+					if (fni == CH_BIT && gp->gt_ini >= 0) {
+					    fni = RI_BIT;		/* AND - LATCH, display as logic signal */
+					}
+					while (rest = REPLY - msgOffset, (len = fni > MAX_FTY ?
+					    snprintf(&msgBuf[msgOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
+					    snprintf(&msgBuf[msgOffset], rest, ";%s %d", ids, fni)
+					    ) < 0 || len >= rest) {
+					    msgBuf[msgOffset] = '\0';		/* terminate */
+					    if (micro) microPrint("Send Symbols intermediate", 0);
+					    send_msg_to_server(sockFN, msgBuf);
+					    if (micro) microReset(0);
+					    msgOffset = 4;
+					}
+					msgOffset += len;
+				    }
+				    if (msgOffset > 4) {
+					if (micro) microPrint("Send Symbols", 0);
+					send_msg_to_server(sockFN, msgBuf);
+					if (micro) microReset(0);
+				    }
+				    /* end of symbol table - execute scan */
+				    snprintf(&msgBuf[0], REPLY, "L0.2;%s", progname);
+				    if (micro) microPrint("Send Scan Command", 0);
 				    send_msg_to_server(sockFN, msgBuf);
+				    liveFlag = 1;		/* live inhibit bits are set */
 				    if (micro) microReset(0);
-				}
-				if (val == 4) {
-				    liveFlag = 1;		/* live inhibit bits are correct */
+				    break;
+
+				case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
+				case 4:		/* LAST_ACTIVE_SYMBOLS */
+				    if (liveFlag) {
+					for (opp = sTable; opp < sTend; opp++) {
+					    (*opp)->gt_live &= 0x7fff;	/* clear live active */
+					}
+					liveFlag = 0;	/* do not set again until case 4 received */
+				    }
+				    strcpy(msgBuf, "L0.3");	/* header for live data */
+				    msgOffset = 4;		/* strlen(msgBuf) */
+				    cp = rBuf;
+				    while ((cp = strchr(cp, ';')) != NULL) {
+					int		value;
+					int		fni;
+					index = atoi(++cp);
+					assert(index < sTend - sTable);	/* check index is in range */
+					gp = sTable[index];
+					gp->gt_live |= 0x8000;	/* set live active */
+					value = ((fni = gp->gt_fni) == ARITH || fni == D_SH || fni == F_SW ||
+					    fni == OUTW || fni == CH_BIT && gp->gt_ini == -ARN) ?
+					    gp->gt_old : gp->gt_val < 0 ? 1 : 0;
+					if (value) {
+					    liveData(gp->gt_live, value);	/* initial active live values */
+					}
+				    }
+				    /*
+				     * send a reply for each block received because
+				     * a scan may occurr between received blocks which
+				     * also sends an L0.3 block
+				     */
+				    if (msgOffset > 4) {
+					send_msg_to_server(sockFN, msgBuf);
+					if (micro) microReset(0);
+				    }
+				    if (val == 4) {
+					liveFlag = 1;		/* live inhibit bits are correct */
+				    }
+				    break;
+
+				case 5:		/* STOP PROGRAM */
+				    close(sockFN);
+				    fprintf(errFP, "\n%s stopped by debugger\n", iccNM);
+				    quit(0);			/* quit normally */
+				    break;
+
+				default:
+				    goto RcvError;		/* unknown L0.? case */
 				}
 				break;
+#endif
 
 			    default:
-				goto RcvError;
+				goto RcvError;			/* unkikely if sscanf %1[XBWL] OK */
 			    }
-#endif
 			} else {
 			  RcvError:
 			    fprintf(errFP, "ERROR: %s rcvd at %s ???\n", rBuf, iccNM);

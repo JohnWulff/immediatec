@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.24 2001/04/09 19:15:20 jw Exp $";
+"@(#)$Id: rsff.c,v 1.25 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -21,6 +21,8 @@ static const char rsff_c[] =
 #include	<stdlib.h>
 #include	<assert.h>
 #include	"icc.h"
+
+#define min(x,y) ((x) < (y) ? (x) : (y))
 
 char *		full_type[]  = { FULL_TYPE };
 char *		full_ftype[] = { FULL_FTYPE };
@@ -673,6 +675,11 @@ fScf(					/* F_CF slave action on CF */
  *	b1  or w2 can be used as arithmetic values (ftype is ARITH)
  *	and may be any logical or arithmetic function, including INPUT.
  *
+ *	NOTE: for word output the I/O address (slot) must be even.
+ *	      The I/O address (slot) must be < IXD (max 64).
+ *	      These are checked by the compiler in yylex() and by
+ *	      iCbox and iCserver since rev 1.68
+ *
  *	NOTE: This action does not act on a clocked slave object.
  *	      and the node is not linked to any action or clock list
  *
@@ -680,7 +687,7 @@ fScf(					/* F_CF slave action on CF */
 
 void
 outMw(					/* OUTW master action */
-    Gate *	gp,		/* NOTE: there is no slave action */
+    Gate *	gp,			/* NOTE: there is no slave action */
     Gate *	out_list)
 {
     int		val;
@@ -690,8 +697,8 @@ outMw(					/* OUTW master action */
 
     slot = (int)gp->gt_list;
     mask = gp->gt_mark;
-    assert(slot < IXD && mask);
-    cage = slot >> 3;			/* IXD must be <= 64 for this scheme */
+    assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
+    cage = slot >> 3;			/* test here because of cage algorithm */
 #ifdef MIXED
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */
@@ -714,6 +721,7 @@ outMw(					/* OUTW master action */
 	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
 	QMM |= bitMask[cage & 0x7];		/* mark the rack */
     } else if (mask == W_WIDTH) {
+	assert((slot & 0x01) == 0);	/* even I/O word address */
 	*(short*)&QX_[slot] = val;	/* output word to slot and slot+1 */
 	QM_[cage] |= bitMask[slot & 0x7];	/* mark the cage */
 	QMM |= bitMask[cage & 0x7];		/* mark the rack */
@@ -723,7 +731,7 @@ outMw(					/* OUTW master action */
 #endif
     }
 #ifndef _WINDOWS 
-	if (debug & 0100) fprintf(outFP, "%d", val);	/* byte or word */
+    if (debug & 0100) fprintf(outFP, "%d", val);	/* byte or word */
 #endif
 } /* outMw */
 
@@ -746,7 +754,7 @@ outMw(					/* OUTW master action */
 
 void
 outMx(					/* OUTX master action */
-    Gate *	gp,		/* NOTE: there is no slave action */
+    Gate *	gp,			/* NOTE: there is no slave action */
     Gate *	out_list)
 {
     int			slot;
@@ -755,8 +763,8 @@ outMx(					/* OUTX master action */
 
     slot = (int)gp->gt_list;
     mask = (unsigned char)gp->gt_mark;
-    assert(slot < IXD && mask);
-    cage = slot >> 3;			/* IXD must be <= 64 for this scheme */
+    assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
+    cage = slot >> 3;			/* test here because of cage algorithm */
 #ifdef MIXED
     if (out_list == a_list) {
 	/* called from arithmetic scan - convert a to d */

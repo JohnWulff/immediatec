@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.21 2001/04/01 08:23:14 jw Exp $";
+"@(#)$Id: main.c,v 1.22 2002/06/05 19:46:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -18,6 +18,7 @@ static const char main_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<assert.h>
 #include	"icc.h"
 #include	"comp.h"
 #ifdef TCP
@@ -60,8 +61,12 @@ static const char *	usage =
 "                   +10  source listing\n"
 "                    +4  logic expansion\n"
 #ifdef YYDEBUG
-"                    +2  logic generation\n"
-"                    +1  yacc debug info\n"
+"                    +2  logic generation (requires +400)\n"
+"                    +1  yacc debug info  (requires +400)\n"
+#endif
+#ifdef TCP
+"                    +2  trace I/O receive buffer\n"
+"                    +1  trace I/O send buffer\n"
 #endif
 "        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
 "        <iC_program>    any iC language program file (extension .ic)\n"
@@ -94,9 +99,7 @@ static const char *	usage =
 
 const char *	progname;		/* name of this executable */
 short		debug = 0;
-#ifdef TCP
 int		micro = 0;
-#endif
 unsigned short	xflag;
 unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
@@ -179,13 +182,13 @@ main(
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
-		    debug = debi;	/* short */
+		    debug |= debi;	/* short */
 #ifdef YYDEBUG
-		    yydebug = debug & 01;
+		    if (debug & 0400) yydebug = debug & 01;
 #endif
 		    goto break2;
 		case 't':
-		    if (debug == 0) debug = 0100;	/* trace only */
+		    debug |= 0100;	/* trace only */
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -311,7 +314,9 @@ main(
 			fclose(excFP);
 		    }
 		} else if ((r = buildNet(&igp)) == 0) {/* generate execution network */
-		    c_list = (lookup("iClock"))->u.gate;/* initialise clock list */
+		    Symbol * sp = lookup("iClock");
+		    assert (sp);		/* iClock initialized in init() */
+		    c_list = sp->u.gate;	/* initialise clock list */
 		    icc(igp, gate_count);	/* execute the compiled logic */
 		}
 	    } else {
@@ -327,8 +332,10 @@ main(
 #ifndef _WINDOWS
 	fclose(outFP);
 #endif
-	if (r == 0 && listFN && iFlag) {
-	    r = inversionCorrection();
+	if (listFN && iFlag) {
+	    if (inversionCorrection() != 0) {
+		r += 100;
+	    }
 	    iFlag = 0;
 	}
     }
@@ -339,7 +346,7 @@ main(
 	    unlink(Tname);
 	}
     }
-    return (r);	/* 1 - 6 compile errors, 11 - 16 output errors */
+    return (r);	/* 1 - 6 compile errors, 11 - 16 output errors, 1xx pplstfix error */
 } /* main */
 
 /********************************************************************

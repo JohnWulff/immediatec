@@ -1,7 +1,7 @@
 
-                         immediate C, iC rev 1.66
+                         immediate C, iC rev 1.68
 
-                    Copyright (C) 1985-2001, John E. Wulff
+                    Copyright (C) 1985-2002, John E. Wulff
                             All rights reserved.
 
     This program is free software; you can redistribute it and/or modify
@@ -60,16 +60,16 @@
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev 1.66
+        Notes for the installation of icc rev 1.68
 
         1)  Unpack the archive in a suitable working directory with:
 
-                tar -xvzf icc_1.66.tar.gz
-                cd icc_1.66/src
+                tar -xvzf icc_1.68.tar.gz
+                cd icc_1.68/src
 
         2)  Excute the following:
 
-                configure  OR    ./configure # if super user
+                configure  OR    ./configure # if super user (depricated)
                 make       OR    make quiet  # to supress intermediate output
 
             this should build the files
@@ -91,7 +91,7 @@
 	    Skip to point 8) if you get a help output and no error message.
 
 	    You can work without Time::Hires - the scripts iCbox, iCserver will
-	    not support the -m microsecond timing option and iClive will not
+	    not support the -m microsecond timing option and 'iClive' will not
 	    display short signals by flashing colours. If you subsequently
 	    install Time::Hires, you have to execute make uninstall followed
 	    by another make install as su in the icc/src directory, since the
@@ -114,7 +114,7 @@
 
         7)  Return to the immediate C installtion
 
-		cd icc_1.66/src	# or the correct icc src directory
+		cd icc_1.68/src	# or the correct icc src directory
 
         8)  To install the compiler, library and scripts execute the following
 	    as super user:
@@ -178,17 +178,17 @@
 	    of all variables from the running iC program (bar3). These
 	    updates will change the colours of all words, which are
 	    immediate variables.  (green/black = 0, yellow/red = 1)
-	    This "live listing" shows the current state of logical
+	    This "live display" shows the current state of logical
 	    relationships in statements of the iC program. Arithmetic
 	    variables are displayed in a balloon, when the cursor rests
 	    on a variable. (Arithmetic variables have a blue background).
 
-	    The program iClive uses the Tk::Text widget, which is a full
-	    featured editor. It is best to use the edit facilities when the
-	    'live display' has been cleared with the 'Clear' button. (Live
-	    display can be turned back on when this button shows 'Scan').
-	    The edit facilities of iClive are described in the Tk::Text
-	    man page in the section 'BINDINGS' near the end.
+	    The program 'iClive' uses the Tk::TextUndo widget, an extension
+	    of Tk::Text. In 'Live' mode when a "live display" is shown the
+	    text is read only. When the 'Edit' button is pressed 'iClive' is
+	    a full featured editor. The edit facilities of this program are
+	    described in the Tk::Text man page in the section 'BINDINGS'
+	    near the end. (Control-u is <<Undo>>)
 
 	14) I have included a script called 'stop' from my private toolkit.
 	    It can be used effectively to kill iCserver when it is
@@ -217,23 +217,21 @@
         
         Lots of success
 
-        John E. Wulff   02.June.2001     <john.wulff@inka.de>
+        John E. Wulff   05.June.2002     <john.wulff@inka.de>
 
-	PS
+	NOTE for SuSE Linux 7.1:
 	The program 'iCbox' requires Tk800.022 if you have Perl 5.6.0.
-	The SuSE Linux 7.1 which I have just installed has Tk800.014
-	in combination with Perl 5.6.0. With this constellation, iCbox
-	produces 20 lines of warnings every time a virtual button is
-	pressed, which executes $tcp_conn->send_now() from a Tk callback
-	function. Tk800.014 has 'require fileevent', which appears
-	to go awry. (should use 'use'!!). Strangely the transmissions
+	SuSE Linux 7.1 has Tk800.014 in combination with Perl 5.6.0.
+	With this constellation, iCbox produces 20 lines of warnings every
+	time a virtual button is pressed, which executes $tcp_conn->send_now()
+	from a Tk callback function. Tk800.014 has 'require fileevent', which
+	appears to go awry. (should use 'use'!!). Strangely the transmissions
 	work - the voluminous 'croak' outputs are only warnings.
 	
 	If you download Tk800-022 from CPAN and install it, iCbox
 	works fine. If you have an older distribution of Perl (5.005)
 	this is not necessary.
 
-	PPS
-	The SuSE Linux 7.2 distribution has Tk800.022 and works fine.
+	SuSE Linux 7.2 distribution has Tk800.022 and works fine.
 
-        $Id: README,v 1.7 2001/06/03 20:09:24 jw Exp $
+        $Id: README,v 1.8 2002/06/05 19:46:14 jw Exp $

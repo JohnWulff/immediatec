@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.9 2001/03/30 17:31:20 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.10 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,6 +25,9 @@ static const char RCS_Id[] =
 #include <sys/time.h>
 #include <errno.h>
 #include "tcpc.h"
+#include "icc.h"
+
+#define TBSIZE 32
 
 const char *	hostNM = "localhost";	/* 127.0.0.1 */
 const char *	portNM = "8778";	/* iC service */
@@ -97,12 +100,14 @@ int
 connect_to_server(const char *	host,
 		  const char *	port,
 		  const char *	icc,
-		  float		delay)
+		  float		delay,
+		  int		maxIOs)
 {
     int			sock;
     struct in_addr	sin_addr;
     unsigned short int	sin_port;
     struct sockaddr_in	server;
+    char		tempBuf[TBSIZE];
 
     if (isdigit(*host)) {
 	if (inet_aton(host, &sin_addr) == 0) {
@@ -143,15 +148,16 @@ connect_to_server(const char *	host,
 
     if (connect(sock, (SA)&server, sizeof(server)) < 0) {
 	fprintf(stderr, "ERROR in %s: client could not be connected to server '%s:%d'\n",
-	    iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+	    icc, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	perror("connect failed");
 	quit(1);
     }
 
-    printf("Connection %s to server '%s:%d'\n",
-	icc, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    printf("Connection %s %d to server '%s:%d'\n",
+	icc, maxIOs, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
-    send_msg_to_server(sock, icc);	/* register iC */
+    snprintf(tempBuf, TBSIZE, "%s %d", icc, maxIOs);
+    send_msg_to_server(sock, tempBuf);	/* register CO with maxIOs */
 
     FD_ZERO(&infds);	/* should be done centrally if more than 1 connect */
     FD_SET(0, &infds);			/* watch stdin for inputs - FD_CLR on EOF */
@@ -230,11 +236,11 @@ rcvd_msg_from_server(int sock, char * buf, int maxLen)
 	}
 	maxLen = len;
 	if ((len = rcvd_buffer_from_server(sock, netBuf.buffer, maxLen)) == maxLen) {
-#ifdef COMMENT
-	    printf("       received %2d bytes: '%-*.*s'\n", len, len, len, netBuf.buffer);
-#endif
 	    memcpy(buf, netBuf.buffer, len);
 	    buf[len] = '\0';
+	    if (debug & 02) {
+		fprintf(outFP, "%s < '%s'\n", iccNM, buf);	/* trace recv buffer */
+	    }
 	}
     }
     return len;
@@ -256,6 +262,9 @@ send_msg_to_server(int sock, const char * msg)
     if (len >= sizeof netBuf.buffer) {
 	fprintf(stderr, "ERROR in %s: message to send is too long: %d\n", iccNM, len);
 	len = sizeof netBuf.buffer - 1;
+    } else
+    if (debug & 01) {
+	fprintf(outFP, "%s > '%s'\n", iccNM, msg);		/* trace send buffer */
     }
     memcpy(netBuf.buffer, msg, len + 1);
     netBuf.length = htonl(len);

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.53 2002/05/16 14:28:43 jw Exp $";
+"@(#)$Id: comp.y,v 1.54 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,6 +25,9 @@
 #include	"icc.h"
 #include	"comp.h"
 
+#define		IMMBUFSIZE	1024
+#define		TSIZE		256
+
 /* "comp.y	3.70	95/02/03 Copyright (c) 1985-1993 by John E. Wulff" */
 
 static int	get(void);
@@ -40,8 +43,8 @@ static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
-static char	yybuf[1024];		/* buffer to build imm statement */
-char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
+static char	yybuf[IMMBUFSIZE];	/* buffer to build imm statement */
+char *		stmtp = yybuf;		/* manipulated in yylex() only */
 %}
 
 %union {		/* stack type */
@@ -55,6 +58,7 @@ char *		stmtp = yybuf;		/* pointer into yybuf used in genr.c */
 
 %{
 
+#ifdef YYDEBUG
 static void
 pu(int t, char * token, Lis * node)
 {
@@ -98,6 +102,7 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
     fflush(outFP);
 } /* pd */
 
+#endif
 %}
 
 	/************************************************************
@@ -206,7 +211,9 @@ extDecl	: extDeclHead UNDEF	{
 		$$.v = $2.v;
 		$$.v->ftype = $1.v & 0xff;
 		$$.v->type = $1.v >> 8;
-		if (debug & 02) pd("extDecl", $$.v, $1.v, &t);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pd("extDecl", $$.v, $1.v, &t);
+#endif
 	    }
 	| extDeclHead variable	{
 		Symbol t = *($2.v);
@@ -221,7 +228,9 @@ extDecl	: extDeclHead UNDEF	{
 		} else if ($2.v->type != INPW && $2.v->type != INPX) {
 		    warning("extern declaration after assignment - ignored:", $2.v->name);
 		}
-		if (debug & 02) pd("extDecl", $$.v, $1.v, &t);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pd("extDecl", $$.v, $1.v, &t);
+#endif
 	    }
 	;
 
@@ -256,7 +265,9 @@ decl	: declHead UNDEF	{
 		$$.v = $2.v;
 		$$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
 		$$.v->type = $1.v >> 8;		/* UDF for all TYPEs */
-		if (debug & 02) pd("decl", $$.v, $1.v, &t);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
+#endif
 	    }
 	| declHead variable	{
 		Symbol t = *($2.v);
@@ -268,10 +279,12 @@ decl	: declHead UNDEF	{
 		if (($2.v->type & ~TM) || $2.v->type == UDF) {
 		    $$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
 		    $$.v->type = $1.v >> 8;	/* UDF for all TYPEs */
-		} else if ($2.v->type != ERR && $2.v->type != INPW && $2.v->type != INPX) {
+		} else if ($2.v->type != INPW && $2.v->type != INPX) {
 		    warning("declaration after assignment - ignored:", $2.v->name);
 		}
-		if (debug & 02) pd("decl", $$.v, $1.v, &t);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
+#endif
 	    }
 	;
 
@@ -293,12 +306,14 @@ dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 		    if ($1.v->ftype != ARITH) { $$.v = 0; errBit(); YYERROR; }
 		    else if (const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
 		}
-		if ($1.v->type != UDF && $1.v->type != ERR) {
-		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
+		if ($1.v->type != UDF) {
+		    error("multiple assignment to imm type:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
-		if (debug & 02) pu(0, "dasgn", (Lis*)&$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "dasgn", (Lis*)&$$);
+#endif
 	    }
 	;
 
@@ -313,39 +328,45 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$1.v->ftype = GATE;	/* implicitly declared as 'imm bit' */
 		$$.v = op_asgn(&$1, &$3, GATE);	/* UNDEF is default GATE */
-		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+#endif
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
-		if ($1.v->type != UDF && $1.v->type != ERR) {
+		if ($1.v->type != UDF) {
 		    error("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, GATE);
-		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+#endif
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0 && const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
-		if ($1.v->type != UDF && $1.v->type != ERR) {
+		if ($1.v->type != UDF) {
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, ARITH);
-		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+#endif
 	    }
 	| LOUT '=' aexpr		{
 		Sym		sy;
 		Lis		li;
-		char		temp[30];
+		char		temp[TSIZE];
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
-		if ($1.v->type != UDF && $1.v->type != ERR) {
+		if ($1.v->type != UDF) {
 		    error("multiple assignment to imm bit:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
-		sprintf(temp, "%s_0", $1.v->name);
+		snprintf(temp, TSIZE, "%s_0", $1.v->name);
 		sy.v = install(temp, UDF, OUTX);	/* generate output Gate */
 		li.v = sy_push($1.v);			/* provide a link to LOUT */
 		if ((li.v = op_push(0, OR, li.v)) != 0) {
@@ -353,19 +374,21 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		}
 		op_asgn(&sy, &li, $1.v->ftype);
 		$$.v = op_asgn(&$1, &$3, GATE);
-		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+#endif
 	    }
 	| AOUT '=' aexpr		{
 		Sym		sy;
 		Lis		li;
-		char		temp[20];
+		char		temp[TSIZE];
 		$$.f = $1.f; $$.l = $3.l;
 		if ($3.v == 0) { $$.v = 0; errInt(); YYERROR; }
-		if ($1.v->type != UDF && $1.v->type != ERR) {
+		if ($1.v->type != UDF) {
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
-		sprintf(temp, "%s_0", $1.v->name);
+		snprintf(temp, TSIZE, "%s_0", $1.v->name);
 		sy.v = install(temp, UDF, OUTW);	/* generate output Gate */
 		li.v = sy_push($1.v);			/* provide a link to AOUT */
 		if ((li.v = op_push(0, ARN, li.v)) != 0) {
@@ -373,7 +396,9 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		}
 		op_asgn(&sy, &li, $1.v->ftype);
 		$$.v = op_asgn(&$1, &$3, ARITH);
-		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+#endif
 	    }
 	;
 
@@ -393,7 +418,9 @@ aexpr	: expr			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "aexpr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "aexpr", &$$);
+#endif
 	    }
 	;
 
@@ -408,18 +435,24 @@ expr	: UNDEF			{
 		$$.v = sy_push($1.v);
 		$1.v->ftype = GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| NUMBER		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = 0;			/* no node, do not need value */
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| valuevariable		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| fexpr			{
 		Symbol *	sp;
@@ -432,7 +465,9 @@ expr	: UNDEF			{
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| funct			{
 		$$ = $1;
@@ -445,14 +480,18 @@ expr	: UNDEF			{
 		if (($$.v = $2.v) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| BLATCH '(' lexpr ')'	{		/* L(set,reset) */
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = op_push(sy_push($3.v->le_sym), LOGC, $3.v);
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| BFORCE '(' aexpr ',' lexpr ')'	{	/* F(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
@@ -460,7 +499,9 @@ expr	: UNDEF			{
 		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr '|' expr		{		/* binary | */
 		$$.f = $1.f; $$.l = $3.l;
@@ -476,7 +517,9 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr '^' expr		{		/* binary ^ */
 		$$.f = $1.f; $$.l = $3.l;
@@ -492,7 +535,9 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr '&' expr		{		/* binary & */
 		$$.f = $1.f; $$.l = $3.l;
@@ -508,7 +553,9 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr CMP expr	{			/* == != < <= > >= */
 		$$.f = $1.f; $$.l = $3.l;
@@ -517,7 +564,9 @@ expr	: UNDEF			{
 		    $$.v = op_force($$.v, GATE);	/* default output */
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr AOP expr		{		/* << >> / % */
 		$$.f = $1.f; $$.l = $3.l;
@@ -525,7 +574,9 @@ expr	: UNDEF			{
 		    ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr PM expr		{		/* binary + - */
 		$$.f = $1.f; $$.l = $3.l;
@@ -533,7 +584,9 @@ expr	: UNDEF			{
 		    ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr '*' expr		{		/* binary * */
 		$$.f = $1.f; $$.l = $3.l;
@@ -541,7 +594,9 @@ expr	: UNDEF			{
 		    ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 
 	/************************************************************
@@ -574,7 +629,9 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr OO expr	{			/* binary || */
 		Symbol *	sp;
@@ -595,7 +652,9 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| expr '?' expr ':' expr	{	/* ? : */
 		$$.f = $1.f; $$.l = $5.l;
@@ -604,7 +663,9 @@ expr	: UNDEF			{
 		    ARN, op_force($5.v, ARITH)))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| NOTL expr 		{		/* unary ~ or ! */
 		Symbol *	sp;
@@ -624,14 +685,18 @@ expr	: UNDEF			{
 		} else {
 		    $$.v = 0;			/* constant negation */
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	| PM expr %prec NOTL	{		/* unary + or - */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "expr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
 	    }
 	;
 
@@ -643,7 +708,9 @@ lexpr	: aexpr ',' aexpr		{
 		    LOGC, op_not(op_force($3.v, GATE)))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "lexpr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "lexpr", &$$);
+#endif
 	    }
 	;
 
@@ -754,54 +821,74 @@ dexpr	: NVAR			{
 fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
-		if (debug & 02) pu(1, "fexpr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
 	    }
 	| DLATCH '(' lexpr cref ')'	{		/* DL(set,reset) */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0);
-		if (debug & 02) pu(1, "fexpr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
 	    }
 	| BLTIN2 '(' aexpr ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $7.l;
 		$$.v = bltin(&$1, &$3, &$6, &$5, 0, 0, 0);
-		if (debug & 02) pu(1, "fexpr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
 	    }
 	| BLTIN2 '(' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, 0);
-		if (debug & 02) pu(1, "fexpr", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
 	    }
 	| BLTIN3 '(' aexpr ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $6.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, 0); /* monoflop without reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by iClock */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by iClock */
+#endif
 	    }
 	| BLTIN3 '(' aexpr ',' ctdref ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $8.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, 0); /* monoflop without reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+#endif
 	    }
 	| BLTIN3 '(' aexpr ',' aexpr ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $8.l;
 		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, 0); /* monoflop with reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
+#endif
 	    }
 	| BLTIN3 '(' aexpr ',' aexpr ',' ctdref ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $10.l;
 		$$.v = bltin(&$1, &$3, &$7, &$5, 0, &$9, 0); /* monoflop with reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by same clock or timer */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set and reset clocked by same clock or timer */
+#endif
 	    }
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctref ')'	{
 		Lis	lis1;
 		$$.f = $1.f; $$.l = $10.l;
 		lis1.v = sy_push(iclock);		/* to avoid shift reduce conflict */
 		$$.v = bltin(&$1, &$3, &$5, &$7, &lis1, &$9, 0); /* monoflop with reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+#endif
 	    }						/* reset clocked by iClock */
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctdref ',' ctref ')'	{
 		$$.f = $1.f; $$.l = $12.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, &$11, 0); /* monoflop with reset */
-		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+#endif
 	    }						/* reset clocked by different clock or timer */
 	;
 
@@ -851,7 +938,7 @@ dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 		if ($1.v->ftype != CLCKL) {
 		    error("assigning clock to variable declared differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
-		} else if ($1.v->type != UDF && $1.v->type != CLK && $1.v->type != ERR) {
+		} else if ($1.v->type != UDF && $1.v->type != CLK) {
 		    error("assigning clock to variable assigned differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
@@ -863,6 +950,7 @@ casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
 	| CVAR '=' cexpr	{
 		if ($1.v->type != UDF) {
 		    error("multiple assignment clock:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, CLCKL);
 	    }
@@ -902,8 +990,8 @@ dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 		if ($1.v->ftype != TIMRL) {
 		    error("assigning timer to variable declared differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
-		} else if ($1.v->type != UDF && $1.v->type != TIM && $1.v->type != ERR) {
-		    error("assigning clock to variable assigned differently:", $1.v->name);
+		} else if ($1.v->type != UDF && $1.v->type != TIM) {
+		    error("assigning timer to variable assigned differently:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, TIMRL);
@@ -914,6 +1002,7 @@ tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
 	| TVAR '=' texpr	{
 		if ($1.v->type != UDF) {
 		    error("multiple assignment timer:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, TIMRL);
 	    }
@@ -1000,7 +1089,9 @@ funct	: UNDEF '(' params ')'	{
 		    free($1.v);
 		}
 		$$.v = $3.v;
-		if (debug & 02) pu(1, "funct", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "funct", &$$);
+#endif
 	    }
 	;
 
@@ -1013,14 +1104,18 @@ plist	: aexpr			{
 		if (($$.v = op_push(0, ARN, op_force($1.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "plist", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "plist", &$$);
+#endif
 	    }
 	| plist ',' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = op_push($1.v, ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, "plist", &$$);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "plist", &$$);
+#endif
 	    }
 	;
 
@@ -1032,15 +1127,20 @@ plist	: aexpr			{
 
 %%
 
+#ifdef NEWSTYLE
+#define CBUFSZ 166			/* listing just fits on 132  cols */
+#define YTOKSZ 166
+#else
 #define CBUFSZ 125			/* listing just fits on 132  cols */
 #define YTOKSZ 66
+#endif
 static char	chbuf[CBUFSZ];
 static char *	getp = chbuf;
 static char *	fillp = chbuf;
 static char	yytext[YTOKSZ];		/* lex token */
 static int	yyleng;			/* length */
 static char	inpBuf[YTOKSZ];		/* alternate file name */
-static int	lineflag;
+static int	lineflag = 0;
 static char	tmpbuf[256];		/* buffer to build variable */
 static char *	errFilename;
 static int	errFlag = 0;
@@ -1117,6 +1217,10 @@ get(void)
     int		temp1;
 
     while (getp >= fillp) {
+	/************************************************************
+	 *  getp has reached end of previous chbuf filling
+	 *  fill chbuf with a new line
+	 ************************************************************/
 	if (lineflag) {
 	    lineno++;
 	}
@@ -1124,12 +1228,18 @@ get(void)
 	    && (temp = getc(inFP)) != EOF
 	    && (*fillp++ = temp) != '\n'; );
 	if (fillp == chbuf) {
-	    strcpy(chbuf, "*** EOF ***\n");
+	    lineflag = 0;
+	    strcpy(chbuf, "*** EOF ***");
 	    return (EOF);
 	}
 	*fillp = '\0';
 	lineflag = (*(fillp-1) == '\n') ? 1 : 0;
-	if (debug & 010) {	/* source listing in debugging output */
+	if (debug & 010) {
+	    /********************************************************
+	     *  output source listing line in debugging output
+	     *  before any tokens are handed to the parser
+	     *  then messages appear neatly after the listing line
+	     ********************************************************/
 	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
 	    if (lineflag == 0) putc('\n', outFP);
 	}
@@ -1141,6 +1251,10 @@ get(void)
 	    getp = fillp;	/* do not pass to yylex() */
 	}
     }
+    /****************************************************************
+     *  extract 1 character at a time from chbuf and return it
+     *  transfer it to the token buffer yytext and count yyleng
+     ****************************************************************/
     yytext[yyleng++] = temp = *getp++;
     if (yyleng >= sizeof(yytext)) yyleng--;
     yytext[yyleng] = '\0';
@@ -1162,7 +1276,8 @@ char *	cexeString[] = {
 static int
 yylex(void)
 {
-    int	c, c1;
+    int		c;
+    int		c1;
 
     if (ccfrag) {
 	if (ccfrag == '%') {
@@ -1171,7 +1286,8 @@ yylex(void)
 	fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
 	unget('{');
 	if (copyCfrag('{', ccfrag == '%' ? '%' : ';', '}') == 0) {
-	    return 0;	/* copy C block or statement */
+	    ccfrag = 0;
+	    return 0;	/* EOF in copy C block or statement */
 	}
 	yylval.val.v = c_number;	/* return case # */
 	ccfrag = 0;
@@ -1182,6 +1298,9 @@ yylex(void)
     while ((c = get()) !=  EOF) {
 	Symbol *	symp;
 	List_e *	lp;
+	int		len;
+	int		rest;
+
 	if (c == ' ' || c == '\t' || c == '\n') {
 	    yyleng = 0;
 	    continue;			/* ignore white space */
@@ -1252,8 +1371,16 @@ yylex(void)
 		    warning("Variables with __ clash with I/O", yytext);
 		    typ = ERR;			/* QX%d__%d not allowed */
 		}				/* QX%d__%d_ABC is OK */
+		if (yn >= IXD) {
+		    char tempBuf[TSIZE];		/* make long enough for format below */
+		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:", IXD);
+		    error(tempBuf, yytext);	/* hard error if outside range */
+		}
 	    }
 	    unget(c);
+	    if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
+		error("WORD I/O must have even byte address:", yytext);
+	    }
 	    if ((symp = lookup(yytext)) == 0) {
 		symp = install(yytext, typ, ftyp); /* usually UDF UDFA */
 	    } else if (typ == ERR) {
@@ -1276,7 +1403,13 @@ yylex(void)
 		symp = lp->le_sym;		/* original via backptr */
 	    }
 	    yylval.sym.f = stmtp;	/* original name for expressions */
-	    yylval.sym.l = stmtp += sprintf(stmtp, "_(%s)", symp->name);
+	    if ((len = snprintf(stmtp, rest = &yybuf[IMMBUFSIZE] - stmtp,
+				"_(%s)", symp->name)) < 0 || len >= rest) {
+		yybuf[IMMBUFSIZE-1] = '\0';
+		len = rest - 1;			/* text + NUL which fits */
+		error("statement too long at: ", symp->name);
+	    }
+	    yylval.sym.l = stmtp += len;
 	} else {
 	    c1 = get();
 	    switch (c) {
@@ -1401,13 +1534,21 @@ yylex(void)
 	    if ((c == PM || c == PPMM) &&
 		stmtp > yybuf && *(stmtp-1) == *yytext) {
 		*stmtp++ = ' ';		/* space between + + and - - */
+					/* 1 byte will always fit */
 	    }
-	    yylval.val.l = stmtp = strcpy(stmtp, yytext) + strlen(yytext);
+	    rest = &yybuf[IMMBUFSIZE] - stmtp;
+	    len = strlen(yytext);
+	    if (len >= rest) {
+		yybuf[IMMBUFSIZE-1] = '\0';
+		len = rest -1;
+		error("statement too long at: ", yytext);
+	    }
+	    yylval.val.l = stmtp = strncpy(stmtp, yytext, len) + len;
 	}
 	dflag = 0;
 	return c;			/* return token to yacc */
     }
-    return (0);		/* EOF */
+    return 0;				/* EOF */
 } /* yylex */
 
 static void
@@ -1452,7 +1593,7 @@ errmess(				/* actual error message */
     char *	str1,
     char *	str2)
 {
-    errLine();
+    errLine();				/* do not change - used as search key in iClive */
     fprintf(outFP, "*** %s: %s", str0, str1);
     if (errFlag) fprintf(errFP, "*** %s: %s", str0, str1);
     if (str2) {
@@ -1462,8 +1603,13 @@ errmess(				/* actual error message */
 	putc('.', outFP);
 	if (errFlag) putc('.', errFP);
     }
+#ifdef NEWSTYLE
+    fprintf(outFP, " '%s'\n", inpNM);
+    if (errFlag) fprintf(errFP, " '%s'\n", inpNM);
+#else
     fprintf(outFP, " File %s, line %d\n", inpNM, lineno);
     if (errFlag) fprintf(errFP, " File %s, line %d\n", inpNM, lineno);
+#endif
 } /* errmess */
 
 void
@@ -1510,10 +1656,10 @@ yyerror(char *	s)		/* called for yacc syntax error */
 {
     char *	cp = chbuf;
     int		n, n1;
-    char	erbuf[80];
+    char	erbuf[TSIZE];
 
     errLine();
-    fprintf(outFP, "*** ");
+    fprintf(outFP, "*** ");	/* do not change - used as search key in iClive */
     if (errFlag) fprintf(errFP, "*** ");
     for (n1 = 0, n = getp - cp - yyleng; n > 0; n--, cp++) {
 	n1++;
@@ -1523,7 +1669,12 @@ yyerror(char *	s)		/* called for yacc syntax error */
 	    }
 	}
     }
-    n = sprintf(erbuf, "%s %d in %s", s, ++ynerrs, inpNM);
+    ynerrs++;
+#ifdef NEWSTYLE
+    n = snprintf(erbuf, TSIZE, "%s '%s'", s, inpNM);
+#else
+    n = snprintf(erbuf, TSIZE, "%s %d in %s", s, ynerrs, inpNM);
+#endif
     if (n1 < n + 5) {
 	n1 += 4;
 	while (n1--) {
@@ -1621,6 +1772,7 @@ copyCfrag(char s, char m, char e)
 		    putc(c, exoFP);
 		    if ((c = get()) == EOF) goto eof_error;
 		} else if (c == '\n') {
+		    yyleng = 1;		/* error pointer at newline */
 		    yyerror("C code: newline in \" \" or ' ', error");
 		} else if (c == EOF)  goto eof_error;
 		putc(c, exoFP);
@@ -1630,6 +1782,7 @@ copyCfrag(char s, char m, char e)
 	putc(c, exoFP);			/* output to cexe.tmp */
     }
 eof_error:
+    yyleng = 1;				/* error pointer at EOF */
     yyerror("C code: EOF, error");
-    return 0;
+    return 0;				/* EOF */
 } /* copyCfrag */

@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.11 2001/03/02 12:56:32 jw Exp $";
+"@(#)$Id: cexe.h,v 1.12 2002/06/03 13:11:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -11,7 +11,9 @@ static const char cexe_h[] =
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	cexe.h
- *	template to generate extensions to the icc compiler
+ *	template to generate cexe.c
+ *	for extensions to the compiler run time system
+ *	to execute literal blocks and arithmetic expressions
  *
  *******************************************************************/
 
@@ -20,8 +22,28 @@ static const char cexe_h[] =
 #include "comp.h"
 
 #line 16 "cexe.h"
-#define _(x) lookup(#x)->u.gate->gt_old
-#define A(x,v) assign(lookup(#x)->u.gate, v)
+#define _(x) Lookup(#x)->u.gate->gt_old
+#define A(x,v) assign(Lookup(#x)->u.gate, v)
+
+static Symbol *
+Lookup(char *	string)	/* find string in symbol table at run time */
+{
+    Symbol *	sp;
+
+    if ((sp = lookup(string)) == 0) {
+#ifndef _WINDOWS
+	fflush(outFP);
+	fprintf(errFP,
+	    "\n*** Error: cexe.c: Lookup could not find Symbol '%s' at run time.\n"
+	      "*** Usually this is a term in a C function which does not match.\n"
+	      "*** Check that 'cexe.c' was built from '%s'\n"
+	      "*** Rebuild compiler using '%s -c %s'\n"
+	      , string, inpNM, progname, inpNM);
+#endif
+	quit(-3);
+    }
+    return sp;				/* found */
+} /* Lookup */
 Q
 int
 c_exec(int pp_index, Gate * _cexe_gf)
@@ -33,8 +55,10 @@ V
 #ifndef _WINDOWS
 	fflush(outFP);
 	fprintf(errFP,
-	    "\n%s: line %d: F%d C function unknown\n",
-	    __FILE__, __LINE__, pp_index);
+	    "\n*** Error: cexe.c: C function 'F(%d)' is unknown.\n"
+	      "*** Check that 'cexe.c' was built from '%s'\n"
+	      "*** Rebuild compiler using '%s -c %s'\n"
+	      , pp_index, inpNM, progname, inpNM);
 	quit(-1);
 #endif
 	break;

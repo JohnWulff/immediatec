@@ -22,7 +22,8 @@
 #	Registration:	UnitID
 #			X0 .. X31  from bit  I/O to server
 #			B0 .. B31  from byte I/O to server
-#			W0 .. W30  from word I/O to server
+#			W0 .. W30  from word I/O to server (even only)
+#			L0         from live display to server
 #			C0         from ICC to server
 #
 #	I/O values:	Value
@@ -33,6 +34,7 @@
 #			X0.0 .. X31.255   from server to ICC bit
 #			B0.0 .. B31.255   from server to ICC byte
 #			W0.0 .. W30.65535 from server to ICC word
+#			L0...             from server to ICC live display
 #
 #	The same formats are used from server to I/O and ICC to server.
 #	The direction of transmission determines if an I/O messages
@@ -63,10 +65,13 @@
 use Msg;
 use strict;
 
-my %UnitIDs = ();
-my %Connections = ();
-my %Values = ();
-my $connICC;
+my %UnitIDs = ();	# indexed by $conn - stores hash of UnitIDs
+			# I0 I1 ... connected at this connection
+my %Connections = ();	# indexed by UnitId I0 I1 ... stores connection
+my %IOs = ();		# indexed by UnitNo as byte address
+my %Values = ();	# indexed by UnitId I0 I1 ... stores latest value
+my $connICC;		# connection of the iC control client ICC
+my $maxIOs = undef;	# maximum no of IO addresses allowed by ICC
 
 ########################################################################
 #
@@ -90,7 +95,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.24 2001/05/06 19:09:47 jw Exp $
+$Id: iCserver,v 1.25 2002/06/03 13:14:26 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_h);
@@ -124,6 +129,9 @@ print "Server created. Waiting for events\n";
 ########################################################################
 #
 #	Start clients named in argument list
+#
+#	start each argument as a seperate process after splicing in
+#	optional global switches -p <port> -t -m
 #
 ########################################################################
 
@@ -199,12 +207,24 @@ sub rcvd_msg_from_client {
 	my $len = length $msg;
 # print "($len)$msg", defined $unitID ? " $unitID\n" : " ID?\n";
 	if ($len == 0) {
+	    ############################################################
+	    # Client $conn has signalled shutdown - disconnect client
+	    # take appropriate actions on other clients
+	    ############################################################
 	    if (defined $unitID and exists $Connections{$unitID}) {
 		delete $Connections{$unitID};
 		delete $UnitIDs{$conn};		# all unitIDs for this connection
 		$conn->disconnect();
+		if ($unitID =~ /^([BWX])(\d+)$/) {
+		    my $unitNo = $2;
+		    delete $IOs{$unitNo};
+		    if ($1 eq 'W') {
+			delete $IOs{$unitNo+1};
+		    }
+		}
 		if ($unitID =~ /^C/) {
 		    $connICC = undef;
+		    $maxIOs = undef;
 		    if ($Connections{'L0'}) {
 			delete $UnitIDs{$Connections{'L0'}};
 			$Connections{'L0'}->disconnect();	# stop live display
@@ -213,19 +233,21 @@ sub rcvd_msg_from_client {
 		} elsif (defined $connICC) {
 		    # pass clear input message to ICC
 		    print "I$unitID 0 to C0\n" if $opt_t;
-		    $connICC->send_now("$unitID.0");
+		    $connICC->send_now("$unitID.0");		# all inputs 0
 		}
 		print "$unitID has disconnected\n";
 	    }
 	} else {
 	    foreach my $msg1 (split /,/, $msg) {	# break up multiple messages
 		my ($uID, $value) = split /\./, $msg1, 2;
+		my $unitNo = undef;
+		my $max = undef;
 		if (defined $value) {
 		    if (not defined $connICC) {
 			print "I$uID $value to dummy C0\n" if $opt_t;
 		    } elsif ($conn eq $connICC) {
 			############################################################
-			# value from ICC to I/O
+			# $msg1: 2.4 value 4 from ICC to I/O Q2
 			############################################################
 			if (defined $Connections{$uID}) {
 			    print "$unitID $value to Q$uID\n" if $opt_t;
@@ -236,14 +258,17 @@ sub rcvd_msg_from_client {
 			$Values{$uID} = $value;	# save latest bit or analog value
 		    } else {
 			############################################################
-			# value from I/O to ICC
+			# $msg1: 3.5 value 5 from I/O I3 to ICC
 			############################################################
 			print "I$uID $value to C0\n" if $opt_t;
 			$connICC->send_now("$msg1");
 		    }
-		} elsif ($msg1 !~ /^[XBWCL]\d+$/) {	# X0 X1 .. B0 .. W0 .. C0 L0
-		    warn "WARNING: $msg1 from Unit $unitID ?? ignored";
-		} elsif (exists $Connections{$msg1}) {
+		} elsif ($msg1 !~ /^[XBWCL](\d+)( (\d+))?$/ or	# X0 X1 .. B0 .. W0 .. L0 C0 64
+		    (($max = $3), ($unitNo = $1) & 1) == 1 and $msg1 =~ /^W/) {
+		    warn "WARNING: $msg1: badly formed UnitID or odd WORD address";
+		} elsif (exists $Connections{$msg1} or
+		    $msg1 =~ /^[BWX]/ and exists $IOs{$unitNo} or
+		    $msg1 =~ /^W/ and exists $IOs{$unitNo+1}) {
 		    delete $UnitIDs{$conn}{$msg1};
 		    $conn->disconnect();
 		    warn "Trying to attach $msg1 twice - disconnected\n";
@@ -252,6 +277,10 @@ sub rcvd_msg_from_client {
 		    # registration
 		    ############################################################
 		    if ($msg1 =~ /^C/) {
+			############################################################
+			# C0 optionally followed by max number of I/Os
+			############################################################
+			$msg1 = "C$unitNo";		# take away max I/Os
 			if (defined $connICC) {
 			    delete $UnitIDs{$conn}{$msg1};
 			    $conn->disconnect();
@@ -259,26 +288,56 @@ sub rcvd_msg_from_client {
 			    next;
 			}
 			$connICC = $conn;		# the ICC connection
+			$maxIOs = $max;
+			if ($opt_t) {
+			    if (defined $maxIOs) {
+				print "maxIOs = $maxIOs\n";
+			    } else {
+				print "maxIOs not defined\n";
+			    }
+			}
 			############################################################
 			# new ICC connected - reset all the attached I/Os
 			############################################################
 			foreach my $con1 (sort keys %UnitIDs) {
 			    foreach $uID (sort keys %{ $UnitIDs{$con1} }) {
-				if ($uID =~ /^[BWX]/) {
-				    if (defined $Connections{$uID}) {
+				if ($uID =~ /^[BWX](\d+)$/) {
+				    my $uIdNo = $1;
+				    unless (defined $Connections{$uID}) {
+					print "ICS R to dummy $uID\n" if $opt_t;
+				    } elsif (defined $maxIOs and $uIdNo >= $maxIOs) {
+					warn "ICS disconnects $uID because >= $maxIOs\n";
+					if (exists $Connections{$uID}) {
+					    $Connections{$uID}->disconnect();
+					    delete $Connections{$uID};
+					    delete $UnitIDs{$con1};		# all unitIDs for this connection
+					    delete $IOs{$uIdNo};
+					    if ($uID =~ /^W/) {
+						delete $IOs{$uIdNo+1};
+					    }
+					}
+				    } else {
 					print "ICS R to $uID\n" if $opt_t;
 					$Connections{$uID}->send_now("$uID.R");
-				    } else {
-					print "ICS R to dummy $uID\n" if $opt_t;
 				    }
 				    $Values{$uID} = 0;	# save latest bit or analog value
 				}
 			    }
 			}
 		    }
-		    if ($connICC or $msg1 !~ /^L/) {
+		    if (defined $unitNo and (not defined $maxIOs or $unitNo < $maxIOs) and
+			($connICC or $msg1 !~ /^L/)) {
+			############################################################
+			# B0 B1 ... B63 W0 W2 ... W62 X0 X1 ... X63 L0 C0
+			############################################################
 			$UnitIDs{$conn}{$msg1} = $msg1;
 			$Connections{$msg1} = $conn;
+			if ($msg1 =~ /^([BWX])/) {
+			    $IOs{$unitNo} = 1;
+			    if ($1 eq 'W') {
+				$IOs{$unitNo+1} = 1;
+			    }
+			}
 			print "Registered $msg1 at server\n";
 			if ($connICC and $msg1 =~ /^[BWX]/) {
 			    $value = $Values{$msg1};	# saved bit or analog value from ICC
@@ -289,7 +348,11 @@ sub rcvd_msg_from_client {
 			}
 		    } else {
 			$conn->disconnect();	# live display must have a controller
-			warn "Trying to attach $msg1 when no controller - disconnected\n";
+			if ($msg1 =~ /^L/) {
+			    warn "Trying to attach $msg1 when no controller - disconnected\n";
+			} else {
+			    warn "Trying to attach $msg1 when >= $maxIOs - disconnected\n";
+			}
 		    }
 		}
 	    }

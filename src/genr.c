@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.41 2001/04/27 20:07:37 jw Exp $";
+"@(#)$Id: genr.c,v 1.42 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -67,7 +67,7 @@ sy_push(Symbol * var)	/* create List element for variable */
     lp = (List_e *) emalloc(sizeof(List_e));
     lp->le_sym = var;	/* point to variables Symbol entry */
 #ifdef YYDEBUG
-    if (debug & 02) {
+    if ((debug & 0402) == 0402) {
 	fprintf(outFP, "++%s\n", var->name);
 	fflush(outFP);
     }
@@ -89,7 +89,7 @@ sy_pop(List_e * lp)	/* delete List element left over */
     sp = lp->le_sym;	/* point to variables Symbol entry */
     free(lp);
 #ifdef YYDEBUG
-    if (debug & 02) {
+    if ((debug & 0402) == 0402) {
 	fprintf(outFP, "  %s--\n", sp->name);
 	fflush(outFP);
     }
@@ -122,7 +122,7 @@ op_force(		/* force linked Symbol to correct ftype */
 	    sp = lp->le_sym;
 	}
 #ifdef YYDEBUG
-	if (debug & 02) {
+	if ((debug & 0402) == 0402) {
 	    fprintf(outFP, "\tforce %s from %s to %s\n",
 		sp->name, full_ftype[sp->ftype], full_ftype[ftyp]);
 	    fflush(outFP);
@@ -168,7 +168,7 @@ op_push(			/* reduce List_e stack to links */
 	sp = (Symbol *) emalloc(sizeof(Symbol));
 	sp->name = NS;		/* no name at present */
 #ifdef YYDEBUG
-	if (debug & 02) {	/* DEBUG name */
+	if ((debug & 0402) == 0402) {	/* DEBUG name */
 	    sprintf(temp, "$%d", ++tn);
 	    sp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	    strcpy(sp->name, temp);
@@ -201,7 +201,7 @@ op_push(			/* reduce List_e stack to links */
 		left->le_next = sp->u.blist;	/* extend expression */
 		sp->u.blist = left;		/* link left of expr */
 #ifdef YYDEBUG
-		if (debug & 02) {
+		if ((debug & 0402) == 0402) {
 		    fprintf(outFP, "\t%c%s %c %c%s\n",
 			v(left), os[op], v(right));
 		    fflush(outFP);
@@ -227,13 +227,13 @@ op_push(			/* reduce List_e stack to links */
 		    templist = lsp->next;		/* unlink first object */
 		}
 #ifdef YYDEBUG
-		if (debug & 02) {
+		if ((debug & 0402) == 0402) {
 		    fprintf(outFP, "\t%c%s %c %c%s\n",
 			v(left), os[op], v(right));
 		    fflush(outFP);
 		}
 		sy_pop(left);			/* left Link_e */
-		if (debug & 02) {
+		if ((debug & 0402) == 0402) {
 		    free(lsp->name);		/* free name space */
 		}
 		free(lsp);			/* left Symbol */
@@ -245,7 +245,7 @@ op_push(			/* reduce List_e stack to links */
 	    sy_pop(left);			/* Link_e only */
 	}
 #ifdef YYDEBUG
-    } else if (debug & 02) {		/* fexpr : sexpr { left is 0 } */
+    } else if ((debug & 0402) == 0402) {		/* fexpr : sexpr { left is 0 } */
 	fprintf(outFP, "\t(0) %c %c%s\n", os[op], v(right));
 	fflush(outFP);
 #endif
@@ -372,7 +372,7 @@ op_not(List_e * right)		/* logical negation */
 	}
     }
 #ifdef YYDEBUG
-    if (debug & 02) {
+    if ((debug & 0402) == 0402) {
 	fprintf(outFP, "    ~%s\n", right->le_sym->name);
 	fflush(outFP);
     }
@@ -424,7 +424,7 @@ op_asgn(				/* asign List_e stack to links */
 	sflag = 1;			/* print output name */
     }
 #ifdef YYDEBUG
-    if (debug & 02) {
+    if ((debug & 0402) == 0402) {
 	fprintf(outFP, "\t  %s = %c%s\n", var->name, v(right));
 	fflush(outFP);
     }
@@ -531,7 +531,9 @@ op_asgn(				/* asign List_e stack to links */
     atn = 0;
     sp = var;				/* start reduction with var */
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
-    if (debug & 02) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
+#ifdef YYDEBUG
+    if ((debug & 0402) == 0402) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
+#endif
     do {				/* marked symbol */
 	int	gt_input;
 	char *	ep = eBuf;		/* temporary expression buffer */
@@ -566,7 +568,7 @@ op_asgn(				/* asign List_e stack to links */
 		    gp = (Symbol *) emalloc(sizeof(Symbol));
 		    gp->name = NS;		/* no name at present */
 #ifdef YYDEBUG
-		    if (debug & 02) {	/* DEBUG name */
+		    if ((debug & 0402) == 0402) {	/* DEBUG name */
 			sprintf(temp, "$%d", ++tn);
 			gp->name = emalloc(strlen(temp)+1);
 			strcpy(gp->name, temp);
@@ -602,15 +604,16 @@ op_asgn(				/* asign List_e stack to links */
 		if ((tlp = gp->list) == 0) {
 		    gp->list = lp;	/* this is the first Symbol */
 		} else {
+		    /* loop to find duplicate link (possibly inverted) */
 		  loop:		/* special loop with test in middle */
 		    if (tlp->le_sym == sp) {
 			if (gp->ftype == OUTW || gp->ftype == OUTX) {
-		    warning("input equals output at output gate:", gp->name);
-			} else if (tlp->le_val != lp->le_val) {
-			    warning("gate has input and inverse:", gp->name);
-			} else {
+			    warning("input equals output at output gate:", gp->name);
+			} else if (tlp->le_val == lp->le_val) {
 			    sy_pop(lp);	/* ignore duplicate link */
 			    continue;	/* output scan for 1 gate */
+			} else if (gp->ftype != ARITH) {
+			    warning("gate has input and inverse:", gp->name);
 			}
 		    }
 		    if (tlp->le_next) {
@@ -630,7 +633,7 @@ op_asgn(				/* asign List_e stack to links */
 #endif
 	    ) {			/* not marked symbol */
 #ifdef YYDEBUG
-		if (debug & 02) {
+		if ((debug & 0402) == 0402) {
 		    if (debug & 04) {
 			fprintf(outFP, "%s =", gp->name);
 		    } else {
@@ -787,11 +790,11 @@ op_asgn(				/* asign List_e stack to links */
 
     if (right->le_val == NOT ^ NOT) {
 	sy_pop(right);			/* right Symbol and List_e */
-    #ifdef YYDEBUG
-	if (debug & 02) {
+#ifdef YYDEBUG
+	if ((debug & 0402) == 0402) {
 	    free(rsp->name);		/* free name space of $x */
 	}
-    #endif
+#endif
 	free(rsp);			/* free right Symbol */
     }
     if (debug & 04) {
@@ -817,10 +820,12 @@ op_asgn(				/* asign List_e stack to links */
 	    execerror("error in unlinking temp:", var->name);
 	}
 	lp->le_sym = 0;			/* erase reference to temp */
-	if (debug & 02) {
+#ifdef YYDEBUG
+	if ((debug & 0402) == 0402) {
 	    fprintf(outFP, "\t  %s deleted\n\n", var->name);
 	    fflush(outFP);
 	}
+#endif
 	free(var->name);		/* free name space */
 	free(var);			/* temporary Symbol */
 	return 0;

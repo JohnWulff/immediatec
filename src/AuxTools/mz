@@ -11,7 +11,7 @@ usage ()
     echo 'Usage:	'${0##*/}' [-dh] file ...' >&2
     echo '	-d	diff previously made files' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mz,v 1.6 2001/02/21 16:21:41 jw Exp $' >&2
+    echo '	$Id: mz,v 1.7 2002/06/06 08:30:19 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -54,10 +54,10 @@ for w in $versions; do
 		rm -f Alex$v/$f.lst Alex$v/$f.c Alex$v/$f.ini
 	    fi
 	done
-	ICMake -v$v $*;
+	iCmake -v$v $*;
 	for f in $*; do
 	    if [[ -n "$d" ]]; then
-		mdiff -ne $f.ic $f.lst $f.c $f.ini Alex$v
+		Mdiff -ne $f.ic $f.lst $f.c $f.ini Alex$v
 	    else
 		cp $f.ic $f.lst $f.c $f.ini Alex$v
 	    fi

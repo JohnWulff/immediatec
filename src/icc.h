@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.33 2002/05/16 14:28:43 jw Exp $";
+"@(#)$Id: icc.h,v 1.34 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -37,7 +37,7 @@ extern void	efree(void *);
 #endif
 
 #define	DIS_MAX	5		/* diplay heading after this many */
-#define	IXD	32		/* number of slots in icc (<= 64) */
+#define	IXD	64		/* number of slots in icc (<= 64) */
 #define	TXD	1		/* number of system slots (timers etc) */
 
 #define	Sizeof(x)	((sizeof x) / (sizeof x[0]))

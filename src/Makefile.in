@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.20 2001/06/03 20:09:24 jw Exp $
+# @(#)$Id: Makefile.in,v 1.21 2002/06/06 12:17:51 jw Exp $
 
 ############################################################
 #
@@ -112,10 +112,10 @@ cexe.c:	$(srcdir)/cexe.h
 $(srcdir)/comp.c:	$(srcdir)/comp.y
 
 test:
-	@echo "compile and generate all executables from iC files in Test ..."
-	@${srcdir}/iCmake -v ${srcdir}/Test/*.ic
-	@echo "diffing generated files in Test with originals in Test/ORG* ..."
-	@if ${srcdir}/Mdiff -kl ${srcdir}/Test/*.* ${srcdir}/Test/ORG*; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files"; fi
+	@echo "compile and generate all executables from iC files in ${srcdir}/Test ..."
+	@-${srcdir}/iCmake -iv ${srcdir}/Test/*.ic > ${srcdir}/Test/ErrorMessages.err 2>&1
+	@echo "diffing generated files in ${srcdir}/Test with originals in ${srcdir}/Test/ORG ..."
+	@if ${srcdir}/Mdiff -kle ${srcdir}/Test/*.* ${srcdir}/Test/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test/ORG"; fi
 
 install:	installdirs
 	$(srcdir)/perlinstall -t $(srcdir) Msg.pm
@@ -149,6 +149,9 @@ clean:
 
 distclean: clean
 	rm -f Makefile config.status config.log config.cache
+
+distribution:
+	@rev=`grep 'icc\.v,v' ${srcdir}/icc.v | awk '{ print $$3; }'`; echo "making icc_$$rev.tgz"; cd ${srcdir}/../..; tar -czhf icc_$$rev.tgz `sed -n -e '/^[a-z_A-Z]/ s/^/'icc_$$rev'\//p' icc_$$rev/src/manifest`; cd -;
 
 genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h
 init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h y.tab.h

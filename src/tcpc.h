@@ -1,5 +1,5 @@
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.7 2001/03/11 15:10:19 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.8 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -52,7 +52,7 @@ extern const char *	iccNM;		/* icc name */
 extern float		timeout;	/* in seconds */
 
 extern int		connect_to_server(const char* host, const char* port,
-					  const char* icc, float delay);
+					  const char* icc, float delay, int maxIOs);
 extern int		wait_for_next_event(int maxFN);
 extern int		rcvd_msg_from_server(int sock, char* buf, int maxLen);
 extern void		send_msg_to_server(int sock, const char* msg);

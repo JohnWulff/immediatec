@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.43 2002/05/16 14:28:43 jw Exp $";
+"@(#)$Id: outp.c,v 1.44 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -124,7 +124,7 @@ listNet(unsigned * gate_count)
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
-    if (debug & 020) fprintf(outFP, "\nNET TOPOLOGY\n");
+    if (debug & 020) fprintf(outFP, "\nNET TOPOLOGY\n\n");
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type & ~TM) {
@@ -148,7 +148,7 @@ listNet(unsigned * gate_count)
 		    }			/* or time for TIMER action */
 		}
 		if (debug & 020) {		/* print directed graph */
-		    fprintf(outFP, "\n%s\t%c  %c", sp->name,
+		    fprintf(outFP, "%s\t%c  %c", sp->name,
 			os[typ], fos[sp->ftype]);
 		    dc = 0;
 		    for (lp = sp->list; lp; lp = lp->le_next) {
@@ -175,11 +175,16 @@ listNet(unsigned * gate_count)
 				tsp->name, os[tsp->type & TM]);
 			}
 		    }
+		    fprintf(outFP, "\n");
+		}
+		if (typ == UDF) {
+		    warning("undefined gate:", sp->name);
+		} else if (typ == ERR) {
+		    error("gate:", sp->name);
 		}
 	    }
 	}
     }
-    if (debug & 020) fprintf(outFP, "\n");
 
     if (debug & 040) {
 	byte_total = (long)block_total * sizeof(Gate)
@@ -197,17 +202,24 @@ listNet(unsigned * gate_count)
     }
     if (debug & 076) fprintf(outFP, "\ncompiled by:\n%s\n", SC_ID);
     if (gate_count[UDF]) {
-	warning("undefined gates and functions", NS);
+	char undBuf[32];
+	snprintf(undBuf, 32, "%d undefined gate%s",
+	    gate_count[UDF],
+	    gate_count[UDF] > 1 ? "s" : "");
+	warning(undBuf, NS);
     }
-#ifdef _WINDOWS
-    if (outFP != stdout) fclose(outFP);	/* this is end of listing output */
-#endif
     if (ynerrs || gate_count[ERR]) {
-	fprintf(errFP, "%s%s%s error%s - cannot execute\n",
-	    ynerrs			? "syntax"	: "",
+	char synBuf[16];
+	char genBuf[16];
+	char errBuf[64];
+	snprintf(synBuf, 16, "%d syntax", ynerrs);
+	snprintf(genBuf, 16, "%d generate", gate_count[ERR]);
+	snprintf(errBuf, 64, "%s%s%s error%s - cannot execute",
+	    ynerrs			?  synBuf	: "",
 	    ynerrs && gate_count[ERR]	? " and "	: "",
-	    gate_count[ERR]		? "generate"	: "",
+	    gate_count[ERR]		?  genBuf	: "",
 	    ynerrs + gate_count[ERR] >1	? "s"		: "");
+	error(errBuf, NS);
 	return 1;
     }
     return 0;

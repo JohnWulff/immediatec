@@ -18,26 +18,28 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-[l|s|c|b|n]6h] [-v[<N>]] file ...' >&2
+    echo 'Usage:	'${0##*/}' [-[l|s|c|b|n]i6xqh] [-v[<N>]] file ...' >&2
     echo '    (default)	link all files into independent executables' >&2
     echo '	-l	link all files into one executable' >&2
+    echo '	-i	produce file.ini which records output of an initial run' >&2
     echo '	-s	supress C output and executable, listing only' >&2
     echo '	-c	generate C output only' >&2
     echo '	-b	generate both listing and C output' >&2
     echo '	-n	generate no output, report ict compile errors only' >&2
     echo '		-s and -n generate cexe.c for last file as a side effect' >&2
-    echo '	-v	use ict, pplstfix and libict.a in local directory' >&2
-    echo '		(default use installed ict and -lict)' >&2
-    echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '		default listing is file.lst' >&2
     echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
+    echo '	-q	quiet operation - return status only' >&2
+    echo '	-v	use ict, pplstfix and libict.a in local directory' >&2
+    echo '		(default use installed ict and -lict)' >&2
+    echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.18 2001/04/17 07:43:50 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.19 2002/06/05 19:46:14 jw Exp $' >&2
 }
 
 link=0
-flag=noerror
+status=0
 a=""
 v=""
 b=""
@@ -45,6 +47,8 @@ lib="-lict"
 d="-d74 -A"
 x=""
 l=""
+q=0
+i=0
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -57,6 +61,8 @@ while [ $# -gt 0 ]; do
 	    c*)	link=3;;
 	    b*) link=4;;
 	    n*) link=5;;
+	    i*)	i=1;;
+	    q*)	q=1;;
 	    v*)	option=${option#?};
 		if [ -n "$option" ]; then
 		    v=$option;
@@ -79,71 +85,118 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+# if [ "$q" = 0 ]; then
+#     echo "########## '${0##*/}' ##########"
+# fi
+
 for f in $*; do
     file=$f
     base=${file%.*}
     if [ "$file" = "$base" ]; then
 	file="$base.ic"
     fi
-    if [ ! -f "$file" ]; then
-	echo "iC file $file does not exist" >&2
-	usage
-	exit 1;
-    fi
-    echo $file
-
-    case $link in
-    0)
-	rm -f $base.c $base
-	if nice ${b}ict$v $d -o $base.c -l $base.lst$l $file; then
-	    if nice cc -g -I. -DYYDEBUG -o $base $base.c _list_.c $lib; then
-		./$base -d540 > $base.ini
-	    fi
-	else
-	    echo "${b}ict$v compile errors in '$file' - no executable '$base' generated" >&2
-	fi ;;
-    1)
-	rm -f $base.c
-	if nice ${b}ict$v $a $d -o $base.c -l $base.lst$l $file; then
-	    list="$list $base.c"
-	else
-	    list="$list ERROR:$base.c"
-	    flag=error
+    if [ -f "$file" ]; then
+	if [ "$q" = 0 ]; then
+	    echo $file
 	fi
-	if [ -z "$first" ]; then
-	    first=$base
-	    a="-a"
-	fi ;;
-    2)
-	if ! nice ${b}ict$v $d -c -l $base.lst$l $file; then
-	    echo "${b}ict$v compile errors in '$file'" >&2
-	fi ;;
-    3)
-	rm -f $base.c
-	if ! nice ${b}ict$v -o $base.c $file; then
-	    echo "${b}ict$v compile errors in '$file'" >&2
-	fi ;;
-    4)
-	rm -f $base.c
-	if ! nice ${b}ict$v $d -o $base.c -l $base.lst$l $file; then
-	    echo "${b}ict$v compile errors in '$file'" >&2
-	fi ;;
-    5)
-	if ! nice ${b}ict$v -c $file; then
-	    echo "${b}ict$v compile errors in '$file'" >&2
-	fi ;;
-    esac
+	case $link in
+	0)
+	    rm -f $base.c $base
+	    if nice ${b}ict$v $d -o $base.c -l $base.lst$l $file; then
+		if nice cc -g -I. -o $base $base.c _list_.c $lib; then
+		    if [ "$i" = 1 ] && ! ./$base -d540 > $base.ini; then
+			if [ "$q" = 0 ]; then
+			    echo "run time error in initial execution of '$base'" >&2
+			fi
+			let status+=1
+		    fi
+		else
+		    if [ "$q" = 0 ]; then
+			echo "cc compile errors in '$base.c' - no executable '$base' generated" >&2
+		    fi
+		    let status+=1
+		fi
+	    else
+		if [ "$q" = 0 ]; then
+		    echo "${b}ict$v compile errors in '$file' - no executable '$base' generated" >&2
+		fi
+		let status+=1
+	    fi ;;
+	1)
+	    rm -f $base.c
+	    if nice ${b}ict$v $a $d -o $base.c -l $base.lst$l $file; then
+		list="$list $base.c"
+	    else
+		list="$list ERROR:$base.c"
+		let status+=1
+	    fi
+	    if [ -z "$first" ]; then
+		first=$base
+		a="-a"
+	    fi ;;
+	2)
+	    if ! nice ${b}ict$v $d -c -l $base.lst$l $file; then
+		if [ "$q" = 0 ]; then
+		    echo "${b}ict$v compile errors in '$file'" >&2
+		fi
+		let status+=1
+	    fi ;;
+	3)
+	    rm -f $base.c
+	    if ! nice ${b}ict$v -o $base.c $file; then
+		if [ "$q" = 0 ]; then
+		    echo "${b}ict$v compile errors in '$file'" >&2
+		fi
+		let status+=1
+	    fi ;;
+	4)
+	    rm -f $base.c
+	    if ! nice ${b}ict$v $d -o $base.c -l $base.lst$l $file; then
+		if [ "$q" = 0 ]; then
+		    echo "${b}ict$v compile errors in '$file'" >&2
+		fi
+		let status+=1
+	    fi ;;
+	5)
+	    if ! nice ${b}ict$v -c $file; then
+		if [ "$q" = 0 ]; then
+		    echo "${b}ict$v compile errors in '$file'" >&2
+		fi
+		let status+=1
+	    fi ;;
+	esac
+    else
+	if [ "$q" = 0 ]; then
+	    echo "Error: iC file '$file' does not exist" >&2
+	fi
+	list="$list ERROR:$base.c"
+	let status+=1
+    fi
 done
 
 if [ "$link" = 1 ]; then
-    if [ "$flag" = noerror ]; then
+    if [ "$status" = 0 ]; then
 	rm -f $first
-	echo "link $first from$list"
-	if nice cc -g -I. -DYYDEBUG -o $first $list _list_.c $lib; then
-	    ./$first -d540 > $first.ini
+	if [ "$q" = 0 ]; then
+	    echo "link $first from$list"
+	fi
+	if nice cc -g -I. -o $first $list _list_.c $lib; then
+	    if [ "$i" = 1 ] && ! ./$first -d540 > $first.ini; then
+		if [ "$q" = 0 ]; then
+		    echo "run time error in initial execution of '$first'" >&2
+		fi
+		let status+=1
+	    fi
+	else
+	    if [ "$q" = 0 ]; then
+		echo "cc link errors in '$list' - no executable '$first' generated" >&2
+	    fi
+	    let status+=1
 	fi
     else
-	echo "${b}ict$v compile errors in '$list'" >&2
+	if [ "$q" = 0 ]; then
+	    echo "${b}ict$v compile errors in '$list'" >&2
+	fi
     fi
 fi
 
@@ -151,3 +204,8 @@ fi
 if [ "$x" != 1 ]; then
     rm -f _list1.h _list2.h _list_.c
 fi
+
+# if [ "$status" != 0 ] && [ "$q" = 0 ]; then
+#     echo "########## $status errors ##########"
+# fi
+exit $status
