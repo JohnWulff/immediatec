@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.12 2000/12/20 18:21:11 jw Exp $";
+"@(#)$Id: rsff.c,v 1.13 2000/12/25 18:11:41 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -7,6 +7,7 @@ static const char rsff_c[] =
 /* "rsff.c	3.32	95/02/11" */
 
 #include	<stdio.h>
+#include	<stdlib.h>
 #include	<assert.h>
 #include	"pplc.h"
 #ifdef TCP 
@@ -285,7 +286,7 @@ i_ff3(register Gate * gp, int typ)	/* Pass3 init on FF etc. */
     uchar		mask;		/* action bit mask */
     char		opt;
 
-    if (gp != c_list) {
+    if (gp != c_list) {			/* iClock has no inputs */
 	mask = bit2[ftypes[typ]] & ~ONCE_M;/* action bit mask required */
 	opt = os[typ];
 	/* accept only the right number of compatible inputs */
@@ -306,6 +307,8 @@ i_ff3(register Gate * gp, int typ)	/* Pass3 init on FF etc. */
 	gp->gt_val = 1;		/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gp->gt_new = gp->gt_old = 0;	/* clear arithmetic */
+	} else if (typ == NCONST) {
+	    gp->gt_new = gp->gt_old = atoi(gp->gt_ids);	/* constant */
 	}
     } else {
 	gp->gt_val = 0;		/* used in visualization */

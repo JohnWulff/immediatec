@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.7 2000/12/04 10:51:12 jw Exp $";
+"@(#)$Id: link.c,v 1.8 2000/12/25 18:11:41 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -123,28 +123,9 @@ link_ol(
 	     * action D_SH is always timed, even when arithmetic
 	     * value is 0 (ignore gt_val). This implements sample/hold
 	     */
-	    if (gp->gt_val > 0 && gp->gt_fni != D_SH || (time =
-#if defined(LOAD) && defined (_MSDOS_)
-		(FP_SEG(gp->gt_time) != 0)
-#else
-		((int)gp->gt_time < 0)
-#endif
-		? (
+	    if ((gp->gt_val > 0 && gp->gt_fni != D_SH) || (time = gp->gt_time->gt_old
 #ifndef _WINDOWS 
-		    format = "{%d}",
-#endif
-#ifdef LOAD
-		    ((CFunctp)(gp->gt_time))(gp)
-#else
-		    c_exec(-(int)gp->gt_time, gp)	/* must pass both -/+ */
-#endif
-		    ) :
-#ifndef _WINDOWS 
-		    (format = "(%d)",
-#endif
-		    (int)gp->gt_time
-#ifndef _WINDOWS 
-		), (debug & 0100) ? fprintf(outFP, format, time) : 0, time
+		, (debug & 0100) ? fprintf(outFP, "(%d)", time) : 0, time
 #endif
 		) == 0) {
 

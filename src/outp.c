@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.21 2000/12/25 09:03:12 jw Exp $";
+    "@(#)$Id: outp.c,v 1.22 2000/12/25 18:11:41 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -349,10 +349,28 @@ buildNet(Gate ** igpp)
 
 			    for (lp = sp->list; lp; lp = lp->le_next) {
 				lp->le_sym->u.gate->gt_clk = gp;
-				if (typ == TIM) {
-				    /* Header is a Timer, store time value */
-				    (unsigned int)lp->le_sym->u.gate->gt_time =
-					lp->le_val;
+			    }
+			    gp++;
+			}
+		    }
+		}
+	    }
+	}
+	if ((val = gp - *igpp) == block_total) {
+	    gp = *igpp;			/* repeat to initialise timer links */
+	    for (typ = 0; typ < MAX_OP; typ++) {	/* keep gp in same order */
+		for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+		    for (sp = *hsp; sp; sp = sp->next) {
+			if (sp->type == typ) {
+			    if (sp->ftype < MAX_AR) {
+				/*
+				 * The 3rd location holds a pointer to a Gate of
+				 * ftype ARITH holding a time value (ARN or NCONST).
+				 */
+				for (lp = sp->list; lp; lp = lp->le_next) {
+				    if (lp->le_val == (unsigned) -1) {
+					lp->le_sym->u.gate->gt_time = gp;
+				    }
 				}
 			    }
 			    gp++;
