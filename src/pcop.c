@@ -1,14 +1,18 @@
 static const char pcop_c[] =
-"@(#)$Id: pcop.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: pcop.c,v 1.3 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
  *
- *	parallel plc - procedure
+ *	Copyright (C) 1985-2001  John E. Wulff
  *
- *	Standalone run-time version to execute on COP processor
- *	
- *	J.E. Wulff	3-Mar-85
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
  *
- *	"pcop.c	1.34	95/05/12"
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john.wulff@inka.de>
+ *
+ *	pcop.c
+ *	parallel plc - runtime execution with Phoenix Contact COP card
+ *		       connected to InterBus-S field bus I/O system
  *
  *******************************************************************/
 
@@ -18,8 +22,8 @@ static const char pcop_c[] =
 #include <dos.h>
 #include <signal.h>
 
-#define P_8086		/* für Include-Dateien notwendig */
-#define C_TURBO_C	/* Syntax für stdtypes.h, s.S. 4-45 Handbuch */
+#define P_8086		/* fuer Include-Dateien notwendig */
+#define C_TURBO_C	/* Syntax fuer stdtypes.h, s.S. 4-45 Handbuch */
 
 #include <ibs_dos.h>
 #include <ddi_lib.h>
@@ -69,7 +73,7 @@ unsigned char	m500;
 unsigned short	txw;
 unsigned short	txp;
 
-void INTERRUPT isrtimer(void);	/* isr für 8253-interrupt */
+void INTERRUPT isrtimer(void);	/* isr fuer 8253-interrupt */
 
 #ifdef LOAD
 unsigned	scan_cnt;			/* count scan operations */
@@ -173,8 +177,8 @@ pplc(
     cdata[0] = 0xffff;
 
     if (InitDataLink() == FALSE) quit(-2);
-    if (StartIBS() == FALSE) {	/* im Fehlerfall müssen die geöffneten */
-				/* Datenkanäle wieder geschlossen werden */
+    if (StartIBS() == FALSE) {	/* im Fehlerfall muessen die geoeffneten */
+				/* Datenkanaele wieder geschlossen werden */
 	quit(-1);			/* CloseDataLink() only */
     }
     tinit();				/* Timer0 mit 1 ms starten */
@@ -299,8 +303,8 @@ scanIn(void)
     if (IBSsendData() != TRUE) quit(3);	/* error exit 3 */
     if (IBSrecvData() != TRUE) quit(4);	/* error exit 4 */
 
-    DIp = (unsigned char*)DataIn;	/* IBS binäre Eingaben */
-    DOp = (unsigned char*)DataOut;	/* IBS binäre Ausgaben */
+    DIp = (unsigned char*)DataIn;	/* IBS binaere Eingaben */
+    DOp = (unsigned char*)DataOut;	/* IBS binaere Ausgaben */
     odp = QX_;			/* Output data to be transmitted */
     idp = idata;		/* Input data from this scan */
     pdp = pdata;		/* input data from Previous scan */

@@ -1,15 +1,25 @@
 static const char pccop_c[] =
-"@(#)$Id: pccop.c,v 1.2 1999/08/06 21:13:31 jw Exp $";
+"@(#)$Id: pccop.c,v 1.3 2001/03/02 12:56:32 jw Exp $";
 /********************************************************************
+ *
+ *	Copyright (C) 1985-2001  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file or <john.wulff@inka.de>
+ *
+ *	pccop.c
+ *	parallel plc - runtime test with Phoenix Contact COP card
+ *		       connected to InterBus-S field bus I/O system
  *
  * 	Datenaustausch PC --> COP
  *	16.1.95 / mg
  *
  *	!! A C H T U N G !!
- *	Vor dem Start dieses Programmes muß auf dem PC das TSR-
+ *	Vor dem Start dieses Programmes muss auf dem PC das TSR-
  *	Programm ibspccb.exe gestartet werden!
- *
- *	"pccop.c	0.06	95/05/12"
  *
  *******************************************************************/
 
@@ -19,8 +29,8 @@ static const char pccop_c[] =
 #include <conio.h>
 #include <string.h>
 
-#define P_8086		/* für Include-Dateien notwendig */
-#define C_TURBO_C	/* Syntax für stdtypes.h, s.S. 4-45 Handbuch */
+#define P_8086		/* fuer Include-Dateien notwendig */
+#define C_TURBO_C	/* Syntax fuer stdtypes.h, s.S. 4-45 Handbuch */
 
 #include <ibs_dos.h>
 #include <ddi_lib.h>
@@ -98,7 +108,7 @@ main(void)
 
 /********************************************************************
  *
- * 	DDI-Treiber und Datenkanäle initialisieren
+ * 	DDI-Treiber und Datenkanaele initialisieren
  *	(Initialisierung der Treibersoftware in ibspccb.exe)
  *
  *******************************************************************/
@@ -107,7 +117,7 @@ short
 InitDataLink(void)
 {
 /*----------------------------------------------------------------- */
-/* Kanäle zum Mailbox- und Data-Interface (MXI und DTI) öffnen */
+/* Kanaele zum Mailbox- und Data-Interface (MXI und DTI) oeffnen */
 /* Parameter : */
 /*  - Device-Names: 	IBB1N2_M -> B1=Board1, N2=Node2, M=Mailbox */
 /*  			IBB1N2_D -> B1=Board1, N2=Node2, D=Data */
@@ -135,7 +145,7 @@ InitDataLink(void)
 
 /********************************************************************
  *
- * 	Verbindungen zu den Interfaces (Data & Mailbox) schließen
+ * 	Verbindungen zu den Interfaces (Data & Mailbox) schliessen
  *
  *******************************************************************/
 
@@ -149,7 +159,7 @@ CloseDataLink(void)
 
 /********************************************************************
  *
- * 	Ausgabe der Prozeßdaten
+ * 	Ausgabe der Prozessdaten
  *
  *******************************************************************/
 
@@ -159,7 +169,7 @@ sendData(void)
     T_DDI_DTI_ACCESS  dtiAcc;
 
     dtiAcc.address  = DTA_OFFST_PC_TO_COP;	/* Offset-Adresse */
-    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.length   = MAXBIN * 2; 		/* Groesse Datenbereich */
     dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
     dtiAcc.data     = (USIGN8 FAR *)HostDataOut;/* Adr. OUT-Data-Puffer */
 
@@ -169,7 +179,7 @@ sendData(void)
 
 /********************************************************************
  *
- * 	Eingabe der Prozeßdaten
+ * 	Eingabe der Prozessdaten
  *
  *******************************************************************/
 
@@ -179,7 +189,7 @@ recvData(void)
     T_DDI_DTI_ACCESS  dtiAcc;
 
     dtiAcc.address  = DTA_OFFST_PC_TO_COP;	/* Offset-Adresse */
-    dtiAcc.length   = MAXBIN * 2; 		/* Größe Datenbereich */
+    dtiAcc.length   = MAXBIN * 2; 		/* Groesse Datenbereich */
     dtiAcc.dataCons = DTI_DATA_WORD; 		/* Datenkonsistenz: Word */
     dtiAcc.data     = (USIGN8 FAR *)HostDataIn;	/* Adr. IN-Data-Puffer */
 		
@@ -191,7 +201,7 @@ recvData(void)
  *
  *	Nachricht zum Host-Pc senden
  *
- *	Rückgabewert:	Länge zu groß oder Fehler FALSE
+ *	Rueckgabewert:	Laenge zu gross oder Fehler FALSE
  *	sonst		TRUE
  *
  *******************************************************************/
@@ -214,8 +224,8 @@ sendMsg(unsigned int length)
  *
  *	Nachricht vom Host-Pc empfangen
  *
- *	Rückgabewert:	Keine Nachricht oder Fehler 0 (FALSE)
- *	oder		Länge der empfangenen Nachricht (TRUE)
+ *	Rueckgabewert:	Keine Nachricht oder Fehler 0 (FALSE)
+ *	oder		Laenge der empfangenen Nachricht (TRUE)
  *
  *******************************************************************/
 
