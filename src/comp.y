@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.39 2001/02/03 17:10:28 jw Exp $";
+"@(#)$Id: comp.y,v 1.40 2001/02/06 20:04:44 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -90,7 +90,7 @@ pu(int t, char * token, Lis * node)
 %type	<sym>	program statement simplestatement asgn wasgn xasgn casgn tasgn
 %type	<sym>	cstatic decl dasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
-%type	<list>	cref ctref ctdref dexpr
+%type	<list>	cref ctref ctdref dexpr funct params plist
 %type	<val>	cblock declHead
 %type	<str>	cstini cexini
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
@@ -292,6 +292,12 @@ expr	: UNDEF			{
 		sp->ftype = sp->type == SH ? ARITH : GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		if (debug & 02) pu(1, "expr", &$$);
+	    }
+	| funct			{
+		$$ = $1;
+		if ($$.v) {
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
 	    }
 	| '(' aexpr ')'		{
 		$$.f = $1.f; $$.l = $3.l;
@@ -737,6 +743,33 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	    }
 	| TBLTI1 '(' aexpr ',' ctdref ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, &val1);
+	    }
+	;
+
+funct	: UNDEF '(' params ')'	{
+		$$.f = $1.f; $$.l = $4.l;
+		assert($1.f[0] == '_' && $1.f[1] == '(' && $1.l[-1] == ')');
+		$1.f[0] = $1.f[1] = $1.l[-1] = '#';
+		if (lookup($1.v->name)) {	/* may be unlinked in same expr */
+		    unlink_sym($1.v);		/* unlink Symbol from symbol table */
+		    free($1.v);
+		}
+		$$.v = $3.v;
+		if (debug & 02) pu(1, "funct", &$$);
+	    }
+	;
+
+params	: /* nothing */		{ $$.v = 0; }
+	| plist			{ $$   = $1; }
+	;
+
+plist	: aexpr			{ $$ = $1; }
+	| plist ',' aexpr	{
+		$$.f = $1.f; $$.l = $3.l;
+		if (($$.v = op_push($1.v, ARN, op_force($3.v, ARITH))) != 0) {
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+		if (debug & 02) pu(1, "plist", &$$);
 	    }
 	;
 
