@@ -22,6 +22,7 @@ usage()
   echo '	-q	quiet operation - return status only' >&2
   echo '	-l	list names of files which differ' >&2
   echo '	-li	list names of files which are identical' >&2
+  echo '	-I	case insensitive and white space ignored' >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
   echo '	-	all further arguments are treated as files' >&2
@@ -30,7 +31,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.12 1999/02/28 15:23:19 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.13 2000/07/01 22:56:23 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -103,6 +104,7 @@ while [[ $# > 0 ]]; do
 	    i*)	i=1; let "li|=2";;
 	    l*)	q=1; let "li|=1";;
 	    q*)	q=1;;
+	    I*)	w=-wi;;
 	    h*)	usage; exit 255;;
 	    -*)	pipe=1;;
 	    *)	x=${option#?}; option=${option%$x}
