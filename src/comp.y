@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.14 2000/11/17 05:44:21 jw Exp $";
+"@(#)$Id: comp.y,v 1.15 2000/11/19 17:19:08 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -645,6 +645,12 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 /* no assignment allowed for ffexpr - they stand alone */
 
 ffexpr	: IF '(' aexpr cref ')' cblock {		/* if (expr) { x++; } */
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
+	    }
+	| IF '(' aexpr cref ')' cblock '}' ELSE cblock {
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
+	    }
+	| SWITCH '(' aexpr cref ')' cblock {
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, &$6);
 	    }
 	;
