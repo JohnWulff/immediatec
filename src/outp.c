@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.71 2004/01/05 15:38:03 jw Exp $";
+"@(#)$Id: outp.c,v 1.72 2004/01/28 12:02:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -22,6 +22,7 @@ static const char outp_c[] =
 #endif
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<unistd.h>
 #include	<string.h>
 #include	<assert.h>
 #include	<errno.h>
@@ -205,16 +206,37 @@ listNet(unsigned * gate_count)
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
+#if YYDEBUG	/* ############################################### */
+    if (debug & 01) {
+	int hspn = 0;
+	int hspf = 0;
+	fprintf(outFP, "******* SYMBOL TABLE    ************************\n");
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (sp = *hsp; sp; sp = sp->next) {
+		if (hspf == 0) {
+		    fprintf(outFP, "%3d:", hspn);
+		    hspf = 1;
+		}
+		fprintf(outFP, " %s", sp->name);
+	    }
+	    hspn++;
+	    if (hspf != 0) {
+		fprintf(outFP, "\n");
+		hspf = 0;
+	    }
+	}
+    }
+#endif		/* ############################################### */
     if (debug & 020) {
 	/* do not change spelling - used in 'pplstfix' */
 	fprintf(outFP, "\n******* NET TOPOLOGY    ************************\n\n");
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (sp->type & ~TM) {
+	    if (sp->type & EM) {
 		extFlag = 1;
 	    }
-	    if ((typ = sp->type & TM) < MAX_LS) {
+	    if ((typ = sp->type & ~EM) < MAX_LS) {
 		gate_count[typ]++;
 		if (typ < MAX_OP) {
 		    block_total++;
@@ -347,7 +369,7 @@ buildNet(Gate ** igpp)
 		if (sp->type == typ) {
 		    gp->gt_fni = sp->ftype;	/* basic gate first */
 		    gp->gt_ids = sp->name;	/* gate to symbol name */
-		    sp->u.gate = gp++;		/* symbol to gate */
+		    sp->u_gate = gp++;		/* symbol to gate */
 		}
 	    }
 	}
@@ -368,12 +390,12 @@ buildNet(Gate ** igpp)
 					    if (lp->le_val == (unsigned) -1) {
 						continue; /* timer value link */
 					    }
-					    lp->le_sym->u.gate->gt_rlist =
+					    lp->le_sym->u_gate->gt_rlist =
 					    (Gate**)lp->le_val;
 					} else if (val != lp->le_val) {
 					    continue;	/* not right value */
 					}
-					*fp++ = lp->le_sym->u.gate;
+					*fp++ = lp->le_sym->u_gate;
 				    }
 				    *fp++ = 0;		/* gate list terminator */
 				} while (val ^= NOT);
@@ -418,11 +440,11 @@ buildNet(Gate ** igpp)
 				lp = sp->list;
 				if ((tsp = lp->le_sym) != 0) {
 				    if (sp->ftype == TIMR &&
-					tsp->u.gate->gt_old < lp->le_val) {
+					tsp->u_gate->gt_old < lp->le_val) {
 					/* transfer timer preset off value */
-					tsp->u.gate->gt_old = lp->le_val;
+					tsp->u_gate->gt_old = lp->le_val;
 				    }
-				    *fp++ = tsp->u.gate;
+				    *fp++ = tsp->u_gate;
 				} else {
 				    /* F_SW, F_CF or F_CE action gate points to function */
 				    *fp++ = (Gate*)lp->le_val;
@@ -481,7 +503,7 @@ buildNet(Gate ** igpp)
 			     */
 
 			    for (lp = sp->list; lp; lp = lp->le_next) {
-				lp->le_sym->u.gate->gt_clk = gp;
+				lp->le_sym->u_gate->gt_clk = gp;
 			    }
 			    gp++;
 			}
@@ -506,7 +528,7 @@ buildNet(Gate ** igpp)
 				 */
 				for (lp = sp->list; lp; lp = lp->le_next) {
 				    if (lp->le_val == (unsigned) -1) {
-					lp->le_sym->u.gate->gt_time = gp;
+					lp->le_sym->u_gate->gt_time = gp;
 				    }
 				}
 			    }
@@ -655,18 +677,18 @@ extern Gate *	_l_[];\n\
 
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) == UDF || typ & ~TM) {
+	    if ((typ = sp->type) == UDF || typ & EM) {
 		fprintf(Fp, "extern Gate	%s;\n", mN(sp));
 		linecnt++;
 	    }
-	    if ((typ &= TM) < MAX_LV) {
+	    if ((typ &= ~EM) < MAX_LV) {
 		if ((dc = sp->ftype) == ARITH || dc == GATE) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			/* leave out timing controls */
 			if (lp->le_val != (unsigned) -1) {
 			    tsp = lp->le_sym;	/* reverse action links */
-			    tlp = tsp->u.blist;
-			    tsp->u.blist = lp;	/* to input links */
+			    tlp = tsp->u_blist;
+			    tsp->u_blist = lp;	/* to input links */
 			    *lpp = lp->le_next;
 			    lp->le_sym = sp;
 			    lp->le_next = tlp;	/* lpp is not changed */
@@ -677,8 +699,8 @@ extern Gate *	_l_[];\n\
 		} else if (dc == TIMR &&
 		    (lp = sp->list) != 0 &&
 		    (tsp = lp->le_sym) != 0 &&
-		    tsp->u.val < lp->le_val) {
-		    tsp->u.val = lp->le_val;	/* store timer preset off value */
+		    tsp->u_val < lp->le_val) {
+		    tsp->u_val = lp->le_val;	/* store timer preset off value */
 		}				/* temporarily in u (which is 0) */
 		if (dc == OUTW && (lp = sp->list) != 0) {
 		    assert(0);			/* #define no longer in use */
@@ -758,7 +780,7 @@ extern Gate *	_l_[];\n\
     /* do the timing controls last, to link them after their timer clock */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((sp->type & TM) < MAX_LV && sp->ftype < MAX_AR) {
+	    if ((sp->type & ~EM) < MAX_LV && sp->ftype < MAX_AR) {
 		for (lp = sp->list; lp; ) {
 		    if (lp->le_val == (unsigned) -1) {
 			tsp = lp->le_sym;		/* action gate */
@@ -836,7 +858,7 @@ extern Gate *	_l_[];\n\
 			dc = 1;				/* typ == OR */
 		    } else {
 			dc = 0;				/* typ == AND LATCH */
-			for (lp = sp->u.blist; lp; lp = lp->le_next) {
+			for (lp = sp->u_blist; lp; lp = lp->le_next) {
 			    dc++;			/* space in input list */
 			}
 			if (typ == LATCH) {
@@ -862,7 +884,7 @@ extern Gate *	_l_[];\n\
 		    fprintf(Fp, " &_l_[%d],", li);
 		    li += 2;	/* space for action or function pointer + clock */
 		    if ((lp = sp->list->le_next) != 0 &&
-			(lp->le_sym->type & TM) == TIM) {
+			(lp->le_sym->type & ~EM) == TIM) {
 			li++;		/* space for pointer to delay time Gate */
 		    }
 		} else if (dc == OUTW) {
@@ -899,15 +921,15 @@ extern Gate *	_l_[];\n\
 		} else {
 		    fprintf(Fp, " 0,");		/* no gt_list */
 		    if (dc == TIMRL) {
-			if (sp->u.val > 0) {
-			    mask = sp->u.val;
-			    sp->u.val = 0;	/* restore temporary u to 0 */
+			if (sp->u_val > 0) {
+			    mask = sp->u_val;
+			    sp->u_val = 0;	/* restore temporary u to 0 */
 			}
 		    }
 		}
 		if (typ == ARN || (typ >= AND && typ < MAX_GT)) {
 		    fprintf(Fp, " &_l_[%d],", li);	/* gt_rlist */
-		    for (lp = sp->u.blist; lp; lp = lp->le_next) {
+		    for (lp = sp->u_blist; lp; lp = lp->le_next) {
 			li++;	/* space in input list */
 		    }
 		    /* space for dual GATE list or ARITH with FUNCTION */
@@ -978,6 +1000,11 @@ extern Gate *	_l_[];\n\
 	    }
 	}
     }
+
+    /*
+     * link counting in output() counts reverse links and is thus very different to listNet()
+     * therefore cannot compare link_count and li
+     */
 
 /********************************************************************
  *
@@ -1061,7 +1088,7 @@ static Gate *	_l_[] = {\n");
     lc = 0;			/* count links */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) > UDF && typ < MAX_GT) { /* leave aout EXT_TYPES */
+	    if ((typ = sp->type) > UDF && typ < MAX_GT) { /* leave out EXT_TYPES */
 		int		len = 16;
 		char *	fs = strlen(sp->name) > 1 ? "\t" : "\t\t";
 
@@ -1096,7 +1123,7 @@ static Gate *	_l_[] = {\n");
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
 				fs, mN(tsp));		/* clock or timer */
-			    if ((tsp->type & TM) == TIM) {
+			    if ((tsp->type & ~EM) == TIM) {
 				if ((lp = lp->le_next) != 0) {
 				    len += strlen((tsp = lp->le_sym)->name) + 3;
 				    fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* delay time */
@@ -1119,7 +1146,7 @@ static Gate *	_l_[] = {\n");
 
 		val = 0;
 		if (typ == ARN) {
-		    if ((lp = sp->u.blist) == 0) {
+		    if ((lp = sp->u_blist) == 0) {
 			snprintf(errorBuf, sizeof errorBuf,
 			    "Arithmetic gate '%s' has no function",
 			    sp->name);
@@ -1141,7 +1168,7 @@ static Gate *	_l_[] = {\n");
 		if (typ >= AND && typ < MAX_GT) {
 		n1:
 		    do {
-			for (lp = sp->u.blist; lp; lp = lp->le_next) {
+			for (lp = sp->u_blist; lp; lp = lp->le_next) {
 			    if (lp->le_val == val || typ == ARN) {
 				len += strlen(lp->le_sym->name) + 3;
 				if (len > 73) {
@@ -1283,9 +1310,8 @@ extern FILE* yyout;
 int
 c_compile(FILE * iFP)
 {
-    int		mask = 01;			/* copy literal blocks */
-    int		r;
-    char	lineBuf[BUFS];	/* can be smaller than a line */
+    int		r;				/* copy literal blocks */
+    char	lineBuf[BUFS];			/* can be smaller than a line */
 
     lexflag = C_PARSE|C_FIRST|C_BLOCK;		/* output partial source listing */
 
@@ -1312,7 +1338,7 @@ c_compile(FILE * iFP)
     if (T4FP) {
 	fflush(T4FP);
 	/* Cygnus does not understand cc - use gcc */
-	sprintf(lineBuf, "gcc -E -x c %s -o %s", T4FN, T5FN);
+	snprintf(lineBuf, sizeof lineBuf, "gcc -E -x c %s -o %s", T4FN, T5FN);
 	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
 	r = system(lineBuf);			/* Pre-compile C file */
 	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);

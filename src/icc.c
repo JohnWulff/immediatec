@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.25 2004/01/04 20:36:45 jw Exp $";
+"@(#)$Id: icc.c,v 1.26 2004/01/26 18:54:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -20,6 +20,7 @@ static const char icc_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<errno.h>
+#include	<string.h>
 #ifdef _MSDOS_
 #include	<dos.h>
 #include	<conio.h>
@@ -464,8 +465,11 @@ icc(
 #endif
 			    ungetch(c);
 			}
-			while ((c = getch()) != EOF &&
-			    (isprint(c) && yp < &ybuf[YSIZE-1] || c == '\b' || c == '\177')) {
+			while ((c = getch()) != EOF && (
+			    (isprint(c) && yp < &ybuf[YSIZE-1]) ||
+			    c == '\b' ||
+			    c == '\177')
+			) {
 			    if (c == '\b' || c == '\177') {
 				if (yp > ybuf) {	/* backspace or del */
 				    fprintf(outFP, "\b \b");

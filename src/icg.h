@@ -18,7 +18,7 @@
 #ifndef ICG_H
 #define ICG_H
 static const char icg_h[] =
-"@(#)$Id: icg.h,v 1.3 2003/12/30 15:50:24 jw Exp $";
+"@(#)$Id: icg.h,v 1.4 2004/01/25 19:21:29 jw Exp $";
 
 #ifndef INT_MAX
 #include	<limits.h>
@@ -58,18 +58,23 @@ static const char icg_h[] =
 #define	CTYPE	21	/* C Types */
 #define	CWORD	22	/* C tokens used temporarily */
 
+#define	IFUNCT	23	/* immediate function type */
+
 #define	MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define	MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
 #define	MAX_OP	ALIAS	/* types < MAX_OP are executable */
 #define	MAX_LS	KEYW	/* types < MAX_LS are generated */
 
 			/* mark nodes declared as extern - stop assignment */
-#define	TM	31	/* 0x1f mask for type from EXT_TYPES */
-#define EXT_ARN	ARN+TM+1
-#define EXT_AND	AND+TM+1
-#define EXT_OR	OR+TM+1
-#define EXT_CLK	CLK+TM+1
-#define EXT_TIM	TIM+TM+1
+#define	TM	0x1f	/* mask for type from EXT_TYPES */
+#define	EM	0x20	/* mask for external type from EXT_TYPES */
+#define	FM	0x40	/* mask for terminal function type from FUN_TYPES */
+			/* intermediate Symbols are marked by ->name == 0 */
+#define EXT_ARN	(ARN | EM)
+#define EXT_AND	(AND | EM)
+#define EXT_OR	(OR  | EM)
+#define EXT_CLK	(CLK | EM)
+#define EXT_TIM	(TIM | EM)
 
 /*	Output types: Symbol.ftype and Gate.gt_fni */
 

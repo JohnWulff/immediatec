@@ -19,17 +19,17 @@ static const char cexe_part1[] = "\
  *******************************************************************/\n\
 \n\
 static const char cexe_h[] =\n\
-\"@(#)$Id: cexe.h,v 1.19 2004/01/02 14:32:55 jw Exp $\";\n\
+\"@(#)$Id: cexe.h,v 1.20 2004/01/15 15:05:47 jw Exp $\";\n\
 \n\
 #include	<stdio.h>\n\
 #include	\"icg.h\"\n\
 #include	\"icc.h\"\n\
 #include	\"comp.h\"\n\
 \n\
-#define _AV(x) Lookup(#x)->u.gate->gt_new\n\
-#define _LV(x) (Lookup(#x)->u.gate->gt_val < 0 ? 1 : 0)\n\
-#define _AA(x,v) aAssign(Lookup(#x)->u.gate, v)\n\
-#define _LA(x,v) lAssign(Lookup(#x)->u.gate, v)\n\
+#define _AV(x) Lookup(#x)->u_gate->gt_new\n\
+#define _LV(x) (Lookup(#x)->u_gate->gt_val < 0 ? 1 : 0)\n\
+#define _AA(x,v) aAssign(Lookup(#x)->u_gate, v)\n\
+#define _LA(x,v) lAssign(Lookup(#x)->u_gate, v)\n\
 \n\
 #if INT_MAX == 32767 && defined (LONG16)\n\
 static long	_tVar;\n\

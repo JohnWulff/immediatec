@@ -16,9 +16,10 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.41 2004/01/03 21:24:17 jw Exp $";
+"@(#)$Id: comp.h,v 1.42 2004/02/01 22:33:52 jw Exp $";
 
 #define NS	((char*)0)
+#define	TSIZE	256
 
 #define	NOT	1	/* used in List_e.le_val */
 
@@ -35,13 +36,27 @@ typedef	struct Symbol {		/* symbol table entry */
     unsigned char	type;	/* ARN AND OR LATCH FF CLK TIM ... */
     unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
     List_e *		list;	/* output list pointer */
+#if ! YYDEBUG
     union {
+#endif
 	Gate *		gate;	/* AND OR */
 	List_e *	blist;	/* used in compile */
 	unsigned int	val;	/* used to hold function number etc. */
+#if ! YYDEBUG
     } u;
+#endif
     struct Symbol *	next;	/* to link to another */
 } Symbol;
+
+#if ! YYDEBUG
+#define u_gate		u.gate
+#define u_blist		u.blist
+#define u_val		u.val
+#else				/* easier for debugging */
+#define u_gate		gate
+#define u_blist		blist
+#define u_val		val
+#endif
 
 /* for use in a union identical first elements can be accesed */
 typedef struct { char *f; char *l; Symbol * v;     } Sym;
@@ -60,6 +75,8 @@ extern int  iCparse(void);		/* generated yacc parser function */
 extern int  compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
+extern void errBit(void);		/* no constant allowed in bit expression */
+extern void errInt(void);		/* no imm variable to trigger arithmetic expression */
 extern void ierror(char *, char *);	/* print error message */
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *,
@@ -96,7 +113,17 @@ extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
 extern char	inpNM[];		/* original input file name */
-extern char *	stmtp;			/* pointer into iCbuf */
+extern int	dFlag;			/* convert number to NVAR object */
+extern char *	iFunSymExt;		/* flags that function is being compiled */
+extern Symbol *	varList;		/* list of temp Symbols while compiling function */
+extern char	One[];			/* name for constant 1 Symbol */
+extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
+	    Sym * sv, Lis * lv, int ioTyp);
+extern Symbol *	pushFunCall(Symbol *);	/* save global variables for nested function calls */
+extern List_e * handleRealParameter(	/* handle a real parameter of a called function */
+	    List_e * plp, List_e * alp);
+extern List_e *	cloneFunction(		/* clone a function template in a function call */
+	    Symbol * functionHead, List_e * plp);
 extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
 extern Symbol *	sy_pop(List_e *);	/* delete List element left over */
@@ -117,6 +144,9 @@ extern List_e * bltin(			/* generate built in iC functions */
 	    Lis* ae3, Lis* cr3,		/* optional reset */
 	    Lis* crm,			/* optional mono-flop clock */
 	    Val* pVal);			/* optional cblock# or off-delay */
+#if YYDEBUG
+extern void	pu(int t, char * token, Lis * node);
+#endif
 
 extern Symbol *	iclock;			/*   init.c  */
 extern void	init(void);		/* install constants and built-ins */

@@ -19,7 +19,7 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] file.ic ...' >&2
+    echo 'Usage:	'${0##*/}' [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] [-d<dir>] file.ic ...' >&2
     echo '    (default)	link all iCfiles file.ic ... into independent executables' >&2
     echo '		output names are base names of the iCfiles (file ...)' >&2
     echo '	-l	link all iCfiles into one executable' >&2
@@ -36,10 +36,11 @@ usage ()
     echo '	-x	auxiliary files _list1.h _list2.h _list_.c not deleted' >&2
     echo '	-q	quiet operation - return status only' >&2
     echo '	-v	use icc, pplstfix and libict.a in local directory' >&2
-    echo '		(default use installed icc and -lict)' >&2
     echo '	-v<N>	use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...' >&2
+    echo '	-d<dir>	use icc and (pplstfix libict.a unless -v first) in directory <dir>' >&2
+    echo '		(default use installed icc and -lict)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.26 2004/01/02 16:50:45 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.27 2004/01/09 11:40:36 jw Exp $' >&2
 }
 
 link=0
@@ -49,7 +50,7 @@ a=""
 v=""
 b=""
 lib="-lict"
-dir="/usr/local/lib"
+ldir="-L/usr/local/lib"
 d="-d474 -A"
 x=""
 l=""
@@ -90,14 +91,29 @@ while [ $# -gt 0 ]; do
 	    I*)	i=540;;
 	    q*)	q=1;;
 	    v*)	option=${option#?}
-		if [ -n "$option" ]; then
-		    lib=./libict$option.a
-		    v="$option -P./"
-		else
-		    lib=./libict.a
-		    v=" -P./"
+		if [ -z "$b" ]; then
+		    b="./"
 		fi
-		b="./"
+		lib=${b}libict$option.a
+		ldir=""
+		v="$option -P${b}"
+		break;;
+	    d*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		option=${option%/}
+		if [ ! -d "$option/" ]; then
+		    echo "Error: -d '$option/' is not a directory" >&2
+		    exit 254;
+		fi
+		b="$option/"
+		if [ -z "$v" ]; then
+		    lib=${b}libict.a
+		    ldir=""
+		    v=" -P${b}"
+		fi
 		break;;
 	    6*)	d="-d476 -A";l="6";;
 	    x*)	d="-d4474 -A";x="1";;
@@ -130,7 +146,7 @@ for f in $*; do
 	    rm -f $base.c $base
 	    if nice ${b}icc$v $d -o $base.c -l $base.lst$l $file; then
 		echo >> _list2.h	# terminate last line of #define \
-		if nice gcc -g -I. -L$dir -o $base $base.c _list_.c $lib; then
+		if nice gcc -g -I. $ldir -o $base $base.c _list_.c $lib; then
 		    if [ -n "$i" ] && ! ./$base -d$i > $base.ini; then
 			if [ "$q" = 0 ]; then
 			    echo "run time error in initial execution of '$base'" >&2
@@ -229,7 +245,7 @@ if [ "$link" = 1 ]; then
 	    echo "link $first from$list"
 	fi
 	echo >> _list2.h	# terminate last line of #define \
-	if nice gcc -g -I. -L$dir -o $first $list _list_.c $lib; then
+	if nice gcc -g -I. $ldir -o $first $list _list_.c $lib; then
 	    if [ -n "$i" ] && ! ./$first -d$i > $first.ini; then
 		if [ "$q" = 0 ]; then
 		    echo "run time error in initial execution of '$first'" >&2

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.22 2002/08/26 20:41:47 jw Exp $";
+"@(#)$Id: init.c,v 1.23 2004/01/26 19:27:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -31,7 +31,7 @@ Symbol *	iclock;		/* default clock */
  *	Initialise Symbol table
  *
  *		reserved words:		type KEYW
- *					u.val = compiler_token
+ *					uVal = compiler_token
  *					ftype used in compilation
  *
  *		built-in symbols:	type for built-in
@@ -42,10 +42,10 @@ Symbol *	iclock;		/* default clock */
 static struct {
     char *		name;
     unsigned char	type;
-    int			u_val;		/* yacc token for type KEYW */
+    int			uVal;		/* yacc token for type KEYW */
     unsigned char	ftype;
 } builtins[] = {
-    /* name	type	u_val	ftype */
+    /* name	type	uVal	ftype */
   { "D",	KEYW,	BLTIN1,	D_FF,	}, /* D flip-flop */
   { "DR",	KEYW,	BLTIN2,	D_FF,	}, /* D flip-flop with reset */
   { "DSR",	KEYW,	BLTIN3,	D_FF,	}, /* D flip-flop with set/reset */
@@ -76,10 +76,13 @@ static struct {
   { "DL",	KEYW,	DLATCH,	D_FF,	},
   { "DLATCH",	KEYW,	DLATCH,	D_FF,	},
   { "extern",	KEYW,	EXTERN,	0,	},
+  { "assign",	KEYW,	ASSIGN,	0,	},
+  { "return",	KEYW,	RETURN,	0,	},
   { "imm",	KEYW,	IMM,	0,	},
+  { "void",	KEYW,	VOID,	UDFA,	},
   { "bit",	KEYW,	TYPE,	GATE,	},
-  { "clock",	KEYW,	TYPE,	CLCKL,	},
   { "int",	KEYW,	TYPE,	ARITH,	},
+  { "clock",	KEYW,	TYPE,	CLCKL,	},
   { "timer",	KEYW,	TYPE,	TIMRL,	},
   { "Gate",	CTYPE,	YYERRCODE, 0,	}, /* initial C type from icc.h */
   { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
@@ -93,7 +96,7 @@ init(void)		/* install constants and built-ins */
 
     for (io = 0; builtins[io].name; io++) {
 	iclock = install(builtins[io].name, builtins[io].type, builtins[io].ftype);
-	iclock->u.val = builtins[io].u_val;/* set u.val in Symbol just installed */
+	iclock->u_val = builtins[io].uVal;	/* set u_val in Symbol just installed */
     }
     /* 'iclock' with name "iClock" is default clock when loop finishes */
 }

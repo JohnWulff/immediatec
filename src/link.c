@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.21 2004/01/04 15:06:42 jw Exp $";
+"@(#)$Id: link.c,v 1.22 2004/01/28 11:04:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -40,9 +40,6 @@ link_ol(
     Gate *		ap;
     unsigned short	diff;
     int			time;
-#ifndef _WINDOWS 
-    char *		format;
-#endif
 
     if (gp->gt_next) {
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
@@ -57,20 +54,18 @@ link_ol(
 #endif
 	    diff += tp->gt_mark;		/* makes sense for TIMRL */
 	    if ((tp = tp->gt_next) == ap) {	/* end of one list */
-		/**********************************************************
+		/********************************************************************
+		 * find glitch in alternate list - rare
 		 *
-		 *	find glitch in alternate list - rare
+		 * the list heads for o_list and a_list and their alternate
+		 * list heads have pointers to their respective alternate
+		 * list heads in gt_rlist.
 		 *
-		 *	the list heads for o_list and a_list and their
-		 *	alternate list heads have pointers to their
-		 *	respective alternate list heads in gt_rlist.
+		 * all clock or timer nodes are list heads which have *c_list as
+		 * their alternate in gt_rlist.
 		 *
-		 *	all clock or timer nodes are list heads which
-		 *	have *c_list as their alternate in gt_rlist.
-		 *
-		 *	*clist (iClock) has 0 in gt_rlist for termination
-		 *
-		 *********************************************************/
+		 * *clist (iClock) has 0 in gt_rlist for termination
+		 *******************************************************************/
 		if ((tp = (Gate*)tp->gt_rlist) == out_list || tp == 0) {
 #if !defined(_WINDOWS) || defined(LOAD)
 		    fprintf(errFP,
@@ -108,7 +103,7 @@ link_ol(
 #endif
     } else {
 	link_cnt++;				/* count link operations */
-	if (gp->gt_fni < MIN_ACT) {	/* ARITH & GATE may oscillate */
+	if (gp->gt_fni < MIN_ACT) {		/* ARITH & GATE may oscillate */
 	    if (gp->gt_mark != mark_stamp) {	/* first link this cycle */
 		gp->gt_mark = mark_stamp;	/* yes, stamp the gate */
 		gp->gt_mcnt = 0;		/*      clear mark count */
@@ -132,7 +127,7 @@ link_ol(
 #endif
 	    }
 	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */
-	    /*
+	    /********************************************************************
 	     * except OUTW or OUTX which is never linked to TIMRL - ignore
 	     *
 	     * action D_SH is always timed, even when arithmetic
@@ -141,20 +136,28 @@ link_ol(
 	     * the same applies to F_SW which is the 'switch' action and
 	     * to CH_BIT which is the CHANGE action. CHANGE times on both
 	     * edges, both for arithmetic as well as for logical input.
-	     */
-	    if ((gp->gt_val > 0 &&			/* 'LO' action gate and not */
-		(gp->gt_fni != CH_BIT && gp->gt_fni != D_SH && gp->gt_fni != F_SW) ||
-		(time = gp->gt_time->gt_old) <= 0) &&	/* or required time is 0 or -ve */
-		(time = out_list->gt_old) <= 0) {	/* and preset off time is 0 */
+	     *******************************************************************/
+	    if (
+		(
+		    (
+			gp->gt_val > 0 &&		/* 'LO' action gate and not */
+			gp->gt_fni != CH_BIT &&
+			gp->gt_fni != D_SH &&
+			gp->gt_fni != F_SW
+		    ) ||
+		    (time = gp->gt_time->gt_old) <= 0	/* or required time is 0 or -ve */
+		) &&
+		(time = out_list->gt_old) <= 0		/* and preset off time is 0 */
+	    ) {
 		out_list = c_list;			/* put on 'clock' list imme */
 	    } else {
-		/*
+		/********************************************************************
 		 * 'HI' action gate clocked by timer/counter (time >= 1)
 		 * or alternate 'LO' action if preset time is 1 (TIMER1)
 		 * which is equivalent to normal clocking.
 		 * Link Gate gp into list sorted by time order.
 		 * Negative times are treated like 0 times.
-		 */
+		 *******************************************************************/
 #if YYDEBUG && !defined(_WINDOWS)
 		if (debug & 0100) fprintf(outFP, "(%d)!", time);
 #endif
@@ -162,12 +165,12 @@ link_ol(
 		diff = 0;
 		while ((np = tp->gt_next) != out_list &&
 		    (int)(diff += np->gt_mark) <= time) {
-		    tp = np;		/* scan along time sorted list */
+		    tp = np;				/* scan along time sorted list */
 		}
 #ifndef DEQ
 		tp->gt_next = gp;			/* old => new */
 		gp->gt_next = np;			/* new => next */
-		diff -= np->gt_mark;		/* full time to previous */
+		diff -= np->gt_mark;			/* full time to previous */
 		gp->gt_mark = time - diff;		/* diff previous to new */
 		if (np != out_list) {
 		    np->gt_mark -= gp->gt_mark;	/* adjust diff new to old */
@@ -184,7 +187,7 @@ link_ol(
 #endif
 		}
 #else
-		np->gt_prev = tp->gt_next = gp;	/* next, previous ==> new */
+		np->gt_prev = tp->gt_next = gp;		/* next, previous ==> new */
 		gp->gt_next = np;			/* new ==> next */
 		gp->gt_prev = tp;			/* previous <== newious */
 		if (np != out_list) {
@@ -194,7 +197,7 @@ link_ol(
 		np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		/* if np == out_list, out_list->gt_mark gets -diff */
 #endif
-		return;			/* sorted link action complete */
+		return;				/* sorted link action complete */
 	    }
 	}
 #if YYDEBUG && !defined(_WINDOWS)

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.37 2004/01/05 12:33:23 jw Exp $";
+"@(#)$Id: ict.c,v 1.38 2004/01/26 20:21:54 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -104,9 +104,6 @@ icc(
     Gate *	gp;
     Functp	init_fa;
     int		tcnt = D10;
-    char *	format;		/* number format */
-    char	ybuf[YSIZE];	/* buffer for number */
-    char *	yp;
     float	delay = 0.0;	/* timer processing stopped */
     int		retval;
 
@@ -466,11 +463,11 @@ icc(
 #endif
 		    gp->gt_val = - gp->gt_val;	/* complement input */
 		    link_ol(gp, o_list);
+		    cnt++;
 #if YYDEBUG
 		    if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
-#endif
-		    cnt++;
 		skipT4: ;
+#endif
 		}
 		if (--tcnt == 0) {
 		    tcnt = D10;
@@ -500,11 +497,11 @@ icc(
 #endif
 			gp->gt_val = - gp->gt_val;	/* complement input */
 			link_ol(gp, o_list);
+			cnt++;
 #if YYDEBUG
 			if (debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', outFP);
-#endif
-			cnt++;
 		    skipT5: ;
+#endif
 		    }
 		}
 	    } else if (retval > 0) {
@@ -524,8 +521,10 @@ icc(
 			int		index;
 			int		mask;
 			int		diff;
+#ifdef LOAD
 			char *		cp;
 			int		liveFlag;
+#endif
 			char		utype[4];		/* need 2 with NUL */
 
 			if (
@@ -689,9 +688,14 @@ icc(
 					assert(index < sTend - sTable);	/* check index is in range */
 					gp = sTable[index];
 					gp->gt_live |= 0x8000;	/* set live active */
-					value = ((fni = gp->gt_fni) == ARITH || fni == D_SH || fni == F_SW ||
-					    fni == OUTW || fni == CH_BIT && gp->gt_ini == -ARN) ?
-					    gp->gt_new : gp->gt_val < 0 ? 1 : 0;
+					value = (
+					    (fni = gp->gt_fni) == ARITH ||
+					    fni == D_SH ||
+					    fni == F_SW ||
+					    fni == OUTW ||
+					    (fni == CH_BIT && gp->gt_ini == -ARN)) ?  gp->gt_new
+					    /* CH_BIT is int if ARN else bit */	   : gp->gt_val < 0 ? 1
+												    : 0;
 					if (value) {
 					    liveData(gp->gt_live, value);	/* initial active live values */
 					}

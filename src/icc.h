@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.50 2004/01/04 14:42:56 jw Exp $";
+"@(#)$Id: icc.h,v 1.51 2004/01/13 22:30:17 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -78,9 +78,9 @@ extern void	efree(void *);
 /* list of types */
 #define	FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
-	"CLK","TIM","ALIAS","ERR","KEYW","CTYPE","CWORD",
+	"CLK","TIM","ALIAS","ERR","KEYW","CTYPE","CWORD","IFUNCT",
 
-#define	OPS	".-+\"&|%*#^/({=[<:!@?;tw"	/* DEBUG display of types */
+#define	OPS	".-+\"&|%*#^/({=[<:!@?;twi"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
 #define	FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
@@ -91,7 +91,7 @@ extern void	efree(void *);
 #define	DEF_TYP	YYERRCODE, AVARC, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, NVAR,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, YYERRCODE, YYERRCODE,
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define	I_LISTS	gate_i, gate_i, gate_i, gate_i, gate_i, gate_i, gate_i,\

@@ -1,4 +1,4 @@
-$Id: manifest,v 1.8 2004/01/06 07:20:55 jw Exp $
+$Id: manifest,v 1.9 2004/02/02 08:12:29 jw Exp $
 README
 doc/iC.doc
 doc/iC.html
@@ -41,6 +41,10 @@ src/Test0/ORG/bar3.lst
 src/Test0/ORG/bar3.sh
 src/Test0/ORG/biterr.ic
 src/Test0/ORG/biterr.lst
+src/Test0/ORG/dasgnq.c
+src/Test0/ORG/dasgnq.ic
+src/Test0/ORG/dasgnq.ini
+src/Test0/ORG/dasgnq.lst
 src/Test0/ORG/demo.c
 src/Test0/ORG/demo.ic
 src/Test0/ORG/demo.ini
@@ -111,6 +115,7 @@ src/Test0/bar2.sh
 src/Test0/bar3.ic
 src/Test0/bar3.sh
 src/Test0/biterr.ic
+src/Test0/dasgnq.ic
 src/Test0/demo.ic
 src/Test0/demo.sh
 src/Test0/f10.ic

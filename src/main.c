@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.42 2004/01/06 11:57:16 jw Exp $";
+"@(#)$Id: main.c,v 1.43 2004/01/26 19:49:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -17,6 +17,7 @@ static const char main_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<unistd.h>
 #include	<string.h>
 #include	<assert.h>
 #ifdef TCP
@@ -410,7 +411,9 @@ main(
     if ((r = c_compile(T1FP)) != 0) {
 	ro = 6;				/* C-compile error */
     } else {
+#if defined(RUN) || defined(TCP)
 	Gate *		igp;
+#endif	/* RUN or TCP */
 	unsigned	gate_count[MAX_LS];	/* accessed by icc() */
 
 /********************************************************************
@@ -492,7 +495,7 @@ main(
 *******************************************************************/
 
 		assert (sp);			/* iClock initialized in init() */
-		c_list = sp->u.gate;		/* initialise clock list */
+		c_list = sp->u_gate;		/* initialise clock list */
 		icc(igp, gate_count);		/* execute the compiled logic */
 		/* never returns - exits via quit() */
 #endif	/* RUN or TCP */
@@ -585,10 +588,10 @@ unlinkTfiles(void)
 int
 inversionCorrection(void)
 {
-    char	exStr[256];
-    char	tempName[] = "pplstfix.XXXXXX";
     int		fd;
     int		r = 0;
+    char	tempName[] = "pplstfix.XXXXXX";
+    char	exStr[TSIZE];
 
     if ((debug & 04024) == 024) {	/* not suppressed, NET TOPOLOGY and LOGIC */
 	/* mktemp() is deemed dangerous */
@@ -601,7 +604,7 @@ inversionCorrection(void)
 	    fprintf(stderr, "%s: rename(%s, %s) failed\n",
 		progname, listFN, tempName);
 	} else {
-	    sprintf(exStr, "%spplstfix%s %s > %s", ppPath, progname + strcspn(progname, "0123456789"), tempName, listFN);
+	    snprintf(exStr, TSIZE, "%spplstfix%s %s > %s", ppPath, progname + strcspn(progname, "0123456789"), tempName, listFN);
 	    r = system(exStr);
 	    unlink(tempName);
 	    if (r != 0) {

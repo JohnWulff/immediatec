@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.40 2004/01/05 16:57:37 jw Exp $";
+"@(#)$Id: load.c,v 1.41 2004/01/26 20:23:41 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -402,7 +402,7 @@ main(
 			    *tlp = gp;	/* swap in real input */
 			}
 			if (df) printf("	%c%s,",
-			    (i >> 1) & 1 ^ inversion ? '~' : ' ', gp->gt_ids);
+			    ((i >> 1) & 0x1) ^ inversion ? '~' : ' ', gp->gt_ids);
 			op->gt_val++;		/* count input */
 			if (gp->gt_fni == GATE) {
 			    gp->gt_mark++;	/* logic output at gp */

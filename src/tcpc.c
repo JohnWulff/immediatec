@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.12 2002/09/01 19:30:09 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.13 2004/01/26 20:11:02 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -82,7 +82,7 @@ microPrint(const char * str, int mask)
 	    sec--;
 	    usec += 1000000;
 	}
-	printf("%3d.%03d,%03d: %s\n", sec, usec/1000, usec%1000, str);
+	printf("%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
     gettimeofday(&mt0, 0);	/* start of next measurement without print time */
     micro &= ~mask;

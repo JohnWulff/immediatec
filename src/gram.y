@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.16 2003/12/22 18:19:53 jw Exp $";
+"@(#)$Id: gram.y,v 1.17 2004/01/26 20:35:44 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -19,6 +19,7 @@
  *******************************************************************/
 
 #include	<stdio.h>
+#include	<stdlib.h>
 #include	<assert.h>
 #include	<stdarg.h>
 #include	<string.h>
@@ -2036,7 +2037,9 @@ copyAdjust(FILE* iFP, FILE* oFP)
     int			pFlag;
     int			ppi;
     Symbol *		sp;
+#ifdef LEAS
     Symbol **		hsp;
+#endif
     int			mType;
     char		buffer[BUFS];	/* buffer for modified names */
     char		iqt[2];		/* char buffers - space for 0 terminator */

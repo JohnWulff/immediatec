@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.8 2003/10/03 18:45:13 jw Exp $";
+"@(#)$Id: lmain.c,v 1.9 2004/01/26 19:44:47 jw Exp $";
 /********************************************************************
  *
  *	Standalone check of gram.y and lexc.l C compiler
@@ -7,6 +7,7 @@ static const char lmain_c[] =
  *******************************************************************/
 
 #include	<stdio.h>
+#include	<stdlib.h>
 #include	<string.h>
 #include	"icg.h"
 #include 	"icc.h"
@@ -78,7 +79,6 @@ main(
 			"%s: unknown flag '%c'\n", progname, **argv);
 		case 'h':
 		case '?':
-		error:
 		    fprintf(stderr, usage, progname, lmain_c);
 		    exit(1);
 		}

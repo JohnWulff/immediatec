@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.82 2004/01/05 15:35:54 jw Exp $";
+"@(#)$Id: comp.y,v 1.83 2004/02/02 08:45:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -17,6 +17,7 @@
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<unistd.h>
 #include	<string.h>
 #include	<ctype.h>
 #include	<setjmp.h>
@@ -27,24 +28,30 @@
 #include	"comp.h"
 
 #define		IMMBUFSIZE	1024
-#define		TSIZE		256
+#define		IBUFSIZE	512
 
 /* "comp.y	3.70	95/02/03 Copyright (c) 1985-1993 by John E. Wulff" */
 
 static void	unget(int);		/* shares buffers with get() */
+static long	getNumber(void);	/* shares buffers with get() */
 static int	iClex(void);
 int		ynerrs;			/* count of yyerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
-static void	errBit(void);
-static void	errInt(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
-static int	dflag = 0;		/* record states dexpr */
+int		dFlag = 0;		/* convert number to NVAR object */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
 static Symbol	tSym = { "_tSym_", AND, GATE, };
 static char	iCbuf[IMMBUFSIZE];	/* buffer to build imm statement */
-char *		stmtp = iCbuf;		/* manipulated in iClex() only */
+static char	iFunBuffer[IBUFSIZE];	/* buffer to build imm function symbols */
+static char *	iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
+char *		iFunSymExt = 0;		/* pointer to imm function symbol Extension */
+static char *	iFunSyText = 0;		/* pointer to function symbol text when active */
+static Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
+Symbol *	varList = 0;		/* list of temp Symbols while compiling function */
+char		One[] = "1";		/* name for constant 1 Symbol */
+static char *	stmtp = iCbuf;		/* manipulated in iClex() only */
 %}
 
 %union {		/* stack type */
@@ -59,7 +66,7 @@ char *		stmtp = iCbuf;		/* manipulated in iClex() only */
 %{
 
 #if YYDEBUG
-static void
+void
 pu(int t, char * token, Lis * node)
 {
     char *	cp;
@@ -67,7 +74,11 @@ pu(int t, char * token, Lis * node)
 
     switch (t) {
     case 0:
-	fprintf(outFP, ">>>Sym	%s	%s :	", token, ((Sym*)node)->v->name);
+	if (node->v) {
+	    fprintf(outFP, ">>>Sym	%s	%s :	", token, ((Sym*)node)->v->name);
+	} else {
+	    fprintf(outFP, ">>>Sym	%s	0 =	", token);
+	}
 	break;
     case 1:
 	if (node->v) {
@@ -96,9 +107,10 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 {
     fprintf(outFP, ">>>%s\t%s\t[%c%c %c] [%c%c %c] => [%c%c %c]\n",
 	token, s2->name,
-	os[(s1 >> 8)&TM], os[!!((s1 >> 8)&~TM)], fos[s1 & 0xff],
-	os[s2->type&TM], os[!!(s2->type&~TM)], fos[s2->ftype],
-	os[ss->type&TM], os[!!(ss->type&~TM)], fos[ss->ftype]);
+	/* single character for type, . normal or - external, ftype */
+	os[(s1 >>8)&TM], os[!!((s1 >>8)&EM)], fos[s1 & 0xff],
+	os[s2->type&TM], os[!!(s2->type&EM)], fos[s2->ftype],
+	os[ss->type&TM], os[!!(ss->type&EM)], fos[ss->ftype]);
     fflush(outFP);
 } /* pd */
 
@@ -113,14 +125,18 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLATCH BFORCE DLATCH
 %token	<sym>	BLTIN1 BLTIN2 BLTIN3 BLTINJ BLTINT CVAR CBLTIN TVAR TBLTIN TBLTI1
-%token	<sym>	NVAR EXTERN IMM TYPE IF ELSE SWITCH
+%token	<sym>	NVAR IF ELSE SWITCH EXTERN ASSIGN RETURN IMM VOID TYPE
+%token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
-%type	<sym>	program statement simplestatement lBlock variable valuevariable
+%type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
+%type	<sym>	returnStatement formalParameter lBlock variable valueVariable
 %type	<sym>	decl extDecl asgn dasgn casgn dcasgn tasgn dtasgn
-%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
-%type	<list>	cref ctref ctdref dexpr funct params plist
-%type	<val>	cBlock declHead extDeclHead
+%type	<sym>	vFunCall vFunCallHead iFunCallHead cFunCallHead tFunCallHead
+%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr actexpr actdexpr tfexpr ifini ffexpr
+%type	<list>	cref ctref ctdref dexpr cCall cParams cPlist
+%type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall rParams rPlist
+%type	<val>	cBlock declHead extDeclHead formalParaTypeDecl
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
@@ -147,36 +163,88 @@ program	: /* nothing */		{ $$.v = 0;  stmtp = iCbuf; }
 	| program error ';'	{ $$.v = 0;  stmtp = iCbuf; iclock->type = ERR; yyerrok; }
 	;
 
-statement
-	: ';'			{ $$.v = 0;  }
-	| simplestatement ';'	{ $$   = $1; }
-	| ffexpr		{ $$.v = op_asgn(0, &$1, GATE); }
-	    /* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
-	| lBlock		{ $$.v = 0;  }
+funcBody
+	: /* nothing */		{ $$.v = 0;  stmtp = iCbuf; }
+	| funcBody funcStatement	{
+		List_e *	slp;			/* link for statement Symbol */
+		List_e *	vlp;			/* link for varList */
+		Symbol *	sp;
+		unsigned char	typ;
+		
+		stmtp = iCbuf;
+		if ((sp = $2.v) != 0) {
+		    typ = sp->type & TM;		/* ZZZ check extern logic */
+		    if (typ <= MAX_OP) {
+			if ($1.v == 0) {		/* list reset for each new function */
+			    $$.v = slp = sy_push(sp);	/* first link in statement list */
+			    slp->le_next = sy_push(varList);
+#if YYDEBUG
+			    if ((debug & 0402) == 0402) pu(1, "funcBody", &$$);
+#endif
+			} else {
+			    slp = $$.v;
+			    vlp = slp->le_next;
+			    while (slp->le_sym != sp && vlp->le_next) {
+				slp = vlp->le_next;
+				vlp = slp->le_next;
+				assert(vlp);
+			    }
+			    if (slp->le_sym != sp) {	/* new statement Symbol ? */
+				vlp->le_next = slp = sy_push(sp);	/* yes */
+				slp->le_next = sy_push(varList); /* link to end of list */
+			    } else if (varList) {
+				vlp->le_sym = varList;	/* not set in declaration */
+			    }
+			}
+		    } else if (typ != ERR) {
+			fprintf(outFP, "type: %s, ftype: %s\n",
+			    full_type[typ], full_ftype[sp->ftype]);
+			ierror("function statement is not int, bit, clock or timer:", sp->name);
+			sp->type = (sp->type & FM) | ERR;
+		    }
+		}
+	    }
+	| funcBody error ';'	{ $$.v = 0;  stmtp = iCbuf; iclock->type = ERR; yyerrok; }
 	;
 
-simplestatement
-	: extDecl		{ $$ = $1; }
-	| decl			{ $$ = $1; }
-	| asgn			{ $$ = $1; }
-	| dasgn			{ $$ = $1; }
-	| casgn			{ $$ = $1; }
-	| dcasgn		{ $$ = $1; }
-	| tasgn			{ $$ = $1; }
-	| dtasgn		{ $$ = $1; }
+statement
+	: ';'			{ $$.v = 0;  }		/* empty statement */
+	| simpleStatement ';'	{ $$   = $1; }		/* immediate statement */
+	| ffexpr		{ $$.v = op_asgn(0, &$1, GATE); } /* if or switch */
+			    /* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
+	| iFunDef		{ $$   = $1; }		/* immediate function definition */
+	| lBlock		{ $$.v = 0;  }		/* literal block */
+	;
+
+funcStatement
+	: ';'			{ $$.v = 0;  }		/* empty statement */
+	| simpleStatement ';'	{ $$   = $1; }		/* immediate statement */
+	| returnStatement ';'	{ $$   = $1; }		/* function return statement */
+	;
+
+simpleStatement
+	: extDecl		{ $$   = $1; }		/* extrernal declaration */
+	| decl			{ $$   = $1; }		/* immediate declararion */
+	| asgn			{ $$   = $1; }		/* immediate value assignment */
+	| dasgn			{ $$   = $1; }		/* declaration assignment */
+	| casgn			{ $$   = $1; }		/* clock assignment */
+	| dcasgn		{ $$   = $1; }		/* declararion clock assignment */
+	| tasgn			{ $$   = $1; }		/* timer assignment */
+	| dtasgn		{ $$   = $1; }		/* declararion timer assignment */
+	| vFunCall		{ $$   = $1; }		/* void function call */
 	;
 
 variable
-	: valuevariable		{ $$ = $1; }		/* value variable */
-	| CVAR			{ $$ = $1; }		/* clock variable */
-	| TVAR			{ $$ = $1; }		/* timer variable */
+	: valueVariable		{ $$   = $1; }		/* value variable */
+	| CVAR			{ $$   = $1; }		/* clock variable */
+	| TVAR			{ $$   = $1; }		/* timer variable */
 	;
 
-valuevariable
-	: LVAR			{ $$ = $1; }		/* logical bit variable */
-	| AVAR			{ $$ = $1; }		/* arithmetic variable */
-	| LOUT			{ $$ = $1; }		/* output bit variable */
-	| AOUT			{ $$ = $1; }		/* output arith. variable */
+valueVariable
+	: LVAR			{ $$   = $1; }		/* logical bit variable */
+	| AVAR			{ $$   = $1; }		/* arithmetic variable */
+	| LOUT			{ $$   = $1; }		/* output bit variable */
+	| AOUT			{ $$   = $1; }		/* output arith. variable */
 	;
 
 	/************************************************************
@@ -213,16 +281,17 @@ valuevariable
 	 ***********************************************************/
 
 extDecl	: extDeclHead UNDEF	{
-		Symbol t = *($2.v);
 		$$.v = $2.v;
 		$$.v->ftype = $1.v & 0xff;
 		$$.v->type = $1.v >> 8;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pd("extDecl", $$.v, $1.v, &t);
+		if ((debug & 0402) == 0402) {
+		    Symbol t = *($2.v);
+		    pd("extDecl", $$.v, $1.v, &t);
+		}
 #endif
 	    }
 	| extDeclHead variable	{
-		Symbol t = *($2.v);
 		if ($2.v->ftype != ($1.v & 0xff)) {
 		    ierror("extern declaration does not match previous declaration:", $2.v->name);
 		    $2.v->type = ERR;	/* cannot execute properly */
@@ -235,7 +304,10 @@ extDecl	: extDeclHead UNDEF	{
 		    warning("extern declaration after assignment - ignored:", $2.v->name);
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pd("extDecl", $$.v, $1.v, &t);
+		if ((debug & 0402) == 0402) {
+		    Symbol t = *($2.v);
+		    pd("extDecl", $$.v, $1.v, &t);
+		}
 #endif
 	    }
 	;
@@ -247,7 +319,7 @@ extDeclHead
 		if (ftyp >= CLCKL) {		/* check that CLCKL TIMRL */
 		    ftyp -= CLCKL - CLCK;	/* and CLCK and TIMR are adjacent */
 		}
-		$$.v = stype = $3.v->ftype | ((types[ftyp] | (TM+1)) << 8);
+		$$.v = stype = $3.v->ftype | ((types[ftyp] | EM) << 8);
 	    }
 	| extDecl ','		{ $$.v = stype;	/* first TYPE */ }
 	;
@@ -267,27 +339,35 @@ extDeclHead
 	 ***********************************************************/
 
 decl	: declHead UNDEF	{
+#if YYDEBUG
 		Symbol t = *($2.v);
+#endif
+		$$.f = $1.f; $$.l = $2.l;
 		$$.v = $2.v;
 		$$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
 		$$.v->type = $1.v >> 8;		/* UDF for all TYPEs */
+		iFunSyText = 0;			/* no more function symbols */
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
 #endif
 	    }
 	| declHead variable	{
+#if YYDEBUG
 		Symbol t = *($2.v);
+#endif
+		$$.f = $1.f; $$.l = $2.l;
 		if ($2.v->ftype != ($1.v & 0xff)) {
 		    ierror("declaration does not match previous declaration:", $2.v->name);
 		    $2.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = $2.v;
-		if (($2.v->type & ~TM) || $2.v->type == UDF) {
+		if (($2.v->type & EM) || $2.v->type == UDF) {
 		    $$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
 		    $$.v->type = $1.v >> 8;	/* UDF for all TYPEs */
 		} else if ($2.v->type != INPW && $2.v->type != INPX) {
 		    warning("declaration after assignment - ignored:", $2.v->name);
 		}
+		iFunSyText = 0;			/* no more function symbols */
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
 #endif
@@ -295,28 +375,47 @@ decl	: declHead UNDEF	{
 	;
 
 declHead
-	: IMM TYPE		{ $$.v = stype = $2.v->ftype; }
-	| decl ','		{ $$.v = stype;	/* first TYPE */ }
-	| dasgn ','		{ $$.v = stype;	/* first TYPE */ }
+	: IMM TYPE		{
+		$$.f = $$.l = $2.l;		/* do not include in expression string */
+		$$.v = stype = $2.v->ftype | UDF << 8;
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| decl ','		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = stype;			/* first TYPE */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| dasgn ','		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = stype;			/* first TYPE */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
 	;
 
 	/************************************************************
 	 *
 	 * Assignment combined with a declaration
+	 * an output can only be recognised by its name: Q[XBWL]%d
 	 *
 	 ***********************************************************/
 
 dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
+		unsigned char	y1[2];
+		int		yn;
+		int		ioTyp;
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) {
-		    if ($1.v->ftype != ARITH) { $$.v = 0; errBit(); YYERROR; }
-		    else if (const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
+		if (sscanf($1.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
+		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
+		} else {
+		    ioTyp = 0;				/* flags that no I/O is generated */
 		}
-		if ($1.v->type != UDF) {
-		    ierror("multiple assignment to imm type:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
+		if (($$.v = assignExpression(&$1, &$3, ioTyp)) == 0) YYERROR;
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(0, "dasgn", (Lis*)&$$);
 #endif
@@ -331,77 +430,36 @@ dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 
 asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$1.v->ftype = GATE;	/* implicitly declared as 'imm bit' */
-		$$.v = op_asgn(&$1, &$3, GATE);	/* UNDEF is default GATE */
+		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
-		if ($1.v->type != UDF) {
-		    ierror("multiple assignment to imm bit:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		$$.v = op_asgn(&$1, &$3, GATE);
+		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0 && const_push(&$3)) { $$.v = 0; errInt(); YYERROR; }
-		if ($1.v->type != UDF) {
-		    ierror("multiple assignment to imm int:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		$$.v = op_asgn(&$1, &$3, ARITH);
+		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| LOUT '=' aexpr		{
-		Sym		sy;
-		Lis		li;
-		char		temp[TSIZE];
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
-		if ($1.v->type != UDF) {
-		    ierror("multiple assignment to imm bit:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		snprintf(temp, TSIZE, "%s_0", $1.v->name);
-		sy.v = install(temp, UDF, OUTX);	/* generate output Gate */
-		li.v = sy_push($1.v);			/* provide a link to LOUT */
-		if ((li.v = op_push(0, OR, li.v)) != 0) {
-		    li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
-		}
-		op_asgn(&sy, &li, $1.v->ftype);
-		$$.v = op_asgn(&$1, &$3, GATE);
+		if (($$.v = assignExpression(&$1, &$3, OUTX)) == 0) YYERROR;
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| AOUT '=' aexpr		{
-		Sym		sy;
-		Lis		li;
-		char		temp[TSIZE];
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; errInt(); YYERROR; }
-		if ($1.v->type != UDF) {
-		    ierror("multiple assignment to imm int:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		snprintf(temp, TSIZE, "%s_0", $1.v->name);
-		sy.v = install(temp, UDF, OUTW);	/* generate output Gate */
-		li.v = sy_push($1.v);			/* provide a link to AOUT */
-		if ((li.v = op_push(0, ARN, li.v)) != 0) {
-		    li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
-		}
-		op_asgn(&sy, &li, $1.v->ftype);
-		$$.v = op_asgn(&$1, &$3, ARITH);
+		if (($$.v = assignExpression(&$1, &$3, OUTW)) == 0) YYERROR;
 #if YYDEBUG
 		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
@@ -452,7 +510,7 @@ expr	: UNDEF			{
 		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| valuevariable		{
+	| valueVariable		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -475,7 +533,13 @@ expr	: UNDEF			{
 		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| funct			{
+	| cCall			{
+		$$ = $1;
+		if ($$.v) {
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+	    }
+	| iFunCall			{
 		$$ = $1;
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -655,9 +719,9 @@ expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist) &&
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist)) {
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist)) {
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
@@ -682,9 +746,9 @@ expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist) &&
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u.blist)) {
+		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist)) {
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
@@ -723,7 +787,7 @@ expr	: UNDEF			{
 		    int typ;
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
 			(((typ = sp->type & TM) != ARNC && typ != ARN &&
-			typ != SH) || sp->u.blist == 0)) {
+			typ != SH) || sp->u_blist == 0)) {
 						/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
 		    } else {
@@ -832,9 +896,8 @@ ctref	: ctdref		{ $$ = $1; }		/* clock or timer with delay */
 	| texpr			{			/* timer */
 		Symbol *	sp;			/* with implicit delay of 1 */
 		List_e *	lp;
-		char		one[] = "1";
-		if ((sp = lookup(one)) == 0) {
-		    sp = install(one, NCONST, ARITH);	/* becomes NVAR */
+		if ((sp = lookup(One)) == 0) {
+		    sp = install(One, NCONST, ARITH);	/* becomes NVAR */
 		}
 		lp = sy_push(sp);
 		lp->le_val = (unsigned) -1;		/* mark link as timer value */
@@ -847,7 +910,7 @@ ctref	: ctdref		{ $$ = $1; }		/* clock or timer with delay */
 	 *  (cexpr|texpr,dexpr)
 	 ***********************************************************/
 ctdref	: cexpr			{ $$ = $1; }		/* clock */
-	| texpr ','		{ dflag = 1; }		/* timer */
+	| texpr ','		{ dFlag = 1; }		/* timer */
 	  dexpr			{			/* with delay expression */
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = op_push($1.v, TIM, $4.v);
@@ -1122,12 +1185,12 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
 		}
 		$$.v = bltin(&$1, &liS, 0, 0, 0, &liR, &$6, 0, 0);
-		lpS = liS.v->le_sym->u.blist;
+		lpS = liS.v->le_sym->u_blist;
 		while (lpS && lpS->le_sym != &tSym) {
 		    lpS = lpS->le_next;
 		}
 		assert(lpS);
-		lpR = liR.v->le_sym->u.blist;
+		lpR = liR.v->le_sym->u_blist;
 		while (lpR && lpR->le_sym != &tSym) {
 		    lpR = lpR->le_next;
 		}
@@ -1163,12 +1226,12 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
 		}
 		$$.v = bltin(&$1, &liS, &$5, 0, 0, &liR, &$8, 0, 0);
-		lpS = liS.v->le_sym->u.blist;
+		lpS = liS.v->le_sym->u_blist;
 		while (lpS && lpS->le_sym != &tSym) {
 		    lpS = lpS->le_next;
 		}
 		assert(lpS);
-		lpR = liR.v->le_sym->u.blist;
+		lpR = liR.v->le_sym->u_blist;
 		while (lpR && lpR->le_sym != &tSym) {
 		    lpR = lpR->le_next;
 		}
@@ -1321,7 +1384,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 		List_e *	lp;
 		sp = $1.v->le_sym;		/* slave, deleted later */
 		assert(sp);
-		lp = sp->u.blist;
+		lp = sp->u_blist;
 		assert(lp);
 		sp = lp->le_sym;		/* master - currently ftype F_CF */
 		assert(sp);
@@ -1380,10 +1443,22 @@ cexpr	: CVAR			{ $$.v = sy_push($1.v); }
 	| casgn			{ $$.v = sy_push($1.v); }
 	| cfexpr		{
 		Symbol *	sp = $1.v->le_sym;
+		assert(sp);
 		if (sp->ftype != ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = CLCKL;	/* clock list head */
+		$$ = $1;
+	    }
+	| cFunCall		{
+		Symbol *	sp;
+		assert($1.v);			/* ZZZ analyse and fix */
+		sp = $1.v->le_sym;
+		assert(sp);
+		if (sp->ftype != CLCKL) {
+		    ierror("called function does not return type clock:", sp->name);
+		    sp->type = ERR;	/* cannot execute properly */
+		}
 		$$ = $1;
 	    }
 	| '(' cexpr ')'		{ $$ = $2; }
@@ -1460,10 +1535,22 @@ texpr	: TVAR			{ $$.v = sy_push($1.v); }
 	| tasgn			{ $$.v = sy_push($1.v); }
 	| tfexpr		{
 		Symbol *	sp = $1.v->le_sym;
+		assert(sp);
 		if (sp->ftype != ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = TIMRL;	/* timer list head */
+		$$ = $1;
+	    }
+	| tFunCall		{
+		Symbol *	sp;
+		assert($1.v);			/* ZZZ analyse and fix */
+		sp = $1.v->le_sym;
+		assert(sp);
+		if (sp->ftype != TIMRL) {
+		    ierror("called function does not return type timer:", sp->name);
+		    sp->type = ERR;	/* cannot execute properly */
+		}
 		$$ = $1;
 	    }
 	| '(' texpr ')'		{ $$ = $2; }
@@ -1584,43 +1671,473 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *
 	 ***********************************************************/
 
-funct	: UNDEF '(' params ')'	{
+cCall	: UNDEF '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 	    				/* CHECK if iCbuf changes now _() is missing */
-//		assert($1.f[0] == '_' && $1.f[1] == '(' && $1.l[-1] == ')');
-//		$1.f[0] = $1.f[1] = $1.l[-1] = '#';
 		if (lookup($1.v->name)) {	/* may be unlinked in same expr */
 		    unlink_sym($1.v);		/* unlink Symbol from symbol table */
 		    free($1.v->name);
-		    free($1.v);
+		    free($1.v);		/* TODO may be better to keep in ST with type ??? */
 		}
 		$$.v = $3.v;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "funct", &$$);
+		if ((debug & 0402) == 0402) pu(1, "cFunct", &$$);
 #endif
 	    }
 	;
 
-params	: /* nothing */		{ $$.v = 0; }
-	| plist			{ $$   = $1; }
+cParams	: /* nothing */		{ $$.v = 0; }
+	| cPlist		{ $$   = $1; }
 	;
 
-plist	: aexpr			{
+cPlist	: aexpr			{
 		$$.f = $1.f; $$.l = $1.l;
 		if (($$.v = op_push(0, ARN, op_force($1.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "plist", &$$);
+		if ((debug & 0402) == 0402) pu(1, "cPlist", &$$);
 #endif
 	    }
-	| plist ',' aexpr	{
+	| cPlist ',' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = op_push($1.v, ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "plist", &$$);
+		if ((debug & 0402) == 0402) pu(1, "cPlist", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 *
+	 *	Immediate functions
+	 *
+	 * Algorithm:
+	 *	The UNDEF function head Symbol for a function definition
+	 *	called <fName> is marked with type IFUNCT which will return
+	 *	YACC type VFUNCTION or IFUNCTION from iClex when the function
+	 *	name <fName> later appears as a function call in subsequent code.
+	 *	A void function VFUNCTION is returned if the ftype is UDFA or
+	 *	a value function IFUNCTION for ftypes ARITH GATE CKLCK or TIMRL.
+	 *	For a value function a Symbol named <fName>$ is installed
+	 *	and made known via Sym iRetSymbol to the return statement.
+	 *	A text buffer iFunBuffer holds the text <fName>$ and a
+	 *	pointer iFunSymExt is set to point just past the $ symbol.
+	 *
+	 *	When scanning the formal parameter list or when declaring immediate
+	 *	variables in the body of a function (signalled by iFunSymExt
+	 *	being set), the name of the item is concatenated to the <fName>$
+	 *	string and a new undefined Symbol with this extended name is
+	 *	installed in the Symbol Table. That puts the formal parameter
+	 *	names and variables declared in a function in a private name space
+	 *	for that function. Only the function name is global and may not
+	 *	clash with any other global name.
+	 *
+	 *	The Symbols in the parameter list are linked to 'blist' of the
+	 *	function head Symbol. A linked statement list of declarations and
+	 *	assignments are linked to 'list' of the function head Symbol.
+	 *	These are the possible return Symbol, any assignable parameters
+	 *	and variables declared inside the function. When the function
+	 *	definition has been completely compiled, both lists are checked to
+	 *	see if they contain any undefined Symbols. If this is the case, an
+	 *	assignment is missing in the function.
+	 *
+	 *	Each assignment head has an expression net linked to it, which will
+	 *	link back to value parameters (or assignment parameters or even the
+	 *	return Symbol used as values) or function internal or global immediate
+	 *	variables. The expression net is unresolved at this stage.
+	 *
+	 *	When a void or value function is called, its real parameter list
+	 *	is scanned and type checked against the list of formal prameters
+	 *	linked to the function head Symbol. Links from formal to real
+	 *	parameters are via 'blist' in the formal parameters, which are marked
+	 *	with type|FM. The return Symbol 'blist' is linked back to the function
+	 *	head Symbol.
+	 *
+	 *	If that is OK, the assignment head list is scanned and each associated
+	 *	net is cloned, replacing any value parameters by links to the real
+	 *	parameter Symbols. For each assignment head the unfinished assignment
+	 *	is now carried out with the cloned net, which gives temporary names
+	 *	associated with each real assignment variable to internal Symbols.
+	 *	Also the full logic of assigning to variables which have already been
+	 *	used as values is thus taken care of. Internal Variables do not have
+	 *	a link in 'blist', and a Symbol to assign to must be cloned for them.
+	 *
+	 *	Finally any links to the return value used as a value inside the
+	 *	function must be linked to the target of the function return assignment.
+	 *	
+	 * Immediate function with immediate return value
+	 * Definition:
+	 *	imm bit   bf1(bit p1, int p2, clock c1, timer t1, int delay) {...}
+	 *	imm int   if1(assign bit a1, assign int a2, bit p1, int p2)  {...}
+	 *	imm clock cf1(bit p1, clock c1) {...}
+	 *	imm timer tf1(bit p1, clock c1) {...}
+	 ***********************************************************/
+
+iFunHead
+	: declHead UNDEF '('		{
+		unsigned char	typ;
+		unsigned char	ftyp;
+
+		$2.v->type = IFUNCT;			/* function head */
+		$2.v->ftype = $1.v;			/* GATE ARITH CLCKL TIMRL */
+		iFunSymExt = strncpy(iFunBuffer, $2.v->name, IBUFSIZE);
+		iFunSymExt += strlen(iFunBuffer);	/* point past text */
+		if (iFunEnd - iFunSymExt < 32) {
+		    execerror("iFunBuffer for function symbol too small", $2.v->name, __FILE__, __LINE__);
+		}
+		*iFunSymExt++ = '$';			/* append '$' */
+		ftyp = $1.v & 0xff;			/* TYPE bit int clock timer */
+		typ = $1.v >> 8;			/* UDF for all TYPEs */
+		if ((iRetSymbol.v = lookup(iFunBuffer)) == 0) {
+		    iRetSymbol.v = install(iFunBuffer, typ, ftyp);	/* return Symbol */
+		}
+#if YYDEBUG
+		if ((debug & 0402) == 0402) {
+		    fprintf(outFP, "iFunHead: imm %s %s\n",
+			full_ftype[ftyp], iRetSymbol.v->name);
+		    fflush(outFP);
+		}
+#endif
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $2.v;				/* function head Symbol */
+	    }
+
+	/************************************************************
+	 * Void immediate function
+	 * Definition:
+	 *	imm void  vf1(assign bit a1, assign int a2, bit p1, int p2) {...}
+	 ***********************************************************/
+
+	| IMM VOID UNDEF '('		{
+		$3.v->type = IFUNCT;			/* function head */
+		$3.v->ftype = $2.v->ftype;		/* UDFA for VOID */
+		iFunSymExt = strncpy(iFunBuffer, $3.v->name, IBUFSIZE);
+		iFunSymExt += strlen(iFunBuffer);	/* point past text */
+		if (iFunEnd - iFunSymExt < 32) {
+		    execerror("iFunBuffer for function symbol too small", $3.v->name, __FILE__, __LINE__);
+		}
+		*iFunSymExt++ = '$';			/* append '$' */
+		iRetSymbol.v = 0;			/* void function has no return Symbol */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) {
+		    fprintf(outFP, "vFunHead: imm %s %s\n", full_ftype[$3.v->ftype], $3.v->name);
+		    fflush(outFP);
+		}
+#endif
+		$$.f = $1.f; $$.l = $4.l;
+		$$.v = $3.v;
+	    }
+	;
+
+iFunDef	: iFunHead fParams ')' '{' funcBody '}'	{
+		List_e *	lp;
+		Symbol *	sp;
+		int		instanceNum;		/* save early union u.val u.blist */
+		int		saveCount = 0;		/* count parameter links for saving */
+
+		$$.f = $1.f; $$.l = $6.l;
+		instanceNum = $1.v->u_val;		/* read from file if -a option */
+		if (iRetSymbol.v) {
+		    if (iRetSymbol.v->type == UDF) {
+			ierror("no return statement in function:", $1.v->name);
+		    }
+		    iRetSymbol.v->type |= FM;		/* mark return Symbol */
+		    iRetSymbol.v->u_blist = sy_push($1.v);	/* with own function head */
+		    iRetSymbol.v = 0;			/* no need to report as undefined */
+		    saveCount--;			/* not save-restored in call */
+		}
+		iFunSymExt = 0;				/* end of function compilation */
+		$$.v = $1.v;				/* iFunHead yacc stack value */
+		$$.v->u_blist = lp = $2.v;		/* fParams yacc stack value */
+		while (lp) {				/* mark formal parameter list */
+		    sp = lp->le_sym;			/* assign and value parameters */
+		    assert(sp);
+		    if (sp->type == UDF) {
+			ierror("undefined gate in function:", sp->name);
+		    }
+		    assert(sp->u_blist == 0);		/* link for real parameters */
+		    sp->type |= FM;			/* mark as function Symbol */
+		    saveCount++;			/* space for saving nested para */
+		    lp = lp->le_next;			/* next formal parameter link */
+		}
+		$$.v->list = lp = $5.v;			/* funcBody yacc stack value */
+		while (lp) {				/* mark function statement list */
+		    sp = lp->le_sym;			/* assign and internal declarations */
+		    assert(sp);
+		    if (sp->type == UDF) {		/* assigns are marked twice */
+			ierror("undefined gate in function:", sp->name);
+		    }
+		    sp->type |= FM;			/* mark as function Symbol */
+		    saveCount++;			/* space for saving nested decl */
+		    lp = lp->le_next;			/* next varList link */
+		    assert(lp);				/* statement list is in pairs */
+		    sp = lp->le_sym;			/* first varList Symbol */
+		    while (sp) {			/* varList my be empty */
+			free(sp->name);	/* free name space generated for listing name */
+			sp->name = 0;	/* mark the Symbol as function internal (no '$') */
+			sp->list = 0;			/* clear internal Symbol pointers */
+			sp = sp->next;			/* next varList Symbol */
+		    }
+		    lp = lp->le_next;			/* next statement link */
+		}
+		lp = $$.v->list;	/* save 2 numbers in first elements of statement list */
+		if (lp) {		/* any sensible function has at least 1 statement */
+		    lp->le_val = instanceNum;		/* allows call to number instances */
+		    lp = lp->le_next;			/* first varList link */
+		    assert(lp);				/* must be a pair */
+		    lp->le_val = saveCount;		/* allows call to get save block */
+		} else {
+		    ierror("function has no statements!", $1.v->name);
+		}
+#if YYDEBUG
+		if ((debug & 0402) == 0402) {
+		    fprintf(outFP, "iFunDef:  imm %s %s\n", full_ftype[$1.v->ftype], $1.v->name);
+		    fflush(outFP);
+		}
+#endif
+	    }
+	;
+
+	/************************************************************
+	 * value function return statement
+	 ***********************************************************/
+
+returnStatement
+	: RETURN actexpr				{
+		List_e *	lp;
+		Symbol *	sp;
+		int		retType;
+
+		$$.f = $2.f; $$.l = $2.l;	/* TODO $$.f should be func$ */
+		if ($2.v == 0) { $$.v = 0; errBit(); YYERROR; }
+		if (iRetSymbol.v) {
+		    if ((lp = $2.v) == 0 || (sp = lp->le_sym) == 0) {
+			ierror("no expression to return:", iFunBuffer);
+		    } else {
+			switch (retType = iRetSymbol.v->ftype) {
+			case ARITH:
+			case GATE:
+			    if (sp->ftype != ARITH && sp->ftype != GATE) {
+				ierror("wrong return type for int or bit:", iFunBuffer);
+			    }
+			    break;
+			case CLCKL:
+			case TIMRL:
+			    if (sp->ftype != retType) {
+				ierror("wrong return type for clock or timer:", iFunBuffer);
+			    }
+			    break;
+			default:
+			    ierror("wrong type for function return:", iFunBuffer);
+			    break;
+			}
+		    }
+		    $$.v = op_asgn(&iRetSymbol, &$2, iRetSymbol.v->ftype);
+		} else {
+		    $$.v = 0;
+		    ierror("return statement in void function:", iFunBuffer);
+		}
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "return", (Lis*)&$$);
+#endif
+	    }
+	;
+
+actexpr	: aexpr					{ $$ = $1; }
+	| cexpr					{ $$ = $1; }
+	| texpr					{ $$ = $1; }
+	;
+
+	/************************************************************
+	 * formal parameter list for immediate function definitions
+	 ***********************************************************/
+
+fParams	: /* nothing */				{ $$.v = 0; }
+	| fPlist				{
+		$$   = $1;			/* pass the parameter list */
+	    }
+	;
+
+fPlist	: formalParameter			{
+		$$.v = sy_push($1.v);		/* first link in parameter list */
+		$$.v->le_first = $1.f;
+		$$.v->le_last = $1.l;
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fPlist", &$$);
+#endif
+	    }
+	| fPlist ',' formalParameter	{
+		List_e *	lp;
+
+		lp = $$.v;
+		while (lp->le_next) {
+		    lp = lp->le_next;
+		}
+		lp = lp->le_next = sy_push($3.v); /* link to end of parameter list */
+		lp->le_first = $3.f;
+		lp->le_last = $3.l;
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "fPlist", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 * individual formal parameter
+	 ***********************************************************/
+
+formalParameter
+	: ASSIGN formalParaTypeDecl UNDEF	{
+		$$ = $3;			/* formal assign parameter Symbol */
+		$$.v->ftype = $2.v & 0xff;	/* TYPE bit int clock timer */
+		$$.v->type = $2.v >> 8;		/* UDF for all TYPEs */
+		iFunSyText = 0;			/* no more function symbols */
+	    }
+	| formalParaTypeDecl UNDEF		{
+		int	ft;
+
+		$$ = $2;			/* formal value parameter Symbol */
+		$$.v->ftype = ft = $1.v & 0xff;	/* TYPE bit int clock timer */
+		if (ft >= CLCKL) {		/* check that CLCKL TIMRL */
+		    ft -= CLCKL - CLCK;		/* and CLCK and TIMR are adjacent */
+		}
+		$$.v->type = types[ft];
+		iFunSyText = 0;			/* no more function symbols */
+	    }
+	;
+
+formalParaTypeDecl
+	: TYPE					{
+		$$.f = $$.l = $1.l;		/* do not include in expression string */
+		$$.v = $1.v->ftype;
+		iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+	    }
+	| IMM TYPE				{
+		$$.f = $$.l = $2.l;		/* do not include in expression string */
+		$$.v = $2.v->ftype;		/* IMM is optional */
+		iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+	    }
+	;
+
+	/************************************************************
+	 * immediate function with immediate return value bit and int
+	 * Call:
+	 *	imm bit b1, b2; imm int i1, i2, delay; imm clock clk; imm timer tim;
+	 *	b1  = bf1(b2, i1, clk, tim, delay);
+	 *	i1  = if1(b2, i2, b1 & IX0.0, delay * 10);
+	 * Mixed Call:
+	 *	QX0.0  = bf1(b1 | b2, if1(...) + 5, cf1(...), tf1(...), 2);
+	 ***********************************************************/
+
+iFunCallHead
+	: IFUNCTION '('			{
+		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+	    }
+	;
+
+iFunCall: iFunCallHead rParams ')'	{
+		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "iFunC", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 * immediate function with immediate return value clock
+	 * Call:
+	 *	clk = cf1(b1, iClock);
+	 ***********************************************************/
+
+cFunCallHead
+	: CFUNCTION '('			{
+		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+	    }
+	;
+
+cFunCall: cFunCallHead rParams ')'	{
+		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "cFunC", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 * immediate function with immediate return value timer
+	 * Call:
+	 *	tim = tf1(b2, clk);
+	 ***********************************************************/
+
+tFunCallHead
+	: TFUNCTION '('			{
+		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+	    }
+	;
+
+tFunCall: tFunCallHead rParams ')'	{
+		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "tFunC", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 * void immediate function
+	 * Call:
+	 *	imm bit b1, b3; imm int i3, delay;
+	 *	vf1(b3, i3, b1 & IX0.0, delay * 10);
+	 ***********************************************************/
+
+vFunCallHead
+	: VFUNCTION '('			{
+		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+	    }
+	;
+
+vFunCall: vFunCallHead rParams ')'	{
+		cloneFunction($1.v, $2.v);	/* clone function from call head */
+		$$.v = 0;			/* $$.v is Sym - not compatible */
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(0, "vFunC", (Lis*)&$$);
+#endif
+	    }
+	;
+
+actdexpr: actexpr		{ $$ = $1; }
+	| NVAR			{
+		Symbol *	sp = $1.v;
+		while (sp->type == ALIAS) {
+		    sp = sp->list->le_sym;	/* get token of original */
+		}
+		$$.v = sy_push(sp);
+	    }
+	;
+
+	/************************************************************
+	 * real parameter list for immediate function calls
+	 ***********************************************************/
+
+rParams	: /* nothing */		{ $$.v = 0;  }
+	| rPlist		{ $$   = $1; }
+	;
+
+rPlist	: actdexpr			{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = handleRealParameter(0, $1.v);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "rPlist", &$$);
+#endif
+	    }
+	| rPlist ',' actdexpr	{
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = handleRealParameter($1.v, $3.v);
+#if YYDEBUG
+		if ((debug & 0402) == 0402) pu(1, "rPlist", &$$);
 #endif
 	    }
 	;
@@ -1703,7 +2220,7 @@ compile(
     if (inpPath) {
 	strncpy(inpNM, inpPath, BUFS);
 	/* pre-compile if iC files contains any #include, #define #if etc */
-	sprintf(execBuf, "grep -q '^[ \t]*#' %s", inpPath);
+	snprintf(execBuf, BUFS, "grep -q '^[ \t]*#' %s", inpPath);
 	r = system(execBuf);		/* test with grep if #include in input */
 #if YYDEBUG
 	if ((debug & 0402) == 0402) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
@@ -1716,7 +2233,7 @@ compile(
 		return T0index;		/* error unlinking temporary file */
 	    }
 	    /* Cygnus does not understand cc - use gcc - pass comments with -C */
-	    sprintf(execBuf, "gcc -E -C -x c %s -o %s", inpPath, T0FN);
+	    snprintf(execBuf, BUFS, "gcc -E -C -x c %s -o %s", inpPath, T0FN);
 #if YYDEBUG
 	    if ((debug & 0402) == 0402) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
 #endif
@@ -1888,6 +2405,37 @@ unget(int c)
 
 /********************************************************************
  *
+ *	Get a number, which may be decimal, octal or hexadecimal
+ *
+ *	Convert from getp in chbuf - termination will be at least at
+ *	newline supplied by fgets() or final '\0'. Usually it is
+ *	erlier and that part is copied into iCtext with get().
+ *
+ *******************************************************************/
+
+static long
+getNumber(void)
+{
+    long	value;
+    char *	cp;
+    char *	ep;
+
+    value = strtol(getp, &ep, 0);		/* convert to long */
+    assert (ep <= &chbuf[CBUFSZ]);
+    for (cp = getp; cp < ep; cp++) {
+	get(T0FP);				/* transfer to iCtext */
+    }
+#if YYDEBUG
+    if ((debug & 0402) == 0402) {
+	fprintf(outFP, "getNumber: '%s' converted to %ld\n", iCtext, value);
+	fflush(outFP);
+    }
+#endif
+    return value;
+} /* getNumber */
+
+/********************************************************************
+ *
  *	Lexer for iC grammar
  *
  *******************************************************************/
@@ -1925,46 +2473,39 @@ iClex(void)
     iCleng = 0;
     while ((c = get(T0FP)) !=  EOF) {
 	Symbol *	symp;
+	Symbol *	sp;
 	List_e *	lp;
 	int		len;
 	int		rest;
+	char		tempBuf[TSIZE];			/* make long enough for format below */
 
 	if (c == ' ' || c == '\t' || c == '\n') {
 	    iCleng = 0;
-	    continue;			/* ignore white space */
+	    continue;					/* ignore white space */
 	}
 	if (isdigit(c)) {
-	    char *	format;		/* number */
-	    if (c == '0') {		/* oct or hex or 0 */
-		if ((c = get(T0FP)) == 'x') {
-		    format = "0x%x%s";	/* hexadecimal */
-		} else if (c == 'X') {
-		    format = "0X%x%s";	/* hexadecimal */
+	    unget(c);					/* must be at least a single 0 */
+	    iClval.val.v = getNumber();			/* decimal octal or hex */
+	    if (dFlag) {
+		snprintf(tempBuf, TSIZE, "%u", iClval.val.v);
+		if ((symp = lookup(tempBuf)) == 0) {	/* install name of decimal conversion */
+		    symp = install(tempBuf, NCONST, ARITH); /* becomes NVAR */
+#if YYDEBUG
+		    if ((debug & 0402) == 0402) {
+			fprintf(outFP, "iClex: number %s as %s %s %s\n",
+			    iCtext, symp->name, full_type[symp->type], full_ftype[symp->ftype]);
+			fflush(outFP);
+		    }
+#endif
+		}
+		if (symp->type == NCONST && symp->ftype == ARITH) {
+		    iClval.sym.v = symp;		/* return actual symbol */
+		    c = NVAR;				/* numeric symbol */
 		} else {
-		    format = "%o%s";	/* octal */
-		    unget(c);		/* may be a single 0 */
+		    c = NUMBER;				/* used in arith expression */
 		}
 	    } else {
-		format = "%d%s";	/* decimal */
-	    }
-	    while ((c = get(T0FP)) != EOF && isxdigit(c));
-	    unget(c);
-	    if (sscanf(iCtext, format, &iClval.val.v, iCtext) == 1) {
-		if (dflag) {
-		    if ((symp = lookup(iCtext)) == 0) {
-			symp = install(iCtext, NCONST, ARITH); /* becomes NVAR */
-		    }
-		    if (symp->type == NCONST && symp->ftype == ARITH) {
-			iClval.sym.v = symp;		/* return actual symbol */
-			c = NVAR;			/* numeric symbol */
-		    } else {
-			c = NUMBER;			/* used in arith expression */
-		    }
-		} else {
-		    c = NUMBER;				/* value in iClval.val.v */
-		}
-	    } else {
-		c = LEXERR;
+		c = NUMBER;				/* value in iClval.val.v */
 	    }
 	    goto retfl;
 	} else if (isalpha(c) || c == '_') {
@@ -1981,9 +2522,8 @@ iClex(void)
 	    int			yt;
 	    unsigned char	y2[2];
 
-	    while ((c = get(T0FP)) != EOF && (isalnum(c) || c == '_'));
+	    while ((c = get(T0FP)) != EOF && (isalnum(c) || c == '$' || c == '_'));
 	    if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d", y0, y1, &yn) == 3) {
-		char tempBuf[TSIZE];	/* make long enough for format below */
 		if (y1[0] == 'B') {
 		    wplus = 1;
 		    qmask = 0x02;			/* QB or IB */
@@ -2032,7 +2572,7 @@ iClex(void)
 		    }
 		} else if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d_%d%1[A-Z_a-z]",
 		    y0, y1, &yn, &yt, y2) == 4) {
-		    ierror("Variables with _ clash with I/O", iCtext);
+		    ierror("I/O like names with _ instead of . clash with internal representation", iCtext);
 						/* QX%d_%d not allowed */
 		}				/* QX%d_%dABC is OK - not I/O */
 
@@ -2068,23 +2608,56 @@ iClex(void)
 		    }
 		    QX_[yn] |= qmask;		/* note bit or byte I/O */
 		}
+	    } else if (sscanf(iCtext, "_%d%1[A-Z_a-z_]", &yn, y2) == 1) {
+		ierror("Variables _<number> clash with internal number representation", iCtext);
 	    }
 	    unget(c);
-	    if ((symp = lookup(iCtext)) == 0) {
-		symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
-	    } else if (typ == ERR) {
-		symp->type = ERR;		/* mark ERROR in QX%d_%d */
+	    symp = 0;
+	    if (iFunSymExt && ! qtoken) {	/* in function definition */
+		strncpy(iFunSymExt, iCtext, iFunEnd - iFunSymExt);
+		if ((symp = lookup(iFunBuffer)) == 0 && iFunSyText) {
+		    symp = install(iFunBuffer, typ, ftyp); /* parameter or declaration */
+		}
+		*iFunSymExt = '\0';
 	    }
+	    if (symp == 0) {
+		if ((symp = lookup(iCtext)) == 0) {
+		    symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
+		} else if (typ == ERR) {
+		    symp->type = ERR;		/* mark ERROR in QX%d_%d */
+		}
+	    }
+#if YYDEBUG
+	    if ((debug & 0402) == 0402) {
+		fprintf(outFP, "iClex: %s %s %s\n",
+		    symp->name, full_type[symp->type], full_ftype[symp->ftype]);
+		fflush(outFP);
+	    }
+#endif
 	    iClval.sym.v = symp;		/* return actual symbol */
-	    while ((typ = symp->type) == ALIAS) {
-		symp = symp->list->le_sym;	/* with token of original */
+	    while ( (typ = symp->type) == ALIAS &&
+		    (lp = symp->list) != 0 &&
+		    (sp = lp->le_sym) != 0) {
+		symp = sp;			/* with token of original */
 	    }
 	    typ &= TM;
-	    if (typ >= KEYW) {
-		c = symp->u.val;		/* reserved word or C-type */
+	    if (typ == IFUNCT) {
+		if ((ftyp = symp->ftype) == UDFA) {
+		    c = VFUNCTION;
+		} else if (ftyp == ARITH || ftyp == GATE) {
+		    c = IFUNCTION;
+		} else if (ftyp == CLCKL) {
+		    c = CFUNCTION;
+		} else if (ftyp == TIMRL) {
+		    c = TFUNCTION;
+		} else {
+		    c = LEXERR;
+		}
+	    } else if (typ >= KEYW) {
+		c = symp->u_val;		/* reserved word or C-type */
 	    } else if (qtoken) {
 		c = qtoken;			/* LOUT or AOUT */
-	    } else if (typ == ARNC || typ == LOGC || (dflag && typ == NCONST)) {
+	    } else if (typ == ARNC || typ == LOGC || (dFlag && typ == NCONST)) {
 		c = lex_typ[typ];		/* NCONST via ALIAS ==> NVAR */
 	    } else {
 		c = lex_act[symp->ftype];	/* alpha_numeric symbol */
@@ -2236,7 +2809,7 @@ iClex(void)
 	    }
 	    iClval.val.l = stmtp = strncpy(stmtp, iCtext, len) + len;
 	}
-	dflag = 0;
+	dFlag = 0;
 	return c;			/* return token to yacc */
     }
     return 0;				/* EOF */
@@ -2350,13 +2923,13 @@ warning(				/* print warning message */
  *
  *******************************************************************/
 
-static void
+void
 errBit(void)
 {
     ierror("no constant allowed in bit expression", NULL);
 } /* errBit */
 
-static void
+void
 errInt(void)
 {
     ierror("no imm variable to trigger arithmetic expression", NULL);
