@@ -1,5 +1,5 @@
 static const char pptc_c[] =
-"@(#)$Id: pptc.c,v 1.12 2001/01/28 10:33:42 jw Exp $";
+"@(#)$Id: pptc.c,v 1.13 2001/01/29 23:06:38 jw Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -101,6 +101,8 @@ pplc(
     char *	yp;
     float	delay = 0.0;	/* timer processing stopped */
     int		retval;
+    int		offset;		/* for message send */
+    char	msg[REPLY];
 
     if (outFP != stdout) {
 	fclose(outFP);
@@ -285,27 +287,37 @@ pplc(
  *
  *******************************************************************/
 
+	offset = 0;
 	while (QMM) {			/* rack with bit set for every cage */
 	    int mask = QMM & -QMM;		/* rightmost cage set in QMM */
 	    int cage = bitIndex[mask];		/* mask has only 1 bit set */
 	    int slots = QM_[cage];
 	    int cageOffset = cage << 3;		/* cage has 8 slots */
 	    while (slots) {
-		char	msg[16];
 		int mask = slots & -slots;	/* rightmost slot set in slots */
 		int slot = cageOffset + bitIndex[mask];
 		char Qtype = QT_[slot];
-		unsigned int val = Qtype == 'W' ? *(short*)&QX_[slot] : QX_[slot];
-		/* TODO - change system to make QT_ unnecessary */
+		short val = Qtype == 'W' ? *(short*)&QX_[slot]
+						: QX_[slot];
 		assert(Qtype);			/* make sure slot is programmed */
-		sprintf(msg, "%c%d,%u", Qtype, slot, val);
-		if (micro) microPrint("Send start");
-		send_msg_to_server(sockFN, msg);
-		if (micro) microPrint("Send complete");
+		offset += sprintf(&msg[offset], "%c%d.%d,", Qtype, slot, val);
+		if (offset > REPLY - 13) {	/* 12 is length of largest message */
+		    msg[offset - 1] = '\0';	/* clear last ',' */
+		    if (micro) microPrint("Send intermediate");
+		    send_msg_to_server(sockFN, msg);
+		    if (micro) microReset();
+		    offset = 0;
+		}
 		slots &= ~mask;			/* clear rightmost slot in slots */
 	    }
 	    QM_[cage] = slots;			/* clear QM_[cage] */
 	    QMM &= ~mask;		/* clear rightmost cage in QMM */
+	}
+	if (offset > 0) {
+	    msg[offset - 1] = '\0';	/* clear last ',' */
+	    if (micro) microPrint("Send");
+	    send_msg_to_server(sockFN, msg);
+	    if (micro) microReset();
 	}
 
 /********************************************************************
@@ -349,14 +361,15 @@ pplc(
 		     */
 		    if (rcvd_msg_from_server(sockFN, rBuf, sizeof rBuf)) {
 			int		slot;
-			int		val;
+			short		val;
 			int		index;
 			int		mask;
 			int		diff;
 
 			if (debug & 0200) fprintf(outFP, "%s rcvd %s\n", rBuf, pplcNM);
-			if (sscanf(rBuf, "X%d,%d", &slot, &val) == 2) {
+			if (sscanf(rBuf, "X%d.%hd", &slot, &val) == 2) {
 			    if (slot < IXD) {
+				val &= 0xff;			/* safety measure */
 				diff = val ^ pdata[slot];
 				pdata[slot] = val;		/* ready for next scan */
 				slot <<= 3;			/* convert to bit index */
@@ -378,12 +391,12 @@ pplc(
 				    diff &= ~mask;		/* clear rightmost bit in diff */
 				}			/* loops only once for every 1 in diff */
 			    }
-			} else if (sscanf(rBuf, "B%d,%d", &slot, &val) == 2) {
+			} else if (sscanf(rBuf, "B%d.%hd", &slot, &val) == 2) {
 			    if (slot < IXD && (gp = IB_[slot]) != NULL) {
 				val &= 0xff;			/* limit to byte val */
 				goto wordIn;
 			    }
-			} else if (sscanf(rBuf, "W%d,%d", &slot, &val) == 2) {
+			} else if (sscanf(rBuf, "W%d.%hd", &slot, &val) == 2) {
 			    if (slot < IXD && (gp = IW_[slot]) != NULL) {
 			    wordIn:
 				if (val != gp->gt_new &&	/* first change or glitch */
@@ -472,7 +485,7 @@ display(void)
 	if ((gp = IW_[2]) != 0) fprintf(outFP, " %6d", gp->gt_old);
     } else {
 	if ((gp = IB_[1]) != 0) fprintf(outFP, "   %02x", gp->gt_old & 0xff);
-	if ((gp = IW_[2]) != 0) fprintf(outFP, "   %04x", gp->gt_old);
+	if ((gp = IW_[2]) != 0) fprintf(outFP, "   %04x", gp->gt_old & 0xffff);
     }
     fprintf(outFP, "   ");
     data = *(unsigned short*)QX_;
@@ -482,7 +495,7 @@ display(void)
     }
     /* display QB1 and QW2 */
     if (!xflag) {
-	fprintf(outFP, " %4d %6d\n", QX_[1], *(unsigned short*)&QX_[2]);
+	fprintf(outFP, " %4d %6d\n", QX_[1], *(short*)&QX_[2]);
     } else {
 	fprintf(outFP, "   %02x   %04x\n", QX_[1], *(unsigned short*)&QX_[2]);
     }

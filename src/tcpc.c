@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.2 2001/01/28 10:33:42 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.3 2001/01/29 23:06:38 jw Exp $";
 /********************************************************************
  *
  *	TCP/IC communication support
@@ -238,7 +238,7 @@ void
 send_msg_to_server(int sock, const char* msg)
 {
     NetBuffer	netBuf;
-    int		len = strlen(msg);
+    size_t	len = strlen(msg);
 
     if (len >= sizeof netBuf.buffer) {
 	fprintf(stderr, "ERROR in %s: message to send is too long: %d\n", pplcNM, len);
