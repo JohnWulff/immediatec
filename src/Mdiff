@@ -1,4 +1,4 @@
-#!/usr/bin/ksh -p
+#!/bin/sh
 ########################################################################
 #
 #	Copyright (C) 2000-2001  John E. Wulff
@@ -43,7 +43,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.17 2001/03/08 19:23:30 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.18 2001/03/16 17:32:53 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -173,4 +173,4 @@ else
     process | less
 fi
 
-return $status
+exit $status
