@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.42 2001/04/27 20:07:37 jw Exp $";
+"@(#)$Id: outp.c,v 1.43 2002/05/16 14:28:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -718,7 +718,7 @@ extern Gate *	l_[];\n\
 		if (dc >= MIN_ACT && dc < MAX_ACT) {
 		    /* gt_list */
 		    fprintf(Fp, " &l_[%d],", li);
-		    /* space for ACTION or FUNCTION pointer + CLOCK */
+		    /* space for action or function pointer + clock */
 		    li += 2;
 		    if ((lp = sp->list->le_next) == 0) {
 			fprintf(Fp,
@@ -909,7 +909,7 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 		if ((dc = sp->ftype) >= MIN_ACT && dc < MAX_ACT) {
 		    if ((lp = sp->list) == 0) {
 			fprintf(Fp,
-    "/* error in emitting code. ACTION gate '%s' has no action list */\n",
+    "/* error in emitting code. action gate '%s' has no action list */\n",
 			    sp->name);
 		    } else {
 			if (lp->le_sym == 0) {	/* dc == F_SW or F_CF */

@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.15 2001/03/07 12:30:06 jw Exp $";
+"@(#)$Id: icc.c,v 1.16 2002/05/16 14:28:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -424,7 +424,7 @@ icc(
 			if (val != gp->gt_new && /* first change or glitch */
 			((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
 			    /* arithmetic master action */
-			    link_ol(gp, a_list);	/* no ACTIONs */
+			    link_ol(gp, a_list);	/* no actions */
 			}
 			cnt--;
 		    } else {

@@ -1,5 +1,5 @@
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.32 2001/04/18 12:00:28 jw Exp $";
+"@(#)$Id: icc.h,v 1.33 2002/05/16 14:28:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -170,8 +170,8 @@ extern void	efree(void *);
 	ERR, ERR
 
 /* compiler tokens corresponding to ftype */
-#define	DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
-	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, AOUT, LOUT,\
+#define	DEF_ACT	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, AOUT, LOUT,\
 	CVAR, TVAR
 
 extern char *		full_type[];

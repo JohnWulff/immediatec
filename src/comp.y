@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.52 2001/04/27 20:07:37 jw Exp $";
+"@(#)$Id: comp.y,v 1.53 2002/05/16 14:28:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -106,8 +106,8 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 	 *
 	 ***********************************************************/
 
-%token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION AOUT LOUT BLTIN1 BLTIN2 BLTIN3
-%token	<sym>	CVAR CBLTIN TVAR TBLTIN TBLTI1 NVAR STATIC BLATCH BFORCE DLATCH
+%token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLTIN1 BLTIN2 BLTIN3
+%token	<sym>	CVAR CBLTIN TVAR TBLTIN TBLTI1 NVAR BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
