@@ -14,11 +14,11 @@ usage ()
     echo '      -T	uses ict -c to make a dedicated ict for each iCtarget' >&2
     echo '		output the listings produced to directory ListT' >&2
     echo '		(default option)' >&2
-    echo 'if no iCtargets are specified, each single entry of file pm.lt is' >&2
-    echo 'made; in this case also outputs the common output to Init.out and' >&2
-    echo 'restores a plain icc or ict at the end of the test run' >&2
+    echo 'if no iCtargets are specified, each single entry of file pm.lt is made' >&2
+    echo '   outputs the common output to ListC/Init.out or ListT/Init.out' >&2
+    echo '   restores a plain icc or ict at the end of the test run' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.11 2003/12/14 06:47:17 jw Exp $' >&2
+    echo '	$Id: mo,v 1.12 2003/12/29 21:27:45 jw Exp $' >&2
 }
 
 ic='ict'
