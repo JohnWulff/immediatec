@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.11 2004/12/22 17:00:05 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.12 2005/01/24 21:07:28 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -44,12 +44,12 @@ static const char tcpc_h[] =
 #define INT_MAX 32767
 #endif
 
-#define REQUEST	1400		/* max size of request, in bytes */
-#define REPLY	1400		/* max size of reply, in bytes */
+#define REQUEST	1400			/* max size of request, in bytes */
+#define REPLY	1400			/* max size of reply, in bytes */
 
-#define UDP_SERV_PORT	7777	/* UDP server's wel-known port */
-#define TCP_SERV_PORT	8888	/* TCP server's wel-known port */
-#define TTCP_SERV_PORT	9999	/* TTCP server's wel-known port */
+#define UDP_SERV_PORT	7777		/* UDP server's wel-known port */
+#define TCP_SERV_PORT	8888		/* TCP server's wel-known port */
+#define TTCP_SERV_PORT	9999		/* TTCP server's wel-known port */
 
     /* Following shortens all the type casts of pointer arguments */
 #define SA		struct sockaddr *
@@ -60,23 +60,23 @@ void	err_sys(const char *, ...);
 void	read_stream(int, char *, int);
 #endif
 
-extern const char *	hostNM;		/* 127.0.0.1 */
-extern const char *	portNM;		/* icc service */
-extern char *		iccNM;		/* icc name qualified with instance */
-extern char *		iidNM;		/* instance id */
-extern float		timeout;	/* in seconds */
+extern const char *	iC_hostNM;	/* 127.0.0.1 */
+extern const char *	iC_portNM;	/* icc service */
+extern char *		iC_iccNM;	/* icc name qualified with instance */
+extern char *		iC_iidNM;	/* instance id */
+extern float		iC_timeout;	/* in seconds */
 
-extern int		connect_to_server(const char* host, const char* port, float delay);
-extern int		wait_for_next_event(int maxFN);
-extern int		rcvd_msg_from_server(int sock, char* buf, int maxLen);
-extern void		send_msg_to_server(int sock, const char* msg);
+extern int		iC_connect_to_server(const char* host, const char* port, float delay);
+extern int		iC_wait_for_next_event(int maxFN);
+extern int		iC_rcvd_msg_from_server(int sock, char* buf, int maxLen);
+extern void		iC_send_msg_to_server(int sock, const char* msg);
 
-extern fd_set		rdfds;
-extern fd_set		infds;
-extern struct timeval	timeoutCounter;
-extern struct timeval	timeoutValue;
+extern fd_set		iC_rdfds;
+extern fd_set		iC_infds;
+extern struct timeval	iC_timeoutCounter;
+extern struct timeval	iC_timeoutValue;
 
-extern int		micro;
-extern void		microPrint(const char * str, int mask);
-extern void		microReset(int mask);
+extern int		iC_micro;
+extern void		iC_microPrint(const char * str, int mask);
+extern void		iC_microReset(int mask);
 #endif	/* TCPC_H */

@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.14 2005/01/16 19:49:56 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.15 2005/01/26 15:49:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -20,24 +20,24 @@ static const char RCS_Id[] =
  *
  *******************************************************************/
 
+#include	<stdio.h>
 #include	<netdb.h>
 #include	<ctype.h>
 #include	<sys/time.h>
 #include	<errno.h>
 #include	"tcpc.h"
-#include	"icg.h"
 #include	"icc.h"
 
-const char *	hostNM = "localhost";	/* 127.0.0.1 */
-const char *	portNM = "8778";	/* iC service */
-char *		iccNM  = "C0";		/* icc name qualified with instance */
-char *		iidNM  = "";		/* instance id */
-float		timeout = 0.05;		/* default 50 ms on 50 ms off */
+const char *	iC_hostNM = "localhost";	/* 127.0.0.1 */
+const char *	iC_portNM = "8778";		/* iC service */
+char *		iC_iccNM  = "C0";		/* icc name qualified with instance */
+char *		iC_iidNM  = "";			/* instance id */
+float		iC_timeout = 0.05;		/* default 50 ms on 50 ms off */
 
-fd_set		rdfds;
-fd_set		infds;
-struct timeval	timeoutCounter;
-struct timeval	timeoutValue;
+fd_set		iC_rdfds;
+fd_set		iC_infds;
+struct timeval	iC_timeoutCounter;
+struct timeval	iC_timeoutValue;
 
 /********************************************************************
  *
@@ -62,14 +62,14 @@ static struct timeval	mt1;
  *******************************************************************/
 
 void
-microReset(int mask)
+iC_microReset(int mask)
 {
-    gettimeofday(&mt0, 0);	/* reset for next measurement */
-    micro |= mask;
+    gettimeofday(&mt0, 0);			/* reset for next measurement */
+    iC_micro |= mask;
 } /* microReset */
 
 void
-microPrint(const char * str, int mask)
+iC_microPrint(const char * str, int mask)
 {
     long	sec;
     long	usec;
@@ -83,8 +83,8 @@ microPrint(const char * str, int mask)
 	}
 	printf("%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
-    gettimeofday(&mt0, 0);	/* start of next measurement without print time */
-    micro &= ~mask;
+    gettimeofday(&mt0, 0);			/* start of next measurement without print time */
+    iC_micro &= ~mask;
 } /* microPrint */
 
 /********************************************************************
@@ -97,7 +97,7 @@ microPrint(const char * str, int mask)
  *******************************************************************/
 
 int
-connect_to_server(const char *	host,
+iC_connect_to_server(const char *	host,
 		  const char *	port,
 		  float		delay)
 {
@@ -109,13 +109,13 @@ connect_to_server(const char *	host,
     if (isdigit(*host)) {
 	if (inet_aton(host, &sin_addr) == 0) {
 	    fprintf(stderr, "inet_aton with '%s' failed\n", host);
-	    quit(1);
+	    iC_quit(1);
 	}
     } else {
 	struct hostent *	pHost;
 	if ((pHost = gethostbyname(host)) == NULL) {
 	    fprintf(stderr, "gethostbyname with '%s' failed\n", host);
-	    quit(1);
+	    iC_quit(1);
 	}
 	/* gethostbyname returns h_addr in network byte order */
 	sin_addr.s_addr = *((unsigned int*)pHost->h_addr);
@@ -127,7 +127,7 @@ connect_to_server(const char *	host,
 	struct servent *	pServ;
 	if ((pServ = getservbyname(port, "tcp")) == NULL) {
 	    fprintf(stderr, "getservbyname with '%s/tcp' failed\n", port);
-	    quit(1);
+	    iC_quit(1);
 	}
 	/* getservbyname returns s_port in network byte order */
 	sin_port = pServ->s_port;
@@ -135,7 +135,7 @@ connect_to_server(const char *	host,
 
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 	perror("socket failed");
-	quit(1);
+	iC_quit(1);
     }
 
     memset(&server, 0, sizeof(server));
@@ -145,23 +145,23 @@ connect_to_server(const char *	host,
 
     if (connect(sock, (SA)&server, sizeof(server)) < 0) {
 	fprintf(stderr, "ERROR in %s: client could not be connected to server '%s:%d'\n",
-	    iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	perror("connect failed");
-	quit(1);
+	iC_quit(1);
     }
 
     printf("'%s' connected to server at '%s:%d'\n",
-	iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+	iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
-    FD_ZERO(&infds);	/* should be done centrally if more than 1 connect */
-    FD_SET(0, &infds);			/* watch stdin for inputs - FD_CLR on EOF */
-    FD_SET(sock, &infds);		/* watch sock for inputs */
+    FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
+    FD_SET(0, &iC_infds);		/* watch stdin for inputs - FD_CLR on EOF */
+    FD_SET(sock, &iC_infds);		/* watch sock for inputs */
 
-    timeoutValue.tv_sec = (int)delay;
-    timeoutValue.tv_usec = (int)((delay - timeoutValue.tv_sec) * 1e6);
-    if (timeoutValue.tv_sec != 0 || timeoutValue.tv_usec != 0) {
-	timeoutCounter = timeoutValue;
-	ptv = &timeoutCounter;
+    iC_timeoutValue.tv_sec = (int)delay;
+    iC_timeoutValue.tv_usec = (int)((delay - iC_timeoutValue.tv_sec) * 1e6);
+    if (iC_timeoutValue.tv_sec != 0 || iC_timeoutValue.tv_usec != 0) {
+	iC_timeoutCounter = iC_timeoutValue;
+	ptv = &iC_timeoutCounter;
     }
     return sock;
 } /* connect_to_server */
@@ -173,13 +173,13 @@ connect_to_server(const char *	host,
  *******************************************************************/
 
 int
-wait_for_next_event(int maxFN)
+iC_wait_for_next_event(int maxFN)
 {
     int	retval;
 
     do {
-	rdfds = infds;
-    } while ((retval = select(maxFN + 1, &rdfds, 0, 0, ptv)) == -1 && errno == EINTR);
+	iC_rdfds = iC_infds;
+    } while ((retval = select(maxFN + 1, &iC_rdfds, 0, 0, ptv)) == -1 && errno == EINTR);
 
     return retval;
 } /* wait_for_next_event */
@@ -205,7 +205,7 @@ rcvd_buffer_from_server(int sock, char * buf, int length)
 	}
     } else if (len < 0) {
 	perror("recv failed");
-	quit(1);
+	iC_quit(1);
     }
     return len;
 } /* rcvd_buffer_from_server */
@@ -217,7 +217,7 @@ rcvd_buffer_from_server(int sock, char * buf, int length)
  *******************************************************************/
 
 int
-rcvd_msg_from_server(int sock, char * buf, int maxLen)
+iC_rcvd_msg_from_server(int sock, char * buf, int maxLen)
 {
     NetBuffer	netBuf;
     int		len;
@@ -226,7 +226,7 @@ rcvd_msg_from_server(int sock, char * buf, int maxLen)
 	    == sizeof netBuf.length) {		/* get 4 bytes of length to start with */
 	len = ntohl(netBuf.length);		/* length in host byte order */
 	if (len >= maxLen) {
-	    fprintf(stderr, "ERROR in %s: received message is too long: %d >= %d\n", iccNM, len, maxLen);
+	    fprintf(stderr, "ERROR in %s: received message is too long: %d >= %d\n", iC_iccNM, len, maxLen);
 	    len = maxLen - 1;
 	}
 	maxLen = len;
@@ -234,8 +234,8 @@ rcvd_msg_from_server(int sock, char * buf, int maxLen)
 	    memcpy(buf, netBuf.buffer, len);
 	    buf[len] = '\0';
 #if YYDEBUG
-	    if (debug & 02) {
-		fprintf(outFP, "%s < '%s'\n", iccNM, buf);	/* trace recv buffer */
+	    if (iC_debug & 02) {
+		fprintf(iC_outFP, "%s < '%s'\n", iC_iccNM, buf);	/* trace recv buffer */
 	    }
 #endif
 	}
@@ -251,18 +251,18 @@ rcvd_msg_from_server(int sock, char * buf, int maxLen)
  *******************************************************************/
 
 void
-send_msg_to_server(int sock, const char * msg)
+iC_send_msg_to_server(int sock, const char * msg)
 {
     NetBuffer	netBuf;
     size_t	len = strlen(msg);
 
     if (len >= sizeof netBuf.buffer) {
-	fprintf(stderr, "ERROR in %s: message to send is too long: %d >= %d\n", iccNM, len, sizeof netBuf.length);
+	fprintf(stderr, "ERROR in %s: message to send is too long: %d >= %d\n", iC_iccNM, len, sizeof netBuf.length);
 	len = sizeof netBuf.buffer - 1;
     } else
 #if YYDEBUG
-    if (debug & 01) {
-	fprintf(outFP, "%s > '%s'\n", iccNM, msg);		/* trace send buffer */
+    if (iC_debug & 01) {
+	fprintf(iC_outFP, "%s > '%s'\n", iC_iccNM, msg);	/* trace send buffer */
     }
 #endif
     memcpy(netBuf.buffer, msg, len + 1);
@@ -270,6 +270,6 @@ send_msg_to_server(int sock, const char * msg)
     len += sizeof netBuf.length;
     if (send(sock, (char*)&netBuf, len, 0) != len) {
 	perror("send failed");
-	quit(1);
+	iC_quit(1);
     }
 } /* send_msg_to_server */

@@ -39,6 +39,7 @@ usage ()
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-L	make libict.a only' >&2
     echo '	-M	make lmain only' >&2
+    echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
@@ -47,58 +48,58 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.20 2005/01/06 12:03:02 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.21 2005/01/25 17:28:21 jw Exp $' >&2
 }
 
 makeIcr ()
 {
-    mv comp.$O genr.$O gram.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O icc.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
     if [ -d IcrObjs ]; then
 	mv IcrObjs/* .
     else
 	mkdir IcrObjs
     fi
     make OPT="-DRUN$r$d$e$o$s$z" CFLAGS="$cflags" icr
-    mv comp.$O genr.$O gram.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
+    mv comp.$O genr.$O gram.$O icc.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeIct ()
 {
-    mv comp.$O genr.$O gram.$O ict.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
     if [ -d IctObjs ]; then
 	mv IctObjs/* .
     else
 	mkdir IctObjs
     fi
     make OPT="-DTCP$t$d$e$o$s$z" CFLAGS="$cflags" ict
-    mv comp.$O genr.$O gram.$O ict.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
+    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeLib ()
 {
-    mv ict.$O link.$O rsff.$O scan.$O tcpc.$O  Make_tmp 2> /dev/null
+    mv ict.$O misc.$O link.$O rsff.$O scan.$O tcpc.$O  Make_tmp 2> /dev/null
     if [ -d LibObjs ]; then
 	mv LibObjs/* .
     else
 	mkdir LibObjs
     fi
     make OPT="-DLOAD -DTCP$l$d$e$o$s$z" CFLAGS="$cflags" libict.a
-    mv ict.$O link.$O rsff.$O scan.$O tcpc.$O  LibObjs
+    mv ict.$O misc.$O link.$O rsff.$O scan.$O tcpc.$O  LibObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeLmain ()
 {
-    mv gram.$O lexc.$O Make_tmp 2> /dev/null
+    mv misc.$O gram.$O lexc.$O Make_tmp 2> /dev/null
     if [ -d LmainObjs ]; then
 	mv LmainObjs/* .
     else
 	mkdir LmainObjs
     fi
     make OPT="-DLMAIN$m$d$e$o$s$z" CFLAGS="$cflags" lmain
-    mv gram.$O lexc.$O LmainObjs
+    mv misc.$O gram.$O lexc.$O LmainObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
@@ -121,6 +122,7 @@ ALL=1
 cflags="-O2"			# optimisation, no debugging info
 O="o"
 o=""
+w=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -129,7 +131,7 @@ while [ $# -gt 0 ]; do
 	while [ -n "$option" ]; do
 	    case $option in
 	    q*)	q=1;;		# echo only - dont kill
-	    g*)	cflags="-g";;	# debugging, no optimisation
+	    g*)	cflags="-g$w";;	# debugging, no optimisation
 	    c*)	c="-DYYDEBUG";;
 	    r*)	r=" -DYYDEBUG";;
 	    t*)	t=" -DYYDEBUG";;
@@ -143,6 +145,16 @@ while [ $# -gt 0 ]; do
 		    option=$1
 		fi
 		o=" -D$option"
+		break;;
+	    W*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		w=" -W$option"
+		if [ -n "$cflags" ]; then
+		    cflags="$cflags$w"
+		fi
 		break;;
 	    s*)	s=" -DINT_MAX=32767";;
 	    z*)	z=" -DLONG16";;
@@ -287,7 +299,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff> with S<L<iC Project>> in
+Email bug reports to B<john@je-wulff.de> with S<L<iC Project>> in
 the subject field.
 
 =head1 SEE ALSO

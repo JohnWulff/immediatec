@@ -19,48 +19,27 @@ static const char cexe_part1[] = "\
  *******************************************************************/\n\
 \n\
 static const char cexe_h[] =\n\
-\"@(#)$Id: cexe.h,v 1.22 2004/12/22 16:53:52 jw Exp $\";\n\
+\"@(#)$Id: cexe.h,v 1.23 2005/01/26 16:47:45 jw Exp $\";\n\
 \n\
 #include	<stdio.h>\n\
-#include	\"icg.h\"\n\
 #include	\"icc.h\"\n\
 #include	\"comp.h\"\n\
 \n\
-#define _MV(n) _cexe_gf->gt_rlist[n]->gt_new\n\
-#define _AV(n) _cexe_gf->gt_list[n]->gt_new\n\
-#define _LV(n) (_cexe_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
-#define _AA(n,v) aAssign(_cexe_gf->gt_list[n], v)\n\
-#define _LA(n,v) aAssign(_cexe_gf->gt_list[n], v)\n\
-#define _AVL(x) Lookup(#x)->u_gate->gt_new\n\
-#define _LVL(x) (Lookup(#x)->u_gate->gt_val < 0 ? 1 : 0)\n\
-#define _AAL(x,v) aAssign(Lookup(#x)->u_gate, v)\n\
-#define _LAL(x,v) lAssign(Lookup(#x)->u_gate, v)\n\
+#define iC_MV(n) iC_gf->gt_rlist[n]->gt_new\n\
+#define iC_AV(n) iC_gf->gt_list[n]->gt_new\n\
+#define iC_LV(n) (iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define iC_AA(n,v) iC_assign(iC_gf->gt_list[n], v)\n\
+#define iC_LA(n,v) iC_assign(iC_gf->gt_list[n], v)\n\
+#define iC_AVL(x) iC_Lookup(#x)->u_gate->gt_new\n\
+#define iC_LVL(x) (iC_Lookup(#x)->u_gate->gt_val < 0 ? 1 : 0)\n\
+#define iC_AAL(x,v) iC_assign(iC_Lookup(#x)->u_gate, v)\n\
+#define iC_LAL(x,v) iC_assign(iC_Lookup(#x)->u_gate, v)\n\
 \n\
 #if INT_MAX == 32767 && defined (LONG16)\n\
-static long	_tVar;\n\
+static long	iC_tVar;\n\
 #else\n\
-static int	_tVar;\n\
+static int	iC_tVar;\n\
 #endif\n\
-\n\
-static Symbol *\n\
-Lookup(char *	string)	/* find string in symbol table at run time */\n\
-{\n\
-    Symbol *	sp;\n\
-\n\
-    if ((sp = lookup(string)) == 0) {\n\
-#ifndef _WINDOWS \n\
-	fflush(outFP);\n\
-	fprintf(errFP,\n\
-	    \"\\n*** Error: cexe.c: Lookup could not find Symbol '%%s' at run time.\\n\"\n\
-	      \"*** Usually this is a term in a C function which does not match.\\n\"\n\
-	      \"*** Check that 'cexe.c' was built from '%%s'\\n\"\n\
-	      \"*** Rebuild compiler using '%%s -c %%s'\\n\"\n\
-	      , string, inpNM, progname, inpNM);\n\
-#endif\n\
-	quit(-3);\n\
-    }\n\
-    return sp;				/* found */\n\
-} /* Lookup */\n\
 \n\
 /********************************************************************\n\
  *\n\
@@ -69,7 +48,7 @@ Lookup(char *	string)	/* find string in symbol table at run time */\n\
  *******************************************************************/\n\
 \n\
 ";
-static const int cexe_lines1 = 57;
+static const int cexe_lines1 = 37;
 
 static const char cexe_part2[] = "\
 #if INT_MAX == 32767 && defined (LONG16)\n\
@@ -77,35 +56,35 @@ long\n\
 #else\n\
 int\n\
 #endif\n\
-c_exec(int pp_index, Gate * _cexe_gf)\n\
+iC_exec(int iC_index, iC_Gt * iC_gf)\n\
 {\n\
-    switch (pp_index) {\n\
+    switch (iC_index) {\n\
 ";
 static const int cexe_lines2 = 8;
 
 static const char cexe_part3[] = "\
     default:\n\
 #ifndef _WINDOWS \n\
-	fflush(outFP);\n\
-	fprintf(errFP,\n\
+	fflush(iC_outFP);\n\
+	fprintf(iC_errFP,\n\
 	    \"\\n*** Error: cexe.c: C function 'F(%%d)' is unknown.\\n\"\n\
 	      \"*** Check that 'cexe.c' was built from '%%s'\\n\"\n\
 	      \"*** Rebuild compiler using '%%s -c %%s'\\n\"\n\
-	      , pp_index, inpNM, progname, inpNM);\n\
-	quit(-1);\n\
+	      , iC_index, inpNM, iC_progname, inpNM);\n\
+	iC_quit(-1);\n\
 #endif\n\
 	break;\n\
     }\n\
 #ifndef _WINDOWS \n\
-    fflush(outFP);\n\
-    fprintf(errFP,\n\
+    fflush(iC_outFP);\n\
+    fprintf(iC_errFP,\n\
 	\"\\n%%s: line %%d: Function fragment without return ???\\n\",\n\
 	__FILE__, __LINE__);\n\
-    quit(-2);\n\
-#else\n\
-    return 0;	/* for those cases where no return has been programmed */\n\
+    iC_quit(-2);\n\
 #endif\n\
-} /* c_exec */\n\
+    iC_tVar = (int)iC_Lookup(\"iClock\");			/* shut up -Wall */\n\
+    return 0;	/* for those cases where no return has been programmed */\n\
+} /* iC_exec */\n\
 ";
 static const int cexe_lines3 = 22;
 

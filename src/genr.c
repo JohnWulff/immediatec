@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.62 2004/12/22 16:54:22 jw Exp $";
+"@(#)$Id: genr.c,v 1.63 2005/01/26 16:35:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -25,7 +25,6 @@ static const char genr_c[] =
 #include	<string.h>
 #include	<assert.h>
 #include	<ctype.h>
-#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #include	"comp_tab.h"
@@ -60,14 +59,14 @@ static int	ffexprFlag = 0;		/* if - else or switch seen in function */
  *******************************************************************/
 
 void
-initcode(void)			/* initialize for code generation */
+initcode(void)				/* initialize for code generation */
 {
     templist = 0;
 #if YYDEBUG
     tn = 0;
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "initcode:\n");
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "initcode:\n");
+	fflush(iC_outFP);
     }
 #endif
 } /* init_code */
@@ -80,19 +79,19 @@ initcode(void)			/* initialize for code generation */
  *******************************************************************/
 
 List_e *
-sy_push(Symbol * var)	/* create List element for variable */
+sy_push(Symbol * var)			/* create List element for variable */
 {
     List_e *	lp;
 
-    lp = (List_e *) emalloc(sizeof(List_e));
-    lp->le_sym = var;	/* point to variables Symbol entry */
+    lp = (List_e *) iC_emalloc(sizeof(List_e));
+    lp->le_sym = var;			/* point to variables Symbol entry */
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "sy_push:++%s\n", var ? var->name : "(null)");
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "sy_push:++%s\n", var ? var->name : "(null)");
+	fflush(iC_outFP);
     }
 #endif
-    return (lp);	/* return pointer to List_e to yacc */
+    return (lp);			/* return pointer to List_e to yacc */
 } /* sy_push */
 
 /********************************************************************
@@ -103,19 +102,19 @@ sy_push(Symbol * var)	/* create List element for variable */
  *******************************************************************/
 
 Symbol *
-sy_pop(List_e * lp)	/* delete List element left over */
+sy_pop(List_e * lp)			/* delete List element left over */
 {
     Symbol *	sp;
 
-    sp = lp->le_sym;	/* point to variables Symbol entry */
+    sp = lp->le_sym;			/* point to variables Symbol entry */
     free(lp);
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "sy_pop:   %s--\n", sp ? sp->name : "(null)");
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "sy_pop:   %s--\n", sp ? sp->name : "(null)");
+	fflush(iC_outFP);
     }
 #endif
-    return (sp);	/* return pointer to Symbol to yacc */
+    return (sp);			/* return pointer to Symbol to yacc */
 } /* sy_pop */
 
 /********************************************************************
@@ -125,7 +124,7 @@ sy_pop(List_e * lp)	/* delete List element left over */
  *******************************************************************/
 
 List_e *
-op_force(		/* force linked Symbol to correct ftype */
+op_force(				/* force linked Symbol to correct ftype */
     List_e *		lp,
     unsigned char	ftyp)
 {
@@ -137,8 +136,8 @@ op_force(		/* force linked Symbol to correct ftype */
 	if (sp->u_blist == 0 ||			/* not a $ symbol or */
 	    (sp->type & TM) >= MAX_GT ||	/* SH, FF, EF, VF, SW, CF or */
 	    (sp->u_blist->le_sym == sp && sp->type == LATCH)) { /* L(r,s) */
-	    if ((typ = types[sp->ftype]) == ERR) {
-		ierror("cannot force from", full_ftype[sp->ftype]);
+	    if ((typ = iC_types[sp->ftype]) == ERR) {
+		ierror("cannot force from", iC_full_ftype[sp->ftype]);
 	    }
 	    lp1 = op_push(0, typ, lp);
 	    lp1->le_first = lp->le_first;
@@ -147,15 +146,15 @@ op_force(		/* force linked Symbol to correct ftype */
 	    sp = lp->le_sym;
 	}
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {
-	    fprintf(outFP, "op_force: %s from %s to %s\n",
-		sp->name, full_ftype[sp->ftype], full_ftype[ftyp]);
-	    fflush(outFP);
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "op_force: %s from %s to %s\n",
+		sp->name, iC_full_ftype[sp->ftype], iC_full_ftype[ftyp]);
+	    fflush(iC_outFP);
 	}
 #endif
-	sp->ftype = ftyp;	/* convert old or new to ftyp */
+	sp->ftype = ftyp;		/* convert old or new to ftyp */
     }
-    return (lp);	/* return 0 or link to old or new Symbol */
+    return (lp);			/* return 0 or link to old or new Symbol */
 } /* op_force */
 
 /********************************************************************
@@ -165,13 +164,13 @@ op_force(		/* force linked Symbol to correct ftype */
  *******************************************************************/
 
 List_e *
-op_push(			/* reduce List_e stack to links */
+op_push(				/* reduce List_e stack to links */
     List_e *		left,
     unsigned char	op,
     List_e *		right)
 {
     List_e *		rlp;
-    Symbol *		sp;	/* current temporary Symbol */
+    Symbol *		sp;		/* current temporary Symbol */
     Symbol *		lsp;
     Symbol *		tsp;
     List_e *		lp;
@@ -189,7 +188,7 @@ op_push(			/* reduce List_e stack to links */
     sp = rlp->le_sym;
     typ = sp->type & TM;
     if (left && op > OR && op < MAX_LV && op != typ) {
-	warning("function types incompatible", NS);
+	warning("function iC_types incompatible", NS);
     }
     if (sp->u_blist == 0 || op != typ) {
 	if ((lp = sp->v_elist) != 0 && (sp->name == 0
@@ -205,30 +204,32 @@ op_push(			/* reduce List_e stack to links */
 	    }
 	}
 	/* right not a $ symbol or new operator - force new level */
-	sp = (Symbol *) emalloc(sizeof(Symbol));
+	sp = (Symbol *) iC_emalloc(sizeof(Symbol));
 	sp->name = NS;		/* no name at present */
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {	/* DEBUG name */
+	if ((iC_debug & 0402) == 0402) {	/* DEBUG name */
 	    snprintf(temp, TSIZE, "$%d", ++tn);
-	    sp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
+	    sp->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	    strcpy(sp->name, temp);
 	}
 #endif
 	sp->type = op != UDF ? op : AND; /* operator OR or AND (default) */
-	sp->ftype = rlp->le_sym->ftype;	 /* used in op_xor() with op UDF */
-	sp->next = templist;	/* put at front of templist */
+	sp->ftype = rlp->le_sym->ftype;	 /* used in op_xor() with op UDF (defunct) */
+	sp->next = templist;		/* put at front of templist */
 	templist = sp;
-	rlp->le_next = 0;	/* sp->u_blist is 0 for new sp */
-	sp->u_blist = rlp;	/* link right of expression */
-	rlp = sy_push(sp);	/* push new list element on stack */
+	rlp->le_next = 0;		/* sp->u_blist is 0 for new sp */
+	sp->u_blist = rlp;		/* link right of expression */
+	rlp = sy_push(sp);		/* push new list element on stack */
     }
     if (left) {
-	lsp = left->le_sym;	/* test works correctly with ftype - handles ALIAS */
+	lsp = left->le_sym;		/* test works correctly with ftype - handles ALIAS */
 	if (lsp->ftype >= MIN_ACT && lsp->ftype < MAX_ACT) {
 	    if (sp->ftype < S_FF) {
-		sp->ftype = 0;	/* OK for any value of GATE */
+		sp->ftype = 0;		/* OK for any value of GATE */
 	    }
 	    sp->ftype |= lsp->ftype;	/* modify S_FF ==> D_FF */
+	    /* this requires S_FF R_FF D_FF to be 1001 1010 1011 to work !!! */
+	    /* does nothing for S_SH R_SH D_SH - not required because no analog SR */
 	}
 	if ((typ = lsp->type & TM) < MAX_LS) {
 	    if ((lp = lsp->v_elist) != 0 && (lsp->name == 0
@@ -254,10 +255,10 @@ op_push(			/* reduce List_e stack to links */
 		left->le_next = sp->u_blist;	/* extend expression */
 		sp->u_blist = left;		/* link left of expr */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) {
-		    fprintf(outFP, "op_push:  %c%s %c %c%s\n",
-			v(left), os[op], v(right));
-		    fflush(outFP);
+		if ((iC_debug & 0402) == 0402) {
+		    fprintf(iC_outFP, "op_push:  %c%s %c %c%s\n",
+			v(left), iC_os[op], v(right));
+		    fflush(iC_outFP);
 		}
 #endif
 	    } else {	/* left is a $ symbol and ... - merge left into right */
@@ -279,13 +280,13 @@ op_push(			/* reduce List_e stack to links */
 		    templist = lsp->next;	/* unlink first object */
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) {
-		    fprintf(outFP, "\t%c%s %c %c%s\n",
-			v(left), os[op], v(right));
-		    fflush(outFP);
+		if ((iC_debug & 0402) == 0402) {
+		    fprintf(iC_outFP, "\t%c%s %c %c%s\n",
+			v(left), iC_os[op], v(right));
+		    fflush(iC_outFP);
 		}
 		sy_pop(left);			/* left Link_e */
-		if ((debug & 0402) == 0402) {
+		if ((iC_debug & 0402) == 0402) {
 		    free(lsp->name);		/* free name space */
 		}
 		free(lsp);			/* left Symbol */
@@ -297,9 +298,9 @@ op_push(			/* reduce List_e stack to links */
 	    sy_pop(left);			/* Link_e only */
 	}
 #if YYDEBUG
-    } else if ((debug & 0402) == 0402) {		/* fexpr : sexpr { left is 0 } */
-	fprintf(outFP, "\t(0) %c %c%s\n", os[op], v(right));
-	fflush(outFP);
+    } else if ((iC_debug & 0402) == 0402) {	/* fexpr : sexpr { left is 0 } */
+	fprintf(iC_outFP, "\t(0) %c %c%s\n", iC_os[op], v(right));
+	fflush(iC_outFP);
 #endif
     }
     return (rlp);
@@ -332,9 +333,9 @@ const_push(Lis * expr)
     value = strtol(buf, &endptr, 0);	/* convert to check for error */
     assert(value >= 0);			/* must be unsigned positive */
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "const_push: '%s' converted to %ld\n", buf, value);
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "const_push: '%s' converted to %ld\n", buf, value);
+	fflush(iC_outFP);
     }
 #endif
     if (*endptr != '\0') {
@@ -350,80 +351,46 @@ const_push(Lis * expr)
 
 /********************************************************************
  *
- *	special exclusive or push
- *
- *******************************************************************/
-
-List_e *
-op_xor(				/* special exclusive or push */
-    List_e *	left,
-    List_e *	right)
-{
-    List_e *	inv_left;
-    List_e *	inv_right;
-    List_e*	lp1;
-    List_e*	lp2;
-
-#if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "op_xor:   %c%s ^ %c%s\n", v(left), v(right));
-	fflush(outFP);
-    }
-#endif
-    inv_left = sy_push(left->le_sym);	/* duplicate arg list entries */
-    inv_right = sy_push(right->le_sym);
-    inv_left->le_val = left->le_val ^ NOT;	/* invert */
-    inv_right->le_val = right->le_val ^ NOT;	/* invert */
-    /********************************************************************
-     * left ^ right === (left & ~right) | (~left & right)
-     * the op "UDF" forces a new level in op_push
-     * it is then changed to AND 
-     * thus a new level is forced even if left or right is AND
-     *******************************************************************/
-    lp2 = op_push(inv_left, UDF, right);	/* ~left & right */
-    lp1 = op_push(left, UDF, inv_right);	/* left & ~right */
-    lp2->le_first = lp1->le_first = inv_left->le_first = left->le_first;
-    inv_left->le_last = left->le_last;
-    inv_right->le_first = right->le_first;
-    lp2->le_last = lp1->le_last = inv_right->le_last = right->le_last;
-    return op_push(lp1, OR, lp2);		/* left ^ right */
-} /* op_xor */
- 
-/********************************************************************
- *
  *	logical negation
  *
  *******************************************************************/
 
 List_e *
-op_not(List_e * right)		/* logical negation */
+op_not(List_e * right)			/* logical negation */
 {
     Symbol *	sp = right->le_sym;
     List_e *	lp = sp->u_blist;
 
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "op_not:   ~%s\n", sp->name);
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "op_not:   ~%s\n", sp->name);
+	fflush(iC_outFP);
     }
 #endif
     if (lp == 0) {
 	right->le_val ^= NOT;		/* negate logical value */
     } else {
-	switch (sp->type) {			/* $ symbol */
+	switch (sp->type) {		/* $ symbol */
 	case AND:
 	case OR:
 	case EXT_AND:
 	case EXT_OR:
-	    sp->type ^= (AND ^ OR);		/* de Morgans rule */
-	case LATCH:
+	    sp->type ^= (AND ^ OR);	/* de Morgans rule - switch AND/OR */
+	case LATCH:			/* -                 but not LATCH */
 	    while (lp) {
-		if (lp->le_sym != sp) {		/* ignore latch feedback */
-		    lp->le_val ^= NOT;
-		}
-		lp = lp->le_next;
+		if (lp->le_sym != sp) {
+		    lp->le_val ^= NOT;	/* - and negate every input */
+		}			/* - except LATCH feedback */
+		lp = lp->le_next;	/* - AND/OR has no direct feedback */
 	    }
 	    break;
+
+	case XOR:			/* negate only the first input to XOR */
+	case EXT_XOR:
+	case ALIAS:			/* unresolved alias from negated function */
+	    lp->le_val ^= NOT;		/* negate via alias or one only XOR input */
+	    break;
+
 	case ARNC:
 	case ARN:
 	case LOGC:
@@ -435,16 +402,14 @@ op_not(List_e * right)		/* logical negation */
 	case CF:
 	case NCONST:			/* impossible to generate ? */
 	case EXT_ARN:
-	    right->le_val ^= NOT;	/* negate logical value */
-	    				/* forces creation of alias */
-	    break;			/* if assigned immediately */
-	case ALIAS:			/* unresolved alias from negated function */
-	    lp->le_val ^= NOT;		/* negate via alias */
-	    break;
+	    right->le_val ^= NOT;	/* negate logical value - forces creation */
+	    break;			/* of alias, if assigned immediately */
+
 	case INPW:
 	case INPX:
 	    execerror("INPUT has other inputs in op_not() ???", sp->name, __FILE__, __LINE__);
 	    break;
+
 	default:
 	    execerror("negation of non-logical value attempted", sp->name, __FILE__, __LINE__);
 	    break;
@@ -476,27 +441,27 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int gt_input, int sflag)
 	    }
 	}
 	*ePtr = 0;
-	if (debug & 04) {
+	if (iC_debug & 04) {
 	    /* only logic gate or SH can be aux expression */
 	    if (sflag == 1) {
-		fprintf(outFP, "\t\t\t\t\t");
+		fprintf(iC_outFP, "\t\t\t\t\t");
 	    } else
 	    if (sflag) {
 		assert(sflag == 0200);
 		if (sp->ftype == GATE) {
-		    putc('\t', outFP);
+		    putc('\t', iC_outFP);
 		}
-		putc('\t', outFP);
+		putc('\t', iC_outFP);
 	    } else {
-		fprintf(outFP, "\t\t\t");
+		fprintf(iC_outFP, "\t\t\t");
 	    }
-	    fprintf(outFP, "%s%s	// %d",
+	    fprintf(iC_outFP, "%s%s	// %d",
 		cp, gp->name, gt_input);	/* expression till now */
 	    if (sflag == 1) {
-		fprintf(outFP, "\n");
+		fprintf(iC_outFP, "\n");
 	    }
 	}
-	ePtr += snprintf(ePtr, eEnd - ePtr, "_MV(%d)", gt_input);
+	ePtr += snprintf(ePtr, eEnd - ePtr, "iC_MV(%d)", gt_input);
 	t_first = lp->le_last;			/* skip current expression */
     }
 } /* copyArithmetic */
@@ -559,9 +524,9 @@ op_asgn(				/* asign List_e stack to links */
     right = op_force(rl->v, ft);	/* force Symbol on right to ftype ft */
     if (sv == 0) {
 	/* null var - generate a temporary Symbol of type UNDEF */
-	var = (Symbol *) emalloc(sizeof(Symbol));
+	var = (Symbol *) iC_emalloc(sizeof(Symbol));
 	snprintf(temp, TSIZE, "%s_f%d", iFunSymExt ? iFunBuffer : "", ++ttn);
-	var->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
+	var->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	strcpy(var->name, temp);	/* name needed for derived Sy's */
 	sflag = 0;			/* don't output name */
     } else {
@@ -574,14 +539,14 @@ op_asgn(				/* asign List_e stack to links */
 	var->type = ERR;		/* reduce anyway to clear list */
     }
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "op_asgn:  %s = %c%s\n", var->name, v(right));
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "op_asgn:  %s = %c%s\n", var->name, v(right));
+	fflush(iC_outFP);
     }
 #endif
     assert(right);			/* must have something to assign */
     rsp = right->le_sym;
-    if ((typ = var->type & TM) >= AND && typ != (rsp->type & TM)) {
+    if ((typ = var->type & TM) >= MIN_GT && typ != (rsp->type & TM)) {
 	if (typ != ERR) {
 	    ierror("type mismatch in multiple assignment:", var->name);
 	    var->type = ERR;		/* reduce anyway to clear list */
@@ -631,11 +596,11 @@ op_asgn(				/* asign List_e stack to links */
 	    rsp->list = tlp;		/* link full list to right */
 	}
 	var->list = right;		/* alias points to original */
-	if (debug & 04) {
+	if (iC_debug & 04) {
 	    iFlag = 1;
-	    fprintf(outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
-		((typ = rsp->type & TM) >= MAX_LV) ? os[typ] : w(right),
-		os[var->type & TM], var->name);
+	    fprintf(iC_outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
+		((typ = rsp->type & TM) >= MAX_LV) ? iC_os[typ] : w(right),
+		iC_os[var->type & TM], var->name);
 	}
 	if (sv == 0) {
 	    execerror("ALIAS points to temp ???", var->name, __FILE__, __LINE__);
@@ -655,9 +620,9 @@ op_asgn(				/* asign List_e stack to links */
 		    right->le_sym->name, __FILE__, __LINE__);
 	    }
 	}
-	sp->next = rsp->next;	/* link tail to head in front of rsp */
-	rsp->next = templist;	/* link head to rsp */
-	templist = rsp;		/* now rsp is head of templist */
+	sp->next = rsp->next;		/* link tail to head in front of rsp */
+	rsp->next = templist;		/* link head to rsp */
+	templist = rsp;			/* now rsp is head of templist */
     }
     if (((typ = rsp->type & TM) == CLK || typ == TIM) && var->ftype != rsp->ftype) {
 	warning("clock or timer assignment from wrong ftype:", var->name);
@@ -678,12 +643,12 @@ op_asgn(				/* asign List_e stack to links */
 		    tlp->le_sym = var;	/* change feedback to var - watch negation */
 		    atn++;		/* must have 1 feedback */
 #if YYDEBUG
-		    if ((debug & 0402) == 0402) {
-			fprintf(outFP, "*** feedback at %s from %s to %s\n",
+		    if ((iC_debug & 0402) == 0402) {
+			fprintf(iC_outFP, "*** feedback at %s from %s to %s\n",
 			    sr->name ? sr->name : "(null)",
 			    sp->name ? sp->name : "(null)",
 			    var->name ? var->name : "(null)");
-			fflush(outFP);
+			fflush(iC_outFP);
 		    }
 #endif
 		}
@@ -711,7 +676,7 @@ op_asgn(				/* asign List_e stack to links */
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
     assert((t_first == 0 || t_first >= iCbuf) && t_last < &iCbuf[IMMBUFSIZE]);
 #if YYDEBUG
-    if ((debug & 0402) == 0402) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
+    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
 #endif
     do {				/* marked symbol */
 	List_e*	saveBlist = 0;		/* prevent warning - only used when iFunSymExt != 0 */
@@ -723,12 +688,12 @@ op_asgn(				/* asign List_e stack to links */
 	ePtr = eBuf;			/* temporary expression buffer pointer */
 	eEnd = &eBuf[EBSIZE];		/* end of temporary expression buffer */
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {
+	if ((iC_debug & 0402) == 0402) {
 	    memset(eBuf, '\0', EBSIZE);
 	}
 #endif
-	if (debug & 04) {
-	    fprintf(outFP, "\n");
+	if (iC_debug & 04) {
+	    fprintf(iC_outFP, "\n");
 	}
 	gt_input = 0;			/* output scan for 1 gate */
 	if (iFunSymExt) saveBlist = sp->u_blist;
@@ -743,7 +708,7 @@ op_asgn(				/* asign List_e stack to links */
 #if YYDEBUG
 							|| *(gp->name) == '$'
 #endif
-	    )) {				/* not marked symbol */
+	    )) {			/* not marked symbol */
 		/********************************************************************
 		 * A feedback element has occurred in the middle of an expression
 		 * reduction. Since this element will not be assigned to a differnt
@@ -759,12 +724,12 @@ op_asgn(				/* asign List_e stack to links */
 	    if (! fflag || ! plp) {
 		while (gp->type == ALIAS) {	/* not for var ALIAS */
 		    if ((tlp = gp->list) == 0 && (tlp = gp->u_blist) == 0) {
-			assert(0);			/* ALIAS without left or right link */
+			assert(0);		/* ALIAS without left or right link */
 		    }
 		    lp->le_val ^= tlp->le_val;	/* negate if necessary */
 		    gp = tlp->le_sym;		/* point to original */
 		}
-		if (iFunSymExt && (debug & 020000) &&
+		if (iFunSymExt && (iC_debug & 020000) &&
 		    gp->type == LATCH && gp->ftype == D_FF && gp->list == 0) {
 		    gp->list = sy_push(sp);	/* extra link for feedback */
 		}
@@ -788,12 +753,12 @@ op_asgn(				/* asign List_e stack to links */
 			 *	I1	  ---%	O1_2
 			 *	I2	~ ---%	O1_2	<--- new gp
 			 ***************************************************/
-			gp = (Symbol *) emalloc(sizeof(Symbol));
-			gp->name = NS;			/* no name at present */
+			gp = (Symbol *) iC_emalloc(sizeof(Symbol));
+			gp->name = NS;		/* no name at present */
 #if YYDEBUG
-			if ((debug & 0402) == 0402) {	/* DEBUG name */
+			if ((iC_debug & 0402) == 0402) {	/* DEBUG name */
 			    snprintf(temp, TSIZE, "$%d", ++tn);
-			    gp->name = emalloc(strlen(temp)+1);
+			    gp->name = iC_emalloc(strlen(temp)+1);
 			    strcpy(gp->name, temp);
 			}
 #endif
@@ -806,17 +771,17 @@ op_asgn(				/* asign List_e stack to links */
 			tlp->le_next = sp->u_blist;		/* rest of inputs on sp */
 			sp->u_blist = 0;			/* this link scan now complete */
 			if (iFunSymExt) {
-			    lp->le_sym = gp;		/* for function definition */
+			    lp->le_sym = gp;	/* for function definition */
 			    lp->le_next = 0;
 			}
 		    }
 		}
-		if (gp->ftype == ARITH &&		/* && gp->u_blist ZZZ */
+		if (gp->ftype == ARITH &&	/* && gp->u_blist ZZZ */
 		    sp->ftype != OUTW &&
 		    sp->type != ALIAS) {
 		    int	val;
 		    if ((val = lp->le_val) == (unsigned) -1) {
-			gt_input--;			/* delay is not an arithmetic input */
+			gt_input--;		/* delay is not an arithmetic input */
 		    } else if (val == 0){
 			lp->le_val = ((c_number + 1) << 8)	/* arithmetic case number */
 				     + gt_input + 1;	/* arithmetic input number */
@@ -824,7 +789,7 @@ op_asgn(				/* asign List_e stack to links */
 			assert((val & 0xff) == gt_input+1);	/* input number must match definition */
 			val >>= 8;
 			if (cFn == 0) {
-			    cFn = val;			/* case number from function */
+			    cFn = val;		/* case number from function */
 			    if (iFunSymExt == 0) {
 				assert(cFn < functionUseSize); /* adjusted when function generated */
 				functionUse[0] |= F_CALLED; /* flag for copying temp file*/
@@ -835,7 +800,7 @@ op_asgn(				/* asign List_e stack to links */
 			}
 		    }
 		}
-		if (iFunSymExt == 0) {			/* global reduction only */
+		if (iFunSymExt == 0) {		/* global reduction only */
 		    if (sp->type == ALIAS) {
 			/* var was made an ALIAS because of FF negation */
 			for (lpp = &gp->list; (tlp = *lpp) != 0; ) {
@@ -848,17 +813,17 @@ op_asgn(				/* asign List_e stack to links */
 			    }
 			    tlp = tlp->le_next;		/* scan to end of ALIAS list */
 			}
-			sp->list = lp;			/* link ALIAS to right */
+			sp->list = lp;		/* link ALIAS to right */
 		    } else {
 			/* link Symbols to the end of gp->list to maintain order */
 			if (! fflag) {
-			    lp->le_next = 0;		/* unless if - else or switch */
+			    lp->le_next = 0;	/* unless if - else or switch */
 			}
 			if ((tlp = gp->list) == 0) {
 			    gp->list = lp;		/* this is the first Symbol */
 			} else {
 			    /* loop to find duplicate link (possibly inverted) */
-			  loop:					/* special loop with test in middle */
+			  loop:				/* special loop with test in middle */
 			    if (tlp->le_sym == sp) {
 				if (gp->ftype == OUTW || gp->ftype == OUTX) {
 				    warning("input equals output at output gate:", gp->name);
@@ -889,7 +854,7 @@ op_asgn(				/* asign List_e stack to links */
 			    if (gp->ftype == OUTW || gp->ftype == OUTX) {
 				warning("input equals output at output gate:", gp->name);
 			    } else if (gp->ftype == ARITH || tlp->le_val == lp->le_val) {
-				assert(plp);	/* cannot be first link in chain */
+				assert(plp);		/* cannot be first link in chain */
 				plp->le_next = sp->u_blist;	/* relink the chain */
 				copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 1);
 				sy_pop(lp);		/* ignore duplicate link */
@@ -910,66 +875,66 @@ op_asgn(				/* asign List_e stack to links */
 #endif
 	    ) {						/* not marked symbol */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) {
-		    if (debug & 04) {
-			fprintf(outFP, "%s =", gp->name);
+		if ((iC_debug & 0402) == 0402) {
+		    if (iC_debug & 04) {
+			fprintf(iC_outFP, "%s =", gp->name);
 		    } else {
-			fprintf(outFP, "\t  %s cleared\n", gp->name);
+			fprintf(iC_outFP, "\t  %s cleared\n", gp->name);
 		    }
 		    free(gp->name);			/* free name space */
 		}
 #endif
 		snprintf(temp, TSIZE, "%s_%d", var->name, ++atn);
-		gp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
+		gp->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 		strcpy(gp->name, temp);			/* mark Symbol */
 	    }
-	    if (debug & 04) {
+	    if (iC_debug & 04) {
 		if (fflag && plp) {
 		    /* reference to a C fragment variable */
 		    assert(lp->le_val & 0xff);
-		    fprintf(outFP, "\t%s\t%c<---%c\t\t\t// %d", gp->name, fos[gp->ftype],
-			os[sp->type & TM], lp->le_val & 0xff);
+		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d", gp->name, iC_fos[gp->ftype],
+			iC_os[sp->type & TM], lp->le_val & 0xff);
 		} else
 		if ((typ = gp->type & TM) >= MAX_LV) {
-		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, os[typ],
-			os[sp->type & TM]);
+		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_os[typ],
+			iC_os[sp->type & TM]);
 		} else
 		if (gp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
 		    /* reference to a timer value - no link */
-		    fprintf(outFP, "\t%s\t%c<---%c", gp->name, fos[gp->ftype],
-			os[sp->type & TM]);
+		    fprintf(iC_outFP, "\t%s\t%c<---%c", gp->name, iC_fos[gp->ftype],
+			iC_os[sp->type & TM]);
 		} else
 		if (gp->ftype != GATE) {
-		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, fos[gp->ftype],
-			os[sp->type & TM]);
+		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_fos[gp->ftype],
+			iC_os[sp->type & TM]);
 		} else {
 		    if (sp->type == ALIAS) iFlag = 1;
-		    fprintf(outFP, "\t%s\t%c ---%c", gp->name, w(lp),
-			os[sp->type & TM]);
+		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, w(lp),
+			iC_os[sp->type & TM]);
 		}
 		if (sflag) {
-		    fprintf(outFP, "\t%s", sp->name);
+		    fprintf(iC_outFP, "\t%s", sp->name);
 		    if (sp->ftype != GATE) {
-			fprintf(outFP, "\t%c", fos[sp->ftype]);
+			fprintf(iC_outFP, "\t%c", iC_fos[sp->ftype]);
 		    }
 		}
 		if (gp->ftype == F_SW || gp->ftype == F_CF || gp->ftype == F_CE) {
 		    /********************************************************************
 		     * case number of "if" or "switch" C fragment
 		     *******************************************************************/
-		    fprintf(outFP, " (%d)", lp->le_val >> 8);
+		    fprintf(iC_outFP, " (%d)", lp->le_val >> 8);
 		} else
 		if ((gp->ftype == TIMR && lp->le_val > 0)) {
 		    /********************************************************************
 		     * Timer preset off value
 		     *******************************************************************/
-		    fprintf(outFP, " (%d)", lp->le_val);
+		    fprintf(iC_outFP, " (%d)", lp->le_val);
 		}
 	    }
 	    copyArithmetic(lp, sp, gp, gt_input, sflag); /* with current expression */
-	    if (debug & 04) {
-		fprintf(outFP, "\n");
-		sflag = debug & 0200;
+	    if (iC_debug & 04) {
+		fprintf(iC_outFP, "\n");
+		sflag = iC_debug & 0200;
 	    }
 	    if (sp == gp && (sp->type != LATCH || lp->le_val != (NOT^NOT))) {
 		warning("input equals output at gate:", sp->name);
@@ -995,18 +960,18 @@ op_asgn(				/* asign List_e stack to links */
 							/* start case or function */
 	    if (sp->ftype != OUTW) {			/* output cexe function */
 		if (cFn == 0) {
-		    if (strcmp(eBuf, "_MV(1)") == 0) {
+		    if (strcmp(eBuf, "iC_MV(1)") == 0) {
 			assert(strlen(cp) == 0);
-			plp->le_val = 0;		/* correct _l[] generation */
+			plp->le_val = 0;		/* correct iC_l_[] generation */
 		    } else {
 			functionUse[0] |= F_ARITHM;	/* flag for copying macro */
 			writeCexeString(T1FP, ++c_number); /* and record for copying */
 			fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
 			fprintf(T1FP, "	return %s;\n", eBuf);
 			fprintf(T1FP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
-			if (debug & 04) fprintf(outFP, "\t\t\t\t\t%s;	// (%d)\n", cp, c_number);
+			if (iC_debug & 04) fprintf(iC_outFP, "\t\t\t\t\t%s;	// (%d)\n", cp, c_number);
 		    }
-		} else if (debug & 04) fprintf(outFP, "\t\t\t\t\t;	// (%d)\n", cFn);
+		} else if (iC_debug & 04) fprintf(iC_outFP, "\t\t\t\t\t;	// (%d)\n", cFn);
 	    }
 	}
 	sflag = 0200;					/* print output name */
@@ -1060,13 +1025,13 @@ op_asgn(				/* asign List_e stack to links */
     if (right->le_val == (NOT^NOT)) {
 	sy_pop(right);			/* right Symbol and List_e */
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {
+	if ((iC_debug & 0402) == 0402) {
 	    free(rsp->name);		/* free name space of $x */
 	}
 #endif
 	free(rsp);			/* free right Symbol */
     }
-    if (debug & 04) fprintf(outFP, "\n");
+    if (iC_debug & 04) fprintf(iC_outFP, "\n");
     /********************************************************************
      * A Symbol is marked by storing a pointer value in ->name
      * which points to a string which does not start with $.
@@ -1090,9 +1055,9 @@ op_asgn(				/* asign List_e stack to links */
 	assert(lp && lp->le_sym == var);
 	lp->le_sym = 0;			/* erase reference to temp either way */
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {
-	    fprintf(outFP, "\t  %s deleted\n\n", var->name);
-	    fflush(outFP);
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "\t  %s deleted\n\n", var->name);
+	    fflush(iC_outFP);
 	}
 #endif
 	free(var->name);		/* free name space */
@@ -1167,7 +1132,7 @@ bTyp(List_e * lp)
 			  : (tp == UDF ||
 			    symp->u_blist == 0 ||
     (symp->list &&
-    ((ft = symp->list->le_sym->ftype) == OUTX || ft == OUTW))) ? types[symp->ftype]
+    ((ft = symp->list->le_sym->ftype) == OUTX || ft == OUTW))) ? iC_types[symp->ftype]
 							       : tp;
 } /* bTyp */
 
@@ -1180,10 +1145,10 @@ bTyp(List_e * lp)
 static List_e *
 para_push(
     Sym* fname,
-    Lis* aex, Lis* crx,				/* expression and clock pair */
-    Lis* cr3,					/* default clock to clone if no own clock */
+    Lis* aex, Lis* crx,			/* expression and clock pair */
+    Lis* cr3,				/* default clock to clone if no own clock */
     List_e* lp3,
-    unsigned char ft,				/* 0 or S_FF or R_FF */
+    unsigned char ft,			/* 0 or S_FF or R_FF */
     List_e** alp1)
 {
     List_e *	lp1;
@@ -1193,20 +1158,20 @@ para_push(
 
     /* lpc is either own clock crx->v or clock cloned from cr3->v or iClock */
     lp1 = 0;
-    lpc = crx ? crx->v				/* individul clock or timer crx */
+    lpc = crx ? crx->v			/* individul clock or timer crx */
 	      : cr3 && cr3->v && (sp = cr3->v->le_sym)
 		    ? sy_push(sp->ftype != CLCKL && (lp1 = sp->u_blist)
-			? lp1->le_sym		/* or clone last timer cr3 */
-			: sp)			/* or clone last clock cr3 */
-		    : sy_push(iclock);		/* or clone default clock iClock */
+			? lp1->le_sym	/* or clone last timer cr3 */
+			: sp)		/* or clone last clock cr3 */
+		    : sy_push(iclock);	/* or clone default clock iClock */
     if (lp1 && (sp = lp1->le_sym) && sp->ftype == TIMRL) {
-	lp1 = lp1->le_next;			/* type TIM, EXT_TIM, UDF or ALIAS */
-	assert(lp1);				/* clone associated timer value */
+	lp1 = lp1->le_next;		/* type TIM, EXT_TIM, UDF or ALIAS */
+	assert(lp1);			/* clone associated timer value */
 	assert(lp1->le_val == (unsigned) -1);
 	lp2 = sy_push(lp1->le_sym);
-	lp2->le_val = (unsigned) -1;		/* mark link as -1 timer before op_push */
-	lp2->le_first = lp1->le_first;		/* copy expr text */
-	lp2->le_last  = lp1->le_last;		/* copy expr termination */
+	lp2->le_val = (unsigned) -1;	/* mark link as -1 timer before op_push */
+	lp2->le_first = lp1->le_first;	/* copy expr text */
+	lp2->le_last  = lp1->le_last;	/* copy expr termination */
 	lpc = op_push(lpc, TIM, lp2);
     }
     lp1 = op_push(sy_push(fname->v), bTyp(aex->v), aex->v);
@@ -1221,8 +1186,8 @@ para_push(
 	}
     }
     *alp1 = op_push(lpc, lp1->le_sym->type & TM, lp1);	/* return lp1 for pVal */
-    lp2 = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-    return lp3 ? op_push(lp3, types[lp3->le_sym->ftype], lp2) : lp2;
+    lp2 = op_push((List_e *)0, iC_types[lp1->le_sym->ftype], lp1);
+    return lp3 ? op_push(lp3, iC_types[lp3->le_sym->ftype], lp2) : lp2;
 } /* para_push */
 
 /********************************************************************
@@ -1233,12 +1198,12 @@ para_push(
 
 List_e *
 bltin(
-    Sym* fname,					/* function name and ftype */
-    Lis* ae1, Lis* cr1,				/* expression */
-    Lis* ae2, Lis* cr2,				/* optional set */
-    Lis* ae3, Lis* cr3,				/* optional reset */
-    Lis* crm,					/* optional mono-flop clock */
-    Val* pVal)					/* optional cblock# or off-delay */
+    Sym* fname,				/* function name and ftype */
+    Lis* ae1, Lis* cr1,			/* expression */
+    Lis* ae2, Lis* cr2,			/* optional set */
+    Lis* ae3, Lis* cr3,			/* optional reset */
+    Lis* crm,				/* optional mono-flop clock */
+    Val* pVal)				/* optional cblock# or off-delay */
 {
     List_e *	lp1;
     List_e *	lp2;
@@ -1246,14 +1211,14 @@ bltin(
 
     if (ae1 == 0 || ae1->v == 0) {
 	warning("first parameter missing. builtin: ", fname->v->name);
-	return 0;				/* YYERROR in fexpr */
+	return 0;			/* YYERROR in fexpr */
     }
     lp3 = para_push(fname, ae1, cr1, cr3, 0, 0, &lp1);	/* lp1 needed for pVal */
 
     if (ae2) {
 	if (ae2->v == 0) {
 	    warning("second parameter missing. builtin: ", fname->v->name);
-	    return 0;				/* YYERROR in fexpr */
+	    return 0;			/* YYERROR in fexpr */
 	}
 	lp3 = para_push(fname, ae2, cr2, cr3, lp3, S_FF, &lp2);
     }
@@ -1261,28 +1226,28 @@ bltin(
     if (ae3) {
 	if (ae3->v == 0) {
 	    warning("third parameter missing. builtin: ", fname->v->name);
-	    return 0;				/* YYERROR in fexpr */
+	    return 0;			/* YYERROR in fexpr */
 	}
 	lp3 = para_push(fname, ae3, cr3, 0, lp3, R_FF, &lp2);	/* 0 stops cloning */
     }
 
     if (crm) {
 	/* extra Master for mono-flop is reset fed back from own output */
-	lp1 = sy_push(ae1->v->le_sym);		/* use dummy ae1 fill link */
+	lp1 = sy_push(ae1->v->le_sym);	/* use dummy ae1 fill link */
 	lp2 = op_push(sy_push(fname->v), UDF, lp1);
 	if (lp2->le_sym->ftype == S_FF) {
-	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR flip flop*/
+	    lp2->le_sym->ftype = R_FF;	/* next ftype for SR flip flop*/
 	}
 	lp2 = op_push(crm->v, lp2->le_sym->type & TM, lp2);
-	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
-	lp3 = op_push(lp3, types[lp3->le_sym->ftype], lp2);
+	lp2 = op_push((List_e *)0, iC_types[lp2->le_sym->ftype], lp2);
+	lp3 = op_push(lp3, iC_types[lp3->le_sym->ftype], lp2);
 
-	lp1->le_sym = lp3->le_sym;		/* fix link from own */
+	lp1->le_sym = lp3->le_sym;	/* fix link from own */
     }
 
     if (pVal) {
 	/* cblock number for ffexpr or preset off delay for timer */
-	lp1->le_val = pVal->v;			/* unsigned int value for case # */
+	lp1->le_val = pVal->v;		/* unsigned int value for case # */
     }
     return lp3;
 } /* bltin */
@@ -1327,20 +1292,20 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 	sv->v->type = ERR;			/* cannot execute properly */
 	if (iFunSymExt) sv->v->list = 0;	/* do 2nd assignment for listing */
     }
-    rsp = (debug & 020000) ? sv->v
+    rsp = (iC_debug & 020000) ? sv->v
 			   : op_asgn(sv, lv, ftyp);	/* new code before Output */
     if (ioTyp >= MAX_ACT) {			/* OUTW or OUTX */
 	snprintf(temp, TSIZE, "%s_0", rsp->name);
 	if ((sy.v = lookup(temp)) == 0) {	/* locate position in ST */
 	    sy.v = install(temp, UDF, ioTyp);	/* generate output Gate OUTX or OUTW */
 	    li.v = sy_push(rsp);		/* provide a link to LOUT or AOUT */
-	    if ((li.v = op_push(0, types[ftyp], li.v)) != 0) {
+	    if ((li.v = op_push(0, iC_types[ftyp], li.v)) != 0) {
 		li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
 	    }
 	    op_asgn(&sy, &li, ftyp);		/* Output assignment */
 	}
     }
-    if (debug & 020000) rsp =  op_asgn(sv, lv, ftyp);	/* old code after Output */
+    if (iC_debug & 020000) rsp =  op_asgn(sv, lv, ftyp);	/* old code after Output */
     if (iFunSymExt) collectStatement(rsp);	/* update varList in definition stmtList */
     return rsp;
 } /* assignExpression */
@@ -1474,18 +1439,18 @@ functionHead(unsigned int typeVal, Symbol * funTrigger, int retFlag)
 	    iRetSymbol.v = install(iFunBuffer, UDF, ftyp);	/* return Symbol */
 	}
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {
-	    fprintf(outFP, "iFunHead: imm %s %s\n",
-		full_ftype[ftyp], iRetSymbol.v->name);
-	    fflush(outFP);
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "iFunHead: imm %s %s\n",
+		iC_full_ftype[ftyp], iRetSymbol.v->name);
+	    fflush(iC_outFP);
 	}
 #endif
     } else {
 	iRetSymbol.v = 0;			/* void function has no return Symbol */
 #if YYDEBUG
-	if ((debug & 0402) == 0402) {
-	    fprintf(outFP, "vFunHead: imm %s %s\n", full_ftype[ftyp], funTrigger->name);
-	    fflush(outFP);
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "vFunHead: imm %s %s\n", iC_full_ftype[ftyp], funTrigger->name);
+	    fflush(iC_outFP);
 	}
 #endif
     }
@@ -1513,10 +1478,10 @@ collectStatement(Symbol * funcStatement)
     if ((sp = funcStatement) != 0) {		/* miss a void function call */
 	if ((typ = sp->type) <= MAX_OP) {
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) {
-		fprintf(outFP, "collectStatement: %s type: %s, ftype: %s\n",
-		    sp->name, full_type[typ&TM], full_ftype[sp->ftype]);
-		fflush(outFP);
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "collectStatement: %s type: %s, ftype: %s\n",
+		    sp->name, iC_full_type[typ&TM], iC_full_ftype[sp->ftype]);
+		fflush(iC_outFP);
 	    }
 #endif
 	    if (stmtList == 0) {		/* list reset for each new function */
@@ -1538,8 +1503,8 @@ collectStatement(Symbol * funcStatement)
 		}
 	    }
 	} else if ((typ & EM) == 0 && typ != ERR) {	/* ignore extern */
-	    fprintf(outFP, "type: %s, ftype: %s\n",
-		full_type[typ&TM], full_ftype[sp->ftype]);
+	    fprintf(iC_outFP, "type: %s, ftype: %s\n",
+		iC_full_type[typ&TM], iC_full_ftype[sp->ftype]);
 	    ierror("function statement is not int, bit, clock or timer:", sp->name);
 	    sp->type = (sp->type & FM) | ERR;
 	}
@@ -1671,9 +1636,9 @@ functionDefinition(Symbol * iFunHead, List_e * fParams)
 	ierror("function has no statements!", iFunHead->name);
     }
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "iFunDef:  imm %s %s\n", full_ftype[iFunHead->ftype], iFunHead->name);
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "iFunDef:  imm %s %s\n", iC_full_ftype[iFunHead->ftype], iFunHead->name);
+	fflush(iC_outFP);
     }
 #endif
     return iFunHead;				/* yacc stack value */
@@ -1710,13 +1675,13 @@ clearFunDef(Symbol * functionHead)
     while (slp) {
 	sp = slp->le_sym;			/* formal satement head Symbol */
 	assert(sp);
-	lp = sp->u_blist;				/* cloned expression links */
+	lp = sp->u_blist;			/* cloned expression links */
 	while (lp) {
 	    lp1 = lp->le_next;			/* next expression link */
 	    free(lp);				/* delete expression link */
 	    lp = lp1;
 	}
-	lp = sp->list;			/* possible link to function head */
+	lp = sp->list;				/* possible link to function head */
 	while (lp) {
 	    lp1 = lp->le_next;			/* next expression link */
 	    free(lp);				/* delete expression link */
@@ -1730,10 +1695,10 @@ clearFunDef(Symbol * functionHead)
 	assert(vlp);				/* statement list is in pairs */
 	vsp = vlp->le_sym;			/* varList of temp Symbols */
 	while (vsp) {				/* varList may be empty */
-	    lp = vsp->u_blist;				/* cloned expression links */
+	    lp = vsp->u_blist;			/* cloned expression links */
 	    while (lp) {
-		lp1 = lp->le_next;			/* next expression link */
-		free(lp);				/* delete expression link */
+		lp1 = lp->le_next;		/* next expression link */
+		free(lp);			/* delete expression link */
 		lp = lp1;
 	    }
 	    sp = vsp->next;			/* next varList Symbol */
@@ -1747,7 +1712,7 @@ clearFunDef(Symbol * functionHead)
      * Pass 2: parameter list
      * links to real parameters were deleted at the end of a call
      *******************************************************************/
-    slp = functionHead->list;		/* parameter list */
+    slp = functionHead->list;			/* parameter list */
     functionHead->list = 0;			/* clear for next definition */
     while (slp) {
 	sp = slp->le_sym;			/* formal parameter Symbol */
@@ -1871,7 +1836,7 @@ pushFunCall(Symbol * functionHead)
     lp = lp->le_next;				/* first varList link */
     assert(lp);					/* must be a pair */
     saveCount = lp->le_val;			/* allows call to store save block */
-    saveFunBs = (struct sF *) emalloc(sizeof(struct sF) - 1 + saveCount * sizeof(void *));
+    saveFunBs = (struct sF *) iC_emalloc(sizeof(struct sF) - 1 + saveCount * sizeof(void *));
     saveFunBs->saveFunBs = oldSFunBs;
     saveFunBs->iCallHead = iCallHead;		/* will be set up during the call */
     saveFunBs->iFormNext = iFormNext;
@@ -1915,7 +1880,7 @@ pushFunCall(Symbol * functionHead)
     lp = functionHead->list;			/* parameter list */
     while (lp) {
 	sp = lp->le_sym;
-	sp->list = 0;			/* clear parameter link */
+	sp->list = 0;				/* clear parameter link */
 	lp = lp->le_next;
     }
     /********************************************************************
@@ -2122,7 +2087,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
     char *		cp;
     char		temp[TSIZE];
 
-    slp = lp = functionHead->u_blist;	/* get 2 numbers in first elements of statement list */
+    slp = lp = functionHead->u_blist;		/* get 2 numbers in first elements of statement list */
     if (slp == 0) {
 	ierror("called function has no statements - cannot execute!", functionHead->name);
 	return 0;
@@ -2280,7 +2245,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	    sv.f = sv.l = sl.f = sl.l = 0;	/* clear internal expression text */
 	    if (ssp->u_blist == 0) {
 		assert(sl.v == 0);		 /* template is defined - otherwise error */
-		sv.v->type = ctypes[sv.v->ftype]; /* must be ARNC or LOGC */
+		sv.v->type = iC_ctypes[sv.v->ftype]; /* must be ARNC or LOGC */
 	    } else
 	    if (iFunSymExt || (ssp->type != (SW|FM) && ssp->type != (CF|FM))) {
 		sv.v->u_blist = 0;		/* restore for op_asgn */
@@ -2294,7 +2259,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		}
 		assignExpression(&sv, &sl, ioTyp); /* assign to internal variable or parameter */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "clone", (Lis*)&sv);
+		if ((iC_debug & 0402) == 0402) pu(0, "clone", (Lis*)&sv);
 #endif
 	    } else {				/* iFunSymExt == 0 */
 		int	cFn;
@@ -2389,12 +2354,12 @@ cloneSymbol(Symbol * sp)
     char 		temp[TSIZE];
 #endif
 
-    rsp = (Symbol *) emalloc(sizeof(Symbol));
-    rsp->name = NS;		/* no name at present */
+    rsp = (Symbol *) iC_emalloc(sizeof(Symbol));
+    rsp->name = NS;				/* no name at present */
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {	/* DEBUG name */
+    if ((iC_debug & 0402) == 0402) {		/* DEBUG name */
 	snprintf(temp, TSIZE, "$%d", ++tn);
-	rsp->name = emalloc(strlen(temp)+1);	/* +1 for '\0' */
+	rsp->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	strcpy(rsp->name, temp);
     }
 #endif

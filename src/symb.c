@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.16 2004/12/22 16:59:33 jw Exp $";
+"@(#)$Id: symb.c,v 1.17 2005/01/26 15:18:38 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -22,14 +22,13 @@ static const char symb_c[] =
 #include	<string.h>
 #include	<stdlib.h>
 #include	<assert.h>
-#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #include	"comp_tab.h"
 
 /* "symb.c	3.09	95/01/13" */
 
-Symbol *	symlist[HASHSIZ];	/* symbol table: linked lists */
+Symbol *	symlist[HASHSIZ];		/* symbol table: linked lists */
 
 typedef struct hts {
     char first;
@@ -52,7 +51,7 @@ hts	hta[] =	{
 };
 
 static int
-hash(char *	string)	/* hash a string to table index */
+hash(char *	string)				/* hash a string to table index */
 {
     char	ch;
     unsigned	hsh;
@@ -61,74 +60,74 @@ hash(char *	string)	/* hash a string to table index */
     hts *	htp;
 
     hsh = 0;
-    correct = 10;		/* range of 1st character 64 - 10 */
+    correct = 10;				/* range of 1st character 64 - 10 */
     for (i = 0; i < 2; i++) {
 	ch = *string++;
-	hsh <<= 6;		/* multiply by 64, range of 2nd char */
+	hsh <<= 6;				/* multiply by 64, range of 2nd char */
 	for (htp = &hta[1-i]; htp < &hta[sizeof hta/sizeof(hts)]; htp++) {
 	    if (ch < htp->first) {
-		break;		/* not a proper character ==> 0 */
+		break;				/* not a proper character ==> 0 */
 	    }
 	    if (ch <= htp->last) {
 		ch -= (htp->offset + correct);
 		if (ch <= 0) {
-		    ch = 1;	/* _ under _WINDOWS */
+		    ch = 1;			/* _ under _WINDOWS */
 		}
 		hsh += ch;
-		break;		/* proper character */
+		break;				/* proper character */
 	    }
 	}
-	correct = 0;		/* range of 2nd character 64 */
+	correct = 0;				/* range of 2nd character 64 */
     }
-    return (hsh >> 2);		/* divide by 4, range 54 * 64 / 4 */
+    return (hsh >> 2);				/* divide by 4, range 54 * 64 / 4 */
 }
 
 static Symbol **	spl;
 
 Symbol *
-lookup(char *	string)	/* find string in symbol table */
+lookup(char *	string)				/* find string in symbol table */
 {
     Symbol *	sp;
-    int		i = 1;		/* must be != 0 in case empty */
+    int		i = 1;				/* must be != 0 in case empty */
 
     spl = &symlist[hash(string)];
     for (sp = *spl; sp != 0; spl = &sp->next, sp = *spl) {
 	if ((i = strcmp(string, sp->name)) <= 0) {
-	    break;	/* position where a new Symbol should go */
+	    break;				/* position where a new Symbol should go */
 	}
     }
     if (i == 0) {
-	return (sp);	/* found */
+	return (sp);				/* found */
     }
-    return (0);		/* 0 ==> not found */
+    return (0);					/* 0 ==> not found */
 }
 
 Symbol *
-place_sym(Symbol *	sp)	/* place sp in symbol table */
+place_sym(Symbol *	sp)			/* place sp in symbol table */
 {
     Symbol *	tsp;
 
     if (spl == 0 || ((tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0)) {
-	if (lookup(sp->name) != 0) {	/* locate sorted position */
+	if (lookup(sp->name) != 0) {		/* locate sorted position */
 	    ierror("trying to place existing symbol:", sp->name);
 	}
     }
-    sp->next = *spl;	/* point from this to next Symbol */
-    *spl = sp;		/* point from previous to this Symbol */
-    spl = 0;		/* force execution of lookup() for next call */
+    sp->next = *spl;				/* point from this to next Symbol */
+    *spl = sp;					/* point from previous to this Symbol */
+    spl = 0;					/* force execution of lookup() for next call */
     return (sp);
 }
 
 Symbol *
-install(				/* install string in symbol table */
+install(					/* install string in symbol table */
     char *		string,
     unsigned char	typ,
     unsigned char	ftyp)
 {
     Symbol *		sp;
 
-    sp = (Symbol *) emalloc(sizeof(Symbol));
-    sp->name = emalloc(strlen(string)+1);	/* +1 for '\0' */
+    sp = (Symbol *) iC_emalloc(sizeof(Symbol));
+    sp->name = iC_emalloc(strlen(string)+1);	/* +1 for '\0' */
     strcpy(sp->name, string);
     sp->type = typ;
     sp->ftype = ftyp;
@@ -136,18 +135,18 @@ install(				/* install string in symbol table */
 }
 
 Symbol *
-unlink_sym(Symbol *	sp)	/* unlink Symbol from symbol table */
+unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table */
 {
     Symbol *	tsp;
 
     if (sp) {
 	if ((tsp = lookup(sp->name)) != 0) {	/* locate sorted position */
 	    assert(tsp == sp);
-	    *spl = sp->next;		/* skip this Symbol, point previous to next */
-	    spl = 0;			/* force execution of lookup() for next call */
+	    *spl = sp->next;			/* skip this Symbol, point previous to next */
+	    spl = 0;				/* force execution of lookup() for next call */
 	} else {
 	    ierror("trying to delete a Symbol not yet installed:", sp->name);
 	}
     }
-    return (sp);	/* Symbol has not been deleted from heap yet */
+    return (sp);				/* Symbol has not been deleted from heap yet */
 }

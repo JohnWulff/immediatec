@@ -41,6 +41,13 @@ my $ackString = '';
 my $iniString = '';
 my @AutoVivify = ();
 my $AutoDebug = '';
+my %sortOrder = (	# determines in which order iCboxes ar autovivified
+    IX => 0, QX => 1,
+    IB => 2, QB => 3,
+    IW => 4, QW => 5,
+    IL => 6, QL => 7,
+    IH => 8, QH => 9,
+);
 
 ########################################################################
 #
@@ -74,7 +81,7 @@ Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.31 2005/01/17 14:08:01 jw Exp $
+$Id: iCserver,v 1.32 2005/01/28 18:34:06 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -593,7 +600,8 @@ use warnings;
 			$Senders[$channel][0] = $conn;
 			$Senders[$channel][1] = $name;
 			$Senders[$channel][2] = 0;		# default initial value
-			if ($aref = $Receivers[$channel]) {
+			$aref = $Receivers[$channel];
+			if ($aref and @$aref) {
 			    foreach $receiver (@$aref) {
 				$rconn = $$receiver[0];
 				if ($rconn) {
@@ -748,9 +756,16 @@ use warnings;
 		if (@AutoVivify) {
 		    my $autovivify = join ' ', sort {
 			my ($ha, $na, $hb, $nb);
-			$a =~ /([A-Z]+)(\d+)/; $ha = $1; $na = $2;
-			$b =~ /([A-Z]+)(\d+)/; $hb = $1; $nb = $2;
+			$a =~ /([A-Z]+)(\d+)/; $ha = $sortOrder{$1}; $na = $2;
+			$ha = $1 if not defined $ha;
+			$b =~ /([A-Z]+)(\d+)/; $hb = $sortOrder{$1}; $nb = $2;
+			$hb = $1 if not defined $hb;
+			############################################################
+			## sort order is number then names in the following order
+			## IX QX IB QB IW QW IL QL IH QH .. others should not happen
+			##  0  1  2  3  4  5  6  7  8  9 .. correct for alpha cmp
 			## print "$a $ha $na	$b $hb $nb\n" if $opt_T;
+			############################################################
 			$na <=> $nb || $ha cmp $hb;
 		    } @AutoVivify;
 		    $autovivify = "$opt_A -n$sender-IO $autovivify";
@@ -1300,7 +1315,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff> with L<iC Project> in the
+Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
 subject field.
 
 Error and warning messages for transmissions to missing clients have

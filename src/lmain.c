@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.11 2004/12/22 17:01:55 jw Exp $";
+"@(#)$Id: lmain.c,v 1.12 2005/01/26 15:17:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -18,7 +18,6 @@ static const char lmain_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
-#include	"icg.h"
 #include 	"icc.h"
 #include 	"comp.h"
 
@@ -41,11 +40,11 @@ static const char *	usage =
 
 FILE *	yyin;
 FILE *	yyout;
-FILE *	outFP;
-const char *	progname;		/* name of this executable */
+FILE *	iC_outFP;
+const char *	iC_progname;		/* name of this executable */
 const char *	inpFN = 0;		/* name of input file */
 const char *	listFN = 0;		/* name of list file */
-short		debug = 0400;
+short		iC_debug = 0400;
 #if YYDEBUG
 extern	int	c_debug;
 #endif
@@ -58,12 +57,12 @@ main(
     int		r = 0;		/* return value of compile */
 
     /* Process the arguments */
-    if ((progname = strrchr(*argv, '/')) == NULL) {
-	progname = *argv;
+    if ((iC_progname = strrchr(*argv, '/')) == NULL) {
+	iC_progname = *argv;
     } else {
-	progname++;		/*  path has been stripped */
+	iC_progname++;		/*  path has been stripped */
     }
-    outFP = stdout;		/* listing file pointer */
+    iC_outFP = stdout;		/* listing file pointer */
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;
@@ -74,9 +73,9 @@ main(
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
-		    debug |= debi;	/* short */
+		    iC_debug |= debi;	/* short */
 #if YYDEBUG
-		    if (debug & 0400) c_debug = debug & 01;
+		    if (iC_debug & 0400) c_debug = iC_debug & 01;
 #endif
 		    goto break2;
 		case 'l':
@@ -85,10 +84,10 @@ main(
 		    goto break2;
 		default:
 		    fprintf(stderr,
-			"%s: unknown flag '%c'\n", progname, **argv);
+			"%s: unknown flag '%c'\n", iC_progname, **argv);
 		case 'h':
 		case '?':
-		    fprintf(stderr, usage, progname, lmain_c);
+		    fprintf(stderr, usage, iC_progname, lmain_c);
 		    exit(1);
 		}
 	    } while (*++*argv);
@@ -97,21 +96,21 @@ main(
 	    inpFN = *argv;
 	}
     }
-    debug &= 07777;			/* allow only cases specified */
+    iC_debug &= 07777;			/* allow only cases specified */
 
-    if (listFN && (outFP = fopen(listFN, "w+")) == NULL) {
-	fprintf(stderr, "%s: cannot open list file '%s'\n", progname, listFN);
+    if (listFN && (iC_outFP = fopen(listFN, "w+")) == NULL) {
+	fprintf(stderr, "%s: cannot open list file '%s'\n", iC_progname, listFN);
 	return -3;
     }
-    yyout = outFP;
+    yyout = iC_outFP;
 
     if (inpFN) {
 	if ((yyin = fopen(inpFN, "r")) == NULL) {
-	    fprintf(stderr, "%s: cannot open input file '%s'\n", progname, inpFN);
+	    fprintf(stderr, "%s: cannot open input file '%s'\n", iC_progname, inpFN);
 	    return -2;
 	}
     } else {
-	fprintf(stderr, "%s: no input file\n", progname);
+	fprintf(stderr, "%s: no input file\n", iC_progname);
 	return -1;
     }
 
@@ -121,23 +120,23 @@ main(
 	Symbol **	hsp;
 
 #if YYDEBUG
-	if (debug & 020) {
-	    fprintf(outFP, "\nSYMBOL TABLE\n\n");
+	if (iC_debug & 020) {
+	    fprintf(iC_outFP, "\nSYMBOL TABLE\n\n");
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		for (sp = *hsp; sp; sp = sp->next) {
-		    fprintf(outFP, "%-15s %d %d\n", sp->name, sp->type, sp->ftype);
+		    fprintf(iC_outFP, "%-15s %d %d\n", sp->name, sp->type, sp->ftype);
 		}
 	    }
 	}
-	if ((debug & ~0400) == 0) {
+	if ((iC_debug & ~0400) == 0) {
 #endif
 	/* output list of TYPE_NAMEs as a space seperated list terminated by a new line */
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
-		fprintf(outFP, " %s", sp->name);
+		fprintf(iC_outFP, " %s", sp->name);
 	    }
 	}
-	fprintf(outFP, "\n");
+	fprintf(iC_outFP, "\n");
 #if YYDEBUG
 	}
 #endif

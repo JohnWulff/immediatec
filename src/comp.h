@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.47 2004/12/22 16:54:02 jw Exp $";
+"@(#)$Id: comp.h,v 1.48 2005/01/28 17:48:05 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -37,7 +37,7 @@ typedef	struct	List_e {	/* list element */
 
 typedef	struct Symbol {		/* symbol table entry */
     char *		name;	/* element name */
-    unsigned char	type;	/* ARN AND OR LATCH FF CLK TIM ... */
+    unsigned char	type;	/* ARN XOR AND OR LATCH FF CLK TIM ... */
     unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
     List_e *		list;	/* output list pointer */
 #if ! YYDEBUG
@@ -98,6 +98,8 @@ extern void ierror(char *, char *);	/* print error message */
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */
+
+extern int	c_lex(void);		/* produced by lexc.l for gram.y */
 #ifndef LMAIN
 extern void yyerror(char * s);		/* called for yacc syntax error */
 extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
@@ -195,8 +197,6 @@ extern List_e * op_force(		/* force linked Symbol to ftype */
 extern List_e *	op_push(List_e *,	/* reduce List_e stack to links */
 	    unsigned char, List_e *);	/*   left, typ, right   */
 extern int	const_push(Lis * expr);	/* numeric constant push */
-extern List_e *	op_xor(			/* special exclusive or push */
-	    List_e *, List_e *);	/*   left, right   */
 extern List_e *	op_not(List_e *);	/* logical negation */
 extern void	writeCexeString(FILE * oFP, int cn);
 extern Symbol *	op_asgn(Sym *, Lis *,	/* asign List_e stack to links */
@@ -226,9 +226,8 @@ extern Symbol *	install( char *, unsigned char,
 extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 
 					/*   main.c   */
-#define Cname	"_list_.c"	/* unusual, not to be used for application name */
-#define H1name	"_list1.h"
-#define H2name	"_list2.h"
+#define H1name	".iC_list1.h"
+#define H2name	".iC_list2.h"
 
 /* index 0 not used */
 #define Iindex	1
@@ -236,18 +235,16 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define Lindex	3
 #define Oindex	4
 #define COindex	5
-#define Cindex	6
-#define H1index	7
-#define H2index	8
-#define T0index	9
-#define T1index	10
-#define T2index	11
-#define T3index	12
-#define T4index	13
-#define T5index	14
+#define H1index	6
+#define H2index	7
+#define T0index	8
+#define T1index	9
+#define T2index	10
+#define T3index	11
+#define T4index	12
+#define T5index	13
 
-#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, Cname, H1name, H2name,\
-				0, 0, 0, 0, 0, 0,
+#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, H1name, H2name, 0, 0, 0, 0, 0, 0,
 
 extern FILE *	T0FP;
 extern FILE *	T1FP;
@@ -289,4 +286,9 @@ extern void	clearParaList(int flag); /* clear parameter list from extraneous ent
 					/*   gram.y   */
 extern int	c_parse(void);		/* generated yacc parser function */
 extern void	copyAdjust(FILE* iFP, FILE* oFP, List_e* lp);
+
+					/*   cexe.h   */
+#if ! defined(LOAD) && (defined(RUN) || defined(TCP))
+extern	Symbol*	iC_Lookup(char * string);
+#endif	/* nor LOAD and ( RUN or TCP ) */
 #endif	/* COMP_H */

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.23 2005/01/16 15:38:43 jw Exp $";
+"@(#)$Id: link.c,v 1.24 2005/01/26 15:16:54 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -21,17 +21,16 @@ static const char link_c[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #include	<stdio.h>
-#include	"icg.h"
 #include	"icc.h"
 
-unsigned short	mark_stamp = 1;		/* incremented every scan */
-Gate *		osc_gp = NULL;		/* report oscillations */
+unsigned short	iC_mark_stamp = 1;		/* incremented every scan */
+Gate *		iC_osc_gp = NULL;		/* report oscillations */
 static short	warn_cnt = OSC_WARN_CNT;/* limit the number of oscillator warnings */
 
 /* link a gate block into the output list */
 
 void
-link_ol(
+iC_link_ol(
     Gate *		gp,
     Gate *		out_list)
 {
@@ -43,7 +42,7 @@ link_ol(
 
     if (gp->gt_next) {
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
-	glit_cnt++;				/* count glitches */
+	iC_glit_cnt++;				/* count glitches */
 #endif
 #ifndef DEQ
 	ap = tp = out_list;			/* glitch */
@@ -68,15 +67,15 @@ link_ol(
 		 *******************************************************************/
 		if ((tp = (Gate*)tp->gt_rlist) == out_list || tp == 0) {
 #if !defined(_WINDOWS) || defined(LOAD)
-		    fprintf(errFP,
+		    fprintf(iC_errFP,
     "\n%s: line %d: cannot find '%s' entry in '%s' or '%s' after glitch\n",
     __FILE__, __LINE__, gp->gt_ids, out_list->gt_ids, ap->gt_ids);
 #endif
-		    quit(-1);
+		    iC_quit(-1);
 		}
 		ap =  tp;
 #if YYDEBUG && !defined(_WINDOWS)
-		if ((debug & 0300) == 0300) putc('@', outFP); /* alternate found */
+		if ((iC_debug & 0300) == 0300) putc('@', iC_outFP); /* alternate found */
 #endif
 	    }
 	}
@@ -99,32 +98,32 @@ link_ol(
 	}
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "g<");
+	if (iC_debug & 0100) fprintf(iC_outFP, "g<");
 #endif
     } else {
-	link_cnt++;				/* count link operations */
+	iC_link_cnt++;				/* count link operations */
 	if (gp->gt_fni < MIN_ACT) {		/* ARITH & GATE may oscillate */
-	    if (gp->gt_mark != mark_stamp) {	/* first link this cycle */
-		gp->gt_mark = mark_stamp;	/* yes, stamp the gate */
+	    if (gp->gt_mark != iC_mark_stamp) {	/* first link this cycle */
+		gp->gt_mark = iC_mark_stamp;	/* yes, stamp the gate */
 		gp->gt_mcnt = 0;		/*      clear mark count */
 	    } else {
-		if (++gp->gt_mcnt >= osc_lim) {	/* new alg: cnt 1 larger */
+		if (++gp->gt_mcnt >= iC_osc_lim) {	/* new alg: cnt 1 larger */
 #if YYDEBUG && !defined(_WINDOWS)
-		    if ((debug & 0300) == 0300) putc('#', outFP);
+		    if ((iC_debug & 0300) == 0300) putc('#', iC_outFP);
 #endif
 		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
 		    if (warn_cnt > 0
 #if YYDEBUG && !defined(_WINDOWS)
-				    && !(debug & 0200)
+				    && !(iC_debug & 0200)
 #endif
 		    ) {
 			warn_cnt--;		/* limit the number of warning messages */
-			osc_gp = gp;		/* report oscillations */
+			iC_osc_gp = gp;		/* report oscillations */
 		    }
 		}
 #if YYDEBUG && !defined(_WINDOWS)
-//####		if ((debug & 0300) == 0300) fprintf(outFP, "%d", gp->gt_mcnt);
-		if ((debug & 0300) == 0300) fprintf(outFP, "%d,%d", gp->gt_mcnt,osc_lim);
+//####		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d", gp->gt_mcnt);
+		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d,%d", gp->gt_mcnt,iC_osc_lim);
 #endif
 	    }
 	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */
@@ -150,7 +149,7 @@ link_ol(
 		) &&
 		(time = out_list->gt_old) <= 0		/* and preset off time is 0 */
 	    ) {
-		out_list = c_list;			/* put on 'clock' list imme */
+		out_list = iC_c_list;			/* put on 'clock' list imme */
 	    } else {
 		/********************************************************************
 		 * 'HI' action gate clocked by timer/counter (time >= 1)
@@ -160,7 +159,7 @@ link_ol(
 		 * Negative times are treated like 0 times.
 		 *******************************************************************/
 #if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0100) fprintf(outFP, "(%d)!", time);
+		if (iC_debug & 0100) fprintf(iC_outFP, "(%d)!", time);
 #endif
 		tp = out_list;
 		diff = 0;
@@ -174,16 +173,16 @@ link_ol(
 		diff -= np->gt_mark;			/* full time to previous */
 		gp->gt_mark = time - diff;		/* diff previous to new */
 		if (np != out_list) {
-		    np->gt_mark -= gp->gt_mark;	/* adjust diff new to old */
+		    np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		} else {
 		    out_list->gt_list = (Gate **)gp;	/* list => new */
 #ifndef NOCHECK
 		    /* check that algorithm is correct */
 		    if (out_list->gt_mark != 0) {
-			fprintf(errFP,
+			fprintf(iC_errFP,
 		    "\n%s: line %d: TIMER %s gt_mark is %d, should be 0)\n",
 			__FILE__, __LINE__, out_list->gt_ids, out_list->gt_mark);
-			quit(-1);
+			iC_quit(-1);
 		    }
 #endif
 		}
@@ -198,21 +197,21 @@ link_ol(
 		np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		/* if np == out_list, out_list->gt_mark gets -diff */
 #endif
-		return;				/* sorted link action complete */
+		return;					/* sorted link action complete */
 	    }
 	}
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) putc('>', outFP);
+	if (iC_debug & 0100) putc('>', iC_outFP);
 #endif
 #ifndef DEQ
 	((Gate *)out_list->gt_list)->gt_next = gp;	/* old => new */
 	gp->gt_next = out_list;				/* new => list */
 	out_list->gt_list = (Gate **)gp;		/* list => new */
 #else
-	tp = out_list->gt_prev;			/* save previous */
-	out_list->gt_prev = tp->gt_next = gp;	/* list, previous ==> new */
-	gp->gt_next = out_list;			/* new ==> list */
-	gp->gt_prev = tp;			/* previous <== new */
+	tp = out_list->gt_prev;				/* save previous */
+	out_list->gt_prev = tp->gt_next = gp;		/* list, previous ==> new */
+	gp->gt_next = out_list;				/* new ==> list */
+	gp->gt_prev = tp;				/* previous <== new */
 #endif
     }
-} /* link_ol */
+} /* iC_link_ol */

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.30 2004/12/22 16:59:26 jw Exp $";
+"@(#)$Id: scan.c,v 1.31 2005/01/26 15:29:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,7 +19,6 @@ static const char scan_c[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #include	<stdio.h>
-#include	"icg.h"
 #include	"icc.h"
 
 static void	link_c(Gate * gp, Gate * out_list);
@@ -28,45 +27,35 @@ static void	link_c(Gate * gp, Gate * out_list);
  *
  *	The following 5 arrays are indexed by gt_fni (is ftype)
  *
- *	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
- *	F_SW	S_FF	R_FF	D_FF	F_CF	F_CE	CLCK	TIMR
+ *	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH
+ *	F_SW	S_FF	R_FF	D_FF	CH_BIT	F_CF	F_CE	CLCK	TIMR
  *	TRAB	OUTW	OUTX	CLCKL	TIMRL
  *
  *******************************************************************/
 
-Functp2		initAct[] = {		/* called in pass4 */
-		    err_fn, arithMa, link_ol, link_c, chMbit, link_c, link_c, dMsh,
-		    link_c, link_c, link_c, link_c, link_c, link_c, link_c, link_c,
-		    err_fn, outMw, outMx, err_fn, err_fn,
+static iC_Functp2 initAct[] = {			/* called in pass4 */
+		    INIT_ACT
 		};
 
-Functp2		masterAct[] = {		/* called in scan, scan_ar and pass4 */
-		    err_fn, arithMa, link_ol, riMbit, chMbit, sMsh, rMsh, dMsh,
-		    fMsw, sMff, rMff, dMff, fMcf, fMce, fMfn, fMfn,
-		    err_fn, outMw, outMx, err_fn, err_fn,
+static iC_Functp2 masterAct[] = {		/* called in scan, scan_ar and pass4 */
+		    MASTER_ACT
 		};
 
-Functp2		slaveAct[] = {		/* called in scan_clk */
-		    err_fn, err_fn, err_fn, riSbit, chSbit, sSsh, rSsh, dSsh,
-		    fSsw, sSff, rSff, dSff, fScf, fScf, clockSfn, timerSfn,
-		    err_fn, err_fn, err_fn, err_fn, err_fn,
+static iC_Functp2 slaveAct[] = {		/* called in scan_clk */
+		    SLAVE_ACT
 		};
 
-Functp		init2[] = {		/* called in pass2 */
-		    null1, gate2, gate2, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
-		    null1, i_ff2, i_ff2, i_ff2, null1, null1, i_ff2, i_ff2,
-		    null1, null1, null1, null1, null1,
+static iC_Functp init2[] = {			/* called in pass2 */
+		    INIT2_ACT
 		};
 
-unsigned int	bit2[] = {		/* used in i_ff2() and i_ff3() */
-		    0, INPT_M, INPT_M, RI_B_M, CH_B_M, S_SH_M, R_SH_M, D_SH_M,
-		    F_CW_M, S_FF_M, R_FF_M, D_FF_M, F_CF_M, F_CF_M, CLCK_M, TIMR_M,
-		    0, OUTP_M, 0, 0, 0,	/* TRAB and OUTX ==> 0 jw 040417 */
+unsigned int	iC_bit2[] = {			/* used in i_ff2() and i_ff3() */
+		    BIT2_LST
 		};
 
-Gate *		gx;	/* used to point to action Gate in chMbit riMbit */
+Gate *		iC_gx;	/* used to point to action Gate in chMbit riMbit */
 #if YYDEBUG && !defined(_WINDOWS)
-short		dc;	/* debug display counter in scan and rsff */
+short		iC_dc;	/* debug display counter in scan and rsff */
 #endif
 
 /********************************************************************
@@ -88,7 +77,7 @@ short		dc;	/* debug display counter in scan and rsff */
  *******************************************************************/
 
 void
-scan_ar(Gate *	out_list)
+iC_scan_ar(Gate *	out_list)
 {
 #if INT_MAX == 32767 && defined (LONG16)
     long		val;
@@ -100,8 +89,8 @@ scan_ar(Gate *	out_list)
     Gate *		op;
 
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) {
-	fprintf(outFP, "\narith scan ==========");
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, "\narith scan ==========");
     }
 #endif
     while ((op = out_list->gt_next) != out_list) {	/* scan outputs */
@@ -116,49 +105,49 @@ scan_ar(Gate *	out_list)
 	gp->gt_prev = out_list;			/* list <== next */
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
-	/*
+	/********************************************************************
 	 * up to this point changes in gt_new back to gt_old could have
 	 * caused this Gate to be unlinked (glitch), resulting in the
 	 * following update executions of arithmetic functions not
 	 * being done. They are then no longer necessary, since no
 	 * change in the function results would occurr.
-	 */
-	op->gt_old = op->gt_new;	/* now new value is fixed */
+	 *******************************************************************/
+	op->gt_old = op->gt_new;		/* now new value is fixed */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) {
+	if (iC_debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-	    fprintf(outFP, "\n%s: %ld", op->gt_ids, op->gt_new);
+	    fprintf(iC_outFP, "\n%s: %ld", op->gt_ids, op->gt_new);
 #else
-	    fprintf(outFP, "\n%s: %d", op->gt_ids, op->gt_new);
+	    fprintf(iC_outFP, "\n%s: %d", op->gt_ids, op->gt_new);
 #endif
-	    dc = 0;
+	    iC_dc = 0;
 	}
 #endif
 #if defined(TCP) && defined(LOAD)
 	if (op->gt_live & 0x8000) {
-	    liveData(op->gt_live, op->gt_new);	/* live is active */
+	    iC_liveData(op->gt_live, op->gt_new);	/* live is active */
 	}
 #endif
 	lp = op->gt_list;
 	while ((gp = *lp++) != 0) {
 #ifdef LOAD
-	    CFunctp exec;
+	    iC_CFunctp exec;
 #endif
-	    scan_cnt++;				/* count scan operations */
+	    iC_scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-	    gx = gp;				/* save old gp in gx */
-	    if (debug & 0100) {
-		if (dc++ >= 4) {
-		    dc = 1;
-		    putc('\n', outFP);
+	    iC_gx = gp;				/* save old gp in iC_gx */
+	    if (iC_debug & 0100) {
+		if (iC_dc++ >= 4) {
+		    iC_dc = 1;
+		    putc('\n', iC_outFP);
 		}
 #if INT_MAX == 32767 && defined (LONG16)
-		fprintf(outFP, "\t%s %ld ==>", gp->gt_ids,
+		fprintf(iC_outFP, "\t%s %ld ==>", gp->gt_ids,
 		    gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 		    gp->gt_new : (long)gp->gt_val);
 #else
-		fprintf(outFP, "\t%s %d ==>", gp->gt_ids,
+		fprintf(iC_outFP, "\t%s %d ==>", gp->gt_ids,
 		    gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 		    gp->gt_new : gp->gt_val);
@@ -166,12 +155,12 @@ scan_ar(Gate *	out_list)
 	    }
 #endif
 #ifdef LOAD
-	    if ((exec = (CFunctp)*(gp->gt_rlist)) != 0) {
+	    if ((exec = (iC_CFunctp)*(gp->gt_rlist)) != 0) {
 		val = exec(gp);			/* compute arith expression */
 	    }
 #else
 	    if (gp->gt_rlist) {
-		val = c_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
+		val = iC_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
 	    }
 #endif
 	    else {
@@ -187,25 +176,25 @@ scan_ar(Gate *	out_list)
 		gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
 		if (val != gp->gt_new) {
 		    gp->gt_new = val;
-		    (*masterAct[gp->gt_fni])(gp, a_list); /* arithmetic master action */
+		    (*masterAct[gp->gt_fni])(gp, iC_a_list); /* arithmetic master action */
 		}
 	    } else if ((val = val ? -1 : 1) != gp->gt_val) {
-		gp->gt_val = val;	/* convert val to logic value */
+		gp->gt_val = val;		/* convert val to logic value */
 		/* logic master action */
-		(*masterAct[gp->gt_fni])(gp, o_list);
+		(*masterAct[gp->gt_fni])(gp, iC_o_list);
 	    }
 #if YYDEBUG && !defined(_WINDOWS)
-	    /* global gx is modified in arithmetic chMbit() master action */
+	    /* global iC_gx is modified in arithmetic chMbit() master action */
 #if INT_MAX == 32767 && defined (LONG16)
-	    if (debug & 0100) fprintf(outFP, " %ld",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gx->gt_fni == F_SW ||
-		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
-		    gx->gt_new : (long)gx->gt_val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, " %ld",
+		    iC_gx->gt_fni == ARITH || iC_gx->gt_fni == D_SH || iC_gx->gt_fni == F_SW ||
+		    iC_gx->gt_fni == CH_BIT || iC_gx->gt_fni == OUTW ?
+		    iC_gx->gt_new : (long)iC_gx->gt_val);
 #else
-	    if (debug & 0100) fprintf(outFP, " %d",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gx->gt_fni == F_SW ||
-		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
-		    gx->gt_new : gx->gt_val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, " %d",
+		    iC_gx->gt_fni == ARITH || iC_gx->gt_fni == D_SH || iC_gx->gt_fni == F_SW ||
+		    iC_gx->gt_fni == CH_BIT || iC_gx->gt_fni == OUTW ?
+		    iC_gx->gt_new : iC_gx->gt_val);
 #endif
 #endif
 	}
@@ -217,7 +206,7 @@ scan_ar(Gate *	out_list)
  *	Scan of nodes on a logic action list
  *
  *	The nodes op on the o_list are all of ftype GATE and the target
- *	nodes gp are all of types AND, OR or LATCH.
+ *	nodes gp are all of types AND, OR, LATCH or XOR.
  *
  *	The target nodes gp can trigger both arithmetic and logical actions.
  *
@@ -226,12 +215,12 @@ scan_ar(Gate *	out_list)
  *	This is faster for the bulk of the plain logic actions which
  *	would be slowed down by an extra test in the scan.
  *
- *	The target action GATE is to simly call link_ol().
+ *	The target action GATE is to simly call iC_link_ol().
  *
  *******************************************************************/
 
 void
-scan(Gate *	out_list)
+iC_scan(Gate *	out_list)
 {
     int			val;
     Gate *		gp;
@@ -239,8 +228,8 @@ scan(Gate *	out_list)
     Gate *		op;
 
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) {
-	fprintf(outFP, "\nlogic scan ==========");
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, "\nlogic scan ==========");
     }
 #endif
     while ((op = out_list->gt_next) != out_list) {	/* scan outputs */
@@ -256,70 +245,172 @@ scan(Gate *	out_list)
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) {
-	    fprintf(outFP, "\n%s:", op->gt_ids);
-	    dc = 0;
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "\n%s:", op->gt_ids);
+	    iC_dc = 0;
 	}
 #endif
 #if defined(TCP) && defined(LOAD)
 	if (op->gt_live & 0x8000) {
-	    liveData(op->gt_live, op->gt_val < 0 ? 1 : 0);	/* live is active */
+	    iC_liveData(op->gt_live, op->gt_val < 0 ? 1 : 0);	/* live is active */
 	}
 #endif
+	/************************************************************
+	 * In the following code all proccessing for normal and
+	 * inverted outputs ar coded twice (identically) to speed up
+	 * exeution a little.
+	 ***********************************************************/
 	lp = op->gt_list;
 	/************************************************************
+	 * GATE logical types AND OR LATCH (LOGC never occurrs)
 	 * op->gt_val is either -1 or +1 when a gate fires and it is
 	 * linked to the tail of the action list.
 	 * By the time the gate has reached the head of the action
 	 * list, it may have been modified either + or -.
 	 ***********************************************************/
 	val = (op->gt_val < 0) ? -1 : 1;
-	/* do twice: once with val, then whith -val */
-	while ((gp = *lp++) != 0) { /* scan non-inverted outputs */
-	    scan_cnt++;				/* count scan operations */
+#ifdef LOAD
+	if (op->gt_fni == GATE) {
+	    /********************************************************************
+	     * ftype == GATE - no targets will be XOR
+	     *******************************************************************/
+	    /* do twice: once with val, then whith -val */
+	    while ((gp = *lp++) != 0) { /* scan non-inverted outputs */
+		iC_scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-	    gx = gp;			/* save old gp in gx */
-	    if (debug & 0100) {
-		if (dc++ >= 4) {
-		    dc = 1;
-		    putc('\n', outFP);
+		iC_gx = gp;			/* save old gp in iC_gx */
+		if (iC_debug & 0100) {
+		    if (iC_dc++ >= 4) {
+			iC_dc = 1;
+			putc('\n', iC_outFP);
+		    }
+		    fprintf(iC_outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
 		}
-		fprintf(outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
-	    }
 #endif
-	    if ((gp->gt_val += val) == 0) {	/* gate function */
-		gp->gt_val = val;		/* val is logic value */
-		(*masterAct[gp->gt_fni])(gp, o_list);/* master action */
-	    }
-#if YYDEBUG && !defined(_WINDOWS)
-	    /* global gx is modified in riMbit() and chMbit() master action */
-	    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
-#endif
-	}
-	val = -val;				/* invert logic value */
-	while ((gp = *lp++) != 0) { /* scan inverted outputs */
-	    scan_cnt++;				/* count scan operations */
-#if YYDEBUG && !defined(_WINDOWS)
-	    gx = gp;			/* save old gp in gx */
-	    if (debug & 0100) {
-		if (dc++ >= 4) {
-		    dc = 1;
-		    putc('\n', outFP);
+		/************************************************************
+		 * GATE logical types AND OR LATCH for normal outputs
+		 ***********************************************************/
+		if ((gp->gt_val += val) == 0) {	/* gate function */
+		    gp->gt_val = val;		/* val is logic value */
+		    (*masterAct[gp->gt_fni])(gp, iC_o_list);/* master action */
 		}
-		fprintf(outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
-	    }
-#endif
-	    if ((gp->gt_val += val) == 0) {	/* gate function */
-		gp->gt_val = val;		/* val is inverted value */
-		(*masterAct[gp->gt_fni])(gp, o_list);/* master action */
-	    }
 #if YYDEBUG && !defined(_WINDOWS)
-	    /* global gx is modified in riMbit() and chMbit() master action */
-	    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
+		/* global iC_gx is modified in riMbit() and chMbit() master action */
+		if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
 #endif
+	    }
+	    /************************************************************
+	     * GATE logical types AND OR LATCH for inverted outputs
+	     ***********************************************************/
+	    val = -val;				/* invert logic value */
+	    while ((gp = *lp++) != 0) { /* scan inverted outputs */
+		iC_scan_cnt++;			/* count scan operations */
+#if YYDEBUG && !defined(_WINDOWS)
+		iC_gx = gp;			/* save old gp in iC_gx */
+		if (iC_debug & 0100) {
+		    if (iC_dc++ >= 4) {
+			iC_dc = 1;
+			putc('\n', iC_outFP);
+		    }
+		    fprintf(iC_outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
+		}
+#endif
+		/************************************************************
+		 * GATE logical types AND OR LATCH for inverted outputs
+		 ***********************************************************/
+		if ((gp->gt_val += val) == 0) {	/* gate function */
+		    gp->gt_val = val;		/* val is inverted value */
+		    (*masterAct[gp->gt_fni])(gp, iC_o_list);/* master action */
+		}
+#if YYDEBUG && !defined(_WINDOWS)
+		/* global iC_gx is modified in riMbit() and chMbit() master action */
+		if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
+#endif
+	    }
+	} else {
+#endif	/* LOAD */
+	    /********************************************************************
+	     * ftype == GATEX - some targets may be XOR - set at load time
+	     * or direct execution, in which case ftype GATE handles XOR AND ...
+	     *******************************************************************/
+	    /* do twice: once with val, then whith -val */
+	    while ((gp = *lp++) != 0) { /* scan non-inverted outputs */
+		iC_scan_cnt++;			/* count scan operations */
+#if YYDEBUG && !defined(_WINDOWS)
+		iC_gx = gp;			/* save old gp in iC_gx */
+		if (iC_debug & 0100) {
+		    if (iC_dc++ >= 4) {
+			iC_dc = 1;
+			putc('\n', iC_outFP);
+		    }
+		    fprintf(iC_outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
+		}
+#endif
+		if (gp->gt_ini != 0) {		/* trigger for XOR (UDF) */
+		    /************************************************************
+		     * GATE logical types AND OR LATCH for normal outputs
+		     ***********************************************************/
+		    if ((gp->gt_val += val) == 0) {	/* gate function */
+			gp->gt_val = val;		/* val is logic value */
+			(*masterAct[gp->gt_fni])(gp, iC_o_list);/* master action */
+		    }
+		} else {
+		    /************************************************************
+		     * XOR processing for normal outputs
+		     * xor gates are initialised to 0 for 2, 3 or more 0 inputs.
+		     * Every time one of the inputs changes from a 0 to a 1 or
+		     * from a 1 to a 0, the output is toggled.
+		     * This is independent of the value of the current input.
+		     ***********************************************************/
+		    gp->gt_val ^= 0x80;		/* xor independent of change */
+		    (*masterAct[gp->gt_fni])(gp, iC_o_list);/* master action */
+		}
+#if YYDEBUG && !defined(_WINDOWS)
+		/* global iC_gx is modified in riMbit() and chMbit() master action */
+		if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
+#endif
+	    }
+	    /************************************************************
+	     * GATE logical types AND OR LATCH for inverted outputs
+	     ***********************************************************/
+	    val = -val;				/* invert logic value */
+	    while ((gp = *lp++) != 0) { /* scan inverted outputs */
+		iC_scan_cnt++;			/* count scan operations */
+#if YYDEBUG && !defined(_WINDOWS)
+		iC_gx = gp;			/* save old gp in iC_gx */
+		if (iC_debug & 0100) {
+		    if (iC_dc++ >= 4) {
+			iC_dc = 1;
+			putc('\n', iC_outFP);
+		    }
+		    fprintf(iC_outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
+		}
+#endif
+		if (gp->gt_ini != 0) {		/* trigger for XOR (UDF) */
+		    /************************************************************
+		     * GATE logical types AND OR LATCH for inverted outputs
+		     ***********************************************************/
+		    if ((gp->gt_val += val) == 0) {	/* gate function */
+			gp->gt_val = val;		/* val is inverted value */
+			(*masterAct[gp->gt_fni])(gp, iC_o_list);/* master action */
+		    }
+		} else {
+		    /************************************************************
+		     * XOR processing for inverted outputs
+		     ***********************************************************/
+		    gp->gt_val ^= 0x80;		/* xor independent of change */
+		    (*masterAct[gp->gt_fni])(gp, iC_o_list);/* master action */
+		}
+#if YYDEBUG && !defined(_WINDOWS)
+		/* global iC_gx is modified in riMbit() and chMbit() master action */
+		if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
+#endif
+	    }
+#ifdef LOAD
 	}
+#endif	/* LOAD */
     }
-} /* scan */
+} /* iC_scan */
 
 /********************************************************************
  *
@@ -354,7 +445,7 @@ scan(Gate *	out_list)
  *******************************************************************/
 
 void
-scan_clk(Gate *	out_list)	/* scan a clock list */
+iC_scan_clk(Gate *	out_list)		/* scan a clock list */
 {
     Gate *	op;
 #ifdef DEQ
@@ -362,8 +453,8 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 #endif
 
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) {
-	fprintf(outFP, out_list == c_list ? "\nclock scan =========="
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, out_list == iC_c_list ? "\nclock scan =========="
 					  : "\nfunct scan ==========");
     }
 #endif
@@ -379,9 +470,9 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 	gp->gt_prev = out_list;			/* list <== next */
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
-	scan_cnt++;				/* count scan operations */
+	iC_scan_cnt++;				/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "\n%s:", op->gt_ids);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\n%s:", op->gt_ids);
 #endif
 	/* only fScf() and fSsw() require out_list to switch to f_list */
 	(*slaveAct[op->gt_fni])(op, out_list);	/* execute slave action */
@@ -395,13 +486,13 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
  *******************************************************************/
 
 void
-scan_snd(Gate *	out_list)
+iC_scan_snd(Gate *	out_list)
 {
     Gate *	op;
 
 #if YYDEBUG && !defined(_WINDOWS)
-    if (debug & 0100) {
-	fprintf(outFP, "\nsend scan ==========");
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, "\nsend scan ==========");
     }
 #endif
     while ((op = out_list->gt_next) != out_list) {
@@ -417,12 +508,12 @@ scan_snd(Gate *	out_list)
 	op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) fprintf(outFP, "\n%s:\t", op->gt_ids);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\n%s:\t", op->gt_ids);
 #endif
-	outMw(op, out_list);			/* Master action is always outMw() */
-	scan_cnt++;				/* count scan operations */
+	iC_outMw(op, out_list);			/* Master action is always outMw() */
+	iC_scan_cnt++;				/* count scan operations */
     }
-} /* scan_snd */
+} /* iC_scan_snd */
 
 /********************************************************************
  *
@@ -433,16 +524,16 @@ scan_snd(Gate *	out_list)
  *******************************************************************/
 
 void
-pass1(Gate * op, int typ)	/* Pass1 init on gates */
+iC_pass1(Gate * op, int typ)			/* Pass1 init on gates */
 {
-    op->gt_mcnt = 0;			/* clear gate value */
+    op->gt_mcnt = 0;				/* clear gate value */
 #ifndef LOAD
-    op->gt_ini = -typ;			/* overwritten for AND OR LATCH types */
+    op->gt_ini = -typ;				/* overwritten for AND OR LATCH types */
 #endif
 #ifndef DEQ
-    op->gt_next = 0;			/* clear link */
+    op->gt_next = 0;				/* clear link */
 #else
-    op->gt_next = op->gt_prev = 0;	/* unlink Gate */
+    op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif
 } /* pass1 */
 
@@ -456,9 +547,9 @@ pass1(Gate * op, int typ)	/* Pass1 init on gates */
  *******************************************************************/
 
 void
-pass2(Gate * op, int typ)	/* Pass2 init on gates */
+iC_pass2(Gate * op, int typ)			/* Pass2 init on gates */
 {
-    (*init2[op->gt_fni])(op, typ);	/* call pass2 function init */
+    (*init2[op->gt_fni])(op, typ);		/* call pass2 function init */
 } /* pass2 */
 
 /********************************************************************
@@ -474,7 +565,7 @@ pass2(Gate * op, int typ)	/* Pass2 init on gates */
  *******************************************************************/
 
 void
-gate2(Gate * op, int typ)		/* pass2 function init gates */
+iC_gate2(Gate * op, int typ)			/* pass2 function init gates */
 {
     int	cnt;
     Gate **	lp;
@@ -482,19 +573,19 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
 
     if ((lp = op->gt_list) != 0) {
 	cnt = (op->gt_fni < MAX_AR) ? 1 : 2;
-	do {				/* for normal and inverted */
-	    while ((gp = *lp++) != 0) {	/* init connected gates */
+	do {					/* for normal and inverted */
+	    while ((gp = *lp++) != 0) {		/* init connected gates */
 		if (gp->gt_mcnt++ >= PPGATESIZE) {
-		    fprintf(outFP, "\nError:\ttoo many inputs on gate: %s",
+		    fprintf(iC_outFP, "\nError:\ttoo many inputs on gate: %s",
 			gp->gt_ids);
-		    error_flag = 1;	/* cannot execute with this error */
-		}			/* error message only once */
+		    iC_error_flag = 1;		/* cannot execute with this error */
+		}				/* error message only once */
 	    }
 	} while (--cnt);
     } else {
-	fprintf(outFP,
+	fprintf(iC_outFP,
 	    "\nWarning:	gate %s has no output list", gp->gt_ids);
-	    error_flag = 2;		/* can execute with this warning */
+	    iC_error_flag = 2;			/* can execute with this warning */
     }
 } /* gate2 */
 
@@ -502,10 +593,16 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
  *
  *	Pass 3 initialisation for Gates. Called directly for types.
  *
- *	The connection count is reported and a Warning issued if zero.
- *	For AND and UDF the initial value for gt_val is this count. For
- *	ARN, ARNC, LOGC and OR the initial value for gt_val is set to +1.
- *	For a 2 input LATCH the initial value for gt_val is set to +2.
+ *	The connection count is reported and a Warning issued if zero
+ *	for types other than LOGC or ARNC.
+ *	For AND the initial value for gt_val is this count. gt_val is
+ *	set as follows:
+ *	gt_ini	gt_val
+ *	   0	   0	for UDF (because number of inputs is 0 !!)
+ *	   0	   1	for XOR
+ *	   1	   1	for OR ARN ARNC LOGC
+ *	   n	   n	for AND where n is number of inputs
+ *	(n+1)/2	(n+1)/2	for LATCH
  *	Multi input LATCHes are handled correctly (not supported yet).
  *	In all cases this corresponds to the state when all inputs
  *	are LO. Since gt_val is set to a positive count in every
@@ -513,23 +610,23 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
  *	of pass 3.
  *
  *	For the reverse logic check the initial value of gt_val is
- *	saved in gt_ini for AND OR and LATCH.
+ *	saved in gt_ini for XOR AND OR and LATCH.
  *
  *******************************************************************/
 
 void
-gate3(Gate * gp, int typ)	/* Pass3 init on gates */
+gate3(Gate * gp, int typ)			/* Pass3 init on gates */
 {
-    unsigned char opt = os[typ];
+    unsigned char opt = iC_os[typ];
     if (gp->gt_mcnt == 0 && typ != LOGC && typ != ARNC) {
-	fprintf(outFP,
+	fprintf(iC_outFP,
 	    "\nWarning:    %c	%s\thas no input connections",
 	    opt, gp->gt_ids);
-	    error_flag = 2;		/* can execute with this warning */
+	    iC_error_flag = 2;			/* can execute with this warning */
     } else {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) {
-	    fprintf(outFP, "\n	    %c	%s:\t%d inputs",
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "\n	    %c	%s:\t%d inputs",
 		opt, gp->gt_ids, gp->gt_mcnt);
 	}
 #endif
@@ -537,15 +634,13 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	if (typ == ARN || typ == ARNC || typ == LOGC) {
 	    gp->gt_new = gp->gt_old = 0;
 	    gp->gt_val = 1;
+	} else if (gp->gt_ini == 0) {
+	    gp->gt_val = 1;			/* XOR */
 	} else {
-	    gp->gt_val = gp->gt_ini;	/* calculations done in generator */
+	    gp->gt_val = gp->gt_ini;		/* calculations done in outp.c (output()) */
 	}
 #else
 	switch (typ) {
-	case UDF:
-	case AND:
-	    gp->gt_ini = gp->gt_val = gp->gt_mcnt;	/* AND set to number of inputs */
-	    break;
 	case ARNC:
 	case ARN:
 	    gp->gt_new = gp->gt_old = 0;
@@ -553,23 +648,31 @@ gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 	case LOGC:
 	    gp->gt_val = 1;
 	    break;
+	case XOR:
+	    gp->gt_ini = 0;			/* set XOR gates to 0/1 */
+	    gp->gt_val = 1;
+	    break;
+	case UDF:				/* number of inputs is 0 !! */
+	case AND:
+	    gp->gt_ini = gp->gt_val = gp->gt_mcnt;	/* AND set to number of inputs */
+	    break;
 	case OR:
-	    gp->gt_ini = gp->gt_val = 1;		/* set OR gates to +1 */
+	    gp->gt_ini = gp->gt_val = 1;	/* set OR gates to +1 */
 	    break;
 	case LATCH:
 	    gp->gt_ini = gp->gt_val = (int)(gp->gt_mcnt + 1) >> 1;	/* set LATCH gates */
 	    break;
 	default:
-	    gp->gt_val = 0;		/* should not happen */
+	    gp->gt_val = 0;			/* should not happen */
 	    break;
 	}
-	gp->gt_mcnt = 0;		/* clear gt_mcnt */
+	gp->gt_mcnt = 0;			/* clear gt_mcnt */
 #endif
-	gp->gt_live = 0;		/* clear live flag */
+	gp->gt_live = 0;			/* clear live flag */
     }
 } /* gate3 */
 
-Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
+iC_Functp		iC_gate_i[] = {iC_pass1, iC_pass2, gate3, iC_pass4, };
 
 /********************************************************************
  *
@@ -584,7 +687,8 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
  *
  *	Each inverted connection to other Gates acts as a HI signal
  *	which means that a Gate action must be carried out for all
- *	inverted connections. Outputs which change are linked. All
+ *	inverted connections. This applies to XOR gates also. Outputs
+ *	which change are linked (or unlinked in case of a glitch). All
  *	clocked and timer actions are linked to c_list immediately,
  *	rather than to some other clock or timer. This is done with
  *	the assumptions that the clock or timer action took place
@@ -613,7 +717,7 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
  *******************************************************************/
 
 void
-pass4(Gate * op, int typ)	/* Pass4 init on gates */
+iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 {
     Gate **	lp;
     Gate *	gp;
@@ -623,34 +727,37 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
     int		val;
 #endif
 
-    if (op->gt_fni < MIN_ACT) {		/* UDFA, ARITH, GATE */
+    if (op->gt_fni < MIN_ACT) {			/* UDFA, ARITH, GATE */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (debug & 0100) {
-	    fprintf(outFP, "\ninit %s:", op->gt_ids);
-	    dc = 0;
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "\ninit %s:", op->gt_ids);
+	    iC_dc = 0;
 	}
 #endif
 	lp = op->gt_list;
 	if (op->gt_fni == ARITH) {
-	    while ((gp = *lp++) != 0) {	/* do arithmetic outputs */
+	    /************************************************************
+	     * Scan arithmetic outputs
+	     ***********************************************************/
+	    while ((gp = *lp++) != 0) {		/* do arithmetic outputs */
 #ifdef LOAD
-		CFunctp exec;
+		iC_CFunctp exec;
 #endif
-		scan_cnt++;			/* count scan operations */
+		iC_scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-		gx = gp;			/* save old gp in gx */
-		if (debug & 0100) {
-		    if (dc++ >= 4) {
-			dc = 1;
-			putc('\n', outFP);
+		iC_gx = gp;			/* save old gp in iC_gx */
+		if (iC_debug & 0100) {
+		    if (iC_dc++ >= 4) {
+			iC_dc = 1;
+			putc('\n', iC_outFP);
 		    }
 #if INT_MAX == 32767 && defined (LONG16)
-		    fprintf(outFP, "\t%s %ld ==>", gp->gt_ids,
+		    fprintf(iC_outFP, "\t%s %ld ==>", gp->gt_ids,
 			gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 			gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 			gp->gt_new : (long)gp->gt_val);
 #else
-		    fprintf(outFP, "\t%s %d ==>", gp->gt_ids,
+		    fprintf(iC_outFP, "\t%s %d ==>", gp->gt_ids,
 			gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 			gp->gt_fni == CH_BIT || gp->gt_fni == OUTW ?
 			gp->gt_new : gp->gt_val);
@@ -658,12 +765,12 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		}
 #endif
 #ifdef LOAD
-		if ((exec = (CFunctp)*(gp->gt_rlist)) != 0) {
+		if ((exec = (iC_CFunctp)*(gp->gt_rlist)) != 0) {
 		    val = exec(gp);		/* compute arith expression */
 		}
 #else
 		if (gp->gt_rlist) {
-		    val = c_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
+		    val = iC_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
 		}
 #endif
 		else {
@@ -674,88 +781,130 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
 		    if (val != gp->gt_new) {
 			gp->gt_new = val;
-			(*initAct[gp->gt_fni])(gp, a_list);
+			(*initAct[gp->gt_fni])(gp, iC_a_list);
 		    }
 		} else if (gp->gt_fni == F_SW) {
 		    gp->gt_new = val;		/* store new value, even if unchanged */
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, a_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_a_list);	/* link_c() */
 		    }
 		} else if (gp->gt_fni == F_CE) {
 		    gp->gt_val = val ? -1 : 1;	/* convert val to logic value */
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, a_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_a_list);	/* link_c() */
 		    }
 		} else if ((val = val ? -1 : 1) != gp->gt_val) {
 		    gp->gt_val = val;		/* convert val to logic value */
-		    (*initAct[gp->gt_fni])(gp, o_list);		/* init action */
+		    (*initAct[gp->gt_fni])(gp, iC_o_list);		/* init action */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-		if (debug & 0100) fprintf(outFP, " %ld",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
-		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
-		    gx->gt_new : (long)gx->gt_val);
+		if (iC_debug & 0100) fprintf(iC_outFP, " %ld",
+		    iC_gx->gt_fni == ARITH || iC_gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
+		    iC_gx->gt_fni == CH_BIT || iC_gx->gt_fni == OUTW ?
+		    iC_gx->gt_new : (long)iC_gx->gt_val);
 #else
-		if (debug & 0100) fprintf(outFP, " %d",
-		    gx->gt_fni == ARITH || gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
-		    gx->gt_fni == CH_BIT || gx->gt_fni == OUTW ?
-		    gx->gt_new : gx->gt_val);
+		if (iC_debug & 0100) fprintf(iC_outFP, " %d",
+		    iC_gx->gt_fni == ARITH || iC_gx->gt_fni == D_SH || gp->gt_fni == F_SW ||
+		    iC_gx->gt_fni == CH_BIT || iC_gx->gt_fni == OUTW ?
+		    iC_gx->gt_new : iC_gx->gt_val);
 #endif
 #endif
 	    }
-	} else if (op->gt_fni == GATE) {
+	} else if (op->gt_fni == GATE || op->gt_fni == GATEX) {
+	    /************************************************************
+	     * Scan normal logical outputs
+	     ***********************************************************/
 	    while ((gp = *lp++) != 0) {		/* ignore direct outputs except F_SW F_CE */
 		if (gp->gt_fni == F_SW || gp->gt_fni == F_CE) {
-		    scan_cnt++;			/* count scan operations */
+		    /************************************************************
+		     * Special initial treatment for ftypes F_SW F_CE normal outputs
+		     ***********************************************************/
+		    iC_scan_cnt++;		/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-		    gx = gp;			/* save old gp in gx */
-		    if (debug & 0100) {
-			if (dc++ >= 4) {
-			    dc = 1;
-			    putc('\n', outFP);
+		    iC_gx = gp;			/* save old gp in iC_gx */
+		    if (iC_debug & 0100) {
+			if (iC_dc++ >= 4) {
+			    iC_dc = 1;
+			    putc('\n', iC_outFP);
 			}
-			fprintf(outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
+			fprintf(iC_outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
 		    }
 #endif
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, o_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_c() */
 		    }
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
+		    if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
 #endif
 		}
 	    }
+	    /************************************************************
+	     * Scan inverted logical outputs
+	     ***********************************************************/
 	    while ((gp = *lp++) != 0) {		/* do inverted outputs */
-		scan_cnt++;			/* count scan operations */
+		/************************************************************
+		 * no need to optimize for GATEX in this initialization
+		 * - always test for XOR
+		 ***********************************************************/
+		iC_scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
-		gx = gp;			/* save old gp in gx */
-		if (debug & 0100) {
-		    if (dc++ >= 4) {
-			dc = 1;
-			putc('\n', outFP);
+		iC_gx = gp;			/* save old gp in iC_gx */
+		if (iC_debug & 0100) {
+		    if (iC_dc++ >= 4) {
+			iC_dc = 1;
+			putc('\n', iC_outFP);
 		    }
-		    fprintf(outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
+		    fprintf(iC_outFP, "\t%s %2d ==>", gp->gt_ids, gp->gt_val);
 		}
 #endif
 		if (gp->gt_fni == F_SW || gp->gt_fni == F_CE) {
-		    if (--gp->gt_val == 0) {	/* gate function */
-			--gp->gt_val;
+		    /************************************************************
+		     * Special initial treatment for ftypes F_SW F_CE inverted outputs
+		     ***********************************************************/
+		    if (gp->gt_ini != 0) {	/* logic not including XOR */
+			/************************************************************
+			 * GATE logical types AND OR LATCH for inverted outputs
+			 ***********************************************************/
+			if (--gp->gt_val == 0) {	/* gate function */
+			    --gp->gt_val;
+			}
+		    } else {
+			/************************************************************
+			 * XOR for inverted outputs
+			 ***********************************************************/
+			gp->gt_val ^= 0x80;		/* xor independent of change */
 		    }
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, o_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_c() */
 		    }
-		} else if (--gp->gt_val == 0) {	/* gate function */
-		    --gp->gt_val;
-		    (*initAct[gp->gt_fni])(gp, o_list);	/* init action */
+		} else {
+		    /************************************************************
+		     * Initial treatment for inverted outputs
+		     ***********************************************************/
+		    if (gp->gt_ini != 0) {		/* logic not including XOR */
+			/************************************************************
+			 * GATE logical types AND OR LATCH for inverted outputs
+			 ***********************************************************/
+			if (--gp->gt_val == 0) {	/* gate function */
+			    --gp->gt_val;
+			    (*initAct[gp->gt_fni])(gp, iC_o_list);	/* init action */
+			}
+		    } else {
+			/************************************************************
+			 * XOR for inverted outputs
+			 ***********************************************************/
+			gp->gt_val ^= 0x80;		/* xor independent of change */
+			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* init action every time */
+		    }
 		}
 #if YYDEBUG && !defined(_WINDOWS)
-		if (debug & 0100) fprintf(outFP, " %d", gx->gt_val);
+		if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
 #endif
 	    }
 #if YYDEBUG && !defined(_WINDOWS)
 	} else {
-	    if (debug & 0100) fprintf(outFP, " ftype UDFA ???");
+	    if (iC_debug & 0100) fprintf(iC_outFP, " ftype UDFA ??? %d", op->gt_fni);
 #endif
 	}
     }
@@ -775,7 +924,7 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 static void
 link_c(Gate * gp, Gate * out_list)
 {
-    link_ol(gp, c_list);	/* link clocked Gate to c_list */
+    iC_link_ol(gp, iC_c_list);			/* link clocked Gate to c_list */
 } /* link_c */
 
 /********************************************************************
@@ -786,15 +935,15 @@ link_c(Gate * gp, Gate * out_list)
  *******************************************************************/
 
 void
-err_fn(				/* error - no master or slave function */
+iC_err_fn(					/* error - no master or slave function */
     Gate *	gp,
     Gate *	out_list)
 {
 #if !defined(_WINDOWS) || defined(LOAD)
-    fprintf(errFP,
+    fprintf(iC_errFP,
     "\n%s: line %d: Gate %s, action %d not implemented",
     __FILE__, __LINE__, gp->gt_ids, gp->gt_fni);
-    quit(-1);
+    iC_quit(-1);
 #endif
 } /* err_fn */
 
@@ -805,7 +954,7 @@ err_fn(				/* error - no master or slave function */
  *
  *******************************************************************/
 
-void null(void)	{}	/* null function for function lists */
+void iC_null(void)	{}			/* null function for function lists */
 
 /********************************************************************
  *
@@ -817,32 +966,32 @@ void null(void)	{}	/* null function for function lists */
  *******************************************************************/
 
 void
-arithMa(				/* ARITH master action */
-    Gate *	gp,			/* NOTE: there is no slave action */
+iC_arithMa(					/* ARITH master action */
+    Gate *	gp,				/* NOTE: there is no slave action */
     Gate *	out_list)
 {
-    if (out_list == o_list) {
+    if (out_list == iC_o_list) {
 	/* called from logic scan - convert d to a */
 #if INT_MAX == 32767 && defined (LONG16)
 	gp->gt_new = (long)((unsigned char)gp->gt_val >> 7);
 #else
 	gp->gt_new = ((unsigned char)gp->gt_val >> 7);
 #endif
-	/*
+	/********************************************************************
 	 * since new is only modified here and since gt_val has changed,
 	 * new must differ from old (no need to check).
 	 * old will be modified during arithmetic scan, although that
 	 * would not be necessary for this action.
-	 */
+	 *******************************************************************/
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (debug & 0100) fprintf(outFP, "%ld", gp->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "%ld", gp->gt_new);
 #else
-	if (debug & 0100) fprintf(outFP, "%d", gp->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "%d", gp->gt_new);
 #endif
 #endif
     }
     if ((gp->gt_new != gp->gt_old) ^ (gp->gt_next != 0)) {
-	link_ol(gp, a_list);		/* link to arithmetic list */
+	iC_link_ol(gp, iC_a_list);		/* link to arithmetic list */
     }
 } /* arithMa */

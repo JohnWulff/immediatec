@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.42 2005/01/04 17:51:12 jw Exp $
+# @(#)$Id: Makefile.in,v 1.43 2005/01/28 13:23:14 jw Exp $
 
 ############################################################
 #
@@ -175,7 +175,7 @@ makeAll.1.gz:	makeAll
 
 test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -iv ${srcdir}/Test0/*.ic > ${srcdir}/Test0/ErrorMessages.err 2>&1
+	@-${srcdir}/iCmake -Aiv ${srcdir}/Test0/*.ic 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/' > ${srcdir}/Test0/ErrorMessages.err
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
 	@if ${srcdir}/Mdiff -kl ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 

@@ -36,9 +36,13 @@ my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
 my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
 my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
 my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
+my @ChannelsIQ;		# stores values before queing for all I[XBWL]n inputs
 my %IONames;		# stores channel for each IO name (aux use in initial pass)
 my $UnitRegistrations;	# stores the registration string
 my $frameCount;		# number of frames in the box
+my %HoldQueue = ();	# Hold Queue
+my $holdButton;		# Hold button
+my $hold;		# state of Hold button
 
 my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
 my @bitIndex =	(
@@ -69,7 +73,7 @@ my @bitIndex =	(
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<< [-dtmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>][ -c <colm>]
+@<<<<<< [-dtTmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>][ -c <colm>]
 	$named
 	[ -RrJjOo <num>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
 	ID	X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
@@ -92,7 +96,9 @@ Usage:
 	-c colm	maximum number of columns in a row (default 12)
 	-f file	read ID parametes from this file
 	-d	display external inputs IMn only (no ini values allowed)
+	-H      a Hold button is generated which holds input changes
 	-t	trace debug messages
+	-T	extra static debug messages
 	-m	display elapsed time in seconds and microseconds
 	-h	help, ouput this Usage text only
     The following options apply to analog units with ID Bx, Wy or Lz only
@@ -105,12 +111,13 @@ Usage:
 	-l len	length of scales (default 170)
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.39 2005/01/09 15:47:59 jw Exp $
+$Id: iCbox,v 1.40 2005/01/25 14:52:10 jw Exp $
 .
 
-use vars qw($opt_d $opt_t $opt_T $opt_m $opt_s $opt_p $opt_n $opt_i $opt_c $opt_r $opt_j $opt_o $opt_R $opt_J $opt_O $opt_l $opt_f $opt_h);
+use vars qw($opt_d $opt_H $opt_t $opt_T $opt_m $opt_s $opt_p $opt_n $opt_i $opt_c);
+use vars qw($opt_r $opt_j $opt_o $opt_R $opt_J $opt_O $opt_l $opt_f $opt_h);
 require "getopts.pl";
-&Getopts('dtTms:p:n:i:c:r:j:o:R:J:O:l:f:h');	# sets $opt_h if -h etc
+&Getopts('dHtTms:p:n:i:c:r:j:o:R:J:O:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -301,6 +308,8 @@ rcvd_msg_from_server($conn, $tmsg, $terr);	# analyse registration string now
 ############# TODO pull out registration analysis from rcvd_msg_from_server() ################
 exit unless $frameCount or die "$named: no valid registrations - cannot make any frames\n";
 
+$frameCount++ if $opt_H;			# extra Hold frame
+
 ########################################################################
 #
 #	Create main window
@@ -320,6 +329,58 @@ if ($frameCount > $opt_c*2) {
     $maxColumn = $frameCount;
 }
 print "frameCount = $frameCount maxColumn = $maxColumn\n" if $opt_t;
+
+########################################################################
+#
+#	Optional Hold button
+#
+########################################################################
+
+if ($opt_H) {
+    $frame  = $mainWindow->Frame(-label       => 'Hold',
+				 -relief      => 'groove',
+				 -borderwidth => 2,
+				)->grid(-row    => $row, 
+				        -column => $column,
+				        -sticky => 'nsew',
+				       );
+    $column++;
+    $holdButton = $frame->Checkbutton(
+	-text        => 'II',
+	-width       => '2',
+	-variable    => \$hold,
+	-selectcolor => 'green',
+	-command     => sub {
+			     if ($hold) {
+				$holdButton->configure(-text => '>');
+			     } else {
+				print "Hold release\n" if $opt_t;
+				## scan list of changes on Hold Queue
+				my ($ch, $val);
+				my $msg = '';
+				foreach $ch (sort { $a <=> $b } keys %HoldQueue) {
+				    $val = $HoldQueue{$ch};	# retieve latest value
+				    if ($val != $ChannelsIQ[$ch]) {
+					print "$named: $ch:$val	> $ChannelNames[$ch] from hold queue\n" if $opt_t;
+					unless ($msg) {
+					    $msg = "$ch:$val";
+					} else {
+					    $msg = "$msg,$ch:$val";
+					}
+					$ChannelsIQ[$ch] = $val;
+				    }
+				}
+				if ($msg) {
+				    $conn->send_now("$msg");
+				}
+				%HoldQueue = ();	# delete all entries
+				$holdButton->configure(-text => 'II');
+			     }
+			    },
+			)->pack(-side   => 'top',
+				-expand => 1,
+			       );
+}
 
 ########################################################################
 #
@@ -382,7 +443,7 @@ for ($i = 0; $i < @ArgNames; $i += 2) {
 					-expand => 1,\
 				       );\
 	    ";
-	    ## print $makeOutCheckbutton if $opt_t;
+	    print $makeOutCheckbutton if $opt_T;
 	    eval $makeOutCheckbutton;
 	    print $@;
 	    ## ChannelsQ[$ch] initialised to 0 on registration
@@ -411,9 +472,7 @@ for ($i = 0; $i < @ArgNames; $i += 2) {
 					 \$val &= ~$masks[$index]; # clear bit\n\
 				     }\
 				     if (\$val != \$ChannelsI[$ch]) {\
-					 \&printMicroSeconds if \$opt_m;\
-					 print \"$named: $ch:\$val	> $label\\n\" if \$opt_t;\
-					 \$conn->send_now(\"$ch:\$val\");\
+					 send_input($ch, \$val);\
 					 \$ChannelsI[$ch] = \$val;\
 				     }\
 				    },\
@@ -421,12 +480,11 @@ for ($i = 0; $i < @ArgNames; $i += 2) {
 					-expand => 1,\
 				       );\
 	    ";
-	    ## print $makeInCheckbutton if $opt_t;
+	    print $makeInCheckbutton if $opt_T;
 	    eval $makeInCheckbutton;
 	    print $@;
 	}
-	print "$named: $ch:$ChannelsI[$ch]	> $label\n" if $opt_t;
-	$conn->send_now("$ch:$ChannelsI[$ch]");	# executed at build time
+	send_input($ch, $ChannelsI[$ch]);	# executed at build time
     }
 
 ########################################################################
@@ -466,15 +524,13 @@ for ($i = 0; $i < @ArgNames; $i += 2) {
 	    -width       => '4m',\
 	    -variable    => \\\$ChannelsI[$ch],\
 	    -command     => sub {\
-				 &printMicroSeconds if \$opt_m;\
-				 print \"$named: $ch:\$ChannelsI[$ch]	> $label\\n\" if \$opt_t;\
-				 \$conn->send_now(\"$ch:\$ChannelsI[$ch]\");\
+				 send_input($ch, \$ChannelsI[$ch]);\
 				},\
 		      )->pack(-side   => 'top',\
 			      -expand => 1,\
 			     );\
 	";
-	## print $makeInScaleCheckbutton if $opt_t;
+	print $makeInScaleCheckbutton if $opt_T;
 	eval $makeInScaleCheckbutton;
 	print $@;
     }
@@ -500,6 +556,25 @@ $mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 ########################################################################
 
 MainLoop;
+
+########################################################################
+#
+#	Send input value, unless hold - in which case input is queued
+#
+########################################################################
+
+sub send_input {
+    my ($ch, $val) = @_;
+    &printMicroSeconds if $opt_m;
+    if ($hold) {
+	print "$named: $ch:$val	II $ChannelNames[$ch]\n" if $opt_t;
+	$HoldQueue{$ch} = $val;		# hold latest value
+    } else {
+	print "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
+	$conn->send_now("$ch:$val");	# send latest value
+	$ChannelsIQ[$ch] = $val;
+    }
+}
 
 ########################################################################
 #
@@ -583,7 +658,8 @@ sub rcvd_msg_from_server {
 		    }
 		    $dir = 'S';
 		    $frameCount++;
-		    $ChannelsI[$channel] = $in;	# initial value and I definition
+		    ## initial value and I definition
+		    $ChannelsIQ[$channel] = $ChannelsI[$channel] = $in;
 		    ## when this array element is defined, it is a I[XBWL] sender
 		    if ($1 eq 'X') {
 			for my $index (0 .. 7) {
@@ -646,7 +722,7 @@ __END__
 
 =head1 SYNOPSIS
 
- iCbox [-dtmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>][ -c <colm>]
+ iCbox [-dtTmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>][ -c <colm>]
        [ -RrJjOo <num>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
@@ -667,7 +743,9 @@ __END__
     -c colm maximum number of columns in a row (default 12)
     -f file read additional ID parametes from this file
     -d      display external inputs IMn only (no ini values allowed)
+    -H      a Hold button is generated which holds input changes
     -t      trace debug messages
+    -T      extra static debug messages
     -m      display elapsed time in seconds and microseconds
     -h      help, ouput this Usage text only
  The following options apply to analog units with ID Bx, Wy or Lz only
@@ -719,7 +797,7 @@ for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set and
 may be pressed on and off; Output Checkbuttons are red when set and display
 an external value only - they cannot be pressed.
 
-Analog frames have a vertical slider labelles 0 to 100 by default. Analog inputs
+Analog frames have a vertical slider labelled 0 to 100 by default. Analog inputs
 have a green slider - analog outputs a red slider. Only input sliders can be
 moved manually.
 
@@ -727,13 +805,19 @@ An iCbox generated with the -d option will make input frames which behave
 like outputs (except for the labels). This is useful for monitoring real
 external inputs (and outputs).
 
+An optional frame with a B<Hold> button is generated with the -H
+option.  After this button is pressed, any input changes are queued
+and not transmitted until the B<Hold> button is released. This is
+useful for testing iC programs in a situation when several inputs
+must arrive simultaneously.
+
 =head1 AUTHOR
 
 John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff> with L<iC Project> in the
+Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO

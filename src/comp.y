@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.88 2004/12/22 17:11:41 jw Exp $";
+"@(#)$Id: comp.y,v 1.89 2005/01/26 18:20:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -23,7 +23,6 @@
 #include	<setjmp.h>
 #include	<assert.h>
 
-#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 
@@ -73,7 +72,7 @@ clrBuf(void)
 {
     stmtp = iCbuf;
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
+    if ((iC_debug & 0402) == 0402) {
 	memset(iCbuf, '\0', IMMBUFSIZE);
     }
 #endif
@@ -89,44 +88,44 @@ pu(int t, char * token, Lis * node)
     switch (t) {
     case 0:
 	if (node->v) {
-	    fprintf(outFP, ">>>Sym	%s	%s :	", token, ((Sym*)node)->v->name);
+	    fprintf(iC_outFP, ">>>Sym	%s	%s :	", token, ((Sym*)node)->v->name);
 	} else {
-	    fprintf(outFP, ">>>Sym	%s	0 =	", token);
+	    fprintf(iC_outFP, ">>>Sym	%s	0 =	", token);
 	}
 	break;
     case 1:
 	if (node->v) {
-	    fprintf(outFP, ">>>Lis	%s	%s =	", token, node->v->le_sym->name);
+	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, node->v->le_sym->name);
 	} else {
-	    fprintf(outFP, ">>>Lis	%s	0 =	", token);
+	    fprintf(iC_outFP, ">>>Lis	%s	0 =	", token);
 	}
 	break;
     case 2:
-	fprintf(outFP, ">>>Val	%s	%d =	", token, ((Val*)node)->v);
+	fprintf(iC_outFP, ">>>Val	%s	%d =	", token, ((Val*)node)->v);
 	break;
     case 3:
-	fprintf(outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
+	fprintf(iC_outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
 	break;
     }
     if ((t_first = node->f) != 0 && (len = node->l - t_first) != 0) {
 	assert(t_first >= iCbuf && node->l < &iCbuf[IMMBUFSIZE]);
-	fprintf(outFP, "%-*.*s\n", len, len, t_first);
+	fprintf(iC_outFP, "%-*.*s\n", len, len, t_first);
     } else {
-	fprintf(outFP, "\n");
+	fprintf(iC_outFP, "\n");
     }
-    fflush(outFP);
+    fflush(iC_outFP);
 } /* pu */
 
 static void
 pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 {
-    fprintf(outFP, ">>>%s\t%s\t[%c%c %c] [%c%c %c] => [%c%c %c]\n",
+    fprintf(iC_outFP, ">>>%s\t%s\t[%c%c %c] [%c%c %c] => [%c%c %c]\n",
 	token, s2->name,
 	/* single character for type, . normal or - external, ftype */
-	os[(s1 >>8)&TM], os[!!((s1 >>8)&EM)], fos[s1 & 0xff],
-	os[s2->type&TM], os[!!(s2->type&EM)], fos[s2->ftype],
-	os[ss->type&TM], os[!!(ss->type&EM)], fos[ss->ftype]);
-    fflush(outFP);
+	iC_os[(s1 >>8)&TM], iC_os[!!((s1 >>8)&EM)], iC_fos[s1 & 0xff],
+	iC_os[s2->type&TM], iC_os[!!(s2->type&EM)], iC_fos[s2->ftype],
+	iC_os[ss->type&TM], iC_os[!!(ss->type&EM)], iC_fos[ss->ftype]);
+    fflush(iC_outFP);
 } /* pd */
 
 #endif
@@ -278,7 +277,7 @@ extDecl	: extDeclHead UNDEF	{
 		$$.v->ftype = $1.v & 0xff;
 		$$.v->type = $1.v >> 8;		/* has EM set from extDeclHead */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) {
+		if ((iC_debug & 0402) == 0402) {
 		    Symbol t = *($2.v);
 		    pd("extDecl", $$.v, $1.v, &t);
 		}
@@ -307,7 +306,7 @@ extDecl	: extDeclHead UNDEF	{
 		    warning("extern declaration after assignment - ignored:", $2.v->name);
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) {
+		if ((iC_debug & 0402) == 0402) {
 		    Symbol t = *($2.v);
 		    pd("extDecl", $$.v, $1.v, &t);
 		}
@@ -322,7 +321,7 @@ extDeclHead
 		if (ftyp >= CLCKL) {		/* check that CLCKL TIMRL */
 		    ftyp -= CLCKL - CLCK;	/* and CLCK and TIMR are adjacent */
 		}
-		$$.v = stype = $3.v->ftype | ((types[ftyp] | EM) << 8);
+		$$.v = stype = $3.v->ftype | ((iC_types[ftyp] | EM) << 8);
 	    }
 	| extDecl ','		{ $$.v = stype;	/* first TYPE */ }
 	;
@@ -361,7 +360,7 @@ decl	: declHead UNDEF	{
 		    iFunSyText = 0;		/* no more function symbols */
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
+		if ((iC_debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
 #endif
 	    }
 	| declHead variable	{
@@ -382,7 +381,7 @@ decl	: declHead UNDEF	{
 		}
 		iFunSyText = 0;			/* no more function symbols */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
+		if ((iC_debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
 #endif
 	    }
 	;
@@ -418,7 +417,7 @@ declHead
 	 *
 	 ***********************************************************/
 
-dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
+dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
 		unsigned char	y1[2];
 		int		yn;
 		int		ioTyp;
@@ -426,11 +425,11 @@ dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 		if (sscanf($1.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
 		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
 		} else {
-		    ioTyp = 0;				/* flags that no I/O is generated */
+		    ioTyp = 0;			/* flags that no I/O is generated */
 		}
 		if (($$.v = assignExpression(&$1, &$3, ioTyp)) == 0) YYERROR;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "dasgn", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "dasgn", (Lis*)&$$);
 #endif
 	    }
 	;
@@ -441,40 +440,40 @@ dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
 	 *
 	 ***********************************************************/
 
-asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
+asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
-		$1.v->ftype = GATE;	/* implicitly declared as 'imm bit' */
+		$1.v->ftype = GATE;		/* implicitly declared as 'imm bit' */
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| LOUT '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, OUTX)) == 0) YYERROR;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	| AOUT '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, OUTW)) == 0) YYERROR;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
 	    }
 	;
@@ -496,7 +495,7 @@ aexpr	: expr			{
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "aexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "aexpr", &$$);
 #endif
 	    }
 	;
@@ -513,14 +512,14 @@ expr	: UNDEF			{
 		$1.v->ftype = GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	| NUMBER		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = 0;			/* no node, do not need value */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	| valueVariable		{		/* LVAR LVARC AVAR AVARC */
@@ -528,7 +527,7 @@ expr	: UNDEF			{
 		$$.v = checkDecl($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	| outVariable		{		/* LOUT AOUT */
@@ -536,22 +535,22 @@ expr	: UNDEF			{
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	| fexpr			{
 		Symbol *	sp;
 
-		if ($1.v == 0) YYERROR;			/* error in bltin() */
+		if ($1.v == 0) YYERROR;		/* error in bltin() */
 		sp = $1.v->le_sym;
 		$$ = $1;
-		if (sp->ftype != ftypes[sp->type & TM]) {
+		if (sp->ftype != iC_ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	| cCall			{
@@ -572,7 +571,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -594,7 +593,7 @@ expr	: UNDEF			{
 		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -609,10 +608,10 @@ expr	: UNDEF			{
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr '|' expr		{		/* binary | */
+	| expr '|' expr		{			/* binary | */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -630,10 +629,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr '^' expr		{		/* binary ^ */
+	| expr '^' expr		{			/* binary ^ */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -645,16 +644,16 @@ expr	: UNDEF			{
 		} else {
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
-		    $$.v = op_xor(lpL, lpR);		/* logical ^ */
+		    $$.v = op_push(lpL, XOR, lpR);	/* logical ^ */
 		}
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr '&' expr		{		/* binary & */
+	| expr '&' expr		{			/* binary & */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -672,10 +671,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr CMP expr	{			/* == != < <= > >= */
+	| expr CMP expr	{				/* == != < <= > >= */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -686,10 +685,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr AOP expr		{		/* << >> / % */
+	| expr AOP expr		{			/* << >> / % */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -699,10 +698,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr PM expr		{		/* binary + - */
+	| expr PM expr		{			/* binary + - */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -712,10 +711,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr '*' expr		{		/* binary * */
+	| expr '*' expr		{			/* binary * */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -725,7 +724,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 
@@ -740,7 +739,7 @@ expr	: UNDEF			{
 	 *
 	 ***********************************************************/
 
-	| expr AA expr	{			/* binary && */
+	| expr AA expr	{				/* binary && */
 		Symbol *	sp;
 		int		typ;
 		List_e *	lpL;
@@ -764,10 +763,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr OO expr	{			/* binary || */
+	| expr OO expr	{				/* binary || */
 		Symbol *	sp;
 		int		typ;
 		List_e *	lpL;
@@ -791,10 +790,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| expr '?' expr ':' expr	{	/* ? : */
+	| expr '?' expr ':' expr	{		/* ? : */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $5.l;
@@ -806,10 +805,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| NOTL expr 		{		/* unary ~ or ! */
+	| NOTL expr 		{			/* unary ~ or ! */
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
 		if ($2.v) {
@@ -817,27 +816,27 @@ expr	: UNDEF			{
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
 			(((typ = sp->type & TM) != ARNC && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
-						/* logical negation */
+							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
 		    } else {
-						/* bitwise negation */
+							/* bitwise negation */
 			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
 		    }
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		} else {
-		    $$.v = 0;			/* constant negation */
+		    $$.v = 0;				/* constant negation */
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
-	| PM expr %prec NOTL	{		/* unary + or - */
+	| PM expr %prec NOTL	{			/* unary + or - */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
 	;
@@ -854,7 +853,7 @@ lexpr	: aexpr ',' aexpr		{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "lexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "lexpr", &$$);
 #endif
 	    }
 	;
@@ -975,7 +974,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -996,7 +995,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		/* DLATCH output is transferred as feed back in op_asgn */
 		$$.v = bltin(&$1, &li1, &$4, 0, 0, 0, 0, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1016,7 +1015,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $7.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1044,7 +1043,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1059,7 +1058,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1074,7 +1073,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $7.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1093,7 +1092,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1108,7 +1107,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $9.l;
 		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, &$8, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1132,7 +1131,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $11.l;
 		$$.v = bltin(&$1, &$3, 0, &$5, &$7, &$9, &$10, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	 ***********************************************************/
@@ -1152,7 +1151,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $11.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, 0, &$9, &$10, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1179,7 +1178,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $13.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, &$11, &$12, 0, 0);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1190,7 +1189,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	JK(set,reset,timSetReset,delaySetReset)
 	 ***********************************************************/
 	| BLTINJ '(' aexpr ',' aexpr cref ')' {		/* JK(set,reset) */
-		Lis		liS = $3;	/* later = 0 ZZZ */
+		Lis		liS = $3;		/* later = 0 ZZZ */
 		Lis		liR = $5;
 		List_e *	lpS;
 		List_e *	lpR;
@@ -1218,13 +1217,13 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		assert(lpR);
 		nsp = lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
 		if (iFunSymExt) {
-		    nlp = nsp->v_elist;		/* feedback list */
+		    nlp = nsp->v_elist;			/* feedback list */
 		    nsp->v_elist = sy_push(liS.v->le_sym);
 		    nsp->v_elist->le_next = sy_push(liR.v->le_sym);
 		    nsp->v_elist->le_next->le_next = nlp;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1239,7 +1238,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	JK(set,timSet,delaySet,reset,timReset,delayReset)
 	 ***********************************************************/
 	| BLTINJ '(' aexpr ',' ctdref ',' aexpr cref ')' {
-		Lis		liS = $3;	/* later = 0 ZZZ */
+		Lis		liS = $3;		/* later = 0 ZZZ */
 		Lis		liR = $7;
 		List_e *	lpS;
 		List_e *	lpR;
@@ -1267,13 +1266,13 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		assert(lpR);
 		nsp = lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
 		if (iFunSymExt) {
-		    nlp = nsp->v_elist;		/* feedback list */
+		    nlp = nsp->v_elist;			/* feedback list */
 		    nsp->v_elist = sy_push(liS.v->le_sym);
 		    nsp->v_elist->le_next = sy_push(liR.v->le_sym);
 		    nsp->v_elist->le_next->le_next = nlp;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1283,11 +1282,11 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	SRT(set,tim)
 	 *	SRT(set,tim,delay)
 	 ***********************************************************/
-	| BLTINT '(' aexpr cref ')'	{			/* SRT(set,reset,tim,delay) */
+	| BLTINT '(' aexpr cref ')'	{		/* SRT(set,reset,tim,delay) */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, 0, 0, &$4, 0); /* monoflop without reset */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by iClock */
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by iClock */
 #endif
 	    }
 	/************************************************************
@@ -1303,7 +1302,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $8.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, 0, 0, &$7, 0); /* monoflop without reset */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 #endif
 	    }
 	/************************************************************
@@ -1317,7 +1316,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $7.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, 0, &$6, 0); /* monoflop with reset */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
 #endif
 	    }
 	/************************************************************
@@ -1333,7 +1332,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $10.l;
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$7, &$9, 0); /* monoflop with reset */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set and reset clocked by same clock or timer */
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set and reset clocked by same clock or timer */
 #endif
 	    }
 	/************************************************************
@@ -1353,7 +1352,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		lis1.v = sy_push(iclock);		/* to avoid shift reduce conflict */
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &lis1, &$8, 0); /* monoflop with reset */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 #endif
 	    }						/* reset clocked by iClock */
 	/************************************************************
@@ -1375,7 +1374,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $12.l;
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$9, &$11, 0); /* monoflop with reset */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
 #endif
 	    }						/* reset clocked by different clock or timer */
 	;
@@ -1391,7 +1390,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 		if (openT4T5(1)) ierror("IF: cannot open:", T4FN); /* rewind if necessary */
 		writeCexeString(T4FP, ++c_number);	/* and record for copying */
-		fprintf(T4FP, "    if (_cexe_gf->gt_val < 0)\n");
+		fprintf(T4FP, "    if (iC_gf->gt_val < 0)\n");
 	    }
 				cBlock	{		/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
@@ -1419,13 +1418,13 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	| ifini ELSE			{		/* { x++; } else */
 		Symbol *	sp;
 		List_e *	lp;
-		sp = $1.v->le_sym;		/* slave, deleted later */
+		sp = $1.v->le_sym;			/* slave, deleted later */
 		assert(sp);
 		lp = sp->u_blist;
 		assert(lp);
-		sp = lp->le_sym;		/* master - currently ftype F_CF */
+		sp = lp->le_sym;			/* master - currently ftype F_CF */
 		assert(sp);
-		sp->ftype = $2.v->ftype;	/* make it ftype F_CE from ELSE */
+		sp->ftype = $2.v->ftype;		/* make it ftype F_CE from ELSE */
 		fprintf(T4FP, "    else\n");
 	    }
 		     cBlock		{		/* { x--; } */
@@ -1442,7 +1441,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	| SWITCH '(' aexpr cref ')'		{	/* switch (expr) { case ...; } */
 		if (openT4T5(1)) ierror("SWITCH: cannot open:", T4FN); /* rewind if necessary */
 		writeCexeString(T4FP, ++c_number);	/* and record for copying */
-		fprintf(T4FP, "    switch (_cexe_gf->gt_new)\n");
+		fprintf(T4FP, "    switch (iC_gf->gt_new)\n");
 	    }
 				    cBlock	{	/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
@@ -1459,10 +1458,10 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 		if ($1.v->ftype != CLCKL) {
 		    ierror("assigning clock to variable declared differently:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
+		    $1.v->type = ERR;			/* cannot execute properly */
 		} else if ($1.v->type != UDF && $1.v->type != CLK) {
 		    ierror("assigning clock to variable assigned differently:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
+		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, CLCKL);
 	    }
@@ -1472,7 +1471,7 @@ casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
 	| CVAR '=' cexpr	{
 		if ($1.v->type != UDF) {
 		    ierror("multiple assignment clock:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
+		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, CLCKL);
 	    }
@@ -1483,20 +1482,20 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	| cfexpr		{
 		Symbol *	sp = $1.v->le_sym;
 		assert(sp);
-		if (sp->ftype != ftypes[sp->type & TM]) {
+		if (sp->ftype != iC_ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
-		sp->ftype = CLCKL;	/* clock list head */
+		sp->ftype = CLCKL;			/* clock list head */
 		$$ = $1;
 	    }
 	| cFunCall		{
 		Symbol *	sp;
-		assert($1.v);			/* ZZZ analyse and fix */
+		assert($1.v);				/* ZZZ analyse and fix */
 		sp = $1.v->le_sym;
 		assert(sp);
 		if (sp->ftype != CLCKL) {
 		    ierror("called function does not return type clock:", sp->name);
-		    sp->type = ERR;	/* cannot execute properly */
+		    sp->type = ERR;			/* cannot execute properly */
 		}
 		$$ = $1;
 	    }
@@ -1551,10 +1550,10 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 		if ($1.v->ftype != TIMRL) {
 		    ierror("assigning timer to variable declared differently:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
+		    $1.v->type = ERR;			/* cannot execute properly */
 		} else if ($1.v->type != UDF && $1.v->type != TIM) {
 		    ierror("assigning timer to variable assigned differently:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
+		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, TIMRL);
 	    }
@@ -1564,7 +1563,7 @@ tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
 	| TVAR '=' texpr	{
 		if ($1.v->type != UDF) {
 		    ierror("multiple assignment timer:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
+		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, TIMRL);
 	    }
@@ -1575,20 +1574,20 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 	| tfexpr		{
 		Symbol *	sp = $1.v->le_sym;
 		assert(sp);
-		if (sp->ftype != ftypes[sp->type & TM]) {
+		if (sp->ftype != iC_ftypes[sp->type & TM]) {
 		    warning("not enough arguments for function", sp->name);
 		}
-		sp->ftype = TIMRL;	/* timer list head */
+		sp->ftype = TIMRL;			/* timer list head */
 		$$ = $1;
 	    }
 	| tFunCall		{
 		Symbol *	sp;
-		assert($1.v);			/* ZZZ analyse and fix */
+		assert($1.v);				/* ZZZ analyse and fix */
 		sp = $1.v->le_sym;
 		assert(sp);
 		if (sp->ftype != TIMRL) {
 		    ierror("called function does not return type timer:", sp->name);
-		    sp->type = ERR;	/* cannot execute properly */
+		    sp->type = ERR;			/* cannot execute properly */
 		}
 		$$ = $1;
 	    }
@@ -1713,27 +1712,27 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 cCall	: UNDEF '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 	    				/* CHECK if iCbuf changes now _() is missing */
-		if (lookup($1.v->name)) {	/* may be unlinked in same expr */
-		    unlink_sym($1.v);		/* unlink Symbol from symbol table */
+		if (lookup($1.v->name)) {		/* may be unlinked in same expr */
+		    unlink_sym($1.v);			/* unlink Symbol from symbol table */
 		    free($1.v->name);
 		    free($1.v);		/* TODO may be better to keep in ST with type ??? */
 		}
 		$$.v = $3.v;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "cFunct", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
 #endif
 	    }
 	| UNDEF '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
 	    				/* CHECK if iCbuf changes now _() is missing */
-		if (lookup($1.v->name)) {	/* may be unlinked in same expr */
-		    unlink_sym($1.v);		/* unlink Symbol from symbol table */
+		if (lookup($1.v->name)) {		/* may be unlinked in same expr */
+		    unlink_sym($1.v);			/* unlink Symbol from symbol table */
 		    free($1.v->name);
 		    free($1.v);		/* TODO may be better to keep in ST with type ??? */
 		}
 		$$.v = $3.v;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "cFunct", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -1749,7 +1748,7 @@ cPlist	: aexpr			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "cPlist", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cPlist", &$$);
 #endif
 	    }
 	| cPlist ',' aexpr	{
@@ -1758,7 +1757,7 @@ cPlist	: aexpr			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "cPlist", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cPlist", &$$);
 #endif
 	    }
 	;
@@ -1831,7 +1830,7 @@ funcBody
 	: /* nothing */			{ $$.v = 0; clrBuf(); }
 	| funcBody funcStatement	{
 		$$.f = $1.f; $$.l = $2.l;
-		$$.v = 0;			/* $$.v is not required */
+		$$.v = 0;				/* $$.v is not required */
 		clrBuf();
 	    }
 	| funcBody error ';'	{ $$.v = 0; clrBuf(); iclock->type = ERR; yyerrok; }
@@ -1843,11 +1842,11 @@ funcBody
 
 returnStatement
 	: RETURN actexpr		{
-		$$.f = $2.f; $$.l = $2.l;	/* TODO $$.f should be func$ */
+		$$.f = $2.f; $$.l = $2.l;		/* TODO $$.f should be func$ */
 		if ($2.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$$.v = returnStatement(&$2);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "return", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "return", (Lis*)&$$);
 #endif
 	    }
 	;
@@ -1868,11 +1867,11 @@ fParams	: /* nothing */			{ $$.v =  0; }
 
 fPlist	: formalParameter		{
 		$$.f = $1.f; $$.l = $1.l;
-		$$.v = sy_push($1.v);		/* first link in parameter list */
+		$$.v = sy_push($1.v);			/* first link in parameter list */
 		$$.v->le_first = $1.f;
 		$$.v->le_last = $1.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fPlist", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fPlist", &$$);
 #endif
 	    }
 	| fPlist ',' formalParameter	{
@@ -1887,7 +1886,7 @@ fPlist	: formalParameter		{
 		lp->le_first = $3.f;
 		lp->le_last = $3.l;
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "fPlist", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "fPlist", &$$);
 #endif
 	    }
 	;
@@ -1898,34 +1897,34 @@ fPlist	: formalParameter		{
 
 formalParameter
 	: ASSIGN formalParaTypeDecl UNDEF	{
-		$$ = $3;			/* formal assign parameter Symbol */
-		$$.v->ftype = $2.v & 0xff;	/* TYPE bit int clock timer */
-		$$.v->type = $2.v >> 8;		/* UDF for all TYPEs */
-		iFunSyText = 0;			/* no more function symbols */
+		$$ = $3;				/* formal assign parameter Symbol */
+		$$.v->ftype = $2.v & 0xff;		/* TYPE bit int clock timer */
+		$$.v->type = $2.v >> 8;			/* UDF for all TYPEs */
+		iFunSyText = 0;				/* no more function symbols */
 	    }
 	| formalParaTypeDecl UNDEF	{
 		int	ft;
 
-		$$ = $2;			/* formal value parameter Symbol */
-		$$.v->ftype = ft = $1.v & 0xff;	/* TYPE bit int clock timer */
-		if (ft >= CLCKL) {		/* check that CLCKL TIMRL */
-		    ft -= CLCKL - CLCK;		/* and CLCK and TIMR are adjacent */
+		$$ = $2;				/* formal value parameter Symbol */
+		$$.v->ftype = ft = $1.v & 0xff;		/* TYPE bit int clock timer */
+		if (ft >= CLCKL) {			/* check that CLCKL TIMRL */
+		    ft -= CLCKL - CLCK;			/* and CLCK and TIMR are adjacent */
 		}
-		$$.v->type = types[ft];
-		iFunSyText = 0;			/* no more function symbols */
+		$$.v->type = iC_types[ft];
+		iFunSyText = 0;				/* no more function symbols */
 	    }
 	;
 
 formalParaTypeDecl
 	: TYPE				{
-		$$.f = $$.l = $1.l;		/* do not include in expression string */
+		$$.f = $$.l = $1.l;			/* do not include in expression string */
 		$$.v = $1.v->ftype;
-		iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 	    }
 	| IMM TYPE			{
-		$$.f = $$.l = $2.l;		/* do not include in expression string */
-		$$.v = $2.v->ftype;		/* IMM is optional */
-		iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		$$.f = $$.l = $2.l;			/* do not include in expression string */
+		$$.v = $2.v->ftype;			/* IMM is optional */
+		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 	    }
 	;
 
@@ -1942,7 +1941,7 @@ formalParaTypeDecl
 iFunCallHead
 	: IFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
 	    }
 	;
 
@@ -1950,14 +1949,14 @@ iFunCall: iFunCallHead rParams ')'	{
 		$$.f = $1.f; $$.l = $3.l;
 		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "iFunC", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "iFunC", &$$);
 #endif
 	    }
 	| iFunCallHead rParams error ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "iFunC", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "iFunC", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -1972,7 +1971,7 @@ iFunCall: iFunCallHead rParams ')'	{
 cFunCallHead
 	: CFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
 	    }
 	;
 
@@ -1980,14 +1979,14 @@ cFunCall: cFunCallHead rParams ')'	{
 		$$.f = $1.f; $$.l = $3.l;
 		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "cFunC", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cFunC", &$$);
 #endif
 	    }
 	| cFunCallHead rParams error ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "cFunC", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cFunC", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2002,7 +2001,7 @@ cFunCall: cFunCallHead rParams ')'	{
 tFunCallHead
 	: TFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
 	    }
 	;
 
@@ -2010,14 +2009,14 @@ tFunCall: tFunCallHead rParams ')'	{
 		$$.f = $1.f; $$.l = $3.l;
 		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "tFunC", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "tFunC", &$$);
 #endif
 	    }
 	| tFunCallHead rParams error ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = cloneFunction($1.v, $2.v);	/* clone function from call head */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "tFunC", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "tFunC", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2033,24 +2032,24 @@ tFunCall: tFunCallHead rParams ')'	{
 vFunCallHead
 	: VFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);	/* save globals for nested function calls */
+		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
 	    }
 	;
 
 vFunCall: vFunCallHead rParams ')'	{
 		$$.f = $1.f; $$.l = $3.l;
-		cloneFunction($1.v, $2.v);	/* clone function from call head */
-		$$.v = 0;			/* $$.v is Sym - not compatible */
+		cloneFunction($1.v, $2.v);		/* clone function from call head */
+		$$.v = 0;				/* $$.v is Sym - not compatible */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "vFunC", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "vFunC", (Lis*)&$$);
 #endif
 	    }
 	| vFunCallHead rParams error ')'	{
 		$$.f = $1.f; $$.l = $4.l;
-		cloneFunction($1.v, $2.v);	/* clone function from call head */
-		$$.v = 0;			/* $$.v is Sym - not compatible */
+		cloneFunction($1.v, $2.v);		/* clone function from call head */
+		$$.v = 0;				/* $$.v is Sym - not compatible */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(0, "vFunC", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(0, "vFunC", (Lis*)&$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2072,17 +2071,17 @@ rPlist	: actexpr			{
 		}
 		$$.v = handleRealParameter(0, $1.v);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "rPlist", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "rPlist", &$$);
 #endif
 	    }
 	| rPlist ',' actexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) {		/* must extract value from aexpr */
+		if ($3.v == 0) {			/* must extract value from aexpr */
 		    if (const_push(&$3)) { errInt(); YYERROR; }
 		}
 		$$.v = handleRealParameter($1.v, $3.v);
 #if YYDEBUG
-		if ((debug & 0402) == 0402) pu(1, "rPlist", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "rPlist", &$$);
 #endif
 	    }
 	;
@@ -2096,17 +2095,17 @@ rPlist	: actexpr			{
 %%
 
 #ifdef NEWSTYLE
-#define CBUFSZ 166			/* listing just fits on 132  cols */
+#define CBUFSZ 166					/* listing just fits on 132  cols */
 #define YTOKSZ 166
 #else
-#define CBUFSZ 125			/* listing just fits on 132  cols */
+#define CBUFSZ 125					/* listing just fits on 132  cols */
 #define YTOKSZ 66
 #endif
 static char	chbuf[2][CBUFSZ];	/* used in get() errline() andd yyerror() */
 static char	prevNM[BUFS];
 static char *	getp[2] = {NULL,NULL};	/* used in get() unget() andd yyerror() */
-static char	iCtext[YTOKSZ];		/* lex token */
-static int	iCleng;			/* length */
+static char	iCtext[YTOKSZ];				/* lex token */
+static int	iCleng;					/* length */
 static int	lineflag;
 static int	iniDebug;
 static char const * iniPtr;
@@ -2121,13 +2120,13 @@ static int	errline = 0;
  *	lexflag is bitmapped and controls the input for lexers
  *******************************************************************/
 int		lexflag = 0;
-int		lineno = 0;		/* count first line on entry to get() */
+int		lineno = 0;			/* count first line on entry to get() */
 
-int		c_number = 0;		/* case number for cexe.c */
-int		outFlag = 0;		/* global flag for compiled output */
+int		c_number = 0;			/* case number for cexe.c */
+int		outFlag = 0;			/* global flag for compiled output */
 jmp_buf		begin;
-int		lex_typ[] = { DEF_TYP };/* tokens corresponding to type */
-int		lex_act[] = { DEF_ACT };/* tokens corresponding to ftype */
+int		lex_typ[] = { DEF_TYP };	/* tokens corresponding to type */
+int		lex_act[] = { DEF_ACT };	/* tokens corresponding to ftype */
 
 /********************************************************************
  *
@@ -2147,10 +2146,10 @@ int		lex_act[] = { DEF_ACT };/* tokens corresponding to ftype */
 
 int
 compile(
-    char *	inpPath,		/* input file path */
-    char *	lstNM,			/* list file name */
-    char *	errNM,			/* error file name */
-    char *	outNM)			/* C output file name */
+    char *	inpPath,			/* input file path */
+    char *	lstNM,				/* list file name */
+    char *	errNM,				/* error file name */
+    char *	outNM)				/* C output file name */
 {
     char	execBuf[BUFS];
     int		fd;
@@ -2158,60 +2157,60 @@ compile(
 
     lineno = 0;
 #if YYDEBUG
-    if ((debug & 0402) != 0402)
+    if ((iC_debug & 0402) != 0402)
 #endif
-    lexflag = C_FIRST;			/* supress initial pre-processor lines */
-    lineflag = 1;			/* previous line was complete */
+    lexflag = C_FIRST;				/* supress initial pre-processor lines */
+    lineflag = 1;				/* previous line was complete */
 
-    if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
+    if (lstNM && (iC_outFP = fopen(lstNM, "w+")) == NULL) {
 	return Lindex;
     }
-    errFilename = errNM;		/* open on first error */
-    init();				/* initialise symbol table - allows ierror() */
+    errFilename = errNM;			/* open on first error */
+    init();					/* initialise symbol table - allows ierror() */
     if (inpPath) {
 	strncpy(inpNM, inpPath, BUFS);
 	/* pre-compile if iC files contains any #include, #define #if etc */
 	snprintf(execBuf, BUFS, "grep -q '^[ \t]*#' %s", inpPath);
-	r = system(execBuf);		/* test with grep if #include in input */
+	r = system(execBuf);			/* test with grep if #include in input */
 	if (r == 0) {
 	    /* pass the input file through the C pre-compiler to resolve #includes */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);
 		perror("unlink");
-		return T0index;		/* error unlinking temporary file */
+		return T0index;			/* error unlinking temporary file */
 	    }
 	    /* Cygnus does not understand cc - use gcc - pass comments with -C */
 	    snprintf(execBuf, BUFS, "gcc -E -C -x c %s -o %s", inpPath, T0FN);
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
 #endif
-	    r = system(execBuf);	/* Pre-compile iC file */
+	    r = system(execBuf);		/* Pre-compile iC file */
 	    if (r != 0) {
 		ierror("compile: cannot run:", execBuf);
 		return T0index;
 	    }
 	    if ((T0FP = fopen(T0FN, "r")) == NULL) {
-		return T0index;		/* error opening intermediate file */
+		return T0index;			/* error opening intermediate file */
 	    }
 	} else if ((T0FP = fopen(inpNM, "r")) == NULL) {
-	    return Iindex;		/* error opening input file */
+	    return Iindex;			/* error opening input file */
 	}
     }
     strncpy(prevNM, inpNM, BUFS);
-    outFlag = outNM != 0;		/* global flag for compiled output */
-    if (debug & 046) {			/* begin source listing */
-	fprintf(outFP, "******* %-15s ************************\n", inpNM);
+    outFlag = outNM != 0;			/* global flag for compiled output */
+    if (iC_debug & 046) {			/* begin source listing */
+	fprintf(iC_outFP, "******* %-15s ************************\n", inpNM);
     }
-    if ((debug & 020000) == 0) {		/* suppres internal functions to test old code */
+    if ((iC_debug & 020000) == 0) {		/* suppres internal functions to test old code */
 	iniPtr = initialFunctions;		/* read system function definitions first */
-	iniDebug = debug;			/* save debug flag */
-	if ((debug & 010400) != 010400) debug &= ~ 047; /* suppress logic expansion for ini code */
+	iniDebug = iC_debug;			/* save iC_debug flag */
+	if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
     }
     setjmp(begin);
     for (initcode(); iCparse(); initcode()) {
 	;
     }
-    if (r == 0 && !(debug & 04000)) {
+    if (r == 0 && !(iC_debug & 04000)) {
 	unlink(T0FN);
     }
     if (inpPath) fclose(T0FP);
@@ -2240,7 +2239,7 @@ get(FILE* fp, int x)
 		iniLen++;
 	    }
 	    else if (iniLen == 0) {
-		debug = iniDebug;		/* restore logic expansion */
+		iC_debug = iniDebug;		/* restore logic expansion */
 		iniPtr = getp[0] = 0;		/* iC system function definitions read */
 		clrBuf();			/* clear iCbuf after initial functions */
 		continue;
@@ -2312,31 +2311,31 @@ get(FILE* fp, int x)
 	    if (sscanf(chbuf[x], " # line %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
-		if (lineno == -1 && !(debug & 010000)) {
+		if (lineno == -1 && !(iC_debug & 010000)) {
 		    continue;			/* no listing output for system C CODE */
 		}
-		if ((debug & 042) && lexflag & C_FIRST) {
-		    fprintf(outFP, "******* C CODE          ************************\n");
+		if ((iC_debug & 042) && lexflag & C_FIRST) {
+		    fprintf(iC_outFP, "******* C CODE          ************************\n");
 		}
 		if (strcmp(inpNM, prevNM)) {
 		    lexflag &= ~C_BLOCK;	/* output #line for changed filename */
-		} else if (debug & 042) {
-		    fprintf(outFP, "\n");	/* seperate blocks in lex listing */
+		} else if (iC_debug & 042) {
+		    fprintf(iC_outFP, "\n");	/* seperate blocks in lex listing */
 		}
 		lexflag |= C_LINE|C_LINE1;	/* only in C-compile */
 		strncpy(prevNM, inpNM, BUFS);
 	    }
 	}
-	if ((debug & 040) &&
+	if ((iC_debug & 040) &&
 	    (lexflag & C_BLOCK1) == 0 &&
 	    sscanf(chbuf[x], cexeString[outFlag], &temp1) == 1) {
 	    cFn = temp1;
 	    assert(cFn < functionUseSize);
 	}
-	if ((debug & 040) &&
+	if ((iC_debug & 040) &&
 	    ((lexflag & (C_BLOCK|C_BLOCK1)) == 0	/* iC listing */
 #if YYDEBUG
-						 || ((debug & 0402) == 0402)
+						 || ((iC_debug & 0402) == 0402)
 #endif
 									    )) {
 	    /********************************************************
@@ -2345,19 +2344,19 @@ get(FILE* fp, int x)
 	     *  then messages appear neatly after the listing line
 	     ********************************************************/
 	    if ((lexflag & C_LINE) == 0) {
-		if (cFn && (debug & 0402) != 0402) {
-		    fprintf(outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]);
+		if (cFn && (iC_debug & 0402) != 0402) {
+		    fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]);
 		    cFn = 0;
 		} else if ((lexflag & C_PARSE) && chbuf[x][0] != '\t' && chbuf[x][0] != ' ') {
-		    fprintf(outFP, "%03d\t    %s", lineno, chbuf[x]);
+		    fprintf(iC_outFP, "%03d\t    %s", lineno, chbuf[x]);
 		} else {
-		    fprintf(outFP, "%03d\t%s", lineno, chbuf[x]);
+		    fprintf(iC_outFP, "%03d\t%s", lineno, chbuf[x]);
 		}
 		iFlag = 1;				/* may need correction by pplstfix */
 	    } else if ((lexflag & (C_PARSE|C_FIRST)) != C_FIRST) {
-		fprintf(outFP, "\t%s", chbuf[x]);	/* # line or # 123 "name" */
+		fprintf(iC_outFP, "\t%s", chbuf[x]);	/* # line or # 123 "name" */
 	    }
-	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
+	    if (lineflag == 0) putc('\n', iC_outFP);	/* current line not complete */
 	}
 	if ((lexflag & C_PARSE) == 0 && lineno > 0) {
 	    lexflag &= ~C_FIRST;
@@ -2391,7 +2390,7 @@ unget(int c)
 	if(getp[0] <= chbuf[0]) {
 	    execerror("unget: ???", NULL, __FILE__, __LINE__);
 	}
-	*--getp[0] = c;		/* use always insures 1 free place */
+	*--getp[0] = c;				/* use always insures 1 free place */
 	iCtext[--iCleng] = '\0';
     }
 } /* unget */
@@ -2419,9 +2418,9 @@ getNumber(void)
 	get(T0FP, 0);				/* transfer to iCtext */
     }
 #if YYDEBUG
-    if ((debug & 0402) == 0402) {
-	fprintf(outFP, "getNumber: '%s' converted to %ld\n", iCtext, value);
-	fflush(outFP);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "getNumber: '%s' converted to %ld\n", iCtext, value);
+	fflush(iC_outFP);
     }
 #endif
     return value;
@@ -2434,11 +2433,11 @@ getNumber(void)
  *******************************************************************/
 
 char *	cexeString[] = {
-    "/**/case %d:\n",			/* begin with empty comment for uniqueness */
+    "/**/case %d:\n",				/* begin with empty comment for uniqueness */
 #if INT_MAX == 32767 && defined (LONG16)
-    "static long _c_%d(Gate * _cexe_gf) {\n",
+    "static long iC_%d(iC_Gt * iC_gf) {\n",
 #else
-    "static int _c_%d(Gate * _cexe_gf) {\n",
+    "static int iC_%d(iC_Gt * iC_gf) {\n",
 #endif
 };
 
@@ -2450,15 +2449,15 @@ iClex(void)
 
     if (ccfrag) {
 	if (ccfrag == '%') {
-	    fprintf(ccFP, "%%{\n");	/* output "%{\n" now */
+	    fprintf(ccFP, "%%{\n");		/* output "%{\n" now */
 	}
 	fprintf(ccFP, "#line %d \"%s\"\n", lineno, inpNM);
 	unget('{');
 	if (copyCfrag('{', ccfrag == '%' ? '%' : ';', '}', ccFP) == 0) {
 	    ccfrag = 0;
-	    return 0;	/* EOF in copy C block or statement */
+	    return 0;				/* EOF in copy C block or statement */
 	}
-	iClval.val.v = c_number << 8;	/* return case # */
+	iClval.val.v = c_number << 8;		/* return case # */
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
@@ -2470,25 +2469,25 @@ iClex(void)
 	List_e *	lp;
 	int		len;
 	int		rest;
-	char		tempBuf[TSIZE];			/* make long enough for format below */
+	char		tempBuf[TSIZE];		/* make long enough for format below */
 
 	if (c == ' ' || c == '\t' || c == '\n') {
 	    iCleng = 0;
-	    continue;					/* ignore white space */
+	    continue;				/* ignore white space */
 	}
 	if (isdigit(c)) {
-	    unget(c);					/* must be at least a single 0 */
-	    iClval.val.v = getNumber();			/* decimal octal or hex */
-	    c = NUMBER;					/* value in iClval.val.v */
+	    unget(c);				/* must be at least a single 0 */
+	    iClval.val.v = getNumber();		/* decimal octal or hex */
+	    c = NUMBER;				/* value in iClval.val.v */
 	    goto retfl;
 	} else if (isalpha(c) || c == '_') {
 	    unsigned char	wplus = 0;
 	    unsigned int	qtoken = 0;
-	    unsigned long	qmask = 0;		/* mask to id bit, byte, word or long */
-	    unsigned long	iomask = 0;		/* output Q is 0x0f, input I is 0xf0 */
+	    unsigned long	qmask = 0;	/* mask to id bit, byte, word or long */
+	    unsigned long	iomask = 0;	/* output Q is 0x0f, input I is 0xf0 */
 	    unsigned char	typ = UDF;
 	    unsigned char	ftyp = UDFA;
-	    int			ixd = IXD;
+	    int			ixd = iC_maxIO;	/* limit for I/O index (-1 no limit) */
 	    unsigned char	y0[2];
 	    unsigned char	y1[2];
 	    int			yn;
@@ -2499,42 +2498,42 @@ iClex(void)
 	    if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d", y0, y1, &yn) == 3) {
 		if (y1[0] == 'B') {
 		    wplus = 1;
-		    qmask = 0x02;			/* QB or IB */
+		    qmask = 0x02;		/* QB or IB */
 		    iomask = 0x0f;
 		    goto foundQIT;
 		} else if (y1[0] == 'W') {
 		    wplus = 1;
-		    qmask = 0x0404;			/* QW or IW */
+		    qmask = 0x0404;		/* QW or IW */
 		    iomask = 0x0f0f;
 		    goto foundQIT;
 		} else if (y1[0] == 'L') {
 #if INT_MAX != 32767 || defined (LONG16)
 		    wplus = 1;
-		    qmask = 0x08080808;			/* QL or IL */
+		    qmask = 0x08080808;		/* QL or IL */
 		    iomask = 0x0f0f0f0f;
 		    goto foundQIT;
 #else
 		    ierror("32 bit I/O not supported in 16 bit environment:", iCtext);
 #endif
 		} else if (c == '.') {
-		    int c1, i1;				/* QXn. or IXn. */
+		    int c1, i1;			/* QXn. or IXn. */
 		    if (isdigit(c1 = c = get(T0FP, 0))) {	/* can only be QX%d. */
 			for (i1 = 0; isdigit(c = get(T0FP, 0)); i1++);
 			if (c1 >= '8' || i1 > 0) {
 			    ierror("I/O bit address must be less than 8:", iCtext);
 			} else {
-			    qmask = 0x01;		/* QX, IX or TX */
+			    qmask = 0x01;	/* QX, IX or TX */
 			    iomask = 0x0f;
 			}
 		    foundQIT:
-			ftyp = GATE - wplus;		/* GATE or ARITH */
+			ftyp = GATE - wplus;	/* GATE or ARITH */
 			if (y0[0] == 'Q') {
 			    qtoken = lex_act[OUTX - wplus]; /* LOUT or AOUT */
 			} else {
-			    typ = INPX - wplus;		/* INPX or INPW */
+			    typ = INPX - wplus;	/* INPX or INPW */
 			    if (y0[0] != 'T') {
-				qmask <<= 4;		/* IX, IB, IW or IL */
-				iomask <<= 4;		/* input I */
+				qmask <<= 4;	/* IX, IB, IW or IL */
+				iomask <<= 4;	/* input I */
 			    } else {
 				qmask = iomask = 0;	/* TX (TB or TW) */
 				ixd = y1[0] == 'X' ? 1 : 0;	/* TX0.7 is max */
@@ -2548,41 +2547,47 @@ iClex(void)
 		    ierror("I/O like names with _ instead of . clash with internal representation", iCtext);
 						/* QX%d_%d not allowed */
 		}				/* QX%d_%dABC is OK - not I/O */
-
-		if (yn >= ixd) {
-		    snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:",
-			ixd);
-		    ierror(tempBuf, iCtext);	/* hard error if outside range */
-		} else			/* test rest if yn < ixd (array bounds) */
-		if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
-		    ierror("WORD I/O must have even byte address:", iCtext);
-		} else			/* test rest if yn < ixd (array bounds) */
-		if (wplus && y1[0] == 'L' && (yn & 0x03) != 0) {
-		    ierror("LONG I/O address must be on 4 byte boundary:", iCtext);
-		} else			/* and yn is on correct byte boundary */
-		if (qmask & 0x88888888) {
-		    if (*(unsigned long*)&QX_[yn] & ~qmask & iomask) {
-			ierror("I/O addresses more than 1 of bit, byte or word:",
-			    iCtext);		/* mixed mode warning */
+		if (ixd >= 0) {			/* no size limit for -ve ixd */
+		    if (yn >= ixd) {
+			snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:",
+			    ixd);
+			ierror(tempBuf, iCtext);/* hard error if outside range */
+		    } else			/* no byte word long boundaries */
+		    if (ixd <= IXD) {	/* test rest - old style tests (yn in array bounds) */
+			if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
+			    ierror("WORD I/O must have even byte address:", iCtext);
+			} else			/* test rest if yn < ixd (array bounds) */
+			if (wplus && y1[0] == 'L' && (yn & 0x03) != 0) {
+			    ierror("LONG I/O address must be on 4 byte boundary:", iCtext);
+			} else			/* and yn is on correct byte boundary */
+			if (qmask & 0x88888888) {
+			    if (*(unsigned long*)&iC_QX_[yn] & ~qmask & iomask) {
+				ierror("I/O addresses more than 1 of bit, byte or word:",
+				    iCtext);	/* mixed mode warning */
+			    }
+			    *(unsigned long*)&iC_QX_[yn] |= qmask; /* note long I/O */
+			} else
+			if (qmask & 0x4444) {
+			    if (*(unsigned short*)&iC_QX_[yn] & ~qmask & iomask) {
+				ierror("I/O addresses more than 1 of bit, byte or word:",
+				    iCtext);	/* mixed mode warning */
+			    }
+			    *(unsigned short*)&iC_QX_[yn] |= qmask; /* note word I/O */
+			} else
+			if (qmask) {
+			    if (iC_QX_[yn] & ~qmask & iomask) {
+				ierror("I/O addresses more than 1 of bit, byte or word:",
+				    iCtext);	/* mixed mode warning */
+			    }
+			    iC_QX_[yn] |= qmask;	/* note bit or byte I/O */
+			}
 		    }
-		    *(unsigned long*)&QX_[yn] |= qmask; /* note long I/O */
-		} else
-		if (qmask & 0x4444) {
-		    if (*(unsigned short*)&QX_[yn] & ~qmask & iomask) {
-			ierror("I/O addresses more than 1 of bit, byte or word:",
-			    iCtext);		/* mixed mode warning */
-		    }
-		    *(unsigned short*)&QX_[yn] |= qmask; /* note word I/O */
-		} else
-		if (qmask) {
-		    if (QX_[yn] & ~qmask & iomask) {
-			ierror("I/O addresses more than 1 of bit, byte or word:",
-			    iCtext);		/* mixed mode warning */
-		    }
-		    QX_[yn] |= qmask;		/* note bit or byte I/O */
 		}
 	    } else if (sscanf(iCtext, "_%d%1[A-Z_a-z_]", &yn, y2) == 1) {
 		ierror("Variables _<number> clash with internal number representation", iCtext);
+	    } else if (!(iC_debug & 04000) && sscanf(iCtext, "iC_%1[A-Za-z_0-9]", y2) == 1) {
+		/* this test suppressed for testing by option -d4000 - can cause link errors */
+		ierror("Variable starting with iC_ clashes with iC-runtime global variable", iCtext);
 	    }
 	    unget(c);
 	    symp = 0;
@@ -2605,10 +2610,10 @@ iClex(void)
 		}
 	    }
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) {
-		fprintf(outFP, "iClex: %s %s %s\n",
-		    symp->name, full_type[symp->type&TM], full_ftype[symp->ftype]);
-		fflush(outFP);
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "iClex: %s %s %s\n",
+		    symp->name, iC_full_type[symp->type&TM], iC_full_ftype[symp->ftype]);
+		fflush(iC_outFP);
 	    }
 #endif
 	    iClval.sym.v = symp;		/* return actual symbol */
@@ -2648,8 +2653,8 @@ iClex(void)
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {
 		symp = lp->le_sym;		/* original via backptr */
 	    }
-	    iClval.sym.f = stmtp;	/* original name for expressions */
-	    				/* CHECK if iCbuf changes now _() is missing */
+	    iClval.sym.f = stmtp;		/* original name for expressions */
+	    					/* CHECK if iCbuf changes now _() is missing */
 	    if ((len = snprintf(stmtp, rest = &iCbuf[IMMBUFSIZE] - stmtp,
 				"%s", symp->name)) < 0 || len >= rest) {
 		iCbuf[IMMBUFSIZE-1] = '\0';
@@ -2662,67 +2667,67 @@ iClex(void)
 	    switch (c) {
 	    case '!':
 		if (c1 == '=') {
-		    c = CMP; goto found;		/* != */
+		    c = CMP; goto found;	/* != */
 		}
 	    case '~':
-		c = NOTL;				/* ! or ~ */
+		c = NOTL;			/* ! or ~ */
 		break;
 	    case '%':
-		if (c1 == '{') {			/*    >>> '}' */
-		    c = LHEAD; goto found;		/* %{ >>> %} */
+		if (c1 == '{') {		/*    >>> '}' */
+		    c = LHEAD; goto found;	/* %{ >>> %} */
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* %= */
+		    c = OPE; goto found;	/* %= */
 		}
-		c = AOP;				/* % */
+		c = AOP;			/* % */
 		break;
 	    case '&':
 		if (c1 == '&') {
-		    c = AA; goto found;			/* && */
+		    c = AA; goto found;		/* && */
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* &= */
+		    c = OPE; goto found;	/* &= */
 		}
 		break;
 	    case '*':
 		if (c1 == '/') {
-		    c = COMMENTEND;	/* dangling end of a comment */
+		    c = COMMENTEND;		/* dangling end of a comment */
 		    goto found;
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* *= */
+		    c = OPE; goto found;	/* *= */
 		}
 		break;
 	    case '+':
 		if (c1 == '+') {
-		    c = PPMM; goto found;		/* ++ */
+		    c = PPMM; goto found;	/* ++ */
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* += */
+		    c = OPE; goto found;	/* += */
 		}
-		c = PM;					/* + */
+		c = PM;				/* + */
 		break;				/* + binary or unary */
 	    case '-':
 		if (c1 == '-') {
-		    c = PPMM; goto found;		/* -- */
+		    c = PPMM; goto found;	/* -- */
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* -= */
+		    c = OPE; goto found;	/* -= */
 		} else if (c1 == '>') {
-		    c = PR; goto found;			/* -> */
+		    c = PR; goto found;		/* -> */
 		}
-		c = PM;					/* - */
+		c = PM;				/* - */
 		break;				/* - binary or unary */
 	    case '/':
 		if (c1 == '/') {
-		    do {		/* start C++ style comment */
+		    do {			/* start C++ style comment */
 			if ((c1 = get(T0FP, 0)) == EOF) return 0;
 		    } while (c1 != '\n');
 		} else if (c1 == '*') {
-		    do {		/* start C style comment */
+		    do {			/* start C style comment */
 			while (c1 != '*') {
 			    if ((c1 = get(T0FP, 0)) == EOF) return 0;
 			}
 		    } while ((c1 = get(T0FP, 0)) != '/');
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* /= */
+		    c = OPE; goto found;	/* /= */
 		} else {
-		    c = AOP;				/* / */
+		    c = AOP;			/* / */
 		    break;
 		}
 		iCleng = 0;			/* end of comment */
@@ -2730,58 +2735,58 @@ iClex(void)
 	    case '<':
 		if (c1 == '<') {
 		    if ((c1 = get(T0FP, 0)) == '=') {
-			c = OPE; goto found;		/* <<= */
+			c = OPE; goto found;	/* <<= */
 		    }
-		    c = AOP;				/* << */
+		    c = AOP;			/* << */
 		    break;
 		}
 		if (c1 != '=') {
 		    unget(c1);
 		}
-		c = CMP; goto found;			/* < or <= */
+		c = CMP; goto found;		/* < or <= */
 	    case '=':
 		if (c1 == '=') {
-		    c = CMP; goto found;		/* == */
+		    c = CMP; goto found;	/* == */
 		}
-		*iCtext = '#';	/* to recognise <= => transmogrify = */
+		*iCtext = '#';			/* to recognise <= => transmogrify = */
 		break;
 	    case '>':
 		if (c1 == '>') {
 		    if ((c1 = get(T0FP, 0)) == '=') {
-			c = OPE; goto found;		/* >>= */
+			c = OPE; goto found;	/* >>= */
 		    }
-		    c = AOP;				/* >> */
+		    c = AOP;			/* >> */
 		    break;
 		}
 		if (c1 != '=') {
 		    unget(c1);
 		}
-		c = CMP; goto found;			/* > or >= */
+		c = CMP; goto found;		/* > or >= */
 	    case '^':
 		if (c1 == '=') {
-		    c = OPE; goto found;		/* ^= */
+		    c = OPE; goto found;	/* ^= */
 		}
 		break;
 	    case '|':
 		if (c1 == '|') {
-		    c = OO; goto found;			/* || */
+		    c = OO; goto found;		/* || */
 		} else if (c1 == '=') {
-		    c = OPE; goto found;		/* |= */
+		    c = OPE; goto found;	/* |= */
 		}
 		break;
 	    case '.':
-		c = PR;					/* . */
+		c = PR;				/* . */
 		break;
 	    }
 	    unget(c1);
 	found:
-	    iClval.val.v = c;		/* return to yacc as is */
+	    iClval.val.v = c;			/* return to yacc as is */
 	retfl:
-	    iClval.val.f = stmtp;	/* all sources are iClval.val */
+	    iClval.val.f = stmtp;		/* all sources are iClval.val */
 	    if ((c == PM || c == PPMM) &&
 		stmtp > iCbuf && *(stmtp-1) == *iCtext) {
-		*stmtp++ = ' ';		/* space between + + and - - */
-					/* 1 byte will always fit */
+		*stmtp++ = ' ';			/* space between + + and - - */
+						/* 1 byte will always fit */
 	    }
 	    rest = &iCbuf[IMMBUFSIZE] - stmtp;
 	    len = strlen(iCtext);
@@ -2792,9 +2797,9 @@ iClex(void)
 	    }
 	    iClval.val.l = stmtp = strncpy(stmtp, iCtext, len) + len;
 	}
-	return c;			/* return token to yacc */
+	return c;				/* return token to yacc */
     }
-    return 0;				/* EOF */
+    return 0;					/* EOF */
 } /* iClex */
 
 /********************************************************************
@@ -2805,35 +2810,35 @@ iClex(void)
  *******************************************************************/
 
 static void
-errLine(void)			/* error file not openend if no errors */
+errLine(void)					/* error file not openend if no errors */
 {
     if (errFlag == 0) {
-	if (errFilename && errFP == stderr) {
-	    if ((errFP = fopen(errFilename, "w+")) == NULL) {
-		errFilename = 0;	/* cannot open errFilename */
-		errFP = stderr;		/* just output to stderr */
-		errRet = Eindex;	/* error return for compile() */
+	if (errFilename && iC_errFP == stderr) {
+	    if ((iC_errFP = fopen(errFilename, "w+")) == NULL) {
+		errFilename = 0;		/* cannot open errFilename */
+		iC_errFP = stderr;		/* just output to stderr */
+		errRet = Eindex;		/* error return for compile() */
 	    } else {
-		errFlag = 1;		/* there is an error file */
+		errFlag = 1;			/* there is an error file */
 	    }
 	}
-	if (outFP != stdout) {
-	    errFlag = 1;		/* errors to errFilename or stderr */
-	    if (!(debug & 046)) {	/* no source listing in debugging output */
-		fprintf(outFP, "******* %-15s ************************\n", inpNM);
+	if (iC_outFP != stdout) {
+	    errFlag = 1;			/* errors to errFilename or stderr */
+	    if (!(iC_debug & 046)) {		/* no source listing in debugging output */
+		fprintf(iC_outFP, "******* %-15s ************************\n", inpNM);
 	    }
 	}
-	if (errFlag) fprintf(errFP, "******* %-15s ************************\n", inpNM);
+	if (errFlag) fprintf(iC_errFP, "******* %-15s ************************\n", inpNM);
     }
     if (lineno != errline) {
-	errline = lineno;		/* dont print line twice */
-	if (!(debug & 040) || (lexflag & C_BLOCK)) {	/* no source listing in debugging output */
-	    fprintf(outFP, "%03d\t%s", lineno, chbuf[lexflag&C_PARSE]);
-	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
+	errline = lineno;			/* dont print line twice */
+	if (!(iC_debug & 040) || (lexflag & C_BLOCK)) {	/* no source listing in debugging output */
+	    fprintf(iC_outFP, "%03d\t%s", lineno, chbuf[lexflag&C_PARSE]);
+	    if (lineflag == 0) putc('\n', iC_outFP);	/* current line not complete */
 	}
 	if (errFlag) {
-	    fprintf(errFP, "%03d\t%s", lineno, chbuf[lexflag&C_PARSE]);
-	    if (lineflag == 0)  putc('\n', errFP);	/* current line not complete */
+	    fprintf(iC_errFP, "%03d\t%s", lineno, chbuf[lexflag&C_PARSE]);
+	    if (lineflag == 0)  putc('\n', iC_errFP);	/* current line not complete */
 	}
     }
 } /* errLine */
@@ -2845,27 +2850,27 @@ errLine(void)			/* error file not openend if no errors */
  *******************************************************************/
 
 void
-errmess(				/* actual error message */
+errmess(					/* actual error message */
     char *	str0,
     char *	str1,
     char *	str2)
 {
-    errLine();				/* do not change - used as search key in iClive */
-    fprintf(outFP, "*** %s: %s", str0, str1);
-    if (errFlag) fprintf(errFP, "*** %s: %s", str0, str1);
+    errLine();					/* do not change - used as search key in iClive */
+    fprintf(iC_outFP, "*** %s: %s", str0, str1);
+    if (errFlag) fprintf(iC_errFP, "*** %s: %s", str0, str1);
     if (str2) {
-	fprintf(outFP, " %s", str2);
-	if (errFlag) fprintf(errFP, " %s", str2);
+	fprintf(iC_outFP, " %s", str2);
+	if (errFlag) fprintf(iC_errFP, " %s", str2);
     } else {
-	putc('.', outFP);
-	if (errFlag) putc('.', errFP);
+	putc('.', iC_outFP);
+	if (errFlag) putc('.', iC_errFP);
     }
 #ifdef NEWSTYLE
-    fprintf(outFP, " '%s'\n", inpNM);
-    if (errFlag) fprintf(errFP, " '%s'\n", inpNM);
+    fprintf(iC_outFP, " '%s'\n", inpNM);
+    if (errFlag) fprintf(iC_errFP, " '%s'\n", inpNM);
 #else
-    fprintf(outFP, " File %s, line %d\n", inpNM, lineno);
-    if (errFlag) fprintf(errFP, " File %s, line %d\n", inpNM, lineno);
+    fprintf(iC_outFP, " File %s, line %d\n", inpNM, lineno);
+    if (errFlag) fprintf(iC_errFP, " File %s, line %d\n", inpNM, lineno);
 #endif
 } /* errmess */
 
@@ -2877,11 +2882,11 @@ errmess(				/* actual error message */
  *******************************************************************/
 
 void
-ierror(					/* print error message */
+ierror(						/* print error message */
     char *	str1,
     char *	str2)
 {
-    iclock->type = ERR;			/* prevent execution */
+    iclock->type = ERR;				/* prevent execution */
     errmess("Error", str1, str2);
 } /* ierror */
 
@@ -2892,7 +2897,7 @@ ierror(					/* print error message */
  *******************************************************************/
 
 void
-warning(				/* print warning message */
+warning(					/* print warning message */
     char *	str1,
     char *	str2)
 {
@@ -2924,20 +2929,20 @@ errInt(void)
  *******************************************************************/
 
 void
-execerror(			/* recover from run-time error */
+execerror(					/* recover from run-time error */
     char *	str1,
     char *	str2,
     char *	file,
     int		line)
 {
     errmess("Execerror", str1, str2);
-    fprintf(outFP, "in source file: %s line %d\n", file, line);
-    fflush(outFP);
+    fprintf(iC_outFP, "in source file: %s line %d\n", file, line);
+    fflush(iC_outFP);
     if (errFlag) {
-	fprintf(errFP, "in source file: %s line %d\n", file, line);
-	fflush(errFP);
+	fprintf(iC_errFP, "in source file: %s line %d\n", file, line);
+	fflush(iC_errFP);
     }
-    fseek(T0FP, 0L, 2);	/* flush rest of file */
+    fseek(T0FP, 0L, 2);				/* flush rest of file */
     longjmp(begin, 0);
 } /* execerror */
 
@@ -2955,8 +2960,8 @@ yyerror(char *	s)
     char	erbuf[TSIZE];
 
     errLine();
-    fprintf(outFP, "*** ");	/* do not change - used as search key in iClive */
-    if (errFlag) fprintf(errFP, "*** ");
+    fprintf(iC_outFP, "*** ");			/* do not change - used as search key in iClive */
+    if (errFlag) fprintf(iC_errFP, "*** ");
     if ((lexflag & C_PARSE) == 0) {
 	n = getp[0] - chbuf[0] - iCleng;
     } else {
@@ -2979,21 +2984,21 @@ yyerror(char *	s)
     if (n1 < n + 5) {
 	n1 += 4;
 	while (n1--) {
-	    putc('-', outFP);
-	    if (errFlag) putc('-', errFP);
+	    putc('-', iC_outFP);
+	    if (errFlag) putc('-', iC_errFP);
 	}
-	fprintf(outFP, "^ %s\n", erbuf);
-	if (errFlag) fprintf(errFP, "^ %s\n", erbuf);
+	fprintf(iC_outFP, "^ %s\n", erbuf);
+	if (errFlag) fprintf(iC_errFP, "^ %s\n", erbuf);
     } else {
-	fprintf(outFP, "%s ", erbuf);
-	if (errFlag) fprintf(errFP, "%s ", erbuf);
+	fprintf(iC_outFP, "%s ", erbuf);
+	if (errFlag) fprintf(iC_errFP, "%s ", erbuf);
 	n1 -= n - 3;
 	while (n1--) {
-	    putc('-', outFP);
-	    if (errFlag) putc('-', errFP);
+	    putc('-', iC_outFP);
+	    if (errFlag) putc('-', iC_errFP);
 	}
-	fprintf(outFP, "^\n");
-	if (errFlag) fprintf(errFP, "^\n");
+	fprintf(iC_outFP, "^\n");
+	if (errFlag) fprintf(iC_errFP, "^\n");
     }
 } /* yyerror */
 
@@ -3013,16 +3018,16 @@ copyCfrag(char s, char m, char e, FILE * oFP)
     int		match;
 
     for (brace = 0; (c = get(T0FP, 0)) != EOF; ) {
-	if (c == s) {			/* '{' or '(' */
+	if (c == s) {				/* '{' or '(' */
 	    if (brace++ == 0 && m == '%') {	/* don't output "%{\w" */
 		while ((c = get(T0FP, 0)) == ' ' || c == '\t');
 		unget(c);
 		continue;
 	    }
-	} else if (c == m) {		/* ';' or '%' or ',' */
+	} else if (c == m) {			/* ';' or '%' or ',' */
 	    if (brace <= 0) {
-		unget(c);		/* use for next token */
-		return m;		/* no longer used */
+		unget(c);			/* use for next token */
+		return m;			/* no longer used */
 	    } else if (brace == 1 && c == '%') {
 		if ((c = get(T0FP, 0)) == '}') {
 		    fprintf(oFP, "\n%%##\n\n%%}\n");	/* #line lineno "outNM"\n%} */
@@ -3032,27 +3037,27 @@ copyCfrag(char s, char m, char e, FILE * oFP)
 		unget(c);
 		c = '%';
 	    }
-	} else if (c == e) {		/* ')' or '}' */
+	} else if (c == e) {			/* ')' or '}' */
 	    if (--brace <= 0) {
 		/* ZZZ fix lineno and name */
 		if (brace == 0 && c == '}') {
-		    putc(c, oFP);	/* output '}' */
+		    putc(c, oFP);		/* output '}' */
 		}
 		fprintf(oFP, "\n%%##\n");	/* #line lineno "outNM" */
-		unget(c);		/* should not return without '}' */
+		unget(c);			/* should not return without '}' */
 		return e;
 	    }
 	} else switch (c) {
 
-	case '/':			/* look for comments */
+	case '/':				/* look for comments */
 	    putc(c, oFP);
 	    if ((c = get(T0FP, 0)) == '/') {
-		do {			/* start C++ style comment */
+		do {				/* start C++ style comment */
 		    putc(c, oFP);
 		    if ((c = get(T0FP, 0)) == EOF) goto eof_error;
 		} while (c != '\n');
 	    } else if (c == '*') {
-		do {			/* start C style comment */
+		do {				/* start C style comment */
 		    putc(c, oFP);
 		    while (c != '*') {
 			if ((c = get(T0FP, 0)) == EOF) goto eof_error;
@@ -3064,11 +3069,11 @@ copyCfrag(char s, char m, char e, FILE * oFP)
 	    }
 	    break;
 
-	case '\'':			/* character constant */
+	case '\'':				/* character constant */
 	    match = '\'';
 	    goto string;
 
-	case '"':			/* character string */
+	case '"':				/* character string */
 	    match = '"';
 
 	string:
@@ -3078,19 +3083,19 @@ copyCfrag(char s, char m, char e, FILE * oFP)
 		    putc(c, oFP);
 		    if ((c = get(T0FP, 0)) == EOF) goto eof_error;
 		} else if (c == '\n') {
-		    iCleng = 1;		/* error pointer at newline */
+		    iCleng = 1;			/* error pointer at newline */
 		    yyerror("C code: newline in \" \" or ' ', error");
 		} else if (c == EOF)  goto eof_error;
 		putc(c, oFP);
 	    }
 	    break;
 	}
-	putc(c, oFP);			/* output to T1FN or T4FN */
+	putc(c, oFP);				/* output to T1FN or T4FN */
     }
 eof_error:
-    iCleng = 1;				/* error pointer at EOF */
+    iCleng = 1;					/* error pointer at EOF */
     yyerror("C code: EOF, error");
-    return 0;				/* EOF */
+    return 0;					/* EOF */
 } /* copyCfrag */
     
 static void
@@ -3100,18 +3105,18 @@ ffexprCompile(char * txt, List_e * lp)
     int		saveLineno;
     Symbol *	sp;
 
-    saveLexflag = lexflag;		/* iC compile state */
+    saveLexflag = lexflag;			/* iC compile state */
     saveLineno  = lineno;
     assert(lp);
     sp = lp->le_sym;
     assert(sp);
-    lp = sp->u_blist;			/* ffexpr head link */
+    lp = sp->u_blist;				/* ffexpr head link */
     assert(lp);
     fprintf(T4FP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
     if (c_compile(T4FP, T5FP, C_PARSE|C_BLOCK1, lp) || copyXlate(T5FP, T1FP, 0, 0, 02)) {
 	ierror("c_compile failed:", txt);
     }
-    lexflag = saveLexflag;		/* restore iC compile state */
+    lexflag = saveLexflag;			/* restore iC compile state */
     lineno  = saveLineno;
 //    warning("c_compile complete", txt);
 } /* ffexprCompile */

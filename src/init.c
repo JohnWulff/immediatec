@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.26 2004/12/22 16:56:52 jw Exp $";
+"@(#)$Id: init.c,v 1.27 2005/01/27 17:35:17 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,12 +19,11 @@ static const char init_c[] =
 #include	<windows.h>
 #endif
 #include	<stdio.h>
-#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #include	"comp_tab.h"
 
-Symbol *	iclock;		/* default clock */
+Symbol *	iclock;			/* default clock */
 
 /********************************************************************
  *
@@ -107,13 +106,13 @@ static struct bi builtins[] = {
   { "int",	KEYW,	TYPE,	ARITH,	},
   { "clock",	KEYW,	TYPE,	CLCKL,	},
   { "timer",	KEYW,	TYPE,	TIMRL,	},
-  { "Gate",	CTYPE,	YYERRCODE, 0,	}, /* initial C type from icc.h */
+  { "iC_Gt",	CTYPE,	YYERRCODE, 0,	}, /* initial Gate C-type from icg.h */
   { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
   { 0,		0,	0,	0,	},
 };
 
 void
-init(void)		/* install constants and built-ins */
+init(void)				/* install constants and built-ins */
 {
     int		io;
     int		instanceNum;
@@ -122,10 +121,10 @@ init(void)		/* install constants and built-ins */
     char	funName[BUFS];
     char	lineBuf[BUFS];
 
-    if (debug & 010000) {
-	fprintf(outFP, "initialFunctions:\n%s\n", initialFunctions);
+    if (iC_debug & 010000) {
+	fprintf(iC_outFP, "initialFunctions:\n%s\n", initialFunctions);
     }
-    if (debug & 020000) {
+    if (iC_debug & 020000) {
 	for (io = 0; builtinsOld[io].name; io++) {
 	    sp = install(builtinsOld[io].name, builtinsOld[io].type, builtinsOld[io].ftype);
 	    sp->u_val = builtinsOld[io].uVal;	/* set u_val in Symbol just installed */
@@ -134,19 +133,25 @@ init(void)		/* install constants and built-ins */
     for (io = 0; builtins[io].name; io++) {
 	/* no name may occurr twice - otherwise install fails */
 	sp = install(builtins[io].name, builtins[io].type, builtins[io].ftype);
-	sp->u_val = builtins[io].uVal;	/* set u_val in Symbol just installed */
+	sp->u_val = builtins[io].uVal;		/* set u_val in Symbol just installed */
     }
     iclock = sp;	/* 'iclock' with name "iClock" is default clock when loop finishes */
-    if (aflag && (H1p = fopen(H1name, "r")) != 0) {	/* list _list_.c */
-	while (fgets(lineBuf, sizeof lineBuf, H1p)) {	/* read previous instance numbers */
-	    if (sscanf(lineBuf, "/* %s\t%d */", funName, &instanceNum) == 2) {
-		if ((sp = lookup(funName)) == 0) {
-		    sp = install(funName, IFUNCT, UDFA); /* function not defined yet */;
+
+    if (iC_aflag != 0) {		/* build several files to be linked */
+	if ((H1p = fopen(H1name, "r")) != 0) {			/* scan _list1.h */
+	    while (fgets(lineBuf, sizeof lineBuf, H1p)) {	/* read previous instance numbers */
+		if (sscanf(lineBuf, "/* %s\t%d */", funName, &instanceNum) == 2) {
+		    if ((sp = lookup(funName)) == 0) {
+			sp = install(funName, IFUNCT, UDFA);	/* function not defined yet */
+		    }
+		    sp->u_val = instanceNum;		/* initialise instance number */
 		}
-		sp->u_val = instanceNum;		/* initialise instance number */
 	    }
+	    fclose(H1p);
+	    /* if a previous _list1.h exists, it will be extended ZZZ */
+	} else {
+	    iC_lflag = 1;			/* need to write #define in new _list1.h */
 	}
-	fclose(H1p);
     }
 }
 

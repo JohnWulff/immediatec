@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.45 2005/01/16 15:24:57 jw Exp $";
+"@(#)$Id: load.c,v 1.46 2005/01/26 17:19:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,36 +19,36 @@ static const char load_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<assert.h>
 #ifndef LOAD
 #error - must be compiled with LOAD defined to make a linkable library
 #else
 #ifdef TCP
 #include	"tcpc.h"
 #endif
-#include	"icg.h"
 #include	"icc.h"
 
 #define STS	1
 #define ESIZE	512
 
-extern const char	SC_ID[];
+extern const char	iC_ID[];
 
 typedef int (*fptr)(const void*, const void*);
 
 Gate		iClock = { -1, -CLK, CLCKL, 0, "iClock" };	/* active */
-Gate **		sTable;			/* pointer to dynamic array */
-Gate **		sTend;			/* end of dynamic array */
+Gate **		iC_sTable;			/* pointer to dynamic array */
+Gate **		iC_sTend;			/* end of dynamic array */
 
 unsigned	errCount;
-const char *	progname;		/* name of this executable */
-short		debug = 0;
-int		micro = 0;
-unsigned short	xflag;
-unsigned short	osc_max = MARKMAX;
-unsigned short	osc_lim = MARKMAX;
+const char *	iC_progname;			/* name of this executable */
+short		iC_debug = 0;
+int		iC_micro = 0;
+unsigned short	iC_xflag;
+unsigned short	iC_osc_max = MARKMAX;
+unsigned short	iC_osc_lim = MARKMAX;
 
-FILE *		outFP;			/* listing file pointer */
-FILE *		errFP;			/* error file pointer */
+FILE *		iC_outFP;			/* listing file pointer */
+FILE *		iC_errFP;			/* error file pointer */
 
 static char	eBuf[ESIZE];
 
@@ -105,33 +105,36 @@ static const char *	usage =
  *
  *******************************************************************/
 
-char *		full_type[]  = { FULL_TYPE };
-char *		full_ftype[] = { FULL_FTYPE };
-unsigned char	types[]      = { TYPES };
-unsigned char	ctypes[]     = { CTYPES };
-unsigned char	ftypes[]     = { FTYPES };
-char		os[]         = OPS;
-char		fos[]        = FOPS;
+char *		iC_full_type[]  = { FULL_TYPE };
+char *		iC_full_ftype[] = { FULL_FTYPE };
+unsigned char	iC_types[]      = { TYPES };
+unsigned char	iC_ctypes[]     = { CTYPES };
+unsigned char	iC_ftypes[]     = { FTYPES };
+char		iC_os[]         = OPS;
+char		iC_fos[]        = FOPS;
 
-unsigned char	bitMask[]    = {
+unsigned char	iC_bitMask[]    = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
 };
 
 /********************************************************************
  *
- *	I/O arrays also used at compile time
+ *	I/O links for display()
  *
  *******************************************************************/
 
-Gate *		IX_[IXD];		/* pointers to bit Input byte Gates */
-Gate *		IB_[IXD];		/* pointers to byte Input Gates */
-Gate *		IW_[IXD];		/* pointers to word Input Gates */
-#if INT_MAX != 32767 || defined (LONG16)
-Gate *		IL_[IXD];		/* pointers to long Input Gates */
-#endif
-Gate *		TX_[TXD];		/* pointers to bit System byte Gates */
-unsigned char	QX_[IXD];		/* Output bit field slots */
-char		QT_[IXD];		/* Output type of slots */
+Gate *		iC_TX0p;			/* pointer to bit System byte Gates */
+
+Gate *		iC_IX0p;			/* pointer to Input Gate for bit iC_display */
+Gate *		iC_QX0p;			/* pointer to Output Gate for bit iC_display */
+Gate *		iC_IB1p;			/* pointer to Input Gate for byte iC_display */
+Gate *		iC_QB1p;			/* pointer to Output Gate for byte iC_display */
+Gate *		iC_IW2p;			/* pointer to Input Gate for word iC_display */
+Gate *		iC_QW2p;			/* pointer to Output Gate for word iC_display */
+#if	INT_MAX != 32767 || defined (LONG16)
+Gate *		iC_IL4p;			/* pointer to Input Gate for long iC_display */
+Gate *		iC_QL4p;			/* pointer to Output Gate for long iC_display */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 
 /********************************************************************
  *
@@ -197,17 +200,17 @@ main(
     char	tail[8];		/* compiler generated suffix _123456 max */
 
     /* Process the arguments */
-    if ((progname = strrchr(*argv, '/')) == NULL) {
-	progname = *argv;
+    if ((iC_progname = strrchr(*argv, '/')) == NULL) {
+	iC_progname = *argv;
     } else {
-	progname++;		/*  path has been stripped */
+	iC_progname++;			/*  path has been stripped */
     }
 #ifdef TCP
-    iccNM = emalloc(strlen(progname)+INSTSIZE+2);	/* +2 for '-...\0' */
-    strcpy(iccNM, progname);
+    iC_iccNM = iC_emalloc(strlen(iC_progname)+INSTSIZE+2);	/* +2 for '-...\0' */
+    strcpy(iC_iccNM, iC_progname);
 #endif
-    outFP = stdout;		/* listing file pointer */
-    errFP = stderr;		/* error file pointer */
+    iC_outFP = stdout;			/* listing file pointer */
+    iC_errFP = stderr;			/* error file pointer */
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;
@@ -216,11 +219,11 @@ main(
 #ifdef TCP
 		case 's':
 		    if (! *++*argv) { --argc, ++argv; }
-		    hostNM = *argv;
+		    iC_hostNM = *argv;
 		    goto break2;
 		case 'p':
 		    if (! *++*argv) { --argc, ++argv; }
-		    portNM = *argv;
+		    iC_portNM = *argv;
 		    goto break2;
 		case 'i':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -229,43 +232,43 @@ main(
 			fprintf(stderr, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
 			    *argv, INSTSIZE);
 		    } else {
-			iidNM = emalloc(INSTSIZE+1);	/* +1 for '\0' */
-			strncpy(iidNM, *argv, INSTSIZE);
-			snprintf(iccNM + strlen(iccNM), INSTSIZE+2, "-%s", iidNM);
+			iC_iidNM = iC_emalloc(INSTSIZE+1);	/* +1 for '\0' */
+			strncpy(iC_iidNM, *argv, INSTSIZE);
+			snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
 		    }
 		    goto break2;
 		case 'm':
-		    micro++;		/* microsecond info */
+		    iC_micro++;		/* microsecond info */
 		    break;
 #endif
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &df);
-		    debug |= df;	/* short */
+		    iC_debug |= df;	/* short */
 		    df &= 040;		/* load listing */
 		    goto break2;
 		case 't':
-		    debug |= 0100;	/* trace */
+		    iC_debug |= 0100;	/* trace */
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
-		    osc_lim = osc_max = atoi(*argv);
-		    if (osc_max > 15) goto error;
+		    iC_osc_lim = iC_osc_max = atoi(*argv);
+		    if (iC_osc_max > 15) goto error;
 		    goto break2;
 		case 'x':
-		    xflag = 1;		/* start with hexadecimal output */
+		    iC_xflag = 1;	/* start with hexadecimal output */
 		    break;
 		default:
 		    fprintf(stderr,
-			"%s: unknown flag '%c'\n", progname, **argv);
+			"%s: unknown flag '%c'\n", iC_progname, **argv);
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, progname,
+		    fprintf(stderr, usage, iC_progname,
 #ifdef TCP
-		    hostNM, portNM, iidNM, INSTSIZE,
+		    iC_hostNM, iC_portNM, iC_iidNM, INSTSIZE,
 #endif
-		    MARKMAX, SC_ID);
+		    MARKMAX, iC_ID);
 		    exit(-1);
 		}
 	    } while (*++*argv);
@@ -274,11 +277,11 @@ main(
 	    goto error;
 	}
     }
-    debug &= 03747;			/* allow only cases specified */
+    iC_debug &= 03747;			/* allow only cases specified */
 
 /********************************************************************
  *
- *	Scan i_list[] for PASS 0 to 2. Each entry contains a Gate** to the
+ *	Scan iC_list[] for PASS 0 to 2. Each entry contains a Gate** to the
  *	Gates in each seperately compiled module. These Gates are linked
  *	via gt_next in the compiled code for each module.
  *
@@ -294,13 +297,13 @@ main(
  *	Generate an INPB/OUTW Gate QXx for each first QXx.y_0 of gt_fni OUTX
  *	These new Gates are linked in an extra list, which can be scanned
  *	reasonably quickly for duplicates. At the end of Pass 0, the extra
- *	list is linked into the start of the first entry in i_list[], so the
+ *	list is linked into the start of the first entry in iC_list[], so the
  *	newly generated Gates are also scanned in Pass 1 and 2 and then sorted.
  *
  *******************************************************************/
 
     if (df) { printf("PASS 0\n"); fflush(stdout); }
-    for (oppp = i_list; (opp = *oppp++) != 0; ) {
+    for (oppp = iC_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
 	    op->gt_val = (op->gt_ini == -NCONST	|| op->gt_ini == -INPW) ? -1 : 0;
 	    if (op->gt_ini != -ALIAS) {
@@ -323,15 +326,15 @@ main(
 			    }
 			}
 			/* generate a new auxiliary Gate for bit I/O */
-			tgp = (Gate *) emalloc(sizeof(Gate));
-			tgp->gt_ids = emalloc(eLen);	/* all bytes 0 */
+			tgp = (Gate *) iC_emalloc(sizeof(Gate));
+			tgp->gt_ids = iC_emalloc(eLen);	/* all bytes 0 */
 			strncpy(tgp->gt_ids, eBuf, eLen);
 			tgp->gt_next = e_list;		/* link rest of e_list to new Gate */
 			e_list = tgp;			/* new Gate at front for speed */
 			if (op->gt_ini == -INPX) {
 			    tgp->gt_ini = -INPW;
 			    tgp->gt_fni = TRAB;
-			    tgp->gt_list = (Gate **) emalloc(8 * sizeof(Gate *));
+			    tgp->gt_list = (Gate **) iC_emalloc(8 * sizeof(Gate *));
 			} else {			/* (op->gt_fni == OUTX) */
 			    tgp->gt_ini = -INPB;
 			    tgp->gt_fni = OUTW;
@@ -344,7 +347,7 @@ main(
 			    /* ###### no back link ####### */
 			} else {			/* (op->gt_fni == OUTX) */
 			    if (i != 4 || strcmp(tail, "_0") || strcmp(iqt, "Q")) goto pass0Err;
-			    op->gt_mark = bitMask[bit];
+			    op->gt_mark = iC_bitMask[bit];
 			    op->gt_list = (Gate**)tgp;	/* pointer directly in gt_list */
 			    /* ###### no back link ####### */
 			}
@@ -357,12 +360,12 @@ main(
 	}
     }
     if (errCount) {
-	exit(1);		/* pass 0 failed */
+	exit(1);					/* pass 0 failed */
     }
     if (e_list) {
 	for (tgp = e_list; (ttgp = tgp->gt_next) != 0; tgp = ttgp);
-	tgp->gt_next = *i_list[0];	/* must have a non-null entry - works even if not */
-	*i_list[0] = e_list;		/* now e_list is at the front of first i_list entry */
+	tgp->gt_next = *iC_list[0];	/* must have a non-null entry - works even if not */
+	*iC_list[0] = e_list;		/* now e_list is at the front of first iC_list entry */
     }
 
 /********************************************************************
@@ -402,33 +405,33 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 1 - name gt_ini gt_fni: input list\n"); fflush(stdout); }
-    val = 1;					/* count iClock */
-    for (oppp = i_list; (opp = *oppp++) != 0; ) {
+    val = 1;						/* count iClock */
+    for (oppp = iC_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
-	    val++;				/* count node */
+	    val++;					/* count node */
 	    /********************************************************************
 	     *  part A
 	     *  arithmetic node or logical output
 	     *******************************************************************/
 	    if (op->gt_ini == -ARN) {
 		if (df) printf(" %-8s%6s%7s:", op->gt_ids,
-			    full_type[-op->gt_ini], full_ftype[op->gt_fni]);
+			    iC_full_type[-op->gt_ini], iC_full_ftype[op->gt_fni]);
 		if ((lp = op->gt_rlist) == 0) {
 		    inError(__LINE__, op, 0, "PASS 1: arithmetic node with no forward list");
 		    goto partB;
 		}
 		if (op->gt_ini == -ARN) {
-		    lp++;			/* skip function vector */
+		    lp++;				/* skip function vector */
 		}
-		while ((gp = *lp++) != 0) {	/* for ARN scan 1 list */
-		    if (gp->gt_ini == -ALIAS) {	/* resolve arithmetic ALIAS */
-			tgp = gp;		/* remember start of ALIAS chain */
+		while ((gp = *lp++) != 0) {		/* for ARN scan 1 list */
+		    if (gp->gt_ini == -ALIAS) {		/* resolve arithmetic ALIAS */
+			tgp = gp;			/* remember start of ALIAS chain */
 			while (gp->gt_ini == -ALIAS) {
 			    if (df) printf("	%s@", gp->gt_ids);
 			    gp = (Gate*)gp->gt_rlist;	/* adjust */
 			}
 			tlp = lp - 1;
-			*tlp = gp;		/* swap in real input */
+			*tlp = gp;			/* swap in real input */
 			/* adjust ALIAS chain, so that each ALIAS points to real input */
 			while (tgp->gt_ini == -ALIAS) {
 			    ttgp = (Gate*)tgp->gt_rlist;
@@ -437,9 +440,9 @@ main(
 			}
 		    }
 		    if (df) printf("	%s,", gp->gt_ids);
-		    op->gt_val++;		/* count input */
+		    op->gt_val++;			/* count input */
 		    if (gp->gt_fni == ARITH) {
-			gp->gt_mark++;		/* arithmetic output at gp */
+			gp->gt_mark++;			/* arithmetic output at gp */
 			link_count++;
 		    } else
 		    if (gp->gt_fni != OUTX) {
@@ -451,18 +454,25 @@ main(
 	    /********************************************************************
 	     *  logical node
 	     *******************************************************************/
-	    if (op->gt_ini > 0) {
-		if (df) printf(" %-8s%6d%7s:", op->gt_ids,
-			    op->gt_ini, full_ftype[op->gt_fni]);
+	    if (op->gt_ini >= 0) {
+		if (df) {
+		    if (op->gt_ini < 0) {
+			printf(" %-8s%6s%7s:", op->gt_ids,
+			    iC_full_type[-op->gt_ini], iC_full_ftype[op->gt_fni]);
+		    } else {
+			printf(" %-8s%6d%7s:", op->gt_ids,
+			    op->gt_ini, iC_full_ftype[op->gt_fni]);
+		    }
+		}
 		if ((lp = op->gt_rlist) == 0) {
 		    inError(__LINE__, op, 0, "PASS 1: logic node with no forward list");
 		    goto partB;
 		}
-		i = 1;			/* LOGIC nodes AND, OR or LATCH */
+		i = 1;					/* LOGIC nodes XOR, AND, OR or LATCH */
 		/* for LOGIC scan 2 lists with i = 1 and -1 */
 		do {
 		    while ((gp = *lp++) != 0) {
-			inversion = 0;		/* resolve logical ALIAS */
+			inversion = 0;			/* resolve logical ALIAS */
 			if (gp->gt_ini == -ALIAS) {
 			    while (gp->gt_ini == -ALIAS) {
 				if (df) printf("	%c%s@",		/* @ */
@@ -470,24 +480,24 @@ main(
 				inversion ^= gp->gt_mark;
 				gp = (Gate*)gp->gt_rlist;
 			    }
-			    tlp = lp - 1;	/* destination */
+			    tlp = lp - 1;		/* destination */
 			    if (inversion) {
-				slp = tlp + i;	/* source */
+				slp = tlp + i;		/* source */
 				if (i == 1) {
 				    while ((*tlp++ = *slp++) != 0);
-				    *tlp = gp;	/* swap in real input */
+				    *tlp = gp;		/* swap in real input */
 				    lp--;
-				    continue;	/* counted as inverse */
+				    continue;		/* counted as inverse */
 				}
 				while ((*tlp-- = *slp--) != 0);
 			    }
-			    *tlp = gp;	/* swap in real input */
+			    *tlp = gp;			/* swap in real input */
 			}
 			if (df) printf("	%c%s,",
 			    ((i >> 1) & 0x1) ^ inversion ? '~' : ' ', gp->gt_ids);
-			op->gt_val++;		/* count input */
+			op->gt_val++;			/* count input */
 			if (gp->gt_fni == GATE) {
-			    gp->gt_mark++;	/* logic output at gp */
+			    gp->gt_mark++;		/* logic output at gp */
 			    link_count++;
 			} else {
 			    if (gp->gt_fni < MAX_FTY && gp->gt_ini > -MAX_LS) {
@@ -498,7 +508,7 @@ main(
 			    fprintf(stderr,
 				"ERROR %s: line %d: ftype = %d type = %d ???\n",
 				__FILE__, __LINE__, gp->gt_fni, gp->gt_ini);
-			    goto failed;	/* to avoid memory access error */
+			    goto failed;		/* to avoid memory access error */
 			}
 		    }
 		} while ((i = -i) != 1);
@@ -507,7 +517,7 @@ main(
 		 *  remaining types not touched in part A
 		 *******************************************************************/
 		if (df) printf(" %s\t\t\t\t\tlink count = %d\n", op->gt_ids, link_count);
-		goto partB;			/* rest not touched in in part A */
+		goto partB;				/* rest not touched in in part A */
 	    }
 	  failed:
 	    if (df) printf("\t\tlink count = %d\n", link_count);
@@ -521,21 +531,21 @@ main(
 		if (op->gt_list != 0) {
 		    inError(__LINE__, op, 0, "PASS 1: no forward list for ARITH or GATE");
 		}
-		link_count++;			/* 1 terminator for ARITH */
+		link_count++;				/* 1 terminator for ARITH */
 		if (op->gt_fni == GATE) {
-		    link_count++;		/* 2 terminators for GATE */
+		    link_count++;			/* 2 terminators for GATE */
 		}
 	    } else
 	    /********************************************************************
 	     *  action nodes
 	     *******************************************************************/
 	    if (op->gt_fni >= MIN_ACT && op->gt_fni < MAX_ACT) {
-		op->gt_mark++;			/* count self */
+		op->gt_mark++;				/* count self */
 		if ((lp = op->gt_list) == 0 || (gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0, "PASS 1: no slave node or funct for action");
 		} else
 		if (op->gt_fni != F_SW && op->gt_fni != F_CF && op->gt_fni != F_CE) {
-		    gp->gt_val++;		/* mark slave node */
+		    gp->gt_val++;			/* mark slave node */
 		    if (op->gt_fni == D_SH) {
 			if (gp->gt_rlist) {
 			    inError(__LINE__, op, gp, "PASS 1: backlink for D_SH slave already installed");
@@ -550,7 +560,7 @@ main(
 		    while (gp->gt_ini == -ALIAS) {
 			gp = (Gate*)gp->gt_rlist;	/* adjust */
 		    }
-		    gp->gt_mark++;		/* clock ir timer node */
+		    gp->gt_mark++;			/* clock ir timer node */
 		    if (gp->gt_fni == TIMRL) {
 			if ((gp = *lp++) == 0) {
 			    inError(__LINE__, op, 0, "PASS 1: timed action has no delay");
@@ -567,7 +577,7 @@ main(
     }
     if (df) printf(" link count = %d\n", link_count);
     if (errCount) {
-	exit(1);		/* pass 1 failed */
+	exit(1);					/* pass 1 failed */
     }
 
 /********************************************************************
@@ -582,13 +592,13 @@ main(
  *******************************************************************/
 
     ifp = fp = (Gate **)calloc(link_count, sizeof(Gate *));	/* links */
-    sTable = sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
+    iC_sTable = iC_sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
 
 /********************************************************************
  *
  *	PASS 2
  *
- *	Enter iClock and each node in i_list into symbol table sTable.
+ *	Enter iClock and each node in iC_list into symbol table sTable.
  *	At the end of this pass sTend will hold the end of the table.
  *
  *	Using the counts accumulated in op->gt_mark determine the
@@ -607,11 +617,11 @@ main(
     /* iClock has no input, needs no output - just report for completeness */
     if (df) printf(" %-8s %3d %3d\n", iClock.gt_ids, iClock.gt_val,
 	iClock.gt_mark);
-    *sTend++ = &iClock;			/* enter iClock into sTable */
+    *iC_sTend++ = &iClock;				/* enter iClock into sTable */
 
-    for (oppp = i_list; (opp = *oppp++) != 0; ) {
+    for (oppp = iC_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
-	    *sTend++ = op;		/* enter node into sTable */
+	    *iC_sTend++ = op;				/* enter node into sTable */
 	    if (op->gt_ini != -ALIAS) {
 		if (df) {
 		    printf(" %-8s %3d %3d", op->gt_ids, op->gt_val, op->gt_mark);
@@ -670,10 +680,10 @@ main(
 	}
     }
 
-    if (val != (sTend - sTable)) {
+    if (val != (iC_sTend - iC_sTable)) {
 	fprintf(stderr,
 	    "\nERROR: %s: line %d: Gate allocation %d vs Symbol Table size %d\n",
-	    __FILE__, __LINE__, val, sTend - sTable);
+	    __FILE__, __LINE__, val, iC_sTend - iC_sTable);
 	exit(2);
     }
 
@@ -692,7 +702,7 @@ main(
  *
  *******************************************************************/
 
-    qsort(sTable, sTend - sTable, sizeof(Gate*), (fptr)cmp_gt_ids);
+    qsort(iC_sTable, iC_sTend - iC_sTable, sizeof(Gate*), (fptr)cmp_gt_ids);
 
 /********************************************************************
  *
@@ -704,12 +714,15 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 3\n"); fflush(stdout); }
-    for (opp = sTable; opp < sTend; opp++) {
+    for (opp = iC_sTable; opp < iC_sTend; opp++) {
 	op = *opp;
-	if (op->gt_ini > 0) {
+	if (op->gt_ini >= 0) {
 	    lp = op->gt_rlist;			/* reverse or input list */
 	    while (*lp++ != 0);			/* skip normal inputs */
 	    while ((gp = *lp++) != 0) {
+		if (op->gt_ini == 0 && gp->gt_fni == GATE) {
+		    gp->gt_fni = GATEX;		/* this source must handle XOR */
+		}
 		*(--(gp->gt_list)) = op;	/* transfer inverted */
 	    }
 	}
@@ -724,9 +737,9 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 4\n"); fflush(stdout); }
-    for (opp = sTable; opp < sTend; opp++) {
+    for (opp = iC_sTable; opp < iC_sTend; opp++) {
 	op = *opp;
-	if (op->gt_ini != -ALIAS && op->gt_fni == GATE) {
+	if (op->gt_ini != -ALIAS && (op->gt_fni == GATE || op->gt_fni == GATEX)) {
 	    *(--(op->gt_list)) = 0;		/* GATE normal terminator */
 	}
     }
@@ -742,11 +755,14 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 5\n"); fflush(stdout); }
-    for (opp = sTable; opp < sTend; opp++) {
+    for (opp = iC_sTable; opp < iC_sTend; opp++) {
 	op = *opp;
-	if (op->gt_ini == -ARN || op->gt_ini > 0) {
+	if (op->gt_ini == -ARN || op->gt_ini >= 0) {
 	    lp = op->gt_rlist + (op->gt_ini == -ARN);
 	    while ((gp = *lp++) != 0) {
+		if (op->gt_ini == 0 && gp->gt_fni == GATE) {
+		    gp->gt_fni = GATEX;		/* this source must handle XOR */
+		}
 		*(--(gp->gt_list)) = op;	/* transfer normal */
 	    }
 	}
@@ -763,16 +779,16 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 6 - name gt_ini gt_fni: output list\n"); fflush(stdout); }
-    for (opp = sTable; opp < sTend; opp++) {
+    for (opp = iC_sTable; opp < iC_sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
 	    if (df) {
 		if (op->gt_ini < 0) {
 		    printf(" %-8s%6s%7s:", op->gt_ids,
-			full_type[-op->gt_ini], full_ftype[op->gt_fni]);
+			iC_full_type[-op->gt_ini], iC_full_ftype[op->gt_fni]);
 		} else {
 		    printf(" %-8s%6d%7s:", op->gt_ids,
-			op->gt_ini, full_ftype[op->gt_fni]);
+			op->gt_ini, iC_full_ftype[op->gt_fni]);
 		}
 	    }
 	    if (op->gt_ini == -ARN) {
@@ -783,32 +799,34 @@ main(
 #endif
 	    } else
 	    /********************************************************************
-	     *  arithmetic or logical input linkage to physical I/O
+	     *  arithmetic or logical input linkage to physical I/O (mainly display)
 	     *******************************************************************/
 	    if (op->gt_ini == -INPW) {
-		char *	aName = "??_";
 		if ((i = sscanf(op->gt_ids, "%1[IT]%1[XBWL]%5d%7s",
-			iqt, xbwl, &byte, tail)) == 3 &&
-		    byte < IXD) {
+			iqt, xbwl, &byte, tail)) == 3) {
 		    switch (iqt[0]) {
 		    case 'I':
 			switch (xbwl[0]) {
 			case 'X':
-			    IX_[byte] = op;		/* forward input link */
-			    aName = "IX_";
+			    if (byte == 0) {
+				iC_IX0p = op;		/* link for iC_display logic only */
+			    }
 			    break;
 			case 'B':
-			    IB_[byte] = op;		/* forward input link */
-			    aName = "IB_";
+			    if (byte == 1) {
+				iC_IB1p = op;		/* link for iC_display logic only */
+			    }
 			    break;
 			case 'W':
-			    IW_[byte] = op;		/* forward input link */
-			    aName = "IW_";
+			    if (byte == 2) {
+				iC_IW2p = op;		/* link for iC_display logic only */
+			    }
 			    break;
 #if INT_MAX != 32767 || defined (LONG16)
 			case 'L':
-			    IL_[byte] = op;		/* forward input link */
-			    aName = "IL_";
+			    if (byte == 4) {
+				iC_IL4p = op;		/* link for iC_display logic only */
+			    }
 			    break;
 #endif
 			default:
@@ -816,14 +834,12 @@ main(
 			}
 			break;
 		    case 'T':
-			TX_[byte] = op;			/* forward input link */
-			aName = "TX_";
-			if (byte >= TXD) goto inErr;
+			if (byte != 0) goto inErr;	/* TXD must be 1 */
+			iC_TX0p = op;			/* forward input link */
 			break;
 		    default:
 			goto inErr;
 		    }
-		    if (df) printf("	%s[%d]", aName, byte);
 		} else {
 		  inErr:
 		    inError(__LINE__, op, 0, "PASS 6: no valid input word definition");
@@ -838,7 +854,7 @@ main(
 		    while ((gp = *lp++) != 0) {
 			printf("	%s,", gp->gt_ids);
 		    }
-		    if (op->gt_fni == GATE) {
+		    if (op->gt_fni == GATE || op->gt_fni == GATEX) {
 			while ((gp = *lp++) != 0) {
 			    printf("	~%s,", gp->gt_ids);
 			}
@@ -877,7 +893,7 @@ main(
 			(gp->gt_fni != TIMRL || gp->gt_ini != -TIM)) {
 			inError(__LINE__, op, gp, "PASS 6: clock or timer master does not match slave");
 		    }
-		    if (df) printf("	%c%s,", os[-gp->gt_ini], gp->gt_ids);
+		    if (df) printf("	%c%s,", iC_os[-gp->gt_ini], gp->gt_ids);
 		    if (gp->gt_fni == TIMRL) {
 			if ((gp = *lp++) == 0) {
 			    inError(__LINE__, op, 0, "PASS 6: timed action has no delay");
@@ -897,33 +913,41 @@ main(
 	    } else
 	    /********************************************************************
 	     *  arithmetic or logical output linkage to physical I/O
-	     *  QX_[slot] receives output value in outMw()
 	     *******************************************************************/
 	    if (op->gt_fni == OUTW) {
-		if ((i = sscanf(op->gt_ids, "Q%1[XBWL]%5d%7s", xbwl, &byte, tail)) >= 2 &&
-		    byte < IXD) {
-		    op->gt_list = (Gate **) byte;	/* slot */
-		    QT_[byte] = xbwl[0];
+		if ((i = sscanf(op->gt_ids, "Q%1[XBWL]%5d%7s", xbwl, &byte, tail)) >= 2) {
 		    switch (xbwl[0]) {
 		    case 'X':
-			if (i > 2) goto outErr;	/* no tail _0 allowed for QXn */
+			if (i > 2) goto outErr;		/* no tail _0 allowed for QXn */
 			op->gt_mark = X_WIDTH;
+			if (byte == 0) {
+			    iC_QX0p = op;		/* link for iC_display logic only */
+			}
 			break;
 		    case 'B':
 			op->gt_mark = B_WIDTH;
+			if (byte == 1) {
+			    iC_QB1p = op;		/* link for iC_display logic only */
+			}
 			break;
 		    case 'W':
 			op->gt_mark = W_WIDTH;
+			if (byte == 2) {
+			    iC_QW2p = op;		/* link for iC_display logic only */
+			}
 			break;
 #if INT_MAX != 32767 || defined (LONG16)
 		    case 'L':
 			op->gt_mark = L_WIDTH;
+			if (byte == 4) {
+			    iC_QL4p = op;		/* link for iC_display logic only */
+			}
 			break;
 #endif
 		    default:
 			goto outErr;
 		    }
-		    if (df) printf("	QX_[%d]	0x%02x", (int)op->gt_list, op->gt_mark);
+		    if (df) printf("	0x%02x", op->gt_mark);
 		} else {
 		  outErr:
 		    inError(__LINE__, op, 0, "PASS 6: no valid output word definition");
@@ -954,23 +978,23 @@ main(
 	    if (df) printf("\n");
 	} else
 	if (df) {
-	    int inverse = 0;		/* print ALIAS in symbol table */
+	    int inverse = 0;				/* print ALIAS in symbol table */
 	    gp = op;
 	    printf(" %-8s%6s%7s:", op->gt_ids,
-		full_type[-op->gt_ini], full_ftype[op->gt_fni]);
+		iC_full_type[-op->gt_ini], iC_full_ftype[op->gt_fni]);
 	    while (gp->gt_ini == -ALIAS) {
-		if (gp->gt_fni == GATE) {
-		    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+		if (gp->gt_fni == GATE || gp->gt_fni == GATEX) {
+		    inverse ^= gp->gt_mark;		/* holds ALIAS inversion flag */
 		}
-		gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+		gp = (Gate*)gp->gt_rlist;		/* resolve ALIAS */
 	    }
 	    printf("	%s%s\n", inverse ? "~" : "", gp->gt_ids);
 	}
     }
     if (errCount) {
-	exit(6);		/* pass 6 failed */
+	exit(6);					/* pass 6 failed */
     }
-    icc(&iClock, &errCount);	/* try it like this */
+    iC_icc(&iClock, &errCount);				/* execute load object */
     return 0;
 } /* main */
 #endif

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.23 2004/03/19 16:03:00 jw Exp $";
+"@(#)$Id: lexc.l,v 1.24 2005/01/26 15:16:47 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -38,7 +38,6 @@ IS			(u|U|l|L)
 #include	<string.h>
 #include	<assert.h>
 #include	<errno.h>
-#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #include	"gram_tab.h"
@@ -49,10 +48,13 @@ static int	preprocess(c_STYPE* u);
 static int	ignore(c_STYPE* u);
 static void	count(c_STYPE* u);
 static int	check_type(c_STYPE* u, int qtoken);
+
+#define YY_NO_UNPUT
+
+#ifndef LMAIN
 static Symbol	markerSymbol = { "marker", UDF, UDFA, };
 static Symbol *	paraList = &markerSymbol;
 
-#ifndef LMAIN
 #define YY_INPUT(buf,result,max_size) \
 {\
     int c = '*', n;\
@@ -66,7 +68,6 @@ static Symbol *	paraList = &markerSymbol;
 }
 
 #define ECHO
-#define YY_NO_UNPUT
 #endif
 
 %}
@@ -188,7 +189,6 @@ static Symbol *	paraList = &markerSymbol;
 int gramOffset = 0;
 
 static int gramLine   = 1;
-static char* staticName = NULL;
 int column = 0;
 FILE* saveFP = NULL;
 
@@ -209,15 +209,15 @@ c_comment(c_STYPE* u)
 {
     int c;
 
-    count(u);			/* count "/*" */
+    count(u);				/* count C comment start */
 
     if ((c = input()) == EOF) return 1;
 
-    do {		/* start C style comment */
+    do {				/* start C style comment */
 	while (c != '*') {
 	    gramOffset++;
 #if YYDEBUG && defined LMAIN
-	    if (debug & 040) putc(c, yyout);
+	    if (iC_debug & 040) putc(c, yyout);
 #endif
 	    if (c == '\n') {
 		column = 0;
@@ -229,18 +229,18 @@ c_comment(c_STYPE* u)
 	    }
 	    if ((c = input()) == EOF) return 1;
 	}
-	column++;		/* count '*' */
+	column++;			/* count '*' */
 	gramOffset++;
 #if YYDEBUG && defined LMAIN
-	if (debug & 040) putc(c, yyout);
+	if (iC_debug & 040) putc(c, yyout);
 #endif
     } while ((c = input()) != '/');
 
     if (c == EOF) return 1;
-    column++;			/* count '/' */
+    column++;				/* count '/' */
     gramOffset++;
 #if YYDEBUG && defined LMAIN
-    if (debug & 040) putc(c, yyout);
+    if (iC_debug & 040) putc(c, yyout);
 #endif
 
     return 0;
@@ -259,13 +259,13 @@ cpp_comment(c_STYPE* u)
 {
     int c;
 
-    count(u);			/* count "//" */
+    count(u);				/* count "//" */
 
-    do {			/* start C++ style comment */
+    do {				/* start C++ style comment */
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
 #if YYDEBUG && defined LMAIN
-	if (debug & 040) putc(c, yyout);
+	if (iC_debug & 040) putc(c, yyout);
 #endif
     } while (c != '\n');
     column = 0;
@@ -287,15 +287,15 @@ preprocess(c_STYPE* u)
     int c = 0;
     int prev;
 
-    count(u);			/* count "#" */
+    count(u);				/* count "#" */
 
-    do {			/* pre processeor line */
+    do {				/* pre processeor line */
 	do {
 	    prev = c;
 	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
 	    gramOffset++;
 #if YYDEBUG && defined LMAIN
-	    if (debug & 040) putc(c, yyout);
+	    if (iC_debug & 040) putc(c, yyout);
 #endif
 	} while (c != '\n');
 	column = 0;
@@ -317,13 +317,13 @@ ignore(c_STYPE* u)
     int c;
     int  bracketCount = 0;
 
-    count(u);			/* count "__atribute__" */
+    count(u);				/* count "__atribute__" */
 
     for (;;) {
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
 	gramOffset++;
 #if YYDEBUG && defined LMAIN
-	if (debug & 040) putc(c, yyout);
+	if (iC_debug & 040) putc(c, yyout);
 #endif
 	if (c == '\n') {
 	    column = 0;
@@ -376,7 +376,7 @@ count(c_STYPE* u)
     u->tok.end = gramOffset;
 
 #if YYDEBUG && defined LMAIN
-    if (debug & 040) { ECHO; }
+    if (iC_debug & 040) { ECHO; }
 #endif
 } /* count */
 
@@ -401,7 +401,6 @@ check_type(c_STYPE* u, int qtoken)
 {
     Symbol *	sp = 0;
 #ifndef LMAIN
-    int		mType;
     char	buffer[BUFS];		/* buffer for modified names */
     char	iqt[2];			/* char buffers - space for 0 terminator */
     char	xbwl[2];
@@ -449,15 +448,17 @@ check_type(c_STYPE* u, int qtoken)
 	}
 	return YYERRCODE;		/* internal imm node is an error */
     }
+#ifndef LMAIN
   inInclude:
-    sp = (Symbol *) emalloc(sizeof(Symbol));
-    sp->name = emalloc(c_leng + 1);	/* +1 for '\0' */
+#endif
+    sp = (Symbol *) iC_emalloc(sizeof(Symbol));
+    sp->name = iC_emalloc(c_leng + 1);	/* +1 for '\0' */
     strcpy(sp->name, c_text);
     sp->type = CWORD;
     sp->ftype = UDFA;
     u->tok.symbol = sp;			/* sp->next === NULL */
 #if YYDEBUG && defined LMAIN
-    if ((debug & 0402) == 0402) fprintf(outFP, "\nC %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\nC %-15s %d %d\n", sp->name, sp->type, sp->ftype);
 #endif
     return IDENTIFIER;
 } /* check_type */
@@ -476,7 +477,7 @@ delete_sym(Token* tokp)
     if ((sp = tokp->symbol) != NULL && (sp->type & TM) > MAX_LS) {
 	tokp->symbol = NULL;
 #if YYDEBUG && defined LMAIN
-	if ((debug & 0402) == 0402) fprintf(outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
 #endif
 	free(sp->name);
 	free(sp);

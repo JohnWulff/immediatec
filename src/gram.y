@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.19 2004/03/19 16:02:52 jw Exp $";
+"@(#)$Id: gram.y,v 1.20 2005/01/26 15:16:12 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -24,10 +24,18 @@
 #include	<stdarg.h>
 #include	<string.h>
 
-#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 
+#define ENDSTACKSIZE	100
+// #define LEAS		2
+#define LEAI		170
+#define LARGE		(~0U>>2)
+static const char	idOp[] = "+-+-";	/* increment/decrement operator selection */
+
+static Symbol		typedefSymbol = { "typedef", UDF, UDFA, };
+
+#ifndef LMAIN
 typedef struct LineEntry {
     unsigned int	pStart;
     unsigned int	vStart;
@@ -38,11 +46,6 @@ typedef struct LineEntry {
     int			ppIdx;
 } LineEntry;
 
-#define ENDSTACKSIZE	100
-// #define LEAS		2
-#define LEAI		170
-#define LARGE		(~0U>>2)
-static const char	idOp[] = "+-+-";	/* increment/decrement operator selection */
 static LineEntry *	lineEntryArray = NULL;
 static LineEntry *	lep = NULL;		/* associated array allocated from heap */
 #ifdef LEAS
@@ -59,12 +62,9 @@ static void		immAssignFound(unsigned int start, unsigned int operator,
 			    unsigned int end, Symbol* sp, int ppi);
 static unsigned int	pushEndStack(unsigned int value);
 static unsigned int	popEndStack(void);
-
-static Symbol		typedefSymbol = { "typedef", UDF, UDFA, };
-
-#ifdef LMAIN
+#else	/* LMAIN */
 static void		yyerror(char *s, ...);
-#endif
+#endif	/* LMAIN */
 %}
 %union {					/* stack type */
     Token		tok;
@@ -201,7 +201,7 @@ declaration					/* 5 */
 		if ($1.symbol && $1.symbol->type == UDF) {
 		    sp1->type = CTYPE;		/* found a typedef */
 #if YYDEBUG
-		    if ((debug & 0402) == 0402) fprintf(outFP, "P %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
+		    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "P %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
 		    if (lookup(sp1->name) == 0) {
 			place_sym(sp1);
@@ -1319,7 +1319,7 @@ assignment_expression				/* 48 */
 	    $$.end = $3.end;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u = %u>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u = %u>\n", $$.start, $$.end);
 #endif
 	    if ($1.symbol->v_glist == 0)
 		immAssignFound($1.start, $2.start, $3.end, $1.symbol, 5);
@@ -1651,7 +1651,7 @@ imm_unary_expression				/* 63a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "\n<++%u %u>\n", $$.start, $$.end);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<++%u %u>\n", $$.start, $$.end);
 #endif
 	    if ($2.symbol->v_glist == 0)
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 0);
@@ -1663,7 +1663,7 @@ imm_unary_expression				/* 63a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "\n<--%u %u>\n", $$.start, $$.end);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<--%u %u>\n", $$.start, $$.end);
 #endif
 	    if ($2.symbol->v_glist == 0)
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 1);
@@ -1784,7 +1784,7 @@ imm_postfix_expression				/* 65a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u++>\n", $$.start, $$.end);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u++>\n", $$.start, $$.end);
 #endif
 	    if ($1.symbol->v_glist == 0)
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 2);
@@ -1796,7 +1796,7 @@ imm_postfix_expression				/* 65a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "\n<%u %u-->\n", $$.start, $$.end);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u-->\n", $$.start, $$.end);
 #endif
 	    if ($1.symbol->v_glist == 0)
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 3);
@@ -1879,7 +1879,7 @@ imm_identifier					/* 69 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "[%u %u]\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "[%u %u]\n", $$.start, $$.end);
 #endif
 	    if ($$.symbol->v_glist == 0)
 		immVarFound($$.start, $$.end, $1.symbol);
@@ -1892,7 +1892,7 @@ imm_identifier					/* 69 */
 	    $$.symbol = $2.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "{%u %u}\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "{%u %u}\n", $$.start, $$.end);
 #endif
 	    if ($$.symbol->v_glist == 0)
 		immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
@@ -1916,7 +1916,7 @@ yyerror(char *s, ...)
 } /* yyerror */
 
 void
-ierror(					/* print error message */
+ierror(						/* print error message */
     char *	str1,
     char *	str2)
 {
@@ -1929,8 +1929,6 @@ ierror(					/* print error message */
     }
 } /* ierror */
 #else
-
-extern int column;
 
 static char*	macro[] = { MACRO_NAMES };
 
@@ -1953,27 +1951,27 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
     LineEntry *	newArray;
 
     if (sp) {
-	lep->vStart = start;		/* of an imm variable */
-	lep->equOp  = LARGE;		/* marks a value variable */
-	lep->vEnd   = end;		/* of an imm variable */
+	lep->vStart = start;			/* of an imm variable */
+	lep->equOp  = LARGE;			/* marks a value variable */
+	lep->vEnd   = end;			/* of an imm variable */
 	lep->sp     = sp;
 	lep->ppIdx  = 5;
 	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
 	    ierror("C-statement tries to access an imm type not bit or int:", sp->name);
-	    sp->type = ERR;		/* cannot execute properly */
+	    sp->type = ERR;			/* cannot execute properly */
 	}
-    } else {				/* parenthesized variable found */
-	--lep;				/* step back to previous entry */
+    } else {					/* parenthesized variable found */
+	--lep;					/* step back to previous entry */
     }
-    lep->pStart = start;		/* of possible parentheses */
-    lep->pEnd   = end;			/* of possible parentheses */
+    lep->pStart = start;			/* of possible parentheses */
+    lep->pEnd   = end;				/* of possible parentheses */
     lep++;
     if (lep > &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
 	udfCount += LEAI;			/* increase the size of the array */
 	newArray = (LineEntry*)realloc(lineEntryArray, udfCount * sizeof(LineEntry));
-	assert(newArray);		/* FIX with quit */
+	assert(newArray);			/* FIX with quit */
 	lep += newArray - lineEntryArray;
-	lineEntryArray = newArray;	/* Array has been successfully resized */
+	lineEntryArray = newArray;		/* Array has been successfully resized */
     }
 } /* immVarFound */
 
@@ -1992,18 +1990,18 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 static void
 immVarRemove(unsigned int start, unsigned int end, Symbol* sp)
 {
-    --lep;				/* step back to previous entry */
+    --lep;					/* step back to previous entry */
     if(lep->pStart == start && lep->pEnd == end) {
-	markParaList(sp);		/* mark imm Symbol so it is hidden */
+	markParaList(sp);			/* mark imm Symbol so it is hidden */
 	lep->pStart = lep->equOp = LARGE;
     } else {
 #if YYDEBUG
-	if ((debug & 0402) == 0402)
-	    fprintf(outFP, "stack position (remove): start %u (%u) end %u (%u) Symbol %s\n",
+	if ((iC_debug & 0402) == 0402)
+	    fprintf(iC_outFP, "stack position (remove): start %u (%u) end %u (%u) Symbol %s\n",
 	    lep->pStart, start, lep->pEnd, end, lep->sp->name);
 #endif
 	ierror("C name which is an imm variable cannot be hidden:", sp->name);
-	lep++;				/* do not remove */
+	lep++;					/* do not remove */
     }
 } /* immVarRemove */
 
@@ -2051,42 +2049,42 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 
     assert(sp);
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "start %u, op %u end %u sp =>%s ppi %d\n", start, operator, end, sp->name, ppi);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "start %u, op %u end %u sp =>%s ppi %d\n", start, operator, end, sp->name, ppi);
 #endif
 
     for (p = lep - 1; p >= lineEntryArray; p-- ) {
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "--%u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "--%u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
 #endif
 	if (p->pStart == start) {		/* start position of imm variable assigned to */
 	    p->equOp  = operator;		/* position of operator marks an assignment expression */
 	    p->pEnd   = end;			/* end position of expression assigned from */
 	    p->ppIdx  = ppi;			/* pre/post-inc/dec character value */
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
 #endif
 	    if (p->sp == sp) {
 		typ = sp->type & TM;
 		mType = sp->ftype;
 		if (typ == UDF) {
-		    sp->type = ctypes[mType];	/* must be ARNC or LOGC */
+		    sp->type = iC_ctypes[mType];	/* must be ARNC or LOGC */
 		} else if ((typ != ARNC || mType != ARITH) &&
 			   (typ != LOGC || mType != GATE) &&
 			   (typ != ERR)) {	/* avoids multiple error messages */
 		    if ((typ == ARN && mType == ARITH) ||
-		        (typ >= AND && typ <= LATCH && mType == GATE)) {
+		        (typ >= MIN_GT && typ < MAX_GT && mType == GATE)) {
 			ierror("C-assignment to an imm variable already assigned in iC code:", sp->name);
 		    } else {
 			ierror("C-assignment to an incompatible imm type:", sp->name);
 		    }
-		    sp->type = ERR;	/* cannot execute properly */
+		    sp->type = ERR;		/* cannot execute properly */
 		}
 		return;
 	    } else {
-		break;			/* Error: Symbols don't match */
+		break;				/* Error: Symbols don't match */
 	    }
 	} else if (p->pStart < start) {
-	    break;			/* Error: will not find start */
+	    break;				/* Error: will not find start */
 	}
     }
     execerror("C-assignment: Symbol not found ???", sp->name, __FILE__, __LINE__);
@@ -2169,12 +2167,12 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #endif
     int			ml;
     int			mType;
-    char		buffer[BUFS];	/* buffer for modified names */
-    char		iqt[2];		/* char buffers - space for 0 terminator */
+    char		buffer[BUFS];		/* buffer for modified names */
+    char		iqt[2];			/* char buffers - space for 0 terminator */
     char		xbwl[2];
     int			byte;
     int			bit;
-    char		tail[8];	/* compiler generated suffix _123456 max */
+    char		tail[8];		/* compiler generated suffix _123456 max */
 
     if (iFP == NULL) {
 #ifdef LEAS
@@ -2187,12 +2185,12 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	}
 #endif
 	lineEntryArray = (LineEntry*)realloc(NULL, udfCount * sizeof(LineEntry));
-	assert(lineEntryArray);		/* FIX with quit */
+	assert(lineEntryArray);			/* FIX with quit */
 	lep = lineEntryArray;
 	lep->pStart = lep->equOp = LARGE;	/* guard value in case first immVarFound(0) */
 	lep++;
 	lep->pStart = lep->equOp = LARGE;	/* value overwritten by first immVarFound */
-	return;				/* lineEntryArray initialized */
+	return;					/* lineEntryArray initialized */
     }
 
     if (lp) {					/* ffexpr head link */
@@ -2212,16 +2210,17 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	}
     }
 
-    lep++->pStart = lep->equOp = LARGE;		/* finalise lineEntryArray */
+    lep->pStart   = lep->equOp = LARGE;		/* finalise lineEntryArray */
+    lep++;
     lep->pStart   = lep->equOp = LARGE;		/* require 2 guard entries at the end */
 
     bytePos = 0;
-    p       = lineEntryArray + 1;	/* miss guard entry at start */
+    p       = lineEntryArray + 1;		/* miss guard entry at start */
     start   = p->pStart;
     if (p->equOp < start) {
-	earlyop = p->equOp;		/* operator in pre-inc/dec entry handled early */
+	earlyop = p->equOp;			/* operator in pre-inc/dec entry handled early */
 #if YYDEBUG
-	if ((debug & 0402) == 0402) fprintf(outFP, "load bytePos = %u, earlyop = %u\n", bytePos, earlyop);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "load bytePos = %u, earlyop = %u\n", bytePos, earlyop);
 #endif
     } else {
 	earlyop = LARGE;
@@ -2236,23 +2235,23 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 
     while ((c = getc(iFP)) != EOF) {
 	while (bytePos >= end) {
-	    putc(')', oFP);		/* end found - output end */
+	    putc(')', oFP);			/* end found - output end */
 	    end = popEndStack();
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "popE bytePos = %u, earlyop = %u, end = %u\n", bytePos, earlyop, end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "popE bytePos = %u, earlyop = %u, end = %u\n", bytePos, earlyop, end);
 #endif
 	}
 	if (bytePos >= start) {
-	    pushEndStack(end);	/* push previous end */
+	    pushEndStack(end);			/* push previous end */
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
 #endif
-	    vstart = p->vStart;		/* start of actual variable */
-	    vend   = p->vEnd;		/* end of actual variable */
-	    equop  = p->equOp;		/* operator in this entry */
-	    end    = p->pEnd;		/* end of this entry */
-	    sp     = p->sp;		/* associated Symbol */
-	    ppi    = p->ppIdx;		/* pre/post-inc/dec character value */
+	    vstart = p->vStart;			/* start of actual variable */
+	    vend   = p->vEnd;			/* end of actual variable */
+	    equop  = p->equOp;			/* operator in this entry */
+	    end    = p->pEnd;			/* end of this entry */
+	    sp     = p->sp;			/* associated Symbol */
+	    ppi    = p->ppIdx;			/* pre/post-inc/dec character value */
 	    assert(sp);
 	    ml     = lp		     ? 0		: MACRO_LITERAL;
 	    mType  = sp->type == ERR ? UDFA
@@ -2263,18 +2262,18 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		fprintf(oFP, macro[ml+mType]);	/* entry found - output macro start */
 	    }
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "strt bytePos = %u, earlyop = %u, equop = %u, ppi = %d, sp =>%s\n", bytePos, earlyop, equop, ppi, sp->name);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "strt bytePos = %u, earlyop = %u, equop = %u, ppi = %d, sp =>%s\n", bytePos, earlyop, equop, ppi, sp->name);
 #endif
 	    p++;
 	    assert(start <= vstart);
 	    assert(vstart < vend);
 	    assert(vend <= end);
 	    assert(bytePos < p->pStart);
-	    start = p->pStart;		/* start of next entry */
+	    start = p->pStart;			/* start of next entry */
 	    if (p->equOp < start) {
-		earlyop = p->equOp;	/* operator in pre-inc/dec entry handled early */
+		earlyop = p->equOp;		/* operator in pre-inc/dec entry handled early */
 #if YYDEBUG
-		if ((debug & 0402) == 0402) fprintf(outFP, "load bytePos = %u, earlyop = %u\n", bytePos, earlyop);
+		if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "load bytePos = %u, earlyop = %u\n", bytePos, earlyop);
 #endif
 	    } else {
 		earlyop = LARGE;
@@ -2314,8 +2313,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 			macro[ml+mType], buffer, macro[ml+sp->ftype], buffer, idOp[ppi]);
 		} else {
 		    /* post-increment/decrement */
-		    Tflag = 1;		/* triggers definition/declaration of _tVar in _list_.c/_list1.h */
-		    fprintf(oFP, "(%s%s , (_tVar = %s%s)) %c 1), _tVar",
+		    iC_Tflag = 1;		/* triggers definition/declaration of iC_tVar in _list_.c/_list1.h */
+		    fprintf(oFP, "(%s%s , (iC_tVar = %s%s)) %c 1), iC_tVar",
 			macro[ml+mType], buffer, macro[ml+sp->ftype], buffer, idOp[ppi]);
 		}
 	    }
@@ -2326,11 +2325,11 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	}
 	if (bytePos == equop) {
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "use  bytePos = %u, earlyop = %u, equop = %u\n", bytePos, earlyop, equop);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u, earlyop = %u, equop = %u\n", bytePos, earlyop, equop);
 #endif
 	    if (ppi >= 5) {
 		if (c == '=') {
-		    c = ',';		/* simple assignment, replace '=' by ',' */
+		    c = ',';			/* simple assignment, replace '=' by ',' */
 		} else {
 		    assert(sp);
 		    assert(strchr("+-*/%&^|><", c));
@@ -2340,18 +2339,18 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		}
 	    } else {
 		endop = bytePos + 1;
-		pFlag = 0;		/* suppress output of ++ or -- from post-inc/dec */
+		pFlag = 0;			/* suppress output of ++ or -- from post-inc/dec */
 	    }
 	}
 	if (bytePos == earlyop) {
 #if YYDEBUG
-	    if ((debug & 0402) == 0402) fprintf(outFP, "use  bytePos = %u, earlyop = %u\n", bytePos, earlyop);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u, earlyop = %u\n", bytePos, earlyop);
 #endif
 	    endop = bytePos + 1;
-	    pFlag = 0;			/* suppress output of ++ or -- from pre-inc/dec */
+	    pFlag = 0;				/* suppress output of ++ or -- from pre-inc/dec */
 	}
 	if (pFlag && bytePos != endop) {
-	    putc(c, oFP);		/* output all except variables and = of assignment operators */
+	    putc(c, oFP);			/* output all except variables and = of assignment operators */
 	}
 	if (bytePos == endop) {
 	    endop = LARGE;
