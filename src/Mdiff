@@ -3,41 +3,95 @@
 #
 #	Mdiff - multiple diff
 #
-#	Generate a full report of differences between the files in two
-#	different project directories. Whitspace is normally ignored.
-#
-#	Option -l allows the generation of lists of different or
-#	identical files in the two projects.
-#
 ########################################################################
 
 usage()
 {
-    echo "Usage:	$name [+w] [-ieqlh] [directory] [file ...]" >&2
-    echo '	+w	whitespace (spaces and tabs) is significant' >&2
-    echo '		default: whitespace is ignored' >&2
-    echo '	-i	identical files output:	==== file ====' >&2
-    echo '		default: ignore identical files in output' >&2
-    echo '	-e	nonexisting files put:	**** file does not exist' >&2
-    echo '		default: ignore nonexisting files in output' >&2
-    echo '		if files exist output:	#### file ####' >&2
-    echo '	-q	quiet operation - return status only' >&2
-    echo '	-l	list names of files which differ' >&2
-    echo '	-li	list names of files which are identical' >&2
-    echo '	-h	this help text' >&2
-    echo '	-	all further arguments are treated as files' >&2
-    echo '	if first file argument is not a directory, .. is used' >&2
-    echo "	if no files are specified, '$files' is used" >&2
-    echo '	return status 0 (true) if all files are identical' >&2
-    echo '	return status n (false) number of files which differ' >&2
-    echo '	Author: J.E. Wulff (John.Wulff@inka.de)' >&2
-    echo '	$Id: Mdiff,v 1.9 1998/02/15 21:47:45 archiv Exp $' >&2
+  echo '\nGenerate a full report of differences between the files in two' >&2
+  echo 'different project directories. Whitspace is normally ignored.\n' >&2
+  echo 'Option -l allows the generation of lists of different or' >&2
+  echo 'identical files in the two projects.\n' >&2
+  echo "Usage:	$name [+w] [-ieqlh] [directory] [file ...]" >&2
+  echo '	+w	whitespace (spaces and tabs) is significant' >&2
+  echo '		default: whitespace is ignored' >&2
+  echo '	-i	identical files output:	==== file ====' >&2
+  echo '		default: ignore identical files in output' >&2
+  echo '	-e	nonexisting files put:	**** file does not exist' >&2
+  echo '		default: ignore nonexisting files in output' >&2
+  echo '		if files exist output:	#### file ####' >&2
+  echo '	-q	quiet operation - return status only' >&2
+  echo '	-l	list names of files which differ' >&2
+  echo '	-li	list names of files which are identical' >&2
+  echo '	-h	this help text' >&2
+  echo '	--	output is piped to less' >&2
+  echo '	-	all further arguments are treated as files' >&2
+  echo '	if first file argument is not a directory, .. is used' >&2
+  echo "	if no files are specified, '$files' is used" >&2
+  echo '	return status 0 (true) if all files are identical' >&2
+  echo '	return status n (false) number of files which differ' >&2
+  echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
+  echo '$Id: Mdiff,v 1.10 1998/04/14 11:29:29 archiv Exp $' >&2
 }
+
+########################################################################
+#
+#	all echo's to stdin are in process which may be piped
+#
+########################################################################
+
+process()
+{
+    if [[ $q = 0 ]]; then
+	echo "Differences in directory $PWD and $dir"
+	date
+    fi
+
+    status=0
+    for f in $files; do
+	if [[ -f $f ]]; then
+	    if [[ -f $dir/$f ]]; then
+		if cmp -s $f $dir/$f; then
+		    if [[ $q = 0 ]]; then
+			[[ $i = 0 ]] || echo "========== $f =========="
+		    elif [[ $li = 3 ]]; then
+			echo $f
+		    fi
+		else
+		    let status+=1
+		    if [[ $q = 0 ]]; then
+			echo
+			echo "########## $f ##########"
+			ls -lL $f
+			ls -lL $dir/$f
+			diff $w $f $dir
+		    elif [[ $li = 1 ]]; then
+			echo $f
+		    fi
+		fi
+	    elif [[ $e != 0 ]]; then
+		let status+=1
+		if [[ $q = 0 ]] || [[ $li > 0 ]]; then
+		    echo "********** $dir/$f does not exist"
+		fi
+	    fi
+	fi
+    done
+    if [[ $status != 0 ]] && [[ $q = 0 ]]; then
+	echo
+	echo "########## $status files differ ##########"
+    fi
+}
+
+########################################################################
+#
+#	main
+#
+########################################################################
 
 name=${0##*/}
 name=${name%.*}
 files='[Mm]akefile* *.[chv]*'
-i=0; e=0; q=0; li=0; w=-w
+i=0; e=0; q=0; li=0; w=-w; pipe=0
 
 while [[ $# > 0 ]]; do
     case $1 in
@@ -50,8 +104,9 @@ while [[ $# > 0 ]]; do
 	    l*)	q=1; let "li|=1";;
 	    q*)	q=1;;
 	    h*)	usage; exit 255;;
+	    -*)	pipe=1;;
 	    *)	x=${option#?}; option=${option%$x}
-	    	echo "$name: unexpected option $option in $1"
+	    	echo "$name: unexpected option $option in $1" >&2
 		usage; exit 254;;
 	    esac
 	    option=${option#?}
@@ -73,44 +128,10 @@ fi
 if [[ $# != 0 ]]; then
     files=$*
 fi
-
-if [[ $q = 0 ]]; then
-    echo "Differences in directory $PWD and $dir"
-    date
+if [[ $pipe = 0 ]]; then
+    process
+else
+    process | less
 fi
 
-status=0
-for f in $files; do
-    if [[ -f $f ]]; then
-	if [[ -f $dir/$f ]]; then
-	    if cmp -s $f $dir/$f; then
-		if [[ $q = 0 ]]; then
-		    [[ $i = 0 ]] || echo "========== $f =========="
-		elif [[ $li = 3 ]]; then
-		    echo $f
-		fi
-	    else
-		let status+=1
-		if [[ $q = 0 ]]; then
-		    echo
-		    echo "########## $f ##########"
-		    ls -lL $f
-		    ls -lL $dir/$f
-		    diff $w $f $dir
-		elif [[ $li = 1 ]]; then
-		    echo $f
-		fi
-	    fi
-	elif [[ $e != 0 ]]; then
-	    let status+=1
-	    if [[ $q = 0 ]] || [[ $li > 0 ]]; then
-		echo "********** $dir/$f does not exist"
-	    fi
-	fi
-    fi
-done
-if [[ $status != 0 ]] && [[ $q = 0 ]]; then
-    echo
-    echo "########## $status files differ ##########"
-fi
 return $status
