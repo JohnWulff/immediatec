@@ -1,0 +1,19 @@
+/********************************************************************
+ *
+ *	error I/O bit  address >= 8	for IX and QX
+ *	error I/O byte address >= IXD	for IX IB and IW, QX QB or QW
+ *	error I/O byte address >= 1	for TX
+ *	error I/O byte address >= 0	for TB amd TW (always error)
+ *
+ *******************************************************************/
+
+QX0.7 = IX0.7 & IX0.6;		// OK
+QX0.8 = IX0.8 & IX0.9;		// I/O bit  address >= 8
+QX0.17 = IX0.17 & IX0.16;	// I/O bit  address >= 8
+QX128.0 = IX128.0 & IX128.1;	// I/O byte address >= IXD
+QX129.8 = IX129.8 & IX129.9;	// I/O byte address >= IXD, bit address >= 8
+
+imm clock clk = CLOCK(TX0.4);	// OK
+imm timer tim = TIMER(TX1.4);	// I/O byte address >= 1
+QB1 = TB0;			// not allwowed
+QB2 = TB1;			// not allwowed
