@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.20 2002/10/04 19:53:35 jw Exp $";
+"@(#)$Id: icc.c,v 1.21 2003/12/11 09:55:39 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -106,13 +106,15 @@ Functp	*i_lists[] = { I_LISTS };
 #ifdef LOAD
 #endif
 
-Gate		alist0;
-Gate		alist1;
-Gate *		a_list;			/* these lists are toggled */
-Gate		olist0;
-Gate		olist1;
-Gate *		o_list;			/* these lists are toggled */
-Gate *		c_list;			/* "iClock" */
+static Gate	alist0;			/* these lists are toggled */
+static Gate	alist1;
+Gate *		a_list;			/* arithmetic output action list */
+static Gate	olist0;			/* these lists are toggled */
+static Gate	olist1;
+Gate *		o_list;			/* logic output action list */
+Gate *		c_list;			/* main clock list "iClock" */
+static Gate	flist;
+Gate *		f_list;			/* auxiliary function clock list */
 
 Gate *		IX_[IXD*8];		/* pointers to Bit Input Gates */
 Gate *		IB_[IXD];		/* pointers to Byte Input Gates */
@@ -173,8 +175,10 @@ icc(
     olist1.gt_rlist = (Gate **)(o_list = &olist0);	/* start with olist0 */
     Out_init(o_list);
 #ifdef LOAD
-    c_list = &iClock;				/* system clock list */
+    c_list = &iClock;			/* system clock list */
 #endif
+    f_list = &flist;			/* function clock list */
+    Out_init(f_list);
 
     if (outFP != stdout) {
 	fclose(outFP);
@@ -246,7 +250,7 @@ icc(
     if (debug & 0100) fprintf(outFP, "\nPass 5:");
 #endif
     if (o_list->gt_next == o_list) {			/* empty */
-	scan_clk(c_list);				/* clock list */
+	scan_clk(c_list) && scan_clk(f_list);		/* clock lists */
     }
 #if YYDEBUG
     if (debug & 0100) {
@@ -306,7 +310,8 @@ icc(
 		}
 #endif
 	    }
-	} while (scan_clk(c_list));	/* then scan clock list until empty */
+	    /* then scan clock lists once - f_list holds if-else-switch events */
+	} while (scan_clk(c_list) && scan_clk(f_list));
 
 	/*
 	 *	alternate list contains all those gates which were marked in
