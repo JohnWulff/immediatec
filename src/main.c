@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.40 2004/01/03 08:46:46 jw Exp $";
+"@(#)$Id: main.c,v 1.41 2004/01/05 16:58:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -21,7 +21,7 @@ static const char main_c[] =
 #include	<assert.h>
 #ifdef TCP
 #include	"tcpc.h"
-#endif
+#endif	/* TCP */
 #include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
@@ -40,51 +40,52 @@ static const char *	usage =
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
 "        -c              generate auxiliary file cexe.c to extend %s compiler\n"
 "                        (cannot be used if also compiling with -o)\n"
-"        -d <debug>4000  supress listing alias post processor\n"
+"        -d <debug>4000  supress listing alias post processor (save temp files)\n"
 #if defined(RUN) || defined(TCP)
-#if YYDEBUG && !defined(_WINDOWS)
-"                 +2000  display scan_cnt and link_cnt\n"
-#endif
-"                 +1000  I0 toggled every second\n"
 "                  +400  exit after initialisation\n"
-#if YYDEBUG && !defined(_WINDOWS)
-"                  +200  display loop info (+old style logic)\n"
-"                  +100  initialisation and run time info\n"
-#endif
-#endif
-"                   +40  net statistics\n"
+#endif	/* RUN or TCP */
+"                   +40  source listing\n"
 "                   +20  net topology\n"
-"                   +10  source listing\n"
+"                   +10  net statistics\n"
 "                    +4  logic expansion\n"
-#if YYDEBUG
-"                    +2  logic generation"
+#if YYDEBUG && !defined(_WINDOWS)
 #if defined(RUN) || defined(TCP)
-" (requires +400)"
-#endif
-"\n                    +1  yacc debug info"
-#if defined(RUN) || defined(TCP)
-"  (requires +400)"
-#endif
-"\n"
-#ifdef TCP
-"                    +2  trace I/O receive buffer\n"
-"                    +1  trace I/O send buffer\n"
-#endif
-#endif
+"                  |402  logic generation (exits after initialisation)\n"
+"                  |401  yacc debug info  (listing on stdout only)\n"
+#else	/* not RUN and not TCP */
+"                    +2  logic generation\n"
+"                    +1  yacc debug info  (listing on stdout only)\n"
+#endif	/* RUN or TCP */
+#endif	/* YYDEBUG and not _WINDOWS */
 "        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
 "        <iC_program>    any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
 "        -h              this help text\n"
 #if defined(RUN) || defined(TCP)
 "Extra options for run mode: (direct interpretation)\n"
-"  [-"
+"  [-n<count>] [-"
 #ifdef TCP
 "s <server>] [-p <port>] [-u <unitID>] [-m[m]"
-#endif
+#endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)
 "t"
-#endif
-"x] [-n<count>]\n"
+#endif	/* YYDEBUG and not _WINDOWS */
+"x]\n"
+"        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
+#if YYDEBUG && !defined(_WINDOWS)
+"        -d <debug>2000  display scan_cnt and link_cnt\n"
+#ifdef RUN
+"                 +1000  I0 toggled every second\n"
+#else	/* TCP */
+"                 +1000  do not trace non-active timers TX0.n\n"
+#endif	/* RUN */
+"                  +200  display oscillator info\n"
+"                  +100  initialisation and run time trace\n"
+#ifdef TCP
+"                    +2  trace I/O receive buffer\n"
+"                    +1  trace I/O send buffer\n"
+#endif	/* TCP */
+#endif	/* YYDEBUG and not _WINDOWS */
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n"
 "        -p service port of server (default '%s')\n"
@@ -92,14 +93,13 @@ static const char *	usage =
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                        can be toggled at run time by typing m\n"
-#endif
+#endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)
 "        -t              trace debug (equivalent to -d 100)\n"
 "                        can be toggled at run time by typing t\n"
-#endif
+#endif	/* YYDEBUG and not _WINDOWS */
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
 "                        can be changed at run time by typing x or d\n"
-"        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
 "      An <iC_program> containing only logical expressions can be interpreted\n"
 "      with  %s -t <iC_program>. An <iC_program> containing arithmetic\n"
 "      expressions requires relinking of %s with a new cexe.c generated\n"
@@ -109,9 +109,9 @@ static const char *	usage =
 "      Typing b<num> w<num> or l<num> alters simulated inputs IB1, IW2 or IL4\n"
 "              <num> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
 "      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
-#endif
+#endif	/* not TCP */
 "      Typing q or ctrl-C quits run mode.\n"
-#endif
+#endif	/* RUN or TCP */
 "Copyright (C) 1985-2001 John E. Wulff     <john@je-wulff.de>\n"
 "%s\n";
 
@@ -123,7 +123,7 @@ unsigned short	iFlag;
 unsigned short	osc_max = MARKMAX;
 #if YYDEBUG
 extern	int	iCdebug;
-#endif
+#endif	/* YYDEBUG */
 
 #define inpFN	szNames[1]		/* input file name */
 #define errFN	szNames[2]		/* error file name */
@@ -197,7 +197,7 @@ Gate *		IB_[IXD];		/* pointers to byte Input Gates */
 Gate *		IW_[IXD];		/* pointers to word Input Gates */
 #if INT_MAX != 32767 || defined (LONG16)
 Gate *		IL_[IXD];		/* pointers to long Input Gates */
-#endif
+#endif	/* INT_MAX != 32767 or LONG16 */
 Gate *		TX_[TXD*8];		/* pointers to bit System Gates */
 unsigned char	QX_[IXD];		/* Output bit field slots */
 char		QT_[IXD];		/* Output type of slots */
@@ -251,17 +251,17 @@ main(
 		case 'm':
 		    micro++;		/* microsecond info */
 		    break;
-#endif
+#endif	/* TCP */
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &debi);
 		    debug |= debi;	/* short */
 #if !defined(RUN) && !defined(TCP)
 		    debug |= 0400;	/* always stops */
-#endif
+#endif	/* not RUN and not TCP */
 #if YYDEBUG
 		    if (debug & 0400) iCdebug = debug & 01;
-#endif
+#endif	/* YYDEBUG */
 		    goto break2;
 		case 't':
 		    debug |= 0100;	/* trace only */
@@ -317,12 +317,13 @@ main(
 		case '?':
 		error:
 		    fprintf(stderr, usage, progname, progname,
+#if defined(RUN) || defined(TCP)
+		    MARKMAX,
 #ifdef TCP
 		    hostNM, portNM, iccNM,
-#endif
-#if defined(RUN) || defined(TCP)
-		    MARKMAX, progname, progname, progname,
-#endif
+#endif	/* TCP */
+		    progname, progname, progname,
+#endif	/* RUN or TCP */
 		    SC_ID);
 		    exit(1);
 		}
@@ -450,7 +451,7 @@ main(
 			if (linecnt > (1 + cexe_lines1 + cexe_lines2 + cexe_lines3)) {
 			    fprintf(excFP, cexe_part4, inpNM, SC_ID);
 			    linecnt += cexe_lines4;
-			    if (debug & 040) {
+			    if (debug & 010) {
 				fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
 			    }
 			}
@@ -480,7 +481,7 @@ main(
 		c_list = sp->u.gate;		/* initialise clock list */
 		icc(igp, gate_count);		/* execute the compiled logic */
 		/* never returns - exits via quit() */
-#endif
+#endif	/* RUN or TCP */
 	    }
 	}
 	if (r != 0) {
