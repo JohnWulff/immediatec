@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.13 2002/08/19 09:30:32 jw Exp $";
+"@(#)$Id: lexc.l,v 1.14 2002/08/21 16:37:21 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -173,8 +173,9 @@ static int	check_type(c_STYPE* u);
 "|"			{ count(&c_lval); return '|'; }
 "?"			{ count(&c_lval); return '?'; }
 
-[ \t\v\n\f]+		{ count(&c_lval); }
-.			{ count(&c_lval); /* ignore bad characters */ }
+[ \t\v\f]+		{ count(&c_lval); }
+"\n"			{ count(&c_lval); }	/* individual token */
+.			{ count(&c_lval); 	/* ignore bad characters */ }
 
 %%
 
@@ -206,7 +207,7 @@ c_comment(c_STYPE* u)
 
     do {		/* start C style comment */
 	while (c != '*') {
-	    gramOffset++;
+	    if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
 #if YYDEBUG && defined LMAIN
 	    if (debug & 010) putc(c, yyout);
 #endif
@@ -221,7 +222,7 @@ c_comment(c_STYPE* u)
 	    if ((c = input()) == EOF) return 1;
 	}
 	column++;		/* count '*' */
-	gramOffset++;
+	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
 #if YYDEBUG && defined LMAIN
 	if (debug & 010) putc(c, yyout);
 #endif
@@ -229,7 +230,7 @@ c_comment(c_STYPE* u)
 
     if (c == EOF) return 1;
     column++;			/* count '/' */
-    gramOffset++;
+    if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
 #if YYDEBUG && defined LMAIN
     if (debug & 010) putc(c, yyout);
 #endif
@@ -240,6 +241,8 @@ c_comment(c_STYPE* u)
 /********************************************************************
  *
  *	C++ comment
+ *
+ *	no need to process '\t'
  *
  *******************************************************************/
 
@@ -252,7 +255,7 @@ cpp_comment(c_STYPE* u)
 
     do {			/* start C++ style comment */
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
-	gramOffset++;
+	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
 #if YYDEBUG && defined LMAIN
 	if (debug & 010) putc(c, yyout);
 #endif
@@ -265,6 +268,8 @@ cpp_comment(c_STYPE* u)
 /********************************************************************
  *
  *	Pre-processor line - more lines if last character is '\'
+ *
+ *	no need to process '\t'
  *
  *******************************************************************/
 
@@ -280,7 +285,7 @@ preprocess(c_STYPE* u)
 	do {
 	    prev = c;
 	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
-	    gramOffset++;
+	    if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
 #if YYDEBUG && defined LMAIN
 	    if (debug & 010) putc(c, yyout);
 #endif
@@ -308,7 +313,7 @@ ignore(c_STYPE* u)
 
     for (;;) {
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
-	gramOffset++;
+	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
 #if YYDEBUG && defined LMAIN
 	if (debug & 010) putc(c, yyout);
 #endif
@@ -333,6 +338,12 @@ ignore(c_STYPE* u)
  *
  *	Count collumns, lines and bytes in gramOffset
  *
+ *	When include files are processed (lexflag & C_NO_COUNT)
+ *	it is important that "\n" are individual tokens not grouped
+ *	as white space. Otherwise the trailing whitespace from an
+ *	include file is grouped in c_text[] with the leading whitespace
+ *	after the #include line and counted after C_NO_COUNT is reset.
+ *
  *******************************************************************/
 
 static void
@@ -351,7 +362,7 @@ count(c_STYPE* u)
 	} else {
 	    column++;
 	}
-	gramOffset++;
+	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
     }
 
     u->tok.end = gramOffset;

@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.10 2002/08/16 13:27:33 jw Exp $";
+"@(#)$Id: gram.y,v 1.11 2002/08/20 20:55:32 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -10,12 +10,8 @@
  *
  *	ANSI C Grammar and scanner
  *
- *	The ANSI C scanner/parser was posted on the net by Jeff Lee,
- *	whose net address is
- *		jeff%gatech.CSNet@CSNet-Relay.ARPA, or jeff@gatech
- *	The grammar is based on the draft ANSI standard.
- *
- *	Acknowledgement: This code is based on Jeff Lee's code.
+ *	Acknowledgement: the draft ANSI C standard grammar is based on
+ *	Kernighan and Ritchie "The C Programming Language" 2nd Ed. A13.
  *
  *	gram.y
  *	C grammar for icc compiler
@@ -63,7 +59,7 @@ static Symbol	typedefSymbol = { "typedef", UDF, UDFA, };
 static void	yyerror(char *s, ...);
 #endif
 %}
-%union {		/* stack type */
+%union {					/* stack type */
     Token	tok;
 }
 
@@ -75,33 +71,35 @@ static void	yyerror(char *s, ...);
 
 %token	<tok> TYPEDEF TYPEOF EXTERN STATIC AUTO REGISTER
 %token	<tok> CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID
-%token	<tok> STRUCT UNION ENUM ELIPSIS RANGE
+%token	<tok> STRUCT UNION ENUM ELIPSIS
 
 %token	<tok> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
-%type	<tok> primary_expr postfix_expr argument_expr_list unary_expr unary_operator
-%type	<tok> cast_expr multiplicative_expr additive_expr shift_expr relational_expr
-%type	<tok> equality_expr and_expr exclusive_or_expr inclusive_or_expr
-%type	<tok> logical_and_expr logical_or_expr conditional_expr assignment_expr
-%type	<tok> assignment_operator expr constant_expr declaration declaration_specifiers
-%type	<tok> init_declarator_list init_declarator storage_class_specifier
-%type	<tok> type_specifier struct_or_union_specifier struct_or_union_tag struct_or_union
-%type	<tok> struct_declaration_list struct_declaration struct_declarator_list
-%type	<tok> struct_declarator enum_specifier enumerator_list enumerator declarator
-%type	<tok> declarator2 pointer type_specifier_list parameter_identifier_list
-%type	<tok> identifier_list parameter_type_list parameter_list parameter_declaration
-%type	<tok> type_name abstract_declarator abstract_declarator2 initializer
-%type	<tok> initializer_list statement labeled_statement compound_statement
-%type	<tok> declaration_list statement_list expression_statement selection_statement
-%type	<tok> iteration_statement jump_statement file external_definition
-%type	<tok> function_definition function_body identifier
-%type	<tok> imm_identifier string_literal enumerator_list_comma
+%type	<tok> translation_unit external_declaration function_definition function_body
+%type	<tok> declaration declaration_list declaration_specifiers storage_class_specifier
+%type	<tok> type_specifier type_qualifier struct_or_union_specifier struct_or_union_tag
+%type	<tok> struct_or_union struct_declaration_list init_declarator_list init_declarator
+%type	<tok> struct_declaration specifier_qualifier_list struct_declarator_list
+%type	<tok> struct_declarator enum_specifier enumerator_list_comma enumerator_list
+%type	<tok> enumerator declarator direct_declarator pointer type_qualifier_list
+%type	<tok> parameter_type_list parameter_identifier_list parameter_list
+%type	<tok> parameter_declaration identifier_list initializer initializer_list
+%type	<tok> type_name abstract_declarator direct_abstract_declarator statement
+%type	<tok> labeled_statement expression_statement compound_statement statement_list
+%type	<tok> selection_statement iteration_statement jump_statement expression
+%type	<tok> assignment_expression assignment_operator conditional_expression
+%type	<tok> constant_expression logical_OR_expression logical_AND_expression
+%type	<tok> inclusive_OR_expression exclusive_OR_expression AND_expression
+%type	<tok> equality_expression relational_expression shift_expression
+%type	<tok> additive_expression multiplicative_expression cast_expression
+%type	<tok> unary_expression unary_operator postfix_expression primary_expression
+%type	<tok> argument_expr_list string_literal imm_identifier
 
 %type	<tok>	'{' '[' '(' ')' ']' '}'
 %right	<tok>	'=' ':' ';' ','
 %right	<tok>	'&' '*' '+' '-' '~' '!'
 
-%start file
+%start translation_unit
 %%
 
 /********************************************************************
@@ -110,173 +108,709 @@ static void	yyerror(char *s, ...);
  *
  *******************************************************************/
 
-primary_expr
-	: identifier {
+translation_unit				/* 1 */
+	: /* NOTHING allows an empty translation_unit as in gcc */ {
+	    $$.start = 0;
+	    $$.end = 0;
+	    $$.symbol = NULL;
+	}
+	| translation_unit external_declaration {
+	    $$.start = $1.start ? $1.start : $2.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+external_declaration				/* 2 */
+	: function_definition {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| declaration {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+function_definition				/* 3 */
+	: declarator function_body {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
+	}
+	| declaration_specifiers declarator function_body {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	;
+
+function_body					/* 4 */
+	: compound_statement {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| declaration_list compound_statement {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+declaration					/* 5 */
+	: declaration_specifiers ';' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| declaration_specifiers init_declarator_list ';' {
+	    Symbol *	sp;
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    sp = $2.symbol;
+	    assert(sp);			/* ERROR: initialized in : init_declarator */
+	    while (sp) {
+		Symbol * sp1 = sp;
+		sp = sp->next;		/* get next before Symbol is placed or deleted */
+		if ($1.symbol && $1.symbol->type == UDF) {
+		    sp1->type = CTYPE;		/* found a typedef */
+#if YYDEBUG
+		    if ((debug & 0402) == 0402) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
+#endif
+		    place_sym(sp1);
+		} else {
+		    $$.symbol = sp1;	/* use $$ as transport Token for delete_sym */
+		    delete_sym(&$$);
+		}
+	    }
+	    $$.symbol = NULL;
+	}
+	| declaration_specifiers error ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+declaration_list				/* 6 */
+	: declaration {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| declaration_list declaration {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+declaration_specifiers				/* 7 -- at least 1 type */
+	: specifier_qualifier_list {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| storage_class_specifier specifier_qualifier_list {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = $1.symbol;		/* typedef information */
+	}
+	;
+
+storage_class_specifier				/* 8 */
+	: AUTO {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| STATIC {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| EXTERN {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEDEF {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = &typedefSymbol;
+	}
+	;
+
+type_specifier					/* 9 */
+	: VOID {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| REGISTER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| CHAR {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| SHORT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| INT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| LONG {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| FLOAT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| DOUBLE {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| SIGNED {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| UNSIGNED {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| struct_or_union_specifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| enum_specifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| TYPE_NAME {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEOF '(' unary_expression ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEOF '(' unary_expression error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| TYPEOF '(' type_name ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| TYPEOF '(' type_name error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+type_qualifier					/* 10 */
+	: CONST {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| VOLATILE {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+struct_or_union_specifier			/* 11 */
+	: struct_or_union_tag {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| struct_or_union_tag '{' struct_declaration_list '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| struct_or_union_tag '{' struct_declaration_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+struct_or_union_tag				/* 12 */
+	: struct_or_union {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| struct_or_union IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	/* struct or union tags have a different name space to types */
+	| struct_or_union TYPE_NAME {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	/* struct or union tags have a different name space to imm */
+	| struct_or_union imm_identifier {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+struct_or_union					/* 13 */
+	: STRUCT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| UNION {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+struct_declaration_list				/* 14 */
+	: /* NOTHING */ {
+	    $$.start = 0;
+	    $$.end = 0;
+	    $$.symbol = NULL;
+	}
+	| struct_declaration_list struct_declaration {
+	    $$.start = $1.start ? $1.start : $2.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+init_declarator_list				/* 15 */
+	: init_declarator {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
+	}
+	| init_declarator_list ',' init_declarator {
+	    Symbol *	sp;
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    sp = $$.symbol = $1.symbol;
+	    assert(sp);			/* ERROR: initialized in : init_declarator */
+	    while (sp->next) {
+		sp = sp->next;
+	    }
+	    sp->next = $3.symbol;
+	}
+	;
+
+init_declarator					/* 16 */
+	: declarator {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
+	}
+	| declarator '=' initializer {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+	}
+	;
+
+struct_declaration				/* 17 */
+	: specifier_qualifier_list struct_declarator_list ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| specifier_qualifier_list error ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+specifier_qualifier_list			/* 18 */
+	: type_specifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| type_specifier specifier_qualifier_list {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| type_qualifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| type_qualifier specifier_qualifier_list {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+struct_declarator_list				/* 19 */
+	: struct_declarator {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| struct_declarator_list ',' struct_declarator {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+struct_declarator				/* 20 */
+	: declarator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    delete_sym(&$1);
 	    $$.symbol = NULL;
 	}
-	| CONSTANT {
+	| ':' constant_expression {
 	    $$.start = $1.start;
-	    $$.end = $1.end;
+	    $$.end = $2.end;
 	    $$.symbol = NULL;
 	}
-	| string_literal {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '(' expr ')' {
+	| declarator ':' constant_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$1);
 	    $$.symbol = NULL;
-	}
-	| '(' expr error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '(' compound_statement ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '(' compound_statement error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
 	}
 	;
 
-string_literal
-	: STRING_LITERAL {
+enum_specifier					/* 21 */
+	: ENUM '{' enumerator_list_comma '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| ENUM '{' enumerator_list_comma error '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| ENUM IDENTIFIER '{' enumerator_list_comma '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	| ENUM IDENTIFIER '{' enumerator_list_comma error '}' {
+	    $$.start = $1.start;
+	    $$.end = $6.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| ENUM IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	;
+
+enumerator_list_comma				/* 22 */
+	: enumerator_list {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| string_literal STRING_LITERAL {
+	| enumerator_list ',' {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-postfix_expr
-	: primary_expr {
+enumerator_list					/* 23 */
+	: enumerator {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| postfix_expr '[' expr ']' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| postfix_expr '[' expr error ']' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| postfix_expr '(' ')' {
+	| enumerator_list ',' enumerator {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
-	| postfix_expr '(' error ')' {
+	;
+
+enumerator					/* 24 */
+	: IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
+	}
+	| IDENTIFIER '=' constant_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
+	}
+	;
+
+declarator					/* 25 */
+	: direct_declarator {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
+	}
+	| pointer direct_declarator {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = $2.symbol;
+	}
+	;
+
+direct_declarator				/* 26 */
+	: IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
+	}
+	| '(' declarator ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = $2.symbol;
+	}
+	| '(' declarator error ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
-	    $$.symbol = NULL;
+	    $$.symbol = $2.symbol;
 	    yyclearin; yyerrok;
 	}
-	| postfix_expr '(' argument_expr_list ')' {
+	| direct_declarator '[' ']' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+	}
+	| direct_declarator '[' error ']' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
-	    $$.symbol = NULL;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
 	}
-	| postfix_expr '(' argument_expr_list error ')' {
+	| direct_declarator '[' constant_expression ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	}
+	| direct_declarator '[' constant_expression error ']' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
-	    $$.symbol = NULL;
+	    $$.symbol = $1.symbol;
 	    yyclearin; yyerrok;
 	}
-	| postfix_expr '.' identifier {
+	| direct_declarator '(' ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = $1.symbol;
+	}
+	| direct_declarator '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
+	}
+	| direct_declarator '(' parameter_type_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	}
+	| direct_declarator '(' parameter_type_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
+	}
+	| direct_declarator '(' parameter_identifier_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+	}
+	| direct_declarator '(' parameter_identifier_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = $1.symbol;
+	    yyclearin; yyerrok;
+	}
+	;
+
+pointer						/* 27 */
+	: '*' {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| '*' type_qualifier_list {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '*' pointer {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '*' type_qualifier_list pointer {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+type_qualifier_list				/* 28 */
+	: type_qualifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| type_qualifier_list type_qualifier {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+parameter_type_list				/* 29 */
+	: parameter_list {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| parameter_list ',' ELIPSIS {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+parameter_identifier_list			/* 30 */
+	: identifier_list {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| identifier_list ',' ELIPSIS {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+parameter_list					/* 31 */
+	: parameter_declaration {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| parameter_list ',' parameter_declaration {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+parameter_declaration				/* 32 */
+	: specifier_qualifier_list declarator {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	| type_name {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+identifier_list					/* 33 */
+	: IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
+	}
+	| identifier_list ',' IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    delete_sym(&$3);
 	    $$.symbol = NULL;
 	}
-	| postfix_expr PTR_OP identifier {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$3);
-	    $$.symbol = NULL;
-	}
-	| postfix_expr INC_OP {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| postfix_expr DEC_OP {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
 	;
 
-argument_expr_list
-	: assignment_expr {
+initializer					/* 34 */
+	: assignment_expression {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| argument_expr_list ',' assignment_expr {
+	| '{' initializer_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
-	;
-
-unary_expr
-	: postfix_expr {
+	| '{' initializer_list error '}' {
 	    $$.start = $1.start;
-	    $$.end = $1.end;
+	    $$.end = $4.end;
 	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
-	| imm_identifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| INC_OP unary_expr {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| DEC_OP unary_expr {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| unary_operator cast_expr {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| SIZEOF unary_expr {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| SIZEOF '(' type_name ')' {
+	| '{' initializer_list ',' '}' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = NULL;
 	}
-	| SIZEOF '(' type_name error ')' {
+	| '{' initializer_list error ',' '}' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
@@ -284,51 +818,145 @@ unary_expr
 	}
 	;
 
-unary_operator
-	: '&' {
+initializer_list				/* 35 */
+	: initializer {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| '*' {
+	| initializer_list ',' initializer {
 	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '+' {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '-' {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '~' {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '!' {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
+	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-cast_expr
-	: unary_expr {
+type_name					/* 36 */
+	: specifier_qualifier_list {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| '(' type_name ')' cast_expr {
+	| specifier_qualifier_list abstract_declarator {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+abstract_declarator				/* 37 */
+	: pointer {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| direct_abstract_declarator {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| pointer direct_abstract_declarator {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+direct_abstract_declarator			/* 38 */
+	: '(' abstract_declarator ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' abstract_declarator error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '[' ']' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '[' error ']' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '[' constant_expression ']' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '[' constant_expression error ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| direct_abstract_declarator '[' ']' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| direct_abstract_declarator '[' error ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| direct_abstract_declarator '[' constant_expression ']' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = NULL;
 	}
-	| '(' type_name error ')' cast_expr {
+	| direct_abstract_declarator '[' constant_expression error ']' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '(' ')' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '(' parameter_type_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' parameter_type_list error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| direct_abstract_declarator '(' ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| direct_abstract_declarator '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| direct_abstract_declarator '(' parameter_type_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| direct_abstract_declarator '(' parameter_type_list error ')' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
@@ -336,196 +964,263 @@ cast_expr
 	}
 	;
 
-multiplicative_expr
-	: cast_expr {
+statement					/* 39 */
+	: labeled_statement {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| multiplicative_expr '*' cast_expr {
+	| expression_statement {
 	    $$.start = $1.start;
-	    $$.end = $3.end;
+	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| multiplicative_expr '/' cast_expr {
+	| compound_statement {
 	    $$.start = $1.start;
-	    $$.end = $3.end;
+	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| multiplicative_expr '%' cast_expr {
+	| selection_statement {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| iteration_statement {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| jump_statement {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+labeled_statement				/* 40 */
+	: IDENTIFIER ':' statement {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
+	}
+	| CASE constant_expression ':' statement {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| DEFAULT ':' statement {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-additive_expr
-	: multiplicative_expr {
+expression_statement				/* 41 */
+	: ';' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| additive_expr '+' multiplicative_expr {
+	| expression ';' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| expression error ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+compound_statement				/* 42 */
+	: '{' '}' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| '{' error '}' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '{' statement_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
-	| additive_expr '-' multiplicative_expr {
+	| '{' statement_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '{' declaration_list '}' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '{' declaration_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '{' declaration_list statement_list '}' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| '{' declaration_list statement_list error '}' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+statement_list					/* 43 */
+	: statement {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| statement_list statement {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-shift_expr
-	: additive_expr {
+selection_statement				/* 44 */
+	: IF '(' expression ')' statement {
 	    $$.start = $1.start;
-	    $$.end = $1.end;
+	    $$.end = $5.end;
 	    $$.symbol = NULL;
 	}
-	| shift_expr LEFT_OP additive_expr {
+	| IF '(' expression ')' statement ELSE statement {
 	    $$.start = $1.start;
-	    $$.end = $3.end;
+	    $$.end = $7.end;
 	    $$.symbol = NULL;
 	}
-	| shift_expr RIGHT_OP additive_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-relational_expr
-	: shift_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| relational_expr '<' shift_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| relational_expr '>' shift_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| relational_expr LE_OP shift_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| relational_expr GE_OP shift_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-equality_expr
-	: relational_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| equality_expr EQ_OP relational_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| equality_expr NE_OP relational_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-and_expr
-	: equality_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| and_expr '&' equality_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-exclusive_or_expr
-	: and_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| exclusive_or_expr '^' and_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-inclusive_or_expr
-	: exclusive_or_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| inclusive_or_expr '|' exclusive_or_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-logical_and_expr
-	: inclusive_or_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| logical_and_expr AND_OP inclusive_or_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-logical_or_expr
-	: logical_and_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| logical_or_expr OR_OP logical_and_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-conditional_expr
-	: logical_or_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| logical_or_expr '?' logical_or_expr ':' conditional_expr {
+	| SWITCH '(' expression ')' statement {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-assignment_expr
-	: conditional_expr {
+iteration_statement				/* 45 */
+	: WHILE '(' expression ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
+	    $$.symbol = NULL;
+	}
+	| DO statement WHILE '(' expression ')' ';' {
+	    $$.start = $1.start;
+	    $$.end = $7.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' ';' ';' ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $6.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' ';' ';' expression ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $7.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' ';' expression ';' ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $7.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' ';' expression ';' expression ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $8.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' expression ';' ';' ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $7.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' expression ';' ';' expression ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $8.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' expression ';' expression ';' ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $8.end;
+	    $$.symbol = NULL;
+	}
+	| FOR '(' expression ';' expression ';' expression ')' statement {
+	    $$.start = $1.start;
+	    $$.end = $9.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+jump_statement					/* 46 */
+	: GOTO IDENTIFIER ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    delete_sym(&$2);
+	    $$.symbol = NULL;
+	}
+	| CONTINUE ';' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| BREAK ';' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| RETURN ';' {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| RETURN expression ';' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| RETURN expression error ';' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	;
+
+expression					/* 47 */
+	: assignment_expression {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| unary_expr assignment_operator assignment_expr {
+	| expression ',' assignment_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+assignment_expression				/* 48 */
+	: conditional_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| unary_expression assignment_operator assignment_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
@@ -533,7 +1228,7 @@ assignment_expr
 	if ((debug & 0402) == 0402) fprintf(outFP, "@");
 #endif
 	}
-	| imm_identifier '=' assignment_expr {
+	| imm_identifier '=' assignment_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 #ifndef LMAIN
@@ -546,7 +1241,7 @@ assignment_expr
 	}
 	;
 
-assignment_operator
+assignment_operator				/* 49 */
 	: '=' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
@@ -604,224 +1299,209 @@ assignment_operator
 	}
 	;
 
-expr
-	: assignment_expr {
+conditional_expression				/* 50 */
+	: logical_OR_expression {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| expr ',' assignment_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-constant_expr
-	: conditional_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-declaration
-	: declaration_specifiers ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| declaration_specifiers init_declarator_list ';' {
-	    Symbol *	sp;
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    sp = $2.symbol;
-	    assert(sp);			/* ERROR: initialized in : init_declarator */
-	    while (sp) {
-		Symbol * sp1 = sp;
-		sp = sp->next;		/* get next before Symbol is placed or deleted */
-		if ($1.symbol && $1.symbol->type == UDF) {
-		    sp1->type = CTYPE;		/* found a typedef */
-#if YYDEBUG
-		    if ((debug & 0402) == 0402) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
-#endif
-		    place_sym(sp1);
-		} else {
-		    $$.symbol = sp1;	/* use $$ as transport Token for delete_sym */
-		    delete_sym(&$$);
-		}
-	    }
-	    $$.symbol = NULL;
-	}
-	| declaration_specifiers error ';' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-declaration_specifiers
-	: type_specifier_list {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| storage_class_specifier type_specifier_list {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = $1.symbol;	/* typedef information */
-	}
-	;
-
-init_declarator_list
-	: init_declarator {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = $1.symbol;
-	}
-	| init_declarator_list ',' init_declarator {
-	    Symbol *	sp;
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    sp = $$.symbol = $1.symbol;
-	    assert(sp);			/* ERROR: initialized in : init_declarator */
-	    while (sp->next) {
-		sp = sp->next;
-	    }
-	    sp->next = $3.symbol;
-	}
-	;
-
-init_declarator
-	: declarator {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = $1.symbol;
-	}
-	| declarator '=' initializer {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = $1.symbol;
-	}
-	;
-
-storage_class_specifier
-	: TYPEDEF {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = &typedefSymbol;
-	}
-	| EXTERN {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| STATIC {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| AUTO {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-type_specifier
-	: CHAR {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| SHORT {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| INT {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| LONG {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| SIGNED {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| UNSIGNED {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| FLOAT {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| DOUBLE {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| CONST {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| VOLATILE {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| VOID {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| REGISTER {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| struct_or_union_specifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| enum_specifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| TYPE_NAME {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| TYPEOF '(' unary_expr ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| TYPEOF '(' unary_expr error ')' {
+	| logical_OR_expression '?' logical_OR_expression ':' conditional_expression {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
 	}
-	| TYPEOF '(' type_name ')' {
+	;
+
+constant_expression				/* 51 */
+	: conditional_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+logical_OR_expression				/* 52 */
+	: logical_AND_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| logical_OR_expression OR_OP logical_AND_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+logical_AND_expression				/* 53 */
+	: inclusive_OR_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| logical_AND_expression AND_OP inclusive_OR_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+inclusive_OR_expression				/* 54 */
+	: exclusive_OR_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| inclusive_OR_expression '|' exclusive_OR_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+exclusive_OR_expression				/* 55 */
+	: AND_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| exclusive_OR_expression '^' AND_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+AND_expression					/* 56 */
+	: equality_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| AND_expression '&' equality_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+equality_expression				/* 57 */
+	: relational_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| equality_expression EQ_OP relational_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| equality_expression NE_OP relational_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+relational_expression				/* 58 */
+	: shift_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| relational_expression '<' shift_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| relational_expression '>' shift_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| relational_expression LE_OP shift_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| relational_expression GE_OP shift_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+shift_expression				/* 59 */
+	: additive_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| shift_expression LEFT_OP additive_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| shift_expression RIGHT_OP additive_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+additive_expression				/* 60 */
+	: multiplicative_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| additive_expression '+' multiplicative_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| additive_expression '-' multiplicative_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+multiplicative_expression			/* 61 */
+	: cast_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| multiplicative_expression '*' cast_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| multiplicative_expression '/' cast_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| multiplicative_expression '%' cast_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+cast_expression					/* 62 */
+	: unary_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| '(' type_name ')' cast_expression {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = NULL;
 	}
-	| TYPEOF '(' type_name error ')' {
+	| '(' type_name error ')' cast_expression {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
@@ -829,18 +1509,43 @@ type_specifier
 	}
 	;
 
-struct_or_union_specifier
-	: struct_or_union_tag {
+unary_expression				/* 63 */
+	: postfix_expression {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| struct_or_union_tag '{' struct_declaration_list '}' {
+	| imm_identifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| INC_OP unary_expression {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| DEC_OP unary_expression {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| unary_operator cast_expression {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| SIZEOF unary_expression {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	| SIZEOF '(' type_name ')' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = NULL;
 	}
-	| struct_or_union_tag '{' struct_declaration_list error '}' {
+	| SIZEOF '(' type_name error ')' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
@@ -848,859 +1553,170 @@ struct_or_union_specifier
 	}
 	;
 
-struct_or_union_tag
-	: struct_or_union {
+unary_operator					/* 64 */
+	: '&' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| struct_or_union identifier {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
-	}
-	/* struct or union tags have a different name space to types */
-	| struct_or_union TYPE_NAME {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	/* struct or union tags have a different name space to imm */
-	| struct_or_union imm_identifier {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-struct_or_union
-	: STRUCT {
+	| '*' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| UNION {
+	| '+' {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| '-' {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| '~' {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| '!' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-struct_declaration_list
-	: /* NOTHING */ {
-	    $$.start = 0;
-	    $$.end = 0;
-	    $$.symbol = NULL;
-	}
-	| struct_declaration_list struct_declaration {
-	    $$.start = $1.start ? $1.start : $2.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-struct_declaration
-	: type_specifier_list struct_declarator_list ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| type_specifier_list error ';' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-struct_declarator_list
-	: struct_declarator {
+postfix_expression				/* 65 */
+	: primary_expression {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| struct_declarator_list ',' struct_declarator {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-struct_declarator
-	: declarator {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	| ':' constant_expr {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| declarator ':' constant_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	;
-
-enum_specifier
-	: ENUM '{' enumerator_list_comma '}' {
+	| postfix_expression '[' expression ']' {
 	    $$.start = $1.start;
 	    $$.end = $4.end;
 	    $$.symbol = NULL;
 	}
-	| ENUM '{' enumerator_list_comma error '}' {
+	| postfix_expression '[' expression error ']' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
 	    yyclearin; yyerrok;
 	}
-	| ENUM identifier '{' enumerator_list_comma '}' {
+	| postfix_expression '(' ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| postfix_expression '(' error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| postfix_expression '(' argument_expr_list ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	}
+	| postfix_expression '(' argument_expr_list error ')' {
 	    $$.start = $1.start;
 	    $$.end = $5.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
-	}
-	| ENUM identifier '{' enumerator_list_comma error '}' {
-	    $$.start = $1.start;
-	    $$.end = $6.end;
-	    delete_sym(&$2);
 	    $$.symbol = NULL;
 	    yyclearin; yyerrok;
 	}
-	| ENUM identifier {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
-	}
-	;
-
-enumerator_list_comma
-	: enumerator_list {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| enumerator_list ',' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-enumerator_list
-	: enumerator {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| enumerator_list ',' enumerator {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-enumerator
-	: identifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	| identifier '=' constant_expr {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	;
-
-declarator
-	: declarator2 {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = $1.symbol;
-	}
-	| pointer declarator2 {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = $2.symbol;
-	}
-	;
-
-declarator2
-	: identifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = $1.symbol;
-	}
-	| '(' declarator ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = $2.symbol;
-	}
-	| '(' declarator error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = $2.symbol;
-	    yyclearin; yyerrok;
-	}
-	| declarator2 '[' ']' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = $1.symbol;
-	}
-	| declarator2 '[' error ']' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = $1.symbol;
-	    yyclearin; yyerrok;
-	}
-	| declarator2 '[' constant_expr ']' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = $1.symbol;
-	}
-	| declarator2 '[' constant_expr error ']' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = $1.symbol;
-	    yyclearin; yyerrok;
-	}
-	| declarator2 '(' ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = $1.symbol;
-	}
-	| declarator2 '(' error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = $1.symbol;
-	    yyclearin; yyerrok;
-	}
-	| declarator2 '(' parameter_type_list ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = $1.symbol;
-	}
-	| declarator2 '(' parameter_type_list error ')' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = $1.symbol;
-	    yyclearin; yyerrok;
-	}
-	| declarator2 '(' parameter_identifier_list ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = $1.symbol;
-	}
-	| declarator2 '(' parameter_identifier_list error ')' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = $1.symbol;
-	    yyclearin; yyerrok;
-	}
-	;
-
-pointer
-	: '*' {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '*' type_specifier_list {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| '*' pointer {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| '*' type_specifier_list pointer {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-type_specifier_list
-	: type_specifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| type_specifier_list type_specifier {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-parameter_identifier_list
-	: identifier_list {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| identifier_list ',' ELIPSIS {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-identifier_list
-	: identifier {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	| identifier_list ',' identifier {
+	| postfix_expression '.' IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    delete_sym(&$3);
 	    $$.symbol = NULL;
 	}
-	;
-
-parameter_type_list
-	: parameter_list {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| parameter_list ',' ELIPSIS {
+	| postfix_expression PTR_OP IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    delete_sym(&$3);
 	    $$.symbol = NULL;
 	}
-	;
-
-parameter_list
-	: parameter_declaration {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| parameter_list ',' parameter_declaration {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-parameter_declaration
-	: type_specifier_list declarator {
+	| postfix_expression INC_OP {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
-	    delete_sym(&$2);
 	    $$.symbol = NULL;
 	}
-	| type_name {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-type_name
-	: type_specifier_list {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| type_specifier_list abstract_declarator {
+	| postfix_expression DEC_OP {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    $$.symbol = NULL;
 	}
 	;
 
-abstract_declarator
-	: pointer {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| abstract_declarator2 {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| pointer abstract_declarator2 {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-abstract_declarator2
-	: '(' abstract_declarator ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '(' abstract_declarator error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '[' ']' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| '[' error ']' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '[' constant_expr ']' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '[' constant_expr error ']' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| abstract_declarator2 '[' ']' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| abstract_declarator2 '[' error ']' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| abstract_declarator2 '[' constant_expr ']' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| abstract_declarator2 '[' constant_expr error ']' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '(' ')' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| '(' error ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '(' parameter_type_list ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '(' parameter_type_list error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| abstract_declarator2 '(' ')' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| abstract_declarator2 '(' error ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| abstract_declarator2 '(' parameter_type_list ')' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| abstract_declarator2 '(' parameter_type_list error ')' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-initializer
-	: assignment_expr {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| '{' initializer_list '}' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '{' initializer_list error '}' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '{' initializer_list ',' '}' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| '{' initializer_list error ',' '}' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-initializer_list
-	: initializer {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| initializer_list ',' initializer {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-statement
-	: labeled_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| compound_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| expression_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| selection_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| iteration_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| jump_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-labeled_statement
-	: identifier ':' statement {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	| CASE constant_expr ':' statement {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| DEFAULT ':' statement {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-compound_statement
-	: '{' '}' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| '{' error '}' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '{' statement_list '}' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '{' statement_list error '}' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '{' declaration_list '}' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| '{' declaration_list error '}' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	| '{' declaration_list statement_list '}' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	}
-	| '{' declaration_list statement_list error '}' {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-declaration_list
-	: declaration {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| declaration_list declaration {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-statement_list
-	: statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| statement_list statement {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-expression_statement
-	: ';' {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| expr ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| expr error ';' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-selection_statement
-	: IF '(' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	}
-	| IF '(' expr ')' statement ELSE statement {
-	    $$.start = $1.start;
-	    $$.end = $7.end;
-	    $$.symbol = NULL;
-	}
-	| SWITCH '(' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-iteration_statement
-	: WHILE '(' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $5.end;
-	    $$.symbol = NULL;
-	}
-	| DO statement WHILE '(' expr ')' ';' {
-	    $$.start = $1.start;
-	    $$.end = $7.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' ';' ';' ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $6.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' ';' ';' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $7.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' ';' expr ';' ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $7.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' ';' expr ';' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $8.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' expr ';' ';' ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $7.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' expr ';' ';' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $7.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' expr ';' expr ';' ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $8.end;
-	    $$.symbol = NULL;
-	}
-	| FOR '(' expr ';' expr ';' expr ')' statement {
-	    $$.start = $1.start;
-	    $$.end = $9.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-jump_statement
-	: GOTO identifier ';' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
-	}
-	| CONTINUE ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| BREAK ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| RETURN ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	| RETURN expr ';' {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    $$.symbol = NULL;
-	}
-	| RETURN expr error ';' {
-	    $$.start = $1.start;
-	    $$.end = $4.end;
-	    $$.symbol = NULL;
-	    yyclearin; yyerrok;
-	}
-	;
-
-file
-	: /* NOTHING allows an empty file required for iC */ {
-	    $$.start = 0;
-	    $$.end = 0;
-	    $$.symbol = NULL;
-	}
-	| file external_definition {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-external_definition
-	: function_definition {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| declaration {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-function_definition
-	: declarator function_body {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    delete_sym(&$1);
-	    $$.symbol = NULL;
-	}
-	| declaration_specifiers declarator function_body {
-	    $$.start = $1.start;
-	    $$.end = $3.end;
-	    delete_sym(&$2);
-	    $$.symbol = NULL;
-	}
-	;
-
-function_body
-	: compound_statement {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| declaration_list compound_statement {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
-	}
-	;
-
-identifier
+primary_expression				/* 66 */
 	: IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
-	    $$.symbol = $1.symbol;
+	    delete_sym(&$1);
+	    $$.symbol = NULL;
+	}
+	| CONSTANT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| string_literal {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| '(' expression ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' expression error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
+	}
+	| '(' compound_statement ')' {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	| '(' compound_statement error ')' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
-imm_identifier
+argument_expr_list				/* 67 */
+	: assignment_expression {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| argument_expr_list ',' assignment_expression {
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+string_literal					/* 68 */
+	: STRING_LITERAL {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| string_literal STRING_LITERAL {
+	    $$.start = $1.start;
+	    $$.end = $2.end;
+	    $$.symbol = NULL;
+	}
+	;
+
+imm_identifier					/* 69 */
 	: IMM_IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
@@ -1713,7 +1729,7 @@ imm_identifier
 #endif
 	}
 	| '(' imm_identifier ')' {
-	    /* stops this being a primary_expr which would lead to C assignment */
+	    /* stops this being a primary_expression which would lead to C assignment */
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = $2.symbol;

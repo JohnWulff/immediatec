@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.59 2002/08/18 15:32:56 jw Exp $";
+"@(#)$Id: outp.c,v 1.60 2002/08/21 11:43:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -1208,7 +1208,7 @@ c_compile(FILE * iFP)
     char	lineBuf[BUFS];	/* can be smaller than a line */
 
 //fprintf(stderr, "c_compile: start\n"); fflush(stderr);
-    lexflag = 07;			/* output partial source listing */
+    lexflag = C_PARSE|C_FIRST|C_BLOCK;		/* output partial source listing */
 
     if (copyBlocks(iFP, T2FP, 01)) {
 	return T1index;

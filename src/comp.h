@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.34 2002/08/19 09:30:12 jw Exp $";
+"@(#)$Id: comp.h,v 1.35 2002/08/21 13:10:41 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -51,6 +51,7 @@ typedef struct Token {		/* Token for gram.y grammar */
 } Token;
 
 					/*  comp.y  */
+extern int  iCparse(void);		/* generated yacc parser function */
 extern int  compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
@@ -64,7 +65,24 @@ extern int  get(FILE* fp);		/* character input shared with lexc.l */
 #endif
 extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
+
 extern int	lexflag;
+/********************************************************************
+ *	lexflag is bitmapped and controls the input for lexers
+ *
+ *	bit	mask	iCparse	c_parse	function
+ *  C_PARSE	01	0	01	select parser
+ *  C_FIRST	02	-	02	set for first line of listing
+ *  C_BLOCK	04	-	04	block c_parse source listing
+ *  C_INCLUDE	010	-	010	c_parse handling include
+ *  C_NO_COUNT	020	-	020	c_parse blocks counting chars
+ *******************************************************************/
+#define C_PARSE		01
+#define C_FIRST		02
+#define C_BLOCK		04
+#define C_INCLUDE	010
+#define C_NO_COUNT	020
+
 extern int	lineno;
 					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
@@ -166,4 +184,5 @@ extern int	readTypesFromCache(char* includeName);
 extern FILE *	restoreCblocksStream(void);
 #define TCBUFS	1024
 					/*   gram.y   */
+extern int	c_parse(void);		/* generated yacc parser function */
 extern void	copyAdjust(FILE* iFP, FILE* oFP);
