@@ -18,9 +18,11 @@ fi
 
 for v in 36 37 38 39 40 41 42 43 44 45 46 47 50 51; do
     echo "### $v ###"
+    for f in $*; do
+	rm -f $f $f.lst $f.c Alex$v/$f.lst Alex$v/$f.c
+    done
     makex -v$v $*;
     for f in $*; do
-	echo $f
 	cp $f.p $f.lst $f.c Alex$v
     done
 done
