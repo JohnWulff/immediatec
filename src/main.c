@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.48 2004/04/13 12:33:13 jw Exp $";
+"@(#)$Id: main.c,v 1.49 2004/11/10 17:47:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -20,6 +20,7 @@ static const char main_c[] =
 #include	<unistd.h>
 #include	<string.h>
 #include	<assert.h>
+#include	<errno.h>
 #ifdef TCP
 #include	"tcpc.h"
 #endif	/* TCP */
@@ -668,10 +669,12 @@ inversionCorrection(void)
 	} else {
 	    snprintf(exStr, TSIZE, "%spplstfix%s %s > %s", ppPath, progname + strcspn(progname, "0123456789"), tempName, listFN);
 	    r = system(exStr);
-	    unlink(tempName);
-	    if (r != 0) {
-		fprintf(stderr, "%s: system(\"%s\") could not be executed\n",
-		    progname, exStr);
+	    if (r == 0) {
+		unlink(tempName);
+	    } else {
+		perror("pplstfix");
+		fprintf(stderr, "%s: system(\"%s\") could not be executed $? = %d\n",
+		    progname, exStr, r);
 	    }
 	}
     }

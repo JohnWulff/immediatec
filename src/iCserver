@@ -1,4 +1,4 @@
-#!/usr/bin/perl -P
+#!/usr/bin/perl
 
 ########################################################################
 #
@@ -63,11 +63,11 @@
 #	For measuring reaction times the Module Time::HiRes may be used.
 #	This activates the -m option.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
-#define TIME_HIRES
 #
 ########################################################################
 
-use Msg;
+use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+			##                   by Sriram Srinivasan
 use strict;
 
 my %UnitIDs = ();	# indexed by $conn - stores hash of UnitIDs
@@ -101,7 +101,7 @@ Usage:	@<<<<<<< [-tmh] [-s <host>] [-p <port>] [<list of client calls>]
 		$named
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.29 2003/12/28 20:55:53 jw Exp $
+$Id: iCserver,v 1.30 2004/11/10 17:47:56 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_r $opt_h);
@@ -111,14 +111,12 @@ require "getopts.pl";
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
-#ifdef TIME_HIRES 
 
 my ($t0, $t1);
 if ($opt_m) {
     use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
     $t0 = [gettimeofday];	# start of program
 }
-#endif
 
 ########################################################################
 #
@@ -178,7 +176,7 @@ sub login_proc {
     my ($conn, $host, $port) = @_;
     print "Connection $host:$port at server\n";
     ## Unconditionally accept an incoming connection request
-    $UnitIDs{$conn} = undef;
+    $UnitIDs{$conn} = undef;	# $conn accepted but no registration yet
     return \&rcvd_msg_from_client;
 }
 
@@ -190,7 +188,6 @@ sub login_proc {
 
 sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
-#ifdef TIME_HIRES 
     my ($sec, $usec);
     if ($opt_m) {
 	$t1 = [gettimeofday];
@@ -206,7 +203,6 @@ sub rcvd_msg_from_client {
 	    printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
 	}
     }
-#endif
     if (defined $msg) {
 	my @unitIDs = sort keys %{ $UnitIDs{$conn} };	# all unitIDs
 	my $unitID = $unitIDs[0];			# first unitID
@@ -384,9 +380,7 @@ sub rcvd_msg_from_client {
 	    }
 	}
     }
-#ifdef TIME_HIRES 
     if ($opt_m) {
 	$t0 = [gettimeofday];
     }
-#endif
 }

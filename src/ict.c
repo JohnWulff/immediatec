@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.41 2004/05/19 10:30:11 jw Exp $";
+"@(#)$Id: ict.c,v 1.42 2004/11/10 17:47:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -838,8 +838,10 @@ display(void)
 
     if (dis_cnt++ >= DIS_MAX) {		/* display header line */
 	dis_cnt = 1;
-	for (n = 0; n < 10; n++) {
-	    if ((gp = IX_[n]) != 0) fprintf(outFP, " I%d", n);
+	if ((gp = IX_[0]) != 0) {
+	    for (n = 0; n < MAX_IO; n++) {
+		fprintf(outFP, " I%d", n);
+	    }
 	}
 	if (IB_[1] != 0) fprintf(outFP, "  IB1");
 	if (IW_[2] != 0) fprintf(outFP, "    IW2");
@@ -856,9 +858,11 @@ display(void)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	fprintf(outFP, "\n");
     }
-    for (n = 0; n < 10; n++) {
-	if ((gp = IX_[n]) != 0) {
-	    fprintf(outFP, "  %c", gp->gt_val < 0 ? '1' : '0');
+    if ((gp = IX_[0]) != 0) {
+	data = gp->gt_new;
+	for (n = 0; n < MAX_IO; n++) {
+	    fprintf(outFP, "  %c", (data & 0x0001) ? '1' : '0');
+	    data >>= 1;				/* scan input bits */
 	}
     }
     /* display IB1, IW2 and IL4 if active */

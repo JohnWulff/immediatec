@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.43 2004/05/19 14:15:39 jw Exp $";
+"@(#)$Id: load.c,v 1.44 2004/11/10 17:47:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -58,13 +58,14 @@ static const char *	usage =
 #endif
 "xh]"
 #ifdef TCP
-" [-m[m]] [-s <server>] [-p <port>] [-u <unitID>]\n      "
+" [-m[m]] [-s <server>] [-p <port>] [-u <unitID>] [-i <instance>]\n"
 #endif
 " [-n<count>] [-d<debug>]\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n"
 "        -p service port of server (default '%s')\n"
 "        -u unit ID of this client (default '%s')\n"
+"        -i instance number of this client (default '%s')\n"
 #endif
 "        -n <count>      maximum oscilator count (default is %d, limit 15)\n"
 #if YYDEBUG
@@ -247,7 +248,7 @@ main(
 		error:
 		    fprintf(stderr, usage, progname,
 #ifdef TCP
-		    hostNM, portNM, iccNM,
+		    hostNM, portNM, iccNM, iccNM,
 #endif
 		    MARKMAX, SC_ID);
 		    exit(-1);
@@ -524,7 +525,7 @@ main(
 			if (gp->gt_rlist) {
 			    inError(__LINE__, op, gp, "PASS 1: backlink for D_SH slave already installed");
 			} else {
-			    (Gate*)gp->gt_rlist = op;	/* back pointer to delay master */
+			    gp->gt_rlist = (Gate**)op;	/* back pointer to delay master */
 			}
 		    }
 		}

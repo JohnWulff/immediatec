@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.60 2004/04/04 20:11:16 jw Exp $";
+"@(#)$Id: genr.c,v 1.61 2004/11/10 17:47:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -544,7 +544,6 @@ op_asgn(				/* asign List_e stack to links */
     List_e *	lp;
     Symbol *	gp;
     Symbol *	rsp;
-    Symbol *	tsp;
     List_e *	tlp;
     List_e *	nlp;
     List_e *	right;
@@ -715,7 +714,7 @@ op_asgn(				/* asign List_e stack to links */
     if ((debug & 0402) == 0402) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
 #endif
     do {				/* marked symbol */
-	List_e*	saveBlist;
+	List_e*	saveBlist = 0;		/* prevent warning - only used when iFunSymExt != 0 */
 	List_e*	plp;
 	int	gt_input;
 	char *	cp;
@@ -1460,7 +1459,6 @@ delayOne(List_e * tp)
 Symbol *
 functionHead(unsigned int typeVal, Symbol * funTrigger, int retFlag)
 {
-    unsigned char	typ;
     unsigned char	ftyp = typeVal & 0xff;	/* UDFA GATE ARITH CLCKL TIMRL */
 
     funTrigger->type = IFUNCT;			/* function head */
@@ -2171,7 +2169,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	vsp = vlp->le_sym;			/* varList of temp Symbols */
 	while (vsp) {				/* varList may be empty */
 	    assert(vsp->list == 0);
-	    (Symbol*)vsp->list = cloneSymbol(vsp); /* point to new internal Symbol */
+	    vsp->list = (List_e *) cloneSymbol(vsp); /* point to new internal Symbol */
 	    vsp = vsp->next;			/* next varList Symbol */
 	}
 	/********************************************************************

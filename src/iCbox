@@ -1,4 +1,4 @@
-#!/usr/bin/perl -P
+#!/usr/bin/perl
 
 ########################################################################
 #
@@ -18,12 +18,13 @@
 #	For measuring reaction times the Module Time::HiRes may be used.
 #	This activates the -m option.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
-#define TIME_HIRES
 #
 ########################################################################
 
-use Tk;					# Slurp the module in
-use Msg;
+use Tk;			# The graphical user interface toolkit perl/Tk
+			##                   by Nick Ing-Simmons
+use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+			##                   by Sriram Srinivasan
 use strict;
 
 my @inputs;
@@ -81,7 +82,7 @@ Usage:
 	-l len	length of scales (default 170)
 Copyright (C) 2000-2001  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.37 2003/12/29 17:05:59 jw Exp $
+$Id: iCbox,v 1.38 2004/11/10 17:47:56 jw Exp $
 .
 
 use vars qw($opt_e $opt_t $opt_m $opt_s $opt_p $opt_r $opt_i $opt_o $opt_R $opt_I $opt_O $opt_l $opt_h);
@@ -91,14 +92,12 @@ require "getopts.pl";
 if ($opt_h or @ARGV > 2) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
-#ifdef TIME_HIRES 
 
 my ($t0, $t1, $sec, $usec);
 if ($opt_m) {
     use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
     $t0 = [gettimeofday];	# start of program
 }
-#endif
 
 ########################################################################
 #
@@ -207,9 +206,7 @@ if ($unitID =~ /^X/) {
 					 \$inByte &= ~$masks[$index];	# clear bit\n\
 				     }\
 				     "
-#ifdef TIME_HIRES 
 				   ."\&printMicroSeconds if \$opt_m;"
-#endif
 				   ."print \"I$unitID.$index --> \$inputs[$index] (\$inByte)\\n\" if \$opt_t;\
 				     \$conn->send_now(\"$unitID.\$inByte\");\
 				    },\
@@ -270,9 +267,7 @@ elsif ($unitID =~ /^[BWL]/) {
 	-variable    => \$inByte,
 	-command     => sub {
 			     if (length $inByte) {
-#ifdef TIME_HIRES 
 				 &printMicroSeconds if $opt_m;
-#endif
 				 print "I$unitID --> $inByte\n" if $opt_t;
 				 $conn->send_now("$unitID.$inByte");
 			     }
@@ -319,9 +314,7 @@ MainLoop;
 
 sub rcvd_msg_from_server {
     my ($conn, $msg, $err) = @_;
-#ifdef TIME_HIRES 
     &printMicroSeconds if $opt_m;
-#endif
     if (defined $msg) {
         my $len = length $msg;
 	if ($len == 0) {
@@ -381,7 +374,6 @@ sub rcvd_msg_from_server {
 	}
     }
 }
-#ifdef TIME_HIRES 
 
 ########################################################################
 #
@@ -390,19 +382,20 @@ sub rcvd_msg_from_server {
 ########################################################################
 
 sub printMicroSeconds {
-    my ($sec, $usec);
-    $t1 = [gettimeofday];
-    $sec =  $t1->[0] - $t0->[0];
-    $usec = $t1->[1] - $t0->[1];
-    if ($usec < 0) {
-	$sec--;
-	$usec += 1000000;
+    if ($opt_m) {
+	my ($sec, $usec);
+	$t1 = [gettimeofday];
+	$sec =  $t1->[0] - $t0->[0];
+	$usec = $t1->[1] - $t0->[1];
+	if ($usec < 0) {
+	    $sec--;
+	    $usec += 1000000;
+	}
+	if ($opt_t) {
+	    printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	} else {
+	    printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	}
+	$t0 = $t1;
     }
-    if ($opt_t) {
-	printf "%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
-    } else {
-	printf "%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
-    }
-    $t0 = $t1;
 }
-#endif

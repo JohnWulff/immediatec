@@ -5,7 +5,7 @@
 #   icc.v is maintained under source control and the version number
 #   of icc.v is used as the version number of the iC release.
 #   Call: 	ident icc.v | README.tpl > ../README
-#   $Id: README.tpl,v 1.12 2003/10/12 20:57:47 jw Exp $
+#   $Id: README.tpl,v 1.13 2004/11/10 18:04:50 jw Exp $
 ########################################################################
 
 while (<>) {
@@ -95,27 +95,19 @@ print <<EOF;
                 libict.a
             without any errors
 
-        3)  To test compile the iC files in Test execute:
+        3)  To test compile the iC files in Test0 execute:
 
 		make test
 
-	4)  It is recomended that you install the Perl package Time::HiRes 
+	4)  It is mandatory that you install the Perl package Time::HiRes 
 	    included with this distribution unless it is already installed.
 	    This can be checked by executing the following at this point:
 
 	        iCserver -h
 
-	    Skip to point 8) if you get a help output and no error message.
+	    Skip to point 7) if you get a help output and no error message.
 
-	    You can work without Time::HiRes - the scripts iCbox, iCserver will
-	    not support the -m microsecond timing option and 'iClive' will not
-	    display short signals by flashing colours. If you subsequently
-	    install Time::HiRes, you have to execute make uninstall followed
-	    by another make install as su in the icc/src directory, since the
-	    Perl scripts are adjusted by make install to work with/without
-	    Time::HiRes depending on its presence.
-
-        6)  Unpack build and install the Time::HiRes archive in a suitable
+        5)  Unpack build and install the Time::HiRes archive in a suitable
 	    working directory with:
 
                 tar -xvzf Time-HiRes-01.20.tar.gz
@@ -129,12 +121,12 @@ print <<EOF;
 		cd ..
 		rm -rf Time-HiRes-01.20	# unless you want to keep it
 
-        7)  Return to the immediate C installtion
+        6)  Return to the immediate C installtion
 
 		cd icc_$REV/src	# or the correct icc src directory
 
-        8)  To install the compiler, library and scripts execute the following
-	    as super user:
+        7)  To install the iC-compiler, library and scripts execute the
+	    following as super user:
 
                 su               ### Password  ###
                 make install
@@ -146,9 +138,9 @@ print <<EOF;
 	    
 	    (make uninstall as su will remove all these files)
 
-        9)  Change to directory Test and compile a0.ic with iCmake
+        8)  Change to directory Test0 and compile a0.ic with iCmake
 
-                cd Test
+                cd Test0
                 iCmake a0.ic
 
             This should make a0.lst a0.c a0 and a0.ini
@@ -158,7 +150,7 @@ print <<EOF;
                 a0.ini  is used for testing. It is the initialisation
                         output when executing a0. (Not required later)
 
-        10) The support programs iCbox, which provides simulated I/O and
+        9)  The support programs iCbox, which provides simulated I/O and
 	    iClive, which provides program entry and debugging facilities
 	    require Perl-Tk800.022 (see note below).
 
@@ -177,19 +169,19 @@ print <<EOF;
                 QX0.0 = IX0.0; ...
 	    stop with ctrl-C
 
-	11) Make all iC executable in this directory by running
+	10) Make all iC executable in this directory by running
 
 		iCmake *.ic
 
 	    The script 'a012.sh' starts 'iCserver', 3 x 'iCbox' and 'a012'
 	    which sets all outputs from inputs like a0 above.
 
-	12) The scripts 'bar3.sh' start demos showing running lights moving
+	11) The scripts 'bar3.sh' start demos showing running lights moving
 	    every 100 ms. The lights should move smoothly on a 100 MHz or
 	    faster computer. 'bar1.sh' and 'bar2.sh' require a faster computer.
 	    'demo.sh' shows some logic processing.
 
-	13) Running 'iClive bar3.ic' as a seperate process, while 'bar3' is
+	12) Running 'iClive bar3.ic' as a seperate process, while 'bar3' is
 	    running, will display the source listing (in an edit window),
 	    connect to iCServer as an auxiliary I/O and receive updates
 	    of all variables from the running iC program (bar3). These
@@ -207,7 +199,7 @@ print <<EOF;
 	    described in the Tk::Text man page in the section 'BINDINGS'
 	    near the end. (Control-u is <<Undo>>)
 
-	14) I have included a script called 'stop' from my private toolkit.
+	13) I have included a script called 'stop' from my private toolkit.
 	    It can be used effectively to kill iCserver when it is
 	    executing in the background, which is appropriate for
 	    a server.
@@ -224,7 +216,7 @@ print <<EOF;
 	    'stop' is not a command on any Unix or Linux systems I know.
 	    If it does interfere I suggest renaming it to 'Stop'.
 
-        15) The StarOffice Word document doc/iC.sdw (or doc/iC.html)
+        14) The StarOffice Word document doc/iC.sdw (or doc/iC.html)
             provide an introduction to the Programming Language iC.
 
             There are currently no man pages (on my TODO list) but

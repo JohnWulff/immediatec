@@ -1,4 +1,4 @@
-#!/usr/bin/perl -P
+#!/usr/bin/perl
 
 ########################################################################
 #
@@ -30,7 +30,7 @@
 #	which are followed by ~ show the inverse state of the node.
 #
 #	When the mouse cursor sits on an active word the value of the
-#	node is displayed in a subwindow. This is useful for displaying
+#	node is displayed in a balloon window. This is useful for displaying
 #	the current value of arithmetic nodes.
 #
 #	To be effective, the displayed text must be either the source of
@@ -47,33 +47,25 @@
 #	jump to the last updated text for value changes in the control
 #	program. This makes the 'live display' hard to interpret. This does
 #	not happen with Tk::Text. If you want to activate the UNDO facility
-#	uncomment 'define' in the next line. (not recommended)
-#//define TEXT_UNDO
+#	use the -u option (recommended only for editing)
 #
 #	For measuring reaction times the Module Time::HiRes is used.
 #	This activates the -m option and flash display of short events.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
-#define TIME_HIRES
 #
 ########################################################################
 
-use Tk;					# Slurp the module in
-use Msg;
-#ifdef TEXT_UNDO
-use Tk::TextUndo;	# 7 times slower for live display
-my $undoBinding = '                (Control-u is <<Undo>>)';
-#else
-my $undoBinding = '';
-#endif
+use Tk;			# The graphical user interface toolkit perl/Tk
+			##                   by Nick Ing-Simmons
+use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+			##                   by Sriram Srinivasan
 use Tk::Balloon;
 use Tk::Dialog;
 use Cwd;
 use strict;
-#ifdef TIME_HIRES 
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 my $t0 = [gettimeofday];	# start of program
 my %delayedColour;	# colour that should be restored after a flash
-#endif
 
 ########################################################################
 #
@@ -133,59 +125,65 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<<< [-tTmh] [-s <host>] [-p <port>] [-f <font>] [file ...]
-	$named
-	-s host	host name of server    (default 'localhost')
-	-p port	service port of server (default '8778')
-	-f font	font to use in Text window (default '9x15')
-	-t	trace run time changes
-	-T	trace static debug messages
-	-m	display elapsed time in seconds and microseconds
-	    (Requires Module Time::HiRes available from CPAN - see source)
-	-h	help, ouput this Usage text only
+@<<<<<<< [-tTmuh] [-s <host>] [-p <port>] [-f <font>] [file ...]
+ $named
+        -s host host name of server    (default 'localhost')
+        -p port service port of server (default '8778')
+        -f font font to use in Text window (default '9x15')
+        -u      activate undo edit facility (not recommended if Live display
+                is used, because display may skip to parts which change)
+        -m      display elapsed time in seconds and microseconds
+            (Requires Module Time::HiRes available from CPAN - see source)
+        -t      trace run time changes
+        -T      trace static debug messages
+        -h      help, ouput this Usage text only
 
 Menu buttons:
-    File/New	provide an empty page for editing.
-    File/Open	load the file named in the menu bar window.
-    File/Save	store the file previously opened if modified
+    File/New    provide an empty page for editing.
+    File/Open   load the file named in the menu bar window.
+    File/Save   store the file previously opened if modified
     File/SaveAs store the file by the name in the menu bar window.
-    File/Quit	quit the program.
+    File/Quit   quit the program.
 
-    Make	make either the C file or the exutable program from the
-		currently displayed iC program text.
+    Build       build either the C file or the exutable program from the
+                currently displayed iC program text.
 
-    Run/Stop	run or stop the executable program generated from the
-		currently displayed iC program text.
+    Run/Stop    run or stop the executable program generated from the
+                currently displayed iC program text.
 
-    Live	scan the text in the text window and generate live markings
-    		for all words, which represent variables in the currently
-		running program - which should be generated from the text to
-		make a meaningful display. Text is 'read only' in this mode.
+    Live        scan the text in the text window and generate live markings
+                for all words, which represent variables in the currently
+                running program - which should be generated from the text to
+                make a meaningful display. Text is 'read only' in this mode.
 
-    Edit	clears the live markings in the text window. In this mode the
-    		text may be edited with the facilities of Tk::Text, which is
-		a full featured editor. The edit facilities are described in
-		the Tk::Text man page in the section 'BINDINGS' near the end.
-@<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-		$undoBinding
-    Search	the text in the text window. It may be scanned for an exact
-		match or for a regular expression in the entry window next
-		to the button. All found items will be marked. Repeating
-		'Search down' or RETURN will display a section of the text
-		containing found items which were previously not displayed.
-		'Search up' or SHIFT-RETURN reverses the direction of scrolling.
+    Edit        clears the live markings in the text window. In this mode the
+                text may be edited with the facilities of Tk::Text, which is
+                a full featured editor. The edit facilities are described in
+                the Tk::Text man page in the section 'BINDINGS' near the end.
+                If called with the -u option, ctrl-U is the <<Undo>> binding.
 
-Copyright (C) 2000-2002  John E. Wulff		<john@je-wulff.de>
-						  '@'
-$Id: iClive,v 1.33 2004/04/18 09:23:40 jw Exp $
+    Search      the text in the text window. It may be scanned for an exact
+                match or for a regular expression in the entry window next
+                to the button. All found items will be marked. Repeating
+                'Search down' or RETURN will display a section of the text
+                containing found items which were previously not displayed.
+                'Search up' or SHIFT-RETURN reverses the direction of scrolling.
+
+Copyright (C) 2000-2002  John E. Wulff          <john@je-wulff.de>
+						    '@'
+$Id: iClive,v 1.34 2004/11/10 17:47:56 jw Exp $
 .
 
-use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
+use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_f $opt_u $opt_h);
 require "getopts.pl";
-&Getopts('tTms:p:f:h');		# sets $opt_h if -h etc
+&Getopts('tTms:p:f:uh');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+if ($opt_u) {
+    use Tk::TextUndo;		# 7 times slower for live display and jerky
 }
 
 ########################################################################
@@ -305,18 +303,20 @@ my @currentFiles = ();
 my @lastFile = ();				# save last open file
 
 ########################################################################
-#	Make menu
+#	Build menu
 ########################################################################
-my $make_mb   = $menuBar->Menubutton(-text        => 'Make',
-				     -relief      => 'raised',
-				     -borderwidth => 2,
-				    )->pack(-side => 'left',
-					    -padx => 2,
-					   );
-$make_mb->command(-label => 'Make executable',	-command => [ \&make_file, 0, 0 ]);
-$make_mb->command(-label => 'Save &Make unconditionally',
-						-command => [ \&make_file, 0, 1 ]);
-$make_mb->command(-label => 'Make C file only',	-command => [ \&make_file, 0, 2 ]);
+my $build_mb   = $menuBar->Menubutton(-text        => 'Build',
+				      -relief      => 'raised',
+				      -borderwidth => 2,
+				     )->pack(-side => 'left',
+					     -padx => 2,
+					    );
+$build_mb->command(-label => 'Build executable',  -command => [ \&build_file, 0, 0 ]);
+$build_mb->command(-label => 'Save &Build unconditionally',
+						  -command => [ \&build_file, 0, 1 ]);
+$build_mb->command(-label => 'Build C file only', -command => [ \&build_file, 0, 2 ]);
+my $makeName = '';
+my $restartFlag = 0;
 
 ########################################################################
 #	Run or Stop button
@@ -470,26 +470,27 @@ my $infoBar = $mainWindow->Label(-textvariable => \$info,
 ########################################################################
 #	Text window
 ########################################################################
-#ifdef TEXT_UNDO
-my $text = $mainWindow->Scrolled('TextUndo',
-				 -scrollbars => 'osoe',
-				 -background => 'cornsilk1',
-				 -wrap       => 'none',
-				 -font       => $font,
-				)->pack(-fill   => 'both',
-					-expand => 1,
-				       );
-$text->eventAdd('<<Undo>>' => '<Control-u>');	# extra Undo binding
-#else
-my $text = $mainWindow->Scrolled('Text',
-				 -scrollbars => 'osoe',
-				 -background => 'cornsilk1',
-				 -wrap       => 'none',
-				 -font       => $font,
-				)->pack(-fill   => 'both',
-					-expand => 1,
-				       );
-#endif
+my $text;
+if ($opt_u) {
+    $text = $mainWindow->Scrolled('TextUndo',
+				     -scrollbars => 'osoe',
+				     -background => 'cornsilk1',
+				     -wrap       => 'none',
+				     -font       => $font,
+				    )->pack(-fill   => 'both',
+					    -expand => 1,
+					   );
+    $text->eventAdd('<<Undo>>' => '<Control-u>');	# extra Undo binding
+} else {
+    $text = $mainWindow->Scrolled('Text',
+				     -scrollbars => 'osoe',
+				     -background => 'cornsilk1',
+				     -wrap       => 'none',
+				     -font       => $font,
+				    )->pack(-fill   => 'both',
+					    -expand => 1,
+					   );
+}
 $text->bind('<KeyPress>', [ \&report_cursor ] );	# change in cursor position
 $text->bind('<Button-1>', [ \&report_cursor ] );	# change in cursor position
 
@@ -511,12 +512,6 @@ ini_program();
 ########################################################################
 
 connect_to_server();
-
-########################################################################
-#	Ignore any processes forked with the Run button
-########################################################################
-
-$SIG{CHLD} = 'IGNORE';
 
 ########################################################################
 #	Sit in an infinite loop dispatching incoming events.
@@ -585,21 +580,25 @@ sub rcvd_msg_from_server {
 	    $mainWindow->title("iClive $fileName");
 	    info_display('red', $iCname ?
 		"$unitID disconnected from '$iCname' by server" :
-		"$unitID is not connected to a control program");
+		"$unitID is not connected to a running control program");
 	    deleteAllTags();	# also clears @activeSymbols
 	    %symbolTable = ();	# clear symbol table so balloons dont show
 	    undef $iCname;
 	    undef $conn;
 	    clearScan(1);	# detach balloon
-	    ####################################################
-	    ## change text on run button to "Run"
-	    ####################################################
-	    $runButton->configure(-text => "Run ");
 	    $runFlag = 0;
+	    $makeName = '';
+	    if ($restartFlag) {
+		$restartFlag = 0;
+		run_file();	# restart after scan detects out of date build
+	    } else {
+		####################################################
+		## change text on run button to "Run"
+		####################################################
+		$runButton->configure(-text => "Run ");
+	    }
 	} else {
-#ifdef TIME_HIRES 
 	    printMicroSeconds() if $opt_m;
-#endif
 	    print "rcvd '$msg'\n" if $opt_t;
 	    my @symbols = split /;/, $msg;	# break up message
 	    my $entry = shift @symbols;		# first entry is an operation
@@ -654,19 +653,14 @@ sub rcvd_msg_from_server {
 		    my $normalFlag = 0;		# state currently diasabled
 		    while ($entry = shift @symbols) {
 			my ($index, $value) = split " ", $entry;
-#ifdef TIME_HIRES 
-			my $tNew;
-			my ($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
+			my ($tRest, $cs, $tNew, $tOld);
+			($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
 			$activeSymbols[$index][3] = $tNew = [gettimeofday];
-			my $tRest = 50 - int(tv_interval($tOld, $tNew) * 1000);	# ms.
+			$tRest = 50 - int(tv_interval($tOld, $tNew) * 1000);	# ms.
 # print "index: $index value: $value rest: $tRest\n";
-#else
-			my $cs = $activeSymbols[$index][2];
-#endif
 			$cs ^= 1 if $value;			# change colour
 			$activeSymbols[$index][1] = $value;	# for value display
 			if ($activeSymbols[$index][0] & 01) {
-#ifdef TIME_HIRES 
 			    if ($tRest < 10) {
 				colourTag("$index", $cs);	# normal colour
 			    } else {
@@ -674,16 +668,12 @@ sub rcvd_msg_from_server {
 				## delay the colour change to make it visible
 				$text->after(50, [ \&restoreTag, "$index" ]);
 			    }
-#else
-			    colourTag("$index", $cs);		# normal colour
-#endif
 			    if ($cs == 5 or $cs == 7) {	# hi CLOCK or TIMER
 				## turn colour off after 50 ms.
 				$text->after(50, [ \&colourTag, "$index", $cs & ~01 ]);
 			    }
 			}
 			if ($activeSymbols[$index][0] & 02) {
-#ifdef TIME_HIRES 
 			    $cs ^= 1;				# complement colour
 			    if ($tRest < 10) {
 				colourTag("$index~", $cs);	# latest $cs is saved
@@ -692,9 +682,6 @@ sub rcvd_msg_from_server {
 				## delay the colour change to make it visible
 				$text->after(50, [ \&restoreTag, "$index~" ]);
 			    }
-#else
-			    colourTag("$index~", $cs ^ 1);	# complement colour
-#endif
 			}
 			if ($activeSymbols[$index][0] & 04) {
 			    my $tag = "$index=";
@@ -710,9 +697,7 @@ sub rcvd_msg_from_server {
 				$text->insert($beg, " $value", $tag);
 			    }
 			}
-#ifdef TIME_HIRES 
 			printMicroSeconds() if $opt_m;
-#endif
 			print "$index	$value\n" if $opt_t;
 		    }
 		    if ($normalFlag) {
@@ -724,9 +709,7 @@ sub rcvd_msg_from_server {
 	    } else {
 		Spurious: warn "$unitID: spurious operation '$entry' ???\n";
 	    }
-#ifdef TIME_HIRES 
 	    printMicroSeconds() if $opt_m;
-#endif
 	    print "rcvd end\n" if $opt_t;
 	}
     }
@@ -745,7 +728,6 @@ sub colourTag {
 			-background => $tagBackground[$cs],
 			-foreground => $tagForeground[$cs],
 		       );
-#ifdef TIME_HIRES 
     $delayedColour{$tag} = $cs;		# save colour for end of flash
 } # colourTag
 
@@ -1076,6 +1058,26 @@ sub scan {
 	$mainWindow->title("iClive $fileName");
 	clearScan();	# $scanFlag = 0
     } elsif ($conn and $iCname) {
+	if ($makeName) {
+	    my $dialog = $text->Dialog (-title   => 'Modified build',
+					-bitmap  => 'question',
+					-text    => 'Start up to date build?',
+					-buttons => [qw(Yes No Cancel)],
+				       );
+	    my $dialogBar = $dialog->Label(-textvariable => \$makeName,
+					   -relief       => 'ridge',
+					  )->pack(-side => 'bottom',
+						  -fill => 'x',
+						 );
+	    my $answer = $dialog->Show();
+	    if ($answer eq 'Cancel') {
+		return 0;			# cancel operation
+	    } elsif ($answer eq 'Yes') {
+		stop_file();			# $runFlag = 0
+		$restartFlag = 1;		# restart after receiving stopped message
+		return 0;
+	    }
+	}
 	$mainWindow->title("iClive $fileName $iCname");
 	if ($fileName !~ /\b$iCname\./) {
 	    info_display('red',
@@ -1098,11 +1100,7 @@ sub scan {
 		    $tag = $index;
 		    $word = $2;			# word is in the symbol table
 		    $cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
-#ifdef TIME_HIRES 
 		    @{ $activeSymbols[$index] }[1 .. 3] = (0, $cs & ~01, [gettimeofday]);
-#else
-		    @{ $activeSymbols[$index] }[1, 2] = (0, $cs & ~01);	# clear inv
-#endif
 		    while ($i =~ m/~/g) {
 			$cs ^= 1;		# complement initial colour selection
 		    }
@@ -1252,7 +1250,7 @@ sub clearScan {
 #		saves $fileName
 #		changes entry box text to $fileName if successful
 #	ELSE does nothing
-#	no regex matches allowed for make_file()
+#	no regex matches allowed for build_file()
 #
 ########################################################################
 
@@ -1425,17 +1423,17 @@ sub saveAs_file {
 
 ########################################################################
 #
-#	Make a target file generated from $fileName (C file or executable)
+#	Build a target file generated from $fileName (C file or executable)
 #	check if $fileName is an iC source (*.ic) and needs saving
 #	generate a new target file if target is older than $fileName
 #
-#	2nd parameter:	0   Make executable
-#			1   Save & Make unconditionally
-#			2   Make C file only
+#	2nd parameter:	0   Build executable
+#			1   Save & Build unconditionally
+#			2   Build C file only
 #
 ########################################################################
 
-sub make_file {
+sub build_file {
     my $par2 = $_[1];
     my $saved = 0;
     if ($par2 == 1) {
@@ -1453,7 +1451,7 @@ sub make_file {
 	    clearScan();
 	}
 	if ($fileName !~ /(^[\w\.\\\/]+)\.ic/) {
-	    info_display('blue', "WARNING: cannot make '$fileName' (must end in .ic)");
+	    info_display('blue', "WARNING: cannot build '$fileName' (must end in .ic)");
 	} else {
 	    my $baseName = $1;	# so that $1 is valid
 	    my $targetName = $par2 == 2 ? "$baseName.c" : $baseName;
@@ -1462,23 +1460,31 @@ sub make_file {
 	    my $ret = 0;
 	    $errorName = '';
 	    if ($par2 == 1 or $mtime < $ftime) {
+		## system() requires signal CHLD to notify completion
+		$SIG{CHLD} = 'DEFAULT';
 		my @args = ("iCmake", $fileName);
 		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
 		print "system @args\n" if $opt_t;
 		$ret = system(@args) >> 8;
+		$SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
 		if ($ret) {
 		    $errorName = "$baseName.lst";
+		    info_display('red',
+			"ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)");
+		    print STDERR "ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)";
+		    sleep 2;
 		    open_file(0, $errorName);	# load the listing file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
 		    $matchType = '-regexp';
 		    search_text();			# carry out the search setting markers
 		    $errorName = "$baseName.ic";	# to open iC file after inspecting listing
-		    info_display('red',
-			"ERROR: '$targetName' cannot be made from '$errorName' (return = $ret)");
 		} else {
+		    if ($runFlag) {
+			$makeName = $targetName;	# running proces is not current build
+		    }
 		    info_display('dark green', "'$targetName' successfully made");
 		}
 	    } else {
@@ -1486,7 +1492,7 @@ sub make_file {
 	    }
 	}
     } # ELSE operation was cancelled by check_save() or file could not be saved
-} # make_file
+} # build_file
 
 ########################################################################
 #
@@ -1499,30 +1505,32 @@ sub make_file {
 
 sub run_file {
     if ($runFlag) {
-	stop_file();	# $runFlag = 0
+	stop_file();				# $runFlag = 0
     } elsif ($conn and $iCname) {
 	info_display('red', "$unitID is connected to '$iCname' (Stop it to run '$fileName')");
     } elsif ($fileName !~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
 	info_display('blue', "WARNING: cannot run '$fileName' (must end in .ic .lst .c or .ini)");
     } elsif ($2 ne 'ic' or check_save()) {
-	deleteAllTags();	# also clears @activeSymbols
+	deleteAllTags();			# also clears @activeSymbols
 	clearScan();
 	my $processName = $1;
 	print "run_file: $processName from $fileName\n" if $opt_T;;
 	my $ftime = (stat($fileName))[9];
 	my $mtime = (stat($processName))[9];
 	if (not -f _) {
-	    info_display('red', "ERROR: no file named '$processName' (Make it first)");
+	    info_display('red', "ERROR: no file named '$processName' (Build it first)");
 	} elsif (not -x _) {
 	    info_display('red', "ERROR: '$processName' not executable ??");
 	} elsif ($mtime < $ftime) {
-	    info_display('blue', "WARNING: '$processName' is older than '$fileName' (Make again)");
+	    info_display('blue', "WARNING: '$processName' is older than '$fileName' (Build again)");
 	} else {
+	    ## ignore CHLD signal of processes forked with the Run button
+	    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
 	    my $pid;
 	    FORK: {
 		if ($pid = fork) {
 		    ## parent process
-		    sleep 0.1;	# wait for control program to be activated as child process
+		    sleep 0.2;	# wait for control program to be activated as child process
 		    scan();	# make live connection with the new control program
 		} elsif (defined $pid) {	# $pid is zero if defined
 		    ## dispatch child process
@@ -1557,7 +1565,7 @@ sub stop_file {
 	clearScan();
 	$conn->send_now("$unitID.5");	# stop control program
     } else {
-	info_display('red', "$unitID is not connected to a control program");
+	info_display('red', "$unitID is not connected to a running control program");
     }
 } # stop_file
 
@@ -1687,7 +1695,6 @@ sub quit_program {
     }
     ## continue if check_save() was cancelled
 } # quit_program
-#ifdef TIME_HIRES 
 
 ########################################################################
 #
@@ -1700,4 +1707,3 @@ sub printMicroSeconds {
     printf "%10.6f%s", $ti, $opt_t ? ": " : "\n";
     $t0 = [gettimeofday];
 } # printMicroSeconds
-#endif
