@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: pplc.h,v 1.2 1996/07/30 20:24:24 john Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -7,7 +7,9 @@ static const char pplc_h[] =
 /* " pplc.h	3.53	95/02/15" */
 
 typedef unsigned char	uchar;
+#ifndef _LINUX_TYPES_H
 typedef unsigned short	ushort;
+#endif
 
 #ifdef _WINDOWS
 #define strlen(a)	lstrlen(a)

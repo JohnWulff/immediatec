@@ -1,58 +1,53 @@
-# @(#)$Id: Makefile,v 1.2 1996/07/30 20:28:43 john Exp $
+# @(#)$Id: Makefile,v 1.3 1996/08/01 17:35:19 john Exp $
 ############################################################
 #
 #	makefile for parallel plc
 #	J.E. Wulff	14-Mar-87
 #	pplc.m	3.31	95/03/02
 #
-#	use Borland C++ (default)
-#	or Microsoft C++ (MSC defined)
-#	or Microsoft C++  and Windows (WIN defined)
+#	use GNU make	28-Jul-96
 #
 ############################################################
 
-SRC =	main.c comp.y genr.c init.c symb.c outp.c cexe.c \
-	pplc.c pplt.c link.c rsff.c scan.c load.c
-SRC2 =	pcop.c ibsd.c time.c
-COBJ =	comp.o genr.o init.o symb.o outp.o cexe.o
-POBJ =	pplc.o link.o rsff.o scan.o scid.o
-TOBJ =	pplt.o link.o rsff.o scan.o scid.o
+YSRCS =	comp.y
+SRC1 =	comp.c main.c genr.c init.c symb.c outp.c cexe.c
+SRC2 =	pplc.c pplt.c link.c rsff.c scan.c
+#SRC3 =	pcop.c ibsd.c time.c load.c
+CSRCS =	$(SRC1) $(SRC2) $(SRC3)
 
-.SUFFIXES:	.y .yac .lib .v
+COBJ =	comp.o genr.o init.o symb.o outp.o cexe.o
+POBJ =	pplc.o link.o rsff.o scan.o
+TOBJ =	pplt.o link.o rsff.o scan.o
+
+CFLAGS = -g -DYYDEBUG
+YFLAGS = -d -v
+LDFLAGS =
 
 #### Standalone versions ################################### !!! do last !!!
 
-pplc:	Makefile $(POBJ) $(COBJ) main.o
-	cc $(LFLAG) -o pplc $(POBJ) $(COBJ) main.o
+pplc:	Makefile main.d main.o scid.o $(COBJ:.o=.d) $(COBJ) $(POBJ:.o=.d) $(POBJ)
+	cc $(LDFLAG) -o pplc main.o scid.o $(COBJ) $(POBJ)
 
-pplt:	Makefile $(TOBJ) $(COBJ) main.o
-	cc $(LFLAG) -o $* $(TOBJ) $(COBJ) main.o
+pplt:	Makefile main.d main.o scid.o $(COBJ:.o=.d) $(COBJ) $(TOBJ:.o=.d) $(TOBJ)
+	cc $(LDFLAG) -o pplt main.o scid.o $(COBJ) $(TOBJ)
 
 #### Compile objects #######################################
-CFLAG = -g
-LFLAG = -g
 
-.yac.o:
-	mv $*.yac $*.c
-	cc -c $(CFLAG) $*.c
-	mv $*.c $*.yac
+%.c: %.y
+	mv -f y.tab.h y.tab.t
+	rm -f y.tab.c
+	$(YACC.y) $< 
+	cp -f y.tab.c $@
+	$(SHELL) -ec 'if cmp -s y.tab.h y.tab.t; then mv y.tab.t y.tab.h; fi'
+	rm -f y.tab.t
+	chmod -w y.tab.h y.tab.c $@
 
-.c.o:
-	cc -c $(CFLAG) $*.c
-
-.y.yac:
-	chmod +w y.tab.h
-	cp -p y.tab.h y.tab.t
-	yacc -d -v $*.y
-	awk -f ~/lib/yt.awk y.tab.h > y.token
-	sed -f ~/lib/yg.sed y.output > y.tab.s
-	awk -f ~/lib/yg.awk y.tab.s > y.tab.a
-	sort +0.2n y.tab.a > y.tab.s
-	uniq y.tab.s > y.gramm
-	cat y.token y.gramm y.tab.c > $*.yac
-#	sh cmp_cp y.tab.h y.tab.t
-	chmod -w y.tab.h
-	rm y.tab.c y.tab.a y.tab.s y.tab.t
+%.d: %.c
+	$(SHELL) -ec '$(CC) -MM $(CPPFLAGS) $< | sed '\''s/$*.o[ :]*/$@ &/g'\'' > $@'
 
 scid.c:	pplc.v Makefile pawk.a
-	ident pplc.v Makefile | grep '$Id' | awk -f pawk.a > scid.c
+	rm -f scid.c; ident pplc.v Makefile | grep '$Id' | awk -f pawk.a > scid.c; chmod -w scid.c
+
+comp.c:	comp.y
+
+include $(CSRCS:.c=.d)

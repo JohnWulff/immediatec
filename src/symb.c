@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: symb.c,v 1.3 1996/08/01 17:27:50 john Exp $";
 /*
  *	"symb.c"
  */
@@ -152,9 +152,11 @@ lookup(register char	*string)	/* find string in symbol table */
 Symbol *
 place_sym(register Symbol	*sp)	/* place sp in symbol table */
 {
-    if (spl == 0 || strcmp((*spl)->name, sp->name) != 0) {
+    register Symbol *	tsp;
+
+    if (spl == 0 || (tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0) {
 	if (lookup(sp->name) != 0) {	/* locate sorted position */
-	    execerror("trying to place existing symbol", (char *) 0);
+	    execerror("trying to place existing symbol:", sp->name);
 	}
     }
     sp->next = *spl;	/* point from this to next Symbol */

@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.1 1996/07/30 16:18:19 john Exp $";
+"@(#)$Id: comp.h,v 1.2 1996/08/01 17:27:50 john Exp $";
 /*
  *	"comp.h"
  *
@@ -46,8 +46,6 @@ extern char	szFile_g[];		/* L source file name */
 #else
 extern char *	szFile_g;		/* L source file name */
 #endif
-extern void errmess(
-	    char *, char *, char *);	/* actual error message */ 
 extern void error(char *, char *);	/* print error message */ 
 extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *);	/* recover from run-time error */ 

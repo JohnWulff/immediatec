@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: outp.c,v 1.3 1996/08/01 17:27:50 john Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -342,9 +342,9 @@ output(char * outfile)			/* emit code in C */
 	int		c;
 	FILE *		Fp;
 	FILE *		Hp;
-	char *		module;
+	char *		s1;
 	char *		source;
-	char *		destination;
+	char *		module;
 	unsigned int	linecnt = 33;	/* MODIFY when changing format */
 
 	/* open output file */
@@ -363,6 +363,18 @@ output(char * outfile)			/* emit code in C */
 	    rc = 6; goto endm;
 	}
 
+	if ((s1 = strrchr(szFile_g, '/')) != 0) {
+	    s1++;			/* UNIX file name without path */
+	} else {
+	    s1 = szFile_g;
+	}
+
+	if ((source = strrchr(s1, '\\')) != 0) {
+	    source++;			/* MS-DOS file name without path */
+	} else {
+	    source = s1;
+	}
+
 	fprintf(Fp, "\
 /********************************************************************\n\
  *\n\
@@ -371,7 +383,8 @@ output(char * outfile)			/* emit code in C */
  *\n\
  *******************************************************************/\n\
 \n\
-static char	COMPILER[] = \"%s\";\n\
+static char	COMPILER[] =\n\
+\"%s\";\n\
 \n\
 #include	<stdio.h>\n\
 #include	<pplc.h>\n\
@@ -379,7 +392,7 @@ static char	COMPILER[] = \"%s\";\n\
 \n\
 #define _(x) x.gt_old\n\
 extern Gate *	l_[];\n\
-", szFile_g, outfile, SC_ID, "x.h");
+", source, outfile, SC_ID, "x.h");
 
 /********************************************************************
  *
@@ -627,14 +640,15 @@ extern Gate *	l_[];\n\
 		}
 	    }
 	}
-	destination = module = emalloc(strlen(szFile_g)+1);
-	source = szFile_g;		/* copy base name without .p */
-	while ((c = *source++) != '.' && c != 0) {
-	    *destination++ = c;
+
+	module = strdup(source);	/* source file name without path */
+	if ((s1 = strchr(module, '.')) != 0) {
+	    *s1 = '\0';			/* module name without extensions */
 	}
-	*destination = 0;		/* terminate string */
+
 	fprintf(Fp, "\nGate *		%s_i_list = %s%s;\n",
 					module, sam, nxs);
+	free(module);
 
 	fprintf(Fp, "\n\
 /********************************************************************\n\

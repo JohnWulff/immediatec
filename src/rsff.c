@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: rsff.c,v 1.2 1996/07/30 20:24:24 john Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -307,7 +307,7 @@ i_ff3(register Gate * gp, int typ)	/* Pass3 init on FF etc. */
 	gp->gt_val = 0;		/* used in visualization */
 	Out_init(gp);		/* link as clock or timer list */
 	if (gp != c_list) {
-	    gp->gt_rlist = c_list;	/* c_list is alternate for link */
+	    gp->gt_rlist = (Gate**)c_list;	/* c_list is alternate for link */
 	}				/* except c_list which has 0 */
     }
     if (gp->gt_fni != OUTW && gp->gt_fni != OUTX) {

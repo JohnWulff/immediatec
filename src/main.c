@@ -1,3 +1,5 @@
+static const char main_c[] =
+"@(#)$Id: main.c,v 1.2 1996/07/30 16:41:47 john Exp $";
 /*
  *	"main.c"
  *	compiler for pplc

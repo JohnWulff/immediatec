@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: link.c,v 1.2 1996/07/30 20:24:24 john Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -62,7 +62,7 @@ link_ol(
 		 *	*clist (iClock) has 0 in gt_rlist for termination
 		 *
 		 *********************************************************/
-		if ((tp = tp->gt_rlist) == out_list || tp == 0) {
+		if ((tp = (Gate*)tp->gt_rlist) == out_list || tp == 0) {
 #if !defined(_WINDOWS) || defined(LOAD)
 		    fprintf(errFP,
     "\n%s: line %d: cannot find '%s' entry in '%s' or '%s' after glitch\n",
@@ -110,7 +110,7 @@ link_ol(
 #ifndef _WINDOWS 
 		    if (debug & 0200) putc('#', outFP);
 #endif
-		    out_list = out_list->gt_rlist; /* link gate next cycle */
+		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
 		}
 #ifndef _WINDOWS 
 		if (debug & 0200) fprintf(outFP, "%d", gp->gt_mcnt);

@@ -1,15 +1,17 @@
 BEGIN {
-	x = 1;
+	name = "SC_ID";
+	x = "";
+	mod = "";
     }
 
     {
-	printf "static const char pawk%d[] =\n", x;
+	printf "%sconst char %s%s[] =\n", mod, name, x;
 	x++;
-	printf "\t\"@%s %s;\"\n", "(#)", $0;
+	mod = "static ";
+	printf "\t\"@%s%s\";\n", "(#)", $0;
     }
 
 END {
-	printf "static const char pawk%d[] =\n", x;
-	x++;
-	printf "\t\"@(#) $Id: pawk.a,v 1.1 1996/07/30 16:15:12 john Exp $\";\n";
+	printf "%sconst char %s%s[] =\n", mod, name, x;
+	printf "\t\"@(#) $Id: pawk.a,v 1.2 1996/07/30 20:24:24 john Exp $\";\n";
     }

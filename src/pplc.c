@@ -1,5 +1,5 @@
 static const char pplc_c[] =
-"@(#)$Id: pplc.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: pplc.c,v 1.2 1996/07/30 20:24:24 john Exp $";
 /********************************************************************
  *
  *	parallel plc - procedure
@@ -229,7 +229,6 @@ pplc(
 	    display();				/* inputs and outputs */
 	}
 
-	while (!kbhit() && !flag1C);		/* check inputs */
 	if (flag1C) {				/* 1/3 second timer */
 	    flag1C = 0;
 	    if (c != '\r') {
@@ -254,7 +253,7 @@ pplc(
 	} else {
 	    cnt = 1;
 	    while (cnt) {
-		if ((c = getche()) == 'q' || c == EOF) {
+		if ((c = getchar()) == 'q' || c == EOF) {
 		    quit(0);			/* quit normally */
 		}
 		if (c >= '0' && c < '0' + MAX_IO) {
@@ -280,26 +279,26 @@ pplc(
 		    if ((gp = IW_[2]) != 0) {
 		    wordIn:
 			yp = ybuf;
-			if ((c = getch()) == '-') {
+			if ((c = getchar()) == '-') {
 			    putc(c, outFP);		/* echo */
 			    *yp++ = c;
-			    c = getch();
+			    c = getchar();
 			}
 			if (c == '0') {			/* oct or hex or 0 */
 			    putc(c, outFP);		/* echo */
-			    if ((c = getch()) == 'x' || c == 'X') {
+			    if ((c = getchar()) == 'x' || c == 'X') {
 				putc(c, outFP);		/* echo */
 				format = "%x%s";	/* hexadecimal */
 			    } else {
 				format = "%o%s";	/* octal */
 				*yp++ = '0';		/* may be a single 0 */
-				ungetch(c);
+				ungetc(c, stdin);
 			    }
 			} else {
 			    format = "%d%s";		/* decimal */
-			    ungetch(c);
+			    ungetc(c, stdin);
 			}
-			while ((c = getch()) != EOF && yp < &ybuf[YSIZE-1] &&
+			while ((c = getchar()) != EOF && yp < &ybuf[YSIZE-1] &&
 			    (isxdigit(c) || c == '\b')) {
 			    if (c == '\b') {
 				if (yp > ybuf) {
@@ -315,7 +314,7 @@ pplc(
 			}
 			*yp = 0;		/* string terminator */
 			if (sscanf(ybuf, format, &val, ybuf) != 1) goto wordEr;
-			if (c != '\r' && c != EOF) ungetch(c);
+			if (c != '\r' && c != EOF) ungetc(c, stdin);
 			putc(c, outFP);		/* echo */
 			if (gp == IB_[1]) {
 			    val &= 0xff;	/* reduce to byte */
