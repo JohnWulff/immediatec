@@ -10,6 +10,7 @@ mklst *.p > p.lst	# all for copying
 mklst -d *.p > pd.lst	# sources and derived for comparing
 mklst -e *.p > pe.lst	# executables only
 mklst -c *.p > pc.lst	# C files only
+mklst -i *.p > pi.lst	# ini files only
 mklst -l *.p > pl.lst	# lst files only
 mklst -6 *.p > p6.lst	# lst6 files only
 mklst -p *.p > pp.lst	# pplc files only

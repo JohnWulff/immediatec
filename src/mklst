@@ -13,19 +13,20 @@ $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
 Usage:	@<<<<<<< [-decl6ph] [file ...]
 	$named
-	-d	do not output base without extension
+	-d	output .c .ini .lst .p - for comparisons
 	-e	output only base without extension
 	-c	output only base with .c extension
+	-i	output only base with .ini extension
 	-l	output only base with .lst extension
 	-6	output only base with .lst6 extension
 	-p	output only base with .p extension
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.4 2001/01/17 09:42:25 jw Exp $
+$Id: mklst,v 1.5 2001/02/04 17:41:16 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_l $opt_6 $opt_p $opt_h);
+use vars qw($opt_c $opt_d $opt_e $opt_i $opt_l $opt_6 $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('cdel6ph');			# sets $opt_h if -h etc
+&Getopts('cdeil6ph');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -35,11 +36,13 @@ unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
 while ($ARGV = shift @ARGV) {
     if ($ARGV =~ /(\w+)\.p/) {
 	if ($opt_d) {
-	    print "$1.c\n$1.lst\n$1.p\n";
+	    print "$1.c\n$1.ini\n$1.lst\n$1.p\n";
 	} elsif ($opt_e) {
 	    print "$1\n";
 	} elsif ($opt_c) {
 	    print "$1.c\n";
+	} elsif ($opt_i) {
+	    print "$1.ini\n";
 	} elsif ($opt_l) {
 	    print "$1.lst\n";
 	} elsif ($opt_6) {
@@ -47,7 +50,7 @@ while ($ARGV = shift @ARGV) {
 	} elsif ($opt_p) {
 	    print "$1.p\n";
 	} else {
-	    print "$1\n$1.c\n$1.lst\n$1.p\n";
+	    print "$1\n$1.c\n$1.ini\n$1.lst\n$1.p\n";
 	}
     }
 }
