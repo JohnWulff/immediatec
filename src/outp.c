@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.5 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: outp.c,v 1.6 1999/08/02 21:26:19 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -163,7 +163,7 @@ output(char * outfile)			/* emit code in C */
 	warning("undefined gates and functions", NS);
     }
 #ifdef _WINDOWS
-    fclose(outFP);		/* this is end of listing output */
+    if (outFP != stdout) fclose(outFP);	/* this is end of listing output */
 #endif
     if (ynerrs || gate_count[ERR]) {
 	fprintf(errFP, "%d syntax + %d generate errors - cannot execute\n",

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.1 1996/07/30 16:18:20 john Exp $";
+"@(#)$Id: scan.c,v 1.2 1999/08/02 21:26:19 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -33,7 +33,7 @@ Functp2		slaveAct[] = {		/* called in scan_clk */
 
 Functp		init2[] = {		/* called in pass2 */
 			null1, gate2, gate2, i_ff2, i_ff2, i_ff2,
-			i_ff2, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
+			null1, i_ff2, i_ff2, i_ff2, i_ff2, i_ff2,
 			null1, null1, null1, null1,
 		};
 

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.3 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: comp.y,v 1.4 1999/08/02 21:26:19 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -123,12 +123,11 @@ stmt	: /* nothing */		{ stmtp = yybuf; $$.v = 0; }
 	| stmt wasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
 	| stmt xasgn ';'	{ $$.v = $2.v; stmtp = yybuf; return (1); }
 	| stmt xasgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt ffexpr '}'	{ op_asgn(0, &$2, GATE); $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt ffexpr error '}'	{ op_asgn(0, &$2, GATE);
-				  ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
-	| stmt ffexpr ';'	{ op_asgn(0, &$2, GATE); $$.v = $2.v; stmtp = yybuf; return (1); }
-	| stmt ffexpr error ';'	{ op_asgn(0, &$2, GATE);
-				  ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
+		/* op_asgn(0,...) returns 0 for missing slave gate in ffexpr */
+	| stmt ffexpr '}'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; return (1); }
+	| stmt ffexpr error '}'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; yyerrok; }
+	| stmt ffexpr ';'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; return (1); }
+	| stmt ffexpr error ';'	{ $$.v = op_asgn(0, &$2, GATE); stmtp = yybuf; yyerrok; }
 	| stmt casgn ';'	{ $$.v = $2.v; return (1); }
 	| stmt casgn error ';'	{ ($$.v = $2.v)->type = ERR; stmtp = yybuf; yyerrok; }
 	| stmt tasgn ';'	{ $$.v = $2.v; return (1); }
@@ -1081,7 +1080,7 @@ yylex(void)
 		}
 	    } else {
 		if ((stflag & 0x10) == 0) {
-		    fprintf(exoFP, " break");
+		    fprintf(exoFP, " return 0");
 		}
 		stflag &= ~0x18;		/* clear bit 3 and 4 */
 	    }

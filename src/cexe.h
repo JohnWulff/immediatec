@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.3 1998/10/02 11:15:55 john Exp $";
+"@(#)$Id: cexe.h,v 1.4 1999/08/02 21:26:19 jw Exp $";
 /********************************************************************
  *
  *	Routine to execute C code fragments in the PPLC system
@@ -17,7 +17,7 @@ static const char cexe_h[] =
 static int x, y, z;
 static Gate* px;
 extern int getCount(void);
-extern int assign(Gate * lv, int rv);
+extern int assign(char * ls, int rv);
 
 int
 c_exec(int pp_index)
@@ -79,8 +79,11 @@ getCount(void)
  *******************************************************************/
 
 int
-assign(Gate * lv, int rv)
+assign(char * ls, int rv)
 {
+    static Gate * lv;
+    lv = lookup(ls)->u.gate;	/* address of action gate */
+
     if (rv != lv->gt_new) {
 	if (lv->gt_new == lv->gt_old || rv == lv->gt_old) {
 	    link_ol(lv, a_list);	/* first change or glitch */

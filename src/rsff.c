@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.2 1996/07/30 20:24:24 john Exp $";
+"@(#)$Id: rsff.c,v 1.3 1999/08/02 21:26:19 jw Exp $";
 /* RS flip flop function */
 
 /* J.E. Wulff	8-Mar-85 */
@@ -232,7 +232,7 @@ d_sh(					/* D_SH slave action on SH */
 /********************************************************************
  *
  *	Pass 2 initialisation for clocked Gates via ftype S_FF - TIMR
- *	in pass2().
+ *	except F_CF in pass2().
  *
  *	Each action Gate ors a bit reserved for its action in gt_val
  *	of the function Gate on which it acts. If ONCE_M is set, that
@@ -271,7 +271,7 @@ i_ff2(register Gate * op, int typ)	/* called via output lists */
  *
  *	This is done by comparing the action bits applied in pass 2
  *	with the bit mask required for that function. This detects if
- *	there are too manny or too few actions for the function.
+ *	there are too many or too few actions for the function.
  *
  *******************************************************************/
 

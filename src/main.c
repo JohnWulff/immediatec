@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.3 1999/08/02 07:41:40 jw Exp $";
+"@(#)$Id: main.c,v 1.4 1999/08/02 21:26:19 jw Exp $";
 /*
  *	"main.c"
  *	compiler for pplc
@@ -29,7 +29,7 @@ unsigned short	osc_max = MARKMAX;
 extern	int	yydebug;
 #endif
 static char *	usage = "USAGE:\n\
-pplc [-d<debug>] [-n<count>] [-o<out>] [-l<list>] [-e<err>] [-xa] <Lprogram>\n\
+pplc [-d<debug>] [-n<count>] [-o<out>] [-l<list>] [-e<err>] [-xa] <iC_program>\n\
 	-d <debug>2000	display scan_cnt and link_cnt\n\
 		 +1000	I0 toggled every second\n\
 		  +400	exit after initialisation\n\
@@ -49,7 +49,8 @@ pplc [-d<debug>] [-n<count>] [-o<out>] [-l<list>] [-e<err>] [-xa] <Lprogram>\n\
 	-e <errFN>	name of error file (default is stderr)\n\
 	-x		generate auxiliary file cexe.c to extend compiler\n\
 	-a		output ARITHMETIC ALIAS nodes for symbol debugging\n\
-	<Lprogram>	any L language program file (extension .p)\n\
+	-h		this help text\n\
+	<iC_program>	any iC language program file (extension .p)\n\
 			- or default is stdin\n\
 ";
 
@@ -122,6 +123,7 @@ main(
 		default:
 		    fprintf(stderr,
 			"%s: unknown flag '%c'\n", progFN, **argv);
+		case 'h':
 		case '?':
 		error:
 		    fprintf(stderr, usage, MARKMAX);
@@ -139,6 +141,6 @@ main(
 	fprintf(stderr, OutputMessage[r < 4 ? r : 4], progFN, szNames[r]);
 	r += 10;
     }
-    fclose(exoFP);
+    if (exoFP) fclose(exoFP);
     return (r);	/* 1 - 6 compile errors, 11 - 16 output errors */
 } /* main */
