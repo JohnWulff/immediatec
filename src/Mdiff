@@ -22,9 +22,9 @@ usage()
   echo 'Option -l allows the generation of lists of different or' >&2
   echo 'identical files in the two projects.' >&2
   echo >&2
-  echo "Usage:	$name [+w] [-ietqlckIh] [file ...] [directory]" >&2
-  echo '	+w	whitespace (spaces and tabs) is significant' >&2
-  echo '		default: whitespace is ignored' >&2
+  echo "Usage:	$name [+w] [-ietqlckIh] [-x<regex>] [file ...] [directory]" >&2
+  echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
+  echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
   echo '		default: ignore identical files in output' >&2
   echo '	-e	nonexisting files put:	**** file does not exist' >&2
@@ -38,6 +38,7 @@ usage()
   echo '	-c	display diff output in context form' >&2
   echo '	-k	ignore lines containing the string $Id:' >&2
   echo '	-I	case insensitive and white space ignored' >&2
+  echo '	-x <regex> ignore changes in lines that match regex' >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
   echo '	-	all further arguments are treated as files' >&2
@@ -46,7 +47,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.20 2002/06/02 14:19:33 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.21 2002/06/28 19:17:45 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -110,7 +111,7 @@ process()
 name=${0##*/}
 name=${name%.*}
 files='[Mm]akefile* *.[chyv]*'
-i=0; e=0; t=0; q=0; li=0; w=-w; pipe=0
+i=0; e=0; t=0; q=0; li=0; w=-wB; pipe=0
 context=''
 
 while [ $# -gt 0 ]; do
@@ -126,7 +127,14 @@ while [ $# -gt 0 ]; do
 	    q*)	q=1;;
 	    c*) context="-c";;
 	    k*)	w="$w -I \$Id:";;
-	    I*)	w=-wi;;
+	    I*)	w=-wBi;;
+	    x*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		w="$w -I $option"
+		break;;
 	    h*)	usage; exit 255;;
 	    -*)	pipe=1;;
 	    *)	x=${option#?}; option=${option%$x}
