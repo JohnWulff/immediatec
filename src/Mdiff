@@ -7,7 +7,7 @@
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john.wulff@inka.de>
+#   to contact the author, see the README file or <john@je-wulff.de>
 #
 #	Mdiff - multiple diff with precise list and status output
 #
@@ -55,8 +55,8 @@ echo "	-Z	extra debugging output for $0 development" >&2
   echo "	if no files or command is specified, '$defaultfiles' is used" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
-  echo 'Author:	John E. Wulff        <john.wulff@inka.de>' >&2
-  echo '$Id: Mdiff,v 1.29 2003/10/05 17:41:34 archiv Exp $' >&2
+  echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
+  echo '$Id: Mdiff,v 1.30 2004/01/18 13:12:52 archiv Exp $' >&2
 }
 
 ########################################################################
