@@ -30,7 +30,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.10 1998/04/14 11:29:29 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.11 1998/11/17 22:09:54 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -50,7 +50,7 @@ process()
     for f in $files; do
 	if [[ -f $f ]]; then
 	    if [[ -f $dir/$f ]]; then
-		if cmp -s $f $dir/$f; then
+		if diff -q $w $f $dir > /dev/null; then
 		    if [[ $q = 0 ]]; then
 			[[ $i = 0 ]] || echo "========== $f =========="
 		    elif [[ $li = 3 ]]; then
