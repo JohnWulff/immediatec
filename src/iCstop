@@ -34,7 +34,7 @@ usage()
   echo '          named directories in their program path are killed. (A feature)' >&2
   echo " EXAMPLE: $name -a bin; stops all programs out of /bin/ /usr/bin/ ..." >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: iCstop,v 1.9 2004/01/18 13:12:52 archiv Exp $' >&2
+  echo '$Id: iCstop,v 1.10 2005/01/07 11:12:23 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -70,19 +70,24 @@ process()
 	    if [ -n "$pids" ]; then
 		if [ "$e" != 1 ]; then
 		    kill $s$pids
-		    if [ -n "$(processNumbers)" ]; then
-			sleep 1		# some processes take a little time to die
-			pids1=$(processNumbers)
-			if [ -n "$pids1" ]; then
-			    echo "$p:$pids kill $sd,$pids1 NOT killed; try stop -9"
-			    let status=$status+1
-			    continue
+		    # do not follow up on signal USR1 (10) and USR2 (12)
+		    if [ "$s" != -10 ] && [ "$s" != -12 ]; then
+			if [ -n "$(processNumbers)" ]; then
+			    sleep 1	# some processes take a little time to die
+			    pids1=$(processNumbers)
+			    if [ -n "$pids1" ]; then
+				echo "$p:$pids kill $sd,$pids1 NOT killed; try stop -9"
+				let status=$status+1
+				continue
+			    fi
 			fi
+			echo "$p:$pids killed"
 		    fi
-		    echo "$p:$pids killed"
 		else
 		    echo "$p:$pids NOT killed"
 		fi
+	    else
+		echo "$p: no running process detected"
 	    fi
 	fi
     done
