@@ -19,29 +19,18 @@ $top->title("Simple");
 
 ########################################################################
 #
-#	Generate a 2 buttons
+#	Generate many buttons
 #
 ########################################################################
 
-$button1 = $top->Button(
-    text	=> 'John',
-    command	=> sub {	# use a closure
-	$button1->cget('text') eq 'John' ?
-	    $button1->configure(text => 'Helene') :
-	    $button1->configure(text => 'John');
-    }
-);
-$button1->pack;	# give it a default place in the main window
-
-$button2 = $top->Button(
-    text	=> 'John',
-    command	=> sub {	# use a closure
-	$button2->cget('text') eq 'John' ?
-	    $button2->configure(text => 'David') :
-	    $button2->configure(text => 'John');
-    }
-);
-$button2->pack;	# give it a default place in the main window
+foreach my $color (qw(PeachPuff1 LightBlue1 SeaGreen2 Yellow1 PeachPuff1 LightBlue1 SeaGreen2 Yellow1)) {  
+	my $button = $top->Button(
+		-text    => $color,
+		-width   => 10,
+		-command => sub {$top->configure(-background => lc($color))},
+	);
+	$button->pack(qw(-side top -expand yes -pady 2));
+}
 
 ########################################################################
 #
