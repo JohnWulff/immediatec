@@ -2,16 +2,16 @@
 
 ########################################################################
 #
-#	make versions of pplc pptc and load.a
+#	make versions of icc ict and libict.a
 #
 ########################################################################
 
 usage ()
 {
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
-    echo '	-d	diff pplc.v in versions' >&2
+    echo '	-d	diff icc.v in versions' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mpv,v 1.1 2002/05/19 14:40:05 jw Exp $' >&2
+    echo '	$Id: mpv,v 1.2 2002/06/06 08:30:19 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -42,7 +42,7 @@ if [[ -n "$d" ]]; then
 	if [[ ! -L $w ]]; then
 	    v=${w##*[a-z]}
 	    echo "### $v ###"
-	    co -p1.$v pplc.v | diff - pplc.v_1.$v/pplc.v
+	    co -p1.$v icc.v | diff - icc.v_1.$v/icc.v
 	fi
     done
     exit
@@ -52,19 +52,19 @@ for w in $versions; do
     if [[ ! -L $w ]]; then
 	v=${w##*[a-z]}
 	echo "### $v ###"
-	if [[ ! -d pplc.v_1.$v ]]; then
-	    cov -r1.$v pplc.v
-	    cp cexe.c cexe.c_empty y.tab.h pplc.v_1.$v
+	if [[ ! -d icc.v_1.$v ]]; then
+	    cov -r1.$v icc.v
+	    cp cexe.c cexe.c_empty y.tab.h icc.v_1.$v
 	fi
-	cd pplc.v_1.$v
-	if [[ ! -e makeall ]]; then ln -s ../makeall .; fi
-	if [[ ! -e makepptc ]]; then ln -s ../makeall .; fi
-	if [[ ! -e makeload ]]; then ln -s ../makeall .; fi
-	makeall
-	cp pplc ../Test/pplc$v
-	cp pptc ../Test/pptc$v
-	cp load.a ../Test/load$v.a
-	mkv pplc pptc load.a > ../Test/pplc$v.v
+	cd icc.v_1.$v
+	if [[ ! -e makeAll ]]; then ln -s ../makeAll .; fi
+	if [[ ! -e makeIct ]]; then ln -s ../makeIct .; fi
+	if [[ ! -e makeLib ]]; then ln -s ../makeLib .; fi
+	makeAll
+	cp icc ../Test/icc$v
+	cp ict ../Test/ict$v
+	cp libict.a ../Test/libict$v.a
+	mkv icc ict libict.a > ../Test/icc$v.v
 	cd ..
     fi
 done
