@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.19 2001/03/24 21:01:48 jw Exp $";
+"@(#)$Id: ict.c,v 1.20 2001/03/27 20:49:12 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -442,17 +442,16 @@ icc(
 				offset = 5;		/* strlen(msg) */
 				for (opp = sTable; opp < sTend; opp++) {
 				    gp = *opp;
-				    if (gp->gt_ini != -NCONST) {
-					if (offset > REPLY - 6 - strlen(gp->gt_ids)) {	/* -11 id, */
-					    msg[offset - 1] = '\0';		/* clear last ',' */
-			    printf("lenth of msg = %d\n", strlen(msg));
-					    if (micro) microPrint("Send Symbols intermediate", 0);
-					    send_msg_to_server(sockFN, msg);
-					    if (micro) microReset(0);
-					    offset = 5;
-					}
-					offset += sprintf(&msg[offset], "%s %d;", gp->gt_ids, gp->gt_ini);
+				    /* to maintain index correctly send all symbols */
+				    if (offset > REPLY - 6 - strlen(gp->gt_ids)) {	/* -11 id, */
+					msg[offset - 1] = '\0';		/* clear last ',' */
+			printf("lenth of msg = %d\n", strlen(msg));
+					if (micro) microPrint("Send Symbols intermediate", 0);
+					send_msg_to_server(sockFN, msg);
+					if (micro) microReset(0);
+					offset = 5;
 				    }
+				    offset += sprintf(&msg[offset], "%s %d;", gp->gt_ids, gp->gt_ini);
 				}
 				if (offset > 5) {
 				    msg[offset - 1] = '\0';	/* clear last ',' */
@@ -462,6 +461,7 @@ icc(
 				    if (micro) microReset(0);
 				}
 				if (micro) microPrint("Send Scan Command", 0);
+				/* end of symbol table - execute scan */
 				send_msg_to_server(sockFN, "L0.2");
 				if (micro) microReset(0);
 				break;
