@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.47 2002/06/27 19:55:24 jw Exp $";
+"@(#)$Id: outp.c,v 1.48 2002/06/28 18:21:01 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -36,7 +36,10 @@ extern const char	SC_ID[];
  *	If count is less the 4 the unmodified name is returned in buf
  *	The count can be used to charecterize IBx, QBx etc fields also
  *
- *	bufLen should be >= 21 (sscanf format length)
+ *	Also convert plain numbers to numbers preceded by an underscore
+ *	(do this first, so that the parameter values returned are correct)
+ *
+ *	bufLen should be >= 23 (sscanf format length)
  *
  *******************************************************************/
 
@@ -46,15 +49,45 @@ IEC1131(char * name, char * buf, int bufLen,
 {
     int count;
 
-    assert(bufLen >= 21);
-    if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
-				iqt, bwx, bytep, bitp, tail)) >= 4) {
-	sprintf(buf, "%s%s%d__%d%s", iqt, bwx, *bytep, *bitp, tail);
+    assert(bufLen >= 23);
+    if (outFlag && (count = sscanf(name, "%d%7s", bytep, tail)) == 1) {
+	snprintf(buf, bufLen-1, "_%d", *bytep);
+    } else if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d.%5d%7s",
+			    iqt, bwx, bytep, bitp, tail)) >= 4) {
+	snprintf(buf, bufLen-1, "%s%s%d__%d%s",
+			    iqt, bwx, *bytep, *bitp, tail);
     } else {
-	strncpy(buf, name, bufLen - 1);
+	strncpy(buf, name, bufLen-1);
     }
     return count;
 } /* IEC1131 */
+
+/********************************************************************
+ *
+ *	toIEC1131() changes modified names back to IEC-1131 bit names
+ *
+ *	bufLen should be >= 24 (sscanf format length)
+ *
+ *******************************************************************/
+
+static int
+toIEC1131(char * name, char * buf, int bufLen,
+	char * iqt, char * bwx, int * bytep, int * bitp, char * tail)
+{
+    int count;
+
+    assert(bufLen >= 24);
+    if (outFlag && (count = sscanf(name, "_%d%7s", bytep, tail)) == 1) {
+	snprintf(buf, bufLen-1, "%d", *bytep);
+    } else if (outFlag && (count = sscanf(name, "%1[IQT]%1[BWX]%5d__%5d%7s",
+			    iqt, bwx, bytep, bitp, tail)) >= 4) {
+	snprintf(buf, bufLen-1, "%s%s%d.%d%s",
+			    iqt, bwx, *bytep, *bitp, tail);
+    } else {
+	strncpy(buf, name, bufLen-1);
+    }
+    return count;
+} /* toIEC1131 */
 
 /********************************************************************
  *
@@ -70,11 +103,11 @@ IEC1131(char * name, char * buf, int bufLen,
  *
  *	Because names[] has 3 static arrays, used in rotating-pong fashion,
  *	a pointer to the current names entry can still be used after a 2nd
- *	a 3rd call to mN(). Used in loops to provide previous name.
+ *	and a 3rd call to mN(). Used in loops to provide previous name.
  *
  *******************************************************************/
 
-#define SZ	4
+#define SZ	4		/* one more than 3 for bad surprises */
 static char	names[SZ][BUFS];/* ping pong buffer for modified names */
 static int	ix;		/* index for accessing alternate arrays */
 static char	iqt[2];		/* char buffers - space for 0 terminator */
@@ -472,8 +505,9 @@ output(char * outfile)
     char *	modName;
     char *	nxs;
     char *	sam;
-    int		li;
-    FILE *	Fp;
+    int		li;		/* link index into connection list */
+    int		lc;		/* link count in connection list */
+    FILE *	Fp;		/* C output file */
     FILE *	Hp;		/* list _list_.c + header _list1.h */
     FILE *	Lp;		/* list header _list2.h */
     char *	s1;
@@ -750,7 +784,7 @@ linecnt += 21;
 		    } else if (typ == NCONST) {
 			/* NCONST Gate must be static because same constant */
 			/* may be used in several linked modules - not extern */
-			fprintf(Fp, "static Gate _%-7s", modName); /* modify */
+			fprintf(Fp, "static Gate %-7s", modName);
 		    } else {
 			fprintf(Fp, "Gate %-8s", modName);
 		    }
@@ -761,15 +795,10 @@ linecnt += 21;
 		if (dc >= MIN_ACT && dc < MAX_ACT) {
 		    /* gt_list */
 		    fprintf(Fp, " &l_[%d],", li);
-		    /* space for action or function pointer + clock */
-		    li += 2;
-		    if ((lp = sp->list->le_next) == 0) {
-			snprintf(errorBuf, sizeof errorBuf,
-			    "Action gate '%s' has no clock",
-			    sp->name);	/* ZZZ wrong format */
-			errorEmit(Fp, errorBuf, &linecnt);
-		    } else if ((lp->le_sym->type & TM) == TIM) {
-			li++;	/* space for pointer to delay time Gate */
+		    li += 2;	/* space for action or function pointer + clock */
+		    if ((lp = sp->list->le_next) != 0 &&
+			(lp->le_sym->type & TM) == TIM) {
+			li++;		/* space for pointer to delay time Gate */
 		    }
 		} else if (dc == OUTW) {
 		    if (iqt[0] == 'Q' &&
@@ -845,7 +874,7 @@ linecnt += 21;
 		fprintf(Fp, " };\n");
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
-		sam = (dc == OUTW || typ == NCONST) ? "&_" : "&";
+		sam = (dc == OUTW) ? "&_" : "&";
 	    }
 	}
     }
@@ -873,7 +902,7 @@ linecnt += 21;
 		fprintf(Fp,
 		" = { 1, -%s, %s, 0, \"%s\", 0, (Gate**)&%s%s, %s%s, %d };\n",
 		full_type[typ], full_ftype[dc], sp->name,
-		(gp->ftype == OUTW || gp->type == NCONST) ? "_" : "",
+		(gp->ftype == OUTW) ? "_" : "",
 		mN(gp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;		/* previous Symbol name */
@@ -946,7 +975,9 @@ linecnt += 21;
  *******************************************************************/\n\
 \n\
 static Gate *	l_[] = {\n");
+    linecnt += 7;
 
+    lc = 0;			/* count links */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) > UDF && typ < MAX_GT) { /* leave aout EXT_TYPES */
@@ -971,24 +1002,35 @@ static Gate *	l_[] = {\n");
 			    fprintf(Fp, "%s&%s,",
 				fs, mN(tsp));		/* action */
 			}
+			lc++;
 			fs = " ";
-			if ((lp = lp->le_next) != 0) {
-			    /* error message already in last loop */
+			if ((lp = lp->le_next) == 0) {
+			    len += 3;		/* 0 filler - no clock or timer */
+			    fprintf(Fp, "%s0,", fs);
+			    snprintf(errorBuf, sizeof errorBuf,
+				"Action gate '%s' has no clock or timer",
+				sp->name);
+			    errorEmit(Fp, errorBuf, &linecnt);
+			} else {
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
 				fs, mN(tsp));		/* clock or timer */
 			    if ((tsp->type & TM) == TIM) {
-				/* error messages already in last loop */
 				if ((lp = lp->le_next) != 0) {
 				    len += strlen((tsp = lp->le_sym)->name) + 3;
-				    fprintf(Fp, "%s&%s%s,",	/* delay time */
-					fs, tsp->type == NCONST ? "_" : "", mN(tsp));
+				    fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* delay time */
 				} else {
 				    len += 3;		/* 0 filler - no delay time */
 				    fprintf(Fp, "%s0,", fs);
+				    snprintf(errorBuf, sizeof errorBuf,
+					"Action gate '%s' has timer '%s' with no delay",
+					sp->name, tsp->name );
+				    errorEmit(Fp, errorBuf, &linecnt);
 				}
+				lc++;
 			    }
 			}
+			lc++;
 			fs = "\t";
 			len += 8; len &= 0xfff8;
 		    }
@@ -1009,6 +1051,7 @@ static Gate *	l_[] = {\n");
 			} else {
 			    fprintf(Fp, "%s(Gate*)0,", fs);	/* OUTW */
 			}
+			lc++;
 			fs = " ";
 			val = NOT;	/* force single input list */
 		    }
@@ -1022,29 +1065,37 @@ static Gate *	l_[] = {\n");
 				len += strlen(lp->le_sym->name) + 3;
 				if (len > 73) {
 				    fs = "\n\t\t";
+				    linecnt++;
 				    len = 16 + strlen(lp->le_sym->name) + 3;
 				}
-				if (lp->le_sym->type == NCONST) {
-				    fprintf(Fp,
-					"%s&_%s,", fs, mN(lp->le_sym));	/* modify */
-				} else {
-				    fprintf(Fp,
-					"%s&%s,", fs, mN(lp->le_sym));
-				}
+				fprintf(Fp, "%s&%s,", fs, mN(lp->le_sym));
+				lc++;
 				fs = " ";
 			    }
 			}
 			fprintf(Fp, "%s0,", fs);
+			lc++;
 			len += 3;
 			fs = " ";
 		    } while (val ^= NOT);
 		}
 		fprintf(Fp, "\n");
+		linecnt++;
 	    }
 	}
     }
     fprintf(Fp, "};\n");
+    linecnt++;
+    if (li != lc) {
+	snprintf(errorBuf, sizeof errorBuf,
+	    "Link count %d from gate list is not %d in connection list",
+	    li, lc);
+	errorEmit(Fp, errorBuf, &linecnt);
+    }
 endm:
+    if (debug & 040) {
+	fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", outfile, linecnt-1);
+    }
     fclose(Hp);	/* close the header file in case other actions */
 endh:
     fclose(Lp);	/* close the list header file in case other actions */
@@ -1073,8 +1124,6 @@ end:
  * %#define
  * %#ifdef etc
  *
- *	TODO error generation
- *
  *******************************************************************/
 
 void
@@ -1085,9 +1134,15 @@ copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
     int		lf = 0;		/* set by first non white space in a line */
     Symbol *	sp;
     char	lineBuf[256];
-    char	buffer[256];
+    char	buffer[BUFS];
     char *	lp;
     char *	bp;
+    char	modified[BUFS];	/* buffer for modified names */
+    char	iqt[2];		/* char buffers - space for 0 terminator */
+    char	bwx[2];
+    int		byte;
+    int		bit;
+    char	tail[8];	/* compiler generated suffix _123456 max */
 
     while (fgets(lineBuf, sizeof lineBuf, iFP)) {
 	if (strcmp(lineBuf, "%{\n") == 0) {
@@ -1108,33 +1163,50 @@ copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
 				putc(c, oFP);
 				/* accept any token which might be in the symbol table */
 				bp = buffer;
-				while ((c = *lp++) != 0 && (isalnum(c) || c == '_')) {
+				while ((c = *lp++) != 0 &&
+				    bp < &buffer[BUFS] &&
+				    (isalnum(c) || c == '_')) {
 				    *bp++ = c;
 				}
 				*bp = '\0';	/* terminate string */
 				if (c == ')') {
 				    /* token found - xlate it */
-				    if ((sp = lookup(buffer)) != 0) {
+				    /* modify IXx__x etc to IXx.x */
+				    toIEC1131(buffer, modified, BUFS, iqt, bwx, &byte, &bit, tail);
+				    if ((sp = lookup(modified)) != 0) {
 					while (sp->type == ALIAS) {
 					    if (sp->ftype != ARITH) {
-						/* generate error */
+						snprintf(errorBuf, sizeof errorBuf,
+						    "copyXlate: @'%s' not ARITH",
+						    sp->name);
+						errorEmit(oFP, errorBuf, lcp);
 					    }
 					    sp = sp->list->le_sym;	/* resolve ALIAS */
 					}
+					IEC1131(sp->name, modified, BUFS, iqt, bwx, &byte, &bit, tail);
+					fputs(modified, oFP);
+					putc(c, oFP);	/* ')' */
 					if (sp->ftype != ARITH) {
-					    /* CHECK may be type ARN or SH */
-					    /* generate error */
+					    snprintf(errorBuf, sizeof errorBuf,
+						"copyXlate: '%s' not ARITH but ftype %s",
+						sp->name, full_ftype[sp->ftype]);
+					    errorEmit(oFP, errorBuf, lcp);
 					}
-					fputs(sp->name, oFP);
 				    } else {
-					/* generate error - symbol should at least be in table */
 					fputs(buffer, oFP);
+					putc(c, oFP);	/* ')' */
+					snprintf(errorBuf, sizeof errorBuf,
+					    "copyXlate: '%s' not in symbol table ???",
+					    buffer);
+					errorEmit(oFP, errorBuf, lcp);
 				    }
 				} else {
 				    fputs(buffer, oFP);	/* strange but true */
+				    putc(c, oFP);	/* char after buffer */
 				}
+			    } else {
+				putc(c, oFP);	/* char after '_' */
 			    }
-			    putc(c, oFP);	/* char after '_' or buffer */
 			}
 		    }
 		} else if (*(lp + 1) == '#') {

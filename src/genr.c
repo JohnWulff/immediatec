@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.45 2002/06/27 19:48:03 jw Exp $";
+"@(#)$Id: genr.c,v 1.46 2002/06/28 18:22:38 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -705,14 +705,9 @@ op_asgn(				/* asign List_e stack to links */
 		    t_first++;
 		}
 		if (debug & 04) fprintf(outFP, "_(%s)", gp->name);
-		if (outFlag == 0) {
-		    ep += sprintf(ep, "_(%s)", gp->name);	/* -c compile */
-		} else {
-		    /* modify IXx.x and QXx.x names for compiled output only */
-		    IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
-		    ep += sprintf(ep, "_(%s%s)", gp->type == NCONST ? "_"
-								    : "", buffer);
-		}
+		/* modify numbers, IXx.x and QXx.x names for compiled output only */
+		IEC1131(gp->name, buffer, BUFS, iqt, bwx, &byte, &bit, tail);
+		ep += sprintf(ep, "_(%s)", buffer);
 		t_first = lp->le_last;	/* skip logic expr's */
 	    }
 	    if (debug & 04) {

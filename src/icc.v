@@ -1,4 +1,4 @@
-@(#)$Id: icc.v,v 1.72 2002/06/26 22:00:00 jw Exp $
+@(#)$Id: icc.v,v 1.73 2002/06/27 22:00:00 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 Makefile.in     1.21    2002/06/06  12:17:51  jw      Exp
@@ -9,7 +9,7 @@ comp.h          1.22    2002/06/27  15:51:54  jw      Exp
 comp.y          1.57    2002/06/27  19:53:33  jw      Exp
 configure       1.1     2001/03/07  11:10:52  jw      Exp
 configure.in    1.1     2001/03/07  11:10:52  jw      Exp
-genr.c          1.45    2002/06/27  19:48:03  jw      Exp
+genr.c          1.46    2002/06/28  18:22:38  jw      Exp
 iCbox           1.35    2002/06/03  13:14:26  jw      Exp
 iClive          1.23    2002/06/19  20:44:13  jw      Exp
 iCmake          1.20    2002/06/13  08:39:24  jw      Exp
@@ -21,13 +21,13 @@ init.c          1.17    2002/06/25  14:33:01  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
 link.c          1.16    2002/06/19  21:37:40  jw      Exp
 load.c          1.31    2002/06/27  12:11:06  jw      Exp
-main.c          1.23    2002/06/27  18:04:27  jw      Exp
+main.c          1.24    2002/06/28  11:58:03  jw      Exp
 makeAll         1.9     2001/03/18  14:03:15  jw      Exp
 makeIct         1.8     2001/03/30  17:31:20  jw      Exp
 makeLib         1.10    2001/03/18  14:03:15  jw      Exp
 manifest        1.1     2002/06/06  09:23:00  jw      Exp
 mkinstalldirs   1.1     2001/03/07  12:26:24  jw      Exp
-outp.c          1.47    2002/06/27  19:55:24  jw      Exp
+outp.c          1.48    2002/06/28  18:21:01  jw      Exp
 pawk.a          1.2     1996/07/30  20:24:24  john    Exp
 perlinstall     1.6     2001/06/03  20:09:24  jw      Exp
 pplstfix        1.5     2001/03/02  12:56:32  jw      Exp

@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.23 2002/06/27 18:04:27 jw Exp $";
+"@(#)$Id: main.c,v 1.24 2002/06/28 11:58:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -309,6 +309,9 @@ main(
 				fputs(lineBuf, excFP);
 				linecnt++;
 			    }
+			}
+			if (debug & 040) {
+			    fprintf(outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
 			}
 			fclose(exiFP);
 			fclose(excFP);
