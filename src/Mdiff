@@ -23,6 +23,7 @@ usage()
   echo '	-l	list names of files which differ' >&2
   echo '	-li	list names of files which are identical' >&2
   echo '	-c	display diff output in context form' >&2
+  echo '	-k	ignore lines containing the string $Id:' >&2
   echo '	-I	case insensitive and white space ignored' >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
@@ -32,7 +33,7 @@ usage()
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	J.E. Wulff (John.Wulff@inka.de)' >&2
-  echo '$Id: Mdiff,v 1.14 2000/07/07 16:14:48 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.15 2000/11/28 22:32:10 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -107,6 +108,7 @@ while [[ $# > 0 ]]; do
 	    l*)	q=1; let "li|=1";;
 	    q*)	q=1;;
 	    c*) context="-c";;
+	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wi;;
 	    h*)	usage; exit 255;;
 	    -*)	pipe=1;;
