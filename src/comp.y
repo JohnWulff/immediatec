@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.13 2000/11/16 14:19:55 jw Exp $";
+"@(#)$Id: comp.y,v 1.14 2000/11/17 05:44:21 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -615,21 +615,31 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = bltin(&$1, &$3, &$7, &$5, 0, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
-	| BLTIN2 '(' aexpr ',' cexpr ',' aexpr ',' cexpr ')' {
-		$$.f = $1.f; $$.l = $10.l;
-		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, 0);
+	| BLTIN2 '(' aexpr cref ',' aexpr ',' cexpr ')' {
+		$$.f = $1.f; $$.l = $9.l;
+		$$.v = bltin(&$1, &$3, &$4, &$6, &$8, 0);
 		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' texpr ',' value ')'	{
 		$$.f = $1.f; $$.l = $8.l;
-		$$.v = bltin(&$1, &$3, 0, 0, &$5, &$7);	/* monoflop without reset */
-		if (debug & 02) pu(1, "fexpr", &$$);
+		$$.v = bltin(&$1, &$3, 0, 0, &$5, &$7); /* monoflop without reset */
+		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by iClock */
 	    }
 	| BLTIN2 '(' aexpr ',' aexpr ',' texpr ',' value ')'	{
 		$$.f = $1.f; $$.l = $10.l;
 		$$.v = bltin(&$1, &$3, 0, &$5, &$7, &$9); /* monoflop with reset */
-		if (debug & 02) pu(1, "fexpr", &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);	/* set and reset clocked by iClock */
 	    }
+	| BLTIN2 '(' aexpr cref ',' texpr ',' value ')'	{
+		$$.f = $1.f; $$.l = $9.l;
+		$$.v = bltin(&$1, &$3, &$4, 0, &$6, &$8); /* monoflop without reset */
+		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+	    }
+	| BLTIN2 '(' aexpr ',' aexpr cref ',' texpr ',' value ')'	{
+		$$.f = $1.f; $$.l = $11.l;
+		$$.v = bltin(&$1, &$3, &$6, &$5, &$8, &$10); /* monoflop with reset */
+		if (debug & 02) pu(1, "fexpr", &$$);	/* set clocked by ext clock or timer */
+	    }						/* reset clocked by iClock */
 	;
 
 /* no assignment allowed for ffexpr - they stand alone */
