@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.4 1999/08/02 21:26:19 jw Exp $";
+"@(#)$Id: comp.y,v 1.5 1999/08/06 15:43:37 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -55,27 +55,27 @@ unsigned int	stype;			/* to save TYPE in decl */
 %{
 
 void
-pu(int t, Lis * node)
+pu(int t, char * token, Lis * node)
 {
     register char *	cp;
     register char *	ep;
 
     switch (t) {
     case 0:
-	fprintf(outFP, ">>>Sym	%s :	", ((Sym*)node)->v->name);
+	fprintf(outFP, ">>>Sym	%s	%s :	", token, ((Sym*)node)->v->name);
 	break;
     case 1:
 	if (node->v) {
-	    fprintf(outFP, ">>>Lis	%s =	", node->v->le_sym->name);
+	    fprintf(outFP, ">>>Lis	%s	%s =	", token, node->v->le_sym->name);
 	} else {
-	    fprintf(outFP, ">>>Lis	0 =	");
+	    fprintf(outFP, ">>>Lis	%s	0 =	", token);
 	}
 	break;
     case 2:
-	fprintf(outFP, ">>>Val	%d =	", ((Val*)node)->v);
+	fprintf(outFP, ">>>Val	%s	%d =	", token, ((Val*)node)->v);
 	break;
     case 3:
-	fprintf(outFP, ">>>Str	%2.2s =	", ((Str*)node)->v);
+	fprintf(outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
 	break;
     }
     cp = node->f; ep = node->l;
@@ -161,7 +161,7 @@ aexpr	: expr			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "aexpr", &$$);
 	    }
 	| wasgn		{
 		register List_e *	lp;
@@ -174,7 +174,7 @@ aexpr	: expr			{
 		    $$.v = 0;
 		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "aexpr", &$$);
 	    }
 	| xasgn		{
 		register List_e *	lp;
@@ -188,7 +188,7 @@ aexpr	: expr			{
 		    $$.v = 0;
 		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "aexpr", &$$);
 	    }
 	;
 
@@ -234,7 +234,7 @@ asgn	: UNDEF '=' aexpr	{
 		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
 		$1.v->ftype = GATE;
 		$$.v = op_asgn(&$1, &$3, GATE);	/* UNDEF is default GATE */
-		if (debug & 02) pu(0, (Lis*)&$$);
+		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
@@ -244,7 +244,7 @@ asgn	: UNDEF '=' aexpr	{
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, GATE);
-		if (debug & 02) pu(0, (Lis*)&$$);
+		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
@@ -254,7 +254,7 @@ asgn	: UNDEF '=' aexpr	{
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = op_asgn(&$1, &$3, ARITH);	/* arithmetic ALIAS */
-		if (debug & 02) pu(0, (Lis*)&$$);
+		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
 	    }
 
 expr	: UNDEF			{
@@ -262,23 +262,23 @@ expr	: UNDEF			{
 		$$.v = sy_push($1.v);
 		$1.v->ftype = GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| NUMBER		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = 0;			/* no node */
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| CCNUMBER		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = 0;			/* no node */
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| LVAR			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| XACT		{
 		register List_e *	lp;
@@ -291,13 +291,13 @@ expr	: UNDEF			{
 		    $$.v = sy_push($1.v);
 		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| AVAR			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| WACT		{
 		register List_e *	lp;
@@ -309,7 +309,7 @@ expr	: UNDEF			{
 		    $$.v = sy_push($1.v);
 		}
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| fexpr			{
 		register Symbol *	sp = $1.v->le_sym;
@@ -320,21 +320,21 @@ expr	: UNDEF			{
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| '(' aexpr ')'		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = $2.v) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| BLATCH '(' lexpr ')'	{		/* L(set,reset) */
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = op_push(sy_push($3.v->le_sym), LOGC, $3.v);
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| BFORCE '(' aexpr ',' lexpr ')'	{	/* F(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
@@ -342,7 +342,7 @@ expr	: UNDEF			{
 		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
 		$$.v->le_sym->type = LATCH;
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr '|' expr		{		/* binary | */
 		$$.f = $1.f; $$.l = $3.l;
@@ -366,7 +366,7 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr '^' expr		{		/* binary ^ */
 		$$.f = $1.f; $$.l = $3.l;
@@ -390,7 +390,7 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr '&' expr		{		/* binary & */
 		$$.f = $1.f; $$.l = $3.l;
@@ -414,7 +414,7 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr CMP expr	{			/* == != < <= > >= */
 		$$.f = $1.f; $$.l = $3.l;
@@ -423,7 +423,7 @@ expr	: UNDEF			{
 		    $$.v = op_force($$.v, GATE);	/* default output */
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr AOP expr		{		/* << >> / % */
 		$$.f = $1.f; $$.l = $3.l;
@@ -431,7 +431,7 @@ expr	: UNDEF			{
 		    ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr PM expr		{		/* binary + - */
 		$$.f = $1.f; $$.l = $3.l;
@@ -439,7 +439,7 @@ expr	: UNDEF			{
 		    ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr '*' expr		{		/* binary * */
 		$$.f = $1.f; $$.l = $3.l;
@@ -447,7 +447,7 @@ expr	: UNDEF			{
 		    ARN, op_force($3.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 
 	/************************************************************
@@ -479,7 +479,7 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr OO expr	{			/* binary || */
 		register Symbol * sp;
@@ -499,7 +499,7 @@ expr	: UNDEF			{
 		if ($$.v) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| expr '?' expr ':' expr	{	/* ? : */
 		$$.f = $1.f; $$.l = $5.l;
@@ -508,7 +508,7 @@ expr	: UNDEF			{
 		    ARN, op_force($5.v, ARITH)))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| NOTL expr 		{		/* unary ~ or ! */
 		register Symbol * sp;
@@ -527,14 +527,14 @@ expr	: UNDEF			{
 		} else {
 		    $$.v = 0;			/* constant negation */
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	| PM expr %prec NOTL	{		/* unary + or - */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "expr", &$$);
 	    }
 	;
 
@@ -546,7 +546,7 @@ lexpr	: aexpr ',' aexpr		{
 		    LOGC, op_not(op_force($3.v, GATE)))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "lexpr", &$$);
 	    }
 	;
 
@@ -556,7 +556,7 @@ value	: NUMBER		{ $$.v = $1.v;	/* terminates with , or ) */
 		    warning("time value must be <= 32767", NULL);
 		    $$.v = 32767;
 		}
-		if (debug & 02) pu(2, (Lis*)&$$);
+		if (debug & 02) pu(2, "value", (Lis*)&$$);
 	    }
 	| ccexpr		{ $$.v = -$1.v; }	/* case # */
 	;
@@ -612,7 +612,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		lp1->le_first = $3.f; lp1->le_last = $3.l;
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		$$.v = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| DLATCH '(' lexpr cref ')'	{	/* DL(set,reset) */
 		register List_e	*lp1;
@@ -622,7 +622,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		lp1 = op_push(sy_push($1.v), LATCH, lp1);
 		lp1 = op_push($4.v, lp1->le_sym->type, lp1);
 		$$.v = op_push((List_e *)0, types[lp1->le_sym->ftype], lp1);
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' aexpr ')'	{
 		register List_e	*lp1;
@@ -642,7 +642,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		lp2 = op_push(sy_push(clk), lp2->le_sym->type, lp2);
 		lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 		$$.v = op_push(lp1, types[lp1->le_sym->ftype], lp2);
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' aexpr ',' cexpr ')' {
 		register List_e	*lp1;
@@ -662,7 +662,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		lp2 = op_push(sy_push($7.v->le_sym), lp2->le_sym->type, lp2);
 		lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 		$$.v = op_push(lp1, types[lp1->le_sym->ftype], lp2);
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' cexpr ',' aexpr ',' cexpr ')' {
 		register List_e	*lp1;
@@ -682,7 +682,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		lp2 = op_push($9.v, lp2->le_sym->type, lp2);
 		lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);
 		$$.v = op_push(lp1, types[lp1->le_sym->ftype], lp2);
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' texpr ',' value ')'	{
 		register List_e	*lp1;
@@ -706,7 +706,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = op_push(lp1, types[lp1->le_sym->ftype], lp2);
 		lp3->le_sym = $$.v->le_sym;	/* fix link from own */
 		$5.v->le_val = $7.v;	/* unsigned int value for time */
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	| BLTIN2 '(' aexpr ',' aexpr ',' texpr ',' value ')'	{
 		register List_e	*lp1;
@@ -738,7 +738,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {
 		$$.v = op_push($$.v, $$.v->le_sym->type, lp2);
 		lp3->le_sym = $$.v->le_sym;	/* fix link from own */
 		$7.v->le_val = $9.v;	/* unsigned int value for time */
-		if (debug & 02) pu(1, &$$);
+		if (debug & 02) pu(1, "fexpr", &$$);
 	    }
 	;
 
