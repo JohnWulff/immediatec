@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.9 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: scan.c,v 1.10 2001/02/11 14:05:14 jw Exp $";
 /* scan output list, do gate function */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -9,7 +9,7 @@ static const char scan_c[] =
 #include	<stdio.h>
 #include	"pplc.h"
 
-static void	link_c(register Gate * gp, Gate * out_list);
+static void	link_c(Gate * gp, Gate * out_list);
 
 /********************************************************************
  *
@@ -75,10 +75,10 @@ short		dc;	/* debug display counter in scan and rsff */
 int
 scan_ar(Gate	*out_list)
 {
-    register Gate	**lp;
-    register Gate	*gp;
-    register short	val;
-    Gate		*op;
+    Gate	**lp;
+    Gate	*gp;
+    int		val;
+    Gate	*op;
 
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
@@ -116,6 +116,11 @@ scan_ar(Gate	*out_list)
 #endif
 	lp = op->gt_list;
 	while ((gp = *lp++) != 0) {
+#ifdef LOAD
+	    CFunctp exec;
+#else
+	    int exec;
+#endif
 #if !defined(_WINDOWS) || defined(LOAD)
 	    scan_cnt++;				/* count scan operations */
 #endif
@@ -133,15 +138,22 @@ scan_ar(Gate	*out_list)
 	    }
 #endif
 #ifdef LOAD
-	    val = ((CFunctp)*(gp->gt_rlist))(gp);	/* compute arith expression */
+	    if ((exec = (CFunctp)*(gp->gt_rlist)) != 0) {
+		val = exec(gp);		/* compute arith expression */
+	    }
 #else
-	    val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
+	    if ((exec = (int)gp->gt_rlist) != 0) {
+		val = c_exec(exec, gp);	/* must pass both -/+ */
+	    }
 #endif
+	    else {
+		val = op->gt_old;	/* pass value to master output */
+	    }
 	    /************************************************************
 	     *
 	     *	For any C_expressions, the computed value is returned.
 	     *
-	     *	At the moment only short int's are treated (ZZZ).
+	     *	At the moment only int's are treated (ZZZ).
 	     *
 	     ***********************************************************/
 
@@ -189,10 +201,10 @@ scan_ar(Gate	*out_list)
 int
 scan(Gate	*out_list)
 {
-    register Gate	**lp;
-    register Gate	*gp;
-    register short	val;
-    Gate		*op;
+    Gate	**lp;
+    Gate	*gp;
+    int		val;
+    Gate	*op;
 
     if (out_list->gt_next == out_list) {
 	return 0;			/* list was empty */
@@ -302,11 +314,11 @@ scan(Gate	*out_list)
  *******************************************************************/
 
 int
-scan_clk(register Gate	*out_list)	/* scan a clock list */
+scan_clk(Gate	*out_list)	/* scan a clock list */
 {
-    register Gate	*op;
+    Gate	*op;
 #ifdef DEQ
-    register Gate	*gp;
+    Gate	*gp;
 #endif
 
     if (out_list->gt_next == out_list) {
@@ -348,7 +360,7 @@ scan_clk(register Gate	*out_list)	/* scan a clock list */
  *******************************************************************/
 
 void
-pass1(register Gate * op, int typ)	/* Pass1 init on gates */
+pass1(Gate * op, int typ)	/* Pass1 init on gates */
 {
     op->gt_mcnt = 0;			/* clear gate value */
 #ifndef DEQ
@@ -367,7 +379,7 @@ pass1(register Gate * op, int typ)	/* Pass1 init on gates */
  *******************************************************************/
 
 void
-pass2(register Gate * op, int typ)	/* Pass2 init on gates */
+pass2(Gate * op, int typ)	/* Pass2 init on gates */
 {
     (*init2[op->gt_fni])(op, typ);	/* call pass2 function init */
 } /* pass2 */
@@ -386,9 +398,9 @@ pass2(register Gate * op, int typ)	/* Pass2 init on gates */
 void
 gate2(Gate * op, int typ)		/* pass2 function init gates */
 {
-    register int	cnt;
-    register Gate	**lp;
-    register Gate	*gp;
+    int	cnt;
+    Gate	**lp;
+    Gate	*gp;
 
     if ((lp = op->gt_list) != 0) {
 	cnt = (op->gt_fni < MAX_AR) ? 1 : 2;
@@ -427,7 +439,7 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
  *******************************************************************/
 
 void
-gate3(register Gate * gp, int typ)	/* Pass3 init on gates */
+gate3(Gate * gp, int typ)	/* Pass3 init on gates */
 {
     uchar opt = os[typ];
     if (gp->gt_mcnt == 0) {
@@ -506,11 +518,11 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
  *******************************************************************/
 
 void
-pass4(register Gate * op, int typ)	/* Pass4 init on gates */
+pass4(Gate * op, int typ)	/* Pass4 init on gates */
 {
-    register Gate	**lp;
-    register Gate	*gp;
-    register short	val;
+    Gate	**lp;
+    Gate	*gp;
+    int		val;
 
     if (op->gt_fni < MIN_ACT) {		/* UDFA, ARITH, GATE */
 #ifndef _WINDOWS 
@@ -522,6 +534,11 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 	lp = op->gt_list;
 	if (op->gt_fni == ARITH) {
 	    while ((gp = *lp++) != 0) {	/* do arithmetic outputs */
+#ifdef LOAD
+		CFunctp exec;
+#else
+		int exec;
+#endif
 #if !defined(_WINDOWS) || defined(LOAD)
 		scan_cnt++;			/* count scan operations */
 #endif
@@ -539,10 +556,17 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
 		}
 #endif
 #ifdef LOAD
-		val = ((CFunctp)*(gp->gt_rlist))(gp);	/* compute arith expression */
+		if ((exec = (CFunctp)*(gp->gt_rlist)) != 0) {
+		    val = exec(gp);		/* compute arith expression */
+		}
 #else
-		val = c_exec((int)gp->gt_rlist, gp);	/* must pass both -/+ */
+		if ((exec = (int)gp->gt_rlist) != 0) {
+		    val = c_exec(exec, gp);	/* must pass both -/+ */
+		}
 #endif
+		else {
+		    val = op->gt_old;		/* pass value to master output */
+		}
 
 		if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
@@ -606,7 +630,7 @@ pass4(register Gate * op, int typ)	/* Pass4 init on gates */
  *******************************************************************/
 
 static void
-link_c(register Gate * gp, Gate * out_list)
+link_c(Gate * gp, Gate * out_list)
 {
     link_ol(gp, c_list);	/* link clocked Gate to c_list */
 } /* link_c */
@@ -620,8 +644,8 @@ link_c(register Gate * gp, Gate * out_list)
 
 void
 err_fn(				/* error - no master or slave function */
-    register Gate *	gp,
-    Gate *		out_list)
+    Gate *	gp,
+    Gate *	out_list)
 {
 #if !defined(_WINDOWS) || defined(LOAD)
     fprintf(errFP,
@@ -651,8 +675,8 @@ void null(void)	{}	/* null function for function lists */
 
 void
 arithMa(				/* ARITH master action */
-    register Gate *	gp,		/* NOTE: there is no slave action */
-    Gate *		out_list)
+    Gate *	gp,			/* NOTE: there is no slave action */
+    Gate *	out_list)
 {
     if (out_list == o_list) {
 	/* called from logic scan - convert d to a */

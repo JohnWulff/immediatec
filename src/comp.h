@@ -1,5 +1,5 @@
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.14 2001/02/01 12:10:41 jw Exp $";
+"@(#)$Id: comp.h,v 1.15 2001/02/11 14:05:14 jw Exp $";
 /*
  *	"comp.h"
  *
@@ -71,10 +71,6 @@ extern List_e *	op_xor(			/* special exclusive or push */
 	    List_e *, List_e *);	/*   left, right   */
 extern List_e *	op_not(List_e *);	/* logical negation */
 extern Symbol *	op_asgn(		/* asign List_e stack to links */
-	    Sym *, Lis *, uchar);	/*   var, right, ftyp   */
-extern void	qp_value(		/* value from QBx, QWx or QXx.y */
-	    Lis *, Sym *, uchar);	/* expr, act, ftyp      */
-extern Symbol *	qp_asgn(		/* asign to QBx, QWx or QXx.y */
 	    Sym *, Lis *, uchar);	/*   var, right, ftyp   */
 extern List_e * bltin(			/* generate built in iC functions */
 	    Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* tr, Val* pVal);

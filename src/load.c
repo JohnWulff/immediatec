@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.18 2001/02/04 17:37:21 jw Exp $";
+"@(#)$Id: load.c,v 1.19 2001/02/11 14:05:14 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -565,7 +565,6 @@ main(
 	    if (df) printf(" %-8s%3d%3d:",
 		op->gt_ids, op->gt_ini, op->gt_fni);
 	    if (op->gt_ini == -ARN) {
-		if ((gp = *op->gt_rlist) == 0) inError(__LINE__, op, 0);
 		if (df) printf("	%p()", gp);	/* cexe_n */
 	    } else if (op->gt_ini == -INPW || op->gt_ini == -INPX) {
 		if ((lp = op->gt_rlist) == 0) {

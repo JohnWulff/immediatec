@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.42 2001/02/08 20:23:59 jw Exp $";
+"@(#)$Id: comp.y,v 1.43 2001/02/11 14:05:14 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -12,7 +12,7 @@
 #include	<string.h>
 #include	<ctype.h>
 #include	<setjmp.h>
-#include	<assert.h>	/* QQQ */
+#include	<assert.h>
 
 #include	"pplc.h"
 #include	"comp.h"
@@ -30,7 +30,6 @@ static void	warnBit(void);
 static void	warnInt(void);
 static int	copyCfrag(char, char, char);	/* copy C action */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
-static char	ccbuf[32];		/* buffer for NUMBER CCFRAG */
 static int	dflag = 0;		/* record states dexpr */
 static unsigned int stype;		/* to save TYPE in decl */
 static Val	val1 = { 1, 0, 0, };	/* preset off 1 value for timers */
@@ -87,13 +86,13 @@ pu(int t, char * token, Lis * node)
 	 *
 	 ***********************************************************/
 
-%token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION WACT XACT BLTIN1 BLTIN2 BLTIN3
+%token	<sym>	UNDEF AVARC AVAR LVARC LVAR ACTION AOUT LOUT BLTIN1 BLTIN2 BLTIN3
 %token	<sym>	CVAR CBLTIN TVAR TBLTIN TBLTI1 NVAR STATIC BLATCH BFORCE DLATCH
 %token	<sym>	EXTERN IMM TYPE IF ELSE SWITCH
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
-%type	<sym>	program statement simplestatement lBlock
-%type	<sym>	decl asgn wasgn xasgn casgn tasgn dasgn
+%type	<sym>	program statement simplestatement lBlock variable
+%type	<sym>	decl asgn dasgn casgn tasgn
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr tfexpr ifini ffexpr
 %type	<list>	cref ctref ctdref dexpr funct params plist
 %type	<val>	cBlock declHead
@@ -135,8 +134,6 @@ simplestatement:
 	  decl			{ $$ = $1; }
 	| asgn			{ $$ = $1; }
 	| dasgn			{ $$ = $1; }
-	| wasgn			{ $$ = $1; }
-	| xasgn			{ $$ = $1; }
 	| casgn			{ $$ = $1; }
 	| tasgn			{ $$ = $1; }
 	;
@@ -182,33 +179,6 @@ aexpr	: expr			{
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		if (debug & 02) pu(1, "aexpr", &$$);
 	    }
-	| wasgn		{
-		register List_e *	lp;
-		$$.f = $1.f; $$.l = $1.l;
-		if ((lp = $1.v->list) != 0) {
-		    $$.v = sy_push(lp->le_sym);		/* output driver */
-		} else {
-		    error("output must be assigned before use:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		    $$.v = 0;
-		}
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "aexpr", &$$);
-	    }
-	| xasgn		{
-		register List_e *	lp;
-		$$.f = $1.f; $$.l = $1.l;
-		if ((lp = $1.v->list) != 0) {
-		    $$.v = sy_push(lp->le_sym);		/* output driver */
-		    $$.v->le_val = lp->le_val;		/* copy inversion */
-		} else {
-		    error("output must be assigned before use:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		    $$.v = 0;
-		}
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "aexpr", &$$);
-	    }
 	;
 
 	/************************************************************
@@ -216,35 +186,6 @@ aexpr	: expr			{
 	 * Different forms of assignment
 	 *
 	 ***********************************************************/
-
-wasgn	: WACT '=' aexpr	{			/* WACT = lex_act[OUTW] */
-		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warnInt(); YYERROR; }
-		$$.v = qp_asgn(&$1, &$3, ARITH);	/* assign to output word */
-	    }
-	;
-
-xasgn	: XACT '=' aexpr	{			/* XACT = lex_act[OUTX] */
-		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
-		$$.v = qp_asgn(&$1, &$3, GATE);		/* assign to output bit */
-	    }
-	;
-
-dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
-		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) {
-		    if ($1.v->ftype != ARITH) { $$.v = 0; warnBit(); YYERROR; }
-		    else if (const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
-		}
-		if ($1.v->type != UDF && $1.v->type != ERR) {
-		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
-		    $1.v->type = ERR;	/* cannot execute properly */
-		}
-		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
-		if (debug & 02) pu(0, "dasgn", (Lis*)&$$);
-	    }
-	;
 
 asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
@@ -270,8 +211,63 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
 		}
-		$$.v = op_asgn(&$1, &$3, ARITH);	/* arithmetic ALIAS */
+		$$.v = op_asgn(&$1, &$3, ARITH);
 		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+	    }
+	| LOUT '=' aexpr		{
+		Sym		sy;
+		Lis		li;
+		char		temp[30];
+		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v == 0) { $$.v = 0; warnBit(); YYERROR; }
+		if ($1.v->type != UDF && $1.v->type != ERR) {
+		    error("multiple assignment to imm bit:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		sprintf(temp, "%s_0", $1.v->name);
+		sy.v = install(temp, UDF, OUTX);	/* generate output Gate */
+		li.v = sy_push($1.v);			/* provide a link to LOUT */
+		if ((li.v = op_push(0, OR, li.v)) != 0) {
+		    li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
+		}
+		op_asgn(&sy, &li, $1.v->ftype);
+		$$.v = op_asgn(&$1, &$3, GATE);
+		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+	    }
+	| AOUT '=' aexpr		{
+		Sym		sy;
+		Lis		li;
+		char		temp[20];
+		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v == 0) { $$.v = 0; warnInt(); YYERROR; }
+		if ($1.v->type != UDF && $1.v->type != ERR) {
+		    error("multiple assignment to imm int:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		sprintf(temp, "%s_0", $1.v->name);
+		sy.v = install(temp, UDF, OUTW);	/* generate output Gate */
+		li.v = sy_push($1.v);			/* provide a link to AOUT */
+		if ((li.v = op_push(0, ARN, li.v)) != 0) {
+		    li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
+		}
+		op_asgn(&sy, &li, $1.v->ftype);
+		$$.v = op_asgn(&$1, &$3, ARITH);
+		if (debug & 02) pu(0, "asgn", (Lis*)&$$);
+	    }
+	;
+
+dasgn	: decl '=' aexpr	{			/* dasgn is NOT an aexpr */
+		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v == 0) {
+		    if ($1.v->ftype != ARITH) { $$.v = 0; warnBit(); YYERROR; }
+		    else if (const_push(&$3)) { $$.v = 0; warnInt(); YYERROR; }
+		}
+		if ($1.v->type != UDF && $1.v->type != ERR) {
+		    error("assigning to wrong type ARNC or LOGC:", $1.v->name);
+		    $1.v->type = ERR;	/* cannot execute properly */
+		}
+		$$.v = op_asgn(&$1, &$3, $1.v->ftype);	/* int ARITH or bit GATE */
+		if (debug & 02) pu(0, "dasgn", (Lis*)&$$);
 	    }
 	;
 
@@ -280,6 +276,12 @@ asgn	: UNDEF '=' aexpr	{			/* asgn is an aexpr */
 	 * Expressions - includes unclocked built in functions
 	 *
 	 ***********************************************************/
+
+variable: LVAR			{ $$ = $1; }		/* logical bit variable */
+	| AVAR			{ $$ = $1; }		/* arithmetic variable */
+	| LOUT			{ $$ = $1; }		/* output bit variable */
+	| AOUT			{ $$ = $1; }		/* output arith. variable */
+	;
 
 expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $1.l;
@@ -293,21 +295,7 @@ expr	: UNDEF			{
 		$$.v = 0;			/* no node, do not need value */
 		if (debug & 02) pu(1, "expr", &$$);
 	    }
-	| LVAR			{
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = sy_push($1.v);
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		if (debug & 02) pu(1, "expr", &$$);
-	    }
-	| WACT		{
-		qp_value(&$$, &$1, ARITH);		/* value from output word */
-		if (debug & 02) pu(1, "expr", &$$);
-	    }
-	| XACT		{
-		qp_value(&$$, &$1, GATE);		/* value from output bit */
-		if (debug & 02) pu(1, "expr", &$$);
-	    }
-	| AVAR			{
+	| variable			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1042,7 +1030,6 @@ yylex(void)
 	    while ((c = get()) != EOF && isxdigit(c));
 	    unget(c);
 	    if (sscanf(yytext, format, &yylval.val.v, yytext) == 1) {
-		strncpy(ccbuf, yytext, sizeof ccbuf - 1); /* for NUMBER */
 		if (dflag) {
 		    if ((symp = lookup(yytext)) == 0) {
 			symp = install(yytext, NCONST, ARITH); /* becomes NVAR */
@@ -1062,6 +1049,7 @@ yylex(void)
 	    goto retfl;
 	} else if (isalpha(c) || c == '_') {
 	    unsigned char	wplus = 0;
+	    unsigned int	qtoken = 0;
 	    unsigned char	typ = UDF;
 	    unsigned char	ftyp = UDFA;
 	    unsigned char	y0[2];
@@ -1077,11 +1065,11 @@ yylex(void)
 		    if (isdigit(c = get())) {	/* can only be QX%d. */
 			while (isdigit(c = get()));
 		    foundQIT:
+			ftyp = GATE - wplus;		/* GATE or ARITH */
 			if (y0[0] == 'Q') {
-			    ftyp = OUTX - wplus;	/* OUTX or OUTW */
+			    qtoken = lex_act[OUTX - wplus]; /* LOUT or AOUT */
 			} else {
 			    typ = INPX - wplus;		/* INPX or INPW */
-			    ftyp = GATE - wplus;	/* GATE or ARITH */
 			}
 		    } else {
 			unget(c);		/* the non digit, not '.' */
@@ -1104,7 +1092,9 @@ yylex(void)
 	    }
 	    if (typ == KEYW) {
 		c = symp->u.val;		/* reserved word */
-	    } else if (typ == ARNC || typ == LOGC || dflag && typ == NCONST){
+	    } else if (qtoken) {
+		c = qtoken;			/* LOUT or AOUT */
+	    } else if (typ == ARNC || typ == LOGC || dflag && typ == NCONST) {
 		c = lex_typ[symp->type];	/* NCONST via ALIAS ==> NVAR */
 	    } else {
 		c = lex_act[symp->ftype];	/* alpha_numeric symbol */

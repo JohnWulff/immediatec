@@ -1,8 +1,58 @@
 #!/usr/bin/ksh -p
 
-for file in pplc*; do
-    base=${file%.*}
-    if [[ $file = $base ]]; then
-	mkv $file | grep -Ff mkpp.pp > $file.v
+########################################################################
+#
+#	make pplc$v.v of pplc$v pptc$v and load$v.a
+#
+########################################################################
+
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
+    echo '	-d	diff previously made files' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: mkpp,v 1.2 2001/02/08 20:23:10 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    d*)	d=diff;;
+	    h*)	usage; exit 255;;
+	    *) aflag="-$option"; break;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
+
+if [[ $# != 0 ]]; then
+    versions=$*
+else
+    versions=$(echo Alex??)
+fi
+
+for w in $versions; do
+    if [[ ! -L $w ]]; then
+	v=${w##*[a-z]}
+	echo "### $v ###"
+	if [[ ! -f pplc$v ]]; then
+	    echo "Error: pplc$v does not exist" >&2
+	elif [[ ! -f pptc$v ]]; then
+	    echo "Error: pptc$v does not exist" >&2
+	elif [[ ! -f load$v.a ]]; then
+	    echo "Error: load$v.a does not exist" >&2
+	else
+	    if [[ -n "$d" ]]; then
+		mkv pplc$v pptc$v load$v.a | diff - pplc$v.v
+	    else
+		mkv pplc$v pptc$v load$v.a > pplc$v.v
+	    fi
+	fi
     fi
 done

@@ -1,9 +1,35 @@
 #!/usr/bin/ksh -p
 
-case $# in
-    0)	echo "USAGE mz base1 base2 base3 ..."
-	exit 1;;
-esac
+########################################################################
+#
+#	make iC files in previous versions
+#
+########################################################################
+
+usage ()
+{
+    echo 'Usage:	'${0##*/}' [-dh] file ...' >&2
+    echo '	-d	diff previously made files' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: mz,v 1.5 2001/02/08 20:23:10 jw Exp $' >&2
+}
+
+while [[ $# > 0 ]]; do
+    case $1 in
+    -)	shift; break;;
+    -*)	option=${1#?}
+	while [[ -n "$option" ]]; do
+	    case "$option" in
+	    d*)	d=diff;;
+	    h*)	usage; exit 255;;
+	    *) aflag="-$option"; break;;
+	    esac
+	    option=${option#?}
+	done;;
+    *)	break;;
+    esac
+    shift
+done
 
 for f in $*; do
     if [[ ! -e $f.p ]]; then
@@ -16,13 +42,25 @@ if [[ -n "$er" ]]; then
     exit 2;
 fi
 
-for v in 36 37 38 39 40 41 42 43 44 45 46 47 50 51 54 55 56; do
-    echo "### $v ###"
-    for f in $*; do
-	rm -f $f $f.lst $f.c Alex$v/$f.lst Alex$v/$f.c
-    done
-    makex -v$v $*;
-    for f in $*; do
-	cp $f.p $f.lst $f.c Alex$v
-    done
+versions=$(echo Alex??)
+
+for w in $versions; do
+    if [[ ! -L $w ]]; then
+	v=${w##*[a-z]}
+	echo "### $v ###"
+	for f in $*; do
+	    rm -f $f $f.lst $f.c $f.ini
+	    if [[ -z "$d" ]]; then
+		rm -f Alex$v/$f.lst Alex$v/$f.c Alex$v/$f.ini
+	    fi
+	done
+	makex -v$v $*;
+	for f in $*; do
+	    if [[ -n "$d" ]]; then
+		mdiff -ne $f.p $f.lst $f.c $f.ini Alex$v
+	    else
+		cp $f.p $f.lst $f.c $f.ini Alex$v
+	    fi
+	done
+    fi
 done

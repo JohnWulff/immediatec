@@ -1,5 +1,5 @@
 static const char pplc_h[] =
-"@(#)$Id: pplc.h,v 1.21 2001/01/25 21:53:13 jw Exp $";
+"@(#)$Id: pplc.h,v 1.22 2001/02/11 14:05:14 jw Exp $";
 /* parallel plc */
 
 /* J.E. Wulff	3-Mar-85 */
@@ -149,7 +149,7 @@ extern void	efree(void *);
 
 /* compiler tokens corresponding to ftype */
 #define DEF_ACT	UNDEF, AVAR, LVAR, ACTION, ACTION, ACTION, ACTION,\
-	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, WACT, XACT,\
+	ACTION, ACTION, ACTION, ACTION, ACTION, ACTION, AOUT, LOUT,\
 	CVAR, TVAR
 
 extern uchar	types[];		/*   comp.y   */
@@ -179,8 +179,6 @@ typedef struct Gate {			/* Gate */
 	int		gt_new;		/* new value for arithhmetic */
 	int		gt_old;		/* old value for arithhmetic */
 } Gate;
-/* ##	struct Gate *	gt_last;	 back link for lists */
-/* gt_last # (Gate *)gp->gt_list # back link for output or clock lists */
 
 #define FL_GATE	0
 #define FL_CLK	1

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-    "@(#)$Id: outp.c,v 1.31 2001/02/03 17:10:04 jw Exp $";
+    "@(#)$Id: outp.c,v 1.32 2001/02/11 14:05:14 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -720,7 +720,7 @@ extern Gate *	l_[];\n\
 		} else if (dc == OUTX) {
 		    if (iqt[0] == 'Q' &&
 			bwx[0] == 'X' &&
-			cnt == 4 && byte < IXD && bit < 8) {
+			cnt == 5 && byte < IXD && bit < 8) {
 			/* OUTPUT byte part of bit pointer */
 			fprintf(Fp, " (Gate**)%d,", byte);
 			mask = bitMask[bit];
@@ -891,7 +891,11 @@ static Gate *	l_[] = {\n", linecnt, outfile);
 		    } else {
 			/* Function Pointer at start of input list */
 			len += 17;	/* assume len of %d is 2 */
-			fprintf(Fp, "%s(Gate*)cexe_%d,", fs, lp->le_val);
+			if (lp->le_val) {
+			    fprintf(Fp, "%s(Gate*)cexe_%d,", fs, lp->le_val);
+			} else {
+			    fprintf(Fp, "%s(Gate*)0,", fs);	/* OUTW */
+			}
 			fs = " ";
 			val = NOT;	/* force single input list */
 		    }

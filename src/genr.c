@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.33 2001/02/04 17:37:21 jw Exp $";
+"@(#)$Id: genr.c,v 1.34 2001/02/11 14:05:14 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -366,7 +366,7 @@ op_not(register List_e * right)		/* logical negation */
 #endif
     return (right);
 } /* op_not */
- 
+
 /********************************************************************
  *
  *	asign List_e stack to links
@@ -510,7 +510,7 @@ op_asgn(			/* asign List_e stack to links */
 	var->u.blist = right;		/* link var to right */
     }
 
-    atn = (debug & 0100000) ? -1 : 0;	/* QW0_0 generated for qp_value ALIAS */
+    atn = 0;
     sp = var;				/* start reduction with var */
     t_first = rl->f; t_last = rl->l;	/* full text of expression */
     if (debug & 02) fprintf(outFP, "resolve \"%s\" to \"%s\"\n", t_first, t_last);
@@ -576,7 +576,9 @@ op_asgn(			/* asign List_e stack to links */
 		/* link Symbols to the end of gp->list to maintain order */
 		lp->le_next = 0;
 					/* && gp->u.blist ZZZ */
-		if (gp->ftype == ARITH && lp->le_val != (unsigned) -1) {
+		if (gp->ftype == ARITH &&
+		    sp->ftype != OUTW &&
+		    lp->le_val != (unsigned) -1) {
 		    lp->le_val = c_number + 1;	/* arith case # */
 		}
 		if ((tlp = gp->list) == 0) {
@@ -711,7 +713,7 @@ op_asgn(			/* asign List_e stack to links */
 	    }
 	    *ep++ = 0;
 						/* start case or function */
-	    if ((debug & 0100000) == 0) {	/* output cexe function */
+	    if (sp->ftype != OUTW) {	/* output cexe function */
 		fprintf(exoFP, cexeString[outFlag], ++c_number);
 		fprintf(exoFP, "#line %d \"%s\"\n", lineno, inpNM);
 		fprintf(exoFP, "	return %s;\n", eBuf);
@@ -719,8 +721,6 @@ op_asgn(			/* asign List_e stack to links */
 		    fprintf(exoFP, "}\n\n");	/* terminate function */
 		}
 		if (debug & 04) fprintf(outFP, "; (%d)\n", c_number);
-	    } else {
-		if (debug & 04) fprintf(outFP, "; (dummy assignment)\n");
 	    }
 	}
 	sflag = 1;			/* print output name */
@@ -809,31 +809,26 @@ op_asgn(			/* asign List_e stack to links */
     }
     return (sv->v);
 } /* op_asgn */
- 
+
 /********************************************************************
  *
- *	Value from QBx or QWx	when ft == ARITH
- *	Value from QXx.y	when ft == GATE
+ *	Asign to QBx or QWx	when ft == ARITH
+ *	Asign to QXx.y		when ft == GATE
  *
- *	Once an output symbol has been assigned to with qp_asgn() an
- *	auxiliary gate named QW1_1 etc points to the output QW1, which
- *	is the name used in expressions. yylex() returns QW1_1 by use
- *	of the backpointer generated from QW1 in qp_asgn(). In this
- *	case act->v->list != 0 and most of the code below is skipped.
+ *	Outputs are ordinary nodes of type ARITH or GATE which may
+ *	be used as values anywhere, even before they are assigned.
  *
- *	When an output gate is used for input, but has never been
- *	assigned to yet, act->v->list == 0 and the code below assigns
- *	the output gate from a temporary gate variable using qp_asgn().
- *	This ensures that a provisional auxiliary driver gate exist.
- *	This provisional driver gate is named QW1_0 etc.
+ *	When the right expression of the assignment is a direct Symbol
+ *	that Symbol drives the output gate. This assignment generates
+ *	an ALIAS in the usual way. This ALIAS may contain a logic
+ *	inversion.
  *
- *	Extra code in qp_asgn() re-assign the output gate again,
- *	without notifying a multiple assignment. The provisional driver
- *	QW1_0 is made an ALIAS to the auxiliary driver generated in the
- *	new assignment.  All outputs from the previous auxiliary output
- *	driver (now an ALIAS) are transferred to the new auxiliary driver.
+ *	The actual output action is handled by an auxiliary node of
+ *	ftype AOUT or LOUT, which is linked to the output value node,
+ *	carrying the name of the output. This auxiliary node is never
+ *	and can never be used as an input value.
  *
- *	This use of output values before assignment is necessary in iC,
+ *	The use of output values before assignment is necessary in iC,
  *	to allow the implementation of feedback in single clocked
  *	expressions. eg: the following output word of 1 second counts
  *
@@ -847,180 +842,7 @@ op_asgn(			/* asign List_e stack to links */
  *	logic or arithmetic values is completely hidden from the user,
  *	which removes unnecessary errors in user code.
  *
- *	Lis expr contains List_e *v and char *f and *l to source
- *	Sym act contains Symbol *v and char *f and *l to source
- *
  *******************************************************************/
-
-void
-qp_value(Lis * expr, Sym * act, uchar ft)
-{
-    Lis		li;
-
-    expr->f = li.f = act->f; expr->l = li.l = act->l;
-    if ((li.v = act->v->list) == 0) {
-	Symbol *	sp;		/* output not yet assigned */
-	char		temp[100];
-	short		saveDebug;
-	char *		bp;
-	char *		cp;
-	char *		dp;
-
-	sp = install("__Tmp_0", INPW, OUTX);	/* temporary __Tmp symbol */
-	li.v = sy_push(sp);			/* provide a link to __Tmp */
-	saveDebug = debug;
-	if ((debug & 06) == 04) {
-	    debug &= ~04;			/* supress listing output */
-	}
-	debug |= 0100000;			/* supress cexe output */
-	li.v = qp_asgn(act, &li, ft)->list;	/* ft is ARITH or GATE */
-	li.v->le_sym->type = UDF;		/* not really defined yet */
-	debug = saveDebug;			/* restore listing output */
-	if (ft == ARITH) {
-	    cp = temp;
-	    cp += sprintf(temp, "_(%s)", li.v->le_sym->name);
-	    bp = act->l;			/* copy rest of lexed statement */
-	    expr->l = li.l = act->l = act->f + (cp - temp);
-	    while (bp < stmtp) {
-		*cp++ = *bp++;
-	    }
-	    bp = temp;
-	    dp = act->f;			/* copy extended statement */
-	    while (bp < cp) {
-		*dp++ = *bp++;
-	    }
-	    stmtp = dp;				/* fix WACT name */
-	}
-	unlink_sym(sp);				/* unlink __Tmp symbol */
-	free(sp->name);
-	sy_pop(sp->list);
-	free(sp);			/* free all references to W_ symbol */
-    }
-    expr->v = sy_push(li.v->le_sym);	/* link to output driver */
-    expr->v->le_val = li.v->le_val;	/* copy function number or inversion */
-    expr->v->le_first = expr->f; expr->v->le_last = expr->l;
-} /* qp_value */
- 
-/********************************************************************
- *
- *	Asign to QBx or QWx	when ft == ARITH
- *	Asign to QXx.y		when ft == GATE
- *
- *	When the right expression of the assignment is a direct Symbol
- *	that Symbol drives the output gate. This assignment generates
- *	a backpointer in the output gate to the Symbol driving the output.
- *	The backpointer is used to locate the actual logic or arithmetic
- *	value, which that output represents. The backpointer may contain
- *	a logic inversion. In this way the use of an output gate as input
- *	is handled just like an ALIAS.
- *
- *	In the more usual case, where the right expression is a logical
- *	or arithmetic expression, that expression resolves into a gate,
- *	which is named QW1_1 etc. This is the driver gate and is linked
- *	to the actual output gate just as described above. The driver is
- *	used for all inputs, since output gates of ftyp OUTW and OUTX
- *	cannot drive logic or arithmetic directly.
- *
- *	Sym sv contains Symbol *v and char *f and *l to source
- *	Lis lr contains List_e *v and char *f and *l to source
- *
- *******************************************************************/
-
-Symbol *
-qp_asgn(
-    Sym *	sv,
-    Lis *	rl,
-    uchar	ft)
-{
-    Lis		li1;
-    List_e *	lp;
-    List_e *	lpf;
-    List_e **	lpp;
-    Symbol *	svv;
-    Symbol *	sp;
-    Symbol *	fsp;
-    Symbol *	bsp = 0;
-    List_e *	lpb = 0;
-    uchar	oft = OUTW - ARITH + ft;	/* ensure order of ftypes is correct */
-
-    if ((svv = sv->v)->type != UDF) {
-	if (svv->type != ERR && (
-	    svv->ftype != oft ||		/* oft is OUTW or OUTX */
-	    (lpf = svv->list) == 0 ||
-	    (bsp = lpf->le_sym) == 0 ||
-	    bsp->type != UDF
-	)) {
-	    error("multiple assignment to imm bit or int:", svv->name);
-	    svv->type = ERR;			/* cannot execute properly */
-	} else {
-	    svv->type = UDF;
-	}
-	free(lpf);				/* old back link */
-    }
-    lpf = op_force(rl->v, ft);			/* ARITH or GATE */
-    fsp = lpf->le_sym;				/* aexpr symbol */
-    svv->list = sy_push(lpf->le_sym);		/* create back link */
-    svv->list->le_val = lpf->le_val;		/* copy inversion to back link */
-    li1.v = op_push((List_e *)0, UDF, lpf);	/* type <== AND */
-    li1.v->le_sym->type = types[ft];		/* type <== ARN or OR */
-    li1.f = rl->f;	/* for op_asgn */
-    li1.l = rl->l;	/* for op_asgn */
-    if (bsp) {
-	/*
-	 * QW1_0 is made an ALIAS to the auxiliary driver generated in the
-	 * new assignment.  All outputs from the previous auxiliary output
-	 * driver (now an ALIAS) are transferred to the new auxiliary driver.
-	 *
-	 * ALIAS should be complete before the op_asgn() below, so that any
-	 * inputs of its own output are resolved correctly in that assignment.
-	 */
-	assert(fsp);
-	bsp->type = ALIAS;			/* convert old driver to ALIAS */
-	for (lpp = &bsp->list, lp = *lpp; lp; lpp = &lp->le_next, lp = *lpp) {
-	    if (lp->le_sym == svv) {
-		lp->le_sym = fsp;		/* is ALIAS to driver gate */
-		*lpp = lp->le_next;		/* rest of output list */ 
-		lp->le_next = 0;		/* ALIAS has backward link only */
-		lp->le_val = lpf->le_val;	/* handle inversion */
-		lpb = bsp->list;		/* old output list or 0 */ 
-		bsp->list = lp;			/* now link ALIAS correctly */
-		break;
-	    }
-	}
-	assert(lp != 0);			/* WHAT! no link to output ? */
-    }
-    sp = op_asgn(sv, &li1, oft);		/* oft is OUTW or OUTX */
-    if (bsp) {
-	if (lpb) {
-	    if ((lp = fsp->list) != 0) {
-		unsigned int inv = (ft == GATE) ? lpf->le_val : 0;
-		fsp->list = lpb;		/* put old output list first */
-		while (lpb->le_next != 0) {
-		    lpb->le_val ^= inv;		/* invert link in old list */
-		    lpb = lpb->le_next;
-		}
-		lpb->le_val ^= inv;		/* invert last link in old list*/
-		lpb->le_next = lp;		/* link new output at end of old */
-		if (debug & 04) {		/* generate listing output */
-		    iFlag = 1;
-		    fprintf(outFP, "\t%s\t%c ---%c\t%s\n\n", fsp->name,
-			(fsp->ftype != GATE) ? fos[fsp->ftype] : w(lpf),
-			os[bsp->type], bsp->name);
-		}
-	    }
-	} else if (bsp->ftype >= MAX_AR) {
-	    unlink_sym(bsp);			/* ALIAS not required */
-	    free(bsp->name);
-	    sy_pop(bsp->list);
-	    free(bsp);				/* free all references to ALIAS */
-	} else {
-	    /* these symbol table entries are needed to edit cexe.tmp */
-	    if (debug & 04) iFlag = 1;
-	    bsp->type = DALIAS;			/* deleted arithmetic ALIAS */
-	}
-    }
-    return sp;
-} /* qp_asgn */
 
 /********************************************************************
  *
