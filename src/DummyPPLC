@@ -20,10 +20,10 @@ format STDERR =
 Usage:	@<<<<<<<< [-s <host>] [-p <port>] [-h] [<delay>]
 	$named
 	-s host	ID of server (default 'localhost')
-	-p port	service port of server (default '8080')
+	-p port	service port of server (default '8778')
 	delay	random output every <delay> seconds eg 2.5
 	-h	help, ouput this Usage text only
-$Id: DummyPPLC,v 1.3 2000/05/30 22:02:32 jw Exp $
+$Id: DummyPPLC,v 1.4 2000/11/06 20:30:33 jw Exp $
 .
 
 use vars qw($opt_s $opt_p $opt_h);
@@ -41,7 +41,7 @@ if ($opt_h) {
 ########################################################################
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
-my $port = defined $opt_p ? $opt_p : 8080;
+my $port = defined $opt_p ? $opt_p : 8778;
 my $pplc = 'P0';
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
