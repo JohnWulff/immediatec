@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.10 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: load.c,v 1.11 2000/12/07 18:31:14 jw Exp $";
 /********************************************************************
  *
  *	load.c
@@ -397,11 +397,13 @@ main(
 	    if (op->gt_ini != -ALIAS) {
 		if (df) printf("%-8s %3d %3d\n",
 		    op->gt_ids, op->gt_val, op->gt_mark);
-		if (op->gt_val == 0) {
-		    fprintf(stderr, "WARNING '%s' has no input\n", op->gt_ids);
-		}
-		if (op->gt_mark == 0) {
-		    fprintf(stderr, "WARNING '%s' has no output\n", op->gt_ids);
+		if (op->gt_ini != -NCONST) {
+		    if (op->gt_val == 0) {
+			fprintf(stderr, "WARNING '%s' has no input\n", op->gt_ids);
+		    }
+		    if (op->gt_mark == 0) {
+			fprintf(stderr, "WARNING '%s' has no output\n", op->gt_ids);
+		    }
 		}
 		if (op->gt_fni == ARITH || op->gt_fni == GATE) {
 		    fp += op->gt_mark + (op->gt_fni == GATE);

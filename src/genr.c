@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.7 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: genr.c,v 1.8 2000/12/07 18:31:14 jw Exp $";
 /************************************************************
  * 
  *	"genr.c"
@@ -388,7 +388,7 @@ op_asgn(			/* asign List_e stack to links */
 	    var->ftype = rsp->ftype;
 	}
     }
-    if (rsp->u.blist == 0) {		/* right must be a $ symbol */
+    if (rsp->type == NCONST || rsp->u.blist == 0) {		/* right must be a $ symbol */
 	if (var->type != ERR) {
 	    var->type = ALIAS;		/* alias found */
 	}

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile,v 1.10 2000/11/11 13:36:37 jw Exp $
+# @(#)$Id: Makefile,v 1.11 2000/12/07 18:31:14 jw Exp $
 ############################################################
 #
 #	makefile for parallel plc
@@ -56,7 +56,7 @@ scid.c:	pplc.v Makefile pawk.a
 	rm -f scid.c; ident pplc.v Makefile | grep '$Id' | awk -f pawk.a > scid.c; chmod -w scid.c
 
 cexe.c:	cexe.h
-	pplc -cd400 /dev/null	# generate cexe.c with no functions
+	pplc -c /dev/null	# generate cexe.c with no functions
 
 comp.c:	comp.y
 

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.6 2000/11/11 13:36:37 jw Exp $";
+"@(#)$Id: link.c,v 1.7 2000/12/04 10:51:12 jw Exp $";
 /********************************************************************
  *
  *	"link.c"
@@ -46,7 +46,7 @@ link_ol(
 #if !defined(_WINDOWS) || defined(LOAD)
 	    glit_nxt++;				/* count glitch scan */
 #endif
-	    diff += tp->gt_mark;		/* makes sense for TIM */
+	    diff += tp->gt_mark;		/* makes sense for TIMRL */
 	    if ((tp = tp->gt_next) == ap) {	/* end of one list */
 		/**********************************************************
 		 *
@@ -80,7 +80,7 @@ link_ol(
 	gp->gt_next = 0;			/* activity list */
 	if (np == ap) {				/* last entry ? */
 	    (Gate *)ap->gt_list = tp;		/* adjust pointer */
-	} else if (ap->gt_fni == TIM) {		/* correct timer list ? */
+	} else if (ap->gt_fni == TIMRL) {	/* correct timer list ? */
 	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to old */
 	    gp->gt_mark += diff;		/* time remaining */
 	}
@@ -89,7 +89,7 @@ link_ol(
 	tp->gt_next = np = gp->gt_next;		/* previous ==> next */
 	np->gt_prev = tp;			/* previous <== next */
 	gp->gt_next = gp->gt_prev = 0;		/* unlink Gate */
-	if (out_list->gt_fni == TIM) {		/* correct timer list ? */
+	if (out_list->gt_fni == TIMRL) {	/* correct timer list ? */
 	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to next */
 	    /* ignore time remaining in gp */
 	}
@@ -116,9 +116,9 @@ link_ol(
 		if (debug & 0200) fprintf(outFP, "%d", gp->gt_mcnt);
 #endif
 	    }
-	} else if (out_list->gt_fni == TIM) {	/* rest are actions */
+	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */
 	    /*
-	     * except OUTW or OUTX which is never linked to TIM - ignore
+	     * except OUTW or OUTX which is never linked to TIMRL - ignore
 	     *
 	     * action D_SH is always timed, even when arithmetic
 	     * value is 0 (ignore gt_val). This implements sample/hold

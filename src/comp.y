@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.25 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: comp.y,v 1.26 2000/12/07 18:31:14 jw Exp $";
 /********************************************************************
  *
  *	"comp.y"
@@ -239,7 +239,25 @@ asgn	: UNDEF '=' aexpr	{
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) { $$.v = 0; warn1(); YYERROR; }
+		if ($3.v == 0) {
+		    char *	cp = $3.f;
+		    char *	ep = $3.l;
+		    int		bc = 30;
+		    char	buf[30];
+		    char *	bp = buf;
+		    Symbol *	symp;
+		    while (cp < ep) {
+			if (--bc == 0 || !isdigit(*bp++ = *cp++)) {
+			    $$.v = 0; warn1(); YYERROR;
+			}
+		    }
+		    *bp = 0;		/* terminate - there is room in buf */
+		    if ((symp = lookup(buf)) == 0) {
+			symp = install(buf, NCONST, ARITH); /* becomes NVAR */
+			symp->u.val = atoi(buf);	/* transfer value */
+		    }
+		    $3.v = sy_push(symp);	/* ZZZ is it safe to use $3.v ??? */
+		}
 		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    error("multiple assignment to imm int:", $1.v->name);
 		    $1.v->type = ERR;	/* cannot execute properly */
@@ -579,7 +597,13 @@ ctref	: cexpr			{ $$.v = $1.v; }	/* other clock */
 	  dexpr			{ $$.v->le_val = $4.v->le_sym->u.val; } /* time value */
 	;			/* TODO link instead - works for const NUMBER only */
 
-dexpr	: NVAR			{ $$.v = sy_push($1.v); }
+dexpr	: NVAR			{
+		register Symbol *	sp = $1.v;
+		while (sp->type == ALIAS) {
+		    sp = sp->list->le_sym;	/* get token of original */
+		}
+		$$.v = sy_push(sp);
+	    }
 	| aexpr			{ $$.v = $1.v; }	/* TODO time value not correct */
 	;
 
@@ -970,7 +994,7 @@ yylex(void)
 		    if (symp->type == NCONST && symp->ftype == ARITH) {
 			c = NVAR;			/* numeric symbol */
 		    } else {
-			c = NUMBER;
+			c = NUMBER;			/* unlikely */
 		    }
 		} else {
 		    c = NUMBER;
@@ -1023,8 +1047,8 @@ yylex(void)
 	    }
 	    if (typ == KEYW) {
 		c = symp->u.val;		/* reserved word */
-	    } else if (typ == ARNC || typ == LOGC || typ == NCONST){
-		c = lex_typ[symp->type];	/* NCONST via ALIAS */
+	    } else if (typ == ARNC || typ == LOGC || dflag && typ == NCONST){
+		c = lex_typ[symp->type];	/* NCONST via ALIAS ==> NVAR */
 	    } else {
 		c = lex_act[symp->ftype];	/* alpha_numeric symbol */
 	    }

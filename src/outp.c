@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.14 2000/12/04 09:45:22 jw Exp $";
+"@(#)$Id: outp.c,v 1.15 2000/12/04 10:51:12 jw Exp $";
 /* parallel plc - output code or run machine */
 
 /* J.E. Wulff	24-April-89 */
@@ -295,7 +295,9 @@ output(char * outfile)			/* emit code in C */
 			    }
 			    gp++;
 			} else if (typ < MAX_OP) {
-			    gp->gt_fni = typ;	/* CLK || TIM list headers */
+			    /* CLK || TIM list headers - convert to ftype */
+			    gp->gt_fni = typ == CLK ? CLCKL
+				       : typ == TIM ? TIMRL : 0;
 			    /*
 			     * this initialisation of clock references relies
 			     * on gates which execute a function ftype != GATE
