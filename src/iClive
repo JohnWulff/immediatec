@@ -60,6 +60,7 @@ my @tagForeground = ('black'        , 'red'          ,);
 my $is_logic = 0;             # 1 if check-button on
 my $info = '';
 my $filename = '';
+my $iCname = '';
 
 ########################################################################
 #
@@ -81,7 +82,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2001  John E. Wulff		<john.wulff@inka.de>
 							  '@'
-$Id: iClive,v 1.5 2001/03/29 11:16:15 jw Exp $
+$Id: iClive,v 1.6 2001/04/01 08:23:14 jw Exp $
 .
 
 use vars qw($opt_t $opt_m $opt_s $opt_p $opt_f $opt_h);
@@ -102,7 +103,7 @@ if ($opt_m) {
 
 ########################################################################
 #
-#	Connect to server
+#	Initialize global variables
 #
 ########################################################################
 
@@ -113,20 +114,12 @@ my $unitID = 'L0';
 my %symbolTable = ();	# $symbolTable{$symbol}     = [$ftype, $index]
 my @activeSymbols;	# $activeSymbols[$index][0] = $ftype if active (never 0)
 			# $activeSymbols[$index][1] = $ftype if inverse active
-my $recvIndex = 0;
+my $stIndex = 0;
+my $conn;
 
 my ($normal, $inverse);
 $normal = "0";
 $inverse = "0~";
-
-my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-if ($conn) {
-    print "Connection $unitID at client.\n";
-    $conn->send_now($unitID);	# register I/O
-    $conn->send_now("$unitID.1");	# request Symbol Table
-} else {
-    print "$named could not connect to $host:$port\nEdit only - no live listing\n";
-}
 
 $filename = $ARGV[0] unless @ARGV < 1;
 
@@ -221,7 +214,7 @@ $search->bind('<KeyPress-Return>', \&search);
 ########################################################################
 #	Info bar
 ########################################################################
-$mainWindow->Label(-textvariable => \$info,
+my $infoBar = $mainWindow->Label(-textvariable => \$info,
 		   -relief => 'ridge',
 		  )->pack(-side => 'bottom',
 		  	  -fill => 'x',
@@ -240,27 +233,48 @@ my $text = $mainWindow->Scrolled('Text',
 			               );
 
 ########################################################################
-#
-#	Register read events
-#
-########################################################################
-
-$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); }) if $conn;
-
-########################################################################
-#
 #	Open the first file in the argument list
-#	Sit in an infinite loop dispatching incoming events.
-#
 ########################################################################
 
 load_file() if $filename;
+
+########################################################################
+#	Connect to ICServer
+########################################################################
+
+connect_to_server();
+
+########################################################################
+#	Sit in an infinite loop dispatching incoming events.
+########################################################################
+
 MainLoop;
 
 ########################################################################
 #
+#	Connect to ICServer and request Symbol Table
+#	Register read events
+#	Register I/O at ICServer and request Symbol Table
+#
+########################################################################
+
+sub connect_to_server {
+    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+    if ($conn) {
+	print "Connection $unitID at client.\n";
+	$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+	$conn->send_now($unitID);	# register I/O
+	$conn->send_now("$unitID.1");	# request Symbol Table
+    } else {
+	$infoBar->configure(-foreground => 'red');
+	$info = "Could not connect to $host:$port - no live listing - edit only";
+    }
+}
+
+########################################################################
+#
 #	Receive message from server - adjust outputs
-#	(these will only occurr if $conn)
+#	(these will only occurr if $conn and read events registered)
 #
 ########################################################################
 
@@ -272,27 +286,46 @@ sub rcvd_msg_from_server {
     if (defined $msg) {
 	if (length $msg == 0) {
 	    $rConn->disconnect();
-	    print "LiveList $unitID disconnected by server\n";
+	    $infoBar->configure(-foreground => 'red');
+	    $info = "$unitID disconnected by server";
 	    deleteAllTags();
 	    undef $conn;
 	} else {
 	    print "$msg\n" if $opt_t;
-	    my @symbols = split /;/, $msg;		# break up message
+	    my @symbols = split /;/, $msg;	# break up message
 	    my $entry = shift @symbols;		# first entry is an operation
 	    if ($entry =~ /$unitID\.(\d+)/) {
 		if (($entry = $1) eq '1') {
-		    # Symbol table block
+		    ####################################################
+		    # Symbol Table block
+		    # Symbol table entries consist of two or three words.
+		    # Usually symbol-id and ftype are received. In this
+		    # case the ST-offset is the index. (computed by counting)
+		    # For ALIASes the index of the Gate to which the
+		    # ALIAS resolves is transmitted as a 3rd value.
+		    ####################################################
 		    while ($entry = shift @symbols) {
-			my ($symbol, $ftype) = split " ", $entry;
-			print "$symbol	$ftype\n" if $opt_t;
-			push @{ $symbolTable{$symbol} }, $ftype, $recvIndex++;
+			my ($symbol, $ftype, $index) = split " ", $entry;
+			$index = $stIndex unless defined $index;
+			print "$index\t$symbol\t$ftype\n" if $opt_t;
+			push @{ $symbolTable{$symbol} }, $ftype, $index;
+			$stIndex++;
 		    }
 		} elsif ($entry eq '2') {
-		    # End of symbol table
-		    $recvIndex = 0;		# ready for next block
+		    ####################################################
+		    # End of Symbol Table
+		    # The 2nd entry is the name of the running iC program.
+		    # This name allows a check against the file name of
+		    # the displayed text. (Assume it should match)
+		    ####################################################
+		    $iCname = shift @symbols;
+		    $stIndex = 0;		# ready for next reception
 		    scan();
 		} elsif ($entry eq '3') {
+		    ####################################################
 		    # New data values
+		    # Data value entries consist of ST-index and value
+		    ####################################################
 		    while ($entry = shift @symbols) {
 			my ($index, $value) = split " ", $entry;
 			my $is = $value ? 1 : 0;
@@ -316,9 +349,11 @@ sub rcvd_msg_from_server {
 			}
 			print "$index	$value\n" if $opt_t;
 		    }
+		} else {
+		    goto Spurious;
 		}
 	    } else {
-		print "Spurious operation '$entry' for $unitID ???\n";
+		Spurious: print "Spurious operation '$entry' for $unitID ???\n";
 	    }
 	}
     }
@@ -351,7 +386,7 @@ sub logic {
 	printMicroSeconds() if $opt_m;
 #endif
     }
-    print "is_logic = $is_logic '$normal' '$inverse'\n if $opt_t";
+    print "is_logic = $is_logic '$normal' '$inverse'\n" if $opt_t;
 }
 
 ########################################################################
@@ -420,8 +455,18 @@ sub deleteAllTags {
 		print(" $index~")   if $activeSymbols[$index][1];
 		print(" deleted\n");
 	    }
-	    $text->tagDelete("$index")  if $activeSymbols[$index][0];
-	    $text->tagDelete("$index~") if $activeSymbols[$index][1];
+	    ############################################################
+	    # due to ALIASes tagDelete would be called more than once
+	    # hence the undefs below
+	    ############################################################
+	    if ($activeSymbols[$index][0]) {
+		undef $activeSymbols[$index][0];
+		$text->tagDelete("$index");
+	    }
+	    if ($activeSymbols[$index][1]) {
+		undef $activeSymbols[$index][1];
+		$text->tagDelete("$index~");
+	    }
 	}
     }
     @activeSymbols = ();	# delete all previous active symbols
@@ -434,7 +479,8 @@ sub deleteAllTags {
 #
 #	The colouring for each symbol found is initially set to logic 0.
 #	Any active symbols which are not 0 are updated immediately by
-#	the iC control program.
+#	the iC control program. Further updates occur, every time the
+#	state of an active symbol changes.
 #
 ########################################################################
 
@@ -443,8 +489,13 @@ sub scan {
 	my ($search_pattern, $current, $word, $i, $iw, $tag, $inv, $ftype, $index);
 
 	deleteAllTags();
-	$search_pattern = '[~!\s]*[A-Za-z][\w.]*\s*((~ )?---)?';
 
+	if ($filename !~ /$iCname/) {
+	    $infoBar->configure(-foreground => 'red');
+	    $info = "'$filename' does not match connected control program '$iCname'"; 
+	}
+
+	$search_pattern = '[~!\s]*[A-Z_a-z][\w]*(\.\w+)?\s*((~ )?---)?';
 	$current = '1.0'; my $length = '0';
 	while (1) {
 	    $current = $text->search('-count' => \$length,
@@ -459,8 +510,8 @@ sub scan {
 	    if ($symbolTable{$2}) {
 		($ftype, $index) = @{ $symbolTable{$2} };
 		$tag = $index;
-		$word = $2;			# ZZZ word is in the symbol table
-		$inv = 0;
+		$word = $2;			# word is in the symbol table
+		$inv = $ftype == 19 ? 1 : 0;	# 19 is inverted logical ALIAS
 		while ($i =~ m/[!~]/g) {
 		    $inv ^= 1;
 		}
@@ -479,18 +530,18 @@ sub scan {
 	}
 
 	####################################################################
-	# send list of active symbols to iC control process
-	# only the state (logic or arithmetic) for the symbols in this list
-	# need to be updated for this display
-	# it is immaterial for the control program in which logic
-	# sense the symbol is displayed
+	# Send list of active symbols to the iC control process. Only the
+	# state (logic or arithmetic) for the symbols in this list need to
+	# be updated for this display, since the others are not displayed.
+	# It is immaterial for the control program in which logic
+	# sense the symbol is displayed, except for inverted ALIASes.
 	####################################################################
 
 	my $msg = "";
 	foreach $index (0 .. $#activeSymbols) {
 	    if ($activeSymbols[$index]) {
 		print "$index\n" if $opt_t;
-		if (length $msg > 391) {
+		if (length $msg > 391) {		# REPLY - 9 in icc.h
 		    $conn->send_now("$unitID.3$msg");	# intermediate active symbols
 		    $msg = "";
 		}
@@ -499,7 +550,8 @@ sub scan {
 	}
 	$conn->send_now("$unitID.4$msg");		# send last active symbols
     } else {
-	$info = "$unitID not connected";
+	$info = "";
+	connect_to_server();	# will call scan() if connect was successful
     }
 }
 
@@ -521,10 +573,12 @@ sub new_text {
 ########################################################################
 
 sub load_file {
+    $infoBar->configure(-foreground => 'black');
     $info = "Loading file '$filename'...";
     $text->delete("1.0", "end");
     if (!open(FH, "$filename")) {
-    $text->insert("end", "ERROR: Could not open $filename\n"); 
+	$infoBar->configure(-foreground => 'red');
+	$info = "ERROR: Could not open $filename"; 
 	return; 
     }
     my $length = 0;
@@ -543,6 +597,7 @@ sub load_file {
 ########################################################################
 
 sub save_file {
+    $infoBar->configure(-foreground => 'black');
     $info = "Saving '$filename'...";
     open (FH, ">$filename");
     my $contents = $text->get("1.0", "end - 1 chars");
