@@ -29,16 +29,30 @@ print "Connection successful.\n";
 #
 ########################################################################
 
-my $top = MainWindow->new();
-$top->title("iC Demo Box");
-$top->Label(-text => "iC Demo Box")->pack;
+my $mainWindow = MainWindow->new();
+$mainWindow->title("iC Demo Box");
+$mainWindow->Label(-text => "iC Demo Box")->pack;
 
-$top->Button(-text => "Exit",
+$mainWindow->Button(-text => "Exit",
             -command => sub { exit },
 	   )->pack(-side   => 'bottom', 
 		   -expand => 1,
 		   -fill   => 'x',
 		  );
+
+my $inputs  = $mainWindow->Frame(
+				)->pack(-side   => 'left', 
+				        -expand => 'y',
+				        -fill   => 'y',
+				       );
+$inputs->Label(-text => 'inputs',)->pack;
+
+my $outputs = $mainWindow->Frame(
+				)->pack(-side   => 'right', 
+				        -expand => 'y',
+				        -fill   => 'y',
+				       );
+$outputs->Label(-text => 'outputs',)->pack;
 
 ########################################################################
 #
@@ -51,7 +65,7 @@ my $index = 0;
 foreach my $input (qw(I0 I1 I2 I3 I4 I5 I6 I7)) {  
 
     $makeCheckbutton = "\
-	\$top->Checkbutton(\
+	\$inputs->Checkbutton(\
 		-text     => \$input,\
 		-variable => \\\$input[\$index],\
 		-command  => sub {\
@@ -74,7 +88,7 @@ my $index = 0;
 foreach my $output (qw(O0 O1 O2 O3 O4 O5 O6 O7)) {  
 
     $makeCheckbutton = "\
-	\$top->Checkbutton(\
+	\$outputs->Checkbutton(\
 		-text     => \$output,\
 		-variable => \\\$output[\$index],\
 #		-state    => 'disabled',\
@@ -100,7 +114,7 @@ foreach my $output (qw(O0 O1 O2 O3 O4 O5 O6 O7)) {
 #
 ########################################################################
 
-$top->fileevent($conn->{sock}, 'readable', sub { });
+$mainWindow->fileevent($conn->{sock}, 'readable', sub { });
 
 ########################################################################
 #
@@ -116,7 +130,7 @@ while (Tk::MainWindow->Count) {
     Msg->event_loop(1);
 }
 # print "\nQuit\n";
-$top->fileevent($conn->{sock}, 'readable', undef);
+$mainWindow->fileevent($conn->{sock}, 'readable', undef);
 $conn->disconnect();
 Msg->event_loop();
 
