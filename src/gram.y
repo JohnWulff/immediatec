@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.12 2002/08/23 18:17:00 jw Exp $";
+"@(#)$Id: gram.y,v 1.13 2002/08/26 19:55:49 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -22,6 +22,7 @@
 #include	<assert.h>
 #include	<stdarg.h>
 
+#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 
@@ -179,9 +180,6 @@ declaration					/* 5 */
 		sp = sp->next;		/* get next before Symbol is placed or deleted */
 		if ($1.symbol && $1.symbol->type == UDF) {
 		    sp1->type = CTYPE;		/* found a typedef */
-#ifdef CACHE
-		    sp1->ftype = CNEW;		/* found a new typedef */
-#endif
 #if YYDEBUG
 		    if ((debug & 0402) == 0402) fprintf(outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
@@ -1797,7 +1795,6 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 	    error("C-statement tries to access an imm type not bit or int:", sp->name);
 	    sp->type = ERR;		/* cannot execute properly */
 	}
-//fprintf(stderr, "immVarFound: %p %s\n", lep, sp->name); fflush(stderr);
     } else {				/* parenthesized variable found */
 	--lep;				/* step back to previous entry */
     }
@@ -1810,7 +1807,6 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 	assert(newArray);		/* FIX with quit */
 	lep += newArray - lineEntryArray;
 	lineEntryArray = newArray;	/* Array has been successfully resized */
-//fprintf(stderr, "immVarFound: %d re-allocated for lineEntryArray %p\n", udfCount, lineEntryArray); fflush(stderr);
     }
 } /* immVarFound */
 
@@ -1955,7 +1951,6 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
 		if ((sp->type & TM) == UDF) {
-//fprintf(stderr, "copyAdjust: %d: %2d %s\n", udfCount, sp->type, sp->name); fflush(stderr);
 		    udfCount += LEAS;
 		}
 	    }
@@ -1963,7 +1958,6 @@ copyAdjust(FILE* iFP, FILE* oFP)
 #endif
 	lineEntryArray = (LineEntry*)realloc(NULL, udfCount * sizeof(LineEntry));
 	assert(lineEntryArray);		/* FIX with quit */
-//fprintf(stderr, "copyAdjust: %d allocated for lineEntryArray      %p\n", udfCount, lineEntryArray); fflush(stderr);
 	lep = lineEntryArray;
 	lep++->pStart = LARGE;		/* guard value in case first immVarFound(0) */
 	lep->pStart   = LARGE;		/* value overwritten by first immVarfound */
@@ -2023,6 +2017,5 @@ copyAdjust(FILE* iFP, FILE* oFP)
 	}
 	bytePos++;
     }
-//fprintf(stderr, "copyAdjust: %d used for lineEntryArray\n", lep - lineEntryArray); fflush(stderr);
 } /* copyAdjust */
 #endif

@@ -4,14 +4,18 @@ BEGIN {
 	mod = "";
     }
 
-    {
+/\$Id/ {
 	printf "%sconst char %s%s[] =\n", mod, name, x;
 	x++;
 	mod = "static ";
 	printf "\t\"@%s%s\";\n", "(#)", $0;
+	if (x <= 1) {
+	    printf("#ifndef LOAD\n");
+	}
     }
 
 END {
+	printf("#endif\n");
 	printf "%sconst char %s%s[] =\n", mod, name, x;
-	printf "\t\"@(#) $Id: pawk.a,v 1.2 1996/07/30 20:24:24 john Exp $\";\n";
+	printf "\t\"@(#) $Id: pawk.a,v 1.3 2002/08/26 16:41:34 jw Exp $\";\n";
     }

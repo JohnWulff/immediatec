@@ -1,5 +1,3 @@
-static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.43 2002/08/23 19:54:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -11,11 +9,14 @@ static const char icc_h[] =
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	icc.h
- *	parallel plc - runtime execution header
+ *	immediate C - runtime execution header
  *
  *******************************************************************/
 
-/* J.E. Wulff	3-Mar-85 */
+#ifndef ICC_H
+#define ICC_H
+static const char icc_h[] =
+"@(#)$Id: icc.h,v 1.44 2002/08/26 22:05:24 jw Exp $";
 
 #ifdef _WINDOWS
 #define	strlen(a)	lstrlen(a)
@@ -34,94 +35,6 @@ extern void	efree(void *);
 #define	DIS_MAX	5		/* diplay heading after this many */
 #define	IXD	64		/* number of slots in icc (<= 64) */
 #define	TXD	1		/* number of system slots (timers etc) */
-
-#define	Sizeof(x)	((sizeof x) / (sizeof x[0]))
-#ifndef DEQ
-#define	Out_init(ol)	(ol->gt_list = (Gate **)(ol->gt_next = ol))
-#else
-#define	Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
-#endif
-
-#define	NOT	1	/* used in List_e.le_val */
-
-/* operations used in 'op' 'Symbol.type' and display */
-
-#define	UDF	0	/* represents undefined type */
-#define	ARNC	1	/* arithmetic node in a C fragment */
-#define	ARN	2	/* arithmetic node */
-
-#define	LOGC	3	/* logical node in a C fragment */
-#define	AND	4
-#define	OR	5
-#define	LATCH	6
-
-#define	SH	7	/* functions driven by action gates */
-#define	FF	8
-#define	VF	9
-#define	EF	10
-#define	SW	11	/* NOTE: no output */
-#define	CF	12	/* NOTE: no output */
-#define	NCONST	13	/* constant number */
-#define	INPW	14	/* arithmetic input */
-#define	INPX	15	/* logical input */
-
-#define	CLK	16	/* functions which controll clock lists */
-#define	TIM	17
-
-#define	ALIAS	18	/* non executable functions */
-#define	ERR	19	/* mark node which had error during generation */
-
-#define	KEYW	20	/* hold yacc token, used for compilation only */
-
-#define	CTYPE	21	/* used for C-compilation only */
-#define	CWORD	22	/* used for C-compilation only */
-#ifdef CACHE
-#define	CINC	23	/* used for C-compilation only */
-#endif
-
-#define	MAX_GT	SH	/* types < MAX_GT are driven by a value */
-#define	MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
-#define	MAX_OP	ALIAS	/* types < MAX_OP are executable */
-#define	MAX_LS	KEYW	/* types < MAX_LS are generated */
-
-			/* mark nodes declared as extern - stop assignment */
-#define	TM	31	/* 0x1f mask for type from EXT_TYPES */
-#define EXT_ARN	ARN+TM+1
-#define EXT_AND	AND+TM+1
-#define EXT_OR	OR+TM+1
-#define EXT_CLK	CLK+TM+1
-#define EXT_TIM	TIM+TM+1
-
-/*	action function types symbol.ftype and Gate.gt_fni */
-
-#define	UDFA	0	/* indices into action function arrays */
-#define	ARITH	1	/* arithmetic gate */
-#define	GATE	2	/* logical gate */
-#define	RI_BIT	3	/* logical action */
-#define	CH_BIT	4	/* arithmetic action */
-#define	S_SH	5	/* arithmetic action */
-#define	R_SH	6	/* arithmetic action */
-#define	D_SH	7	/* arithmetic action */
-#define	F_SW	8	/* arithmetic action */
-#define	S_FF	9	/* logical action not needed 1001 */
-#define	R_FF	10	/* logical action not needed 1010 */
-#define	D_FF	11	/* logical action not needed 1011 */
-#define	F_CF	12	/* logical action */
-#define	F_CE	13	/* logical action */
-#define	CLCK	14	/* logical action */
-#define	TIMR	15	/* logical action */
-#define	OUTW	16	/* arithmetic output */
-#define	OUTX	17	/* logical output */
-#define	CLCKL	18	/* clock action */
-#define	TIMRL	19	/* timer action */
-
-#ifdef CACHE
-#define	COLD	20	/* used for C-compilation only */
-#define	CNEW	21	/* used for C-compilation only */
-#define	CGINC	22	/* used for C-compilation only */
-#define	CLINC	23	/* used for C-compilation only */
-#define	CFINC	24	/* used for C-compilation only */
-#endif
 
 #define	MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
 #define	MIN_ACT	RI_BIT	/* ftypes >= MIN_ACT cause an action */
@@ -144,13 +57,30 @@ extern void	efree(void *);
 #define	INPT_M	0	/* only used for check so far */
 #define	OUTP_M	1	/* used to check that 1 input */
 
+#define	FL_GATE	0
+#define	FL_CLK	1
+#define	FL_TIME	2
+			/* action gate output or C function pointer */
+#define	gt_funct	gt_list[FL_GATE]
+			/* clock list pointer */
+#define	gt_clk		gt_list[FL_CLK]
+			/* gate holding time value (ARN or NCONST) */
+#define	gt_time		gt_list[FL_TIME]
+	/* this order is required for initialisation */
+
+#define	Sizeof(x)	((sizeof x) / (sizeof x[0]))
+#ifndef DEQ
+#define	Out_init(ol)	(ol->gt_list = (Gate **)(ol->gt_next = ol))
+#else
+#define	Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
+#endif
+
 /* list of types */
 #define	FULL_TYPE "UDF","ARNC","ARN","LOGC","AND","OR","LATCH",\
 	"SH","FF","VF","EF","SW","CF","NCONST","INPW","INPX",\
-	"CLK","TIM","ALIAS","ERR","KEYW","CTYPE","CWORD",\
-	"CINC",
+	"CLK","TIM","ALIAS","ERR","KEYW","CTYPE","CWORD",
 
-#define	OPS	".-+\"&|%*#^/({=[<:!@?;twi"	/* DEBUG display of types */
+#define	OPS	".-+\"&|%*#^/({=[<:!@?;tw"	/* DEBUG display of types */
 
 /* ftypes corresponding to types */
 #define	FTYPES	UDFA, ARITH, ARITH, GATE, GATE, GATE, GATE,\
@@ -171,14 +101,13 @@ extern void	efree(void *);
 /* list of ftypes */
 #define	FULL_FTYPE "UDFA","ARITH","GATE","RI_BIT","CH_BIT","S_SH","R_SH","D_SH",\
 	"F_SW","S_FF","R_FF","D_FF","F_CF","F_CE","CLCK","TIMR","OUTW","OUTX",\
-	"CLCKL","TIMRL",\
-	"COLD","CNEW","CGINC","CLINC","CFINC",
+	"CLCKL","TIMRL",
 
 /* macro names generated by gram.y for ARITH and GATE values and assignments */
 #define MACRO_NAMES "_UV(","_AV(","_LV(","_AA(","_LA(",
 #define MACRO_OFFSET	2
 
-#define	FOPS	"UA EVsrHISRDFGCTWX:!onglf"	/* DEBUG display of ftypes */
+#define	FOPS	"UA EVsrHISRDFGCTWX:!"		/* DEBUG display of ftypes */
 
 /* types corresponding to ftypes */
 #define	TYPES	UDF, ARN, OR, EF, VF, SH, SH, SH, SW,\
@@ -198,39 +127,9 @@ extern unsigned char	types[];	/*   comp.y   */
 extern unsigned char	ftypes[];
 extern char		os[];
 extern char		fos[];
-extern FILE *		inFP;		/* input file pointer */
 extern FILE *		outFP;		/* output file pointer */
 extern FILE *		errFP;		/* error file pointer */
 extern short		debug;		/* from -do argument in call to main */
-
-typedef struct Gate {			/* Gate */
-	char		gt_val;		/* forward logic value */
-	char		gt_ini;		/* initial logic value */
-	unsigned char	gt_fni;		/* function index */
-	unsigned char	gt_mcnt;	/* mark counter */
-	char *		gt_ids;		/* id string */
-	struct Gate **	gt_list;	/* forward logic list */
-	struct Gate **	gt_rlist;	/* reverse logic list */
-	struct Gate *	gt_next;	/* forward link */
-	unsigned short	gt_mark;	/* mark for stamping gate */
-	unsigned short	gt_live;	/* live flag and index */
-#ifdef DEQ
-	struct Gate *	gt_prev;	/* previous link */
-#endif
-	int		gt_new;		/* new value for arithhmetic */
-	int		gt_old;		/* old value for arithhmetic */
-} Gate;
-
-#define	FL_GATE	0
-#define	FL_CLK	1
-#define	FL_TIME	2
-			/* action gate output or C function pointer */
-#define	gt_funct	gt_list[FL_GATE]
-			/* clock list pointer */
-#define	gt_clk		gt_list[FL_CLK]
-			/* gate holding time value (ARN or NCONST) */
-#define	gt_time		gt_list[FL_TIME]
-	/* this order is required for initialisation */
 
 typedef void		(*Functp2)(Gate *, Gate *);
 typedef void		(*Functp)(Gate *, int);
@@ -252,11 +151,6 @@ extern unsigned short	xflag;		/* -x flag signals hexadecimal output */
 extern unsigned short	iFlag;		/* inversion correction needed */
 extern int		inversionCorrection(void);
 
-extern Gate		iClock;		/* System clock */
-extern Gate *		IX_[];		/* pointers to Bit Input Gates */
-extern Gate *		IB_[];		/* pointers to Byte Input Gates */
-extern Gate *		IW_[];		/* pointers to Word Input Gates */
-extern Gate *		TX_[];		/* pointers to System Bit Gates */
 extern unsigned char	QX_[];		/* Output bit field slots */
 extern char		QT_[IXD];	/* Output type of slots */
 extern unsigned char	QM_[];		/* Output slot mask per cage */
@@ -350,8 +244,6 @@ extern Gate **		i_list[];		/* used to load several modules */
 #else
 extern int		c_exec(int pp_index, Gate * gp);
 #endif
-#define aAssign		assign
-#define lAssign		assign
-extern int		assign(Gate * lv, int rv);
 
 extern void		liveData(unsigned short index, int value);
+#endif	/* ICC_H */

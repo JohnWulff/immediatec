@@ -124,7 +124,7 @@
                 exit             ### IMPORTANT ###
 
             this copies the essential executables to /usr/local/bin
-            it also copies the include file icc.h to /usr/local/include
+            it also copies the include file icg.h to /usr/local/include
             libict.a to /usr/local/lib and Msg.pm to /usr/lib/perl5/site...
 	    
 	    (make uninstall as su will remove all these files)
@@ -234,4 +234,4 @@
 
 	SuSE Linux 7.2 distribution has Tk800.022 and works fine.
 
-        $Id: README.tpl,v 1.10 2002/08/23 10:13:34 jw Exp $
+        $Id: README.tpl,v 1.11 2002/08/26 19:03:45 jw Exp $

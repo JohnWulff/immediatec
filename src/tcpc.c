@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.10 2002/06/03 13:14:26 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.11 2002/08/26 19:13:50 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -20,12 +20,13 @@ static const char RCS_Id[] =
  *
  *******************************************************************/
 
-#include <netdb.h>
-#include <ctype.h>
-#include <sys/time.h>
-#include <errno.h>
-#include "tcpc.h"
-#include "icc.h"
+#include	<netdb.h>
+#include	<ctype.h>
+#include	<sys/time.h>
+#include	<errno.h>
+#include	"tcpc.h"
+#include	"icg.h"
+#include	"icc.h"
 
 #define TBSIZE 32
 

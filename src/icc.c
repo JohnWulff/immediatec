@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.17 2002/08/13 10:40:05 jw Exp $";
+"@(#)$Id: icc.c,v 1.18 2002/08/26 19:06:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -17,22 +17,23 @@ static const char icc_c[] =
 
 /* J.E. Wulff	3-Mar-85 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
+#include	<stdio.h>
+#include	<stdlib.h>
+#include	<errno.h>
 #ifdef _MSDOS_
-#include <dos.h>
-#include <conio.h>
+#include	<dos.h>
+#include	<conio.h>
 #else	/* Linux */
 #define getch() getchar()
 #define ungetch(x) ungetc(x, stdin)
-#include <sys/types.h>
-#include <sys/time.h>
-#include <termio.h>
+#include	<sys/types.h>
+#include	<sys/time.h>
+#include	<termio.h>
 #endif
-#include <signal.h>
-#include <ctype.h>
-#include "icc.h"
+#include	<signal.h>
+#include	<ctype.h>
+#include	"icg.h"
+#include	"icc.h"
 
 /***NOTE: This is an interrupt service
  routine. You cannot compile this program

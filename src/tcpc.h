@@ -1,5 +1,3 @@
-static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.8 2002/06/03 13:14:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -20,6 +18,11 @@ static const char tcpc_h[] =
  *	W. R. Stevens, TCP/IP Illustrated, Vol 3, p 5
  *
  *******************************************************************/
+
+#ifndef TCPC_H
+#define TCPC_H
+static const char tcpc_h[] =
+"@(#)$Id: tcpc.h,v 1.9 2002/08/26 18:06:23 jw Exp $";
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -67,3 +70,4 @@ extern int		sockFN;			/* TCPIP socket file number */
 extern int		micro;
 extern void		microPrint(const char * str, int mask);
 extern void		microReset(int mask);
+#endif	/* TCPC_H */

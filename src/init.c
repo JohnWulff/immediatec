@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.21 2002/08/06 10:55:23 jw Exp $";
+"@(#)$Id: init.c,v 1.22 2002/08/26 20:41:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,6 +19,7 @@ static const char init_c[] =
 #include	<windows.h>
 #endif
 #include	<stdio.h>
+#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #include	"comp_tab.h"
@@ -80,10 +81,7 @@ static struct {
   { "clock",	KEYW,	TYPE,	CLCKL,	},
   { "int",	KEYW,	TYPE,	ARITH,	},
   { "timer",	KEYW,	TYPE,	TIMRL,	},
-  { "FILE",	CTYPE,	YYERRCODE, 0,	}, /* initial C type from stdio.h */
   { "Gate",	CTYPE,	YYERRCODE, 0,	}, /* initial C type from icc.h */
-  { "Symbol",	CTYPE,	YYERRCODE, 0,	}, /* initial C type from comp.h */
-  { "size_t",	CTYPE,	YYERRCODE, 0,	}, /* initial C type from stdio.h */
   { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
   { 0,		0,	0,	0,	},
 };

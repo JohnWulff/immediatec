@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.61 2002/08/23 19:23:04 jw Exp $";
+"@(#)$Id: outp.c,v 1.62 2002/08/26 20:11:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,6 +25,7 @@ static const char outp_c[] =
 #include	<string.h>
 #include	<assert.h>
 #include	<errno.h>
+#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 
@@ -562,11 +563,10 @@ output(char * outfile)
 	    rc = Cindex; goto endh;
 	}
 	fprintf(H1p, "\
-#include	<stdio.h>\n\
-#include	<icc.h>\n\
+#include	<icg.h>\n\
 #include	\"%s\"\n\
 #include	\"%s\"\n\
-Gate **		i_list[] = { I_LIST 0 };\n\
+Gate **		i_list[] = { I_LIST 0, };\n\
 ", H1name, H2name);					/* list _list_.c */
 	fclose(H1p);					/* list _list_.c */
     }
@@ -586,8 +586,7 @@ Gate **		i_list[] = { I_LIST 0 };\n\
 static char	COMPILER[] =\n\
 \"%s\";\n\
 \n\
-#include	<stdio.h>\n\
-#include	<icc.h>\n\
+#include	<icg.h>\n\
 #include	\"%s\"\n\
 \n\
 #ifdef ALIAS_ARITH\n\
@@ -1187,7 +1186,6 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    } else if (c != ' ' && c != '\t') {
 			lf = 1;			/* not white space */
 		    }
-#ifndef CACHE
 		} else
 		/********************************************************
 		 *  handle pre-processor #include <stdio.h> or "icc.h"
@@ -1207,7 +1205,6 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    }
 		    if (debug & 02) fprintf(outFP, "####### c_parse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
-#endif
 		}
 	    }
 	}
@@ -1268,8 +1265,8 @@ c_compile(FILE * iFP)
 	if (debug & 02) fprintf(outFP, "####### compile include files via %s %s\n", T4FN, T5FN);
 	yyin = T5FP;			/* lexc reads from include now */
 	yyout = outFP;			/* list file */
-	lexflag |= C_NO_COUNT;		/* do not count characters for include files */
-	lineno = 0;
+	lexflag |= C_PARSE|C_NO_COUNT|C_FIRST;	/* do not count characters for include files */
+	gramOffset = lineno = 0;
 	if (c_parse() != 0) {
 	    error("c_compile: Parse error in includes\n", T5FN);
 	}
@@ -1284,7 +1281,7 @@ c_compile(FILE * iFP)
     yyin = T2FP;
     yyout = outFP;			/* list file */
     copyAdjust(NULL, T3FP);		/* initialize lineEntryArray */
-    lineno = 0;
+    gramOffset = lineno = 0;
     if (c_parse() != 0) {
 	error("c_compile: Parse error\n", NULL);
     }

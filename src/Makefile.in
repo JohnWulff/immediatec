@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.28 2002/08/23 10:13:03 jw Exp $
+# @(#)$Id: Makefile.in,v 1.29 2002/08/26 19:03:29 jw Exp $
 
 ############################################################
 #
@@ -127,8 +127,8 @@ lmain:	$(srcdir)/Makefile lmain.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	test -f $@ && touch $@
     endif
 
-scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/../README
-	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/../README | grep '$Id' | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
+scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix $(srcdir)/../README
+	rm -f scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix | $(AWK) -f $(srcdir)/pawk.a > scid.c; chmod -w scid.c
 
 ../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
 	rm -f $(srcdir)/../README; ident $(srcdir)/icc.v | awk '/\$Id/ { print "g/#REV/s//"$$3"/"; split($$4,d,"/"); print "g/#DATE/s//"d[1]"."d[2]"."d[3]"/"; print "w $(srcdir)/../README"; print "q" }' | ed -s $(srcdir)/README.tpl
@@ -160,7 +160,7 @@ install:	installdirs
 	${INSTALL_PROGRAM} iCserver ${bindir}/${binprefix}iCserver
 	${INSTALL_PROGRAM} pplstfix ${bindir}/${binprefix}pplstfix
 	${INSTALL_DATA}    libict.a ${prefix}/lib/libict.a
-	${INSTALL_DATA}    icc.h    ${prefix}/include/icc.h
+	${INSTALL_DATA}    icg.h    ${prefix}/include/icg.h
 
 installdirs:	${srcdir}/mkinstalldirs
 	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include
@@ -176,7 +176,7 @@ uninstall:
 	rm -f ${bindir}/${binprefix}iCserver
 	rm -f ${bindir}/${binprefix}pplstfix
 	rm -f ${prefix}/lib/libict.a
-	rm -f ${prefix}/include/icc.h
+	rm -f ${prefix}/include/icg.h
 
 clean:
 	rm -rf *.$(O) comp.c gram.c lexc.c LoadObjs PptcObjs cexe.c* scid.c core icc ict libict.a
@@ -187,23 +187,23 @@ distclean: clean
 distribution:
 	@rev=`grep 'icc\.v,v' ${srcdir}/icc.v | awk '{ print $$3; }'`; echo "making icc_$$rev.tgz"; cd ${srcdir}/../..; tar -czhf icc_$$rev.tgz `sed -n -e '/^[a-z_A-Z]/ s/^/'icc_$$rev'\//p' icc_$$rev/src/manifest`; cd -;
 
-genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
-init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
-symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
+genr.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
+init.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
+symb.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h comp_tab.h
 
-comp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
-main.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
-outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
-cexe.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+comp.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+main.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+outp.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+cexe.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
 
-ict.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h
-load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h
+ict.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/tcpc.h
+load.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/tcpc.h
 
-icc.$(O):	$(srcdir)/icc.h
-link.$(O):	$(srcdir)/icc.h
-rsff.$(O):	$(srcdir)/icc.h
-scan.$(O):	$(srcdir)/icc.h
+icc.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
+link.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
+rsff.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
+scan.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
 
-gram.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
-lexc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h gram_tab.h
-lmain.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+gram.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+lexc.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h gram_tab.h
+lmain.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h

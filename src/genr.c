@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.52 2002/08/16 13:01:36 jw Exp $";
+"@(#)$Id: genr.c,v 1.53 2002/08/26 19:05:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -24,6 +24,7 @@ static const char genr_c[] =
 #endif
 #include	<string.h>
 #include	<assert.h>
+#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #include	"comp_tab.h"

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.74 2002/08/23 21:46:29 jw Exp $";
+"@(#)$Id: comp.y,v 1.75 2002/08/26 19:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -22,6 +22,7 @@
 #include	<setjmp.h>
 #include	<assert.h>
 
+#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 
@@ -1598,10 +1599,10 @@ plist	: aexpr			{
 #define YTOKSZ 66
 #endif
 static char	chbuf[CBUFSZ];		/* used in get() errline() andd yyerror() */
+static char	prevNM[BUFS];
 static char *	getp = NULL;		/* used in get() unget() andd yyerror() */
 static char	iCtext[YTOKSZ];		/* lex token */
 static int	iCleng;			/* length */
-static char	lstBuf[YTOKSZ];		/* listing file name */
 static int	lineflag = 1;		/* previous line was complete */
 static char *	errFilename;
 static int	errFlag = 0;
@@ -1621,11 +1622,6 @@ int		outFlag = 0;		/* global flag for compiled output */
 jmp_buf		begin;
 int		lex_typ[] = { DEF_TYP };/* tokens corresponding to type */
 int		lex_act[] = { DEF_ACT };/* tokens corresponding to ftype */
-
-char *		inpNM = "stdin";	/* original input file name */
-FILE *		inFP = 0;		/* input file pointer - stdin default */
-FILE *		outFP;			/* listing file pointer */
-FILE *		errFP;			/* error file pointer */
 
 /********************************************************************
  *
@@ -1650,26 +1646,58 @@ compile(
     char *	errNM,			/* error file name */
     char *	outNM)			/* C output file name */
 {
-    lineno = lexflag = 0;		/* output all of source listing */
+    char	execBuf[BUFS];
+    int		fd;
+    int		r = 1;
+
+    lineno = 0;
+    lexflag = C_FIRST;			/* output all of source listing */
 
     if (lstNM && (outFP = fopen(lstNM, "w+")) == NULL) {
 	return Lindex;
     }
     errFilename = errNM;		/* open on first error */
-    if (inpPath && (inFP = fopen(inpNM = inpPath, "r")) == NULL) {
-	return Iindex;
+    init();				/* initialise symbol table - allows error() */
+    if (inpPath) {
+	strncpy(inpNM, inpPath, BUFS);
+	/* pre-compile if iC files contains any #include, #define #if etc */
+	sprintf(execBuf, "grep -q '^[ \t]*#' %s", inpPath);
+	r = system(execBuf);		/* test with grep if #include in input */
+	if (debug & 02) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+	if (r == 0) {
+	    /* pass the input file through the C pre-compiler to resolve #includes */
+	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
+		error("compile: cannot make or unlink:", T0FN);
+		perror("unlink");
+		return T0index;		/* error unlinking temporary file */
+	    }
+	    sprintf(execBuf, "cc -E -C -x c %s -o %s", inpPath, T0FN);
+	    if (debug & 02) fprintf(outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+	    r = system(execBuf);	/* Pre-compile iC file */
+	    if (r != 0) {
+		error("compile: cannot run:", execBuf);
+		return T0index;
+	    }
+	    if ((T0FP = fopen(T0FN, "r")) == NULL) {
+		return T0index;		/* error opening intermediate file */
+	    }
+	} else if ((T0FP = fopen(inpNM, "r")) == NULL) {
+	    return Iindex;		/* error opening input file */
+	}
     }
-    outFlag = outNM != 0;	/* global flag for compiled output */
-    init();		/* initialise symbol table */
-    strncpy(lstBuf, inpNM, YTOKSZ);
-    if (debug & 016) {	/* begin source listing */
+    strncpy(prevNM, inpNM, BUFS);
+    outFlag = outNM != 0;		/* global flag for compiled output */
+    if (debug & 016) {			/* begin source listing */
 	fprintf(outFP, "******* %-15s ************************\n", inpNM);
     }
     setjmp(begin);
     for (initcode(); iCparse(); initcode()) {
 	;
     }
-    if (inpPath) fclose(inFP);
+    if (r == 0 && !(debug & 04000)) {
+	unlink(T0FN);
+    }
+    if (inpPath) fclose(T0FP);
     return errRet;
 } /* compile */
 
@@ -1697,46 +1725,16 @@ get(FILE* fp)
 	 *  NOTE: getp === NULL at start of file (chbuf has EOF line)
 	 ************************************************************/
 	if ((getp = fgets(chbuf, CBUFSZ, fp)) == NULL) {
-#ifdef CACHE
-	    if ((lexflag & C_PARSE) && T5FP) {
-		lineno = savedLineno;
-		lexflag &= ~(C_BLOCK|C_INCLUDE|C_NO_COUNT);	/* output source listing for lex */
-		fp = restoreCblocksStream();	/* update cache file */
-		continue;			/* back to C-blocks */
-	    }
-#else
 	    if ((lexflag & C_PARSE) == 0) {
 		eofLineno = lineno;
 	    } else {
 		lineno = eofLineno;
 	    }
-#endif
 	    errline = lineno;			/* no listing line at EOF */
-	    strcpy(chbuf, "*** EOF ***\n");	/* provide a listing line at EOF for errors */
 	    return (EOF);
 	}
-#ifdef CACHE
-	if (lexflag & C_INCLUDE) {
-	    lexflag |= C_BLOCK|C_NO_COUNT;	/* block listing and counting */
-	    lexflag &= ~C_INCLUDE;
-	}
-#endif
 	lineflag = chbuf[strlen(chbuf)-1] == '\n' ? 1 : 0;	/* this line terminated with \n */
 
-	if (prevflag && (lexflag & C_PARSE) && strncmp(chbuf, "##", 2) == 0) {
-	    lexflag |= C_BLOCK;			/* block source listing for lex */
-	    lineno = savedLineno;
-//	    if ((debug & 0402) == 0402) fprintf(outFP, "####### ## lineno = %d\n", lineno);
-	}
-	if ((debug & 010) && ((lexflag & C_BLOCK) == 0 || (debug & 02))) {
-	    /********************************************************
-	     *  output source listing line in debugging output
-	     *  before any tokens are handed to the parser
-	     *  then messages appear neatly after the listing line
-	     ********************************************************/
-	    fprintf(outFP, "%03d\t%s", lineno, chbuf);
-	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
-	}
 	/********************************************************
 	 *  handle different preprocessor lines
 	 *  identify leading '#' for efficiency
@@ -1744,57 +1742,67 @@ get(FILE* fp)
 	 *        pre-processor line for the following sscanf()s
 	 ********************************************************/
 	if (prevflag && sscanf(chbuf, " %1s", tempBuf) == 1 && *tempBuf == '#') {
+	    if ((lexflag & C_PARSE) && strncmp(chbuf, "##", 2) == 0) {
+		lexflag |= C_BLOCK;		/* block source listing for lex */
+		lineno = savedLineno;
+	    }
+	    /********************************************************
+	     *  handle C-pre-processor # 1 "/usr/include/stdio.h"
+	     ********************************************************/
+	    if (sscanf(chbuf, " # %d \"%[/A-Za-z_.0-9]\"", &temp1, inpNM) == 2) {
+		lineno = temp1 - 1;		/* handled in iC and C-code */
+		lexflag |= C_LINE;
+		if ((lexflag & C_PARSE) == 0) {
+		    getp = NULL;			/* bypass this line in iC */
+		}
+	    } else
+	    /********************************************************
+	     *  there should be no other # lines remaining in iC file
+	     ********************************************************/
 	    if ((lexflag & C_PARSE) == 0) {
 		/* TODO process pre-processor lines in iC compilation */
 		/* handle only local includes - not full C-precompiler features */
-		warning("pre-compiler code not handled in iC yet", NULL);
-		warning("do you perhaps mean %#include etc ?", NULL);
+		error("get: stray # line in iC ???", NULL);
 		getp = NULL;			/* bypass this line in iC */
 	    } else
 	    /********************************************************
 	     *  C-compile
 	     *  handle pre-processor #line 1 "file.ic"
 	     ********************************************************/
-	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, lstBuf) == 2) {
+	    if (sscanf(chbuf, " # line %d \"%[/A-Za-z_.0-9]\"", &temp1, inpNM) == 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
-//		if ((debug & 0402) == 0402) fprintf(outFP, "####### #line %d \"%s\"\n", temp1, lstBuf);
-		assert(strcmp(inpNM, lstBuf) == 0);
-		if ((debug & 010)) {
-		    if (lexflag & C_FIRST) {
-			fprintf(outFP, "******* C CODE          ************************\n\n");
-		    } else {
-			fprintf(outFP, "\n");	/* seperate blocks in lex listing */
-		    }
+		if (lexflag & C_FIRST) {
+		    fprintf(outFP, "******* C CODE          ************************\n");
 		}
-		lexflag &= ~(C_FIRST|C_BLOCK);	/* output source listing for lex */
-	    } else
-	    /********************************************************
-	     *  handle C-pre-processor # 1 "/usr/include/stdio.h"
-	     ********************************************************/
-	    if (sscanf(chbuf, " # %d \"%[/A-Za-z_.0-9]\"", &temp1, lstBuf) == 2) {
-		lineno = temp1 - 1;
-		if ((debug & 0402) == 0402) fprintf(outFP, "####### # %d \"%s\"\n", temp1, lstBuf);
-#ifdef CACHE
-	    } else
-	    /********************************************************
-	     *  handle pre-processor #include <stdio.h> or "icc.h"
-	     ********************************************************/
-	    if (sscanf(chbuf, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
-		savedLineno = lineno;
-		if ((debug & 0402) == 0402) fprintf(outFP, "####### #include %s\n", lstBuf);
-		/* the first call to process an include file reads in the cache */
-		if (readTypesFromCache(lstBuf)) return (EOF);	/* error */
-		/* if an include file has been opened yyin is now T5FP */
-		/* and the next line will be read from there */
-		if (T5FP) {
-		    lexflag |= C_INCLUDE;		/* block counting gramOffset from next line */
-		    if (((debug & 0402) == 0402) == 0) lexflag |= C_BLOCK;	/* block source listing for lex */
+		if (strcmp(inpNM, prevNM)) {
+		    lexflag &= ~C_BLOCK;	/* output #line for changed filename */
+		} else {
+		    fprintf(outFP, "\n");	/* seperate blocks in lex listing */
 		}
-		/* pass this line to lexc to get gramOffset correct */
-#endif
+		lexflag |= C_LINE|C_LINE1;	/* only in C-compile */
+		strncpy(prevNM, inpNM, BUFS);
 	    }
 	}
+	if ((debug & 010) && ((lexflag & C_BLOCK) == 0 || (debug & 02))) {
+	    /********************************************************
+	     *  output source listing line in debugging output
+	     *  before any tokens are handed to the parser
+	     *  then messages appear neatly after the listing line
+	     ********************************************************/
+	    if ((lexflag & C_LINE) == 0) {
+		fprintf(outFP, "%03d\t%s", lineno, chbuf);
+	    } else if ((lexflag & (C_PARSE|C_FIRST)) != C_FIRST) {
+		fprintf(outFP, "\t%s", chbuf);		/* # line or # 123 "name" */
+	    }
+	    if (lineflag == 0) putc('\n', outFP);	/* current line not complete */
+	}
+	if ((lexflag & C_PARSE) == 0) {
+	    lexflag &= ~C_FIRST;
+	} else if (lexflag & C_LINE1) {
+	    lexflag &= ~(C_FIRST|C_BLOCK|C_LINE1);	/* output source listing for lex */
+	}
+	lexflag &= ~C_LINE;
     }
     /****************************************************************
      *  return 1 character at a time from chbuf and return it
@@ -1859,7 +1867,7 @@ iClex(void)
 	goto retfl;
     }
     iCleng = 0;
-    while ((c = get(inFP)) !=  EOF) {
+    while ((c = get(T0FP)) !=  EOF) {
 	Symbol *	symp;
 	List_e *	lp;
 	int		len;
@@ -1872,7 +1880,7 @@ iClex(void)
 	if (isdigit(c)) {
 	    char *	format;		/* number */
 	    if (c == '0') {		/* oct or hex or 0 */
-		if ((c = get(inFP)) == 'x') {
+		if ((c = get(T0FP)) == 'x') {
 		    format = "0x%x%s";	/* hexadecimal */
 		} else if (c == 'X') {
 		    format = "0X%x%s";	/* hexadecimal */
@@ -1883,7 +1891,7 @@ iClex(void)
 	    } else {
 		format = "%d%s";	/* decimal */
 	    }
-	    while ((c = get(inFP)) != EOF && isxdigit(c));
+	    while ((c = get(T0FP)) != EOF && isxdigit(c));
 	    unget(c);
 	    if (sscanf(iCtext, format, &iClval.val.v, iCtext) == 1) {
 		if (dflag) {
@@ -1912,14 +1920,14 @@ iClex(void)
 	    unsigned char	y1[2];
 	    int			yn;
 
-	    while ((c = get(inFP)) != EOF && (isalnum(c) || c == '_'));
+	    while ((c = get(T0FP)) != EOF && (isalnum(c) || c == '_'));
 	    if (sscanf(iCtext, "%1[IQT]%1[BWX]%d", y0, y1, &yn) == 3) {
 		if (y1[0] == 'B' || y1[0] == 'W') {
 		    wplus = 1;
 		    goto foundQIT;
 		} else if (c == '.') {
-		    if (isdigit(c = get(inFP))) {	/* can only be QX%d. */
-			while (isdigit(c = get(inFP)));
+		    if (isdigit(c = get(T0FP))) {	/* can only be QX%d. */
+			while (isdigit(c = get(T0FP)));
 		    foundQIT:
 			ftyp = GATE - wplus;		/* GATE or ARITH */
 			if (y0[0] == 'Q') {
@@ -1977,7 +1985,7 @@ iClex(void)
 	    }
 	    iClval.sym.l = stmtp += len;
 	} else {
-	    if ((c1 = get(inFP)) == EOF) goto found;	/* nothing after EOF */
+	    if ((c1 = get(T0FP)) == EOF) goto found;	/* nothing after EOF */
 	    switch (c) {
 	    case '!':
 		if (c1 == '=') {
@@ -2030,14 +2038,14 @@ iClex(void)
 	    case '/':
 		if (c1 == '/') {
 		    do {		/* start C++ style comment */
-			if ((c1 = get(inFP)) == EOF) return 0;
+			if ((c1 = get(T0FP)) == EOF) return 0;
 		    } while (c1 != '\n');
 		} else if (c1 == '*') {
 		    do {		/* start C style comment */
 			while (c1 != '*') {
-			    if ((c1 = get(inFP)) == EOF) return 0;
+			    if ((c1 = get(T0FP)) == EOF) return 0;
 			}
-		    } while ((c1 = get(inFP)) != '/');
+		    } while ((c1 = get(T0FP)) != '/');
 		} else if (c1 == '=') {
 		    c = OPE; goto found;		/* /= */
 		} else {
@@ -2048,7 +2056,7 @@ iClex(void)
 		continue;
 	    case '<':
 		if (c1 == '<') {
-		    if ((c1 = get(inFP)) == '=') {
+		    if ((c1 = get(T0FP)) == '=') {
 			c = OPE; goto found;		/* <<= */
 		    }
 		    c = AOP;				/* << */
@@ -2066,7 +2074,7 @@ iClex(void)
 		break;
 	    case '>':
 		if (c1 == '>') {
-		    if ((c1 = get(inFP)) == '=') {
+		    if ((c1 = get(T0FP)) == '=') {
 			c = OPE; goto found;		/* >>= */
 		    }
 		    c = AOP;				/* >> */
@@ -2181,11 +2189,11 @@ errmess(				/* actual error message */
 	if (errFlag) putc('.', errFP);
     }
 #ifdef NEWSTYLE
-    fprintf(outFP, " '%s'\n", lstBuf);
-    if (errFlag) fprintf(errFP, " '%s'\n", lstBuf);
+    fprintf(outFP, " '%s'\n", inpNM);
+    if (errFlag) fprintf(errFP, " '%s'\n", inpNM);
 #else
-    fprintf(outFP, " File %s, line %d\n", lstBuf, lineno);
-    if (errFlag) fprintf(errFP, " File %s, line %d\n", lstBuf, lineno);
+    fprintf(outFP, " File %s, line %d\n", inpNM, lineno);
+    if (errFlag) fprintf(errFP, " File %s, line %d\n", inpNM, lineno);
 #endif
 } /* errmess */
 
@@ -2257,7 +2265,7 @@ execerror(			/* recover from run-time error */
 	fprintf(errFP, "in source file: %s line %d\n", file, line);
 	fflush(errFP);
     }
-    fseek(inFP, 0L, 2);	/* flush rest of file */
+    fseek(T0FP, 0L, 2);	/* flush rest of file */
     longjmp(begin, 0);
 } /* execerror */
 
@@ -2292,9 +2300,9 @@ yyerror(char *	s)
     }
     ynerrs++;
 #ifdef NEWSTYLE
-    n = snprintf(erbuf, TSIZE, "%s '%s'", s, lstBuf);
+    n = snprintf(erbuf, TSIZE, "%s '%s'", s, inpNM);
 #else
-    n = snprintf(erbuf, TSIZE, "%s %d in %s", s, ynerrs, lstBuf);
+    n = snprintf(erbuf, TSIZE, "%s %d in %s", s, ynerrs, inpNM);
 #endif
     if (n1 < n + 5) {
 	n1 += 4;
@@ -2332,10 +2340,10 @@ copyCfrag(char s, char m, char e)
     int		c;
     int		match;
 
-    for (brace = 0; (c = get(inFP)) != EOF; ) {
+    for (brace = 0; (c = get(T0FP)) != EOF; ) {
 	if (c == s) {			/* '{' or '(' */
 	    if (brace++ == 0 && m == '%') {	/* don't output "%{\w" */
-		while ((c = get(inFP)) == ' ' || c == '\t');
+		while ((c = get(T0FP)) == ' ' || c == '\t');
 		unget(c);
 		continue;
 	    }
@@ -2344,7 +2352,7 @@ copyCfrag(char s, char m, char e)
 		unget(c);		/* use for next token */
 		return m;		/* no longer used */
 	    } else if (brace == 1 && c == '%') {
-		if ((c = get(inFP)) == '}') {
+		if ((c = get(T0FP)) == '}') {
 		    fprintf(T1FP, "\n%%##\n\n%%}\n");	/* #line lineno "outNM"\n%} */
 		    unget(c);
 		    return m;
@@ -2366,19 +2374,19 @@ copyCfrag(char s, char m, char e)
 
 	case '/':			/* look for comments */
 	    putc(c, T1FP);
-	    if ((c = get(inFP)) == '/') {
+	    if ((c = get(T0FP)) == '/') {
 		do {			/* start C++ style comment */
 		    putc(c, T1FP);
-		    if ((c = get(inFP)) == EOF) goto eof_error;
+		    if ((c = get(T0FP)) == EOF) goto eof_error;
 		} while (c != '\n');
 	    } else if (c == '*') {
 		do {			/* start C style comment */
 		    putc(c, T1FP);
 		    while (c != '*') {
-			if ((c = get(inFP)) == EOF) goto eof_error;
+			if ((c = get(T0FP)) == EOF) goto eof_error;
 			putc(c, T1FP);
 		    }
-		} while ((c = get(inFP)) != '/');
+		} while ((c = get(T0FP)) != '/');
 	    } else {
 		unget(c);
 	    }
@@ -2393,10 +2401,10 @@ copyCfrag(char s, char m, char e)
 
 	string:
 	    putc(c, T1FP);
-	    while ((c = get(inFP)) != match) {
+	    while ((c = get(T0FP)) != match) {
 		if (c == '\\') {
 		    putc(c, T1FP);
-		    if ((c = get(inFP)) == EOF) goto eof_error;
+		    if ((c = get(T0FP)) == EOF) goto eof_error;
 		} else if (c == '\n') {
 		    iCleng = 1;		/* error pointer at newline */
 		    yyerror("C code: newline in \" \" or ' ', error");

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.21 2002/08/13 12:08:05 jw Exp $";
+"@(#)$Id: scan.c,v 1.22 2002/08/26 19:13:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,6 +19,7 @@ static const char scan_c[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #include	<stdio.h>
+#include	"icg.h"
 #include	"icc.h"
 
 static void	link_c(Gate * gp, Gate * out_list);

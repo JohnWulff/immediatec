@@ -1,4 +1,4 @@
-$Id: manifest,v 1.4 2002/08/03 19:01:16 jw Exp $
+$Id: manifest,v 1.5 2002/08/26 19:12:23 jw Exp $
 README
 doc/iC.doc
 doc/iC.html
@@ -136,6 +136,7 @@ src/iCserver
 src/icc.c
 src/icc.h
 src/icc.v
+src/icg.h
 src/ict.c
 src/init.c
 src/install.sh

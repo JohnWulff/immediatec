@@ -1,5 +1,5 @@
 static const char cexe_h[] =
-"@(#)$Id: cexe.h,v 1.15 2002/08/06 08:46:49 jw Exp $";
+"@(#)$Id: cexe.h,v 1.16 2002/08/26 19:45:22 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -17,9 +17,10 @@ static const char cexe_h[] =
  *
  *******************************************************************/
 
-#include <stdio.h>
-#include "icc.h"
-#include "comp.h"
+#include	<stdio.h>
+#include	"icg.h"
+#include	"icc.h"
+#include	"comp.h"
 
 #define _AV(x) Lookup(#x)->u.gate->gt_old
 #define _LV(x) (Lookup(#x)->u.gate->gt_val < 0 ? 1 : 0)

@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.6 2002/08/16 13:22:58 jw Exp $";
+"@(#)$Id: lmain.c,v 1.7 2002/08/26 19:11:25 jw Exp $";
 /********************************************************************
  *
  *	simple driver for MKS yacc
@@ -8,6 +8,7 @@ static const char lmain_c[] =
 
 #include	<stdio.h>
 #include	<string.h>
+#include	"icg.h"
 #include 	"icc.h"
 #include 	"comp.h"
 

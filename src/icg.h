@@ -18,41 +18,41 @@
 #ifndef ICG_H
 #define ICG_H
 static const char icg_h[] =
-"@(#)$Id: icg.h,v 1.1 2002/08/26 19:25:27 jw Exp $";
+"@(#)$Id: icg.h,v 1.2 2002/08/26 22:05:38 jw Exp $";
 
-#define	NOT	1	/* used in List_e.le_val */
-
-/* operations used in 'op' 'Symbol.type' and display */
+/*	Function types 'op' 'Symbol.type' and display */
 
 #define	UDF	0	/* represents undefined type */
+		    /* arithmetic functions */
 #define	ARNC	1	/* arithmetic node in a C fragment */
 #define	ARN	2	/* arithmetic node */
-
+		    /* logical functions */
 #define	LOGC	3	/* logical node in a C fragment */
-#define	AND	4
-#define	OR	5
-#define	LATCH	6
-
-#define	SH	7	/* functions driven by action gates */
-#define	FF	8
-#define	VF	9
-#define	EF	10
-#define	SW	11	/* NOTE: no output */
-#define	CF	12	/* NOTE: no output */
+#define	AND	4	/* logical AND gate */
+#define	OR	5	/* logical OR gate */
+#define	LATCH	6	/* single node LATCH element */
+		    /* functions driven by action gates */
+#define	SH	7	/* sample and hold clocked action */
+#define	FF	8	/* flip flop clocked action */
+#define	VF	9	/* CHANGE clocked action */
+#define	EF	10	/* RISE clocked action */
+#define	SW	11	/* SWITCH clocked action NOTE: no output */
+#define	CF	12	/* IF clocked action NOTE: no output */
+		    /* values from extermal sources */
 #define	NCONST	13	/* constant number */
 #define	INPW	14	/* arithmetic input */
 #define	INPX	15	/* logical input */
-
-#define	CLK	16	/* functions which controll clock lists */
-#define	TIM	17
-
+		    /* clock functions controlling clock lists */
+#define	CLK	16	/* CLOCK clocked action */
+#define	TIM	17	/* TIMER clocked action */
+		    /* non executable functions */
 #define	ALIAS	18	/* non executable functions */
 #define	ERR	19	/* mark node which had error during generation */
-
+		    /* for compilation only */
 #define	KEYW	20	/* hold yacc token, used for compilation only */
-
-#define	CTYPE	21	/* used for C-compilation only */
-#define	CWORD	22	/* used for C-compilation only */
+		    /* for C-compilation only */
+#define	CTYPE	21	/* C Types */
+#define	CWORD	22	/* C tokens used temporarily */
 
 #define	MAX_GT	SH	/* types < MAX_GT are driven by a value */
 #define	MAX_LV	CLK	/* types < MAX_LV return a logical or arith value */
@@ -67,49 +67,32 @@ static const char icg_h[] =
 #define EXT_CLK	CLK+TM+1
 #define EXT_TIM	TIM+TM+1
 
-/*	action function types Symbol.ftype and Gate.gt_fni */
+/*	Output types: Symbol.ftype and Gate.gt_fni */
 
 #define	UDFA	0	/* indices into action function arrays */
-#define	ARITH	1	/* arithmetic gate */
-#define	GATE	2	/* logical gate */
-#define	RI_BIT	3	/* logical action */
-#define	CH_BIT	4	/* arithmetic action */
-#define	S_SH	5	/* arithmetic action */
-#define	R_SH	6	/* arithmetic action */
-#define	D_SH	7	/* arithmetic action */
-#define	F_SW	8	/* arithmetic action */
-#define	S_FF	9	/* logical action not needed 1001 */
-#define	R_FF	10	/* logical action not needed 1010 */
-#define	D_FF	11	/* logical action not needed 1011 */
-#define	F_CF	12	/* logical action */
-#define	F_CE	13	/* logical action */
-#define	CLCK	14	/* logical action */
-#define	TIMR	15	/* logical action */
+		    /* unclocked immediate outputs */
+#define	ARITH	1	/* arithmetic output */
+#define	GATE	2	/* logical output */
+		    /* clocked actions used internally */
+#define	RI_BIT	3	/* RISE logical action */
+#define	CH_BIT	4	/* CHANGE logical or arithmetic action */
+#define	S_SH	5	/* sample and hold set action */
+#define	R_SH	6	/* sample and hold reset action */
+#define	D_SH	7	/* sample and hold arithmetic action */
+#define	F_SW	8	/* SWITCH arithmetic action */
+#define	S_FF	9	/* FF set logical action   not needed 1001 */
+#define	R_FF	10	/* FF reset logical action not needed 1010 */
+#define	D_FF	11	/* FF D logical action     not needed 1011 */
+#define	F_CF	12	/* IF logical action */
+#define	F_CE	13	/* IF ELSE logical action */
+#define	CLCK	14	/* CLOCK logical action */
+#define	TIMR	15	/* TIMER logical action */
+		    /* outputs to external sinks */
 #define	OUTW	16	/* arithmetic output */
 #define	OUTX	17	/* logical output */
+		    /* clock outputs */
 #define	CLCKL	18	/* clock action */
 #define	TIMRL	19	/* timer action */
-
-#define	MAX_AR	GATE	/* ftypes >= MAX_AR never cause simple arithmetic */
-#define	MIN_ACT	RI_BIT	/* ftypes >= MIN_ACT cause an action */
-#define	MAX_ACT	OUTW	/* ftypes >= MAX_ACT never cause an action */
-#define	MAX_FTY	TIMRL+1	/* ftypes >= MAX_FTY are ALIAS ftypes for live list */
-
-#define	ONCE_M	0x100	/* actions containing this bit only once */
-#define	S_FF_M	0x01	/* masks in array bit2 for pass2 */
-#define	R_FF_M	0x02
-#define	D_FF_M	(S_FF_M | R_FF_M | ONCE_M)
-#define	CH_B_M	0x04
-#define	RI_B_M	0x08
-#define	S_SH_M	0x10
-#define	R_SH_M	0x20
-#define	D_SH_M	(S_SH_M | R_SH_M | ONCE_M)
-#define	CLCK_M	0x40
-#define	TIMR_M	0x80
-#define	F_CF_M	0	/* has no slave node */
-#define	F_CW_M	0	/* has no slave node */
-#define	INPT_M	0	/* only used for check so far */
-#define	OUTP_M	1	/* used to check that 1 input */
 
 typedef struct Gate {			/* Gate */
 	char		gt_val;		/* forward logic value */
@@ -129,20 +112,13 @@ typedef struct Gate {			/* Gate */
 	int		gt_old;		/* old value for arithhmetic */
 } Gate;
 
-#define	FL_GATE	0
-#define	FL_CLK	1
-#define	FL_TIME	2
-			/* action gate output or C function pointer */
-#define	gt_funct	gt_list[FL_GATE]
-			/* clock list pointer */
-#define	gt_clk		gt_list[FL_CLK]
-			/* gate holding time value (ARN or NCONST) */
-#define	gt_time		gt_list[FL_TIME]
-	/* this order is required for initialisation */
-
 extern Gate		iClock;		/* System clock */
 extern Gate *		IX_[];		/* pointers to Bit Input Gates */
 extern Gate *		IB_[];		/* pointers to Byte Input Gates */
 extern Gate *		IW_[];		/* pointers to Word Input Gates */
 extern Gate *		TX_[];		/* pointers to System Bit Gates */
+
+#define aAssign		assign
+#define lAssign		assign
+extern int		assign(Gate * lv, int rv);
 #endif	/* ICG_H */

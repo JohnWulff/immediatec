@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.30 2002/08/13 10:34:14 jw Exp $";
+"@(#)$Id: ict.c,v 1.31 2002/08/26 19:09:29 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -23,16 +23,17 @@ static const char ict_c[] =
 
 /* J.E. Wulff	3-Mar-85 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <signal.h>
-#include <ctype.h>
-#include <assert.h>
-#include "icc.h"
-#include "tcpc.h"
+#include	<stdio.h>
+#include	<stdlib.h>
+#include	<errno.h>
+#include	<sys/types.h>
+#include	<sys/time.h>
+#include	<signal.h>
+#include	<ctype.h>
+#include	<assert.h>
+#include	"icg.h"
+#include	"icc.h"
+#include	"tcpc.h"
 
 #define MAX_IO	8
 #define MAX_W	2

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.16 2002/06/19 21:37:40 jw Exp $";
+"@(#)$Id: link.c,v 1.17 2002/08/26 19:11:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -21,6 +21,7 @@ static const char link_c[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #include	<stdio.h>
+#include	"icg.h"
 #include	"icc.h"
 
 unsigned short	mark_stamp = 1;		/* incremented every scan */

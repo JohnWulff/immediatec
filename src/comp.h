@@ -1,5 +1,3 @@
-static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.36 2002/08/23 18:59:15 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -15,7 +13,14 @@ static const char comp_h[] =
  *
  *******************************************************************/
 
+#ifndef COMP_H
+#define COMP_H
+static const char comp_h[] =
+"@(#)$Id: comp.h,v 1.37 2002/08/26 21:56:19 jw Exp $";
+
 #define NS	((char*)0)
+
+#define	NOT	1	/* used in List_e.le_val */
 
 typedef	struct	List_e {	/* list element */
     struct Symbol *	le_sym;
@@ -74,21 +79,23 @@ extern int	lexflag;
  *  C_PARSE	01	0	01	select parser
  *  C_FIRST	02	-	02	set for first line of listing
  *  C_BLOCK	04	-	04	block c_parse source listing
- *  C_INCLUDE	010	-	010	c_parse handling include
- *  C_NO_COUNT	020	-	020	c_parse blocks counting chars
+ *  C_NO_COUNT	010	-	010	c_parse blocks counting chars
+ *  C_LINE	020	-	020	# 1 or # line seen
+ *  C_LINE1	040	-	040	# line seen
  *******************************************************************/
 #define C_PARSE		01
 #define C_FIRST		02
 #define C_BLOCK		04
-#define C_INCLUDE	010
-#define C_NO_COUNT	020
+#define C_NO_COUNT	010
+#define C_LINE		020
+#define C_LINE1		040
 
 extern int	lineno;
 					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
-extern char *	inpNM;			/* original input file name */
+extern char	inpNM[];		/* original input file name */
 extern char *	stmtp;			/* pointer into iCbuf */
 extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
@@ -139,27 +146,24 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define Cindex	7
 #define H1index	8
 #define H2index	9
-#define T1index	10
-#define T2index	11
-#define T3index	12
-#define T4index	13
-#define T5index	14
-
-//#define CACHE
-#ifdef CACHE
-#define TCindex	15
-#define TCname	".iCcTypes.def"
-#endif
+#define T0index	10
+#define T1index	11
+#define T2index	12
+#define T3index	13
+#define T4index	14
+#define T5index	15
 
 #define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, 0, Cname, H1name, H2name,\
-				0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0,
 
+extern FILE *	T0FP;
 extern FILE *	T1FP;
 extern FILE *	T2FP;
 extern FILE *	T3FP;
 extern FILE *	T4FP;
 extern FILE *	T5FP;
 
+extern char	T0FN[];
 extern char	T4FN[];
 extern char	T5FN[];
 
@@ -180,16 +184,9 @@ extern int	copyXlate(FILE *, char *, unsigned *, int);
 					/*   lexc.l   */
 extern int	c_leng;
 extern int	column;
+extern int	gramOffset;
 extern void	delete_sym(Token* tokp);
-
-#ifdef CACHE
-extern FILE *	typeCacheFP;
-extern char	typeCacheFN[];
-extern int	readTypeCacheFile(void);
-extern int	readTypesFromCache(char* includeName);
-extern FILE *	restoreCblocksStream(void);
-#define TCBUFS	1024
-#endif
 					/*   gram.y   */
 extern int	c_parse(void);		/* generated yacc parser function */
 extern void	copyAdjust(FILE* iFP, FILE* oFP);
+#endif	/* COMP_H */

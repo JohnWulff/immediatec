@@ -1,5 +1,5 @@
 static const char main_c[] =
-"@(#)$Id: main.c,v 1.35 2002/08/23 19:18:56 jw Exp $";
+"@(#)$Id: main.c,v 1.36 2002/08/26 18:58:51 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -19,6 +19,7 @@ static const char main_c[] =
 #include	<stdlib.h>
 #include	<string.h>
 #include	<assert.h>
+#include	"icg.h"
 #include	"icc.h"
 #include	"comp.h"
 #ifdef TCP
@@ -115,10 +116,12 @@ extern	int	iCdebug;
 #define excFN	szNames[6]		/* cexe C out file name */
 char *		szNames[] = {		/* matches return in compile */
     INITIAL_FILE_NAMES
-#ifdef CACHE
-    TCname,
-#endif
 };
+
+char		inpNM[BUFS] = "stdin";	/* original input file name */
+
+FILE *		outFP;			/* listing file pointer */
+FILE *		errFP;			/* error file pointer */
 
 static FILE *	exiFP;			/* cexe in file pointer */
 static FILE *	excFP;			/* cexe C out file pointer */
@@ -135,22 +138,19 @@ char * OutputMessage[] = {
     "%s: cannot open file %s in output\n",	/* [7] */
 };
 
+FILE *	T0FP = NULL;
 FILE *	T1FP = NULL;
 FILE *	T2FP = NULL;
 FILE *	T3FP = NULL;
 FILE *	T4FP = NULL;
 FILE *	T5FP = NULL;
 
-#ifdef CACHE
-FILE *	typeCacheFP = NULL;
-char		typeCacheFN[] = TCname;
-#endif
-
-static char	T1FN[] = "/tmp/ic1.XXXXXX";
-static char	T2FN[] = "/tmp/ic2.XXXXXX";
-static char	T3FN[] = "/tmp/ic3.XXXXXX";
+char		T0FN[] = "ic0.XXXXXX";
+static char	T1FN[] = "ic1.XXXXXX";
+static char	T2FN[] = "ic2.XXXXXX";
+static char	T3FN[] = "ic3.XXXXXX";
 char		T4FN[] = "ic4.XXXXXX";	/* must be in current directory */
-char		T5FN[] = "/tmp/ic5.XXXXXX";
+char		T5FN[] = "ic5.XXXXXX";
 
 static void	unlinkTfiles(void);
 
@@ -176,7 +176,7 @@ main(
     } else {
 	progname++;		/*  path has been stripped */
     }
-    inFP = stdin;		/* input file pointer */
+    T0FP = stdin;		/* input file pointer */
     outFP = stdout;		/* listing file pointer */
     errFP = stderr;		/* error file pointer */
     while (--argc > 0) {
@@ -287,10 +287,12 @@ main(
 /********************************************************************
  *
  *	Generate and open temporary files T1FN T2FN T3FN
- *	T4FN and T5FN are only used if C-include files are actually parsed
+ *	T0FN, T4FN and T5FN are only used if iC and/or C-include files
+ *	are actually parsed
  *
  *******************************************************************/
 
+    szNames[T0index] = T0FN;
     szNames[T1index] = T1FN;
     szNames[T2index] = T2FN;
     szNames[T3index] = T3FN;

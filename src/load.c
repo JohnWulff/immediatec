@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.34 2002/08/13 09:02:26 jw Exp $";
+"@(#)$Id: load.c,v 1.35 2002/08/26 19:11:39 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -22,6 +22,7 @@ static const char load_c[] =
 #ifndef LOAD
 #error - must be compiled with LOAD defined to make a linkable library
 #else
+#include	"icg.h"
 #include	"icc.h"
 #ifdef TCP
 #include	"tcpc.h"

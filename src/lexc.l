@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.15 2002/08/23 20:25:20 jw Exp $";
+"@(#)$Id: lexc.l,v 1.16 2002/08/26 20:16:37 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -32,14 +32,15 @@ FS			(f|F|l|L)
 IS			(u|U|l|L)
 
 %{
-#include <stdio.h>
-#include <ctype.h>
-#include <string.h>
-#include <assert.h>
-#include <errno.h>
-#include "icc.h"
-#include "comp.h"
-#include "gram_tab.h"
+#include	<stdio.h>
+#include	<ctype.h>
+#include	<string.h>
+#include	<assert.h>
+#include	<errno.h>
+#include	"icg.h"
+#include	"icc.h"
+#include	"comp.h"
+#include	"gram_tab.h"
 
 static int	c_comment(c_STYPE* u);
 static int	cpp_comment(c_STYPE* u);
@@ -179,7 +180,8 @@ static int	check_type(c_STYPE* u);
 
 %%
 
-static int gramOffset = 0;
+int gramOffset = 0;
+
 static int gramLine   = 1;
 static char* staticName = NULL;
 int column = 0;
@@ -208,7 +210,7 @@ c_comment(c_STYPE* u)
 
     do {		/* start C style comment */
 	while (c != '*') {
-	    if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+	    gramOffset++;
 #if YYDEBUG && defined LMAIN
 	    if (debug & 010) putc(c, yyout);
 #endif
@@ -223,7 +225,7 @@ c_comment(c_STYPE* u)
 	    if ((c = input()) == EOF) return 1;
 	}
 	column++;		/* count '*' */
-	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+	gramOffset++;
 #if YYDEBUG && defined LMAIN
 	if (debug & 010) putc(c, yyout);
 #endif
@@ -231,7 +233,7 @@ c_comment(c_STYPE* u)
 
     if (c == EOF) return 1;
     column++;			/* count '/' */
-    if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+    gramOffset++;
 #if YYDEBUG && defined LMAIN
     if (debug & 010) putc(c, yyout);
 #endif
@@ -256,7 +258,7 @@ cpp_comment(c_STYPE* u)
 
     do {			/* start C++ style comment */
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
-	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+	gramOffset++;
 #if YYDEBUG && defined LMAIN
 	if (debug & 010) putc(c, yyout);
 #endif
@@ -286,7 +288,7 @@ preprocess(c_STYPE* u)
 	do {
 	    prev = c;
 	    if ((c = input()) == EOF) return 1;    /* error EOF in line */
-	    if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+	    gramOffset++;
 #if YYDEBUG && defined LMAIN
 	    if (debug & 010) putc(c, yyout);
 #endif
@@ -314,7 +316,7 @@ ignore(c_STYPE* u)
 
     for (;;) {
 	if ((c = input()) == EOF) return 1;    /* error EOF in comment */
-	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+	gramOffset++;
 #if YYDEBUG && defined LMAIN
 	if (debug & 010) putc(c, yyout);
 #endif
@@ -363,7 +365,7 @@ count(c_STYPE* u)
 	} else {
 	    column++;
 	}
-	if ((lexflag & C_NO_COUNT) == 0) gramOffset++;
+	gramOffset++;
     }
 
     u->tok.end = gramOffset;
@@ -409,7 +411,9 @@ check_type(c_STYPE* u)
 
     if ((sp = lookup(buffer)) != 0) {
 	if ((sp->type & TM) <= MAX_LS) {
+#ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
+#endif
 	    while ((sp->type & TM) == ALIAS) {
 		sp = sp->list->le_sym;	/* with token of original */
 	    }
@@ -454,313 +458,3 @@ delete_sym(Token* tokp)
 	free(sp);
     }
 } /* delete_sym */
-#ifdef CACHE
-
-/********************************************************************
- *
- *	Read C-Symbols cache file and store names of available include
- *	files and the file offset of the entries in the Symbol Table.
- *
- *	The cache file is left open for reading and when necessary, the
- *	lines with the named include file can be accessed with an fseek
- *	and the relevant type names read.
- *
- *	The entries for <stdio.h>, "icc.h" and "comp.h" should be read
- *	straight away, since they are declared as includes for generated
- *	C files.  It is not correct to read types for other include files
- *	available in the cache, since they may clash.
- *
- *	Once an entry line has been read in, the symbol table entry is
- *	marked with ftype = CRINC
- *
- *	Structure of C-Symbols cache file:	(by example)
- *
- *	<stdio.h> FILE size_t etc
- *	"icc.h" [data stamp] Gate Functp2 Functp CFunctp
- *	"comp.h" [data stamp] List_e Symbol Sym Lis Val Str
- *	<stdlib.h> uint ulong etc
- *	"../include/types.h" [data stamp] type1 type2
- *		lines longer than TCBUFS are folded at the end of a type_name
- *		follow up lines start with a space character.
- *
- *	Include files in angle brackets are assumed to be in the include
- *	path and are not date stamped.
- *
- *	Other include files are local or have a path relative to the
- *	local working directory.
- *
- *	The C-Symbols file is called ".iCcTypes.def" and is in the
- *	same path as the iC compiler called. It is writable by all.
- *	It is a cache of all type_names used in include files in
- *	C-Code for the computer installation.
- *
- *	PROBLEM: under Linux the path of the exected file is not available
- *
- *	The local file names should be in a file in the local directory.
- *	Initial implementation: a local file for all includes.
- *
- *	Name of cache file defined in comp.h
- *
- *******************************************************************/
-
-int
-readTypeCacheFile(void)
-{
-    int		c;
-    int		ftype;
-    long	fileOffset;
-    Symbol *	sp;
-    char	nameBuf[BUFS];
-    char	lineBuf[TCBUFS];
-
-    if (typeCacheFP == NULL) {
-	/* open the cache file and leave it open for reading details */
-	if ((typeCacheFP = fopen(typeCacheFN, "r+")) == NULL) {
-	    if (errno != ENOENT || (typeCacheFP = fopen(typeCacheFN, "w+")) == NULL) {
-		perror("could not open file");
-		return TCindex;			/* error opening file */
-	    }
-	}
-    }
-
-    for (fileOffset = 0;			/* start of the file */
-	fgets(lineBuf, TCBUFS, typeCacheFP) != NULL;
-	fileOffset += strlen(lineBuf))		/* start of the next line */
-    {
-	if ((c = *lineBuf) == '<') {
-	    ftype = CGINC;			/* global include file */
-	} else if (c == '"') {
-	    ftype = CLINC;			/* local include file */
-	} else {
-	    if (c != ' ') {
-		goto formatError;		/* strange line */
-	    }
-	    continue;				/* ignore follow up lines */
-	}
-	if (sscanf(lineBuf, "%[<\"/A-Za-z_.0-9>]", nameBuf) == 1) {
-	    if (debug & 02) fprintf(outFP, "####### %s\n", nameBuf);
-	    /* store include file name in symbol table */
-	    if ((sp = lookup(nameBuf)) != 0) {
-		if (sp->type == CINC) {
-		    warning("readTypeCacheFile: multiple entry ???:", nameBuf);
-		} else {
-		    warning("readTypeCacheFile: wrong type in ST ???:", nameBuf);
-		}
-	    } else if ((sp = install(nameBuf, CINC, ftype)) != 0) {
-		sp->u.val = fileOffset;		/* new entry */
-	    } else {
-		error("readTypeCacheFile: could not store symbol:", nameBuf);
-		return TCindex;			/* error reading file */
-	    }
-	} else {
-	  formatError:
-	    error("readTypeCacheFile: strange line:", lineBuf);
-	    return TCindex;			/* error reading file */
-	}
-    }
-
-    return 0;
-} /* readTypeCacheFile */
-
-/********************************************************************
- *
- *	Read types from the cache
- *
- *	If a particular include file is not yet in the cache file, it
- *	has to be processed by the C-parser to determine any type_names.
- *
- *	To do this the following steps are executed:
- *
- *	1) write a #include statement to the temporary file ic4.XXXXXX
- *	2) execute 'cc -E ic4.XXXXXX > ic5.XXXXXX' as a system call
- *	3) unlink ic4.XXXXXX
- *	4) open ic5.XXXXXX for reading on T5FP and associate it with yyin
- *	5) continue C-parse until EOF - close T5FP - unlink ic5.XXXXXX
- *	   During the parse type_names are added to the ST with type CTYPE
- *	   and ftype CNEW. Mark CTYPE entries previously defined also.
- *	   save the includeName in staticName.
- *
- *	At the end of step step 4 we return from this function.
- *	On EOF the fact that T5FP != NULL leads us to step 6 and 7.
- *	After reverting yyin to normal input the next get() will access
- *	the next line in the C-blocks.
- *
- *	The reason include files have to be handled in the stream of
- *	normal compilation is the fact, that some include files declare
- *	types, which are required for the correct C-compilation of later
- *	include files. If this is not done various syntax errors occurr
- *	which have nothing to do with the iC compilation - all we want
- *	to achieve is to extract type_names from the include files - but
- *	such syntax errors are a nuisance and hard to control.
- *
- *	For this pass a simpler tool, which recognises only typedef
- *	statements would have sufficed. But since a lot of the full
- *	C-grammar is needed to handle immediate expressions, it is
- *	easier to use the full compiler here also - particularly
- *	since typedef statements are quite complex with struct, pointer
- *	array and function declarations.
- *
- *******************************************************************/
-
-int
-readTypesFromCache(char* includeName)
-{
-    int		c;
-    int		fFlag;
-    int		fd;
-    int		r;
-    long	fileOffset;
-    Symbol *	sp;
-    char*	tokenPtr;
-    char	lineBuf[TCBUFS];
-
-    if (typeCacheFP == NULL) {
-	/* open the cache file and leave it open for reading details */
-	if (readTypeCacheFile() != 0) {
-	    return TCindex;			/* error handling cache file */
-	}
-    }
-
-    /* read the relevant symbol table entry and get offset */
-    if ((sp = lookup(includeName)) == 0) {
-	/* c_compile the actual include file to extend the cache */
-	/* involves appending to cache file and installing in ST */
-	if (T4FP == NULL) {
-	    if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
-		error("readTypesFromCache: cannot open:", T4FN);
-		return T4index;			/* error opening temporary file */
-	    }
-	    if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
-		error("readTypesFromCache: cannot make or unlink:", T5FN);
-		perror("unlink");
-		return T5index;			/* error unlinking temporary file */
-	    }
-	} else {
-	    rewind(T4FP);
-	}
-	if (debug & 02) fprintf(outFP, "####### open include file %s via %s %s\n", includeName, T4FN, T5FN);
-	fprintf(T4FP, "#include %s\n", includeName);	/* a little C file !!! */
-	fflush(T4FP);
-
-	sprintf(lineBuf, "cc -E -x c %s -o %s", T4FN, T5FN);
-	if (debug & 02) fprintf(outFP, "####### pre-compile: %s\n", lineBuf);
-	r = system(lineBuf);			/* Pre-compile C file */
-	if (debug & 02) fprintf(outFP, "####### pre-compile: return %d\n", r);
-	staticName = emalloc(strlen(includeName) + 1);	/* +1 for '\0' */
-	strcpy(staticName, includeName);
-
-	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
-	    error("readTypesFromCache: cannot open:", T5FN);
-	    perror("open");
-	    return T5index;
-	}
-	if (debug & 02) fprintf(outFP, "####### compile include file %s via %s %s\n", includeName, T4FN, T5FN);
-	saveFP = yyin;
-	yyin = T5FP;				/* lexc reads from include now */
-	return 0;				/* T5FP acts as flag */
-    } else if (sp->type != CINC) {
-	error("readTypesFromCache: wrong type in ST ???:", includeName);
-	return TCindex;				/* cannot proceed */
-    }
-
-    fileOffset = sp->u.val;
-    sp->ftype = CFINC;				/* entry has been read from file */
-    if (debug & 02) fprintf(outFP, "####### %s", includeName);
-    if (fseek(typeCacheFP, fileOffset, SEEK_SET) < 0) {
-	error("readTypesFromCache: wrong offset in ST ???:", includeName);
-	return TCindex;				/* cannot proceed */
-    }
-
-    fFlag = 0;
-    while (fgets(lineBuf, TCBUFS, typeCacheFP) != NULL) {
-	if ((c = *lineBuf) != ' ') {
-	    if (fFlag == 0 && (c == '<' || c == '"')) {
-		fFlag = 1;
-		/* first strtok() skips name entry */
-		if (strtok(lineBuf, " \n") == NULL) {
-		    error("readTypesFromCache: wrong first token ???:", lineBuf);
-		    return TCindex;				/* cannot proceed */
-		}
-		if (c == '"') {
-		    /* could handle date stamp here */
-		}
-		tokenPtr = strtok(NULL, " \n");	/* first type token */
-	    } else {
-		break;				/* next entry - ignore errors */
-	    }
-	} else {
-	    /* skip space at start of follow up line */
-	    tokenPtr = strtok(lineBuf + 1, " \n");	/* first token from follow up */
-	}
-	/* break up the type entries in the line */
-	while (tokenPtr && *tokenPtr != '\n') {
-	    if ((sp = lookup(tokenPtr)) != 0) {
-		if (sp->type != CTYPE) {
-		    warning("readTypesFromCache: wrong type in ST ???:", tokenPtr);
-		}
-		/* ignore multiple type_names from different includes - happens a lot */
-		if (debug & 02) fprintf(outFP, ";%s", tokenPtr);
-	    } else if ((sp = install(tokenPtr, CTYPE, COLD)) == 0) {
-		warning("readTypesFromCache: problem installing Symbol in ST ???:", tokenPtr);
-	    } else {
-		if (debug & 02) fprintf(outFP, ",%s", tokenPtr);
-	    }
-	    tokenPtr = strtok(NULL, " \n");	/* next type token */
-	}
-    }
-    if (debug & 02) fprintf(outFP, ":\n");
-
-    return 0;
-} /* readTypesFromCache */
-
-/********************************************************************
- *
- *	Write out types to cache
- *
- *	executed in restoreCblocksStream()
- *	6) append a line to the cache file .iCcTypes.def with the
- *	   includeName and a list of all new type_names generated in step 5.
- *	   These are recognised because they have ftype == CNEW.
- *	   Set ftype to COLD for each type_name output. The cache is now
- *	   ready for this include file for the next iC file to be compiled.
- *	   For this compilation the ST is correct and the cache file does
- *	   not need to be read.
- *	7) revert yyin to the normal input file and continue C-parse of
- *	   iC generated C-blocks.
- *
- *******************************************************************/
-
-FILE *
-restoreCblocksStream(void)
-{
-    Symbol *	sp;
-    Symbol **	hsp;
-
-    /* append to open cache file */
-    assert(typeCacheFP);
-    assert(staticName);
-    if (fseek(typeCacheFP, 0L, SEEK_END) == 0) {
-	fprintf(typeCacheFP, "%s", staticName);
-	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
-	    for (sp = *hsp; sp; sp = sp->next) {
-		if (sp->type == CTYPE && sp->ftype == CNEW) {
-		    fprintf(typeCacheFP, " %s", sp->name);
-		    sp->ftype = COLD;	/* prevent output for next include */
-		}
-	    }
-	}
-	fprintf(typeCacheFP, "\n");	/* terminate line */
-	free(staticName);
-	staticName = NULL;
-    } else {
-	error("restoreCblocksStream: cannot seek to end ???:", typeCacheFN);
-    }
-
-    assert(T5FP);
-    fclose(T5FP);
-    T5FP = NULL;
-    if (!(debug & 04000)) unlink(T5FN);
-    if (debug & 02) fprintf(outFP, "####### close and unlink %s\n", T5FN);
-    return (yyin = saveFP);			/* restore FILE* in get() after EOF */
-}
-#endif

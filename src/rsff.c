@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.30 2002/08/08 08:10:50 jw Exp $";
+"@(#)$Id: rsff.c,v 1.31 2002/08/26 19:12:51 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -20,6 +20,7 @@ static const char rsff_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<assert.h>
+#include	"icg.h"
 #include	"icc.h"
 
 #define min(x,y) ((x) < (y) ? (x) : (y))
