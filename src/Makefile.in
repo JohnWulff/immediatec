@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.23 2002/07/08 13:00:16 jw Exp $
+# @(#)$Id: Makefile.in,v 1.24 2002/07/08 14:54:01 jw Exp $
 
 ############################################################
 #
@@ -195,5 +195,5 @@ rsff.$(O):	$(srcdir)/icc.h
 scan.$(O):	$(srcdir)/icc.h
 
 gram.$(O):	$(srcdir)/gram.h
-lexc.$(O):	$(srcdir)/gram.h gram_tab.h
+lexc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram.h gram_tab.h
 lmain.$(O):	$(srcdir)/gram.h
