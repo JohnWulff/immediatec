@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.43 2002/06/19 17:54:27 jw Exp $";
+"@(#)$Id: genr.c,v 1.44 2002/06/24 11:15:49 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -964,7 +964,10 @@ bltin(Sym* sym, Lis* ae1, Lis* cr1, Lis* ae2, Lis* cr2, Lis* cr3, Val* pVal)
 	lp2->le_first = ae2->f; lp2->le_last = ae2->l;
 	if (lp2->le_sym->ftype == S_FF ||
 	    lp2->le_sym->ftype == D_FF) {
-	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR, DR */
+	    lp2->le_sym->ftype = R_FF;		/* next ftype for SR, DSR, DR */
+	} else if (lp2->le_sym->ftype == S_SH ||
+	    lp2->le_sym->ftype == D_SH) {
+	    lp2->le_sym->ftype = R_SH;		/* next ftype for SHSR, SHR */
 	}
 	lp2 = op_push(lpc, lp2->le_sym->type & TM, lp2);
 	lp2 = op_push((List_e *)0, types[lp2->le_sym->ftype], lp2);

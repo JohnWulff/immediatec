@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.17 2002/06/22 22:24:08 jw Exp $";
+"@(#)$Id: scan.c,v 1.18 2002/06/24 16:05:51 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2001  John E. Wulff
@@ -25,7 +25,7 @@ static void	link_c(Gate * gp, Gate * out_list);
 
 /********************************************************************
  *
- *	the following 5 arrays are indexed by gt_fni is ftype
+ *	The following 5 arrays are indexed by gt_fni is ftype
  *
  *	UDFA	ARITH	GATE	RI_BIT	CH_BIT	S_SH	R_SH	D_SH
  *	F_SW	S_FF	R_FF	D_FF	F_CF	CLCK	TIMR
@@ -34,8 +34,8 @@ static void	link_c(Gate * gp, Gate * out_list);
  *******************************************************************/
 
 Functp2		initAct[] = {		/* called in pass4 */
-		    err_fn, arithMa, link_ol, link_c, link_c, link_c, link_c, link_c,
-		    link_c, link_c, link_c, link_c, link_c, link_c, link_c,
+		    err_fn, arithMa, link_ol, link_c, chMbit, link_c, link_c, dMsh,
+		    fMsw, link_c, link_c, link_c, link_c, link_c, link_c,
 		    outMw, outMx, err_fn, err_fn,
 		};
 
@@ -68,7 +68,7 @@ short		dc;	/* debug display counter in scan and rsff */
 
 /********************************************************************
  *
- *	scan of nodes on an arithmetic action list
+ *	Scan of nodes on an arithmetic action list
  *
  *	The nodes op on the a_list are all of ftype ARITH and the target
  *	nodes gp are all of type ARN + which have a cexe function.
@@ -200,7 +200,7 @@ scan_ar(Gate *	out_list)
 
 /********************************************************************
  *
- *	scan of nodes on a logic action list
+ *	Scan of nodes on a logic action list
  *
  *	The nodes op on the o_list are all of ftype GATE and the target
  *	nodes gp are all of types AND, OR or LATCH.
@@ -317,7 +317,7 @@ scan(Gate *	out_list)
 
 /********************************************************************
  *
- *	scan of nodes on a clock action list
+ *	Scan of nodes on a clock action list
  *
  *	The nodes gp on the c_list are all actions of ftype D_SH - F_CF
  *	or CLCKL or TIMRL.
@@ -380,6 +380,7 @@ scan_clk(Gate *	out_list)	/* scan a clock list */
 /********************************************************************
  *
  *	Pass 1 initialisation for all nodes.
+ *
  *	Clear the logic value to zero. Used to count links.
  *
  *******************************************************************/
@@ -401,6 +402,7 @@ pass1(Gate * op, int typ)	/* Pass1 init on gates */
 /********************************************************************
  *
  *	Pass 2 initialisation for all nodes.
+ *
  *	Call a routine which depends on the ftype of this node.
  *	For Gates this is gate2().
  *
@@ -416,6 +418,7 @@ pass2(Gate * op, int typ)	/* Pass2 init on gates */
  *
  *	Pass 2 initialisation for Gates via gt_fni == GATE in pass2().
  *	or gt_fni == ARITH.
+ *
  *	Count the connections in each Gate to which this Gate is
  *	connected. Limit the maximum to PPGATESIZE (127) for GATE.
  *	In Pass 3 every simple Gate will contain the count of how
@@ -451,6 +454,7 @@ gate2(Gate * op, int typ)		/* pass2 function init gates */
 /********************************************************************
  *
  *	Pass 3 initialisation for Gates. Called directly for types.
+ *
  *	The connection count is reported and a Warning issued if zero.
  *	For AND, UDF and LOGC the initial value for gt_val is this count.
  *	For OR, ARNC and ARN the initial value for gt_val is set to +1.
@@ -520,22 +524,23 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
 
 /********************************************************************
  *
- *	Pass 4 initialisation for all logic Gates.
- *	Do a special logic scan on all inverted connections only.
- *	At end of pass 3 all logic Gates have been initialised to LO.
+ *	Pass 4 initialisation for all logic and arithmetic Gates.
+ *
+ *	Do a special logic scan on all inverted connections only. At
+ *	the end of pass 3 all logic Gates have been initialised to LO.
  *	Each non-inverted connection to other Gates acts as a LO
  *	signal on that Gate which corresponds to the original
  *	assumption. Thus no Gate action needs to be carried out for
  *	non-inverted connections.
+ *
  *	Each inverted connection to other Gates acts as a HI signal
  *	which means that a Gate action must be carried out for all
  *	inverted connections. Outputs which change are linked. All
  *	clocked and timer actions are linked to c_list immediately,
  *	rather than to some other clock or timer. This is done with
  *	the assumptions that the clock or timer action took place
- *	well before turn on.
- *	This process simulates what happens in logic hardware when
- *	power is applied.
+ *	well before turn on. This process simulates what happens in
+ *	logic hardware when power is applied.
  *
  *	Each arithmetic output is initialised to 0. Arithmetic
  *	outputs only act on gates of type ARN (+), but these have
@@ -543,6 +548,12 @@ Functp		gate_i[] = {pass1, pass2, gate3, pass4, };
  *	must be evaluated in this pass and those which do change
  *	are linked, and those which change back are unlinked - Same
  *	as in scan_ar().
+ *
+ *	Clocked and timer arithmetic actions are processed with their
+ *	arithmetic masterAct and thus go on their own clock or timer
+ *	list. This is needed particularly for a D_SH action, whose
+ *	slave may be simultaneously acted on by S_SH or R_SH, which
+ *	should come first on start up.
  *
  *******************************************************************/
 
@@ -601,8 +612,8 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 		    gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
 		    if (val != gp->gt_new &&	/* first change or glitch */
 		    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
-			/* arithmetic master action */
-			(*masterAct[gp->gt_fni])(gp, a_list);
+			/* arithmetic init action same as master action */
+			(*initAct[gp->gt_fni])(gp, a_list);
 		    }
 		} else if ((val = val ? -1 : 1) != gp->gt_val) {
 		    gp->gt_val = val;	/* convert val to logic value */
@@ -649,7 +660,7 @@ pass4(Gate * op, int typ)	/* Pass4 init on gates */
 
 /********************************************************************
  *
- *	During pass 4 all Gates with clocked actions are put
+ *	During pass 4 all logic Gates with clocked actions are put
  *	directly on the c_list, to simulate that all timers and
  *	clocks have completed before initialisation.
  *

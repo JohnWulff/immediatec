@@ -1,4 +1,4 @@
-@(#)$Id: icc.v,v 1.69 2002/06/23 22:00:00 jw Exp $
+@(#)$Id: icc.v,v 1.70 2002/06/24 22:00:00 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 Makefile.in     1.21    2002/06/06  12:17:51  jw      Exp
@@ -9,7 +9,7 @@ comp.h          1.20    2001/04/14  13:32:05  jw      Exp
 comp.y          1.55    2002/06/19  11:21:44  jw      Exp
 configure       1.1     2001/03/07  11:10:52  jw      Exp
 configure.in    1.1     2001/03/07  11:10:52  jw      Exp
-genr.c          1.43    2002/06/19  17:54:27  jw      Exp
+genr.c          1.44    2002/06/24  11:15:49  jw      Exp
 iCbox           1.35    2002/06/03  13:14:26  jw      Exp
 iClive          1.23    2002/06/19  20:44:13  jw      Exp
 iCmake          1.20    2002/06/13  08:39:24  jw      Exp
@@ -17,7 +17,7 @@ iCserver        1.26    2002/06/20  12:08:02  jw      Exp
 icc.c           1.16    2002/05/16  14:28:43  jw      Exp
 icc.h           1.36    2002/06/21  15:42:13  jw      Exp
 ict.c           1.28    2002/06/12  06:30:46  jw      Exp
-init.c          1.15    2002/06/19  17:50:12  jw      Exp
+init.c          1.16    2002/06/24  10:42:31  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
 link.c          1.16    2002/06/19  21:37:40  jw      Exp
 load.c          1.30    2002/06/23  19:04:58  jw      Exp
@@ -32,7 +32,7 @@ pawk.a          1.2     1996/07/30  20:24:24  john    Exp
 perlinstall     1.6     2001/06/03  20:09:24  jw      Exp
 pplstfix        1.5     2001/03/02  12:56:32  jw      Exp
 rsff.c          1.26    2002/06/23  16:24:59  jw      Exp
-scan.c          1.17    2002/06/22  22:24:08  jw      Exp
+scan.c          1.18    2002/06/24  16:05:51  jw      Exp
 symb.c          1.8     2001/04/14  13:32:05  jw      Exp
 tcpc.c          1.10    2002/06/03  13:14:26  jw      Exp
 tcpc.h          1.8     2002/06/03  13:14:26  jw      Exp
