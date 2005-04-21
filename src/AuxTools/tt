@@ -15,6 +15,7 @@ usage()
   echo '	-x <regex> ignore changes in lines that match regex' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo '	-	all further arguments are treated as files' >&2
@@ -26,7 +27,7 @@ usage()
   echo "	If a 2nd <directory> is specified the files in all 1st <directory>" >&2
   echo "	will be compared with files in the 2nd <directory> with Mdiff -k" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.6 2005/03/16 18:30:33 jw Exp $' >&2
+  echo '$Id: tt,v 1.7 2005/04/21 17:42:05 jw Exp $' >&2
 }
 
 ########################################################################
@@ -63,6 +64,7 @@ while [ $# -gt 0 ]; do
 	    l*)	l="$l -l";;
 	    A*)	A="$A -A";;
 	    S*)	A="$A -S";;
+	    R*)	A="$A -R";;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
