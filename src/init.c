@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.27 2005/01/27 17:35:17 jw Exp $";
+"@(#)$Id: init.c,v 1.28 2005/04/16 17:00:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -100,6 +100,10 @@ static struct bi builtins[] = {
   { "extern",	KEYW,	EXTERN,	0,	},
   { "assign",	KEYW,	ASSIGN,	0,	},
   { "return",	KEYW,	RETURN,	0,	},
+  { "use",	KEYW,	USE,	1,	}, /* turn on use */
+  { "no",	KEYW,	USE,	0,	}, /* turn off use */
+  { "alias",	KEYW,	USETYPE, 0,	}, /* check that no more than MAXUSETYPE USETYPE's occurr */
+  { "strict",	KEYW,	USETYPE, 1,	}, /* MAXUSETYPE 2 */
   { "imm",	KEYW,	IMM,	0,	},
   { "void",	KEYW,	VOID,	UDFA,	},
   { "bit",	KEYW,	TYPE,	GATE,	},
@@ -107,6 +111,7 @@ static struct bi builtins[] = {
   { "clock",	KEYW,	TYPE,	CLCKL,	},
   { "timer",	KEYW,	TYPE,	TIMRL,	},
   { "iC_Gt",	CTYPE,	YYERRCODE, 0,	}, /* initial Gate C-type from icg.h */
+  { ICONST,	NCONST, 0,	ARITH,	}, /* iConst Symbol */
   { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
   { 0,		0,	0,	0,	},
 };

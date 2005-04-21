@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.12 2005/01/26 15:17:03 jw Exp $";
+"@(#)$Id: lmain.c,v 1.13 2005/03/06 12:25:12 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -31,7 +31,7 @@ static const char *	usage =
 "                    +2  generation of insert markers\n"
 "                    +1  yacc debug info\n"
 #else
-"                        output space seperated list of typenames\n"
+"                        output space separated list of typenames\n"
 #endif
 "        <C_program>    any C language program file (extension .c)\n"
 "        -h              this help text\n"
@@ -41,7 +41,7 @@ static const char *	usage =
 FILE *	yyin;
 FILE *	yyout;
 FILE *	iC_outFP;
-const char *	iC_progname;		/* name of this executable */
+char *		iC_progname;		/* name of this executable */
 const char *	inpFN = 0;		/* name of input file */
 const char *	listFN = 0;		/* name of list file */
 short		iC_debug = 0400;
@@ -130,7 +130,7 @@ main(
 	}
 	if ((iC_debug & ~0400) == 0) {
 #endif
-	/* output list of TYPE_NAMEs as a space seperated list terminated by a new line */
+	/* output list of TYPE_NAMEs as a space separated list terminated by a new line */
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
 		fprintf(iC_outFP, " %s", sp->name);

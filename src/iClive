@@ -101,75 +101,82 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 ########################################################################
 
 my $named = $0; $named =~ s#.*[/\\]##;
+use vars qw($opt_T $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i $opt_f $opt_l $opt_w $opt_g $opt_u $opt_X $opt_h);
 format STDERR =
 Usage:
 @<<<<<<<[ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
  $named
-        [ -g <geometry>][ <file> ...]
+        [ -l <num>][ -w <num>][ -g <geometry>][ -d <deb>][ <file> ...]
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -f font font to use in Text window (default '9x15')
-    -g geom geometry for main window (default '748x436')
+    -l num  height of the Text window (default @<)
+					$opt_l
+    -w num  width  of the Text window (default @<)
+					$opt_w
+    -g geom geometry for main window (-g= is special small window)
+    -d deb  extra debug options (see iCapplication -h)
+    -t      trace output run time changes in target application (-d100)
+    -m      output elapsed time in seconds and microseconds
+    -T      trace output static debug messages
     -u      activate undo edit facility (not recommended if Live display
             is used, because display may skip to lines which change)
-    -m      output elapsed time in seconds and microseconds
-    -t      trace output run time changes in target application
-    -T      trace output static debug messages
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
-            rest will be stored in the File menu for later selection. If
-            the built application is running, Live display is activated.
+            rest will be stored in the File menu for later selection.
 
- Menu buttons:
-    [File] New  provide a new empty file for editing.
-         Open   open and load the selected file.
-         Save   save the current file if modified.
-         SaveAs store the file at the selected path.
-         Quit   quit the program.
+ Menu buttons:                                              Accelerators
+    [File] New  provide a new empty file for editing.             Alt-n
+       Open     open and load the selected file.                  Alt-o
+       Open.lst open the listing x.lst corresponding to x.ic      Alt-l
+       Save     save the current file if modified.                Alt-s
+       SaveAs   store the current file at the selected path.      Alt-a
+       Quit     quit the program.                                 Alt-q
 
     [Build]     build either the C file or the executable application
-                from the currently displayed iC program text.
+                from the currently displayed iC program text.     Alt-b
 
     [Run/Stop]  run or stop the executable application built from the
-                currently displayed iC program text.
+                currently displayed iC program text.              Alt-r
 
     [ -]        select no instance or -0 to -9 or extra instance passed
                 with -i option. Run and Live use the selected instance.
 
-    [Live	scan the text and generate live markings for all words,
-		which represent variables in the currently running
-		application - which should be built from the text
-		to make a meaningful display. Text is 'read only'
-		in this mode.
-    /Edit]      clears live markings in the text window. In this mode the
+    [Live       scan the text and generate live markings for all words,
+                which represent variables in the currently running
+                application - which should be built from the text
+                to make a meaningful display. Text is 'read only'
+                in this mode.                                     Alt-e
+    /Edit]      clears live markings in the Text window. In this mode the
                 text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
                 are described in the Tk::Text man page in the section
                 'BINDINGS' near the end.  If called with the -u option,
                 ctrl-U is the <<Undo>> binding.
 
-    [Search]    the the text window. It may be scanned for an exact match
-                or for a regular expression in the entry window next to
-                the button. All found items will be marked. Repeating
-                'Search down' or RETURN will display a section of
-                the text containing found items which were previously
-                not displayed.  'Search up' or SHIFT-RETURN reverses
-                the direction of scrolling.  Another option is to Go
-                to a line entered in the entry window.
+    [Search:]   in the Text window. Text may be scanned for an exact
+                match or for a regular expression in the entry window
+                next to the button. All hits will be marked. Repeating
+                'Search down' or RETURN will display a new group of
+                hits. 'Search up' or SHIFT-RETURN reverses the direction
+                of scrolling.  Another option is to Go to a line entered
+                in the entry window.                             RETURN
 
-    [Help]      display the man page
+    [Help]      display the iClive man page                       Alt-h
 
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.36 2005/01/23 09:05:00 jw Exp $
+$Id: iClive,v 1.37 2005/04/05 10:20:53 jw Exp $ uses Tk-@<<<<<<<<<
+						    $Tk::VERSION
 .
 
-use vars qw($opt_T $opt_t $opt_m $opt_s $opt_p $opt_i $opt_f $opt_g $opt_u $opt_X $opt_h);
 require "getopts.pl";
-&Getopts('tTms:p:i:f:g:uXh');	# sets $opt_h if -h etc
+&Getopts('tTmd:s:p:i:f:l:w:g:uXh');	# sets $opt_h if -h etc
 
-exit -1 if $opt_X;		# called in forked process if first exec fails
+exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
+$opt_l = 25 unless $opt_l;
+$opt_w = 80 unless $opt_w;
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
@@ -182,12 +189,29 @@ if ($opt_u) {
 
 ########################################################################
 #
-#	Initialize global variables
+#	Handle signals
+#
+#	NOTE: a signal to be caught by one of the callbacks below will
+#	not be processed, until this application receives focus or handles
+#	some other event internally (Problem with Tk::MainLoop())
 #
 ########################################################################
 
-our $shucks = 0;
-$SIG{PIPE} = \&catch_zap;	# catch signal in syswrite() in Msg.pm line 103
+## $SIG{QUIT} = \&quit_program;	# catch signal from (X) button
+## $SIG{TERM} = \&quit_program;	# catch signal from signal 15
+
+## $SIG{HUP} = \&catch_sig;	# catch signal 1
+## $SIG{INT} = \&catch_sig;	# catch signal 2
+## $SIG{QUIT} = \&catch_sig;	# catch signal 3
+## $SIG{TERM} = \&catch_sig;	# catch signal 15
+
+$SIG{PIPE} = \&catch_sig;	# catch signal in syswrite() in Msg.pm line 103
+
+########################################################################
+#
+#	Initialize global variables
+#
+########################################################################
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
@@ -206,6 +230,7 @@ my $infoDisplaying = 0;
 my @infoMessages = ();
 
 my $fileName = '';	# name of currently loaded file (should be iC or derivative)
+my $fileTime = 0;	# last modified time of currently loaded file
 my $procName = '';	# name of runnable iC control program
 my $instName = '';	# name of runnable iC control program with instance extension
 my $regName = '';
@@ -221,19 +246,25 @@ print "cwd = $cwd\n" if $opt_T;
 my $fileTypes = [
     ['iC Source Files',  ['.ic',  '.ih',   ], ['TEXT', ], ],
     ['iC Listing Files', ['.lst',          ], ['TEXT', ], ],
-    ['C  Source Files',  ['.c',            ], ['TEXT', ], ],
+    ['C  Source Files',  ['.c',   '.h',    ], ['TEXT', ], ],
     ['Text Files',       ['.txt', '.text', ],             ],
+    ['Text Files',       ['',              ], ['TEXT', ], ],
     ['All Files',        ['*',             ],             ],
 ];
 
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
-my $scanPattern = '[~\s]*[\w]+(\.\w+)?\s*((~ )?---|=$)?';
+my $scanPattern = '[~\s]*(-\s*\d+|[\w\$]+(\.\w+)?)\s*((~ )?---|=$)?';
 my $bMsg = '';		# balloon message
 my @wIdx = ('', '');	# Indices surrounding the current word.
-my @lIdx = ('', '');	# Same for last word.
+my @pIdx = ('', '');	# Same for previous word.
 
 # has to be global, 'our' not portable yet
-my ($prevText, $prevMatch, @lines, $si, $sj, $siWrap, $sjWrap, $top, $home);
+my ($home);
+my (@hits, @groups, $gi, $gl, $centre);
+my $prevText = '';
+my $prevMatch = '';
+my $prevStart = 0;
+my $prevLast  = 0;
 
 ########################################################################
 #
@@ -326,44 +357,69 @@ my $menuBar = $mainWindow->Frame()->pack(-side => 'top', -fill => 'x');
 ########################################################################
 #	File menu
 ########################################################################
-my $menuFile = $menuBar->Menubutton(-text        => 'File',
-				    -relief      => 'raised',
-				    -borderwidth => 2,
-				    -tearoff     => 1,	# tear off line 0
+my $menuFile = $menuBar->Menubutton(-text               => 'File',
+				    -relief             => 'raised',
+				    -borderwidth        => 2,
+				    -takefocus          => 1,
+				    -highlightthickness => 1,
+				    -tearoff            => 1,	# tear off line 0
 				   )->pack(-side => 'left',
 					   -padx => 2,
 					  );
-$menuFile->command(-label => 'New',    -command => \&new_text);
-$menuFile->command(-label => 'Open',   -command => \&open_file);
-$menuFile->command(-label => 'Save',   -command => \&save_file);
-$menuFile->command(-label => 'SaveAs', -command => \&saveAs_file);
-$menuFile->separator();
-$menuFile->command(-label => 'Quit',   -command => \&quit_program);
-$menuFile->separator();
-my $menuFileStart = 8;				# first dynamic entry line 8
-my @currentFiles = ();
-my @lastFile = ();				# save last open file
+$menuFile->command(-label       => 'New',				# 1
+		   -accelerator => 'Alt-n',
+		   -command     => \&new_text);
+$menuFile->command(-label       => 'Open',				# 2
+		   -accelerator => 'Alt-o',
+		   -command     => \&open_file);
+$menuFile->command(-label       => 'Open.lst',				# 3
+		   -accelerator => 'Alt-l',
+		   -command     => \&open_list);
+$menuFile->command(-label       => 'Save',				# 4
+		   -accelerator => 'Alt-s',
+		   -command     => \&save_file);
+$menuFile->command(-label       => 'SaveAs',				# 5
+		   -accelerator => 'Alt-a',
+		   -command     => \&saveAs_file);
+$menuFile->separator();							# 6
+$menuFile->command(-label       => 'Quit',				# 7
+		   -accelerator => 'Alt-q',
+		   -command     => \&quit_program);
+$menuFile->separator();				# 8
+my $menuFileStart = 9;				# first dynamic entry line 9
+my %currentFiles = ();
+my $menuFileCount = 0;				# caching count
+my %lastFile = ();				# save last open file
+my $lastFileCount = 0;				# caching count
 
 ########################################################################
 #	Build menu
 ########################################################################
-my $build_mb   = $menuBar->Menubutton(-text        => 'Build',
-				      -relief      => 'raised',
-				      -borderwidth => 2,
+my $build_mb   = $menuBar->Menubutton(-text               => 'Build',
+				      -relief             => 'raised',
+				      -borderwidth        => 2,
+				      -takefocus          => 1,
+				      -highlightthickness => 1,
+				      -tearoff            => 0,	# no tear off
 				     )->pack(-side => 'left',
 					     -padx => 2,
 					    );
-$build_mb->command(-label => 'Build executable',  -command => [ \&build_file, 0, 0 ]);
-$build_mb->command(-label => 'Save &Build unconditionally',
-						  -command => [ \&build_file, 0, 1 ]);
-$build_mb->command(-label => 'Build C file only', -command => [ \&build_file, 0, 2 ]);
+$build_mb->command(-label       => 'Build executable',
+		   -accelerator => 'Alt-b',
+		   -command     => [ \&build_file, 0, 0 ]);
+$build_mb->command(-label       => 'Save &Build unconditionally',
+		   -accelerator => 'Alt-u',
+		   -command     => [ \&build_file, 0, 1 ]);
+$build_mb->command(-label       => 'Build C file only',
+		   -accelerator => 'Alt-c',
+		   -command     => [ \&build_file, 0, 2 ]);
 if ($opt_T) {
-    $build_mb->command(-label => 'T to iCserver',         -command =>
-						sub { conn_send_now('T') if $conn; });
-    $build_mb->command(-label => 'Symbol Table by name',  -command =>
-							[ \&output_symbol_table, 0, 0 ]);
-    $build_mb->command(-label => 'Symbol Table by index', -command =>
-							[ \&output_symbol_table, 0, 1 ]);
+    $build_mb->command(-label   => 'T to iCserver',
+    		       -command => sub { conn_send_now('T') if $conn; });
+    $build_mb->command(-label   => 'Symbol Table by name',
+    		       -command => [ \&output_symbol_table, 0, 0 ]);
+    $build_mb->command(-label   => 'Symbol Table by index',
+    		       -command => [ \&output_symbol_table, 0, 1 ]);
 }
 my $makeName = '';
 my $restartFlag = 0;
@@ -437,63 +493,66 @@ my $scanFlag = 0;		# text is initially cleared
 ########################################################################
 #	Search menu 
 ########################################################################
-my $menuSearch = $menuBar->Menubutton(-text        => 'Search',
-				      -relief      => 'raised',
-				      -borderwidth => 2,
-				      -tearoff     => 1,	# tear off line 0
+my $menuSearch = $menuBar->Menubutton(-text               => 'Search:',
+				      -relief             => 'raised',
+				      -borderwidth        => 2,
+				      -takefocus          => 1,
+				      -highlightthickness => 1,
+				      -tearoff            => 1,	# tear off line 0
 				     )->pack(-side => 'left',
 					     -padx => 2,
 					    );
 my $matchType = "-exact";	# default, alternatives -nocase -regexp
 
-$menuSearch->command(-label       => 'Search down',
-		     -accelerator => 'RETURN',
+$menuSearch->command(-label       => 'Search down',			# 1
+		     -accelerator => 'Return',
 		     -command     => [ \&search_text, 0, undef, 0 ]);
-$menuSearch->command(-label       => 'Search up',
-		     -accelerator => 'SHIFT-RET',
+$menuSearch->command(-label       => 'Search up',			# 2
+		     -accelerator => 'Shift-Ret',
 		     -command     => [ \&search_text, 0, undef, 1 ]);
-$menuSearch->command(-label       => 'Clear',
-		     -accelerator => 'CTRL-RET',
+$menuSearch->command(-label       => 'Clear',				# 3
+		     -accelerator => 'Ctrl-Ret',
 		     -command     => [ \&search_text, 0, '',    0 ]);
 ########################################################################
 #	Goto line number
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Go to line',
-			 -accelerator => 'ALT-RET',
+$menuSearch->radiobutton(-label    => 'Go to line',			# 4
+			 -accelerator => 'Alt-Ret',
 			 -value    => 'g',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 0, undef, 2 ]);
 ########################################################################
 #	Exact match
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Exact match',
+$menuSearch->radiobutton(-label    => 'Exact match',			# 5
 			 -value    => '-exact',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 0, undef, 0 ]);
 ########################################################################
 #	Ignore case
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Ignore case',
+$menuSearch->radiobutton(-label    => 'Ignore case',			# 6
 			 -value    => '-nocase',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 0, undef, 0 ]);
 ########################################################################
 #	Regexp match
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Regexp match',
+$menuSearch->radiobutton(-label    => 'Regexp match',			# 7
 			 -value    => '-regexp',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 0, undef, 0 ]);
 ########################################################################
 #	Regexp match - Ignore case
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Regexp Ignore case',
+$menuSearch->radiobutton(-label    => 'Regexp Ignore case',		# 8
 			 -value    => 'ri',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 0, undef, 0 ]);
-$menuSearch->separator();
-my $menuSearchStart = 10;			    # first dynamic entry line 10
-my @currentSearches = ();
+$menuSearch->separator();						# 9
+my $menuSearchStart = 10;			# first dynamic entry line 10
+my %currentSearches = ();
+my $menuSearchCount = 0;			# caching count
 
 ########################################################################
 #	Search entry
@@ -503,10 +562,27 @@ my $entrySearch = $menuBar->Entry(-width        => 20,
 				 )->pack(-side => 'left',
 					 -padx => 2,
 					);
+####### Search entry bindings ##########################################
 $entrySearch->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
 $entrySearch->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
 $entrySearch->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
 $entrySearch->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+####### File menu bindings #############################################
+$entrySearch->bind('<Alt-Key-l>', [ \&open_list ]);	# active in Live mode
+$entrySearch->bind('<Alt-Key-q>', [ \&quit_program ]);	# active in Live mode
+####### Run/Stop button binding ########################################
+$entrySearch->bind('<Alt-Key-r>', [ \&run_file ]);	# active in Live mode
+####### Live/Edit button binding #######################################
+$entrySearch->bind('<Alt-Key-e>', [ \&scan ]);		# active in Live mode
+####### Help button binding ############################################
+$entrySearch->bind('<Alt-Key-h>', [ \&fork_help ]);	# active in Live mode
+####### X-Movement bindings #### Y-Movement used by Entry #############
+$entrySearch->bind('<Key-Down>',  [ \&scroll_text, 1    ]); # scroll down
+$entrySearch->bind('<Key-Up>',    [ \&scroll_text, -1   ]); # scroll up
+$entrySearch->bind('<Key-Next>',  [ \&scroll_text, $opt_l-2 ]); # next page
+$entrySearch->bind('<Key-Prior>', [ \&scroll_text, -$opt_l+2]); # prior page
+$entrySearch->bind('<Key-Home>',  [ \&position_text, '1.0'  ]); # beginning
+$entrySearch->bind('<Key-End>',   [ \&position_text, 'end'  ]); # end
 
 ########################################################################
 #	Help button
@@ -514,10 +590,7 @@ $entrySearch->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go t
 my $helpButton = $menuBar->Button(-text        => 'Help',
 				  -relief      => 'raised',
 				  -borderwidth => 2,
-				  -command     =>
-					sub {
-					    fork_and_exec('perlman', $named);
-					},
+				  -command     => \&fork_help,
 			         )->pack(-side => 'right',
 				         -padx => 2,
 				        );
@@ -525,27 +598,30 @@ my $helpButton = $menuBar->Button(-text        => 'Help',
 ########################################################################
 #	Ini data for file and search menu lists
 ########################################################################
-my %iniData = (
+my %iniMenuData = (
     files	=> [
 	$menuFile,		# file menu
 	$menuFileStart,		# start of dynamic entries
-	\@currentFiles,		# save file menu entries
+	\%currentFiles,		# save file menu entries
 	10,			# number of dynamic entries
 	\&open_file,		# call back for open file
+	\$menuFileCount,	# current caching count
     ],
     'last open file' => [
 	0,			# no menu
 	0,
-	\@lastFile,		# save last open file and instance
+	\%lastFile,		# save last open file, line # and instance
 	0,			# (not used)
 	0,
+	\$lastFileCount,	# current caching count
     ],
     searches	=> [
 	$menuSearch,		# search menu
 	$menuSearchStart,	# start of dynamic entries
-	\@currentSearches,	# save search menu entries
+	\%currentSearches,	# save search menu entries
 	10,			# number of dynamic entries
 	\&search_text,		# call back for search text
+	\$menuSearchCount,	# current caching count
     ],
 );
 
@@ -597,15 +673,81 @@ if ($opt_u) {
 					    -expand => 1,
 					   );
 }
-$text->bind('<KeyPress>', [ \&report_cursor ] );	# change in cursor position
-$text->bind('<Button-1>', [ \&report_cursor ] );	# change in cursor position
-
+unless ($opt_g) {
+    $text->configure (-width  => $opt_w);
+    $text->configure (-height => $opt_l);
+}
+####### Text window bindings ###########################################
+$text->bind('<KeyPress>', [ \&report_cursor ]);	# change in cursor position
+$text->bind('<Button-1>', [ \&report_cursor ]);	# change in cursor position
+$text->bind('<ButtonRelease>', [ \&adjust_live ]);
+####### Y-Scrollbar bindings ###########################################
+my $yScrollbar = $text->Subwidget('yscrollbar');
+$yScrollbar->bind('<Alt-Key-l>',[ \&open_list ]);
+$yScrollbar->bind('<Key-l>',    [ \&open_list ]);
+$yScrollbar->bind('<Key-q>',	[ \&quit_program ]);
+$yScrollbar->bind('<Alt-Key-q>',[ \&quit_program ]);
+$yScrollbar->bind('<Key-Right>',[ \&scroll_x_text, 1  ]); # scroll right
+$yScrollbar->bind('<Key-Left>',	[ \&scroll_x_text, -1 ]); # scroll left
+$yScrollbar->bind('<ButtonRelease>', [ \&adjust_live ]);
+$yScrollbar->bind('<KeyRelease>', [ \&adjust_live ]);
+####### Search entry bindings ##########################################
+$yScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
+$yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
+$yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
+$yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+####### X-Scrollbar bindings ###########################################
+my $xScrollbar = $text->Subwidget('xscrollbar');
+$xScrollbar->bind('<Key-Down>',	[ \&scroll_text, 1    ]); # scroll down
+$xScrollbar->bind('<Key-Up>',	[ \&scroll_text, -1   ]); # scroll up
+$xScrollbar->bind('<Key-Next>',	[ \&scroll_text, $opt_l-2 ]); # next page
+$xScrollbar->bind('<Key-Prior>',[ \&scroll_text, -$opt_l+2]); # prior page
+$xScrollbar->bind('<Key-Home>',	[ \&position_text, '1.0'  ]); # beginning
+$xScrollbar->bind('<Key-End>',	[ \&position_text, 'end'  ]); # end
+$xScrollbar->bind('<ButtonRelease>', [ \&adjust_live ]);
+####### Search entry bindings ##########################################
+$xScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
+$xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
+$xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
+$xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+########################################################################
+#	The Tk::Text Widget uses no Alt bindings - so we use them here
+####### File menu bindings #############################################
+$text->bind('<Alt-Key-n>', [ \&new_text ]);	# not active in Live mode
+$text->bind('<Alt-Key-o>', [ \&open_file ]);	# not active in Live mode
+$text->bind('<Alt-Key-l>', [ \&open_list ]);	# active in Live mode
+$text->bind('<Alt-Key-s>', [ \&save_file ]);	# not active in Live mode
+$text->bind('<Alt-Key-a>', [ \&saveAs_file ]);	# not active in Live mode
+$text->bind('<Alt-Key-q>', [ \&quit_program ]);	# active in Live mode
+####### Build menu bindings ############################################
+$text->bind('<Alt-Key-b>', [ \&build_file, 0 ]);# not active in Live mode
+$text->bind('<Alt-Key-u>', [ \&build_file, 1 ]);# not active in Live mode
+$text->bind('<Alt-Key-c>', [ \&build_file, 2 ]);# not active in Live mode
+####### Run/Stop button binding ########################################
+$text->bind('<Alt-Key-r>', [ \&run_file ]);	# active in Live mode
+$yScrollbar->bind('<Alt-Key-r>', [ \&run_file ]);
+$yScrollbar->bind('<Key-r>',     [ \&run_file ]);
+$yScrollbar->bind('<Key-s>',     [ \&run_file ]);
+####### Live/Edit button binding #######################################
+$text->bind('<Alt-Key-e>', [ \&scan ]);		# active in Live mode
+$yScrollbar->bind('<Alt-Key-e>', [ \&scan ]);
+$yScrollbar->bind('<Key-e>',     [ \&scan ]);
+####### Help button binding ############################################
+$text->bind('<Alt-Key-h>', [ \&fork_help ]);	# active in Live mode
+$yScrollbar->bind('<Alt-Key-h>', [ \&fork_help ]);
+$yScrollbar->bind('<Key-h>',     [ \&fork_help ]);
 ########################################################################
 #	Balloon widget
 ########################################################################
 my $balloon = $mainWindow->Balloon(-state => 'balloon');
 my $balloonAttached = 0;
-$mainWindow->OnDestroy(sub { $balloon->destroy; });
+########################################################################
+#	Bug in Tk-804.027 (possibly only on MAC OsX-1.3-darwin)
+#	next (commented) statement causes XS_TK__Callback_Call error
+#	just forget about it ???	JW 2005/02/02
+########################################################################
+# $mainWindow->OnDestroy(sub { $balloon->destroy; });
+$mainWindow->bind('<Configure>', [ \&adjust_live ]);
 
 ########################################################################
 #	Initialise file and search menu lists, open the first file
@@ -623,9 +765,13 @@ register_at_server();
 #	Sit in an infinite loop dispatching incoming events.
 ########################################################################
 
-MainLoop;
+MainLoop();
+exit(0);
+
+####### End of main program ############################################
 
 ########################################################################
+#
 #	Display information on the info bar
 #	(make sure all displays to info bar go via this routine)
 #	Parameter 1:	delay in milliseconds
@@ -633,6 +779,7 @@ MainLoop;
 #	Parameter 3:	message text
 #
 #	messages  are queued and displayed at <delay> ms intervals
+#
 ########################################################################
 
 sub info_display {
@@ -656,18 +803,75 @@ sub display_callback {
 } # display_callback
 
 ########################################################################
+#
 #	Report the cursor position in the info bar
+#
 ########################################################################
 
 sub report_cursor {
-    my @m = $text->markNames();
-    foreach (@m) {
-	if (/insert/) {
-	    info_display(0, 'black', $text->index($_));
-	    last;
-	}
-    }
+    info_display(0, 'black', $text->index('insert'));	# '27.4'
+    adjust_live();
 } # report_cursor
+
+########################################################################
+#
+#	Adjust live display to only the text in the view window.
+#
+#	This speeds up live display enourmously - especially on very
+#	large listing texts eg. 10,000 lines, where 15 seconds were needed
+#	to build the live display and live updates were then still sluggish
+#	approx. 0.5 seconds near the end of the text. Worse still my 2.5 GHz
+#	processor was stretched to the limit to keep the live display up to
+#	date, although 99% or more of the changes did not affect the current
+#	text visible in the text window. With the change live displays come
+#	up in a fraction of a second no matter how large the text is. All
+#	one can see when scrolling the text window is a blink in '1' variables.
+#	Measured 2 ms for a typical 26 line window. CPU loading between 0 and
+#	10% for an application displaying 4 shift registers changing every
+#	50 ms. Associated network traffic 25K.
+#
+#	Since this activation may come from several binds resulting in the
+#	same $start and $last lines, do_scan only once when line numbers
+#	change.
+#
+#	The computation of $start and $last from $end has always yielded
+#	integer values with the fractions returned by $text->yview().
+#	If this were not the case, function int($start+0.5) could be used.
+#	Perl seems to do this internally on the 16th precision digit ???
+#	Tested empircally JW 20050404
+#
+#	parameter 1:	$_[0], has HASH ref when callback from bind
+#	parameter 2:	$_[1], do_scan unconditionally if true
+#
+########################################################################
+
+sub adjust_live {
+    if ($scanFlag) {
+	my @position = $text->yview();
+	my $end = $text->index('end');	# re-compute in case text has changed
+	$end =~ s/(\d+).*/$1/;
+	$end--;
+	my $start = $end * $position[0];
+	$start++;
+	my $last = $end * $position[1];
+	$last++;
+	$last++ unless $last > $end;
+	if ($start != $prevStart or $last != $prevLast or $_[1]) {
+	    if (@activeSymbols) {
+		deleteAllTags();
+		clear_scan();
+	    }
+	    do_scan("$start.0", "$last.0");
+	    $prevStart = $start;
+	    $prevLast  = $last;
+	    printMicroSeconds();
+no warnings;
+	    print "do_scan complete, $start, $last, '$_[1]'\n" if $opt_t;
+use warnings;
+	}
+	info_display(0, 'dark green', "$start      $last");
+    }
+} # adjust_live
 
 ########################################################################
 #
@@ -733,11 +937,10 @@ use warnings;
     }
 } # register_at_server
 
-sub catch_zap {
+sub catch_sig {
     my $signame = shift;
-    $shucks++;
-    die "shucks $shucks: Somebody sent me a SIG$signame: $!";
-} # catch_zap
+    die "$named: Somebody sent me a SIG$signame: $!";
+} # catch_sig
 
 ########################################################################
 #
@@ -778,16 +981,16 @@ print "($len)$msg< iCserver\n" if $opt_T;
 	    $scanButton->configure(-text => 'Live');
 	    $regName = $runName = '';
 	    $runButton->configure(-text => 'Run ');
-	    $mainWindow->title("$named$u $fileName");
+	    $mainWindow->title("$named$u: $fileName");
 	    $makeName = '';
 	    $conn->disconnect;		# should only happen when iCserver shuts down
 	    $conn = 0;
 	    info_display(2000, 'red', "iCserver has disconnected $named from '$host:$port'");
 	} else {
 	    my ($msg1);
-	    printMicroSeconds() if $opt_m;
+	    printMicroSeconds();
 	    print "rcvd '$msg'\n" if $opt_t;
-	    foreach $msg1 (split /,/, $msg) {	# break up comma seperated multiple messages
+	    foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
 		my @symbols = split /;/, $msg1;	# break up message
 		my $entry = shift @symbols;		# first entry is an operation
 		if ($entry =~ /$C_channel\:(\d+)/) {
@@ -802,6 +1005,7 @@ print "($len)$msg< iCserver\n" if $opt_T;
 			## ALIAS resolves is transmitted as a 3rd value.
 			## For bit I/O names IX0.0 etc, add a second entry IX0_0
 			## For number constants 0 1 etc, add a second entry _0 _1
+			## For negative constants -1 etc, add a second entry __1
 			####################################################
 			while ($entry = shift @symbols) {
 			    my ($symbol, $ftype, $index) = split " ", $entry;
@@ -813,7 +1017,11 @@ print "($len)$msg< iCserver\n" if $opt_T;
 				print "$index\t$symbol\t$ftype\n" if $opt_T;
 				@{ $symbolTable{$symbol} } = ($ftype, $index);
 			    }
-			    if ($symbol =~ s/^(\d+)$/_$1/) {
+			    elsif ($symbol =~ s/^-(\d+)$/__$1/) {
+				print "$index\t$symbol\t$ftype\n" if $opt_T;
+				@{ $symbolTable{$symbol} } = ($ftype, $index);
+			    }
+			    elsif ($symbol =~ s/^(\d+)$/_$1/) {
 				print "$index\t$symbol\t$ftype\n" if $opt_T;
 				@{ $symbolTable{$symbol} } = ($ftype, $index);
 			    }
@@ -833,7 +1041,7 @@ print "($len)$msg< iCserver\n" if $opt_T;
 			## change text on run button to 'Stop'
 			####################################################
 			$runName = shift @symbols;
-			$mainWindow->title("$named$u $fileName $runName");
+			$mainWindow->title("$named$u: $fileName $runName");
 			info_display(2000, 'blue', "'$runName' is running");
 			$runButton->configure(-text => 'Stop');
 			if ($scanFlag) {
@@ -896,7 +1104,7 @@ no warnings;
 				    $text->insert($beg, " $value", $tag);
 				}
 			    }
-			    printMicroSeconds() if $opt_m;
+			    printMicroSeconds();
 			    print "$index	$value\n" if $opt_t;
 			}
 			if ($normalFlag) {
@@ -911,8 +1119,9 @@ use warnings;
 			info_display(2000, 'blue', "'$runName' Symbol Table received");
 			$stIndex = 0;		# ready for next reception
 			print "received '$C_channel:4'\n" if $opt_T;
-			printMicroSeconds() if $opt_m;
-			do_scan();
+			printMicroSeconds();
+			$scanFlag = 1;
+			adjust_live(-1, -1);
 		    }
 		    elsif ($entry eq '5') {
 			####################################################
@@ -924,7 +1133,7 @@ use warnings;
 			    "application was stopped - not registered !?");
 			clear_all();
 			$runName = '';
-			$mainWindow->title("$named$u $fileName");
+			$mainWindow->title("$named$u: $fileName");
 			$makeName = '';
 			if ($restartFlag) {
 			    $restartFlag = 0;
@@ -961,7 +1170,7 @@ use warnings;
 		else {
 		    Spurious: warn "$named: spurious operation '$entry' ???\n";
 		}
-		printMicroSeconds() if $opt_m;
+		printMicroSeconds();
 	    }
 	    print "rcvd end\n" if $opt_t;
 	}
@@ -1022,7 +1231,7 @@ sub restoreTag {
 #		    "		undef	use $searchText from Entry widget
 #		    "		''	clear the search
 #		parameter 3:	0  Search down	(default)
-#		    "		1  Search up
+#		    "		1  Search up	(save searchText when clearing)
 #		    "		2  Go to line
 #
 #	search_text() is mostly called from a pop up, which does not close,
@@ -1040,30 +1249,35 @@ sub search_text {
     $text->after(0, [ \&search_now, @_ ]); # allow pop up to go away
 } # search_text
 
-no warnings;
 sub search_now {
     my ($dummy, $newSearchText, $direction) = @_;
-    my ($option, $auxiliary, $current, $length, $i, $tmpText);
+    my ($saveText, $saveMatch, $option, $auxiliary, $current, $hl, $y, $x, $length);
+    my $tmpText;
     if (defined $newSearchText) {
+	if ($newSearchText eq '' and $direction) {	# save search text when clearing
+	    ($saveText, $saveMatch) = ($searchText, $matchType);
+	}
 	($searchText, $option) = split(/\t/, $newSearchText);
 	$matchType = $option ? $matchRestores{$option} : '-exact';
     }
-    if ($direction == 2 or $matchType eq 'g') {
+    $searchText = '' if not defined $searchText;
+    while ($direction == 2 or $matchType eq 'g') {
 	## go to line $searchText
-	if ($searchText =~ s/^(\d+\.(\d+|end)|end).*$/$1/) {
+	if ($searchText eq '') {
+	    $searchText = $current = "1.0";
+	} elsif ($searchText =~ s/^(\d+\.(\d+|end)|end).*$/$1/) {
 	    $current = "$1";
 	} elsif ($searchText =~ s/^(\d+).*$/$1/) {
 	    $current = "$1.0";
 	} else {
-	    info_display(0, 'red', "cannot go to line '$searchText'");
-	    return;
+	    $matchType = '-exact';	# try exact match - most likely
+	    last;
 	}
-    print "goto: '$searchText' '$current' '$matchType' $direction\n" if $opt_T;
+	print "goto: '$searchText' '$current' '$matchType' $direction\n" if $opt_T;
 	$matchType = 'g';
 	$text->see($current);
-	if ($scanFlag) {
-	    $text->tagAdd('sel', "$current linestart", "$current lineend");
-	}
+	## grey out the whole line - until mouse moves - visible in Edit and Live mode
+	$text->tagAdd('sel', "$current linestart", "$current lineend");
 	$text->markSet('insert', $current);
 	report_cursor();
 	$tmpText = "$searchText$matchExtensions{$matchType}";
@@ -1071,13 +1285,18 @@ sub search_now {
 	return;
     }
     if ($prevText ne $searchText or $prevMatch ne $matchType) {
+	########################################################################
+	#	Start of a new search
+	########################################################################
 	print "pattern: '$searchText' '$matchType'\n" if $opt_T;
-	$si = -1;			# see index
-	@lines = ();
+	@hits = ();
+	@groups = ();
+	$gl = 0;
 	$text->tagDelete('searchTag') if $prevText;
 	$text->tagConfigure('searchTag',
-			    -background => 'gray', 
-			   );
+			    -background => 'black',	# same as 'less'
+			    -foreground => 'white',	# stands out amongst live colours
+			   );				# cannot see live status though
 	if ($matchType eq 'ri') {
 	    $matchType = '-regexp';
 	    $auxiliary = '-nocase';
@@ -1089,7 +1308,7 @@ sub search_now {
 	while (1) {
 	    eval {
 		$current = $text->search(-count => \$length,
-					 $matchType, 
+					 $matchType,
 					 $auxiliary,
 					 '--',
 					 $searchText,
@@ -1110,153 +1329,194 @@ sub search_now {
 		print "word: $word $length '@lineinfo'\n";
 	    }
 	    $text->tagAdd('searchTag', $current, "$current + $length char");
-	    push @lines, $current;
-	    $current = $text->index("$current + $length char");
+	    $current =~ /(\d+)\.(\d+)/;
+	    $y = $1; $x = $2;
+	    push @hits, [ $current, $y, $x, $length, ];
+	    $current = $text->index("$current + $length char");	# point bejond hit
 	}
 	$matchType = 'ri' if $auxiliary eq '-nocase';	# otherwise radio button skips
-	$tmpText = "$searchText$matchExtensions{$matchType}";
-	if (@lines != 0) {
-	    check_menu($tmpText, 'searches');
+	if (($hl = scalar @hits) > 0) {
+	    if ($searchText ne '^\*\*\* ') {	# regular expression to find errors in listing
+		$tmpText = "$searchText$matchExtensions{$matchType}";
+		check_menu($tmpText, 'searches');
+	    }
+	    ########################################################################
+	    #	Analyse hits and group them into display groups.
+	    #   First pseudo_code for the algorithm.
+	    #
+	    #	determine centre of page
+	    #	for (gi = 0; @hits; gi++) {
+	    #	    top = first entry in a group - start with first element of @hits
+	    #	    cLeft = top_c;
+	    #	    cRight = top_c + top.length;
+	    #	    my cMid = cLeft + int((cRight - cLeft) / 2);
+	    #	    see top_l < center ? 1.0 : end; see "top_l.cMid";
+	    #	    groups[gi] = "top_l.cMid";
+	    #	    for each further entry bot in @hits {
+	    #		cLeft = bot_c if bot_c < cLeft;
+	    #		cRight = bot_c + bot.length if bot_c + bot.length > cRight;
+	    #		lMid = yTop + int((lBot - yTop) / 2);
+	    #		cMid = cLeft + int((cRight - cLeft) / 2);
+	    #		unless (bbox "lBot.cRight") {
+	    #		    see lMid < center ? 1.0 : end; see "lMid.cMid";
+	    #		    last unless bbox yTop.cLeft and bbox "lBot.cRight"
+	    #		    groups[gi] = "lMid.cMid";
+	    #		}
+	    #	    }
+	    #	}
+	    #
+	    #	By using text->bbox(bot) first, there may be no need to reposition and
+	    #	even short pages are analyzed optimally. When repositioning becomes
+	    #	necessary, see the opposite end to the target being analyzed first, the
+	    #	text->see() method will position the argument index in the centre
+	    #	of the window. Using text->bbox() it is determined, whether the top
+	    #	left index and the bottom right + word length index of a rectangle
+	    #	enclosing all hits in a group are visible. Using this strategy, optimal
+	    #	group size is achieved and scrolling by seeing the centre of the group
+	    #	is identical and correct in either direction.
+	    #
+	    #	The previous algorithm, which was much longer actually missed showing
+	    #	some hits under some circumstances.
+	    ########################################################################
+	    $text->see('1.0');			# position to top left so bbox works
+	    my ($x, $y, $w, , $lineHeight, $h) = $text->bbox("1.0");
+	    ## print "bbox('1.0') x = $x, y = $y, w = $w, lineHeight = $lineHeight\n" if $opt_T;
+	    $centre = $text->index("end");
+	    $centre =~ /(\d+)\.\d+/;		# start is 1.0, end is 1 line past last line
+	    $centre = $1 / 2;			# x for the centre of the page
+	    my $dir = 1;			# start in forward direction
+	    my $ip = "end";
+	    print "centre = $centre dir = $dir\n" if $opt_T;
+	    my ($aRef, $lMid, $cLeft, $cMid, $cRight);
+	    my ($top_current, $top_l, $top_c, $top_length);
+	    my ($bot_current, $bot_l, $bot_c, $bot_length, $bot_end);
+	    for ($gi = 0; @hits; $gi += $dir) {
+		if ($dir and $hits[0][1] >= $centre) {
+		    $dir =  0;			# reverse direction
+		    $gi++ if @groups;		# splice on right, skip forwards
+		    $ip = "1.0";
+		}
+		# top is first or last entry in a group
+		$aRef = $dir ? shift @hits : pop @hits;	# start with first or last hit
+		($top_current, $top_l, $top_c, $top_length) = @$aRef;
+		$lMid = $bot_l = $top_l;
+		$bot_c = $top_c;
+		$cLeft = $top_c;		# left and right bounds of box
+		$cRight = $top_c + $top_length;
+		$cMid = $cLeft + int(($cRight - $cLeft) / 2);
+		$text->see($ip);		# position to top left corner or end
+		$text->see("$top_l.$cMid");	# position to middle of first word
+		splice @groups, $gi, $dir, [ $ip, $lMid, $cMid ];# next entry in group
+		print "first $gi '$ip' => '$lMid.$cMid' '$bot_l.$bot_c' dir = $dir\n" if $opt_T;
+		while (@hits) {
+		    my $repos;
+		    $aRef = $dir ? shift @hits : pop @hits;
+		    ($bot_current, $bot_l, $bot_c, $bot_length) = @$aRef;
+		    $cLeft = $bot_c if $bot_c < $cLeft;
+		    $bot_end = $bot_c + $bot_length;
+		    $cRight = $bot_end if $bot_end > $cRight;
+		    $lMid = $top_l + int(($bot_l - $top_l) / 2);
+		    $cMid = $cLeft + int(($cRight - $cLeft) / 2);
+		    unless ((($x, $y, $w, $h) = $text->bbox("$bot_l.$cRight")) and
+			    defined $h and
+			    $h >= $lineHeight) {	# bot still visible ?
+			$text->see($ip);		# position to top left corner or end
+			$text->see("$lMid.$cMid");	# position to middle of new group
+			unless ((($x, $y, $w, $h) = $text->bbox("$top_l.$cLeft")) and
+				defined $h and
+				$h >= $lineHeight and
+				(($x, $y, $w, $h) = $text->bbox("$bot_l.$cRight")) and
+				defined $h and
+				$h >= $lineHeight) {	# top and bot still visible ?
+			    print "skip  $gi '$ip' => '$lMid.$cMid' '$bot_l.$bot_c' dir = $dir\n" if $opt_T;
+			    $dir ? unshift @hits, $aRef
+				 : push @hits, $aRef;	# no longer visible
+			    if ($dir and $hits[0][1] >= $centre) {
+				$dir =  0;		# reverse direction
+				$gi++ if @groups;	# splice on right, skip forwards
+				$ip = "1.0";
+			    }
+			    last;			# use with next group
+			}
+			## print "h = $h, lineHeight = $lineHeight\n" if $opt_T;
+			$repos = 'repos';
+		    } elsif ($opt_T) {
+			## print "h = $h, lineHeight = $lineHeight\n";
+			$repos = '     ';
+		    }
+		    splice @groups, $gi, 1, [ $ip, $lMid, $cMid ];# next entry in group
+		    print "$repos $gi '$ip' => '$lMid.$cMid' '$bot_l.$bot_c' dir = $dir\n" if $opt_T;
+		}
+	    }
+	    ###### last entry is not stored in @ groups if always seen by bbox
+	    ## splice @groups, $gi, 1, [ $ip, $lMid, $cMid ];# last entry
+	    ## print "last  $gi '$ip' => '$lMid.$cMid' '$bot_l.$bot_c' dir = $dir\n" if $opt_T;
+	    $gi = -1;				# see index
+	    $gl = scalar @groups;
+	    my $plural = $gl > 1 ? 's' : '';
+	    info_display(0, 'dark green', "/$searchText/ found $hl times in $gl group$plural");
+	    $text->tagRaise('searchTag') if $gl;	# put any search results in foreground
 	}
 	$prevText = $searchText;
 	$prevMatch = $matchType;
+	$entrySearch->focus();
     }
-    if (($i = @lines) != 0) {
-	my $sd = $direction ? -1 : 1;	# scroll direction
-	if ($si == -1) {
-	    info_display(0, 'dark green', "/$searchText/ found $i times");
-	    $top = "1.0";
-	    $text->see($top);		# position to top left corner
-	    print "see:  $si $sd '$top' $#lines\n" if $opt_T;
-	    $si = 0;			# index for downwards display
-	    $sj = $#lines;		# index for upwards display
-	    $siWrap = $sjWrap = 0;
-	} elsif ($sd == $siWrap) {
-	    info_display(0, 'dark red', "search hit BOTTOM, continuing at TOP");
-	} elsif ($sd == $sjWrap) {
-	    info_display(0, 'dark red', "search hit TOP, continuing at BOTTOM");
+    ########################################################################
+    #	Use @groups to scroll over the groups forwards or backwards.
+    #	Initial group index is $gi = -1. Used to determine scroll start for
+    #	immediate backward scroll.
+    #	Even for a single group, re-position group every time RETURN is pressed,
+    #	because the hits could have been moved by manual scrolling.
+    ########################################################################
+    if ($gl > 0) {
+	my $infoFlag = ($gi < 0 or $gl < 2) ? 0 : 1;	# allows search statistics info to stay
+	if (not $direction) {
+	    $gi++;			# forward scroll
+	    if ($gi >= $gl) {
+		$gi = 0;
+		if ($infoFlag) {
+		    info_display(0, 'dark red', "search hit BOTTOM, continuing at TOP");
+		    $infoFlag = 0;
+		}
+	    }
 	} else {
+	    $gi--;			# backward scroll
+	    if ($gi < 0) {
+		if ($infoFlag and $gi == -1) {	# -2 is first time backwards
+		    info_display(0, 'dark red', "search hit TOP, continuing at BOTTOM");
+		    $infoFlag = 0;
+		}
+		$gi = $gl - 1;
+	    }
+	}
+	if ($infoFlag) {
 	    info_display(0, 'black', '');	# clears display_info
 	}
-	if ($sd == 1) {			# search downward
-	    $top = "$lines[$si] - 1 line";
-	    $text->see($top);		# position to top new search box
-    print "top:  $si $sd '$top'\n" if $opt_T;
-	    for ($i = $si + 1; $i <= $#lines; $i++) {
-		$current = "$lines[$i] + 1 line";
-		unless ($text->bbox($current)) {	# test not needed if once failed
-		    $text->see($current);		# this line was previously invisible
-    print "cur:  $i $sd '$current'\n" if $opt_T;
-		    unless ($text->bbox($top)) {
-			$top = $lines[$si];
-			$text->see($top);		# position to top new search box again
-    print "to1:  $i $sd '$top'\n" if $opt_T;
-			if (--$i > $si) {
-			    $current = $lines[$i];
-			    $text->see($current);	# this is last box still visible
-    print "cu1:  $i $sd '$current'\n" if $opt_T;
-			}
-			if ($si <= 0) {
-			    $sj = $#lines;
-			    $sjWrap = -$sd;
-			} else {
-			    $sj = $si - 1;
-			    $sjWrap = 0;
-			}
-			$si = $i + 1;
-			$siWrap = 0;
-    print "for loop break early $si\n" if $opt_T;
-			return;		# now show the new block of boxes
-		    }
-		} elsif ($opt_T) {
-		    print "loop: $i $sd '$current' '$top'\n";
-		}
-	    }
-	    $top = $lines[$si];
-	    $text->see($top);		# position to top new search box again
-    print "to2:  $i $sd '$top'\n" if $opt_T;
-	    if (--$i > $si) {
-		$current = $lines[$i];
-		$text->see($current);	# this is last box still visible
-    print "cu2:  $i $sd '$current'\n" if $opt_T;
-	    }
-	    if ($si <= 0) {
-		$sj = $#lines;
-		$sjWrap = -$sd;
-	    } else {
-		$sj = $si - 1;
-		$sjWrap = 0;
-	    }
-	    $si = 0;
-	    $siWrap = $sd;
-    print "for loop complete $si\n" if $opt_T;
-	} else {		# search upward
-	    $top = "$lines[$sj] + 1 line";
-	    $text->see($top);		# position to top new search box
-    print "top:  $sj $sd '$top'\n" if $opt_T;
-	    for ($i = $sj - 1; $i >= 0; $i--) {
-		$current = "$lines[$i] - 1 line";
-		unless ($text->bbox($current)) {	# test not needed if once failed
-		    $text->see($current);		# this line was previously invisible
-    print "cur:  $i $sd '$current'\n" if $opt_T;
-		    unless ($text->bbox($top)) {
-			$top = $lines[$sj];
-			$text->see($top);	# position to top new search box again
-    print "to1:  $i $sd '$top'\n" if $opt_T;
-			if (++$i < $sj) {
-			    $current = $lines[$i];
-			    $text->see($current);	# this is last box still visible
-    print "cu1:  $i $sd '$current'\n" if $opt_T;
-			}
-			if ($sj >= $#lines) {
-			    $si = 0;
-			    $siWrap = -$sd;
-			} else {
-			    $si = $sj + 1;
-			    $siWrap = 0;
-			}
-			$sj = $i - 1;
-			$sjWrap = 0;
-    print "for loop break early $sj\n" if $opt_T;
-			return;		# now show the new block of boxes
-		    }
-		} elsif ($opt_T) {
-		    print "loop: $i $sd '$current' '$top'\n";
-		}
-	    }
-	    $top = $lines[$sj];
-	    $text->see($top);		# position to top new search box again
-    print "to2:  $i $sd '$top'\n" if $opt_T;
-	    if (++$i > $sj) {
-		$current = $lines[$i];
-		$text->see($current);	# this is last box still visible
-    print "cu2:  $i $sd '$current'\n" if $opt_T;
-	    }
-	    if ($sj >= $#lines) {
-		$si = 0;
-		$siWrap = -$sd;
-	    } else {
-		$si = $sj + 1;
-		$siWrap = 0;
-	    }
-	    $sj = $#lines;
-	    $sjWrap = $sd;
-    print "for loop complete $sj\n" if $opt_T;
-	}
-    } elsif ($si == -1 and not $@) {	# do not overwrite search eval error message
+	my ($ip, $lMid, $cMid) = @{$groups[$gi]};
+	$text->see($ip);		# position to top left corner or end
+	$text->see("$lMid.$cMid");	# position to middle of new group
+	adjust_live();
+	print "see $gi '$ip' => '$lMid.$cMid'\n" if $opt_T;
+    } elsif ($gl == 0 and not $@) {	# do not overwrite search eval error message
 	if ($searchText ne '') {
-	    info_display(0, 'red', "/$searchText/ not found");
+	    info_display(0, 'red', "/$searchText/ not found");	# report every time
 	} else {
 	    info_display(0, 'dark red', "search cleared");
+	    if ($scanFlag) {
+		$yScrollbar->focus();
+	    } else {
+		$text->focus();
+	    }
 	}
-	$si = 0;			# do not display this unless new search
+    }
+    if ($saveText) {
+	($searchText, $matchType) = ($saveText, $saveMatch);
     }
 } # search_now
-use warnings;
 
 ########################################################################
 #
-#	clear_all()
+#	Clear_all
 #
 ########################################################################
 
@@ -1274,6 +1534,7 @@ sub clear_all {
 
 sub deleteAllTags {
     $text->configure(-state => 'normal');
+    $text->focus();
     foreach my $index (0 .. $#activeSymbols) {
 	my $ts = $activeSymbols[$index][0];
 	if ($ts) {
@@ -1327,8 +1588,7 @@ sub scan {
 
 ########################################################################
 #
-#	reset_scan
-#	reset $scanFlag and then clear_scan()
+#	Reset $scanFlag and then clear_scan()
 #		parameter 1:	1  skips clear active symbols in application
 #
 ########################################################################
@@ -1345,10 +1605,8 @@ sub reset_scan {
 
 ########################################################################
 #
-#	clear_scan
-#	detach balloon processing
-#	prepare for scan
-#	clear active symbols for faster processing of connected controller
+#	Clear scan and detach balloon processing. Prepare for scan.
+#	Clear active symbols for faster processing of connected controller
 #		parameter 1:	1  skips clear active symbols in application
 #
 ########################################################################
@@ -1375,7 +1633,7 @@ sub clear_scan {
 
 ########################################################################
 #
-#	do_scan text for symbols in %symbolTable, adding a tag for each
+#	Scan text for symbols in %symbolTable, adding a tag for each
 #	symbol found and another for the inverted symbol, if required.
 #
 #	The colouring for each symbol found is initially set to logic 0.
@@ -1390,7 +1648,8 @@ sub clear_scan {
 ########################################################################
 
 sub do_scan {
-    my ($current, $word, $i, $iw, $tag, $cs, $ts, $ftype, $index, $t);
+    my ($current, $last) = @_;
+    my ($word, $i, $iw, $tag, $cs, $ts, $ftype, $index, $t);
     if (defined $instName and $instName ne '') {
 	if ($instName ne $regName) {
 	    unregister_from_server();
@@ -1424,22 +1683,24 @@ sub do_scan {
 	    $scanButton->configure(-text => 'Live');
 	    return;
 	}
-	$current = '1.0'; my $length = '0';
+	$current = '1.0' unless defined $current;
+	$last    = 'end' unless defined $last;
+	my $length = '0';
 	while (1) {
 	    $current = $text->search(-count => \$length,
 				     '-regexp',
 				     '--',
 				     $scanPattern,
 				     $current,
-				     'end');
+				     $last);
 	    last if (!$current);
 	    $iw = $i = $text->get($current, "$current + $length char");
-	    $i =~ s/([~\t ]*)([\w.]+)([~\t ]*)/$1$3/;
-	    if ($symbolTable{$2}) {
-		($ftype, $index) = @{ $symbolTable{$2} };
+	    $i =~ s/(-)?([~\t ]*)([\w.\$]+)([~\t ]*)/$2$4/;
+	    $word = defined $1 ? "$1$3" : $3;	# word for the symbol table
+	    if (defined $word and $symbolTable{$word}) {
+		($ftype, $index) = @{ $symbolTable{$word} };
 		if (defined $index and $ftype) {
-		    $tag = $index;
-		    $word = $2;			# word is in the symbol table
+		    $tag = $index;		# word is in the symbol table
 		    $cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
 		    @{ $activeSymbols[$index] }[1 .. 3] = (0, $cs & ~01, [gettimeofday]);
 		    while ($i =~ m/~/g) {
@@ -1484,12 +1745,16 @@ sub do_scan {
 		print "$index\n" if $opt_T;
 		if (length $msg > 391) {			# REPLY - 9 in icg.h
 		    conn_send_now("$D_channel:3$msg");	# intermediate active symbols
+		    printMicroSeconds();
+		    print "sent '$D_channel:3$msg'\n" if $opt_t;
 		    $msg = '';
 		}
 		$msg .= ";$index";
 	    }
 	}
 	conn_send_now("$D_channel:4$msg");		# send last active symbols
+	printMicroSeconds();
+	print "sent '$D_channel:4$msg'\n" if $opt_t;
 	conn_send_now("$D_channel:0");			# reset last value in iCserver
 
 	####################################################################
@@ -1519,6 +1784,12 @@ sub do_scan {
 			    ## Try bit I/O first
 			    ## otherwise analog value of stem is displayed
 			}
+			elsif ($word =~ /\d+/) {
+			    $word = $text->get("$wIdx[0] linestart", $wIdx[1]);
+			    if ($word !~ s/.*-\s*(\d+)\s*$/-$1/) {
+				$word = $stem;	# false attempt - restore stem
+			    }
+			}
 			if (not defined ($index = $symbolTable{$word}[1])) {
 			    if ($word eq $stem or	# now try stem
 				not defined ($index = $symbolTable{$stem}[1])) {
@@ -1546,14 +1817,14 @@ use warnings;
 		    my $y = $text->pointery - $text->rooty;
 		    @wIdx = ($text->index("\@$x,$y wordstart"),
 			$text->index("\@$x,$y wordend"));
-		    if ($wIdx[0] eq $lIdx[0] and $wIdx[1] eq $lIdx[1]) {
-			## Same word - dont cancel the balloon.
+		    if ($wIdx[0] eq $pIdx[0] and $wIdx[1] eq $pIdx[1]) {
+			## Same word as previous word - dont cancel the balloon.
 			return 0;
 		    } else {
 			## New word under mouse
 			## cancel it so a new balloon will be posted.
 			$text->SelectionClear;
-			@lIdx = @wIdx;
+			@pIdx = @wIdx;		# save as previous word
 			return 1;
 		    }
 		},
@@ -1565,8 +1836,10 @@ use warnings;
 	## change text on scan button to 'Edit'
 	####################################################################
 
+	$text->tagRaise('searchTag') if $gl;	# put any search results in foreground
 	$scanButton->configure(-text => 'Edit');
 	$text->configure(-state => 'disabled');
+	$yScrollbar->focus();
 	$scanFlag = 1;		# scan successful
     } else {
 	info_display(2000, 'red', "no current runnable proces");
@@ -1575,7 +1848,7 @@ use warnings;
 
 ########################################################################
 #
-#	register_now
+#	Register_now
 #
 ########################################################################
 
@@ -1588,7 +1861,7 @@ sub register_now {
 
 ########################################################################
 #
-#	check if a file has been modified and needs to be saved
+#	Check if a file has been modified and needs to be saved
 #
 #	IF contents has changed AND Button 'Yes' is pressed
 #		saves $fileName
@@ -1608,7 +1881,7 @@ sub check_save {
     if ($contents ne $oldContents) {
 	my $l1 = length $contents;
 	my $l2 = length $oldContents;
-	print "length contents = $l1, length oldContents = $l2\n";
+	print "length contents = $l1, length oldContents = $l2\n" if $opt_T;
 	my $dialog = $text->Dialog (-title   => 'Modified file',
 				    -bitmap  => 'question',
 				    -text    => 'Save modified file?',
@@ -1631,7 +1904,7 @@ sub check_save {
 
 ########################################################################
 #
-#	new_text clears the text area
+#	New text clears the text area
 #
 ########################################################################
 
@@ -1642,14 +1915,32 @@ sub new_text {
 	$text->delete("1.0", "end");
 	$oldContents = '';
 	$fileName = $newName;
-	$mainWindow->title("$named$u $fileName $runName");
+	$mainWindow->title("$named$u: $fileName $runName");
     }
 } # new_text
 
 ########################################################################
 #
-#	open_file
-#	opens a file if possible; then loads the contents
+#	Open the list file (file.lst) for the currently loaded $fileName
+#	Alternatively open the corresponding file.ic if file.lst open
+#
+########################################################################
+
+sub open_list {
+    if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
+	if ($2 eq 'lst') {
+	    open_file(0, "$1.ic");
+	} else {
+	    open_file(0, "$1.lst");
+	}
+    } else {
+	info_display(2000, 'red', "ERROR: no list file matching '$fileName'");
+    }
+} # open_list
+
+########################################################################
+#
+#	Opens a file if possible; then loads the contents
 #		parameter 1:	1  load unconditionally (discard changes)
 #				'' save first if text is altered (default)
 #		parameter 2:	file_name
@@ -1692,57 +1983,92 @@ sub open_file {
 		    $oldContents .= $_;
 		}
 		close(FH);
+		## read last modified time from new stat now in case it changed since last stat
+		$fileTime = (stat($fName))[9]; $fileTime = 0 unless defined $fileTime;
 		$text->insert("end", $oldContents);
 		my $length = length $oldContents;
 		$fileName = $fName;	# alter global $fileName
-		$mainWindow->title("$named$u $fileName $runName");
-		info_display(2000, 'black', "File '$fileName', '$length' bytes loaded");
+		$mainWindow->title("$named$u: $fileName $runName");
+		info_display(2000, 'black', "File '$fileName', $length bytes loaded");
 		if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
 		    $procName = $1;
 		    $instName = "$procName$instanceText";
+		    if ($2 eq 'lst') {
+			$menuFile->entryconfigure(3, -label => 'Open.ic');
+		    } else {
+			$menuFile->entryconfigure(3, -label => 'Open.lst');
+			check_menu($fileName, 'files');
+		    }
+		    adjust_live(-1, -1);
 		    $ci = change_instance();
 		}
 		$prevText = '';		# start a new search
-		check_menu($fileName, 'files');
 		return if $ci;		# global $fileName and application has altered
 	    } else {
+		check_menu($fName, 'files', 1);		# delete fName in the menu
 		info_display(2000, 'red', "ERROR: Could not open $fName");
 	    }
 	}
-	if ($scanFlag) {
-	    do_scan();
-	}
+	adjust_live();
     }
+    return;
 } # open_file
 
 ########################################################################
 #
-#	save_file
-#	saves the file previously loaded or last saved
+#	Saves the file previously loaded or last saved
 #		parameter 1:	1  overwrite file unconditionally (new destination)
 #				'' overwrite if contents has changed (default)
 #
 ########################################################################
 
 sub save_file {
-    my $ret = 1;
+    my $ret = 1;		# good return
     if (defined $fileName and $fileName ne $newName and $fileName ne '') {
 	my ($unconditional) = @_;	# optional parameter
+	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
+	## allow non existing file to be written by setting to $fileTime if undef
+	if ($ftime != $fileTime) {
+	    info_display(2000, 'red', "'$fileName' modified in background");
+	    my $dialog = $text->Dialog (-title   => 'Modified since reading file',
+					-bitmap  => 'question',
+					-text    => 'Save to modified file?',
+					-buttons => [qw(Yes No)],
+				       );
+	    my $dialogBar = $dialog->Label(-textvariable => \$fileName,
+					   -relief       => 'ridge',
+					  )->pack(-side => 'bottom',
+						  -fill => 'x',
+						 );
+	    my $answer = $dialog->Show();
+	    if ($answer ne 'Yes') {
+		info_display(2000, 'red', "'$fileName' modified in background - not written");
+		return 0;	# No or Cancel - report error
+	    }
+	    $unconditional = 1;	# definitely write to modified file
+	}
 	deleteAllTags();	# also clears @activeSymbols
 	reset_scan(1);		# take away all live text
 	my $contents = $text->get("1.0", "end - 1 chars");
 	if ($unconditional or $contents ne $oldContents) {
-	    if (open(FH, ">$fileName")) {
+	    ## rename to backup if $fileName exists (stat was done above)
+	    if (-f _ and not rename $fileName, "$fileName.bak") {
+		info_display(2000, 'red', "ERROR: Could not rename backup to '$fileName.bak'");
+		$ret = 0;	# error return
+	    }
+	    elsif (open(FH, ">$fileName")) {
 		$oldContents = $contents;
 		my $length = length $oldContents;
 		print FH $oldContents;
 		close(FH);
-		$mainWindow->title("$named$u $fileName $runName");
-		info_display(2000, 'black', "File '$fileName', '$length' bytes saved");
+		## read last modified time from new stat now as it changed since last stat
+		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
+		$mainWindow->title("$named$u: $fileName $runName");
+		info_display(2000, 'black', "File '$fileName', $length bytes saved (backup '$fileName.bak')");
 		check_menu($fileName, 'files');
 	    } else {
 		info_display(2000, 'red', "ERROR: Could not open '$fileName' for writing");
-		$ret = 0;
+		$ret = 0;	# error return
 	    }
 	} else {
 	    info_display(2000, 'blue', "FILE '$fileName' has not changed - not written");
@@ -1755,8 +2081,7 @@ sub save_file {
 
 ########################################################################
 #
-#	saveAs_file
-#	save file to suggested $fileName or to another selected file_name
+#	Save file to suggested $fileName or to another selected file_name
 #		return:		1  file successfully saved
 #				0  failure - $fileName not changed
 #	$fileName is assigned new file_name if successfully saved
@@ -1768,14 +2093,19 @@ sub saveAs_file {
     my $oldName = $fileName;
     $fileName = $mainWindow->getSaveFile(-filetypes => $fileTypes,
 					 -initialfile => $fileName);
-    $fileName =~ s#^C:/cygwin## or $fileName =~ s#^([A-Z]):#/cygdrive/\l$1#;
-    $fileName =~ s#^$cwd/##;
-    print "saveAs_file: $fileName\n" if $opt_T;
     if (defined $fileName and $fileName ne '') {
+	if ($fileName ne $oldName) {
+	    my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
+	    ## allow non existing file to be written by setting to $fileTime if undef
+	    $fileTime = $ftime;
+	}
+	$fileName =~ s#^C:/cygwin## or $fileName =~ s#^([A-Z]):#/cygdrive/\l$1#;
+	$fileName =~ s#^$cwd/##;
+	print "saveAs_file: $fileName\n" if $opt_T;
 	if (save_file($fileName ne $oldName) == 0) {
 	    ## could not save $fileName
 	    $fileName = $oldName;	# restore fileName
-	    $mainWindow->title("$named$u $fileName $runName");
+	    $mainWindow->title("$named$u: $fileName $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
 	    if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
@@ -1828,7 +2158,7 @@ sub build_file {
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-q", $fileName);
+		my @args = ("iCmake", "-qA", $fileName);	# -A useful for live display
 		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
@@ -1858,6 +2188,45 @@ sub build_file {
 	} # ELSE operation was cancelled by check_save() or file could not be saved
     }
 } # build_file
+
+########################################################################
+#
+#	Scroll text left or right
+#
+########################################################################
+
+sub scroll_x_text {
+    my ($dummy, $increment) = @_;
+    print "scroll_x increment = '$increment'\n" if $opt_T;
+    $text->xview('scroll', $increment, 'units');
+    adjust_live();
+} # scroll_x_text
+
+########################################################################
+#
+#	Scroll text up or down
+#
+########################################################################
+
+sub scroll_text {
+    my ($dummy, $increment) = @_;
+    print "scroll increment = '$increment'\n" if $opt_T;
+    $text->yview('scroll', $increment, 'units');
+    adjust_live();
+} # scroll_text
+
+########################################################################
+#
+#	Position text
+#
+########################################################################
+
+sub position_text {
+    my ($dummy, $position) = @_;
+    print "scroll position = '$position'\n" if $opt_T;
+    $text->see($position);
+    adjust_live();
+} # position_text
 
 ########################################################################
 #
@@ -1892,7 +2261,17 @@ sub fork_and_exec {
 
 ########################################################################
 #
-#	stop or run the executable file generated from $fileName
+#	Fork to the help process
+#
+########################################################################
+
+sub fork_help {
+    fork_and_exec('iCman', '-n', $named);
+} # fork_help
+
+########################################################################
+#
+#	Stop or run the executable file generated from $fileName
 #	check if $fileName is an iC source (*.ic) and needs saving
 #	generate name of executable file from $fileName
 #	run executable if it exists, is executable and newer than source
@@ -1924,9 +2303,10 @@ sub run_file {
 	    my @call = ($processName);
 	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
 	    splice @call, 1, 0, '-t' if defined $opt_t;
+	    splice @call, 1, 0, "-d$opt_d" if defined $opt_d;
 	    splice @call, 1, 0, '-m' if defined $opt_m;
 	    splice @call, 1, 0, "-i$instance" if $instance ne '';
-	    print "@call\n";
+	    print "@call\n" if $opt_T;
 	    ## fork and exec the call
 	    fork_and_exec(@call);	# if application starts it will send back <ch>:2;<name>
 	    $procName = $processName;
@@ -1938,7 +2318,7 @@ sub run_file {
 
 ########################################################################
 #
-#	stop the control program if connected
+#	Stop the control program if connected
 #
 ########################################################################
 
@@ -1954,7 +2334,7 @@ sub stop_file {
 
 ########################################################################
 #
-#	change instance selection
+#	Change instance selection
 #
 ########################################################################
 
@@ -1970,7 +2350,7 @@ sub change_instance {
 	####################################################
 	$runButton->configure(-text => 'Run ');
 	$runName = '';		# if :2 is received will change back to <name>
-	$mainWindow->title("$named$u $fileName");
+	$mainWindow->title("$named$u: $fileName");
 	$oldInstance = $instanceText;
 	if ($scanFlag) {
 	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
@@ -1983,45 +2363,60 @@ sub change_instance {
 
 ########################################################################
 #
-#	Enter a new value into a particular menu if check shows not duplicate
-#	check_menu (newEntry, menuKey)
-#	    iniData{menuKey} ==> [
+#	Enter a new value into a particular menu
+#	check_menu (newEntry, menuKey[, delete])
+#	    iniMenuData{menuKey} ==> [
 #		menuRef,
 #		menuPos,
-#		entriesArRef,
+#		entriesRef,
 #		entriesLim,
 #		commandRef,
+#		cachingRef,
 #	    ])
+#	'newEntry' is appended to (or moved to the bottom of) the 'menuKey' menu
+#	when 'delete' is set, 'newEntry' in the menu is deleted and not replaced
 #
 ########################################################################
 
 sub check_menu {
-    my ($newEntry, $menuKey) = @_;
-    print "check_menu: [$menuKey] '$newEntry'\n" if $opt_T;
-    my $menuData = $iniData{$menuKey};
-    my ($menuRef, $menuPos, $entriesArRef, $entriesLim, $commandRef) = @$menuData;
+    my ($newEntry, $menuKey, $delete) = @_;
+    my $menuData = $iniMenuData{$menuKey};
+    my ($menuRef, $menuPos, $entriesRef, $entriesLim, $commandRef, $cachingRef) = @$menuData;
+    my $oldEntry = $$entriesRef{$newEntry};
+    $$cachingRef++;				# increment caching count
+    $$entriesRef{$newEntry} = $$cachingRef;
     if ($menuRef) {
-	my $entry;
-	foreach $entry (@$entriesArRef) {
-	    if ($newEntry eq $entry) {
-		return;				# avoid dual identical entries
+	my $size = scalar keys %$entriesRef;
+	if ($oldEntry) {
+	    $menuRef->menu->delete($newEntry);	# delete old entry
+	} else {
+	    $size++;				# menu increases in size
+	}
+	if ($delete) {
+	    delete $$entriesRef{$newEntry};	# delete this entry
+	} else {
+	    $menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
+			      -command => [ $commandRef, 0, $newEntry, 0 ]);	# define 0 (down for search)
+	    if ($size > $entriesLim + 1) {
+		my $label = $menuRef->menu->entrycget($menuPos, '-label');
+		print "label = $label size = $size\n" if $opt_T;
+		$menuRef->menu->delete($menuPos);	# first dynamic menu entry
+		delete $$entriesRef{$label};	# delete the oldest entry
 	    }
 	}
-	push(@$entriesArRef, $newEntry);	# push a new entry at the back
-	$menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
-			  -command => [ $commandRef, 0, $newEntry ]);
-	if ($#$entriesArRef >= $entriesLim) {
-	    $menuRef->menu->delete($menuPos);	# first dynamic menu entry
-	    shift(@$entriesArRef);		# shift out the extra entry
+    }
+    if ($opt_T) {
+	if ($menuKey and $delete) {
+	    print "check_menu: [$menuKey] '$newEntry' deleted\n";
+	} else {
+	    print "check_menu: [$menuKey] '$newEntry' {$$entriesRef{$newEntry}}\n";
 	}
-    } else {
-	push(@$entriesArRef, $newEntry);	# not a menu list
     }
 } # check_menu
 
 ########################################################################
 #
-#	initialise the program by reading ~/.iClive.ini if it exists
+#	Initialise the program by reading ~/.iClive.ini if it exists
 #	and initialising file list and search list in menus
 #	IF there are no file arguments, open the last open file
 #	ELSE	open the first file in the argument list
@@ -2033,7 +2428,9 @@ sub check_menu {
 #		sort5.lst
 #		/tmp/trial.ic
 #	[last open file]
-#		sort5.ic
+#		sort5.ic		# last open file
+#		27.4			# line #
+#		1			# instance
 #	[searches]
 #		pip			# default match type is -exact
 #		[files]			# a curious -exact match
@@ -2041,7 +2438,7 @@ sub check_menu {
 #		QX[\d+]\.[\d+]	r	# match type -regexp (<tab>r)
 #		ix[\d+]\.[\d+]	ri	# is resolved to -regexp -nocase
 #
-#	since tabs cannot be entered in the search entry box (skips to text window)
+#	since tabs cannot be entered in the search entry box (skips to Text window)
 #	use <tab> followed by search option in the search menu list
 #	also precede each ini item by <tab>, since [files] may be a
 #	legitimate search expression (watch Goedel here)
@@ -2049,14 +2446,14 @@ sub check_menu {
 ########################################################################
 
 sub ini_program {
-    my ($home, $menuData, $menuKey, $entry, $initialFile);
+    my ($home, $menuData, $menuKey, $entry, $initialFile, $position);
     ## restore file and search menu lists from ~/.iClive.ini
     if (($home = $ENV{HOME}) ne '' and open(INI, "$home/.$named.ini")) {
 	while (<INI>) {
 	    chomp;
 	    if (/^\[([\w ]+)\]$/) {
 		$menuKey = $1;			# key found
-		$menuData = $iniData{$menuKey};
+		$menuData = $iniMenuData{$menuKey};
 		print "ini_program: menuKey [$menuKey] found\n" if $opt_T;
 	    } elsif ($menuData and s/^\t(.*)$/$1/) {	# ini starts with <tab>
 		$entry = $_;
@@ -2067,9 +2464,20 @@ sub ini_program {
     }	# ignore if ~/.iClive.ini cannot be opened or found
     $initialFile = shift @ARGV;			# ARGV may be empty
     unless (defined $initialFile and $initialFile ne '') {
-	$initialFile = shift @lastFile;
-	if (not defined $opt_i and @lastFile) {
-	    $instance = shift @lastFile;
+	($initialFile, $position, $entry) = sort {		# forward sort
+						    $lastFile{$a} <=> $lastFile{$b}
+						 } keys %lastFile;
+	if (not defined $entry and defined $position and $position =~ /^\d+$/) {
+	    $entry = $position;
+	}
+	if (defined $position and $position !~ /^\d+\.\d+$/) {
+	    $position = undef;
+	}
+no warnings;
+	print "initialFile = '$initialFile' position = '$position' instance '$entry'\n" if $opt_T;
+use warnings;
+	if (defined $initialFile and not defined $opt_i) {
+	    $instance = $entry;
 	    if (defined $instance and $instance ne '') {
 		$instanceText = "-$instance";
 		if ($instance !~ /^[0-9]$/) {
@@ -2082,6 +2490,14 @@ sub ini_program {
     if (defined $initialFile and $initialFile ne '') {
 	open_file(0, $initialFile);
     }
+    if (defined $position and $position ne '' and $position ne "1.0") {
+	$text->see($position);			# Tk has segmentation fault if $position eq ''
+	## grey out the whole line - until mouse moves
+	$text->tagAdd('sel', "$position linestart", "$position lineend");
+    } else {
+	$position = "1.0";
+    }
+    $text->markSet('insert', $position);
     foreach $initialFile (@ARGV) {
 	check_menu($initialFile, 'files');	# stuff the rest in the file menu list
     }
@@ -2089,31 +2505,46 @@ sub ini_program {
 
 ########################################################################
 #
-#	quit program after checking if file needs saving
+#	Quit program after checking if file needs saving
 #	and current file and search menu lists have been written
+#
+#	Care has been taken, that the hash indices $fileName, $position
+#	and $instance can never be the same - they have different signatures
+#		$fileName	\w+\.ic|lst|c
+#		$position	\d+\.\d+
+#		$instance	\d+
+#	It is of course possible to fudge a filename like "0", which clashes
+#	with instance 0. But "0" should be the executable built from "0.ic".
 #
 ########################################################################
 
 sub quit_program {
-    my ($home, $menuKey, $entriesArRef, $entry);
+    my ($home, $menuKey, $entriesRef, $entry);
     deleteAllTags();	# also clears @activeSymbols
     clear_scan();
     if (check_save()) {
-	@lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
+	%lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
 	if (defined $fileName and $fileName ne $newName and $fileName ne '') {
-	    push @lastFile, $fileName;
-	    if ($instance ne '') {
-		push @lastFile, $instance;
+	    $lastFile{$fileName} = 1; 
+	    $lastFile{$text->index('insert')} = 2;
+	    if (defined $instance and $instance ne '') {
+		$lastFile{$instance} = 3;
 	    }
 	}
 	## save file and search menu lists to ~/.iClive.ini
 	if (($home = $ENV{HOME}) ne '') {
 	    if (open(INI, ">$home/.$named.ini")) {
-		foreach $menuKey (sort keys %iniData) {
+		foreach $menuKey (sort keys %iniMenuData) {
 		    print INI "[$menuKey]\n";
-		    $entriesArRef = @{$iniData{$menuKey}}[2];
-		    foreach $entry (@$entriesArRef) {
-			print INI "\t$entry\n" if defined $entry and $entry ne '';
+		    print "INI: [$menuKey]\n" if $opt_T;
+		    $entriesRef = @{$iniMenuData{$menuKey}}[2];
+		    foreach $entry (sort {		# forward sort
+					    $$entriesRef{$a} <=> $$entriesRef{$b}
+					 } keys %$entriesRef) {
+			if (defined $entry and $entry ne '') {
+			    print INI "\t$entry\n";
+			    print "INI:	$entry => '$$entriesRef{$entry}'\n" if $opt_T;
+			}
 		    };
 		}
 		close(INI);
@@ -2142,14 +2573,31 @@ sub quit_program {
 ########################################################################
 
 sub printMicroSeconds {
-    my $ti = tv_interval $t0, [gettimeofday];
-    printf "%10.6f%s", $ti, $opt_t ? ": " : "\n";
+    my $t1 = tv_interval $t0, [gettimeofday];
+    if ($opt_m) {
+	my ($sec, $usec);
+	$t1 = [gettimeofday];
+	$sec =  $t1->[0] - $t0->[0];
+	$usec = $t1->[1] - $t0->[1];
+	if ($usec < 0) {
+	    $sec--;
+	    $usec += 1000000;
+	}
+	if ($opt_t) {
+	    printf "D%3d.%03d,%03d: ", $sec, int($usec/1000), $usec%1000;
+	} else {
+	    printf "D%3d.%03d,%03d\n", $sec, int($usec/1000), $usec%1000;
+	}
+    } elsif ($opt_t) {
+	print "D: ";
+    }
     $t0 = [gettimeofday];
 } # printMicroSeconds
 
 ########################################################################
 #
-#	Output Symbol Table for debugging purposes (activated by $opt_T)
+#	Output Symbol Table for debugging purposes
+#	called by extra Build menu items activated by $opt_T
 #
 #	parameter 1	(ignore)
 #	parameter 2	sorting order: 0 by name	1 by index
@@ -2215,62 +2663,64 @@ __END__
 =head1 SYNOPSIS
 
  iClive [ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
-        [ -g <geometry>][ <file> ...]
+        [ -l <num>][ -w <num>][ -g <geometry>][ -d <deb>][ <file> ...]
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -f font font to use in Text window (default '9x15')
-    -g geom geometry for main window (default '748x436')
+    -l num  height of the Text window (default 40)
+    -w num  width  of the Text window (default 80)
+    -g geom geometry for main window (-g= is special small window)
+    -d deb  extra debug options (see iCapplication -h)
+    -t      trace output run time changes in target application (-d100)
+    -m      output elapsed time in seconds and microseconds
+    -T      trace output static debug messages
     -u      activate undo edit facility (not recommended if Live display
             is used, because display may skip to lines which change)
-    -m      output elapsed time in seconds and microseconds
-    -t      trace output run time changes in target application
-    -T      trace output static debug messages
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
-            rest will be stored in the File menu for later selection. If
-            the built application is running, Live display is activated.
+            rest will be stored in the File menu for later selection.
 
 =head1 DESCRIPTION
 
- Menu buttons:
-    [File] New  provide a new empty file for editing.
-         Open   open and load the selected file.
-         Save   save the current file if modified.
-         SaveAs store the file at the selected path.
-         Quit   quit the program.
+ Menu buttons:                   Action                      Accelerator
+    [File] New  provide a new empty file for editing.             Alt-n
+       Open     open and load the selected file.                  Alt-o
+       Open.lst open the listing x.lst corresponding to x.ic      Alt-l
+       Save     save the current file if modified.                Alt-s
+       SaveAs   store the current file at the selected path.      Alt-a
+       Quit     quit the program.                                 Alt-q
 
     [Build]     build either the C file or the executable application
-                from the currently displayed iC program text.
+                from the currently displayed iC program text.     Alt-b
 
     [Run/Stop]  run or stop the executable application built from the
-                currently displayed iC program text.
+                currently displayed iC program text.              Alt-r
 
     [ -]        select no instance or -0 to -9 or extra instance passed
                 with -i option. Run and Live use the selected instance.
 
-    [Live	scan the text and generate live markings for all words,
-		which represent variables in the currently running
-		application - which should be built from the text
-		to make a meaningful display. Text is 'read only'
-		in this mode.
-    /Edit]      clears live markings in the text window. In this mode the
-                text may be edited with the facilities of Tk::Text,
+    [Live       scan the text and generate live markings for all words,
+                which represent variables in the currently running
+                application - which should be built from the text
+                to make a meaningful display. Text is 'read only'
+                in this mode.                                     Alt-e
+    /Edit]      clears live markings in the Text window. In this mode
+                the text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
-                are described in the Tk::Text man page in the section
-                'BINDINGS' near the end.  If called with the -u option,
+                are described in the section 'KEYBOARD BINDINGS'
+                (copied from Tk::Text).  If called with the -u option,
                 ctrl-U is the <<Undo>> binding.
 
-    [Search]    the the text window. It may be scanned for an exact match
-                or for a regular expression in the entry window next to
-                the button. All found items will be marked. Repeating
-                'Search down' or RETURN will display a section of
-                the text containing found items which were previously
-                not displayed.  'Search up' or SHIFT-RETURN reverses
-                the direction of scrolling.  Another option is to Go
-                to a line entered in the entry window.
+    [Search:]   in the Text window. Text may be scanned for an exact
+                match or for a regular expression in the entry window
+                next to the button. All hits will be marked. Repeating
+                'Search down' or RETURN will display a new group of
+                hits. 'Search up' or SHIFT-RETURN reverses the direction
+                of scrolling.  Another option is to Go to a line entered
+                in the entry window.                             RETURN
 
-    [Help]      display this man page
+    [Help]      display this man page.                            Alt-h
 
 B<iClive> provides an edit window in which the text of a source or listing
 can be displayed and optionally edited and saved. In Text mode the line
@@ -2320,6 +2770,264 @@ display' hard to interpret. This does not happen with Tk::Text. If you
 want to activate the UNDO facility use the -u option (recommended only
 for editing)
 
+=head1 KEYBOARD BINDINGS (from Tk::Text)
+
+Tk automatically creates class bindings for texts that
+give them the following default behavior.  In the descrip-
+tions below, 'word' refers to a contiguous group of let-
+ters, digits, or '_' characters, or any single character
+other than these.
+
+[1] Clicking mouse button 1 positions the insertion cursor
+   just before the character underneath the mouse cursor,
+   sets the input focus to this widget, and clears any
+   selection in the widget.  Dragging with mouse button 1
+   strokes out a selection between the insertion cursor
+   and the character under the mouse.
+
+[2] Double-clicking with mouse button 1 selects the word
+   under the mouse and positions the insertion cursor at
+   the beginning of the word.  Dragging after a double
+   click will stroke out a selection consisting of whole
+   words.
+
+[3] Triple-clicking with mouse button 1 selects the line
+   under the mouse and positions the insertion cursor at
+   the beginning of the line.  Dragging after a triple
+   click will stroke out a selection consisting of whole
+   lines.
+
+[4] The ends of the selection can be adjusted by dragging
+   with mouse button 1 while the Shift key is down;  this
+   will adjust the end of the selection that was nearest
+   to the mouse cursor when button 1 was pressed.  If the
+   button is double-clicked before dragging then the
+   selection will be adjusted in units of whole words;
+   if it is triple-clicked then the selection will be
+   adjusted in units of whole lines.
+
+[5] Clicking mouse button 1 with the Control key down will
+   reposition the insertion cursor without affecting the
+   selection.
+
+[6] If any normal printing characters are typed, they are
+   inserted at the point of the insertion cursor.
+
+[7] The view in the widget can be adjusted by dragging
+   with mouse button 2.  If mouse button 2 is clicked
+   without moving the mouse, the selection is copied into
+   the text at the position of the mouse cursor.  The
+   Insert key also inserts the selection, but at the
+   position of the insertion cursor.
+
+[8] If the mouse is dragged out of the widget while button
+   1 is pressed, the entry will automatically scroll to
+   make more text visible (if there is more text off-
+   screen on the side where the mouse left the window).
+
+[9] The Left and Right keys move the insertion cursor one
+   character to the left or right;  they also clear any
+   selection in the text.  If Left or Right is typed with
+   the Shift key down, then the insertion cursor moves
+   and the selection is extended to include the new char-
+   acter.  Control-Left and Control-Right move the inser-
+   tion cursor by words, and Control-Shift-Left and Con-
+   trol-Shift-Right move the insertion cursor by words
+   and also extend the selection.  Control-b and Control-
+   f behave the same as Left and Right, respectively.
+   Meta-b and Meta-f behave the same as Control-Left and
+   Control-Right, respectively.
+
+[10]
+   The Up and Down keys move the insertion cursor one
+   line up or down and clear any selection in the text.
+   If Up or Right is typed with the Shift key down, then
+   the insertion cursor moves and the selection is
+   extended to include the new character.  Control-Up and
+   Control-Down move the insertion cursor by paragraphs
+   (groups of lines separated by blank lines), and Con-
+   trol-Shift-Up and Control-Shift-Down move the inser-
+   tion cursor by paragraphs and also extend the selec-
+   tion.  Control-p and Control-n behave the same as Up
+   and Down, respectively.
+
+[11]
+   The Next and Prior keys move the insertion cursor for-
+   ward or backwards by one screenful and clear any
+   selection in the text.  If the Shift key is held down
+   while Next or Prior is typed, then the selection is
+   extended to include the new character.  Control-v
+   moves the view down one screenful without moving the
+   insertion cursor or adjusting the selection.
+
+[12]
+   Control-Next and Control-Prior scroll the view right
+   or left by one page without moving the insertion cur-
+   sor or affecting the selection.
+
+[13]
+   Home and Control-a move the insertion cursor to the
+   beginning of its line and clear any selection in the
+   widget.  Shift-Home moves the insertion cursor to the
+   beginning of the line and also extends the selection
+   to that point.
+
+[14]
+   End and Control-e move the insertion cursor to the end
+   of the line and clear any selection in the widget.
+   Shift-End moves the cursor to the end of the line and
+   extends the selection to that point.
+
+[15]
+   Control-Home and Meta-< move the insertion cursor to
+   the beginning of the text and clear any selection in
+   the widget.  Control-Shift-Home moves the insertion
+   cursor to the beginning of the text and also extends
+   the selection to that point.
+
+[16]
+   Control-End and Meta-> move the insertion cursor to
+   the end of the text and clear any selection in the
+   widget.  Control-Shift-End moves the cursor to the end
+   of the text and extends the selection to that point.
+
+[17]
+   The Select key and Control-Space set the selection
+   anchor to the position of the insertion cursor.  They
+   don't affect the current selection.  Shift-Select and
+   Control-Shift-Space adjust the selection to the cur-
+   rent position of the insertion cursor, selecting from
+   the anchor to the insertion cursor if there was not
+   any selection previously.
+
+[18]
+   Control-/ selects the entire contents of the widget.
+
+[19]
+   Control-\ clears any selection in the widget.
+
+[20]
+   The F16 key (labelled Copy on many Sun workstations)
+   or Meta-w copies the selection in the widget to the
+   clipboard, if there is a selection.
+
+[21]
+   The F20 key (labelled Cut on many Sun workstations) or
+   Control-w copies the selection in the widget to the
+   clipboard and deletes the selection.  If there is no
+   selection in the widget then these keys have no
+   effect.
+
+[22]
+   The F18 key (labelled Paste on many Sun workstations)
+   or Control-y inserts the contents of the clipboard at
+   the position of the insertion cursor.
+
+[23]
+   The Delete key deletes the selection, if there is one
+   in the widget.  If there is no selection, it deletes
+   the character to the right of the insertion cursor.
+
+[24]
+   Backspace and Control-h delete the selection, if there
+   is one in the widget.  If there is no selection, they
+   delete the character to the left of the insertion cur-
+   sor.
+
+[25]
+   Control-d deletes the character to the right of the
+   insertion cursor.
+
+[26]
+   Meta-d deletes the word to the right of the insertion
+   cursor.
+
+[27]
+   Control-k deletes from the insertion cursor to the end
+   of its line; if the insertion cursor is already at the
+   end of a line, then Control-k deletes the newline
+   character.
+
+[28]
+   Control-o opens a new line by inserting a newline
+   character in front of the insertion cursor without
+   moving the insertion cursor.
+
+[29]
+   Meta-backspace and Meta-Delete delete the word to the
+   left of the insertion cursor.
+
+[30]
+   Control-x deletes whatever is selected in the text
+   widget.
+
+[31]
+   Control-t reverses the order of the two characters to
+   the right of the insertion cursor.
+
+The following extra bindings have been defined for iClive:
+
+[32]
+   Alt-n   open a NEW file
+   Alt-o   OPEN a file
+   Alt-l   switch beteen iC-source and iC-LISTING
+   Alt-s   SAVE current file
+   Alt-a   saveAS current file under a new name
+   Alt-h   HELP for iClive
+   Alt-q   QUIT iClive
+
+   Alt-b   BUILD executable from current iC-file
+   Alt-u   UNCONDITIONALLY save and build
+   Alt-c   build C-file only from current iC-file
+
+   Alt-r   RUN/Stop the current executable
+   Alt-e   switch between EDIT/Live mode
+
+If the widget is disabled, as it is in 'Live' mode, then its view can
+still be adjusted and text can still be selected, but no insertion
+cursor will be displayed and no text modifications will take place.
+In 'Live' mode the focus is normally on the y-Scrollbar or on the
+search-Entry window.  The following Bindings have been programmed for
+'Live' mode.
+
+[33]
+   The Left and Right keys scroll the whole text left and
+   right one character at a time.
+
+[34]
+   The Up and Down keys scroll the text up and down one
+   line at a time.
+
+[35]
+   The Next and Prior keys scroll the text up and down one
+   page at a time.
+
+[36]
+   The Home and End keys move the text to the beginning or
+   end.
+
+These scroll modes are also available in 'Edit' mode, by putting
+the focus in the 'search-Entry' window by clicking in it. To
+continue editing click in the text window again.
+
+[37]
+   The view in the widget can be adjusted by dragging
+   with mouse button 2. (same in both modes)
+
+[38]
+   In 'Live' mode the following Accelerators work without
+   the Alt-Key pressed:
+    l   switch beteen iC-source and iC-LISTING
+    h   HELP for iClive
+    q   QUIT iClive
+    r   STOP the current executable (Alt-r to RUN again)
+    s   STOP the current executable (Alt-r to RUN again)
+    e   switch to EDIT mode         (Alt-e for LIVE mode)
+   All these accelerators (except s) also work with the
+   Alt-Key pressed.
+
+=head1 MODULE Time::HiRes
+
 For measuring reaction times the Module Time::HiRes is used.  This
 activates the -m option and flash display of short events.  Make sure
 you have installed Time::HiRes (provided in this distribution)
@@ -2335,7 +3043,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<icc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>
+L<icc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 

@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.46 2005/01/26 17:19:00 jw Exp $";
+"@(#)$Id: load.c,v 1.47 2005/03/14 20:30:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -40,7 +40,7 @@ Gate **		iC_sTable;			/* pointer to dynamic array */
 Gate **		iC_sTend;			/* end of dynamic array */
 
 unsigned	errCount;
-const char *	iC_progname;			/* name of this executable */
+char *		iC_progname;			/* name of this executable */
 short		iC_debug = 0;
 int		iC_micro = 0;
 unsigned short	iC_xflag;
@@ -282,7 +282,7 @@ main(
 /********************************************************************
  *
  *	Scan iC_list[] for PASS 0 to 2. Each entry contains a Gate** to the
- *	Gates in each seperately compiled module. These Gates are linked
+ *	Gates in each separately compiled module. These Gates are linked
  *	via gt_next in the compiled code for each module.
  *
  *	PASS 0
@@ -351,6 +351,7 @@ main(
 			    op->gt_list = (Gate**)tgp;	/* pointer directly in gt_list */
 			    /* ###### no back link ####### */
 			}
+			tgp->gt_mark |= iC_bitMask[bit];	/* note used bits for registration */
 		    } else {
 		      pass0Err:
 			inError(__LINE__, op, tgp, "PASS 0: invalid bit I/O Gate");
@@ -400,6 +401,10 @@ main(
  *	it points to the final input. This is needed for execution of
  *	cexe_n() functions, where inputs can only resove 1 level of ALIAS.
  *
+ *	If an ARITH is a constant function triggered by iConst, include
+ *	iConst in the list of nodes when it is encountered as a target
+ *	for the first time (gt_mark == 0).
+ *
  *	After this pass the input lists contain no aliases.
  *
  *******************************************************************/
@@ -442,6 +447,13 @@ main(
 		    if (df) printf("	%s,", gp->gt_ids);
 		    op->gt_val++;			/* count input */
 		    if (gp->gt_fni == ARITH) {
+			if (gp->gt_mark == 0 &&
+			    gp->gt_ini == -NCONST &&
+			    strcmp(gp->gt_ids, ICONST) == 0) {
+			    assert(gp->gt_next == 0);
+			    gp->gt_next = op->gt_next;
+			    op->gt_next = gp;		/* link iConst into S.T. */
+			}
 			gp->gt_mark++;			/* arithmetic output at gp */
 			link_count++;
 		    } else
@@ -661,7 +673,7 @@ main(
 		    *fp = 0;		/* last output terminator */
 		    op->gt_list = fp++;
 		}
-		if (op->gt_fni != OUTW && op->gt_fni != OUTX) {
+		if (op->gt_ini != -INPW && op->gt_fni != OUTW && op->gt_fni != OUTX) {
 		    op->gt_mark = 0;	/* must be cleared for run-time */
 		}
 	    } else
@@ -919,11 +931,10 @@ main(
 		    switch (xbwl[0]) {
 		    case 'X':
 			if (i > 2) goto outErr;		/* no tail _0 allowed for QXn */
-			op->gt_mark = X_WIDTH;
 			if (byte == 0) {
 			    iC_QX0p = op;		/* link for iC_display logic only */
 			}
-			break;
+			break;				/* op->gt_mark set to used bits 0x01 to 0x80 in Pass 0 */
 		    case 'B':
 			op->gt_mark = B_WIDTH;
 			if (byte == 1) {

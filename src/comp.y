@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.89 2005/01/26 18:20:20 jw Exp $";
+"@(#)$Id: comp.y,v 1.90 2005/04/16 20:39:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -55,6 +55,7 @@ static char *	iFunSyText = 0;		/* pointer to function symbol text when active */
 Sym		iRetSymbol;		/* .v is pointer to imm function return Symbol */
 static char *	stmtp;			/* manipulated in iClex() only */
 static void	clrBuf(void);
+static int	ierrorCnt = 0;		/* count errors - abort after 100 errors */
 %}
 
 %union {		/* stack type */
@@ -139,13 +140,13 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLATCH BFORCE DLATCH
 %token	<sym>	BLTIN1 BLTIN2 BLTIN3 BLTINJ BLTINT CVAR CBLTIN TVAR TBLTIN TBLTI1
-%token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN IMM VOID TYPE
+%token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
 %type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
 %type	<sym>	returnStatement formalParameter lBlock variable valueVariable outVariable
-%type	<sym>	decl extDecl asgn dasgn casgn dcasgn tasgn dtasgn
+%type	<sym>	useFlag decl extDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<sym>	iFunTrigger vFunCall vFunCallHead iFunCallHead cFunCallHead tFunCallHead
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr actexpr tfexpr ifini ffexpr
 %type	<list>	cref ctref ctdref cCall cParams cPlist
@@ -196,7 +197,8 @@ funcStatement
 	;
 
 simpleStatement
-	: extDecl		{ $$   = $1; }		/* external declaration */
+	: useFlag		{ $$   = $1; }		/* use flags */
+	| extDecl		{ $$   = $1; }		/* external declaration */
 	| decl			{ $$   = $1; }		/* immediate declararion */
 	| asgn			{ $$   = $1; }		/* immediate value assignment */
 	| dasgn			{ $$   = $1; }		/* declaration assignment */
@@ -228,6 +230,57 @@ valueVariable
 outVariable
 	: LOUT			{ $$   = $1; }		/* output bit variable */
 	| AOUT			{ $$   = $1; }		/* output arith. variable */
+	;
+
+	/************************************************************
+	 *
+	 * USE flags postset options for compiling code
+	 *
+	 *	use alias;		// equivalent to -A option
+	 *	no alias;		// turns off -A option
+	 *
+	 *	use strict;		// equivalent to -S option
+	 *	no strict;		// turns off -S option
+	 *
+	 *	use strict alias;	// equivalent to -AS option
+	 *	no alias strict;	// turn off both options
+	 *
+	 * with 'use' and 'no' a particular option can be set and reset
+	 * after compilation has started, overriding the compiler flag
+	 * options. This way code which is linked from several iC sources
+	 * can be forced with 'use alias' to produce ALIAS nodes, which
+	 * are needed for loading the combined code, without having to
+	 * worry about setting the -A flag when compiling.
+	 *
+	 * The -A flag is still useful for generating extra ALIAS nodes
+	 * for debugging with iClive.
+	 *
+	 * The 'use strict' option should always be set at the start of
+	 * code in future iC programs. Nevertheless very simple iC programs
+	 * with mainly bit nodes will still work without having to declare
+	 * every variable. The 'no strict' option should be avoided and
+	 * is only included for completeness. It should be very easy to
+	 * add extra declarations to satisfy the 'strict' criterion.
+	 * But one never knows and as a language designer I feel this is
+	 * a good way. (grateful acknowledgements to the designers of PERL)
+	 *
+	 * The remaining compiler flags are very specific. The following
+	 * mechanism allows extension to those as well.
+	 *
+	 ***********************************************************/
+
+useFlag	: USE USETYPE		{
+		$$ = $1;				/* 'use' or 'no' */
+		unsigned int useindex = $2.v->ftype;
+		assert(useindex < MAXUSETYPE);
+		*iC_useTypes[useindex] = $1.v->ftype;	/* iC_Aflag, iC_Sflag */
+	    }
+	| useFlag USETYPE	{
+		$$ = $1;				/* 'use' or 'no' */
+		unsigned int useindex = $2.v->ftype;
+		assert(useindex < MAXUSETYPE);
+		*iC_useTypes[useindex] = $1.v->ftype;	/* iC_Aflag, iC_Sflag */
+	    }
 	;
 
 	/************************************************************
@@ -354,7 +407,7 @@ decl	: declHead UNDEF	{
 		    cp = strchr($2.v->name, '$'); /* locate original extension */
 		    assert(cp && isprint(cp[1])); /* extension must be at least 1 character */
 		    if ((sp = lookup(++cp)) != 0 && (sp->type & EM)) {
-			warning("function declaration of an extern variable - ignored:", cp);
+			warning("declaration of an extern variable in a function - ignored:", cp);
 		    }
 		    collectStatement($2.v);
 		    iFunSyText = 0;		/* no more function symbols */
@@ -442,8 +495,12 @@ dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
 
 asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 		$$.f = $1.f; $$.l = $3.l;
-		$1.v->ftype = GATE;		/* implicitly declared as 'imm bit' */
+		$1.v->ftype = GATE;		/* not strict - implicitly declared as 'imm bit' */
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
+		if (iC_Sflag) {
+		    ierror("strict - assignment to an undeclared imm variable:", $1.v->name);
+		    $1.v->type = ERR;		/* cannot execute properly */
+		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(0, "asgn", (Lis*)&$$);
 #endif
@@ -514,6 +571,10 @@ expr	: UNDEF			{
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
+		if (iC_Sflag) {
+		    ierror("strict - use of an undeclared imm variable:", $1.v->name);
+		    $1.v->type = ERR;		/* cannot execute properly */
+		}
 	    }
 	| NUMBER		{
 		$$.f = $1.f; $$.l = $1.l;
@@ -578,6 +639,8 @@ expr	: UNDEF			{
 	 * L(aexpr,aexpr)
 	 * LATCH(aexpr,aexpr)
 	 *	L(..) LATCH(set,reset)
+	 * ######### not required with iC system functions #########
+	 * ######### is handled by BFORCE ##########################
 	 ***********************************************************/
 	| BLATCH '(' lexpr ')'	{		/* L(set,reset) */
 		Symbol *	nsp;
@@ -611,6 +674,10 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
+
+	/************************************************************
+	 * binary logical and arithmetic operators
+	 ***********************************************************/
 	| expr '|' expr		{			/* binary | */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -729,6 +796,7 @@ expr	: UNDEF			{
 	    }
 
 	/************************************************************
+	 * &&  ||
 	 *
 	 * If both operands of a binary && or || operator are imm bit
 	 * more precisely ftype GATE or UDFA (!ARITH) && type >ARN ||
@@ -736,9 +804,7 @@ expr	: UNDEF			{
 	 * operation is compiled as a logical bit, rather than con-
 	 * verting both imm bit (GATE) to ARITH, doing an arithmetic
 	 * operation and then having default GATE again.
-	 *
 	 ***********************************************************/
-
 	| expr AA expr	{				/* binary && */
 		Symbol *	sp;
 		int		typ;
@@ -793,6 +859,15 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
+
+	/************************************************************
+	 * Conditional expression expr1 ? expr2 : expr3
+	 *
+	 * All three expressions are forced to ftype ARITH.
+	 * Even if expr1 is imm bit it is not possible to use the
+	 * logical value directly - it must be forced to a new ARITH
+	 * node, which takes part in the resulting arithmetic expression.
+	 ***********************************************************/
 	| expr '?' expr ':' expr	{		/* ? : */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -808,6 +883,24 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
+
+	/************************************************************
+	 * Logical negation or arithmetic bitwise complement
+	 *
+	 * For an imm bit operand both '~' and '!' operator result in
+	 * logical negation.
+	 *
+	 * For an imm int operand the '~' operator results in a bitwise
+	 * complement, whereas the '!' operator results in logical
+	 * negation of the int converted to a truth value. For this
+	 * purpose the resulting C expression does the job in both cases.
+	 *
+	 * The result of '!' on an int could be forced to GATE, but it
+	 * would only influence combinations with && and ||, which are
+	 * best left as complete arithmetic expressions in such a
+	 * doubtful case. All combinations with other bit operands
+	 * force it to GATE anyway.
+	 ***********************************************************/
 	| NOTL expr 		{			/* unary ~ or ! */
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
@@ -830,6 +923,10 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 	    }
+
+	/************************************************************
+	 * Unary + or -
+	 ***********************************************************/
 	| PM expr %prec NOTL	{			/* unary + or - */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
@@ -840,6 +937,12 @@ expr	: UNDEF			{
 #endif
 	    }
 	;
+
+	/************************************************************
+	 *
+	 * lexpr - auxiliary grammar rule to support BFORCE and BLATCH
+	 *
+	 ***********************************************************/
 
 lexpr	: aexpr ',' aexpr		{
 		List_e *	lpL;
@@ -984,6 +1087,8 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	DL(..) DLATCH(set,reset,clkSetReset)
 	 *	DL(..) DLATCH(set,reset,timSetReset)
 	 *	DL(..) DLATCH(set,reset,timSetReset,delaySetReset)
+	 * ######### not required with iC system functions #########
+	 * ######### is handled by BFORCE ##########################
 	 ***********************************************************/
 	| DLATCH '(' lexpr cref ')'	{		/* DL(set,reset) */
 		Lis		li1 = $3;
@@ -1187,6 +1292,8 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	JK(set,reset,clkSetReset)
 	 *	JK(set,reset,timSetReset)
 	 *	JK(set,reset,timSetReset,delaySetReset)
+	 * ######### not required with iC system functions #########
+	 * ######### is handled by SR ### ##########################
 	 ***********************************************************/
 	| BLTINJ '(' aexpr ',' aexpr cref ')' {		/* JK(set,reset) */
 		Lis		liS = $3;		/* later = 0 ZZZ */
@@ -1236,6 +1343,8 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	JK(set,timSet,delaySet,reset,clkReset)
 	 *	JK(set,timSet,delaySet,reset,timReset)
 	 *	JK(set,timSet,delaySet,reset,timReset,delayReset)
+	 * ######### not required with iC system functions #########
+	 * ######### is handled by SR ### ##########################
 	 ***********************************************************/
 	| BLTINJ '(' aexpr ',' ctdref ',' aexpr cref ')' {
 		Lis		liS = $3;		/* later = 0 ZZZ */
@@ -1467,9 +1576,15 @@ dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 	    }
 	;
 
-casgn	: UNDEF '=' cexpr	{ $$.v = op_asgn(&$1, &$3, CLCKL); }
+casgn	: UNDEF '=' cexpr	{
+		$$.v = op_asgn(&$1, &$3, CLCKL);	/* not strict */
+		if (iC_Sflag) {
+		    ierror("strict - assignment to an undeclared 'imm clock':", $1.v->name);
+		    $1.v->type = ERR;			/* cannot execute properly */
+		}
+	    }
 	| CVAR '=' cexpr	{
-		if ($1.v->type != UDF) {
+		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    ierror("multiple assignment clock:", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
@@ -1559,9 +1674,15 @@ dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 	    }
 	;
 
-tasgn	: UNDEF '=' texpr	{ $$.v = op_asgn(&$1, &$3, TIMRL); }
+tasgn	: UNDEF '=' texpr	{
+		$$.v = op_asgn(&$1, &$3, TIMRL);	/* not strict */
+		if (iC_Sflag) {
+		    ierror("strict - assignment to an undeclared 'imm timer':", $1.v->name);
+		    $1.v->type = ERR;			/* cannot execute properly */
+		}
+	    }
 	| TVAR '=' texpr	{
-		if ($1.v->type != UDF) {
+		if ($1.v->type != UDF && $1.v->type != ERR) {
 		    ierror("multiple assignment timer:", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
@@ -2124,9 +2245,11 @@ int		lineno = 0;			/* count first line on entry to get() */
 
 int		c_number = 0;			/* case number for cexe.c */
 int		outFlag = 0;			/* global flag for compiled output */
-jmp_buf		begin;
-int		lex_typ[] = { DEF_TYP };	/* tokens corresponding to type */
-int		lex_act[] = { DEF_ACT };	/* tokens corresponding to ftype */
+extern jmp_buf	beginMain;
+extern int	maxErrCount;
+static jmp_buf	begin;
+static int	lex_typ[] = { DEF_TYP };	/* tokens corresponding to type */
+static int	lex_act[] = { DEF_ACT };	/* tokens corresponding to ftype */
 
 /********************************************************************
  *
@@ -2152,6 +2275,7 @@ compile(
     char *	outNM)				/* C output file name */
 {
     char	execBuf[BUFS];
+    char	lineBuf[BUFS];
     int		fd;
     int		r = 1;
 
@@ -2180,14 +2304,27 @@ compile(
 		return T0index;			/* error unlinking temporary file */
 	    }
 	    /* Cygnus does not understand cc - use gcc - pass comments with -C */
-	    snprintf(execBuf, BUFS, "gcc -E -C -x c %s -o %s", inpPath, T0FN);
+	    snprintf(execBuf, BUFS, "gcc -E -C -x c %s -o %s 2> %s", inpPath, T0FN, T6FN);
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
 #endif
 	    r = system(execBuf);		/* Pre-compile iC file */
 	    if (r != 0) {
+		if ((T6FP = fopen(T6FN, "r")) == NULL) {
+		    return T6index;		/* error opening gcc error file */
+		}
+		while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
+		    ierror("gcc:", lineBuf);	/* gcc error message */
+		}
+		fclose(T6FP);
+		if (!(iC_debug & 04000)) {
+		    unlink(T6FN);
+		}
 		ierror("compile: cannot run:", execBuf);
 		return T0index;
+	    }
+	    if (!(iC_debug & 04000)) {
+		unlink(T6FN);
 	    }
 	    if ((T0FP = fopen(T0FN, "r")) == NULL) {
 		return T0index;			/* error opening intermediate file */
@@ -2214,12 +2351,17 @@ compile(
 	unlink(T0FN);
     }
     if (inpPath) fclose(T0FP);
+    T0FP = 0;
     return errRet;
 } /* compile */
 
 /********************************************************************
  *
  *	Get routine for iC and C grammars
+ *
+ *	fp	FILE pointer for the source of data
+ *	x	0	uses getp[0] as its buffer - used by iC-compile
+ *		1	uses getp[1] - used by lexc.l for C-compile
  *
  *******************************************************************/
 
@@ -2296,6 +2438,12 @@ get(FILE* fp, int x)
 		}
 	    } else
 	    /********************************************************
+	     *  handle C-pre-processor # pragma ## comes out on MAC OsX
+	     ********************************************************/
+	    if (sscanf(chbuf[x], " # %s", tempBuf) == 1 && strcmp(tempBuf, "pragma") == 0) {
+		getp[x] = NULL;			/* ignore and bypass # pragma */
+	    } else
+	    /********************************************************
 	     *  there should be no other # lines remaining in iC file
 	     ********************************************************/
 	    if ((lexflag & C_PARSE) == 0) {
@@ -2320,7 +2468,7 @@ get(FILE* fp, int x)
 		if (strcmp(inpNM, prevNM)) {
 		    lexflag &= ~C_BLOCK;	/* output #line for changed filename */
 		} else if (iC_debug & 042) {
-		    fprintf(iC_outFP, "\n");	/* seperate blocks in lex listing */
+		    fprintf(iC_outFP, "\n");	/* separate blocks in lex listing */
 		}
 		lexflag |= C_LINE|C_LINE1;	/* only in C-compile */
 		strncpy(prevNM, inpNM, BUFS);
@@ -2366,7 +2514,7 @@ get(FILE* fp, int x)
 	lexflag &= ~C_LINE;
     }
     /****************************************************************
-     *  return 1 character at a time from chbuf and return it
+     *  return 1 character at a time from chbuf[x] and returns it
      *  transfer it to the token buffer iCtext and count iCleng if not lex
      ****************************************************************/
     if ((lexflag & C_PARSE) == 0) {
@@ -2380,6 +2528,9 @@ get(FILE* fp, int x)
 /********************************************************************
  *
  *	Unget for iC grammar only
+ *
+ *	c	character to push back - can go back to beginning of line
+ *		always uses getp[0] as its buffer - used by iC-compile
  *
  *******************************************************************/
 
@@ -2584,7 +2735,9 @@ iClex(void)
 		    }
 		}
 	    } else if (sscanf(iCtext, "_%d%1[A-Z_a-z_]", &yn, y2) == 1) {
-		ierror("Variables _<number> clash with internal number representation", iCtext);
+		ierror("Number preceded by '_' clashes with internal number representation", iCtext);
+	    } else if (sscanf(iCtext, "__%d%1[A-Z_a-z_]", &yn, y2) == 1) {
+		ierror("Number preceded by '__' clashes with internal negative number representation", iCtext);
 	    } else if (!(iC_debug & 04000) && sscanf(iCtext, "iC_%1[A-Za-z_0-9]", y2) == 1) {
 		/* this test suppressed for testing by option -d4000 - can cause link errors */
 		ierror("Variable starting with iC_ clashes with iC-runtime global variable", iCtext);
@@ -2646,9 +2799,9 @@ iClex(void)
 		c = qtoken;			/* LOUT or AOUT */
 	    } else
 	    if (typ == ARNC || typ == LOGC) {
-		c = lex_typ[typ];
-	    } else {
-		c = lex_act[symp->ftype];	/* alpha_numeric symbol */
+		c = lex_typ[typ];		/* YYERRCODE AVARC YYERRCODE LVARC YYERRCODE */
+	    } else {				/* alpha_numeric symbol */
+		c = lex_act[symp->ftype];	/* UNDEF AVAR LVAR ..YYERRCODE.. CVAR TVAR */
 	    }
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {
 		symp = lp->le_sym;		/* original via backptr */
@@ -2888,6 +3041,16 @@ ierror(						/* print error message */
 {
     iclock->type = ERR;				/* prevent execution */
     errmess("Error", str1, str2);
+    if (++ierrorCnt >= maxErrCount) {
+	fprintf(iC_outFP, "*** too many errors - compilation aborted\n");
+	fflush(iC_outFP);
+	if (errFlag) {
+	    fprintf(iC_errFP, "*** too many errors - compilation aborted\n");
+	    fflush(iC_errFP);
+	}
+	if (T0FP) fseek(T0FP, 0L, SEEK_END);	/* flush rest of file */
+	longjmp(beginMain, Iindex);
+    }
 } /* ierror */
 
 /********************************************************************
@@ -2942,7 +3105,7 @@ execerror(					/* recover from run-time error */
 	fprintf(iC_errFP, "in source file: %s line %d\n", file, line);
 	fflush(iC_errFP);
     }
-    fseek(T0FP, 0L, 2);				/* flush rest of file */
+    fseek(T0FP, 0L, SEEK_END);			/* flush rest of file */
     longjmp(begin, 0);
 } /* execerror */
 

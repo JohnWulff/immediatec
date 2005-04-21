@@ -22,7 +22,8 @@ CC=gcc
 usage ()
 {
     echo 'Usage:' >&2
-    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] [-d<dir>] [-y<opt>] file ...' >&2
+    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-d<dir>] [-y<opt>]' >&2
+    echo '         file ...' >&2
     echo '    (default)	link all iC-files file.ic ... into independent executables' >&2
     echo '		output names are base names of the iC-files (file ...)' >&2
     echo '	-l	link all iC-files into one executable (implies -A)' >&2
@@ -34,6 +35,11 @@ usage ()
     echo '	-n	generate no output, report icc compile errors only' >&2
     echo "		-s and -n generate 'cexe.c' for last file as a side effect" >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
+    echo '	-S	strict compile - all immediate variables must be declared' >&2
+    echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+    echo '	-i<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
+    echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
+    echo '	        default: any index for bit, byte, word or long is allowed' >&2
     echo '	-i	produce file.ini which records output of an initial run' >&2
     echo '	-I	produce file.ini with full INITIALIZATION info (debug only)' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
@@ -47,7 +53,7 @@ usage ()
     echo "	-N	No nice with calls of icc and $CC compilers (default is nice)" >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.30 2005/01/28 19:27:10 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.31 2005/04/07 15:54:12 jw Exp $' >&2
 }
 
 link=0
@@ -61,11 +67,14 @@ lib="-lict"
 ldir="-L/usr/local/lib"
 d=" -d474"
 A=""
+S=""
+R=""
 x=""
 l=""
 q=0
 z=0
 i=""
+I=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -100,12 +109,26 @@ while [ $# -gt 0 ]; do
 		fi
 		break;;
 	    s*)	link=2;;
-	    c*)	link=3;d=$A;;
+	    c*)	link=3;d=$A$S$R$i;;
 	    b*) link=4;;
-	    n*) link=5;d=$A;;
+	    n*) link=5;d=$A$S$R$i;;
 	    N*) nice="";;
-	    i*)	i=440;;
-	    I*)	i=540;;
+	    i*)	t=${option#?}
+		if [ -z "$t" ]; then
+		    shift
+		    t=$1
+		    option=$1
+		else
+		    case "$t" in
+		    6)	t='';;
+		    esac
+		fi
+		case "$t" in
+		1*|2*|3*|4*|5*|6*|7|8|9)
+		    i=" -i$t"; d="$d$i"; break;;
+		esac
+		I=440;;
+	    I*)	I=540;;
 	    q*)	q=1;;
 	    v*)	option=${option#?}
 		if [ -z "$b" ]; then
@@ -113,7 +136,7 @@ while [ $# -gt 0 ]; do
 		fi
 		lib=${b}libict$option.a
 		ldir=""
-		v="$option -P${b}"
+		v="$option"
 		break;;
 	    d*)	option=${option#?}
 		if [ -z "$option" ]; then
@@ -129,10 +152,11 @@ while [ $# -gt 0 ]; do
 		if [ -z "$v" ]; then
 		    lib=${b}libict.a
 		    ldir=""
-		    v=" -P${b}"
 		fi
 		break;;
 	    A*)	A=" -A";d="$d$A";;
+	    S*)	S=" -S";d="$d$S";;
+	    R*)	R=" -R";d="$d$R";;
 	    6*)	d="$d -d2";l="6";;
 	    x*)	d="$d -d4000";x="1";;
 	    y*)	option=${option#?}
@@ -152,6 +176,8 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+# echo I=$I, i=$i, d=$d, l=$l, v=$v, b=$b
+# exit
 
 # if [ "$q" = 0 ]; then
 #     echo "########## '${0##*/}' ##########"
@@ -181,7 +207,7 @@ for f in $*; do
 		    echo "$CC -g -I. $ldir -o $base $base.c $lib" >&2
 		fi
 		if $nice $CC -g -I. $ldir -o $base $base.c $lib; then
-		    if [ -n "$i" ] && ! ./$base -d$i > $base.ini; then
+		    if [ -n "$I" ] && ! ./$base -d$I > $base.ini; then
 			if [ "$q" = 0 ]; then
 			    echo "run time error in initial execution of '$base'" >&2
 			fi
@@ -297,7 +323,7 @@ if [ "$link" = 1 ]; then
 	    echo "$CC -g -I. $ldir -o $first $list $lib" >&2
 	fi
 	if $nice $CC -g -I. $ldir -o $first $list $lib; then
-	    if [ -n "$i" ] && ! ./$first -d$i > $first.ini; then
+	    if [ -n "$I" ] && ! ./$first -d$I > $first.ini; then
 		if [ "$q" = 0 ]; then
 		    echo "run time error in initial execution of '$first'" >&2
 		fi
@@ -334,7 +360,8 @@ exit $status
 
 =head1 SYNOPSIS
 
- iCmake [-[l|o<exe>|s|c|b|n]i6xqh] [-v[<N>]] [-d<dir>] [-y<opt>] file ...
+ iCmake [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-d<dir>] [-y<opt>]
+        file ...
   (default) link all iC-files file.ic ... into independent executables
             output names are base names of the iC-files (file ...)
     -l	    link all iC-files into one executable (implies -A)
@@ -346,6 +373,8 @@ exit $status
     -n	    generate no output, report icc compile errors only
             -s and -n generate 'cexe.c' for last file as a side effect
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
+    -S      strict compile - all immediate variables must be declared
+    -R      no maximum error count (default: abort after 100 errors)
     -i	    produce file.ini which records output of an initial run
     -I	    produce file.ini with full INITIALIZATION info (debug only)
     -6	    produce logic generation listing file.lst6

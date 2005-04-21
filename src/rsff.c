@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.40 2005/01/26 15:29:06 jw Exp $";
+"@(#)$Id: rsff.c,v 1.41 2005/03/14 21:01:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -26,6 +26,8 @@ static const char rsff_c[] =
 #endif /* TCP */
 
 #define min(x,y) ((x) < (y) ? (x) : (y))
+
+Gate		iConst = { 1, -NCONST, ARITH, 0, ICONST, 0, 0, 0 };
 
 /********************************************************************
  *
@@ -588,7 +590,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	gm->gt_val = 1;				/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gm->gt_new = gm->gt_old = 0;	/* clear arithmetic */
-	} else if (typ == NCONST) {
+	} else if (typ == NCONST && strcmp(gm->gt_ids, ICONST) != 0) {
 	    char *	ep;
 	    /* convert constant 18 from dec, 077 from oct 0x1c from hex */
 	    gm->gt_new = gm->gt_old = strtol(gm->gt_ids, &ep, 0); /* long to int or long */
@@ -1052,21 +1054,15 @@ iC_outMw(					/* NEW OUTW master action */
 	if (gm->gt_live & 0x8000) {
 	    iC_liveData(gm->gt_live, val);	/* live is active */
 	}
-	if (mask == X_WIDTH) {
-#ifndef _WINDOWS 
-	    val &= 0xff;			/* for display only */
-#endif
-	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%d,", channel, val);	/* TODO overflow */
-	    iC_outOffset += len;
-	} else if (mask == B_WIDTH) {
+	if (mask == B_WIDTH) {
 #ifndef _WINDOWS 
 	    val &= 0xff;			/* for display only */
 #endif
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%d:%hhd,", channel, (char)val);	/* TODO overflow */
 	    iC_outOffset += len;
-	} else if (mask == W_WIDTH) {
+	} else
+	if (mask == W_WIDTH) {
 #ifndef _WINDOWS 
 	    val &= 0xffff;			/* for display only */
 #endif
@@ -1074,7 +1070,8 @@ iC_outMw(					/* NEW OUTW master action */
 		"%d:%hd,", channel, (short)val);	/* TODO overflow */
 	    iC_outOffset += len;
 #if INT_MAX != 32767 || defined (LONG16)
-	} else if (mask == L_WIDTH) {
+	} else
+	if (mask == L_WIDTH) {
 #if INT_MAX == 32767
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%d:%ld,", channel, (long)val);	/* TODO overflow */
@@ -1084,6 +1081,14 @@ iC_outMw(					/* NEW OUTW master action */
 #endif
 	    iC_outOffset += len;
 #endif
+	} else
+	if (mask & X_MASK) {
+#ifndef _WINDOWS 
+	    val &= 0xff;			/* for display only */
+#endif
+	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
+		"%d:%d,", channel, val);	/* TODO overflow */
+	    iC_outOffset += len;
 #ifndef _WINDOWS
 	} else {
 	    val = 0;				/* error - no output */

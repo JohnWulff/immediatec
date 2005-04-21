@@ -1,5 +1,5 @@
-static const char main_c[] =
-"@(#)$Id: icc.c,v 1.51 2005/01/28 17:41:31 jw Exp $";
+static const char icc_c[] =
+"@(#)$Id: icc.c,v 1.52 2005/04/16 17:14:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,6 +19,7 @@ static const char main_c[] =
 #include	<stdlib.h>
 #include	<unistd.h>
 #include	<string.h>
+#include	<setjmp.h>
 #include	<assert.h>
 #include	<errno.h>
 #include	"icc.h"
@@ -32,10 +33,12 @@ static const char main_c[] =
 #endif	/* LOAD */
 
 extern const char	iC_ID[];
+unsigned short		iC_Aflag = 0;			/* -A flag signals ARITH alias */
+unsigned short		iC_Sflag = 0;			/* not strict */
+unsigned short *	iC_useTypes[] = { USETYPEFLAGS };
 
 static const char *	usage =
-"USAGE: %s [-aAch][ -o<out>][ -l<list>][ -e<err>][ -i<lim>]\n"
-"           [ -d<debug>][ -P<path>] <src.ic>\n"
+"USAGE: %s [-acASRh][ -o<out>][ -l<list>][ -e<err>][ -i<lim>][ -d<deb>] <src.ic>\n"
 #if defined(RUN) || defined(TCP)
 "Options in compile mode (-o or -c):\n"
 #endif	/* RUN or TCP */
@@ -47,6 +50,8 @@ static const char *	usage =
 "        -e <err>        name of error file (default is stderr)\n"
 "        -a              compile with linking information in auxiliary files\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
+"        -S              strict compile - all immediate variables must be declared\n"
+"        -R              no maximum error count (default: abort after 100 errors)\n"
 #if defined(RUN) || defined(TCP)
 "        -i <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
@@ -84,14 +89,13 @@ static const char *	usage =
 "                +20000  use old style imm functions - no internal functions\n"
 "        -d 10444        generate listing of compiler internal functions\n"
 #endif	/* YYDEBUG and not _WINDOWS */
-"        -P <path>       Path of script pplstfix when not on PATH (usually ./)\n"
 "        <src.ic>        any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
 "        -h              this help text\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
 "        -B              export EF_PROTECT_BELOW which tests access BELOW \n"
-"        -F              export EF_PROTECT_FREE which tests access FREE \n"
+"        -F              export EF_PROTECT_FREE which tests access FREE\n"
 #endif	/* EFENCE */
 #if defined(RUN) || defined(TCP)
 "Extra options for run mode: (direct interpretation)\n"
@@ -146,7 +150,7 @@ static const char *	usage =
 "Copyright (C) 1985-2005 John E. Wulff     <john@je-wulff.de>\n"
 ;
 
-const char *	iC_progname;		/* name of this executable */
+char *		iC_progname;		/* name of this executable */
 short		iC_debug = 0;
 int		iC_micro = 0;
 unsigned short	iC_xflag;
@@ -177,7 +181,9 @@ FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
 
 static FILE *	excFP;			/* cexe C out file pointer */
-static char *	ppPath = "";		/* default pplstfix on PATH */
+static char *	iC_path;		/* default pplstfix on PATH */
+jmp_buf		beginMain;
+int		maxErrCount = 100	/* default error count at which to abort compile */;
 
 char * OutputMessage[] = {
     0,					/* [0] no error */
@@ -185,8 +191,8 @@ char * OutputMessage[] = {
     "%s: block count error\n",		/* [2] */
     "%s: link count error\n",		/* [3] */
     "%s: cannot open file %s\n",	/* [4] */
-    "%s: cannot open file %s in iC compile\n",	/* [5] */
-    "%s: cannot open file %s in C compile\n",	/* [6] */
+    "%s: cannot open or compile file %s in iC compile\n",	/* [5] */
+    "%s: cannot open or compile file %s in C compile\n",	/* [6] */
     "%s: cannot open file %s in output\n",	/* [7] */
 };
 
@@ -196,6 +202,7 @@ FILE *	T2FP = NULL;
 FILE *	T3FP = NULL;
 FILE *	T4FP = NULL;
 FILE *	T5FP = NULL;
+FILE *	T6FP = NULL;
 
 char		T0FN[] = "ic0.XXXXXX";
 static char	T1FN[] = "ic1.XXXXXX";
@@ -203,6 +210,7 @@ char		T2FN[] = "ic2.XXXXXX";
 static char	T3FN[] = "ic3.XXXXXX";
 char		T4FN[] = "ic4.XXXXXX";	/* must be in current directory */
 char		T5FN[] = "ic5.XXXXXX";
+char		T6FN[] = "ic6.XXXXXX";
 
 static void	unlinkTfiles(void);
 
@@ -307,10 +315,12 @@ main(
     int		ro = 4;			/* output message index */
 
     /* Process the arguments */
-    if ((iC_progname = strrchr(*argv, '/')) == NULL) {
-	iC_progname = *argv;
+    iC_path = *argv;			/* in case there is a leading path/ */
+    if ((iC_progname = strrchr(iC_path, '/')) == NULL) {
+	iC_progname = iC_path;		/* no leading path */
+	iC_path     = "";		/* default PATH for pplstfix */
     } else {
-	iC_progname++;			/*  path has been stripped */
+	*iC_progname++ = '\0';		/* path has been stripped and isolated */
     }
 #ifdef EFENCE
     inpNM = iC_emalloc(BUFS);
@@ -421,16 +431,18 @@ main(
 		case 'A':
 		    iC_Aflag = 1;		/* generate ARITH ALIAS in outFN */
 		    break;
+		case 'S':
+		    iC_Sflag = 1;		/* strict - all imm variables must be declared */
+		    break;
+		case 'R':
+		    maxErrCount = 32000;	/* maximum error count very high */
+		    break;
 		case 'a':
 		    iC_aflag = 1;		/* append for compile */
 		    break;
 		case 'x':
 		    iC_xflag = 1;		/* start with hexadecimal display */
 		    break;
-		case 'P':
-		    if (! *++*argv) { --argc, ++argv; }
-		    if (strlen(*argv)) ppPath = *argv;	/* path of pplstfix */
-		    goto break2;
 #ifdef EFENCE
 		case 'E':
 		    iC_xflag = inpNM[BUFS-1];
@@ -491,12 +503,15 @@ main(
     szNames[T3index] = T3FN;
     szNames[T4index] = T4FN;
     szNames[T5index] = T5FN;
+    szNames[T6index] = T6FN;
     if ((fd = mkstemp(T1FN)) < 0 || (T1FP = fdopen(fd, "w+")) == 0) {
 	r = T1index;			/* error opening temporary file */
     } else if ((fd = mkstemp(T2FN)) < 0 || (T2FP = fdopen(fd, "w+")) == 0) {
 	r = T2index;			/* error opening temporary file */
     } else if ((fd = mkstemp(T3FN)) < 0 || (T3FP = fdopen(fd, "w+")) == 0) {
 	r = T3index;			/* error opening temporary file */
+    } else if ((fd = mkstemp(T6FN)) < 0 || close(fd) < 0 || unlink(T6FN) < 0) {
+	r = T6index;			/* error making temporary name */
     } else
     /********************************************************************
      *	Call the iC compiler which builds a Symbol table and a logic
@@ -506,7 +521,8 @@ main(
      *	and C-actions are collected in the temporary file T1FN
      *	Also as a side effect outFlag is set if outFN is set (-o option)
      *******************************************************************/
-    if ((r = compile(inpFN, listFN, errFN, outFN)) != 0) {
+    if (r = setjmp(beginMain) ||
+	(r = compile(inpFN, listFN, errFN, outFN)) != 0) {
 	ro = 5;				/* compile error */
     } else
     /********************************************************************
@@ -685,6 +701,11 @@ unlinkTfiles(void)
  *	cleared up in the listing. These changes affect only the
  *	listing. The output is correctly compiled.
  *
+ *	When iC_path is not "", pplstfix fill be called with the log
+ *	option -l, which outputs to pplstfix.log. In this case
+ *	when iC_progname is not just "icc" but ends with a revision
+ *	number, eg. icc109, pplstfix will be called as pplstfix109.
+ *
  *******************************************************************/
 
 int
@@ -692,6 +713,7 @@ iC_inversionCorrection(void)
 {
     int		fd;
     int		r = 0;
+    char *	versionTail;
     char	tempName[] = "pplstfix.XXXXXX";
     char	exStr[TSIZE];
 
@@ -706,7 +728,13 @@ iC_inversionCorrection(void)
 	    fprintf(stderr, "%s: rename(%s, %s) failed\n",
 		iC_progname, listFN, tempName);
 	} else {
-	    snprintf(exStr, TSIZE, "%spplstfix%s %s > %s", ppPath, iC_progname + strcspn(iC_progname, "0123456789"), tempName, listFN);
+	    if (strlen(iC_path) == 0) {
+		snprintf(exStr, TSIZE, "pplstfix %s > %s", tempName, listFN);
+	    } else {
+		versionTail = iC_progname + strcspn(iC_progname, "0123456789");
+		snprintf(exStr, TSIZE, "%s/pplstfix%s -l %s/pplstfix%s.log %s > %s",	/* developer debug version */
+		    iC_path, versionTail, iC_path, versionTail, tempName, listFN);
+	    }
 	    r = system(exStr);
 	    if (r == 0) {
 		unlink(tempName);
@@ -750,8 +778,7 @@ iC_Lookup(char *	string)	/* find string in symbol table at run time */
 
 =head1 SYNOPSIS
 
- icc [-aAch][ -o<out>][ -l<lst>][ -e<err>][ -i<lim>]
-     [ -d<deb>][ -P<ppl>] <src.ic>
+ icc [-acASRh][ -o<out>][ -l<lst>][ -e<err>][ -i<lim>][ -d<deb>] <src.ic>
     -o <out> name of generated C output file
     -c       generate C source cexe.c to extend 'icr' or 'ict' compiler
              (cannot be used if also compiling with -o)
@@ -760,6 +787,8 @@ iC_Lookup(char *	string)	/* find string in symbol table at run time */
     -e <err> name of error file (default is stderr)
     -a       append linking info for 2nd and later files
     -A       compile output ARITHMETIC ALIAS nodes for symbol debugging
+    -S       strict compile - all immediate variables must be declared
+    -R       no maximum error count (default: abort after 100 errors)
     -i <lim> highest I/O index (default: no limit; 63 for -c mode)
              if lim <= 63, mixed byte, word and long indices are tested
              default: any index for bit, byte, word or long is allowed
@@ -775,7 +804,6 @@ iC_Lookup(char *	string)	/* find string in symbol table at run time */
      +20000  use old style imm functions - no internal functions
     -d 10044 generate listing of compiler internal functions
 
-    -P <ppl> Path of script pplstfix when not on PATH (usually ./)
     <src.ic> iC language source file (extension .ic)
     -        or default: take iC source from stdin
     -h       this help text
@@ -810,17 +838,44 @@ The generated C-code is re-grouped into literal blocks first, followed
 by C-actions. This is necessary to place all C-declarations in literal
 blocks before any C-actions, which may require them.
 
-In a next pass an integrated special-purpose C compiler is run (preceded
-by a pass through the C-preprocessor, if necessary), which recognizes
-any variables declared as B<imm bit> or B<imm int> in the embedded
-C-code.  These variables can be used as values anywhere in the C-code
-and appropriate modification is carried out. Immediate variables which
-have been declared but not yet assigned may be (multiple) assigned to in
-the C-code.  Such assignment expressions are recognised and converted
-to function calls.  If an immediate variable has already been (single)
-assigned to in an immediate statement, an attempt to assign to it in
-the C-code is an error. A syntax check of the embedded C code with
-appropriate error messages is a by-product of this procedure.
+In a next pass an integrated special-purpose C compiler is run
+(preceded by a pass through the C-preprocessor, if necessary). The
+C compiler recognizes any variables declared as B<imm bit> or
+B<imm int> in the embedded C-code.  These variables can be used
+as values anywhere in the C-code and appropriate modification is
+carried out. Immediate variables which have been declared but not yet
+assigned may be (multiple) assigned to in the C-code.  Such assignment
+expressions are recognised and converted to function calls, which
+fire all immediate expressions dependent in the immediate variable.
+If an immediate variable has already been (single) assigned to in an
+immediate statement, an attempt to assign to it in the C-code is an
+error. A syntax check of the embedded C code with appropriate error
+messages is a by-product of this procedure.
+
+The compiler also produces an optional listing (default file.lst). The
+listing displays the iC source lines with line numbers. These
+are interspersed with a detailed logic expansion of the generated
+code produced by the compiler. Study of this code gives insights
+into how iC-code is compiled and executed.  Aliases appear in the
+raw listing because of one pass compiler limitations. Aliases are
+completely eliminated from the executable code, and should therefore
+not confuse readers of the listings. A correction is carried out by
+passing the listing - and only the listing through the perlscript
+'pplistfix', which resolves aliases in the listing of a single source
+file. Aliases will still occurr for iC-applications spanning several
+source files. Here the reader must resolve any aliases.
+
+=head1 DEVELOPER INFORMATION
+
+For debugging the compiler and 'pplstfix', if the compiler is called
+with a path, eg. './icc', 'pplstfix' will be called with the same
+path, namely './pplstfix'.  If a path is specified and the name of
+the compiler is not just 'icc' but ends with a revision number,
+eg. 'icc109', 'pplstfix' will be called as 'pplstfix109'. This
+way several versions of the compiler and pplstfix can be kept in
+the development directory.  Also if a path is specified 'pplstfix'
+will be called with the log option -l. This outputs a log file to
+'./pplstfix109.log', if the compiler call was './icc109'.
 
 =head1 AUTHOR
 

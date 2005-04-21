@@ -12,7 +12,7 @@ use strict;
 #	for iC Project widgets
 #--------------------------------------------------------------
 #	Changes from perlman:
-# 1	Make text window READ-ONLY
+# 1	Make Text window READ-ONLY
 # 2	Use the search algorithm developed for iClive which moves
 #	the text to 'see' the text that has been found.
 # 3	Implement a history with previous and next buttons [<=] [=>]
@@ -21,16 +21,25 @@ use strict;
 use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
 use warnings;
+use utf8;
 
 my $named = $0; $named =~ s#.*[/\\]##;
+use vars qw($opt_c $opt_n $opt_k $opt_l $opt_w $opt_g $opt_T $opt_X $opt_h);
 format STDERR =
 Usage:
-@<<<<<[ -cTh][ -k <key>][ -g <geometry>][ [<section>] <manpage> ...] ...
+@<<<<<[ -cnTh][ -k <key>][ -l <num>][ -w <num>][ -g <geometry>]
  $named
+      [ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
+    -l num  height of the Text window (default @<)
+					$opt_l
+    -w num  width  of the Text window (default @<)
+					$opt_w
     -g geom geometry for main window (-g= is special small window)
     -c      build a new cache of section names (default: use cache)
+    -n      no fork of initial window (used in internal fork call)
+            (default is to fork the initial window)
     -T      trace output static debug messages
     -h      help, ouput this Usage text only
 
@@ -61,7 +70,7 @@ Usage:
 
     [Sections]  Load the index for one of the manpage sections.
 
-    [Search:]   in the text window. Text may be scanned for an exact
+    [Search:]   in the Text window. Text may be scanned for an exact
                 match or for a regular expression in the entry window
                 next to the button. All hits will be marked. Repeating
                 'Search down' or RETURN will display a new group of
@@ -74,7 +83,7 @@ Usage:
 
 Author: Sriram Srinivasan - extended by John E. Wulff  <john@je-wulff.de>
 							'@'
-$Id: iCman,v 1.6 2005/02/13 17:01:55 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.7 2005/02/21 20:53:15 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 my $menu_headings;	# "Headings" MenuButton
@@ -91,8 +100,6 @@ my $hi = 0;		# history index
 my $pi = 0;		# previous index
 # my $boldfont = '-adobe-helvetica-bold-r-normal--14-140-75-75-p-82-iso8859-1';
 my $boldfont = '-adobe-courier-bold-r-normal--14-140-75-75-m-90-iso8859-1';
-my $screenHeight = 40;
-my $screenWidth = 80;
 my $kopt = '';
 
 my %matchExtensions = (
@@ -119,16 +126,18 @@ my $prevMatch = '';
 
 $SIG{PIPE} = \&catch_sig;	# catch signal in pipe from man
 
-use vars qw($opt_c $opt_k $opt_g $opt_T $opt_X $opt_h);
 require "getopts.pl";
-&Getopts('ck:g:TXh');		# sets $opt_h if -h etc
+&Getopts('cnk:l:w:g:TXh');		# sets $opt_h if -h etc
 
 exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
+$opt_l = 40 unless $opt_l;
+$opt_w = 80 unless $opt_w;
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
 scout_man_dirs();
+to_background() unless $opt_n;	# run window as a  forked process
 
 $mainWindow = MainWindow->new();
 if ($opt_g) {
@@ -286,12 +295,13 @@ $entrySearch->bind('<Alt-Key-Return>',		[ \&search_text, undef, 2 ]); # go to li
 # $entrySearch->bind('<Key>', [ sub { print "'k' 'K': '$_[1]'   '$_[2]'\n"; }, Ev('k'), Ev('K') ]) if $opt_T;
 $entrySearch->bind('<Key-Down>',		[ \&scroll_text, 1        ]); # scroll down
 $entrySearch->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
-$entrySearch->bind('<Key-Next>',		[ \&scroll_text, $screenHeight  ]); # next page
-$entrySearch->bind('<Key-Prior>',		[ \&scroll_text, -$screenHeight ]); # prior page
+$entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_l-2 ]); # next page
+$entrySearch->bind('<Key-Prior>',		[ \&scroll_text, -$opt_l+2]); # prior page
 $entrySearch->bind('<Key-Home>',		[ \&position_text, '1.0'  ]); # beginning
 $entrySearch->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
 $entrySearch->bind('<Key-Right>',		[ \&scroll_x_text, 1      ]); # scroll right
 $entrySearch->bind('<Key-Left>',		[ \&scroll_x_text, -1     ]); # scroll left
+$entrySearch->bind('<Alt-Key-q>',		[ \&quit_program          ]);
 
 ########################################################################
 #	Help button
@@ -320,26 +330,17 @@ $menuBar->Button(-text        => 'Quit',
 #	TEXT STUFF
 ########################################################################
 
-if ($opt_g) {
-    $text = $mainWindow->Scrolled('Text',
-				  -scrollbars => 'osoe',
-				  -background => 'cornsilk1',
-				  -wrap       => 'none',
-				 )->pack(
-					  -fill => 'both',
-					  -expand => 1,
-					);
-} else {
-    $text = $mainWindow->Scrolled('Text',
-				  -scrollbars => 'osoe',
-				  -width      => $screenWidth,
-				  -height     => $screenHeight,
-				  -background => 'cornsilk1',
-				  -wrap       => 'none',
-				 )->pack(
-					  -fill => 'both',
-					  -expand => 1,
-					);
+$text = $mainWindow->Scrolled('Text',
+			      -scrollbars => 'osoe',
+			      -background => 'cornsilk1',
+			      -wrap       => 'none',
+			     )->pack(
+				      -fill   => 'both',
+				      -expand => 1,
+				    );
+unless ($opt_g) {
+    $text->configure (-width  => $opt_w);
+    $text->configure (-height => $opt_l);
 }
 $text->configure (-cursor => 'left_ptr');
 # Use xterm-color settings for attributes if available
@@ -365,14 +366,25 @@ $yScrollbar->bind('<Key-h>',	[ \&show_help     ]);
 $yScrollbar->bind('<Key-q>',	[ \&quit_program  ]);
 $yScrollbar->bind('<Key-Right>',[ \&scroll_x_text, 1  ]); # scroll right
 $yScrollbar->bind('<Key-Left>',	[ \&scroll_x_text, -1 ]); # scroll left
+$yScrollbar->bind('<Alt-Key-q>',	[ \&quit_program  ]);
+####### Search entry bindings ##########################################
+$yScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
+$yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
+$yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
+$yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
 ####### X-Scrollbar bindings ###########################################
 my $xScrollbar = $text->Subwidget('xscrollbar');
 $xScrollbar->bind('<Key-Down>',	[ \&scroll_text, 1    ]); # scroll down
 $xScrollbar->bind('<Key-Up>',	[ \&scroll_text, -1   ]); # scroll up
-$xScrollbar->bind('<Key-Next>',	[ \&scroll_text, $screenHeight  ]); # next page
-$xScrollbar->bind('<Key-Prior>',[ \&scroll_text, -$screenHeight ]); # prior page
+$xScrollbar->bind('<Key-Next>',	[ \&scroll_text, $opt_l-2 ]); # next page
+$xScrollbar->bind('<Key-Prior>',[ \&scroll_text, -$opt_l+2]); # prior page
 $xScrollbar->bind('<Key-Home>',	[ \&position_text, '1.0'  ]); # beginning
 $xScrollbar->bind('<Key-End>',	[ \&position_text, 'end'  ]); # end
+####### Search entry bindings ##########################################
+$xScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
+$xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
+$xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
+$xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
 
 ########################################################################
 #	Show Button and Entry
@@ -442,7 +454,6 @@ if (@history) {
     show_man('', 1);		# show first argument
 }
 
-print STDERR "Done \n";
 my $xWin = $mainWindow->vrootx; $xWin = $mainWindow->rootx unless $xWin eq '';
 my $yWin = $mainWindow->vrooty; $yWin = $mainWindow->rooty unless $yWin eq '';
 print "xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
@@ -504,12 +515,14 @@ sub show_man {
     if ($kopt or not $section or not is_valid_section($section)) {
         $section = '';
     }
-    print "$entry: kopt = '$kopt' man = '$man' section = '$section' forkFlag = $forkFlag\n" if $opt_T;
+no warnings;
+    print "$entry: kopt = '$kopt' man = '$man' section = '$section' forkFlag = '$forkFlag'\n" if $opt_T;
+use warnings;
     if ($forkFlag) {			# hFlag cannot be set
-	my @call = ('iCman', $man);
+	my @call = ('iCman', '-n', $man);
 	$section =~ s/[()]//g;	# remove parens (will pass '' unchanged)
 	$section = '-k' if $kopt;
-	splice @call, 1, 0, $section if $section ne '';
+	splice @call, 2, 0, $section if $section ne '';
 	print "fork_and_exec(@call)\n" if $opt_T;
 	fork_and_exec(@call);		# open the page in a new iCman window
 	return;
@@ -519,7 +532,7 @@ sub show_man {
     $text->update();
     ($s = $section) =~ s/[()]//g;	# remove parens (will pass '' unchanged)
     my $cmd_line = $kopt ? "man $kopt $man 2>/dev/null | sort -u |"
-			 : "man -7 $s $man 2>/dev/null |";
+			 : "man $s $man 2>/dev/null |";
     print "open (F, '$cmd_line')\n" if $opt_T;
     if ($ret = open (F, $cmd_line)) {
 	my $lines_added = 0;
@@ -560,14 +573,14 @@ sub show_man {
 					'-command' => [ sub { $text->see($_[0]) }, $index ],
 				       );
 	    } else {
-		$line =~ s/\342\224\202/|/g;# man translates '|' into 226 148 130 ?!
+		$line =~ s/\342\224\202/|/g;	# man translates '|' into 226 148 130 ?!
 ## with man -7
-		$line =~ s/\302//g;		# Unicode prefix for - ° ´ and x
+##		$line =~ s/\302//g;		# Unicode prefix for - ° ´ and x
 ## with man
-##		$line =~ s/\302\255/-/g;	# precedes '-' for word syllabification from 'man'
-##		$line =~ s/\302\267/°/g;	# bullet
-##		$line =~ s/\302\264/´/g;	# acute accent
-##		$line =~ s/\302\327/x/g;	# multiplication sign
+		$line =~ s/\302\255/-/g;	# precedes '-' for word syllabification from 'man'
+		$line =~ s/\342\213\205/°/g;	# bullet
+		$line =~ s/\302\264/´/g;	# acute accent
+		$line =~ s/\303\327/x/g;	# multiplication sign
 ##############
 		# Underlining, Boldfacing
 		while ($line =~ s/(.)//) {
@@ -593,10 +606,8 @@ sub show_man {
 		$text->insert('end', $line); # Ordinary text. Just insert.
 	    }
 	}
-	unless ($ret = close(F)) {
-	    info_display('red', "Close for '$cmd_line' returned '$ret' ($?)");
-	}
-	elsif ($lines_added) {
+	$ret = close(F);	# fails with $?/256 == 16 - page does not exist
+	if ($lines_added) {
 	    unless ($hFlag) {
 ### store new entry in history, deleting forwards
 #		splice @history, $hi, @history - $hi, $entry;
@@ -627,7 +638,7 @@ sub show_man {
 		    for ($i = 0; $i < @history; $i++) {
 			if ($entry eq $history[$i]) {
 ####		print "show_man: error entry pi = $pi '@history'\n" if $opt_T;
-			    splice @history, $i, 1;		# splice out duplicate entry
+			    splice @history, $i, 1;	# splice out duplicate entry
 			    if ($i < $pi) {
 				$pi--;
 			    }
@@ -967,8 +978,9 @@ sub search_now {
 	$gl = 0;
 	$text->tagDelete('searchTag') if $prevText;
 	$text->tagConfigure('searchTag',
-			    -background => 'gray',
-			   );
+			    -background => 'black',	# same as 'less'
+			    -foreground => 'white',	# stands out amongst live colours
+			   );				# cannot see live status though
 	if ($matchType eq 'ri') {
 	    $matchType = '-regexp';
 	    $auxiliary = '-nocase';
@@ -1130,6 +1142,7 @@ sub search_now {
 	}
 	$prevText = $searchText;
 	$prevMatch = $matchType;
+	$entrySearch->focus();
     }
     ########################################################################
     #	Use @groups to scroll over the groups forwards or backwards.
@@ -1288,6 +1301,23 @@ sub fork_and_exec {
 
 ########################################################################
 #
+#	Fork initial window to background
+#
+########################################################################
+
+sub to_background {
+    ## ignore CHLD signal of processes forked
+    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
+    my $pid = fork;
+    if ($pid < 0) {
+	warn "Unable to run in the background, cannot fork: $!\n";
+	exit $?;
+    }
+    exit 0 if $pid;	# exit foreground which started the program
+} # to_background
+
+########################################################################
+#
 #	Quit program
 #
 ########################################################################
@@ -1305,11 +1335,16 @@ __END__
 
 =head1 SYNOPSIS
 
- iCman[ -cTh][ -k <key>][ -g <geometry>][ [<section>] <manpage> ...] ...
+ iCman[ -cnTh][ -k <key>][ -l <num>][ -w <num>][ -g <geometry>]
+      [ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
+    -l num  height of the Text window (default 40)
+    -w num  width  of the Text window (default 80)
     -g geom geometry for main window (-g= is special small window)
     -c      build a new cache of section names (default: use cache)
+    -n      no fork of initial window (used in internal fork call)
+            (default is to fork the initial window)
     -T      trace output static debug messages
     -h      help, ouput this Usage text only
 
@@ -1342,7 +1377,7 @@ __END__
 
     [Sections]  Load the index for one of the manpage sections.
 
-    [Search:]   in the text window. Text may be scanned for an exact
+    [Search:]   in the Text window. Text may be scanned for an exact
                 match or for a regular expression in the entry window
                 next to the button. All hits will be marked. Repeating
                 'Search down' or RETURN will display a new group of
@@ -1390,7 +1425,7 @@ Perl-type regular expression. The \bword\b feature to find only whole
 words is particularly useful. Searches are normally case sensitive,
 but a case-insensitive search may be selectd. Once a search has been
 carried out, all the hits are highlighted. A first group of hits is
-displayed in the text window. The text is moved to display as many
+displayed in the Text window. The text is moved to display as many
 hits as possible. When the user has analysed the first group of hits,
 hitting RETURN will display the next group of hits in the text and
 so on until the end of the text is reached. Another RETURN will start
@@ -1412,9 +1447,16 @@ Sriram Srinivasan - extended by John E. Wulff
 =head1 BUGS
 
 iCman cannot display Unicode characters used in the current Linux.
-man produces some L<latin1>(7) characters for a few man pages. In the
-Unicode environment of Linux, these are not translated with the man -7
-option.
+man produces some Unicode characters for a few man pages. In the
+Unicode environment of Linux, these are not translated with or without
+the man -7 option. (the -7 option is therefore not used). The most
+important characters - in particular the special hyphen used in 'man'
+for word syllabification and '|' are substituted by code.
+
+This is probably a problem with Tk::Text where I currently still use
+Tk-800.024. Some tests done with Tk804.027 showed its Tk::Text to be
+much slower in updating tags - which is a cornerstone of the iC-range
+of programs.
 
 Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
 subject field.

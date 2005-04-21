@@ -1,5 +1,5 @@
-static const char icc_c[] =
-"@(#)$Id: icr.c,v 1.30 2005/01/26 15:16:22 jw Exp $";
+static const char icr_c[] =
+"@(#)$Id: icr.c,v 1.31 2005/02/01 20:57:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -29,7 +29,8 @@ static const char icc_c[] =
 #define ungetch(x) ungetc(x, stdin)
 #include	<sys/types.h>
 #include	<sys/time.h>
-#include	<termio.h>
+#include	<termios.h>
+#include	<unistd.h>
 #endif
 #include	<signal.h>
 #include	<ctype.h>
@@ -74,8 +75,8 @@ static struct timeval	to;
 static struct timeval *	top;
 
 static int		ttyparmFlag = 0;
-static struct termio	ttyparms;
-static struct termio	ttyparmh;
+static struct termios	ttyparms;
+static struct termios	ttyparmh;
 
 # define max(x, y) ((x) > (y) ? (x) : (y))
 
@@ -260,14 +261,14 @@ iC_icc(
 #endif	/* _MSDOS_ */
     }
 #ifndef	_MSDOS_
-    if (ioctl(0, TCGETA, &ttyparms) == -1)   {
+    if (tcgetattr(0, &ttyparms) == -1)   {
 	fprintf(stderr, "Cannot get termio from stdin\n");
 	exit(-5);
     }
+    memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termios));
+    ttyparmh.c_lflag &= ~(ECHO | ICANON | ECHOE);
+    if (tcsetattr(0, TCSAFLUSH, &ttyparmh) == -1) exit(-6);
     ttyparmFlag = 1;
-    memcpy((void *) &ttyparmh, (void *) &ttyparms, sizeof(struct termio));
-    ttyparmh.c_lflag &= ~(ECHO | ICANON);
-    if (ioctl(0, TCSETA, &ttyparmh) == -1) exit(-6);
 #endif	/* _MSDOS_ */
 
     if ((gp = tim[0]) != 0) {
@@ -655,7 +656,7 @@ void iC_quit(int sig)
     }
 #else	/* Linux */
     if (ttyparmFlag) {
-	if (ioctl(0, TCSETA, &ttyparms) == -1) exit(-1);
+	if (tcsetattr(0, TCSAFLUSH, &ttyparms) == -1) exit(-1);
     }
 #endif
     if (sig == SIGINT) {

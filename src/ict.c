@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.44 2005/01/26 15:16:30 jw Exp $";
+"@(#)$Id: ict.c,v 1.45 2005/04/04 21:36:49 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -202,8 +202,12 @@ iC_icc(
 	    tbp += cn;
 	    tbc -= cn;
 	    cn = 0;
+	    int mask = gp->gt_mark;
 	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T') {	/* suppress TX0 */
 		cn = snprintf(tbp, tbc, ",R%s", gp->gt_ids);	/* read input at controller */
+		if (gp->gt_fni != TRAB) {
+		    mask = 0x100;	/*block output of used bits for analog I/O */
+		}
 	    } else
 	    if (gp->gt_fni == OUTW) {
 		cn = snprintf(tbp, tbc, ",S%s", gp->gt_ids);	/* send output at controller */
@@ -211,6 +215,7 @@ iC_icc(
 		    if ((tbt = strrchr(tbp, '_')) != NULL && *(tbt+1) == '0') {
 			*tbt = '\0';	/* strip trailing "_0" from internal output name */
 			cn -= 2;
+			mask = 0x100;	/*block output of used bits for analog I/O */
 			assert(cn > 0);
 		    } else {
 			fprintf(iC_errFP, "\n%s: illformed output name '%s'\n", iC_iccNM, tbp + 1);
@@ -219,10 +224,16 @@ iC_icc(
 		}
 	    }
 	    if (cn > 0) {
-		if (iC_debug & 04) fprintf(iC_outFP,
-		    "%s	%d	%d\n", gp->gt_ids, (int)gp->gt_ini, (int)gp->gt_fni);
+		char * scp = "";
 		if (strlen(iC_iidNM) > 0) {
 		    cn += snprintf(tbp + cn, tbc - cn, "-%s", iC_iidNM); /* append instance id */
+		    scp = "-";
+		}
+		if (iC_debug & 04) fprintf(iC_outFP,
+		    "%s%s%s	%d	%d	(%d)\n", gp->gt_ids, scp, iC_iidNM, (int)gp->gt_ini, (int)gp->gt_fni, mask);
+		assert(mask);
+		if (mask < X_MASK) {
+		    cn += snprintf(tbp + cn, tbc - cn, "(%d)", mask);	/* mask of used bits */
 		}
 	    }
 	    if (cn >= tbc) {
@@ -841,7 +852,9 @@ iC_icc(
 						break;
 
 					    case 1:		/* GET_SYMBOL_TABLE */
-						printf("Symbol Table requested by '%s'\n", iC_iccNM);
+#if	YYDEBUG
+						if (iC_debug & 0100) fprintf(iC_outFP, "Symbol Table requested by '%s'\n", iC_iccNM);
+#endif	/* YYDEBUG */
 						/* prepare index entries first to allow ALIAS back-references */
 						index = 0;
 						for (opp = iC_sTable; opp < iC_sTend; opp++) {
@@ -956,7 +969,9 @@ iC_icc(
 						    (*opp)->gt_live &= 0x7fff;	/* clear live active */
 						}
 						liveFlag = 0;
-						printf("Symbol Table no longer required by '%s'\n", iC_iccNM);
+#if	YYDEBUG
+						if (iC_debug & 0100) fprintf(iC_outFP, "Symbol Table no longer required by '%s'\n", iC_iccNM);
+#endif	/* YYDEBUG */
 						/* leave '0' for iCserver */
 						regOffset = snprintf(regBuf, REQUEST, "%d:0", C_channel);
 						iC_send_msg_to_server(sockFN, regBuf);
@@ -1091,6 +1106,13 @@ void iC_initIO(void)
  *	Quit program with 'q' or ctrlC or Break via signal SIGINT
  *	or program abort on detected bugs.
  *
+ *	Although nansleep is supposed to be POSIX, it is not implemented
+ *	under Windows/Cygwin - since the sleep in iC_quit is not critical
+ *	usleep() has been used and not the following, which works under
+ *	Linux and MAC-OsX
+ *	    struct timespec ms200 = { 0, 200000000, };
+ *	    nanosleep(&ms200, NULL);
+ *
  *******************************************************************/
 
 void iC_quit(int sig)
@@ -1098,12 +1120,12 @@ void iC_quit(int sig)
     if (sockFN) {
 #ifdef	LOAD
 	if (C_channel) {
-	    struct timespec ms200 = { 0, 200000000, };
 	    /* disconnect iClive - follow with '0' for iCserver */
 	    regOffset = snprintf(regBuf, REQUEST, "%d:5,%d:0", C_channel, C_channel);
 	    iC_send_msg_to_server(sockFN, regBuf);
 	    if (iC_micro) iC_microReset(0);
-	    nanosleep(&ms200, NULL);
+	    usleep(200000);			/* 200 ms in us */
+	    if (iC_micro) iC_microPrint("disconnected", 0);
 	}
 #endif	/* LOAD */
 	close(sockFN);				/* close connection to iCserver */

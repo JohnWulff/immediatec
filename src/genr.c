@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.63 2005/01/26 16:35:26 jw Exp $";
+"@(#)$Id: genr.c,v 1.64 2005/03/30 10:17:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -46,7 +46,7 @@ static char *	ePtr = 0;		/* temporary expression buffer pointer */
 static char *	eEnd = 0;		/* end of temporary expression buffer */
 static char *	t_first = 0;
 static char *	t_last = 0;
-static char	One[] = "1";		/* name for constant 1 Symbol */
+static char *	iC_One = "1";		/* name for constant 1 Symbol (installed in S.T.) */
 static Symbol *	iCallHead = 0;		/* function head seen at start of imm call */
 static Symbol *	varList = 0;		/* list of temp Symbols while compiling function */
 static List_e *	stmtList = 0;		/* list of statement Symbols making function body */
@@ -281,7 +281,7 @@ op_push(				/* reduce List_e stack to links */
 		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "\t%c%s %c %c%s\n",
+		    fprintf(iC_outFP, "op_push:  %c%s %c %c%s\n",
 			v(left), iC_os[op], v(right));
 		    fflush(iC_outFP);
 		}
@@ -299,7 +299,7 @@ op_push(				/* reduce List_e stack to links */
 	}
 #if YYDEBUG
     } else if ((iC_debug & 0402) == 0402) {	/* fexpr : sexpr { left is 0 } */
-	fprintf(iC_outFP, "\t(0) %c %c%s\n", iC_os[op], v(right));
+	fprintf(iC_outFP, "op_push:  (0) %c %c%s\n", iC_os[op], v(right));
 	fflush(iC_outFP);
 #endif
     }
@@ -320,9 +320,13 @@ const_push(Lis * expr)
     int		bc = TSIZE;
     char	buf[TSIZE];
     char *	bp = buf;
-    Symbol *	symp;
+    Symbol *	sp;
+    List_e *	lp;
     char *	endptr;
     long	value;
+#if YYDEBUG
+    char 	temp[TSIZE];
+#endif
 
     while (cp < ep) {
 	if (--bc == 0 || !isprint(*bp++ = *cp++)) {
@@ -331,21 +335,31 @@ const_push(Lis * expr)
     }
     *bp = 0;				/* terminate - there is room in buf */
     value = strtol(buf, &endptr, 0);	/* convert to check for error */
-    assert(value >= 0);			/* must be unsigned positive */
-#if YYDEBUG
-    if ((iC_debug & 0402) == 0402) {
-	fprintf(iC_outFP, "const_push: '%s' converted to %ld\n", buf, value);
-	fflush(iC_outFP);
-    }
-#endif
     if (*endptr != '\0') {
-	return 1;			/* error */
+	/* const $ symbol */
+	if ((sp = lookup(ICONST)) == 0) {
+	    execerror("arithmetic constant initializer not installed", ICONST, __FILE__, __LINE__);
+	}
+	sp->u_val++;			/* mark use of iConst */
+	lp = sy_push(sp);
+	expr->v = op_push(0, ARN, lp);
+	expr->v->le_first = lp->le_first = expr->f;	/* identifies as const expression */
+	expr->v->le_last  = lp->le_last  = expr->l;
+    } else {
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "const_push: '%s' converted to %ld\n", buf, value);
+	    fflush(iC_outFP);
+	}
+#endif
+	snprintf(buf, TSIZE, "%ld", value);
+	if ((sp = lookup(buf)) == 0) {	/* install name of decimal conversion */
+	    sp = install(buf, NCONST, ARITH);
+	} else if (sp->type != NCONST && sp->ftype != ARITH) {
+	    ierror("use of a constant which was previously used for a different purpose:", buf);
+	}
+	expr->v = sy_push(sp);		/* expr->v->le_first == 0 is simple const */
     }
-    snprintf(buf, TSIZE, "%ld", value);
-    if ((symp = lookup(buf)) == 0) {	/* install name of decimal conversion */
-	symp = install(buf, NCONST, ARITH);
-    }
-    expr->v = sy_push(symp);
     return 0;				/* correct - no error */
 } /* const_push */
 
@@ -441,28 +455,51 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int gt_input, int sflag)
 	    }
 	}
 	*ePtr = 0;
-	if (iC_debug & 04) {
-	    /* only logic gate or SH can be aux expression */
-	    if (sflag == 1) {
-		fprintf(iC_outFP, "\t\t\t\t\t");
-	    } else
-	    if (sflag) {
-		assert(sflag == 0200);
-		if (sp->ftype == GATE) {
-		    putc('\t', iC_outFP);
+	if ((gp->type & TM) == NCONST && strcmp(gp->name, ICONST) == 0) {
+	    if (t_first) {				/* end of arith */
+		assert(t_first = lp->le_first);
+		assert(t_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
+		while (t_first < lp->le_last) {
+		    if (*t_first != '#') {		/* transmogrified '=' */
+			*ePtr++ = *t_first;
+		    }
+		    t_first++;
 		}
-		putc('\t', iC_outFP);
-	    } else {
-		fprintf(iC_outFP, "\t\t\t");
 	    }
-	    fprintf(iC_outFP, "%s%s	// %d",
-		cp, gp->name, gt_input);	/* expression till now */
-	    if (sflag == 1) {
-		fprintf(iC_outFP, "\n");
+	    *ePtr = 0;
+	    if (iC_debug & 04) {
+		int	val;
+		if ((val = lp->le_val) == 0) {
+		    fprintf(iC_outFP, "\t\t\t%s;\t// (%d)", cp, c_number + 1);
+		} else {
+		    /* function number from function definition */
+		    fprintf(iC_outFP, "\t\t\t%s;\t// (%d)", cp, val >> 8);
+		}
 	    }
+	} else {
+	    if (iC_debug & 04) {
+		/* only logic gate or SH can be aux expression */
+		if (sflag == 1) {
+		    fprintf(iC_outFP, "\t\t\t\t\t");
+		} else
+		if (sflag) {
+		    assert(sflag == 0200);
+		    if (sp->ftype == GATE) {
+			putc('\t', iC_outFP);
+		    }
+		    putc('\t', iC_outFP);
+		} else {
+		    fprintf(iC_outFP, "\t\t\t");
+		}
+		fprintf(iC_outFP, "%s%s	// %d",
+		    cp, gp->name, gt_input);	/* expression till now */
+		if (sflag == 1) {
+		    fprintf(iC_outFP, "\n");
+		}
+	    }
+	    ePtr += snprintf(ePtr, eEnd - ePtr, "iC_MV(%d)", gt_input);
+	    t_first = lp->le_last;			/* skip current expression */
 	}
-	ePtr += snprintf(ePtr, eEnd - ePtr, "iC_MV(%d)", gt_input);
-	t_first = lp->le_last;			/* skip current expression */
     }
 } /* copyArithmetic */
 
@@ -525,7 +562,10 @@ op_asgn(				/* asign List_e stack to links */
     if (sv == 0) {
 	/* null var - generate a temporary Symbol of type UNDEF */
 	var = (Symbol *) iC_emalloc(sizeof(Symbol));
-	snprintf(temp, TSIZE, "%s_f%d", iFunSymExt ? iFunBuffer : "", ++ttn);
+	do {
+	    /* do not use generated name used somewhere else already */
+	    snprintf(temp, TSIZE, "%s_f%d", iFunSymExt ? iFunBuffer : "", ++ttn);
+	} while (lookup(temp) != 0);
 	var->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	strcpy(var->name, temp);	/* name needed for derived Sy's */
 	sflag = 0;			/* don't output name */
@@ -557,7 +597,7 @@ op_asgn(				/* asign List_e stack to links */
 	    var->ftype = rsp->ftype;
 	}
     }
-    if (rsp->type == NCONST || rsp->u_blist == 0) {		/* right must be a $ symbol */
+    if (templist == 0 || rsp->u_blist == 0 || rsp->type == NCONST) {	/* right must be a $ symbol */
 	if (var->type != ERR) {
 	    var->type = ALIAS;		/* alias found */
 	}
@@ -644,7 +684,7 @@ op_asgn(				/* asign List_e stack to links */
 		    atn++;		/* must have 1 feedback */
 #if YYDEBUG
 		    if ((iC_debug & 0402) == 0402) {
-			fprintf(iC_outFP, "*** feedback at %s from %s to %s\n",
+			fprintf(iC_outFP, "op_asgn:  *** feedback at %s from %s to %s\n",
 			    sr->name ? sr->name : "(null)",
 			    sp->name ? sp->name : "(null)",
 			    var->name ? var->name : "(null)");
@@ -884,7 +924,10 @@ op_asgn(				/* asign List_e stack to links */
 		    free(gp->name);			/* free name space */
 		}
 #endif
-		snprintf(temp, TSIZE, "%s_%d", var->name, ++atn);
+		do {
+		    /* do not use generated name used somewhere else already */
+		    snprintf(temp, TSIZE, "%s_%d", var->name, ++atn);
+		} while (lookup(temp) != 0);
 		gp->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 		strcpy(gp->name, temp);			/* mark Symbol */
 	    }
@@ -922,13 +965,13 @@ op_asgn(				/* asign List_e stack to links */
 		    /********************************************************************
 		     * case number of "if" or "switch" C fragment
 		     *******************************************************************/
-		    fprintf(iC_outFP, " (%d)", lp->le_val >> 8);
+		    fprintf(iC_outFP, "	// (%d)", lp->le_val >> 8);
 		} else
 		if ((gp->ftype == TIMR && lp->le_val > 0)) {
 		    /********************************************************************
 		     * Timer preset off value
 		     *******************************************************************/
-		    fprintf(iC_outFP, " (%d)", lp->le_val);
+		    fprintf(iC_outFP, "%d", lp->le_val);
 		}
 	    }
 	    copyArithmetic(lp, sp, gp, gt_input, sflag); /* with current expression */
@@ -969,9 +1012,13 @@ op_asgn(				/* asign List_e stack to links */
 			fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
 			fprintf(T1FP, "	return %s;\n", eBuf);
 			fprintf(T1FP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
-			if (iC_debug & 04) fprintf(iC_outFP, "\t\t\t\t\t%s;	// (%d)\n", cp, c_number);
+			if (iC_debug & 04 && (typ != NCONST || gp->u_val == 0)) {
+			    fprintf(iC_outFP, "\t\t\t\t\t%s;	// (%d)\n", cp, c_number);
+			}
 		    }
-		} else if (iC_debug & 04) fprintf(iC_outFP, "\t\t\t\t\t;	// (%d)\n", cFn);
+		} else if (iC_debug & 04 && (typ != NCONST || gp->u_val == 0)) {
+		    fprintf(iC_outFP, "\t\t\t\t\t;	// (%d)\n", cFn);
+		}
 	    }
 	}
 	sflag = 0200;					/* print output name */
@@ -995,7 +1042,7 @@ op_asgn(				/* asign List_e stack to links */
 		    gp = sp;				/* look for marked symbol */
 		}
 		if (sp) {
-		    gp->next = sp->next;/* by_pass marked symbol */
+		    gp->next = sp->next;		/* by_pass marked symbol */
 		}
 	    }
 	    if (sp) {
@@ -1056,7 +1103,7 @@ op_asgn(				/* asign List_e stack to links */
 	lp->le_sym = 0;			/* erase reference to temp either way */
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "\t  %s deleted\n\n", var->name);
+	    fprintf(iC_outFP, "op_asgn:  %s deleted\n\n", var->name);
 	    fflush(iC_outFP);
 	}
 #endif
@@ -1282,14 +1329,16 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 	else if (const_push(lv)) { errInt(); return 0;	/* YYERROR */ }
     }
     if (sv->v->type != UDF) {
-	if (ftyp == ARITH) {
-	    ierror("multiple assignment to imm int:", sv->v->name);
-	} else if (ftyp == GATE) {
-	    ierror("multiple assignment to imm bit:", sv->v->name);
-	} else {
-	    ierror("multiple assignment to wrong imm type:", sv->v->name);
+	if (sv->v->type != ERR) {
+	    if (ftyp == ARITH) {
+		ierror("multiple assignment to imm int:", sv->v->name);
+	    } else if (ftyp == GATE) {
+		ierror("multiple assignment to imm bit:", sv->v->name);
+	    } else {
+		ierror("multiple assignment to wrong imm type:", sv->v->name);
+	    }
+	    sv->v->type = ERR;			/* cannot execute properly */
 	}
-	sv->v->type = ERR;			/* cannot execute properly */
 	if (iFunSymExt) sv->v->list = 0;	/* do 2nd assignment for listing */
     }
     rsp = (iC_debug & 020000) ? sv->v
@@ -1322,8 +1371,8 @@ delayOne(List_e * tp)
 {
     Symbol *	sp;				/* with implicit delay of 1 */
     List_e *	lp;
-    if ((sp = lookup(One)) == 0) {
-	sp = install(One, NCONST, ARITH);
+    if ((sp = lookup(iC_One)) == 0) {
+	sp = install(iC_One, NCONST, ARITH);
     }
     lp = sy_push(sp);
     lp->le_val = (unsigned) -1;			/* mark link as timer value */
@@ -1383,7 +1432,7 @@ delayOne(List_e * tp)
  *	1)  imm <type> functionName(<parameter list>) for value functions
  *	    the name of the function return object in expressions is "this".
  *	2a) assign <type> <name> for an assign parameter or
- *	2b) <type> <name> for a value parameter, both in the comma seperated
+ *	2b) <type> <name> for a value parameter, both in the comma separated
  *	    parameter list.
  *	3)  imm <type> <name> in the body of the function declares a function
  *	    internal variable which will be cloned with different names in
@@ -1603,7 +1652,7 @@ functionDefinition(Symbol * iFunHead, List_e * fParams)
 	lp = lp->le_next;			/* next varList link */
 	assert(lp);				/* statement list is in pairs */
 	sp = lp->le_sym;			/* first varList Symbol */
-	while (sp) {				/* varList my be empty */
+	while (sp) {				/* varList may be empty */
 	    free(sp->name);			/* free name space generated for listing name */
 	    sp->name = 0;			/* mark the Symbol as function internal (no '$') */
 	    sp->list = 0;			/* clear internal Symbol pointers */
@@ -1750,7 +1799,7 @@ clearFunDef(Symbol * functionHead)
  *	need an extern declaration to prevent them being flagged as
  *	undefined.
  *
- *	iClock ia a universal global variable which needs no external
+ *	iClock is a universal global variable which needs no external
  *	declaration.
  *
  *******************************************************************/
@@ -1911,6 +1960,19 @@ pushFunCall(Symbol * functionHead)
  *		 imm int delay(int x, clock c, bit y) { return SH(y?x:1, c); }
  *	Call:	 QB3 = delay(QB1, tim, delay(QB2, tim, 3, IX0.1), IX0.0);
  *
+ *	Process each real parameter with its formal parameter.
+ *	Parameters for imm bit and int may be mismatched, in which case
+ *	value parameters will be forced to the ftype of the formal parameter.
+ *	Mismatched bit and int assign parameters are forced in op_asgn.
+ *	Both value and assign parameters for imm timer must be matched.
+ *	See delay handling after timer above.
+ *	A value imm clock parameter may be filled by either a clock or a timer
+ *	parameter (with optional delay count) or may be missing altogether in
+ *	which case it will be the same as the next clock parameter or iClock if
+ *	no clock parameter at all is filled in the call parameter list.
+ *	An assign clock parameter must be an unassigned variable declared
+ *	as imm clock. It can fill in as value for prior missing clocks.
+ *
  *******************************************************************/
 
 List_e *
@@ -1926,8 +1988,8 @@ handleRealParameter(List_e * plp, List_e * lp)
 
     if (lp == 0) {				/* final call from cloneFunction() */
 	if (plp) {				/* to clear unresolved formal parameters */
-	    if ((rsp = lookup(One)) == 0) {	/* default delay 1 after last timer parameter */
-		rsp = install(One, NCONST, ARITH);
+	    if ((rsp = lookup(iC_One)) == 0) {	/* default delay 1 after last timer parameter */
+		rsp = install(iC_One, NCONST, ARITH);
 	    }
 	} else {
 	    rsp = iclock;			/* default iClock if no real clock parameter */
@@ -1975,7 +2037,9 @@ handleRealParameter(List_e * plp, List_e * lp)
 	    switch (formalType) {
 	    case ARITH:
 		if (rsp->ftype == GATE) {
-		    rlp = op_force(rlp, ARITH);	/* force to int */
+		    if (fsp->u_blist == 0) {	/* assign parameter forced in op_asgn */
+			rlp = op_force(rlp, ARITH);	/* force value parameter to int */
+		    }
 		} else
 		if (rsp->ftype != ARITH) {
 		    ierror("wrong parameter type for int:", rsp->name);
@@ -1985,7 +2049,9 @@ handleRealParameter(List_e * plp, List_e * lp)
 		break;
 	    case GATE:
 		if (rsp->ftype == ARITH) {
-		    rlp = op_force(rlp, GATE);	/* force to bit */
+		    if (fsp->u_blist == 0) {	/* assign parameter forced in op_asgn */
+			rlp = op_force(rlp, GATE);	/* force value parameter to bit */
+		    }
 		} else
 		if (rsp->ftype != GATE) {
 		    ierror("wrong parameter type for bit:", rsp->name);
@@ -2002,6 +2068,12 @@ handleRealParameter(List_e * plp, List_e * lp)
 			iFunClock = clp;
 		    }
 		    lp = rlp;			/* in case dummy iClock */
+		} else
+		if (fsp->u_blist) {		/* assign parameter must be correct ftype */
+		    ierror("wrong parameter type for 'assign clock':", rsp->name);
+		    sy_pop(rlp);		/* parameter not used */
+		    rlp = 0;			/* error */
+		    rsp->type = ERR;
 		} else
 		if (rsp->ftype == TIMRL) {
 		    fsp->list = rlp;		/* link real to formal parameter */
@@ -2165,12 +2237,12 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		     * The heuristic handles multiply nested function calls reasonably.
 		     * These names do not touch the instance number until the function
 		     * is finally called, when an instance number will be appended.
-		     * This scheme als sees to it, that the same template is generated
+		     * This scheme also sees to it, that the same template is generated
 		     * in each file it is used in - providing the set of functions is the
 		     * same. This helps analysis of the generated code.
 		     *******************************************************************/
 		    snprintf(cp, iFunEnd - cp, "%d", ++n);	/* simply count up */
-		}				/* positon in ST located in while */
+		}				/* position in ST located in while */
 		sv.v = install(iFunBuffer, UDF, ssp->ftype);
 		*iFunSymExt = '\0';
 		collectStatement(sv.v);		/* put in definition stmtList like a decl */
@@ -2219,6 +2291,13 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	    assert(sv.v);			/* ZZZ what happens to link if not used ??? */
 	    csp = cloneSymbol(ssp);		/* clone parameter expression head Symbol */
 	    csp->u_blist = cloneList(ssp->u_blist, csp, rsp); /* clone the rest of the expression */
+	    if (sv.v->u_blist != 0) {
+		printf("sv.v %s blist %p val %d csp %s ssp %s rsp %s\n",
+		sv.v->name, sv.v->u_blist, sv.v->u_val,
+		csp ? csp->name : "(nil)",
+		ssp ? ssp->name : "(nil)",
+		rsp ? rsp->name : "(nil)");	/* ERROR MESSAGE FOR ASSERT */
+	    }
 	    assert(sv.v->u_blist == 0);		/* will be assigning to it */
 	    sv.v->u_blist = sy_push(csp);	/* link to expression head for Pass 3 */
 	}
@@ -2248,11 +2327,12 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		sv.v->type = iC_ctypes[sv.v->ftype]; /* must be ARNC or LOGC */
 	    } else
 	    if (iFunSymExt || (ssp->type != (SW|FM) && ssp->type != (CF|FM))) {
+		char *	name;
 		sv.v->u_blist = 0;		/* restore for op_asgn */
 		if (lp->le_val == NOT && sv.v->ftype == GATE) {
 		    op_not(sl.v);		/* negated assign parameter */
 		}
-		if (sscanf(sv.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
+		if ((name = sv.v->name) && sscanf(name, "Q%1[XBWL]%d", y1, &yn) == 2) {
 		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
 		} else {
 		    ioTyp = 0;			/* flags that no I/O is generated */

@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.48 2005/01/28 17:48:05 jw Exp $";
+"@(#)$Id: comp.h,v 1.49 2005/03/14 18:46:27 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -243,8 +243,9 @@ extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
 #define T3index	11
 #define T4index	12
 #define T5index	13
+#define T6index	14
 
-#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, H1name, H2name, 0, 0, 0, 0, 0, 0,
+#define INITIAL_FILE_NAMES	0, 0, 0, 0, 0, 0, H1name, H2name, 0, 0, 0, 0, 0, 0, 0,
 
 extern FILE *	T0FP;
 extern FILE *	T1FP;
@@ -252,11 +253,13 @@ extern FILE *	T2FP;
 extern FILE *	T3FP;
 extern FILE *	T4FP;
 extern FILE *	T5FP;
+extern FILE *	T6FP;
 
 extern char	T0FN[];
 extern char	T2FN[];
 extern char	T4FN[];
 extern char	T5FN[];
+extern char	T6FN[];
 extern int	openT4T5(int mode);
 
 					/*   outp.c   */

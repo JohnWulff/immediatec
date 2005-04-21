@@ -48,32 +48,32 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.21 2005/01/25 17:28:21 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.22 2005/02/01 18:25:18 jw Exp $' >&2
 }
 
 makeIcr ()
 {
-    mv comp.$O genr.$O gram.$O icc.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
     if [ -d IcrObjs ]; then
 	mv IcrObjs/* .
     else
 	mkdir IcrObjs
     fi
     make OPT="-DRUN$r$d$e$o$s$z" CFLAGS="$cflags" icr
-    mv comp.$O genr.$O gram.$O icc.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
+    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeIct ()
 {
-    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
     if [ -d IctObjs ]; then
 	mv IctObjs/* .
     else
 	mkdir IctObjs
     fi
     make OPT="-DTCP$t$d$e$o$s$z" CFLAGS="$cflags" ict
-    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O main.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
+    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
 

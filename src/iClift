@@ -1,7 +1,10 @@
 #!/usr/bin/perl
-################################################################
-## Draw a lift model
-################################################################
+########################################################################
+##
+##	iClift
+##	simulation of the physics and appearance of lifts in a building
+##
+########################################################################
 use Tk;
 use strict;
 use warnings;
@@ -13,24 +16,36 @@ use warnings;
 ########################################################################
 
 my $named = $0; $named =~ s#.*[/\\]##;
+use vars qw($opt_c $opt_d $opt_W $opt_H $opt_t $opt_m $opt_T $opt_h);
 format STDERR =
 Usage:
-@<<<<<< [-tmTh]
+@<<<<<< [-tmTh][ -c cage_delay][ -d door_type][ -W width][ -H height]
 	$named
-	-d del	delay between cage steps in milliseconds
+	-c del	delay between cage steps (default @<<< ms)
+						$opt_c
+	-d typ	door type 0 open from centre, 1 left, -1 right
+	-W pix	width of canvas in pixels  (default @<<<)
+						$opt_W
+	-H pix	height of canvas in pixels (default @<<<)
+						$opt_H
 	-t	trace debug messages
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iClift,v 1.1 2005/02/15 18:25:43 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClift,v 1.2 2005/04/06 17:42:38 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
-use vars qw($opt_d $opt_t $opt_m $opt_T $opt_h);
 require "getopts.pl";
-&Getopts('d:tmTh');	# sets $opt_h if -h etc
+&Getopts('c:d:W:H:tmTh');	# sets $opt_h if -h etc
+
+$opt_c = 7 unless defined $opt_c;	# delay between cage steps
+$opt_d = 0 unless defined $opt_d;	# door type 0 open from centre, 1 left, -1 right
+$opt_W = 370 unless defined $opt_W;	# width of canvas in pixels
+$opt_H = 644 unless defined $opt_H;	# height of canvas in pixels
+my $to = 2;			# triangle offset in square buttons
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -43,8 +58,8 @@ if ($opt_m) {
 }
 
 my $thickness = 1;
-$opt_d = 10 unless defined $opt_d;
-my $cageD = $opt_d;
+my $ropeThickness = 3;
+my $cageD = $opt_c;
 
 my $mw = MainWindow->new;
 $mw->title('Lift Model');
@@ -57,9 +72,9 @@ my $f = $mw->Frame(-relief   => 'groove',
 	       );
 
 my $c = $mw->Scrolled('Canvas',
-		-cursor => 'crosshair',
-		-width  => 370,
-		-height => 700,
+		-cursor => 'left_ptr',
+		-width  => $opt_W,
+		-height => $opt_H,
 	       )->pack(
 		-side => 'left',
 		-fill => 'both',
@@ -68,20 +83,20 @@ my $c = $mw->Scrolled('Canvas',
 my $canvas = $c->Subwidget('canvas');
 
 my $cageId;
-my $cage      = draw_cage($canvas, 165, 215, 110, 145);
-my $leftDoor  = draw_door($canvas, 165, 220, 55, 145, 4, -1);
-my $rightDoor = draw_door($canvas, 165, 220, 55, 145, 4, 1);
-my $wall      = draw_wall($canvas, 165, 215, 300, 200);
+my $cage = draw_cage($canvas, 165, $opt_H - 215, 110, 145);
+my $door = draw_door($canvas, 165, $opt_H - 220,  55, 145, 2, $opt_d);
+my $wall = draw_wall($canvas, 165, $opt_H - 215, 300, 200, 100, 133);
+# my ($canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd) = @$wall;
 
-$mw->bind('<Key-Up>',	  [ \&move_cage, $canvas, $cage, 1      ]);	# cage up
-$mw->bind('<Key-Down>',	  [ \&move_cage, $canvas, $cage, -1     ]);	# cage down
-$mw->bind('<Key-Prior>',  [ \&move_cage, $canvas, $cage, 5      ]);	# cage up fast
-$mw->bind('<Key-Next>',	  [ \&move_cage, $canvas, $cage, -5     ]);	# cage down fast
-$mw->bind('<Key-Home>',	  [ \&move_cage, $canvas, $cage, 1,  $cageD, \$cageId ]);	# cage up continuous
-$mw->bind('<Key-End>',	  [ \&move_cage, $canvas, $cage, -1, $cageD, \$cageId ]);	# cage down continuous
-$mw->bind('<Key-Return>', [ \&move_cage, $canvas, $cage, 0, 0,   \$cageId ]);	# stop cage continuous
-$mw->bind('<Key-Right>',  [ \&move_door, $canvas, $leftDoor, $rightDoor, 1  ]);	# open doors
-$mw->bind('<Key-Left>',	  [ \&move_door, $canvas, $leftDoor, $rightDoor, -1 ]);	# close doors
+$mw->bind('<Key-Up>',	  [ \&move_cage, $cage, 1      ]);	# cage up
+$mw->bind('<Key-Down>',	  [ \&move_cage, $cage, -1     ]);	# cage down
+$mw->bind('<Key-Prior>',  [ \&move_cage, $cage, 5      ]);	# cage up fast
+$mw->bind('<Key-Next>',	  [ \&move_cage, $cage, -5     ]);	# cage down fast
+$mw->bind('<Key-Home>',	  [ \&move_cage, $cage, 1,  $cageD, \$cageId ]);	# cage up continuous
+$mw->bind('<Key-End>',	  [ \&move_cage, $cage, -1, $cageD, \$cageId ]);	# cage down continuous
+$mw->bind('<Key-Return>', [ \&move_cage, $cage, 0, 0,   \$cageId ]);	# stop cage continuous
+$mw->bind('<Key-Right>',  [ \&move_door, $door, 1  ]);	# open doors
+$mw->bind('<Key-Left>',	  [ \&move_door, $door, -1 ]);	# close doors
 $mw->bind('<Key-q>',	  sub { exit(0); });	# quit
 
 MainLoop;
@@ -90,32 +105,34 @@ MainLoop;
 #
 #	Draw a wall with an opening for a lift door
 #	This widget sits in front of lift cage and lift doors and wall doors
+#	parameter 1:	canv	canvas this wall is drawn on
+#	parameter 2,3:	x,y	coordinates of bottom (floor) centre
+#	parameter 4,5:	w,h	width and height of wall
+#	parameter 6,7:	wd,hd	width and height of door opening
 #
-#	Coordinate system: x = 0	centre of lift shaft
-#			   y = 0	floor level
-#	Note: all y coordinates are reversed like engineering drawings
+#	Note: all parameter y coordinates are reversed like engineering drawings
 #
 ########################################################################
 
 sub draw_wall {
-    my ($canv, $x, $y, $width, $height) = @_;
+    my ($canv, $x, $y, $width, $height, $wDoor, $hDoor) = @_;
     print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
     $x = $canv->canvasx($x);
-    $y = $canv->canvasy($y);
-    print "lift_wall: x,y = '$x,$y' w = '$width' h = '$height'\n" if $opt_T;
+    $y = $canv->canvasy($opt_H - $y);
+    print "lift_wall: x,y = '$x,$y' w = '$width' h = '$height' wd = '$wDoor' hd = '$hDoor'\n" if $opt_T;
 
     my $width_2    = $width * 0.5;
-    my $width_4    = $width * 0.167;
+    my $wDoor_2    = $wDoor * 0.5;
 
     my $xLeft      = $x - $width_2;
     my $xRight     = $x + $width_2;
     my $yTop       = $y - $height;
     my $yBott      = $y;
-    my $yDoorTop   = $y - $height * .667;
-    my $xDoorLeft  = $x - $width_4;
-    my $xDoorRight = $x + $width_4;
+    my $xDoorLeft  = $x - $wDoor_2;
+    my $xDoorRight = $x + $wDoor_2;
+    my $yDoorTop   = $y - $hDoor;
 
-    my @coordinates = (
+    my $actualWall = $canv->createPolygon (
 	$xLeft,		$yTop,		# 0
 	$xRight,	$yTop,		# 1
 	$xRight,	$yBott,		# 2
@@ -124,104 +141,200 @@ sub draw_wall {
 	$xDoorLeft,	$yDoorTop,	# 5
 	$xDoorLeft,	$yBott,		# 6
 	$xLeft,		$yBott,		# 7
-    );
-
-    return $canv->createPolygon (
-	@coordinates,
 	-width => $thickness,
 	-tags => 'wall',
 	-fill => 'cornsilk1',
 	-outline => 'black',
     );
+
+    my $xBut = $xDoorRight + $wDoor * 0.1;	# x button position to right of centre
+    my $yBut = $yBott - $hDoor * 0.4;	# y button position from the floor
+    my $yOff = $hDoor * 0.07;		# vert space between buttons / 2
+    my $rBut = $wDoor * 0.05;		# radius of buttons
+
+    my $xtl = $xBut - $rBut;
+    my $xbr = $xBut + $rBut;
+    my $ytl = $yBut - $yOff - $rBut;
+    my $ybr = $yBut - $yOff + $rBut;
+
+    my $upBut = $canv->create (
+	'rectangle',			# can be parameterized to be a circle
+	$xtl, $ytl,
+	$xbr, $ybr,
+	-width => $thickness,
+	-tags => 'but',
+	-fill => 'green',
+	-outline => 'black',
+    );
+
+    my $xpl = $xtl + $to;
+    my $xpr = $xbr - $to;
+    my $xpm = ($xtl + $xbr) / 2;
+    my $ypt = $ytl + $to;
+    my $ypb = $ybr - $to;
+
+    my $upTri = $canv->create (
+	'polygon',
+	$xpl, $ypb,
+	$xpr, $ypb,
+	$xpm, $ypt,
+	-width => $thickness,
+	-tags => 'but',
+	-fill => 'black',
+	-outline => 'black',
+    );
+
+    $ytl = $yBut + $yOff - $rBut;
+    $ybr = $yBut + $yOff + $rBut;
+
+    my $downBut = $canv->create (
+	'rectangle',			# can be parameterized to be a circle
+	$xtl, $ytl,
+	$xbr, $ybr,
+	-width => $thickness,
+	-tags => 'but',
+	-fill => 'green',
+	-outline => 'black',
+    );
+
+    $ypt = $ytl + $to;
+    $ypb = $ybr - $to;
+
+    my $downTri = $canv->create (
+	'polygon',
+	$xpl, $ypt,
+	$xpr, $ypt,
+	$xpm, $ypb,
+	-tags => 'but',
+	-fill => 'black',
+	-outline => 'black',
+    );
+
+    my ($upInd, $downInd, $floorInd);
+
+    $canv->bind($upBut, '<Button-1>', [ \&wallButton, $canv, $upBut, 'green', $upTri, 'black', ]);
+    $canv->bind($upTri, '<Button-1>', [ \&wallButton, $canv, $upBut, 'dark green', $upTri, 'yellow', ]);
+    $canv->bind($downBut, '<Button-1>', [ \&wallButton, $canv, $downBut, 'green', $downTri, 'black', ]);
+    $canv->bind($downTri, '<Button-1>', [ \&wallButton, $canv, $downBut, 'dark green', $downTri, 'yellow', ]);
+
+    return [ $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ];
 } # draw_wall
 
 ########################################################################
 #
-#	Draw a lift door to close half the opening in the wall
+#	Process a wall button (up or down)
+#	(call to controller)
+#	Leave the output on until it is reset from the controller
+#	when the indication is also turned on. Or make it a
+#	short transient whose leading edge is significant. 2nd option
+#	may loose a pulse if OS has a hiccup.
+#
+########################################################################
+
+sub wallButton {
+    my ($dummy, $canv, $button, $butColour, $triangle, $triColour) = @_;
+    $canv->itemconfigure($button, -fill => $butColour);
+    $canv->itemconfigure($triangle, -fill => $triColour);
+    $canv->itemconfigure($triangle, -outline => $triColour);
+}
+
+########################################################################
+#
+#	Indicate a wall button state (off or on)
+#	(called from the controller)
+#
+########################################################################
+
+sub setWallButton {
+    my ($dummy, $canv, $button, $butColour, $triangle, $triColour) = @_;
+    $canv->itemconfigure($button, -fill => $butColour);
+    $canv->itemconfigure($triangle, -fill => $triColour);
+    $canv->itemconfigure($triangle, -outline => $triColour);
+}
+
+########################################################################
+#
+#	Draw a set of lift doors to close the opening in the wall
+#	parameter 1:	canv	canvas this door is drawn on
+#	parameter 2,3:	x,y	coordinates of bottom (floor) centre
+#	parameter 4,5:	w,h	width and height of one door
+#	parameter 6:	offset	initial offset (leaves a small opening for type 0)
+#	parameter 7:	type	0	2 door which move left and right
+#				1	2 doors which move left at different speeds
+#				-1	2 doors which move right at different speeds
 #
 ########################################################################
 
 sub draw_door {
-    my ($canv, $x, $y, $width, $height, $offset, $direction) = @_;
+    my ($canv, $x, $y, $width, $height, $offset, $type) = @_;
     print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
     $x = $canv->canvasx($x);
-    $y = $canv->canvasy($y);
-    print "lift_door: x,y = '$x,$y' w = '$width' h = '$height' o = '$offset' d = '$direction'\n" if $opt_T;
+    $y = $canv->canvasy($opt_H - $y);
+    print "lift_door: x,y = '$x,$y' w = '$width' h = '$height' o = '$offset' t = '$type'\n" if $opt_T;
 
-    my $xOutside   = $x + ($direction == 1 ? $width  : -$width);
-    my $xMiddle    = $x + ($direction == 1 ? $offset : -$offset);
-    my $yTop       = $y - $height;
-    my $yBott      = $y;
+    my ($backInc, $frontInc, $off);
+    if ($type == 1) {
+	$backInc      = 1;
+	$frontInc     = 2;
+	$off          = -$offset;	# -ve offset for overlapping doors
+    }
+    elsif ($type == -1) {
+	$backInc      = -1;
+	$frontInc     = -2;
+	$off          = -$offset;	# -ve offset for overlapping doors
+    }
+    else {
+	$backInc      = -1;
+	$frontInc     = 1;
+	$off          = $offset;
+    }
+    my $xMiddleBack   = $x - $backInc  * $off;
+    my $xOutsideBack  = $xMiddleBack  - $backInc * $width;
+    my $xMiddleFront  = $x + $backInc * $off;
+    my $xOutsideFront = $xMiddleFront + $backInc * $width;
+    my $yTop          = $y - $height;
+    my $yBott         = $y;
 
-    my @coordinates = (
-	$xOutside,	$yTop,	# 0
-	$xMiddle,	$yBott,	# 1
-    );
-
-    return $canv->createRectangle (
-	@coordinates,
+    # draw backDoor first so it is at back if overlapped
+    my $backDoor = $canv->createRectangle (
+	$xOutsideBack, $yTop,
+	$xMiddleBack,  $yBott,
 	-width => $thickness,
 	-tags => 'door',
 	-fill => 'light green',
 	-outline => 'black',
     );
+
+    # draw frontDoor later so it is in front if overlapped
+    my $frontDoor = $canv->createRectangle (
+	$xOutsideFront, $yTop,
+	$xMiddleFront,  $yBott,
+	-width => $thickness,
+	-tags => 'door',
+	-fill => 'light blue',
+	-outline => 'black',
+    );
+    return [ $canv, $backDoor, $frontDoor, $backInc, $frontInc, ];	# used in move_door()
 } # draw_door
 
 ########################################################################
 #
 #	Move door open or closed
-#	Parameter 1:	id	canvas identification
-#	Parameter 2:	id	left door identification
-#	Parameter 3:	id	right door identification
-#	Parameter 4:	1..n	number of increments to open
-#			-1..-n	number of increments to close
+#	Parameter 1:	dummy
+#	Parameter 2:	dor	door identification array ref
+#	Parameter 3:	inc	1..n	number of increments to open
+#				-1..-n	number of increments to close
 #
 ########################################################################
 
 sub move_door {
-    my ($dummy, $canv, $leftD, $rightD, $inc) = @_;
-    &printMicroSeconds;
+    my ($dummy, $dor, $inc) = @_;
+    my ($canv, $backDoor, $frontDoor, $backInc, $frontInc) = @$dor;
+    printMicroSeconds();
     print "door increment = '$inc'\n" if $opt_t;
-    $canv->move($leftD, $inc, 0);
-    $canv->move($rightD, -$inc, 0);
+    $canv->move($backDoor,  $backInc  * $inc, 0);
+    $canv->move($frontDoor, $frontInc * $inc, 0);
 } # move_door
-
-########################################################################
-#
-#	Move cage up or down
-#	Parameter 1:	id	canvas identification
-#	Parameter 2:	id	cage identification
-#	Parameter 3:	1..n	number of increments to move up
-#			-1..-n	number of increments to move down
-#	Parameter 4:	undef	move once
-#			ms	number of milliseconds between steps
-#				of continuous motion
-#			0	stop continous motion
-#	Parameter 5:	idRef	reference to id returned by repeat
-#
-########################################################################
-
-no warnings;
-sub move_cage {
-    my ($dummy, $canv, $cag, $inc, $tim, $idR) = @_;
-    &printMicroSeconds;
-    if (defined $tim) {
-	if ($$idR) {
-	    $$idR->cancel();	# stop continuous cage movement
-	    $$idR = undef;
-	}
-	elsif ($tim) {
-	    $$idR = $canv->repeat($tim, [ \&move_cage, $dummy, $canv, $cag, $inc, ]); # no time
-	}
-	print "cage time = '$tim' id = '$$idR'\n" if $opt_t;
-    } else {
-	print "cage increment = '$inc'\n" if $opt_t;
-	if ($inc) {
-	    $canv->move($cag, 0, -$inc);
-	}
-    }
-} # move_cage
-use warnings;
 
 ########################################################################
 #
@@ -233,7 +346,7 @@ sub draw_cage {
     my ($canv, $x, $y, $width, $height) = @_;
     print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
     $x = $canv->canvasx($x);
-    $y = $canv->canvasy($y);
+    $y = $canv->canvasy($opt_H - $y);
     print "lift_cage: x,y = '$x,$y' w = '$width'\n" if $opt_T;
 
     my $width_2    = $width * 0.5;
@@ -247,14 +360,64 @@ sub draw_cage {
 	$xRight,	$yBott,	# 1
     );
 
-    return $canv->createRectangle (
+    my $basicCage = $canv->createRectangle (
 	@coordinates,
 	-width => $thickness,
 	-tags => 'cage',
 	-fill => 'yellow',
 	-outline => 'black',
     );
+
+    my $rope = $canv->createLine (
+	$x, 0,
+	$x, $yTop,
+	-width => $ropeThickness,
+	-tags => 'rope',
+	-fill => 'blue',
+    );
+    return [ $canv, $basicCage, $rope, $x, $yTop, ];	# used in move_cage()
 } # draw_cage
+
+########################################################################
+#
+#	Move cage up or down
+#	Parameter 1:	dummy
+#	Parameter 2:	cag	cage identification array ref
+#	Parameter 3:	inc	1..n	number of increments to move up
+#				-1..-n	number of increments to move down
+#	Parameter 4:	tim	undef	move once
+#				1..n	number of milliseconds between
+#					steps of continuous motion
+#				0	stop continous motion
+#	Parameter 5:	idRef	reference to id returned by after or repeat
+#
+########################################################################
+
+no warnings;
+sub move_cage {
+    my ($dummy, $cag, $inc, $tim, $idR) = @_;
+    my ($canv, $basicCage, $rope, $x, $yTop) = @$cag;	# $yTop at index 4
+    printMicroSeconds();
+    if (defined $tim) {
+	if ($$idR) {
+	    $$idR->cancel();	# stop continuous cage movement
+	    $$idR = undef;
+	}
+	elsif ($tim) {
+	    $$idR = $canv->repeat($tim, [ \&move_cage, $dummy, $cag, $inc, ]); # no time
+	}
+	print "cage time = '$tim' id = '$$idR'\n" if $opt_t;
+    } else {
+	print "cage increment = '$inc'\n" if $opt_t;
+	if ($inc) {
+	    $canv->move($basicCage, 0, -$inc);
+	    $yTop -= $inc;
+	    $$cag[4] = $yTop;
+	    $canv->coords($rope, $x, 0, $x, $yTop);	# move bottom of rope to stay attached to cage
+	}
+    }
+} # move_cage
+use warnings;
 
 ########################################################################
 #
@@ -282,3 +445,111 @@ sub printMicroSeconds {
 	print "L: ";
     }
 }
+__END__
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ iClift -simulation of the physics and appearance of lifts in a building
+
+=head1 SYNOPSIS
+
+ iClift [-tmTh][ -c cage_delay][ -d door_type][ -W width][ -H height]
+	-L num  number of lifts in the building      (default 1)
+	-F code floor code for basement,ground,upper (default 'B1,G,3')
+	-c del	delay between cage steps             (default 7 ms)
+	-d typ	door type 0 open from centre, 1 left, -1 right
+	-W pix	width of canvas in pixels            (default 370)
+	-H pix	height of canvas in pixels           (default 644)
+	-t	trace debug messages
+	-m	display elapsed time in seconds and microseconds
+	-T	extra static debug messages
+	-h	help, ouput this Usage text only
+
+=head1 DESCRIPTION
+
+B<iClift> provides an interface to a suitable iC control application
+meant to control the working of one or more lifts in a building and
+all associated devices. The outputs from the control application must
+drive the various motors to open doors, raise and lower the lifts and
+turn indicators on and off. Inputs to the control application come from
+the pushbuttons on the floors, pushbuttons to select destination floors
+in the lift and position sensors, indicating the position of the lifts.
+
+The simulation shows an animated picture of the floors with suitable
+pushbuttons and indicators, outside and inside doors, which can be
+opened and closed, as well as lifts which can be moved at different
+speeds. In particular the lifts do not start and stop instantaneously,
+but rather with an acceleration and deceleration to simulate the
+inertia of the lifts.
+
+The number of lifts can be preset with the -L option. This must be
+matched by an equal number of lifts to be controlled by the control
+application. The same applies to the floors which are preset with
+the -F option. This option also determines the prefixes used for
+basement floors and the text used for the ground floor.  Ground floor
+can also be 0 or 1. Basement prefixes can vary. A prefix for upper
+floors could be provided, but is not usual.
+
+    -F B3,G,3  would provide the following floors:   B3 B2 B1 G 1 2 3
+    -F B3,1,4  for american indications:             B3 B2 B1 1 2 3 4
+    -F U3,E,3  for german indications:               U3 U2 U1 E 1 2 3
+    -F S3,P,3  for french indications:               S3 S2 S1 P 1 2 3
+    -F -3,0,3  for equivalent numerical indications: -3 -2 -1 0 1 2 3
+
+Outputs from the control application:
+
+ Common to all floors:
+    Floor indicator:    QB1	# floor at which lift is currently
+    Lift up:            QX0.0
+    Lift slow:          QX0.1
+    Lift medium:        QX0.2
+    Lift fast:          QX0.3	# this may vary
+ or Lift speed:         QB2     # +/-
+
+ Equivalences for Buttons in the lift:
+ (order determines position starting at the top)
+ [LIFT BUTTONS]
+    5    X1.5,  6    X1.6,	# actuators and indicators
+    3    X1.3,  4    X1.4,
+    1    X1.1,  2    X1.2,
+    B1   X0.7,  G    X1.0,
+    B3   X0.5,  B2   X0.6,
+    do   IX0.0, dc   IX0.1,     # door open and close, actuators only
+ (the same list can be used in the control application)
+
+ [FLOOR BUTTONS]
+    6    X4.4,  X4.5,		# up/down actuators and indicators
+    5    X4.2,  X4.3,
+    4    X4.0,  X4.1,
+    3    X3.6,  X3.7,
+    2    X3.4,  X3.5,
+    1    X3.2,  X3.3,
+    G    X3.0,  X3.1,
+    B1   X2.6,  X2.7,
+    B2   X2.4,  X2.5,
+    B3   X2.2.  X2.3,
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<iCbox(1)>, L<icc(1)>, L<iClive(1)>, L<iCserver(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.

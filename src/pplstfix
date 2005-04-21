@@ -34,6 +34,7 @@
 #		    NET TOPOLOGY list
 #   V1.13: 22.12.04 Change Copyright to include 2005
 #   V1.14: 02.03.05 Accept negative constansts
+#   V1.15: 05.03.05 New algorithm to format individual logic expansions
 #
 #################################################################
 
@@ -42,18 +43,17 @@ use strict;
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [file ...]
+Usage:	@<<<<<<< [-l <log_file>] file ...
 	$named
-	-l	produce log file 'pplstfix.log'
+	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from icc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.14 2005/03/05 16:07:06 jw Exp $
+$Id: pplstfix,v 1.15 2005/03/13 23:25:11 jw Exp $
 .
 
 use vars qw($opt_l $opt_h);
-# print STDERR "pplstfix: $named @ARGV\n";
 require "getopts.pl";
-&Getopts('lh');			# sets $opt_h if -h etc
+&Getopts('l:h');		# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -63,16 +63,16 @@ my (%inv);
 %inv = ("~", " ", " ", "~");	# inversion symbols in listing
 
 my $OPS  = qr"[-.+\"^&|%*#/>({=\][<:!@?ktwi]";	# DEBUG display of types from icc.h
-my $LOPS = qr"[UA _EsrHVSRDIFGCTBWX:!~]";	# DEBUG display of ftypes or negation
 my $FOPS = qr"[UA _EsrHVSRDIFGCTBWX:!]";	# DEBUG display of ftypes from icc.h
-my $target   = qr/($OPS)\t([A-Za-z_][\w.\$]*|-\d+)(\t($FOPS))?/o;
+my $LOPS = qr"[UA _EsrHVSRDIFGCTBWX:!~?]";	# DEBUG display of ftypes or negation
 
-open LOG, ">pplstfix.log" or die "Can't create 'pplstfix.log': $!" if $opt_l;
+open LOG, ">$opt_l" or die "Can't create '$opt_l': $!" if $opt_l;
 while ($ARGV = shift @ARGV) {
     unless (open (IN, $ARGV)) {
 	warn "can't open input $ARGV";
 	next;
     }
+    print LOG "##### $named $ARGV\n" if $opt_l;
     processFile();
     close(IN);
 }
@@ -82,41 +82,31 @@ close LOG if $opt_l;
 #
 #	process one file
 #
-#	QX1.7	|  X	 v5@
-#	i7_7	@   	 IX7.7<
-#	v5	@   	~v5_1#
-#
 ####################################################################
 
 sub processFile {
-    my ($line, $alias, $xlate, $type, $ftype, $inver, %symbols);
-    my ($empty, $removed, $count, $ar, $word, $pos, @array, $cFlag);
-    my ($maxLength, $len, $firstWord, $spaces);
+    my ($line, $name, $xlate, $type, $ftype, $inver, $tlen, %symbols, %lengths);
+    my ($empty, $removed, $count, $ar, $word, $wpos, $wlen, @array, $cFlag);
+    my ($maxLength, $len, $blankLines, $target, $nodeName, $hashRef, $arrayRef);
+    my ($print, $max1, $max2, $max3, $w1, $w3, $w4, $w6, $w8, $w10, $w12, @largeBlock, @logicBlock);
     $maxLength = 7;			# one standard tab size - 1
     %symbols = ();
 
-    # Pass 1: scan file for ALIAS definitions
-    #         also determine length of longest variable name
-    # scan iC listing and C CODE
+    # Pass 1: scan file for ALIAS definitions in NET TOPOLOGY
 
-    print LOG "##### Pass1 iC listing and C CODE\n" if $opt_l;
     while (<IN>) {
 	if (/\bNET TOPOLOGY\b/) {
-	    last;
-	}
-	# logic
-	if (/^\t([A-Za-z_][\w.\$]*|-\d+)\t($LOPS)[< ]---($OPS)(\t([A-Za-z_][\w.\$]*|-\d+)(\t($FOPS))?)?/o) {
-	    if (($len = length $1) > $maxLength) {
-		$maxLength = $len;
-	    }
-	    if (($len = length $5) > $maxLength) {
-		$maxLength = $len;
-	    }
-	    print LOG "$.:	$1	$5\n" if $opt_l;
+	    last;		# bypass iC listing and C CODE
 	}
     }
 
-    # scan NET TOPOLOGY
+    ####################################################################
+    #	scan NET TOPOLOGY
+    #
+    #	QX1.7	|  X	 v5@
+    #	i7_7	@   	 IX7.7<
+    #	v5	@   	~v5_1#
+    ####################################################################
 
     print LOG "##### Pass1 NET TOPOLOGY\n" if $opt_l;
     while (<IN>) {
@@ -125,136 +115,242 @@ sub processFile {
 	}
 	# allow alias of numbers (change jw 040112)
 	# topology
-	if (/^([A-Za-z_][\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t([ ~])(\w[\w.\$]*|-\d+).+)?/o) {
-	    if ($2 eq '@') {
-		# NET TOPOLOGY line found eg:QB0_0	@  A	~QB0_1*
-		$line  = $.;
-		$alias = $1;
-		$type  = $2;
-		$ftype = $3;
-		$inver = ($5 eq '~') ? 1 : 0;
-		$xlate = $6;
-		if ($4 and $alias ne $xlate) {
-		    $symbols{$alias} = [ $line, $xlate, $type, $ftype, $inver ];
+	if (/^\t|(\w[\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])(\w[\w.\$]*)($OPS)))?/go) {
+	    if (defined $1) {
+		$name = $1;
+		if ($2 eq '@') {
+		    # NET TOPOLOGY line found eg:QB0_0	@  A	~QB0_1*
+		    $line  = $.;
+		    $type  = $2;
+		    $ftype = $3;
+		    $inver = ($6 eq '~') ? 1 : 0;
+		    $xlate = $7;
+		    if ($4 and $name ne $xlate) {
+			$symbols{$name} = [ $line, $xlate, $type, $ftype, $inver ];
+		    } else {
+			print STDERR "*** $named $ARGV $.: ERROR ALIAS '$name' translates to itself '$xlate'\n";
+			print LOG "$.:**$_\n" if $opt_l;
+		    }
+		}
+		if (($len = length $1) > $maxLength) {
+		    $maxLength = $len;
+		}
+		if (exists $lengths{$name}) {
+		    print STDERR "*** $named $ARGV $.: ERROR '$name' occurs twice in NET TOPOLOGY\n";
+		    print LOG "$.:**$_\n" if $opt_l;
+		    $tlen = $lengths{$name};			# previous length
 		} else {
-		    printf("Generate error line%d: ALIAS '%s' translates to itself '%s'\n", $line, $alias, $xlate);
+		    $tlen = 7;					# standard length
+		}
+		if (defined $5 and ($len = length $5) > $tlen) {
+		    $tlen = $len;
+		}
+		$lengths{$name} = $tlen;
+		print LOG "$.:	$1	$2 $3 $6 $7 $8\n" if $opt_l;
+	    }
+	    while (/\G\t([ <~]\w[\w.\$]*$OPS)/g) {
+		if (($len = length $1) > $tlen) {
+		    $tlen = $len;
+		    $lengths{$name} = $tlen;
 		}
 	    }
-	    if (($len = length $1) > $maxLength) {
-		$maxLength = $len;
-	    }
-	    print LOG "$.:	$1	$2 $3 $5 $6\n" if $opt_l;
 	}
     }
 
     # terminate at NET STATISTICS
 
-    # Pass 2: resolve ALIAS occurences
+    # Pass 2: resolve ALIAS occurences - format the output
 
     print LOG "##### Pass2\n" if $opt_l;
     seek(IN, 0, 0);
     $. = 0;
     @array = ();
+    @logicBlock = ();
+    @largeBlock = ();
+    $max1 = $max2 = $max3 = 7;
+    $blankLines = 2;					# starts new set of hashes;
+    undef $hashRef;					# throw away the hash
+    $nodeName = '!';					# name differs from '' for if switch
     $empty = 0;
     $removed = 0;
-    $cFlag = 0;
-  line:
+    $cFlag = 0;						# iC LISTING
+  Line:
     while (<IN>) {
-	$cFlag = 1 if /\bC.CODE\b/;			# change ALIAS's in C CODE listing lines
-	$cFlag = 2 if /\bNET TOPOLOGY\b/;
+	chomp;
 	if ($empty and /^$/) {
 	    $empty = 0;
-	    next line;
+	    next Line;
 	}
-	if (/^[\d*]/ and $cFlag < 2) {			# 001 listing or *** Error line
-	    s/\b([IQT]X\d+)_(\d+(_\d+)?)\b/$1.$2/g;
-	    s/\b__(\d+)\b/-$1/g;
-	    s/\b_(\d+)\b/$1/g;
-	    goto cCode if $cFlag == 1;
-	} else {
+	if (/^([\d*])/ and $cFlag < 2) {		# 001 listing or *** Error line
+	    my $s1 = $1;
+	    if (defined $hashRef) {
+		push @largeBlock, $hashRef;		# save for sorting
+	    }
+	    if (@largeBlock) {
+		while (@largeBlock) {
+		    $hashRef = shift @largeBlock;
+		    if (ref($hashRef) eq 'HASH') {
+			foreach $target (sort keys %$hashRef) {
+			    $arrayRef = $hashRef->{$target};
+			    while (@$arrayRef) {
+				$print = shift @$arrayRef;
+				if (ref($print) eq 'ARRAY') {
+				    ($w1, $w3, $w4, $w6, $w8, $w10, $w12) = @$print;
+				    $print = sprintf "%s\t%*s %6s  %*s %-2s      %*s %s",
+					$w1, -$max1, $w3,
+					$w4, -$max2, $w6,
+					$w8, -$max3, $w10, $w12; 
+				}
+				$print =~ s/[\t ]+$//;
+				print "$print\n";
+				print LOG "$.:--$print\n" if $opt_l;
+			    }
+			}
+		    } else {
+			print "$hashRef\n";		# 2nd and further lines
+			print LOG "$.:==$hashRef\n" if $opt_l;
+		    }
+		}
+		$max1 = $max2 = $max3 = 7;
+		$blankLines = 2;			# starts new set of hashes;
+		undef $hashRef;				# throw away the hash
+		$nodeName = '!';			# name differs from '' for if switch
+	    }
+	    if (/\bC.CODE\b/) {
+		$cFlag = 1;				# change ALIAS's in C CODE listing lines
+	    }
+	    elsif (/\bNET TOPOLOGY\b/) {
+		$cFlag = 2;
+	    }
+	    elsif ($s1 eq '*' or $cFlag == 1) {
+		s/\b([IQT]X\d+)_(\d+(_\d+)?)\b/$1.$2/g;
+		s/\b__(\d+)\b/-$1/g;
+		s/\b_(\d+)\b/$1/g;
+		goto cCode if $cFlag == 1;
+	    }
+	}
+	elsif ($cFlag > 0 and $cFlag < 3 or not /^[^\t\$]/) {	# just output debug & 02 lines
+	    if (/\bNET STATISTICS\b/) {
+		$cFlag = 3;
+	    }
 	  cCode:
 	    while (/([A-Za-z_][\w.\$]*|-\d+)/g) {	# non listing line or C CODE
 		if (defined($symbols{$1})) {
-		    push @array, $1, length $`;		# $word and $pos
+		    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
 		}
 		print LOG "$.:	$1\n" if $opt_l;
 	    }
+	  Array:
 	    while (@array) {
 		# start with the last word found, so positions are correct
-		$pos = pop @array;			# position of word
-		$word = $xlate = pop @array;		# value of word
+		($word, $wpos, $wlen) = splice @array, -3;
+		$xlate = $word;				# xlation of word
 		$inver = 0;
-		while (defined($ar = $symbols{$xlate})) {
+		while (defined($ar = $symbols{$xlate})) {	# allow multiple xlate
 		    $line  = $ar->[0];
-		    $type  = $ar->[2];
-		    if (/---_/ or $line == $. and $type eq '_') {
-			@array = ();			# should be clear anyway
-			next line;			# ignore type '_'
-		    }
-		    if (/---@/ or $line == $.) {
-			if ($word !~ /Q.*_0/ or /^\$/) {# keep $x lines
-			    if (/^\t*(\w[\w.\$]*|-\d+)\t/) {
-				$firstWord = $1;
-				$len = $maxLength + 1 - length $firstWord;
-				$len = 1 if $len < 1;	# should never happen
-				$spaces = ' ' x $len;
-				s/^(\t*)(\w[\w.\$]*|-\d+)\t/$1$2$spaces/;
-				m/$target/o;
-				if (length $3) {
-				    $firstWord = $2;
-				    $len = $maxLength + 1 - length $firstWord;
-				    $len = 1 if $len < 1; # should never happen
-				    $spaces = ' ' x $len;
-				    s//$1  $2$spaces$4/;
-				} else {
-				    s//$1  $2/;
-				}
-			    }
-			    print $_;			# keep type '@' except Q.._0
+		    if (/---@/ or $line == $.) {	# $line finds topology definition
+			########################################################################
+			# do not translate ALIAS definitions - delete @ Q.._0
+			########################################################################
+			@array = ();
+			if ($word !~ /Q.*_0/ or /^\$/) {# keep $x lines (never occurs ???)
+			    last Array;			# $inver has not been inverted
 			} elsif (/^\t/) {
 			    $empty = 1;			# delete ALIAS definition
 			} else {
 			    $removed++;			# reduce ALIAS count
 			}
-			@array = ();			# should be clear anyway
-			next line;
+			next Line;
 		    }
 		    $xlate = $ar->[1];
 		    if ($ar->[3] eq ' ') {		# ftype is GATE
 			$inver ^= $ar->[4];		# invert
 		    }
+		    print LOG "$.:	$word ==> $xlate ($inver)\n" if $opt_l;
 		}
-		substr($_, $pos, length $word) = $xlate;
+		substr($_, $wpos - $wlen, $wlen) = $xlate if $xlate ne $word;
+		if ($cFlag == 2 and $inver) {		# in topology line swap ' ' and '~'
+		    substr($_, $wpos - $wlen - 1, 1) = $inv{substr($_, $wpos -$wlen - 1, 1)};
+		    $inver = 0;
+		}
 	    }
-	    if ($inver) {				# for first word in line
+	    if ($cFlag != 2 and $inver) {		# for first word in listing line
 		s/([ ~]) ---/$inv{$1} ---/;		# swap ' ' and '~'
 		$inver = 0;
 	    }
-	    if (/^\t*(\w[\w.\$]*|-\d+)\t/ and $cFlag != 1) {
-		$firstWord = $1;
-		$len = $maxLength + 1 - length $firstWord;
-		$len = 1 if $len < 1;			# should never happen
-		$spaces = ' ' x $len;
-		s/^(\t*)(\w[\w.\$]*|-\d+)\t/$1$2$spaces/;
-		m/$target/o;
-		if (length $3) {
-		    $firstWord = $2;
-		    $len = $maxLength + 1 - length $firstWord;
-		    $len = 1 if $len < 1;		# should never happen
-		    $spaces = ' ' x $len;
-		    s//$1  $2$spaces$4/;
+	    if ($cFlag == 0) {
+		if (/^(\$\d+ =)?\t+(([\w(][\w.\$)]*|-\d+)?\t($LOPS.---$OPS))?(\t([A-Za-z_][\w.\$]*|-\d+))?(\t(${FOPS}1*))?(\t+([^\t]*))?(\t*(\/\/ .*))?$/o) {
+		    if (($len = length $3) > $max1) {
+			$max1 = $len;
+		    }
+		    if (($len = length $6) > $max2) {
+			$max2 = $len;
+		    }
+		    if (($len = length $10) > $max3) {
+			$max3 = $len;
+		    }
+		    print LOG "$.:..$3\[$max1\]..$6\[$max2\]..$10\[$max3\]\n" if $opt_l;
+		    ## if ($opt_l) {
+		    ## $_ = sprintf "%s\t%*s %6s  %*s %-2s      %*s %s\n",
+		    ## 	$1, -$max1, $3, $4, -$max2, $6, $8, -$max3, $10, $12; 
+		    ## print LOG "$.:..$_\n";
+		    ## }
+		    if ($blankLines > 0) {
+			$target = defined $6 ? $6 : '';	# target node name
+			if ($nodeName ne $target) {
+			    $nodeName = $target;
+			} else {
+			    print STDERR "*** $named $ARGV $.: ERROR '$target' occurs twice\n";
+			    print LOG "$.:**$_\n" if $opt_l;
+			    @logicBlock = @{$hashRef->{$target}}; # continue to fill same array
+			}
+		    }
+		    push @logicBlock, [$1, $3, $4, $6, $8, $10, $12];
+		    $blankLines = 0;
 		} else {
-		    s//$1  $2/;
+		    if ($blankLines++) {
+			if (defined $hashRef) {
+			    print LOG "$.:#2 '$nodeName'\n" if $opt_l;
+			    push @largeBlock, $hashRef;	# save for sorting later
+			    undef $hashRef;		# throw away the hash
+			    $nodeName = '!';
+			}
+			push @largeBlock, $_;		# 2nd and further blank line
+		    } else {
+			print LOG "$.:#1 '$nodeName'\n" if $opt_l;
+			push @logicBlock, $_;		# 1st blank line at end of @logicBlock
+			$hashRef->{$nodeName} =  [ @logicBlock ];
+			@logicBlock = ();
+		    }
+		    print LOG "$.:>>$_\n" if $opt_l and not /^$/;	# missed a text line
 		}
+		next Line;
+	    }
+	    if ($cFlag == 2 and
+		/^\t|(\w[\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])(\w[\w.\$]*)($OPS)1?|[({] \(\d+\)))?/go) {
+		if (defined $1) {
+		    $tlen = $lengths{$1};
+		    $print = sprintf "%*s %1s  %1s %*s",
+			-$maxLength, $1, $2, $3, -$tlen, $5; 
+		} else {
+		    $print = ' ' x ($maxLength + 5);
+		}
+		while (/\G\t([ <~]\w[\w.\$]*$OPS)/g) {
+		    $print .= sprintf " %*s",
+			-$tlen, $1; 
+		}
+		$_ = $print;
 	    }
 	}
 	if (/^ALIAS\t@ +(\d+)$/) {
 	    if (($count = $1 - $removed) > 0) {
 		s/\d+/$count/;
 	    } else {
-		next line;
+		next Line;
 	    }
 	}
-	print $_;
+	s/[\t ]+$//;
+	print "$_\n";
+	print LOG "$.:__$_\n" if $opt_l;
     }
 } # processFile

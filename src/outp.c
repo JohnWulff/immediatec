@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.78 2005/01/28 15:10:26 jw Exp $";
+"@(#)$Id: outp.c,v 1.79 2005/04/16 17:05:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -62,6 +62,11 @@ static char *		iC_ext_ftype[] = { iC_EXT_FTYPE };
  *			   "_123_5" in buf.
  *	(done first, so that the parameter values returned are correct)
  *
+ *	Also converts -ve numbers to number preceded by 2 undersores.
+ *		eg: -1    returns 1, -1 in bytep "" and "__1" in buf.
+ *		eg: -123_5  returns 2, -123 in bytep, "_5" in tail and
+ *			   "__123_5" in buf.
+ *
  *	bufLen should be >= 23 (sscanf format length)
  *
  *******************************************************************/
@@ -75,7 +80,11 @@ IEC1131(char * name, char * buf, int bufLen,
     assert(bufLen >= 23);
     iqt[0] = xbwl[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
     if (outFlag && (count = sscanf(name, "%d%7s", bytep, tail)) >= 1) {
-	snprintf(buf, bufLen-1, "_%d%s", *bytep, tail);
+	if (*bytep >= 0) {
+	    snprintf(buf, bufLen-1, "_%d%s", *bytep, tail);
+	} else {
+	    snprintf(buf, bufLen-1, "__%d%s", -(*bytep), tail);
+	}
     } else if (outFlag &&
 	(count = sscanf(name, "%1[IQT]%1[XBWL]%5d.%5d%7s",
 			    iqt, xbwl, bytep, bitp, tail)) >= 4 &&
@@ -105,7 +114,9 @@ toIEC1131(char * name, char * buf, int bufLen,
 
     assert(bufLen >= 24);
     iqt[0] = xbwl[0] = tail[0] = *bytep = *bitp = count = 0;	/* clear for later check */
-    if (outFlag && (count = sscanf(name, "_%d%7s", bytep, tail)) == 1) {
+    if (outFlag && (count = sscanf(name, "__%d%7s", bytep, tail)) == 1) {
+	snprintf(buf, bufLen-1, "-%d", *bytep);
+    } else if (outFlag && (count = sscanf(name, "_%d%7s", bytep, tail)) == 1) {
 	snprintf(buf, bufLen-1, "%d", *bytep);
     } else if (outFlag &&
 	(count = sscanf(name, "%1[IQT]%1[XBWL]%5d_%5d%7s",
@@ -157,7 +168,6 @@ mN(Symbol * sp)
     return np;
 } /* mN */
 
-unsigned short	iC_Aflag;			/* -A flag signals ARITH alias */
 unsigned short	iC_aflag;			/* -a on compile to append output */
 unsigned short	iC_lflag;			/* -a on compile to append output */
 unsigned short	iC_Tflag;			/* define iC_tVar */
@@ -178,7 +188,7 @@ static char	errorBuf[256];			/* used for error lines in emitting code */
 static void
 errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
 {
-    fprintf(Fp, "#warning \"iC: %s\"\n", errorMsg);
+    fprintf(Fp, "\n#warning \"iC: %s\"\n", errorMsg);
     (*lcp)++;					/* count lines actually output */
     errmess("ErrorEmit", errorMsg, NS);		/* error sets iClock->type to ERR */
 } /* errorEmit */
@@ -268,7 +278,8 @@ listNet(unsigned gate_count[])
 	    if (sp->type & EM) {
 		extFlag = 1;
 	    }
-	    if ((typ = sp->type & ~EM) < MAX_LS) {
+	    if ((typ = sp->type & ~EM) < MAX_LS &&
+		(typ != NCONST || strcmp(sp->name, ICONST) != 0 || sp->u_val)) {
 		gate_count[typ]++;
 		if (typ < MAX_OP) {
 		    block_total++;
@@ -280,7 +291,8 @@ listNet(unsigned gate_count[])
 			    link_count++;
 			    if (sp->ftype < MAX_AR && lp->le_val != 0) {
 				tsp = lp->le_sym;	/* arithmetic function */
-				assert(tsp && (tsp->type == ARN || tsp->type == ERR));
+//	printf("%s==>%s type = %d le_val = %d\n", sp->name, tsp->name, tsp->type, lp->le_val);
+				assert(tsp && (tsp->type == ARN || tsp->type == SH || tsp->type == NCONST || tsp->type == ARNC || tsp->type == ERR));
 				tsp->v_cnt++;		/* count reverse parameter */
 			    }
 			}
@@ -290,7 +302,7 @@ listNet(unsigned gate_count[])
 			link_count++;		/* 2nd terminator for inverted */
 		    }				/* or time for TIMER action */
 		}
-		if (iC_debug & 020) {		/* print directed graph */
+		if (iC_debug & 020) {
 		    fprintf(iC_outFP, "%s\t%c  %c", sp->name,
 			iC_os[typ], iC_fos[sp->ftype]);
 		    iC_dc = 0;
@@ -308,7 +320,7 @@ listNet(unsigned gate_count[])
 			    }
 			} else if (sp->ftype == TIMR && lp->le_val > 0) {
 			     /* timer preset off value */
-			    fprintf(iC_outFP, "\t %s%c (%d)",
+			    fprintf(iC_outFP, "\t %s%c%d",
 				tsp->name, iC_os[tsp->type & TM], lp->le_val);
 			} else if (sp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
 			    /* reference to a timer value - no link */
@@ -336,7 +348,7 @@ listNet(unsigned gate_count[])
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->v_cnt) {
-		assert(sp->type == ARN || sp->type == ERR);
+		assert(sp->type == ARN || sp->type == SH || sp->type == NCONST || sp->type == ARNC || sp->type == ERR);
 		link_count += sp->v_cnt + 1;	/* space for reverse links + function # */
 	    }
 	    sp->v_cnt = 0;
@@ -836,6 +848,7 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 			    for (tlpp = &tsp->u_blist;
 				(tlp = *tlpp) != 0 && tlp->le_val <= val;
 				tlpp = &tlp->le_next) {
+//	printf("%s==>%s type = %d val = %d\n", sp->name, tsp->name, tsp->type, val);
 				assert(val != tlp->le_val);
 			    }
 			    *tlpp = lp;		/* to input links */
@@ -1121,7 +1134,13 @@ extern iC_Gt *	iC_l_[];\n\
 		    fprintf(Fp, "iC_Gt %-8s = { %d, %d,", modName, iC_dc, iC_dc);
 		} else {
 		    if (typ == NCONST) {
-			/* NCONST Gate must be static because same constant */
+			if (strcmp(modName, ICONST) == 0) {
+			    if (sp->u_val) {
+				fprintf(Fp, "extern iC_Gt %s; /* %d */\n", modName, sp->u_val);
+			    }
+			    continue;
+			}
+			/* other NCONST Gates must be static because same constant */
 			/* may be used in several linked modules - not extern */
 			fprintf(Fp, "static iC_Gt %-7s", modName);
 		    } else {
@@ -1591,7 +1610,7 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 /********************************************************************
  *
  *	To handle immediate variables in C code, the output of the first
- *	two passes of copyBlocks is seperated by a line containing
+ *	two passes of copyBlocks is separated by a line containing
  *	## in C comment delimiters
  *	and output to T2FP.
  *
@@ -1627,7 +1646,7 @@ c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	fprintf(T2FP, "/*##*/int iC_exec(int iC_index) { switch (iC_index) {\n");
 #endif
     } else {
-	fprintf(T2FP, "/*##*/\n");		/* -o option - seperate blocks */
+	fprintf(T2FP, "/*##*/\n");		/* -o option - separate blocks */
     }
     if (copyBlocks(iFP, T2FP, 02)) {
 	return T1index;
@@ -1642,15 +1661,27 @@ c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	 ********************************************************/
 	fflush(T4FP);
 	/* Cygnus does not understand cc - use gcc */
-	snprintf(lineBuf, sizeof lineBuf, "gcc -E -x c %s -o %s", T4FN, T5FN);
+	snprintf(lineBuf, sizeof lineBuf, "gcc -E -x c %s -o %s 2> %s", T4FN, T5FN, T6FN);
 	if (iC_debug & 02) fprintf(iC_outFP, "####### pre-compile: %s\n", lineBuf);
 	r = system(lineBuf);			/* Pre-compile C file */
 	if (iC_debug & 02) fprintf(iC_outFP, "####### pre-compile: return %d\n", r);
-
 	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
+	    if ((T6FP = fopen(T6FN, "r")) == NULL) {
+		return T6index;		/* error opening gcc error file */
+	    }
+	    while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
+		ierror("gcc:", lineBuf);	/* gcc error message */
+	    }
+	    fclose(T6FP);
+	    if (!(iC_debug & 04000)) {
+		unlink(T6FN);
+	    }
 	    ierror("c_compile: cannot open:", T5FN);
 	    perror("open");
 	    return T5index;
+	}
+	if (!(iC_debug & 04000)) {
+	    unlink(T6FN);
 	}
 	if (iC_debug & 02) fprintf(iC_outFP, "####### compile include files via %s %s\n", T4FN, T5FN);
 	yyin = T5FP;				/* lexc reads from include now */
