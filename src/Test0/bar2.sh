@@ -22,14 +22,4 @@
 #
 ########################################################################
 
-iCserver $1 \
-'iCbox X0' \
-'iCbox X1' \
-'iCbox X2' \
-'iCbox X3' \
-'iCbox B4 1' \
-'iCbox B5 1' \
-'iCbox B6 1' \
-'iCbox B7 1' \
-'iCbox X8' \
-'bar2 -d100000'
+iCserver 'iCbox X0 X1 X2 X3 B4=1 B5=1 B6=1 B7=1 X8' 'bar2 -d1000'

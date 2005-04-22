@@ -22,4 +22,4 @@
 #
 ########################################################################
 
-iCserver 'iCbox X0' 'iCbox X1' 'iCbox B4 1' bar1
+iCserver 'iCbox X0 X1 B4=1' bar1

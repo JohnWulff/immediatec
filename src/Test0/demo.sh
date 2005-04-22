@@ -15,9 +15,4 @@
 #
 ########################################################################
 
-iCserver \
-'iCbox X0' \
-'iCbox X1' \
-'iCbox X2' \
-'iCbox X3' \
-demo
+iCserver 'iCbox X0 X1 X2 X3' 'demo -d1000'
