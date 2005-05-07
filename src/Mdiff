@@ -23,7 +23,8 @@ usage()
   echo 'the two directories or a list of non-existing files in the second directory.' >&2
   echo 'These 3 lists are exclusive subsets of the complete set of selected files.' >&2
   echo >&2
-  echo "Usage:	$name [+w] [-ietqlckILZh] [-x<regex>] [-d<dir>] [-C<command>|file ...] directory" >&2
+  echo "Usage:	$name [+w] [-ietqlckILZh] [-d<dir>] [-C<num>] [-U<num>] [-x<regex>]" >&2
+  echo "	      [-X<command>|file ...] directory" >&2
   echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
   echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-i	identical files output:	==== file ====' >&2
@@ -43,11 +44,14 @@ usage()
   echo '		default: ignore symbolic links (treated as non-existing)' >&2
   echo '	-t	text and date header at start of report' >&2
   echo '	-q	quiet operation - return status only' >&2
-  echo '	-c	display diff output in context form' >&2
+  echo '	-c	display diff output in 3 line copied context form' >&2
+  echo '	-C<num>	display diff output in num line copied context form' >&2
+  echo '	-u	display diff output in 3 line unified context form' >&2
+  echo '	-U<num>	display diff output in num line unified context form' >&2
   echo '	-I	case insensitive and white space ignored' >&2
   echo '	-k	ignore lines containing the string $Id:' >&2
   echo '	-x <regex> ignore changes in lines that match regex' >&2
-  echo '	-C <command> shell command to generate a list of files.' >&2
+  echo '	-X <command> shell command to generate a list of files.' >&2
 echo "	-Z	extra debugging output for $0 development" >&2
   echo '	-h	this help text' >&2
   echo '	--	output is piped to less' >&2
@@ -56,7 +60,7 @@ echo "	-Z	extra debugging output for $0 development" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: Mdiff,v 1.30 2004/01/18 13:12:52 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.31 2005/05/07 17:19:34 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -153,7 +157,7 @@ test "$Z" = 1 && echo "processFiles \$*: '$*'"
 				ls -lL $tdSf
 				ls -lL $dirsSf
 			    fi
-			    diff $w $context $tdSf $dirsSf
+			    diff $w$context $tdSf $dirsSf
 			elif [ "$li" = 1 ] && [ "$e" = 0 ]; then
 			    echo $tdSf
 			fi
@@ -368,7 +372,22 @@ while [ $# -gt 0 ]; do
 	    t*)	t=$q;;
 	    p*)	p=1;;
 	    q*)	t=1; q=1;;
-	    c*) context="-c";;
+	    c*) context="$context -c";;
+	    C*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		context="$context -C $option";
+		break;;
+	    u*) context="$context -u";;
+	    U*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    shift
+		    option=$1
+		fi
+		context="$context -U $option";
+		break;;
 	    k*)	w="$w -I \$Id:";;
 	    I*)	w=-wBi;;
 	    r*)	recursive=1;;
@@ -389,7 +408,7 @@ Z*)	Z=1;;
 		fi
 		w="$w -I $option"
 		break;;
-	    C*)	option=${option#?}
+	    X*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
 		    option=$1
