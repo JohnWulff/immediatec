@@ -8,26 +8,30 @@
 
 usage()
 {
-  echo "Usage: $name [-lczh][ -y<opt>][ -x<regex>] <directory>[ <directory>]" >&2
+  echo "Usage: $name [-lczh][ -y<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
   echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
-  echo '	-c	copy files to <directory>; must be new, else compare only' >&2
+  echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full diff output)' >&2
   echo '	-x <regex> ignore changes in lines that match regex' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
+  echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
+  echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo '	-	all further arguments are treated as files' >&2
-  echo "	<directory> or <directory>_<opt> is a sub-directory of" >&2
+  echo "	<dir1> or <dir1>_<opt> is a sub-directory of" >&2
   echo "	directory Test1, Test2, Test3 .. Test9 (however many exist)" >&2
-  echo "	<directory> will be created if it does not exit and generated" >&2
-  echo "	files copied to it; if <directory> exists, the generated files" >&2
-  echo "	will be compared with files in <directory> with Mdiff -k" >&2
-  echo "	If a 2nd <directory> is specified the files in all 1st <directory>" >&2
-  echo "	will be compared with files in the 2nd <directory> with Mdiff -k" >&2
+  echo "	<dir1> will be created if it does not exist and generated" >&2
+  echo "	files copied to it; if <dir1> exists, the generated files" >&2
+  echo "	will be compared with files in <dir1> with Mdiff -k" >&2
+  echo "	If no <dir1> is specified no files will be copied or compared" >&2
+  echo "	If <dir2> is specified all files <dir1> will be" >&2
+  echo "	compared with all files in <dir2> with Mdiff -k" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.7 2005/04/21 17:42:05 jw Exp $' >&2
+  echo '$Id: tt,v 1.8 2005/05/16 13:13:16 jw Exp $' >&2
 }
 
 ########################################################################
@@ -44,6 +48,7 @@ y=""
 l=""
 c=""
 A=""
+I=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -65,6 +70,9 @@ while [ $# -gt 0 ]; do
 	    A*)	A="$A -A";;
 	    S*)	A="$A -S";;
 	    R*)	A="$A -R";;
+	    i*) I=" -i";;
+	    I*) I=" -I";;
+	    J*) I=" -J";;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
@@ -86,36 +94,67 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-if [ -n "$1" ]; then
-    d1=$1
-    d2=$2
+d1=$1
+d2=$2
 
-    echo; date
-    if [ -z "$y" -a -z "$c" -a -z "$d2" ]; then
-	echo; echo "========== Test0 make test"; echo
-	time make test
-    fi
+echo; date
+if [ -z "$y" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
+    echo; echo "========== Test0 make test"; echo
+    time make test
+fi
 
-    t=Test1
-    if [ -d "$t" ]; then
-	cd $t
-	if [ -z "$d2" ]; then
-	    if [ -z "$c" ]; then
-		echo; echo "========== $t mm$v$A"
-		time mm$v$A > Init.out 2>&1
-	    fi
+t=Test1
+if [ -d "$t" ]; then
+    cd $t
+    if [ -z "$d2" ]; then
+	if [ -z "$c" ]; then
+	    echo; echo "========== $t mm$I$v$A"
+	    time mm$I$v$A
+	fi
+	if [ -n "$d1" ]; then
 	    if [ -d "$d1$y" ]; then
 		echo; echo "========== $t Mdiff -k$l * $d1$y"
 		time Mdiff -k$l $(cat pd.lt) $d1$y
 	    else
 		mkdir $d1$y
-		echo; echo "========== $t cp * $d1$y"
-		cp $(cat pd.lt) $d1$y
+		echo; echo "========== $t cp -p * $d1$y"
+		cp -p $(cat pd.lt) $d1$y
+	    fi
+	fi
+    elif [ -d "$d1$y" -a -d "$d2$y" ]; then
+	cd $d1$y
+	echo; echo "========== $t Mdiff -k$l $d1$y/* $d2$y"
+	time Mdiff -k$l $(cat ../pd.lt) ../$d2$y
+	cd ..
+    else
+	echo "ERROR: if two <directories> are specified they must exist" >&2
+	usage
+    fi
+    cd ..
+fi
+
+for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
+    if [ -d "$t" ]; then
+	cd $t
+	if [ -z "$d2" ]; then
+	    if [ -z "$c" ]; then
+		echo; echo "========== $t my$I$v$A"
+		time my$I$v$A
+	    fi
+	    if [ -n "$d1" ]; then
+		if [ -d "$d1$y" ]; then
+		    echo; echo "========== $t Mdiff -k$l * $d1$y"
+		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d6].lt) $d1$y
+		else
+		    mkdir $d1$y
+		    echo; echo "========== $t cp -p * $d1$y"
+		    cp -p $(cat p[d6].lt) $d1$y
+		fi
 	    fi
 	elif [ -d "$d1$y" -a -d "$d2$y" ]; then
 	    cd $d1$y
 	    echo; echo "========== $t Mdiff -k$l $d1$y/* $d2$y"
-	    time Mdiff -k$l $(cat ../pd.lt) ../$d2$y
+	    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d6].lt) ../$d2$y
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -123,37 +162,5 @@ if [ -n "$1" ]; then
 	fi
 	cd ..
     fi
-
-    for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
-	if [ -d "$t" ]; then
-	    cd $t
-	    if [ -z "$d2" ]; then
-		if [ -z "$c" ]; then
-		    echo; echo "========== $t my$v$A"
-		    time my$v$A
-		fi
-		if [ -d "$d1$y" ]; then
-		    echo; echo "========== $t Mdiff -k$l * $d1$y"
-		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d6].lt) $d1$y
-		else
-		    mkdir $d1$y
-		    echo; echo "========== $t cp * $d1$y"
-		    cp $(cat p[d6].lt) $d1$y
-		fi
-	    elif [ -d "$d1$y" -a -d "$d2$y" ]; then
-		cd $d1$y
-		echo; echo "========== $t Mdiff -k$l $d1$y/* $d2$y"
-		time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d6].lt) ../$d2$y
-		cd ..
-	    else
-		echo "ERROR: if two <directories> are specified they must exist" >&2
-		usage
-	    fi
-	    cd ..
-	fi
-    done
-    echo; echo "========== end"
-else
-    usage
-    exit 255
-fi
+done
+echo; echo "========== end"
