@@ -8,7 +8,7 @@
 
 usage()
 {
-  echo "Usage: $name [-lczh][ -y<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
+  echo "Usage: $name [-clASRiIJ6zh][ -y<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
   echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full diff output)' >&2
@@ -19,6 +19,7 @@ usage()
   echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
+  echo '	-6	produce logic generation listing file.lst6 in Test2 etc' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo '	-	all further arguments are treated as files' >&2
@@ -31,7 +32,7 @@ usage()
   echo "	If <dir2> is specified all files <dir1> will be" >&2
   echo "	compared with all files in <dir2> with Mdiff -k" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.8 2005/05/16 13:13:16 jw Exp $' >&2
+  echo '$Id: tt,v 1.9 2005/05/19 09:52:16 jw Exp $' >&2
 }
 
 ########################################################################
@@ -49,6 +50,8 @@ l=""
 c=""
 A=""
 I=""
+g=""
+G=""
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -73,6 +76,7 @@ while [ $# -gt 0 ]; do
 	    i*) I=" -i";;
 	    I*) I=" -I";;
 	    J*) I=" -J";;
+	    6*) g="6"; G=" -6";;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
 		    shift
@@ -138,23 +142,23 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
 	cd $t
 	if [ -z "$d2" ]; then
 	    if [ -z "$c" ]; then
-		echo; echo "========== $t my$I$v$A"
-		time my$I$v$A
+		echo; echo "========== $t my$I$v$A$G"
+		time my$I$v$A$G
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$y" ]; then
 		    echo; echo "========== $t Mdiff -k$l * $d1$y"
-		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d6].lt) $d1$y
+		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$y
 		else
 		    mkdir $d1$y
 		    echo; echo "========== $t cp -p * $d1$y"
-		    cp -p $(cat p[d6].lt) $d1$y
+		    cp -p $(cat p[d$g].lt) $d1$y
 		fi
 	    fi
 	elif [ -d "$d1$y" -a -d "$d2$y" ]; then
 	    cd $d1$y
 	    echo; echo "========== $t Mdiff -k$l $d1$y/* $d2$y"
-	    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d6].lt) ../$d2$y
+	    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d$g].lt) ../$d2$y
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2

@@ -1,8 +1,47 @@
 #!/bin/bash
-# make all iC components for debugging and install them
-makeAll -qgcrtlm
+
+usage()
+{
+    echo "Make all iC components for debugging and install them" >&2
+    echo "Usage [-ih] [[<iCmake_options>] <iC_sources>]" >&2
+    echo "  -i            execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
+    echo "                this is required to run make install as an ordinary user" >&2
+    echo '  -h            this help text' >&2
+    echo "  <iC_sources>  list of iC source files which will be made with iCmake" >&2
+    echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
+    echo '$Id: m,v 1.5 2005/05/27 14:54:17 jw Exp $Id: m,v 1.5 2005/05/27 14:54:17 jw Exp $' >&2
+}
+
+if [ $# -gt 0 ]; then
+    case $1 in
+    -*) option=${1#?}
+	while [ -n "$option" ]; do
+	    case $option in
+	    i*)
+		echo "Enter root:" >&2
+		sudo chmod +s /usr/bin/install /usr/bin/ranlib
+		echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
+		echo "Exit  root:" >&2
+		sudo -k
+		exit
+		;;
+	    h*) usage; exit 255;;
+	    *)  break;;
+	    esac
+	    option=${option#?}
+	done
+	;;
+    *)  ;;
+    esac
+fi
+
+echo "### makeAll -qgcrtlm"
+./makeAll -qgcrtlm
+echo "### make install"
 make install
-# optionally make selected iC applications with the new libict.a
-# may use all options of iCmake with 'm'
-iCmake $*
-# $Id: m,v 1.4 2005/01/17 19:23:18 jw Exp $
+if [ $# -gt 0 ]; then
+    # optionally make selected iC applications with the new libict.a
+    # may use all options of iCmake with 'm'
+    echo "### iCmake $*"
+    ./iCmake $*
+fi
