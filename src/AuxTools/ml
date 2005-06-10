@@ -19,7 +19,8 @@ usage ()
     echo '	pl.lt	# lst files only' >&2
     echo '	p6.lt	# lst6 files only' >&2
     echo '	pp.lt	# iC files only' >&2
-    echo '	$Id: ml,v 1.8 2004/02/24 09:34:36 jw Exp $' >&2
+    echo '	-g	pg.lt - exe .c .ini .lst .lst6 - generated - may be deleted in source dir' >&2
+    echo '	$Id: ml,v 1.9 2005/06/10 13:42:09 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -28,6 +29,8 @@ while [[ $# > 0 ]]; do
     -*)	option=${1#?}
 	while [[ -n "$option" ]]; do
 	    case "$option" in
+	    g*) mklst -g *.ic > pg.lt	# generated files only
+		exit;;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;
 	    esac
@@ -40,18 +43,27 @@ done
 
 mklst *.i[ch] > p.lt	# all for copying
 mklst -d *.i[ch] > pd.lt	# sources, includes and derived for comparing
+mklst -g *.ic > pg.lt	# generated exe .c .ini .lst .lst6 for deletion in source dir
 mklst -e *.ic > pe.lt	# executables only
 mklst -c *.ic > pc.lt	# C files only
 mklst -i *.ic > pi.lt	# ini files only
 mklst -l *.ic > pl.lt	# lst files only
 mklst -6 *.ic > p6.lt	# lst6 files only
-mklst -p *.ic > pp.lt	# iC files only
+mklst -p *.i[ch] > pp.lt	# iC source and include files only
 
 if [[ -f Init.out ]]; then
     echo Init.out >> p.lt
     echo Init.out >> pd.lt
+    echo Init.out >> pg.lt
 fi
 
 if [[ -f Init.out6 ]]; then
     echo Init.out6 >> p6.lt
+    echo Init.out6 >> pg.lt
+fi
+
+if [[ -f ErrorMessages.err ]]; then
+    echo ErrorMessages.err >> p.lt
+    echo ErrorMessages.err >> pd.lt
+    echo ErrorMessages.err >> pg.lt
 fi
