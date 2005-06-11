@@ -25,25 +25,26 @@ usage()
   echo >&2
   echo "Usage:	$name [+w] [-ietqlckILZh] [-d<dir>] [-C<num>] [-U<num>] [-x<regex>]" >&2
   echo "	      [-X<command>|file ...] directory" >&2
-  echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
-  echo '		default: whitespace and blank lines are ignored' >&2
+  echo '		if files differ output:	#### file ####' >&2
+  echo '			 followed by the output of diff' >&2
   echo '	-i	identical files output:	==== file ====' >&2
   echo '		default: ignore identical files in output' >&2
   echo '	-e	non-existing files put:	**** file does not exist' >&2
   echo '		default: ignore non-existing files in output' >&2
   echo '			 (unless only 1 file)' >&2
-  echo '		if files differ output:	#### file ####' >&2
-  echo '			 followed by the output of diff' >&2
   echo '	-l	list files which differ - no other output' >&2
   echo '	-li	list files which are identical' >&2
   echo '	-le	list files which are non-existing in directory' >&2
   echo '	-d<dir>	use directory <dir> instead of current directory' >&2
   echo '	-p	full path in file names for directory (default removed)' >&2
+  echo '		the first path is concatenated to the comparison directory' >&2
   echo '	-r	recursively Mdiff all directories in arg list except last' >&2
   echo '	-L	compare files and directories which are symbolic links' >&2
   echo '		default: ignore symbolic links (treated as non-existing)' >&2
   echo '	-t	text and date header at start of report' >&2
   echo '	-q	quiet operation - return status only' >&2
+  echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
+  echo '		default: whitespace and blank lines are ignored' >&2
   echo '	-c	display diff output in 3 line copied context form' >&2
   echo '	-C<num>	display diff output in num line copied context form' >&2
   echo '	-u	display diff output in 3 line unified context form' >&2
@@ -60,7 +61,7 @@ echo "	-Z	extra debugging output for $0 development" >&2
   echo '	return status 0 (true) if all files are identical' >&2
   echo '	return status n (false) number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: Mdiff,v 1.31 2005/05/07 17:19:34 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 1.32 2005/06/11 13:50:01 archiv Exp $' >&2
 }
 
 ########################################################################
@@ -87,7 +88,9 @@ header()
 
 ########################################################################
 #
-#	all echo's to stdin are in processFiles which may be piped
+#	processFiles called once in processDirectory
+#	all echo's to stdin are in processFiles and processDirectory
+#	which may be piped
 #
 ########################################################################
 
@@ -116,8 +119,9 @@ test "$Z" = 1 && echo "processFiles \$*: '$*'"
 		if [ "$p" = 0 ]; then
 		    dirsSf="$dir/${f##*/}"
 		fi
+test "$Z" = 1 && echo "dirsSf: '$dirsSf'"
 		if [ -f $dirsSf ]; then
-		    if [ $tdSf -ef $dirsSf ]; then
+		    if [ $tdSf -ef $dirsSf ]; then	# check if same device and inode
 			if [ ! -L $tdSf ] && [ ! -L $dirsSf ]; then
 			    f1=${f%/*}
 			    if [ "$f" = "$f1" ]; then
@@ -191,7 +195,8 @@ test "$Z" = 1 && echo "processFiles \$*: '$*'"
 
 ########################################################################
 #
-#	handle directories recursively
+#	processDirectory called recursively in processDirectory
+#	and initially in main
 #
 ########################################################################
 
