@@ -19,8 +19,10 @@ usage ()
     echo '	pl.lt	# lst files only' >&2
     echo '	p6.lt	# lst6 files only' >&2
     echo '	pp.lt	# iC files only' >&2
-    echo '	-g	pg.lt - exe .c .ini .lst .lst6 - generated - may be deleted in source dir' >&2
-    echo '	$Id: ml,v 1.9 2005/06/10 13:42:09 jw Exp $' >&2
+    echo '	ps.lt	# iC source files *.ic and *.ih' >&2
+    echo '	pg.lt	# exe .c .ini .lst .lst6 - generated - may be deleted in source dir' >&2
+    echo '	-g	pg.lt - exe .c .ini .lst .lst6 - generated files only' >&2
+    echo '	$Id: ml,v 1.10 2005/06/12 19:14:06 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -49,7 +51,8 @@ mklst -c *.ic > pc.lt	# C files only
 mklst -i *.ic > pi.lt	# ini files only
 mklst -l *.ic > pl.lt	# lst files only
 mklst -6 *.ic > p6.lt	# lst6 files only
-mklst -p *.i[ch] > pp.lt	# iC source and include files only
+mklst -p *.ic > pp.lt	# iC source files only
+mklst -s *.i[ch] > ps.lt	# iC source and include files only
 
 if [[ -f Init.out ]]; then
     echo Init.out >> p.lt
