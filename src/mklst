@@ -20,14 +20,15 @@ Usage:	@<<<<<<< [-decl6ph] [file ...]
 	-i	output only base with .ini extension
 	-l	output only base with .lst extension
 	-6	output only base with .lst6 extension
-	-p	output only base with .ic and .ih extension
+	-p	output only base with .ic extension
+	-s	output only base with .ic and .ih extension (iC sources)
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.8 2005/06/10 13:25:26 jw Exp $
+$Id: mklst,v 1.9 2005/06/12 19:14:06 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_6 $opt_p $opt_h);
+use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_6 $opt_p $opt_s $opt_h);
 require "getopts.pl";
-&Getopts('cdegil6ph');			# sets $opt_h if -h etc
+&Getopts('cdegil6psh');			# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -59,7 +60,7 @@ while ($ARGV = shift @ARGV) {
 	    print "$1.lst\n" if -f "$1.lst";
 	} elsif ($opt_6) {
 	    print "$1.lst6\n" if -f "$1.lst6";
-	} elsif ($opt_p) {
+	} elsif ($opt_p or $opt_s) {
 	    print "$1.ic\n" if -f "$1.ic";
 	} else {
 	    print "$1\n" if -f "$1";
@@ -70,7 +71,7 @@ while ($ARGV = shift @ARGV) {
 	    print "$1.ic\n" if -f "$1.ic";
 	}
     } elsif ($ARGV =~ /(\w+)\.ih/) {
-	unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6) {
+	unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6 or $opt_p) {
 	    print "$1.ih\n" if -f "$1.ih";
 	}
     }
