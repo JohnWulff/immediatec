@@ -1,4 +1,5 @@
 #!/bin/bash
+
 ########################################################################
 #
 #	Copyright (C) 2000-2001  John E. Wulff
@@ -11,70 +12,75 @@
 #
 #	Mdiff - multiple diff with precise list and status output
 #
+#	Major rewrite June 2005 to handle recursive selection more
+#	smoothly
+#
 ########################################################################
 
 usage()
 {
-  echo >&2
-  echo 'Generate a full report of differences between a list of files  in the' >&2
-  echo 'current directory and files with the same name in another directory.' >&2
-  echo >&2
+  echo 'Generate a full report of differences between a list of files in a source' >&2
+  echo 'directory and files with the same name in another comparison directory.' >&2
   echo 'Option -l allows the generation of lists of different or identical files in' >&2
-  echo 'the two directories or a list of non-existing files in the second directory.' >&2
-  echo 'These 3 lists are exclusive subsets of the complete set of selected files.' >&2
+  echo 'the two directories or a list of non-existing or common files in the directories.' >&2
+  echo 'These lists are exclusive subsets of the complete set of selected files.' >&2
   echo >&2
-  echo "Usage:	$name [+w] [-ietqlckILZh] [-d<dir>] [-C<num>] [-U<num>] [-x<regex>]" >&2
-  echo "	      [-X<command>|file ...] directory" >&2
-  echo '		if files differ output:	#### file ####' >&2
-  echo '			 followed by the output of diff' >&2
+  echo "Usage:	$name [+w] [-raLielEtqcuIkTZph] [-C<num>] [-U<num>] [-x<rexp>]" >&2
+  echo '	[[[-R<regex>|-X<cmd>] [source_dir]]|file ...] comparison_dir' >&2
+  echo '	diff files named in command line (common initial path is source_dir)' >&2
+  echo '	or files which match <regex> from single named source_dir with last' >&2
+  echo '	named comparison_dir. If source_dir missing, default is current directory' >&2
+  echo '	-r	diff source_dir and all its sub-directories recursively' >&2
+  echo '	-R<regex> use <regex> to select files from all files in source_dir' >&2
+  echo '		  as well as recursiveley selected sub-directories.' >&2
+  echo "		  default <regex> is '$defaultregex'" >&2
+  echo '	-X<cmd> shell command to generate a list of files instead of regex' >&2
+  echo '	-a	do not ignore directories and files starting with .' >&2
+  echo '		default: ignore directories and files starting with .' >&2
+  echo '	-L	compare files and directories which are symbolic links' >&2
+  echo '		default: ignore symbolic links (treated as non-existing)' >&2
+  echo '	     if files differ output:	#### file #### plus output of diff' >&2
   echo '	-i	identical files output:	==== file ====' >&2
   echo '		default: ignore identical files in output' >&2
   echo '	-e	non-existing files put:	**** file does not exist' >&2
-  echo '		default: ignore non-existing files in output' >&2
-  echo '			 (unless only 1 file)' >&2
-  echo '	-l	list files which differ - no other output' >&2
-  echo '	-li	list files which are identical' >&2
-  echo '	-le	list files which are non-existing in directory' >&2
-  echo '	-d<dir>	use directory <dir> instead of current directory' >&2
-  echo '	-p	full path in file names for directory (default removed)' >&2
-  echo '		the first path is concatenated to the comparison directory' >&2
-  echo '	-r	recursively Mdiff all directories in arg list except last' >&2
-  echo '	-L	compare files and directories which are symbolic links' >&2
-  echo '		default: ignore symbolic links (treated as non-existing)' >&2
-  echo '	-t	text and date header at start of report' >&2
+  echo '		default: ignore non-existing files (unless only 1 file)' >&2
+  echo '	-l	list only files which differ - no other output' >&2
+  echo '	-li	list only files which are identical' >&2
+  echo '	-le	list only files which are non-existing in comparison_dir' >&2
+  echo '	-lE	list files which exist in source_dir and comparison_dir' >&2
+  echo '	-lEi	list files which exist in directories, including identities' >&2
+  echo '	-t	put date and text header at start of report' >&2
   echo '	-q	quiet operation - return status only' >&2
-  echo '	+w	whitespace (spaces, tabs, blank lines) are significant' >&2
-  echo '		default: whitespace and blank lines are ignored' >&2
+  echo '	-w	whitespace (spaces, tabs, blank lines) are significant' >&2
+  echo '		default: all whitespace is ignored (opposite to diff)' >&2
+  echo '	-I	ignore case differences in file contents' >&2
   echo '	-c	display diff output in 3 line copied context form' >&2
   echo '	-C<num>	display diff output in num line copied context form' >&2
   echo '	-u	display diff output in 3 line unified context form' >&2
   echo '	-U<num>	display diff output in num line unified context form' >&2
-  echo '	-I	case insensitive and white space ignored' >&2
   echo '	-k	ignore lines containing the string $Id:' >&2
-  echo '	-x <regex> ignore changes in lines that match regex' >&2
-  echo '	-X <command> shell command to generate a list of files.' >&2
-echo "	-Z	extra debugging output for $0 development" >&2
-  echo '	-h	this help text' >&2
-  echo '	--	output is piped to less' >&2
-  echo '	-	all further arguments are treated as files' >&2
-  echo "	if no files or command is specified, '$defaultfiles' is used" >&2
+  echo '	-x<rexp> ignore diff changes in lines that match <rexp>' >&2
+  echo '	-h	this help text	-T -Z	trace debugging output' >&2
+  echo '	-p	output is piped to "less" (return status is not valid)' >&2
+  echo '	--	all further arguments are treated as files' >&2
   echo '	return status 0 (true) if all files are identical' >&2
-  echo '	return status n (false) number of files which differ' >&2
+  echo '	return status n (false) n is number of files which differ' >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: Mdiff,v 1.32 2005/06/11 13:50:01 archiv Exp $' >&2
+  echo '$Id: Mdiff,v 2.1 2005/07/03 18:05:47 archiv Exp $' >&2
 }
 
 ########################################################################
 #
 #	generate an optional header
+#	count directories for final report
 #
 ########################################################################
 
 header()
 {
-    if [ $headFlag = 0 ]; then
-	if [ "$t" = 0 ]; then
-	    if [ "$headCnt" = 0 ]; then
+    if [[ $headFlag = 0 ]]; then
+	if [[ $t = 0 ]]; then
+	    if [[ $headCnt = 0 ]]; then
 		date
 	    else
 		echo
@@ -88,264 +94,174 @@ header()
 
 ########################################################################
 #
-#	processFiles called once in processDirectory
-#	all echo's to stdin are in processFiles and processDirectory
-#	which may be piped
+#	process called in main and recursively in proces()
+#	all echo's in process are to stdin and process may therefore be piped
 #
 ########################################################################
 
-processFiles()
+process()
 {
-    local t1="${1%/}/"
-    local td="${t1#./*}"
-    t1="${td%/}"
+    local n=$1
     shift
-    local dir="${1%*/}"
+    local spath=$1
+    shift
+    local cdir=$1
     shift
     headFlag=0
     local status=0
-    local f1
-    local f2
-test "$Z" = 1 && echo "td: '$td'"
-test "$Z" = 1 && echo "t1: '$t1'"
-test "$Z" = 1 && echo "dir: '$dir'"
-test "$Z" = 1 && echo "processFiles \$*: '$*'"
-
-    for f in $*; do
-	local tdSf="$td$f"
-	if [ -f $tdSf ]; then
-	    if [ ! -L $tdSf ] || [ "$Link" != 0 ]; then
-		local dirsSf="$dir/$f"
-		if [ "$p" = 0 ]; then
-		    dirsSf="$dir/${f##*/}"
-		fi
-test "$Z" = 1 && echo "dirsSf: '$dirsSf'"
-		if [ -f $dirsSf ]; then
-		    if [ $tdSf -ef $dirsSf ]; then	# check if same device and inode
-			if [ ! -L $tdSf ] && [ ! -L $dirsSf ]; then
-			    f1=${f%/*}
-			    if [ "$f" = "$f1" ]; then
-				f1="."
-			    fi
-			    f2=${dirsSf%/*}
-			    echo "$name: paths $td$f1 and $f2 are identical - ignored" >&2
-			    status=-1
-			    break
-			fi
-		    elif [ -L $dirsSf ] && [ "$Link" = 0 ]; then
-			if [ "$e" != 0 ]; then
-			    let status+=1
-			    if [ "$q" = 0 ]; then
-				header "$t1" "$dir"
-				echo "********** $dirsSf is a symbolic link"
-			    elif [ "$li" = 1 ]; then
-				echo $tdSf
-			    fi
-			fi
-		    elif diff -q $w $tdSf $dirsSf > /dev/null; then
-			if [ "$q" = 0 ]; then
-			    if [ "$i" != 0 ]; then
-				header "$t1" "$dir"
-				echo "========== $tdSf =========="
-			    fi
-			elif [ "$li" = 3 ]; then
-			    echo $tdSf
-			fi
-		    else
-			let status+=1
-			if [ "$q" = 0 ]; then
-			    header "$t1" "$dir"
-			    echo
-			    echo "########## $tdSf ##########"
-			    if [ -z "$context" ]; then
-				ls -lL $tdSf
-				ls -lL $dirsSf
-			    fi
-			    diff $w$context $tdSf $dirsSf
-			elif [ "$li" = 1 ] && [ "$e" = 0 ]; then
-			    echo $tdSf
-			fi
-		    fi
-		elif [ "$e" != 0 ]; then
-		    let status+=1
-		    if [ "$q" = 0 ]; then
-			header "$t1" "$dir"
-			echo "********** $dirsSf does not exist"
-		    elif [ "$li" = 1 ]; then
-			echo $tdSf
-		    fi
-		fi
-	    fi
-	fi
-    done
-    if [ "$status" != 0 ] && [ "$q" = 0 ]; then
-	echo
-	local files_differ="files differ"
-	if [ "$status" = 1 ]; then
-	    files_differ="file differs"
-	fi
-	if [ -z "$td" ]; then
-	    echo "########## $status $files_differ ##########"
-	else
-	    echo "########## $status $files_differ in $td ##########"
-	fi
+    local alldirs allfiles sfile file sdir dir cfile
+    if [[ $all = 0 ]]; then
+	alldirs="$spath*"
+    else
+	alldirs="$spath.[^.]* $spath..?* $spath*"
     fi
-    return $status
-}
-
-########################################################################
-#
-#	processDirectory called recursively in processDirectory
-#	and initially in main
-#
-########################################################################
-
-processDirectory()
-{
-    local this=$1
-    shift
-    local fileArgs=''
-    local fileParams=''
-    local fileCnt=0
-    local directory=''
-    local ff=''
-    local status=0
-    local f1
-    local f2
-    local d
-    local dd
-
-    while [ $# -gt 0 ]; do
-	f1=${1#$this/}
-	f2="${f1%/}"
-test "$Z" = 1 && echo "this $this 1 '$1' f1 '$f1' f2 '$f2' command '$command'"
-	if [ -d "$1" ]; then
-	    directory=$f2	# last directory in args is other directory
-	elif [ "$level" = 0 ]; then
-	    if [ -f "$this/$f2" ]; then
-		fileArgs="$fileArgs $f2"
-	    fi
-	    fileParams="$fileParams $1"
-	    let fileCnt+=1
+    if [[ $n = 0 ]];then
+	if [[ -n "$cmd" ]]; then
+	    if [[ -z "$spath" ]]; then cd .; else cd $spath; fi
+	    allfiles=''
+	    for file in $($cmd); do
+		allfiles="$allfiles $spath$file"
+	    done
+	    cd - > /dev/null
 	else
-	    fileParams="$fileParams $1"
-	    ff="$1"
-test "$Z" = 1 && echo "ff: '$ff'"
+	    allfiles=$alldirs
 	fi
-	shift
-    done
-test "$Z" = 1 && echo "ff1: $fileCnt: '$ff'"
-
-    if [ $fileCnt = 0 ]; then
-	if [ -z "$ff" ] || [ "$ff" = " " ]; then
-	    if [ -n "$command" ]; then
-		local tmp=${command#[a-zA-Z_]*}
-test "$Z" = 1 && echo "$PWD: '$tmp' '$command'"
-		if [ "$tmp" != "$command" ]; then
-		    cd $this		# first character of command is a letter
-		    if ff=`$command 2> /dev/null`; then
-test "$Z" = 1 && echo "ct: '$ff'"
-			cd -
-		    else
-			cd -
-			ff="$this/$command"
-test "$Z" = 1 && echo "ct failed: '$ff'"
+    else
+	allfiles=$*
+    fi
+    test $T = 1 && echo "### allfiles='$allfiles'"
+    for sfile in $allfiles; do
+	file=${sfile#$spath}
+	if [[ ! -d "$sfile" ]]; then
+	    if [[ -z "$regex" || -n "$(echo "$file" | grep -E $regex)" ]]; then
+		if [[ -f "$sfile" ]]; then
+		    cfile="$cdir$file"
+		    if [[ -f "$cfile" ]]; then
+			if [[ -L "$cfile" && $link = 0 ]]; then
+			    if [[ $e = 1 ]]; then
+				let status+=1
+				test $T = 1 && echo -n "*** $cfile is a link; status = $status: "
+				if [[ $q = 0 ]]; then
+				    header "$spath" "$cdir"
+				    echo "********** $cfile is a symbolic link - ignored"
+				elif [[ $li = 1 ]]; then
+				    echo $sfile
+				fi
+			    fi
+			elif [[ $sfile -ef $cfile ]]; then	# check if same device and inode
+			    if [[ $q = 0 ]]; then
+				if [[ $i = 1 ]]; then
+				    header "$spath" "$cdir"
+				    echo "========== $sfile and $cfile are the same file"
+				fi
+			    elif [[ $li = 3 && $i = 1 && $e = 1 ]]; then
+				echo $sfile
+			    fi
+			elif [[ $li = 3 && $e = 1 ]]; then
+			    echo $sfile		# -lE option
+			elif diff -q $w -- $sfile $cfile > /dev/null; then
+			    if [[ $q = 0 ]]; then
+				if [[ $i = 1 ]]; then
+				    header "$spath" "$cdir"
+				    echo "========== $sfile =========="
+				fi
+			    elif [[ $li = 3 ]]; then
+				echo $sfile
+			    fi
+			else
+			    if [[ $li = 0 || $li = 2 || $e = 0 ]]; then
+				let status+=1
+				test $T = 1 && echo -n "*** $cfile differs; status = $status: "
+			    fi
+			    if [[ $q = 0 ]]; then
+				header "$spath" "$cdir"
+				echo
+				echo "########## $sfile ##########"
+				if [[ -z "$context" ]]; then
+				    ls -lL -- $sfile
+				    ls -lL -- $cfile
+				fi
+				diff $w$context -- $sfile $cfile
+			    elif [[ $li = 1 && $e = 0 ]]; then
+				echo $sfile
+			    fi
+			fi
+		    elif [[ $e = 1 ]]; then
+			let status+=1
+			test $T = 1 && echo -n "*** $cfile does not exist; status = $status: "
+			if [[ $q = 0 ]]; then
+			    header "$spath" "$cdir"
+			    echo "********** $cfile does not exist"
+			elif [[ $li = 1 ]]; then
+			    echo $sfile
+			fi
 		    fi
-		else
-		    ff="$this/$command"
-test "$Z" = 1 && echo "tc: '$ff'"
+		elif [[ $q = 0 ]]; then
+		    local f=${sfile%\*}
+		    if [[ "$sfile" = "$f" ]]; then
+			let status+=1
+			test $T = 1 && echo -n "*** $sfile does not exist; status = $status: "
+			header "$spath" "$cdir"
+			echo "**SOURCE** $sfile does not exist"
+		    fi
 		fi
+	    fi
+	fi
+    done
+    if [[ $status > 0 ]]; then
+	if [[ $q = 0 ]]; then
+	    echo
+	    local files_differ="files differ"
+	    if [[ $status = 1 ]]; then
+		files_differ="file differs"
+	    fi
+	    if [[ -z "$spath" ]]; then
+		echo "########## $status $files_differ in $cdir ##########"
 	    else
-		ff="$this/$defaultfiles"
-test "$Z" = 1 && echo "td: '$ff'"
+		echo "########## $status $files_differ in $spath and $cdir ##########"
 	    fi
 	fi
+	let fullstatus+=$status
+	test $T = 1 && echo -n "*** fullstatus = $fullstatus; status = $status: "
     fi
-test "$Z" = 1 && echo "ff2: $fileCnt: '$ff'"
-test "$Z" = 1 && echo "$PWD: '$command' '$this':" $ff
-    
-    if [ -n "$ff" ]; then
-	for f1 in $ff; do
-	    f2=${f1#$this/}
-	    if [ -f "$this/$f2" ]; then
-		fileArgs="$fileArgs $f2"
-		let fileCnt+=1
-test "$Z" = 1 && echo "for ff: $fileCnt: $fileArgs"
-	    fi
-	done
-    fi
-
-    if [ "$level" = 0 ]; then
-	if [ -z "$directory" ]; then
-	    echo "$name: there must be at least one directory argument" >&2
-	    usage
-	    exit 253		# call provides directory at other levels
-	fi
-	if [ $fileCnt = 0 ] && [ $recursive = 0 ]; then
-	    echo "$name: there are no files or directories to compare" >&2
-	    exit 252		# can be empty at other levels
-	fi
-    fi
-
-    if [ $fileCnt -gt 0 ]; then
-	if [ $fileCnt = 1 ] && [ $q = 0 ] && [ $recursive = 0 ]; then
-	    e=1;		# for single file argument, check if other file exists
-	fi
-test "$Z" = 1 && echo "call processFiles \$this: '$this' \$directory: '$directory' \$fileArgs: '$fileArgs'"
-	processFiles $this $directory $fileArgs; let status+=$?
-    fi
-    if [ $recursive = 1 ]; then
-	let level+=1
-	for d in $this/*; do
-	    if [ -d $d ]; then
-		if [ "$Link" != 0 ] || [ ! -L $d ]; then
-		    let dc+=1
-		    dd=${d#$this/}
-		    if [ -d $directory/$dd ]; then
-			if [ "$Link" != 0 ] || [ ! -L $directory/$dd ]; then
-test "$Z" = 1 && echo "processDirectory $this/$dd $fileParams $directory/$dd;"
-			    processDirectory $this/$dd "$fileParams" $directory/$dd; let status+=$?
-			elif [ "$e" != 0 ]; then
-			    let status+=1
-			    if [ "$q" = 0 ]; then
-				echo "********** $directory/$dd/ is a symbolic link"
-			    elif [ "$li" = 1 ]; then
-				echo $directory/$dd/
-			    fi
-			fi
-		    elif [ "$e" != 0 ]; then
-			let status+=1
-			local td="$this/$dd"
-			local t1="${td%/}/"
-			td="${t1#./*}"
-			t1="${td%/}"
-			if [ "$q" = 0 ]; then
-			    headFlag=0
-			    header "$t1" "$directory/$dd"
-			    echo "********** $directory/$dd/ does not exist"
-			elif [ "$li" = 1 ]; then
-			    echo "$t1/"
+    if [[ $recursive = 1 ]]; then
+	for sdir in $alldirs; do
+	    dir=${sdir#$spath}
+	    if [[ -d "$sdir" ]]; then
+		if [[ ! -L "$sdir" || $link = 1 ]]; then
+		    if [[ -d "$cdir$dir" ]]; then
+			test $T = 1 && echo "chdir $sdir/"
+			let level+=1
+			process 0 "$sdir/" "$cdir$dir/" ''
+			let level-=1
+			test $T = 1 && echo "redir $spath"
+		    elif [[ $e = 1 ]]; then
+			let fullstatus+=1
+			test $T = 1 && echo -n "*** $cdir$dir does not exist; fullstatus = $fullstatus: "
+			if [[ $q = 0 ]]; then
+			    echo "**DIR***** $cdir$dir/ does not exist"
+			elif [[ $li = 1 ]]; then
+			    echo "$sdir/"
 			fi
 		    fi
 		fi
+	    elif [[ $T = 1 && ! -e "$sdir" ]]; then
+		echo "### ! -d sdir='$sdir'"
 	    fi
 	done
-	let level-=1
-    fi
-
-    if [ "$level" = 0 ] && [ "$dc" != 0 ] && [ "$status" != 0 ] && [ "$q" = 0 ]; then
-	echo
-	files_differ="files differ"
-	if [ "$status" = 1 ]; then
-	    files_differ="file differs"
+	if [[ $q = 0 && $level = 0 && $fullstatus > 0 ]]; then
+	    echo
+	    files_differ="files differ"
+	    if [[ $fullstatus = 1 ]]; then
+		files_differ="file differs"
+	    fi
+	    directories="directories"
+	    if [[ $headCnt = 1 ]]; then
+		directories="directory"
+	    fi
+	    echo "########## $fullstatus $files_differ in $headCnt $directories ##########"
 	fi
-	directories="directories"
-	if [ "$headCnt" = 1 ]; then
-	    directories="directory"
-	fi
-	echo "########## $status $files_differ in $headCnt $directories ##########"
     fi
-    return $status
 }
 
 ########################################################################
@@ -355,89 +271,310 @@ test "$Z" = 1 && echo "processDirectory $this/$dd $fileParams $directory/$dd;"
 ########################################################################
 
 name=${0##*/}
-name=${name%.*}
-i=0; e=0; t=1; p=0; q=0; li=0; w=-wB; pipe=0;
-recursive=0; level=0; Link=0; headCnt=0;
+all=0
+link=0
+defaultregex='(\.[Cchly](pp|xx)?|[Mm]akefile)$'
+regex=''
+recursive=0
+level=0
+sourcepath=''
+sourcecnt=0
+filelist=''
+filecnt=0
+T=0
+Z=0
+pipe=0
+i=0
+e=0
+t=1
+q=0
+li=0
+w=-wB
+headCnt=0
 context=''
-defaultfiles='*.[achimlyv]*'
-command=''
-thisdir='.'
-dc=0
-status=0
+cmd=''
+fullstatus=0
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case $option in
-	    e*)	e=1;;
-	    i*)	i=1; let "li|=2";;
-	    l*)	t=1; q=1; let "li|=1";;
-	    t*)	t=$q;;
-	    p*)	p=1;;
-	    q*)	t=1; q=1;;
-	    c*) context="$context -c";;
-	    C*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		context="$context -C $option";
-		break;;
-	    u*) context="$context -u";;
-	    U*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		context="$context -U $option";
-		break;;
-	    k*)	w="$w -I \$Id:";;
-	    I*)	w=-wBi;;
-	    r*)	recursive=1;;
-	    R*)	recursive=1;;
-	    L*)	Link=1;;
-Z*)	Z=1;;
-	    d*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		thisdir="./$option"
-		break;;
-	    x*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		w="$w -I $option"
-		break;;
-	    X*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		command="$option"
-		break;;
-	    h*)	usage; exit 255;;
-	    -*)	pipe=1;;
-	    *)	x=${option#?}; option=${option%$x}
-	    	echo "$name: unexpected option $option in $1" >&2
-		usage; exit 254;;
-	    esac
-	    option=${option#?}
-	done
-	;;
-    +w) w=;;
-    *)	break;;
+while getopts ":eEiltpqcC:uU:kIwaLrR:x:X:TZp-h" opt; do
+    case $opt in
+    e )	e=1;;
+    E )	e=1; let "li|=2";;
+    i )	i=1; let "li|=2";;
+    l )	t=1; q=1; let "li|=1";;
+    t )	t=$q;;
+    q )	t=1; q=1;;
+    c ) context="$context -c";;
+    C )	context="$context -C $OPTARG";;
+    u ) context="$context -u";;
+    U )	context="$context -U $OPTARG";;
+    k )	w="$w -I \$Id[$:]";;
+    w )	w=;;
+    I )	w="$w -i";;
+    a )	all=1;;
+    L )	link=1;;
+    r )	recursive=1;;
+    R )	regex="$OPTARG";;
+    x )	w="$w -I $OPTARG";;
+    X )	cmd="$OPTARG";;
+    T )	T=1;;
+    Z )	Z=1;;
+    p )	pipe=1;;
+    - )	pipe=1;;
+    h )	usage; exit 255;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 254;;
     esac
-    shift
 done
-test "$Z" = 1 && echo "processDirectory $thisdir" "$@"
+shift $(($OPTIND - 1))
 
-if [ "$pipe" = 0 ]; then
-    processDirectory $thisdir "$@"
-else
-    processDirectory $thisdir "$@" | less
+if [[ $# = 2 && -d "$1" ]]; then
+    sourcepath="${1%/}/"
+    shift
+    test $T = 1 && echo "sourcepath='$sourcepath'"
 fi
+
+if [[ $# = 0 ]]; then
+    echo "$name: no comparison directory as last parameter" >&2
+    usage; exit 253;
+elif [[ $# = 1 ]]; then
+    if [[ -d "$1" ]]; then
+	compdir="${1%/}/"
+	if [[ -z "$regex" && -z "$cmd" ]]; then
+	    regex=$defaultregex
+	fi
+    else
+	echo "$name: no comparison directory as last parameter" >&2
+	usage; exit 252;
+    fi
+else
+    if [[ $recursive = 0 && -z "$regex" && -z "$cmd" ]]; then
+	while [[ $# > 1 ]]; do
+	    filelist="$filelist $1"
+	    if [[ $filecnt = 0 ]]; then
+		fa=${1##*/}
+		sourcepath=${1%$fa}
+		test $Z = 1 && echo "*** 0 *** fa=$fa"
+	    else
+		a=$sourcepath
+		ea=$a
+		eb=$1
+		ga=''
+		gb=''
+		while [[ "$ga" = "$gb" ]]; do
+		    sourcepath=$ga
+		    fa=${ea#*/}
+		    ga=${a%$fa}
+		    if [[ "$fa" = "$ea" ]]; then break; fi
+		    ea=$fa
+		    fb=${eb#*/}
+		    gb=${1%$fb}
+		    if [[ "$fb" = "$eb" ]]; then break; fi
+		    eb=$fb
+		    test $Z = 1 && echo "=== a=$a; s1=$1; fa=$fa; fb=$fb;"
+		    test $Z = 1 && echo "=== sourcepath=$sourcepath; ga=$ga; gb=$gb;"
+		done
+		test $Z = 1 && echo "### a=$a; s1=$1; fa=$fa; fb=$fb;"
+		test $Z = 1 && echo "### sourcepath=$sourcepath; ga=$ga; gb=$gb;"
+	    fi
+	    ((filecnt++))
+	    test $T = 1 && echo "### $filecnt ### sourcepath=$sourcepath"
+	    shift
+	done
+	if [[ -d "$1" ]]; then
+	    compdir="${1%/}/"
+	    shift
+	else
+	    echo "$name: last parameter '$1' is not a directory" >&2
+	    usage; exit 249;
+	fi
+	if [[ $filecnt = 1 && $q = 0 ]]; then
+	    e=1;		# for single file argument, check if other file exists
+	fi
+    else
+	echo "$name: no command line file selection for recursive scan or if -R<regex> or -X<cmd>" >&2
+	usage; exit 248;
+    fi
+fi
+if [[ $sourcepath -ef $compdir ]]; then
+    echo "$name: source and compare directories '$sourcepath' are identical" >&2
+    usage; exit 247;
+fi
+test $T = 1 && echo "regex='$regex'; cmd='$cmd'; compdir='$compdir'; $filecnt files='$filelist'"
+
+if [[ $pipe = 0 ]]; then
+    process $filecnt "$sourcepath" "$compdir" "$filelist"
+else
+    process $filecnt "$sourcepath" "$compdir" "$filelist" | less
+fi
+
+exit $fullstatus
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ Mdiff
+
+=head1 SYNOPSIS
+
+ Usage:  Mdiff [+w] [-raLielEtqcuIkTZph] [-C<num>] [-U<num>] [-x<rexp>]
+    [[[-R<regex>|-X<cmd>] [source_dir]]|file ...] comparison_dir
+
+    diff files named in command line (common initial path is source_dir)
+    or files which match <regex> from single named source_dir with last
+    named comparison_dir. If source_dir missing, default is current directory
+
+    -r    diff source_dir and all its sub-directories recursively
+    -R<regex> use <regex> to select files from all files in source_dir
+              as well as recursiveley selected sub-directories.
+              default <regex> is '(\.[Cchly](pp|xx)?|[Mm]akefile)$'
+    -X<cmd>   shell command to generate a list of files instead of all
+              files. Normally either -R or -X is used, but both can be
+	      used in which case regex selects from lists generated by cmd.
+	      (when -X<cmd> is defined and -R<regex> is not defined, the
+	      default regex is empty, which selects all generated files)
+    -a    do not ignore directories and files starting with .
+          default: ignore directories and files starting with .
+    -L    compare files and directories which are symbolic links
+          default: ignore symbolic links (treated as non-existing)
+       if files differ output:    #### file #### plus output of diff
+    -i    identical files output: ==== file ====
+          default: ignore identical files in output
+    -e    non-existing files put: **** file does not exist
+          default: ignore non-existing files (unless only 1 file)
+
+    -l    list only files which differ - no other output
+    -li   list only files which are identical
+    -le   list only files which are non-existing in comparison_dir
+    -lE   list files which exist in source_dir and comparison_dir
+    -lEi  list files which exist in directories, including identities
+
+    -t    put date and text header at start of report
+    -q    quiet operation - return status only
+    -w    whitespace (spaces, tabs, blank lines) are significant
+          default: all whitespace is ignored (opposite to diff)
+    -I    ignore case differences in file contents
+    -c      display diff output in 3 line copied context form
+    -C<num> display diff output in num line copied context form
+    -u      display diff output in 3 line unified context form
+    -U<num> display diff output in num line unified context form
+    -k    ignore lines containing the string $Id:
+    -x<rexp> ignore diff changes in lines that match <rexp>
+    -h    this help text    -T -Z    trace debugging output
+    -p    output is piped to "less" (return status is not valid)
+    --    all further arguments are treated as files
+    return status 0 (true) if all files are identical
+    return status n (false) n is number of files which differ
+
+=head1 DESCRIPTION
+
+Generate a full report of differences between a list of files in a source
+directory and files with the same name in another comparison directory.
+Option -l allows the generation of lists of different or identical files in
+the two directories or a list of non-existing or common files in the directories.
+These lists are exclusive subsets of the complete set of selected files.
+
+=head1 SPECIFICATION
+
+ After all options with a leading '-' are handled, file selections remain:
+
+ 1)  The last argument must be a directory and is the comparison
+     directory. It may be relative (to CWD) or absolute.
+
+ 2)  any other arguments may be either:
+
+    a)  a single directory, which is the source base directory
+        (default . or better ''). This directory may be relative
+        (to CWD) or absolute.
+
+    or alternatively, but only if -r (recusrsive option) is not set
+    and no regular expression for file selection is set with -R<regex>
+    or a command option with -X<cmd> is defined:
+
+    b)  one or more existing files. These may be in the current
+        directory, but may also be specified with a relative or
+        absolute path. Shell file name expansion can be used to
+        generate a list of files. A special feature of the handling
+        of these filenames is, that the initial sub-path, which is
+        common to all the files listed, is extracted and is used as
+        the source sub directory. Only the rest of the path - usually
+        just plain file names are then looked for in the comparison
+        directory. An example may make this clearer. If there are
+        three files a.c, b.c and x.c in both directory first/ and
+        directory second/, The call:
+
+            Mdiff first/*.c second
+
+        will generate the file list first/a.c, first/b.c and first/x.c
+        whose common sub-path is first/. These files will then be
+        compared with second/a.c etc and not second/first/a.c etc. To
+        do that you will need to call:
+
+            Mdiff first/*.c second/first
+
+
+ 3)  If  -r (recusrsive option) is  set
+     and/or
+        an -X<cmd> generating command is specified
+     and/or
+        a regular expression for file selection is set with -R<regex>
+     or
+        no file list is specified; then
+
+        if -X<cmd> is specified generate lists of files by executing
+            cmd in the source base directory and optionally in
+            recursively generated subdirectories
+        else
+            generate lists of all files in the directories
+
+        if -R<regex> is defined use regex, else if -X<cmd> is not
+            defined use default '(\.[Cchly](pp|xx)?|[Mm]akefile)$'
+
+        if no regex is defined select all files generated
+        else select files from generated lists which match regex
+
+ 4)  For each file specified with a command line list as described in 2b)
+     or as generated and selected as described in 3); do
+     if comparison_directory/file exists but differs; then
+        echo "########## $sfile ##########"
+        ls -l source_directory/file
+        ls -l comparison_directory/file
+        diff <options> source_directory/file comparison_directory/file
+     else if -i option and files are identical
+        echo "========== $sfile =========="
+     else if -e option and comparison file does not exist
+        echo "********** $cfile does not exist"
+     else if -e option and comparison directory does not exist (recursive)
+        echo "**DIR***** $cdir$dir/ does not exist"
+     else if source file does not exist (erroneous command line)
+        echo "**SOURCE** $sfile does not exist"
+
+ 5)  for -l options simply output lists of files using the same file
+     selection mechanism as described in 4)
+       -l    list only files which differ - no other output
+       -li   list only files which are identical
+       -le   list only files which are non-existing in comparison_dir
+       -lE   list files which exist in source_dir and comparison_dir
+       -lEi  list files which exist in directories, including identities
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<iCmake(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.
