@@ -9,7 +9,7 @@ usage ()
 {
     echo 'Usage:	'${0##*/}' [-ASRxzNh] [-v<N>] [-y<opt>]' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
-    echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+    echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
     echo '	-S	strict compile - all immediate variables must be declared' >&2
     echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
@@ -18,13 +18,13 @@ usage ()
     echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
     echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
-    echo '	-N	No nice with calls of icc and gcc compilers (default is nice)' >&2
+    echo '	-N	No nice with calls of immcc and gcc compilers (default is nice)' >&2
     echo '	-h	this help text' >&2
     echo '	uses iCmake -v<N> -y<opt> to make each line of the list pm.lt' >&2
     echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mm,v 1.11 2005/05/15 20:07:13 jw Exp $' >&2
+    echo '$Id: mm,v 1.12 2005/07/04 13:42:03 jw Exp $' >&2
 }
 
 v=""
