@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	make versions of icc ict and libict.a in Test2
+#	make versions of immcc ict and libict.a in Test2
 #
 ########################################################################
 
@@ -11,10 +11,10 @@ usage ()
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
     echo '	-d	diff icc.v in versions' >&2
     echo '	-h	this help text' >&2
-    echo 'make versions of icc ict and libict.a in Test2' >&2
+    echo 'make versions of immcc ict and libict.a in Test2' >&2
     echo 'from project sources of older versions in icc.v_<ver>' >&2
     echo 'if directory icc.v_<ver> does not exist, cov makes it' >&2
-    echo '	$Id: mpv,v 1.5 2003/10/19 12:59:27 jw Exp $' >&2
+    echo '	$Id: mpv,v 1.6 2005/07/04 13:43:24 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -59,7 +59,7 @@ for w in $versions; do
 	    cov -r1.$v icc.v
 	fi
 	cd icc.v_1.$v
-	rm -rf *.o comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core icc ict libict.a
+	rm -rf *.o comp.c gram.c lexc.c LoadObjs PptcObjs LmainObjs cexe.c* scid.c core immcc ict libict.a
 	rm -f Makefile config.status config.log config.cache
 	if [[ ! -e makeAll ]]; then ln -s ../makeAll .; fi
 	if [[ -e configure ]]; then configure; fi
@@ -68,7 +68,7 @@ for w in $versions; do
 	else
 	    makeAll -gctl
 	fi
-	cp icc ../Test2/icc$v
+	cp immcc ../Test2/immcc$v
 	cp ict ../Test2/ict$v
 	cp libict.a ../Test2/libict$v.a
 	if [[ -f pplstfix ]]; then
