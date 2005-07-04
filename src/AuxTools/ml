@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	make lists for icc test
+#	make lists for immcc test
 #
 ########################################################################
 
@@ -22,7 +22,7 @@ usage ()
     echo '	ps.lt	# iC source files *.ic and *.ih' >&2
     echo '	pg.lt	# exe .c .ini .lst .lst6 - generated - may be deleted in source dir' >&2
     echo '	-g	pg.lt - exe .c .ini .lst .lst6 - generated files only' >&2
-    echo '	$Id: ml,v 1.10 2005/06/12 19:14:06 jw Exp $' >&2
+    echo '	$Id: ml,v 1.11 2005/07/04 13:41:38 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
