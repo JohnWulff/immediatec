@@ -9,7 +9,7 @@
 usage()
 {
   echo "Usage: $name [-clASRiIJ6zh][ -y<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
-  echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
+  echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full diff output)' >&2
   echo '	-x <regex> ignore changes in lines that match regex' >&2
@@ -32,7 +32,7 @@ usage()
   echo "	If <dir2> is specified all files <dir1> will be" >&2
   echo "	compared with all files in <dir2> with Mdiff -k" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.9 2005/05/19 09:52:16 jw Exp $' >&2
+  echo '$Id: tt,v 1.10 2005/07/04 13:45:01 jw Exp $' >&2
 }
 
 ########################################################################
