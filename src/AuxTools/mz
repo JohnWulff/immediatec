@@ -12,7 +12,7 @@ usage ()
     echo '	-d	diff previously made files' >&2
     echo '	-min<MIN> minimum version to process (0 .. 9999)' >&2
     echo '	-max<MAX> maximum version to process (0 .. 9999)' >&2
-    echo '	-N	No nice with calls of icc and gcc compilers (default is nice)' >&2
+    echo '	-N	No nice with calls of immcc and gcc compilers (default is nice)' >&2
     echo '	-h	this help text' >&2
     echo '	uses iCmake -Iv<N> to make file ... for each version Alex<N>' >&2
     echo '	N is the minor version number of icc.v (version 1.<N>)' >&2
@@ -20,7 +20,7 @@ usage ()
     echo '	if no files are specified uses mm via pm.lt' >&2
     echo '	directory Alex<N> must exist (generated files are saved there)' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mz,v 1.11 2005/01/17 19:23:18 jw Exp $' >&2
+    echo '$Id: mz,v 1.12 2005/07/04 13:44:47 jw Exp $' >&2
 }
 
 min=0
