@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	make icc$v.v of icc$v ict$v and libict$v.a
+#	make icc$v.v of immcc$v ict$v and libict$v.a
 #
 ########################################################################
 
@@ -11,7 +11,7 @@ usage ()
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
     echo '	-d	diff previously made files' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mkpp,v 1.5 2003/10/18 22:13:32 jw Exp $' >&2
+    echo '	$Id: mkpp,v 1.6 2005/07/04 13:41:25 jw Exp $' >&2
 }
 
 while [[ $# > 0 ]]; do
@@ -41,17 +41,17 @@ for w in $versions; do
     if [[ ! -L $w ]]; then
 	v=${w##*[a-z]}
 	echo "### $v ###"
-	if [[ ! -f icc$v ]]; then
-	    echo "Error: icc$v does not exist" >&2
+	if [[ ! -f immcc$v ]]; then
+	    echo "Error: immcc$v does not exist" >&2
 	elif [[ ! -f ict$v ]]; then
 	    echo "Error: ict$v does not exist" >&2
 	elif [[ ! -f libict$v.a ]]; then
 	    echo "Error: libict$v.a does not exist" >&2
 	else
 	    if [[ -n "$d" ]]; then
-		mkv icc$v ict$v libict$v.a | diff - icc$v.v
+		mkv immcc$v ict$v libict$v.a | diff - icc$v.v
 	    else
-		mkv icc$v ict$v libict$v.a > icc$v.v
+		mkv immcc$v ict$v libict$v.a > icc$v.v
 	    fi
 	fi
     fi
