@@ -1,0 +1,14 @@
+#! /bin/sh
+# $Id:
+
+for d in $*; do
+    if [ -d $d ]; then
+	echo "#### $d"
+	cd $d
+	if locked -vq; then
+	    echo "==== " $(locked -v)
+	    co $(locked -v)
+	fi
+	cd ..
+    fi
+done
