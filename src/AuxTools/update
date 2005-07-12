@@ -1,14 +1,26 @@
-#! /bin/sh
+#! /bin/bash
 # $Id:
 
-for d in $*; do
+name=${0##*/}
+spath="V*"
+
+for d in $spath; do
     if [ -d $d ]; then
-	echo "#### $d"
 	cd $d
 	if locked -vq; then
+	    echo "#### $d"
 	    echo "==== " $(locked -v)
 	    co $(locked -v)
 	fi
 	cd ..
     fi
 done
+
+if [ $name = 'save' ]; then
+    n=${d#V*}
+    let n=$n+1
+    e="V$n"
+    echo "#### $name $e"
+    mkdir $e
+    cp -a $d/RCS $(locked) $e
+fi
