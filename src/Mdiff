@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.2 2005/07/07 09:42:50 archiv Exp $'
+  echo '$Id: Mdiff,v 2.3 2005/07/16 19:59:40 archiv Exp $'
   echo
 }
 
@@ -69,7 +69,13 @@ usage()
   echo '	-U<num>	display diff output in num line unified context form'
   echo '	-k	ignore lines containing the string $Id:'
   echo '	-x<rexp> ignore diff changes in lines that match <rexp>'
+if [[ $BASH_VERSINFO > 2 ]]; then
   echo '	-p	output is piped to "less"'
+  echo '	-P	output is piped to "less -E -X"'
+else
+  echo '	-p	output is piped to "less"       return status not valid' 
+  echo '	-P	output is piped to "less -E -X" return status not valid'
+fi
   echo '	-v	author and version information'
   echo '	-h	this help text	-T -Z	trace debugging output'
   echo '	--	all further arguments are treated as files'
@@ -292,7 +298,7 @@ filelist=''
 filecnt=0
 T=0
 Z=0
-pipe=0
+pipe=''
 i=0
 e=0
 t=1
@@ -304,7 +310,7 @@ context=''
 cmd=''
 fullstatus=0
 
-while getopts ":eEiltpqcC:uU:kIwaLrR:x:X:TZp-vh" opt; do
+while getopts ":eEiltpqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
     case $opt in
     e )	e=1;;
     E )	e=1; let "li|=2";;
@@ -327,8 +333,8 @@ while getopts ":eEiltpqcC:uU:kIwaLrR:x:X:TZp-vh" opt; do
     X )	cmd="$OPTARG";;
     T )	T=1;;
     Z )	Z=1;;
-    p )	pipe=1;;
-    - )	pipe=1;;
+    p|-) pipe='less';;
+    P )	pipe="less -E -X";;
     v )	version; usage; exit 0;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
@@ -417,11 +423,13 @@ if [[ $regex = '.' ]]; then
 fi
 test $T = 1 && echo "regex='$regex'; cmd='$cmd'; sourcepath='$sourcepath'; compdir='$compdir'; $filecnt files='$filelist'"
 
-if [[ $pipe = 0 ]]; then
+if [[ -z "$pipe" ]]; then
     process $filecnt "$sourcepath" "$compdir" "$filelist"
 else
-    set -o pipefail
-    process $filecnt "$sourcepath" "$compdir" "$filelist" | less
+    if [[ $BASH_VERSINFO > 2 ]]; then
+	set -o pipefail
+    fi
+    process $filecnt "$sourcepath" "$compdir" "$filelist" | $pipe
 fi
 
 exit
@@ -479,6 +487,7 @@ exit
     -k    ignore lines containing the string $Id:
     -x<rexp> ignore diff changes in lines that match <rexp>
     -p    output is piped to "less"
+    -P    output is piped to "less -E -X"
     -v    author and version information
     -h    this help text    -T -Z    trace debugging output
     --    all further arguments are treated as files
