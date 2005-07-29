@@ -11,8 +11,8 @@ usage()
   echo "Usage: $name [-clASRiIJ6zh][ -y<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
   echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
-  echo '	-l	list files which differ (default is full diff output)' >&2
-  echo '	-x <regex> ignore changes in lines that match regex' >&2
+  echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
+  echo '	-x <regex> ignore changes in lines that match regex (after -l if used)' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
@@ -27,12 +27,12 @@ usage()
   echo "	directory Test1, Test2, Test3 .. Test9 (however many exist)" >&2
   echo "	<dir1> will be created if it does not exist and generated" >&2
   echo "	files copied to it; if <dir1> exists, the generated files" >&2
-  echo "	will be compared with files in <dir1> with Mdiff -k" >&2
+  echo "	will be compared with files in <dir1> with Mdiff -ke" >&2
   echo "	If no <dir1> is specified no files will be copied or compared" >&2
   echo "	If <dir2> is specified all files <dir1> will be" >&2
-  echo "	compared with all files in <dir2> with Mdiff -k" >&2
+  echo "	compared with all files in <dir2> with Mdiff -ke" >&2
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.10 2005/07/04 13:45:01 jw Exp $' >&2
+  echo '$Id: tt,v 1.11 2005/07/29 18:44:46 jw Exp $' >&2
 }
 
 ########################################################################
@@ -46,7 +46,7 @@ name=${name%.*}
 
 v=""
 y=""
-l=""
+l="e"
 c=""
 A=""
 I=""
@@ -69,7 +69,7 @@ while [ $# -gt 0 ]; do
 		    usage; exit 254;
 		fi
 		break;;
-	    l*)	l="$l -l";;
+	    l*)	l="l";;
 	    A*)	A="$A -A";;
 	    S*)	A="$A -S";;
 	    R*)	A="$A -R";;
@@ -112,16 +112,19 @@ if [ -d "$t" ]; then
     cd $t
     if [ -z "$d2" ]; then
 	if [ -z "$c" ]; then
+	    rm $(cat pg.lt)
 	    echo; echo "========== $t mm$I$v$A"
 	    time mm$I$v$A
+	    ml
 	fi
 	if [ -n "$d1" ]; then
 	    if [ -d "$d1$y" ]; then
-		echo; echo "========== $t Mdiff -k$l * $d1$y"
+		Rdiff p*.lt
+		echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$y"
 		time Mdiff -k$l $(cat pd.lt) $d1$y
 	    else
 		mkdir $d1$y
-		echo; echo "========== $t cp -p * $d1$y"
+		echo; echo "========== $t cp -p \$(cat pd.lt) $d1$y"
 		cp -p $(cat pd.lt) $d1$y
 	    fi
 	fi
@@ -142,16 +145,19 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
 	cd $t
 	if [ -z "$d2" ]; then
 	    if [ -z "$c" ]; then
+		rm $(cat p[g$g].lt)
 		echo; echo "========== $t my$I$v$A$G"
 		time my$I$v$A$G
+		ml
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$y" ]; then
-		    echo; echo "========== $t Mdiff -k$l * $d1$y"
+		    Rdiff p*.lt
+		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$y"
 		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$y
 		else
 		    mkdir $d1$y
-		    echo; echo "========== $t cp -p * $d1$y"
+		    echo; echo "========== $t cp -p \$(cat p[d$g].lt) $d1$y"
 		    cp -p $(cat p[d$g].lt) $d1$y
 		fi
 	    fi
