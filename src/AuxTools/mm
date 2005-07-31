@@ -24,14 +24,14 @@ usage ()
     echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mm,v 1.12 2005/07/04 13:42:03 jw Exp $' >&2
+    echo '$Id: mm,v 1.13 2005/07/31 17:59:43 jw Exp $' >&2
 }
 
 v=""
 z=0
 I=""
 
-while [[ $# > 0 ]]; do
+while [[ $# -gt 0 ]]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
@@ -78,7 +78,7 @@ while true; do
     if [[ -z "$line" ]]; then
 	break
     fi
-    if [ "$z" = 1 ]; then
+    if [ $z -eq 1 ]; then
 	echo "iCmake$I$v $line" >&2
     fi
     iCmake$I$v $line
