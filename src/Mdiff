@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.3 2005/07/16 19:59:40 archiv Exp $'
+  echo '$Id: Mdiff,v 2.4 2005/07/31 17:26:08 archiv Exp $'
   echo
 }
 
@@ -342,16 +342,16 @@ while getopts ":eEiltpqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
 done
 shift $(($OPTIND - 1))
 
-if [[ $# = 2 && -d "$1" ]]; then
+if [[ $# -eq 2 && -d "$1" ]]; then
     sourcepath="${1%/}/"
     shift
     test $T = 1 && echo "sourcepath='$sourcepath'"
 fi
 
-if [[ $# = 0 ]]; then
+if [[ $# -eq 0 ]]; then
     echo "$name: no last parameter (must be a comparison directory)"
     usage; exit 126;
-elif [[ $# = 1 ]]; then
+elif [[ $# -eq 1 ]]; then
     if [[ -d "$1" ]]; then
 	compdir="${1%/}/"
 	if [[ -z "$regex" && -z "$cmd" ]]; then
@@ -363,7 +363,7 @@ elif [[ $# = 1 ]]; then
     fi
 else
     if [[ $recursive = 0 && -z "$regex" && -z "$cmd" ]]; then
-	while [[ $# > 1 ]]; do
+	while [[ $# -gt 1 ]]; do
 	    filelist="$filelist $1"
 	    if [[ $filecnt = 0 ]]; then
 		fa=${1##*/}
