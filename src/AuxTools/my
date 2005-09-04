@@ -16,7 +16,7 @@ usage ()
     echo '	-h	this help text' >&2
     echo 'uses immcc -d76 -y<opt> x.ic to make each line of the list pp.lt' >&2
     echo 'uses immcc -d74 -y<opt> -o x.c x.ic to make each line of the list pp.lt' >&2
-    echo '	$Id: my,v 1.9 2005/07/31 17:58:57 jw Exp $' >&2
+    echo '	$Id: my,v 1.10 2005/09/04 19:40:41 jw Exp $' >&2
 }
 
 v=""
@@ -64,16 +64,15 @@ done
 if [ -f pp.lt ]; then
     if [ -n "$g" ]; then
 	for file in $(cat pp.lt); do
-	    echo $file
 	    f=${file%.*}
 	    if [ $z -eq 1 ]; then
 		echo "immcc -d76$v$A -l $f.lst6 $f.ic" >&2
 	    fi
+	    echo $file
 	    immcc -d76$v$A -l $f.lst6 $f.ic;
 	done 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.[a-z][a-z]*+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/' > Init.out6
     fi
     for file in $(cat pp.lt); do
-	echo $file
 	f=${file%.*}
 	if [ $z -eq 1 ]; then
 	    echo "iCmake$I$y$A $f.ic" >&2

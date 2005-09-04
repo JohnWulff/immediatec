@@ -42,7 +42,7 @@ usage()
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
   echo
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.12 2005/07/29 20:32:20 jw Exp $' >&2
+  echo '$Id: tt,v 1.13 2005/09/04 19:40:41 jw Exp $' >&2
 }
 
 ########################################################################
@@ -132,7 +132,7 @@ if [ -d "$t" ]; then
     cd $t
     if [ -z "$d2" ]; then
 	if [ -z "$c" ]; then
-	    rm $(cat pg.lt)
+	    rm -f $(cat pg.lt)
 	    echo; echo "========== $t mm$I$v$A"
 	    time mm$I$v$A
 	    ml
@@ -166,7 +166,7 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
 	cd $t
 	if [ -z "$d2" ]; then
 	    if [ -z "$c" ]; then
-		rm $(cat p[g$g].lt)
+		rm -f $(cat p[g$g].lt)
 		echo; echo "========== $t my$I$v$A$G"
 		time my$I$v$A$G
 		ml
