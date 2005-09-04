@@ -42,7 +42,7 @@ usage()
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
   echo
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.13 2005/09/04 19:40:41 jw Exp $' >&2
+  echo '$Id: tt,v 1.14 2005/09/04 20:31:20 jw Exp $' >&2
 }
 
 ########################################################################
@@ -127,41 +127,42 @@ if [ -z "$y" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
     time make test
 fi
 
-t=Test1
-if [ -d "$t" ]; then
-    cd $t
-    if [ -z "$d2" ]; then
-	if [ -z "$c" ]; then
-	    rm -f $(cat pg.lt)
-	    echo; echo "========== $t mm$I$v$A"
-	    time mm$I$v$A
-	    ml
-	fi
-	if [ -n "$d1" ]; then
-	    if [ -d "$d1$y" ]; then
-		Rdiff p*.lt
-		echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$y"
-		time Mdiff -k$l $(cat pd.lt) $d1$y
-	    else
-		mkdir $d1$y
-		echo; echo "========== $t cp -p \$(cat pd.lt) $d1$y"
-		cp -p $(cat pd.lt) $d1$y
+for t in Test1 Test9; do
+    if [ -d "$t" ]; then
+	cd $t
+	if [ -z "$d2" ]; then
+	    if [ -z "$c" ]; then
+		rm -f $(cat pg.lt)
+		echo; echo "========== $t mm$I$v$A"
+		time mm$I$v$A
+		ml
 	    fi
+	    if [ -n "$d1" ]; then
+		if [ -d "$d1$y" ]; then
+		    Rdiff p*.lt
+		    echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$y"
+		    time Mdiff -k$l $(cat pd.lt) $d1$y
+		else
+		    mkdir $d1$y
+		    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$y"
+		    cp -p $(cat pd.lt) $d1$y
+		fi
+	    fi
+	elif [ -d "$d1$y" -a -d "$d2$y" ]; then
+	    cd $d1$y
+	    eval d4="$d3"
+	    echo; echo "========== $t Mdiff -k$l $d1$y/* $d4$y"
+	    time Mdiff -k$l $(cat ../pd.lt) $d4$y
+	    cd ..
+	else
+	    echo "ERROR: if two <directories> are specified they must exist" >&2
+	    usage
 	fi
-    elif [ -d "$d1$y" -a -d "$d2$y" ]; then
-	cd $d1$y
-	eval d4="$d3"
-	echo; echo "========== $t Mdiff -k$l $d1$y/* $d4$y"
-	time Mdiff -k$l $(cat ../pd.lt) $d4$y
 	cd ..
-    else
-	echo "ERROR: if two <directories> are specified they must exist" >&2
-	usage
     fi
-    cd ..
-fi
+done
 
-for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test9; do
+for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
     if [ -d "$t" ]; then
 	cd $t
 	if [ -z "$d2" ]; then
