@@ -27,13 +27,13 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.4 2005/07/31 17:26:08 archiv Exp $'
+  echo '$Id: Mdiff,v 2.5 2005/09/11 15:09:12 archiv Exp $'
   echo
 }
 
 usage()
 {
-  echo "Usage:	$name [eEiltpqcukIwaLrTZpvh] [-C<num>] [-U<num>] [-x<rexp>]"
+  echo "Usage:	$name [eEiltqcukIwaLrTZpPvh] [-C<num>] [-U<num>] [-x<rexp>]"
   echo '	[[[-R<regex>|-X<cmd>] [source_dir]]|file ...] comparison_dir'
   echo '	diff files named in command line (common initial path is source_dir)'
   echo '	or files which match <regex> from single named source_dir with last'
@@ -69,7 +69,7 @@ usage()
   echo '	-U<num>	display diff output in num line unified context form'
   echo '	-k	ignore lines containing the string $Id:'
   echo '	-x<rexp> ignore diff changes in lines that match <rexp>'
-if [[ $BASH_VERSINFO > 2 ]]; then
+if [[ $BASH_VERSINFO -gt 2 ]]; then
   echo '	-p	output is piped to "less"'
   echo '	-P	output is piped to "less -E -X"'
 else
@@ -92,9 +92,9 @@ fi
 
 header()
 {
-    if [[ $headFlag = 0 ]]; then
-	if [[ $t = 0 ]]; then
-	    if [[ $headCnt = 0 ]]; then
+    if [[ $headFlag -eq 0 ]]; then
+	if [[ $t -eq 0 ]]; then
+	    if [[ $headCnt -eq 0 ]]; then
 		date
 	    else
 		echo
@@ -124,12 +124,12 @@ process()
     headFlag=0
     local status=0
     local alldirs allfiles sfile file sdir dir cfile
-    if [[ $all = 0 ]]; then
+    if [[ $all -eq 0 ]]; then
 	alldirs="$spath*"
     else
 	alldirs="$spath.[^.]* $spath..?* $spath*"
     fi
-    if [[ $n = 0 ]];then
+    if [[ $n -eq 0 ]];then
 	if [[ -n "$cmd" ]]; then
 	    if [[ -z "$spath" ]]; then cd .; else cd $spath; fi
 	    allfiles=''
@@ -143,7 +143,7 @@ process()
     else
 	allfiles=$*
     fi
-    test $T = 1 && echo "### allfiles='$allfiles'"
+    test $T -eq 1 && echo "### allfiles='$allfiles'"
     for sfile in $allfiles; do
 	file=${sfile#$spath}
 	if [[ ! -d "$sfile" ]]; then
@@ -151,43 +151,43 @@ process()
 		if [[ -f "$sfile" ]]; then
 		    cfile="$cdir$file"
 		    if [[ -f "$cfile" ]]; then
-			if [[ -L "$cfile" && $link = 0 ]]; then
-			    if [[ $e = 1 ]]; then
+			if [[ -L "$cfile" && $link -eq 0 ]]; then
+			    if [[ $e -eq 1 ]]; then
 				let status+=1
-				test $T = 1 && echo -n "*** $cfile is a link; status = $status: "
-				if [[ $q = 0 ]]; then
+				test $T -eq 1 && echo -n "*** $cfile is a link; status = $status: "
+				if [[ $q -eq 0 ]]; then
 				    header "$spath" "$cdir"
 				    echo "********** $cfile is a symbolic link - ignored"
-				elif [[ $li = 1 ]]; then
-				    echo $sfile	# -le option
+				elif [[ $li -eq 1 ]]; then
+				    echo "$sfile"	# -le option
 				fi
 			    fi
 			elif [[ $sfile -ef $cfile ]]; then	# check if same device and inode
-			    if [[ $q = 0 ]]; then
-				if [[ $i = 1 ]]; then
+			    if [[ $q -eq 0 ]]; then
+				if [[ $i -eq 1 ]]; then
 				    header "$spath" "$cdir"
 				    echo "==SAME==== $sfile and $cfile are the same file"
 				fi
-			    elif [[ $li = 3 && $i = 1 && $e = 1 ]]; then
-				echo $sfile	# -lEi option
+			    elif [[ $li -eq 3 && $i -eq 1 && $e -eq 1 ]]; then
+				echo "$sfile"	# -lEi option
 			    fi
-			elif [[ $li = 3 && $e = 1 ]]; then
-			    echo $sfile		# -lE option
+			elif [[ $li -eq 3 && $e -eq 1 ]]; then
+			    echo "$sfile"		# -lE option
 			elif diff -q $w -- $sfile $cfile > /dev/null; then
-			    if [[ $q = 0 ]]; then
-				if [[ $i = 1 ]]; then
+			    if [[ $q -eq 0 ]]; then
+				if [[ $i -eq 1 ]]; then
 				    header "$spath" "$cdir"
 				    echo "========== $sfile =========="
 				fi
-			    elif [[ $li = 3 ]]; then
-				echo $sfile	# -li option
+			    elif [[ $li -eq 3 ]]; then
+				echo "$sfile"		# -li option
 			    fi
 			else
-			    if [[ $li = 0 || $li = 2 || $e = 0 ]]; then
+			    if [[ $li -eq 0 || $li -eq 2 || $e -eq 0 ]]; then
 				let status+=1
-				test $T = 1 && echo -n "*** $cfile differs; status = $status: "
+				test $T -eq 1 && echo -n "*** $cfile differs; status = $status: "
 			    fi
-			    if [[ $q = 0 ]]; then
+			    if [[ $q -eq 0 ]]; then
 				header "$spath" "$cdir"
 				echo
 				echo "########## $sfile ##########"
@@ -196,25 +196,25 @@ process()
 				    ls -lL -- $cfile
 				fi
 				diff $w$context -- $sfile $cfile
-			    elif [[ $li = 1 && $e = 0 ]]; then
-				echo $sfile	# -l option
+			    elif [[ $li -eq 1 && $e -eq 0 ]]; then
+				echo "$sfile"		# -l option
 			    fi
 			fi
-		    elif [[ $e = 1 ]]; then
+		    elif [[ $e -eq 1 ]]; then
 			let status+=1
-			test $T = 1 && echo -n "*** $cfile does not exist; status = $status: "
-			if [[ $q = 0 ]]; then
+			test $T -eq 1 && echo -n "*** $cfile does not exist; status = $status: "
+			if [[ $q -eq 0 ]]; then
 			    header "$spath" "$cdir"
 			    echo "********** $cfile does not exist"
-			elif [[ $li = 1 ]]; then
-			    echo $sfile		# -le option
+			elif [[ $li -eq 1 ]]; then
+			    echo "$sfile"		# -le option
 			fi
 		    fi
-		elif [[ $q = 0 ]]; then
+		elif [[ $q -eq 0 ]]; then
 		    local f=${sfile%\*}
 		    if [[ "$sfile" = "$f" ]]; then
 			let status+=1
-			test $T = 1 && echo -n "*** $sfile does not exist; status = $status: "
+			test $T -eq 1 && echo -n "*** $sfile does not exist; status = $status: "
 			header "$spath" "$cdir"
 			echo "**SOURCE** $sfile does not exist"
 		    fi
@@ -222,11 +222,11 @@ process()
 	    fi
 	fi
     done
-    if [[ $status > 0 ]]; then
-	if [[ $q = 0 ]]; then
+    if [[ $status -gt 0 ]]; then
+	if [[ $q -eq 0 ]]; then
 	    echo
 	    local files_differ="files differ"
-	    if [[ $status = 1 ]]; then
+	    if [[ $status -eq 1 ]]; then
 		files_differ="file differs"
 	    fi
 	    if [[ -z "$spath" ]]; then
@@ -236,41 +236,41 @@ process()
 	    fi
 	fi
 	let fullstatus+=$status
-	test $T = 1 && echo -n "*** fullstatus = $fullstatus; status = $status: "
+	test $T -eq 1 && echo -n "*** fullstatus = $fullstatus; status = $status: "
     fi
-    if [[ $recursive = 1 ]]; then
+    if [[ $recursive -eq 1 ]]; then
 	for sdir in $alldirs; do
 	    dir=${sdir#$spath}
 	    if [[ -d "$sdir" ]]; then
-		if [[ ! -L "$sdir" || $link = 1 ]]; then
+		if [[ ! -L "$sdir" || $link -eq 1 ]]; then
 		    if [[ -d "$cdir$dir" ]]; then
-			test $T = 1 && echo "chdir $sdir/"
+			test $T -eq 1 && echo "chdir $sdir/"
 			let level+=1
 			process 0 "$sdir/" "$cdir$dir/" ''
 			let level-=1
-			test $T = 1 && echo "redir $spath"
-		    elif [[ $e = 1 ]]; then
+			test $T -eq 1 && echo "redir $spath"
+		    elif [[ $e -eq 1 ]]; then
 			let fullstatus+=1
-			test $T = 1 && echo -n "*** $cdir$dir does not exist; fullstatus = $fullstatus: "
-			if [[ $q = 0 ]]; then
+			test $T -eq 1 && echo -n "*** $cdir$dir does not exist; fullstatus = $fullstatus: "
+			if [[ $q -eq 0 ]]; then
 			    echo "**DIR***** $cdir$dir/ does not exist"
-			elif [[ $li = 1 ]]; then
+			elif [[ $li -eq 1 ]]; then
 			    echo "$sdir/"
 			fi
 		    fi
 		fi
-	    elif [[ $T = 1 && ! -e "$sdir" ]]; then
+	    elif [[ $T -eq 1 && ! -e "$sdir" ]]; then
 		echo "### ! -d sdir='$sdir'"
 	    fi
 	done
-	if [[ $q = 0 && $level = 0 && $fullstatus > 0 ]]; then
+	if [[ $q -eq 0 && $level -eq 0 && $fullstatus -gt 0 ]]; then
 	    echo
 	    files_differ="files differ"
-	    if [[ $fullstatus = 1 ]]; then
+	    if [[ $fullstatus -eq 1 ]]; then
 		files_differ="file differs"
 	    fi
 	    directories="directories"
-	    if [[ $headCnt = 1 ]]; then
+	    if [[ $headCnt -eq 1 ]]; then
 		directories="directory"
 	    fi
 	    echo "########## $fullstatus $files_differ in $headCnt $directories ##########"
@@ -310,7 +310,7 @@ context=''
 cmd=''
 fullstatus=0
 
-while getopts ":eEiltpqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
+while getopts ":eEiltqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
     case $opt in
     e )	e=1;;
     E )	e=1; let "li|=2";;
@@ -345,7 +345,7 @@ shift $(($OPTIND - 1))
 if [[ $# -eq 2 && -d "$1" ]]; then
     sourcepath="${1%/}/"
     shift
-    test $T = 1 && echo "sourcepath='$sourcepath'"
+    test $T -eq 1 && echo "sourcepath='$sourcepath'"
 fi
 
 if [[ $# -eq 0 ]]; then
@@ -362,13 +362,13 @@ elif [[ $# -eq 1 ]]; then
 	usage; exit 125;
     fi
 else
-    if [[ $recursive = 0 && -z "$regex" && -z "$cmd" ]]; then
+    if [[ $recursive -eq 0 && -z "$regex" && -z "$cmd" ]]; then
 	while [[ $# -gt 1 ]]; do
 	    filelist="$filelist $1"
-	    if [[ $filecnt = 0 ]]; then
+	    if [[ $filecnt -eq 0 ]]; then
 		fa=${1##*/}
 		sourcepath=${1%$fa}
-		test $Z = 1 && echo "*** 0 *** fa=$fa"
+		test $Z -eq 1 && echo "*** 0 *** fa=$fa"
 	    else
 		a=$sourcepath
 		ea=$a
@@ -385,14 +385,14 @@ else
 		    gb=${1%$fb}
 		    if [[ "$fb" = "$eb" ]]; then break; fi
 		    eb=$fb
-		    test $Z = 1 && echo "=== a=$a; s1=$1; fa=$fa; fb=$fb;"
-		    test $Z = 1 && echo "=== sourcepath=$sourcepath; ga=$ga; gb=$gb;"
+		    test $Z -eq 1 && echo "=== a=$a; s1=$1; fa=$fa; fb=$fb;"
+		    test $Z -eq 1 && echo "=== sourcepath=$sourcepath; ga=$ga; gb=$gb;"
 		done
-		test $Z = 1 && echo "### a=$a; s1=$1; fa=$fa; fb=$fb;"
-		test $Z = 1 && echo "### sourcepath=$sourcepath; ga=$ga; gb=$gb;"
+		test $Z -eq 1 && echo "### a=$a; s1=$1; fa=$fa; fb=$fb;"
+		test $Z -eq 1 && echo "### sourcepath=$sourcepath; ga=$ga; gb=$gb;"
 	    fi
 	    ((filecnt++))
-	    test $T = 1 && echo "### $filecnt ### sourcepath=$sourcepath"
+	    test $T -eq 1 && echo "### $filecnt ### sourcepath=$sourcepath"
 	    shift
 	done
 	if [[ -d "$1" ]]; then
@@ -402,7 +402,7 @@ else
 	    echo "$name: last parameter '$1' is not a directory (for comparison)"
 	    usage; exit 124;
 	fi
-	if [[ $filecnt = 1 && $q = 0 ]]; then
+	if [[ $filecnt -eq 1 && $q -eq 0 ]]; then
 	    e=1;		# for single file argument, check if other file exists
 	fi
     else
@@ -421,12 +421,12 @@ fi
 if [[ $regex = '.' ]]; then
     regex=''			# faster, because grep is not used
 fi
-test $T = 1 && echo "regex='$regex'; cmd='$cmd'; sourcepath='$sourcepath'; compdir='$compdir'; $filecnt files='$filelist'"
+test $T -eq 1 && echo "regex='$regex'; cmd='$cmd'; sourcepath='$sourcepath'; compdir='$compdir'; $filecnt files='$filelist'"
 
 if [[ -z "$pipe" ]]; then
     process $filecnt "$sourcepath" "$compdir" "$filelist"
 else
-    if [[ $BASH_VERSINFO > 2 ]]; then
+    if [[ $BASH_VERSINFO -gt 2 ]]; then
 	set -o pipefail
     fi
     process $filecnt "$sourcepath" "$compdir" "$filelist" | $pipe
