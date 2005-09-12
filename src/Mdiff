@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.5 2005/09/11 15:09:12 archiv Exp $'
+  echo '$Id: Mdiff,v 2.6 2005/09/12 18:04:46 archiv Exp $'
   echo
 }
 
@@ -56,6 +56,7 @@ usage()
   echo '	-l	list only files which differ - no other output'
   echo '	-li	list only files which are identical'
   echo '	-le	list only files which are non-existing in comparison_dir'
+  echo '	-el	list non-existing files plus files which differ'
   echo '	-lE	list files which exist in source_dir and comparison_dir'
   echo '	-lEi|-lei list files which exist in directories, including identities'
   echo '	-t	put date and text header at start of report'
@@ -80,7 +81,7 @@ fi
   echo '	-h	this help text	-T -Z	trace debugging output'
   echo '	--	all further arguments are treated as files'
   echo '	return status 0 (true) if all files are identical'
-  echo '	return status n (false) n is number of files which differ'
+  echo '	return status n (false) n is number of files which differ or are missing'
 }
 
 ########################################################################
@@ -152,14 +153,14 @@ process()
 		    cfile="$cdir$file"
 		    if [[ -f "$cfile" ]]; then
 			if [[ -L "$cfile" && $link -eq 0 ]]; then
-			    if [[ $e -eq 1 ]]; then
-				let status+=1
+			    if [[ $e -ne 0 ]]; then
+				let status+=1		# symbolic link (-e -le -lE)
 				test $T -eq 1 && echo -n "*** $cfile is a link; status = $status: "
 				if [[ $q -eq 0 ]]; then
 				    header "$spath" "$cdir"
 				    echo "********** $cfile is a symbolic link - ignored"
 				elif [[ $li -eq 1 ]]; then
-				    echo "$sfile"	# -le option
+				    echo "$sfile"	# -le or -el option (symbolic link)
 				fi
 			    fi
 			elif [[ $sfile -ef $cfile ]]; then	# check if same device and inode
@@ -168,11 +169,11 @@ process()
 				    header "$spath" "$cdir"
 				    echo "==SAME==== $sfile and $cfile are the same file"
 				fi
-			    elif [[ $li -eq 3 && $i -eq 1 && $e -eq 1 ]]; then
-				echo "$sfile"	# -lEi option
+			    elif [[ $li -eq 3 && $i -eq 1 && $e -ne 0 ]]; then
+				echo "$sfile"		# -lEi option only (identity)
 			    fi
-			elif [[ $li -eq 3 && $e -eq 1 ]]; then
-			    echo "$sfile"		# -lE option
+			elif [[ $li -eq 3 && $e -ne 0 ]]; then
+			    echo "$sfile"		# -lE or -lEi (not identity)
 			elif diff -q $w -- $sfile $cfile > /dev/null; then
 			    if [[ $q -eq 0 ]]; then
 				if [[ $i -eq 1 ]]; then
@@ -180,11 +181,11 @@ process()
 				    echo "========== $sfile =========="
 				fi
 			    elif [[ $li -eq 3 ]]; then
-				echo "$sfile"		# -li option
+				echo "$sfile"		# -li option (-lE or -lEi in other elif)
 			    fi
 			else
-			    if [[ $li -eq 0 || $li -eq 2 || $e -eq 0 ]]; then
-				let status+=1
+			    if [[ $li -eq 0 || $li -eq 2 || $e -ne 1 ]]; then
+				let status+=1		# files differ (-l -li -i or nothing)
 				test $T -eq 1 && echo -n "*** $cfile differs; status = $status: "
 			    fi
 			    if [[ $q -eq 0 ]]; then
@@ -196,27 +197,29 @@ process()
 				    ls -lL -- $cfile
 				fi
 				diff $w$context -- $sfile $cfile
-			    elif [[ $li -eq 1 && $e -eq 0 ]]; then
-				echo "$sfile"		# -l option
+			    elif [[ $li -eq 1 && $e -ne 1 ]]; then
+				echo "$sfile"		# -l or -el option
 			    fi
 			fi
-		    elif [[ $e -eq 1 ]]; then
-			let status+=1
+		    elif [[ $e -ne 0 ]]; then
+			let status+=1			# comparison file missing (-e -le -lE)
 			test $T -eq 1 && echo -n "*** $cfile does not exist; status = $status: "
 			if [[ $q -eq 0 ]]; then
 			    header "$spath" "$cdir"
 			    echo "********** $cfile does not exist"
 			elif [[ $li -eq 1 ]]; then
-			    echo "$sfile"		# -le option
+			    echo "$sfile"		# -le or -el option
 			fi
 		    fi
 		elif [[ $q -eq 0 ]]; then
-		    local f=${sfile%\*}
+		    let status+=1			# count as error (-i -e nothing)
+		    local f=${sfile%\*}			# weed out wild cards if no file found
 		    if [[ "$sfile" = "$f" ]]; then
-			let status+=1
 			test $T -eq 1 && echo -n "*** $sfile does not exist; status = $status: "
 			header "$spath" "$cdir"
 			echo "**SOURCE** $sfile does not exist"
+		    else
+			echo "**SOURCE** no files match"
 		    fi
 		fi
 	    fi
@@ -249,13 +252,13 @@ process()
 			process 0 "$sdir/" "$cdir$dir/" ''
 			let level-=1
 			test $T -eq 1 && echo "redir $spath"
-		    elif [[ $e -eq 1 ]]; then
+		    elif [[ $e -ne 0 ]]; then
 			let fullstatus+=1
 			test $T -eq 1 && echo -n "*** $cdir$dir does not exist; fullstatus = $fullstatus: "
 			if [[ $q -eq 0 ]]; then
 			    echo "**DIR***** $cdir$dir/ does not exist"
 			elif [[ $li -eq 1 ]]; then
-			    echo "$sdir/"
+			    echo "$sdir/"		# -le or -el option
 			fi
 		    fi
 		fi
@@ -315,7 +318,7 @@ while getopts ":eEiltqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
     e )	e=1;;
     E )	e=1; let "li|=2";;
     i )	i=1; let "li|=2";;
-    l )	t=1; q=1; let "li|=1";;
+    l )	t=1; q=1; let "li|=1"; if [[ $e -eq 1 ]]; then e=2; fi;;
     t )	t=$q;;
     q )	t=1; q=1;;
     c ) context="$context -c";;
@@ -434,6 +437,24 @@ fi
 
 exit
 
+############ flag combinations        ##################################
+# opt	li e  i  q	explanation
+# ----------------
+# none	0  0  0  0	show diffs only
+# -i	2  0  1  0	show diffs and report identical files
+# -e	0  1  0  0	show diffs and report missing files
+# -ei	0  1  1  0	show diffs, report identical and missing files
+# -E	2  1  0  0	(same as -e)
+# ----------------
+# -l	1  0  0  1	list only files which differ
+# -li	3  0  1  1	list only files which are identical
+# -le	1  1  0  1	list only files which are missing
+# -el	1  2  0  1	list missing files plus files which differ
+# -lE	3  1  0  1	list all files which exist in both directories
+# -lEi	3  1  1  1	same but also include identities (same inode)
+# -lei	3  1  1  1	same but also include identities (same inode)
+########################################################################
+
 ############ POD to generate man page ##################################
 
 =head1 NAME
@@ -472,6 +493,7 @@ exit
     -l    list only files which differ - no other output
     -li   list only files which are identical
     -le   list only files which are non-existing in comparison_dir
+    -el   list non-existing files plus files which differ
     -lE   list files which exist in source_dir and comparison_dir
     -lEi|-lei list files which exist in directories, including identities
 
@@ -492,7 +514,7 @@ exit
     -h    this help text    -T -Z    trace debugging output
     --    all further arguments are treated as files
     return status 0 (true) if all files are identical
-    return status n (false) n is number of files which differ
+    return status n (false) n is number of files which differ or are missing
 
 =head1 DESCRIPTION
 
@@ -583,6 +605,7 @@ These lists are exclusive subsets of the complete set of selected files.
        -li   list only selected files which are identical
        -le   list only selected files which are non-existing in
              comparison_dir (existing path in source_dir is listed)
+       -el   list non-existing files plus files which differ
        -lE   list selected files which exist in source_dir and
              comparison_dir
        -lEi or -lei  list selected files which exist in directories,
@@ -601,6 +624,7 @@ These lists are exclusive subsets of the complete set of selected files.
 
      You get the idea. It generally pays to execute the plain Mdiff
      first to visually check that the generated list is sensible.
+     A serious error would be, if a diff output is used as a list.
 
 =head1 AUTHOR
 
