@@ -6,6 +6,8 @@ usage ()
     echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
     echo '	-S	strict compile - all immediate variables must be declared' >&2
+    echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
+    echo '	-PP	pedantic-error: error if variable contains $' >&2
     echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
     echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
     echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
@@ -16,7 +18,7 @@ usage ()
     echo '	-h	this help text' >&2
     echo 'uses immcc -d76 -y<opt> x.ic to make each line of the list pp.lt' >&2
     echo 'uses immcc -d74 -y<opt> -o x.c x.ic to make each line of the list pp.lt' >&2
-    echo '	$Id: my,v 1.10 2005/09/04 19:40:41 jw Exp $' >&2
+    echo '	$Id: my,v 1.11 2005/09/19 20:32:50 jw Exp $' >&2
 }
 
 v=""
@@ -44,6 +46,7 @@ while [ $# -gt 0 ]; do
 		break;;
 	    A*)	A="$A -A";;
 	    S*)	A="$A -S";;
+	    P*)	A="$A -P";;
 	    R*)	A="$A -R";;
 	    i*) I=" -i";;
 	    I*) I=" -I";;

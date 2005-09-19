@@ -12,6 +12,8 @@ usage ()
     echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
     echo '	-S	strict compile - all immediate variables must be declared' >&2
+    echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
+    echo '	-PP	pedantic-error: error if variable contains $' >&2
     echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
     echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
     echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
@@ -24,10 +26,10 @@ usage ()
     echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mm,v 1.13 2005/07/31 17:59:43 jw Exp $' >&2
+    echo '$Id: mm,v 1.14 2005/09/19 20:32:50 jw Exp $' >&2
 }
 
-v=""
+A=""
 z=0
 I=""
 
@@ -39,7 +41,7 @@ while [[ $# -gt 0 ]]; do
 	    case "$option" in
 	    v*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    v="$v -v$option"
+		    A="$A -v$option"
 		else
 		    echo "-v must specify an option";
 		    usage; exit 254;
@@ -47,21 +49,22 @@ while [[ $# -gt 0 ]]; do
 		break;;
 	    y*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    v="$v -y$option"
+		    A="$A -y$option"
 		else
 		    echo "-y must specify an option";
 		    usage; exit 254;
 		fi
 		break;;
-	    x*)	v="$v -x";;
-	    A*)	v="$v -A";;
-	    S*)	v="$v -S";;
-	    R*)	v="$v -R";;
-	    N*)	v="$v -N";;
+	    x*)	A="$A -x";;
+	    A*)	A="$A -A";;
+	    S*)	A="$A -S";;
+	    P*)	A="$A -P";;
+	    R*)	A="$A -R";;
+	    N*)	A="$A -N";;
 	    i*) I=" -i";;
 	    I*) I=" -I";;
 	    J*) I=" -J";;
-	    z*)	z=1;v="$v -z";;
+	    z*)	z=1;A="$A -z";;
 	    h*)	usage; exit 255;;
 	    *)	echo "unknown flag -$option";
 		usage; exit 255;;
@@ -79,8 +82,8 @@ while true; do
 	break
     fi
     if [ $z -eq 1 ]; then
-	echo "iCmake$I$v $line" >&2
+	echo "iCmake$I$A $line" >&2
     fi
-    iCmake$I$v $line
+    iCmake$I$A $line
 done < pm.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.[a-z][a-z]*+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/' > Init.out
 rm -rf ic[0-9].*
