@@ -44,7 +44,7 @@ usage()
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
   echo
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.15 2005/09/19 20:32:50 jw Exp $' >&2
+  echo '$Id: tt,v 1.16 2005/09/20 19:13:20 jw Exp $' >&2
 }
 
 ########################################################################
@@ -59,11 +59,14 @@ name=${name%.*}
 v=""
 y=""
 l="e"
+x=""
+P=""
 c=""
 A=""
 I=""
 g=""
 G=""
+T="test"
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -81,10 +84,10 @@ while [ $# -gt 0 ]; do
 		    usage; exit 254;
 		fi
 		break;;
-	    l*)	l="l";;
+	    l*)	l="${l}l";;
 	    A*)	A="$A -A";;
 	    S*)	A="$A -S";;
-	    P*)	A="$A -P";;
+	    P*)	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -xC.OUTPUT -x__GNUC__ -x__extension__ -x#endif"; fi;A="$A$P";;	# allows -PP => -P -P
 	    R*)	A="$A -R";;
 	    i*) I=" -i";;
 	    I*) I=" -I";;
@@ -95,7 +98,7 @@ while [ $# -gt 0 ]; do
 		    shift
 		    option=$1
 		fi
-		l="$l -x $option"
+		x="$x -x$option"
 		break;;
 	    z*)	v="$v -z";;
 	    h*)	usage; exit 255;;
@@ -111,6 +114,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+l="$l$x"
 d1=$1
 d1=${d1%/}
 d2=$2
@@ -126,8 +130,8 @@ fi
 
 echo; date
 if [ -z "$y" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
-    echo; echo "========== Test0 make test"; echo
-    time make test
+    echo; echo "========== Test0 make $T"; echo
+    time make $T
 fi
 
 for t in Test1 Test9; do
