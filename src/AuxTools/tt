@@ -8,8 +8,8 @@
 
 usage()
 {
-  echo "Usage: $name [-clASRiIJ6zh][ -y<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
-  echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
+  echo "Usage: $name [-clASRiIJ6zh][ -d<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
+  echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
   echo '	-x <regex> ignore changes in lines that match regex (after -l if used)' >&2
@@ -44,7 +44,7 @@ usage()
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
   echo
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.16 2005/09/20 19:13:20 jw Exp $' >&2
+  echo '$Id: tt,v 1.17 2005/09/30 15:58:01 jw Exp $' >&2
 }
 
 ########################################################################
@@ -57,7 +57,7 @@ name=${0##*/}
 name=${name%.*}
 
 v=""
-y=""
+d=""
 l="e"
 x=""
 P=""
@@ -75,19 +75,19 @@ while [ $# -gt 0 ]; do
 	while [ -n "$option" ]; do
 	    case $option in
 	    c*)	c="c";;
-	    y*)	option=${option#?}
+	    d*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    v="$v -y$option"
-		    y="_$option"
+		    v="$v -d$option"
+		    d="_$option"
 		else
-		    echo "-y must specify an option in $1" >&2
+		    echo "-d must specify an option in $1" >&2
 		    usage; exit 254;
 		fi
 		break;;
 	    l*)	l="${l}l";;
 	    A*)	A="$A -A";;
 	    S*)	A="$A -S";;
-	    P*)	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -xC.OUTPUT -x__GNUC__ -x__extension__ -x#endif"; fi;A="$A$P";;	# allows -PP => -P -P
+	    P*)	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
 	    R*)	A="$A -R";;
 	    i*) I=" -i";;
 	    I*) I=" -I";;
@@ -98,7 +98,7 @@ while [ $# -gt 0 ]; do
 		    shift
 		    option=$1
 		fi
-		x="$x -x$option"
+		x="$x -I$option"
 		break;;
 	    z*)	v="$v -z";;
 	    h*)	usage; exit 255;;
@@ -129,7 +129,7 @@ else
 fi
 
 echo; date
-if [ -z "$y" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
+if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
     echo; echo "========== Test0 make $T"; echo
     time make $T
 fi
@@ -145,21 +145,21 @@ for t in Test1 Test9; do
 		ml
 	    fi
 	    if [ -n "$d1" ]; then
-		if [ -d "$d1$y" ]; then
+		if [ -d "$d1$d" ]; then
 		    Rdiff p*.lt
-		    echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$y"
-		    time Mdiff -k$l $(cat pd.lt) $d1$y
+		    echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$d"
+		    time Mdiff -k$l $(cat pd.lt) $d1$d
 		else
-		    mkdir $d1$y
-		    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$y"
-		    cp -p $(cat pd.lt) $d1$y
+		    mkdir $d1$d
+		    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
+		    cp -p $(cat pd.lt) $d1$d
 		fi
 	    fi
-	elif [ -d "$d1$y" -a -d "$d2$y" ]; then
-	    cd $d1$y
+	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
+	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l $d1$y/* $d4$y"
-	    time Mdiff -k$l $(cat ../pd.lt) $d4$y
+	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
+	    time Mdiff -k$l $(cat ../pd.lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -180,21 +180,21 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 		ml
 	    fi
 	    if [ -n "$d1" ]; then
-		if [ -d "$d1$y" ]; then
+		if [ -d "$d1$d" ]; then
 		    Rdiff p*.lt
-		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$y"
-		    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$y
+		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$d"
+		    time Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$d
 		else
-		    mkdir $d1$y
-		    echo; echo "========== $t cp -p \$(cat p[d$g].lt) $d1$y"
-		    cp -p $(cat p[d$g].lt) $d1$y
+		    mkdir $d1$d
+		    echo; echo "========== $t cp -p \$(cat p[d$g].lt) $d1$d"
+		    cp -p $(cat p[d$g].lt) $d1$d
 		fi
 	    fi
-	elif [ -d "$d1$y" -a -d "$d2$y" ]; then
-	    cd $d1$y
+	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
+	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l $d1$y/* $d4$y"
-	    time Mdiff -k$l -x'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d$g].lt) $d4$y
+	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
+	    time Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d$g].lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
