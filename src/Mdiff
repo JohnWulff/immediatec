@@ -27,14 +27,14 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.6 2005/09/12 18:04:46 archiv Exp $'
+  echo '$Id: Mdiff,v 2.7 2005/09/30 15:26:32 archiv Exp $'
   echo
 }
 
 usage()
 {
-  echo "Usage:	$name [eEiltqcukIwaLrTZpPvh] [-C<num>] [-U<num>] [-x<rexp>]"
-  echo '	[[[-R<regex>|-X<cmd>] [source_dir]]|file ...] comparison_dir'
+  echo "Usage:	$name [eEiltqcukxwaLrTZpPvh][ -I<regex>][ -[f|F]<filter>][ -[C|U]<num>]"
+  echo '	[ [[-R<regex>|-X<cmd>][source_dir]]|file ...] comparison_dir'
   echo '	diff files named in command line (common initial path is source_dir)'
   echo '	or files which match <regex> from single named source_dir with last'
   echo '	named comparison_dir. If source_dir missing, default is current directory'
@@ -59,23 +59,25 @@ usage()
   echo '	-el	list non-existing files plus files which differ'
   echo '	-lE	list files which exist in source_dir and comparison_dir'
   echo '	-lEi|-lei list files which exist in directories, including identities'
-  echo '	-t	put date and text header at start of report'
-  echo '	-q	quiet operation - return status only'
   echo '	-w	whitespace (spaces, tabs, blank lines) are significant'
   echo '		default: all whitespace is ignored (opposite to diff)'
-  echo '	-I	ignore case differences in file contents'
+  echo '	-x	ignore case differences in file contents'
+  echo '	-k	ignore RCS/CVS keyword lines containing the string $Id:'
+  echo '	-I<regex>  ignore diff changes in lines that match <regex>'
+  echo '	-f<filter> process the first file in a diff by <filter> before diff'
+  echo '	-F<filter> process the second file in a diff by <filter> before diff'
+  echo '	-t	put date and text header at start of report'
+  echo '	-q	quiet operation - return status only'
   echo '	-c	display diff output in 3 line copied context form'
   echo '	-C<num>	display diff output in num line copied context form'
   echo '	-u	display diff output in 3 line unified context form'
   echo '	-U<num>	display diff output in num line unified context form'
-  echo '	-k	ignore lines containing the string $Id:'
-  echo '	-x<rexp> ignore diff changes in lines that match <rexp>'
-if [[ $BASH_VERSINFO -gt 2 ]]; then
-  echo '	-p	output is piped to "less"'
-  echo '	-P	output is piped to "less -E -X"'
-else
+if [[ $BASH_VERSINFO -lt 3 ]]; then
   echo '	-p	output is piped to "less"       return status not valid' 
   echo '	-P	output is piped to "less -E -X" return status not valid'
+else
+  echo '	-p	output is piped to "less"'
+  echo '	-P	output is piped to "less -E -X"'
 fi
   echo '	-v	author and version information'
   echo '	-h	this help text	-T -Z	trace debugging output'
@@ -174,31 +176,53 @@ process()
 			    fi
 			elif [[ $li -eq 3 && $e -ne 0 ]]; then
 			    echo "$sfile"		# -lE or -lEi (not identity)
-			elif diff -q $w -- $sfile $cfile > /dev/null; then
-			    if [[ $q -eq 0 ]]; then
-				if [[ $i -eq 1 ]]; then
-				    header "$spath" "$cdir"
-				    echo "========== $sfile =========="
-				fi
-			    elif [[ $li -eq 3 ]]; then
-				echo "$sfile"		# -li option (-lE or -lEi in other elif)
-			    fi
 			else
-			    if [[ $li -eq 0 || $li -eq 2 || $e -ne 1 ]]; then
-				let status+=1		# files differ (-l -li -i or nothing)
-				test $T -eq 1 && echo -n "*** $cfile differs; status = $status: "
-			    fi
-			    if [[ $q -eq 0 ]]; then
-				header "$spath" "$cdir"
-				echo
-				echo "########## $sfile ##########"
-				if [[ -z "$context" ]]; then
-				    ls -lL -- $sfile
-				    ls -lL -- $cfile
+			    sf=$sfile
+			    cf=$cfile
+			    if [[ $filter -ne 0 ]]; then
+				if [[ -n $f ]]; then
+				    tmp1=$(mktemp) || exit 11
+				    test $T -eq 1 && echo "eval $f $sfile >> $tmp1"
+				    eval $f $sfile >> $tmp1
+				    sf=$tmp1
 				fi
-				diff $w$context -- $sfile $cfile
-			    elif [[ $li -eq 1 && $e -ne 1 ]]; then
-				echo "$sfile"		# -l or -el option
+				if [[ -n $F ]]; then
+				    tmp2=$(mktemp) || exit 12
+				    test $T -eq 1 && echo "eval $F $cfile >> $tmp2"
+				    eval $F $cfile >> $tmp2
+				    cf=$tmp2
+				fi
+				test $T -eq 1 && echo "diff $w$context -- $sf $cf"
+			    fi
+			    if diff -q $w -- $sf $cf > /dev/null; then
+				if [[ $q -eq 0 ]]; then
+				    if [[ $i -eq 1 ]]; then
+					header "$spath" "$cdir"
+					echo "========== $sfile =========="
+				    fi
+				elif [[ $li -eq 3 ]]; then
+				    echo "$sfile"		# -li option (-lE or -lEi in other elif)
+				fi
+			    else
+				if [[ $li -eq 0 || $li -eq 2 || $e -ne 1 ]]; then
+				    let status+=1		# files differ (-l -li -i or nothing)
+				    test $T -eq 1 && echo -n "*** $cfile differs; status = $status: "
+				fi
+				if [[ $q -eq 0 ]]; then
+				    header "$spath" "$cdir"
+				    echo
+				    echo "########## $sfile ##########"
+				    if [[ -z "$context" ]]; then
+					ls -lL -- $sfile
+					ls -lL -- $cfile
+				    fi
+				    diff $w$context -- $sf $cf
+				elif [[ $li -eq 1 && $e -ne 1 ]]; then
+				    echo "$sfile"		# -l or -el option
+				fi
+			    fi
+			    if [[ $filter -ne 0 && $T -ne 1 ]]; then
+				rm -f $tmp1 $tmp2
 			    fi
 			fi
 		    elif [[ $e -ne 0 ]]; then
@@ -213,8 +237,8 @@ process()
 		    fi
 		elif [[ $q -eq 0 ]]; then
 		    let status+=1			# count as error (-i -e nothing)
-		    local f=${sfile%\*}			# weed out wild cards if no file found
-		    if [[ "$sfile" = "$f" ]]; then
+		    local nwc=${sfile%\*}		# weed out wild cards if no file found
+		    if [[ "$sfile" = "$nwc" ]]; then
 			test $T -eq 1 && echo -n "*** $sfile does not exist; status = $status: "
 			header "$spath" "$cdir"
 			echo "**SOURCE** $sfile does not exist"
@@ -308,12 +332,15 @@ t=1
 q=0
 li=0
 w=-wB
+filter=0
+f=''
+F=''
 headCnt=0
 context=''
 cmd=''
 fullstatus=0
 
-while getopts ":eEiltqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
+while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZp-Pvh" opt; do
     case $opt in
     e )	e=1;;
     E )	e=1; let "li|=2";;
@@ -327,12 +354,14 @@ while getopts ":eEiltqcC:uU:kIwaLrR:x:X:TZp-Pvh" opt; do
     U )	context="$context -U $OPTARG";;
     k )	w="$w -I \$Id[$:]";;
     w )	w=;;
-    I )	w="$w -i";;
+    x )	w="$w -i";;
     a )	all=1;;
     L )	link=1;;
     r )	recursive=1;;
     R )	regex="$OPTARG";;
-    x )	w="$w -I $OPTARG";;
+    I )	w="$w -I $OPTARG";;
+    f )	filter=1; f="$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable"; usage; exit 126; fi;;
+    F )	filter=1; F="$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable"; usage; exit 126; fi;;
     X )	cmd="$OPTARG";;
     T )	T=1;;
     Z )	Z=1;;
@@ -429,7 +458,7 @@ test $T -eq 1 && echo "regex='$regex'; cmd='$cmd'; sourcepath='$sourcepath'; com
 if [[ -z "$pipe" ]]; then
     process $filecnt "$sourcepath" "$compdir" "$filelist"
 else
-    if [[ $BASH_VERSINFO -gt 2 ]]; then
+    if [[ $BASH_VERSINFO -ge 3 ]]; then
 	set -o pipefail
     fi
     process $filecnt "$sourcepath" "$compdir" "$filelist" | $pipe
@@ -463,13 +492,13 @@ exit
 
 =head1 SYNOPSIS
 
- Usage:  Mdiff [eEiltpqcukIwaLrTZpvh] [-C<num>] [-U<num>] [-x<rexp>]
-    [[[-R<regex>|-X<cmd>] [source_dir]]|file ...] comparison_dir
+ Usage:  Mdiff [eEiltpqcukxwaLrTZpvh][ -I<regex>][ -[f|F]<filter>][ -[C|U]<num>]
+    [ [[-R<regex>|-X<cmd>][source_dir]]|file ...] comparison_dir
 
     diff files named in command line (common initial path is source_dir)
     or files which match <regex> from single named source_dir with last
     named comparison_dir. If source_dir missing, default is current directory
-
+ Selection options:
     -r    diff source_dir and all its sub-directories recursively
     -R<regex> use <regex> to select files from all files in source_dir
               as well as recursiveley selected sub-directories.
@@ -489,27 +518,31 @@ exit
           default: ignore identical files in output
     -e    non-existing files put: **** file does not exist
           default: ignore non-existing files (unless only 1 file)
-
+ List options:
     -l    list only files which differ - no other output
     -li   list only files which are identical
     -le   list only files which are non-existing in comparison_dir
     -el   list non-existing files plus files which differ
     -lE   list files which exist in source_dir and comparison_dir
     -lEi|-lei list files which exist in directories, including identities
-
-    -t    put date and text header at start of report
-    -q    quiet operation - return status only
+ Filter options:
     -w    whitespace (spaces, tabs, blank lines) are significant
           default: all whitespace is ignored (opposite to diff)
-    -I    ignore case differences in file contents
+    -x    ignore case differences in file contents
+    -k    ignore RCS/CVS keyword lines containing the string $Id:
+    -I<regex>  ignore diff changes in lines that match <regex>
+    -f<filter> process the first file in a diff by <filter> before diff
+    -F<filter> process the second file in a diff by <filter> before diff
+ Display options:
+    -t    put date and text header at start of report
+    -q    quiet operation - return status only
     -c      display diff output in 3 line copied context form
     -C<num> display diff output in num line copied context form
     -u      display diff output in 3 line unified context form
     -U<num> display diff output in num line unified context form
-    -k    ignore lines containing the string $Id:
-    -x<rexp> ignore diff changes in lines that match <rexp>
     -p    output is piped to "less"
     -P    output is piped to "less -E -X"
+ Help options:
     -v    author and version information
     -h    this help text    -T -Z    trace debugging output
     --    all further arguments are treated as files
@@ -524,7 +557,7 @@ Option -l allows the generation of lists of different or identical files in
 the two directories or a list of non-existing or common files in the directories.
 These lists are exclusive subsets of the complete set of selected files.
 
-=head1 SPECIFICATION
+=head1 Selection
 
  After all options with a leading '-' are handled, file selections remain:
 
@@ -536,7 +569,7 @@ These lists are exclusive subsets of the complete set of selected files.
     a)  a single directory, which is the source directory. This directory
         may be relative to CWD or absolute.
 
-    b)  if there no other argument the source directory is CWD ''
+    b)  if there are no other arguments, the source directory is CWD (.)
 
     or alternatively, but only if -r (recusrsive option) is not set
     and no regular expression for file selection is set with -R<regex>
@@ -552,7 +585,7 @@ These lists are exclusive subsets of the complete set of selected files.
         just plain file names are then looked for in the comparison
         directory. An example may make this clearer. If there are
         three files a.c, b.c and y/x.c in both directory first/
-        and directory second/, the call:
+        and directory second/, then the call:
 
             Mdiff first/*.c first/y/x.c second
 
@@ -565,7 +598,7 @@ These lists are exclusive subsets of the complete set of selected files.
 
  3)  If  -r (recusrsive option) is  set
      and/or
-        an -X<cmd> generating command is specified
+        an -X<cmd> file generating command is specified
      and/or
         a regular expression for file selection is set with -R<regex>
      or
@@ -599,7 +632,9 @@ These lists are exclusive subsets of the complete set of selected files.
      else if source file does not exist (erroneous command line)
         echo "**SOURCE** source_dir/file does not exist"
 
- 5)  For -l options simply output lists of files using the same file
+=head1 Lists
+
+     For -l options simply output lists of files using the same file
      selection mechanism as described in 2c) or 3)
        -l    list only selected files which differ - no other output
        -li   list only selected files which are identical
@@ -616,15 +651,73 @@ These lists are exclusive subsets of the complete set of selected files.
      file parameters for other commands. eg:
 
      Copy all C files which differ fron those in directory 'original' to
-     directory 'backup1':
-         cp $(Mdiff -l *.c original) backup1
+     directory 'backup':
+        cp $(Mdiff -l *.c original) backup
 
      Update 'original' with new C files, without overwriting changed ones:
-         cp $(Mdiff -le *.c original) original
+        cp $(Mdiff -le *.c original) original
+
+     Update 'backup' with new C files and overwrite changed ones:
+        cp $(Mdiff -el *.c backup) backup
 
      You get the idea. It generally pays to execute the plain Mdiff
      first to visually check that the generated list is sensible.
      A serious error would be, if a diff output is used as a list.
+
+=head1 Filter
+
+     Whitespace (spaces, tabs, blank lines) are normally ignored by Mdiff.
+     The -w option makes whitespace significant (opposite to diff).
+
+     Case differences are significant unless the -x option is specified.
+
+     -I <regex>
+     Ignore changes that just insert or delete lines that match <regex>.
+     -k is shorthand for -I '\$Id:', which ignores RCS/CVS keyword lines.
+
+     -f<filter>
+     -F<filter>
+     <filter> must be the name of an executable program (no options),
+     which takes the name of a text file as a parameter, filters the
+     contents of that file and outputs the filtered text to standard
+     output. Internally the first file (-f) and/or the second file (-F)
+     may be filtered before the filtered output(s) are applied to diff.
+     Filters may easily be created by writing short shell or perl scripts.
+
+     Example: filter all files in directory 'draft' with 'ora', replacing
+     all occurences of 'ORA' by the full company name before diffing with
+     the files in directory 'final'.
+        Mdiff -R. -f ora draft final
+     The filter 'ora' could look like this:
+        #! /bin/bash
+        sed "s/ORA/O'Reilly \& Associates, Inc./g" $1
+     or alternatively:
+        #! /usr/bin/perl
+        while (<>) { s/ORA/O'Reilly \& Associates, Inc./g; print; }
+
+=head1 Display
+
+     -t option puts a Date stamp and a line naming the directories used
+     at the top of the report. This is not done if -l options apply.
+        Fri Sep 30 15:10:46 CEST 2005
+        Differences in /home/archiv/draft/ and /home/archiv/final/
+
+     -q suppresses all output (quiet) except for the -l list options.
+
+     -C<num> -c
+     Use the context output format, showing <num> (an integer) lines of
+     context or three if -c option is used.
+
+     -U<num> -u
+     Use the unified output format, showing <num> (an integer) lines of
+     context or three if -u option is used.
+
+     -p -P
+     Output is piped to 'less' or to 'less -E -X' with the -P option.
+     The -P option is preferable for short outputs, because less exits
+     when EOF is reached and the output is left on the screen.
+     For versions of bash less than 3 the return status is not valid
+     when these piping options are used.
 
 =head1 AUTHOR
 
