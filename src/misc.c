@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.3 2005/01/26 15:18:10 jw Exp $";
+"@(#)$Id: misc.c,v 1.4 2005/05/10 16:51:57 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -80,7 +80,21 @@ iC_efree(void *	p)
 #endif
 } /* iC_efree */
 #endif
-#if defined(RUN) || ((defined (LOAD) || defined(TCP)) && defined (YYDEBUG))
+#if defined(RUN) || defined (TCP) || defined(LOAD)
+
+/********************************************************************
+ *
+ *	Compare gt_ids in two Gates support of qsort()
+ *
+ *******************************************************************/
+
+int
+iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
+{
+    return( strcmp((*a)->gt_ids, (*b)->gt_ids) );
+} /* iC_cmp_gt_ids */
+#endif /* RUN) or TCP or LOAD */
+#if defined(RUN) || ((defined (TCP) || defined(LOAD)) && defined (YYDEBUG))
 
 /********************************************************************
  *
@@ -100,28 +114,28 @@ iC_display(int * dis_cntp, int dis_max)
     long		l4;
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
 
-#ifndef	LOAD
+#if	! defined(TCP) && ! defined(LOAD)
 #define iC_IX0p	iC_IX_[0]
 #define iC_IB1p	iC_IB_[1]
 #define iC_IW2p	iC_IW_[2]
 #if	INT_MAX != 32767 || defined (LONG16)
 #define iC_IL4p	iC_IL_[4]
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
-#endif	/* LOAD */
+#endif	/* ! TCP && ! LOAD */
 
     if ((*dis_cntp)++ >= dis_max) {	/* display header line */
 	*dis_cntp = 1;
-#ifdef	LOAD
+#if defined(TCP) || defined(LOAD)
 	if (iC_IX0p != 0) {
 	    for (n = 0; n < MAX_IO; n++) {
 		fprintf(iC_outFP, " I%d", n);
 	    }
 	}
-#else	/* LOAD */
+#else /* defined(TCP) || defined(LOAD) */
 	for (n = 0; n < MAX_IO; n++) {
 	    if ((gp = iC_IX_[n]) != 0) fprintf(iC_outFP, " I%d", n);
 	}
-#endif	/* LOAD */
+#endif /* defined(TCP) || defined(LOAD) */
 	if (iC_IB1p != 0) fprintf(iC_outFP, "  IB1");
 	if (iC_IW2p != 0) fprintf(iC_outFP, "    IW2");
 #if	INT_MAX != 32767 || defined (LONG16)
@@ -138,7 +152,7 @@ iC_display(int * dis_cntp, int dis_max)
 	fprintf(iC_outFP, "\n");
     }
     /* display IX0 .. IX7 - any that are active */
-#ifdef	LOAD
+#if defined(TCP) || defined(LOAD)
     if ((gp = iC_IX0p) != 0) {
 	x0 = gp->gt_new;
 	for (n = 0; n < MAX_IO; n++) {
@@ -146,13 +160,13 @@ iC_display(int * dis_cntp, int dis_max)
 	    x0 >>= 1;			/* scan input bits */
 	}
     }
-#else	/* LOAD */
+#else /* defined(TCP) || defined(LOAD) */
     for (n = 0; n < MAX_IO; n++) {
 	if ((gp = iC_IX_[n]) != 0) {
 	    fprintf(iC_outFP, "  %c", gp->gt_val < 0 ? '1' : '0');
 	}
     }
-#endif	/* LOAD */
+#endif /* defined(TCP) || defined(LOAD) */
     /* display IB1, IW2 and IL4 if active */
     if (!iC_xflag) {
 	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " %4d", gp->gt_new & 0xff);
@@ -177,14 +191,14 @@ iC_display(int * dis_cntp, int dis_max)
     }
     fprintf(iC_outFP, "   ");
 
-#ifdef	LOAD
+#if defined(TCP) || defined(LOAD)
     x0 = iC_QX0p ? iC_QX0p->gt_new : 0;
     b1 = iC_QB1p ? iC_QB1p->gt_new : 0;
     w2 = iC_QW2p ? iC_QW2p->gt_new : 0;
 #if	INT_MAX != 32767 || defined (LONG16)
     l4 = iC_QL4p ? iC_QL4p->gt_new : 0;
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
-#else	/* LOAD */
+#else /* defined(TCP) || defined(LOAD) */
     x0 = iC_QX_[0];
     b1 = iC_QX_[1];
     w2 = *(short*)&iC_QX_[2];
@@ -193,7 +207,7 @@ iC_display(int * dis_cntp, int dis_max)
 #else	/* INT_MAX == 32767 */
     l4 = *(int*)&iC_QX_[4];
 #endif	/* INT_MAX == 32767 */
-#endif	/* LOAD */
+#endif /* defined(TCP) || defined(LOAD) */
     /* display QX0 .. QX7 */
     for (n = 0; n < MAX_IO; n++) {
 	fprintf(iC_outFP, "  %c", (x0 & 0x0001) ? '1' : '0');
@@ -215,4 +229,4 @@ iC_display(int * dis_cntp, int dis_max)
     }
     fflush(iC_outFP);
 } /* iC_display */
-#endif	/* RUN or ((LOAD orTCP) and YYDEBUG) */
+#endif	/* RUN or ((TCP or LOAD) and YYDEBUG) */

@@ -81,7 +81,7 @@ Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.33 2005/02/26 22:26:42 jw Exp $
+$Id: iCserver,v 1.34 2005/08/22 23:11:40 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -577,7 +577,12 @@ use warnings;
 		    $numberOfConnections++;
 		    print "$name: client no. $numberOfConnections registering now\n" if $opt_t;
 		}
-		elsif ($msg1 =~ /^([SR])(\w+(-\d{1-3})?)(\((\d+)\))?/) {
+		elsif ($msg1 =~ /^([SR])(\w+(-\d*)?)(\((\d+)\))?/) {
+		    ############################################################
+		    # regex is permissive allowing any number of instance digits
+		    # clients have to stay in specification 1 to 3 digits
+		    # if not, server still functions correctly
+		    ############################################################
 		    $direction  = $1;
 		    $name = $2;
 		    $bits = $5;
@@ -622,7 +627,7 @@ use warnings;
 				print "Autovivify sender '$iCbox_param'\n" if $opt_T;
 			    }
 			    if ($opt_g and			# C_channel only as trigger
-				$name =~ /^C(\w+)(-(\d{1,3}))?$/ and
+				$name =~ /^C(\w+)(-(\d*))?$/ and
 				not $EquivChannels{$name} and	# not part of an equivalence
 				not $AutoDebug) {		# only 1 per application
 				if (defined $3) {
@@ -848,6 +853,20 @@ for iC clients) when they run on the same processor as iCserver or via
 the host address of the processor iCserver is running on.  On connection
 each client registers itself with iCserver.
 
+Clients for iCserver are iC control applications, I/O clients such
+as iCbox or similar real I/O clients and debugging programs such
+as iClive. These clients either send or receive data values from
+and to named I/O locations or debugging information. As far as
+iCserver is concerned I/O locations could have any name, but the iC
+language calls for I/O names or addresses according to the IEC-1131
+standard. Each client registers the I/O names it requires on connection
+to iCserver. Each unique name is stored in a Hash in iCserver,
+whose value is a channel number, which is used for all actual data
+transfers. The Hash is only required for registration. Each channel
+allows the naming of one Sender for data on the channel (or I/O name)
+and one or more Receivers for the data. A detailed description follows
+in the Specification below.
+
 Additional functionality in iCserver.
 
  a) equivalence - or interconnection of different I/O addresses in
@@ -980,7 +999,7 @@ Additional functionality in iCserver.
     Note: when a control program exits (disconnects from iCserver)
     the I/O's are not disconnected. They can be reused by a restarted
     control application. When iCserver exits, all connected clients
-    are closed (see current implementation).
+    are closed.
 
  e) -k option - if a sender registers with the same name as one already
     registered, kill the previously registerd sender, rather than
@@ -1013,8 +1032,8 @@ Additional functionality in iCserver.
 	and unregister with different names, to monitor different
 	iC applications.
 
-    b)	the type of data it is sending or receiving and the physical
-	address in IEC-1131 format:
+    b)	Registration code: the type of data it is sending or receiving
+	and the physical address in IEC-1131 format:
 
 	<send_receive><input_output><type><address>[-<instance>]
 
@@ -1033,7 +1052,7 @@ Additional functionality in iCserver.
 	IEC-1131 address. The name may be followed by an -<instance>.
 
 	<input_output>
-	I date is input to an iC control client.
+	I data is input to an iC control client.
 	Q data is output from an iC control client.
 
 	C debug data is output from an iC control client to iClive
@@ -1085,10 +1104,10 @@ Additional functionality in iCserver.
 	SQL15  single long QL15 sent from an iC controller
 	RQL15  single long QL15 received by an external sink
 
-    c)  The name registration followed by the individual sender and
-	receiver registration codes are sent as one comma separated
-	list. iCserver acknowledges this with a comma separated list of
-	channel numbers used for each sender or receiver.
+    The registration 'name' followed by one or more individual sender
+    and receiver registration codes are sent as one comma separated
+    list from a client. iCserver acknowledges this by sending a comma
+    separated list of channel numbers used for each sender or receiver.
 
  2) As indicated under <address> above, each data type QX, QB, QW, QL
     and QH as well as IX, IB, IW, IL and IH define their own
@@ -1120,14 +1139,14 @@ Additional functionality in iCserver.
     and to re-implement it later.
 
  3) One client device has one two way TCP/IC connection to iCserver,
-    but it can register for any number of send and/or receive
-    addresses. For example the simple iCbox currently registered as X0,
-    supplying 8 bits if input data and sinking 8 bits of output data,
-    will now register itself as SIX0,RQX0. SIX0 is the source of the
-    signals IX0.0 to IX0.7 and RQX0 is the sink of QX0.0 to QX0.7.
-    An iC control application handling those two signal groups will
-    register itself as RIX0,SQX0.  RIX0 for receiving IX0.0 to IX0.7
-    and SQX0 for sending QX0.0 to QX0.7.
+    but it can register for any number of send and/or receive addresses.
+    For example the simple iCbox registers as X0 by default, supplying
+    8 bits if input data and sinking 8 bits of output data It will
+    register itself as SIX0,RQX0. SIX0 is the source of the signals
+    IX0.0 to IX0.7 and RQX0 is the sink of QX0.0 to QX0.7.  An iC
+    control application handling those two signal groups will register
+    itself as RIX0,SQX0.  RIX0 for receiving IX0.0 to IX0.7 and SQX0
+    for sending QX0.0 to QX0.7.
 
     This scheme makes I/O devices and controllers identical as far as
     iCserver data handling is concerned. and opens the possibility,
@@ -1185,7 +1204,7 @@ Additional functionality in iCserver.
 
  7) Allow every application to be started by specifying an optional
     <instance> parameter (see 1), which is appended to all registration
-    names or addresses. The same instance number is also appended
+    codes or addresses. The same instance number is also appended
     to the addresses of I/O clients communicating with a particular
     controller instance. Such a set of a controller and I/O clients
     with a common instance number are a set, which communicate with
@@ -1224,20 +1243,21 @@ Additional functionality in iCserver.
  8) Registration of clients from the view of iCserver
 
     a)	A client connects to iCserver, which accepts and issues a
-	$conn object (see current code).
+	$conn object.
 
-    b)	The client sends a Message with all its registrations in a comma
-	sperated list to iCserver (see specification).
+    b)	The client sends a Message with all its registration codes in
+	a comma sperated list to iCserver (see specification).
 
-    c)	In iCserver the <input_output><type><address>[-<instance] are
-	used as a key in a hash table, which associates a unique
-	channel number with the key. The key is the identification or
-	name of a communication pair and is unique. The associated
-	channel number is an index in an array which holds run-time
-	details for the communication pair or channel. <send_receive>
-	select the correct entries in that array.
+    c)	In iCserver the registration codes <input_output><type>
+	<address>[-<instance] are used as a key in a hash table,
+	which associates a unique channel number with the key.
+	The key is the identification or name of a communication pair
+	and is unique. The associated channel number is an index in
+	an array which holds run-time details for the communication
+	pair or channel. <send_receive> select the correct entries
+	in that array.
 
-	iCserver maps each name against the Hash %clientNames,
+	iCserver maps each code against the Hash %clientNames,
 	which returns the correct channel number if it has already
 	been allocated. All further data transfers in iCserver and
 	the clients use the channel number to identify a particular
@@ -1245,7 +1265,7 @@ Additional functionality in iCserver.
 
     d)	iCserver acknowledges registration of a client by sending a
 	comma separated list of channel numbers in the same order as
-	the registration names. If a particular registration name
+	the registration codes. If a particular registration code
 	cannot be registered correctly, the comma separated list
 	contains a negative error number for that entry.
 
@@ -1256,7 +1276,7 @@ Additional functionality in iCserver.
 
     b)	When the client receives the positive acknowledgement string,
 	which will be the first message received, it pairs off the
-	registration names and the channel numbers received in the
+	registration codes and the channel numbers received in the
 	acknowledgement. The details depend on the client application.
 
 	For the first example in section 7, the following tables will
@@ -1306,9 +1326,9 @@ Additional functionality in iCserver.
 
     A client must be able to unregister itself, without disrupting a
     running process, particularly if it is only a secondary receiver.
-    This will happen when a client closes a TCP/IP connection (see
-    current implementation). When a client is disconnected, keep the
-    Hash entry for the channel number in case it connects again.
+    This will happen when a client closes a TCP/IP connection. When a
+    client is disconnected, keep the Hash entry for the channel number
+    in case it connects again.
 
 For measuring reaction times the Module Time::HiRes is used.
 This activates the -m option and flash display of short events.
@@ -1338,7 +1358,7 @@ useful in understanding its workings.
 
 =head1 SEE ALSO
 
-L<icc(1)>, L<iCbox(1)>, L<iClive(1)>
+L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 

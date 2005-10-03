@@ -47,8 +47,8 @@ Usage:	@<<<<<<< [-l <log_file>] file ...
 	$named
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
-	called from icc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.15 2005/03/13 23:25:11 jw Exp $
+	called from immcc, icr or ict compiler to adjust listing output
+$Id: pplstfix,v 1.16 2005/09/28 14:26:10 jw Exp $
 .
 
 use vars qw($opt_l $opt_h);
@@ -110,19 +110,19 @@ sub processFile {
 
     print LOG "##### Pass1 NET TOPOLOGY\n" if $opt_l;
     while (<IN>) {
-	if (/\bNET STATISTICS\b/) {
+	if (/\bNET STATISTICS\b/ or /^compiled by:/) {
 	    last;
 	}
 	# allow alias of numbers (change jw 040112)
 	# topology
-	if (/^\t|(\w[\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])(\w[\w.\$]*)($OPS)))?/go) {
+	if (/^\t|([\w.\$]+|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])([\w.\$]+|-\d+)($OPS)))?/go) {
 	    if (defined $1) {
 		$name = $1;
 		if ($2 eq '@') {
 		    # NET TOPOLOGY line found eg:QB0_0	@  A	~QB0_1*
 		    $line  = $.;
-		    $type  = $2;
-		    $ftype = $3;
+		    $type  = $2;			# ($OPS)
+		    $ftype = $3;			# ($FOPS)
 		    $inver = ($6 eq '~') ? 1 : 0;
 		    $xlate = $7;
 		    if ($4 and $name ne $xlate) {
@@ -148,7 +148,7 @@ sub processFile {
 		$lengths{$name} = $tlen;
 		print LOG "$.:	$1	$2 $3 $6 $7 $8\n" if $opt_l;
 	    }
-	    while (/\G\t([ <~]\w[\w.\$]*$OPS)/g) {
+	    while (/\G\t([ <~]([\w.\$]+|-\d+)$OPS)/g) {
 		if (($len = length $1) > $tlen) {
 		    $tlen = $len;
 		    $lengths{$name} = $tlen;
@@ -230,11 +230,11 @@ sub processFile {
 	    }
 	}
 	elsif ($cFlag > 0 and $cFlag < 3 or not /^[^\t\$]/) {	# just output debug & 02 lines
-	    if (/\bNET STATISTICS\b/) {
+	    if (/\bNET STATISTICS\b/ or /^compiled by:/) {
 		$cFlag = 3;
 	    }
 	  cCode:
-	    while (/([A-Za-z_][\w.\$]*|-\d+)/g) {	# non listing line or C CODE
+	    while (/([\w.\$]+|-\d+)/g) {		# non listing line or C CODE
 		if (defined($symbols{$1})) {
 		    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
 		}
@@ -279,7 +279,7 @@ sub processFile {
 		$inver = 0;
 	    }
 	    if ($cFlag == 0) {
-		if (/^(\$\d+ =)?\t+(([\w(][\w.\$)]*|-\d+)?\t($LOPS.---$OPS))?(\t([A-Za-z_][\w.\$]*|-\d+))?(\t(${FOPS}1*))?(\t+([^\t]*))?(\t*(\/\/ .*))?$/o) {
+		if (/^(\$\d+ =)?\t+(([\w\$(][\w.\$)]*|-\d+)?\t($LOPS.---$OPS))?(\t([A-Za-z_\$][\w.\$]*|-\d+))?(\t(${FOPS}1*))?(\t+([^\t]*))?(\t*(\/\/ .*))?$/o) {
 		    if (($len = length $3) > $max1) {
 			$max1 = $len;
 		    }
@@ -327,7 +327,7 @@ sub processFile {
 		next Line;
 	    }
 	    if ($cFlag == 2 and
-		/^\t|(\w[\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])(\w[\w.\$]*)($OPS)1?|[({] \(\d+\)))?/go) {
+		/^\t|([\w.\$]+|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])([\w.\$]+|-\d+)($OPS)1?|[({] \(\d+\)))?/go) {
 		if (defined $1) {
 		    $tlen = $lengths{$1};
 		    $print = sprintf "%*s %1s  %1s %*s",
@@ -335,7 +335,7 @@ sub processFile {
 		} else {
 		    $print = ' ' x ($maxLength + 5);
 		}
-		while (/\G\t([ <~]\w[\w.\$]*$OPS)/g) {
+		while (/\G\t([ <~]([\w.\$]+|-\d+)$OPS)/g) {
 		    $print .= sprintf " %*s",
 			-$tlen, $1; 
 		}

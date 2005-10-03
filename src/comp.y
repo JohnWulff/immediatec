@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.90 2005/04/16 20:39:48 jw Exp $";
+"@(#)$Id: comp.y,v 1.91 2005/09/28 15:04:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -11,7 +11,7 @@
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	comp.y
- *	grammar for icc compiler
+ *	grammar for immcc compiler
  *
  *******************************************************************/
 
@@ -139,9 +139,9 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 	 ***********************************************************/
 
 %token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLATCH BFORCE DLATCH
-%token	<sym>	BLTIN1 BLTIN2 BLTIN3 BLTINJ BLTINT CVAR CBLTIN TVAR TBLTIN TBLTI1
+%token	<sym>	BLTIN1 BLTIN2 BLTIN3 BLTINX BLTINJ BLTINT CVAR CBLTIN TVAR TBLTIN TBLTI1
 %token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE
-%token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION
+%token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
 %token	<val>	NUMBER CCFRAG
 %token	<str>	LEXERR COMMENTEND LHEAD
 %type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
@@ -163,7 +163,7 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 %right	<str>	'&'		/* logical and */
 %right	<str>	CMP		/* compare operators == != < <= > >= */
 %right	<str>	AOP PM '*'	/* arithmetic operators << >> / % + - * */
-%nonassoc <str>	NOTL PPMM	/* unary operators ! ~ ++ -- (+ - & *) */
+%nonassoc <str>	'!' '~' PPMM	/* unary operators ! ~ ++ -- (+ - & *) */
 %right	<str>	PR 		/* structure operators -> . */
 %%
 
@@ -270,14 +270,16 @@ outVariable
 	 ***********************************************************/
 
 useFlag	: USE USETYPE		{
+		unsigned int useindex;
 		$$ = $1;				/* 'use' or 'no' */
-		unsigned int useindex = $2.v->ftype;
+		useindex = $2.v->ftype;
 		assert(useindex < MAXUSETYPE);
 		*iC_useTypes[useindex] = $1.v->ftype;	/* iC_Aflag, iC_Sflag */
 	    }
 	| useFlag USETYPE	{
+		unsigned int useindex;
 		$$ = $1;				/* 'use' or 'no' */
-		unsigned int useindex = $2.v->ftype;
+		useindex = $2.v->ftype;
 		assert(useindex < MAXUSETYPE);
 		*iC_useTypes[useindex] = $1.v->ftype;	/* iC_Aflag, iC_Sflag */
 	    }
@@ -295,7 +297,15 @@ useFlag	: USE USETYPE		{
 	 * as an rvalue in immediate expressions in this module.
 	 *
 	 * Because of the single assignment rule, such an extern immediate
-	 * variable may normally not be assigned in this module.
+	 * variable may normally not be assigned in this module. An exception
+	 * is an immediate variable assigned in C statements. If such an
+	 * immediate variable is declared extern, a special form must be used:
+	 *
+	 *	extern immC bit  b2;	extern immC int  a2;
+	 *
+	 * Variables declared extern with the special type modifier 'immC'
+	 * may be used as rvalues and may be assigned in a C statement.
+	 *
 	 * To allow lists of extern immediate declarations of all variables
 	 * in a common include file, a simple immediate type declaration
 	 * after the extern immediate declaration (or after the #include
@@ -305,14 +315,25 @@ useFlag	: USE USETYPE		{
 	 * clock or timer) must match the type used previously in the
 	 * extern declaration.
 	 *
+	 * The use if 'immC' in a simple type declaration defines the Gate
+	 * object, like in C. It must match the previous extern immC type.
+	 * In any other context 'immC' is equivalent to 'imm'.
+	 *
 	 * An extern type declaration of a particular variable may not
-	 * occurr after its simple declaration or its assignment.
+	 * occurr after its simple declaration or its assignment or if it
+	 * is an input variable, which is implicitly assigned. Since no
+	 * real harm is done, a warning is issued and the extern declaration
+	 * is ignored.
 	 *
 	 * If a variable is declared extern in several sources which will
 	 * later be linked and that variable is erroneously declared and
 	 * assigned, either in immediate assignments or C assignments in
 	 * more than one source module, a linker error will occurr.
 	 * (Multiple definition of the variable in C code).
+	 *
+	 * If a variable is declared extern and is never assigned in this
+	 * module (after a simple declaration) or in another module,
+	 * then a linker error will occurr. (Undefined reference).
 	 *
 	 * See use of extern type declaration in a function definition
 	 * under 'Immediate functions' below.
@@ -355,7 +376,11 @@ extDecl	: extDeclHead UNDEF	{
 		    ierror("extern declaration in function definition after assignment:", $2.v->name);
 		    $$.v->type = ERR | EM;	/* stop use as a statement in function */
 		} else
-		if ($2.v->type != INPW && $2.v->type != INPX) {
+		if ($2.v->type == INPW || $2.v->type == INPX) {
+		    if (iC_Sflag) {
+			warning("strict - extern declaration of an input variable - ignored:", $2.v->name);
+		    }
+		} else {
 		    warning("extern declaration after assignment - ignored:", $2.v->name);
 		}
 #if YYDEBUG
@@ -369,12 +394,27 @@ extDecl	: extDeclHead UNDEF	{
 
 extDeclHead
 	: EXTERN IMM TYPE	{
-		int	ftyp;
-		ftyp = $3.v->ftype;
-		if (ftyp >= CLCKL) {		/* check that CLCKL TIMRL */
-		    ftyp -= CLCKL - CLCK;	/* and CLCK and TIMR are adjacent */
+		int		typ;
+		int		ftyp;
+		ftyp = $3.v->ftype;		/* ARITH GATE CLCKL TIMRL */
+		if ($2.v->ftype == 1) {
+		    if (ftyp == ARITH) {
+			typ = ARNC;		/* immC int */
+		    } else
+		    if (ftyp == GATE) {
+			typ = LOGC;		/* immC bit */
+		    } else {
+			warning("extern declaration of an immC type other than bit or int - ignore:", iC_full_ftype[ftyp]);
+			goto extImmType;
+		    }
+		} else {
+		  extImmType:
+		    if (ftyp >= CLCKL) {	/* check that CLCKL TIMRL */
+			ftyp -= CLCKL - CLCK;	/* and CLCK TIMR are adjacent */
+		    }
+		    typ = iC_types[ftyp];	/* ARN OR CLK TIM */
 		}
-		$$.v = stype = $3.v->ftype | ((iC_types[ftyp] | EM) << 8);
+		$$.v = stype = $3.v->ftype | ((typ | EM) << 8);
 	    }
 	| extDecl ','		{ $$.v = stype;	/* first TYPE */ }
 	;
@@ -391,58 +431,127 @@ extDeclHead
 	 * after an assignment a warning is still issued, except for
 	 * input variables which are never assigned, rather predeclared.
 	 *
+	 *	immC bit   b1;		immC int   a1;
+	 *
+	 * The use if 'immC' in a simple type declaration defines the Gate
+	 * object, like in C. Such an object may only be used in a C assignment
+	 * or as an immediate rvalue. By defining an object, no C assignment
+	 * in the current source is necessary. An assignment can occurr in
+	 * another source, in which the same variable is declared with an
+	 * extern immC type. An assignment in some source should take place
+	 * to avoid an algorithmic error. The load module detects and counts
+	 * assignments during initialization and warns if no assignments have
+	 * occurred.
+	 *
+	 * immC type declarations may not be combined with a dasgn, since no
+	 * immediate assignment may occurr if a variable has been declared
+	 * and defined as an ARNC or LOGC type with immC. Such an attempted
+	 * assignment is flagged as an error.
+	 *
+	 * declHead has type UDF for all TYPEs except ARNC and LOGC
+	 *
 	 ***********************************************************/
 
 decl	: declHead UNDEF	{
+		Symbol *	sp;
 #if YYDEBUG
 		Symbol t = *($2.v);
 #endif
 		$$.f = $1.f; $$.l = $2.l;
-		$$.v = $2.v;
-		$$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
-		$$.v->type = $1.v >> 8;		/* UDF for all TYPEs */
+		sp = $$.v = $2.v;
+		sp->ftype = $1.v & 0xff;	/* bit int clock timer */
+		sp->type = $1.v >> 8;
+		if ((sp->type = $1.v >> 8) != UDF) {
+		    listGenOut(sp);		/* list immC node and generate possible output */
+		}
 		if (iFunSymExt) {
 		    char *	cp;
-		    Symbol *	sp;
-		    cp = strchr($2.v->name, '$'); /* locate original extension */
+		    Symbol *	sp1;
+		    cp = strchr(sp->name, '$'); /* locate original extension */
 		    assert(cp && isprint(cp[1])); /* extension must be at least 1 character */
-		    if ((sp = lookup(++cp)) != 0 && (sp->type & EM)) {
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->type & EM)) {
 			warning("declaration of an extern variable in a function - ignored:", cp);
 		    }
-		    collectStatement($2.v);
+		    collectStatement(sp);
 		    iFunSyText = 0;		/* no more function symbols */
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
+		if ((iC_debug & 0402) == 0402) pd("decl", sp, $1.v, &t);
 #endif
 	    }
 	| declHead variable	{
+		int		typ;
+		int		ftyp;
+		Symbol *	sp;
 #if YYDEBUG
 		Symbol t = *($2.v);
 #endif
 		$$.f = $1.f; $$.l = $2.l;
-		if ($2.v->ftype != ($1.v & 0xff)) {
-		    ierror("declaration does not match previous declaration:", $2.v->name);
-		    $2.v->type = ERR;	/* cannot execute properly */
-		}
-		$$.v = $2.v;
-		if (($2.v->type & EM) || $2.v->type == UDF) {
-		    $$.v->ftype = $1.v & 0xff;	/* TYPE bit int clock timer */
-		    $$.v->type = $1.v >> 8;	/* UDF for all TYPEs */
-		} else if ($2.v->type != INPW && $2.v->type != INPX) {
-		    warning("declaration after assignment - ignored:", $2.v->name);
+		ftyp = $1.v & 0xff;		/* TYPE bit int clock timer */
+		typ = $1.v >> 8;		/* UDF for all TYPEs except ARNC and LOGC */
+		sp = $$.v = $2.v;
+		if (sp->ftype != ftyp) {
+		    ierror("declaration does not match previous declaration:", sp->name);
+		    sp->type = ERR;		/* cannot execute properly */
+		} else
+		if ((sp->type & EM) || sp->type == UDF) {
+		    sp->ftype = ftyp;		/* bit int clock timer */
+		    if (typ != UDF) {		/* UDF for all TYPEs except ARNC and LOGC */
+			char *	name;
+			char	y1[2];
+			int	yn;
+			if ((name = sp->name) &&
+			    sscanf(name, "Q%1[XBWL]%d", y1, &yn) != 2 &&
+			    (sp->type & TM) != typ) {
+			    ierror("declaration does not match previous imm declaration:", name);
+			    typ = ERR;		/* cannot execute properly */
+			} else {
+			    sp->type = typ;	/* UDF for all TYPEs except ARNC and LOGC */
+			    listGenOut(sp);	/* list immC node and generate possible output */
+			}
+		    } else
+		    if (sp->type == (ARNC|EM) || sp->type == (LOGC|EM)) {
+			ierror("declaration does not match previous immC declaration:", sp->name);
+			typ = ERR;		/* cannot execute properly */
+		    }
+		    sp->type = typ;
+		} else
+		if (sp->type == INPW || sp->type == INPX) {
+		    if (iC_Sflag) {
+			warning("strict - declaration of an input variable - ignored:", sp->name);
+		    }
+		} else
+		if (sp->type != ERR){
+		    warning("declaration after assignment - ignored:", sp->name);
 		}
 		iFunSyText = 0;			/* no more function symbols */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pd("decl", $$.v, $1.v, &t);
+		if ((iC_debug & 0402) == 0402) pd("decl", sp, $1.v, &t);
 #endif
 	    }
 	;
 
 declHead
 	: IMM TYPE		{
+		int		typ;
+		int		ftyp;
 		$$.f = $$.l = $2.l;		/* do not include in expression string */
-		$$.v = stype = $2.v->ftype | UDF << 8;
+		ftyp = $2.v->ftype;		/* ARITH GATE CLCKL TIMRL */
+		if ($1.v->ftype == 1) {		/* immC in init.c */
+		    if (ftyp == ARITH) {
+			typ = ARNC;		/* immC int */
+		    } else
+		    if (ftyp == GATE) {
+			typ = LOGC;		/* immC bit */
+		    } else {
+			warning("declaration of an immC type other than bit or int - ignore:", iC_full_ftype[ftyp]);
+			goto immType;
+		    }
+		} else {			/* simple imm */
+		  immType:
+		    typ = UDF;
+		}
+		$$.v = stype = ftyp | typ << 8;
 		if (iFunSymExt) {
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
@@ -461,6 +570,20 @@ declHead
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
 	    }
+	| dcasgn ','		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = stype;			/* first TYPE */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| dtasgn ','		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = stype;			/* first TYPE */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
 	;
 
 	/************************************************************
@@ -468,12 +591,14 @@ declHead
 	 * Assignment combined with a declaration
 	 * an output can only be recognised by its name: Q[XBWL]%d
 	 *
+	 * Report an error if the type is an ARNC or LOGC, defined with immC
+	 *
 	 ***********************************************************/
 
 dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
-		unsigned char	y1[2];
-		int		yn;
-		int		ioTyp;
+		char	y1[2];
+		int	yn;
+		int	ioTyp;
 		$$.f = $1.f; $$.l = $3.l;
 		if (sscanf($1.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
 		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
@@ -819,6 +944,9 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
+		    if (iC_Pflag) {
+			warning("Use of '&&' with imm bit variables is deprecated:", sp->name);
+		    }
 		} else {
 		    lpR = op_force($3.v, ARITH);
 		    lpL = op_force($1.v, ARITH);
@@ -846,6 +974,9 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
+		    if (iC_Pflag) {
+			warning("Use of '||' with imm bit variables is deprecated:", sp->name);
+		    }
 		} else {
 		    lpR = op_force($3.v, ARITH);
 		    lpL = op_force($1.v, ARITH);
@@ -885,6 +1016,53 @@ expr	: UNDEF			{
 	    }
 
 	/************************************************************
+	 * Conditional expression expr1 ? : expr3
+	 * Excerpt from 'info gcc'
+	 * ======================================
+	 * 5.8 Conditionals with Omitted Operands
+	 * ======================================
+	 * The middle operand in a conditional expression may be omitted.  Then if
+	 * the first operand is nonzero, its value is the value of the conditional
+	 * expression.
+	 *
+	 *    Therefore, the expression
+	 *
+	 *      x ? : y
+	 *
+	 * has the value of `x' if that is nonzero; otherwise, the value of `y'.
+	 *
+	 *    This example is perfectly equivalent to
+	 *
+	 *      x ? x : y
+	 *
+	 * In this simple case, the ability to omit the middle operand is not
+	 * especially useful.  When it becomes useful is when the first operand
+	 * does, or may (if it is a macro argument), contain a side effect.  Then
+	 * repeating the operand in the middle would perform the side effect
+	 * twice.  Omitting the middle operand uses the value already computed
+	 * without the undesirable effects of recomputing it.
+	 *
+	 * Both expressions are forced to ftype ARITH.
+	 ***********************************************************/
+	| expr '?' ':' expr	{			/* ? : */
+		List_e *	lpL;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $4.l;
+		lpR = op_force($4.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+		if (iC_Pflag) {
+		    Symbol * sp = $4.v->le_sym;
+		    warning("ISO C forbids omitting the middle term of a ?: expression", sp->name);
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
+	    }
+
+	/************************************************************
 	 * Logical negation or arithmetic bitwise complement
 	 *
 	 * For an imm bit operand both '~' and '!' operator result in
@@ -901,7 +1079,7 @@ expr	: UNDEF			{
 	 * doubtful case. All combinations with other bit operands
 	 * force it to GATE anyway.
 	 ***********************************************************/
-	| NOTL expr 		{			/* unary ~ or ! */
+	| '~' expr 		{			/* unary ~ */
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
 		if ($2.v) {
@@ -924,10 +1102,36 @@ expr	: UNDEF			{
 #endif
 	    }
 
+	| '!' expr 		{			/* unary ! */
+		Symbol *	sp;
+		$$.f = $1.f; $$.l = $2.l;
+		if ($2.v) {
+		    int typ;
+		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
+			(((typ = sp->type & TM) != ARNC && typ != ARN &&
+			typ != SH) || sp->u_blist == 0)) {
+							/* logical negation */
+			$$.v = op_not(op_force($2.v, GATE));
+			if (iC_Pflag) {
+			    warning("Use of '!' with an imm bit variable is deprecated:", sp->name);
+			}
+		    } else {
+							/* arithmetic negation */
+			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
+		    }
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		} else {
+		    $$.v = 0;				/* constant negation */
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
+#endif
+	    }
+
 	/************************************************************
 	 * Unary + or -
 	 ***********************************************************/
-	| PM expr %prec NOTL	{			/* unary + or - */
+	| PM expr %prec '!'	{			/* unary + or - */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1282,6 +1486,80 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $13.l;
 		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, &$11, &$12, 0, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	/************************************************************
+	 * SRX(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
+	 *	SRX(set,reset)
+	 *	SRX(set,reset,clkSetReset)
+	 *	SRX(set,reset,timSetReset)
+	 *	SRX(set,reset,timSetReset,delaySetReset)
+	 * ######### not required with iC system functions #########
+	 * ######### is handled by SR ### ##########################
+	 ***********************************************************/
+	| BLTINX '(' aexpr ',' aexpr cref ')' {		/* SRX(set,reset) */
+		Lis liS, liR, noS, noR, xxS, xxR;
+		liS = noS = $3;
+		liR = noR = $5;
+		$$.f = $1.f; $$.l = $7.l;
+		liS.v = op_force(liS.v, GATE);		/* set */
+		liR.v = op_force(liR.v, GATE);		/* res */
+		noS.v = sy_push(liS.v->le_sym);		/* copy set */
+		noS.v->le_val ^= NOT;			/* ~set */
+		noS.v->le_first = noS.f;
+		noS.v->le_last  = noS.l;
+		noR.v = sy_push(liR.v->le_sym);		/* copy res */
+		noR.v->le_val ^= NOT;			/* ~res */
+		noR.v->le_first = noR.f;
+		noR.v->le_last  = noR.l;
+		xxS.v = op_push(liS.v, AND, noR.v);	/* set & ~res */
+		xxS.f = xxS.v->le_first = liS.f;
+		xxS.l = xxS.v->le_last  = noR.l;
+		xxR.v = op_push(noS.v, AND, liR.v);	/* ~set & res */
+		xxR.f = xxR.v->le_first = noS.f;
+		xxR.l = xxR.v->le_last  = liR.l;
+		$$.v = bltin(&$1, &xxS, 0, 0, 0, &xxR, &$6, 0, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
+#endif
+	    }
+	/************************************************************
+	 * SRX(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
+	 *	SRX(set,clkSet,         reset)
+	 *	SRX(set,clkSet,         reset,clkReset)
+	 *	SRX(set,clkSet,         reset,timReset)
+	 *	SRX(set,clkSet,         reset,timReset,delayReset)
+	 *	SRX(set,timSet,delaySet,reset)
+	 *	SRX(set,timSet,delaySet,reset,clkReset)
+	 *	SRX(set,timSet,delaySet,reset,timReset)
+	 *	SRX(set,timSet,delaySet,reset,timReset,delayReset)
+	 * ######### not required with iC system functions #########
+	 * ######### is handled by SR ### ##########################
+	 ***********************************************************/
+	| BLTINX '(' aexpr ',' ctdref ',' aexpr cref ')' {
+		Lis liS, liR, noS, noR, xxS, xxR;
+		liS = noS = $3;
+		liR = noR = $7;
+		$$.f = $1.f; $$.l = $9.l;
+		liS.v = op_force(liS.v, GATE);		/* set */
+		liR.v = op_force(liR.v, GATE);		/* res */
+		noS.v = sy_push(liS.v->le_sym);		/* copy set */
+		noS.v->le_val ^= NOT;			/* ~set */
+		noS.v->le_first = noS.f;
+		noS.v->le_last  = noS.l;
+		noR.v = sy_push(liR.v->le_sym);		/* copy res */
+		noR.v->le_val ^= NOT;			/* ~res */
+		noR.v->le_first = noR.f;
+		noR.v->le_last  = noR.l;
+		xxS.v = op_push(liS.v, AND, noR.v);	/* set & ~res */
+		xxS.f = xxS.v->le_first = liS.f;
+		xxS.l = xxS.v->le_last  = noR.l;
+		xxR.v = op_push(noS.v, AND, liR.v);	/* ~set & res */
+		xxR.f = xxR.v->le_first = noS.f;
+		xxR.l = xxR.v->le_last  = liR.l;
+		$$.v = bltin(&$1, &xxS, &$5, 0, 0, &xxR, &$8, 0, 0);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "fexpr", &$$);
 #endif
@@ -1833,11 +2111,17 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 cCall	: UNDEF '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 	    				/* CHECK if iCbuf changes now _() is missing */
-		if (lookup($1.v->name)) {		/* may be unlinked in same expr */
-		    unlink_sym($1.v);			/* unlink Symbol from symbol table */
-		    free($1.v->name);
-		    free($1.v);		/* TODO may be better to keep in ST with type ??? */
-		}
+		/* do not unlink and free UNDEF Symbol - leads to malloc errors */
+		$1.v->type = CWORD;			/* no longer in imm variable */
+		$1.v->u_val = CNAME;
+		$$.v = $3.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
+#endif
+	    }
+	| CNAME '(' cParams ')'	{
+		$$.f = $1.f; $$.l = $4.l;
+	    				/* CHECK if iCbuf changes now _() is missing */
 		$$.v = $3.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
@@ -1846,11 +2130,18 @@ cCall	: UNDEF '(' cParams ')'	{
 	| UNDEF '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
 	    				/* CHECK if iCbuf changes now _() is missing */
-		if (lookup($1.v->name)) {		/* may be unlinked in same expr */
-		    unlink_sym($1.v);			/* unlink Symbol from symbol table */
-		    free($1.v->name);
-		    free($1.v);		/* TODO may be better to keep in ST with type ??? */
-		}
+		/* do not unlink and free UNDEF Symbol - leads to malloc errors */
+		$1.v->type = CWORD;			/* no longer in imm variable */
+		$1.v->u_val = CNAME;
+		$$.v = $3.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
+#endif
+		iclock->type = ERR; yyerrok;
+	    }
+	| CNAME '(' cParams error ')'	{
+		$$.f = $1.f; $$.l = $5.l;
+	    				/* CHECK if iCbuf changes now _() is missing */
 		$$.v = $3.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
@@ -1912,7 +2203,7 @@ iFunTrigger
 iFunHead
 	: declHead iFunTrigger '('	{
 		$$.f = $1.f; $$.l = $3.l;
-		$$.v = functionHead($1.v, $2.v, 1);	/* function head Symbol */
+		$$.v = functionDefHead($1.v, $2.v, 1);	/* function head Symbol */
 	    }
 
 	/************************************************************
@@ -1923,7 +2214,7 @@ iFunHead
 
 	| IMM VOID iFunTrigger '('	{
 		$$.f = $1.f; $$.l = $4.l;
-		$$.v = functionHead($2.v->ftype, $3.v, 0); /* function head Symbol */
+		$$.v = functionDefHead($2.v->ftype, $3.v, 0); /* function head Symbol */
 	    }
 	;
 
@@ -2277,7 +2568,8 @@ compile(
     char	execBuf[BUFS];
     char	lineBuf[BUFS];
     int		fd;
-    int		r = 1;
+    int		r  = 1;
+    int		r1 = 1;
 
     lineno = 0;
 #if YYDEBUG
@@ -2293,28 +2585,33 @@ compile(
     init();					/* initialise symbol table - allows ierror() */
     if (inpPath) {
 	strncpy(inpNM, inpPath, BUFS);
-	/* pre-compile if iC files contains any #include, #define #if etc */
-	snprintf(execBuf, BUFS, "grep -q '^[ \t]*#' %s", inpPath);
-	r = system(execBuf);			/* test with grep if #include in input */
+	r = 0;
+	if (strlen(iC_defines) == 0) {
+	    /* pre-compile if iC files contains any #include, #define #if etc */
+	    snprintf(execBuf, BUFS, "grep -q '^[ \t]*#' %s", inpPath);
+	    r = system(execBuf);		/* test with grep if #include in input */
+	}
 	if (r == 0) {
-	    /* pass the input file through the C pre-compiler to resolve #includes */
+	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #xxx was found by grep */
+	    /* pass the input file through the C pre-compiler to resolve #includes and macros */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);
 		perror("unlink");
 		return T0index;			/* error unlinking temporary file */
 	    }
-	    /* Cygnus does not understand cc - use gcc - pass comments with -C */
-	    snprintf(execBuf, BUFS, "gcc -E -C -x c %s -o %s 2> %s", inpPath, T0FN, T6FN);
+	    /* Cygnus does not understand cc - use macro CC=gcc - pass comments with -C */
+	    snprintf(execBuf, BUFS, SS(CC) "%s -E -C -I/usr/local/include -x c %s -o %s 2> %s",
+		iC_defines, inpPath, T0FN, T6FN);
+	    r1 = system(execBuf);		/* Pre-compile iC file */
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### compile: %s; $? = %d\n", execBuf, r>>8);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
 #endif
-	    r = system(execBuf);		/* Pre-compile iC file */
-	    if (r != 0) {
+	    if (r1 != 0) {
 		if ((T6FP = fopen(T6FN, "r")) == NULL) {
-		    return T6index;		/* error opening gcc error file */
+		    return T6index;		/* error opening CC error file */
 		}
 		while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
-		    ierror("gcc:", lineBuf);	/* gcc error message */
+		    ierror(SS(CC) ":", lineBuf);	/* CC error message */
 		}
 		fclose(T6FP);
 		if (!(iC_debug & 04000)) {
@@ -2338,10 +2635,12 @@ compile(
     if (iC_debug & 046) {			/* begin source listing */
 	fprintf(iC_outFP, "******* %-15s ************************\n", inpNM);
     }
-    if ((iC_debug & 020000) == 0) {		/* suppres internal functions to test old code */
+    if ((iC_debug & 020000) == 0) {		/* new code with function definitions */
 	iniPtr = initialFunctions;		/* read system function definitions first */
 	iniDebug = iC_debug;			/* save iC_debug flag */
 	if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
+    } else if ((iC_debug & 021000) == 020000) {	/* suppress internal functions to test old code */
+	c_number = GEN_COUNT;			/* skip first 2 functions for compatibility */
     }
     setjmp(begin);
     for (initcode(); iCparse(); initcode()) {
@@ -2370,9 +2669,11 @@ get(FILE* fp, int x)
 {
     int		c;
     int		temp1;
+    int		slen;
     int		prevflag;
     size_t	iniLen;
-    char	tempBuf[2];
+    char	tempNM[BUFS];
+    char	tempBuf[TSIZE];
 
     while (getp[x] == 0 || (c = *getp[x]++) == 0) {
 	if (iniPtr) {
@@ -2401,9 +2702,9 @@ get(FILE* fp, int x)
 	     ************************************************************/
 	    if ((getp[x] = fgets(chbuf[x], CBUFSZ, fp)) == NULL) {
 		if ((lexflag & C_PARSE) == 0) {
-		    eofLineno = lineno;
+		    eofLineno = lineno;		/* iC parse */
 		} else {
-		    lineno = eofLineno;
+		    lineno = eofLineno;		/* C parse with lex */
 		}
 		errline = lineno;		/* no listing line at EOF */
 		return (EOF);
@@ -2431,56 +2732,65 @@ get(FILE* fp, int x)
 		lineno = temp1 - 1;		/* handled in iC and C-code */
 		lexflag |= C_LINE;
 		if ((lexflag & C_PARSE) == 0) {
+		    /* iC parse only */
 		    if (strcmp(inpNM, prevNM) && strchr(inpNM, '<') == 0) {
 			lexflag &= ~C_FIRST;	/* report # 1 if file has changed */
 		    }
-		    getp[x] = NULL;		/* bypass this line in iC */
+		    getp[x] = NULL;		/* bypass parsing this line in iC */
+		    strncpy(prevNM, inpNM, BUFS);	/* inpNM has been modified */
 		}
 	    } else
 	    /********************************************************
 	     *  handle C-pre-processor # pragma ## comes out on MAC OsX
 	     ********************************************************/
 	    if (sscanf(chbuf[x], " # %s", tempBuf) == 1 && strcmp(tempBuf, "pragma") == 0) {
-		getp[x] = NULL;			/* ignore and bypass # pragma */
+		getp[x] = NULL;			/* ignore and bypass parsing # pragma */
 	    } else
 	    /********************************************************
 	     *  there should be no other # lines remaining in iC file
 	     ********************************************************/
 	    if ((lexflag & C_PARSE) == 0) {
-		/* TODO process pre-processor lines in iC compilation */
 		/* handle only local includes - not full C-precompiler features */
-		ierror("get: stray # line in iC ???", NULL);
-		getp[x] = NULL;			/* bypass this line in iC */
+		ierror("get: invalid # pre-processor line in iC ???", NULL);
+		getp[x] = NULL;			/* bypass parsing this line in iC */
 	    } else
 	    /********************************************************
 	     *  C-compile
 	     *  handle pre-processor #line 1 "file.ic"
 	     ********************************************************/
-	    if (sscanf(chbuf[x], " # line %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
+	    if ((slen = sscanf(chbuf[x], " # line %d \"%[-/A-Za-z_.0-9<>]\"	%s",
+		&temp1, tempNM, tempBuf)) >= 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
-		if (lineno == -1 && !(iC_debug & 010000)) {
+		if (slen == 3 &&		/* has comment string after #line x "init.c" */
+		    !( (iC_debug & 010000) ||	/* Assumes 2 system expressions */
+		    (functionUse[1] && temp1 == genLineNums[1] && strcmp(tempNM, genName) == 0) ||	/* SHR */
+		    (functionUse[2] && temp1 == genLineNums[2] && strcmp(tempNM, genName) == 0) )	/* SHSR */
+		) {
 		    continue;			/* no listing output for system C CODE */
 		}
-		if ((iC_debug & 042) && lexflag & C_FIRST) {
-		    fprintf(iC_outFP, "******* C CODE          ************************\n");
-		}
-		if (strcmp(inpNM, prevNM)) {
-		    lexflag &= ~C_BLOCK;	/* output #line for changed filename */
-		} else if (iC_debug & 042) {
-		    fprintf(iC_outFP, "\n");	/* separate blocks in lex listing */
+		strncpy(inpNM, tempNM, BUFS);	/* defer changing name until used */
+		if (iC_debug & 06) {
+		    if (lexflag & C_FIRST) {
+			fprintf(iC_outFP, "******* C CODE          ************************\n");
+		    }
+		    if (strcmp(inpNM, prevNM)) {
+			lexflag &= ~C_BLOCK;	/* output #line for changed filename */
+		    } else {
+			fprintf(iC_outFP, "\n");	/* separate blocks in lex listing */
+		    }
 		}
 		lexflag |= C_LINE|C_LINE1;	/* only in C-compile */
 		strncpy(prevNM, inpNM, BUFS);
 	    }
 	}
-	if ((iC_debug & 040) &&
+	if ((iC_debug & 04) &&
 	    (lexflag & C_BLOCK1) == 0 &&
 	    sscanf(chbuf[x], cexeString[outFlag], &temp1) == 1) {
 	    cFn = temp1;
 	    assert(cFn < functionUseSize);
 	}
-	if ((iC_debug & 040) &&
+	if ((iC_debug & 046) &&
 	    ((lexflag & (C_BLOCK|C_BLOCK1)) == 0	/* iC listing */
 #if YYDEBUG
 						 || ((iC_debug & 0402) == 0402)
@@ -2493,11 +2803,18 @@ get(FILE* fp, int x)
 	     ********************************************************/
 	    if ((lexflag & C_LINE) == 0) {
 		if (cFn && (iC_debug & 0402) != 0402) {
-		    fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]);
+		    if (cFn > GEN_COUNT || functionUse[cFn]) {	/* Assumes 2 system expressions */
+			fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]);
+			if (cFn <= GEN_COUNT) {
+			    const char * cp = strchr(genLines[cFn], '\t');
+			    fprintf(iC_outFP, "\t%s\n", cp);
+			}
+		    }
 		    cFn = 0;
-		} else if ((lexflag & C_PARSE) && chbuf[x][0] != '\t' && chbuf[x][0] != ' ') {
+		} else if ((iC_debug & 06) && (lexflag & C_PARSE) && chbuf[x][0] != '\t' && chbuf[x][0] != ' ') {
 		    fprintf(iC_outFP, "%03d\t    %s", lineno, chbuf[x]);
-		} else {
+		} else if (((iC_debug & 06)  && (lexflag & C_PARSE)) ||
+		    ((iC_debug & 040)  && (lexflag & C_PARSE) == 0)) {
 		    fprintf(iC_outFP, "%03d\t%s", lineno, chbuf[x]);
 		}
 		iFlag = 1;				/* may need correction by pplstfix */
@@ -2622,7 +2939,7 @@ iClex(void)
 	int		rest;
 	char		tempBuf[TSIZE];		/* make long enough for format below */
 
-	if (c == ' ' || c == '\t' || c == '\n') {
+	if (isspace(c)) {			/* space \f \n \r \t \v */
 	    iCleng = 0;
 	    continue;				/* ignore white space */
 	}
@@ -2631,7 +2948,7 @@ iClex(void)
 	    iClval.val.v = getNumber();		/* decimal octal or hex */
 	    c = NUMBER;				/* value in iClval.val.v */
 	    goto retfl;
-	} else if (isalpha(c) || c == '_') {
+	} else if (isalpha(c) || c == '_' || c == '$') {
 	    unsigned char	wplus = 0;
 	    unsigned int	qtoken = 0;
 	    unsigned long	qmask = 0;	/* mask to id bit, byte, word or long */
@@ -2639,14 +2956,23 @@ iClex(void)
 	    unsigned char	typ = UDF;
 	    unsigned char	ftyp = UDFA;
 	    int			ixd = iC_maxIO;	/* limit for I/O index (-1 no limit) */
-	    unsigned char	y0[2];
-	    unsigned char	y1[2];
+	    char		y0[2];
+	    char		y1[2];
 	    int			yn;
 	    int			yt;
-	    unsigned char	y2[2];
+	    char		y2[2];
 
-	    while ((c = get(T0FP, 0)) != EOF && (isalnum(c) || c == '$' || c == '_'));
-	    if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d", y0, y1, &yn) == 3) {
+#if YYDEBUG
+	    rest = 0;				/* used for =I5 0402 debug output */
+#endif
+	    /* step forward to first character (in c) after identifier to fill iCtext */
+	    while (isalnum(c = get(T0FP, 0)) || c == '_' || c == '$');
+	    if ((len = sscanf(iCtext, "%1[IQT]%1[XBWL]%d_%d%1[A-Z_a-z]",
+		y0, y1, &yn, &yt, y2)) >= 4) {
+		if (len == 4) {			/* 4 - QX%d_%d is not allowed */
+		    ierror("I/O like names with _ instead of . clash with internal representation", iCtext);
+		}				/* 5 - QX%d_%dA is OK - not I/O */
+	    } else if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d", y0, y1, &yn) == 3) {
 		if (y1[0] == 'B') {
 		    wplus = 1;
 		    qmask = 0x02;		/* QB or IB */
@@ -2666,45 +2992,128 @@ iClex(void)
 #else
 		    ierror("32 bit I/O not supported in 16 bit environment:", iCtext);
 #endif
-		} else if (c == '.') {
-		    int c1, i1;			/* QXn. or IXn. */
-		    if (isdigit(c1 = c = get(T0FP, 0))) {	/* can only be QX%d. */
-			for (i1 = 0; isdigit(c = get(T0FP, 0)); i1++);
-			if (c1 >= '8' || i1 > 0) {
-			    ierror("I/O bit address must be less than 8:", iCtext);
-			} else {
-			    qmask = 0x01;	/* QX, IX or TX */
-			    iomask = 0x0f;
-			}
-		    foundQIT:
-			ftyp = GATE - wplus;	/* GATE or ARITH */
-			if (y0[0] == 'Q') {
-			    qtoken = lex_act[OUTX - wplus]; /* LOUT or AOUT */
-			} else {
-			    typ = INPX - wplus;	/* INPX or INPW */
-			    if (y0[0] != 'T') {
-				qmask <<= 4;	/* IX, IB, IW or IL */
-				iomask <<= 4;	/* input I */
-			    } else {
-				qmask = iomask = 0;	/* TX (TB or TW) */
-				ixd = y1[0] == 'X' ? 1 : 0;	/* TX0.7 is max */
-			    }
-			}
-		    } else {
-			unget(c);		/* the non digit, not '.' */
+		} else {			/* QX, IX or TX */
+		    /********************************************************************
+		     *  the Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1
+		     *  Generally if yacc were to handle the '.' as a seperate token,
+		     *  white space would be allowed as it would in C for the operator '.'
+		     *  If we allow white space here we will have the same effect without
+		     *  changing the grammar.
+		     *******************************************************************/
+		    len = iCleng;
+		    while (isspace(c)) {		/* space \f \n \r \t \v */
+			c = get(T0FP, 0);		/* iCleng++ if ! lexflag & C_PARSE */
 		    }
-		} else if (sscanf(iCtext, "%1[IQT]%1[XBWL]%d_%d%1[A-Z_a-z]",
-		    y0, y1, &yn, &yt, y2) == 4) {
-		    ierror("I/O like names with _ instead of . clash with internal representation", iCtext);
-						/* QX%d_%d not allowed */
-		}				/* QX%d_%dABC is OK - not I/O */
+		    if (c == '.') {			/* [IQT]Xn. ? */
+			if (len < iCleng) {
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, ">I1:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				rest++;
+			    }
+#endif
+			    iCtext[len-1] = c;		/* move '.' back over spaces */
+			    iCtext[len] = '\0';
+			    iCleng = len;		/* in case more than 1 space */
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, "<I1:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				fflush(iC_outFP);
+			    }
+#endif
+			}
+			/********************************************************************
+			 *  delete space after the '.' although not really required (yet).
+			 *******************************************************************/
+			len++;				/* get one or more characters */
+			while (isspace(c = get(T0FP, 0)));	/* space \f \n \r \t \v */
+			if (isdigit(c1 = c)) {		/* can only be [IQT]X%d. */
+			    int		i;
+			    if (len < iCleng) {
+#if YYDEBUG
+				if ((iC_debug & 0402) == 0402) {
+				    fprintf(iC_outFP, ">I2:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				    rest++;
+				}
+#endif
+				iCtext[len-1] = c;	/* move digit back over spaces */
+				iCtext[len] = '\0';
+				iCleng = len;		/* in case more than 1 space */
+#if YYDEBUG
+				if ((iC_debug & 0402) == 0402) {
+				    fprintf(iC_outFP, "<I2:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				    fflush(iC_outFP);
+				}
+#endif
+			    }
+			    for (i = 0; isdigit(c = get(T0FP, 0)); i++);
+			    if (c1 >= '8' || i > 0) {
+				ierror("I/O bit address must be less than 8:", iCtext);
+			    } else {
+				qmask = 0x01;	/* QX, IX or TX */
+				iomask = 0x0f;
+			    }
+			foundQIT:
+			    ftyp = GATE - wplus;	/* GATE or ARITH */
+			    if (y0[0] == 'Q') {
+				qtoken = lex_act[OUTX - wplus]; /* LOUT or AOUT */
+			    } else {
+				typ = INPX - wplus;	/* INPX or INPW */
+				if (y0[0] != 'T') {
+				    qmask <<= 4;	/* IX, IB, IW or IL */
+				    iomask <<= 4;	/* input I */
+				} else {
+				    qmask = iomask = 0;	/* TX (TB or TW) */
+				    ixd = y1[0] == 'X' ? 1 : 0;	/* TX0.7 is max */
+				}
+			    }
+			} else {
+			    while (len < iCleng) {	/* '.' not followed by %d - error anyway */
+#if YYDEBUG
+				if ((iC_debug & 0402) == 0402) {
+				    fprintf(iC_outFP, ">I3:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				    rest++;
+				}
+#endif
+				c = iCtext[iCleng-1];	/* char after space and spaces */
+				unget(c);		/* unget char, does --iCleng */
+#if YYDEBUG
+				if ((iC_debug & 0402) == 0402) {
+				    fprintf(iC_outFP, "<I3:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				    fflush(iC_outFP);
+				}
+#endif
+			    }				/* finish up with first space */
+			    unget(c);			/* unget it as well or char after '.' */
+			    c = iCtext[iCleng-1];	/* restore correct c to unget below */
+			}
+		    } else if (len < iCleng) {		/* not [IQT]X%d. */
+			while (len < iCleng) {
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, ">I4:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				rest++;
+			    }
+#endif
+			    c = iCtext[iCleng-1];	/* char after space while space */
+			    unget(c);			/* unget char, does --iCleng */
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, "<I4:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d\n", lineno, iCtext, c, len, iCleng);
+				fflush(iC_outFP);
+			    }
+#endif
+			}				/* leave first space */
+			c = iCtext[iCleng-1];		/* restore correct c to unget below */
+		    }
+		}
 		if (ixd >= 0) {			/* no size limit for -ve ixd */
 		    if (yn >= ixd) {
 			snprintf(tempBuf, TSIZE, "I/O byte address must be less than %d:",
 			    ixd);
 			ierror(tempBuf, iCtext);/* hard error if outside range */
 		    } else			/* no byte word long boundaries */
-		    if (ixd <= IXD) {	/* test rest - old style tests (yn in array bounds) */
+		    if (ixd <= IXD) {		/* test rest - old style tests (yn in array bounds) */
 			if (wplus && y1[0] == 'W' && (yn & 0x01) != 0) {
 			    ierror("WORD I/O must have even byte address:", iCtext);
 			} else			/* test rest if yn < ixd (array bounds) */
@@ -2736,24 +3145,57 @@ iClex(void)
 		}
 	    } else if (sscanf(iCtext, "_%d%1[A-Z_a-z_]", &yn, y2) == 1) {
 		ierror("Number preceded by '_' clashes with internal number representation", iCtext);
+		typ = ERR;
 	    } else if (sscanf(iCtext, "__%d%1[A-Z_a-z_]", &yn, y2) == 1) {
 		ierror("Number preceded by '__' clashes with internal negative number representation", iCtext);
+		typ = ERR;
 	    } else if (!(iC_debug & 04000) && sscanf(iCtext, "iC_%1[A-Za-z_0-9]", y2) == 1) {
 		/* this test suppressed for testing by option -d4000 - can cause link errors */
 		ierror("Variable starting with iC_ clashes with iC-runtime global variable", iCtext);
+		typ = ERR;
 	    }
 	    unget(c);
+#if YYDEBUG
+	    if (rest) {					/* set when other >Ix 402 debug output */
+		fprintf(iC_outFP, "=I5:%d	iCtext:%s:	c='%c', len = %d, iCleng = %d '%s'\n", lineno, iCtext, c, len, iCleng, chbuf[0]);
+		fflush(iC_outFP);
+	    }
+#endif
 	    symp = 0;
 	    if (iFunSymExt && ! qtoken) {	/* in function definition */
 		if (iRetSymbol.v && strcmp(iCtext, "this") == 0) {
 		    symp = iRetSymbol.v;	/* function return Symbol */
 		} else {
+		    if (iC_Pflag && strchr(iCtext, '$')) {
+			if (iC_Pflag >= 2) typ = ERR;
+			warning("'$' character(s) in function block parameter or identifier:", iCtext);
+		    }
 		    strncpy(iFunSymExt, iCtext, iFunEnd - iFunSymExt);
 		    if ((symp = lookup(iFunBuffer)) == 0 && iFunSyText) {
 			symp = install(iFunBuffer, typ, ftyp); /* parameter or declaration */
 		    }
 		    *iFunSymExt = '\0';
 		}
+	    } else if (iC_Pflag && strchr(iCtext, '$')) {
+		/********************************************************************
+		 *  This and the test just above, are the only places, where variables
+		 *  containing the '$' symbol may be marked erroneous in iC code.
+		 *  The internal C compiler, gcc and iClive can handle variables
+		 *  containg a '$'
+		 *  Excerpt from 'info gcc':
+		 *  =====================================
+		 *  5.29 Dollar Signs in Identifier Names
+		 *  =====================================
+		 *  In GNU C, you may normally use dollar signs in identifier names.  This
+		 *  is because many traditional C implementations allow such identifiers.
+		 *  However, dollar signs in identifiers are not supported on a few target
+		 *  machines, typically because the target assembler does not allow them.
+		 *
+		 *  The internal C compiler warns about variables in C expressions starting
+		 *  with a '$' symbol, which may lead to assembler errors. (see lexc.l)
+		 *******************************************************************/
+		if (iC_Pflag >= 2) typ = ERR;
+		warning("'$' character(s) in identifier:", iCtext);
 	    }
 	    if (symp == 0) {
 		if ((symp = lookup(iCtext)) == 0) {
@@ -2816,15 +3258,14 @@ iClex(void)
 	    }
 	    iClval.sym.l = stmtp += len;
 	} else {
-	    if ((c1 = get(T0FP, 0)) == EOF) goto found;	/* nothing after EOF */
+	    if ((c1 = get(T0FP, 0)) == EOF) goto foundEOF;	/* nothing after EOF */
 	    switch (c) {
 	    case '!':
 		if (c1 == '=') {
 		    c = CMP; goto found;	/* != */
 		}
 	    case '~':
-		c = NOTL;			/* ! or ~ */
-		break;
+		break;				/* ! or ~ */
 	    case '%':
 		if (c1 == '{') {		/*    >>> '}' */
 		    c = LHEAD; goto found;	/* %{ >>> %} */
@@ -2931,6 +3372,7 @@ iClex(void)
 		c = PR;				/* . */
 		break;
 	    }
+	foundEOF:
 	    unget(c1);
 	found:
 	    iClval.val.v = c;			/* return to yacc as is */
@@ -3064,7 +3506,11 @@ warning(					/* print warning message */
     char *	str1,
     char *	str2)
 {
-    errmess("Warning", str1, str2);
+    if (iC_Pflag <= 1) {
+	errmess("Warning", str1, str2);		/* simple warning */
+    } else {
+	ierror(str1, str2);			/* convert warning to error */
+    }
 } /* warning */
 
 /********************************************************************
@@ -3281,5 +3727,4 @@ ffexprCompile(char * txt, List_e * lp)
     }
     lexflag = saveLexflag;			/* restore iC compile state */
     lineno  = saveLineno;
-//    warning("c_compile complete", txt);
 } /* ffexprCompile */

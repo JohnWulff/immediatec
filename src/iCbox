@@ -109,7 +109,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.41 2005/02/26 23:25:17 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.42 2005/08/22 21:43:32 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -931,8 +931,8 @@ toggled on or off with mouse button-1.
 
 Analog I/O widgets consist of a slider or scale widget allowing the
 display or selection of a range of numbers. Default is a range from 0
-to 100. This range can be changed on creation of the widget (-ROJrojl
-options). Analog I/O widgets may be generated to deal with single
+to 100. This range can be changed on creation of the widget (,start,finish
+option). Analog I/O widgets may be generated to deal with single
 byte values, 2 byte or word values and 4 byte or long values. These
 are labelled IBn, IWn, ILn and QBn, QWn, QLn for inputs and outputs
 respectively. Input sliders have a green background and their central
@@ -980,8 +980,8 @@ ID-parameter, range, initialiser and number-range must be written
 without spaces in the command line unless they are quoted. In the
 optional INI file which can be read with the -f option, white space
 can be placed between parameter, range, initialiser and number-range.
-They must only be all in one line. Any text following '#' is ignored
-and treated as a comment.
+They must only be all in one line. In an INI file any text following '#'
+is ignored and treated as a comment.
 
 A separate frame is generated for each input and output ID; two frames
 for an ID not specifying I or Q. Each frame is labelled with the ID
@@ -1020,7 +1020,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<icc(1)>, L<iClive(1)>, L<iCserver(1)>
+L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 

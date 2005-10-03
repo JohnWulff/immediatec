@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.45 2005/04/04 21:36:49 jw Exp $";
+"@(#)$Id: ict.c,v 1.46 2005/09/02 13:55:45 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -35,25 +35,28 @@ static const char ict_c[] =
 #include	"tcpc.h"
 #include	"icc.h"
 
-#define MAX_W	2
-#define INTR 0x1c    /* The clock tick interrupt */
-
 #define D10	10			/* 1/10 second select timeout under Linux */
-#define ENTER	'\n'
 
-iC_Functp	*iC_i_lists[] = { I_LISTS };
+static iC_Functp * iC_i_lists[] = { I_LISTS };
 
-static Gate	alist0;			/* these lists are toggled */
-static Gate	alist1;
+/********************************************************************
+ *  initialise all lists with their name to aid symbolic debugging
+ *  do this here because at least "flist" is needed in load() for
+ *  ini output, which runs before icc().
+ *******************************************************************/
+/* these lists are toggled (initialised dynamically) */
+static Gate	alist0 = { 0, 0, 0, 0, "alist0", };
+static Gate	alist1 = { 0, 0, 0, 0, "alist1", };
 Gate *		iC_a_list;		/* arithmetic output action list */
-static Gate	olist0;			/* these lists are toggled */
-static Gate	olist1;
+static Gate	olist0 = { 0, 0, 0, 0, "olist0", };
+static Gate	olist1 = { 0, 0, 0, 0, "olist1", };
 Gate *		iC_o_list;		/* logic output action list */
+/* these lists are not toggled (static initialisation here) */
 Gate *		iC_c_list;		/* main clock list "iClock" */
-static Gate	flist;
-Gate *		iC_f_list;		/* auxiliary function clock list */
-static Gate	slist;
-Gate *		iC_s_list;		/* send bit and byte outputs */
+static Gate	flist = { 0, 0, 0, 0, "flist", };
+Gate *		iC_f_list = &flist;	/* deferred function action list (init in load) */
+static Gate	slist = { 0, 0, 0, 0, "slist", };
+Gate *		iC_s_list = &slist;	/* send bit and byte outputs */
 
 #if	YYDEBUG
 static int	dis_cnt;
@@ -69,11 +72,6 @@ unsigned long	glit_nxt;		/* count glitch scan */
 
 static int	sockFN = 0;		/* TCP/IP socket file number */
 
-#ifndef	LOAD	// OLD I/O
-unsigned char	iC_QM_[IXD/8];		/* Output slot mask per cage */
-unsigned char	iC_QMM;			/* Output cage mask for 1 rack */
-unsigned char	iC_pdata[IXD];		/* input differences */
-#else		// NEW I/O
 static Gate *	timNull[] = { 0, 0, 0, 0, 0, 0, 0, 0, }; /* speeds up tim[] lookup */
 static int	maxChannels = 0;
 static int	C_channel = 0;		/* channel for sending messages to Debug */
@@ -85,7 +83,6 @@ static char	regBuf[REQUEST];
 #else	/* EFENCE */
 static char *	regBuf;
 #endif	/* EFENCE */
-#endif		// END NEW I/O
 
 static int	msgOffset = 0;		/* for message send */
 #ifndef	EFENCE
@@ -116,16 +113,10 @@ iC_icc(
     short	typ;
     int		cnt;
     int		index;
-#ifdef	LOAD
     Gate **	opp;
     char *	cp;
-    Gate **	Channels;
+    Gate **	Channels = 0;
     Gate **	tim = timNull;		/* point to array of 8 null pointers */
-#else	/* LOAD */
-    unsigned *	gcp;
-    iC_Functp * *	ilp;
-    Gate **	tim = &iC_TX_[0];	/* pointers to 8 system gates TX[0] to TX[7] */
-#endif	/* LOAD */
     Gate *	gp;
     iC_Functp	init_fa;
     int		tcnt = 1;
@@ -133,9 +124,7 @@ iC_icc(
     int		retval;
 #ifdef	EFENCE
     msgBuf = iC_emalloc(REQUEST);
-#ifdef	LOAD
     regBuf = iC_emalloc(REQUEST);
-#endif	/* LOAD */
     iC_outBuf = iC_emalloc(REQUEST);
     rpyBuf = iC_emalloc(REPLY);
 #endif	/* EFENCE */
@@ -144,7 +133,7 @@ iC_icc(
 	fclose(iC_outFP);
 #ifndef LOAD
 	if (iFlag) {
-	    iC_inversionCorrection();
+	    iC_inversionCorrection();	/* only applies to compiler listing */
 	    iFlag = 0;
 	}
 #endif	/* LOAD */
@@ -155,10 +144,8 @@ iC_icc(
 	iC_errFP = stderr;		/* standard error from here */
     }
 
-#ifdef	LOAD
     if ((gp = iC_TX0p) != 0) {		/* are EOP or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7 */
-#endif	/* LOAD */
 	assert(tim);
 	for (cnt = 1; cnt < 8; cnt++) {
 	    if (tim[cnt] != NULL) {	/* any of the 7 timers programmed ? */
@@ -166,25 +153,17 @@ iC_icc(
 		break;			/* could optimise by varying delay */
 	    }
 	}
-#ifdef	LOAD
     }
-#endif	/* LOAD */
 
     if ((iC_debug & 0400) == 0) {
-	/* Start TCP/IP communication before any inputs are generated => outputs */
-	if (iC_micro) iC_microReset(04);
-	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM, delay);
-#ifndef	LOAD
-	snprintf(msgBuf, REQUEST, "%s %d", "C0", IXD);
-	iC_send_msg_to_server(sockFN, msgBuf);	/* register C0 with IXD as maxIOs */
-	if (iC_micro) iC_microPrint("connect to server", 0);
-#else	/* LOAD */
 	char *		tbp = regBuf;
 	int		tbc = REQUEST;
 	int		cn  = 0;
 	char *		tbt;
 	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
-
+	/* Start TCP/IP communication before any inputs are generated => outputs */
+	if (iC_micro) iC_microReset(04);
+	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM, delay);
 	if (iC_debug & 04) fprintf(iC_outFP, "%s: I/O registration objects\n", iC_iccNM);
 	for (i = 0; i < 3; i++) {
 	    tbp += cn;
@@ -198,11 +177,12 @@ iC_icc(
 	D_gate.gt_old = -1;	/* never changes - not equal 0 - 5 for debug messages */
 
 	for (opp = iC_sTable; opp < iC_sTend; opp++) {
+	    int mask;
 	    gp = *opp;
 	    tbp += cn;
 	    tbc -= cn;
 	    cn = 0;
-	    int mask = gp->gt_mark;
+	    mask = gp->gt_mark;
 	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T') {	/* suppress TX0 */
 		cn = snprintf(tbp, tbc, ",R%s", gp->gt_ids);	/* read input at controller */
 		if (gp->gt_fni != TRAB) {
@@ -226,7 +206,7 @@ iC_icc(
 	    if (cn > 0) {
 		char * scp = "";
 		if (strlen(iC_iidNM) > 0) {
-		    cn += snprintf(tbp + cn, tbc - cn, "-%s", iC_iidNM); /* append instance id */
+		    cn += snprintf(tbp + cn, tbc - cn, "-%s", iC_iidNM); /* append instance ID */
 		    scp = "-";
 		}
 		if (iC_debug & 04) fprintf(iC_outFP,
@@ -248,7 +228,7 @@ iC_icc(
 	if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
 	    if (iC_micro) iC_microPrint("reply from server", 0);
 	    if (iC_debug & 04) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
-	    cp = rpyBuf - 1;
+	    cp = rpyBuf; cp--;
 	    do {
 		index = atoi(++cp);
 		if (index > maxChannels) {
@@ -293,7 +273,6 @@ iC_icc(
 	    fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
 	    iC_quit(0);			/* quit normally */
 	}
-#endif	/* LOAD */
     }
 
 /********************************************************************
@@ -313,11 +292,9 @@ iC_icc(
     Out_init(iC_o_list);
 #ifdef	LOAD
     iC_c_list = &iClock;				/* system clock list */
-    /* TODO check c_list is a propoer list even if DEQ (also other places) */
+    Out_init(iC_c_list);
 #endif	/* LOAD */
-    iC_f_list = &flist;					/* function clock list */
     Out_init(iC_f_list);
-    iC_s_list = &slist;					/* send outputs */
     Out_init(iC_s_list);
     /********************************************************************
      *  Carry out 4 Passes to initialise all Gates
@@ -326,7 +303,6 @@ iC_icc(
     if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
 #endif	/* YYDEBUG */
 
-#ifdef	LOAD 
     /* if (iC_debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
     /* header for live data */
     /********************************************************************
@@ -337,9 +313,7 @@ iC_icc(
      *  Message in msgBuf is ignored of iC_debug&0400 stops process after init
      *******************************************************************/
     msgOffset = liveOffset = snprintf(msgBuf, REQUEST, "%d:3", C_channel);
-#endif	/* LOAD */
-
-#ifndef	LOAD
+#ifndef LOAD
     for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
 	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
     }
@@ -348,7 +322,6 @@ iC_icc(
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
 #endif	/* YYDEBUG */
-#ifdef	LOAD
 	for (opp = iC_sTable; opp < iC_sTend; opp++) {
 	    gp = *opp;
 	    typ = gp->gt_ini > 0 ? AND : -gp->gt_ini;
@@ -357,17 +330,6 @@ iC_icc(
 		(*init_fa)(gp, typ);	/* initialise for this pass */
 	    }
 	}
-#else	/* LOAD */
-	gp = g_lists;
-	gcp = gate_count;
-	ilp = iC_i_lists;
-	for (typ = 0; typ < MAX_OP; typ++) {
-	    init_fa = (*ilp++)[pass];
-	    for (cnt = *gcp++; cnt; cnt--) {
-		(*init_fa)(gp++, typ);	/* initialise for this pass */
-	    }
-	}
-#endif	/* LOAD */
     }
 
 #if	YYDEBUG
@@ -428,46 +390,57 @@ iC_icc(
     /********************************************************************
      *  Operational loop
      *******************************************************************/
-    for ( ; ; ) {
+    for (;;) {
 	if (iC_micro & 06) iC_microPrint("Input", 0);
 	if (++iC_mark_stamp == 0) {	/* next generation for check */
 	    iC_mark_stamp++;		/* leave out zero */
 	}
 
 	/********************************************************************
-	 *  New I/O handling and the sequencing of different action lists
+	 *  Sequencing of different action lists and New I/O handling
 	 *
 	 *  1   initialisation - put EOP on o_list
 	 *      # actions after an idle period:
-	 *  2   Loop:   scan a_list unless empty
-	 *                 INPW ARITH to a_list
-	 *                 comparisons to o_list
+	 *  2   Loop:  scan a_list unless a_list empty
+	 *                 INPW ARITH expr results to a_list
+	 *                 comparisons, &&, || to o_list
 	 *                 clocked actions to c_list via own clock list
-	 *  3          scan o_list; goto Loop unless empty
+	 *  3        { scan o_list; goto Loop } unless o_list empty
+	 *                 bit actions to o_list
 	 *                 bits used in arithmetic to a_list (less common)
 	 *                 clocked actions to c_list via own clock list
-	 *  4          scan c_list; goto Loop unless empty
-	 *                 put ARITH and GATE actions on a_list and o_list
+	 ****** CLOCK PHASE *******
+	 *  4        { scan c_list; DO 5; goto Loop } unless c_list empty
+	 *                 transfer ARITH master values as slave values to a_list
+	 *                 transfer GATE master values as slave values to o_list
+	 *                 (does not use any combinatorial ARITH or GATE values)
 	 *                 defer 'if else switch' C actions to f_list
-	 *  5          scan f_list; goto Loop unless empty
-	 *                 C actions can generate now ARITH and GATE actions
+	 ****** COMBINATORIAL *****
+	 *  5        { scan f_list; } unless f_list empty
+	 *                 C actions can use and generate combinatotrial ARITH and
+	 *                 GATE values, which is start of a new combinatorial scan
 	 *  6   scan s_list			# only one scan is required
 	 *          do OUTW Gates building send string
-	 *      send output string with final outputs only
-	 *      switch to alternate a_list and o_list
-	 *      idle - wait for next input
-	 *      read new input and link INPW Gates directly to a_list
-	 *      or via traMb to o_list
-	 *  Loop algorithms with for or do while - continue are all incorrect
+	 *  7   send output string with final outputs only
+	 *  8   switch to alternate a_list and o_list
+	 *  9   IDLE - wait for next input
+	 * 10   read new input and link INPW Gates directly to a_list
+	 *      or via traMb to o_list; goto Loop
 	 *******************************************************************/
-      Loop:
-	if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);            }
-	if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); goto Loop; }
-	if (iC_c_list != iC_c_list->gt_next) { iC_scan_clk(iC_c_list); goto Loop; }
-	if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); goto Loop; }
-	if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);            }
+	for (;;) {
+	    if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);           }
+	    if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); continue; }
+	    if (iC_c_list != iC_c_list->gt_next) {
+		iC_scan_clk(iC_c_list);		/* new flist entries can only occurr here */
+		if (iC_f_list != iC_f_list->gt_next) {
+		    iC_scan_clk(iC_f_list);
+		}
+		continue;
+	    }
+	    if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);           }
+	    break;
+	}
 
-#ifdef	LOAD  // ########## NEW Input
 	/********************************************************************
 	 *  Send live data collected in msgBuf during initialisation
 	 *  and previous loop to iCserver
@@ -480,7 +453,6 @@ iC_icc(
 	 *  Initialise msgBuf for live data collection during next loop
 	 *******************************************************************/
 	msgOffset = liveOffset;				/* msg = "C_channel:3" */
-#endif	/* LOAD */ // ########## END NEW Input
 
 #if	YYDEBUG
 	if (iC_scan_cnt || iC_link_cnt) {
@@ -518,7 +490,7 @@ iC_icc(
 #if	YYDEBUG
 	if (iC_debug & 0300) {		/* osc or detailed info */
 	    if ((iC_debug & 0200) &&
-		(iC_o_list->gt_next != iC_o_list || iC_a_list->gt_next != iC_a_list)) {
+		(iC_a_list->gt_next != iC_a_list || iC_o_list->gt_next != iC_o_list)) {
 		fprintf(iC_outFP, "OSC =");
 		for (gp = iC_a_list->gt_next; gp != iC_a_list; gp = gp->gt_next) {
 		    fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
@@ -531,70 +503,6 @@ iC_icc(
 	    iC_display(&dis_cnt, DIS_MAX);	/* inputs and outputs */
 	}
 #endif	/* YYDEBUG */
-#ifndef	LOAD
-
-/********************************************************************
- *
- *	Output to external output modules
- *
- *	QMM and all QM_[] bytes are initially clear (global variables)
- *	bits are set in QMM and QM_[] in preceding scans by outMw and outMx
- *	to mark cages and slots
- *	QMM and all QM_[] are left clear after the following loops
- *
- *	Use 8 bit masks for fast conversion of mask to index via bitIndex[]
- *
- *******************************************************************/
-
-	msgOffset = 0;
-	while (iC_QMM) {			/* rack with bit set for every cage */
-	    int len;
-	    int rest;
-	    int mask = iC_QMM & -iC_QMM;	/* rightmost cage set in QMM */
-	    int cage = iC_bitIndex[mask];	/* mask has only 1 bit set */
-	    int slots = iC_QM_[cage];
-	    int cageOffset = cage << 3;		/* cage has 8 slots */
-	    while (slots) {
-		int mask = slots & -slots;	/* rightmost slot set in slots */
-		int slot = cageOffset + iC_bitIndex[mask];
-#if INT_MAX == 32767 && defined (LONG16)
-		long val;
-#else
-		int val;
-#endif
-		char Qtype = iC_QT_[slot];
-		assert(Qtype);			/* make sure slot is programmed */
-		val = Qtype == 'L' ? *(long*)&iC_QX_[slot] :
-		      Qtype == 'W' ? *(short*)&iC_QX_[slot] : iC_QX_[slot];
-		while ((len =
-#if INT_MAX == 32767 && defined (LONG16)
-			snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
-			    "%c%d.%ld,", Qtype, slot, val)
-#else
-			snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
-			    "%c%d.%d,", Qtype, slot, val)
-#endif
-			) < 0 || len > rest	/* use > because of -1 truncation */
-		    ) {
-		    msgBuf[msgOffset - 1] = '\0';	/* clear last ',' */
-		    if (iC_micro) iC_microPrint("Send intermediate", 0);
-		    iC_send_msg_to_server(sockFN, msgBuf);
-		    if (iC_micro) iC_microReset(0);
-		    msgOffset = 0;
-		}
-		msgOffset += len;
-		slots &= ~mask;			/* clear rightmost slot in slots */
-	    }
-	    iC_QM_[cage] = slots;		/* clear QM_[cage] */
-	    iC_QMM &= ~mask;			/* clear rightmost cage in QMM */
-	}
-	if (msgOffset > 0) {
-	    msgBuf[msgOffset - 1] = '\0';	/* clear last ',' */
-	    if (iC_micro) iC_microPrint("Send", 0);
-	    iC_send_msg_to_server(sockFN, msgBuf);
-	    if (iC_micro) iC_microReset(0);
-	}
-#else	/* LOAD */
 
 	/********************************************************************
 	 *  Send output data collected in outBuf to iCserver
@@ -603,11 +511,10 @@ iC_icc(
 	    iC_outBuf[iC_outOffset - 1] = '\0';	/* clear last ',' */
 	    if (iC_micro) iC_microPrint("New Send", 0);
 	    iC_send_msg_to_server(sockFN, iC_outBuf);
-	    memset(iC_outBuf, 0, REQUEST);	/* clear for next data from outMw() */
+	    memset(iC_outBuf, 0, REQUEST);	/* clear for next data from iC_outMw() */
 	    iC_outOffset = 0;
 	    if (iC_micro) iC_microReset(0);
 	}
-#endif	/* LOAD */ // ########## END NEW Input
 
 	/********************************************************************
 	 *  Input from external input modules and time input if used
@@ -710,99 +617,13 @@ iC_icc(
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 			int		val;
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-#ifndef	LOAD	// ########## OLD Input
-			int		mask;
-			int		diff;
-			int		slot;
-			char		utype[4];	/* need 2 with NUL */
-
-			if (
-#if	INT_MAX == 32767 && defined (LONG16)
-				sscanf(rpyBuf, "%1[XBWLD]%d.%ld", utype, &slot, &val)
-#else	/* INT_MAX == 32767 && defined (LONG16) */
-				sscanf(rpyBuf, "%1[XBWLD]%d.%d", utype, &slot, &val)
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
-				== 3 && slot < IXD
-			    ) {
-			    switch (*utype) {
-			    case 'X':			/* bit input */
-				val &= 0xff;		/* safety measure */
-				diff = val ^ iC_pdata[slot];
-				iC_pdata[slot] = val;	/* ready for next scan */
-				slot <<= 3;		/* convert to bit index */
-				while (diff) {		/* age old algorithm from CSR days */
-				    mask = diff & -diff;	/* rightmost bit set in diff */
-				    index = iC_bitIndex[mask];	/* mask has only 1 bit set */
-				    /* ignore Gate if not programmed  or no change in bit */
-				    if ((gp = iC_IX_[slot+index]) != 0 &&
-					((gp->gt_val & 0x80) ^ (val & mask ? 0x80 : 0x00))) {
-					/* relies on input initialized to +1 !!!!!! */
-					/* and no other function modifies gp_gt_val */
-					gp->gt_val = - gp->gt_val;	/* complement input */
-#if YYDEBUG
-					if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
-#endif
-					iC_link_ol(gp, iC_o_list);	/* fire Input Gate */
-#if YYDEBUG
-					if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
-#endif
-					cnt++;
-					/* o_list will be scanned before next input */
-				    }
-				    diff &= ~mask;	/* clear rightmost bit in diff */
-				}			/* loops only once for every 1 in diff */
-				break;
-
-			    case 'B':			/* 8 bit byte input */
-				if ((gp = iC_IB_[slot]) != NULL) {
-				    val &= 0xff;	/* reduce to byte */
-				    goto wordIn;
-				}
-				break;
-
-			    case 'W':			/* 16 bit word input */
-				if ((gp = iC_IW_[slot]) != NULL) {
-				    val = (short)val;	/* reduce to signed word */
-#if	INT_MAX != 32767 || defined (LONG16)
-				    goto wordIn;
-				}
-				break;
-
-			    case 'L':			/* 32 bit long input */
-				if ((gp = iC_IL_[slot]) != NULL) {
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
-			    wordIn:
-				    if (val != gp->gt_new &&	/* first change or glitch */
-				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
-					/* arithmetic master action */
-#if	YYDEBUG
-					if (iC_debug & 0100) fprintf(iC_outFP, "%s[\t", gp->gt_ids);
-#endif	/* YYDEBUG */
-					iC_link_ol(gp, iC_a_list);	/* no actions */
-#if	YYDEBUG
-#if	INT_MAX == 32767 && defined (LONG16)
-					/* TODO - format for byte, word or long */
-					if (iC_debug & 0100) fprintf(iC_outFP, "%ld", gp->gt_new);
-#else	/* INT_MAX == 32767 && defined (LONG16) */
-					if (iC_debug & 0100) fprintf(iC_outFP, "%d", gp->gt_new);
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
-#endif	/* YYDEBUG */
-					cnt++;
-				    }
-				}
-				break;
-
-			    default:
-				goto RcvError;		/* unkikely if sscanf %1[XBWLD] OK */
-			    }
-			}
-#else	/* LOAD */ // ########## NEW Input
 			int		count;
 			int		channel;
 			static int	liveFlag;
 
 			if (isdigit(rpyBuf[0])) {
-			    cp = rpyBuf - 1;
+			    assert(Channels);
+			    cp = rpyBuf; cp--;
 			    do {
 				int n;
 				if (
@@ -846,6 +667,7 @@ iC_icc(
 					    cnt++;
 					} else
 					if (gp->gt_fni == UDFA) {	/* D_gate initialised type */
+					    char * cp1;
 					    gp->gt_new = 0;	/* allow repeated 1-6 commands */
 					    switch (val) {
 					    case 0:		/* IGNORE */
@@ -925,7 +747,7 @@ iC_icc(
 						    if (iC_micro) iC_microReset(0);
 						}
 						msgOffset = liveOffset;		/* msg = "C_channel:3" */
-						char * cp1 = rpyBuf;
+						cp1 = rpyBuf;
 						while ((cp1 = strchr(cp1, ';')) != NULL) {
 						    long	value;
 						    int		fni;
@@ -964,15 +786,33 @@ iC_icc(
 						}
 						break;
 
-					    case 5:		/* GET_END */
-						for (opp = iC_sTable; opp < iC_sTend; opp++) {
-						    (*opp)->gt_live &= 0x7fff;	/* clear live active */
+					    case 2:		/* POLL */
+						/********************************************************************
+						 *  Receive when re-registering - makes sure, that application is seen
+						 *******************************************************************/
+						if (liveFlag) {
+						    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+							(*opp)->gt_live &= 0x7fff;	/* clear live active */
+						    }
+						    liveFlag = 0;
 						}
-						liveFlag = 0;
-#if	YYDEBUG
-						if (iC_debug & 0100) fprintf(iC_outFP, "Symbol Table no longer required by '%s'\n", iC_iccNM);
-#endif	/* YYDEBUG */
-						/* leave '0' for iCserver */
+						/* poll iClive with 'ch:2;<name>' */
+						regOffset = snprintf(regBuf, REQUEST, "%d:2;%s", C_channel, iC_iccNM);
+						if (iC_micro) iC_microPrint("Send application name", 0);
+						iC_send_msg_to_server(sockFN, regBuf);
+						if (iC_micro) iC_microReset(0);
+						break;
+
+					    case 5:		/* GET_END */
+						/********************************************************************
+						 *  Receive from iClive when Symbol Table is no longer required
+						 *******************************************************************/
+						if (liveFlag) {
+						    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+							(*opp)->gt_live &= 0x7fff;	/* clear live active */
+						    }
+						    liveFlag = 0;
+						}
 						regOffset = snprintf(regBuf, REQUEST, "%d:0", C_channel);
 						iC_send_msg_to_server(sockFN, regBuf);
 						if (iC_micro) iC_microReset(0);
@@ -984,10 +824,11 @@ iC_icc(
 						break;
 
 					    case 7:		/* DEBUGGER STOPPED */
-						fprintf(iC_errFP, "\nDebugger has stopped\n");
-						regOffset = snprintf(regBuf, REQUEST, "%d:2;%s", C_channel, iC_iccNM);
-						if (iC_micro) iC_microPrint("Send application name", 0);
-						iC_send_msg_to_server(sockFN, regBuf);	/* Application Name for next debugger start */
+#if	YYDEBUG
+						if (iC_debug & 0100) fprintf(iC_outFP, "Debugger has stopped for '%s'\n", iC_iccNM);
+#endif	/* YYDEBUG */
+						regOffset = snprintf(regBuf, REQUEST, "%d:0", C_channel);
+						iC_send_msg_to_server(sockFN, regBuf);
 						break;
 
 					    default:
@@ -1001,7 +842,6 @@ iC_icc(
 				}
 			    } while ((cp = strchr(cp, ',')) != NULL);
 			}
-#endif	/* LOAD */ // ########## END NEW Input
 			else {
 			  RcvError:
 			    fprintf(iC_errFP, "ERROR: '%s' rcvd at '%s' ???\n", rpyBuf, iC_iccNM);
@@ -1050,9 +890,8 @@ iC_icc(
 		iC_osc_lim = iC_osc_max;	/* cnt = 1, osc_lim = 3 default */
 	    }
 	}
-    } /* for ( ; ; ) */
+    } /* for (;;) */
 } /* iC_icc */
-#ifdef	LOAD
 
 /********************************************************************
  *
@@ -1088,7 +927,6 @@ iC_liveData(unsigned short index, int value)
     }
     msgOffset += len;
 } /* liveData */
-#endif	/* LOAD */
 
 /********************************************************************
  *
@@ -1118,7 +956,6 @@ void iC_initIO(void)
 void iC_quit(int sig)
 {
     if (sockFN) {
-#ifdef	LOAD
 	if (C_channel) {
 	    /* disconnect iClive - follow with '0' for iCserver */
 	    regOffset = snprintf(regBuf, REQUEST, "%d:5,%d:0", C_channel, C_channel);
@@ -1127,7 +964,6 @@ void iC_quit(int sig)
 	    usleep(200000);			/* 200 ms in us */
 	    if (iC_micro) iC_microPrint("disconnected", 0);
 	}
-#endif	/* LOAD */
 	close(sockFN);				/* close connection to iCserver */
     }
     fflush(iC_outFP);
@@ -1143,9 +979,7 @@ void iC_quit(int sig)
 #ifdef	EFENCE
     free(rpyBuf);
     free(iC_outBuf);
-#ifdef	LOAD
     free(regBuf);
-#endif	/* LOAD */
     free(msgBuf);
 #endif	/* EFENCE */
     exit(sig);					/* really quit */

@@ -83,7 +83,7 @@ Usage:
 
 Author: Sriram Srinivasan - extended by John E. Wulff  <john@je-wulff.de>
 							'@'
-$Id: iCman,v 1.7 2005/02/21 20:53:15 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.8 2005/05/29 12:58:19 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 my $menu_headings;	# "Headings" MenuButton
@@ -573,15 +573,19 @@ use warnings;
 					'-command' => [ sub { $text->see($_[0]) }, $index ],
 				       );
 	    } else {
-		$line =~ s/\342\224\202/|/g;	# man translates '|' into 226 148 130 ?!
-## with man -7
-##		$line =~ s/\302//g;		# Unicode prefix for - ° ´ and x
-## with man
-		$line =~ s/\302\255/-/g;	# precedes '-' for word syllabification from 'man'
-		$line =~ s/\342\213\205/°/g;	# bullet
-		$line =~ s/\302\264/´/g;	# acute accent
-		$line =~ s/\303\327/x/g;	# multiplication sign
+##		if ($Tk::VERSION =~ /800/) {
 ##############
+##		    $line =~ s/\342\224\202/|/g;	# man translates '|' into 226 148 130 ?! SuSE 9.1
+## with man -7
+##		    $line =~ s/\302//g;		# Unicode prefix for - ° ´ and x
+## with man
+##		    $line =~ s/\302\255/-/g;	# precedes '-' for word syllabification from 'man' SuSE 9.1
+		    $line =~ s/\342\200\220/-/g;# precedes '-' for word syllabification from 'man' SuSE 9.3
+		    $line =~ s/\342\213\205/°/g;	# bullet
+		    $line =~ s/\302\264/´/g;	# acute accent
+		    $line =~ s/\303\327/x/g;	# multiplication sign
+##############
+##		}
 		# Underlining, Boldfacing
 		while ($line =~ s/(.)//) {
 		    my $o = $1;

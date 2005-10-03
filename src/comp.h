@@ -9,14 +9,14 @@
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	comp.h
- *	header for icc compiler
+ *	header for immcc compiler
  *
  *******************************************************************/
 
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.49 2005/03/14 18:46:27 jw Exp $";
+"@(#)$Id: comp.h,v 1.50 2005/09/27 17:35:27 jw Exp $";
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -26,6 +26,10 @@ static const char comp_h[] =
 
 #define	NOT	1		/* used in List_e.le_val */
 #define FEEDBACK
+
+/* Stringification of a defined macro s */
+#define SS(s)	S(s)
+#define S(s)	#s
 
 typedef	struct	List_e {	/* list element */
     struct Symbol *	le_sym;
@@ -107,6 +111,7 @@ extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
 extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 
+extern int	iC_Pflag;
 extern int	lexflag;
 /********************************************************************
  *	lexflag is bitmapped and controls the input for lexers
@@ -157,12 +162,21 @@ extern int	functionUseSize;	/* dynamic size adjusted with realloc */
 #define F_FFEXPR	04
 #define F_LITERAL	010
 
+#ifndef LMAIN
+extern char *	szNames[];
+#define inpFN	szNames[1]		/* input file name */
+#endif	/* LMAIN */
+
 #ifndef EFENCE
 extern char	inpNM[];		/* currently scanned input file name */
+extern char	iC_defines[];		/* -D -U definitions from command line */
+extern char	iC_Cdefines[];		/* -C -V definitions from command line */
 extern char	iCbuf[];		/* buffer to build imm statement size IMMBUFSIZE */
 extern char	iFunBuffer[];		/* buffer to build imm function symbols */
 #else
 extern char *	inpNM;			/* currently scanned input file name */
+extern char *	iC_defines;		/* -D -U definitions from command line */
+extern char *	iC_Cdefines;		/* -C -V definitions from command line */
 extern char *	iCbuf;			/* buffer to build imm statement size IMMBUFSIZE */
 extern char *	iFunBuffer;		/* buffer to build imm function symbols */
 #endif
@@ -171,8 +185,12 @@ extern char *	iFunSymExt;		/* flags that function is being compiled */
 extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
 extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
 	    Sym * sv, Lis * lv, int ioTyp);
+extern void	assignOutput(		/* generate and assign an output node */
+	    Symbol * rsp, int ftyp, int ioTyp);
+extern void	listGenOut(		/* listing for undefined C variable */
+	    Symbol * sp);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
-extern Symbol *	functionHead(		/* set up the function definition head */
+extern Symbol *	functionDefHead(	/* set up the function definition head */
 	    unsigned int typeVal, Symbol * funTrigger, int retFlag);
 extern List_e *	collectStatement(	/* collect statements in the function body */
 	    Symbol * funcStatement);
@@ -215,6 +233,10 @@ extern void	pu(int t, char * token, Lis * node);
 extern Symbol *	iclock;			/*   init.c  */
 extern void	init(void);		/* install constants and built-ins */
 extern const char initialFunctions[];	/* iC system function definitions */
+extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */
+extern const char * genName;
+extern int	    genLineNums[];
+#define GEN_COUNT 2			/* number of C functions in precompileds */
 
 					/*   symb.c   */
 #define	HASHSIZ 54*16			/* for new sorted list algorithm */
@@ -263,7 +285,7 @@ extern char	T6FN[];
 extern int	openT4T5(int mode);
 
 					/*   outp.c   */
-#define BUFS	128
+#define BUFS	256
 extern int	IEC1131(char * name, char * buf, int bufLen,
 			char * iqt, char * xbwl, int * bytep,
 			int * bitp, char * tail);
@@ -277,6 +299,8 @@ extern int	buildNet(Gate ** igpp,			/* generate execution network */
 extern int	output(FILE * iFP, char * outfile);	/* generate network as C file */
 extern int	c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
+extern unsigned short	iC_Tflag;			/* define iC_tVar */
+
 					/*   lexc.l   */
 extern int	c_leng;
 extern int	column;
@@ -289,9 +313,4 @@ extern void	clearParaList(int flag); /* clear parameter list from extraneous ent
 					/*   gram.y   */
 extern int	c_parse(void);		/* generated yacc parser function */
 extern void	copyAdjust(FILE* iFP, FILE* oFP, List_e* lp);
-
-					/*   cexe.h   */
-#if ! defined(LOAD) && (defined(RUN) || defined(TCP))
-extern	Symbol*	iC_Lookup(char * string);
-#endif	/* nor LOAD and ( RUN or TCP ) */
 #endif	/* COMP_H */

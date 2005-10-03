@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.28 2005/04/16 17:00:42 jw Exp $";
+"@(#)$Id: init.c,v 1.29 2005/09/17 20:47:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -32,7 +32,6 @@ Symbol *	iclock;			/* default clock */
  *		reserved words:		type KEYW
  *					uVal = compiler_token
  *					ftype used in compilation
- *
  *		built-in symbols:	type for built-in
  *					ftype for built-in
  *
@@ -53,17 +52,17 @@ static struct bi builtinsOld[] = {
   { "SHSR",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with set/reset */
 #ifdef SR_X 
   /*
+   * default SR(set, reset) is cross checked
    * define here if SR(set, res) is cross checked in initialFunctions
    * SRX(set, res) always has this feature
    * cross checked SR is not the default because of extra code generated
    * which is normally not needed - SRX is provided if it is required
    */
-  { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
+  { "SR",	KEYW,	BLTINX,	S_FF,	}, /* R_FF for reset master */
 #endif
+  { "SRX",	KEYW,	BLTINX,	S_FF,	}, /* R_FF for reset master */
   { "JK",	KEYW,	BLTINJ,	S_FF,	}, /* R_FF for reset master */
-  { "L",	KEYW,	BLATCH,	0,	},
   { "LATCH",	KEYW,	BLATCH,	0,	},
-  { "DL",	KEYW,	DLATCH,	D_FF,	},
   { "DLATCH",	KEYW,	DLATCH,	D_FF,	},
   { 0,		0,	0,	0,	},
 };
@@ -89,13 +88,9 @@ static struct bi builtins[] = {
   { "else",	KEYW,	ELSE,	F_CE,	},
   { "SWITCH",	KEYW,	SWITCH,	F_SW,	},
   { "switch",	KEYW,	SWITCH,	F_SW,	},
-  { "C",	KEYW,	CBLTIN,	CLCK,	},
   { "CLOCK",	KEYW,	CBLTIN,	CLCK,	},
-  { "T",	KEYW,	TBLTIN,	TIMR,	}, /* there is no default timer */
   { "TIMER",	KEYW,	TBLTIN,	TIMR,	}, /* normal timer with preset off 0 */
-  { "T1",	KEYW,	TBLTI1,	TIMR,	}, /* alternate timer with preset off 1 */
   { "TIMER1",	KEYW,	TBLTI1,	TIMR,	}, /* alternate timer with preset off 1 */
-  { "F",	KEYW,	BFORCE,	0,	},
   { "FORCE",	KEYW,	BFORCE,	0,	},
   { "extern",	KEYW,	EXTERN,	0,	},
   { "assign",	KEYW,	ASSIGN,	0,	},
@@ -105,6 +100,7 @@ static struct bi builtins[] = {
   { "alias",	KEYW,	USETYPE, 0,	}, /* check that no more than MAXUSETYPE USETYPE's occurr */
   { "strict",	KEYW,	USETYPE, 1,	}, /* MAXUSETYPE 2 */
   { "imm",	KEYW,	IMM,	0,	},
+  { "immC",	KEYW,	IMM,	1,	},
   { "void",	KEYW,	VOID,	UDFA,	},
   { "bit",	KEYW,	TYPE,	GATE,	},
   { "int",	KEYW,	TYPE,	ARITH,	},
@@ -121,12 +117,12 @@ init(void)				/* install constants and built-ins */
 {
     int		io;
     int		instanceNum;
-    Symbol *	sp;
+    Symbol *	sp = 0;
     FILE *	H1p;
     char	funName[BUFS];
     char	lineBuf[BUFS];
 
-    if (iC_debug & 010000) {
+    if ((iC_debug & 010000) && inpFN == 0) {
 	fprintf(iC_outFP, "initialFunctions:\n%s\n", initialFunctions);
     }
     if (iC_debug & 020000) {
@@ -159,6 +155,12 @@ init(void)				/* install constants and built-ins */
 	}
     }
 }
+
+
+
+
+
+
 
 /********************************************************************
  *
@@ -200,23 +202,36 @@ imm int SHR(int dat, clock dcl, bit res, clock rcl) {\n\
     return SHR_( res ? this : dat, dcl, res, rcl); }\n\
 imm int SHSR(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
     return SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
-imm bit L(bit set, bit res) {\n\
-    return F(this, set, res); }\n\
-imm bit DL(bit set, bit res, clock clk) {\n\
-    return D(F(this, set, res), clk); }\n\
-imm bit LATCH(bit s, bit r) {\n\
-    return F(this, s, r); }\n\
-imm bit DLATCH(bit s, bit r, clock c) {\n\
-    return D(F(this, s, r), c); }\n\
+imm bit LATCH(bit set, bit res) {\n\
+    return FORCE(this, set, res); }\n\
+imm bit DLATCH(bit set, bit res, clock clk) {\n\
+    return D(FORCE(this, set, res), clk); }\n\
 /* end iC system function definitions */\n\
 ";
 
 /********************************************************************
- *  Nested functions for test puposes - they work and produce identical
- *  output as above - not necessary for production.
  *
- *  imm bit LATCH(bit s, bit r) {\n\
- *      return L(s, r); }\n\
- *  imm bit DLATCH(bit s, bit r, clock c) {\n\
- *      return DL(s, r, c); }\n\
+ *  The following function blocks generate C functions 1 and 2
+ *  *** adjust line numbers to point to correct line in initialFunctions
+ *  *** comment string is required in comp.y line 2538
+ *  *** tab before comment is required in comp.y line 2586
+ *  *** adjust GEN_COUNT in comp.h to reflect correct number (used in comp.y)
+ *
+ *  genName and genLineNums are used to identify function lines in get()
+ *  generated with genLines.
+ *
  *******************************************************************/
+
+const char *	genLines[]  = {
+    "",
+    "#line 202 \"init.c\"	/* in pre-compiled function block SHR */",
+    "#line 204 \"init.c\"	/* in pre-compiled function block SHSR */",
+};
+
+const char *	genName = "init.c";	/* must be the same as above */
+
+int		genLineNums[] = {
+    0,
+    202,				/* must be the same as above */
+    204,
+};

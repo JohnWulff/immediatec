@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.52 2005/04/16 17:14:48 jw Exp $";
+"@(#)$Id: icc.c,v 1.53 2005/09/18 12:38:02 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -11,7 +11,7 @@ static const char icc_c[] =
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	main.c
- *	command line interpretation and starter for icc compiler
+ *	command line interpretation and starter for immcc compiler
  *
  *******************************************************************/
 
@@ -38,7 +38,8 @@ unsigned short		iC_Sflag = 0;			/* not strict */
 unsigned short *	iC_useTypes[] = { USETYPEFLAGS };
 
 static const char *	usage =
-"USAGE: %s [-acASRh][ -o<out>][ -l<list>][ -e<err>][ -i<lim>][ -d<deb>] <src.ic>\n"
+"USAGE: %s [-acASRh][ -o<out>][ -l<list>][ -e<err>][ -k<lim>][ -d<deb>]\n"
+"             [ -Dmacro[=defn]...][ -Umacro...] <src.ic>\n"
 #if defined(RUN) || defined(TCP)
 "Options in compile mode (-o or -c):\n"
 #endif	/* RUN or TCP */
@@ -51,12 +52,19 @@ static const char *	usage =
 "        -a              compile with linking information in auxiliary files\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
 "        -S              strict compile - all immediate variables must be declared\n"
+"        -P              pedantic: warning if variable contains $ (default $ allowed)\n"
+"        -PP             pedantic-error: error if variable contains $\n"
 "        -R              no maximum error count (default: abort after 100 errors)\n"
+"        -D <macro>      predefine <macro> for the iC preprocessor phase\n"
+"        -U <macro>      cancel previous definition of <macro> for the iC phase\n"
+"                        Note: do not use the same macros for the iC and the C phase\n"
+"        -C <macro>      predefine <macro> for the C preprocessor phase\n"
+"        -V <macro>      cancel previous definition of <macro> for the C phase\n"
 #if defined(RUN) || defined(TCP)
-"        -i <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
+"        -k <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
 #else	/* not RUN or TCP */
-"        -i <lim>        highest I/O index (default: no limit; %d for -c mode)\n"
+"        -k <lim>        highest I/O index (default: no limit; %d for -c mode)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
 "                        default: any index for bit, byte, word or long is allowed\n"
 #endif	/* RUN or TCP */
@@ -64,18 +72,18 @@ static const char *	usage =
 "                   +40  source listing\n"
 "                   +20  net topology\n"
 "                   +10  net statistics\n"
-"                    +4  logic expansion\n"
+"                    +4  logic expansion                      (+204 old style)\n"
 #if defined(RUN) || defined(TCP)
 "                  +400  exit after initialisation\n"
 #endif	/* RUN or TCP */
 #if YYDEBUG && !defined(_WINDOWS)
 "                                          DEBUG options\n"
 #if defined(RUN) || defined(TCP)
-"                 +0402  logic generation (exits after initialisation)\n"
+"                  +402  logic generation (exits after initialisation)\n"
 #ifdef YACC
-"                 +0401  iC yacc debug info  (on stdout only) (+4401 C yacc)\n"
+"                  +401  iC yacc debug info  (on stdout only) (+4401 C yacc)\n"
 #else	/* BISON */
-"                 +0401  iC bison debug info (on stderr only) (+4401 C bison)\n"
+"                  +401  iC bison debug info (on stderr only) (+4401 C bison)\n"
 #endif	/* YACC */
 #else	/* not RUN and not TCP */
 "                    +2  logic generation                     (+4002 Symbol Table)\n"
@@ -86,16 +94,17 @@ static const char *	usage =
 #endif	/* YACC */
 #endif	/* RUN or TCP */
 "                 +4000  supress listing alias post processor (save temp files)\n"
+"                +10000  generate listing of compiler internal functions\n"
 "                +20000  use old style imm functions - no internal functions\n"
-"        -d 10444        generate listing of compiler internal functions\n"
+"                +21000  outputs first (really old style) - no internal functions\n"
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        any iC language program file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
 "        -h              this help text\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
-"        -B              export EF_PROTECT_BELOW which tests access BELOW \n"
-"        -F              export EF_PROTECT_FREE which tests access FREE\n"
+"        -B              export EF_PROTECT_BELOW=1 which tests access BELOW \n"
+"        -F              export EF_PROTECT_FREE=1 which tests access FREE\n"
 #endif	/* EFENCE */
 #if defined(RUN) || defined(TCP)
 "Extra options for run mode: (direct interpretation)\n"
@@ -121,7 +130,8 @@ static const char *	usage =
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n"
 "        -p service port of server (default '%s')\n"
-"        -u unit ID of this client (default '%s')\n"
+"        -u unit ID of this client (default base name of <src.ic>)\n"
+"        -i instance ID of this client (default '%s'; 1 to %d numeric digits)\n"
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                        can be toggled at run time by typing m\n"
@@ -153,6 +163,7 @@ static const char *	usage =
 char *		iC_progname;		/* name of this executable */
 short		iC_debug = 0;
 int		iC_micro = 0;
+int		iC_Pflag;
 unsigned short	iC_xflag;
 unsigned short	iFlag;
 unsigned short	iC_osc_max = MARKMAX;
@@ -162,7 +173,6 @@ extern	int	iCdebug;
 extern	int	c_debug;
 #endif	/* YYDEBUG */
 
-#define inpFN	szNames[1]		/* input file name */
 #define errFN	szNames[2]		/* error file name */
 #define listFN	szNames[3]		/* list file name */
 #define outFN	szNames[4]		/* C output file name */
@@ -173,8 +183,12 @@ char *		szNames[] = {		/* matches return in compile */
 
 #ifndef EFENCE
 char		inpNM[BUFS] = "stdin";	/* original input file name */
+char		iC_defines[BUFS] = "";	/* -D -U definitions from command line */
+char		iC_Cdefines[BUFS] = "";	/* -C -V definitions from command line */
 #else
 char *		inpNM;
+char *		iC_defines;
+char *		iC_Cdefines;
 #endif	/* EFENCE */
 
 FILE *		iC_outFP;		/* listing file pointer */
@@ -220,13 +234,14 @@ static void	unlinkTfiles(void);
  *
  *******************************************************************/
 
-char *		iC_full_type[]  = { FULL_TYPE };
-char *		iC_full_ftype[] = { FULL_FTYPE };
-unsigned char	iC_types[]      = { TYPES };
-unsigned char	iC_ctypes[]     = { CTYPES };
-unsigned char	iC_ftypes[]     = { FTYPES };
-char		iC_os[]         = OPS;
-char		iC_fos[]        = FOPS;
+char *		iC_full_type[]	= { FULL_TYPE };
+char *		iC_full_ftype[]	= { FULL_FTYPE };
+unsigned char	iC_types[]	= { TYPES };
+unsigned char	iC_ctypes[]	= { CTYPES };
+unsigned char	iC_ftypes[]	= { FTYPES };
+char		iC_os[]		= OPS;
+char		iC_fos[]	= FOPS;
+char *		iC_useText[4]	= { USE_TEXT };
 
 unsigned char	iC_bitMask[]    = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
@@ -238,7 +253,7 @@ unsigned char	iC_bitMask[]    = {
  *
  *******************************************************************/
 
-#if defined(RUN) || defined(TCP)
+#if defined(RUN)
 Gate *		iC_IX_[IXD*8];		/* pointers to bit Input Gates */
 Gate *		iC_IB_[IXD];		/* pointers to byte Input Gates */
 Gate *		iC_IW_[IXD];		/* pointers to word Input Gates */
@@ -248,17 +263,42 @@ Gate *		iC_IL_[IXD];		/* pointers to long Input Gates */
 Gate *		iC_TX_[TXD*8];		/* pointers to bit System Gates */
 char		iC_QT_[IXD];		/* Output type of slots */
 int		iC_maxIO = IXD;		/* I/O index limited to 64 */
-#else	/*  not RUN or TCP */
+#else	/*  not RUN */
 int		iC_maxIO = -1;		/* I/O index no limit */
-#endif	/*  not RUN or TCP */
+#endif	/*  not RUN */
+
+#if defined(RUN) || defined(TCP)
+Gate *		iC_pf0_1;		/* pointer to _f01 if generated in buildNet() */
+#endif /* defined(RUN) || defined(TCP) */
 
 unsigned char	iC_QX_[IXD];		/* Output bit field slots (also used in compile) */
+
+#if defined(TCP)
+/********************************************************************
+ *
+ *	I/O links for display()
+ *
+ *******************************************************************/
+
+Gate *		iC_TX0p;			/* pointer to bit System byte Gates */
+
+Gate *		iC_IX0p;			/* pointer to Input Gate for bit iC_display */
+Gate *		iC_QX0p;			/* pointer to Output Gate for bit iC_display */
+Gate *		iC_IB1p;			/* pointer to Input Gate for byte iC_display */
+Gate *		iC_QB1p;			/* pointer to Output Gate for byte iC_display */
+Gate *		iC_IW2p;			/* pointer to Input Gate for word iC_display */
+Gate *		iC_QW2p;			/* pointer to Output Gate for word iC_display */
+#if	INT_MAX != 32767 || defined (LONG16)
+Gate *		iC_IL4p;			/* pointer to Input Gate for long iC_display */
+Gate *		iC_QL4p;			/* pointer to Output Gate for long iC_display */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
+#endif	/* TCP */
 
 /********************************************************************
  *
  *	Open auxiliary files T4FN and T5FN
- *			make and open T4FN; rewind if it exists
- *	mode == 1:	make and open T5FN; rewind if it exists
+ *			make and open T4FN; close and re-open if it exists
+ *	mode == 1:	make and open T5FN; close and re-open if it exists
  *	mode == 0:	make and close T5FN; gcc -E call will overwrite it
  *
  *******************************************************************/
@@ -267,33 +307,53 @@ int
 openT4T5(int mode)
 {
     int		fd;
+    static int	T5flag = 0;		/* set when mkstemp(T5FN) is executed */
 
-    if (T4FP == NULL) {
+    if (T4FP == 0) {
 	if ((fd = mkstemp(T4FN)) < 0 || (T4FP = fdopen(fd, "w+")) == 0) {
 	    ierror("openT4T5: cannot open:", T4FN);
 	    return T4index;		/* error opening temporary file */
 	}
-	if (mode) {
-	    if ((fd = mkstemp(T5FN)) < 0 || (T5FP = fdopen(fd, "w+")) == 0) {
+    } else
+    if (fclose(T4FP) < 0 || (T4FP = fopen(T4FN, "w+")) == NULL) {
+	ierror("openT4T5: cannot open:", T4FN);
+	return T4index;
+    }
+    if (mode) {
+	if (T5FP == 0) {
+	    if (T5flag == 0) {
+		if ((fd = mkstemp(T5FN)) < 0 || (T5FP = fdopen(fd, "w+")) == 0) {
+		    ierror("openT4T5: cannot open:", T5FN);
+		    return T5index;	/* error opening temporary file */
+		}
+		T5flag = 1;		/* generate name only once */
+	    } else
+	    if ((T5FP = fopen(T5FN, "w+")) == NULL) {
 		ierror("openT4T5: cannot open:", T5FN);
 		return T5index;		/* error opening temporary file */
 	    }
 	} else
-	if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
-	    ierror("openT4T5: cannot make or unlink:", T5FN);
-	    perror("unlink");
-	    return T5index;		/* error unlinking temporary file */
+	if (fclose(T5FP) < 0 || (T5FP = fopen(T5FN, "w+")) == NULL) {
+	    ierror("openT4T5: cannot open:", T5FN);
+	    return T5index;
 	}
     } else {
-	fclose (T4FP);			/* overwrite intermediate file */
-	if ((T4FP = fopen(T4FN, "w+")) == NULL) {
-	    return T4index;		/* error re-opening temporary file */
-	}
-	if (T5FP) fclose (T5FP);	/* overwrite intermediate file */
-	if (mode) {
-	    if ((T5FP = fopen(T5FN, "w+")) == NULL) {
-		return T5index;		/* error re-opening temporary file */
+	if (T5FP) {
+	    assert(T5flag);
+	    if (fclose (T5FP) < 0 || unlink(T5FN) < 0) {
+		ierror("openT4T5: cannot close or unlink:", T5FN);
+		perror("unlink");
+		return T5index;		/* error unlinking temporary file */
 	    }
+	    T5FP = 0;			/* overwrite intermediate file */
+	} else
+	if (T5flag == 0) {
+	    if ((fd = mkstemp(T5FN)) < 0 || close(fd) < 0 || unlink(T5FN) < 0) {
+		ierror("openT4T5: cannot make or unlink:", T5FN);
+		perror("unlink");
+		return T5index;		/* error unlinking temporary file */
+	    }
+	    T5flag = 1;			/* generate name only once */
 	}
     }
     return 0;
@@ -311,6 +371,8 @@ main(
     char **	argv)
 {
     int		fd;
+#ifdef TCP
+#endif	/* TCP */
     int		r = 0;			/* return value of compile */
     int		ro = 4;			/* output message index */
 
@@ -325,6 +387,8 @@ main(
 #ifdef EFENCE
     inpNM = iC_emalloc(BUFS);
     inpNM = strcpy(inpNM, "stdin");	/* original input file name */
+    iC_defines = iC_emalloc(BUFS);	/* initialized with empty string "" */
+    iC_Cdefines = iC_emalloc(BUFS);	/* initialized with empty string "" */
     iCbuf = iC_emalloc(IMMBUFSIZE);	/* buffer to build imm statement */
     iFunBuffer = iC_emalloc(IBUFSIZE);	/* buffer to build imm function symbols */
     iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
@@ -341,7 +405,12 @@ main(
 	    ++*argv;
 	    do {
 		switch (**argv) {
-		    int	debi;
+		    int		debi;
+		    int		slen;
+		    int		arg;
+		    char *	mp;
+		    char *	op;
+		    char	tempBuf[BUFS];
 
 		case '\0':
 		    inpFN = 0;		/* - is standard input */
@@ -357,6 +426,17 @@ main(
 		case 'u':
 		    if (! *++*argv) { --argc, ++argv; }
 		    if (strlen(*argv)) iC_iccNM = *argv;
+		    goto break2;
+		case 'i':
+		    if (! *++*argv) { --argc, ++argv; }
+		    if ((slen = strlen(*argv)) > INSTSIZE ||
+			slen != strspn(*argv, "0123456789")) {
+			fprintf(stderr, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
+			    *argv, INSTSIZE);
+		    } else {
+			iC_iidNM = iC_emalloc(INSTSIZE+1);	/* +1 for '\0' */
+			strncpy(iC_iidNM, *argv, INSTSIZE);
+		    }
 		    goto break2;
 		case 'm':
 		    iC_micro++;		/* microsecond info */
@@ -408,7 +488,7 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    if (strlen(*argv)) errFN = *argv;	/* error file name */
 		    goto break2;
-		case 'i':
+		case 'k':
 		    if (! *++*argv) { --argc, ++argv; }
 		    iC_maxIO = atoi(*argv) + 1;
 		    if (excFN != 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) goto maxIOerror;
@@ -416,10 +496,10 @@ main(
 		case 'c':
 		    if (outFN == 0) {
 			excFN = "cexe.c";
-			if (iC_maxIO < 0) iC_maxIO = IXD;	/* pre-set for icc is -1 */
+			if (iC_maxIO < 0) iC_maxIO = IXD;	/* pre-set for immcc is -1 */
 			if (iC_maxIO > IXD) {		/* I/O limit for -c mode */
 			    maxIOerror: fprintf(stderr,
-				"%s: -i %d exceeds %d for -c option\n",
+				"%s: -k %d exceeds %d for -c option\n",
 				iC_progname, iC_maxIO-1, IXD-1);
 			    goto error;
 			}
@@ -440,9 +520,51 @@ main(
 		case 'a':
 		    iC_aflag = 1;		/* append for compile */
 		    break;
+		case 'P':
+		    iC_Pflag++;			/* -P is pedantic, -PP or more is pedantic-error*/
+		    break;
 		case 'x':
 		    iC_xflag = 1;		/* start with hexadecimal display */
 		    break;
+		case 'C':
+		    arg = 'D';
+		    goto buildCdefines;
+		case 'V':
+		    arg = 'U';
+		  buildCdefines:
+		    mp = iC_Cdefines;
+		    op = iC_defines;
+		    goto buildDefines;
+		case 'D':
+		case 'U':
+		    mp = iC_defines;
+		    op = iC_Cdefines;
+		    arg = **argv;
+		  buildDefines:
+		    if (! *++*argv) { --argc, ++argv; }
+		    if (strlen(*argv)) {
+			if (strlen(op)) {
+			    char *	cp;
+			    strncpy(tempBuf, op, BUFS);
+			    cp = strtok(tempBuf+1, " ");	/* miss first space */
+			    while (cp) {
+				if ((cp = strtok(NULL, " ")) == NULL) break;	/* next token */
+				if (strcmp(*argv, cp) == 0) {
+				    fprintf(stderr, "%s: must not use same macro '%s' for C and iC\n",
+					iC_progname, *argv);
+				    goto error;
+				}
+				cp = strtok(NULL, " ");	/* -D -C -U or -V */
+			    }
+			}
+			slen = strlen(mp);	/* space used so far */
+			if (snprintf(mp + slen, BUFS - slen, " -%c %s", arg, *argv) >= BUFS - slen) {
+			    fprintf(stderr, "%s: -%c %s: does not fit in internal buffer\n",
+				iC_progname, arg, *argv);
+			    goto error;
+			}
+		    }
+		    goto break2;
 #ifdef EFENCE
 		case 'E':
 		    iC_xflag = inpNM[BUFS-1];
@@ -471,7 +593,7 @@ main(
 #if defined(RUN) || defined(TCP)
 		    MARKMAX,
 #ifdef TCP
-		    iC_hostNM, iC_portNM, iC_iccNM,
+		    iC_hostNM, iC_portNM, iC_iidNM, INSTSIZE,
 #endif	/* TCP */
 		    iC_progname, iC_progname, iC_progname,
 #endif	/* RUN or TCP */
@@ -482,14 +604,27 @@ main(
 	    break2: ;
 	} else {
 	    if (strlen(*argv)) inpFN = *argv;
+#ifdef TCP
+	    if (strcmp(iC_iccNM, "stdin") == 0) {
+		char * cp;
+		iC_iccNM = iC_emalloc(strlen(inpFN)+1);	/* +1 for '\0' */
+		strcpy(iC_iccNM, inpFN);
+		if ((cp = strrchr(iC_iccNM, '.')) != 0) {
+		    *cp = '\0';		/* terminate at trailing extension .ic */
+		}
+	    }
+	    if (strlen(iC_iidNM) > 0) {
+		snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
+	    }
+#endif	/* TCP */
 	}
     }
-#if defined(RUN) || defined(TCP)
+#if defined(RUN)
     if (outFN == 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) {	/* I/O limit for run mode */
-	fprintf(stderr, "%s: -i %d exceeds %d for run mode\n", iC_progname, iC_maxIO-1, IXD-1);
+	fprintf(stderr, "%s: -k %d exceeds %d for run mode\n", iC_progname, iC_maxIO-1, IXD-1);
 	goto error;
     }
-#endif	/* RUN or TCP */
+#endif	/* RUN */
     iC_debug &= 037777;			/* allow only cases specified */
     iFlag = 0;
     /********************************************************************
@@ -521,7 +656,7 @@ main(
      *	and C-actions are collected in the temporary file T1FN
      *	Also as a side effect outFlag is set if outFN is set (-o option)
      *******************************************************************/
-    if (r = setjmp(beginMain) ||
+    if ((r = setjmp(beginMain)) ||
 	(r = compile(inpFN, listFN, errFN, outFN)) != 0) {
 	ro = 5;				/* compile error */
     } else
@@ -548,7 +683,10 @@ main(
 #if defined(RUN) || defined(TCP)
 	Gate *		igp;
 #endif	/* RUN or TCP */
-	unsigned	gate_count[MAX_LS];	/* accessed by iC_icc() */
+	unsigned	gate_count[MAX_LS];	/* used in listNet and buildNet only */
+	if (inpFN) {
+	    strncpy(inpNM, inpFN, BUFS);	/* restore name if last #line was not inpFN */
+	}
 	/********************************************************************
 	 *	List network topology and statistics - this completes listing
 	 *******************************************************************/
@@ -703,21 +841,33 @@ unlinkTfiles(void)
  *
  *	When iC_path is not "", pplstfix fill be called with the log
  *	option -l, which outputs to pplstfix.log. In this case
- *	when iC_progname is not just "icc" but ends with a revision
- *	number, eg. icc109, pplstfix will be called as pplstfix109.
+ *	when iC_progname is not just "immcc" but ends with a revision
+ *	number, eg. immcc109, pplstfix will be called as pplstfix109.
+ *
+ *	pplstfix is called if logic expansion and net topology is
+ *	specified -d24. The latter defines the alias equivalences.
+ *
+ *	pplstfix is suppressed if yacc output -d1, logic generation -d2
+ *	or pplstfix suppression -d4000 is specified. Particularly the
+ *	logic generation is a very detailed listing, and the listing
+ *	should be in the sequence the lexer and parser generate the code.
+ *	pplstfix sorts and re-arranges this sequence and changes names
+ *	to resolve aliases, which is good for the final listing, but
+ *	not for the logic generation or yacc listing.
  *
  *******************************************************************/
 
 int
 iC_inversionCorrection(void)
 {
-    int		fd;
     int		r = 0;
-    char *	versionTail;
-    char	tempName[] = "pplstfix.XXXXXX";
-    char	exStr[TSIZE];
 
-    if ((iC_debug & 04024) == 024) {	/* not suppressed, NET TOPOLOGY and LOGIC */
+    if ((iC_debug & 04027) == 024) {	/* required: logic expansion and net topology */
+	int	fd;
+	char *	versionTail;
+	char	tempName[] = "pplstfix.XXXXXX";
+	char	exStr[TSIZE];
+
 	/* mktemp() is deemed dangerous */
 	/* Cygnus won't unlink till file is closed */
 	if ((fd = mkstemp(tempName)) < 0 ||
@@ -747,38 +897,17 @@ iC_inversionCorrection(void)
     }
     return r;
 } /* inversionCorrection */
-#if defined(RUN) || defined(TCP)
 
-Symbol *
-iC_Lookup(char *	string)	/* find string in symbol table at run time */
-{
-    Symbol *	sp;
-
-    if ((sp = lookup(string)) == 0) {
-#ifndef _WINDOWS 
-	fflush(iC_outFP);
-	fprintf(iC_errFP,
-	    "\n*** Error: cexe.c: iC_Lookup could not find Symbol '%s' at run time.\n"
-	      "*** Usually this is a term in a C function which does not match.\n"
-	      "*** Check that 'cexe.c' was built from '%s'\n"
-	      "*** Rebuild compiler using '%s -c %s'\n"
-	      , string, inpNM, iC_progname, inpNM);
-#endif
-	iC_quit(-3);
-    }
-    return sp;				/* found */
-} /* iC_Lookup */
-#endif	/* RUN or TCP */
-
-#ifdef POD /* ############ POD to generate man page ################################## */
+/* ############ POD to generate man page ##################################
 
 =head1 NAME
 
- icc - the immediate-C to C compiler
+ immcc - the immediate-C to C compiler
 
 =head1 SYNOPSIS
 
- icc [-acASRh][ -o<out>][ -l<lst>][ -e<err>][ -i<lim>][ -d<deb>] <src.ic>
+ immcc [-acASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
+       [ -Dmacro[=defn]...][ -Umacro...] <src.ic>
     -o <out> name of generated C output file
     -c       generate C source cexe.c to extend 'icr' or 'ict' compiler
              (cannot be used if also compiling with -o)
@@ -788,21 +917,29 @@ iC_Lookup(char *	string)	/* find string in symbol table at run time */
     -a       append linking info for 2nd and later files
     -A       compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S       strict compile - all immediate variables must be declared
+    -P       pedantic: warning if variable contains $ (default $ allowed)
+    -PP      pedantic-error: error if variable contains $
     -R       no maximum error count (default: abort after 100 errors)
-    -i <lim> highest I/O index (default: no limit; 63 for -c mode)
+    -D <macro> predefine <macro> for the iC preprocessor phase
+    -U <macro> cancel previous definition of <macro> for the iC phase
+            Note: do not use the same macros for the iC and the C phase
+    -C <macro> predefine <macro> for the C preprocessor phase
+    -V <macro> cancel previous definition of <macro> for the C phase
+    -k <lim> highest I/O index (default: no limit; 63 for -c mode)
              if lim <= 63, mixed byte, word and long indices are tested
              default: any index for bit, byte, word or long is allowed
     -d <deb>                  LIST options
         +40  source listing
         +20  net topology
         +10  net statistics
-         +4  logic expansion
+         +4  logic expansion                      (+204 old style)
                               DEBUG options
          +2  logic generation                     (+4002 Symbol Table)
          +1  iC bison iC_debug info (on stderr only) (+4001 C bison)
       +4000  supress listing alias post processor (save temp files)
+     +10000  generate listing of compiler internal functions
      +20000  use old style imm functions - no internal functions
-    -d 10044 generate listing of compiler internal functions
+     +21000  outputs first (really old style) - no internal functions
 
     <src.ic> iC language source file (extension .ic)
     -        or default: take iC source from stdin
@@ -810,17 +947,18 @@ iC_Lookup(char *	string)	/* find string in symbol table at run time */
 
 =head1 DESCRIPTION
 
-B<icc> translates an iC-source (extension: .ic) into a C file which can
+B<immcc> translates an iC-source (extension: .ic) into a C file which can
 be compiled with a C compiler and linked with the iC project run time
 library B<libict.a> (link option -lict) to produce an executable which
 communicates via TCP/IP with B<iCserver> and associated I/O-clients -
 usually B<iCbox>.
 
-B<icc> reads and translates one iC-source eg file.ic. If no options are
+B<immcc> reads and translates one iC-source eg file.ic. If no options are
 specified, only compilation errors (if any) are reported on 'stderr'.
 
 Before translation starts, file.ic is optionally passed through the
-C-precompiler if it contains any lines starting with '#'.
+C-precompiler if it contains any lines starting with '#' or if -D or -U
+options were used in the command line.
 
 Immediate-C code consists of immediate statements and C literal blocks.
 Immediate statements translate into data tables for use at run time
@@ -852,8 +990,8 @@ immediate statement, an attempt to assign to it in the C-code is an
 error. A syntax check of the embedded C code with appropriate error
 messages is a by-product of this procedure.
 
-The compiler also produces an optional listing (default file.lst). The
-listing displays the iC source lines with line numbers. These
+The iC and C compiler also produces an optional listing (default file.lst).
+The listing displays the iC source lines with line numbers. These
 are interspersed with a detailed logic expansion of the generated
 code produced by the compiler. Study of this code gives insights
 into how iC-code is compiled and executed.  Aliases appear in the
@@ -861,17 +999,17 @@ raw listing because of one pass compiler limitations. Aliases are
 completely eliminated from the executable code, and should therefore
 not confuse readers of the listings. A correction is carried out by
 passing the listing - and only the listing through the perlscript
-'pplistfix', which resolves aliases in the listing of a single source
+'pplstfix', which resolves aliases in the listing of a single source
 file. Aliases will still occurr for iC-applications spanning several
 source files. Here the reader must resolve any aliases.
 
 =head1 DEVELOPER INFORMATION
 
 For debugging the compiler and 'pplstfix', if the compiler is called
-with a path, eg. './icc', 'pplstfix' will be called with the same
+with a path, eg. './immcc', 'pplstfix' will be called with the same
 path, namely './pplstfix'.  If a path is specified and the name of
-the compiler is not just 'icc' but ends with a revision number,
-eg. 'icc109', 'pplstfix' will be called as 'pplstfix109'. This
+the compiler is not just 'immcc' but ends with a revision number,
+eg. 'immcc109', 'pplstfix' will be called as 'pplstfix109'. This
 way several versions of the compiler and pplstfix can be kept in
 the development directory.  Also if a path is specified 'pplstfix'
 will be called with the log option -l. This outputs a log file to
@@ -902,4 +1040,4 @@ to contact the author, see the README file.
 
 =cut
 
-#endif
+   ############ end of POD to generate man page ########################### */

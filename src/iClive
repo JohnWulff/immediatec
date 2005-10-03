@@ -63,9 +63,9 @@ my %delayedColour;	# colour that should be restored after a flash
 ########################################################################
 
 my @abbrevSelect  = ( 'U','A',' ','_','E','s','r','H','V','S','R','D','I','F','G',
-		      'C','T','B','W','X',':','!',      # as[ftype] 0 - 20
-		      '?','Aa','ga','ga','ia','ia','?','?','?','?','?','?','?','?',
-		      '?','?','?','?','?',':a','!a',    # ALIASes  21 - 41
+		      'C','T','B','W','X',':','!',		   # as[ftype] 0 - 21
+		      '?','aA','a ','a_','~ ','~_','?','?','?','?','?','?','?','?',
+		      '?','?','?','?','?','a:','a!',		   # ALIAS    22 - 43
 		    );
 
 my @colourSelect  = ( 0,2,0,0,0,0,0,2,2,0,0,0,2,0,0,0,0,2,2,0,4,6, # cs[ftype] 0 - 21
@@ -167,7 +167,7 @@ Usage:
 
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.37 2005/04/05 10:20:53 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.38 2005/09/23 19:20:44 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -253,10 +253,10 @@ my $fileTypes = [
 ];
 
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
-my $scanPattern = '[~\s]*(-\s*\d+|[\w\$]+(\.\w+)?)\s*((~ )?---|=$)?';
+my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*\w+)?)\s*((~ )?---|=$)?';
 my $bMsg = '';		# balloon message
-my @wIdx = ('', '');	# Indices surrounding the current word.
-my @pIdx = ('', '');	# Same for previous word.
+my $wIdx = '';		# Index of current wordstart
+my $pIdx = '';		# Index of previous wordstart
 
 # has to be global, 'our' not portable yet
 my ($home);
@@ -362,7 +362,7 @@ my $menuFile = $menuBar->Menubutton(-text               => 'File',
 				    -borderwidth        => 2,
 				    -takefocus          => 1,
 				    -highlightthickness => 1,
-				    -tearoff            => 1,	# tear off line 0
+				    -tearoff            => 1,		# 0 - tear off
 				   )->pack(-side => 'left',
 					   -padx => 2,
 					  );
@@ -385,8 +385,8 @@ $menuFile->separator();							# 6
 $menuFile->command(-label       => 'Quit',				# 7
 		   -accelerator => 'Alt-q',
 		   -command     => \&quit_program);
-$menuFile->separator();				# 8
-my $menuFileStart = 9;				# first dynamic entry line 9
+$menuFile->separator();							# 8
+my $menuFileStart = 9;				# first dynamic entry:  # 9
 my %currentFiles = ();
 my $menuFileCount = 0;				# caching count
 my %lastFile = ();				# save last open file
@@ -400,7 +400,7 @@ my $build_mb   = $menuBar->Menubutton(-text               => 'Build',
 				      -borderwidth        => 2,
 				      -takefocus          => 1,
 				      -highlightthickness => 1,
-				      -tearoff            => 0,	# no tear off
+				      -tearoff            => 0,		# no tear off
 				     )->pack(-side => 'left',
 					     -padx => 2,
 					    );
@@ -498,7 +498,7 @@ my $menuSearch = $menuBar->Menubutton(-text               => 'Search:',
 				      -borderwidth        => 2,
 				      -takefocus          => 1,
 				      -highlightthickness => 1,
-				      -tearoff            => 1,	# tear off line 0
+				      -tearoff            => 1,		# 0 - tear off
 				     )->pack(-side => 'left',
 					     -padx => 2,
 					    );
@@ -550,7 +550,7 @@ $menuSearch->radiobutton(-label    => 'Regexp Ignore case',		# 8
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 0, undef, 0 ]);
 $menuSearch->separator();						# 9
-my $menuSearchStart = 10;			# first dynamic entry line 10
+my $menuSearchStart = 10;			# first dynamic entry:  #10
 my %currentSearches = ();
 my $menuSearchCount = 0;			# caching count
 
@@ -834,6 +834,9 @@ sub report_cursor {
 #	same $start and $last lines, do_scan only once when line numbers
 #	change.
 #
+#	$prevStart and $prevLast must be cleared when changing file or instance
+#	in case the text in the window is similar.
+#
 #	The computation of $start and $last from $end has always yielded
 #	integer values with the fractions returned by $text->yview().
 #	If this were not the case, function int($start+0.5) could be used.
@@ -929,7 +932,7 @@ use warnings;
 	    $C_channel = $1;	# receiver channel from control program
 	    $D_channel = $2;	# sender channel to control program
 	    print "$named: registered: C_channel = $C_channel, D_channel = $D_channel\n" if $opt_T;
-	    conn_send_now("$D_channel:7,$D_channel:0");
+	    conn_send_now("$D_channel:2");	# poll application to see if it is live
 	}
     } else {
 	FAILED_TO_REGISTER: info_display(2000, 'red',
@@ -955,6 +958,7 @@ sub unregister_from_server {
 	my $UnRegistrations = "n-$regName,rC$regName,sD$regName";
 	$regName = '';
 	print "$named: UnRegistrations: $UnRegistrations\n" if $opt_T;
+	$mainWindow->title("$named$u: $fileName");	# YYY
 	conn_send_now($UnRegistrations);
     }
     clear_all();
@@ -981,6 +985,7 @@ print "($len)$msg< iCserver\n" if $opt_T;
 	    $scanButton->configure(-text => 'Live');
 	    $regName = $runName = '';
 	    $runButton->configure(-text => 'Run ');
+	    print "$named: rcvd_msg_from_server(0) buttons to 'Run ' 'Live'\n" if $opt_T;
 	    $mainWindow->title("$named$u: $fileName");
 	    $makeName = '';
 	    $conn->disconnect;		# should only happen when iCserver shuts down
@@ -1032,22 +1037,25 @@ print "($len)$msg< iCserver\n" if $opt_T;
 			}
 		    }
 		    elsif ($entry eq '2') {
-			print "received '$C_channel:2'\n" if $opt_T;
-			####################################################
-			## Application is running
-			## The 2nd entry is the name of the running iC program.
-			## This name allows a check against the file name of
-			## the displayed text. (Assume it should match)
-			## change text on run button to 'Stop'
-			####################################################
-			$runName = shift @symbols;
-			$mainWindow->title("$named$u: $fileName $runName");
-			info_display(2000, 'blue', "'$runName' is running");
-			$runButton->configure(-text => 'Stop');
-			if ($scanFlag) {
-			    %symbolTable = ();
-			    print "Request Symbol Table '$D_channel:1'.\n" if $opt_T;
-			    conn_send_now("$D_channel:1");	# request Symbol Table
+			if ($runName eq '') {	# block 2nd receive of ch:2;<name>
+			    print "received '$C_channel:2'\n" if $opt_T;
+			    ####################################################
+			    ## Application is running
+			    ## The 2nd entry is the name of the running iC program.
+			    ## This name allows a check against the file name of
+			    ## the displayed text. (Assume it should match)
+			    ## change text on run button to 'Stop'
+			    ####################################################
+			    $runName = shift @symbols;
+			    $mainWindow->title("$named$u: $fileName $runName");
+			    info_display(2000, 'blue', "'$runName' is running");
+			    $runButton->configure(-text => 'Stop');
+			    print "$named: rcvd_msg_from_server received :2 'Stop' scanFlag = '$scanFlag'\n" if $opt_T;
+			    if ($scanFlag) {
+				%symbolTable = ();
+				print "$named: Request Symbol Table '$D_channel:1'.\n" if $opt_T;
+				conn_send_now("$D_channel:1");	# request Symbol Table
+			    }
 			}
 		    }
 		    elsif ($entry eq '3') {
@@ -1143,9 +1151,11 @@ use warnings;
 			    ## change text on run button to 'Run '
 			    ####################################################
 			    $runButton->configure(-text => 'Run ');
+			    print "$named: rcvd_msg_from_server received :5 'Run '\n" if $opt_T;
 			}
 			if ($scanFlag) {
 			    $scanButton->configure(-text => 'wait');
+			    print "$named: rcvd_messgae_from_server received :5 'wait'\n" if $opt_T;
 			}
 		    }
 		    elsif ($entry ne '0') {	# ignore :0 messages
@@ -1576,8 +1586,9 @@ sub scan {
     } elsif ($conn) {
 	$scanFlag = 1;
 	$scanButton->configure(-text => 'wait');
+	print "$named: scan 'wait'\n" if $opt_T;
 	if ($runName ne '') {
-	    print "Request Symbol Table '$D_channel:1'.\n" if $opt_T;
+	    print "$named: Request Symbol Table '$D_channel:1'.\n" if $opt_T;
 	    conn_send_now("$D_channel:1");	# request Symbol Table
 	}
     } else {
@@ -1683,6 +1694,7 @@ sub do_scan {
 	    $scanButton->configure(-text => 'Live');
 	    return;
 	}
+	$text->configure(-state => 'normal');
 	$current = '1.0' unless defined $current;
 	$last    = 'end' unless defined $last;
 	my $length = '0';
@@ -1695,11 +1707,16 @@ sub do_scan {
 				     $last);
 	    last if (!$current);
 	    $iw = $i = $text->get($current, "$current + $length char");
-	    $i =~ s/(-)?([~\t ]*)([\w.\$]+)([~\t ]*)/$2$4/;
+	    $i =~ s/(-)?([~\t ]*)(-\s*\d+|\w[\w\$]*(\s*\.\s*\w+)?)([~\t ]*)/$2$5/;
 	    $word = defined $1 ? "$1$3" : $3;	# word for the symbol table
+no warnings;
+	    $tag = "'$word' length=$length, iw='$iw' i='$i' 1='$1' 2='$2' 3='$3' 5='$5'\n" if $opt_T;
+use warnings;
+	    $word =~ s/\s//g;			# delete any white space
 	    if (defined $word and $symbolTable{$word}) {
 		($ftype, $index) = @{ $symbolTable{$word} };
 		if (defined $index and $ftype) {
+		    print $tag if $opt_T;
 		    $tag = $index;		# word is in the symbol table
 		    $cs = $colourSelect[$ftype]; # initial colour with ALIAS inv
 		    @{ $activeSymbols[$index] }[1 .. 3] = (0, $cs & ~01, [gettimeofday]);
@@ -1766,65 +1783,66 @@ sub do_scan {
 	       -balloonmsg      => \$bMsg,
 	       -balloonposition => 'mouse', # not used since postcommand returns real position
 	       -postcommand     => sub {
-		    if ($wIdx[0] eq $wIdx[1]) {
-			## No word under mouse - dont post the balloon
-			return 0;
-		    } else {
-			my ($word, $stem, $ftype, $index, $val);
-			## Have a word under mouse - change the message:
-			$word = $stem = $text->get($wIdx[0], $wIdx[1]);
-			## Skip if it contains non-word chars or is not in Symbol Table
-			return 0 if $word =~ /\W/;
-			if ($word =~ /^[IQT]X\d+$/) {
-			    ## Try bit I/O like IX0.0 QX10.7 or TX0.0_14
-			    $word = $text->get($wIdx[0], "$wIdx[1] lineend");
-			    if ($word !~ s/^([IQT]X\d+\.\d(_\d+)?).*$/$1/) {
-				$word = $stem;	# false attempt - restore stem
-			    }
-			    ## Try bit I/O first
-			    ## otherwise analog value of stem is displayed
-			}
-			elsif ($word =~ /\d+/) {
-			    $word = $text->get("$wIdx[0] linestart", $wIdx[1]);
-			    if ($word !~ s/.*-\s*(\d+)\s*$/-$1/) {
-				$word = $stem;	# false attempt - restore stem
-			    }
-			}
-			if (not defined ($index = $symbolTable{$word}[1])) {
-			    if ($word eq $stem or	# now try stem
-				not defined ($index = $symbolTable{$stem}[1])) {
-				return 0;		# not found in S.T.
-			    }
-			    $word = $stem;		# stem was found in S.T.
-			}
-			$ftype = $symbolTable{$word}[0];
-			$val = $activeSymbols[$index][1]; $val = 0 unless $val;
-			$val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
-			$bMsg = "$val";
-			$text->tag('add', 'sel', $wIdx[0] => $wIdx[1]);
-			## a good place to put the balloon is below the last char in the word
-			my $i = $text->index("$wIdx[1] - 1 chars");
-			my @p = $text->bbox($i);
-no warnings;
-			my $x = $text->rootx + $p[0] + $p[2] - 4;
-			my $y = $text->rooty + $p[1] + $p[3] + 2;
-use warnings;
-			return "$x,$y";
+		    my ($word, $stem, $ftype, $index, $val, $wlen, $wlen_1);
+		    ## Have a word under mouse - change the message:
+		    $stem = $text->get($wIdx, "$wIdx lineend");
+		    ## Skip if word starts with a non-word char
+		    return 0 if not $stem or $stem =~ /^\W/;	# first character is not \w
+		    print "¸$stem´\n" if $opt_T;
+		    ## Try bit I/O like IX0.0 QX10.7 or TX0.0_14 first
+		    if ($stem =~ /^([IQT]X\d+\s*.\s*\d+(_\d+)?)/) {
+			$word = $1;		# bit I/O variable found
+			$wlen = length $word;
+			$word =~ s/\s//g;	# delete possible white space around '.'
 		    }
+		    elsif ($stem =~ /^(\w[\$\w]*)/) {
+			$word = $1;		# number or variable found
+			$wlen = length $word;
+			if ($word =~ /\d+/) {
+			    $stem = $text->get("$wIdx linestart", "$wIdx + $wlen chars");
+			    if ($stem =~ /((-\s*)\d+)\s*$/) {
+				$word = $1;	# negative number
+				$wlen = length $word;
+				$wlen_1 = length $2;
+				$wIdx = $text->index("$wIdx - $wlen_1 chars");
+				$word =~ s/\s//g;	# delete possible white space around '-'
+			    }
+			}
+		    } else {
+			return 0;		# unlikely with \W test above
+		    }
+		    print "	word = ¸$word´\n" if $opt_T;
+		    if (not defined ($index = $symbolTable{$word}[1])) {
+			return 0;		# not found in S.T.
+		    }
+		    $wlen_1 = $wlen - 1;
+		    $ftype = $symbolTable{$word}[0];
+		    $val = $activeSymbols[$index][1]; $val = 0 unless $val;
+		    print "	wlen = $wlen, index = $index, ftype = $ftype, val = $val\n" if $opt_T;
+		    $val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
+		    $bMsg = "$val";
+		    $text->tag('add', 'sel', $wIdx, "$wIdx + $wlen chars");
+		    ## a good place to put the balloon is below the last char in the word
+		    my $i = $text->index("$wIdx + $wlen_1 chars");
+		    my @p = $text->bbox($i);
+no warnings;
+		    my $x = $text->rootx + $p[0] + $p[2] - 4;
+		    my $y = $text->rooty + $p[1] + $p[3] + 2;
+use warnings;
+		    return "$x,$y";
 		},
 	       -motioncommand   => sub {
 		    my $x = $text->pointerx - $text->rootx;
 		    my $y = $text->pointery - $text->rooty;
-		    @wIdx = ($text->index("\@$x,$y wordstart"),
-			$text->index("\@$x,$y wordend"));
-		    if ($wIdx[0] eq $pIdx[0] and $wIdx[1] eq $pIdx[1]) {
+		    $wIdx = $text->index("\@$x,$y wordstart");
+		    if ($wIdx eq $pIdx) {
 			## Same word as previous word - dont cancel the balloon.
 			return 0;
 		    } else {
 			## New word under mouse
 			## cancel it so a new balloon will be posted.
 			$text->SelectionClear;
-			@pIdx = @wIdx;		# save as previous word
+			$pIdx = $wIdx;		# save as previous word
 			return 1;
 		    }
 		},
@@ -1855,6 +1873,7 @@ use warnings;
 sub register_now {
     $scanFlag = 1;
     $scanButton->configure(-text => 'wait');
+    print "$named: register_now 'wait'\n" if $opt_T;
     register_at_server();
     # will call do_scan() if connect was successful via Request S.T and :2 reply
 } # register_now
@@ -1999,8 +2018,8 @@ sub open_file {
 			$menuFile->entryconfigure(3, -label => 'Open.lst');
 			check_menu($fileName, 'files');
 		    }
-		    adjust_live(-1, -1);
 		    $ci = change_instance();
+		    adjust_live(-1, -1);
 		}
 		$prevText = '';		# start a new search
 		return if $ci;		# global $fileName and application has altered
@@ -2082,7 +2101,7 @@ sub save_file {
 ########################################################################
 #
 #	Save file to suggested $fileName or to another selected file_name
-#		return:		1  file successfully saved
+#		return:		1  file successfully saved, instance is reset
 #				0  failure - $fileName not changed
 #	$fileName is assigned new file_name if successfully saved
 #
@@ -2110,6 +2129,7 @@ sub saveAs_file {
 	} elsif ($fileName ne $oldName) {
 	    if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
 		$procName = $1;
+		$instanceText = $instance = '';		# reset instance
 		$instName = "$procName$instanceText";
 		change_instance();
 	    }
@@ -2327,6 +2347,7 @@ sub stop_file {
     if ($scanFlag) {
 	conn_send_now("$D_channel:5");		# GET_END - clear S.T.
 	$scanButton->configure(-text => 'wait');	# was 'Edit'
+	print "$named: stop_file 'wait'\n" if $opt_T;
     }				# leave scanButton as 'Edit' if not $scanFlag
     conn_send_now("$D_channel:6,$D_channel:0");	# STOP_PROGRAM
     # receives "$C_channel:5" from application when it quits - sets 'Run ' then
@@ -2351,10 +2372,11 @@ sub change_instance {
 	$runButton->configure(-text => 'Run ');
 	$runName = '';		# if :2 is received will change back to <name>
 	$mainWindow->title("$named$u: $fileName");
+	print "$named: change_instance 'Run '\n" if $opt_T;
 	$oldInstance = $instanceText;
 	if ($scanFlag) {
-	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
 	    $scanButton->configure(-text => 'wait');
+	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
 	}
 	return 1;
     }
@@ -3043,7 +3065,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<icc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
+L<immcc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 

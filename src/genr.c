@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.64 2005/03/30 10:17:10 jw Exp $";
+"@(#)$Id: genr.c,v 1.65 2005/09/30 21:09:25 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -11,7 +11,7 @@ static const char genr_c[] =
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
  *	genr.c
- *	generator functions for icc compiler
+ *	generator functions for immcc compiler
  *
  *******************************************************************/
 
@@ -133,7 +133,7 @@ op_force(				/* force linked Symbol to correct ftype */
     int			typ;
 
     if (lp && (sp = lp->le_sym)->ftype != ftyp) {
-	if (sp->u_blist == 0 ||			/* not a $ symbol or */
+	if (sp->u_blist == 0 ||			/* not a @ symbol or */
 	    (sp->type & TM) >= MAX_GT ||	/* SH, FF, EF, VF, SW, CF or */
 	    (sp->u_blist->le_sym == sp && sp->type == LATCH)) { /* L(r,s) */
 	    if ((typ = iC_types[sp->ftype]) == ERR) {
@@ -142,7 +142,7 @@ op_force(				/* force linked Symbol to correct ftype */
 	    lp1 = op_push(0, typ, lp);
 	    lp1->le_first = lp->le_first;
 	    lp1->le_last = lp->le_last;
-	    lp = lp1;	/* create a new $ symbol linked to old */
+	    lp = lp1;	/* create a new @ symbol linked to old */
 	    sp = lp->le_sym;
 	}
 #if YYDEBUG
@@ -193,7 +193,7 @@ op_push(				/* reduce List_e stack to links */
     if (sp->u_blist == 0 || op != typ) {
 	if ((lp = sp->v_elist) != 0 && (sp->name == 0
 #if YYDEBUG
-						    || *(sp->name) == '$'
+						    || *(sp->name) == '@'
 #endif
 	)) {					/* not marked symbol */
 	    sp->v_elist = 0;			/* clear the feedback list */
@@ -203,12 +203,12 @@ op_push(				/* reduce List_e stack to links */
 		lp = tlp;
 	    }
 	}
-	/* right not a $ symbol or new operator - force new level */
+	/* right not a @ symbol or new operator - force new level */
 	sp = (Symbol *) iC_emalloc(sizeof(Symbol));
 	sp->name = NS;		/* no name at present */
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {	/* DEBUG name */
-	    snprintf(temp, TSIZE, "$%d", ++tn);
+	    snprintf(temp, TSIZE, "@%d", ++tn);
 	    sp->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	    strcpy(sp->name, temp);
 	}
@@ -234,7 +234,7 @@ op_push(				/* reduce List_e stack to links */
 	if ((typ = lsp->type & TM) < MAX_LS) {
 	    if ((lp = lsp->v_elist) != 0 && (lsp->name == 0
 #if YYDEBUG
-							|| *(lsp->name) == '$'
+							|| *(lsp->name) == '@'
 #endif
 	    )) {				/* not marked symbol */
 		lsp->v_elist = 0;		/* clear the feedback list */
@@ -244,7 +244,7 @@ op_push(				/* reduce List_e stack to links */
 		    lp = tlp;
 		}
 	    }
-	    if ((lp = lsp->u_blist) == 0 ||	/* left not a $ symbol */
+	    if ((lp = lsp->u_blist) == 0 ||	/* left not a @ symbol */
 		sp == lsp ||			/* or right == left */
 		(typ != op &&			/* or new operator */
 			/* ZZZ watch this when typ is ALIAS or UDF */
@@ -261,7 +261,7 @@ op_push(				/* reduce List_e stack to links */
 		    fflush(iC_outFP);
 		}
 #endif
-	    } else {	/* left is a $ symbol and ... - merge left into right */
+	    } else {	/* left is a @ symbol and ... - merge left into right */
 		while (lp->le_next) {
 		    lp = lp->le_next;		/* scan to end of left list */
 		}
@@ -324,9 +324,6 @@ const_push(Lis * expr)
     List_e *	lp;
     char *	endptr;
     long	value;
-#if YYDEBUG
-    char 	temp[TSIZE];
-#endif
 
     while (cp < ep) {
 	if (--bc == 0 || !isprint(*bp++ = *cp++)) {
@@ -336,7 +333,7 @@ const_push(Lis * expr)
     *bp = 0;				/* terminate - there is room in buf */
     value = strtol(buf, &endptr, 0);	/* convert to check for error */
     if (*endptr != '\0') {
-	/* const $ symbol */
+	/* const @ symbol */
 	if ((sp = lookup(ICONST)) == 0) {
 	    execerror("arithmetic constant initializer not installed", ICONST, __FILE__, __LINE__);
 	}
@@ -384,7 +381,7 @@ op_not(List_e * right)			/* logical negation */
     if (lp == 0) {
 	right->le_val ^= NOT;		/* negate logical value */
     } else {
-	switch (sp->type) {		/* $ symbol */
+	switch (sp->type) {		/* @ symbol */
 	case AND:
 	case OR:
 	case EXT_AND:
@@ -544,7 +541,7 @@ op_asgn(				/* asign List_e stack to links */
     Symbol *	var;
     Symbol *	sp;
     List_e *	lp;
-    Symbol *	gp;
+    Symbol *	gp = 0;
     Symbol *	rsp;
     List_e *	tlp;
     List_e *	nlp;
@@ -597,7 +594,7 @@ op_asgn(				/* asign List_e stack to links */
 	    var->ftype = rsp->ftype;
 	}
     }
-    if (templist == 0 || rsp->u_blist == 0 || rsp->type == NCONST) {	/* right must be a $ symbol */
+    if (templist == 0 || rsp->u_blist == 0 || rsp->type == NCONST) {	/* right must be a @ symbol */
 	if (var->type != ERR) {
 	    var->type = ALIAS;		/* alias found */
 	}
@@ -637,10 +634,14 @@ op_asgn(				/* asign List_e stack to links */
 	}
 	var->list = right;		/* alias points to original */
 	if (iC_debug & 04) {
-	    iFlag = 1;
-	    fprintf(iC_outFP, "\n\t%s\t%c ---%c\t%s\n\n", rsp->name,
-		((typ = rsp->type & TM) >= MAX_LV) ? iC_os[typ] : w(right),
+	    iFlag = 1;			/* may need correction by pplstfix */
+	    fprintf(iC_outFP, "\n\t%s\t%c ---%c\t%s", rsp->name,
+		rsp->ftype != GATE ? iC_fos[rsp->ftype] : w(right),
 		iC_os[var->type & TM], var->name);
+	    if (var->ftype != GATE) {
+		fprintf(iC_outFP, "\t%c", iC_fos[var->ftype]);
+	    }
+	    fprintf(iC_outFP, "\n\n");
 	}
 	if (sv == 0) {
 	    execerror("ALIAS points to temp ???", var->name, __FILE__, __LINE__);
@@ -669,7 +670,7 @@ op_asgn(				/* asign List_e stack to links */
     }
     if ((lp = rsp->v_elist) != 0 && (rsp->name == 0
 #if YYDEBUG
-						|| *(rsp->name) == '$'
+						|| *(rsp->name) == '@'
 #endif
     )) {				/* not marked symbol */
 	rsp->v_elist = 0;		/* clear the feedback list */
@@ -746,7 +747,7 @@ op_asgn(				/* asign List_e stack to links */
 	    }
 	    if ((nlp = gp->v_elist) != 0 && (gp->name == 0
 #if YYDEBUG
-							|| *(gp->name) == '$'
+							|| *(gp->name) == '@'
 #endif
 	    )) {			/* not marked symbol */
 		/********************************************************************
@@ -797,7 +798,7 @@ op_asgn(				/* asign List_e stack to links */
 			gp->name = NS;		/* no name at present */
 #if YYDEBUG
 			if ((iC_debug & 0402) == 0402) {	/* DEBUG name */
-			    snprintf(temp, TSIZE, "$%d", ++tn);
+			    snprintf(temp, TSIZE, "@%d", ++tn);
 			    gp->name = iC_emalloc(strlen(temp)+1);
 			    strcpy(gp->name, temp);
 			}
@@ -911,7 +912,7 @@ op_asgn(				/* asign List_e stack to links */
 	    }
 	    if (! gp->name
 #if YYDEBUG
-		|| *(gp->name) == '$'
+		|| *(gp->name) == '@'
 #endif
 	    ) {						/* not marked symbol */
 #if YYDEBUG
@@ -933,10 +934,13 @@ op_asgn(				/* asign List_e stack to links */
 	    }
 	    if (iC_debug & 04) {
 		if (fflag && plp) {
+		    int		use;
 		    /* reference to a C fragment variable */
 		    assert(lp->le_val & 0xff);
-		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d", gp->name, iC_fos[gp->ftype],
-			iC_os[sp->type & TM], lp->le_val & 0xff);
+		    use = lp->le_val >> USE_OFFSET;
+		    assert(use < Sizeof(iC_useText));
+		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d  %s", gp->name, iC_fos[gp->ftype],
+			iC_os[sp->type & TM], lp->le_val & 0xff, iC_useText[use]);
 		} else
 		if ((typ = gp->type & TM) >= MAX_LV) {
 		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_os[typ],
@@ -951,7 +955,7 @@ op_asgn(				/* asign List_e stack to links */
 		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_fos[gp->ftype],
 			iC_os[sp->type & TM]);
 		} else {
-		    if (sp->type == ALIAS) iFlag = 1;
+		    if (sp->type == ALIAS) iFlag = 1;	/* may need correction by pplstfix */
 		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, w(lp),
 			iC_os[sp->type & TM]);
 		}
@@ -1002,6 +1006,7 @@ op_asgn(				/* asign List_e stack to links */
 	    *ePtr++ = 0;
 							/* start case or function */
 	    if (sp->ftype != OUTW) {			/* output cexe function */
+		assert(gp);				/* gp must be initialised */
 		if (cFn == 0) {
 		    if (strcmp(eBuf, "iC_MV(1)") == 0) {
 			assert(strlen(cp) == 0);
@@ -1009,7 +1014,12 @@ op_asgn(				/* asign List_e stack to links */
 		    } else {
 			functionUse[0] |= F_ARITHM;	/* flag for copying macro */
 			writeCexeString(T1FP, ++c_number); /* and record for copying */
-			fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
+			if (lineno == 0) {
+			    assert(c_number <= 2);
+			    fprintf(T1FP, "%s\n", genLines[c_number]);
+			} else {
+			    fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
+			}
 			fprintf(T1FP, "	return %s;\n", eBuf);
 			fprintf(T1FP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
 			if (iC_debug & 04 && (typ != NCONST || gp->u_val == 0)) {
@@ -1029,14 +1039,14 @@ op_asgn(				/* asign List_e stack to links */
 	if ((gp = sp = templist) != 0) {
 	    if (sp->name
 #if YYDEBUG
-		&& *(sp->name) != '$'
+		&& *(sp->name) != '@'
 #endif
 	    ) {						/* marked symbol is first */
 		templist = sp->next;			/* by_pass marked symbol */
 	    } else {
 		while ((sp = sp->next) != 0 && (!sp->name
 #if YYDEBUG
-		    || *(sp->name) == '$'
+		    || *(sp->name) == '@'
 #endif
 		)) {
 		    gp = sp;				/* look for marked symbol */
@@ -1073,7 +1083,7 @@ op_asgn(				/* asign List_e stack to links */
 	sy_pop(right);			/* right Symbol and List_e */
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {
-	    free(rsp->name);		/* free name space of $x */
+	    free(rsp->name);		/* free name space of @x */
 	}
 #endif
 	free(rsp);			/* free right Symbol */
@@ -1081,7 +1091,7 @@ op_asgn(				/* asign List_e stack to links */
     if (iC_debug & 04) fprintf(iC_outFP, "\n");
     /********************************************************************
      * A Symbol is marked by storing a pointer value in ->name
-     * which points to a string which does not start with $.
+     * which points to a string which does not start with @.
      * Only marked symbols are reduced.
      * Any remaining new Symbols on 'templist' must belong to an outer
      * assignment which will be reduced later.
@@ -1113,40 +1123,6 @@ op_asgn(				/* asign List_e stack to links */
     }
     return var;
 } /* op_asgn */
-
-/********************************************************************
- *
- *	Asign to QBx or QWx	when ft == ARITH
- *	Asign to QXx.y		when ft == GATE
- *
- *	Outputs are ordinary nodes of type ARITH or GATE which may
- *	be used as values anywhere, even before they are assigned.
- *
- *	When the right expression of the assignment is a direct Symbol
- *	that Symbol drives the output gate. This assignment generates
- *	an ALIAS in the usual way. This ALIAS may contain a logic
- *	inversion.
- *
- *	The actual output action is handled by an auxiliary node of
- *	ftype OUTW or OUTX, which is linked to the output value node,
- *	carrying the name of the output. This auxiliary node is never
- *	and can never be used as an input value.
- *
- *	The use of output values before assignment is necessary in iC,
- *	to allow the implementation of feedback in single clocked
- *	expressions. eg: the following output word of 1 second counts
- *
- *		QW1 = SH(QW1 + 1, clock1Second);
- *
- *	The same could of course be realised by using a counter
- *	variable and assigning the output independently. But this way
- *	the compiler does the job - which is what it should do.
- *
- *	With this implementation, the fact that outputs are not full
- *	logic or arithmetic values is completely hidden from the user,
- *	which removes unnecessary errors in user code.
- *
- *******************************************************************/
 
 /********************************************************************
  *
@@ -1317,11 +1293,8 @@ bltin(
 Symbol *
 assignExpression(Sym * sv, Lis * lv, int ioTyp)
 {
-    Sym		sy;
-    Lis		li;
     Symbol *	rsp;
     int		ftyp;
-    char	temp[TSIZE];
 
     ftyp = sv->v->ftype;
     if (lv->v == 0) {
@@ -1341,23 +1314,106 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 	}
 	if (iFunSymExt) sv->v->list = 0;	/* do 2nd assignment for listing */
     }
-    rsp = (iC_debug & 020000) ? sv->v
-			   : op_asgn(sv, lv, ftyp);	/* new code before Output */
+    rsp = ((iC_debug & 021000) == 021000) ? sv->v
+			   : op_asgn(sv, lv, ftyp);	/* new: code before Output */
     if (ioTyp >= MAX_ACT) {			/* OUTW or OUTX */
-	snprintf(temp, TSIZE, "%s_0", rsp->name);
-	if ((sy.v = lookup(temp)) == 0) {	/* locate position in ST */
-	    sy.v = install(temp, UDF, ioTyp);	/* generate output Gate OUTX or OUTW */
-	    li.v = sy_push(rsp);		/* provide a link to LOUT or AOUT */
-	    if ((li.v = op_push(0, iC_types[ftyp], li.v)) != 0) {
-		li.v->le_first = li.f = 0; li.v->le_last = li.l = 0;
-	    }
-	    op_asgn(&sy, &li, ftyp);		/* Output assignment */
-	}
+	assignOutput(rsp, ftyp, ioTyp);
     }
-    if (iC_debug & 020000) rsp =  op_asgn(sv, lv, ftyp);	/* old code after Output */
+    if ((iC_debug & 021000) == 021000)		/* not needed - can be activated with +21000 */
+			rsp =  op_asgn(sv, lv, ftyp);	/* old: code after Output */
     if (iFunSymExt) collectStatement(rsp);	/* update varList in definition stmtList */
     return rsp;
 } /* assignExpression */
+
+/********************************************************************
+ *
+ *	Generate and assign an output node of ftype OUTX or OUTW
+ *	called from assignExpression() and gram.y immAssignFound()
+ *
+ *	Asign to QBx or QWx	when ft == ARITH
+ *	Asign to QXx.y		when ft == GATE
+ *
+ *	Outputs are ordinary nodes of type ARITH or GATE which may
+ *	be used as values anywhere, even before they are assigned.
+ *
+ *	When the right expression of the assignment is a direct Symbol
+ *	that Symbol drives the output gate. This assignment generates
+ *	an ALIAS in the usual way. This ALIAS may contain a logic
+ *	inversion.
+ *
+ *	The actual output action is handled by an auxiliary node of
+ *	ftype OUTW or OUTX, which is linked to the output value node,
+ *	carrying the name of the output. This auxiliary node is never
+ *	and can never be used as an input value.
+ *
+ *	The use of output values before assignment is necessary in iC,
+ *	to allow the implementation of feedback in single clocked
+ *	expressions. eg: the following output word of 1 second counts
+ *
+ *		QW1 = SH(QW1 + 1, clock1Second);
+ *
+ *	The same could of course be realised by using a counter
+ *	variable and assigning the output independently. But this way
+ *	the compiler does the job - which is what it should do.
+ *
+ *	With this implementation, the fact that outputs are not full
+ *	logic or arithmetic values is completely hidden from the user,
+ *	which removes unnecessary errors in user code.
+ *
+ *******************************************************************/
+
+void
+assignOutput(Symbol * rsp, int ftyp, int ioTyp)
+{
+    Sym		sy;
+    Lis		li;
+    char	temp[TSIZE];
+
+    snprintf(temp, TSIZE, "%s_0", rsp->name);
+    if ((sy.v = lookup(temp)) == 0) {		/* locate position in ST */
+	sy.v = install(temp, UDF, ioTyp);	/* generate output Gate OUTX or OUTW */
+	li.v = sy_push(rsp);			/* provide a link to LOUT or AOUT */
+	sy.f = sy.l = li.f = li.l = 0;
+	if ((li.v = op_push(0, iC_types[ftyp], li.v)) != 0) {
+	    li.v->le_first = li.v->le_last = 0;
+	}
+	op_asgn(&sy, &li, ftyp);		/* Output assignment */
+    }
+} /* assignOutput */
+
+/********************************************************************
+ *
+ *	Listing for undefined C variable
+ *	Generate and assign output I/O if it is a Q[XBWL]n variable
+ *
+ *******************************************************************/
+
+void
+listGenOut(Symbol * sp)
+{
+    char *	name;
+    char	y1[2];
+    int		yn;
+    int		ioTyp;
+
+    if (iC_debug & 04) {
+	/********************************************************************
+	 * compile listing output for undefined C variable
+	 *******************************************************************/
+	fprintf(iC_outFP, "\n\t\t= ---%c\t%s", iC_os[sp->type & TM], sp->name);
+	if (sp->ftype != GATE) {
+	    fprintf(iC_outFP, "\t%c", iC_fos[sp->ftype]);
+	}
+	fprintf(iC_outFP, "\n\n");
+    }
+    if ((name = sp->name) && sscanf(name, "Q%1[XBWL]%d", y1, &yn) == 2) {
+	/********************************************************************
+	 * generate and assign output I/O
+	 *******************************************************************/
+	ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
+	assignOutput(sp, sp->ftype, ioTyp);	/* assign to I/O output variable */
+    }
+} /* listGenOut */
 
 /********************************************************************
  *
@@ -1471,7 +1527,7 @@ delayOne(List_e * tp)
  *******************************************************************/
 
 Symbol *
-functionHead(unsigned int typeVal, Symbol * funTrigger, int retFlag)
+functionDefHead(unsigned int typeVal, Symbol * funTrigger, int retFlag)
 {
     unsigned char	ftyp = typeVal & 0xff;	/* UDFA GATE ARITH CLCKL TIMRL */
 
@@ -1505,7 +1561,7 @@ functionHead(unsigned int typeVal, Symbol * funTrigger, int retFlag)
     }
     assert(stmtList == 0);			/* function definitions cannot nest */
     return funTrigger;
-} /* functionHead */
+} /* functionDefHead */
 
 /********************************************************************
  *
@@ -1654,7 +1710,7 @@ functionDefinition(Symbol * iFunHead, List_e * fParams)
 	sp = lp->le_sym;			/* first varList Symbol */
 	while (sp) {				/* varList may be empty */
 	    free(sp->name);			/* free name space generated for listing name */
-	    sp->name = 0;			/* mark the Symbol as function internal (no '$') */
+	    sp->name = 0;			/* mark the Symbol as function internal (no '@') */
 	    sp->list = 0;			/* clear internal Symbol pointers */
 	    sp = sp->next;			/* next varList Symbol */
 	}
@@ -2220,8 +2276,8 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	if ((lp = ssp->list) == 0) {		/* function internal variable */
 	    if (iFunSymExt) {
 		int	n = 0;			/* cloned in a function definition */
-		cp = strchr(ssp->name, '$');	/* locate original extension */
-		assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		cp = ssp->name + strlen(functionHead->name);	/* locate original extension */
+		assert(cp[0] == '$' && isprint(cp[1]));		/* extension must be at least 1 character */
 		strncpy(iFunSymExt, cp+1, iFunEnd - iFunSymExt);/* copy ext to new fun name */
 		cp = iFunBuffer + strlen(iFunBuffer);		/* end of new var name */
 		while (lookup(iFunBuffer) != 0) {
@@ -2231,7 +2287,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		     * same name used in different functions called in the definition.
 		     * This heuristic assumes there are not hundreds of instances in
 		     * one function definition. (Even a very large number will work -
-		     * the temporaries generated from it are _1 etc) eg: fun$i123456_1
+		     * the temporaries generated from it are fun$i1 fun$i2 from fun$i.
 		     * The heuristic can handle extensions ending in numerals - it will
 		     * keep trying until it finds one with a different numeral.
 		     * The heuristic handles multiply nested function calls reasonably.
@@ -2252,11 +2308,14 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		 * may be generated in several independent source files, unlike names
 		 * in function definitions above, which are contained in one file.
 		 *******************************************************************/
-		snprintf(temp, TSIZE, "%s_%d", ssp->name, instanceNum);
+		cp = ssp->name + strlen(functionHead->name);	/* locate original extension */
+		assert(cp[0] == '$');		/* has failed during development */
+#ifdef OLD_INSTANCE 
+		snprintf(temp, TSIZE, "%s_%s_%d", functionHead->name, cp+1, instanceNum);
+#else
+		snprintf(temp, TSIZE, "%s_%d_%s", functionHead->name, instanceNum, cp+1);
+#endif
 		instanceFlg++;			/* instanceNum was used so update */
-		cp = strchr(temp, '$');		/* locate original extension */
-		assert(cp);			/* has failed during development */
-		*cp = '_';			/* replace '$' by '_' in cloned object */
 		if ((sv.v = lookup(temp)) == 0) {	/* locate position in ST */
 		    sv.v = install(temp, UDF, ssp->ftype); /* Symbol for declared variable */
 		}
@@ -2313,9 +2372,9 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	lp = ssp->list;				/* link to real Symbol */
 	assert(lp);				/* internal Symbols linked in pass 1 */
 	if ((sv.v = lp->le_sym) != functionHead) {
-	    unsigned char	y1[2];		/* assign parameter or internal Symbol */
-	    int			yn;
-	    int			ioTyp;
+	    char	y1[2];			/* assign parameter or internal Symbol */
+	    int		yn;
+	    int		ioTyp;
 	    /********************************************************************
 	     * assign the expression associated with this assign para or internal statement
 	     * an output can only be recognised by its name: Q[XBWL]%d
@@ -2438,7 +2497,7 @@ cloneSymbol(Symbol * sp)
     rsp->name = NS;				/* no name at present */
 #if YYDEBUG
     if ((iC_debug & 0402) == 0402) {		/* DEBUG name */
-	snprintf(temp, TSIZE, "$%d", ++tn);
+	snprintf(temp, TSIZE, "@%d", ++tn);
 	rsp->name = iC_emalloc(strlen(temp)+1);	/* +1 for '\0' */
 	strcpy(rsp->name, temp);
     }

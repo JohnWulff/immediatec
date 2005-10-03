@@ -18,7 +18,7 @@
 #ifndef ICG_H
 #define ICG_H
 static const char icg_h[] =
-"@(#)$Id: icg.h,v 1.7 2005/01/26 18:55:16 jw Exp $";
+"@(#)$Id: icg.h,v 1.8 2005/08/18 12:05:13 jw Exp $";
 
 #ifndef INT_MAX
 #include	<limits.h>
@@ -117,8 +117,10 @@ typedef struct Gate {			/* Gate */
 extern iC_Gt		iClock;		/* System clock */
 
 #if INT_MAX == 32767 && defined (LONG16)
-extern long		iC_assign(iC_Gt * lv, long rv);
+extern long		iC_assignA(iC_Gt * lv, long rv);
+extern long		iC_assignL(iC_Gt * lv, long rv);
 #else
-extern int		iC_assign(iC_Gt * lv, int rv);
+extern int		iC_assignA(iC_Gt * lv, int rv);
+extern int		iC_assignL(iC_Gt * lv, int rv);
 #endif
 #endif	/* ICG_H */

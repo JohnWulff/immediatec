@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.31 2005/02/01 20:57:37 jw Exp $";
+"@(#)$Id: icr.c,v 1.32 2005/08/08 11:04:38 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -10,7 +10,7 @@ static const char icr_c[] =
  *  For more information about this program, or for information on how
  *  to contact the author, see the README file or <john@je-wulff.de>
  *
- *	icc.c
+ *	icr.c
  *	parallel plc - runtime execution with stdio test input only
  *
  *******************************************************************/
@@ -31,7 +31,7 @@ static const char icr_c[] =
 #include	<sys/time.h>
 #include	<termios.h>
 #include	<unistd.h>
-#endif
+#endif	/* Linux */
 #include	<signal.h>
 #include	<ctype.h>
 #include	"icc.h"
@@ -45,7 +45,6 @@ static const char icr_c[] =
  get an executable file that operates
  correctly. */
 
-#define MAX_W	2
 #define INTR	0x1c			/* The clock tick interrupt */
 #define YSIZE	13			/* - and 10 dec digits or 12 oct digits */
 
@@ -56,10 +55,10 @@ static short	flag1C;
 #ifdef	MSC
 void (interrupt far *oldhandler)();
 void interrupt far handler1C(void);
-#else
+#else	/* MSC */
 void interrupt (*oldhandler)(void);
 void interrupt handler1C(void);
-#endif
+#endif	/* MSC */
 #define D10	3			/* 1/3 second interrupts under MSDOS */
 #define ENTER	'\r'
 
@@ -103,21 +102,28 @@ kbhit(void)
     }
     return stat;			/* can only be 0 or 1 */
 } /* kbhit */
-#endif
+#endif	/* Linux */
 
-iC_Functp	*iC_i_lists[] = { I_LISTS };
+static iC_Functp * iC_i_lists[] = { I_LISTS };
 
-static Gate	alist0;			/* these lists are toggled */
-static Gate	alist1;
+/********************************************************************
+ *  initialise all lists with their name to aid symbolic debugging
+ *  do this here because at least "flist" is needed in load() for
+ *  ini output, which runs before icc().
+ *******************************************************************/
+/* these lists are toggled (initialised dynamically) */
+static Gate	alist0 = { 0, 0, 0, 0, "alist0", };
+static Gate	alist1 = { 0, 0, 0, 0, "alist1", };
 Gate *		iC_a_list;		/* arithmetic output action list */
-static Gate	olist0;			/* these lists are toggled */
-static Gate	olist1;
+static Gate	olist0 = { 0, 0, 0, 0, "olist0", };
+static Gate	olist1 = { 0, 0, 0, 0, "olist1", };
 Gate *		iC_o_list;		/* logic output action list */
+/* these lists are not toggled (static initialisation here) */
 Gate *		iC_c_list;		/* main clock list "iClock" */
-static Gate	flist;
-Gate *		iC_f_list;		/* auxiliary function clock list */
-static Gate	slist;
-Gate *		iC_s_list;		/* send bit and byte outputs */
+static Gate	flist = { 0, 0, 0, 0, "flist", };
+Gate *		iC_f_list = &flist;	/* deferred function action list (init in load) */
+static Gate	slist = { 0, 0, 0, 0, "slist", };
+Gate *		iC_s_list = &slist;	/* send bit and byte outputs */
 
 unsigned char	iC_QM_[IXD/8];		/* Output slot mask per cage */
 unsigned char	iC_QMM;			/* Output cage mask for 1 rack */
@@ -130,7 +136,7 @@ unsigned	iC_link_cnt;		/* count link operations */
 #if	YYDEBUG && !defined(_WINDOWS)
 unsigned	iC_glit_cnt;		/* count glitches */
 unsigned long	glit_nxt;		/* count glitch scan */
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 /********************************************************************
  *
@@ -145,39 +151,25 @@ iC_icc(
 {
     int		i;
     short	pass;
-    short	c;
+    int		c;
     short	typ;
     int		cn;
     int		cnt;
+    Gate **	opp;
     Gate **	tim = &iC_TX_[0];	/* pointers to 8 system gates TX[0] to TX[7] */
-    unsigned *	gcp;
-    iC_Functp * *	ilp;
     Gate *	gp;
     iC_Functp	init_fa;
     int		tcnt = 1;
 #if	INT_MAX == 32767 && defined (LONG16)
     long	val;
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
     int	val;
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
     char *	format;			/* number format */
     char	ybuf[YSIZE];		/* buffer for number */
     char *	yp;
 
     iC_initIO();			/* catch memory access signal */
-    iC_error_flag = 0;
-    alist0.gt_rlist = (Gate **)(iC_a_list = &alist1);	/* initialise alternate */
-    Out_init(iC_a_list);
-    alist1.gt_rlist = (Gate **)(iC_a_list = &alist0);	/* start with alist0 */
-    Out_init(iC_a_list);
-    olist0.gt_rlist = (Gate **)(iC_o_list = &olist1);	/* initialise alternate */
-    Out_init(iC_o_list);
-    olist1.gt_rlist = (Gate **)(iC_o_list = &olist0);	/* start with olist0 */
-    Out_init(iC_o_list);
-    iC_f_list = &flist;			/* function clock list */
-    Out_init(iC_f_list);
-    iC_s_list = &slist;			/* send outputs */
-    Out_init(iC_s_list);
 
     if (iC_outFP != stdout) {
 	fclose(iC_outFP);
@@ -201,34 +193,53 @@ iC_icc(
 #ifdef	_MSDOS_
 #ifdef	MSC
     oldhandler = _dos_getvect(INTR);	/* save the old interrupt vector */
-#else
+#else	/* MSC */
     oldhandler = getvect(INTR);		/* save the old interrupt vector */
-#endif
+#endif	/* MSC */
 #else	/* Linux */
     /* Setup fd sets */
     FD_ZERO (&selectinfds);
     maxfd = 0;
     FD_SET (fileno (stdin), &selectinfds);
     maxfd = max(maxfd, (int)fileno(stdin));
-#endif
+#endif	/* Linux */
 
+/********************************************************************
+ *
+ *	Initialise the work lists to empty lists
+ *
+ *******************************************************************/
+
+    iC_error_flag = 0;
+    alist0.gt_rlist = (Gate **)(iC_a_list = &alist1);	/* initialise alternate */
+    Out_init(iC_a_list);
+    alist1.gt_rlist = (Gate **)(iC_a_list = &alist0);	/* start with alist0 */
+    Out_init(iC_a_list);
+    olist0.gt_rlist = (Gate **)(iC_o_list = &olist1);	/* initialise alternate */
+    Out_init(iC_o_list);
+    olist1.gt_rlist = (Gate **)(iC_o_list = &olist0);	/* start with olist0 */
+    Out_init(iC_o_list);
+    Out_init(iC_f_list);
+    Out_init(iC_s_list);
+    /********************************************************************
+     *  Carry out 4 Passes to initialise all Gates
+     *******************************************************************/
 #if	YYDEBUG
     if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
-#endif
+#endif	/* YYDEBUG */
     for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
 	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
     }
     for (pass = 0; pass < 4; pass++) {
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
-#endif
-	gp = g_lists;
-	gcp = gate_count;
-	ilp = iC_i_lists;
-	for (typ = 0; typ < MAX_OP; typ++) {
-	    init_fa = (*ilp++)[pass];
-	    for (cnt = *gcp++; cnt; cnt--) {
-		(*init_fa)(gp++, typ);	/* initialise for this pass */
+#endif	/* YYDEBUG */
+	for (opp = iC_sTable; opp < iC_sTend; opp++) {
+	    gp = *opp;
+	    typ = gp->gt_ini > 0 ? AND : -gp->gt_ini;
+	    if (typ < MAX_OP) {
+		init_fa = iC_i_lists[typ][pass];
+		(*init_fa)(gp, typ);	/* initialise for this pass */
 	    }
 	}
     }
@@ -237,7 +248,7 @@ iC_icc(
     if (iC_debug & 0100) {
 	fprintf(iC_outFP, "\nInit complete =======\n");
     }
-#endif
+#endif	/* YYDEBUG */
 
     if (iC_error_flag) {
 	if (iC_error_flag == 1) {
@@ -271,19 +282,22 @@ iC_icc(
     ttyparmFlag = 1;
 #endif	/* _MSDOS_ */
 
-    if ((gp = tim[0]) != 0) {
+    if ((gp = tim[0]) != NULL) {
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
-#endif
+#endif	/* YYDEBUG */
 	gp->gt_val = -1;		/* set EOP once as first action */
 	iC_link_ol(gp, iC_o_list);	/* fire EOP Input Gate */
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
-#endif
+#endif	/* YYDEBUG */
     }
 
     dis_cnt = DIS_MAX;
-    for ( ; ; ) {
+    /********************************************************************
+     *  Operational loop
+     *******************************************************************/
+    for (;;) {
 	if (++iC_mark_stamp == 0) {	/* next generation for check */
 	    iC_mark_stamp++;		/* leave out zero */
 	}
@@ -291,37 +305,49 @@ iC_icc(
 	time_cnt = 0;			/* clear time count */
 
 	/********************************************************************
-	 *  New I/O handling and the sequencing of different action lists
+	 *  Sequencing of different action lists and New I/O handling
 	 *
 	 *  1   initialisation - put EOP on o_list
 	 *      # actions after an idle period:
-	 *  2   Loop:   scan a_list unless empty
-	 *                 INPW ARITH to a_list
-	 *                 comparisons to o_list
+	 *  2   Loop:  scan a_list unless a_list empty
+	 *                 INPW ARITH expr results to a_list
+	 *                 comparisons, &&, || to o_list
 	 *                 clocked actions to c_list via own clock list
-	 *  3          scan o_list; goto Loop unless empty
+	 *  3        { scan o_list; goto Loop } unless o_list empty
+	 *                 bit actions to o_list
 	 *                 bits used in arithmetic to a_list (less common)
 	 *                 clocked actions to c_list via own clock list
-	 *  4          scan c_list; goto Loop unless empty
-	 *                 put ARITH and GATE actions on a_list and o_list
+	 ****** CLOCK PHASE *******
+	 *  4        { scan c_list; DO 5; goto Loop } unless c_list empty
+	 *                 transfer ARITH master values as slave values to a_list
+	 *                 transfer GATE master values as slave values to o_list
+	 *                 (does not use any combinatorial ARITH or GATE values)
 	 *                 defer 'if else switch' C actions to f_list
-	 *  5          scan f_list; goto Loop unless empty
-	 *                 C actions can generate now ARITH and GATE actions
+	 ****** COMBINATORIAL *****
+	 *  5        { scan f_list; } unless f_list empty
+	 *                 C actions can use and generate combinatotrial ARITH and
+	 *                 GATE values, which is start of a new combinatorial scan
 	 *  6   scan s_list			# only one scan is required
 	 *          do OUTW Gates building send string
-	 *      send output string with final outputs only
-	 *      switch to alternate a_list and o_list
-	 *      idle - wait for next input
-	 *      read new input and link INPW Gates directly to a_list
-	 *      or via traMb to o_list
-	 *  Loop algorithms with for or do while - continue are all incorrect
+	 *  7   send output string with final outputs only
+	 *  8   switch to alternate a_list and o_list
+	 *  9   IDLE - wait for next input
+	 * 10   read new input and link INPW Gates directly to a_list
+	 *      or via traMb to o_list; goto Loop
 	 *******************************************************************/
-      Loop:
-	if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);            }
-	if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); goto Loop; }
-	if (iC_c_list != iC_c_list->gt_next) { iC_scan_clk(iC_c_list); goto Loop; }
-	if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); goto Loop; }
-	if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);            }
+	for (;;) {
+	    if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);           }
+	    if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); continue; }
+	    if (iC_c_list != iC_c_list->gt_next) {
+		iC_scan_clk(iC_c_list);		/* new flist entries can only occurr here */
+		if (iC_f_list != iC_f_list->gt_next) {
+		    iC_scan_clk(iC_f_list);
+		}
+		continue;
+	    }
+	    if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);           }
+	    break;
+	}
 
 	if (iC_scan_cnt || iC_link_cnt) {
 	    fprintf(iC_outFP, "\n");
@@ -335,7 +361,7 @@ iC_icc(
 		fprintf(iC_outFP, "\n");
 	    }
 	    iC_glit_cnt = glit_nxt =
-#endif
+#endif	/* YYDEBUG */
 	    iC_scan_cnt = iC_link_cnt = 0;
 	}
 	/********************************************************************
@@ -368,7 +394,7 @@ iC_icc(
 	    }
 	    fprintf(iC_outFP, "\n");
 	}
-#endif
+#endif	/* YYDEBUG */
 	iC_display(&dis_cnt, DIS_MAX);		/* inputs and outputs */
 	/********************************************************************
 	 *  Input from keyboard and time input if used
@@ -472,7 +498,7 @@ iC_icc(
 			if (iC_debug & 0100) {
 			    putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
 			}
-#endif
+#endif	/* YYDEBUG */
 			cn--;			/* apply input ? */
 			cnt++;			/* count inputs */
 		    } else {
@@ -495,7 +521,7 @@ iC_icc(
 		    goto wordEr;		/* input not configured */
 		} else if (c == 'l') {
 		    if ((gp = iC_IL_[4]) != 0) {	/* l long input to IL4 */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 		    wordIn:
 			yp = ybuf;
 			if ((c = getch()) == '0') {	/* initial 0 is oct or hex */
@@ -504,15 +530,15 @@ iC_icc(
 				putc(c, iC_outFP);	/* echo */
 #if	INT_MAX == 32767 && defined (LONG16)
 				format = "%lx%s";	/* hexadecimal */
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 				format = "%x%s";	/* hexadecimal */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 			    } else {
 #if	INT_MAX == 32767 && defined (LONG16)
 				format = "%lo%s";	/* octal */
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 				format = "%o%s";	/* octal */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 				*yp++ = '0';		/* may be a single 0 */
 				ungetch(c);
 			    }
@@ -524,9 +550,9 @@ iC_icc(
 			    }
 #if	INT_MAX == 32767 && defined (LONG16)
 			    format = "%ld%s";		/* decimal */
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 			    format = "%d%s";		/* decimal */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 			    ungetch(c);
 			}
 			while ((c = getch()) != EOF && (
@@ -583,7 +609,7 @@ iC_icc(
 	if (iC_osc_lim < iC_osc_max) {
 	    iC_osc_lim = iC_osc_max;			/* cnt = 1, osc_lim = 3 default */
 	}
-    }
+    } /* for (;;) */
 } /* iC_icc */
 #ifdef	_MSDOS_
 
@@ -599,12 +625,12 @@ int count1C = 0;
 void interrupt far handler1C(void)
 #else
 void interrupt handler1C(void)
-#endif
+#endif	/* MSC */
 {
 #ifndef	MSC
     /* disable interrupts during the handling of the interrupt */
     disable();
-#endif
+#endif	/* MSC */
     time_cnt++;						/* count time in ticks */
     /* increase the global counter */
     if (iC_debug & 01000 &&
@@ -615,11 +641,11 @@ void interrupt handler1C(void)
 #ifndef	MSC
     /* reenable interrupts at the end of the handler */
     enable();
-#endif
+#endif	/* MSC */
     /* call the old routine */
     oldhandler();
 } /* handler1C */
-#endif
+#endif	/* _MSDOS_ */
 
 /********************************************************************
  *
@@ -632,7 +658,7 @@ void iC_initIO(void)
     signal(SIGSEGV, iC_quit);			/* catch memory access signal */
 #ifdef	_MSDOS_
     oldhandler = NULL;
-#endif
+#endif	/* _MSDOS_ */
 }
 
 /********************************************************************
@@ -650,15 +676,15 @@ void iC_quit(int sig)
 	/* reset the old interrupt handler */
 #ifdef	MSC
 	_dos_setvect(INTR, oldhandler);
-#else
+#else	/* MSC */
 	setvect(INTR, oldhandler);
-#endif
+#endif	/* MSC */
     }
 #else	/* Linux */
     if (ttyparmFlag) {
 	if (tcsetattr(0, TCSAFLUSH, &ttyparms) == -1) exit(-1);
     }
-#endif
+#endif	/* Linux */
     if (sig == SIGINT) {
 	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_progname);
     } else if (sig == SIGSEGV) {

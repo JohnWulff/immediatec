@@ -10,7 +10,7 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	make icc ict libict.a lmain
+#	make immcc ict libict.a lmain
 #
 #	make these individually with -C -T -L and -M flags
 #	when any of these are set, cexe.c is not modified
@@ -22,10 +22,10 @@
 usage ()
 {
     echo 'Usage:	'${0##*/}' [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]' >&2
-    echo '	call make for icc, ict, libict.a and lmain with the correct options' >&2
+    echo '	call make for immcc, ict, libict.a and lmain with the correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
-    echo '	-c	make icc with YYDEBUG' >&2
+    echo '	-c	make immcc with YYDEBUG' >&2
     echo '	-r	make icr with YYDEBUG -t trace output possible' >&2
     echo '	-t	make ict with YYDEBUG -t trace output possible' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
@@ -33,8 +33,8 @@ usage ()
     echo '	-d	make all targets with DEQ option defined' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
-    echo '	see usage of icc, icr, ict and applications for other options' >&2
-    echo '	-C	make icc only; generate an empty cexe.c' >&2
+    echo '	see usage of immcc, icr, ict and applications for other options' >&2
+    echo '	-C	make immcc only; generate an empty cexe.c' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-L	make libict.a only' >&2
@@ -48,7 +48,7 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.22 2005/02/01 18:25:18 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.23 2005/07/04 13:27:40 jw Exp $' >&2
 }
 
 makeIcr ()
@@ -190,17 +190,8 @@ fi
 test -d Make_tmp || mkdir Make_tmp;
 
 if [ $ALL = 1 ] || [ $C = 1 ]; then
-    echo "make OPT=\"$c$d$e$o$s$z\" CFLAGS=\"$cflags\" icc"
-    make OPT="$c$d$e$o$s$z" CFLAGS="$cflags" icc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-    rm -f /tmp/cexe.c
-    test -f cexe.c && mv cexe.c /tmp			# current cexe.c for comparison
-    ./icc -c -d20000 < /dev/null
-    if cmp -s cexe.c /tmp/cexe.c; then
-	mv /tmp/cexe.c .				# restore version with old date
-    else
-	if [ -z "$q" ]; then echo './icc -c < /dev/null	# make new empty cexe.c'; fi
-	rm -f /tmp/cexe.c				# clean up in case another user wants to use it
-    fi
+    echo "make OPT=\"$c$d$e$o$s$z\" CFLAGS=\"$cflags\" immcc"
+    make OPT="$c$d$e$o$s$z" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $ALL = 1 ] || [ $R = 1 ]; then
@@ -230,15 +221,15 @@ exit 0
 
 =head1 NAME
 
- makeAll - supports Makefile in icc develeopment
+ makeAll - supports Makefile in immcc develeopment
 
 =head1 SYNOPSIS
 
     makeAll [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]
-    call make for icc, ict, libict.a and lmain with the correct options
+    call make for immcc, ict, libict.a and lmain with the correct options
     -q      output only headings and error messages
     -g      compile for debugging and no optimisation (default -O2)
-    -c      make icc with YYDEBUG
+    -c      make immcc with YYDEBUG
     -r      make icr with YYDEBUG -t trace output possible
     -t      make ict with YYDEBUG -t trace output possible
     -l      make libict.a with YYDEBUG -t trace output possible
@@ -246,8 +237,8 @@ exit 0
     -d      make all targets with DEQ option defined
     -e      make all targets with EFENCE option and link with -lefence
     -D<OPT> make all targets with <OPT> defined
-            see usage of icc, icr, ict and applications for other options
-    -C      make icc only; generate an empty cexe.c
+            see usage of immcc, icr, ict and applications for other options
+    -C      make immcc only; generate an empty cexe.c
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -L      make libict.a only
@@ -264,7 +255,7 @@ exit 0
 =head1 DESCRIPTION
 
 makeAll is a shell script to support the Makefile to build various
-versions of the icc compiler. Normally only the 'icc' compiler and
+versions of the immcc compiler. Normally only the 'immcc' compiler and
 'libict.a' are required for production systems.
 
 'icr' is an early version of the compiler which builds its run-time
@@ -279,7 +270,7 @@ is via TCP/IP and iCserver.
 'lmain' is a standalone check for the integrated C-compiler in gram.y and
 lex.c.
 
-  to make icc, make with OPT=''
+  to make immcc, make with OPT=''
   to make icr, make with OPT='-DRUN -DYYDEBUG'
   to make ict, remove all objects and make with OPT='-DTCP'
   to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
@@ -304,7 +295,7 @@ the subject field.
 
 =head1 SEE ALSO
 
-L<icc(1)>, L<iCserver(1)>
+L<immcc(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 

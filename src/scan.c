@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.31 2005/01/26 15:29:18 jw Exp $";
+"@(#)$Id: scan.c,v 1.32 2005/09/02 14:06:57 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -123,7 +123,7 @@ iC_scan_ar(Gate *	out_list)
 	    iC_dc = 0;
 	}
 #endif
-#if defined(TCP) && defined(LOAD)
+#if defined(TCP) || defined(LOAD)
 	if (op->gt_live & 0x8000) {
 	    iC_liveData(op->gt_live, op->gt_new);	/* live is active */
 	}
@@ -210,12 +210,12 @@ iC_scan_ar(Gate *	out_list)
  *
  *	The target nodes gp can trigger both arithmetic and logical actions.
  *
- *	The target actions ARITH and D_SH cause logic to arithmetic
+ *	The target actions for ARITH and D_SH cause logic to arithmetic
  *	conversion in the masterAct functions if called from o_list
  *	This is faster for the bulk of the plain logic actions which
  *	would be slowed down by an extra test in the scan.
  *
- *	The target action GATE is to simly call iC_link_ol().
+ *	The target action for GATE is to simply call iC_link_ol().
  *
  *******************************************************************/
 
@@ -250,7 +250,7 @@ iC_scan(Gate *	out_list)
 	    iC_dc = 0;
 	}
 #endif
-#if defined(TCP) && defined(LOAD)
+#if defined(TCP) || defined(LOAD)
 	if (op->gt_live & 0x8000) {
 	    iC_liveData(op->gt_live, op->gt_val < 0 ? 1 : 0);	/* live is active */
 	}
@@ -510,7 +510,7 @@ iC_scan_snd(Gate *	out_list)
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\n%s:\t", op->gt_ids);
 #endif
-	iC_outMw(op, out_list);			/* Master action is always outMw() */
+	iC_outMw(op, out_list);			/* Master action is always iC_outMw() */
 	iC_scan_cnt++;				/* count scan operations */
     }
 } /* iC_scan_snd */
@@ -526,10 +526,8 @@ iC_scan_snd(Gate *	out_list)
 void
 iC_pass1(Gate * op, int typ)			/* Pass1 init on gates */
 {
-    op->gt_mcnt = 0;				/* clear gate value */
-#ifndef LOAD
-    op->gt_ini = -typ;				/* overwritten for AND OR LATCH types */
-#endif
+    /* op->gt_mcnt is compiled or generated with 0, */
+    /* except for _f0_1, where it is and should be 1 */
 #ifndef DEQ
     op->gt_next = 0;				/* clear link */
 #else
@@ -584,7 +582,7 @@ iC_gate2(Gate * op, int typ)			/* pass2 function init gates */
 	} while (--cnt);
     } else {
 	fprintf(iC_outFP,
-	    "\nWarning:	gate %s has no output list", gp->gt_ids);
+	    "\nWarning:	gate %s has no output list", op->gt_ids);
 	    iC_error_flag = 2;			/* can execute with this warning */
     }
 } /* gate2 */
@@ -610,7 +608,8 @@ iC_gate2(Gate * op, int typ)			/* pass2 function init gates */
  *	of pass 3.
  *
  *	For the reverse logic check the initial value of gt_val is
- *	saved in gt_ini for XOR AND OR and LATCH.
+ *	saved in gt_ini for UDF AND OR and LATCH. (XOR requires 0 ??)
+ *	Really only required for AND and LATCH, all others assume 1.
  *
  *******************************************************************/
 
@@ -630,16 +629,6 @@ gate3(Gate * gp, int typ)			/* Pass3 init on gates */
 		opt, gp->gt_ids, gp->gt_mcnt);
 	}
 #endif
-#ifdef LOAD
-	if (typ == ARN || typ == ARNC || typ == LOGC) {
-	    gp->gt_new = gp->gt_old = 0;
-	    gp->gt_val = 1;
-	} else if (gp->gt_ini == 0) {
-	    gp->gt_val = 1;			/* XOR */
-	} else {
-	    gp->gt_val = gp->gt_ini;		/* calculations done in outp.c (output()) */
-	}
-#else
 	switch (typ) {
 	case ARNC:
 	case ARN:
@@ -667,7 +656,6 @@ gate3(Gate * gp, int typ)			/* Pass3 init on gates */
 	    break;
 	}
 	gp->gt_mcnt = 0;			/* clear gt_mcnt */
-#endif
 	gp->gt_live = 0;			/* clear live flag */
     }
 } /* gate3 */

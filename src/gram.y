@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.20 2005/01/26 15:16:12 jw Exp $";
+"@(#)$Id: gram.y,v 1.21 2005/09/21 16:56:20 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -14,7 +14,7 @@
  *	Kernighan and Ritchie "The C Programming Language" 2nd Ed. A13.
  *
  *	gram.y
- *	C grammar for icc compiler
+ *	C grammar for immcc compiler
  *
  *******************************************************************/
 
@@ -1322,7 +1322,7 @@ assignment_expression				/* 48 */
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u = %u>\n", $$.start, $$.end);
 #endif
 	    if ($1.symbol->v_glist == 0)
-		immAssignFound($1.start, $2.start, $3.end, $1.symbol, 5);
+		immAssignFound($1.start, $2.start, $3.end, $1.symbol, 6);
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1396,6 +1396,18 @@ conditional_expression				/* 50 */
 	    $$.start = $1.start;
 	    $$.end = $5.end;
 	    $$.symbol = NULL;
+	}
+	/* see info gcc: 5.8 Conditionals with Omitted Operands  */
+	| logical_OR_expression '?' ':' conditional_expression {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+#ifndef LMAIN
+	    if (iC_Pflag) {
+		Symbol * sp = $4.symbol;
+		warning("ISO C forbids omitting the middle term of a ?: expression", sp ? sp->name : NULL);
+	    }
+	    $$.symbol = NULL;
+#endif
 	}
 	;
 
@@ -1927,6 +1939,7 @@ ierror(						/* print error message */
     } else {
 	putc('.', stderr);
     }
+    fprintf(stderr, "\n");
 } /* ierror */
 #else
 
@@ -1955,7 +1968,7 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 	lep->equOp  = LARGE;			/* marks a value variable */
 	lep->vEnd   = end;			/* of an imm variable */
 	lep->sp     = sp;
-	lep->ppIdx  = 5;
+	lep->ppIdx  = 6;
 	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
 	    ierror("C-statement tries to access an imm type not bit or int:", sp->name);
 	    sp->type = ERR;			/* cannot execute properly */
@@ -2030,13 +2043,23 @@ immVarRemove(unsigned int start, unsigned int end, Symbol* sp)
  *
  *	Checked earlier that IMM_IDENTIFIER is ftype ARITH or GATE.
  *
- *	mType is derived from the ftype of the Symbol. It may only be
+ *	ftyp is derived from the ftype of the Symbol. It may only be
  *	ARITH === 1, GATE === 2, ARITH+2 and GATE+2. (UDFA === 0 is an error)
  *
  *	This did not work. jw 2004.02.23 found with Electric Fence 2.2.1
  *	in arnc5.ic:
  *		imm clock clk; if (IX0.1) { clk = 1; } // tries to use
- *		macro[mType] with mType = CLCKL 18, type = ERR 19 // FIXED
+ *		macro[ftyp] with ftyp = CLCKL 18, type = ERR 19 // FIXED
+ *
+ *	Use of ppIdx, ppi and equOp, operator:
+ *	In immVarFound() p->ppIdx is initialized to 6 and p->equOp to LARGE
+ *	which is then described as a used variable. If equOp is set to some
+ *	operator position it becomes an assigned operator. All other imm
+ *	variables in an assignment, which have ppIdx == 6 have the value
+ *	set to 5. This marks the variable as used, even if it is an assignment
+ *	variable. By this method multiple assignments are handled correctly.
+ *	If ppi < 5 the current variable is involved in a pre/post-inc/dec
+ *	operation and is marked as both assigned and used anyway.
  *
  *******************************************************************/
 
@@ -2044,7 +2067,7 @@ static void
 immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symbol* sp, int ppi)
 {
     LineEntry *	p;
-    int		mType;
+    int		ftyp;
     int		typ;
 
     assert(sp);
@@ -2065,14 +2088,20 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 #endif
 	    if (p->sp == sp) {
 		typ = sp->type & TM;
-		mType = sp->ftype;
+		ftyp = sp->ftype;
 		if (typ == UDF) {
-		    sp->type = iC_ctypes[mType];	/* must be ARNC or LOGC */
-		} else if ((typ != ARNC || mType != ARITH) &&
-			   (typ != LOGC || mType != GATE) &&
+		    if (iC_Sflag) {
+			ierror("strict - C assignment to an imm variable (should be immC):", sp->name);
+			sp->type = ERR;		/* cannot execute properly */
+		    } else {
+			sp->type = iC_ctypes[ftyp];	/* must be ARNC or LOGC */
+			listGenOut(sp);		/* list immC node and generate possible output */
+		    }
+		} else if ((typ != ARNC || ftyp != ARITH) &&
+			   (typ != LOGC || ftyp != GATE) &&
 			   (typ != ERR)) {	/* avoids multiple error messages */
-		    if ((typ == ARN && mType == ARITH) ||
-		        (typ >= MIN_GT && typ < MAX_GT && mType == GATE)) {
+		    if ((typ == ARN && ftyp == ARITH) ||
+		        (typ >= MIN_GT && typ < MAX_GT && ftyp == GATE)) {
 			ierror("C-assignment to an imm variable already assigned in iC code:", sp->name);
 		    } else {
 			ierror("C-assignment to an incompatible imm type:", sp->name);
@@ -2085,6 +2114,9 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    }
 	} else if (p->pStart < start) {
 	    break;				/* Error: will not find start */
+	}
+	if (p->ppIdx == 6) {			/* all other imm values in the assignment */
+	    p->ppIdx = 5;			/* are used even if themselves assigned to */
 	}
     }
     execerror("C-assignment: Symbol not found ???", sp->name, __FILE__, __LINE__);
@@ -2157,7 +2189,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     int			pFlag;
     int			ppi;
     Symbol *		sp;
-    Symbol *		fsp;
+    Symbol *		tsp;
     List_e *		lp1;
     List_e *		lp2;
     int			lNr = 0;
@@ -2166,13 +2198,9 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     Symbol **		hsp;
 #endif
     int			ml;
-    int			mType;
-    char		buffer[BUFS];		/* buffer for modified names */
-    char		iqt[2];			/* char buffers - space for 0 terminator */
-    char		xbwl[2];
-    int			byte;
-    int			bit;
-    char		tail[8];		/* compiler generated suffix _123456 max */
+    int			ftyp;
+    Symbol *		fsp = 0;
+    static char *	f = "_f0_1";		/* name of literal function head */
 
     if (iFP == NULL) {
 #ifdef LEAS
@@ -2195,15 +2223,15 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 
     if (lp) {					/* ffexpr head link */
 	assert(lp->le_val>>8 && lp->le_next == 0); /* must have function # and callled only once */
-	fsp = lp->le_sym;			/* master - must be ftype F_CF, F_CE or F_SW */
-	assert(fsp && (fsp->ftype == F_CF || fsp->ftype == F_CE || fsp->ftype == F_SW));
-	lp1 = fsp->u_blist;
+	tsp = lp->le_sym;			/* master - must be ftype F_CF, F_CE or F_SW */
+	assert(tsp && (tsp->ftype == F_CF || tsp->ftype == F_CE || tsp->ftype == F_SW));
+	lp1 = tsp->u_blist;
 	assert(lp1);
-	fsp = lp1->le_sym;			/* clock for ffexpr head */
-	assert(fsp);
-	if (fsp->ftype == CLCKL) {
+	tsp = lp1->le_sym;			/* clock for ffexpr head */
+	assert(tsp);
+	if (tsp->ftype == CLCKL) {
 	    lNr = 2;				/* start of value list for C fragment */
-	} else if (fsp->ftype == TIMRL) {
+	} else if (tsp->ftype == TIMRL) {
 	    lNr = 3;				/* extra space for timer delay */
 	} else {
 	    assert(0);				/* must be a clock */
@@ -2230,7 +2258,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     equop   = LARGE;
     endop   = LARGE;
     end     = LARGE;
-    pFlag   = 1;
+    pFlag   = 1;				/* start by outputting C code till first variable or ++/-- */
     sp      = NULL;
 
     while ((c = getc(iFP)) != EOF) {
@@ -2254,17 +2282,17 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    ppi    = p->ppIdx;			/* pre/post-inc/dec character value */
 	    assert(sp);
 	    ml     = lp		     ? 0		: MACRO_LITERAL;
-	    mType  = sp->type == ERR ? UDFA
+	    ftyp  = sp->type == ERR ? UDFA
 				     : (equop == LARGE) ? sp->ftype
 							: sp->ftype + MACRO_OFFSET;
 	    if (ppi >= 5) {
 		/* assignment macro must be printed outside of enclosing parentheses */
-		fprintf(oFP, macro[ml+mType]);	/* entry found - output macro start */
+		fprintf(oFP, macro[ml+ftyp]);	/* entry found - output macro start */
 	    }
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "strt bytePos = %u, earlyop = %u, equop = %u, ppi = %d, sp =>%s\n", bytePos, earlyop, equop, ppi, sp->name);
 #endif
-	    p++;
+	    p++;				/* next entry to locate possible earlyop */
 	    assert(start <= vstart);
 	    assert(vstart < vend);
 	    assert(vend <= end);
@@ -2280,48 +2308,71 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    }
 	}
 	if (bytePos == vstart) {
-	    assert(sp);
+	    assert(sp);				/* start of actual variable */
 	    if (lp) {
+		functionUse[0] |= F_FFEXPR;	/* flag for copying ffexpr macro */
 		lp1 = lp;
-    		sNr = lNr;
-		while ((lp2 = lp1->le_next) != 0) {
-		    if (sp == lp2->le_sym) {
-			assert(lp2->le_val == sNr);
-			break;			/* variable occurred previously */
-		    }
-		    sNr++;
-		    lp1 = lp2;
-		}
-		if (lp2 == 0) {
-		    lp2 = sy_push(sp);		/* new variable in this C fragment */
-		    lp2->le_val = sNr;		/* offset in list */
-		    lp1->le_next = lp2;		/* place at end of list */
-		}
-		snprintf(buffer, sizeof buffer, "%d", sNr);
-		functionUse[0] |= F_FFEXPR;	/* flag for copying macro */
 	    } else {
-		IEC1131(sp->name, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
-		functionUse[0] |= F_LITERAL;	/* flag for copying macro */
+		functionUse[0] |= F_LITERAL;	/* flag for copying literal macro */
+		if (fsp) {
+		    lp1 = fsp->list;		/* start with head of pointer list */
+		} else
+		if ((fsp = lookup(f)) == 0) {
+		    fsp = install(f, OR, F_CF);	/* install new literal function head */
+		    lp1 = sy_push(fsp);		/* head of literal pointer list */
+		    fsp->list = lp1;		/* save in list for more pointers */
+		} else {
+		    if (fsp->type != CF && fsp->ftype != F_CF) {
+			ierror("use of literal function head which was previously used for a different purpose:", f);
+		    }
+		    lp1 = fsp->list;		/* start with head of pointer list */
+		}
+		lNr = 0;
+	    }
+	    sNr = lNr;				/* start at array pos after clock or timer,val */
+	    while ((lp2 = lp1->le_next) != 0) {
+		if (sp == lp2->le_sym) {
+		    assert((lp2->le_val & VAR_MASK) == sNr);
+		    break;			/* variable occurred previously */
+		}
+		sNr++;
+		assert(sNr < VAR_MASK);		/* limits # of variables to 16.384 if short */
+		lp1 = lp2;
+	    }
+	    if (lp2 == 0) {
+		lp2 = sy_push(sp);		/* new variable in this C fragment */
+		lp2->le_val |= sNr;		/* offset in list */
+		lp1->le_next = lp2;		/* place at end of list */
+	    }
+	    if (equop == LARGE) {
+		lp2->le_val |= VAR_USE;		/* variable value is only used */
+	    } else {
+		lp2->le_val |= VAR_ASSIGN;	/* variable is assigned to */
+		if (ppi < 6) {
+		    lp2->le_val |= VAR_USE;	/* pre/post-inc/dec or marked as used */
+		}
 	    }
 	    if (ppi >= 5) {
-		fprintf(oFP, "%s", buffer);	/* output real Symbol name not ALIAS */
+		fprintf(oFP, "%d", sNr);	/* output Symbol pointer offset */
 	    } else {
 		/* expanded pre/post-inc/dec macro may be printed inside enclosing parentheses */
 		if (ppi < 2){
 		    /* pre-increment/decrement */
-		    fprintf(oFP, "%s%s , %s%s) %c 1",
-			macro[ml+mType], buffer, macro[ml+sp->ftype], buffer, idOp[ppi]);
+		    fprintf(oFP, "%s%d , %s%d) %c 1",
+			macro[ml+ftyp], sNr, macro[ml+sp->ftype], sNr, idOp[ppi]);
+		    /* ++x; produces: iC_AA(2 , iC_AV(2) + 1); */
 		} else {
 		    /* post-increment/decrement */
-		    iC_Tflag = 1;		/* triggers definition/declaration of iC_tVar in _list_.c/_list1.h */
-		    fprintf(oFP, "(%s%s , (iC_tVar = %s%s)) %c 1), iC_tVar",
-			macro[ml+mType], buffer, macro[ml+sp->ftype], buffer, idOp[ppi]);
+		    iC_Tflag = 1;		/* triggers definition of iC_tVar in C outfile */
+		    fprintf(oFP, "(iC_tVar = %s%d), %s%d , iC_tVar %c 1), iC_tVar",
+			macro[ml+sp->ftype], sNr, macro[ml+ftyp], sNr, idOp[ppi]);
+		    /* x--; produces: (iC_tVar = iC_AV(2), iC_AA(2 , iC_tVar - 1), iC_tVar); */
 		}
 	    }
-	    pFlag = 0;
+	    pFlag = 0;				/* start of variable name, which is replaced by macro */
 	}
 	if (bytePos == vend) {
-	    pFlag = 1;
+	    pFlag = 1;				/* end of the variable which is the next entry */
 	}
 	if (bytePos == equop) {
 #if YYDEBUG
@@ -2333,12 +2384,21 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		} else {
 		    assert(sp);
 		    assert(strchr("+-*/%&^|><", c));
-		    /* output variable as value for operator assignment axpression*/
-		    fprintf(oFP, ", %s%s) ", macro[ml+sp->ftype], buffer);
-		    endop = equop + ((c == '>' || c == '<') ? 2 : 1);
+		    /********************************************************************
+		     *  output variable as value for operator assignment expression
+		     *  QB1 *= IB2 + IB3; produces:
+		     *  iC_AA(2 , iC_AV(2) * ( iC_AV(3) + iC_AV(4)));
+		     *  NOTE: parenthesis around operator assigned expression
+		     *******************************************************************/
+		    fprintf(oFP, ", %s%d) ", macro[ml+sp->ftype], sNr);
+		    endop = equop + ((c == '>' || c == '<') ? 2 : 1);	/* replace '=' by " (" */
+		    pushEndStack(end);		/* push extra end ')' for operator assign expression */
+		    assert(lp2);
+		    lp2->le_val |= VAR_USE;	/* operator assignment is also used */
 		}
 	    } else {
-		endop = bytePos + 1;
+		assert(ppi >= 2);		/* equop occurred before start for pre-inc/dec */
+		endop = bytePos + 1;		/* ppi >= 2 && < 5 is post-inc/dec at equop */
 		pFlag = 0;			/* suppress output of ++ or -- from post-inc/dec */
 	    }
 	}
@@ -2349,14 +2409,38 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    endop = bytePos + 1;
 	    pFlag = 0;				/* suppress output of ++ or -- from pre-inc/dec */
 	}
-	if (pFlag && bytePos != endop) {
-	    putc(c, oFP);			/* output all except variables and = of assignment operators */
+	if (pFlag) {
+	    if (bytePos != endop) {
+		putc(c, oFP);			/* output all except variables and ++ or -- from inc/dec */
+	    } else {
+		fprintf(oFP, " (");		/* replace '=' by " (" for operator assignment */
+	    }
 	}
 	if (bytePos == endop) {
 	    endop = LARGE;
 	    pFlag = 1;
 	}
 	bytePos++;
+    }
+    if ((iC_debug & 04) && (fsp = lookup(f)) != 0) {
+	/********************************************************************
+	 * compile listing output for literal function block
+	 *******************************************************************/
+	lp1 = fsp->list;			/* start with head of pointer list */
+	assert(lp1->le_sym == fsp);
+	fprintf(iC_outFP, "\n\n\t%s\t%c ---%c\t\t\t// (L)\n", fsp->name, iC_fos[fsp->ftype],
+	    iC_os[CF]);
+	while ((lp1 = lp1->le_next) != 0) {
+	    Symbol *	gp;
+	    int		use;
+	    gp = lp1->le_sym;
+	    assert(gp);
+	    assert(gp->name);
+	    use = lp1->le_val >> USE_OFFSET;
+	    assert(use < Sizeof(iC_useText));
+	    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d  %s\n", gp->name, iC_fos[gp->ftype],
+		iC_os[CF], lp1->le_val & 0xff, iC_useText[use]);
+	}
     }
 } /* copyAdjust */
 #endif

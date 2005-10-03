@@ -19,21 +19,21 @@ static const char cexe_part1[] = "\
  *******************************************************************/\n\
 \n\
 static const char cexe_h[] =\n\
-\"@(#)$Id: cexe.h,v 1.23 2005/01/26 16:47:45 jw Exp $\";\n\
+\"@(#)$Id: cexe.h,v 1.24 2005/08/20 21:56:32 jw Exp $\";\n\
 \n\
 #include	<stdio.h>\n\
 #include	\"icc.h\"\n\
 #include	\"comp.h\"\n\
 \n\
-#define iC_MV(n) iC_gf->gt_rlist[n]->gt_new\n\
-#define iC_AV(n) iC_gf->gt_list[n]->gt_new\n\
-#define iC_LV(n) (iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
-#define iC_AA(n,v) iC_assign(iC_gf->gt_list[n], v)\n\
-#define iC_LA(n,v) iC_assign(iC_gf->gt_list[n], v)\n\
-#define iC_AVL(x) iC_Lookup(#x)->u_gate->gt_new\n\
-#define iC_LVL(x) (iC_Lookup(#x)->u_gate->gt_val < 0 ? 1 : 0)\n\
-#define iC_AAL(x,v) iC_assign(iC_Lookup(#x)->u_gate, v)\n\
-#define iC_LAL(x,v) iC_assign(iC_Lookup(#x)->u_gate, v)\n\
+#define iC_MV(n)	iC_gf->gt_rlist[n]->gt_new\n\
+#define iC_AV(n)	iC_gf->gt_list[n]->gt_new\n\
+#define iC_LV(n)	(iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define iC_AA(n,v)	iC_assignA(iC_gf->gt_list[n], v)\n\
+#define iC_LA(n,v)	iC_assignL(iC_gf->gt_list[n], v)\n\
+#define iC_AVL(n)	iC_pf0_1->gt_list[n]->gt_new\n\
+#define iC_LVL(n)	(iC_pf0_1->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define iC_AAL(n,v)	iC_assignA(iC_pf0_1->gt_list[n], v)\n\
+#define iC_LAL(n,v)	iC_assignL(iC_pf0_1->gt_list[n], v)\n\
 \n\
 #if INT_MAX == 32767 && defined (LONG16)\n\
 static long	iC_tVar;\n\
@@ -48,7 +48,7 @@ static int	iC_tVar;\n\
  *******************************************************************/\n\
 \n\
 ";
-static const int cexe_lines1 = 37;
+static const int cexe_lines1 = 36;
 
 static const char cexe_part2[] = "\
 #if INT_MAX == 32767 && defined (LONG16)\n\
@@ -82,7 +82,7 @@ static const char cexe_part3[] = "\
 	__FILE__, __LINE__);\n\
     iC_quit(-2);\n\
 #endif\n\
-    iC_tVar = (int)iC_Lookup(\"iClock\");			/* shut up -Wall */\n\
+    iC_tVar = 0;			/* shut up -Wall */\n\
     return 0;	/* for those cases where no return has been programmed */\n\
 } /* iC_exec */\n\
 ";

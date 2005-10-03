@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.15 2005/01/26 15:49:43 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.16 2005/07/14 09:27:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -30,8 +30,8 @@ static const char RCS_Id[] =
 
 const char *	iC_hostNM = "localhost";	/* 127.0.0.1 */
 const char *	iC_portNM = "8778";		/* iC service */
-char *		iC_iccNM  = "C0";		/* icc name qualified with instance */
-char *		iC_iidNM  = "";			/* instance id */
+char *		iC_iccNM  = "stdin";		/* immcc name qualified with instance */
+char *		iC_iidNM  = "";			/* instance ID */
 float		iC_timeout = 0.05;		/* default 50 ms on 50 ms off */
 
 fd_set		iC_rdfds;

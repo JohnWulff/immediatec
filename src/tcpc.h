@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.12 2005/01/24 21:07:28 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.13 2005/07/14 09:27:22 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -61,9 +61,9 @@ void	read_stream(int, char *, int);
 #endif
 
 extern const char *	iC_hostNM;	/* 127.0.0.1 */
-extern const char *	iC_portNM;	/* icc service */
-extern char *		iC_iccNM;	/* icc name qualified with instance */
-extern char *		iC_iidNM;	/* instance id */
+extern const char *	iC_portNM;	/* immcc service */
+extern char *		iC_iccNM;	/* immcc name qualified with instance */
+extern char *		iC_iidNM;	/* instance ID */
 extern float		iC_timeout;	/* in seconds */
 
 extern int		iC_connect_to_server(const char* host, const char* port, float delay);

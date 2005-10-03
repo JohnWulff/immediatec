@@ -13,173 +13,171 @@
 #	make an executable file from an iC file
 #
 #	Cygnus does not understand cc - CC=gcc
-#	On other systems use            CC=cc
+#	Intel C/C++ compiler		CC=icc
 #
 ########################################################################
 
-CC=gcc
+if echo $PATH | grep -q intel_cc; then
+    CC=icc
+    ldir=" -I/usr/local/include -L/usr/local/lib"
+else
+    CC=gcc
+    ldir=" -L/usr/local/lib"
+fi
+ICC=immcc
 
 usage ()
 {
     echo 'Usage:' >&2
-    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-d<dir>] [-y<opt>]' >&2
-    echo '         file ...' >&2
-    echo '    (default)	link all iC-files file.ic ... into independent executables' >&2
+    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-w<dir>] [-d<opt>]' >&2
+    echo '         [ -Dmacro[=defn]...][ -Umacro...] file ...' >&2
+    echo '     default:	link all iC-files file.ic ... into independent executables' >&2
     echo '		output names are base names of the iC-files (file ...)' >&2
     echo '	-l	link all iC-files into one executable (implies -A)' >&2
-    echo '		default output name is base name of the first iC-file' >&2
+    echo '		default: output name is base name of the first iC-file' >&2
+    echo '		complete listing of all files is in first.lst' >&2
     echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
+    echo '		complete listing of all files is in exe.lst' >&2
     echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
     echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
     echo '	-b	generate both listings and C outputs' >&2
-    echo '	-n	generate no output, report icc compile errors only' >&2
+    echo "	-n	generate no output, report $ICC compile errors only" >&2
     echo "		-s and -n generate 'cexe.c' for last file as a side effect" >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
     echo '	-S	strict compile - all immediate variables must be declared' >&2
+    echo '	-P	pedantic: warning if variable contains $ (default: $ allowed)' >&2
+    echo '	-PP	pedantic-error: error if variable contains $' >&2
     echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
-    echo '	-i<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
+    echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
+    echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
+    echo '	        Note: do not use the same macros for the iC and the C phase' >&2
+    echo '	-C<macro> predefine <macro> for the C preprocessor phase' >&2
+    echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
+    echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
     echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
     echo '	        default: any index for bit, byte, word or long is allowed' >&2
-    echo '	-i	produce file.ini which records output of an initial run' >&2
+    echo '	-i	produce file.ini which records load info from initial run' >&2
     echo '	-I	produce file.ini with full INITIALIZATION info (debug only)' >&2
+    echo '	-J	produce file.ini with run INITIALIZATION only (debug only)' >&2
     echo '	-6	produce logic generation listing file.lst6' >&2
     echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
     echo '	-q	quiet operation - return status only' >&2
-    echo '	-v	use icc, pplstfix and libict.a in local directory' >&2
-    echo '	-v<N>	use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...' >&2
-    echo '	-d<dir>	use icc and (pplstfix libict.a unless -v first) in directory' >&2
-    echo '		<dir> (default use installed icc and -lict)' >&2
-    echo '	-y<opt>	call icc with extra -d<opt> orred into normal -d474' >&2
-    echo "	-N	No nice with calls of icc and $CC compilers (default is nice)" >&2
+    echo "	-v<N>   use $ICC<N>, pplsstfix<N> and libict<N>.a in local directory" >&2
+    echo "	-w<dir> use $ICC, pplstfix and libict.a in directory <dir>" >&2
+    echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
+    echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
+    echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.31 2005/04/07 15:54:12 jw Exp $' >&2
+    echo '	$Id: iCmake,v 1.32 2005/09/30 22:12:42 jw Exp $' >&2
 }
 
 link=0
 status=0
 list=""
+slist=""
 nice="nice"
 a=""
 v=""
 b=""
 lib="-lict"
-ldir="-L/usr/local/lib"
 d=" -d474"
 A=""
 S=""
+P=""
 R=""
-x=""
+x=0
 l=""
 q=0
 z=0
-i=""
+k=""
 I=""
+D=""
+C=""
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case "$option" in
-	    l*)	link=1
-		a=" -a"				# generate aux files for linking
-		if [ -z "$A" ]; then
-		    A=" -A"			# must have ARITH ALIAS for linking
-		    d="$d$A"
-		fi
-		;;
-	    o*) if [ "$link" = 0 ]; then
-		    link=1			# don't necessarily generate aux files
-		fi
-		option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		if [ -n "$option" ]; then
-		    first=$option
-		    base=${first%.*}
-		    if [ "$first" = "$base.ic" ]; then
-			echo "parameter error - target '$first' has extension .ic" >&2
-			exit 1
-		    fi
-		else
-		    usage; exit 255
-		fi
-		break;;
-	    s*)	link=2;;
-	    c*)	link=3;d=$A$S$R$i;;
-	    b*) link=4;;
-	    n*) link=5;d=$A$S$R$i;;
-	    N*) nice="";;
-	    i*)	t=${option#?}
-		if [ -z "$t" ]; then
-		    shift
-		    t=$1
-		    option=$1
-		else
-		    case "$t" in
-		    6)	t='';;
-		    esac
-		fi
-		case "$t" in
-		1*|2*|3*|4*|5*|6*|7|8|9)
-		    i=" -i$t"; d="$d$i"; break;;
-		esac
-		I=440;;
-	    I*)	I=540;;
-	    q*)	q=1;;
-	    v*)	option=${option#?}
-		if [ -z "$b" ]; then
-		    b="./"
-		fi
-		lib=${b}libict$option.a
-		ldir=""
-		v="$option"
-		break;;
-	    d*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		option=${option%/}
-		if [ ! -d "$option/" ]; then
-		    echo "Error: -d '$option/' is not a directory" >&2
-		    exit 254;
-		fi
-		b="$option/"
-		if [ -z "$v" ]; then
-		    lib=${b}libict.a
-		    ldir=""
-		fi
-		break;;
-	    A*)	A=" -A";d="$d$A";;
-	    S*)	S=" -S";d="$d$S";;
-	    R*)	R=" -R";d="$d$R";;
-	    6*)	d="$d -d2";l="6";;
-	    x*)	d="$d -d4000";x="1";;
-	    y*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		d="$d -d$option"
-		break;;
-	    z*)	z=1;;
-	    h*)	usage; exit 255;;
-	    *) aflag="-$option"; break;;
-	    esac
-	    option=${option#?}
-	done;;
-    *)	break;;
+while getopts ":lo:scbnNk:iIJqv:w:ASPRD:U:C:V:6xd:zh" opt; do
+    case $opt in
+    l )	link=1
+	a=" -a"				# generate aux files for linking
+	if [ -z "$A" ]; then
+	    A=" -A"			# must have ARITH ALIAS for linking
+	    d="$d$A"
+	fi
+	;;
+    o ) if [ $link -eq 0 ]; then	# don't necessarily generate aux files
+	    link=1
+	    a=" -a"			# generate aux files for linking
+	    if [ -z "$A" ]; then
+		A=" -A"			# must have ARITH ALIAS for linking
+		d="$d$A"
+	    fi
+	fi
+	if [ -n "$OPTARG" ]; then
+	    first=$OPTARG
+	    base=${first%.*}
+	    if [ "$first" = "$base.ic" -o "$first" = "$base.ih" ]; then
+		echo "parameter error - target -o '$first' is probably an iC source" >&2
+		exit 1
+	    fi
+	else
+	    echo "parameter error - no target name for -o option" >&2
+	    exit 2
+	fi
+	;;
+    s )	link=2;;
+    c )	link=3; d="$A$S$R$k";;
+    b ) link=4;;
+    n ) link=5; d="$A$S$R$k";;
+    N ) nice="";;
+    k ) case "$OPTARG" in
+	1*|2*|3*|4*|5*|6*|7|8|9)
+	    k=" -k$OPTARG"; d="$d$k";;
+	esac
+	;;
+    i )	I=440;;
+    I )	I=540;;
+    J )	I=500;;
+    q )	q=1;;
+    v ) if [ -z "$b" ]; then
+	    b="./"
+	fi
+	lib=${b}libict$OPTARG.a
+	ldir=""
+	v="$OPTARG"
+	;;
+    w ) OPTARG=${OPTARG%/}
+	if [ ! -d "$OPTARG/" ]; then
+	    echo "Error: -d '$OPTARG/' is not a directory" >&2
+	    exit 254;
+	fi
+	b="$OPTARG/"
+	if [ -z "$v" ]; then
+	    lib=${b}libict.a
+	    ldir=""
+	fi
+	;;
+    A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
+    S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
+    P )	if [ -z "$P" ]; then P=" -P"; C="$C -pedantic"; fi; d="$d$P";;	# allows -PP => -P -P
+    R )	if [ -z "$R" ]; then R=" -R"; d="$d$R"; fi;;
+    D ) D="$D -D$OPTARG";;
+    U ) D="$D -U$OPTARG";;
+    C ) D="$D -C$OPTARG"; C="$C -D$OPTARG";;
+    V ) D="$D -V$OPTARG"; C="$C -U$OPTARG";;
+    6 )	d="$d -d2"; l="6";;
+    x )	d="$d -d4000"; x="1";;
+    d ) d="$d -d$OPTARG";;
+    z )	z=1;;
+    h )	usage; exit 0;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
-    shift
 done
-# echo I=$I, i=$i, d=$d, l=$l, v=$v, b=$b
+shift $(($OPTIND - 1))
+
+# echo I=$I, k=$k, d=$d, l=$l, v=$v, b=$b
 # exit
 
-# if [ "$q" = 0 ]; then
+# if [ $q -eq 0 ]; then
 #     echo "########## '${0##*/}' ##########"
 # fi
 
@@ -193,45 +191,52 @@ for f in $*; do
 	file="$base.ic"
     fi
     if [ -f "$file" ]; then
-	if [ "$q" = 0 ]; then
+	if [ $q -eq 0 ]; then
+	    if [ $z -eq 1 ]; then echo -n "# "; fi
 	    echo $file
 	fi
 	case $link in
 	0)				# default
 	    rm -f $base.c $base
-	    if [ "$z" = 1 ]; then
-		echo "${b}icc$v$d -o $base.c -l $base.lst$l $file" >&2
+	    if [ $z -eq 1 ]; then
+		echo "${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
 	    fi
-	    if $nice ${b}icc$v$d -o $base.c -l $base.lst$l $file; then
-		if [ "$z" = 1 ]; then
-		    echo "$CC -g -I. $ldir -o $base $base.c $lib" >&2
+	    if $nice ${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
+		if [ $z -eq 1 ]; then
+		    echo "$CC -g -I.$ldir$C -o $base $base.c $lib"
 		fi
-		if $nice $CC -g -I. $ldir -o $base $base.c $lib; then
-		    if [ -n "$I" ] && ! ./$base -d$I > $base.ini; then
-			if [ "$q" = 0 ]; then
-			    echo "run time error in initial execution of '$base'" >&2
+		if $nice $CC -g -I.$ldir$C -o $base $base.c $lib; then
+		    if [ -n "$I" ]; then
+			if [ $z -eq 1 ]; then
+			    echo "./$base -d$I > $base.ini"
 			fi
-			let status+=1
+			if ! ./$base -d$I > $base.ini; then
+			    if [ $q -eq 0 ]; then
+				echo "run time error in initial execution of '$base'" >&2
+			    fi
+			    let status+=1
+			fi
 		    fi
 		else
-		    if [ "$q" = 0 ]; then
+		    if [ $q -eq 0 ]; then
 			echo "$CC compile errors in '$base.c' - no executable '$base' generated" >&2
 		    fi
 		    let status+=1
 		fi
 	    else
-		if [ "$q" = 0 ]; then
-		    echo "${b}icc$v compile errors in '$file' - no executable '$base' generated" >&2
+		if [ $q -eq 0 ]; then
+		    echo "${b}$ICC$v compile errors in '$file' - no executable '$base' generated" >&2
 		fi
 		let status+=1
 	    fi ;;
 	1)				# -l	link all iC-files into one executable
 	    rm -f $base.c		# -f in case read only
-	    if [ "$z" = 1 ]; then
-		echo "${b}icc$v$a$d -o $base.c -l $base.lst$l $file" >&2
+	    if [ $z -eq 1 ]; then
+		echo "${b}$ICC$v$D$a$d -o $base.c -l $base.lst$l $file"
 	    fi
-	    if $nice ${b}icc$v$a$d -o $base.c -l $base.lst$l $file; then
+	    if $nice ${b}$ICC$v$D$a$d -o $base.c -l $base.lst$l $file; then
 		list="$list $base.c"
+		slist="$slist $base.lst$l"
 	    else
 		list="$list ERROR:$base.c"
 		let status+=1
@@ -244,12 +249,12 @@ for f in $*; do
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$z" = 1 ]; then
-		echo "${b}icc$v$d -c -l $base.lst$l $file" >&2
+	    if [ $z -eq 1 ]; then
+		echo "${b}$ICC$v$D$d -c -l $base.lst$l $file"
 	    fi
-	    if ! $nice ${b}icc$v$d -c -l $base.lst$l $file; then
-		if [ "$q" = 0 ]; then
-		    echo "${b}icc$v compile errors in '$file'" >&2
+	    if ! $nice ${b}$ICC$v$D$d -c -l $base.lst$l $file; then
+		if [ $q -eq 0 ]; then
+		    echo "${b}$ICC$v compile errors in '$file'" >&2
 		fi
 		let status+=1
 	    fi ;;
@@ -259,12 +264,12 @@ for f in $*; do
 		first=''		# -o applied only to first file
 	    fi
 	    rm -f $base.c
-	    if [ "$z" = 1 ]; then
-		echo "${b}icc$v$d -o $base.c $file" >&2
+	    if [ $z -eq 1 ]; then
+		echo "${b}$ICC$v$D$d -o $base.c $file"
 	    fi
-	    if ! $nice ${b}icc$v$d -o $base.c $file; then
-		if [ "$q" = 0 ]; then
-		    echo "${b}icc$v compile errors in '$file'" >&2
+	    if ! $nice ${b}$ICC$v$D$d -o $base.c $file; then
+		if [ $q -eq 0 ]; then
+		    echo "${b}$ICC$v compile errors in '$file'" >&2
 		fi
 		let status+=1
 	    fi ;;
@@ -274,32 +279,32 @@ for f in $*; do
 		first=''
 	    fi
 	    rm -f $base.c
-	    if [ "$z" = 1 ]; then
-		echo "${b}icc$v$d -o $base.c -l $base.lst$l $file" >&2
+	    if [ $z -eq 1 ]; then
+		echo "${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
 	    fi
-	    if ! $nice ${b}icc$v$d -o $base.c -l $base.lst$l $file; then
-		if [ "$q" = 0 ]; then
-		    echo "${b}icc$v compile errors in '$file'" >&2
+	    if ! $nice ${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
+		if [ $q -eq 0 ]; then
+		    echo "${b}$ICC$v compile errors in '$file'" >&2
 		fi
 		let status+=1
 	    fi ;;
-	5)				# -n	generate no output, report icc compile errors only
+	5)				# -n	generate no output, report immcc compile errors only
 	    if [ -n "$first" ]; then
 		echo "output file '$first' ignored" >&2
 		first=''
 	    fi
-	    if [ "$z" = 1 ]; then
-		echo "${b}icc$v$d -c $file" >&2
+	    if [ $z -eq 1 ]; then
+		echo "${b}$ICC$v$D$d -c $file"
 	    fi
-	    if ! $nice ${b}icc$v$d -c $file; then
-		if [ "$q" = 0 ]; then
-		    echo "${b}icc$v compile errors in '$file'" >&2
+	    if ! $nice ${b}$ICC$v$D$d -c $file; then
+		if [ $q -eq 0 ]; then
+		    echo "${b}$ICC$v compile errors in '$file'" >&2
 		fi
 		let status+=1
 	    fi ;;
 	esac
     else
-	if [ "$q" = 0 ]; then
+	if [ $q -eq 0 ]; then
 	    echo "Error: iC file '$file' does not exist" >&2
 	fi
 	list="$list ERROR:$base.c"
@@ -307,47 +312,58 @@ for f in $*; do
     fi
 done
 
-if [ "$link" = 1 ]; then
+if [ $link -eq 1 ]; then
     if [ -z "$list" ]; then
-	if [ "$q" = 0 ]; then
+	if [ $q -eq 0 ]; then
 	    echo "parameter error - no iC source files" >&2
 	fi
 	let status+=1
-    elif [ "$status" = 0 ]; then
+    elif [ $status -eq 0 ]; then
 	rm -f $first
-	if [ "$q" = 0 ]; then
+	if [ $q -eq 0 ]; then
+	    if [ $z -eq 1 ]; then echo -n "# "; fi
 	    echo "link $first from$list"
 	fi
-	echo >> .iC_list2.h	# terminate last line of #define \
-	if [ "$z" = 1 ]; then
-	    echo "$CC -g -I. $ldir -o $first $list $lib" >&2
+	if [ -n "$slist" ]; then
+	    cat $slist > .iC_list0.lst
+	    mv -f .iC_list0.lst $first.lst$l
 	fi
-	if $nice $CC -g -I. $ldir -o $first $list $lib; then
-	    if [ -n "$I" ] && ! ./$first -d$I > $first.ini; then
-		if [ "$q" = 0 ]; then
-		    echo "run time error in initial execution of '$first'" >&2
+	echo >> .iC_list2.h	# terminate last line of #define \
+	if [ $z -eq 1 ]; then
+	    echo "echo >> .iC_list2.h	# terminate last line of #define \\"
+	    echo "$CC -g -I.$ldir$C -o $first $list $lib"
+	fi
+	if $nice $CC -g -I.$ldir$C -o $first $list $lib; then
+	    if [ -n "$I" ]; then
+		if [ $z -eq 1 ]; then
+		    echo "./$first -d$I > $first.ini"
 		fi
-		let status+=1
+		if ! ./$first -d$I > $first.ini; then
+		    if [ $q -eq 0 ]; then
+			echo "run time error in initial execution of '$first'" >&2
+		    fi
+		    let status+=1
+		fi
 	    fi
 	else
-	    if [ "$q" = 0 ]; then
+	    if [ $q -eq 0 ]; then
 		echo "$CC link errors in '$list' - no executable '$first' generated" >&2
 	    fi
 	    let status+=1
 	fi
     else
-	if [ "$q" = 0 ]; then
-	    echo "${b}icc$v compile errors in '$list'" >&2
+	if [ $q -eq 0 ]; then
+	    echo "${b}$ICC$v compile errors in '$list'" >&2
 	fi
     fi
 fi
 
-# clean up temporary files generated by icc compiler unless -x option
-if [ "$x" != 1 ]; then
+# clean up temporary files generated by immcc compiler unless -x option
+if [ $x -ne 1 ]; then
     rm -f .iC_list1.h .iC_list2.h
 fi
 
-# if [ "$status" != 0 ] && [ "$q" = 0 ]; then
+# if [ $status -ne 0 -a $q -eq 0 ]; then
 #     echo "########## $status errors ##########"
 # fi
 exit $status
@@ -360,39 +376,51 @@ exit $status
 
 =head1 SYNOPSIS
 
- iCmake [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-d<dir>] [-y<opt>]
-        file ...
-  (default) link all iC-files file.ic ... into independent executables
+ iCmake [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-w<dir>] [-d<opt>]
+        [ -Dmacro[=defn]...][ -Umacro...] file ...
+   default: link all iC-files file.ic ... into independent executables
             output names are base names of the iC-files (file ...)
-    -l	    link all iC-files into one executable (implies -A)
-            default output name is base name of the first iC-file
+    -l      link all iC-files into one executable (implies -A)
+            default: output name is base name of the first iC-file
+            complete listing of all files is in first.lst
     -o<exe> place output in file 'exe' (implies -l if first option)
-    -s	    generate listings file.lst .. only (-o target.lst optional)
-    -c	    generate C outputs file.c ... only (-o target.c optional)
-    -b	    generate both listings and C outputs
-    -n	    generate no output, report icc compile errors only
+            complete listing of all files is in exe.lst
+    -s      generate listings file.lst .. only (-o target.lst optional)
+    -c      generate C outputs file.c ... only (-o target.c optional)
+    -b      generate both listings and C outputs
+    -n      generate no output, report immcc compile errors only
             -s and -n generate 'cexe.c' for last file as a side effect
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S      strict compile - all immediate variables must be declared
+    -P      pedantic: warning if variable contains $ (default: $ allowed)
+    -PP     pedantic-error: error if variable contains $
     -R      no maximum error count (default: abort after 100 errors)
-    -i	    produce file.ini which records output of an initial run
-    -I	    produce file.ini with full INITIALIZATION info (debug only)
-    -6	    produce logic generation listing file.lst6
-    -x	    auxiliary files .iC_list1.h .iC_list2.h not deleted
-    -q	    quiet operation - return status only
-    -v	    use icc, pplstfix and libict.a in local directory
-    -v<N>   use icc<N> eg icc1 icc2 ... with libict1.a libict2.a ...
-    -d<dir> use icc and (pplstfix libict.a unless -v first) in directory
-            <dir> (default use installed icc and -lict)
-    -y<opt> call icc with extra -d<opt> orred into normal -d474
-    -N	    No nice with calls of icc and gcc compilers (default is nice)
-    -z	    echo compiler calls with all options for debugging
-    -h	    this help text
+    -D <macro> predefine <macro> for the iC preprocessor phase
+    -U <macro> cancel previous definition of <macro> for the iC phase
+            Note: do not use the same macros for the iC and the C phase
+    -C <macro> predefine <macro> for the C preprocessor phase
+    -V <macro> cancel previous definition of <macro> for the C phase
+    -k<lim> highest I/O index (default: no limit; 63 for -c mode)
+            if lim <= 63, mixed byte, word and long indices are tested
+            default: any index for bit, byte, word or long is allowed
+    -i      produce file.ini which records output of an initial run
+    -I      produce file.ini with full INITIALIZATION info (debug only)
+    -J      produce file.ini with run INITIALIZATION only (debug only)
+    -6      produce logic generation listing file.lst6
+    -x      auxiliary files .iC_list1.h .iC_list2.h not deleted
+    -q      quiet operation - return status only
+    -v<N>   use immcc<N>, pplsstfix<N> and libict<N>.a in local directory
+    -w<dir> use immcc, pplstfix and libict.a in directory <dir>
+            (default: use installed immcc, pplstfix and -lict)
+    -d<opt> call immcc with extra -d<opt> orred into normal -d474
+    -N      No nice with calls of immcc and gcc compilers (default: nice)
+    -z      echo compiler calls with all options for debugging
+    -h      this help text
 
 =head1 DESCRIPTION
 
 iCmake is a shell script to compile iC sources into C sources using the
-icc compiler.  These in turn are compiled and linked into an executable
+immcc compiler.  These in turn are compiled and linked into an executable
 iC applications (currently using gcc - this can be changed).
 
 Various options allow partial compilation and generation of listings.
@@ -410,7 +438,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<icc(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCbox(1)>
+L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 

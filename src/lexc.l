@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.24 2005/01/26 15:16:47 jw Exp $";
+"@(#)$Id: lexc.l,v 1.25 2005/09/28 15:17:15 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -19,18 +19,19 @@ static const char lexc_c[] =
  *	Acknowledgement: This code is based on Jeff Lee's code.
  *
  *	lexc.l
- *	C lexer for icc compiler
+ *	C lexer for immcc compiler
  *
  *******************************************************************/
 
 %}
 D			[0-9]
-L			[a-zA-Z_]
+L			[$a-zA-Z_]
 S			[$a-zA-Z_0-9]
 H			[a-fA-F0-9]
 E			[Ee][+-]?{D}+
 FS			(f|F|l|L)
 IS			(u|U|l|L)
+WS			[ \t\v\f\n]
 
 %{
 #include	<stdio.h>
@@ -119,9 +120,10 @@ static Symbol *	paraList = &markerSymbol;
 "__LINE__"		{ count(&c_lval); return CONSTANT; }	/* no need to identify octal */
 "__FILE__"		{ count(&c_lval); return STRING_LITERAL; }
 
-(I|Q)(B|W|L){D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval, 1); }
-(I|Q|T)X{D}+\.{D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval, 1); }
-{L}{S}*				{ count(&c_lval); return check_type(&c_lval, 0); }
+	/* allow white space because Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1 */
+(I|Q|T)X{D}+{WS}*\.{WS}*{D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval, 2); }
+(I|Q)(B|W|L){D}+(_{D}+)?		{ count(&c_lval); return check_type(&c_lval, 1); }
+{L}{S}*					{ count(&c_lval); return check_type(&c_lval, 0); }
 
 0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 0xac8 0XAC8UL */
 {D}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 12 12l 12u 12UL */
@@ -400,15 +402,42 @@ static int
 check_type(c_STYPE* u, int qtoken)
 {
     Symbol *	sp = 0;
-#ifndef LMAIN
-    char	buffer[BUFS];		/* buffer for modified names */
+    int		n;
     char	iqt[2];			/* char buffers - space for 0 terminator */
     char	xbwl[2];
     int		byte;
     int		bit;
+#ifndef LMAIN
+    int		c;
+    int		i;
+    char	buffer[BUFS];		/* buffer for modified names */
     char	tail[8];		/* compiler generated suffix _123456 max */
+    int		ixd = iC_maxIO;		/* limit for I/O index (-1 no limit) */
 
-    toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+    if (c_text[0] == '$') {
+	warning("possible asm error due to '$' character starting identifier:", c_text);
+    }
+    if (qtoken == 2) {
+	toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+	/********************************************************************
+	 *  the Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1
+	 *  Generally if yacc were to handle the '.' as a seperate token,
+	 *  white space would be allowed as it would in C for the operator '.'
+	 *  If we allow white space here we will have the same effect without
+	 *  changing the grammar.
+	 *******************************************************************/
+	for (i = n = 0; n <= c_leng; n++) {
+	    c = buffer[n];
+	    if (! isspace(c)) {		/* space \f \n \r \t \v */
+		if (i < n) {
+		    buffer[i] = c;
+		}
+		i++;
+	    }
+	}
+    } else {
+	strncpy(buffer, c_text, BUFS);
+    }
     if (iFunSymExt && !qtoken) {
 	if (iRetSymbol.v && strcmp(c_text, "this") == 0) {
 	    sp = iRetSymbol.v;		/* function return Symbol */
@@ -418,12 +447,51 @@ check_type(c_STYPE* u, int qtoken)
 	    *iFunSymExt = '\0';
 	}
     }
-    if (sp ||
+    if (sp == 0 &&
 #else
-#define buffer		c_text
+#define buffer	c_text
+    int		ixd = -1;		/* limit for I/O index (-1 no limit) */
+
     if (
 #endif
-	(sp = lookup(buffer)) != 0) {
+	(sp = lookup(buffer)) == 0) {
+	/********************************************************************
+	 *  Recognise and install undefined IEC1131 I/O variables. Otherwise
+	 *  they have to be declared as imm variables, which is not consistent
+	 *  with the iC use of I/O variables, which need not be declared.
+	 *******************************************************************/
+	if ((n = sscanf(buffer, "%1[IQT]%1[XBWL]%d.%d", iqt, xbwl, &byte, &bit)) >= 3) {
+	    unsigned char	wplus = 0;
+	    unsigned char	typ = UDF;
+	    unsigned char	ftyp = UDFA;
+
+	    if (xbwl[0] != 'X') {
+		wplus = 1;		/* QB, QW, QL or IB, IW, IL */
+		goto foundQIT;
+	    }
+	    if (n == 4) {		/* QX, IX or TX */
+		if (bit < 8) {
+		    foundQIT:
+		    ftyp = GATE - wplus;	/* GATE or ARITH */
+		    if (iqt[0] != 'Q') {
+			typ = INPX - wplus;	/* INPX or INPW */
+			if (iqt[0] == 'T') {
+			    ixd = xbwl[0] == 'X' ? 1 : 0;	/* TX0.7 is max */
+			}
+		    }
+		    if (ixd < 0 || byte < ixd) {
+			sp = install(buffer, typ, ftyp);
+			goto foundSymbol;
+		    } else {
+			YY_FATAL_ERROR( "I/O byte address must be less than 64" );\
+		    }
+		} else {
+		    YY_FATAL_ERROR( "I/O bit address must be less than 8" );\
+		}
+	    }
+	}
+    } else {
+	foundSymbol:
 	if ((sp->type & ~EM) <= MAX_LS) {
 #ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
@@ -445,6 +513,9 @@ check_type(c_STYPE* u, int qtoken)
 	} else if (sp->type == CTYPE) {
 	    u->tok.symbol = sp;
 	    return TYPE_NAME;
+	} else if (sp->type == CWORD) {
+	    u->tok.symbol = sp;
+	    return IDENTIFIER;		/* CNAME C function recognized in comp.y */
 	}
 	return YYERRCODE;		/* internal imm node is an error */
     }
@@ -473,12 +544,17 @@ void
 delete_sym(Token* tokp)
 {
     Symbol *	sp;
+    Symbol *	tsp;
 
     if ((sp = tokp->symbol) != NULL && (sp->type & TM) > MAX_LS) {
 	tokp->symbol = NULL;
 #if YYDEBUG && defined LMAIN
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\nD %-15s %d %d\n", sp->name, sp->type, sp->ftype);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\nD %-15s %d %d %u\n", sp->name, sp->type, sp->ftype, sp->u_val);
 #endif
+	if ((tsp = lookup(sp->name)) != 0 &&	/* check if in symbol table */
+	    tsp == sp) {			/* and not generated by C parse */
+	    unlink_sym(sp);			/* unlink Symbol from symbol table */
+	}
 	free(sp->name);
 	free(sp);
     }

@@ -5,7 +5,7 @@
 #   icc.v is maintained under source control and the version number
 #   of icc.v is used as the version number of the iC release.
 #   Call: 	ident icc.v | README.tpl > ../README
-#   $Id: README.tpl,v 1.14 2005/04/05 12:32:49 jw Exp $
+#   $Id: README.tpl,v 1.15 2005/07/04 14:07:03 jw Exp $
 ########################################################################
 
 while (<>) {
@@ -77,7 +77,7 @@ print <<EOF;
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of icc rev $REV
+        Notes for the installation of immcc rev $REV
 
         1)  Unpack the archive in a suitable working directory with:
 
@@ -90,7 +90,7 @@ print <<EOF;
                 make       OR    make quiet  # to supress intermediate output
 
             this should build the files
-                icc
+                immcc
                 ict
                 libict.a
             without any errors
@@ -123,7 +123,7 @@ print <<EOF;
 
         6)  Return to the immediate C installtion
 
-		cd icc_$REV/src	# or the correct icc src directory
+		cd icc_$REV/src	# or the correct immcc src directory
 
         7)  To install the iC-compiler, library and scripts execute the
 	    following as super user:

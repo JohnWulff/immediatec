@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.79 2005/04/16 17:05:16 jw Exp $";
+"@(#)$Id: outp.c,v 1.80 2005/09/18 21:57:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -195,13 +195,22 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
 
 /********************************************************************
  *
- *	Gather information on total memory required for generation
- *	including link count and gate count for each type of Gate.
- *	This must be done after the iC and C compile phase but before
- *	buildNet() or output().
+ *	Output the forward network as NET TOPOLOGY in the listing file.
+ *	Gather information on total memory required for generation in
+ *	buildNeti(). These are block_total, link_count and gate_count[]
+ *	for each type of Gate. This must be done after the iC and
+ *	C compile phase but before buildNet().
  *
- *	if (iC_debug & 020) list the generated network
- *	if (iC_debug & 010) list network statistics
+ *	output() and later load generate their own counts.
+ *
+ *	The collected counts are output as NET STATISTICS in the listing.
+ *	They only apply precisely for the old fashioned generation with
+ *	buildNet(), but they give an idea of memory requirements for fully
+ *	linked iC applications.
+ *
+ *	if (iC_debug & 020) list NET TOPOLOGY
+ *	if (iC_debug & 010) list NET STATISTICS
+ *	if (iC_debug & 04002) list SYMBOL TABLE as a debugging aid
  *	output warnings and error statistics - terminate if fatal
  *
  *******************************************************************/
@@ -213,12 +222,15 @@ listNet(unsigned gate_count[])
     Symbol *	tsp;
     List_e *	lp;
     Symbol **	hsp;
-    short	iC_dc;
-    short	typ;
+    int		iClockAlias;
+    int		iClockHidden;
+    int		fcnt;
+    int		typ;
     int		undefined;
     long	byte_total;
+    int		fflag;
 
-    byte_total = link_count = block_total = undefined = 0;	/* init each time */
+    link_count = block_total = undefined = iClockAlias = 0;	/* init each time */
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
@@ -268,76 +280,111 @@ listNet(unsigned gate_count[])
 	/* do not change spelling - used in 'pplstfix' */
 	fprintf(iC_outFP, "\n******* NET TOPOLOGY    ************************\n\n");
     }
+    sp = lookup(ICONST);			/* iConst */
+    assert(sp);
+    if (sp->u_val == 0) {
+	unlink_sym(sp);				/* iConst was not used - delete from ST */
+    }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    sp->v_cnt = 0;			/* v_elist & v_glist no longer needed */
+	    /* check if iClock is referenced in and ALIAS */
+	    if ((sp->type & ~EM) == ALIAS && sp->ftype == CLCKL) {
+		tsp = sp;
+		while ((tsp->type & ~EM) == ALIAS) {
+		    tsp = tsp->list->le_sym;	/* point to original */
+		    assert(tsp->ftype == CLCKL);
+		}
+		if (tsp == iclock) {
+		    iClockAlias = 1;		/* include iClock below if ALIAS */
+		}
+	    }
 	}
     }
+    iClockHidden = 0;
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type & EM) {
 		extFlag = 1;
 	    }
-	    if ((typ = sp->type & ~EM) < MAX_LS &&
-		(typ != NCONST || strcmp(sp->name, ICONST) != 0 || sp->u_val)) {
-		gate_count[typ]++;
-		if (typ < MAX_OP) {
-		    block_total++;
-		}
-		if (typ < MAX_LV &&		/* don't count outputs */
-		    sp->ftype != OUTX && sp->ftype != OUTW) {
-		    for (lp = sp->list; lp; lp = lp->le_next) {
-			if (lp->le_val != (unsigned) -1) {
-			    link_count++;
-			    if (sp->ftype < MAX_AR && lp->le_val != 0) {
-				tsp = lp->le_sym;	/* arithmetic function */
-//	printf("%s==>%s type = %d le_val = %d\n", sp->name, tsp->name, tsp->type, lp->le_val);
-				assert(tsp && (tsp->type == ARN || tsp->type == SH || tsp->type == NCONST || tsp->type == ARNC || tsp->type == ERR));
-				tsp->v_cnt++;		/* count reverse parameter */
+	    if ((typ = sp->type & ~EM) < MAX_LS) {
+		/* ignore iClock unless used, ERR (! CLK) or referenced in an ALIAS */
+		if (sp != iclock || sp->list != 0 || typ != CLK || iClockAlias) {
+		    gate_count[typ]++;		/* count ALIAS and ERR typ */
+		    if (typ < MAX_OP) {
+			block_total++;		/* don't count ALIAS and ERR typ */
+		    }
+		    if (typ < MAX_LV &&		/* don't count outputs */
+			sp->ftype != OUTX && sp->ftype != OUTW) {
+			fflag = 0;
+			for (lp = sp->list; lp; lp = lp->le_next) {
+			    if (sp->ftype == F_CF && lp->le_sym == sp) {
+				fflag = 2;	/* detected _f0_1 */
+			    }
+			    if (lp->le_val != (unsigned) -1) {
+				if (fflag == 2) {
+				    fflag = 1;	/* miss only first link of _f0_1 */
+				} else {
+				    link_count++;
+				    if (sp->ftype < MAX_AR && lp->le_val != 0) {
+					tsp = lp->le_sym;	/* arithmetic function */
+					assert(tsp && (tsp->type == ARN || tsp->type == SH || tsp->type == NCONST || tsp->type == ARNC || tsp->type == ERR));
+					tsp->v_cnt++;	/* count reverse parameter */
+				    }
+				}
 			    }
 			}
-		    }
-		    link_count++;		/* for terminator */
-		    if (sp->ftype >= MAX_AR) {
-			link_count++;		/* 2nd terminator for inverted */
-		    }				/* or time for TIMER action */
-		}
-		if (iC_debug & 020) {
-		    fprintf(iC_outFP, "%s\t%c  %c", sp->name,
-			iC_os[typ], iC_fos[sp->ftype]);
-		    iC_dc = 0;
-		    for (lp = sp->list; lp; lp = lp->le_next) {
-			tsp = lp->le_sym;
-			if (iC_dc++ >= 8) {
-			    iC_dc = 1;
-			    fprintf(iC_outFP, "\n\t");
+			if (fflag == 0) {	/* miss for _f0_1 */
+			    link_count++;		/* for terminator or clock or timer */
+			    if (sp->ftype >= MAX_AR) {
+				link_count++;		/* 2nd terminator for inverted */
+			    }				/* or time for TIMER action */
 			}
-			if (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) {
-			    /* case number of "if" or "switch" C fragment */
-			    if (lp->le_val >= 0x100) {
-				fprintf(iC_outFP, "\t%c (%d)",
-				    iC_os[iC_types[sp->ftype]], lp->le_val >> 8);
+		    }
+		    if (iC_debug & 020) {
+			fprintf(iC_outFP, "%s\t%c  %c", sp->name,
+			    iC_os[typ], iC_fos[sp->ftype]);
+			fcnt = 0;
+			for (lp = sp->list; lp; lp = lp->le_next) {
+			    tsp = lp->le_sym;
+			    if (fcnt++ >= 8) {
+				fcnt = 1;
+				fprintf(iC_outFP, "\n\t");
 			    }
-			} else if (sp->ftype == TIMR && lp->le_val > 0) {
-			     /* timer preset off value */
-			    fprintf(iC_outFP, "\t %s%c%d",
-				tsp->name, iC_os[tsp->type & TM], lp->le_val);
-			} else if (sp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
-			    /* reference to a timer value - no link */
-			    fprintf(iC_outFP, "\t<%s%c", tsp->name, iC_os[tsp->type & TM]);
-			} else {
-			    fprintf(iC_outFP, "\t%c%s%c",
-				(sp->ftype == GATE || sp->ftype == OUTX) &&
-				lp->le_val ? '~' : ' ',
-				tsp->name, iC_os[tsp->type & TM]);
+			    if (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) {
+				/* case number of "if" or "switch" C fragment */
+				if ((unsigned)lp->le_val <= VAR_MASK && lp->le_val != 0) {
+				    fprintf(iC_outFP, "\t%c (%d)",
+					iC_os[iC_types[sp->ftype]], lp->le_val >> 8);
+				} else if (tsp == sp) {
+				    fcnt--;		/* dummy link of _f0_1 */
+				} else {
+				    goto normalOut;	/* reference link of _f0_1 */
+				}
+			    } else if (sp->ftype == TIMR && lp->le_val > 0) {
+				 /* timer preset off value */
+				fprintf(iC_outFP, "\t %s%c%d",
+				    tsp->name, iC_os[tsp->type & TM], lp->le_val);
+			    } else if (sp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
+				/* reference to a timer value - no link */
+				fprintf(iC_outFP, "\t<%s%c", tsp->name, iC_os[tsp->type & TM]);
+			    } else {
+				normalOut:
+				fprintf(iC_outFP, "\t%c%s%c",
+				    (sp->ftype == GATE || sp->ftype == OUTX) &&
+				    lp->le_val ? '~' : ' ',
+				    tsp->name, iC_os[tsp->type & TM]);
+			    }
 			}
+			fprintf(iC_outFP, "\n");
 		    }
-		    fprintf(iC_outFP, "\n");
-		}
-		if (typ == UDF) {
-		    warning("undefined gate:", sp->name);
-		} else if (typ == ERR) {
-		    ierror("gate:", sp->name);
+		    if (typ == UDF) {
+			warning("undefined gate:", sp->name);
+		    } else if (typ == ERR) {
+			ierror("gate:", sp->name);
+		    }
+		} else {
+		    iClockHidden = 1;
 		}
 	    } else if (typ == (UDF|FM)) {
 		undefined++;	/* cannot execute if function internal gate not defined */
@@ -355,9 +402,9 @@ listNet(unsigned gate_count[])
 	}
     }
 
-    if (iC_debug & 010) {
-	byte_total = (long)block_total * sizeof(Gate)
-		   + (long)link_count * sizeof(Gate *);
+    if ((iC_debug & 010) &&
+	(byte_total = (long)block_total * sizeof(Gate) + (long)link_count * sizeof(Gate *))
+    ) {
 	/* do not change spelling - used in 'pplstfix' */
 	fprintf(iC_outFP, "\n******* NET STATISTICS  ************************\n\n");
 	for (typ = 0; typ < MAX_LS; typ++) {
@@ -370,6 +417,11 @@ listNet(unsigned gate_count[])
 	fprintf(iC_outFP, "\t%8u links\n", link_count);
 	fprintf(iC_outFP, "\t%8ld bytes\n", byte_total);
     }
+    if (iClockHidden) {
+	block_total++;				/* iClock is generated anyway in buildNet() */
+	gate_count[CLK]++;
+    }
+    /* do not change spelling - used in 'pplstfix' */
     if (iC_debug & 076) fprintf(iC_outFP, "\ncompiled by:\n%s\n", iC_ID);
     if ((undefined += gate_count[UDF]) > 0) {
 	char undBuf[32];
@@ -396,6 +448,9 @@ listNet(unsigned gate_count[])
 } /* listNet */
 #if defined(RUN) || defined(TCP) && ! defined(LOAD)
 
+Gate **		iC_sTable;			/* pointer to dynamic array */
+Gate **		iC_sTend;			/* end of dynamic array */
+
 /********************************************************************
  *
  *	Generate execution network for icr or ict direct execution
@@ -411,15 +466,31 @@ buildNet(Gate ** igpp, unsigned gate_count[])
     Symbol *	tsp;
     List_e *	lp;
     Symbol **	hsp;
-    short	typ;
+    int		typ;
     unsigned	val;
     unsigned	i;
     unsigned	rc = 0;				/* return code */
-    char	bwl[2];				/* "B" or "W" */
     Gate *	gp;
     Gate *	tgp;
     Gate **	fp;
+    Gate **	tfp;
     Gate **	ifp;
+    Gate *	op;
+    Gate *	g_list = 0;
+    int		byte1;
+    int		bit1;
+#ifndef	TCP
+    char	bwl[2];				/* "B" or "W" */
+#else	/* TCP */
+    int		ftyp;
+    Gate *	e_list = 0;
+    char *	cp;
+    int		eLen;
+    char	iqt1[2];			/* single char buffer - space for 0 terminator */
+    char	xbwl1[2];			/* single char buffer - space for 0 terminator */
+    char	tail1[8];			/* compiler generated suffix _123456 max */
+    char	eBuf[ESIZE];
+#endif	/* TCP */
 
     if (extFlag) {
 	fprintf(iC_errFP, "extern declarations used - cannot execute\n");
@@ -436,9 +507,11 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
 		if (sp->type == typ) {
+		    gp->gt_ini = -typ;		/* overwritten for AND OR LATCH types */
 		    gp->gt_fni = sp->ftype;	/* basic gate first */
 		    gp->gt_ids = sp->name;	/* gate to symbol name */
-		    sp->u_gate = gp++;		/* symbol to gate */
+		    gp->gt_next = g_list;	/* link rest of g_list to new Gate */
+		    g_list = sp->u_gate = gp++;	/* symbol to gate */
 		    val++;
 		}
 	    }
@@ -456,13 +529,14 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			    if (sp->ftype < MIN_ACT) {
 				val = (sp->ftype < MAX_AR) ? NOT : 0;
 				do {		/* go through list twice for LVs */
+				    tfp = fp;	/* start of new gate list */
 				    for (lp = sp->list; lp; lp = lp->le_next) {
+					tsp = lp->le_sym;
+					assert(tsp && tsp->u_gate);
 					if (sp->ftype < MAX_AR) {
 					    if (lp->le_val == (unsigned) -1) {
 						continue; /* timer value link */
 					    }
-					    tsp = lp->le_sym;
-					    assert(tsp && tsp->u_gate);
 					    tgp = tsp->u_gate;
 					    if (lp->le_val != 0) {
 						assert(tsp->type == ARN || tsp->type == ERR);
@@ -471,21 +545,23 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					} else if (val != lp->le_val) {
 					    continue;	/* not right logical value */
 					}
-					*fp++ = lp->le_sym->u_gate;
+					*fp++ = tsp->u_gate;
 				    }
+				    /* sort gate list */
+				    qsort(tfp, fp - tfp, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
 				    *fp++ = 0;		/* gate list terminator */
 				} while (val ^= NOT);
-
+#ifndef	TCP
 				if (typ == INPW) {
 				    if (sscanf(gp->gt_ids, "I%1[BWL]%d",
-					bwl, &byte) == 2 && byte < IXD) {
+					bwl, &byte1) == 2 && byte1 < IXD) {
 					if (bwl[0] == 'B') {
-					    iC_IB_[byte] = gp;
+					    iC_IB_[byte1] = gp;
 					} else if (bwl[0] == 'W') {
-					    iC_IW_[byte] = gp;
+					    iC_IW_[byte1] = gp;
 					} else if (bwl[0] == 'L') {
 #if INT_MAX != 32767 || defined (LONG16)
-					    iC_IL_[byte] = gp;
+					    iC_IL_[byte1] = gp;
 #else
 		    ierror("32 bit INPUT not supported in 16 bit environment:", sp->name);
 #endif
@@ -497,22 +573,23 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 				    }
 				} else if (typ == INPX) {
 				    if (sscanf(sp->name, "IX%d.%d",
-					&byte, &bit) == 2 &&
-					byte < IXD && bit < 8) {
-					iC_IX_[byte * 8 + bit] = gp;
+					&byte1, &bit1) == 2 &&
+					byte1 < IXD && bit1 < 8) {
+					iC_IX_[byte1 * 8 + bit1] = gp;
 				    } else if (sscanf(sp->name, "TX%d.%d",
-					&byte, &bit) == 2 &&
-					byte < TXD && bit < 8) {
-					iC_TX_[byte * 8 + bit] = gp;
+					&byte1, &bit1) == 2 &&
+					byte1 < TXD && bit1 < 8) {
+					iC_TX_[byte1 * 8 + bit1] = gp;
 				    } else {
 				    inErr:
 		    ierror("INPUT byte or bit address exceeds limit:", sp->name);
 				    }
 				}
+#endif	/* TCP */
 			    } else if (sp->ftype < MAX_ACT) {
 				/* D_SH - TIMR relies on action gates having only one output */
 				lp = sp->list;
-				if ((tsp = lp->le_sym) != 0) {
+				if ((tsp = lp->le_sym) != 0 && tsp != sp) {
 				    tgp = tsp->u_gate;
 				    assert(tgp);
 				    if (sp->ftype == TIMR &&
@@ -531,41 +608,51 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					    sp->ftype == F_CF ||
 					    sp->ftype == F_CE) &&
 					   (lp->le_val & 0xff) == 0);
-				    fp[0] = (Gate*)(lp->le_val >> 8);
-				    fp[1] = 0;	/* room for clock or timer entry */
-				    fp[2] = 0;	/* room for time delay or first parameter */
-				    i   = 3;	/* offset for above */
-				    val = 1;
+				    if (lp->le_val == 0) {
+					tgp = sp->u_gate;
+					assert(tgp && tsp == sp && strcmp(sp->name, "_f0_1") == 0);
+					iC_pf0_1 = tgp;	/* pointer to _f01 used in cexe.c */
+					tgp->gt_mcnt = 1;
+					i = 0;
+				    } else {
+					fp[0] = (Gate*)(lp->le_val >> 8);
+					fp[1] = 0;	/* room for clock or timer entry */
+					fp[2] = 0;	/* room for time delay or first parameter */
+					i   = 3;	/* offset for above */
+				    }
 				    while ((lp = lp->le_next) != 0) {
-					assert(val < lp->le_val);
-					val = lp->le_val;
+					val = lp->le_val & VAR_MASK;
 					tsp = lp->le_sym;
+					while (tsp->type == ALIAS) {
+					    tsp = tsp->list->le_sym;	/* point to original */
+					}
 					assert(tsp && tsp->u_gate);
 					fp[val] = tsp->u_gate;
 					i++;	/* count parameters */
 				    }
 				    fp += i;	/* space for above entries */
 				}
+#ifndef	TCP
 			    } else if (sp->ftype == OUTW) {
-				if (sscanf(gp->gt_ids, "Q%1[BWL]%d", bwl, &byte) == 2 &&
-				    byte < IXD) {
-				    gp->gt_list = (Gate**)byte;
+				if (sscanf(gp->gt_ids, "Q%1[BWL]%d", bwl, &byte1) == 2 &&
+				    byte1 < IXD) {
+				    gp->gt_list = (Gate**)byte1;
 				    gp->gt_mark = bwl[0] == 'B' ? B_WIDTH :
 						  bwl[0] == 'W' ? W_WIDTH :
 #if INT_MAX != 32767 || defined (LONG16)
 						  bwl[0] == 'L' ? L_WIDTH :
 #endif
 								  0;
-				    iC_QT_[byte] = bwl[0];	/* 'B', 'W' or 'L' */
+				    iC_QT_[byte1] = bwl[0];	/* 'B', 'W' or 'L' */
 				} else {
 				    goto outErr;
 				}
 			    } else if (sp->ftype == OUTX) {
-				if (sscanf(gp->gt_ids, "QX%d.%d", &byte, &bit) == 2 &&
-				    byte < IXD && bit < 8) {
-				    gp->gt_list = (Gate**)byte;
-				    gp->gt_mark = iC_bitMask[bit];
-				    iC_QT_[byte] = 'X';
+				if (sscanf(gp->gt_ids, "QX%d.%d", &byte1, &bit1) == 2 &&
+				    byte1 < IXD && bit1 < 8) {
+				    gp->gt_list = (Gate**)byte1;
+				    gp->gt_mark = iC_bitMask[bit1];
+				    iC_QT_[byte1] = 'X';
 				} else {
 				outErr:
 		    ierror("OUTPUT byte or bit address exceeds limit:", gp->gt_ids);
@@ -573,6 +660,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 				    gp->gt_mark = 0;	/* no change in bits */
 				}
 			    } else {
+#else	/* TCP */
+			    } else if (sp->ftype != OUTW && sp->ftype != OUTX) {
+#endif	/* TCP */
 		    ierror("OUTPUT strange ftype:", gp->gt_ids);
 			    }
 			    gp++;
@@ -593,7 +683,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			     * typ < MAX_LV were done first.
 			     ****************************************************/
 			    for (lp = sp->list; lp; lp = lp->le_next) {
-				lp->le_sym->u_gate->gt_clk = gp;
+				tsp = lp->le_sym;
+				assert(tsp && tsp->u_gate);
+				tsp->u_gate->gt_clk = gp;
 			    }
 			    gp++;
 			}
@@ -615,7 +707,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 				for (lp = sp->list; lp; lp = lp->le_next) {
 				    tsp = lp->le_sym;
 				    assert(tsp && tsp->u_gate);
-				    if ((val = lp->le_val) != 0) {
+				    if ((val = lp->le_val & VAR_MASK) != 0) {
 					tgp = tsp->u_gate;
 					if (val == (unsigned) -1) {
 					    /**************************************************
@@ -651,9 +743,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		for (sp = *hsp; sp; sp = sp->next) {
 		    if (sp->type < MAX_OP && (tgp = sp->u_gate) != 0) {
-			if (tgp->gt_new != 0) {
-			    tgp->gt_new = 0;	/* restore gt_new */
-			}
+			tgp->gt_new = 0;	/* restore gt_new */
 		    }
 		}
 	    }
@@ -669,11 +759,208 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	    "\n%s: line %d: block error %d vs block_total %d\n",
 	    __FILE__, __LINE__, val, block_total);
 	rc = 2;
-    } else if ((val = fp - ifp) != link_count) {
+    } else
+    if ((val = fp - ifp) != link_count) {
 	fprintf(iC_errFP,
-	    "\n%s: line %d: link error %d vs link_count %d\n",
+	    "\n%s: line %d: link error %d vs link_count %u\n",
 	    __FILE__, __LINE__, val, link_count);
 	rc = 3;
+    } else {
+#ifdef	TCP
+	/********************************************************************
+	 * Do ALIASes last to avoid forward references of Gates in gt_list
+	 * Resolve multiple ALIASes here for the same reason.
+	 * Generate all ALIASes for display, independent of -A flag
+	 *******************************************************************/
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (sp = *hsp; sp; sp = sp->next) {
+		if ((typ = sp->type) == ALIAS && sp->list != 0 &&
+		    ((ftyp = sp->ftype) == GATE || ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)) {
+		    val = sp->list->le_val;
+		    tsp = sp->list->le_sym;
+		    while (tsp->type == ALIAS) {
+			val ^= tsp->list->le_val;	/* negate if necessary */
+			tsp = tsp->list->le_sym;	/* point to original */
+		    }
+		    /* generate a new auxiliary Gate for ALIAS */
+		    eLen = strlen(sp->name) + 1;
+		    tgp = (Gate *) iC_emalloc(sizeof(Gate));
+		    tgp->gt_ids = iC_emalloc(eLen);	/* all bytes 0 */
+		    strncpy(tgp->gt_ids, sp->name, eLen);
+		    tgp->gt_ini = -typ;		/* ALIAS */
+		    tgp->gt_fni = ftyp;	/* ftype */
+		    tgp->gt_rlist = (Gate **)tsp->u_gate;	/* link to original */
+		    tgp->gt_mark = val;			/* ALIAS inversion flag */
+		    tgp->gt_next = g_list;		/* link rest of g_list to new Gate */
+		    g_list = sp->u_gate = tgp;		/* symbol to gate and new Gate at front of g_list */
+		    block_total++;
+		}
+	    }
+	}
+	/********************************************************************
+	 * Generate an INPW/TRAB Gate IXx for each first IXx.y of gt_ini -INPX
+	 * Generate an INPW/TRAB Gate TXx for each first TXx.y of gt_ini -INPX
+	 * Generate an INPB/OUTW Gate QXx for each first QXx.y_0 of gt_fni OUTX
+	 * These new Gates are linked in an extra list, which can be scanned
+	 * reasonably quickly for duplicates. At the end of Pass 0, the extra
+	 * list is linked into the start of the first entry in iC_list[], so the
+	 * newly generated Gates are also scanned in Pass 1 and 2 and then sorted.
+	 *******************************************************************/
+	for (op = g_list; op; op = op->gt_next) {
+	    /********************************************************************
+	     * handle bit I/O
+	     *******************************************************************/
+	    if (op->gt_ini == -INPX || op->gt_fni == OUTX) {
+		strncpy(eBuf, op->gt_ids, ESIZE);
+		cp = strchr(eBuf, '.');
+		i = sscanf(eBuf, "%1[IQT]X%5d.%5d%7s", iqt1, &byte1, &bit1, tail1);
+		tgp = 0;				/* for correct inError message */
+		if (cp && bit1 < 8) {
+		    *cp = '\0';			/* terminate extra name */
+		    eLen = cp - eBuf + 1;
+		    for (tgp = e_list; tgp != 0; tgp = tgp->gt_next) {
+			if (strcmp(tgp->gt_ids, eBuf) == 0) {
+			    goto linkIO;		/* previously generated */
+			}
+		    }
+		    /* generate a new auxiliary Gate for bit I/O */
+		    tgp = (Gate *) iC_emalloc(sizeof(Gate));
+		    tgp->gt_ids = iC_emalloc(eLen);	/* all bytes 0 */
+		    strncpy(tgp->gt_ids, eBuf, eLen);
+		    tgp->gt_next = e_list;		/* link rest of e_list to new Gate */
+		    e_list = tgp;			/* new Gate at front for speed */
+		    block_total++;
+		    if (op->gt_ini == -INPX) {
+			tgp->gt_ini = -INPW;
+			tgp->gt_fni = TRAB;
+			tgp->gt_list = (Gate **) iC_emalloc(8 * sizeof(Gate *));
+		    } else {			/* (op->gt_fni == OUTX) */
+			tgp->gt_ini = -INPB;
+			tgp->gt_fni = OUTW;
+		    }
+		  linkIO:
+		    if (op->gt_ini == -INPX) {
+			if (i != 3 || op->gt_rlist != 0 || strcmp(iqt1, "Q") == 0) goto pass0Err;
+			tgp->gt_list[bit1] = op;	/* pointer to bit Gate */
+			/* ###### no back link ####### */
+		    } else {			/* (op->gt_fni == OUTX) */
+			if (i != 4 || strcmp(tail1, "_0") || strcmp(iqt1, "Q")) goto pass0Err;
+			op->gt_mark = iC_bitMask[bit1];
+			op->gt_list = (Gate**)tgp;	/* pointer directly in gt_list */
+			/* ###### no back link ####### */
+		    }
+		    tgp->gt_mark |= iC_bitMask[bit1];	/* note used bits for registration */
+		} else {
+		  pass0Err:
+		    ierror("OUTPUT invalid I/O Gate:", op->gt_ids);
+		    return 2;
+		}
+	    }
+	    gp = op;					/* remember last entry of g_list */
+	}
+	gp->gt_next = e_list;				/* concatenate e_list to tail of g_list */
+	tgp = 0;					/* for correct inError message */
+#endif	/* TCP */
+	iC_sTable = iC_sTend = (Gate **)calloc(block_total, sizeof(Gate *));
+	for (op = g_list; op; op = op->gt_next) {
+	    *iC_sTend++ = op;				/* enter node into sTable */
+#ifdef	TCP
+	    /********************************************************************
+	     *  arithmetic or logical input linkage to physical I/O (mainly display)
+	     *******************************************************************/
+	    if (op->gt_ini == -INPW) {
+		if ((i = sscanf(op->gt_ids, "%1[IT]%1[XBWL]%5d%7s",
+			iqt1, xbwl1, &byte1, tail1)) == 3) {
+		    switch (iqt1[0]) {
+		    case 'I':
+			switch (xbwl1[0]) {
+			case 'X':
+			    if (byte1 == 0) {
+				iC_IX0p = op;		/* link for iC_display logic only */
+			    }
+			    break;
+			case 'B':
+			    if (byte1 == 1) {
+				iC_IB1p = op;		/* link for iC_display logic only */
+			    }
+			    break;
+			case 'W':
+			    if (byte1 == 2) {
+				iC_IW2p = op;		/* link for iC_display logic only */
+			    }
+			    break;
+#if INT_MAX != 32767 || defined (LONG16)
+			case 'L':
+			    if (byte1 == 4) {
+				iC_IL4p = op;		/* link for iC_display logic only */
+			    }
+			    break;
+#endif
+			default:
+			    goto pass0Err;
+			}
+			break;
+		    case 'T':
+			if (byte1 != 0) goto pass0Err;	/* TXD must be 1 */
+			iC_TX0p = op;			/* forward input link */
+			break;
+		    default:
+			goto pass0Err;
+		    }
+		}
+	    }
+	    /********************************************************************
+	     *  arithmetic or logical output linkage to physical I/O
+	     *******************************************************************/
+	    if (op->gt_fni == OUTW) {
+		if ((i = sscanf(op->gt_ids, "Q%1[XBWL]%5d%7s", xbwl1, &byte1, tail1)) >= 2) {
+		    switch (xbwl1[0]) {
+		    case 'X':
+			if (i > 2) goto pass0Err;	/* no tail1 _0 allowed for QXn */
+			if (byte1 == 0) {
+			    iC_QX0p = op;		/* link for iC_display logic only */
+			}
+			break;				/* op->gt_mark set to used bits 0x01 to 0x80 in Pass 0 */
+		    case 'B':
+			op->gt_mark = B_WIDTH;
+			if (byte1 == 1) {
+			    iC_QB1p = op;		/* link for iC_display logic only */
+			}
+			break;
+		    case 'W':
+			op->gt_mark = W_WIDTH;
+			if (byte1 == 2) {
+			    iC_QW2p = op;		/* link for iC_display logic only */
+			}
+			break;
+#if INT_MAX != 32767 || defined (LONG16)
+		    case 'L':
+			op->gt_mark = L_WIDTH;
+			if (byte1 == 4) {
+			    iC_QL4p = op;		/* link for iC_display logic only */
+			}
+			break;
+#endif
+		    default:
+			goto pass0Err;
+		    }
+		} else {
+		    goto pass0Err;
+		}
+	    }
+#endif	/* TCP */
+	}
+	if ((val = iC_sTend - iC_sTable) != block_total) {
+	    fprintf(iC_errFP,			/* either first or second scan above */
+		"\n%s: line %d: Symbol Table size %d vs block_total %d\n",
+		__FILE__, __LINE__, val, block_total);
+	    rc = 2;
+	} else {
+	    /********************************************************************
+	     * Sort the symbol table in order of gt_ids.
+	     *******************************************************************/
+	    qsort(iC_sTable, iC_sTend - iC_sTable, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
+	}
     }
 
     return rc;					/* return code */
@@ -690,11 +977,10 @@ int
 output(FILE * iFP, char * outfile)
 {
     Symbol *	sp;
-    Symbol *	gp;
     List_e *	lp;
     Symbol **	hsp;
-    short	iC_dc;
-    short	typ;
+    int		ftyp;
+    int		typ;
     unsigned	val;
     unsigned	rc = 0;				/* return code */
     unsigned	mask;
@@ -708,14 +994,15 @@ output(FILE * iFP, char * outfile)
     int		li;				/* link index into connection list */
     int		lc;				/* link count in connection list */
     FILE *	Fp;				/* C output file */
-    FILE *	H1p;				/* list _list_.c + header _list1.h */
-    FILE *	H2p;				/* list header _list2.h */
+    FILE *	H1p = 0;			/* list _list_.c + header _list1.h */
+    FILE *	H2p = 0;			/* list header _list2.h */
     char *	cp;				/* auxiliary char pointer */
     char *	module;				/* module name built from path/name */
-    char *	H1path;				/* path of PWD relative to target */
     unsigned	linecnt = 1;
-    int		aliasArithFlag;
     int		fflag;
+    int		idx;
+    int		ext;
+    char	tail2[8];			/* compiler generated suffix _123456 max */
 
     /********************************************************************
      *	Generate linked list header, for linking several independently
@@ -749,7 +1036,6 @@ output(FILE * iFP, char * outfile)
 	    *cp = '_';				/*  replace all non-alnums with '_' */
 	}
     }
-    aliasArithFlag = iC_Aflag;
 
     /* open output file */
 
@@ -834,12 +1120,12 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 		linecnt++;
 	    }
 	    if ((typ &= ~EM) < MAX_LV) {
-		iC_dc = sp->ftype;
+		ftyp = sp->ftype;
 		if (typ == INPX) {
-		    assert(iC_dc == GATE || iC_dc == ARITH);
+		    assert(ftyp == GATE || ftyp == ARITH);
 		    assert(sp->u_blist == 0);
 		}
-		if (iC_dc == ARITH) {
+		if (ftyp == ARITH) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			List_e **	tlpp;
 			/* leave out timing controls */
@@ -848,7 +1134,6 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 			    for (tlpp = &tsp->u_blist;
 				(tlp = *tlpp) != 0 && tlp->le_val <= val;
 				tlpp = &tlp->le_next) {
-//	printf("%s==>%s type = %d val = %d\n", sp->name, tsp->name, tsp->type, val);
 				assert(val != tlp->le_val);
 			    }
 			    *tlpp = lp;		/* to input links */
@@ -860,7 +1145,7 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 			}
 		    }
 		} else
-		if (iC_dc == GATE) {
+		if (ftyp == GATE) {
 		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
 			/* leave out timing controls */
 			if (lp->le_val != (unsigned) -1) {
@@ -876,16 +1161,16 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 			}
 		    }
 		} else
-		if (iC_dc == OUTX) {
+		if (ftyp == OUTX) {
 		    assert(typ == OR);
 		} else
-		if (iC_dc == TIMR &&
+		if (ftyp == TIMR &&
 		    (lp = sp->list) != 0 &&
 		    (tsp = lp->le_sym) != 0 &&
 		    tsp->u_val < lp->le_val) {
 		    tsp->u_val = lp->le_val;	/* store timer preset off value */
 		}				/* temporarily in u (which is 0) */
-		assert(iC_dc != OUTW || sp->list == 0);	/* #define no longer in use */
+		assert(ftyp != OUTW || sp->list == 0);	/* #define no longer in use */
 	    } else
 	    if (typ < MAX_OP) {
 		/********************************************************************
@@ -943,11 +1228,8 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 			"Alias '%s' has more than 1 output",
 			sp->name);
 		    errorEmit(Fp, errorBuf, &linecnt);
-		} else if (sp->ftype == ARITH) {
-		    if (aliasArithFlag == 1) {			/* write only once */
-			aliasArithFlag = 2;			/* use extended macro now */
-		    }
-		} else if (sp->ftype != GATE && sp->ftype != CLCKL && sp->ftype != TIMRL) {
+		} else if (sp->ftype != ARITH && sp->ftype != GATE &&
+		    sp->ftype != CLCKL && sp->ftype != TIMRL) {
 		    snprintf(errorBuf, sizeof errorBuf,
 			"Alias '%s' has wrong ftype %s",
 			sp->name, iC_full_ftype[sp->ftype]);
@@ -1012,75 +1294,33 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
      *******************************************************************/
     fprintf(Fp, "\
 \n\
-");
-    linecnt += 1;
+"); linecnt += 1;
     if (functionUse[0] & F_CALLED) {		/* has any function been called ? */
-	if (aliasArithFlag == 2) {
-	    if (functionUse[0] & (F_ARITHM|F_FFEXPR)) {
-		fprintf(Fp, "\
-static iC_Gt *	iC_Mt;\n\
+	if (functionUse[0] & F_ARITHM) {
+	    fprintf(Fp, "\
+#define iC_MV(n)	iC_gf->gt_rlist[n]->gt_new\n\
 ");	    linecnt += 1;
-	    }
-	    if (functionUse[0] & F_ARITHM) {
-		fprintf(Fp, "\
-#define iC_MV(n) ((iC_Mt=iC_gf->gt_rlist[n])->gt_ini==-iC_ALIAS\\\n\
-			? ((iC_Gt*)iC_Mt->gt_rlist)->gt_new\\\n\
-			: iC_Mt->gt_new)\n\
-");	    linecnt += 3;
-	    }
-	    if (functionUse[0] & F_FFEXPR) {
-		fprintf(Fp, "\
-#define iC_AV(n) ((iC_Mt=iC_gf->gt_list[n])->gt_ini==-iC_ALIAS\\\n\
-			? ((iC_Gt*)iC_Mt->gt_rlist)->gt_new\\\n\
-			: iC_Mt->gt_new)\n\
-#define iC_LV(n) ((iC_Mt=iC_gf->gt_list[n])->gt_ini==-iC_ALIAS\\\n\
-			? (((iC_Gt*)iC_Mt->gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
-			: (iC_Mt->gt_val < 0 ? 1 : 0))\n\
-#define iC_AA(n,v) iC_assign((iC_Mt=iC_gf->gt_list[n])->gt_ini==-iC_ALIAS\\\n\
-				? ((iC_Gt*)iC_Mt->gt_rlist)\\\n\
-				: iC_Mt, v)\n\
-#define iC_LA(n,v) iC_assign((iC_Mt=iC_gf->gt_list[n])->gt_ini==-iC_ALIAS\\\n\
-					? ((iC_Gt*)iC_Mt->gt_rlist)\\\n\
-					: iC_Mt, v)\n\
-");	    linecnt += 12;
-	    }
-	    if (functionUse[0] & F_LITERAL) {
-		fprintf(Fp, "\
-#define iC_AVL(x) (x.gt_ini==-iC_ALIAS ? ((iC_Gt*)x.gt_rlist)->gt_new : x.gt_new)\n\
-#define iC_LVL(x) (x.gt_ini==-iC_ALIAS ? (((iC_Gt*)x.gt_rlist)->gt_val < 0 ? 1 : 0)\\\n\
-					: (x.gt_val < 0 ? 1 : 0))\n\
-#define iC_AAL(x,v) iC_assign(x.gt_ini==-iC_ALIAS ? (iC_Gt*)x.gt_rlist : &x, v)\n\
-#define iC_LAL(x,v) iC_assign(x.gt_ini==-iC_ALIAS ? (iC_Gt*)x.gt_rlist : &x, v)\n\
-");	    linecnt += 5;
-	    }
-	} else {
-	    if (functionUse[0] & F_ARITHM) {
-		fprintf(Fp, "\
-#define iC_MV(n) iC_gf->gt_rlist[n]->gt_new\n\
-");	    linecnt += 1;
-	    }
-	    if (functionUse[0] & F_FFEXPR) {
-		fprintf(Fp, "\
-#define iC_AV(n) iC_gf->gt_list[n]->gt_new\n\
-#define iC_LV(n) (iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
-#define iC_AA(n,v) iC_assign(iC_gf->gt_list[n], v)\n\
-#define iC_LA(n,v) iC_assign(iC_gf->gt_list[n], v)\n\
+	}
+	if (functionUse[0] & F_FFEXPR) {
+	    fprintf(Fp, "\
+#define iC_AV(n)	iC_gf->gt_list[n]->gt_new\n\
+#define iC_LV(n)	(iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define iC_AA(n,v)	iC_assignA(iC_gf->gt_list[n], v)\n\
+#define iC_LA(n,v)	iC_assignL(iC_gf->gt_list[n], v)\n\
 ");	    linecnt += 4;
-	    }
-	    if (functionUse[0] & F_LITERAL) {
-		fprintf(Fp, "\
-#define iC_AVL(x) x.gt_new\n\
-#define iC_LVL(x) (x.gt_val < 0 ? 1 : 0)\n\
-#define iC_AAL(x,v) iC_assign(&x, v)\n\
-#define iC_LAL(x,v) iC_assign(&x, v)\n\
+	}
+	if (functionUse[0] & F_LITERAL) {
+	    fprintf(Fp, "\
+#define iC_AVL(n)	_f0_1.gt_list[n]->gt_new\n\
+#define iC_LVL(n)	(_f0_1.gt_list[n]->gt_val < 0 ? 1 : 0)\n\
+#define iC_AAL(n,v)	iC_assignA(_f0_1.gt_list[n], v)\n\
+#define iC_LAL(n,v)	iC_assignL(_f0_1.gt_list[n], v)\n\
 ");	    linecnt += 4;
-	    }
 	}
     }
     fprintf(Fp, "\
 extern iC_Gt *	iC_l_[];\n\
-");
-    linecnt += 1;
+"); linecnt += 1;
     /********************************************************************
      *	Output executable gates
      *
@@ -1096,8 +1336,7 @@ extern iC_Gt *	iC_l_[];\n\
  *\n\
  *******************************************************************/\n\
 \n\
-");
-    linecnt += 7;
+"); linecnt += 7;
 
     li = 0;
     nxs = "0";					/* 0 terminator for linked gate list */
@@ -1105,71 +1344,64 @@ extern iC_Gt *	iC_l_[];\n\
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) > UDF && typ < MAX_OP && /* leave out EXT_TYPES */
-		strcmp(sp->name, "iClock") != 0) {
+		sp != iclock) {
 		mask = 0;
-		modName = mN(sp);		/* modified string, byte and bit */
 		/********************************************************************
-		 * mN() sets cnt, iqt, xbwl, byte and bit via IEC1131() as side effect
-		 * generate gt_val (initial gate count for XOR AND OR LATCH)
-		 *   0       for XOR
-		 *   1       for OR
-		 *   n       for AND where n is number of inputs
-		 *   (n+1)/2 for LATCH
-		 * and
-		 * gt_ini (-type except for XOR AND OR LATCH, which repeat gate count)
+		 * mN() sets cnt, iqt, xbwl, byte, bit and tail via IEC1131() as side effect
 		 *******************************************************************/
-		if (typ >= MIN_GT && typ < MAX_GT) {	/* XOR AND OR LATCH */
-		    iC_dc = 0;				/* typ == XOR */
-		    if (typ == OR) {
-			iC_dc = 1;			/* typ == OR */
-		    } else if (typ != XOR) {		/* typ == AND LATCH */
-			for (lp = sp->u_blist; lp; lp = lp->le_next) {
-			    iC_dc++;			/* space in input list */
-			}
-			if (typ == LATCH) {
-			    iC_dc++;
-			    iC_dc >>= 1;		/* halve for LATCH */
-			}
+		modName = mN(sp);		/* modified string, bit is used in block */
+		if (typ == NCONST) {
+		    if (strcmp(modName, ICONST) == 0) {
+			assert(sp->u_val);	/* unused iConst was deleted from ST */
+			fprintf(Fp, "extern iC_Gt %s; /* %d */\n", modName, sp->u_val);
+			continue;
 		    }
-		    fprintf(Fp, "iC_Gt %-8s = { %d, %d,", modName, iC_dc, iC_dc);
+		    /* other NCONST Gates must be static because same constant */
+		    /* may be used in several linked modules - not extern */
+		    fprintf(Fp, "static iC_Gt %-7s", modName);
+		} else if (sscanf(modName, "_f%d_%d%7s", &idx, &ext, tail2) == 2) {
+		    /* _fx.y if else switch Gates must be static because they are */
+		    /* generated and may be used in several linked modules - not extern */
+		    fprintf(Fp, "static iC_Gt %-7s", modName);
 		} else {
-		    if (typ == NCONST) {
-			if (strcmp(modName, ICONST) == 0) {
-			    if (sp->u_val) {
-				fprintf(Fp, "extern iC_Gt %s; /* %d */\n", modName, sp->u_val);
-			    }
-			    continue;
-			}
-			/* other NCONST Gates must be static because same constant */
-			/* may be used in several linked modules - not extern */
-			fprintf(Fp, "static iC_Gt %-7s", modName);
-		    } else {
-			fprintf(Fp, "iC_Gt %-8s", modName);
-		    }
-		    fprintf(Fp, " = { 1, -%s,", iC_ext_type[typ]);	/* -gt_ini */
+		    fprintf(Fp, "iC_Gt %-8s", modName);
 		}
-		/* generate gt_fni (ftype), gt_mcnt (0) and gt_ids */
-		fprintf(Fp, " %s, 0, \"%s\",",
-		    iC_ext_ftype[iC_dc = sp->ftype], sp->name);
+		fprintf(Fp, " = { 1, -%s,", iC_ext_type[typ]);	/* -gt_ini */
+		if ((lp = sp->list) != 0 && lp->le_sym == sp) {
+		    fflag = 1;			/* leave out _f0_1 */
+		    /* generate gt_fni (ftype), gt_mcnt (1) and gt_ids */
+		    fprintf(Fp, " %s, 1, \"%s\",",
+			iC_ext_ftype[ftyp = sp->ftype], sp->name);
+		} else {
+		    fflag = 0;
+		    /* generate gt_fni (ftype), gt_mcnt (0) and gt_ids */
+		    fprintf(Fp, " %s, 0, \"%s\",",
+			iC_ext_ftype[ftyp = sp->ftype], sp->name);
+		}
 		/* generate gt_list */
-		if (iC_dc >= MIN_ACT && iC_dc < MAX_ACT) {
+		if (ftyp >= MIN_ACT && ftyp < MAX_ACT) {
 		    /* gt_list */
 		    fprintf(Fp, " &iC_l_[%d],", li);
-		    li += 2;			/* space for action or function pointer + clock */
-		    if ((lp = sp->list->le_next) != 0 &&
-			(lp->le_sym->type & ~EM) == TIM) {
-			li++;			/* space for pointer to delay time Gate */
-			lp = lp->le_next;	/* point past delay time */
+		    if (fflag == 0) {		/* leave out _f0_1 */
+			li += 2;		/* space for action or function pointer + clock */
+			if ((lp = lp->le_next) != 0 &&
+			    (lp->le_sym->type & ~EM) == TIM) {
+			    li++;		/* space for pointer to delay time Gate */
+			    lp = lp->le_next;	/* point to delay time */
+			}
 		    }
-		    assert(lp);
-		    if (iC_dc == F_SW || iC_dc == F_CF || iC_dc == F_CE) {
+		    assert(lp);			/* lp points to clock or delay */
+		    if (ftyp == F_SW || ftyp == F_CF || ftyp == F_CE) {
 			/* Function Pointer for "if" or "switch" */
+			lc = li;
 			while ((lp = lp->le_next) != 0) {
 			    li++;		/* count C var on list */
 			}
+			lc -= li;		/* negative count of C vars */
+			li += (USE_COUNT - 1 - lc) / USE_COUNT;	/* # of words extra */
 		    }
 		} else
-		if (iC_dc == OUTW) {
+		if (ftyp == OUTW) {
 		    if (iqt[0] == 'Q' &&	/* QB0_0 is cnt == 3 (no tail) */
 			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3) {
@@ -1178,7 +1410,7 @@ extern iC_Gt *	iC_l_[];\n\
 			goto OutErr;
 		    }
 		} else
-		if (iC_dc == OUTX) {
+		if (ftyp == OUTX) {
 		    if (iqt[0] == 'Q' &&
 			xbwl[0] == 'X' &&	/* QX0.0_0 is cnt == 5 */
 			cnt == 5 && bit < 8) {
@@ -1194,7 +1426,7 @@ extern iC_Gt *	iC_l_[];\n\
 		    }
 		} else {
 		    fprintf(Fp, " 0,");		/* no gt_list */
-		    if (iC_dc == TIMRL) {
+		    if (ftyp == TIMRL) {
 			if (sp->u_val > 0) {
 			    mask = sp->u_val;
 			    sp->u_val = 0;	/* restore temporary u to 0 */
@@ -1204,11 +1436,13 @@ extern iC_Gt *	iC_l_[];\n\
 		/* generate gt_rlist */
 		if (typ == ARN || (typ >= MIN_GT && typ < MAX_GT)) {
 		    fprintf(Fp, " &iC_l_[%d],", li);	/* gt_rlist */
-		    for (lp = sp->u_blist; lp; lp = lp->le_next) {
-			li++;			/* space in input list */
+		    if (fflag == 0) {		/* leave dummy pointer for _f0_1 in gt_rlist */
+			for (lp = sp->u_blist; lp; lp = lp->le_next) {
+			    li++;			/* space in input list */
+			}
+			/* space for dual GATE list or ARITH with FUNCTION */
+			li += 2;
 		    }
-		    /* space for dual GATE list or ARITH with FUNCTION */
-		    li += 2;
 		} else
 		if (typ == INPW) {
 		    if (iqt[0] == 'I' &&	/* IB0 is cnt == 3 */
@@ -1257,19 +1491,19 @@ extern iC_Gt *	iC_l_[];\n\
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) == ALIAS && sp->list != 0 &&
-		((iC_dc = sp->ftype) == GATE ||
-		(iC_Aflag && (iC_dc == ARITH || iC_dc == CLCKL || iC_dc == TIMRL)))) {
+		((ftyp = sp->ftype) == GATE ||
+		(iC_Aflag && (ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)))) {
 		modName = mN(sp);		/* modified string, byte and bit */
 		fprintf(Fp, "iC_Gt %-8s", modName);	/* ZZZZ */
 		val = sp->list->le_val;
-		gp = sp->list->le_sym;
-		while (gp->type == ALIAS) {
-		    val ^= gp->list->le_val;	/* negate if necessary */
-		    gp = gp->list->le_sym;	/* point to original */
+		tsp = sp->list->le_sym;
+		while (tsp->type == ALIAS) {
+		    val ^= tsp->list->le_val;	/* negate if necessary */
+		    tsp = tsp->list->le_sym;	/* point to original */
 		}
 		fprintf(Fp,
 		    " = { 1, -%s, %s, 0, \"%s\", 0, (iC_Gt**)&%s, %s%s, %d };\n",
-		    iC_ext_type[typ], iC_ext_ftype[iC_dc], sp->name, mN(gp), sam, nxs, val);
+		    iC_ext_type[typ], iC_ext_ftype[ftyp], sp->name, mN(tsp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;			/* previous Symbol name */
 		sam = "&";
@@ -1291,6 +1525,7 @@ iC_Gt *		iC_%s_list = %s%s;\n\
 	/********************************************************************
 	 *	iC_list will be built from aux files
 	 *******************************************************************/
+	assert(H1p && H2p);
 	fprintf(H1p, "extern iC_Gt *	iC_%s_list;\n", module);	/* header _list1.h */
 	fprintf(H2p, "	&iC_%s_list,\\\n", module);	/* list header _list2.h */
     } else {
@@ -1316,8 +1551,7 @@ iC_Gt **	iC_list[] = { &iC_%s_list, 0, };\n\
     free(module);
     fprintf(Fp, "\
 \n\
-");
-    linecnt += 1;
+"); linecnt += 1;
 
     if (functionUse[0] & F_CALLED) {		/* has any function been called ? */
 	fprintf(Fp, "\
@@ -1327,8 +1561,7 @@ iC_Gt **	iC_list[] = { &iC_%s_list, 0, };\n\
  *\n\
  *******************************************************************/\n\
 \n\
-");
-	linecnt += 6;
+");	linecnt += 6;
 
 	/* copy C intermediate file up to EOF to C output file */
 	/* translate any imm variables and ALIAS references of type 'QB1_0' */
@@ -1352,9 +1585,17 @@ iC_Gt **	iC_list[] = { &iC_%s_list, 0, };\n\
  *\n\
  *******************************************************************/\n\
 \n\
+"); linecnt += 6;
+    if (iC_Pflag) {
+	fprintf(Fp, "\
+#ifdef __GNUC__\n\
+__extension__		/* suppress -pedantic warning: static follows non-static */\n\
+#endif\n\
+");	linecnt += 3;
+    }
+    fprintf(Fp, "\
 static iC_Gt *	iC_l_[] = {\n\
-");
-    linecnt += 7;
+"); linecnt += 1;
 
     lc = 0;					/* count links */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
@@ -1364,71 +1605,162 @@ static iC_Gt *	iC_l_[] = {\n\
 		int		len = 16;
 		char *	fs = strlen(sp->name) > 1 ? "\t" : "\t\t";
 
+		fflag = 0;
 		fprintf(Fp, "/* %s */", sp->name);
-		if ((iC_dc = sp->ftype) >= MIN_ACT && iC_dc < MAX_ACT) {
+		if ((ftyp = sp->ftype) >= MIN_ACT && ftyp < MAX_ACT) {
 		    if ((lp = sp->list) == 0) {
 			snprintf(errorBuf, sizeof errorBuf,
 			    "Action gate '%s' has no action list",
 			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
 		    } else {
-			fflag = 0;
-			if (lp->le_sym == 0) {	/* dc == F_SW, F_CF or F_CE */
-			    assert(iC_dc == F_SW || iC_dc == F_CF || iC_dc == F_CE);
+			if (lp->le_sym == sp) {
+			    fflag = 2;		/* leave out _f0_1 */
+			} else
+			if (lp->le_sym == 0) {	/* ftyp == F_SW, F_CF or F_CE */
+			    assert(ftyp == F_SW || ftyp == F_CF || ftyp == F_CE);
 			    /* Function Pointer for "if" or "switch" */
 			    fflag = 1;
-			    len += 17;		/* assume len of %d is 2 */
+			    len += 13;		/* assume len of %d is 2 */
+			    if (len > 73) {
+				fs = "\n\t\t";
+				linecnt++;
+				len = 16 + 13;
+			    }
 			    fprintf(Fp, "%s(iC_Gt*)iC_%d,", fs, lp->le_val >> 8);
+			    fs = " ";
+			    lc++;
 			} else {
 			    len += strlen((tsp = lp->le_sym)->name) + 3;
 			    fprintf(Fp, "%s&%s,",
 				fs, mN(tsp));	/* action */
+			    fs = " ";
+			    lc++;
 			}
-			lc++;
-			fs = " ";
-			if ((lp = lp->le_next) == 0) {
-			    len += 3;		/* 0 filler - no clock or timer */
-			    fprintf(Fp, "%s0,", fs);
-			    snprintf(errorBuf, sizeof errorBuf,
-				"Action gate '%s' has no clock or timer",
-				sp->name);
-			    errorEmit(Fp, errorBuf, &linecnt);
-			    fflag = 0;		/* do not try to scan C var list */
-			} else {
-			    len += strlen((tsp = lp->le_sym)->name) + 3;
-			    assert((tsp->type & ~EM) == CLK || (tsp->type & ~EM) == TIM);
-			    fprintf(Fp, "%s&%s,",
-				fs, mN(tsp));	/* clock or timer */
-			    if ((tsp->type & ~EM) == TIM) {
-				if ((lp = lp->le_next) != 0) {
-				    len += strlen((tsp = lp->le_sym)->name) + 3;
-				    fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* delay time */
+			if (fflag != 2) {	/* not _f0_1 */
+			    if ((lp = lp->le_next) == 0) {
+				len += 3;		/* 0 filler - no clock or timer */
+				fprintf(Fp, "%s0,", fs);
+				snprintf(errorBuf, sizeof errorBuf,
+				    "Action gate '%s' has no clock or timer",
+				    sp->name);
+				errorEmit(Fp, errorBuf, &linecnt);
+				fflag = 0;		/* do not try to scan C var list */
+			    } else {
+				len += strlen((tsp = lp->le_sym)->name) + 3;
+				assert((tsp->type & ~EM) == CLK || (tsp->type & ~EM) == TIM);
+				fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* clock or timer */
+				if ((tsp->type & ~EM) == TIM) {
+				    if ((lp = lp->le_next) != 0) {
+					len += strlen((tsp = lp->le_sym)->name) + 3;
+					fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* delay time */
+				    } else {
+					len += 3;	/* 0 filler - no delay time */
+					fprintf(Fp, "%s0,", fs);
+					snprintf(errorBuf, sizeof errorBuf,
+					    "Action gate '%s' has timer '%s' with no delay",
+					    sp->name, tsp->name );
+					errorEmit(Fp, errorBuf, &linecnt);
+					fflag = 0;	/* do not try to scan C var list */
+				    }
+				    lc++;
+				}
+			    }
+			    lc++;
+			}
+			if (fflag) {		/* if else or switch or _f0_1 */
+			    /********************************************************************
+			     *  Scan the imm C variable list generated by the C compile phase
+			     *  either as part of an if else or switch C fragment (_f1_1 ...)
+			     *  or as C statements in a literal block (_f0_1).
+			     *  Two use bits are set at the top end of le_val in the link for
+			     *  each imm variable found by the C compiler (USE_MASK).
+			     *  VAR_USE marks, that the variable is used as a value in an
+			     *  expression (marked by v in listing).
+			     *  VAR_ASSIGN marks, that the variable is assigned to in a
+			     *  statement (marked by = in listing). Care is taken, that the
+			     *  second or later assigned variable in a multiple assignment is
+			     *  also marked as a value. Operator assignments and pre/post-
+			     *  inc/dec operations mark both bits.
+			     *  In the following the use bit pairs are grouped into words,
+			     *  as many as will fit and these words are then appended to the
+			     *  list of variables. The load routine collects the bits for
+			     *  each variable and can thereby determine, if any variable has
+			     *  been assigned somewhere (input) and has been used somewhere as
+			     *  a value (output). This was always done for immdiate statements.
+			     *  This is now done for immediate variables used in C code, which
+			     *  makes the usage analysis complete. No analysis of C variables
+			     *  is done - here a correct algorithmic design and the interpre-
+			     *  tation of the final C compiler warnings, as in any C code
+			     *  is called for.
+			     *******************************************************************/
+			    int	uc = 0;
+			    tlp = lp;		/* do not modify lp yet */
+			    while ((tlp = tlp->le_next) != 0) {
+				uc++;		/* count C vars on list */
+			    }
+			    if (uc) {
+				Gate **	gpp;
+				int	useWord;
+				int	useBits;
+				int	i;
+				int	i1;
+				int	j;
+
+				uc = (USE_COUNT - 1 + uc) / USE_COUNT;	/* # of words extra */
+				gpp = (Gate **)calloc(uc, sizeof(Gate *));	/* use words */
+				j = i = useWord = 0;
+				while ((lp = lp->le_next) != 0) {	/* scan C var list */
+				    tsp = lp->le_sym;
+				    useBits = lp->le_val >> USE_OFFSET;	/* use bits */
+				    assert(useBits > 0 && useBits < 4);
+				    useWord |= useBits << i;
+				    i += 2;
+				    if (i >= (USE_COUNT << 1)) {
+					assert(j < uc);
+					gpp[j++] = (Gate *)useWord;
+					i = useWord = 0;
+				    }
+				    while (tsp->type == ALIAS) {
+					tsp = tsp->list->le_sym;	/* point to original */
+				    }
+				    len += strlen(tsp->name) + 3;
+				    if (len > 73) {
+					fs = "\n\t\t";
+					linecnt++;
+					len = 16 + strlen(tsp->name) + 3;
+				    }
+				    fprintf(Fp, "%s&%s,", fs, mN(tsp));
+				    fs = " ";
+				    lc++;
+				}
+				if (i) {
+				    gpp[j++] = (Gate *)useWord;
+				    assert(j == uc);
 				} else {
-				    len += 3;	/* 0 filler - no delay time */
-				    fprintf(Fp, "%s0,", fs);
-				    snprintf(errorBuf, sizeof errorBuf,
-					"Action gate '%s' has timer '%s' with no delay",
-					sp->name, tsp->name );
-				    errorEmit(Fp, errorBuf, &linecnt);
-				    fflag = 0;	/* do not try to scan C var list */
+				    i = USE_COUNT << 1;
 				}
-				lc++;
+				i1 = 12 + ((USE_COUNT + 1) >> 1);
+				for (--uc, j = 0; j <= uc; j++) {
+				    if (j == uc) i1 = 12 + ((i + 2) >> 2);	/* # of digits in last mask */
+				    len += i1;
+				    if (len > 73) {
+					fs = "\n\t\t";
+					linecnt++;
+					len = 16 + i1;
+				    }
+				    fprintf(Fp, "%s(iC_Gt*)%p,", fs, gpp[j]);	/* write use bits */
+				    fs = " ";
+				    lc++;
+				}
+				free(gpp);		/* free the temporary array */
 			    }
 			}
-			lc++;
-			if (fflag) {		/* if else or switch */
-			    while ((lp = lp->le_next) != 0) {	/* scan C var list */
-				tsp = lp->le_sym;
-				while (tsp->type == ALIAS) {
-				    tsp = tsp->list->le_sym;	/* point to original */
-				}
-				len += strlen(tsp->name) + 3;
-				fprintf(Fp, "%s&%s,", fs, mN(tsp));
-				lc++;
-			    }
-			}
-			fs = "\t";
 			len += 8; len &= 0xfff8;
+			fs = "\t";
+			if (len > 48) {
+			    len = 96;			/* force line break if continuation */
+			}
 		    }
 		}
 
@@ -1441,14 +1773,19 @@ static iC_Gt *	iC_l_[] = {\n\
 			errorEmit(Fp, errorBuf, &linecnt);
 		    } else {
 			/* Function Pointer at start of input list */
-			len += 17;		/* assume len of %d is 2 */
+			len += 13;		/* assume len of %d is 2 */
+			if (len > 73) {
+			    fs = "\n\t\t";
+			    linecnt++;
+			    len = 16 + 13;
+			}
 			if (lp->le_val) {
 			    fprintf(Fp, "%s(iC_Gt*)iC_%d,", fs, lp->le_val >> 8);
 			} else {
 			    fprintf(Fp, "%s(iC_Gt*)0,", fs);	/* OUTW */
 			}
-			lc++;
 			fs = " ";
+			lc++;
 		    }
 		    for (lp = sp->u_blist; lp; lp = lp->le_next) {
 			len += strlen(lp->le_sym->name) + 3;
@@ -1460,15 +1797,15 @@ static iC_Gt *	iC_l_[] = {\n\
 			/* check order of arithmetic input index from op_asgn() */
 			assert(lp->le_val == 0 || ++val == (lp->le_val & 0xff));
 			fprintf(Fp, "%s&%s,", fs, mN(lp->le_sym));
-			lc++;
 			fs = " ";
+			lc++;
 		    }
-		    fprintf(Fp, "%s0,", fs);
-		    lc++;
 		    len += 3;
+		    fprintf(Fp, "%s0,", fs);
 		    fs = " ";
+		    lc++;
 		} else
-		if (typ >= MIN_GT && typ < MAX_GT) {
+		if ((typ >= MIN_GT && typ < MAX_GT) && fflag != 2) {
 		    do {
 			for (lp = sp->u_blist; lp; lp = lp->le_next) {
 			    if (lp->le_val == val) {
@@ -1479,14 +1816,19 @@ static iC_Gt *	iC_l_[] = {\n\
 				    len = 16 + strlen(lp->le_sym->name) + 3;
 				}
 				fprintf(Fp, "%s&%s,", fs, mN(lp->le_sym));
-				lc++;
 				fs = " ";
+				lc++;
 			    }
 			}
-			fprintf(Fp, "%s0,", fs);
-			lc++;
 			len += 3;
+			if (len > 76) {
+			    fs = "\n\t\t";
+			    linecnt++;
+			    len = 16 + 3;
+			}
+			fprintf(Fp, "%s0,", fs);
 			fs = " ";
+			lc++;
 		    } while (val ^= NOT);
 		}
 		fprintf(Fp, "\n");
@@ -1503,6 +1845,7 @@ static iC_Gt *	iC_l_[] = {\n\
 		 * have been called in this module, and no new instance number update
 		 * need be written.
 		 *******************************************************************/
+		assert(H1p);
 		fprintf(H1p, "/* %s\t%d */\n", sp->name, val);	/* header _list1.h */
 	    }
 	}
@@ -1520,8 +1863,10 @@ endm:
 	fprintf(iC_outFP, "\nC OUTPUT: %s  (%d lines)\n", outfile, linecnt-1);
     }
     if (iC_aflag) {
+	assert(H2p);
 	fclose(H2p);			/* close list header in case other actions */
 endd:
+	assert(H1p);
 	fclose(H1p);			/* close declaration header in case other actions */
     }
 endh:
@@ -1573,12 +1918,20 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 	return T1index;
     }
 
+#ifdef PRECOMPILE_C_OUTPUT
+    if(iFP != T4FP && strlen(iC_Cdefines)) {
+	if (precompileFlag == 0) {		/* may only be used in final C-compile */
+	    if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+	}
+	precompileFlag |= 2;			/* 2 marks -D, #define or #if */
+    }
+#endif
     while (fgets(lineBuf, sizeof lineBuf, iFP)) {
 	if (strcmp(lineBuf, "%{\n") == 0) {
 	    mask = 01;				/* copy literal blocks */
 	} else if (strcmp(lineBuf, "%}\n") == 0) {
 	    mask = 02;				/* copy functions or cases */
-	} else if (mode & mask) {
+	} else if (mode & mask) {		/* seperates literal blocks and functions */
 	    for (lp = lineBuf; (c = *lp++) != 0; ) {
 		if (lf || c != '%' || *lp != '#') {	/* converts %# to # */
 		    putc(c, oFP);
@@ -1589,18 +1942,43 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    }
 		} else
 		/********************************************************
+		 *  lp now points to the beginning of a line past % but to #
 		 *  handle pre-processor #include <stdio.h> or "icc.h"
 		 ********************************************************/
-		if (sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
+		if (precompileFlag <= 1 &&
+		    sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
 		    if(iFP == T4FP) {
 			ierror("copyBlocks: if else or switch has:", lstBuf);
 			continue;
 		    }
-		    if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+		    if (precompileFlag == 0) {
+			if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+		    }
 		    if (iC_debug & 02) fprintf(iC_outFP, "####### c_parse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
-		    precompileFlag++;
+		    precompileFlag |= 1;	/* 1 marks #include */
 		}
+#ifdef PRECOMPILE_C_OUTPUT
+		/********************************************************
+		 *  Handle pre-processor #define and #if
+		 *  No need to scan for #else or #endif; if they occurr
+		 *  there must have been a #if - unless serious C error.
+		 *  Other preprocessor directives do not affect outcome.
+		 ********************************************************/
+		else if (sscanf(lp, " # define %[A-Za-z_0-9]", lstBuf) == 1 ||
+		    sscanf(lp, " # if %s", lstBuf) == 1 ||
+		    sscanf(lp, " # ifdef %s", lstBuf) == 1 ||
+		    sscanf(lp, " # ifndef %s", lstBuf) == 1) {
+		    if(iFP == T4FP) {
+			ierror("copyBlocks: if else or switch has:", lstBuf);
+			continue;
+		    }
+		    if (precompileFlag == 0) {
+			if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+		    }
+		    precompileFlag |= 2;	/* 2 marks -D, #define or #if */
+		}
+#endif
 	    }
 	}
     }
@@ -1626,7 +2004,8 @@ int
 c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 {
     int		r;				/* copy literal blocks */
-    char	lineBuf[BUFS];			/* can be smaller than a line */
+    char	execBuf[BUFS];			/* can be smaller than a line */
+    char	lineBuf[BUFS];
 
     lexflag = flag;				/* output partial source listing */
 
@@ -1654,23 +2033,28 @@ c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
     if (outFlag == 0) {
 	fprintf(T2FP, "/*##*/}}\n");
     }
-    if (precompileFlag) {
+#ifdef PRECOMPILE_C_OUTPUT
+    fclose (T2FP);				/* close intermediate file */
+#endif
+    if (precompileFlag == 1) {
 	/********************************************************
-	 *  handle pre-processor #include <stdio.h> and "icc.h" etc
+	 *  pre-process and C-parse #include <stdio.h> and "icc.h" etc
 	 *  add CTYPE's as symbols to iC symbol table for main C-parse
 	 ********************************************************/
 	fflush(T4FP);
-	/* Cygnus does not understand cc - use gcc */
-	snprintf(lineBuf, sizeof lineBuf, "gcc -E -x c %s -o %s 2> %s", T4FN, T5FN, T6FN);
-	if (iC_debug & 02) fprintf(iC_outFP, "####### pre-compile: %s\n", lineBuf);
-	r = system(lineBuf);			/* Pre-compile C file */
-	if (iC_debug & 02) fprintf(iC_outFP, "####### pre-compile: return %d\n", r);
+	/* Cygnus does not understand cc - use macro CC=gcc */
+	snprintf(execBuf, BUFS, SS(CC) " -E -I/usr/local/include -x c %s -o %s 2> %s",
+	    T4FN, T5FN, T6FN);
+	r = system(execBuf);			/* Pre-compile C header file(s) */
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r>>8);
+#endif
 	if (r != 0 || (T5FP = fopen(T5FN, "r")) == NULL) {
 	    if ((T6FP = fopen(T6FN, "r")) == NULL) {
-		return T6index;		/* error opening gcc error file */
+		return T6index;			/* error opening CC error file */
 	    }
 	    while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
-		ierror("gcc:", lineBuf);	/* gcc error message */
+		ierror(SS(CC) ":", lineBuf);	/* CC error message */
 	    }
 	    fclose(T6FP);
 	    if (!(iC_debug & 04000)) {
@@ -1693,9 +2077,51 @@ c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	}
 	lexflag &= ~C_NO_COUNT;			/* count characters again */
     }
+#ifdef PRECOMPILE_C_OUTPUT
+    /* The listing produced is not complete - functionality is doubtful */
+    else if (precompileFlag > 1) {
+	/********************************************************
+	 *  Alternatively
+	 *  pre-process generated C code with # define and/or #if
+	 *  or if iC_Cdefines contains -C or -V definitions
+	 ********************************************************/
+	int	r1;
+	/* Cygnus does not understand cc - use macro CC=gcc - pass comments with -C */
+	snprintf(execBuf, BUFS, SS(CC) "%s -E -C -I/usr/local/include -x c %s -o %s 2> %s",
+	    iC_Cdefines, T2FN, T5FN, T6FN);
+	r1 = system(execBuf);			/* Pre-compile generated C file */
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
+#endif
+	if (r1 != 0) {
+	    if ((T6FP = fopen(T6FN, "r")) == NULL) {
+		return T6index;			/* error opening CC error file */
+	    }
+	    while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
+		ierror(SS(CC) ":", lineBuf);	/* CC error message */
+	    }
+	    fclose(T6FP);
+	    if (!(iC_debug & 04000)) {
+		unlink(T6FN);
+	    }
+	    ierror("compile: cannot run:", execBuf);
+	    return T0index;
+	}
+	if (!(iC_debug & 04000)) {
+	    unlink(T6FN);
+	}
+	if ((T2FP = fopen(T5FN, "r")) == NULL) {
+	    return T2index;			/* error opening intermediate file */
+	}
+    }
+    else if ((T2FP = fopen(T2FN, "r")) == NULL) {
+	return T2index;				/* error opening input file */
+    }
+#else
     if (fseek(T2FP, 0L, SEEK_SET) != 0) {	/* rewind intermediate file */
 	return T2index;
     }
+#endif
     copyAdjust(NULL, NULL, lp);			/* initialize lineEntryArray */
     gramOffset = lineno = 0;
     yyin = T2FP;				/* C input to C parser */
