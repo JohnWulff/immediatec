@@ -15,6 +15,7 @@ Usage:	@<<<<<<< [-decl6ph] [file ...]
 	$named
 	-d	output .c .ini .lst .ic .ih - for comparisons
 	-g	output exe .c .ini .lst .lst6 - generated - may be deleted in source dir
+	-n	output exe .c .ini .lst .lst6 - generated corpses - no .ic to match
 	-e	output only base without extension
 	-c	output only base with .c extension
 	-i	output only base with .ini extension
@@ -23,56 +24,72 @@ Usage:	@<<<<<<< [-decl6ph] [file ...]
 	-p	output only base with .ic extension
 	-s	output only base with .ic and .ih extension (iC sources)
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.9 2005/06/12 19:14:06 jw Exp $
+$Id: mklst,v 1.10 2005/10/01 12:50:33 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_6 $opt_p $opt_s $opt_h);
+use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_n $opt_6 $opt_p $opt_s $opt_h);
 require "getopts.pl";
-&Getopts('cdegil6psh');			# sets $opt_h if -h etc
+&Getopts('cdegiln6psh');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
+my %pn = ();
+
 unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
 while ($ARGV = shift @ARGV) {
-    if ($ARGV =~ /(\w+)\.ic/) {
-	if ($opt_d) {
-	    print "$1.c\n" if -f "$1.c";
-	    print "$1.ini\n" if -f "$1.ini";
-	    print "$1.lst\n" if -f "$1.lst";
-	    print "$1.ic\n" if -f "$1.ic";
-	} elsif ($opt_g) {
-	    print "$1\n" if -f "$1";
-	    print "$1.exe\n" if -f "$1.exe";
-	    print "$1.c\n" if -f "$1.c";
-	    print "$1.ini\n" if -f "$1.ini";
-	    print "$1.lst\n" if -f "$1.lst";
-	    print "$1.lst6\n" if -f "$1.lst6";
-	} elsif ($opt_e) {
-	    print "$1\n" if -f "$1";
-	    print "$1.exe\n" if -f "$1.exe";
-	} elsif ($opt_c) {
-	    print "$1.c\n" if -f "$1.c";
-	} elsif ($opt_i) {
-	    print "$1.ini\n" if -f "$1.ini";
-	} elsif ($opt_l) {
-	    print "$1.lst\n" if -f "$1.lst";
-	} elsif ($opt_6) {
-	    print "$1.lst6\n" if -f "$1.lst6";
-	} elsif ($opt_p or $opt_s) {
-	    print "$1.ic\n" if -f "$1.ic";
-	} else {
-	    print "$1\n" if -f "$1";
-	    print "$1.exe\n" if -f "$1.exe";
-	    print "$1.c\n" if -f "$1.c";
-	    print "$1.ini\n" if -f "$1.ini";
-	    print "$1.lst\n" if -f "$1.lst";
-	    print "$1.ic\n" if -f "$1.ic";
+    if ($opt_n) {
+	if ($ARGV =~ /(\w+)\.(lst6?|ini)/) {	# don't use .c - too dangerous in development
+	    unless (-f "$1.ic" or $pn{$1}) {	# if no .ic, the rest are corpses
+		print "$1\n" if -f "$1";
+		print "$1.exe\n" if -f "$1.exe";
+		print "$1.c\n" if -f "$1.c";
+		print "$1.ini\n" if -f "$1.ini";
+		print "$1.lst\n" if -f "$1.lst";
+		print "$1.lst6\n" if -f "$1.lst6";
+		$pn{$1}++;
+	    }
 	}
-    } elsif ($ARGV =~ /(\w+)\.ih/) {
-	unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6 or $opt_p) {
-	    print "$1.ih\n" if -f "$1.ih";
+    } else {
+	if ($ARGV =~ /(\w+)\.ic/) {
+	    if ($opt_d) {
+		print "$1.c\n" if -f "$1.c";
+		print "$1.ini\n" if -f "$1.ini";
+		print "$1.lst\n" if -f "$1.lst";
+		print "$1.ic\n" if -f "$1.ic";
+	    } elsif ($opt_g) {
+		print "$1\n" if -f "$1";
+		print "$1.exe\n" if -f "$1.exe";
+		print "$1.c\n" if -f "$1.c";
+		print "$1.ini\n" if -f "$1.ini";
+		print "$1.lst\n" if -f "$1.lst";
+		print "$1.lst6\n" if -f "$1.lst6";
+	    } elsif ($opt_e) {
+		print "$1\n" if -f "$1";
+		print "$1.exe\n" if -f "$1.exe";
+	    } elsif ($opt_c) {
+		print "$1.c\n" if -f "$1.c";
+	    } elsif ($opt_i) {
+		print "$1.ini\n" if -f "$1.ini";
+	    } elsif ($opt_l) {
+		print "$1.lst\n" if -f "$1.lst";
+	    } elsif ($opt_6) {
+		print "$1.lst6\n" if -f "$1.lst6";
+	    } elsif ($opt_p or $opt_s) {
+		print "$1.ic\n" if -f "$1.ic";
+	    } else {
+		print "$1\n" if -f "$1";
+		print "$1.exe\n" if -f "$1.exe";
+		print "$1.c\n" if -f "$1.c";
+		print "$1.ini\n" if -f "$1.ini";
+		print "$1.lst\n" if -f "$1.lst";
+		print "$1.ic\n" if -f "$1.ic";
+	    }
+	} elsif ($ARGV =~ /(\w+)\.ih/) {
+	    unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6 or $opt_p) {
+		print "$1.ih\n" if -f "$1.ih";
+	    }
 	}
     }
 }

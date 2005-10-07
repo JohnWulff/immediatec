@@ -7,9 +7,9 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-ASRxzNh] [-v<N>] [-y<opt>]' >&2
+    echo 'Usage:	'${0##*/}' [-ASRxzNh] [-v<N>] [-d<opt>]' >&2
     echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
-    echo '	-y<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
+    echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
     echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
     echo '	-S	strict compile - all immediate variables must be declared' >&2
     echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
@@ -22,11 +22,11 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-N	No nice with calls of immcc and gcc compilers (default is nice)' >&2
     echo '	-h	this help text' >&2
-    echo '	uses iCmake -v<N> -y<opt> to make each line of the list pm.lt' >&2
+    echo '	uses iCmake -v<N> -d<opt> to make each line of the list pm.lt' >&2
     echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
     echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mm,v 1.14 2005/09/19 20:32:50 jw Exp $' >&2
+    echo '$Id: mm,v 1.15 2005/09/30 15:52:10 jw Exp $' >&2
 }
 
 A=""
@@ -47,11 +47,11 @@ while [[ $# -gt 0 ]]; do
 		    usage; exit 254;
 		fi
 		break;;
-	    y*)	option=${option#?}
+	    d*)	option=${option#?}
 		if [ -n "$option" ]; then
-		    A="$A -y$option"
+		    A="$A -d$option"
 		else
-		    echo "-y must specify an option";
+		    echo "-d must specify an option";
 		    usage; exit 254;
 		fi
 		break;;
@@ -85,5 +85,5 @@ while true; do
 	echo "iCmake$I$A $line" >&2
     fi
     iCmake$I$A $line
-done < pm.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.[a-z][a-z]*+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/' > Init.out
+done < pm.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\./ s//\/tmp\/x./' > Init.out
 rm -rf ic[0-9].*

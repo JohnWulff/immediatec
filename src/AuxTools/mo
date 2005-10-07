@@ -26,13 +26,13 @@ usage ()
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
     echo '	-z	make with -DLONG16        (make clean; makeAll first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
-    echo '	-y<opt>	call ic[rt] with extra -d<opt> orred into normal -d474' >&2
+    echo '	-d<opt>	call ic[rt] with extra -d<opt> orred into normal -d474' >&2
     echo 'if no iCtargets are specified, each single entry of file pa.lt is made' >&2
-    echo '   outputs the common output to ListR/ListR.out or ListT/ListT.out' >&2
+    echo '   outputs the common output to ListR/Init.out or ListT/Init.out' >&2
     echo '   restores a plain icr or ict at the end of the test run' >&2
     echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.18 2005/07/31 17:54:57 jw Exp $' >&2
+    echo '	$Id: mo,v 1.19 2005/10/07 14:17:45 jw Exp $' >&2
 }
 
 v=""
@@ -54,11 +54,11 @@ while [ $# -gt 0 ]; do
 	    m*)	list='pm.lt';;
 	    s*)	op="${op}s";;
 	    z*)	op="${op}z";;
-	    y*)	option=${option#?}
+	    d*)	option=${option#?}
 		if [ -n "$option" ]; then
 		    v="$v -d$option"
 		else
-		    echo "-y must specify an option";
+		    echo "-d must specify an option";
 		    usage; exit 254;
 		fi
 		break;;
@@ -147,7 +147,7 @@ elif [ -f $list ]; then
 	else
 	    echo "ERROR: $file does not exist - no $ic made" >&2
 	fi
-    done > List$p/List$p.out 2>&1;
+    done 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\./ s//\/tmp\/x./' > List$p/Init.out
     if [ -f /tmp/cexe.c ]; then
 	cd $devp			# restore plain icr or ict
 	cp /tmp/cexe.c .

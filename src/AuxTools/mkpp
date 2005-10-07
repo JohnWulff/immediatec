@@ -11,10 +11,10 @@ usage ()
     echo 'Usage:	'${0##*/}' [-dh] [ver ...]' >&2
     echo '	-d	diff previously made files' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mkpp,v 1.6 2005/07/04 13:41:25 jw Exp $' >&2
+    echo '	$Id: mkpp,v 1.7 2005/07/31 17:54:06 jw Exp $' >&2
 }
 
-while [[ $# > 0 ]]; do
+while [[ $# -gt 0 ]]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
@@ -31,7 +31,7 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $# != 0 ]]; then
+if [[ $# -ne 0 ]]; then
     versions=$*
 else
     versions=$(echo Alex??)

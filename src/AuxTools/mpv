@@ -14,10 +14,10 @@ usage ()
     echo 'make versions of immcc ict and libict.a in Test2' >&2
     echo 'from project sources of older versions in icc.v_<ver>' >&2
     echo 'if directory icc.v_<ver> does not exist, cov makes it' >&2
-    echo '	$Id: mpv,v 1.6 2005/07/04 13:43:24 jw Exp $' >&2
+    echo '	$Id: mpv,v 1.7 2005/07/31 17:55:18 jw Exp $' >&2
 }
 
-while [[ $# > 0 ]]; do
+while [[ $# -gt 0 ]]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
@@ -34,7 +34,7 @@ while [[ $# > 0 ]]; do
     shift
 done
 
-if [[ $# != 0 ]]; then
+if [[ $# -ne 0 ]]; then
     versions=$*
 else
     versions=$(echo Test2/Alex??)

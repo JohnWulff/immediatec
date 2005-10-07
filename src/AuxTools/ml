@@ -22,7 +22,8 @@ usage ()
     echo '	ps.lt	# iC source files *.ic and *.ih' >&2
     echo '	pg.lt	# exe .c .ini .lst .lst6 - generated - may be deleted in source dir' >&2
     echo '	-g	pg.lt - exe .c .ini .lst .lst6 - generated files only' >&2
-    echo '	$Id: ml,v 1.12 2005/07/31 17:54:21 jw Exp $' >&2
+    echo '	-n	pn.lt - exe .c .ini .lst .lst6 - generated corpses - no .ic to match' >&2
+    echo '	$Id: ml,v 1.13 2005/10/01 12:51:35 jw Exp $' >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -32,6 +33,8 @@ while [[ $# -gt 0 ]]; do
 	while [[ -n "$option" ]]; do
 	    case "$option" in
 	    g*) mklst -g *.ic > pg.lt	# generated files only
+		exit;;
+	    n*) mklst -n *.lst* *.ini > pn.lt	# corpses only
 		exit;;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;

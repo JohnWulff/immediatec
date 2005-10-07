@@ -20,14 +20,14 @@ usage ()
     echo '	if no files are specified uses mm via pm.lt' >&2
     echo '	directory Alex<N> must exist (generated files are saved there)' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mz,v 1.12 2005/07/04 13:44:47 jw Exp $' >&2
+    echo '$Id: mz,v 1.13 2005/07/31 17:55:53 jw Exp $' >&2
 }
 
 min=0
 max=9999
 N=''
 
-while [[ $# > 0 ]]; do
+while [[ $# -gt 0 ]]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
