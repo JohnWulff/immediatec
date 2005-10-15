@@ -27,13 +27,13 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.7 2005/09/30 15:26:32 archiv Exp $'
+  echo '$Id: Mdiff,v 2.8 2005/10/15 15:52:17 archiv Exp $'
   echo
 }
 
 usage()
 {
-  echo "Usage:	$name [eEiltqcukxwaLrTZpPvh][ -I<regex>][ -[f|F]<filter>][ -[C|U]<num>]"
+  echo "Usage:	$name [-eEiltqcukxwaLrTZpPvh-][ -I<regex>][ -[f|F]<filter>][ -[C|U]<num>]"
   echo '	[ [[-R<regex>|-X<cmd>][source_dir]]|file ...] comparison_dir'
   echo '	diff files named in command line (common initial path is source_dir)'
   echo '	or files which match <regex> from single named source_dir with last'
@@ -73,10 +73,10 @@ usage()
   echo '	-u	display diff output in 3 line unified context form'
   echo '	-U<num>	display diff output in num line unified context form'
 if [[ $BASH_VERSINFO -lt 3 ]]; then
-  echo '	-p	output is piped to "less"       return status not valid' 
+  echo '	-p	output is piped to "less -A"    return status not valid' 
   echo '	-P	output is piped to "less -E -X" return status not valid'
 else
-  echo '	-p	output is piped to "less"'
+  echo '	-p	output is piped to "less -A"'
   echo '	-P	output is piped to "less -E -X"'
 fi
   echo '	-v	author and version information'
@@ -331,7 +331,7 @@ e=0
 t=1
 q=0
 li=0
-w=-wB
+w='-wB'
 filter=0
 f=''
 F=''
@@ -340,7 +340,7 @@ context=''
 cmd=''
 fullstatus=0
 
-while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZp-Pvh" opt; do
+while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZpPvh" opt; do
     case $opt in
     e )	e=1;;
     E )	e=1; let "li|=2";;
@@ -365,7 +365,7 @@ while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZp-Pvh" opt; do
     X )	cmd="$OPTARG";;
     T )	T=1;;
     Z )	Z=1;;
-    p|-) pipe='less';;
+    p ) pipe='less -A';;
     P )	pipe="less -E -X";;
     v )	version; usage; exit 0;;
     h )	usage; exit 0;;
@@ -492,9 +492,8 @@ exit
 
 =head1 SYNOPSIS
 
- Usage:  Mdiff [eEiltpqcukxwaLrTZpvh][ -I<regex>][ -[f|F]<filter>][ -[C|U]<num>]
-    [ [[-R<regex>|-X<cmd>][source_dir]]|file ...] comparison_dir
-
+ Usage:  Mdiff [-eEiltpqcukxwaLrTZpvh-][ -I<regex>][ -[f|F]<filter>][ -[C|U]<num>]
+           [ [[-R<regex>|-X<cmd>][source_dir]]|file ...] comparison_dir
     diff files named in command line (common initial path is source_dir)
     or files which match <regex> from single named source_dir with last
     named comparison_dir. If source_dir missing, default is current directory
@@ -540,7 +539,7 @@ exit
     -C<num> display diff output in num line copied context form
     -u      display diff output in 3 line unified context form
     -U<num> display diff output in num line unified context form
-    -p    output is piped to "less"
+    -p    output is piped to "less -A"
     -P    output is piped to "less -E -X"
  Help options:
     -v    author and version information
@@ -698,9 +697,10 @@ These lists are exclusive subsets of the complete set of selected files.
 =head1 Display
 
      -t option puts a Date stamp and a line naming the directories used
-     at the top of the report. This is not done if -l options apply.
-        Fri Sep 30 15:10:46 CEST 2005
-        Differences in /home/archiv/draft/ and /home/archiv/final/
+        at the top of the report. This is not done if -l options apply.
+
+          Fri Sep 30 15:10:46 CEST 2005
+          Differences in /home/archiv/draft/ and /home/archiv/final/
 
      -q suppresses all output (quiet) except for the -l list options.
 
@@ -713,7 +713,7 @@ These lists are exclusive subsets of the complete set of selected files.
      context or three if -u option is used.
 
      -p -P
-     Output is piped to 'less' or to 'less -E -X' with the -P option.
+     Output is piped to 'less -A' or to 'less -E -X' with the -P option.
      The -P option is preferable for short outputs, because less exits
      when EOF is reached and the output is left on the screen.
      For versions of bash less than 3 the return status is not valid
@@ -730,7 +730,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<iCmake(1)>
+L<Rdiff(1)> L<iCmake(1)>
 
 =head1 COPYRIGHT
 
