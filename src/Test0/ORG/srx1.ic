@@ -1,0 +1,5 @@
+imm clock clk1 = CLOCK(IX0.6, ~IX0.6);
+imm clock clk2 = CLOCK(IX0.7, ~IX0.7);
+QX0.0 = SRX(IX0.0, IX0.1);
+QX0.1 = SRX(IX0.0, IX0.1, clk2);
+QX0.2 = SRX(IX0.0, clk1, IX0.1, clk2);

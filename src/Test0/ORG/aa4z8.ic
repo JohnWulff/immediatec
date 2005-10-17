@@ -1,0 +1,51 @@
+/********************************************************************
+ *
+ *	nested bit functions
+ *
+ *******************************************************************/
+
+imm bit Sub3(bit ib1, bit ib2) {
+    return ib1 & ib2;
+}
+
+imm bit Sub33(bit ib3, bit ib4) {
+    this = ib3 & ib4;
+}
+
+imm bit Sub4() {
+    return IX0.4;
+}
+
+imm bit Sub44() {
+    this = 4 & 4;
+}
+
+imm bit Sub5() {
+    this = IX0.5;
+}
+
+imm bit Nest1(bit i1, bit i2) {
+    return Sub3(i1, i2) & Sub4();
+}
+imm bit Nest2(bit i3, bit i4) {
+    this = Sub4() & Sub33(i3, i4);
+}
+imm bit Nest3(bit i1, bit i2, bit i3, bit i4) {
+    return Sub3(i1, i2) & Sub33(i3, i4);
+}
+imm bit Nest4(bit i3, bit i4) {
+    this = Sub44() & Sub33(i3, i4);
+}
+imm bit Nest5(bit i3, bit i4) {
+    return Sub33(i3, i4) & Sub44();
+}
+imm bit Nest6() {
+    this = Sub4() & Sub5();
+}
+
+QX0.1 = Nest1(Sub4(), Sub5()) & Sub4();
+QX0.2 = Sub4() & Nest2(Sub44(), Nest6());
+QX0.3 = Nest3(Sub4(), Sub5(), Sub44(), Nest6()) & Sub33(Sub44(), Nest6());
+QX0.4 = Sub44() & Nest4(Sub44(), Nest6());
+QX0.5 = Nest5(Sub44(), Nest6()) & Sub44();
+QX0.6 = Sub4() & Nest6();

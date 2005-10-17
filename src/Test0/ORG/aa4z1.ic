@@ -1,0 +1,26 @@
+imm int Sub3() {
+    return IB1 + IB2;
+}
+
+imm int Sub33() {
+    this = IB3 + IB4;
+}
+
+imm int Sub4() {
+    return 4;
+}
+
+imm int Sub44() {
+    this = 4 + 4;
+}
+
+imm int Sub55() {
+    this = 5 + 5;
+}
+
+QB1 = Sub3() + Sub4();
+QB2 = Sub4() + Sub33();
+QB3 = Sub3() + Sub33();
+QB4 = Sub44() + Sub33();
+QB5 = Sub33() + Sub44();
+QB6 = Sub4() + Sub55();

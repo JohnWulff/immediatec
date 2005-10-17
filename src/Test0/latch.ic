@@ -1,0 +1,37 @@
+/********************************************************************
+ *
+ *	generate a LATCH from a FORCE function
+ *	to illustrate a point in Ic.sdw page 9
+ *
+ *******************************************************************/
+
+use strict;
+
+imm bit t5, t6, t7;
+
+QX0.0 = LATCH(IX0.0, IX0.1);		// this statement and
+QX0.1 = FORCE(QX0.1, IX0.0, IX0.1);	// this statement produce identical code
+
+imm clock c = CLOCK(CHANGE(IX0.2));
+
+QX0.2 = DLATCH(IX0.0, IX0.1, c);	// this statement and
+QX0.3 = D(LATCH(IX0.0, IX0.1), c);	// this statement produce identical code
+QX0.4 = D(FORCE(QX0.4, IX0.0, IX0.1), c);	// so does this statement
+QX0.5 = t5 = D(FORCE(t5, IX0.0, IX0.1), c);	// and this statement
+	// the following 2 statements are not identical to DLATCH() above
+	// feedback comes from the internal temporary assignments
+QX0.6 = D((t6 = FORCE(t6, IX0.0, IX0.1)), c);	// the following is the same
+QX0.7 = D((t7 = LATCH(IX0.0, IX0.1)), c);
+
+/********************************************************************
+ *
+ *	The difference can be tested. When the set input is turned
+ *	on and off between clocks, the outpt of DLATCH() and D(LATCH())
+ *	does not change, whereas the internal simulated latch in the
+ *	last statement sets, which is reflected in the Output of D()
+ *	The same applies analogously to the reset input.
+ *
+ *******************************************************************/
+
+QX1.0 = SR(IX0.0, IX0.1, c);	// SR can reset while set is still on
+				// and vice versa, which latches can not

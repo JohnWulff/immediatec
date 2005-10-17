@@ -1,0 +1,6 @@
+%{
+%#include	<stdio.h>
+%}
+
+in1 = IX0.0;
+if (in1) { printf("iC is here!!\n"); }

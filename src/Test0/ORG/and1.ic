@@ -1,0 +1,24 @@
+/********************************************************************
+ *
+ *	Bit function with simple and more complex call parameters
+ *
+ *	Value parameters which are called as iC expressions, may be
+ *	used more than once inside a function and are therefore not
+ *	merged with iC expressions with the same operator.
+ *
+ *	By counting whether a parameter is only used once, merging
+ *	might be attempted in that case, but the extra complication
+ *	was not deemed necessary or particularly useful.
+ *
+ *******************************************************************/
+
+imm bit and(bit i0, bit i1) {
+    this = i0 & i1;
+}
+
+QX0.0 = and(IX0.0, IX0.1);				// simple call
+QX0.1 = (IX0.0 & IX0.1) & (IX0.2 & IX0.3);		// merged into one node
+QX0.2 = and(IX0.0, IX0.1) & and(IX0.2, IX0.3);		// same - merged into one node
+
+QX0.3 = and(and(IX0.0, IX0.1), and(IX0.2, IX0.3));	// complex parameters not merged
+QX0.4 = and(IX0.0 & IX0.1, IX0.2 & IX0.3);		// same as previous

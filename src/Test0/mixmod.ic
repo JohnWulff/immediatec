@@ -1,0 +1,37 @@
+/********************************************************************
+ *
+ *	test mixed mode use mixed bits, bytes and words
+ *
+ *	error only if compiled with icc -i 63 (or < 63)
+ *
+ *******************************************************************/
+
+imm int word2;
+imm bit bit2;
+imm bit bit3;
+imm int word4;
+imm int byte5;
+
+/* INPUT */
+
+QX0.0 = IX0.0;		// OK
+QX0.1 = IX1.1;
+QB1   = IB1;		// mixes with IX1.1
+word2 = IW2;
+bit2  = IX2.0;		// mixes with IW2
+bit3  = IX3.0;		// mixes with IW2
+word4 = IW4;
+byte5 = IB5;		// mixes with IW4
+
+/* OUTPUT */
+
+QW2 = QX2.0 & QX1.0;	// mixes with QW2 and QB1
+QW4 = 5 * QX5.7;	// mixes with QW4
+QW6 = QB6;		// mixes with QW6
+QW8 = QB9;		// mixes with QW8
+QW11 = QB1;		// uneven, QB1 mixes with QX1.0
+QB6 = word4 / 5;
+QB9 = byte5 + word2;
+QX2.0 = bit2 & bit3;
+QX1.0 = bit2 | bit3;
+QX5.7 = bit2 ^ bit3;

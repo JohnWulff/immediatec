@@ -1,0 +1,32 @@
+/********************************************************************
+ *
+ *	test arnc and logc assignment
+ *
+ *******************************************************************/
+
+imm int a1, a2, a3;
+imm bit b1, b2, b3;
+
+%{
+int
+cf1(void)
+{
+    a1 = b3 * a3;	// must be very careful variables are
+    a2 = a1 + a3;	// updated sequentially
+    b1 = a2 < 10;	// if a2 is evaluated before a1, a2 will be wrong
+    b2 = a2 < 20 || b3;
+    return a1 + a2;
+} /* cf1 */
+%}
+a3 = IB1 + IB2;
+b3 = IX0.0 & IX0.1;
+
+QB1 = a1;	// a1 =
+QB2 = a2;	// a2 =
+QB3 = a3;	// a3 =
+QB4 = IB4 + cf1();	// cf1() only executed when IB4 changes
+		// QB4 =
+
+QX0.1 = b1;
+QX0.2 = b2;
+QX0.3 = b3;

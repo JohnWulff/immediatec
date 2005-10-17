@@ -1,0 +1,14 @@
+%{
+%#include	<stdio.h>
+%}
+
+if (IX0.0) {
+    printf("IX0.0 is TRUE\n");
+} else {
+    printf("IX0.0 is FALSE\n");
+}
+if (IB1) {
+    printf("IB1 is TRUE\n");
+} else {
+    printf("IB1 is FALSE\n");
+}

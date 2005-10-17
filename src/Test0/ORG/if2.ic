@@ -1,0 +1,9 @@
+%{
+%#include	<stdio.h>
+%}
+
+if (IX0.1) {
+    printf("IX0.0 is on!!\n");
+} else {
+    printf("IX0.0 is off again!!\n");
+}

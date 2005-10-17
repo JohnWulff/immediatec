@@ -1,0 +1,48 @@
+/********************************************************************
+ *
+ *	test short conditional expression
+ *
+ * Conditional expression expr1 ? : expr3
+ * Excerpt from 'info gcc'
+ * ======================================
+ * 5.8 Conditionals with Omitted Operands
+ * ======================================
+ * The middle operand in a conditional expression may be omitted.  Then if
+ * the first operand is nonzero, its value is the value of the conditional
+ * expression.
+ * 
+ *    Therefore, the expression
+ * 
+ *      x ? : y
+ * 
+ * has the value of `x' if that is nonzero; otherwise, the value of `y'.
+ * 
+ *    This example is perfectly equivalent to
+ * 
+ *      x ? x : y
+ * 
+ * In this simple case, the ability to omit the middle operand is not
+ * especially useful.  When it becomes useful is when the first operand
+ * does, or may (if it is a macro argument), contain a side effect.  Then
+ * repeating the operand in the middle would perform the side effect
+ * twice.  Omitting the middle operand uses the value already computed
+ * without the undesirable effects of recomputing it.
+ *
+ * warning: ISO C forbids omitting the middle term of a ?: expression
+ *
+ *******************************************************************/
+
+immC int a;
+immC int b;
+
+QB1 = IB1 ? : IB2;		/* compiled as iC statement */
+
+if (IX0.0) {
+    QB2 = IB1 ? : IB2;		/* compiled as C statement */
+    QB3 = a++ ? : IB2;		/* conditional with side effect */
+    QB4 = b++ ? b++ : IB2;	/* conditional with active side effect */
+}
+
+if (IX0.1) {
+    a = b = 0;			/* reset a and b */
+}

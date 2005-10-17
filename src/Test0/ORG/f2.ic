@@ -1,0 +1,7 @@
+c =	CLOCK((CHANGE(IB1) | reset) & ~QX0.2);
+reset =	CHANGE(IX0.0, c);
+QB1 =	SH(IB1, c);
+hilo =	IB1 - QB1 > 1 | QB1 - IB1 > 1;
+QX0.0 =	LATCH(hilo, IB1 == QB1);
+QX0.1 =	SR(hilo,    reset);
+QX0.2 =	SR(hilo, c, reset);

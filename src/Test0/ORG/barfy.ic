@@ -1,0 +1,66 @@
+/********************************************************************
+ *
+ *	bar1.ic - vertical bar demo
+ *
+ *	QX0 outputs the value of a shift register made up of SR flip
+ *	flops m0 to m7. These are clocked by an internally generated
+ *	clock c0. It looks like running lights when displayed.
+ *
+ *	By changing the input IB4 the clocking speed on m0 to m7,
+ *	which is output on QX0.0 to QX0.7 is set to IB4 * 50 ms.
+ *	A value of 0 on input IB4 lets you clock the running
+ *	lights manually via input IX0.0
+ *
+ *	Output QX1.0 indicates the direction of the running
+ *	lights on QX0 - just to show a bit of internal logic.
+ *
+ *******************************************************************/
+
+imm bit bar(
+    assign bit m0,
+    assign bit m1,
+    assign bit m2,
+    assign bit m3,
+    assign bit m4,
+    assign bit m5,
+    assign bit m6,
+    assign bit m7,
+    clock c
+)
+{
+    return       SR(~m7 & m6, m0 & ~m1, c);
+	    m0 = SR(~this     , this & ~m1, c);
+	    m1 = SR(~this & m0, this & ~m2, c);
+	    m2 = SR(~this & m1, this & ~m3, c);
+	    m3 = SR(~this & m2, this & ~m4, c);
+	    m4 = SR(~this & m3, this & ~m5, c);
+	    m5 = SR(~this & m4, this & ~m6, c);
+	    m6 = SR(~this & m5, this & ~m7, c);
+	    m7 = SR(~this & m6, this      , c);
+}
+
+imm bit base =	TX0.1 & ~IX0.2 & ~IX0.3 & ~IX0.4 & ~IX0.5 & ~IX0.6 & ~IX0.7 |
+		TX0.2 &  IX0.2 & ~IX0.3 & ~IX0.4 & ~IX0.5 & ~IX0.6 & ~IX0.7 |
+		TX0.3 &           IX0.3 & ~IX0.4 & ~IX0.5 & ~IX0.6 & ~IX0.7 |
+		TX0.4 &                    IX0.4 & ~IX0.5 & ~IX0.6 & ~IX0.7 |
+		TX0.5 &                             IX0.5 & ~IX0.6 & ~IX0.7 |
+		TX0.6 &                                      IX0.6 & ~IX0.7 |
+		TX0.7 &                                               IX0.7;
+imm timer t = TIMER(base, ~base);		/* selected timer */
+
+imm int d0 = IB8;	
+imm bit f0 = IB8;
+
+imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+imm clock c0 = CLOCK(b0);
+
+QX9.0 = bar(QX0.0, QX0.1, QX0.2, QX0.3, QX0.4, QX0.5, QX0.6, QX0.7, c0);
+QX9.1 = bar(QX1.0, QX1.1, QX1.2, QX1.3, QX1.4, QX1.5, QX1.6, QX1.7, c0);
+QX9.2 = bar(QX2.0, QX2.1, QX2.2, QX2.3, QX2.4, QX2.5, QX2.6, QX2.7, c0);
+QX9.3 = bar(QX3.0, QX3.1, QX3.2, QX3.3, QX3.4, QX3.5, QX3.6, QX3.7, c0);
+QX9.4 = bar(QX4.0, QX4.1, QX4.2, QX4.3, QX4.4, QX4.5, QX4.6, QX4.7, c0);
+QX9.5 = bar(QX5.0, QX5.1, QX5.2, QX5.3, QX5.4, QX5.5, QX5.6, QX5.7, c0);
+QX9.6 = bar(QX6.0, QX6.1, QX6.2, QX6.3, QX6.4, QX6.5, QX6.6, QX6.7, c0);
+QX9.7 = bar(QX7.0, QX7.1, QX7.2, QX7.3, QX7.4, QX7.5, QX7.6, QX7.7, c0);
+// d0  =
+// IB8 =

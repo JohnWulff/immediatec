@@ -1,0 +1,16 @@
+/********************************************************************
+ *
+ *	aa4e.ic
+ *
+ *	The built in int function blocks SHR() and SHSR() return
+ *	the arithmetic type SH (*), which is built up from a compiled
+ *	node H r or H s r, which are cloned correctly and form single
+ *	independent nodes in arithemetic expressions in which SHR()
+ *	or SHSR() are used as values. No attempt is made to merge these
+ *	into the arithmetic expression.
+ *
+ *******************************************************************/
+
+QB0 = IB6 + SH(IB0) * SH(IB3) * IB7;
+QB1 = IB6 + SHR(IB0, IX0.1) * SHR(IB3, IX0.1) * IB7;
+QB2 = IB6 + SHSR(IB0, IX0.0, IX0.1) * SHSR(IB3, IX0.0, IX0.1) * IB7;

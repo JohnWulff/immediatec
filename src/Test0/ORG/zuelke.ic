@@ -1,0 +1,21 @@
+/********************************************************************
+ *
+ *	Zuelke Beispiel - Luzern 19.Apil.2005
+ *
+ *******************************************************************/
+
+use strict;
+
+imm bit Up   = IX0.0;	// move up
+imm bit Down = IX0.1;	// move down
+imm bit Stop = IX0.2;	// stop motor
+imm bit Top  = IX0.3;	// stop up movement because top limit has been reached
+imm bit Bot  = IX0.4;	// stop down movement because bottom limit has been reached
+
+imm bit Moving, MotorUp,  MotorDown;
+Moving    = MotorUp | MotorDown;
+MotorUp   = LATCH(Up   & ~Moving, Top | Stop);
+MotorDown = LATCH(Down & ~Moving, Bot | Stop);
+
+QX0.0 = MotorUp;
+QX0.1 = MotorDown;

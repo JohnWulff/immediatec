@@ -1,0 +1,13 @@
+use strict;
+
+imm void fun(int a, assign imm int b) {
+    b = a + 2;
+}
+
+imm int x;
+
+fun(IB1, x);	/* x is declared */
+fun(IB2, y);	/* y is not declared (default bit) */
+
+QB1 = x + 3;
+QB2 = y + 3;

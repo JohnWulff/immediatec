@@ -1,0 +1,24 @@
+%{
+%#include	<stdio.h>
+%}
+
+imm int del1;
+del1 = IX0.0 ? IB1 : 5;
+t  = TIMER(CHANGE(IX0.3));
+switch (IB1, t, del1) {
+    case 0:
+	printf("IB1 is 0!!\n");
+	break;
+    case 1:
+	printf("IB1 is 1!!\n");
+	break;
+    case 2:
+	printf("IB1 is 2!!\n");
+	break;
+    case 3:
+	printf("IB1 is 3!!\n");
+	break;
+    default:
+	printf("IB1 is >= 4!!\n");
+	break;
+}

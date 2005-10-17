@@ -1,0 +1,5 @@
+imm clock clk1 = CLOCK(IX0.6, ~IX0.6);
+imm clock clk2 = CLOCK(IX0.7, ~IX0.7);
+QX0.0 = JK((IB1 & 0x7f) == 0x41 + (IB2 << 1), (IB1 & IB3) == IB3 | IX0.0, iClock);
+QX0.1 = JK(IB4 - 1, IB5 - 1, clk2);
+QX0.2 = JK(IB6 - 1, clk1, IB7 - 1, clk2);

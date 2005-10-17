@@ -1,0 +1,214 @@
+/********************************************************************
+ *
+ *	Parcel sorter for long belts
+ *	Author:	J.E. Wulff
+ *	Source: Test0/sort32i.ic
+ *
+ *******************************************************************/
+
+/********************************************************************
+ *
+ *	Feeder segment
+ *
+ *******************************************************************/
+
+imm bit feeder(			/* feeds code into feeder segment */
+	imm bit transfer,	/* photo cell to transfer code */
+ assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+	imm int code,		/* destination code - 0 to 31 */
+	imm int length,		/* sets the length of the segment */
+	imm int width,		/* width of lock frame 6 + 6 for 0x7f */
+	imm clock c,		/* stepping clock for the belt */
+    )
+{
+    extern imm bit reset;	/* general re-initialisation */
+    imm bit pip   = RISE(transfer & ~this & ~reset, c);
+    imm int shift = SHR((shift << 1) + (pip * (0x41 + (code << 1))), c, reset);
+    imm int mask  = 0x41 << width;
+    carryOut = (shift >> length) & 0x00000001;
+    this = SRX(pip,		/* unlock after width steps */
+	       (shift & mask) == mask | reset, c);
+}
+
+/********************************************************************
+ *
+ *	Segment
+ *
+ *	Each segment controls one gate and may be up to 32 steps long
+ *
+ *******************************************************************/
+
+imm bit segment(		/* returns gate control output */
+	imm int carryIn,	/* shift bit (as int) from the previous segment */
+ assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+	imm int code,		/* code identifying this segment */
+	imm int length,		/* segment length */
+	imm int width,		/* width of the gate */
+	imm clock c,		/* stepping clock for the belt */
+    )
+{
+    extern imm bit reset;	/* general re-initialisation */
+    imm int shift = SHR((shift << 1) + carryIn, c, reset);
+    imm int mask  = 0x41 << width;
+    carryOut = (shift >> length) & 0x00000001;
+    this = SRX((shift & 0x7f) == 0x41 + (code << 1),
+	       (shift & mask) == mask | reset, c);
+}
+
+/********************************************************************
+ *
+ *	Belt
+ *
+ *	Each belt has 32 gates
+ *
+ *******************************************************************/
+
+imm int belt(
+    	assign	imm bit lock,		/* lock indicator */
+    	assign	imm bit gate00,
+    	assign	imm bit gate01,
+    	assign	imm bit gate02,
+    	assign	imm bit gate03,
+    	assign	imm bit gate04,
+    	assign	imm bit gate05,
+    	assign	imm bit gate06,
+    	assign	imm bit gate07,
+    	assign	imm bit gate08,
+    	assign	imm bit gate09,
+    	assign	imm bit gate10,
+    	assign	imm bit gate11,
+    	assign	imm bit gate12,
+    	assign	imm bit gate13,
+    	assign	imm bit gate14,
+    	assign	imm bit gate15,
+    	assign	imm bit gate16,
+    	assign	imm bit gate17,
+    	assign	imm bit gate18,
+    	assign	imm bit gate19,
+    	assign	imm bit gate20,
+    	assign	imm bit gate21,
+    	assign	imm bit gate22,
+    	assign	imm bit gate23,
+    	assign	imm bit gate24,
+    	assign	imm bit gate25,
+    	assign	imm bit gate26,
+    	assign	imm bit gate27,
+    	assign	imm bit gate28,
+    	assign	imm bit gate29,
+    	assign	imm bit gate30,
+    	assign	imm bit gate31,
+		imm int code,		/* gate code 0 to 31 for parcel destination */
+		imm bit p_cell,		/* photo cell monitoring parcel onto belt */
+		imm bit strobe,		/* strobe pulse from belt movement */
+    )
+{
+    imm int carfd;			/* carry bits */
+    imm int car00, car01, car02, car03, car04, car05, car06, car07;
+    imm int car08, car09, car10, car11, car12, car13, car14, car15;
+    imm int car16, car17, car18, car19, car20, car21, car22, car23;
+    imm int car24, car25, car26, car27, car28, car29, car30, car31;
+
+    imm clock clk = CLOCK(strobe);
+
+    lock   = feeder(p_cell, carfd, code, 12, 11, clk);
+    gate00 = segment(carfd, car00,    0, 12,  7, clk);
+    gate01 = segment(car00, car01,    1, 12,  7, clk);
+    gate02 = segment(car01, car02,    2, 12,  7, clk);
+    gate03 = segment(car02, car03,    3, 12,  7, clk);
+    gate04 = segment(car03, car04,    4, 12,  7, clk);
+    gate05 = segment(car04, car05,    5, 12,  7, clk);
+    gate06 = segment(car05, car06,    6, 12,  7, clk);
+    gate07 = segment(car06, car07,    7, 12,  7, clk);
+    gate08 = segment(car07, car08,    8, 12,  7, clk);
+    gate09 = segment(car08, car09,    9, 12,  7, clk);
+    gate10 = segment(car09, car10,   10, 12,  7, clk);
+    gate11 = segment(car10, car11,   11, 12,  7, clk);
+    gate12 = segment(car11, car12,   12, 12,  7, clk);
+    gate13 = segment(car12, car13,   13, 12,  7, clk);
+    gate14 = segment(car13, car14,   14, 12,  7, clk);
+    gate15 = segment(car14, car15,   15, 12,  7, clk);
+    gate16 = segment(car15, car16,   16, 12,  7, clk);
+    gate17 = segment(car16, car17,   17, 12,  7, clk);
+    gate18 = segment(car17, car18,   18, 12,  7, clk);
+    gate19 = segment(car18, car19,   19, 12,  7, clk);
+    gate20 = segment(car19, car20,   20, 12,  7, clk);
+    gate21 = segment(car20, car21,   21, 12,  7, clk);
+    gate22 = segment(car21, car22,   22, 12,  7, clk);
+    gate23 = segment(car22, car23,   23, 12,  7, clk);
+    gate24 = segment(car23, car24,   24, 12,  7, clk);
+    gate25 = segment(car24, car25,   25, 12,  7, clk);
+    gate26 = segment(car25, car26,   26, 12,  7, clk);
+    gate27 = segment(car26, car27,   27, 12,  7, clk);
+    gate28 = segment(car27, car28,   28, 12,  7, clk);
+    gate29 = segment(car28, car29,   29, 12,  7, clk);
+    gate30 = segment(car29, car30,   30, 12,  7, clk);
+    gate31 = segment(car30, car31,   31, 12,  7, clk);
+    this = car31;			/* allows concatenation of belts */
+}
+
+/********************************************************************
+ *
+ *	Generate tick
+ *	input fast1 or fast2 cause 50 ms ticks
+ *	else tick for every change of manual input
+ *
+ *******************************************************************/
+
+imm bit tick(bit manual, bit fast1, bit fast2) {
+    imm bit fast = fast1 | fast2;
+    this = CHANGE(manual & ~fast | TX0.4 & fast);
+}
+
+/********************************************************************
+ *
+ *	4 belts
+ *
+ *	Each belt has 32 gates
+ *
+ *******************************************************************/
+
+imm bit reset = IX0.7;	/* general re-initialisation */
+
+QX8.0 = belt(
+    QX8.1,		/* lock indicator */
+    QX0.0, QX0.1, QX0.2, QX0.3, QX0.4, QX0.5, QX0.6, QX0.7,
+    QX1.0, QX1.1, QX1.2, QX1.3, QX1.4, QX1.5, QX1.6, QX1.7,
+    QX2.0, QX2.1, QX2.2, QX2.3, QX2.4, QX2.5, QX2.6, QX2.7,
+    QX3.0, QX3.1, QX3.2, QX3.3, QX3.4, QX3.5, QX3.6, QX3.7,
+    IB3,		/* gate code 0 to 31 for parcel destination */
+    IX0.1,		/* photo cell monitoring parcel onto belt */
+    tick(IX0.0, IX0.6, IX0.5), /* strobe pulse from belt movement */
+);
+
+QX8.2 = belt(
+    QX8.3,		/* lock indicator */
+    QX4.0, QX4.1, QX4.2, QX4.3, QX4.4, QX4.5, QX4.6, QX4.7,
+    QX5.0, QX5.1, QX5.2, QX5.3, QX5.4, QX5.5, QX5.6, QX5.7,
+    QX6.0, QX6.1, QX6.2, QX6.3, QX6.4, QX6.5, QX6.6, QX6.7,
+    QX7.0, QX7.1, QX7.2, QX7.3, QX7.4, QX7.5, QX7.6, QX7.7,
+    IB7,		/* gate code 0 to 31 for parcel destination */
+    IX4.1,		/* photo cell monitoring parcel onto belt */
+    tick(IX4.0, IX4.6, IX0.5), /* strobe pulse from belt movement */
+);
+
+QX8.4 = belt(
+    QX8.5,		/* lock indicator */
+    QX10.0, QX10.1, QX10.2, QX10.3, QX10.4, QX10.5, QX10.6, QX10.7,
+    QX11.0, QX11.1, QX11.2, QX11.3, QX11.4, QX11.5, QX11.6, QX11.7,
+    QX12.0, QX12.1, QX12.2, QX12.3, QX12.4, QX12.5, QX12.6, QX12.7,
+    QX13.0, QX13.1, QX13.2, QX13.3, QX13.4, QX13.5, QX13.6, QX13.7,
+    IB13,		/* gate code 0 to 31 for parcel destination */
+    IX10.1,		/* photo cell monitoring parcel onto belt */
+    tick(IX10.0, IX10.6, IX0.5), /* strobe pulse from belt movement */
+);
+
+QX8.6 = belt(
+    QX8.7,		/* lock indicator */
+    QX14.0, QX14.1, QX14.2, QX14.3, QX14.4, QX14.5, QX14.6, QX14.7,
+    QX15.0, QX15.1, QX15.2, QX15.3, QX15.4, QX15.5, QX15.6, QX15.7,
+    QX16.0, QX16.1, QX16.2, QX16.3, QX16.4, QX16.5, QX16.6, QX16.7,
+    QX17.0, QX17.1, QX17.2, QX17.3, QX17.4, QX17.5, QX17.6, QX17.7,
+    IB17,		/* gate code 0 to 31 for parcel destination */
+    IX14.1,		/* photo cell monitoring parcel onto belt */
+    tick(IX14.0, IX14.6, IX0.5), /* strobe pulse from belt movement */
+);

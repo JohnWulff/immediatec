@@ -1,0 +1,32 @@
+/********************************************************************
+ *
+ *	Int function with simple and more complex call parameters
+ *
+ *	Int expressions returned by an imm int function block are
+ *	associated with a pre-compiled C-function, which cannot be
+ *	merged with the expression in which that function might be
+ *	called, which is associated with a different C-function, in
+ *	which the called function block is one element. For this
+ *	reason special provisions have been taken in the compiler to
+ *	make the 'type' returned by an imm int function block
+ *	different from a normal int (ARNF rather than ARN). This
+ *	prevents merging of ARNF expressions with ARN expressions
+ *	in op_push(). Otherwise ARNF and ARN expressions are handled
+ *	the same and produce the same code. Later in the first loop
+ *	of listNet() all ARNF nodes are changed back to ARN nodes
+ *	so the execution code did not need to be changed. No ARNF
+ *	nodes are visible to the user; both are marked by + in the
+ *	listing.
+ *
+ *******************************************************************/
+
+imm int plus(int i0, int i1) {
+    this = i0 + i1;
+}
+
+QB0 = plus(IB0, IB1);				// simple call
+QB1 = (IB0 + IB1) + (IB2 + IB3);		// one arithmetic expression
+
+QB2 = plus(IB0, IB1) + plus(IB2, IB3);		// not merged into one node
+QB3 = plus(plus(IB0, IB1), plus(IB2, IB3));	// same - complex parameters not merged
+QB4 = plus(IB0 + IB1, IB2 + IB3);		// same as previous two

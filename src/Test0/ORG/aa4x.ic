@@ -1,0 +1,47 @@
+imm void Sub() {
+    return this;
+}
+
+imm void Sub0() {
+    return IX0.0 & IX0.1;
+}
+
+imm void Sub00() {
+    this = IX0.2 & IX0.3;
+}
+
+imm bit Sub1() {
+    return IX0.0 & IX0.1;
+}
+
+imm bit Sub11() {
+    this = IX0.2 & IX0.3;
+}
+
+imm bit Sub2() {
+    return 2;
+}
+
+imm bit Sub22() {
+    this = 2 + 2;
+}
+
+imm int Sub3() {
+    return IB1 + IB2;
+}
+
+imm int Sub33() {
+    this = IB3 + IB4;
+}
+
+imm int Sub4() {
+    return 4;
+}
+
+imm int Sub44() {
+    this = 4 + 4;
+}
+
+QX0.0 = Sub1() & Sub11();
+QB1 = Sub3() + Sub4();
+QB2 = Sub33() + Sub44();

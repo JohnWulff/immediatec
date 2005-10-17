@@ -1,0 +1,17 @@
+/********************************************************************
+ *
+ *	aa4a.ic and aa4b.ic produce identical code in the final call
+ *
+ *	imm bit function blocks called in bit expressions compile OK
+ *
+ *******************************************************************/
+
+imm bit Sub0(bit i0, bit i1, bit i2) {
+    return i0 & i1 | i2;
+}
+
+imm bit Sub1(bit i3, bit i4, bit i5) {
+    return i3 & (i4 | i5);
+}
+
+QX0.0 = IX0.6 | Sub0(IX0.0, IX0.1, IX0.2) & Sub1(IX0.3, IX0.4, IX0.5) & IX0.7;

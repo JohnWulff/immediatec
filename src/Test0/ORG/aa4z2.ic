@@ -1,0 +1,51 @@
+/********************************************************************
+ *
+ *	nested int functions
+ *
+ *******************************************************************/
+
+imm int Sub3() {
+    return IB1 + IB2;
+}
+
+imm int Sub33() {
+    this = IB3 + IB4;
+}
+
+imm int Sub4() {
+    return 4;
+}
+
+imm int Sub44() {
+    this = 4 + 4;
+}
+
+imm int Sub55() {
+    this = 5 + 5;
+}
+
+imm int Nest1() {
+    return Sub3() + Sub4();
+}
+imm int Nest2() {
+    this = Sub4() + Sub33();
+}
+imm int Nest3() {
+    return Sub3() + Sub33();
+}
+imm int Nest4() {
+    this = Sub44() + Sub33();
+}
+imm int Nest5() {
+    return Sub33() + Sub44();
+}
+imm int Nest6() {
+    this = Sub4() + Sub55();
+}
+
+QB1 = Nest1() + Sub4();
+QB2 = Sub4() + Nest2();
+QB3 = Nest3() + Sub33();
+QB4 = Sub44() + Nest4();
+QB5 = Nest5() + Sub44();
+QB6 = Sub4() + Nest6();

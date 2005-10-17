@@ -1,0 +1,11 @@
+/********************************************************************
+ *
+ *	Test detection of C++ comments in embedded C code
+ *
+ *******************************************************************/
+
+// C++ style comment in iC code is always OK
+
+if (IX0.0) {
+    QB1 = IB1 + IB2;	// C++ comment in embedded C reported by -P option
+}

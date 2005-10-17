@@ -1,0 +1,3 @@
+imm timer t = TIMER(IX0.0, ~IX0.0);
+QX0.1 = D(IX0.1, t, 10);
+QX0.2 = D(IX0.2, t, 010 * 0xa);

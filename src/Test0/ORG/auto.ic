@@ -1,0 +1,15 @@
+/********************************************************************
+ *
+ *	protect against C keywords in iC programs
+ *
+ *******************************************************************/
+
+imm bit auto, char, continue, while;
+
+auto = char & continue & while;	// strange
+
+char     = IX0.0 & IX0.7;
+continue = IX0.1 & IX0.7;
+while    = IX0.2 & IX0.7;
+
+QX0.0    = auto;

@@ -1,0 +1,18 @@
+/********************************************************************
+ *
+ *	aa4f.ic aa4g.ic - simple case
+ *
+ *	imm int function blocks called in int assignment compile OK
+ *
+ *******************************************************************/
+
+imm int Sub0(int i0, int i1, int i2) {
+    return i0 * i1 + i2;
+}
+
+imm int Sub1(int i3, int i4, int i5) {
+    return i3 * (i4 + i5);
+}
+
+QB0 = Sub0(IB0, IB1, IB2);
+QB1 = Sub1(IB3, IB4, IB5);

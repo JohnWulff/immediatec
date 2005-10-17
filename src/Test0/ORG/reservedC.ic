@@ -1,0 +1,76 @@
+/********************************************************************
+ *
+ *	Test with C keywords in iC programs
+ *
+ *  extra C keywords cause syntax error if used as immediate variables.
+ *  The erroneous line in the iC code is marked with a pointer to the
+ *  offending keyword.
+ *
+ *  Otherwise the C compiler would flag them with a syntax error message
+ *  referring to the line number of the generated Gate in the C code
+ *  produced by the iC compiler, which is harder to trace back to the source.
+ *
+ *  C keywords int if else extern return switch and void used in iC cause
+ *  similar iC syntax errors if used as immediate variable names.
+ *
+ *  Also 'this' used wrongly causes a syntax error.
+ *
+ *******************************************************************/
+
+imm bit auto		= IX0.0 & IX0.1;
+imm bit break		= IX0.0 & IX0.1;
+imm bit case		= IX0.0 & IX0.1;
+imm bit char		= IX0.0 & IX0.1;
+imm bit const		= IX0.0 & IX0.1;
+imm bit continue	= IX0.0 & IX0.1;
+imm bit default		= IX0.0 & IX0.1;
+imm bit do		= IX0.0 & IX0.1;
+imm bit double		= IX0.0 & IX0.1;
+imm bit else		= IX0.0 & IX0.1;
+imm bit enum		= IX0.0 & IX0.1;
+imm bit extern		= IX0.0 & IX0.1;
+imm bit float		= IX0.0 & IX0.1;
+imm bit for		= IX0.0 & IX0.1;
+imm bit goto		= IX0.0 & IX0.1;
+imm bit if		= IX0.0 & IX0.1;
+imm bit int		= IX0.0 & IX0.1;
+imm bit long		= IX0.0 & IX0.1;
+imm bit register	= IX0.0 & IX0.1;
+imm bit return		= IX0.0 & IX0.1;
+imm bit short		= IX0.0 & IX0.1;
+imm bit signed		= IX0.0 & IX0.1;
+imm bit sizeof		= IX0.0 & IX0.1;
+imm bit static		= IX0.0 & IX0.1;
+imm bit struct		= IX0.0 & IX0.1;
+imm bit switch		= IX0.0 & IX0.1;
+imm bit typedef		= IX0.0 & IX0.1;
+imm bit union		= IX0.0 & IX0.1;
+imm bit unsigned	= IX0.0 & IX0.1;
+imm bit void		= IX0.0 & IX0.1;
+imm bit volatile	= IX0.0 & IX0.1;
+imm bit while		= IX0.0 & IX0.1;
+imm bit fortran		= IX0.0 & IX0.1;
+imm bit asm		= IX0.0 & IX0.1;
+
+/* complete list from K&R 2nd ed. p 192 */
+
+/* 'this' only allowed inside function block definitions */
+
+imm bit this		= IX0.0 & IX0.1;
+
+imm int error()
+{
+    imm bit this;		/* declararion of 'this' is implicit */
+    return		  IB1 + IB2;
+}
+
+imm bit ok1()
+{
+    imm bit this;		/* correct declaration does no harm */
+    this		= IX0.0 & IX0.1;	/* equivalent to return */
+}
+
+imm bit ok2()
+{
+    return		  IX0.0 & IX0.1;	/* equivalent to this = */
+}
