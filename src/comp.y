@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.91 2005/09/28 15:04:23 jw Exp $";
+"@(#)$Id: comp.y,v 1.92 2006/01/10 11:54:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -17,16 +17,17 @@
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#ifdef WIN32
+#include	<process.h>
+#else	/* WIN32 */
 #include	<unistd.h>
+#endif	/* WIN32 */
 #include	<string.h>
 #include	<ctype.h>
-#include	<setjmp.h>
 #include	<assert.h>
 
 #include	"icc.h"
 #include	"comp.h"
-
-/* "comp.y	3.70	95/02/03 Copyright (C) 1985-1993 by John E. Wulff" */
 
 static void	unget(int);		/* shares buffers with get() */
 static long	getNumber(void);	/* shares buffers with get() */
@@ -55,7 +56,6 @@ static char *	iFunSyText = 0;		/* pointer to function symbol text when active */
 Sym		iRetSymbol;		/* .v is pointer to imm function return Symbol */
 static char *	stmtp;			/* manipulated in iClex() only */
 static void	clrBuf(void);
-static int	ierrorCnt = 0;		/* count errors - abort after 100 errors */
 %}
 
 %union {		/* stack type */
@@ -1085,7 +1085,7 @@ expr	: UNDEF			{
 		if ($2.v) {
 		    int typ;
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
-			(((typ = sp->type & TM) != ARNC && typ != ARN &&
+			(((typ = sp->type & TM) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
@@ -1108,7 +1108,7 @@ expr	: UNDEF			{
 		if ($2.v) {
 		    int typ;
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
-			(((typ = sp->type & TM) != ARNC && typ != ARN &&
+			(((typ = sp->type & TM) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
@@ -2255,7 +2255,6 @@ funcBody
 returnStatement
 	: RETURN actexpr		{
 		$$.f = $2.f; $$.l = $2.l;		/* TODO $$.f should be func$ */
-		if ($2.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$$.v = returnStatement(&$2);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(0, "return", (Lis*)&$$);
@@ -2536,8 +2535,6 @@ int		lineno = 0;			/* count first line on entry to get() */
 
 int		c_number = 0;			/* case number for cexe.c */
 int		outFlag = 0;			/* global flag for compiled output */
-extern jmp_buf	beginMain;
-extern int	maxErrCount;
 static jmp_buf	begin;
 static int	lex_typ[] = { DEF_TYP };	/* tokens corresponding to type */
 static int	lex_act[] = { DEF_ACT };	/* tokens corresponding to ftype */
@@ -2588,20 +2585,50 @@ compile(
 	r = 0;
 	if (strlen(iC_defines) == 0) {
 	    /* pre-compile if iC files contains any #include, #define #if etc */
-	    snprintf(execBuf, BUFS, "grep -q '^[ \t]*#' %s", inpPath);
-	    r = system(execBuf);		/* test with grep if #include in input */
+#ifdef	WIN32
+	    fflush(iC_outFP);
+	    /* CMD.EXE does not know '' but does not interpret $, so use "" */
+	    /* don't use system() because Win98 command.com does not return exit status */
+	    /* use spawn() instead - spawnlp() searches Path */
+	    r = _spawnlp( _P_WAIT, "perl",  "perl",  "-e", "\"$s=1; while (<>) { if (/^[ \\t]*#/) { $s=0; last; } } exit $s;\"", inpPath, NULL );
+	    if (r < 0) {
+		ierror("cannot spawn perl -e ...", inpPath);
+		perror("spawnlp");
+		return Iindex;			/* error opening input file */
+	    }
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e \"$s=1; print 'perl $s = ', $s, '...'; while (<>) { if (/^[ \\t]*#/) { $s=0; print 'perl $_ = ', $_, '...'; last; } } print 'perl $s = ', $s, '...'; exit $s;\" %s; $? = %d\n", inpPath, r);
+#endif
+#else	/* not WIN32 */
+	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^[ \\t]*#/) { $s=0; last; } } exit $s;' %s", inpPath);
+	    r = system(execBuf);		/* test with perl script if #include in input */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: %s; $? = %d\n", execBuf, r);
+#endif
+#endif	/* WIN32 */
 	}
+#if YYDEBUG
+	else {
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### iC_defines = %s; $? = %d\n", iC_defines, r);
+	}
+#endif
 	if (r == 0) {
-	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #xxx was found by grep */
+	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #xxx was found by perl script */
 	    /* pass the input file through the C pre-compiler to resolve #includes and macros */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);
 		perror("unlink");
 		return T0index;			/* error unlinking temporary file */
 	    }
-	    /* Cygnus does not understand cc - use macro CC=gcc - pass comments with -C */
+#ifdef	WIN32
+	    /* cl does not know -x c, -E is preprocess to stdout, no -o option  */
+	    snprintf(execBuf, BUFS, "cl %s -E -C -I/usr/local/include %s > %s 2> %s",
+		iC_defines, inpPath, T0FN, T6FN);
+#else	/* not WIN32 */
+	    /* Cygnus does not understand cc - use macro CC=gcc, pass comments with -C */
 	    snprintf(execBuf, BUFS, SS(CC) "%s -E -C -I/usr/local/include -x c %s -o %s 2> %s",
 		iC_defines, inpPath, T0FN, T6FN);
+#endif	/* WIN32 */
 	    r1 = system(execBuf);		/* Pre-compile iC file */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
@@ -2675,6 +2702,7 @@ get(FILE* fp, int x)
     char	tempNM[BUFS];
     char	tempBuf[TSIZE];
 
+    prevflag = lineflag;
     while (getp[x] == 0 || (c = *getp[x]++) == 0) {
 	if (iniPtr) {
 	    iniLen = strcspn(iniPtr, "\n");
@@ -2726,18 +2754,48 @@ get(FILE* fp, int x)
 		lineno = savedLineno;
 	    }
 	    /********************************************************
-	     *  handle C-pre-processor # 1 "/usr/include/stdio.h"
+	     *  WIN32 - cl pre-processor
+	     *    handle C-pre-processor #line 1 "c:\\usr\\include\\stdio.h"
+	     *  Linux or Cygnus - gcc or Intel icc pre-processor
+	     *    handle C-pre-processor # 1 "/usr/include/stdio.h"
 	     ********************************************************/
-	    if (sscanf(chbuf[x], " # %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2) {
-		lineno = temp1 - 1;		/* handled in iC and C-code */
-		lexflag |= C_LINE;
-		if ((lexflag & C_PARSE) == 0) {
-		    /* iC parse only */
+	    if ((lexflag & C_PARSE) == 0) {
+		/* iC parse only */
+#ifdef	WIN32
+		if (strchr(chbuf[x], '\\') != 0) {
+		    int	    c;
+		    int	    slFlag;
+		    char *  srcp;
+		    char *  destp;
+    		
+		    slFlag = 0;
+		    srcp = destp = chbuf[x];	/* modify source line */
+		    while ((c = *srcp++) != 0) {
+			if (c != '\\') {
+        		    *destp++ = c;
+			    slFlag = 0;		/* copy '\' after another character */
+			} else if (slFlag == 0) {
+			    *destp++ = '/';	/* convert '\\' to '/' under WIN32 */
+			    slFlag = 1;		/* skip 2nd, 4th ... '\' */
+			} else {
+			    slFlag = 0;		/* copy 3rd, 5th ... '\' */
+			}
+		    }
+        	    *destp++ = '\0';		/* terminate string */
+		}
+		if (sscanf(chbuf[x], " #line %d \"%[-/:A-Za-z_.0-9<>]\"",
+#else	/* not WIN32 */
+		if (sscanf(chbuf[x], " # %d \"%[-/A-Za-z_.0-9<>]\"",
+#endif	/* WIN32 */
+		    &temp1, inpNM) == 2) {
+		    lineno = temp1 - 1;		/* handled in iC-code */
+		    lexflag |= C_LINE;
 		    if (strcmp(inpNM, prevNM) && strchr(inpNM, '<') == 0) {
 			lexflag &= ~C_FIRST;	/* report # 1 if file has changed */
+			/* don't change to inpNM <built-in> and sytem headers */
+			strncpy(prevNM, inpNM, BUFS);	/* inpNM has been modified */
 		    }
 		    getp[x] = NULL;		/* bypass parsing this line in iC */
-		    strncpy(prevNM, inpNM, BUFS);	/* inpNM has been modified */
 		}
 	    } else
 	    /********************************************************
@@ -2758,7 +2816,11 @@ get(FILE* fp, int x)
 	     *  C-compile
 	     *  handle pre-processor #line 1 "file.ic"
 	     ********************************************************/
+#ifdef	WIN32
+	    if ((slen = sscanf(chbuf[x], " # line %d \"%[-/:A-Za-z_.0-9<>]\"	%s",
+#else	/* not WIN32 */
 	    if ((slen = sscanf(chbuf[x], " # line %d \"%[-/A-Za-z_.0-9<>]\"	%s",
+#endif	/* WIN32 */
 		&temp1, tempNM, tempBuf)) >= 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
@@ -3483,13 +3545,8 @@ ierror(						/* print error message */
 {
     iclock->type = ERR;				/* prevent execution */
     errmess("Error", str1, str2);
-    if (++ierrorCnt >= maxErrCount) {
-	fprintf(iC_outFP, "*** too many errors - compilation aborted\n");
-	fflush(iC_outFP);
-	if (errFlag) {
-	    fprintf(iC_errFP, "*** too many errors - compilation aborted\n");
-	    fflush(iC_errFP);
-	}
+    if (++iC_iErrCount >= iC_maxErrCount) {
+	errmess("Error", "too many errors - compilation aborted", NS);
 	if (T0FP) fseek(T0FP, 0L, SEEK_END);	/* flush rest of file */
 	longjmp(beginMain, Iindex);
     }

@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.14 2005/08/27 21:53:53 jw Exp $";
+"@(#)$Id: lmain.c,v 1.15 2005/10/22 13:07:58 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -17,7 +17,9 @@ static const char lmain_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#ifndef _WINDOWS
 #include	<unistd.h>
+#endif	/* _WINDOWS */
 #include	<string.h>
 #include 	"icc.h"
 #include 	"comp.h"
@@ -170,11 +172,11 @@ main(
 	r = 0;
 	if (strlen(iC_defines) == 0) {
 	    /* pre-compile if C files contains any #include, #define #if etc */
-	    snprintf(execBuf, BUFS, "grep -q '^[ \t]*#' %s", inpPath);
-	    r = system(execBuf);		/* test with grep if #include in input */
+	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^[ \\t]*#/) { $s=0; last; } } exit $s;' %s", inpPath);
+	    r = system(execBuf);		/* test with perl script if #include in input */
 	}
 	if (r == 0) {
-	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #xxx was found by grep */
+	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #xxx was found by perl script */
 	    /* pass the input file through the C pre-compiler to resolve #includes */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);

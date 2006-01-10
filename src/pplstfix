@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#!/usr/bin/perl
 
 #################################################################
 #
@@ -35,6 +35,8 @@
 #   V1.13: 22.12.04 Change Copyright to include 2005
 #   V1.14: 02.03.05 Accept negative constansts
 #   V1.15: 05.03.05 New algorithm to format individual logic expansions
+#   V1.16: 05.09.28 More precise regular expressions - allow $ at start of name
+#   V1.17: 05.10.28 Add -o option to specify an output file (Windows has trouble with >)
 #
 #################################################################
 
@@ -43,17 +45,18 @@ use strict;
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [-l <log_file>] file ...
+Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	$named
+	-o out	produce output file (default: stdout)
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.16 2005/09/28 14:26:10 jw Exp $
+$Id: pplstfix,v 1.17 2006/01/10 12:03:27 jw Exp $
 .
 
-use vars qw($opt_l $opt_h);
+use vars qw($opt_o $opt_l $opt_h);
 require "getopts.pl";
-&Getopts('l:h');		# sets $opt_h if -h etc
+&Getopts('o:l:h');		# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -66,6 +69,8 @@ my $OPS  = qr"[-.+\"^&|%*#/>({=\][<:!@?ktwi]";	# DEBUG display of types from icc
 my $FOPS = qr"[UA _EsrHVSRDIFGCTBWX:!]";	# DEBUG display of ftypes from icc.h
 my $LOPS = qr"[UA _EsrHVSRDIFGCTBWX:!~?]";	# DEBUG display of ftypes or negation
 
+
+open STDOUT, ">$opt_o" or die "Can't redirect stdout to '$opt_o': $!" if $opt_o;
 open LOG, ">$opt_l" or die "Can't create '$opt_l': $!" if $opt_l;
 while ($ARGV = shift @ARGV) {
     unless (open (IN, $ARGV)) {

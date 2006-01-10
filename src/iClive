@@ -10,7 +10,7 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	iClive display for iC sources and listings
+#	iClive; display for iC sources and listings
 #
 #	A full description is in the POD documentation at the end
 #
@@ -167,7 +167,7 @@ Usage:
 
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.38 2005/09/23 19:20:44 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.39 2006/01/10 12:51:05 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -2990,20 +2990,20 @@ other than these.
 The following extra bindings have been defined for iClive:
 
 [32]
-   Alt-n   open a NEW file
-   Alt-o   OPEN a file
-   Alt-l   switch beteen iC-source and iC-LISTING
-   Alt-s   SAVE current file
-   Alt-a   saveAS current file under a new name
-   Alt-h   HELP for iClive
-   Alt-q   QUIT iClive
+   Alt-n   open a New file
+   Alt-o   Open a file
+   Alt-l   switch beteen iC-source and iC-Listing
+   Alt-s   Save current file
+   Alt-a   saveAs current file under a new name
+   Alt-h   Help for iClive
+   Alt-q   Quit iClive
 
-   Alt-b   BUILD executable from current iC-file
-   Alt-u   UNCONDITIONALLY save and build
+   Alt-b   Build executable from current iC-file
+   Alt-u   Unconditionally save and build
    Alt-c   build C-file only from current iC-file
 
-   Alt-r   RUN/Stop the current executable
-   Alt-e   switch between EDIT/Live mode
+   Alt-r   Run/stop the current executable
+   Alt-e   switch between Edit/live mode
 
 If the widget is disabled, as it is in 'Live' mode, then its view can
 still be adjusted and text can still be selected, but no insertion
@@ -3034,17 +3034,17 @@ continue editing click in the text window again.
 
 [37]
    The view in the widget can be adjusted by dragging
-   with mouse button 2. (same in both modes)
+   with mouse button 3. (same in both modes)
 
 [38]
    In 'Live' mode the following Accelerators work without
    the Alt-Key pressed:
-    l   switch beteen iC-source and iC-LISTING
-    h   HELP for iClive
-    q   QUIT iClive
-    r   STOP the current executable (Alt-r to RUN again)
-    s   STOP the current executable (Alt-r to RUN again)
-    e   switch to EDIT mode         (Alt-e for LIVE mode)
+    l   switch beteen iC-source and iC-Listing
+    h   Help for iClive
+    q   Quit iClive
+    r   stop the current executable (Alt-r to RUN again)
+    s   Stop the current executable (Alt-r to RUN again)
+    e   switch to Edit mode         (Alt-e for LIVE mode)
    All these accelerators (except s) also work with the
    Alt-Key pressed.
 

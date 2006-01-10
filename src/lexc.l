@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.25 2005/09/28 15:17:15 jw Exp $";
+"@(#)$Id: lexc.l,v 1.26 2005/10/04 16:03:36 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -260,6 +260,7 @@ static int
 cpp_comment(c_STYPE* u)
 {
     int c;
+    static int errorCnt = 0;
 
     count(u);				/* count "//" */
 
@@ -270,6 +271,11 @@ cpp_comment(c_STYPE* u)
 	if (iC_debug & 040) putc(c, yyout);
 #endif
     } while (c != '\n');
+#ifndef LMAIN
+    if (iC_Pflag && errorCnt++ == 0) {	/* report only once */
+	warning("C++ style comments are not allowed in ISO C90:", c_text);
+    }
+#endif
     column = 0;
     gramLine++;
     return 0;

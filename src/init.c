@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.29 2005/09/17 20:47:26 jw Exp $";
+"@(#)$Id: init.c,v 1.30 2005/10/21 18:51:44 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -44,6 +44,15 @@ struct bi {
     unsigned char	ftype;
 };
 
+/********************************************************************
+ *
+ *  Old built in symbols for iC used if calling compiler with -d12000
+ *
+ *  these are now handled by pre-defined built in function blocks
+ *  later in this source.
+ *
+ *******************************************************************/
+
 static struct bi builtinsOld[] = {
     /* name	type	uVal	ftype */
   { "DR",	KEYW,	BLTIN2,	D_FF,	}, /* D flip-flop with reset */
@@ -52,7 +61,6 @@ static struct bi builtinsOld[] = {
   { "SHSR",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with set/reset */
 #ifdef SR_X 
   /*
-   * default SR(set, reset) is cross checked
    * define here if SR(set, res) is cross checked in initialFunctions
    * SRX(set, res) always has this feature
    * cross checked SR is not the default because of extra code generated
@@ -66,6 +74,23 @@ static struct bi builtinsOld[] = {
   { "DLATCH",	KEYW,	DLATCH,	D_FF,	},
   { 0,		0,	0,	0,	},
 };
+
+/********************************************************************
+ *
+ *  All standard built in symbols for iC
+ *
+ *  extra C keywords cause a syntax error if used as immediate variables.
+ *  The erroneous line in the iC code is marked with a pointer to the
+ *  offending keyword.
+ *
+ *  Otherwise the C compiler would flag them with a syntax error message
+ *  referring to the line number of the generated Gate in the C code
+ *  produced by th iC compiler, which is harder to trace back to the source.
+ *
+ *  C keywords int if else extern return switch and void used in iC cause
+ *  similar iC syntax errors if used as immediate variable names.
+ *
+ *******************************************************************/
 
 static struct bi builtins[] = {
     /* name	type	uVal	ftype */
@@ -82,11 +107,8 @@ static struct bi builtins[] = {
 #endif
   { "SR_",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
   { "SRT",	KEYW,	BLTINT,	S_FF,	}, /* monoflop with timed reset*/
-  { "IF",	KEYW,	IF,	F_CF,	},
   { "if",	KEYW,	IF,	F_CF,	},
-  { "ELSE",	KEYW,	ELSE,	F_CE,	},
   { "else",	KEYW,	ELSE,	F_CE,	},
-  { "SWITCH",	KEYW,	SWITCH,	F_SW,	},
   { "switch",	KEYW,	SWITCH,	F_SW,	},
   { "CLOCK",	KEYW,	CBLTIN,	CLCK,	},
   { "TIMER",	KEYW,	TBLTIN,	TIMR,	}, /* normal timer with preset off 0 */
@@ -106,10 +128,112 @@ static struct bi builtins[] = {
   { "int",	KEYW,	TYPE,	ARITH,	},
   { "clock",	KEYW,	TYPE,	CLCKL,	},
   { "timer",	KEYW,	TYPE,	TIMRL,	},
+  { "this",	KEYW,	LEXERR,	0,	}, /* only used in function block definitions */
+  { "auto",	KEYW,	LEXERR,	0,	}, /* C keywords to cause syntax errors if used in iC */
+  { "break",	KEYW,	LEXERR,	0,	},
+  { "case",	KEYW,	LEXERR,	0,	},
+  { "char",	KEYW,	LEXERR,	0,	},
+  { "const",	KEYW,	LEXERR,	0,	},
+  { "continue",	KEYW,	LEXERR,	0,	},
+  { "default",	KEYW,	LEXERR,	0,	},
+  { "do",	KEYW,	LEXERR,	0,	},
+  { "double",	KEYW,	LEXERR,	0,	},
+  { "enum",	KEYW,	LEXERR,	0,	},
+  { "float",	KEYW,	LEXERR,	0,	},
+  { "for",	KEYW,	LEXERR,	0,	},
+  { "goto",	KEYW,	LEXERR,	0,	},
+  { "long",	KEYW,	LEXERR,	0,	},
+  { "register",	KEYW,	LEXERR,	0,	},
+  { "short",	KEYW,	LEXERR,	0,	},
+  { "signed",	KEYW,	LEXERR,	0,	},
+  { "sizeof",	KEYW,	LEXERR,	0,	},
+  { "static",	KEYW,	LEXERR,	0,	},
+  { "struct",	KEYW,	LEXERR,	0,	},
+  { "typedef",	KEYW,	LEXERR,	0,	},
+  { "union",	KEYW,	LEXERR,	0,	},
+  { "unsigned",	KEYW,	LEXERR,	0,	},
+  { "volatile",	KEYW,	LEXERR,	0,	},
+  { "while",	KEYW,	LEXERR,	0,	},
+  { "fortran",	KEYW,	LEXERR,	0,	},
+  { "asm",	KEYW,	LEXERR,	0,	},
   { "iC_Gt",	CTYPE,	YYERRCODE, 0,	}, /* initial Gate C-type from icg.h */
   { ICONST,	NCONST, 0,	ARITH,	}, /* iConst Symbol */
   { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
   { 0,		0,	0,	0,	},
+};
+
+/********************************************************************
+ *
+ *	iC system function definitions
+ *
+ *	These definitions are parsed before any line of iC code is read.
+ *
+ *	WARNING: make sure lines are not more than CBUFSZ-1 (124) chars long
+ *		 otherwise sytem aborts in get().
+ *
+ *	Suggestion: make internally declared immediate variables 1 char long
+ *		 to keep generated listing names short. 'i' is a good choice.
+ *
+ *	A listing of these functions can be generated with    -d10044
+ *	Old style imm functions without these definitions use -d20000
+ *
+ *******************************************************************/
+
+const char initialFunctions[] = "\
+/* iC system function definitions */\n\
+"
+#ifdef SR_X 
+"\
+imm bit SR(bit set, clock scl, bit res, clock rcl) {\n\
+    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
+"
+#endif
+"\
+imm bit SRX(bit set, clock scl, bit res, clock rcl) {\n\
+    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
+imm bit JK(bit set, clock scl, bit res, clock rcl) {\n\
+    return SR_(~this & set, scl, this & res, rcl); }\n\
+imm bit DR(bit dat, clock dcl, bit res, clock rcl) {\n\
+    return DR_(dat & ~res | this & res, dcl, res, rcl); }\n\
+imm bit DSR(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
+    imm bit i = set | res;\n\
+    return DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl); }\n\
+imm int SHR(int dat, clock dcl, bit res, clock rcl) {\n\
+    return SHR_( res ? this : dat, dcl, res, rcl); }	/* line 202 */\n\
+imm int SHSR(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
+    return SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
+imm bit LATCH(bit set, bit res) {\n\
+    return FORCE(this, set, res); }\n\
+imm bit DLATCH(bit set, bit res, clock clk) {\n\
+    return D(FORCE(this, set, res), clk); }\n\
+/* end iC system function definitions */\n\
+";
+
+/********************************************************************
+ *
+ *  The following function blocks generate C functions 1 and 2
+ *  *** adjust line numbers to point to correct line in initialFunctions
+ *  *** comment string is required in comp.y line 2538
+ *  *** tab before comment is required in comp.y line 2586
+ *  *** adjust GEN_COUNT in comp.h to reflect correct number (used in comp.y)
+ *
+ *  genName and genLineNums are used to identify function lines in get()
+ *  generated with genLines.
+ *
+ *******************************************************************/
+
+const char *	genLines[]  = {
+    "",
+    "#line 202 \"init.c\"	/* in pre-compiled function block SHR */",
+    "#line 204 \"init.c\"	/* in pre-compiled function block SHSR */",
+};
+
+const char *	genName = "init.c";	/* must be the same as above */
+
+int		genLineNums[] = {
+    0,
+    202,				/* must be the same as above */
+    204,
 };
 
 void
@@ -155,83 +279,3 @@ init(void)				/* install constants and built-ins */
 	}
     }
 }
-
-
-
-
-
-
-
-/********************************************************************
- *
- *	iC system function definitions
- *
- *	These definitions are parsed before any line of iC code is read.
- *
- *	WARNING: make sure lines are not more than CBUFSZ-1 (124) chars long
- *		 otherwise sytem aborts in get().
- *
- *	Suggestion: make internally declared immediate variables 1 char long
- *		 to keep generated listing names short. 'i' is a good choice.
- *
- *	A listing of these functions can be generated with    -d10044
- *	Old style imm functions without these definitions use -d20000
- *
- *******************************************************************/
-
-const char initialFunctions[] = "\
-/* iC system function definitions */\n\
-"
-#ifdef SR_X 
-"\
-imm bit SR(bit set, clock scl, bit res, clock rcl) {\n\
-    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
-"
-#endif
-"\
-imm bit SRX(bit set, clock scl, bit res, clock rcl) {\n\
-    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
-imm bit JK(bit set, clock scl, bit res, clock rcl) {\n\
-    return SR_(~this & set, scl, this & res, rcl); }\n\
-imm bit DR(bit dat, clock dcl, bit res, clock rcl) {\n\
-    return DR_(dat & ~res | this & res, dcl, res, rcl); }\n\
-imm bit DSR(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
-    imm bit i = set | res;\n\
-    return DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl); }\n\
-imm int SHR(int dat, clock dcl, bit res, clock rcl) {\n\
-    return SHR_( res ? this : dat, dcl, res, rcl); }\n\
-imm int SHSR(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
-    return SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
-imm bit LATCH(bit set, bit res) {\n\
-    return FORCE(this, set, res); }\n\
-imm bit DLATCH(bit set, bit res, clock clk) {\n\
-    return D(FORCE(this, set, res), clk); }\n\
-/* end iC system function definitions */\n\
-";
-
-/********************************************************************
- *
- *  The following function blocks generate C functions 1 and 2
- *  *** adjust line numbers to point to correct line in initialFunctions
- *  *** comment string is required in comp.y line 2538
- *  *** tab before comment is required in comp.y line 2586
- *  *** adjust GEN_COUNT in comp.h to reflect correct number (used in comp.y)
- *
- *  genName and genLineNums are used to identify function lines in get()
- *  generated with genLines.
- *
- *******************************************************************/
-
-const char *	genLines[]  = {
-    "",
-    "#line 202 \"init.c\"	/* in pre-compiled function block SHR */",
-    "#line 204 \"init.c\"	/* in pre-compiled function block SHSR */",
-};
-
-const char *	genName = "init.c";	/* must be the same as above */
-
-int		genLineNums[] = {
-    0,
-    202,				/* must be the same as above */
-    204,
-};

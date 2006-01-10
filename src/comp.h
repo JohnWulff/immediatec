@@ -16,7 +16,9 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.50 2005/09/27 17:35:27 jw Exp $";
+"@(#)$Id: comp.h,v 1.51 2005/10/18 11:41:42 jw Exp $";
+
+#include	<setjmp.h>
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -138,6 +140,9 @@ extern int	lexflag;
 #define C_FUNCTION	0400
 
 extern int	lineno;
+extern int	iC_maxErrCount;
+extern int	iC_iErrCount;
+extern jmp_buf	beginMain;
 					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */

@@ -22,21 +22,26 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.13 2005/07/14 09:27:22 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.14 2006/01/08 13:24:58 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
 #define MY_INT_MAX
 #endif
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include	<sys/types.h>
+#ifdef	WIN32
+#include	<windows.h>
+#else	/* WIN32 */
+#include	<unistd.h>
+#include	<sys/socket.h>
+#include	<netinet/in.h>
+#include	<arpa/inet.h>
+#define SOCKET   int
+#endif	/* WIN32 */
+#include	<stdio.h>
+#include	<stdlib.h>
+#include	<string.h>
 
 /* restore the command line definition of INT_MAX if it was 32767 for simulated 16 bit */
 #ifdef MY_INT_MAX
@@ -64,12 +69,12 @@ extern const char *	iC_hostNM;	/* 127.0.0.1 */
 extern const char *	iC_portNM;	/* immcc service */
 extern char *		iC_iccNM;	/* immcc name qualified with instance */
 extern char *		iC_iidNM;	/* instance ID */
-extern float		iC_timeout;	/* in seconds */
+extern double		iC_timeout;	/* in seconds */
 
-extern int		iC_connect_to_server(const char* host, const char* port, float delay);
+extern SOCKET		iC_connect_to_server(const char* host, const char* port, double delay);
 extern int		iC_wait_for_next_event(int maxFN);
-extern int		iC_rcvd_msg_from_server(int sock, char* buf, int maxLen);
-extern void		iC_send_msg_to_server(int sock, const char* msg);
+extern int		iC_rcvd_msg_from_server(SOCKET sock, char* buf, int maxLen);
+extern void		iC_send_msg_to_server(SOCKET sock, const char* msg);
 
 extern fd_set		iC_rdfds;
 extern fd_set		iC_infds;

@@ -10,7 +10,7 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	iC generic Demo Box
+#	iCbox; generic Demo Box
 #	adapted from
 #	Example 14-1 Simple UI Code
 #	Sriram Srinivasan: Advanced Perl p. 224
@@ -109,7 +109,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.42 2005/08/22 21:43:32 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.43 2006/01/10 12:50:39 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 

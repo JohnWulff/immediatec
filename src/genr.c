@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.65 2005/09/30 21:09:25 jw Exp $";
+"@(#)$Id: genr.c,v 1.66 2006/01/10 11:55:01 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,9 +19,9 @@ static const char genr_c[] =
 #include	<windows.h>
 #endif
 #include	<stdio.h>
-#ifndef _WINDOWS 
+#ifndef	WIN32
 #include	<stdlib.h>
-#endif
+#endif	/* WIN32 */
 #include	<string.h>
 #include	<assert.h>
 #include	<ctype.h>
@@ -403,6 +403,7 @@ op_not(List_e * right)			/* logical negation */
 	    break;
 
 	case ARNC:
+	case ARNF:
 	case ARN:
 	case LOGC:
 	case SH:
@@ -439,7 +440,11 @@ op_not(List_e * right)			/* logical negation */
 static void
 copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int gt_input, int sflag)
 {
-    if (gp->ftype == ARITH && (sp->type & TM) == ARN && lp->le_val != (unsigned) -1) {
+    int typ;
+
+    if (gp->ftype == ARITH &&
+	((typ = sp->type & TM) == ARN || typ == ARNF) &&
+	lp->le_val != (unsigned) -1) {
 	char *	cp = ePtr;
 
 	if (t_first) {				/* end of arith */
@@ -454,7 +459,9 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int gt_input, int sflag)
 	*ePtr = 0;
 	if ((gp->type & TM) == NCONST && strcmp(gp->name, ICONST) == 0) {
 	    if (t_first) {				/* end of arith */
-		assert(t_first = lp->le_first);
+		if (lp->le_first == 0) lp->le_first = t_first;
+		if (lp->le_last == 0) lp->le_last = t_last;
+		assert(t_first == lp->le_first);
 		assert(t_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
 		while (t_first < lp->le_last) {
 		    if (*t_first != '#') {		/* transmogrified '=' */
@@ -552,6 +559,7 @@ op_asgn(				/* asign List_e stack to links */
     int		fflag;
     Symbol *	sr;
     int		typ;
+    int		typ1;
     char	temp[TSIZE];
 
     assert(varList == 0);		/* checks that collectStatement has been executed */
@@ -887,7 +895,8 @@ op_asgn(				/* asign List_e stack to links */
 		} else					/* function reduction */
 		if (sp->type != ALIAS) {		/* ALIAS linked to u_blist is OK */
 		    /* test very carefully so no global Symbols are linked */
-		    if (gp->list == 0 && gp->u_blist && gp->type == ARN) {
+		    if (gp->list == 0 && gp->u_blist &&
+			((typ1 = gp->type & TM) == ARN || typ1 == ARNF)) {
 			gp->list = lp;			/* reverse first link for arith text */
 		    }
 		    for (tlp = saveBlist; tlp && tlp != lp; tlp = tlp->le_next) {
@@ -989,7 +998,7 @@ op_asgn(				/* asign List_e stack to links */
 	    nextInputLink: ;
 	}						/* end output scan for 1 gate */
 	if (iFunSymExt) sp->u_blist = saveBlist;
-	if ((sp->type & TM) == ARN) {
+	if ((typ1 = sp->type & TM) == ARN || typ1 == ARNF) {
 	    /********************************************************************
 	     * copy rest of arithmetic expression and finalise C-Code
 	     *******************************************************************/
@@ -1064,7 +1073,7 @@ op_asgn(				/* asign List_e stack to links */
 		    sp->next = varList;	/* put newly marked Symbol on function varList */
 		    varList = sp;	/* which is used to reconstitute templist when cloned */
 		}
-		if ((sp->type & TM) == ARN) {
+		if ((typ1 = sp->type & TM) == ARN || typ1 == ARNF) {
 		    assert(sp->list);
 		    t_first = sp->list->le_first;
 		    t_last = sp->list->le_last;
@@ -1629,14 +1638,18 @@ returnStatement(Lis * actexpr)
 {
     List_e *	lp;
     Symbol *	sp;
-    int		retType;
+    int		ftyp;
 
     if (iRetSymbol.v) {
-	retType = iRetSymbol.v->ftype;
-	if ((lp = actexpr->v) == 0 || (sp = lp->le_sym) == 0) {
+	ftyp = iRetSymbol.v->ftype;
+	if (actexpr->v == 0) {
+	    if (ftyp != ARITH)            { errBit(); return 0;	/* YYERROR */ }
+	    else if (const_push(actexpr)) { errInt(); return 0;	/* YYERROR */ }
+	}
+	if ((sp = actexpr->v->le_sym) == 0) {
 	    ierror("no expression to return:", iFunBuffer);
 	} else {
-	    switch (retType) {
+	    switch (ftyp) {
 	    case ARITH:
 	    case GATE:
 		if (sp->ftype != ARITH && sp->ftype != GATE) {
@@ -1645,7 +1658,7 @@ returnStatement(Lis * actexpr)
 		break;
 	    case CLCKL:
 	    case TIMRL:
-		if (sp->ftype != retType) {
+		if (sp->ftype != ftyp) {
 		    ierror("wrong return type for clock or timer:", iFunBuffer);
 		}
 		break;
@@ -1654,7 +1667,7 @@ returnStatement(Lis * actexpr)
 		break;
 	    }
 	}
-	sp = op_asgn(&iRetSymbol, actexpr, retType);
+	sp = op_asgn(&iRetSymbol, actexpr, ftyp);
     } else {
 	sp = 0;
 	ierror("return statement in void function:", iFunBuffer);
@@ -1770,6 +1783,7 @@ clearFunDef(Symbol * functionHead)
     /********************************************************************
      * Pass 1: statement list
      *******************************************************************/
+    assert(functionHead);
     slp = functionHead->u_blist;		/* start of statement list */
     if (slp == 0) {
 	return functionHead;			/* already cleared */
@@ -1934,67 +1948,67 @@ pushFunCall(Symbol * functionHead)
     int			saveCount;
     int			cF;
 
+    assert(functionHead);
     lp = functionHead->u_blist;
-    if (lp == 0) {
-	return 0;				/* report error later - no popFunCall */
-    }
-    lp = lp->le_next;				/* first varList link */
-    assert(lp);					/* must be a pair */
-    saveCount = lp->le_val;			/* allows call to store save block */
-    saveFunBs = (struct sF *) iC_emalloc(sizeof(struct sF) - 1 + saveCount * sizeof(void *));
-    saveFunBs->saveFunBs = oldSFunBs;
-    saveFunBs->iCallHead = iCallHead;		/* will be set up during the call */
-    saveFunBs->iFormNext = iFormNext;
-    saveFunBs->iFunClock = iFunClock;
-    /* other variables are saved in pushFunParameter() */
-    /********************************************************************
-     * Save function template parameter and declared variable links
-     * Assign parameter links are saved in Pass 1 with other parameters but not cleared.
-     * Declarations and assigns are saved and cleared in Pass 2 (assigns are saved twice).
-     * Assign parameter links are cleared in Pass 3 with other parameters.
-     * Pass 1: parameter list
-     *******************************************************************/
-    cF = 0;
-    lp = functionHead->list;			/* parameter list */
-    while (lp) {
-	sp = lp->le_sym;
-	assert(sp);
-	saveFunBs->iSav[cF++] = sp->list;	/* save parameter template link */
-	lp = lp->le_next;
-    }
-    /********************************************************************
-     * Pass 2: statement list
-     *******************************************************************/
-    lp = functionHead->u_blist;			/* statement list */
-    while (lp) {
-	sp = lp->le_sym;
-	assert(sp);
-	sp1 = ((lp1 = sp->list) != 0) ? lp1->le_sym : 0;
-	if (sp1 != functionHead) {		/* bypass return link */
-	    saveFunBs->iSav[cF++] = sp->list;/* save declaration or assign link */
-	    sp->list = 0;			/* clear link */
+    if (lp != 0) {
+	lp = lp->le_next;			/* first varList link */
+	assert(lp);				/* must be a pair */
+	saveCount = lp->le_val;			/* allows call to store save block */
+	saveFunBs = (struct sF *) iC_emalloc(sizeof(struct sF) - 1 + saveCount * sizeof(void *));
+	saveFunBs->saveFunBs = oldSFunBs;
+	saveFunBs->iCallHead = iCallHead;	/* will be set up during the call */
+	saveFunBs->iFormNext = iFormNext;
+	saveFunBs->iFunClock = iFunClock;
+	/* other variables are saved in pushFunParameter() */
+	/********************************************************************
+	 * Save function template parameter and declared variable links
+	 * Assign parameter links are saved in Pass 1 with other parameters but not cleared.
+	 * Declarations and assigns are saved and cleared in Pass 2 (assigns are saved twice).
+	 * Assign parameter links are cleared in Pass 3 with other parameters.
+	 * Pass 1: parameter list
+	 *******************************************************************/
+	cF = 0;
+	lp = functionHead->list;		/* parameter list */
+	while (lp) {
+	    sp = lp->le_sym;
+	    assert(sp);
+	    saveFunBs->iSav[cF++] = sp->list;	/* save parameter template link */
+	    lp = lp->le_next;
 	}
-	lp = lp->le_next;			/* next varList link */
-	assert(lp);				/* statement list is in pairs */
-	lp = lp->le_next;			/* next statement link */
+	/********************************************************************
+	 * Pass 2: statement list
+	 *******************************************************************/
+	lp = functionHead->u_blist;		/* statement list */
+	while (lp) {
+	    sp = lp->le_sym;
+	    assert(sp);
+	    sp1 = ((lp1 = sp->list) != 0) ? lp1->le_sym : 0;
+	    if (sp1 != functionHead) {		/* bypass return link */
+		saveFunBs->iSav[cF++] = sp->list;/* save declaration or assign link */
+		sp->list = 0;			/* clear link */
+	    }
+	    lp = lp->le_next;			/* next varList link */
+	    assert(lp);				/* statement list is in pairs */
+	    lp = lp->le_next;			/* next statement link */
+	}
+	assert(cF == saveCount);
+	/********************************************************************
+	 * Pass 3: parameter list again - clear links now
+	 *******************************************************************/
+	lp = functionHead->list;		/* parameter list */
+	while (lp) {
+	    sp = lp->le_sym;
+	    sp->list = 0;			/* clear parameter link */
+	    lp = lp->le_next;
+	}
+	/********************************************************************
+	 * set up for cloning
+	 *******************************************************************/
+	iCallHead = functionHead;		/* make avalable globally */
+	assert(iCallHead);			/* must have a function head */
+	iFormNext = iCallHead->list;		/* first formal parameter - may be 0 */
+	iFunClock = 0;				/* no unresolved clock parameters */
     }
-    assert(cF == saveCount);
-    /********************************************************************
-     * Pass 3: parameter list again - clear links now
-     *******************************************************************/
-    lp = functionHead->list;			/* parameter list */
-    while (lp) {
-	sp = lp->le_sym;
-	sp->list = 0;				/* clear parameter link */
-	lp = lp->le_next;
-    }
-    /********************************************************************
-     * set up for cloning
-     *******************************************************************/
-    iCallHead = functionHead;			/* make avalable globally */
-    assert(iCallHead);				/* must have a function head */
-    iFormNext = iCallHead->list;		/* first formal parameter - may be 0 */
-    iFunClock = 0;				/* no unresolved clock parameters */
     return functionHead;
 } /* pushFunCall */
 
@@ -2215,6 +2229,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
     char *		cp;
     char		temp[TSIZE];
 
+    assert(functionHead);
     slp = lp = functionHead->u_blist;		/* get 2 numbers in first elements of statement list */
     if (slp == 0) {
 	ierror("called function has no statements - cannot execute!", functionHead->name);
@@ -2324,6 +2339,9 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	} else
 	if (lp->le_sym == functionHead) {
 	    rsp = cloneSymbol(ssp);		/* clone return expression head Symbol */
+	    if ((rsp->type & TM) == ARN) {
+		rsp->type += (ARNF-ARN);	/* change ARN to ARNF */
+	    }
 	}					/* assign parameters alrady have a link */
 	slp = vlp->le_next;			/* next statement */
     }
@@ -2554,18 +2572,20 @@ cloneList(List_e * slp, Symbol * csp, Symbol * rsp)
 		ierror("no link from formal to real parameter:", ssp->name);
 		break;				/* cannot continue */
 	    }
-	} else
-	if (ssp->name) {			/* global variable Symbol */
-	    nsp = ssp;				/* pointer to global variable */
-	    nlp = 0;
-	    nval = 0;
-	    first = last = 0;
-	} else {				/* function internal Symbol ->name == 0 */
-	    nsp = (Symbol*)ssp->list;		/* link set up in cloneFunction varList scan */
-	    assert(nsp);
-	    if (nsp->u_blist == 0) {		/* clone internal expression recursively */
-		nsp->u_blist = slp;		/* set in case of tight feedback */
-		nsp->u_blist = cloneList(ssp->u_blist, nsp, rsp); /* unless in parallel branch */
+	} else {
+	    while ((ssp->type & TM) == ALIAS && (nlp = ssp->u_blist) != 0) {
+		ssp = nlp->le_sym;		/* resolve ALIAS in function */
+		assert(ssp);
+	    }
+	    if (ssp->name) {			/* global variable Symbol */
+		nsp = ssp;			/* pointer to global variable */
+	    } else {				/* function internal Symbol ->name == 0 */
+		nsp = (Symbol*)ssp->list;	/* link set up in cloneFunction varList scan */
+		assert(nsp);
+		if (nsp->u_blist == 0) {	/* clone internal expression recursively */
+		    nsp->u_blist = slp;		/* set in case of tight feedback */
+		    nsp->u_blist = cloneList(ssp->u_blist, nsp, rsp); /* unless in parallel branch */
+		}
 	    }
 	    nlp = 0;
 	    nval = 0;

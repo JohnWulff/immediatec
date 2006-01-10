@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.42 2005/08/18 12:17:24 jw Exp $";
+"@(#)$Id: rsff.c,v 1.43 2005/11/03 16:35:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -26,7 +26,9 @@ static const char rsff_c[] =
 #include	"tcpc.h"
 #endif /* TCP */
 
+#ifndef	WIN32
 #define min(x,y) ((x) < (y) ? (x) : (y))
+#endif	/* WIN32 */
 
 Gate		iConst = { 1, -NCONST, ARITH, 0, ICONST, 0, 0, 0 };
 
@@ -1568,8 +1570,10 @@ int
 iC_assignL(Gate * gm, int rv)
 #endif
 {
+    char val;
+
     assert(gm->gt_ini == -LOGC);
-    char val = rv ? -1 : 1;
+    val = rv ? -1 : 1;
     if (gm->gt_val != val) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {

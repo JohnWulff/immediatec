@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.21 2005/09/21 16:56:20 jw Exp $";
+"@(#)$Id: gram.y,v 1.22 2005/10/10 13:03:23 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -2100,7 +2100,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 		} else if ((typ != ARNC || ftyp != ARITH) &&
 			   (typ != LOGC || ftyp != GATE) &&
 			   (typ != ERR)) {	/* avoids multiple error messages */
-		    if ((typ == ARN && ftyp == ARITH) ||
+		    if (((typ == ARN || typ == ARNF) && ftyp == ARITH) ||
 		        (typ >= MIN_GT && typ < MAX_GT && ftyp == GATE)) {
 			ierror("C-assignment to an imm variable already assigned in iC code:", sp->name);
 		    } else {

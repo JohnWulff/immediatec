@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.16 2005/07/14 09:27:11 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.17 2006/01/08 13:56:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -21,9 +21,13 @@ static const char RCS_Id[] =
  *******************************************************************/
 
 #include	<stdio.h>
+#ifdef	WIN32
+#include	<Time.h>
+#else	/* WIN32 */
 #include	<netdb.h>
-#include	<ctype.h>
 #include	<sys/time.h>
+#endif	/* WIN32 */
+#include	<ctype.h>
 #include	<errno.h>
 #include	"tcpc.h"
 #include	"icc.h"
@@ -32,7 +36,7 @@ const char *	iC_hostNM = "localhost";	/* 127.0.0.1 */
 const char *	iC_portNM = "8778";		/* iC service */
 char *		iC_iccNM  = "stdin";		/* immcc name qualified with instance */
 char *		iC_iidNM  = "";			/* instance ID */
-float		iC_timeout = 0.05;		/* default 50 ms on 50 ms off */
+double		iC_timeout = 0.05;		/* default 50 ms on 50 ms off */
 
 fd_set		iC_rdfds;
 fd_set		iC_infds;
@@ -51,8 +55,14 @@ typedef struct NetBuffer {
 } NetBuffer;
 
 static struct timeval *	ptv = NULL;
+#ifdef	WIN32
+static int	freqFlag;
+static double	frequency;
+static LARGE_INTEGER freq, start, end;
+#else	/* WIN32 */
 static struct timeval	mt0;
 static struct timeval	mt1;
+#endif	/* WIN32 */
 
 /********************************************************************
  *
@@ -64,13 +74,36 @@ static struct timeval	mt1;
 void
 iC_microReset(int mask)
 {
+#ifdef	WIN32
+    QueryPerformanceCounter(&start);
+#else	/* WIN32 */
     gettimeofday(&mt0, 0);			/* reset for next measurement */
+#endif	/* WIN32 */
     iC_micro |= mask;
-} /* microReset */
+} /* iC_microReset */
 
 void
 iC_microPrint(const char * str, int mask)
 {
+#ifdef	WIN32
+    double fi;
+
+    if (freqFlag == 0 && QueryPerformanceFrequency(&freq)) {
+	freqFlag = 1;
+	frequency = freq.HighPart * 4294967296.0 + freq.LowPart;
+        // printf("frequency is %f\n", frequency);
+    }
+    if (freqFlag && QueryPerformanceCounter(&end)) {
+	// printf("start %d.%u\n", start.HighPart, start.LowPart);
+	// printf("end   %d.%u\n", end.HighPart, end.LowPart);
+	fi = ((double)(end.LowPart - start.LowPart) +
+	     (double)(end.HighPart - start.HighPart) * 4294967296.0) / frequency;
+	printf("%10.6f: %s\n", fi, str);
+        QueryPerformanceCounter(&start);	/* start of next measurement without print time */
+    } else {
+        printf("micro: %s\n", str);
+    }
+#else	/* WIN32 */
     long	sec;
     long	usec;
 
@@ -84,8 +117,9 @@ iC_microPrint(const char * str, int mask)
 	printf("%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
     gettimeofday(&mt0, 0);			/* start of next measurement without print time */
+#endif	/* WIN32 */
     iC_micro &= ~mask;
-} /* microPrint */
+} /* iC_microPrint */
 
 /********************************************************************
  *
@@ -96,18 +130,64 @@ iC_microPrint(const char * str, int mask)
  *
  *******************************************************************/
 
-int
+SOCKET
 iC_connect_to_server(const char *	host,
-		  const char *	port,
-		  float		delay)
+		     const char *	port,
+		     double		delay)
 {
-    int			sock;
+    SOCKET		sock;
     struct in_addr	sin_addr;
     unsigned short int	sin_port;
     struct sockaddr_in	server;
+#ifdef	WIN32
+    WORD		wVersionRequested;
+    WSADATA		wsaData;
+    int			err;
+
+//    wVersionRequested = MAKEWORD( 1, 0 );
+    wVersionRequested = MAKEWORD( 2, 2 );
+
+    err = WSAStartup( wVersionRequested, &wsaData );
+    if ( err != 0 ) {
+	/* Tell the user that we could not find a usable */
+	/* WinSock DLL.                                  */
+	fprintf(stderr, "WSAStartup failed: %d\n", err);
+	iC_quit(1);
+    }
+/*    fprintf(stderr, "WSAStartup: requested %d.%d, version %d.%d, high version %d.%d\n",
+	HIBYTE( wVersionRequested ), LOBYTE( wVersionRequested ),
+	HIBYTE( wsaData.wVersion ), LOBYTE( wsaData.wVersion ),
+	HIBYTE( wsaData.wHighVersion ), LOBYTE( wsaData.wHighVersion ));
+*/
+
+    /* Confirm that the WinSock DLL supports 2.2.*/
+    /* Note that if the DLL supports versions greater    */
+    /* than 2.2 in addition to 2.2, it will still return */
+    /* 2.2 in wVersion since that is the version we      */
+    /* requested. (works with 1.0 to 2.2 - JW 051107)    */
+
+    if ( LOBYTE( wsaData.wVersion ) != LOBYTE( wVersionRequested ) ||
+	    HIBYTE( wsaData.wVersion ) != HIBYTE( wVersionRequested ) ) {
+	/* Tell the user that we could not find a usable */
+	/* WinSock DLL.                                  */
+	WSACleanup( );
+	fprintf(stderr, "WSAStartup failed: requested %d.%d, got %d.%d\n",
+	    HIBYTE( wVersionRequested ), LOBYTE( wVersionRequested ),
+	    HIBYTE( wsaData.wVersion ), LOBYTE( wsaData.wVersion ));
+	iC_quit(1);
+    }
+
+    /* The WinSock DLL is acceptable. Proceed. */
+#endif	/* WIN32 */
 
     if (isdigit(*host)) {
-	if (inet_aton(host, &sin_addr) == 0) {
+#ifdef	WIN32
+	/* inet_addr() obselete under Linux because of 255.255.255.255 error return */
+	if ((sin_addr.S_un.S_addr = inet_addr(host)) == INADDR_NONE)
+#else	/* WIN32 */
+	if (inet_aton(host, &sin_addr) == 0)
+#endif	/* WIN32 */
+	{
 	    fprintf(stderr, "inet_aton with '%s' failed\n", host);
 	    iC_quit(1);
 	}
@@ -133,8 +213,13 @@ iC_connect_to_server(const char *	host,
 	sin_port = pServ->s_port;
     }
 
+#ifdef	WIN32
+    if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+	fprintf(stderr, "socket failed: %d\n", WSAGetLastError());
+#else	/* WIN32 */
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 	perror("socket failed");
+#endif	/* WIN32 */
 	iC_quit(1);
     }
 
@@ -154,7 +239,10 @@ iC_connect_to_server(const char *	host,
 	iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
     FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
+#ifndef	WIN32
     FD_SET(0, &iC_infds);		/* watch stdin for inputs - FD_CLR on EOF */
+    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
+#endif	/* WIN32 */
     FD_SET(sock, &iC_infds);		/* watch sock for inputs */
 
     iC_timeoutValue.tv_sec = (int)delay;
@@ -164,7 +252,7 @@ iC_connect_to_server(const char *	host,
 	ptv = &iC_timeoutCounter;
     }
     return sock;
-} /* connect_to_server */
+} /* iC_connect_to_server */
 
 /********************************************************************
  *
@@ -180,9 +268,15 @@ iC_wait_for_next_event(int maxFN)
     do {
 	iC_rdfds = iC_infds;
     } while ((retval = select(maxFN + 1, &iC_rdfds, 0, 0, ptv)) == -1 && errno == EINTR);
+#ifdef	WIN32
+    if (retval == -1) {
+	fprintf(stderr, "ERROR: select failed: %d\n", WSAGetLastError());
+	iC_quit(1);
+    }
+#endif	/* WIN32 */
 
     return retval;
-} /* wait_for_next_event */
+} /* iC_wait_for_next_event */
 
 /********************************************************************
  *
@@ -191,7 +285,7 @@ iC_wait_for_next_event(int maxFN)
  *******************************************************************/
 
 static int
-rcvd_buffer_from_server(int sock, char * buf, int length)
+rcvd_buffer_from_server(SOCKET sock, char * buf, int length)
 {
     int		len;
 
@@ -217,7 +311,7 @@ rcvd_buffer_from_server(int sock, char * buf, int length)
  *******************************************************************/
 
 int
-iC_rcvd_msg_from_server(int sock, char * buf, int maxLen)
+iC_rcvd_msg_from_server(SOCKET sock, char * buf, int maxLen)
 {
     NetBuffer	netBuf;
     int		len;
@@ -241,7 +335,7 @@ iC_rcvd_msg_from_server(int sock, char * buf, int maxLen)
 	}
     }
     return len;
-} /* rcvd_msg_from_server */
+} /* iC_rcvd_msg_from_server */
 
 /********************************************************************
  *
@@ -251,7 +345,7 @@ iC_rcvd_msg_from_server(int sock, char * buf, int maxLen)
  *******************************************************************/
 
 void
-iC_send_msg_to_server(int sock, const char * msg)
+iC_send_msg_to_server(SOCKET sock, const char * msg)
 {
     NetBuffer	netBuf;
     size_t	len = strlen(msg);
@@ -272,4 +366,4 @@ iC_send_msg_to_server(int sock, const char * msg)
 	perror("send failed");
 	iC_quit(1);
     }
-} /* send_msg_to_server */
+} /* iC_send_msg_to_server */

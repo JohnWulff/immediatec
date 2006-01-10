@@ -5,7 +5,7 @@
 #   icc.v is maintained under source control and the version number
 #   of icc.v is used as the version number of the iC release.
 #   Call: 	ident icc.v | README.tpl > ../README
-#   $Id: README.tpl,v 1.15 2005/07/04 14:07:03 jw Exp $
+#   $Id: README.tpl,v 1.16 2006/01/10 11:23:11 jw Exp $
 ########################################################################
 
 while (<>) {
@@ -173,7 +173,7 @@ print <<EOF;
 
 		iCmake *.ic
 
-	    The script 'a012.sh' starts 'iCserver', 3 x 'iCbox' and 'a012'
+	    The script 'a1.sh' starts 'iCserver', 'iCbox X0 B1 W2' and 'a1'
 	    which sets all outputs from inputs like a0 above.
 
 	11) The scripts 'bar3.sh' start demos showing running lights moving
@@ -192,8 +192,8 @@ print <<EOF;
 	    variables are displayed in a balloon, when the cursor rests
 	    on a variable. (Arithmetic variables have a blue background).
 
-	    The program 'iClive' cn use the Tk::TextUndo widget, an extension
-	    of Tk::Text. In 'Live' mode when a "live display" is shown the
+	    The program 'iClive' can use the Tk::TextUndo widget, an extension
+	    of Tk::Text. In 'Live' mode, when a "live display" is shown the
 	    text is read only. When the 'Edit' button is pressed 'iClive' is
 	    a full featured editor. The edit facilities of this program are
 	    described in the Tk::Text man page in the section 'BINDINGS'
@@ -226,12 +226,13 @@ print <<EOF;
 
         John E. Wulff   $YEAR.$MONTH.$DAY     <john\@je-wulff.de>
 
-	I currently use SuSE Linux 9.1 with Tk800.024. I have tested the
+	I currently use SuSE Linux 9.3 with Tk800.024. I have tested the
 	distribution with Cygwin under WinXP and a special binary distribution
 	of Tk800.023 (in the kit).
 
-	Test with Tk804.027 under MAC-OSX 1.3 works, but the live updates
-	in iClive are noticably slow. I do hope Tk804.27 is not generally
-	slower in tag-handling in Tk::Text.
+	A test with Tk804.027 under MAC-OSX 1.3 and Linux works, but live
+	updates in iClive are noticably slow. Tag-handling in Tk::Text is
+	much slower under Tk804.27 than under Tk800.024 with Linux.
+	Therefore I suggest staying with Tk800.024.
 EOF
 ########################################################################
