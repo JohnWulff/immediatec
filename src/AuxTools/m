@@ -3,14 +3,24 @@
 usage()
 {
     echo "Make all iC components for debugging and install them" >&2
-    echo "Usage [-ih] [[<iCmake_options>] <iC_sources>]" >&2
-    echo "  -i            execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
-    echo "                this is required to run make install as an ordinary user" >&2
-    echo '  -h            this help text' >&2
-    echo "  <iC_sources>  list of iC source files which will be made with iCmake" >&2
+    echo "Usage [-idszh] [[<iCmake_options>] <iC_sources>]" >&2
+    echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
+    echo "		this is required to run make install as an ordinary user" >&2
+    echo '	-d	make with -DDEQ           (make clean required first)' >&2
+    echo '		double ended queue processing is slightly faster' >&2
+    echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
+    echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
+    echo '		simulates compilation for a 16 bit system, which does' >&2
+    echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
+    echo '	-z	make with -DLONG16        (make clean required first)' >&2
+    echo '		produces code for long int arithmetic on a 16 bit system' >&2
+    echo '	-h	this help text' >&2
+    echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: m,v 1.5 2005/05/27 14:54:17 jw Exp $Id: m,v 1.5 2005/05/27 14:54:17 jw Exp $' >&2
+    echo '$Id: m,v 1.6 2006/04/17 19:17:22 jw Exp $Id: m,v 1.6 2006/04/17 19:17:22 jw Exp $' >&2
 }
+
+dsz=''
 
 if [ $# -gt 0 ]; then
     case $1 in
@@ -25,6 +35,9 @@ if [ $# -gt 0 ]; then
 		sudo -k
 		exit
 		;;
+	    d*) dsz="${dsz}d";;
+	    s*) dsz="${dsz}s";;
+	    z*) dsz="${dsz}z";;
 	    h*) usage; exit 255;;
 	    *)  break;;
 	    esac
@@ -35,8 +48,8 @@ if [ $# -gt 0 ]; then
     esac
 fi
 
-echo "### makeAll -qgcrtlm"
-./makeAll -qgcrtlm
+echo "### makeAll -qgcrtlm$dsz"
+./makeAll -qgcrtlm$dsz
 echo "### make install"
 make install
 if [ $# -gt 0 ]; then
