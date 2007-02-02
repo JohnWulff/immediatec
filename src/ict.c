@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.46 2005/09/02 13:55:45 jw Exp $";
+"@(#)$Id: ict.c,v 1.47 2006/02/23 17:40:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -28,7 +28,11 @@ static const char ict_c[] =
 #include	<time.h>
 #include	<errno.h>
 #include	<sys/types.h>
+#ifdef	WIN32
+#include	<Time.h>
+#else	/* WIN32 */
 #include	<sys/time.h>
+#endif	/* WIN32 */
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -36,13 +40,14 @@ static const char ict_c[] =
 #include	"icc.h"
 
 #define D10	10			/* 1/10 second select timeout under Linux */
+#define TLIMIT	4			/* TX0.4 is fastest timer */
 
 static iC_Functp * iC_i_lists[] = { I_LISTS };
 
 /********************************************************************
  *  initialise all lists with their name to aid symbolic debugging
  *  do this here because at least "flist" is needed in load() for
- *  ini output, which runs before icc().
+ *  ini output, which runs before iC_icc().
  *******************************************************************/
 /* these lists are toggled (initialised dynamically) */
 static Gate	alist0 = { 0, 0, 0, 0, "alist0", };
@@ -70,7 +75,7 @@ unsigned	iC_glit_cnt;		/* count glitches */
 unsigned long	glit_nxt;		/* count glitch scan */
 #endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 
-static int	sockFN = 0;		/* TCP/IP socket file number */
+static SOCKET	sockFN = 0;		/* TCP/IP socket file number */
 
 static Gate *	timNull[] = { 0, 0, 0, 0, 0, 0, 0, 0, }; /* speeds up tim[] lookup */
 static int	maxChannels = 0;
@@ -119,8 +124,10 @@ iC_icc(
     Gate **	tim = timNull;		/* point to array of 8 null pointers */
     Gate *	gp;
     iC_Functp	init_fa;
-    int		tcnt = 1;
-    float	delay = 0.0;		/* timer processing stopped */
+    int		tcnt1  = 1;
+    int		tcnt10 = 1;
+    int		tcnt60 = 1;
+    double	delay = 0.0;		/* timer processing stopped */
     int		retval;
 #ifdef	EFENCE
     msgBuf = iC_emalloc(REQUEST);
@@ -149,6 +156,10 @@ iC_icc(
 	assert(tim);
 	for (cnt = 1; cnt < 8; cnt++) {
 	    if (tim[cnt] != NULL) {	/* any of the 7 timers programmed ? */
+		if (cnt < TLIMIT) {
+		    fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_iccNM, cnt);
+		    iC_quit(6);
+		}
 		delay = iC_timeout;	/* yes - setup timer processing */
 		break;			/* could optimise by varying delay */
 	    }
@@ -198,7 +209,7 @@ iC_icc(
 			mask = 0x100;	/*block output of used bits for analog I/O */
 			assert(cn > 0);
 		    } else {
-			fprintf(iC_errFP, "\n%s: illformed output name '%s'\n", iC_iccNM, tbp + 1);
+			fprintf(iC_errFP, "\n%s: ill formed output name '%s'\n", iC_iccNM, tbp + 1);
 			iC_quit(3);
 		    }
 		}
@@ -520,8 +531,8 @@ iC_icc(
 	 *  Input from external input modules and time input if used
 	 *  Wait for input in a select statement most of the time
 	 *
-	 *  The iC_debug facility -d1000 stops linking the 100 msec and 1 second
-	 *  TIMERS tim[4] and tim[5] when they are connected directly to
+	 *  The iC_debug facility -d1000 stops linking the 100 ms to 60 second
+	 *  TIMERS tim[4] to tim[7] when they are connected directly to
 	 *  the slave input of a clock or timer Gate and that clock or timer
 	 *  has no Gates on the clock list it controls - ie nothing will happen.
 	 *  This stops continuous output when tracing logic (-d100 or -t) when
@@ -536,16 +547,16 @@ iC_icc(
 	    if (retval == 0) {
 		iC_timeoutCounter = iC_timeoutValue;	/* will repeat if timeout with input */
 		/********************************************************************
-		 *  TIMERS here every 100 milliseconds
+		 *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
 		 *******************************************************************/
-		if ((gp = tim[4]) != 0) {	/* 100 millisecond timer */
+		if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
 #if	YYDEBUG
 		    if (iC_debug & 01000) {
 			Gate **	lp;
 			Gate *	tp;
 			int	cn1 = 2;
-			lp = gp->gt_list;	/* test if any clock or timer is active */
-			do {			/* for normal and inverted */
+			lp = gp->gt_list;		/* test if any clock or timer is active */
+			do {				/* for normal and inverted */
 			    while ((tp = *lp++) != 0) {
 				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
 				    tp = *((Gate **)tp->gt_list);
@@ -557,12 +568,12 @@ iC_icc(
 				}
 			    }
 			} while (--cn1);
-			goto skipT4;		/* excuse spaghetti - faster without flag */
+			goto skipT4;			/* excuse spaghetti - faster without flag */
 		    }
 		linkT4:
 		    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
 #endif	/* YYDEBUG */
-		    gp->gt_val = - gp->gt_val;	/* complement input */
+		    gp->gt_val = - gp->gt_val;		/* complement input */
 		    iC_link_ol(gp, iC_o_list);
 		    cnt++;
 #if	YYDEBUG
@@ -570,28 +581,28 @@ iC_icc(
 		skipT4: ;
 #endif	/* YYDEBUG */
 		}
-		if (--tcnt <= 0) {
-		    tcnt = D10;
-		    if ((gp = tim[5]) != 0) {	/* 1 second timer */
+		if (--tcnt1 <= 0) {
+		    tcnt1 = D10;		/* 10 under Linux, 9 under MSDOS */
+		    if ((gp = tim[5]) != 0) {		/* 1 second timer */
 #if	YYDEBUG
 			if (iC_debug & 01000) {
 			    Gate **	lp;
 			    Gate *	tp;
 			    int	cn1 = 2;
-			    lp = gp->gt_list;	/* test if any clock or timer is active */
-			    do {		/* for normal and inverted */
+			    lp = gp->gt_list;		/* test if any clock or timer is active */
+			    do {			/* for normal and inverted */
 				while ((tp = *lp++) != 0) {
 				    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
 					tp = *((Gate **)tp->gt_list);
 					if (tp->gt_next != tp) {
-					    goto linkT5; /* found an active clock or timer */
+					    goto linkT5;	/* found an active clock or timer */
 					}
 				    } else {
 					goto linkT5;	/* found a link to non clock or timer */
 				    }
 				}
 			    } while (--cn1);
-			    goto skipT5;	/* excuse spaghetti - faster without flag */
+			    goto skipT5;		/* excuse spaghetti - faster without flag */
 			}
 		    linkT5:
 			if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
@@ -603,6 +614,76 @@ iC_icc(
 			if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
 		    skipT5: ;
 #endif	/* YYDEBUG */
+		    }
+		    if (--tcnt10 <= 0) {
+			tcnt10 = 10;
+			if ((gp = tim[6]) != 0) {	/* 10 second timer */
+#if	YYDEBUG
+			    if (iC_debug & 01000) {
+				Gate **	lp;
+				Gate *	tp;
+				int	cn1 = 2;
+				lp = gp->gt_list;	/* test if any clock or timer is active */
+				do {			/* for normal and inverted */
+				    while ((tp = *lp++) != 0) {
+					if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+					    tp = *((Gate **)tp->gt_list);
+					    if (tp->gt_next != tp) {
+						goto linkT6;/* found an active clock or timer */
+					    }
+					} else {
+					    goto linkT6;/* found a link to non clock or timer */
+					}
+				    }
+				} while (--cn1);
+				goto skipT6;		/* excuse spaghetti - faster without flag */
+			    }
+			linkT6:
+			    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+#endif	/* YYDEBUG */
+			    gp->gt_val = - gp->gt_val;	/* complement input */
+			    iC_link_ol(gp, iC_o_list);
+			    cnt++;
+#if	YYDEBUG
+			    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			skipT6: ;
+#endif	/* YYDEBUG */
+			}
+			if (--tcnt60 <= 0) {
+			    tcnt60 = 6;
+			    if ((gp = tim[7]) != 0) {	/* 60 second timer */
+#if	YYDEBUG
+				if (iC_debug & 01000) {
+				    Gate **	lp;
+				    Gate *	tp;
+				    int	cn1 = 2;
+				    lp = gp->gt_list;	/* test if any clock or timer is active */
+				    do {		/* for normal and inverted */
+					while ((tp = *lp++) != 0) {
+					    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+						tp = *((Gate **)tp->gt_list);
+						if (tp->gt_next != tp) {
+						    goto linkT7;/* found an active clock or timer */
+						}
+					    } else {
+						goto linkT7;/* found a link to non clock or timer */
+					    }
+					}
+				    } while (--cn1);
+				    goto skipT7;	/* excuse spaghetti - faster without flag */
+				}
+			    linkT7:
+				if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+#endif	/* YYDEBUG */
+				gp->gt_val = - gp->gt_val;	/* complement input */
+				iC_link_ol(gp, iC_o_list);
+				cnt++;
+#if	YYDEBUG
+				if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			    skipT7: ;
+#endif	/* YYDEBUG */
+			    }
+			}
 		    }
 		}
 	    } else if (retval > 0) {
@@ -961,7 +1042,11 @@ void iC_quit(int sig)
 	    regOffset = snprintf(regBuf, REQUEST, "%d:5,%d:0", C_channel, C_channel);
 	    iC_send_msg_to_server(sockFN, regBuf);
 	    if (iC_micro) iC_microReset(0);
+#ifdef	WIN32
+	    Sleep(200);				/* 200 ms in ms */
+#else	/* WIN32 */
 	    usleep(200000);			/* 200 ms in us */
+#endif	/* WIN32 */
 	    if (iC_micro) iC_microPrint("disconnected", 0);
 	}
 	close(sockFN);				/* close connection to iCserver */

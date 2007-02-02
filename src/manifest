@@ -1,4 +1,4 @@
-$Id: manifest,v 1.12 2005/04/05 09:57:37 jw Exp $
+$Id: manifest,v 1.13 2006/04/17 18:18:16 jw Exp $
 README
 doc/iC.doc
 doc/iC.html
@@ -14,14 +14,14 @@ src/Test0
 src/cexe.h
 src/comp.c
 src/comp.h
-src/comp.sed
+src/comp.pl
 src/comp.y
 src/comp_tab.h
 src/configure
 src/configure.in
 src/genr.c
 src/gram.c
-src/gram.sed
+src/gram.pl
 src/gram.y
 src/gram_tab.h
 src/iCbox
@@ -33,7 +33,7 @@ src/iCserver
 src/icc.c
 src/icc.h
 src/icc.v
-src/icg.h
+src/icg.pl
 src/icr.c
 src/ict.c
 src/init.c
@@ -46,13 +46,11 @@ src/load.c
 src/misc.c
 src/makeAll
 src/manifest
-src/mkinstalldirs
 src/outp.c
-src/pawk.a
+src/pawk.pl
 src/perlinstall
 src/pod2man
 src/pplstfix
-src/psed.sed
 src/rsff.c
 src/scan.c
 src/iCstop

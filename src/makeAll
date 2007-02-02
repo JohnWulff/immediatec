@@ -30,8 +30,6 @@ usage ()
     echo '	-t	make ict with YYDEBUG -t trace output possible' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain with YYDEBUG' >&2
-    echo '	-d	make all targets with DEQ option defined' >&2
-    echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	see usage of immcc, icr, ict and applications for other options' >&2
     echo '	-C	make immcc only; generate an empty cexe.c' >&2
@@ -40,6 +38,9 @@ usage ()
     echo '	-L	make libict.a only' >&2
     echo '	-M	make lmain only' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
+    echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
+    echo '	-d	make with -DDEQ           (make clean required first)' >&2
+    echo '		double ended queue processing is slightly faster' >&2
     echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
@@ -48,7 +49,7 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.23 2005/07/04 13:27:40 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.24 2006/04/17 16:47:43 jw Exp $' >&2
 }
 
 makeIcr ()
@@ -189,6 +190,9 @@ if [ -f Make_tmp ]; then
 fi
 test -d Make_tmp || mkdir Make_tmp;
 
+rm -f icg.h
+perl icg.pl $d$s$z icc.h > icg.h
+
 if [ $ALL = 1 ] || [ $C = 1 ]; then
     echo "make OPT=\"$c$d$e$o$s$z\" CFLAGS=\"$cflags\" immcc"
     make OPT="$c$d$e$o$s$z" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
@@ -234,8 +238,6 @@ exit 0
     -t      make ict with YYDEBUG -t trace output possible
     -l      make libict.a with YYDEBUG -t trace output possible
     -m      make lmain with YYDEBUG
-    -d      make all targets with DEQ option defined
-    -e      make all targets with EFENCE option and link with -lefence
     -D<OPT> make all targets with <OPT> defined
             see usage of immcc, icr, ict and applications for other options
     -C      make immcc only; generate an empty cexe.c
@@ -243,6 +245,10 @@ exit 0
     -T      make ict only without modifying cexe.c
     -L      make libict.a only
     -M      make lmain only
+    -W<OPT> compile all C sources with -W<OPT> (useful for -Wall)
+    -e      make all targets with EFENCE option and link with -lefence
+    -d      make with -DDEQ           (make clean required first)
+            double ended queue processing is slightly faster
     -s      make with -DINT_MAX=32767 (make clean required first)
             (on a 16 bit system INT_MAX is 32767 and -s is not required)
             simulates compilation for a 16 bit system, which does

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.24 2005/01/26 15:16:54 jw Exp $";
+"@(#)$Id: link.c,v 1.25 2006/04/14 11:50:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -43,14 +43,14 @@ iC_link_ol(
     if (gp->gt_next) {
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	iC_glit_cnt++;				/* count glitches */
-#endif
+#endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 #ifndef DEQ
 	ap = tp = out_list;			/* glitch */
 	diff = 0;				/* save time remaining */
 	while (tp->gt_next != gp) {		/* find previous entry */
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	    glit_nxt++;				/* count glitch scan */
-#endif
+#endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 	    diff += tp->gt_mark;		/* makes sense for TIMRL */
 	    if ((tp = tp->gt_next) == ap) {	/* end of one list */
 		/********************************************************************
@@ -70,13 +70,13 @@ iC_link_ol(
 		    fprintf(iC_errFP,
     "\n%s: line %d: cannot find '%s' entry in '%s' or '%s' after glitch\n",
     __FILE__, __LINE__, gp->gt_ids, out_list->gt_ids, ap->gt_ids);
-#endif
+#endif	/* !defined(_WINDOWS) || defined(LOAD) */
 		    iC_quit(-1);
 		}
 		ap =  tp;
 #if YYDEBUG && !defined(_WINDOWS)
 		if ((iC_debug & 0300) == 0300) putc('@', iC_outFP); /* alternate found */
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    }
 	}
 	np = tp->gt_next = gp->gt_next;		/* unlink from */
@@ -87,7 +87,7 @@ iC_link_ol(
 	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to old */
 	    gp->gt_mark += diff;		/* time remaining */
 	}
-#else
+#else	/* DEQ */
 	tp = gp->gt_prev;			/* glitch - previous */
 	tp->gt_next = np = gp->gt_next;		/* previous ==> next */
 	np->gt_prev = tp;			/* previous <== next */
@@ -96,10 +96,10 @@ iC_link_ol(
 	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to next */
 	    /* ignore time remaining in gp */
 	}
-#endif
+#endif	/* DEQ */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "g<");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     } else {
 	iC_link_cnt++;				/* count link operations */
 	if (gp->gt_fni < MIN_ACT) {		/* ARITH & GATE may oscillate */
@@ -110,12 +110,12 @@ iC_link_ol(
 		if (++gp->gt_mcnt >= iC_osc_lim) {	/* new alg: cnt 1 larger */
 #if YYDEBUG && !defined(_WINDOWS)
 		    if ((iC_debug & 0300) == 0300) putc('#', iC_outFP);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
 		    if (warn_cnt > 0
 #if YYDEBUG && !defined(_WINDOWS)
 				    && !(iC_debug & 0200)
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    ) {
 			warn_cnt--;		/* limit the number of warning messages */
 			iC_osc_gp = gp;		/* report oscillations */
@@ -124,7 +124,7 @@ iC_link_ol(
 #if YYDEBUG && !defined(_WINDOWS)
 //####		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d", gp->gt_mcnt);
 		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d,%d", gp->gt_mcnt,iC_osc_lim);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    }
 	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */
 	    /********************************************************************
@@ -160,7 +160,7 @@ iC_link_ol(
 		 *******************************************************************/
 #if YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 0100) fprintf(iC_outFP, "(%d)!", time);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		tp = out_list;
 		diff = 0;
 		while ((np = tp->gt_next) != out_list &&
@@ -184,9 +184,9 @@ iC_link_ol(
 			__FILE__, __LINE__, out_list->gt_ids, out_list->gt_mark);
 			iC_quit(-1);
 		    }
-#endif
+#endif	/* NOCHECK */
 		}
-#else
+#else	/* DEQ */
 		np->gt_prev = tp->gt_next = gp;		/* next, previous ==> new */
 		gp->gt_next = np;			/* new ==> next */
 		gp->gt_prev = tp;			/* previous <== newious */
@@ -196,22 +196,22 @@ iC_link_ol(
 		gp->gt_mark = time - diff;		/* diff previous to new */
 		np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		/* if np == out_list, out_list->gt_mark gets -diff */
-#endif
+#endif	/* DEQ */
 		return;					/* sorted link action complete */
 	    }
 	}
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) putc('>', iC_outFP);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifndef DEQ
 	((Gate *)out_list->gt_list)->gt_next = gp;	/* old => new */
 	gp->gt_next = out_list;				/* new => list */
 	out_list->gt_list = (Gate **)gp;		/* list => new */
-#else
+#else	/* DEQ */
 	tp = out_list->gt_prev;				/* save previous */
 	out_list->gt_prev = tp->gt_next = gp;		/* list, previous ==> new */
 	gp->gt_next = out_list;				/* new ==> list */
 	gp->gt_prev = tp;				/* previous <== new */
-#endif
+#endif	/* DEQ */
     }
 } /* iC_link_ol */

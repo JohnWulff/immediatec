@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.45 2005/09/30 18:38:07 jw Exp $
+# @(#)$Id: Makefile.in,v 1.46 2006/04/17 20:34:53 jw Exp $
 
 ############################################################
 #
@@ -39,7 +39,6 @@ else
 O0 =
 endif
 
-AWK = @AWK@
 LEX = @LEX@
 LEXLIB = @LEXLIB@
 YACC = @YACC@
@@ -48,7 +47,7 @@ Y = -DYACC
 else
 Y =
 endif
-INSTALL = @INSTALL@
+INSTALL = @INSTALL@ -D -p
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_DATA = @INSTALL_DATA@
 
@@ -76,6 +75,11 @@ binprefix =
 mandir = @mandir@
 manext = 1
 manprefix =
+
+PSED = perl -e 'while (<>) { if ( s /^.*icc.v,v (\d+\.\d+).*$$/icc.v $$1/ ) { print; last; } }'
+PREV = perl -e 'while (<>) { if ( s /^.*icc.v,v (\d+\.\d+).*$$/$$1/ ) { print; last; } }'
+PMOD = perl -e 'while (<>) { if ( m /^\/tmp\/[a-z_A-Z]\w*\.o(\(\.data\+0x[a-f\d]+\))*:/ ) { s //\/tmp\/x.o:/; } print; }'
+PADD = perl -e 'while (<>) { if ( m /^[a-z_A-Z]/ ) { s /^/'icc_$$rev'\//; print; } }'
 
 #### End of system configuration section. ####
 
@@ -127,7 +131,7 @@ pplstfix:
 %.c:	%.l
     ifneq ($(LEX),)
 	rm -f $@
-	$(LEX) -t $< | sed -f $(srcdir)/gram.sed > $@
+	$(LEX) -t $< | perl $(srcdir)/gram.pl > $@
 	chmod -w $@
     else
 	@echo "System has no lex or flex - install one of them"
@@ -140,8 +144,8 @@ pplstfix:
 	$(SHELL) -ec 'if [ -f $(*)_tab.h ]; then mv -f $(*)_tab.h y.tab.t; fi'
 	rm -f y.tab.c $@
 	$(YACC) $(YFLAGS) $<
-	sed -f $*.sed y.tab.c > $@
-	sed -f $*.sed y.tab.h > $(*)_tab.h
+	perl $*.pl y.tab.c > $@
+	perl $*.pl y.tab.h > $(*)_tab.h
 	$(SHELL) -ec 'if cmp -s $(*)_tab.h y.tab.t; then mv y.tab.t $(*)_tab.h; fi'
 	rm -f y.tab.t y.tab.h y.tab.c
 	chmod -w $(*)_tab.h $@
@@ -153,21 +157,21 @@ pplstfix:
     endif
 
 %.1.gz:	%
-####	@echo "$(srcdir)/pod2man -n $* -c 'iC Project Documentation' -r \"`$(srcdir)/psed.sed`\" $< > $*.1"
-	@$(srcdir)/pod2man -n $* -c 'iC Project Documentation' -r "`$(srcdir)/psed.sed`" $< > $*.1
+####	@echo "$(srcdir)/pod2man -n $* -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $*.1"
+	@$(srcdir)/pod2man -n $* -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $*.1
 	@gzip -f $*.1
 
-$(srcdir)/scid.c:	$(srcdir)/Makefile.in $(srcdir)/pawk.a $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix $(srcdir)/../README
-	rm -f $(srcdir)/scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.sed $(srcdir)/gram.sed $(srcdir)/pplstfix | $(AWK) -f $(srcdir)/pawk.a > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
+$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix $(srcdir)/../README
+	rm -f $(srcdir)/scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix | perl $(srcdir)/pawk.pl > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
 $(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
 	ident $(srcdir)/icc.v | $(srcdir)/README.tpl > $(srcdir)/../README;
 
-$(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.sed
+$(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.pl
 
-$(srcdir)/gram.c:	$(srcdir)/gram.y $(srcdir)/gram.sed
+$(srcdir)/gram.c:	$(srcdir)/gram.y $(srcdir)/gram.pl
 
-$(srcdir)/lexc.c:	$(srcdir)/lexc.l $(srcdir)/gram.sed
+$(srcdir)/lexc.c:	$(srcdir)/lexc.l $(srcdir)/gram.pl
 
 $(srcdir)/cexe.c:	$(srcdir)/cexe.h
 	rm -f /tmp/cexe.c
@@ -175,64 +179,61 @@ $(srcdir)/cexe.c:	$(srcdir)/cexe.h
 	$(SHELL) -ec 'if [ "$(srcdir)" != '.' ]; then mv cexe.c $(srcdir)/cexe.c; fi'
 	rm -f /tmp/cexe.c
 
-$(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/psed.sed
-####	@echo "$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r \"`$(srcdir)/psed.sed`\" $< > $(srcdir)/immcc.1"
-	@$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r "`$(srcdir)/psed.sed`" $< > $(srcdir)/immcc.1
+$(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
+####	@echo "$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $(srcdir)/immcc.1"
+	@$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
-$(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/psed.sed
+$(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
 
-$(srcdir)/iClift.1.gz:	$(srcdir)/iClift $(srcdir)/psed.sed
+$(srcdir)/iClift.1.gz:	$(srcdir)/iClift $(srcdir)/scid.c
 
-$(srcdir)/iClive.1.gz:	$(srcdir)/iClive $(srcdir)/psed.sed
+$(srcdir)/iClive.1.gz:	$(srcdir)/iClive $(srcdir)/scid.c
 
-$(srcdir)/iCman.1.gz:	$(srcdir)/iCman $(srcdir)/psed.sed
+$(srcdir)/iCman.1.gz:	$(srcdir)/iCman $(srcdir)/scid.c
 
-$(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/psed.sed
+$(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/scid.c
 
-$(srcdir)/iCmake.1.gz:	$(srcdir)/iCmake $(srcdir)/psed.sed
+$(srcdir)/iCmake.1.gz:	$(srcdir)/iCmake $(srcdir)/scid.c
 
-$(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/psed.sed
+$(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
 test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -Aiw. ${srcdir}/Test0/*.ic 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/' > ${srcdir}/Test0/ErrorMessages.err
+	@-${srcdir}/iCmake -Aiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
 	@if ${srcdir}/Mdiff -kl ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 pedantic:
 	@echo "compile with -P option and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -PAiw. ${srcdir}/Test0/*.ic 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\.o\((\.data+0x[0-9a-f]*)\)*:/ s//\/tmp\/x.o:/' > ${srcdir}/Test0/ErrorMessages.err
-	@echo "show differences from generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kP -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@-${srcdir}/iCmake -PAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out
+	@echo "show differences from generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/PED ..."
+	@if ${srcdir}/Mdiff -kLP -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/PED; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/PED"; fi
 
-install:	installdirs $(srcdir)/immcc.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/makeAll.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} immcc        ${bindir}/${binprefix}immcc
 	${INSTALL_PROGRAM} icr          ${bindir}/${binprefix}icr
 	${INSTALL_PROGRAM} ict          ${bindir}/${binprefix}ict
 	${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
+	${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
 	${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
-	${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 	${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
+	${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 	${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
 	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
 	${INSTALL_DATA} libict.a        ${prefix}/lib/libict.a
-	@ranlib                                 ${prefix}/lib/libict.a
+	@ranlib                         ${prefix}/lib/libict.a
 	${INSTALL_DATA} $(srcdir)/icg.h         ${prefix}/include/icg.h
-	${INSTALL_DATA} $(srcdir)/icc.h         ${prefix}/include/icc.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${prefix}/man/man1/immcc.1.gz
 	${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${prefix}/man/man1/iCbox.1.gz
 	${INSTALL_DATA} $(srcdir)/iClift.1.gz   ${prefix}/man/man1/iClift.1.gz
 	${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${prefix}/man/man1/iClive.1.gz
+	${INSTALL_DATA} $(srcdir)/iCmake.1.gz   ${prefix}/man/man1/iCmake.1.gz
 	${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${prefix}/man/man1/iCman.1.gz
 	${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${prefix}/man/man1/iCserver.1.gz
-	${INSTALL_DATA} $(srcdir)/iCmake.1.gz   ${prefix}/man/man1/iCmake.1.gz
 	${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${prefix}/man/man1/makeAll.1.gz
-
-installdirs:	${srcdir}/mkinstalldirs
-	${srcdir}/mkinstalldirs ${bindir} ${prefix}/lib ${prefix}/include ${prefix}/man/man1
 
 uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)
@@ -243,56 +244,57 @@ uninstall:
 	rm -f ${bindir}/${binprefix}iCbox
 	rm -f ${bindir}/${binprefix}iClift
 	rm -f ${bindir}/${binprefix}iClive
-	rm -f ${bindir}/${binprefix}iCman
 	rm -f ${bindir}/${binprefix}iCmake
+	rm -f ${bindir}/${binprefix}iCman
 	rm -f ${bindir}/${binprefix}iCserver
 	rm -f ${bindir}/${binprefix}pplstfix
 	rm -f ${prefix}/lib/libict.a
 	rm -f ${prefix}/include/icg.h
-	rm -f ${prefix}/include/icc.h
 	rm -f ${prefix}/man/man1/immcc.1.gz
 	rm -f ${prefix}/man/man1/iCbox.1.gz
+	rm -f ${prefix}/man/man1/iClift.1.gz
 	rm -f ${prefix}/man/man1/iClive.1.gz
+	rm -f ${prefix}/man/man1/iCmake.1.gz
 	rm -f ${prefix}/man/man1/iCman.1.gz
 	rm -f ${prefix}/man/man1/iCserver.1.gz
 	rm -f ${prefix}/man/man1/makeAll.1.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c IcrObjs IctObjs LibObjs LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c core immcc icr ict libict.a lmain $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c IcrObjs IctObjs LibObjs LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h core immcc icr ict libict.a lmain $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README
 
 distribution:
-	@rev=`grep 'icc\.v,v' ${srcdir}/icc.v | awk '{ print $$3; }'`; echo "making icc_$$rev.tgz"; cd ${srcdir}/../..; tar -czhf icc_$$rev.tgz `sed -n -e '/^[a-z_A-Z]/ s/^/'icc_$$rev'\//p' icc_$$rev/src/manifest`; cd -;
+	@rev=`$(PREV) $(srcdir)/scid.c`; echo "making icc_$$rev.tgz"; cd ${srcdir}/../..; tar -czf icc_$$rev.tgz `$(PADD) icc_$$rev/src/manifest`; cd -;
 
-genr.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
-init.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
-symb.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
+genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
+init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
+symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
 
-comp.$(O):	$(srcdir)/comp.c $(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+comp.$(O):	$(srcdir)/comp.c $(srcdir)/icc.h $(srcdir)/comp.h
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<
 
-icc.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h
-outp.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
-cexe.$(O):	$(srcdir)/cexe.c $(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+icc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h
+outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+cexe.$(O):	$(srcdir)/cexe.c $(srcdir)/icc.h $(srcdir)/comp.h
 
-ict.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/tcpc.h
-load.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/tcpc.h
+ict.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h
+load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h
 
-icr.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
-link.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
-rsff.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
-scan.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
+icr.$(O):	$(srcdir)/icc.h
+link.$(O):	$(srcdir)/icc.h
+rsff.$(O):	$(srcdir)/icc.h
+scan.$(O):	$(srcdir)/icc.h
 
-gram.$(O):	$(srcdir)/gram.c $(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+gram.$(O):	$(srcdir)/gram.c $(srcdir)/icc.h $(srcdir)/comp.h
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<
 
-lexc.$(O):	$(srcdir)/lexc.c $(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram_tab.h
+lexc.$(O):	$(srcdir)/lexc.c $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram_tab.h
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<
 
-lmain.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h $(srcdir)/comp.h
+lmain.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 
-misc.$(O):	$(srcdir)/icg.h $(srcdir)/icc.h
+misc.$(O):	$(srcdir)/icc.h
 
 scid.$(O):	$(srcdir)/scid.c

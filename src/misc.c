@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.4 2005/05/10 16:51:57 jw Exp $";
+"@(#)$Id: misc.c,v 1.5 2006/04/17 20:20:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,6 +19,25 @@ static const char misc_c[] =
 #include	<stdlib.h>
 #include	<string.h>
 #include	"icc.h"
+#ifdef	WIN32
+
+#include	<io.h>
+#include	<fcntl.h>
+#include	<sys/stat.h>
+
+/********************************************************************
+ *
+ * version of mkstemp() for Windows
+ *
+ *******************************************************************/
+
+int
+mkstemp(char * templ)
+{
+    /* must use _S_IWRITE, otherwise newly created file will be read only when closed */
+    return open(mktemp(templ), _O_CREAT | _O_RDWR | _O_TRUNC, _S_IWRITE);
+}
+#endif	/* WIN32 */
 
 /********************************************************************
  *
@@ -110,9 +129,7 @@ iC_display(int * dis_cntp, int dis_max)
     unsigned char	x0;
     char		b1;
     short		w2;
-#if	INT_MAX != 32767 || defined (LONG16)
     long		l4;
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
 
 #if	! defined(TCP) && ! defined(LOAD)
 #define iC_IX0p	iC_IX_[0]

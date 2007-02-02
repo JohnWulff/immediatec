@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.80 2005/09/18 21:57:33 jw Exp $";
+"@(#)$Id: outp.c,v 1.81 2006/02/23 17:41:09 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -18,11 +18,13 @@ static const char outp_c[] =
 /* J.E. Wulff	24-April-89 */
 
 #ifdef _WINDOWS
-#include <windows.h>
-#endif
+#include	<windows.h>
+#endif	/* _WINDOWS */
 #include	<stdio.h>
 #include	<stdlib.h>
+#ifndef	WIN32
 #include	<unistd.h>
+#endif	/* WIN32 */
 #include	<string.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -190,7 +192,15 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
 {
     fprintf(Fp, "\n#warning \"iC: %s\"\n", errorMsg);
     (*lcp)++;					/* count lines actually output */
-    errmess("ErrorEmit", errorMsg, NS);		/* error sets iClock->type to ERR */
+    errmess("ErrorEmit", errorMsg, NS);
+    if (++iC_iErrCount >= iC_maxErrCount) {
+	iclock->type = ERR;			/* prevent execution */
+	fprintf(Fp, "\n#error \"too many errors - iC compilation aborted\"\n");
+	fflush(Fp);
+	errmess("ErrorEmit", "too many errors - iC compilation aborted", NS);
+	if (T0FP) fseek(T0FP, 0L, SEEK_END);	/* flush rest of file */
+	longjmp(beginMain, Iindex);
+    }
 } /* errorEmit */
 
 /********************************************************************
@@ -298,6 +308,9 @@ listNet(unsigned gate_count[])
 		if (tsp == iclock) {
 		    iClockAlias = 1;		/* include iClock below if ALIAS */
 		}
+	    }
+	    if ((sp->type & TM) == ARNF) {
+		sp->type += (ARN-ARNF);		/* convert ARNF back to ARN */
 	    }
 	}
     }
@@ -455,7 +468,7 @@ Gate **		iC_sTend;			/* end of dynamic array */
  *
  *	Generate execution network for icr or ict direct execution
  *	igpp ==> array of Gates generated with calloc(block_total)
- *	gate_count splits this array into different type Gates in icc()
+ *	gate_count splits this array into different type Gates in iC_icc()
  *
  *******************************************************************/
 
@@ -707,7 +720,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 				for (lp = sp->list; lp; lp = lp->le_next) {
 				    tsp = lp->le_sym;
 				    assert(tsp && tsp->u_gate);
-				    if ((val = lp->le_val & VAR_MASK) != 0) {
+				    if ((val = lp->le_val) != 0) {
 					tgp = tsp->u_gate;
 					if (val == (unsigned) -1) {
 					    /**************************************************
@@ -715,7 +728,8 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					     * ftype ARITH holding a time delay (ARN or NCONST).
 					     **************************************************/
 					    tgp->gt_time = gp;
-					} else {
+					} else
+					if ((val &= VAR_MASK) != 0) {
 					    /**************************************************
 					     * ftype ARITH - generate backward input list
 					     **************************************************/
@@ -1385,12 +1399,18 @@ extern iC_Gt *	iC_l_[];\n\
 		    if (fflag == 0) {		/* leave out _f0_1 */
 			li += 2;		/* space for action or function pointer + clock */
 			if ((lp = lp->le_next) != 0 &&
-			    (lp->le_sym->type & ~EM) == TIM) {
+			    (tsp = lp->le_sym) != 0 &&
+			    (tsp->type & ~EM) == TIM) {
 			    li++;		/* space for pointer to delay time Gate */
 			    lp = lp->le_next;	/* point to delay time */
 			}
 		    }
-		    assert(lp);			/* lp points to clock or delay */
+		    if (lp == 0) {		/* lp points to clock or delay */
+			snprintf(errorBuf, sizeof errorBuf,
+			    "Action gate '%s' has no valid clock",
+			    sp->name);
+			errorEmit(Fp, errorBuf, &linecnt);
+		    } else
 		    if (ftyp == F_SW || ftyp == F_CF || ftyp == F_CE) {
 			/* Function Pointer for "if" or "switch" */
 			lc = li;

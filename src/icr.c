@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.32 2005/08/08 11:04:38 jw Exp $";
+"@(#)$Id: icr.c,v 1.33 2006/02/23 17:40:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -47,6 +47,7 @@ static const char icr_c[] =
 
 #define INTR	0x1c			/* The clock tick interrupt */
 #define YSIZE	13			/* - and 10 dec digits or 12 oct digits */
+#define TLIMIT	4			/* TX0.4 is fastest timer */
 
 static unsigned	time_cnt;		/* count time in ticks */
 static short	flag1C;
@@ -98,7 +99,7 @@ kbhit(void)
     } else if (stat == 0) {
 	time_cnt++;			/* count time in ticks */
 	/* increase the global counter */
-	flag1C = 1;			/* 1/20 second on, 1/20 second off */
+	flag1C = 1;			/* 50 ms on, 50 ms off */
     }
     return stat;			/* can only be 0 or 1 */
 } /* kbhit */
@@ -109,7 +110,7 @@ static iC_Functp * iC_i_lists[] = { I_LISTS };
 /********************************************************************
  *  initialise all lists with their name to aid symbolic debugging
  *  do this here because at least "flist" is needed in load() for
- *  ini output, which runs before icc().
+ *  ini output, which runs before iC_icc().
  *******************************************************************/
 /* these lists are toggled (initialised dynamically) */
 static Gate	alist0 = { 0, 0, 0, 0, "alist0", };
@@ -159,7 +160,9 @@ iC_icc(
     Gate **	tim = &iC_TX_[0];	/* pointers to 8 system gates TX[0] to TX[7] */
     Gate *	gp;
     iC_Functp	init_fa;
-    int		tcnt = 1;
+    int		tcnt1  = 1;
+    int		tcnt10 = 1;
+    int		tcnt60 = 1;
 #if	INT_MAX == 32767 && defined (LONG16)
     long	val;
 #else	/* INT_MAX == 32767 && defined (LONG16) */
@@ -185,6 +188,10 @@ iC_icc(
     }
     for (cnt = 1; cnt < 8; cnt++) {
 	if (tim[cnt] != NULL) {		/* any of the 7 timers programmed ? */
+	    if (cnt < TLIMIT) {
+		fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_progname, cnt);
+		iC_quit(6);
+	    }
 	    top = &to;			/* activate select timeout */
 	    break;			/* could optimise by varying delay */
 	}
@@ -406,9 +413,9 @@ iC_icc(
 	if (flag1C) {				/* 1/D10 second timer */
 	    flag1C = 0;
 	    /********************************************************************
-	     *  TIMERS here every 100 milliseconds
+	     *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
 	     *******************************************************************/
-	    if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
+	    if ((gp = tim[4]) != 0) {			/* 100 millisecond timer */
 #if	YYDEBUG
 		if (iC_debug & 01000) {
 		    Gate **	lp;
@@ -432,49 +439,121 @@ iC_icc(
 	    linkT4:
 		if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
 #endif	/* YYDEBUG */
-		gp->gt_val = - gp->gt_val;	/* complement input */
+		gp->gt_val = - gp->gt_val;		/* complement input */
 		iC_link_ol(gp, iC_o_list);
-		cn = 0;				/* TX0.4 changed */
+		cn = 0;					/* TX0.4 changed */
 		cnt++;
 #if	YYDEBUG
 		if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
 	    skipT4: ;
 #endif	/* YYDEBUG */
 	    }
-	    if (--tcnt <= 0) {
-		tcnt = D10;
-		if ((gp = tim[5]) != 0) {	/* 1 second timer */
+	    if (--tcnt1 <= 0) {
+		tcnt1 = D10;			/* 10 under Linux, 9 under MSDOS */
+		if ((gp = tim[5]) != 0) {		/* 1 second timer */
 #if	YYDEBUG
 		    if (iC_debug & 01000) {
 			Gate **	lp;
 			Gate *	tp;
 			int	cn1 = 2;
-			lp = gp->gt_list;	/* test if any clock or timer is active */
+			lp = gp->gt_list;		/* test if any clock or timer is active */
 			do {			/* for normal and inverted */
 			    while ((tp = *lp++) != 0) {
 				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
 				    tp = *((Gate **)tp->gt_list);
 				    if (tp->gt_next != tp) {
-					goto linkT5; /* found an active clock or timer */
+					goto linkT5;	/* found an active clock or timer */
 				    }
 				} else {
 				    goto linkT5;	/* found a link to non clock or timer */
 				}
 			    }
 			} while (--cn1);
-			goto skipT5;		/* excuse spaghetti - faster without flag */
+			goto skipT5;			/* excuse spaghetti - faster without flag */
 		    }
 		linkT5:
 		    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
 #endif	/* YYDEBUG */
-		    gp->gt_val = - gp->gt_val;	/* complement input */
+		    gp->gt_val = - gp->gt_val;		/* complement input */
 		    iC_link_ol(gp, iC_o_list);
-		    cn = 0;			/* TX0.5 changed */
+		    cn = 0;				/* TX0.5 changed */
 		    cnt++;
 #if	YYDEBUG
 		    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
 		skipT5: ;
 #endif	/* YYDEBUG */
+		}
+		if (--tcnt10 <= 0) {
+		    tcnt10 = 10;
+		    if ((gp = tim[6]) != 0) {		/* 10 second timer */
+#if	YYDEBUG
+			if (iC_debug & 01000) {
+			    Gate **	lp;
+			    Gate *	tp;
+			    int	cn1 = 2;
+			    lp = gp->gt_list;		/* test if any clock or timer is active */
+			    do {			/* for normal and inverted */
+				while ((tp = *lp++) != 0) {
+				    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+					tp = *((Gate **)tp->gt_list);
+					if (tp->gt_next != tp) {
+					    goto linkT6;/* found an active clock or timer */
+					}
+				    } else {
+					goto linkT6;	/* found a link to non clock or timer */
+				    }
+				}
+			    } while (--cn1);
+			    goto skipT6;		/* excuse spaghetti - faster without flag */
+			}
+		    linkT6:
+			if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+#endif	/* YYDEBUG */
+			gp->gt_val = - gp->gt_val;	/* complement input */
+			iC_link_ol(gp, iC_o_list);
+			cn = 0;				/* TX0.6 changed */
+			cnt++;
+#if	YYDEBUG
+			if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+		    skipT6: ;
+#endif	/* YYDEBUG */
+		    }
+		    if (--tcnt60 <= 0) {
+			tcnt60 = 6;
+			if ((gp = tim[7]) != 0) {	/* 60 second timer */
+#if	YYDEBUG
+			    if (iC_debug & 01000) {
+				Gate **	lp;
+				Gate *	tp;
+				int	cn1 = 2;
+				lp = gp->gt_list;	/* test if any clock or timer is active */
+				do {			/* for normal and inverted */
+				    while ((tp = *lp++) != 0) {
+					if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+					    tp = *((Gate **)tp->gt_list);
+					    if (tp->gt_next != tp) {
+						goto linkT7;	/* found an active clock or timer */
+					    }
+					} else {
+					    goto linkT7;/* found a link to non clock or timer */
+					}
+				    }
+				} while (--cn1);
+				goto skipT7;		/* excuse spaghetti - faster without flag */
+			    }
+			linkT7:
+			    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+#endif	/* YYDEBUG */
+			    gp->gt_val = - gp->gt_val;	/* complement input */
+			    iC_link_ol(gp, iC_o_list);
+			    cn = 0;			/* TX0.7 changed */
+			    cnt++;
+#if	YYDEBUG
+			    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			skipT7: ;
+#endif	/* YYDEBUG */
+			}
+		    }
 		}
 	    }
 	    if (cn) {
@@ -619,8 +698,6 @@ iC_icc(
  *
  *******************************************************************/
 
-int count1C = 0;
-
 #ifdef	MSC
 void interrupt far handler1C(void)
 #else
@@ -633,9 +710,7 @@ void interrupt handler1C(void)
 #endif	/* MSC */
     time_cnt++;						/* count time in ticks */
     /* increase the global counter */
-    if (iC_debug & 01000 &&
-	count1C++ >= 6) {			/* roughly 1/3 second on, 1/3 second off */
-	count1C = 0;
+    if (iC_debug & 01000) {
 	flag1C = 1;
     }
 #ifndef	MSC

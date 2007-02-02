@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.53 2005/09/18 12:38:02 jw Exp $";
+"@(#)$Id: icc.c,v 1.54 2006/02/23 17:42:22 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -17,7 +17,9 @@ static const char icc_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#ifndef	WIN32
 #include	<unistd.h>
+#endif	/* WIN32 */
 #include	<string.h>
 #include	<setjmp.h>
 #include	<assert.h>
@@ -197,7 +199,8 @@ FILE *		iC_errFP;		/* error file pointer */
 static FILE *	excFP;			/* cexe C out file pointer */
 static char *	iC_path;		/* default pplstfix on PATH */
 jmp_buf		beginMain;
-int		maxErrCount = 100	/* default error count at which to abort compile */;
+int		iC_maxErrCount = 100;	/* default error count at which to abort compile */
+int		iC_iErrCount = 0;	/* count errors - abort after 100 errors */
 
 char * OutputMessage[] = {
     0,					/* [0] no error */
@@ -375,10 +378,12 @@ main(
 #endif	/* TCP */
     int		r = 0;			/* return value of compile */
     int		ro = 4;			/* output message index */
+    char *	cp;
 
     /* Process the arguments */
     iC_path = *argv;			/* in case there is a leading path/ */
-    if ((iC_progname = strrchr(iC_path, '/')) == NULL) {
+    if ((iC_progname = strrchr(iC_path, '/')) == NULL &&
+        (iC_progname = strrchr(iC_path, '\\')) == NULL) {
 	iC_progname = iC_path;		/* no leading path */
 	iC_path     = "";		/* default PATH for pplstfix */
     } else {
@@ -470,7 +475,17 @@ main(
 		case 'o':
 		    if (excFN == 0) {
 			if (! *++*argv) { --argc, ++argv; }
+#ifdef	WIN32
+			if (strlen(*argv)) {
+			    outFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
+			    strcpy(outFN, *argv);
+			    while ((cp = strchr(outFN, '\\')) != 0) {
+				*cp = '/';		/* convert '\' to '/' under WIN32 */
+			    }
+			}
+#else	/* not WIN32 */
 			if (strlen(*argv)) outFN = *argv;	/* compiler output file name */
+#endif	/* WIN32 */
 			goto break2;
 		    } else {
 			fprintf(stderr,
@@ -479,14 +494,34 @@ main(
 		    }
 		case 'l':
 		    if (! *++*argv) { --argc, ++argv; }
+#ifdef	WIN32
+		    if (strlen(*argv)) {
+			listFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
+			strcpy(listFN, *argv);
+			while ((cp = strchr(listFN, '\\')) != 0) {
+			    *cp = '/';		/* convert '\' to '/' under WIN32 */
+			}
+		    }
+#else	/* not WIN32 */
 		    if (strlen(*argv)) listFN = *argv;	/* listing file name */
+#endif	/* WIN32 */
 		    if ((iC_debug & 077) == 0) {
 			iC_debug |= 074;	/* default listing, topology, stats and logic expansion */
 		    }
 		    goto break2;
 		case 'e':
 		    if (! *++*argv) { --argc, ++argv; }
+#ifdef	WIN32
+		    if (strlen(*argv)) {
+			errFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
+			strcpy(errFN, *argv);
+			while ((cp = strchr(errFN, '\\')) != 0) {
+			    *cp = '/';		/* convert '\' to '/' under WIN32 */
+			}
+		    }
+#else	/* not WIN32 */
 		    if (strlen(*argv)) errFN = *argv;	/* error file name */
+#endif	/* WIN32 */
 		    goto break2;
 		case 'k':
 		    if (! *++*argv) { --argc, ++argv; }
@@ -515,7 +550,7 @@ main(
 		    iC_Sflag = 1;		/* strict - all imm variables must be declared */
 		    break;
 		case 'R':
-		    maxErrCount = 32000;	/* maximum error count very high */
+		    iC_maxErrCount = INT_MAX;	/* maximum error count very high */
 		    break;
 		case 'a':
 		    iC_aflag = 1;		/* append for compile */
@@ -544,7 +579,6 @@ main(
 		    if (! *++*argv) { --argc, ++argv; }
 		    if (strlen(*argv)) {
 			if (strlen(op)) {
-			    char *	cp;
 			    strncpy(tempBuf, op, BUFS);
 			    cp = strtok(tempBuf+1, " ");	/* miss first space */
 			    while (cp) {
@@ -592,7 +626,7 @@ main(
 		    fprintf(stderr, usage, iC_progname, IXD-1, IXD-1,
 #if defined(RUN) || defined(TCP)
 		    MARKMAX,
-#ifdef TCP
+#ifdef	TCP
 		    iC_hostNM, iC_portNM, iC_iidNM, INSTSIZE,
 #endif	/* TCP */
 		    iC_progname, iC_progname, iC_progname,
@@ -603,10 +637,19 @@ main(
 	    } while (*++*argv);
 	    break2: ;
 	} else {
+#ifdef	WIN32
+	    if (strlen(*argv)) {
+		inpFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
+		strcpy(inpFN, *argv);
+		while ((cp = strchr(inpFN, '\\')) != 0) {
+		    *cp = '/';		/* convert '\' to '/' under WIN32 */
+		}
+	    }
+#else	/* not WIN32 */
 	    if (strlen(*argv)) inpFN = *argv;
-#ifdef TCP
+#endif	/* WIN32 */
+#ifdef	TCP
 	    if (strcmp(iC_iccNM, "stdin") == 0) {
-		char * cp;
 		iC_iccNM = iC_emalloc(strlen(inpFN)+1);	/* +1 for '\0' */
 		strcpy(iC_iccNM, inpFN);
 		if ((cp = strrchr(iC_iccNM, '.')) != 0) {
@@ -879,12 +922,13 @@ iC_inversionCorrection(void)
 		iC_progname, listFN, tempName);
 	} else {
 	    if (strlen(iC_path) == 0) {
-		snprintf(exStr, TSIZE, "pplstfix %s > %s", tempName, listFN);
+		snprintf(exStr, TSIZE, "pplstfix -o %s %s", listFN, tempName);	/* on $PATH */
 	    } else {
 		versionTail = iC_progname + strcspn(iC_progname, "0123456789");
-		snprintf(exStr, TSIZE, "%s/pplstfix%s -l %s/pplstfix%s.log %s > %s",	/* developer debug version */
-		    iC_path, versionTail, iC_path, versionTail, tempName, listFN);
+		snprintf(exStr, TSIZE, "perl %s/pplstfix%s -o %s -l %s/pplstfix%s.log %s",	/* developer debug version */
+		    iC_path, versionTail, listFN, iC_path, versionTail, tempName);
 	    }
+//	    printf("!!! %s\n", exStr);
 	    r = system(exStr);
 	    if (r == 0) {
 		unlink(tempName);
@@ -1013,7 +1057,7 @@ eg. 'immcc109', 'pplstfix' will be called as 'pplstfix109'. This
 way several versions of the compiler and pplstfix can be kept in
 the development directory.  Also if a path is specified 'pplstfix'
 will be called with the log option -l. This outputs a log file to
-'./pplstfix109.log', if the compiler call was './icc109'.
+'./pplstfix109.log', if the compiler call was './immcc109'.
 
 =head1 AUTHOR
 
