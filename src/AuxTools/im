@@ -1,0 +1,40 @@
+#!/bin/bash
+
+usage ()
+{
+    echo 'Usage:' >&2
+    echo '  '${0##*/}' [-zh]' >&2
+    echo '	-z	echo compiler calls with all options for debugging' >&2
+    echo '	-h	this help text' >&2
+    echo '	$Id: im,v 1.1 2007/02/09 15:46:05 archiv Exp $' >&2
+}
+
+z=0
+
+while getopts "zh" opt; do
+    case $opt in
+    z )	z=1;;
+    h )	usage; exit 0;;
+    esac
+done
+shift $(($OPTIND - 1))
+
+for f in $*; do
+    file=$f
+    base=${file%.*}
+    if [ "$file" = "$base" ]; then
+	file="$base.ic"
+    fi
+    echo $file
+    if [ -f "$file" ]; then
+	if [ $z -eq 1 ]; then
+	    echo "immcc -A -d474(6) -o $base.c -l $base.lst $file"
+	fi
+	immcc -A -d474 -o $base.c -l $base.lst $file
+	immcc -A -d476 -o $base.c -l $base.lst6 $file
+    else
+	if [ $q -eq 0 ]; then
+	    echo "Error: iC file '$file' does not exist" >&2
+	fi
+    fi
+done
