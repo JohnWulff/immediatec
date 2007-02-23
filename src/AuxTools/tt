@@ -9,6 +9,7 @@
 usage()
 {
   echo "Usage: $name [-clASRiIJ6zh][ -d<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
+  echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
@@ -34,17 +35,17 @@ usage()
   echo "	Test1, Test2, Test3 .. Test9 (however many exist)" >&2
   echo "	<dir1> will be created if it does not exist and generated" >&2
   echo "	files copied to it; if <dir1> exists, the generated files" >&2
-  echo "	will be compared with files in <dir1> with Mdiff -ke" >&2
+  echo "	will be compared with files in <dir1> with Mdiff -kLe" >&2
   echo "	If no <dir1> is specified no files will be copied or compared" >&2
   echo
   echo "	If <dir2> is specified all files in <dir1> will be" >&2
-  echo "	compared with all files in <dir2> with Mdiff -ke" >&2
+  echo "	compared with all files in <dir2> with Mdiff -kLe" >&2
   echo
   echo "	If <dir2> is an absolute path, it must be the base of" >&2
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
   echo
   echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.17 2005/09/30 15:58:01 jw Exp $' >&2
+  echo '$Id: tt,v 1.18 2007/02/23 11:40:23 jw Exp $' >&2
 }
 
 ########################################################################
@@ -56,9 +57,10 @@ usage()
 name=${0##*/}
 name=${name%.*}
 
+m=""
 v=""
 d=""
-l="e"
+l="Le"
 x=""
 P=""
 c=""
@@ -75,14 +77,38 @@ while [ $# -gt 0 ]; do
 	while [ -n "$option" ]; do
 	    case $option in
 	    c*)	c="c";;
-	    d*)	option=${option#?}
-		if [ -n "$option" ]; then
-		    v="$v -d$option"
-		    d="_$option"
-		else
-		    echo "-d must specify an option in $1" >&2
-		    usage; exit 254;
+	    m*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    case $2 in
+		    -*) echo "-m must specify a message text" >&2
+			usage; exit 254;
+			break;;
+		    esac
+		    shift
+		    option=$1
+		    if [ -z "$option" ]; then
+			echo "-m must specify a message text" >&2
+			usage; exit 254;
+		    fi
 		fi
+		m="$option"
+		break;;
+	    d*)	option=${option#?}
+		if [ -z "$option" ]; then
+		    case $2 in
+		    -*) echo "-d must specify an option" >&2
+			usage; exit 254;
+			break;;
+		    esac
+		    shift
+		    option=$1
+		    if [ -z "$option" ]; then
+			echo "-d must specify an option" >&2
+			usage; exit 254;
+		    fi
+		fi
+		v="$v -d$option"
+		d="_$option"
 		break;;
 	    l*)	l="${l}l";;
 	    A*)	A="$A -A";;
@@ -95,8 +121,17 @@ while [ $# -gt 0 ]; do
 	    6*) g="6"; G=" -6";;
 	    x*)	option=${option#?}
 		if [ -z "$option" ]; then
+		    case $2 in
+		    -*) echo "-x must specify a regex" >&2
+			usage; exit 254;
+			break;;
+		    esac
 		    shift
 		    option=$1
+		    if [ -z "$option" ]; then
+			echo "-x must specify a regex" >&2
+			usage; exit 254;
+		    fi
 		fi
 		x="$x -I$option"
 		break;;
@@ -114,6 +149,8 @@ while [ $# -gt 0 ]; do
     shift
 done
 
+# echo "m = '$m' v = '$v' d = '$d' x = '$x'"
+
 l="$l$x"
 d1=$1
 d1=${d1%/}
@@ -129,9 +166,13 @@ else
 fi
 
 echo; date
+if [ -n "$m" ]; then
+    echo "== $m =="
+fi
+
 if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
     echo; echo "========== Test0 make $T"; echo
-    time make $T
+    make $T
 fi
 
 for t in Test1 Test9; do
@@ -141,14 +182,14 @@ for t in Test1 Test9; do
 	    if [ -z "$c" ]; then
 		rm -f $(cat pg.lt)
 		echo; echo "========== $t mm$I$v$A"
-		time mm$I$v$A
+		mm$I$v$A
 		ml
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$d" ]; then
 		    Rdiff p*.lt
 		    echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$d"
-		    time Mdiff -k$l $(cat pd.lt) $d1$d
+		    Mdiff -k$l $(cat pd.lt) $d1$d
 		else
 		    mkdir $d1$d
 		    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
@@ -159,7 +200,7 @@ for t in Test1 Test9; do
 	    cd $d1$d
 	    eval d4="$d3"
 	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
-	    time Mdiff -k$l $(cat ../pd.lt) $d4$d
+	    Mdiff -k$l $(cat ../pd.lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -176,14 +217,14 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 	    if [ -z "$c" ]; then
 		rm -f $(cat p[g$g].lt)
 		echo; echo "========== $t my$I$v$A$G"
-		time my$I$v$A$G
+		my$I$v$A$G
 		ml
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$d" ]; then
 		    Rdiff p*.lt
 		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$d"
-		    time Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$d
+		    Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$d
 		else
 		    mkdir $d1$d
 		    echo; echo "========== $t cp -p \$(cat p[d$g].lt) $d1$d"
@@ -194,7 +235,7 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 	    cd $d1$d
 	    eval d4="$d3"
 	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
-	    time Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d$g].lt) $d4$d
+	    Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d$g].lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
