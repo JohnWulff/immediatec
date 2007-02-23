@@ -84,6 +84,9 @@ Scripts:
 		install script - from X11R5;
 		expected by configure and used in 'make install' if
 		configure cannot find a better BSD compatible 'install'
+		
+		Actuall use /usr/bin/install (file-4.13) via /usr/bin/ginstall
+		Also use /usr/bin/ranlib
 
     perlinstall:#!/bin/sh
 		install Perl modules in the correct $INC path;
@@ -118,8 +121,10 @@ Scripts:
 		4 support scripts for make
 
     m:		#!/bin/bash
-		make all iC components for debugging and install them
-		optionally make all iC applications with the new libict.a
+		Make all iC components for debugging and install them.
+		For this to work /usr/bin/install and /usr/bin/ranlib must have
+		the "set user ID on execution" bit set (chmod +s ... as root).
+		Optionally make all iC applications with the new libict.a
 
 Auxiliary scripts for testing compiler outputs
 
@@ -178,4 +183,4 @@ Auxiliary scripts for testing compiler outputs
 		if no files are specified uses mm via pm.lt to make
 		all the applications in the Test2 directory
 
-$Id: Readme_develop,v 1.10 2007/02/03 18:21:17 jw Exp $
+$Id: Readme_develop,v 1.11 2007/02/23 11:40:23 jw Exp $
