@@ -3,10 +3,11 @@
 usage()
 {
     echo "Make all iC components for debugging and install them" >&2
-    echo "Usage [-idszh] [[<iCmake_options>] <iC_sources>]" >&2
+    echo "Usage $name[ -iudszh] [[<iCmake_options>] <iC_sources>]" >&2
     echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
-    echo '	-d	make with -DDEQ           (make clean required first)' >&2
+    echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
+    echo '	-d	make with -DDEQ Gate option (make clean required first)' >&2
     echo '		double ended queue processing is slightly faster' >&2
     echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
@@ -17,44 +18,39 @@ usage()
     echo '	-h	this help text' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: m,v 1.6 2006/04/17 19:17:22 jw Exp $Id: m,v 1.6 2006/04/17 19:17:22 jw Exp $' >&2
+    echo '$Id: m,v 1.7 2007/02/23 11:07:08 jw Exp $Id: m,v 1.7 2007/02/23 11:07:08 jw Exp $' >&2
 }
 
-dsz=''
+name=${0##*/}
+udsz=''
 
-if [ $# -gt 0 ]; then
-    case $1 in
-    -*) option=${1#?}
-	while [ -n "$option" ]; do
-	    case $option in
-	    i*)
-		echo "Enter root:" >&2
-		sudo chmod +s /usr/bin/install /usr/bin/ranlib
-		echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
-		echo "Exit  root:" >&2
-		sudo -k
-		exit
-		;;
-	    d*) dsz="${dsz}d";;
-	    s*) dsz="${dsz}s";;
-	    z*) dsz="${dsz}z";;
-	    h*) usage; exit 255;;
-	    *)  break;;
-	    esac
-	    option=${option#?}
-	done
+while getopts ":iudszh" opt; do
+    case $opt in
+    i )
+	echo "Enter root:" >&2
+	sudo chmod +s /usr/bin/install /usr/bin/ranlib
+	echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
+	echo "Exit  root:" >&2
+	sudo -k
+	exit
 	;;
-    *)  ;;
+    u ) udsz="${udsz}u";;
+    d ) udsz="${udsz}d";;
+    s ) udsz="${udsz}s";;
+    z ) udsz="${udsz}z";;
+    h )	usage; exit 127;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
-fi
+done
+shift $(($OPTIND - 1))
 
-echo "### makeAll -qgcrtlm$dsz"
-./makeAll -qgcrtlm$dsz
+echo "### makeAll -qgcrtlm$udsz"
+./makeAll -qgcrtlm$udsz
 echo "### make install"
 make install
 if [ $# -gt 0 ]; then
     # optionally make selected iC applications with the new libict.a
     # may use all options of iCmake with 'm'
     echo "### iCmake $*"
-    ./iCmake $*
+    iCmake $*
 fi
