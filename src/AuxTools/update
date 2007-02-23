@@ -1,26 +1,83 @@
 #! /bin/bash
-# $Id:
+# $Id: update,v 1.3 2007/02/23 11:31:02 jw Exp $
 
 name=${0##*/}
-spath="V*"
+vp='V'		## save directory prefix
+vn='100'	## save directory start numeral
+wp='W'		## branch directory prefix
+wn='1'		## branch directory start numeral
+vpath="$vp*"
 
-for d in $spath; do
-    if [ -d $d ]; then
-	cd $d
-	if locked -vq; then
-	    echo "#### $d"
-	    echo "==== " $(locked -v)
-	    co $(locked -v)
+if locked -q; then
+    for d in $vpath; do
+	if [ -d $d ]; then
+	    cd $d
+	    if locked -vq; then
+		echo "#### $d"
+		echo "==== " $(locked -v)
+		co $(locked -v)
+	    fi
+	    cd ..
 	fi
-	cd ..
-    fi
-done
+    done
 
-if [ $name = 'save' ]; then
-    n=${d#V*}
-    let n=$n+1
-    e="V$n"
-    echo "#### $name $e"
-    mkdir $e
-    cp -a $d/RCS $(locked) $e
+    if [ $name = 'save' ]; then
+	if [ $d = "$vpath" ]; then
+	    head="$vp$vn"
+	    echo "#### $name $head"
+	    mkdir $head
+	    cd $head
+	    ln -s ../RCS .
+	    cd ..
+	    cp -p $(locked) $head
+	else
+	    n=${d#$vp*}
+	    previous="$vp$n"
+	    let n=$n+1
+	    head="$vp$n"
+	    if ! Mdiff -kLeq $(locked) $previous; then
+		echo "#### $name $head"
+		mkdir $head
+		cd $head
+		ln -s ../$previous/* .
+		rm -f RCS
+		ln -s ../RCS .
+		cd ..
+		cp --remove-destination -p $(Mdiff -kLel $(locked) $head) $head
+	    else
+		echo "**** Error: $name directory will get no new files - no $head made"
+	    fi
+	fi
+    elif [ $name = 'branch' ]; then
+	n=${d#$vp*}
+	head="$vp$n"
+	w="$wp${n}_"
+	wpath="$w*"
+	for db in $wpath; do
+	    :	# additional files co in head directory are linked below
+	done
+	if [ $db = "$wpath" ]; then
+	    previous=$head	# wpath is empty
+	    m="$wn"		# usually 1 - can be 0
+	else
+	    m=${db#$w*}
+	    previous="$w$m"
+	    let m=$m+1
+	fi
+	branch="$w$m"
+	if ! Mdiff -kLeq $(locked) $previous; then
+	    echo "#### $name $branch"
+	    mkdir $branch
+	    cd $branch
+	    ln -s ../$previous/* .
+	    rm -f RCS
+	    ln -s ../RCS .
+	    cd ..
+	    cp --remove-destination -p $(Mdiff -kLel $(locked) $branch) $branch
+	else
+	    echo "**** Error: $name directory will get no new files - no $branch made"
+	fi
+    fi
+else
+    echo "**** Error: $name - no files are locked - nothing can be saved"
 fi
