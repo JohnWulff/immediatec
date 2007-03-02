@@ -37,6 +37,7 @@
 #   V1.15: 05.03.05 New algorithm to format individual logic expansions
 #   V1.16: 05.09.28 More precise regular expressions - allow $ at start of name
 #   V1.17: 05.10.28 Add -o option to specify an output file (Windows has trouble with >)
+#   V1.18: 07.02.27 use '@' as function head marker rather then '$', which can be normal variable character
 #
 #################################################################
 
@@ -51,7 +52,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.17 2006/01/10 12:03:27 jw Exp $
+$Id: pplstfix,v 1.18 2007/02/27 23:19:57 jw Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -111,6 +112,7 @@ sub processFile {
     #	QX1.7	|  X	 v5@
     #	i7_7	@   	 IX7.7<
     #	v5	@   	~v5_1#
+    # There are no function definition variables with '@' in NET TOPOLOGY
     ####################################################################
 
     print LOG "##### Pass1 NET TOPOLOGY\n" if $opt_l;
@@ -120,7 +122,7 @@ sub processFile {
 	}
 	# allow alias of numbers (change jw 040112)
 	# topology
-	if (/^\t|([\w.\$]+|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])([\w.\$]+|-\d+)($OPS)))?/go) {
+	if (/^\t|([\w\$][\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])([\w\$][\w.\$]*|-\d+)($OPS)))?/go) {
 	    if (defined $1) {
 		$name = $1;
 		if ($2 eq '@') {
@@ -153,7 +155,7 @@ sub processFile {
 		$lengths{$name} = $tlen;
 		print LOG "$.:	$1	$2 $3 $6 $7 $8\n" if $opt_l;
 	    }
-	    while (/\G\t([ <~]([\w.\$]+|-\d+)$OPS)/g) {
+	    while (/\G\t([ <~]([\w\$][\w.\$]*|-\d+)$OPS)/g) {
 		if (($len = length $1) > $tlen) {
 		    $tlen = $len;
 		    $lengths{$name} = $tlen;
@@ -195,7 +197,22 @@ sub processFile {
 		while (@largeBlock) {
 		    $hashRef = shift @largeBlock;
 		    if (ref($hashRef) eq 'HASH') {
-			foreach $target (sort keys %$hashRef) {
+			foreach $target (sort
+			    {
+				my ($at, $an, $bt, $bn);
+				if ($a =~ /(.+)_(\d+)$/) {
+				    ($at, $an) = ($1, $2);
+				} else {
+				    ($at, $an) = ($a, -1);
+				}
+				if ($b =~ /(.+)_(\d+)$/) {
+				    ($bt, $bn) = ($1, $2);
+				} else {
+				    ($bt, $bn) = ($b, -1);
+				}
+				$at cmp $bt || $an <=> $bn;
+			    }
+			    keys %$hashRef) {
 			    $arrayRef = $hashRef->{$target};
 			    while (@$arrayRef) {
 				$print = shift @$arrayRef;
@@ -239,11 +256,20 @@ sub processFile {
 		$cFlag = 3;
 	    }
 	  cCode:
-	    while (/([\w.\$]+|-\d+)/g) {		# non listing line or C CODE
-		if (defined($symbols{$1})) {
-		    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
+	    if ($cFlag == 0) {
+		while (/([\w\$][\w.@\$]*|-\d+)/g) {		# listing line
+		    if (defined($symbols{$1})) {
+			push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
+		    }
+		    print LOG "$.:	$1\n" if $opt_l;
 		}
-		print LOG "$.:	$1\n" if $opt_l;
+	    } else {
+		while (/([\w\$][\w.\$]*|-\d+)/g) {		# non listing line or C CODE
+		    if (defined($symbols{$1})) {
+			push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
+		    }
+		    print LOG "$.:	$1\n" if $opt_l;
+		}
 	    }
 	  Array:
 	    while (@array) {
@@ -284,7 +310,7 @@ sub processFile {
 		$inver = 0;
 	    }
 	    if ($cFlag == 0) {
-		if (/^(\$\d+ =)?\t+(([\w\$(][\w.\$)]*|-\d+)?\t($LOPS.---$OPS))?(\t([A-Za-z_\$][\w.\$]*|-\d+))?(\t(${FOPS}1*))?(\t+([^\t]*))?(\t*(\/\/ .*))?$/o) {
+		if (/^(@\d+ =)?\t+(([\w\$(][\w.@\$)]*|-\d+)?\t($LOPS.---$OPS))?(\t([\w\$][\w.@\$]*|-\d+))?(\t(${FOPS}1*))?(\t+([^\t]*))?(\t*(\/\/ .*))?$/o) {
 		    if (($len = length $3) > $max1) {
 			$max1 = $len;
 		    }
@@ -332,7 +358,17 @@ sub processFile {
 		next Line;
 	    }
 	    if ($cFlag == 2 and
-		/^\t|([\w.\$]+|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])([\w.\$]+|-\d+)($OPS)1?|[({] \(\d+\)))?/go) {
+		/^\t|([\w\$][\w.\$]*|-\d+)\t($OPS)  ($FOPS)(\t(([ <~])([\w\$][\w.\$]*|-\d+)($OPS)1?|[({] \(\d+\)))?/go)	## }
+	    {
+		########################################################################
+		##	NET TOPOLOGY
+		##	IX0.0	<   	 _f1_1|
+		##	QB1	@  A	 i-
+		##	QB1_0	+  W
+		##	_f1_1	|  F	{ (3)	 i-	 QB1@
+		##	i	-  A	 QB1_0+
+		## There are no function definition variables with '@' in NET TOPOLOGY
+		########################################################################
 		if (defined $1) {
 		    $tlen = $lengths{$1};
 		    $print = sprintf "%*s %1s  %1s %*s",
@@ -340,7 +376,7 @@ sub processFile {
 		} else {
 		    $print = ' ' x ($maxLength + 5);
 		}
-		while (/\G\t([ <~]([\w.\$]+|-\d+)$OPS)/g) {
+		while (/\G\t([ <~]([\w\$][\w.\$]*|-\d+)$OPS)/g) {
 		    $print .= sprintf " %*s",
 			-$tlen, $1; 
 		}

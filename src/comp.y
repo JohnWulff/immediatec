@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.92 2006/01/10 11:54:48 jw Exp $";
+"@(#)$Id: comp.y,v 1.93 2007/03/02 08:16:05 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -38,7 +38,7 @@ static int	copyCfrag(char, char, char, FILE*);	/* copy C action */
 static void	ffexprCompile(char *, List_e *);	/* c_compile cBlock */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
-static unsigned int stype;		/* to save TYPE in decl */
+static Type	stype;			/* to save TYPE in decl */
 static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
 static Symbol	tSym = { "_tSym_", AND, GATE, };
 static int	cFn = 0;
@@ -62,6 +62,7 @@ static void	clrBuf(void);
     Sym		sym;			/* symbol table pointer */
     Lis		list;			/* linked list elements */
     Val		val;			/* int numerical values */
+    Typ		typ;			/* type, ftype, em and fm */
     Str		str;			/* one character array */
     /* allows storing character as iClval.val.v (2nd byte is NULL) */
     /* then char array can be referenced as $1.v, single char as $1.v[0] */
@@ -118,14 +119,14 @@ pu(int t, char * token, Lis * node)
 } /* pu */
 
 static void
-pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
+pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 {
     fprintf(iC_outFP, ">>>%s\t%s\t[%c%c %c] [%c%c %c] => [%c%c %c]\n",
 	token, s2->name,
 	/* single character for type, . normal or - external, ftype */
-	iC_os[(s1 >>8)&TM], iC_os[!!((s1 >>8)&EM)], iC_fos[s1 & 0xff],
-	iC_os[s2->type&TM], iC_os[!!(s2->type&EM)], iC_fos[s2->ftype],
-	iC_os[ss->type&TM], iC_os[!!(ss->type&EM)], iC_fos[ss->ftype]);
+	iC_os[s1.type],  iC_os[s1.em],  iC_fos[s1.ftype],
+	iC_os[s2->type], iC_os[s2->em], iC_fos[s2->ftype],
+	iC_os[ss->type], iC_os[ss->em], iC_fos[ss->ftype]);
     fflush(iC_outFP);
 } /* pd */
 
@@ -151,7 +152,8 @@ pd(const char * token, Symbol * ss, unsigned int s1, Symbol * s2)
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr actexpr tfexpr ifini ffexpr
 %type	<list>	cref ctref ctdref cCall cParams cPlist
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall rParams rPlist
-%type	<val>	cBlock declHead extDeclHead formalParaTypeDecl
+%type	<val>	cBlock
+%type	<typ>	declHead extDeclHead formalParaTypeDecl
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
@@ -348,8 +350,9 @@ useFlag	: USE USETYPE		{
 
 extDecl	: extDeclHead UNDEF	{
 		$$.v = $2.v;
-		$$.v->ftype = $1.v & 0xff;
-		$$.v->type = $1.v >> 8;		/* has EM set from extDeclHead */
+		$$.v->ftype = $1.v.ftype;
+		$$.v->type  = $1.v.type;
+		$$.v->em    = $1.v.em;		/* has em set from extDeclHead */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
 		    Symbol t = *($2.v);
@@ -360,21 +363,24 @@ extDecl	: extDeclHead UNDEF	{
 	| extDeclHead variable	{
 		char *	cp;
 
-		if ($2.v->ftype != ($1.v & 0xff)) {
+		if ($2.v->ftype != $1.v.ftype) {
 		    ierror("extern declaration does not match previous declaration:", $2.v->name);
 		    $2.v->type = ERR;	/* cannot execute properly */
 		}
 		$$.v = $2.v;
-		if (iFunSymExt && (cp = strchr($2.v->name, '$'))) {
+		if (iFunSymExt && (cp = strchr($2.v->name, '@'))) {
 		    warning("extern declaration of internal function variable - ignored:", cp+1);
 		} else
-		if (($2.v->type & EM) || $2.v->type == UDF) {	/* QXx.y QBz */
-		    $$.v->ftype = $1.v & 0xff;
-		    $$.v->type = $1.v >> 8;	/* has EM set from extDeclHead */
+		if ($2.v->type == UDF ||		/* new extern or unused QXx.y QBz */
+		    ($2.v->em && $2.v->type != ERR)) {	/* or prev extern but not ERROR */
+		    $$.v->ftype = $1.v.ftype;
+		    $$.v->type  = $1.v.type;
+		    $$.v->em    = $1.v.em;		/* has em set from extDeclHead */
 		} else
 		if (iFunSymExt) {
 		    ierror("extern declaration in function definition after assignment:", $2.v->name);
-		    $$.v->type = ERR | EM;	/* stop use as a statement in function */
+		    $$.v->type = ERR;		/* stop use as a statement in function */
+		    $$.v->em   = 1;
 		} else
 		if ($2.v->type == INPW || $2.v->type == INPX) {
 		    if (iC_Sflag) {
@@ -397,7 +403,7 @@ extDeclHead
 		int		typ;
 		int		ftyp;
 		ftyp = $3.v->ftype;		/* ARITH GATE CLCKL TIMRL */
-		if ($2.v->ftype == 1) {
+		if ($2.v->ftype == 1) {		/* ftype field in IMM for immC */
 		    if (ftyp == ARITH) {
 			typ = ARNC;		/* immC int */
 		    } else
@@ -407,14 +413,18 @@ extDeclHead
 			warning("extern declaration of an immC type other than bit or int - ignore:", iC_full_ftype[ftyp]);
 			goto extImmType;
 		    }
-		} else {
+		} else {			/* IMM is imm */
 		  extImmType:
 		    if (ftyp >= CLCKL) {	/* check that CLCKL TIMRL */
 			ftyp -= CLCKL - CLCK;	/* and CLCK TIMR are adjacent */
 		    }
 		    typ = iC_types[ftyp];	/* ARN OR CLK TIM */
 		}
-		$$.v = stype = $3.v->ftype | ((typ | EM) << 8);
+		stype.ftype = $3.v->ftype;
+		stype.type  = typ;
+		stype.em    = 1;		/* set em for extern declaration */
+		stype.fm    = 0;
+		$$.v = stype;
 	    }
 	| extDecl ','		{ $$.v = stype;	/* first TYPE */ }
 	;
@@ -459,17 +469,18 @@ decl	: declHead UNDEF	{
 #endif
 		$$.f = $1.f; $$.l = $2.l;
 		sp = $$.v = $2.v;
-		sp->ftype = $1.v & 0xff;	/* bit int clock timer */
-		sp->type = $1.v >> 8;
-		if ((sp->type = $1.v >> 8) != UDF) {
+		sp->ftype = $1.v.ftype;	/* bit int clock timer */
+		sp->type  = $1.v.type;
+		sp->em    = $1.v.em;
+		if (sp->type != UDF) {
 		    listGenOut(sp);		/* list immC node and generate possible output */
 		}
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
-		    cp = strchr(sp->name, '$'); /* locate original extension */
+		    cp = strchr(sp->name, '@'); /* locate original extension */
 		    assert(cp && isprint(cp[1])); /* extension must be at least 1 character */
-		    if ((sp1 = lookup(++cp)) != 0 && (sp1->type & EM)) {
+		    if ((sp1 = lookup(++cp)) != 0 && sp1->em) {
 			warning("declaration of an extern variable in a function - ignored:", cp);
 		    }
 		    collectStatement(sp);
@@ -487,14 +498,14 @@ decl	: declHead UNDEF	{
 		Symbol t = *($2.v);
 #endif
 		$$.f = $1.f; $$.l = $2.l;
-		ftyp = $1.v & 0xff;		/* TYPE bit int clock timer */
-		typ = $1.v >> 8;		/* UDF for all TYPEs except ARNC and LOGC */
+		ftyp = $1.v.ftype;		/* TYPE bit int clock timer */
+		typ  = $1.v.type;		/* UDF for all TYPEs except ARNC and LOGC */
 		sp = $$.v = $2.v;
 		if (sp->ftype != ftyp) {
 		    ierror("declaration does not match previous declaration:", sp->name);
 		    sp->type = ERR;		/* cannot execute properly */
 		} else
-		if ((sp->type & EM) || sp->type == UDF) {
+		if (sp->em || sp->type == UDF) {
 		    sp->ftype = ftyp;		/* bit int clock timer */
 		    if (typ != UDF) {		/* UDF for all TYPEs except ARNC and LOGC */
 			char *	name;
@@ -502,19 +513,21 @@ decl	: declHead UNDEF	{
 			int	yn;
 			if ((name = sp->name) &&
 			    sscanf(name, "Q%1[XBWL]%d", y1, &yn) != 2 &&
-			    (sp->type & TM) != typ) {
+			    sp->type != typ) {
 			    ierror("declaration does not match previous imm declaration:", name);
 			    typ = ERR;		/* cannot execute properly */
 			} else {
 			    sp->type = typ;	/* UDF for all TYPEs except ARNC and LOGC */
+			    sp->em = 0;
 			    listGenOut(sp);	/* list immC node and generate possible output */
 			}
 		    } else
-		    if (sp->type == (ARNC|EM) || sp->type == (LOGC|EM)) {
+		    if (sp->em && (sp->type == ARNC || sp->type == LOGC)) {
 			ierror("declaration does not match previous immC declaration:", sp->name);
 			typ = ERR;		/* cannot execute properly */
 		    }
 		    sp->type = typ;
+		    sp->em = 0;
 		} else
 		if (sp->type == INPW || sp->type == INPX) {
 		    if (iC_Sflag) {
@@ -551,7 +564,10 @@ declHead
 		  immType:
 		    typ = UDF;
 		}
-		$$.v = stype = ftyp | typ << 8;
+		stype.ftype = ftyp;
+		stype.type  = typ;
+		stype.em    = stype.fm = 0;
+		$$.v = stype;
 		if (iFunSymExt) {
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
@@ -730,7 +746,7 @@ expr	: UNDEF			{
 		if ($1.v == 0) YYERROR;		/* error in bltin() */
 		sp = $1.v->le_sym;
 		$$ = $1;
-		if (sp->ftype != iC_ftypes[sp->type & TM]) {
+		if (sp->ftype != iC_ftypes[sp->type]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
@@ -775,6 +791,7 @@ expr	: UNDEF			{
 		$$.v->le_sym->type = LATCH;
 		if (iFunSymExt) {
 		    nsp = $$.v->le_sym;
+		    assert(nsp && nsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
 		    nlp = nsp->v_elist;		/* feedback list */
 		    nsp->v_elist = sy_push(nsp); /* feeds back to itself */
 		    nsp->v_elist->le_next = nlp;
@@ -938,9 +955,9 @@ expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist) &&
+		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist)) {
+		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist)) {
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
@@ -968,9 +985,9 @@ expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist) &&
+		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist) &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
-		    ((typ = sp->type & TM) > ARN || typ == UDF || !sp->u_blist)) {
+		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist)) {
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
@@ -1085,7 +1102,7 @@ expr	: UNDEF			{
 		if ($2.v) {
 		    int typ;
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
-			(((typ = sp->type & TM) != ARNC && typ != ARNF && typ != ARN &&
+			(((typ = sp->type) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
@@ -1108,7 +1125,7 @@ expr	: UNDEF			{
 		if ($2.v) {
 		    int typ;
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
-			(((typ = sp->type & TM) != ARNC && typ != ARNF && typ != ARN &&
+			(((typ = sp->type) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
@@ -1602,6 +1619,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		assert(lpR);
 		nsp = lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
 		if (iFunSymExt) {
+		    assert(nsp && nsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
 		    nlp = nsp->v_elist;			/* feedback list */
 		    nsp->v_elist = sy_push(liS.v->le_sym);
 		    nsp->v_elist->le_next = sy_push(liR.v->le_sym);
@@ -1653,6 +1671,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		assert(lpR);
 		nsp = lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
 		if (iFunSymExt) {
+		    assert(nsp && nsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
 		    nlp = nsp->v_elist;			/* feedback list */
 		    nsp->v_elist = sy_push(liS.v->le_sym);
 		    nsp->v_elist->le_next = sy_push(liR.v->le_sym);
@@ -1875,7 +1894,7 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	| cfexpr		{
 		Symbol *	sp = $1.v->le_sym;
 		assert(sp);
-		if (sp->ftype != iC_ftypes[sp->type & TM]) {
+		if (sp->ftype != iC_ftypes[sp->type]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = CLCKL;			/* clock list head */
@@ -1973,7 +1992,7 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 	| tfexpr		{
 		Symbol *	sp = $1.v->le_sym;
 		assert(sp);
-		if (sp->ftype != iC_ftypes[sp->type & TM]) {
+		if (sp->ftype != iC_ftypes[sp->type]) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = TIMRL;			/* timer list head */
@@ -2203,7 +2222,7 @@ iFunTrigger
 iFunHead
 	: declHead iFunTrigger '('	{
 		$$.f = $1.f; $$.l = $3.l;
-		$$.v = functionDefHead($1.v, $2.v, 1);	/* function head Symbol */
+		$$.v = functionDefHead($1.v.ftype, $2.v, 1);	/* function head Symbol */
 	    }
 
 	/************************************************************
@@ -2309,15 +2328,16 @@ fPlist	: formalParameter		{
 formalParameter
 	: ASSIGN formalParaTypeDecl UNDEF	{
 		$$ = $3;				/* formal assign parameter Symbol */
-		$$.v->ftype = $2.v & 0xff;		/* TYPE bit int clock timer */
-		$$.v->type = $2.v >> 8;			/* UDF for all TYPEs */
+		$$.v->ftype = $2.v.ftype;		/* TYPE bit int clock timer */
+		$$.v->type  = $2.v.type;		/* UDF for all TYPEs */
 		iFunSyText = 0;				/* no more function symbols */
 	    }
 	| formalParaTypeDecl UNDEF	{
 		int	ft;
 
 		$$ = $2;				/* formal value parameter Symbol */
-		$$.v->ftype = ft = $1.v & 0xff;		/* TYPE bit int clock timer */
+		$$.v->ftype = ft = $1.v.ftype;		/* TYPE bit int clock timer */
+		$$.v->type  = $1.v.type;		/* UDF for all TYPEs */
 		if (ft >= CLCKL) {			/* check that CLCKL TIMRL */
 		    ft -= CLCKL - CLCK;			/* and CLCK and TIMR are adjacent */
 		}
@@ -2329,12 +2349,14 @@ formalParameter
 formalParaTypeDecl
 	: TYPE				{
 		$$.f = $$.l = $1.l;			/* do not include in expression string */
-		$$.v = $1.v->ftype;
+		$$.v.ftype = $1.v->ftype;
+		$$.v.type = $$.v.em = $$.v.fm = 0;
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 	    }
 	| IMM TYPE			{
 		$$.f = $$.l = $2.l;			/* do not include in expression string */
-		$$.v = $2.v->ftype;			/* IMM is optional */
+		$$.v.ftype = $2.v->ftype;		/* IMM is optional */
+		$$.v.type = $$.v.em = $$.v.fm = 0;
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 	    }
 	;
@@ -3010,7 +3032,7 @@ iClex(void)
 	    iClval.val.v = getNumber();		/* decimal octal or hex */
 	    c = NUMBER;				/* value in iClval.val.v */
 	    goto retfl;
-	} else if (isalpha(c) || c == '_' || c == '$') {
+	} else if (isalpha(c) || c == '_' || c == '$') {	/* first may not be '@' */
 	    unsigned char	wplus = 0;
 	    unsigned int	qtoken = 0;
 	    unsigned long	qmask = 0;	/* mask to id bit, byte, word or long */
@@ -3028,7 +3050,7 @@ iClex(void)
 	    rest = 0;				/* used for =I5 0402 debug output */
 #endif
 	    /* step forward to first character (in c) after identifier to fill iCtext */
-	    while (isalnum(c = get(T0FP, 0)) || c == '_' || c == '$');
+	    while (isalnum(c = get(T0FP, 0)) || c == '_' || c == '$' || c == '@');
 	    if ((len = sscanf(iCtext, "%1[IQT]%1[XBWL]%d_%d%1[A-Z_a-z]",
 		y0, y1, &yn, &yt, y2)) >= 4) {
 		if (len == 4) {			/* 4 - QX%d_%d is not allowed */
@@ -3228,16 +3250,36 @@ iClex(void)
 		if (iRetSymbol.v && strcmp(iCtext, "this") == 0) {
 		    symp = iRetSymbol.v;	/* function return Symbol */
 		} else {
+		    char *	cp;
 		    if (iC_Pflag && strchr(iCtext, '$')) {
 			if (iC_Pflag >= 2) typ = ERR;
 			warning("'$' character(s) in function block parameter or identifier:", iCtext);
 		    }
-		    strncpy(iFunSymExt, iCtext, iFunEnd - iFunSymExt);
+		    if ((cp = strchr(iCtext, '@')) != 0) {
+			/********************************************************************
+			 *  Variable names with '@' are only legal if part of this
+			 *  function definition in which case they match iFunBuffer
+			 *  and no second '@' occurs - alternate syntax used previously
+			 *  with '$' as the function variable separator
+			 *******************************************************************/
+			cp++;
+			if (strchr(cp, '@') ||
+			    strncmp(iCtext, iFunBuffer, iFunSymExt - iFunBuffer)) {
+			    ierror("'@' only allowed if it follows current function name:", iCtext);
+			    return LEXERR;
+			}
+		    } else {
+			cp = iCtext;		/* use the bare function variable */
+		    }
+		    strncpy(iFunSymExt, cp, iFunEnd - iFunSymExt);
 		    if ((symp = lookup(iFunBuffer)) == 0 && iFunSyText) {
 			symp = install(iFunBuffer, typ, ftyp); /* parameter or declaration */
 		    }
 		    *iFunSymExt = '\0';
 		}
+	    } else if (strchr(iCtext, '@')) {
+		ierror("'@' only allowed if it follows function name in a function definition:", iCtext);
+		return LEXERR;
 	    } else if (iC_Pflag && strchr(iCtext, '$')) {
 		/********************************************************************
 		 *  This and the test just above, are the only places, where variables
@@ -3269,7 +3311,7 @@ iClex(void)
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
 		fprintf(iC_outFP, "iClex: %s %s %s\n",
-		    symp->name, iC_full_type[symp->type&TM], iC_full_ftype[symp->ftype]);
+		    symp->name, iC_full_type[symp->type], iC_full_ftype[symp->ftype]);
 		fflush(iC_outFP);
 	    }
 #endif
@@ -3279,9 +3321,12 @@ iClex(void)
 		    (sp = lp->le_sym) != 0) {
 		symp = sp;			/* with token of original */
 	    }
-	    typ &= ~EM;
-	    if (typ > IFUNCT) {
-		c = LEXERR;
+	    /********************************************************************
+	     *  no need to clear sp->em
+	     *  EM was cleared as typ &= ~EM before - was not cleared in symp->type
+	     *******************************************************************/
+	    if (typ > IFUNCT || symp->fm) {	/* function definition symbols */
+		c = LEXERR;			/* are not looked up directly */
 	    } else
 	    if (typ == IFUNCT) {
 		if ((ftyp = symp->ftype) == UDFA) {

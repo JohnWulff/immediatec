@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.51 2005/10/18 11:41:42 jw Exp $";
+"@(#)$Id: comp.h,v 1.52 2007/02/17 14:54:18 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -41,38 +41,47 @@ typedef	struct	List_e {	/* list element */
     char *		le_last;
 } List_e;
 
+typedef	struct Type {		/* auxiliary compile type to preserve types and masks */
+    unsigned char	type;	/* ARN XOR AND OR LATCH FF CLK TIM ... */
+    unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
+    unsigned char	em;	/* bit to mark external Symbol */
+    unsigned char	fm;	/* mark parameter and local var in function definition */
+} Type;
+
 typedef	struct Symbol {		/* symbol table entry */
     char *		name;	/* element name */
     unsigned char	type;	/* ARN XOR AND OR LATCH FF CLK TIM ... */
     unsigned char	ftype;	/* ARITH GATE S_FF R_FF D_FF CLCK TIMR ... */
+    unsigned char	em;	/* bit to mark external Symbol */
+    unsigned char	fm;	/* mark parameter and local var in function definition */
     List_e *		list;	/* output list pointer */
-#if ! YYDEBUG
+#if ! YYDEBUG || defined(SYUNION)
     union {
 #endif
 	Gate *		gate;	/* AND OR */
 	List_e *	blist;	/* used in compile */
 	unsigned int	val;	/* used to hold function number etc. */
-#if ! YYDEBUG
+#if ! YYDEBUG || defined(SYUNION)
     } u;
     union {
 #endif
 	unsigned int	cnt;	/* used to hold link_count in listNet() */
 	List_e *	elist;	/* feedback list pointer */
 	struct Symbol *	glist;	/* mark symbols in C compile */
-#if ! YYDEBUG
+#if ! YYDEBUG || defined(SYUNION)
     } v;
 #endif
     struct Symbol *	next;	/* to link to another Symbol, mostly in ST */
 } Symbol;
 
-#if ! YYDEBUG
+#if ! YYDEBUG || defined(SYUNION)
 #define u_gate		u.gate
 #define u_blist		u.blist
 #define u_val		u.val
 #define v_cnt		v.cnt
 #define v_elist		v.elist
 #define v_glist		v.glist
-#else				/* easier for debugging */
+#else				/* no unions is easier for debugging with ddd */
 #define u_gate		gate
 #define u_blist		blist
 #define u_val		val
@@ -85,6 +94,7 @@ typedef	struct Symbol {		/* symbol table entry */
 typedef struct { char *f; char *l; Symbol * v;     } Sym;
 typedef struct { char *f; char *l; List_e * v;     } Lis;
 typedef struct { char *f; char *l; unsigned int v; } Val;
+typedef struct { char *f; char *l; Type v;         } Typ;
 typedef struct { char *f; char *l; char v[2];      } Str;
 
 typedef struct Token {		/* Token for gram.y grammar */
@@ -196,7 +206,7 @@ extern void	listGenOut(		/* listing for undefined C variable */
 	    Symbol * sp);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
 extern Symbol *	functionDefHead(	/* set up the function definition head */
-	    unsigned int typeVal, Symbol * funTrigger, int retFlag);
+	    unsigned int ftyp, Symbol * funTrigger, int retFlag);
 extern List_e *	collectStatement(	/* collect statements in the function body */
 	    Symbol * funcStatement);
 extern Symbol *	returnStatement(	/* value function return statement */

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.30 2005/10/21 18:51:44 jw Exp $";
+"@(#)$Id: init.c,v 1.31 2007/02/17 12:33:39 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -202,6 +202,8 @@ imm int SHR(int dat, clock dcl, bit res, clock rcl) {\n\
     return SHR_( res ? this : dat, dcl, res, rcl); }	/* line 202 */\n\
 imm int SHSR(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
     return SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
+imm bit FALL(bit fall, clock clk) {\n\
+    return RISE(~fall, clk); }\n\
 imm bit LATCH(bit set, bit res) {\n\
     return FORCE(this, set, res); }\n\
 imm bit DLATCH(bit set, bit res, clock clk) {\n\
@@ -269,7 +271,8 @@ init(void)				/* install constants and built-ins */
 		    if ((sp = lookup(funName)) == 0) {
 			sp = install(funName, IFUNCT, UDFA);	/* function not defined yet */
 		    }
-		    sp->u_val = instanceNum;		/* initialise instance number */
+		    /* care is taken that union members v.elist and v.glist not used for IFUNCT */
+		    sp->v_cnt = instanceNum;		/* initialise instance number */
 		}
 	    }
 	    fclose(H1p);

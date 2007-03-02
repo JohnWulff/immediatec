@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.22 2005/10/10 13:03:23 jw Exp $";
+"@(#)$Id: gram.y,v 1.23 2007/02/15 00:50:53 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -644,7 +644,7 @@ declarator					/* 25 */
 	    $$.end = $1.end;
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
-	    if (($1.symbol->type & TM) < MAX_LS &&
+	    if ($1.symbol->type < MAX_LS &&
 		$1.symbol->v_glist == 0) {
 		immVarRemove($1.start, $1.end, $1.symbol);
 	    }
@@ -655,7 +655,7 @@ declarator					/* 25 */
 	    $$.end = $2.end;
 	    $$.symbol = $2.symbol;
 #ifndef LMAIN
-	    if (($2.symbol->type & TM) < MAX_LS &&
+	    if ($2.symbol->type < MAX_LS &&
 		$2.symbol->v_glist == 0) {
 		immVarRemove($2.start, $2.end, $2.symbol);
 	    }
@@ -2087,7 +2087,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
 #endif
 	    if (p->sp == sp) {
-		typ = sp->type & TM;
+		typ = sp->type;
 		ftyp = sp->ftype;
 		if (typ == UDF) {
 		    if (iC_Sflag) {
@@ -2206,7 +2206,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #ifdef LEAS
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
-		if ((sp->type & TM) == UDF) {
+		if (sp->type == UDF) {
 		    udfCount += LEAS;
 		}
 	    }

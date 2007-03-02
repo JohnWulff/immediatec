@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.81 2006/02/23 17:41:09 jw Exp $";
+"@(#)$Id: outp.c,v 1.82 2007/02/27 22:19:54 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -256,19 +256,22 @@ listNet(unsigned gate_count[])
 		    hspf = 1;
 		}
 		if (sp && sp->name) {
+		    int fm = sp->fm;
 		    fprintf(iC_outFP, "\n\t%-20s %-6s %-2s %-2s %-6s",
 			sp->name,
-			iC_full_type[sp->type & TM],
-			sp->type & EM ? "EM" : "",
-			sp->type & FM ? "FM" : "",
+			iC_full_type[sp->type],
+			sp->em ? "EM" : "",
+			fm == 0 ? "" : fm == 1 ? "01" :
+				       fm == 2 ? "10" : "11",
 			iC_full_ftype[sp->ftype]);
-		    if ((sp->type & ~FM) == ALIAS) {
+		    if (sp->type == ALIAS) {
 			Symbol * sp1 = sp;
 			List_e * lp1;
 			Symbol * sp2;
 			while (sp1 &&
-			    ((sp1->type == ALIAS && (lp1 = sp1->list) != 0) ||
-			    (sp1->type == (ALIAS|FM) && (lp1 = sp1->u_blist) != 0)) &&
+			    sp1->type == ALIAS &&
+			    ((sp1->fm == 0 && (lp1 = sp1->list) != 0) ||
+			    (sp1->fm != 0 && (lp1 = sp1->u_blist) != 0)) &&
 			    (sp2 = lp1->le_sym) != 0) {
 			    fprintf(iC_outFP, " %s ", sp2->name);
 			    sp1 = sp2;
@@ -297,30 +300,32 @@ listNet(unsigned gate_count[])
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    sp->v_cnt = 0;			/* v_elist & v_glist no longer needed */
-	    /* check if iClock is referenced in and ALIAS */
-	    if ((sp->type & ~EM) == ALIAS && sp->ftype == CLCKL) {
-		tsp = sp;
-		while ((tsp->type & ~EM) == ALIAS) {
-		    tsp = tsp->list->le_sym;	/* point to original */
-		    assert(tsp->ftype == CLCKL);
+	    if (sp->type < IFUNCT) {		/* allows IFUNCT to use union v.cnt */
+		sp->v_cnt = 0;			/* v.elist & v.glist no longer needed */
+		/* check if iClock is referenced in and ALIAS */
+		if (sp->type == ALIAS && sp->fm == 0 && sp->ftype == CLCKL) {
+		    tsp = sp;
+		    while (tsp->type == ALIAS && tsp->fm == 0) {
+			tsp = tsp->list->le_sym;	/* point to original */
+			assert(tsp->ftype == CLCKL);
+		    }
+		    if (tsp == iclock) {
+			iClockAlias = 1;		/* include iClock below if ALIAS */
+		    }
 		}
-		if (tsp == iclock) {
-		    iClockAlias = 1;		/* include iClock below if ALIAS */
+		if (sp->type == ARNF) {
+		    sp->type += (ARN-ARNF);		/* convert ARNF back to ARN */
 		}
-	    }
-	    if ((sp->type & TM) == ARNF) {
-		sp->type += (ARN-ARNF);		/* convert ARNF back to ARN */
 	    }
 	}
     }
     iClockHidden = 0;
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (sp->type & EM) {
+	    if (sp->em) {
 		extFlag = 1;
 	    }
-	    if ((typ = sp->type & ~EM) < MAX_LS) {
+	    if ((typ = sp->type) < MAX_LS && sp->fm == 0) {
 		/* ignore iClock unless used, ERR (! CLK) or referenced in an ALIAS */
 		if (sp != iclock || sp->list != 0 || typ != CLK || iClockAlias) {
 		    gate_count[typ]++;		/* count ALIAS and ERR typ */
@@ -342,6 +347,7 @@ listNet(unsigned gate_count[])
 				    if (sp->ftype < MAX_AR && lp->le_val != 0) {
 					tsp = lp->le_sym;	/* arithmetic function */
 					assert(tsp && (tsp->type == ARN || tsp->type == SH || tsp->type == NCONST || tsp->type == ARNC || tsp->type == ERR));
+					/* allows IFUNCT to use union v.cnt */
 					tsp->v_cnt++;	/* count reverse parameter */
 				    }
 				}
@@ -360,6 +366,7 @@ listNet(unsigned gate_count[])
 			fcnt = 0;
 			for (lp = sp->list; lp; lp = lp->le_next) {
 			    tsp = lp->le_sym;
+			    if (tsp && tsp->fm) continue;	/* no function internal variables */
 			    if (fcnt++ >= 8) {
 				fcnt = 1;
 				fprintf(iC_outFP, "\n\t");
@@ -377,16 +384,16 @@ listNet(unsigned gate_count[])
 			    } else if (sp->ftype == TIMR && lp->le_val > 0) {
 				 /* timer preset off value */
 				fprintf(iC_outFP, "\t %s%c%d",
-				    tsp->name, iC_os[tsp->type & TM], lp->le_val);
+				    tsp->name, iC_os[tsp->type], lp->le_val);
 			    } else if (sp->ftype < MAX_AR && lp->le_val == (unsigned) -1) {
 				/* reference to a timer value - no link */
-				fprintf(iC_outFP, "\t<%s%c", tsp->name, iC_os[tsp->type & TM]);
+				fprintf(iC_outFP, "\t<%s%c", tsp->name, iC_os[tsp->type]);
 			    } else {
 				normalOut:
 				fprintf(iC_outFP, "\t%c%s%c",
 				    (sp->ftype == GATE || sp->ftype == OUTX) &&
 				    lp->le_val ? '~' : ' ',
-				    tsp->name, iC_os[tsp->type & TM]);
+				    tsp->name, iC_os[tsp->type]);
 			    }
 			}
 			fprintf(iC_outFP, "\n");
@@ -399,7 +406,7 @@ listNet(unsigned gate_count[])
 		} else {
 		    iClockHidden = 1;
 		}
-	    } else if (typ == (UDF|FM)) {
+	    } else if (typ == UDF) {
 		undefined++;	/* cannot execute if function internal gate not defined */
 		ierror("undefined gate in function:", sp->name);
 	    }
@@ -407,11 +414,13 @@ listNet(unsigned gate_count[])
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (sp->v_cnt) {
-		assert(sp->type == ARN || sp->type == SH || sp->type == NCONST || sp->type == ARNC || sp->type == ERR);
-		link_count += sp->v_cnt + 1;	/* space for reverse links + function # */
+	    if (sp->type < IFUNCT) {		/* allows IFUNCT to use union v.cnt */
+		if (sp->v_cnt) {
+		    assert(sp->type == ARN || sp->type == SH || sp->type == NCONST || sp->type == ARNC || sp->type == ERR);
+		    link_count += sp->v_cnt + 1;	/* space for reverse links + function # */
+		}
+		sp->v_cnt = 0;
 	    }
-	    sp->v_cnt = 0;
 	}
     }
 
@@ -508,7 +517,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
     if (extFlag) {
 	fprintf(iC_errFP, "extern declarations used - cannot execute\n");
 	return 1;				/* syntax or generate error */
-    }						/* no need to mask ->type & TM in buildNet() */
+    }						/* no need to mask ->type in buildNet() */
 
     /* initialise executable gates */
 
@@ -1124,130 +1133,134 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
     }
 
     /********************************************************************
+     *  Ignore function gates marked with fm != 0
+     *  Output extern C statement for Gates which are UDF or marked with em
      *	Reverse action links to input links for simple Gates
      *	for Gates of ftype ARITH, keep the links in ascending order
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) == UDF || typ & EM) {
-		fprintf(Fp, "extern iC_Gt	%s;\n", mN(sp));
-		linecnt++;
-	    }
-	    if ((typ &= ~EM) < MAX_LV) {
-		ftyp = sp->ftype;
-		if (typ == INPX) {
-		    assert(ftyp == GATE || ftyp == ARITH);
-		    assert(sp->u_blist == 0);
+	    if (sp->fm == 0) {
+		if ((typ = sp->type) == UDF || sp->em) {
+		    fprintf(Fp, "extern iC_Gt	%s;\n", mN(sp));
+		    linecnt++;
 		}
-		if (ftyp == ARITH) {
-		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
-			List_e **	tlpp;
-			/* leave out timing controls */
-			if ((val = lp->le_val) != (unsigned) -1) {
-			    tsp = lp->le_sym;	/* reverse action links */
-			    for (tlpp = &tsp->u_blist;
-				(tlp = *tlpp) != 0 && tlp->le_val <= val;
-				tlpp = &tlp->le_next) {
-				assert(val != tlp->le_val);
+		if (typ < MAX_LV) {
+		    ftyp = sp->ftype;
+		    if (typ == INPX) {
+			assert(ftyp == GATE || ftyp == ARITH);
+			assert(sp->u_blist == 0);
+		    }
+		    if (ftyp == ARITH) {
+			for (lpp = &sp->list; (lp = *lpp) != 0; ) {
+			    List_e **	tlpp;
+			    /* leave out timing controls */
+			    if ((val = lp->le_val) != (unsigned) -1) {
+				tsp = lp->le_sym;	/* reverse action links */
+				for (tlpp = &tsp->u_blist;
+				    (tlp = *tlpp) != 0 && tlp->le_val <= val;
+				    tlpp = &tlp->le_next) {
+				    assert(val != tlp->le_val);
+				}
+				*tlpp = lp;		/* to input links */
+				*lpp = lp->le_next;
+				lp->le_sym = sp;
+				lp->le_next = tlp;	/* lpp is not changed */
+			    } else {
+				lpp = &lp->le_next;	/* lpp to next link */
 			    }
-			    *tlpp = lp;		/* to input links */
-			    *lpp = lp->le_next;
-			    lp->le_sym = sp;
-			    lp->le_next = tlp;	/* lpp is not changed */
-			} else {
-			    lpp = &lp->le_next;	/* lpp to next link */
 			}
-		    }
-		} else
-		if (ftyp == GATE) {
-		    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
-			/* leave out timing controls */
-			if (lp->le_val != (unsigned) -1) {
-			    tsp = lp->le_sym;	/* reverse action links */
-			    tlp = tsp->u_blist;
-			    tsp->u_blist = lp;	/* to input links */
-			    *lpp = lp->le_next;
-			    lp->le_sym = sp;
-			    lp->le_next = tlp;	/* lpp is not changed */
-			} else {
-			    assert(0);
-			    lpp = &lp->le_next;	/* lpp to next link */
+		    } else
+		    if (ftyp == GATE) {
+			for (lpp = &sp->list; (lp = *lpp) != 0; ) {
+			    /* leave out timing controls */
+			    if (lp->le_val != (unsigned) -1) {
+				tsp = lp->le_sym;	/* reverse action links */
+				tlp = tsp->u_blist;
+				tsp->u_blist = lp;	/* to input links */
+				*lpp = lp->le_next;
+				lp->le_sym = sp;
+				lp->le_next = tlp;	/* lpp is not changed */
+			    } else {
+				assert(0);
+				lpp = &lp->le_next;	/* lpp to next link */
+			    }
 			}
+		    } else
+		    if (ftyp == OUTX) {
+			assert(typ == OR);
+		    } else
+		    if (ftyp == TIMR &&
+			(lp = sp->list) != 0 &&
+			(tsp = lp->le_sym) != 0 &&
+			tsp->u_val < lp->le_val) {
+			tsp->u_val = lp->le_val;	/* store timer preset off value */
+		    }				/* temporarily in u (which is 0) */
+		    assert(ftyp != OUTW || sp->list == 0);	/* #define no longer in use */
+		} else
+		if (typ < MAX_OP) {
+		    /********************************************************************
+		     * this initialisation of clock references relies on gates which
+		     * execute a function ftype != GATE having only one output which
+		     * is in the first location of the function list (FL_GATE).
+		     * The clock reference is put in the second location which was
+		     * previously cleared by a terminator. The 3rd location holds a
+		     * pointer to a Gate of ftype ARITH holding a time delay (ARN or NCONST).
+		     * During execution of an action this pointer is used to find the
+		     * correct clock block, which is used as the head of a clock list
+		     * to which the action is linked. The actual clock block is made
+		     * empty in the following, and action blocks are linked to it
+		     * dynamically at run time.
+		     *******************************************************************/
+		    for (lp = sp->list; lp; lp = sp->list) {
+			tsp = lp->le_sym;		/* action gate */
+			if (tsp->ftype == GATE) {
+			    snprintf(errorBuf, sizeof errorBuf,
+				"Simple gate '%s' on clock list '%s'",
+				tsp->name, sp->name);
+			    errorEmit(Fp, errorBuf, &linecnt);
+			    break;
+			}
+			if ((tlp = tsp->list) == 0) {
+			    snprintf(errorBuf, sizeof errorBuf,
+				"Action gate '%s' on clock list '%s' has no output",
+				tsp->name, sp->name);
+			    errorEmit(Fp, errorBuf, &linecnt);
+			    break;
+			}
+			if ((nlp = tlp->le_next) != 0 &&
+			    (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE)
+			) {
+			    snprintf(errorBuf, sizeof errorBuf,
+				"Action gate '%s' on clock list '%s' has more than 1 output",
+				tsp->name, sp->name);
+			    errorEmit(Fp, errorBuf, &linecnt);
+			    break;
+			}
+			tlp->le_next = lp;
+			sp->list = lp->le_next;
+			lp->le_sym = sp;
+			lp->le_next = nlp;		/* restore ffexpr value list */
 		    }
 		} else
-		if (ftyp == OUTX) {
-		    assert(typ == OR);
-		} else
-		if (ftyp == TIMR &&
-		    (lp = sp->list) != 0 &&
-		    (tsp = lp->le_sym) != 0 &&
-		    tsp->u_val < lp->le_val) {
-		    tsp->u_val = lp->le_val;	/* store timer preset off value */
-		}				/* temporarily in u (which is 0) */
-		assert(ftyp != OUTW || sp->list == 0);	/* #define no longer in use */
-	    } else
-	    if (typ < MAX_OP) {
-		/********************************************************************
-		 * this initialisation of clock references relies on gates which
-		 * execute a function ftype != GATE having only one output which
-		 * is in the first location of the function list (FL_GATE).
-		 * The clock reference is put in the second location which was
-		 * previously cleared by a terminator. The 3rd location holds a
-		 * pointer to a Gate of ftype ARITH holding a time delay (ARN or NCONST).
-		 * During execution of an action this pointer is used to find the
-		 * correct clock block, which is used as the head of a clock list
-		 * to which the action is linked. The actual clock block is made
-		 * empty in the following, and action blocks are linked to it
-		 * dynamically at run time.
-		 *******************************************************************/
-		for (lp = sp->list; lp; lp = sp->list) {
-		    tsp = lp->le_sym;		/* action gate */
-		    if (tsp->ftype == GATE) {
+		if (typ == ALIAS) {
+		    if ((lp = sp->list) == 0) {
 			snprintf(errorBuf, sizeof errorBuf,
-			    "Simple gate '%s' on clock list '%s'",
-			    tsp->name, sp->name);
+			    "Alias '%s' has no output",
+			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
-			break;
-		    }
-		    if ((tlp = tsp->list) == 0) {
+		    } else if (lp->le_next) {
 			snprintf(errorBuf, sizeof errorBuf,
-			    "Action gate '%s' on clock list '%s' has no output",
-			    tsp->name, sp->name);
+			    "Alias '%s' has more than 1 output",
+			    sp->name);
 			errorEmit(Fp, errorBuf, &linecnt);
-			break;
-		    }
-		    if ((nlp = tlp->le_next) != 0 &&
-			(sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE)
-		    ) {
+		    } else if (sp->ftype != ARITH && sp->ftype != GATE &&
+			sp->ftype != CLCKL && sp->ftype != TIMRL) {
 			snprintf(errorBuf, sizeof errorBuf,
-			    "Action gate '%s' on clock list '%s' has more than 1 output",
-			    tsp->name, sp->name);
+			    "Alias '%s' has wrong ftype %s",
+			    sp->name, iC_full_ftype[sp->ftype]);
 			errorEmit(Fp, errorBuf, &linecnt);
-			break;
 		    }
-		    tlp->le_next = lp;
-		    sp->list = lp->le_next;
-		    lp->le_sym = sp;
-		    lp->le_next = nlp;		/* restore ffexpr value list */
-		}
-	    } else
-	    if (typ == ALIAS) {
-		if ((lp = sp->list) == 0) {
-		    snprintf(errorBuf, sizeof errorBuf,
-			"Alias '%s' has no output",
-			sp->name);
-		    errorEmit(Fp, errorBuf, &linecnt);
-		} else if (lp->le_next) {
-		    snprintf(errorBuf, sizeof errorBuf,
-			"Alias '%s' has more than 1 output",
-			sp->name);
-		    errorEmit(Fp, errorBuf, &linecnt);
-		} else if (sp->ftype != ARITH && sp->ftype != GATE &&
-		    sp->ftype != CLCKL && sp->ftype != TIMRL) {
-		    snprintf(errorBuf, sizeof errorBuf,
-			"Alias '%s' has wrong ftype %s",
-			sp->name, iC_full_ftype[sp->ftype]);
-		    errorEmit(Fp, errorBuf, &linecnt);
 		}
 	    }
 	}
@@ -1256,7 +1269,7 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
     /* do the timing controls last, to link them after their timer clock */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((sp->type & ~EM) < MAX_LV && sp->ftype < MAX_AR) {
+	    if (sp->type < MAX_LV && sp->fm == 0 && sp->ftype < MAX_AR) {
 		for (lp = sp->list; lp; ) {
 		    if (lp->le_val == (unsigned) -1) {
 			tsp = lp->le_sym;	/* action gate */
@@ -1358,7 +1371,7 @@ extern iC_Gt *	iC_l_[];\n\
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) > UDF && typ < MAX_OP && /* leave out EXT_TYPES */
-		sp != iclock) {
+		sp->em == 0 && sp->fm == 0 && sp != iclock) {
 		mask = 0;
 		/********************************************************************
 		 * mN() sets cnt, iqt, xbwl, byte, bit and tail via IEC1131() as side effect
@@ -1400,7 +1413,7 @@ extern iC_Gt *	iC_l_[];\n\
 			li += 2;		/* space for action or function pointer + clock */
 			if ((lp = lp->le_next) != 0 &&
 			    (tsp = lp->le_sym) != 0 &&
-			    (tsp->type & ~EM) == TIM) {
+			    tsp->type == TIM && tsp->fm == 0) {
 			    li++;		/* space for pointer to delay time Gate */
 			    lp = lp->le_next;	/* point to delay time */
 			}
@@ -1510,14 +1523,14 @@ extern iC_Gt *	iC_l_[];\n\
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) == ALIAS && sp->list != 0 &&
+	    if ((typ = sp->type) == ALIAS && sp->em == 0 && sp->fm == 0 && sp->list != 0 &&
 		((ftyp = sp->ftype) == GATE ||
 		(iC_Aflag && (ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)))) {
 		modName = mN(sp);		/* modified string, byte and bit */
 		fprintf(Fp, "iC_Gt %-8s", modName);	/* ZZZZ */
 		val = sp->list->le_val;
 		tsp = sp->list->le_sym;
-		while (tsp->type == ALIAS) {
+		while (tsp->type == ALIAS && tsp->em == 0 && tsp->fm == 0) {
 		    val ^= tsp->list->le_val;	/* negate if necessary */
 		    tsp = tsp->list->le_sym;	/* point to original */
 		}
@@ -1620,8 +1633,9 @@ static iC_Gt *	iC_l_[] = {\n\
     lc = 0;					/* count links */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) == ARN ||	/* leave out UDF, ARNC, LOGC */
-		(typ >= MIN_GT && typ < MAX_GT)) {	/* leave out EXT_TYPES */
+	    if (((typ = sp->type) == ARN ||	/* leave out UDF, ARNC, LOGC */
+		(typ >= MIN_GT && typ < MAX_GT)) &&
+		sp->em == 0 && sp-> fm == 0) {	/* leave out EXT_TYPES */
 		int		len = 16;
 		char *	fs = strlen(sp->name) > 1 ? "\t" : "\t\t";
 
@@ -1668,9 +1682,9 @@ static iC_Gt *	iC_l_[] = {\n\
 				fflag = 0;		/* do not try to scan C var list */
 			    } else {
 				len += strlen((tsp = lp->le_sym)->name) + 3;
-				assert((tsp->type & ~EM) == CLK || (tsp->type & ~EM) == TIM);
+				assert((tsp->type == CLK || tsp->type == TIM) && tsp->fm == 0);
 				fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* clock or timer */
-				if ((tsp->type & ~EM) == TIM) {
+				if (tsp->type == TIM && tsp->fm == 0) {
 				    if ((lp = lp->le_next) != 0) {
 					len += strlen((tsp = lp->le_sym)->name) + 3;
 					fprintf(Fp, "%s&%s,", fs, mN(tsp));	/* delay time */

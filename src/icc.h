@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.60 2006/04/20 20:11:37 jw Exp $";
+"@(#)$Id: icc.h,v 1.61 2007/02/14 21:51:26 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -243,18 +243,6 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #define	MAX_LV	(INPX+1)	/* types < MAX_LV return a logical or arith value */
 #define	MAX_OP	(TIM+1)		/* types < MAX_OP are executable */
 #define	MAX_LS	(ERR+1)		/* types < MAX_LS are generated */
-
-				/* mark nodes declared as extern - stop assignment */
-#define	TM	0x1f		/* mask for type from EXT_TYPES */
-#define	EM	0x20		/* mask for external type from EXT_TYPES */
-#define	FM	0x40		/* mask for terminal function type from FUN_TYPES */
-				/* intermediate Symbols are marked by ->name == 0 */
-#define EXT_ARN	(ARN | EM)
-#define EXT_XOR	(XOR | EM)
-#define EXT_AND	(AND | EM)
-#define EXT_OR	(OR  | EM)
-#define EXT_CLK	(CLK | EM)
-#define EXT_TIM	(TIM | EM)
 
 #define	MAX_AR	(ARITH+1)	/* ftypes >= MAX_AR never cause simple arithmetic */
 #define	MIN_ACT	RI_BIT		/* ftypes >= MIN_ACT cause an action */

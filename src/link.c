@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.25 2006/04/14 11:50:19 jw Exp $";
+"@(#)$Id: link.c,v 1.26 2007/02/25 10:05:52 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -36,7 +36,9 @@ iC_link_ol(
 {
     Gate *		tp;
     Gate *		np;
+#ifndef DEQ
     Gate *		ap;
+#endif	/* DEQ */
     unsigned short	diff;
     int			time;
 

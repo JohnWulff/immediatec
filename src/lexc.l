@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.26 2005/10/04 16:03:36 jw Exp $";
+"@(#)$Id: lexc.l,v 1.27 2007/02/25 09:47:55 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -260,7 +260,9 @@ static int
 cpp_comment(c_STYPE* u)
 {
     int c;
+#ifndef LMAIN
     static int errorCnt = 0;
+#endif
 
     count(u);				/* count "//" */
 
@@ -421,7 +423,16 @@ check_type(c_STYPE* u, int qtoken)
     int		ixd = iC_maxIO;		/* limit for I/O index (-1 no limit) */
 
     if (c_text[0] == '$') {
-	warning("possible asm error due to '$' character starting identifier:", c_text);
+	/********************************************************************
+	 *  Identifier starts with a '$'. gcc can handle this if the next character
+	 *  is alpha but not if it is a digit.
+	 *  Most assemblers have problems with leading '$' - hence the warning.
+	 *******************************************************************/
+	if (isdigit(c_text[1])) {
+	    ierror("asm error due to '$' followed by digit starting identifier:", c_text);
+	} else {
+	    warning("possible asm error due to '$' character starting identifier:", c_text);
+	}
     }
     if (qtoken == 2) {
 	toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
@@ -498,7 +509,7 @@ check_type(c_STYPE* u, int qtoken)
 	}
     } else {
 	foundSymbol:
-	if ((sp->type & ~EM) <= MAX_LS) {
+	if (sp->type <= MAX_LS && sp->fm == 0) {
 #ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
 	    if ((lexflag & C_BLOCK1) == 0) {
@@ -511,7 +522,7 @@ check_type(c_STYPE* u, int qtoken)
 		}
 	    }
 #endif
-	    while ((sp->type & ~EM) == ALIAS) {
+	    while (sp->type == ALIAS) {
 		sp = sp->list->le_sym;	/* with token of original */
 	    }
 	    u->tok.symbol = sp;
@@ -552,7 +563,7 @@ delete_sym(Token* tokp)
     Symbol *	sp;
     Symbol *	tsp;
 
-    if ((sp = tokp->symbol) != NULL && (sp->type & TM) > MAX_LS) {
+    if ((sp = tokp->symbol) != NULL && sp->type > MAX_LS) {
 	tokp->symbol = NULL;
 #if YYDEBUG && defined LMAIN
 	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\nD %-15s %d %d %u\n", sp->name, sp->type, sp->ftype, sp->u_val);
@@ -582,6 +593,7 @@ delete_sym(Token* tokp)
 void
 markParaList(Symbol * sp)
 {
+    assert(sp && sp->type < IFUNCT);		/* allows IFUNCT to use union v.cnt */
     if (sp->v_glist == 0) {			/* already marked ? */
 	if ((lexflag & C_FUNCTION) == 0) {
 	    sp->v_glist = &markerSymbol;	/* mark C globally */
@@ -605,6 +617,7 @@ clearParaList(int flag)
 
     while (paraList != &markerSymbol) {
 	sp = paraList->v_glist;
+	assert(sp && sp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
 	paraList->v_glist = 0;
 	paraList = sp;
     }
