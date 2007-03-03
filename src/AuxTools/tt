@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: tt,v 1.19 2007/03/03 10:22:27 jw Exp $'
+  echo '$Id: tt,v 1.20 2007/03/03 23:12:25 jw Exp $'
 }
 
 usage()
@@ -69,7 +69,7 @@ m=""
 v=""
 d=""
 l="Le"
-x=" -Iic[0-6c]\."
+x=""
 f=""
 F=""
 P=""
@@ -93,7 +93,7 @@ while getopts ":cm:d:lASPRiIJ6x:f:F:zvh" opt; do
     i ) I=" -i";;
     I ) I=" -I";;
     J ) I=" -J";;
-    6 ) g="6"; G=" -6";;
+    6 ) g="6"; G=" -6"; x="$x -Iic[045]\."; d="_6";;
     x )	x="$x -I$OPTARG";;
     f )	f="/home/archiv/bin/$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable" >&2; usage; exit 126; fi; f=" -f$f";;
     F )	F="/home/archiv/bin/$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable" >&2; usage; exit 126; fi; F=" -F$F";;
@@ -132,7 +132,7 @@ if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
 fi
 
 for t in Test1 Test9; do
-    if [ -d "$t" ]; then
+    if [ -d "$t" -a -z "$g" ]; then
 	cd $t
 	if [ -z "$d2" ]; then
 	    if [ -z "$c" ]; then
