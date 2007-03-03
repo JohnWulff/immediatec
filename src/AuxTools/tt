@@ -6,14 +6,23 @@
 #
 ########################################################################
 
+version()
+{
+  echo 'Author:	John E. Wulff        <john@je-wulff.de>'
+  echo '$Id: tt,v 1.19 2007/03/03 10:22:27 jw Exp $'
+}
+
 usage()
 {
-  echo "Usage: $name [-clASRiIJ6zh][ -d<opt>][ -x<regex>] <dir1>[ <dir2>]" >&2
+  echo "Usage: $name [-clASP[P]RiIJ6x:f:F:zvh]" >&2
+  echo "          [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]" >&2
   echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
-  echo '	-x <regex> ignore changes in lines that match regex (after -l if used)' >&2
+  echo '	-x<regex>  in each Mdiff ignore changes in lines that match regex' >&2
+  echo '	-f<filter> process the first file in an Mdiff by <filter> before diff' >&2
+  echo '	-F<filter> process the second file in an Mdiff by <filter> before diff' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
@@ -24,8 +33,9 @@ usage()
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
   echo '	-6	produce logic generation listing file.lst6 in Test2 etc' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
+  echo '	-v	author and version information'
   echo '	-h	this help text' >&2
-  echo '	-	all further arguments are treated as files' >&2
+  echo '	--	all further arguments are treated as files' >&2
   echo
   echo "	$name must be called from a directory, which has a number of" >&2
   echo "	sub-directories Test1, Test2, Test3 .. Test9 containg iC sources." >&2
@@ -43,9 +53,7 @@ usage()
   echo
   echo "	If <dir2> is an absolute path, it must be the base of" >&2
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
-  echo
-  echo 'Author:	J.E. Wulff (john@je-wulff.de)' >&2
-  echo '$Id: tt,v 1.18 2007/02/23 11:40:23 jw Exp $' >&2
+  version
 }
 
 ########################################################################
@@ -61,7 +69,9 @@ m=""
 v=""
 d=""
 l="Le"
-x=""
+x=" -Iic[0-6c]\."
+f=""
+F=""
 P=""
 c=""
 A=""
@@ -70,88 +80,34 @@ g=""
 G=""
 T="test"
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case $option in
-	    c*)	c="c";;
-	    m*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    case $2 in
-		    -*) echo "-m must specify a message text" >&2
-			usage; exit 254;
-			break;;
-		    esac
-		    shift
-		    option=$1
-		    if [ -z "$option" ]; then
-			echo "-m must specify a message text" >&2
-			usage; exit 254;
-		    fi
-		fi
-		m="$option"
-		break;;
-	    d*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    case $2 in
-		    -*) echo "-d must specify an option" >&2
-			usage; exit 254;
-			break;;
-		    esac
-		    shift
-		    option=$1
-		    if [ -z "$option" ]; then
-			echo "-d must specify an option" >&2
-			usage; exit 254;
-		    fi
-		fi
-		v="$v -d$option"
-		d="_$option"
-		break;;
-	    l*)	l="${l}l";;
-	    A*)	A="$A -A";;
-	    S*)	A="$A -S";;
-	    P*)	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
-	    R*)	A="$A -R";;
-	    i*) I=" -i";;
-	    I*) I=" -I";;
-	    J*) I=" -J";;
-	    6*) g="6"; G=" -6";;
-	    x*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    case $2 in
-		    -*) echo "-x must specify a regex" >&2
-			usage; exit 254;
-			break;;
-		    esac
-		    shift
-		    option=$1
-		    if [ -z "$option" ]; then
-			echo "-x must specify a regex" >&2
-			usage; exit 254;
-		    fi
-		fi
-		x="$x -I$option"
-		break;;
-	    z*)	v="$v -z";;
-	    h*)	usage; exit 255;;
-	    *)	x=${option#?}; option=${option%$x}
-	    	echo "$name: unexpected option $option in $1" >&2
-		usage; exit 254;;
-	    esac
-	    option=${option#?}
-	done
-	;;
-    *)	break;;
+while getopts ":cm:d:lASPRiIJ6x:f:F:zvh" opt; do
+    case $opt in
+    c )	c="c";;
+    m )	m="$OPTARG";;
+    d ) v="$v -d$OPTARG"; d="_$OPTARG";;
+    l )	l="${l}l";;
+    A )	A="$A -A";;
+    S )	A="$A -S";;
+    P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
+    R )	A="$A -R";;
+    i ) I=" -i";;
+    I ) I=" -I";;
+    J ) I=" -J";;
+    6 ) g="6"; G=" -6";;
+    x )	x="$x -I$OPTARG";;
+    f )	f="/home/archiv/bin/$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable" >&2; usage; exit 126; fi; f=" -f$f";;
+    F )	F="/home/archiv/bin/$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable" >&2; usage; exit 126; fi; F=" -F$F";;
+    z )	v="$v -z";;
+    v )	version; exit 0;;
+    h )	usage; exit 0;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
-    shift
 done
+shift $(($OPTIND - 1))
 
-# echo "m = '$m' v = '$v' d = '$d' x = '$x'"
+l="$l$x$f$F"
+# echo "c = !$c! A = !$A! I = !$I! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! G = !$G!"
 
-l="$l$x"
 d1=$1
 d1=${d1%/}
 d2=$2
@@ -224,7 +180,7 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 		if [ -d "$d1$d" ]; then
 		    Rdiff p*.lt
 		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$d"
-		    Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat p[d$g].lt) $d1$d
+		    Mdiff -k$l $(cat p[d$g].lt) $d1$d
 		else
 		    mkdir $d1$d
 		    echo; echo "========== $t cp -p \$(cat p[d$g].lt) $d1$d"
@@ -235,7 +191,7 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 	    cd $d1$d
 	    eval d4="$d3"
 	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
-	    Mdiff -k$l -I'ic[0-5]\.[A-Za-z0-9]' $(cat ../p[d$g].lt) $d4$d
+	    Mdiff -k$l $(cat ../p[d$g].lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
