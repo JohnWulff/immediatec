@@ -9,17 +9,18 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: tt,v 1.20 2007/03/03 23:12:25 jw Exp $'
+  echo '$Id: tt,v 1.21 2007/03/09 22:50:40 jw Exp $'
 }
 
 usage()
 {
-  echo "Usage: $name [-clASP[P]RiIJ6x:f:F:zvh]" >&2
+  echo "Usage: $name [-clrASP[P]RiIJ6x:f:F:zvh]" >&2
   echo "          [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]" >&2
   echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
+  echo '	-r	put Rdiff *.lt output in log file' >&2
   echo '	-x<regex>  in each Mdiff ignore changes in lines that match regex' >&2
   echo '	-f<filter> process the first file in an Mdiff by <filter> before diff' >&2
   echo '	-F<filter> process the second file in an Mdiff by <filter> before diff' >&2
@@ -70,6 +71,7 @@ v=""
 d=""
 l="Le"
 x=""
+r=""
 f=""
 F=""
 P=""
@@ -80,14 +82,15 @@ g=""
 G=""
 T="test"
 
-while getopts ":cm:d:lASPRiIJ6x:f:F:zvh" opt; do
+while getopts ":cm:d:lrASPRiIJ6x:f:F:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
     d ) v="$v -d$OPTARG"; d="_$OPTARG";;
     l )	l="${l}l";;
+    r )	r="1";;
     A )	A="$A -A";;
-    S )	A="$A -S";;
+    S )	A="$A -S";T="strict";;
     P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
     R )	A="$A -R";;
     i ) I=" -i";;
@@ -143,7 +146,9 @@ for t in Test1 Test9; do
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$d" ]; then
-		    Rdiff p*.lt
+		    if [ -n "$r" ]; then
+			Rdiff p*.lt
+		    fi
 		    echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$d"
 		    Mdiff -k$l $(cat pd.lt) $d1$d
 		else
@@ -178,7 +183,9 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$d" ]; then
-		    Rdiff p*.lt
+		    if [ -n "$r" ]; then
+			Rdiff p*.lt
+		    fi
 		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$d"
 		    Mdiff -k$l $(cat p[d$g].lt) $d1$d
 		else
