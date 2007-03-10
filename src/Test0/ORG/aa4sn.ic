@@ -1,0 +1,15 @@
+use alias, strict;
+
+imm void fun(int a, assign imm int b) {
+    b = a + 2;
+}
+
+imm int x;
+
+fun(IB1, x);	/* x is declared */
+no strict;
+fun(IB2, y);	/* y is not declared (default bit) */
+use strict;
+
+QB1 = x;
+QB2 = y;
