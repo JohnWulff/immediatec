@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.54 2006/02/23 17:42:22 jw Exp $";
+"@(#)$Id: icc.c,v 1.55 2007/03/10 12:00:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -35,9 +35,12 @@ static const char icc_c[] =
 #endif	/* LOAD */
 
 extern const char	iC_ID[];
-unsigned short		iC_Aflag = 0;			/* -A flag signals ARITH alias */
-unsigned short		iC_Sflag = 0;			/* not strict */
+unsigned short		iC_Aflag = 0;		/* -A flag signals ARITH alias */
+unsigned short		iC_Sflag = 0;		/* not strict */
 unsigned short *	iC_useTypes[] = { USETYPEFLAGS };
+unsigned short		iC_Arestore = 0;	/* saved -A flag signals ARITH alias */
+unsigned short		iC_Srestore = 0;	/* saved strict */
+unsigned short *	iC_useRestore[] = { USERESTOREFLAGS };
 
 static const char *	usage =
 "USAGE: %s [-acASRh][ -o<out>][ -l<list>][ -e<err>][ -k<lim>][ -d<deb>]\n"
@@ -544,10 +547,10 @@ main(
 			goto error;
 		    }
 		case 'A':
-		    iC_Aflag = 1;		/* generate ARITH ALIAS in outFN */
+		    iC_Aflag = iC_Arestore = 1;	/* generate ARITH ALIAS in outFN */
 		    break;
 		case 'S':
-		    iC_Sflag = 1;		/* strict - all imm variables must be declared */
+		    iC_Sflag = iC_Srestore = 1;	/* strict - all imm variables must be declared */
 		    break;
 		case 'R':
 		    iC_maxErrCount = INT_MAX;	/* maximum error count very high */

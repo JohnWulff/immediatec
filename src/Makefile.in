@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.46 2006/04/17 20:34:53 jw Exp $
+# @(#)$Id: Makefile.in,v 1.47 2007/03/07 08:58:14 jw Exp $
 
 ############################################################
 #
@@ -200,13 +200,19 @@ $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
 test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -Aiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out
+	@-${srcdir}/iCmake -Aiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
 	@if ${srcdir}/Mdiff -kl ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
+strict:
+	@echo "compile with -S option and generate all executables from iC files in ${srcdir}/Test0 ..."
+	@-${srcdir}/iCmake -SAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
+	@if ${srcdir}/Mdiff -kLl ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+
 pedantic:
 	@echo "compile with -P option and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -PAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out
+	@-${srcdir}/iCmake -PAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "show differences from generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/PED ..."
 	@if ${srcdir}/Mdiff -kLP -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/PED; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/PED"; fi
 

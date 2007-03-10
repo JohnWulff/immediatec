@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.43 2005/11/03 16:35:43 jw Exp $";
+"@(#)$Id: rsff.c,v 1.44 2007/03/07 13:21:44 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -30,7 +30,7 @@ static const char rsff_c[] =
 #define min(x,y) ((x) < (y) ? (x) : (y))
 #endif	/* WIN32 */
 
-Gate		iConst = { 1, -NCONST, ARITH, 0, ICONST, 0, 0, 0 };
+Gate		iConst = { 1, -NCONST, ARITH, 0, "iConst", 0, 0, 0 };
 
 /********************************************************************
  *
@@ -593,7 +593,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	gm->gt_val = 1;				/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gm->gt_new = gm->gt_old = 0;	/* clear arithmetic */
-	} else if (typ == NCONST && strcmp(gm->gt_ids, ICONST) != 0) {
+	} else if (typ == NCONST && strcmp(gm->gt_ids, "iConst") != 0) {
 	    char *	ep;
 	    /* convert constant 18 from dec, 077 from oct 0x1c from hex */
 	    gm->gt_new = gm->gt_old = strtol(gm->gt_ids, &ep, 0); /* long to int or long */

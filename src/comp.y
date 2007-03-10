@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.93 2007/03/02 08:16:05 jw Exp $";
+"@(#)$Id: comp.y,v 1.94 2007/03/10 15:02:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -97,7 +97,7 @@ pu(int t, char * token, Lis * node)
 	break;
     case 1:
 	if (node->v) {
-	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, node->v->le_sym->name);
+	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, node->v->le_sym ? node->v->le_sym->name : "(0)");
 	} else {
 	    fprintf(iC_outFP, ">>>Lis	%s	0 =	", token);
 	}
@@ -149,11 +149,12 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %type	<sym>	returnStatement formalParameter lBlock variable valueVariable outVariable
 %type	<sym>	useFlag decl extDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<sym>	iFunTrigger vFunCall vFunCallHead iFunCallHead cFunCallHead tFunCallHead
+%type	<sym>	extCfunDecl dVar
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr actexpr tfexpr ifini ffexpr
-%type	<list>	cref ctref ctdref cCall cParams cPlist
+%type	<list>	cref ctref ctdref cCall cParams cPlist dPar
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall rParams rPlist
-%type	<val>	cBlock
-%type	<typ>	declHead extDeclHead formalParaTypeDecl
+%type	<val>	cBlock dParams dPlist
+%type	<typ>	declHead extDeclHead formalParaTypeDecl extCfunDeclHead
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
@@ -200,6 +201,7 @@ funcStatement
 
 simpleStatement
 	: useFlag		{ $$   = $1; }		/* use flags */
+	| extCfunDecl		{ $$   = $1; }		/* external C function declaration */
 	| extDecl		{ $$   = $1; }		/* external declaration */
 	| decl			{ $$   = $1; }		/* immediate declararion */
 	| asgn			{ $$   = $1; }		/* immediate value assignment */
@@ -240,24 +242,29 @@ outVariable
 	 *
 	 *	use alias;		// equivalent to -A option
 	 *	no alias;		// turns off -A option
+	 *	restore alias;		// restores -A option
 	 *
 	 *	use strict;		// equivalent to -S option
 	 *	no strict;		// turns off -S option
+	 *	restore strict;		// restores -S option
 	 *
-	 *	use strict alias;	// equivalent to -AS option
-	 *	no alias strict;	// turn off both options
+	 *	use strict, alias;	// equivalent to -AS option
+	 *	no alias, strict;	// turn off both options
+	 *	restore alias, strict;	// restores both options
 	 *
-	 * with 'use' and 'no' a particular option can be set and reset
+	 * With 'use' and 'no' a particular option can be set and reset
 	 * after compilation has started, overriding the compiler flag
-	 * options. This way code which is linked from several iC sources
-	 * can be forced with 'use alias' to produce ALIAS nodes, which
-	 * are needed for loading the combined code, without having to
-	 * worry about setting the -A flag when compiling.
+	 * options.  With 'restore' the flags are restored to the choice
+	 * made in the command line after possibly changing the flags with
+	 * 'use' and/or 'no'.
 	 *
-	 * The -A flag is still useful for generating extra ALIAS nodes
-	 * for debugging with iClive.
+	 * With 'use alias' code which is linked from several iC sources
+	 * can be forced to produce ALIAS nodes, which are needed for
+	 * loading the combined code, without having to worry about setting
+	 * the -A flag when compiling. The -A compiler flag is still useful
+	 * for generating extra ALIAS nodes for debugging with iClive.
 	 *
-	 * The 'use strict' option should always be set at the start of
+	 * The 'use strict' statement should always be put at the start of
 	 * code in future iC programs. Nevertheless very simple iC programs
 	 * with mainly bit nodes will still work without having to declare
 	 * every variable. The 'no strict' option should be avoided and
@@ -272,19 +279,205 @@ outVariable
 	 ***********************************************************/
 
 useFlag	: USE USETYPE		{
-		unsigned int useindex;
+		unsigned int useindex, ftyp;
 		$$ = $1;				/* 'use' or 'no' */
 		useindex = $2.v->ftype;
 		assert(useindex < MAXUSETYPE);
-		*iC_useTypes[useindex] = $1.v->ftype;	/* iC_Aflag, iC_Sflag */
+		if ((ftyp = $1.v->ftype) <= 1) {	/* 0 or 1 */
+		    *iC_useTypes[useindex] = ftyp;	/* iC_Aflag, iC_Sflag */
+		} else if (ftyp == 2) {
+		    *iC_useTypes[useindex] = *iC_useRestore[useindex];	/* restore */
+		} else {
+		    assert(0);				/* should not happen */
+		}
 	    }
-	| useFlag USETYPE	{
-		unsigned int useindex;
+	| useFlag ',' USETYPE	{
+		unsigned int useindex, ftyp;
 		$$ = $1;				/* 'use' or 'no' */
-		useindex = $2.v->ftype;
+		useindex = $3.v->ftype;
 		assert(useindex < MAXUSETYPE);
-		*iC_useTypes[useindex] = $1.v->ftype;	/* iC_Aflag, iC_Sflag */
+		if ((ftyp = $1.v->ftype) <= 1) {	/* 0 or 1 */
+		    *iC_useTypes[useindex] = ftyp;	/* iC_Aflag, iC_Sflag */
+		} else if (ftyp == 2) {
+		    *iC_useTypes[useindex] = *iC_useRestore[useindex];	/* restore */
+		} else {
+		    assert(0);				/* should not happen */
+		}
 	    }
+	;
+
+	/********************************************************************
+	 *
+	 * Extern C function or macro declaration
+	 *
+	 *	extern int rand();		// function with no parameters
+	 *	extern int rand(void);		// alternative syntax
+	 *	extern int abs(int);		// function with 1 parameter
+	 *	extern int min(int, int);	// macro with 2 parameters
+	 *
+	 * When 'strict' is active, any C functions or macros, which are called
+	 * in immediate expressions must be declared in the iC code. Since it is
+	 * easy to mistype the names of iC function blocks and such non-defined
+	 * function blocks will be compiled without error as a C function call,
+	 * the error is not discovered until link time. With declaration a clean
+	 * error message is produced and the extra effort is not great. When a C
+	 * function or macro is called in an immediate expression, a check is
+	 * made, that the number of parameters is correct. Otherwise an error
+	 * message is issued. No check is made for C calls in C fragments
+	 * controlled by if else or switch statements or other literal C code,
+	 * since the compilation is handled by the follow up C compiler.
+	 *
+	 * In principle this information could be retrieved from the embedded
+	 * C code, but in practice this gets extremely messy.
+	 *
+	 * The following declaration errors will evoke a warning if 'strict'
+	 *
+	 *	extern bit rand()		// wrong return type
+	 *
+	 * The following declaration errors will evoke warnings or errors if 'strict'
+	 *
+	 *	extern int rand			// no ( parameters )
+	 *	extern clock rand()		// absolutely wrong return type
+	 *	extern timer rand()		// absolutely wrong return type
+	 *
+	 *******************************************************************/
+
+extCfunDecl
+	: extCfunDeclHead UNDEF			{
+		if (iC_Sflag) {
+		    ierror("strict: erroneous declaration of a C function - no ( parameters ):", $2.v->name);
+		} else {
+		    warning("erroneous declaration of a C function - no ( parameters ):", $2.v->name);
+		}
+		if ($2.v->ftype == UDFA) {	/* if not previously declared as imm */
+		    uninstall($2.v);		/* delete dummy Symbol */
+		}
+		$$.v = 0;
+	    }
+	| extCfunDeclHead UNDEF	'(' dParams ')'	{
+		$2.v->type = CWORD;			/* no longer an imm variable */
+		$2.v->u_val = CNAME;			/* yacc type */
+		$2.v->v_cnt = $4.v;			/* parameter count */
+		$$.v = $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fflush(iC_outFP);
+		}
+#endif
+	    }
+	| extCfunDeclHead UNDEF '(' dParams error ')'	{
+		$2.v->type = CWORD;			/* no longer an imm variable */
+		$2.v->u_val = CNAME;			/* yacc type */
+		$2.v->v_cnt = $4.v;			/* parameter count */
+		$$.v = $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fflush(iC_outFP);
+		}
+#endif
+		iclock->type = ERR; yyerrok;
+	    }
+	| extCfunDeclHead CNAME			{
+		if (iC_Sflag) {
+		    ierror("strict: erroneous re-declaration of a C function - no ( parameters ):", $2.v->name);
+		} else {
+		    warning("erroneous re-declaration of a C function - no ( parameters ):", $2.v->name);
+		}
+		$$.v = 0;
+	    }
+	| extCfunDeclHead CNAME '(' dParams ')'	{
+		if ($2.v->v_cnt != $4.v) {
+		    char	tempBuf[TSIZE];
+		    snprintf(tempBuf, TSIZE, "%s %d (%d)", $2.v->name, $4.v, $2.v->v_cnt);
+		    if (iC_Sflag) {
+			ierror("strict: parameter count does not match a previous C function declaration:", tempBuf);
+		    } else {
+			warning("parameter count does not match a previous C function declaration - ignore:", tempBuf);
+		    }
+		    $2.v->v_cnt = $4.v;			/* latest parameter count */
+		}
+		$$.v = $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fflush(iC_outFP);
+		}
+#endif
+	    }
+	| extCfunDeclHead CNAME '(' dParams error ')'	{
+		if ($2.v->v_cnt != $4.v) {
+		    char	tempBuf[TSIZE];
+		    snprintf(tempBuf, TSIZE, "%s %d (%d)", $2.v->name, $4.v, $2.v->v_cnt);
+		    if (iC_Sflag) {
+			ierror("strict: parameter count does not match a previous C function declaration:", tempBuf);
+		    } else {
+			warning("parameter count does not match a previous C function declaration - ignore:", tempBuf);
+		    }
+		    $2.v->v_cnt = $4.v;			/* latest parameter count */
+		}
+		$$.v = $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fflush(iC_outFP);
+		}
+#endif
+		iclock->type = ERR; yyerrok;
+	    }
+	;
+
+extCfunDeclHead
+	: EXTERN TYPE		{
+		if ($2.v->ftype != ARITH) {
+		    if (iC_Sflag) {
+			ierror("strict: incompatible return type for an extern C function declaration:", $2.v->name);
+		    } else {
+			warning("incompatible return type for an extern C function declaration:", $2.v->name);
+		    }
+		}
+		stype.ftype = ARITH;
+		stype.type  = ARN;
+		stype.em    = 1;		/* set em for extern declaration */
+		stype.fm    = 0;
+		$$.v = stype;
+	    }
+	| extCfunDecl ','	{ $$.v = stype;	/* first TYPE */ }
+	;
+
+dParams	: /* nothing */		{ $$.v =  0; }
+	| VOID			{ $$.v =  0; }
+	| dPlist		{ $$   = $1; }	/* do not allow extra comma for C parameters */
+	;
+
+dPlist	: dPar			{ $$.v = 1; }
+	| dPlist ',' dPar	{ $$.v = $1.v + 1; }
+	;
+
+dPar	: TYPE dVar		{
+		if ($1.v->ftype != ARITH) {
+		    if ($1.v->ftype == GATE) {
+			warning("parameter type in an extern C function declaration other than int - ignore:", $1.v->name);
+		    } else
+		    if (iC_Sflag) {
+			ierror("strict: incompatible parameter type in an extern C function declaration:", $1.v->name);
+		    } else {
+			warning("incompatible parameter type in an extern C function declaration:", $1.v->name);
+		    }
+		}
+		$$.v = 0;
+	    }
+	;
+
+dVar	: /* nothing */		{ $$.v = 0; }
+	| UNDEF			{
+		if ($1.v->ftype == UDFA) {	/* if not previously declared as imm */
+		    uninstall($1.v);		/* delete dummy Symbol */
+		}
+		$$.v = 0;
+	    }
+	| variable		{ $$.v = 0; }	/* since this is a dummy use any word */
 	;
 
 	/************************************************************
@@ -384,7 +577,7 @@ extDecl	: extDeclHead UNDEF	{
 		} else
 		if ($2.v->type == INPW || $2.v->type == INPX) {
 		    if (iC_Sflag) {
-			warning("strict - extern declaration of an input variable - ignored:", $2.v->name);
+			warning("strict: extern declaration of an input variable - ignored:", $2.v->name);
 		    }
 		} else {
 		    warning("extern declaration after assignment - ignored:", $2.v->name);
@@ -410,7 +603,7 @@ extDeclHead
 		    if (ftyp == GATE) {
 			typ = LOGC;		/* immC bit */
 		    } else {
-			warning("extern declaration of an immC type other than bit or int - ignore:", iC_full_ftype[ftyp]);
+			warning("extern declaration of an immC type other than bit or int - ignore:", $3.v->name);
 			goto extImmType;
 		    }
 		} else {			/* IMM is imm */
@@ -443,7 +636,7 @@ extDeclHead
 	 *
 	 *	immC bit   b1;		immC int   a1;
 	 *
-	 * The use if 'immC' in a simple type declaration defines the Gate
+	 * The use of 'immC' in a simple type declaration defines the Gate
 	 * object, like in C. Such an object may only be used in a C assignment
 	 * or as an immediate rvalue. By defining an object, no C assignment
 	 * in the current source is necessary. An assignment can occurr in
@@ -469,7 +662,7 @@ decl	: declHead UNDEF	{
 #endif
 		$$.f = $1.f; $$.l = $2.l;
 		sp = $$.v = $2.v;
-		sp->ftype = $1.v.ftype;	/* bit int clock timer */
+		sp->ftype = $1.v.ftype;		/* bit int clock timer */
 		sp->type  = $1.v.type;
 		sp->em    = $1.v.em;
 		if (sp->type != UDF) {
@@ -503,7 +696,7 @@ decl	: declHead UNDEF	{
 		sp = $$.v = $2.v;
 		if (sp->ftype != ftyp) {
 		    ierror("declaration does not match previous declaration:", sp->name);
-		    sp->type = ERR;		/* cannot execute properly */
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 		} else
 		if (sp->em || sp->type == UDF) {
 		    sp->ftype = ftyp;		/* bit int clock timer */
@@ -531,7 +724,7 @@ decl	: declHead UNDEF	{
 		} else
 		if (sp->type == INPW || sp->type == INPX) {
 		    if (iC_Sflag) {
-			warning("strict - declaration of an input variable - ignored:", sp->name);
+			warning("strict: declaration of an input variable - ignored:", sp->name);
 		    }
 		} else
 		if (sp->type != ERR){
@@ -557,7 +750,7 @@ declHead
 		    if (ftyp == GATE) {
 			typ = LOGC;		/* immC bit */
 		    } else {
-			warning("declaration of an immC type other than bit or int - ignore:", iC_full_ftype[ftyp]);
+			warning("declaration of an immC type other than bit or int - ignore:", $2.v->name);
 			goto immType;
 		    }
 		} else {			/* simple imm */
@@ -639,7 +832,7 @@ asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 		$1.v->ftype = GATE;		/* not strict - implicitly declared as 'imm bit' */
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 		if (iC_Sflag) {
-		    ierror("strict - assignment to an undeclared imm variable:", $1.v->name);
+		    ierror("strict: assignment to an undeclared imm variable:", $1.v->name);
 		    $1.v->type = ERR;		/* cannot execute properly */
 		}
 #if YYDEBUG
@@ -713,7 +906,7 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(1, "expr", &$$);
 #endif
 		if (iC_Sflag) {
-		    ierror("strict - use of an undeclared imm variable:", $1.v->name);
+		    ierror("strict: use of an undeclared imm variable:", $1.v->name);
 		    $1.v->type = ERR;		/* cannot execute properly */
 		}
 	    }
@@ -1876,7 +2069,7 @@ dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 casgn	: UNDEF '=' cexpr	{
 		$$.v = op_asgn(&$1, &$3, CLCKL);	/* not strict */
 		if (iC_Sflag) {
-		    ierror("strict - assignment to an undeclared 'imm clock':", $1.v->name);
+		    ierror("strict: assignment to an undeclared 'imm clock':", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 	    }
@@ -1907,7 +2100,7 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 		assert(sp);
 		if (sp->ftype != CLCKL) {
 		    ierror("called function does not return type clock:", sp->name);
-		    sp->type = ERR;			/* cannot execute properly */
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 		}
 		$$ = $1;
 	    }
@@ -1974,7 +2167,7 @@ dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 tasgn	: UNDEF '=' texpr	{
 		$$.v = op_asgn(&$1, &$3, TIMRL);	/* not strict */
 		if (iC_Sflag) {
-		    ierror("strict - assignment to an undeclared 'imm timer':", $1.v->name);
+		    ierror("strict: assignment to an undeclared 'imm timer':", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 	    }
@@ -2005,7 +2198,7 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 		assert(sp);
 		if (sp->ftype != TIMRL) {
 		    ierror("called function does not return type timer:", sp->name);
-		    sp->type = ERR;			/* cannot execute properly */
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 		}
 		$$ = $1;
 	    }
@@ -2129,41 +2322,31 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 
 cCall	: UNDEF '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
-	    				/* CHECK if iCbuf changes now _() is missing */
-		/* do not unlink and free UNDEF Symbol - leads to malloc errors */
-		$1.v->type = CWORD;			/* no longer in imm variable */
-		$1.v->u_val = CNAME;
-		$$.v = $3.v;
+		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cCall", &$$);
 #endif
 	    }
 	| CNAME '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
-	    				/* CHECK if iCbuf changes now _() is missing */
-		$$.v = $3.v;
+		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cCall", &$$);
 #endif
 	    }
 	| UNDEF '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
-	    				/* CHECK if iCbuf changes now _() is missing */
-		/* do not unlink and free UNDEF Symbol - leads to malloc errors */
-		$1.v->type = CWORD;			/* no longer in imm variable */
-		$1.v->u_val = CNAME;
-		$$.v = $3.v;
+		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cCall", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
 	| CNAME '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
-	    				/* CHECK if iCbuf changes now _() is missing */
-		$$.v = $3.v;
+		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cFunct", &$$);
+		if ((iC_debug & 0402) == 0402) pu(1, "cCall", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2175,7 +2358,7 @@ cParams	: /* nothing */		{ $$.v =  0; }
 
 cPlist	: aexpr			{
 		$$.f = $1.f; $$.l = $1.l;
-		if (($$.v = op_push(0, ARN, op_force($1.v, ARITH))) != 0) {
+		if (($$.v = cListCount(0, $1.v)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -2184,7 +2367,7 @@ cPlist	: aexpr			{
 	    }
 	| cPlist ',' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = op_push($1.v, ARN, op_force($3.v, ARITH))) != 0) {
+		if (($$.v = cListCount($1.v, $3.v)) != 0) {
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -3624,13 +3807,13 @@ warning(					/* print warning message */
 void
 errBit(void)
 {
-    ierror("no constant allowed in bit expression", NULL);
+    ierror("no constant allowed in bit expression", NS);
 } /* errBit */
 
 void
 errInt(void)
 {
-    ierror("no imm variable to trigger arithmetic expression", NULL);
+    ierror("no imm variable to trigger arithmetic expression", NS);
 } /* errInt */
 
 /********************************************************************

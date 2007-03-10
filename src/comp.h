@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.52 2007/02/17 14:54:18 jw Exp $";
+"@(#)$Id: comp.h,v 1.53 2007/03/10 10:26:19 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -205,6 +205,10 @@ extern void	assignOutput(		/* generate and assign an output node */
 extern void	listGenOut(		/* listing for undefined C variable */
 	    Symbol * sp);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
+extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
+	    Symbol * cName, List_e * cParams);
+extern List_e *	cListCount(		/* count parameters in 'cList' */
+	    List_e * cPlist, List_e * aexpr);
 extern Symbol *	functionDefHead(	/* set up the function definition head */
 	    unsigned int ftyp, Symbol * funTrigger, int retFlag);
 extern List_e *	collectStatement(	/* collect statements in the function body */
@@ -257,10 +261,11 @@ extern int	    genLineNums[];
 #define	HASHSIZ 54*16			/* for new sorted list algorithm */
 extern Symbol *	symlist[];		/* symbol table: linked lists */
 extern Symbol *	lookup(char *);		/* find string in symbol table */
-extern Symbol *	place_sym(Symbol *);	/* place sp in symbol table */
 extern Symbol *	install( char *, unsigned char,
 		    unsigned char);	/* install Symbol in symbol table */
+extern Symbol *	link_sym(Symbol *);	/* link Symbol into symbol table */
 extern Symbol * unlink_sym(Symbol *);	/* unlink Symbol from symbol table */
+extern void	uninstall(Symbol *);	/* uninstall Symbol from symbol table (free space) */
 
 					/*   main.c   */
 #define H1name	".iC_list1.h"

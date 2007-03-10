@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.17 2005/01/26 15:18:38 jw Exp $";
+"@(#)$Id: symb.c,v 1.18 2007/03/07 14:12:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -80,7 +80,7 @@ hash(char *	string)				/* hash a string to table index */
 	correct = 0;				/* range of 2nd character 64 */
     }
     return (hsh >> 2);				/* divide by 4, range 54 * 64 / 4 */
-}
+} /* hash */
 
 static Symbol **	spl;
 
@@ -100,23 +100,7 @@ lookup(char *	string)				/* find string in symbol table */
 	return (sp);				/* found */
     }
     return (0);					/* 0 ==> not found */
-}
-
-Symbol *
-place_sym(Symbol *	sp)			/* place sp in symbol table */
-{
-    Symbol *	tsp;
-
-    if (spl == 0 || ((tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0)) {
-	if (lookup(sp->name) != 0) {		/* locate sorted position */
-	    ierror("trying to place existing symbol:", sp->name);
-	}
-    }
-    sp->next = *spl;				/* point from this to next Symbol */
-    *spl = sp;					/* point from previous to this Symbol */
-    spl = 0;					/* force execution of lookup() for next call */
-    return (sp);
-}
+} /* lookup */
 
 Symbol *
 install(					/* install string in symbol table */
@@ -131,8 +115,24 @@ install(					/* install string in symbol table */
     strcpy(sp->name, string);
     sp->type = typ;
     sp->ftype = ftyp;
-    return (place_sym(sp));
-}
+    return (link_sym(sp));
+} /* install */
+
+Symbol *
+link_sym(Symbol *	sp)			/* link Symbol into symbol table */
+{
+    Symbol *	tsp;
+
+    if (spl == 0 || ((tsp = *spl) != 0 && strcmp(tsp->name, sp->name) != 0)) {
+	if (lookup(sp->name) != 0) {		/* locate sorted position */
+	    ierror("trying to place existing symbol:", sp->name);
+	}
+    }
+    sp->next = *spl;				/* point from this to next Symbol */
+    *spl = sp;					/* point from previous to this Symbol */
+    spl = 0;					/* force execution of lookup() for next call */
+    return (sp);
+} /* link_sym */
 
 Symbol *
 unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table */
@@ -149,4 +149,12 @@ unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table */
 	}
     }
     return (sp);				/* Symbol has not been deleted from heap yet */
-}
+} /* unlink_sym */
+
+void
+uninstall(Symbol *	sp)			/* completely remove the Symbol */
+{
+    unlink_sym(sp);				/* unlink Symbol from symbol table */
+    if (sp) free(sp->name);
+    free(sp);					/* delete Symbol name and Symbol space */
+} /* uninstall */

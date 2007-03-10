@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.82 2007/02/27 22:19:54 jw Exp $";
+"@(#)$Id: outp.c,v 1.83 2007/03/07 13:55:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -293,10 +293,10 @@ listNet(unsigned gate_count[])
 	/* do not change spelling - used in 'pplstfix' */
 	fprintf(iC_outFP, "\n******* NET TOPOLOGY    ************************\n\n");
     }
-    sp = lookup(ICONST);			/* iConst */
+    sp = lookup("iConst");			/* iConst */
     assert(sp);
     if (sp->u_val == 0) {
-	unlink_sym(sp);				/* iConst was not used - delete from ST */
+	uninstall(sp);				/* iConst was not used - delete from ST */
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
@@ -1378,7 +1378,7 @@ extern iC_Gt *	iC_l_[];\n\
 		 *******************************************************************/
 		modName = mN(sp);		/* modified string, bit is used in block */
 		if (typ == NCONST) {
-		    if (strcmp(modName, ICONST) == 0) {
+		    if (strcmp(modName, "iConst") == 0) {
 			assert(sp->u_val);	/* unused iConst was deleted from ST */
 			fprintf(Fp, "extern iC_Gt %s; /* %d */\n", modName, sp->u_val);
 			continue;

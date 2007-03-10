@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.31 2007/02/17 12:33:39 jw Exp $";
+"@(#)$Id: init.c,v 1.32 2007/03/10 11:27:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -117,8 +117,9 @@ static struct bi builtins[] = {
   { "extern",	KEYW,	EXTERN,	0,	},
   { "assign",	KEYW,	ASSIGN,	0,	},
   { "return",	KEYW,	RETURN,	0,	},
-  { "use",	KEYW,	USE,	1,	}, /* turn on use */
   { "no",	KEYW,	USE,	0,	}, /* turn off use */
+  { "use",	KEYW,	USE,	1,	}, /* turn on use */
+  { "restore",	KEYW,	USE,	2,	}, /* resore use */
   { "alias",	KEYW,	USETYPE, 0,	}, /* check that no more than MAXUSETYPE USETYPE's occurr */
   { "strict",	KEYW,	USETYPE, 1,	}, /* MAXUSETYPE 2 */
   { "imm",	KEYW,	IMM,	0,	},
@@ -157,8 +158,8 @@ static struct bi builtins[] = {
   { "fortran",	KEYW,	LEXERR,	0,	},
   { "asm",	KEYW,	LEXERR,	0,	},
   { "iC_Gt",	CTYPE,	YYERRCODE, 0,	}, /* initial Gate C-type from icg.h */
-  { ICONST,	NCONST, 0,	ARITH,	}, /* iConst Symbol */
-  { "iClock",	CLK,	0,	CLCKL,	}, /* must be last non-zero entry */
+  { "iConst",	NCONST, 0,	ARITH,	}, /* Symbol "iConst" */
+  { "iClock",	CLK,	0,	CLCKL,	}, /* Symbol "iClock" must be last non-zero entry */
   { 0,		0,	0,	0,	},
 };
 

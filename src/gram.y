@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.23 2007/02/15 00:50:53 jw Exp $";
+"@(#)$Id: gram.y,v 1.24 2007/03/09 23:20:48 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -204,7 +204,7 @@ declaration					/* 5 */
 		    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "P %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
 		    if (lookup(sp1->name) == 0) {
-			place_sym(sp1);
+			link_sym(sp1);
 		    }
 		} else {
 		    $$.symbol = sp1;		/* use $$ as transport Token for delete_sym */
@@ -1971,7 +1971,7 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
 	lep->ppIdx  = 6;
 	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
 	    ierror("C-statement tries to access an imm type not bit or int:", sp->name);
-	    sp->type = ERR;			/* cannot execute properly */
+	    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 	}
     } else {					/* parenthesized variable found */
 	--lep;					/* step back to previous entry */
@@ -2091,9 +2091,11 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 		ftyp = sp->ftype;
 		if (typ == UDF) {
 		    if (iC_Sflag) {
-			ierror("strict - C assignment to an imm variable (should be immC):", sp->name);
-			sp->type = ERR;		/* cannot execute properly */
+			ierror("strict: C assignment to an imm variable (should be immC):", sp->name);
+			if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
+			else goto changeType;
 		    } else {
+			changeType:
 			sp->type = iC_ctypes[ftyp];	/* must be ARNC or LOGC */
 			listGenOut(sp);		/* list immC node and generate possible output */
 		    }
@@ -2106,7 +2108,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 		    } else {
 			ierror("C-assignment to an incompatible imm type:", sp->name);
 		    }
-		    sp->type = ERR;		/* cannot execute properly */
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 		}
 		return;
 	    } else {

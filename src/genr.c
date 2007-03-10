@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.67 2007/02/26 18:11:26 jw Exp $";
+"@(#)$Id: genr.c,v 1.68 2007/03/10 10:26:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -29,7 +29,7 @@ static const char genr_c[] =
 #include	"comp.h"
 #include	"comp_tab.h"
 
-#define v(lp)	(lp->le_val) ? '~' : ' ', lp->le_sym->name
+#define v(lp)	(lp->le_val) ? '~' : ' ', lp->le_sym ? lp->le_sym->name : "(0)"
 #define w(lp)	(lp->le_val) ? '~' : ' '
 #define EBSIZE	2048
 
@@ -132,7 +132,7 @@ op_force(				/* force linked Symbol to correct ftype */
     List_e *		lp1;
     int			typ;
 
-    if (lp && (sp = lp->le_sym)->ftype != ftyp) {
+    if (lp && (sp = lp->le_sym) != 0 && sp->ftype != ftyp) {
 	if (sp->u_blist == 0 ||			/* not a @ symbol or */
 	    sp->type >= MAX_GT ||	/* SH, FF, EF, VF, SW, CF or */
 	    (sp->u_blist->le_sym == sp && sp->type == LATCH)) { /* L(r,s) */
@@ -176,6 +176,7 @@ op_push(				/* reduce List_e stack to links */
     List_e *		lp;
     List_e *		tlp;
     int			typ;
+    int			ftyp;
 #if YYDEBUG
     char 		temp[TSIZE];
 #endif
@@ -186,13 +187,14 @@ op_push(				/* reduce List_e stack to links */
     }
     rlp = right;
     sp = rlp->le_sym;
-    assert(sp && sp->type < IFUNCT);		/* allows IFUNCT to use union v.cnt */
-    typ = sp->type;
+    assert(sp == 0 || sp->type < IFUNCT);		/* allows IFUNCT to use union v.cnt */
+    typ = sp ? sp->type : ARN;
+    ftyp = sp ? sp->ftype : ARITH;
     if (left && op > OR && op < MAX_LV && op != typ) {
 	warning("function iC_types incompatible", NS);
     }
-    if (sp->u_blist == 0 || op != typ) {
-	if ((lp = sp->v_elist) != 0 && (sp->name == 0
+    if (sp == 0 || sp->u_blist == 0 || op != typ) {
+	if (sp && (lp = sp->v_elist) != 0 && (sp->name == 0
 #if YYDEBUG
 						      || (sp->name)[0] == '@'
 #endif
@@ -215,16 +217,15 @@ op_push(				/* reduce List_e stack to links */
 	}
 #endif
 	sp->type = op != UDF ? op : AND; /* operator OR or AND (default) */
-	sp->ftype = rlp->le_sym->ftype;	 /* used in op_xor() with op UDF (defunct) */
+	sp->ftype = ftyp;		/* used in op_xor() with op UDF (defunct) */
 	sp->next = templist;		/* put at front of templist */
 	templist = sp;
 	rlp->le_next = 0;		/* sp->u_blist is 0 for new sp */
 	sp->u_blist = rlp;		/* link right of expression */
 	rlp = sy_push(sp);		/* push new list element on stack */
     }
-    if (left) {
-	lsp = left->le_sym;		/* test works correctly with ftype - handles ALIAS */
-	assert(lsp && lsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
+    if (left && (lsp = left->le_sym) != 0) {	/* test works correctly with ftype - handles ALIAS */
+	assert(lsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
 	if (lsp->ftype >= MIN_ACT && lsp->ftype < MAX_ACT) {
 	    if (sp->ftype < S_FF) {
 		sp->ftype = 0;		/* OK for any value of GATE */
@@ -341,10 +342,10 @@ const_push(Lis * expr)
     value = strtol(buf, &endptr, 0);	/* convert to check for error */
     if (*endptr != '\0') {
 	/* const @ symbol */
-	if ((sp = lookup(ICONST)) == 0) {
-	    execerror("arithmetic constant initializer not installed", ICONST, __FILE__, __LINE__);
+	if ((sp = lookup("iConst")) == 0) {
+	    execerror("arithmetic constant initializer not installed", "iConst", __FILE__, __LINE__);
 	}
-	sp->u_val++;			/* mark use of iConst */
+	sp->u_val++;			/* mark use of "iConst" */
 	lp = sy_push(sp);
 	expr->v = op_push(0, ARN, lp);
 	expr->v->le_first = lp->le_first = expr->f;	/* identifies as const expression */
@@ -460,7 +461,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int gt_input, int sflag)
 	    }
 	}
 	*ePtr = 0;
-	if (gp->type == NCONST && strcmp(gp->name, ICONST) == 0) {
+	if (gp->type == NCONST && strcmp(gp->name, "iConst") == 0) {
 	    if (t_first) {				/* end of arith */
 		if (lp->le_first == 0) lp->le_first = t_first;
 		if (lp->le_last == 0) lp->le_last = t_last;
@@ -1055,8 +1056,8 @@ op_asgn(				/* asign List_e stack to links */
 	}
 	sflag = 0200;					/* print output name */
 	if (gt_input > PPGATESIZE) {
-	    sp->type = ERR;				/* cannot execute properly */
 	    ierror("too many inputs on gate:", sp->name);
+	    if (! iFunSymExt) sp->type = ERR;		/* cannot execute properly */
 	}
 	if ((gp = sp = templist) != 0) {
 	    if (sp->name
@@ -1080,7 +1081,7 @@ op_asgn(				/* asign List_e stack to links */
 	    if (sp) {
 		if (iFunSymExt == 0) {
 		    if (lookup(sp->name) == 0) {
-			(void) place_sym(sp);/* place sp in the symbol table (changes sp->next) */
+			link_sym(sp);	/* place sp in the symbol table (changes sp->next) */
 		    }
 		} else {
 		    sp->next = varList;	/* put newly marked Symbol on function varList */
@@ -1459,6 +1460,140 @@ delayOne(List_e * tp)
 } /* delayOne */
 
 /********************************************************************
+ *
+ *	For 'strict' processing check parameter count in 'cCall'
+ *	and clean away dummy list elements produced in 'cList'
+ *
+ *	Algorithm:
+ *	The first link in 'cParams' (if there is one) contains the
+ *	parameter count collected in cListCount(). If there are no
+ *	links, parameter count is 0.
+ *	All dummy links (with le_sym == 0) generated in cListCount()
+ *	and which are linked in a list to u.blist of the first Symbol
+ *	pointed to by cParams must be removed. If all links are dummys
+ *	u.blist in the first Symbol will be 0 and this Symbol was a
+ *	temp generated in cListCount(). It must be removed from templist
+ *	and removed removed with its name and link.
+ *
+ *	Finally compare the parameter count with v.cnt in 'cName', which
+ *	contains the parameter count collected in the extern C function
+ *	decleration.
+ *
+ *******************************************************************/
+
+List_e *
+cCallCount(Symbol * cName, List_e * cParams)
+{
+    if (iC_Sflag) {
+	List_e *	lp;
+	List_e **	lpp;
+	Symbol *	sp;
+	int		pcnt = 0;
+
+	if ((lp = cParams) != 0) {
+	    sp = lp->le_sym;
+	    assert(sp);
+	    pcnt = lp->le_val;
+	    for (lpp = &sp->u_blist; (lp = *lpp) != 0; ) {
+		if (lp->le_sym == 0) {
+		    *lpp = lp->le_next;		/* remove dummy link from list */
+		    sy_pop(lp);
+		} else {
+		    lpp = &lp->le_next;		/* next list element */
+		}
+	    }
+	    if (sp->u_blist == 0) {		/* sp has only links which have been popped */
+		if (templist != sp) {		/* bypass sp on templist */
+		    Symbol * tsp;
+		    tsp = templist;		/* scan templist */
+		    while (tsp->next != sp) {
+			tsp = tsp->next;	/* find sp in templist */
+			if (tsp == 0) {
+			    execerror("cCall temp not found ???\n", NS, __FILE__, __LINE__);
+			}
+		    }
+		    tsp->next = sp->next;	/* unlink sp from templist */
+		} else {
+		    templist = sp->next;	/* unlink first object */
+		}
+#if YYDEBUG
+		sy_pop(cParams);		/* free link to dummy sp */
+		if ((iC_debug & 0402) == 0402) {
+		    free(sp->name);		/* free dummy name */
+		}
+		free(sp);			/* free dummy Symbol */
+#else
+		free(sy_pop(cParams));		/* free dummy Link and Symbol */
+#endif
+		cParams = 0;
+	    } else {
+		cParams->le_val = 0;
+	    }
+	}
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "cCall: %s has %d parameters\n", cName->name, pcnt);
+	    fflush(iC_outFP);
+	}
+#endif
+	if (cName->type == UDF) {
+	    cName->v_cnt = pcnt;		/* UNDEF stop more error messages */
+	    ierror("strict: call of an undeclared C function or macro:", cName->name);
+	} else
+	if (pcnt != cName->v_cnt) {
+	    char	tempBuf[TSIZE];		/* CNAME */
+	    snprintf(tempBuf, TSIZE, "%s %d (%d)", cName->name, pcnt, cName->v_cnt);
+	    ierror("strict: call parameter count does not match C function declaration:", tempBuf);
+	}
+    }
+    if (cName->type == UDF) {
+	cName->type  = CWORD;			/* no longer an imm variable */
+	cName->u_val = CNAME;			/* yacc type */
+    }
+    return cParams;
+} /* cCallCount */
+
+/********************************************************************
+ *
+ *	For 'strict' processing count parameters in 'cList'
+ *	If 'aexpr == 0' generate a dummy link with a null pointer
+ *	in le_sym for transporting pcnt in le_val. This link will
+ *	be removed in 'cCall'
+ *	If the first parameter is a dummy (aexpr == 0), a dummy
+ *	temp Symbol is put on templist by op_push(), which must
+ *	also be removed in 'cCall' if all other parameters are dummys
+ *
+ *******************************************************************/
+
+List_e *
+cListCount(List_e * cPlist, List_e * aexpr)
+{
+    int		pcnt = 0;
+
+    if (iC_Sflag) {
+	if (cPlist) {
+	    pcnt = cPlist->le_val;	/* count from cPlist before sy_pop in op_push */
+	    cPlist->le_val = 0;		/* restore so that expression is correct */
+	}
+	if (aexpr == 0) {
+	    aexpr = sy_push(0);		/* dummy link for counting */
+	}
+    }
+    aexpr = op_push(cPlist, ARN, op_force(aexpr, ARITH));
+    if (iC_Sflag) {
+	assert(aexpr);
+	aexpr->le_val = pcnt + 1;
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "cPlist: parameter %d\n", aexpr->le_val);
+	    fflush(iC_outFP);
+	}
+#endif
+    }
+    return aexpr;
+} /* cListCount */
+
+/********************************************************************
  ********************************************************************
  *
  * class DefineFunction
@@ -1632,7 +1767,7 @@ collectStatement(Symbol * funcStatement)
 	    fprintf(iC_outFP, "type: %s, ftype: %s\n",
 		iC_full_type[typ], iC_full_ftype[sp->ftype]);
 	    ierror("function statement is not int, bit, clock or timer:", sp->name);
-	    sp->type = ERR;
+	    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 	}
 	varList = 0;				/* ready for next function assignment */
     }
@@ -1817,9 +1952,7 @@ clearFunDef(Symbol * functionHead)
 	    free(lp);				/* delete expression link */
 	    lp = lp1;				/* has no follow ups - but just in case */
 	}
-	unlink_sym(sp);				/* unlink Symbol from symbol table */
-	free(sp->name);
-	free(sp);				/* delete formal statement head Symbol */
+	uninstall(sp);				/* delete formal statement head Symbol */
 	vlp = slp->le_next;			/* next varList link */
 	free(slp);				/* delete statement link */
 	assert(vlp);				/* statement list is in pairs */
@@ -1847,9 +1980,7 @@ clearFunDef(Symbol * functionHead)
     while (slp) {
 	sp = slp->le_sym;			/* formal parameter Symbol */
 	assert(sp && sp->list == 0);		/* call leaves link to real para cleared */
-	unlink_sym(sp);				/* unlink Symbol from symbol table */
-	free(sp->name);
-	free(sp);				/* delete formal parameter Symbol */
+	uninstall(sp);				/* delete formal parameter Symbol */
 	vlp = slp->le_next;
 	free(slp);				/* delete formal parameter link */
 	slp = vlp;
@@ -2410,7 +2541,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 	ssp = slp->le_sym;			/* expression head template */
 	assert(ssp && ssp->fm);			/* marked statement list head Symbol */
 	typ = ssp->type;			/* type's below are marked with fmxx */
-	assert(ssp->u_blist || typ == (UDF) || typ == (ARNC) || typ == (LOGC));
+	assert(ssp->u_blist || typ == UDF || typ == ARNC || typ == LOGC || typ == ERR);
 	/********************************************************************
 	 * clone the expression head associated with this statement
 	 *******************************************************************/
@@ -2533,8 +2664,8 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 			    if (sp->fm <= PPGATESIZE) {
 				sp->fm++;		/* add inputs to target gate */
 			    } else {
-				sp->type = ERR;		/* cannot execute properly */
 				ierror("too many inputs on gate during optimisation:", sp->name);
+				if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 			    }
 			    lp2 = lp2->le_next;		/* scan to end of merge list */
 			}
@@ -2642,9 +2773,7 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		functionUse[cFn]++;		/* free this function for copying */
 		sy_pop(lp);			/* free link before target is unlinked */
 		ssp->list = 0;			/* free for next cloning */
-		unlink_sym(sv.v);		/* unlink Symbol from symbol table */
-		free(sv.v->name);		/* free name space */
-		free(sv.v);			/* temporary Symbol */
+		uninstall(sv.v);		/* delete temporary Symbol */
 		op_asgn(0, &sl, GATE);		/* delete missing slave gate in ffexpr */
 	    }
 	}
