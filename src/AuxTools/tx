@@ -1,21 +1,48 @@
 #!/bin/sh
-echo '$Id: tx,v 1.1 2007/03/23 13:21:47 jw Exp $'
+echo '$Id: tx,v 1.2 2007/03/23 16:53:21 jw Exp $'
 
 head=$1
 next=$2
-source=$3
 
-if [ -n "$head" -a -n "$next" -a -n "$source" ]; then
+if [ -n "$head" -a -z "$next" ]; then
+    source="W$head"
+    head="V$head"
     for t in Test[1-9]; do
-	echo $t;
+	echo "*** $t ***";
+	cd $t;
+	Mdiff -kLel $source/*.* $head
+	cd ..;
+    done
+elif [ -n "$head" -a -n "$next" ]; then
+    head="V$head"
+    source="W$next"
+    next="V$next"
+    for t in Test[0-9]; do
+	echo "*** $t ***";
 	cd $t;
 	if [ -d "$head" -a ! -d "$next" -a -d "$source" ]; then
 	    ls -ld $head $source
+	    mkdir $next
+	    cd $next
+	    for file in ../$head/*; do
+		if [ -L $file ]; then
+		    cp -a $file .
+		elif [ -f $file ]; then
+		    ln -s $file .
+		else
+		    echo "**** Error: $name has strange file $file - not backed up"
+		fi
+	    done
+	    rm -f $(Mdiff -Lle * ../$source)	# remove links to files which no longer exist
+	    cd ../$source
+	    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted *.* ../$next) ../$next 2> /dev/null
+	    cd ..
 	else
 	    echo "Error: $head and $source must exist in $t wheras $next may not exist in $t"
+	    ls -ld [VW]*
 	fi
 	cd ..;
     done
 else
-    echo "Usage: $0 <head directoty> <next directory> <source directory> # for next in Test1 - Test9"
+    echo "Usage: $0 <head directoty index>[ <next directory index>] # for next in Test1 - Test9"
 fi
