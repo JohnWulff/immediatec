@@ -1,0 +1,21 @@
+#!/bin/sh
+echo '$Id: tx,v 1.1 2007/03/23 13:21:47 jw Exp $'
+
+head=$1
+next=$2
+source=$3
+
+if [ -n "$head" -a -n "$next" -a -n "$source" ]; then
+    for t in Test[1-9]; do
+	echo $t;
+	cd $t;
+	if [ -d "$head" -a ! -d "$next" -a -d "$source" ]; then
+	    ls -ld $head $source
+	else
+	    echo "Error: $head and $source must exist in $t wheras $next may not exist in $t"
+	fi
+	cd ..;
+    done
+else
+    echo "Usage: $0 <head directoty> <next directory> <source directory> # for next in Test1 - Test9"
+fi
