@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: tt,v 1.21 2007/03/09 22:50:40 jw Exp $'
+  echo '$Id: tt,v 1.22 2007/03/23 22:21:53 jw Exp $'
 }
 
 usage()
@@ -49,8 +49,12 @@ usage()
   echo "	will be compared with files in <dir1> with Mdiff -kLe" >&2
   echo "	If no <dir1> is specified no files will be copied or compared" >&2
   echo
-  echo "	If <dir2> is specified all files in <dir1> will be" >&2
-  echo "	compared with all files in <dir2> with Mdiff -kLe" >&2
+  echo "	If <dir2> is specified and exists and <dir1> does not exist" >&2
+  echo "	<dir1> will be created and only changed files will be coped to <dir1>." >&2
+  echo "	The others will be soft links from <dir1> to <dir2>" >&2
+  echo
+  echo "	If <dir2> is specified and <dir1> exists all files in <dir1>" >&2
+  echo "	will be compared with all files in <dir2> with Mdiff -kLe" >&2
   echo
   echo "	If <dir2> is an absolute path, it must be the base of" >&2
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
@@ -81,6 +85,7 @@ I=""
 g=""
 G=""
 T="test"
+head=""
 
 while getopts ":cm:d:lrASPRiIJ6x:f:F:zvh" opt; do
     case $opt in
@@ -124,6 +129,15 @@ else
     d3="$d2/\$t/$d1"
 fi
 
+cd Test1;
+if [ -n "$d2" -a -d $d2$d -a -n "$d1" -a ! -d "$d1$d" ]; then
+    head="$d2$d"
+    d2=""
+fi
+cd ..;
+
+# echo "d1 = !$d1! d2 = !$d2! d3 = !$d3! head = !$head!"
+
 echo; date
 if [ -n "$m" ]; then
     echo "== $m =="
@@ -153,8 +167,26 @@ for t in Test1 Test9; do
 		    Mdiff -k$l $(cat pd.lt) $d1$d
 		else
 		    mkdir $d1$d
-		    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
-		    cp -p $(cat pd.lt) $d1$d
+		    if [ -d "$head" ]; then
+			echo; echo "========== $t link all files from $d1$d to $head or beyond"
+			cd $d1$d
+			for file in ../$head/*; do
+			    if [ -L $file ]; then
+				cp -a $file .
+			    elif [ -f $file ]; then
+				ln -s $file .
+			    else
+				echo "**** Error: $name has strange file $file - not backed up"
+			    fi
+			done
+			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
+			cd ..
+			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel -I'ic[0-6c]\.' -IAborted \$(cat pd.lt) $d1$d) $d1$d"
+			cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat pd.lt) $d1$d) $d1$d 2> /dev/null
+		    else
+			echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
+			cp -p $(cat pd.lt) $d1$d
+		    fi
 		fi
 	    fi
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
@@ -190,8 +222,26 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
 		    Mdiff -k$l $(cat p[d$g].lt) $d1$d
 		else
 		    mkdir $d1$d
-		    echo; echo "========== $t cp -p \$(cat p[d$g].lt) $d1$d"
-		    cp -p $(cat p[d$g].lt) $d1$d
+		    if [ -d "$head" ]; then
+			echo; echo "========== $t link all files from $d1$d to $head or beyond"
+			cd $d1$d
+			for file in ../$head/*; do
+			    if [ -L $file ]; then
+				cp -a $file .
+			    elif [ -f $file ]; then
+				ln -s $file .
+			    else
+				echo "**** Error: $name has strange file $file - not backed up"
+			    fi
+			done
+			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
+			cd ..
+			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel -I'ic[0-6c]\.' -IAborted \$(cat pd.lt) $d1$d) $d1$d"
+			cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat pd.lt) $d1$d) $d1$d 2> /dev/null
+		    else
+			echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
+			cp -p $(cat pd.lt) $d1$d
+		    fi
 		fi
 	    fi
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
