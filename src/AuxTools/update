@@ -1,5 +1,5 @@
 #! /bin/bash
-# $Id: update,v 1.3 2007/02/23 11:31:02 jw Exp $
+# $Id: update,v 1.4 2007/03/02 09:00:45 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
@@ -7,22 +7,28 @@ vn='100'	## save directory start numeral
 wp='W'		## branch directory prefix
 wn='1'		## branch directory start numeral
 vpath="$vp*"
+n=''
 
 if locked -q; then
     for d in $vpath; do
 	if [ -d $d ]; then
-	    cd $d
-	    if locked -vq; then
-		echo "#### $d"
-		echo "==== " $(locked -v)
-		co $(locked -v)
+	    nt=${d#$vp*}
+	    if [[ $nt =~ '[0-9][0-9]*' ]]; then
+		n=$nt
+		cd $d
+		if locked -vq; then
+		    echo "#### $d"
+		    echo "==== " $(locked -v)
+		    co $(locked -v)
+		fi
+		cd ..
+	    else
+		echo "**** Warning: $name '$d' must be '$vp' followed by digits, not '$nt' - ignored"
 	    fi
-	    cd ..
 	fi
     done
-
     if [ $name = 'save' ]; then
-	if [ $d = "$vpath" ]; then
+	if [ -z $n ]; then
 	    head="$vp$vn"
 	    echo "#### $name $head"
 	    mkdir $head
@@ -31,7 +37,6 @@ if locked -q; then
 	    cd ..
 	    cp -p $(locked) $head
 	else
-	    n=${d#$vp*}
 	    previous="$vp$n"
 	    let n=$n+1
 	    head="$vp$n"
@@ -39,43 +44,70 @@ if locked -q; then
 		echo "#### $name $head"
 		mkdir $head
 		cd $head
-		ln -s ../$previous/* .
-		rm -f RCS
-		ln -s ../RCS .
+		for f in ../$previous/*; do
+		    if [ -L $f ]; then
+			cp -a $f .
+		    elif [ -f $f ]; then
+			ln -s $f .
+		    else
+			echo "**** Error: $name has strange file $f - not backed up"
+		    fi
+		done
+		rm -f $(Mdiff -Lle * ..)	# remove links to files which longer exist
 		cd ..
 		cp --remove-destination -p $(Mdiff -kLel $(locked) $head) $head
 	    else
-		echo "**** Error: $name directory will get no new files - no $head made"
+		echo "**** Warning: $name directory will get no new files - no $head made"
 	    fi
 	fi
     elif [ $name = 'branch' ]; then
-	n=${d#$vp*}
-	head="$vp$n"
-	w="$wp${n}_"
-	wpath="$w*"
-	for db in $wpath; do
-	    :	# additional files co in head directory are linked below
-	done
-	if [ $db = "$wpath" ]; then
-	    previous=$head	# wpath is empty
-	    m="$wn"		# usually 1 - can be 0
+	if [ -n $n ]; then
+	    head="$vp$n"
+	    w="$wp${n}_"
+	    wpath="$w*"
+	    db=''
+	    for d in $wpath; do
+		if [ -d $d ]; then
+		    db=$d
+		    cd $db
+		    if locked -vq; then
+			echo "#### $db"
+			echo "==== " $(locked -v)
+			co $(locked -v)
+		    fi
+		    cd ..
+		fi
+	    done
+	    if [ -z $db ]; then
+		previous=$head	# wpath is empty
+		m="$wn"		# usually 1 - can be 0
+	    else
+		m=${db#$w*}
+		previous="$w$m"
+		let m=$m+1
+	    fi
+	    branch="$w$m"
+	    if ! Mdiff -kLeq $(locked) $previous; then
+		echo "#### $name $branch"
+		mkdir $branch
+		cd $branch
+		for f in ../$previous/*; do
+		    if [ -L $f ]; then
+			cp -a $f .
+		    elif [ -f $f ]; then
+			ln -s $f .
+		    else
+			echo "**** Error: $name has strange file $f - not backed up"
+		    fi
+		done
+		rm -f $(Mdiff -Lle * ..)	# remove links to files which longer exist
+		cd ..
+		cp --remove-destination -p $(Mdiff -kLel $(locked) $branch) $branch
+	    else
+		echo "**** Warning: $name directory will get no new files - no $branch made"
+	    fi
 	else
-	    m=${db#$w*}
-	    previous="$w$m"
-	    let m=$m+1
-	fi
-	branch="$w$m"
-	if ! Mdiff -kLeq $(locked) $previous; then
-	    echo "#### $name $branch"
-	    mkdir $branch
-	    cd $branch
-	    ln -s ../$previous/* .
-	    rm -f RCS
-	    ln -s ../RCS .
-	    cd ..
-	    cp --remove-destination -p $(Mdiff -kLel $(locked) $branch) $branch
-	else
-	    echo "**** Error: $name directory will get no new files - no $branch made"
+	    echo "**** Error: $name no 'save' has ever been done - no branch made"
 	fi
     fi
 else

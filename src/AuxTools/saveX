@@ -5,7 +5,7 @@
 #
 ########################################################################
 
-# $Id: saveX,v 1.1 2007/02/24 10:55:26 jw Exp $
+# $Id: saveX,v 1.2 2007/03/22 18:01:54 jw Exp $
 
 name=${0##*/}
 vp='X'		## save directory prefix
@@ -37,13 +37,22 @@ if [ -f pd.lt ]; then
 	    previous="$vp$n"
 	    let n=$n+1
 	    head="$vp$n"
-	    if ! Mdiff -kLeq $(cat p[d6].lt) $previous; then
+	    if ! Mdiff -kLeq -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $previous; then
 		echo "#### $name $head"
 		mkdir $head
 		cd $head
-		ln -s ../$previous/* .
+		for f in ../$previous/*; do
+		    if [ -L $f ]; then
+			cp -a $f .
+		    elif [ -f $f ]; then
+			ln -s $f .
+		    else
+			echo "**** Error: $name has strange file $f - not backed up"
+		    fi
+		done
+		rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 		cd ..
-		cp --remove-destination -p $(Mdiff -kLel $(cat p[d6].lt) $head) $head
+		cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $head) $head
 	    else
 		echo "**** Error: $name directory will get no new files - no $head made"
 	    fi
@@ -64,13 +73,22 @@ if [ -f pd.lt ]; then
 	    let m=$m+1
 	fi
 	branch="$w$m"
-	if ! Mdiff -kLeq $(cat p[d6].lt) $previous; then
+	if ! Mdiff -kLeq -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $previous; then
 	    echo "#### $name $branch"
 	    mkdir $branch
 	    cd $branch
-	    ln -s ../$head/* .
+	    for f in ../$head/*; do
+		if [ -L $f ]; then
+		    cp -a $f .
+		elif [ -f $f ]; then
+		    ln -s $f .
+		else
+		    echo "**** Error: $name has strange file $f - not backed up"
+		fi
+	    done
+	    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 	    cd ..
-	    cp --remove-destination -p $(Mdiff -kLel $(cat p[d6].lt) $branch) $branch
+	    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $branch) $branch
 	else
 	    echo "**** Error: $name directory will get no new files - no $branch made"
 	fi

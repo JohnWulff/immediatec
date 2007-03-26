@@ -1,23 +1,38 @@
 #!/bin/sh
-echo '$Id: tx,v 1.2 2007/03/23 16:53:21 jw Exp $'
+echo '$Id: tx,v 1.3 2007/03/24 14:07:36 jw Exp $'
+
+tdirectories=$1
+if [ -n "$tdirectories" -a -d "$tdirectories" ]; then
+    shift
+else
+    tdirectories="Test[1-9] Test10"
+fi
+#echo "'$tdirectories'"
+#exit
 
 head=$1
 next=$2
+source=$3
 
 if [ -n "$head" -a -z "$next" ]; then
-    source="W$head"
+    if [ -z "$source" ]; then source="W$head"; fi
     head="V$head"
-    for t in Test[1-9]; do
+    for t in $tdirectories; do
 	echo "*** $t ***";
 	cd $t;
-	Mdiff -kLel $source/*.* $head
+	if [ -d "$head" -a -d "$source" ]; then
+	    Mdiff -kLel -I'ic[0-6c]\.' -IAborted $source/*.* $head
+	else
+	    echo "Error: $head and $source must exist in $t"
+	    ls -ld [VW]*
+	fi
 	cd ..;
     done
 elif [ -n "$head" -a -n "$next" ]; then
     head="V$head"
-    source="W$next"
+    if [ -z "$source" ]; then source="W$next"; fi
     next="V$next"
-    for t in Test[0-9]; do
+    for t in $tdirectories; do
 	echo "*** $t ***";
 	cd $t;
 	if [ -d "$head" -a ! -d "$next" -a -d "$source" ]; then
@@ -44,5 +59,14 @@ elif [ -n "$head" -a -n "$next" ]; then
 	cd ..;
     done
 else
-    echo "Usage: $0 <head directoty index>[ <next directory index>] # for next in Test1 - Test9"
+    echo "Usage: $0 [<test dir>] <head dir index>[[ <next dir index>] <source dir name>]"
+    echo "       if <test dir> is a directory it is used - else use Test1 Test2 ... Test10"
+    echo " 1)    if only <head> is given, all files in W<head> are Mdiff -kLel with V<head>"
+    echo " 2)    if only <head> and <next> are given, all files in W<next> are Mdiffed"
+    echo "          with V<head>. For all files which are identical links are created"
+    echo "          in V<next> to the same file in V<head>."
+    echo "          Files which are different are copied from W<next> to V<next>."
+    echo " 1a)   if <head>, '' and <source> are given, <source> replaces W<next> in 1)"
+    echo " 2a)   if <head>, <next> and <source> are given, <source> replaces W<next> in 2)"
+    echo " Note: <source> must be a directory in the current Test directoy and it must exist"
 fi

@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: tt,v 1.22 2007/03/23 22:21:53 jw Exp $'
+  echo '$Id: tt,v 1.23 2007/03/26 07:36:40 jw Exp $'
 }
 
 usage()
@@ -130,7 +130,7 @@ else
 fi
 
 cd Test1;
-if [ -n "$d2" -a -d $d2$d -a -n "$d1" -a ! -d "$d1$d" ]; then
+if [ -n "$d2" -a -d "$d2$d" -a -n "$d1" -a ! -d "$d1$d" ]; then
     head="$d2$d"
     d2=""
 fi
@@ -203,7 +203,7 @@ for t in Test1 Test9; do
     fi
 done
 
-for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8; do
+for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10; do
     if [ -d "$t" ]; then
 	cd $t
 	if [ -z "$d2" ]; then

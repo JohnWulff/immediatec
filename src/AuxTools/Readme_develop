@@ -140,14 +140,18 @@ Auxiliary scripts for testing compiler outputs
 
     ml:		#!/usr/bin/bash
 		make lists for immcc compiler tests; uses 'mklst'
-		    mklst *.i[ch] > p.lt	# all for copying
-		    mklst -d *.i[ch] > pd.lt	# sources, includes and derived for comparing
-		    mklst -e *.ic > pe.lt	# executables only
-		    mklst -c *.ic > pc.lt	# C files only
-		    mklst -i *.ic > pi.lt	# ini files only
-		    mklst -l *.ic > pl.lt	# lst files only
-		    mklst -6 *.ic > p6.lt	# lst6 files only
-		    mklst -p *.ic > pp.lt	# iC files only
+		    p.lt	# all for copying
+		    pd.lt	# sources, includes and derived for comparing
+		    pe.lt	# executables only
+		    pc.lt	# C files only
+		    pi.lt	# ini files only
+		    pl.lt	# lst files only
+		    p6.lt	# lst6 files only
+		    pp.lt	# iC files only
+		    ps.lt	# iC source files *.ic and *.ih
+		    pg.lt	# exe .c .ini .lst .lst6 - generated - may be deleted in source dir
+		    -g	pg.lt - exe .c .ini .lst .lst6 - generated files only
+		    -n	pn.lt - exe .c .ini .lst .lst6 - generated corpses - no .ic to match
 
     mm:		#!/usr/bin/bash
 		Usage: mm [-h] [-v<N>]
@@ -183,4 +187,45 @@ Auxiliary scripts for testing compiler outputs
 		if no files are specified uses mm via pm.lt to make
 		all the applications in the Test2 directory
 
-$Id: Readme_develop,v 1.11 2007/02/23 11:40:23 jw Exp $
+    tt:		#!/usr/bin/bash
+		Regression test of iC compilation of ic sources in Test1 - Test10
+		Usage: tt [-clrASP[P]RiIJ6x:f:F:zvh]
+		  [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]
+		-m<txt>	place <txt> message in log file just after full date
+		-d<opt>	call immcc with extra -d<opt> orred into normal -d474
+		-c	only copy files to <dir1>; must be new, else compare only
+		-l	list files which differ (default is full Mdiff output with -e)
+		-r	put Rdiff *.lt output in log file
+		-x<regex>  in each Mdiff ignore changes in lines that match regex
+		-f<filter> process the first file in an Mdiff by <filter> before diff
+		-F<filter> process the second file in an Mdiff by <filter> before diff
+		-A	compile output ARITHMETIC ALIAS nodes for symbol debugging
+		-S	strict compile - all immediate variables must be declared
+		-P	pedantic: warning if variable contains $ (default $ allowed)
+		-PP	pedantic-error: error if variable contains $
+		-R      no maximum error count (default: abort after 100 errors)
+		-i	produce file.ini with load info but no INITIALIZATION
+		-I	produce file.ini with load info and full INITIALIZATION
+		-J	produce file.ini without load info but full INITIALIZATION
+		-6	produce logic generation listing file.lst6 in Test2 etc
+		-z	echo compiler calls with all options for debugging
+		-h	this help text
+		--	all further arguments are treated as files
+		tt must be called from a directory, which has a number of
+		sub-directories Test1, Test2, Test3 .. Test9 containg iC sources.
+		Each iC source is made with iCmake, generating different files.
+		<dir1> or <dir1>_<opt> are sub-directories of directory
+		Test1, Test2, Test3 .. Test9 (however many exist)
+		<dir1> will be created if it does not exist and generated
+		files copied to it; if <dir1> exists, the generated files
+		will be compared with files in <dir1> with Mdiff -kLe
+		If no <dir1> is specified no files will be copied or compared
+		If <dir2> is specified and exists and <dir1> does not exist
+		<dir1> will be created and only changed files will be coped to <dir1>.
+		The others will be soft links from <dir1> to <dir2>
+		If <dir2> is specified and <dir1> exists all files in <dir1>
+		will be compared with all files in <dir2> with Mdiff -kLe
+		If <dir2> is an absolute path, it must be the base of
+		another set of directories Test1, Test2, Test3 .. Test9
+
+    $Id: Readme_develop,v 1.12 2007/03/26 12:47:51 jw Exp $
