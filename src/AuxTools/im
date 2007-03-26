@@ -2,21 +2,26 @@
 
 usage ()
 {
-    echo 'Usage:' >&2
-    echo "  $name[ -e xxx][ -zh]" >&2
-    echo "	-e xxx	execute with iC compiler xxx (default $ic)" >&2
-    echo '	-z	echo compiler calls with all options for debugging' >&2
-    echo '	-h	this help text' >&2
-    echo '	$Id: im,v 1.2 2007/02/25 10:22:02 archiv Exp $' >&2
+  echo 'Usage:' >&2
+  echo "  $name[ -e xxx][ -ASzh]" >&2
+  echo "	-e xxx	execute with iC compiler xxx (default $ic)" >&2
+  echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
+  echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-z	echo compiler calls with all options for debugging' >&2
+  echo '	-h	this help text' >&2
+  echo '	$Id: im,v 1.3 2007/03/26 14:40:42 archiv Exp $' >&2
 }
 
 name=${0##*/}
 ic='./immcc'
+A=""
 z=0
 
-while getopts ":e:zh" opt; do
+while getopts ":e:ASzh" opt; do
     case $opt in
     e )	ic="$OPTARG";;
+    A )	A="$A -A";;
+    S )	A="$A -S";;
     z )	z=1;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
@@ -33,10 +38,10 @@ for f in $*; do
     echo $file
     if [ -f "$file" ]; then
 	if [ $z -eq 1 ]; then
-	    echo "$ic -A -d474(6) -o $base.c -l $base.lst $file"
+	    echo "$ic$A -d474(6) -o $base.c -l $base.lst $file"
 	fi
-	$ic -A -d474 -o $base.c -l $base.lst $file
-	$ic -A -d476 -o $base.c -l $base.lst6 $file
+	$ic$A -d474 -o $base.c -l $base.lst $file
+	$ic$A -d476 -o $base.c -l $base.lst6 $file
     else
 	if [ $q -eq 0 ]; then
 	    echo "Error: iC file '$file' does not exist" >&2
