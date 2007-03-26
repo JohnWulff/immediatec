@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.24 2007/03/09 23:20:48 jw Exp $";
+"@(#)$Id: gram.y,v 1.25 2007/03/21 12:59:23 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -2312,10 +2312,10 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	if (bytePos == vstart) {
 	    assert(sp);				/* start of actual variable */
 	    if (lp) {
-		functionUse[0] |= F_FFEXPR;	/* flag for copying ffexpr macro */
+		functionUse[0].c_cnt |= F_FFEXPR;	/* flag for copying ffexpr macro */
 		lp1 = lp;
 	    } else {
-		functionUse[0] |= F_LITERAL;	/* flag for copying literal macro */
+		functionUse[0].c_cnt |= F_LITERAL;	/* flag for copying literal macro */
 		if (fsp) {
 		    lp1 = fsp->list;		/* start with head of pointer list */
 		} else

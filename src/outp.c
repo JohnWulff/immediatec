@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.83 2007/03/07 13:55:47 jw Exp $";
+"@(#)$Id: outp.c,v 1.84 2007/03/21 13:01:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -1322,13 +1322,13 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
     fprintf(Fp, "\
 \n\
 "); linecnt += 1;
-    if (functionUse[0] & F_CALLED) {		/* has any function been called ? */
-	if (functionUse[0] & F_ARITHM) {
+    if (functionUse[0].c_cnt & F_CALLED) {	/* has any function been called ? */
+	if (functionUse[0].c_cnt & F_ARITHM) {
 	    fprintf(Fp, "\
 #define iC_MV(n)	iC_gf->gt_rlist[n]->gt_new\n\
 ");	    linecnt += 1;
 	}
-	if (functionUse[0] & F_FFEXPR) {
+	if (functionUse[0].c_cnt & F_FFEXPR) {
 	    fprintf(Fp, "\
 #define iC_AV(n)	iC_gf->gt_list[n]->gt_new\n\
 #define iC_LV(n)	(iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n\
@@ -1336,7 +1336,7 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 #define iC_LA(n,v)	iC_assignL(iC_gf->gt_list[n], v)\n\
 ");	    linecnt += 4;
 	}
-	if (functionUse[0] & F_LITERAL) {
+	if (functionUse[0].c_cnt & F_LITERAL) {
 	    fprintf(Fp, "\
 #define iC_AVL(n)	_f0_1.gt_list[n]->gt_new\n\
 #define iC_LVL(n)	(_f0_1.gt_list[n]->gt_val < 0 ? 1 : 0)\n\
@@ -1586,7 +1586,7 @@ iC_Gt **	iC_list[] = { &iC_%s_list, 0, };\n\
 \n\
 "); linecnt += 1;
 
-    if (functionUse[0] & F_CALLED) {		/* has any function been called ? */
+    if (functionUse[0].c_cnt & F_CALLED) {	/* has any function been called ? */
 	fprintf(Fp, "\
 /********************************************************************\n\
  *\n\
@@ -2196,7 +2196,7 @@ copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
 	    if (mask == 02 &&			/* do not look in literals - mode 01 */
 		sscanf(lineBuf, cexeString[outFlag], &cFn) == 1) {
 		assert(cFn < functionUseSize);
-		flag = functionUse[cFn];	/* has this function or case been called ? */
+		flag = functionUse[cFn].c_cnt;	/* has this function or case been called ? */
 	    }
 	    if (flag || outfile == 0) {		/* skip functions or cases not called */
 		if (lcp) (*lcp)++;		/* count lines actually output */

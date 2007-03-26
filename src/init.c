@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.32 2007/03/10 11:27:23 jw Exp $";
+"@(#)$Id: init.c,v 1.33 2007/03/16 22:05:40 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -19,6 +19,7 @@ static const char init_c[] =
 #include	<windows.h>
 #endif
 #include	<stdio.h>
+#include	<assert.h>
 #include	"icc.h"
 #include	"comp.h"
 #include	"comp_tab.h"
@@ -77,18 +78,16 @@ static struct bi builtinsOld[] = {
 
 /********************************************************************
  *
- *  All standard built in symbols for iC
+ *  All standard built in symbols for iC - with all C keywords
  *
- *  extra C keywords cause a syntax error if used as immediate variables.
+ *  The C keywords cause a syntax error if used as immediate variables.
  *  The erroneous line in the iC code is marked with a pointer to the
  *  offending keyword.
- *
  *  Otherwise the C compiler would flag them with a syntax error message
  *  referring to the line number of the generated Gate in the C code
  *  produced by th iC compiler, which is harder to trace back to the source.
- *
- *  C keywords int if else extern return switch and void used in iC cause
- *  similar iC syntax errors if used as immediate variable names.
+ *  C keywords int if else extern return switch and void which are keywords
+ *  in iC as well cause syntax errors also if used as immediate variables.
  *
  *******************************************************************/
 
@@ -213,11 +212,31 @@ imm bit DLATCH(bit set, bit res, clock clk) {\n\
 ";
 
 /********************************************************************
+ *  Trial version with all int parameters - useful with ARITHMETIC optimisation.
+ *
+imm int SHR(int dat, clock dcl, int res, clock rcl) {\n\
+    return SHR_( res ? this : dat, dcl, res, rcl); }	// line 202\n\
+imm int SHSR(int dat, clock dcl, int set, clock scl, int res, clock rcl) {\n\
+    return SHSR_(set || res ? this : dat, dcl, set && !res, scl, res && !set, rcl); }\n\
+ *
+ *  alternate lines in genLines[]
+    "#line 202 \"init.c\"	// 'dat' in pre-compiled function block SHR",
+    "#line 204 \"init.c\"	// 'dat' in pre-compiled function block SHSR",
+    "#line 204 \"init.c\"	// 'set' in pre-compiled function block SHSR",
+    "#line 204 \"init.c\"	// 'res' in pre-compiled function block SHSR",
+ *  extra middle lines in genLineNums[]
+    204,
+    204,
+ *  Integration for pre-compile code with more than 2 expressions has been done
+ *  This code has been tested with #define GEN_COUNT 4 - jw 070316
+ *******************************************************************/
+
+/********************************************************************
  *
  *  The following function blocks generate C functions 1 and 2
  *  *** adjust line numbers to point to correct line in initialFunctions
- *  *** comment string is required in comp.y line 2538
- *  *** tab before comment is required in comp.y line 2586
+ *  *** comment string is required in comp.y at /has comment string after/
+ *  *** tab before comment is required in comp.y at /output comment string/
  *  *** adjust GEN_COUNT in comp.h to reflect correct number (used in comp.y)
  *
  *  genName and genLineNums are used to identify function lines in get()
@@ -229,15 +248,15 @@ const char *	genLines[]  = {
     "",
     "#line 202 \"init.c\"	/* in pre-compiled function block SHR */",
     "#line 204 \"init.c\"	/* in pre-compiled function block SHSR */",
-};
+};	/* last entry must have index [GEN_COUNT] */
 
-const char *	genName = "init.c";	/* must be the same as above */
+const char *	genName = "init.c";	/* must be the same name as above */
 
 int		genLineNums[] = {
     0,
-    202,				/* must be the same as above */
+    202,				/* must be the same lines as above */
     204,
-};
+};	/* last entry must have index [GEN_COUNT] */
 
 void
 init(void)				/* install constants and built-ins */
@@ -248,6 +267,9 @@ init(void)				/* install constants and built-ins */
     FILE *	H1p;
     char	funName[BUFS];
     char	lineBuf[BUFS];
+
+    assert(sizeof genLines/sizeof genLines[0] - 1 == GEN_COUNT);
+    assert(sizeof genLineNums/sizeof genLineNums[0] - 1 == GEN_COUNT);
 
     if ((iC_debug & 010000) && inpFN == 0) {
 	fprintf(iC_outFP, "initialFunctions:\n%s\n", initialFunctions);

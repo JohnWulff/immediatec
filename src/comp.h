@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.53 2007/03/10 10:26:19 jw Exp $";
+"@(#)$Id: comp.h,v 1.54 2007/03/21 13:33:29 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -157,25 +157,39 @@ extern jmp_buf	beginMain;
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
-extern int *	functionUse;		/* database to record function calls */
-extern int	functionUseSize;	/* dynamic size adjusted with realloc */
+
 /********************************************************************
- * functionUse[x] is a dynamic array, which records the number of
- * calls for each C function x = 1 2 3 ... generated. If a C function
- * is generated in an iC function definition, which is never called,
- * this count is 0 and the function is not copied into the generated C code.
+ * functionUse[] is a dynamic array of records with 2 fields: c_cnt, c_expr.
  *
- * functionUse[0] records the type of function called:
+ * functionUse[x].c_cnt - records the number of calls for each C function
+ *   x = 1 2 3 ... generated. If a C function is generated in an iC function
+ *   definition, which is never called, this count is 0 and the function is
+ *   not copied into the generated C code.
+ *
+ * functionUse[x].c_expr - points to a copy of the C expression returned
+ *   by the function. This is used to produce a better listing of cloned
+ *   functions and is vital information for optimising arithmetic functions.
+ *
+ * functionUse[0].c_cnt or functionUse->c_cnt records the type of function called:
  *	bit	value	description
  * F_CALLED	01	any type of call
  * F_ARITHM	02	imm reference in an immediate arithmetic expression
  * F_FFEXPR	04	imm reference in an immediate if else or switch
  * F_LITERAL	010	imm reference generated in a literal block
  *******************************************************************/
+
 #define F_CALLED	01
 #define F_ARITHM	02
 #define F_FFEXPR	04
 #define F_LITERAL	010
+
+typedef struct FuUse {			/* Function call count and C expression */
+    int		c_cnt;			/* call count */
+    char *	c_expr;			/* C expression */
+} FuUse;
+
+extern FuUse *	functionUse;		/* database to record function calls */
+extern int	functionUseSize;	/* dynamic size adjusted with realloc */
 
 #ifndef LMAIN
 extern char *	szNames[];
@@ -255,7 +269,7 @@ extern const char initialFunctions[];	/* iC system function definitions */
 extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */
 extern const char * genName;
 extern int	    genLineNums[];
-#define GEN_COUNT 2			/* number of C functions in precompileds */
+#define GEN_COUNT 2			/* number of C functions in precompiled functions */
 
 					/*   symb.c   */
 #define	HASHSIZ 54*16			/* for new sorted list algorithm */

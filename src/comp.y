@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.94 2007/03/10 15:02:42 jw Exp $";
+"@(#)$Id: comp.y,v 1.95 2007/03/21 12:54:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -809,6 +809,10 @@ dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
 		int	yn;
 		int	ioTyp;
 		$$.f = $1.f; $$.l = $3.l;
+		if ($1.v->type == ARNC || $1.v->type == LOGC) {
+		    ierror("immC declaration may not be combined with an immediate assignment:", $1.v->name);
+		    $1.v->type = iFunSymExt ? UDF : ERR;
+		}
 		if (sscanf($1.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
 		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
 		} else {
@@ -1396,7 +1400,7 @@ lexpr	: aexpr ',' aexpr		{
 
 lBlock	: LHEAD			{ ccfrag = '%'; ccFP = T1FP; }	/* %{ literal block %} */
 		CCFRAG '}'	{ $$.v = 0;
-		functionUse[0] |= F_CALLED;
+		functionUse[0].c_cnt |= F_CALLED;
 	    }
 	;
 
@@ -2906,6 +2910,7 @@ get(FILE* fp, int x)
     size_t	iniLen;
     char	tempNM[BUFS];
     char	tempBuf[TSIZE];
+    static int	gen_count = 0;
 
     prevflag = lineflag;
     while (getp[x] == 0 || (c = *getp[x]++) == 0) {
@@ -3030,12 +3035,32 @@ get(FILE* fp, int x)
 		savedLineno = lineno;
 		lineno = temp1 - 1;
 		if (slen == 3 &&		/* has comment string after #line x "init.c" */
-		    !( (iC_debug & 010000) ||	/* Assumes 2 system expressions */
-		    (functionUse[1] && temp1 == genLineNums[1] && strcmp(tempNM, genName) == 0) ||	/* SHR */
-		    (functionUse[2] && temp1 == genLineNums[2] && strcmp(tempNM, genName) == 0) )	/* SHSR */
-		) {
-		    continue;			/* no listing output for system C CODE */
+		    strcmp(tempNM, genName) == 0) {	/* in the system file "init.c" */
+		    int	i;
+		    
+		    gen_count++;		/* count C functions in pre-compile code */
+		    if (iC_debug & 010000) {	/* generate listing of compiler */
+			goto listCfunction;	/* internal functions*/
+		    }
+		    for (i = 1; i <= GEN_COUNT; i++) {
+			/********************************************************
+			 * System C CODE
+			 * For function blocks with more than 1 C function, the
+			 * same test will be repeated. All C functions for the
+			 * function block will be listed if the function block is
+			 * in use on the basis of the first entry for the line.
+			 ********************************************************/
+			if (temp1 == genLineNums[i] &&	/* find i for this line */
+			    functionUse[i].c_cnt) {	/* is function block in use? */
+			    goto listCfunction;		/* yes */
+			}
+		    }
+		    continue;			/* no listing for system C CODE not in use */
+		} else if (gen_count) {
+		    assert(gen_count == GEN_COUNT);	/* correct in init.c */
+		    gen_count = 0;
 		}
+	      listCfunction:
 		strncpy(inpNM, tempNM, BUFS);	/* defer changing name until used */
 		if (iC_debug & 06) {
 		    if (lexflag & C_FIRST) {
@@ -3070,11 +3095,11 @@ get(FILE* fp, int x)
 	     ********************************************************/
 	    if ((lexflag & C_LINE) == 0) {
 		if (cFn && (iC_debug & 0402) != 0402) {
-		    if (cFn > GEN_COUNT || functionUse[cFn]) {	/* Assumes 2 system expressions */
+		    if (cFn > GEN_COUNT || functionUse[cFn].c_cnt || (iC_debug & 010000)) {
 			fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]);
 			if (cFn <= GEN_COUNT) {
 			    const char * cp = strchr(genLines[cFn], '\t');
-			    fprintf(iC_outFP, "\t%s\n", cp);
+			    fprintf(iC_outFP, "\t%s\n", cp);	/* output comment string */
 			}
 		    }
 		    cFn = 0;

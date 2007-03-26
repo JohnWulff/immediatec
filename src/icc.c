@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.55 2007/03/10 12:00:00 jw Exp $";
+"@(#)$Id: icc.c,v 1.56 2007/03/21 12:49:09 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -402,8 +402,8 @@ main(
     iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
 #endif	/* EFENCE */
     functionUseSize = FUNUSESIZE;	/* initialise function use database */
-    functionUse = (int*)realloc(NULL, functionUseSize * sizeof(int));
-    memset(functionUse, '\0', functionUseSize);
+    functionUse = (FuUse*)realloc(NULL, FUNUSESIZE * sizeof(FuUse));
+    memset(functionUse, '\0', FUNUSESIZE * sizeof(FuUse));
     T0FP = stdin;			/* input file pointer */
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.68 2007/03/10 10:26:26 jw Exp $";
+"@(#)$Id: genr.c,v 1.69 2007/03/22 20:24:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -33,7 +33,7 @@ static const char genr_c[] =
 #define w(lp)	(lp->le_val) ? '~' : ' '
 #define EBSIZE	2048
 
-int *		functionUse = NULL;	/* database to record function calls */
+FuUse *		functionUse = NULL;	/* database to record function calls */
 int		functionUseSize = 0;	/* dynamic size adjusted with realloc */
 
 static Symbol *	templist;		/* temp list of un-named symbols */
@@ -41,8 +41,10 @@ static int	ttn;			/* for generating temp f object name */
 #if YYDEBUG
 static int	tn;
 #endif
-static char	eBuf[EBSIZE];		/* temporary expression text buffer */
-static char *	ePtr = 0;		/* temporary expression buffer pointer */
+static char	eBuf[EBSIZE];		/* temporary C expression text buffer */
+static char	gBuf[EBSIZE];		/* temporary clone expression text buffer */
+static char *	ePtr = 0;		/* temporary C expression buffer pointer */
+static char *	gPtr = 0;		/* temporary clone expression buffer pointer */
 static char *	eEnd = 0;		/* end of temporary expression buffer */
 static char *	t_first = 0;
 static char *	t_last = 0;
@@ -51,6 +53,7 @@ static Symbol *	iCallHead = 0;		/* function head seen at start of imm call */
 static Symbol *	varList = 0;		/* list of temp Symbols while compiling function */
 static List_e *	stmtList = 0;		/* list of statement Symbols making function body */
 static int	ffexprFlag = 0;		/* if - else or switch seen in function */
+static Symbol *	caList[PPGATESIZE+1];	/* auxiliary input gate list for copyArithmetic */
 
 /********************************************************************
  *
@@ -436,77 +439,147 @@ op_not(List_e * right)			/* logical negation */
 
 /********************************************************************
  *
- *	copy arithmetic up to the current expression or constant;
- *	then copy in the indexed macro of the expression or constant
+ *  STANDARD C EXPRESSION
+ *	Copy arithmetic from t_first to the current C expression or constant
+ *	(lp->le_first) into eBuf and gBuf. Output this part of the expression
+ *	into the listing followed by the name of the input and // x
+ *	Copy the indexed macro iC_MV(x) of the expression or constant
+ *	into eBuf, which finishes the C expression up to this point.
+ *	For a generated function copy "\xff\<x>" into gBuf, which is easier
+ *	to parse as a cloned expression, than the full C expression.
+ *	Move t_first to point to after the end of the current subexpression.
+ *
+ *  CLONED C EXPRESSION
+ *	For a cloned Gate, cFn is set.
+ *	Copy ePtr up to the first occurence of "\xff\<x>" (check that
+ *	n == x). Then output this into the listing, again followed
+ *	by the current name of the input (real parameter) and // x
+ *	Move ePtr to point to after "\xff\<x>". Look ahead for the next
+ *	occurence of "\xff\<x>" and output a line for a duplicate, if x
+ *	is < n+1. Repeat until x == n+1 or string terminates. (x > n+1
+ *	is an error).
  *
  *******************************************************************/
 
 static void
-copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int gt_input, int sflag)
+copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 {
-    int typ;
+    int		typ;
+    char *	cp;
+    List_e *	tlp;
 
     if (gp->ftype == ARITH &&
 	((typ = sp->type) == ARN || typ == ARNF) &&
 	lp->le_val != (unsigned) -1) {
-	char *	cp = ePtr;
-
-	if (t_first) {				/* end of arith */
-	    assert(t_first >= iCbuf && lp->le_first < &iCbuf[IMMBUFSIZE]);
-	    while (t_first < lp->le_first) {
-		if (*t_first != '#') {		/* transmogrified '=' */
-		    *ePtr++ = *t_first;
-		}
-		t_first++;
-	    }
-	}
-	*ePtr = 0;
-	if (gp->type == NCONST && strcmp(gp->name, "iConst") == 0) {
-	    if (t_first) {				/* end of arith */
-		if (lp->le_first == 0) lp->le_first = t_first;
-		if (lp->le_last == 0) lp->le_last = t_last;
-		assert(t_first == lp->le_first);
-		assert(t_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
-		while (t_first < lp->le_last) {
+	assert(ePtr && gPtr);
+	cp = ePtr;
+	if (cFn == 0) {				/* STANDARD C EXPRESSION */
+	    if (t_first) {					/* end of arith */
+		assert(t_first >= iCbuf && lp->le_first < &iCbuf[IMMBUFSIZE]);
+		while (t_first < lp->le_first) {
 		    if (*t_first != '#') {		/* transmogrified '=' */
-			*ePtr++ = *t_first;
+			*gPtr++ = *ePtr++ = *t_first;
 		    }
 		    t_first++;
 		}
 	    }
-	    *ePtr = 0;
-	    if (iC_debug & 04) {
-		int	val;
-		if ((val = lp->le_val) == 0) {
-		    fprintf(iC_outFP, "\t\t\t%s;\t// (%d)", cp, c_number + 1);
-		} else {
-		    /* function number from function definition */
-		    fprintf(iC_outFP, "\t\t\t%s;\t// (%d)", cp, val >> 8);
-		}
-	    }
-	} else {
-	    if (iC_debug & 04) {
-		/* only logic gate or SH can be aux expression */
-		if (sflag == 1) {
-		    fprintf(iC_outFP, "\t\t\t\t\t");
-		} else
-		if (sflag) {
-		    assert(sflag == 0200);
-		    if (sp->ftype == GATE) {
-			putc('\t', iC_outFP);
+	    *ePtr = '\0';
+	    if (gp->type == NCONST && strcmp(gp->name, "iConst") == 0) {
+		if (t_first) {				/* end of arith */
+		    if (lp->le_first == 0) lp->le_first = t_first;
+		    if (lp->le_last == 0) lp->le_last = t_last;
+		    assert(t_first == lp->le_first);
+		    assert(t_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
+		    while (t_first < lp->le_last) {
+			if (*t_first != '#') {		/* transmogrified '=' */
+			    *gPtr++ = *ePtr++ = *t_first;
+			}
+			t_first++;
 		    }
-		    putc('\t', iC_outFP);
-		} else {
-		    fprintf(iC_outFP, "\t\t\t");
 		}
-		fprintf(iC_outFP, "%s%s	// %d",
-		    cp, gp->name, gt_input);	/* expression till now */
-		if (sflag == 1) {
-		    fprintf(iC_outFP, "\n");
+		*ePtr = '\0';
+		if (iC_debug & 04) {
+		    fprintf(iC_outFP, "\t\t\t%s;\t// (%d)", cp, c_number + 1);
+		}
+	    } else {
+		if (iC_debug & 04) {
+		    /* only logic gate or SH can be aux expression */
+		    if (sflag == 1) {
+			fprintf(iC_outFP, "\t\t\t\t\t");	/* auxiliary call for duplicate link */
+		    } else
+		    if (sflag) {
+			assert(sflag == 0200);
+			if (sp->ftype == GATE) {
+			    putc('\t', iC_outFP);
+			}
+			putc('\t', iC_outFP);
+		    } else {
+			fprintf(iC_outFP, "\t\t\t");
+		    }
+		    fprintf(iC_outFP, "%s%s	// %d",
+			cp, gp->name, x);			/* expression till now */
+		    if (sflag == 1) {
+			fprintf(iC_outFP, "\n");		/* auxiliary call for duplicate link */
+		    }
+		}
+		assert(ePtr + 10 < eEnd);			/* checks previous copying */
+		ePtr += sprintf(ePtr, "iC_MV(%d)", x);
+		gPtr += sprintf(gPtr, "\xff%c", x);		/* bound to fit since shorter */
+		t_first = lp->le_last;			/* skip current expression */
+	    }
+	} else {				/* CLONED C EXPRESSION */
+	    char *	ep;
+	    int		n;
+	    int		y;
+
+	    /* cp points to current start of cloning expression in eBuf */
+	    ep = ePtr = strchr(cp, '\xff');
+	    if (ePtr) {
+		y = *++ep;				/* numeric byte value */
+		ep++;
+	    } else {
+		ep = ePtr = cp + strlen(cp);		/* no more macros */
+	    }
+	    *ePtr = '\0';				/* modify \xff to \0 */
+	    if (gp->type == NCONST && strcmp(gp->name, "iConst") == 0) {
+		assert(ePtr == ep);
+		if (iC_debug & 04) {
+		    /* function number from function definition */
+		    fprintf(iC_outFP, "\t\t\t%s;	// (%d)", cp, cFn);
+		}
+	    } else {
+		assert(y == x);
+		if (iC_debug & 04) {
+		    if (sflag) {
+			assert(sflag == 0200);
+			if (sp->ftype == GATE) {
+			    putc('\t', iC_outFP);
+			}
+			putc('\t', iC_outFP);
+		    } else {
+			fprintf(iC_outFP, "\t\t\t");
+		    }
+		    fprintf(iC_outFP, "%s%s	// %d",
+			cp, gp->name, x);		/* expression till now */
+		}
+		while (1) {
+		    ePtr = strchr(ep, '\xff');		/* look ahead to next macro */
+		    if (ePtr && (y = *(ePtr+1)) != x + 1) {
+			assert(y <= x);			/* should never be ahead */
+			gp = caList[y];
+			assert(gp);
+			if (iC_debug & 04) {
+			    *ePtr = '\0';		/* modify \xff to \0 */
+			    fprintf(iC_outFP, "\n\t\t\t\t\t%s%s	// %d",
+				ep, gp->name, y);	/* repeated term */
+			}
+			ep = ePtr + 2;
+			continue;
+		    }
+		    ePtr = ep;
+		    break;
 		}
 	    }
-	    ePtr += snprintf(ePtr, eEnd - ePtr, "iC_MV(%d)", gt_input);
-	    t_first = lp->le_last;			/* skip current expression */
 	}
     }
 } /* copyArithmetic */
@@ -522,14 +595,14 @@ writeCexeString(FILE * oFP, int cn)
 {
     fprintf(oFP, cexeString[outFlag], cn);
     while (cn >= functionUseSize) {
-	functionUse = (int*)realloc(functionUse,
-	    (functionUseSize + FUNUSESIZE) * sizeof(int));
-	memset(&functionUse[functionUseSize], '\0', FUNUSESIZE * sizeof(int));
+	functionUse = (FuUse*)realloc(functionUse,
+	    (functionUseSize + FUNUSESIZE) * sizeof(FuUse));
+	memset(&functionUse[functionUseSize], '\0', FUNUSESIZE * sizeof(FuUse));
 	functionUseSize += FUNUSESIZE;
     }
-    if (iFunSymExt == 0) {		/* defer freeing till called */
-	functionUse[0] |= F_CALLED;	/* flag for copying temp file */
-	functionUse[cn]++;		/* free this function for copying */
+    if (iFunSymExt == 0) {			/* defer freeing till called */
+	functionUse[0].c_cnt |= F_CALLED;	/* flag for copying temp file */
+	functionUse[cn].c_cnt++;		/* free this function for copying */
     }
 } /* writeCexeString */
 
@@ -744,16 +817,35 @@ op_asgn(				/* asign List_e stack to links */
 	List_e*	saveBlist = 0;		/* prevent warning - only used when iFunSymExt != 0 */
 	List_e*	plp;
 	int	gt_input;
+	int	len;
 	char *	cp;
 	int	cFn = 0;
 
 	ePtr = eBuf;			/* temporary expression buffer pointer */
 	eEnd = &eBuf[EBSIZE];		/* end of temporary expression buffer */
+	gPtr = gBuf;			/* temporary cloned expression buffer pointer */
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {
 	    memset(eBuf, '\0', EBSIZE);
+	    memset(gBuf, '\0', EBSIZE);
 	}
 #endif
+	/********************************************************************
+	 * Prepare a list of input pointers in caList[] for copyArithmetic,
+	 * while the list is not reversed yet.
+	 *******************************************************************/
+	if (sp->type == ARN || sp->type == ARNF) {
+	    memset(caList, '\0', (PPGATESIZE+1) * sizeof(Symbol *));	/* clear for check */
+	    for (lp = sp->u_blist; lp; lp = lp->le_next) {
+		gp = lp->le_sym;
+		gt_input = lp->le_val;
+		if (gt_input != 0 && gt_input != -1) {
+		    gt_input &= 0xff;
+		    assert(gt_input <= PPGATESIZE);
+		    caList[gt_input] = gp;
+		}
+	    }
+	}
 	if (iC_debug & 04) {
 	    fprintf(iC_outFP, "\n");
 	}
@@ -855,15 +947,20 @@ op_asgn(				/* asign List_e stack to links */
 			    cFn = val;		/* case number from function */
 			    if (iFunSymExt == 0) {
 				assert(cFn < functionUseSize); /* adjusted when function generated */
-				functionUse[0] |= F_CALLED; /* flag for copying temp file*/
-				functionUse[cFn]++;	/* free this function for copying */
+				functionUse[0].c_cnt |= F_CALLED; /* flag for copying temp file*/
+				functionUse[cFn].c_cnt++;	/* free this function for copying */
 			    }
 			} else {
 			    assert(cFn == val);		/* other members must be the same */
 			}
+			assert(cFn > 0 && cFn < functionUseSize);
+			cp = functionUse[cFn].c_expr;	/* C expression prepared for cloning */
+			len = strlen(cp);
+			assert(eBuf + len < eEnd);
+			strncpy(eBuf, cp, len+1);	/* copy cloning expression + terminator */
 		    }
 		}
-		if (iFunSymExt == 0) {		/* global reduction only */
+		if (iFunSymExt == 0) {		/* GLOBAL REDUCTION */
 		    if (sp->type == ALIAS) {
 			/* var was made an ALIAS because of FF negation */
 			for (lpp = &gp->list; (tlp = *lpp) != 0; ) {
@@ -885,13 +982,17 @@ op_asgn(				/* asign List_e stack to links */
 			if ((tlp = gp->list) == 0) {
 			    gp->list = lp;		/* this is the first Symbol */
 			} else {
-			    /* loop to find duplicate link (possibly inverted) */
+			    /********************************************************************
+			     * loop to find duplicate link (possibly inverted)
+			     * start at beginning and test for duplicate up to end
+			     * put new Symbol after last unless duplicate
+			     *******************************************************************/
 			  loop:				/* special loop with test in middle */
 			    if (tlp->le_sym == sp) {
 				if (gp->ftype == OUTW || gp->ftype == OUTX) {
 				    warning("input equals output at output gate:", gp->name);
 				} else if (gp->ftype == ARITH || tlp->le_val == lp->le_val) {
-				    copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 1);
+				    copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 1, cFn);
 				    sy_pop(lp);		/* ignore duplicate link */
 				    goto nextInputLink;
 				} else {
@@ -906,13 +1007,17 @@ op_asgn(				/* asign List_e stack to links */
 			}
 			lp->le_sym = sp;		/* completely symmetrical */
 		    }
-		} else					/* function reduction */
+		} else				/* FUNCTION BLOCK REDUCTION */
 		if (sp->type != ALIAS) {		/* ALIAS linked to u_blist is OK */
 		    /* test very carefully so no global Symbols are linked */
 		    if (gp->list == 0 && gp->u_blist &&
 			((typ1 = gp->type) == ARN || typ1 == ARNF)) {
 			gp->list = lp;			/* reverse first link for arith text */
 		    }
+		    /********************************************************************
+		     * loop to find duplicate link (possibly inverted)
+		     * start at beginning and test for duplicate up to current link
+		     *******************************************************************/
 		    for (tlp = saveBlist; tlp && tlp != lp; tlp = tlp->le_next) {
 			if (tlp->le_sym == gp) {
 			    if (gp->ftype == OUTW || gp->ftype == OUTX) {
@@ -920,7 +1025,7 @@ op_asgn(				/* asign List_e stack to links */
 			    } else if (gp->ftype == ARITH || tlp->le_val == lp->le_val) {
 				assert(plp);		/* cannot be first link in chain */
 				plp->le_next = sp->u_blist;	/* relink the chain */
-				copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 1);
+				copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 1, cFn);
 				sy_pop(lp);		/* ignore duplicate link */
 				goto nextInputLink;
 			    } else {
@@ -1001,7 +1106,7 @@ op_asgn(				/* asign List_e stack to links */
 		    fprintf(iC_outFP, "%d", lp->le_val);
 		}
 	    }
-	    copyArithmetic(lp, sp, gp, gt_input, sflag); /* with current expression */
+	    copyArithmetic(lp, sp, gp, gt_input, sflag, cFn); /* with current expression */
 	    if (iC_debug & 04) {
 		fprintf(iC_outFP, "\n");
 		sflag = iC_debug & 0200;
@@ -1017,16 +1122,18 @@ op_asgn(				/* asign List_e stack to links */
 	     * copy rest of arithmetic expression and finalise C-Code
 	     *******************************************************************/
 	    cp = ePtr;
-	    if (t_first) {
-		assert(t_first >= iCbuf && t_last < &iCbuf[IMMBUFSIZE]);
-		while (t_first < t_last) {
-		    if (*t_first != '#') {		/* transmogrified '=' */
-			*ePtr++ = *t_first;
+	    if (cFn == 0) {
+		if (t_first) {
+		    assert(t_first >= iCbuf && t_last < &iCbuf[IMMBUFSIZE]);
+		    while (t_first < t_last) {
+			if (*t_first != '#') {		/* transmogrified '=' */
+			    *gPtr++ = *ePtr++ = *t_first;
+			}
+			t_first++;
 		    }
-		    t_first++;
 		}
+		*gPtr = *ePtr = '\0';			/* terminate expression strings */
 	    }
-	    *ePtr++ = 0;
 							/* start case or function */
 	    if (sp->ftype != OUTW) {			/* output cexe function */
 		assert(gp);				/* gp must be initialised */
@@ -1035,10 +1142,10 @@ op_asgn(				/* asign List_e stack to links */
 			assert(strlen(cp) == 0);
 			plp->le_val = 0;		/* correct iC_l_[] generation */
 		    } else {
-			functionUse[0] |= F_ARITHM;	/* flag for copying macro */
+			functionUse[0].c_cnt |= F_ARITHM;  /* flag for copying macro */
 			writeCexeString(T1FP, ++c_number); /* and record for copying */
 			if (lineno == 0) {
-			    assert(c_number <= 2);
+			    assert(c_number <= GEN_COUNT);
 			    fprintf(T1FP, "%s\n", genLines[c_number]);
 			} else {
 			    fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
@@ -1048,9 +1155,17 @@ op_asgn(				/* asign List_e stack to links */
 			if (iC_debug & 04 && (typ != NCONST || gp->u_val == 0)) {
 			    fprintf(iC_outFP, "\t\t\t\t\t%s;	// (%d)\n", cp, c_number);
 			}
+			if (iFunSymExt) {
+			    len = strlen(gBuf);		/* C expression prepared for cloning */
+			    assert(len);
+			    cp = iC_emalloc(len + 1);	/* +1 for '\0' */
+			    strncpy(cp, gBuf, len);
+			    assert(c_number && c_number < functionUseSize);
+			    functionUse[c_number].c_expr = cp;
+			}
 		    }
 		} else if (iC_debug & 04 && (typ != NCONST || gp->u_val == 0)) {
-		    fprintf(iC_outFP, "\t\t\t\t\t;	// (%d)\n", cFn);
+		    fprintf(iC_outFP, "\t\t\t\t\t%s;	// (%d)\n", cp, cFn);
 		}
 	    }
 	}
@@ -2769,8 +2884,8 @@ cloneFunction(Symbol * functionHead, List_e * plp)
 		int	cFn;
 		cFn = ssp->u_blist->le_val >> 8; /* function number */
 		assert(cFn && cFn < functionUseSize);
-		functionUse[0] |= F_CALLED;	/* flag for copying temp file*/
-		functionUse[cFn]++;		/* free this function for copying */
+		functionUse[0].c_cnt |= F_CALLED;	/* flag for copying temp file*/
+		functionUse[cFn].c_cnt++;		/* free this function for copying */
 		sy_pop(lp);			/* free link before target is unlinked */
 		ssp->list = 0;			/* free for next cloning */
 		uninstall(sv.v);		/* delete temporary Symbol */
