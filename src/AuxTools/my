@@ -2,23 +2,24 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-ASRiIJ6xzh] [-d<opt>]' >&2
-    echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
-    echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
-    echo '	-S	strict compile - all immediate variables must be declared' >&2
-    echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
-    echo '	-PP	pedantic-error: error if variable contains $' >&2
-    echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
-    echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
-    echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
-    echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
-    echo '	-6	produce logic generation listing file.lst6' >&2
-    echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
-    echo '	-z	echo compiler calls with all options for debugging' >&2
-    echo '	-h	this help text' >&2
-    echo 'uses immcc -d76 -d<opt> x.ic to make each line of the list pp.lt' >&2
-    echo 'uses immcc -d74 -d<opt> -o x.c x.ic to make each line of the list pp.lt' >&2
-    echo '	$Id: my,v 1.12 2005/09/30 15:53:50 jw Exp $' >&2
+  echo "Usage:	${0##*/} [-ASRiIJ6xzh][ -d<opt>][ -O<level>]" >&2
+  echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
+  echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
+  echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
+  echo '	-PP	pedantic-error: error if variable contains $' >&2
+  echo '	-O <l>  optimisation -O0 none -O1 bit -O2 arithmetic -O3 both (default)' >&2
+  echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
+  echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
+  echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
+  echo '	-6	produce logic generation listing file.lst6' >&2
+  echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
+  echo '	-z	echo compiler calls with all options for debugging' >&2
+  echo '	-h	this help text' >&2
+  echo 'uses immcc -d76 -d<opt> -O<level> x.ic to make each line of the list pp.lt' >&2
+  echo 'uses immcc -d74 -d<opt> -O<level> -o x.c x.ic to make each line of the list pp.lt' >&2
+  echo '	$Id: my,v 1.13 2007/04/02 18:16:31 jw Exp $' >&2
 }
 
 v=""
@@ -29,41 +30,26 @@ A=""
 I=""
 g=""
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case "$option" in
-	    d*)	option=${option#?}
-		if [ -n "$option" ]; then
-		    v="$v -d$option"
-		    d="$d -d$option"
-		else
-		    echo "-d must specify an option";
-		    usage; exit 254;
-		fi
-		break;;
-	    A*)	A="$A -A";;
-	    S*)	A="$A -S";;
-	    P*)	A="$A -P";;
-	    R*)	A="$A -R";;
-	    i*) I=" -i";;
-	    I*) I=" -I";;
-	    J*) I=" -J";;
-	    6*) g="6";;
-	    x*)	x=1;v="$v -d4000";;
-	    z*)	z=1;;
-	    h*)	usage; exit 255;;
-	    *)	echo "unknown flag -$option";
-		usage; exit 255;;
-	    esac
-	    option=${option#?}
-	done;;
-    *)	break;;
+while getopts ":d:ASO:PRiIJ6xzh" opt; do
+    case $opt in
+    d ) v="$v -d$OPTARG"; d="$d -d$OPTARG";;
+    A )	A="$A -A";;
+    S )	A="$A -S";;
+    O )	A="$A -O$OPTARG";;
+    P )	A="$A -P";;
+    R )	A="$A -R";;
+    i ) I=" -i";;
+    I ) I=" -I";;
+    J ) I=" -J";;
+    6 ) g="6";;
+    x )	x=1;v="$v -d4000";;
+    z )	z=1;;
+    h )	usage; exit 0;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
-    shift
 done
+shift $(($OPTIND - 1))
+
 if [ -f pp.lt ]; then
     if [ -n "$g" ]; then
 	for file in $(cat pp.lt); do
