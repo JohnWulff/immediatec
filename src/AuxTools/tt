@@ -8,13 +8,13 @@
 
 version()
 {
-  echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: tt,v 1.23 2007/03/26 07:36:40 jw Exp $'
+  echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
+  echo '$Id: tt,v 1.24 2007/04/03 06:42:59 jw Exp $' >&2
 }
 
 usage()
 {
-  echo "Usage: $name [-clrASP[P]RiIJ6x:f:F:zvh]" >&2
+  echo "Usage: $name [-clrASP[P]RiIJ6x:f:F:zvh][ -O<level>]" >&2
   echo "          [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]" >&2
   echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
@@ -28,13 +28,14 @@ usage()
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
   echo '	-PP	pedantic-error: error if variable contains $' >&2
+  echo '	-O <l>  optimisation -O0 none -O1 bit -O2 arithmetic -O3 both (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
   echo '	-6	produce logic generation listing file.lst6 in Test2 etc' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
-  echo '	-v	author and version information'
+  echo '	-v	author and version information' >&2
   echo '	-h	this help text' >&2
   echo '	--	all further arguments are treated as files' >&2
   echo
@@ -87,7 +88,7 @@ G=""
 T="test"
 head=""
 
-while getopts ":cm:d:lrASPRiIJ6x:f:F:zvh" opt; do
+while getopts ":cm:d:lrASO:PRiIJ6x:f:F:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
@@ -96,6 +97,7 @@ while getopts ":cm:d:lrASPRiIJ6x:f:F:zvh" opt; do
     r )	r="1";;
     A )	A="$A -A";;
     S )	A="$A -S";T="strict";;
+    O )	A="$A -O$OPTARG";;
     P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
     R )	A="$A -R";;
     i ) I=" -i";;
@@ -176,7 +178,7 @@ for t in Test1 Test9; do
 			    elif [ -f $file ]; then
 				ln -s $file .
 			    else
-				echo "**** Error: $name has strange file $file - not backed up"
+				echo "**** Error: $name has strange file $file - not backed up" >&2
 			    fi
 			done
 			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
@@ -231,7 +233,7 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10; do
 			    elif [ -f $file ]; then
 				ln -s $file .
 			    else
-				echo "**** Error: $name has strange file $file - not backed up"
+				echo "**** Error: $name has strange file $file - not backed up" >&2
 			    fi
 			done
 			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
