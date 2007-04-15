@@ -3,10 +3,14 @@
 usage()
 {
     echo "Make all iC components for debugging and install them" >&2
-    echo "Usage $name[ -iudszh] [[<iCmake_options>] <iC_sources>]" >&2
+    echo "Usage $name[ -iudszeh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
+    echo 'Usage:	'${0##*/}' [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]' >&2
     echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
     echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
+    echo '	-D<OPT>	make all targets with <OPT> defined' >&2
+    echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
+    echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
     echo '	-d	make with -DDEQ Gate option (make clean required first)' >&2
     echo '		double ended queue processing is slightly faster' >&2
     echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
@@ -18,13 +22,14 @@ usage()
     echo '	-h	this help text' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: m,v 1.7 2007/02/23 11:07:08 jw Exp $Id: m,v 1.7 2007/02/23 11:07:08 jw Exp $' >&2
+    echo '$Id: m,v 1.8 2007/04/15 07:40:55 jw Exp $Id: m,v 1.8 2007/04/15 07:40:55 jw Exp $' >&2
 }
 
 name=${0##*/}
-udsz=''
+udsze=''
+dw=''
 
-while getopts ":iudszh" opt; do
+while getopts ":iudszeD:W:h" opt; do
     case $opt in
     i )
 	echo "Enter root:" >&2
@@ -34,18 +39,21 @@ while getopts ":iudszh" opt; do
 	sudo -k
 	exit
 	;;
-    u ) udsz="${udsz}u";;
-    d ) udsz="${udsz}d";;
-    s ) udsz="${udsz}s";;
-    z ) udsz="${udsz}z";;
+    u ) udsze="${udsze}u";;
+    d ) udsze="${udsze}d";;
+    s ) udsze="${udsze}s";;
+    z ) udsze="${udsze}z";;
+    e ) udsze="${udsze}e";;
+    D ) dw="$dw -D$OPTARG";;
+    W ) dw="$dw -W$OPTARG";;
     h )	usage; exit 127;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
 
-echo "### makeAll -qgcrtlm$udsz"
-./makeAll -qgcrtlm$udsz
+echo "### makeAll -qgcrtlm$udsze$dw"
+./makeAll -qgcrtlm$udsze$dw
 echo "### make install"
 make install
 if [ $# -gt 0 ]; then
