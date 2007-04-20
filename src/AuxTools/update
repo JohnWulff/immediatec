@@ -1,11 +1,11 @@
 #! /bin/bash
-# $Id: update,v 1.4 2007/03/02 09:00:45 jw Exp $
+# $Id: update,v 1.5 2007/04/20 07:51:36 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
 vn='100'	## save directory start numeral
 wp='W'		## branch directory prefix
-wn='1'		## branch directory start numeral
+wn='01'		## branch directory start numeral - range 01 - 99
 vpath="$vp*"
 n=''
 
@@ -80,7 +80,7 @@ if locked -q; then
 	    done
 	    if [ -z $db ]; then
 		previous=$head	# wpath is empty
-		m="$wn"		# usually 1 - can be 0
+		m="$wn"		# usually 01 - can be 00, 0 or 1 (1 - 9 only)
 	    else
 		m=${db#$w*}
 		previous="$w$m"
