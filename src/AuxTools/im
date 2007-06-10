@@ -11,7 +11,7 @@ usage ()
   echo '	-x	auxiliary files .iC_list1.h etc not deleted; no pplstfix' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: im,v 1.4 2007/03/28 10:01:31 archiv Exp $' >&2
+  echo '	$Id: im,v 1.5 2007/06/10 13:40:13 archiv Exp $' >&2
 }
 
 name=${0##*/}
@@ -41,17 +41,16 @@ for f in $*; do
     if [ "$file" = "$base" ]; then
 	file="$base.ic"
     fi
-    echo $file
     if [ -f "$file" ]; then
 	if [ $z -eq 1 ]; then
 	    echo "$ic$A -d474(6) -o $base.c -l $base.lst $file"
+	else
+	    echo $file
 	fi
 	$ic$A -d474 -o $base.c -l $base.lst $file
 	$ic$A -d476 -o $base.c -l $base.lst6 $file
     else
-	if [ $q -eq 0 ]; then
-	    echo "Error: iC file '$file' does not exist" >&2
-	fi
+	echo "Error: iC file '$file' does not exist" >&2
     fi
 done
 
