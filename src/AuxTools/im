@@ -3,15 +3,16 @@
 usage ()
 {
   echo 'Usage:' >&2
-  echo "  $name[ -e xxx][ -ASxzh]" >&2
+  echo "  $name[ -gASxzh][ -e xxx]" >&2
   echo "	-e xxx	execute with iC compiler xxx (default $ic)" >&2
+  echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-O <l>  optimisation -O0 none -O1 bit -O2 arithmetic -O3 both (default)' >&2
   echo '	-x	auxiliary files .iC_list1.h etc not deleted; no pplstfix' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: im,v 1.5 2007/06/10 13:40:13 archiv Exp $' >&2
+  echo '	$Id: im,v 1.6 2007/06/11 22:10:29 jw Exp $' >&2
 }
 
 name=${0##*/}
@@ -21,9 +22,10 @@ O=""
 x=0
 z=0
 
-while getopts ":e:ASO:xzh" opt; do
+while getopts ":e:gASO:xzh" opt; do
     case $opt in
     e )	ic="$OPTARG";;
+    g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";;
     O )	A="$A -O$OPTARG";;
