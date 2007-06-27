@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.44 2007/03/07 13:21:44 jw Exp $";
+"@(#)$Id: rsff.c,v 1.45 2007/06/07 09:17:25 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -593,7 +593,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	gm->gt_val = 1;				/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gm->gt_new = gm->gt_old = 0;	/* clear arithmetic */
-	} else if (typ == NCONST && strcmp(gm->gt_ids, "iConst") != 0) {
+	} else if (typ == NCONST && gm != &iConst) {
 	    char *	ep;
 	    /* convert constant 18 from dec, 077 from oct 0x1c from hex */
 	    gm->gt_new = gm->gt_old = strtol(gm->gt_ids, &ep, 0); /* long to int or long */
@@ -974,7 +974,7 @@ iC_traMb(					/* TRAB master action */
     assert (diff && !(diff & ~0xff));
     while (diff) {
 	index = iC_bitIndex[diff];		/* returns 0 - 7 for values 1 - 255 */
-	assert(index < 8);			/* ZZZ can be removed after initial testing */
+	assert(index < 8);			/* TODO can be removed after initial testing */
 	mask  = iC_bitMask[index];		/* returns hex 01 02 04 08 10 20 40 80 */
 	if ((gs = gm->gt_list[index]) != 0) {	/* is bit Gate allocated ? */
 	    val   = (gm->gt_new & mask) ? -1 : 1;	/* yes */
@@ -1066,7 +1066,7 @@ iC_outMw(					/* NEW OUTW master action */
 		"%d:%hhd,", channel, (char)val);	/* TODO overflow */
 	    iC_outOffset += len;
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%d", val & 0xff);	/* byte */
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val & 0xff);	/* byte */
 #endif
 	} else
 	if (mask == W_WIDTH) {
@@ -1103,10 +1103,10 @@ iC_outMw(					/* NEW OUTW master action */
 	    val &= 0xff;			/* for display only */
 #endif
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%d,", channel, val);	/* TODO overflow */
+		"%d:%hd,", channel, (short)val);	/* TODO overflow */
 	    iC_outOffset += len;
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%d", val & 0xff);	/* byte */
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val & 0xff);	/* byte */
 #endif
 #ifndef _WINDOWS
 	} else {
@@ -1223,7 +1223,7 @@ iC_outMw(					/* OLD OUTW master action */
 #endif
 	    iC_QX_[slot] = val;			/* output byte to slot */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%d", val & 0xff);	/* byte */
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val & 0xff);	/* byte */
 #endif
 	} else if (mask == W_WIDTH) {
 #ifndef _WINDOWS

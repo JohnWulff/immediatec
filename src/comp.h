@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.54 2007/03/21 13:33:29 jw Exp $";
+"@(#)$Id: comp.h,v 1.55 2007/06/25 11:18:19 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -90,12 +90,15 @@ typedef	struct Symbol {		/* symbol table entry */
 #define v_glist		glist
 #endif
 
+#define FM		0x80	/* bit wihch marks paramater and local var in function definition */
+#define FU		0x03	/* bit mask for use count 0, 1 or 2 */
+
 /* for use in a union identical first elements can be accesed */
-typedef struct { char *f; char *l; Symbol * v;     } Sym;
-typedef struct { char *f; char *l; List_e * v;     } Lis;
-typedef struct { char *f; char *l; unsigned int v; } Val;
-typedef struct { char *f; char *l; Type v;         } Typ;
-typedef struct { char *f; char *l; char v[2];      } Str;
+typedef struct Sym { char *f; char *l; Symbol * v;     } Sym;
+typedef struct Lis { char *f; char *l; List_e * v;     } Lis;
+typedef struct Val { char *f; char *l; unsigned int v; } Val;
+typedef struct Typ { char *f; char *l; Type v;         } Typ;
+typedef struct Str { char *f; char *l; char v[2];      } Str;
 
 typedef struct Token {		/* Token for gram.y grammar */
     unsigned int	start;
@@ -152,6 +155,7 @@ extern int	lexflag;
 extern int	lineno;
 extern int	iC_maxErrCount;
 extern int	iC_iErrCount;
+extern char *	iCstmtp;		/* manipulated in iClex() (reset in clrBuf()) */
 extern jmp_buf	beginMain;
 					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
@@ -159,14 +163,14 @@ extern int	outFlag;		/* global flag for compiled output */
 extern char *	cexeString[];		/* case or function string */
 
 /********************************************************************
- * functionUse[] is a dynamic array of records with 2 fields: c_cnt, c_expr.
+ * functionUse[] is a dynamic array of records with 2 fields: c_cnt, c.expr.
  *
  * functionUse[x].c_cnt - records the number of calls for each C function
  *   x = 1 2 3 ... generated. If a C function is generated in an iC function
  *   definition, which is never called, this count is 0 and the function is
  *   not copied into the generated C code.
  *
- * functionUse[x].c_expr - points to a copy of the C expression returned
+ * functionUse[x].c.expr - points to a copy of the C expression returned
  *   by the function. This is used to produce a better listing of cloned
  *   functions and is vital information for optimising arithmetic functions.
  *
@@ -185,7 +189,10 @@ extern char *	cexeString[];		/* case or function string */
 
 typedef struct FuUse {			/* Function call count and C expression */
     int		c_cnt;			/* call count */
-    char *	c_expr;			/* C expression */
+    union	c {
+	char *	expr;			/* C expression */
+	int	use;			/* final use count in outNet */
+    } c;
 } FuUse;
 
 extern FuUse *	functionUse;		/* database to record function calls */
@@ -234,8 +241,8 @@ extern Symbol *	functionDefinition(	/* finalise function definition */
 extern Symbol *	pushFunCall(Symbol *);	/* save global variables for nested function calls */
 extern List_e * handleRealParameter(	/* handle a real parameter of a called function */
 	    List_e * plp, List_e * alp);
-extern List_e *	cloneFunction(		/* clone a function template in a function call */
-	    Symbol * functionHead, List_e * plp);
+extern Lis	cloneFunction(		/* clone a function template in a function call */
+	    Sym * fhs, Lis * plpl, Str * par);
 extern Symbol *	clearFunDef(		/* clear a previous function definition */
 	    Symbol * functionHead);
 extern List_e *	checkDecl(		/* check decleration of a function terminal */
@@ -263,13 +270,17 @@ extern List_e * bltin(			/* generate built in iC functions */
 extern void	pu(int t, char * token, Lis * node);
 #endif
 
-extern Symbol *	iclock;			/*   init.c  */
+					/*   init.c  */
+extern Symbol *	iclock;			/* default clock */
+extern Symbol *	iconst;			/* pointer to Symbol "iConst" */
 extern void	init(void);		/* install constants and built-ins */
 extern const char initialFunctions[];	/* iC system function definitions */
 extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */
 extern const char * genName;
 extern int	    genLineNums[];
-#define GEN_COUNT 2			/* number of C functions in precompiled functions */
+#define GEN_COUNT 2			/* max number of C functions in precompiled functions */
+extern int	iC_genCount;		/* actual number of pre-comp C functions - varies with optimisation */
+extern unsigned short	iC_gflag;	/* -g independent C code for gdb debugging */
 
 					/*   symb.c   */
 #define	HASHSIZ 54*16			/* for new sorted list algorithm */
@@ -330,7 +341,7 @@ extern int	toIEC1131(char * name, char * buf, int bufLen,
 extern int	listNet(unsigned gate_count[]);		/* list generated network */
 extern int	buildNet(Gate ** igpp,			/* generate execution network */
 			    unsigned gate_count[]);
-extern int	output(FILE * iFP, char * outfile);	/* generate network as C file */
+extern int	outNet(FILE * iFP, char * outfile);	/* generate network as C file */
 extern int	c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 extern unsigned short	iC_Tflag;			/* define iC_tVar */

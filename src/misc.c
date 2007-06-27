@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.5 2006/04/17 20:20:31 jw Exp $";
+"@(#)$Id: misc.c,v 1.6 2007/05/29 16:29:01 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -114,6 +114,14 @@ iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
 } /* iC_cmp_gt_ids */
 #endif /* RUN) or TCP or LOAD */
 #if defined(RUN) || ((defined (TCP) || defined(LOAD)) && defined (YYDEBUG))
+#if	! defined(TCP) && ! defined(LOAD)
+#define iC_IX0p	iC_IX_[0]
+#define iC_IB1p	iC_IB_[1]
+#define iC_IW2p	iC_IW_[2]
+#if	INT_MAX != 32767 || defined (LONG16)
+#define iC_IL4p	iC_IL_[4]
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
+#endif	/* ! TCP && ! LOAD */
 
 /********************************************************************
  *
@@ -129,16 +137,9 @@ iC_display(int * dis_cntp, int dis_max)
     unsigned char	x0;
     char		b1;
     short		w2;
+#if (!defined(TCP) && !defined(LOAD)) || INT_MAX != 32767 || defined (LONG16)
     long		l4;
-
-#if	! defined(TCP) && ! defined(LOAD)
-#define iC_IX0p	iC_IX_[0]
-#define iC_IB1p	iC_IB_[1]
-#define iC_IW2p	iC_IW_[2]
-#if	INT_MAX != 32767 || defined (LONG16)
-#define iC_IL4p	iC_IL_[4]
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
-#endif	/* ! TCP && ! LOAD */
+#endif /* (!defined(TCP) && !defined(LOAD)) || defined (LONG16) */
 
     if ((*dis_cntp)++ >= dis_max) {	/* display header line */
 	*dis_cntp = 1;
@@ -186,7 +187,7 @@ iC_display(int * dis_cntp, int dis_max)
 #endif /* defined(TCP) || defined(LOAD) */
     /* display IB1, IW2 and IL4 if active */
     if (!iC_xflag) {
-	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " %4d", gp->gt_new & 0xff);
+	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " %4hd", (short)gp->gt_new & 0xff);
 	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, " %6hd", (short)gp->gt_new);
 #if	INT_MAX == 32767
 #if	defined (LONG16)
@@ -196,8 +197,8 @@ iC_display(int * dis_cntp, int dis_max)
 	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " %8d", gp->gt_new);
 #endif	/* INT_MAX == 32767 */
     } else {
-	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, "   %02x", gp->gt_new & 0xff);
-	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, "   %04x", gp->gt_new & 0xffff);
+	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, "   %02hx", (short)gp->gt_new & 0xff);
+	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, "   %04hx", (short)gp->gt_new & 0xffff);
 #if	INT_MAX == 32767
 #if	defined (LONG16)
 	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " %08lx", gp->gt_new);

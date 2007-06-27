@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.27 2007/02/25 09:47:55 jw Exp $";
+"@(#)$Id: lexc.l,v 1.28 2007/06/26 15:24:27 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -111,13 +111,13 @@ static Symbol *	paraList = &markerSymbol;
 "void"			{ count(&c_lval); return VOID; }
 (__)?volatile(__)?	{ count(&c_lval); return VOLATILE; }
 "while"			{ count(&c_lval); return WHILE; }
-(__)?builtin_va_list	{ count(&c_lval); return TYPE_NAME; }	/* type in GCC 3.2 */
+(__)?builtin_va_list	{ count(&c_lval); return TYPE_NAME;	/* type in GCC 3.2 */ }
 (__)?attribute(__)?	{ if (ignore(&c_lval)) yyterminate(); }
 (__)?asm(__)?		{ if (ignore(&c_lval)) yyterminate(); }
-(__)?extension(__)?	{ count(&c_lval); }		/* ignore */
-(__)?inline(__)?	{ count(&c_lval); }		/* ignore */
-(__)?restrict(__)?	{ count(&c_lval); }		/* ignore */
-"__LINE__"		{ count(&c_lval); return CONSTANT; }	/* no need to identify octal */
+(__)?extension(__)?	{ count(&c_lval);		/* ignore */ }
+(__)?inline(__)?	{ count(&c_lval);		/* ignore */ }
+(__)?restrict(__)?	{ count(&c_lval);		/* ignore */ }
+"__LINE__"		{ count(&c_lval); return CONSTANT;	/* no need to identify octal */ }
 "__FILE__"		{ count(&c_lval); return STRING_LITERAL; }
 
 	/* allow white space because Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1 */
@@ -125,13 +125,13 @@ static Symbol *	paraList = &markerSymbol;
 (I|Q)(B|W|L){D}+(_{D}+)?		{ count(&c_lval); return check_type(&c_lval, 1); }
 {L}{S}*					{ count(&c_lval); return check_type(&c_lval, 0); }
 
-0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 0xac8 0XAC8UL */
-{D}+{IS}*		{ count(&c_lval); return CONSTANT; }	/* 12 12l 12u 12UL */
-'(\\.|[^\\'])+'		{ count(&c_lval); return CONSTANT; }	/* '\n' 'A' 'ABC' */
+0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT;	/* 0xac8 0XAC8UL */ }
+{D}+{IS}*		{ count(&c_lval); return CONSTANT;	/* 12 12l 12u 12UL */ }
+'(\\.|[^\\'])+'		{ count(&c_lval); return CONSTANT;	/* '\n' 'A' 'ABC' */ }
 
-{D}+{E}{FS}?		{ count(&c_lval); return CONSTANT; }	/* 12e2 12e2f 12E2L */
-{D}*"."{D}+({E})?{FS}?	{ count(&c_lval); return CONSTANT; }	/* .1 0.1 1.0 1.0e2 */
-{D}+"."{D}*({E})?{FS}?	{ count(&c_lval); return CONSTANT; }	/* 1. 1.e2 */
+{D}+{E}{FS}?		{ count(&c_lval); return CONSTANT;	/* 12e2 12e2f 12E2L */ }
+{D}*"."{D}+({E})?{FS}?	{ count(&c_lval); return CONSTANT;	/* .1 0.1 1.0 1.0e2 */ }
+{D}+"."{D}*({E})?{FS}?	{ count(&c_lval); return CONSTANT;	/* 1. 1.e2 */ }
 
 \"(\\.|[^\\"])*\"	{ count(&c_lval); return STRING_LITERAL; }
 
@@ -183,7 +183,7 @@ static Symbol *	paraList = &markerSymbol;
 "?"			{ count(&c_lval); return '?'; }
 
 [ \t\v\f]+		{ count(&c_lval); }
-"\n"			{ count(&c_lval); }	/* individual token */
+"\n"			{ count(&c_lval);	/* individual token */ }
 .			{ count(&c_lval); 	/* ignore bad characters */ }
 
 %%
@@ -415,13 +415,18 @@ check_type(c_STYPE* u, int qtoken)
     char	xbwl[2];
     int		byte;
     int		bit;
-#ifndef LMAIN
+    int		ixd;
+#ifdef LMAIN
+#define buffer	c_text
+    ixd = -1;				/* limit for I/O index (-1 no limit) */
+
+#else
     int		c;
     int		i;
     char	buffer[BUFS];		/* buffer for modified names */
     char	tail[8];		/* compiler generated suffix _123456 max */
-    int		ixd = iC_maxIO;		/* limit for I/O index (-1 no limit) */
 
+    ixd = iC_maxIO;			/* limit for I/O index (-1 no limit) */
     if (c_text[0] == '$') {
 	/********************************************************************
 	 *  Identifier starts with a '$'. gcc can handle this if the next character
@@ -464,12 +469,10 @@ check_type(c_STYPE* u, int qtoken)
 	    *iFunSymExt = '\0';
 	}
     }
-    if (sp == 0 &&
-#else
-#define buffer	c_text
-    int		ixd = -1;		/* limit for I/O index (-1 no limit) */
-
+#endif
     if (
+#ifndef LMAIN
+	sp == 0 &&
 #endif
 	(sp = lookup(buffer)) == 0) {
 	/********************************************************************
@@ -509,14 +512,20 @@ check_type(c_STYPE* u, int qtoken)
 	}
     } else {
 	foundSymbol:
-	if (sp->type <= MAX_LS && sp->fm == 0) {
+	if (sp->type <= MAX_LS && (sp->fm & FM) == 0) {
 #ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
 	    if ((lexflag & C_BLOCK1) == 0) {
 		if ((lexflag & C_PARA) == C_PARA) {
 		    markParaList(sp);	/* mark Symbol as parameter on glist */
 		}
-		if (sp->v_glist) {
+		if (
+#if YYDEBUG && ! defined(SYUNION)
+		    sp->v_glist
+#else
+		    sp->v_cnt > 2	/* v_cnt instead of v_glist for SYUNION */
+#endif
+		) {
 		    u->tok.symbol = sp;
 		    return IDENTIFIER;	/* name of imm variable temporarily C parameter */
 		}
@@ -594,7 +603,13 @@ void
 markParaList(Symbol * sp)
 {
     assert(sp && sp->type < IFUNCT);		/* allows IFUNCT to use union v.cnt */
-    if (sp->v_glist == 0) {			/* already marked ? */
+    if (
+#if YYDEBUG && ! defined(SYUNION)
+	sp->v_glist == 0
+#else
+	sp->v_cnt <= 2				/* v_cnt instead of v_glist for SYUNION */
+#endif
+    ) {
 	if ((lexflag & C_FUNCTION) == 0) {
 	    sp->v_glist = &markerSymbol;	/* mark C globally */
 	} else {

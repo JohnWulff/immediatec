@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.56 2007/03/21 12:49:09 jw Exp $";
+"@(#)$Id: icc.c,v 1.57 2007/06/27 15:51:27 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -35,31 +35,37 @@ static const char icc_c[] =
 #endif	/* LOAD */
 
 extern const char	iC_ID[];
+unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
 unsigned short		iC_Aflag = 0;		/* -A flag signals ARITH alias */
 unsigned short		iC_Sflag = 0;		/* not strict */
 unsigned short *	iC_useTypes[] = { USETYPEFLAGS };
 unsigned short		iC_Arestore = 0;	/* saved -A flag signals ARITH alias */
 unsigned short		iC_Srestore = 0;	/* saved strict */
 unsigned short *	iC_useRestore[] = { USERESTOREFLAGS };
+unsigned short		iC_optimise = 07;	/* optimisation levels 0 - 7 */
+int			iC_genCount;
 
 static const char *	usage =
-"USAGE: %s [-acASRh][ -o<out>][ -l<list>][ -e<err>][ -k<lim>][ -d<deb>]\n"
-"             [ -Dmacro[=defn]...][ -Umacro...] <src.ic>\n"
+"USAGE: %s [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>][ -O<level>]\n"
+"             [ -Dmacro[=defn]...][ -Umacro...][ -Cmacro[=defn]...][ -Vmacro...] <src.ic>\n"
 #if defined(RUN) || defined(TCP)
 "Options in compile mode (-o or -c):\n"
 #endif	/* RUN or TCP */
 "        -o <out>        name of generated C output file\n"
 "        -c              generate C source cexe.c to extend 'icr' or 'ict' compiler\n"
 "                        (cannot be used if also compiling with -o)\n"
-"        -l <list>       name of list file  (default: none, '' is stdout)\n"
-"                        default: listing, net topology, stats and logic expansion\n"
+"        -l <lst>        name of list file  (default: none, '' is stdout) output:\n"
+"                        listing with logic expansion, net topology and statistics\n"
 "        -e <err>        name of error file (default is stderr)\n"
 "        -a              compile with linking information in auxiliary files\n"
+"        -g              each expression has its own C code for debugging with gdb\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
 "        -S              strict compile - all immediate variables must be declared\n"
 "        -P              pedantic: warning if variable contains $ (default $ allowed)\n"
 "        -PP             pedantic-error: error if variable contains $\n"
 "        -R              no maximum error count (default: abort after 100 errors)\n"
+"        -O <level>      optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate \n"
+"                        duplicate arithmetic expressions; -O7 all (default)\n"
 "        -D <macro>      predefine <macro> for the iC preprocessor phase\n"
 "        -U <macro>      cancel previous definition of <macro> for the iC phase\n"
 "                        Note: do not use the same macros for the iC and the C phase\n"
@@ -77,7 +83,7 @@ static const char *	usage =
 "                   +40  source listing\n"
 "                   +20  net topology\n"
 "                   +10  net statistics\n"
-"                    +4  logic expansion                      (+204 old style)\n"
+"                    +4  logic expansion\n"
 #if defined(RUN) || defined(TCP)
 "                  +400  exit after initialisation\n"
 #endif	/* RUN or TCP */
@@ -103,7 +109,7 @@ static const char *	usage =
 "                +20000  use old style imm functions - no internal functions\n"
 "                +21000  outputs first (really old style) - no internal functions\n"
 #endif	/* YYDEBUG and not _WINDOWS */
-"        <src.ic>        any iC language program file (extension .ic)\n"
+"        <src.ic>        iC language source file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
 "        -h              this help text\n"
 #ifdef EFENCE
@@ -274,7 +280,7 @@ int		iC_maxIO = -1;		/* I/O index no limit */
 #endif	/*  not RUN */
 
 #if defined(RUN) || defined(TCP)
-Gate *		iC_pf0_1;		/* pointer to _f01 if generated in buildNet() */
+Gate *		iC_pf0_1;		/* pointer to _f0_1 if generated in buildNet() */
 #endif /* defined(RUN) || defined(TCP) */
 
 unsigned char	iC_QX_[IXD];		/* Output bit field slots (also used in compile) */
@@ -392,6 +398,7 @@ main(
     } else {
 	*iC_progname++ = '\0';		/* path has been stripped and isolated */
     }
+
 #ifdef EFENCE
     inpNM = iC_emalloc(BUFS);
     inpNM = strcpy(inpNM, "stdin");	/* original input file name */
@@ -422,21 +429,27 @@ main(
 
 		case '\0':
 		    inpFN = 0;		/* - is standard input */
+#if defined(RUN) || defined(TCP)
+		case 'n':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    iC_osc_lim = iC_osc_max = atoi(*argv);
+		    if (iC_osc_max > 15) goto error;
+		    goto break2;
 #ifdef TCP
 		case 's':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if (strlen(*argv)) iC_hostNM = *argv;
 		    goto break2;
 		case 'p':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if (strlen(*argv)) iC_portNM = *argv;
 		    goto break2;
 		case 'u':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if (strlen(*argv)) iC_iccNM = *argv;
 		    goto break2;
 		case 'i':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if ((slen = strlen(*argv)) > INSTSIZE ||
 			slen != strspn(*argv, "0123456789")) {
 			fprintf(stderr, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
@@ -450,8 +463,15 @@ main(
 		    iC_micro++;		/* microsecond info */
 		    break;
 #endif	/* TCP */
+		case 'x':
+		    iC_xflag = 1;	/* start with hexadecimal display */
+		    break;
+		case 't':
+		    iC_debug |= 0100;	/* trace only */
+		    break;
+#endif	/* RUN or TCP */
 		case 'd':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    sscanf(*argv, "%o", &debi);
 		    iC_debug |= debi;	/* short */
 #if !defined(RUN) && !defined(TCP)
@@ -467,17 +487,9 @@ main(
 		    }
 #endif	/* YYDEBUG */
 		    goto break2;
-		case 't':
-		    iC_debug |= 0100;	/* trace only */
-		    break;
-		case 'n':
-		    if (! *++*argv) { --argc, ++argv; }
-		    iC_osc_lim = iC_osc_max = atoi(*argv);
-		    if (iC_osc_max > 15) goto error;
-		    goto break2;
 		case 'o':
 		    if (excFN == 0) {
-			if (! *++*argv) { --argc, ++argv; }
+			if (! *++*argv) { --argc; if(! *++argv) goto error; }
 #ifdef	WIN32
 			if (strlen(*argv)) {
 			    outFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
@@ -496,7 +508,7 @@ main(
 			goto error;
 		    }
 		case 'l':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 #ifdef	WIN32
 		    if (strlen(*argv)) {
 			listFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
@@ -513,7 +525,7 @@ main(
 		    }
 		    goto break2;
 		case 'e':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 #ifdef	WIN32
 		    if (strlen(*argv)) {
 			errFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
@@ -527,7 +539,7 @@ main(
 #endif	/* WIN32 */
 		    goto break2;
 		case 'k':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    iC_maxIO = atoi(*argv) + 1;
 		    if (excFN != 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) goto maxIOerror;
 		    goto break2;
@@ -546,6 +558,9 @@ main(
 			    "%s: cannot use both -o and -c option\n", iC_progname);
 			goto error;
 		    }
+		case 'g':
+		    iC_gflag = iC_Arestore = 1;	/* independent C code for gdb debugging */
+		    break;	/* allows setting breakpoints in C code in iC listings */
 		case 'A':
 		    iC_Aflag = iC_Arestore = 1;	/* generate ARITH ALIAS in outFN */
 		    break;
@@ -561,9 +576,15 @@ main(
 		case 'P':
 		    iC_Pflag++;			/* -P is pedantic, -PP or more is pedantic-error*/
 		    break;
-		case 'x':
-		    iC_xflag = 1;		/* start with hexadecimal display */
-		    break;
+		case 'O':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (sscanf(*argv, "%o%s", &debi, tempBuf) != 1 || debi > 07) {
+			fprintf(stderr,
+			    "%s: -O levels can only be 0 - 7 (7 is default)\n", iC_progname);
+			goto error;
+		    }
+		    iC_optimise = debi;		/* short */
+		    goto break2;
 		case 'C':
 		    arg = 'D';
 		    goto buildCdefines;
@@ -579,7 +600,7 @@ main(
 		    op = iC_Cdefines;
 		    arg = **argv;
 		  buildDefines:
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if (strlen(*argv)) {
 			if (strlen(op)) {
 			    strncpy(tempBuf, op, BUFS);
@@ -672,6 +693,7 @@ main(
     }
 #endif	/* RUN */
     iC_debug &= 037777;			/* allow only cases specified */
+    iC_genCount = ((iC_optimise & 04) != 0) ? 1 : GEN_COUNT;
     iFlag = 0;
     /********************************************************************
      *	Generate and open temporary files T1FN T2FN T3FN
@@ -741,7 +763,7 @@ main(
 	     *	-o option: Output a C-file of all Gates, C-code and links
 	     *******************************************************************/
 	    if (outFlag) {			/* -o option */
-		r = output(T3FP, outFN);	/* generate network as C file */
+		r = outNet(T3FP, outFN);	/* generate network as C file */
 	    } else
 	    /********************************************************************
 	     *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
@@ -931,7 +953,6 @@ iC_inversionCorrection(void)
 		snprintf(exStr, TSIZE, "perl %s/pplstfix%s -o %s -l %s/pplstfix%s.log %s",	/* developer debug version */
 		    iC_path, versionTail, listFN, iC_path, versionTail, tempName);
 	    }
-//	    printf("!!! %s\n", exStr);
 	    r = system(exStr);
 	    if (r == 0) {
 		unlink(tempName);
@@ -953,20 +974,24 @@ iC_inversionCorrection(void)
 
 =head1 SYNOPSIS
 
- immcc [-acASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
-       [ -Dmacro[=defn]...][ -Umacro...] <src.ic>
+ immcc [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
+       [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
+       [ -Cmacro[=defn]...][ -Vmacro...] <src.ic>
     -o <out> name of generated C output file
     -c       generate C source cexe.c to extend 'icr' or 'ict' compiler
              (cannot be used if also compiling with -o)
-    -l <lst> name of list file  (default: none, '' is stdout)
-             default: listing, net topology, stats and logic expansion
+    -l <lst> name of list file  (default: none, '' is stdout) output:
+             listing with logic expansion, net topology and statistics
     -e <err> name of error file (default is stderr)
-    -a       append linking info for 2nd and later files
+    -a       compile with linking information in auxiliary files
+    -g       each expression has its own C code for debugging with gdb
     -A       compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S       strict compile - all immediate variables must be declared
     -P       pedantic: warning if variable contains $ (default $ allowed)
     -PP      pedantic-error: error if variable contains $
     -R       no maximum error count (default: abort after 100 errors)
+    -O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate
+             duplicate arithmetic expressions; -O7 all (default)\n"
     -D <macro> predefine <macro> for the iC preprocessor phase
     -U <macro> cancel previous definition of <macro> for the iC phase
             Note: do not use the same macros for the iC and the C phase
@@ -994,17 +1019,17 @@ iC_inversionCorrection(void)
 
 =head1 DESCRIPTION
 
-B<immcc> translates an iC-source (extension: .ic) into a C file which can
-be compiled with a C compiler and linked with the iC project run time
-library B<libict.a> (link option -lict) to produce an executable which
-communicates via TCP/IP with B<iCserver> and associated I/O-clients -
-usually B<iCbox>.
+B<immcc> translates an iC-source (extension: .ic) with iC-includes
+(extension: .ih) into a C file which can be compiled with a C
+compiler and linked with the iC project run time library B<libict.a>
+(link option -lict) to produce an executable which communicates via
+TCP/IP with B<iCserver> and associated I/O-clients - usually B<iCbox>.
 
 B<immcc> reads and translates one iC-source eg file.ic. If no options are
 specified, only compilation errors (if any) are reported on 'stderr'.
 
 Before translation starts, file.ic is optionally passed through the
-C-precompiler if it contains any lines starting with '#' or if -D or -U
+C-preprocessor if it contains any lines starting with '#' or if -D or -U
 options were used in the command line.
 
 Immediate-C code consists of immediate statements and C literal blocks.
@@ -1024,18 +1049,23 @@ by C-actions. This is necessary to place all C-declarations in literal
 blocks before any C-actions, which may require them.
 
 In a next pass an integrated special-purpose C compiler is run
-(preceded by a pass through the C-preprocessor, if necessary). The
-C compiler recognizes any variables declared as B<imm bit> or
-B<imm int> in the embedded C-code.  These variables can be used
-as values anywhere in the C-code and appropriate modification is
+(preceded by a pass through the C-preprocessor, if necessary). The C
+compiler recognizes any immediate variables in the embedded C code.
+Immediate variables are declared with B<imm bit> or B<imm int>
+in the iC code section.  These variables can be used as values
+anywhere in the C-code and appropriate modification of the C code is
 carried out. Immediate variables which have been declared but not yet
 assigned may be (multiple) assigned to in the C-code.  Such assignment
-expressions are recognised and converted to function calls, which
-fire all immediate expressions dependent in the immediate variable.
-If an immediate variable has already been (single) assigned to in an
-immediate statement, an attempt to assign to it in the C-code is an
-error. A syntax check of the embedded C code with appropriate error
-messages is a by-product of this procedure.
+expressions are recognised and converted to function calls, which fire
+all immediate expressions dependent in the immediate variable.  If the
+B<strict> option (-S) is used for compilation, immediate variables
+to be assigned in C code must be declared with the type modifier
+B<immC> rather than with B<imm>.  This is particularly important if
+an immediate variable assigned to in C code is going to be used in
+another iC source.  If an immediate variable has already been (single)
+assigned to in an immediate statement, an attempt to assign to it in
+the C-code is an error. A syntax check of the embedded C code with
+appropriate error messages is a by-product of this procedure.
 
 The iC and C compiler also produces an optional listing (default file.lst).
 The listing displays the iC source lines with line numbers. These
@@ -1059,8 +1089,10 @@ the compiler is not just 'immcc' but ends with a revision number,
 eg. 'immcc109', 'pplstfix' will be called as 'pplstfix109'. This
 way several versions of the compiler and pplstfix can be kept in
 the development directory.  Also if a path is specified 'pplstfix'
-will be called with the log option -l. This outputs a log file to
-'./pplstfix109.log', if the compiler call was './immcc109'.
+will be called with the log option -l. This outputs a log file
+to './pplstfix109.log', if the compiler call was './immcc109'.
+Finally the script iCmake will link to ./libict109.a rather than to
+the standard libict.a
 
 =head1 AUTHOR
 

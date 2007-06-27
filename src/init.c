@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.33 2007/03/16 22:05:40 jw Exp $";
+"@(#)$Id: init.c,v 1.34 2007/06/24 19:35:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -25,6 +25,7 @@ static const char init_c[] =
 #include	"comp_tab.h"
 
 Symbol *	iclock;			/* default clock */
+Symbol *	iconst;			/* pointer to Symbol "iConst" */
 
 /********************************************************************
  *
@@ -73,7 +74,7 @@ static struct bi builtinsOld[] = {
   { "JK",	KEYW,	BLTINJ,	S_FF,	}, /* R_FF for reset master */
   { "LATCH",	KEYW,	BLATCH,	0,	},
   { "DLATCH",	KEYW,	DLATCH,	D_FF,	},
-  { 0,		0,	0,	0,	},
+  { 0,		0,	0,	0,	}, /* terminate initialisation with name == 0 */
 };
 
 /********************************************************************
@@ -157,9 +158,9 @@ static struct bi builtins[] = {
   { "fortran",	KEYW,	LEXERR,	0,	},
   { "asm",	KEYW,	LEXERR,	0,	},
   { "iC_Gt",	CTYPE,	YYERRCODE, 0,	}, /* initial Gate C-type from icg.h */
-  { "iConst",	NCONST, 0,	ARITH,	}, /* Symbol "iConst" */
+  { "iConst",	NCONST, 0,	ARITH,	}, /* Symbol "iConst" must be second last non-zero entry */
   { "iClock",	CLK,	0,	CLCKL,	}, /* Symbol "iClock" must be last non-zero entry */
-  { 0,		0,	0,	0,	},
+  { 0,		0,	0,	0,	}, /* terminate initialisation with name == 0 */
 };
 
 /********************************************************************
@@ -185,29 +186,29 @@ const char initialFunctions[] = "\
 #ifdef SR_X 
 "\
 imm bit SR(bit set, clock scl, bit res, clock rcl) {\n\
-    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
+    this = SR_(set & ~res, scl, ~set & res, rcl); }\n\
 "
 #endif
 "\
 imm bit SRX(bit set, clock scl, bit res, clock rcl) {\n\
-    return SR_(set & ~res, scl, ~set & res, rcl); }\n\
+    this = SR_(set & ~res, scl, ~set & res, rcl); }\n\
 imm bit JK(bit set, clock scl, bit res, clock rcl) {\n\
-    return SR_(~this & set, scl, this & res, rcl); }\n\
+    this = SR_(~this & set, scl, this & res, rcl); }\n\
 imm bit DR(bit dat, clock dcl, bit res, clock rcl) {\n\
-    return DR_(dat & ~res | this & res, dcl, res, rcl); }\n\
+    this = DR_(dat & ~res | this & res, dcl, res, rcl); }\n\
 imm bit DSR(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
     imm bit i = set | res;\n\
-    return DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl); }\n\
+    this = DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl); }\n\
 imm int SHR(int dat, clock dcl, bit res, clock rcl) {\n\
-    return SHR_( res ? this : dat, dcl, res, rcl); }	/* line 202 */\n\
+    this = SHR_( res ? this : dat, dcl, res, rcl); }	/* line 202 */\n\
 imm int SHSR(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {\n\
-    return SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
+    this = SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl); }\n\
 imm bit FALL(bit fall, clock clk) {\n\
-    return RISE(~fall, clk); }\n\
+    this = RISE(~fall, clk); }\n\
 imm bit LATCH(bit set, bit res) {\n\
-    return FORCE(this, set, res); }\n\
+    this = FORCE(this, set, res); }\n\
 imm bit DLATCH(bit set, bit res, clock clk) {\n\
-    return D(FORCE(this, set, res), clk); }\n\
+    this = D(FORCE(this, set, res), clk); }\n\
 /* end iC system function definitions */\n\
 ";
 
@@ -215,9 +216,9 @@ imm bit DLATCH(bit set, bit res, clock clk) {\n\
  *  Trial version with all int parameters - useful with ARITHMETIC optimisation.
  *
 imm int SHR(int dat, clock dcl, int res, clock rcl) {\n\
-    return SHR_( res ? this : dat, dcl, res, rcl); }	// line 202\n\
+    this = SHR_( res ? this : dat, dcl, res, rcl); }	// line 202\n\
 imm int SHSR(int dat, clock dcl, int set, clock scl, int res, clock rcl) {\n\
-    return SHSR_(set || res ? this : dat, dcl, set && !res, scl, res && !set, rcl); }\n\
+    this = SHSR_(set || res ? this : dat, dcl, set && !res, scl, res && !set, rcl); }\n\
  *
  *  alternate lines in genLines[]
     "#line 202 \"init.c\"	// 'dat' in pre-compiled function block SHR",
@@ -282,6 +283,7 @@ init(void)				/* install constants and built-ins */
     }
     for (io = 0; builtins[io].name; io++) {
 	/* no name may occurr twice - otherwise install fails */
+	iconst = sp;	/* 'iconst' points to "iConst" when loop finishes */
 	sp = install(builtins[io].name, builtins[io].type, builtins[io].ftype);
 	sp->u_val = builtins[io].uVal;		/* set u_val in Symbol just installed */
     }
@@ -299,7 +301,7 @@ init(void)				/* install constants and built-ins */
 		}
 	    }
 	    fclose(H1p);
-	    /* if a previous _list1.h exists, it will be extended ZZZ */
+	    /* if a previous _list1.h exists, it will be extended TODO */
 	} else {
 	    iC_lflag = 1;			/* need to write #define in new _list1.h */
 	}

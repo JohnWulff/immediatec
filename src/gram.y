@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.25 2007/03/21 12:59:23 jw Exp $";
+"@(#)$Id: gram.y,v 1.26 2007/06/21 13:57:55 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -645,7 +645,12 @@ declarator					/* 25 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    if ($1.symbol->type < MAX_LS &&
-		$1.symbol->v_glist == 0) {
+#if YYDEBUG && ! defined(SYUNION)
+		$1.symbol->v_glist == 0
+#else
+		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immVarRemove($1.start, $1.end, $1.symbol);
 	    }
 #endif
@@ -656,7 +661,12 @@ declarator					/* 25 */
 	    $$.symbol = $2.symbol;
 #ifndef LMAIN
 	    if ($2.symbol->type < MAX_LS &&
-		$2.symbol->v_glist == 0) {
+#if YYDEBUG && ! defined(SYUNION)
+		$2.symbol->v_glist == 0
+#else
+		$2.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immVarRemove($2.start, $2.end, $2.symbol);
 	    }
 #endif
@@ -1321,8 +1331,15 @@ assignment_expression				/* 48 */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u = %u>\n", $$.start, $$.end);
 #endif
-	    if ($1.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$1.symbol->v_glist == 0
+#else
+		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immAssignFound($1.start, $2.start, $3.end, $1.symbol, 6);
+	    }
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1663,10 +1680,17 @@ imm_unary_expression				/* 63a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<++%u %u>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<++%u %u>\n", $$.start, $$.end);
 #endif
-	    if ($2.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$2.symbol->v_glist == 0
+#else
+		$2.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 0);
+	    }
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1675,10 +1699,17 @@ imm_unary_expression				/* 63a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<--%u %u>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<--%u %u>\n", $$.start, $$.end);
 #endif
-	    if ($2.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$2.symbol->v_glist == 0
+#else
+		$2.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 1);
+	    }
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1796,10 +1827,17 @@ imm_postfix_expression				/* 65a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u++>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u++>\n", $$.start, $$.end);
 #endif
-	    if ($1.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$1.symbol->v_glist == 0
+#else
+		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 2);
+	    }
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1808,10 +1846,17 @@ imm_postfix_expression				/* 65a */
 	    $$.end = $2.end;
 #ifndef LMAIN
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u-->\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u-->\n", $$.start, $$.end);
 #endif
-	    if ($1.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$1.symbol->v_glist == 0
+#else
+		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 3);
+	    }
 #endif
 	    $$.symbol = NULL;
 	}
@@ -1893,8 +1938,15 @@ imm_identifier					/* 69 */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "[%u %u]\n", $$.start, $$.end);
 #endif
-	    if ($$.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$$.symbol->v_glist == 0
+#else
+		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immVarFound($$.start, $$.end, $1.symbol);
+	    }
 #endif
 	}
 	| '(' imm_identifier ')' {
@@ -1906,8 +1958,15 @@ imm_identifier					/* 69 */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "{%u %u}\n", $$.start, $$.end);
 #endif
-	    if ($$.symbol->v_glist == 0)
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$$.symbol->v_glist == 0
+#else
+		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
 		immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+	    }
 #endif
 	}
 	;

@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.62 2007/03/10 11:50:56 jw Exp $";
+"@(#)$Id: icc.h,v 1.63 2007/06/13 14:38:42 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -315,11 +315,11 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 
 /* compiler tokens corresponding to type */
 #define	DEF_TYP \
-	YYERRCODE, AVARC, YYERRCODE, YYERRCODE, LVARC, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, \
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,
+	0, AVARC, 0, 0, LVARC, 0, 0, 0, 0,\
+	0, 0, 0, 0, 0, 0, NUMBER,\
+	0, 0, 0,\
+	0, 0, 0, 0, \
+	0, 0, 0, 0,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define	I_LISTS \
@@ -385,7 +385,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #define	TYPES \
 	UDF, ARN, OR, OR, EF, SH, SH, SH, \
 	VF, FF, FF, FF, SW, CF, CF, CLK, TIM, \
-	INPX, ARN, INPB, ERR, ERR
+	INPX, ARN, AND, ERR, ERR
 
 /* C types corresponding to ftypes */
 #define	CTYPES \
@@ -473,7 +473,7 @@ extern unsigned short	iFlag;		/* inversion correction needed */
 extern int		iC_inversionCorrection(void);
 extern int		iC_maxIO;	/* I/O index limited to 64 or -1 no limit */
 extern unsigned char	iC_QX_[];	/* Output bit field slots */
-
+extern unsigned short	iC_optimise;	/* optimisation levels 0 - 7 */
 #if ! defined(TCP) && ! defined(LOAD)	/* OLD I/O */
 extern Gate *		iC_TX_[];	/* pointers to bit System Gates */
 extern Gate *		iC_IX_[];	/* pointers to bit Input Gates */
@@ -597,7 +597,7 @@ extern void	iC_initIO(void);		/* init signal and correct interrupt vectors */
 extern void	iC_quit(int sig);		/* quit with correct interrupt vectors */
 
 #if defined(RUN) || defined(TCP) && ! defined(LOAD)
-extern Gate *		iC_pf0_1;		/* pointer to _f01 if generated in buildNet() */
+extern Gate *		iC_pf0_1;		/* pointer to _f0_1 if generated in buildNet() */
 #endif /* defined(RUN) || defined(TCP) && ! defined(LOAD) */
 
 #if defined(RUN) || defined(TCP) || defined(LOAD)

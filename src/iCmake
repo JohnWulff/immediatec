@@ -28,48 +28,51 @@ ICC=immcc
 
 usage ()
 {
-    echo 'Usage:' >&2
-    echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]ASRiI6xqh] [-v[<N>]] [-w<dir>] [-d<opt>]' >&2
-    echo '         [ -Dmacro[=defn]...][ -Umacro...] file ...' >&2
-    echo '     default:	link all iC-files file.ic ... into independent executables' >&2
-    echo '		output names are base names of the iC-files (file ...)' >&2
-    echo '	-l	link all iC-files into one executable (implies -A)' >&2
-    echo '		default: output name is base name of the first iC-file' >&2
-    echo '		complete listing of all files is in first.lst' >&2
-    echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
-    echo '		complete listing of all files is in exe.lst' >&2
-    echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
-    echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
-    echo '	-b	generate both listings and C outputs' >&2
-    echo "	-n	generate no output, report $ICC compile errors only" >&2
-    echo "		-s and -n generate 'cexe.c' for last file as a side effect" >&2
-    echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
-    echo '	-S	strict compile - all immediate variables must be declared' >&2
-    echo '	-P	pedantic: warning if variable contains $ (default: $ allowed)' >&2
-    echo '	-PP	pedantic-error: error if variable contains $' >&2
-    echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
-    echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
-    echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
-    echo '	        Note: do not use the same macros for the iC and the C phase' >&2
-    echo '	-C<macro> predefine <macro> for the C preprocessor phase' >&2
-    echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
-    echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
-    echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
-    echo '	        default: any index for bit, byte, word or long is allowed' >&2
-    echo '	-i	produce file.ini which records load info from initial run' >&2
-    echo '	-I	produce file.ini with full INITIALIZATION info (debug only)' >&2
-    echo '	-J	produce file.ini with run INITIALIZATION only (debug only)' >&2
-    echo '	-6	produce logic generation listing file.lst6' >&2
-    echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
-    echo '	-q	quiet operation - return status only' >&2
-    echo "	-v<N>   use $ICC<N>, pplsstfix<N> and libict<N>.a in local directory" >&2
-    echo "	-w<dir> use $ICC, pplstfix and libict.a in directory <dir>" >&2
-    echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
-    echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
-    echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
-    echo '	-z	echo compiler calls with all options for debugging' >&2
-    echo '	-h	this help text' >&2
-    echo '	$Id: iCmake,v 1.32 2005/09/30 22:12:42 jw Exp $' >&2
+  echo 'Usage:' >&2
+  echo '  '${0##*/}' [-[l|o<exe>|s|c|b|n]gASRiI6xqh][ -v[<N>]][ -w<dir>][ -d<opt>]' >&2
+  echo '         [ -O<level>][ -Dmacro[=defn]...][ -Umacro...] file ...' >&2
+  echo '     default:	link all iC-files file.ic ... into independent executables' >&2
+  echo '		output names are base names of the iC-files (file ...)' >&2
+  echo '	-l	link all iC-files into one executable (implies -A)' >&2
+  echo '		default: output name is base name of the first iC-file' >&2
+  echo '		complete listing of all files is in first.lst' >&2
+  echo '	-o<exe>	place output in file 'exe' (implies -l if first option)' >&2
+  echo '		complete listing of all files is in exe.lst' >&2
+  echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
+  echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
+  echo '	-b	generate both listings and C outputs' >&2
+  echo "	-n	generate no output, report $ICC compile errors only" >&2
+  echo '		-s and -n generate 'cexe.c' for last file as a side effect' >&2
+  echo '	-g	each expression has its own C code for debugging with gdb' >&2
+  echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
+  echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-P	pedantic: warning if variable contains $ (default: $ allowed)' >&2
+  echo '	-PP	pedantic-error: error if variable contains $' >&2
+  echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
+  echo '		duplicate arithmetic expressions -O7 all (default)' >&2
+  echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
+  echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
+  echo '	        Note: do not use the same macros for the iC and the C phase' >&2
+  echo '	-C<macro> predefine <macro> for the C preprocessor phase' >&2
+  echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
+  echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
+  echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
+  echo '	        default: any index for bit, byte, word or long is allowed' >&2
+  echo '	-i	produce file.ini which records load info from initial run' >&2
+  echo '	-I	produce file.ini with full INITIALIZATION info (debug only)' >&2
+  echo '	-J	produce file.ini with run INITIALIZATION only (debug only)' >&2
+  echo '	-6	produce logic generation listing file.lst6' >&2
+  echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
+  echo '	-q	quiet operation - return status only' >&2
+  echo "	-v<N>   use $ICC<N>, pplsstfix<N> and libict<N>.a in local directory" >&2
+  echo "	-w<dir> use $ICC, pplstfix and libict.a in directory <dir>" >&2
+  echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
+  echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
+  echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
+  echo '	-z	echo compiler calls with all options for debugging' >&2
+  echo '	-h	this help text' >&2
+  echo '	$Id: iCmake,v 1.33 2007/06/16 19:32:00 jw Exp $' >&2
 }
 
 link=0
@@ -95,7 +98,7 @@ I=""
 D=""
 C=""
 
-while getopts ":lo:scbnNk:iIJqv:w:ASPRD:U:C:V:6xd:zh" opt; do
+while getopts ":lo:scbnNk:iIJqv:w:gASO:PRD:U:C:V:6xd:zh" opt; do
     case $opt in
     l )	link=1
 	a=" -a"				# generate aux files for linking
@@ -167,6 +170,8 @@ while getopts ":lo:scbnNk:iIJqv:w:ASPRD:U:C:V:6xd:zh" opt; do
     6 )	d="$d -d2"; l="6";;
     x )	d="$d -d4000"; x="1";;
     d ) d="$d -d$OPTARG";;
+    O ) d="$d -O$OPTARG";;
+    g ) d="$d -g";;
     z )	z=1;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;

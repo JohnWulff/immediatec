@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.47 2006/02/23 17:40:28 jw Exp $";
+"@(#)$Id: ict.c,v 1.48 2007/05/29 16:18:49 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -727,8 +727,14 @@ iC_icc(
 #endif	/* YYDEBUG */
 					    count = iC_traMb(gp, 0);	/* distribute bits directly */
 #if	YYDEBUG
+#if	INT_MAX == 32767 && defined (LONG16)
+					    /* TODO - format for byte, word or long */
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%ld%s",
+							    gp->gt_new, count ? "" : "\n");
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%d%s",
 							    gp->gt_new, count ? "" : "\n");
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
 					    cnt += count;	/* extra number of fired gates */
 					} else
