@@ -9,12 +9,12 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: tt,v 1.24 2007/04/03 06:42:59 jw Exp $' >&2
+  echo '$Id: tt,v 1.25 2007/06/16 19:24:34 jw Exp $' >&2
 }
 
 usage()
 {
-  echo "Usage: $name [-clrASP[P]RiIJ6x:f:F:zvh][ -O<level>]" >&2
+  echo "Usage: $name [-clrgASP[P]RiIJ6x:f:F:zvh][ -O<level>]" >&2
   echo "          [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]" >&2
   echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
@@ -24,11 +24,13 @@ usage()
   echo '	-x<regex>  in each Mdiff ignore changes in lines that match regex' >&2
   echo '	-f<filter> process the first file in an Mdiff by <filter> before diff' >&2
   echo '	-F<filter> process the second file in an Mdiff by <filter> before diff' >&2
+  echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
   echo '	-PP	pedantic-error: error if variable contains $' >&2
-  echo '	-O <l>  optimisation -O0 none -O1 bit -O2 arithmetic -O3 both (default)' >&2
+  echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
+  echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
@@ -38,25 +40,25 @@ usage()
   echo '	-v	author and version information' >&2
   echo '	-h	this help text' >&2
   echo '	--	all further arguments are treated as files' >&2
-  echo
+  echo >&2
   echo "	$name must be called from a directory, which has a number of" >&2
   echo "	sub-directories Test1, Test2, Test3 .. Test9 containg iC sources." >&2
   echo "	Each iC source is made with iCmake, generating different files." >&2
-  echo
+  echo >&2
   echo "	<dir1> or <dir1>_<opt> are sub-directories of directory" >&2
   echo "	Test1, Test2, Test3 .. Test9 (however many exist)" >&2
   echo "	<dir1> will be created if it does not exist and generated" >&2
   echo "	files copied to it; if <dir1> exists, the generated files" >&2
   echo "	will be compared with files in <dir1> with Mdiff -kLe" >&2
   echo "	If no <dir1> is specified no files will be copied or compared" >&2
-  echo
+  echo >&2
   echo "	If <dir2> is specified and exists and <dir1> does not exist" >&2
   echo "	<dir1> will be created and only changed files will be coped to <dir1>." >&2
   echo "	The others will be soft links from <dir1> to <dir2>" >&2
   echo
   echo "	If <dir2> is specified and <dir1> exists all files in <dir1>" >&2
   echo "	will be compared with all files in <dir2> with Mdiff -kLe" >&2
-  echo
+  echo >&2
   echo "	If <dir2> is an absolute path, it must be the base of" >&2
   echo "	another set of directories Test1, Test2, Test3 .. Test9" >&2
   version
@@ -88,13 +90,14 @@ G=""
 T="test"
 head=""
 
-while getopts ":cm:d:lrASO:PRiIJ6x:f:F:zvh" opt; do
+while getopts ":cm:d:lrgASO:PRiIJ6x:f:F:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
     d ) v="$v -d$OPTARG"; d="_$OPTARG";;
     l )	l="${l}l";;
     r )	r="1";;
+    g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";T="strict";;
     O )	A="$A -O$OPTARG";;
@@ -260,3 +263,7 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10; do
     fi
 done
 echo; echo "========== end"
+
+########################################################################
+# time tt -AIlO3 -m"m -O3 W338_22 Y309_03" V340e >> icc.tt_V340
+########################################################################

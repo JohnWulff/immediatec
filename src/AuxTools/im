@@ -3,32 +3,35 @@
 usage ()
 {
   echo 'Usage:' >&2
-  echo "  $name[ -gASxzh][ -e xxx]" >&2
+  echo "  $name[ -gAS6xzh][ -e xxx]" >&2
   echo "	-e xxx	execute with iC compiler xxx (default $ic)" >&2
   echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-O <l>  optimisation -O0 none -O1 bit -O2 arithmetic -O3 both (default)' >&2
+  echo '	-6	produce logic generation listing file.lst6' >&2
   echo '	-x	auxiliary files .iC_list1.h etc not deleted; no pplstfix' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: im,v 1.6 2007/06/11 22:10:29 jw Exp $' >&2
+  echo '	$Id: im,v 1.7 2007/06/21 16:52:01 jw Exp $' >&2
 }
 
 name=${0##*/}
 ic='./immcc'
 A=""
 O=""
+g=""
 x=0
 z=0
 
-while getopts ":e:gASO:xzh" opt; do
+while getopts ":e:gASO:6xzh" opt; do
     case $opt in
     e )	ic="$OPTARG";;
     g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";;
     O )	A="$A -O$OPTARG";;
+    6 ) g="6";;
     x )	A="$A -d4000"; x="1";;
     z )	z=1;;
     h )	usage; exit 0;;
@@ -45,12 +48,17 @@ for f in $*; do
     fi
     if [ -f "$file" ]; then
 	if [ $z -eq 1 ]; then
-	    echo "$ic$A -d474(6) -o $base.c -l $base.lst $file"
+	    echo "$ic$A -d474 -o $base.c -l $base.lst $file"
+	    if [ -n "$g" ]; then
+		echo "$ic$A -d476 -o $base.c -l $base.lst $file"
+	    fi
 	else
 	    echo $file
 	fi
 	$ic$A -d474 -o $base.c -l $base.lst $file
-	$ic$A -d476 -o $base.c -l $base.lst6 $file
+	if [ -n "$g" ]; then
+	    $ic$A -d476 -o $base.c -l $base.lst6 $file
+	fi
     else
 	echo "Error: iC file '$file' does not exist" >&2
     fi

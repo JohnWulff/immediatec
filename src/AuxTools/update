@@ -1,5 +1,5 @@
 #! /bin/bash
-# $Id: update,v 1.5 2007/04/20 07:51:36 jw Exp $
+# $Id: update,v 1.6 2007/06/12 16:37:24 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
@@ -84,7 +84,15 @@ if locked -q; then
 	    else
 		m=${db#$w*}
 		previous="$w$m"
-		let m=$m+1
+		j=${m#0}
+		if [ $j != $m ]; then
+		    let m=$j+1
+		    if [ $m != 10 ]; then
+			m="0$m"
+		    fi
+		else
+		    let m=$m+1
+		fi
 	    fi
 	    branch="$w$m"
 	    if ! Mdiff -kLeq $(locked) $previous; then

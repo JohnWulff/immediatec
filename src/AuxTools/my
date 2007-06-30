@@ -2,13 +2,15 @@
 
 usage ()
 {
-  echo "Usage:	${0##*/} [-ASRiIJ6xzh][ -d<opt>][ -O<level>]" >&2
+  echo "Usage:	${0##*/} [-gASRiIJ6xzh][ -d<opt>][ -O<level>]" >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
+  echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
   echo '	-PP	pedantic-error: error if variable contains $' >&2
-  echo '	-O <l>  optimisation -O0 none -O1 bit -O2 arithmetic -O3 both (default)' >&2
+  echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
+  echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
@@ -19,7 +21,7 @@ usage ()
   echo '	-h	this help text' >&2
   echo 'uses immcc -d76 -d<opt> -O<level> x.ic to make each line of the list pp.lt' >&2
   echo 'uses immcc -d74 -d<opt> -O<level> -o x.c x.ic to make each line of the list pp.lt' >&2
-  echo '	$Id: my,v 1.13 2007/04/02 18:16:31 jw Exp $' >&2
+  echo '	$Id: my,v 1.14 2007/06/16 19:15:49 jw Exp $' >&2
 }
 
 v=""
@@ -30,9 +32,10 @@ A=""
 I=""
 g=""
 
-while getopts ":d:ASO:PRiIJ6xzh" opt; do
+while getopts ":d:gASO:PRiIJ6xzh" opt; do
     case $opt in
     d ) v="$v -d$OPTARG"; d="$d -d$OPTARG";;
+    g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";;
     O )	A="$A -O$OPTARG";;

@@ -5,7 +5,7 @@
 #
 ########################################################################
 
-# $Id: saveX,v 1.3 2007/04/20 07:49:27 jw Exp $
+# $Id: saveX,v 1.4 2007/06/12 16:35:43 jw Exp $
 
 name=${0##*/}
 vp='X'		## save directory prefix
@@ -70,7 +70,15 @@ if [ -f pd.lt ]; then
 	else
 	    m=${db#$w*}
 	    previous="$w$m"
-	    let m=$m+1
+	    j=${m#0}
+	    if [ $j != $m ]; then
+		let m=$j+1
+		if [ $m != 10 ]; then
+		    m="0$m"
+		fi
+	    else
+		let m=$m+1
+	    fi
 	fi
 	branch="$w$m"
 	if ! Mdiff -kLeq -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $previous; then

@@ -2,7 +2,7 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <john@je-wulff.de>
 " Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.1 2007/04/11 15:47:34 jw Exp $
+" $Id: ic.vim,v 1.2 2007/04/13 10:47:10 jw Exp $
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded
@@ -46,12 +46,17 @@ syn match icLineNumber		"^\d\d*"
 syn match icType		"@"
 syn match icSep			"%{"
 syn match icSep			"%}"
-syn match icSep			"^\*\*\* Warning:"
-syn match icError		"^\*\*\* Error:"
+syn match icSep			"^\*\*\* Warning\i*:"
+syn match icError		"^\*\*\* Error\i*:"
+syn match icError		"^\*\*\* .*syntax error"
+syn match icError		"\m---?\M"
+syn match icError		"? ---\&?"
 syn keyword icStorageClass	assign
 syn keyword icStructure		imm immC
 syn keyword icBoolean		true false
-syn keyword icConstant		D DR_ SR SR_ SRT DSR_ SH SHR_ SHSR_ CHANGE RISE CLOCK TIMER TIMER1 FORCE
+syn match icConstant		"D\s*(\&D"
+syn match icConstant		"SH\s*(\&SH"
+syn keyword icConstant		DR_ SR SR_ SRT DSR_ SHR_ SHSR_ CHANGE RISE CLOCK TIMER TIMER1 FORCE
 syn keyword icConstant		SRX JK DR DSR SHR SHSR FALL LATCH DLATCH
 
 " Default highlighting

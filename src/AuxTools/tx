@@ -1,30 +1,104 @@
-#!/bin/sh
-echo '$Id: tx,v 1.3 2007/03/24 14:07:36 jw Exp $'
+#!/bin/bash
+
+########################################################################
+#
+#	tx - convert save directories to optimal links if files do not differ
+#
+########################################################################
+
+version()
+{
+  echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
+  echo '$Id: tx,v 1.4 2007/04/22 06:51:33 jw Exp $' >&2
+}
+
+usage()
+{
+  echo "Usage: $0 [-vh] |[<test dir>] <head dir index>[[ <next dir index>] <source dir name>]" >&2
+  echo "       if <test dir> is a directory it is used - else use Test1 Test2 ... Test10 ..." >&2
+  echo " 1)    if only <head> is given, all files in W<head> are Mdiff$a -kLel with V<head>" >&2
+  echo " 2)    if only <head> and <next> are given, all files in W<next> are Mdiffed" >&2
+  echo "          with V<head>. For all files which are identical links are created" >&2
+  echo "          in V<next> to the same file in V<head>." >&2
+  echo "          Files which are different are copied from W<next> to V<next>." >&2
+  echo " 1a)   if <head>, '' and <source> are given, <source> replaces W<next> in 1)" >&2
+  echo " 2a)   if <head>, <next> and <source> are given, <source> replaces W<next> in 2)" >&2
+  echo " Note: <source> must be a directory in the current test directoy and it must exist" >&2
+  echo "       to work directly in the current directoty make '.' the test directory" >&2
+  echo '	-p	all is output of $(cat pd.lt)' >&2
+  echo '	-a	do not ignore directories and files starting with .' >&2
+  echo '		default: ignore directories and files starting with .' >&2
+  echo '	-x	output parameters only and exit' >&2
+  echo '	-z	echo calls with all options for debugging' >&2
+  echo '	-v	author and version information' >&2
+  echo '	-h	this help text' >&2
+  version
+}
+
+a=''
+p=''
+z=''
+x=''
+
+while getopts ":apxzvh" opt; do
+    case $opt in
+    a )	a="$a -a";;
+    p )	p="$p -p";;
+    x )	x="$x -x";;
+    z )	z="$z -z";;
+    v )	version; exit 0;;
+    h )	usage; exit 0;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
+    esac
+done
+shift $(($OPTIND - 1))
 
 tdirectories=$1
 if [ -n "$tdirectories" -a -d "$tdirectories" ]; then
     shift
 else
-    tdirectories="Test[1-9] Test10"
+    tdirectories="Test[1-9] Test[1-9][0-9]"
 fi
-#echo "'$tdirectories'"
-#exit
+if [ -n "$p" ]; then
+    all='$(cat pd.lt)'
+elif [ "$tdirectories" = '.' ]; then
+    all='*'
+else
+    all='*.*'
+fi
 
 head=$1
 next=$2
 source=$3
+
+if [ -n "$x" ]; then
+    echo "$z '$tdirectories' '$head' '$next' '$source' '$a'; all = $all"
+    exit
+fi
 
 if [ -n "$head" -a -z "$next" ]; then
     if [ -z "$source" ]; then source="W$head"; fi
     head="V$head"
     for t in $tdirectories; do
 	echo "*** $t ***";
+	if [ -n "$z" ]; then
+	    echo "cd $t"
+	fi
 	cd $t;
 	if [ -d "$head" -a -d "$source" ]; then
-	    Mdiff -kLel -I'ic[0-6c]\.' -IAborted $source/*.* $head
+	    if [ -n "$z" ]; then
+		echo "Mdiff$a -kLel -I'ic[0-6c]\.' -IAborted $source/$all $head"
+	    fi
+	    if [ "$source" = '.' -a -n "$p" ]; then
+		Mdiff$a -kLel -I'ic[0-6c]\.' -IAborted $(cat pd.lt) $head
+	    else
+		Mdiff$a -kLel -I'ic[0-6c]\.' -IAborted $source/$all $head
+	    fi
 	else
-	    echo "Error: $head and $source must exist in $t"
-	    ls -ld [VW]*
+	    echo "Error: $head and $source must exist in $t" >&2
+	fi
+	if [ -n "$z" ]; then
+	    echo "cd .."
 	fi
 	cd ..;
     done
@@ -34,39 +108,67 @@ elif [ -n "$head" -a -n "$next" ]; then
     next="V$next"
     for t in $tdirectories; do
 	echo "*** $t ***";
+	if [ -n "$z" ]; then
+	    echo "cd $t"
+	fi
 	cd $t;
 	if [ -d "$head" -a ! -d "$next" -a -d "$source" ]; then
 	    ls -ld $head $source
+	    if [ -n "$z" ]; then
+		echo "mkdir $next"
+		echo "cd $next"
+	    fi
 	    mkdir $next
 	    cd $next
 	    for file in ../$head/*; do
 		if [ -L $file ]; then
+		    if [ -n "$z" ]; then
+			echo "cp -a $file ."
+		    fi
 		    cp -a $file .
 		elif [ -f $file ]; then
+		    if [ -n "$z" ]; then
+			echo "ln -s $file ."
+		    fi
 		    ln -s $file .
 		else
-		    echo "**** Error: $name has strange file $file - not backed up"
+		    echo "**** Error: $name has strange file $file - not backed up" >&2
 		fi
 	    done
-	    rm -f $(Mdiff -Lle * ../$source)	# remove links to files which no longer exist
+	    if [ -n "$z" ]; then
+		echo "rm -f $(Mdiff$a -Lle $all ../$source)	# remove links to files which no longer exist"
+		echo "cd ../$source"
+		echo 'cp --remove-destination -p $(Mdiff$a -kLel -I'ic[0-6c]\.' -IAborted $all ../$next) ../$next 2> /dev/null'
+		echo "cd .."
+	    fi
+	    if [ -n "$p" ]; then
+		rm -f $(Mdiff$a -Lle $(cat ../pd.lt) ../$source)	# remove links to files which no longer exist
+	    else
+		rm -f $(Mdiff$a -Lle $all ../$source)	# remove links to files which no longer exist
+	    fi
 	    cd ../$source
-	    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted *.* ../$next) ../$next 2> /dev/null
+	    if [ -n "$p" ]; then
+		cp --remove-destination -p $(Mdiff$a -kLel -I'ic[0-6c]\.' -IAborted $(cat ../pd.lt) ../$next) ../$next 2> /dev/null
+	    else
+		cp --remove-destination -p $(Mdiff$a -kLel -I'ic[0-6c]\.' -IAborted $all ../$next) ../$next 2> /dev/null
+	    fi
 	    cd ..
 	else
-	    echo "Error: $head and $source must exist in $t wheras $next may not exist in $t"
-	    ls -ld [VW]*
+	    echo "Error: $head and $source must exist in $t wheras $next may not exist in $t" >&2
+	fi
+	if [ -n "$z" ]; then
+	    echo "cd .."
 	fi
 	cd ..;
     done
-else
-    echo "Usage: $0 [<test dir>] <head dir index>[[ <next dir index>] <source dir name>]"
-    echo "       if <test dir> is a directory it is used - else use Test1 Test2 ... Test10"
-    echo " 1)    if only <head> is given, all files in W<head> are Mdiff -kLel with V<head>"
-    echo " 2)    if only <head> and <next> are given, all files in W<next> are Mdiffed"
-    echo "          with V<head>. For all files which are identical links are created"
-    echo "          in V<next> to the same file in V<head>."
-    echo "          Files which are different are copied from W<next> to V<next>."
-    echo " 1a)   if <head>, '' and <source> are given, <source> replaces W<next> in 1)"
-    echo " 2a)   if <head>, <next> and <source> are given, <source> replaces W<next> in 2)"
-    echo " Note: <source> must be a directory in the current Test directoy and it must exist"
 fi
+########################################################################
+# to compare current backups:
+# head=310; for d in Z3[0-9][0-9]; do next=${d#Z*}; echo "### $head $next ###"; tx -z . $next "" Z$next; head=$next; done
+#
+# To make links in Test1 - Test10 for current head Testx/V339
+#   time tt -AIc -m"copy current test results to a temporary backup" W340 >> icc.tt_V340
+#   tx 339 340   # this transfers files from W340 to V340 - links for files identical to V339
+#   rm -fr W340 in due course
+# 
+########################################################################
