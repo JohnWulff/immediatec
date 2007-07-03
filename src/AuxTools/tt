@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: tt,v 1.25 2007/06/16 19:24:34 jw Exp $' >&2
+  echo '$Id: tt,v 1.26 2007/07/03 14:34:52 jw Exp $' >&2
 }
 
 usage()
@@ -168,8 +168,8 @@ for t in Test1 Test9; do
 		    if [ -n "$r" ]; then
 			Rdiff p*.lt
 		    fi
-		    echo; echo "========== $t Mdiff -k$l \$(cat pd.lt) $d1$d"
-		    Mdiff -k$l $(cat pd.lt) $d1$d
+		    echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' \$(cat pd.lt) $d1$d"
+		    Mdiff -k$l -I'ic[0-6c]\.' $(cat pd.lt) $d1$d
 		else
 		    mkdir $d1$d
 		    if [ -d "$head" ]; then
@@ -197,8 +197,8 @@ for t in Test1 Test9; do
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
 	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
-	    Mdiff -k$l $(cat ../pd.lt) $d4$d
+	    echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' $d1$d/* $d4$d"
+	    Mdiff -k$l -I'ic[0-6c]\.' $(cat ../pd.lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -223,8 +223,8 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10; do
 		    if [ -n "$r" ]; then
 			Rdiff p*.lt
 		    fi
-		    echo; echo "========== $t Mdiff -k$l \$(cat p[d$g].lt) $d1$d"
-		    Mdiff -k$l $(cat p[d$g].lt) $d1$d
+		    echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' \$(cat p[d$g].lt) $d1$d"
+		    Mdiff -k$l -I'ic[0-6c]\.' $(cat p[d$g].lt) $d1$d
 		else
 		    mkdir $d1$d
 		    if [ -d "$head" ]; then
@@ -252,8 +252,8 @@ for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10; do
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
 	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l $d1$d/* $d4$d"
-	    Mdiff -k$l $(cat ../p[d$g].lt) $d4$d
+	    echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' $d1$d/* $d4$d"
+	    Mdiff -k$l -I'ic[0-6c]\.' $(cat ../p[d$g].lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
