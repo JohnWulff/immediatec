@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.45 2007/06/07 09:17:25 jw Exp $";
+"@(#)$Id: rsff.c,v 1.46 2007/12/07 08:35:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -30,7 +30,9 @@ static const char rsff_c[] =
 #define min(x,y) ((x) < (y) ? (x) : (y))
 #endif	/* WIN32 */
 
+#ifdef	LOAD
 Gate		iConst = { 1, -NCONST, ARITH, 0, "iConst", 0, 0, 0 };
+#endif	/* LOAD */
 
 /********************************************************************
  *
@@ -496,14 +498,14 @@ iC_rSsh(					/* R_SH slave action on SH */
 {
     Gate *	gs;
 
-    assert(gm->gt_val < 0);			/* S SH receives -1 ==> 1 ??? */
+    assert(gm->gt_val < 0);			/* R SH receives -1 ==> 1 ??? */
     gs = gm->gt_funct;
     if (gs->gt_new != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tS SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\tR SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tS SH %s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\tR SH %s %2d ==>", gs->gt_ids, gs->gt_new);
 #endif
 #endif
 	gs->gt_new = 0;				/* reset SH slave output */
@@ -593,7 +595,13 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	gm->gt_val = 1;				/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gm->gt_new = gm->gt_old = 0;	/* clear arithmetic */
-	} else if (typ == NCONST && gm != &iConst) {
+	} else if (typ == NCONST &&
+#ifdef	LOAD
+	    gm != &iConst
+#else	/* ! LOAD */
+	    strcmp(gm->gt_ids, "iConst") != 0
+#endif	/* LOAD */
+	) {
 	    char *	ep;
 	    /* convert constant 18 from dec, 077 from oct 0x1c from hex */
 	    gm->gt_new = gm->gt_old = strtol(gm->gt_ids, &ep, 0); /* long to int or long */
@@ -840,7 +848,7 @@ iC_fSsw(					/* F_SW slave action on SW */
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%p(\n", (iC_CFunctp)gm->gt_funct);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\tF0x%lx(\n", (long)gm->gt_funct);
 #endif
 	((iC_CFunctp)(gm->gt_funct))(gm);
 #else
@@ -933,7 +941,7 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%p{\n", (iC_CFunctp)gm->gt_funct);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\tF0x%lx{\n", (long)gm->gt_funct);
 #endif
 	((iC_CFunctp)(gm->gt_funct))(gm);
 #else
@@ -1035,7 +1043,7 @@ iC_outMw(					/* NEW OUTW master action */
     int		val;
 #endif
     int		mask;
-    int		channel;
+    long	channel;
     int		rest;
     int		len;
 
@@ -1051,7 +1059,7 @@ iC_outMw(					/* NEW OUTW master action */
 	assert(out_list == iC_s_list);
 	assert(gm->gt_new != gm->gt_old);
 
-	channel = (int)gm->gt_list;		/* set up during registration */
+	channel = (long)gm->gt_list;		/* set up during registration */
 	assert(channel > 0);			/* -1 is error, 0 is not registered */
 	mask = gm->gt_mark;
 	val = gm->gt_old = gm->gt_new;		/* update gt_old since no iC_link_ol */
@@ -1063,7 +1071,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    val &= 0xff;			/* for display only */
 #endif
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%hhd,", channel, (char)val);	/* TODO overflow */
+		"%ld:%hhd,", channel, (char)val);	/* TODO overflow */
 	    iC_outOffset += len;
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val & 0xff);	/* byte */
@@ -1074,7 +1082,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    val &= 0xffff;			/* for display only */
 #endif
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%hd,", channel, (short)val);	/* TODO overflow */
+		"%ld:%hd,", channel, (short)val);	/* TODO overflow */
 	    iC_outOffset += len;
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val);	/* word */
@@ -1084,13 +1092,13 @@ iC_outMw(					/* NEW OUTW master action */
 	if (mask == L_WIDTH) {
 #if INT_MAX == 32767
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%ld,", channel, (long)val);	/* TODO overflow */
+		"%ld:%ld,", channel, (long)val);	/* TODO overflow */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%ld", val);	/* long */
 #endif
 #else
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%d,", channel, val);	/* TODO overflow */
+		"%ld:%d,", channel, val);		/* TODO overflow */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%d", val);	/* long */
 #endif
@@ -1103,7 +1111,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    val &= 0xff;			/* for display only */
 #endif
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%d:%hd,", channel, (short)val);	/* TODO overflow */
+		"%ld:%hd,", channel, (short)val);	/* TODO overflow */
 	    iC_outOffset += len;
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val & 0xff);	/* byte */

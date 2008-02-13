@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.85 2007/06/27 14:33:05 jw Exp $";
+"@(#)$Id: outp.c,v 1.86 2008/02/11 13:05:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -362,15 +362,22 @@ listNet(unsigned gate_count[])
 					fflag = 1;	/* miss only first link of _f0_1 */
 				    } else {
 					link_count++;
-					if (sp->ftype < MAX_AR && lp->le_val != 0) {
-					    tsp = lp->le_sym;	/* arithmetic function */
-					    assert(tsp && (tsp->type == ARN || tsp->type == SH || tsp->type == NCONST || tsp->type == ARNC || tsp->type == ERR));
-					    /* allows IFUNCT to use union v.cnt */
+					if (sp->ftype < MAX_AR &&	/* arithmetic function */
+					    lp->le_val != 0    &&
+					    (tsp = lp->le_sym) != 0) {
+					    assert(
+						tsp->type == ARNC ||
+						tsp->type == ARNF ||
+						tsp->type == ARN ||
+						tsp->type == SH ||
+						tsp->type == NCONST ||
+						tsp->type == INPW ||
+						tsp->type == ERR);
+					    /* also not IFUNCT, allows IFUNCT to use union v.cnt */
 					    tsp->v_cnt++;	/* count reverse parameter */
 					}
 				    }
 				}
-				tsp = lp->le_sym;
 			    }
 			    if (fflag == 0) {	/* miss for _f0_1 */
 				link_count++;		/* for terminator or clock or timer */
@@ -409,10 +416,12 @@ listNet(unsigned gate_count[])
 				    fprintf(iC_outFP, "\t<%s%c", tsp->name, iC_os[tsp->type]);
 				} else {
 				    normalOut:
-				    fprintf(iC_outFP, "\t%c%s%c",
-					(sp->ftype == GATE || sp->ftype == OUTX) &&
-					lp->le_val ? '~' : ' ',
-					tsp->name, iC_os[tsp->type]);
+				    if (tsp) {
+					fprintf(iC_outFP, "\t%c%s%c",
+					    (sp->ftype == GATE || sp->ftype == OUTX) &&
+					    lp->le_val ? '~' : ' ',
+					    tsp->name, iC_os[tsp->type]);
+				    }
 				}
 			    }
 			    fprintf(iC_outFP, "\n");
@@ -457,14 +466,16 @@ listNet(unsigned gate_count[])
 	}
 	fprintf(iC_outFP, "\nTOTAL\t%8u blocks\n", block_total);
 	fprintf(iC_outFP, "\t%8u links\n", link_count);
-	fprintf(iC_outFP, "\t%8ld bytes\n", byte_total);
     }
     if (iClockHidden) {
 	block_total++;				/* iClock is generated anyway in buildNet() */
 	gate_count[CLK]++;
     }
-    /* do not change spelling - used in 'pplstfix' */
-    if (iC_debug & 076) fprintf(iC_outFP, "\ncompiled by:\n%s -O%o\n", iC_ID, iC_optimise);
+    if (iC_debug & 076) {
+	/* do not change spelling "\ncompiled by:" - used in 'pplstfix' */
+	fprintf(iC_outFP, "\ncompiled by:\n%s -%sO%o\n",
+	    iC_ID, iC_gflag ? "g" : "", iC_optimise);
+    }
     if ((undefined += gate_count[UDF]) > 0) {
 	char undBuf[32];
 	snprintf(undBuf, 32, "%d undefined gate%s",
@@ -548,7 +559,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	val = 0;
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
-		if (sp->type == typ) {
+		if (sp->type == typ && (sp->fm & FM) == 0 && (typ != NCONST || sp->u_val != 0)) {
 		    gp->gt_ini = -typ;		/* overwritten for AND OR LATCH types */
 		    gp->gt_fni = sp->ftype;	/* basic gate first */
 		    gp->gt_ids = sp->name;	/* gate to symbol name */
@@ -565,7 +576,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	for (typ = 0; typ <= MAX_OP; typ++) {	/* include ALIAS */
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		for (sp = *hsp; sp; sp = sp->next) {
-		    if (sp->type == typ) {
+		    if (sp->type == typ && (sp->fm & FM) == 0 && (typ != NCONST || sp->u_val != 0)) {
 			if (typ < MAX_LV) {
 			    gp->gt_list = fp;	/* start of gate list */
 			    if (sp->ftype < MIN_ACT) {
@@ -744,7 +755,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	    for (typ = 0; typ < MAX_OP; typ++) {	/* keep gp in same order */
 		for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		    for (sp = *hsp; sp; sp = sp->next) {
-			if (sp->type == typ) {
+			if (sp->type == typ && (sp->fm & FM) == 0 && (typ != NCONST || sp->u_val != 0)) {
 			    if (sp->ftype < MAX_AR) {	/* Arithmetic Gate */
 				for (lp = sp->list; lp; lp = lp->le_next) {
 				    tsp = lp->le_sym;
@@ -785,7 +796,10 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	    }
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		for (sp = *hsp; sp; sp = sp->next) {
-		    if (sp->type < MAX_OP && (tgp = sp->u_gate) != 0) {
+		    if ((typ = sp->type) < MAX_OP &&
+			(tgp = sp->u_gate) != 0 &&
+			(sp->fm & FM) == 0 &&
+			(typ != NCONST || sp->u_val != 0)) {
 			tgp->gt_new = 0;	/* restore gt_new */
 		    }
 		}
@@ -817,7 +831,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	 *******************************************************************/
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
-		if ((typ = sp->type) == ALIAS && sp->list != 0 &&
+		if ((typ = sp->type) == ALIAS && (sp->fm & FM) == 0 && sp->list != 0 &&
 		    ((ftyp = sp->ftype) == GATE || ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)) {
 		    val = sp->list->le_val;
 		    tsp = sp->list->le_sym;
@@ -1111,10 +1125,10 @@ outNet(FILE * iFP, char * outfile)
  *******************************************************************/\n\
 \n\
 static const char	iC_compiler[] =\n\
-\"%s\";\n\
+\"%s -%sO%o\";\n\
 \n\
 #include	<icg.h>\n\
-",	inpNM, outfile, iC_ID);
+",	inpNM, outfile, iC_ID, iC_gflag ? "g" : "", iC_optimise);
     linecnt += 11;
 
     /********************************************************************
@@ -1776,11 +1790,11 @@ static iC_Gt *	iC_l_[] = {\n\
 			    }
 			    if (uc) {
 				Gate **	gpp;
-				int	useWord;
-				int	useBits;
-				int	i;
-				int	i1;
-				int	j;
+				unsigned int	useWord;
+				int		useBits;
+				int		i;
+				int		i1;
+				int		j;
 
 				uc = (USE_COUNT - 1 + uc) / USE_COUNT;	/* # of words extra */
 				gpp = (Gate **)calloc(uc, sizeof(Gate *));	/* use words */
@@ -1793,7 +1807,7 @@ static iC_Gt *	iC_l_[] = {\n\
 				    i += 2;
 				    if (i >= (USE_COUNT << 1)) {
 					assert(j < uc);
-					gpp[j++] = (Gate *)useWord;
+					gpp[j++] = (Gate *)(unsigned long)useWord;
 					i = useWord = 0;
 				    }
 				    while (tsp->type == ALIAS) {
@@ -1810,7 +1824,7 @@ static iC_Gt *	iC_l_[] = {\n\
 				    lc++;
 				}
 				if (i) {
-				    gpp[j++] = (Gate *)useWord;
+				    gpp[j++] = (Gate *)(unsigned long)useWord;
 				    assert(j == uc);
 				} else {
 				    i = USE_COUNT << 1;
@@ -1824,7 +1838,7 @@ static iC_Gt *	iC_l_[] = {\n\
 					linecnt++;
 					len = 16 + i1;
 				    }
-				    fprintf(Fp, "%s(iC_Gt*)%p,", fs, gpp[j]);	/* write use bits */
+				    fprintf(Fp, "%s(iC_Gt*)0x%lx,", fs, (long)gpp[j]);	/* write use bits */
 				    fs = " ";
 				    lc++;
 				}

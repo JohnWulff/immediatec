@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.70 2007/06/27 16:09:45 jw Exp $";
+"@(#)$Id: genr.c,v 1.71 2008/02/12 13:53:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -193,6 +193,7 @@ op_force(				/* force linked Symbol to correct ftype */
 		ierror("cannot force from", iC_full_ftype[sp->ftype]);
 	    }
 	    lp1 = op_push(0, typ, lp);
+	    assert(lp->le_first == 0 || lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
 	    lp1->le_first = lp->le_first;
 	    lp1->le_last = lp->le_last;
 	    lp = lp1;	/* create a new @ symbol linked to old */
@@ -543,6 +544,7 @@ const_push(Lis * expr)
 	assert(iconst);			/* only cleared in listNet() if not used */
 	lp = sy_push(iconst);		/* link to "iConst" */
 	expr->v = op_push(0, ARN, lp);
+	assert(expr->f == 0 || expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]);
 	expr->v->le_first = lp->le_first = expr->f;	/* identifies as const expression */
 	expr->v->le_last  = lp->le_last  = expr->l;
     } else {
@@ -559,6 +561,7 @@ const_push(Lis * expr)
 	    ierror("use of a constant which was previously used for a different purpose:", buf);
 	}
 	expr->v = sy_push(sp);		/* expr->v->le_first == 0 is simple const */
+	assert(expr->f == 0 || expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]);
 	expr->v->le_first = expr->f;	/* identifies as const expression */
 	expr->v->le_last  = expr->l;	/* no need to be 0 - JW 12.Apr.2007 */
     }
@@ -1823,18 +1826,22 @@ op_asgn(				/* asign List_e stack to links */
 	}
     } else
     if (sv == 0) {
-	lp = sr->list;			/* link action to temp */
-	assert(lp && lp->le_sym == var);
-	lp->le_sym = 0;			/* erase reference to temp either way */
-#if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "op_asgn:  %s deleted\n\n", var->name);
-	    fflush(iC_outFP);
+	if (var->ftype == F_ERR) {
+	    var->type = ERR;
+	} else {
+	    lp = sr->list;		/* link action to temp */
+	    assert(lp && lp->le_sym == var);
+	    lp->le_sym = 0;		/* erase reference to temp either way */
+    #if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "op_asgn:  %s deleted\n\n", var->name);
+		fflush(iC_outFP);
+	    }
+    #endif
+	    free(var->name);		/* free name space */
+	    free(var);			/* temporary Symbol */
+	    var = 0;
 	}
-#endif
-	free(var->name);		/* free name space */
-	free(var);			/* temporary Symbol */
-	var = 0;
     }
     if (iC_debug & 04) fprintf(iC_outFP, "\n");
     return var;
@@ -1910,11 +1917,13 @@ para_push(
 	assert(lp1->le_val == (unsigned)-1);
 	lp2 = sy_push(lp1->le_sym);	/* lp1 has changed */
 	lp2->le_val = (unsigned)-1;	/* mark link as -1 timer before op_push */
+	assert(lp1->le_first == 0 || lp1->le_first >= iCbuf && lp1->le_last < &iCbuf[IMMBUFSIZE]);
 	lp2->le_first = lp1->le_first;	/* copy expr text */
 	lp2->le_last  = lp1->le_last;	/* copy expr termination */
 	lpc = op_push(lpc, TIM, lp2);
     }
     lp1 = op_push(sy_push(fname->v), bTyp(aex->v), aex->v);
+    assert(aex->f == 0 || aex->f >= iCbuf && aex->l < &iCbuf[IMMBUFSIZE]);
     lp1->le_first = aex->f; lp1->le_last = aex->l;
     if (ft) {
 	if (lp1->le_sym->ftype == D_FF ||	/* force ft for set or reset */
@@ -3861,6 +3870,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	}
 	clp = sy_push(nsp);			/* clone one list element */
 	clp->le_val = flp->le_val ^ nval;	/* negation or arithmetic index in para */
+	assert(first == 0 || first >= iCbuf && last < &iCbuf[IMMBUFSIZE]);
 	clp->le_first = first;			/* transfer arithmetic text */
 	clp->le_last = last;
 	if (tlp == 0) {
@@ -3873,6 +3883,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	    assert(nsp);
 	    clp = sy_push(nsp);			/* clone follow up delay element */
 	    clp->le_val = nlp->le_val;		/* negation or arithmetic index in delay */
+	    assert(nlp->le_first == 0 || nlp->le_first >= iCbuf && nlp->le_last < &iCbuf[IMMBUFSIZE]);
 	    clp->le_first = nlp->le_first;	/* transfer arithmetic text */
 	    clp->le_last = nlp->le_last;
 	    tlp = tlp->le_next = clp;		/* also link delay element */
@@ -3955,6 +3966,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	    fflush(iC_outFP);
 	}
 #endif
+	assert(ttp == 0 || ttp >= iCbuf);
 	rlp->le_first = ttp;			/* first of this statement expression text */
 	*ttp++ = '#';				/* room to parenthesise arithmetic function expression */
 	icp = 0;

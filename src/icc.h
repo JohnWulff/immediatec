@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.63 2007/06/13 14:38:42 jw Exp $";
+"@(#)$Id: icc.h,v 1.64 2008/02/12 13:34:00 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -108,6 +108,7 @@ static const char icc_h[] =
 			    /* clock outputs */
 #define	iC_CLCKL	20	/* clock action */
 #define	iC_TIMRL	21	/* timer action */
+#define	iC_F_ERR	22	/* error action */
 
 typedef struct Gate {			/* Gate */
 	char		gt_val;		/* forward logic value */
@@ -235,6 +236,7 @@ extern void		iC_display(int * dis_cntp, int dis_max);
 			    /* clock outputs */
 #define	CLCKL	iC_CLCKL	/* clock action */
 #define	TIMRL	iC_TIMRL	/* timer action */
+#define	F_ERR	iC_F_ERR	/* error action */
 
 typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 
@@ -311,7 +313,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #define	FTYPES \
 	UDFA, ARITH, ARITH, ARITH, GATE, GATE, GATE, GATE, GATE,\
 	D_SH, D_FF, RI_BIT, CH_BIT, F_SW, F_CF, ARITH, OUTX, ARITH, TRAB,\
-	CLCK, TIMR, GATE, GATE, 0, 0, 0, 0,
+	CLCK, TIMR, GATE, F_ERR, 0, 0, 0, 0,
 
 /* compiler tokens corresponding to type */
 #define	DEF_TYP \
@@ -333,7 +335,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
  *
  *	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH
  *	CH_BIT	S_FF	R_FF	D_FF	F_SW	F_CF	F_CE	CLCK	TIMR
- *	TRAB	OUTW	OUTX	CLCKL	TIMRL
+ *	TRAB	OUTW	OUTX	CLCKL	TIMRL	F_ERR
  *
  *******************************************************************/
 
@@ -341,63 +343,63 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #define	FULL_FTYPE \
 	"UDFA","ARITH","GATE","GATEX","RI_BIT","S_SH","R_SH","D_SH",\
 	"CH_BIT","S_FF","R_FF","D_FF","F_SW","F_CF","F_CE","CLCK","TIMR",\
-	"TRAB","OUTW","OUTX","CLCKL","TIMRL",
+	"TRAB","OUTW","OUTX","CLCKL","TIMRL","F_ERR",
 
 /* list of iC_ extended ftypes in icg.h */
 #define	iC_EXT_FTYPE \
 	"iC_UDFA","iC_ARITH","iC_GATE","iC_GATEX","iC_RI_BIT","iC_S_SH","iC_R_SH","iC_D_SH",\
 	"iC_CH_BIT","iC_S_FF","iC_R_FF","iC_D_FF","iC_F_SW","iC_F_CF","iC_F_CE","iC_CLCK","iC_TIMR",\
-	"iC_TRAB","iC_OUTW","iC_OUTX","iC_CLCKL","iC_TIMRL",
+	"iC_TRAB","iC_OUTW","iC_OUTX","iC_CLCKL","iC_TIMRL","iC_F_ERR",
 
 /* iC_Functp2		initAct[] = {		// called in pass4 */
 #define INIT_ACT \
 	iC_err_fn, iC_arithMa, iC_link_ol, iC_link_ol, link_c, link_c, link_c, iC_dMsh, \
 	iC_chMbit, link_c, link_c, link_c, link_c, link_c, link_c, link_c, link_c, \
-	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn,
+	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp2		masterAct[] = {		// called in scan, scan_ar and pass4 */
 #define MASTER_ACT \
 	iC_err_fn, iC_arithMa, iC_link_ol, iC_link_ol, iC_riMbit, iC_sMsh, iC_rMsh, iC_dMsh, \
 	iC_chMbit, iC_sMff, iC_rMff, iC_dMff, iC_fMsw, iC_fMcf, iC_fMce, iC_fMfn, iC_fMfn, \
-	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn,
+	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp2		slaveAct[] = {		// called in scan_clk */
 #define SLAVE_ACT \
 	iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_riSbit, iC_sSsh, iC_rSsh, iC_dSsh, \
 	iC_chSbit, iC_sSff, iC_rSff, iC_dSff, iC_fSsw, iC_fScf, iC_fScf, iC_clockSfn, iC_timerSfn, \
-	iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn,
+	iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp		init2[] = {		// called in pass2 */
 #define INIT2_ACT \
 	iC_null1, iC_gate2, iC_gate2, iC_gate2, iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_i_ff2, \
 	iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_null1, iC_null1, iC_null1, iC_i_ff2, iC_i_ff2, \
-	iC_null1, iC_null1, iC_null1, iC_null1, iC_null1,
+	iC_null1, iC_null1, iC_null1, iC_null1, iC_null1, iC_null1,
 
 /* unsigned int	iC_bit2[] = {			// used in i_ff2() and i_ff3() */
 #define BIT2_LST \
 	0, INPT_M, INPT_M, INPT_M, RI_B_M, S_SH_M, R_SH_M, D_SH_M, \
 	CH_B_M, S_FF_M, R_FF_M, D_FF_M, F_CW_M, F_CF_M, F_CF_M, CLCK_M, TIMR_M, \
-	0, OUTP_M, 0, 0, 0,	/* TRAB and OUTX ==> 0 jw 040417 */
+	0, OUTP_M, 0, 0, 0, 0,	/* TRAB and OUTX ==> 0 jw 040417 */
 
-#define	FOPS	"UA _EsrHVSRDIFGCTBWX:!"	/* DEBUG display of ftypes */
+#define	FOPS	"UA _EsrHVSRDIFGCTBWX:!e"	/* DEBUG display of ftypes */
 
 /* types corresponding to ftypes */
 #define	TYPES \
 	UDF, ARN, OR, OR, EF, SH, SH, SH, \
 	VF, FF, FF, FF, SW, CF, CF, CLK, TIM, \
-	INPX, ARN, AND, ERR, ERR
+	INPX, ARN, AND, ERR, ERR, ERR,
 
 /* C types corresponding to ftypes */
 #define	CTYPES \
 	UDF, ARNC, LOGC, LOGC, ERR, ERR, ERR, ERR, ERR,\
 	ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, \
-	ERR, ARNC, LOGC,ERR, ERR
+	ERR, ARNC, LOGC,ERR, ERR, ERR,
 
 /* compiler tokens corresponding to ftype */
 #define	DEF_ACT \
 	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, AOUT, LOUT, CVAR, TVAR
+	YYERRCODE, AOUT, LOUT, CVAR, TVAR, YYERRCODE,
 
 #if INT_MAX == 32767
 #define VAR_USE		0x8000		/* largest value generating unsigned short */
@@ -412,7 +414,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #define VAR_MASK	0x1fffffff	/* (VAR_ASSIGN-1) is a positive value */
 #define USE_OFFSET	29
 #endif	/* INT_MAX == 32767 */
-#define USE_COUNT	(sizeof(iC_Gt*)*4)
+#define USE_COUNT	(sizeof(unsigned int)*4)
 #define USE_TEXT	"??","="," v","=v",	/* must be 4 entries */
 
 #define YYERRCODE	256		/* defined in comp.c but not exported */

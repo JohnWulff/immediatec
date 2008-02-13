@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.96 2007/06/25 11:04:45 jw Exp $";
+"@(#)$Id: comp.y,v 1.97 2008/02/12 13:37:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -113,7 +113,7 @@ pu(int t, char * token, Lis * node)
     if (len > 0 && t_first >= iCbuf && t_first < &iCbuf[IMMBUFSIZE] && t_last >= iCbuf && t_last < &iCbuf[IMMBUFSIZE]) {
 	fprintf(iC_outFP, "%-*.*s\n", len, len, t_first);
     } else if (len != 0) {
-	fprintf(iC_outFP, "\n*** Error: CODE GENERATION len = %d, f = %p l = %p\n", len, t_first, t_last);
+	fprintf(iC_outFP, "\n*** Error: CODE GENERATION len = %d, f = 0x%lx l = 0x%lx\n", len, (long)t_first, (long)t_last);
     } else {
 	fprintf(iC_outFP, "\n");
     }
@@ -887,7 +887,10 @@ asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 	| NUMBER '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		ierror("assignment to a number is illegal:", $$.f);
-		if (($$.v = op_asgn(0, &$3, ARITH)) == 0) YYERROR;
+		if (($$.v = op_asgn(0, &$3, F_ERR)) == 0) YYERROR;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(0, "asgn: NUMBER (ERR)", (Lis*)&$$);
+#endif
 	    }
 	;
 
@@ -900,6 +903,7 @@ asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 aexpr	: expr			{
 		$$ = $1;
 		if ($$.v != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -909,6 +913,7 @@ aexpr	: expr			{
 	| asgn			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "aexpr: asgn", &$$);
@@ -926,6 +931,7 @@ expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = checkDecl($1.v);
 		$1.v->ftype = GATE;
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr: UNDEF", &$$);
@@ -945,6 +951,7 @@ expr	: UNDEF			{
 	| valueVariable		{		/* LVAR LVARC AVAR AVARC */
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = checkDecl($1.v);
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr: valueVariable", &$$);
@@ -953,6 +960,7 @@ expr	: UNDEF			{
 	| outVariable		{		/* LOUT AOUT */
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr: outVariable", &$$);
@@ -968,6 +976,7 @@ expr	: UNDEF			{
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr: fexpr", &$$);
@@ -976,6 +985,7 @@ expr	: UNDEF			{
 	| cCall			{
 		$$ = $1;
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -985,6 +995,7 @@ expr	: UNDEF			{
 	| iFunCall			{
 		$$ = $1;
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -994,6 +1005,7 @@ expr	: UNDEF			{
 	| '(' aexpr ')'		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = $2.v) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1024,6 +1036,7 @@ expr	: UNDEF			{
 		    nsp->v_elist = sy_push(nsp); /* feeds back to itself */
 		    nsp->v_elist->le_next = nlp;
 		}
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr: BLATCH", &$$);
@@ -1039,6 +1052,7 @@ expr	: UNDEF			{
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
 		$$.v->le_sym->type = LATCH;
+		assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(1, "expr: BFORCE", &$$);
@@ -1063,6 +1077,7 @@ expr	: UNDEF			{
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		}
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1084,6 +1099,7 @@ expr	: UNDEF			{
 		    $$.v = op_push(lpL, XOR, lpR);	/* logical ^ */
 		}
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1105,6 +1121,7 @@ expr	: UNDEF			{
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		}
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1119,6 +1136,7 @@ expr	: UNDEF			{
 		lpL = op_force($1.v, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    $$.v = op_force($$.v, GATE);	/* default output */
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1132,6 +1150,7 @@ expr	: UNDEF			{
 		lpR = op_force($3.v, ARITH);
 		lpL = op_force($1.v, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1145,6 +1164,7 @@ expr	: UNDEF			{
 		lpR = op_force($3.v, ARITH);
 		lpL = op_force($1.v, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1158,6 +1178,7 @@ expr	: UNDEF			{
 		lpR = op_force($3.v, ARITH);
 		lpL = op_force($1.v, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1199,6 +1220,7 @@ expr	: UNDEF			{
 		    $$.v = op_force($$.v, GATE);	/* default GATE output */
 		}
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1229,6 +1251,7 @@ expr	: UNDEF			{
 		    $$.v = op_force($$.v, GATE);	/* default GATE output */
 		}
 		if ($$.v) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1253,6 +1276,7 @@ expr	: UNDEF			{
 		lpR = op_push(lpL, ARN, lpR);
 		lpL = op_force($1.v, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1296,6 +1320,7 @@ expr	: UNDEF			{
 		lpR = op_force($4.v, ARITH);
 		lpL = op_force($1.v, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 		if (iC_Pflag) {
@@ -1338,6 +1363,7 @@ expr	: UNDEF			{
 							/* bitwise negation */
 			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
 		    }
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		} else {
 		    $$.v = 0;				/* constant negation */
@@ -1364,6 +1390,7 @@ expr	: UNDEF			{
 							/* arithmetic negation */
 			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
 		    }
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		} else {
 		    $$.v = 0;				/* constant negation */
@@ -1379,6 +1406,7 @@ expr	: UNDEF			{
 	| PM expr %prec '!'	{			/* unary + or - */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1402,6 +1430,7 @@ lexpr	: aexpr ',' aexpr		{
 		lpR = op_not(op_force($3.v, GATE));
 		lpL = op_force($1.v, GATE);
 		if (($$.v = op_push(lpL, LOGC, lpR)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -1762,16 +1791,20 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		liR.v = op_force(liR.v, GATE);		/* res */
 		noS.v = sy_push(liS.v->le_sym);		/* copy set */
 		noS.v->le_val ^= NOT;			/* ~set */
+		assert(noS.f == 0 || noS.f >= iCbuf && noS.l < &iCbuf[IMMBUFSIZE]);
 		noS.v->le_first = noS.f;
 		noS.v->le_last  = noS.l;
 		noR.v = sy_push(liR.v->le_sym);		/* copy res */
 		noR.v->le_val ^= NOT;			/* ~res */
+		assert(noR.f == 0 || noR.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]);
 		noR.v->le_first = noR.f;
 		noR.v->le_last  = noR.l;
 		xxS.v = op_push(liS.v, AND, noR.v);	/* set & ~res */
+		assert(liS.f == 0 || liS.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]);
 		xxS.f = xxS.v->le_first = liS.f;
 		xxS.l = xxS.v->le_last  = noR.l;
 		xxR.v = op_push(noS.v, AND, liR.v);	/* ~set & res */
+		assert(noS.f == 0 || noS.f >= iCbuf && liR.l < &iCbuf[IMMBUFSIZE]);
 		xxR.f = xxR.v->le_first = noS.f;
 		xxR.l = xxR.v->le_last  = liR.l;
 		$$.v = bltin(&$1, &xxS, 0, 0, 0, &xxR, &$6, 0, 0);
@@ -1801,16 +1834,20 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		liR.v = op_force(liR.v, GATE);		/* res */
 		noS.v = sy_push(liS.v->le_sym);		/* copy set */
 		noS.v->le_val ^= NOT;			/* ~set */
+		assert(noS.f == 0 || noS.f >= iCbuf && noS.l < &iCbuf[IMMBUFSIZE]);
 		noS.v->le_first = noS.f;
 		noS.v->le_last  = noS.l;
 		noR.v = sy_push(liR.v->le_sym);		/* copy res */
 		noR.v->le_val ^= NOT;			/* ~res */
+		assert(noR.f == 0 || noR.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]);
 		noR.v->le_first = noR.f;
 		noR.v->le_last  = noR.l;
 		xxS.v = op_push(liS.v, AND, noR.v);	/* set & ~res */
+		assert(liS.f == 0 || liS.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]);
 		xxS.f = xxS.v->le_first = liS.f;
 		xxS.l = xxS.v->le_last  = noR.l;
 		xxR.v = op_push(noS.v, AND, liR.v);	/* ~set & res */
+		assert(noS.f == 0 || noS.f >= iCbuf && liR.l < &iCbuf[IMMBUFSIZE]);
 		xxR.f = xxR.v->le_first = noS.f;
 		xxR.l = xxR.v->le_last  = liR.l;
 		$$.v = bltin(&$1, &xxS, &$5, 0, 0, &xxR, &$8, 0, 0);
@@ -2413,6 +2450,7 @@ cParams	: /* nothing */		{ $$.v =  0; }
 cPlist	: aexpr			{
 		$$.f = $1.f; $$.l = $1.l;
 		if (($$.v = cListCount(0, $1.v)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -2422,6 +2460,7 @@ cPlist	: aexpr			{
 	| cPlist ',' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = cListCount($1.v, $3.v)) != 0) {
+		    assert($$.f == 0 || $$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]);
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
@@ -2535,6 +2574,7 @@ fParams	: /* nothing */			{ $$.v =  0; }
 fPlist	: formalParameter		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = sy_push($1.v);			/* first link in parameter list */
+		assert($1.f == 0 || $1.f >= iCbuf && $1.l < &iCbuf[IMMBUFSIZE]);
 		$$.v->le_first = $1.f;
 		$$.v->le_last = $1.l;
 #if YYDEBUG
@@ -2550,6 +2590,7 @@ fPlist	: formalParameter		{
 		    lp = lp->le_next;
 		}
 		lp = lp->le_next = sy_push($3.v); /* link to end of parameter list */
+		assert($3.f == 0 || $3.f >= iCbuf && $3.l < &iCbuf[IMMBUFSIZE]);
 		lp->le_first = $3.f;
 		lp->le_last = $3.l;
 #if YYDEBUG

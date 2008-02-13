@@ -34,7 +34,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iClift,v 1.3 2005/07/04 14:07:22 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClift,v 1.4 2008/02/13 16:26:07 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -43,8 +43,8 @@ require "getopts.pl";
 
 $opt_c = 7 unless defined $opt_c;	# delay between cage steps
 $opt_d = 0 unless defined $opt_d;	# door type 0 open from centre, 1 left, -1 right
-$opt_W = 370 unless defined $opt_W;	# width of canvas in pixels
-$opt_H = 644 unless defined $opt_H;	# height of canvas in pixels
+$opt_W = 400 unless defined $opt_W;	# width of canvas in pixels
+$opt_H = 850 unless defined $opt_H;	# height of canvas in pixels
 my $to = 2;			# triangle offset in square buttons
 
 if ($opt_h) {
@@ -53,7 +53,7 @@ if ($opt_h) {
 
 my ($t0, $t1, $sec, $usec);
 if ($opt_m) {
-    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    use Time::HiRes qw(gettimeofday);
     $t0 = [gettimeofday];	# start of program
 }
 
@@ -84,8 +84,11 @@ my $canvas = $c->Subwidget('canvas');
 
 my $cageId;
 my $cage = draw_cage($canvas, 165, $opt_H - 215, 110, 145);
-my $door = draw_door($canvas, 165, $opt_H - 220,  55, 145, 2, $opt_d);
-my $wall = draw_wall($canvas, 165, $opt_H - 215, 300, 200, 100, 133);
+my $door = draw_door($canvas, 165, $opt_H - 217,  55, 137, 2, $opt_d);
+my $wall_3 = draw_wall($canvas, 165, $opt_H - 215, 300, 200, 100, 133);
+my $wall_2 = draw_wall($canvas, 165, $opt_H - 420, 300, 200, 100, 133);
+my $wall_1 = draw_wall($canvas, 165, $opt_H - 625, 300, 200, 100, 133);
+my $wall_0 = draw_wall($canvas, 165, $opt_H - 830, 300, 200, 100, 133);
 # my ($canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd) = @$wall;
 
 $mw->bind('<Key-Up>',	  [ \&move_cage, $cage, 1      ]);	# cage up

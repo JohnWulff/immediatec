@@ -52,7 +52,7 @@ my %delayedColour;	# colour that should be restored after a flash
 #
 #	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH	0-8
 #	CH_BIT	S_FF	R_FF	D_FF	F_SW	F_CF	F_CE	CLCK	9-15
-#	TIMR	TRAB	OUTW	OUTX	CLCKL	TIMRL			16-21
+#	TIMR	TRAB	OUTW	OUTX	CLCKL	TIMRL	F_ERR		16-22
 #	MAX_FTY	+ARITH	+GATE	+GATEX	+GATE+INV  ...	+CLCKL	+TIMRL	22-25...42-43
 #
 #	ftype-abbreviations are used for debugging to list the Symbol Table.
@@ -64,7 +64,7 @@ my %delayedColour;	# colour that should be restored after a flash
 
 my @abbrevSelect  = ( 'U','A',' ','_','E','s','r','H','V','S','R','D','I','F','G',
 		      'C','T','B','W','X',':','!',		   # as[ftype] 0 - 21
-		      '?','aA','a ','a_','~ ','~_','?','?','?','?','?','?','?','?',
+		      'e','aA','a ','a_','~ ','~_','?','?','?','?','?','?','?','?',
 		      '?','?','?','?','?','a:','a!',		   # ALIAS    22 - 43
 		    );
 
@@ -110,7 +110,7 @@ Usage:
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
-    -f font font to use in Text window (default '9x15')
+    -f font font or font size to use in Text window (default '16')
     -l num  height of the Text window (default @<)
 					$opt_l
     -w num  width  of the Text window (default @<)
@@ -167,7 +167,7 @@ Usage:
 
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.39 2006/01/10 12:51:05 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.40 2008/02/12 19:05:07 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -186,6 +186,27 @@ if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
     $u = ' -u';			# show -u option in title when editing
 }
+
+my ($fontSize, $font);
+if (defined $opt_f) {
+    if ($opt_f =~ /^\d+$/) {
+	$fontSize = $opt_f;
+    } else {
+	$font = $opt_f;
+    }
+}
+unless ($font) {
+    if ($ENV{COMSPEC}) {	# defined on Windows 98 and Windows XP
+	$fontSize = 10 unless $fontSize;
+	$font = "{Lucida Console} $fontSize normal";
+    } else {			# Linux
+	$fontSize = 16 unless $fontSize;
+	$font = "-adobe-courier-medium-r-normal--$fontSize-100-100-100-m-90-iso8859-1";
+    }
+}
+no warnings;
+print "opt_f = '$opt_f' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
+use warnings;
 
 ########################################################################
 #
@@ -215,10 +236,6 @@ $SIG{PIPE} = \&catch_sig;	# catch signal in syswrite() in Msg.pm line 103
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
-my $font = defined $opt_f ? $opt_f :
-			    $ENV{COMSPEC} ?	# defined on Windows 98 and Windows XP
-				'{Lucida Console} 10 normal' :
-				'9x15';		# Linux
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
 my $maxSymbolLength = 4;
 my @activeSymbols;	# $activeSymbols[$index][0 .. 3] = ($ts,$val,$cs,[$sec,$usec])
@@ -265,6 +282,7 @@ my $prevText = '';
 my $prevMatch = '';
 my $prevStart = 0;
 my $prevLast  = 0;
+my $server  = 0;
 
 ########################################################################
 #
@@ -414,12 +432,14 @@ $build_mb->command(-label       => 'Build C file only',
 		   -accelerator => 'Alt-c',
 		   -command     => [ \&build_file, 0, 2 ]);
 if ($opt_T) {
-    $build_mb->command(-label   => 'T to iCserver',
-    		       -command => sub { conn_send_now('T') if $conn; });
     $build_mb->command(-label   => 'Symbol Table by name',
     		       -command => [ \&output_symbol_table, 0, 0 ]);
     $build_mb->command(-label   => 'Symbol Table by index',
     		       -command => [ \&output_symbol_table, 0, 1 ]);
+    $build_mb->command(-label   => 'T to iCserver',	# iCserver prints table
+    		       -command => sub { conn_send_now('T') if $conn; });
+    $build_mb->command(-label   => 'X to iCserver',	# stop iCserver
+    		       -command => sub { conn_send_now('X') if $conn; });
 }
 my $makeName = '';
 my $restartFlag = 0;
@@ -759,6 +779,7 @@ ini_program();
 #	Connect to iCserver
 ########################################################################
 
+print "$named: initial register_at_server\n" if $opt_T;
 register_at_server();
 
 ########################################################################
@@ -872,6 +893,7 @@ no warnings;
 	    print "do_scan complete, $start, $last, '$_[1]'\n" if $opt_t;
 use warnings;
 	}
+	$last--;			# actual last line
 	info_display(0, 'dark green', "$start      $last");
     }
 } # adjust_live
@@ -900,12 +922,17 @@ sub conn_send_now {
 ########################################################################
 
 sub register_at_server {
-    unless ($conn) {
+    my $i = 0;
+    CONNECT: until ($conn) {
 	$conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 	if ($conn) {
 	    print "Connection $named at server.\n";
 	    $mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 	    info_display(2000, 'blue', "Connection to '$host:$port'");
+	} else {
+	    last CONNECT if $i++ >= 3;
+	    fork_and_exec('iCserver', '-a');	# start iCserver
+	    $server = 1;			# remember that this iClive started iCserver
 	}
     }
     if ($conn) {
@@ -919,14 +946,18 @@ sub register_at_server {
 	    my ($tmsg, $terr) = $conn->rcv_now();
 no warnings;
 	    print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
-	    my $i = 0;
+	    $i = 1;
 	    REPEAT:
-	    if ($tmsg !~ /^(\d+),(\d+)$/) {		# analyse registration reply now
+	    if ($tmsg !~ /^(\d+),(\d+)$/) {	# analyse registration reply now
 		rcvd_msg_from_server($conn, $tmsg, $terr);
+		unless ($conn) {
+		    print "$named: failed to register on attempt $i\n" if $opt_T;
+		    goto FAILED_TO_REGISTER;	# stop trying if registered twice
+		}
 		($tmsg, $terr) = $conn->rcv_now();
-		print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
-		die "registration failed\n" if ++$i >= 3;
-		goto REPEAT;
+		print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
+		die "registration failed\n" if $i++ >= 3;
+		goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
 	    }
 use warnings;
 	    $C_channel = $1;	# receiver channel from control program
@@ -976,7 +1007,7 @@ sub rcvd_msg_from_server {
     die "named: rcvd on a strange connection '$rConn', should be '$conn'\n$msg\n" if $rConn ne $conn;
     if (defined $msg) {
 	my $len = length $msg;
-print "($len)$msg< iCserver\n" if $opt_T;
+	print "($len)$msg< iCserver\n" if $opt_T;
 	if ($len == 0) {
 	    print "$named: rcvd zero length message - disconnect\n" if $opt_T;
 	    info_display(2000, 'red', "$named: disconnected by iCserver");
@@ -1661,6 +1692,7 @@ sub clear_scan {
 sub do_scan {
     my ($current, $last) = @_;
     my ($word, $i, $iw, $tag, $cs, $ts, $ftype, $index, $t);
+    print "do_scan: instName = '$instName' regName = '$regName' makeName = '$makeName'\n" if $opt_T;
     if (defined $instName and $instName ne '') {
 	if ($instName ne $regName) {
 	    unregister_from_server();
@@ -1682,6 +1714,7 @@ sub do_scan {
 	    if ($answer eq 'Cancel') {
 		return 0;			# cancel operation
 	    } elsif ($answer eq 'Yes') {
+		print "do_scan: stop '$instName' start '$makeName'\n" if $opt_T;
 		stop_file();			# $runName = ''
 		$restartFlag = 1;		# restart after receiving stopped message
 		return 0;
@@ -1946,8 +1979,8 @@ sub new_text {
 ########################################################################
 
 sub open_list {
-    if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
-	if ($2 eq 'lst') {
+    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
+	if ($4 eq 'lst') {
 	    open_file(0, "$1.ic");
 	} else {
 	    open_file(0, "$1.lst");
@@ -1960,8 +1993,8 @@ sub open_list {
 ########################################################################
 #
 #	Opens a file if possible; then loads the contents
-#		parameter 1:	1  load unconditionally (discard changes)
-#				'' save first if text is altered (default)
+#		parameter 1:	1 load unconditionally (discard changes)
+#				0 or '' save first if text is altered (default)
 #		parameter 2:	file_name
 #				'' use getOpenFile from Tk::FBox (default)
 #	$fileName is assigned new file_name if successfully opened
@@ -1993,6 +2026,30 @@ sub open_file {
 	    deleteAllTags();		# required here to clear = values in text
 	    clear_scan();
 	}
+	my $rName = $runName;
+	$rName =~ s/-\d+//;		# check without instance number
+	if ($rName and $fName !~ /^$rName/) {
+	    # old file is running and is not derived from new file
+	    info_display(2000, 'red', "'$runName' is still running - should be stopped unless compatible with '$fName'");
+	    my $dialog = $text->Dialog (-title   => 'Still running',
+					-bitmap  => 'question',
+					-text    => 'Stop executable?',
+					-buttons => [qw(Yes No Cancel)],
+				       );
+	    my $dialogBar = $dialog->Label(-textvariable => \$runName,
+					   -relief       => 'ridge',
+					  )->pack(-side => 'bottom',
+						  -fill => 'x',
+						 );
+	    my $answer = $dialog->Show();
+	    if ($answer eq 'Cancel') {
+		info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
+		return 0;			# cancel operation
+	    } elsif ($answer eq 'Yes') {
+		print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
+		stop_file();			# $runName = ''
+	    }
+	}
 	if ($unconditional or check_save()) {
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "$fName")) {
@@ -2009,10 +2066,10 @@ sub open_file {
 		$fileName = $fName;	# alter global $fileName
 		$mainWindow->title("$named$u: $fileName $runName");
 		info_display(2000, 'black', "File '$fileName', $length bytes loaded");
-		if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
-		    $procName = $1;
+		if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
+		    $procName = $3;
 		    $instName = "$procName$instanceText";
-		    if ($2 eq 'lst') {
+		    if ($4 eq 'lst') {
 			$menuFile->entryconfigure(3, -label => 'Open.ic');
 		    } else {
 			$menuFile->entryconfigure(3, -label => 'Open.lst');
@@ -2036,8 +2093,8 @@ sub open_file {
 ########################################################################
 #
 #	Saves the file previously loaded or last saved
-#		parameter 1:	1  overwrite file unconditionally (new destination)
-#				'' overwrite if contents has changed (default)
+#		parameter 1:	1 overwrite file unconditionally (new destination)
+#				0 or '' overwrite if contents has changed (default)
 #
 ########################################################################
 
@@ -2127,8 +2184,8 @@ sub saveAs_file {
 	    $mainWindow->title("$named$u: $fileName $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
-	    if ($fileName =~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
-		$procName = $1;
+	    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
+		$procName = $3;
 		$instanceText = $instance = '';		# reset instance
 		$instName = "$procName$instanceText";
 		change_instance();
@@ -2191,7 +2248,7 @@ sub build_file {
 		    warn "ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)\n";
 		    sleep 2;
 		    my $listName = "$baseName.lst";
-		    open_file(0, $listName);	# load the listing file (iC is up to date)
+		    open_file(1, $listName);	# load the listing file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
 		    $matchType = '-regexp';
@@ -2302,11 +2359,12 @@ sub run_file {
     if ($runName ne '') {
 	## running - stop application
 	stop_file();
-    } elsif ($fileName !~ /(^[\w\.\\\/]+)\.(ic|lst?|c|ini)$/) {
+    } elsif ($fileName !~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
 	info_display(2000, 'blue', "WARNING: cannot run '$fileName' (must end in .ic .lst .c or .ini)");
-    } elsif ($2 ne 'ic' or check_save()) {
-	my $processName = $1;
-	deleteAllTags();			# also clears @activeSymbols
+    } elsif ($4 ne 'ic' or check_save()) {
+	my $processName = $1;		# full path name of executable
+	$procName = $3;			# execuatble without directory path
+	deleteAllTags();		# also clears @activeSymbols
 	clear_scan(1);
 	print "run_file: $processName from $fileName\n" if $opt_T;
 	my $ftime = (stat($fileName))[9];
@@ -2318,6 +2376,9 @@ sub run_file {
 	} elsif ($mtime < $ftime) {
 	    info_display(2000, 'blue', "WARNING: '$processName' is older than '$fileName' (Build again)");
 	} else {
+	    $instName = "$procName$instanceText";
+	    print "$named: register_at_server before fork_and_exec '$processName'\n" if $opt_T;
+	    register_at_server();	# in case newly started
 	    ## generate the call
 	    $makeName = '';	# up to date build is running (unless deliberate No save)
 	    my @call = ($processName);
@@ -2325,13 +2386,10 @@ sub run_file {
 	    splice @call, 1, 0, '-t' if defined $opt_t;
 	    splice @call, 1, 0, "-d$opt_d" if defined $opt_d;
 	    splice @call, 1, 0, '-m' if defined $opt_m;
-	    splice @call, 1, 0, "-i$instance" if $instance ne '';
+	    splice @call, 1, 0, "-i$instance" if (defined $instance and $instance ne '');
 	    print "@call\n" if $opt_T;
 	    ## fork and exec the call
 	    fork_and_exec(@call);	# if application starts it will send back <ch>:2;<name>
-	    $procName = $processName;
-	    $instName = "$procName$instanceText";
-	    register_at_server();	# in case newly started
 	}
     } # ELSE operation was cancelled by check_save()
 } # run_file
@@ -2438,13 +2496,13 @@ sub check_menu {
 
 ########################################################################
 #
-#	Initialise the program by reading ~/.iClive.ini if it exists
+#	Initialise the program by reading .iClive.ini if it exists
 #	and initialising file list and search list in menus
 #	IF there are no file arguments, open the last open file
 #	ELSE	open the first file in the argument list
 #		add any others to the file list menu
 #
-#	structure of ~/.iClive.ini
+#	structure of .iClive.ini
 #	[files]
 #		sort5.ic
 #		sort5.lst
@@ -2468,9 +2526,9 @@ sub check_menu {
 ########################################################################
 
 sub ini_program {
-    my ($home, $menuData, $menuKey, $entry, $initialFile, $position);
-    ## restore file and search menu lists from ~/.iClive.ini
-    if (($home = $ENV{HOME}) ne '' and open(INI, "$home/.$named.ini")) {
+    my ($menuData, $menuKey, $entry, $initialFile, $position);
+    ## restore file and search menu lists from .iClive.ini
+    if (open(INI, ".$named.ini")) {
 	while (<INI>) {
 	    chomp;
 	    if (/^\[([\w ]+)\]$/) {
@@ -2483,7 +2541,7 @@ sub ini_program {
 	    }
 	}
 	close(INI);
-    }	# ignore if ~/.iClive.ini cannot be opened or found
+    }	# ignore if .iClive.ini cannot be opened or found
     $initialFile = shift @ARGV;			# ARGV may be empty
     unless (defined $initialFile and $initialFile ne '') {
 	($initialFile, $position, $entry) = sort {		# forward sort
@@ -2541,7 +2599,7 @@ use warnings;
 ########################################################################
 
 sub quit_program {
-    my ($home, $menuKey, $entriesRef, $entry);
+    my ($menuKey, $entriesRef, $entry);
     deleteAllTags();	# also clears @activeSymbols
     clear_scan();
     if (check_save()) {
@@ -2553,29 +2611,29 @@ sub quit_program {
 		$lastFile{$instance} = 3;
 	    }
 	}
-	## save file and search menu lists to ~/.iClive.ini
-	if (($home = $ENV{HOME}) ne '') {
-	    if (open(INI, ">$home/.$named.ini")) {
-		foreach $menuKey (sort keys %iniMenuData) {
-		    print INI "[$menuKey]\n";
-		    print "INI: [$menuKey]\n" if $opt_T;
-		    $entriesRef = @{$iniMenuData{$menuKey}}[2];
-		    foreach $entry (sort {		# forward sort
-					    $$entriesRef{$a} <=> $$entriesRef{$b}
-					 } keys %$entriesRef) {
-			if (defined $entry and $entry ne '') {
-			    print INI "\t$entry\n";
-			    print "INI:	$entry => '$$entriesRef{$entry}'\n" if $opt_T;
-			}
-		    };
-		}
-		close(INI);
-	    } else {
-		die "ERROR: Can't open ~/.$named.ini: $!\n";
+	## save file and search menu lists to .iClive.ini
+	if (open(INI, ">.$named.ini")) {
+	    foreach $menuKey (sort keys %iniMenuData) {
+		print INI "[$menuKey]\n";
+		print "INI: [$menuKey]\n" if $opt_T;
+		$entriesRef = @{$iniMenuData{$menuKey}}[2];
+		foreach $entry (sort {		# forward sort
+					$$entriesRef{$a} <=> $$entriesRef{$b}
+				     } keys %$entriesRef) {
+		    if (defined $entry and $entry ne '') {
+			print INI "\t$entry\n";
+			print "INI:	$entry => '$$entriesRef{$entry}'\n" if $opt_T;
+		    }
+		};
 	    }
+	    close(INI);
+	} else {
+	    warn "ERROR: Can't open .$named.ini: $!\n";
 	}
 	print "$named: quit\n" if $opt_T;
-	if ($runName ne '') {
+	if ($server) {
+	   conn_send_now('X') if $conn;	# iClive started iCserver - stop it
+	} elsif ($runName ne '') {
 	    print "quit_program() sends '$D_channel:7,$D_channel:0'\n" if $opt_T;
 	    conn_send_now("$D_channel:7,$D_channel:0");
 	    ####################################################
@@ -2689,7 +2747,7 @@ __END__
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
-    -f font font to use in Text window (default '9x15')
+    -f font font or font size to use in Text window (default '16')
     -l num  height of the Text window (default 40)
     -w num  width  of the Text window (default 80)
     -g geom geometry for main window (-g= is special small window)
@@ -2744,16 +2802,18 @@ __END__
 
     [Help]      display this man page.                            Alt-h
 
-B<iClive> provides an edit window in which the text of a source or listing
-can be displayed and optionally edited and saved. In Text mode the line
-number and column of the cursor are shown in the bottom status bar.
+In B<Edit> mode B<iClive> provides an edit window in which the text
+of a source or listing can be displayed and optionally edited and
+saved. The line number and column of the cursor are shown in the
+bottom status bar.
 
-B<iClive> is normally a client of a running iC application. On startup it
-requests the symbol table of the application. It returns a list of
-words from the symbol table on which it wants live updates of the state
-of the nodes, named by each word in the list. The application then
-provides updates to B<iClive> when the state of any node from the list
-changes as soon as possible after the change.
+In B<Live> mode B<iClive> is normally a client of a running
+iC application. On startup it requests the symbol table of the
+application. It returns a list of words from the symbol table on
+which it wants live updates of the state of the nodes, named by each
+word in the list. The application then provides updates to B<iClive>
+when the state of any node from the list changes as soon as possible
+after the change.
 
 All words in the text which exactly match any token in the list are
 marked with a colour depending on the current state of the node.
@@ -2794,133 +2854,116 @@ for editing)
 
 =head1 KEYBOARD BINDINGS (from Tk::Text)
 
-Tk automatically creates class bindings for texts that
-give them the following default behavior.  In the descrip-
-tions below, 'word' refers to a contiguous group of let-
-ters, digits, or '_' characters, or any single character
-other than these.
+Tk automatically creates class bindings for texts that give them
+the following default behavior.  In the descriptions below, 'word'
+refers to a contiguous group of letters, digits, or '_' characters,
+or any single character other than these.
 
-[1] Clicking mouse button 1 positions the insertion cursor
-   just before the character underneath the mouse cursor,
-   sets the input focus to this widget, and clears any
-   selection in the widget.  Dragging with mouse button 1
-   strokes out a selection between the insertion cursor
+[1] Clicking mouse button 1 positions the insertion cursor just before
+   the character underneath the mouse cursor, sets the input focus to
+   this widget, and clears any selection in the widget.  Dragging with
+   mouse button 1 strokes out a selection between the insertion cursor
    and the character under the mouse.
 
-[2] Double-clicking with mouse button 1 selects the word
-   under the mouse and positions the insertion cursor at
-   the beginning of the word.  Dragging after a double
-   click will stroke out a selection consisting of whole
-   words.
+[2] Double-clicking with mouse button 1 selects the word under the
+   mouse and positions the insertion cursor at the beginning of the
+   word.  Dragging after a double click will stroke out a selection
+   consisting of whole words.
 
-[3] Triple-clicking with mouse button 1 selects the line
-   under the mouse and positions the insertion cursor at
-   the beginning of the line.  Dragging after a triple
-   click will stroke out a selection consisting of whole
-   lines.
+[3] Triple-clicking with mouse button 1 selects the line under the
+   mouse and positions the insertion cursor at the beginning of the
+   line.  Dragging after a triple click will stroke out a selection
+   consisting of whole lines.
 
-[4] The ends of the selection can be adjusted by dragging
-   with mouse button 1 while the Shift key is down;  this
-   will adjust the end of the selection that was nearest
-   to the mouse cursor when button 1 was pressed.  If the
-   button is double-clicked before dragging then the
-   selection will be adjusted in units of whole words;
-   if it is triple-clicked then the selection will be
-   adjusted in units of whole lines.
+[4] The ends of the selection can be adjusted by dragging with mouse
+   button 1 while the Shift key is down;  this will adjust the end
+   of the selection that was nearest to the mouse cursor when button
+   1 was pressed.  If the button is double-clicked before dragging
+   then the selection will be adjusted in units of whole words; if
+   it is triple-clicked then the selection will be adjusted in units
+   of whole lines.
 
-[5] Clicking mouse button 1 with the Control key down will
-   reposition the insertion cursor without affecting the
-   selection.
+[5] Clicking mouse button 1 with the Control key down will reposition
+   the insertion cursor without affecting the selection.
 
-[6] If any normal printing characters are typed, they are
-   inserted at the point of the insertion cursor.
+[6] If any normal printing characters are typed, they are inserted
+   at the point of the insertion cursor.
 
-[7] The view in the widget can be adjusted by dragging
-   with mouse button 2.  If mouse button 2 is clicked
-   without moving the mouse, the selection is copied into
-   the text at the position of the mouse cursor.  The
-   Insert key also inserts the selection, but at the
-   position of the insertion cursor.
+[7] The view in the widget can be adjusted by dragging with mouse
+   button 2.  If mouse button 2 is clicked without moving the mouse,
+   the selection is copied into the text at the position of the
+   mouse cursor.  The Insert key also inserts the selection, but at
+   the position of the insertion cursor.
 
-[8] If the mouse is dragged out of the widget while button
-   1 is pressed, the entry will automatically scroll to
-   make more text visible (if there is more text off-
-   screen on the side where the mouse left the window).
+[8] If the mouse is dragged out of the widget while button 1 is
+   pressed, the entry will automatically scroll to make more text
+   visible (if there is more text offscreen on the side where the
+   mouse left the window).
 
-[9] The Left and Right keys move the insertion cursor one
-   character to the left or right;  they also clear any
-   selection in the text.  If Left or Right is typed with
-   the Shift key down, then the insertion cursor moves
-   and the selection is extended to include the new char-
-   acter.  Control-Left and Control-Right move the inser-
-   tion cursor by words, and Control-Shift-Left and Con-
-   trol-Shift-Right move the insertion cursor by words
-   and also extend the selection.  Control-b and Control-
-   f behave the same as Left and Right, respectively.
-   Meta-b and Meta-f behave the same as Control-Left and
-   Control-Right, respectively.
+[9] The Left and Right keys move the insertion cursor one character
+   to the left or right;  they also clear any selection in
+   the text.  If Left or Right is typed with the Shift key down,
+   then the insertion cursor moves and the selection is extended
+   to include the new character.  Control-Left and Control-Right
+   move the insertion cursor by words, and Control-Shift-Left and
+   Control-Shift-Right move the insertion cursor by words and also
+   extend the selection.  Control-b and Control-f behave the same as
+   Left and Right, respectively.  Meta-b and Meta-f behave the same
+   as Control-Left and Control-Right, respectively.
 
 [10]
-   The Up and Down keys move the insertion cursor one
-   line up or down and clear any selection in the text.
-   If Up or Right is typed with the Shift key down, then
-   the insertion cursor moves and the selection is
-   extended to include the new character.  Control-Up and
-   Control-Down move the insertion cursor by paragraphs
-   (groups of lines separated by blank lines), and Con-
-   trol-Shift-Up and Control-Shift-Down move the inser-
-   tion cursor by paragraphs and also extend the selec-
-   tion.  Control-p and Control-n behave the same as Up
-   and Down, respectively.
+   The Up and Down keys move the insertion cursor one line up or
+   down and clear any selection in the text.  If Up or Right is
+   typed with the Shift key down, then the insertion cursor moves
+   and the selection is extended to include the new character.
+   Control-Up and Control-Down move the insertion cursor by paragraphs
+   (groups of lines separated by blank lines), and Control-Shift-Up
+   and Control-Shift-Down move the insertion cursor by paragraphs
+   and also extend the selection.  Control-p and Control-n behave
+   the same as Up and Down, respectively.
 
 [11]
-   The Next and Prior keys move the insertion cursor for-
-   ward or backwards by one screenful and clear any
-   selection in the text.  If the Shift key is held down
-   while Next or Prior is typed, then the selection is
-   extended to include the new character.  Control-v
-   moves the view down one screenful without moving the
+   The Next and Prior keys move the insertion cursor forward or
+   backwards by one screenful and clear any selection in the text.
+   If the Shift key is held down while Next or Prior is typed,
+   then the selection is extended to include the new character.
+   Control-v moves the view down one screenful without moving the
    insertion cursor or adjusting the selection.
 
 [12]
-   Control-Next and Control-Prior scroll the view right
-   or left by one page without moving the insertion cur-
-   sor or affecting the selection.
+   Control-Next and Control-Prior scroll the view right or left by one
+   page without moving the insertion cursor or affecting the selection.
 
 [13]
-   Home and Control-a move the insertion cursor to the
-   beginning of its line and clear any selection in the
-   widget.  Shift-Home moves the insertion cursor to the
-   beginning of the line and also extends the selection
-   to that point.
-
-[14]
-   End and Control-e move the insertion cursor to the end
-   of the line and clear any selection in the widget.
-   Shift-End moves the cursor to the end of the line and
-   extends the selection to that point.
-
-[15]
-   Control-Home and Meta-< move the insertion cursor to
-   the beginning of the text and clear any selection in
-   the widget.  Control-Shift-Home moves the insertion
-   cursor to the beginning of the text and also extends
+   Home and Control-a move the insertion cursor to the beginning of
+   its line and clear any selection in the widget.  Shift-Home moves
+   the insertion cursor to the beginning of the line and also extends
    the selection to that point.
 
+[14]
+   End and Control-e move the insertion cursor to the end of the line
+   and clear any selection in the widget.  Shift-End moves the cursor
+   to the end of the line and extends the selection to that point.
+
+[15]
+   Control-Home and Meta-< move the insertion cursor to the
+   beginning of the text and clear any selection in the widget.
+   Control-Shift-Home moves the insertion cursor to the beginning of
+   the text and also extends the selection to that point.
+
 [16]
-   Control-End and Meta-> move the insertion cursor to
-   the end of the text and clear any selection in the
-   widget.  Control-Shift-End moves the cursor to the end
-   of the text and extends the selection to that point.
+   Control-End and Meta-> move the insertion cursor to the end of
+   the text and clear any selection in the widget.  Control-Shift-End
+   moves the cursor to the end of the text and extends the selection
+   to that point.
 
 [17]
-   The Select key and Control-Space set the selection
-   anchor to the position of the insertion cursor.  They
-   don't affect the current selection.  Shift-Select and
-   Control-Shift-Space adjust the selection to the cur-
-   rent position of the insertion cursor, selecting from
-   the anchor to the insertion cursor if there was not
-   any selection previously.
+   The Select key and Control-Space set the selection anchor to
+   the position of the insertion cursor.  They don't affect the
+   current selection.  Shift-Select and Control-Shift-Space adjust
+   the selection to the current position of the insertion cursor,
+   selecting from the anchor to the insertion cursor if there was
+   not any selection previously.
 
 [18]
    Control-/ selects the entire contents of the widget.
@@ -2929,63 +2972,57 @@ other than these.
    Control-\ clears any selection in the widget.
 
 [20]
-   The F16 key (labelled Copy on many Sun workstations)
-   or Meta-w copies the selection in the widget to the
-   clipboard, if there is a selection.
+   The F16 key (labelled Copy on many Sun workstations) or Meta-w
+   copies the selection in the widget to the clipboard, if there is
+   a selection.
 
 [21]
-   The F20 key (labelled Cut on many Sun workstations) or
-   Control-w copies the selection in the widget to the
-   clipboard and deletes the selection.  If there is no
-   selection in the widget then these keys have no
-   effect.
+   The F20 key (labelled Cut on many Sun workstations) or Control-w
+   copies the selection in the widget to the clipboard and deletes
+   the selection.  If there is no selection in the widget then these
+   keys have no effect.
 
 [22]
-   The F18 key (labelled Paste on many Sun workstations)
-   or Control-y inserts the contents of the clipboard at
-   the position of the insertion cursor.
-
-[23]
-   The Delete key deletes the selection, if there is one
-   in the widget.  If there is no selection, it deletes
-   the character to the right of the insertion cursor.
-
-[24]
-   Backspace and Control-h delete the selection, if there
-   is one in the widget.  If there is no selection, they
-   delete the character to the left of the insertion cur-
-   sor.
-
-[25]
-   Control-d deletes the character to the right of the
+   The F18 key (labelled Paste on many Sun workstations) or Control-y
+   inserts the contents of the clipboard at the position of the
    insertion cursor.
 
-[26]
-   Meta-d deletes the word to the right of the insertion
+[23]
+   The Delete key deletes the selection, if there is one in the widget.
+   If there is no selection, it deletes the character to the right
+   of the insertion cursor.
+
+[24]
+   Backspace and Control-h delete the selection, if there is one in
+   the widget.  If there is no selection, they delete the character
+   to the left of the insertion cursor.
+
+[25]
+   Control-d deletes the character to the right of the insertion
    cursor.
 
+[26]
+   Meta-d deletes the word to the right of the insertion cursor.
+
 [27]
-   Control-k deletes from the insertion cursor to the end
-   of its line; if the insertion cursor is already at the
-   end of a line, then Control-k deletes the newline
-   character.
+   Control-k deletes from the insertion cursor to the end of its
+   line; if the insertion cursor is already at the end of a line,
+   then Control-k deletes the newline character.
 
 [28]
-   Control-o opens a new line by inserting a newline
-   character in front of the insertion cursor without
-   moving the insertion cursor.
+   Control-o opens a new line by inserting a newline character in
+   front of the insertion cursor without moving the insertion cursor.
 
 [29]
-   Meta-backspace and Meta-Delete delete the word to the
-   left of the insertion cursor.
+   Meta-backspace and Meta-Delete delete the word to the left of the
+   insertion cursor.
 
 [30]
-   Control-x deletes whatever is selected in the text
-   widget.
+   Control-x deletes whatever is selected in the text widget.
 
 [31]
-   Control-t reverses the order of the two characters to
-   the right of the insertion cursor.
+   Control-t reverses the order of the two characters to the right
+   of the insertion cursor.
 
 The following extra bindings have been defined for iClive:
 
@@ -3013,28 +3050,26 @@ search-Entry window.  The following Bindings have been programmed for
 'Live' mode.
 
 [33]
-   The Left and Right keys scroll the whole text left and
-   right one character at a time.
+   The Left and Right keys scroll the whole text left and right one
+   character at a time.
 
 [34]
-   The Up and Down keys scroll the text up and down one
-   line at a time.
+   The Up and Down keys scroll the text up and down one line at a time.
 
 [35]
-   The Next and Prior keys scroll the text up and down one
-   page at a time.
+   The Next and Prior keys scroll the text up and down one page at
+   a time.
 
 [36]
-   The Home and End keys move the text to the beginning or
-   end.
+   The Home and End keys move the text to the beginning or end.
 
 These scroll modes are also available in 'Edit' mode, by putting
 the focus in the 'search-Entry' window by clicking in it. To
 continue editing click in the text window again.
 
 [37]
-   The view in the widget can be adjusted by dragging
-   with mouse button 3. (same in both modes)
+   The view in the widget can be adjusted by dragging with mouse
+   button 3. (same in both modes)
 
 [38]
    In 'Live' mode the following Accelerators work without

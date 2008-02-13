@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.48 2007/05/29 16:18:49 jw Exp $";
+"@(#)$Id: ict.c,v 1.49 2007/08/05 21:21:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -117,7 +117,7 @@ iC_icc(
     int		c;
     short	typ;
     int		cnt;
-    int		index;
+    long	index;
     Gate **	opp;
     char *	cp;
     Gate **	Channels = 0;

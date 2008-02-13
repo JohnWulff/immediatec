@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.17 2006/01/08 13:56:20 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.18 2007/08/09 14:05:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -50,7 +50,11 @@ struct timeval	iC_timeoutValue;
  *******************************************************************/
 
 typedef struct NetBuffer {
+#if INT_MAX == 32767 && defined (LONG16)
     long	length;
+#else
+    int		length;
+#endif
     char	buffer[REPLY];
 } NetBuffer;
 
@@ -151,10 +155,10 @@ iC_connect_to_server(const char *	host,
     if ( err != 0 ) {
 	/* Tell the user that we could not find a usable */
 	/* WinSock DLL.                                  */
-	fprintf(stderr, "WSAStartup failed: %d\n", err);
+	fprintf(iC_errFP, "WSAStartup failed: %d\n", err);
 	iC_quit(1);
     }
-/*    fprintf(stderr, "WSAStartup: requested %d.%d, version %d.%d, high version %d.%d\n",
+/*    fprintf(iC_errFP, "WSAStartup: requested %d.%d, version %d.%d, high version %d.%d\n",
 	HIBYTE( wVersionRequested ), LOBYTE( wVersionRequested ),
 	HIBYTE( wsaData.wVersion ), LOBYTE( wsaData.wVersion ),
 	HIBYTE( wsaData.wHighVersion ), LOBYTE( wsaData.wHighVersion ));
@@ -171,7 +175,7 @@ iC_connect_to_server(const char *	host,
 	/* Tell the user that we could not find a usable */
 	/* WinSock DLL.                                  */
 	WSACleanup( );
-	fprintf(stderr, "WSAStartup failed: requested %d.%d, got %d.%d\n",
+	fprintf(iC_errFP, "WSAStartup failed: requested %d.%d, got %d.%d\n",
 	    HIBYTE( wVersionRequested ), LOBYTE( wVersionRequested ),
 	    HIBYTE( wsaData.wVersion ), LOBYTE( wsaData.wVersion ));
 	iC_quit(1);
@@ -188,13 +192,13 @@ iC_connect_to_server(const char *	host,
 	if (inet_aton(host, &sin_addr) == 0)
 #endif	/* WIN32 */
 	{
-	    fprintf(stderr, "inet_aton with '%s' failed\n", host);
+	    fprintf(iC_errFP, "inet_aton with '%s' failed\n", host);
 	    iC_quit(1);
 	}
     } else {
 	struct hostent *	pHost;
 	if ((pHost = gethostbyname(host)) == NULL) {
-	    fprintf(stderr, "gethostbyname with '%s' failed\n", host);
+	    fprintf(iC_errFP, "gethostbyname with '%s' failed\n", host);
 	    iC_quit(1);
 	}
 	/* gethostbyname returns h_addr in network byte order */
@@ -206,7 +210,7 @@ iC_connect_to_server(const char *	host,
     } else {
 	struct servent *	pServ;
 	if ((pServ = getservbyname(port, "tcp")) == NULL) {
-	    fprintf(stderr, "getservbyname with '%s/tcp' failed\n", port);
+	    fprintf(iC_errFP, "getservbyname with '%s/tcp' failed\n", port);
 	    iC_quit(1);
 	}
 	/* getservbyname returns s_port in network byte order */
@@ -215,7 +219,7 @@ iC_connect_to_server(const char *	host,
 
 #ifdef	WIN32
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
-	fprintf(stderr, "socket failed: %d\n", WSAGetLastError());
+	fprintf(iC_errFP, "socket failed: %d\n", WSAGetLastError());
 #else	/* WIN32 */
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 	perror("socket failed");
@@ -229,13 +233,13 @@ iC_connect_to_server(const char *	host,
     server.sin_port = sin_port;
 
     if (connect(sock, (SA)&server, sizeof(server)) < 0) {
-	fprintf(stderr, "ERROR in %s: client could not be connected to server '%s:%d'\n",
+	fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
 	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	perror("connect failed");
 	iC_quit(1);
     }
 
-    printf("'%s' connected to server at '%s:%d'\n",
+    fprintf(iC_outFP, "'%s' connected to server at '%s:%d'\n",
 	iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 
     FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
@@ -270,7 +274,7 @@ iC_wait_for_next_event(int maxFN)
     } while ((retval = select(maxFN + 1, &iC_rdfds, 0, 0, ptv)) == -1 && errno == EINTR);
 #ifdef	WIN32
     if (retval == -1) {
-	fprintf(stderr, "ERROR: select failed: %d\n", WSAGetLastError());
+	fprintf(iC_errFP, "ERROR: select failed: %d\n", WSAGetLastError());
 	iC_quit(1);
     }
 #endif	/* WIN32 */
@@ -292,9 +296,9 @@ rcvd_buffer_from_server(SOCKET sock, char * buf, int length)
     if ((len = recv(sock, buf, length, 0)) > 0) {
 	if (len != length) {
 	    int i;
-	    printf("recv: length %d != expected length %d\n", len, length);
+	    fprintf(iC_errFP, "recv: length %d != expected length %d\n", len, length);
 	    for (i = 0; i < len; i++) {
-		printf(" %02x", ((unsigned char*)&buf)[i]);
+		fprintf(iC_errFP, " %02x", ((unsigned char*)&buf)[i]);
 	    }
 	}
     } else if (len < 0) {
@@ -320,7 +324,7 @@ iC_rcvd_msg_from_server(SOCKET sock, char * buf, int maxLen)
 	    == sizeof netBuf.length) {		/* get 4 bytes of length to start with */
 	len = ntohl(netBuf.length);		/* length in host byte order */
 	if (len >= maxLen) {
-	    fprintf(stderr, "ERROR in %s: received message is too long: %d >= %d\n", iC_iccNM, len, maxLen);
+	    fprintf(iC_errFP, "ERROR in %s: received message is too long: %d >= %d\n", iC_iccNM, len, maxLen);
 	    len = maxLen - 1;
 	}
 	maxLen = len;
@@ -351,7 +355,7 @@ iC_send_msg_to_server(SOCKET sock, const char * msg)
     size_t	len = strlen(msg);
 
     if (len >= sizeof netBuf.buffer) {
-	fprintf(stderr, "ERROR in %s: message to send is too long: %d >= %d\n", iC_iccNM, len, sizeof netBuf.length);
+	fprintf(iC_errFP, "ERROR in %s: message to send is too long: %d >= %d\n", iC_iccNM, len, sizeof netBuf.length);
 	len = sizeof netBuf.buffer - 1;
     } else
 #if YYDEBUG

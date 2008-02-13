@@ -81,7 +81,7 @@ Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.35 2006/01/10 12:50:53 jw Exp $
+$Id: iCserver,v 1.36 2007/12/03 18:21:00 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -144,7 +144,7 @@ print "ARGV:", join(':', @ARGV), ":\n" if $opt_t and @ARGV;
 
 my ($t0, $t1);
 if ($opt_m) {
-    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    use Time::HiRes qw(gettimeofday);
     $t0 = [gettimeofday];	# start of program
 }
 
@@ -168,7 +168,7 @@ my $host = defined $opt_s ? $opt_s : '0.0.0.0';
 my $port = defined $opt_p ? $opt_p : 8778;
 
 Msg->new_server($host, $port, \&login_proc);
-print "Server created. Waiting for events\n";
+print "$named created. Waiting for events\n";
 
 ########################################################################
 #
@@ -752,6 +752,10 @@ use warnings;
 			    }
 			}
 		    }
+		}
+		elsif ($msg1 eq 'X') {
+		    print "iClive stopped $named\n";
+		    exit 0;	# iClive started iCserver and now stopped it
 		}
 		elsif ($msg1 eq 'T' and $opt_t) {
 		    print_tables();

@@ -19,7 +19,7 @@ static const char cexe_part1[] = "\
  *******************************************************************/\n\
 \n\
 static const char cexe_h[] =\n\
-\"@(#)$Id: cexe.h,v 1.24 2005/08/20 21:56:32 jw Exp $\";\n\
+\"@(#)$Id: cexe.h,v 1.25 2007/07/03 06:28:07 jw Exp $\";\n\
 \n\
 #include	<stdio.h>\n\
 #include	\"icc.h\"\n\
@@ -68,9 +68,9 @@ static const char cexe_part3[] = "\
 	fflush(iC_outFP);\n\
 	fprintf(iC_errFP,\n\
 	    \"\\n*** Error: cexe.c: C function 'F(%%d)' is unknown.\\n\"\n\
-	      \"*** Check that 'cexe.c' was built from '%%s'\\n\"\n\
-	      \"*** Rebuild compiler using '%%s -c %%s'\\n\"\n\
-	      , iC_index, inpNM, iC_progname, inpNM);\n\
+	      \"*** Rebuild compiler using '%%s -c -%%sO%%o %%s'\\n\"\n\
+	      \"*** was built with         '%s -c -%sO%o %s'\\n\"\n\
+	      , iC_index, iC_progname, iC_gflag ? \"g\" : \"\", iC_optimise, inpNM);\n\
 	iC_quit(-1);\n\
 #endif\n\
 	break;\n\
@@ -93,7 +93,7 @@ static const char cexe_part4[] = "\
 /********************************************************************\n\
  *		SOURCE:   %s\n\
  *******************************************************************/\n\
-static char	COMPILER[] =\n\
-\"%s\";\n\
+static char	iC_compiler[] =\n\
+\"%s -%sO%o\";\n\
 ";
 static const int cexe_lines4 = 6;

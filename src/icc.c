@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.57 2007/06/27 15:51:27 jw Exp $";
+"@(#)$Id: icc.c,v 1.58 2007/12/06 15:25:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -558,9 +558,7 @@ main(
 			    "%s: cannot use both -o and -c option\n", iC_progname);
 			goto error;
 		    }
-		case 'g':
-		    iC_gflag = iC_Arestore = 1;	/* independent C code for gdb debugging */
-		    break;	/* allows setting breakpoints in C code in iC listings */
+		    /* fall through -c implies -A */
 		case 'A':
 		    iC_Aflag = iC_Arestore = 1;	/* generate ARITH ALIAS in outFN */
 		    break;
@@ -576,6 +574,9 @@ main(
 		case 'P':
 		    iC_Pflag++;			/* -P is pedantic, -PP or more is pedantic-error*/
 		    break;
+		case 'g':
+		    iC_gflag = 1;		/* independent C code for gdb debugging */
+		    break;	/* allows setting breakpoints in C code in iC listings */
 		case 'O':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if (sscanf(*argv, "%o%s", &debi, tempBuf) != 1 || debi > 07) {
@@ -676,7 +677,10 @@ main(
 	    if (strcmp(iC_iccNM, "stdin") == 0) {
 		iC_iccNM = iC_emalloc(strlen(inpFN)+1);	/* +1 for '\0' */
 		strcpy(iC_iccNM, inpFN);
-		if ((cp = strrchr(iC_iccNM, '.')) != 0) {
+		if ((cp = strrchr(iC_iccNM, '.')) != 0 &&
+		    cp[1] == 'i' &&
+		    cp[2] == 'c' &&
+		    cp[3] == '\0') {
 		    *cp = '\0';		/* terminate at trailing extension .ic */
 		}
 	    }
@@ -785,10 +789,11 @@ main(
 		    /* copy called function cases from C intermediate file to C output file */
 		    copyXlate(T3FP, excFP, excFN, &linecnt, 02);
 		    /* write C execution file Part 3 */
-		    fprintf(excFP, cexe_part3);
+		    fprintf(excFP, cexe_part3, iC_progname, iC_gflag ? "g" : "", iC_optimise, inpNM);
 		    linecnt += cexe_lines3;
 		    if (linecnt > (1 + cexe_lines1 + cexe_lines2 + cexe_lines3)) {
-			fprintf(excFP, cexe_part4, inpNM, iC_ID);
+			fprintf(excFP, cexe_part4,
+			    inpNM, iC_ID, iC_gflag ? "g" : "", iC_optimise);
 			linecnt += cexe_lines4;
 			if (iC_debug & 010) {
 			    fprintf(iC_outFP, "\nC OUTPUT: %s  (%d lines)\n", excFN, linecnt-1);
@@ -950,8 +955,8 @@ iC_inversionCorrection(void)
 		snprintf(exStr, TSIZE, "pplstfix -o %s %s", listFN, tempName);	/* on $PATH */
 	    } else {
 		versionTail = iC_progname + strcspn(iC_progname, "0123456789");
-		snprintf(exStr, TSIZE, "perl %s/pplstfix%s -o %s -l %s/pplstfix%s.log %s",	/* developer debug version */
-		    iC_path, versionTail, listFN, iC_path, versionTail, tempName);
+		snprintf(exStr, TSIZE, "perl \"%s\"/pplstfix%s -o %s -l pplstfix%s.log %s",	/* developer debug version */
+		    iC_path, versionTail, listFN, versionTail, tempName);
 	    }
 	    r = system(exStr);
 	    if (r == 0) {

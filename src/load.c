@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.48 2005/09/09 17:42:49 jw Exp $";
+"@(#)$Id: load.c,v 1.49 2007/12/07 09:32:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -25,7 +25,7 @@ static const char load_c[] =
 #else
 #ifdef TCP
 #include	"tcpc.h"
-#endif
+#endif	/* TCP */
 #include	"icc.h"
 
 #define STS	1
@@ -51,17 +51,17 @@ static const char *	usage =
 "USAGE: %s [-"
 #if YYDEBUG
 "t"
-#endif
+#endif	/* YYDEBUG */
 "xh]"
 #ifdef TCP
 " [-m[m]] [-s <server>] [-p <port>] [-i <instance_id>]\n"
-#endif
+#endif	/* TCP */
 " [-n<count>] [-d<debug>]\n"
 #ifdef TCP
 "        -s host ID of server      (default '%s')\n"
 "        -p service port of server (default '%s')\n"
 "        -i instance ID of this client (default '%s'; 1 to %d numeric digits)\n"
-#endif
+#endif	/* TCP */
 "        -n <count>      maximum oscilator count (default is %d, limit 15)\n"
 #if YYDEBUG
 "        -d <debug>2000  display scan_cnt and link_cnt\n"
@@ -69,9 +69,9 @@ static const char *	usage =
 "                  +400  exit after initialisation\n"
 "                  +200  display oscillator info\n"
 "                  +100  initialisation and run time trace\n"
-#else
+#else	/* YYDEBUG */
 "        -d <debug> 400  exit after initialisation\n"
-#endif
+#endif	/* YYDEBUG */
 "                   +40  load listing\n"
 "                    +4  extra install debug info\n"
 #if YYDEBUG
@@ -79,12 +79,12 @@ static const char *	usage =
 "                    +1  trace I/O send buffer\n"
 "        -t              trace debug (equivalent to -d 100)\n"
 "                        can be toggled at run time by typing t\n"
-#endif
+#endif	/* YYDEBUG */
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                        can be toggled at run time by typing m\n"
-#endif
+#endif	/* TCP */
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
 "                        can be changed at run time by typing x or d\n"
 "        -h              this help text\n"
@@ -185,7 +185,11 @@ main(
     char	eBuf[ESIZE];
 
     /* Process the arguments */
-    if ((iC_progname = strrchr(*argv, '/')) == NULL) {
+    if ((iC_progname = strrchr(*argv, '/')) == NULL
+#ifdef	WIN32
+	&& (iC_progname = strrchr(*argv, '\\')) == NULL
+#endif	/* WIN32 */
+    ) {
 	iC_progname = *argv;
     } else {
 	iC_progname++;			/*  path has been stripped */
@@ -193,7 +197,16 @@ main(
 #ifdef TCP
     iC_iccNM = iC_emalloc(strlen(iC_progname)+INSTSIZE+2);	/* +2 for '-...\0' */
     strcpy(iC_iccNM, iC_progname);
-#endif
+#ifdef	WIN32
+    if ((cp = strrchr(iC_iccNM, '.')) != 0 &&
+	cp[1] == 'e' &&
+	cp[2] == 'x' &&
+	cp[3] == 'e' &&
+	cp[4] == '\0') {
+	*cp = '\0';			/* terminate at trailing extension .exe */
+    }
+#endif	/* WIN32 */
+#endif	/* TCP */
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
     while (--argc > 0) {
@@ -225,7 +238,7 @@ main(
 		case 'm':
 		    iC_micro++;		/* microsecond info */
 		    break;
-#endif
+#endif	/* TCP */
 		case 'd':
 		    if (! *++*argv) { --argc, ++argv; }
 		    sscanf(*argv, "%o", &df);
@@ -252,7 +265,7 @@ main(
 		    fprintf(stderr, usage, iC_progname,
 #ifdef TCP
 		    iC_hostNM, iC_portNM, iC_iidNM, INSTSIZE,
-#endif
+#endif	/* TCP */
 		    MARKMAX, iC_ID);
 		    exit(-1);
 		}
@@ -626,22 +639,24 @@ main(
 		if (lp < slp) {
 		    /********************************************************************
 		     * slp also delimits C parameter list starting at lp
-		     * for every USE_COUNT parameters there is 1 use word at the end
+		     * for every USE_COUNT parameters there is 1 use word at the end.
+		     * Therefore divide by USE_COUNT + 1, because slp points past extra
+		     * use word(s).
 		     *******************************************************************/
-		    Gate **	ulp;
-		    Gate **	elp;
-		    int		uc;
-		    int		j;
-		    int		useWord;
+		    Gate **		ulp;
+		    Gate **		elp;
+		    int			uc;
+		    int			j;
+		    unsigned int	useWord;
 
 		    uc = slp - lp;
-		    assert(uc >= 2);
+		    assert(uc >= 2);			/* at least one pointer and one use word */
 		    uc = (USE_COUNT + uc) / (USE_COUNT + 1);	/* # of use words */
 		    ulp = elp = slp - uc;
 		    j = USE_COUNT - 1;
 		    while (lp < elp) {
 			if (++j >= USE_COUNT) {
-			    useWord = (int)*ulp++;	/* next use word */
+			    useWord = (unsigned int)(unsigned long)*ulp++;	/* next use word */
 			    j = 0;
 			} else {
 			    useWord >>= 2;		/* next set of useBits */
@@ -727,9 +742,9 @@ main(
 		    if (op->gt_old) {
 #if INT_MAX == 32767 && defined (LONG16)
 			printf(" %3ld\n", op->gt_old);	/* delay references */
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 			printf(" %3d\n", op->gt_old);	/* delay references */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 		    } else {
 			printf("\n");
 		    }
@@ -887,10 +902,10 @@ main(
 		}
 		gp = *lp++;				/* skip function vector (may be 0) */
 #ifdef HEXADDRESS
-		if (df) printf("	%p()", gp);	/* cexe_n */
-#else
-		if (df) printf("	0x0()");	/* dummy */
-#endif
+		if (df) printf("	0x%lx()", (long)gp);	/* cexe_n */
+#else	/* HEXADDRESS */
+		if (df) printf("	0x0()");		/* dummy */
+#endif	/* HEXADDRESS */
 		while ((gp = *lp++) != 0) {		/* for ARN scan 1 input list */
 		    if (gp->gt_ini == -ALIAS) {		/* arithmetic ALIAS */
 			inError(__LINE__, op, gp, "PASS 6: input int ALIAS not resolved");
@@ -927,7 +942,7 @@ main(
 				iC_IL4p = op;		/* link for iC_display logic only */
 			    }
 			    break;
-#endif
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 			default:
 			    goto inErr;
 			}
@@ -990,10 +1005,10 @@ main(
 			if (df) printf("	%s,", gp->gt_ids);
 		    } else {
 #ifdef HEXADDRESS
-			if (df) printf("	%p(),", gp);	/* cexe_n */
-#else
-			if (df) printf("	0x0(),");	/* dummy */
-#endif
+			if (df) printf("	0x%lx()", (long)gp);	/* cexe_n */
+#else	/* HEXADDRESS */
+			if (df) printf("	0x0(),");		/* dummy */
+#endif	/* HEXADDRESS */
 		    }
 		    i = 2;					/* offset for clock */
 		    if ((gp = *lp++) == 0) {
@@ -1030,24 +1045,27 @@ main(
 		    if (lp < slp) {
 			/********************************************************************
 			 * slp also delimits C parameter list starting at lp
-			 * for every USE_COUNT parameters there is 1 use word at the end
+			 * for every USE_COUNT parameters there is 1 use word at the end.
+			 * Therefore divide by USE_COUNT + 1, because slp points past extra
+			 * use word(s).
 			 *******************************************************************/
-			Gate **	ulp;
-			Gate **	elp;
+			Gate **		ulp;
+			Gate **		elp;
 			int		uc;
 			int		j;
-			int		useWord;
+			unsigned int	useWord;
 
 			uc = slp - lp;
+			assert(uc >= 2);			/* at least one pointer and one use word */
 			uc = (USE_COUNT + uc) / (USE_COUNT + 1);	/* # of use words */
 			ulp = elp = slp - uc;
 			j = USE_COUNT - 1;
 			while (lp < elp) {
 			    if (++j >= USE_COUNT) {
-				useWord = (int)*ulp++;	/* next use word */
+				useWord = (unsigned int)(unsigned long)*ulp++;	/* next use word */
 				j = 0;
 			    } else {
-				useWord >>= 2;		/* next set of useBits */
+				useWord >>= 2;			/* next set of useBits */
 			    }
 			    if ((gp = *lp++) == 0) {
 				inError(__LINE__, op, 0, "PASS 6: C parameter missing");
@@ -1094,7 +1112,7 @@ main(
 			    iC_QL4p = op;		/* link for iC_display logic only */
 			}
 			break;
-#endif
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 		    default:
 			goto outErr;
 		    }
@@ -1119,9 +1137,9 @@ main(
 		if (op->gt_fni == TIMRL && op->gt_old > 0) {
 #if INT_MAX == 32767 && defined (LONG16)
 		    if (df) printf("	(%ld)", op->gt_old);
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 		    if (df) printf("	(%d)", op->gt_old);
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 		}
 	    } else {
 		inError(__LINE__, op, 0, "PASS 6: unknown output type (ftype)");
@@ -1148,4 +1166,4 @@ main(
     iC_icc(&iClock, &errCount);				/* execute load object */
     return 0;
 } /* main */
-#endif
+#endif	/* LOAD */

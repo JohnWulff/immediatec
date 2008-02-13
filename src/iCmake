@@ -22,7 +22,7 @@ if echo $PATH | grep -q intel_cc; then
     ldir=" -I/usr/local/include -L/usr/local/lib"
 else
     CC=gcc
-    ldir=" -L/usr/local/lib"
+    ldir=" -I/usr/local/include -L/usr/local/lib"
 fi
 ICC=immcc
 
@@ -40,7 +40,7 @@ usage ()
   echo '		complete listing of all files is in exe.lst' >&2
   echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
   echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
-  echo '	-b	generate both listings and C outputs' >&2
+  echo '	-b	generate both listings and C outputs - no executable' >&2
   echo "	-n	generate no output, report $ICC compile errors only" >&2
   echo '		-s and -n generate 'cexe.c' for last file as a side effect' >&2
   echo '	-g	each expression has its own C code for debugging with gdb' >&2
@@ -72,9 +72,13 @@ usage ()
   echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.33 2007/06/16 19:32:00 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.34 2007/12/04 16:12:00 jw Exp $' >&2
 }
 
+lwsock32=""
+if [ "$OS" = Windows_NT ]; then
+    lwsock32=" -lwsock32"
+fi
 link=0
 status=0
 list=""
@@ -83,7 +87,7 @@ nice="nice"
 a=""
 v=""
 b=""
-lib="-lict"
+lib="-lict$lwsock32"
 d=" -d474"
 A=""
 S=""
@@ -144,7 +148,7 @@ while getopts ":lo:scbnNk:iIJqv:w:gASO:PRD:U:C:V:6xd:zh" opt; do
     v ) if [ -z "$b" ]; then
 	    b="./"
 	fi
-	lib=${b}libict$OPTARG.a
+	lib="${b}libict$OPTARG.a$lwsock32"
 	ldir=""
 	v="$OPTARG"
 	;;
@@ -155,7 +159,7 @@ while getopts ":lo:scbnNk:iIJqv:w:gASO:PRD:U:C:V:6xd:zh" opt; do
 	fi
 	b="$OPTARG/"
 	if [ -z "$v" ]; then
-	    lib=${b}libict.a
+	    lib="${b}libict.a$lwsock32"
 	    ldir=""
 	fi
 	;;
@@ -179,7 +183,7 @@ while getopts ":lo:scbnNk:iIJqv:w:gASO:PRD:U:C:V:6xd:zh" opt; do
 done
 shift $(($OPTIND - 1))
 
-# echo I=$I, k=$k, d=$d, l=$l, v=$v, b=$b
+# echo I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib
 # exit
 
 # if [ $q -eq 0 ]; then
@@ -392,7 +396,7 @@ exit $status
             complete listing of all files is in exe.lst
     -s      generate listings file.lst .. only (-o target.lst optional)
     -c      generate C outputs file.c ... only (-o target.c optional)
-    -b      generate both listings and C outputs
+    -b      generate both listings and C outputs - no executable
     -n      generate no output, report immcc compile errors only
             -s and -n generate 'cexe.c' for last file as a side effect
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging

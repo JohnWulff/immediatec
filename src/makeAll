@@ -10,9 +10,10 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	make immcc ict libict.a lmain
+#	make immcc and libict.a by default
 #
-#	make these individually with -C -T -L and -M flags
+#	make immcc, libict.a, icr, ict or lmain individually with
+#	-C -L -R -T or -M flags
 #	when any of these are set, cexe.c is not modified
 #
 #	use egrep rather than grep -E so it works on older Unix systems
@@ -21,23 +22,23 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]' >&2
-    echo '	call make for immcc, ict, libict.a and lmain with the correct options' >&2
+    echo 'Usage:	'${0##*/}' [-qgclrtmdeCLRTMszh] [-D<OPT>] [-o<OBJ>]' >&2
+    echo '	call make for immcc, libict.a, icr, ict and lmain with correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-c	make immcc iC compiler with YYDEBUG' >&2
+    echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-r	make icr iC compiler with YYDEBUG -t trace output possible' >&2
     echo '	-t	make ict iC compiler with YYDEBUG -t trace output possible' >&2
-    echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain test internal C compiler with YYDEBUG' >&2
+    echo '	-C	make immcc only; generate an empty cexe.c' >&2
+    echo '	-L	make libict.a only' >&2
+    echo '	-R	make icr only without modifying cexe.c' >&2
+    echo '	-T	make ict only without modifying cexe.c' >&2
+    echo '	-M	make lmain only' >&2
     echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	see usage of immcc, icr, ict and applications for other options' >&2
-    echo '	-C	make immcc only; generate an empty cexe.c' >&2
-    echo '	-R	make icr only without modifying cexe.c' >&2
-    echo '	-T	make ict only without modifying cexe.c' >&2
-    echo '	-L	make libict.a only' >&2
-    echo '	-M	make lmain only' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
     echo '	-d	make with -DDEQ Gate option (make clean required first)' >&2
@@ -50,33 +51,7 @@ usage ()
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.25 2007/02/17 14:54:56 jw Exp $' >&2
-}
-
-makeIcr ()
-{
-    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
-    if [ -d IcrObjs ]; then
-	mv IcrObjs/* .
-    else
-	mkdir IcrObjs
-    fi
-    make OPT="-DRUN$r$u$d$e$o$s$z" CFLAGS="$cflags" icr
-    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
-    mv Make_tmp/* . 2> /dev/null
-}
-
-makeIct ()
-{
-    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
-    if [ -d IctObjs ]; then
-	mv IctObjs/* .
-    else
-	mkdir IctObjs
-    fi
-    make OPT="-DTCP$t$u$d$e$o$s$z" CFLAGS="$cflags" ict
-    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
-    mv Make_tmp/* . 2> /dev/null
+    echo '	$Id: makeAll,v 1.26 2008/02/13 19:46:07 jw Exp $' >&2
 }
 
 makeLib ()
@@ -89,6 +64,32 @@ makeLib ()
     fi
     make OPT="-DLOAD -DTCP$l$d$e$o$s$z" CFLAGS="$cflags" libict.a
     mv ict.$O misc.$O link.$O rsff.$O scan.$O tcpc.$O  LibObjs
+    mv Make_tmp/* . 2> /dev/null
+}
+
+makeIcr ()
+{
+    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
+    if [ -d IcrObjs ]; then
+	mv IcrObjs/* .
+    else
+	mkdir IcrObjs
+    fi
+    make OPT="-Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -DRUN$r$u$d$e$o$s$z" CFLAGS="$cflags" icr
+    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
+    mv Make_tmp/* . 2> /dev/null
+}
+
+makeIct ()
+{
+    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
+    if [ -d IctObjs ]; then
+	mv IctObjs/* .
+    else
+	mkdir IctObjs
+    fi
+    make OPT="-Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -DTCP$t$u$d$e$o$s$z" CFLAGS="$cflags" ict
+    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
@@ -107,9 +108,9 @@ makeLmain ()
 
 q=""
 c=""
+l=""
 r=""
 t=""
-l=""
 m=""
 u=""
 d=""
@@ -117,75 +118,43 @@ e=""
 s=""
 z=""
 C=0
+L=0
 R=0
 T=0
-L=0
 M=0
-ALL=1
+IM_LIB=1
 cflags="-O2"			# optimisation, no debugging info
 O="o"
 o=""
 w=""
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case $option in
-	    q*)	q=1;;		# echo only - dont kill
-	    g*)	cflags="-g$w";;	# debugging, no optimisation
-	    c*)	c="-DYYDEBUG";;
-	    r*)	r=" -DYYDEBUG";;
-	    t*)	t=" -DYYDEBUG";;
-	    l*)	l=" -DYYDEBUG";;
-	    m*)	m=" -DYYDEBUG";;
-	    u*)	u=" -DSYUNION";;
-	    d*)	d=" -DDEQ";;
-	    e*)	e=" -DEFENCE";;
-	    D*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		o=" -D$option"
-		break;;
-	    W*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		w=" -W$option"
-		if [ -n "$cflags" ]; then
-		    cflags="$cflags$w"
-		fi
-		break;;
-	    s*)	s=" -DINT_MAX=32767";;
-	    z*)	z=" -DLONG16";;
-	    C*)	C=1; ALL=0;;
-	    R*)	R=1; ALL=0;;
-	    T*)	T=1; ALL=0;;
-	    L*)	L=1; ALL=0;;
-	    M*)	M=1; ALL=0;;
-	    o*)	option=${option#?}
-		if [ -z "$option" ]; then
-		    shift
-		    option=$1
-		fi
-		O="$option"
-		break;;
-	    h*)	usage; exit 255;;
-	    *)	x=${option#?}; option=${option%$x}
-	    	echo "$name: unexpected option $option in $1" >&2
-		usage; exit 254;;
-	    esac
-	    option=${option#?}
-	done
-	;;
-    *)	break;;
+while getopts ":qgclrtmCLRTMudeD:W:szo:h" opt; do
+    case $opt in
+    q )	q=1;;		# echo only - dont kill
+    g )	cflags="-g$w";;	# debugging, no optimisation
+    c )	C=1; IM_LIB=0; c="-DYYDEBUG";;
+    l )	L=1; IM_LIB=0; l=" -DYYDEBUG";;
+    r )	R=1; IM_LIB=0; r=" -DYYDEBUG";;
+    t )	T=1; IM_LIB=0; t=" -DYYDEBUG";;
+    m )	M=1; IM_LIB=0; m=" -DYYDEBUG";;
+    C )	C=1; IM_LIB=0;;
+    L )	L=1; IM_LIB=0;;
+    R )	R=1; IM_LIB=0;;
+    T )	T=1; IM_LIB=0;;
+    M )	M=1; IM_LIB=0;;
+    u )	u=" -DSYUNION";;
+    d )	d=" -DDEQ";;
+    e )	e=" -DEFENCE";;
+    D ) o=" -D$OPTARG";;
+    W ) w=" -W$OPTARG"; if [ -n "$cflags" ]; then cflags="$cflags$w"; fi ;;
+    s )	s=" -DINT_MAX=32767";;
+    z )	z=" -DLONG16";;
+    o ) O="$OPTARG";;
+    h )	usage; exit 255;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
-    shift
 done
+shift $(($OPTIND - 1))
 
 if [ -f Make_tmp ]; then
     echo 'Error makeAll: Make_tmp exists as file ??? - nothing made' >&2
@@ -196,27 +165,27 @@ test -d Make_tmp || mkdir Make_tmp;
 rm -f icg.h
 perl icg.pl $d$s$z icc.h > icg.h
 
-if [ $ALL = 1 ] || [ $C = 1 ]; then
+if [ $IM_LIB = 1 ] || [ $C = 1 ]; then
     echo "make OPT=\"$c$u$d$e$o$s$z\" CFLAGS=\"$cflags\" immcc"
     make OPT="$c$u$d$e$o$s$z" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
-if [ $ALL = 1 ] || [ $R = 1 ]; then
-    echo "make OPT=\"-DRUN$r$u$d$e$o$s$z\" CFLAGS=\"$cflags\" icr"
-    makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-fi
-
-if [ $ALL = 1 ] || [ $T = 1 ]; then
-    echo "make OPT=\"-DTCP$t$u$d$e$o$s$z\" CFLAGS=\"$cflags\" ict"
-    makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-fi
-
-if [ $ALL = 1 ] || [ $L = 1 ]; then
+if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
     echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$z\" CFLAGS=\"$cflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
-if [ $ALL = 1 ] || [ $M = 1 ]; then
+if [ $R = 1 ]; then
+    echo "make OPT=\"-DRUN$r$u$d$e$o$s$z\" CFLAGS=\"$cflags\" icr"
+    makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
+if [ $T = 1 ]; then
+    echo "make OPT=\"-DTCP$t$u$d$e$o$s$z\" CFLAGS=\"$cflags\" ict"
+    makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
+if [ $M = 1 ]; then
     echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$z\" CFLAGS=\"$cflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
@@ -232,21 +201,21 @@ exit 0
 
 =head1 SYNOPSIS
 
-    makeAll [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]
-    call make for immcc, ict, libict.a and lmain with the correct options
+    makeAll [-qgclrtmdeCLRTMszh] [-D<OPT>] [-o<OBJ>]
+    call make for immcc, libict.a, icr, ict and lmain with correct options
     -q      output only headings and error messages
     -g      compile for debugging and no optimisation (default -O2)
     -c      make immcc with YYDEBUG
+    -l      make libict.a with YYDEBUG -t trace output possible
     -r      make icr with YYDEBUG -t trace output possible
     -t      make ict with YYDEBUG -t trace output possible
-    -l      make libict.a with YYDEBUG -t trace output possible
     -m      make lmain with YYDEBUG
     -D<OPT> make all targets with <OPT> defined
             see usage of immcc, icr, ict and applications for other options
     -C      make immcc only; generate an empty cexe.c
+    -L      make libict.a only
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
-    -L      make libict.a only
     -M      make lmain only
     -W<OPT> compile all C sources with -W<OPT> (useful for -Wall)
     -e      make all targets with EFENCE option and link with -lefence
@@ -280,9 +249,9 @@ is via TCP/IP and iCserver.
 lex.c.
 
   to make immcc, make with OPT=''
+  to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
   to make icr, make with OPT='-DRUN -DYYDEBUG'
   to make ict, remove all objects and make with OPT='-DTCP'
-  to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
   to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 
     makeAll -rm; # called for all: does this automatically

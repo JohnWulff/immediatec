@@ -109,7 +109,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.43 2006/01/10 12:50:39 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.44 2007/12/03 18:22:07 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -124,7 +124,7 @@ if ($opt_h) {
 
 my ($t0, $t1, $sec, $usec);
 if ($opt_m) {
-    use Time::HiRes qw(usleep ualarm gettimeofday tv_interval);
+    use Time::HiRes qw(gettimeofday);
     $t0 = [gettimeofday];	# start of program
 }
 

@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.47 2007/03/07 08:58:14 jw Exp $
+# @(#)$Id: Makefile.in,v 1.48 2007/08/09 16:17:07 jw Exp $
 
 ############################################################
 #
@@ -18,9 +18,9 @@
 #	use GNU make pattern rules instead of suffix rules 3.Jan.2005
 #
 #	to make immcc, make with OPT=''
+#	to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
 #	to make icr, make with OPT='-DRUN -DYYDEBUG'
 #	to make ict, remove all objects and make with OPT='-DTCP'
-#	to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
 #	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #
 #	auxiliary script makeAll -rm called for all: does this automatically
@@ -98,11 +98,11 @@ POBJ =	link.$(O) rsff.$(O) scan.$(O)
 #### Standalone versions ###################################
 #### make icr and lmain with YYDEBUG, since they need it for normal operation
 
-all:
-	@$(srcdir)/makeAll -rm -o$(O)
+im_lib:
+	@$(srcdir)/makeAll -o$(O)
 
 quiet:
-	@$(srcdir)/makeAll -qrm -o$(O)
+	@$(srcdir)/makeAll -q -o$(O)
 
 immcc:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) $(COBJ) pplstfix
 	$(CC) $(LDFLAGS) -o immcc icc.$(O) misc.$(O) scid.$(O) $(COBJ) $(EL)
@@ -117,6 +117,7 @@ ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O
 
 libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
 	ar -rvs libict.a load.$(O) misc.$(O) scid.$(O) ict.$(O) tcpc.$(O) $(POBJ)
+	ranlib libict.a
 
 #### C-parser test #########################################
 
@@ -202,35 +203,32 @@ test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -Aiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kl ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/Mdiff -kl -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@echo "compile with -S option and generate all executables from iC files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -SAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/Mdiff -kLl ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/Mdiff -kLl -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 pedantic:
 	@echo "compile with -P option and generate all executables from iC files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -PAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "show differences from generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/PED ..."
-	@if ${srcdir}/Mdiff -kLP -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/PED; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/PED"; fi
+	@if ${srcdir}/Mdiff -kLP -Ibytes -Isyntax.error -Iparse.error -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/PED; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/PED"; fi
 
 install:	$(srcdir)/immcc.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
-	${INSTALL_PROGRAM} immcc        ${bindir}/${binprefix}immcc
-	${INSTALL_PROGRAM} icr          ${bindir}/${binprefix}icr
-	${INSTALL_PROGRAM} ict          ${bindir}/${binprefix}ict
+	${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
+	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
 	${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
 	${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
 	${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
 	${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
 	${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 	${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
-	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
-	${INSTALL_DATA} libict.a        ${prefix}/lib/libict.a
-	@ranlib                         ${prefix}/lib/libict.a
+	${INSTALL_DATA} $(srcdir)/libict.a      ${prefix}/lib/libict.a
 	${INSTALL_DATA} $(srcdir)/icg.h         ${prefix}/include/icg.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${prefix}/man/man1/immcc.1.gz
 	${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${prefix}/man/man1/iCbox.1.gz
@@ -245,15 +243,13 @@ uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)
 	rm -f `$(srcdir)/perlinstall`/Msg.pm
 	rm -f ${bindir}/${binprefix}immcc
-	rm -f ${bindir}/${binprefix}icr
-	rm -f ${bindir}/${binprefix}ict
+	rm -f ${bindir}/${binprefix}pplstfix
 	rm -f ${bindir}/${binprefix}iCbox
 	rm -f ${bindir}/${binprefix}iClift
 	rm -f ${bindir}/${binprefix}iClive
 	rm -f ${bindir}/${binprefix}iCmake
 	rm -f ${bindir}/${binprefix}iCman
 	rm -f ${bindir}/${binprefix}iCserver
-	rm -f ${bindir}/${binprefix}pplstfix
 	rm -f ${prefix}/lib/libict.a
 	rm -f ${prefix}/include/icg.h
 	rm -f ${prefix}/man/man1/immcc.1.gz
@@ -266,7 +262,7 @@ uninstall:
 	rm -f ${prefix}/man/man1/makeAll.1.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c IcrObjs IctObjs LibObjs LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h core immcc icr ict libict.a lmain $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c IcrObjs IctObjs LibObjs LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h core immcc libict.a icr ict lmain $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README
