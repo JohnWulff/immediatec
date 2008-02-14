@@ -2,11 +2,14 @@
 
 usage()
 {
-    echo "Make all iC components for debugging and install them" >&2
+    echo "Make iC components immcc and libict.a for debugging and install them" >&2
     echo "Usage $name[ -iudszeh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
     echo 'Usage:	'${0##*/}' [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]' >&2
     echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
+    echo '	-r	additionally make standalone compiler icr' >&2
+    echo '	-t	additionally make standalone compiler ict' >&2
+    echo '	-m	additionally make standalone compiler lmain' >&2
     echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
@@ -22,14 +25,14 @@ usage()
     echo '	-h	this help text' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: m,v 1.8 2007/04/15 07:40:55 jw Exp $Id: m,v 1.8 2007/04/15 07:40:55 jw Exp $' >&2
+    echo '$Id: m,v 1.9 2007/07/03 09:20:27 jw Exp $Id: m,v 1.9 2007/07/03 09:20:27 jw Exp $' >&2
 }
 
 name=${0##*/}
-udsze=''
+rtmudsze=''
 dw=''
 
-while getopts ":iudszeD:W:h" opt; do
+while getopts ":irtmudszeD:W:h" opt; do
     case $opt in
     i )
 	echo "Enter root:" >&2
@@ -39,11 +42,14 @@ while getopts ":iudszeD:W:h" opt; do
 	sudo -k
 	exit
 	;;
-    u ) udsze="${udsze}u";;
-    d ) udsze="${udsze}d";;
-    s ) udsze="${udsze}s";;
-    z ) udsze="${udsze}z";;
-    e ) udsze="${udsze}e";;
+    r ) rtmudsze="${rtmudsze}r";;
+    t ) rtmudsze="${rtmudsze}t";;
+    m ) rtmudsze="${rtmudsze}m";;
+    u ) rtmudsze="${rtmudsze}u";;
+    d ) rtmudsze="${rtmudsze}d";;
+    s ) rtmudsze="${rtmudsze}s";;
+    z ) rtmudsze="${rtmudsze}z";;
+    e ) rtmudsze="${rtmudsze}e";;
     D ) dw="$dw -D$OPTARG";;
     W ) dw="$dw -W$OPTARG";;
     h )	usage; exit 127;;
@@ -52,8 +58,8 @@ while getopts ":iudszeD:W:h" opt; do
 done
 shift $(($OPTIND - 1))
 
-echo "### makeAll -qgcrtlm$udsze$dw"
-./makeAll -qgcrtlm$udsze$dw
+echo "### makeAll -qgcl$rtmudsze$dw"
+./makeAll -qgcl$rtmudsze$dw
 echo "### make install"
 make install
 if [ $# -gt 0 ]; then

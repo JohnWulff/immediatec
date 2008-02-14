@@ -2,7 +2,7 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <john@je-wulff.de>
 " Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.2 2007/04/13 10:47:10 jw Exp $
+" $Id: ic.vim,v 1.3 2008/02/13 14:09:46 jw Exp $
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded
@@ -72,7 +72,7 @@ if version >= 508 || !exists("did_ic_syntax_inits")
   HiLink icStorageClass		StorageClass
   HiLink icStructure		Structure
   HiLink icNumber		Number
-  HiLink icConstant		Constant
+  HiLink icConstant		Macro
   HiLink icIO			Constant
   HiLink icBoolean		Boolean
   HiLink icLineNumber		Comment

@@ -20,6 +20,9 @@ usage ()
     echo '	-T	uses ict -c to make a dedicated ict for each iCtarget' >&2
     echo '		output the listings produced to directory ListT' >&2
     echo '	-t	make ict with YYDEBUG -t trace output possible (default)' >&2
+    echo '	-g	each expression has its own C code for debugging with gdb' >&2
+    echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
+    echo '		duplicate arithmetic expressions -O7 all (default)' >&2
     echo '	-s	make with -DINT_MAX=32767 (make clean; makeAll first)' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
@@ -32,7 +35,7 @@ usage ()
     echo '   restores a plain icr or ict at the end of the test run' >&2
     echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.19 2005/10/07 14:17:45 jw Exp $' >&2
+    echo '	$Id: mo,v 1.20 2007/07/01 16:56:21 jw Exp $' >&2
 }
 
 v=""
@@ -41,37 +44,23 @@ op='Tt'
 p='T'
 list='pa.lt'
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case "$option" in
-	    R*)	ic='icr';op='R';p='R';;
-	    r*)	ic='icr';op='Rr';p='R';;
-	    T*)	ic='ict';op='T';p='T';;
-	    t*)	ic='ict';op='Tt';p='T';;
-	    m*)	list='pm.lt';;
-	    s*)	op="${op}s";;
-	    z*)	op="${op}z";;
-	    d*)	option=${option#?}
-		if [ -n "$option" ]; then
-		    v="$v -d$option"
-		else
-		    echo "-d must specify an option";
-		    usage; exit 254;
-		fi
-		break;;
-	    h*)	usage; exit 255;;
-	    *)	echo "unknown flag -$option" >&2
-		usage; exit 255;;
-	    esac
-	    option=${option#?}
-	done;;
-    *)	break;;
+while getopts ":RrTtmszd:gO:h" opt; do
+    case $opt in
+    R )	ic='icr';op='R';p='R';;
+    r )	ic='icr';op='Rr';p='R';;
+    T )	ic='ict';op='T';p='T';;
+    t )	ic='ict';op='Tt';p='T';;
+    m )	list='pm.lt';;
+    s )	op="${op}s";;
+    z )	op="${op}z";;
+    d ) v="$v -d$OPTARG";;
+    g )	v="$v -g";;
+    O )	v="$v -O$OPTARG";;
+    h )	usage; exit 0;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
-    shift
 done
+shift $(($OPTIND - 1))
 
 devp=$(pwd)
 while [ -n "$devp" ]; do

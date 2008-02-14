@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: tt,v 1.26 2007/07/03 14:34:52 jw Exp $' >&2
+  echo '$Id: tt,v 1.27 2007/12/05 20:23:10 jw Exp $' >&2
 }
 
 usage()
@@ -116,6 +116,8 @@ while getopts ":cm:d:lrgASO:PRiIJ6x:f:F:zvh" opt; do
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
+echo; date
+echo $name "$@"
 shift $(($OPTIND - 1))
 
 l="$l$x$f$F"
@@ -143,9 +145,8 @@ cd ..;
 
 # echo "d1 = !$d1! d2 = !$d2! d3 = !$d3! head = !$head!"
 
-echo; date
 if [ -n "$m" ]; then
-    echo "== $m =="
+    echo "== -m\"$m\" =="
 fi
 
 if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" ]; then
@@ -266,4 +267,5 @@ echo; echo "========== end"
 
 ########################################################################
 # time tt -AIlO3 -m"m -O3 W338_22 Y309_03" V340e >> icc.tt_V340
+# time tt -AIl -m"W339_06 - adjusted for Win" V342 >> icc.tt_V342 2>&1
 ########################################################################
