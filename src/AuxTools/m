@@ -3,7 +3,7 @@
 usage()
 {
     echo "Make iC components immcc and libict.a for debugging and install them" >&2
-    echo "Usage $name[ -iudszeh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
+    echo "Usage $name[ -iudsyeh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
     echo 'Usage:	'${0##*/}' [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]' >&2
     echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
@@ -20,19 +20,21 @@ usage()
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
-    echo '	-z	make with -DLONG16        (make clean required first)' >&2
+    echo '	-y	make with -DLONG16        (make clean required first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
+    echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: m,v 1.9 2007/07/03 09:20:27 jw Exp $Id: m,v 1.9 2007/07/03 09:20:27 jw Exp $' >&2
+    echo '$Id: m,v 1.10 2008/02/24 22:59:01 jw Exp $Id: m,v 1.10 2008/02/24 22:59:01 jw Exp $' >&2
 }
 
 name=${0##*/}
-rtmudsze=''
+rtmudsye=''
 dw=''
+z=0
 
-while getopts ":irtmudszeD:W:h" opt; do
+while getopts ":irtmudsyeD:W:zh" opt; do
     case $opt in
     i )
 	echo "Enter root:" >&2
@@ -42,24 +44,25 @@ while getopts ":irtmudszeD:W:h" opt; do
 	sudo -k
 	exit
 	;;
-    r ) rtmudsze="${rtmudsze}r";;
-    t ) rtmudsze="${rtmudsze}t";;
-    m ) rtmudsze="${rtmudsze}m";;
-    u ) rtmudsze="${rtmudsze}u";;
-    d ) rtmudsze="${rtmudsze}d";;
-    s ) rtmudsze="${rtmudsze}s";;
-    z ) rtmudsze="${rtmudsze}z";;
-    e ) rtmudsze="${rtmudsze}e";;
+    r ) rtmudsye="${rtmudsye}r";;
+    t ) rtmudsye="${rtmudsye}t";;
+    m ) rtmudsye="${rtmudsye}m";;
+    u ) rtmudsye="${rtmudsye}u";;
+    d ) rtmudsye="${rtmudsye}d";;
+    s ) rtmudsye="${rtmudsye}s";;
+    y ) rtmudsye="${rtmudsye}y";;
+    e ) rtmudsye="${rtmudsye}e";;
     D ) dw="$dw -D$OPTARG";;
     W ) dw="$dw -W$OPTARG";;
+    z )	z=1;rtmudsye="${rtmudsye}z";;
     h )	usage; exit 127;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
 
-echo "### makeAll -qgcl$rtmudsze$dw"
-./makeAll -qgcl$rtmudsze$dw
+echo "### makeAll -qgcl$rtmudsye$dw"
+./makeAll -qgcl$rtmudsye$dw
 echo "### make install"
 make install
 if [ $# -gt 0 ]; then
