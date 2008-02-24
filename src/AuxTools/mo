@@ -10,7 +10,7 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-CTszh] [iCtarget ...]' >&2
+    echo 'Usage:	'${0##*/}' [-CTsyh] [iCtarget ...]' >&2
     echo 'Must be executed in the iC development environment or one of its subdirectories.' >&2
     echo 'Makes a dedicated icr or ict compiler with integrated arithmetic functions' >&2
     echo 'from iCtarget if iCtarget has arithmetic variables or literal blocks. ' >&2
@@ -21,30 +21,34 @@ usage ()
     echo '		output the listings produced to directory ListT' >&2
     echo '	-t	make ict with YYDEBUG -t trace output possible (default)' >&2
     echo '	-g	each expression has its own C code for debugging with gdb' >&2
+    echo '		makeAll with -g option to generate debug binaries' >&2
     echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
     echo '		duplicate arithmetic expressions -O7 all (default)' >&2
     echo '	-s	make with -DINT_MAX=32767 (make clean; makeAll first)' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
-    echo '	-z	make with -DLONG16        (make clean; makeAll first)' >&2
+    echo '	-y	make with -DLONG16        (make clean; makeAll first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-d<opt>	call ic[rt] with extra -d<opt> orred into normal -d474' >&2
     echo 'if no iCtargets are specified, each single entry of file pa.lt is made' >&2
     echo '   outputs the common output to ListR/Init.out or ListT/Init.out' >&2
     echo '   restores a plain icr or ict at the end of the test run' >&2
     echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
+    echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.20 2007/07/01 16:56:21 jw Exp $' >&2
+    echo '	$Id: mo,v 1.21 2008/02/24 23:52:34 jw Exp $' >&2
 }
 
 v=""
 ic='ict'
 op='Tt'
+g=''
 p='T'
 list='pa.lt'
+z=0
 
-while getopts ":RrTtmszd:gO:h" opt; do
+while getopts ":RrTtmsyd:gO:zh" opt; do
     case $opt in
     R )	ic='icr';op='R';p='R';;
     r )	ic='icr';op='Rr';p='R';;
@@ -52,16 +56,18 @@ while getopts ":RrTtmszd:gO:h" opt; do
     t )	ic='ict';op='Tt';p='T';;
     m )	list='pm.lt';;
     s )	op="${op}s";;
-    z )	op="${op}z";;
+    y )	op="${op}y";;
     d ) v="$v -d$OPTARG";;
-    g )	v="$v -g";;
+    g )	v="$v -g";g="g";;
     O )	v="$v -O$OPTARG";;
+    z )	z=1;op="${op}z";;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
 
+op="$op$g"
 devp=$(pwd)
 while [ -n "$devp" ]; do
     if [ -x $devp/$ic ]; then
@@ -91,20 +97,32 @@ if [ $# -ne 0 ]; then
 	file="$base.ic"
 	if [ -f "$file" ]; then
 	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+		if [ $z -eq 1 ]; then
+		    echo "$ic$v -c -d474 -l List$p/$base.lst $file" >&2	# only if different
+		fi
 		echo "$file";
 		cp -f cexe.c List$p/$base.c
 		mv -f cexe.c $devp 2> /dev/null
 		cd $devp
 		rm -f cexe.o $ic	# new cexe.o too soon for make sometimes
-		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+		if [ $z -eq 1 ]; then
+		    echo "makeAll -$op" >&2
+		fi
+		makeAll -$op 2>&1 | if [ $z -ne 1 ]; then  grep -iE '(error|warning|:[0-9]+:)'; else cat; fi
 		cd - > /dev/null
 		if [ -x $devp/$ic ]; then	# use newly generated compiler
+		    if [ $z -eq 1 ]; then
+			echo "$devp/$ic$v -d500 $file > List$p/$base.ini" >&2
+		    fi
 		    $devp/$ic$v -d500 $file > List$p/$base.ini
 		else
 		    echo "make $ic from $file failed"
 		fi
 	    else
 		rm List$p/$base.lst	# only keep listings with functions or literals
+		if [ $z -eq 1 ]; then
+		    echo "$ic has no functions or literals - standard cexe.c" >&2
+		fi
 	    fi
 	else
 	    echo "ERROR: $file does not exist - no $ic made"
@@ -118,20 +136,32 @@ elif [ -f $list ]; then
 	file="$base.ic"
 	if [ -f "$file" ]; then
 	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+		if [ $z -eq 1 ]; then
+		    echo "$ic$v -c -d474 -l List$p/$base.lst $file" >&2	# only if different
+		fi
 		echo "$file";
 		cp -f cexe.c List$p/$base.c
 		mv -f cexe.c $devp 2> /dev/null
 		cd $devp
 		rm -f cexe.o $ic	# new cexe.c too soon for make sometimes
-		makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+		if [ $z -eq 1 ]; then
+		    echo "makeAll -$op" >&2
+		fi
+		makeAll -$op 2>&1 | if [ $z -ne 1 ]; then  grep -iE '(error|warning|:[0-9]+:)'; else cat; fi
 		cd - > /dev/null
 		if [ -x $devp/$ic ]; then	# use newly generated compiler
+		    if [ $z -eq 1 ]; then
+			echo "$devp/$ic$v -d500 $file > List$p/$base.ini" >&2
+		    fi
 		    $devp/$ic$v -d500 $file > List$p/$base.ini
 		else
 		    echo "make $ic from $file failed"
 		fi
 	    else
 		rm List$p/$base.lst	# only keep listings with functions or literals
+		if [ $z -eq 1 ]; then
+		    echo "$ic has no functions or literals - standard cexe.c" >&2
+		fi
 	    fi
 	else
 	    echo "ERROR: $file does not exist - no $ic made" >&2
@@ -141,7 +171,10 @@ elif [ -f $list ]; then
 	cd $devp			# restore plain icr or ict
 	cp /tmp/cexe.c .
 	rm -f cexe.o $ic		# new cexe.c too soon for make sometimes
-	makeAll -$op 2>&1 | grep -iE '(error|warning|:[0-9]+:)'
+	if [ $z -eq 1 ]; then
+	    echo "makeAll -$op" >&2
+	fi
+	makeAll -$op 2>&1 | if [ $z -ne 1 ]; then  grep -iE '(error|warning|:[0-9]+:)'; else cat; fi
 	cd - > /dev/null
     fi
 else
