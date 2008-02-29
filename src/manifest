@@ -1,8 +1,8 @@
-$Id: manifest,v 1.13 2006/04/17 18:18:16 jw Exp $
+$Id: manifest,v 1.14 2008/02/29 11:26:51 jw Exp $
 README
-doc/iC.doc
 doc/iC.html
-doc/iC.sxw
+doc/iC.odt
+doc/iC.pdf
 doc/icc.sxc
 src/ARTISTIC
 src/COPYING
@@ -11,6 +11,7 @@ src/Mdiff
 src/Msg.pm
 src/README.tpl
 src/Test0
+src/bar.ic
 src/cexe.h
 src/comp.c
 src/comp.h
@@ -24,15 +25,18 @@ src/gram.c
 src/gram.pl
 src/gram.y
 src/gram_tab.h
+src/hello.ic
 src/iCbox
 src/iClift
 src/iClive
 src/iCmake
 src/iCman
 src/iCserver
+src/icbegin.c
 src/icc.c
 src/icc.h
 src/icc.v
+src/icend.c
 src/icg.pl
 src/icr.c
 src/ict.c
@@ -43,9 +47,9 @@ src/lexc.l
 src/link.c
 src/lmain.c
 src/load.c
-src/misc.c
 src/makeAll
 src/manifest
+src/misc.c
 src/outp.c
 src/pawk.pl
 src/perlinstall
@@ -53,6 +57,7 @@ src/pod2man
 src/pplstfix
 src/rsff.c
 src/scan.c
+src/simple.ic
 src/iCstop
 src/symb.c
 src/tcpc.c

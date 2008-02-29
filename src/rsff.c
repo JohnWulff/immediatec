@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.46 2007/12/07 08:35:00 jw Exp $";
+"@(#)$Id: rsff.c,v 1.47 2008/02/22 23:06:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -853,9 +853,9 @@ iC_fSsw(					/* F_SW slave action on SW */
 	((iC_CFunctp)(gm->gt_funct))(gm);
 #else
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%d(\n", (int)gm->gt_funct);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%d(\n", gm->gt_functn);
 #endif
-	iC_exec((int)gm->gt_funct, gm);	/* must pass both -/+ */
+	iC_exec(gm->gt_functn, gm);		/* must pass both -/+ */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, ")");
@@ -946,9 +946,9 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 	((iC_CFunctp)(gm->gt_funct))(gm);
 #else
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%d{\n", (int)gm->gt_funct);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%d{\n", gm->gt_functn);
 #endif
-	iC_exec((int)gm->gt_funct, gm);	/* must pass both -/+ */
+	iC_exec(gm->gt_functn, gm);		/* must pass both -/+ */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "}");
@@ -1212,7 +1212,7 @@ iC_outMw(					/* OLD OUTW master action */
     int		mask;
 
     if (gm->gt_new != gm->gt_old) {
-	slot = (int)gm->gt_list;
+	slot = gm->gt_listn;
 	mask = gm->gt_mark;
 	assert(slot < min(IXD, 64) && mask);	/* IXD must be <= 64 for this scheme */
 	cage = slot >> 3;			/* test here because of cage algorithm */
@@ -1294,7 +1294,7 @@ iC_outMx(					/* OLD OUTX master action */
     int			cage;
     unsigned char	mask;
 
-    slot = (int)gm->gt_list;
+    slot = gm->gt_listn;
     mask = (unsigned char)gm->gt_mark;
     assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
     cage = slot >> 3;				/* test here because of cage algorithm */

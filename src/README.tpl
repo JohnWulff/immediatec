@@ -5,7 +5,7 @@
 #   icc.v is maintained under source control and the version number
 #   of icc.v is used as the version number of the iC release.
 #   Call: 	ident icc.v | README.tpl > ../README
-#   $Id: README.tpl,v 1.16 2006/01/10 11:23:11 jw Exp $
+#   $Id: README.tpl,v 1.17 2008/02/29 00:13:40 jw Exp $
 ########################################################################
 
 while (<>) {
@@ -16,19 +16,20 @@ while (<>) {
 ########################################################################
 print <<EOF;
 
-                         immediate C, iC rev $REV
+			 immediate C, iC rev $REV
 
-                    Copyright (C) 1985-$YEAR, John E. Wulff
-                            All rights reserved.
+		    Copyright (C) 1985-$YEAR, John E. Wulff
+			    All rights reserved.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of either:
 
-        a) the GNU General Public License as published by the Free
-        Software Foundation; either version 2, or (at your option) any
-        later version, or
+	a)  the GNU General Public License as published by the Free
+	    Software Foundation; either version 2, or (at your option)
+	    any later version,
+	 OR
 
-        b) the "Artistic License" which comes with this Kit.
+	b)  the "Artistic License" which comes with this Kit.
 
     This program is distributed in the hope that it will be useful, but
     WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -68,171 +69,215 @@ print <<EOF;
     so you may prefer to use that.
 
     Acknowledgements to Larry Wall, whose README I used as a template.
-                                    and for Perl - which is just great.
+				    and for Perl - which is just GREAT.
 
-    Acknowledgements to Nick Ing-Simmons for Perl-Tk - which is smooth.
+    Acknowledgements to Nick Ing-Simmons for Perl/Tk - which is SMOOTH.
 
     Acknowledgements to Linus Torvalds and the Open-Software community
-                                    for Linux(R) - which is something else. 
+				    for Linux(R) - which is SOMETHING ELSE.
 
 --------------------------------------------------------------------------
 
-        Notes for the installation of immcc rev $REV
+    Notes for the installation of iC rev $REV
 
-        1)  Unpack the archive in a suitable working directory with:
+    1)  Pre-requisites. You need the following on your system:
 
-                tar -xvzf icc_$REV.tgz
-                cd icc_$REV/src
+	    C compiler			     # tested with gcc, MSC and Borland
+	    Perl, Perl/Tk and Time::HiRes    # to build iC applications
 
-        2)  Excute the following:
+    1)  Unpack the iC-archive in a suitable working directory with:
 
-                configure  OR    ./configure # if super user (depricated)
-                make       OR    make quiet  # to supress intermediate output
+	    tar -xvzf icc_$REV.tgz
+	    cd icc_$REV/src
 
-            this should build the files
-                immcc
-                ict
-                libict.a
-            without any errors
+    2)  Excute the following:
 
-        3)  To test compile the iC files in Test0 execute:
+	    configure     OR  ./configure    # if super user (depricated)
+	To make a Debug version do
+	    makeAll -gcl  OR  makeAll -qgcl  # to supress intermediate output
+	OR to make a Release version do
+	    make          OR  make quiet     # to supress intermediate output
 
-		make test
+	this should build the files
+	    immcc			     # the iC to C compiler
+	    libict.a			     # the run-time library
+	without any errors
 
-	4)  It is mandatory that you install the Perl package Time::HiRes 
-	    included with this distribution unless it is already installed.
-	    This can be checked by executing the following at this point:
+    3)  To compile and compare the test iC files in Test0 execute:
 
-	        iCserver -h
+	    make test
 
-	    Skip to point 7) if you get a help output and no error message.
+    4)  To use the Perl support programs, it is mandatory that you install the
+	Perl packages Tk800.024 or later and Time::HiRes unless they are already
+	installed on your system.  Both are included with this distribution.
+	This can be checked by executing the following at this point:
 
-        5)  Unpack build and install the Time::HiRes archive in a suitable
-	    working directory with:
+	    iClive -h
 
-                tar -xvzf Time-HiRes-01.20.tar.gz
-                cd Time-HiRes-01.20
-		perl Makefile.PL
-		make
-		make test
-		su               ### Password  ###
-		make install
-                exit             ### IMPORTANT ###
-		cd ..
-		rm -rf Time-HiRes-01.20	# unless you want to keep it
+	Skip to point 8) if you get a help output and no error message.
+	The last line tells you which version of Perl/Tk you are using.
 
-        6)  Return to the immediate C installtion
+    5)  Unpack build and install the Time::HiRes archive in a suitable
+	working directory with:
 
-		cd icc_$REV/src	# or the correct immcc src directory
+	    tar -xvzf Time-HiRes-01.20.tar.gz
+	    cd Time-HiRes-01.20
+	    perl Makefile.PL
+	    make
+	    make test
+	    su		     ### Password  ###
+	    make install
+	    exit	     ### IMPORTANT ###
+	    cd ..
+	    rm -rf Time-HiRes-01.20	     # unless you want to keep it
 
-        7)  To install the iC-compiler, library and scripts execute the
-	    following as super user:
+    6)  Perl/Tk is usually contained in Linux distributions and will
+	be installed automatically when the package is selected.
+	If not, unpack, build and install Tk-800.024.tar.gz (or later).
+	Follow the instructions in the README.xxx and INSTALL files.
+	For Cygwin under WinXP a special binary distribution of Tk800.023
+	is included, which works fine.
 
-                su               ### Password  ###
-                make install
-                exit             ### IMPORTANT ###
+    7)  Return to the immediate C installtion
 
-            this copies the essential executables to /usr/local/bin
-            it also copies the include file icg.h to /usr/local/include
-            libict.a to /usr/local/lib and Msg.pm to /usr/lib/perl5/site...
-	    
+	    cd icc_$REV/src		     # or the correct iC src directory
+
+    8)  To install the iC-compiler, library and scripts execute the
+	following as super user:
+
+	    su		     ### Password  ###
+	    make install
+	    exit	     ### IMPORTANT ###
+
+	this copies the essential executables to /usr/local/bin
+	it also copies the include file icg.h to /usr/local/include
+	libict.a to /usr/local/lib and Msg.pm to /usr/lib/perl5/site...
+
 	    (make uninstall as su will remove all these files)
 
-        8)  Change to directory Test0 and compile a0.ic with iCmake
+    9)  To build and run the very simple iC application "hello.ic" do
 
-                cd Test0
-                iCmake a0.ic
+	    iClive hello.ic		     # starts the IDE with hell0.ic
+	    press Build > Build executable   # displays 'hello' successfully built
+	    press Run			     # opens an iCbox with 1 button IX0.0
+	    press button IX0.0 in iCbox	     # button turns HI (input is green)
+		# 'Hello! world' is output in the window iClive was started from
+	    press Live
+		# The word IX0.0 (the only immediate variable in hello.ic)
+		# is coloured yellow/red, because IX0.0 is HI.
+		# When IX0.0 is pressed again to LO, the colour in the live
+		# display changes to green/black, indicating LO.
+	    press File > Quit		     # 'hello' and iCbox are terminated
 
-            This should make a0.lst a0.c a0 and a0.ini
-                a0.lst  is a listing
-                a0.c    is the C source
-                a0      is the executable
-                a0.ini  is used for testing. It is the initialisation
-                        output when executing a0. (Not required later)
+    10) A slightly bigger application is "simple.ic". Build and run it with iClive.
+	An iCbox with 16 inputs and 8 outputs is started automatically.
+	Explore the logic of the statements by changing inputs and following
+	the outputs in iCbox and the live display in iClive.
 
-        9)  The support programs iCbox, which provides simulated I/O and
-	    iClive, which provides program entry and debugging facilities
-	    require Perl-Tk800.022 (see note below).
+    11) The application "bar.ic" uses flip flops to produce a bar of running lights.
+	The application also explores the use of programmable time delays, giving
+	some idea of the scope of the iC language.
 
-	    If you do not have Perl-Tk, install it from your Linux distribution
-	    CD's or the copy supplied with this distribution at this point.
+	Running 'iClive bar.ic' as a separate process, while 'bar' is running,
+	will display the source listing (in the edit window), connects to iCServer
+	as an auxiliary client to receive updates of all variables from the running
+	iC program (bar). These updates will change the colours of all words,
+	which are immediate variables.  (green/black = 0, yellow/red = 1)
+	This "live display" shows the current state of logical relationships in
+	visible statements of the iC program. Arithmetic variables are displayed
+	in a balloon, when the cursor rests on a variable.
+	(Arithmetic variables have a blue background).
 
-	    When Perl/Tk is installed on the system the following starts
-	    a very simple demonstration:
+	In 'Live' mode, when a "live display" is shown, the text is read only.
+	When the 'Edit' button is pressed 'iClive' is a full featured editor.
+	The edit facilities of this program are described in the iClive man page
+	under the Heading 'KEYBOARD BINDINGS' (press Help button in 'iClive').
 
-                iCserver 'iCbox X0' a0
+	'iClive' can use the Tk::TextUndo package, an extension of Tk::Text. This
+	allows undoing changes with the Ctrl-u key. (Control-u is <<Undo>>)
+	This is achieved by starting iClive with the -u option. Use this option
+	only for editing. In 'Live' mode the display is very jerky with -u active.
 
-            An "iCbox" with 8 inputs and 8 outputs is displayed.
-            Input IX0.0 can be turned on and off.
-            Output QX0.0 follows the input, since program a0.ic simply
-	    assigns immediate inputs to corresponding outputs:
-                QX0.0 = IX0.0; ...
-	    stop with ctrl-C
+    12) Applications can of course be run without iClive. They do need iCserver
+	though, which is a hub server for the TCP/IP packets exchanged between
+	iC applications, I/O apllications (currently only iCbox) and optionally
+	iClive.
 
-	10) Make all iC executable in this directory by running
+	    iCserver &			     # server runs on the background
+	    iCbox IX0 &			     # start IX0 manually
+	    hello			     # start application
 
-		iCmake *.ic
+	    ctrl-C			     # terminate application
+	    iCstop iCserver		     # kill iCserver and iCbox
 
-	    The script 'a1.sh' starts 'iCserver', 'iCbox X0 B1 W2' and 'a1'
-	    which sets all outputs from inputs like a0 above.
+	A better way is to start iCserver with the -a (auto-vivify) option,
+	which will start simulated I/O iCbox, every time an iC application
+	is started. Otherwise these must be started manually, which can be
+	tedious for larger applications.
 
-	11) The scripts 'bar3.sh' start demos showing running lights moving
-	    every 100 ms. The lights should move smoothly on a 100 MHz or
-	    faster computer. 'bar1.sh' and 'bar2.sh' require a faster computer.
-	    'demo.sh' shows some logic processing.
+	    iCserver -a &		     # auto-vivify iCbox for application
+	    simple			     # iCbox with 3 sets of I/O starts
 
-	12) Running 'iClive bar3.ic' as a separate process, while 'bar3' is
-	    running, will display the source listing (in an edit window),
-	    connect to iCServer as an auxiliary I/O and receive updates
-	    of all variables from the running iC program (bar3). These
-	    updates will change the colours of all words, which are
-	    immediate variables.  (green/black = 0, yellow/red = 1)
-	    This "live display" shows the current state of logical
-	    relationships in visible statements of the iC program. Arithmetic
-	    variables are displayed in a balloon, when the cursor rests
-	    on a variable. (Arithmetic variables have a blue background).
+	If iClive is started first, it does all this automatically. It then kills
+	iCserver automatically when it quits. When iCserver quits it kills all
+	registered applications and I/O's.
 
-	    The program 'iClive' can use the Tk::TextUndo widget, an extension
-	    of Tk::Text. In 'Live' mode, when a "live display" is shown the
-	    text is read only. When the 'Edit' button is pressed 'iClive' is
-	    a full featured editor. The edit facilities of this program are
-	    described in the Tk::Text man page in the section 'BINDINGS'
-	    near the end. (Control-u is <<Undo>>)
+    13) I have included a script called 'iCstop' from my private toolkit.
+	It can be used effectively to kill iCserver when it is executing
+	in the background, which is appropriate for a server.
 
-	13) I have included a script called 'iCstop' from my private toolkit.
-	    It can be used effectively to kill iCserver when it is
-	    executing in the background, which is appropriate for
-	    a server.
+	    iCserver &
+	    .....
+	    ../iCstop iCserver		     # local copy of 'iCstop'
 
-		iCserver &
-		.....
-		../iCstop iCserver	# local copy of 'iCstop'
+	I have tried to use 'kill' with named processes as described in
+	the 'kill' manpage, but it does not seem to work, even called as
+	'command kill iCserver'.
+	You will have to install 'iCstop' manually in a PATH directory to
+	use it anywhere in your system. (see 'iCstop -h' for help)
 
-	    I have tried to use 'kill' with named processes as described in
-	    the 'kill' manpage, but it does not seem to work, even called as
-	    'command kill iCserver'.
-	    You will have to install 'iCstop' manually in a PATH directory to
-	    use it anywhere in your system. (see 'iCstop -h' for help)
+    14) To make executable applications from iC sources, use the script iCmake.
+	iCmake is a shell script to compile iC sources into C sources using the
+	'immcc' compiler.  These in turn are compiled and linked into an
+	executable iC applications (currently using gcc - this can be changed).
+	Various options allow partial compilation and generation of listings.
 
-        14) The OpenOffice 1.1 document doc/iC.sxw (or doc/iC.html, doc/iC.doc)
-            provide an introduction to the Programming Language iC.
+	    iCmake -h  OR  iCman iCmake	     # gives a lot of help
 
-        15) There are 'man' pages for all the executables used in the
-	    'iC Project'. The man page viewer 'iCman' has some nifty features
-	    to view and search man pages. - try it with 'iCman iCman'.
+    15) The OpenOffice 2.2 document doc/iC.odt (or doc/iC.pdf, doc/iC.html)
+	is the handbook for the iC Programming Language. It opens the way to
+	use "immediate C" fully.
 
-        
-        Lots of success
+    16) There is a generous help output for every tool in the 'iC Project'
+	initiated with the -h option. Each generated iC application also
+	has a help output:
 
-        John E. Wulff   $YEAR.$MONTH.$DAY     <john\@je-wulff.de>
+	    hello -h			     # list available options
 
-	I currently use SuSE Linux 9.3 with Tk800.024. I have tested the
-	distribution with Cygwin under WinXP and a special binary distribution
-	of Tk800.023 (in the kit).
+	These options allow connecting to iCserver on another computer in a
+	LAN - or with a differnt port number. Very detailed debugging output,
+	showing the change of state of every event in the system is available
+	for the Debug version of the iC system. (Supressed for Release version)
 
-	A test with Tk804.027 under MAC-OSX 1.3 and Linux works, but live
-	updates in iClive are noticably slow. Tag-handling in Tk::Text is
-	much slower under Tk804.27 than under Tk800.024 with Linux.
-	Therefore I suggest staying with Tk800.024.
+    17) There are 'man' pages for all the tools used in the 'iC Project'.
+	These can be viewed with the normal 'man' command under Linux or with
+	'iCman'.  The man page viewer 'iCman' has some nifty web-browser
+	features to view and search man pages - try it with 'iCman iCman'.
+
+
+    Lots of success
+
+    John E. Wulff   $YEAR.$MONTH.$DAY     <john\@je-wulff.de>
+
+
+    I currently use SuSE Linux 9.3 with Tk800.024. I have tested the
+    distribution with Cygwin under WinXP and a special binary distribution
+    of Tk800.023 (in the kit).  Perl under Windows Vista will not execute
+    forked processes, so the iC support programs don't work.
+
+    A test with Tk804.027 under MAC-OSX 1.3 and SuSE Linux 10.2 both work,
+    but live updates in iClive are noticably slow in both systems (about 10x).
+    Tag-handling in Tk::Text is much slower under Tk804.27 than under
+    Tk800.024 with Linux.  Therefore I suggest staying with Tk800.024.
 EOF
 ########################################################################

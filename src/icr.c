@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.33 2006/02/23 17:40:19 jw Exp $";
+"@(#)$Id: icr.c,v 1.34 2008/02/25 16:15:11 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -228,15 +228,15 @@ iC_icc(
     Out_init(iC_o_list);
     Out_init(iC_f_list);
     Out_init(iC_s_list);
-    /********************************************************************
-     *  Carry out 4 Passes to initialise all Gates
-     *******************************************************************/
 #if	YYDEBUG
     if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
 #endif	/* YYDEBUG */
     for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
 	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
     }
+    /********************************************************************
+     *  Carry out 4 Passes to initialise all Gates
+     *******************************************************************/
     for (pass = 0; pass < 4; pass++) {
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
@@ -291,16 +291,39 @@ iC_icc(
 
     if ((gp = tim[0]) != NULL) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
-	gp->gt_val = -1;		/* set EOP once as first action */
-	iC_link_ol(gp, iC_o_list);	/* fire EOP Input Gate */
+	gp->gt_val = -1;		/* set EOI once as first action */
+	iC_link_ol(gp, iC_o_list);	/* fire EOI Input Gate */
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
 #endif	/* YYDEBUG */
     }
 
     dis_cnt = DIS_MAX;
+    /********************************************************************
+     *  The following initialisation function is an empty function
+     *  in the libict.a support library.
+     *		int iCbegin(void) { return 0; }
+     *  It may be implemented in a literal block of an iC source, in
+     *  which case that function will be linked in preference.
+     *  User implementations of iCbegin() should return 1, to activate
+     *  the debug message "iCbegin complete ====".
+     *
+     *  It can be used to initialise immC variables etc. For this reason
+     *  it should be executed once after EOI, but before normal processing.
+     *  It can use the initial values of all immediate variables.
+     *
+     *  If the iCbegin() function contains a fork() call, a child process is
+     *  spawned, which will run in parallel with immediate processing.
+     *******************************************************************/
+    if (iCbegin()) {			/* initialisation function */
+#if	YYDEBUG
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "iCbegin complete ====\n");
+	}
+#endif	/* YYDEBUG */
+    }
     /********************************************************************
      *  Operational loop
      *******************************************************************/
@@ -314,7 +337,7 @@ iC_icc(
 	/********************************************************************
 	 *  Sequencing of different action lists and New I/O handling
 	 *
-	 *  1   initialisation - put EOP on o_list
+	 *  1   initialisation - put EOI on o_list
 	 *      # actions after an idle period:
 	 *  2   Loop:  scan a_list unless a_list empty
 	 *                 INPW ARITH expr results to a_list
@@ -745,7 +768,37 @@ void iC_initIO(void)
 
 void iC_quit(int sig)
 {
-    fflush(iC_outFP);
+    if (sig == SIGINT) {
+	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_progname);
+    } else if (sig == SIGSEGV) {
+	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_progname);
+    }
+    /********************************************************************
+     *  The following termination function is an empty function
+     *  in the libict.a support library.
+     *		int iCend(void) { return 0; }
+     *  It may be implemented in a literal block of an iC source, in
+     *  which case that function will be linked in preference.
+     *  User implementations of iCend() should return 1, to activate
+     *  the debug message "iend complete ======".
+     *
+     *  It can be used to free allocated memory, etc.
+     *
+     *  If the iCbegin() function contains a fork() call, iCend() may have
+     *  a matching wait() call.
+     *******************************************************************/
+    if ((sig == 0 || sig == SIGINT) &&
+	iCend()) {				/* termination function */
+#if	YYDEBUG
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "iCend complete ======\n");
+	}
+#endif	/* YYDEBUG */
+    }
+    if (iC_outFP != stdout) {
+	fflush(iC_outFP);
+	fclose(iC_outFP);
+    }
 #ifdef	_MSDOS_
     if (oldhandler && iC_debug & 03000) {
 	/* reset the old interrupt handler */
@@ -760,11 +813,6 @@ void iC_quit(int sig)
 	if (tcsetattr(0, TCSAFLUSH, &ttyparms) == -1) exit(-1);
     }
 #endif	/* Linux */
-    if (sig == SIGINT) {
-	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_progname);
-    } else if (sig == SIGSEGV) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_progname);
-    }
     if (iC_errFP != stderr) {
 	fflush(iC_errFP);
 	fclose(iC_errFP);

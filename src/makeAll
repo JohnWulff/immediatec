@@ -22,7 +22,7 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-qgclrtmdeCLRTMszh] [-D<OPT>] [-o<OBJ>]' >&2
+    echo 'Usage:	'${0##*/}' [-qgclrtmdeCLRTMsyh] [-D<OPT>] [-o<OBJ>]' >&2
     echo '	call make for immcc, libict.a, icr, ict and lmain with correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
@@ -47,11 +47,12 @@ usage ()
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
-    echo '	-z	make with -DLONG16        (make clean required first)' >&2
+    echo '	-y	make with -DLONG16        (make clean required first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
+    echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.26 2008/02/13 19:46:07 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.27 2008/02/24 22:45:06 jw Exp $' >&2
 }
 
 makeLib ()
@@ -62,7 +63,7 @@ makeLib ()
     else
 	mkdir LibObjs
     fi
-    make OPT="-DLOAD -DTCP$l$d$e$o$s$z" CFLAGS="$cflags" libict.a
+    make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" libict.a
     mv ict.$O misc.$O link.$O rsff.$O scan.$O tcpc.$O  LibObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -75,7 +76,7 @@ makeIcr ()
     else
 	mkdir IcrObjs
     fi
-    make OPT="-Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -DRUN$r$u$d$e$o$s$z" CFLAGS="$cflags" icr
+    make OPT="-DRUN$r$u$d$e$o$s$y" CFLAGS="$cflags" icr
     mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -88,7 +89,7 @@ makeIct ()
     else
 	mkdir IctObjs
     fi
-    make OPT="-Wno-pointer-to-int-cast -Wno-int-to-pointer-cast -DTCP$t$u$d$e$o$s$z" CFLAGS="$cflags" ict
+    make OPT="-DTCP$t$u$d$e$o$s$y" CFLAGS="$cflags" ict
     mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -101,7 +102,7 @@ makeLmain ()
     else
 	mkdir LmainObjs
     fi
-    make OPT="-DLMAIN$m$u$d$e$o$s$z" CFLAGS="$cflags" lmain
+    make OPT="-DLMAIN$m$u$d$e$o$s$y" CFLAGS="$cflags" lmain
     mv misc.$O gram.$O lexc.$O LmainObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -116,7 +117,7 @@ u=""
 d=""
 e=""
 s=""
-z=""
+y=""
 C=0
 L=0
 R=0
@@ -127,11 +128,12 @@ cflags="-O2"			# optimisation, no debugging info
 O="o"
 o=""
 w=""
+z=0
 
-while getopts ":qgclrtmCLRTMudeD:W:szo:h" opt; do
+while getopts ":qgclrtmCLRTMudeD:W:syo:zh" opt; do
     case $opt in
-    q )	q=1;;		# echo only - dont kill
-    g )	cflags="-g$w";;	# debugging, no optimisation
+    q )	q="q";;		# echo only - dont kill
+    g )	cflags="-g";;	# debugging, no optimisation
     c )	C=1; IM_LIB=0; c="-DYYDEBUG";;
     l )	L=1; IM_LIB=0; l=" -DYYDEBUG";;
     r )	R=1; IM_LIB=0; r=" -DYYDEBUG";;
@@ -146,14 +148,16 @@ while getopts ":qgclrtmCLRTMudeD:W:szo:h" opt; do
     d )	d=" -DDEQ";;
     e )	e=" -DEFENCE";;
     D ) o=" -D$OPTARG";;
-    W ) w=" -W$OPTARG"; if [ -n "$cflags" ]; then cflags="$cflags$w"; fi ;;
+    W ) w=" -W$OPTARG";;
     s )	s=" -DINT_MAX=32767";;
-    z )	z=" -DLONG16";;
+    y )	y=" -DLONG16";;
     o ) O="$OPTARG";;
+    z )	z=1; q="";;
     h )	usage; exit 255;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
+cflags="$cflags$w";
 shift $(($OPTIND - 1))
 
 if [ -f Make_tmp ]; then
@@ -162,31 +166,33 @@ if [ -f Make_tmp ]; then
 fi
 test -d Make_tmp || mkdir Make_tmp;
 
-rm -f icg.h
-perl icg.pl $d$s$z icc.h > icg.h
+if [ $z -eq 1 ]; then
+    echo "rm -f icg.h; perl icg.pl $d$s$y icc.h > icg.h" >&2
+fi
+rm -f icg.h; perl icg.pl $d$s$y icc.h > icg.h
 
 if [ $IM_LIB = 1 ] || [ $C = 1 ]; then
-    echo "make OPT=\"$c$u$d$e$o$s$z\" CFLAGS=\"$cflags\" immcc"
-    make OPT="$c$u$d$e$o$s$z" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    echo "make OPT=\"$c$u$d$e$o$s$y\" CFLAGS=\"$cflags\" immcc"
+    make OPT="$c$u$d$e$o$s$y" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
-    echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$z\" CFLAGS=\"$cflags\" libict.a"
+    echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $R = 1 ]; then
-    echo "make OPT=\"-DRUN$r$u$d$e$o$s$z\" CFLAGS=\"$cflags\" icr"
+    echo "make OPT=\"-DRUN$r$u$d$e$o$s$y\" CFLAGS=\"$cflags\" icr"
     makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $T = 1 ]; then
-    echo "make OPT=\"-DTCP$t$u$d$e$o$s$z\" CFLAGS=\"$cflags\" ict"
+    echo "make OPT=\"-DTCP$t$u$d$e$o$s$y\" CFLAGS=\"$cflags\" ict"
     makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $M = 1 ]; then
-    echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$z\" CFLAGS=\"$cflags\" lmain"
+    echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$y\" CFLAGS=\"$cflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
@@ -201,7 +207,7 @@ exit 0
 
 =head1 SYNOPSIS
 
-    makeAll [-qgclrtmdeCLRTMszh] [-D<OPT>] [-o<OBJ>]
+    makeAll [-qgclrtmdeCLRTMsyh] [-D<OPT>] [-o<OBJ>]
     call make for immcc, libict.a, icr, ict and lmain with correct options
     -q      output only headings and error messages
     -g      compile for debugging and no optimisation (default -O2)
@@ -225,9 +231,10 @@ exit 0
             (on a 16 bit system INT_MAX is 32767 and -s is not required)
             simulates compilation for a 16 bit system, which does
             no 32 bit arithmetic and rejects QL.. and IL.. I/O unless
-    -z      make with -DLONG16        (make clean required first)
+    -y      make with -DLONG16        (make clean required first)
             produces code for long int arithmetic on a 16 bit system
     -o<OBJ> define object extension (o is default; obj for Windows)
+    -z      echo compiler calls with all options for debugging (not -q)
     -h      this help text
 
 =head1 DESCRIPTION

@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.64 2008/02/12 13:34:00 jw Exp $";
+"@(#)$Id: icc.h,v 1.65 2008/02/25 15:30:02 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -110,14 +110,20 @@ static const char icc_h[] =
 #define	iC_TIMRL	21	/* timer action */
 #define	iC_F_ERR	22	/* error action */
 
+typedef union GppIpI {
+    struct Gate **	gpp;		/* Gate pointer array */
+    int		*	ip;		/* int array */
+    int			i;		/* int */
+} GppIpI;				/* auxiliary union to avoid casts */
+
 typedef struct Gate {			/* Gate */
 	char		gt_val;		/* forward logic value */
 	char		gt_ini;		/* initial logic value */
 	unsigned char	gt_fni;		/* function index */
 	unsigned char	gt_mcnt;	/* mark counter */
 	char *		gt_ids;		/* id string */
-	struct Gate **	gt_list;	/* forward logic list */
-	struct Gate **	gt_rlist;	/* reverse logic list */
+	union  GppIpI	gt_ll;		/* forward logic list */
+	union  GppIpI	gt_rll;		/* reverse logic list */
 	struct Gate *	gt_next;	/* forward link */
 	unsigned short	gt_mark;	/* mark for stamping gate */
 	unsigned short	gt_live;	/* live flag and index */
@@ -132,6 +138,28 @@ typedef struct Gate {			/* Gate */
 	int		gt_old;		/* old value for arithhmetic */
 #endif
 } iC_Gt;
+
+#define	FL_GATE	0
+#define	FL_CLK	1
+#define	FL_TIME	2
+				/* normal gate pointer pointer */
+#define	gt_list		gt_ll.gpp
+				/* action C function number in union */
+#define	gt_listn	gt_ll.i
+				/* action C function pointer */
+#define	gt_funct	gt_ll.gpp[FL_GATE]
+				/* action C function number in int array */
+#define	gt_functn	gt_ll.ip[FL_GATE]
+				/* clock list pointer */
+#define	gt_clk		gt_ll.gpp[FL_CLK]
+				/* gate holding time value (ARN or NCONST) */
+#define	gt_time		gt_ll.gpp[FL_TIME]
+				/* this order is required for initialisation */
+
+				/* reverse gate pointer pointer */
+#define	gt_rlist	gt_rll.gpp
+				/* reverse C function number in int array */
+#define	gt_rfunctn	gt_rll.ip[FL_GATE]
 
 extern iC_Gt		iClock;		/* System clock */
 
@@ -266,17 +294,6 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #define	F_CW_M	0		/* has no slave node */
 #define	INPT_M	0		/* only used for check so far */
 #define	OUTP_M	1		/* used to check that 1 input */
-
-#define	FL_GATE	0
-#define	FL_CLK	1
-#define	FL_TIME	2
-				/* action gate output or C function pointer */
-#define	gt_funct	gt_list[FL_GATE]
-				/* clock list pointer */
-#define	gt_clk		gt_list[FL_CLK]
-				/* gate holding time value (ARN or NCONST) */
-#define	gt_time		gt_list[FL_TIME]
-				/* this order is required for initialisation */
 
 #define	Sizeof(x)	((sizeof x) / (sizeof x[0]))
 #ifndef DEQ
@@ -529,6 +546,8 @@ extern unsigned char	iC_bitIndex[];
 #define	H_WIDTH		260		/* marks output as long long width signed */
 #endif
 
+extern int	iCbegin(void);			/* initialisation function */
+extern int	iCend(void);			/* termination function */
 extern void	iC_sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	iC_rMff(Gate *, Gate *);	/* R_FF master action on FF */
 extern void	iC_dMff(Gate *, Gate *);	/* D_FF master action on FF */

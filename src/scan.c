@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.33 2006/04/14 12:34:20 jw Exp $";
+"@(#)$Id: scan.c,v 1.34 2008/02/22 23:08:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -160,7 +160,7 @@ iC_scan_ar(Gate *	out_list)
 	    }
 #else	/* LOAD */
 	    if (gp->gt_rlist) {
-		val = iC_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
+		val = iC_exec(gp->gt_rfunctn, gp);	/* must pass both -/+ */
 	    }
 #endif	/* LOAD */
 	    else {
@@ -761,7 +761,7 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 		}
 #else	/* LOAD */
 		if (gp->gt_rlist) {
-		    val = iC_exec((int)gp->gt_rlist[0], gp);	/* must pass both -/+ */
+		    val = iC_exec(gp->gt_rfunctn, gp);	/* must pass both -/+ */
 		}
 #endif	/* LOAD */
 		else {

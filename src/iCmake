@@ -72,7 +72,7 @@ usage ()
   echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.34 2007/12/04 16:12:00 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.35 2008/02/21 20:41:16 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -101,6 +101,7 @@ k=""
 I=""
 D=""
 C=""
+CFL="-g -fno-builtin"
 
 while getopts ":lo:scbnNk:iIJqv:w:gASO:PRD:U:C:V:6xd:zh" opt; do
     case $opt in
@@ -212,9 +213,9 @@ for f in $*; do
 	    fi
 	    if $nice ${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
 		if [ $z -eq 1 ]; then
-		    echo "$CC -g -I.$ldir$C -o $base $base.c $lib"
+		    echo "$CC $CFL -I.$ldir$C -o $base $base.c $lib"
 		fi
-		if $nice $CC -g -I.$ldir$C -o $base $base.c $lib; then
+		if $nice $CC $CFL -I.$ldir$C -o $base $base.c $lib; then
 		    if [ -n "$I" ]; then
 			if [ $z -eq 1 ]; then
 			    echo "./$base -d$I > $base.ini"
@@ -340,9 +341,9 @@ if [ $link -eq 1 ]; then
 	echo >> .iC_list2.h	# terminate last line of #define \
 	if [ $z -eq 1 ]; then
 	    echo "echo >> .iC_list2.h	# terminate last line of #define \\"
-	    echo "$CC -g -I.$ldir$C -o $first $list $lib"
+	    echo "$CC $CFL -I.$ldir$C -o $first $list $lib"
 	fi
-	if $nice $CC -g -I.$ldir$C -o $first $list $lib; then
+	if $nice $CC $CFL -I.$ldir$C -o $first $list $lib; then
 	    if [ -n "$I" ]; then
 		if [ $z -eq 1 ]; then
 		    echo "./$first -d$I > $first.ini"

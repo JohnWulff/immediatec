@@ -167,7 +167,7 @@ Usage:
 
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.40 2008/02/12 19:05:07 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.41 2008/02/29 11:17:54 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1274,6 +1274,7 @@ sub restoreTag {
 #		parameter 3:	0  Search down	(default)
 #		    "		1  Search up	(save searchText when clearing)
 #		    "		2  Go to line
+#		    "		4  Special search down - suppress search statistics
 #
 #	search_text() is mostly called from a pop up, which does not close,
 #	until search_text() has completed execution. If the search action
@@ -1283,6 +1284,9 @@ sub restoreTag {
 #	To fix this, postpone the search and scrolling action until after
 #	search_text() has completed execution, by posting the callback
 #	search_now(). No actual delay is necessary.
+#
+#	When called from build_file() to search for '*** ', which Error or
+#	Warning lines, suppress search statistics to retain display from build
 #
 ########################################################################
 
@@ -1294,6 +1298,8 @@ sub search_now {
     my ($dummy, $newSearchText, $direction) = @_;
     my ($saveText, $saveMatch, $option, $auxiliary, $current, $hl, $y, $x, $length);
     my $tmpText;
+    my $suppress = $direction & 0x04;	# extract additional parameter 3 info
+    $direction &= 0x03;			# remove suppress bit
     if (defined $newSearchText) {
 	if ($newSearchText eq '' and $direction) {	# save search text when clearing
 	    ($saveText, $saveMatch) = ($searchText, $matchType);
@@ -1495,7 +1501,7 @@ sub search_now {
 	    $gi = -1;				# see index
 	    $gl = scalar @groups;
 	    my $plural = $gl > 1 ? 's' : '';
-	    info_display(0, 'dark green', "/$searchText/ found $hl times in $gl group$plural");
+	    info_display(0, 'dark green', "/$searchText/ found $hl times in $gl group$plural") unless $suppress;
 	    $text->tagRaise('searchTag') if $gl;	# put any search results in foreground
 	}
 	$prevText = $searchText;
@@ -2235,29 +2241,44 @@ sub build_file {
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-qA", $fileName);	# -A useful for live display
+		my @args = ("iCmake", "-qA", $fileName, "2>&1");	# -A useful for live display
 		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
-		print "system @args\n" if $opt_T;
-		$ret = system(@args) >> 8;
+		print "qx(@args)\n" if $opt_T;
+		my @errText = qx(@args);	# exwcute iCmake ...
+		$ret = $? >> 8;
+		my $len = @errText;
+		my $gr = grep /^\*\*\* /, @errText;
+		print "ret = $ret, len = $len, *** = $gr\n" if $opt_T;
+		print STDERR @errText;
 		$SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
-		if ($ret) {
-		    info_display(2000, 'red',
-			"ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)");
-		    warn "ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)\n";
+		if ($ret or $gr) {
 		    sleep 2;
 		    my $listName = "$baseName.lst";
 		    open_file(1, $listName);	# load the listing file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
 		    $matchType = '-regexp';
-		    search_text(0, undef, 0);	# carry out the search setting markers
+		    search_text(0, undef, 4);	# carry out the search, setting markers but no display
+		}
+		if ($ret) {
+		    info_display(2000, 'red',
+			"ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)");
+		    warn "ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)\n";
 		} else {
 		    if ($runName ne '') {
-			$makeName = $targetName;# running proces is not current build
+			$makeName = $targetName;# running process is not current build
 		    }
-		    info_display(2000, 'dark green', "'$targetName' successfully built");
+		    my $build_warnings;
+		    if ($gr) {
+			$build_warnings = "built with $gr Warnings - can be run";
+			warn "WARNING: '$targetName' $build_warnings\n";
+			$build_warnings .= " after pressing Alt-l";
+		    } else {
+			$build_warnings = "successfully built";
+		    }
+		    info_display(2000, 'dark green', "'$targetName' $build_warnings");
 		}
 	    } else {
 		info_display(2000, 'blue', "'$targetName' is up to date");

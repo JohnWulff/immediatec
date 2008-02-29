@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.55 2007/06/25 11:18:19 jw Exp $";
+"@(#)$Id: comp.h,v 1.56 2008/02/16 12:18:26 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -127,6 +127,9 @@ extern int	ynerrs;			/* count of iCerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 
 extern int	iC_Pflag;
+extern int	iC_Wflag;
+#define W_DEPRECATED_LOGIC	01	/* do/no logic warnings */
+/* define other Warning switches here */
 extern int	lexflag;
 /********************************************************************
  *	lexflag is bitmapped and controls the input for lexers

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.97 2008/02/12 13:37:07 jw Exp $";
+"@(#)$Id: comp.y,v 1.98 2008/02/16 12:24:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -1210,8 +1210,8 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
-		    if (iC_Pflag) {
-			warning("Use of '&&' with imm bit variables is deprecated:", sp->name);
+		    if ((iC_Wflag & W_DEPRECATED_LOGIC) || iC_Pflag) {
+			warning("Use of '&&' with imm bit variables is deprecated (use '&'):", sp->name);
 		    }
 		} else {
 		    lpR = op_force($3.v, ARITH);
@@ -1241,8 +1241,8 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
-		    if (iC_Pflag) {
-			warning("Use of '||' with imm bit variables is deprecated:", sp->name);
+		    if ((iC_Wflag & W_DEPRECATED_LOGIC) || iC_Pflag) {
+			warning("Use of '||' with imm bit variables is deprecated (use '|'):", sp->name);
 		    }
 		} else {
 		    lpR = op_force($3.v, ARITH);
@@ -1383,8 +1383,8 @@ expr	: UNDEF			{
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
-			if (iC_Pflag) {
-			    warning("Use of '!' with an imm bit variable is deprecated:", sp->name);
+			if ((iC_Wflag & W_DEPRECATED_LOGIC) || iC_Pflag) {
+			    warning("Use of '!' with an imm bit variable is deprecated (use '~'):", sp->name);
 			}
 		    } else {
 							/* arithmetic negation */

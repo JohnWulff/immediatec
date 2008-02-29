@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.49 2007/08/05 21:21:00 jw Exp $";
+"@(#)$Id: ict.c,v 1.50 2008/02/25 16:07:41 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -151,7 +151,7 @@ iC_icc(
 	iC_errFP = stderr;		/* standard error from here */
     }
 
-    if ((gp = iC_TX0p) != 0) {		/* are EOP or TX0 timers programmed */
+    if ((gp = iC_TX0p) != 0) {		/* are EOI or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7 */
 	assert(tim);
 	for (cnt = 1; cnt < 8; cnt++) {
@@ -307,9 +307,6 @@ iC_icc(
 #endif	/* LOAD */
     Out_init(iC_f_list);
     Out_init(iC_s_list);
-    /********************************************************************
-     *  Carry out 4 Passes to initialise all Gates
-     *******************************************************************/
 #if	YYDEBUG
     if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
 #endif	/* YYDEBUG */
@@ -329,6 +326,9 @@ iC_icc(
 	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
     }
 #endif	/* LOAD */
+    /********************************************************************
+     *  Carry out 4 Passes to initialise all Gates
+     *******************************************************************/
     for (pass = 0; pass < 4; pass++) {
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
@@ -386,10 +386,10 @@ iC_icc(
 
     if ((gp = tim[0]) != NULL) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOP:\t%s  1 ==>", gp->gt_ids);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
-	gp->gt_val = -1;		/* set EOP once as first action */
-	iC_link_ol(gp, iC_o_list);			/* fire EOP Input Gate */
+	gp->gt_val = -1;		/* set EOI once as first action */
+	iC_link_ol(gp, iC_o_list);			/* fire EOI Input Gate */
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
 #endif	/* YYDEBUG */
@@ -398,6 +398,29 @@ iC_icc(
 #if	YYDEBUG
     dis_cnt = DIS_MAX;
 #endif	/* YYDEBUG */
+    /********************************************************************
+     *  The following initialisation function is an empty function
+     *  in the libict.a support library.
+     *		int iCbegin(void) { return 0; }
+     *  It may be implemented in a literal block of an iC source, in
+     *  which case that function will be linked in preference.
+     *  User implementations of iCbegin() should return 1, to activate
+     *  the debug message "iCbegin complete ====".
+     *
+     *  It can be used to initialise immC variables etc. For this reason
+     *  it should be executed once after EOI, but before normal processing.
+     *  It can use the initial values of all immediate variables.
+     *
+     *  If the iCbegin() function contains a fork() call, a child process is
+     *  spawned, which will run in parallel with immediate processing.
+     *******************************************************************/
+    if (iCbegin()) {			/* initialisation function */
+#if	YYDEBUG
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "iCbegin complete ====\n");
+	}
+#endif	/* YYDEBUG */
+    }
     /********************************************************************
      *  Operational loop
      *******************************************************************/
@@ -410,7 +433,7 @@ iC_icc(
 	/********************************************************************
 	 *  Sequencing of different action lists and New I/O handling
 	 *
-	 *  1   initialisation - put EOP on o_list
+	 *  1   initialisation - put EOI on o_list
 	 *      # actions after an idle period:
 	 *  2   Loop:  scan a_list unless a_list empty
 	 *                 INPW ARITH expr results to a_list
@@ -1031,7 +1054,7 @@ void iC_initIO(void)
  *	Quit program with 'q' or ctrlC or Break via signal SIGINT
  *	or program abort on detected bugs.
  *
- *	Although nansleep is supposed to be POSIX, it is not implemented
+ *	Although nanosleep is supposed to be POSIX, it is not implemented
  *	under Windows/Cygwin - since the sleep in iC_quit is not critical
  *	usleep() has been used and not the following, which works under
  *	Linux and MAC-OsX
@@ -1042,6 +1065,33 @@ void iC_initIO(void)
 
 void iC_quit(int sig)
 {
+    if (sig == SIGINT) {
+	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
+    } else if (sig == SIGSEGV) {
+	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
+    }
+    /********************************************************************
+     *  The following termination function is an empty function
+     *  in the libict.a support library.
+     *		int iCend(void) { return 0; }
+     *  It may be implemented in a literal block of an iC source, in
+     *  which case that function will be linked in preference.
+     *  User implementations of iCend() should return 1, to activate
+     *  the debug message "iend complete ======".
+     *
+     *  It can be used to free allocated memory, etc.
+     *
+     *  If the iCbegin() function contains a fork() call, iCend() may have
+     *  a matching wait() call.
+     *******************************************************************/
+    if ((sig == 0 || sig == SIGINT) &&
+	iCend()) {				/* termination function */
+#if	YYDEBUG
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "iCend complete ======\n");
+	}
+#endif	/* YYDEBUG */
+    }
     if (sockFN) {
 	if (C_channel) {
 	    /* disconnect iClive - follow with '0' for iCserver */
@@ -1057,11 +1107,9 @@ void iC_quit(int sig)
 	}
 	close(sockFN);				/* close connection to iCserver */
     }
-    fflush(iC_outFP);
-    if (sig == SIGINT) {
-	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
-    } else if (sig == SIGSEGV) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
+    if (iC_outFP != stdout) {
+	fflush(iC_outFP);
+	fclose(iC_outFP);
     }
     if (iC_errFP != stderr) {
 	fflush(iC_errFP);

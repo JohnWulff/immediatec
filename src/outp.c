@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.86 2008/02/11 13:05:00 jw Exp $";
+"@(#)$Id: outp.c,v 1.87 2008/02/22 23:32:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -525,7 +525,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
     unsigned	rc = 0;				/* return code */
     Gate *	gp;
     Gate *	tgp;
-    Gate **	fp;
+    GppIpI	fp;				/* union of Gate ** and int */
     Gate **	tfp;
     Gate **	ifp;
     Gate *	op;
@@ -553,7 +553,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
     /* initialise executable gates */
 
     *igpp = gp = (Gate *)calloc(block_total, sizeof(Gate));	/* gates */
-    ifp = fp = (Gate **)calloc(link_count, sizeof(Gate *));	/* links */
+    ifp = fp.gpp = (Gate **)calloc(link_count, sizeof(Gate *));	/* links */
 
     for (typ = 0; typ < MAX_OP; typ++) {
 	val = 0;
@@ -578,11 +578,11 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 		for (sp = *hsp; sp; sp = sp->next) {
 		    if (sp->type == typ && (sp->fm & FM) == 0 && (typ != NCONST || sp->u_val != 0)) {
 			if (typ < MAX_LV) {
-			    gp->gt_list = fp;	/* start of gate list */
+			    gp->gt_list = fp.gpp;	/* start of gate list */
 			    if (sp->ftype < MIN_ACT) {
 				val = (sp->ftype < MAX_AR) ? NOT : 0;
 				do {		/* go through list twice for LVs */
-				    tfp = fp;	/* start of new gate list */
+				    tfp = fp.gpp;	/* start of new gate list */
 				    for (lp = sp->list; lp; lp = lp->le_next) {
 					tsp = lp->le_sym;
 					assert(tsp && tsp->u_gate);
@@ -598,11 +598,11 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					} else if (val != lp->le_val) {
 					    continue;	/* not right logical value */
 					}
-					*fp++ = tsp->u_gate;
+					*fp.gpp++ = tsp->u_gate;
 				    }
 				    /* sort gate list */
-				    qsort(tfp, fp - tfp, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
-				    *fp++ = 0;		/* gate list terminator */
+				    qsort(tfp, fp.gpp - tfp, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
+				    *fp.gpp++ = 0;		/* gate list terminator */
 				} while (val ^= NOT);
 #ifndef	TCP
 				if (typ == INPW) {
@@ -650,9 +650,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					/* transfer timer preset off value */
 					tgp->gt_old = lp->le_val;
 				    }
-				    *fp++ = tgp;
-				    *fp++ = 0;		/* room for clock or timer entry */
-				    *fp++ = 0;		/* room for time delay */
+				    *fp.gpp++ = tgp;
+				    *fp.gpp++ = 0;		/* room for clock or timer entry */
+				    *fp.gpp++ = 0;		/* room for time delay */
 				    /* TODO modify later to do this only for */
 				    /* TODO action gates controlled by a TIMER */
 				} else {
@@ -668,9 +668,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					tgp->gt_mcnt = 1;
 					i = 0;
 				    } else {
-					fp[0] = (Gate*)(lp->le_val >> 8);
-					fp[1] = 0;	/* room for clock or timer entry */
-					fp[2] = 0;	/* room for time delay or first parameter */
+					fp.ip[0] = lp->le_val >> 8;
+					fp.gpp[1] = 0;	/* room for clock or timer entry */
+					fp.gpp[2] = 0;	/* room for time delay or first parameter */
 					i   = 3;	/* offset for above */
 				    }
 				    while ((lp = lp->le_next) != 0) {
@@ -680,16 +680,16 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					    tsp = tsp->list->le_sym;	/* point to original */
 					}
 					assert(tsp && tsp->u_gate);
-					fp[val] = tsp->u_gate;
+					fp.gpp[val] = tsp->u_gate;
 					i++;	/* count parameters */
 				    }
-				    fp += i;	/* space for above entries */
+				    fp.gpp += i;	/* space for above entries */
 				}
 #ifndef	TCP
 			    } else if (sp->ftype == OUTW) {
 				if (sscanf(gp->gt_ids, "Q%1[BWL]%d", bwl, &byte1) == 2 &&
 				    byte1 < IXD) {
-				    gp->gt_list = (Gate**)byte1;
+				    gp->gt_listn = byte1;	/* number in union */
 				    gp->gt_mark = bwl[0] == 'B' ? B_WIDTH :
 						  bwl[0] == 'W' ? W_WIDTH :
 #if INT_MAX != 32767 || defined (LONG16)
@@ -703,7 +703,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			    } else if (sp->ftype == OUTX) {
 				if (sscanf(gp->gt_ids, "QX%d.%d", &byte1, &bit1) == 2 &&
 				    byte1 < IXD && bit1 < 8) {
-				    gp->gt_list = (Gate**)byte1;
+				    gp->gt_listn = byte1;	/* number in union */
 				    gp->gt_mark = iC_bitMask[bit1];
 				    iC_QT_[byte1] = 'X';
 				} else {
@@ -778,11 +778,11 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					    assert((tsp->type == ARN || tsp->type == ERR) &&
 						   val && i && i <= tgp->gt_new);
 					    if (tgp->gt_rlist == 0) {
-						tgp->gt_rlist = fp;
-						fp += tgp->gt_new + 1;
-						tgp->gt_rlist[0] = (Gate*)val;
+						tgp->gt_rlist = fp.gpp;
+						fp.gpp += tgp->gt_new + 1;
+						tgp->gt_rfunctn = val;	/* reverse n in array */
 					    } else {
-						assert((Gate*)val == tgp->gt_rlist[0]);
+						assert(val == tgp->gt_rfunctn);
 					    }
 					    tgp->gt_rlist[i] = gp;
 					}
@@ -817,7 +817,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 	    __FILE__, __LINE__, val, block_total);
 	rc = 2;
     } else
-    if ((val = fp - ifp) != link_count) {
+    if ((val = fp.gpp - ifp) != link_count) {
 	fprintf(iC_errFP,
 	    "\n%s: line %d: link error %d vs link_count %u\n",
 	    __FILE__, __LINE__, val, link_count);

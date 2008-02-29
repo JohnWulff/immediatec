@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.58 2007/12/06 15:25:00 jw Exp $";
+"@(#)$Id: icc.c,v 1.59 2008/02/16 13:13:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -47,7 +47,7 @@ int			iC_genCount;
 
 static const char *	usage =
 "USAGE: %s [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>][ -O<level>]\n"
-"             [ -Dmacro[=defn]...][ -Umacro...][ -Cmacro[=defn]...][ -Vmacro...] <src.ic>\n"
+"    [ -Dmacro[=defn]...][ -Umacro...][ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>] <src.ic>\n"
 #if defined(RUN) || defined(TCP)
 "Options in compile mode (-o or -c):\n"
 #endif	/* RUN or TCP */
@@ -71,6 +71,8 @@ static const char *	usage =
 "                        Note: do not use the same macros for the iC and the C phase\n"
 "        -C <macro>      predefine <macro> for the C preprocessor phase\n"
 "        -V <macro>      cancel previous definition of <macro> for the C phase\n"
+"        -W[no-]<warn>   positive/negative warning options\n"
+"                        -Wno-deprecated-logic -Wno-deprecated -Wdeprecated (default)\n"
 #if defined(RUN) || defined(TCP)
 "        -k <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
@@ -174,7 +176,8 @@ static const char *	usage =
 char *		iC_progname;		/* name of this executable */
 short		iC_debug = 0;
 int		iC_micro = 0;
-int		iC_Pflag;
+int		iC_Pflag = 0;		/* pedantic warning/error flag */
+int		iC_Wflag = W_DEPRECATED_LOGIC;	/* do/no logic warnings */
 unsigned short	iC_xflag;
 unsigned short	iFlag;
 unsigned short	iC_osc_max = MARKMAX;
@@ -574,6 +577,20 @@ main(
 		case 'P':
 		    iC_Pflag++;			/* -P is pedantic, -PP or more is pedantic-error*/
 		    break;
+		case 'W':
+		    if (strcmp(*argv, "Wno-deprecated") == 0) {
+			iC_Wflag &= ~(W_DEPRECATED_LOGIC);	/* or all deprecated flags */
+		    } else if (strcmp(*argv, "Wdeprecated") == 0) {
+			iC_Wflag |= (W_DEPRECATED_LOGIC);	/* or all deprecated flags */
+		    } else if (strcmp(*argv, "Wno-deprecated-logic") == 0) {
+			iC_Wflag &= ~W_DEPRECATED_LOGIC;
+		    } else if (strcmp(*argv, "Wdeprecated-logic") == 0) {
+			iC_Wflag |= W_DEPRECATED_LOGIC;
+		    /* Insert other Waning switches here */
+		    } else {
+			goto cerror;
+		    }
+		    goto break2;
 		case 'g':
 		    iC_gflag = 1;		/* independent C code for gdb debugging */
 		    break;	/* allows setting breakpoints in C code in iC listings */
@@ -642,9 +659,10 @@ main(
 		    iC_xflag = inpNM[0];	/* test Electric Fence FREE */
 		    goto error;			/* SIGSEGV if EF_PROTECT_FREE  */
 #endif	/* EFENCE */
+		cerror:
 		default:
 		    fprintf(stderr,
-			"%s: unknown flag '%c'\n", iC_progname, **argv);
+			"%s: unknown command line switch '%s'\n", iC_progname, *argv);
 		case 'h':
 		case '?':
 		error:
