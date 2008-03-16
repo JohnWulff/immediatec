@@ -1,5 +1,5 @@
 #! /bin/bash
-# $Id: update,v 1.6 2007/06/12 16:37:24 jw Exp $
+# $Id: update,v 1.7 2008/03/16 21:52:47 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
@@ -40,7 +40,7 @@ if locked -q; then
 	    previous="$vp$n"
 	    let n=$n+1
 	    head="$vp$n"
-	    if ! Mdiff -kLeq $(locked) $previous; then
+	    if ! Mdiff -wkLeq $(locked) $previous; then
 		echo "#### $name $head"
 		mkdir $head
 		cd $head
@@ -53,9 +53,9 @@ if locked -q; then
 			echo "**** Error: $name has strange file $f - not backed up"
 		    fi
 		done
-		rm -f $(Mdiff -Lle * ..)	# remove links to files which longer exist
+		rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 		cd ..
-		cp --remove-destination -p $(Mdiff -kLel $(locked) $head) $head
+		cp --remove-destination -p $(Mdiff -wkLel $(locked) $head) $head
 	    else
 		echo "**** Warning: $name directory will get no new files - no $head made"
 	    fi
@@ -95,7 +95,7 @@ if locked -q; then
 		fi
 	    fi
 	    branch="$w$m"
-	    if ! Mdiff -kLeq $(locked) $previous; then
+	    if ! Mdiff -wkLeq $(locked) $previous; then
 		echo "#### $name $branch"
 		mkdir $branch
 		cd $branch
@@ -108,9 +108,9 @@ if locked -q; then
 			echo "**** Error: $name has strange file $f - not backed up"
 		    fi
 		done
-		rm -f $(Mdiff -Lle * ..)	# remove links to files which longer exist
+		rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 		cd ..
-		cp --remove-destination -p $(Mdiff -kLel $(locked) $branch) $branch
+		cp --remove-destination -p $(Mdiff -wkLel $(locked) $branch) $branch
 	    else
 		echo "**** Warning: $name directory will get no new files - no $branch made"
 	    fi
