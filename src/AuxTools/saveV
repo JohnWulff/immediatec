@@ -5,7 +5,7 @@
 #
 ########################################################################
 
-# $Id: saveV,v 1.1 2008/03/17 14:20:27 jw Exp $
+# $Id: saveV,v 1.2 2008/03/17 15:29:46 jw Exp $
 
 name=${0##*/}
 previous=$1
@@ -15,20 +15,20 @@ error=''
 for d in Test[1-9]*; do
     echo $d
     if [ ! -d "$d/$previous" ]; then
-	echo "**** Error: $name: '$d/$previous' must be a directoy"
+	echo "**** Error: $name: '$d/$previous' must be a directoy" >&2
 	error=1
     fi
     if [ -e "$d/$head" ]; then
-	echo "**** Error: $name: '$d/$head' may not exist yet"
+	echo "**** Error: $name: '$d/$head' may not exist yet" >&2
 	error=1
     fi
 done
 if [ -n "$error" ]; then
-    echo "-----"
-    echo "**** Error: $name:  directories not correct - fix first"
+    echo "-----" >&2
+    echo "**** Error: $name:  directories not correct - fix first" >&2
     exit 1
 fi
-echo "----- cp errors are OK - occurs for directories in which no files differ"
+echo "-----"
 for d in Test[1-9]*; do
     echo $d
     cd $d
@@ -41,17 +41,17 @@ for d in Test[1-9]*; do
 	elif [ -f $f ]; then
 	    ln -s $f .
 	else
-	    echo "**** Error: $name has strange file $f - not backed up"
+	    echo "**** Error: $name has strange file $f - not backed up" >&2
 	    error=1
 	fi
     done
     rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
     cd ..
-    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $head) $head
+    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $head) $head 2> /dev/null
     cd ..
 done
 if [ -n "$error" ]; then
-    echo "-----"
-    echo "**** Error: $name:  strange file - check"
+    echo "-----" >&2
+    echo "**** Error: $name:  strange file - check" >&2
     exit 1
 fi
