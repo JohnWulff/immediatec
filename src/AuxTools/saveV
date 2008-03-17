@@ -1,0 +1,57 @@
+#! /bin/bash
+########################################################################
+#
+#	save execution lists in Test[1-9]*/V100 etc
+#
+########################################################################
+
+# $Id: saveV,v 1.1 2008/03/17 14:20:27 jw Exp $
+
+name=${0##*/}
+previous=$1
+head=$2
+error=''
+
+for d in Test[1-9]*; do
+    echo $d
+    if [ ! -d "$d/$previous" ]; then
+	echo "**** Error: $name: '$d/$previous' must be a directoy"
+	error=1
+    fi
+    if [ -e "$d/$head" ]; then
+	echo "**** Error: $name: '$d/$head' may not exist yet"
+	error=1
+    fi
+done
+if [ -n "$error" ]; then
+    echo "-----"
+    echo "**** Error: $name:  directories not correct - fix first"
+    exit 1
+fi
+echo "----- cp errors are OK - occurs for directories in which no files differ"
+for d in Test[1-9]*; do
+    echo $d
+    cd $d
+    ml
+    mkdir $head
+    cd $head
+    for f in ../$previous/*; do
+	if [ -L $f ]; then
+	    cp -a $f .
+	elif [ -f $f ]; then
+	    ln -s $f .
+	else
+	    echo "**** Error: $name has strange file $f - not backed up"
+	    error=1
+	fi
+    done
+    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
+    cd ..
+    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $head) $head
+    cd ..
+done
+if [ -n "$error" ]; then
+    echo "-----"
+    echo "**** Error: $name:  strange file - check"
+    exit 1
+fi
