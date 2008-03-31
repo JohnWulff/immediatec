@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.49 2008/02/25 17:05:07 jw Exp $
+# @(#)$Id: Makefile.in,v 1.50 2008/03/26 21:13:05 jw Exp $
 
 ############################################################
 #
@@ -19,11 +19,17 @@
 #
 #	to make immcc, make with OPT=''
 #	to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
-#	to make icr, make with OPT='-DRUN -DYYDEBUG'
+#	to make icr, remove all objects and make with OPT='-DRUN -DYYDEBUG'
 #	to make ict, remove all objects and make with OPT='-DTCP'
 #	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #
-#	auxiliary script makeAll -rm called for all: does this automatically
+#	  makeAll       # makes 'immcc' and 'libict.a' without YYDEBUG support
+#	  makeAll -trm; # makes the auxiliary compilers with YYDEBUG support
+#
+#	Do not rm comp.c, gram.c and lexc.c with make clean in case the target
+#	system has no bison or yacc and no flex or lex (some Knoppix distributions)
+#	Define YYERROR_VERBOSE for bison generated files comp.c and gram.c
+#	26.Mar.2008
 #
 ############################################################
 
@@ -268,10 +274,10 @@ uninstall:
 	rm -f ${prefix}/man/man1/makeAll.1.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LibObjs $(srcdir)/LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict.a $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LibObjs $(srcdir)/LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict.a $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/*.1.gz
 
 distclean: clean
-	rm -f $(srcdir)/Makefile $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README
+	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README
 
 distribution:
 	@rev=`$(PREV) $(srcdir)/scid.c`; echo "making icc_$$rev.tgz"; cd ${srcdir}/../..; tar -czf icc_$$rev.tgz `$(PADD) icc_$$rev/src/manifest`; cd -;
@@ -281,7 +287,7 @@ init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
 symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
 
 comp.$(O):	$(srcdir)/comp.c $(srcdir)/icc.h $(srcdir)/comp.h
-	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) $(O0) $<
 
 icc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h
 outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
@@ -296,7 +302,7 @@ rsff.$(O):	$(srcdir)/icc.h
 scan.$(O):	$(srcdir)/icc.h
 
 gram.$(O):	$(srcdir)/gram.c $(srcdir)/icc.h $(srcdir)/comp.h
-	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) $(O0) $<
 
 lexc.$(O):	$(srcdir)/lexc.c $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram_tab.h
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<

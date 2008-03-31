@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.26 2007/06/21 13:57:55 jw Exp $";
+"@(#)$Id: gram.y,v 1.27 2008/03/16 00:05:24 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -181,10 +181,10 @@ function_body					/* 4 */
 	;
 
 declaration					/* 5 */
-	: declaration_specifiers ';' {
-	    $$.start = $1.start;
-	    $$.end = $2.end;
-	    $$.symbol = NULL;
+	: declaration_specifiers ';' {	/* may have empty init_declarator_list according to K&R */
+	    $$.start = $1.start;	/* GCC issues a warning: */
+	    $$.end = $2.end;		/* "useless keyword or typname in empty declaration" */
+	    $$.symbol = NULL;		/* (see also rule 17) */
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
 #endif
@@ -201,7 +201,7 @@ declaration					/* 5 */
 		if ($1.symbol && $1.symbol->type == UDF) {
 		    sp1->type = CTYPE;		/* found a typedef */
 #if YYDEBUG
-		    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "P %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
+		    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\nP %-15s %d %d\n", sp1->name, sp1->type, sp1->ftype);
 #endif
 		    if (lookup(sp1->name) == 0) {
 			link_sym(sp1);
@@ -448,7 +448,7 @@ struct_or_union					/* 13 */
 	;
 
 struct_declaration_list				/* 14 */
-	: /* NOTHING */ {
+	: /* NOTHING */ {		/* optional in modern C compilers (not K&R) */
 	    $$.start = 0;
 	    $$.end = 0;
 	    $$.symbol = NULL;
@@ -495,7 +495,12 @@ init_declarator					/* 16 */
 	;
 
 struct_declaration				/* 17 */
-	: specifier_qualifier_list struct_declarator_list ';' {
+	: specifier_qualifier_list ';' {/* nameless struct/union for moder C (not K&R) */
+	    $$.start = $1.start;	/* should only be for struct or union, but GCC */
+	    $$.end = $2.end;		/* only issues warning: "declaration does not declare anything" */
+	    $$.symbol = NULL;		/* for 'TYPE ;' in a struct_declaration (similar to 'declaration' rule 5) */
+	}
+	| specifier_qualifier_list struct_declarator_list ';' {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
@@ -1982,8 +1987,8 @@ imm_identifier					/* 69 */
 static void
 yyerror(char *s, ...)
 {
-    fflush(stdout);
-    fprintf(stderr, "\n%*s\n%*s\n", column, "^", column, s);
+    fprintf(iC_outFP, "\n%*s\n%*s\n", column, "^", column, s);
+    fflush(iC_outFP);
 } /* yyerror */
 
 void
@@ -1991,14 +1996,14 @@ ierror(						/* print error message */
     char *	str1,
     char *	str2)
 {
-    fflush(stdout);
-    fprintf(stderr, "*** Error: %s", str1);
+    fprintf(iC_outFP, "*** Error: %s", str1);
     if (str2) {
-	fprintf(stderr, " %s", str2);
+	fprintf(iC_outFP, " %s", str2);
     } else {
-	putc('.', stderr);
+	putc('.', iC_outFP);
     }
-    fprintf(stderr, "\n");
+    fprintf(iC_outFP, "\n");
+    fflush(iC_outFP);
 } /* ierror */
 #else
 
@@ -2499,8 +2504,12 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    assert(gp->name);
 	    use = lp1->le_val >> USE_OFFSET;
 	    assert(use < Sizeof(iC_useText));
-	    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d  %s\n", gp->name, iC_fos[gp->ftype],
+	    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d %s", gp->name, iC_fos[gp->ftype],
 		iC_os[CF], lp1->le_val & 0xff, iC_useText[use]);
+	    if ((iC_debug & 0200) && ! iFunSymExt) {	/* could use liveDisp, if it were global */
+		fprintf(iC_outFP, "\t%s\t=", gp->name);
+	    }
+	    fprintf(iC_outFP, "\n");
 	}
     }
 } /* copyAdjust */

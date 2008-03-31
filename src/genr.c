@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.71 2008/02/12 13:53:07 jw Exp $";
+"@(#)$Id: genr.c,v 1.72 2008/03/16 00:04:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -77,6 +77,7 @@ static SymListP	caList[PPGATESIZE+1];	/* auxiliary input gate list for copyArith
 
 static Sym	vaList[0x80];		/* stores text and Symbol pointers for repeat elements */
 int		z = 0;			/* index into vaList[] - circular list of 128 elements */
+static int	liveDisp;		/* set when arithmetic values will generate live display */
 
 /********************************************************************
  *
@@ -91,6 +92,7 @@ initcode(void)				/* initialize for code generation */
     freelist = 0;
 #if YYDEBUG
     tn = 0;				/* re-initialisze for each new pass */
+    liveDisp = iC_debug & 0200;		/* initially not in function generation - live display if -d200 */
     if ((iC_debug & 0402) == 0402) {
 	fprintf(iC_outFP, "initcode:\n");
 	fflush(iC_outFP);
@@ -673,8 +675,8 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
     char *	ep;
     static int	x1;
 
-    if (gp->ftype == ARITH &&
-	((typ = sp->type) == ARN || typ == ARNF) &&
+    if (((typ = sp->type) == ARN || typ == ARNF) &&
+	gp->ftype == ARITH &&
 	lp->le_val != (unsigned)-1) {
 	assert(ePtr && gPtr && tPtr && tOut);
 	if (cFn == 0) {				/* STANDARD C EXPRESSION */
@@ -718,10 +720,13 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 				for (y = 1; y <= PPGATESIZE; y++) {
 				    if (sp1 == caList[y].s) break;
 				}
-				assert(y <= PPGATESIZE);
+				assert(y <= PPGATESIZE);	/* repeated term */
 				if (iC_debug & 04) {
-				    fprintf(iC_outFP, "\t\t\t\t\t%s	// %d\n",
-					tOut, y);	/* repeated term */
+				    fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, y);
+				    if (liveDisp) {
+					fprintf(iC_outFP, "\t%s\t=", gp->name);
+				    }
+				    fprintf(iC_outFP, "\n");
 				}
 				tOut = tPtr;
 				ePtr += sprintf(ePtr, "iC_MV(%d)", y);
@@ -804,9 +809,12 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 			    putc('\t', iC_outFP);
 			} else {
 			    fprintf(iC_outFP, "\t\t\t");
+			}				/* expression till now */
+			fprintf(iC_outFP, "%s\t// %d", tOut, x);
+			if (liveDisp) {
+			    fprintf(iC_outFP, "\t%s\t=", gp->name);
 			}
-			fprintf(iC_outFP, "%s	// %d\n",
-			    tOut, x);			/* expression till now */
+			fprintf(iC_outFP, "\n");
 		    }
 		    tOut = tPtr;			/* alternative tOut = tPtr = tBuf */
 		    assert(ePtr + 10 < eEnd);		/* checks previous copying */
@@ -859,9 +867,12 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 			    putc('\t', iC_outFP);
 			} else {
 			    fprintf(iC_outFP, "\t\t\t");
+			}				/* expression till now */
+			fprintf(iC_outFP, "%s\t// %d", tOut, x1);
+			if (liveDisp) {
+			    fprintf(iC_outFP, "\t%s\t=", gp->name);
 			}
-			fprintf(iC_outFP, "%s	// %d\n",
-			    tOut, x1);			/* expression till now */
+			fprintf(iC_outFP, "\n");
 		    }
 		    tOut = tPtr;			/* alternative tOut = tPtr = tBuf */
 		    assert(ePtr + 10 < eEnd);		/* checks previous copying */
@@ -880,9 +891,12 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 			gPtr += sprintf(gPtr, "%s%s", ep, gp->name);
 		    } else {
 			x1 = caList[y].x;		/* real index of non NCONST's */
-			if (iC_debug & 04) {
-			    fprintf(iC_outFP, "\t\t\t\t\t%s	// %d\n",
-				tOut, x1);		/* repeated term */
+			if (iC_debug & 04) {		/* repeated term */
+			    fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, x1);
+			    if (liveDisp) {
+				fprintf(iC_outFP, "\t%s\t=", gp->name);
+			    }
+			    fprintf(iC_outFP, "\n");
 			}
 			tOut = tPtr;
 			ePtr += sprintf(ePtr, "%siC_MV(%d)", ep, x1);
@@ -894,6 +908,14 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	}
     } else
     if (iC_debug & 04 && sflag != 02) {
+	if (liveDisp && (sflag & 0200) && (
+	    sp->ftype == ARITH  ||
+	    sp->ftype == D_SH   ||
+	    sp->ftype == F_SW   ||
+	    sp->ftype == OUTW   ||
+	    sp->ftype == CH_BIT && (typ == ARN || typ == ARNF))) {	/* only arithmetic CHANGE */
+	    fprintf(iC_outFP, "\t\t//\t%s\t=", sp->name);
+	}
 	fprintf(iC_outFP, "\n");		/* all non Arithmetic and delay */
     }
 } /* copyArithmetic */
@@ -1040,9 +1062,12 @@ op_asgn(				/* asign List_e stack to links */
 	    iFlag = 1;			/* may need correction by pplstfix */
 	    fprintf(iC_outFP, "\n\t%s\t%c ---%c\t%s", rsp->name,
 		rsp->ftype != GATE ? iC_fos[rsp->ftype] : w(right),
-		iC_os[var->type], var->name);
+		iC_os[var->type], var->name);	/* type is ALIAS or ERR */
 	    if (var->ftype != GATE) {
 		fprintf(iC_outFP, "\t%c", iC_fos[var->ftype]);
+		if (liveDisp && var->ftype == ARITH) {
+		    fprintf(iC_outFP, "\t\t//\t%s\t=", var->name);
+		}
 	    }
 	    fprintf(iC_outFP, "\n\n");
 	}
@@ -1499,8 +1524,11 @@ op_asgn(				/* asign List_e stack to links */
 		    assert(lp->le_val & 0xff);
 		    use = lp->le_val >> USE_OFFSET;
 		    assert(use < Sizeof(iC_useText));
-		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d  %s", gp->name, iC_fos[gp->ftype],
+		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d %s", gp->name, iC_fos[gp->ftype],
 			iC_os[sp->type], lp->le_val & 0xff, iC_useText[use]);
+		    if (liveDisp) {
+			fprintf(iC_outFP, "\t%s\t=", gp->name);
+		    }
 		} else
 		if ((typ = gp->type) >= MAX_LV) {
 		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_os[typ],
@@ -1508,16 +1536,16 @@ op_asgn(				/* asign List_e stack to links */
 		} else
 		if (gp->ftype < MAX_AR && lp->le_val == (unsigned)-1) {
 		    /* reference to a timer value - no link */
-		    fprintf(iC_outFP, "\t%s\t%c<---%c", gp->name, iC_fos[gp->ftype],
-			iC_os[sp->type]);
+		    fprintf(iC_outFP, "\t%s\t%c<---%c", gp->name, iC_fos[gp->ftype], iC_os[sp->type]);
+		    if (liveDisp) {
+			fprintf(iC_outFP, "\t\t\t\t//\t%s\t=", gp->name);
+		    }
 		} else
 		if (gp->ftype != GATE) {
-		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_fos[gp->ftype],
-			iC_os[sp->type]);
+		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, iC_fos[gp->ftype], iC_os[sp->type]);
 		} else {
 		    if (sp->type == ALIAS) iFlag = 1;	/* may need correction by pplstfix */
-		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, w(lp),
-			iC_os[sp->type]);
+		    fprintf(iC_outFP, "\t%s\t%c ---%c", gp->name, w(lp), iC_os[sp->type]);
 		}
 		if (sflag & 0200) {
 		    fprintf(iC_outFP, "\t%s", sp->name);
@@ -1529,7 +1557,10 @@ op_asgn(				/* asign List_e stack to links */
 		    /********************************************************************
 		     * case number of "if" or "switch" C fragment
 		     *******************************************************************/
-		    fprintf(iC_outFP, "	// (%d)", lp->le_val >> 8);
+		    fprintf(iC_outFP, "\t// (%d)", lp->le_val >> 8);
+		    if (liveDisp) {
+			fprintf(iC_outFP, "\t%s\t=", gp->name);
+		    }
 		} else
 		if ((gp->ftype == TIMR && lp->le_val > 0)) {
 		    /********************************************************************
@@ -1606,9 +1637,12 @@ op_asgn(				/* asign List_e stack to links */
 					if (sp1 == caList[y].s) break;
 				    }
 				    assert(y <= PPGATESIZE);
-				    if (iC_debug & 04) {
-					fprintf(iC_outFP, "\t\t\t\t\t%s	// %d\n",
-					    tOut, y);	/* repeated term */
+				    if (iC_debug & 04) {	/* repeated term */
+					fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, y);
+					if (liveDisp) {
+					    fprintf(iC_outFP, "\t%s\t=", gp->name);
+					}
+					fprintf(iC_outFP, "\n");
 				    }
 				    tOut = tPtr;
 				    ePtr += sprintf(ePtr, "iC_MV(%d)", y);
@@ -1724,7 +1758,11 @@ op_asgn(				/* asign List_e stack to links */
 			functionUse[z1].c_cnt++;		/* free this function for copying */
 		    }
 		    if (iC_debug & 04) {
-			fprintf(iC_outFP, "\t\t\t\t\t%s;	// (%d)\n", tOut, z1);
+			fprintf(iC_outFP, "\t\t\t\t\t%s;\t// (%d)", tOut, z1);
+			if (liveDisp) {
+			    fprintf(iC_outFP, "\t%s\t=", sp->name);
+			}
+			fprintf(iC_outFP, "\n");
 		    }
 		}
 	    }
@@ -2374,6 +2412,7 @@ functionDefHead(unsigned int ftyp, Symbol * funTrigger, int retFlag)
     funTrigger->type = IFUNCT;			/* function head */
     funTrigger->ftype = ftyp;			/* void bit int clock timer */
     iFunSymExt = strncpy(iFunBuffer, funTrigger->name, IBUFSIZE);
+    liveDisp = 0;				/* no live display in function generation */
     iFunSymExt += strlen(iFunBuffer);		/* point past text */
     if (iFunEnd - iFunSymExt < 32) {
 	execerror("iFunBuffer for function symbol too small", funTrigger->name, __FILE__, __LINE__);
@@ -2563,6 +2602,7 @@ functionDefinition(Symbol * iFunHead, List_e * fParams)
 	iRetSymbol.v = 0;			/* no need to report as undefined */
     }
     iFunSymExt = 0;				/* end of function compilation */
+    liveDisp = iC_debug & 0200;			/* not in function generation - live display if -d200 */
     /********************************************************************
      * Pass 1
      * Scan statement list built during compilation of the function body

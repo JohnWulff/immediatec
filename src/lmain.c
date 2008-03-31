@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.15 2005/10/22 13:07:58 jw Exp $";
+"@(#)$Id: lmain.c,v 1.16 2008/03/04 14:15:54 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -25,20 +25,24 @@ static const char lmain_c[] =
 #include 	"comp.h"
 
 static const char *	usage =
-"USAGE: %s [-lh][ -Dmacro[=defn]...][ -Umacro...][ -d<debug>] <C_program>\n"
-"        -l <listFN>     name of list file  (default is stdout)\n"
-"        -D <macro>      predefine <macro> for the iC and C preprocessor phases\n"
+"USAGE: %s [-h][ -l<lst>][ -Dmacro[=defn]...][ -Umacro...][ -d<debug>] <C_src>\n"
+"        -l <lst>        name of list file  (default is stdout, option stderr)\n"
+"        -D <macro>      predefine <macro> for the C preprocessor phase\n"
 "        -U <macro>      cancel any previous definitions of <macro>\n"
 "        -d <debug>  40  source listing\n"
 #if YYDEBUG
 "                   +20  symbol table after parse\n"
-"                    +4  debugging info\n"
-"                    +2  generation of insert markers\n"
-"                    +1  yacc debug info\n"
+"                    +2  debugging info\n"
+#ifdef YACC
+"                    +1  C yacc debug info  (on stdout only)\n"
+#else	/* BISON */
+"                    +1  C bison debug info (on stderr only)\n"
+#endif	/* YACC */
+"                 +4000  save temp files\n"
 #else
 "                        output space separated list of typenames\n"
 #endif
-"        <C_program>    any C language program file (extension .c)\n"
+"        <C_src>         any C language source file (extension .c)\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
 "        -B              export EF_PROTECT_BELOW=1 which tests access BELOW \n"
@@ -161,7 +165,9 @@ main(
     }
     iC_debug &= 07777;			/* allow only cases specified */
 
-    if (listFN && (iC_outFP = fopen(listFN, "w+")) == NULL) {
+    if (listFN &&
+	(strcmp(listFN, "stderr") == 0 ? (iC_outFP = stderr, 0) : 1) &&
+	(iC_outFP = fopen(listFN, "w+")) == NULL) {
 	ierror("lmain: cannot open list file:", listFN);
 	return -3;
     }
@@ -225,6 +231,9 @@ main(
     }
 
     r = c_parse();
+    if (!(iC_debug & 04000)) {
+	unlink(T0FN);
+    }
     if (r == 0) {
 	Symbol *	sp;
 	Symbol **	hsp;

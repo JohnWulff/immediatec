@@ -58,7 +58,7 @@ my %delayedColour;	# colour that should be restored after a flash
 #	ftype-abbreviations are used for debugging to list the Symbol Table.
 #	They are also indexed by gt_fni (holds ftype). (lines up with FOPS in icc.h)
 #
-## #define	FOPS	"UA _EsrHVSRDIFGCTBWX:!"	/* DEBUG display of ftypes */
+## #define	FOPS	"UA _EsrHVSRDIFGCTBWX:!e"	/* DEBUG display of ftypes */
 #
 ########################################################################
 
@@ -110,14 +110,14 @@ Usage:
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
-    -f font font or font size to use in Text window (default '16')
+    -f font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default @<)
 					$opt_l
     -w num  width  of the Text window (default @<)
 					$opt_w
     -g geom geometry for main window (-g= is special small window)
-    -d deb  extra debug options (see iCapplication -h)
-    -t      trace output run time changes in target application (-d100)
+    -d deb  extra debug options (see iC-application -h)
+    -t      trace gate activity in target application (-d1100)
     -m      output elapsed time in seconds and microseconds
     -T      trace output static debug messages
     -u      activate undo edit facility (not recommended if Live display
@@ -134,7 +134,7 @@ Usage:
        SaveAs   store the current file at the selected path.      Alt-a
        Quit     quit the program.                                 Alt-q
 
-    [Build]     build either the C file or the executable application
+    [Build]     build the C file and then optionally the executable
                 from the currently displayed iC program text.     Alt-b
 
     [Run/Stop]  run or stop the executable application built from the
@@ -165,9 +165,12 @@ Usage:
 
     [Help]      display the iClive man page                       Alt-h
 
+                Dynamically increase font size                    Alt +
+                Dynamically decrease font size                    Alt -
+
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.41 2008/02/29 11:17:54 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.42 2008/03/27 09:37:04 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -175,7 +178,7 @@ require "getopts.pl";
 &Getopts('tTmd:s:p:i:f:l:w:g:uXh');	# sets $opt_h if -h etc
 
 exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
-$opt_l = 25 unless $opt_l;
+$opt_l = 35 unless $opt_l;
 $opt_w = 80 unless $opt_w;
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -187,23 +190,25 @@ if ($opt_u) {
     $u = ' -u';			# show -u option in title when editing
 }
 
-my ($fontSize, $font);
+my ($fontSize, $font_t, $font);
 if (defined $opt_f) {
     if ($opt_f =~ /^\d+$/) {
 	$fontSize = $opt_f;
     } else {
-	$font = $opt_f;
+	$font_t = $opt_f;
     }
 }
-unless ($font) {
+unless ($font_t) {
     if ($ENV{COMSPEC}) {	# defined on Windows 98 and Windows XP
-	$fontSize = 10 unless $fontSize;
-	$font = "{Lucida Console} $fontSize normal";
+	$fontSize = 12 unless $fontSize;
+	$font_t = "{Lucida Console} fontSize normal";
     } else {			# Linux
-	$fontSize = 16 unless $fontSize;
-	$font = "-adobe-courier-medium-r-normal--$fontSize-100-100-100-m-90-iso8859-1";
+	$fontSize = 14 unless $fontSize;
+	$font_t = "-adobe-courier-medium-r-normal--fontSize-100-100-100-m-90-iso8859-1";
     }
 }
+change_font(0, 0);		# set initial font size to $fontSize
+
 no warnings;
 print "opt_f = '$opt_f' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
 use warnings;
@@ -603,6 +608,8 @@ $entrySearch->bind('<Key-Next>',  [ \&scroll_text, $opt_l-2 ]); # next page
 $entrySearch->bind('<Key-Prior>', [ \&scroll_text, -$opt_l+2]); # prior page
 $entrySearch->bind('<Key-Home>',  [ \&position_text, '1.0'  ]); # beginning
 $entrySearch->bind('<Key-End>',   [ \&position_text, 'end'  ]); # end
+$entrySearch->bind('<Alt-Key-plus>',	[ \&change_font, 2        ]); # increase font
+$entrySearch->bind('<Alt-Key-minus>',	[ \&change_font, -2       ]); # decrease font
 
 ########################################################################
 #	Help button
@@ -676,8 +683,8 @@ my $text;
 if ($opt_u) {
     $text = $mainWindow->Scrolled('TextUndo',
 				     -scrollbars => 'osoe',
+				     -setgrid    => 2,
 				     -background => 'cornsilk1',
-				     -wrap       => 'none',
 				     -font       => $font,
 				    )->pack(-fill   => 'both',
 					    -expand => 1,
@@ -686,8 +693,8 @@ if ($opt_u) {
 } else {
     $text = $mainWindow->Scrolled('Text',
 				     -scrollbars => 'osoe',
+				     -setgrid    => 2,
 				     -background => 'cornsilk1',
-				     -wrap       => 'none',
 				     -font       => $font,
 				    )->pack(-fill   => 'both',
 					    -expand => 1,
@@ -716,6 +723,8 @@ $yScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search d
 $yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
 $yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
 $yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+$yScrollbar->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
+$yScrollbar->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 ####### X-Scrollbar bindings ###########################################
 my $xScrollbar = $text->Subwidget('xscrollbar');
 $xScrollbar->bind('<Key-Down>',	[ \&scroll_text, 1    ]); # scroll down
@@ -730,6 +739,8 @@ $xScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search d
 $xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
 $xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
 $xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+$xScrollbar->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
+$xScrollbar->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 ########################################################################
 #	The Tk::Text Widget uses no Alt bindings - so we use them here
 ####### File menu bindings #############################################
@@ -756,6 +767,9 @@ $yScrollbar->bind('<Key-e>',     [ \&scan ]);
 $text->bind('<Alt-Key-h>', [ \&fork_help ]);	# active in Live mode
 $yScrollbar->bind('<Alt-Key-h>', [ \&fork_help ]);
 $yScrollbar->bind('<Key-h>',     [ \&fork_help ]);
+####### Change font size with Alt - and Alt + ##################
+$text->bind('<Alt-Key-plus>',  [ \&change_font, 2  ]); # increase font
+$text->bind('<Alt-Key-minus>', [ \&change_font, -2 ]); # decrease font
 ########################################################################
 #	Balloon widget
 ########################################################################
@@ -2241,7 +2255,7 @@ sub build_file {
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-qA", $fileName, "2>&1");	# -A useful for live display
+		my @args = ("iCmake", "-qAd200", $fileName, "2>&1");	# -A useful for live display
 		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
@@ -2325,6 +2339,27 @@ sub position_text {
     $text->see($position);
     adjust_live();
 } # position_text
+
+########################################################################
+#
+#	Increase or decrease font size
+#
+########################################################################
+
+sub change_font {
+    my ($dummy, $increment) = @_;
+    $fontSize += $increment;			# initial or new fontSize
+    if ($fontSize < 8 || $fontSize > 22) {
+	$fontSize -= $increment;		# keep fontSize within limits
+    } else {
+	print "font increment = '$increment' size = '$fontSize'\n" if $opt_T;
+	$font       = $font_t;
+	$font       =~ s/fontSize/$fontSize/;	# no change of -f was a specified font
+	if ($increment) {
+	    $text->configure(-font => $font);	# re-configure only for changed fonts
+	}
+    }
+} # change_font
 
 ########################################################################
 #
@@ -2768,12 +2803,12 @@ __END__
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
-    -f font font or font size to use in Text window (default '16')
+    -f font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default 40)
     -w num  width  of the Text window (default 80)
     -g geom geometry for main window (-g= is special small window)
-    -d deb  extra debug options (see iCapplication -h)
-    -t      trace output run time changes in target application (-d100)
+    -d deb  extra debug options (see iC-application -h)
+    -t      trace gate activity in target application (-d1100)
     -m      output elapsed time in seconds and microseconds
     -T      trace output static debug messages
     -u      activate undo edit facility (not recommended if Live display
@@ -2792,7 +2827,7 @@ __END__
        SaveAs   store the current file at the selected path.      Alt-a
        Quit     quit the program.                                 Alt-q
 
-    [Build]     build either the C file or the executable application
+    [Build]     build the C file and then optionally the executable
                 from the currently displayed iC program text.     Alt-b
 
     [Run/Stop]  run or stop the executable application built from the
@@ -2822,6 +2857,9 @@ __END__
                 in the entry window.                             RETURN
 
     [Help]      display this man page.                            Alt-h
+
+                Dynamically increase font size                    Alt +
+                Dynamically decrease font size                    Alt -
 
 In B<Edit> mode B<iClive> provides an edit window in which the text
 of a source or listing can be displayed and optionally edited and
@@ -3062,6 +3100,9 @@ The following extra bindings have been defined for iClive:
 
    Alt-r   Run/stop the current executable
    Alt-e   switch between Edit/live mode
+
+   Alt +   Dynamically increase font size
+   Alt -   Dynamically decrease font size
 
 If the widget is disabled, as it is in 'Live' mode, then its view can
 still be adjusted and text can still be selected, but no insertion

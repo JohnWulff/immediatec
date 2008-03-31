@@ -17,6 +17,7 @@ use strict;
 #	the text to 'see' the text that has been found.
 # 3	Implement a history with previous and next buttons [<=] [=>]
 # 4	Handle topics with '-k <key>'
+# 5	Dynamic change of font size with ctrl+ and ctrl-
 ########################################################################
 use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
@@ -34,7 +35,7 @@ Usage:
             man page links to the topic described by <key>.
     -l num  height of the Text window (default @<)
 					$opt_l
-    -f font font or font size to use in Text window (default '16')
+    -f font font or font size to use in Text window (default '14')
     -w num  width  of the Text window (default @<)
 					$opt_w
     -g geom geometry for main window (-g= is special small window)
@@ -82,9 +83,12 @@ Usage:
     [Quit]      Quit the program.                                   q
     [Help]      Display this man page.                              h
 
+                Dynamically increase font size                    Alt +
+                Dynamically decrease font size                    Alt -
+
 Author: Sriram Srinivasan - extended by John E. Wulff  <john@je-wulff.de>
 							'@'
-$Id: iCman,v 1.9 2007/08/11 21:51:00 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.10 2008/03/27 12:45:06 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 my $menu_headings;	# "Headings" MenuButton
@@ -129,35 +133,37 @@ require "getopts.pl";
 &Getopts('cnk:f:l:w:g:TXh');		# sets $opt_h if -h etc
 
 exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
-$opt_l = 40 unless $opt_l;
+$opt_l = 35 unless $opt_l;
 $opt_w = 80 unless $opt_w;
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
-my ($fontSize, $font, $boldfont);
+my ($fontSize, $font_t, $boldfont_t, $font, $boldfont);
 if (defined $opt_f) {
     if ($opt_f =~ /^\d+$/) {
 	$fontSize = $opt_f;
     } else {
-	$font = $opt_f;
+	$font_t = $opt_f;
     }
 }
-unless ($font) {
+unless ($font_t) {
     if ($ENV{COMSPEC}) {	# defined on Windows 98 and Windows XP
-	$fontSize = 10 unless $fontSize;
-	$font = "{Lucida Console} $fontSize normal";
+	$fontSize = 12 unless $fontSize;
+	$font_t = "{Lucida Console} fontSize normal";
     } else {			# Linux
-	$fontSize = 16 unless $fontSize;
-	$font = "-adobe-courier-medium-r-normal--$fontSize-100-100-100-m-90-iso8859-1";
+	$fontSize = 14 unless $fontSize;
+	$font_t = "-adobe-courier-medium-r-normal--fontSize-100-100-100-m-90-iso8859-1";
     }
 }
-if ($font =~ /medium/) {
-    $boldfont = $font;
-    $boldfont =~ s/medium/bold/;
+if ($font_t =~ /medium/) {
+    $boldfont_t = $font_t;
+    $boldfont_t =~ s/medium/bold/;
 } else {
-    $boldfont = '-adobe-courier-bold-r-normal--16-100-100-100-m-90-iso8859-1';
+    $boldfont_t = "-adobe-courier-bold-r-normal--fontSize-100-100-100-m-90-iso8859-1";
 }
+change_font(0, 0);		# set initial font size to $fontSize
+
 no warnings;
 print "opt_f = '$opt_f' fontSize = '$fontSize'\nfont     = '$font'\nboldfont = '$boldfont'\n" if $opt_T;
 use warnings;
@@ -187,7 +193,6 @@ my $menuBar = $mainWindow->Frame()->pack('-side' => 'top', '-fill' => 'x');
 #	Previous man page button
 ########################################################################
 my $prevButton = $menuBar->Button(-text        => '<=',
-#				  -font        => $boldfont,
 				  -relief      => 'raised',
 				  -borderwidth => 2,
 				  -state       => 'disabled',
@@ -201,7 +206,6 @@ $prevButton->bind('<Button-1>',		[ \&historyShow, \$prevButton, ]);
 #	Next man page button
 ########################################################################
 my $nextButton = $menuBar->Button(-text        => '=>',
-#				  -font        => $boldfont,
 				  -relief      => 'raised',
 				  -borderwidth => 2,
 				  -state       => 'disabled',
@@ -318,16 +322,18 @@ $entrySearch->bind('<Key-Return>',		[ \&search_text, undef, 0 ]); # search down
 $entrySearch->bind('<Shift-Key-Return>',	[ \&search_text, undef, 1 ]); # search up
 $entrySearch->bind('<Control-Key-Return>',	[ \&search_text, '',    0 ]); # clear
 $entrySearch->bind('<Alt-Key-Return>',		[ \&search_text, undef, 2 ]); # go to line
-# $entrySearch->bind('<Key>', [ sub { print "'k' 'K': '$_[1]'   '$_[2]'\n"; }, Ev('k'), Ev('K') ]) if $opt_T;
 $entrySearch->bind('<Key-Down>',		[ \&scroll_text, 1        ]); # scroll down
 $entrySearch->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
 $entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_l-2 ]); # next page
-$entrySearch->bind('<Key-Prior>',		[ \&scroll_text, -$opt_l+2]); # prior page
+$entrySearch->bind('<Key-Prior>',		[ \&scroll_text,-$opt_l+2 ]); # prior page
 $entrySearch->bind('<Key-Home>',		[ \&position_text, '1.0'  ]); # beginning
 $entrySearch->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
 $entrySearch->bind('<Key-Right>',		[ \&scroll_x_text, 1      ]); # scroll right
 $entrySearch->bind('<Key-Left>',		[ \&scroll_x_text, -1     ]); # scroll left
+$entrySearch->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
+$entrySearch->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 $entrySearch->bind('<Alt-Key-q>',		[ \&quit_program          ]);
+# $entrySearch->bind('<Key>', [ sub { print "'k' 'K': '$_[1]'   '$_[2]'\n"; }, Ev('k'), Ev('K') ]) if $opt_T;
 
 ########################################################################
 #	Help button
@@ -358,6 +364,7 @@ $menuBar->Button(-text        => 'Quit',
 
 $text = $mainWindow->Scrolled('Text',
 			      -scrollbars => 'osoe',
+			      -setgrid    => 2,
 			      -background => 'cornsilk1',
 			      -wrap       => 'none',
 			      -font       => $font,
@@ -399,6 +406,8 @@ $yScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search d
 $yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
 $yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
 $yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+$yScrollbar->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
+$yScrollbar->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 ####### X-Scrollbar bindings ###########################################
 my $xScrollbar = $text->Subwidget('xscrollbar');
 $xScrollbar->bind('<Key-Down>',	[ \&scroll_text, 1    ]); # scroll down
@@ -412,6 +421,8 @@ $xScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search d
 $xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
 $xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
 $xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+$xScrollbar->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
+$xScrollbar->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 
 ########################################################################
 #	Show Button and Entry
@@ -436,8 +447,10 @@ $menuShow->command(-label       => 'Open a new window',		# 2
 $show = $mainWindow->Entry ('-width'   =>  20,
 			   )->pack('-side' => 'left'
 			   	  );
-$show->bind('<Key-Return>',     [ \&show_man, undef, undef, 0 ]);	# overlay
-$show->bind('<Alt-Key-Return>', [ \&show_man, undef, undef, 1 ]);	# fork
+$show->bind('<Key-Return>',	 [ \&show_man, undef, undef, 0 ]); # overlay
+$show->bind('<Alt-Key-Return>',	 [ \&show_man, undef, undef, 1 ]); # fork
+$show->bind('<Alt-Key-plus>',	 [ \&change_font, 2     ]); # increase font
+$show->bind('<Alt-Key-minus>',	 [ \&change_font, -2    ]); # decrease font
 
 ########################################################################
 #	Info bar
@@ -1051,10 +1064,6 @@ sub search_now {
 	}
 	$matchType = 'ri' if $auxiliary eq '-nocase';	# otherwise radio button skips
 	if (($hl = scalar @hits) > 0) {
-#	    if ($searchText ne '^\*\*\* ') {	# regular expression to find errors in listing
-#		$tmpText = "$searchText$matchExtensions{$matchType}";
-#		check_menu($tmpText, 'searches');
-#	    }
 	    ########################################################################
 	    #	Analyse hits and group them into display groups.
 	    #   First pseudo_code for the algorithm.
@@ -1289,6 +1298,36 @@ sub position_text {
 
 ########################################################################
 #
+#	Increase or decrease font size
+#
+#	change normal text font (includes underline text)
+#	change 'section' headings which are bold
+#	change 'bd' tagged words which are bold
+#	do not change miscellanous button text fonts
+#
+########################################################################
+
+sub change_font {
+    my ($dummy, $increment) = @_;
+    $fontSize += $increment;			# initial or new fontSize
+    if ($fontSize < 8 || $fontSize > 22) {
+	$fontSize -= $increment;		# keep fontSize within limits
+    } else {
+	print "font increment = '$increment' size = '$fontSize'\n" if $opt_T;
+	$font       = $font_t;
+	$boldfont   = $boldfont_t;
+	$font       =~ s/fontSize/$fontSize/;	# no change of -f was a specified font
+	$boldfont   =~ s/fontSize/$fontSize/;
+	if ($increment) {
+	    $text->configure(-font => $font);	# re-configure only for changed fonts
+	    $text->tagConfigure('section', -font => $boldfont, -foreground => $colorBD);
+	    $text->tagConfigure('bd',  -font => $boldfont);
+	}
+    }
+} # change_font
+
+########################################################################
+#
 #	Show help man page
 #
 ########################################################################
@@ -1370,7 +1409,7 @@ __END__
       [ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
-    -f font font or font size to use in Text window (default '16')
+    -f font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default 40)
     -w num  width  of the Text window (default 80)
     -g geom geometry for main window (-g= is special small window)
@@ -1419,6 +1458,9 @@ __END__
 
     [Quit]      Quit the program.                                   q
     [Help]      Display this man page.                              h
+
+                Dynamically increase font size                    Alt +
+                Dynamically decrease font size                    Alt -
 
 B<iCman> provides a read-only window in which man pages can be
 displayed. Each page argument given to man is normally the name of

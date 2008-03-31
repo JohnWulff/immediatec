@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.49 2007/12/07 09:32:00 jw Exp $";
+"@(#)$Id: load.c,v 1.50 2008/03/27 11:45:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -50,11 +50,14 @@ FILE *		iC_errFP;			/* error file pointer */
 static const char *	usage =
 "USAGE: %s [-"
 #if YYDEBUG
-"t"
+"tx"
 #endif	/* YYDEBUG */
-"xh]"
+"h]"
 #ifdef TCP
-" [-m[m]] [-s <server>] [-p <port>] [-i <instance_id>]\n"
+#if YYDEBUG
+" [-m[m]]"
+#endif	/* YYDEBUG */
+" [-s <server>] [-p <port>] [-i <instance_id>]\n"
 #endif	/* TCP */
 " [-n<count>] [-d<debug>]\n"
 #ifdef TCP
@@ -77,16 +80,16 @@ static const char *	usage =
 #if YYDEBUG
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
-"        -t              trace debug (equivalent to -d 100)\n"
+"        -t              trace gate activity (equivalent to -d 1100)\n"
 "                        can be toggled at run time by typing t\n"
-#endif	/* YYDEBUG */
+"        -x              arithmetic info in hexadecimal (default decimal)\n"
+"                        can be changed at run time by typing x or d\n"
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                        can be toggled at run time by typing m\n"
 #endif	/* TCP */
-"        -x              arithmetic info in hexadecimal (default decimal)\n"
-"                        can be changed at run time by typing x or d\n"
+#endif	/* YYDEBUG */
 "        -h              this help text\n"
 "                        typing q or ctrl-C quits run mode\n"
 "compiled by:\n"
@@ -246,7 +249,7 @@ main(
 		    df &= 040;		/* load listing */
 		    goto break2;
 		case 't':
-		    iC_debug |= 0100;	/* trace */
+		    iC_debug |= 01100;	/* trace gate activity */
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }

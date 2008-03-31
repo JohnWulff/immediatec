@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.50 2008/02/25 16:07:41 jw Exp $";
+"@(#)$Id: ict.c,v 1.51 2008/03/27 09:24:53 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -41,6 +41,10 @@ static const char ict_c[] =
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define TLIMIT	4			/* TX0.4 is fastest timer */
+
+#define QUIT_TERMINAL	(SIGRTMAX+1)
+#define QUIT_DEBUGGER	(SIGRTMAX+2)
+#define QUIT_SERVER	(SIGRTMAX+3)
 
 static iC_Functp * iC_i_lists[] = { I_LISTS };
 
@@ -281,8 +285,7 @@ iC_icc(
 	    if (iC_micro) iC_microPrint("Send application name", 0);
 	    iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
 	} else {
-	    fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
-	    iC_quit(0);			/* quit normally */
+	    iC_quit(QUIT_SERVER);			/* quit normally */
 	}
     }
 
@@ -386,12 +389,12 @@ iC_icc(
 
     if ((gp = tim[0]) != NULL) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "\nEOI:\t%s  1 ==>", gp->gt_ids);
+	if (iC_debug & 0100) fprintf(iC_outFP, "EOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
 	gp->gt_val = -1;		/* set EOI once as first action */
 	iC_link_ol(gp, iC_o_list);			/* fire EOI Input Gate */
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
+	if (iC_debug & 0100) fprintf(iC_outFP, " -1\n");
 #endif	/* YYDEBUG */
     }
 
@@ -417,7 +420,7 @@ iC_icc(
     if (iCbegin()) {			/* initialisation function */
 #if	YYDEBUG
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "iCbegin complete ====\n");
+	    fprintf(iC_outFP, "\niCbegin complete ====\n");
 	}
 #endif	/* YYDEBUG */
     }
@@ -448,7 +451,9 @@ iC_icc(
 	 *                 transfer ARITH master values as slave values to a_list
 	 *                 transfer GATE master values as slave values to o_list
 	 *                 (does not use any combinatorial ARITH or GATE values)
-	 *                 defer 'if else switch' C actions to f_list
+	 *                 transfer master entries on slave clock lists to c_list
+	 *                 (continue scanning c_list until all these have been handled)
+	 *                 defer 'if else switch' slave C actions to f_list
 	 ****** COMBINATORIAL *****
 	 *  5        { scan f_list; } unless f_list empty
 	 *                 C actions can use and generate combinatotrial ARITH and
@@ -466,9 +471,7 @@ iC_icc(
 	    if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); continue; }
 	    if (iC_c_list != iC_c_list->gt_next) {
 		iC_scan_clk(iC_c_list);		/* new flist entries can only occurr here */
-		if (iC_f_list != iC_f_list->gt_next) {
-		    iC_scan_clk(iC_f_list);
-		}
+		if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }
 		continue;
 	    }
 	    if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);           }
@@ -551,17 +554,8 @@ iC_icc(
 	}
 
 	/********************************************************************
-	 *  Input from external input modules and time input if used
+	 *  Input from external input modules and time input (if used)
 	 *  Wait for input in a select statement most of the time
-	 *
-	 *  The iC_debug facility -d1000 stops linking the 100 ms to 60 second
-	 *  TIMERS tim[4] to tim[7] when they are connected directly to
-	 *  the slave input of a clock or timer Gate and that clock or timer
-	 *  has no Gates on the clock list it controls - ie nothing will happen.
-	 *  This stops continuous output when tracing logic (-d100 or -t) when
-	 *  these internal TIMERS produce no change.
-	 *  It also reduces the data traffic to iClive and reduces flashing of
-	 *  clocks and timers controlled by internal TIMERS.
 	 *******************************************************************/
 	for (cnt = 0; cnt == 0; ) {		/* stay in input loop if nothing linked */
 	    retval = iC_wait_for_next_event(sockFN);	/* wait for inputs or timer */
@@ -571,6 +565,15 @@ iC_icc(
 		iC_timeoutCounter = iC_timeoutValue;	/* will repeat if timeout with input */
 		/********************************************************************
 		 *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
+		 *
+		 *  The iC_debug facility -d1000 stops linking the 100 ms to 60 second
+		 *  TIMERS tim[4] to tim[7] when they are connected directly to
+		 *  the slave input of a clock or timer Gate and that clock or timer
+		 *  has no Gates on the clock list it controls - ie nothing will happen.
+		 *  This stops continuous output when tracing logic (-d100 or -t) when
+		 *  these internal TIMERS produce no change.
+		 *  It also reduces the data traffic to iClive and reduces flashing of
+		 *  clocks and timers controlled by internal TIMERS.
 		 *******************************************************************/
 		if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
 #if	YYDEBUG
@@ -929,8 +932,7 @@ iC_icc(
 						break;
 
 					    case 6:		/* STOP PROGRAM */
-						fprintf(iC_errFP, "\n'%s' stopped by debugger\n", iC_iccNM);
-						iC_quit(0);			/* quit normally */
+						iC_quit(QUIT_DEBUGGER);			/* quit normally */
 						break;
 
 					    case 7:		/* DEBUGGER STOPPED */
@@ -957,8 +959,7 @@ iC_icc(
 			    fprintf(iC_errFP, "ERROR: '%s' rcvd at '%s' ???\n", rpyBuf, iC_iccNM);
 			}
 		    } else {
-			fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
-			iC_quit(0);			/* quit normally */
+			iC_quit(QUIT_SERVER);			/* quit normally */
 		    }
 		} else if (FD_ISSET(0, &iC_rdfds)) {	/* unlikely to have both */
 		    /********************************************************************
@@ -967,8 +968,7 @@ iC_icc(
 		    if ((c = getchar()) == EOF) {
 			FD_CLR(0, &iC_infds);		/* ignore EOF - happens in bg */
 		    } else if (c == 'q') {
-			fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_iccNM);
-			iC_quit(0);			/* quit normally */
+			iC_quit(QUIT_TERMINAL);			/* quit normally */
 #if	YYDEBUG
 		    } else if (c == 't') {
 			iC_debug ^= 0100;		/* toggle -t flag */
@@ -1065,11 +1065,6 @@ void iC_initIO(void)
 
 void iC_quit(int sig)
 {
-    if (sig == SIGINT) {
-	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
-    } else if (sig == SIGSEGV) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
-    }
     /********************************************************************
      *  The following termination function is an empty function
      *  in the libict.a support library.
@@ -1084,11 +1079,11 @@ void iC_quit(int sig)
      *  If the iCbegin() function contains a fork() call, iCend() may have
      *  a matching wait() call.
      *******************************************************************/
-    if ((sig == 0 || sig == SIGINT) &&
+    if ((sig >= QUIT_TERMINAL || sig == SIGINT) &&
 	iCend()) {				/* termination function */
 #if	YYDEBUG
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "iCend complete ======\n");
+	    fprintf(iC_outFP, "\niCend complete ======\n");
 	}
 #endif	/* YYDEBUG */
     }
@@ -1107,6 +1102,17 @@ void iC_quit(int sig)
 	}
 	close(sockFN);				/* close connection to iCserver */
     }
+    if (sig == QUIT_TERMINAL) {
+	fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_iccNM);
+    } else if (sig == QUIT_DEBUGGER) {
+	fprintf(iC_errFP, "\n'%s' stopped by debugger\n", iC_iccNM);
+    } else if (sig == QUIT_SERVER) {
+	fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
+    } else if (sig == SIGINT) {
+	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
+    } else if (sig == SIGSEGV) {
+	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
+    }
     if (iC_outFP != stdout) {
 	fflush(iC_outFP);
 	fclose(iC_outFP);
@@ -1121,5 +1127,5 @@ void iC_quit(int sig)
     free(regBuf);
     free(msgBuf);
 #endif	/* EFENCE */
-    exit(sig);					/* really quit */
+    exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
 } /* iC_quit */

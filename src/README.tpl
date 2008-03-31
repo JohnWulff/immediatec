@@ -5,7 +5,7 @@
 #   icc.v is maintained under source control and the version number
 #   of icc.v is used as the version number of the iC release.
 #   Call: 	ident icc.v | README.tpl > ../README
-#   $Id: README.tpl,v 1.17 2008/02/29 00:13:40 jw Exp $
+#   $Id: README.tpl,v 1.18 2008/03/31 09:04:13 jw Exp $
 ########################################################################
 
 while (<>) {
@@ -63,7 +63,7 @@ print <<EOF;
     library and your code are in the same binary file is, in this case,
     a form of mere aggregation.) This is my interpretation of the GPL.
     If you still have concerns or difficulties understanding my intent,
-    feel free to contact me at <john\@je-wulff.de>.
+    feel free to contact me at <ic\@je-wulff.de>.
 
     Of course, the Artistic License spells all this out for your protection,
     so you may prefer to use that.
@@ -267,7 +267,7 @@ print <<EOF;
 
     Lots of success
 
-    John E. Wulff   $YEAR.$MONTH.$DAY     <john\@je-wulff.de>
+    John E. Wulff   $YEAR.$MONTH.$DAY     <ic\@je-wulff.de>
 
 
     I currently use SuSE Linux 9.3 with Tk800.024. I have tested the

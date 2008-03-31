@@ -52,7 +52,7 @@ usage ()
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.27 2008/02/24 22:45:06 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.28 2008/03/26 21:11:46 jw Exp $' >&2
 }
 
 makeLib ()
@@ -96,14 +96,14 @@ makeIct ()
 
 makeLmain ()
 {
-    mv misc.$O gram.$O lexc.$O Make_tmp 2> /dev/null
+    mv misc.$O gram.$O lexc.$O symb.$O Make_tmp 2> /dev/null
     if [ -d LmainObjs ]; then
 	mv LmainObjs/* .
     else
 	mkdir LmainObjs
     fi
     make OPT="-DLMAIN$m$u$d$e$o$s$y" CFLAGS="$cflags" lmain
-    mv misc.$O gram.$O lexc.$O LmainObjs
+    mv misc.$O gram.$O lexc.$O symb.$O LmainObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
@@ -173,27 +173,27 @@ rm -f icg.h; perl icg.pl $d$s$y icc.h > icg.h
 
 if [ $IM_LIB = 1 ] || [ $C = 1 ]; then
     echo "make OPT=\"$c$u$d$e$o$s$y\" CFLAGS=\"$cflags\" immcc"
-    make OPT="$c$u$d$e$o$s$y" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    make OPT="$c$u$d$e$o$s$y" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
     echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" libict.a"
-    makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $R = 1 ]; then
     echo "make OPT=\"-DRUN$r$u$d$e$o$s$y\" CFLAGS=\"$cflags\" icr"
-    makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $T = 1 ]; then
     echo "make OPT=\"-DTCP$t$u$d$e$o$s$y\" CFLAGS=\"$cflags\" ict"
-    makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $M = 1 ]; then
     echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$y\" CFLAGS=\"$cflags\" lmain"
-    makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(error|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 rmdir Make_tmp
@@ -252,16 +252,22 @@ part of development and will not be developed further.
 structures in memory and interprets these directly after compilation. I/O
 is via TCP/IP and iCserver.
 
-'lmain' is a standalone check for the integrated C-compiler in gram.y and
-lex.c.
+'lmain' is a standalone check for the integrated C-compiler implemented
+with gram.y and lexc.l. It test compiles C sources and generates debugging
+output and possibly error messages.
+
+'makeAll' keeps the directories 'LibObjs' 'IcrObjs' 'IctObjs' 'LmainObjs'
+to save object files which differ for the different targets.
+Thus the following rules for 'make' are satisfied:
 
   to make immcc, make with OPT=''
   to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
-  to make icr, make with OPT='-DRUN -DYYDEBUG'
+  to make icr, remove all objects and make with OPT='-DRUN -DYYDEBUG'
   to make ict, remove all objects and make with OPT='-DTCP'
   to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 
-    makeAll -rm; # called for all: does this automatically
+    makeAll       # makes 'immcc' and 'libict.a' without YYDEBUG support
+    makeAll -trm; # makes the auxiliary compilers with YYDEBUG support
 
 another useful call is:
 
