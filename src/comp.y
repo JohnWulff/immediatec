@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.98 2008/02/16 12:24:18 jw Exp $";
+"@(#)$Id: comp.y,v 1.99 2008/06/02 14:20:58 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -288,7 +288,13 @@ useFlag	: USE USETYPE		{
 		assert(useindex < MAXUSETYPE);
 		if ((ftyp = $1.v->ftype) <= 1) {	/* 0 or 1 */
 		    *iC_useTypes[useindex] = ftyp;	/* iC_Aflag, iC_Sflag */
+		    if (*iC_useRestore[useindex] >= 2) { /* no command line initialisation */
+			*iC_useRestore[useindex] = ftyp; /* first use in current source */
+		    }
 		} else if (ftyp == 2) {
+		    if (*iC_useRestore[useindex] >= 2) {
+			*iC_useRestore[useindex] = 0;	/* no command line initialisation */
+		    }
 		    *iC_useTypes[useindex] = *iC_useRestore[useindex];	/* restore */
 		} else {
 		    assert(0);				/* should not happen */
@@ -3227,6 +3233,7 @@ get(FILE* fp, int x)
 		if (sscanf(chbuf[x], " # %d \"%[-/A-Za-z_.0-9<>]\"",
 #endif	/* WIN32 */
 		    &temp1, inpNM) == 2) {
+		    unsigned int useindex;
 		    lineno = temp1 - 1;		/* handled in iC-code */
 		    lexflag |= C_LINE;
 		    if (strcmp(inpNM, prevNM) && strchr(inpNM, '<') == 0) {
@@ -3235,6 +3242,11 @@ get(FILE* fp, int x)
 			strncpy(prevNM, inpNM, BUFS);	/* inpNM has been modified */
 		    }
 		    getp[x] = NULL;		/* bypass parsing this line in iC */
+		    for (useindex = 0; useindex < 2; useindex++) {
+			if (*iC_useRestore[useindex] >= 2) {
+			    *iC_useRestore[useindex] = 0;	/* no command line initialisation */
+			}
+		    }
 		}
 	    } else
 	    /********************************************************

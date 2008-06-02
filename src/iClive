@@ -170,7 +170,7 @@ Usage:
 
 Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.42 2008/03/27 09:37:04 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.43 2008/06/02 12:04:05 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -2420,6 +2420,9 @@ sub run_file {
     } elsif ($4 ne 'ic' or check_save()) {
 	my $processName = $1;		# full path name of executable
 	$procName = $3;			# execuatble without directory path
+	if ($processName eq $procName) {
+	    $processName = "./$processName";	# in case . is not in $PATH
+	}
 	deleteAllTags();		# also clears @activeSymbols
 	clear_scan(1);
 	print "run_file: $processName from $fileName\n" if $opt_T;

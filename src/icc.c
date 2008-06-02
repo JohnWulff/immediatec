@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.60 2008/03/27 11:59:24 jw Exp $";
+"@(#)$Id: icc.c,v 1.61 2008/06/02 13:50:35 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2005  John E. Wulff
@@ -36,11 +36,11 @@ static const char icc_c[] =
 
 extern const char	iC_ID[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
-unsigned short		iC_Aflag = 0;		/* -A flag signals ARITH alias */
-unsigned short		iC_Sflag = 0;		/* not strict */
+unsigned short		iC_Aflag = 0;		/* -A flag - initially not ARITH alias */
+unsigned short		iC_Sflag = 0;		/* -S flag - initially not strict */
 unsigned short *	iC_useTypes[] = { USETYPEFLAGS };
-unsigned short		iC_Arestore = 0;	/* saved -A flag signals ARITH alias */
-unsigned short		iC_Srestore = 0;	/* saved strict */
+unsigned short		iC_Arestore = 2;	/* saved -A flag - initially not even set */
+unsigned short		iC_Srestore = 2;	/* saved -S flag - initially not even set */
 unsigned short *	iC_useRestore[] = { USERESTOREFLAGS };
 unsigned short		iC_optimise = 07;	/* optimisation levels 0 - 7 */
 int			iC_genCount;
