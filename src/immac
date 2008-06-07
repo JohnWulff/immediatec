@@ -1,0 +1,104 @@
+#!/usr/bin/perl
+
+#################################################################
+#
+#	Copyright (C) 2000-2005  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file or <john@je-wulff.de>
+#
+#	immarc
+#
+#   Pre-compiler to convert "immediate C" source files containing arrays
+#   int straight "immediate C".
+#
+#   The strategy is to match lines starting with the regex
+#
+#	for identifier ( ... )	#    identifier matches /[A-Z_a-z]/w*/
+#
+#   if it does not match substitite '[' by '@{[' and ']' by ']}'
+#   and print line
+#
+#   else
+#
+#   Substitute identifier by my $identifier
+#   Store $identifier in hash %identifiers
+#
+#   Next a block inside matching braces is looked for in the current
+#   line and any following lines until the final closing brace is found
+#   All of this is stored in the string $block
+#
+#   All occurrences of any identifier from %identifiers in [ ] in that block
+#   is replaced by @{[$identifier ... ]} - even inside C or C++ comments
+#   Any line not starting with 'for' is replaced by 'print "line"'
+#   else do same as above for nested for's
+#
+#   eval $block;	# which is a string evaluation
+#   die if $@;		# fail on error
+#
+#################################################################
+
+use strict;
+
+my $named = $0;
+$named =~ s#.*[/\\]##;		# delete directory names in path
+format STDERR =
+Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
+	$named
+	-o out	produce output file (default: stdout)
+	-l log	produce log file, usually 'immarc.log'
+	-h	help, ouput this Usage text only
+$Id: immac,v 1.1 2008/06/07 20:47:22 wulff Exp $
+.
+
+use vars qw($opt_o $opt_l $opt_h);
+require "getopts.pl";
+&Getopts('o:l:h');		# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+
+open STDOUT, ">$opt_o" or die "Can't redirect stdout to '$opt_o': $!" if $opt_o;
+open LOG, ">$opt_l" or die "Can't create '$opt_l': $!" if $opt_l;
+while ($ARGV = shift @ARGV) {
+    unless (open (IN, $ARGV)) {
+	warn "can't open input $ARGV";
+	next;
+    }
+    print LOG "##### $named $ARGV\n" if $opt_l;
+    processFile();
+    close(IN);
+}
+close LOG if $opt_l;
+
+####################################################################
+#
+#	process one file
+#
+####################################################################
+
+sub processFile {
+
+    my ($identifier, %identifiers);
+    %identifiers = ();
+
+    #	for identifier ( ... )	#    identifier matches /[A-Z_a-z]/w*/
+    
+    while (<IN>) {
+	if (s/\bfor\b(\s+)([A-Z_a-z]\w*)(\s*)\(/for$1\$$2$3(/) {
+	    $identifier = $2;
+	    $identifiers{$identifier} = "\$$identifier";
+##	    print "$identifier\n";
+	    print;
+	} else {
+	    s/\[/\@{[/g;
+	    s/\]/]}/g;
+	    print;
+	}
+    }
+} # processFile
