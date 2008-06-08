@@ -39,19 +39,33 @@
 #   eval $block;	# which is a string evaluation
 #   die if $@;		# fail on error
 #
+#   since use integer pragma is used, the following is valid:
+#
+#   for n (0 .. 25) {
+#       QX[n/8].[n%8] = IB[n];\n"
+#   }
+#
+#   generates
+#
+#   for my $n (0 .. 25) {
+#       print "    QX@{[$n/8]}.@{[$n%8]} = IB@{[$n]};\n"
+#   }
+#
 #################################################################
 
 use strict;
+use integer;			# allows QX[n/8].[n%8]
 
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
 Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	$named
-	-o out	produce output file (default: stdout)
-	-l log	produce log file, usually 'immarc.log'
+	-o out	produce iC out_file (default: stdout)
+	-l log	produce log_file, usually 'immarc.log'
 	-h	help, ouput this Usage text only
-$Id: immac,v 1.1 2008/06/07 20:47:22 wulff Exp $
+	in_file	input iC file(s) with arrays and for ()
+$Id: immac,v 1.2 2008/06/08 14:52:31 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -84,21 +98,81 @@ close LOG if $opt_l;
 
 sub processFile {
 
-    my ($identifier, %identifiers);
+    my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos);
+    my ($translate, $control, $inBlock, $braceCount, $evalBlock);
     %identifiers = ();
 
     #	for identifier ( ... )	#    identifier matches /[A-Z_a-z]/w*/
     
+    @block = ();
+    $inBlock = 0;
     while (<IN>) {
-	if (s/\bfor\b(\s+)([A-Z_a-z]\w*)(\s*)\(/for$1\$$2$3(/) {
+	$control = 0;
+	if (s/\bfor\b(\s+)([A-Z_a-z]\w*)(\s*)\(/for my$1$2$3(/) {
 	    $identifier = $2;
+	    if (@block == 0) {
+		%identifiers = ();
+		$braceCount = 0;
+	    }
 	    $identifiers{$identifier} = "\$$identifier";
-##	    print "$identifier\n";
-	    print;
-	} else {
+	    $inBlock = $control = 1;
+	}
+	if ($inBlock) {
+	    %atoms = ();			# new line in an eval block
+	    $offset = 0;
+
+	    foreach $lookfor ('{', '}') {
+		for ($pos = $[;
+		    ($pos = index($_, $lookfor, $pos)) >= $[;
+		    $pos += length $lookfor) {
+		    $atoms{ $pos } = $lookfor;	# key is position of atom found
+		}
+	    }
+	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
+		$atoms{ length $` } = $1;	# key is position of 'word' found
+	    }
+	    foreach $pos (sort { $a <=> $b } keys %atoms) {
+		$atom = $atoms{ $pos };		# process atoms in sequence
+		if ($atom eq "{") {
+		    $braceCount++;		# brace count at the end of this line
+		    $control = 1;
+		} elsif ($atom eq "}") {
+		    if (--$braceCount <= 0) {
+			$inBlock = 0;		# actively came out of last nested block
+		    }
+		    $control = 1;
+		} elsif (defined($translate = $identifiers{ $atom })) {
+		    substr($_, $pos + $offset, length $atom) = $translate;
+		    $offset += length($translate) - length($atom);
+		}
+	    }
 	    s/\[/\@{[/g;
 	    s/\]/]}/g;
-	    print;
+	    unless ($control) {
+		s/"/\\"/g;
+		chomp;
+		$_ = "print \"$_\\n\";\n";
+	    }
+	    push(@block, $_);			# push the modified line for eval
+	    unless ($inBlock) {
+		print LOG "### evaL BLOCK @{[++$evalBlock]} at LINE $.\n", @block if $opt_l;
+		eval "@block";
+		die if $@;
+		@block = ();			# end of this eval block
+	    }
+	} else {
+	    if (/[\[\]]/) {
+		s/\[/\@{[/g;
+		s/\]/]}/g;
+		s/"/\\"/g;
+		chomp;
+		$_ = "print \"$_\\n\";\n";
+		print LOG "### evaL LINE $.\n", $_ if $opt_l;
+		eval;				# evaluate [expr]
+		die if $@;
+	    } else {
+		print;				# faster if direct print
+	    }
 	}
     }
 } # processFile
