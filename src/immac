@@ -10,10 +10,42 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file or <john@je-wulff.de>
 #
-#	immarc
+#	immac
 #
 #   Pre-compiler to convert "immediate C" source files containing arrays
 #   int straight "immediate C".
+#
+#   The immediate C language extension is as follows:
+#
+#	immediate array variables are defined by appending an expression
+#	enclosed in square brackets to the array name eg. array[i+10]
+#
+#	unless the expression in the square brackets is a constant
+#	expression eg. array[4+10]
+#	the line containing the expression must be contained in a for block
+#	as follows:
+#
+#	for i (0 .. 31) {
+#	    array[i+10];
+#	}
+#	Only the control variable 'i' in this instance may be used in the
+#	index expressions on the block. These for blocks may be nested.
+#	In that case all the control variables in each nested block may
+#	be used.
+#
+#	Since this pre-processor only manipulates text, and does not compile
+#	there are some restrictions. The for line with or without the following
+#	opening brace and the braces must be on seperate lines. These are not
+#	part of the immediate C code itself.
+#	Other immediate C lines in the block may contain bracketed index
+#	expressions, but they don not need to.
+#
+#	All the immediate C lines are repeated a number of times controlled
+#	by the for block control line.
+#		A 'perlish' syntax rather than a 'C' syntax was chosen
+#		deliberately, because the pre-compiler eval's a slightly
+#		modified form of the code in Perl. This syntax is very
+#		simple and fits the limitations of expanding an array.
 #
 #   The strategy is to match lines starting with the regex
 #
@@ -65,7 +97,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log_file, usually 'immarc.log'
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.2 2008/06/08 14:52:31 wulff Exp $
+$Id: immac,v 1.3 2008/06/09 09:02:25 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -100,10 +132,6 @@ sub processFile {
 
     my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos);
     my ($translate, $control, $inBlock, $braceCount, $evalBlock);
-    %identifiers = ();
-
-    #	for identifier ( ... )	#    identifier matches /[A-Z_a-z]/w*/
-    
     @block = ();
     $inBlock = 0;
     while (<IN>) {
@@ -151,7 +179,7 @@ sub processFile {
 	    unless ($control) {
 		s/"/\\"/g;
 		chomp;
-		$_ = "print \"$_\\n\";\n";
+		$_ = "print \"$_\\n\";\n";	# output all lines in the for loop
 	    }
 	    push(@block, $_);			# push the modified line for eval
 	    unless ($inBlock) {
@@ -168,7 +196,7 @@ sub processFile {
 		chomp;
 		$_ = "print \"$_\\n\";\n";
 		print LOG "### evaL LINE $.\n", $_ if $opt_l;
-		eval;				# evaluate [expr]
+		eval;				# evaluate constant expr eg. [4*8]
 		die if $@;
 	    } else {
 		print;				# faster if direct print
