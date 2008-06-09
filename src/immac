@@ -102,7 +102,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log_file, usually 'immarc.log'
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.5 2008/06/09 16:46:06 wulff Exp $
+$Id: immac,v 1.6 2008/06/09 20:39:53 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -146,6 +146,10 @@ sub processFile {
 	    if (@block == 0) {
 		%identifiers = ();
 		$braceCount = 0;
+	    }
+	    if ($braceCount < $inBlock) {
+		warn "### WARNING: for i ( ... ) not nested after previous '{' at '$ARGV' line $.\n";
+		print LOG "### WARNING: for i ( ... ) not nested after previous '{' at LINE $.\n", @block if $opt_l;
 	    }
 	    $identifiers{$identifier} = "\$$identifier";
 	    $inBlock++;
