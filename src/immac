@@ -96,18 +96,19 @@ use integer;			# allows QX[n/8].[n%8]
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
+Usage:	@<<<<<<< [-ph][ -o out_file][ -l log_file] in_file ...
 	$named
 	-o out	produce iC out_file (default: stdout)
 	-l log	produce log_file, usually 'immarc.log'
+	-p	allow perl type loop 'for id (0 .. 31)'
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.6 2008/06/09 20:39:53 wulff Exp $
+$Id: immac,v 1.7 2008/06/09 21:33:26 wulff Exp $
 .
 
-use vars qw($opt_o $opt_l $opt_h);
+use vars qw($opt_o $opt_l $opt_p $opt_h);
 require "getopts.pl";
-&Getopts('o:l:h');		# sets $opt_h if -h etc
+&Getopts('o:l:ph');		# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -141,15 +142,18 @@ sub processFile {
     $inBlock = 0;
     while (<IN>) {
 	$control = 0;
-	if (s/\bfor\b(\s+)([A-Z_a-z]\w*)(\s*)\(/for my$1$2$3(/) {
+	if (s/\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)/for (my $2/
+	    or $opt_p and			# perl type for id ( ... ) loop control
+	    s/\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/
+	   ) {
 	    $identifier = $2;
 	    if (@block == 0) {
 		%identifiers = ();
 		$braceCount = 0;
 	    }
 	    if ($braceCount < $inBlock) {
-		warn "### WARNING: for i ( ... ) not nested after previous '{' at '$ARGV' line $.\n";
-		print LOG "### WARNING: for i ( ... ) not nested after previous '{' at LINE $.\n", @block if $opt_l;
+		warn "### WARNING: 'for (...)' not nested after previous '{' at '$ARGV' line $.\n";
+		print LOG "### WARNING: 'for (...)' not nested after previous '{' at LINE $.\n", @block if $opt_l;
 	    }
 	    $identifiers{$identifier} = "\$$identifier";
 	    $inBlock++;
@@ -195,8 +199,8 @@ sub processFile {
 		s!/[*/]!##!;			# substitute C or C++ comment by Perl comment
 	    } else {
 		if ($braceCount < $inBlock) {
-		    warn "### WARNING: '{' must follow for i ( ... ) at '$ARGV' line $.\n";
-		    print LOG "### WARNING: '{' must follow for i ( ... ) at LINE $.\n", @block if $opt_l;
+		    warn "### WARNING: '{' must follow 'for (...)' at '$ARGV' line $.\n";
+		    print LOG "### WARNING: '{' must follow 'for (...)' at LINE $.\n", @block if $opt_l;
 		}
 		s/"/\\"/g;			# protect interpolated " in string
 		chomp;
