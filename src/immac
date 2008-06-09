@@ -33,12 +33,17 @@
 #	In that case all the control variables in each nested block may
 #	be used.
 #
-#	Since this pre-processor only manipulates text, and does not compile
+#	Since this pre-processor only manipulates text, and does not compile,
 #	there are some restrictions. The for line with or without the following
 #	opening brace and the braces must be on seperate lines. These are not
-#	part of the immediate C code itself.
+#	part of the immediate C code itself. The lines are called control lines.
+#	Control lines may terminate with a C /* ... */ or C++ // comment.
+#	(They may in fact terminate with a Perl # comment). But a C comment
+#	in a control line must be completed on the line on which it starts.
+#	(C++ or Perl comments terminate on the one line anyway).
+
 #	Other immediate C lines in the block may contain bracketed index
-#	expressions, but they don not need to.
+#	expressions, but they don't need to.
 #
 #	All the immediate C lines are repeated a number of times controlled
 #	by the for block control line.
@@ -97,7 +102,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log_file, usually 'immarc.log'
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.3 2008/06/09 09:02:25 wulff Exp $
+$Id: immac,v 1.4 2008/06/09 10:20:26 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -176,31 +181,31 @@ sub processFile {
 	    }
 	    s/\[/\@{[/g;
 	    s/\]/]}/g;
-	    unless ($control) {
+	    if ($control) {
+		s!/[*/]!##!;			# substitute C or C++ comment by Perl comment
+	    } else {
 		s/"/\\"/g;
 		chomp;
 		$_ = "print \"$_\\n\";\n";	# output all lines in the for loop
 	    }
 	    push(@block, $_);			# push the modified line for eval
-	    unless ($inBlock) {
+	    if (not $inBlock) {
 		print LOG "### evaL BLOCK @{[++$evalBlock]} at LINE $.\n", @block if $opt_l;
 		eval "@block";
 		die if $@;
 		@block = ();			# end of this eval block
 	    }
+	} elsif (/[\[\]]/) {
+	    s/\[/\@{[/g;
+	    s/\]/]}/g;
+	    s/"/\\"/g;
+	    chomp;
+	    $_ = "print \"$_\\n\";\n";
+	    print LOG "### evaL LINE $.\n", $_ if $opt_l;
+	    eval;				# evaluate constant expr eg. [4*8]
+	    die if $@;
 	} else {
-	    if (/[\[\]]/) {
-		s/\[/\@{[/g;
-		s/\]/]}/g;
-		s/"/\\"/g;
-		chomp;
-		$_ = "print \"$_\\n\";\n";
-		print LOG "### evaL LINE $.\n", $_ if $opt_l;
-		eval;				# evaluate constant expr eg. [4*8]
-		die if $@;
-	    } else {
-		print;				# faster if direct print
-	    }
+	    print;				# faster if direct print
 	}
     }
 } # processFile
