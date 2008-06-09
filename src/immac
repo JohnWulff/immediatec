@@ -102,7 +102,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log_file, usually 'immarc.log'
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.4 2008/06/09 10:20:26 wulff Exp $
+$Id: immac,v 1.5 2008/06/09 16:46:06 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -148,7 +148,8 @@ sub processFile {
 		$braceCount = 0;
 	    }
 	    $identifiers{$identifier} = "\$$identifier";
-	    $inBlock = $control = 1;
+	    $inBlock++;
+	    $control = 1;
 	}
 	if ($inBlock) {
 	    %atoms = ();			# new line in an eval block
@@ -168,25 +169,34 @@ sub processFile {
 		$atom = $atoms{ $pos };		# process atoms in sequence
 		if ($atom eq "{") {
 		    $braceCount++;		# brace count at the end of this line
+		    $control++;
 		    $control = 1;
 		} elsif ($atom eq "}") {
+		    $inBlock--;			# for control block finishes with brace
 		    if (--$braceCount <= 0) {
 			$inBlock = 0;		# actively came out of last nested block
 		    }
+		    $control--;
 		    $control = 1;
 		} elsif (defined($translate = $identifiers{ $atom })) {
 		    substr($_, $pos + $offset, length $atom) = $translate;
 		    $offset += length($translate) - length($atom);
 		}
 	    }
-	    s/\[/\@{[/g;
-	    s/\]/]}/g;
+	    if (/[\[\]]/) {
+		s/\[/\@{[/g;			# executable interpolated index expressions
+		s/\]/]}/g;			# in control and immediate C lines
+	    }
 	    if ($control) {
 		s!/[*/]!##!;			# substitute C or C++ comment by Perl comment
 	    } else {
-		s/"/\\"/g;
+		if ($braceCount < $inBlock) {
+		    warn "### WARNING: '{' must follow for i ( ... ) at '$ARGV' line $.\n";
+		    print LOG "### WARNING: '{' must follow for i ( ... ) at LINE $.\n", @block if $opt_l;
+		}
+		s/"/\\"/g;			# protect interpolated " in string
 		chomp;
-		$_ = "print \"$_\\n\";\n";	# output all lines in the for loop
+		$_ = "print \"$_\\n\";\n";	# print lines in the for loop when eval'd
 	    }
 	    push(@block, $_);			# push the modified line for eval
 	    if (not $inBlock) {
@@ -196,9 +206,9 @@ sub processFile {
 		@block = ();			# end of this eval block
 	    }
 	} elsif (/[\[\]]/) {
-	    s/\[/\@{[/g;
-	    s/\]/]}/g;
-	    s/"/\\"/g;
+	    s/\[/\@{[/g;			# executable interpolated index expressions
+	    s/\]/]}/g;				# outside of a control block
+	    s/"/\\"/g;				# protect interpolated " in string
 	    chomp;
 	    $_ = "print \"$_\\n\";\n";
 	    print LOG "### evaL LINE $.\n", $_ if $opt_l;
