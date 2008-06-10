@@ -96,27 +96,42 @@ use integer;			# allows QX[n/8].[n%8]
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [-ph][ -o out_file][ -l log_file] in_file ...
+Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file][ -D m=v] in_file
 	$named
 	-o out	produce iC out_file (default: stdout)
 	-l log	produce log_file, usually 'immarc.log'
-	-p	allow perl type loop 'for id (0 .. 31)'
+	-D m=3	define macro 'm' with value '3' (may have several)
+		NOTE: command line definitions have precedence over
+		      '#define m 4' in the code (opposite to cpp)
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.9 2008/06/10 15:24:56 wulff Exp $
+$Id: immac,v 1.10 2008/06/10 19:50:41 wulff Exp $
 .
 
-use vars qw($opt_o $opt_l $opt_p $opt_h);
+use vars qw($opt_o $opt_l $opt_D $opt_h);
 require "getopts.pl";
-&Getopts('o:l:ph');		# sets $opt_h if -h etc
+&Getopts('o:l:D:h');		# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
+my %defs = ();
+my @def;
+my $def;
 
 open STDOUT, ">$opt_o" or die "Can't redirect stdout to '$opt_o': $!" if $opt_o;
 open LOG, ">$opt_l" or die "Can't create '$opt_l': $!" if $opt_l;
+
+my @defines = split(' ', $opt_D);
+foreach (@defines) {
+    @def = split(/=/, $_);
+    $def = shift(@def);		# enter -D NAME(s) in associative array %defs
+    $defs{ $def } = @def ? join('=', @def) : '';
+    warn "### WARNING: '-D $def' has no value - should be '-D $def=value'\n" unless @def;
+    print LOG "### COMMAND LINE -D $def=$defs{ $def }\n" if $opt_l;
+}
+
 while ($ARGV = shift @ARGV) {
     unless (open (IN, $ARGV)) {
 	warn "can't open input $ARGV";
@@ -137,15 +152,13 @@ close LOG if $opt_l;
 sub processFile {
 
     my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos);
-    my ($translate, $control, $inBlock, $braceCount, $evalBlock, %defs);
-    %defs = ();
+    my ($translate, $control, $inBlock, $braceCount, $evalBlock);
     @block = ();
     $inBlock = 0;
     while (<IN>) {
 	$control = 0;
 	if (s/^\s*\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)\s*=/for (my $2 =/
-	    or $opt_p and			# perl type for id ( ... ) loop control
-	    s/^\s*\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/
+	    or s/^\s*\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/	# perlish for i (...)
 	   ) {
 	    $identifier = $2;
 	    if (@block == 0) {
@@ -162,9 +175,13 @@ sub processFile {
 	} elsif (/^\s*#\s*\bdefine\b\s+([A-Z_a-z]\w*)\s+(\S.*)$/) {
 	    $identifier = $1;
 	    $translate  = $2;
-	    $translate =~ s!(\s*/[*/].*|\s+)$!!;# delete C or C++ comment and traling blanks
-	    $defs{ $identifier } = $translate;	# process macro eg #define X (4 * 8)
 	    print LOG "### $_" if $opt_l;
+	    if (defined $defs{ $identifier }) {
+		print LOG "### command line definition '$identifier=$defs{ $identifier }' has precedence over #define\n" if $opt_l;
+	    } else {
+		$translate =~ s!(\s*/[*/].*|\s+)$!!;	# delete C or C++ comment and traling blanks
+		$defs{ $identifier } = $translate;	# macro to %defs eg #define X (4 * 8)
+	    }
 	    next;				# do not output #define line
 	}
 	if (keys %defs) {			# resolve #define macros if any
