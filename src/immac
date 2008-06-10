@@ -103,7 +103,7 @@ Usage:	@<<<<<<< [-ph][ -o out_file][ -l log_file] in_file ...
 	-p	allow perl type loop 'for id (0 .. 31)'
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.7 2008/06/09 21:33:26 wulff Exp $
+$Id: immac,v 1.8 2008/06/10 09:19:42 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_p $opt_h);
@@ -137,14 +137,15 @@ close LOG if $opt_l;
 sub processFile {
 
     my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos);
-    my ($translate, $control, $inBlock, $braceCount, $evalBlock);
+    my ($translate, $control, $inBlock, $braceCount, $evalBlock, %defs);
+    %defs = ();
     @block = ();
     $inBlock = 0;
     while (<IN>) {
 	$control = 0;
-	if (s/\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)/for (my $2/
+	if (s/^\s*\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)/for (my $2/
 	    or $opt_p and			# perl type for id ( ... ) loop control
-	    s/\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/
+	    s/^\s*\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/
 	   ) {
 	    $identifier = $2;
 	    if (@block == 0) {
@@ -155,9 +156,27 @@ sub processFile {
 		warn "### WARNING: 'for (...)' not nested after previous '{' at '$ARGV' line $.\n";
 		print LOG "### WARNING: 'for (...)' not nested after previous '{' at LINE $.\n", @block if $opt_l;
 	    }
-	    $identifiers{$identifier} = "\$$identifier";
+	    $identifiers{ $identifier } = "\$$identifier";
 	    $inBlock++;
 	    $control = 1;
+	} elsif (/^\s*#\s*\bdefine\b\s+([A-Z_a-z]\w*)\s+(\S.*)$/) {
+	    $identifier = $1;
+	    $translate  = $2;
+	    $defs{ $identifier } = $translate;	# process macro eg #define X (4 * 8)
+	    print LOG "### $_" if $opt_l;
+	    next;				# do not output #define line
+	}
+	if (keys %defs) {			# resolve #define macros if any
+	    $offset = 0;
+	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
+		$atom = $1;			# 'word' found
+		$pos  = length $`;		# position of 'word' found
+		if (defined($translate = $defs{ $atom })) {
+		    print LOG "### OLD '$atom' '$translate' in $.: $_" if $opt_l and $offset++ == 0;
+		    substr($_, $pos, length $atom) = $translate;
+		    print LOG "### SUB '$atom' '$translate' in $.: $_" if $opt_l;
+		}
+	    }
 	}
 	if ($inBlock) {
 	    %atoms = ();			# new line in an eval block
