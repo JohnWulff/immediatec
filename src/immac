@@ -105,7 +105,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file][ -D m=v] in_file
 		      '#define m 4' in the code (opposite to cpp)
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.10 2008/06/10 19:50:41 wulff Exp $
+$Id: immac,v 1.11 2008/06/10 21:32:55 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_D $opt_h);
@@ -157,6 +157,18 @@ sub processFile {
     $inBlock = 0;
     while (<IN>) {
 	$control = 0;
+	if (keys %defs) {			# resolve #define macros if any
+	    $offset = 0;
+	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
+		$atom = $1;			# 'word' found
+		$pos  = length $`;		# position of 'word' found
+		if (defined($translate = $defs{ $atom })) {
+		    print LOG "### OLD '$atom' '$translate' in $.: $_" if $opt_l and $offset++ == 0;
+		    substr($_, $pos, length $atom) = $translate;
+		    print LOG "### SUB '$atom' '$translate' in $.: $_" if $opt_l;
+		}
+	    }
+	}
 	if (s/^\s*\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)\s*=/for (my $2 =/
 	    or s/^\s*\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/	# perlish for i (...)
 	   ) {
@@ -183,18 +195,6 @@ sub processFile {
 		$defs{ $identifier } = $translate;	# macro to %defs eg #define X (4 * 8)
 	    }
 	    next;				# do not output #define line
-	}
-	if (keys %defs) {			# resolve #define macros if any
-	    $offset = 0;
-	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
-		$atom = $1;			# 'word' found
-		$pos  = length $`;		# position of 'word' found
-		if (defined($translate = $defs{ $atom })) {
-		    print LOG "### OLD '$atom' '$translate' in $.: $_" if $opt_l and $offset++ == 0;
-		    substr($_, $pos, length $atom) = $translate;
-		    print LOG "### SUB '$atom' '$translate' in $.: $_" if $opt_l;
-		}
-	    }
 	}
 	if ($inBlock) {
 	    %atoms = ();			# new line in an eval block
@@ -233,7 +233,13 @@ sub processFile {
 		s/\]/]}/g;			# in control and immediate C lines
 	    }
 	    if ($control) {
-		s!/[*/]!##!;			# substitute C or C++ comment by Perl comment
+		s!(\s*(/[*/]|#).*|[ \t]+)$!!;	# delete C, C++ of Perl comment and traling blanks
+		while (/([A-Z_a-z\$]\w*)/g) {	# look for 'words' in this line
+		    $atom = $1;
+		    if ($atom ne 'for' and $atom ne 'my' and $atom !~ /^\$/) {
+			warn "### WARNING: Bareword '$atom' (unresolved macro) at '$ARGV' line $.\n";
+		    }
+		}
 	    } else {
 		if ($braceCount < $inBlock) {
 		    warn "### WARNING: '{' must follow 'for (...)' at '$ARGV' line $.\n";
