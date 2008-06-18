@@ -105,7 +105,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file][ -D m=v] in_file
 		      '#define m 4' in the code (opposite to cpp)
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.11 2008/06/10 21:32:55 wulff Exp $
+$Id: immac,v 1.12 2008/06/18 14:01:07 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_D $opt_h);
@@ -170,7 +170,7 @@ sub processFile {
 	    }
 	}
 	if (s/^\s*\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)\s*=/for (my $2 =/
-	    or s/^\s*\bfor\b(\s+)([A-Z_a-z]\w*)\s*\(/for my $2 (/	# perlish for i (...)
+	    or s/^\s*\bfor\b\s+(\bint\b\s+)?([A-Z_a-z]\w*)\s*\(/for my $2 (/	# perlish for i (...)
 	   ) {
 	    $identifier = $2;
 	    if (@block == 0) {
@@ -184,15 +184,17 @@ sub processFile {
 	    $identifiers{ $identifier } = "\$$identifier";
 	    $inBlock++;
 	    $control = 1;
-	} elsif (/^\s*#\s*\bdefine\b\s+([A-Z_a-z]\w*)\s+(\S.*)$/) {
+	} elsif (/^\s*#\s*\bdefine\b\s+(\S+)\s+(\S.*)$/) {
 	    $identifier = $1;
 	    $translate  = $2;
 	    print LOG "### $_" if $opt_l;
-	    if (defined $defs{ $identifier }) {
-		print LOG "### command line definition '$identifier=$defs{ $identifier }' has precedence over #define\n" if $opt_l;
-	    } else {
-		$translate =~ s!(\s*/[*/].*|\s+)$!!;	# delete C or C++ comment and traling blanks
-		$defs{ $identifier } = $translate;	# macro to %defs eg #define X (4 * 8)
+	    if (/[A-Z_a-z]\w*/) {
+		if (defined $defs{ $identifier }) {
+		    print LOG "### command line definition '$identifier=$defs{ $identifier }' has precedence over #define\n" if $opt_l;
+		} else {
+		    $translate =~ s!(\s*/[*/].*|\s+)$!!;	# delete C or C++ comment and trailing blanks
+		    $defs{ $identifier } = $translate;	# macro to %defs eg #define X (4 * 8)
+		}
 	    }
 	    next;				# do not output #define line
 	}
