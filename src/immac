@@ -21,20 +21,34 @@
 #	enclosed in square brackets to the array name eg. array[i+10]
 #
 #	unless the expression in the square brackets is a constant
-#	expression eg. array[4+10]
-#	the line containing the expression must be contained in a for block
-#	as follows:
+#	expression eg. array[4+10], the line containing the expression
+#	must be contained in a for block as follows:
+#
+#	for (int i; i < 32; i++) {
+#	    array[i+10];
+#	}
+#
+#	The following "perlish" syntax does the same, but is not recommended.
 #
 #	for i (0 .. 31) {
 #	    array[i+10];
 #	}
-#	Only the control variable 'i' in this instance may be used in the
-#	index expressions on the block. These for blocks may be nested.
+
+#	The only reason it is included, is to generate irregular Perl type lists,
+#	which is unlikely to be an important feature.
+#
+#	for i (0, 3, 4, 10, 5) {
+#	    array[i];
+#	}
+#	will generate array0 array3 array4 array10 array5
+#
+#	Only the control variable 'i' in the above instances may be used in the
+#	index expressions of the block. These 'for' blocks may be nested.
 #	In that case all the control variables in each nested block may
 #	be used.
 #
 #	Since this pre-processor only manipulates text, and does not compile,
-#	there are some restrictions. The for line with or without the following
+#	there are some restrictions. The 'for' line with or without the following
 #	opening brace and the braces must be on seperate lines. These are not
 #	part of the immediate C code itself. The lines are called control lines.
 #	Control lines may terminate with a C /* ... */ or C++ // comment.
@@ -45,16 +59,36 @@
 #	Other immediate C lines in the block may contain bracketed index
 #	expressions, but they don't need to.
 #
-#	All the immediate C lines are repeated a number of times controlled
-#	by the for block control line.
-#		A 'perlish' syntax rather than a 'C' syntax was chosen
-#		deliberately, because the pre-compiler eval's a slightly
+#	All immediate C lines in a  'for' block are repeated a number of
+#	times controlled by the 'for' control line.
+#		As shown above, a 'C' type control expression
+#			for (int i; i < 32; i++)
+#		is preferable - it fits into the general 'C' syntax of
+#		'immediate C'.
+#		A 'perlish' syntax rather than a 'C' syntax may be used:
+#			for int i (0 .. 31) {
+#		This is, because the pre-compiler eval's a slightly
 #		modified form of the code in Perl. This syntax is very
 #		simple and fits the limitations of expanding an array.
 #
+#		The 'int' type specifier of the control variable is optional - it
+#		may be used in both variants to make the syntax look more correct.
+#		It must be remembered, that the control variable is usually an 'int'.
+#		In the Perl code, 'use integer' has been called, so integer division
+#		always applies.
+#
+#		In the case a 'Perl' type list is used, then strings may be used:
+#			for i ("AA", "BB", "CC", "DD", "EE") {
+#		If these are not numeric, then no arithmetic may be done when the
+#		control variable is used in an index expression:
+#			    array[i];
+#		will generate arrayAA arrayBB arrayCC arrayDD arrayEE
+#		Note: special care must be taken, that these strings are
+#		not defined as macros.
+#
 #   The strategy is to match lines starting with the regex
 #
-#	for identifier ( ... )	#    identifier matches /[A-Z_a-z]/w*/
+#	for (identifier    or	for identifier ( #    identifier matches /[A-Z_a-z]/w*/
 #
 #   if it does not match substitite '[' by '@{[' and ']' by ']}'
 #   and print line
@@ -78,15 +112,24 @@
 #
 #   since use integer pragma is used, the following is valid:
 #
-#   for n (0 .. 25) {
+#   for (n = 0; n < 16; n++) {
 #       QX[n/8].[n%8] = IB[n];\n"
 #   }
 #
-#   generates
+#   generates the following, which is eval'd
 #
-#   for my $n (0 .. 25) {
+#   for (my $n = 0; $n < 16; $n++) {
 #       print "    QX@{[$n/8]}.@{[$n%8]} = IB@{[$n]};\n"
 #   }
+#
+#   to produce the following straight immediate C output
+#
+#    QX0.0 = IB0;
+#    QX0.1 = IB1;
+#    ...
+#    QX1.7 = IB15;
+#
+#   which is not brilliant code, but shows the pattern.
 #
 #################################################################
 
@@ -105,7 +148,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file][ -D m=v] in_file
 		      '#define m 4' in the code (opposite to cpp)
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.12 2008/06/18 14:01:07 wulff Exp $
+$Id: immac,v 1.13 2008/06/19 08:53:17 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_D $opt_h);
