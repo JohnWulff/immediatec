@@ -148,7 +148,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file][ -D m=v] in_file
 		      '#define m 4' in the code (opposite to cpp)
 	-h	help, ouput this Usage text only
 	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.13 2008/06/19 08:53:17 wulff Exp $
+$Id: immac,v 1.14 2008/06/20 18:40:10 wulff Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_D $opt_h);
@@ -315,3 +315,61 @@ sub processFile {
 	}
     }
 } # processFile
+__END__
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ immac - the immediate-C array pre-compiler
+
+=head1 SYNOPSIS
+
+ immac [-h][ -o<out>][ -l<log>][ -Dmacro[=defn]...] <src.ica>
+    -o <out>   name of generated iC output file (default: src.ic)
+    -l <log>   name of Perl log file            (default: none)
+    -e <err>   name of error file (default is stderr)
+    -D <macro> predefine <macro> evaluated directly by this program
+               Usually defined with a numeric value eg. -D m=4
+               NOTE: command line definitions have precedence over
+		      '#define m 3' in the code (opposite to cpp)
+
+    <src.ica>  iC source file with array definiions
+    -h       this help text
+
+=head1 DESCRIPTION
+
+B<immac> translates an iC-source with array definitions (extension: .ica)
+into an expanded iC file (extension: .ic) which can be compiled with B<immcc>
+
+B<immac> reads and translates one source eg file.ica. If no options are
+specified, only compilation errors (if any) are reported on 'stderr'.
+
+The B<immac> compiler also produces an optional log (default file.log).
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<immcc(1)>, L<iCmake(1)>, L<iCserver(1)>, L<iCbox(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2005  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.
+
+=cut
+
+   ############ end of POD to generate man page ########################### */
