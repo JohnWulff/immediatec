@@ -2,7 +2,10 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <john@je-wulff.de>
 " Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.3 2008/02/13 14:09:46 jw Exp $
+" $Id: ic.vim,v 1.4 2008/06/24 15:13:39 jw Exp $
+" for openSUSE ic.vim must be in /usr/share/vim/current/syntax
+" NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
+" local filetype.vim must be in ~/.vim (ic.vim does not work there)
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded
