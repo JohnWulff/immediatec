@@ -18,21 +18,21 @@ usage ()
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
-  echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
+  echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
   echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default is nice)' >&2
   echo '	-h	this help text' >&2
-  echo '	uses iCmake -v<N> -d<opt> -O<level> to make each line of the list pm.lt' >&2
+  echo '	uses iCmake -f -v<N> -d<opt> -O<level> to make each line of the list pm.lt' >&2
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: mm,v 1.17 2007/06/16 19:15:30 jw Exp $' >&2
+  echo '$Id: mm,v 1.18 2008/07/03 17:28:34 jw Exp $' >&2
 }
 
-A=""
+A=" -f"
 z=0
 I=""
 
@@ -47,7 +47,7 @@ while getopts ":d:gASO:PRiIJ6xzh" opt; do
     P )	A="$A -P";;
     R )	A="$A -R";;
     N )	A="$A -N";;
-    i ) I=" -i";;
+    j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
     x )	A="$A -x";;
