@@ -12,7 +12,7 @@ usage ()
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
-  echo '	-i	produce file.ini with load info but no INITIALIZATION' >&2
+  echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
   echo '	-6	produce logic generation listing file.lst6' >&2
@@ -21,14 +21,14 @@ usage ()
   echo '	-h	this help text' >&2
   echo 'uses immcc -d76 -d<opt> -O<level> x.ic to make each line of the list pp.lt' >&2
   echo 'uses immcc -d74 -d<opt> -O<level> -o x.c x.ic to make each line of the list pp.lt' >&2
-  echo '	$Id: my,v 1.14 2007/06/16 19:15:49 jw Exp $' >&2
+  echo '	$Id: my,v 1.15 2008/07/03 17:29:08 jw Exp $' >&2
 }
 
 v=""
 d=""
 x=0
 z=0
-A=""
+A=" -f"
 I=""
 g=""
 
@@ -41,7 +41,7 @@ while getopts ":d:gASO:PRiIJ6xzh" opt; do
     O )	A="$A -O$OPTARG";;
     P )	A="$A -P";;
     R )	A="$A -R";;
-    i ) I=" -i";;
+    j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
     6 ) g="6";;
