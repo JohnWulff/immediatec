@@ -66,10 +66,25 @@ which is the default host name or distributed over several computers using
 appropriate host names with the -s <host> option.  The default networking
 port is '8778'. Another port can be selected with the -p <port> option.
 
-    iCmake	make one or more iC application(s) from iC source(s).
-		Each source file is compiled using 'immcc' which
+    iCmake	make one or more iC application(s) from iC or iCa
+		source(s).
+
+		If a source contains 'for loops', %define macro
+		definitions or there are -P macro definitions, the
+		source file is an iCa language file and is renamed
+		<source>.ica - unless the source file has the .ica
+		extension already.  This is translated to an iC source
+		file using immac.  Isolated [index expressions]
+		without at least one 'for loop' or %define are not
+		sufficient to classify a file as an iCa language file.
+
+		Each iC source file is compiled using 'immcc' which
 		generates a C file, which in turn is compiled and
 		linked with 'libict.a' generating the application.
+
+    immac	translates an iCa language file <source>.ica to an
+		iC language file <source>.ic, which can then be
+		compiled by immcc and the C compiler.
 
 All components and the generated applications will display detailed
 usage texts when called with the -h option.
@@ -310,4 +325,4 @@ Vim support files
 
     filetype.vim:	Vim filetype file selects *.ic *.ih and *.lst as iC files
 
-    $Id: Readme_develop,v 1.14 2007/06/16 19:28:42 jw Exp $
+    $Id: Readme_develop,v 1.15 2008/07/03 12:36:43 jw Exp $
