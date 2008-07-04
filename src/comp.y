@@ -1,14 +1,14 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.99 2008/06/02 14:20:58 jw Exp $";
+"@(#)$Id: comp.y,v 1.100 2008/06/25 21:38:33 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	comp.y
  *	grammar for immcc compiler

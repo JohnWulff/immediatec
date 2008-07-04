@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2005  John E. Wulff
+#	Copyright (C) 2000-2008  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <ic@je-wulff.de>
 #
 #	iClive; display for iC sources and listings
 #
@@ -102,6 +102,10 @@ my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 
 my $named = $0; $named =~ s#.*[/\\]##;
 use vars qw($opt_T $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i $opt_f $opt_l $opt_w $opt_g $opt_u $opt_X $opt_h);
+my $ofh = select(STDERR);	# save old file handle
+$= = 1000;			# stop page overflow (default 60 lines)
+select($ofh);			# retore old file handle
+
 format STDERR =
 Usage:
 @<<<<<<<[ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
@@ -168,9 +172,9 @@ Usage:
                 Dynamically increase font size                    Alt +
                 Dynamically decrease font size                    Alt -
 
-Copyright (C) 2000-2005  John E. Wulff          <john@je-wulff.de>
+Copyright (C) 2000-2008  John E. Wulff          <ic@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.43 2008/06/02 12:04:05 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.44 2008/07/04 20:53:41 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -266,12 +270,12 @@ my $cwd = cwd;
 print "cwd = $cwd\n" if $opt_T;
 
 my $fileTypes = [
-    ['iC Source Files',  ['.ic',  '.ih',   ], ['TEXT', ], ],
-    ['iC Listing Files', ['.lst',          ], ['TEXT', ], ],
-    ['C  Source Files',  ['.c',   '.h',    ], ['TEXT', ], ],
-    ['Text Files',       ['.txt', '.text', ],             ],
-    ['Text Files',       ['',              ], ['TEXT', ], ],
-    ['All Files',        ['*',             ],             ],
+    ['iC Source Files',  ['.ic',  '.ica',  '.ih',   ], ['TEXT', ], ],
+    ['iC Listing Files', ['.lst',                   ], ['TEXT', ], ],
+    ['C  Source Files',  ['.c',   '.h',             ], ['TEXT', ], ],
+    ['Text Files',       ['.txt', '.text',          ],             ],
+    ['Text Files',       ['',                       ], ['TEXT', ], ],
+    ['All Files',        ['*',                      ],             ],
 ];
 
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
@@ -1993,17 +1997,17 @@ sub new_text {
 
 ########################################################################
 #
-#	Open the list file (file.lst) for the currently loaded $fileName
-#	Alternatively open the corresponding file.ic if file.lst open
+#	Open the list file (file.lst) for the currently loaded iC $fileName
+#	Alternatively open the corresponding file.ic
 #
 ########################################################################
 
 sub open_list {
-    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
-	if ($4 eq 'lst') {
-	    open_file(0, "$1.ic");
-	} else {
+    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
+	if ($4 eq 'ic') {
 	    open_file(0, "$1.lst");
+	} else {
+	    open_file(0, "$1.ic");
 	}
     } else {
 	info_display(2000, 'red', "ERROR: no list file matching '$fileName'");
@@ -2086,14 +2090,17 @@ sub open_file {
 		$fileName = $fName;	# alter global $fileName
 		$mainWindow->title("$named$u: $fileName $runName");
 		info_display(2000, 'black', "File '$fileName', $length bytes loaded");
-		if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
+		if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
 		    $procName = $3;
 		    $instName = "$procName$instanceText";
-		    if ($4 eq 'lst') {
-			$menuFile->entryconfigure(3, -label => 'Open.ic');
-		    } else {
+		    if ($4 eq 'ic') {
 			$menuFile->entryconfigure(3, -label => 'Open.lst');
-			check_menu($fileName, 'files');
+			check_menu($fileName, 'files');		# save ic name in file menu
+		    } else {
+			$menuFile->entryconfigure(3, -label => 'Open.ic');
+			if ($4 eq 'ica') {
+			    check_menu($fileName, 'files');	# save ica name in file menu
+			}
 		    }
 		    $ci = change_instance();
 		    adjust_live(-1, -1);
@@ -2204,7 +2211,7 @@ sub saveAs_file {
 	    $mainWindow->title("$named$u: $fileName $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
-	    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
+	    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
 		$procName = $3;
 		$instanceText = $instance = '';		# reset instance
 		$instName = "$procName$instanceText";
@@ -2255,7 +2262,7 @@ sub build_file {
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-qAd200", $fileName, "2>&1");	# -A useful for live display
+		my @args = ("iCmake", "-qfaAd200", $fileName, "2>&1");	# -A useful for live display
 		if ($par2 == 2) {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
@@ -2415,8 +2422,8 @@ sub run_file {
     if ($runName ne '') {
 	## running - stop application
 	stop_file();
-    } elsif ($fileName !~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|lst?|c|ini)$/) {
-	info_display(2000, 'blue', "WARNING: cannot run '$fileName' (must end in .ic .lst .c or .ini)");
+    } elsif ($fileName !~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
+	info_display(2000, 'blue', "WARNING: cannot run '$fileName' (must end in .ic .ica .lst .c or .ini)");
     } elsif ($4 ne 'ic' or check_save()) {
 	my $processName = $1;		# full path name of executable
 	$procName = $3;			# execuatble without directory path
@@ -3160,7 +3167,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
@@ -3169,7 +3176,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2005  John E. Wulff
+COPYRIGHT (C) 2000-2008  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

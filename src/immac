@@ -2,13 +2,13 @@
 
 #################################################################
 #
-#	Copyright (C) 2000-2005  John E. Wulff
+#	Copyright (C) 2000-2008  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <ic@je-wulff.de>
 #
 #	immac
 #
@@ -139,52 +139,69 @@ use integer;			# allows QX[n/8].[n%8]
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file][ -D m=v] in_file
+Usage:
+ @<<<<<<< [-ath][ -o<out>][ -l<log>][ -e<err>][ -Pmacro[=defn]...] <src.ica>
 	$named
-	-o out	produce iC out_file (default: stdout)
-	-l log	produce log_file, usually 'immarc.log'
-	-D m=3	define macro 'm' with value '3' (may have several)
-		NOTE: command line definitions have precedence over
-		      '#define m 4' in the code (opposite to cpp)
-	-h	help, ouput this Usage text only
-	in_file	input iC file(s) with arrays and for ()
-$Id: immac,v 1.14 2008/06/20 18:40:10 wulff Exp $
+    -o <out>   name of generated iC output file (default: stdout)
+    -l <log>   name of Perl log file            (default: none)
+    -e <err>   name of error file               (default: stderr)
+    -P <macro> predefine <macro> evaluated directly by this program
+               Usually defined with a numeric value eg. -P m=8
+               NOTE: command line definitions have precedence over
+		     '%define m 4' in the code (opposite to cpp)
+    -a         output for loop control and %define lines as comments
+    -t         test if source is an iCa language file - status 1 if it is
+    -h         this help text
+    <src.ica>  iCa source file with array definiions
+$Id: immac,v 1.15 2008/07/03 11:15:37 jw Exp $
 .
 
-use vars qw($opt_o $opt_l $opt_D $opt_h);
+use vars qw($opt_a $opt_o $opt_l $opt_e $opt_P $opt_t $opt_h);
 require "getopts.pl";
-&Getopts('o:l:D:h');		# sets $opt_h if -h etc
+&Getopts('ao:l:e:P:th');	# sets $opt_h if -h etc
 
 if ($opt_h) {
-    write STDERR; exit 0;	# -h, ouput Usage only
+    write STDERR; exit 2;	# -h, ouput Usage only
 }
 
 my %defs = ();
 my @def;
-my $def;
+my $df;
 
-open STDOUT, ">$opt_o" or die "Can't redirect stdout to '$opt_o': $!" if $opt_o;
-open LOG, ">$opt_l" or die "Can't create '$opt_l': $!" if $opt_l;
-
-my @defines = split(' ', $opt_D);
-foreach (@defines) {
-    @def = split(/=/, $_);
-    $def = shift(@def);		# enter -D NAME(s) in associative array %defs
-    $defs{ $def } = @def ? join('=', @def) : '';
-    warn "### WARNING: '-D $def' has no value - should be '-D $def=value'\n" unless @def;
-    print LOG "### COMMAND LINE -D $def=$defs{ $def }\n" if $opt_l;
+if ($opt_t) {
+    $opt_o = $opt_e = $opt_l = '';
 }
 
+open STDOUT, ">$opt_o" or die "Can't redirect stdout to '$opt_o': $!" if $opt_o;
+open STDERR, ">$opt_e" or die "Can't redirect stderr to '$opt_e': $!" if $opt_e;
+open LOG, ">$opt_l" or die "Can't create '$opt_l': $!" if $opt_l;
+
+my @defines = split(' ', $opt_P);
+foreach (@defines) {
+    @def = split(/=/, $_);
+    $df = shift(@def);		# enter -P NAME(s) in associative array %defs
+    if ($df =~ /^[A-Z_a-z]\w*$/) {
+	$defs{ $df } = @def ? join('=', @def) : '';
+	warn "### WARNING: '-P $df' has no value - should be '-P $df=value'\n" unless @def;
+	print LOG "### COMMAND LINE -P $df=$defs{ $df }\n" if $opt_l;
+	print "//***** -P $_\n" if $opt_a;
+    } else {
+	warn "### WARNING: -P '$df' has bad characters - ignored in command line\n";
+    }
+}
+
+my $ret = 0;
 while ($ARGV = shift @ARGV) {
     unless (open (IN, $ARGV)) {
 	warn "can't open input $ARGV";
 	next;
     }
     print LOG "##### $named $ARGV\n" if $opt_l;
-    processFile();
+    $ret = processFile();
     close(IN);
 }
 close LOG if $opt_l;
+exit $ret;
 
 ####################################################################
 #
@@ -194,52 +211,73 @@ close LOG if $opt_l;
 
 sub processFile {
 
-    my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos);
-    my ($translate, $control, $inBlock, $braceCount, $evalBlock);
+    my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos, $prev);
+    my ($translate, $control, $inBlock, $braceCount, $evalBlock, $comment, @ids);
     @block = ();
     $inBlock = 0;
     while (<IN>) {
 	$control = 0;
-	if (keys %defs) {			# resolve #define macros if any
+	if (keys %defs) {			# resolve %define macros if any
 	    $offset = 0;
-	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
+	    $prev='';
+	    while (/([A-Z%_a-z]\w*)/g) {	# look for 'words' in this line
 		$atom = $1;			# 'word' found
 		$pos  = length $`;		# position of 'word' found
-		if (defined($translate = $defs{ $atom })) {
+		if (defined($translate = $defs{ $atom }) and $prev ne '%define') {
+		    return 1 if $opt_t;		# test has found iCa code
 		    print LOG "### OLD '$atom' '$translate' in $.: $_" if $opt_l and $offset++ == 0;
 		    substr($_, $pos, length $atom) = $translate;
 		    print LOG "### SUB '$atom' '$translate' in $.: $_" if $opt_l;
 		}
+		$prev = $atom;
 	    }
 	}
+	$comment = $_;
 	if (s/^\s*\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)\s*=/for (my $2 =/
 	    or s/^\s*\bfor\b\s+(\bint\b\s+)?([A-Z_a-z]\w*)\s*\(/for my $2 (/	# perlish for i (...)
 	   ) {
+	    return 1 if $opt_t;			# test has found iCa code 'for loop'
 	    $identifier = $2;
 	    if (@block == 0) {
 		%identifiers = ();
+		@ids = () if $opt_a;
 		$braceCount = 0;
 	    }
 	    if ($braceCount < $inBlock) {
-		warn "### WARNING: 'for (...)' not nested after previous '{' at '$ARGV' line $.\n";
-		print LOG "### WARNING: 'for (...)' not nested after previous '{' at LINE $.\n", @block if $opt_l;
+		warn "### WARNING: 'for (...)' not nested after previous '{' at '$ARGV' line $.\n";			# }
+		print LOG "### WARNING: 'for (...)' not nested after previous '{' at LINE $.\n", @block if $opt_l;	# }
+	    }
+	    if ($opt_a) {
+		my $id;
+		foreach $id (@ids) {
+		    $comment =~ s/\b$id\b/($id=$identifiers{ $id })/g;
+		}
+		push @ids, $identifier;
+		unless ($comment =~ /{/) {	# }
+		    $comment =~ s/\)/) {/;	# } Todo: make more precise
+		}
 	    }
 	    $identifiers{ $identifier } = "\$$identifier";
 	    $inBlock++;
 	    $control = 1;
-	} elsif (/^\s*#\s*\bdefine\b\s+(\S+)\s+(\S.*)$/) {
+	} elsif (/^\s*%\s*\bdefine\b\s+(\S+)\s+(\S.*)$/) {
+	    return 1 if $opt_t;			# test has found iCa code %define
 	    $identifier = $1;
 	    $translate  = $2;
-	    print LOG "### $_" if $opt_l;
-	    if (/[A-Z_a-z]\w*/) {
+	    if ($identifier =~ /^[A-Z_a-z]\w*$/) {
 		if (defined $defs{ $identifier }) {
-		    print LOG "### command line definition '$identifier=$defs{ $identifier }' has precedence over #define\n" if $opt_l;
+		    print LOG "### command line definition '$identifier=$defs{ $identifier }' has precedence over %define\n" if $opt_l;
+		    print "//***** -P $identifier=$defs{ $identifier } has precedence over $_" if $opt_a;
 		} else {
 		    $translate =~ s!(\s*/[*/].*|\s+)$!!;	# delete C or C++ comment and trailing blanks
-		    $defs{ $identifier } = $translate;	# macro to %defs eg #define X (4 * 8)
+		    $defs{ $identifier } = $translate;		# macro to %defs eg %define X (4 * 8)
+		    print LOG "### $_" if $opt_l;
+		    print "//***** $_" if $opt_a;
 		}
+	    } else {
+		warn "### WARNING: %define '$identifier' has bad characters - ignored at '$ARGV' line $.\n";
 	    }
-	    next;				# do not output #define line
+	    next;				# do not output %define line
 	}
 	if ($inBlock) {
 	    %atoms = ();			# new line in an eval block
@@ -259,15 +297,14 @@ sub processFile {
 		$atom = $atoms{ $pos };		# process atoms in sequence
 		if ($atom eq "{") {
 		    $braceCount++;		# brace count at the end of this line
-		    $control++;
-		    $control = 1;
+		    $control = 3 unless $control;
 		} elsif ($atom eq "}") {
 		    $inBlock--;			# for control block finishes with brace
 		    if (--$braceCount <= 0) {
 			$inBlock = 0;		# actively came out of last nested block
 		    }
-		    $control--;
-		    $control = 1;
+		    $control = 2;
+		    pop @ids if $opt_a;
 		} elsif (defined($translate = $identifiers{ $atom })) {
 		    substr($_, $pos + $offset, length $atom) = $translate;
 		    $offset += length($translate) - length($atom);
@@ -278,7 +315,12 @@ sub processFile {
 		s/\]/]}/g;			# in control and immediate C lines
 	    }
 	    if ($control) {
-		s!(\s*(/[*/]|#).*|[ \t]+)$!!;	# delete C, C++ of Perl comment and traling blanks
+		if ($opt_a) {
+		    $comment =~ s/"/\\"/g;	# protect interpolated " in string
+		    chomp $comment;
+		    $comment = "print \"//***** $comment\\n\";\n";
+		}
+		s!(\s*(/[*/]|#).*|[ \t]+)$!!;	# delete C, C++ or Perl comment and traling blanks
 		while (/([A-Z_a-z\$]\w*)/g) {	# look for 'words' in this line
 		    $atom = $1;
 		    if ($atom ne 'for' and $atom ne 'my' and $atom !~ /^\$/) {
@@ -287,21 +329,30 @@ sub processFile {
 		}
 	    } else {
 		if ($braceCount < $inBlock) {
-		    warn "### WARNING: '{' must follow 'for (...)' at '$ARGV' line $.\n";
-		    print LOG "### WARNING: '{' must follow 'for (...)' at LINE $.\n", @block if $opt_l;
+		    warn "### WARNING: '{' must follow 'for (...)' at '$ARGV' line $.\n";			# }
+		    print LOG "### WARNING: '{' must follow 'for (...)' at LINE $.\n", @block if $opt_l;	# }
 		}
 		s/"/\\"/g;			# protect interpolated " in string
 		chomp;
 		$_ = "print \"$_\\n\";\n";	# print lines in the for loop when eval'd
 	    }
+	    if ($opt_a and $control == 1) {
+		push(@block, $comment);		# } push the 'for () {' comment line for eval
+	    }
 	    push(@block, $_);			# push the modified line for eval
+	    if ($opt_a and $control == 2) {
+		push(@block, $comment);		# { push the '}' comment line for eval
+	    }
 	    if (not $inBlock) {
 		print LOG "### evaL BLOCK @{[++$evalBlock]} at LINE $.\n", @block if $opt_l;
 		eval "@block";
 		die if $@;
 		@block = ();			# end of this eval block
 	    }
-	} elsif (/[\[\]]/) {
+	} elsif (/[\[\]]/
+	    and not $opt_t	# do not return for [] outside 'for loop' - could be in comment
+	    ) {			# can select either alternatives above or below
+###	    return 1 if $opt_t;	# test has found iCa code [] outside 'for loop'
 	    s/\[/\@{[/g;			# executable interpolated index expressions
 	    s/\]/]}/g;				# outside of a control block
 	    s/"/\\"/g;				# protect interpolated " in string
@@ -311,9 +362,10 @@ sub processFile {
 	    eval;				# evaluate constant expr eg. [4*8]
 	    die if $@;
 	} else {
-	    print;				# faster if direct print
+	    print unless $opt_t;		# faster if direct print
 	}
     }
+    return 0;
 } # processFile
 __END__
 
@@ -325,27 +377,37 @@ __END__
 
 =head1 SYNOPSIS
 
- immac [-h][ -o<out>][ -l<log>][ -Dmacro[=defn]...] <src.ica>
-    -o <out>   name of generated iC output file (default: src.ic)
+ immac [-ath][ -o<out>][ -l<log>][ -e<err>][ -Pmacro[=defn]...] <src.ica>
+    -o <out>   name of generated iC output file (default: stdout)
     -l <log>   name of Perl log file            (default: none)
-    -e <err>   name of error file (default is stderr)
-    -D <macro> predefine <macro> evaluated directly by this program
-               Usually defined with a numeric value eg. -D m=4
+    -e <err>   name of error file               (default: stderr)
+    -P <macro> predefine <macro> evaluated directly by this program
+               Usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
-		      '#define m 3' in the code (opposite to cpp)
-
-    <src.ica>  iC source file with array definiions
-    -h       this help text
+		     '%define m 4' in the code (opposite to cpp)
+    -a         output for loop control and %define lines as comments
+    -t         test if source is an iCa language file - status 1 if it is
+    -h         this help text
+    <src.ica>  iCa source file with array definiions
 
 =head1 DESCRIPTION
 
-B<immac> translates an iC-source with array definitions (extension: .ica)
-into an expanded iC file (extension: .ic) which can be compiled with B<immcc>
+B<immac> translates an iC-source with array definitions, called in iCa language
+file (extension: .ica)
+into an expanded iC language file (extension: .ic) which can be compiled with B<immcc>.
 
-B<immac> reads and translates one source eg file.ica. If no options are
-specified, only compilation errors (if any) are reported on 'stderr'.
+B<immac> reads and translates one source eg file.ica. If no options are specified,
+output is to 'stdout' and compilation errors (if any) are reported on 'stderr'.
 
-The B<immac> compiler also produces an optional log (default file.log).
+The B<immac> compiler can also produce an optional log file with the -l opton,
+which can be run as a Perl script to test 'for loop' generation. This produces
+better error messages.
+
+The B<immac> compiler can be used to test for iCa language constructs with the -t opton.
+If the source contains 'for loops', %define macro definitions or there are
+B<immac> -P macro definitions, the source file is an iCa language file.
+Isolated [index expressions] without at least one 'for loop' or %define
+are not sufficient to classify a file as an iCa language file.
 
 =head1 AUTHOR
 
@@ -353,7 +415,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
@@ -362,7 +424,7 @@ L<immcc(1)>, L<iCmake(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2005  John E. Wulff
+COPYRIGHT (C) 2000-2008  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.
@@ -372,4 +434,4 @@ to contact the author, see the README file.
 
 =cut
 
-   ############ end of POD to generate man page ########################### */
+############ end of POD to generate man page ###########################

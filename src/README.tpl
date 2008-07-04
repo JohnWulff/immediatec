@@ -1,15 +1,33 @@
 #!/usr/bin/perl
+eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
+    if $running_under_some_shell;
+			# this emulates #! processing on NIH machines.
+			# (remove #! line above if indigestible)
 ########################################################################
 #   Self extracting README which adjusts to the current version of
 #   icc.v, which contains a parts list of the whole of the iC project.
 #   icc.v is maintained under source control and the version number
 #   of icc.v is used as the version number of the iC release.
-#   Call: 	ident icc.v | README.tpl > ../README
-#   $Id: README.tpl,v 1.18 2008/03/31 09:04:13 jw Exp $
+#   Call: 	README.tpl icc.v > ../README
+#   or    	cat icc.v | README.tpl > ../README
+#   No command line checking is done, since only called from Makefile.
+#   NOTE: the 'ident' filter is no longer used, since it is part of
+#         the 'RCS' package and may not be installed by some users.
+#         The power of Perl regular expressions is used instead.
+#   $Id: README.tpl,v 1.19 2008/06/25 14:09:37 jw Exp $
 ########################################################################
 
+use strict;
+
+my ($ID, $NAME, $REV, $DATE, $YEAR, $MONTH, $DAY);
+my $id = "Id";
+
 while (<>) {
-    ($ID, $NAME, $REV, $DATE) = split if length > 20;	# ident string
+    if (/(\$$id:[^\$]*\$)/o) {
+	my $ident = $1;
+	($ID, $NAME, $REV, $DATE) = split " ", $ident if length > 20;	# ident string
+	last;
+    }
 }
 ($YEAR, $MONTH, $DAY) = split "/", $DATE;
 
@@ -279,5 +297,10 @@ print <<EOF;
     but live updates in iClive are noticably slow in both systems (about 10x).
     Tag-handling in Tk::Text is much slower under Tk804.27 than under
     Tk800.024 with Linux.  Therefore I suggest staying with Tk800.024.
+
+    I have now switched to openSUSE 11.0, which brings along Tk804.28,
+    which provides fast live updates in iClive again. They seem to be as
+    fast as with Tk800.24. This was only judged by observation - at least
+    the performance is now subjectively good and I suggest you get Tk804.28.
 EOF
 ########################################################################

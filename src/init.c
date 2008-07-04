@@ -1,14 +1,14 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.34 2007/06/24 19:35:11 jw Exp $";
+"@(#)$Id: init.c,v 1.35 2008/06/25 21:45:34 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	init.c
  *	parallel plc - initialise compiler symbol table with keywords
@@ -119,7 +119,7 @@ static struct bi builtins[] = {
   { "return",	KEYW,	RETURN,	0,	},
   { "no",	KEYW,	USE,	0,	}, /* turn off use */
   { "use",	KEYW,	USE,	1,	}, /* turn on use */
-  { "restore",	KEYW,	USE,	2,	}, /* resore use */
+  { "restore",	KEYW,	USE,	2,	}, /* restore use */
   { "alias",	KEYW,	USETYPE, 0,	}, /* check that no more than MAXUSETYPE USETYPE's occurr */
   { "strict",	KEYW,	USETYPE, 1,	}, /* MAXUSETYPE 2 */
   { "imm",	KEYW,	IMM,	0,	},

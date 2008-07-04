@@ -1,12 +1,12 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	icc.h
  *	immediate C - runtime execution header
@@ -16,18 +16,18 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.65 2008/02/25 15:30:02 jw Exp $";
+"@(#)$Id: icc.h,v 1.66 2008/06/25 21:44:11 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	icg.h	// extracted from icc.h by perl script icg.pl
  *	immediate C - Gate structure
