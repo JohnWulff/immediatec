@@ -13,7 +13,7 @@ $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
 Usage:	@<<<<<<< [-decl6ph] [file ...]
 	$named
-	-d	output .c .ini .lst .ic .ih - for comparisons
+	-d	output .c .ini .lst .ic .ica .ih - for comparisons
 	-g	output exe .c .ini .lst .lst6 - generated - may be deleted in source dir
 	-n	output exe .c .ini .lst .lst6 - generated corpses - no .ic to match
 	-e	output only base without extension
@@ -22,20 +22,22 @@ Usage:	@<<<<<<< [-decl6ph] [file ...]
 	-l	output only base with .lst extension
 	-6	output only base with .lst6 extension
 	-p	output only base with .ic extension
-	-s	output only base with .ic and .ih extension (iC sources)
+	-a	output only base with .ica extension
+	-s	output only base with .ic .ica and .ih extension (iC sources)
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.11 2008/02/13 14:32:25 jw Exp $
+$Id: mklst,v 1.12 2008/08/08 20:36:53 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_n $opt_6 $opt_p $opt_s $opt_h);
+use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_n $opt_6 $opt_p $opt_a $opt_s $opt_h);
 require "getopts.pl";
-&Getopts('cdegiln6psh');	# sets $opt_h if -h etc
+&Getopts('cdegiln6pash');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
 my %pn = ();
+my $prev = '';
 
 unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
 while ($ARGV = shift @ARGV) {
@@ -52,11 +54,13 @@ while ($ARGV = shift @ARGV) {
 	    }
 	}
     } else {
-	if ($ARGV =~ /(\w+)\.ic/) {
+	if ($ARGV =~ /(\w+)\.(ica?)/ and $prev ne $1) {
+	    $prev = $1;
 	    if ($opt_d) {
 		print "$1.c\n" if -f "$1.c";
 		print "$1.ini\n" if -f "$1.ini";
 		print "$1.lst\n" if -f "$1.lst";
+		print "$1.ica\n" if -f "$1.ica";
 		print "$1.ic\n" if -f "$1.ic";
 	    } elsif ($opt_g) {
 		print "$1\n" if -f "$1";
@@ -64,6 +68,7 @@ while ($ARGV = shift @ARGV) {
 		print "$1.c\n" if -f "$1.c";
 		print "$1.ini\n" if -f "$1.ini";
 		print "$1.lst\n" if -f "$1.lst";
+		print "$1.ic\n" if -f "$1.ica" and -f "$1.ic";
 		if ($opt_6) {
 		    print "$1.lst6\n" if -f "$1.lst6";
 		}
@@ -78,7 +83,12 @@ while ($ARGV = shift @ARGV) {
 		print "$1.lst\n" if -f "$1.lst";
 	    } elsif ($opt_6) {
 		print "$1.lst6\n" if -f "$1.lst6";
-	    } elsif ($opt_p or $opt_s) {
+	    } elsif ($opt_p) {
+		print "$1.ic\n" if -f "$1.ic";
+	    } elsif ($opt_a) {
+		print "$1.ica\n" if -f "$1.ica";
+	    } elsif ($opt_s) {
+		print "$1.ica\n" if -f "$1.ica";
 		print "$1.ic\n" if -f "$1.ic";
 	    } else {
 		print "$1\n" if -f "$1";
@@ -86,10 +96,11 @@ while ($ARGV = shift @ARGV) {
 		print "$1.c\n" if -f "$1.c";
 		print "$1.ini\n" if -f "$1.ini";
 		print "$1.lst\n" if -f "$1.lst";
+		print "$1.ica\n" if -f "$1.ica";
 		print "$1.ic\n" if -f "$1.ic";
 	    }
 	} elsif ($ARGV =~ /(\w+)\.ih/) {
-	    unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6 or $opt_p) {
+	    unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6 or $opt_p or $opt_a) {
 		print "$1.ih\n" if -f "$1.ih";
 	    }
 	}
