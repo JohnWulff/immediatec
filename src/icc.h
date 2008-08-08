@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.66 2008/06/25 21:44:11 jw Exp $";
+"@(#)$Id: icc.h,v 1.67 2008/07/14 16:14:42 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -473,15 +473,19 @@ extern void	iC_icc(			/* initialise and execute */
 
 extern unsigned short	iC_osc_max;
 extern unsigned short	iC_osc_lim;
-extern unsigned short	iC_Aflag;	/* -A flag signals ARITH alias */
-extern unsigned short	iC_Sflag;	/* strict - all imm variables must be declared */
-extern unsigned short *	iC_useTypes[];
-#define USETYPEFLAGS	&iC_Aflag, &iC_Sflag
-extern unsigned short	iC_Arestore;	/* saved -A flag signals ARITH alias */
-extern unsigned short	iC_Srestore;	/* saved strict - all imm variables must be declared */
-extern unsigned short *	iC_useRestore[];
-#define USERESTOREFLAGS	&iC_Arestore, &iC_Srestore
+
+#define USE_ALIAS	01
+#define USE_STRICT	02
 #define MAXUSETYPE	2
+#define USESTACKSZ	32		/* nested includes - should do */
+
+extern unsigned int	iC_uses;	/* 01=alias 02=strict as bit field */
+extern unsigned int	iC_useStack[USESTACKSZ];
+extern unsigned int	iC_useStackIndex;
+
+#define iC_Aflag (iC_uses & USE_ALIAS)	/* -A alias - generate ARITH alias nodes */
+#define iC_Sflag (iC_uses & USE_STRICT)	/* -S strict - all imm variables must be declared */
+
 extern unsigned short	iC_aflag;	/* -a flag signals append mode */
 extern unsigned short	iC_lflag;	/* -l flag signals append mode */
 

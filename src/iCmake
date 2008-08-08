@@ -25,12 +25,14 @@ else
     ldir=" -I/usr/local/include -L/usr/local/lib"
 fi
 ICC=immcc
+IAC=immac
 
 usage ()
 {
   echo 'Usage:' >&2
-  echo '  '${0##*/}' [-[l|o<exe>|i|s|c|b|n]fgASpRajIJ6xqh][ -v[<N>]][ -w<dir>][ -d<opt>]' >&2
-  echo '         [ -O<level>][ -Dmacro[=defn]...][ -Umacro...][ -Pmacro[=defn]...] file ...' >&2
+  echo '  '${0##*/}' [-[l|o<exe>|i|s|c|b|n]fgASpRajIJ6xqh][ -v[<N>]][ -w<dir>]' >&2
+  echo '         [ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]' >&2
+  echo '         [ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...] file ...' >&2
   echo '     default:	link all iC-files file.ic ... into independent executables' >&2
   echo '		output names are base names of the iC-files (file ...)' >&2
   echo '	-l	link all iC-files into one executable (implies -A)' >&2
@@ -38,12 +40,13 @@ usage ()
   echo '		complete listing of all files is in first.lst' >&2
   echo '	-o<exe>	place output in file 'exe' (implies -l if first option)' >&2
   echo '		complete listing of all files is in exe.lst' >&2
+  echo "	-i      generate iC file.ic .. only (runs $IAC pre-compiler only)" >&2
   echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
   echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
   echo '	-b	generate both listings and C outputs - no executable' >&2
   echo "	-n	generate no output, report $ICC compile errors only" >&2
   echo '		-s and -n generate 'cexe.c' for last file as a side effect' >&2
-  echo '	-f	force building of new output files' >&2
+  echo '	-f	force building of new output files - do not $IAC for .ic' >&2
   echo '	-g	debugging with gdb - each expression has its own C code' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
@@ -57,9 +60,9 @@ usage ()
   echo '	        Note: do not use the same macros for the iC and the C phase' >&2
   echo '	-C<macro> predefine <macro> for the C preprocessor phase' >&2
   echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
-  echo '	-P<macro> predefine <macro> for immac pre-compiler (forces immac)' >&2
+  echo "	-P<macro> predefine <macro> for $IAC pre-compiler (forces $IAC)" >&2
   echo '		  also forces building of new iC output and the rest' >&2
-  echo '	-a      immac: output for loop control and %define lines as comments' >&2
+  echo "	-a      $IAC: output for loop control and %define lines as comments" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
   echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
   echo '	        default: any index for bit, byte, word or long is allowed' >&2
@@ -69,14 +72,14 @@ usage ()
   echo '	-6	produce logic generation listing file.lst6' >&2
   echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
   echo '	-q	quiet operation - return status only' >&2
-  echo "	-v<N>   use $ICC<N>, pplstfix<N> and libict<N>.a in local directory" >&2
-  echo "	-w<dir> use $ICC, pplstfix and libict.a in directory <dir>" >&2
+  echo "	-v<N>   use $IAC<N>, $ICC<N>, pplstfix<N> and libict<N>.a in local directory" >&2
+  echo "	-w<dir> use $IAC, $ICC, pplstfix and libict.a in directory <dir>" >&2
   echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
   echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
   echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.36 2008/07/04 18:40:45 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.37 2008/08/01 22:00:31 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -173,7 +176,7 @@ while getopts ":lo:iscbnNk:jIJqv:w:fgASO:pRD:U:C:V:P:a6xd:zh" opt; do
 	    ldir=""
 	fi
 	;;
-    f )	force="1";;
+    f )	force=1;;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
     p )	if [ -z "$p" ]; then p=" -P"; C="$C -pedantic"; fi; d="$d$p";;	# allows -pp => -P -P
@@ -213,31 +216,45 @@ for arg in $*; do
     ext=${arg#$base}
     ica="$base.ica"
     file="$base.ic"
+# echo "arg=$arg, base=$base, ext=$ext, ica=$ica, file=$file, lk=$lk"
+    stat=0
     if [ -f $ica ]; then
-	if [ $ica -nt $file -o $force -eq 1 ]; then
-	    if [ -f $file ]; then
-		mv $file "$file.bak"
+	if [ $ica -nt $file -o $force -ne 0 -a "$ext" = '.ica' ]; then
+	    if [ -w $file ]; then
+		mv -f $file "$file.bak"		# backup writable iC file
 	    fi
 	    if [ $q -eq 0 ]; then
 		if [ $z -eq 1 ]; then echo -n "# "; fi
 		echo $ica
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "immac$a$P -o $file $ica"	# may be copy if no iCa constructs
+		echo "${b}$IAC$v$a$P -o $file $ica"	# may be copy if no iCa constructs
 	    fi
-	    immac$a$P -o $file $ica		# translate iCa to iC file
+	    if ! $nice ${b}$IAC$v$a$P -o $file $ica; then	# translate iCa to iC file
+		if [ $q -eq 0 ]; then
+		    echo "${b}$IAC$v compile errors in '$ica' - incorrect iC file '$file' generated" >&2
+		fi
+		stat=1
+		let status+=20			# immac error
+	    fi
 	fi
-    elif [ -f $file ]; then
-	if ! immac$P -t $file; then
+    elif [ -f $file -a $force -eq 0 ]; then
+	if ! $nice ${b}$IAC$v$P -t $file; then
 	    if [ $q -eq 0 ]; then
 		if [ $z -eq 1 ]; then echo -n "# "; fi
 		echo $ica
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "mv $file $ica; immac$a$P -o $file $ica	# ic file has iCa constructs"
+		echo "mv $file $ica; ${b}$IAC$v$a$P -o $file $ica	# ic file has iCa constructs"
 	    fi
-	    mv $file $ica			# there was no previous iCa file
-	    immac$a$P -o $file $ica		# ic file has iCa constructs
+	    mv $file $ica				# there was no previous iCa file
+	    if ! $nice ${b}$IAC$v$a$P -o $file $ica; then	# ic file has iCa constructs
+		if [ $q -eq 0 ]; then
+		    echo "${b}$IAC$v compile errors in '$ica' - incorrect iC file '$file' generated" >&2
+		fi
+		stat=1
+		let status+=20			# immac error
+	    fi
 	fi
     fi
     if [ -n "$ext" ]; then
@@ -251,11 +268,11 @@ for arg in $*; do
 	esac
     fi
 
-    if [ -f "$file" -a -z "$ic" ]; then
+    if [ -f "$file" -a -z "$ic" -a "$stat" -eq 0 ]; then
 	case $lk in
 	0)				# default
 	    stat=0
-	    if [ "$file" -nt "$base.c" -o $force -eq 1 ]; then
+	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo $file
@@ -273,7 +290,7 @@ for arg in $*; do
 		fi
 	    fi
 	    if [ "$stat" -eq 0 ]; then	# do sequentially in case C file was already made
-		if [ "$base.c" -nt "$base" -o $force -eq 1 ]; then
+		if [ "$base.c" -nt "$base" -o $force -ne 0 ]; then
 		    rm -f $base
 		    if [ $z -eq 1 ]; then
 			echo "$CC$CFL -I.$ldir$C -o $base $base.c $lib"
@@ -299,7 +316,7 @@ for arg in $*; do
 		fi
 	    fi ;;
 	1)				# -l	link all iC-files into one executable
-	    if [ "$file" -nt "$base.c" -o $force -eq 1 ]; then
+	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo $file
@@ -324,7 +341,7 @@ for arg in $*; do
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$file" -nt "$base.lst$l" -o $force -eq 1 ]; then
+	    if [ "$file" -nt "$base.lst$l" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo "$base.lst$l"
@@ -345,7 +362,7 @@ for arg in $*; do
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$file" -nt "$base.c" -o $force -eq 1 ]; then
+	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo "$base.c"
@@ -366,7 +383,7 @@ for arg in $*; do
 		echo "output file '$first' ignored" >&2
 		first=''
 	    fi
-	    if [ "$file" -nt "$base.c" -o "$file" -nt "$base.lst$l" -o $force -eq 1 ]; then
+	    if [ "$file" -nt "$base.c" -o "$file" -nt "$base.lst$l" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo "$base.c $base.lst$l"
@@ -403,7 +420,7 @@ for arg in $*; do
 	esac
     elif [ -z "$ic" ]; then
 	if [ $q -eq 0 ]; then
-	    echo "Error: iC file '$file' does not exist" >&2
+	    echo "Error: iC file '$file' does not exist or is in error" >&2
 	fi
 	list="$list ERROR:$base.c"
 	let status+=1
@@ -474,8 +491,9 @@ exit $status
 
 =head1 SYNOPSIS
 
- iCmake [-[l|o<exe>|i|s|c|b|n]fgASpRajIJ6xqh] [-v[<N>]] [-w<dir>] [-d<opt>]
-        [ -Dmacro[=defn]...][ -Umacro...][ -Dmacro[=defn]...] file ...
+ iCmake [-[l|o<exe>|i|s|c|b|n]fgASpRajIJ6xqh][ -v[<N>]][ -w<dir>]
+        [ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
+	[ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...] file ...
    default: link all iC-files file.ic ... into independent executables
             output names are base names of the iC-files (file ...)
     -l      link all iC-files into one executable (implies -A)
@@ -489,7 +507,7 @@ exit $status
     -b      generate both listings and C outputs - no executable
     -n      generate no output, report immcc compile errors only
             -s and -n generate 'cexe.c' for last file as a side effect
-    -f      force building of new output files
+    -f      force building of new output files - do not $IAC for .ic
     -g      debugging with gdb - each expression has its own C code
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S      strict compile - all immediate variables must be declared
@@ -513,8 +531,9 @@ exit $status
     -6      produce logic generation listing file.lst6
     -x      auxiliary files .iC_list1.h .iC_list2.h not deleted
     -q      quiet operation - return status only
-    -v<N>   use immcc<N>, pplstfix<N> and libict<N>.a in local directory
-    -w<dir> use immcc, pplstfix and libict.a in directory <dir>
+    -v<N>   use immac<N>, immcc<N>, pplstfix<N> and libict<N>.a in local
+            directory
+    -w<dir> use immac, immcc, pplstfix and libict.a in directory <dir>
             (default: use installed immcc, pplstfix and -lict)
     -d<opt> call immcc with extra -d<opt> orred into normal -d474
     -N      No nice with calls of immcc and gcc compilers (default: nice)

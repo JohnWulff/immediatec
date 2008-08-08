@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.88 2008/06/25 21:47:25 jw Exp $";
+"@(#)$Id: outp.c,v 1.89 2008/07/14 16:45:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2008  John E. Wulff
@@ -22,6 +22,7 @@ static const char outp_c[] =
 #endif	/* _WINDOWS */
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<sys/stat.h>
 #ifndef	WIN32
 #include	<unistd.h>
 #endif	/* WIN32 */
@@ -1109,8 +1110,11 @@ outNet(FILE * iFP, char * outfile)
 
     /* open output file */
 
-    if ((Fp = fopen(outfile, "w")) == 0) {
-	rc = Oindex; goto end;
+    if ((chmod(outfile, 0644) &&		/* make C output file writable */
+	errno != ENOENT) ||			/* if it exists */
+	(Fp = fopen(outfile, "w")) == NULL) {
+	perror("chmod or fopen");
+	rc = Oindex; goto endc;
     }
 
     /********************************************************************
@@ -1575,9 +1579,13 @@ static iC_Gt *	iC_l_[];\n\
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) == ALIAS && sp->em == 0 && sp->fm == 0 && sp->list != 0 &&
-		((ftyp = sp->ftype) == GATE ||
-		(iC_Aflag && (ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)))) {
+	    if ((typ = sp->type) == ALIAS &&
+		sp->em == 0 &&
+		sp->fm == 0 &&
+		sp->list != 0 &&
+		iC_Aflag &&
+		((ftyp = sp->ftype) == GATE || ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)
+	    ) {
 		modName = mN(sp);		/* modified string, byte and bit */
 		fprintf(Fp, "iC_Gt %-8s", modName);
 		val = sp->list->le_val;
@@ -2003,7 +2011,8 @@ endd:
     }
 endh:
     fclose(Fp);				/* close C output file in case other actions */
-end:
+    rc |= chmod(outfile, 0444);		/* make C output file read-only */
+endc:
     return rc;				/* return code */
 } /* outNet */
 

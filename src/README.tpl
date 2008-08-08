@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.19 2008/06/25 14:09:37 jw Exp $
+#   $Id: README.tpl,v 1.20 2008/07/10 20:18:06 jw Exp $
 ########################################################################
 
 use strict;
@@ -302,5 +302,8 @@ print <<EOF;
     which provides fast live updates in iClive again. They seem to be as
     fast as with Tk800.24. This was only judged by observation - at least
     the performance is now subjectively good and I suggest you get Tk804.28.
+
+    A Test with Knoppix and Tk804.25, which is still available for Debian
+    also provided good performance with fast live updates in iClive.
 EOF
 ########################################################################

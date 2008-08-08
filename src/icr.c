@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.36 2008/06/25 21:44:52 jw Exp $";
+"@(#)$Id: icr.c,v 1.37 2008/07/08 21:07:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2008  John E. Wulff
@@ -176,18 +176,19 @@ iC_icc(
 
     iC_initIO();			/* catch memory access signal */
 
-    if (iC_outFP != stdout) {
+    if (iC_outFP && iC_outFP != stdout) {
 	fclose(iC_outFP);
 	if (iFlag) {
-	    iC_inversionCorrection();
+	    iC_inversionCorrection();	/* only applies to compiler listing */
 	    iFlag = 0;
 	}
-	iC_outFP = stdout;		/* standard output from here */
     }
-    if (iC_errFP != stderr) {
+    iC_outFP = stdout;			/* standard output from here */
+    if (iC_errFP && iC_errFP != stderr) {
 	fclose(iC_errFP);
-	iC_errFP = stderr;		/* standard error from here */
     }
+    iC_errFP = stderr;			/* standard error from here */
+
     for (cnt = 1; cnt < 8; cnt++) {
 	if (tim[cnt] != NULL) {		/* any of the 7 timers programmed ? */
 	    if (cnt < TLIMIT) {

@@ -174,7 +174,7 @@ Usage:
 
 Copyright (C) 2000-2008  John E. Wulff          <ic@je-wulff.de>
 						    '@'
-$Id: iClive,v 1.44 2008/07/04 20:53:41 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.45 2008/07/11 21:58:25 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -257,6 +257,7 @@ my @infoMessages = ();
 
 my $fileName = '';	# name of currently loaded file (should be iC or derivative)
 my $fileTime = 0;	# last modified time of currently loaded file
+my $readOnly = '';	# set ' (RO)' - true - if file in buffer is read-only
 my $procName = '';	# name of runnable iC control program
 my $instName = '';	# name of runnable iC control program with instance extension
 my $regName = '';
@@ -1007,7 +1008,7 @@ sub unregister_from_server {
 	my $UnRegistrations = "n-$regName,rC$regName,sD$regName";
 	$regName = '';
 	print "$named: UnRegistrations: $UnRegistrations\n" if $opt_T;
-	$mainWindow->title("$named$u: $fileName");	# YYY
+	$mainWindow->title("$named$u: $fileName$readOnly");
 	conn_send_now($UnRegistrations);
     }
     clear_all();
@@ -1035,7 +1036,7 @@ sub rcvd_msg_from_server {
 	    $regName = $runName = '';
 	    $runButton->configure(-text => 'Run ');
 	    print "$named: rcvd_msg_from_server(0) buttons to 'Run ' 'Live'\n" if $opt_T;
-	    $mainWindow->title("$named$u: $fileName");
+	    $mainWindow->title("$named$u: $fileName$readOnly");
 	    $makeName = '';
 	    $conn->disconnect;		# should only happen when iCserver shuts down
 	    $conn = 0;
@@ -1096,7 +1097,7 @@ sub rcvd_msg_from_server {
 			    ## change text on run button to 'Stop'
 			    ####################################################
 			    $runName = shift @symbols;
-			    $mainWindow->title("$named$u: $fileName $runName");
+			    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 			    info_display(2000, 'blue', "'$runName' is running");
 			    $runButton->configure(-text => 'Stop');
 			    print "$named: rcvd_msg_from_server received :2 'Stop' scanFlag = '$scanFlag'\n" if $opt_T;
@@ -1190,7 +1191,7 @@ use warnings;
 			    "application was stopped - not registered !?");
 			clear_all();
 			$runName = '';
-			$mainWindow->title("$named$u: $fileName");
+			$mainWindow->title("$named$u: $fileName$readOnly");
 			$makeName = '';
 			if ($restartFlag) {
 			    $restartFlag = 0;
@@ -1626,6 +1627,9 @@ sub deleteAllTags {
 	}
     }
     @activeSymbols = ();	# delete all previous active symbols
+    if ($readOnly) {
+	$text->configure(-state => 'disabled');	# read-only file
+    }
 } # deleteAllTags
 
 ########################################################################
@@ -1746,7 +1750,7 @@ sub do_scan {
 	}
 	if ($fileName !~ /\b$procName\./) {
 	    info_display(2000, 'red',
-		"WARNING: '$fileName' does not match connected control program '$runName'");
+		"WARNING: '$fileName$readOnly' does not match connected control program '$runName'");
 	    $scanFlag = 0;
 	    $scanButton->configure(-text => 'Live');
 	    return;
@@ -1908,11 +1912,15 @@ use warnings;
 	}
 
 	####################################################################
-	## change text on scan button to 'Edit'
+	## change text on scan button to 'View' (RO) or 'Edit'
 	####################################################################
 
 	$text->tagRaise('searchTag') if $gl;	# put any search results in foreground
-	$scanButton->configure(-text => 'Edit');
+	if ($readOnly) {
+	    $scanButton->configure(-text => 'View');
+	} else {
+	    $scanButton->configure(-text => 'Edit');
+	}
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();
 	$scanFlag = 1;		# scan successful
@@ -1988,10 +1996,14 @@ sub new_text {
     deleteAllTags();	# also clears @activeSymbols
     reset_scan();
     if (check_save()) {
+	if ($readOnly) {
+	    $text->configure(-state => 'normal');	# allow clearing new file
+	    $readOnly = '';				# can modify text
+	}
 	$text->delete("1.0", "end");
 	$oldContents = '';
 	$fileName = $newName;
-	$mainWindow->title("$named$u: $fileName $runName");
+	$mainWindow->title("$named$u: $fileName$readOnly $runName");
     }
 } # new_text
 
@@ -2010,7 +2022,7 @@ sub open_list {
 	    open_file(0, "$1.ic");
 	}
     } else {
-	info_display(2000, 'red', "ERROR: no list file matching '$fileName'");
+	info_display(2000, 'red', "ERROR: no list file matching '$fileName$readOnly'");
     }
 } # open_list
 
@@ -2030,6 +2042,10 @@ sub open_list {
 #	supplied from a menu via a closure set up in check_menu()
 #	both are called via check_menu()
 #
+#	If a file is read-only, $readOnly is set, which executes
+#		$text->configure(-state => 'disabled');
+#	when going to Edit mode - also stops save but not saveAs
+#
 ########################################################################
 
 sub open_file {
@@ -2048,7 +2064,10 @@ sub open_file {
 	print "open_file: $unconditional $fName\n" if $opt_T;
 	if ($scanFlag) {
 	    deleteAllTags();		# required here to clear = values in text
-	    clear_scan();
+	    clear_scan();		# $text -state now 'normal' for reading file
+	}
+	if ($readOnly) {
+	    $text->configure(-state => 'normal');	# allow overwriting with new file
 	}
 	my $rName = $runName;
 	$rName =~ s/-\d+//;		# check without instance number
@@ -2077,6 +2096,8 @@ sub open_file {
 	if ($unconditional or check_save()) {
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "$fName")) {
+		$readOnly = (-w _) ? '' : ' (RO)';	# set read-only flag correctly
+		print "$fName is read-only\n" if $readOnly and $opt_T;
 		$text->delete("1.0", "end");	# clear the text area
 		$oldContents = '';
 		while (<FH>) {
@@ -2088,8 +2109,8 @@ sub open_file {
 		$text->insert("end", $oldContents);
 		my $length = length $oldContents;
 		$fileName = $fName;	# alter global $fileName
-		$mainWindow->title("$named$u: $fileName $runName");
-		info_display(2000, 'black', "File '$fileName', $length bytes loaded");
+		$mainWindow->title("$named$u: $fileName$readOnly $runName");
+		info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
 		if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
 		    $procName = $3;
 		    $instName = "$procName$instanceText";
@@ -2106,6 +2127,9 @@ sub open_file {
 		    adjust_live(-1, -1);
 		}
 		$prevText = '';		# start a new search
+		if ($readOnly) {
+		    $text->configure(-state => 'disabled');	# read-only file
+		}
 		return if $ci;		# global $fileName and application has altered
 	    } else {
 		check_menu($fName, 'files', 1);		# delete fName in the menu
@@ -2132,7 +2156,7 @@ sub save_file {
 	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
 	## allow non existing file to be written by setting to $fileTime if undef
 	if ($ftime != $fileTime) {
-	    info_display(2000, 'red', "'$fileName' modified in background");
+	    info_display(2000, 'red', "'$fileName$readOnly' modified in background");
 	    my $dialog = $text->Dialog (-title   => 'Modified since reading file',
 					-bitmap  => 'question',
 					-text    => 'Save to modified file?',
@@ -2145,7 +2169,7 @@ sub save_file {
 						 );
 	    my $answer = $dialog->Show();
 	    if ($answer ne 'Yes') {
-		info_display(2000, 'red', "'$fileName' modified in background - not written");
+		info_display(2000, 'red', "'$fileName$readOnly' modified in background - not written");
 		return 0;	# No or Cancel - report error
 	    }
 	    $unconditional = 1;	# definitely write to modified file
@@ -2154,8 +2178,13 @@ sub save_file {
 	reset_scan(1);		# take away all live text
 	my $contents = $text->get("1.0", "end - 1 chars");
 	if ($unconditional or $contents ne $oldContents) {
-	    ## rename to backup if $fileName exists (stat was done above)
-	    if (-f _ and not rename $fileName, "$fileName.bak") {
+	    ## test read-only. then rename to backup if $fileName exists
+	    ## stat was done above
+	    if (-f _ and not -w _) {
+		info_display(2000, 'red', "ERROR: Could not save read-only file '$fileName$readOnly'");
+		$ret = 0;	# error return
+	    }
+	    elsif (-f _ and not rename $fileName, "$fileName.bak") {	# is writable
 		info_display(2000, 'red', "ERROR: Could not rename backup to '$fileName.bak'");
 		$ret = 0;	# error return
 	    }
@@ -2164,17 +2193,21 @@ sub save_file {
 		my $length = length $oldContents;
 		print FH $oldContents;
 		close(FH);
+		if ($readOnly) {
+		    $text->configure(-state => 'normal');	# new writable file
+		    $readOnly = '';				# can modify text
+		}
 		## read last modified time from new stat now as it changed since last stat
 		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
-		$mainWindow->title("$named$u: $fileName $runName");
-		info_display(2000, 'black', "File '$fileName', $length bytes saved (backup '$fileName.bak')");
+		$mainWindow->title("$named$u: $fileName$readOnly $runName");
+		info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved (backup $fileName.bak)");
 		check_menu($fileName, 'files');
 	    } else {
-		info_display(2000, 'red', "ERROR: Could not open '$fileName' for writing");
+		info_display(2000, 'red', "ERROR: Could not open '$fileName$readOnly' for writing");
 		$ret = 0;	# error return
 	    }
 	} else {
-	    info_display(2000, 'blue', "FILE '$fileName' has not changed - not written");
+	    info_display(2000, 'blue', "File '$fileName$readOnly' has not changed - not written");
 	}
     } else {
 	$ret = saveAs_file();
@@ -2208,7 +2241,7 @@ sub saveAs_file {
 	if (save_file($fileName ne $oldName) == 0) {
 	    ## could not save $fileName
 	    $fileName = $oldName;	# restore fileName
-	    $mainWindow->title("$named$u: $fileName $runName");
+	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
 	    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
@@ -2243,10 +2276,11 @@ sub saveAs_file {
 sub build_file {
     my $par2 = $_[1];
     my $saved = 0;
-    if ($fileName !~ /(^[\w\.\\\/]+)\.ic/) {
-	info_display(2000, 'blue', "WARNING: cannot build '$fileName' (must end in .ic)");
+    if ($fileName !~ /(^[\w\.\\\/]+)\.ica?/) {
+	info_display(2000, 'blue', "WARNING: cannot build '$fileName$readOnly' (must end in .ic or .ica)");
     } else {
 	my $baseName = $1;
+	my $buildName = "$fileName$readOnly";	# $fileName will change in open_file() if error
 	deleteAllTags();		# also clears @activeSymbols
 	reset_scan(1);			# must be done before save_file, because live expands text
 	if ($par2 == 1) {
@@ -2267,7 +2301,7 @@ sub build_file {
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		}
 		print "qx(@args)\n" if $opt_T;
-		my @errText = qx(@args);	# exwcute iCmake ...
+		my @errText = qx(@args);	# execute iCmake ...
 		$ret = $? >> 8;
 		my $len = @errText;
 		my $gr = grep /^\*\*\* /, @errText;
@@ -2276,17 +2310,18 @@ sub build_file {
 		$SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
 		if ($ret or $gr) {
 		    sleep 2;
-		    my $listName = "$baseName.lst";
-		    open_file(1, $listName);	# load the listing file (iC is up to date)
+		    # iCmake += 20 for immac errors : += 1 for immcc errors
+		    my $listName = $ret >= 20 ? "$baseName.ic" : "$baseName.lst";
+		    open_file(1, $listName);	# load the generated file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
-		    $matchType = '-regexp';
+		    $matchType = '-regexp';	# NOTE: $fileName has changed
 		    search_text(0, undef, 4);	# carry out the search, setting markers but no display
 		}
 		if ($ret) {
 		    info_display(2000, 'red',
-			"ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)");
-		    warn "ERROR: '$targetName' cannot be built from '$fileName' (return = $ret)\n";
+			"ERROR: '$targetName' cannot be built from '$buildName' (return = $ret)");
+		    warn "ERROR: '$targetName' cannot be built from '$buildName' (return = $ret)\n";
 		} else {
 		    if ($runName ne '') {
 			$makeName = $targetName;# running process is not current build
@@ -2423,7 +2458,7 @@ sub run_file {
 	## running - stop application
 	stop_file();
     } elsif ($fileName !~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
-	info_display(2000, 'blue', "WARNING: cannot run '$fileName' (must end in .ic .ica .lst .c or .ini)");
+	info_display(2000, 'blue', "WARNING: cannot run '$fileName$readOnly' (must end in .ic .ica .lst .c or .ini)");
     } elsif ($4 ne 'ic' or check_save()) {
 	my $processName = $1;		# full path name of executable
 	$procName = $3;			# execuatble without directory path
@@ -2440,7 +2475,7 @@ sub run_file {
 	} elsif (not -x _) {
 	    info_display(2000, 'red', "ERROR: '$processName' not executable ??");
 	} elsif ($mtime < $ftime) {
-	    info_display(2000, 'blue', "WARNING: '$processName' is older than '$fileName' (Build again)");
+	    info_display(2000, 'blue', "WARNING: '$processName' is older than '$fileName$readOnly' (Build again)");
 	} else {
 	    $instName = "$procName$instanceText";
 	    print "$named: register_at_server before fork_and_exec '$processName'\n" if $opt_T;
@@ -2495,7 +2530,7 @@ sub change_instance {
 	####################################################
 	$runButton->configure(-text => 'Run ');
 	$runName = '';		# if :2 is received will change back to <name>
-	$mainWindow->title("$named$u: $fileName");
+	$mainWindow->title("$named$u: $fileName$readOnly");
 	print "$named: change_instance 'Run '\n" if $opt_T;
 	$oldInstance = $instanceText;
 	if ($scanFlag) {

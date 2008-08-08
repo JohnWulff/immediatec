@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.52 2008/06/25 21:45:02 jw Exp $";
+"@(#)$Id: ict.c,v 1.53 2008/07/08 21:07:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2008  John E. Wulff
@@ -140,7 +140,8 @@ iC_icc(
     rpyBuf = iC_emalloc(REPLY);
 #endif	/* EFENCE */
     iC_initIO();			/* catch memory access signal */
-    if (iC_outFP != stdout) {
+
+    if (iC_outFP && iC_outFP != stdout) {
 	fclose(iC_outFP);
 #ifndef LOAD
 	if (iFlag) {
@@ -148,12 +149,12 @@ iC_icc(
 	    iFlag = 0;
 	}
 #endif	/* LOAD */
-	iC_outFP = stdout;		/* standard output from here */
     }
-    if (iC_errFP != stderr) {
+    iC_outFP = stdout;			/* standard output from here */
+    if (iC_errFP && iC_errFP != stderr) {
 	fclose(iC_errFP);
-	iC_errFP = stderr;		/* standard error from here */
     }
+    iC_errFP = stderr;			/* standard error from here */
 
     if ((gp = iC_TX0p) != 0) {		/* are EOI or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7 */

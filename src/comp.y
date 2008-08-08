@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.100 2008/06/25 21:38:33 jw Exp $";
+"@(#)$Id: comp.y,v 1.101 2008/07/14 16:08:55 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2008  John E. Wulff
@@ -17,6 +17,7 @@
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<sys/stat.h>
 #ifdef WIN32
 #include	<process.h>
 #else	/* WIN32 */
@@ -25,6 +26,7 @@
 #include	<string.h>
 #include	<ctype.h>
 #include	<assert.h>
+#include	<errno.h>
 
 #include	"icc.h"
 #include	"comp.h"
@@ -245,21 +247,16 @@ outVariable
 	 *
 	 *	use alias;		// equivalent to -A option
 	 *	no alias;		// turns off -A option
-	 *	restore alias;		// restores -A option
 	 *
 	 *	use strict;		// equivalent to -S option
 	 *	no strict;		// turns off -S option
-	 *	restore strict;		// restores -S option
 	 *
 	 *	use strict, alias;	// equivalent to -AS option
 	 *	no alias, strict;	// turn off both options
-	 *	restore alias, strict;	// restores both options
 	 *
 	 * With 'use' and 'no' a particular option can be set and reset
 	 * after compilation has started, overriding the compiler flag
-	 * options.  With 'restore' the flags are restored to the choice
-	 * made in the command line after possibly changing the flags with
-	 * 'use' and/or 'no'.
+	 * options.
 	 *
 	 * With 'use alias' code which is linked from several iC sources
 	 * can be forced to produce ALIAS nodes, which are needed for
@@ -276,41 +273,49 @@ outVariable
 	 * But one never knows and as a language designer I feel this is
 	 * a good way. (grateful acknowledgements to the designers of PERL)
 	 *
+	 * As noted earlier, C functions and macros should be declared
+	 * extern with their correct parameter ramp and return value.
+	 * When "strict" is active, error messages are output if an
+	 * undeclared C function or macro is called in an immediate C
+	 * expression.
+	 *
 	 * The remaining compiler flags are very specific. The following
 	 * mechanism allows extension to those as well.
+	 *
+	 * The scope of these pragmas is a file. If a pragma is enabled in
+	 * one file it carries over to an included iC header file. If on the
+	 * other hand a pragma is changed in a header file, it reverts to its
+	 * previous value in the iC file after the #include statement, which
+	 * includes the header file. This makes sure that sloppy iC programs,
+	 * which include a header file, which uses "strict" syntax, will not
+	 * report errors, because they do not follow the "strict" syntax.
 	 *
 	 ***********************************************************/
 
 useFlag	: USE USETYPE		{
-		unsigned int useindex, ftyp;
-		$$ = $1;				/* 'use' or 'no' */
-		useindex = $2.v->ftype;
-		assert(useindex < MAXUSETYPE);
-		if ((ftyp = $1.v->ftype) <= 1) {	/* 0 or 1 */
-		    *iC_useTypes[useindex] = ftyp;	/* iC_Aflag, iC_Sflag */
-		    if (*iC_useRestore[useindex] >= 2) { /* no command line initialisation */
-			*iC_useRestore[useindex] = ftyp; /* first use in current source */
-		    }
-		} else if (ftyp == 2) {
-		    if (*iC_useRestore[useindex] >= 2) {
-			*iC_useRestore[useindex] = 0;	/* no command line initialisation */
-		    }
-		    *iC_useTypes[useindex] = *iC_useRestore[useindex];	/* restore */
+		unsigned int usetype, use;
+		$$ = $1;
+		use = $1.v->ftype;			/* 0=no or 1=use */
+		assert(use <= 1);
+		usetype = $2.v->ftype;			/* 0=alias 1=strict */
+		assert(usetype < MAXUSETYPE);
+		if (use) {
+		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag */
 		} else {
-		    assert(0);				/* should not happen */
+		    iC_uses &= ~(1<<usetype);		/* reset */
 		}
 	    }
 	| useFlag ',' USETYPE	{
-		unsigned int useindex, ftyp;
-		$$ = $1;				/* 'use' or 'no' */
-		useindex = $3.v->ftype;
-		assert(useindex < MAXUSETYPE);
-		if ((ftyp = $1.v->ftype) <= 1) {	/* 0 or 1 */
-		    *iC_useTypes[useindex] = ftyp;	/* iC_Aflag, iC_Sflag */
-		} else if (ftyp == 2) {
-		    *iC_useTypes[useindex] = *iC_useRestore[useindex];	/* restore */
+		unsigned int usetype, use;
+		$$ = $1;
+		use = $1.v->ftype;			/* 0=no or 1=use */
+		assert(use <= 1);
+		usetype = $3.v->ftype;			/* 0=alias 1=strict */
+		assert(usetype < MAXUSETYPE);
+		if (use) {
+		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag */
 		} else {
-		    assert(0);				/* should not happen */
+		    iC_uses &= ~(1<<usetype);		/* reset */
 		}
 	    }
 	;
@@ -2815,7 +2820,7 @@ rPlist	: actexpr			{
 %%
 
 #ifdef NEWSTYLE
-#define CBUFSZ 166				/* listing just fits on 132  cols */
+#define CBUFSZ 166
 #define YTOKSZ 166
 #else
 #define CBUFSZ 125				/* listing just fits on 132  cols */
@@ -2889,7 +2894,11 @@ compile(
     lexflag = C_FIRST;				/* supress initial pre-processor lines */
     lineflag = 1;				/* previous line was complete */
 
-    if (lstNM && (iC_outFP = fopen(lstNM, "w+")) == NULL) {
+    if (lstNM &&
+	((chmod(lstNM, 0644) &&			/* make list file writable */
+	errno != ENOENT) ||			/* if it exists */
+	(iC_outFP = fopen(lstNM, "w+")) == NULL)) {
+	perror("chmod or fopen");
 	return Lindex;
     }
     errFilename = errNM;			/* open on first error */
@@ -3228,25 +3237,38 @@ get(FILE* fp, int x)
 		    }
         	    *destp++ = '\0';		/* terminate string */
 		}
+		/********************************************************
+		 *  iC-compile
+		 *  handle pre-processor #line 1 "file.ic"	// WIN32
+		 *  handle pre-processor # 1 "file.ic"		// GCC
+		 ********************************************************/
 		if (sscanf(chbuf[x], " #line %d \"%[-/:A-Za-z_.0-9<>]\"",
 #else	/* not WIN32 */
 		if (sscanf(chbuf[x], " # %d \"%[-/A-Za-z_.0-9<>]\"",
 #endif	/* WIN32 */
 		    &temp1, inpNM) == 2) {
-		    unsigned int useindex;
+		    unsigned int usetype;
 		    lineno = temp1 - 1;		/* handled in iC-code */
 		    lexflag |= C_LINE;
 		    if (strcmp(inpNM, prevNM) && strchr(inpNM, '<') == 0) {
 			lexflag &= ~C_FIRST;	/* report # 1 if file has changed */
 			/* don't change to inpNM <built-in> and sytem headers */
+			if (temp1 <= 1) {
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, ">>> get: # %3d  %-10s >> %-10s, useStackIndex = %d, uses = %o\n", temp1, prevNM, inpNM, iC_useStackIndex, iC_uses);
+#endif
+			    assert(iC_useStackIndex < USESTACKSZ);
+			    iC_useStack[iC_useStackIndex++] = iC_uses; /* save use values */
+			} else {
+			    assert(iC_useStackIndex > 0);
+			    iC_uses = iC_useStack[--iC_useStackIndex]; /* restore use values */
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "<<< get: # %3d  %-10s << %-10s, useStackIndex = %d, uses = %o\n", temp1, inpNM, prevNM, iC_useStackIndex, iC_uses);
+#endif
+			}
 			strncpy(prevNM, inpNM, BUFS);	/* inpNM has been modified */
 		    }
 		    getp[x] = NULL;		/* bypass parsing this line in iC */
-		    for (useindex = 0; useindex < 2; useindex++) {
-			if (*iC_useRestore[useindex] >= 2) {
-			    *iC_useRestore[useindex] = 0;	/* no command line initialisation */
-			}
-		    }
 		}
 	    } else
 	    /********************************************************

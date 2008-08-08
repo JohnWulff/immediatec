@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.62 2008/06/25 21:43:41 jw Exp $";
+"@(#)$Id: icc.c,v 1.63 2008/07/14 14:28:52 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2008  John E. Wulff
@@ -17,6 +17,7 @@ static const char icc_c[] =
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<sys/stat.h>
 #ifndef	WIN32
 #include	<unistd.h>
 #endif	/* WIN32 */
@@ -36,12 +37,11 @@ static const char icc_c[] =
 
 extern const char	iC_ID[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
-unsigned short		iC_Aflag = 0;		/* -A flag - initially not ARITH alias */
-unsigned short		iC_Sflag = 0;		/* -S flag - initially not strict */
-unsigned short *	iC_useTypes[] = { USETYPEFLAGS };
-unsigned short		iC_Arestore = 2;	/* saved -A flag - initially not even set */
-unsigned short		iC_Srestore = 2;	/* saved -S flag - initially not even set */
-unsigned short *	iC_useRestore[] = { USERESTOREFLAGS };
+
+unsigned int		iC_uses = 0;		/* 01=alias 02=strict as bit field */
+unsigned int		iC_useStack[USESTACKSZ];
+unsigned int		iC_useStackIndex = 0;
+
 unsigned short		iC_optimise = 07;	/* optimisation levels 0 - 7 */
 int			iC_genCount;
 
@@ -569,10 +569,10 @@ main(
 		    }
 		    /* fall through -c implies -A */
 		case 'A':
-		    iC_Aflag = iC_Arestore = 1;	/* generate ARITH ALIAS in outFN */
+		    iC_uses |= USE_ALIAS;	/* generate ARITH ALIAS in outFN */
 		    break;
 		case 'S':
-		    iC_Sflag = iC_Srestore = 1;	/* strict - all imm variables must be declared */
+		    iC_uses |= USE_STRICT;	/* strict - all imm variables must be declared */
 		    break;
 		case 'R':
 		    iC_maxErrCount = INT_MAX;	/* maximum error count very high */
@@ -858,17 +858,14 @@ main(
 	fprintf(stderr, OutputMessage[ro], iC_progname, szNames[r]);
     }
 closeFiles: ;
-    if (iC_outFP != stdout) {
+    if (iC_outFP && iC_outFP != stdout) {
 	fflush(iC_outFP);
 	fclose(iC_outFP);
-	if (listFN && iFlag) {
-	    if (iC_inversionCorrection() != 0) {
-		r += 100;
-	    }
-	    iFlag = 0;
+	if (iC_inversionCorrection() != 0) {
+	    r += 100;
 	}
     }
-    if (iC_errFP != stderr) {
+    if (iC_errFP && iC_errFP != stderr) {
 	fflush(iC_errFP);
 	fclose(iC_errFP);
     }
@@ -958,7 +955,9 @@ iC_inversionCorrection(void)
 {
     int		r = 0;
 
-    if ((iC_debug & 04027) == 024) {	/* required: logic expansion and net topology */
+    if (listFN &&
+	iFlag &&
+	(iC_debug & 04027) == 024) {	/* required: logic expansion and net topology */
 	int	fd;
 	char *	versionTail;
 	char	tempName[] = "pplstfix.XXXXXX";
@@ -991,8 +990,10 @@ iC_inversionCorrection(void)
 	    }
 	}
     }
+    iFlag = 0;
+    r |= chmod(listFN, 0444);		/* make list file read-only */
     return r;
-} /* inversionCorrection */
+} /* iC_inversionCorrection */
 
 /* ############ POD to generate man page ##################################
 
