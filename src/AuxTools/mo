@@ -10,7 +10,7 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-CTsyh] [iCtarget ...]' >&2
+    echo 'Usage:	'${0##*/}' [-RTsymzh][ -O<level>][ -d<opt>] [iCtarget ...]' >&2
     echo 'Must be executed in the iC development environment or one of its subdirectories.' >&2
     echo 'Makes a dedicated icr or ict compiler with integrated arithmetic functions' >&2
     echo 'from iCtarget if iCtarget has arithmetic variables or literal blocks. ' >&2
@@ -31,13 +31,13 @@ usage ()
     echo '	-y	make with -DLONG16        (make clean; makeAll first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-d<opt>	call ic[rt] with extra -d<opt> orred into normal -d474' >&2
-    echo 'if no iCtargets are specified, each single entry of file pa.lt is made' >&2
+    echo 'if no iCtargets are specified, each single entry of file po.lt is made' >&2
     echo '   outputs the common output to ListR/Init.out or ListT/Init.out' >&2
     echo '   restores a plain icr or ict at the end of the test run' >&2
-    echo '	-m	make each entry from pm.lt instead of default pa.lt (takes longer)' >&2
+    echo '	-m	make each entry from pm.lt instead of default po.lt (takes longer)' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.21 2008/02/24 23:52:34 jw Exp $' >&2
+    echo '	$Id: mo,v 1.22 2008/08/08 19:33:06 jw Exp $' >&2
 }
 
 v=""
@@ -45,7 +45,7 @@ ic='ict'
 op='Tt'
 g=''
 p='T'
-list='pa.lt'
+list='po.lt'
 z=0
 
 while getopts ":RrTtmsyd:gO:zh" opt; do
@@ -119,7 +119,7 @@ if [ $# -ne 0 ]; then
 		    echo "make $ic from $file failed"
 		fi
 	    else
-		rm List$p/$base.lst	# only keep listings with functions or literals
+		rm -f List$p/$base.lst	# only keep listings with functions or literals
 		if [ $z -eq 1 ]; then
 		    echo "$ic has no functions or literals - standard cexe.c" >&2
 		fi
@@ -158,7 +158,7 @@ elif [ -f $list ]; then
 		    echo "make $ic from $file failed"
 		fi
 	    else
-		rm List$p/$base.lst	# only keep listings with functions or literals
+		rm -f List$p/$base.lst	# only keep listings with functions or literals
 		if [ $z -eq 1 ]; then
 		    echo "$ic has no functions or literals - standard cexe.c" >&2
 		fi

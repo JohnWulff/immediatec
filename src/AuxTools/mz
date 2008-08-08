@@ -14,18 +14,18 @@ usage ()
     echo '	-max<MAX> maximum version to process (0 .. 9999)' >&2
     echo '	-N	No nice with calls of immcc and gcc compilers (default is nice)' >&2
     echo '	-h	this help text' >&2
-    echo '	uses iCmake -Iv<N> to make file ... for each version Alex<N>' >&2
+    echo '	uses iCmake -f -Iv<N> to make file ... for each version Alex<N>' >&2
     echo '	N is the minor version number of icc.v (version 1.<N>)' >&2
     echo '	iC files are made from compiler ict<N> and libict<N>.a' >&2
     echo '	if no files are specified uses mm via pm.lt' >&2
     echo '	directory Alex<N> must exist (generated files are saved there)' >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mz,v 1.13 2005/07/31 17:55:53 jw Exp $' >&2
+    echo '$Id: mz,v 1.14 2008/07/03 13:20:19 jw Exp $' >&2
 }
 
 min=0
 max=9999
-N=''
+N=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -85,7 +85,7 @@ for w in $versions; do
 	    fi
 	done
 	if [[ -n "$*" ]]; then
-	    iCmake$N -Iv$v $*;
+	    iCmake -f$N -Iv$v $*;
 	    for f in $*; do
 		if [[ -n "$d" ]]; then
 		    Mdiff -ke $f.ic $f.lst $f.c $f.ini Alex$v

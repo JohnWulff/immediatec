@@ -1,5 +1,5 @@
 #! /bin/bash
-# $Id: update,v 1.7 2008/03/16 21:52:47 jw Exp $
+# $Id: update,v 1.8 2008/06/27 12:55:58 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
@@ -8,22 +8,39 @@ wp='W'		## branch directory prefix
 wn='01'		## branch directory start numeral - range 01 - 99
 vpath="$vp*"
 n=''
+previous=''
 
 if locked -q; then
     for d in $vpath; do
 	if [ -d $d ]; then
 	    nt=${d#$vp*}
-	    if [[ $nt =~ '[0-9][0-9]*' ]]; then
+	    if [[ $nt =~ '[^0-9]' ]]; then
+		echo "**** Warning: $name '$d' must be '$vp' followed by digits only, not '$nt' - ignored"
+	    else
 		n=$nt
 		cd $d
 		if locked -vq; then
-		    echo "#### $d"
-		    echo "==== " $(locked -v)
-		    co $(locked -v)
+		    if [ -z "$previous" ]; then
+			echo "#### $d"
+			co $(locked -v)
+		    else
+			for f in $(locked -v); do
+			    if [ ! -e "$f" ]; then
+				if [ -L "../$previous/$f" ]; then
+				    echo "## $d cp ../$previous/$f ."
+				    cp -a "../$previous/$f" .
+				elif [ -f "../$previous/$f" ]; then
+				    echo "## $d ln -s ../$previous/$f ."
+				    ln -s "../$previous/$f" .
+				else
+				    echo "**** Error: $name has broken link to ../$previous/$fp"
+				fi
+			    fi
+			done
+		    fi
 		fi
 		cd ..
-	    else
-		echo "**** Warning: $name '$d' must be '$vp' followed by digits, not '$nt' - ignored"
+		previous=$d
 	    fi
 	fi
     done
