@@ -1,17 +1,25 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.27 2008/03/16 00:05:24 jw Exp $";
+"@(#)$Id: gram.y,v 1.28 2008/06/26 14:46:43 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
- *	ANSI C Grammar and scanner
+ *	ANSI C Grammar
  *
- *	Acknowledgement: the draft ANSI C standard grammar is based on
+ *	The ANSI C scanner/parser was posted on the net by Jeff Lee,
+ *	in 1985. His net address is:
+ *		jeff%gatech.CSNet@CSNet-Relay.ARPA, or jeff@gatech
+ *	There was no open source license I could find.
+ *
+ *	Acknowledgement: Jeff Lee and the draft ANSI C standard grammar.
  *	Kernighan and Ritchie "The C Programming Language" 2nd Ed. A13.
+ *
+ *	This grammar was expanded to support most of the latest extensions
+ *	used in gcc.
  *
  *	gram.y
  *	C grammar for immcc compiler

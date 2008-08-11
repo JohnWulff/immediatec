@@ -1,9 +1,9 @@
-$Id: manifest,v 1.14 2008/02/29 11:26:51 jw Exp $
+$Id: manifest,v 1.15 2008/08/11 10:02:44 jw Exp $
 README
 doc/iC.html
 doc/iC.odt
 doc/iC.pdf
-doc/icc.sxc
+doc/iC_*
 src/ARTISTIC
 src/COPYING
 src/Makefile.in
@@ -20,6 +20,7 @@ src/comp.y
 src/comp_tab.h
 src/configure
 src/configure.in
+src/demo.ic
 src/genr.c
 src/gram.c
 src/gram.pl
@@ -40,6 +41,7 @@ src/icend.c
 src/icg.pl
 src/icr.c
 src/ict.c
+src/immac
 src/init.c
 src/install.sh
 src/lexc.c

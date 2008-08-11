@@ -1,14 +1,14 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.34 2008/02/22 23:08:13 jw Exp $";
+"@(#)$Id: scan.c,v 1.35 2008/06/25 21:48:28 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	scan.c
  *	parallel plc - runtime execution - scan action lists

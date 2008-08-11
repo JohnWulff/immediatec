@@ -1,22 +1,26 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.28 2007/06/26 15:24:27 jw Exp $";
+"@(#)$Id: lexc.l,v 1.29 2008/06/26 14:46:35 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
- *	ANSI C Grammar and scanner
+ *	ANSI C Lexer
  *
  *	The ANSI C scanner/parser was posted on the net by Jeff Lee,
- *	whose net address is
+ *	in 1985. His net address is:
  *		jeff%gatech.CSNet@CSNet-Relay.ARPA, or jeff@gatech
- *	The grammar is based on the draft ANSI standard.
+ *	There was no open source license I could find.
  *
- *	Acknowledgement: This code is based on Jeff Lee's code.
+ *	Acknowledgement: Jeff Lee and the draft ANSI C standard grammar.
+ *	Kernighan and Ritchie "The C Programming Language" 2nd Ed. A13.
+ *
+ *	This lexer was expanded to support most of the latest extensions
+ *	used in gcc.
  *
  *	lexc.l
  *	C lexer for immcc compiler

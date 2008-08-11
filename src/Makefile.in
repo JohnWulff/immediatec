@@ -1,14 +1,14 @@
-# @(#)$Id: Makefile.in,v 1.50 2008/03/26 21:13:05 jw Exp $
+# @(#)$Id: Makefile.in,v 1.51 2008/07/03 11:42:59 jw Exp $
 
 ############################################################
 #
-#	Copyright (C) 1985-2005  John E. Wulff
+#	Copyright (C) 1985-2008  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <ic@je-wulff.de>
 #
 #	Makefile for immediate C compilers and runtime library
 #	J.E. Wulff	14-Mar-87
@@ -175,10 +175,10 @@ pplstfix:
 	@gzip -f $*.1
 
 $(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix $(srcdir)/../README
-	rm -f $(srcdir)/scid.c; ident $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix | perl $(srcdir)/pawk.pl > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
+	rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
 $(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
-	ident $(srcdir)/icc.v | $(srcdir)/README.tpl > $(srcdir)/../README;
+	perl $(srcdir)/README.tpl $(srcdir)/icc.v > $(srcdir)/../README;
 
 $(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.pl
 
@@ -197,6 +197,8 @@ $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
 	@$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
+$(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
+
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
 
 $(srcdir)/iClift.1.gz:	$(srcdir)/iClift $(srcdir)/scid.c
@@ -213,27 +215,28 @@ $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
 test:
 	@echo "compile and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -Aiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@-${srcdir}/iCmake -Ajfw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kl -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/Mdiff -kel -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@echo "compile with -S option and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -SAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@-${srcdir}/iCmake -SAjfw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/Mdiff -kLl -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 pedantic:
 	@echo "compile with -P option and generate all executables from iC files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -PAiw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@-${srcdir}/iCmake -PAjfw. ${srcdir}/Test0/*.ic 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "show differences from generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/PED ..."
-	@if ${srcdir}/Mdiff -kLP -Ibytes -Isyntax.error -Iparse.error -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/PED; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/PED"; fi
+	@if ${srcdir}/Mdiff -kLeP -Ibytes -Isyntax.error -Iparse.error -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif ${srcdir}/Test0/*.* ${srcdir}/Test0/PED; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/PED"; fi
 
-install:	$(srcdir)/immcc.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
 	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
+	${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
 	${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
 	${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
 	${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
@@ -243,6 +246,7 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdi
 	${INSTALL_DATA} $(srcdir)/libict.a      ${prefix}/lib/libict.a
 	${INSTALL_DATA} $(srcdir)/icg.h         ${prefix}/include/icg.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${prefix}/man/man1/immcc.1.gz
+	${INSTALL_DATA} $(srcdir)/immac.1.gz    ${prefix}/man/man1/immac.1.gz
 	${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${prefix}/man/man1/iCbox.1.gz
 	${INSTALL_DATA} $(srcdir)/iClift.1.gz   ${prefix}/man/man1/iClift.1.gz
 	${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${prefix}/man/man1/iClive.1.gz
@@ -265,6 +269,7 @@ uninstall:
 	rm -f ${prefix}/lib/libict.a
 	rm -f ${prefix}/include/icg.h
 	rm -f ${prefix}/man/man1/immcc.1.gz
+	rm -f ${prefix}/man/man1/immac.1.gz
 	rm -f ${prefix}/man/man1/iCbox.1.gz
 	rm -f ${prefix}/man/man1/iClift.1.gz
 	rm -f ${prefix}/man/man1/iClive.1.gz

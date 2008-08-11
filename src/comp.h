@@ -1,12 +1,12 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	comp.h
  *	header for immcc compiler
@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.56 2008/02/16 12:18:26 jw Exp $";
+"@(#)$Id: comp.h,v 1.57 2008/06/25 21:37:52 jw Exp $";
 
 #include	<setjmp.h>
 

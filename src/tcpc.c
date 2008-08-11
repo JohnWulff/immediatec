@@ -1,14 +1,14 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.18 2007/08/09 14:05:00 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.19 2008/06/25 21:49:06 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	tcpc.c
  *	TCP/IC communication support

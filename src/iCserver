@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2005  John E. Wulff
+#	Copyright (C) 2000-2008  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <ic@je-wulff.de>
 #
 #	iCserver
 #
@@ -79,9 +79,9 @@ Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 		eg: 'iCbox X0-X3' 'iCbox X10' sort
 		if a client call has arguments, the call must be quoted
 	-h	help, ouput this Usage text only
-Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
+Copyright (C) 2000-2008  John E. Wulff		<ic@je-wulff.de>
 							  '@'
-$Id: iCserver,v 1.36 2007/12/03 18:21:00 jw Exp $
+$Id: iCserver,v 1.37 2008/06/25 21:43:01 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -1349,7 +1349,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
 subject field.
 
 Error and warning messages for transmissions to missing clients have
@@ -1371,7 +1371,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2005  John E. Wulff
+COPYRIGHT (C) 2000-2008  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

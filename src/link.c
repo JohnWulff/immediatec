@@ -1,14 +1,14 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.26 2007/02/25 10:05:52 jw Exp $";
+"@(#)$Id: link.c,v 1.27 2008/06/25 21:46:06 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	link.c
  *	linked list routine

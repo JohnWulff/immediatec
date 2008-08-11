@@ -86,9 +86,9 @@ Usage:
                 Dynamically increase font size                    Alt +
                 Dynamically decrease font size                    Alt -
 
-Author: Sriram Srinivasan - extended by John E. Wulff  <john@je-wulff.de>
+Author: Sriram Srinivasan - extended by John E. Wulff  <ic@je-wulff.de>
 							'@'
-$Id: iCman,v 1.10 2008/03/27 12:45:06 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.11 2008/06/25 21:42:36 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 my $menu_headings;	# "Headings" MenuButton
@@ -1532,7 +1532,7 @@ Tk-800.024. Some tests done with Tk804.027 showed its Tk::Text to be
 much slower in updating tags - which is a cornerstone of the iC-range
 of programs.
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO

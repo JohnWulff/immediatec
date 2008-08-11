@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2005  John E. Wulff
+#	Copyright (C) 2000-2008  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <ic@je-wulff.de>
 #
 #	make immcc and libict.a by default
 #
@@ -52,7 +52,7 @@ usage ()
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.28 2008/03/26 21:11:46 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.29 2008/06/25 21:46:56 jw Exp $' >&2
 }
 
 makeLib ()
@@ -281,7 +281,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with S<L<iC Project>> in
+Email bug reports to B<ic@je-wulff.de> with S<L<iC Project>> in
 the subject field.
 
 =head1 SEE ALSO
@@ -290,7 +290,7 @@ L<immcc(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2005  John E. Wulff
+COPYRIGHT (C) 2000-2008  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

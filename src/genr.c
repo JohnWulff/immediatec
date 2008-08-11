@@ -1,14 +1,14 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.72 2008/03/16 00:04:16 jw Exp $";
+"@(#)$Id: genr.c,v 1.73 2008/07/02 15:47:08 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2005  John E. Wulff
+ *	Copyright (C) 1985-2008  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <john@je-wulff.de>
+ *  to contact the author, see the README file or <ic@je-wulff.de>
  *
  *	genr.c
  *	generator functions for immcc compiler
@@ -681,7 +681,17 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	assert(ePtr && gPtr && tPtr && tOut);
 	if (cFn == 0) {				/* STANDARD C EXPRESSION */
 	    if (t_first) {				/* end of arith */
+#ifndef EFENCE
 		assert(t_first >= iCbuf && lp->le_first < &iCbuf[IMMBUFSIZE]);
+#else
+		if (t_first < iCbuf || lp->le_first >= &iCbuf[IMMBUFSIZE]) {
+		    fprintf(iC_outFP, "\nsflag = 0%o; t_first = %p >= iCbuf = %p && lp->le_first = %p < &iCbuf[IMMBUFSIZE] = %p\n",
+			sflag, t_first, iCbuf, lp->le_first, &iCbuf[IMMBUFSIZE]);
+		    fflush(iC_outFP);
+		    ierror("Assertion 1:", NULL);
+		    exit(-1);
+		}
+#endif
 		stxFlag = 0;
 		while (t_first < lp->le_first) {
 		    if ((c = *t_first++ & 0xff) == STX) {
@@ -822,6 +832,16 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 		    gPtr += sprintf(gPtr, "\xff%c", x);	/* bound to fit since shorter */
 		}
 		t_first = lp->le_last;			/* skip current expression */
+#ifndef EFENCE
+		assert(t_first == 0 || t_first >= iCbuf);
+#else
+		if (t_first != 0 && t_first < iCbuf) {
+		    fprintf(iC_outFP, "\nt_first = %p >= iCbuf = %p\n", t_first, iCbuf);
+		    fflush(iC_outFP);
+		    ierror("Assertion 2:", NULL);
+//##		    exit(-1);
+		}
+#endif
 		if (t_last == 0) {
 		    t_last = t_first;			/* TODO */
 		}

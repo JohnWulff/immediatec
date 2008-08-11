@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2005  John E. Wulff
+#	Copyright (C) 2000-2008  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <ic@je-wulff.de>
 #
 #	iCbox; generic Demo Box
 #	adapted from
@@ -107,9 +107,9 @@ Usage:
 	-T	extra static debug messages
 	-x	exit after analyzing input parameters
 	-h	help, ouput this Usage text only
-Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
+Copyright (C) 2000-2008  John E. Wulff		<ic@je-wulff.de>
 							  '@'
-$Id: iCbox,v 1.44 2007/12/03 18:22:07 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.45 2008/06/25 21:41:06 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -1015,7 +1015,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
@@ -1024,7 +1024,7 @@ L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2005  John E. Wulff
+COPYRIGHT (C) 2000-2008  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

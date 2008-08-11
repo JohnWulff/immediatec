@@ -32,9 +32,9 @@ Usage:
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-h	help, ouput this Usage text only
-Copyright (C) 2000-2005  John E. Wulff		<john@je-wulff.de>
+Copyright (C) 2000-2008  John E. Wulff		<ic@je-wulff.de>
 							  '@'
-$Id: iClift,v 1.4 2008/02/13 16:26:07 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClift,v 1.5 2008/06/25 21:41:30 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -540,7 +540,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
@@ -549,7 +549,7 @@ L<iCbox(1)>, L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2005  John E. Wulff
+COPYRIGHT (C) 2000-2008  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.
