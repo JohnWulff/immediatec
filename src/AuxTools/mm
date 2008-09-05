@@ -18,6 +18,7 @@ usage ()
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-a      immac: output for loop control and %define lines as comments' >&2
   echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
@@ -29,14 +30,14 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: mm,v 1.18 2008/07/03 17:28:34 jw Exp $' >&2
+  echo '$Id: mm,v 1.19 2008/09/05 18:37:10 jw Exp $' >&2
 }
 
 A=" -f"
 z=0
 I=""
 
-while getopts ":d:gASO:PRiIJ6xzh" opt; do
+while getopts ":d:gASO:PRaiIJ6xzh" opt; do
     case $opt in
     v )	A="$A -v$OPTARG";;
     d ) A="$A -d$OPTARG";;
@@ -46,6 +47,7 @@ while getopts ":d:gASO:PRiIJ6xzh" opt; do
     O )	A="$A -O$OPTARG";;
     P )	A="$A -P";;
     R )	A="$A -R";;
+    a )	A="$A -a";;
     N )	A="$A -N";;
     j ) I=" -j";;
     I ) I=" -I";;
