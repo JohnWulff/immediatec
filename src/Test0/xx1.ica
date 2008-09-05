@@ -1,0 +1,16 @@
+%define LENGTH	 4
+%define WIDTH	 (5+1)			/* C comment */
+%define AREA	 (LENGTH * WIDTH)	// C++ comment
+
+FOR (I = 0; I < AREA; I++)
+{{
+    imm bit a[I] = IB[I];
+}}
+FOR (N = 0; N < WIDTH; N++)		/* { not seen - correct in comment */
+{{
+
+    FOR (M = 0; M < LENGTH; M++)
+    {{
+QX[N].[M] = IX[N].[M] & a[N*LENGTH+M];
+    }}
+}}

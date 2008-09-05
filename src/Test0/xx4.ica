@@ -1,0 +1,10 @@
+
+FOR M ("abc", "def", "ghi", "jkl")	// { not seen either
+{{
+
+    FOR (N = 0; N < 4; N++)		/* { not seen - correct in comment */
+    {{
+imm bit\
+ [M][N] = IX0.[N] & IX1.[N];
+    }}
+}}
