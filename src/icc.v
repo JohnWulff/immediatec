@@ -1,4 +1,4 @@
-@(#)$Id: icc.v,v 1.122 2008/08/08 21:52:36 jw Exp $
+@(#)$Id: icc.v,v 1.123 2008/09/06 01:32:56 jw Exp $
      $ARGV: $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
@@ -27,7 +27,7 @@ icend.c         1.2     2008/06/25  21:44:22  jw      Exp
 icg.pl          1.2     2008/06/25  21:44:39  jw      Exp
 icr.c           1.37    2008/07/08  21:07:42  jw      Exp
 ict.c           1.53    2008/07/08  21:07:18  jw      Exp
-immac           1.16    2008/08/08  12:01:39  jw      Exp
+immac           1.17    2008/09/05  21:40:26  jw      Exp
 init.c          1.36    2008/07/14  09:28:45  jw      Exp
 install.sh      1.2     89/12/18    14:47:22  jim     Exp
 lexc.l          1.29    2008/06/26  14:46:35  jw      Exp

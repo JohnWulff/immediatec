@@ -33,11 +33,11 @@ Usage:
                Usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
 		     '%define m 4' in the code (opposite to cpp)
-    -a         output for loop control and %define lines as comments
+    -a         output FOR loop control and %define lines as comments
     -t         test if source is an iCa language file - status 1 if it is
     -h         this help text
     <src.ica>  iCa source file with array definiions
-$Id: immac,v 1.16 2008/08/08 12:01:39 jw Exp $
+$Id: immac,v 1.17 2008/09/05 21:40:26 jw Exp $
 .
 
 use vars qw($opt_a $opt_o $opt_l $opt_e $opt_P $opt_t $opt_h);
@@ -75,11 +75,11 @@ foreach (@defines) {
     $df = shift(@def);		# enter -P NAME(s) in associative array %defs
     if ($df =~ /^[A-Z_a-z]\w*$/) {
 	$defs{ $df } = @def ? join('=', @def) : '';
-	warn "### WARNING: '-P $df' has no value - should be '-P $df=value'\n" unless @def;
+	warn "//* WARNING: '-P $df' has no value - should be '-P $df=value'\n" unless @def;
 	print LOG "### COMMAND LINE -P $df=$defs{ $df }\n" if $opt_l;
 	print "//***** -P $_\n" if $opt_a;
     } else {
-	warn "### WARNING: -P '$df' has bad characters - ignored in command line\n";
+	warn "//* WARNING: -P '$df' has bad characters - ignored in command line\n";
     }
 }
 
@@ -114,12 +114,17 @@ exit $ret;
 
 sub processFile {
 
-    my ($identifier, %identifiers, $atom, %atoms, @block, $line, $offset, $lookfor, $pos, $prev);
-    my ($translate, $control, $inBlock, $braceCount, $evalBlock, $comment, @ids, $el);
-    my ($lfFlag, $spOfs, $Cdirective, $directive);
+    my $r = 0;
+    my ($identifier, %identifiers, $atom, @atoms, @block, $line, $offset, $lookfor, $pos, $prev);
+    my ($translate, $control, $finBlock, $inBlock, $braceCount, $evalBlock, $comment, @ids, $el);
+    my ($lfFlag, $spOfs, $Cdirective, $directive, $compound, $state, @error, $error, %forHash);
+    my ($len, $square, $sqSave, $sqOffs, $sqNest, @sqError, $forFlag, $iesFlag, $litFlag);
     @block = ();
-    $inBlock = $lfFlag = $spOfs = $Cdirective = 0;
+    %forHash = ();
+    $state = "A";				# outside of comments and quotes
+    $forFlag = $iesFlag = $braceCount = $finBlock = $inBlock = $lfFlag = $spOfs = $Cdirective = 0;
     $directive = '';
+    undef $compound;
     while (<IN>) {
 	$control = 0;
 	if (/#\s*define/ or $Cdirective) {
@@ -130,11 +135,15 @@ sub processFile {
 	if (keys %defs) {			# resolve %define macros if any
 	    $offset = 0;
 	    $prev='';
-	    while (/([A-Z%_a-z]\w*)/g) {	# look for 'words' in this line
+	    undef $pos;
+	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
 		$atom = $1;			# 'word' found
-		$pos  = length $`;		# position of 'word' found
-		if (defined($translate = $defs{ $atom }) and $prev ne '%define') {
+		# suppress translation of redefined macro name (first word after %define)
+		if (defined($translate = $defs{ $atom }) and
+		    ($prev ne 'define' or defined $pos)
+		) {
 		    return 1 if $opt_t;		# test has found iCa code
+		    $pos  = length $`;		# $` position of 'word' found
 		    print LOG "### OLD '$atom' '$translate' in $.: $_" if $opt_l and $offset++ == 0;
 		    substr($_, $pos, length $atom) = $translate;
 		    print LOG "### SUB '$atom' '$translate' in $.: $_" if $opt_l;
@@ -143,7 +152,7 @@ sub processFile {
 	    }
 	}
 	$comment = $_;
-	if (/^\s*%\s*\bdefine/ or $directive) {
+	if (/^\s*%\s*\bdefine\b/ or $directive) {
 	    if (s/\\$//) {
 		chomp;
 		s!(\s*(/[*/]|#).*|[ \t]+)$!!;	# delete C, C++ or Perl comment and traling blanks
@@ -170,92 +179,228 @@ sub processFile {
 			    print "//***** $_" if $opt_a;
 			}
 		    } else {
-			warn "### WARNING: %define '$identifier' has bad characters - ignored at '$ARGV' line $.\n";
+			warn "//* WARNING: %define '$identifier' has bad characters - ignored at '$ARGV' line $.\n";
 		    }
 		}
 	    }
 	    next;				# do not output %define line
 	}
-	if (s/^\s*\bfor\b\s*\(\s*(\bint\b\s+)?([A-Z_a-z]\w*)\s*=/for (my $2 =/
-	    or s/^\s*\bfor\b\s+(\bint\b\s+)?([A-Z_a-z]\w*)\s*\(/for my $2 (/	# perlish for i (...)
-	) {
-	    return 1 if $opt_t;			# test has found iCa code 'for loop'
-	    $identifier = $2;
-	    if (@block == 0) {
-		%identifiers = ();
-		@ids = () if $opt_a;
-		$braceCount = 0;
-		$el = $.;
-	    }
-	    if ($braceCount < $inBlock) {
-		warn "### WARNING: 'for (...)' not nested after previous '{' at '$ARGV' line $.\n";			# "}"
-		print LOG "### WARNING: 'for (...)' not nested after previous '{' at LINE $.\n", @block if $opt_l;	# "}"
-	    }
-	    if ($opt_a) {
-		my $id;
-		foreach $id (@ids) {
-		    $comment =~ s/\b$id\b/($id=$identifiers{ $id })/g;
-		}
-		push @ids, $identifier;
-		unless ($comment =~ /{/) {	# }
-		    $comment =~ s/\)/) {/;	# } TODO: make more precise
-		}
-	    }
-	    $identifiers{ $identifier } = "\$$identifier";
-	    $inBlock++;
-	    $spOfs = $control = 1;
-	}
-	if ($inBlock) {
-	    %atoms = ();			# new line in an eval block
-	    $offset = 0;
 
-	    foreach $lookfor ('{', '}') {
-		for ($pos = $[;
-		    ($pos = index($_, $lookfor, $pos)) >= $[;
-		    $pos += length $lookfor) {
-		    $atoms{ $pos } = $lookfor;	# key is position of atom found
+	########################################################################
+	#   Start of detailed analysis of code lines
+	#   extract atoms to drive state machine - save with position
+	#   ignore leading back slash pairs
+	#   include odd back slash to change atom for some lookups
+	########################################################################
+	@atoms = ();
+	$litFlag = $sqNest = $square = $offset = 0;
+	while (/((\\\\)*)(\\?("|'|\/\*|\/\/|\*\/|{|}|\[|\]|[A-Z_a-z]\w*|\n))/g) {
+	    push @atoms, [ length($`)+length($1), $3 ];		# [ $pos, $atom ]
+	}
+	########################################################################
+	#   check atoms in sequence - positions in line may change now
+	#   translate atoms only in square brackets in code, comments and strings
+	#   and in iCa FOR { control lines
+	########################################################################
+	$litFlag = 1 if /^\s*%{/ and $state eq "A";	# start of literal block in iC code
+	for (my $aix = 0; $aix < @atoms; $aix++) {
+	    my $ref = $atoms[$aix];
+	    ( $pos, $atom ) = @$ref;
+	    if (($square or $forFlag) and
+		$atom =~ /[A-Z_a-z]\w*/) {
+		if (defined($translate = $identifiers{ $atom })) {
+		    $len = length $atom;	# translate in strings and comments also
+		    substr($_, $pos + $offset, $len) = $translate;
+		    $offset += length($translate) - $len;
+		    $square |= 0x02 if $square;	# translation in square brackets
+		} elsif ($square) {
+		    $square |= 0x04;		# bare word in square brackets
+		    push @sqError, $atom;
+		} elsif ($state eq "A") {	# bare word in FOR line comment or string ignored
+		    push(@error, "*** ERROR in $ARGV line $.: C variable '$atom' (bare word) in FOR line\n");
+		    $r = 2;			# error return
 		}
+
 	    }
-	    while (/([A-Z_a-z]\w*)/g) {		# look for 'words' in this line
-		$atoms{ length $` } = $1;	# key is position of 'word' found
-	    }
-	    foreach $pos (sort { $a <=> $b } keys %atoms) {
-		$atom = $atoms{ $pos };		# process atoms in sequence
-		if ($atom eq "{") {
-		    $braceCount++;		# brace count at the end of this line
-		    $spOfs = $control = 2 unless $control;	# free standing brace
-		} elsif ($atom eq "}") {
-		    $inBlock--;			# for control block finishes with brace
-		    if (--$braceCount <= 0) {
-			$inBlock = 0;		# actively came out of last nested block
-		    }
-		    if (s/\\$//) {
-			$control = 4;
-			$comment =~ s/\\$//;
+	    if ($square) {
+		if ($atom eq "]") {
+		    if ($square < 0x04 and ($square >= 0x02 or not defined $compound)) {
+			substr($_, $pos + $offset, 1) = "]}";	# final change "{"
+			$offset += 1;				# 2 - 1
 		    } else {
-			$control = 3;
+			$_ = $sqSave;		# undo changes in square brackets
+			$offset = $sqOffs;
+			if ($square >= 0x06) {
+			    push(@error, "*** ERROR in $ARGV line $.: [ ] has C variable(s) '@sqError' as well as iCa variable(s)\n");
+			    $r = 2;		# error return
+			}
+			# if only C variables (bare words) in square brackets leave as C array expression
+			# C array expressions with only constant values is not changed in iCa C code
 		    }
-		    $spOfs = 0;
-		    pop @ids if $opt_a;
-		} elsif (defined($translate = $identifiers{ $atom })) {
-		    substr($_, $pos + $offset, length $atom) = $translate;
-		    $offset += length($translate) - length($atom);
+		    $square = 0;		# closing square brackets
+		} elsif ($atom eq "[") {
+		    if (defined $compound) {
+			$_ = $sqSave;		# undo changes in first square bracket
+			$offset = $sqOffs;
+			$sqNest = 1;
+			goto startSquare;	# start nested square bracket in C code
+		    }
+		    push(@error, "### WARNING: $ARGV line $.: 2nd '[' found in square brackets\n");
+		}
+	    } elsif ($atom eq "[") {
+	      startSquare:
+		$square = 0x01;			# opening square brackets
+		$sqSave = $_;			# save in case changes have to be undone
+		$sqOffs = $offset;
+		substr($_, $pos + $offset, 1) = "\@{[";	# provisonal change "}"
+		$offset += 2;			# 3 - 1
+		@sqError = ();
+	    } elsif ($atom eq "]") {
+		if ($sqNest) {
+		    $sqNest = 0;		# no other change for outside nested square bracket
+		} else {
+		    push(@error, "### WARNING: $ARGV line $.: lone ']' found outside of square brackets\n");
+		}
+	    } else {
+		if ($state eq "A") {		# iC - Program
+		    if ($atom eq '"') {		# leading back slash will not compare
+			$state = "S";		# start of string found
+		    } elsif ($atom eq "'") {
+			$state = "H";		# start of character constant found
+		    } else {
+			$atom =~ s/^\\//;	# no use for leading back slash any more
+			if ($atom eq "/*") {
+			    $state = "C";	# start of C comment found
+			} elsif ($atom eq "*/") {
+			    push(@error, "### WARNING: $ARGV line $.: */ found after end of comment\n");
+			} elsif ($atom eq "//") {
+			    $state = "C++";	# start of C++ comment found
+			} elsif ($atom eq "{") {
+			    if ($iesFlag or $litFlag) {	# end of if else switch or literal block control line
+				$compound = $braceCount; # start of a C compound statement in iC code
+				$iesFlag = $litFlag = 0;
+			    }
+			    if ($forFlag and not $control) {
+				$spOfs = $control = 2;	# free standing brace
+			    }
+			    $forFlag = 0;	# stop translating atoms in FOR control line
+			    $braceCount++;	# current brace count
+			} elsif ($atom eq "}") {
+			    --$braceCount;
+			    if (defined $compound) {
+				undef $compound if $braceCount <= $compound; # end of C compound statement
+			    }
+			    if (defined $forHash{ $braceCount }) {
+				$inBlock--;	# FOR control block finishes with brace
+				if (s/\\$//) {
+				    $control = 4;
+				    $comment =~ s/\\$//;
+				} else {
+				    $control = 3;
+				}
+				$spOfs = 0;
+				delete $forHash{ $braceCount };
+				delete $identifiers{ pop @ids };	# latest $identifier out of scope
+			    }
+			    if ($braceCount <= 0) {
+				$inBlock = 0;	# should not be necessary
+			    }
+			} elsif ($atom eq "FOR") {
+			    return 1 if $opt_t;		# test has found iCa code 'FOR loop'
+			    substr($_, $pos + $offset, 3) = "for";	# 'FOR' changed to Perl 'for'
+			  retry:
+			    $ref = $atoms[$aix + 1];	# next atom in @atoms [int] $identifier
+			    if (ref($ref) eq "ARRAY") {
+				( $pos, $identifier ) = @$ref;
+				if ($identifier eq "int") {
+				    substr($_, $pos + $offset, 4) = "";
+				    $offset -= 4;
+				    $aix++;			# skip over "int"
+				    goto retry;
+				}
+				$forFlag = 1;		# translate atoms till next brace
+				substr($_, $pos + $offset, 0) = "my ";
+				$offset += 3;
+				if (@block == 0) {
+				    %identifiers = ();
+				    @ids = ();
+				    $braceCount = 0;
+				    $el = $.;
+				}
+				if (not defined $identifiers{ $identifier }) {
+				    if ($braceCount >= $inBlock) {
+					if ($opt_a) {
+					    my $id;
+					    foreach $id (@ids) {
+						$comment =~ s/\b$id\b/($id=$identifiers{ $id })/g;
+					    }
+					    unless ($comment =~ /{/) {	# }
+						$comment =~ s/\)/) {/;	# } TODO: make more precise
+					    }
+					}
+					push @ids, $identifier;		# each iCa FOR loop only has one $identifier
+					$identifiers{ $identifier } = "\$$identifier";
+					$finBlock = ++$inBlock;
+					$spOfs = $control = 1;
+					$forHash{ $braceCount } = 1;
+				    } else {
+					push(@error, "### WARNING: 'FOR (...)' not nested after previous '{' at '$ARGV' line $.\n"); # '}'
+				    }
+				} else {
+				    push(@error, "### WARNING: 'FOR $identifier' used twice at '$ARGV' line $.\n");
+				}
+			    } else {
+				push(@error, "### WARNING: 'FOR' not followed by identifier at '$ARGV' line $.\n");
+			    }
+			} elsif (not defined $compound and
+			    ($atom eq "if" or $atom eq "else" or $atom eq "switch")) {
+			    $iesFlag = 1;	# start of iC if else or switch control line
+			}
+		    }
+		} elsif ($state eq "S") {	# string constant
+		    if ($atom eq '"') {
+			$state = "A";
+		    }
+		} elsif ($state eq "H") {	# character constant
+		    if ($atom eq "'") {
+			$state = "A";
+		    }
+		} else {
+		    $atom =~ s/^\\//;		# no use for leading back slash any more
+		    if ($state eq "C") {	# C comment
+			if ($atom eq "*/") {
+			    $state = "A";	# end of C comment found
+			} elsif ($atom eq "/*") {
+			    push(@error, "### WARNING: $ARGV line $.: /* found during comment\n");
+			}
+		    } elsif ($state eq "C++") {	# C++ comment
+			if ($atom eq "\n") {
+			    $state = "A";	# end of C++ comment found
+			}
+		    }
 		}
 	    }
-	    if (/[\[\]]/) {
-		s/(\w)\s+\[/${1}[/g;		# remove spaces after array name
-		s/\]\s+(\w)/]${1}/g;		# and before array continuation (rare)
-		if (s/\]\s*\[/]x[/g) {		# insert x for multi-dimensional arrays
-		    s/x(\[[^\]]*"[^\]]*\])/$1/g;# remove x before [exp?",":""] special
+	}
+	########################################################################
+	#   end of line analysis
+	########################################################################
+	if ($finBlock) {
+	    $finBlock = $inBlock;
+	    undef $compound if $compound == 0;
+	    if (/(\@{\[|\]})/) {
+		s/(\w)\s+\@{\[/${1}\@{[/g;	# remove spaces after array name
+		s/\]}\s+(\w)/]}${1}/g;		# and before array continuation (rare)
+		if (s/\]}\s*\@{\[/]}x\@{[/g) {	# insert x for multi-dimensional arrays
+		    s/x(\@{\[[^\]]*"[^\]]*\]})/$1/g;# remove x before [exp?",":""] special
 		}
-		if (s/(\d)\[/${1}y[/g) {	# insert y for array name ending in numerals
-		    s/y(\[[^\]]*"[^\]]*\])/$1/g;# remove y before [exp?",":""] special
+		if (s/(\d)\@{\[/${1}y\@{[/g) {	# insert y for array name ending in numerals
+		    s/y(\@{\[[^\]]*"[^\]]*\]})/$1/g;# remove y before [exp?",":""] special
 		}
-		s/\[/\@{[/g;			# executable interpolated index expressions
-		s/\]/]}/g;			# in control and immediate C lines
+		s/\]}\[/]} [/g;			# insert space between ]}[ - needed for perl interpretation
 	    }
-	    if ($control) {
+	    if ($control or $forFlag) {
 		if ($opt_a) {
+		    $comment =~ s/\\/\\\\/g;	# protect interpolated \ in string
 		    $comment =~ s/"/\\"/g;	# protect interpolated " in string
 		    chomp $comment;
 		    if ($lfFlag) {
@@ -266,36 +411,30 @@ sub processFile {
 		    }
 		}
 		s!(\s*(/[*/]|#).*|[ \t]+)$!!;	# delete C, C++ or Perl comment and traling blanks
-		while (/([A-Z_a-z\$]\w*)/g) {	# look for 'words' in this line
-		    $atom = $1;
-		    if ($atom ne 'for' and $atom ne 'my' and $atom !~ /^\$/) {
-			warn "### WARNING: Bareword '$atom' (unresolved macro) at '$ARGV' line $.\n";
-		    }
-		}
 	    } else {
-		if ($braceCount < $inBlock) {
-		    warn "### WARNING: '{' must follow 'for (...)' at '$ARGV' line $.\n";			# "}"
-		    print LOG "### WARNING: '{' must follow 'for (...)' at LINE $.\n", @block if $opt_l;	# "}"
+		if ($braceCount < $finBlock) {
+		    push(@error, "### WARNING: '{' must follow 'FOR (...)' at '$ARGV' line $.\n");	# "}"
 		}
+		s/\\/\\\\/g;			# protect interpolated \ in string
 		s/"/\\"/g;			# protect interpolated " in string
 		chomp;
-		if (s/\\$//) {
+		if (s/\\\\$//) {
 		    if ($spOfs) {
 			s/^(\s*)(\s)/$2/;
 			if ($spOfs and $1) {
 			    splice(@block, @block - $spOfs, 0, "print \"$1\";\n");
 			}
 		    }
-		    $_ = "print \"$_\";\n";	# print line without LF in the for loop when eval'd
+		    $_ = "print \"$_\";\n";	# print line without LF in the FOR loop when eval'd
 		    $lfFlag = 1;		# terminate the last line in the block with LF
 		} else {
-		    $_ = "print \"$_\\n\";\n";	# print line with LF in the for loop when eval'd
+		    $_ = "print \"$_\\n\";\n";	# print line with LF in the FOR loop when eval'd
 		    $lfFlag = 0;		# line already terminated wih LF
 		}
-		$spOfs = 0;			# was set in 'for line and brace'
+		$spOfs = 0;			# was set in 'FOR line and brace'
 	    }
 	    if ($opt_a and $control == 1) {
-		push(@block, $comment);		# "}" push the "for () {" comment line for eval
+		push(@block, $comment);		# "}" push the "FOR () {" comment line for eval
 	    }
 	    push(@block, $_);			# push the modified line for eval
 	    if ($control >= 3) {
@@ -306,55 +445,59 @@ sub processFile {
 		}
 		$lfFlag = 0;			# lines terminated by '\' are now terminated by LF
 	    }
-	    if (not $inBlock) {
+	    if (not $finBlock) {
 		print LOG "### evaL BLOCK @{[++$evalBlock]} at LINE $.\n", @block if $opt_l;
 		eval "@block";
 		if ($@) {
-		    print "*** ERROR in $ARGV: $el: start of Perl eval\n";
+		    push(@error, "*** ERROR in $ARGV: $el: start of Perl eval\n");
 		    $line = 0;
 		    for (@block) {
 			$line++;
-			print "$line: $_";	# append eval output to iC file
+			push(@error, " $line: $_");	# append eval output to iC file
 		    }
-		    print "*** ERROR in $ARGV: $.: end of Perl eval ($line lines)\n";
-		    print $@;			# error message from eval
-		    return 2;			# error return
+		    push(@error, "*** ERROR in $ARGV: $.: end of Perl eval ($line lines)\n/**** error messages from Perl eval:\n$@  *** end error messages from Perl eval */\n");
+		    $r = 2;			# error return
 		}
 		@block = ();			# end of this eval block
 	    }
-	} elsif (/([\[\]]|\\$)/
-	    and not $opt_t	# do not return for [] outside 'for loop' - could be in comment
+	} elsif (/(\@{\[|\]}|\\$)/
+	    and not $opt_t	# do not return for [] outside 'FOR loop' - could be in comment
 	) {			# can select either alternatives above or below
 ###	    return 1 if $opt_t;	# test has found iCa code [] outside 'for loop'
-	    s/(\w)\s+\[/${1}[/g;		# remove spaces after array name
-	    s/\]\s+(\w)/]${1}/g;		# and before array continuation (rare)
-	    s/\]\s*\[/]x[/g;			# insert x for multi-dimensional arrays
-	    s/(\d)\[/${1}y[/g;			# insert y for array name ending in numerals
-	    s/\[/\@{[/g;			# executable interpolated index expressions
-	    s/\]/]}/g;				# outside of a control block
+	    s/(\w)\s+\@{\[/${1}\@{[/g;		# remove spaces after array name
+	    s/\]}\s+(\w)/]}${1}/g;		# and before array continuation (rare)
+	    s/\]}\s*\@{\[/]}x\@{[/g;		# insert x for multi-dimensional arrays
+	    s/(\d)\@{\[/${1}y\@{[/g;		# insert y for array name ending in numerals
+	    s/\]}\[/]} [/g;			# insert space between ]}[ - needed for perl interpretation
+	    s/\\/\\\\/g;			# protect interpolated \ in string
 	    s/"/\\"/g;				# protect interpolated " in string
 	    chomp;
-	    if (s/\\$//) {
-		$_ = "print \"$_\";\n";		# print line without LF in the for loop when eval'd
+	    if (s/\\\\$//) {
+		$_ = "print \"$_\";\n";		# print line without LF in the FOR loop when eval'd
 		$lfFlag = 1;			# terminate the last line in the block with LF
 	    } else {
-		$_ = "print \"$_\\n\";\n";	# print line with LF in the for loop when eval'd
+		$_ = "print \"$_\\n\";\n";	# print line with LF in the FOR loop when eval'd
 		$lfFlag = 0;			# line already terminated wih LF
 	    }
 	    print LOG "### evaL LINE $.\n", $_ if $opt_l;
 	    eval $_;				# evaluate constant expr eg. [4*8]
 	    if ($@) {
-		print "*** ERROR in $ARGV: $.: start of Perl eval\n";
-		print "1: $_";			# append eval output to iC file
-		print "*** ERROR in $ARGV: $.: end of Perl eval (1 line)\n";
-		print $@;			# error message from eval
-		return 2;			# error return
+		push(@error, "*** ERROR in $ARGV: $.: start of Perl eval\n");
+		push(@error, " 1: $_");		# append eval output to iC file
+		push(@error, "*** ERROR in $ARGV: $.: end of Perl eval (1 line)\n/**** error messages from Perl eval:\n$@  *** end error messages from Perl eval */\n");
+		$r = 2;				# error return
 	    }
 	} else {
 	    print unless $opt_t;		# faster if direct print
 	}
+    } continue {
+	while ($error = shift @error) {
+	    print "//$error" if $opt_o;		# output errors and warnings to output file
+	    print LOG "$error" if $opt_l;	# output errors and warnings to log file
+	    print STDERR "$error";		# output errors and warnings to terminal
+	}
     }
-    return 0;
+    return $r;
 } # processFile
 __END__
 
@@ -374,7 +517,7 @@ __END__
                Usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
 		     '%define m 4' in the code (opposite to cpp)
-    -a         output for loop control and %define lines as comments
+    -a         output FOR loop control and %define lines as comments
     -t         test if source is an iCa language file - status 1 if it is
     -h         this help text
     <src.ica>  iCa source file with array definiions
@@ -387,15 +530,17 @@ into an expanded iC language file (extension: .ic) which can be compiled with B<
 
 B<immac> reads and translates one source eg file.ica. If no options are specified,
 output is to 'stdout' and compilation errors (if any) are reported on 'stderr'.
+Normally output is stored in a file specified with the -o <output> option. Error messages
+are included in the output file.
 
-The B<immac> compiler can also produce an optional log file with the -l opton,
-which can be run as a Perl script to test 'for loop' generation. This produces
+The B<immac> compiler can also produce an optional log file with the -l option,
+which can be run as a Perl script to test 'FOR loop' generation. This produces
 better error messages.
 
-The B<immac> compiler can be used to test for iCa language constructs with the -t opton.
-If the source contains 'for loops', %define macro definitions or there are
+The B<immac> compiler can be used to test for iCa language constructs with the -t option.
+If the source contains 'FOR loops', %define macro definitions or there are
 B<immac> -P macro definitions, the source file is an iCa language file.
-Isolated [index expressions] without at least one 'for loop' or %define
+Isolated [index expressions] without at least one 'FOR loop' or %define
 are not sufficient to classify a file as an iCa language file.
 
 =head1 SPECIFICATION
@@ -403,37 +548,38 @@ are not sufficient to classify a file as an iCa language file.
  The immediate C language extension is as follows:
 
     immediate array variables are defined by appending an expression
-    enclosed in square brackets to the array name eg. array[i+10]
+    enclosed in square brackets to the array name eg. array[n+10]
 
     unless the expression in the square brackets is a constant
     expression eg. array[4+10], the line containing the expression
-    must be contained in a for block as follows:
+    must be contained in a FOR block as follows:
 
-    for (int i; i < 32; i++) {
-	array[i+10],
+    FOR (int n; n < 32; n++) {
+	array[n+10],
     }
 
-    The following "perlish" syntax does the same, but is not recommended.
+    The following "perlish" syntax does the same, but is not
+    recommended.
 
-    for i (0 .. 31) {
-	array[i+10],
+    FOR n (0 .. 31) {
+	array[n+10],
     }
 
     The only reason it is included, is to generate irregular Perl type
     lists, which is unlikely to be an important feature.
 
-    for i (0, 3, 4, 10, 5) {
-	array[i],\
+    FOR n (0, 3, 4, 10, 5) {
+	array[n],\
     }
     will generate array0, array3, array4, array10, array5,
 
-    Only the control variable 'i' in the above instances may be used
-    in the index expressions of the block. These 'for' blocks may
+    Only the control variable 'n' in the above instances may be used
+    in the index expressions of the block. These 'FOR' blocks may
     be nested.  In that case all the control variables in each nested
     block may be used.
 
     Since this pre-processor only manipulates text, and does not
-    compile, there are some restrictions. The 'for' line with or
+    compile, there are some restrictions. The 'FOR' line with or
     without the following opening brace and the braces must be
     on seperate lines. These are not part of the immediate C code
     itself. The lines are called control lines.  Control lines may
@@ -445,76 +591,25 @@ are not sufficient to classify a file as an iCa language file.
     Other immediate C lines in the block may contain bracketed index
     expressions, but they don't need to (they will of course not vary).
 
-    All immediate C lines in a  'for' block are repeated a number of
-    times controlled by the 'for' control line.
-
-    As shown above, a 'C' type control expression
-	for (int i; i < 32; i++)
-    is preferable - it fits into the general 'C' syntax of
-    'immediate C'.
-    A 'perlish' syntax rather than a 'C' syntax may be used:
-	for int i (0 .. 31) {
-    This is, because the pre-compiler eval's a slightly
-    modified form of the code in Perl. This syntax is very
-    simple and fits the limitations of expanding an array.
+    All immediate C lines in a  'FOR' block are repeated a number of
+    times controlled by the 'FOR' control line.
 
     The 'int' type specifier of the control variable is optional - it
     may be used in both variants to make the syntax look more correct.
     It must be remembered, that the control variable is usually an
     'int'.  In the Perl code, 'use integer' has been called, so
-    integer division always applies.
+    integer division always applies - the following is valid:
 
-    In the case a 'Perl' type list is used, then strings may be used:
-	for i ("AA", "BB", "CC", "DD", "EE") {
-    If these are not numeric, then no arithmetic may be done when the
-    control variable is used in an index expression:
-	    array[i];
-    will generate arrayAA arrayBB arrayCC arrayDD arrayEE
-    Note: special care must be taken, that these strings are
-    not defined as macros.
-
-    The strategy is to match lines starting with the regex
-
-	for (identifier    or	for identifier (
-	    #    identifier matches /[A-Z_a-z]/w*/
-
-    if it does not match substitite '[' by '@{[' and ']' by ']}'
-    and print line
-
-    else
-
-    Substitute identifier by my $identifier
-    Store $identifier in hash %identifiers
-
-    Next a block inside matching braces is looked for in the current
-    line and any following lines until the final closing brace is
-    found All of this is stored in the string $block
-
-    All occurrences of any identifier from %identifiers in [ ] in that
-    block is replaced by @{[$identifier ... ]} - even inside C or C++
-    comments Any line not starting with 'for' is replaced by 'print
-    "line"' else do same as above for nested for's
-
-    eval $block;	# which is a string evaluation
-    die if $@;		# fail on error
-
-    since use integer pragma is used, the following is valid:
-
-    for (n = 0; n < 16; n++) {
-       QX[n/8].[n%8] = IB[n];\n"
+    FOR (int n = 0; n < 16; n++) {
+       QX[n/8].[n%8] = IB[n];
     }
 
-    generates the following, which is eval'd
-
-    for (my $n = 0; $n < 16; $n++) {
-       print "    QX@{[$n/8]}.@{[$n%8]} = IB@{[$n]};\n"
-    }
-
-    to produce the following straight immediate C output
+    produces the following straight immediate C output
 
     QX0.0 = IB0;
     QX0.1 = IB1;
     ...
+    QX1.6 = IB14;
     QX1.7 = IB15;
 
     which is not brilliant code, but shows the pattern.
@@ -530,13 +625,16 @@ are not sufficient to classify a file as an iCa language file.
     before the the first index
 	eg: b8 [0]     is replaced by b8y0
 	eg: b9 [1] [2] is replaced by b9y1x2
+    If this were not done, the generated iC variables could be
+    ambiguous. Also the mental conversion from the generated iC
+    variable back to its array form is made easier this way.
 
     A line terminated by a back-slash '\' both inside or outside a
-    'for loop' generates that line without a terminating LF '\n'.
-    This allows the generation of lists in a single line.
-    Normally a LF is inserted on the termination of the 'for loop'
-    unless the final brace is also followed by a back-slash '\' -
-    then the line is not terminated by a LF '\n'.
+    'FOR loop' generates that line without a terminating LF '\n'.
+    This allows the generation of lists in a single line.  Normally a
+    LF is inserted on the termination of the 'FOR loop' unless the
+    final brace is also followed by a back-slash '\' - then the line
+    is not terminated by a LF '\n'.
 
     Index expressions which contain a '"' marking a string do not have
     x or y inserted before them. This is used as follows
@@ -545,11 +643,11 @@ are not sufficient to classify a file as an iCa language file.
     This is useful to terminate a single line comma separated list.
 
 	imm int\
-    for (n = 0; n <= 4; n++) {
+    FOR (n = 0; n <= 4; n++) {
       a [n] [n < 4 ? "," : ";"]\
     }\
 	/* declaration statement */
-    produces
+    produces the following statement:
 	imm int	a0, a1, a2, a3, a4;	/* declaration statement */
 
 =head1 AUTHOR
