@@ -1,8 +1,8 @@
-@(#)$Id: icc.v,v 1.123 2008/09/06 01:32:56 jw Exp $
+@(#)$Id: icc.v,v 1.124 2008/10/09 10:14:13 jw Exp $
      $ARGV: $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
-Makefile.in     1.51    2008/07/03  11:42:59  jw      Exp
+Makefile.in     1.52    2008/10/09  09:08:36  jw      Exp
 Msg.pm          1.3     2000/05/30  22:10:09  jw      Exp
 README.tpl      1.20    2008/07/10  20:18:06  jw      Exp
 cexe.h          1.26    2008/06/25  21:37:30  jw      Exp
@@ -35,7 +35,7 @@ link.c          1.27    2008/06/25  21:46:06  jw      Exp
 lmain.c         1.17    2008/06/25  21:46:26  jw      Exp
 load.c          1.51    2008/06/25  21:46:43  jw      Exp
 makeAll         1.29    2008/06/25  21:46:56  jw      Exp
-manifest        1.15    2008/07/04  21:29:40  jw      Exp
+manifest        1.16    2008/10/09  08:20:41  jw      Exp
 misc.c          1.7     2008/06/25  21:47:14  jw      Exp
 outp.c          1.89    2008/07/14  16:45:04  jw      Exp
 pawk.pl         1.6     2008/06/25  21:47:44  jw      Exp
