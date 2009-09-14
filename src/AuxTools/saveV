@@ -5,24 +5,66 @@
 #
 ########################################################################
 
-# $Id: saveV,v 1.2 2008/03/17 15:29:46 jw Exp $
+usage()
+{
+  echo "Usage: $name [-h] <previous_directory> <new_directory>" >&2
+  echo '	-h	this help text' >&2
+  echo >&2
+  echo "	$name must be called from a directory, which has a number of" >&2
+  echo "	sub-directories Test1, Test2, Test3 .. Test9 containg iC sources." >&2
+  echo "	Each iC source must have different files generated from sources." >&2
+  echo >&2
+  echo "	<previous_directory> is a sub-directoriy of directory" >&2
+  echo "	Test1, Test2, Test3 .. Test9 (however many exist)" >&2
+  echo "	where previous comparison files were stored." >&2
+  echo >&2
+  echo "	<new_directory> will be created (it may not exist) and generated" >&2
+  echo "	files copied to it; any generated files, which are identical to" >&2
+  echo "	the copy in <previous_directory> will be stored as a soft link." >&2
+  echo >&2
+  echo 'Author:	John E. Wulff        <wulff.johne@gmail.com>' >&2
+  echo '$Id: saveV,v 1.3 2009/09/14 01:42:33 jw Exp $' >&2
+}
+
+########################################################################
+#
+#	main
+#
+########################################################################
 
 name=${0##*/}
 previous=$1
 head=$2
+exists=''
 error=''
+
+while getopts "h" opt; do
+    case $opt in
+    h )	usage; exit 0;;
+    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
+    esac
+done
+
+if [ -z "$1" -o -z "$2" ]; then
+    echo "	must specify two directory names." >&2
+    usage; exit -1;
+fi
 
 for d in Test[1-9]*; do
     echo $d
-    if [ ! -d "$d/$previous" ]; then
-	echo "**** Error: $name: '$d/$previous' must be a directoy" >&2
-	error=1
+    if [ -d "$d/$previous" ]; then
+	exists=1
     fi
     if [ -e "$d/$head" ]; then
 	echo "**** Error: $name: '$d/$head' may not exist yet" >&2
 	error=1
     fi
 done
+if [ -z $exists ]; then
+    echo "-----" >&2
+    echo "**** Error: $name:  there are no source directories $previous - fix first" >&2
+    exit 1
+fi
 if [ -n "$error" ]; then
     echo "-----" >&2
     echo "**** Error: $name:  directories not correct - fix first" >&2
@@ -30,25 +72,27 @@ if [ -n "$error" ]; then
 fi
 echo "-----"
 for d in Test[1-9]*; do
-    echo $d
-    cd $d
-    ml
-    mkdir $head
-    cd $head
-    for f in ../$previous/*; do
-	if [ -L $f ]; then
-	    cp -a $f .
-	elif [ -f $f ]; then
-	    ln -s $f .
-	else
-	    echo "**** Error: $name has strange file $f - not backed up" >&2
-	    error=1
-	fi
-    done
-    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
-    cd ..
-    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $head) $head 2> /dev/null
-    cd ..
+    if [ -d "$d/$previous" ]; then
+	echo $d
+	cd $d
+	ml
+	mkdir $head
+	cd $head
+	for f in ../$previous/*; do
+	    if [ -L $f ]; then
+		cp -a $f .
+	    elif [ -f $f ]; then
+		ln -s $f .
+	    else
+		echo "**** Error: $name: strange file $f - not backed up" >&2
+		error=1
+	    fi
+	done
+	rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
+	cd ..
+	cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -IAborted $(cat p[d6].lt) $head) $head 2> /dev/null
+	cd ..
+    fi
 done
 if [ -n "$error" ]; then
     echo "-----" >&2
