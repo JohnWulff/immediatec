@@ -11,46 +11,84 @@ use strict;
 my $named = $0;
 $named =~ s#.*[/\\]##;		# delete directory names in path
 format STDERR =
-Usage:	@<<<<<<< [-decl6ph] [file ...]
+Usage:	@<<<<<<< [-dgnecilL6paHsh] [-m px.lt] [file ...]
 	$named
-	-d	output .c .ini .lst .ic .ica .ih - for comparisons
-	-g	output exe .c .ini .lst .lst6 - generated - may be deleted in source dir
-	-n	output exe .c .ini .lst .lst6 - generated corpses - no .ic to match
+	-d	output .c .cc .ini .lst .log .ic .ica .ih - for comparisons
+	-g	output exe .c .cc .ini .lst .lst6 .log - generated - may be deleted in source dir
+		also ouput .ic if generated from .ica
+	-n	output exe .c .cc .ini .lst .lst6 - generated corpses - no .ic to match
 	-e	output only base without extension
-	-c	output only base with .c extension
+	-c	output only base with .c and .cc extension
 	-i	output only base with .ini extension
 	-l	output only base with .lst extension
+	-L	output only base with .log extension
 	-6	output only base with .lst6 extension
 	-p	output only base with .ic extension
 	-a	output only base with .ica extension
-	-s	output only base with .ic .ica and .ih extension (iC sources)
+	-H	output only base with .ih or .iha extension (includes)
+	-s	output only base with .ic .ica and .ih or .iha extension (iC sources)
+		output .ic if not generated from .ica
+	-m px.lt output only base with .ic .ica unless they occurr in xfile
+		insert execution lines in px.lt as well
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.12 2008/08/08 20:36:53 jw Exp $
+$Id: mklst,v 1.13 2009/09/18 08:16:03 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_n $opt_6 $opt_p $opt_a $opt_s $opt_h);
+use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_L $opt_n);
+use vars qw($opt_6 $opt_p $opt_a $opt_H $opt_s $opt_m $opt_h);
 require "getopts.pl";
-&Getopts('cdegiln6pash');	# sets $opt_h if -h etc
+&Getopts('cdegilLn6paHsm:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
 my %pn = ();
+my %mx = ();
+my @ax = ();
+my $current = -1;
+my $line = 0;
 my $prev = '';
+my ($source, $ln);
+
+if ($opt_m and -f $opt_m) {
+    if (open (IN, $opt_m)) {
+	while (<IN>) {
+	    while (/(\w+\.ica?)/g) {
+		unless (defined $mx{$1}) {
+		    $mx{$1} = $line;	# note first use of source in this line
+		    unless (-f $1) {
+			if (-e $1) {
+			    warn "$named: '$1' referred to in '$opt_m' is not a regular file\n";
+			} else {
+			    warn "$named: '$1' referred to in '$opt_m' does not exist\n";
+			}
+		    }
+		}
+	    }
+	    push @ax, $_;		# save line for output when first encountered
+	    $line++;			# next line
+	}
+	close(IN);
+    } else {
+	warn "$named: can't open input -m $opt_m\n";
+    }
+}
 
 unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
 while ($ARGV = shift @ARGV) {
     if ($opt_n) {
-	if ($ARGV =~ /(\w+)\.(lst6?|ini)/) {	# don't use .c - too dangerous in development
-	    unless (-f "$1.ic" or $pn{$1}) {	# if no .ic, the rest are corpses
-		print "$1\n" if -f "$1";
-		print "$1.exe\n" if -f "$1.exe";
+	if ($ARGV =~ /(\w+)\.(lst6?|ini)/) {	# don't check .c or .log - too dangerous
+	    unless (-f "$1.ic" or -f "$1.ica" or $pn{$1}) {
+		print "$1\n" if -f "$1";	# if no .ic or .ica, the rest are corpses
 		print "$1.c\n" if -f "$1.c";
+		print "$1.cc\n" if -f "$1.cc";
+		print "$1.exe\n" if -f "$1.exe";
 		print "$1.ini\n" if -f "$1.ini";
+		print "$1.log\n" if -f "$1.log";
 		print "$1.lst\n" if -f "$1.lst";
 		print "$1.lst6\n" if -f "$1.lst6";
-		$pn{$1}++;
+		$pn{$1}++;			# don't output list a second time
 	    }
 	}
     } else {
@@ -58,17 +96,21 @@ while ($ARGV = shift @ARGV) {
 	    $prev = $1;
 	    if ($opt_d) {
 		print "$1.c\n" if -f "$1.c";
-		print "$1.ini\n" if -f "$1.ini";
-		print "$1.lst\n" if -f "$1.lst";
-		print "$1.ica\n" if -f "$1.ica";
+		print "$1.cc\n" if -f "$1.cc";
 		print "$1.ic\n" if -f "$1.ic";
+		print "$1.ica\n" if -f "$1.ica";
+		print "$1.ini\n" if -f "$1.ini";
+		print "$1.log\n" if -f "$1.log";
+		print "$1.lst\n" if -f "$1.lst";
 	    } elsif ($opt_g) {
 		print "$1\n" if -f "$1";
-		print "$1.exe\n" if -f "$1.exe";
 		print "$1.c\n" if -f "$1.c";
-		print "$1.ini\n" if -f "$1.ini";
-		print "$1.lst\n" if -f "$1.lst";
+		print "$1.cc\n" if -f "$1.cc";
+		print "$1.exe\n" if -f "$1.exe";
 		print "$1.ic\n" if -f "$1.ica" and -f "$1.ic";
+		print "$1.ini\n" if -f "$1.ini";
+		print "$1.log\n" if -f "$1.log";
+		print "$1.lst\n" if -f "$1.lst";
 		if ($opt_6) {
 		    print "$1.lst6\n" if -f "$1.lst6";
 		}
@@ -77,32 +119,61 @@ while ($ARGV = shift @ARGV) {
 		print "$1.exe\n" if -f "$1.exe";
 	    } elsif ($opt_c) {
 		print "$1.c\n" if -f "$1.c";
+		print "$1.cc\n" if -f "$1.cc";
 	    } elsif ($opt_i) {
 		print "$1.ini\n" if -f "$1.ini";
 	    } elsif ($opt_l) {
 		print "$1.lst\n" if -f "$1.lst";
+	    } elsif ($opt_L) {
+		print "$1.log\n" if -f "$1.log";
 	    } elsif ($opt_6) {
 		print "$1.lst6\n" if -f "$1.lst6";
 	    } elsif ($opt_p) {
 		print "$1.ic\n" if -f "$1.ic";
 	    } elsif ($opt_a) {
 		print "$1.ica\n" if -f "$1.ica";
-	    } elsif ($opt_s) {
-		print "$1.ica\n" if -f "$1.ica";
-		print "$1.ic\n" if -f "$1.ic";
-	    } else {
+	    } elsif ($opt_s or $opt_m) {
+		if (-f "$1.ica") {
+		    $source = "$1.ica";
+		}
+		elsif (-f "$1.ic") {
+		    $source = "$1.ic";
+		}
+		if ($opt_m and defined $mx{$source}) {
+		    $ln = $mx{$source};
+		    if ($current < $ln) {
+			die "ERROR: bad line '$ln' ($current)" if $ln < $current-1 or $ln >= $line;
+			while (++$current < $ln) {
+			    print $ax[$current];	# include lines without source
+			}
+			print $ax[$current];	# line with sources
+		    }
+		} else {
+		    print "$source\n";
+		}
+	    } elsif (not $opt_H) {
 		print "$1\n" if -f "$1";
-		print "$1.exe\n" if -f "$1.exe";
 		print "$1.c\n" if -f "$1.c";
+		print "$1.cc\n" if -f "$1.cc";
+		print "$1.exe\n" if -f "$1.exe";
 		print "$1.ini\n" if -f "$1.ini";
+		print "$1.log\n" if -f "$1.log";
 		print "$1.lst\n" if -f "$1.lst";
-		print "$1.ica\n" if -f "$1.ica";
 		print "$1.ic\n" if -f "$1.ic";
+		print "$1.ica\n" if -f "$1.ica";
 	    }
-	} elsif ($ARGV =~ /(\w+)\.ih/) {
-	    unless ($opt_g or $opt_e or $opt_c or $opt_i or $opt_l or $opt_6 or $opt_p or $opt_a) {
+	} elsif ($ARGV =~ /(\w+)\.iha?/) {
+	    unless ($opt_c or $opt_e or $opt_g or $opt_i or
+		    $opt_l or $opt_L or $opt_n or $opt_6 or
+		    $opt_p or $opt_a or $opt_m or $opt_h) {
 		print "$1.ih\n" if -f "$1.ih";
+		print "$1.iha\n" if -f "$1.iha";
 	    }
 	}
+    }
+}
+if ($opt_m) {
+    while (++$current < $line) {	# works even if $opt_m is not a file
+	print $ax[$current];		# include lines without source at end
     }
 }
