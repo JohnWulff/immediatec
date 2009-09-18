@@ -9,17 +9,19 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: tt,v 1.29 2009/09/07 13:23:44 jw Exp $' >&2
+  echo '$Id: tt,v 1.30 2009/09/18 01:03:28 jw Exp $' >&2
 }
 
 usage()
 {
-  echo "Usage: $name [-clrgASP[P]RiIJ6x:f:F:zvh][ -O<level>]" >&2
+  echo "Usage: $name [-clrgASP[P]RaLNjIJ6x:f:F:zvh][ -O<level>]" >&2
   echo "          [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]" >&2
   echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
+  echo '	-w	whitespace (spaces, tabs, blank lines) are significant'
+  echo '		default: all whitespace is ignored (opposite to diff)'
   echo '	-r	put Rdiff *.lt output in log file' >&2
   echo '	-x<regex>  in each Mdiff ignore changes in lines that match regex' >&2
   echo '	-f<filter> process the first file in an Mdiff by <filter> before diff' >&2
@@ -33,10 +35,14 @@ usage()
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-a      immac: output for loop control and %define lines as comments (mm)' >&2
+  echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
+  echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
-  echo '	-6	produce logic generation listing file.lst6 in Test2 etc' >&2
+  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11' >&2
+  echo '	-T <string of directory names for Test2 group> default Test2 - Test10' >&2
+  echo '	-6	produce logic generation listing file.lst6 in Test2 group' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-v	author and version information' >&2
   echo '	-h	this help text' >&2
@@ -86,18 +92,24 @@ P=""
 c=""
 a=""
 A=""
+L=""
 I=""
 g=""
 G=""
 T="test"
 head=""
+test1=""
+test2=""
+Test1='Test1 Test9 Test11'
+Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
-while getopts ":cm:d:lrgASO:PRaiIJ6x:f:F:zvh" opt; do
+while getopts ":cm:d:lwrgASO:PRaLNjIJ6x:f:F:t:T:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
     d ) v="$v -d$OPTARG"; d="_$OPTARG";;
     l )	l="${l}l";;
+    w )	l="${l}w";;
     r )	r="1";;
     g )	A="$A -g";;
     A )	A="$A -A";;
@@ -106,6 +118,8 @@ while getopts ":cm:d:lrgASO:PRaiIJ6x:f:F:zvh" opt; do
     P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
     R )	A="$A -R";;
     a )	A="$A -a"; a=1;;
+    L )	L="$L -L";;
+    N )	A="$A -N";;
     j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
@@ -113,6 +127,8 @@ while getopts ":cm:d:lrgASO:PRaiIJ6x:f:F:zvh" opt; do
     x )	x="$x -I$OPTARG";;
     f )	f="/home/archiv/bin/$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable" >&2; usage; exit 126; fi; f=" -f$f";;
     F )	F="/home/archiv/bin/$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable" >&2; usage; exit 126; fi; F=" -F$F";;
+    t )	test1="$OPTARG";;
+    T )	test2="$OPTARG";;
     z )	v="$v -z";;
     v )	version; exit 0;;
     h )	usage; exit 0;;
@@ -124,7 +140,7 @@ echo $name "$@"
 shift $(($OPTIND - 1))
 
 l="$l$x$f$F"
-# echo "c = !$c! A = !$A! I = !$I! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! G = !$G!"
+# echo "c = !$c! A = !$A! L = !$L! I = !$I! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! G = !$G!"
 
 d1=$1
 d1=${d1%/}
@@ -152,68 +168,77 @@ if [ -n "$m" ]; then
     echo "== -m\"$m\" =="
 fi
 
-if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" -a -z "$a" ]; then
-    echo; echo "========== Test0 make $T"; echo
-    make $T
+if [ -z "$test1" -a -z "$test2" ]; then
+    test1=$Test1
+    test2=$Test2
+    if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" -a -z "$a" ]; then
+	echo; echo "========== Test0 make $T"; echo
+	make $T
+    fi
 fi
+# echo "Test1: '$test1' Test2: '$test2'"
 
-for t in Test1 Test9 Test11; do
-    if [ -d "$t" -a -z "$g" ]; then
-	cd $t
-	if [ -z "$d2" ]; then
-	    if [ -z "$c" ]; then
-		rm -f $(cat pg.lt)
-		echo; echo "========== $t mm$I$v$A"
-		mm$I$v$A
-		ml
-	    fi
-	    if [ -n "$d1" ]; then
-		if [ -d "$d1$d" ]; then
-		    if [ -n "$r" ]; then
-			Rdiff p*.lt
-		    fi
-		    echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' \$(cat pd.lt) $d1$d"
-		    Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat pd.lt) $d1$d
-		else
-		    mkdir $d1$d
-		    if [ -d "$head" ]; then
-			echo; echo "========== $t link all files from $d1$d to $head or beyond"
-			cd $d1$d
-			for file in ../$head/*; do
-			    if [ -L $file ]; then
-				cp -a $file .
-			    elif [ -f $file ]; then
-				ln -s $file .
-			    else
-				echo "**** Error: $name has strange file $file - not backed up" >&2
-			    fi
-			done
-			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
-			cd ..
-			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted \$(cat pd.lt) $d1$d) $d1$d"
-			cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted $(cat pd.lt) $d1$d) $d1$d 2> /dev/null
+if [ -n "$test1" -a -z "$g" ]; then
+    for t in $test1; do
+	if [ -d "$t" ]; then
+	    cd $t
+	    if [ -z "$d2" ]; then
+		if [ -z "$c" ]; then
+		    rm -f $(cat pg.lt)
+		    echo; echo "========== $t mm$I$v$A$L"
+		    mm$I$v$A$L
+		    ml
+		fi
+		if [ -n "$d1" ]; then
+		    if [ -d "$d1$d" ]; then
+			if [ -n "$r" ]; then
+			    Rdiff p*.lt
+			fi
+			echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' \$(cat pd.lt) $d1$d"
+			Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat pd.lt) $d1$d
 		    else
-			echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
-			cp -p $(cat pd.lt) $d1$d
+			mkdir $d1$d
+			if [ -d "$head" ]; then
+			    echo; echo "========== $t link all files from $d1$d to $head or beyond"
+			    cd $d1$d
+			    for file in ../$head/*; do
+				if [ -L $file ]; then
+				    cp -a $file .
+				elif [ -f $file ]; then
+				    ln -s $file .
+				else
+				    echo "**** Error: $name has strange file $file - not backed up" >&2
+				fi
+			    done
+			    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
+			    cd ..
+			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted \$(cat pd.lt) $d1$d) $d1$d"
+			    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted $(cat pd.lt) $d1$d) $d1$d 2> /dev/null
+			else
+			    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
+			    cp -p $(cat pd.lt) $d1$d
+			fi
 		    fi
 		fi
+	    elif [ -d "$d1$d" -a -d "$d2$d" ]; then
+		cd $d1$d
+		eval d4="$d3"
+		echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $d1$d/* $d4$d"
+		Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat ../pd.lt) $d4$d
+		cd ..
+	    else
+		echo "ERROR: if two <directories> are specified they must exist" >&2
+		usage
 	    fi
-	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
-	    cd $d1$d
-	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $d1$d/* $d4$d"
-	    Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat ../pd.lt) $d4$d
 	    cd ..
 	else
-	    echo "ERROR: if two <directories> are specified they must exist" >&2
-	    usage
+	    echo "ERROR: '$t' is not a directory; group '$test1'" >&2
 	fi
-	cd ..
-    fi
-done
+    done
+fi
 
-if [ -z "$a" ]; then
-    for t in Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10; do
+if [ -n "$test2" -a -z "$a" ]; then
+    for t in $test2; do
 	if [ -d "$t" ]; then
 	    cd $t
 	    if [ -z "$d2" ]; then
@@ -265,6 +290,8 @@ if [ -z "$a" ]; then
 		usage
 	    fi
 	    cd ..
+	else
+	    echo "ERROR: '$t' is not a directory; group '$test2'" >&2
 	fi
     done
 fi
