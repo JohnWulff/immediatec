@@ -8,7 +8,7 @@
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <immediateC@gmail.com>
 #
 #	Mdiff - multiple diff with precise list and status output
 #
@@ -26,8 +26,8 @@ version()
   echo 'the two directories or a list of non-existing or common files in the directories.'
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
-  echo 'Author:	John E. Wulff        <john@je-wulff.de>'
-  echo '$Id: Mdiff,v 2.8 2005/10/15 15:52:17 archiv Exp $'
+  echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
+  echo '$Id: Mdiff,v 2.9 2009/10/14 03:46:59 archiv Exp $'
   echo
 }
 
@@ -725,7 +725,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<john@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
