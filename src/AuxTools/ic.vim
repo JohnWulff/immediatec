@@ -2,7 +2,7 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <john@je-wulff.de>
 " Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.4 2008/06/24 15:13:39 jw Exp $
+" $Id: ic.vim,v 1.5 2009/08/13 08:06:43 jw Exp $
 " for openSUSE ic.vim must be in /usr/share/vim/current/syntax
 " NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
 " local filetype.vim must be in ~/.vim (ic.vim does not work there)
@@ -36,7 +36,7 @@ syn match	cIncluded	display contained "<[^>]*>"
 syn match	cInclude	display "[0-9\s]*\(%#\|#\)\s*include\>\s*["<]" contains=cIncluded
 "syn match cLineSkip	"\\$"
 syn cluster	cPreProcGroup	contains=cPreCondit,cIncluded,cInclude,cDefine,cErrInParen,cErrInBracket,cUserLabel,cSpecial,cOctalZero,cCppOut,cCppOut2,cCppSkip,cFormat,cNumber,cFloat,cOctal,cOctalError,cNumbersCom,cString,cCommentSkip,cCommentString,cComment2String,@cCommentGroup,cCommentStartError,cParen,cBracket,cMulti
-syn region	cDefine		start="[0-9\s]*\(%#\|#\)\s*\(define\|undef\)\>" skip="\\$" end="$" end="//"me=s-1 contains=ALLBUT,@cPreProcGroup,@Spell
+syn region	cDefine		start="[0-9\s]*\(%#\|%\|#\)\s*\(define\|undef\)\>" skip="\\$" end="$" end="//"me=s-1 contains=ALLBUT,@cPreProcGroup,@Spell
 syn region	cPreProc	start="[0-9\s]*\(%#\|#\)\s*\(pragma\>\|line\>\|warning\>\|warn\>\|error\>\)" skip="\\$" end="$" keepend contains=ALLBUT,@cPreProcGroup,@Spell
 
 " iC extentions
@@ -62,6 +62,9 @@ syn match icConstant		"SH\s*(\&SH"
 syn keyword icConstant		DR_ SR SR_ SRT DSR_ SHR_ SHSR_ CHANGE RISE CLOCK TIMER TIMER1 FORCE
 syn keyword icConstant		SRX JK DR DSR SHR SHSR FALL LATCH DLATCH
 
+" iCa extentions
+syn keyword icRepeat		FOR
+
 " Default highlighting
 if version >= 508 || !exists("did_ic_syntax_inits")
   if version < 508
@@ -81,6 +84,7 @@ if version >= 508 || !exists("did_ic_syntax_inits")
   HiLink icLineNumber		Comment
   HiLink icSep			Todo
   HiLink icError		Error
+  HiLink icRepeat		Repeat
   delcommand HiLink
 endif
 

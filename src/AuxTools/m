@@ -3,8 +3,7 @@
 usage()
 {
     echo "Make iC components immcc and libict.a for debugging and install them" >&2
-    echo "Usage $name[ -iudsyeh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
-    echo 'Usage:	'${0##*/}' [-qgcrtlmdeCRTLMszh] [-D<OPT>] [-o<OBJ>]' >&2
+    echo "Usage $name[ -irtmuedsyzh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
     echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
     echo '	-r	additionally make standalone compiler icr' >&2
@@ -14,19 +13,19 @@ usage()
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
-    echo '	-d	make with -DDEQ Gate option (make clean required first)' >&2
-    echo '		double ended queue processing is slightly faster' >&2
-    echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
+    echo '	-d	make with DEQ - double ended queues are slightly faster' >&2
+    echo '	-s	make with INT_MAX=32767' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
-    echo '	-y	make with -DLONG16        (make clean required first)' >&2
+    echo '	-y	make with LONG16' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
+    echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: m,v 1.10 2008/02/24 22:59:01 jw Exp $Id: m,v 1.10 2008/02/24 22:59:01 jw Exp $' >&2
+    echo '$Id: m,v 1.11 2009/10/15 05:49:25 jw Exp $Id: m,v 1.11 2009/10/15 05:49:25 jw Exp $' >&2
 }
 
 name=${0##*/}
@@ -34,7 +33,7 @@ rtmudsye=''
 dw=''
 z=0
 
-while getopts ":irtmudsyeD:W:zh" opt; do
+while getopts ":irtmuedsyD:W:zh" opt; do
     case $opt in
     i )
 	echo "Enter root:" >&2

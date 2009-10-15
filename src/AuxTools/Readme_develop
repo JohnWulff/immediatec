@@ -69,7 +69,7 @@ port is '8778'. Another port can be selected with the -p <port> option.
     iCmake	make one or more iC application(s) from iC or iCa
 		source(s).
 
-		If a source contains 'for loops', %define macro
+		If a source contains 'FOR loops', %define macro
 		definitions or there are -P macro definitions, the
 		source file is an iCa language file and is renamed
 		<source>.ica - unless the source file has the .ica
@@ -314,7 +314,7 @@ Auxiliary scripts for testing compiler outputs
 
 Vim support files
 
-    ic.vim:	Vim syntac file for the iC language. The file was developed from
+    ic.vim:	Vim syntax file for the iC language. The file was developed from
     		c.vim and yacc.vim in /usr/share/vim/current/syntax where ic.vim
 		must be located also for Linux.
 		The colouring of IEC-1131 I/O names like IX0.1, QB1, TX0.4 etc.
@@ -325,4 +325,4 @@ Vim support files
 
     filetype.vim:	Vim filetype file selects *.ic *.ih and *.lst as iC files
 
-    $Id: Readme_develop,v 1.15 2008/07/03 12:36:43 jw Exp $
+    $Id: Readme_develop,v 1.16 2009/09/21 01:12:52 jw Exp $

@@ -18,24 +18,25 @@ usage ()
     echo '	pi.lt	# ini files only' >&2
     echo '	pl.lt	# lst files only' >&2
     echo '	p6.lt	# lst6 files only' >&2
-    echo '	pp.lt	# iC files only' >&2
-    echo '	pa.lt	# iCa files only' >&2
-    echo '	ps.lt	# iC source files *.ic *.ica and *.ih' >&2
+    echo '	pp.lt	# iC files .ic and .ih only' >&2
+    echo '	pa.lt	# iCa files .ica and .ih only' >&2
+    echo '	ps.lt	# iC(a) source files .ica or .ic and .ih' >&2
     echo '	pg.lt	# exe .c .ini .lst - generated - may be deleted in source dir' >&2
-    echo '	-g	pg.lt - exe .c .ini .lst .lst6 - generated including .lst6' >&2
-    echo '	-n	pn.lt - exe .c .ini .lst .lst6 - generated corpses - no .ic to match' >&2
-    echo '	$Id: ml,v 1.15 2008/08/08 20:21:53 jw Exp $' >&2
+    echo '		also ouput .ic if generated from .ica' >&2
+    echo '	-g	pg.lt - exe .c .ini .lst .log .lst6 - generated including .lst6' >&2
+    echo '	-n	pn.lt - exe .c .ini .lst .log .lst6 - generated corpses - no .ic to match' >&2
+    echo '	$Id: ml,v 1.16 2009/09/13 03:04:58 jw Exp $' >&2
 }
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
     -*)	option=${1#?}
-	while [[ -n "$option" ]]; do
+	while [ -n "$option" ]; do
 	    case "$option" in
-	    g*) mklst -g6 *.ic > pg.lt	# generated files including .lst6
+	    g*) mklst -g6 *.ic* > pg.lt		# generated files including .lst6
 		exit;;
-	    n*) mklst -n *.lst* *.ini > pn.lt	# corpses only
+	    n*) mklst -n *.lst* *.log *.ini > pn.lt	# corpses only
 		exit;;
 	    h*)	usage; exit 255;;
 	    *) aflag="-$option"; break;;
@@ -47,30 +48,59 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-mklst *.i[ch]* > p.lt	# all for copying
-mklst -d *.i[ch]* > pd.lt	# sources, includes and derived for comparing
-mklst -g *.ic* > pg.lt	# generated exe .c .ini .lst for deletion in source dir
-mklst -e *.ic* > pe.lt	# executables only
-mklst -c *.ic* > pc.lt	# C files only
-mklst -i *.ic* > pi.lt	# ini files only
-mklst -l *.ic* > pl.lt	# lst files only
-mklst -6 *.ic* > p6.lt	# lst6 files only
-mklst -p *.ic > pp.lt	# iC source files only
-mklst -a *.ica > pa.lt	# iC source files only
-mklst -s *.i[ch] > ps.lt	# iC source and include files only
+rm -f p.lt pd.lt ps.lt pm.lt pg.lt pe.lt pc.lt pi.lt pl.lt pL.lt p6.lt pp.lt pa.lt ph.lt
 
-if [[ -f Init.out ]]; then
+if ls *.i[ch]* > /dev/null 2>&1; then
+    mklst    *.i[ch]* > p.lt	# all for copying
+    mklst -d *.i[ch]* > pd.lt	# sources, includes and derived for comparing
+    mklst -s *.i[ch]* > ps.lt	# iC or iCa sources and include files
+fi
+if ls *.ic* > /dev/null 2>&1; then
+    if [ -f px.lt ]; then
+	mklst -m px.lt *.ic* > pm.lt	# special execution list for mm
+    else
+	mklst -s *.ic* > pm.lt	# iC or iCa sources without include files
+    fi
+    mklst -g *.ic*    > pg.lt	# generated exe .c .ini .lst for deletion in source dir
+    mklst -e *.ic*    > pe.lt	# executables only
+fi
+if ls *.c > /dev/null 2>&1; then
+    mklst -c *.ic*    > pc.lt	# C files only
+fi
+if ls *.ini > /dev/null 2>&1; then
+    mklst -i *.ic*    > pi.lt	# ini files only
+fi
+if ls *.lst > /dev/null 2>&1; then
+    mklst -l *.ic*    > pl.lt	# lst files only
+fi
+if ls *.log > /dev/null 2>&1; then
+    mklst -L *.ic*    > pL.lt	# log files only
+fi
+if ls *.lst6 > /dev/null 2>&1; then
+    mklst -6 *.ic*    > p6.lt	# lst6 files only
+fi
+if ls *.ic > /dev/null 2>&1; then
+    mklst -p *.ic      > pp.lt	# iC source files not generated from iCa only
+fi
+if ls *.ica > /dev/null 2>&1; then
+    mklst -a *.ica     > pa.lt	# iCa source files only
+fi
+if ls *.ih* > /dev/null 2>&1; then
+    mklst -H *.ih*    > ph.lt	# iC include files only
+fi
+
+if [ -f Init.out ]; then
     echo Init.out >> p.lt
     echo Init.out >> pd.lt
     echo Init.out >> pg.lt
 fi
 
-if [[ -f Init.out6 ]]; then
+if [ -f Init.out6 ]; then
     echo Init.out6 >> p6.lt
     echo Init.out6 >> pg.lt
 fi
 
-if [[ -f ErrorMessages.err ]]; then
+if [ -f ErrorMessages.err ]; then
     echo ErrorMessages.err >> p.lt
     echo ErrorMessages.err >> pd.lt
     echo ErrorMessages.err >> pg.lt
