@@ -7,7 +7,7 @@
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <john@je-wulff.de>
+#   to contact the author, see the README file or <immediateC@gmail.com>
 #
 #	stop running named processes by sending them kill SIGTERM (15)
 #	or kill -1 to kill -29 as specified by parameter
@@ -33,8 +33,8 @@ usage()
   echo ' CAUTION: use the -a[x] option with care, since all processes with' >&2
   echo '          named directories in their program path are killed. (A feature)' >&2
   echo " EXAMPLE: $name -a bin; stops all programs out of /bin/ /usr/bin/ ..." >&2
-  echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: iCstop,v 1.11 2005/07/31 17:29:54 archiv Exp $' >&2
+  echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
+  echo '$Id: iCstop,v 1.12 2009/10/14 03:51:56 archiv Exp $' >&2
 }
 
 ########################################################################
