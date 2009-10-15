@@ -1,0 +1,129 @@
+/********************************************************************
+ *
+ *	Parcel sorter for long belts
+ *	Author:	J.E. Wulff
+ *	Source: sort32.icx
+ *
+ *	Trial source for using arrays in "iC programs"
+ *
+ *******************************************************************/
+
+use strict;
+
+%define GATES 10		// number of gate destinations per belt
+/********************************************************************
+ *
+ *	Feeder segment
+ *
+ *******************************************************************/
+
+imm bit feeder(			/* feeds code into feeder segment */
+	imm bit transfer,	/* photo cell to transfer code */
+ assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+	imm int code,		/* destination code - 0 .. [GATES-1] */
+	imm int length,		/* sets the length of the segment */
+	imm int width,		/* width of lock frame 6 + 6 for 0x7f */
+	imm clock c,		/* stepping clock for the belt */
+    )
+{
+    extern imm bit reset;	/* general re-initialisation */
+    imm bit pip   = RISE(transfer & ~this & ~reset, c);
+    imm int shift = SHR((shift << 1) + (pip * (0x41 + (code << 1))), c, reset);
+    imm int mask  = 0x41 << width;
+    carryOut = (shift >> length) & 1;
+    this = SRX(pip,		/* unlock after width steps */
+	       (shift & mask) == mask | reset, c);
+}
+
+/********************************************************************
+ *
+ *	Segment
+ *
+ *	Each segment controls one gate and may be up to 32 steps long
+ *
+ *******************************************************************/
+
+imm bit segment(		/* returns gate control output */
+	imm int carryIn,	/* shift bit (as int) from the previous segment */
+ assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+	imm int code,		/* code identifying this segment */
+	imm int length,		/* segment length */
+	imm int width,		/* width of the gate */
+	imm clock c,		/* stepping clock for the belt */
+    )
+{
+    extern imm bit reset;	/* general re-initialisation */
+    imm int shift = SHR((shift << 1) + carryIn, c, reset);
+    imm int mask  = 0x41 << width;
+    carryOut = (shift >> length) & 1;
+    this = SRX((shift & 0x7f) == 0x41 + (code << 1),
+	       (shift & mask) == mask | reset, c);
+}
+
+/********************************************************************
+ *
+ *	Belt
+ *
+ *	Each belt has GATES gates
+ *
+ *******************************************************************/
+
+imm int belt(
+    	assign	imm bit lock,	/* lock indicator */
+  FOR (int I = 0; I < GATES; I++) {{
+	assign  imm bit gate[I],
+  }}
+		imm int code,	/* gate code 0 .. [GATES-1]  - for parcel destination */
+		imm bit p_cell,	/* photo cell monitoring parcel onto belt */
+		imm bit strobe,	/* strobe pulse from belt movement */
+    )
+{
+  FOR (int I = 0; I < GATES+1; I++) {{	/* 1 extra carry bit */
+    imm int car[I];		/* carry bit: [I] */
+  }}				// for overflow
+
+    imm clock clk = CLOCK(strobe);
+
+    lock   = feeder(p_cell, car[0], code, 12, 11, clk);
+  FOR (int I = 0; I < GATES; I++) {{	# Perl comment - depricated but works by default
+    gate[I] = segment(car[I], car[I+1],    [I], 12,  7, clk);
+  }}
+    this = car[GATES];		/* allows concatenation of "belts" */
+}
+
+/********************************************************************
+ *
+ *	Generate tick
+ *	input fast1 or fast2 cause 50 ms ticks
+ *	else tick for every change of manual input
+ *
+ *******************************************************************/
+
+imm bit tick(bit manual, bit fast1, bit fast2) {
+    imm bit fast = fast1 | fast2;
+    this = CHANGE(manual & ~fast | TX0.4 & fast);
+}
+
+%define BELTS 2	
+%define LAST  ((GATES+7)/8*BELTS)	/* last QX index */
+/********************************************************************
+ *
+ *	BELTS belts
+ *
+ *	Each belt has GATES gates
+ *
+ *******************************************************************/
+
+imm bit reset = IX0.7;		/* general re-initialisation */
+  FOR (int I = 0; I < BELTS; I++) {{
+
+    QX[LAST].[I] = belt(
+	QX[LAST].[I+BELTS],		/* lock indicator */
+      FOR (int J = I*BELTS*8; J < I*BELTS*8+GATES; J++) {{
+	QX[J/8].[J%8],
+      }}
+	IB[I*BELTS+BELTS-1],		/* gate code 0 .. [GATES-1]  - for parcel destination */
+	IX[I*BELTS].1,		/* photo cell monitoring parcel onto belt */
+	tick(IX[I*BELTS].0, IX[I*BELTS].6, IX0.5),	/* "strobe pulse" from belt movement */
+    );
+  }}
