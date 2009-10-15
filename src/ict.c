@@ -1,14 +1,14 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.53 2008/07/08 21:07:18 jw Exp $";
+"@(#)$Id: ict.c,v 1.54 2009/08/24 13:23:43 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	ict.c
  *	parallel plc - runtime execution with TCP/IP I/O to iCserver
@@ -42,6 +42,9 @@ static const char ict_c[] =
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define TLIMIT	4			/* TX0.4 is fastest timer */
 
+#ifndef SIGRTMAX
+#define SIGRTMAX	32		/* for non-POSIX systems (Win32) */
+#endif
 #define QUIT_TERMINAL	(SIGRTMAX+1)
 #define QUIT_DEBUGGER	(SIGRTMAX+2)
 #define QUIT_SERVER	(SIGRTMAX+3)

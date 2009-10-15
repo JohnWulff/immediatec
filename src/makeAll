@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	make immcc and libict.a by default
 #
@@ -41,18 +41,18 @@ usage ()
     echo '	see usage of immcc, icr, ict and applications for other options' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
-    echo '	-d	make with -DDEQ Gate option (make clean required first)' >&2
-    echo '		double ended queue processing is slightly faster' >&2
-    echo '	-s	make with -DINT_MAX=32767 (make clean required first)' >&2
+    echo '	-d	make with DEQ - double ended queues are slightly faster' >&2
+    echo '	-s	make with INT_MAX=32767' >&2
     echo '		(on a 16 bit system INT_MAX is 32767 and -s is not required)' >&2
     echo '		simulates compilation for a 16 bit system, which does' >&2
     echo '		no 32 bit arithmetic and rejects QL.. and IL.. I/O unless' >&2
-    echo '	-y	make with -DLONG16        (make clean required first)' >&2
+    echo '	-y	make with LONG16' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-o<OBJ>	define object extension (o is default; obj for Windows)' >&2
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: makeAll,v 1.29 2008/06/25 21:46:56 jw Exp $' >&2
+    echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
+    echo '	$Id: makeAll,v 1.30 2009/10/15 02:46:37 jw Exp $' >&2
 }
 
 makeLib ()
@@ -129,13 +129,15 @@ O="o"
 o=""
 w=""
 z=0
+YN=0
+Y=""
 
 while getopts ":qgclrtmCLRTMudeD:W:syo:zh" opt; do
     case $opt in
     q )	q="q";;		# echo only - dont kill
     g )	cflags="-g";;	# debugging, no optimisation
-    c )	C=1; IM_LIB=0; c="-DYYDEBUG";;
-    l )	L=1; IM_LIB=0; l=" -DYYDEBUG";;
+    c )	C=1; IM_LIB=0; c="-DYYDEBUG"; YN=$(($YN|1));;
+    l )	L=1; IM_LIB=0; l=" -DYYDEBUG"; YN=$(($YN|2));;
     r )	R=1; IM_LIB=0; r=" -DYYDEBUG";;
     t )	T=1; IM_LIB=0; t=" -DYYDEBUG";;
     m )	M=1; IM_LIB=0; m=" -DYYDEBUG";;
@@ -166,10 +168,17 @@ if [ -f Make_tmp ]; then
 fi
 test -d Make_tmp || mkdir Make_tmp;
 
-if [ $z -eq 1 ]; then
-    echo "rm -f icg.h; perl icg.pl $d$s$y icc.h > icg.h" >&2
+if [ $YN -ne 0 ]; then
+    Y=" -DYYDEBUG=$YN"
 fi
-rm -f icg.h; perl icg.pl $d$s$y icc.h > icg.h
+if ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
+    echo "Options changed to '$Y$u$d$e$o$s$y'"
+    if [ $z -eq 1 ]; then	# $u SYSUNION only to make clean if it changes
+	echo "make clean; perl icg.pl $Y$u$d$e$o$s$y icc.h > icg.h" >&2
+    fi
+    make clean 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    perl icg.pl $Y$u$d$e$o$s$y icc.h > icg.h
+fi
 
 if [ $IM_LIB = 1 ] || [ $C = 1 ]; then
     echo "make OPT=\"$c$u$d$e$o$s$y\" CFLAGS=\"$cflags\" immcc"
@@ -225,17 +234,17 @@ exit 0
     -M      make lmain only
     -W<OPT> compile all C sources with -W<OPT> (useful for -Wall)
     -e      make all targets with EFENCE option and link with -lefence
-    -d      make with -DDEQ           (make clean required first)
-            double ended queue processing is slightly faster
-    -s      make with -DINT_MAX=32767 (make clean required first)
+    -d      make with DEQ - double ended queues are slightly faster
+    -s      make with INT_MAX=32767
             (on a 16 bit system INT_MAX is 32767 and -s is not required)
             simulates compilation for a 16 bit system, which does
             no 32 bit arithmetic and rejects QL.. and IL.. I/O unless
-    -y      make with -DLONG16        (make clean required first)
+    -y      make with LONG16
             produces code for long int arithmetic on a 16 bit system
     -o<OBJ> define object extension (o is default; obj for Windows)
     -z      echo compiler calls with all options for debugging (not -q)
     -h      this help text
+    NOTE: if any option is changed, make clean is automatically executed
 
 =head1 DESCRIPTION
 
@@ -281,7 +290,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<ic@je-wulff.de> with S<L<iC Project>> in
+Email bug reports to B<immediateC@gmail.com> with S<L<iC Project>> in
 the subject field.
 
 =head1 SEE ALSO
@@ -290,7 +299,7 @@ L<immcc(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2008  John E. Wulff
+COPYRIGHT (C) 2000-2009  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

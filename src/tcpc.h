@@ -1,12 +1,12 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	tcpc.h
  *
@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.15 2008/06/25 21:49:18 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.16 2009/08/21 06:09:44 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767

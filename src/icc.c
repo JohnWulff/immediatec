@@ -1,14 +1,14 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.63 2008/07/14 14:28:52 jw Exp $";
+"@(#)$Id: icc.c,v 1.64 2009/08/21 06:16:56 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	main.c
  *	command line interpretation and starter for immcc compiler
@@ -176,7 +176,7 @@ static const char *	usage =
 "      Typing q or ctrl-C quits run mode.\n"
 #endif	/* RUN or TCP */
 "%s\n"
-"Copyright (C) 1985-2008 John E. Wulff     <ic@je-wulff.de>\n"
+"Copyright (C) 1985-2009 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1130,7 +1130,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
@@ -1139,7 +1139,7 @@ L<iCmake(1)>, L<makeAll(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2008  John E. Wulff
+COPYRIGHT (C) 2000-2009  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

@@ -1,14 +1,14 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.89 2008/07/14 16:45:04 jw Exp $";
+"@(#)$Id: outp.c,v 1.90 2009/10/13 12:26:22 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	outp.c
  *	parallel plc - output code or run machine
@@ -616,9 +616,10 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 					} else if (bwl[0] == 'L') {
 #if INT_MAX != 32767 || defined (LONG16)
 					    iC_IL_[byte1] = gp;
-#else
-		    ierror("32 bit INPUT not supported in 16 bit environment:", sp->name);
-#endif
+#else	/* INT_MAX == 32767 && ! defined (LONG16) */
+					    warning("32 bit INPUT not supported in 16 bit environment:", sp->name);
+					    iC_IW_[byte1] = gp;	/* use 16 bit input instead */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 					} else {
 					    assert(0);	/* must be 'B', 'W' or 'L' */
 					}
@@ -695,7 +696,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 						  bwl[0] == 'W' ? W_WIDTH :
 #if INT_MAX != 32767 || defined (LONG16)
 						  bwl[0] == 'L' ? L_WIDTH :
-#endif
+#else	/* INT_MAX == 32767 && ! defined (LONG16) */
+						  bwl[0] == 'L' ? W_WIDTH : /* use as 16 bit output */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 								  0;
 				    iC_QT_[byte1] = bwl[0];	/* 'B', 'W' or 'L' */
 				} else {
@@ -947,13 +950,13 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 				iC_IW2p = op;		/* link for iC_display logic only */
 			    }
 			    break;
-#if INT_MAX != 32767 || defined (LONG16)
 			case 'L':
+#if INT_MAX != 32767 || defined (LONG16)
 			    if (byte1 == 4) {
 				iC_IL4p = op;		/* link for iC_display logic only */
-			    }
+			    }				/* ignore if 16 bit */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 			    break;
-#endif
 			default:
 			    goto pass0Err;
 			}
@@ -991,14 +994,16 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			    iC_QW2p = op;		/* link for iC_display logic only */
 			}
 			break;
-#if INT_MAX != 32767 || defined (LONG16)
 		    case 'L':
+#if INT_MAX != 32767 || defined (LONG16)
 			op->gt_mark = L_WIDTH;
 			if (byte1 == 4) {
 			    iC_QL4p = op;		/* link for iC_display logic only */
 			}
+#else	/* INT_MAX == 32767 && ! defined (LONG16) */
+			op->gt_mark = W_WIDTH;		/* use as 16 bit output */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 			break;
-#endif
 		    default:
 			goto pass0Err;
 		    }

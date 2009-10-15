@@ -6,13 +6,13 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 
 ########################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	pawk.pl
 #
@@ -28,7 +28,7 @@ use strict;
 
 eval '$'.$1.'$2;' while $ARGV[0] =~ /^([A-Za-z_0-9]+=)(.*)/ && shift;
 			# process any FOO=bar switches
-my $rev = '@(#)     $Id: pawk.pl,v 1.6 2008/06/25 21:47:44 jw Exp $';
+my $rev = '@(#)     $Id: pawk.pl,v 1.7 2009/08/21 06:08:31 jw Exp $';
 my $name = 'iC_ID';
 my $X = '';
 my $mod = '';

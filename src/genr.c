@@ -1,14 +1,14 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.73 2008/07/02 15:47:08 jw Exp $";
+"@(#)$Id: genr.c,v 1.74 2009/10/10 02:53:16 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	genr.c
  *	generator functions for immcc compiler
@@ -78,6 +78,8 @@ static SymListP	caList[PPGATESIZE+1];	/* auxiliary input gate list for copyArith
 static Sym	vaList[0x80];		/* stores text and Symbol pointers for repeat elements */
 int		z = 0;			/* index into vaList[] - circular list of 128 elements */
 static int	liveDisp;		/* set when arithmetic values will generate live display */
+static void	assignOutput(		/* generate and assign an output node */
+			     Symbol * rsp, int ftyp, int ioTyp);
 
 /********************************************************************
  *
@@ -946,6 +948,15 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
  *
  *******************************************************************/
 
+const char *	cexeString[] = {
+    "/**/case %d:\n",				/* begin with empty comment for uniqueness */
+#if INT_MAX == 32767 && defined (LONG16)
+    "static long iC_%d(iC_Gt * iC_gf) {\n",
+#else
+    "static int iC_%d(iC_Gt * iC_gf) {\n",
+#endif
+};
+
 void
 writeCexeString(FILE * oFP, int cn)
 {
@@ -957,6 +968,24 @@ writeCexeString(FILE * oFP, int cn)
 	functionUseSize += FUNUSESIZE;
     }
 } /* writeCexeString */
+
+/********************************************************************
+ *
+ *	write the cexeTail
+ *
+ *******************************************************************/
+
+static const char *	cexeTail[] = {
+    "\n",
+    "} /* iC_%d */\n\n",
+};
+
+void
+writeCexeTail(FILE * oFP, const char * tail, int cn)
+{
+    fprintf(oFP, tail);
+    fprintf(oFP, cexeTail[outFlag], cn);
+} /* writeCexeTail */
 
 /********************************************************************
  *
@@ -1712,7 +1741,7 @@ op_asgn(				/* asign List_e stack to links */
 				fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
 			    }
 			    fprintf(T1FP, "	return %s;\n", eBuf);
-			    fprintf(T1FP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
+			    writeCexeTail(T1FP, "%%##\n", z1);
 			    if (iFunSymExt ||
 				(iC_optimise & 04) != 0) {	/* save expression for full optimising as well */
 				len = strlen(gBuf);		/* C expression prepared for cloning */
@@ -1745,7 +1774,7 @@ op_asgn(				/* asign List_e stack to links */
 				assert(lineno > 0);		/* no nested calls in pre-defines */
 				fprintf(T1FP, "#line %d \"%s\"\n", lineno, inpNM);
 				fprintf(T1FP, "	return %s;\n", eBuf);
-				fprintf(T1FP, "%%##\n%s", outFlag ? "}\n\n" : "\n");
+				writeCexeTail(T1FP, "%%##\n", z1);
 				if (iFunSymExt ||
 				    (iC_optimise & 04) != 0) {	/* save expression for full optimising as well */
 				    len = strlen(gBuf);		/* C expression prepared for cloning */
@@ -2084,8 +2113,21 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
     assert(sp);
     ftyp = sp->ftype;
     if (lv->v == 0) {
-	if (ftyp != ARITH)       { errBit(); return 0;	/* YYERROR */ }
-	else if (const_push(lv)) { errInt(); return 0;	/* YYERROR */ }
+	if (ftyp != ARITH) {
+	    if (ftyp == GATE) {
+		ierror("constant assignment to imm bit:", sp->name);
+	    } else if (ftyp == CLCKL) {
+		ierror("constant assignment to imm clock:", sp->name);
+	    } else if (ftyp == TIMRL) {
+		ierror("constant assignment to imm timer:", sp->name);
+	    } else {
+		ierror("constant assignment to wrong imm type:", sp->name);
+	    }
+	    return 0;				/* YYERROR */
+	} else if (const_push(lv)) {
+	    ierror("no imm variable to trigger arithmetic assignment", sp->name);
+	    return 0;				/* YYERROR */
+	}
     }
     if (sp->type != UDF) {
 	if (sp->type != ERR) {
@@ -2093,6 +2135,10 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 		ierror("multiple assignment to imm int:", sp->name);
 	    } else if (ftyp == GATE) {
 		ierror("multiple assignment to imm bit:", sp->name);
+	    } else if (ftyp == CLCKL) {
+		ierror("multiple assignment to imm clock:", sp->name);
+	    } else if (ftyp == TIMRL) {
+		ierror("multiple assignment to imm timer:", sp->name);
 	    } else {
 		ierror("multiple assignment to wrong imm type:", sp->name);
 	    }
@@ -2236,7 +2282,7 @@ delayOne(List_e * tp)
  *	pointed to by cParams must be removed. If all links are dummys
  *	u.blist in the first Symbol will be 0 and this Symbol was a
  *	temp generated in cListCount(). It must be removed from templist
- *	and removed removed with its name and link.
+ *	and removed with its name and link.
  *
  *	Finally compare the parameter count with v.cnt in 'cName', which
  *	contains the parameter count collected in the extern C function
@@ -2416,7 +2462,7 @@ cListCount(List_e * cPlist, List_e * aexpr)
  *	Set up the function definition head Symbol before any parameters
  *	have been parsed.
  *
- *	iFunBuffef contains the function head name for the whole of the
+ *	iFunBuffer contains the function head name for the whole of the
  *		   definition.
  *	iFunSymExt points past the '@' in the name and is the place where
  *		   local name extensions can temprarily be written.
@@ -2427,7 +2473,7 @@ cListCount(List_e * cPlist, List_e * aexpr)
  *******************************************************************/
 
 Symbol *
-functionDefHead(unsigned int ftyp, Symbol * funTrigger, int retFlag)
+functionDefHead(unsigned int ftyp, Symbol * funTrigger)
 {
     funTrigger->type = IFUNCT;			/* function head */
     funTrigger->ftype = ftyp;			/* void bit int clock timer */
@@ -2438,7 +2484,15 @@ functionDefHead(unsigned int ftyp, Symbol * funTrigger, int retFlag)
 	execerror("iFunBuffer for function symbol too small", funTrigger->name, __FILE__, __LINE__);
     }
     *iFunSymExt++ = '@';			/* append '@' */
-    if (retFlag) {
+    if (ftyp == UDFA) {
+	iRetSymbol.v = 0;			/* void function has no return Symbol */
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "vFunHead: imm %s %s\n", iC_full_ftype[ftyp], funTrigger->name);
+	    fflush(iC_outFP);
+	}
+#endif
+    } else {
 	if ((iRetSymbol.v = lookup(iFunBuffer)) == 0) {
 	    iRetSymbol.v = install(iFunBuffer, UDF, ftyp);	/* return Symbol */
 	}
@@ -2446,14 +2500,6 @@ functionDefHead(unsigned int ftyp, Symbol * funTrigger, int retFlag)
 	if ((iC_debug & 0402) == 0402) {
 	    fprintf(iC_outFP, "iFunHead: imm %s %s\n",
 		iC_full_ftype[ftyp], iRetSymbol.v->name);
-	    fflush(iC_outFP);
-	}
-#endif
-    } else {
-	iRetSymbol.v = 0;			/* void function has no return Symbol */
-#if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "vFunHead: imm %s %s\n", iC_full_ftype[ftyp], funTrigger->name);
 	    fflush(iC_outFP);
 	}
 #endif

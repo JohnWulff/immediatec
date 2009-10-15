@@ -1,14 +1,14 @@
-# @(#)$Id: Makefile.in,v 1.52 2008/10/09 09:08:36 jw Exp $
+# @(#)$Id: Makefile.in,v 1.53 2009/10/13 02:24:40 jw Exp $
 
 ############################################################
 #
-#	Copyright (C) 1985-2008  John E. Wulff
+#	Copyright (C) 1985-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	Makefile for immediate C compilers and runtime library
 #	J.E. Wulff	14-Mar-87
@@ -123,13 +123,11 @@ ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O
 
 icbegin.a:	$(srcdir)/Makefile icbegin.$(O) icend.$(O)
 	ar -rvs icbegin.a icbegin.$(O) icend.$(O)
-	ranlib icbegin.a
 
 #### Run-time library ######################################
 
 libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(POBJ)
 	ar -rvs libict.a load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(POBJ)
-	ranlib libict.a
 
 #### C-parser test #########################################
 
@@ -197,19 +195,21 @@ $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
 	@$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
-$(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
-
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
 
 $(srcdir)/iClift.1.gz:	$(srcdir)/iClift $(srcdir)/scid.c
 
 $(srcdir)/iClive.1.gz:	$(srcdir)/iClive $(srcdir)/scid.c
 
+$(srcdir)/iCmake.1.gz:	$(srcdir)/iCmake $(srcdir)/scid.c
+
 $(srcdir)/iCman.1.gz:	$(srcdir)/iCman $(srcdir)/scid.c
 
 $(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/scid.c
 
-$(srcdir)/iCmake.1.gz:	$(srcdir)/iCmake $(srcdir)/scid.c
+$(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
+
+$(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
 
 $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
@@ -227,12 +227,13 @@ strict:
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
 	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
 	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
 	${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
+	${INSTALL_PROGRAM} $(srcdir)/immax      ${bindir}/${binprefix}immax
 	${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
 	${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
 	${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
@@ -243,6 +244,7 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/iCbox.1.gz $(srcdir
 	${INSTALL_DATA} $(srcdir)/icg.h         ${prefix}/include/icg.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${prefix}/man/man1/immcc.1.gz
 	${INSTALL_DATA} $(srcdir)/immac.1.gz    ${prefix}/man/man1/immac.1.gz
+	${INSTALL_DATA} $(srcdir)/immax.1.gz    ${prefix}/man/man1/immax.1.gz
 	${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${prefix}/man/man1/iCbox.1.gz
 	${INSTALL_DATA} $(srcdir)/iClift.1.gz   ${prefix}/man/man1/iClift.1.gz
 	${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${prefix}/man/man1/iClive.1.gz
@@ -266,6 +268,7 @@ uninstall:
 	rm -f ${prefix}/include/icg.h
 	rm -f ${prefix}/man/man1/immcc.1.gz
 	rm -f ${prefix}/man/man1/immac.1.gz
+	rm -f ${prefix}/man/man1/immax.1.gz
 	rm -f ${prefix}/man/man1/iCbox.1.gz
 	rm -f ${prefix}/man/man1/iClift.1.gz
 	rm -f ${prefix}/man/man1/iClive.1.gz

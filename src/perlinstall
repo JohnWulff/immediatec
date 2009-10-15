@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	perlinstall
 #
@@ -36,7 +36,7 @@ usage ()
     echo '	-r	restore modified perlscripts to use Time::HiRes' >&2
     echo '		default source directory <srcdir> is .' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: perlinstall,v 1.10 2008/06/25 21:47:54 jw Exp $' >&2
+    echo '	$Id: perlinstall,v 1.11 2009/08/21 06:08:40 jw Exp $' >&2
 }
 
 srcdir='.'

@@ -1,14 +1,14 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.51 2008/06/25 21:46:43 jw Exp $";
+"@(#)$Id: load.c,v 1.52 2009/10/13 12:15:29 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	load.c
  *	This module prepares the data structures for the run time
@@ -94,7 +94,7 @@ static const char *	usage =
 "                        typing q or ctrl-C quits run mode\n"
 "compiled by:\n"
 "%s\n"
-"Copyright (C) 1985-2008 John E. Wulff     <ic@je-wulff.de>\n"
+"Copyright (C) 1985-2009 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 /********************************************************************
@@ -939,13 +939,13 @@ main(
 				iC_IW2p = op;		/* link for iC_display logic only */
 			    }
 			    break;
-#if INT_MAX != 32767 || defined (LONG16)
 			case 'L':
+#if INT_MAX != 32767 || defined (LONG16)
 			    if (byte == 4) {
 				iC_IL4p = op;		/* link for iC_display logic only */
-			    }
-			    break;
+			    }				/* ignore if 16 bit */
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
+			    break;
 			default:
 			    goto inErr;
 			}
@@ -1108,14 +1108,16 @@ main(
 			    iC_QW2p = op;		/* link for iC_display logic only */
 			}
 			break;
-#if INT_MAX != 32767 || defined (LONG16)
 		    case 'L':
+#if INT_MAX != 32767 || defined (LONG16)
 			op->gt_mark = L_WIDTH;
 			if (byte == 4) {
 			    iC_QL4p = op;		/* link for iC_display logic only */
 			}
-			break;
+#else	/* INT_MAX == 32767 && ! defined (LONG16) */
+			op->gt_mark = W_WIDTH;		/* use as 16 bit output */
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
+			break;
 		    default:
 			goto outErr;
 		    }

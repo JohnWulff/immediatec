@@ -1,14 +1,14 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.48 2008/06/25 21:48:18 jw Exp $";
+"@(#)$Id: rsff.c,v 1.49 2009/08/21 06:08:59 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	rsff.c
  *	parallel plc - SR flip flop and other clocked functions

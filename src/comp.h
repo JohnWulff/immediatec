@@ -1,12 +1,12 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	comp.h
  *	header for immcc compiler
@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.57 2008/06/25 21:37:52 jw Exp $";
+"@(#)$Id: comp.h,v 1.58 2009/10/07 05:04:45 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -163,7 +163,7 @@ extern jmp_buf	beginMain;
 					/*   genr.c  */
 extern int	c_number;		/* case number for cexe.c */
 extern int	outFlag;		/* global flag for compiled output */
-extern char *	cexeString[];		/* case or function string */
+extern const char * cexeString[];	/* case or function string */
 
 /********************************************************************
  * functionUse[] is a dynamic array of records with 2 fields: c_cnt, c.expr.
@@ -224,8 +224,6 @@ extern char *	iFunSymExt;		/* flags that function is being compiled */
 extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
 extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
 	    Sym * sv, Lis * lv, int ioTyp);
-extern void	assignOutput(		/* generate and assign an output node */
-	    Symbol * rsp, int ftyp, int ioTyp);
 extern void	listGenOut(		/* listing for undefined C variable */
 	    Symbol * sp);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
@@ -234,7 +232,7 @@ extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
 extern List_e *	cListCount(		/* count parameters in 'cList' */
 	    List_e * cPlist, List_e * aexpr);
 extern Symbol *	functionDefHead(	/* set up the function definition head */
-	    unsigned int ftyp, Symbol * funTrigger, int retFlag);
+	    unsigned int ftyp, Symbol * funTrigger);
 extern List_e *	collectStatement(	/* collect statements in the function body */
 	    Symbol * funcStatement);
 extern Symbol *	returnStatement(	/* value function return statement */
@@ -260,6 +258,7 @@ extern List_e *	op_push(List_e *,	/* reduce List_e stack to links */
 extern int	const_push(Lis * expr);	/* numeric constant push */
 extern List_e *	op_not(List_e *);	/* logical negation */
 extern void	writeCexeString(FILE * oFP, int cn);
+extern void	writeCexeTail(FILE * oFP, const char * tail, int cn);
 extern Symbol *	op_asgn(Sym *, Lis *,	/* asign List_e stack to links */
 	    unsigned char);		/*   var, right, ftyp   */
 extern List_e * bltin(			/* generate built in iC functions */

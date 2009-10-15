@@ -1,14 +1,14 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.37 2008/07/08 21:07:42 jw Exp $";
+"@(#)$Id: icr.c,v 1.38 2009/10/13 12:03:23 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	icr.c
  *	parallel plc - runtime execution with stdio test input only
@@ -49,6 +49,9 @@ static const char icr_c[] =
 #define YSIZE	13			/* - and 10 dec digits or 12 oct digits */
 #define TLIMIT	4			/* TX0.4 is fastest timer */
 
+#ifndef SIGRTMAX
+#define SIGRTMAX	32		/* for non-POSIX systems (Win32) */
+#endif
 #define QUIT_TERMINAL	(SIGRTMAX+1)
 
 static unsigned	time_cnt;		/* count time in ticks */
@@ -624,18 +627,21 @@ iC_icc(
 		    cn++;			/* 1 extra input */
 		} else if (c == '-') {
 		    if (--cn <= 0) cn = 1;	/* at least 1 more in */
-		} else if (c == 'b') {
+		}
+		if (c == 'b') {
 		    if ((gp = iC_IB_[1]) != 0) {	/* b byte input to IB1 */
 			goto wordIn;
 		    }
 		    goto wordEr;		/* input not configured */
-		} else if (c == 'w') {
+		}
+		if (c == 'w') {
 		    if ((gp = iC_IW_[2]) != 0) {	/* w word input to IW2 */
 #if	INT_MAX != 32767 || defined (LONG16)
 			goto wordIn;
 		    }
 		    goto wordEr;		/* input not configured */
-		} else if (c == 'l') {
+		}
+		if (c == 'l') {
 		    if ((gp = iC_IL_[4]) != 0) {	/* l long input to IL4 */
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 		    wordIn:

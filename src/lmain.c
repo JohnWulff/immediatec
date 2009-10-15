@@ -1,14 +1,14 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.17 2008/06/25 21:46:26 jw Exp $";
+"@(#)$Id: lmain.c,v 1.18 2009/08/21 06:26:19 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	lmain.c
  *	Standalone check of gram.y and lexc.l C compiler
@@ -49,7 +49,7 @@ static const char *	usage =
 "        -F              export EF_PROTECT_FREE=1 which tests access FREE\n"
 #endif	/* EFENCE */
 "        -h              this help text\n"
-"Copyright (C) 1985-2008 John E. Wulff     <ic@je-wulff.de>\n"
+"Copyright (C) 1985-2009 John E. Wulff\n"
 "%s\n";
 
 FILE *	yyin;

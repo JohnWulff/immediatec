@@ -2,13 +2,13 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	make an executable file from an iC file
 #
@@ -30,8 +30,8 @@ IAC=immac
 usage ()
 {
   echo 'Usage:' >&2
-  echo '  '${0##*/}' [-[l|o<exe>|i|s|c|b|n]fgASpRajIJ6xqh][ -v[<N>]][ -w<dir>]' >&2
-  echo '         [ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]' >&2
+  echo '  '${0##*/}' [-[l|o<exe>|i|s|c|b|n]fgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]' >&2
+  echo '         [ -k<lim>][ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]' >&2
   echo '         [ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...] file ...' >&2
   echo '     default:	link all iC-files file.ic ... into independent executables' >&2
   echo '		output names are base names of the iC-files (file ...)' >&2
@@ -46,10 +46,13 @@ usage ()
   echo '	-b	generate both listings and C outputs - no executable' >&2
   echo "	-n	generate no output, report $ICC compile errors only" >&2
   echo '		-s and -n generate 'cexe.c' for last file as a side effect' >&2
-  echo '	-f	force building of new output files - do not $IAC for .ic' >&2
+  echo "	-f	force building of new output files - do not $IAC for .ic" >&2
+  echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
   echo '	-g	debugging with gdb - each expression has its own C code' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo "		forces $IAC to only accept twin braces in FOR ... {{ }}" >&2
+  echo "		-N negates use strict pragmas in $IAC for testing" >&2
   echo '	-p	pedantic: warning if variable contains $ (default: $ allowed)' >&2
   echo '	-pp	pedantic-error: error if variable contains $' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
@@ -62,7 +65,8 @@ usage ()
   echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
   echo "	-P<macro> predefine <macro> for $IAC pre-compiler (forces $IAC)" >&2
   echo '		  also forces building of new iC output and the rest' >&2
-  echo "	-a      $IAC: output for loop control and %define lines as comments" >&2
+  echo "	-a      $IAC: output FOR loop control and %define lines as comments" >&2
+  echo "	-L      generate auxiliary 'file.log' for debugging $IAC translation" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
   echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
   echo '	        default: any index for bit, byte, word or long is allowed' >&2
@@ -76,10 +80,10 @@ usage ()
   echo "	-w<dir> use $IAC, $ICC, pplstfix and libict.a in directory <dir>" >&2
   echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
   echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
-  echo "	-N	No nice with calls of $ICC and $CC compilers (default: nice)" >&2
+  echo "	-N	No nice with calls of $ICC, $CC and $IAC compilers (default: nice)" >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.37 2008/08/01 22:00:31 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.38 2009/10/15 03:21:31 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -90,7 +94,7 @@ link=0
 status=0
 list=""
 slist=""
-nice="nice"
+nice="nice "
 aux=""
 v=""
 b=""
@@ -98,11 +102,14 @@ lib="-lict$lwsock32"
 d=" -d474"
 A=""
 S=""
+N=""
 p=""
 P=""
+L=""
 a=""
 R=""
 force=0
+ef=""
 ic=""
 x=0
 l=""
@@ -114,7 +121,11 @@ D=""
 C=""
 CFL=" -fno-builtin"
 
-while getopts ":lo:iscbnNk:jIJqv:w:fgASO:pRD:U:C:V:P:a6xd:zh" opt; do
+if $ICC < /dev/null 2>&1| grep -q 'Electric Fence'; then
+    ef=" -lefence"
+fi
+
+while getopts ":lo:iscbnfegASpRaLk:jIJ6xqNzv:w:d:O:D:U:C:V:P:h" opt; do
     case $opt in
     l )	link=1
 	aux=" -a"			# generate aux files with 'immcc -a' for linking
@@ -148,7 +159,15 @@ while getopts ":lo:iscbnNk:jIJqv:w:fgASO:pRD:U:C:V:P:a6xd:zh" opt; do
     c )	link=3; d="$A$S$R$k";;
     b ) link=4;;
     n ) link=5; d="$A$S$R$k";;
-    N ) nice="";;
+    f )	force=1;;
+    e ) ef=" -lefence";;
+    g ) d="$d -g"; CFL="$CFL -g";;
+    A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
+    S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
+    p )	if [ -z "$p" ]; then p=" -P"; C="$C -pedantic"; fi; d="$d$p";;	# allows -pp => -P -P
+    R )	if [ -z "$R" ]; then R=" -R"; d="$d$R"; fi;;
+    a ) a=" -a";;
+    L ) L=" -l x.log";;			# dummy string changed later
     k ) case "$OPTARG" in
 	1*|2*|3*|4*|5*|6*|7|8|9)
 	    k=" -k$OPTARG"; d="$d$k";;
@@ -157,7 +176,11 @@ while getopts ":lo:iscbnNk:jIJqv:w:fgASO:pRD:U:C:V:P:a6xd:zh" opt; do
     j )	I=440;;
     I )	I=540;;
     J )	I=500;;
+    6 )	d="$d -d2"; l="6";;
+    x )	d="$d -d4000"; x="1";;
     q )	q=1;;
+    N ) nice=""; N=" -N";;
+    z )	z=1;;
     v ) if [ -z "$b" ]; then
 	    b="./"
 	fi
@@ -176,29 +199,20 @@ while getopts ":lo:iscbnNk:jIJqv:w:fgASO:pRD:U:C:V:P:a6xd:zh" opt; do
 	    ldir=""
 	fi
 	;;
-    f )	force=1;;
-    A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
-    S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
-    p )	if [ -z "$p" ]; then p=" -P"; C="$C -pedantic"; fi; d="$d$p";;	# allows -pp => -P -P
-    R )	if [ -z "$R" ]; then R=" -R"; d="$d$R"; fi;;
+    d ) d="$d -d$OPTARG";;
+    O ) d="$d -O$OPTARG";;
     D ) D="$D -D$OPTARG";;
     U ) D="$D -U$OPTARG";;
     C ) D="$D -C$OPTARG"; C="$C -D$OPTARG";;
     V ) D="$D -V$OPTARG"; C="$C -U$OPTARG";;
     P ) P="$P -P$OPTARG";;
-    a ) a=" -a";;
-    6 )	d="$d -d2"; l="6";;
-    x )	d="$d -d4000"; x="1";;
-    d ) d="$d -d$OPTARG";;
-    O ) d="$d -O$OPTARG";;
-    g ) d="$d -g"; CFL="$CFL -g";;
-    z )	z=1;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
 
+lib=$lib$ef
 # echo "I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib, force = $force"
 # exit
 
@@ -216,6 +230,9 @@ for arg in $*; do
     ext=${arg#$base}
     ica="$base.ica"
     file="$base.ic"
+    if [ -n "$L" ]; then
+	L=" -l $base.log"		# will change for every arg once L is set
+    fi
 # echo "arg=$arg, base=$base, ext=$ext, ica=$ica, file=$file, lk=$lk"
     stat=0
     if [ -f $ica ]; then
@@ -228,9 +245,9 @@ for arg in $*; do
 		echo $ica
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "${b}$IAC$v$a$P -o $file $ica"	# may be copy if no iCa constructs
+		echo "$nice${b}$IAC$v$a$S$N$P$L -o $file $ica"	# may be copy if no iCa constructs
 	    fi
-	    if ! $nice ${b}$IAC$v$a$P -o $file $ica; then	# translate iCa to iC file
+	    if ! $nice${b}$IAC$v$a$S$N$P$L -o $file $ica; then	# translate iCa to iC file
 		if [ $q -eq 0 ]; then
 		    echo "${b}$IAC$v compile errors in '$ica' - incorrect iC file '$file' generated" >&2
 		fi
@@ -239,16 +256,16 @@ for arg in $*; do
 	    fi
 	fi
     elif [ -f $file -a $force -eq 0 ]; then
-	if ! $nice ${b}$IAC$v$P -t $file; then
+	if ! $nice${b}$IAC$v$S$N$P -t $file; then
 	    if [ $q -eq 0 ]; then
 		if [ $z -eq 1 ]; then echo -n "# "; fi
 		echo $ica
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "mv $file $ica; ${b}$IAC$v$a$P -o $file $ica	# ic file has iCa constructs"
+		echo "mv $file $ica; $nice${b}$IAC$v$a$S$N$P$L -o $file $ica	# ic file has iCa constructs"
 	    fi
 	    mv $file $ica				# there was no previous iCa file
-	    if ! $nice ${b}$IAC$v$a$P -o $file $ica; then	# ic file has iCa constructs
+	    if ! $nice${b}$IAC$v$a$S$N$P$L -o $file $ica; then	# ic file has iCa constructs
 		if [ $q -eq 0 ]; then
 		    echo "${b}$IAC$v compile errors in '$ica' - incorrect iC file '$file' generated" >&2
 		fi
@@ -279,9 +296,9 @@ for arg in $*; do
 		fi
 		rm -f $base.c
 		if [ $z -eq 1 ]; then
-		    echo "${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
 		fi
-		if ! $nice ${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
+		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
 		    if [ $q -eq 0 ]; then
 			echo "${b}$ICC$v compile errors in '$file' - no executable '$base' generated" >&2
 		    fi
@@ -293,9 +310,9 @@ for arg in $*; do
 		if [ "$base.c" -nt "$base" -o $force -ne 0 ]; then
 		    rm -f $base
 		    if [ $z -eq 1 ]; then
-			echo "$CC$CFL -I.$ldir$C -o $base $base.c $lib"
+			echo "$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib"
 		    fi
-		    if $nice $CC$CFL -I.$ldir$C -o $base $base.c $lib; then
+		    if $nice$CC$CFL -I.$ldir$C -o $base $base.c $lib; then
 			if [ -n "$I" ]; then
 			    if [ $z -eq 1 ]; then
 				echo "./$base -d$I > $base.ini"
@@ -323,9 +340,9 @@ for arg in $*; do
 		fi
 		rm -f $base.c		# -f in case read only
 		if [ $z -eq 1 ]; then
-		    echo "${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file"
 		fi
-		if $nice ${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file; then
+		if $nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file; then
 		    list="$list $base.c"
 		    slist="$slist $base.lst$l"
 		else
@@ -348,9 +365,9 @@ for arg in $*; do
 		fi
 		rm -f $base.lst$l
 		if [ $z -eq 1 ]; then
-		    echo "${b}$ICC$v$D$d -c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$d -c -l $base.lst$l $file"
 		fi
-		if ! $nice ${b}$ICC$v$D$d -c -l $base.lst$l $file; then
+		if ! $nice${b}$ICC$v$D$d -c -l $base.lst$l $file; then
 		    if [ $q -eq 0 ]; then
 			echo "${b}$ICC$v compile errors in '$file'" >&2
 		    fi
@@ -369,9 +386,9 @@ for arg in $*; do
 		fi
 		rm -f $base.c
 		if [ $z -eq 1 ]; then
-		    echo "${b}$ICC$v$D$d -o $base.c $file"
+		    echo "$nice${b}$ICC$v$D$d -o $base.c $file"
 		fi
-		if ! $nice ${b}$ICC$v$D$d -o $base.c $file; then
+		if ! $nice${b}$ICC$v$D$d -o $base.c $file; then
 		    if [ $q -eq 0 ]; then
 			echo "${b}$ICC$v compile errors in '$file'" >&2
 		    fi
@@ -390,9 +407,9 @@ for arg in $*; do
 		fi
 		rm -f $base.c $base.lst$l
 		if [ $z -eq 1 ]; then
-		    echo "${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
 		fi
-		if ! $nice ${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
+		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
 		    if [ $q -eq 0 ]; then
 			echo "${b}$ICC$v compile errors in '$file'" >&2
 		    fi
@@ -409,9 +426,9 @@ for arg in $*; do
 		first=''
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "${b}$ICC$v$D$d -c $file"
+		echo "$nice${b}$ICC$v$D$d -c $file"
 	    fi
-	    if ! $nice ${b}$ICC$v$D$d -c $file; then
+	    if ! $nice${b}$ICC$v$D$d -c $file; then
 		if [ $q -eq 0 ]; then
 		    echo "${b}$ICC$v compile errors in '$file'" >&2
 		fi
@@ -446,9 +463,9 @@ if [ $link -eq 1 -a -z "$ic" ]; then
 	echo >> .iC_list2.h	# terminate last line of #define \
 	if [ $z -eq 1 ]; then
 	    echo "echo >> .iC_list2.h	# terminate last line of #define \\"
-	    echo "$CC$CFL -I.$ldir$C -o $first $list $lib"
+	    echo "$nice$CC$CFL -I.$ldir$C -o $first $list $lib"
 	fi
-	if $nice $CC$CFL -I.$ldir$C -o $first $list $lib; then
+	if $nice$CC$CFL -I.$ldir$C -o $first $list $lib; then
 	    if [ -n "$I" ]; then
 		if [ $z -eq 1 ]; then
 		    echo "./$first -d$I > $first.ini"
@@ -491,8 +508,8 @@ exit $status
 
 =head1 SYNOPSIS
 
- iCmake [-[l|o<exe>|i|s|c|b|n]fgASpRajIJ6xqh][ -v[<N>]][ -w<dir>]
-        [ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
+ iCmake [-[l|o<exe>|i|s|c|b|n]fgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]
+        [ -k<lim>][ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
 	[ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...] file ...
    default: link all iC-files file.ic ... into independent executables
             output names are base names of the iC-files (file ...)
@@ -507,10 +524,13 @@ exit $status
     -b      generate both listings and C outputs - no executable
     -n      generate no output, report immcc compile errors only
             -s and -n generate 'cexe.c' for last file as a side effect
-    -f      force building of new output files - do not $IAC for .ic
+    -f      force building of new output files - do not immac for .ic
+    -e      link all targets with -lefence to test with Electric Fence
     -g      debugging with gdb - each expression has its own C code
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S      strict compile - all immediate variables must be declared
+            forces immac to only accept twin braces in FOR ... {{ }}
+            -N negates use strict pragmas in immac for testing
     -p      pedantic: warning if variable contains $ (default: $ allowed)
     -pp     pedantic-error: error if variable contains $
     -R      no maximum error count (default: abort after 100 errors)
@@ -521,7 +541,8 @@ exit $status
     -V <macro> cancel previous definition of <macro> for the C phase
     -P <macro> predefine <macro> for immac pre-compiler (forces immac)
                also forces building of new iC output and the rest
-    -a      immac: output for loop control and %define lines as comments
+    -a      immac: output FOR loop control and %define lines as comments
+    -L      generate auxiliary 'file.log' for debugging immac translation
     -k<lim> highest I/O index (default: no limit; 63 for -c mode)
             if lim <= 63, mixed byte, word and long indices are tested
             default: any index for bit, byte, word or long is allowed
@@ -536,7 +557,7 @@ exit $status
     -w<dir> use immac, immcc, pplstfix and libict.a in directory <dir>
             (default: use installed immcc, pplstfix and -lict)
     -d<opt> call immcc with extra -d<opt> orred into normal -d474
-    -N      No nice with calls of immcc and gcc compilers (default: nice)
+    -N      No nice with calls of immcc, gcc and immac compilers (default: nice)
     -z      echo compiler calls with all options for debugging
     -h      this help text
 
@@ -546,10 +567,10 @@ B<iCmake> is a shell script to compile iC sources into C sources using the
 B<immcc> compiler.  These in turn are compiled and linked into an executable
 iC applications by a C compiler - currently B<gcc> (this can be changed).
 
-If a source contains 'for loops', %define macro definitions or there are
+If a source contains 'FOR loops', %define macro definitions or there are
 -P macro definitions, the source file is an iCa language file and is
 renamed <source>.ica - unless the source file has the .ica extension already.
-Isolated [index expressions] without at least one 'for loop' or %define
+Isolated [index expressions] without at least one 'FOR loop' or %define
 are not sufficient to classify a file as an iCa language file.
 
 B<immac> translates an iCa language file to an iC language file <source>.ic,
@@ -565,7 +586,7 @@ John E. Wulff
 
 =head1 BUGS
 
-Email bug reports to B<ic@je-wulff.de> with L<iC Project> in the
+Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
 subject field.
 
 =head1 SEE ALSO
@@ -574,7 +595,7 @@ L<immcc(1)>, L<immac(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2008  John E. Wulff
+COPYRIGHT (C) 2000-2009  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

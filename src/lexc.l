@@ -1,13 +1,13 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.29 2008/06/26 14:46:35 jw Exp $";
+"@(#)$Id: lexc.l,v 1.30 2009/08/21 05:51:38 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	ANSI C Lexer
  *

@@ -1,14 +1,14 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.101 2008/07/14 16:08:55 jw Exp $";
+"@(#)$Id: comp.y,v 1.102 2009/10/15 08:21:32 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	comp.y
  *	grammar for immcc compiler
@@ -37,7 +37,7 @@ static int	iClex(void);
 int		ynerrs;			/* count of yyerror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 static int	copyCfrag(char, char, char, FILE*);	/* copy C action */
-static void	ffexprCompile(char *, List_e *);	/* c_compile cBlock */
+static void	ffexprCompile(char *, List_e *, int);	/* c_compile cBlock */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
@@ -151,7 +151,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %token	<str>	LEXERR COMMENTEND LHEAD BE
 %type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
 %type	<sym>	returnStatement formalParameter lBlock variable valueVariable outVariable
-%type	<sym>	useFlag decl extDecl asgn dasgn casgn dcasgn tasgn dtasgn
+%type	<sym>	useFlag decl extDecl immDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<sym>	iFunTrigger vFunCall vFunCallHead iFunCallHead cFunCallHead tFunCallHead
 %type	<sym>	extCfunDecl dVar
 %type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr actexpr tfexpr ifini ffexpr
@@ -206,18 +206,16 @@ funcStatement
 simpleStatement
 	: useFlag		{ $$   = $1; }		/* use flags */
 	| extCfunDecl		{ $$   = $1; }		/* external C function declaration */
+	| extCfunDecl ','	{ $$   = $1; }		/* external C function declaration - new style */
 	| extDecl		{ $$   = $1; }		/* external declaration */
-	| decl			{ $$   = $1; }		/* immediate declararion */
+	| extDecl ','		{ $$   = $1; }		/* external declaration - new style */
+	| immDecl		{ $$   = $1;		/* immediate declaration */
+	    iFunSyText = 0; }
+	| immDecl ','		{ $$   = $1;		/* immediate declaration - new style */
+	    iFunSyText = 0; }
 	| asgn			{ $$   = $1; }		/* immediate value assignment */
-	| dasgn			{ $$   = $1; }		/* declaration assignment */
-	| casgn			{ $$   = $1;		/* clock assignment */
-	    if (iFunSymExt) collectStatement($1.v); }
-	| dcasgn		{ $$   = $1;		/* declararion clock assignment */
-	    if (iFunSymExt) collectStatement($1.v); }
-	| tasgn			{ $$   = $1;		/* timer assignment */
-	    if (iFunSymExt) collectStatement($1.v); }
-	| dtasgn		{ $$   = $1;		/* declararion timer assignment */
-	    if (iFunSymExt) collectStatement($1.v); }
+	| casgn			{ $$   = $1; }		/* clock assignment */
+	| tasgn			{ $$   = $1; }		/* timer assignment */
 	| vFunCall		{ $$   = $1; }		/* void function call */
 	;
 
@@ -634,8 +632,12 @@ extDeclHead
 		stype.em    = 1;		/* set em for extern declaration */
 		stype.fm    = 0;
 		$$.v = stype;
+		iFunSyText = 0;			/* no function symbols for extern */
 	    }
-	| extDecl ','		{ $$.v = stype;	/* first TYPE */ }
+	| extDecl ','		{
+		$$.v = stype;	/* first TYPE */
+		iFunSyText = 0;			/* no function symbols for extern */
+	    }
 	;
 
 	/************************************************************
@@ -667,7 +669,11 @@ extDeclHead
 	 * and defined as an ARNC or LOGC type with immC. Such an attempted
 	 * assignment is flagged as an error.
 	 *
-	 * declHead has type UDF for all TYPEs except ARNC and LOGC
+	 * immC type declarations may also not be combined with an immediate
+	 * function definition - that is a hard error.
+	 *
+	 * declHead has type UDF for all TYPEs except ARNC and LOGC, which
+	 * are the TYPEs given to completed immC Gate objects.
 	 *
 	 ***********************************************************/
 
@@ -757,6 +763,28 @@ decl	: declHead UNDEF	{
 	    }
 	;
 
+immDecl	: decl			{		/* immediate declaration */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| dasgn			{		/* declaration assignment */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| dcasgn		{		/* declaration clock assignment */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| dtasgn		{		/* declaration timer assignment */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	;
+
 declHead
 	: IMM TYPE		{
 		int		typ;
@@ -785,33 +813,9 @@ declHead
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
 	    }
-	| decl ','		{
+	| immDecl ','		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = stype;			/* first TYPE */
-		if (iFunSymExt) {
-		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
-		}
-	    }
-	| dasgn ','		{
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = stype;			/* first TYPE */
-		if (iFunSymExt) {
-		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
-		}
-	    }
-	| dcasgn ','		{
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = stype;			/* first TYPE */
-		if (iFunSymExt) {
-		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
-		}
-	    }
-	| dtasgn ','		{
-		$$.f = $1.f; $$.l = $1.l;
-		$$.v = stype;			/* first TYPE */
-		if (iFunSymExt) {
-		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
-		}
 	    }
 	;
 
@@ -2109,7 +2113,7 @@ ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 	 ***********************************************************/
 ffexpr	: ifini				{		/* if (expr) { x++; } */
 		$$.v = $1.v;
-		ffexprCompile("IF", $$.v);		/* c_compile cBlock */
+		ffexprCompile("IF", $$.v, c_number);	/* c_compile cBlock */
 	    }
 	/************************************************************
 	 * if (aexpr[,(cexpr|texpr[,aexpr])]) { C code } else { C code }
@@ -2132,7 +2136,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	    }
 		     cBlock		{		/* { x--; } */
 		$$.v = $1.v;
-		ffexprCompile("IF ELSE", $$.v);		/* c_compile cBlock's */
+		ffexprCompile("IF ELSE", $$.v, c_number); /* c_compile cBlock's */
 	    }
 	/************************************************************
 	 * switch (aexpr[,(cexpr|texpr[,aexpr])]) { C switch code }
@@ -2152,7 +2156,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 	    }
 				    cBlock	{	/* { x++; } */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
-		ffexprCompile("SWITCH", $$.v);		/* c_compile cBlock */
+		ffexprCompile("SWITCH", $$.v, c_number); /* c_compile cBlock */
 	    }
 	;
 
@@ -2165,17 +2169,21 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 		if ($1.v == 0 || $1.v->ftype != CLCKL) {
 		    ierror("assigning clock to variable declared differently:", $1.v->name);
-		    if ($1.v) $1.v->type = ERR;		/* cannot execute properly */
+		    if ($1.v) {
+			$1.v->type = ERR;		/* cannot execute properly */
+			$1.v->ftype = CLCKL;
+		    }
 		} else if ($1.v->type != UDF && $1.v->type != CLK) {
 		    ierror("assigning clock to variable assigned differently:", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
-		if ($1.v) $$.v = op_asgn(&$1, &$3, CLCKL);
+		if ($1.v) $$.v = assignExpression(&$1, &$3, 0);
 	    }
 	;
 
 casgn	: UNDEF '=' cexpr	{
-		$$.v = op_asgn(&$1, &$3, CLCKL);	/* not strict */
+		$1.v->ftype = CLCKL;
+		$$.v = assignExpression(&$1, &$3, 0);	/* not strict */
 		if (iC_Sflag) {
 		    ierror("strict: assignment to an undeclared 'imm clock':", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
@@ -2186,7 +2194,8 @@ casgn	: UNDEF '=' cexpr	{
 		    ierror("multiple assignment clock:", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
-		$$.v = op_asgn(&$1, &$3, CLCKL);
+		assert($1.v->ftype == CLCKL);
+		$$.v = assignExpression(&$1, &$3, 0);
 	    }
 	;
 
@@ -2260,17 +2269,21 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 		if ($1.v == 0 || $1.v->ftype != TIMRL) {
 		    ierror("assigning timer to variable declared differently:", $1.v->name);
-		    if ($1.v) $1.v->type = ERR;		/* cannot execute properly */
+		    if ($1.v) {
+			$1.v->type = ERR;		/* cannot execute properly */
+			$1.v->ftype = TIMRL;
+		    }
 		} else if ($1.v->type != UDF && $1.v->type != TIM) {
 		    ierror("assigning timer to variable assigned differently:", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
-		if ($1.v) $$.v = op_asgn(&$1, &$3, TIMRL);
+		if ($1.v) $$.v = assignExpression(&$1, &$3, 0);
 	    }
 	;
 
 tasgn	: UNDEF '=' texpr	{
-		$$.v = op_asgn(&$1, &$3, TIMRL);	/* not strict */
+		$1.v->ftype = TIMRL;
+		$$.v = assignExpression(&$1, &$3, 0);	/* not strict */
 		if (iC_Sflag) {
 		    ierror("strict: assignment to an undeclared 'imm timer':", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
@@ -2281,7 +2294,8 @@ tasgn	: UNDEF '=' texpr	{
 		    ierror("multiple assignment timer:", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
-		$$.v = op_asgn(&$1, &$3, TIMRL);
+		assert($1.v->ftype == TIMRL);
+		$$.v = assignExpression(&$1, &$3, 0);
 	    }
 	;
 
@@ -2420,6 +2434,17 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 * is to be used with a different return value, define a wrapper
 	 * function in a literal block.
 	 *
+	 * If a C function or macro is going to be used in an iC immediate
+	 * expression it must be declared with an extern C function
+	 * declaration in the iC code - at least if 'use strict' is active.
+	 * (it is - isn't it) Such extern declarations make the debugging
+	 * of iC code much simpler.
+	 *
+	 * C functions in blocks of C code controlled by iC if else or
+	 * switch are not limited in this way. They must fit in with
+	 * declarations made in C literal blocks and produce consistent
+	 * C code.
+	 *
 	 ***********************************************************/
 
 cCall	: UNDEF '(' cParams ')'	{
@@ -2509,7 +2534,10 @@ iFunTrigger
 iFunHead
 	: declHead iFunTrigger '('	{
 		$$.f = $1.f; $$.l = $3.l;
-		$$.v = functionDefHead($1.v.ftype, $2.v, 1);	/* function head Symbol */
+		if ($1.v.type == ARNC || $1.v.type == LOGC) {
+		    ierror("Definition of an immC function is illegal:", $$.f);
+		}
+		$$.v = functionDefHead($1.v.ftype, $2.v);	/* function head Symbol */
 	    }
 
 	/************************************************************
@@ -2520,7 +2548,10 @@ iFunHead
 
 	| IMM VOID iFunTrigger '('	{
 		$$.f = $1.f; $$.l = $4.l;
-		$$.v = functionDefHead($2.v->ftype, $3.v, 0); /* function head Symbol */
+		if ($1.v->ftype == 1) {		/* immC in init.c */
+		    ierror("Definition of an immC void function is illegal:", $$.f);
+		}
+		$$.v = functionDefHead($2.v->ftype, $3.v); /* function head Symbol */
 	    }
 	;
 
@@ -2612,6 +2643,11 @@ fPlist	: formalParameter		{
 
 	/************************************************************
 	 * individual formal parameter
+	 * since formal parameters are declared before anything else
+	 * in the function block definition and since they are in their
+	 * own namespace, with the function name prefix @ they cannot
+	 * be anything but UNDEF, except NUMBER or IO variables, which
+	 * will cause a syntax error.
 	 ***********************************************************/
 
 formalParameter
@@ -3049,7 +3085,7 @@ get(FILE* fp, int x)
      *  the years of development (the text of that first token is
      *  only needed in embedded assignments by which time the start
      *  of the statement has been passed). But it did show up in
-     *  debugging output ith the -d2 flag, where a negative increment
+     *  debugging output with the -d2 flag, where a negative increment
      *  was calculated for the length of a statement, which resulted
      *  in a huge buffer overflow.
      *
@@ -3451,15 +3487,6 @@ getNumber(void)
  *
  *******************************************************************/
 
-char *	cexeString[] = {
-    "/**/case %d:\n",				/* begin with empty comment for uniqueness */
-#if INT_MAX == 32767 && defined (LONG16)
-    "static long iC_%d(iC_Gt * iC_gf) {\n",
-#else
-    "static int iC_%d(iC_Gt * iC_gf) {\n",
-#endif
-};
-
 static int
 iClex(void)
 {
@@ -3500,7 +3527,8 @@ iClex(void)
 	    iClval.val.v = 0;			/* value is never used */
 	    c = NUMBER;
 	    goto retfl;
-	} else if (isalpha(c) || c == '_' || c == '$') {	/* first may not be '@' */
+	}
+	if (isalpha(c) || c == '_' || c == '$') {	/* first may not be '@' */
 	    unsigned char	wplus = 0;
 	    unsigned int	qtoken = 0;
 	    unsigned long	qmask = 0;	/* mask to id bit, byte, word or long */
@@ -3530,19 +3558,23 @@ iClex(void)
 		    qmask = 0x02;		/* QB or IB */
 		    iomask = 0x0f;
 		    goto foundQIT;
-		} else if (y1[0] == 'W') {
+		}
+		if (y1[0] == 'W') {
+		  useWord:
 		    wplus = 1;
 		    qmask = 0x0404;		/* QW or IW */
 		    iomask = 0x0f0f;
 		    goto foundQIT;
-		} else if (y1[0] == 'L') {
+		}
+		if (y1[0] == 'L') {
 #if INT_MAX != 32767 || defined (LONG16)
 		    wplus = 1;
 		    qmask = 0x08080808;		/* QL or IL */
 		    iomask = 0x0f0f0f0f;
 		    goto foundQIT;
 #else
-		    ierror("32 bit I/O not supported in 16 bit environment:", iCtext);
+		    warning("32 bit I/O not supported in 16 bit environment:", iCtext);
+		    goto useWord;		/* compile for 16 bit word */
 #endif
 		} else {			/* QX, IX or TX */
 		    /********************************************************************
@@ -4292,7 +4324,7 @@ eof_error:
 } /* copyCfrag */
     
 static void
-ffexprCompile(char * txt, List_e * lp)
+ffexprCompile(char * txt, List_e * lp, int cn)
 {
     int		saveLexflag;
     int		saveLineno;
@@ -4305,7 +4337,7 @@ ffexprCompile(char * txt, List_e * lp)
     assert(sp);
     lp = sp->u_blist;				/* ffexpr head link */
     assert(lp);
-    fprintf(T4FP, "    return 0;\n%s", outFlag ? "}\n\n" : "\n");
+    writeCexeTail(T4FP, "    return 0;\n", cn);
     if (c_compile(T4FP, T5FP, C_PARSE|C_BLOCK1, lp) || copyXlate(T5FP, T1FP, 0, 0, 02)) {
 	ierror("c_compile failed:", txt);
     }

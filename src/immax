@@ -1,0 +1,481 @@
+#!/usr/bin/perl
+
+#################################################################
+#
+#	Copyright (C) 2000-2009  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file
+#
+#	immax
+#
+#   Converter to change single braces in FOR control lines to twin braces
+#
+#################################################################
+
+use strict;
+use warnings;
+use integer;			# allows QX[n/8].[n%8]
+
+my $named = $0;
+$named =~ s#.*[/\\]##;		# delete directory names in path
+format STDERR =
+Usage:
+ @<<<<<<< [-UlTh][ -o<out>][ -e<err>][ -Pm[=d]...][ <in>]
+	$named
+    -o <out>   name of generated output file         (default: stdout)
+    -e <err>   name of error file                    (default: stderr)
+    -U         change all FOR loop control variables to UPPER case
+    -l         change all FOR loop control variables to lower case
+    -Ul        all FOR loop control variables to first letter Upper case
+    -P <m=d>   change FOR loop control variable 'm' to 'd' (default 'M')
+    -T         extra Trace output
+    -h         this help text
+    <in>       iCa source file with array definiions (default: stdin)
+
+    iCa converter to change single braces in FOR control lines to twin
+    braces
+
+$Id: immax,v 1.1 2009/10/15 06:51:41 jw Exp $
+.
+
+use vars qw($opt_o $opt_e $opt_U $opt_l $opt_P $opt_T $opt_h);
+require "getopts.pl";
+&Getopts('o:e:UlP:Th');	# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 2;	# -h, ouput Usage only
+}
+
+my %defs = ();
+my @defines = ();
+my @def = ();
+my $df;
+my $val;
+my $argv;
+my $ret = 0;
+my ($devIn, $inoIn, $devOut, $inoOut);
+
+if ($argv = shift @ARGV) {
+    die "Too many input file arguments (only one allowed)" if scalar @ARGV;
+    open IN, $argv or die "Cannot open iCa input file '$argv': $!";
+    ($devIn, $inoIn) = stat $argv;	# prevent writing to the input file later
+} else {
+    open IN, "<-" or die "Cannot re-open STDIN: $!";
+    $argv = 'STDIN';
+    $devIn = $inoIn = -1;	# different to 0
+}
+
+if ($opt_o) {				# keep iC output file if Log file is in error
+    if (-f $opt_o) {
+	($devOut, $inoOut) = stat(_);
+	die "iC output file '$opt_o' is identical to input file '$argv'"
+	    if $inoOut == $inoIn and $devOut == $devIn;
+	chmod (0644, $opt_o) == 1 or die "Cannot chmod 0644 '$opt_o': $!" unless -w _;
+    }
+    open STDOUT, ">$opt_o" or die "Cannot open iC output file '$opt_o': $!";
+}
+if ($opt_e) {				# must be last so STDERR remains open
+    if (-f $opt_e) {
+	($devOut, $inoOut) = stat(_);
+	die "Error output file '$opt_e' is identical to input file '$argv'"
+	    if $inoOut == $inoIn and $devOut == $devIn;
+	chmod (0644, $opt_e) == 1 or die "Cannot chmod 0644 '$opt_e': $!" unless -w _;
+    }
+    open STDERR, ">$opt_e" or die "Cannot open Error output file '$opt_e': $!";
+}
+
+if (defined $opt_P) {
+    @defines = split(' ', $opt_P);
+    foreach (@defines) {
+	@def = split(/=/, $_);
+	$df = shift(@def);		# enter -P NAME(s) in associative array %defs
+	if ($df =~ /^[A-Z_a-z]\w*$/) {
+	    if (@def) {
+		$val = join('=', @def);
+	    } else {
+		($val = $df) =~ tr/a-z/A-Z/;	# default - change to UPPER case
+	    }
+	    if ($val eq $df) {
+		warn "//* Warning: '-P $df=$val' does not change anything ???\n";
+	    }
+	    $defs{ $df } = $val;
+	} else {
+	    warn "//* Warning: -P '$df' has bad characters - ignored in command line\n";
+	}
+    }
+}
+
+$ret = processFile();
+
+exit $ret;
+
+####################################################################
+#
+#	process one file
+#
+####################################################################
+
+sub processFile {
+    my $r = 0;
+    my ($identifier, %identifiers, %translations, %words, $atom, @atoms, $offset, $lookfor, $pos, $prev);
+    my ($translate, $control, $finBlock, $inBlock, $braceCount, $evalBlock, $comment, @ids, $el);
+    my ($lfFlag, $spOfs, $Cdirective, $directive, $FORline, $compound, $state, @lnErr, $error);
+    my (%forHash, $len, $sqNest, $sqStart, $sqSave, $square, @sqE, $sqP, $sqS);
+    my ($forFlag, $iesFlag, $save, $twinCount, $count);
+    @lnErr = ();
+    %forHash = ();
+    %identifiers = ();
+    %translations = ();
+    %words = ();
+    @ids = ();
+    $state = "A";				# outside of comments and quotes
+    $forFlag = $braceCount = $iesFlag = $finBlock = $inBlock = $lfFlag = $spOfs = $Cdirective = 0;
+    $twinCount = 0x100;				# first level different from $braceCount 0
+    $directive = $FORline = '';
+    undef $compound;
+    while (<IN>) {
+	$control = 0;
+	$comment = $_;
+
+	########################################################################
+	#   Start of detailed analysis of code lines
+	#   extract atoms to drive state machine - save with position
+	#   ignore leading back slash pairs
+	#   include odd back slash to change atom for some lookups - \" ne "
+	########################################################################
+	@atoms = ();
+	$sqNest = $square = $offset = 0;
+	while (/((\\\\)*)(\\?("|'|\/\*|\/\/|\*\/|#|%?({{?|}}?)|\[|\]|\w+|;|\n))/g) {
+	    push @atoms, [ length($`)+length($1), $3 ];		# [ $pos, $atom ]
+	}
+	########################################################################
+	#   check atoms in sequence - positions in line may change now
+	#   translate atoms only in square brackets in code, comments and strings
+	#   and in iCa FOR control lines
+	########################################################################
+	for (my $aix = 0; $aix < @atoms; $aix++) {
+	    my $ref = $atoms[$aix];
+	    ( $pos, $atom ) = @$ref;
+	    if ($atom =~ /^[A-Z_a-z]\w*$/) {
+		if ($state eq "A") {
+		    $words{ $atom }++;		# note all the words used in the program for clashes
+		    if (defined $translations{ $atom }) {
+			push(@lnErr, "### Warning: '$atom' clashes with one of the new control variables. File $argv, line $.\n");
+		    }
+		}
+		if ($sqNest or $forFlag) {
+		    if (defined($translate = $identifiers{ $atom })) {
+			if ($translate ne $atom) {
+			    $len = length $atom;	# translate in strings and comments also
+			    substr($_, $pos + $offset, $len) = $translate;
+			    $offset += length($translate) - $len;
+			}
+			$square |= 0x1 if $sqNest;	# translation in square brackets (iC Ok)
+		    } elsif ($sqNest) {			# not in FOR line
+			unless ($state eq "S") {
+			    $square |= 0x4;		# bare word in square brackets (iC error / C Ok)
+			    push @sqE, $atom;
+			}
+		    }
+		} elsif (not defined $compound and	# not $sqNest and not $forFlag
+		    $state eq "A" and		# not in comments or strings
+		    ($atom eq "if" or $atom eq "else" or $atom eq "switch")) {
+		    $iesFlag = 1;	# start of iC if else or switch control line
+		}
+	    } elsif ($atom =~ /^\d+$/) {
+		$square |= 0x1 if $sqNest;	# numeral in square brackets (iC Ok, no change)
+	    }
+	    if ($atom eq "[") {			# not elsif because "FOR" is looked for in state "A"
+		unless ($sqNest++) {		# opening square bracket pair
+		    $sqSave = $state;
+		    $state = "A";		# allows index expressions with strings in comments
+		    @sqE = ();			# collect new set of bare words
+		    $sqP = $pos;		# note position of first bracket in a possibly nested block
+		}
+		$sqStart = $pos + $offset;	# save for changes to innermost bracket pair
+		$square &= ~0x2;		# possible start of another embedded bracket pair
+	    } elsif ($atom eq "]") {
+		if ($sqNest) {
+		    $sqS = substr($comment, $sqP, $pos-$sqP+1);	# for error messages
+		    if (--$sqNest) {
+			if ($square == 0x1) {
+			    $square |= 0x2;	# mark good embedded bracket pair (iC error / C Ok)
+			} else {
+			    $square |= 0x8;	# stop further eval - allows error message for deep nesting
+			}
+		    } else {
+			$square = 0;	# no other change outside nested square bracket
+			$state = $sqSave;
+			@sqE = ();
+		    }
+		}
+	    } else {
+		if ($state eq "A") {		# iC - Program
+		    if ($atom eq '"') {		# leading back slash will not compare
+			$state = "S";		# start of string found
+		    } elsif ($atom eq "'") {
+			$state = "H";		# start of character constant found
+		    } else {
+			$atom =~ s/^\\//;	# no use for leading back slash any more
+			if ($atom eq "/*") {
+			    $state = "C";	# start of C comment found
+			} elsif ($atom eq "*/") {
+			    push(@lnErr, "### Warning: */ found after end of comment. File $argv, line $.\n");
+			} elsif ($atom eq "//" or $atom eq "#") {
+			    $state = "CP";	# start of C++ or Perl comment found
+			    ########################################################################
+			    # a C-pre-processor directive starting with # in iC code will be treated
+			    # like a comment here. Any C comment on the same line should not go to
+			    # a follow on line - how does the C-pre-processor handle this ?
+			    ########################################################################
+			} elsif ($atom eq "FOR") {
+			  retry:
+			    $ref = $atoms[$aix + 1];	# next atom in @atoms [int] $identifier
+			    if (ref($ref) eq "ARRAY") {
+				( $pos, $identifier ) = @$ref;
+				if ($identifier eq "int") {
+				    $aix++;			# skip over "int"
+				    goto retry;
+				}
+				if (not $forFlag) {
+				    $forFlag = 1;		# translate atoms till next (twin) brace
+				    if (not defined $identifiers{ $identifier }) {
+					push @ids, $identifier;	# each iCa FOR loop only has one $identifier
+					print STDERR "+++ push @ids\n" if $opt_T;
+					$translate = $identifier;
+					if ($opt_U or $opt_l or $opt_P) {
+					    if (defined $defs{ $identifier} ) {
+						$translate = $defs{ $identifier};
+					    }
+					    elsif ($opt_l) {
+						$translate =~ tr/A-Z/a-z/;
+						if ($opt_U) {
+						    substr($translate, 0, 1) =~ tr/a-z/A-Z/;
+						}
+					    }
+					    elsif ($opt_U) {
+						$translate =~ tr/a-z/A-Z/;
+					    }
+					}
+					$identifiers{ $identifier } = $translate; # may not have changed
+					# note changed identifier translation for clashes
+					$translations{ $translate }++ if $translate ne $identifier;
+					delete $words{ $identifier };	# these would of course show up
+					if (defined $words{ $translate }) {
+					    push(@lnErr, "### Warning: '$translate' clashes with a program variable. File $argv, line $.\n");
+					}
+					$finBlock = ++$inBlock;
+					$spOfs = $control = 1;
+					$forFlag = 2;		# proper identifier for this FOR line found
+				    } else {
+					push(@lnErr, "### Warning: 'FOR $identifier' used twice. File $argv, line $.\n");
+				    }
+				} else {
+				    push(@lnErr, "### Warning: another 'FOR' used before '{{'. File $argv, line $.\n");
+				}
+			    } else {
+				push(@lnErr, "### Warning: 'FOR' not followed by identifier. File $argv, line $.\n");
+			    }
+			} elsif ($atom =~ m"^{{?$") {
+			    if ($forFlag) {
+				die "Compiler error: \$iesFlag should not be set if \$forFlag" if $iesFlag;
+				if ($forFlag == 1) {
+				    push(@lnErr, "### Warning: FOR line has no control variable ???\n");
+				}
+				unless ($control) {
+				    $spOfs = $control = 2;	# free standing brace (cannot happen any more)
+				}
+				$forFlag = 0;	# stop translating atoms in FOR control line
+				if ($atom eq "{{") {
+				    $forHash{ $twinCount++ } = 1;	# expecting twin braces
+				} else {
+				    $forHash{ $braceCount++ } = 1;	# convert old dialect
+				    substr($_, $pos + $offset, 0) = "{";
+				    $offset += 1;
+				}
+			    } else {
+				if ($iesFlag) {	# end of if else switch or literal block control line
+				    $compound = $braceCount; # start of a C compound statement in iC code
+				    $iesFlag = 0;
+				}
+				$braceCount++;	# current brace count
+				if ($atom eq "{{") {
+				    substr($_, $pos + $offset, 1) = "";
+				    $offset -= 1;
+				    push(@lnErr, "*** Error: iC/C code should not use '{{'\n");
+				    $r = 2;				# error return
+				}
+			    }
+			} elsif ($atom eq "}") {
+			    --$braceCount if $braceCount;	# prevent underflow
+			    $count = $braceCount;
+			    if (defined $forHash{ $braceCount }) {
+				substr($_, $pos + $offset, 0) = "}";
+				$offset += 1;
+				goto alternate;	# support old dialect
+			    }
+			  single:
+			    if (defined $compound) {
+				undef $compound if $braceCount <= $compound; # end of C compound statement
+			    }
+			} elsif ($atom eq "}}") {
+			    $count = --$twinCount;
+			    if (defined $forHash{ $count }) {
+			      alternate:
+				$inBlock--;	# FOR control block finishes with brace
+				delete $forHash{ $count };
+				print STDERR "+++ pop  @ids\n" if $opt_T;
+				delete $identifiers{ pop @ids };	# latest $identifier out of scope
+			    } else {
+				substr($_, $pos + $offset, 1) = "";
+				$offset -= 1;
+				push(@lnErr, "### Warning: 'Unmatched '}} ???'\n");
+				goto single;		# keep going - makes output cleaner
+			    }
+			}
+		    }
+		} elsif ($state eq "S") {	# string constant
+		    if ($atom eq '"') {
+			$state = "A";
+			$square |= 0x1 if $sqNest;	# string in square brackets (no change)
+		    }
+		} elsif ($state eq "H") {	# character constant
+		    if ($atom eq "'") {
+			$state = "A";
+		    }
+		} else {
+		    $atom =~ s/^\\//;		# no use for leading back slash any more
+		    if ($state eq "C") {	# C comment
+			if ($atom eq "*/") {
+			    $state = "A";	# end of C comment
+			} elsif ($atom eq "/*") {
+			    push(@lnErr, "### Warning: /* found during comment. File $argv, line $.\n");
+			}
+		    } elsif ($state eq "CP") {	# C++ or Perl comment
+			if ($atom eq "\n") {
+			    $state = "A";	# end of C++ or Perl comment
+			}
+		    }
+		}
+	    }
+	}
+	if ($sqNest) {
+	    push(@lnErr, "### ERROR: $argv line $.: Unmatched square bracket at end of line; $sqNest ] missing\n");
+	    $r = 2;		# error return
+	}
+	########################################################################
+	#   end of line analysis
+	########################################################################
+	print;					# output with FOR changes
+	if (@lnErr) {
+	    print STDERR "$.	$comment" if $opt_o or $opt_e; # precede by one listng line
+	    while ($error = shift @lnErr) {
+		print STDERR "$error";		# output errors and warnings to terminal
+		print "//$error" if $opt_o or $opt_e;	# and output file
+	    }
+	}
+    }
+    if ($twinCount != 0x100) {
+	print STDERR "*** Error: at EOF - FOR line twin braces {{ @{[$twinCount-0x100]} }} do not match. File $argv, line $.\n";
+	$r = 2;		# error return
+    }
+    print STDERR "//***** \$braceCount = $braceCount\n" if $braceCount and $opt_T;
+    return $r;
+} # processFile
+__END__
+
+############ POD to generate man page ##################################
+
+=head1 NAME
+
+ immax - iCa converter to change single braces in FOR control lines
+
+=head1 SYNOPSIS
+
+ immax [-UlTh][ -o<out>][ -e<err>][ -Pm[=d]...][ <in>]
+	$named
+    -o <out>   name of generated output file         (default: stdout)
+    -e <err>   name of error file                    (default: stderr)
+    -U         change all FOR loop control variables to UPPER case
+    -l         change all FOR loop control variables to lower case
+    -Ul        all FOR loop control variables to first letter Upper case
+    -P <m=d>   change FOR loop control variable 'm' to 'd' (default 'M')
+    -T         extra Trace output
+    -h         this help text
+    <in>       iCa source file with array definiions (default: stdin)
+
+=head1 DESCRIPTION
+
+B<immax> reads and translates one source eg file.ica. If no options are specified,
+output is to 'stdout' and compilation errors (if any) are reported on 'stderr'.
+Normally output is stored in a file specified with the -o <output> option. Error messages
+are included in the output file.
+
+=head1 SPECIFICATION
+
+During the development of the B<immac> compiler it was found that
+single braces for blocks controlled by FOR control lines could get
+out of sync with iC and C language statement block braces under some
+(rare) conditions. Therefore it was decided to change the iCa language
+to use twin braces {{ ... }} for blocks of iC/C code controlled by a
+FOR statement. It was also found, that the iCa language was easier to
+read, if control variables used in a FOR loop were upper case. Here
+an example of the old and the new dialect:
+
+    FOR (n = 0; n < 10; n++) {	    FOR (N = 0; N < 10; N++) {{
+	if (a[n] < b[n]) {		if (a[N] < b[N]) {
+	    ;	/* OLD */		    ;	/* NEW */
+	}				}
+    }				    }}
+
+
+B<immax> translates an iCa-source with old dialect FOR control lines
+into the new iCa dialect. The -U option also changes all lower case
+control variables to upper case. These changes make no difference
+to the iC output generated from the converted iCa files, since FOR
+control variables do not appear in the final iC file.
+
+B<immac> still accepts single braces for blocks controlled by a FOR
+statement although it will issue an error message if the 'use strict'
+pragma is present.
+
+There have been other changes to the iCa language. FOR control
+statements can now be written in free format, either spread over
+several lines or a whole block written in one line. When a FOR
+statement is written in one line, all its generated components are
+also written in one line. If an iC/C statement precedes or follows a
+FOR statement, that will be output in the same line. This means that
+the '\' is no longer necessary to generate single line output. The
+'\' syntax is still supported by B<immac>. It is not automatically
+translated by B<immax>.
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<immac(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2009  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.
+
+=cut
+
+############ end of POD to generate man page ###########################

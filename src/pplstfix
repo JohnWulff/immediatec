@@ -2,13 +2,13 @@
 
 #################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	pplstfix
 #   Fix iC listing, eliminating aliases and other discrepencies
@@ -39,7 +39,8 @@
 #   V1.17: 10.01.06 Add -o option to specify an output file (Windows has trouble with >)
 #   V1.18: 27.02.07 use '@' as function head marker rather then '$', which can be normal variable character
 #   V1.19: 14.03.08 add 'e' to $FOPS and $LOPS;
-#   V1.20: 25.06.08 Change Copyright to include 2008; email ic@je-wulff.de
+#   V1.20: 25.06.08 Change Copyright to include 2008; email
+#   V1.21: 21.08.09 Change Copyright to include 2009; no email
 #
 #################################################################
 
@@ -54,7 +55,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.20 2008/06/25 23:45:52 jw Exp $
+$Id: pplstfix,v 1.21 2009/08/21 06:24:40 jw Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);

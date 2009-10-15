@@ -6,13 +6,13 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 
 ########################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	icg.pl
 #
@@ -37,7 +37,7 @@ Usage:	@<<<<<<< [-h] [-D<def> ...] [<file> ...]
 		(could be several files)
 		if no <file> argument, stdin is copied to stdout
 	-h	help, ouput this Usage text only
-$Id: icg.pl,v 1.2 2008/06/25 21:44:39 jw Exp $
+$Id: icg.pl,v 1.3 2009/08/21 06:05:15 jw Exp $
 .
 
 use vars qw($opt_D $opt_h);

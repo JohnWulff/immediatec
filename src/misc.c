@@ -1,14 +1,14 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.7 2008/06/25 21:47:14 jw Exp $";
+"@(#)$Id: misc.c,v 1.8 2009/08/21 06:08:14 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	misc.c
  *	miscellanious functions shared by all modules

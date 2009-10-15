@@ -4,13 +4,13 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 
 ########################################################################
 #
-#	Copyright (C) 2000-2008  John E. Wulff
+#	Copyright (C) 2000-2009  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
 #
 #   For more information about this program, or for information on how
-#   to contact the author, see the README file or <ic@je-wulff.de>
+#   to contact the author, see the README file
 #
 #	comp.pl
 #
@@ -47,7 +47,7 @@ CYCLE:
 	chomp();
 	$CondReg = 0;   # cleared on t
 BOS:;
-# # $Id: comp.pl,v 1.5 2008/06/25 21:38:16 jw Exp $
+# # $Id: comp.pl,v 1.6 2009/08/21 06:01:04 jw Exp $
 # s/yyparse/iCparse/g
 { $s = s /yyparse/iCparse/sg;
   $CondReg ||= $s;

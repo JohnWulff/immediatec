@@ -1,14 +1,14 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.36 2008/07/14 09:28:45 jw Exp $";
+"@(#)$Id: init.c,v 1.37 2009/08/23 02:15:49 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2008  John E. Wulff
+ *	Copyright (C) 1985-2009  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	init.c
  *	parallel plc - initialise compiler symbol table with keywords
@@ -156,6 +156,7 @@ static struct bi builtins[] = {
   { "while",	KEYW,	LEXERR,	0,	},
   { "fortran",	KEYW,	LEXERR,	0,	},
   { "asm",	KEYW,	LEXERR,	0,	},
+  { "FOR",	KEYW,	LEXERR,	0,	}, /* keyword used in immac FOR loops */
   { "iC_Gt",	CTYPE,	YYERRCODE, 0,	}, /* initial Gate C-type from icg.h */
   { "iConst",	NCONST, 0,	ARITH,	}, /* Symbol "iConst" must be second last non-zero entry */
   { "iClock",	CLK,	0,	CLCKL,	}, /* Symbol "iClock" must be last non-zero entry */

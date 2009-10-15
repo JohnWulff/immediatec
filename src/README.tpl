@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.20 2008/07/10 20:18:06 jw Exp $
+#   $Id: README.tpl,v 1.21 2009/08/21 05:39:05 jw Exp $
 ########################################################################
 
 use strict;
@@ -81,7 +81,7 @@ print <<EOF;
     library and your code are in the same binary file is, in this case,
     a form of mere aggregation.) This is my interpretation of the GPL.
     If you still have concerns or difficulties understanding my intent,
-    feel free to contact me at <ic\@je-wulff.de>.
+    feel free to contact me (see my email at end of this README)
 
     Of course, the Artistic License spells all this out for your protection,
     so you may prefer to use that.
@@ -126,7 +126,7 @@ print <<EOF;
 	    make test
 
     4)  To use the Perl support programs, it is mandatory that you install the
-	Perl packages Tk800.024 or later and Time::HiRes unless they are already
+	Perl packages Tk804.028 or later and Time::HiRes unless they are already
 	installed on your system.  Both are included with this distribution.
 	This can be checked by executing the following at this point:
 
@@ -151,8 +151,8 @@ print <<EOF;
 
     6)  Perl/Tk is usually contained in Linux distributions and will
 	be installed automatically when the package is selected.
-	If not, unpack, build and install Tk-800.024.tar.gz (or later).
-	Follow the instructions in the README.xxx and INSTALL files.
+	If not, unpack, build and install Tk-804.028.tar.gz (or later).
+	Follow the instructions in the README and INSTALL files.
 	For Cygwin under WinXP a special binary distribution of Tk800.023
 	is included, which works fine.
 
@@ -285,10 +285,15 @@ print <<EOF;
 
     Lots of success
 
-    John E. Wulff   $YEAR.$MONTH.$DAY     <ic\@je-wulff.de>
+    John E. Wulff   $YEAR.$MONTH.$DAY     <immediateC\@gmail.com>
 
 
-    I currently use SuSE Linux 9.3 with Tk800.024. I have tested the
+    I have now switched to openSUSE 11.1, which brings along Tk804.28,
+    which provides fast live updates in iClive again. They seem to be as
+    fast as with Tk800.24. This was only judged by observation - at least
+    the performance is now subjectively good and I suggest you get Tk804.28.
+
+    I was using SuSE Linux 9.3 with Tk800.024. I have tested the
     distribution with Cygwin under WinXP and a special binary distribution
     of Tk800.023 (in the kit).  Perl under Windows Vista will not execute
     forked processes, so the iC support programs don't work.
@@ -296,12 +301,7 @@ print <<EOF;
     A test with Tk804.027 under MAC-OSX 1.3 and SuSE Linux 10.2 both work,
     but live updates in iClive are noticably slow in both systems (about 10x).
     Tag-handling in Tk::Text is much slower under Tk804.27 than under
-    Tk800.024 with Linux.  Therefore I suggest staying with Tk800.024.
-
-    I have now switched to openSUSE 11.0, which brings along Tk804.28,
-    which provides fast live updates in iClive again. They seem to be as
-    fast as with Tk800.24. This was only judged by observation - at least
-    the performance is now subjectively good and I suggest you get Tk804.28.
+    Tk800.024 with Linux.
 
     A Test with Knoppix and Tk804.25, which is still available for Debian
     also provided good performance with fast live updates in iClive.

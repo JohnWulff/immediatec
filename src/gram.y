@@ -1,12 +1,12 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.28 2008/06/26 14:46:43 jw Exp $";
+"@(#)$Id: gram.y,v 1.29 2009/08/21 06:10:26 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
  *
  *  For more information about this program, or for information on how
- *  to contact the author, see the README file or <ic@je-wulff.de>
+ *  to contact the author, see the README file
  *
  *	ANSI C Grammar
  *
