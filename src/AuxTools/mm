@@ -18,6 +18,7 @@ usage ()
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo '	-a      immac: output for loop control and %define lines as comments' >&2
   echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
@@ -31,14 +32,14 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: mm,v 1.20 2009/09/12 09:21:02 jw Exp $' >&2
+  echo '$Id: mm,v 1.21 2010/11/01 05:52:05 jw Exp $' >&2
 }
 
 A=" -f"
 z=0
 I=""
 
-while getopts ":d:gASO:PRaLNjIJ6xzh" opt; do
+while getopts ":d:gASO:PRsaLNjIJ6xzh" opt; do
     case $opt in
     v )	A="$A -v$OPTARG";;
     d ) A="$A -d$OPTARG";;
@@ -48,6 +49,7 @@ while getopts ":d:gASO:PRaLNjIJ6xzh" opt; do
     O )	A="$A -O$OPTARG";;
     P )	A="$A -P";;
     R )	A="$A -R";;
+    s )	A="$A -s";;
     a )	A="$A -a";;
     L )	A="$A -L";;
     N )	A="$A -N";;

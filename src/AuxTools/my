@@ -12,6 +12,7 @@ usage ()
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
@@ -22,7 +23,7 @@ usage ()
   echo '	-h	this help text' >&2
   echo 'uses immcc -d76 -d<opt> -O<level> x.ic to make each line of the list pp.lt' >&2
   echo 'uses immcc -d74 -d<opt> -O<level> -o x.c x.ic to make each line of the list pp.lt' >&2
-  echo '	$Id: my,v 1.16 2009/09/18 07:40:34 jw Exp $' >&2
+  echo '	$Id: my,v 1.17 2010/11/01 05:50:51 jw Exp $' >&2
 }
 
 d=""
@@ -32,7 +33,7 @@ A=" -f"
 I=""
 g=""
 
-while getopts ":d:gASO:PRNjIJ6xzh" opt; do
+while getopts ":d:gASO:PRsNjIJ6xzh" opt; do
     case $opt in
     d ) d="$d -d$OPTARG";;
     g )	A="$A -g";;
@@ -41,6 +42,7 @@ while getopts ":d:gASO:PRNjIJ6xzh" opt; do
     O )	A="$A -O$OPTARG";;
     P )	A="$A -P";;
     R )	A="$A -R";;
+    s )	A="$A -s";;
     N )	A="$A -N";;
     j ) I=" -j";;
     I ) I=" -I";;
@@ -62,10 +64,10 @@ if [ -f pp.lt ]; then
 	for file in $(cat pp.lt); do
 	    f=${file%.*}
 	    if [ -n "$z" ]; then
-		echo "iCmake$I$d$A -6s $f.ic" >&2
+		echo "iCmake$I$d$A -6t $f.ic" >&2
 	    fi
 	    rm -f cexe.c
-	    iCmake$I$d$A -6s $f.ic
+	    iCmake$I$d$A -6t $f.ic
 	    if test -f cexe.c &&
 		! diff -q -I'was built with' cexe.c /tmp/cexe.c > /dev/null; then
 		if [ -n "$z" ]; then

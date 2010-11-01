@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: tt,v 1.30 2009/09/18 01:03:28 jw Exp $' >&2
+  echo '$Id: tt,v 1.31 2010/11/01 05:43:40 jw Exp $' >&2
 }
 
 usage()
@@ -34,6 +34,7 @@ usage()
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
+  echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo '	-a      immac: output for loop control and %define lines as comments (mm)' >&2
   echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
@@ -103,7 +104,7 @@ test2=""
 Test1='Test1 Test9 Test11'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
-while getopts ":cm:d:lwrgASO:PRaLNjIJ6x:f:F:t:T:zvh" opt; do
+while getopts ":cm:d:lwrgASO:PRsaLNjIJ6x:f:F:t:T:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
@@ -117,6 +118,7 @@ while getopts ":cm:d:lwrgASO:PRaLNjIJ6x:f:F:t:T:zvh" opt; do
     O )	A="$A -O$OPTARG";;
     P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
     R )	A="$A -R";;
+    s )	A="$A -s";;
     a )	A="$A -a"; a=1;;
     L )	L="$L -L";;
     N )	A="$A -N";;
