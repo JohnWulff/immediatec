@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.64 2009/08/21 06:16:56 jw Exp $";
+"@(#)$Id: icc.c,v 1.65 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -46,8 +46,10 @@ unsigned short		iC_optimise = 07;	/* optimisation levels 0 - 7 */
 int			iC_genCount;
 
 static const char *	usage =
-"USAGE: %s [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>][ -O<level>]\n"
-"    [ -Dmacro[=defn]...][ -Umacro...][ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>] <src.ic>\n"
+"Usage:\n"
+" %s [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]\n"
+"       [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]\n"
+"       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>|-]\n"
 #if defined(RUN) || defined(TCP)
 "Options in compile mode (-o or -c):\n"
 #endif	/* RUN or TCP */
@@ -71,8 +73,11 @@ static const char *	usage =
 "                        Note: do not use the same macros for the iC and the C phase\n"
 "        -C <macro>      predefine <macro> for the C preprocessor phase\n"
 "        -V <macro>      cancel previous definition of <macro> for the C phase\n"
-"        -W[no-]<warn>   positive/negative warning options\n"
-"                        -Wno-deprecated-logic -Wno-deprecated -Wdeprecated (default)\n"
+"        -W[no-]<warn>                  positive/negative warning options\n"
+"            -W[no-]deprecated-logic    use of && || ! in pure bit expressions\n"
+"            -W[no-]function-parameter  unused parameters in functions\n"
+"            -W[no-]function-delete     delete before function re-definition\n"
+"            -Wno-deprecated -Wdeprecated (default) all of the above\n"
 #if defined(RUN) || defined(TCP)
 "        -k <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
@@ -93,18 +98,18 @@ static const char *	usage =
 #if YYDEBUG && !defined(_WINDOWS)
 "                                          DEBUG options\n"
 #if defined(RUN) || defined(TCP)
-"                  +402  logic generation (exits after initialisation)\n"
+"                  +402  logic generation    (exits after initialisation)\n"
 #ifdef YACC
-"                  +401  iC yacc debug info  (on stdout only) (+4401 C yacc)\n"
+"                  +401  iC yacc debug info  (on stdout only) (+4401 C yacc info)\n"
 #else	/* BISON */
-"                  +401  iC bison debug info (on stderr only) (+4401 C bison)\n"
+"                  +401  iC bison debug info (on stderr only) (+4401 C bison info)\n"
 #endif	/* YACC */
 #else	/* not RUN and not TCP */
 "                    +2  logic generation                     (+4002 Symbol Table)\n"
 #ifdef YACC
-"                    +1  iC yacc debug info  (on stdout only) (+4001 C yacc)\n"
+"                    +1  iC yacc debug info  (on stdout only) (+4001 C yacc info)\n"
 #else	/* BISON */
-"                    +1  iC bison debug info (on stderr only) (+4001 C bison)\n"
+"                    +1  iC bison debug info (on stderr only) (+4001 C bison info)\n"
 #endif	/* YACC */
 #endif	/* RUN or TCP */
 "                 +4000  supress listing alias post processor (save temp files)\n"
@@ -122,7 +127,7 @@ static const char *	usage =
 #endif	/* EFENCE */
 #if defined(RUN) || defined(TCP)
 "Extra options for run mode: (direct interpretation)\n"
-"  [-n<count>"
+" [ -n<count>"
 #ifdef TCP
 "][ -s <server>][ -p <port>][ -u <unitID>"
 #endif	/* TCP */
@@ -134,12 +139,13 @@ static const char *	usage =
 #endif	/* YYDEBUG and not _WINDOWS */
 "]\n"
 #ifdef TCP
-"        -s host ID of server      (default '%s')\n"
-"        -p service port of server (default '%s')\n"
-"        -u unit ID of this client (default base name of <src.ic>)\n"
-"        -i instance ID of this client (default '%s'; 1 to %d numeric digits)\n"
+"        -s host ID      of server      (default '%s')\n"
+"        -p service port of server      (default '%s')\n"
+"        -u unit ID      of this client (default base name of <src.ic>)\n"
+"        -i instance ID  of this client (default '%s'; 1 to %d numeric digits)\n"
 #endif	/* TCP */
 "        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
+"                        0 allows unlimited oscillations\n"
 #if YYDEBUG && !defined(_WINDOWS)
 "        -d <debug>2000  display scan_cnt and link_cnt\n"
 "                 +1000  do not trace non-active timers TX0.n\n"
@@ -183,7 +189,7 @@ char *		iC_progname;		/* name of this executable */
 short		iC_debug = 0;
 int		iC_micro = 0;
 int		iC_Pflag = 0;		/* pedantic warning/error flag */
-int		iC_Wflag = W_DEPRECATED_LOGIC;	/* do/no logic warnings */
+int		iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
 unsigned short	iC_xflag;
 unsigned short	iFlag;
 unsigned short	iC_osc_max = MARKMAX;
@@ -417,9 +423,7 @@ main(
     iFunBuffer = iC_emalloc(IBUFSIZE);	/* buffer to build imm function symbols */
     iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
 #endif	/* EFENCE */
-    functionUseSize = FUNUSESIZE;	/* initialise function use database */
-    functionUse = (FuUse*)realloc(NULL, FUNUSESIZE * sizeof(FuUse));
-    memset(functionUse, '\0', FUNUSESIZE * sizeof(FuUse));
+    writeCexeString(NULL, 0);		/* initialise function use database */
     T0FP = stdin;			/* input file pointer */
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
@@ -582,19 +586,30 @@ main(
 		    break;
 		case 'P':
 		    iC_Pflag++;			/* -P is pedantic, -PP or more is pedantic-error*/
+		    iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
 		    break;
 		case 'W':
-		    if (strcmp(*argv, "Wno-deprecated") == 0) {
-			iC_Wflag &= ~(W_DEPRECATED_LOGIC);	/* or all deprecated flags */
-		    } else if (strcmp(*argv, "Wdeprecated") == 0) {
-			iC_Wflag |= (W_DEPRECATED_LOGIC);	/* or all deprecated flags */
-		    } else if (strcmp(*argv, "Wno-deprecated-logic") == 0) {
-			iC_Wflag &= ~W_DEPRECATED_LOGIC;
-		    } else if (strcmp(*argv, "Wdeprecated-logic") == 0) {
-			iC_Wflag |= W_DEPRECATED_LOGIC;
-		    /* Insert other Waning switches here */
-		    } else {
-			goto cerror;
+		    if (! iC_Pflag) {
+			if (strcmp(*argv, "Wdeprecated") == 0) {	/* default */
+			    iC_Wflag |= (W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE);
+			} else if (strcmp(*argv, "Wno-deprecated") == 0) {
+			    iC_Wflag &= ~(W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE);
+			} else if (strcmp(*argv, "Wdeprecated-logic") == 0) {
+			    iC_Wflag |= W_DEPRECATED_LOGIC;
+			} else if (strcmp(*argv, "Wno-deprecated-logic") == 0) {
+			    iC_Wflag &= ~W_DEPRECATED_LOGIC;
+			} else if (strcmp(*argv, "Wfunction-parameter") == 0) {
+			    iC_Wflag |= W_FUNCTION_PARAMETER;
+			} else if (strcmp(*argv, "Wno-function-parameter") == 0) {
+			    iC_Wflag &= ~W_FUNCTION_PARAMETER;
+			} else if (strcmp(*argv, "Wfunction-delete") == 0) {
+			    iC_Wflag |= W_FUNCTION_DELETE;
+			} else if (strcmp(*argv, "Wno-function-delete") == 0) {
+			    iC_Wflag &= ~W_FUNCTION_DELETE;
+			/* Insert other Waning switches here */
+			} else {
+			    goto cerror;
+			}
 		    }
 		    goto break2;
 		case 'g':
@@ -1005,7 +1020,7 @@ iC_inversionCorrection(void)
 
  immcc [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
        [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
-       [ -Cmacro[=defn]...][ -Vmacro...] <src.ic>
+       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>|-]
     -o <out> name of generated C output file
     -c       generate C source cexe.c to extend 'icr' or 'ict' compiler
              (cannot be used if also compiling with -o)
@@ -1020,12 +1035,17 @@ iC_inversionCorrection(void)
     -PP      pedantic-error: error if variable contains $
     -R       no maximum error count (default: abort after 100 errors)
     -O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate
-             duplicate arithmetic expressions; -O7 all (default)\n"
+             duplicate arithmetic expressions; -O7 all (default)
     -D <macro> predefine <macro> for the iC preprocessor phase
     -U <macro> cancel previous definition of <macro> for the iC phase
             Note: do not use the same macros for the iC and the C phase
     -C <macro> predefine <macro> for the C preprocessor phase
     -V <macro> cancel previous definition of <macro> for the C phase
+    -W[no-]<warn>                  positive/negative warning options
+        -W[no-]deprecated-logic    use of && || ! in pure bit expressions
+        -W[no-]function-parameter  unused parameters in functions
+        -W[no-]function-delete     delete before function re-definition
+        -Wno-deprecated -Wdeprecated (default) all of the above
     -k <lim> highest I/O index (default: no limit; 63 for -c mode)
              if lim <= 63, mixed byte, word and long indices are tested
              default: any index for bit, byte, word or long is allowed
@@ -1037,7 +1057,7 @@ iC_inversionCorrection(void)
        +204  numerical values prepared for iClive display
                               DEBUG options
          +2  logic generation                     (+4002 Symbol Table)
-         +1  iC bison iC_debug info (on stderr only) (+4001 C bison)
+         +1  iC yacc debug info  (on stdout only) (+4001 C yacc info)
       +4000  supress listing alias post processor (save temp files)
      +10000  generate listing of compiler internal functions
      +20000  use old style imm functions - no internal functions

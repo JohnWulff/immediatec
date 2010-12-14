@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.20 2009/08/21 06:09:32 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.21 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -239,8 +239,10 @@ iC_connect_to_server(const char *	host,
 	iC_quit(1);
     }
 
-    fprintf(iC_outFP, "'%s' connected to server at '%s:%d'\n",
-	iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    if (iC_osc_max != 0) {		/* suppress connection info for unlimited oscillations */
+	fprintf(iC_outFP, "'%s' connected to server at '%s:%d'\n",
+	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+    }
 
     FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
 #ifndef	WIN32

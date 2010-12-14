@@ -19,36 +19,39 @@
 
 if echo $PATH | grep -q intel_cc; then
     CC=icc
-    ldir=" -I/usr/local/include -L/usr/local/lib"
 else
     CC=gcc
-    ldir=" -I/usr/local/include -L/usr/local/lib"
 fi
+ldir=" -I/usr/local/include -L/usr/local/lib"
+LIB="/usr/local/lib/"
 ICC=immcc
 IAC=immac
 
 usage ()
 {
   echo 'Usage:' >&2
-  echo '  '${0##*/}' [-[l|o<exe>|i|s|c|b|n]fgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]' >&2
+  echo '  '${0##*/}' [-[l|o<exe>|i|t|c|b|n]sfgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]' >&2
   echo '         [ -k<lim>][ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]' >&2
-  echo '         [ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...] file ...' >&2
+  echo '         [ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...]' >&2
+  echo '         [ -W[no-]<warn>...] file ...' >&2
   echo '     default:	link all iC-files file.ic ... into independent executables' >&2
   echo '		output names are base names of the iC-files (file ...)' >&2
   echo '	-l	link all iC-files into one executable (implies -A)' >&2
   echo '		default: output name is base name of the first iC-file' >&2
   echo '		complete listing of all files is in first.lst' >&2
-  echo '	-o<exe>	place output in file 'exe' (implies -l if first option)' >&2
+  echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
   echo '		complete listing of all files is in exe.lst' >&2
   echo "	-i      generate iC file.ic .. only (runs $IAC pre-compiler only)" >&2
-  echo '	-s	generate listings file.lst .. only (-o target.lst optional)' >&2
+  echo '	-t	generate listings file.lst .. only (-o target.lst optional)' >&2
   echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
   echo '	-b	generate both listings and C outputs - no executable' >&2
   echo "	-n	generate no output, report $ICC compile errors only" >&2
-  echo '		-s and -n generate 'cexe.c' for last file as a side effect' >&2
+  echo "		-t and -n generate 'cexe.c' for last file as a side effect" >&2
+  echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo "	-f	force building of new output files - do not $IAC for .ic" >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
   echo '	-g	debugging with gdb - each expression has its own C code' >&2
+  echo '		forces -s -- link with static library libict.a' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo "		forces $IAC to only accept twin braces in FOR ... {{ }}" >&2
@@ -56,7 +59,7 @@ usage ()
   echo '	-p	pedantic: warning if variable contains $ (default: $ allowed)' >&2
   echo '	-pp	pedantic-error: error if variable contains $' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
-  echo '		duplicate arithmetic expressions -O7 all (default)' >&2
+  echo '		   duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
   echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
@@ -65,25 +68,32 @@ usage ()
   echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
   echo "	-P<macro> predefine <macro> for $IAC pre-compiler (forces $IAC)" >&2
   echo '		  also forces building of new iC output and the rest' >&2
+  echo '	-W[no-]<warn>                  positive/negative warning options' >&2
+  echo '	    -W[no-]deprecated-logic    use of && || ! in pure bit expressions' >&2
+  echo '	    -W[no-]function-parameter  unused parameters in functions' >&2
+  echo '	    -W[no-]function-delete     delete before function re-definition' >&2
+  echo '	    -Wno-deprecated -Wdeprecated (default) all of the above' >&2
   echo "	-a      $IAC: output FOR loop control and %define lines as comments" >&2
   echo "	-L      generate auxiliary 'file.log' for debugging $IAC translation" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
   echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
   echo '	        default: any index for bit, byte, word or long is allowed' >&2
-  echo '	-j	produce file.ini which records load info from initial run' >&2
+  echo '	-j	produce file.ini which records output of an initial run' >&2
   echo '	-I	produce file.ini with full INITIALIZATION info (debug only)' >&2
-  echo '	-J	produce file.ini with run INITIALIZATION only (debug only)' >&2
+  echo '	-J	produce file.ini with run INITIALIZATION only  (debug only)' >&2
   echo '	-6	produce logic generation listing file.lst6' >&2
   echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
   echo '	-q	quiet operation - return status only' >&2
-  echo "	-v<N>   use $IAC<N>, $ICC<N>, pplstfix<N> and libict<N>.a in local directory" >&2
-  echo "	-w<dir> use $IAC, $ICC, pplstfix and libict.a in directory <dir>" >&2
+  echo "	-v<N>	use $IAC<N>, $ICC<N>, pplstfix<N> and libict<N>.a in local" >&2
+  echo '		directory' >&2
+  echo "	-w<dir>	use $IAC, $ICC, pplstfix and libict.a in directory <dir>" >&2
   echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
   echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
-  echo "	-N	No nice with calls of $ICC, $CC and $IAC compilers (default: nice)" >&2
+  echo "	-N	No nice with calls of $ICC, $CC and $IAC compilers" >&2
+  echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.38 2009/10/15 03:21:31 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.39 2010/12/14 07:05:06 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -125,7 +135,7 @@ if $ICC < /dev/null 2>&1| grep -q 'Electric Fence'; then
     ef=" -lefence"
 fi
 
-while getopts ":lo:iscbnfegASpRaLk:jIJ6xqNzv:w:d:O:D:U:C:V:P:h" opt; do
+while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     case $opt in
     l )	link=1
 	aux=" -a"			# generate aux files with 'immcc -a' for linking
@@ -155,13 +165,14 @@ while getopts ":lo:iscbnfegASpRaLk:jIJ6xqNzv:w:d:O:D:U:C:V:P:h" opt; do
 	fi
 	;;
     i )	ic="ica";;
-    s )	link=2;;
+    t )	link=2;;
     c )	link=3; d="$A$S$R$k";;
     b ) link=4;;
     n ) link=5; d="$A$S$R$k";;
+    s ) lib="${LIB}libict.a$lwsock32";;
     f )	force=1;;
     e ) ef=" -lefence";;
-    g ) d="$d -g"; CFL="$CFL -g";;
+    g ) d="$d -g"; CFL="$CFL -g"; lib="${LIB}libict.a$lwsock32";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
     p )	if [ -z "$p" ]; then p=" -P"; C="$C -pedantic"; fi; d="$d$p";;	# allows -pp => -P -P
@@ -180,7 +191,6 @@ while getopts ":lo:iscbnfegASpRaLk:jIJ6xqNzv:w:d:O:D:U:C:V:P:h" opt; do
     x )	d="$d -d4000"; x="1";;
     q )	q=1;;
     N ) nice=""; N=" -N";;
-    z )	z=1;;
     v ) if [ -z "$b" ]; then
 	    b="./"
 	fi
@@ -206,14 +216,17 @@ while getopts ":lo:iscbnfegASpRaLk:jIJ6xqNzv:w:d:O:D:U:C:V:P:h" opt; do
     C ) D="$D -C$OPTARG"; C="$C -D$OPTARG";;
     V ) D="$D -V$OPTARG"; C="$C -U$OPTARG";;
     P ) P="$P -P$OPTARG";;
+    W ) D="$D -W$OPTARG";;
+    z )	z=1;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
 
-lib=$lib$ef
+lib="$lib$ef"
 # echo "I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib, force = $force"
+# echo "*='$*'"
 # exit
 
 # if [ $q -eq 0 ]; then
@@ -353,7 +366,7 @@ for arg in $*; do
 		    first=$base
 		fi
 	    fi ;;
-	2)				# -s	generate listings file.lst
+	2)				# -t	generate listings file.lst
 	    if [ -n "$first" ]; then
 		base=${first%.*}
 		first=''		# -o applied only to first file
@@ -467,9 +480,7 @@ if [ $link -eq 1 -a -z "$ic" ]; then
 	fi
 	if $nice$CC$CFL -I.$ldir$C -o $first $list $lib; then
 	    if [ -n "$I" ]; then
-		if [ $z -eq 1 ]; then
-		    echo "./$first -d$I > $first.ini"
-		fi
+		if [ $z -eq 1 ]; then echo "./$first -d$I > $first.ini"; fi
 		if ! ./$first -d$I > $first.ini; then
 		    if [ $q -eq 0 ]; then
 			echo "run time error in initial execution of '$first'" >&2
@@ -508,9 +519,10 @@ exit $status
 
 =head1 SYNOPSIS
 
- iCmake [-[l|o<exe>|i|s|c|b|n]fgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]
+ iCmake [-[l|o<exe>|i|t|c|b|n]sfgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]
         [ -k<lim>][ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
-	[ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...] file ...
+	[ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...]
+	[ -W[no-]<warn>...] file ...
    default: link all iC-files file.ic ... into independent executables
             output names are base names of the iC-files (file ...)
     -l      link all iC-files into one executable (implies -A)
@@ -519,20 +531,24 @@ exit $status
     -o<exe> place output in file 'exe' (implies -l if first option)
             complete listing of all files is in exe.lst
     -i      generate iC file.ic .. only (runs immac pre-compiler only)
-    -s      generate listings file.lst .. only (-o target.lst optional)
+    -t      generate listings file.lst .. only (-o target.lst optional)
     -c      generate C outputs file.c ... only (-o target.c optional)
     -b      generate both listings and C outputs - no executable
     -n      generate no output, report immcc compile errors only
-            -s and -n generate 'cexe.c' for last file as a side effect
+            -t and -n generate 'cexe.c' for last file as a side effect
+    -s	    link with static library libict.a (default libict.so)
     -f      force building of new output files - do not immac for .ic
     -e      link all targets with -lefence to test with Electric Fence
     -g      debugging with gdb - each expression has its own C code
+            forces -s -- link with static library libict.a
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S      strict compile - all immediate variables must be declared
             forces immac to only accept twin braces in FOR ... {{ }}
             -N negates use strict pragmas in immac for testing
     -p      pedantic: warning if variable contains $ (default: $ allowed)
     -pp     pedantic-error: error if variable contains $
+    -O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate
+               duplicate arithmetic expressions -O7 all (default)
     -R      no maximum error count (default: abort after 100 errors)
     -D <macro> predefine <macro> for the iC preprocessor phase
     -U <macro> cancel previous definition of <macro> for the iC phase
@@ -541,6 +557,11 @@ exit $status
     -V <macro> cancel previous definition of <macro> for the C phase
     -P <macro> predefine <macro> for immac pre-compiler (forces immac)
                also forces building of new iC output and the rest
+    -W[no-]<warn>                  positive/negative warning options
+        -W[no-]deprecated-logic    use of && || ! in pure bit expressions
+        -W[no-]function-parameter  unused parameters in functions
+        -W[no-]function-delete     delete before function re-definition
+        -Wno-deprecated -Wdeprecated (default) all of the above
     -a      immac: output FOR loop control and %define lines as comments
     -L      generate auxiliary 'file.log' for debugging immac translation
     -k<lim> highest I/O index (default: no limit; 63 for -c mode)
@@ -548,7 +569,7 @@ exit $status
             default: any index for bit, byte, word or long is allowed
     -j      produce file.ini which records output of an initial run
     -I      produce file.ini with full INITIALIZATION info (debug only)
-    -J      produce file.ini with run INITIALIZATION only (debug only)
+    -J      produce file.ini with run INITIALIZATION only  (debug only)
     -6      produce logic generation listing file.lst6
     -x      auxiliary files .iC_list1.h .iC_list2.h not deleted
     -q      quiet operation - return status only
@@ -557,7 +578,8 @@ exit $status
     -w<dir> use immac, immcc, pplstfix and libict.a in directory <dir>
             (default: use installed immcc, pplstfix and -lict)
     -d<opt> call immcc with extra -d<opt> orred into normal -d474
-    -N      No nice with calls of immcc, gcc and immac compilers (default: nice)
+    -N      No nice with calls of immcc, gcc and immac compilers
+            (default: nice)
     -z      echo compiler calls with all options for debugging
     -h      this help text
 

@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.28 2009/08/21 06:07:15 jw Exp $";
+"@(#)$Id: link.c,v 1.29 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -105,7 +105,8 @@ iC_link_ol(
     } else {
 	iC_link_cnt++;				/* count link operations */
 	if (gp->gt_fni < MIN_ACT) {		/* ARITH & GATE may oscillate */
-	    if (gp->gt_mark != iC_mark_stamp) {	/* first link this cycle */
+	    if (gp->gt_mark != iC_mark_stamp ||	/* first link this cycle or */
+		iC_osc_max == 0) {		/* if 0 let oscillations happen */
 		gp->gt_mark = iC_mark_stamp;	/* yes, stamp the gate */
 		gp->gt_mcnt = 0;		/*      clear mark count */
 	    } else {

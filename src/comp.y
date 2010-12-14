@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.102 2009/10/15 08:21:32 jw Exp $";
+"@(#)$Id: comp.y,v 1.103 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -1028,13 +1028,12 @@ expr	: UNDEF			{
 #endif
 	    }
 	/************************************************************
-	 * L(aexpr,aexpr)
 	 * LATCH(aexpr,aexpr)
-	 *	L(..) LATCH(set,reset)
+	 *	LATCH(set,reset)
 	 * ######### not required with iC system functions #########
 	 * ######### is handled by BFORCE ##########################
 	 ***********************************************************/
-	| BLATCH '(' lexpr ')'	{		/* L(set,reset) */
+	| BLATCH '(' lexpr ')'	{		/* LATCH(set,reset) */
 		Symbol *	nsp;
 		List_e *	nlp;
 		$$.f = $1.f; $$.l = $4.l;
@@ -1058,11 +1057,10 @@ expr	: UNDEF			{
 #endif
 	    }
 	/************************************************************
-	 * F(aexpr,aexpr,aexpr)
 	 * FORCE(aexpr,aexpr,aexpr)
-	 *	F(..) FORCE(expr,on,off)
+	 *	FORCE(expr,on,off)
 	 ***********************************************************/
-	| BFORCE '(' aexpr ',' lexpr ')'	{	/* F(expr,hi,lo) */
+	| BFORCE '(' aexpr ',' lexpr ')'	{	/* FORCE(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
 		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
@@ -1225,7 +1223,7 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
-		    if ((iC_Wflag & W_DEPRECATED_LOGIC) || iC_Pflag) {
+		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			warning("Use of '&&' with imm bit variables is deprecated (use '&'):", sp->name);
 		    }
 		} else {
@@ -1256,7 +1254,7 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
-		    if ((iC_Wflag & W_DEPRECATED_LOGIC) || iC_Pflag) {
+		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			warning("Use of '||' with imm bit variables is deprecated (use '|'):", sp->name);
 		    }
 		} else {
@@ -1398,7 +1396,7 @@ expr	: UNDEF			{
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical negation */
 			$$.v = op_not(op_force($2.v, GATE));
-			if ((iC_Wflag & W_DEPRECATED_LOGIC) || iC_Pflag) {
+			if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			    warning("Use of '!' with an imm bit variable is deprecated (use '~'):", sp->name);
 			}
 		    } else {
@@ -1583,16 +1581,15 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 #endif
 	    }
 	/************************************************************
-	 * DL(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
 	 * DLATCH(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DL(..) DLATCH(set,reset)
-	 *	DL(..) DLATCH(set,reset,clkSetReset)
-	 *	DL(..) DLATCH(set,reset,timSetReset)
-	 *	DL(..) DLATCH(set,reset,timSetReset,delaySetReset)
+	 *	DLATCH(set,reset)
+	 *	DLATCH(set,reset,clkSetReset)
+	 *	DLATCH(set,reset,timSetReset)
+	 *	DLATCH(set,reset,timSetReset,delaySetReset)
 	 * ######### not required with iC system functions #########
 	 * ######### is handled by BFORCE ##########################
 	 ***********************************************************/
-	| DLATCH '(' lexpr cref ')'	{		/* DL(set,reset) */
+	| DLATCH '(' lexpr cref ')'	{		/* DLATCH(set,reset) */
 		Lis		li1 = $3;
 		List_e *	lp1;
 		$$.f = $1.f; $$.l = $5.l;
@@ -2222,38 +2219,35 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	;
 
 	/************************************************************
-	 * C(aexpr[,(cexpr|texpr[,aexpr])])
 	 * CLOCK(aexpr[,(cexpr|texpr[,aexpr])])
-	 *	C(..) CLOCK(set1)
-	 *	C(..) CLOCK(set1,clkSet1)
-	 *	C(..) CLOCK(set1,timSet1)
-	 *	C(..) CLOCK(set1,timSet1,delaySet1)
+	 *	CLOCK(set1)
+	 *	CLOCK(set1,clkSet1)
+	 *	CLOCK(set1,timSet1)
+	 *	CLOCK(set1,timSet1,delaySet1)
 	 ***********************************************************/
 cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
 	    }
 	/************************************************************
-	 * C(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
 	 * CLOCK(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	C(..) CLOCK(set1,set2)
-	 *	C(..) CLOCK(set1,set2,clkSet1Set2)
-	 *	C(..) CLOCK(set1,set2,timSet1Set2)
-	 *	C(..) CLOCK(set1,set2,timSet1Set2,delaySet1Set2)
+	 *	CLOCK(set1,set2)
+	 *	CLOCK(set1,set2,clkSet1Set2)
+	 *	CLOCK(set1,set2,timSet1Set2)
+	 *	CLOCK(set1,set2,timSet1Set2,delaySet1Set2)
 	 ***********************************************************/
 	| CBLTIN '(' aexpr ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
 	    }
 	/************************************************************
-	 * C(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * CLOCK(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	C(..) CLOCK(set1,clkSet1,          set2)
-	 *	C(..) CLOCK(set1,clkSet1,          set2,clkSet2)
-	 *	C(..) CLOCK(set1,clkSet1,          set2,timSet2)
-	 *	C(..) CLOCK(set1,clkSet1,          set2,timSet2,delaySet2)
-	 *	C(..) CLOCK(set1,timSet1,delaySet1,set2)
-	 *	C(..) CLOCK(set1,timSet1,delaySet1,set2,clkSet2)
-	 *	C(..) CLOCK(set1,timSet1,delaySet1,set2,timSet2)
-	 *	C(..) CLOCK(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
+	 *	CLOCK(set1,clkSet1,          set2)
+	 *	CLOCK(set1,clkSet1,          set2,clkSet2)
+	 *	CLOCK(set1,clkSet1,          set2,timSet2)
+	 *	CLOCK(set1,clkSet1,          set2,timSet2,delaySet2)
+	 *	CLOCK(set1,timSet1,delaySet1,set2)
+	 *	CLOCK(set1,timSet1,delaySet1,set2,clkSet2)
+	 *	CLOCK(set1,timSet1,delaySet1,set2,timSet2)
+	 *	CLOCK(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
 	 ***********************************************************/
 	| CBLTIN '(' aexpr ',' ctdref ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
@@ -2323,7 +2317,7 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 
 	/************************************************************
 	 *
-	 * Timers (TIMER or T) have a preset off delay of 0.
+	 * TIMER() has a preset off delay of 0.
 	 * Such timers will clock with iClock on the falling edge of
 	 * the master gate. They will clock with iClock on the rising
 	 * edge if the on delay is 0.
@@ -2334,82 +2328,78 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
 	    }
 	/************************************************************
-	 * T(aexpr[,(cexpr|texpr[,aexpr])])
 	 * TIMER(aexpr[,(cexpr|texpr[,aexpr])])
-	 *	T(..) TIMER(set1)
-	 *	T(..) TIMER(set1,clkSet1)
-	 *	T(..) TIMER(set1,timSet1)
-	 *	T(..) TIMER(set1,timSet1,delaySet1)
+	 *	TIMER(set1)
+	 *	TIMER(set1,clkSet1)
+	 *	TIMER(set1,timSet1)
+	 *	TIMER(set1,timSet1,delaySet1)
 	 ***********************************************************/
 	| TBLTIN '(' aexpr ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
 	    }
 	/************************************************************
-	 * T(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
 	 * TIMER(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	T(..) TIMER(set1,set2)
-	 *	T(..) TIMER(set1,set2,clkSet1Set2)
-	 *	T(..) TIMER(set1,set2,timSet1Set2)
-	 *	T(..) TIMER(set1,set2,timSet1Set2,delaySet1Set2)
+	 *	TIMER(set1,set2)
+	 *	TIMER(set1,set2,clkSet1Set2)
+	 *	TIMER(set1,set2,timSet1Set2)
+	 *	TIMER(set1,set2,timSet1Set2,delaySet1Set2)
 	 ***********************************************************/
 	| TBLTIN '(' aexpr ',' ctdref ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
 	    }
 	/************************************************************
-	 * T(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * TIMER(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	T(..) TIMER(set1,clkSet1,          set2)
-	 *	T(..) TIMER(set1,clkSet1,          set2,clkSet2)
-	 *	T(..) TIMER(set1,clkSet1,          set2,timSet2)
-	 *	T(..) TIMER(set1,clkSet1,          set2,timSet2,delaySet2)
-	 *	T(..) TIMER(set1,timSet1,delaySet1,set2)
-	 *	T(..) TIMER(set1,timSet1,delaySet1,set2,clkSet2)
-	 *	T(..) TIMER(set1,timSet1,delaySet1,set2,timSet2)
-	 *	T(..) TIMER(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
+	 *	TIMER(set1,clkSet1,          set2)
+	 *	TIMER(set1,clkSet1,          set2,clkSet2)
+	 *	TIMER(set1,clkSet1,          set2,timSet2)
+	 *	TIMER(set1,clkSet1,          set2,timSet2,delaySet2)
+	 *	TIMER(set1,timSet1,delaySet1,set2)
+	 *	TIMER(set1,timSet1,delaySet1,set2,clkSet2)
+	 *	TIMER(set1,timSet1,delaySet1,set2,timSet2)
+	 *	TIMER(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
 	 ***********************************************************/
 
 	/************************************************************
 	 *
-	 * Alternate timers (TIMER1 or T1) have a preset off delay of 1.
+	 * Alternate TIMER1() has a preset off delay of 1.
 	 * Such timers will clock with the next timer pulse on the
 	 * falling edge of the master gate. They will clock with the
 	 * next timer pulse on the rising edge if the on delay is 0.
+	 * The timing is the same as if the timer generated by TIMER1()
+	 * and used with a delay of 0 were a clock pulse.
 	 *
 	 ***********************************************************/
 
 	/************************************************************
-	 * T1(aexpr[,(cexpr|texpr[,aexpr])])
 	 * TIMER1(aexpr[,(cexpr|texpr[,aexpr])])
-	 *	T1(..) TIMER1(set1)
-	 *	T1(..) TIMER1(set1,clkSet1)
-	 *	T1(..) TIMER1(set1,timSet1)
-	 *	T1(..) TIMER1(set1,timSet1,delaySet1)
+	 *	TIMER1(set1)
+	 *	TIMER1(set1,clkSet1)
+	 *	TIMER1(set1,timSet1)
+	 *	TIMER1(set1,timSet1,delaySet1)
 	 ***********************************************************/
 	| TBLTI1 '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &val1);
 	    }
 	/************************************************************
-	 * T1(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
 	 * TIMER1(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	T1(..) TIMER1(set1,set2)
-	 *	T1(..) TIMER1(set1,set2,clkSet1Set2)
-	 *	T1(..) TIMER1(set1,set2,timSet1Set2)
-	 *	T1(..) TIMER1(set1,set2,timSet1Set2,delaySet1Set2)
+	 *	TIMER1(set1,set2)
+	 *	TIMER1(set1,set2,clkSet1Set2)
+	 *	TIMER1(set1,set2,timSet1Set2)
+	 *	TIMER1(set1,set2,timSet1Set2,delaySet1Set2)
 	 ***********************************************************/
 	| TBLTI1 '(' aexpr ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, &val1);
 	    }
 	/************************************************************
-	 * T1(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * TIMER1(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	T1(..) TIMER1(set1,clkSet1,          set2)
-	 *	T1(..) TIMER1(set1,clkSet1,          set2,clkSet2)
-	 *	T1(..) TIMER1(set1,clkSet1,          set2,timSet2)
-	 *	T1(..) TIMER1(set1,clkSet1,          set2,timSet2,delaySet2)
-	 *	T1(..) TIMER1(set1,timSet1,delaySet1,set2)
-	 *	T1(..) TIMER1(set1,timSet1,delaySet1,set2,clkSet2)
-	 *	T1(..) TIMER1(set1,timSet1,delaySet1,set2,timSet2)
-	 *	T1(..) TIMER1(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
+	 *	TIMER1(set1,clkSet1,          set2)
+	 *	TIMER1(set1,clkSet1,          set2,clkSet2)
+	 *	TIMER1(set1,clkSet1,          set2,timSet2)
+	 *	TIMER1(set1,clkSet1,          set2,timSet2,delaySet2)
+	 *	TIMER1(set1,timSet1,delaySet1,set2)
+	 *	TIMER1(set1,timSet1,delaySet1,set2,clkSet2)
+	 *	TIMER1(set1,timSet1,delaySet1,set2,timSet2)
+	 *	TIMER1(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
 	 ***********************************************************/
 	| TBLTI1 '(' aexpr ',' ctdref ',' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, &val1);

@@ -1,6 +1,6 @@
-# @(#)$Id: Makefile.in,v 1.53 2009/10/13 02:24:40 jw Exp $
+# @(#)$Id: Makefile.in,v 1.54 2010/12/14 07:05:06 jw Exp $
 
-############################################################
+#######################################################################
 #
 #	Copyright (C) 1985-2009  John E. Wulff
 #
@@ -19,19 +19,20 @@
 #
 #	to make immcc, make with OPT=''
 #	to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
+#	to make libict.so, remove all objects and make with OPT='-fPIC -DLOAD -DTCP'
 #	to make icr, remove all objects and make with OPT='-DRUN -DYYDEBUG'
 #	to make ict, remove all objects and make with OPT='-DTCP'
 #	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #
 #	  makeAll       # makes 'immcc' and 'libict.a' without YYDEBUG support
-#	  makeAll -trm; # makes the auxiliary compilers with YYDEBUG support
+#	  makeAll -rtm; # makes the auxiliary compilers with YYDEBUG support
 #
 #	Do not rm comp.c, gram.c and lexc.c with make clean in case the target
 #	system has no bison or yacc and no flex or lex (some Knoppix distributions)
 #	Define YYERROR_VERBOSE for bison generated files comp.c and gram.c
 #	26.Mar.2008
 #
-############################################################
+#######################################################################
 
 #### Start of system configuration section. ####
 
@@ -96,12 +97,12 @@ SHELL = /bin/sh
 %.$(O):	$(srcdir)/%.c
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $<
 
-###########################################################
+#######################################################################
 
 COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O)
 POBJ =	link.$(O) rsff.$(O) scan.$(O)
 
-#### Standalone versions ###################################
+#### Standalone versions ##############################################
 #### make icr and lmain with YYDEBUG, since they need it for normal operation
 
 im_lib:
@@ -124,17 +125,22 @@ ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O
 icbegin.a:	$(srcdir)/Makefile icbegin.$(O) icend.$(O)
 	ar -rvs icbegin.a icbegin.$(O) icend.$(O)
 
-#### Run-time library ######################################
+#### Static run-time library (for debugging) ##########################
 
 libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(POBJ)
 	ar -rvs libict.a load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(POBJ)
 
-#### C-parser test #########################################
+#### Shared run-time library ##########################################
+
+libict.so:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(POBJ)
+	$(CC) -shared -o libict.so load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(POBJ)
+
+#### C-parser test ####################################################
 
 lmain:	$(srcdir)/Makefile lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	$(CC) $(LDFLAGS) -o lmain lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O) $(EL)
 
-#### Compile objects #######################################
+#### Compile objects ##################################################
 
 pplstfix:
 	@$(SHELL) -ec 'if [ ! -x pplstfix -a ! -L pplstfix -a -x $(srcdir)/pplstfix ]; then rm -f pplstfix; echo "ln -s $(srcdir)/pplstfix ."; ln -s $(srcdir)/pplstfix .; fi'
@@ -213,6 +219,8 @@ $(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
 
 $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
+$(srcdir)/Mdiff.1.gz:	$(srcdir)/Mdiff $(srcdir)/scid.c
+
 test:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
@@ -227,7 +235,7 @@ strict:
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
 	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
@@ -240,7 +248,9 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
 	${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 	${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
+	${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
 	${INSTALL_DATA} $(srcdir)/libict.a      ${prefix}/lib/libict.a
+	${INSTALL_DATA} $(srcdir)/libict.so     ${prefix}/lib/libict.so
 	${INSTALL_DATA} $(srcdir)/icg.h         ${prefix}/include/icg.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${prefix}/man/man1/immcc.1.gz
 	${INSTALL_DATA} $(srcdir)/immac.1.gz    ${prefix}/man/man1/immac.1.gz
@@ -252,6 +262,7 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${prefix}/man/man1/iCman.1.gz
 	${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${prefix}/man/man1/iCserver.1.gz
 	${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${prefix}/man/man1/makeAll.1.gz
+	${INSTALL_DATA} $(srcdir)/Mdiff.1.gz  ${prefix}/man/man1/Mdiff.1.gz
 
 uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)
@@ -264,7 +275,9 @@ uninstall:
 	rm -f ${bindir}/${binprefix}iCmake
 	rm -f ${bindir}/${binprefix}iCman
 	rm -f ${bindir}/${binprefix}iCserver
+	rm -f ${bindir}/${binprefix}Mdiff
 	rm -f ${prefix}/lib/libict.a
+	rm -f ${prefix}/lib/libict.so
 	rm -f ${prefix}/include/icg.h
 	rm -f ${prefix}/man/man1/immcc.1.gz
 	rm -f ${prefix}/man/man1/immac.1.gz
@@ -276,9 +289,10 @@ uninstall:
 	rm -f ${prefix}/man/man1/iCman.1.gz
 	rm -f ${prefix}/man/man1/iCserver.1.gz
 	rm -f ${prefix}/man/man1/makeAll.1.gz
+	rm -f ${prefix}/man/man1/Mdiff.1.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LibObjs $(srcdir)/LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict.a $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict.a $(srcdir)/libict.so $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README

@@ -42,12 +42,12 @@ Usage:
     -L         output all lines to the log file (only for debugging)
     -T         extra Trace output
     -h         this help text
-    <in>       iCa source file with array definiions (default: stdin)
+    <in>       iCa source file with array definitions (default: stdin)
 
     Pre-compiler to convert "immediate C" source files containing arrays
     into straight "immediate C".
 
-$Id: immac,v 1.18 2009/10/15 10:45:44 jw Exp $
+$Id: immac,v 1.19 2010/12/14 07:05:06 jw Exp $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e $opt_P $opt_t $opt_T $opt_h);
@@ -881,7 +881,9 @@ use warnings;
 				    push(@lnErr, "*** Error: strict: FOR line requires '}}'\n");
 				    $r = 2;		# error return
 				}
-				goto alternate;	# support old dialect
+no warnings;						# suppress goto warning
+				goto alternate;		# support old dialect
+use warnings;
 			    }
 			  single:
 			    if (defined $compound) {
@@ -921,7 +923,9 @@ use warnings;
 				delete $identifiers{ pop @ids }; # latest $identifier out of scope
 			    } else {
 				push(@lnErr, "### Warning: 'Unmatched '}} ???'\n");
+no warnings;						# suppress goto warning
 				goto single;		# keep going - makes output cleaner
+use warnings;
 			    }
 			} elsif ($atom eq "%{") {
 			    if ($iesFlag or defined $compound) {
@@ -1189,7 +1193,7 @@ __END__
     -L         output all lines to the log file (only for debugging)
     -T         extra Trace output
     -h         this help text
-    <in>       iCa source file with array definiions
+    <in>       iCa source file with array definitions (default: stdin)
 
 =head1 DESCRIPTION
 

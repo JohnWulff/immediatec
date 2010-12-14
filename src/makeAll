@@ -10,7 +10,7 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file
 #
-#	make immcc and libict.a by default
+#	make immcc libict.a and libict.so by default
 #
 #	make immcc, libict.a, icr, ict or lmain individually with
 #	-C -L -R -T or -M flags
@@ -22,24 +22,26 @@
 
 usage ()
 {
-    echo 'Usage:	'${0##*/}' [-qgclrtmdeCLRTMsyh] [-D<OPT>] [-o<OBJ>]' >&2
-    echo '	call make for immcc, libict.a, icr, ict and lmain with correct options' >&2
+    echo 'Usage:' >&2
+    echo " ${0##*/} [-qgclrtmCLRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]" >&2
+    echo '    call make for immcc, libict.a, icr, ict and lmain with correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-c	make immcc iC compiler with YYDEBUG' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
+    echo '		     libict.so is made without YYDEBUG' >&2
     echo '	-r	make icr iC compiler with YYDEBUG -t trace output possible' >&2
     echo '	-t	make ict iC compiler with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain test internal C compiler with YYDEBUG' >&2
     echo '	-C	make immcc only; generate an empty cexe.c' >&2
-    echo '	-L	make libict.a only' >&2
+    echo '	-L	make libict.a and libict.so' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-M	make lmain only' >&2
-    echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
-    echo '	see usage of immcc, icr, ict and applications for other options' >&2
+    echo '	see usage of immcc, icr, ict and applications for options' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
+    echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
     echo '	-d	make with DEQ - double ended queues are slightly faster' >&2
     echo '	-s	make with INT_MAX=32767' >&2
@@ -52,19 +54,32 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.30 2009/10/15 02:46:37 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.31 2010/12/14 07:05:06 jw Exp $' >&2
 }
 
 makeLib ()
 {
-    mv ict.$O misc.$O link.$O rsff.$O scan.$O tcpc.$O  Make_tmp 2> /dev/null
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O Make_tmp 2> /dev/null
     if [ -d LibObjs ]; then
 	mv LibObjs/* .
     else
 	mkdir LibObjs
     fi
     make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" libict.a
-    mv ict.$O misc.$O link.$O rsff.$O scan.$O tcpc.$O  LibObjs
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O LibObjs
+    mv Make_tmp/* . 2> /dev/null
+}
+
+makeShared ()
+{
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O Make_tmp 2> /dev/null
+    if [ -d SharedObjs ]; then
+	mv SharedObjs/* .
+    else
+	mkdir SharedObjs
+    fi
+    make OPT="-fPIC -DLOAD -DTCP$d$e$o$s$y" CFLAGS="-O2$W" libict.so
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O SharedObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
@@ -150,7 +165,7 @@ while getopts ":qgclrtmCLRTMudeD:W:syo:zh" opt; do
     d )	d=" -DDEQ";;
     e )	e=" -DEFENCE";;
     D ) o=" -D$OPTARG";;
-    W ) w=" -W$OPTARG";;
+    W ) W=" -W$OPTARG";;
     s )	s=" -DINT_MAX=32767";;
     y )	y=" -DLONG16";;
     o ) O="$OPTARG";;
@@ -159,7 +174,7 @@ while getopts ":qgclrtmCLRTMudeD:W:syo:zh" opt; do
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
-cflags="$cflags$w";
+cflags="$cflags$W";
 shift $(($OPTIND - 1))
 
 if [ -f Make_tmp ]; then
@@ -188,6 +203,8 @@ fi
 if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
     echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    echo "make OPT=\"-fPIC -DLOAD -DTCP$d$e$o$s$y\" CFLAGS=\"-O2$W\" libict.so"
+    makeShared  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $R = 1 ]; then
@@ -216,23 +233,24 @@ exit 0
 
 =head1 SYNOPSIS
 
-    makeAll [-qgclrtmdeCLRTMsyh] [-D<OPT>] [-o<OBJ>]
-    call make for immcc, libict.a, icr, ict and lmain with correct options
+ makeAll [-qgclrtmCLRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]
+ call make for immcc, libict.a, icr, ict and lmain with correct options
     -q      output only headings and error messages
     -g      compile for debugging and no optimisation (default -O2)
-    -c      make immcc with YYDEBUG
+    -c      make immcc iC compiler with YYDEBUG
     -l      make libict.a with YYDEBUG -t trace output possible
-    -r      make icr with YYDEBUG -t trace output possible
-    -t      make ict with YYDEBUG -t trace output possible
-    -m      make lmain with YYDEBUG
-    -D<OPT> make all targets with <OPT> defined
-            see usage of immcc, icr, ict and applications for other options
+    -r      make icr iC compiler with YYDEBUG -t trace output possible
+    -t      make ict iC compiler with YYDEBUG -t trace output possible
+    -m      make lmain test internal C compiler with YYDEBUG
     -C      make immcc only; generate an empty cexe.c
     -L      make libict.a only
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -M      make lmain only
+    -D<OPT> make all targets with <OPT> defined
+            see usage of immcc, icr, ict and applications for options
     -W<OPT> compile all C sources with -W<OPT> (useful for -Wall)
+    -u      make any compiler targets with Symbol SYUNION option
     -e      make all targets with EFENCE option and link with -lefence
     -d      make with DEQ - double ended queues are slightly faster
     -s      make with INT_MAX=32767
@@ -265,17 +283,19 @@ is via TCP/IP and iCserver.
 with gram.y and lexc.l. It test compiles C sources and generates debugging
 output and possibly error messages.
 
-'makeAll' keeps the directories 'LibObjs' 'IcrObjs' 'IctObjs' 'LmainObjs'
-to save object files which differ for the different targets.
-Thus the following rules for 'make' are satisfied:
+'makeAll' keeps the directories 'LibObjs' 'SharedObjs' 'IcrObjs'
+'IctObjs' 'LmainObjs' to save object files which differ for the
+different targets.  Thus the following rules for 'make' are satisfied:
 
   to make immcc, make with OPT=''
   to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
-  to make icr, remove all objects and make with OPT='-DRUN -DYYDEBUG'
-  to make ict, remove all objects and make with OPT='-DTCP'
-  to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
+  to make libict.so,  "     "    " and make with OPT='-fPIC -DLOAD -DTCP'
+  to make icr,        "     "    " and make with OPT='-DRUN -DYYDEBUG'
+  to make ict,        "     "    " and make with OPT='-DTCP'
+  to make lmain,      "     "    " and make with OPT='-DLMAIN -DYYDEBUG'
 
-    makeAll       # makes 'immcc' and 'libict.a' without YYDEBUG support
+    makeAll       # makes 'immcc' 'libict.a' and 'libict.so'
+                  # without YYDEBUG support
     makeAll -trm; # makes the auxiliary compilers with YYDEBUG support
 
 another useful call is:

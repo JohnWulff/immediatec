@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.49 2009/08/21 06:08:59 jw Exp $";
+"@(#)$Id: rsff.c,v 1.50 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -1364,8 +1364,8 @@ iC_fMfn(					/* CLCK TIMR master action */
  *	during one clock event, as far as the next arithmetic and logic
  *	scan is concerned.
  *
- *		clock = CLOCK(I6);	// iClock is default
- *		clk2 =  C(I7,clock);	// C is synonym for CLOCK
+ *		clk1 = CLOCK(I6);		// iClock is default
+ *		clk2 = CLOCK(I7,clk1);
  *
  *******************************************************************/
 
@@ -1437,8 +1437,8 @@ iC_Functp	iC_clock_i[] = {iC_pass1, iC_null1, i_ff3, iC_null1};	/* no output lis
  *	The output of this function can be used wherever a clock
  *	may be used. For details see manual.
  *
- *		timer = TIMER(I8);	// iClock is default
- *		tim2 =  T(I9,clock);	// T is synonym for TIMER
+ *		tim1 = TIMER(I8);		// iClock is default
+ *		tim2 = TIMER(I9,tim1,3);
  *
  *******************************************************************/
 

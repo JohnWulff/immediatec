@@ -15,7 +15,8 @@
 #	The full specification is in the POD documentation at the end
 #
 #	For measuring reaction times the Module Time::HiRes is used.
-#	This is activated by the -m option.
+#	Time::HiRes is also used to delay the Autovivify action.
+#	Time::HiRes is activated by the -m and the -a options.
 #	Make sure you have installed Time::HiRes (provided in this distribution)
 #
 ########################################################################
@@ -37,9 +38,12 @@ my @Receivers = ();	# indexed by $channel ... stores receive connections and nam
 my %ReceiverData = ();	# indexed by $conn - holds $conn, channel:value data pairs
 my $numberOfConnections = 0;
 my $maxChannel = 0;
+my $regFlag = 0;
 my $ackString = '';
 my $iniString = '';
-my @AutoVivify = ();
+my $ioName = '';
+my $AutoDelay = 1000;	# 1 ms for normal autovivify delay
+my %AutoVivify = ();
 my $AutoDebug = '';
 my %sortOrder = (	# determines in which order iCboxes ar autovivified
     IX => 0, QX => 1,
@@ -57,11 +61,12 @@ my %sortOrder = (	# determines in which order iCboxes ar autovivified
 
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
-Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+Usage:
+    @<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	$named
-		[ -G <dbg>][ <list of equivalences>][ <list of client calls>]
+	     [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
 	-s host	address of server - clients must specify the same address
-		     unless (default '0.0.0.0' which accepts any client)
+		unless (default '0.0.0.0' which accepts any client)
 	-p port	service port of server for all clients  (default '8778')
 	-f file	read options, equivalences and client calls from this file
 	-a	autovivify I/O clients for missing I/O's with cmd
@@ -81,7 +86,7 @@ Usage:	@<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2009  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.38 2009/08/21 06:17:16 jw Exp $
+$Id: iCserver,v 1.39 2010/12/14 07:05:06 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -143,12 +148,13 @@ if ($opt_f) {
 print "ARGV:", join(':', @ARGV), ":\n" if $opt_t and @ARGV;
 
 my ($t0, $t1);
-if ($opt_m) {
-    use Time::HiRes qw(gettimeofday);
-    $t0 = [gettimeofday];	# start of program
+if ($opt_a or $opt_m) {
+    use Time::HiRes qw(ualarm gettimeofday);
+    $t0 = [gettimeofday] if $opt_m;	# start time of program
 }
 
 $SIG{PIPE} = \&catch_zap;		# signal 13
+$SIG{ALRM} = \&autoVivify;		# signal 14 - Timer signal from ualarm()
 if ($opt_t) {
     $SIG{HUP}  = \&catch_zap;	# signal 1
 ##    $SIG{USR1} = \&catch_zap;	# signal 10	(stop -10 iCserver)
@@ -181,6 +187,9 @@ print "$named created. Waiting for events\n";
 
 my ($argv, $pid);
 
+if (scalar @ARGV > 1) {
+    $AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with more than 1 process
+}
 while ($argv = shift @ARGV) {
     if ($argv =~ /^\s*([\.\d\w_][-\.\d\w_]*)\s*=/) {	# recognise equivalence
 	my ($nm, $nn, $ch);
@@ -195,6 +204,7 @@ while ($argv = shift @ARGV) {
 	    push @{$Equivalences{$nm}}, $nn;	# equivalent name
 	    $EquivChannels{$nn} = $nm;		# used in AutoVivify
 	}
+	$AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with equivalences
     } else {
 	exec_process($argv);
     }
@@ -331,7 +341,7 @@ sub disconnect {
 	    ############################################################
 	    ## Re-constitute equivalences obtainened from initial ARGV
 	    ############################################################
-	    if (scalar(keys(%Equivalences))) {
+	    if (scalar keys %Equivalences) {
 		my ($nm, $nn, $ch, $others);
 		foreach $nm (sort { $Equivalences{$a}[0] <=> $Equivalences{$b}[0] } keys %Equivalences) {
 		    $ch = allocate_channel($nm);	# allocate new channel for first identifier
@@ -411,7 +421,7 @@ sub print_tables {
     foreach $con (sort { $ClientNames{$a} cmp $ClientNames{$b} } keys %ClientNames) {
 	print "$ClientNames{$con}	$con\n";
     }
-    if (scalar(keys(%Equivalences))) {
+    if (scalar keys %Equivalences) {
 	my ($nm, $nn, $others);
 	print "ch:	Equivalences\n";
 	foreach $nm (sort { $Equivalences{$a}[0] <=> $Equivalences{$b}[0] } keys %Equivalences) {
@@ -472,6 +482,40 @@ sub pushReceiverData {
 
 ########################################################################
 #
+#	Execute Autovivify actions after a delay with ualarm($AutoDelay)
+#
+########################################################################
+
+sub autoVivify {
+    if (scalar keys %AutoVivify) {
+	my $autovivify = join ' ', sort {
+	    my ($ha, $na, $za, $hb, $nb, $zb);
+	    $a =~ /([A-Z]+)(\d+)(.*)/; $ha = $sortOrder{$1}; $na = $2; $za = $3;
+	    $ha = $1 if not defined $ha;
+	    $b =~ /([A-Z]+)(\d+)(.*)/; $hb = $sortOrder{$1}; $nb = $2; $zb = $3;
+	    $hb = $1 if not defined $hb;
+	    ############################################################
+	    ## sort order is number then names in the following order
+	    ## IX QX IB QB IW QW IL QL IH QH .. finally any instances
+	    ##  0  1  2  3  4  5  6  7  8  9 .. correct for alpha cmp
+	    ## print "$a $ha $na $za	$b $hb $nb $zb\n" if $opt_T;
+	    ############################################################
+	    $na <=> $nb || $ha cmp $hb || $za cmp $zb;
+	} keys %AutoVivify;
+	$autovivify = "$opt_A -n$ioName $autovivify";
+	print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
+	exec_process($autovivify);
+	%AutoVivify = ();
+    }
+    if ($AutoDebug) {
+	print "AUTODEBUG: '$AutoDebug'\n" if $opt_t;
+	exec_process($AutoDebug);
+	$AutoDebug = '';
+    }
+} # autoVivify
+
+########################################################################
+#
 #	Receive message from client
 #
 #	connection $conn identifies the sender
@@ -480,9 +524,10 @@ sub pushReceiverData {
 #	. zero length		client has signalled shutdown
 #	. comma separated list	break up into individual items $msg1
 #	each item $msg1 has the following charecteristics:
-#	. matches /^[NSR]/	registration item
+#	. matches /^[NnSsRr]/	registration item
 #	. matches /\d+:\d+/	split into $channel and $value, send
 #				value to all receivers for the channel
+#	. matches /^[XT]/	special actions
 #	. else eror
 #
 ########################################################################
@@ -535,14 +580,14 @@ use warnings;
 			    }
 			}
 			if ($opt_t and (not $aref or not @$aref)) {
-			    print "$ClientNames{$conn} $msg1 => dummy\n" if $opt_t;	# not registered
+			    print "$ClientNames{$conn} $msg1 => dummy\n";	# not registered
 			}
 		    } else {
-    print "conn = $conn, channel [0] = $Senders[$channel][0]\n";
+			print "conn = $conn, channel [0] = $Senders[$channel][0]\n";
 			warnD("$ClientNames{$Senders[$channel][0]} $msg1 received on wrong connection $ClientNames{$conn}\n");
 		    }
 		}
-		elsif ($msg1 =~ /^N(.+)/) {
+		elsif ($msg1 =~ /^N(.+)/) {	# name part of registration
 		    $name = $1;
 		    $con = $Clients{$name};
 		    if ($con) {
@@ -580,6 +625,7 @@ use warnings;
 		    }
 		    ALREADY_REGISTRERD:
 		    $numberOfConnections++;
+		    $regFlag = 1;			# registration string has started
 		    print "$name: client no. $numberOfConnections registering now\n" if $opt_t;
 		}
 		elsif ($msg1 =~ /^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?/) {
@@ -628,7 +674,7 @@ use warnings;
 				$name =~ /^Q[XBWL]\d+/ and	# not part of an equivalence
 				not $EquivChannels{$name}) {	# not even first for senders
 				my $iCbox_param = $bits ? "$name,$bits" : $name;
-				push @AutoVivify, $iCbox_param;
+				$AutoVivify{$iCbox_param}++;
 				print "Autovivify sender '$iCbox_param'\n" if $opt_T;
 			    }
 			    if ($opt_g and			# C_channel only as trigger
@@ -683,7 +729,7 @@ use warnings;
 				}
 				if ($base) {
 				    my $iCbox_param = $bits ? "$base,$bits" : $base;
-				    push @AutoVivify, $iCbox_param;
+				    $AutoVivify{$iCbox_param}++;
 				    print "Autovivify receiver '$iCbox_param'\n" if $opt_T;
 				}
 			    }
@@ -695,6 +741,9 @@ use warnings;
 			$ackString = $ack;
 		    }
 		    print "$ClientNames{$conn}: $direction $name	$ack\n" if $opt_t;
+		}
+		elsif ($msg1 eq 'Z') {
+		    $regFlag = 0;		# registration string has terminated
 		}
 		elsif ($msg1 =~ /^n(.+)/) {
 		    $name = $1;
@@ -766,36 +815,17 @@ use warnings;
 		print "ACK: $ackString => $sender\n" if $opt_t;
 		$conn->send_now($ackString);	# registration acknowledgment
 		$ackString = '';
-		if ($iniString) {
-		    ## must be independent xmission, because different rcv call in client
-		    print "INI: $iniString => $sender\n" if $opt_t;
-		    $conn->send_now($iniString);	# registration initialisation
-		    $iniString = '';
-		}
-		if (@AutoVivify) {
-		    my $autovivify = join ' ', sort {
-			my ($ha, $na, $hb, $nb);
-			$a =~ /([A-Z]+)(\d+)/; $ha = $sortOrder{$1}; $na = $2;
-			$ha = $1 if not defined $ha;
-			$b =~ /([A-Z]+)(\d+)/; $hb = $sortOrder{$1}; $nb = $2;
-			$hb = $1 if not defined $hb;
-			############################################################
-			## sort order is number then names in the following order
-			## IX QX IB QB IW QW IL QL IH QH .. others should not happen
-			##  0  1  2  3  4  5  6  7  8  9 .. correct for alpha cmp
-			## print "$a $ha $na	$b $hb $nb\n" if $opt_T;
-			############################################################
-			$na <=> $nb || $ha cmp $hb;
-		    } @AutoVivify;
-		    $autovivify = "$opt_A -n$sender-IO $autovivify";
-		    print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
-		    exec_process($autovivify);
-		    @AutoVivify = ();
-		}
-		if ($AutoDebug) {
-		    print "AUTODEBUG: '$AutoDebug'\n" if $opt_t;
-		    exec_process($AutoDebug);
-		    $AutoDebug = '';
+		unless ($regFlag) {		# defer ini and autoVivify until registration terminated
+		    if ($iniString) {
+			## must be independent xmission, because different rcv call in client
+			print "INI: $iniString => $sender\n" if $opt_t;
+			$conn->send_now($iniString);# registration initialisation
+			$iniString = '';
+		    }
+		    if (scalar keys %AutoVivify or $AutoDebug) {
+			$ioName = "$sender-IO";
+			ualarm($AutoDelay);		# defer the action to allow more registrations
+		    }
 		}
 	    }
 	}
@@ -849,7 +879,7 @@ __END__
     <list of client calls>
             eg: 'iCbox X0-X3' 'iCbox X10' sort
             if a client call has arguments, the call must be quoted
-    -h  help, ouput this Usage text only
+    -h      help, ouput this Usage text only
 
 =head1 DESCRIPTION
 
@@ -1041,82 +1071,109 @@ Additional functionality in iCserver.
 	and unregister with different names, to monitor different
 	iC applications.
 
-    b)	Registration code: the type of data it is sending or receiving
-	and the physical address in IEC-1131 format:
+	-<instance>
+	An optional instance number allows the registrations of several
+	instances of the same control program. Its use is explained in
+	detail later.
 
-	<send_receive><input_output><type><address>[-<instance>]
+    b)	Registration codes: the type of data the client is sending or
+	receiving and the physical address in IEC-1131 format:
 
-	<send_receive>
+	<send_receive_op><address_code>[-<instance>][(<bit_map>)]
+
+	<send_receive_op>
 	S signifies, that the client sends data to iCserver.
 	R signifies, that the client receives data from iCserver.
 	s sender unregisters from iCserver (used by iClive only)
 	r receiver unregisters from iCserver (used by iClive only)
 
-	The middle 3 fields are the IEC-1131 code used in iC programs
-	to identify (address) a particular input or output.
-
-	C, D and M are not IEC-1131 conforming. They are used internally
-	for communicating with debugging and monitoring clients.  C and
-	D are followed by the name of the control client instead of an
-	IEC-1131 address. The name may be followed by an -<instance>.
-
-	<input_output>
-	I data is input to an iC control client.
-	Q data is output from an iC control client.
-
-	C debug data is output from an iC control client to iClive
-	D debug data is input to an iC control client from iClive
-	M signifies a monitor device (none implemented so far).
-
-	<type>
-	X signifies 8 bits of single bit data.
-		bit addresses are not used in the registration or
-		transmission of X senders and receivers. 8 bits are
-		always transmitted as 1 byte and the clients insert
-		or extract modified bits as necessary.
-	B signifies 8 bits or 1 byte of numerical data.
-	W signifies 16 bits or 2 bytes of numerical data.
-	L signifies 32 bits or 4 bytes of numerical data.
-	H signifies 64 bits (not implemented on 32 bit processors)
-
-	<address>
-	This number is the numerical IEC-1131 address. Unlike previous
-	implementations, each data type has its own address space,
-	which is independent of the others. Also the numbering of W
-	(16 bit) addresses is continuous 0, 1, 2, 3 and not 0, 2,
-	4, 6 as in previous implemetations. The same applies to L
-	(32 bit) addresses.
+	<address_code>
+	The <address_code> is made up either of an IEC-1131 code
+	used in iC programs to identify (address) a particular
+	input or output or by a special address for communicating
+	with debugging and monitoring clients consisting of an
+	<address_code> starting with C,D or M are used. These are
+	followed by the name of the debugging or monitoring client.
 
 	-<instance>
 	An optional instance number allows the registrations of several
 	instances of the same control program. Its use is explained in
 	detail later.
 
+	(<bit_map>)
+	An optional bit map, which defines the bits implemented for
+	a digital input or output. The default value is 255, which
+	implements bits 0 to 7.
+
+    c)	Termination code for the registration string consisting of
+	the single letter 'Z'. This allows the registration string
+	to be longer than the maximum buffer size - it will be sent
+	in more than one transmission if it is too long.
+
+    In summary: the registration string consists of a comma seperated
+    list beginning with 'Nname' followed by one or more individual
+    sender and receiver registration codes starting with 'S' or 'R'
+    and terminated with a single 'Z'. The whole is sent in one or
+    more transmissions. iCserver acknowledges each transmission by
+    sending a comma separated list of channel numbers used for each
+    sender or receiver.
+
+	IEC-1131 names are as follows:
+
+	    <io_op><size_op><address>
+
+	    <io_op>
+	    I data is input to an iC control client.
+	    Q data is output from an iC control client.
+
+	    C debug data is output from an iC control client to iClive
+	    D debug data is input to an iC control client from iClive
+	    M signifies a monitor device (none implemented so far).
+		more details for C, D and M in section 6)
+
+	    <size_op>
+	    X signifies 8 bits of single bit data.
+		    bit addresses are not used in the registration or
+		    transmission of X senders and receivers. 8 bits are
+		    always transmitted as 1 byte and the clients insert
+		    or extract modified bits as necessary.
+	    B signifies 8 bits or 1 byte of numerical data.
+	    W signifies 16 bits or 2 bytes of numerical data.
+	    L signifies 32 bits or 4 bytes of numerical data.
+	    H signifies 64 bits (not implemented on 32 bit processors)
+
+	    <address>
+
+	    This number is the numerical IEC-1131 address. Unlike
+	    previous implementations, each data type has its own
+	    address space, which is independent of the others. Also
+	    the numbering of W (16 bit) addresses is continuous 0, 1,
+	    2, 3 and not 0, 2, 4, 6 as in previous implemetations. The
+	    same applies to L (32 bit) addresses.
+
+	NOTE: the syntax of a correct IEC-1131 name is not actually
+	checked by iCserver - it is listed here for reference only.
+
 	Examples:
-	SIX0   8 single bits IX0.0 to IX0.7 sent from an external source
-	RIX0   8 single bits IX0.0 to IX0.7 received by an iC controller
-	SQX9   8 single bits IX9.0 to IX9.7 sent from an iC controller
-	RQX9   8 single bits IX9.0 to IX9.7 received by an external sink
+	SIX0    8 single bits IX0.0 to IX0.7 sent from an external source
+	RIX0    8 single bits IX0.0 to IX0.7 received by an iC controller
+	SQX9(7) 3 single bits IX9.0 to IX9.2 sent from an iC controller
+	RQX9(7) 3 single bits IX9.0 to IX9.2 received by an external sink
 
-	SIB10  single byte IB10 sent from an external source
-	RIB10  single byte IB10 received by an iC controller
-	SQB15  single byte QB15 sent from an iC controller
-	RQB15  single byte QB15 received by an external sink
+	SIB10   single byte IB10 sent from an external source
+	RIB10   single byte IB10 received by an iC controller
+	SQB15   single byte QB15 sent from an iC controller
+	RQB15   single byte QB15 received by an external sink
 
-	SIW10  single word IW10 sent from an external source
-	RIW10  single word IW10 received by an iC controller
-	SQW15  single word QW15 sent from an iC controller
-	RQW15  single word QW15 received by an external sink
+	SIW10   single word IW10 sent from an external source
+	RIW10   single word IW10 received by an iC controller
+	SQW15   single word QW15 sent from an iC controller
+	RQW15   single word QW15 received by an external sink
 
-	SIL10  single long IL10 sent from an external source
-	RIL10  single long IL10 received by an iC controller
-	SQL15  single long QL15 sent from an iC controller
-	RQL15  single long QL15 received by an external sink
-
-    The registration 'name' followed by one or more individual sender
-    and receiver registration codes are sent as one comma separated
-    list from a client. iCserver acknowledges this by sending a comma
-    separated list of channel numbers used for each sender or receiver.
+	SIL10   single long IL10 sent from an external source
+	RIL10   single long IL10 received by an iC controller
+	SQL15   single long QL15 sent from an iC controller
+	RQL15   single long QL15 received by an external sink
 
  2) As indicated under <address> above, each data type QX, QB, QW, QL
     and QH as well as IX, IB, IW, IL and IH define their own
@@ -1147,7 +1204,7 @@ Additional functionality in iCserver.
     it is easier to change it to an option, than to discard it now
     and to re-implement it later.
 
- 3) One client device has one two way TCP/IC connection to iCserver,
+ 3) One client device has one two way TCP/IP connection to iCserver,
     but it can register for any number of send and/or receive addresses.
     For example the simple iCbox registers as X0 by default, supplying
     8 bits if input data and sinking 8 bits of output data It will
@@ -1185,7 +1242,7 @@ Additional functionality in iCserver.
     destination sinks.
 
  6) Communication with debugging devices (iClive) is regulated with two
-    alternative types; 'C' for controller and 'D' for debugger.
+    alternative <io_op>s; 'C' for controller and 'D' for debugger.
     There can be several instances of iClive running together, but
     only one for each control program. They are addressed by the
     program name, not an IEC-1131 address. A control program named
@@ -1251,26 +1308,27 @@ Additional functionality in iCserver.
 
  8) Registration of clients from the view of iCserver
 
-    a)	A client connects to iCserver, which accepts and issues a
-	$conn object.
+    a)	A client connects to iCserver via TCP/IP, which accepts and
+	issues a $conn object.
 
     b)	The client sends a Message with all its registration codes in
 	a comma sperated list to iCserver (see specification).
 
-    c)	In iCserver the registration codes <input_output><type>
-	<address>[-<instance] are used as a key in a hash table,
-	which associates a unique channel number with the key.
-	The key is the identification or name of a communication pair
-	and is unique. The associated channel number is an index in
-	an array which holds run-time details for the communication
-	pair or channel. <send_receive> select the correct entries
-	in that array.
+    c)	In iCserver the registration code <address_code>[-<instance]
+	is used as a key in a hash table, which associates a unique
+	channel number with the key.  The key identifies either an
+	IEC-1131 I/O or a debug address. It is the identification or
+	name of a communication send/receive pair and is unique. The
+	associated channel number is an index in an array which
+	holds run-time details for the communication pair or
+	channel. <send_receive_op> selects the correct entries in
+	that array.
 
 	iCserver maps each code against the Hash %clientNames,
 	which returns the correct channel number if it has already
 	been allocated. All further data transfers in iCserver and
 	the clients use the channel number to identify a particular
-	communication pair.
+	send/recive pair.
 
     d)	iCserver acknowledges registration of a client by sending a
 	comma separated list of channel numbers in the same order as
@@ -1310,7 +1368,7 @@ Additional functionality in iCserver.
     channel has one and only one sender and at least one receiver. If a
     project is run only as a simulation, a missing sender or receiver
     may not matter and only a warning is issued. If a project drives
-    real I/O's an error must be reported by iCserver. The option flag
+    real I/Os an error must be reported by iCserver. The option flag
     -w turns such error messages into warning messages only.
 
  11)Formats of data messages between iCserver and clients follow a

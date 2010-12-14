@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.36 2009/08/21 06:09:09 jw Exp $";
+"@(#)$Id: scan.c,v 1.37 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -417,10 +417,10 @@ iC_scan(Gate *	out_list)
  *	Scan of nodes on a clock action list
  *
  *	The nodes gp on the c_list are all actions of ftype D_SH - F_CF
- *	or CLCKL or TIMRL.
+ *	or CLCK or TIMR.
  *
  *	The appropriate slaveAct function is executed in this scan.
- *	When the slave action is a CLCKL or TIMRL action, the action
+ *	When the slave action is a CLCK or TIMR action, the action
  *	nodes on their lists will be linked to c_list extending the
  *	clock scan immediately.
  *

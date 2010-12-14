@@ -108,7 +108,7 @@ select($ofh);			# retore old file handle
 
 format STDERR =
 Usage:
-@<<<<<<<[ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
+@<<<<< [ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -f <font>]
  $named
         [ -l <num>][ -w <num>][ -g <geometry>][ -d <deb>][ <file> ...]
     -s host host name of server    (default 'localhost')
@@ -130,7 +130,7 @@ Usage:
     file ... one or more iC source files. The first will be opened. The
             rest will be stored in the File menu for later selection.
 
- Menu buttons:                                              Accelerators
+ Menu buttons:                   Action                      Accelerator
     [File] New  provide a new empty file for editing.             Alt-n
        Open     open and load the selected file.                  Alt-o
        Open.lst open the listing x.lst corresponding to x.ic      Alt-l
@@ -152,11 +152,11 @@ Usage:
                 application - which should be built from the text
                 to make a meaningful display. Text is 'read only'
                 in this mode.                                     Alt-e
-    /Edit]      clears live markings in the Text window. In this mode the
-                text may be edited with the facilities of Tk::Text,
+    /Edit]      clears live markings in the Text window. In this mode
+                the text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
                 are described in the Tk::Text man page in the section
-                'BINDINGS' near the end.  If called with the -u option,
+                'KEYBOARD BINDINGS'.  If called with the -u option,
                 ctrl-U is the <<Undo>> binding.
 
     [Search:]   in the Text window. Text may be scanned for an exact
@@ -167,14 +167,15 @@ Usage:
                 of scrolling.  Another option is to Go to a line entered
                 in the entry window.                             RETURN
 
-    [Help]      display the iClive man page                       Alt-h
+    [Help]      Display the @<<<<< man page.                      Alt-h
+			    $named
 
                 Dynamically increase font size                    Alt +
                 Dynamically decrease font size                    Alt -
 
 Copyright (C) 2000-2009  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.46 2009/10/13 08:02:44 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.47 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -903,6 +904,7 @@ sub report_cursor {
 #	If this were not the case, function int($start+0.5) could be used.
 #	Perl seems to do this internally on the 16th precision digit ???
 #	Tested empircally JW 20050404
+#	Failed for very large files, so modified using int	JW 20101016
 #
 #	parameter 1:	$_[0], has HASH ref when callback from bind
 #	parameter 2:	$_[1], do_scan unconditionally if true
@@ -914,12 +916,10 @@ sub adjust_live {
 	my @position = $text->yview();
 	my $end = $text->index('end');	# re-compute in case text has changed
 	$end =~ s/(\d+).*/$1/;
-	$end--;
-	my $start = $end * $position[0];
-	$start++;
-	my $last = $end * $position[1];
-	$last++;
-	$last++ unless $last > $end;
+	my $e = $end -1;
+	my $start = int $e * $position[0] + 1.5;	# 1 line early for wrapped lines
+	my $last = int $e * $position[1] + 2.5;
+	$last = $end if $last > $end;
 	if ($start != $prevStart or $last != $prevLast or $_[1]) {
 	    if (@activeSymbols) {
 		deleteAllTags();
@@ -975,39 +975,41 @@ sub register_at_server {
 	    $server = 1;			# remember that this iClive started iCserver
 	}
     }
-    if ($conn) {
-	if ($regName eq '') {
-	    my $ret = '';
-	    my $Registrations = "N-$instName,RC$instName,SD$instName";
-	    $regName = $instName;		# register but may not connect to application
-	    print "$named: Registrations: $Registrations\n" if $opt_T;
-	    conn_send_now($Registrations);
-	    info_display(2000, 'blue', "Register as '-$instName'");	# ZZZ
-	    my ($tmsg, $terr) = $conn->rcv_now();
-no warnings;
-	    print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
-	    $i = 1;
-	    REPEAT:
-	    if ($tmsg !~ /^(\d+),(\d+)$/) {	# analyse registration reply now
-		rcvd_msg_from_server($conn, $tmsg, $terr);
-		unless ($conn) {
-		    print "$named: failed to register on attempt $i\n" if $opt_T;
-		    goto FAILED_TO_REGISTER;	# stop trying if registered twice
+    if ($instName ne '') {
+	if ($conn) {
+	    if ($regName eq '') {
+		my $ret = '';
+		my $Registrations = "N-$instName,RC$instName,SD$instName";
+		$regName = $instName;		# register but may not connect to application
+		print "$named: Registrations: $Registrations\n" if $opt_T;
+		conn_send_now($Registrations);
+		info_display(2000, 'blue', "Register as '-$instName'");	# ZZZ
+		my ($tmsg, $terr) = $conn->rcv_now();
+    no warnings;
+		print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
+		$i = 1;
+		REPEAT:
+		if ($tmsg !~ /^(\d+),(\d+)$/) {	# analyse registration reply now
+		    rcvd_msg_from_server($conn, $tmsg, $terr);
+		    unless ($conn) {
+			print "$named: failed to register on attempt $i\n" if $opt_T;
+			goto FAILED_TO_REGISTER;	# stop trying if registered twice
+		    }
+		    ($tmsg, $terr) = $conn->rcv_now();
+		    print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
+		    die "registration failed\n" if $i++ >= 3;
+		    goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
 		}
-		($tmsg, $terr) = $conn->rcv_now();
-		print "$named: Reply: '$tmsg' err = '$terr' ($i)\n" if $opt_T;
-		die "registration failed\n" if $i++ >= 3;
-		goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
+    use warnings;
+		$C_channel = $1;	# receiver channel from control program
+		$D_channel = $2;	# sender channel to control program
+		print "$named: registered: C_channel = $C_channel, D_channel = $D_channel\n" if $opt_T;
+		conn_send_now("$D_channel:2");	# poll application to see if it is live
 	    }
-use warnings;
-	    $C_channel = $1;	# receiver channel from control program
-	    $D_channel = $2;	# sender channel to control program
-	    print "$named: registered: C_channel = $C_channel, D_channel = $D_channel\n" if $opt_T;
-	    conn_send_now("$D_channel:2");	# poll application to see if it is live
+	} else {
+	    FAILED_TO_REGISTER: info_display(2000, 'red',
+		"Could not connect to '$host:$port' - no live listing - edit only");
 	}
-    } else {
-	FAILED_TO_REGISTER: info_display(2000, 'red',
-	    "Could not connect to '$host:$port' - no live listing - edit only");
     }
 } # register_at_server
 
@@ -1456,7 +1458,7 @@ sub search_now {
 		($current, $y, $x, $length) = @$aRef;
 		if (defined $groupFirst) {
 		    if (($groupHeight = $y - $groupFirst) >= $height) {
-			$groupTop = int ($groupFirst + ($prevGroupHeight / 2) - ($height / 2));
+			$groupTop = int $groupFirst + ($prevGroupHeight / 2) - ($height / 2);
 			$groupTop = 0 if $groupTop < 0;
 			push @groups, $groupTop / $lineCnt;
 			$groupFirst = $y;	# start of new group
@@ -1469,7 +1471,7 @@ sub search_now {
 		}
 	    }
 	    if (defined $groupFirst) {
-		$groupTop = int ($groupFirst + ($prevGroupHeight / 2) - ($height / 2));
+		$groupTop = int $groupFirst + ($prevGroupHeight / 2) - ($height / 2);
 		$groupTop = 0 if $groupTop < 0;
 		push @groups, $groupTop / $lineCnt;
 	    }
@@ -1714,6 +1716,7 @@ sub do_scan {
 	$current = '1.0' unless defined $current;
 	$last    = 'end' unless defined $last;
 	my $length = '0';
+##	print "search: '$current' - '$last'\n";
 	while (1) {
 	    $current = $text->search(-count => \$length,
 				     '-regexp',
@@ -1776,13 +1779,13 @@ use warnings;
 	foreach $index (0 .. $#activeSymbols) {
 	    if ($activeSymbols[$index][0]) {
 		print "$index\n" if $opt_T;
-		if (length $msg > 391) {			# REPLY - 9 in icg.h
+		if (length $msg > 1389) {		# REPLY 1400 - (4+6+1) in tcpc.h
 		    conn_send_now("$D_channel:3$msg");	# intermediate active symbols
 		    printMicroSeconds("sent one active symbol string to server");
 		    print "sent '$D_channel:3$msg'\n" if $opt_t;
 		    $msg = '';
 		}
-		$msg .= ";$index";
+		$msg .= ";$index";			# max length 6, ch:3 max 4, term 1
 	    }
 	}
 	conn_send_now("$D_channel:4$msg");		# send last active symbols
@@ -2847,7 +2850,7 @@ __END__
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -f font font or font size to use in Text window (default '14')
-    -l num  height of the Text window (default 40)
+    -l num  height of the Text window (default 35)
     -w num  width  of the Text window (default 80)
     -g geom geometry for main window
     -d deb  extra debug options (see iC-application -h)
@@ -2859,8 +2862,6 @@ __END__
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
             rest will be stored in the File menu for later selection.
-
-=head1 DESCRIPTION
 
  Menu buttons:                   Action                      Accelerator
     [File] New  provide a new empty file for editing.             Alt-n
@@ -2899,10 +2900,12 @@ __END__
                 of scrolling.  Another option is to Go to a line entered
                 in the entry window.                             RETURN
 
-    [Help]      display this man page.                            Alt-h
+    [Help]      Display this man page.                            Alt-h
 
                 Dynamically increase font size                    Alt +
                 Dynamically decrease font size                    Alt -
+
+=head1 DESCRIPTION
 
 In B<Edit> mode B<iClive> provides an edit window in which the text
 of a source or listing can be displayed and optionally edited and

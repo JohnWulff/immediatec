@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.58 2009/10/07 05:04:45 jw Exp $";
+"@(#)$Id: comp.h,v 1.59 2010/12/14 07:05:06 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -129,6 +129,8 @@ extern int	ynerrs;			/* count of iCerror() calls */
 extern int	iC_Pflag;
 extern int	iC_Wflag;
 #define W_DEPRECATED_LOGIC	01	/* do/no logic warnings */
+#define W_FUNCTION_PARAMETER	02	/* do/no function parameter warnings */
+#define W_FUNCTION_DELETE	04	/* do/no function delete warnings */
 /* define other Warning switches here */
 extern int	lexflag;
 /********************************************************************

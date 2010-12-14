@@ -74,9 +74,9 @@ my @bitIndex =	(
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-@<<<<<< [-bdHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    @<<<< [-bdHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-	[ -c <col>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
+	  [ -c <col>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
 	ID	X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
 		Any ID can be preceded by 'I' or 'Q' in which case
 		only that input or output is generated (default is both)
@@ -97,8 +97,10 @@ Usage:
 	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
 				    $named
 	-c col 	maximum number of columns in a row (default 12)
+	-C col 	absolute maximum number of columns in a row (default 18)
+	-R rows	absolute maximum number of rows (default 3)
 	-l len	length of scales (default 170)
-	-f file	read ID parametes from this file
+	-f file read additional ID parameters from this file
 	-b	use buttons instead of checkboxes for digital I/O
 	-d	display external inputs IMn only (no ini values allowed)
 	-H      a Hold button is generated which holds input changes
@@ -109,14 +111,14 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2009  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.46 2009/08/21 06:14:20 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.47 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
 use vars qw($opt_b $opt_d $opt_H $opt_m $opt_x $opt_t $opt_T $opt_s $opt_p);
-use vars qw($opt_n $opt_i $opt_c $opt_l $opt_f $opt_h);
+use vars qw($opt_n $opt_i $opt_c $opt_C $opt_R $opt_l $opt_f $opt_h);
 require "getopts.pl";
-&Getopts('bdHmxtTs:p:n:i:c:l:f:h');	# sets $opt_h if -h etc
+&Getopts('bdHmxtTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -128,8 +130,13 @@ if ($opt_m) {
     $t0 = [gettimeofday];	# start of program
 }
 
-$opt_l = 170 unless $opt_l;	# default length 170
-$opt_c = 12 unless $opt_c;	# default maximum number of columns 12
+$opt_c = 12	unless $opt_c;	# default maximum number of columns
+$opt_C = 18	unless $opt_C;	# absolute maximum number of columns
+$opt_c = $opt_C	if $opt_c > $opt_C;
+$opt_R = 3	unless $opt_R;	# absolute maximum number of rows
+$opt_l = 170	unless $opt_l;	# default length of analog scale
+print "c = $opt_c C = $opt_C R = $opt_R l = $opt_l\n" if $opt_t;
+
 if ($opt_b) {
     $indicatoron = 0;		# 0 button    1 checkbox
     $greenButton = "'light green'";
@@ -380,7 +387,6 @@ if ($opt_t) {
 	print "     $argLine\n";
     }
 }
-exit if $opt_x;	# deliberate exit with -x option
 
 %IONames = ();		# clear for channel entries
 
@@ -394,7 +400,7 @@ my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];
 $named = $name;			# use individual ID for warnings from now on
-$UnitRegistrations = "N$name";
+$UnitRegistrations = "N$name";	# initiate registration string
 
 my ($frame, $label, $direction);
 my $register = 1;	# tested in rcvd_msg_from_server() for registration reply
@@ -418,6 +424,7 @@ foreach $argNameRef (@ArgNames) {
     }
 }
 
+$UnitRegistrations .= ",Z";	# terminate registration string
 print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
 $conn->send_now($UnitRegistrations);
 
@@ -427,27 +434,45 @@ rcvd_msg_from_server($conn, $tmsg, $terr);	# analyse registration string now
 ############# TODO pull out registration analysis from rcvd_msg_from_server() ################
 exit unless $frameCount or die "$named: no valid registrations - cannot make any frames\n";
 
+my ($ch, $maxColumn, $mw, $pane);
+my ($row, $column, $scroll) = (0, 0, 0);
+
 $frameCount++ if $opt_H;			# extra Hold frame
+if ($frameCount > $opt_C*$opt_R) {
+    $maxColumn = $opt_C;
+    $scroll = 1;
+} else {
+    for (my $r = $opt_R; $r > 0; $r--) {
+	my $r1 = $r - 1;
+	if ($frameCount > $opt_c*$r1) {
+	    $maxColumn = int(($frameCount + $r1) / $r);
+	    last;
+	}
+    }
+}
+print "frameCount = $frameCount maxColumn = $maxColumn scroll = $scroll\n" if $opt_t;
+exit if $opt_x;	# deliberate exit with -x option
 
 ########################################################################
 #
 #	Create main window
+#	if too big use a scrollable pane (frame) using Tk::Pane
 #
 ########################################################################
 
-my $mainWindow = MainWindow->new();
-$mainWindow->title("$name");
-
-my ($ch, $maxColumn);
-my ($row, $column) = (0, 0);
-if ($frameCount > $opt_c*2) {
-    $maxColumn = int(($frameCount + 2) / 3);
-} elsif ($frameCount > $opt_c) {
-    $maxColumn = int(($frameCount + 1) / 2);
+$mw = MainWindow->new(-title => "$name");
+if ($scroll) {
+    use Tk::Pane;
+    $pane = $mw->Scrolled('Pane',
+			  -scrollbars => 'oe',
+			  -height     => $opt_R * 218,	# 3 rows = 654
+			 )->pack(
+			         -fill   => 'both',
+			         -expand => 1,
+			 );
 } else {
-    $maxColumn = $frameCount;
+    $pane = $mw;	# no need to scroll - keep window at minimum size
 }
-print "frameCount = $frameCount maxColumn = $maxColumn\n" if $opt_t;
 
 ########################################################################
 #
@@ -456,14 +481,18 @@ print "frameCount = $frameCount maxColumn = $maxColumn\n" if $opt_t;
 ########################################################################
 
 if ($opt_H) {
-    $frame  = $mainWindow->Frame(-label       => 'Hold',
-				 -relief      => 'groove',
-				 -borderwidth => 2,
-				)->grid(-row    => $row, 
-				        -column => $column,
-				        -sticky => 'nsew',
-				       );
+    $frame  = $pane->Frame(-label       => 'Hold',
+			   -relief      => 'groove',
+			   -borderwidth => 2,
+			  )->grid(-row    => $row,
+				  -column => $column,
+				  -sticky => 'nsew',
+				 );
     $column++;
+    if ($column >= $maxColumn) {	# in case $maxColumn == 1
+	$column = 0;
+	$row++;
+    }
     $holdButton = $frame->Checkbutton(
 	-text        => 'II',
 	-width       => '2',
@@ -479,7 +508,7 @@ if ($opt_H) {
 				my ($ch, $val);
 				my $msg = '';
 				foreach $ch (sort { $a <=> $b } keys %HoldQueue) {
-				    $val = $HoldQueue{$ch};	# retieve latest value
+				    $val = $HoldQueue{$ch};	# retrieve latest value
 				    if ($val != $ChannelsIq[$ch]) {
 					print "$named: $ch:$val	> $ChannelNames[$ch] from hold queue\n" if $opt_t;
 					unless ($msg) {
@@ -528,13 +557,13 @@ foreach $argNameRef (@ArgNames) {
     }
     print "$named: [$row:$column] label = '$label' in = '$ini' ch = '$ch'\n" if $opt_t;
 
-    $frame  = $mainWindow->Frame(-label       => $label,
-				 -relief      => 'groove',
-				 -borderwidth => 2,
-				)->grid(-row    => $row, 
-				        -column => $column,
-				        -sticky => 'nsew',
-				       );
+    $frame  = $pane->Frame(-label       => $label,
+			   -relief      => 'groove',
+			   -borderwidth => 2,
+			  )->grid(-row    => $row,
+				  -column => $column,
+				  -sticky => 'nsew',
+				 );
     $column++;
     if ($column >= $maxColumn) {
 	$column = 0;
@@ -684,7 +713,7 @@ foreach $argNameRef (@ArgNames) {
 #
 ########################################################################
 
-$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+$mw->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 
 ########################################################################
 #
@@ -893,7 +922,7 @@ __END__
             default ID is X0 generating input IX0 and output QX0
             A range of ID's can be specified with -; eg IX0-IX7
     ID-inst Each ID can be followed by -<inst>, where <inst> consists
-            of up to 3 numeric charactes (usually 1 digit).
+	    of up to 3 numeric digits (usually 1 digit).
             Such an appended instance code takes precedence over the
             general instance specified with the -i <inst> (see below).
     ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
@@ -904,10 +933,12 @@ __END__
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
-    -i inst instance ID for this iCbox (3  alphanumerics maximum)
+    -i inst instance ID for this iCbox (1 to 3 numeric digits)
     -c col  maximum number of columns in a row (default 12)
+    -C col  absolute maximum number of columns in a row (default 18)
+    -R rows absolute maximum number of rows (default 3)
     -l len  length of scales (default 170)
-    -f file read additional ID parametes from this file
+    -f file read additional ID parameters from this file
     -b      use buttons instead of checkboxes for digital I/O
     -d      display external inputs IMn only (no ini values allowed)
     -H      a Hold button is generated which holds input changes
@@ -985,10 +1016,13 @@ is ignored and treated as a comment.
 
 A separate frame is generated for each input and output ID; two frames
 for an ID not specifying I or Q. Each frame is labelled with the ID
-followed by the optional instance; eg IX0 or IX0-1. The number of frames
-is limited to 12, to prevent the whole widget becoming too wide. On the
-other hand the number of rows is also limited to 3 (has precedence). The
-number of frames in a row (columns) may be specified with the -c option.
+followed by the optional instance; eg IX0 or IX0-1. The number of
+columns is limited to 12, to prevent the whole widget becoming too
+wide. On the other hand the number of rows is also limited to 3 (has
+precedence). The number of frames in a row (columns) may be specified
+with the -c option (absolute maximum with -C).  If the number of
+I/O frames exceeds an absolute maximum of 18 columns and 3 rows,
+more rows are generated, which can be accessed with a scroll-bar.
 
 Digital frames have a vertical row of 8 Checkbuttons labelled .0 .1 ... .7
 for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set and

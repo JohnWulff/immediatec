@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.74 2009/10/10 02:53:16 jw Exp $";
+"@(#)$Id: genr.c,v 1.75 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -192,7 +192,7 @@ op_force(				/* force linked Symbol to correct ftype */
     if (lp && (sp = lp->le_sym) != 0 && sp->ftype != ftyp) {
 	if (sp->u_blist == 0 ||			/* not a @ symbol or */
 	    sp->type >= MAX_GT ||	/* SH, FF, EF, VF, SW, CF or */
-	    (sp->u_blist->le_sym == sp && sp->type == LATCH)) { /* L(r,s) */
+	    (sp->u_blist->le_sym == sp && sp->type == LATCH)) { /* LATCH(r,s) */
 	    if ((typ = iC_types[sp->ftype]) == ERR) {
 		ierror("cannot force from", iC_full_ftype[sp->ftype]);
 	    }
@@ -960,10 +960,11 @@ const char *	cexeString[] = {
 void
 writeCexeString(FILE * oFP, int cn)
 {
-    fprintf(oFP, cexeString[outFlag], cn);
+    if (oFP) fprintf(oFP, cexeString[outFlag], cn);
     while (cn >= functionUseSize) {
 	functionUse = (FuUse*)realloc(functionUse,
 	    (functionUseSize + FUNUSESIZE) * sizeof(FuUse));
+	assert(functionUse);
 	memset(&functionUse[functionUseSize], '\0', FUNUSESIZE * sizeof(FuUse));
 	functionUseSize += FUNUSESIZE;
     }
@@ -1391,7 +1392,7 @@ op_asgn(				/* asign List_e stack to links */
 			/****************************************************
 			 * no logical inputs yet: can split function and logic
 			 *
-			 *	O1 = CLOCK(L(I1, I2));
+			 *	O1 = CLOCK(LATCH(I1, I2));
 			 *			clock	: ---%	O1_1	C ---:	O1
 			 *	O1_2	  ---%	O1_2	  ---|	O1_1
 			 *	I1	  ---%	O1_2
@@ -2856,7 +2857,7 @@ functionDefinition(Symbol * iFunHead, List_e * fParams)
     lp = iFunHead->list;			/* parameter list */
     while (lp) {
 	sp = lp->le_sym;			/* assign or read parameter */
-	if (sp && (sp->fm & FU) == 0) {
+	if (sp && (sp->fm & FU) == 0 && (iC_Wflag & W_FUNCTION_PARAMETER)) {
 	    warning("function parameter was never used:", sp->name);
 	}
 	lp = lp->le_next;			/* next formal parameter link */
@@ -2913,7 +2914,9 @@ clearFunDef(Symbol * functionHead)
     if (slp == 0) {
 	return functionHead;			/* already cleared */
     }						/* instanceNum for dummy from file not changed */
-    warning("existing function definition is deleted:", functionHead->name);
+    if (iC_Wflag & W_FUNCTION_DELETE) {
+	warning("existing function definition is deleted:", functionHead->name);
+    }
     functionHead->u_blist = 0;			/* clear for next definition */
     instanceNum = slp->le_val;			/* this function call instance number */
     while (slp) {
@@ -3799,7 +3802,9 @@ cloneFunction(Sym * fhs, Lis * plpl, Str * par)
 	if (sp->u_blist == 0) {
 	    lp1 = sp->list;
 	    while (lp1) {
-		if ((sp->fm & FU) == 0 && (sp1 = lp1->le_sym) != 0) {
+		if ((sp->fm & FU) == 0 &&
+		    (sp1 = lp1->le_sym) != 0 &&
+		    (iC_Wflag & W_FUNCTION_PARAMETER)) {
 		    warning("call parameter is never used:", sp1->name);
 		}
 		lp2 = lp1->le_next;

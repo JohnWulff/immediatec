@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.29 2009/08/21 06:10:26 jw Exp $";
+"@(#)$Id: gram.y,v 1.30 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -2052,9 +2052,11 @@ immVarFound(unsigned int start, unsigned int end, Symbol* sp)
     lep->pEnd   = end;				/* of possible parentheses */
     lep++;
     if (lep > &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
+	newArray = (LineEntry*)realloc(lineEntryArray,
+	    (udfCount + LEAI) * sizeof(LineEntry));
+	assert(newArray);
+	memset(&newArray[udfCount], '\0', LEAI * sizeof(LineEntry));
 	udfCount += LEAI;			/* increase the size of the array */
-	newArray = (LineEntry*)realloc(lineEntryArray, udfCount * sizeof(LineEntry));
-	assert(newArray);			/* FIX with quit */
 	lep += newArray - lineEntryArray;
 	lineEntryArray = newArray;		/* Array has been successfully resized */
     }
@@ -2287,7 +2289,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	}
 #endif
 	lineEntryArray = (LineEntry*)realloc(NULL, udfCount * sizeof(LineEntry));
-	assert(lineEntryArray);			/* FIX with quit */
+	assert(lineEntryArray);
+	memset(lineEntryArray, '\0', udfCount * sizeof(LineEntry));
 	lep = lineEntryArray;
 	lep->pStart = lep->equOp = LARGE;	/* guard value in case first immVarFound(0) */
 	lep++;

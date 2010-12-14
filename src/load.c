@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.52 2009/10/13 12:15:29 jw Exp $";
+"@(#)$Id: load.c,v 1.53 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -48,24 +48,25 @@ FILE *		iC_outFP;			/* listing file pointer */
 FILE *		iC_errFP;			/* error file pointer */
 
 static const char *	usage =
-"USAGE: %s [-"
+"Usage: %s [-"
 #if YYDEBUG
 "tx"
 #endif	/* YYDEBUG */
 "h]"
 #ifdef TCP
 #if YYDEBUG
-" [-m[m]]"
+"[ -m[m]]"
 #endif	/* YYDEBUG */
-" [-s <server>] [-p <port>] [-i <instance_id>]\n"
+"[ -s <server>][ -p <port>][ -i <instance_id>]\n"
 #endif	/* TCP */
-" [-n<count>] [-d<debug>]\n"
+"        [ -n<count>] [-d<debug>]\n"
 #ifdef TCP
-"        -s host ID of server      (default '%s')\n"
-"        -p service port of server (default '%s')\n"
-"        -i instance ID of this client (default '%s'; 1 to %d numeric digits)\n"
+"        -s host ID      of server      (default '%s')\n"
+"        -p service port of server      (default '%s')\n"
+"        -i instance ID  of this client (default '%s'; 1 to %d numeric digits)\n"
 #endif	/* TCP */
-"        -n <count>      maximum oscilator count (default is %d, limit 15)\n"
+"        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
+"                        0 allows unlimited oscillations\n"
 #if YYDEBUG
 "        -d <debug>2000  display scan_cnt and link_cnt\n"
 "                 +1000  do not trace non-active timers TX0.n\n"

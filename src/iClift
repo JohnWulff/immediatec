@@ -32,9 +32,21 @@ Usage:
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-h	help, ouput this Usage text only
+
+ Key bindings:
+    shift buttons
+	<-	open door
+	->	close door
+	@	move lift up	Page up    fast    Home   up continuous
+	'^'
+	v	move lift down	Page down  fast    End    down continuous
+	Ret	stop continuous
+	roll	move with respect to floors
+
+	q	quit
 Copyright (C) 2000-2009  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.6 2009/08/21 06:14:43 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClift,v 1.7 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -89,6 +101,7 @@ my $wall_3 = draw_wall($canvas, 165, $opt_H - 215, 300, 200, 100, 133);
 my $wall_2 = draw_wall($canvas, 165, $opt_H - 420, 300, 200, 100, 133);
 my $wall_1 = draw_wall($canvas, 165, $opt_H - 625, 300, 200, 100, 133);
 my $wall_0 = draw_wall($canvas, 165, $opt_H - 830, 300, 200, 100, 133);
+$c->configure(-scrollregion => [$c->bbox("all")]);	# define scroll region
 # my ($canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd) = @$wall;
 
 $mw->bind('<Key-Up>',	  [ \&move_cage, $cage, 1      ]);	# cage up
@@ -98,8 +111,8 @@ $mw->bind('<Key-Next>',	  [ \&move_cage, $cage, -5     ]);	# cage down fast
 $mw->bind('<Key-Home>',	  [ \&move_cage, $cage, 1,  $cageD, \$cageId ]);	# cage up continuous
 $mw->bind('<Key-End>',	  [ \&move_cage, $cage, -1, $cageD, \$cageId ]);	# cage down continuous
 $mw->bind('<Key-Return>', [ \&move_cage, $cage, 0, 0,   \$cageId ]);	# stop cage continuous
-$mw->bind('<Key-Right>',  [ \&move_door, $door, 1  ]);	# open doors
-$mw->bind('<Key-Left>',	  [ \&move_door, $door, -1 ]);	# close doors
+$mw->bind('<Key-Right>',  [ \&move_door, $door, 1  ]);	# close doors (front door right)
+$mw->bind('<Key-Left>',	  [ \&move_door, $door, -1 ]);	# open doors
 $mw->bind('<Key-q>',	  sub { exit(0); });	# quit
 
 MainLoop;
@@ -119,7 +132,7 @@ MainLoop;
 
 sub draw_wall {
     my ($canv, $x, $y, $width, $height, $wDoor, $hDoor) = @_;
-    print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
+    print "draw_wall:	x,y = '$x,$y'\t" if $opt_T;
     $x = $canv->canvasx($x);
     $y = $canv->canvasy($opt_H - $y);
     print "lift_wall: x,y = '$x,$y' w = '$width' h = '$height' wd = '$wDoor' hd = '$hDoor'\n" if $opt_T;
@@ -161,12 +174,12 @@ sub draw_wall {
     my $ybr = $yBut - $yOff + $rBut;
 
     my $upBut = $canv->create (
-	'rectangle',			# can be parameterized to be a circle
+	'oval',			# or rectangle
 	$xtl, $ytl,
 	$xbr, $ybr,
 	-width => $thickness,
 	-tags => 'but',
-	-fill => 'green',
+	-fill => 'dark green',
 	-outline => 'black',
     );
 
@@ -174,7 +187,7 @@ sub draw_wall {
     my $xpr = $xbr - $to;
     my $xpm = ($xtl + $xbr) / 2;
     my $ypt = $ytl + $to;
-    my $ypb = $ybr - $to;
+    my $ypb = $ybr - $to-1;
 
     my $upTri = $canv->create (
 	'polygon',
@@ -183,24 +196,24 @@ sub draw_wall {
 	$xpm, $ypt,
 	-width => $thickness,
 	-tags => 'but',
-	-fill => 'black',
-	-outline => 'black',
+	-fill => 'yellow',
+	-outline => 'yellow',
     );
 
     $ytl = $yBut + $yOff - $rBut;
     $ybr = $yBut + $yOff + $rBut;
 
     my $downBut = $canv->create (
-	'rectangle',			# can be parameterized to be a circle
+	'oval',			# or rectangle
 	$xtl, $ytl,
 	$xbr, $ybr,
 	-width => $thickness,
 	-tags => 'but',
-	-fill => 'green',
+	-fill => 'dark green',
 	-outline => 'black',
     );
 
-    $ypt = $ytl + $to;
+    $ypt = $ytl + $to+1;
     $ypb = $ybr - $to;
 
     my $downTri = $canv->create (
@@ -209,16 +222,14 @@ sub draw_wall {
 	$xpr, $ypt,
 	$xpm, $ypb,
 	-tags => 'but',
-	-fill => 'black',
-	-outline => 'black',
+	-fill => 'yellow',
+	-outline => 'yellow',
     );
 
     my ($upInd, $downInd, $floorInd);
 
-    $canv->bind($upBut, '<Button-1>', [ \&wallButton, $canv, $upBut, 'green', $upTri, 'black', ]);
-    $canv->bind($upTri, '<Button-1>', [ \&wallButton, $canv, $upBut, 'dark green', $upTri, 'yellow', ]);
-    $canv->bind($downBut, '<Button-1>', [ \&wallButton, $canv, $downBut, 'green', $downTri, 'black', ]);
-    $canv->bind($downTri, '<Button-1>', [ \&wallButton, $canv, $downBut, 'dark green', $downTri, 'yellow', ]);
+    $canv->bind($upTri, '<Button-1>', [ \&wallButton, $canv, $upBut, 'red', $upTri, 'yellow', ]);
+    $canv->bind($downTri, '<Button-1>', [ \&wallButton, $canv, $downBut, 'red', $downTri, 'yellow', ]);
 
     return [ $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ];
 } # draw_wall
@@ -237,23 +248,8 @@ sub draw_wall {
 sub wallButton {
     my ($dummy, $canv, $button, $butColour, $triangle, $triColour) = @_;
     $canv->itemconfigure($button, -fill => $butColour);
-    $canv->itemconfigure($triangle, -fill => $triColour);
-    $canv->itemconfigure($triangle, -outline => $triColour);
-}
-
-########################################################################
-#
-#	Indicate a wall button state (off or on)
-#	(called from the controller)
-#
-########################################################################
-
-sub setWallButton {
-    my ($dummy, $canv, $button, $butColour, $triangle, $triColour) = @_;
-    $canv->itemconfigure($button, -fill => $butColour);
-    $canv->itemconfigure($triangle, -fill => $triColour);
-    $canv->itemconfigure($triangle, -outline => $triColour);
-}
+    $canv->itemconfigure($triangle, -fill => $triColour, -outline => $triColour);
+} # wallButton
 
 ########################################################################
 #
@@ -270,7 +266,7 @@ sub setWallButton {
 
 sub draw_door {
     my ($canv, $x, $y, $width, $height, $offset, $type) = @_;
-    print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
+    print "draw_door:	x,y = '$x,$y'\t" if $opt_T;
     $x = $canv->canvasx($x);
     $y = $canv->canvasy($opt_H - $y);
     print "lift_door: x,y = '$x,$y' w = '$width' h = '$height' o = '$offset' t = '$type'\n" if $opt_T;
@@ -347,7 +343,7 @@ sub move_door {
 
 sub draw_cage {
     my ($canv, $x, $y, $width, $height) = @_;
-    print "start_drawing:	x,y = '$x,$y'\t" if $opt_T;
+    print "draw_cage:	x,y = '$x,$y'\t" if $opt_T;
     $x = $canv->canvasx($x);
     $y = $canv->canvasy($opt_H - $y);
     print "lift_cage: x,y = '$x,$y' w = '$width'\n" if $opt_T;
@@ -459,16 +455,25 @@ __END__
 =head1 SYNOPSIS
 
  iClift [-tmTh][ -c cage_delay][ -d door_type][ -W width][ -H height]
-	-L num  number of lifts in the building      (default 1)
-	-F code floor code for basement,ground,upper (default 'B1,G,3')
 	-c del	delay between cage steps             (default 7 ms)
 	-d typ	door type 0 open from centre, 1 left, -1 right
-	-W pix	width of canvas in pixels            (default 370)
-	-H pix	height of canvas in pixels           (default 644)
+	-W pix	width of canvas in pixels            (default 400)
+	-H pix	height of canvas in pixels           (default 850)
 	-t	trace debug messages
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
-	-h	help, ouput this Usage text only
+	-h      help, ouput this Usage text only
+
+ Key bindings:
+    shift buttons
+	<-	open door
+	->	close door
+	^	move lift up	Page up    fast    Home   up continuous
+	v	move lift down	Page down  fast    End    down continuous
+	Ret	stop continuous
+	roll	move with respect to floors
+
+	q	quit
 
 =head1 DESCRIPTION
 

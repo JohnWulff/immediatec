@@ -39,7 +39,7 @@ Usage:
     iCa converter to change single braces in FOR control lines to twin
     braces
 
-$Id: immax,v 1.1 2009/10/15 06:51:41 jw Exp $
+$Id: immax,v 1.2 2010/12/14 07:05:06 jw Exp $
 .
 
 use vars qw($opt_o $opt_e $opt_U $opt_l $opt_P $opt_T $opt_h);
@@ -316,7 +316,9 @@ sub processFile {
 			    if (defined $forHash{ $braceCount }) {
 				substr($_, $pos + $offset, 0) = "}";
 				$offset += 1;
+no warnings;						# suppress goto warning
 				goto alternate;	# support old dialect
+use warnings;
 			    }
 			  single:
 			    if (defined $compound) {
@@ -334,7 +336,9 @@ sub processFile {
 				substr($_, $pos + $offset, 1) = "";
 				$offset -= 1;
 				push(@lnErr, "### Warning: 'Unmatched '}} ???'\n");
+no warnings;						# suppress goto warning
 				goto single;		# keep going - makes output cleaner
+use warnings;
 			    }
 			}
 		    }
@@ -397,7 +401,6 @@ __END__
 =head1 SYNOPSIS
 
  immax [-UlTh][ -o<out>][ -e<err>][ -Pm[=d]...][ <in>]
-	$named
     -o <out>   name of generated output file         (default: stdout)
     -e <err>   name of error file                    (default: stderr)
     -U         change all FOR loop control variables to UPPER case

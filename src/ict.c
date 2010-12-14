@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.54 2009/08/24 13:23:43 jw Exp $";
+"@(#)$Id: ict.c,v 1.55 2010/12/14 07:05:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -49,7 +49,12 @@ static const char ict_c[] =
 #define QUIT_DEBUGGER	(SIGRTMAX+2)
 #define QUIT_SERVER	(SIGRTMAX+3)
 
-static iC_Functp * iC_i_lists[] = { I_LISTS };
+#define IOCHANNELS	30		/* initial Channels[] size */
+#define ENTRYSZ		16		/* entry "SIX0000-000\0" max length 12 */
+
+static void	regAck(Gate ** oStart, Gate ** oEnd);
+static void	storeChannel(unsigned short channel, Gate * gp);
+static iC_Functp *	iC_i_lists[] = { I_LISTS };
 
 /********************************************************************
  *  initialise all lists with their name to aid symbolic debugging
@@ -85,8 +90,10 @@ unsigned long	glit_nxt;		/* count glitch scan */
 static SOCKET	sockFN = 0;		/* TCP/IP socket file number */
 
 static Gate *	timNull[] = { 0, 0, 0, 0, 0, 0, 0, 0, }; /* speeds up tim[] lookup */
-static int	maxChannels = 0;
-static int	C_channel = 0;		/* channel for sending messages to Debug */
+static unsigned short	topChannel = 0;
+static unsigned short	C_channel = 0;	/* channel for sending messages to Debug */
+static Gate **	Channels = NULL;	/* dynamic array to store input gate addresses */
+static int	ioChannels = 0;		/* allocated size of Channels[] */
 static Gate	D_gate;			/* Gate on channel for receiving messages from Debug */
 static int	regOffset = 0;		/* for register send */
 static int	liveOffset = 0;		/* for live header */
@@ -124,10 +131,8 @@ iC_icc(
     int		c;
     short	typ;
     int		cnt;
-    long	index;
     Gate **	opp;
     char *	cp;
-    Gate **	Channels = 0;
     Gate **	tim = timNull;		/* point to array of 8 null pointers */
     Gate *	gp;
     iC_Functp	init_fa;
@@ -175,122 +180,92 @@ iC_icc(
     }
 
     if ((iC_debug & 0400) == 0) {
-	char *		tbp = regBuf;
-	int		tbc = REQUEST;
-	int		cn  = 0;
-	char *		tbt;
+	char *		tbp = regBuf;	/* points to next entry in regBuf */
+	int		tbc = REQUEST;	/* length of filled entries */
+	char *		tbt;		/* temp pointer */
+	Gate **		sopp;
+	char		entry[ENTRYSZ];	/* entry "SIX0000-000\0" max length 12 */
+	char *		ep  = entry;	/* points to next point in entry */
+	int		el  = 0;	/* entry length */
 	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
+
 	/* Start TCP/IP communication before any inputs are generated => outputs */
 	if (iC_micro) iC_microReset(04);
 	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM, delay);
 	if (iC_debug & 04) fprintf(iC_outFP, "%s: I/O registration objects\n", iC_iccNM);
 	for (i = 0; i < 3; i++) {
-	    tbp += cn;
-	    tbc -= cn;
-	    cn = snprintf(tbp, tbc, "%s%s", sr[i], iC_iccNM);
+	    tbp += el;
+	    tbc -= el;
+	    el = snprintf(tbp, tbc, "%s%s", sr[i], iC_iccNM);	/* directly into regBuf */
 	}
 	/* use last string to initialise name "D<progname>[-<instance>]" for D_gate */
-	D_gate.gt_ids = iC_emalloc(cn-1);			/* including '\0' */
-	strncpy(D_gate.gt_ids, tbp+2, cn-1);		/* +2 leave out ",R" */
+	D_gate.gt_ids = iC_emalloc(el-1);			/* including '\0' */
+	strncpy(D_gate.gt_ids, tbp+2, el-1);		/* +2 leave out ",R" */
 	D_gate.gt_new = -2;	/* changes - not equal 0 - 5 for debug messages */
 	D_gate.gt_old = -1;	/* never changes - not equal 0 - 5 for debug messages */
 
-	for (opp = iC_sTable; opp < iC_sTend; opp++) {
+	for (opp = sopp = iC_sTable; opp < iC_sTend; opp++) {
 	    int mask;
 	    gp = *opp;
-	    tbp += cn;
-	    tbc -= cn;
-	    cn = 0;
+	    tbp += el;
+	    tbc -= el;
+	    ep = entry;
+	    el = 0;
 	    mask = gp->gt_mark;
 	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T') {	/* suppress TX0 */
-		cn = snprintf(tbp, tbc, ",R%s", gp->gt_ids);	/* read input at controller */
+		el = snprintf(ep, ENTRYSZ, ",R%s", gp->gt_ids);	/* read input at controller */
 		if (gp->gt_fni != TRAB) {
 		    mask = 0x100;	/*block output of used bits for analog I/O */
 		}
 	    } else
 	    if (gp->gt_fni == OUTW) {
-		cn = snprintf(tbp, tbc, ",S%s", gp->gt_ids);	/* send output at controller */
+		el = snprintf(ep, ENTRYSZ, ",S%s", gp->gt_ids);	/* send output at controller */
 		if (gp->gt_ini == -ARN) {
-		    if ((tbt = strrchr(tbp, '_')) != NULL && *(tbt+1) == '0') {
+		    if ((tbt = strrchr(ep, '_')) != NULL &&
+			*(tbt+1) == '0' &&
+			*(tbt+2) == '\0') {
 			*tbt = '\0';	/* strip trailing "_0" from internal output name */
-			cn -= 2;
+			el -= 2;
 			mask = 0x100;	/*block output of used bits for analog I/O */
-			assert(cn > 0);
+			assert(el > 0);
 		    } else {
-			fprintf(iC_errFP, "\n%s: ill formed output name '%s'\n", iC_iccNM, tbp + 1);
+			fprintf(iC_errFP, "\n%s: ill formed output name '%s'\n", iC_iccNM, ep + 1);
 			iC_quit(3);
 		    }
 		}
 	    }
-	    if (cn > 0) {
+	    if (el > 0) {
 		char * scp = "";
 		if (strlen(iC_iidNM) > 0) {
-		    cn += snprintf(tbp + cn, tbc - cn, "-%s", iC_iidNM); /* append instance ID */
+		    el += snprintf(ep + el, ENTRYSZ - el, "-%s", iC_iidNM);	/* append instance ID */
 		    scp = "-";
 		}
 		if (iC_debug & 04) fprintf(iC_outFP,
 		    "%s%s%s	%d	%d	(%d)\n", gp->gt_ids, scp, iC_iidNM, (int)gp->gt_ini, (int)gp->gt_fni, mask);
 		assert(mask);
 		if (mask < X_MASK) {
-		    cn += snprintf(tbp + cn, tbc - cn, "(%d)", mask);	/* mask of used bits */
+		    el += snprintf(ep + el, ENTRYSZ - el, "(%d)", mask);	/* mask of used bits */
 		}
-	    }
-	    if (cn >= tbc) {
-		fprintf(iC_errFP, "\n%s: buffer '%s' has overflowed %d %d\n", iC_iccNM, regBuf, cn, tbc);
-		iC_quit(4);
+		if (tbc - el <= (opp+1 == iC_sTend ? 2 : 0)) {	/* leave room for ",Z" at end */
+		    /********************************************************************
+		     * buffer is about to overflow
+		     *******************************************************************/
+		    if (iC_micro) iC_microPrint("partial registration", 0);
+		    regAck(sopp, opp);		/* send/receive partial registration */
+		    sopp = opp;
+		    tbp = regBuf;		/* start new string */
+		    tbc = REQUEST;		/* length of filled entries */
+		    assert(*ep == ',' && (*(ep+1) == 'S' || *(ep+1) == 'R'));
+		    ep++;			/* chop initial ',' */
+		    el--;
+		}
+		strncpy(tbp, ep, tbc);		/* place entry in regBuf */
 	    }
 	}
-	if (iC_debug & 04) fprintf(iC_outFP, "register:%s\n", regBuf);
-	iC_send_msg_to_server(sockFN, regBuf);		/* register controller and IOs */
-	if (iC_micro) iC_microPrint("connect to server", 0);
-	/* receive registration reply */
-	if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
-	    if (iC_micro) iC_microPrint("reply from server", 0);
-	    if (iC_debug & 04) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
-	    cp = rpyBuf; cp--;
-	    do {
-		index = atoi(++cp);
-		if (index > maxChannels) {
-		    maxChannels = index;
-		}
-	    } while ((cp = strchr(cp, ',')) != NULL);
-	    maxChannels++;	/* size of array Channels[] determined from received msg */
-	    Channels = (Gate **)calloc(maxChannels, sizeof(Gate *));
-	    // C channel index - messages from controller to debugger
-	    C_channel = atoi(rpyBuf);
-	    assert(C_channel > 0 && C_channel < maxChannels);
-	    // D channel index - messages from debugger to controller
-	    cp = strchr(rpyBuf, ',');
-	    assert(cp);
-	    index = atoi(++cp);
-	    assert(index > 0 && index < maxChannels);
-	    Channels[index] = &D_gate;				/* ==> Debug input */
-	    // remaining input and output channel indices matching registrations
-	    cp = strchr(cp, ',');
-	    for (opp = iC_sTable; opp < iC_sTend; opp++) {
-		gp = *opp;
-		if ((gp->gt_ini == -INPW && *gp->gt_ids != 'T') ||	/* suppress TX0 */
-		    gp->gt_fni == OUTW) {
-		    assert(cp);
-		    index = atoi(++cp);
-		    assert(index > 0 && index < maxChannels);
-		    if (gp->gt_ini == -INPW) {
-			Channels[index] = gp;				/* ==> Input */
-		    } else
-		    if (gp->gt_fni == OUTW) {
-			gp->gt_list = (Gate **)index;			/* <== Output */
-		    }
-		    cp = strchr(cp, ',');
-		}
-	    }
-	    assert(cp == NULL);
-	    if (iC_debug & 04) fprintf(iC_outFP, "reply: Channels %d\n", maxChannels);
-	    regOffset = snprintf(regBuf, REQUEST, "%d:2;%s", C_channel, iC_iccNM);
-	    if (iC_micro) iC_microPrint("Send application name", 0);
-	    iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
-	} else {
-	    iC_quit(QUIT_SERVER);			/* quit normally */
-	}
+	strncpy(tbp + el, ",Z", tbc - el);	/* place termination in regBuf - 2 bytes are free */
+	if (iC_micro) iC_microPrint("last registration", 0);
+	assert(opp == iC_sTend);
+	regAck(sopp, opp);			/* send/receive last registration */
     }
 
 /********************************************************************
@@ -327,7 +302,7 @@ iC_icc(
      *  one command digit.
      *  Message in msgBuf is ignored of iC_debug&0400 stops process after init
      *******************************************************************/
-    msgOffset = liveOffset = snprintf(msgBuf, REQUEST, "%d:3", C_channel);
+    msgOffset = liveOffset = snprintf(msgBuf, REQUEST, "%hu:3", C_channel);
 #ifndef LOAD
     for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
 	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
@@ -729,7 +704,7 @@ iC_icc(
 			int		val;
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 			int		count;
-			int		channel;
+			unsigned short	channel;
 			static int	liveFlag;
 
 			if (isdigit(rpyBuf[0])) {
@@ -739,13 +714,13 @@ iC_icc(
 				int n;
 				if (
 #if	INT_MAX == 32767 && defined (LONG16)
-				    (n = sscanf(++cp, "%d:%ld", &channel, &val))
+				    (n = sscanf(++cp, "%hu:%ld", &channel, &val))
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-				    (n = sscanf(++cp, "%d:%d", &channel, &val))
+				    (n = sscanf(++cp, "%hu:%d", &channel, &val))
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 				    == 2 &&
 				    channel > 0	&&
-				    channel < maxChannels &&
+				    channel <= topChannel &&
 				    (gp = Channels[channel]) != NULL
 				) {
 				    if (val != gp->gt_new &&	/* first change or glitch */
@@ -785,6 +760,7 @@ iC_icc(
 					} else
 					if (gp->gt_fni == UDFA) {	/* D_gate initialised type */
 					    char * cp1;
+					    unsigned short index;
 					    gp->gt_new = 0;	/* allow repeated 1-6 commands */
 					    switch (val) {
 					    case 0:		/* IGNORE */
@@ -800,7 +776,7 @@ iC_icc(
 						    (*opp)->gt_live = index++;	/* index and live inhibit */
 						    index &= 0x7fff;		/* rolls over if > 32768 Symbols */
 						}
-						regOffset = snprintf(regBuf, REQUEST, "%d:1", C_channel);
+						regOffset = snprintf(regBuf, REQUEST, "%hu:1", C_channel);
 						/* to maintain index correlation send all symbols */
 						for (opp = iC_sTable; opp < iC_sTend; opp++) {
 						    int		len;
@@ -840,7 +816,7 @@ iC_icc(
 						    if (iC_micro) iC_microReset(0);
 						}
 						/* end of symbol table - execute scan - follow with '0' to leave in iCserver */
-						regOffset = snprintf(regBuf, REQUEST, "%d:4,%d:0", C_channel, C_channel);
+						regOffset = snprintf(regBuf, REQUEST, "%hu:4,%hu:0", C_channel, C_channel);
 						if (iC_micro) iC_microPrint("Send Scan Command", 0);
 						iC_send_msg_to_server(sockFN, regBuf);
 						liveFlag = 1;		/* live inhibit bits are set */
@@ -881,7 +857,7 @@ iC_icc(
 							(fni == CH_BIT && gp->gt_ini == -ARN)) ? gp->gt_new
 							/* CH_BIT is int if ARN else bit */    : gp->gt_val < 0 ? 1
 														: 0;
-						    if (iC_debug & 04) fprintf(iC_outFP, "%4d %-15s %ld\n",
+						    if (iC_debug & 04) fprintf(iC_outFP, "%4hu %-15s %ld\n",
 							index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
 						    if (value) {
 							iC_liveData(gp->gt_live, value);	/* initial active live values */
@@ -914,7 +890,7 @@ iC_icc(
 						    liveFlag = 0;
 						}
 						/* poll iClive with 'ch:2;<name>' */
-						regOffset = snprintf(regBuf, REQUEST, "%d:2;%s", C_channel, iC_iccNM);
+						regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
 						if (iC_micro) iC_microPrint("Send application name", 0);
 						iC_send_msg_to_server(sockFN, regBuf);
 						if (iC_micro) iC_microReset(0);
@@ -930,7 +906,7 @@ iC_icc(
 						    }
 						    liveFlag = 0;
 						}
-						regOffset = snprintf(regBuf, REQUEST, "%d:0", C_channel);
+						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
 						iC_send_msg_to_server(sockFN, regBuf);
 						if (iC_micro) iC_microReset(0);
 						break;
@@ -943,7 +919,7 @@ iC_icc(
 #if	YYDEBUG
 						if (iC_debug & 0100) fprintf(iC_outFP, "Debugger has stopped for '%s'\n", iC_iccNM);
 #endif	/* YYDEBUG */
-						regOffset = snprintf(regBuf, REQUEST, "%d:0", C_channel);
+						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
 						iC_send_msg_to_server(sockFN, regBuf);
 						break;
 
@@ -953,7 +929,7 @@ iC_icc(
 					} else goto RcvError;
 				    }
 				} else {
-				    fprintf(iC_errFP, "n = %d, channel = %d, maxChannels = %d, gp = %s\n", n, channel, maxChannels, gp ? gp->gt_ids : "null");
+				    fprintf(iC_errFP, "n = %d, channel = %hu, topChannel = %hu, gp = %s\n", n, channel, topChannel, gp ? gp->gt_ids : "null");
 				    goto RcvError;
 				}
 			    } while ((cp = strchr(cp, ',')) != NULL);
@@ -1006,6 +982,91 @@ iC_icc(
 	}
     } /* for (;;) */
 } /* iC_icc */
+
+/********************************************************************
+ *
+ *	Send registration and receive acknowledgement
+ *
+ *******************************************************************/
+
+static void
+regAck(Gate ** oStart, Gate ** oEnd)
+{
+    Gate **		opp;
+    char *		cp;
+    Gate *		gp;
+    unsigned short	channel;
+
+    if (iC_debug & 04) fprintf(iC_outFP, "register:%s\n", regBuf);
+    iC_send_msg_to_server(sockFN, regBuf);	/* register controller and IOs */
+    if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
+	if (iC_micro) iC_microPrint("reply from server", 0);
+	if (iC_debug & 04) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+	if (! Channels) {
+	    // C channel - messages from controller to debugger
+	    C_channel = atoi(rpyBuf);
+	    assert(C_channel > 0);
+	    // D channel - messages from debugger to controller
+	    cp = strchr(rpyBuf, ',');
+	    assert(cp);
+	    channel = atoi(++cp);
+	    assert(channel > 0);
+	    storeChannel(channel, &D_gate);			/* ==> Debug input */
+	    cp = strchr(cp, ',');
+	} else {
+	    cp = rpyBuf - 1;
+	}
+	// remaining input and output channel indices matching registrations
+	for (opp = oStart; opp < oEnd; opp++) {		/* iC_sTable to iC_sTend */
+	    gp = *opp;
+	    if ((gp->gt_ini == -INPW && *gp->gt_ids != 'T') ||	/* suppress TX0 */
+		gp->gt_fni == OUTW) {
+		assert(cp);
+		channel = atoi(++cp);
+		assert(channel > 0);
+		if (channel > topChannel) {
+		    topChannel = channel;
+		}
+		if (gp->gt_ini == -INPW) {
+		    storeChannel(channel, gp);			/* ==> Input */
+		} else
+		if (gp->gt_fni == OUTW) {
+		    gp->gt_list = (Gate **)(int)channel;	/* <== Output */
+		}
+		cp = strchr(cp, ',');
+	    }
+	}
+	assert(cp == NULL);			/* Ack string matches Registration */
+	if (iC_debug & 04) fprintf(iC_outFP, "reply: Channels %hu\n", topChannel);
+	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
+	if (iC_micro) iC_microPrint("Send application name", 0);
+	iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
+    } else {
+	iC_quit(QUIT_SERVER);			/* quit normally */
+    }
+} /* regAck */
+
+/********************************************************************
+ *
+ *	Initalise and expand dynamic array Channels[] as necessary
+ *	Store input Gate address in Channels[]
+ *
+ *******************************************************************/
+
+static void
+storeChannel(unsigned short channel, Gate * gp)
+{
+    while (channel >= ioChannels) {
+	Channels = (Gate **)realloc(Channels,	/* initially NULL */
+	    (ioChannels + IOCHANNELS) * sizeof(Gate *));
+	assert(Channels);
+	memset(&Channels[ioChannels], '\0', IOCHANNELS * sizeof(Gate *));
+	ioChannels += IOCHANNELS;	/* increase the size of the array */
+	if (iC_debug & 04) fprintf(iC_outFP, "storeChannel: Channels[%d] increase\n", ioChannels);
+    }
+    if (iC_debug & 04) fprintf(iC_outFP, "storeChannel: Channels[%d] <= %s\n", channel, gp->gt_ids);
+    Channels[channel] = gp;		/* store input Gate address */
+} /* storeChannel */
 
 /********************************************************************
  *
@@ -1094,7 +1155,7 @@ void iC_quit(int sig)
     if (sockFN) {
 	if (C_channel) {
 	    /* disconnect iClive - follow with '0' for iCserver */
-	    regOffset = snprintf(regBuf, REQUEST, "%d:5,%d:0", C_channel, C_channel);
+	    regOffset = snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
 	    iC_send_msg_to_server(sockFN, regBuf);
 	    if (iC_micro) iC_microReset(0);
 #ifdef	WIN32
