@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2011  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -37,7 +37,6 @@ my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
 my @ChannelsIq;		# stores values before queing for all I[XBWL]n inputs
 my %IONames;		# stores channel for each IO name (aux use in initial pass)
 my $UnitRegistrations;	# stores the registration string
-my $frameCount;		# number of frames in the box
 my %HoldQueue = ();	# Hold Queue
 my $holdButton;		# Hold button
 my $hold;		# state of Hold button
@@ -109,9 +108,9 @@ Usage:
 	-T	extra static debug messages
 	-x	exit after analyzing input parameters
 	-h	help, ouput this Usage text only
-Copyright (C) 2000-2009  John E. Wulff		<immediateC@gmail.com>
+Copyright (C) 2000-2011  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.47 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.48 2011/10/24 01:25:25 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -400,13 +399,17 @@ my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];
 $named = $name;			# use individual ID for warnings from now on
-$UnitRegistrations = "N$name";	# initiate registration string
-
-my ($frame, $label, $direction);
-my $register = 1;	# tested in rcvd_msg_from_server() for registration reply
 
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-die "Client '$name' could not connect to $host:$port\n" unless $conn;
+die "Client '$named' could not connect to $host:$port\n" unless $conn;
+
+############# send registration ############################
+
+my ($label, $direction);
+my $register = 1;		# tested in rcvd_msg_from_server() for registration reply
+my $ri = 0;			# registration index used in rcvd_msg_from_server()
+my $frameCount = 0;		# number of frames in the box
+$UnitRegistrations = "N$name";	# initiate registration string
 
 foreach $argNameRef (@ArgNames) {
     ($id, $ini, $from, $to, $resolution) = @$argNameRef;
@@ -418,23 +421,33 @@ foreach $argNameRef (@ArgNames) {
     } else {
 	die "$named: invalid argument '$id' - internal error";
     }
-    if ($direction) {
-	$UnitRegistrations .= ",$direction$id";
-	print "register: $direction$id	inByte = $ini\n" if $opt_t;
+    if ((length($UnitRegistrations) + length($id)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
+	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+	$conn->send_now($UnitRegistrations);
+	my ($tmsg, $terr) = $conn->rcv_now();
+	print "$named: Reply: $tmsg\n" if $opt_t;
+	rcvd_msg_from_server($conn, $tmsg, $terr);	# receive registration acknowledgment
+	$UnitRegistrations = '';
     }
+    $UnitRegistrations .= ",$direction$id";	# direction 1 ',Z' 2 term 1
+    print "register: $direction$id	inByte = $ini\n" if $opt_t;
 }
-
 $UnitRegistrations .= ",Z";	# terminate registration string
 print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
 $conn->send_now($UnitRegistrations);
-
 my ($tmsg, $terr) = $conn->rcv_now();
 print "$named: Reply: $tmsg\n" if $opt_t;
-rcvd_msg_from_server($conn, $tmsg, $terr);	# analyse registration string now
-############# TODO pull out registration analysis from rcvd_msg_from_server() ################
-exit unless $frameCount or die "$named: no valid registrations - cannot make any frames\n";
+rcvd_msg_from_server($conn, $tmsg, $terr);	# receive final registration acknowledgment
 
-my ($ch, $maxColumn, $mw, $pane);
+############# registration analysis ########################
+$ri == scalar @ArgNames or
+    die "$named: $ri: not enough registration replies from iCserver - system error";
+$frameCount != 0 or
+    die "$named: no valid registrations - cannot make any frames\n";
+$register = 0;
+############# correct number of registration replies #######
+
+my ($frame, $ch, $maxColumn, $mw, $pane);
 my ($row, $column, $scroll) = (0, 0, 0);
 
 $frameCount++ if $opt_H;			# extra Hold frame
@@ -768,7 +781,7 @@ sub send_input {
 
 ########################################################################
 #
-#	Receive message from server - adjust outputs
+#	Receive message from server - adjust outputs - ack registrations
 #
 ########################################################################
 
@@ -783,13 +796,10 @@ sub rcvd_msg_from_server {
 	    print "$named: disconnected by server\n";
 	    exit;
 	}
-	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId, $j);
-	$j = 0;
-	$frameCount = 0 if $register;		# TODO fix when registration is pulled forward
+	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId);
 	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
 	    if ($msg1 =~ /^(\d+):(.*)$/) {
-		## $1 is channel : $2 is value
-		$channel = $1;
+		$channel = $1;			## receive data as channel:value
 		$value   = $2;
 		$old = $ChannelsQ[$channel];
 		if (defined $old) {
@@ -813,13 +823,12 @@ sub rcvd_msg_from_server {
 		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
 		}
 	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
-		## $1 is channel
-		$channel = $1;
-		($id, $ini) = @{$ArgNames[$j]};	# next 2 values
+		$channel = $1;			## receive channel of a registration acknowlwdgment
+		($id, $ini) = @{$ArgNames[$ri]};	# next 2 values
 		defined $id or
-		    die "$named: too many registration replies from iCserver - system error";
-		print "$named: $j: registering '$id' on channel '$channel'\n" if $opt_t;
-		$j++;
+		    die "$named: too many registration acknowledgments from iCserver - system error";
+		print "$named: $ri: registering '$id' on channel '$channel'\n" if $opt_t;
+		$ri++;
 		my $dir = '';
 		if ($id =~ /$Q__XBWL__/) {	# /^Q([XBWL])/ or /^[IQ]([XBWL])/ if $opt_d
 		    if ($channel == 0) {
@@ -869,11 +878,6 @@ sub rcvd_msg_from_server {
 	    } else {
 		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
 	    }
-	}
-	if ($j) {
-	    $j == scalar @ArgNames or
-		die "$named: $j: not enough registration replies from iCserver - system error";
-	    $register = 0;	# correct number of registration replies have been received
 	}
     }
 } # rcvd_msg_from_server
@@ -1058,7 +1062,7 @@ L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2009  John E. Wulff
+COPYRIGHT (C) 2000-2011  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

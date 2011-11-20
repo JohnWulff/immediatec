@@ -1,8 +1,8 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.65 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: icc.c,v 1.66 2011/10/24 05:55:21 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -152,6 +152,7 @@ static const char *	usage =
 "                  +200  display oscillator info\n"
 "                  +100  initialisation and run time trace\n"
 #ifdef TCP
+"                    +4  extra install debug info\n"
 "                    +2  trace I/O receive buffer\n"
 "                    +1  trace I/O send buffer\n"
 #endif	/* TCP */
@@ -182,7 +183,7 @@ static const char *	usage =
 "      Typing q or ctrl-C quits run mode.\n"
 #endif	/* RUN or TCP */
 "%s\n"
-"Copyright (C) 1985-2009 John E. Wulff     <immediateC@gmail.com>\n"
+"Copyright (C) 1985-2011 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -331,7 +332,7 @@ Gate *		iC_QL4p;			/* pointer to Output Gate for long iC_display */
  *******************************************************************/
 
 int
-openT4T5(int mode)
+iC_openT4T5(int mode)
 {
     int		fd;
     static int	T5flag = 0;		/* set when mkstemp(T5FN) is executed */
@@ -384,7 +385,7 @@ openT4T5(int mode)
 	}
     }
     return 0;
-} /* openT4T5 */
+} /* iC_openT4T5 */
 
 /********************************************************************
  *
@@ -787,7 +788,7 @@ main(
      *	in the iC code, an attempt to assign to it in the C-code is an
      *	error.
      *******************************************************************/
-    if ((r = c_compile(T1FP, T3FP, C_PARSE|C_FIRST|C_BLOCK, 0)) != 0) {
+    if ((r = iC_c_compile(T1FP, T3FP, C_PARSE|C_FIRST|C_BLOCK, 0)) != 0) {
 	ro = 6;				/* C-compile error */
     } else {
 #if defined(RUN) || defined(TCP)
@@ -800,12 +801,12 @@ main(
 	/********************************************************************
 	 *	List network topology and statistics - this completes listing
 	 *******************************************************************/
-	if ((r = listNet(gate_count)) == 0) {
+	if ((r = iC_listNet(gate_count)) == 0) {
 	    /********************************************************************
 	     *	-o option: Output a C-file of all Gates, C-code and links
 	     *******************************************************************/
 	    if (outFlag) {			/* -o option */
-		r = outNet(T3FP, outFN);	/* generate network as C file */
+		r = iC_outNet(T3FP, outFN);	/* generate network as C file */
 	    } else
 	    /********************************************************************
 	     *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
@@ -820,12 +821,12 @@ main(
 		    fprintf(excFP, cexe_part1);
 		    linecnt += cexe_lines1;
 		    /* copy literal blocks from C intermediate file to C output file */
-		    copyXlate(T3FP, excFP, excFN, &linecnt, 01);
+		    iC_copyXlate(T3FP, excFP, excFN, &linecnt, 01);
 		    /* write C execution file Part 2 */
 		    fprintf(excFP, cexe_part2);
 		    linecnt += cexe_lines2;
 		    /* copy called function cases from C intermediate file to C output file */
-		    copyXlate(T3FP, excFP, excFN, &linecnt, 02);
+		    iC_copyXlate(T3FP, excFP, excFN, &linecnt, 02);
 		    /* write C execution file Part 3 */
 		    fprintf(excFP, cexe_part3, iC_progname, iC_gflag ? "g" : "", iC_optimise, inpNM);
 		    linecnt += cexe_lines3;
@@ -844,7 +845,7 @@ main(
 	    /********************************************************************
 	     *	Build a network of Gates and links for direct execution
 	     *******************************************************************/
-	    if ((r = buildNet(&igp, gate_count)) == 0) {
+	    if ((r = iC_buildNet(&igp, gate_count)) == 0) {
 		Symbol * sp = lookup("iClock");
 		unlinkTfiles();
 		/********************************************************************
@@ -1159,7 +1160,7 @@ L<iCmake(1)>, L<makeAll(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2009  John E. Wulff
+COPYRIGHT (C) 2000-2011  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

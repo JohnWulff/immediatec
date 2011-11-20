@@ -1,8 +1,8 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.37 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: scan.c,v 1.38 2011/11/04 01:38:43 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -20,8 +20,6 @@ static const char scan_c[] =
 
 #include	<stdio.h>
 #include	"icc.h"
-
-static void	link_c(Gate * gp, Gate * out_list);
 
 /********************************************************************
  *
@@ -97,8 +95,8 @@ iC_scan_ar(Gate *	out_list)
 #ifndef DEQ
 	out_list->gt_next = op->gt_next;		/* unlink from */
 	op->gt_next = 0;				/* output list */
-	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
+	if (op == out_list->gt_ptr) {			/* last entry ? */
+	    out_list->gt_ptr = out_list;		/* yes - fix pointer */
 	}
 #else	/* DEQ */
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -155,11 +153,11 @@ iC_scan_ar(Gate *	out_list)
 	    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifdef LOAD
-	    if ((exec = (iC_CFunctp)*(gp->gt_rlist)) != 0) {
+	    if (gp->gt_fni != OUTW && (exec = (iC_CFunctp)*(gp->gt_rlist)) != 0) {
 		val = exec(gp);			/* compute arith expression */
 	    }
 #else	/* LOAD */
-	    if (gp->gt_rlist) {
+	    if (gp->gt_fni != OUTW && gp->gt_rlist) {
 		val = iC_exec(gp->gt_rfunctn, gp);	/* must pass both -/+ */
 	    }
 #endif	/* LOAD */
@@ -199,7 +197,7 @@ iC_scan_ar(Gate *	out_list)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
     }
-} /* scan_ar */
+} /* iC_scan_ar */
 
 /********************************************************************
  *
@@ -234,10 +232,10 @@ iC_scan(Gate *	out_list)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     while ((op = out_list->gt_next) != out_list) {	/* scan outputs */
 #ifndef DEQ
-	out_list->gt_next = op->gt_next;		/* unlink from */
-	op->gt_next = 0;				/* output list */
-	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
+	out_list->gt_next = op->gt_next;	/* unlink from */
+	op->gt_next = 0;			/* output list */
+	if (op == out_list->gt_ptr) {		/* last entry ? */
+	    out_list->gt_ptr = out_list;	/* yes - fix pointer */
 	}
 #else	/* DEQ */
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -460,10 +458,10 @@ iC_scan_clk(Gate *	out_list)		/* scan a clock list */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     while ((op = out_list->gt_next) != out_list) {	/* scan outputs */
 #ifndef DEQ
-	out_list->gt_next = op->gt_next;		/* unlink from */
-	op->gt_next = 0;				/* output list */
-	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
+	out_list->gt_next = op->gt_next;	/* unlink from */
+	op->gt_next = 0;			/* output list */
+	if (op == out_list->gt_ptr) {		/* last entry ? */
+	    out_list->gt_ptr = out_list;	/* yes - fix pointer */
 	}
 #else	/* DEQ */
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -477,7 +475,7 @@ iC_scan_clk(Gate *	out_list)		/* scan a clock list */
 	/* only fScf() and fSsw() require out_list to switch to f_list */
 	(*slaveAct[op->gt_fni])(op, out_list);	/* execute slave action */
     }
-} /* scan_clk */
+} /* iC_scan_clk */
 
 /********************************************************************
  *
@@ -500,10 +498,10 @@ iC_scan_snd(Gate *	out_list)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     while ((op = out_list->gt_next) != out_list) {
 #ifndef DEQ
-	out_list->gt_next = op->gt_next;		/* unlink from */
-	op->gt_next = 0;				/* output list */
-	if (op == (Gate *)out_list->gt_list) {		/* last entry ? */
-	    out_list->gt_list = (Gate **)out_list;	/* fix pointer */
+	out_list->gt_next = op->gt_next;	/* unlink from */
+	op->gt_next = 0;			/* output list */
+	if (op == out_list->gt_ptr) {		/* last entry ? */
+	    out_list->gt_ptr = out_list;	/* yes - fix pointer */
 	}
 #else	/* DEQ */
 	out_list->gt_next = gp = op->gt_next;	/* list ==> next */
@@ -536,7 +534,7 @@ iC_pass1(Gate * op, int typ)			/* Pass1 init on gates */
 #else	/* DEQ */
     op->gt_next = op->gt_prev = 0;		/* unlink Gate */
 #endif	/* DEQ */
-} /* pass1 */
+} /* iC_pass1 */
 
 /********************************************************************
  *
@@ -551,7 +549,7 @@ void
 iC_pass2(Gate * op, int typ)			/* Pass2 init on gates */
 {
     (*init2[op->gt_fni])(op, typ);		/* call pass2 function init */
-} /* pass2 */
+} /* iC_pass2 */
 
 /********************************************************************
  *
@@ -588,7 +586,7 @@ iC_gate2(Gate * op, int typ)			/* pass2 function init gates */
 	    "\nWarning:	gate %s has no output list", op->gt_ids);
 	    iC_error_flag = 2;			/* can execute with this warning */
     }
-} /* gate2 */
+} /* iC_gate2 */
 
 /********************************************************************
  *
@@ -616,7 +614,7 @@ iC_gate2(Gate * op, int typ)			/* pass2 function init gates */
  *
  *******************************************************************/
 
-void
+static void
 gate3(Gate * gp, int typ)			/* Pass3 init on gates */
 {
     unsigned char opt = iC_os[typ];
@@ -756,11 +754,11 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 		}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifdef LOAD
-		if ((exec = (iC_CFunctp)*(gp->gt_rlist)) != 0) {
+		if (gp->gt_fni != OUTW && (exec = (iC_CFunctp)*(gp->gt_rlist)) != 0) {
 		    val = exec(gp);		/* compute arith expression */
 		}
 #else	/* LOAD */
-		if (gp->gt_rlist) {
+		if (gp->gt_fni != OUTW && gp->gt_rlist) {
 		    val = iC_exec(gp->gt_rfunctn, gp);	/* must pass both -/+ */
 		}
 #endif	/* LOAD */
@@ -777,12 +775,12 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 		} else if (gp->gt_fni == F_SW) {
 		    gp->gt_new = val;		/* store new value, even if unchanged */
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, iC_a_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_a_list);	/* link_cl() */
 		    }
 		} else if (gp->gt_fni == F_CE) {
 		    gp->gt_val = val ? -1 : 1;	/* convert val to logic value */
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, iC_a_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_a_list);	/* link_cl() */
 		    }
 		} else if ((val = val ? -1 : 1) != gp->gt_val) {
 		    gp->gt_val = val;		/* convert val to logic value */
@@ -823,7 +821,7 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 		    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_cl() */
 		    }
 #if YYDEBUG && !defined(_WINDOWS)
 		    if (iC_debug & 0100) fprintf(iC_outFP, " %d", iC_gx->gt_val);
@@ -867,7 +865,7 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 			gp->gt_val ^= 0x80;		/* xor independent of change */
 		    }
 		    if (gp->gt_next == 0) {	/* execute unconditionally unless linked */
-			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_c() */
+			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_cl() */
 		    }
 		} else {
 		    /************************************************************
@@ -899,7 +897,7 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
     }
-} /* pass4 */
+} /* iC_pass4 */
 
 /********************************************************************
  *
@@ -912,11 +910,11 @@ iC_pass4(Gate * op, int typ)			/* Pass4 init on gates */
  *
  *******************************************************************/
 
-static void
-link_c(Gate * gp, Gate * out_list)
+void
+iC_link_cl(Gate * gp, Gate * out_list)
 {
     iC_link_ol(gp, iC_c_list);			/* link clocked Gate to c_list */
-} /* link_c */
+} /* iC_link_cl */
 
 /********************************************************************
  *
@@ -936,7 +934,7 @@ iC_err_fn(					/* error - no master or slave function */
     __FILE__, __LINE__, gp->gt_ids, gp->gt_fni);
     iC_quit(-1);
 #endif	/* !defined(_WINDOWS) || defined(LOAD) */
-} /* err_fn */
+} /* iC_err_fn */
 
 /********************************************************************
  *
@@ -985,4 +983,4 @@ iC_arithMa(					/* ARITH master action */
     if ((gp->gt_new != gp->gt_old) ^ (gp->gt_next != 0)) {
 	iC_link_ol(gp, iC_a_list);		/* link to arithmetic list */
     }
-} /* arithMa */
+} /* iC_arithMa */

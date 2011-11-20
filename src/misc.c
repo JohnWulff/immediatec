@@ -1,8 +1,8 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.8 2009/08/21 06:08:14 jw Exp $";
+"@(#)$Id: misc.c,v 1.9 2011/11/19 11:14:22 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -135,8 +135,8 @@ iC_display(int * dis_cntp, int dis_max)
     int			n;
     Gate *		gp;
     unsigned char	x0;
-    char		b1;
-    short		w2;
+    int			b1;
+    int			w2;
 #if (!defined(TCP) && !defined(LOAD)) || INT_MAX != 32767 || defined (LONG16)
     long		l4;
 #endif /* (!defined(TCP) && !defined(LOAD)) || defined (LONG16) */
@@ -187,34 +187,38 @@ iC_display(int * dis_cntp, int dis_max)
 #endif /* defined(TCP) || defined(LOAD) */
     /* display IB1, IW2 and IL4 if active */
     if (!iC_xflag) {
-	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " %4hd", (short)gp->gt_new & 0xff);
-	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, " %6hd", (short)gp->gt_new);
-#if	INT_MAX == 32767
-#if	defined (LONG16)
+#if INT_MAX == 32767 && defined (LONG16)
+	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " %4ld", gp->gt_new);
+	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, " %6ld", gp->gt_new);
 	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " %8ld", gp->gt_new);
-#endif	/* defined (LONG16) */
-#else	/* INT_MAX == 32767 */
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " %4d", gp->gt_new);
+	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, " %6d", gp->gt_new);
+#if	INT_MAX != 32767
 	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " %8d", gp->gt_new);
-#endif	/* INT_MAX == 32767 */
+#endif	/* INT_MAX != 32767 */
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
     } else {
-	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, "   %02hx", (short)gp->gt_new & 0xff);
-	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, "   %04hx", (short)gp->gt_new & 0xffff);
-#if	INT_MAX == 32767
-#if	defined (LONG16)
-	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " %08lx", gp->gt_new);
-#endif	/* defined (LONG16) */
-#else	/* INT_MAX == 32767 */
-	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " %08x", gp->gt_new);
-#endif	/* INT_MAX == 32767 */
+#if INT_MAX == 32767 && defined (LONG16)
+	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " 0x%02lx", gp->gt_new);
+	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, " 0x%04lx", gp->gt_new);
+	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " 0x%08lx", gp->gt_new);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+	if ((gp = iC_IB1p) != 0) fprintf(iC_outFP, " 0x%02x", gp->gt_new);
+	if ((gp = iC_IW2p) != 0) fprintf(iC_outFP, " 0x%04x", gp->gt_new);
+#if	INT_MAX != 32767
+	if ((gp = iC_IL4p) != 0) fprintf(iC_outFP, " 0x%08x", gp->gt_new);
+#endif	/* INT_MAX != 32767 */
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
     }
     fprintf(iC_outFP, "   ");
 
 #if defined(TCP) || defined(LOAD)
     x0 = iC_QX0p ? iC_QX0p->gt_new : 0;
-    b1 = iC_QB1p ? iC_QB1p->gt_new : 0;
-    w2 = iC_QW2p ? iC_QW2p->gt_new : 0;
+    b1 = iC_QB1p ? iC_QB1p->gt_out : 0;
+    w2 = iC_QW2p ? iC_QW2p->gt_out : 0;
 #if	INT_MAX != 32767 || defined (LONG16)
-    l4 = iC_QL4p ? iC_QL4p->gt_new : 0;
+    l4 = iC_QL4p ? iC_QL4p->gt_out : 0;
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
 #else /* defined(TCP) || defined(LOAD) */
     x0 = iC_QX_[0];
@@ -240,9 +244,9 @@ iC_display(int * dis_cntp, int dis_max)
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
     } else {
 #if	INT_MAX != 32767 || defined (LONG16)
-	fprintf(iC_outFP, "   %02x   %04hx %08lx\n", (int)b1, w2, l4);
+	fprintf(iC_outFP, "   0x%02x   0x%04hx 0x%08lx\n", (int)b1, w2, l4);
 #else	/* INT_MAX != 32767 || defined (LONG16) */
-	fprintf(iC_outFP, "   %02x   %04hx\n", (int)b1, w2);	/* no QL4 */
+	fprintf(iC_outFP, "   0x%02x   0x%04hx\n", (int)b1, w2);	/* no QL4 */
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
     }
     fflush(iC_outFP);

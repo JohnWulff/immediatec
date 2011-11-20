@@ -1,8 +1,8 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.90 2009/10/13 12:26:22 jw Exp $";
+"@(#)$Id: outp.c,v 1.91 2011/11/04 04:56:28 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -74,7 +74,7 @@ static char *		iC_ext_ftype[] = { iC_EXT_FTYPE };
  *
  *******************************************************************/
 
-int
+static int
 IEC1131(char * name, char * buf, int bufLen,
 	char * iqt, char * xbwl, int * bytep, int * bitp, char * tail)
 {
@@ -110,7 +110,7 @@ IEC1131(char * name, char * buf, int bufLen,
  *******************************************************************/
 
 int
-toIEC1131(char * name, char * buf, int bufLen,
+iC_toIEC1131(char * name, char * buf, int bufLen,
 	char * iqt, char * xbwl, int * bytep, int * bitp, char * tail)
 {
     int count;
@@ -131,7 +131,7 @@ toIEC1131(char * name, char * buf, int bufLen,
 	strncpy(buf, name, bufLen-1);
     }
     return count;
-} /* toIEC1131 */
+} /* iC_toIEC1131 */
 
 /********************************************************************
  *
@@ -227,7 +227,7 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
  *******************************************************************/
 
 int
-listNet(unsigned gate_count[])
+iC_listNet(unsigned gate_count[])
 {
     Symbol *	sp;
     Symbol *	tsp;
@@ -499,7 +499,7 @@ listNet(unsigned gate_count[])
 	return 1;
     }
     return 0;
-} /* listNet */
+} /* iC_listNet */
 #if defined(RUN) || defined(TCP) && ! defined(LOAD)
 
 Gate **		iC_sTable;			/* pointer to dynamic array */
@@ -514,7 +514,7 @@ Gate **		iC_sTend;			/* end of dynamic array */
  *******************************************************************/
 
 int
-buildNet(Gate ** igpp, unsigned gate_count[])
+iC_buildNet(Gate ** igpp, unsigned gate_count[])
 {
     Symbol *	sp;
     Symbol *	tsp;
@@ -691,7 +691,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			    } else if (sp->ftype == OUTW) {
 				if (sscanf(gp->gt_ids, "Q%1[BWL]%d", bwl, &byte1) == 2 &&
 				    byte1 < IXD) {
-				    gp->gt_listn = byte1;	/* number in union */
+				    gp->gt_slot = byte1;	/* slot index in union */
 				    gp->gt_mark = bwl[0] == 'B' ? B_WIDTH :
 						  bwl[0] == 'W' ? W_WIDTH :
 #if INT_MAX != 32767 || defined (LONG16)
@@ -707,20 +707,20 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			    } else if (sp->ftype == OUTX) {
 				if (sscanf(gp->gt_ids, "QX%d.%d", &byte1, &bit1) == 2 &&
 				    byte1 < IXD && bit1 < 8) {
-				    gp->gt_listn = byte1;	/* number in union */
+				    gp->gt_slot = byte1;	/* slot index in union */
 				    gp->gt_mark = iC_bitMask[bit1];
 				    iC_QT_[byte1] = 'X';
 				} else {
 				outErr:
-		    ierror("OUTPUT byte or bit address exceeds limit:", gp->gt_ids);
-				    gp->gt_list = (Gate**)0;
-				    gp->gt_mark = 0;	/* no change in bits */
+				    ierror("OUTPUT byte or bit address exceeds limit:", gp->gt_ids);
+				    gp->gt_slot = 0;
+				    gp->gt_mark = 0;		/* no change in bits */
 				}
 			    } else {
 #else	/* TCP */
 			    } else if (sp->ftype != OUTW && sp->ftype != OUTX) {
 #endif	/* TCP */
-		    ierror("OUTPUT strange ftype:", gp->gt_ids);
+				ierror("OUTPUT strange ftype:", gp->gt_ids);
 			    }
 			    gp++;
 			} else if (typ < MAX_OP) {
@@ -848,9 +848,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 		    tgp = (Gate *) iC_emalloc(sizeof(Gate));
 		    tgp->gt_ids = iC_emalloc(eLen);	/* all bytes 0 */
 		    strncpy(tgp->gt_ids, sp->name, eLen);
-		    tgp->gt_ini = -typ;		/* ALIAS */
-		    tgp->gt_fni = ftyp;	/* ftype */
-		    tgp->gt_rlist = (Gate **)tsp->u_gate;	/* link to original */
+		    tgp->gt_ini = -typ;			/* ALIAS */
+		    tgp->gt_fni = ftyp;			/* ftype */
+		    tgp->gt_rptr = tsp->u_gate;		/* link to original */
 		    tgp->gt_mark = val;			/* ALIAS inversion flag */
 		    tgp->gt_next = g_list;		/* link rest of g_list to new Gate */
 		    g_list = sp->u_gate = tgp;		/* symbol to gate and new Gate at front of g_list */
@@ -905,9 +905,9 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			tgp->gt_list[bit1] = op;	/* pointer to bit Gate */
 			/* ###### no back link ####### */
 		    } else {			/* (op->gt_fni == OUTX) */
-			if (i != 4 || strcmp(tail1, "_0") || strcmp(iqt1, "Q")) goto pass0Err;
+			if (i != 4 || strcmp(tail1, "_0") != 0 || strcmp(iqt1, "Q") != 0) goto pass0Err;
 			op->gt_mark = iC_bitMask[bit1];
-			op->gt_list = (Gate**)tgp;	/* pointer directly in gt_list */
+			op->gt_ptr = tgp;		/* direct pointer (union with gt_list) */
 			/* ###### no back link ####### */
 		    }
 		    tgp->gt_mark |= iC_bitMask[bit1];	/* note used bits for registration */
@@ -983,27 +983,31 @@ buildNet(Gate ** igpp, unsigned gate_count[])
 			}
 			break;				/* op->gt_mark set to used bits 0x01 to 0x80 in Pass 0 */
 		    case 'B':
+			if (i != 3 || strcmp(tail1, "_0") != 0) goto pass0Err;
+			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
 			op->gt_mark = B_WIDTH;
 			if (byte1 == 1) {
 			    iC_QB1p = op;		/* link for iC_display logic only */
 			}
 			break;
 		    case 'W':
+			if (i != 3 || strcmp(tail1, "_0") != 0) goto pass0Err;
+			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
 			op->gt_mark = W_WIDTH;
 			if (byte1 == 2) {
 			    iC_QW2p = op;		/* link for iC_display logic only */
 			}
 			break;
-		    case 'L':
 #if INT_MAX != 32767 || defined (LONG16)
+		    case 'L':
+			if (i != 3 || strcmp(tail1, "_0") != 0) goto pass0Err;
+			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
 			op->gt_mark = L_WIDTH;
 			if (byte1 == 4) {
 			    iC_QL4p = op;		/* link for iC_display logic only */
 			}
-#else	/* INT_MAX == 32767 && ! defined (LONG16) */
-			op->gt_mark = W_WIDTH;		/* use as 16 bit output */
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
 			break;
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 		    default:
 			goto pass0Err;
 		    }
@@ -1027,7 +1031,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
     }
 
     return rc;					/* return code */
-} /* buildNet */
+} /* iC_buildNet */
 #endif /* defined(RUN) || defined(TCP) && ! defined(LOAD) */
 
 /********************************************************************
@@ -1037,7 +1041,7 @@ buildNet(Gate ** igpp, unsigned gate_count[])
  *******************************************************************/
 
 int
-outNet(FILE * iFP, char * outfile)
+iC_outNet(FILE * iFP, char * outfile)
 {
     Symbol *	sp;
     List_e *	lp;
@@ -1664,10 +1668,10 @@ iC_Gt **	iC_list[] = { &iC_%s_list, 0, };\n\
 	/* copy C intermediate file up to EOF to C output file */
 	/* translate any imm variables and ALIAS references of type 'QB1_0' */
 
-	if ((rc = copyXlate(iFP, Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
+	if ((rc = iC_copyXlate(iFP, Fp, outfile, &linecnt, 01)) != 0) { /* copy literal blocks */
 	    goto endm;
 	}
-	if ((rc = copyXlate(iFP, Fp, outfile, &linecnt, 02)) != 0) { /* copy called functions */
+	if ((rc = iC_copyXlate(iFP, Fp, outfile, &linecnt, 02)) != 0) { /* copy called functions */
 	    goto endm;
 	}
     }
@@ -2019,7 +2023,7 @@ endh:
     rc |= chmod(outfile, 0444);		/* make C output file read-only */
 endc:
     return rc;				/* return code */
-} /* outNet */
+} /* iC_outNet */
 
 /********************************************************************
  *
@@ -2067,7 +2071,7 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 #ifdef PRECOMPILE_C_OUTPUT
     if(iFP != T4FP && strlen(iC_Cdefines)) {
 	if (precompileFlag == 0) {		/* may only be used in final C-compile */
-	    if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+	    if ((c = iC_openT4T5(0)) != 0) return c;	/* re-open if necessary */
 	}
 	precompileFlag |= 2;			/* 2 marks -D, #define or #if */
     }
@@ -2098,7 +2102,7 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 			continue;
 		    }
 		    if (precompileFlag == 0) {
-			if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+			if ((c = iC_openT4T5(0)) != 0) return c;	/* re-open if necessary */
 		    }
 		    if (iC_debug & 02) fprintf(iC_outFP, "####### c_parse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
@@ -2120,7 +2124,7 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 			continue;
 		    }
 		    if (precompileFlag == 0) {
-			if ((c = openT4T5(0)) != 0) return c;	/* re-open if necessary */
+			if ((c = iC_openT4T5(0)) != 0) return c;	/* re-open if necessary */
 		    }
 		    precompileFlag |= 2;	/* 2 marks -D, #define or #if */
 		}
@@ -2147,7 +2151,7 @@ extern FILE* yyin;
 extern FILE* yyout;
 
 int
-c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
+iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 {
     int		r;				/* copy literal blocks */
     char	execBuf[BUFS];			/* can be smaller than a line */
@@ -2280,7 +2284,7 @@ c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
     }
     copyAdjust(T2FP, oFP, lp);			/* output adjusted C-code */
     return 0;
-} /* c_compile */
+} /* iC_c_compile */
 
 /********************************************************************
  *
@@ -2290,7 +2294,7 @@ c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
  *******************************************************************/
 
 int
-copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
+iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
 {
     int		mask = 01;			/* copy literal blocks */
     int		flag = 1;
@@ -2321,4 +2325,4 @@ copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode)
 	}
     }
     return 0;
-} /* copyXlate */
+} /* iC_copyXlate */

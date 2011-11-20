@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,12 +16,12 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.68 2009/08/21 06:04:52 jw Exp $";
+"@(#)$Id: icc.h,v 1.69 2011/11/04 04:04:52 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -112,8 +112,18 @@ static const char icc_h[] =
 
 typedef union GppIpI {
     struct Gate **	gpp;		/* Gate pointer array */
+    struct Gate *	gp;		/* Gate pointer */
     int		*	ip;		/* int array */
-    int			i;		/* int */
+#ifdef TCP
+    unsigned short	channel;	/* output channel */
+#if INT_MAX == 32767 && defined (LONG16)
+    long		out;		/* out value for arithhmetic */
+#else
+    int			out;
+#endif
+#else	/* TCP */
+    int			slot;		/* out slot index */
+#endif	/* TCP */
 } GppIpI;				/* auxiliary union to avoid casts */
 
 typedef struct Gate {			/* Gate */
@@ -144,8 +154,15 @@ typedef struct Gate {			/* Gate */
 #define	FL_TIME	2
 				/* normal gate pointer pointer */
 #define	gt_list		gt_ll.gpp
-				/* action C function number in union */
-#define	gt_listn	gt_ll.i
+				/* normal gate pointer */
+#define	gt_ptr		gt_ll.gp
+#ifdef TCP
+				/* OUT channel for OUTW gates */
+#define	gt_channel	gt_ll.channel
+#else	/* TCP */
+				/* OUT slot index for OUTW and OUTX gates */
+#define	gt_slot		gt_ll.slot
+#endif	/* TCP */
 				/* action C function pointer */
 #define	gt_funct	gt_ll.gpp[FL_GATE]
 				/* action C function number in int array */
@@ -158,6 +175,12 @@ typedef struct Gate {			/* Gate */
 
 				/* reverse gate pointer pointer */
 #define	gt_rlist	gt_rll.gpp
+				/* reverse gate pointer */
+#define	gt_rptr		gt_rll.gp
+#ifdef TCP
+				/* OUT value for OUTW gates */
+#define	gt_out		gt_rll.out
+#endif	/* TCP */
 				/* reverse C function number in int array */
 #define	gt_rfunctn	gt_rll.ip[FL_GATE]
 
@@ -297,7 +320,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 
 #define	Sizeof(x)	((sizeof x) / (sizeof x[0]))
 #ifndef DEQ
-#define	Out_init(ol)	(ol->gt_list = (Gate **)(ol->gt_next = ol))
+#define	Out_init(ol)	(ol->gt_next = ol->gt_ptr  = ol)
 #else
 #define	Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
 #endif
@@ -370,8 +393,8 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 
 /* iC_Functp2		initAct[] = {		// called in pass4 */
 #define INIT_ACT \
-	iC_err_fn, iC_arithMa, iC_link_ol, iC_link_ol, link_c, link_c, link_c, iC_dMsh, \
-	iC_chMbit, link_c, link_c, link_c, link_c, link_c, link_c, link_c, link_c, \
+	iC_err_fn, iC_arithMa, iC_link_ol, iC_link_ol, iC_link_cl, iC_link_cl, iC_link_cl, iC_dMsh, \
+	iC_chMbit, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, \
 	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp2		masterAct[] = {		// called in scan, scan_ar and pass4 */
@@ -466,7 +489,11 @@ typedef int		(*iC_CFunctp)(Gate *);	/* external C functions */
 #endif
 
 extern void	iC_link_ol(		/* link a gate block into */
-		Gate *, Gate *);	/* an output or clock list */
+		Gate * gp, Gate * out_list);	/* an output or clock list */
+
+extern void	iC_link_cl(		/* link clocked Gate directly to c_list */
+		Gate * gp, Gate * out_list);	/* during pass4 initialisation */
+
 
 extern void	iC_icc(			/* initialise and execute */
 		Gate * g_lists, unsigned gate_count[]);

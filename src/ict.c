@@ -1,8 +1,8 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.55 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: ict.c,v 1.56 2011/11/04 01:56:54 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -23,6 +23,9 @@ static const char ict_c[] =
 
 /* J.E. Wulff	3-Mar-85 */
 
+#ifndef TCP
+#error - must be compiled with TCP defined to make a linkable library
+#else	/* TCP */
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<time.h>
@@ -266,6 +269,9 @@ iC_icc(
 	if (iC_micro) iC_microPrint("last registration", 0);
 	assert(opp == iC_sTend);
 	regAck(sopp, opp);			/* send/receive last registration */
+	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
+	if (iC_micro) iC_microPrint("Send application name", 0);
+	iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
     }
 
 /********************************************************************
@@ -275,13 +281,13 @@ iC_icc(
  *******************************************************************/
 
     iC_error_flag = 0;
-    alist0.gt_rlist = (Gate **)(iC_a_list = &alist1);	/* initialise alternate */
+    alist0.gt_rptr = iC_a_list = &alist1;	/* initialise alternate */
     Out_init(iC_a_list);
-    alist1.gt_rlist = (Gate **)(iC_a_list = &alist0);	/* start with alist0 */
+    alist1.gt_rptr = iC_a_list = &alist0;	/* start with alist0 */
     Out_init(iC_a_list);
-    olist0.gt_rlist = (Gate **)(iC_o_list = &olist1);	/* initialise alternate */
+    olist0.gt_rptr = iC_o_list = &olist1;	/* initialise alternate */
     Out_init(iC_o_list);
-    olist1.gt_rlist = (Gate **)(iC_o_list = &olist0);	/* start with olist0 */
+    olist1.gt_rptr = iC_o_list = &olist0;	/* start with olist0 */
     Out_init(iC_o_list);
 #ifdef	LOAD
     iC_c_list = &iClock;				/* system clock list */
@@ -493,8 +499,8 @@ iC_icc(
 	 *  MARKMAX times. These are oscillators which wil be
 	 *  scanned again in the next cycle.
 	 *******************************************************************/
-	iC_a_list = (Gate*)iC_a_list->gt_rlist;	/* alternate arithmetic list */
-	iC_o_list = (Gate*)iC_o_list->gt_rlist;	/* alternate logic list */
+	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
+	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
 
 	if (iC_osc_gp) {
 	    fprintf(iC_outFP,
@@ -564,7 +570,7 @@ iC_icc(
 			do {				/* for normal and inverted */
 			    while ((tp = *lp++) != 0) {
 				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-				    tp = *((Gate **)tp->gt_list);
+				    tp = tp->gt_funct;
 				    if (tp->gt_next != tp) {
 					goto linkT4;	/* found an active clock or timer */
 				    }
@@ -598,7 +604,7 @@ iC_icc(
 			    do {			/* for normal and inverted */
 				while ((tp = *lp++) != 0) {
 				    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-					tp = *((Gate **)tp->gt_list);
+					tp = tp->gt_funct;
 					if (tp->gt_next != tp) {
 					    goto linkT5;	/* found an active clock or timer */
 					}
@@ -632,7 +638,7 @@ iC_icc(
 				do {			/* for normal and inverted */
 				    while ((tp = *lp++) != 0) {
 					if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-					    tp = *((Gate **)tp->gt_list);
+					    tp = tp->gt_funct;
 					    if (tp->gt_next != tp) {
 						goto linkT6;/* found an active clock or timer */
 					    }
@@ -666,7 +672,7 @@ iC_icc(
 				    do {		/* for normal and inverted */
 					while ((tp = *lp++) != 0) {
 					    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-						tp = *((Gate **)tp->gt_list);
+						tp = tp->gt_funct;
 						if (tp->gt_next != tp) {
 						    goto linkT7;/* found an active clock or timer */
 						}
@@ -792,7 +798,7 @@ iC_icc(
 							if (gp->gt_fni == GATE || gp->gt_fni == GATEX) {
 							    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
 							}
-							gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+							gp = gp->gt_rptr;	/* resolve ALIAS */
 							fni = MAX_FTY + gp->gt_fni + (inverse << 1);	/* match iClive */
 						    }
 						    if (fni == CH_BIT && gp->gt_ini >= 0) {
@@ -853,10 +859,11 @@ iC_icc(
 							fni == D_SH ||
 							fni == F_SW ||
 							fni == TRAB ||
-							fni == OUTW ||
-							(fni == CH_BIT && gp->gt_ini == -ARN)) ? gp->gt_new
-							/* CH_BIT is int if ARN else bit */    : gp->gt_val < 0 ? 1
-														: 0;
+							(fni == CH_BIT &&	/* CH_BIT is int if ARN else bit */
+							gp->gt_ini == -ARN)) ? gp->gt_new
+									     : fni == OUTW ? gp->gt_out
+											   : gp->gt_val < 0 ? 1
+													    : 0;
 						    if (iC_debug & 04) fprintf(iC_outFP, "%4hu %-15s %ld\n",
 							index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
 						    if (value) {
@@ -1002,15 +1009,21 @@ regAck(Gate ** oStart, Gate ** oEnd)
     if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
 	if (iC_micro) iC_microPrint("reply from server", 0);
 	if (iC_debug & 04) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
-	if (! Channels) {
+	if (Channels == NULL) {
 	    // C channel - messages from controller to debugger
 	    C_channel = atoi(rpyBuf);
 	    assert(C_channel > 0);
+	    if (C_channel > topChannel) {
+		topChannel = C_channel;
+	    }
 	    // D channel - messages from debugger to controller
 	    cp = strchr(rpyBuf, ',');
 	    assert(cp);
 	    channel = atoi(++cp);
 	    assert(channel > 0);
+	    if (channel > topChannel) {
+		topChannel = channel;
+	    }
 	    storeChannel(channel, &D_gate);			/* ==> Debug input */
 	    cp = strchr(cp, ',');
 	} else {
@@ -1031,16 +1044,13 @@ regAck(Gate ** oStart, Gate ** oEnd)
 		    storeChannel(channel, gp);			/* ==> Input */
 		} else
 		if (gp->gt_fni == OUTW) {
-		    gp->gt_list = (Gate **)(int)channel;	/* <== Output */
+		    gp->gt_channel = channel;			/* <== Output */
 		}
 		cp = strchr(cp, ',');
 	    }
 	}
 	assert(cp == NULL);			/* Ack string matches Registration */
 	if (iC_debug & 04) fprintf(iC_outFP, "reply: Channels %hu\n", topChannel);
-	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
-	if (iC_micro) iC_microPrint("Send application name", 0);
-	iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
     } else {
 	iC_quit(QUIT_SERVER);			/* quit normally */
     }
@@ -1092,7 +1102,7 @@ iC_liveData(unsigned short index, int value)
 		";%hu %d", index & 0x7fff, value)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	    ) < 0 || len >= rest
-	) {
+    ) {
 	/********************************************************************
 	 *  Send live data collected in msgBuf before it overflows to iCserver
 	 *******************************************************************/
@@ -1101,7 +1111,7 @@ iC_liveData(unsigned short index, int value)
 	msgOffset = liveOffset;			/* msg = "C_channel:3" */
     }
     msgOffset += len;
-} /* liveData */
+} /* iC_liveData */
 
 /********************************************************************
  *
@@ -1194,3 +1204,4 @@ void iC_quit(int sig)
 #endif	/* EFENCE */
     exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
 } /* iC_quit */
+#endif	/* TCP */

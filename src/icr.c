@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.38 2009/10/13 12:03:23 jw Exp $";
+"@(#)$Id: icr.c,v 1.39 2011/11/04 01:55:13 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -224,13 +224,13 @@ iC_icc(
  *******************************************************************/
 
     iC_error_flag = 0;
-    alist0.gt_rlist = (Gate **)(iC_a_list = &alist1);	/* initialise alternate */
+    alist0.gt_rptr = iC_a_list = &alist1;	/* initialise alternate */
     Out_init(iC_a_list);
-    alist1.gt_rlist = (Gate **)(iC_a_list = &alist0);	/* start with alist0 */
+    alist1.gt_rptr = iC_a_list = &alist0;	/* start with alist0 */
     Out_init(iC_a_list);
-    olist0.gt_rlist = (Gate **)(iC_o_list = &olist1);	/* initialise alternate */
+    olist0.gt_rptr = iC_o_list = &olist1;	/* initialise alternate */
     Out_init(iC_o_list);
-    olist1.gt_rlist = (Gate **)(iC_o_list = &olist0);	/* start with olist0 */
+    olist1.gt_rptr = iC_o_list = &olist0;	/* start with olist0 */
     Out_init(iC_o_list);
     Out_init(iC_f_list);
     Out_init(iC_s_list);
@@ -408,8 +408,8 @@ iC_icc(
 	 *  MARKMAX times. These are oscillators which wil be
 	 *  scanned again in the next cycle.
 	 *******************************************************************/
-	iC_a_list = (Gate*)iC_a_list->gt_rlist;	/* alternate arithmetic list */
-	iC_o_list = (Gate*)iC_o_list->gt_rlist;	/* alternate logic list */
+	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
+	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
 
 	if (iC_osc_gp) {
 	    fprintf(iC_outFP,
@@ -463,9 +463,9 @@ iC_icc(
 		    do {			/* for normal and inverted */
 			while ((tp = *lp++) != 0) {
 			    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-				tp = *((Gate **)tp->gt_list);
+				tp = tp->gt_funct;
 				if (tp->gt_next != tp) {
-				    goto linkT4;	/* found an active clock or timer */
+				    goto linkT4;/* found an active clock or timer */
 				}
 			    } else {
 				goto linkT4;	/* found a link to non clock or timer */
@@ -498,7 +498,7 @@ iC_icc(
 			do {			/* for normal and inverted */
 			    while ((tp = *lp++) != 0) {
 				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-				    tp = *((Gate **)tp->gt_list);
+				    tp = tp->gt_funct;
 				    if (tp->gt_next != tp) {
 					goto linkT5;	/* found an active clock or timer */
 				    }
@@ -533,7 +533,7 @@ iC_icc(
 			    do {			/* for normal and inverted */
 				while ((tp = *lp++) != 0) {
 				    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-					tp = *((Gate **)tp->gt_list);
+					tp = tp->gt_funct;
 					if (tp->gt_next != tp) {
 					    goto linkT6;/* found an active clock or timer */
 					}
@@ -568,7 +568,7 @@ iC_icc(
 				do {			/* for normal and inverted */
 				    while ((tp = *lp++) != 0) {
 					if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-					    tp = *((Gate **)tp->gt_list);
+					    tp = tp->gt_funct;
 					    if (tp->gt_next != tp) {
 						goto linkT7;/* found an active clock or timer */
 					    }

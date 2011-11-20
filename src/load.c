@@ -1,8 +1,8 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.53 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: load.c,v 1.54 2011/11/04 04:55:45 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -95,7 +95,7 @@ static const char *	usage =
 "                        typing q or ctrl-C quits run mode\n"
 "compiled by:\n"
 "%s\n"
-"Copyright (C) 1985-2009 John E. Wulff     <immediateC@gmail.com>\n"
+"Copyright (C) 1985-2011 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 /********************************************************************
@@ -355,9 +355,9 @@ main(
 			    tgp->gt_list[bit] = op;	/* pointer to bit Gate */
 			    /* ###### no back link ####### */
 			} else {			/* (op->gt_fni == OUTX) */
-			    if (i != 4 || strcmp(tail, "_0") || strcmp(iqt, "Q")) goto pass0Err;
+			    if (i != 4 || strcmp(tail, "_0") != 0 || strcmp(iqt, "Q") != 0) goto pass0Err;
 			    op->gt_mark = iC_bitMask[bit];
-			    op->gt_list = (Gate**)tgp;	/* pointer directly in gt_list */
+			    op->gt_ptr = tgp;		/* direct pointer (union with gt_list) */
 			    /* ###### no back link ####### */
 			}
 			tgp->gt_mark |= iC_bitMask[bit];	/* note used bits for registration */
@@ -472,14 +472,14 @@ main(
 		    tgp = gp;				/* remember start of ALIAS chain */
 		    while (gp->gt_ini == -ALIAS) {
 			if (df) printf("	%s@", gp->gt_ids);
-			gp = (Gate*)gp->gt_rlist;	/* adjust */
+			gp = gp->gt_rptr;		/* adjust */
 		    }
 		    tlp = lp - 1;
 		    *tlp = gp;				/* swap in real input */
 		    /* adjust ALIAS chain, so that each ALIAS points to real input */
 		    while (tgp->gt_ini == -ALIAS) {
-			ttgp = (Gate*)tgp->gt_rlist;
-			tgp->gt_rlist = (Gate**)gp;	/* point to final input gate */
+			ttgp = tgp->gt_rptr;
+			tgp->gt_rptr = gp;		/* point to final input gate */
 			tgp = ttgp;
 		    }
 		}
@@ -525,7 +525,7 @@ main(
 			    if (df) printf("	%c%s@",		/* @ */
 				inversion ? '~' : ' ', gp->gt_ids);
 			    inversion ^= gp->gt_mark;
-			    gp = (Gate*)gp->gt_rlist;
+			    gp = gp->gt_rptr;
 			}
 			tlp = lp - 1;		/* destination */
 			if (inversion) {
@@ -599,7 +599,7 @@ main(
 			if (gp->gt_rlist) {
 			    inError(__LINE__, op, gp, "PASS 1: backlink for D_SH slave already installed");
 			} else {
-			    gp->gt_rlist = (Gate**)op;	/* back pointer to delay master */
+			    gp->gt_rptr = op;		/* back pointer to delay master */
 			}
 		    }
 		}
@@ -610,7 +610,7 @@ main(
 			if (df) printf("    resolve clock  >");
 			while (gp->gt_ini == -ALIAS) {
 			    if (df) printf("	%s@", gp->gt_ids);
-			    gp = (Gate*)gp->gt_rlist;	/* adjust */
+			    gp = gp->gt_rptr;		/* adjust */
 			}
 			if (df) printf("	%c%s\n", iC_os[-gp->gt_ini], gp->gt_ids);
 			tlp = lp - 1;
@@ -625,7 +625,7 @@ main(
 				if (df) printf("    resolve delay  >");
 				while (gp->gt_ini == -ALIAS) {
 				    if (df) printf("	%s@", gp->gt_ids);
-				    gp = (Gate*)gp->gt_rlist;	/* adjust */
+				    gp = gp->gt_rptr;	/* adjust */
 				}
 				if (df) printf("	<%s\n", gp->gt_ids);
 				tlp = lp - 1;
@@ -651,7 +651,7 @@ main(
 		    Gate **		elp;
 		    int			uc;
 		    int			j;
-		    unsigned int	useWord;
+		    unsigned int	useWord = 0	/* satisfies -Wall */;
 
 		    uc = slp - lp;
 		    assert(uc >= 2);			/* at least one pointer and one use word */
@@ -661,7 +661,7 @@ main(
 		    while (lp < elp) {
 			if (++j >= USE_COUNT) {
 			    useWord = (unsigned int)(unsigned long)*ulp++;	/* next use word */
-			    j = 0;
+			    j = 0;			/* executed at least once - useWord is initialized */
 			} else {
 			    useWord >>= 2;		/* next set of useBits */
 			}
@@ -672,7 +672,7 @@ main(
 				if (df) printf("    resolve C param>");
 				while (gp->gt_ini == -ALIAS) {
 				    if (df) printf("	%s@", gp->gt_ids);
-				    gp = (Gate*)gp->gt_rlist;	/* adjust */
+				    gp = gp->gt_rptr;	/* adjust */
 				}
 				if (df) printf("	<%s\n", gp->gt_ids);
 				tlp = lp - 1;
@@ -770,30 +770,30 @@ main(
 		    if (df) printf("*** Warning: '%s' has no output\n", op->gt_ids);
 		}
 		if (op->gt_fni == ARITH) {
-		    op->gt_old = 0;	/* clear for run time after ARITH was delay */
+		    op->gt_old = 0;		/* clear for run time after ARITH was delay */
 		    fp += op->gt_mark;
-		    *fp = 0;		/* last output terminator */
+		    *fp = 0;			/* last output terminator */
 		    op->gt_list = fp++;
 		} else
 		if (op->gt_fni == GATE) {
 		    fp += op->gt_mark + 1;
-		    *fp = 0;		/* last output terminator */
+		    *fp = 0;			/* last output terminator */
 		    op->gt_list = fp++;
 		}
 		if (op->gt_ini != -INPW && op->gt_fni != OUTW && op->gt_fni != OUTX) {
-		    op->gt_mark = 0;	/* must be cleared for run-time */
+		    op->gt_mark = 0;		/* must be cleared for run-time */
 		}
 	    }
 	} else
 	if (df) {
-	    int inverse = 0;		/* print ALIAS in symbol table */
+	    int inverse = 0;			/* print ALIAS in symbol table */
 	    printf(" %s@	", op->gt_ids);
 	    gp = op;
 	    while (gp->gt_ini == -ALIAS) {
 		if (gp->gt_fni == GATE) {
 		    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
 		}
-		gp = (Gate*)gp->gt_rlist;	/* resolve ALIAS */
+		gp = gp->gt_rptr;		/* resolve ALIAS */
 	    }
 	    printf("%s%s\n", inverse ? "~" : " ", gp->gt_ids);
 	}
@@ -1057,7 +1057,7 @@ main(
 			Gate **		elp;
 			int		uc;
 			int		j;
-			unsigned int	useWord;
+			unsigned int	useWord = 0	/* satisfies -Wall */;
 
 			uc = slp - lp;
 			assert(uc >= 2);			/* at least one pointer and one use word */
@@ -1067,7 +1067,7 @@ main(
 			while (lp < elp) {
 			    if (++j >= USE_COUNT) {
 				useWord = (unsigned int)(unsigned long)*ulp++;	/* next use word */
-				j = 0;
+				j = 0;			/* executed at least once - useWord is initialized */
 			    } else {
 				useWord >>= 2;			/* next set of useBits */
 			    }
@@ -1098,27 +1098,31 @@ main(
 			}
 			break;				/* op->gt_mark set to used bits 0x01 to 0x80 in Pass 0 */
 		    case 'B':
+			if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
+			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
 			op->gt_mark = B_WIDTH;
 			if (byte == 1) {
 			    iC_QB1p = op;		/* link for iC_display logic only */
 			}
 			break;
 		    case 'W':
+			if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
+			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
 			op->gt_mark = W_WIDTH;
 			if (byte == 2) {
 			    iC_QW2p = op;		/* link for iC_display logic only */
 			}
 			break;
-		    case 'L':
 #if INT_MAX != 32767 || defined (LONG16)
+		    case 'L':
+			if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
+			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
 			op->gt_mark = L_WIDTH;
 			if (byte == 4) {
 			    iC_QL4p = op;		/* link for iC_display logic only */
 			}
-#else	/* INT_MAX == 32767 && ! defined (LONG16) */
-			op->gt_mark = W_WIDTH;		/* use as 16 bit output */
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
 			break;
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
 		    default:
 			goto outErr;
 		    }
@@ -1131,7 +1135,7 @@ main(
 	    if (op->gt_fni < CLCKL) {
 		if (df) {
 		    if (op->gt_fni == OUTX) {
-			gp = (Gate*)(op->gt_list);	/* OUTX */
+			gp = op->gt_ptr;		/* OUTX */
 			printf("	%s	0x%02x", gp->gt_ids, op->gt_mark);
 		    }
 		}
@@ -1161,7 +1165,7 @@ main(
 		if (gp->gt_fni == GATE || gp->gt_fni == GATEX) {
 		    inverse ^= gp->gt_mark;		/* holds ALIAS inversion flag */
 		}
-		gp = (Gate*)gp->gt_rlist;		/* resolve ALIAS */
+		gp = gp->gt_rptr;			/* resolve ALIAS */
 	    }
 	    printf("	%s%s\n", inverse ? "~" : "", gp->gt_ids);
 	}

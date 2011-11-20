@@ -1,8 +1,8 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.75 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: genr.c,v 1.76 2011/10/24 05:54:50 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -197,7 +197,7 @@ op_force(				/* force linked Symbol to correct ftype */
 		ierror("cannot force from", iC_full_ftype[sp->ftype]);
 	    }
 	    lp1 = op_push(0, typ, lp);
-	    assert(lp->le_first == 0 || lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
+	    assert(lp->le_first == 0 || (lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]));
 	    lp1->le_first = lp->le_first;
 	    lp1->le_last = lp->le_last;
 	    lp = lp1;	/* create a new @ symbol linked to old */
@@ -548,7 +548,7 @@ const_push(Lis * expr)
 	assert(iconst);			/* only cleared in listNet() if not used */
 	lp = sy_push(iconst);		/* link to "iConst" */
 	expr->v = op_push(0, ARN, lp);
-	assert(expr->f == 0 || expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]);
+	assert(expr->f == 0 || (expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]));
 	expr->v->le_first = lp->le_first = expr->f;	/* identifies as const expression */
 	expr->v->le_last  = lp->le_last  = expr->l;
     } else {
@@ -565,7 +565,7 @@ const_push(Lis * expr)
 	    ierror("use of a constant which was previously used for a different purpose:", buf);
 	}
 	expr->v = sy_push(sp);		/* expr->v->le_first == 0 is simple const */
-	assert(expr->f == 0 || expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]);
+	assert(expr->f == 0 || (expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]));
 	expr->v->le_first = expr->f;	/* identifies as const expression */
 	expr->v->le_last  = expr->l;	/* no need to be 0 - JW 12.Apr.2007 */
     }
@@ -935,7 +935,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	    sp->ftype == D_SH   ||
 	    sp->ftype == F_SW   ||
 	    sp->ftype == OUTW   ||
-	    sp->ftype == CH_BIT && (typ == ARN || typ == ARNF))) {	/* only arithmetic CHANGE */
+	    sp->ftype == (CH_BIT && (typ == ARN || typ == ARNF)))) {	/* only arithmetic CHANGE */
 	    fprintf(iC_outFP, "\t\t//\t%s\t=", sp->name);
 	}
 	fprintf(iC_outFP, "\n");		/* all non Arithmetic and delay */
@@ -2005,13 +2005,13 @@ para_push(
 	assert(lp1->le_val == (unsigned)-1);
 	lp2 = sy_push(lp1->le_sym);	/* lp1 has changed */
 	lp2->le_val = (unsigned)-1;	/* mark link as -1 timer before op_push */
-	assert(lp1->le_first == 0 || lp1->le_first >= iCbuf && lp1->le_last < &iCbuf[IMMBUFSIZE]);
+	assert(lp1->le_first == 0 || (lp1->le_first >= iCbuf && lp1->le_last < &iCbuf[IMMBUFSIZE]));
 	lp2->le_first = lp1->le_first;	/* copy expr text */
 	lp2->le_last  = lp1->le_last;	/* copy expr termination */
 	lpc = op_push(lpc, TIM, lp2);
     }
     lp1 = op_push(sy_push(fname->v), bTyp(aex->v), aex->v);
-    assert(aex->f == 0 || aex->f >= iCbuf && aex->l < &iCbuf[IMMBUFSIZE]);
+    assert(aex->f == 0 || (aex->f >= iCbuf && aex->l < &iCbuf[IMMBUFSIZE]));
     lp1->le_first = aex->f; lp1->le_last = aex->l;
     if (ft) {
 	if (lp1->le_sym->ftype == D_FF ||	/* force ft for set or reset */
@@ -3004,7 +3004,7 @@ checkDecl(Symbol * terminal)
     int		typ = terminal->type;
 
     if (iFunSymExt &&
-	strncmp(terminal->name, iFunBuffer, iFunSymExt - iFunBuffer) &&
+	strncmp(terminal->name, iFunBuffer, iFunSymExt - iFunBuffer) != 0 &&
 	terminal->em == 0 &&
 	typ != INPX &&
 	typ != INPW &&
@@ -3981,7 +3981,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	}
 	clp = sy_push(nsp);			/* clone one list element */
 	clp->le_val = flp->le_val ^ nval;	/* negation or arithmetic index in para */
-	assert(first == 0 || first >= iCbuf && last < &iCbuf[IMMBUFSIZE]);
+	assert(first == 0 || (first >= iCbuf && last < &iCbuf[IMMBUFSIZE]));
 	clp->le_first = first;			/* transfer arithmetic text */
 	clp->le_last = last;
 	if (tlp == 0) {
@@ -3994,7 +3994,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	    assert(nsp);
 	    clp = sy_push(nsp);			/* clone follow up delay element */
 	    clp->le_val = nlp->le_val;		/* negation or arithmetic index in delay */
-	    assert(nlp->le_first == 0 || nlp->le_first >= iCbuf && nlp->le_last < &iCbuf[IMMBUFSIZE]);
+	    assert(nlp->le_first == 0 || (nlp->le_first >= iCbuf && nlp->le_last < &iCbuf[IMMBUFSIZE]));
 	    clp->le_first = nlp->le_first;	/* transfer arithmetic text */
 	    clp->le_last = nlp->le_last;
 	    tlp = tlp->le_next = clp;		/* also link delay element */

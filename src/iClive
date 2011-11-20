@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2011  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -173,9 +173,9 @@ Usage:
                 Dynamically increase font size                    Alt +
                 Dynamically decrease font size                    Alt -
 
-Copyright (C) 2000-2009  John E. Wulff          <immediateC@gmail.com>
+Copyright (C) 2000-2011  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.47 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.48 2011/10/24 08:21:19 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -979,13 +979,13 @@ sub register_at_server {
 	if ($conn) {
 	    if ($regName eq '') {
 		my $ret = '';
-		my $Registrations = "N-$instName,RC$instName,SD$instName";
+		my $Registrations = "N-$instName,RC$instName,SD$instName,Z";
 		$regName = $instName;		# register but may not connect to application
 		print "$named: Registrations: $Registrations\n" if $opt_T;
 		conn_send_now($Registrations);
-		info_display(2000, 'blue', "Register as '-$instName'");	# ZZZ
+		info_display(2000, 'blue', "Register as '-$instName'");
 		my ($tmsg, $terr) = $conn->rcv_now();
-    no warnings;
+no warnings;
 		print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
 		$i = 1;
 		REPEAT:
@@ -1000,7 +1000,7 @@ sub register_at_server {
 		    die "registration failed\n" if $i++ >= 3;
 		    goto REPEAT;	# cannot use while, because $1 $2 not in scope - if OK
 		}
-    use warnings;
+use warnings;
 		$C_channel = $1;	# receiver channel from control program
 		$D_channel = $2;	# sender channel to control program
 		print "$named: registered: C_channel = $C_channel, D_channel = $D_channel\n" if $opt_T;
@@ -1145,7 +1145,7 @@ no warnings;
 			    ($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
 			    $activeSymbols[$index][3] = $tNew = [gettimeofday];
 			    $tRest = 50 - int(tv_interval($tOld, $tNew) * 1000);	# ms.
-# print "index: $index value: $value rest: $tRest\n";
+			    print "index: $index value: $value rest: $tRest\n" if $opt_T;
 			    $cs ^= 1 if $value;			# change colour
 			    $activeSymbols[$index][1] = $value;	# for value display
 			    if ($activeSymbols[$index][0] & 01) {
@@ -1174,7 +1174,7 @@ no warnings;
 			    if ($activeSymbols[$index][0] & 04) {
 				my $tag = "$index=";
 				my @ranges = $text->tagRanges($tag);
-# print "value at index $index: $activeSymbols[$index][1] '@ranges'\n";
+				print "value at index $index: $activeSymbols[$index][1] '@ranges'\n" if $opt_T;
 				unless ($normalFlag) {
 				    $text->configure(-state => 'normal');
 				    $normalFlag = 1;	# state normal until loop end
@@ -1270,7 +1270,7 @@ use warnings;
 
 sub colourTag {
     my ($tag, $cs) = @_;
-# print "colourTag: $tag $cs\n";
+    print "colourTag: $tag $cs\n" if $opt_T;
     $text->tagConfigure($tag,
 			-background => $tagBackground[$cs],
 			-foreground => $tagForeground[$cs],
@@ -1293,7 +1293,7 @@ sub colourTag {
 sub restoreTag {
     my ($tag) = @_;
     my $cs = $delayedColour{$tag} & 07;	# latest colour ignoring flash
-# print "restoreTag: $tag $cs\n";
+    print "restoreTag: $tag $cs\n" if $opt_T;
     $text->tagConfigure($tag,
 			-background => $tagBackground[$cs],
 			-foreground => $tagForeground[$cs],
@@ -1778,19 +1778,21 @@ use warnings;
 	my $msg = '';
 	foreach $index (0 .. $#activeSymbols) {
 	    if ($activeSymbols[$index][0]) {
-		print "$index\n" if $opt_T;
-		if (length $msg > 1389) {		# REPLY 1400 - (4+6+1) in tcpc.h
-		    conn_send_now("$D_channel:3$msg");	# intermediate active symbols
+		if ((length($msg) + length($index)) > 1393) {	# REPLY 1400 - (6+1) in tcpc.h
+		    conn_send_now("$D_channel:3$msg");	# send intermediate active symbols
 		    printMicroSeconds("sent one active symbol string to server");
 		    print "sent '$D_channel:3$msg'\n" if $opt_t;
 		    $msg = '';
 		}
-		$msg .= ";$index";			# max length 6, ch:3 max 4, term 1
+		print "$index\n" if $opt_T;
+		$msg .= ";$index";			# ch:3 max 6, term 1
 	    }
 	}
-	conn_send_now("$D_channel:4$msg");		# send last active symbols
-	printMicroSeconds("sent last active symbol string to server");
-	print "sent '$D_channel:4$msg'\n" if $opt_t;
+	if ($msg) {
+	    conn_send_now("$D_channel:4$msg");		# send last active symbols
+	    printMicroSeconds("sent last active symbol string to server");
+	    print "sent '$D_channel:4$msg'\n" if $opt_t;
+	}
 	conn_send_now("$D_channel:0");			# reset last value in iCserver
 
 	####################################################################
@@ -3215,7 +3217,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2009  John E. Wulff
+COPYRIGHT (C) 2000-2011  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

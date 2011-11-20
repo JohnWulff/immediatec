@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.30 2009/08/21 05:51:38 jw Exp $";
+"@(#)$Id: lexc.l,v 1.31 2011/10/16 02:38:24 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -13,7 +13,7 @@ static const char lexc_c[] =
  *
  *	The ANSI C scanner/parser was posted on the net by Jeff Lee,
  *	in 1985. His net address is:
- *		jeff%gatech.CSNet@CSNet-Relay.ARPA, or jeff@gatech
+ *		jeff%gatech.CSNet@CSNet-Relay.ARPA, or jeff@gatech.edu
  *	There was no open source license I could find.
  *
  *	Acknowledgement: Jeff Lee and the draft ANSI C standard grammar.
@@ -444,7 +444,7 @@ check_type(c_STYPE* u, int qtoken)
 	}
     }
     if (qtoken == 2) {
-	toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+	iC_toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 	/********************************************************************
 	 *  the Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1
 	 *  Generally if yacc were to handle the '.' as a seperate token,

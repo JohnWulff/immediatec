@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2011  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -29,12 +29,12 @@ usage ()
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-c	make immcc iC compiler with YYDEBUG' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
-    echo '		     libict.so is made without YYDEBUG' >&2
+    echo '		also make libict.so without YYDEBUG if OSTYPE = linux' >&2
     echo '	-r	make icr iC compiler with YYDEBUG -t trace output possible' >&2
     echo '	-t	make ict iC compiler with YYDEBUG -t trace output possible' >&2
     echo '	-m	make lmain test internal C compiler with YYDEBUG' >&2
     echo '	-C	make immcc only; generate an empty cexe.c' >&2
-    echo '	-L	make libict.a and libict.so' >&2
+    echo '	-L	make libict.a as well as libict.so if OSTYPE = linux' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-M	make lmain only' >&2
@@ -54,7 +54,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.31 2010/12/14 07:05:06 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.32 2011/10/24 05:57:50 jw Exp $' >&2
 }
 
 makeLib ()
@@ -188,10 +188,11 @@ if [ $YN -ne 0 ]; then
 fi
 if ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
     echo "Options changed to '$Y$u$d$e$o$s$y'"
-    if [ $z -eq 1 ]; then	# $u SYSUNION only to make clean if it changes
-	echo "make clean; perl icg.pl $Y$u$d$e$o$s$y icc.h > icg.h" >&2
+    if [ $R -eq 0 ] && [ $T -eq 0 ]; then
+	echo "   make clean"
+	make clean 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
     fi
-    make clean 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    echo "   remake icg.h"
     perl icg.pl $Y$u$d$e$o$s$y icc.h > icg.h
 fi
 
@@ -203,8 +204,10 @@ fi
 if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
     echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
-    echo "make OPT=\"-fPIC -DLOAD -DTCP$d$e$o$s$y\" CFLAGS=\"-O2$W\" libict.so"
-    makeShared  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    if [ "$OSTYPE" = "linux" ]; then
+	echo "make OPT=\"-fPIC -DLOAD -DTCP$d$e$o$s$y\" CFLAGS=\"-O2$W\" libict.so"
+	makeShared  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    fi
 fi
 
 if [ $R = 1 ]; then
@@ -239,11 +242,12 @@ exit 0
     -g      compile for debugging and no optimisation (default -O2)
     -c      make immcc iC compiler with YYDEBUG
     -l      make libict.a with YYDEBUG -t trace output possible
+            also make libict.so without YYDEBUG if OSTYPE = linux >&2
     -r      make icr iC compiler with YYDEBUG -t trace output possible
     -t      make ict iC compiler with YYDEBUG -t trace output possible
     -m      make lmain test internal C compiler with YYDEBUG
     -C      make immcc only; generate an empty cexe.c
-    -L      make libict.a only
+    -L      make libict.a as well as libict.so if OSTYPE = linux
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -M      make lmain only
@@ -319,7 +323,7 @@ L<immcc(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2009  John E. Wulff
+COPYRIGHT (C) 2000-2011  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

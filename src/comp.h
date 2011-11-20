@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2011  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.59 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: comp.h,v 1.60 2011/10/24 05:54:08 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -331,23 +331,22 @@ extern char	T2FN[];
 extern char	T4FN[];
 extern char	T5FN[];
 extern char	T6FN[];
-extern int	openT4T5(int mode);
+extern int	iC_openT4T5(int mode);
 
 					/*   outp.c   */
 #define BUFS	256
-extern int	IEC1131(char * name, char * buf, int bufLen,
-			char * iqt, char * xbwl, int * bytep,
-			int * bitp, char * tail);
-extern int	toIEC1131(char * name, char * buf, int bufLen,
+extern int	iC_toIEC1131(char * name, char * buf, int bufLen,
 			  char * iqt, char * xbwl, int * bytep,
 			  int * bitp, char * tail);
 
-extern int	listNet(unsigned gate_count[]);		/* list generated network */
-extern int	buildNet(Gate ** igpp,			/* generate execution network */
+extern int	iC_listNet(unsigned gate_count[]);	/* list generated network */
+#if defined(RUN) || defined(TCP)
+extern int	iC_buildNet(Gate ** igpp,		/* generate execution network */
 			    unsigned gate_count[]);
-extern int	outNet(FILE * iFP, char * outfile);	/* generate network as C file */
-extern int	c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
-extern int	copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
+#endif /* defined(RUN) || defined(TCP) */
+extern int	iC_outNet(FILE * iFP, char * outfile);	/* generate network as C file */
+extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
+extern int	iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 extern unsigned short	iC_Tflag;			/* define iC_tVar */
 
 					/*   lexc.l   */

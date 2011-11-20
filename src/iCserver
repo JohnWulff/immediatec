@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2011  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -84,9 +84,9 @@ Usage:
 		eg: 'iCbox X0-X3' 'iCbox X10' sort
 		if a client call has arguments, the call must be quoted
 	-h	help, ouput this Usage text only
-Copyright (C) 2000-2009  John E. Wulff		<immediateC@gmail.com>
+Copyright (C) 2000-2011  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.39 2010/12/14 07:05:06 jw Exp $
+$Id: iCserver,v 1.40 2011/10/24 05:51:29 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -395,9 +395,6 @@ sub warnD {
 sub allocate_channel {
     my ($name, $channel) = @_;
     my $ch;
-no warnings;
-    print "$named: allocate_channel $name, '$channel'\n" if $opt_t;
-use warnings;
     unless (defined ($ch = $Channels{$name}) and defined $channel) {
 	$channel = $ch unless defined $channel;
 	$channel = ++$maxChannel unless defined $channel;
@@ -405,6 +402,9 @@ use warnings;
     } else {
 	warnD("$named: attempting to allocate channel for $name twice\n");
     }
+no warnings;
+    print "$named: allocate_channel $name, $channel\n" if $opt_t;
+use warnings;
     return $channel;
 } # allocate_channel
 
@@ -571,6 +571,7 @@ use warnings;
 		    ## $1 is channel : $2 is value
 		    $channel = $1;
 		    $con = $Senders[$channel][0];
+		    warnD("Error $named: data '$msg1' during registration - app spec error") if $regFlag;
 		    if (not defined $con or $con eq $conn) {
 			$Senders[$channel][2] = $2;	# latest value in case lost connection
 			if ($aref = $Receivers[$channel]) {
@@ -689,6 +690,9 @@ use warnings;
 				print "AutoDebug: '$AutoDebug' for sender '$name'\n" if $opt_T;
 			    }
 			}
+no warnings;
+			print "$ClientNames{$conn}: $direction $name	ack = $ack\n" if $opt_t;
+use warnings;
 		    } elsif ($direction eq 'R') {
 			############################################################
 			## ignore duplicate Receiver entries for this $conn
@@ -734,13 +738,15 @@ use warnings;
 				}
 			    }
 			}
+no warnings;
+			print "$ClientNames{$conn}: $direction $name	ack = $ack	ini = '$ini'\n" if $opt_t;
+use warnings;
 		    }
 		    if ($ackString) {
 			$ackString = join ',', $ackString, $ack;
 		    } else {
 			$ackString = $ack;
 		    }
-		    print "$ClientNames{$conn}: $direction $name	$ack\n" if $opt_t;
 		}
 		elsif ($msg1 eq 'Z') {
 		    $regFlag = 0;		# registration string has terminated
@@ -1107,8 +1113,9 @@ Additional functionality in iCserver.
 
     c)	Termination code for the registration string consisting of
 	the single letter 'Z'. This allows the registration string
-	to be longer than the maximum buffer size - it will be sent
-	in more than one transmission if it is too long.
+	to be longer than the TCP/IP transmission size of 1400 bytes
+	(also maximum buffer size) - it will be sent in more than one
+	transmission if it is too long.
 
     In summary: the registration string consists of a comma seperated
     list beginning with 'Nname' followed by one or more individual
@@ -1116,7 +1123,9 @@ Additional functionality in iCserver.
     and terminated with a single 'Z'. The whole is sent in one or
     more transmissions. iCserver acknowledges each transmission by
     sending a comma separated list of channel numbers used for each
-    sender or receiver.
+    sender or receiver for each partial registration string. These
+    acknowledge strings are always shorter than the registration
+    strings - hence there is no danger of buffer overflow.
 
 	IEC-1131 names are as follows:
 
@@ -1279,27 +1288,27 @@ Additional functionality in iCserver.
 
     Example without instance number:
         sorter     # (using IX0, QX0, QX1) will register with:
-	    Nsorter,SCsorter,RDsorter,RIX0,SQX0,SQX1
+	    Nsorter,SCsorter,RDsorter,RIX0,SQX0,SQX1,Z
 	iCbox      IX0 QX0 QX1           # will register with:
-	    NIX0,SIX0,RQX0,RQX1
+	    NIX0,SIX0,RQX0,RQX1,Z
 	iClive     sorter                # will register with:
-	    N-sorter,RCsorter,SDsorter
+	    N-sorter,RCsorter,SDsorter,Z
 
     Example of a first instance:
         sorter -i0 # (using IX0, QX0, QX1) will register with:
-	    Nsorter-0,SCsorter-0,RDsorter-0,RIX0-0,SQX0-0,SQX1-0
+	    Nsorter-0,SCsorter-0,RDsorter-0,RIX0-0,SQX0-0,SQX1-0,Z
 	iCbox  -i0 IX0 QX0 QX1           # will register with:
-	    NIX0-0,SIX0-0,RQX0-0,RQX1-0
+	    NIX0-0,SIX0-0,RQX0-0,RQX1-0,Z
 	iClive -i0 sorter                # will register with:
-	    N-sorter-0,RCsorter-0,SDsorter-0
+	    N-sorter-0,RCsorter-0,SDsorter-0,Z
 
     Example of a second instance:
         sorter -i1 # (using IX0, QX0, QX1) will register with:
-	    Nsorter-1,SCsorter-1,RDsorter-1,RIX0-1,SQX0-1,SQX1-1
+	    Nsorter-1,SCsorter-1,RDsorter-1,RIX0-1,SQX0-1,SQX1-1,Z
 	iCbox  -i1 IX0 QX0 QX1           # will register with:
-	    NIX0-1,SIX0-1,RQX0-1,RQX1-1
+	    NIX0-1,SIX0-1,RQX0-1,RQX1-1,Z
 	iClive -i1 sorter                # will register with:
-	    N-sorter-1,RCsorter-1,SDsorter-1
+	    N-sorter-1,RCsorter-1,SDsorter-1,Z
 
     Although mixed registrations, in which clients of the same name
     are used with and without instance numbers as shown above will work
@@ -1415,11 +1424,6 @@ not been implemented yet (-w option).
 
 Mixed instance warning not yet implemented.
 
-No provision so far for sending registration messages and replies as
-multiple messages when size exceeds TCP/IP transmission size of 1400.
-This limits one client to approx 250 I/Os. iClive Data-messages are already
-sent as multiple messages if too long.
-
 The Specification supplements the Description of iCserver and may be
 useful in understanding its workings.
 
@@ -1429,7 +1433,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2000-2009  John E. Wulff
+Copyright (C) 2000-2011  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

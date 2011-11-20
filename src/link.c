@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.29 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: link.c,v 1.30 2011/11/04 01:04:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -67,7 +67,7 @@ iC_link_ol(
 		 *
 		 * *clist (iClock) has 0 in gt_rlist for termination
 		 *******************************************************************/
-		if ((tp = (Gate*)tp->gt_rlist) == out_list || tp == 0) {
+		if ((tp = tp->gt_rptr) == out_list || tp == 0) {
 #if !defined(_WINDOWS) || defined(LOAD)
 		    fprintf(iC_errFP,
     "\n%s: line %d: cannot find '%s' entry in '%s' or '%s' after glitch\n",
@@ -84,7 +84,7 @@ iC_link_ol(
 	np = tp->gt_next = gp->gt_next;		/* unlink from */
 	gp->gt_next = 0;			/* activity list */
 	if (np == ap) {				/* last entry ? */
-	    ap->gt_list = (Gate **)tp;		/* adjust pointer */
+	    ap->gt_ptr = tp;			/* adjust pointer */
 	} else if (ap->gt_fni == TIMRL) {	/* correct timer list ? */
 	    np->gt_mark += gp->gt_mark;		/* adjust diff prev to old */
 	    gp->gt_mark += diff;		/* time remaining */
@@ -114,7 +114,7 @@ iC_link_ol(
 #if YYDEBUG && !defined(_WINDOWS)
 		    if ((iC_debug & 0300) == 0300) putc('#', iC_outFP);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-		    out_list = (Gate*)out_list->gt_rlist; /* link gate next cycle */
+		    out_list = out_list->gt_rptr; /* link gate next cycle */
 		    if (warn_cnt > 0
 #if YYDEBUG && !defined(_WINDOWS)
 				    && !(iC_debug & 0200)
@@ -178,7 +178,7 @@ iC_link_ol(
 		if (np != out_list) {
 		    np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		} else {
-		    out_list->gt_list = (Gate **)gp;	/* list => new */
+		    out_list->gt_ptr = gp;		/* list => new */
 #ifndef NOCHECK
 		    /* check that algorithm is correct */
 		    if (out_list->gt_mark != 0) {
@@ -207,9 +207,9 @@ iC_link_ol(
 	if (iC_debug & 0100) putc('>', iC_outFP);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifndef DEQ
-	((Gate *)out_list->gt_list)->gt_next = gp;	/* old => new */
+	out_list->gt_ptr->gt_next = gp;			/* old => new */
 	gp->gt_next = out_list;				/* new => list */
-	out_list->gt_list = (Gate **)gp;		/* list => new */
+	out_list->gt_ptr = gp;				/* list => new */
 #else	/* DEQ */
 	tp = out_list->gt_prev;				/* save previous */
 	out_list->gt_prev = tp->gt_next = gp;		/* list, previous ==> new */
