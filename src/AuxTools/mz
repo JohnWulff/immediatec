@@ -19,8 +19,8 @@ usage ()
     echo '	iC files are made from compiler ict<N> and libict<N>.a' >&2
     echo '	if no files are specified uses mm via pm.lt' >&2
     echo '	directory Alex<N> must exist (generated files are saved there)' >&2
-    echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-    echo '$Id: mz,v 1.14 2008/07/03 13:20:19 jw Exp $' >&2
+    echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
+    echo '$Id: mz,v 1.15 2012/04/12 23:56:13 jw Exp $' >&2
 }
 
 min=0
