@@ -8,8 +8,8 @@
 
 version()
 {
-  echo 'Author:	John E. Wulff        <john@je-wulff.de>' >&2
-  echo '$Id: tt,v 1.31 2010/11/01 05:43:40 jw Exp $' >&2
+  echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
+  echo '$Id: tt,v 1.32 2012/04/12 23:41:27 jw Exp $' >&2
 }
 
 usage()
@@ -20,8 +20,8 @@ usage()
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-c	only copy files to <dir1>; must be new, else compare only' >&2
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
-  echo '	-w	whitespace (spaces, tabs, blank lines) are significant'
-  echo '		default: all whitespace is ignored (opposite to diff)'
+  echo '	-w	whitespace (spaces, tabs, blank lines) are significant' >&2
+  echo '		default: all whitespace is ignored (opposite to diff)' >&2
   echo '	-r	put Rdiff *.lt output in log file' >&2
   echo '	-x<regex>  in each Mdiff ignore changes in lines that match regex' >&2
   echo '	-f<filter> process the first file in an Mdiff by <filter> before diff' >&2
