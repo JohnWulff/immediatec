@@ -17,15 +17,16 @@ usage ()
     echo '	pc.lt	# C files only' >&2
     echo '	pi.lt	# ini files only' >&2
     echo '	pl.lt	# lst files only' >&2
+    echo '	pL.lt	# log files only' >&2
     echo '	p6.lt	# lst6 files only' >&2
     echo '	pp.lt	# iC files .ic and .ih only' >&2
     echo '	pa.lt	# iCa files .ica and .ih only' >&2
     echo '	ps.lt	# iC(a) source files .ica or .ic and .ih' >&2
-    echo '	pg.lt	# exe .c .ini .lst - generated - may be deleted in source dir' >&2
+    echo '	pg.lt	# exe .c .ini .lst .log - generated - may be deleted in source dir' >&2
     echo '		also ouput .ic if generated from .ica' >&2
     echo '	-g	pg.lt - exe .c .ini .lst .log .lst6 - generated including .lst6' >&2
     echo '	-n	pn.lt - exe .c .ini .lst .log .lst6 - generated corpses - no .ic to match' >&2
-    echo '	$Id: ml,v 1.16 2009/09/13 03:04:58 jw Exp $' >&2
+    echo '	$Id: ml,v 1.17 2012/04/20 07:06:05 jw Exp $' >&2
 }
 
 while [ $# -gt 0 ]; do
