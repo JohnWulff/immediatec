@@ -13,6 +13,9 @@ usage ()
     echo 'make different lists in a Test directory' >&2
     echo '	p.lt	# all for copying' >&2
     echo '	pd.lt	# sources, includes and derived for comparing' >&2
+    echo '	pda.lt	# iCa sources, includes and derived from .ica for comparing' >&2
+    echo '	pm.lt	# sources for making' >&2
+    echo '	pma.lt	# iCa sources for making .ica files only' >&2
     echo '	pe.lt	# executables only' >&2
     echo '	pc.lt	# C files only' >&2
     echo '	pi.lt	# ini files only' >&2
@@ -26,7 +29,7 @@ usage ()
     echo '		also ouput .ic if generated from .ica' >&2
     echo '	-g	pg.lt - exe .c .ini .lst .log .lst6 - generated including .lst6' >&2
     echo '	-n	pn.lt - exe .c .ini .lst .log .lst6 - generated corpses - no .ic to match' >&2
-    echo '	$Id: ml,v 1.17 2012/04/20 07:06:05 jw Exp $' >&2
+    echo '	$Id: ml,v 1.18 2012/05/24 07:53:00 jw Exp $' >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -49,7 +52,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-rm -f p.lt pd.lt ps.lt pm.lt pg.lt pe.lt pc.lt pi.lt pl.lt pL.lt p6.lt pp.lt pa.lt ph.lt
+rm -f p.lt pd.lt pda.lt ps.lt pm.lt pma.lt pg.lt pe.lt pc.lt pi.lt pl.lt pL.lt p6.lt pp.lt pa.lt ph.lt
 
 if ls *.i[ch]* > /dev/null 2>&1; then
     mklst    *.i[ch]* > p.lt	# all for copying
@@ -57,10 +60,19 @@ if ls *.i[ch]* > /dev/null 2>&1; then
     mklst -s *.i[ch]* > ps.lt	# iC or iCa sources and include files
 fi
 if ls *.ic* > /dev/null 2>&1; then
+    mklst -D *.ic* > pda.lt	# iCa sources, includes and derived from .ica for comparing
+    if [ ! -s pda.lt ]; then
+	rm pda.lt
+    fi
     if [ -f px.lt ]; then
 	mklst -m px.lt *.ic* > pm.lt	# special execution list for mm
+	mklst -M px.lt *.ic* > pma.lt	# iCa special execution list for mm
     else
 	mklst -s *.ic* > pm.lt	# iC or iCa sources without include files
+	mklst -S *.ic* > pma.lt	# iCa sources without include files
+    fi
+    if [ ! -s pma.lt ]; then
+	rm pma.lt
     fi
     mklst -g *.ic*    > pg.lt	# generated exe .c .ini .lst for deletion in source dir
     mklst -e *.ic*    > pe.lt	# executables only
@@ -94,6 +106,9 @@ if [ -f Init.out ]; then
     echo Init.out >> p.lt
     echo Init.out >> pd.lt
     echo Init.out >> pg.lt
+    if [ -s pma.lt ]; then
+	echo Init.out >> pda.lt
+    fi
 fi
 
 if [ -f Init.out6 ]; then
@@ -105,4 +120,7 @@ if [ -f ErrorMessages.err ]; then
     echo ErrorMessages.err >> p.lt
     echo ErrorMessages.err >> pd.lt
     echo ErrorMessages.err >> pg.lt
+    if [ -s pma.lt ]; then
+	echo ErrorMessages.err >> pda.lt
+    fi
 fi
