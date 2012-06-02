@@ -14,6 +14,7 @@ format STDERR =
 Usage:	@<<<<<<< [-dgnecilL6paHsh] [-m px.lt] [file ...]
 	$named
 	-d	output .c .cc .ini .lst .log .ic .ica .ih - for comparisons
+	-D	output .c .cc .ini .lst .log .ic .ica .ih - but only if derived from .ica
 	-g	output exe .c .cc .ini .lst .lst6 .log - generated - may be deleted in source dir
 		also ouput .ic if generated from .ica
 	-n	output exe .c .cc .ini .lst .lst6 - generated corpses - no .ic to match
@@ -22,46 +23,53 @@ Usage:	@<<<<<<< [-dgnecilL6paHsh] [-m px.lt] [file ...]
 	-i	output only base with .ini extension
 	-l	output only base with .lst extension
 	-L	output only base with .log extension
-	-6	output only base with .lst6 extension
+	-6	output only base with .lst6 and .cc extension
 	-p	output only base with .ic extension
 	-a	output only base with .ica extension
 	-H	output only base with .ih or .iha extension (includes)
 	-s	output only base with .ic .ica and .ih or .iha extension (iC sources)
 		output .ic if not generated from .ica
+	-S	output only base with .ic .ica and .ih or .iha extension (iC sources)
+		do not output .ic if not generated from .ica
 	-m px.lt output only base with .ic .ica unless they occurr in xfile
-		insert execution lines in px.lt as well
+		insert execution lines from px.lt as well
+	-M px.lt output only base with .ic .ica unless they occurr in xfile
+		insert execution lines from px.lt as well
+		do not output .ic if not generated from .ica
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.13 2009/09/18 08:16:03 jw Exp $
+$Id: mklst,v 1.14 2012/06/02 04:27:59 jw Exp $
 .
 
-use vars qw($opt_c $opt_d $opt_e $opt_g $opt_i $opt_l $opt_L $opt_n);
-use vars qw($opt_6 $opt_p $opt_a $opt_H $opt_s $opt_m $opt_h);
+use vars qw($opt_c $opt_d $opt_D $opt_e $opt_g $opt_i $opt_l $opt_L $opt_n);
+use vars qw($opt_6 $opt_p $opt_a $opt_H $opt_s $opt_S $opt_m $opt_M $opt_h);
 require "getopts.pl";
-&Getopts('cdegilLn6paHsm:h');	# sets $opt_h if -h etc
+&Getopts('cdDegilLn6paHsSm:M:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
 my %pn = ();
+my %prev = ();
 my %mx = ();
 my @ax = ();
 my $current = -1;
 my $line = 0;
-my $prev = '';
-my ($source, $ln);
+my ($source, $sf, $ln);
+my $m_file = '';
 
-if ($opt_m and -f $opt_m) {
-    if (open (IN, $opt_m)) {
+if (($opt_m and -f $opt_m) or ($opt_M and -f $opt_M)) {
+    $m_file = $opt_m ? $opt_m : $opt_M;
+    if (open (IN, $m_file)) {
 	while (<IN>) {
 	    while (/(\w+\.ica?)/g) {
 		unless (defined $mx{$1}) {
 		    $mx{$1} = $line;	# note first use of source in this line
 		    unless (-f $1) {
 			if (-e $1) {
-			    warn "$named: '$1' referred to in '$opt_m' is not a regular file\n";
+			    warn "$named: '$1' referred to in '$m_file' is not a regular file\n";
 			} else {
-			    warn "$named: '$1' referred to in '$opt_m' does not exist\n";
+			    warn "$named: '$1' referred to in '$m_file' does not exist\n";
 			}
 		    }
 		}
@@ -71,15 +79,17 @@ if ($opt_m and -f $opt_m) {
 	}
 	close(IN);
     } else {
-	warn "$named: can't open input -m $opt_m\n";
+	warn "$named: can't open input -m $m_file\n";
     }
+##    foreach $source (sort keys %mx) { warn "$source	$mx{$source}\n"; }
 }
 
 unshift(@ARGV, '-') if !@ARGV;	# use stdin if no further arguments
 while ($ARGV = shift @ARGV) {
     if ($opt_n) {
-	if ($ARGV =~ /(\w+)\.(lst6?|ini)/) {	# don't check .c or .log - too dangerous
+	if ($ARGV =~ /^(\w+)\.(lst6?|ini)$/) {	# don't check .c or .log - too dangerous
 	    unless (-f "$1.ic" or -f "$1.ica" or $pn{$1}) {
+		$pn{$1}++;			# don't output list a second time
 		print "$1\n" if -f "$1";	# if no .ic or .ica, the rest are corpses
 		print "$1.c\n" if -f "$1.c";
 		print "$1.cc\n" if -f "$1.cc";
@@ -88,12 +98,11 @@ while ($ARGV = shift @ARGV) {
 		print "$1.log\n" if -f "$1.log";
 		print "$1.lst\n" if -f "$1.lst";
 		print "$1.lst6\n" if -f "$1.lst6";
-		$pn{$1}++;			# don't output list a second time
 	    }
 	}
     } else {
-	if ($ARGV =~ /(\w+)\.(ica?)/ and $prev ne $1) {
-	    $prev = $1;
+	if ($ARGV =~ /^(\w+)\.(ica?)$/ and not $prev{$1}) {
+	    $prev{$1}++;			# don't output lists a second time
 	    if ($opt_d) {
 		print "$1.c\n" if -f "$1.c";
 		print "$1.cc\n" if -f "$1.cc";
@@ -102,6 +111,16 @@ while ($ARGV = shift @ARGV) {
 		print "$1.ini\n" if -f "$1.ini";
 		print "$1.log\n" if -f "$1.log";
 		print "$1.lst\n" if -f "$1.lst";
+	    } elsif ($opt_D) {
+		if (-f "$1.ica") {
+		    print "$1.c\n" if -f "$1.c";
+		    print "$1.cc\n" if -f "$1.cc";
+		    print "$1.ic\n" if -f "$1.ic";
+		    print "$1.ica\n";
+		    print "$1.ini\n" if -f "$1.ini";
+		    print "$1.log\n" if -f "$1.log";
+		    print "$1.lst\n" if -f "$1.lst";
+		}
 	    } elsif ($opt_g) {
 		print "$1\n" if -f "$1";
 		print "$1.c\n" if -f "$1.c";
@@ -127,29 +146,31 @@ while ($ARGV = shift @ARGV) {
 	    } elsif ($opt_L) {
 		print "$1.log\n" if -f "$1.log";
 	    } elsif ($opt_6) {
+		print "$1.cc\n" if -f "$1.cc";
 		print "$1.lst6\n" if -f "$1.lst6";
 	    } elsif ($opt_p) {
 		print "$1.ic\n" if -f "$1.ic";
 	    } elsif ($opt_a) {
 		print "$1.ica\n" if -f "$1.ica";
-	    } elsif ($opt_s or $opt_m) {
+	    } elsif ($opt_s or $opt_S or $m_file) {
+		$source = '';
+		$sf = ($opt_s or $opt_m) ? 'T' : '';	# force output for -s or -m
 		if (-f "$1.ica") {
-		    $source = "$1.ica";
-		}
-		elsif (-f "$1.ic") {
+		    $sf = $source = "$1.ica";
+		} elsif (-f "$1.ic") {
 		    $source = "$1.ic";
 		}
-		if ($opt_m and defined $mx{$source}) {
+		if ($m_file and defined $mx{$source}) {
 		    $ln = $mx{$source};
 		    if ($current < $ln) {
 			die "ERROR: bad line '$ln' ($current)" if $ln < $current-1 or $ln >= $line;
 			while (++$current < $ln) {
-			    print $ax[$current];	# include lines without source
+			    print $ax[$current] if $sf;	# include lines without source
 			}
-			print $ax[$current];	# line with sources
+			print $ax[$current] if $sf;	# line with sources
 		    }
 		} else {
-		    print "$source\n";
+		    print "$source\n" if $sf and $source;	# or source only;
 		}
 	    } elsif (not $opt_H) {
 		print "$1\n" if -f "$1";
@@ -162,10 +183,10 @@ while ($ARGV = shift @ARGV) {
 		print "$1.ic\n" if -f "$1.ic";
 		print "$1.ica\n" if -f "$1.ica";
 	    }
-	} elsif ($ARGV =~ /(\w+)\.iha?/) {
-	    unless ($opt_c or $opt_e or $opt_g or $opt_i or
-		    $opt_l or $opt_L or $opt_n or $opt_6 or
-		    $opt_p or $opt_a or $opt_m or $opt_h) {
+	} elsif ($ARGV =~ /^(\w+)\.iha?$/) {
+	    unless ($opt_c or $opt_e or $opt_g or $opt_i or $opt_D or
+		    $opt_l or $opt_L or $opt_n or $opt_6 or $opt_S or
+		    $opt_p or $opt_a or $opt_m or $opt_M or $opt_h) {
 		print "$1.ih\n" if -f "$1.ih";
 		print "$1.iha\n" if -f "$1.iha";
 	    }
