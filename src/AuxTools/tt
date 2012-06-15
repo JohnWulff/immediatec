@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.32 2012/04/12 23:41:27 jw Exp $' >&2
+  echo '$Id: tt,v 1.33 2012/06/15 03:41:05 jw Exp $' >&2
 }
 
 usage()
@@ -35,15 +35,18 @@ usage()
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-s	link with static library libict.a (default libict.so)' >&2
-  echo '	-a      immac: output for loop control and %define lines as comments (mm)' >&2
+  echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
+  echo '	-a      immac: output for loop control and %define lines as comments' >&2
+  echo '		do an extra run in those test directories which contain iCa files' >&2
+  echo '		and make only iCa files and compare them with "<dir1>a"' >&2
   echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
-  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11' >&2
-  echo '	-T <string of directory names for Test2 group> default Test2 - Test10' >&2
-  echo '	-6	produce logic generation listing file.lst6 in Test2 group' >&2
+  echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
+  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 Test12' >&2
+  echo '	-T <string of directory names for Test2 group> default Test2 - Test8, Test10' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-v	author and version information' >&2
   echo '	-h	this help text' >&2
@@ -61,7 +64,7 @@ usage()
   echo "	If no <dir1> is specified no files will be copied or compared" >&2
   echo >&2
   echo "	If <dir2> is specified and exists and <dir1> does not exist" >&2
-  echo "	<dir1> will be created and only changed files will be coped to <dir1>." >&2
+  echo "	<dir1> will be created and only changed files will be copied to <dir1>." >&2
   echo "	The others will be soft links from <dir1> to <dir2>" >&2
   echo
   echo "	If <dir2> is specified and <dir1> exists all files in <dir1>" >&2
@@ -91,20 +94,22 @@ f=""
 F=""
 P=""
 c=""
-a=""
+e=""
+ao="x"
 A=""
 L=""
 I=""
 g=""
-G=""
+pd="pd"
 T="test"
+z=""
 head=""
 test1=""
 test2=""
-Test1='Test1 Test9 Test11'
+Test1='Test1 Test9 Test11 Test12'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
-while getopts ":cm:d:lwrgASO:PRsaLNjIJ6x:f:F:t:T:zvh" opt; do
+while getopts ":cm:d:lwrgASO:PRseaLNjIJ6x:f:F:t:T:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
@@ -119,30 +124,56 @@ while getopts ":cm:d:lwrgASO:PRsaLNjIJ6x:f:F:t:T:zvh" opt; do
     P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
     R )	A="$A -R";;
     s )	A="$A -s";;
-    a )	A="$A -a"; a=1;;
-    L )	L="$L -L";;
+    e )	A="$A -e";e=" -I Electric.Fence";;
+    a )	ao=a;;
+    L )	L=" -L";;
     N )	A="$A -N";;
     j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
-    6 ) g="6"; G=" -6"; x="$x -Iic[045]\."; d="_6";;
+    6 ) A="$A -6";g="6"; pd="p6"; x="$x -Iic[045]\."; d="_6";;
     x )	x="$x -I$OPTARG";;
     f )	f="/home/archiv/bin/$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable" >&2; usage; exit 126; fi; f=" -f$f";;
     F )	F="/home/archiv/bin/$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable" >&2; usage; exit 126; fi; F=" -F$F";;
     t )	test1="$OPTARG";;
     T )	test2="$OPTARG";;
-    z )	v="$v -z";;
+    z )	v="$v -z";z="z";;
     v )	version; exit 0;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
+
+if [ -z "$test1" -a -z "$test2" ]; then
+    test1=$Test1
+    test2=$Test2
+else
+    T=""		# do not execute 'make test'
+fi
+for t in $test1; do
+    if [ !  -d "$t" ]; then
+	echo "ERROR: '$t' is not a directory; in group '$test1'" >&2
+	exit
+    fi
+done
+for t in $test2; do
+    if [ !  -d "$t" ]; then
+	echo "ERROR: '$t' is not a directory; in group '$test2'" >&2
+	exit
+    fi
+done
+
 echo; date
-echo $name "$@"
+echo "$name $@"
+if [ -n "$m" ]; then
+    echo "== -m\"$m\" =="
+fi
 shift $(($OPTIND - 1))
 
 l="$l$x$f$F"
-# echo "c = !$c! A = !$A! L = !$L! I = !$I! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! G = !$G!"
+if [ -n "$z" ]; then
+    echo "c = !$c! A = !$A! I = !$I! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! pd = !$pd!"
+fi
 
 d1=$1
 d1=${d1%/}
@@ -157,52 +188,58 @@ else
     d3="$d2/\$t/$d1"
 fi
 
-cd Test1;
+if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" -a -n "$T" ]; then
+    echo; echo "========== Test0 make $T"; echo
+    make $T
+fi
+
+cd $t;
 if [ -n "$d2" -a -d "$d2$d" -a -n "$d1" -a ! -d "$d1$d" ]; then
     head="$d2$d"
     d2=""
 fi
 cd ..;
 
-# echo "d1 = !$d1! d2 = !$d2! d3 = !$d3! head = !$head!"
-
-if [ -n "$m" ]; then
-    echo "== -m\"$m\" =="
+if [ -n "$z" ]; then
+    echo "d1 = !$d1! d2 = !$d2! d3 = !$d3! head = !$head!"
+    echo "test1 !$test1!"
+    echo "test2 !$test2!"
 fi
 
-if [ -z "$test1" -a -z "$test2" ]; then
-    test1=$Test1
-    test2=$Test2
-    if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" -a -z "$a" ]; then
-	echo; echo "========== Test0 make $T"; echo
-	make $T
-    fi
-fi
-# echo "Test1: '$test1' Test2: '$test2'"
-
-if [ -n "$test1" -a -z "$g" ]; then
+if [ -n "$test1" ]; then
     for t in $test1; do
-	if [ -d "$t" ]; then
-	    cd $t
+	cd $t
+	for a in "$ao" ""; do		# do -a first
+	    if [ -n "$a" ]; then
+		if [ "$a" = 'x' -o -n "$g" -o ! -f pda.lt ]; then
+		    continue		# no -a stuff in this test directory	
+		fi
+	    fi
 	    if [ -z "$d2" ]; then
 		if [ -z "$c" ]; then
-		    rm -f $(cat pg.lt)
-		    echo; echo "========== $t mm$I$v$A$L"
-		    mm$I$v$A$L
+		    if [ -z "$a" ]; then
+			ae=""
+		    else
+			ae=" -a"
+		    fi
+		    ml
+		    rm -f $(cat p[g$g].lt)
+		    echo; echo "========== $t mm$I$v$A$L$ae"
+		    mm$I$v$A$L$ae	# do twice if -a
 		    ml
 		fi
 		if [ -n "$d1" ]; then
-		    if [ -d "$d1$d" ]; then
+		    if [ -d "$d1$a$d" ]; then
 			if [ -n "$r" ]; then
 			    Rdiff p*.lt
 			fi
-			echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' \$(cat pd.lt) $d1$d"
-			Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat pd.lt) $d1$d
+			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' \$(cat $pd$a.lt) $d1$a$d"
+			Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat $pd$a.lt) $d1$a$d
 		    else
-			mkdir $d1$d
+			mkdir $d1$a$d
 			if [ -d "$head" ]; then
-			    echo; echo "========== $t link all files from $d1$d to $head or beyond"
-			    cd $d1$d
+			    echo; echo "========== $t link all files from $d1$a$d to $head or beyond"
+			    cd $d1$a$d
 			    for file in ../$head/*; do
 				if [ -L $file ]; then
 				    cp -a $file .
@@ -214,87 +251,86 @@ if [ -n "$test1" -a -z "$g" ]; then
 			    done
 			    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			    cd ..
-			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted \$(cat pd.lt) $d1$d) $d1$d"
-			    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted $(cat pd.lt) $d1$d) $d1$d 2> /dev/null
+			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
+			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
 			else
-			    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
-			    cp -p $(cat pd.lt) $d1$d
+			    echo; echo "========== $t cp -p \$(cat $pd$a.lt) $d1$a$d"
+			    cp -p $(cat $pd$a.lt) $d1$a$d
 			fi
 		    fi
 		fi
-	    elif [ -d "$d1$d" -a -d "$d2$d" ]; then
-		cd $d1$d
+	    elif [ -d "$d1$a$d" -a -d "$d2$a$d" ]; then
+		cd $d1$a$d
 		eval d4="$d3"
-		echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $d1$d/* $d4$d"
-		Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat ../pd.lt) $d4$d
+		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $d1$a$d/* $d4$a$d"
+		Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat ../$pd$a.lt) $d4$a$d
 		cd ..
 	    else
 		echo "ERROR: if two <directories> are specified they must exist" >&2
 		usage
+		break
 	    fi
-	    cd ..
-	else
-	    echo "ERROR: '$t' is not a directory; group '$test1'" >&2
-	fi
+	    if [ -z "$T" ]; then
+		break		# do only first loop if directories are specified in command line
+	    fi
+	done
+	cd ..
     done
 fi
 
-if [ -n "$test2" -a -z "$a" ]; then
+if [ -n "$test2" ]; then
     for t in $test2; do
-	if [ -d "$t" ]; then
-	    cd $t
-	    if [ -z "$d2" ]; then
-		if [ -z "$c" ]; then
-		    rm -f $(cat p[g$g].lt)
-		    echo; echo "========== $t my$I$v$A$G"
-		    my$I$v$A$G
-		    ml
-		fi
-		if [ -n "$d1" ]; then
-		    if [ -d "$d1$d" ]; then
-			if [ -n "$r" ]; then
-			    Rdiff p*.lt
-			fi
-			echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' \$(cat p[d$g].lt) $d1$d"
-			Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat p[d$g].lt) $d1$d
+	cd $t
+	if [ -z "$d2" ]; then
+	    if [ -z "$c" ]; then
+		ml
+		rm -f $(cat p[g$g].lt)
+		echo; echo "========== $t my$I$v$A"
+		my$I$v$A
+		ml
+	    fi
+	    if [ -n "$d1" ]; then
+		if [ -d "$d1$d" ]; then
+		    if [ -n "$r" ]; then
+			Rdiff p*.lt
+		    fi
+		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' \$(cat $pd.lt) $d1$d"
+		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat $pd.lt) $d1$d
+		else
+		    mkdir $d1$d
+		    if [ -d "$head" ]; then
+			echo; echo "========== $t link all files from $d1$d to $head or beyond"
+			cd $d1$d
+			for file in ../$head/*; do
+			    if [ -L $file ]; then
+				cp -a $file .
+			    elif [ -f $file ]; then
+				ln -s $file .
+			    else
+				echo "**** Error: $name has strange file $file - not backed up" >&2
+			    fi
+			done
+			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
+			cd ..
+			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted \$(cat $pd.lt) $d1$d) $d1$d"
+			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
 		    else
-			mkdir $d1$d
-			if [ -d "$head" ]; then
-			    echo; echo "========== $t link all files from $d1$d to $head or beyond"
-			    cd $d1$d
-			    for file in ../$head/*; do
-				if [ -L $file ]; then
-				    cp -a $file .
-				elif [ -f $file ]; then
-				    ln -s $file .
-				else
-				    echo "**** Error: $name has strange file $file - not backed up" >&2
-				fi
-			    done
-			    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
-			    cd ..
-			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted \$(cat pd.lt) $d1$d) $d1$d"
-			    cp --remove-destination -p $(Mdiff -kLel -I'ic[0-6c]\.' -I'undefined.reference' -IAborted $(cat pd.lt) $d1$d) $d1$d 2> /dev/null
-			else
-			    echo; echo "========== $t cp -p \$(cat pd.lt) $d1$d"
-			    cp -p $(cat pd.lt) $d1$d
-			fi
+			echo; echo "========== $t cp -p \$(cat $pd.lt) $d1$d"
+			cp -p $(cat $pd.lt) $d1$d
 		    fi
 		fi
-	    elif [ -d "$d1$d" -a -d "$d2$d" ]; then
-		cd $d1$d
-		eval d4="$d3"
-		echo; echo "========== $t Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $d1$d/* $d4$d"
-		Mdiff -k$l -I'ic[0-6c]\.' -I'undefined.reference' $(cat ../p[d$g].lt) $d4$d
-		cd ..
-	    else
-		echo "ERROR: if two <directories> are specified they must exist" >&2
-		usage
 	    fi
+	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
+	    cd $d1$d
+	    eval d4="$d3"
+	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $d1$d/* $d4$d"
+	    Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat ../$pd.lt) $d4$d
 	    cd ..
 	else
-	    echo "ERROR: '$t' is not a directory; group '$test2'" >&2
+	    echo "ERROR: if two <directories> are specified they must exist" >&2
+	    usage
 	fi
+	cd ..
     done
 fi
 echo; echo "========== end"
