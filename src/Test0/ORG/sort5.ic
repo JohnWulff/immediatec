@@ -1,0 +1,72 @@
+	/********************************************************************
+	 *
+	 *	Demonstration einer Paketsortiermachine
+	 *	Author:	J.E. Wulff
+	 *	$Id: sort5.ic,v 1.1 2012/08/26 21:50:50 jw Exp $
+	 *
+	 *******************************************************************/
+
+	imm int s10, s11, s12;
+
+	t100 = TIMER(TX0.4);	// Timerquelle 100 ms
+
+	in0 = in4 & IX0.0 | ~in4 & ST(CHANGE(IX0.0), t100, 10);
+	in1 = in4 & IX0.1 | ~in4 & ST(CHANGE(IX0.1), t100, 10);
+	in2 = in4 & IX0.2 | ~in4 & ST(CHANGE(IX0.2), t100, 10);
+	in3 = in4 & IX0.3 | ~in4 & ST(CHANGE(IX0.3), t100, 10);
+
+	in4 = IX0.4;
+
+	t = TIMER(CHANGE(in4 & IX0.6), ~in4 & TX0.4);	// Timerquelle manuell oder 100 ms
+	c = CLOCK(CHANGE(in4 & IX0.7), ~in4 & TX0.5);	// Taktquelle manuell oder 1 Sek
+
+	QX0.0 = tor0;
+	QX0.1 = tor1;
+	QX0.2 = tor2;
+	QX0.3 = tor3;
+	QX0.4 = m06;
+	QX0.5 = m07;
+	QX0.6 = m08;
+	QX0.7 = m09;
+
+	QX1.0 = s10 & 1<< 0;	QX2.0 = s10 & 1<< 8;	QX3.0 = s11 & 1<< 0;
+	QX1.1 = s10 & 1<< 1;	QX2.1 = s10 & 1<< 9;	QX3.1 = s11 & 1<< 1;
+	QX1.2 = s10 & 1<< 2;	QX2.2 = s10 & 1<<10;	QX3.2 = s11 & 1<< 2;
+	QX1.3 = s10 & 1<< 3;	QX2.3 = s10 & 1<<11;	QX3.3 = s11 & 1<< 3;
+	QX1.4 = s10 & 1<< 4;	QX2.4 = s10 & 1<<12;	QX3.4 = s11 & 1<< 4;
+	QX1.5 = s10 & 1<< 5;	QX2.5 = s10 & 1<<13;	QX3.5 = s11 & 1<< 5;
+	QX1.6 = s10 & 1<< 6;	QX2.6 = s10 & 1<<14;	QX3.6 = s11 & 1<< 6;
+	QX1.7 = s10 & 1<< 7;	QX2.7 = s10 & 1<<15;	QX3.7 = s11 & 1<< 7;
+
+	QX4.0 = s11 & 1<< 8;	QX5.0 = s12 & 1<< 0;	QX6.0 = in0;
+	QX4.1 = s11 & 1<< 9;	QX5.1 = s12 & 1<< 1;	QX6.1 = in1;
+	QX4.2 = s11 & 1<<10;	QX5.2 = s12 & 1<< 2;	QX6.2 = in2;
+	QX4.3 = s11 & 1<<11;	QX5.3 = s12 & 1<< 3;	QX6.3 = in3;
+	QX4.4 = s11 & 1<<12;	QX5.4 = s12 & 1<< 4;	QX6.4 = in;
+	QX4.5 = s11 & 1<<13;	QX5.5 = s12 & 1<< 5;	QX6.5 = pip;
+	QX4.6 = s11 & 1<<14;	QX5.6 = s12 & 1<< 6;	QX6.6 = lock1;
+	QX4.7 = s11 & 1<<15;	QX5.7 = s12 & 1<< 7;	QX6.7 = lock2;
+
+	/********************************************************************
+	 *
+	 *	Machinensteurung
+	 *
+	 *******************************************************************/
+
+	pip = RISE((in = in0 | in1 | in2 | in3) & ~lock2, c);
+	lock1 = SR(pip, (s10 & 0x9 << 1) == 0x9 << 1, c);	// unlock after suitable gap
+	lock2 = SR(lock1 & ~in, ~lock1);
+
+	m06 = D(pip, c);
+	m07 = D(m06 | pip & (in2 | in3), c);
+	m08 = D(m07 | pip & (in1 | in3), c);
+	m09 = D(m08 | pip, c);
+
+	s10 = SH((s10 << 1) + m09, c);
+	s11 = SH((s11 << 1) + (s10 >> 15 & 1), c);
+	s12 = SH((s12 << 1) + (s11 >> 15 & 1), c);
+
+	tor0 = ST( (s10 & 0xf <<  6) == 0x9 <<  6, t, 5);
+	tor1 = ST( (s11 & 0xf <<  0) == 0xb <<  0, t, 5);
+	tor2 = ST( (s11 & 0xf << 10) == 0xd << 10, t, 5);
+	tor3 = ST( (s12 & 0xf <<  4) == 0xf <<  4, t, 5);

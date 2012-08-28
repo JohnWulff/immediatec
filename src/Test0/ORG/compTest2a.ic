@@ -1,0 +1,303 @@
+%{
+static int x = 0;
+%}
+use strict;
+imm clock clk0;
+imm clock clk1;
+imm clock clk2;
+imm clock clk3;
+imm clock clk4;
+imm clock clk5;
+imm clock clk6;
+imm clock clk7;
+imm clock clk8;
+
+imm timer tim0;
+imm timer tim1;
+imm timer tim2;
+imm timer tim3;
+imm timer tim4;
+imm timer t1m0;
+imm timer t1m1;
+imm timer t1m2;
+imm timer t1m3;
+
+imm int aexpr = 		IB16;
+imm clock clk = 		clk0;
+imm clock clkExpr = 		clk1;
+imm clock clkExprReset = 	clk2;
+imm clock clkReset = 		clk3;
+imm clock clkSet = 		clk4;
+imm clock clkSet1 = 		clk5;
+imm clock clkSet1Set2 = 	clk6;
+imm clock clkSet2 = 		clk7;
+imm clock clkSetReset = 	clk8;
+imm int delay = 		3;
+imm int delayExpr = 		3;
+imm int delayExprReset = 	3;
+imm int delayReset = 		3;
+imm int delaySet = 		3;
+imm int delaySet1 = 		3;
+imm int delaySet1Set2 = 	3;
+imm int delaySet2 = 		3;
+imm int delaySetReset = 	3;
+imm bit expr =		 	IX0.0;
+imm bit on = 			IX0.1;
+imm bit off = 			IX0.2;
+imm bit set = 			IX0.3;
+imm bit reset =		 	IX0.4;
+imm bit set1 = 			IX0.5;
+imm bit set2 = 			IX0.6;
+imm timer tim = 		tim0;
+imm timer timExpr = 		tim1;
+imm timer timExprReset = 	tim2;
+imm timer timReset = 		tim3;
+imm timer timSet = 		tim4;
+imm timer timSet1 = 		t1m0;
+imm timer timSet1Set2 = 	t1m1;
+imm timer timSet2 = 		t1m2;
+imm timer timSetReset = 	t1m3;
+
+QX0.1 =	LATCH(set,reset);
+QX0.3 =	FORCE(expr,on,off);
+
+QX0.4 =	D(expr                                         );
+QX0.5 =	D(expr,clk                                     );
+QX0.6 =	D(expr,tim                                     );
+QX0.7 =	D(expr,tim,delay                               );
+QX1.0 =	DR(expr,                                       reset);
+QX1.1 =	DR(expr,                                       reset,clkExprReset);
+QX1.2 =	DR(expr,                                       reset,timExprReset);
+QX1.3 =	DR(expr,                                       reset,timExprReset,delayExprReset);
+QX1.4 =	DR(expr,clkExpr,                               reset);
+QX1.5 =	DR(expr,clkExpr,                               reset,clkReset);
+QX1.6 =	DR(expr,clkExpr,                               reset,timReset);
+QX1.7 =	DR(expr,clkExpr,                               reset,timReset,delayReset);
+QX2.0 =	DR(expr,timExpr,delayExpr,                     reset);
+QX2.1 =	DR(expr,timExpr,delayExpr,                     reset,clkReset);
+QX2.2 =	DR(expr,timExpr,delayExpr,                     reset,timReset);
+QX2.3 =	DR(expr,timExpr,delayExpr,                     reset,timReset,delayReset);
+QX2.4 =	DSR(expr,                  set,                reset);
+QX2.5 =	DSR(expr,                  set,                reset,clkExprReset);
+QX2.6 =	DSR(expr,                  set,                reset,timExprReset);
+QX2.7 =	DSR(expr,                  set,                reset,timExprReset,delayExprReset);
+QX3.0 =	DSR(expr,clkExpr,          set,                reset);
+QX3.1 =	DSR(expr,clkExpr,          set,                reset,clkSetReset);
+QX3.2 =	DSR(expr,clkExpr,          set,                reset,timSetReset);
+QX3.3 =	DSR(expr,clkExpr,          set,                reset,timSetReset,delaySetReset);
+QX3.4 =	DSR(expr,clkExpr,          set,clkSet,         reset);
+QX3.5 =	DSR(expr,clkExpr,          set,clkSet,         reset,clkReset);
+QX3.6 =	DSR(expr,clkExpr,          set,clkSet,         reset,timReset);
+QX3.7 =	DSR(expr,clkExpr,          set,clkSet,         reset,timReset,delayReset);
+QX4.0 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset);
+QX4.1 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset,clkReset);
+QX4.2 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset);
+QX4.3 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset,delayReset);
+QX4.4 =	DSR(expr,timExpr,delayExpr,set,                reset);
+QX4.5 =	DSR(expr,timExpr,delayExpr,set,                reset,clkSetReset);
+QX4.6 =	DSR(expr,timExpr,delayExpr,set,                reset,timSetReset);
+QX4.7 =	DSR(expr,timExpr,delayExpr,set,                reset,timSetReset,delaySetReset);
+QX5.0 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset);
+QX5.1 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset,clkReset);
+QX5.2 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset);
+QX5.3 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset,delayReset);
+QX5.4 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset);
+QX5.5 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,clkReset);
+QX5.6 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset);
+QX5.7 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset,delayReset);
+
+QX6.0 =	CHANGE(expr);
+QX6.1 =	CHANGE(expr,clk);
+QX6.2 =	CHANGE(expr,tim);
+QX6.3 =	CHANGE(expr,tim,delay);
+
+QX6.4 =	RISE(expr);
+QX6.5 =	RISE(expr,clk);
+QX6.6 =	RISE(expr,tim);
+QX6.7 =	RISE(expr,tim,delay);
+
+QX7.4 =	DLATCH(set,reset);
+QX7.5 =	DLATCH(set,reset,timSetReset);
+QX7.6 =	DLATCH(set,reset,clkSetReset);
+QX7.7 =	DLATCH(set,reset,timSetReset,delaySetReset);
+
+QX8.0 =	SR(set,                reset);
+QX8.1 =	SR(set,                reset,clkSetReset);
+QX8.2 =	SR(set,                reset,timSetReset);
+QX8.3 =	SR(set,                reset,timSetReset,delaySetReset);
+QX8.4 =	SR(set,clkSet,         reset);
+QX8.5 =	SR(set,clkSet,         reset,clkReset);
+QX8.6 =	SR(set,clkSet,         reset,timReset);
+QX8.7 =	SR(set,clkSet,         reset,timReset,delayReset);
+QX9.0 =	SR(set,timSet,delaySet,reset);
+QX9.1 =	SR(set,timSet,delaySet,reset,clkReset);
+QX9.2 =	SR(set,timSet,delaySet,reset,timReset);
+QX9.3 =	SR(set,timSet,delaySet,reset,timReset,delayReset);
+
+QX9.4 =	JK(set,                reset);
+QX9.5 =	JK(set,                reset,clkSetReset);
+QX9.6 =	JK(set,                reset,timSetReset);
+QX9.7 =	JK(set,                reset,timSetReset,delaySetReset);
+QX10.0 =	JK(set,clkSet,         reset);
+QX10.1 =	JK(set,clkSet,         reset,clkReset);
+QX10.2 =	JK(set,clkSet,         reset,timReset);
+QX10.3 =	JK(set,clkSet,         reset,timReset,delayReset);
+QX10.4 =	JK(set,timSet,delaySet,reset);
+QX10.5 =	JK(set,timSet,delaySet,reset,clkReset);
+QX10.6 =	JK(set,timSet,delaySet,reset,timReset);
+QX10.7 =	JK(set,timSet,delaySet,reset,timReset,delayReset);
+
+QX11.0 =	ST(set,                                                 iClock);
+QX11.1 =	ST(set,                                                clk);
+QX11.2 =	ST(set,                                                tim);
+QX11.3 =	ST(set,                                                tim,delay);
+QX11.4 =	ST(set,clkSet,                                         clk);
+QX11.5 =	ST(set,clkSet,                                         tim);
+QX11.6 =	ST(set,clkSet,                                         tim,delay);
+QX11.7 =	ST(set,timSet,delaySet,                                clk);
+QX12.0 =	ST(set,timSet,delaySet,                                tim);
+QX12.1 =	ST(set,timSet,delaySet,                                tim,delay);
+QX12.2 =	SRT(set,                reset,                           iClock);
+QX12.3 =	SRT(set,                reset,                          clk);
+QX12.4 =	SRT(set,                reset,                          tim);
+QX12.5 =	SRT(set,                reset,                          tim,delay);
+QX12.6 =	SRT(set,                reset,clkSetReset,              clk);
+QX12.7 =	SRT(set,                reset,clkSetReset,              tim);
+QX13.0 =	SRT(set,                reset,clkSetReset,              tim,delay);
+QX13.1 =	SRT(set,                reset,timSetReset,delaySetReset,clk);
+QX13.2 =	SRT(set,                reset,timSetReset,delaySetReset,tim);
+QX13.3 =	SRT(set,                reset,timSetReset,delaySetReset,tim,delay);
+QX13.4 =	SRT(set,clkSet,         reset,                           iClock);
+QX13.5 =	SRT(set,clkSet,         reset,                          clk);
+QX13.6 =	SRT(set,clkSet,         reset,                          tim);
+QX13.7 =	SRT(set,clkSet,         reset,                          tim,delay);
+QX14.0 =	SRT(set,clkSet,         reset,clkReset,                 clk);
+QX14.1 =	SRT(set,clkSet,         reset,clkReset,                 tim);
+QX14.2 =	SRT(set,clkSet,         reset,clkReset,                 tim,delay);
+QX14.3 =	SRT(set,clkSet,         reset,timReset,delayReset,      clk);
+QX14.4 =	SRT(set,clkSet,         reset,timReset,delayReset,      tim);
+QX14.5 =	SRT(set,clkSet,         reset,timReset,delayReset,      tim,delay);
+QX14.6 =	SRT(set,timSet,delaySet,reset,                           iClock);
+QX14.7 =	SRT(set,timSet,delaySet,reset,                          clk);
+QX15.0 =	SRT(set,timSet,delaySet,reset,                          tim);
+QX15.1 =	SRT(set,timSet,delaySet,reset,                          tim,delay);
+QX15.2 =	SRT(set,timSet,delaySet,reset,clkReset,                 clk);
+QX15.3 =	SRT(set,timSet,delaySet,reset,clkReset,                 tim);
+QX15.4 =	SRT(set,timSet,delaySet,reset,clkReset,                 tim,delay);
+QX15.5 =	SRT(set,timSet,delaySet,reset,timReset,delayReset,      clk);
+QX15.6 =	SRT(set,timSet,delaySet,reset,timReset,delayReset,      tim);
+QX15.7 =	SRT(set,timSet,delaySet,reset,timReset,delayReset,      tim,delay);
+
+QB16 =	SH(aexpr                                         );
+QB17 =	SH(aexpr,clk                                     );
+QB18 =	SH(aexpr,tim                                     );
+QB19 =	SH(aexpr,tim,delay                               );
+QB20 =	SHR(aexpr,                                       reset);
+QB21 =	SHR(aexpr,                                       reset,clkExprReset);
+QB22 =	SHR(aexpr,                                       reset,timExprReset);
+QB23 =	SHR(aexpr,                                       reset,timExprReset,delayExprReset);
+QB24 =	SHR(aexpr,clkExpr,                               reset);
+QB25 =	SHR(aexpr,clkExpr,                               reset,clkReset);
+QB26 =	SHR(aexpr,clkExpr,                               reset,timReset);
+QB27 =	SHR(aexpr,clkExpr,                               reset,timReset,delayReset);
+QB28 =	SHR(aexpr,timExpr,delayExpr,                     reset);
+QB29 =	SHR(aexpr,timExpr,delayExpr,                     reset,clkReset);
+QB30 =	SHR(aexpr,timExpr,delayExpr,                     reset,timReset);
+QB31 =	SHR(aexpr,timExpr,delayExpr,                     reset,timReset,delayReset);
+QB32 =	SHSR(aexpr,set,                                  reset);
+QB33 =	SHSR(aexpr,set,                                  reset,clkExprReset);
+QB34 =	SHSR(aexpr,set,                                  reset,timExprReset);
+QB35 =	SHSR(aexpr,set,                                  reset,timExprReset,delayExprReset);
+QB36 =	SHSR(aexpr,clkExpr,          set,                reset);
+QB37 =	SHSR(aexpr,clkExpr,          set,                reset,clkSetReset);
+QB38 =	SHSR(aexpr,clkExpr,          set,                reset,timSetReset);
+QB39 =	SHSR(aexpr,clkExpr,          set,                reset,timSetReset,delaySetReset);
+QB40 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset);
+QB41 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset,clkReset);
+QB42 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset,timReset);
+QB43 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset,timReset,delayReset);
+QB44 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset);
+QB45 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset,clkReset);
+QB46 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset,timReset);
+QB47 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset,timReset,delayReset);
+QB48 =	SHSR(aexpr,timExpr,delayExpr,set,                reset);
+QB49 =	SHSR(aexpr,timExpr,delayExpr,set,                reset,clkSetReset);
+QB50 =	SHSR(aexpr,timExpr,delayExpr,set,                reset,timSetReset);
+QB51 =	SHSR(aexpr,timExpr,delayExpr,set,                reset,timSetReset,delaySetReset);
+QB52 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset);
+QB53 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset,clkReset);
+QB54 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset,timReset);
+QB55 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset,timReset,delayReset);
+QB56 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset);
+QB57 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset,clkReset);
+QB58 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset);
+QB59 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset,delayReset);
+
+	if (expr)	    { x++; }
+	if (expr,clk)	    { x++; }
+	if (expr,tim)	    { x++; }
+	if (expr,tim,delay) { x++; }
+	if (expr)	    { x++; } else { x--; }
+	if (expr,clk)	    { x++; } else { x--; }
+	if (expr,tim)	    { x++; } else { x--; }
+	if (expr,tim,delay) { x++; } else { x--; }
+
+	switch (expr)		{ case 0: x=0; break; default: x++; }
+	switch (expr,clk)	{ case 0: x=0; break; default: x++; }
+	switch (expr,tim)	{ case 0: x=0; break; default: x++; }
+	switch (expr,tim,delay) { case 0: x=0; break; default: x++; }
+
+imm clock clk4 =	CLOCK(set1);
+imm clock clk5 =	CLOCK(set1,clkSet1);
+imm clock clk6 =	CLOCK(set1,timSet1);
+imm clock clk7 =	CLOCK(set1,timSet1,delaySet1);
+
+imm clock clk12 =	CLOCK(set1,set2);
+imm clock clk13 =	CLOCK(set1,set2,clkSet1Set2);
+imm clock clk14 =	CLOCK(set1,set2,timSet1Set2);
+imm clock clk15 =	CLOCK(set1,set2,timSet1Set2,delaySet1Set2);
+
+imm clock clk24 =	CLOCK(set1,clkSet1,          set2);
+imm clock clk25 =	CLOCK(set1,clkSet1,          set2,clkSet2);
+imm clock clk26 =	CLOCK(set1,clkSet1,          set2,timSet2);
+imm clock clk27 =	CLOCK(set1,clkSet1,          set2,timSet2,delaySet2);
+imm clock clk28 =	CLOCK(set1,timSet1,delaySet1,set2);
+imm clock clk29 =	CLOCK(set1,timSet1,delaySet1,set2,clkSet2);
+imm clock clk30 =	CLOCK(set1,timSet1,delaySet1,set2,timSet2);
+imm clock clk31 =	CLOCK(set1,timSet1,delaySet1,set2,timSet2,delaySet2);
+
+imm timer tim4 =	TIMER(set1);
+imm timer tim5 =	TIMER(set1,clkSet1);
+imm timer tim6 =	TIMER(set1,timSet1);
+imm timer tim7 =	TIMER(set1,timSet1,delaySet1);
+
+imm timer tim12 =	TIMER(set1,set2);
+imm timer tim13 =	TIMER(set1,set2,clkSet1Set2);
+imm timer tim14 =	TIMER(set1,set2,timSet1Set2);
+imm timer tim15 =	TIMER(set1,set2,timSet1Set2,delaySet1Set2);
+
+imm timer tim24 =	TIMER(set1,clkSet1,          set2);
+imm timer tim25 =	TIMER(set1,clkSet1,          set2,clkSet2);
+imm timer tim26 =	TIMER(set1,clkSet1,          set2,timSet2);
+imm timer tim27 =	TIMER(set1,clkSet1,          set2,timSet2,delaySet2);
+imm timer tim28 =	TIMER(set1,timSet1,delaySet1,set2);
+imm timer tim29 =	TIMER(set1,timSet1,delaySet1,set2,clkSet2);
+imm timer tim30 =	TIMER(set1,timSet1,delaySet1,set2,timSet2);
+imm timer tim31 =	TIMER(set1,timSet1,delaySet1,set2,timSet2,delaySet2);
+
+imm timer t1m16 =	TIMER1(set1);
+imm timer t1m17 =	TIMER1(set1,                  set2);
+imm timer t1m18 =	TIMER1(set1,                  set2,clkSet1Set2);
+imm timer t1m19 =	TIMER1(set1,                  set2,timSet1Set2);
+imm timer t1m20 =	TIMER1(set1,                  set2,timSet1Set2,delaySet1Set2);
+imm timer t1m21 =	TIMER1(set1,clkSet1);
+imm timer t1m22 =	TIMER1(set1,clkSet1,          set2);
+imm timer t1m23 =	TIMER1(set1,clkSet1,          set2,clkSet2);
+imm timer t1m24 =	TIMER1(set1,clkSet1,          set2,timSet2);
+imm timer t1m25 =	TIMER1(set1,clkSet1,          set2,timSet2,delaySet2);
+imm timer t1m26 =	TIMER1(set1,timSet1);
+imm timer t1m27 =	TIMER1(set1,timSet1,delaySet1);
+imm timer t1m28 =	TIMER1(set1,timSet1,delaySet1,set2);
+imm timer t1m29 =	TIMER1(set1,timSet1,delaySet1,set2,clkSet2);
+imm timer t1m30 =	TIMER1(set1,timSet1,delaySet1,set2,timSet2);
+imm timer t1m31 =	TIMER1(set1,timSet1,delaySet1,set2,timSet2,delaySet2);

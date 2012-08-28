@@ -1,0 +1,164 @@
+/********************************************************************
+ *
+ *      iC demonstration
+ *
+ *	requires inputs IX0.0 to IX3.7 and outputs QX0.0 to QX2.7
+ *	iClive demo.ic can be used to load, build and run an executable
+ *
+ *	since no analog values are processed, this demo can also be
+ *	run directly on 'ict' without compiling
+ *		iCserver 'ict -t demo.ic' 'iCbox X0-X3'
+ *
+ *******************************************************************/
+
+T100M =	TX0.4;	// alias for 100 ms builtin timing source
+T1S   =	TX0.5;	// alias for 1 second builtin timing source
+
+/********************************************************************
+ *
+ *	Inputs from bank 0, 1, 2 and 3
+ *
+ *	IEC-1131 names have been renamed to illustrate logical names.
+ *	The IEC-1131 names could have been used directly in the logic.
+ *	But this reduces flexibility. Here the externally fixed
+ *	IEC-1131 names are used only once in the following blocks.
+ *	If connections are changed to different inputs or outputs,
+ *	They only have to be edited in the following 2 blocks.
+ *
+ *******************************************************************/
+
+i00 = IX0.0;   i10 = IX1.0;   i20 = IX2.0;   i30 = IX3.0;
+i01 = IX0.1;   i11 = IX1.1;   i21 = IX2.1;   i31 = IX3.1;
+i02 = IX0.2;   i12 = IX1.2;   i22 = IX2.2;   i32 = IX3.2;
+i03 = IX0.3;   i13 = IX1.3;   i23 = IX2.3;   i33 = IX3.3;
+i04 = IX0.4;   i14 = IX1.4;   i24 = IX2.4;   i34 = IX3.4;
+i05 = IX0.5;   i15 = IX1.5;   i25 = IX2.5;   i35 = IX3.5;
+i06 = IX0.6;   i16 = IX1.6;   i26 = IX2.6;   i36 = IX3.6;
+i07 = IX0.7;   i17 = IX1.7;   i27 = IX2.7;   i37 = IX3.7;
+
+/********************************************************************
+ *
+ *	Outputs to bank 0, 1, 2 and 3
+ *
+ *******************************************************************/
+
+QX0.0 = v0;    QX1.0 = m0;    QX2.0 = t0;    QX3.0 = O0;
+QX0.1 = v1;    QX1.1 = m1;    QX2.1 = t1;    QX3.1 = O1;
+QX0.2 = v2;    QX1.2 = m2;    QX2.2 = t2;    QX3.2 = O2;
+QX0.3 = v3;    QX1.3 = m3;    QX2.3 = t3;    QX3.3 = O3;
+QX0.4 = v4;    QX1.4 = m4;    QX2.4 = t4;    QX3.4 = O4;
+QX0.5 = v5;    QX1.5 = m5;    QX2.5 = t5;    QX3.5 = O5;
+QX0.6 = v6;    QX1.6 = m6;    QX2.6 = t6;    QX3.6 = O6;
+QX0.7 = v7;    QX1.7 = m7;    QX2.7 = t7;    QX3.7 = O7;
+
+/********************************************************************
+ *
+ *	multiplex inputs from the 4 banks to I0 to I7
+ *	using inputs i36 and i37 (correspond to IX3.6 and IX3.7)
+ *
+ *******************************************************************/
+
+bank0 = ~i36 & ~i37;	// multiplexes inputs from bank 0
+bank1 = ~i36 &  i37;	// multiplexes inputs from bank 1
+bank2 =  i36 & ~i37;	// multiplexes inputs from bank 2
+bank3 =  i36 &  i37;	// multiplexes inputs from bank 3
+
+I0 = bank0 & i00 | bank1 & i10 | bank2 & i20 | bank3 & i30;
+I1 = bank0 & i01 | bank1 & i11 | bank2 & i21 | bank3 & i31;
+I2 = bank0 & i02 | bank1 & i12 | bank2 & i22 | bank3 & i32;
+I3 = bank0 & i03 | bank1 & i13 | bank2 & i23 | bank3 & i33;
+I4 = bank0 & i04 | bank1 & i14 | bank2 & i24 | bank3 & i34;
+I5 = bank0 & i05 | bank1 & i15 | bank2 & i25 | bank3 & i35;
+I6 = bank0 & i06 | bank1 & i16 | bank2 & i26 | bank3 & i06; // note i06
+I7 = bank0 & i07 | bank1 & i17 | bank2 & i27 | bank3 & i07; // note i07
+
+/********************************************************************
+ *
+ *	divide 10 Hz time base
+ *
+ *	bank0 selects  10 Hz   T100M       for CLOCK c
+ *	bank1 selects   5 Hz   T100M / 2   for CLOCK c
+ *	bank2 selects   2 Hz   T100M / 5   for CLOCK c
+ *	bank3 selects   1 Hz   T1S         for CLOCK c
+ *
+ *******************************************************************/
+
+t  = TIMER(T100M);		// timer base at 10 Hz
+
+o2 = ST(bank1 & ~o2, t, 2);	// divide t by 2
+o5 = ST(bank2 & ~o5, t, 5);	// divide t by 5
+
+c = CLOCK(bank0 & T100M | o2 | o5 | bank3 & T1S);
+
+/********************************************************************
+ *
+ *	some logic operations visible on output bank 0
+ *
+ *******************************************************************/
+
+v0 = I0 & I1;			// simple and
+v1 = I2 | I3;			// simple or
+v2 = SR(v0, v1);		// SR flip flop
+v3 = SRT(I4 | t8, I5, t, 30);	// 3 second monoflop, extra reset by I5
+v4 = D(I4, t, 20);		// 2 second delayed start
+v5 = ~D(~I5, t, 10);		// 1 second delayed stop
+v6 = LATCH(I6, I7);		// unclocked latch
+v7 = DLATCH(I6, I7, c);		// latch clocked by c
+
+/********************************************************************
+ *
+ *	a moebius ring counter clocked by variable CLOCK 'c'
+ *	visible on output bank 1
+ *
+ *******************************************************************/
+
+m0 = D(~m7, c);
+m1 = D( m0, c);
+m2 = D( m1, c);
+m3 = D( m2, c);
+m4 = D( m3, c);
+m5 = D( m4, c);
+m6 = D( m5, c);
+m7 = D( m6, c);
+
+/********************************************************************
+ *
+ *	A moebius ring counter clocked by 100 ms timer 't' programmed
+ *	for gradually increasing delays on the 1 transitions.
+ *	The 0 transitions are clocked immediately and are thus not
+ *	noticable.
+ *	Visible on output bank 2
+ *
+ *******************************************************************/
+
+t0 = D(~t8, t,  2);
+t1 = D( t0, t,  3);
+t2 = D( t1, t,  4);
+t3 = D( t2, t,  6);
+t4 = D( t3, t,  8);
+t5 = D( t4, t, 11);
+t6 = D( t5, t, 15);
+t7 = D( t6, t, 20);
+t8 = D( t7, t, 27);
+
+/********************************************************************
+ *
+ *	Another divide by 3 counter to sequentally multiplex
+ *	the 'v' values, the 'm' values and the 't' values on
+ *	QX3.0 to QX3.7, which demonstrates output multiplexing
+ *	Visible on output bank 3
+ *
+ *******************************************************************/
+
+c1 = CLOCK(~t8);
+O8 = D((O10 = ~O8 & ~O9) | bank3, c1);
+O9 = D(O8 & ~bank3, c1);
+
+O0 = O8 & v0 | O9 & m0 | O10 & t0;
+O1 = O8 & v1 | O9 & m1 | O10 & t1;
+O2 = O8 & v2 | O9 & m2 | O10 & t2;
+O3 = O8 & v3 | O9 & m3 | O10 & t3;
+O4 = O8 & v4 | O9 & m4 | O10 & t4;
+O5 = O8 & v5 | O9 & m5 | O10 & t5;
+O6 = O8 & v6 | O9 & m6 | O10 & t6;
+O7 = O8 & v7 | O9 & m7 | O10 & t7;
