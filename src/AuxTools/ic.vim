@@ -2,7 +2,7 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <john@je-wulff.de>
 " Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.6 2012/04/13 11:02:34 jw Exp $
+" $Id: ic.vim,v 1.7 2012/08/29 07:02:11 jw Exp $
 " for openSUSE ic.vim must be in /usr/share/vim/current/syntax
 " NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
 " local filetype.vim must be in ~/.vim (ic.vim does not work there)
@@ -61,11 +61,11 @@ syn keyword icStructure		imm immC
 syn keyword icBoolean		true false
 syn match icConstant		"D\s*(\&D"
 syn match icConstant		"SH\s*(\&SH"
-syn keyword icConstant		DR_ SR SR_ SRT DSR_ SHR_ SHSR_ CHANGE RISE CLOCK TIMER TIMER1 FORCE
-syn keyword icConstant		SRX JK DR DSR SHR SHSR FALL LATCH DLATCH
+syn keyword icConstant		DR_ DSR_ SHR_ SHSR_ CHANGE RISE SR SR_ SRR SRR_ CLOCK TIMER TIMER1 FORCE
+syn keyword icConstant		SHR SHSR ST SRT SRX JK DR DSR FALL LATCH DLATCH
 
 " iCa extentions
-syn keyword icRepeat		FOR
+syn keyword icRepeat		FOR IF ELSIF ELSE
 
 " Default highlighting
 if version >= 508 || !exists("did_ic_syntax_inits")
