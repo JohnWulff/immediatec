@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.33 2012/06/15 03:41:05 jw Exp $' >&2
+  echo '$Id: tt,v 1.34 2012/09/24 10:31:08 jw Exp $' >&2
 }
 
 usage()
@@ -45,7 +45,7 @@ usage()
   echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
   echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
   echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
-  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 Test12' >&2
+  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 Test12 Test13' >&2
   echo '	-T <string of directory names for Test2 group> default Test2 - Test8, Test10' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-v	author and version information' >&2
@@ -106,7 +106,7 @@ z=""
 head=""
 test1=""
 test2=""
-Test1='Test1 Test9 Test11 Test12'
+Test1='Test1 Test9 Test11 Test12 Test13'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
 while getopts ":cm:d:lwrgASO:PRseaLNjIJ6x:f:F:t:T:zvh" opt; do
