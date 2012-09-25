@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.30 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: gram.y,v 1.31 2012/09/12 09:07:12 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -36,6 +36,7 @@
 #include	"comp.h"
 
 #define ENDSTACKSIZE	100
+#define AUXBUFSIZE	256
 // #define LEAS		2
 #define LEAI		170
 #define LARGE		(~0U>>2)
@@ -44,14 +45,26 @@ static const char	idOp[] = "+-+-";	/* increment/decrement operator selection */
 static Symbol		typedefSymbol = { "typedef", UDF, UDFA, };
 
 #ifndef LMAIN
+#if YYDEBUG
+#define OUTBUFSIZE	128			/* for 0402 debug output only */
+static char		inBuf[OUTBUFSIZE];
+static char		outBuf[OUTBUFSIZE];
+static char *		obp;
+static char *		ibp;
+#define OUTBUFEND	&outBuf[OUTBUFSIZE]
+#define INBUFEND	&inBuf[OUTBUFSIZE]
+static int		changeFlag;
+#endif
 typedef struct LineEntry {
     unsigned int	pStart;
     unsigned int	vStart;
+    unsigned int	inds;
+    unsigned int	inde;
     unsigned int	equOp;
     unsigned int	vEnd;
     unsigned int	pEnd;
+    unsigned int	ppi;
     Symbol *		sp;
-    int			ppIdx;
 } LineEntry;
 
 static LineEntry *	lineEntryArray = NULL;
@@ -61,15 +74,18 @@ static unsigned int	udfCount = LEAS + 2;	/* start with guard value space */
 #else
 static unsigned int	udfCount = LEAI;	/* 170 is approx 4 kB */
 #endif
-static unsigned int	endStack[ENDSTACKSIZE];
-static unsigned int *	esp = endStack;
+static unsigned int *	endStack = NULL;	/* these values will cause dynamic */
+static unsigned int *	esp = NULL;		/* allocation of first stack block */
+static int		endStackSize = 0;
+static int		sizeofFlag = 0;
 
-static void		immVarFound(unsigned int start, unsigned int end, Symbol* sp);
+static void		immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, Symbol* sp);
 static void		immVarRemove(unsigned int start, unsigned int end, Symbol* sp);
 static void		immAssignFound(unsigned int start, unsigned int operator,
-			    unsigned int end, Symbol* sp, int ppi);
-static unsigned int	pushEndStack(unsigned int value);
+			    unsigned int end, Symbol* sp, unsigned int ppi);
+static void		pushEndStack(unsigned int value);
 static unsigned int	popEndStack(void);
+static unsigned int	peekEndStack(void);
 #else	/* LMAIN */
 static void		yyerror(char *s, ...);
 #endif	/* LMAIN */
@@ -78,7 +94,7 @@ static void		yyerror(char *s, ...);
     Token		tok;
 }
 
-%token	<tok> IDENTIFIER IMM_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
+%token	<tok> IDENTIFIER IMM_IDENTIFIER IMM_ARRAY_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
 %token	<tok> PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token	<tok> AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	<tok> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
@@ -108,8 +124,8 @@ static void		yyerror(char *s, ...);
 %type	<tok> equality_expression relational_expression shift_expression
 %type	<tok> additive_expression multiplicative_expression cast_expression
 %type	<tok> unary_expression unary_operator postfix_expression primary_expression
-%type	<tok> imm_unary_expression imm_postfix_expression
-%type	<tok> argument_expr_list string_literal imm_identifier
+%type	<tok> imm_unary_expression imm_postfix_expression imm_lvalue imm_identifier
+%type	<tok> imm_array_identifier argument_expr_list string_literal
 
 %type	<tok>	'{' '[' '(' ')' ']' '}'
 %right	<tok>	'=' ':' ';' ','
@@ -695,6 +711,8 @@ direct_declarator				/* 26 */
 	| imm_identifier {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
 	    $$.symbol = $1.symbol;
 	}
 	| '(' declarator ')' {
@@ -1330,19 +1348,23 @@ assignment_expression				/* 48 */
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	/* unary_expression can be lvalue via '*' cast_expression */
+	/* unary_expression can be lvalue via '*' cast_expression only */
 	| unary_expression assignment_operator assignment_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
-	/* imm_unary_expression can never be lvalue - use imm_identifier */
-	| imm_identifier assignment_operator assignment_expression {
+	/* imm_unary_expression can never be lvalue - no * - use imm_lvalue */
+	| imm_lvalue assignment_operator assignment_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
+	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u = %u>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "assignment_expression: imm_lvalue <%u> assignment_expression %u (%u) %u <%u> %s\n",
+	    	$2.inds, $1.start, $2.start, $3.end, $2.inds, $1.symbol->name);	/* NOTE: assignment_operator.inds is ppi */
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1351,10 +1373,9 @@ assignment_expression				/* 48 */
 		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immAssignFound($1.start, $2.start, $3.end, $1.symbol, 6);
+		immAssignFound($1.start, $2.start, $3.end, $1.symbol, $2.inds);
 	    }
 #endif
-	    $$.symbol = NULL;
 	}
 	;
 
@@ -1362,56 +1383,67 @@ assignment_operator				/* 49 */
 	: '=' {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 0;		/* = */
 	    $$.symbol = NULL;
 	}
 	| MUL_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 2;		/* *= */
 	    $$.symbol = NULL;
 	}
 	| DIV_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 3;		/* /= */
 	    $$.symbol = NULL;
 	}
 	| MOD_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 4;		/* %= */
 	    $$.symbol = NULL;
 	}
 	| ADD_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 5;		/* += */
 	    $$.symbol = NULL;
 	}
 	| SUB_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| LEFT_ASSIGN {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = NULL;
-	}
-	| RIGHT_ASSIGN {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
+	    $$.inds = 6;		/* -= */
 	    $$.symbol = NULL;
 	}
 	| AND_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 7;		/* &= */
 	    $$.symbol = NULL;
 	}
 	| XOR_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 8;		/* ^= */
 	    $$.symbol = NULL;
 	}
 	| OR_ASSIGN {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = 9;		/* |= */
+	    $$.symbol = NULL;
+	}
+	| LEFT_ASSIGN {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.inds = 10;		/* <<= */
+	    $$.symbol = NULL;
+	}
+	| RIGHT_ASSIGN {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.inds = 11;		/* >>= */
 	    $$.symbol = NULL;
 	}
 	;
@@ -1686,14 +1718,26 @@ imm_unary_expression				/* 63a */
 	: imm_postfix_expression {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
 	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: imm_postfix_expression %u %u %s\n",
+	    	$$.start, $$.end, $$.symbol->name);
+#endif
+#endif
 	}
 	| INC_OP imm_unary_expression {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.inds = $2.inds;
+	    $$.inde = $2.inde;
+	    $$.symbol = $2.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<++%u %u>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: ++ imm_unary_expression %u (%u) %u <12> %s\n",
+	    	$2.start, $1.start, $2.end, $2.symbol->name);
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1702,17 +1746,20 @@ imm_unary_expression				/* 63a */
 		$2.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 0);
+		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 12);	/* ++x */
 	    }
 #endif
-	    $$.symbol = NULL;
 	}
 	| DEC_OP imm_unary_expression {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.inds = $2.inds;
+	    $$.inde = $2.inde;
+	    $$.symbol = $2.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<--%u %u>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: -- imm_unary_expression %u (%u) %u <13> %s\n",
+	    	$2.start, $1.start, $2.end, $2.symbol->name);
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1721,15 +1768,37 @@ imm_unary_expression				/* 63a */
 		$2.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 1);
+		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 13);	/* --x */
 	    }
 #endif
-	    $$.symbol = NULL;
 	}
 	| SIZEOF imm_unary_expression {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
 	    $$.symbol = NULL;
+	}
+	| SIZEOF imm_array_identifier {
+	    $$.start = $2.start;
+	    $$.end = $2.end;
+	    $$.symbol = $2.symbol;
+#ifndef LMAIN
+	    functionUse[0].c_cnt |= F_SIZE;	/* imm sizeof macro required */
+	    $$.inds = 0;			/* mark 0 in imm_lvalue */
+	    $$.inde = $1.start;			/* used to set earlyop to blank out sizeof */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: sizeof imm_unary_expression %u (%u) %u %s\n",
+	    	$2.start, $1.start, $2.end, $2.symbol->name);
+#endif
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$$.symbol->v_glist == 0
+#else
+		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* adjust pEnd, set inds 0 inde early */
+	    }
+#endif
 	}
 	;
 
@@ -1830,17 +1899,29 @@ postfix_expression				/* 65 */
 	;
 
 imm_postfix_expression				/* 65a */
-	: imm_identifier {
+	: imm_lvalue {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
 	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_lvalue %u %u %s\n",
+	    	$$.start, $$.end, $$.symbol->name);
+#endif
+#endif
 	}
 	| imm_postfix_expression INC_OP {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
+	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u++>\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_postfix_expression ++ %u (%u) %u <14> %s\n",
+	    	$1.start, $2.start, $2.end, $1.symbol->name);
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1849,17 +1930,20 @@ imm_postfix_expression				/* 65a */
 		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 2);
+		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 14);	/* x++ */
 	    }
 #endif
-	    $$.symbol = NULL;
 	}
 	| imm_postfix_expression DEC_OP {
 	    $$.start = $1.start;
 	    $$.end = $2.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
+	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "\n<%u %u-->\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_postfix_expression -- %u (%u) %u <15> %s\n",
+	    	$1.start, $2.start, $2.end, $1.symbol->name);
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1868,10 +1952,54 @@ imm_postfix_expression				/* 65a */
 		$1.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 3);
+		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 15);	/* x-- */
 	    }
 #endif
+	}
+	;
+
+imm_lvalue					/* 65b */
+	: imm_identifier {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.inds = $1.inds;
+	    $$.inde = $1.inde;
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_lvalue: imm_identifier %u %u %s\n",
+		$$.start, $$.end, $$.symbol->name);
+#endif
+#endif
+	}
+	/* cannot have multiple immC array references */
+	| imm_array_identifier '[' expression ']' {
+	    $$.start = $1.start;
+	    $$.end = $4.end;
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    $$.inds = $2.start;			/* mark '[' in imm_lvalue */
+	    $$.inde = $4.start;			/* mark ']' in imm_lvalue */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_lvalue: imm_array_identifier %u %u %s[%u %u]\n",
+		$$.start, $$.end, $$.symbol->name, $$.inds, $$.inde);
+#endif
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$$.symbol->v_glist == 0
+#else
+		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* adjust pEnd, set inds inde */
+	    }
+#endif
+	}
+	| imm_array_identifier '[' expression error ']' {
+	    $$.start = $1.start;
+	    $$.end = $5.end;
 	    $$.symbol = NULL;
+	    yyclearin; yyerrok;
 	}
 	;
 
@@ -1946,10 +2074,13 @@ imm_identifier					/* 69 */
 	: IMM_IDENTIFIER {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
+	    $$.inds = LARGE;
+	    $$.inde = LARGE;
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "[%u %u]\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: IMM_IDENTIFIER %u %u %s\n",
+	    	$$.start, $$.end, $$.symbol->name);
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1958,7 +2089,7 @@ imm_identifier					/* 69 */
 		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immVarFound($$.start, $$.end, $1.symbol);
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, $$.symbol);
 	    }
 #endif
 	}
@@ -1966,10 +2097,13 @@ imm_identifier					/* 69 */
 	    /* stops this being a primary_expression which would lead to C assignment */
 	    $$.start = $1.start;
 	    $$.end = $3.end;
+	    $$.inds = $2.inds;
+	    $$.inde = $2.inde;
 	    $$.symbol = $2.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "{%u %u}\n", $$.start, $$.end);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: (imm_identifier) %u %u %s\n",
+	    	$$.start, $$.end, $$.symbol->name);
 #endif
 	    if (
 #if YYDEBUG && ! defined(SYUNION)
@@ -1978,7 +2112,56 @@ imm_identifier					/* 69 */
 		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
 #endif
 	    ) {
-		immVarFound($$.start, $$.end, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+	    }
+#endif
+	}
+	;
+
+imm_array_identifier				/* 70 */
+	: IMM_ARRAY_IDENTIFIER {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.inds = LARGE;			/* will be set in imm_lvalue: */
+	    $$.inde = LARGE;			/*   | imm_array_identifier [ expression ] */
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    functionUse[0].c_cnt |= F_ARRAY;	/* immC array macro required */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_array_identifier: IMM_ARRAY_IDENTIFIER %u %u %s\n",
+	    	$$.start, $$.end, $$.symbol->name);
+#endif
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$$.symbol->v_glist == 0
+#else
+		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, $$.symbol);
+	    }
+#endif
+	}
+	| '(' imm_array_identifier ')' {
+	    /* stops this being a primary_expression which would lead to C assignment */
+	    $$.start = $1.start;
+	    $$.end = $3.end;
+	    $$.inds = $2.inds;
+	    $$.inde = $2.inde;
+	    $$.symbol = $2.symbol;
+#ifndef LMAIN
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_array_identifier: (imm_array_identifier) %u %u %s\n",
+	    	$$.start, $$.end, $$.symbol->name);
+#endif
+	    if (
+#if YYDEBUG && ! defined(SYUNION)
+		$$.symbol->v_glist == 0
+#else
+		$$.symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
+#endif
+	    ) {
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	    }
 #endif
 	}
@@ -2015,49 +2198,85 @@ ierror(						/* print error message */
 } /* ierror */
 #else
 
-static char*	macro[] = { MACRO_NAMES };
+static char*	cMacro[] = { CMACRO_NAMES };
 
 /********************************************************************
  *
  *	immVarFound
  *
  *	The parser has found a bare immediate variable or an immediate
- *	variable in parentheses. (zany but allowed as an lvalue in C)
+ *	variable in parentheses (zany but allowed as an lvalue in C)
+ *	or an arraY_identifier, which require updating of inds and inde.
  *	To locate parentheses, only pStart and pEnd are adjusted.
  *	vStart and vEnd still mark the original variable.
  *
- *	sp == 0 is used to signal parenthesized immediate variable.
+ *	sp == NULL is used to signal parenthesized immediate variable.
  *
  *******************************************************************/
 
 static void
-immVarFound(unsigned int start, unsigned int end, Symbol* sp)
+immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, Symbol* sp)
 {
+    LineEntry *	p;
     LineEntry *	newArray;
 
+    p = lep;
     if (sp) {
-	lep->vStart = start;			/* of an imm variable */
-	lep->equOp  = LARGE;			/* marks a value variable */
-	lep->vEnd   = end;			/* of an imm variable */
-	lep->sp     = sp;
-	lep->ppIdx  = 6;
-	if (sp->ftype != ARITH && sp->ftype != GATE && sp->type != ERR) {
+	p->pStart = p->vStart = start;		/* of an imm variable */
+	p->equOp  = LARGE;			/* marks a value variable */
+	p->inds   = inds;			/* array index (usually LARGE) */
+	p->inde   = inde;			/* array index (usually LARGE) */
+	p->vEnd   = p->pEnd   = end;		/* of an imm variable */
+	p->ppi    = 0;
+	p->sp     = sp;
+	if (sp->ftype != ARITH && sp->ftype != GATE &&
+	    (sp->ftype != UDFA || (sp->type != ARNC && sp->type != LOGC))
+	    && sp->type != ERR) {
 	    ierror("C-statement tries to access an imm type not bit or int:", sp->name);
 	    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 	}
-    } else {					/* parenthesized variable found */
-	--lep;					/* step back to previous entry */
+	lep++;
+    } else {
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "immVarFound(%u %u [%u %u] NULL)\n",
+		start, end, inds, inde);
+	}
+#endif
+	/********************************************************************
+	 *	Backtrack to find parenthesised or array variable to modify
+	 *******************************************************************/
+	for (p = lep - 1;
+	    inds < LARGE &&			/* exit on lep-1 if imm_identifier (LARGE) */
+	    p->pStart > start &&		/* try further for imm_array_identifier (has inds) */
+	    p >= lineEntryArray;		/* avoid underflow */
+	    p--);
+	if (p >= lineEntryArray) {
+	    p->pStart = start;			/* of possible parentheses or index expression */
+	    if ((p->inds = inds) == 0) {	/* adjust array index [ */
+		p->equOp  = inde;		/* marks early sizeof */
+		p->inde   = 0;
+	    } else {
+		p->inde   = inde;		/* adjust array index ] */
+	    }
+	    p->pEnd   = end;			/* of possible parentheses or index expression */
+	} else {
+	    execerror("immVarFound: Symbol not found ???", NULL, __FILE__, __LINE__);	/* underflow */
+	}
     }
-    lep->pStart = start;			/* of possible parentheses */
-    lep->pEnd   = end;				/* of possible parentheses */
-    lep++;
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "immVarFound: %u (%u %u) %u [%u %u] %s\n",
+	    p->pStart, p->vStart, p->vEnd, p->pEnd, p->inds, p->inde, p->sp->name);
+    }
+#endif
     if (lep > &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
 	newArray = (LineEntry*)realloc(lineEntryArray,
 	    (udfCount + LEAI) * sizeof(LineEntry));
 	assert(newArray);
 	memset(&newArray[udfCount], '\0', LEAI * sizeof(LineEntry));
 	udfCount += LEAI;			/* increase the size of the array */
-	lep += newArray - lineEntryArray;
+	lep += newArray - lineEntryArray;	/* lep needs adjusting - cannot realloc lineEntryArray directly */
 	lineEntryArray = newArray;		/* Array has been successfully resized */
     }
 } /* immVarFound */
@@ -2083,9 +2302,10 @@ immVarRemove(unsigned int start, unsigned int end, Symbol* sp)
 	lep->pStart = lep->equOp = LARGE;
     } else {
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402)
+	if ((iC_debug & 0402) == 0402) {
 	    fprintf(iC_outFP, "stack position (remove): start %u (%u) end %u (%u) Symbol %s\n",
 	    lep->pStart, start, lep->pEnd, end, lep->sp->name);
+	}
 #endif
 	ierror("C name which is an imm variable cannot be hidden:", sp->name);
 	lep++;					/* do not remove */
@@ -2098,17 +2318,17 @@ immVarRemove(unsigned int start, unsigned int end, Symbol* sp)
  *
  *	The parser has found an assignment to an immediate variable
  *	The assignment operator may be either
- *	= which is simple assignment or
+ *	=                               which is a simple assignment or
  *	+= -= *= /= %= &= ^= |= >>= <<= which is an operator assignment or
- *	++ -- with ppi 0 or 1, which is pre-increment/decrement or
- *	++ -- with ppi 2 or 3, which is post-increment/decrement.
+ *	++x --x                         which is pre-increment/decrement or
+ *	x++ x--                         which is post-increment/decrement.
  *
  *	Backtrack along the immediate variables found so far, to find
  *	the one being assigned to here. Its 'lep' entry is modified.
  *	equOp points to an actual assignment or locates inc/dec-operator.
  *	vStart and vEnd still mark the variable being assigned to.
  *	pEnd is adjusted to the very end of the expression being assigned,
- *	where the closing bracket for the assignment macro hast to be placed.
+ *	where the closing bracket for the assignment cMacro has to be placed.
  *
  *	If no suitable immediate variable is found it is a compiler
  *	error, because an immediate assignment should have a bare
@@ -2117,53 +2337,64 @@ immVarRemove(unsigned int start, unsigned int end, Symbol* sp)
  *
  *	Checked earlier that IMM_IDENTIFIER is ftype ARITH or GATE.
  *
- *	ftyp is derived from the ftype of the Symbol. It may only be
- *	ARITH === 1, GATE === 2, ARITH+2 and GATE+2. (UDFA === 0 is an error)
+ *	ftyp is derived from the ftype of the Symbol.
+ *	It may only be
+ *	ARITH === 1, GATE === 2 or UDFA === 0 if type == ARNC or LOGC
  *
  *	This did not work. jw 2004.02.23 found with Electric Fence 2.2.1
  *	in arnc5.ic:
  *		imm clock clk; if (IX0.1) { clk = 1; } // tries to use
- *		macro[ftyp] with ftyp = CLCKL 18, type = ERR 19 // FIXED
+ *		cMacro[ftyp] with ftyp = CLCKL 18, type = ERR 19 // FIXED
  *
- *	Use of ppIdx, ppi and equOp, operator:
- *	In immVarFound() p->ppIdx is initialized to 6 and p->equOp to LARGE
+ *	Use of ppi and equOp operator:
+ *	In immVarFound() p->ppi is initialized to 0 and p->equOp to LARGE
  *	which is then described as a used variable. If equOp is set to some
  *	operator position it becomes an assigned operator. All other imm
- *	variables in an assignment, which have ppIdx == 6 have the value
- *	set to 5. This marks the variable as used, even if it is an assignment
+ *	variables in an assignment, which have ppi == 0 have the value
+ *	set to 1. This marks the variable as used, even if it is an assignment
  *	variable. By this method multiple assignments are handled correctly.
- *	If ppi < 5 the current variable is involved in a pre/post-inc/dec
+ *	If ppi > 12 the current variable is involved in a pre/post-inc/dec
  *	operation and is marked as both assigned and used anyway.
  *
  *******************************************************************/
 
 static void
-immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symbol* sp, int ppi)
+immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symbol* sp, unsigned int ppi)
 {
     LineEntry *	p;
     int		ftyp;
     int		typ;
+    Symbol *	sp1;
+    char	temp[TSIZE];
 
     assert(sp);
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "start %u, op %u end %u sp =>%s ppi %d\n", start, operator, end, sp->name, ppi);
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "immAssignFound: %u (%u) %u <%u> %s\n",
+	    start, operator, end, ppi, sp->name);
+    }
 #endif
-
-    for (p = lep - 1; p >= lineEntryArray; p-- ) {
+    /********************************************************************
+     *	Backtrack to find the variable being assigned to
+     *******************************************************************/
+    for (p = lep - 1; p >= lineEntryArray && p->pStart >= start; p--) {
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "--%u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "--%u(%u %u %u)%u <%u>\n",
+	    p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi);
 #endif
 	if (p->pStart == start) {		/* start position of imm variable assigned to */
 	    p->equOp  = operator;		/* position of operator marks an assignment expression */
 	    p->pEnd   = end;			/* end position of expression assigned from */
-	    p->ppIdx  = ppi;			/* pre/post-inc/dec character value */
+	    p->ppi    = ppi;			/* assignment operator or pre/post-inc/dec */
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u <%u>\n",
+		p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi);
 #endif
 	    if (p->sp == sp) {
 		typ = sp->type;
 		ftyp = sp->ftype;
 		if (typ == UDF) {
+		    int atn = 0;
 		    if (iC_Sflag) {
 			ierror("strict: C assignment to an imm variable (should be immC):", sp->name);
 			if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
@@ -2171,11 +2402,42 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 		    } else {
 			changeType:
 			sp->type = iC_ctypes[ftyp];	/* must be ARNC or LOGC */
-			listGenOut(sp);		/* list immC node and generate possible output */
+			if (iFunSymExt && strcmp(iFunBuffer, sp->name) == 0) {
+			    /********************************************************************
+			     * Found 'this' in a function definition - trying to pass it as an immC
+			     * Instead change immC Symbol by writing a new name and making 'this' an ALIAS
+			     * do not use a generated name used somewhere else already
+			     *******************************************************************/
+			    do {
+				snprintf(temp, TSIZE, "%s_%d", sp->name, ++atn);
+			    } while (lookup(temp) != 0);
+			    sp1 = install(temp, sp->type, ftyp);	/* new real immC */
+			    sp1->list = sp->list;	/* transfer expression */
+			    listGenOut(sp1, 1);		/* list immC node and generate possible output */
+			    if (iFunSymExt) {
+				collectStatement(sp1);	/* put immC node in stmtList */
+			    }
+			    sp->type = ALIAS;
+			    sp->list = sy_push(sp1);	/* becomes an alias of immC (no negation) */
+			    if (iC_debug & 04) {
+				iFlag = 1;		/* may need correction by pplstfix */
+				fprintf(iC_outFP, "\n\t%s\t%c ---%c\t%s", sp1->name, iC_fos[sp1->ftype], iC_os[sp->type], sp->name);
+				if (sp->ftype != GATE) {	/* listing of the ALIAS */
+				    fprintf(iC_outFP, "\t%c", iC_fos[sp->ftype]);
+				}
+				fprintf(iC_outFP, "\n\n");
+			    }
+			} else {
+			    listGenOut(sp, 1);		/* list immC node which is not 'this' */
+			}
+			if (iFunSymExt) {
+			    collectStatement(sp);	/* put normal or alias node in stmtList */
+			}
 		    }
-		} else if ((typ != ARNC || ftyp != ARITH) &&
-			   (typ != LOGC || ftyp != GATE) &&
+		} else if ((typ != ARNC || (ftyp != ARITH && ftyp != UDFA)) &&
+			   (typ != LOGC || (ftyp != GATE  && ftyp != UDFA)) &&
 			   (typ != ERR)) {	/* avoids multiple error messages */
+		    /* either way this is a type error */
 		    if (((typ == ARN || typ == ARNF) && ftyp == ARITH) ||
 		        (typ >= MIN_GT && typ < MAX_GT && ftyp == GATE)) {
 			ierror("C-assignment to an imm variable already assigned in iC code:", sp->name);
@@ -2188,41 +2450,70 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    } else {
 		break;				/* Error: Symbols don't match */
 	    }
-	} else if (p->pStart < start) {
-	    break;				/* Error: will not find start */
-	}
-	if (p->ppIdx == 6) {			/* all other imm values in the assignment */
-	    p->ppIdx = 5;			/* are used even if themselves assigned to */
+	} else if (p->ppi == 0) {		/* all "other" imm values in the assignment */
+	    p->ppi = 1;				/* are used even if themselves assigned to */
 	}
     }
-    execerror("C-assignment: Symbol not found ???", sp->name, __FILE__, __LINE__);
+    execerror("immAssignFound: Symbol not found ???", sp->name, __FILE__, __LINE__);
 } /* immAssignFound */
 
 /********************************************************************
  *
- *	pushEndStack
+ *	pushEndStack - either end or inde equop ppi
+ *	before being pushed
+ *		value = end  << 1;	which leaves the value even.
+ *		value = inde << 1 | 1;	which leaves the value odd.
  *
  *******************************************************************/
 
-static unsigned int
+static void
 pushEndStack(unsigned int value)
 {
-    assert(esp < &endStack[ENDSTACKSIZE]);
-    return *esp++ = value;
+    if (esp >= endStack + endStackSize) {
+	endStack = (unsigned int*)realloc(endStack,
+	    (endStackSize + ENDSTACKSIZE) * sizeof(unsigned int));
+	assert(endStack);
+	esp = endStack + endStackSize;
+	memset(esp, '\0', ENDSTACKSIZE * sizeof(unsigned int));
+	endStackSize += ENDSTACKSIZE;
+    }
+    *esp++ = value;
 } /* pushEndStack */
 
 /********************************************************************
  *
  *	popEndStack
+ *	if popped value is even it is an end which cause ')' output.
+ *	if popped value is odd it is an inde etc used to insert
+ *	',' for '=' etc	after inde of index i[x]
+ *	  --------------------------------------^
  *
  *******************************************************************/
 
 static unsigned int
 popEndStack(void)
 {
-    assert(esp >= endStack);
+    assert(esp > endStack);
     return *--esp;
 } /* popEndStack */
+
+/********************************************************************
+ *
+ *	peekEndStack
+ *	check previous value on stack to see if it is odd, which is inde
+ *	without actually popping it.
+ *
+ *******************************************************************/
+
+static unsigned int
+peekEndStack(void)
+{
+    if (esp > endStack) {
+	return *(esp - 1);	/* possible inde with end marker 1 */
+    } else {
+	return 0;		/* end marker 0 */
+    }
+} /* peekEndStack */
 
 /********************************************************************
  *
@@ -2242,7 +2533,7 @@ popEndStack(void)
  *	first guess and realloc() in immVarFound is a better choice.
  *
  *	Use the byte postions stored in lineEntryArray to insert
- *	macro calls for immediate variables and assignments
+ *	cMacro calls for immediate variables and assignments
  *
  *	'lp' points to the ffexpr head when called as an auxiliary
  *	compile of one if - else or switch C fragment. Else NULL
@@ -2256,14 +2547,20 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     LineEntry*		p;
     unsigned int	start;
     unsigned int	vstart;
-    unsigned int	vend;
+    unsigned int	inds;
+    unsigned int	inde;
     unsigned int	equop;
+    unsigned int	ppi;
     unsigned int	earlyop;
     unsigned int	endop;
+    unsigned int	parend;
+    unsigned int	parnxt;
+    unsigned int	parcnt;
     unsigned int	end;
+    unsigned int	vend;
     unsigned int	bytePos;
+    unsigned int	i;
     int			pFlag;
-    int			ppi;
     Symbol *		sp;
     Symbol *		tsp;
     List_e *		lp1;
@@ -2275,8 +2572,13 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #endif
     int			ml;
     int			ftyp;
+    int			ftypa;
     Symbol *		fsp = 0;
-    static char *	f = "_f0_1";		/* name of literal function head */
+    static char *	f0_1 = "_f0_1";		/* name of literal function head */
+
+    /********************************************************************
+     *	Allocate initial LineEntryArray if iFP == NULL (called before c_compile)
+     *******************************************************************/
 
     if (iFP == NULL) {
 #ifdef LEAS
@@ -2298,6 +2600,13 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	return;					/* lineEntryArray initialized */
     }
 
+    /********************************************************************
+     *	Adjust offsets to 2 for ffexpr with clock or 3 for ffexpr with timer,delay
+     *******************************************************************/
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "##### copyAdjust( %s )\n", lp ? "FFEXPR" : "LITERAL");
+#endif
+
     if (lp) {					/* ffexpr head link */
 	assert(lp->le_val>>8 && lp->le_next == 0); /* must have function # and callled only once */
 	tsp = lp->le_sym;			/* master - must be ftype F_CF, F_CE or F_SW */
@@ -2311,96 +2620,179 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	} else if (tsp->ftype == TIMRL) {
 	    lNr = 3;				/* extra space for timer delay */
 	} else {
-	    assert(0);				/* must be a clock */
+	    assert(0);				/* compile error - must be a clock or timer */
 	}
     }
+
+    /********************************************************************
+     *	Initialise lineEntryArray
+     *******************************************************************/
 
     lep->pStart   = lep->equOp = LARGE;		/* finalise lineEntryArray */
     lep++;
     lep->pStart   = lep->equOp = LARGE;		/* require 2 guard entries at the end */
 
-    bytePos = 0;
     p       = lineEntryArray + 1;		/* miss guard entry at start */
     start   = p->pStart;
     if (p->equOp < start) {
 	earlyop = p->equOp;			/* operator in pre-inc/dec entry handled early */
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "load bytePos = %u, earlyop = %u\n", bytePos, earlyop);
+	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "load bytePos = 0, earlyop = %u\n", earlyop);
 #endif
     } else {
 	earlyop = LARGE;
     }
     vstart  = LARGE;
-    vend    = LARGE;
+    inds    = LARGE;
+    inde    = LARGE;
     equop   = LARGE;
     endop   = LARGE;
     end     = LARGE;
+    vend    = LARGE;
+    parend  = LARGE;
+    parnxt  = LARGE;
+    parcnt  = 0;
+    ppi     = 0;
     pFlag   = 1;				/* start by outputting C code till first variable or ++/-- */
     sp      = NULL;
-
-    while ((c = getc(iFP)) != EOF) {
-	while (bytePos >= end) {
-	    putc(')', oFP);			/* end found - output end */
-	    end = popEndStack();
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "popE bytePos = %u, earlyop = %u, end = %u\n", bytePos, earlyop, end);
+    changeFlag = 0;
+    ibp     = inBuf;
+    obp     = outBuf;
 #endif
+
+    /********************************************************************
+     *	Read input file
+     *******************************************************************/
+
+    bytePos = 0;
+    while ((c = getc(iFP)) != EOF) {
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402) {
+	    if (ibp < INBUFEND -1) *ibp++ = c;	/* keep Input for detailed debugging */
+	}
+#endif
+	if (bytePos == endop) {
+	    endop = parnxt = LARGE;		/* do this first so same */
+	    pFlag = 1;				/* bytePos can set pFlag again */
+	}
+	if (inde == LARGE && bytePos == vend && ppi >= 12) {
+	    /* pre/post-increment/decrement */
+	    /* ++x; --x; x++; x--; all now produce: iC_AA(2 , 12, 0); iC_AA(2 , 13, 0); etc jw120722 */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, 0", ppi);
+		changeFlag++;
+	    }
+#endif
+	    fprintf(oFP, ", %u, 0", ppi);	/* output inc/dec operator selection with 0 argument */
+	}
+	while (bytePos >= end) {
+	    i = popEndStack();
+	    assert((i & 1) == 0);
+	    end = i >> 1;			/* 0 marker - new end for while */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		if (obp < OUTBUFEND -1) *obp++ = ')';
+		changeFlag++;
+	    }
+#endif
+	    putc(')', oFP);			/* end found - output end */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "popE bytePos = %u [%u %u] earlyop = %u, end = %u\n",
+		bytePos, inds, inde, earlyop, end);
+#endif
+	    i = peekEndStack();
+	    if ((i & 1) == 1) {			/* look for ] to restore inde */
+		inde = i >> 1;			/* restore inde ] for this level */
+		break;				/* will be popped at inde now restored */
+	    }
 	}
 	if (bytePos >= start) {
-	    pushEndStack(end);			/* push previous end */
+	    pushEndStack(end << 1);		/* push previous end (with 0 marker for end) */
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u %d\n", p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppIdx);
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "\n= %u(%u [%u %u] %u %u)%u <%u> %s\n",
+		    p->pStart, p->vStart, p->inds, p->inde, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi, p->sp->name);
+	    }
 #endif
 	    vstart = p->vStart;			/* start of actual variable */
 	    vend   = p->vEnd;			/* end of actual variable */
+	    inds   = p->inds;			/* array index start */
+	    inde   = p->inde;			/* array index end */
 	    equop  = p->equOp;			/* operator in this entry */
 	    end    = p->pEnd;			/* end of this entry */
+	    ppi    = p->ppi;			/* pre/post-inc/dec character value */
 	    sp     = p->sp;			/* associated Symbol */
-	    ppi    = p->ppIdx;			/* pre/post-inc/dec character value */
 	    assert(sp);
-	    ml     = lp		     ? 0		: MACRO_LITERAL;
-	    ftyp  = sp->type == ERR ? UDFA
-				     : (equop == LARGE) ? sp->ftype
-							: sp->ftype + MACRO_OFFSET;
-	    if (ppi >= 5) {
-		/* assignment macro must be printed outside of enclosing parentheses */
-		fprintf(oFP, macro[ml+ftyp]);	/* entry found - output macro start */
-	    }
+	    ml     = lp ? 0		 : CMACRO_LITERAL;	/*       0 or      9 */
+	    ftyp   = (sp->type == ERR)	 ? UDFA
+		   : (sp->ftype != UDFA) ? sp->ftype		/* ARITH 1 or GATE 2 */
+		   : (sp->type == ARNC)	 ? ARITH+CMACRO_INDEX
+		   : (sp->type == LOGC)	 ? GATE+CMACRO_INDEX : UDFA;
+	    ftypa  = (sp->type == ERR)	 ? UDFA
+		   : (inds == 0)	 ? CMACRO_SIZE		/* sizeof macro */
+		   : (sp->ftype != UDFA) ? ((equop == LARGE) ? sp->ftype	  : sp->ftype + CMACRO_ASSIGN)
+		   : (sp->type == ARNC)	 ? ((equop == LARGE) ? ARITH+CMACRO_INDEX : ARITH+CMACRO_INDEX+CMACRO_ASSIGN)
+		   : (sp->type == LOGC)	 ? ((equop == LARGE) ? GATE+CMACRO_INDEX  : GATE+CMACRO_INDEX+CMACRO_ASSIGN)
+		   : UDFA;
+	    /* assignment cMacro must be printed outside of enclosing parentheses */
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "strt bytePos = %u, earlyop = %u, equop = %u, ppi = %d, sp =>%s\n", bytePos, earlyop, equop, ppi, sp->name);
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "strt bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%s\n",
+		    bytePos, inds, inde, earlyop, equop, ppi, sp->name);
+		obp += snprintf(obp, OUTBUFEND-1-obp, "%s", cMacro[ml+ftypa]);
+		changeFlag++;
+	    }
 #endif
-	    p++;				/* next entry to locate possible earlyop */
+	    if (sizeofFlag) {
+		if (inds) {
+		    fprintf(oFP, "sizeof ");	/* output supressed sizeof unless inds == 0 */
+		}
+		sizeofFlag = 0;
+	    }
+	    fprintf(oFP, "%s", cMacro[ml+ftypa]);	/* entry found - output cMacro start */
 	    assert(start <= vstart);
 	    assert(vstart < vend);
 	    assert(vend <= end);
+	    if (start < vstart) {
+		assert(c == '(');		/* parenthesised imm_identifier or imm_array_identifier */
+		endop = vstart;			/* supress output of this paranthesis */
+		pFlag = 0;
+		parend = vend;			/* marks closing parenthesis which is also supressed */
+		parcnt = 1;			/* could be more than 1 ( */
+		parnxt = bytePos + 1;		/* allows counting of ( and spaces up to vstart */
+	    }
+	    p++;				/* next entry to locate possible earlyop */
 	    assert(bytePos < p->pStart);
 	    start = p->pStart;			/* start of next entry */
 	    if (p->equOp < start) {
-		earlyop = p->equOp;		/* operator in pre-inc/dec entry handled early */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "load bytePos = %u, earlyop = %u\n", bytePos, earlyop);
-#endif
+		earlyop = p->equOp;		/* operator in pre-inc/dec or sizeof entry handled early */
 	    } else {
 		earlyop = LARGE;
 	    }
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "load bytePos = %u, next start = %u, earlyop = %u\n",
+		bytePos, start, earlyop);
+#endif
 	}
 	if (bytePos == vstart) {
-	    assert(sp);				/* start of actual variable */
+	    assert(sp);				/* start of this actual variable */
 	    if (lp) {
-		functionUse[0].c_cnt |= F_FFEXPR;	/* flag for copying ffexpr macro */
+		functionUse[0].c_cnt |= F_FFEXPR;	/* flag for copying ffexpr cMacro */
 		lp1 = lp;
 	    } else {
-		functionUse[0].c_cnt |= F_LITERAL;	/* flag for copying literal macro */
+		functionUse[0].c_cnt |= F_LITERAL;	/* flag for copying literal cMacro */
 		if (fsp) {
 		    lp1 = fsp->list;		/* start with head of pointer list */
 		} else
-		if ((fsp = lookup(f)) == 0) {
-		    fsp = install(f, OR, F_CF);	/* install new literal function head */
+		if ((fsp = lookup(f0_1)) == 0) {
+		    fsp = install(f0_1, OR, F_CF);	/* install new literal function head */
 		    lp1 = sy_push(fsp);		/* head of literal pointer list */
 		    fsp->list = lp1;		/* save in list for more pointers */
 		} else {
 		    if (fsp->type != CF && fsp->ftype != F_CF) {
-			ierror("use of literal function head which was previously used for a different purpose:", f);
+			ierror("use of literal function head which was previously used for a different purpose:", f0_1);
 		    }
 		    lp1 = fsp->list;		/* start with head of pointer list */
 		}
@@ -2422,84 +2814,139 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		lp1->le_next = lp2;		/* place at end of list */
 	    }
 	    if (equop == LARGE) {
-		lp2->le_val |= VAR_USE;		/* variable value is only used */
+		lp2->le_val |= VAR_USE;		/* variable value is used - no assignment selection */
 	    } else {
 		lp2->le_val |= VAR_ASSIGN;	/* variable is assigned to */
-		if (ppi < 6) {
+		if (ppi > 0) {
 		    lp2->le_val |= VAR_USE;	/* pre/post-inc/dec or marked as used */
 		}
 	    }
-	    if (ppi >= 5) {
-		fprintf(oFP, "%d", sNr);	/* output Symbol pointer offset */
-	    } else {
-		/* expanded pre/post-inc/dec macro may be printed inside enclosing parentheses */
-		if (ppi < 2){
-		    /* pre-increment/decrement */
-		    fprintf(oFP, "%s%d , %s%d) %c 1",
-			macro[ml+ftyp], sNr, macro[ml+sp->ftype], sNr, idOp[ppi]);
-		    /* ++x; produces: iC_AA(2 , iC_AV(2) + 1); */
-		} else {
-		    /* post-increment/decrement */
-		    iC_Tflag = 1;		/* triggers definition of iC_tVar in C outfile */
-		    fprintf(oFP, "(iC_tVar = %s%d), %s%d , iC_tVar %c 1), iC_tVar",
-			macro[ml+sp->ftype], sNr, macro[ml+ftyp], sNr, idOp[ppi]);
-		    /* x--; produces: (iC_tVar = iC_AV(2), iC_AA(2 , iC_tVar - 1), iC_tVar); */
-		}
-	    }
-	    pFlag = 0;				/* start of variable name, which is replaced by macro */
-	}
-	if (bytePos == vend) {
-	    pFlag = 1;				/* end of the variable which is the next entry */
-	}
-	if (bytePos == equop) {
+	    endop = vend;			/* suppress variable name, which is replaced by cMacro */
+	    pFlag = 0;
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u, earlyop = %u, equop = %u\n", bytePos, earlyop, equop);
-#endif
-	    if (ppi >= 5) {
-		if (c == '=') {
-		    c = ',';			/* simple assignment, replace '=' by ',' */
-		} else {
-		    assert(sp);
-		    assert(strchr("+-*/%&^|><", c));
-		    /********************************************************************
-		     *  output variable as value for operator assignment expression
-		     *  QB1 *= IB2 + IB3; produces:
-		     *  iC_AA(2 , iC_AV(2) * ( iC_AV(3) + iC_AV(4)));
-		     *  NOTE: parenthesis around operator assigned expression
-		     *******************************************************************/
-		    fprintf(oFP, ", %s%d) ", macro[ml+sp->ftype], sNr);
-		    endop = equop + ((c == '>' || c == '<') ? 2 : 1);	/* replace '=' by " (" */
-		    pushEndStack(end);		/* push extra end ')' for operator assign expression */
-		    assert(lp2);
-		    lp2->le_val |= VAR_USE;	/* operator assignment is also used */
-		}
-	    } else {
-		assert(ppi >= 2);		/* equop occurred before start for pre-inc/dec */
-		endop = bytePos + 1;		/* ppi >= 2 && < 5 is post-inc/dec at equop */
-		pFlag = 0;			/* suppress output of ++ or -- from post-inc/dec */
+	    if ((iC_debug & 0402) == 0402) {
+		obp += snprintf(obp, OUTBUFEND-1-obp, "%d", sNr);
+		changeFlag++;
 	    }
+#endif
+	    fprintf(oFP, "%d", sNr);		/* output Symbol pointer offset instead of variable */
 	}
 	if (bytePos == earlyop) {
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u, earlyop = %u\n", bytePos, earlyop);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u [%u %u] earlyop = %u\n",
+		bytePos, inds, inde, earlyop);
+#endif
+	    endop = bytePos + (p->inds ? 2 : 6);/* ++ and -- are 2 chars sizeof is 6 starting at earlyop */
+	    pFlag = 0;				/* suppress output of ++ or -- from pre-inc/dec or sizeof */
+	}
+	if (bytePos == inds) {
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u inds = %u\n",
+		bytePos, inds);
 #endif
 	    endop = bytePos + 1;
-	    pFlag = 0;				/* suppress output of ++ or -- from pre-inc/dec */
+	    pFlag = 0;				/* suppress output of [ */
+	    pushEndStack(ppi   << 1 | 1);	/* push this ppi (in case embedded imm variable) */
+	    pushEndStack(equop << 1 | 1);	/* push this equop (in case embedded imm variable) */
+	    pushEndStack(inde  << 1 | 1);	/* push this index end (in case embedded imm variable) */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		obp += snprintf(obp, OUTBUFEND-1-obp, ", ");
+		changeFlag++;
+	    }
+#endif
+	    fprintf(oFP, ", ");			/* output ',' to start index */
 	}
-	if (pFlag) {
-	    if (bytePos != endop) {
-		putc(c, oFP);			/* output all except variables and ++ or -- from inc/dec */
-	    } else {
-		fprintf(oFP, " (");		/* replace '=' by " (" for operator assignment */
+	if (bytePos == inde) {
+	    int previnde = inde;
+	    i = popEndStack();			/* pop this inde */
+	    assert((i & 1) == 1);
+	    inde = i >> 1;
+	    i = popEndStack();			/* pop this equop */
+	    assert((i & 1) == 1);
+	    equop = i >> 1;
+	    i = popEndStack();			/* pop this ppi */
+	    assert((i & 1) == 1);
+	    ppi = i >> 1;
+	    endop = bytePos + 1;
+	    pFlag = 0;				/* suppress output of ] */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u inde = %u --inde = %u --equop = %u --ppi <%u> endop = %u\n",
+		bytePos, previnde, inde, equop, ppi, endop);
+#endif
+	    if (ppi >= 12) {
+		/* pre/post-increment/decrement */
+		/* ++x; --x; x++; x--; all now produce: iC_AA(2 , 12, 0); iC_AA(2 , 13, 0); etc jw120722 */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, 0", ppi);
+		    changeFlag++;
+		}
+#endif
+		fprintf(oFP, ", %u, 0", ppi);	/* output inc/dec operator selection with 0 argument */
 	    }
 	}
-	if (bytePos == endop) {
-	    endop = LARGE;
-	    pFlag = 1;
+	if (bytePos == equop) {
+	    assert(strchr("=+-*/%&^|><", c));
+	    endop = bytePos + (
+		ppi <  2 ? 1 :			/* = */
+		ppi < 10 ? 2 :			/* *= /= %= += -= &= ^= |= */
+		ppi < 12 ? 3 :			/* <<= >>= */
+			   2);			/* ++ -- pre/post ++ -- */
+	    pFlag = 0;				/* suppress output of assignment operator */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "use  bytePos = %u [%u %u] earlyop = %u, equop = %u, '%c', endop = %u <%u>\n",
+		bytePos, inds, inde, earlyop, equop, c, endop, ppi);
+#endif
+	    if (ppi < 12) {
+		/* simple or operator assignment */
+		/* x = 15; produces: iC_AA(2, 1, 15); */
+		/* x *= 15; produces: iC_AA(2, 3, 15); */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, ", ppi);
+		    changeFlag++;
+		}
+#endif
+		fprintf(oFP, ", %u, ", ppi);	/* output assignment operator selection */
+	    }
+	}
+	if (bytePos == parnxt) {
+	    if (c == '(') {
+		parcnt++;			/* count extra parentheses (might be spaces) */
+	    }
+	    parnxt = bytePos+1;			/* set to LARGE at endop - terminates counting */
+	}
+	if (bytePos == parend) {
+	    parend = endop = bytePos+1;		/* supress output of closing parantheses and spaces */
+	    if (c == ')' && --parcnt <= 0) {	/* parenthesised imm_identifier or imm_array_identifier */
+		    parend = LARGE;		/* count down ) until the required number */
+	    }
+	    pFlag = 0;
+	}
+	if (pFlag) {
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		if (obp < OUTBUFEND -1) *obp++ = c;
+	    }
+#endif
+	    putc(c, oFP);			/* output all except variables and ++ or -- from inc/dec etc */
 	}
 	bytePos++;
+#if YYDEBUG
+	if (c == '\n' && (iC_debug & 0402) == 0402) {
+	    if (changeFlag) {
+		*ibp = *obp = '\0';
+		fprintf(iC_outFP, "Input:  %s", inBuf);
+		fprintf(iC_outFP, "Output: %s", outBuf);
+		changeFlag = 0;
+	    }
+	    ibp = inBuf;
+	    obp = outBuf;
+	}
+#endif
     }
-    if ((iC_debug & 04) && (fsp = lookup(f)) != 0) {
+    if ((iC_debug & 04) && (fsp = lookup(f0_1)) != 0) {
 	/********************************************************************
 	 * compile listing output for literal function block
 	 *******************************************************************/
@@ -2523,5 +2970,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    fprintf(iC_outFP, "\n");
 	}
     }
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "##### copyAdjust( END )\n");
+#endif
 } /* copyAdjust */
 #endif

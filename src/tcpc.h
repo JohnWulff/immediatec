@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.16 2009/08/21 06:09:44 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.17 2012/05/11 06:52:21 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -69,17 +69,14 @@ extern const char *	iC_hostNM;	/* 127.0.0.1 */
 extern const char *	iC_portNM;	/* immcc service */
 extern char *		iC_iccNM;	/* immcc name qualified with instance */
 extern char *		iC_iidNM;	/* instance ID */
-extern double		iC_timeout;	/* in seconds */
 
-extern SOCKET		iC_connect_to_server(const char* host, const char* port, double delay);
-extern int		iC_wait_for_next_event(int maxFN);
+extern SOCKET		iC_connect_to_server(const char* host, const char* port);
+extern int		iC_wait_for_next_event(int maxFN, struct timeval * ptv);
 extern int		iC_rcvd_msg_from_server(SOCKET sock, char* buf, int maxLen);
 extern void		iC_send_msg_to_server(SOCKET sock, const char* msg);
 
 extern fd_set		iC_rdfds;
 extern fd_set		iC_infds;
-extern struct timeval	iC_timeoutCounter;
-extern struct timeval	iC_timeoutValue;
 
 extern int		iC_micro;
 extern void		iC_microPrint(const char * str, int mask);

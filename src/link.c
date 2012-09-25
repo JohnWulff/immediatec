@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.30 2011/11/04 01:04:18 jw Exp $";
+"@(#)$Id: link.c,v 1.31 2012/07/16 06:40:08 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -21,6 +21,7 @@ static const char link_c[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #include	<stdio.h>
+#include	<signal.h>
 #include	"icc.h"
 
 unsigned short	iC_mark_stamp = 1;		/* incremented every scan */
@@ -73,7 +74,7 @@ iC_link_ol(
     "\n%s: line %d: cannot find '%s' entry in '%s' or '%s' after glitch\n",
     __FILE__, __LINE__, gp->gt_ids, out_list->gt_ids, ap->gt_ids);
 #endif	/* !defined(_WINDOWS) || defined(LOAD) */
-		    iC_quit(-1);
+		    iC_quit(SIGUSR1);
 		}
 		ap =  tp;
 #if YYDEBUG && !defined(_WINDOWS)
@@ -115,6 +116,7 @@ iC_link_ol(
 		    if ((iC_debug & 0300) == 0300) putc('#', iC_outFP);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    out_list = out_list->gt_rptr; /* link gate next cycle */
+		    iC_osc_flag = 1;		/* activate fast timer to resolve oscillations */
 		    if (warn_cnt > 0
 #if YYDEBUG && !defined(_WINDOWS)
 				    && !(iC_debug & 0200)
@@ -125,7 +127,6 @@ iC_link_ol(
 		    }
 		}
 #if YYDEBUG && !defined(_WINDOWS)
-//####		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d", gp->gt_mcnt);
 		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d,%d", gp->gt_mcnt,iC_osc_lim);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    }
@@ -185,7 +186,7 @@ iC_link_ol(
 			fprintf(iC_errFP,
 		    "\n%s: line %d: TIMER %s gt_mark is %d, should be 0)\n",
 			__FILE__, __LINE__, out_list->gt_ids, out_list->gt_mark);
-			iC_quit(-1);
+			iC_quit(SIGUSR1);
 		    }
 #endif	/* NOCHECK */
 		}

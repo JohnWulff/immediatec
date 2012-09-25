@@ -2,7 +2,7 @@
 
 #################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2012  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -41,6 +41,7 @@
 #   V1.19: 14.03.08 add 'e' to $FOPS and $LOPS;
 #   V1.20: 25.06.08 Change Copyright to include 2008; email
 #   V1.21: 21.08.09 Change Copyright to include 2009; no email
+#   V1.22: 28.05.12 Accept TIMER1 type display mnemonic '!1' and extend it for backward references
 #
 #################################################################
 
@@ -55,7 +56,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.21 2009/08/21 06:24:40 jw Exp $
+$Id: pplstfix,v 1.22 2012/06/03 01:09:53 jw Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -89,19 +90,77 @@ close LOG if $opt_l;
 
 ####################################################################
 #
+#	output a large logic block
+#	outputLargeBlock($max1, $max2, $max3, $hashRef, \@largeBlock);
+#
+####################################################################
+
+sub outputLargeBlock {
+    my ($max1, $max2, $max3, $hashRef, $RlargeBlock) = @_;
+    my ($pr, $w1, $w3, $w4, $w6, $w8, $w10, $w12, $arrayRef);
+    if (defined $hashRef) {
+	push @$RlargeBlock, $hashRef;		# save for sorting
+    }
+    if (@$RlargeBlock) {
+	while (@$RlargeBlock) {
+	    $hashRef = shift @$RlargeBlock;
+	    if (ref($hashRef) eq 'HASH') {
+		foreach my $targ (sort
+		    {
+			my ($at, $an, $bt, $bn);
+			if ($a =~ /(.+)_(\d+)$/) {
+			    ($at, $an) = ($1, $2);
+			} else {
+			    ($at, $an) = ($a, -1);
+			}
+			if ($b =~ /(.+)_(\d+)$/) {
+			    ($bt, $bn) = ($1, $2);
+			} else {
+			    ($bt, $bn) = ($b, -1);
+			}
+			$at cmp $bt || $an <=> $bn;
+		    }
+		    keys %$hashRef) {
+		    $arrayRef = $hashRef->{$targ};
+		    while (@$arrayRef) {
+			$pr = shift @$arrayRef;
+			if (ref($pr) eq 'ARRAY') {
+			    ($w1, $w3, $w4, $w6, $w8, $w10, $w12) = @$pr;
+			    $pr = sprintf "%s\t%*s %6s  %*s %-2s      %*s %s",
+				$w1, -$max1, $w3,
+				$w4, -$max2, $w6,
+				$w8, -$max3, $w10, $w12;
+			}
+			$pr =~ s/\s+$//;
+			print "$pr\n";
+			print LOG "$.:--$pr\n" if $opt_l;
+		    }
+		}
+	    } else {
+		print "$hashRef\n";		# 2nd and further lines
+		print LOG "$.:==$hashRef\n" if $opt_l;
+	    }
+	}
+    }
+} # outputLargeBlock
+
+####################################################################
+#
 #	process one file
 #
 ####################################################################
 
 sub processFile {
-    my ($line, $name, $xlate, $type, $ftype, $inver, $tlen, %symbols, %lengths);
+    my ($line, $name, $xlate, $type, $ftype, $inver, $tlen, %symbols, %lengths, %timer1);
     my ($empty, $removed, $count, $ar, $word, $wpos, $wlen, @array, $cFlag);
-    my ($maxLength, $len, $blankLines, $target, $nodeName, $hashRef, $arrayRef);
-    my ($print, $max1, $max2, $max3, $w1, $w3, $w4, $w6, $w8, $w10, $w12, @largeBlock, @logicBlock);
+    my ($maxLength, $len, $blankLines, $target, $nodeName, $hashRef);
+    my ($print, $max1, $max2, $max3, @largeBlock, @logicBlock);
     $maxLength = 7;			# one standard tab size - 1
     %symbols = ();
+    %lengths = ();
+    %timer1  = ();
 
-    # Pass 1: scan file for ALIAS definitions in NET TOPOLOGY
+    # Pass 1: scan file for ALIAS and TIMER1 definitions in NET TOPOLOGY
 
     while (<IN>) {
 	if (/\bNET TOPOLOGY\b/) {
@@ -124,53 +183,61 @@ sub processFile {
 	##	IX0.0	<   	 _f1_1|
 	##	QB1	@  A	 i-
 	##	QB1_0	+  W
-	##	_f1_1	|  F	{ (3)	 i-	 QB1@
+	##	_f1_1	|  F	{ (3)	 i-	 QB1@		# }
 	##	i	-  A	 QB1_0+
+	##	t1m0	!1 !	 clk2_1|	 clk3_1|
+	##	timSet1	@  !	 t1m0!1
 	## There are no function definition variables with '@' in NET TOPOLOGY
 	########################################################################
 	if (/
-		^\t
+		^\s{1,8}?
 	    |
 		([\w\$][\w.\$]* | -\d+)			# $1
-		\t
-		($OPS)					# $2
-		\ \ #		2 spaces
+		\s+
+		(!1|$OPS)				# $2 possible TIMER1 !1
+		\ \ ?					#   2 or 1 space
 		($FOPS)					# $3
 		(					# $4
-		    \t
+		    \s
 		    (					# $5
 			([ <~])				# $6
 			([\w\$][\w.\$]* | -\d+)		# $7
-			($OPS)1? | [({})]\ \(\d+\)	# $8
+			(!1|$OPS) | [({})]\ \(\d+\)	# $8 possible TIMER1 !1
 		    )
 		)?
 	    /xgo)
 	{
 	    if (defined $1) {
-		$name = $1;
-		if ($2 eq '@') {
+		$name  = $1;
+		$type  = $2;				# (!1|$OPS)
+		if ($type eq '!1') {
+		    $timer1{$name} = 1;
+		}
+		if ($type eq '@') {
 		    # NET TOPOLOGY line found eg:QB0_0	@  A	~QB0_1*
 		    $line  = $.;
-		    $type  = $2;			# ($OPS)
 		    $ftype = $3;			# ($FOPS)
 		    $inver = ($6 eq '~') ? 1 : 0;
 		    $xlate = $7;
 		    if ($4 and $name ne $xlate) {
 			$symbols{$name} = [ $line, $xlate, $type, $ftype, $inver ];
 		    } else {
-			print STDERR "*** $named $ARGV $.: ERROR ALIAS '$name' translates to itself '$xlate'\n";
+			warn "*** $named $ARGV $.: ERROR ALIAS '$name' translates to itself '$xlate'\n";
 			print LOG "$.:**$_\n" if $opt_l;
+		    }
+		    if ($8 eq '!1') {
+			$timer1{$name} = 1;		# alias is also marked as TIMER1
 		    }
 		}
 		if (($len = length $1) > $maxLength) {
 		    $maxLength = $len;
 		}
 		if (exists $lengths{$name}) {
-		    print STDERR "*** $named $ARGV $.: ERROR '$name' occurs twice in NET TOPOLOGY\n";
+		    warn "*** $named $ARGV $.: ERROR '$name' occurs twice in NET TOPOLOGY\n";
 		    print LOG "$.:**$_\n" if $opt_l;
-		    $tlen = $lengths{$name};			# previous length
+		    $tlen = $lengths{$name};		# previous length
 		} else {
-		    $tlen = 7;					# standard length
+		    $tlen = 7;				# standard length
 		}
 		if (defined $5 and ($len = length $5) > $tlen) {
 		    $tlen = $len;
@@ -179,11 +246,11 @@ sub processFile {
 		print LOG "$.:	$1	$2 $3 $6 $7 $8\n" if $opt_l;
 	    }
 	    while (/\G
-		    \t
-		    (				# $1
+		    \s+
+		    (					# $1
 			[ <~]
-			([\w\$][\w.\$]* | -\d+)	# $2
-			$OPS
+			([\w\$][\w.\$]* | -\d+)		# $2
+			$OPS				# only first target can be TIMER1
 		    )
 		/xgo)
 	    {
@@ -215,268 +282,256 @@ sub processFile {
   Line:
     while (<IN>) {
 	chomp;
-	if ($empty and /^$/) {
-	    $empty = 0;
-	    next Line;
-	}
-	if (/^([\d*])/ and $cFlag < 2) {		# 001 listing or *** Error line
-	    my $s1 = $1;
-	    if (defined $hashRef) {
-		push @largeBlock, $hashRef;		# save for sorting
+	unless ($cFlag == 4 or				# first listing complete
+	    /^\*\*\* / or				# or '*** Error' or Warning line
+	    ($cFlag == 0 and /^[a-z>]/)) {		# or logic generation line
+	    if ($empty and /^$/) {
+		$empty = 0;
+		next Line;
 	    }
-	    if (@largeBlock) {
-		while (@largeBlock) {
-		    $hashRef = shift @largeBlock;
-		    if (ref($hashRef) eq 'HASH') {
-			foreach $target (sort
-			    {
-				my ($at, $an, $bt, $bn);
-				if ($a =~ /(.+)_(\d+)$/) {
-				    ($at, $an) = ($1, $2);
-				} else {
-				    ($at, $an) = ($a, -1);
-				}
-				if ($b =~ /(.+)_(\d+)$/) {
-				    ($bt, $bn) = ($1, $2);
-				} else {
-				    ($bt, $bn) = ($b, -1);
-				}
-				$at cmp $bt || $an <=> $bn;
-			    }
-			    keys %$hashRef) {
-			    $arrayRef = $hashRef->{$target};
-			    while (@$arrayRef) {
-				$print = shift @$arrayRef;
-				if (ref($print) eq 'ARRAY') {
-				    ($w1, $w3, $w4, $w6, $w8, $w10, $w12) = @$print;
-				    $print = sprintf "%s\t%*s %6s  %*s %-2s      %*s %s",
-					$w1, -$max1, $w3,
-					$w4, -$max2, $w6,
-					$w8, -$max3, $w10, $w12; 
-				}
-				$print =~ s/[\t ]+$//;
-				print "$print\n";
-				print LOG "$.:--$print\n" if $opt_l;
-			    }
-			}
-		    } else {
-			print "$hashRef\n";		# 2nd and further lines
-			print LOG "$.:==$hashRef\n" if $opt_l;
-		    }
-		}
+	    if (/^([\d*])/ and $cFlag < 2) {		# 001 listing or separator
+		my $s1 = $1;
+		outputLargeBlock($max1, $max2, $max3, $hashRef, \@largeBlock);
 		$max1 = $max2 = $max3 = 7;
 		$blankLines = 2;			# starts new set of hashes;
 		undef $hashRef;				# throw away the hash
+		@largeBlock = ();
 		$nodeName = '!';			# name differs from '' for if switch
-	    }
-	    if (/\bC.CODE\b/) {
-		$cFlag = 1;				# change ALIAS's in C CODE listing lines
-	    }
-	    elsif (/\bNET TOPOLOGY\b/) {
-		$cFlag = 2;
-	    }
-	    elsif ($s1 eq '*' or $cFlag == 1) {
-		s/\b([IQT]X\d+)_(\d+(_\d+)?)\b/$1.$2/g;
-		s/\b__(\d+)\b/-$1/g;
-		s/\b_(\d+)\b/$1/g;
-		goto cCode if $cFlag == 1;
-	    }
-	}
-	elsif ($cFlag > 0 and $cFlag < 3 or not /^[^\t\$]/) {	# just output debug & 02 lines
-	    if (/\bNET STATISTICS\b/ or /^compiled by:/) {
-		$cFlag = 3;
-	    }
-	  cCode:
-	    if ($cFlag == 0) {
-		while (/				# listing line
-			([\w\$][\w.@\$]* | -\d+)	# $1
-		    /xg)
-		{
-		    if (defined($symbols{$1})) {
-			push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
-		    }
-		    print LOG "$.:	$1\n" if $opt_l;
+		if (/\bC CODE\b/) {
+		    $cFlag = 1;				# change ALIAS's in C CODE listing lines
 		}
-	    } else {
-		while (/			# non listing line or C CODE
-			([\w\$][\w.\$]* | -\d+)		# $1
-		    /xg)
-		{
-		    if (defined($symbols{$1})) {
-			push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
-		    }
-		    print LOG "$.:	$1\n" if $opt_l;
+		elsif (/\bNET TOPOLOGY\b/) {
+		    $cFlag = 2;
+		}
+		elsif ($s1 eq '*' or $cFlag == 1) {
+		    s/\b([IQT]X\d+)_(\d+(_\d+)?)\b/$1.$2/g;
+		    s/\b__(\d+)\b/-$1/g;
+		    s/\b_(\d+)\b/$1/g;
+		    goto cCode if $cFlag == 1;
 		}
 	    }
-	  Array:
-	    while (@array) {
-		# start with the last word found, so positions are correct
-		($word, $wpos, $wlen) = splice @array, -3;
-		$xlate = $word;				# xlation of word
-		$inver = 0;
-		while (defined($ar = $symbols{$xlate})) {	# allow multiple xlate
-		    $line  = $ar->[0];
-		    if (/---@/ or $line == $.) {	# $line finds topology definition
-			########################################################################
-			# do not translate ALIAS definitions - delete @ Q.._0
-			########################################################################
-			@array = ();
-			if ($word !~ /Q.*_0/ or /^\$/) {# keep $x lines (never occurs ???)
-			    last Array;			# $inver has not been inverted
-			} elsif (/^\t/) {
-			    $empty = 1;			# delete ALIAS definition
-			} else {
-			    $removed++;			# reduce ALIAS count
+	    elsif ($cFlag > 0 and $cFlag < 3 or not /^[^\s\@]/) {	# just output debug & 02 lines
+		if (/\bNET STATISTICS\b/) {		# do not change text
+		    $cFlag = 3;
+		}
+	      cCode:
+		if ($cFlag == 0) {
+		    while (/				# listing line
+			    ([\w\$][\w.@\$]* | -\d+)	# $1
+			/xg)
+		    {
+			if (defined($symbols{$1})) {
+			    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
 			}
-			next Line;
+			print LOG "$.:	$1\n" if $opt_l;
 		    }
-		    $xlate = $ar->[1];
-		    if ($ar->[3] eq ' ') {		# ftype is GATE
-			$inver ^= $ar->[4];		# invert
+		} else {
+		    while (/				# non listing line or C CODE
+			    ([\w\$][\w.\$]* | -\d+)	# $1
+			/xg)
+		    {
+			if (defined($symbols{$1})) {
+			    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
+			}
+			print LOG "$.:	$1\n" if $opt_l;
 		    }
-		    print LOG "$.:	$word ==> $xlate ($inver)\n" if $opt_l;
 		}
-		substr($_, $wpos - $wlen, $wlen) = $xlate if $xlate ne $word;
-		if ($cFlag == 2 and $inver) {		# in topology line swap ' ' and '~'
-		    substr($_, $wpos - $wlen - 1, 1) = $inv{substr($_, $wpos -$wlen - 1, 1)};
+	      Array:
+		while (@array) {
+		    # start with the last word found, so positions are correct
+		    ($word, $wpos, $wlen) = splice @array, -3;
+		    $xlate = $word;				# xlation of word
+		    $inver = 0;
+		    while (defined($ar = $symbols{$xlate})) {	# allow multiple xlate
+			$line  = $ar->[0];
+			if (/---@/ or $line == $.) {	# $line finds topology definition
+			    ########################################################################
+			    # do not translate ALIAS definitions - delete @ Q.._0
+			    ########################################################################
+			    @array = ();
+			    if ($word !~ /Q.*_0/ or /^\$/) {	# keep $x lines (never occurs ???)
+				last Array;			# $inver has not been inverted
+			    } elsif (/^\t/) {
+				$empty = 1;			# delete ALIAS definition
+			    } else {
+				$removed++;			# reduce ALIAS count
+			    }
+			    next Line;
+			}
+			$xlate = $ar->[1];
+			if ($ar->[3] eq ' ') {			# ftype is GATE
+			    $inver ^= $ar->[4];			# invert
+			}
+			print LOG "$.:	$word ==> $xlate ($inver)\n" if $opt_l;
+		    }
+		    substr($_, $wpos - $wlen, $wlen) = $xlate if $xlate ne $word;
+		    if ($cFlag == 2 and $inver) {		# in topology line swap ' ' and '~'
+			substr($_, $wpos - $wlen - 1, 1) = $inv{substr($_, $wpos -$wlen - 1, 1)};
+			$inver = 0;
+		    }
+		}
+		if ($cFlag != 2 and $inver) {			# for first word in listing line
+		    s/([ ~]) ---/$inv{$1} ---/;			# swap ' ' and '~'
 		    $inver = 0;
 		}
-	    }
-	    if ($cFlag != 2 and $inver) {		# for first word in listing line
-		s/([ ~]) ---/$inv{$1} ---/;		# swap ' ' and '~'
-		$inver = 0;
-	    }
-	    if ($cFlag == 0) {
-		print LOG "$.: /$_/\n" if $opt_l;
-		if (/
+		if ($cFlag == 0) {
+		    print LOG "$.: /$_/\n" if $opt_l;		# iC logic line
+		    if (/
 			^
-			(@\d+ =)?			# $1
-			\t+
-			(				# $2
-			    ([\w\$(][\w.@\$)]* | -\d+)?	# $3
-			    \t
-			    ($LOPS.---$OPS)		# $4
+			(@\d+\ =)?				# $1
+			\s{1,8}?
+			(					# $2
+			    ([\w\$(][\w.@\$)]* | -\d+)?		# $3
+			    \s+
+			    ($LOPS.---$OPS)			# $4 possible TIMER1 !1
 			)?
-			(\t				# $5
-			    ([\w\$][\w.@\$]* | -\d+)	# $6
+			(					# $5
+			    (\s{1,2}				# $6
+				([\w\$][\w.@\$]* | -\d+)	# $7
+			    )
+			    (\s+				# $8
+				(!1|$FOPS)			# $9 possible TIMER1 !1
+			    )?
 			)?
-			(\t				# $7
-			    (${FOPS}1?)			# $8
+			(\s+					# $10
+			    ([^\s]*)				# $11
 			)?
-			(\t+				# $9
-			    ([^\t]*)			# $10
-			)?
-			(\t*				# $11
-			    (\/\/\s+.*)			# $12
+			(\s*					# $12
+			    (\/\/\s+.*)				# $13
 			)?
 			$
-		    /xo)
-		{
-		    if (($len = length $3) > $max1) {
-			$max1 = $len;
-		    }
-		    if (($len = length $6) > $max2) {
-			$max2 = $len;
-		    }
-		    if (($len = length $10) > $max3) {
-			$max3 = $len;
-		    }
-		    print LOG "$.:..$3\[$max1\]..$6\[$max2\]..$10\[$max3\]..$12\n" if $opt_l;
-		    if ($blankLines > 0) {
-			$target = defined $6 ? $6 : '';	# target node name
-			if ($nodeName ne $target) {
-			    $nodeName = $target;
+			/xo)
+		    {
+			$name  = $3;
+			$type  = $4;				# '!1---&' possible
+			$ftype = $9;				# '!1' possible
+			if (($len = length $3) > $max1) {
+			    $max1 = $len;
+			}
+			if (($len = length $7) > $max2) {
+			    $max2 = $len;
+			}
+			if (($len = length $11) > $max3) {
+			    $max3 = $len;
+			}
+			print LOG "$.:$1..$3\[$max1\]$4..$7\[$max2\]$9..$11\[$max3\]..$13\n" if $opt_l;
+			if ($blankLines > 0) {
+			    $target = defined $7 ? $7 : '';	# target node name
+			    if ($nodeName ne $target) {
+				$nodeName = $target;
+			    } else {
+				warn "*** $named $ARGV $.: ERROR '$target' occurs twice\n";
+				print LOG "$.:**$_\n" if $opt_l;
+				@logicBlock = @{$hashRef->{$target}}; # continue to fill same array
+			    }
+			}
+			if (defined $timer1{$name}) {
+			    if (substr($type, 0, 1) ne '!') {
+				warn "*** $named $ARGV $.: ERROR '$name' has no '!' although TIMER1\n";
+				print LOG "$.:**$_\n" if $opt_l;
+			    }
+			    substr($type, 0, 2) = '!1';		# avoid regex to keep $1 - $13
+			}
+			if (defined $7 and defined $timer1{$target}) {
+			    if (substr($ftype, 0, 1) ne '!') {
+				warn "*** $named $ARGV $.: ERROR '$target' has no '!' although TIMER1\n";
+				print LOG "$.:**$_\n" if $opt_l;
+			    }
+			    $ftype = '!1';
+			}
+			push @logicBlock, [$1, $3, $type, $7, $ftype, $11, $13];
+			$blankLines = 0;
+		    } else {
+			if ($blankLines++) {
+			    if (defined $hashRef) {
+				print LOG "$.:#2 '$nodeName'\n" if $opt_l;
+				push @largeBlock, $hashRef;	# save for sorting later
+				undef $hashRef;			# throw away the hash
+				$nodeName = '!';
+			    }
+			    push @largeBlock, $_;		# 2nd and further blank line
 			} else {
-			    print STDERR "*** $named $ARGV $.: ERROR '$target' occurs twice\n";
-			    print LOG "$.:**$_\n" if $opt_l;
-			    @logicBlock = @{$hashRef->{$target}}; # continue to fill same array
+			    print LOG "$.:#1 '$nodeName'\n" if $opt_l;
+			    push @logicBlock, $_;		# 1st blank line at end of @logicBlock
+			    $hashRef->{$nodeName} =  [ @logicBlock ];
+			    @logicBlock = ();
 			}
+			print LOG "$.:>>$_\n" if $opt_l and not /^$/;	# missed a text line
 		    }
-		    push @logicBlock, [$1, $3, $4, $6, $8, $10, $12];
-		    $blankLines = 0;
-		} else {
-		    if ($blankLines++) {
-			if (defined $hashRef) {
-			    print LOG "$.:#2 '$nodeName'\n" if $opt_l;
-			    push @largeBlock, $hashRef;	# save for sorting later
-			    undef $hashRef;		# throw away the hash
-			    $nodeName = '!';
-			}
-			push @largeBlock, $_;		# 2nd and further blank line
-		    } else {
-			print LOG "$.:#1 '$nodeName'\n" if $opt_l;
-			push @logicBlock, $_;		# 1st blank line at end of @logicBlock
-			$hashRef->{$nodeName} =  [ @logicBlock ];
-			@logicBlock = ();
-		    }
-		    print LOG "$.:>>$_\n" if $opt_l and not /^$/;	# missed a text line
+		    next Line;
 		}
-		next Line;
-	    }
-	    ########################################################################
-	    ##	NET TOPOLOGY
-	    ##
-	    ##	QX1.7	|  X	 v5@
-	    ##	i7_7	@   	 IX7.7<
-	    ##	v5	@   	~v5_1#
-	    ##	IX0.0	<   	 _f1_1|
-	    ##	QB1	@  A	 i-
-	    ##	QB1_0	+  W
-	    ##	_f1_1	|  F	{ (3)	 i-	 QB1@		# }
-	    ##	i	-  A	 QB1_0+
-	    ## There are no function definition variables with '@' in NET TOPOLOGY
-	    ########################################################################
-	    if ($cFlag == 2) {
-		if (/
-			^\t
-		    |
-			([\w\$][\w.\$]* | -\d+)			# $1
-			\t
-			($OPS)					# $2
-			\ \ #		2 spaces
-			($FOPS)					# $3
-			(					# $4
-			    \t
-			    (					# $5
-				([ <~])				# $6
-				([\w\$][\w.\$]* | -\d+)		# $7
-				($OPS)1? | [({})]\ \(\d+\)	# $8
-			    )
-			)?
-		    /xgo)
-		{
-		    if (defined $1) {
-			$tlen = $lengths{$1};
-			$print = sprintf "%*s %1s  %1s %*s",
-			    -$maxLength, $1, $2, $3, -$tlen, $5; 
-		    } else {
-			$print = ' ' x ($maxLength + 5);
-		    }
-		    while (/\G
-			    \t
-			    (				# $1
-				[ <~]
-				([\w\$][\w.\$]* | -\d+)	# $2
-				$OPS
-			    )
+		########################################################################
+		##	NET TOPOLOGY
+		##
+		##	QX1.7	|  X	 v5@
+		##	i7_7	@   	 IX7.7<
+		##	v5	@   	~v5_1#
+		##	IX0.0	<   	 _f1_1|
+		##	QB1	@  A	 i-
+		##	QB1_0	+  W
+		##	_f1_1	|  F	{ (3)	 i-	 QB1@		# }
+		##	i	-  A	 QB1_0+
+		##	t1m0	!1 !	 clk2_1|	 clk3_1|
+		##	timSet1	@  !	 t1m0!1
+		## There are no function definition variables with '@' in NET TOPOLOGY
+		########################################################################
+		if ($cFlag == 2) {
+		    if (/
+			    ^\s{1,8}?
+			|
+			    ([\w\$][\w.\$]* | -\d+)		# $1
+			    \s+
+			    (!1|$OPS)				# $2 possible TIMER1 !1
+			    \ \ ?				#   2 or 1 space
+			    ($FOPS)				# $3
+			    (					# $4
+				\s
+				(				# $5
+				    ([ <~])			# $6
+				    ([\w\$][\w.\$]* | -\d+)	# $7
+				    (!1|$OPS) | [({})]\ \(\d+\)	# $8 possible TIMER1 !1
+				)
+			    )?
 			/xgo)
 		    {
-			$print .= sprintf " %*s",
-			    -$tlen, $1; 
+			if (defined $1) {
+			    $tlen = $lengths{$1};
+			    $print = sprintf "%*s %-2s %1s %*s",
+				-$maxLength, $1, $2, $3, -$tlen, $5;
+			} else {
+			    $print = ' ' x ($maxLength + 5);
+			}
+			while (/\G
+				\s+
+				(				# $1
+				    [ <~]
+				    ([\w\$][\w.\$]* | -\d+)	# $2
+				    $OPS			# only first target can be TIMER1
+				)
+			    /xgo)
+			{
+			    $print .= sprintf " %*s", -$tlen, $1;
+			}
+			$_ = $print;
 		    }
-		    $_ = $print;
 		}
 	    }
-	}
-	if (/^ALIAS\t@ +(\d+)$/) {
-	    if (($count = $1 - $removed) > 0) {
-		s/\d+/$count/;
-	    } else {
-		next Line;
+	    if (/^ALIAS\t@ +(\d+)$/) {
+		if (($count = $1 - $removed) > 0) {
+		    s/\d+/$count/;
+		} else {
+		    next Line;
+		}
+	    }
+	    s/\s+$//;
+	    if (/^compiled by:/) {				# do not change text
+		$cFlag = 4;
 	    }
 	}
-	s/[\t ]+$//;
 	print "$_\n";
 	print LOG "$.:__$_\n" if $opt_l;
+    }
+    if ($cFlag == 0) {
+	outputLargeBlock($max1, $max2, $max3, $hashRef, \@largeBlock);	# listing terminated prematurely
     }
 } # processFile

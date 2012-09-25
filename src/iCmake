@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2012  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -36,7 +36,7 @@ usage ()
   echo '         [ -W[no-]<warn>...] file ...' >&2
   echo '     default:	link all iC-files file.ic ... into independent executables' >&2
   echo '		output names are base names of the iC-files (file ...)' >&2
-  echo '	-l	link all iC-files into one executable (implies -A)' >&2
+  echo '	-l	link all iC-files into one executable (implies -A -f)' >&2
   echo '		default: output name is base name of the first iC-file' >&2
   echo '		complete listing of all files is in first.lst' >&2
   echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
@@ -93,7 +93,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.39 2010/12/14 07:05:06 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.40 2012/05/16 07:16:40 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -102,6 +102,7 @@ if [ "$OS" = Windows_NT ]; then
 fi
 link=0
 status=0
+files=""
 list=""
 slist=""
 nice="nice "
@@ -347,25 +348,10 @@ for arg in $*; do
 	    fi ;;
 	1)				# -l	link all iC-files into one executable
 	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
-		if [ $q -eq 0 ]; then
-		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo $file
-		fi
-		rm -f $base.c		# -f in case read only
-		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file"
-		fi
-		if $nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file; then
-		    list="$list $base.c"
-		    slist="$slist $base.lst$l"
-		else
-		    list="$list ERROR:$base.c"
-		    let status+=1
-		fi
-		if [ -z "$first" ]; then
-		    first=$base
-		fi
-	    fi ;;
+		list="$list $file"	# compile and link all if one has changed
+	    fi
+	    files="$files $file"
+	    ;;
 	2)				# -t	generate listings file.lst
 	    if [ -n "$first" ]; then
 		base=${first%.*}
@@ -457,13 +443,29 @@ for arg in $*; do
     fi
 done
 
-if [ $link -eq 1 -a -z "$ic" ]; then
-    if [ -z "$list" ]; then
+if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
+    list=""
+    for file in $files; do	# recompile all files for aux and link
+	base=${file%.ic}
 	if [ $q -eq 0 ]; then
-	    echo "parameter error - no iC source files" >&2
+	    if [ $z -eq 1 ]; then echo -n "# "; fi
+	    echo $file
 	fi
-	let status+=1
-    elif [ $status -eq 0 ]; then
+	rm -f $base.c		# -f in case read only
+	if [ $z -eq 1 ]; then
+	    echo "$nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file"
+	fi
+	if ! $nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file; then
+	    list="$list ERROR:"
+	    let status+=1
+	fi
+	list="$list $base.c"
+	slist="$slist $base.lst$l"
+	if [ -z "$first" ]; then
+	    first=$base
+	fi
+    done
+    if [ $status -eq 0 ]; then
 	rm -f $first
 	if [ $q -eq 0 ]; then
 	    if [ $z -eq 1 ]; then echo -n "# "; fi
@@ -513,9 +515,11 @@ exit $status
 
 ############ POD to generate man page ##################################
 
+=encoding utf8
+
 =head1 NAME
 
- iCmake - make one or more iC applications
+iCmake - make one or more immediate-C applications
 
 =head1 SYNOPSIS
 
@@ -617,7 +621,7 @@ L<immcc(1)>, L<immac(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2009  John E. Wulff
+COPYRIGHT (C) 2000-2012  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

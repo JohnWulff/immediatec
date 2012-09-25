@@ -1,8 +1,8 @@
-# @(#)$Id: Makefile.in,v 1.55 2011/10/24 05:53:59 jw Exp $
+# @(#)$Id: Makefile.in,v 1.56 2012/05/13 04:39:09 jw Exp $
 
 #######################################################################
 #
-#	Copyright (C) 1985-2011  John E. Wulff
+#	Copyright (C) 1985-2012  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -182,8 +182,8 @@ pplstfix:
     endif
 
 %.1.gz:	%
-####	@echo "$(srcdir)/pod2man -n $* -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $*.1"
-	@$(srcdir)/pod2man -n $* -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $*.1
+####	@echo "pod2man -u -n $* -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $*.1"
+	@pod2man -u -n $* -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $*.1
 	@gzip -f $*.1
 
 $(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix $(srcdir)/../README
@@ -205,8 +205,8 @@ $(srcdir)/cexe.c:	$(srcdir)/cexe.h
 	rm -f /tmp/cexe.c
 
 $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
-####	@echo "$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $(srcdir)/immcc.1"
-	@$(srcdir)/pod2man -n immcc -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $(srcdir)/immcc.1
+####	@echo "pod2man -u -n immcc -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $(srcdir)/immcc.1"
+	@pod2man -u -n immcc -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
@@ -245,7 +245,7 @@ strict:
 
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
-	${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}man1
+	${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
 	${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
 	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
@@ -290,17 +290,17 @@ uninstall:
 	rm -f ${libdir}/${libprefix}libict.a
 	if [ "${OSTYPE}" = "linux" ]; then rm -f ${libdir}/${libprefix}libict.so; fi
 	rm -f ${includedir}/${includeprefix}icg.h
-	rm -f ${mandir}/${manprefix}immcc.1.gz
-	rm -f ${mandir}/${manprefix}immac.1.gz
-	rm -f ${mandir}/${manprefix}immax.1.gz
-	rm -f ${mandir}/${manprefix}iCbox.1.gz
-	rm -f ${mandir}/${manprefix}iClift.1.gz
-	rm -f ${mandir}/${manprefix}iClive.1.gz
-	rm -f ${mandir}/${manprefix}iCmake.1.gz
-	rm -f ${mandir}/${manprefix}iCman.1.gz
-	rm -f ${mandir}/${manprefix}iCserver.1.gz
-	rm -f ${mandir}/${manprefix}makeAll.1.gz
-	rm -f ${mandir}/${manprefix}Mdiff.1.gz
+	rm -f ${mandir}/man1/${manprefix}immcc.1.gz
+	rm -f ${mandir}/man1/${manprefix}immac.1.gz
+	rm -f ${mandir}/man1/${manprefix}immax.1.gz
+	rm -f ${mandir}/man1/${manprefix}iCbox.1.gz
+	rm -f ${mandir}/man1/${manprefix}iClift.1.gz
+	rm -f ${mandir}/man1/${manprefix}iClive.1.gz
+	rm -f ${mandir}/man1/${manprefix}iCmake.1.gz
+	rm -f ${mandir}/man1/${manprefix}iCman.1.gz
+	rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
+	rm -f ${mandir}/man1/${manprefix}makeAll.1.gz
+	rm -f ${mandir}/man1/${manprefix}Mdiff.1.gz
 
 clean:
 	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict.a $(srcdir)/libict.so $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/*.1.gz

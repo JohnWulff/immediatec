@@ -16,8 +16,9 @@ use strict;
 # 2	Use the search algorithm developed for iClive which moves
 #	the text to 'see' the text that has been found.
 # 3	Implement a history with previous and next buttons [<=] [=>]
-# 4	Handle topics with '-k <key>'
-# 5	Dynamic change of font size with ctrl+ and ctrl-
+# 4	Handle apropos topics with '-k <key>'
+# 5	Dynamic change of font size with Alt- Alt+ and [-] [+] buttons
+# 6	Handle whatis with '-f <page>'
 ########################################################################
 use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
@@ -27,15 +28,20 @@ my $enc = 'utf-8';	# suggested by Kardan
 # use utf8;		# <- makes everything worse
 
 my $named = $0; $named =~ s#.*[/\\]##;
-use vars qw($opt_c $opt_n $opt_k $opt_f $opt_l $opt_w $opt_g $opt_r $opt_T $opt_X $opt_h);
+use vars qw($opt_c $opt_n $opt_k $opt_f $opt_F $opt_l $opt_w $opt_g $opt_r $opt_T $opt_X $opt_h);
+my $ofh = select(STDERR);	# save old file handle
+$= = 100;			# stop page overflow (default 60 lines)
+select($ofh);			# retore old file handle
+
 format STDERR =
 Usage:
-@<<<< [ -cnrTh][ -k <key>][ -f <font>][ -l <num>][ -w <num>]
+@<<<< [ -cnrTh][ -k <key>][ -f <page>][ -F <font>][ -l <num>][ -w <num>]
  $named
       [ -g <geometry>][ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
-    -f font font or font size to use in Text window (default '14')
+    -f page display the output of man -f <page> (whatis)
+    -F font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default @<)
 					$opt_l
     -w num  width  of the Text window (default @<)
@@ -54,10 +60,10 @@ Usage:
     either case <section> must be a valid section name.
 
     One or more manpage arguments may be used - these are placed in
-    the history. If no manpage argument is specified or if the -r
-    option is used, the last sessions is restored with all its manpage
-    and search history. The first manpage in the history is opened -
-    this is either the first manpage argument or the first manpage
+    the history. If no manpage arguments are specified or if the -r
+    option is used, the last session is restored with all its manpage
+    and search history. The first manpage in the history is opened.
+    This is either the first manpage argument or the first manpage
     in the previous session history.
 
  Menu buttons:                   Action                      Accelerator
@@ -66,32 +72,49 @@ Usage:
                 Alternatively show a list of topics matching a key
                 with '-k <key>' or 'apropos <key>' entered in the
                 show window.
-       Open     a new window - to show selected manpage          Alt-RET
+                Double-clicking on a word in the text which is the
+                name of another man page will also open that page.
+       Open     a new window - to show selected manpage         Alt-RET
        Quit     quit the program.                                   q
+
     [ <= ]      Load the previous manpage in the history.           p
     [ => ]      Load the next manpage in the history.               n
-                Holding either of these buttons down briefly will
-                open a menu of history items which can be selected
-                out of order.
+            Holding either of these buttons down briefly will
+            open a menu of history items which can be selected.
+
     [Headings]  Skip to one of the headings in the manpage.
     [Sections]  Load the index for one of the manpage sections.
-    [Search:]   in the Text window. Text may be scanned for an exact
-                match or for a regular expression in the entry window
-                next to the button. All hits will be marked. Repeating
-                'Search down' or RETURN will display a new group of
-                hits. 'Search up' or SHIFT-RETURN reverses the direction
-                of scrolling.  Another option is to Go to a line entered
-                in the entry window.                             RETURN
+
+    [ / ]       Put focus in Search Entry window if cleared.        /
+                    (simulates vi)                            or  Alt-/
+                Else start or continue a search of text in
+                the Entry window. All hits will be marked.
+            Holding this button down briefly will open a menu of
+            extra search options and a history of previous searches.
+       Search down       or                                      RETURN
+                displays a new group of hits.
+       Search up         or                                   Shift-RET
+                reverses the direction of scrolling.
+       Clear             or                                    Ctrl-RET
+                clears hits and the search Entry window.
+     <>Go to line        or                                     Alt-RET
+                goes to the line entered in the Entry window.
+     <>Exact match
+     <>Ignore case
+     <>Regexp match
+     <>Rgexp+ignore case
+
+    [ - ]       Zoom Out   decrease font size                     Alt -
+    [ + ]       Zoom In    increase font size                     Alt +
+
     [Help]      Display the @<<<< man page.                         h
 			    $named
-                Dynamically increase font size                    Alt +
-                Dynamically decrease font size                    Alt -
 
-Copyright (C) 2000-2009  John E. Wulff          <immediateC@gmail.com>
-						    '@'
+Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
+							  '@'
 The core of this program is from from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman,v 1.13 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.14 2012/03/30 03:32:40 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -106,10 +129,10 @@ my $mainWindow;		# Main window
 my $text;		# Main text widget
 my %sections;		# Maps section ('1', '3' ,'3n' etc.)
 my $info = '';		# info messages in status bar
-my @history = ();	# maintain a history of man pages viewed
+my @dynamicHistory = ();# maintain a history of man pages viewed
 my $hi = 0;		# history index
 my $pi = 0;		# previous index
-my $kopt = '';
+my $opt = '';
 my $searchText = '';
 
 # has to be global, 'our' not portable yet
@@ -151,21 +174,22 @@ $SIG{PIPE} = \&catch_sig;	# catch signal in pipe from man
 ########################################################################
 
 require "getopts.pl";
-&Getopts('cnk:f:l:w:g:rTXh');		# sets $opt_h if -h etc
+&Getopts('cnk:f:F:l:w:g:rTXh');		# sets $opt_h if -h etc
 
 exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
-$opt_l = 35 unless $opt_l;
-$opt_w = 80 unless $opt_w;
+$opt_l = 35 unless $opt_l;	# if any higher on 768 pixel high screen, status bar is hidden
+$opt_w = 80 unless $opt_w;	# just allows all buttons to fit in the top menu bar
+				# also gives a bit more room for oversize texts
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
 my ($fontSize, $font_t, $boldfont_t, $font, $boldfont);
-if (defined $opt_f) {
-    if ($opt_f =~ /^\d+$/) {
-	$fontSize = $opt_f;
+if (defined $opt_F) {
+    if ($opt_F =~ /^\d+$/) {
+	$fontSize = $opt_F;
     } else {
-	$font_t = $opt_f;
+	$font_t = $opt_F;
     }
 }
 unless ($font_t) {
@@ -186,7 +210,7 @@ if ($font_t =~ /medium/) {
 change_font(0, 0);		# set initial font size to $fontSize
 
 no warnings;
-print "opt_f = '$opt_f' fontSize = '$fontSize'\nfont     = '$font'\nboldfont = '$boldfont'\n" if $opt_T;
+print "fontSize = '$fontSize'\nfont     = '$font'\nboldfont = '$boldfont'\n" if $opt_T;
 use warnings;
 
 scout_man_dirs();
@@ -198,7 +222,10 @@ to_background() unless $opt_n;	# run window as a  forked process
 my $section = '';
 my $sectionFlag = 0;
 if ($opt_k) {
-    push @history, "-k $opt_k";	# apropos: man -k <key>
+    push @dynamicHistory, "-k $opt_k";	# apropos: man -k <key>
+}
+if ($opt_f) {
+    push @dynamicHistory, "-f $opt_f";	# whatis:  man -f <page>
 }
 print "$named: \@ARGV '@ARGV'\n" if $opt_T;
 while (@ARGV) {
@@ -211,11 +238,11 @@ while (@ARGV) {
 	$sectionFlag = 1;
     }
     elsif ($section ne '') {	# allows section 0
-	push @history, "$man($section)";
+	push @dynamicHistory, "$man($section)";
 	$sectionFlag = 0;
     }
     else {
-	push @history, "$man";	# argument: man or man(1)
+	push @dynamicHistory, "$man";	# argument: man or man(1)
     }
 }
 
@@ -238,45 +265,41 @@ $mainWindow->protocol('WM_DELETE_WINDOW', \&quit_program);	# Windows (X) pressed
 ########################################################################
 #	Menu bar
 ########################################################################
-my $menuBar = $mainWindow->Frame()->pack('-side' => 'top', '-fill' => 'x');
+my $menuBar = $mainWindow->Frame()->pack(-side => 'top', -fill => 'x');
 
 ########################################################################
-#	Show Button
+#	Man Button
 ########################################################################
-my $menuShow = $menuBar->Menubutton(-text               => 'man',
-				    -relief             => 'raised',
-				    -borderwidth        => 2,
-				    -takefocus          => 1,
-				    -highlightthickness => 1,
-				    -tearoff            => 1,	# tear off line 0
-				   )->pack(-side => 'left',
-					   -padx => 2,
-					  );
+my $menuMan = $menuBar->Menubutton(-text               => 'man',
+				   -relief             => 'raised',
+				   -borderwidth        => 2,
+				   -takefocus          => 1,
+				   -highlightthickness => 1,
+				   -tearoff            => 1,	# tear off line 0
+				  )->pack(-side => 'left', -padx => 2);
 
-$menuShow->command(-label       => 'Show in this window',		# 1
+$menuMan->command(-label       => 'Show in this window',		# 1
 		   -accelerator => 'Return',
 		   -command     => [ \&show_man, 0, undef, undef, 0 ]); # overlay
-$menuShow->command(-label       => 'Open a new window',			# 2
+$menuMan->command(-label       => 'Open a new window',			# 2
 		   -accelerator => 'Alt-Ret',
 		   -command     => [ \&show_man, 0, undef, undef, 1 ]); # fork
-$menuShow->command(-label       => 'Quit',				# 3
+$menuMan->command(-label       => 'Quit',				# 3
 		   -accelerator => 'q',
 		   -command     => [ \&quit_program ]);			# quit
 
 ########################################################################
-#	Show entry
+#	Man entry window
 ########################################################################
-my $entryShow = $menuBar->Entry(-width       => 16,
-			       )->pack(-side => 'left',
-				-padx => 2,
-				      );
+my $entryMan = $menuBar->Entry(-width       => 16,
+			       )->pack(-side => 'left', -padx => 2);
 
-####### Show entry bindings ##########################################
-$entryShow->bind('<Key-Return>',	[ \&show_man, undef, undef, 0 ]); # overlay
-$entryShow->bind('<Alt-Key-Return>',	[ \&show_man, undef, undef, 1 ]); # fork
-$entryShow->bind('<Alt-Key-plus>',	[ \&change_font, 2     ]); # increase font
-$entryShow->bind('<Alt-Key-minus>',	[ \&change_font, -2    ]); # decrease font
-$entryShow->bind('<Alt-Key-q>',	[ \&quit_program ]);
+####### Man entry bindings #############################################
+$entryMan->bind('<Key-Return>',		[ \&show_man, undef, undef, 0 ]); # overlay
+$entryMan->bind('<Alt-Key-Return>',	[ \&show_man, undef, undef, 1 ]); # fork
+$entryMan->bind('<Alt-Key-plus>',	[ \&change_font, 2     ]); # increase font
+$entryMan->bind('<Alt-Key-minus>',	[ \&change_font, -2    ]); # decrease font
+$entryMan->bind('<Alt-Key-q>',		[ \&quit_program ]);
 
 ########################################################################
 #	Previous man page button
@@ -285,11 +308,9 @@ my $prevButton = $menuBar->Button(-text        => '<=',
 				  -relief      => 'raised',
 				  -borderwidth => 2,
 				  -state       => 'disabled',
-				  -command     => [ \&show_man, '', -1, ,1 ],
-				 )->pack(-side => 'left',
-					 -padx => 2,
-					);
-$prevButton->bind('<Button-1>',		[ \&historyShow, \$prevButton, ]);
+				  -command     => [ \&show_man, '', -1, ,1 ],	# Release-1
+				 )->pack(-side => 'left', -padx => 2);
+$prevButton->bind('<ButtonPress-1>',	[ \&ManMenu, \$prevButton, ]);
 
 ########################################################################
 #	Next man page button
@@ -298,133 +319,134 @@ my $nextButton = $menuBar->Button(-text        => '=>',
 				  -relief      => 'raised',
 				  -borderwidth => 2,
 				  -state       => 'disabled',
-				  -command     => [ \&show_man, '', 1, ,1 ],
-				 )->pack(-side => 'left',
-					 -padx => 2,
-					);
-$nextButton->bind('<Button-1>',		[ \&historyShow, \$nextButton, ]);
+				  -command     => [ \&show_man, '', 1, ,1 ],	# Release-1
+				 )->pack(-side => 'left', -padx => 2);
+$nextButton->bind('<ButtonPress-1>',	[ \&ManMenu, \$nextButton, ]);
 
-my $historyMenu = $mainWindow->Menu();	# filled dynamically
-my $historyId;
-my $historyMenuStart = 0;		# first dynamic entry:  # 0
-my $historyMenuLim   = 30;		# number of dynamic entries (fairly large)
+my $manMenu = $mainWindow->Menu();	# filled dynamically
+my $manTimer;
+my $manMenuStart = 0;		# first dynamic entry:  # 0
+my $manMenuLim   = 30;		# number of dynamic entries (fairly large)
 
 ########################################################################
 #	Headings menu
 ########################################################################
-$menu_headings = $menuBar->Menubutton('-text' => 'Headings',
-				       '-relief' => 'raised',
-				       '-borderwidth' => 2,
-				       )->pack('-side' => 'left',
-					       '-padx' => 2,
-					      );
+$menu_headings = $menuBar->Menubutton(-text => 'Headings',
+				      -relief => 'raised',
+				      -borderwidth => 2,
+				      -takefocus   => 1,
+				      -highlightthickness => 1,
+				     )->pack(-side => 'left', -padx => 2);
 
 ########################################################################
 #	Sections menu
 ########################################################################
-my $menu_sections = $menuBar->Menubutton('-text' => 'Sections',
-					  '-relief' => 'raised',
-					  '-borderwidth' => 2,
-					  )->pack('-side' => 'left',
-						  '-padx' => 2,
-						 );
+my $menu_sections = $menuBar->Menubutton(-text => 'Sections',
+					 -relief => 'raised',
+					 -borderwidth => 2,
+					 -takefocus   => 1,
+					 -highlightthickness => 1,
+					)->pack(-side => 'left', -padx => 2);
 # Populate sections menu with keys of % sections
 my $section_name;
 foreach $section_name (sort keys %sections) {
     $menu_sections->command (
-	     '-label' => "($section_name)",
-	     '-command' => [\&show_section_contents, $section_name]);
+	     -label => "($section_name)",
+	     -command => [\&show_section_contents, $section_name]);
 }
+
+########################################################################
+#	Search button
+########################################################################
+my $searchButton = $menuBar->Button(-text        => '/',
+				    -relief      => 'raised',
+				    -borderwidth => 2,
+				    -command     => [ \&search_text, 0, undef, 0 ],	# Release-1
+				   )->pack(-side => 'left', -padx => 2);
+$searchButton->bind('<ButtonPress-1>',	[ \&SearchMenu, \$searchButton, ]);
 
 ########################################################################
 #	Search menu
 ########################################################################
-my $menuSearch = $menuBar->Menubutton(-text               => 'Search:',
-				      -relief             => 'raised',
-				      -borderwidth        => 2,
-				      -takefocus          => 1,
-				      -highlightthickness => 1,
-				      -tearoff            => 1,	# tear off line 0
-				     )->pack(-side => 'left',
-					     -padx => 2,
-					    );
-my $matchType = "-exact";	# default, alternatives -nocase -regexp
 
-$menuSearch->command(-label       => 'Search down',			# 1
+my $searchMenu = $mainWindow->Menu();	# filled dynamically
+my $searchTimer;
+my $matchType = "-exact";		# default, alternatives -nocase -regexp
+
+$searchMenu->command(-label       => 'Search down',			# 1
 		     -accelerator => 'Return',
-		     -command     => [ \&search_text, 0, undef, 0 ]);
-$menuSearch->command(-label       => 'Search up',			# 2
+		     -command     => [ \&search_text, 1, undef, 0 ]);
+$searchMenu->command(-label       => 'Search up',			# 2
 		     -accelerator => 'Shift-Ret',
-		     -command     => [ \&search_text, 0, undef, 1 ]);
-$menuSearch->command(-label       => 'Clear',				# 3
+		     -command     => [ \&search_text, 1, undef, 1 ]);
+$searchMenu->command(-label       => 'Clear',				# 3
 		     -accelerator => 'Ctrl-Ret',
-		     -command     => [ \&search_text, 0, '',    0 ]);
+		     -command     => [ \&search_text, 1, '',    0 ]);
 ########################################################################
 #	Goto line number
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Go to line',			# 4
+$searchMenu->radiobutton(-label    => 'Go to line',			# 4
 			 -accelerator => 'Alt-Ret',
 			 -value    => 'g',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text, 0, undef, 2 ]);
+			 -command  => [ \&search_text, 1, undef, 2 ]);
 ########################################################################
 #	Exact match
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Exact match',			# 5
+$searchMenu->radiobutton(-label    => 'Exact match',			# 5
 			 -value    => '-exact',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text, 0, undef, 0 ]);
+			 -command  => [ \&search_text, 1, undef, 0 ]);
 ########################################################################
 #	Ignore case
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Ignore case',			# 6
+$searchMenu->radiobutton(-label    => 'Ignore case',			# 6
 			 -value    => '-nocase',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text, 0, undef, 0 ]);
+			 -command  => [ \&search_text, 1, undef, 0 ]);
 ########################################################################
 #	Regexp match
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Regexp match',			# 7
+$searchMenu->radiobutton(-label    => 'Regexp match',			# 7
 			 -value    => '-regexp',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text, 0, undef, 0 ]);
+			 -command  => [ \&search_text, 1, undef, 0 ]);
 ########################################################################
 #	Regexp match - Ignore case
 ########################################################################
-$menuSearch->radiobutton(-label    => 'Regexp Ignore case',		# 8
+$searchMenu->radiobutton(-label    => 'Regexp Ignore case',		# 8
 			 -value    => 'ri',
 			 -variable => \$matchType,
-			 -command  => [ \&search_text, 0, undef, 0 ]);
-$menuSearch->separator();						# 9
-my $menuSearchStart  = 10;			# first dynamic entry:  #10
+			 -command  => [ \&search_text, 1, undef, 0 ]);
+$searchMenu->separator();						# 9
+my $searchMenuStart  = 10;			# first dynamic entry:  #10
 my @dynamicSearches  = ();			# maintain local dynamic entries
-my $menuSearchLim    = 10;			# number of dynamic entries
+my $searchMenuLim    = 10;			# number of dynamic entries
 
 ########################################################################
 #	Search entry
 ########################################################################
 my $entrySearch = $menuBar->Entry(-width        => 16,
 				  -textvariable => \$searchText,
-				 )->pack(-side => 'left',
-					 -padx => 2,
-					);
-####### Search entry bindings ##########################################
-$entrySearch->bind('<Key-Return>',		[ \&search_text, undef, 0 ]); # search down
-$entrySearch->bind('<Shift-Key-Return>',	[ \&search_text, undef, 1 ]); # search up
-$entrySearch->bind('<Control-Key-Return>',	[ \&search_text, '',    0 ]); # clear
-$entrySearch->bind('<Alt-Key-Return>',		[ \&search_text, undef, 2 ]); # go to line
-$entrySearch->bind('<Key-Down>',		[ \&scroll_text, 1        ]); # scroll down
-$entrySearch->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
-$entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_l-2 ]); # next page
-$entrySearch->bind('<Key-Prior>',		[ \&scroll_text,-$opt_l+2 ]); # prior page
-$entrySearch->bind('<Key-Home>',		[ \&position_text, '1.0'  ]); # beginning
-$entrySearch->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
-$entrySearch->bind('<Key-Right>',		[ \&scroll_x_text, 1      ]); # scroll right
-$entrySearch->bind('<Key-Left>',		[ \&scroll_x_text, -1     ]); # scroll left
-$entrySearch->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
-$entrySearch->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
-$entrySearch->bind('<Alt-Key-q>',		[ \&quit_program          ]);
-# $entrySearch->bind('<Key>', [ sub { print "'k' 'K': '$_[1]'   '$_[2]'\n"; }, Ev('k'), Ev('K') ]) if $opt_T;
+				 )->pack(-side => 'left', -padx => 2);
+
+########################################################################
+#	Zoom in button
+########################################################################
+$menuBar->Button(-text        => '-',
+		 -relief      => 'raised',
+		 -borderwidth => 2,
+		 -command     => [ \&change_font, '', -2, ],
+		)->pack(-side => 'left', -padx => 2);
+
+########################################################################
+#	Zoom out button
+########################################################################
+$menuBar->Button(-text        => '+',
+		 -relief      => 'raised',
+		 -borderwidth => 2,
+		 -command     => [ \&change_font, '', 2, ],
+		)->pack(-side => 'left', -padx => 2);
 
 ########################################################################
 #	Help button
@@ -433,26 +455,24 @@ $menuBar->Button(-text        => 'Help',
 		 -relief      => 'raised',
 		 -borderwidth => 2,
 		 -command     => \&show_help,
-		)->pack(-side => 'right',
-			-padx => 2,
-		       );
+		)->pack(-side => 'right', -padx => 2);
 
 ########################################################################
-#	Ini data for file and search menu lists
+#	Ini data for man and search menu lists
 ########################################################################
 my %iniMenuData = (
     history	=> [
-	$historyMenu,		# menuRef,	file menu
-	\@history,		# entriesArray,	maintain local dynamic entries
-	$historyMenuStart,	# menuPos,	start of dynamic entries
-	$historyMenuLim,	# entriesLim,	number of dynamic entries
+	$manMenu,		# menuRef,	man menu
+	\@dynamicHistory,	# entriesArray,	maintain local dynamic entries
+	$manMenuStart,	# menuPos,	start of dynamic entries
+	$manMenuLim,	# entriesLim,	number of dynamic entries
 	\&open_file,		# commandRef,	call back for open file
     ],
     searches	=> [
-	$menuSearch,		# menuRef,	search menu
+	$searchMenu,		# menuRef,	search menu
 	\@dynamicSearches,	# entriesArray,	maintain local dynamic entries
-	$menuSearchStart,	# menuPos,	start of dynamic entries
-	$menuSearchLim,		# entriesLim,	number of dynamic entries
+	$searchMenuStart,	# menuPos,	start of dynamic entries
+	$searchMenuLim,		# entriesLim,	number of dynamic entries
 	\&search_text,		# commandRef,	call back for search text
     ],
 );
@@ -473,23 +493,30 @@ my %matchRestores = (
 );
 
 ########################################################################
-#	TEXT STUFF
+#	Info bar
 ########################################################################
+my $infoBar = $mainWindow->Label(-textvariable => \$info,
+				 -relief       => 'ridge',
+				)->pack(-side => 'bottom', -fill => 'x');
 
+########################################################################
+#	Text window
+########################################################################
 $text = $mainWindow->Scrolled('Text',
 			      -scrollbars => 'osoe',
 			      -setgrid    => 2,
 			      -background => 'cornsilk1',
 			      -wrap       => 'none',
 			      -font       => $font,
-			     )->pack(
-				      -fill   => 'both',
-				      -expand => 1,
-				    );
+			     )->pack( -fill => 'both', -expand => 1);
 unless ($opt_g) {
     $text->configure (-width  => $opt_w);
     $text->configure (-height => $opt_l);
 }
+
+my $yScrollbar = $text->Subwidget('yscrollbar');
+my $xScrollbar = $text->Subwidget('xscrollbar');
+
 $text->configure (-cursor => 'left_ptr');
 # Use xterm-color settings for attributes if available
 my $colorUL = $text->cget (-foreground);
@@ -502,52 +529,65 @@ $text->tagConfigure('section', -font => $boldfont, -foreground => $colorBD);
 $text->tagConfigure('bd',  -font => $boldfont);
 $text->tagConfigure('ul',  -underline => 1,    -foreground => $colorUL);
 
-####### Text window bindings ###########################################
-$text->bind('<Alt-Double-1>',   [ \&pick_word, 1, ]);	# follow a text link to a new window
-$text->bind('<Double-1>',       [ \&pick_word, 0, ]);	# follow a text link
-$text->bind('<Button-1>',       [ \&report_cursor ]);	# report cursor position
-$text->bind('<Key-q>',		[ \&quit_program ]);
-$text->bind('<Alt-Key-q>',	[ \&quit_program ]);
-####### Y-Scrollbar bindings ###########################################
-my $yScrollbar = $text->Subwidget('yscrollbar');
-$yScrollbar->bind('<Key-p>',	[ \&show_man, -1  ]);     # previous history entry
-$yScrollbar->bind('<Key-n>',	[ \&show_man, 1   ]);     # next history entry
-$yScrollbar->bind('<Key-h>',	[ \&show_help     ]);
-$yScrollbar->bind('<Key-q>',	[ \&quit_program  ]);
-$yScrollbar->bind('<Key-Right>',[ \&scroll_x_text, 1  ]); # scroll right
-$yScrollbar->bind('<Key-Left>',	[ \&scroll_x_text, -1 ]); # scroll left
-$yScrollbar->bind('<Alt-Key-q>',	[ \&quit_program  ]);
+####### Key and Mouse button bindings ##################################
 ####### Search entry bindings ##########################################
-$yScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
-$yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
-$yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
-$yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+$entrySearch->bind('<Key-Return>',		[ \&search_now, undef, 0  ]); # search down
+$entrySearch->bind('<Shift-Key-Return>',	[ \&search_now, undef, 1  ]); # search up
+$entrySearch->bind('<Control-Key-Return>',	[ \&search_now, '',    0  ]); # clear
+$entrySearch->bind('<Alt-Key-Return>',		[ \&search_now, undef, 2  ]); # go to line
+$entrySearch->bind('<Key-Down>',		[ \&scroll_text, 1        ]); # scroll down
+$entrySearch->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
+$entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_l-2 ]); # next page
+$entrySearch->bind('<Key-Prior>',		[ \&scroll_text,-$opt_l+2 ]); # prior page
+$entrySearch->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
+$entrySearch->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
+$entrySearch->bind('<Alt-Key-q>',		[ \&quit_program          ]);
+$entrySearch->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
+####### Text window bindings ###########################################
+$text      ->bind('<Button-1>',			[ \&report_cursor         ]); # report cursor position
+$text      ->bind('<Key-q>',			[ \&quit_program          ]);
+$text      ->bind('<Alt-Key-q>',		[ \&quit_program          ]);
+$text      ->bind('<Double-1>',			[ \&pick_word, 0,         ]); # follow a text link
+# $text      ->bind('<Shift-Double-1>',		[ \&pick_word, 1,         ]); # follow a text link to a new window
+####### Y-Scrollbar bindings ###########################################
+$yScrollbar->bind('<Key-p>',			[ \&show_man, -1          ]); # previous history entry
+$yScrollbar->bind('<Key-n>',			[ \&show_man, 1           ]); # next history entry
+$yScrollbar->bind('<Key-h>',			[ \&show_help             ]);
+$yScrollbar->bind('<Key-q>',			[ \&quit_program          ]);
+$yScrollbar->bind('<Alt-Key-q>',		[ \&quit_program          ]);
+$yScrollbar->bind('<Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
+$yScrollbar->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
+$yScrollbar->bind('<Key-Right>',		[ \&scroll_x_text, 1      ]); # scroll right
+$yScrollbar->bind('<Key-Left>',			[ \&scroll_x_text, -1     ]); # scroll left
+$yScrollbar->bind('<Key-Home>',			[ \&position_text, '1.0'  ]); # beginning
+$yScrollbar->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
+####### Search entry bindings ##########################################
+$yScrollbar->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
+$yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
+$yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
+$yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
 $yScrollbar->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
 $yScrollbar->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
 ####### X-Scrollbar bindings ###########################################
-my $xScrollbar = $text->Subwidget('xscrollbar');
-$xScrollbar->bind('<Key-Down>',	[ \&scroll_text, 1    ]); # scroll down
-$xScrollbar->bind('<Key-Up>',	[ \&scroll_text, -1   ]); # scroll up
-$xScrollbar->bind('<Key-Next>',	[ \&scroll_text, $opt_l-2 ]); # next page
-$xScrollbar->bind('<Key-Prior>',[ \&scroll_text, -$opt_l+2]); # prior page
-$xScrollbar->bind('<Key-Home>',	[ \&position_text, '1.0'  ]); # beginning
-$xScrollbar->bind('<Key-End>',	[ \&position_text, 'end'  ]); # end
+$xScrollbar->bind('<Key-Down>',			[ \&scroll_text, 1        ]); # scroll down
+$xScrollbar->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
+$xScrollbar->bind('<Key-Next>',			[ \&scroll_text, $opt_l-2 ]); # next page
+$xScrollbar->bind('<Key-Prior>',		[ \&scroll_text, -$opt_l+2]); # prior page
+$xScrollbar->bind('<Key-Home>',			[ \&position_text, '1.0'  ]); # beginning
+$xScrollbar->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
 ####### Search entry bindings ##########################################
-$xScrollbar->bind('<KeyPress-Return>',		[ \&search_text, undef, 0 ]); # search down
-$xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_text, undef, 1 ]); # search up
-$xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_text, '',    0 ]); # clear
-$xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_text, undef, 2 ]); # go to line
+$xScrollbar->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
+$xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
+$xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
+$xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
 $xScrollbar->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
 $xScrollbar->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
+####### Useful line to determine Key binding symbols ###################
+# $yScrollbar->bind('<KeyPress>' => sub { my $k =$Tk::event->K ; my $n = $Tk::event->N; info_display('black', "KeySym=$k, numeric=$n"); });
 
 ########################################################################
-#	Info bar
+#	Initialise program
 ########################################################################
-my $infoBar = $mainWindow->Label(-textvariable => \$info,
-				 -relief       => 'ridge',
-				)->pack(-side => 'bottom',
-					-fill => 'x',
-				       );
 if ($sectionFlag) {
     info_display('red', "ERROR: last argument '$section' is a section");
     warn "ERROR: last argument '$section' is a section";
@@ -555,26 +595,61 @@ if ($sectionFlag) {
 # set MAN_KEEP_FORMATTING to make 'man' output bold and underline codes
 $ENV{MAN_KEEP_FORMATTING} = 1;	# set for duration of this execution
 
-if ($opt_r or not @history) {
+if ($opt_r or not @dynamicHistory) {
     ini_program();		# restore last session
 }
-if (@history) {
-    if (@history > 1 - $sectionFlag) {
+if (@dynamicHistory) {
+    if (@dynamicHistory > 1 - $sectionFlag) {
 	$nextButton->configure(-state => 'normal');
     }
     show_man('', 1) unless $sectionFlag;	# show first argument
 }
 
+########################################################################
+#	Sit in an infinite loop dispatching incoming events.
+########################################################################
 $mainWindow->repeat(1000, sub {});	# do a few perl ops every second to catch signals
 MainLoop();
 exit(0);
 
 ####### End of main program ############################################
 
+########################################################################
+#	Catch miscellaneous signals
+########################################################################
+
 sub catch_sig {
     my $signame = shift;
     die "$named: Somebody sent me a SIG$signame: $!";
 } # catch_sig
+
+########################################################################
+#
+#	Display information on the info bar
+#	(make sure all displays to info bar go via this routine)
+#	Parameter 1:	colour (change if $message ne '')
+#	Parameter 2:	message text
+#
+########################################################################
+
+sub info_display {
+    my ($colour, $message) = @_;
+    $infoBar->configure(-foreground => $colour) if $message ne '';
+    $info = $message;	# display now
+} # info_display
+
+########################################################################
+#
+#	Report the cursor position in the info bar
+#
+########################################################################
+
+sub report_cursor {
+    my $cursor = $text->index('insert');		# '27.0'
+    $cursor =~ m/(\d+)\.(\d+)/;
+    my $x = $2 + 1;
+    info_display('black', "line $1, char $x");		# 'line 27 char 1'
+} # report_cursor
 
 ########################################################################
 #
@@ -603,63 +678,65 @@ sub seeCentre {
 #	parameter 1:	dummy for key bindings
 #	parameter 2:	hFlag if not true use showEntry text
 #			else 1/-1 get next/previous history entry
-#	parameter 3:	buttonFlag if true command is from a button
-#	parameter 4:	forkFlag if true SHIFT-RETURN from show->bind (fork)
+#	parameter 3:	buttonFlag if true command is from next/previous button
+#	parameter 4:	forkFlag if true Shift-RETURN from show->bind (fork)
 #
 ########################################################################
 
 sub show_man {
     my ($entry, $hFlag, $buttonFlag, $forkFlag) = @_;
-    my ($ret, $man, $section, $i, $s);
+    my ($ret, $man, $section, $cmdLine, $i, $s);
 no warnings;
-    print "show_man: \$hFlag=$hFlag, \$hi=$hi, \@history '@history'\n" if $opt_T;
+    print "show_man: \$hFlag=$hFlag, \$hi=$hi, \@dynamicHistory '@dynamicHistory'\n" if $opt_T;
 use warnings;
     if ($buttonFlag) {
-	historyCancel();		# do this first - no delays yet
+	ManCancel();			# do this first - no delays yet
     }
     if ($hFlag) {
 	if ($hFlag == 1) {
-	    if ($hi >= @history) {
+	    if ($hi >= @dynamicHistory) {
 		info_display('red', "History exhausted");
 		return;			# happens with 'n' key
 	    }
-	    $entry = $history[$hi++];	# next history entry
+	    $entry = $dynamicHistory[$hi++];	# next history entry
 	} else {
 	    if ($hi < 2) {
 		info_display('red', "History exhausted");
 		return;			# happens with 'p' key
 	    }
 	    $hi -= 2;
-	    $entry = $history[$hi++];	# previous history entry
+	    $entry = $dynamicHistory[$hi++];	# previous history entry
 	}
 	print "show_man: history entry: '$entry'\n" if $opt_T;
-	$entryShow->delete('0', 'end');
-	$entryShow->insert('end', $entry);
+	$entryMan->delete('0', 'end');
+	$entryMan->insert('end', $entry);
     } else {
-	$entry = $entryShow->get();	# get entry from $entryShow
+	$entry = $entryMan->get();	# get entry from $entryMan
 	print "show_man: show entry: '$entry'\n" if $opt_T;
     }
-    if ($entry =~ /^(-k|\w+)\s+([\w:+.-]+)/) {
+    if ($entry =~ /^(-[fk]|\w+)\s+([\w:+.-]+)/) {
 	if ($1 eq '-k' or $1 eq 'apropos') {
-	    ($kopt, $man, $section) = ('-k', $2, '');
+	    ($opt, $man, $section) = ('-k', $2, '');
+	} elsif ($1 eq '-f' or $1 eq 'whatis') {
+	    ($opt, $man, $section) = ('-f', $2, '');
 	} elsif (is_valid_section("($1)")) {
-	    ($kopt, $man, $section) = ('', $2, "($1)");
+	    ($opt, $man, $section) = ('', $2, "($1)");
 	} else {
-	    ($kopt, $man, $section) = ('', $2, '');
+	    ($opt, $man, $section) = ('', $2, '');
 	}
-    } elsif ($entry =~ /^([\w:+.-]+)\s*(\(.*\))?/) {
-	($kopt, $man, $section) = ('', $1, $2);
+    } elsif ($entry =~ /^([\w:+.-]*)\s*(\(.*\))?/) {
+	($opt, $man, $section) = ('', $1, $2);
     }
-    if ($kopt or not $section or not is_valid_section($section)) {
+    if ($opt or not $section or not is_valid_section($section)) {
         $section = '';
     }
 no warnings;
-    print "$entry: kopt = '$kopt' man = '$man' section = '$section' forkFlag = '$forkFlag'\n" if $opt_T;
+    print "$entry: kopt = '$opt' man = '$man' section = '$section' forkFlag = '$forkFlag'\n" if $opt_T;
 use warnings;
     if ($forkFlag) {			# hFlag cannot be set
 	my @call = ($0, '-n', $man);
 	$section =~ s/[()]//g;	# remove parens (will pass '' unchanged)
-	$section = '-k' if $kopt;
+	$section = $opt if $opt;
 	splice @call, 2, 0, $section if $section ne '';
 	print "fork_and_exec(@call)\n" if $opt_T;
 	fork_and_exec(@call);		# open the page in a new iCman window
@@ -667,10 +744,11 @@ use warnings;
     }
     # UI is clean now. Open the file
     ($s = $section) =~ s/[()]//g;	# remove parens (will pass '' unchanged)
-    my $cmd_line = $kopt ? "man $kopt $man 2>/dev/null | sort -u |"
+    $cmdLine = $opt ? "man $opt $man 2>/dev/null | sort -u |"	# output of apropos or whatis
 			 : "man $s $man 2>/dev/null |";
-    print "open (F, '$cmd_line')\n" if $opt_T;
-    if ($ret = open (F, $cmd_line)) {
+    print "open (F, '$cmdLine')\n" if $opt_T;
+    if ($ret = open (F, $cmdLine)) {
+	printf ("\$ret = '0x%x'\n", $ret) if $opt_T;
 	my $lineFlag = 0;
 	my $line;
 	my $mark;
@@ -684,8 +762,8 @@ use warnings;
 		########################################################################
 		$lineFlag = 1;
 		$lineCnt = 0;
-		$text->configure(-state => 'normal');
-		$text->configure (-cursor => 'watch');
+		$text->configure (-state  => 'normal');
+		$text->configure (-cursor => 'watch' );
 		$text->update();
 		$menu_headings->menu()->delete(0,'end'); # Delete current headings
 		foreach $mark ($text->markNames) {  # remove all marks
@@ -705,8 +783,8 @@ use warnings;
 	    $prev = $mark;
 	    # If first character is a capital letter, it's likely a section
 	    # unless it is the first line (standard man heading)
-	    print("text line:       $line") if $opt_T;
-	    if ($lineCnt++ and not $kopt and $line =~ s/^(\e\[(\d+)m)?([A-Z][\w ]*)(\e\[(\d+)m)?$/$3/) {
+###	    print("text line:       $line") if $opt_T;
+	    if ($lineCnt++ and not $opt and $line =~ s/^(\e\[(\d+)m)?([A-Z][\w ]*)(\e\[(\d+)m)?$/$3/) {
 		# Likely a section heading
 		$mark = $line;			# $mark has section title
 		$mark =~ s/.//g;		# take out possible bold and underline repeats
@@ -714,12 +792,11 @@ use warnings;
 		my $index = $text->index('end');	# note current end location
 		# Give 'section' tag to the section title
 		$text->insert('end', "$mark\n", 'section');
-		print("section heading: $mark\n") if $opt_T;
+###		print("section heading: $mark\n") if $opt_T;
 		# Create a menu entry. Have callback invoke text widget's
 		# 'see' method to go to the index noted above (pass index in 1st parameter)
-		$menu_headings->command(
-					'-label'   => $mark,
-					'-command' => [ sub { seeCentre($_[0]) }, $index ],
+		$menu_headings->command(-label   => $mark,
+					-command => [ sub { seeCentre($_[0]) }, $index ],
 				       );
 	    } else {
 		if ($Tk::VERSION =~ /800/) {
@@ -782,10 +859,10 @@ use warnings;
 	$ret = close(F);	# fails with $?/256 == 16 - page does not exist
 	if ($lineFlag) {
 	    unless ($hFlag) {
-		splice @history, $hi, 0, $entry;	# store new entry in history, keeping forwards
-		for ($i = 0; $i < @history; $i++) {
-		    if ($i != $hi and $entry eq $history[$i]) {
-			splice @history, $i, 1;		# splice out duplicate entry
+		splice @dynamicHistory, $hi, 0, $entry;	# store new entry in history, keeping forwards
+		for ($i = 0; $i < @dynamicHistory; $i++) {
+		    if ($i != $hi and $entry eq $dynamicHistory[$i]) {
+			splice @dynamicHistory, $i, 1;		# splice out duplicate entry
 			if ($i < $hi) {
 			    $hi--;
 			}
@@ -795,16 +872,16 @@ use warnings;
 		$hi++;
 	    }
 	    $mainWindow->title("$named: $entry");
-	    $historyMenu->delete(0, 'end');
-	    foreach $i (0 .. $#history) {
-		print "History Menu $i '$history[$i]'\n" if $opt_T;
-		$historyMenu->command(
-		    -label   => $history[$i],
+	    $manMenu->delete(0, 'end');
+	    foreach $i (0 .. $#dynamicHistory) {
+		print "History Menu $i '$dynamicHistory[$i]'\n" if $opt_T;
+		$manMenu->command(
+		    -label   => $dynamicHistory[$i],
 		    -state   => $i == $hi-1 ? 'disabled' : 'normal',
 		    -command => [ \&select_history, $i, ],
 		);
 	    }
-	    if ($hi < @history) {
+	    if ($hi < @dynamicHistory) {
 		$nextButton->configure(-state => 'normal');
 	    } else {
 		$nextButton->configure(-state => 'disabled');
@@ -816,18 +893,18 @@ use warnings;
 	    }
 	    $text->configure (-cursor => 'left_ptr');
 	    $text->update();
-	    info_display('blue', "Loaded $kopt $man$section $lineCnt lines");
+	    info_display('blue', "Loaded $opt $man$section $lineCnt lines");
 	} else {
 	    if ($hi) {
 		if ($hFlag) {			# happens only with wrong entry in command line
-		    splice @history, $hi-1, 1;	# splice out error entry
+		    splice @dynamicHistory, $hi-1, 1;	# splice out error entry
 		    if ($hFlag == 1) {
 			$hi--;			# next entry needs to go back
 		    }
 		} elsif ($pi) {
-		    for ($i = 0; $i < @history; $i++) {
-			if ($entry eq $history[$i]) {
-			    splice @history, $i, 1;	# splice out duplicate entry
+		    for ($i = 0; $i < @dynamicHistory; $i++) {
+			if ($entry eq $dynamicHistory[$i]) {
+			    splice @dynamicHistory, $i, 1;	# splice out duplicate entry
 			    if ($i < $pi) {
 				$pi--;
 			    }
@@ -838,17 +915,17 @@ use warnings;
 		}
 		if ($hFlag) {
 		    $hi = $pi if $pi;
-		    $entry = $history[$hi-1];	# restore current entry and show text
-		    $entryShow->delete('0', 'end');
-		    $entryShow->insert('end', $entry);
+		    $entry = $dynamicHistory[$hi-1];	# restore current entry and show text
+		    $entryMan->delete('0', 'end');
+		    $entryMan->insert('end', $entry);
 		}
 	    }
-	    info_display('red', "No manual entry for $kopt $man$section");
+	    info_display('red', "No manual entry for $opt $man$section");
 	}
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();
     } else {
-	info_display('red', "'$cmd_line' returned '$ret' ($?)");
+	info_display('red', "'$cmdLine' returned '$ret' ($?)");
     }
     $pi = 0;
 } # show_man
@@ -856,15 +933,15 @@ use warnings;
 ########################################################################
 #
 #	Select history entry
-#	Parameter 1:	$i is index into @history
+#	Parameter 1:	$i is index into @dynamicHistory
 #	NOTE: this routine calls show_man() with modified $hi
 #
 ########################################################################
 
 sub select_history {
     my ($i) = @_;
-    $entryShow->delete ('0', 'end');
-    $entryShow->insert ('end', $history[$i]);
+    $entryMan->delete ('0', 'end');
+    $entryMan->insert ('end', $dynamicHistory[$i]);
     $pi = $hi;			# save history index in previous index
     $hi = $i + 1;		# move history index
     show_man();
@@ -905,12 +982,15 @@ sub pick_word {
     my $end_index = $text->index('insert lineend');
     my $line = $text->get($start_index, $end_index);
     my ($page, $section) = ($line =~ /^([\w:+.-]+)\s*(\(.*?\))?/);
+no warnings;
+    print "pick_word: forkFlag = $forkFlag page = '$page' section = '$section'\n" if $opt_T;
+use warnings;
     if ($page) {
-	$entryShow->delete('0', 'end');
+	$entryMan->delete('0', 'end');
 	if ($section && is_valid_section($section)) {
-	    $entryShow->insert('end', "$page${section}");
+	    $entryMan->insert('end', "$page${section}");
 	} else {
-	    $entryShow->insert('end', $page);
+	    $entryMan->insert('end', $page);
 	}
 	show_man(undef, undef, undef, $forkFlag);
     }
@@ -960,8 +1040,8 @@ sub scout_man_dirs {
     my (@man_dirs, $man_dir, $section, $home);
     my @date = split ' ', `date`;	# get current system date
     my $newDate = join ' ', @date[0..2];# keep date part only
-    if ( not $opt_c and			# restore section lists from ~/.iC/iCman.sec
-	($home = $ENV{HOME}) ne '' and
+    if (($home = $ENV{HOME}) ne '' and	# restore section lists from ~/.iC/iCman.sec
+	not $opt_c and			# $home must be set before $opt_c is tested
 	(-d "$home/.iC" or mkdir "$home/.iC") and
 	open(INI, "$home/.iC/$named.sec")) {
 	while (<INI>) {
@@ -971,7 +1051,10 @@ sub scout_man_dirs {
 		if ($section =~ /DATE (.*)/) {
 		    my $oldDate = $1;
 		    $section = '';
-		    goto NewCache if $newDate ne $oldDate;
+		    if ($newDate ne $oldDate) {
+			close(INI);
+			goto NewCache;
+		    }
 		}
 	    } elsif ($section and /^\t/) {	# ini starts with <tab>
 		my @new_list = split;		# all sections in one line
@@ -980,8 +1063,9 @@ sub scout_man_dirs {
 	}
 	close(INI);
 	return;				# use cache values
-    }					# ignore if ~/.iC/iCman.sec cannot be opened or found
-  NewCache: %sections = ();		# start filling cache
+    }					# ignore if ~/.iC/iCman.sec cannot be opened or found or -c
+  NewCache:
+    %sections = ();			# start filling cache
     print STDERR "Scouting man directories\n";
     if ($ENV{MANPATH}) {
         @man_dirs = split (/:/, $ENV{MANPATH});
@@ -1038,38 +1122,79 @@ sub scout_man_dirs {
 
 ########################################################################
 #
-#	Display information on the info bar
-#	(make sure all displays to info bar go via this routine)
-#	Parameter 1:	colour (change if $message ne '')
-#	Parameter 2:	message text
+#	Pop up man menu from previous or next button after 200 ms
 #
 ########################################################################
 
-sub info_display {
-    my ($colour, $message) = @_;
-    $infoBar->configure(-foreground => $colour) if $message ne '';
-    $info = $message;	# display now
-} # info_display
+sub ManMenu {
+    my ($dummy, $buttonRef) = @_;
+    my $buttonState = $$buttonRef->cget(-state);
+    my $buttonText  = $$buttonRef->cget(-text);
+    if ($buttonState ne 'disabled') {
+	my $xWin = $mainWindow->rootx;
+	my $yWin = $mainWindow->rooty;
+	print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
+	$manTimer = $mainWindow->after(200,
+	    sub { $manMenu->post($xWin + ($buttonText eq '<=' ? 172 : 220), $yWin +  32); });
+    }
+    print "Pop up man button '$buttonText' '$buttonState'\n" if $opt_T;
+} # ManMenu
 
 ########################################################################
 #
-#	Report the cursor position in the info bar
+#	Cancel man menu from previous or next button before 200 ms are up
 #
 ########################################################################
 
-sub report_cursor {
-    info_display('black', $text->index('insert'));	# '27.4'
-} # report_cursor
+sub ManCancel {
+    $manMenu->unpost();
+    $manTimer->cancel();
+    print "Cancel man menu\n" if $opt_T;
+} # ManCancel
+
+########################################################################
+#
+#	Pop up search menu from search button after 200 ms
+#
+########################################################################
+
+sub SearchMenu {
+    my ($dummy, $buttonRef) = @_;
+    my $buttonState = $$buttonRef->cget(-state);
+    my $buttonText  = $$buttonRef->cget(-text);
+    if ($buttonState ne 'disabled') {
+	my $xWin = $mainWindow->rootx;
+	my $yWin = $mainWindow->rooty;
+	print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
+	$searchTimer = $mainWindow->after(200,
+	    sub { $searchMenu->post($xWin + 412, $yWin +  32); });
+    }
+    print "Pop up search button '$buttonText' '$buttonState'\n" if $opt_T;
+} # SearchMenu
+
+########################################################################
+#
+#	Cancel search menu from search button before 200 ms are up
+#
+########################################################################
+
+sub SearchCancel {
+    $searchMenu->unpost();
+    $searchTimer->cancel() if defined $searchTimer;
+    print "Cancel search\n" if $opt_T;
+} # SearchCancel
 
 ########################################################################
 #
 #	Search for a regular expression or exact match
 #
-#	when called as a callback from bind('<Return>', [ \&search_text, undef, 0 ])
+#	when called as a callback from
+#		eg: bind('<KeyPress-Return>', [ \&search_text, undef, 0 ])
 #	the first parameter $_[0] is Tk::Entry=HASH(0x...)
-#	provide a dummy first parameter when called directly
+#	provide a dummy first parameter when called directly.
+#	Use this is buttonFlag.
 #
-#		parameter 1:	(dummy)
+#		parameter 1:	buttonFlag - false (0) when [/] release else true
 #		parameter 2:	newSearchText
 #		    "		undef	use $searchText from Entry widget
 #		    "		''	clear the search
@@ -1089,11 +1214,22 @@ sub report_cursor {
 ########################################################################
 
 sub search_text {
-    $text->after(0, [ \&search_now, @_ ]); # allow pop up to go away
+    my ($buttonFlag, $newSearchText, $direction) = @_;
+no warnings;
+    print "search_text: \$buttonFlag = '$buttonFlag' \$searchText = '$searchText'\n" if $opt_T;
+use warnings;
+    unless ($buttonFlag) {
+	SearchCancel();				# do this first - no delays yet
+	if ($searchText eq '' or not defined $searchText) {
+	    $entrySearch->focus();		# initiate search entry (simulates vi)
+	    return;
+	}
+    }
+    $text->after(0, [ \&search_now, @_ ]);	# allow pop up to go away
 } # search_text
 
 sub search_now {
-    my ($dummy, $newSearchText, $direction) = @_;
+    my ($buttonFlag, $newSearchText, $direction) = @_;
     my ($saveText, $saveMatch, $option, $auxiliary, $current, $hl, $length);
     my $tmpText;
     if (defined $newSearchText) {
@@ -1104,7 +1240,8 @@ sub search_now {
 	$matchType = $option ? $matchRestores{$option} : '-exact';
     }
     $searchText = '' if not defined $searchText;
-    while ($direction == 2 or $matchType eq 'g') {
+    $text->tagDelete('gotoTag');
+    while ($direction == 2 or $matchType eq 'g') {	# really if() {.. last; ..}
 	########################################################################
 	##	Go to line $searchText (do exact match search if not numeric)
 	########################################################################
@@ -1122,11 +1259,18 @@ sub search_now {
 	$matchType = 'g';
 	$text->see($current);
 	## grey out the whole line - until mouse moves - visible in Edit and Live mode
-	$text->tagAdd('sel', "$current linestart", "$current lineend");
+	$text->tagConfigure('gotoTag',
+			    -background => 'grey',
+			    -foreground => 'black',
+			   );
+	$text->tagAdd('gotoTag', "$current linestart", "$current lineend");
 	$text->markSet('insert', $current);
+	$text->tagLower('gotoTag');	# put any search results in foreground
 	report_cursor();
 	$tmpText = "$searchText$matchExtensions{$matchType}";
 	check_menu($tmpText, 'searches');
+	$prevText = $searchText;
+	$prevMatch = $matchType;
 	return;
     }
     if ($prevText ne $searchText or $prevMatch ne $matchType) {
@@ -1140,8 +1284,8 @@ sub search_now {
 	$text->tagDelete('searchTag') if $prevText;
 	$text->tagConfigure('searchTag',
 			    -background => 'black',	# same as 'less'
-			    -foreground => 'white',	# stands out amongst live colours
-			   );				# cannot see live status though
+			    -foreground => 'white',
+			   );
 	if ($matchType eq 'ri') {
 	    $matchType = '-regexp';
 	    $auxiliary = '-nocase';
@@ -1285,39 +1429,20 @@ sub search_now {
 
 ########################################################################
 #
-#	Pop up history menu from previous or next button after 400 msec.
+#	Start a new search with / or ALT-/ to simulate vi
 #
 ########################################################################
 
-sub historyShow {
-    my ($dummy, $buttonRef) = @_;
-    my $buttonState = $$buttonRef->cget(-state);
-    my $buttonText  = $$buttonRef->cget(-text);
-    if ($buttonState ne 'disabled') {
-	my $xWin = $mainWindow->rootx;
-	my $yWin = $mainWindow->rooty;
-	print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
-	$historyId = $mainWindow->after(400,
-	    sub { $historyMenu->post($xWin + ($buttonText eq '<=' ? 183 : 231), $yWin +  31); });
-    }
-    print "Pop up history button '$buttonText' '$buttonState'\n" if $opt_T;
-} # historyShow
+sub new_search {
+    print "new_search\n" if $opt_T;
+    $searchText = '';		# clears search entry window
+    search_text(0, '', 0);	# puts focus in search entry window
+} # new_search
 
 ########################################################################
 #
-#	Cancel history menu from previous or next button
-#
-########################################################################
-
-sub historyCancel {
-    $historyMenu->unpost();
-    $historyId->cancel();
-    print "Cancel history\n" if $opt_T;
-} # historyCancel
-
-########################################################################
-#
-#	Scroll text left or right
+#	Scroll text left or right with keys
+#	even if other windows have the focus
 #
 ########################################################################
 
@@ -1329,7 +1454,8 @@ sub scroll_x_text {
 
 ########################################################################
 #
-#	Scroll text up or down
+#	Scroll text up or down with keys
+#	even if other windows have the focus
 #
 ########################################################################
 
@@ -1341,7 +1467,7 @@ sub scroll_text {
 
 ########################################################################
 #
-#	Position text
+#	Position text Home or End
 #
 ########################################################################
 
@@ -1371,25 +1497,26 @@ sub change_font {
 	print "font increment = '$increment' size = '$fontSize'\n" if $opt_T;
 	$font       = $font_t;
 	$boldfont   = $boldfont_t;
-	$font       =~ s/fontSize/$fontSize/;	# no change of -f was a specified font
+	$font       =~ s/fontSize/$fontSize/;	# no change if -F was a specified font
 	$boldfont   =~ s/fontSize/$fontSize/;
 	if ($increment) {
 	    $text->configure(-font => $font);	# re-configure only for changed fonts
 	    $text->tagConfigure('section', -font => $boldfont, -foreground => $colorBD);
 	    $text->tagConfigure('bd',  -font => $boldfont);
+	    info_display('black', "font size $fontSize");
 	}
     }
 } # change_font
 
 ########################################################################
 #
-#	Show help man page
+#	Help man page
 #
 ########################################################################
 
 sub show_help {
-    $entryShow->delete('0', 'end');
-    $entryShow->insert('end', "$named(1)");
+    $entryMan->delete('0', 'end');
+    $entryMan->insert('end', "$named(1)");
     show_man();
 } # show_help
 
@@ -1455,7 +1582,7 @@ sub to_background {
 #	'newEntry' is appended to (or moved to the bottom of) the 'menuKey' menu
 #	when 'delete' is set, 'newEntry' in the menu is deleted and not replaced
 #
-#	Maintain local arrays @history and @dynamicSearches to map a regular
+#	Maintain local arrays @dynamicHistory and @dynamicSearches to map a regular
 #	expression index pattern to a positional number, which can be used to
 #	index menu entries with a numerical index. Entries in these local arrays
 #	are always pushed on the end for new entries, shifted from the front to
@@ -1482,10 +1609,10 @@ sub check_menu {
 	if ($e eq $newEntry) {			# find newEntry in entriesArray
 	    $e = splice(@$entriesArray, $n, 1);	# remove from middle of entriesArray
 	    die "entry '$e' in entriesArray does not match call parameter '$newEntry', stopped" if $e ne $newEntry;
-	    my $label = $menuRef->menu->entrycget($menuPos+$n, '-label');	# check algorithm
+	    my $label = $menuRef->entrycget($menuPos+$n, '-label');	# check algorithm
 	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
 	    print "check_menu: [$menuKey] '$e' removed from position $n of menu\n" if $opt_T;
-	    $menuRef->menu->delete($menuPos+$n) if $menuRef;	# delete old entry from menu
+	    $menuRef->delete($menuPos+$n) if $menuRef;	# delete old entry from menu
 	    last;				# avoids indexing with a pattern, which fails
 	}
 	$n++;
@@ -1501,13 +1628,13 @@ sub check_menu {
     }
     if ($menuRef and not $delete) {		# menu for 'file' and 'searches' not 'last open file'
 	$menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
-			  -command => [ $commandRef, 0, $newEntry, 0 ]); # define 0 (down for search)
+			  -command => [ $commandRef, 1, $newEntry, 0 ]); # define 0 (down for search)
 	if (scalar @$entriesArray > $entriesLim) {
 	    $e = shift(@$entriesArray);		# remove first entry in entriesArray
-	    my $label = $menuRef->menu->entrycget($menuPos, '-label');	# check algorithm
+	    my $label = $menuRef->entrycget($menuPos, '-label');	# check algorithm
 	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
 	    print "check_menu: [$menuKey] '$e' removed from front of menu\n" if $opt_T;
-	    $menuRef->menu->delete($menuPos);	# remove first dynamic menu entry
+	    $menuRef->delete($menuPos);	# remove first dynamic menu entry
 	}
     }
 } # check_menu
@@ -1597,17 +1724,20 @@ __END__
 
 ############ POD to generate man page ##################################
 
+=encoding utf8
+
 =head1 NAME
 
- iCman - an interface to the on-line reference manuals
+iCman - an interface to the on-line reference manuals
 
 =head1 SYNOPSIS
 
- iCman[ -cnrTh][ -k <key>][ -f <font>][ -l <num>][ -w <num>]
+ iCman[ -cnrTh][ -k <key>][ -f <page>][ -F <font>][ -l <num>][ -w <num>]
       [ -g <geometry>][ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
-    -f font font or font size to use in Text window (default '14')
+    -f page display the output of man -f <page> (whatis)
+    -F font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default 35)
     -w num  width  of the Text window (default 80)
     -g geom geometry for main window
@@ -1624,10 +1754,10 @@ __END__
     either case <section> must be a valid section name.
 
     One or more manpage arguments may be used - these are placed in
-    the history. If no manpage argument is specified or if the -r
-    option is used, the last sessions is restored with all its manpage
-    and search history. The first manpage in the history is opened -
-    this is either the first manpage argument or the first manpage
+    the history. If no manpage arguments are specified or if the -r
+    option is used, the last session is restored with all its manpage
+    and search history. The first manpage in the history is opened.
+    This is either the first manpage argument or the first manpage
     in the previous session history.
 
  Menu buttons:                   Action                      Accelerator
@@ -1637,31 +1767,42 @@ __END__
                 Alternatively show a list of topics matching a key
                 with '-k <key>' or 'apropos <key>' entered in the
                 show window.
-       Open     a new window - to show selected manpage          Alt-RET
+                Double-clicking on a word in the text which is the
+                name of another man page will also open that page.
+       Open     a new window - to show selected manpage         Alt-RET
        Quit     quit the program.                                   q
 
     [ <= ]      Load the previous manpage in the history.           p
     [ => ]      Load the next manpage in the history.               n
-                Holding either of these buttons down briefly will
-                open a menu of history items which can be selected
-                out of order.
+            Holding either of these buttons down briefly will
+            open a menu of history items which can be selected.
 
     [Headings]  Skip to one of the headings in the manpage.
-
     [Sections]  Load the index for one of the manpage sections.
 
-    [Search:]   in the Text window. Text may be scanned for an exact
-                match or for a regular expression in the entry window
-                next to the button. All hits will be marked. Repeating
-                'Search down' or RETURN will display a new group of
-                hits. 'Search up' or SHIFT-RETURN reverses the direction
-                of scrolling.  Another option is to Go to a line entered
-                in the entry window.                             RETURN
+    [ / ]       Put focus in Search Entry window if cleared.        /
+                    (simulates vi)                            or  Alt-/
+                Else start or continue a search of text in
+                the Entry window. All hits will be marked.
+            Holding this button down briefly will open a menu of
+            extra search options and a history of previous searches.
+       Search down       or                                      RETURN
+                displays a new group of hits.
+       Search up         or                                   Shift-RET
+                reverses the direction of scrolling.
+       Clear             or                                    Ctrl-RET
+                clears hits and the search Entry window.
+     <>Go to line        or                                     Alt-RET
+                goes to the line entered in the Entry window.
+     <>Exact match
+     <>Ignore case
+     <>Regexp match
+     <>Rgexp+ignore case
+
+    [ - ]       Zoom Out   decrease font size                     Alt -
+    [ + ]       Zoom In    increase font size                     Alt +
 
     [Help]      Display this man page.                              h
-
-                Dynamically increase font size                    Alt +
-                Dynamically decrease font size                    Alt -
 
 =head1 DESCRIPTION
 
@@ -1676,18 +1817,21 @@ first page found, even if pages exist in several sections.
 
 Other manual pages may be opened either by entering the name of a
 manual page optionally followed by a section in parentheses in the
-Show-Enter window and pressing RETURN, or by double clicking on a
+Man-Entry window and pressing RETURN, or by double clicking on a
 word representing a manual page - usually under the SEE ALSO heading
 or in a Section Index. Using ALT-RETURN or ALT-Double click will
 open the new manual page in a new instance of iCman.
 
-Alternatively '-k <key>' or 'apropos <key>' may be used in
-the Show-Entry window to search the manual page names and
+Alternatively '-k <key>' or 'B<apropos> <key>' may be used in
+the Man-Entry window to search the manual page names and
 descriptions. This provides man page links to the topic described
-by <key>.  The default 'regex' behaviour of apropos (man -k) is
+by <key>.  The default 'regex' behaviour of B<apropos> (man -k) is
 used. No wildcard or exact option is provided. The text provided
 by 'man -k' is piped through 'sort -u' to delete duplicate entries.
 A sorted list with no duplicate entries is easier to analyze.
+
+Also '-f <page>' or 'B<whatis> <page>' in the Man-Entry window will
+display the short description of that manual page.
 
 The displayed text is read-only. It's position may be manipulated
 by the scroll bar(s) or the usual up/down/prior/next/home/end keys.
@@ -1719,7 +1863,7 @@ cache after new software has been installed.
 
 =head1 AUTHOR
 
-Copyright 2003-2009, John E. Wulff (immediateC@gmail.com)
+Copyright 2003-2012, John E. Wulff (immediateC@gmail.com)
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
@@ -1741,24 +1885,29 @@ in B<man> for word syllabification and '|' are substituted by code.
 Tk::Text version Tk-804.028 distributed with openSUSE Linux 11.1
 handles the above characters correctly. Therefore the above translations
 have been made conditional for Tk-800.024 (match 800). Proper UTF-8
-translation with decode() has also been introduced. The only problem
-remaining is a bug in B<pod2man>, which replaces all non ASCII-7
-characters.
-Example: German Umlaut characters ÄÖÜäöüß, which should be AOUaou with
-Diaresis plus a sharp s. If B<pod2man> is fixed B<iCman> will show
-UTF-8 characters correctly (has been tested).
+translation with decode('utf-8', <line>) has also been introduced.
+The only problem remaining is a bug in B<pod2man>, which replaces
+all non ASCII-7 characters with rubbish.
 
-Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
-subject field.
+This has now been fixed for UTF-8 sources if an early line in the pod
+source is C<=encoding utf8> and B<pod2man> is called with the -u or
+--utf8 option.  B<iCman> will then show UTF-8 characters correctly
+but only if each text line is passed through  decode('utf-8', <line>),
+which has been done.
+
+Example: German Umlaut characters Ä Ö Ü ä ö ü ß, which should be
+A O U a o u with Diaresis plus a sharp s.
+
+Email bug reports to B<immediateC@gmail.com> with L<iC man page reader>
+in the subject field.
 
 =head1 SEE ALSO
 
-L<man(1)>, L<apropos(1)>, L<iClive(1)>
+man(1), apropos(1), iClive(1)
 
 =head1 ACKNOWLEDGEMENTS
 
-This program is an major extension of B<perlman>, the man page viewer
-in Perl from the O'Reilly Book "Advanced Perl Programming" by
-Sriram Srinivasan.  The work of Sriram Srinivasan is gratefully
-acknowledged. Some ideas were also used from the version of B<perlman>
-extended by H.Merijn Brand.
+This program is a major extension of B<perlman>, the man page viewer
+from the O'Reilly Book "Advanced Perl Programming" by Sriram Srinivasan.
+The work of Sriram Srinivasan is gratefully acknowledged.  Some ideas
+were also used from the version of B<perlman> extended by H.Merijn Brand.

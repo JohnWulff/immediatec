@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.56 2011/11/04 01:56:54 jw Exp $";
+"@(#)$Id: ict.c,v 1.57 2012/07/16 06:33:12 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -48,12 +48,16 @@ static const char ict_c[] =
 #ifndef SIGRTMAX
 #define SIGRTMAX	32		/* for non-POSIX systems (Win32) */
 #endif
-#define QUIT_TERMINAL	(SIGRTMAX+1)
-#define QUIT_DEBUGGER	(SIGRTMAX+2)
-#define QUIT_SERVER	(SIGRTMAX+3)
+#define QUIT_TERMINAL	(SIGRTMAX+3)
+#define QUIT_DEBUGGER	(SIGRTMAX+4)
+#define QUIT_SERVER	(SIGRTMAX+5)
 
 #define IOCHANNELS	30		/* initial Channels[] size */
 #define ENTRYSZ		16		/* entry "SIX0000-000\0" max length 12 */
+
+static struct timeval	timeOut = { 0, 50000 };	/* 50 mS select timeout */
+static struct timeval	toCnt =   { 0, 50000 };	/* actual timeout counter that select uses */
+static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl pointer */
 
 static void	regAck(Gate ** oStart, Gate ** oEnd);
 static void	storeChannel(unsigned short channel, Gate * gp);
@@ -78,9 +82,6 @@ Gate *		iC_f_list = &flist;	/* deferred function action list (init in load) */
 static Gate	slist = { 0, 0, 0, 0, "slist", };
 Gate *		iC_s_list = &slist;	/* send bit and byte outputs */
 
-#if	YYDEBUG
-static int	dis_cnt;
-#endif	/* YYDEBUG */
 short		iC_error_flag;
 
 unsigned	iC_scan_cnt;		/* count scan operations */
@@ -125,9 +126,7 @@ int		iC_outOffset;
  *******************************************************************/
 
 void
-iC_icc(
-    Gate *	g_lists,
-    unsigned	gate_count[])
+iC_icc(Gate ** sTable, Gate ** sTend)
 {
     int		i;
     short	pass;
@@ -142,7 +141,6 @@ iC_icc(
     int		tcnt1  = 1;
     int		tcnt10 = 1;
     int		tcnt60 = 1;
-    double	delay = 0.0;		/* timer processing stopped */
     int		retval;
 #ifdef	EFENCE
     msgBuf = iC_emalloc(REQUEST);
@@ -174,10 +172,10 @@ iC_icc(
 	    if (tim[cnt] != NULL) {	/* any of the 7 timers programmed ? */
 		if (cnt < TLIMIT) {
 		    fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_iccNM, cnt);
-		    iC_quit(6);
+		    iC_quit(SIGUSR1);
 		}
-		delay = iC_timeout;	/* yes - setup timer processing */
-		break;			/* could optimise by varying delay */
+		toCntp = &toCnt;	/* activate select timeout */
+		break;			/* could optimise by varying timeout value */
 	    }
 	}
     }
@@ -194,7 +192,7 @@ iC_icc(
 
 	/* Start TCP/IP communication before any inputs are generated => outputs */
 	if (iC_micro) iC_microReset(04);
-	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM, delay);
+	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM);
 	if (iC_debug & 04) fprintf(iC_outFP, "%s: I/O registration objects\n", iC_iccNM);
 	for (i = 0; i < 3; i++) {
 	    tbp += el;
@@ -207,7 +205,7 @@ iC_icc(
 	D_gate.gt_new = -2;	/* changes - not equal 0 - 5 for debug messages */
 	D_gate.gt_old = -1;	/* never changes - not equal 0 - 5 for debug messages */
 
-	for (opp = sopp = iC_sTable; opp < iC_sTend; opp++) {
+	for (opp = sopp = sTable; opp < sTend; opp++) {
 	    int mask;
 	    gp = *opp;
 	    tbp += el;
@@ -233,7 +231,7 @@ iC_icc(
 			assert(el > 0);
 		    } else {
 			fprintf(iC_errFP, "\n%s: ill formed output name '%s'\n", iC_iccNM, ep + 1);
-			iC_quit(3);
+			iC_quit(SIGUSR1);
 		    }
 		}
 	    }
@@ -249,7 +247,7 @@ iC_icc(
 		if (mask < X_MASK) {
 		    el += snprintf(ep + el, ENTRYSZ - el, "(%d)", mask);	/* mask of used bits */
 		}
-		if (tbc - el <= (opp+1 == iC_sTend ? 2 : 0)) {	/* leave room for ",Z" at end */
+		if (tbc - el <= (opp+1 == sTend ? 2 : 0)) {	/* leave room for ",Z" at end */
 		    /********************************************************************
 		     * buffer is about to overflow
 		     *******************************************************************/
@@ -267,7 +265,7 @@ iC_icc(
 	}
 	strncpy(tbp + el, ",Z", tbc - el);	/* place termination in regBuf - 2 bytes are free */
 	if (iC_micro) iC_microPrint("last registration", 0);
-	assert(opp == iC_sTend);
+	assert(opp == sTend);
 	regAck(sopp, opp);			/* send/receive last registration */
 	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
 	if (iC_micro) iC_microPrint("Send application name", 0);
@@ -309,19 +307,14 @@ iC_icc(
      *  Message in msgBuf is ignored of iC_debug&0400 stops process after init
      *******************************************************************/
     msgOffset = liveOffset = snprintf(msgBuf, REQUEST, "%hu:3", C_channel);
-#ifndef LOAD
-    for (i = 0; i < IXD; i++) {		/* clear output array used to hold */
-	iC_QX_[i] = 0;			/* output size X, B or W during compilation */
-    }
-#endif	/* LOAD */
     /********************************************************************
      *  Carry out 4 Passes to initialise all Gates
      *******************************************************************/
     for (pass = 0; pass < 4; pass++) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\n== Pass %d:", pass + 1);
 #endif	/* YYDEBUG */
-	for (opp = iC_sTable; opp < iC_sTend; opp++) {
+	for (opp = sTable; opp < sTend; opp++) {
 	    gp = *opp;
 	    typ = gp->gt_ini > 0 ? AND : -gp->gt_ini;
 	    if (typ < MAX_OP) {
@@ -330,17 +323,18 @@ iC_icc(
 	    }
 	}
     }
+    iC_osc_max = iC_osc_lim;		/* during Init oscillations were not checked */
 
 #if	YYDEBUG
     if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\nInit complete =======\n");
+	fprintf(iC_outFP, "\n== Init complete =======\n");
     }
 #endif	/* YYDEBUG */
 
     if (iC_error_flag) {
-	if (iC_error_flag == 1) {
+	if (iC_error_flag >= 2) {
 	    fprintf(iC_outFP, "\n*** Fatal Errors ***\n");
-	    iC_quit(1);
+	    iC_quit(SIGUSR1);
 	}
 	fprintf(iC_outFP, "\n*** Warnings ***\n");
     }
@@ -383,9 +377,6 @@ iC_icc(
 #endif	/* YYDEBUG */
     }
 
-#if	YYDEBUG
-    dis_cnt = DIS_MAX;
-#endif	/* YYDEBUG */
     /********************************************************************
      *  The following initialisation function is an empty function
      *  in the libict.a support library.
@@ -522,7 +513,7 @@ iC_icc(
 		}
 		fprintf(iC_outFP, "\n");
 	    }
-	    iC_display(&dis_cnt, DIS_MAX);	/* inputs and outputs */
+	    fprintf(iC_outFP, "======== WAIT ==========\n");
 	}
 #endif	/* YYDEBUG */
 
@@ -543,11 +534,17 @@ iC_icc(
 	 *  Wait for input in a select statement most of the time
 	 *******************************************************************/
 	for (cnt = 0; cnt == 0; ) {		/* stay in input loop if nothing linked */
-	    retval = iC_wait_for_next_event(sockFN);	/* wait for inputs or timer */
+	    retval = iC_wait_for_next_event(sockFN, iC_osc_flag ? &toCnt : toCntp);	/* wait for inputs or timer */
+	    if (iC_osc_flag) {
+		cnt++;				/* gates have been linked to alternate list */
+		iC_osc_flag = 0;		/* normal timer operation again */
+	    }
 	    if (iC_micro & 02) iC_microReset(0);
 
 	    if (retval == 0) {
-		iC_timeoutCounter = iC_timeoutValue;	/* will repeat if timeout with input */
+		if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
+		    toCnt = timeOut;		/* transfer timeout value */
+		}
 		/********************************************************************
 		 *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
 		 *
@@ -582,18 +579,18 @@ iC_icc(
 			goto skipT4;			/* excuse spaghetti - faster without flag */
 		    }
 		linkT4:
-		    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+		    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;		/* complement input */
 		    iC_link_ol(gp, iC_o_list);
 		    cnt++;
 #if	YYDEBUG
-		    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+		    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 		skipT4: ;
 #endif	/* YYDEBUG */
 		}
 		if (--tcnt1 <= 0) {
-		    tcnt1 = D10;		/* 10 under Linux, 9 under MSDOS */
+		    tcnt1 = D10;			/* 10 under Linux, 9 under MSDOS */
 		    if ((gp = tim[5]) != 0) {		/* 1 second timer */
 #if	YYDEBUG
 			if (iC_debug & 01000) {
@@ -616,13 +613,13 @@ iC_icc(
 			    goto skipT5;		/* excuse spaghetti - faster without flag */
 			}
 		    linkT5:
-			if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+			if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;	/* complement input */
 			iC_link_ol(gp, iC_o_list);
 			cnt++;
 #if	YYDEBUG
-			if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 		    skipT5: ;
 #endif	/* YYDEBUG */
 		    }
@@ -650,13 +647,13 @@ iC_icc(
 				goto skipT6;		/* excuse spaghetti - faster without flag */
 			    }
 			linkT6:
-			    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+			    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;	/* complement input */
 			    iC_link_ol(gp, iC_o_list);
 			    cnt++;
 #if	YYDEBUG
-			    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 			skipT6: ;
 #endif	/* YYDEBUG */
 			}
@@ -684,13 +681,13 @@ iC_icc(
 				    goto skipT7;	/* excuse spaghetti - faster without flag */
 				}
 			    linkT7:
-				if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+				if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				gp->gt_val = - gp->gt_val;	/* complement input */
 				iC_link_ol(gp, iC_o_list);
 				cnt++;
 #if	YYDEBUG
-				if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+				if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 			    skipT7: ;
 #endif	/* YYDEBUG */
 			    }
@@ -709,7 +706,6 @@ iC_icc(
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 			int		val;
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-			int		count;
 			unsigned short	channel;
 			static int	liveFlag;
 
@@ -734,32 +730,35 @@ iC_icc(
 					/* arithmetic master action */
 					if (gp->gt_fni == TRAB) {
 #if	YYDEBUG
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%s<\t", gp->gt_ids);
-#endif	/* YYDEBUG */
-					    count = iC_traMb(gp, 0);	/* distribute bits directly */
-#if	YYDEBUG
+					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t", gp->gt_ids);
 #if	INT_MAX == 32767 && defined (LONG16)
 					    /* TODO - format for byte, word or long */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%ld%s",
-							    gp->gt_new, count ? "" : "\n");
+					    if (iC_debug & 0100) fprintf(iC_outFP, "0x%02lx ==>> 0x%02lx",
+						gp->gt_old, gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%d%s",
-							    gp->gt_new, count ? "" : "\n");
+					    if (iC_debug & 0100) fprintf(iC_outFP, "0x%02x ==>> 0x%02x",
+						gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
-					    cnt += count;	/* extra number of fired gates */
+					    cnt += iC_traMb(gp, 0);	/* distribute bits directly */
 					} else
 					if (gp->gt_ini == -INPW) {
 #if	YYDEBUG
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%s[\t", gp->gt_ids);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s[\t", gp->gt_ids);
+#if	INT_MAX == 32767 && defined (LONG16)
+					    /* TODO - format for byte, word or long */
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%ld ==>", gp->gt_old);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%d ==>", gp->gt_old);
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
 					    iC_link_ol(gp, iC_a_list);	/* no actions */
 #if	YYDEBUG
 #if	INT_MAX == 32767 && defined (LONG16)
 					    /* TODO - format for byte, word or long */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%ld", gp->gt_new);
+					    if (iC_debug & 0100) fprintf(iC_outFP, " %ld", gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%d", gp->gt_new);
+					    if (iC_debug & 0100) fprintf(iC_outFP, " %d", gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
 					    cnt++;
@@ -778,13 +777,13 @@ iC_icc(
 #endif	/* YYDEBUG */
 						/* prepare index entries first to allow ALIAS back-references */
 						index = 0;
-						for (opp = iC_sTable; opp < iC_sTend; opp++) {
+						for (opp = sTable; opp < sTend; opp++) {
 						    (*opp)->gt_live = index++;	/* index and live inhibit */
 						    index &= 0x7fff;		/* rolls over if > 32768 Symbols */
 						}
 						regOffset = snprintf(regBuf, REQUEST, "%hu:1", C_channel);
 						/* to maintain index correlation send all symbols */
-						for (opp = iC_sTable; opp < iC_sTend; opp++) {
+						for (opp = sTable; opp < sTend; opp++) {
 						    int		len;
 						    int		rest;
 						    int		fni;
@@ -832,7 +831,7 @@ iC_icc(
 					    case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
 					    case 4:		/* LAST_ACTIVE_SYMBOLS */
 						if (liveFlag) {
-						    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+						    for (opp = sTable; opp < sTend; opp++) {
 							(*opp)->gt_live &= 0x7fff;	/* clear live active */
 						    }
 						    liveFlag = 0;	/* do not set again until case 4 received */
@@ -851,8 +850,8 @@ iC_icc(
 						    long	value;
 						    int		fni;
 						    index = atoi(++cp1);
-						    assert(index < iC_sTend - iC_sTable);	/* check index is in range */
-						    gp = iC_sTable[index];
+						    assert(index < sTend - sTable);	/* check index is in range */
+						    gp = sTable[index];
 						    gp->gt_live |= 0x8000;	/* set live active */
 						    value = (
 							(fni = gp->gt_fni) == ARITH ||
@@ -891,7 +890,7 @@ iC_icc(
 						 *  Receive when re-registering - makes sure, that application is seen
 						 *******************************************************************/
 						if (liveFlag) {
-						    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+						    for (opp = sTable; opp < sTend; opp++) {
 							(*opp)->gt_live &= 0x7fff;	/* clear live active */
 						    }
 						    liveFlag = 0;
@@ -908,7 +907,7 @@ iC_icc(
 						 *  Receive from iClive when Symbol Table is no longer required
 						 *******************************************************************/
 						if (liveFlag) {
-						    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+						    for (opp = sTable; opp < sTend; opp++) {
 							(*opp)->gt_live &= 0x7fff;	/* clear live active */
 						    }
 						    liveFlag = 0;
@@ -962,24 +961,13 @@ iC_icc(
 		    } else if (c == 'm') {
 			iC_micro++;			/* toggle more micro */
 			if (iC_micro >= 3) iC_micro = 0;
-		    } else if (iC_debug & 0300) {	/* osc or detailed info */
-			unsigned short flag = iC_xflag;
-			if (c == 'x') {
-			    flag = 1;			/* hexadecimal output */
-			} else if (c == 'd') {
-			    flag = 0;			/* decimal output */
-			}
-			if (flag != iC_xflag) {
-			    iC_xflag = flag;
-			    iC_display(&dis_cnt, DIS_MAX);	/* inputs and outputs */
-			}
 #endif	/* YYDEBUG */
 		    }
 		    /* ignore the rest for now */
 		}
 	    } else {				/* retval -1 */
 		perror("ERROR: select failed");
-		iC_quit(1);
+		iC_quit(SIGUSR1);
 	    }
 	    /* if many inputs change simultaneously increase oscillator limit */
 	    iC_osc_lim = (cnt << 1) + 1;	/* (cnt * 2) + 1 */
@@ -1030,7 +1018,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	    cp = rpyBuf - 1;
 	}
 	// remaining input and output channel indices matching registrations
-	for (opp = oStart; opp < oEnd; opp++) {		/* iC_sTable to iC_sTend */
+	for (opp = oStart; opp < oEnd; opp++) {		/* sTable to sTend */
 	    gp = *opp;
 	    if ((gp->gt_ini == -INPW && *gp->gt_ids != 'T') ||	/* suppress TX0 */
 		gp->gt_fni == OUTW) {
@@ -1187,6 +1175,8 @@ void iC_quit(int sig)
 	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
     } else if (sig == SIGSEGV) {
 	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
+    } else if (sig == SIGUSR1) {
+	fprintf(iC_errFP, "\n'%s' stopped by 'non-recoverable run-time error'\n", iC_iccNM);
     }
     if (iC_outFP != stdout) {
 	fflush(iC_outFP);

@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.20 2009/08/21 06:09:21 jw Exp $";
+"@(#)$Id: symb.c,v 1.21 2012/08/29 05:03:57 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -36,7 +36,7 @@ typedef struct hts {
     char offset;
 } hts;
 
-hts	hta[] =	{
+static hts	hta[] =	{
 #ifdef _WINDOWS
     { '0', '9', '0'-2,  },
     { 'A', 'Z', 'A'-12, },
@@ -147,6 +147,10 @@ unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table */
 	} else {
 	    ierror("trying to delete a Symbol not yet installed:", sp->name);
 	}
+	if (sp->name) {
+	    free(sp->name);
+	    sp->name = 0;			/* flags that Symbol is not linked to S.T. */
+	}
     }
     return (sp);				/* Symbol has not been deleted from heap yet */
 } /* unlink_sym */
@@ -155,6 +159,5 @@ void
 uninstall(Symbol *	sp)			/* completely remove the Symbol */
 {
     unlink_sym(sp);				/* unlink Symbol from symbol table */
-    if (sp) free(sp->name);
     free(sp);					/* delete Symbol name and Symbol space */
 } /* uninstall */

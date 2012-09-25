@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.21 2009/08/21 05:39:05 jw Exp $
+#   $Id: README.tpl,v 1.22 2012/09/25 02:18:52 jw Exp $
 ########################################################################
 
 use strict;
@@ -55,7 +55,7 @@ print <<EOF;
     GNU General Public License or the Artistic License for more details.
 
     You should have received a copy of the Artistic License with this
-    Kit, in the file named "Artistic". If not, I'll be glad to provide one.
+    Kit, in the file named "Artistic". If not, I will be glad to provide one.
 
     You should also have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software Foundation,
@@ -176,7 +176,7 @@ print <<EOF;
     9)  To build and run the very simple iC application "hello.ic" do
 
 	    iClive hello.ic		     # starts the IDE with hell0.ic
-	    press Build > Build executable   # displays 'hello' successfully built
+	    press Build / Build executable   # displays 'hello' successfully built
 	    press Run			     # opens an iCbox with 1 button IX0.0
 	    press button IX0.0 in iCbox	     # button turns HI (input is green)
 		# 'Hello! world' is output in the window iClive was started from
@@ -185,7 +185,7 @@ print <<EOF;
 		# is coloured yellow/red, because IX0.0 is HI.
 		# When IX0.0 is pressed again to LO, the colour in the live
 		# display changes to green/black, indicating LO.
-	    press File > Quit		     # 'hello' and iCbox are terminated
+	    press File / Quit		     # 'hello' and iCbox are terminated
 
     10) A slightly bigger application is "simple.ic". Build and run it with iClive.
 	An iCbox with 16 inputs and 8 outputs is started automatically.
@@ -262,7 +262,7 @@ print <<EOF;
 
 	    iCmake -h  OR  iCman iCmake	     # gives a lot of help
 
-    15) The OpenOffice 2.2 document doc/iC.odt (or doc/iC.pdf, doc/iC.html)
+    15) The LibreOffice 3.3.1 document doc/iC.odt (or doc/iC.pdf, doc/iC.html)
 	is the handbook for the iC Programming Language. It opens the way to
 	use "immediate C" fully.
 
@@ -288,22 +288,15 @@ print <<EOF;
     John E. Wulff   $YEAR.$MONTH.$DAY     <immediateC\@gmail.com>
 
 
-    I have now switched to openSUSE 11.1, which brings along Tk804.28,
+    I have now switched to openSUSE 11.4, which brings along Tk804.29,
     which provides fast live updates in iClive again. They seem to be as
     fast as with Tk800.24. This was only judged by observation - at least
-    the performance is now subjectively good and I suggest you get Tk804.28.
-
-    I was using SuSE Linux 9.3 with Tk800.024. I have tested the
-    distribution with Cygwin under WinXP and a special binary distribution
-    of Tk800.023 (in the kit).  Perl under Windows Vista will not execute
-    forked processes, so the iC support programs don't work.
-
-    A test with Tk804.027 under MAC-OSX 1.3 and SuSE Linux 10.2 both work,
-    but live updates in iClive are noticably slow in both systems (about 10x).
-    Tag-handling in Tk::Text is much slower under Tk804.27 than under
-    Tk800.024 with Linux.
+    the performance is now subjectively good and I suggest you get Tk804.29.
 
     A Test with Knoppix and Tk804.25, which is still available for Debian
     also provided good performance with fast live updates in iClive.
+
+    No recent tests with MAC-OSX or Windows have been done - this will be
+    the next thing to do.
 EOF
 ########################################################################

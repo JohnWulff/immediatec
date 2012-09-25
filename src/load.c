@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.54 2011/11/04 04:55:45 jw Exp $";
+"@(#)$Id: load.c,v 1.55 2012/09/21 06:11:22 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -33,19 +33,17 @@ static const char load_c[] =
 extern const char	iC_ID[];
 
 Gate		iClock = { -1, -CLK, CLCKL, 0, "iClock" };	/* active */
-Gate **		iC_sTable;			/* pointer to dynamic array */
-Gate **		iC_sTend;			/* end of dynamic array */
 
 unsigned	errCount;
-char *		iC_progname;			/* name of this executable */
+char *		iC_progname;		/* name of this executable */
 short		iC_debug = 0;
 int		iC_micro = 0;
-unsigned short	iC_xflag;
-unsigned short	iC_osc_max = MARKMAX;
+unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
 unsigned short	iC_osc_lim = MARKMAX;
+unsigned short	iC_osc_flag = 0;
 
-FILE *		iC_outFP;			/* listing file pointer */
-FILE *		iC_errFP;			/* error file pointer */
+FILE *		iC_outFP;		/* listing file pointer */
+FILE *		iC_errFP;		/* error file pointer */
 
 static const char *	usage =
 "Usage: %s [-"
@@ -83,8 +81,6 @@ static const char *	usage =
 "                    +1  trace I/O send buffer\n"
 "        -t              trace gate activity (equivalent to -d 1100)\n"
 "                        can be toggled at run time by typing t\n"
-"        -x              arithmetic info in hexadecimal (default decimal)\n"
-"                        can be changed at run time by typing x or d\n"
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
@@ -113,28 +109,7 @@ char		iC_os[]         = OPS;
 char		iC_fos[]        = FOPS;
 char *		iC_useText[4]	= { USE_TEXT };
 
-unsigned char	iC_bitMask[]    = {
-    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
-};
-
-/********************************************************************
- *
- *	I/O links for display()
- *
- *******************************************************************/
-
-Gate *		iC_TX0p;			/* pointer to bit System byte Gates */
-
-Gate *		iC_IX0p;			/* pointer to Input Gate for bit iC_display */
-Gate *		iC_QX0p;			/* pointer to Output Gate for bit iC_display */
-Gate *		iC_IB1p;			/* pointer to Input Gate for byte iC_display */
-Gate *		iC_QB1p;			/* pointer to Output Gate for byte iC_display */
-Gate *		iC_IW2p;			/* pointer to Input Gate for word iC_display */
-Gate *		iC_QW2p;			/* pointer to Output Gate for word iC_display */
-#if	INT_MAX != 32767 || defined (LONG16)
-Gate *		iC_IL4p;			/* pointer to Input Gate for long iC_display */
-Gate *		iC_QL4p;			/* pointer to Output Gate for long iC_display */
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
+Gate *		iC_TX0p;		/* pointer to bit System byte Gates */
 
 /********************************************************************
  *
@@ -164,6 +139,8 @@ main(
 {
     Gate *	op;
     Gate *	gp;
+    Gate **	sTable;			/* pointer to dynamic array */
+    Gate **	sTend;			/* end of dynamic array */
     Gate ***	oppp;
     Gate **	opp;
     Gate **	lp;
@@ -254,12 +231,9 @@ main(
 		    break;
 		case 'n':
 		    if (! *++*argv) { --argc, ++argv; }
-		    iC_osc_lim = iC_osc_max = atoi(*argv);
-		    if (iC_osc_max > 15) goto error;
+		    iC_osc_lim = atoi(*argv);
+		    if (iC_osc_lim > 15) goto error;
 		    goto break2;
-		case 'x':
-		    iC_xflag = 1;	/* start with hexadecimal output */
-		    break;
 		default:
 		    fprintf(stderr,
 			"%s: unknown flag '%c'\n", iC_progname, **argv);
@@ -317,7 +291,9 @@ main(
 	    op->gt_val = (op->gt_ini == -NCONST	|| op->gt_ini == -INPW) ? -1 : 0;
 	    if (op->gt_ini != -ALIAS) {
 		op->gt_old = (op->gt_fni == TIMRL) ? op->gt_mark : 0;
-		op->gt_mark = 0;
+		if ((op->gt_ini != -ARNC && op->gt_ini != -LOGC) || op->gt_fni != UDFA) {
+		    op->gt_mark = 0;
+		}
 		/********************************************************************
 		 * handle bit I/O
 		 *******************************************************************/
@@ -395,25 +371,25 @@ main(
  *******************************************************************/
 
     val += 2;						/* count iClock and iConst */
-    iC_sTable = iC_sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
+    sTable = sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
 
-    *iC_sTend++ = &iClock;				/* enter iClock into sTable */
-    *iC_sTend++ = &iConst;				/* enter iConst into sTable */
+    *sTend++ = &iClock;				/* enter iClock into sTable */
+    *sTend++ = &iConst;				/* enter iConst into sTable */
 
     for (oppp = iC_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
-	    *iC_sTend++ = op;				/* enter node into sTable */
+	    *sTend++ = op;				/* enter node into sTable */
 	}
     }
 
-    if (val != (iC_sTend - iC_sTable)) {
+    if (val != (sTend - sTable)) {
 	fprintf(stderr,
 	    "\nERROR: %s: line %d: Gate allocation %d vs Symbol Table size %d\n",
-	    __FILE__, __LINE__, val, iC_sTend - iC_sTable);
+	    __FILE__, __LINE__, val, sTend - sTable);
 	exit(2);
     }
 
-    qsort(iC_sTable, iC_sTend - iC_sTable, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
+    qsort(sTable, sTend - sTable, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
 
 /********************************************************************
  *
@@ -453,7 +429,7 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 1 - name gt_ini gt_fni: input list\n"); fflush(stdout); }
-    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+    for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	/********************************************************************
 	 *  part A
@@ -484,7 +460,9 @@ main(
 		    }
 		}
 		if (df) printf("	%s,", gp->gt_ids);
-		op->gt_val++;			/* count input */
+		if (op->gt_val < PPGATESIZE) {
+		    op->gt_val++;			/* count input */
+		}
 		if (gp->gt_fni == ARITH) {
 		    gp->gt_mark++;			/* arithmetic output at gp */
 		    link_count++;
@@ -499,7 +477,7 @@ main(
 	 *  logical node
 	 *******************************************************************/
 	if (op->gt_ini <= -MIN_GT && op->gt_ini > -MAX_GT &&
-	    op->gt_mcnt == 0) {				/* leave out _f0_1 */
+	    op->gt_mcnt == 0) {				/* leave out _f0_1 or immC array */
 	    if (df) {
 		if (op->gt_ini < 0) {
 		    printf(" %-8s%6s%7s:", op->gt_ids,
@@ -589,7 +567,7 @@ main(
 	if (op->gt_fni >= MIN_ACT && op->gt_fni < MAX_ACT) {
 	    op->gt_mark++;				/* count self */
 	    lp = op->gt_list;
-	    if (op->gt_mcnt == 0) {			/* leave out _f0_1 */
+	    if (op->gt_mcnt == 0) {			/* leave out _f0_1 or immC array */
 		if (lp == 0 || (gp = *lp++) == 0) {
 		    inError(__LINE__, op, 0, "PASS 1: no slave node or funct for action");
 		} else
@@ -727,19 +705,19 @@ main(
 
     if (df) { printf("PASS 2 - symbol table: name inputs outputs delay-references\n"); fflush(stdout); }
     /* iClock is sorted into Symbol table and does not deed to be reported seperately */
-    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+    for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
 	    if (op->gt_mark == 0 && (op == &iClock || op == &iConst)) {
 		if (df) printf(" %-8s %3d %3d - DELETED\n", op->gt_ids, op->gt_val, op->gt_mark);
-		for (lp = opp, tlp = lp + 1; tlp < iC_sTend;) {
+		for (lp = opp, tlp = lp + 1; tlp < sTend;) {
 		    *lp++ = *tlp++;			/* delete iClock or iConst from S.T. */
 		}
 		if (op == &iConst) {
 		    link_count--;			/* terminator for iConst not needed */
 		}
 		opp--;					/* neutralise opp++ in for loop */
-		iC_sTend = lp;				/* S.T. is shortened */
+		sTend = lp;				/* S.T. is shortened */
 	    } else {
 		if (df) {
 		    printf(" %-8s %3d %3d", op->gt_ids, op->gt_val, op->gt_mark);
@@ -754,7 +732,9 @@ main(
 		    }
 		}
 		if (op->gt_val == 0 &&
-		    op->gt_mcnt == 0 &&			/* leave out _f0_1 */
+		    op->gt_mcnt == 0 &&			/* leave out _f0_1 or immC array */
+		    op->gt_ini != -ARNC &&
+		    op->gt_ini != -LOGC &&
 		    op->gt_ini != -INPB &&
 		    op->gt_ini != -INPW &&
 		    op->gt_ini != -INPX) {
@@ -763,6 +743,8 @@ main(
 		}
 		if (op->gt_mark == 0 &&
 		    op->gt_old == 0 &&
+		    op->gt_ini != -ARNC &&
+		    op->gt_ini != -LOGC &&
 		    op->gt_fni != TRAB &&
 		    op->gt_fni != OUTW &&
 		    op->gt_fni != OUTX) {
@@ -780,7 +762,8 @@ main(
 		    *fp = 0;			/* last output terminator */
 		    op->gt_list = fp++;
 		}
-		if (op->gt_ini != -INPW && op->gt_fni != OUTW && op->gt_fni != OUTX) {
+		if (op->gt_ini != -INPW && op->gt_fni != OUTW && op->gt_fni != OUTX &&
+		    ((op->gt_ini != -ARNC && op->gt_ini != -LOGC) || op->gt_fni != UDFA)) {
 		    op->gt_mark = 0;		/* must be cleared for run-time */
 		}
 	    }
@@ -820,10 +803,10 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 3\n"); fflush(stdout); }
-    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+    for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini <= -MIN_GT && op->gt_ini > -MAX_GT &&
-	    op->gt_mcnt == 0) {			/* leave out _f0_1 */
+	    op->gt_mcnt == 0) {			/* leave out _f0_1 or immC array */
 	    lp = op->gt_rlist;			/* reverse or input list */
 	    while (*lp++ != 0);			/* skip normal inputs */
 	    while ((gp = *lp++) != 0) {
@@ -844,7 +827,7 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 4\n"); fflush(stdout); }
-    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+    for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS && (op->gt_fni == GATE || op->gt_fni == GATEX)) {
 	    *(--(op->gt_list)) = 0;		/* GATE normal terminator */
@@ -862,11 +845,11 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 5\n"); fflush(stdout); }
-    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+    for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini == -ARN ||
 	    (op->gt_ini <= -MIN_GT && op->gt_ini > -MAX_GT &&
-	    op->gt_mcnt == 0)) {		/* leave out _f0_1 */
+	    op->gt_mcnt == 0)) {		/* leave out _f0_1 or immC array */
 	    lp = op->gt_rlist + (op->gt_ini == -ARN);
 	    while ((gp = *lp++) != 0) {
 		if (op->gt_ini == -XOR && gp->gt_fni == GATE) {
@@ -888,7 +871,7 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 6 - name gt_ini gt_fni: output list\n"); fflush(stdout); }
-    for (opp = iC_sTable; opp < iC_sTend; opp++) {
+    for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
 	    if (df) {
@@ -900,259 +883,238 @@ main(
 			op->gt_ini, iC_full_ftype[op->gt_fni]);
 		}
 	    }
-	    if (op->gt_ini == -ARN) {
+	    if ((op->gt_ini == -ARNC || op->gt_ini == -LOGC) && op->gt_fni == UDFA) {
+		int	n = 0;				/* immC array */
 		if ((lp = op->gt_rlist) == 0) {
-		    inError(__LINE__, op, 0, "PASS 6: arithmetic node with no input list");
+		    inError(__LINE__, op, 0, "PASS 6: immC array node with no output list");
 		}
-		gp = *lp++;				/* skip function vector (may be 0) */
-#ifdef HEXADDRESS
-		if (df) printf("	0x%lx()", (long)gp);	/* cexe_n */
-#else	/* HEXADDRESS */
-		if (df) printf("	0x0()");		/* dummy */
-#endif	/* HEXADDRESS */
-		while ((gp = *lp++) != 0) {		/* for ARN scan 1 input list */
-		    if (gp->gt_ini == -ALIAS) {		/* arithmetic ALIAS */
-			inError(__LINE__, op, gp, "PASS 6: input int ALIAS not resolved");
+		while ((gp = *lp++) != 0) {		/* scan array initialisers and check count */
+		    if (df) {
+			printf("\t[%d] %s", n, gp->gt_ids);
 		    }
+		    n++;
 		}
-	    } else
-	    /********************************************************************
-	     *  arithmetic or logical input linkage to physical I/O (mainly display)
-	     *******************************************************************/
-	    if (op->gt_ini == -INPW) {
-		if (sscanf(op->gt_ids, "%1[IT]%1[XBWL]%5d%7s",
-			iqt, xbwl, &byte, tail) == 3) {
-		    switch (iqt[0]) {
-		    case 'I':
-			switch (xbwl[0]) {
-			case 'X':
-			    if (byte == 0) {
-				iC_IX0p = op;		/* link for iC_display logic only */
-			    }
-			    break;
-			case 'B':
-			    if (byte == 1) {
-				iC_IB1p = op;		/* link for iC_display logic only */
-			    }
-			    break;
-			case 'W':
-			    if (byte == 2) {
-				iC_IW2p = op;		/* link for iC_display logic only */
-			    }
-			    break;
-			case 'L':
-#if INT_MAX != 32767 || defined (LONG16)
-			    if (byte == 4) {
-				iC_IL4p = op;		/* link for iC_display logic only */
-			    }				/* ignore if 16 bit */
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
+		if (n != op->gt_mark) {			/* use gt_mark, which is short to allow arrays up to size 32767 */
+		    inError(__LINE__, op, 0, "PASS 6: immC array has incorrect number of initialisers");
+		}
+		/* gt_mark gets clobberd by oscillator marking - transferred to gt_old in INI Pass 3 */
+	    } else {
+		if (op->gt_ini == -ARN) {
+		    if ((lp = op->gt_rlist) == 0) {
+			inError(__LINE__, op, 0, "PASS 6: arithmetic node with no input list");
+		    }
+		    gp = *lp++;				/* skip function vector (may be 0) */
+#ifdef HEXADDRESS
+		    if (df) printf("	0x%lx()", (long)gp);	/* cexe_n */
+#else	/* HEXADDRESS */
+		    if (df) printf("	0x0()");		/* dummy */
+#endif	/* HEXADDRESS */
+		    while ((gp = *lp++) != 0) {		/* for ARN scan 1 input list */
+			if (gp->gt_ini == -ALIAS) {		/* arithmetic ALIAS */
+			    inError(__LINE__, op, gp, "PASS 6: input int ALIAS not resolved");
+			}
+		    }
+		} else
+		/********************************************************************
+		 *  arithmetic or logical input linkage to physical I/O (mainly display)
+		 *******************************************************************/
+		if (op->gt_ini == -INPW) {
+		    if (sscanf(op->gt_ids, "%1[IT]%1[XBWL]%5d%7s",
+			    iqt, xbwl, &byte, tail) == 3) {
+			switch (iqt[0]) {
+			case 'T':
+			    if (byte != 0) goto inErr;	/* TXD must be 1 */
+			    iC_TX0p = op;			/* forward input link */
+			    /* fall through */
+			case 'I':
 			    break;
 			default:
 			    goto inErr;
 			}
-			break;
-		    case 'T':
-			if (byte != 0) goto inErr;	/* TXD must be 1 */
-			iC_TX0p = op;			/* forward input link */
-			break;
-		    default:
-			goto inErr;
-		    }
-		} else {
-		  inErr:
-		    inError(__LINE__, op, 0, "PASS 6: no valid input word definition");
-		}
-	    }
-	    if (op->gt_fni == UDFA) {
-		inError(__LINE__, op, 0, "PASS 6: has undefined output type UDFA");
-	    } else
-	    if (op->gt_fni < MIN_ACT) {
-		tlp = lp = op->gt_list;		/* ARITH or GATE */
-		while (*tlp++ != 0);		/* skip inputs */
-		/* sort gate list */
-		qsort(lp, tlp - lp - 1, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
-		if (df) {
-		    while ((gp = *lp++) != 0) {
-			if (gp->gt_ini == -ALIAS) {	/* resolve bit/int alias */
-			    inError(__LINE__, op, gp, "PASS 6: bit or int ALIAS not resolved");
-			    printf("	@%s,", gp->gt_ids);
-			} else {
-			    printf("	%s,", gp->gt_ids);
-			}
+		    } else {
+		      inErr:
+			inError(__LINE__, op, 0, "PASS 6: no valid input word definition");
 		    }
 		}
-		if (op->gt_fni == GATE || op->gt_fni == GATEX) {
-		    lp = tlp;
+		if (op->gt_fni == UDFA) {
+		    inError(__LINE__, op, 0, "PASS 6: has undefined output type UDFA");
+		} else
+		if (op->gt_fni < MIN_ACT) {
+		    tlp = lp = op->gt_list;		/* ARITH or GATE */
 		    while (*tlp++ != 0);		/* skip inputs */
 		    /* sort gate list */
 		    qsort(lp, tlp - lp - 1, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
 		    if (df) {
 			while ((gp = *lp++) != 0) {
-			    if (gp->gt_ini == -ALIAS) {	/* resolve inverted bit alias */
-				inError(__LINE__, op, gp, "PASS 6: inverted bit ALIAS not resolved");
-				printf("	@~%s,", gp->gt_ids);
+			    if (gp->gt_ini == -ALIAS) {	/* resolve bit/int alias */
+				inError(__LINE__, op, gp, "PASS 6: bit or int ALIAS not resolved");
+				printf("	@%s,", gp->gt_ids);
 			    } else {
-				printf("	~%s,", gp->gt_ids);
+				printf("	%s,", gp->gt_ids);
 			    }
 			}
 		    }
-		}
-	    } else
-	    if (op->gt_fni < MAX_ACT) {
-		lp = op->gt_list;				/* RI_BIT to TIMR */
-		i = 0;						/* offset for _f0_1 */
-		if (op->gt_mcnt == 0) {				/* leave out _f0_1 */
-		    if (lp == 0 || (gp = *lp++) == 0) {
-			inError(__LINE__, op, 0, "PASS 6: no slave for master action RI_BIT to TIMR");
-		    } else
-		    if (op->gt_fni != F_SW && op->gt_fni != F_CF && op->gt_fni != F_CE) {
-			if (df) printf("	%s,", gp->gt_ids);
-		    } else {
+		    if (op->gt_fni == GATE || op->gt_fni == GATEX) {
+			lp = tlp;
+			while (*tlp++ != 0);		/* skip inputs */
+			/* sort gate list */
+			qsort(lp, tlp - lp - 1, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
+			if (df) {
+			    while ((gp = *lp++) != 0) {
+				if (gp->gt_ini == -ALIAS) {	/* resolve inverted bit alias */
+				    inError(__LINE__, op, gp, "PASS 6: inverted bit ALIAS not resolved");
+				    printf("	@~%s,", gp->gt_ids);
+				} else {
+				    printf("	~%s,", gp->gt_ids);
+				}
+			    }
+			}
+		    }
+		} else
+		if (op->gt_fni < MAX_ACT) {
+		    lp = op->gt_list;				/* RI_BIT to TIMR */
+		    i = 0;						/* offset for _f0_1 */
+		    if (op->gt_mcnt == 0) {				/* leave out _f0_1 or immC array */
+			if (lp == 0 || (gp = *lp++) == 0) {
+			    inError(__LINE__, op, 0, "PASS 6: no slave for master action RI_BIT to TIMR");
+			} else
+			if (op->gt_fni != F_SW && op->gt_fni != F_CF && op->gt_fni != F_CE) {
+			    if (df) printf("	%s,", gp->gt_ids);
+			} else {
 #ifdef HEXADDRESS
-			if (df) printf("	0x%lx()", (long)gp);	/* cexe_n */
+			    if (df) printf("	0x%lx()", (long)gp);	/* cexe_n */
 #else	/* HEXADDRESS */
-			if (df) printf("	0x0(),");		/* dummy */
+			    if (df) printf("	0x0(),");		/* dummy */
 #endif	/* HEXADDRESS */
-		    }
-		    i = 2;					/* offset for clock */
-		    if ((gp = *lp++) == 0) {
-			inError(__LINE__, op, 0, "PASS 6: no clock or timer for master action");
-		    } else
-		    if (gp->gt_fni != CLCKL && gp->gt_fni != TIMRL) {
-			inError(__LINE__, op, gp, "PASS 6: strange clock or timer");
-		    } else {
-			if (gp->gt_ini == -ALIAS) {		/* resolve clock/timer alias */
-			    inError(__LINE__, op, gp, "PASS 6: clock or timer ALIAS not resolved");
 			}
-			if ((gp->gt_fni != CLCKL || gp->gt_ini != -CLK) &&
-			    (gp->gt_fni != TIMRL || gp->gt_ini != -TIM)) {
-			    inError(__LINE__, op, gp, "PASS 6: clock or timer master does not match slave");
-			}
-			if (df) printf("	%c%s,", iC_os[-gp->gt_ini], gp->gt_ids);
-			if (gp->gt_fni == TIMRL) {
-			    if ((gp = *lp++) == 0) {
-				inError(__LINE__, op, 0, "PASS 6: timed action has no delay");
-			    } else {
-				if (gp->gt_ini == -ALIAS) {	/* resolve arithmetic alias */
-				    inError(__LINE__, op, gp, "PASS 6: arithmetic delay ALIAS not resolved");
-				}
-				if (df) printf("	<%s,", gp->gt_ids);
+			i = 2;					/* offset for clock */
+			if ((gp = *lp++) == 0) {
+			    inError(__LINE__, op, 0, "PASS 6: no clock or timer for master action");
+			} else
+			if (gp->gt_fni != CLCKL && gp->gt_fni != TIMRL) {
+			    inError(__LINE__, op, gp, "PASS 6: strange clock or timer");
+			} else {
+			    if (gp->gt_ini == -ALIAS) {		/* resolve clock/timer alias */
+				inError(__LINE__, op, gp, "PASS 6: clock or timer ALIAS not resolved");
 			    }
-			    i = 3;				/* offset for timer */
+			    if ((gp->gt_fni != CLCKL || gp->gt_ini != -CLK) &&
+				(gp->gt_fni != TIMRL || gp->gt_ini != -TIM)) {
+				inError(__LINE__, op, gp, "PASS 6: clock or timer master does not match slave");
+			    }
+			    if (df) printf("	%c%s,", iC_os[-gp->gt_ini], gp->gt_ids);
+			    if (gp->gt_fni == TIMRL) {
+				if ((gp = *lp++) == 0) {
+				    inError(__LINE__, op, 0, "PASS 6: timed action has no delay");
+				} else {
+				    if (gp->gt_ini == -ALIAS) {	/* resolve arithmetic alias */
+					inError(__LINE__, op, gp, "PASS 6: arithmetic delay ALIAS not resolved");
+				    }
+				    if (df) printf("	<%s,", gp->gt_ids);
+				}
+				i = 3;				/* offset for timer */
+			    }
 			}
 		    }
-		}
-		if (op->gt_fni == F_SW || op->gt_fni == F_CF || op->gt_fni == F_CE) {
-		    if ((slp = op->gt_rlist) == 0) {	/* F_SW to F_CE */
-			inError(__LINE__, op, 0, "PASS 6: no condition for switch, if else action");
-		    } else
-		    if (lp < slp) {
-			/********************************************************************
-			 * slp also delimits C parameter list starting at lp
-			 * for every USE_COUNT parameters there is 1 use word at the end.
-			 * Therefore divide by USE_COUNT + 1, because slp points past extra
-			 * use word(s).
-			 *******************************************************************/
-			Gate **		ulp;
-			Gate **		elp;
-			int		uc;
-			int		j;
-			unsigned int	useWord = 0	/* satisfies -Wall */;
+		    if (op->gt_fni == F_SW || op->gt_fni == F_CF || op->gt_fni == F_CE) {	/* includes literal block _f0_1 */
+			if ((slp = op->gt_rlist) == 0) {	/* F_SW to F_CE */
+			    inError(__LINE__, op, 0, "PASS 6: no condition for switch, if else action");
+			} else
+			if (lp < slp) {
+			    /********************************************************************
+			     * slp also delimits C parameter list starting at lp
+			     * for every USE_COUNT parameters there is 1 use word at the end.
+			     * Therefore divide by USE_COUNT + 1, because slp points past extra
+			     * use word(s).
+			     *******************************************************************/
+			    Gate **		ulp;
+			    Gate **		elp;
+			    int		uc;
+			    int		j;
+			    unsigned int	useWord = 0	/* satisfies -Wall */;
 
-			uc = slp - lp;
-			assert(uc >= 2);			/* at least one pointer and one use word */
-			uc = (USE_COUNT + uc) / (USE_COUNT + 1);	/* # of use words */
-			ulp = elp = slp - uc;
-			j = USE_COUNT - 1;
-			while (lp < elp) {
-			    if (++j >= USE_COUNT) {
-				useWord = (unsigned int)(unsigned long)*ulp++;	/* next use word */
-				j = 0;			/* executed at least once - useWord is initialized */
-			    } else {
-				useWord >>= 2;			/* next set of useBits */
-			    }
-			    if ((gp = *lp++) == 0) {
-				inError(__LINE__, op, 0, "PASS 6: C parameter missing");
-			    } else {
-				if (gp->gt_ini == -ALIAS) {	/* arithmetic alias */
-				    inError(__LINE__, op, gp, "PASS 6: C parameter ALIAS not resolved");
+			    uc = slp - lp;
+			    assert(uc >= 2);			/* at least one pointer and one use word */
+			    uc = (USE_COUNT + uc) / (USE_COUNT + 1);	/* # of use words */
+			    ulp = elp = slp - uc;
+			    j = USE_COUNT - 1;
+			    while (lp < elp) {
+				if (++j >= USE_COUNT) {
+				    useWord = (unsigned int)(unsigned long)*ulp++;	/* next use word */
+				    j = 0;			/* executed at least once - useWord is initialized */
+				} else {
+				    useWord >>= 2;			/* next set of useBits */
 				}
-				if (df) printf("\tC%d %s %s,", i++, gp->gt_ids,
-				    iC_useText[useWord & (USE_MASK >> USE_OFFSET)]);
+				if ((gp = *lp++) == 0) {
+				    inError(__LINE__, op, 0, "PASS 6: C parameter missing");
+				} else {
+				    if (gp->gt_ini == -ALIAS) {	/* arithmetic alias */
+					inError(__LINE__, op, gp, "PASS 6: C parameter ALIAS not resolved");
+				    }
+				    if (df) printf("\tC%d %s %s,", i++, gp->gt_ids,
+					iC_useText[useWord & (USE_MASK >> USE_OFFSET)]);
+				}
 			    }
+			    lp = slp;				/* skip over use words */
 			}
-			lp = slp;				/* skip over use words */
 		    }
-		}
-	    } else
-	    /********************************************************************
-	     *  arithmetic or logical output linkage to physical I/O
-	     *******************************************************************/
-	    if (op->gt_fni == OUTW) {
-		if ((i = sscanf(op->gt_ids, "Q%1[XBWL]%5d%7s", xbwl, &byte, tail)) >= 2) {
-		    switch (xbwl[0]) {
-		    case 'X':
-			if (i > 2) goto outErr;		/* no tail _0 allowed for QXn */
-			if (byte == 0) {
-			    iC_QX0p = op;		/* link for iC_display logic only */
-			}
-			break;				/* op->gt_mark set to used bits 0x01 to 0x80 in Pass 0 */
-		    case 'B':
-			if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
-			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
-			op->gt_mark = B_WIDTH;
-			if (byte == 1) {
-			    iC_QB1p = op;		/* link for iC_display logic only */
-			}
-			break;
-		    case 'W':
-			if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
-			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
-			op->gt_mark = W_WIDTH;
-			if (byte == 2) {
-			    iC_QW2p = op;		/* link for iC_display logic only */
-			}
-			break;
+		} else
+		/********************************************************************
+		 *  arithmetic or logical output linkage to physical I/O
+		 *******************************************************************/
+		if (op->gt_fni == OUTW) {
+		    if ((i = sscanf(op->gt_ids, "Q%1[XBWL]%5d%7s", xbwl, &byte, tail)) >= 2) {
+			switch (xbwl[0]) {
+			case 'X':
+			    if (i > 2) goto outErr;		/* no tail _0 allowed for QXn */
+			    break;				/* op->gt_mark set to used bits 0x01 to 0x80 in Pass 0 */
+			case 'B':
+			    if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
+			    op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
+			    op->gt_mark = B_WIDTH;
+			    break;
+			case 'W':
+			    if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
+			    op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
+			    op->gt_mark = W_WIDTH;
+			    break;
 #if INT_MAX != 32767 || defined (LONG16)
-		    case 'L':
-			if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
-			op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
-			op->gt_mark = L_WIDTH;
-			if (byte == 4) {
-			    iC_QL4p = op;		/* link for iC_display logic only */
-			}
-			break;
+			case 'L':
+			    if (i != 3 || strcmp(tail, "_0") != 0) goto outErr;
+			    op->gt_out = 0;			/* initial default value (gt_rlist no longer needed) */
+			    op->gt_mark = L_WIDTH;
+			    break;
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
-		    default:
-			goto outErr;
+			default:
+			    goto outErr;
+			}
+			if (df) printf("	0x%02x", op->gt_mark);
+		    } else {
+		      outErr:
+			inError(__LINE__, op, 0, "PASS 6: no valid output word definition");
 		    }
-		    if (df) printf("	0x%02x", op->gt_mark);
-		} else {
-		  outErr:
-		    inError(__LINE__, op, 0, "PASS 6: no valid output word definition");
-		}
-	    } else
-	    if (op->gt_fni < CLCKL) {
-		if (df) {
-		    if (op->gt_fni == OUTX) {
-			gp = op->gt_ptr;		/* OUTX */
-			printf("	%s	0x%02x", gp->gt_ids, op->gt_mark);
+		} else
+		if (op->gt_fni < CLCKL) {
+		    if (df) {
+			if (op->gt_fni == OUTX) {
+			    gp = op->gt_ptr;		/* OUTX */
+			    printf("	%s	0x%02x", gp->gt_ids, op->gt_mark);
+			}
 		    }
-		}
-	    } else
-	    if (op->gt_fni <= TIMRL) {
-		if (op->gt_list != 0) {
-		    inError(__LINE__, op, 0, "PASS 6: clock or timer with initial forward list");
-		}
-		if (op->gt_fni == TIMRL && op->gt_old > 0) {
+		} else
+		if (op->gt_fni <= TIMRL) {
+		    if (op->gt_list != 0) {
+			inError(__LINE__, op, 0, "PASS 6: clock or timer with initial forward list");
+		    }
+		    if (op->gt_fni == TIMRL && op->gt_old > 0) {
 #if INT_MAX == 32767 && defined (LONG16)
-		    if (df) printf("	(%ld)", op->gt_old);
+			if (df) printf("	(%ld)", op->gt_old);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-		    if (df) printf("	(%d)", op->gt_old);
+			if (df) printf("	(%d)", op->gt_old);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
+		    }
+		} else {
+		    inError(__LINE__, op, 0, "PASS 6: unknown output type (ftype)");
 		}
-	    } else {
-		inError(__LINE__, op, 0, "PASS 6: unknown output type (ftype)");
 	    }
 	    if (df) printf("\n");
 	} else
@@ -1173,7 +1135,10 @@ main(
     if (errCount) {
 	exit(6);					/* pass 6 failed */
     }
-    iC_icc(&iClock, &errCount);				/* execute load object */
+    iC_icc(sTable, sTend);				/* execute load object */
+    /********************************************************************
+     * never returns - exits via iC_quit()
+     *******************************************************************/
     return 0;
 } /* main */
 #endif	/* LOAD */

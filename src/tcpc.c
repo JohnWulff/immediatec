@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.21 2010/12/14 07:05:06 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.22 2012/07/16 06:36:57 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -21,6 +21,7 @@ static const char RCS_Id[] =
  *******************************************************************/
 
 #include	<stdio.h>
+#include	<signal.h>
 #ifdef	WIN32
 #include	<Time.h>
 #else	/* WIN32 */
@@ -36,12 +37,8 @@ const char *	iC_hostNM = "localhost";	/* 127.0.0.1 */
 const char *	iC_portNM = "8778";		/* iC service */
 char *		iC_iccNM  = "stdin";		/* immcc name qualified with instance */
 char *		iC_iidNM  = "";			/* instance ID */
-double		iC_timeout = 0.05;		/* default 50 ms on 50 ms off */
-
 fd_set		iC_rdfds;
 fd_set		iC_infds;
-struct timeval	iC_timeoutCounter;
-struct timeval	iC_timeoutValue;
 
 /********************************************************************
  *
@@ -58,7 +55,6 @@ typedef struct NetBuffer {
     char	buffer[REPLY];
 } NetBuffer;
 
-static struct timeval *	ptv = NULL;
 #ifdef	WIN32
 static int	freqFlag;
 static double	frequency;
@@ -129,15 +125,13 @@ iC_microPrint(const char * str, int mask)
  *
  *	Connect to server 'host' and 'port' as a client
  *	Use 'iccNM' for messages (do not register with server)
- *	Set timeout value with 'delay' 
  *	Return:	socket file number
  *
  *******************************************************************/
 
 SOCKET
 iC_connect_to_server(const char *	host,
-		     const char *	port,
-		     double		delay)
+		     const char *	port)
 {
     SOCKET		sock;
     struct in_addr	sin_addr;
@@ -148,15 +142,14 @@ iC_connect_to_server(const char *	host,
     WSADATA		wsaData;
     int			err;
 
-//    wVersionRequested = MAKEWORD( 1, 0 );
-    wVersionRequested = MAKEWORD( 2, 2 );
+    wVersionRequested = MAKEWORD( 2, 2 );	// alternative MAKEWORD( 1, 0 );
 
     err = WSAStartup( wVersionRequested, &wsaData );
     if ( err != 0 ) {
 	/* Tell the user that we could not find a usable */
 	/* WinSock DLL.                                  */
 	fprintf(iC_errFP, "WSAStartup failed: %d\n", err);
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
 /*    fprintf(iC_errFP, "WSAStartup: requested %d.%d, version %d.%d, high version %d.%d\n",
 	HIBYTE( wVersionRequested ), LOBYTE( wVersionRequested ),
@@ -178,7 +171,7 @@ iC_connect_to_server(const char *	host,
 	fprintf(iC_errFP, "WSAStartup failed: requested %d.%d, got %d.%d\n",
 	    HIBYTE( wVersionRequested ), LOBYTE( wVersionRequested ),
 	    HIBYTE( wsaData.wVersion ), LOBYTE( wsaData.wVersion ));
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
 
     /* The WinSock DLL is acceptable. Proceed. */
@@ -193,13 +186,13 @@ iC_connect_to_server(const char *	host,
 #endif	/* WIN32 */
 	{
 	    fprintf(iC_errFP, "inet_aton with '%s' failed\n", host);
-	    iC_quit(1);
+	    iC_quit(SIGUSR1);
 	}
     } else {
 	struct hostent *	pHost;
 	if ((pHost = gethostbyname(host)) == NULL) {
 	    fprintf(iC_errFP, "gethostbyname with '%s' failed\n", host);
-	    iC_quit(1);
+	    iC_quit(SIGUSR1);
 	}
 	/* gethostbyname returns h_addr in network byte order */
 	sin_addr.s_addr = *((unsigned int*)pHost->h_addr);
@@ -211,7 +204,7 @@ iC_connect_to_server(const char *	host,
 	struct servent *	pServ;
 	if ((pServ = getservbyname(port, "tcp")) == NULL) {
 	    fprintf(iC_errFP, "getservbyname with '%s/tcp' failed\n", port);
-	    iC_quit(1);
+	    iC_quit(SIGUSR1);
 	}
 	/* getservbyname returns s_port in network byte order */
 	sin_port = pServ->s_port;
@@ -220,12 +213,14 @@ iC_connect_to_server(const char *	host,
 #ifdef	WIN32
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
 	fprintf(iC_errFP, "socket failed: %d\n", WSAGetLastError());
+	iC_quit(SIGUSR1);
+    }
 #else	/* WIN32 */
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 	perror("socket failed");
-#endif	/* WIN32 */
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
+#endif	/* WIN32 */
 
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
@@ -236,10 +231,10 @@ iC_connect_to_server(const char *	host,
 	fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
 	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
 	perror("connect failed");
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
 
-    if (iC_osc_max != 0) {		/* suppress connection info for unlimited oscillations */
+    if (iC_osc_lim != 0) {		/* suppress connection info for unlimited oscillations */
 	fprintf(iC_outFP, "'%s' connected to server at '%s:%d'\n",
 	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     }
@@ -250,13 +245,6 @@ iC_connect_to_server(const char *	host,
     /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
 #endif	/* WIN32 */
     FD_SET(sock, &iC_infds);		/* watch sock for inputs */
-
-    iC_timeoutValue.tv_sec = (int)delay;
-    iC_timeoutValue.tv_usec = (int)((delay - iC_timeoutValue.tv_sec) * 1e6);
-    if (iC_timeoutValue.tv_sec != 0 || iC_timeoutValue.tv_usec != 0) {
-	iC_timeoutCounter = iC_timeoutValue;
-	ptv = &iC_timeoutCounter;
-    }
     return sock;
 } /* iC_connect_to_server */
 
@@ -267,17 +255,17 @@ iC_connect_to_server(const char *	host,
  *******************************************************************/
 
 int
-iC_wait_for_next_event(int maxFN)
+iC_wait_for_next_event(int maxFN, struct timeval * ptv)
 {
     int	retval;
 
-    do {
+    do {				/* repeat for caught signal */
 	iC_rdfds = iC_infds;
     } while ((retval = select(maxFN + 1, &iC_rdfds, 0, 0, ptv)) == -1 && errno == EINTR);
 #ifdef	WIN32
     if (retval == -1) {
 	fprintf(iC_errFP, "ERROR: select failed: %d\n", WSAGetLastError());
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
 #endif	/* WIN32 */
 
@@ -305,7 +293,7 @@ rcvd_buffer_from_server(SOCKET sock, char * buf, int length)
 	}
     } else if (len < 0) {
 	perror("recv failed");
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
     return len;
 } /* rcvd_buffer_from_server */
@@ -370,6 +358,6 @@ iC_send_msg_to_server(SOCKET sock, const char * msg)
     len += sizeof netBuf.length;
     if (send(sock, (char*)&netBuf, len, 0) != len) {
 	perror("send failed");
-	iC_quit(1);
+	iC_quit(SIGUSR1);
     }
 } /* iC_send_msg_to_server */

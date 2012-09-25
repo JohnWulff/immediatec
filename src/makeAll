@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2011  John E. Wulff
+#	Copyright (C) 2000-2012  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -54,7 +54,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.32 2011/10/24 05:57:50 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.33 2012/03/27 03:51:29 jw Exp $' >&2
 }
 
 makeLib ()
@@ -230,9 +230,11 @@ exit 0
 
 ############ POD to generate man page ##################################
 
+=encoding utf8
+
 =head1 NAME
 
- makeAll - supports Makefile in immcc develeopment
+makeAll - supports Makefile in immediate-C develeopment
 
 =head1 SYNOPSIS
 
@@ -323,7 +325,7 @@ L<immcc(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2011  John E. Wulff
+COPYRIGHT (C) 2000-2012  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.104 2011/10/24 05:54:28 jw Exp $";
+"@(#)$Id: comp.y,v 1.105 2012/09/23 04:52:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -43,7 +43,6 @@ static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
 static Type	stype;			/* to save TYPE in decl */
 static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
-static Symbol	tSym = { "_tSym_", AND, GATE, };
 static Symbol	nSym = { "", ERR, GATE, };
 static int	cFn = 0;
 
@@ -82,40 +81,68 @@ clrBuf(void)
 } /* clrBuf */
 
 #if YYDEBUG
+/********************************************************************
+ *
+ *	Detailed logic generation debugging output for different stack types
+ *	usually only called if ((iC_debug & 0402) == 0402)
+ *				pu(SYM, "dasgn: decl = aexpr", &$$);
+ *		Parameter 1:	one of SYM LIS VAL TYP or STR
+ *		Parameter 2:	a message - usually the grammar rule
+ *		Parameter 3:	a pointer to the full yacc stack type token
+ *
+ *	Each stack type token has identical first elements
+ *		char * f	// start of generated compiler text
+ *		char * l	// last+1 of generated compiler text
+ *	The compiler text for this token is output after the name or value
+ *	of the token itself which is in:
+ *		Symbol * v	// Symbol name
+ *		List_e * v	// name of Symbol List_e points to
+ *		uint     v	// numerical value
+ *		Type     v	// type information
+ *	or	char     v[2]	// 2 character string
+ *
+ *******************************************************************/
+
 void
-pu(int t, char * token, Lis * node)
+pu(enum stackType t, const char * token, void * node)
 {
     char *	t_first;
     char *	t_last;
     int		len;
 
     switch (t) {
-    case 0:
-	if (node->v) {
+    case SYM:
+	if (((Sym*)node)->v) {
 	    fprintf(iC_outFP, ">>>Sym	%s	%s :	", token, ((Sym*)node)->v->name);
 	} else {
 	    fprintf(iC_outFP, ">>>Sym	%s	0 =	", token);
 	}
 	break;
-    case 1:
-	if (node->v) {
-	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, node->v->le_sym ? node->v->le_sym->name : "(0)");
+    case LIS:
+	if (((Lis*)node)->v) {
+	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, ((Lis*)node)->v->le_sym ? ((Lis*)node)->v->le_sym->name : "(0)");
 	} else {
 	    fprintf(iC_outFP, ">>>Lis	%s	0 =	", token);
 	}
 	break;
-    case 2:
+    case VAL:
 	fprintf(iC_outFP, ">>>Val	%s	%d =	", token, ((Val*)node)->v);
 	break;
-    case 3:
+    case TYP:
+	/* single character for type, . normal or - external, ftype */
+	fprintf(iC_outFP, ">>>Typ	%s	%c%c %c =	", token,
+	    iC_os[((Typ*)node)->v.type],  iC_os[((Typ*)node)->v.em  & EM], iC_fos[((Typ*)node)->v.ftype]);
+	break;
+    case STR:
 	fprintf(iC_outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
 	break;
     }
-    len = (t_last = node->l) - (t_first = node->f);
+    len = (t_last = ((Sym*)node)->l) - (t_first = ((Sym*)node)->f);
     if (len > 0 && t_first >= iCbuf && t_first < &iCbuf[IMMBUFSIZE] && t_last >= iCbuf && t_last < &iCbuf[IMMBUFSIZE]) {
 	fprintf(iC_outFP, "%-*.*s\n", len, len, t_first);
     } else if (len != 0) {
-	fprintf(iC_outFP, "\n*** Error: CODE GENERATION len = %d, f = 0x%lx l = 0x%lx\n", len, (long)t_first, (long)t_last);
+	fprintf(iC_outFP, "\n*** Error: CODE GENERATION len = %d, f = %p l = %p iCbuf[%d] %p\n",
+	    len, t_first, t_last, IMMBUFSIZE, iCbuf);
     } else {
 	fprintf(iC_outFP, "\n");
     }
@@ -128,9 +155,9 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
     fprintf(iC_outFP, ">>>%s\t%s\t[%c%c %c] [%c%c %c] => [%c%c %c]\n",
 	token, s2->name,
 	/* single character for type, . normal or - external, ftype */
-	iC_os[s1.type],  iC_os[s1.em],  iC_fos[s1.ftype],
-	iC_os[s2->type], iC_os[s2->em], iC_fos[s2->ftype],
-	iC_os[ss->type], iC_os[ss->em], iC_fos[ss->ftype]);
+	iC_os[s1.type],  iC_os[s1.em  & EM], iC_fos[s1.ftype],
+	iC_os[s2->type], iC_os[s2->em & EM], iC_fos[s2->ftype],
+	iC_os[ss->type], iC_os[ss->em & EM], iC_fos[ss->ftype]);
     fflush(iC_outFP);
 } /* pd */
 
@@ -143,21 +170,21 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 	 *
 	 ***********************************************************/
 
-%token	<sym>	UNDEF AVARC AVAR LVARC LVAR AOUT LOUT BLATCH BFORCE DLATCH
-%token	<sym>	BLTIN1 BLTIN2 BLTIN3 BLTINX BLTINJ BLTINT CVAR CBLTIN TVAR TBLTIN TBLTI1
-%token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE
-%token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME NUMBER
-%token	<val>	CCFRAG
+%token	<sym>	UNDEF IMMCARRAY AVARC AVAR LVARC LVAR AOUT LOUT BFORCE
+%token	<sym>	BLTIN1 BLTIN2 BLTIN3 CVAR CBLTIN TVAR TBLTIN TBLTI1
+%token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE SIZEOF
+%token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
+%token	<val>	CCFRAG NUMBER
 %token	<str>	LEXERR COMMENTEND LHEAD BE
 %type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
-%type	<sym>	returnStatement formalParameter lBlock variable valueVariable outVariable
+%type	<sym>	returnStatement formalParameter lBlock dVariable valueVariable cVariable outVariable
 %type	<sym>	useFlag decl extDecl immDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<sym>	iFunTrigger vFunCall vFunCallHead iFunCallHead cFunCallHead tFunCallHead
-%type	<sym>	extCfunDecl dVar
-%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr actexpr tfexpr ifini ffexpr
-%type	<list>	cref ctref ctdref cCall cParams cPlist dPar
+%type	<sym>	extCfunDecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
+%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr ractexpr actexpr tfexpr ifini ffexpr
+%type	<list>	cref ctref ctdref cCall cParams cPlist dPar immCini immCiniList
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall rParams rPlist
-%type	<val>	cBlock dParams dPlist
+%type	<val>	cBlock dParams dPlist immCindex constExpr
 %type	<typ>	declHead extDeclHead formalParaTypeDecl extCfunDeclHead
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
@@ -165,11 +192,13 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %right	<str>	'?' ':'		/* ? : */
 %right	<str>	OO		/* || */
 %right	<str>	AA 		/* && */
-%right	<str>	'|'		/* logical or */
+%right	<str>	'|'		/* logical or - must do before arithmetic operators */
 %right	<str>	'^'		/* logical exclusive or */
 %right	<str>	'&'		/* logical and */
 %right	<str>	CMP		/* compare operators == != < <= > >= */
-%right	<str>	AOP PM '*'	/* arithmetic operators << >> / % + - * */
+%right	<str>	'*' AOP		/* arithmetic operators * / % */
+%right	<str>	'+' '-'		/* arithmetic operators + - */
+%right	<str>	LEFT_OP RIGHT_OP/* arithmetic operators << >> */
 %nonassoc <str>	'!' '~' PPMM	/* unary operators ! ~ ++ -- (+ - & *) */
 %right	<str>	PR 		/* structure operators -> . */
 %%
@@ -206,31 +235,40 @@ funcStatement
 simpleStatement
 	: useFlag		{ $$   = $1; }		/* use flags */
 	| extCfunDecl		{ $$   = $1; }		/* external C function declaration */
-	| extCfunDecl ','	{ $$   = $1; }		/* external C function declaration - new style */
+	| extCfunDecl ','	{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	| extDecl		{ $$   = $1; }		/* external declaration */
-	| extDecl ','		{ $$   = $1; }		/* external declaration - new style */
+	| extDecl ','		{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	| immDecl		{ $$   = $1;		/* immediate declaration */
 	    iFunSyText = 0; }
-	| immDecl ','		{ $$   = $1;		/* immediate declaration - new style */
+	| immDecl ','		{ $$   = $1;		/* " new style for immac which can generate ,; */
 	    iFunSyText = 0; }
 	| asgn			{ $$   = $1; }		/* immediate value assignment */
 	| casgn			{ $$   = $1; }		/* clock assignment */
 	| tasgn			{ $$   = $1; }		/* timer assignment */
 	| vFunCall		{ $$   = $1; }		/* void function call */
+	| immCarray		{ $$   = $1;		/* declare and initialise an immC array */
+	    iFunSyText = 0; }
+	| immCarray ','		{ $$   = $1;		/* " new style for immac which can generate ,; */
+	    iFunSyText = 0; }
+	| extimmCarray		{ $$   = $1; }		/* declare an immC array extern */
+	| extimmCarray ','	{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	;
 
-variable
+dVariable
 	: valueVariable		{ $$   = $1; }		/* value variable */
 	| outVariable		{ $$   = $1; }		/* output variable */
 	| CVAR			{ $$   = $1; }		/* clock variable */
 	| TVAR			{ $$   = $1; }		/* timer variable */
-	| NUMBER		{ $$   = $1; }		/* numeric constant */
+	| constExpr		{			/* numeric constant */
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = 0;				/* no node, do not need value */
+	    }
 	;
 
 valueVariable
 	: LVAR			{ $$   = $1; }		/* logical bit variable */
-	| LVARC			{ $$   = $1; }		/* logical C bit variable */
 	| AVAR			{ $$   = $1; }		/* arithmetic variable */
+	| LVARC			{ $$   = $1; }		/* logical C bit variable */
 	| AVARC			{ $$   = $1; }		/* arithmetic C variable */
 	;
 
@@ -451,11 +489,19 @@ extCfunDeclHead
 		}
 		stype.ftype = ARITH;
 		stype.type  = ARN;
-		stype.em    = 1;		/* set em for extern declaration */
+		stype.em    |= EM;		/* set em for extern declaration */
 		stype.fm    = 0;
 		$$.v = stype;
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extCfunDeclHead: EXTERN TYPE", &$$);
+#endif
 	    }
-	| extCfunDecl ','	{ $$.v = stype;	/* first TYPE */ }
+	| extCfunDecl ','	{
+		$$.v = stype;	/* first TYPE */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extCfunDeclHead: extCfunDecl", &$$);
+#endif
+	    }
 	;
 
 dParams	: /* nothing */		{ $$.v =  0; }
@@ -489,7 +535,7 @@ dVar	: /* nothing */		{ $$.v = 0; }
 		}
 		$$.v = 0;
 	    }
-	| variable		{ $$.v = 0; }	/* since this is a dummy use any word or number */
+	| dVariable		{ $$.v = 0; }	/* since this is a dummy use any word or number */
 	;
 
 	/************************************************************
@@ -557,42 +603,47 @@ extDecl	: extDeclHead UNDEF	{
 		$$.v = $2.v;
 		$$.v->ftype = $1.v.ftype;
 		$$.v->type  = $1.v.type;
-		$$.v->em    = $1.v.em;		/* has em set from extDeclHead */
+		assert($1.v.em & EM);		/* has been set in extDeclHead */
+		$$.v->em    |= EM;		/* set bit EM here */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
 		    pd("extDecl", $$.v, $1.v, $2.v);
 		}
 #endif
 	    }
-	| extDeclHead variable	{
-		char *	cp;
+	| extDeclHead dVariable	{
+		int		typ;
+		char *		cp;
 		Symbol *	sp;
 		sp = $$.v = $2.v;
 		if (sp) {
-		    if ($2.v->ftype != $1.v.ftype) {
-			ierror("extern declaration does not match previous declaration:", $2.v->name);
-			$2.v->type = ERR;	/* cannot execute properly */
+		    if (sp->ftype != $1.v.ftype) {
+			ierror("extern declaration does not match previous declaration:", sp->name);
+			sp->type = ERR;	/* cannot execute properly */
 		    }
-		    if (iFunSymExt && (cp = strchr($2.v->name, '@'))) {
+		    if (iFunSymExt && (cp = strchr(sp->name, '@'))) {
 			warning("extern declaration of internal function variable - ignored:", cp+1);
 		    } else
-		    if ($2.v->type == UDF ||	/* new extern or unused QXx.y QBz */
-			($2.v->em && $2.v->type != ERR)) {	/* or prev extern but not ERROR */
-			$$.v->ftype = $1.v.ftype;
-			$$.v->type  = $1.v.type;
-			$$.v->em    = $1.v.em;	/* has em set from extDeclHead */
+		    if ((typ = sp->type) == UDF ||	/* extern of unused imm or QXx.y QBz */
+			((sp->em & EM) && typ != ERR)) {	/* or prev extern but not ERROR */
+			sp->ftype = $1.v.ftype;
+			sp->type  = $1.v.type;/* UDF unless ARGC or LOGC */
+			assert($1.v.em & EM);	/* has been set in extDeclHead */
+			sp->em    |= EM;	/* set bit EM here */
 		    } else
 		    if (iFunSymExt) {
-			ierror("extern declaration in function definition after assignment:", $2.v->name);
-			$$.v->type = ERR;	/* stop use as a statement in function */
-			$$.v->em   = 1;
+			ierror("extern declaration in function definition after assignment:", sp->name);
+			sp->type = ERR;	/* stop use as a statement in function */
+			sp->em   |= EM;
 		    } else
-		    if ($2.v->type == INPW || $2.v->type == INPX) {
+		    if (typ == INPW || typ == INPX) {
 			if (iC_Sflag) {
-			    warning("strict: extern declaration of an input variable - ignored:", $2.v->name);
+			    warning("strict: extern declaration of an input variable - ignored:", sp->name);
 			}
+		    } else if (typ == ARNC || typ == LOGC) {
+			warning("extern immC declaration after definition - ignored:", sp->name);
 		    } else {
-			warning("extern declaration after assignment - ignored:", $2.v->name);
+			warning("extern declaration after assignment - ignored:", sp->name);
 		    }
 #if YYDEBUG
 		    if ((iC_debug & 0402) == 0402) {
@@ -627,16 +678,29 @@ extDeclHead
 		    }
 		    typ = iC_types[ftyp];	/* ARN OR CLK TIM */
 		}
-		stype.ftype = $3.v->ftype;
+		stype.ftype = $3.v->ftype;	/* ftyp has changed for CLCKL and TIMRL */
 		stype.type  = typ;
-		stype.em    = 1;		/* set em for extern declaration */
+		stype.em    |= EM;		/* set em for extern declaration */
 		stype.fm    = 0;
 		$$.v = stype;
 		iFunSyText = 0;			/* no function symbols for extern */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extDeclHead: EXTERN IMM TYPE", &$$);
+#endif
 	    }
 	| extDecl ','		{
 		$$.v = stype;	/* first TYPE */
 		iFunSyText = 0;			/* no function symbols for extern */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extDeclHead: extDecl ,", &$$);
+#endif
+	    }
+	| extimmCarray ','	{
+		$$.v = stype;	/* first TYPE */
+		iFunSyText = 0;			/* no function symbols for extern */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extDeclHead: extimmCarray ,", &$$);
+#endif
 	    }
 	;
 
@@ -686,16 +750,17 @@ decl	: declHead UNDEF	{
 		sp = $$.v = $2.v;
 		sp->ftype = $1.v.ftype;		/* bit int clock timer */
 		sp->type  = $1.v.type;
-		sp->em    = $1.v.em;
+		assert(($1.v.em & EM) == 0);	/* has been cleared in declHead */
+		sp->em    &= ~EM;		/* clear bit EM here */
 		if (sp->type != UDF) {
-		    listGenOut(sp);		/* list immC node and generate possible output */
+		    listGenOut(sp, 1);		/* list immC node and generate possible output */
 		}
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
 		    cp = strchr(sp->name, '@'); /* locate original extension */
 		    assert(cp && isprint(cp[1])); /* extension must be at least 1 character */
-		    if ((sp1 = lookup(++cp)) != 0 && sp1->em) {
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
 			warning("declaration of an extern variable in a function - ignored:", cp);
 		    }
 		    collectStatement(sp);
@@ -705,7 +770,7 @@ decl	: declHead UNDEF	{
 		if ((iC_debug & 0402) == 0402) pd("decl", sp, $1.v, &t);
 #endif
 	    }
-	| declHead variable	{
+	| declHead dVariable	{
 		int		typ;
 		int		ftyp;
 		Symbol *	sp;
@@ -719,9 +784,9 @@ decl	: declHead UNDEF	{
 #endif
 		    if (sp->ftype != ftyp) {
 			ierror("declaration does not match previous declaration:", sp->name);
-			if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
+			if (! iFunSymExt) $2.v->type = ERR;	/* cannot execute properly */
 		    } else
-		    if (sp->em || sp->type == UDF) {
+		    if ((sp->em & EM) || sp->type == UDF) {
 			sp->ftype = ftyp;	/* bit int clock timer */
 			if (typ != UDF) {	/* UDF for all TYPEs except ARNC and LOGC */
 			    char *	name;
@@ -730,27 +795,29 @@ decl	: declHead UNDEF	{
 			    if ((name = sp->name) &&
 				sscanf(name, "Q%1[XBWL]%d", y1, &yn) != 2 &&
 				sp->type != typ) {
-				ierror("declaration does not match previous imm declaration:", name);
+				ierror("declaration does not match previous extern imm declaration:", name);
 				typ = ERR;	/* cannot execute properly */
 			    } else {
 				sp->type = typ;	/* UDF for all TYPEs except ARNC and LOGC */
-				sp->em = 0;
-				listGenOut(sp);	/* list immC node and generate possible output */
+				sp->em &= ~EM;
+				listGenOut(sp, 1);	/* list immC node and generate possible output */
 			    }
 			} else
-			if (sp->em && (sp->type == ARNC || sp->type == LOGC)) {
-			    ierror("declaration does not match previous immC declaration:", sp->name);
+			if ((sp->em & EM) && (sp->type == ARNC || sp->type == LOGC)) {
+			    ierror("declaration does not match previous extern immC declaration:", sp->name);
 			    typ = ERR;		/* cannot execute properly */
 			}
-			sp->type = typ;
-			sp->em = 0;
+			sp->type = typ;		/* fix type */
+			sp->em &= ~EM;		/* no longer extern */
 		    } else
 		    if (sp->type == INPW || sp->type == INPX) {
 			if (iC_Sflag) {
 			    warning("strict: declaration of an input variable - ignored:", sp->name);
 			}
+		    } else if (sp->type == ARNC || sp->type == LOGC) {
+			warning("immC declaration after definition - ignored:", sp->name);
 		    } else
-		    if (sp->type != ERR){
+		    if (sp->type != ERR) {
 			warning("declaration after assignment - ignored:", sp->name);
 		    }
 #if YYDEBUG
@@ -807,15 +874,29 @@ declHead
 		}
 		stype.ftype = ftyp;
 		stype.type  = typ;
-		stype.em    = stype.fm = 0;
+		stype.em &= ~EM;
+		stype.fm = 0;
 		$$.v = stype;
 		if (iFunSymExt) {
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "declHead: IMM TYPE", &$$);
+#endif
 	    }
 	| immDecl ','		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = stype;			/* first TYPE */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "declHead: immDecl ,", &$$);
+#endif
+	    }
+	| immCarray ','		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = stype;			/* first TYPE */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "declHead: immCarray ,", &$$);
+#endif
 	    }
 	;
 
@@ -845,7 +926,7 @@ dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
 		    }
 		    if (($$.v = assignExpression(&$1, &$3, ioTyp)) == 0) YYERROR;
 #if YYDEBUG
-		    if ((iC_debug & 0402) == 0402) pu(0, "dasgn: decl = aexpr", (Lis*)&$$);
+		    if ((iC_debug & 0402) == 0402) pu(SYM, "dasgn: decl = aexpr", &$$);
 #endif
 		} else {
 		    ierror("direct assignment to a number is illegal:", $$.f);
@@ -868,43 +949,43 @@ asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 		    $1.v->type = ERR;		/* cannot execute properly */
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "asgn: UNDEF", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: UNDEF", &$$);
 #endif
 	    }
 	| LVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "asgn: LVAR", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: LVAR", &$$);
 #endif
 	    }
 	| AVAR '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "asgn: AVAR", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: AVAR", &$$);
 #endif
 	    }
 	| LOUT '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, OUTX)) == 0) YYERROR;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "asgn: LOUT", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: LOUT", &$$);
 #endif
 	    }
 	| AOUT '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if (($$.v = assignExpression(&$1, &$3, OUTW)) == 0) YYERROR;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "asgn: AOUT", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: AOUT", &$$);
 #endif
 	    }
-	| NUMBER '=' aexpr		{
+	| constExpr '=' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		ierror("assignment to a number is illegal:", $$.f);
 		if (($$.v = op_asgn(0, &$3, F_ERR)) == 0) YYERROR;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "asgn: NUMBER (ERR)", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: constExpr (ERR)", &$$);
 #endif
 	    }
 	;
@@ -922,7 +1003,7 @@ aexpr	: expr			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "aexpr: expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "aexpr: expr", &$$);
 #endif
 	    }
 	| asgn			{
@@ -931,7 +1012,7 @@ aexpr	: expr			{
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "aexpr: asgn", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "aexpr: asgn", &$$);
 #endif
 	    }
 	;
@@ -949,18 +1030,18 @@ expr	: UNDEF			{
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: UNDEF", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: UNDEF", &$$);
 #endif
 		if (iC_Sflag) {
 		    ierror("strict: use of an undeclared imm variable:", $1.v->name);
 		    $1.v->type = ERR;		/* cannot execute properly */
 		}
 	    }
-	| NUMBER		{
+	| constExpr		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = 0;			/* no node, do not need value */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: NUMBER", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: constExpr", &$$);
 #endif
 	    }
 	| valueVariable		{		/* LVAR LVARC AVAR AVARC */
@@ -969,7 +1050,16 @@ expr	: UNDEF			{
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: valueVariable", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: valueVariable", &$$);
+#endif
+	    }
+	| immCarrayVariable	{		/* immC array member variable */
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = checkDecl($1.v);
+		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: immCarrayVariable", &$$);
 #endif
 	    }
 	| outVariable		{		/* LOUT AOUT */
@@ -978,12 +1068,11 @@ expr	: UNDEF			{
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: outVariable", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: outVariable", &$$);
 #endif
 	    }
 	| fexpr			{
 		Symbol *	sp;
-
 		if ($1.v == 0) YYERROR;		/* error in bltin() */
 		sp = $1.v->le_sym;
 		$$ = $1;
@@ -994,7 +1083,7 @@ expr	: UNDEF			{
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: fexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: fexpr", &$$);
 #endif
 	    }
 	| cCall			{
@@ -1004,7 +1093,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: cCall", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: cCall", &$$);
 #endif
 	    }
 	| iFunCall			{
@@ -1014,51 +1103,14 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: iFunCall", &$$);
-#endif
-	    }
-	| '(' aexpr ')'		{
-		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = $2.v) != 0) {
-		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
-		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
-		}
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: (aexpr)", &$$);
-#endif
-	    }
-	/************************************************************
-	 * LATCH(aexpr,aexpr)
-	 *	LATCH(set,reset)
-	 * ######### not required with iC system functions #########
-	 * ######### is handled by BFORCE ##########################
-	 ***********************************************************/
-	| BLATCH '(' lexpr ')'	{		/* LATCH(set,reset) */
-		Symbol *	nsp;
-		List_e *	nlp;
-		$$.f = $1.f; $$.l = $4.l;
-		$$.v = op_push(sy_push($3.v->le_sym), LOGC, $3.v);
-		$$.v->le_sym->type = LATCH;
-		if (iFunSymExt) {
-		    nsp = $$.v->le_sym;
-		    assert(nsp && nsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
-		    nlp =
-#if ! YYDEBUG || defined(SYUNION)
-			nsp->v_cnt <= 2 ? 0 :
-#endif
-			    nsp->v_elist;	/* feedback list */
-		    nsp->v_elist = sy_push(nsp); /* feeds back to itself */
-		    nsp->v_elist->le_next = nlp;
-		}
-		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: BLATCH", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: iFunCall", &$$);
 #endif
 	    }
 	/************************************************************
 	 * FORCE(aexpr,aexpr,aexpr)
 	 *	FORCE(expr,on,off)
+	 * also implements LATCH(set, reset) via a pre-defined function block
+	 * also implements DLATCH(set, reset, clk) via a pre-defined function block
 	 ***********************************************************/
 	| BFORCE '(' aexpr ',' lexpr ')'	{	/* FORCE(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
@@ -1068,10 +1120,19 @@ expr	: UNDEF			{
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: BFORCE", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: BFORCE", &$$);
 #endif
 	    }
-
+	| '(' aexpr ')'		{
+		$$.f = $1.f; $$.l = $3.l;
+		if (($$.v = $2.v) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: (aexpr)", &$$);
+#endif
+	    }
 	/************************************************************
 	 * binary logical and arithmetic operators
 	 ***********************************************************/
@@ -1094,7 +1155,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr | expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr | expr", &$$);
 #endif
 	    }
 	| expr '^' expr		{			/* binary ^ */
@@ -1116,7 +1177,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr ^ expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr ^ expr", &$$);
 #endif
 	    }
 	| expr '&' expr		{			/* binary & */
@@ -1138,7 +1199,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr & expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr & expr", &$$);
 #endif
 	    }
 	| expr CMP expr	{				/* == != < <= > >= */
@@ -1153,35 +1214,67 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr CMP expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr CMP expr", &$$);
 #endif
 	    }
-	| expr AOP expr		{			/* << >> / % */
-		List_e *	lpL;
+	| constExpr '*' expr		{		/* required to compile constExpr * constExpr correctly */
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
-		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		if (($$.v = op_push(0, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr AOP expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: constExpr * expr", &$$);
 #endif
 	    }
-	| expr PM expr		{			/* binary + - */
-		List_e *	lpL;
+	| constExpr '+' expr		{		/* required to compile constExpr + constExpr correctly */
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
 		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
-		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		if (($$.v = op_push(0, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr PM expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: constExpr + expr", &$$);
+#endif
+	    }
+	| constExpr '-' expr		{		/* required to compile constExpr - constExpr correctly */
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		if (($$.v = op_push(0, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: constExpr - expr", &$$);
+#endif
+	    }
+	| constExpr LEFT_OP expr	{		/* required to compile constExpr << constExpr correctly */
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		if (($$.v = op_push(0, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: constExpr << expr", &$$);
+#endif
+	    }
+	| constExpr RIGHT_OP expr	{		/* required to compile constExpr >> constExpr correctly */
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		if (($$.v = op_push(0, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: constExpr >> expr", &$$);
 #endif
 	    }
 	| expr '*' expr		{			/* binary * */
@@ -1195,10 +1288,79 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr * expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr * expr", &$$);
 #endif
 	    }
-
+	| expr AOP expr		{			/* / % */
+		List_e *	lpL;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr AOP expr", &$$);
+#endif
+	    }
+	| expr '+' expr		{			/* binary + */
+		List_e *	lpL;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr '+' expr", &$$);
+#endif
+	    }
+	| expr '-' expr		{			/* binary - */
+		List_e *	lpL;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr '-' expr", &$$);
+#endif
+	    }
+	| expr LEFT_OP expr		{		/* << */
+		List_e *	lpL;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr << expr", &$$);
+#endif
+	    }
+	| expr RIGHT_OP expr		{		/* >> */
+		List_e *	lpL;
+		List_e *	lpR;
+		$$.f = $1.f; $$.l = $3.l;
+		lpR = op_force($3.v, ARITH);
+		lpL = op_force($1.v, ARITH);
+		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr >> expr", &$$);
+#endif
+	    }
 	/************************************************************
 	 * &&  ||
 	 *
@@ -1237,7 +1399,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr AA expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr AA expr", &$$);
 #endif
 	    }
 	| expr OO expr	{				/* binary || */
@@ -1268,10 +1430,9 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr OO expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr OO expr", &$$);
 #endif
 	    }
-
 	/************************************************************
 	 * Conditional expression expr1 ? expr2 : expr3
 	 *
@@ -1293,10 +1454,9 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr ? expr : expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr ? expr : expr", &$$);
 #endif
 	    }
-
 	/************************************************************
 	 * Conditional expression expr1 ? : expr3
 	 * Excerpt from 'info gcc'
@@ -1341,10 +1501,9 @@ expr	: UNDEF			{
 		    warning("ISO C forbids omitting the middle term of a ?: expression", sp->name);
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: expr ? : expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr ? : expr", &$$);
 #endif
 	    }
-
 	/************************************************************
 	 * Logical negation or arithmetic bitwise complement
 	 *
@@ -1382,10 +1541,9 @@ expr	: UNDEF			{
 		    $$.v = 0;				/* constant negation */
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: ~expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: ~expr", &$$);
 #endif
 	    }
-
 	| '!' expr 		{			/* unary ! */
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
@@ -1409,28 +1567,115 @@ expr	: UNDEF			{
 		    $$.v = 0;				/* constant negation */
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: !expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: !expr", &$$);
 #endif
 	    }
-
 	/************************************************************
 	 * Unary + or -
 	 ***********************************************************/
-	| PM expr %prec '!'	{			/* unary + or - */
+	| '+' expr %prec '!'	{			/* unary + */
 		$$.f = $1.f; $$.l = $2.l;
 		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "expr: PM expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: '+' expr", &$$);
+#endif
+	    }
+	| '-' expr %prec '!'	{			/* unary - */
+		$$.f = $1.f; $$.l = $2.l;
+		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
+		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: '-' expr", &$$);
 #endif
 	    }
 	;
 
 	/************************************************************
 	 *
-	 * lexpr - auxiliary grammar rule to support BFORCE and BLATCH
+	 * Constant expression
+	 *
+	 ***********************************************************/
+
+constExpr
+	: NUMBER		{
+		$$ = $1;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: NUMBER", &$$);
+#endif
+	    }
+	| SIZEOF IMMCARRAY {				/* sizeof array */
+		$$.f = $1.f; $$.l = $2.l;
+		List_e *	lp;
+		int		i, len1, len2;
+		char		buf[TSIZE];
+		assert($2.v && $2.v->ftype == UDFA);
+		i = (lp = $2.v->list) ? lp->le_val : 0;	/* 0 is returned if no size is specified */
+		snprintf(buf, TSIZE, "%d", i);
+		if ((len1 = strlen(buf)) > (len2 = $$.l - $$.f)) {
+		    ierror("immC array is far too big:", buf);
+		} else {
+		    strncpy($$.f, buf, len2);		/* overwrite the words 'sizeof x' by the number text */
+		    if ((len2 -= len1) > 0) {
+			memset($$.f + len1, '#', len2);	/* active blank ##### */
+		    }
+		}
+		$$.v = i;				/* value in case it is needed */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: SIZEOF IMMCARRAY", &$$);
+#endif
+	    }
+	| constExpr '*' constExpr		{	/* binary * */
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $1.v * $3.v;			/* division not allowed in constant expressions */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr * constExpr", &$$);
+#endif
+	    }
+	| constExpr '+' constExpr		{	/* binary + */
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $1.v + $3.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr '+' constExpr", &$$);
+#endif
+	    }
+	| constExpr '-' constExpr		{	/* binary - */
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $1.v - $3.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr '-' constExpr", &$$);
+#endif
+	    }
+	| constExpr LEFT_OP constExpr		{	/* << */
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $1.v << $3.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr << constExpr", &$$);
+#endif
+	    }
+	| constExpr RIGHT_OP constExpr		{	/* >> */
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $1.v >> $3.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr >> constExpr", &$$);
+#endif
+	    }
+	| '(' constExpr ')'		{
+		$$.f = $1.f; $$.l = $3.l;
+		$$.v = $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: (constExpr)", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 *
+	 * lexpr - auxiliary grammar rule to support BFORCE
 	 *
 	 ***********************************************************/
 
@@ -1447,7 +1692,7 @@ lexpr	: aexpr ',' aexpr		{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "lexpr: aexpr , aexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "lexpr: aexpr , aexpr", &$$);
 #endif
 	    }
 	;
@@ -1496,7 +1741,7 @@ cBlock	: '{'			{ ccfrag = '{'; ccFP = T4FP; }	/* ccfrag must be set */
 		$$ = $3;				/* function # is yacc token */
 		cBlockFlag = 1;				/* hold up get() till another token found */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) { fprintf(iC_outFP, ">>>cBlock #%d end\n", $3.v); fflush(iC_outFP); }
+		if ((iC_debug & 0402) == 0402) { fprintf(iC_outFP, ">>>cBlock #%d end\n", $3.v >> FUN_OFFSET); fflush(iC_outFP); }
 #endif
 	    }
 	;
@@ -1508,7 +1753,7 @@ cBlock	: '{'			{ ccfrag = '{'; ccFP = T4FP; }	/* ccfrag must be set */
 	 * default clock is iClock if last clock parameter in list
 	 *
 	 * timer parameters must specify a delay, which is either
-	 * NUMBER, an Alias for a NUMBER or an immediate expression
+	 * constExpr, an Alias for a constExpr or an immediate expression
 	 * which is forced to ftype ARITH
 	 *
 	 * default timer delay is 1 if last clock parameter in list
@@ -1575,31 +1820,9 @@ ctdref	: cexpr			{ $$ = $1; }		/* clock */
 	 ***********************************************************/
 fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN1", &$$);
-#endif
-	    }
-	/************************************************************
-	 * DLATCH(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DLATCH(set,reset)
-	 *	DLATCH(set,reset,clkSetReset)
-	 *	DLATCH(set,reset,timSetReset)
-	 *	DLATCH(set,reset,timSetReset,delaySetReset)
-	 * ######### not required with iC system functions #########
-	 * ######### is handled by BFORCE ##########################
-	 ***********************************************************/
-	| DLATCH '(' lexpr cref ')'	{		/* DLATCH(set,reset) */
-		Lis		li1 = $3;
-		List_e *	lp1;
-		$$.f = $1.f; $$.l = $5.l;
-		lp1 = op_push(sy_push($3.v->le_sym), LOGC, $3.v);
-		lp1->le_sym->type = LATCH;
-		lp1 = op_push(sy_push($1.v), LATCH, lp1);
-		/* DLATCH output is transferred as feed back in op_asgn */
-		$$.v = bltin(&$1, &li1, &$4, 0, 0, 0, 0, 0, 0);
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: DLATCH", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN1", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1614,12 +1837,14 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 *	DR(..) SHR(expr,reset,clkExprReset)
 	 *	DR(..) SHR(expr,reset,timExprReset)
 	 *	DR(..) SHR(expr,reset,timExprReset,delayExprReset)
+	 * also implements SRX(set, reset) via a pre-defined function block
+	 * also implements JK(set, reset) via a pre-defined function block
 	 ***********************************************************/
 	| BLTIN2 '(' aexpr ',' aexpr cref ')' {		/* SR(set,reset); DR(expr,reset) */
 		$$.f = $1.f; $$.l = $7.l;
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN2", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN2", &$$);
 #endif
 	    }
 	/************************************************************
@@ -1645,86 +1870,91 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 ***********************************************************/
 	| BLTIN2 '(' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $9.l;
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
+		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN2", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN2", &$$);
 #endif
 	    }
 	/************************************************************
 	 * DSR(aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr)
-	 *	DSR(..) SHSR(expr,clk)
-	 *	DSR(..) SHSR(expr,tim)
-	 *	DSR(..) SHSR(expr,tim,delay)
+	 *	DSR(..) SRR(..) SHSR(expr)
+	 *	DSR(..) SRR(..) SHSR(expr,clk)
+	 *	DSR(..) SRR(..) SHSR(expr,tim)
+	 *	DSR(..) SRR(..) SHSR(expr,tim,delay)
 	 ***********************************************************/
 	| BLTIN3 '(' aexpr cref ')' {			/* DSR(expr); SHSR(expr) */
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
 	/************************************************************
 	 * DSR(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr,reset)
-	 *	DSR(..) SHSR(expr,reset,clkExprReset)
-	 *	DSR(..) SHSR(expr,reset,timExprReset)
-	 *	DSR(..) SHSR(expr,reset,timExprReset,delayExprReset)
+	 *	DSR(..) SRR(..) SHSR(expr,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,reset,clkExprReset)
+	 *	DSR(..) SRR(..) SHSR(expr,reset,timExprReset)
+	 *	DSR(..) SRR(..) SHSR(expr,reset,timExprReset,delayExprReset)
 	 ***********************************************************/
 	| BLTIN3 '(' aexpr ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $7.l;
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
 	/************************************************************
 	 * DSR(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr,clkExpr,          reset)
-	 *	DSR(..) SHSR(expr,clkExpr,          reset,clkReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          reset,timReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          reset,timReset,delayReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset,clkReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset,timReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          reset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,reset,timReset,delayReset)
 	 ***********************************************************/
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $9.l;
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
+		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
 	/************************************************************
 	 * DSR(aexpr,aexpr,aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr,aexpr,aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr,aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr,set,reset)
-	 *	DSR(..) SHSR(expr,set,reset,clkExprReset)
-	 *	DSR(..) SHSR(expr,set,reset,timExprReset)
-	 *	DSR(..) SHSR(expr,set,reset,timExprReset,delayExprReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,reset,clkExprReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,reset,timExprReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,reset,timExprReset,delayExprReset)
 	 ***********************************************************/
 	| BLTIN3 '(' aexpr ',' aexpr ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $9.l;
-		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, &$8, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, &$5, 0, &$7, &$8, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
 	/************************************************************
 	 * DSR(aexpr,aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr,aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr,aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr,set,clkSet,         reset)
-	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset)
-	 *	DSR(..) SHSR(expr,set,clkSet,         reset,clkReset)
-	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset,clkReset)
-	 *	DSR(..) SHSR(expr,set,clkSet,         reset,timReset)
-	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset,timReset)
-	 *	DSR(..) SHSR(expr,set,clkSet,         reset,timReset,delayReset)
-	 *	DSR(..) SHSR(expr,set,timSet,delaySet,reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,clkSet,         reset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,timSet,delaySet,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,clkSet,         reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,timSet,delaySet,reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,clkSet,         reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,timSet,delaySet,reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,clkSet,         reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,set,timSet,delaySet,reset,timReset,delayReset)
 	 * These cases have been left out deliberately, beause it is
 	 * not clear wether the default clock for 'expr' should be taken
 	 * from the set clock or the reset clock - causes syntax errors.
@@ -1733,350 +1963,60 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
 	 * The clock for 'expr' is cloned from the reset clock.
 	| BLTIN3 '(' aexpr ',' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $11.l;
-		$$.v = bltin(&$1, &$3, 0, &$5, &$7, &$9, &$10, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, &$5, &$7, &$9, &$10, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
 	 ***********************************************************/
 	/************************************************************
 	 * DSR(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr,clkExpr,          set,reset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,reset,clkSetReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,reset,timSetReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,reset,timSetReset,delaySetReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,reset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,reset,clkSetReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,reset,timSetReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,reset,timSetReset,delaySetReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,reset,clkSetReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,reset,timSetReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,reset,timSetReset,delaySetReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,reset,clkSetReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,reset,timSetReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,reset,timSetReset,delaySetReset)
 	 ***********************************************************/
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $11.l;
-		$$.v = bltin(&$1, &$3, &$5, &$7, 0, &$9, &$10, 0, 0);
+		$$.v = bltin(&$1, &$3, &$5, &$7, 0, &$9, &$10, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
 	/************************************************************
 	 * DSR(aexpr,(cexpr|texpr,aexpr),aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
+	 * SRR(aexpr,(cexpr|texpr,aexpr),aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
 	 * SHSR(aexpr,(cexpr|texpr,aexpr),aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	DSR(..) SHSR(expr,clkExpr,          set,clkSet,         reset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,clkSet,         reset,clkReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset,clkReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,clkSet,         reset,timReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,clkSet,         reset,timReset,delayReset)
-	 *	DSR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset,delayReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset,clkReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,clkReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset,delayReset)
-	 *	DSR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,clkSet,         reset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,clkSet,         reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,clkSet,         reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,clkSet,         reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,clkReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset,delayReset)
+	 *	DSR(..) SRR(..) SHSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset,delayReset)
 	 ***********************************************************/
 	| BLTIN3 '(' aexpr ',' ctdref ',' aexpr ',' ctdref ',' aexpr cref ')' {
 		$$.f = $1.f; $$.l = $13.l;
-		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, &$11, &$12, 0, 0);
+		$$.v = bltin(&$1, &$3, &$5, &$7, &$9, &$11, &$12, 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTIN3", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN3", &$$);
 #endif
 	    }
-	/************************************************************
-	 * SRX(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	SRX(set,reset)
-	 *	SRX(set,reset,clkSetReset)
-	 *	SRX(set,reset,timSetReset)
-	 *	SRX(set,reset,timSetReset,delaySetReset)
-	 * ######### not required with iC system functions #########
-	 * ######### is handled by SR ### ##########################
-	 ***********************************************************/
-	| BLTINX '(' aexpr ',' aexpr cref ')' {		/* SRX(set,reset) */
-		Lis liS, liR, noS, noR, xxS, xxR;
-		liS = noS = $3;
-		liR = noR = $5;
-		$$.f = $1.f; $$.l = $7.l;
-		liS.v = op_force(liS.v, GATE);		/* set */
-		liR.v = op_force(liR.v, GATE);		/* res */
-		noS.v = sy_push(liS.v->le_sym);		/* copy set */
-		noS.v->le_val ^= NOT;			/* ~set */
-		assert(noS.f == 0 || (noS.f >= iCbuf && noS.l < &iCbuf[IMMBUFSIZE]));
-		noS.v->le_first = noS.f;
-		noS.v->le_last  = noS.l;
-		noR.v = sy_push(liR.v->le_sym);		/* copy res */
-		noR.v->le_val ^= NOT;			/* ~res */
-		assert(noR.f == 0 || (noR.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]));
-		noR.v->le_first = noR.f;
-		noR.v->le_last  = noR.l;
-		xxS.v = op_push(liS.v, AND, noR.v);	/* set & ~res */
-		assert(liS.f == 0 || (liS.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]));
-		xxS.f = xxS.v->le_first = liS.f;
-		xxS.l = xxS.v->le_last  = noR.l;
-		xxR.v = op_push(noS.v, AND, liR.v);	/* ~set & res */
-		assert(noS.f == 0 || (noS.f >= iCbuf && noS.l < &iCbuf[IMMBUFSIZE]));
-		xxR.f = xxR.v->le_first = noS.f;
-		xxR.l = xxR.v->le_last  = liR.l;
-		$$.v = bltin(&$1, &xxS, 0, 0, 0, &xxR, &$6, 0, 0);
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINX", &$$);
-#endif
-	    }
-	/************************************************************
-	 * SRX(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	SRX(set,clkSet,         reset)
-	 *	SRX(set,clkSet,         reset,clkReset)
-	 *	SRX(set,clkSet,         reset,timReset)
-	 *	SRX(set,clkSet,         reset,timReset,delayReset)
-	 *	SRX(set,timSet,delaySet,reset)
-	 *	SRX(set,timSet,delaySet,reset,clkReset)
-	 *	SRX(set,timSet,delaySet,reset,timReset)
-	 *	SRX(set,timSet,delaySet,reset,timReset,delayReset)
-	 * ######### not required with iC system functions #########
-	 * ######### is handled by SR ### ##########################
-	 ***********************************************************/
-	| BLTINX '(' aexpr ',' ctdref ',' aexpr cref ')' {
-		Lis liS, liR, noS, noR, xxS, xxR;
-		liS = noS = $3;
-		liR = noR = $7;
-		$$.f = $1.f; $$.l = $9.l;
-		liS.v = op_force(liS.v, GATE);		/* set */
-		liR.v = op_force(liR.v, GATE);		/* res */
-		noS.v = sy_push(liS.v->le_sym);		/* copy set */
-		noS.v->le_val ^= NOT;			/* ~set */
-		assert(noS.f == 0 || (noS.f >= iCbuf && noS.l < &iCbuf[IMMBUFSIZE]));
-		noS.v->le_first = noS.f;
-		noS.v->le_last  = noS.l;
-		noR.v = sy_push(liR.v->le_sym);		/* copy res */
-		noR.v->le_val ^= NOT;			/* ~res */
-		assert(noR.f == 0 || (noR.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]));
-		noR.v->le_first = noR.f;
-		noR.v->le_last  = noR.l;
-		xxS.v = op_push(liS.v, AND, noR.v);	/* set & ~res */
-		assert(liS.f == 0 || (liS.f >= iCbuf && noR.l < &iCbuf[IMMBUFSIZE]));
-		xxS.f = xxS.v->le_first = liS.f;
-		xxS.l = xxS.v->le_last  = noR.l;
-		xxR.v = op_push(noS.v, AND, liR.v);	/* ~set & res */
-		assert(noS.f == 0 || (noS.f >= iCbuf && noS.l < &iCbuf[IMMBUFSIZE]));
-		xxR.f = xxR.v->le_first = noS.f;
-		xxR.l = xxR.v->le_last  = liR.l;
-		$$.v = bltin(&$1, &xxS, &$5, 0, 0, &xxR, &$8, 0, 0);
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINX", &$$);
-#endif
-	    }
-	/************************************************************
-	 * JK(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	JK(set,reset)
-	 *	JK(set,reset,clkSetReset)
-	 *	JK(set,reset,timSetReset)
-	 *	JK(set,reset,timSetReset,delaySetReset)
-	 * ######### not required with iC system functions #########
-	 * ######### is handled by SR ### ##########################
-	 ***********************************************************/
-	| BLTINJ '(' aexpr ',' aexpr cref ')' {		/* JK(set,reset) */
-		Lis		liS = $3;		/* later = 0 TODO */
-		Lis		liR = $5;
-		List_e *	lpS;
-		List_e *	lpR;
-		Symbol *	nsp;
-		List_e *	nlp;
-		$$.f = $1.f; $$.l = $7.l;
-		liS.v = op_not(sy_push(&tSym));		/* temporary Gate */
-		if ((liS.v = op_push(liS.v, AND, op_force($3.v, GATE))) != 0) {
-		    liS.v->le_first = liS.f = 0; liS.v->le_last = liS.l = 0;
-		}
-		liR.v = sy_push(&tSym);			/* temporary Gate */
-		if ((liR.v = op_push(liR.v, AND, op_force($5.v, GATE))) != 0) {
-		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
-		}
-		$$.v = bltin(&$1, &liS, 0, 0, 0, &liR, &$6, 0, 0);
-		lpS = liS.v->le_sym->u_blist;
-		while (lpS && lpS->le_sym != &tSym) {
-		    lpS = lpS->le_next;
-		}
-		assert(lpS);
-		lpR = liR.v->le_sym->u_blist;
-		while (lpR && lpR->le_sym != &tSym) {
-		    lpR = lpR->le_next;
-		}
-		assert(lpR);
-		nsp = lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
-		if (iFunSymExt) {
-		    assert(nsp && nsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
-		    nlp =
-#if ! YYDEBUG || defined(SYUNION)
-			nsp->v_cnt <= 2 ? 0 :
-#endif
-			    nsp->v_elist;		/* feedback list */
-		    nsp->v_elist = sy_push(liS.v->le_sym);
-		    nsp->v_elist->le_next = sy_push(liR.v->le_sym);
-		    nsp->v_elist->le_next->le_next = nlp;
-		}
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINJ", &$$);
-#endif
-	    }
-	/************************************************************
-	 * JK(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	JK(set,clkSet,         reset)
-	 *	JK(set,clkSet,         reset,clkReset)
-	 *	JK(set,clkSet,         reset,timReset)
-	 *	JK(set,clkSet,         reset,timReset,delayReset)
-	 *	JK(set,timSet,delaySet,reset)
-	 *	JK(set,timSet,delaySet,reset,clkReset)
-	 *	JK(set,timSet,delaySet,reset,timReset)
-	 *	JK(set,timSet,delaySet,reset,timReset,delayReset)
-	 * ######### not required with iC system functions #########
-	 * ######### is handled by SR ### ##########################
-	 ***********************************************************/
-	| BLTINJ '(' aexpr ',' ctdref ',' aexpr cref ')' {
-		Lis		liS = $3;		/* later = 0 TODO */
-		Lis		liR = $7;
-		List_e *	lpS;
-		List_e *	lpR;
-		Symbol *	nsp;
-		List_e *	nlp;
-		$$.f = $1.f; $$.l = $9.l;
-		liS.v = op_not(sy_push(&tSym));		/* temporary Gate */
-		if ((liS.v = op_push(liS.v, AND, op_force($3.v, GATE))) != 0) {
-		    liS.v->le_first = liS.f = 0; liS.v->le_last = liS.l = 0;
-		}
-		liR.v = sy_push(&tSym);			/* temporary Gate */
-		if ((liR.v = op_push(liR.v, AND, op_force($7.v, GATE))) != 0) {
-		    liR.v->le_first = liR.f = 0; liR.v->le_last = liR.l = 0;
-		}
-		$$.v = bltin(&$1, &liS, &$5, 0, 0, &liR, &$8, 0, 0);
-		lpS = liS.v->le_sym->u_blist;
-		while (lpS && lpS->le_sym != &tSym) {
-		    lpS = lpS->le_next;
-		}
-		assert(lpS);
-		lpR = liR.v->le_sym->u_blist;
-		while (lpR && lpR->le_sym != &tSym) {
-		    lpR = lpR->le_next;
-		}
-		assert(lpR);
-		nsp = lpS->le_sym = lpR->le_sym = $$.v->le_sym;	/* JK feedback links */
-		if (iFunSymExt) {
-		    assert(nsp && nsp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
-		    nlp =
-#if ! YYDEBUG || defined(SYUNION)
-			nsp->v_cnt <= 2 ? 0 :
-#endif
-			    nsp->v_elist;		/* feedback list */
-		    nsp->v_elist = sy_push(liS.v->le_sym);
-		    nsp->v_elist->le_next = sy_push(liR.v->le_sym);
-		    nsp->v_elist->le_next->le_next = nlp;
-		}
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINJ", &$$);
-#endif
-	    }
-	/************************************************************
-	 * SRT(aexpr[,(cexpr|texpr[,aexpr])])
-	 *	SRT(set)
-	 *	SRT(set,clk)
-	 *	SRT(set,tim)
-	 *	SRT(set,tim,delay)
-	 ***********************************************************/
-	| BLTINT '(' aexpr cref ')'	{		/* SRT(set,reset,tim,delay) */
-		$$.f = $1.f; $$.l = $5.l;
-		$$.v = bltin(&$1, &$3, 0, 0, 0, 0, 0, &$4, 0); /* monoflop without reset */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINT", &$$);	/* set clocked by iClock */
-#endif
-	    }
-	/************************************************************
-	 * SRT(aexpr,(cexpr|texpr,aexpr),(cexpr|texpr[,aexpr]))
-	 *	SRT(set,clkSet,         clk)
-	 *	SRT(set,timSet,delaySet,clk)
-	 *	SRT(set,clkSet,         tim)
-	 *	SRT(set,timSet,delaySet,tim)
-	 *	SRT(set,clkSet,         tim,delay)
-	 *	SRT(set,timSet,delaySet,tim,delay)
-	 ***********************************************************/
-	| BLTINT '(' aexpr ',' ctdref ',' ctref ')'	{
-		$$.f = $1.f; $$.l = $8.l;
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, 0, 0, &$7, 0); /* monoflop without reset */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINT", &$$);	/* set clocked by ext clock or timer */
-#endif
-	    }
-	/************************************************************
-	 * SRT(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
-	 *	SRT(set,reset)
-	 *	SRT(set,reset,clk)
-	 *	SRT(set,reset,tim)
-	 *	SRT(set,reset,tim,delay)
-	 ***********************************************************/
-	| BLTINT '(' aexpr ',' aexpr cref ')'	{
-		$$.f = $1.f; $$.l = $7.l;
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, 0, &$6, 0); /* monoflop with reset */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINT", &$$);	/* set and reset clocked by iClock */
-#endif
-	    }
-	/************************************************************
-	 * SRT(aexpr,aexpr,(cexpr|texpr,aexpr),(cexpr|texpr[,aexpr]))
-	 *	SRT(set,reset,clkSetReset,              clk)
-	 *	SRT(set,reset,timSetReset,delaySetReset,clk)
-	 *	SRT(set,reset,clkSetReset,              tim)
-	 *	SRT(set,reset,timSetReset,delaySetReset,tim)
-	 *	SRT(set,reset,clkSetReset,              tim,delay)
-	 *	SRT(set,reset,timSetReset,delaySetReset,tim,delay)
-	 ***********************************************************/
-	| BLTINT '(' aexpr ',' aexpr ',' ctdref ',' ctref ')'	{
-		$$.f = $1.f; $$.l = $10.l;
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$7, &$9, 0); /* monoflop with reset */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINT", &$$);	/* set and reset clocked by same clock or timer */
-#endif
-	    }
-	/************************************************************
-	 * SRT(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
-	 *	SRT(set,clkSet,         reset)
-	 *	SRT(set,timSet,delaySet,reset)
-	 *	SRT(set,clkSet,         reset,clk)
-	 *	SRT(set,timSet,delaySet,reset,clk)
-	 *	SRT(set,clkSet,         reset,tim)
-	 *	SRT(set,timSet,delaySet,reset,tim)
-	 *	SRT(set,clkSet,         reset,tim,delay)
-	 *	SRT(set,timSet,delaySet,reset,tim,delay)
-	 ***********************************************************/
-	| BLTINT '(' aexpr ',' ctdref ',' aexpr cref ')'	{
-		Lis	lis1;
-		$$.f = $1.f; $$.l = $9.l;
-		lis1.v = sy_push(iclock);		/* to avoid shift reduce conflict */
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &lis1, &$8, 0); /* monoflop with reset */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINT", &$$);	/* set clocked by ext clock or timer */
-#endif
-	    }						/* reset clocked by iClock */
-	/************************************************************
-	 * SRT(aexpr,(cexpr|texpr,aexpr),aexpr,(cexpr|texpr,aexpr),(cexpr|texpr[,aexpr]))
-	 *	SRT(set,clkSet,         reset,clkReset,           clk)
-	 *	SRT(set,timSet,delaySet,reset,clkReset,           clk)
-	 *	SRT(set,clkSet,         reset,clkReset,           tim)
-	 *	SRT(set,timSet,delaySet,reset,clkReset,           tim)
-	 *	SRT(set,clkSet,         reset,clkReset,           tim,delay)
-	 *	SRT(set,timSet,delaySet,reset,clkReset,           tim,delay)
-	 *	SRT(set,clkSet,         reset,timReset,delayReset,clk)
-	 *	SRT(set,timSet,delaySet,reset,timReset,delayReset,clk)
-	 *	SRT(set,clkSet,         reset,timReset,delayReset,tim)
-	 *	SRT(set,timSet,delaySet,reset,timReset,delayReset,tim)
-	 *	SRT(set,clkSet,         reset,timReset,delayReset,tim,delay)
-	 *	SRT(set,timSet,delaySet,reset,timReset,delayReset,tim,delay)
-	 ***********************************************************/
-	| BLTINT '(' aexpr ',' ctdref ',' aexpr ',' ctdref ',' ctref ')'	{
-		$$.f = $1.f; $$.l = $12.l;
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$9, &$11, 0); /* monoflop with reset */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fexpr: BLTINT", &$$);	/* set clocked by ext clock or timer */
-#endif
-	    }						/* reset clocked by different clock or timer */
 	;
 
 	/************************************************************
@@ -2097,7 +2037,7 @@ ifini	: IF '(' aexpr cref ')'		{		/* if (expr) { x++; } */
 		fprintf(T4FP, "    if (iC_gf->gt_val < 0)\n");
 	    }
 				cBlock	{		/* { x++; } */
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, &$7);
 	    }
 	;
 
@@ -2152,7 +2092,7 @@ ffexpr	: ifini				{		/* if (expr) { x++; } */
 		fprintf(T4FP, "    switch (iC_gf->gt_new)\n");
 	    }
 				    cBlock	{	/* { x++; } */
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &$7);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, &$7);
 		ffexprCompile("SWITCH", $$.v, c_number); /* c_compile cBlock */
 	    }
 	;
@@ -2226,7 +2166,7 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	 *	CLOCK(set1,timSet1,delaySet1)
 	 ***********************************************************/
 cfexpr	: CBLTIN '(' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
 	    }
 	/************************************************************
 	 * CLOCK(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
@@ -2236,7 +2176,7 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 	 *	CLOCK(set1,set2,timSet1Set2,delaySet1Set2)
 	 ***********************************************************/
 	| CBLTIN '(' aexpr ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0);
 	    }
 	/************************************************************
 	 * CLOCK(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
@@ -2250,7 +2190,7 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 	 *	CLOCK(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
 	 ***********************************************************/
 	| CBLTIN '(' aexpr ',' ctdref ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
+		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0);
 	    }
 	;
 
@@ -2325,7 +2265,7 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 	 ***********************************************************/
 
 tfexpr	: TBLTIN '(' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, 0);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
 	    }
 	/************************************************************
 	 * TIMER(aexpr[,(cexpr|texpr[,aexpr])])
@@ -2335,7 +2275,7 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *	TIMER(set1,timSet1,delaySet1)
 	 ***********************************************************/
 	| TBLTIN '(' aexpr ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, 0);
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0);
 	    }
 	/************************************************************
 	 * TIMER(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
@@ -2345,7 +2285,7 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *	TIMER(set1,set2,timSet1Set2,delaySet1Set2)
 	 ***********************************************************/
 	| TBLTIN '(' aexpr ',' ctdref ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, 0);
+		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0);
 	    }
 	/************************************************************
 	 * TIMER(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
@@ -2378,7 +2318,7 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *	TIMER1(set1,timSet1,delaySet1)
 	 ***********************************************************/
 	| TBLTI1 '(' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0, &val1);
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, &val1);
 	    }
 	/************************************************************
 	 * TIMER1(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
@@ -2388,7 +2328,7 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *	TIMER1(set1,set2,timSet1Set2,delaySet1Set2)
 	 ***********************************************************/
 	| TBLTI1 '(' aexpr ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, 0, &val1);
+		$$.v = bltin(&$1, &$3, 0, 0, 0, &$5, &$6, &val1);
 	    }
 	/************************************************************
 	 * TIMER1(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
@@ -2402,7 +2342,7 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *	TIMER1(set1,timSet1,delaySet1,set2,timSet2,delaySet2)
 	 ***********************************************************/
 	| TBLTI1 '(' aexpr ',' ctdref ',' aexpr cref ')'	{
-		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0, &val1);
+		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, &val1);
 	    }
 	;
 
@@ -2441,21 +2381,21 @@ cCall	: UNDEF '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cCall: UNDEF", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: UNDEF", &$$);
 #endif
 	    }
 	| CNAME '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
 		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cCall: CNAME", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: CNAME", &$$);
 #endif
 	    }
 	| UNDEF '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cCall: UNDEF error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: UNDEF error", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2463,7 +2403,7 @@ cCall	: UNDEF '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = cCallCount($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cCall: CNAME error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: CNAME error", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2480,7 +2420,7 @@ cPlist	: aexpr			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cPlist: aexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cPlist: aexpr", &$$);
 #endif
 	    }
 	| cPlist ',' aexpr	{
@@ -2490,7 +2430,7 @@ cPlist	: aexpr			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cPlist: cPlist , aexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cPlist: cPlist , aexpr", &$$);
 #endif
 	    }
 	;
@@ -2580,18 +2520,33 @@ funcBody
 	 ***********************************************************/
 
 returnStatement
-	: RETURN actexpr		{
+	: RETURN ractexpr		{
 		$$.f = $2.f; $$.l = $2.l;		/* TODO $$.f should be func$ */
 		$$.v = returnStatement(&$2);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "returnStatement: RETURN actexpr", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "returnStatement: RETURN ractexpr", &$$);
 #endif
 	    }
 	;
 
-actexpr	: aexpr				{ $$ = $1; }
+ractexpr
+	: aexpr				{ $$ = $1; }	/* use in return and real parameter */
 	| cexpr				{ $$ = $1; }
 	| texpr				{ $$ = $1; }
+	;
+
+actexpr							/* use as real parameter */
+	: ractexpr			{ $$ = $1; }
+	| IMMCARRAY			{
+		Symbol *	sp;
+
+		$$.f = $1.f; $$.l = $1.l;
+		assert($1.f == 0 || ($1.f >= iCbuf && $1.l < &iCbuf[IMMBUFSIZE]));
+		$$.v = checkDecl(sp = $1.v);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "actexpr: immCarray", &$$);
+#endif
+	    }
 	;
 
 	/************************************************************
@@ -2610,7 +2565,7 @@ fPlist	: formalParameter		{
 		$$.v->le_first = $1.f;
 		$$.v->le_last = $1.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fPlist: formalParameter", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fPlist: formalParameter", &$$);
 #endif
 	    }
 	| fPlist ',' formalParameter	{
@@ -2626,7 +2581,7 @@ fPlist	: formalParameter		{
 		lp->le_first = $3.f;
 		lp->le_last = $3.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "fPlist: fPlist , formalParameter", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fPlist: fPlist , formalParameter", &$$);
 #endif
 	    }
 	;
@@ -2645,6 +2600,10 @@ formalParameter
 		$$ = $3;				/* formal assign parameter Symbol */
 		$$.v->ftype = $2.v.ftype;		/* TYPE bit int clock timer */
 		$$.v->type  = $2.v.type;		/* assign parameter is set to UDF */
+		if ($$.v->type != UDF) {
+		    warning("immC type is not allowed for formal assign parameter - ignore:", NS);
+		    $$.v->type = UDF;
+		}
 		iFunSyText = 0;				/* no more function symbols */
 	    }
 	| formalParaTypeDecl UNDEF	{
@@ -2652,10 +2611,58 @@ formalParameter
 
 		$$ = $2;				/* formal value parameter Symbol */
 		$$.v->ftype = ft = $1.v.ftype;		/* TYPE bit int clock timer */
+		if ($$.v->type != UDF) {
+		    warning("immC type is not allowed for formal value parameter - ignore:", NS);
+		}
 		if (ft >= CLCKL) {			/* check that CLCKL TIMRL */
 		    ft -= CLCKL - CLCK;			/* and CLCK and TIMR are adjacent */
 		}
 		$$.v->type = iC_types[ft];		/* value parameter has type set */
+		iFunSyText = 0;				/* no more function symbols */
+	    }
+	| formalParaTypeDecl UNDEF '[' immCindex ']'	{
+		int		typ;
+		int		ftyp;
+		Symbol *	sp;
+		Symbol *	tsp;
+		List_e *	lp;
+		int		i;
+		char		tempBuf[TSIZE];
+
+		$$.f = $1.f; $$.l = $5.l;
+		sp = $$.v = $2.v;
+		ftyp = $1.v.ftype;			/* TYPE bit int */
+		if ((typ = $1.v.type) == UDF) {
+		    if (ftyp == ARITH) {
+			typ = ARNC;			/* immC int */
+		    } else
+		    if (ftyp == GATE) {
+			typ = LOGC;			/* immC bit */
+		    } else {
+			typ = UDF;
+		    }
+		}
+		sp->type = typ;				/* only ARNC or LOGC (UDF on error) */
+		sp->ftype = UDFA;			/* immC array */
+		if (sp->type == ARNC || sp->type == LOGC) {
+		    if ((sp->v_cnt = $4.v) != 0) {	/* array size or 0 */
+			for (i = 0; i < sp->v_cnt; i++) {
+			    snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			    if ((tsp = lookup(tempBuf)) == 0) {
+				tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+			    }
+			    if (sp->list == 0) {
+				sp->list = lp = sy_push(tsp);	/* head of new member list */
+				lp->le_val = sp->v_cnt;
+			    } else {
+				lp = lp->le_next = sy_push(tsp);/* link to end of new member list */
+			    }
+			}
+		    }					/* if array size 0 this is an anonymous array */
+		} else {
+		    ierror("formal array parameter other than immC bit or immC int:", sp->name);
+		    sp->type = ERR;
+		}
 		iFunSyText = 0;				/* no more function symbols */
 	    }
 	;
@@ -2663,15 +2670,42 @@ formalParameter
 formalParaTypeDecl
 	: TYPE				{
 		$$.f = $$.l = $1.l;			/* do not include in expression string */
-		$$.v.ftype = $1.v->ftype;
-		$$.v.type = $$.v.em = $$.v.fm = 0;
+		$$.v.ftype = $1.v->ftype;		/* ARITH GATE CLCKL TIMRL */
+		$$.v.em &= ~EM;
+		$$.v.type = UDF;
+		$$.v.fm = 0;
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "formalParaTypeDecl: TYPE", &$$);
+#endif
 	    }
 	| IMM TYPE			{
+		int		typ;
+		int		ftyp;
 		$$.f = $$.l = $2.l;			/* do not include in expression string */
-		$$.v.ftype = $2.v->ftype;		/* IMM is optional */
-		$$.v.type = $$.v.em = $$.v.fm = 0;
+		ftyp = $2.v->ftype;			/* ARITH GATE CLCKL TIMRL */
+		if ($1.v->ftype == 1) {			/* immC in init.c */
+		    if (ftyp == ARITH) {
+			typ = ARNC;			/* immC int */
+		    } else
+		    if (ftyp == GATE) {
+			typ = LOGC;			/* immC bit */
+		    } else {
+			warning("immC formal parameter other than bit or int - ignore:", $2.v->name);
+			goto immTypeF;
+		    }
+		} else {				/* simple imm */
+		  immTypeF:
+		    typ = UDF;
+		}
+		$$.v.ftype = ftyp;			/* IMM is optional */
+		$$.v.type = typ;
+		$$.v.em &= ~EM;
+		$$.v.fm = 0;
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "formalParaTypeDecl: IMM TYPE", &$$);
+#endif
 	    }
 	;
 
@@ -2689,6 +2723,9 @@ iFunCallHead
 	: IFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
 		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "iFunCallHead: IFUNCTION (", &$$);
+#endif
 	    }
 	;
 
@@ -2696,14 +2733,14 @@ iFunCall: iFunCallHead rParams ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		$$ = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "iFunCall", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "iFunCall: iFunCallHead rParams)", &$$);
 #endif
 	    }
 	| iFunCallHead rParams error ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		$$ = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "iFunCall error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "iFunCall: iFunCallHead rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2719,6 +2756,9 @@ cFunCallHead
 	: CFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
 		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "cFunCallHead: CFUNCTION (", &$$);
+#endif
 	    }
 	;
 
@@ -2726,14 +2766,14 @@ cFunCall: cFunCallHead rParams ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		$$ = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cFunCall", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cFunCall: cFunCallHead rParams)", &$$);
 #endif
 	    }
 	| cFunCallHead rParams error ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		$$ = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "cFunCall error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cFunCall: cFunCallHead rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2749,6 +2789,9 @@ tFunCallHead
 	: TFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
 		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "tFunCallHead: TFUNCTION (", &$$);
+#endif
 	    }
 	;
 
@@ -2756,14 +2799,15 @@ tFunCall: tFunCallHead rParams ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		$$ = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "tFunCall", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall: tFunCallHead rParams)", &$$);
 #endif
 	    }
 	| tFunCallHead rParams error ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		$$ = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "tFunCall error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall: tFunCallHead rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2780,6 +2824,9 @@ vFunCallHead
 	: VFUNCTION '('			{
 		$$.f = $1.f; $$.l = $2.l;
 		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCallHead: VFUNCTION (", &$$);
+#endif
 	    }
 	;
 
@@ -2790,7 +2837,7 @@ vFunCall: vFunCallHead rParams ')'	{
 		$$.f = lis.f; $$.l = lis.l;
 		$$.v = 0;				/* $$.v is Sym - not compatible */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "vFunCall", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCall: vFunCallHead rParams)", &$$);
 #endif
 	    }
 	| vFunCallHead rParams error ')'	{
@@ -2800,7 +2847,7 @@ vFunCall: vFunCallHead rParams ')'	{
 		$$.f = lis.f; $$.l = lis.l;
 		$$.v = 0;				/* $$.v is Sym - not compatible */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(0, "vFunCall error", (Lis*)&$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCall: vFunCallHead rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2822,7 +2869,7 @@ rPlist	: actexpr			{
 		}
 		$$.v = handleRealParameter(0, $1.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "rPlist: actexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "rPlist: actexpr", &$$);
 #endif
 	    }
 	| rPlist ',' actexpr		{
@@ -2832,7 +2879,621 @@ rPlist	: actexpr			{
 		}
 		$$.v = handleRealParameter($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(1, "rPlist: rPlist , actexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "rPlist: rPlist , actexpr", &$$);
+#endif
+	    }
+	;
+
+	/********************************************************************
+	 *
+	 *	immC array declaration - these are arrays of immC bit or immC int nodes.
+	 *
+	 *	An immC array is declared and initialised with immC nodes in the
+	 *	declaration. If no initialising list of members is given directly
+	 *	in the declaration, the call will automatically generate a list of
+	 *	immC nodes of the same type as the array being declared. The names
+	 *	of the members are given the name of the array with a number 0 to n-1
+	 *	appended, where n is the the size of the array, which must be specified
+	 *	in this case. The number appended to the array base name is the index
+	 *	of that member in the array (similar to iCa arrays).
+	 *
+	 *	    immC bit selBit[3];	// defines immC bit selBit0, selBit1, selBit2
+	 *				// and initialises them as array members of
+	 *				// array immC bit selBit, which is also defined
+	 *	    immC int selInt[3];	// defines immC int selInt0, selInt1, selInt2
+	 *				// and initialises them as array members of
+	 *				// array immC int selInt, which is also defined
+	 *
+	 *	Alternatively an immC array may be declared and initialised in the
+	 *	declaration with differently named immC variables of the same
+	 *	immC type as the immC array. In this case the size specification is
+	 *	optional.
+	 *
+	 *	    immC bit selOpen[3] = { open0, open1, open2, };
+	 *	    immC int selNumb[]  = { numb0, numb1, numb2, };
+	 *
+	 *	If a size for the array is specified it must match the number
+	 *	of initialiser elements. If not specified the size is taken
+	 *	from the number of initialisers.
+	 *
+	 *	In either case the member names of the array (either generated names
+	 *	or names provided in the optional initialiser list) may be previously
+	 *	declared immC variables. In this case those immC variables will be used.
+	 *	A check is made, that those members are the same immC type as the array.
+	 *	Alternatively if the names are undefined, the immC array declaration will
+	 *	declare and reserve storage for the named members. The type (immC bit or
+	 *	immC int) will be taken from the type of the array being declared.
+	 *
+	 *	immC arrays may only be declared and optionally called with an initialiser
+	 *	list once in one statement. Like simmple immC declarations, immC array
+	 *	declarations reserve and initialise storage. immC array declarations
+	 *	can be included in a comma separated list of immC declarations. The
+	 *	keywords 'immC bit' or 'immC int' at the head of the list need only be
+	 *	given once.
+	 *
+	 *	immC arrays are accessed with a numeric index, which selects a
+	 *	particular immC node stored during initialisation (similar to ALIAS).
+	 *	Being immC, they may only be assigned in C code. Their value may be
+	 *	accessed and used in any iC or C expression. In iC code only constant
+	 *	numerical indices may be used, whereas in C code either immediate or
+	 *	ordinary C variables in an index expression will be handled correctly.
+	 *
+	 *	    imm int n = ...	// compute selection index n in iC code
+	 *	    if (trig) {
+	 *	       selOpen[n] = 1;	// will set   open[n] to 1 // variable index
+	 *	    } else {
+	 *	       selOpen[n] = 0;	// will reset open[n] to 0
+	 *	    }
+	 *	    imm bit gate0 = ST(selOpen[0], tick, 10);	// same as ST(open0, ...
+	 *	    imm bit gate1 = ST(selOpen[1], tick, 10);	// same as ST(open1, ...
+	 *	    imm bit gate3 = ST(selOpen[2], tick, 10);	// note constant index
+	 *
+	 *	This selection is much faster than having large numbers of comparisons
+	 *	with n as shown in the following iC code example doing the same as the
+	 *	code above:
+	 *
+	 *	    imm int n = ...	// compute selection index n in iC code
+	 *	    imm bit gate0 = ST(trig & n == 0, tick, 10);
+	 *	    imm bit gate1 = ST(trig & n == 1, tick, 10);
+	 *	    imm bit gate2 = ST(trig & n == 2, tick, 10);
+	 *
+	 *	In this example each statement is recomputed every time n changes,
+	 *	although only one of them fires. (Significant if selection is large).
+	 *
+	 *	For the selection with an immC array only one value is used - the
+	 *	one selected by index n in the C fragment triggers the correct
+	 *	gate immediately.
+	 *
+	 *******************************************************************/
+
+immCarray
+	: immCarrayHead			{		/* automatic declaration of members */
+		Symbol *	sp;
+		Symbol *	tsp;
+		List_e *	lp;
+		int		i;
+		char		tempBuf[TSIZE];
+		$$.f = $1.f; $$.l = $1.l;
+		sp = $$.v = $1.v;
+		assert((sp->em & EM) == 0 && (sp->type == ARNC || sp->type == LOGC || sp->type == ERR));
+		if (sp->v_cnt <= 0) {
+		    ierror("must specify array size since there is no member initialiser list:", $$.f);
+		    sp->type = ERR;
+		} else if ((lp = sp->list) == 0) {
+		    listGenOut(sp, sp->v_cnt);		/* list immC array node */
+		    for (i = 0; i < sp->v_cnt; i++) {
+			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			if ((tsp = lookup(tempBuf)) == 0) {
+			    tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+			    listGenOut(tsp, 0);		/* list immC node and generate possible output */
+			}				/* not listed if member node already defined */
+			if (sp->type != tsp->type && sp->type != ERR) {
+			    ierror("array member type does not match type of whole array:", tsp->name);
+			    sp->type = ERR;		/* can only happen if member alread existed */
+			}
+			if (sp->list == 0) {
+			    sp->list = lp = sy_push(tsp);	/* head of new member list */
+			    lp->le_val = sp->v_cnt;
+			} else {
+			    lp = lp->le_next = sy_push(tsp);	/* link to end of new member list */
+			}
+		    }
+		    listGenOut(NULL, 1);		/* terminate immC array node list */
+		} else {
+		    assert(lp->le_val == sp->v_cnt);	/* previously declared extern */
+		    listGenOut(sp, sp->v_cnt);		/* list immC array node */
+		    for (i = 0; i < sp->v_cnt; i++) {	/* use member list set up in extern declaration */
+			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			if ((tsp = lookup(tempBuf)) != 0 && lp && tsp != lp->le_sym) {
+			    ierror("different array member to member in extern declaration:", tsp->name);
+			    sp->type = ERR;
+			} else {
+			    if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
+				if (sp->type != ERR) {	/* TODO might be assertion because tested in extern decl */
+				    ierror("array member type does not match type of whole array:", tsp->name);
+				    sp->type = ERR;	/* can only happen if member alread existed */
+				}
+			    } else if (tsp->em & EM) {	/* extern ARNC or LOGC ? */
+				tsp->em &= ~EM;		/* no longer extern */
+				listGenOut(tsp, 0);	/* list immC node and generate possible output */
+			    }
+			}
+			lp = lp->le_next;
+		    }
+		    listGenOut(NULL, 1);		/* terminate immC array node list */
+		}
+		sp->v_cnt = 0;				/* must be cleared for gram.y */
+		if (iFunSymExt) {
+		    char *	cp;
+		    Symbol *	sp1;
+		    cp = strchr(sp->name, '@');		/* locate original extension */
+		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
+			warning("declaration of an extern variable in a function - ignored:", cp);
+		    }
+		    collectStatement(sp);
+		    iFunSyText = 0;			/* no more function symbols */
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "immCarray: immCarrayHead", &$$);
+#endif
+	    }
+	| immCarrayHead '=' '{' immCini '}'	{
+		Symbol *	sp;
+		Symbol *	tsp;
+		List_e *	lp;
+		List_e *	tlp;
+		List_e *	ttlp;
+		int		i;
+		$$.f = $1.f; $$.l = $5.l;
+		sp = $$.v = $1.v;
+		assert((sp->em & EM) == 0 && (sp->type == ARNC || sp->type == LOGC || sp->type == ERR));
+		if (sp->v_cnt > 0 && sp->v_cnt != $4.v->le_val) {
+		    fprintf(stderr, "immCarray: array size %u, initaliser count %u\n", sp->v_cnt, $4.v->le_val);
+		    ierror("array size does not match number of member initialisers:", $$.f);
+		    sp->type = ERR;
+		}
+		sp->v_cnt = $4.v->le_val;		/* number of member initialisers is array size */
+		/* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
+		tlp = ttlp = sp->list;			/* extern declaration if set */
+		listGenOut(sp, sp->v_cnt);		/* list immC array node */
+		for (lp = $4.v, i = 0; lp; lp = lp->le_next, i++) {
+		    if (tlp && (ttlp = tlp->le_next, 1) && (tsp = sy_pop(tlp)) != lp->le_sym) {	/* remove extern List_e */
+			ierror("different array member to member in extern declaration:", tsp->name);
+			sp->type = ERR;
+		    }
+		    if (lp->le_sym->type == UDF) {
+			if (lp->le_sym->ftype == UDFA) {
+			    lp->le_sym->type = sp->type;/* turn into immC variable */
+			    lp->le_sym->ftype = iC_ftypes[sp->type];
+			    assert((lp->le_sym->em & EM) == 0);
+			    listGenOut(lp->le_sym, 0);	/* list immC node and generate possible output */
+			} else {
+			    goto TypErr;
+			}
+		    } else
+		    if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
+			if (sp->type != ERR) {
+			  TypErr:
+			    ierror("array member type does not match type of whole array:", lp->le_sym->name);
+			    sp->type = ERR;
+			}
+		    } else if (lp->le_sym->em & EM) {	/* extern ARNC or LOGC ? */
+			lp->le_sym->em &= ~EM;		/* no longer extern */
+			listGenOut(lp->le_sym, 0);	/* list immC node and generate possible output */
+		    }
+		    tlp = ttlp;
+		}
+		listGenOut(NULL, 1);			/* terminate immC array node list */
+		assert(tlp == NULL && i == sp->v_cnt);
+		sp->list = $4.v;			/* head of the member list - inherits initialiser count */
+		sp->v_cnt = 0;				/* must be cleared for gram.y */
+		if (iFunSymExt) {
+		    char *	cp;
+		    Symbol *	sp1;
+		    cp = strchr(sp->name, '@');		/* locate original extension */
+		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
+			warning("declaration of an extern variable in a function - ignored:", cp);
+		    }
+		    collectStatement(sp);
+		    iFunSyText = 0;			/* no more function symbols */
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "immCarray: immCarrayHead = { immCini }", &$$);
+#endif
+	    }
+	;
+
+immCindex
+	: /* nothing */		{ $$.v =  0; }
+	| constExpr		{ $$   = $1; }		/* numeric constant */
+	;
+
+immCarrayHead
+	: declHead UNDEF '[' immCindex ']'	{
+		Symbol *	sp;
+#if YYDEBUG
+		Symbol t = *($2.v);
+#endif
+		$$.f = $1.f; $$.l = $5.l;
+		sp = $$.v = $2.v;
+		sp->type  = $1.v.type;			/* only ARNC and LOGC */
+		sp->ftype = UDFA;			/* makes it a IMMCARRAY */
+		assert(($1.v.em & EM) == 0);		/* has been cleared in declHead */
+		sp->em    &= ~EM;			/* clear bit EM here */
+		if (sp->type == ARNC || sp->type == LOGC) {
+		    sp->v_cnt = $4.v;			/* array size or 0 */
+		} else {
+		    ierror("Definition of a non immC array is illegal:", $$.f);
+		    sp->type = ERR;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pd("immCarrayHead: declHead UNDEF [ immCindex ]", sp, $1.v, &t);
+#endif
+	    }
+	| declHead IMMCARRAY '[' immCindex ']'	{
+		int		typ;			/* gets here when IMMCARRAY was */
+		Symbol *	sp;			/* previously declared extern */
+		$$.f = $1.f; $$.l = $5.l;
+		sp = $$.v = $2.v;
+		typ  = $1.v.type;			/* ARNC and LOGC */
+		assert(sp && (typ == ARNC || typ == LOGC));
+#if YYDEBUG
+		Symbol t = *(sp);
+#endif
+		if (sp->ftype != UDFA || sp->type != typ || sp->list->le_val == 0) {
+		    ierror("declaration does not match previous declaration:", sp->name);
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
+		} else
+		if (sp->em & EM) {
+		    if ($4.v > 0 && sp->list->le_val != $4.v) {
+			fprintf(stderr, "immCarrayHead: extern array size %u, array size %u\n", sp->list->le_val, $4.v);
+			ierror("array size does not match previous extern declaration:", $$.f);
+			sp->type = ERR;
+		    }
+		    sp->em    &= ~EM;			/* clear bit EM here */
+		    sp->v_cnt = sp->list->le_val;	/* array size from extern */
+		} else {
+		    ierror("array already defined - cannot define again:", $$.f);
+		    sp->type = ERR;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pd("immCarrayHead: declHead IMMCARRAY [ immCindex ]", sp, $1.v, &t);
+#endif
+		iFunSyText = 0;				/* no more function symbols */
+	    }
+	;
+
+	/************************************************************
+	 * list of immC array members - must have at least one member
+	 ***********************************************************/
+
+immCini
+	: immCiniList		{ $$ = $1; }
+	| immCiniList ','	{ $$ = $1; }
+	;
+
+cVariable
+	: UNDEF			{ $$   = $1; }		/* turned into immC variable */
+	| LVARC			{ $$   = $1; }		/* logical immC bit variable */
+	| AVARC			{ $$   = $1; }		/* arithmetic immC int variable */
+	| immCarrayVariable	{ $$   = $1; }		/* immC array member variable */
+	;
+
+immCiniList
+	: cVariable			{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = checkDecl($1.v);			/* first link in member list */
+		assert($1.f == 0 || ($1.f >= iCbuf && $1.l < &iCbuf[IMMBUFSIZE]));
+		$$.v->le_val = 1;			/* count first member */
+		$$.v->le_first = $1.f;
+		$$.v->le_last = $1.l;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "immCiniList: cVariable", &$$);
+#endif
+	    }
+	| immCiniList ',' cVariable	{
+		List_e *	lp;
+
+		$$.f = $1.f; $$.l = $3.l;
+		lp = $$.v;
+		while (lp->le_next) {
+		    lp = lp->le_next;
+		}
+		lp = lp->le_next = checkDecl($3.v);	/* link to end of member list */
+		assert($3.f == 0 || ($3.f >= iCbuf && $3.l < &iCbuf[IMMBUFSIZE]));
+		$$.v->le_val++;				/* count later members */
+		lp->le_first = $3.f;
+		lp->le_last = $3.l;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "immCiniList: immCiniList , cVariable", &$$);
+#endif
+	    }
+	;
+
+	/********************************************************************
+	 *
+	 *	Extern immC array declaration
+	 *
+	 *	An immC array in another source may be declared extern, in which case
+	 *	the array and its members may be accessed in that source.
+	 *
+	 *	The form of the extern declaration must be the same as the normal
+	 *	declaration with the word 'extern' preceding the type. In particular
+	 *	if the array will be finally declared with an inintialiser list
+	 *	the extern declaration must be provided with an identical initialiser
+	 *	list. If the final declaration will be without an initialiser list
+	 *	the extern declaration must be the same. The reason for this is, that
+	 *	an extern array declaration not only declares the immC array extern
+	 *	but it also declares all of its members extern. Only this way can the
+	 *	members of an immC array be accessed correctly in another source.
+	 *
+	 *	The four arrays declared in the previous section are declared extern
+	 *	as follows:
+	 *
+	 *	    extern immC bit selBit[3];
+	 *	    extern immC int selInt[3];
+	 *
+	 *	    extern immC bit selOpen[3] = { open0, open1, open2, };
+	 *	    extern immC int selNumb[]  = { numb0, numb1, numb2, };
+	 *
+	 *	These extern array declarations will generate the following extern
+	 *	declarations internally.
+	 *
+	 *	    extern immC bit selBit0, selBit1, selBit2;
+	 *	    extern immC int selInt0, selInt1, selInt2;
+	 *
+	 *	    extern immC bit open0, open1, open2;
+	 *	    extern immC int numb0, numb1, numb2;
+	 *
+	 *	If these simple extern immC declarations had already been coded
+	 *	previously, only a check is made that the types match.
+	 *
+	 *	Like simple extern immC declarations, extern immC array declarations
+	 *	do not reserve any storage. Extern immC array declarations can be
+	 *	included in a comma separated list of extern immC declarations. The
+	 *	keywords 'extern immC bit' or 'extern immC int' at the head of the
+	 *	list need only be given once.
+	 *
+	 *	In good C practice, the extern immC array declarations should be
+	 *	coded in a header file, which is to be included in each source
+	 *	using the immC array. In the source finally declaring, defining and
+	 *	initialising the array, the extern declaration in the header will
+	 *	precede the full declaration. At that point a check is made, that
+	 *	the type of the array and the types and names of all of its members
+	 *	are identical to the previous extern declaration. That way a full
+	 *	check is made at immediate C compile time - linker errors are avoided.
+	 *
+	 *******************************************************************/
+
+extimmCarray
+	: extimmCarrayHead			{	/* automatic declaration of members */
+		Symbol *	sp;
+		Symbol *	tsp;
+		List_e *	lp;
+		List_e *	tlp;
+		int		i;
+		char		tempBuf[TSIZE];
+		$$.f = $1.f; $$.l = $1.l;
+		sp = $$.v = $1.v;
+		assert((sp->em & EM) && (sp->type == ARNC || sp->type == LOGC || sp->type == ERR));
+		if ((lp = sp->list) != NULL) {
+		    warning("previous extern array declaration - ignored:", sp->name);
+		    while (lp) {
+			tlp = lp->le_next;		/* pick up next before free */
+			sy_pop(lp);			/* free previous List_e's */
+			lp = tlp;
+		    }
+		    sp->list = NULL;
+		}
+		if (sp->v_cnt <= 0) {
+		    ierror("must specify array size since there is no member initialiser list:", $$.f);
+		    sp->type = ERR;
+		} else {
+		    for (i = 0; i < sp->v_cnt; i++) {
+			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			if ((tsp = lookup(tempBuf)) == 0) {
+			    tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+			    tsp->em |= EM;		/* make newly created member external */
+			}
+			if (sp->type != tsp->type && sp->type != ERR) {
+			    ierror("array member type does not match type of whole array:", tsp->name);
+			    sp->type = ERR;		/* can only happen if member alread existed */
+			}
+			if (sp->list == NULL) {
+			    sp->list = lp = sy_push(tsp);/* head of the member list */
+			    lp->le_val = sp->v_cnt;
+			} else {
+			    lp = lp->le_next = sy_push(tsp);
+			}
+		    }
+		}
+		sp->v_cnt = 0;				/* must be cleared for gram.y */
+		if (iFunSymExt) {
+		    char *	cp;
+		    Symbol *	sp1;
+		    cp = strchr(sp->name, '@');		/* locate original extension */
+		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
+			warning("declaration of an extern variable in a function - ignored:", cp);
+		    }
+		    collectStatement(sp);
+		    iFunSyText = 0;			/* no more function symbols */
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead", &$$);
+#endif
+	    }
+	| extimmCarrayHead '=' '{' immCini '}'	{
+		Symbol *	sp;
+		List_e *	lp;
+		List_e *	tlp;
+		$$.f = $1.f; $$.l = $5.l;
+		sp = $$.v = $1.v;
+		assert((sp->em & EM) && (sp->type == ARNC || sp->type == LOGC || sp->type == ERR));
+		if ((lp = sp->list) != NULL) {
+		    warning("previous extern array declaration - ignored:", sp->name);
+		    while (lp) {
+			tlp = lp->le_next;		/* pick up next before free */
+			sy_pop(lp);			/* free previous List_e's */
+			lp = tlp;
+		    }
+		    sp->list = NULL;
+		}
+		if (sp->v_cnt > 0 && sp->v_cnt != $4.v->le_val) {
+		    fprintf(stderr, "extimmCarray: array size %u, initaliser count %u\n", sp->v_cnt, $4.v->le_val);
+		    ierror("array size does not match number of member initialisers:", $$.f);
+		    sp->type = ERR;
+		}
+		sp->v_cnt = $4.v->le_val;		/* number of member initialisers is array size */
+		/* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
+		for (lp = $4.v; lp; lp = lp->le_next) {
+		    if (lp->le_sym->type == UDF) {
+			if (lp->le_sym->ftype == UDFA) {
+			    lp->le_sym->type = sp->type;/* turn into immC variable */
+			    lp->le_sym->ftype = iC_ftypes[sp->type];
+			    lp->le_sym->em |= EM;	/* make member external */
+			} else {
+			    goto ExtTypErr;
+			}
+		    }
+		    if (sp->type != lp->le_sym->type && sp->type != ERR) {
+		      ExtTypErr:
+			ierror("array member type does not match type of whole array:", lp->le_sym->name);
+			sp->type = ERR;
+		    }
+		}
+		sp->list = $4.v;			/* head of the member list - inherits initialiser count */
+		sp->v_cnt = 0;				/* must be cleared for gram.y */
+		if (iFunSymExt) {
+		    char *	cp;
+		    Symbol *	sp1;
+		    cp = strchr(sp->name, '@');		/* locate original extension */
+		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
+			warning("declaration of an extern variable in a function - ignored:", cp);
+		    }
+		    collectStatement(sp);
+		    iFunSyText = 0;			/* no more function symbols */
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead = { immCini }", &$$);
+#endif
+	    }
+	;
+
+extimmCarrayHead
+	: extDeclHead UNDEF '[' immCindex ']'	{
+		Symbol *	sp;
+		$$.f = $1.f; $$.l = $5.l;
+		sp = $$.v = $2.v;
+		sp->type  = $1.v.type;
+		sp->ftype = UDFA;			/* makes it a IMMCARRAY */
+		assert($1.v.em & EM);			/* has been set in extDeclHead */
+		sp->em    |= EM;			/* set bit EM here */
+		if (sp->type == ARNC || sp->type == LOGC) {
+		    sp->v_cnt = $4.v;			/* array size or 0 */
+		} else {
+		    ierror("Extern declaration of a non immC array is illegal:", $$.f);
+		    sp->type = ERR;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    pd("extimmCarrayHead: extDeclHead UNDEF [ immCindex ]", sp, $1.v, $2.v);
+		}
+#endif
+	    }
+	| extDeclHead IMMCARRAY '[' immCindex ']'	{
+		$$.f = $1.f; $$.l = $5.l;
+		char *	cp;
+		Symbol *	sp;
+		sp = $$.v = $2.v;
+		assert(sp && (sp->type == ARNC || sp->type == LOGC));
+		if (sp->ftype != UDFA) {
+		    ierror("extern array declaration does not match previous declaration:", $2.v->name);
+		    $2.v->type = ERR;			/* cannot execute properly */
+		}
+		if (iFunSymExt && (cp = strchr($2.v->name, '@'))) {
+		    warning("extern array declaration of internal function variable - ignored:", cp+1);
+		} else
+		if ((sp->em & EM) && $2.v->type != ERR) {	/* prev extern but not ERROR */
+		    sp->type  = $1.v.type;
+		    sp->ftype = UDFA;			/* makes it a IMMCARRAY */
+		    assert($1.v.em & EM);		/* has been set in extDeclHead */
+		    sp->em    |= EM;			/* set bit EM here */
+		    sp->v_cnt = $4.v;			/* array size or 0 */
+		} else {
+		    warning("second extern array declaration - ignored:", $2.v->name);
+		} /* TODO FIX */
+		if (iFunSymExt) {
+		    ierror("extern array declaration in function definition after assignment:", $2.v->name);
+		    sp->type = ERR;			/* stop use as a statement in function */
+		    sp->em   |= EM;
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    pd("extimmCarrayHead: extDeclHead IMMCARRAY [ immCindex ]", sp, $1.v, $2.v);
+		}
+#endif
+	    }
+	;
+
+	/************************************************************
+	 *
+	 *	immC array variable
+	 *
+	 *	An immC array member may be used as an immediate variable
+	 *	like any other immC variable.
+	 *
+	 *	    selOpen[0]
+	 *	    selNumb[1]
+	 *
+	 *	A numerical index in the range of 0 to n-1 may be used
+	 *	where n is the size of the immC array
+	 *
+	 *	The return is the immC member of the array, which can
+	 *	even be used to initialise other immC arrays
+	 *
+	 ***********************************************************/
+
+immCarrayVariable
+	: IMMCARRAY '[' constExpr ']'	{
+		$$.f = $1.f; $$.l = $4.l;
+		Symbol *	sp;
+		List_e *	lp;
+		int		i;
+		$$.v = sp = $1.v;
+		assert(sp && sp->ftype == UDFA);
+		if (iFunSymExt && sp->list == NULL) {
+		    warning("anonymous immC array - it's members cannot be accessed in iC code:", sp->name);
+		}
+		if ((lp = sp->list) == NULL) {
+		    if (($$.v = lookup("iCerr")) == 0) {
+			icerr = $$.v = install("iCerr", ERR, GATE);
+		    }
+		    $$.v->type = ERR;			/* in case of error */
+		    ierror("immC array must be initialised to use its members:", sp->name);
+		} else {
+		    if ($3.v < 0 || $3.v >= lp->le_val) {
+			if (($$.v = lookup("iCerr")) == 0) {
+			    icerr = $$.v = install("iCerr", ERR, GATE);
+			}
+			$$.v->type = ERR;		/* in case of error */
+			ierror("immC array member is not in range:", sp->name);
+		    } else {
+			for (i = 0; i < $3.v; i++) {
+			    lp = lp->le_next;		/* select indexed member */
+			    if (lp == NULL && lp->le_sym == NULL) {
+				execerror("immCarrayVariable: member not initialised by compiler", sp->name, __FILE__, __LINE__);
+				/* compiler error - flushes rest of file */
+			    }
+			}
+			$$.v = lp->le_sym;		/* return the member Symbol */
+		    }
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "immCarrayVariable: IMMCARRAY [ constExpr ]", &$$);
 #endif
 	    }
 	;
@@ -2901,7 +3562,7 @@ static int	lex_act[] = { DEF_ACT };	/* tokens corresponding to ftype */
  *******************************************************************/
 
 int
-compile(
+iC_compile(
     char *	inpPath,			/* input file path */
     char *	lstNM,				/* list file name */
     char *	errNM,				/* error file name */
@@ -2993,8 +3654,7 @@ compile(
 		if (!(iC_debug & 04000)) {
 		    unlink(T6FN);
 		}
-		ierror("compile: cannot run:", execBuf);
-		return T0index;
+		return Iindex;
 	    }
 	    if (!(iC_debug & 04000)) {
 		unlink(T6FN);
@@ -3011,13 +3671,9 @@ compile(
     if (iC_debug & 046) {			/* begin source listing */
 	fprintf(iC_outFP, "******* %-15s ************************\n", inpNM);
     }
-    if ((iC_debug & 020000) == 0) {		/* new code with function definitions */
-	iniPtr = initialFunctions;		/* read system function definitions first */
-	iniDebug = iC_debug;			/* save iC_debug flag */
-	if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
-    } else if ((iC_debug & 021000) == 020000) {	/* suppress internal functions to test old code */
-	c_number = iC_genCount;			/* skip internal function numbers for compatibility */
-    }
+    iniPtr = initialFunctions;			/* read system function definitions first */
+    iniDebug = iC_debug;			/* save iC_debug flag */
+    if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
     setjmp(begin);
     for (initcode(); iCparse(); initcode()) {
 	;
@@ -3247,12 +3903,12 @@ get(FILE* fp, int x)
 		    int	    slFlag;
 		    char *  srcp;
 		    char *  destp;
-    		
+
 		    slFlag = 0;
 		    srcp = destp = chbuf[x];	/* modify source line */
 		    while ((c = *srcp++) != 0) {
 			if (c != '\\') {
-        		    *destp++ = c;
+			    *destp++ = c;
 			    slFlag = 0;		/* copy '\' after another character */
 			} else if (slFlag == 0) {
 			    *destp++ = '/';	/* convert '\\' to '/' under WIN32 */
@@ -3261,7 +3917,7 @@ get(FILE* fp, int x)
 			    slFlag = 0;		/* copy 3rd, 5th ... '\' */
 			}
 		    }
-        	    *destp++ = '\0';		/* terminate string */
+		    *destp++ = '\0';		/* terminate string */
 		}
 		/********************************************************
 		 *  iC-compile
@@ -3326,7 +3982,7 @@ get(FILE* fp, int x)
 		if (slen == 3 &&		/* has comment string after #line x "init.c" */
 		    strcmp(tempNM, genName) == 0) {	/* in the system file "init.c" */
 		    int	i;
-		    
+
 		    gen_count++;		/* count C functions in pre-compile code */
 		    if (iC_debug & 010000) {	/* generate listing of compiler */
 			goto listCfunction;	/* internal functions*/
@@ -3446,7 +4102,7 @@ unget(int c)
  *
  *	Convert from getp in chbuf - termination will be at least at
  *	newline supplied by fgets() or final '\0'. Usually it is
- *	erlier and that part is copied into iCtext with get().
+ *	earlier and that part is copied into iCtext with get().
  *
  *******************************************************************/
 
@@ -3493,7 +4149,7 @@ iClex(void)
 	    ccfrag = 0;
 	    return 0;				/* EOF in copy C block or statement */
 	}
-	iClval.val.v = c_number << 8;		/* return case # */
+	iClval.val.v = c_number << FUN_OFFSET;	/* return case # */
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
@@ -3513,9 +4169,8 @@ iClex(void)
 	}
 	if (isdigit(c)) {
 	    unget(c);				/* must be at least a single 0 */
-	    getNumber();			/* decimal octal or hex - getNumber marks text boundaries */
-	    iClval.val.v = 0;			/* value is never used */
-	    c = NUMBER;
+	    iClval.val.v = (unsigned int)getNumber();	/* decimal octal or hex - getNumber marks text boundaries */
+	    c = NUMBER;				/* value used in immCarrayHead */
 	    goto retfl;
 	}
 	if (isalpha(c) || c == '_' || c == '$') {	/* first may not be '@' */
@@ -3817,7 +4472,7 @@ iClex(void)
 		symp = sp;			/* with token of original */
 	    }
 	    /********************************************************************
-	     *  no need to clear sp->em
+	     *  no need to clear sp->em	- check - this refers to very old code Jw 20120515
 	     *  EM was cleared as typ &= ~EM before - was not cleared in symp->type
 	     *******************************************************************/
 	    if (typ > IFUNCT || (symp->fm & FM) != 0) {	/* function definition symbols */
@@ -3850,8 +4505,10 @@ iClex(void)
 	    if (qtoken) {
 		c = qtoken;			/* LOUT or AOUT */
 	    } else
-	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 LVARC 0 ... NUMBER ... val not needed */
+	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 0 LVARC 0 ... NUMBER ... val not needed */
 		c = lex_act[symp->ftype];	/* UNDEF AVAR LVAR ..YYERRCODE.. AOUT LOUT CVAR TVAR */
+	    } else if (typ != NUMBER && symp->ftype == UDFA) {
+		c = IMMCARRAY;			/* UDFA ARNC and UDFA LOGC are immC arrays not UNDEF */
 	    }
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {
 		symp = lp->le_sym;		/* original via backptr */
@@ -3903,7 +4560,6 @@ iClex(void)
 		} else if (c1 == '=') {
 		    c = OPE; goto found;	/* += */
 		}
-		c = PM;				/* + */
 		break;				/* + binary or unary */
 	    case '-':
 		if (c1 == '-') {
@@ -3913,7 +4569,6 @@ iClex(void)
 		} else if (c1 == '>') {
 		    c = PR; goto found;		/* -> */
 		}
-		c = PM;				/* - */
 		break;				/* - binary or unary */
 	    case '/':
 		if (c1 == '/') {
@@ -3939,7 +4594,7 @@ iClex(void)
 		    if ((c1 = get(T0FP, 0)) == '=') {
 			c = OPE; goto found;	/* <<= */
 		    }
-		    c = AOP;			/* << */
+		    c = LEFT_OP;		/* << */
 		    break;
 		}
 		if (c1 != '=') {
@@ -3957,7 +4612,7 @@ iClex(void)
 		    if ((c1 = get(T0FP, 0)) == '=') {
 			c = OPE; goto found;	/* >>= */
 		    }
-		    c = AOP;			/* >> */
+		    c = RIGHT_OP;		/* >> */
 		    break;
 		}
 		if (c1 != '=') {
@@ -3988,7 +4643,7 @@ iClex(void)
 	    iClval.val.v = c;			/* return to yacc as is */
 	retfl:
 	    iClval.val.f = iCstmtp;		/* all sources are iClval.val */
-	    if ((c == PM || c == PPMM) &&
+	    if ((c == '+' || c == '-' || c == PPMM) &&
 		iCstmtp > iCbuf && *(iCstmtp-1) == *iCtext) {
 		*iCstmtp++ = ' ';		/* space between + + and - - */
 						/* 1 byte will always fit */
@@ -4176,7 +4831,7 @@ yyerror(char *	s)
     char	erbuf[TSIZE];
 
     errLine();
-    fprintf(iC_outFP, "*** ");			/* do not change - used as search key in iClive */
+    fprintf(iC_outFP, "*** ");	/* do not change - used as search key in pplstfix and iClive */
     if (errFlag) fprintf(iC_errFP, "*** ");
     if ((lexflag & C_PARSE) == 0) {
 	n = getp[0] - chbuf[0] - iCleng;
@@ -4231,6 +4886,7 @@ copyCfrag(char s, char m, char e, FILE * oFP)
 {
     int		brace;
     int		c;
+    int		c1;
     int		match;
 
     for (brace = 0; (c = get(T0FP, 0)) != EOF; ) {
@@ -4266,22 +4922,25 @@ copyCfrag(char s, char m, char e, FILE * oFP)
 	} else {
 	    switch (c) {
 	    case '/':				/* look for comments */
-		putc(c, oFP);
-		if ((c = get(T0FP, 0)) == '/') {
+		if ((c1 = get(T0FP, 0)) == '/') {
+		    putc(c, oFP);
 		    do {			/* start C++ style comment */
-			putc(c, oFP);
-			if ((c = get(T0FP, 0)) == EOF) goto eof_error;
-		    } while (c != '\n');
-		} else if (c == '*') {
+			putc(c1, oFP);
+			if ((c1 = get(T0FP, 0)) == EOF) goto eof_error;
+		    } while (c1 != '\n');
+		    c = c1;
+		} else if (c1 == '*') {
+		    putc(c, oFP);
 		    do {			/* start C style comment */
-			putc(c, oFP);
-			while (c != '*') {
-			    if ((c = get(T0FP, 0)) == EOF) goto eof_error;
-			    putc(c, oFP);
+			putc(c1, oFP);
+			while (c1 != '*') {
+			    if ((c1 = get(T0FP, 0)) == EOF) goto eof_error;
+			    putc(c1, oFP);
 			}
-		    } while ((c = get(T0FP, 0)) != '/');
+		    } while ((c1 = get(T0FP, 0)) != '/');
+		    c = c1;
 		} else {
-		    unget(c);
+		    unget(c1);
 		}
 		break;
 
@@ -4314,7 +4973,7 @@ eof_error:
     yyerror("C code: EOF, error");
     return 0;					/* EOF */
 } /* copyCfrag */
-    
+
 static void
 ffexprCompile(char * txt, List_e * lp, int cn)
 {

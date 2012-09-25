@@ -47,7 +47,7 @@ CYCLE:
 	chomp();
 	$CondReg = 0;   # cleared on t
 BOS:;
-# # $Id: gram.pl,v 1.5 2009/08/21 06:01:56 jw Exp $
+# # $Id: gram.pl,v 1.6 2012/07/16 01:45:09 jw Exp $
 # s/yyparse/c_parse/g
 { $s = s /yyparse/c_parse/sg;
   $CondReg ||= $s;
@@ -162,6 +162,10 @@ BOS:;
 }
 # s/y\.tab\.c/gram.c/g
 { $s = s /y\.tab\.c/gram.c/sg;
+  $CondReg ||= $s;
+}
+# s/syntax error/C syntax error/g
+{ $s = s /syntax error/C syntax error/sg;
   $CondReg ||= $s;
 }
 EOS:    if( $doPrint ){

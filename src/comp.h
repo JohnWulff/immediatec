@@ -16,14 +16,14 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.60 2011/10/24 05:54:08 jw Exp $";
+"@(#)$Id: comp.h,v 1.61 2012/09/18 04:39:01 jw Exp $";
 
 #include	<setjmp.h>
 
 #define NS		((char*)0)
 #define	TSIZE		256
 #define	IBUFSIZE	512
-#define	IMMBUFSIZE	1024
+#define	IMMBUFSIZE	8192	/* allows 16 bytes for each possible 508 inputs and 1 output in a statement */
 #define	FUNUSESIZE	64
 
 #define	NOT	1		/* used in List_e.le_val */
@@ -90,6 +90,8 @@ typedef	struct Symbol {		/* symbol table entry */
 #define v_glist		glist
 #endif
 
+#define EM		0x01	/* bit mask for extern in em */
+#define TM1		0x02	/* bit mask for TIMER1 in em */
 #define FM		0x80	/* bit wihch marks paramater and local var in function definition */
 #define FU		0x03	/* bit mask for use count 0, 1 or 2 */
 
@@ -103,12 +105,14 @@ typedef struct Str { char *f; char *l; char v[2];      } Str;
 typedef struct Token {		/* Token for gram.y grammar */
     unsigned int	start;
     unsigned int	end;
+    unsigned int	inds;
+    unsigned int	inde;
     Symbol *		symbol;
 } Token;
 
 					/*  comp.y  */
 extern int  iCparse(void);		/* generated yacc parser function */
-extern int  compile(char *, char *,
+extern int  iC_compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
 extern void errBit(void);		/* no constant allowed in bit expression */
@@ -185,12 +189,16 @@ extern const char * cexeString[];	/* case or function string */
  * F_ARITHM	02	imm reference in an immediate arithmetic expression
  * F_FFEXPR	04	imm reference in an immediate if else or switch
  * F_LITERAL	010	imm reference generated in a literal block
+ * F_ARRAY	020	imm reference to an iC array
+ * F_SIZE	040	imm reference to a sizeof operator
  *******************************************************************/
 
 #define F_CALLED	01
 #define F_ARITHM	02
 #define F_FFEXPR	04
 #define F_LITERAL	010
+#define F_ARRAY		020
+#define F_SIZE		040
 
 typedef struct FuUse {			/* Function call count and C expression */
     int		c_cnt;			/* call count */
@@ -226,8 +234,8 @@ extern char *	iFunSymExt;		/* flags that function is being compiled */
 extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
 extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
 	    Sym * sv, Lis * lv, int ioTyp);
-extern void	listGenOut(		/* listing for undefined C variable */
-	    Symbol * sp);
+extern void	listGenOut(		/* listing for undefined immC variable */
+	    Symbol * sp, int size);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
 extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
 	    Symbol * cName, List_e * cParams);
@@ -268,15 +276,16 @@ extern List_e * bltin(			/* generate built in iC functions */
 	    Lis* ae1, Lis* cr1,		/* expression */
 	    Lis* ae2, Lis* cr2,		/* optional set */
 	    Lis* ae3, Lis* cr3,		/* optional reset */
-	    Lis* crm,			/* optional mono-flop clock */
 	    Val* pVal);			/* optional cblock# or off-delay */
 #if YYDEBUG
-extern void	pu(int t, char * token, Lis * node);
+enum stackType { SYM, LIS, VAL, TYP, STR };
+extern void	pu(enum stackType t, const char * token, void * node);
 #endif
 
 					/*   init.c  */
 extern Symbol *	iclock;			/* default clock */
 extern Symbol *	iconst;			/* pointer to Symbol "iConst" */
+extern Symbol *	icerr;			/* pointer to Symbol "iCerr" */
 extern void	init(void);		/* install constants and built-ins */
 extern const char initialFunctions[];	/* iC system function definitions */
 extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */
@@ -339,20 +348,19 @@ extern int	iC_toIEC1131(char * name, char * buf, int bufLen,
 			  char * iqt, char * xbwl, int * bytep,
 			  int * bitp, char * tail);
 
-extern int	iC_listNet(unsigned gate_count[]);	/* list generated network */
+extern int	iC_listNet(void);			/* list generated network */
 #if defined(RUN) || defined(TCP)
-extern int	iC_buildNet(Gate ** igpp,		/* generate execution network */
-			    unsigned gate_count[]);
+extern int	iC_buildNet(
+		Gate *** asTable, Gate *** asTend);	/* generate execution network */
 #endif /* defined(RUN) || defined(TCP) */
 extern int	iC_outNet(FILE * iFP, char * outfile);	/* generate network as C file */
 extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
-extern unsigned short	iC_Tflag;			/* define iC_tVar */
 
 					/*   lexc.l   */
 extern int	c_leng;
 extern int	column;
-extern int	gramOffset;
+extern int	gramOffset;		/* count input in lex */
 extern void	delete_sym(Token* tokp);
 #ifndef LMAIN
 extern void	markParaList(Symbol * sp); /* mark Symbol as parameter on glist */

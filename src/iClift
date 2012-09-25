@@ -44,9 +44,9 @@ Usage:
 	roll	move with respect to floors
 
 	q	quit
-Copyright (C) 2000-2009  John E. Wulff		<immediateC@gmail.com>
+Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.7 2010/12/14 07:05:06 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClift,v 1.8 2012/06/08 04:48:01 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -114,6 +114,23 @@ $mw->bind('<Key-Return>', [ \&move_cage, $cage, 0, 0,   \$cageId ]);	# stop cage
 $mw->bind('<Key-Right>',  [ \&move_door, $door, 1  ]);	# close doors (front door right)
 $mw->bind('<Key-Left>',	  [ \&move_door, $door, -1 ]);	# open doors
 $mw->bind('<Key-q>',	  sub { exit(0); });	# quit
+$mw->bind('<Key-h>',	  sub { $canvas->itemconfigure($wall_3->[1], state => 'hidden'); });
+$mw->bind('<Key-n>',	  sub { $canvas->itemconfigure($wall_3->[1], state => 'normal'); });
+$mw->bind('<Key-a>',	  sub { $canvas->itemconfigure($wall_2->[1], state => 'hidden'); });
+$mw->bind('<Key-b>',	  sub { $canvas->itemconfigure($wall_2->[1], state => 'normal'); });
+
+no warnings;
+my ( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, );
+( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_3;
+print "wall_3: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
+( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_2;
+print "wall_2: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
+( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_1;
+print "wall_1: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
+( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_0;
+print "wall_0: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
+print "\$canvas: $canvas\n";
+use warnings;
 
 MainLoop;
 
@@ -226,11 +243,14 @@ sub draw_wall {
 	-outline => 'yellow',
     );
 
-    my ($upInd, $downInd, $floorInd);
+    my ($upInd, $downInd, $floorInd) = (-1, -2, -3);
 
     $canv->bind($upTri, '<Button-1>', [ \&wallButton, $canv, $upBut, 'red', $upTri, 'yellow', ]);
     $canv->bind($downTri, '<Button-1>', [ \&wallButton, $canv, $downBut, 'red', $downTri, 'yellow', ]);
 
+no warnings;
+print "wall $y: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
+use warnings;
     return [ $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ];
 } # draw_wall
 
@@ -448,9 +468,11 @@ __END__
 
 ############ POD to generate man page ##################################
 
+=encoding utf8
+
 =head1 NAME
 
- iClift -simulation of the physics and appearance of lifts in a building
+iClift -simulation of the physics and appearance of lifts in a building
 
 =head1 SYNOPSIS
 
@@ -554,7 +576,7 @@ L<iCbox(1)>, L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2009  John E. Wulff
+COPYRIGHT (C) 2000-2012  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

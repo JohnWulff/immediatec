@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.51 2011/11/04 02:06:21 jw Exp $";
+"@(#)$Id: rsff.c,v 1.52 2012/08/20 04:52:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -20,6 +20,7 @@ static const char rsff_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<signal.h>
 #include	<assert.h>
 #include	"icc.h"
 #ifdef TCP
@@ -30,10 +31,9 @@ static const char rsff_c[] =
 #define min(x,y) ((x) < (y) ? (x) : (y))
 #endif	/* WIN32 */
 
-#ifdef	LOAD
 Gate		iConst = { 1, -NCONST, ARITH, 0, "iConst" };
-#endif	/* LOAD */
 
+#if defined(TCP) || defined(LOAD)
 /********************************************************************
  *
  *	bitIndex[] is a 256 byte array, whose values represent the
@@ -41,7 +41,7 @@ Gate		iConst = { 1, -NCONST, ARITH, 0, "iConst" };
  *
  *******************************************************************/
 
-unsigned char	iC_bitIndex[]   = {
+static unsigned char	bitIndex[]   = {
  0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
  5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
@@ -60,6 +60,7 @@ unsigned char	iC_bitIndex[]   = {
  4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
 };
 
+#endif /* defined(TCP) || defined(LOAD) */
 /********************************************************************
  *
  *	Clocked Flip Flop.
@@ -154,14 +155,14 @@ iC_sSff(					/* S_FF slave action on FF */
     if (gs->gt_val > 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tS %s %2d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t-1 S\t%s %+d ==>", gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = -1;			/* set slave output */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d", gs->gt_val);
+	    fprintf(iC_outFP, " %+d", gs->gt_val);
 	}
 #endif
     }
@@ -214,14 +215,14 @@ iC_rSff(					/* R_FF slave action on FF */
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tR %s %2d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t-1 R\t%s %+d ==>", gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = 1;				/* reset slave output */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d", gs->gt_val);
+	    fprintf(iC_outFP, " %+d", gs->gt_val);
 	}
 #endif
     }
@@ -272,14 +273,14 @@ iC_dSff(					/* D_FF slave action on FF */
     if ((val = (gm->gt_val < 0) ? -1 : 1) != gs->gt_val) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tD %s %2d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t%+d D\t%s %+d ==>", val, gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = val;			/* transfer val to slave */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d", gs->gt_val);
+	    fprintf(iC_outFP, " %+d", gs->gt_val);
 	}
 #endif
     }
@@ -340,7 +341,7 @@ iC_dMsh(					/* D_SH master action on SH */
      * versus gt_old or changed back, which is a glitch. This is already
      * tested in scan_ar() unlike D master action which has to do it here.
      * Nevertheles the action must only be linked, if the new value will
-     * changes the master, since that can be manipulated by set or reset.
+     * change the master, since that can be manipulated by set or reset.
      *******************************************************************/
     gs = gm->gt_funct;
     if (
@@ -372,9 +373,9 @@ iC_dSsh(					/* D_SH slave action on SH */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tSH %s %ld ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%ld SH\t%s %ld ==>", gm->gt_new, gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tSH %s %d ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d SH\t%s %d ==>", gm->gt_new, gs->gt_ids, gs->gt_new);
 #endif
 #endif
     /********************************************************************
@@ -439,9 +440,9 @@ iC_sSsh(					/* S_SH slave action on SH */
     if (gs->gt_new != -1) {
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tS SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 S SH\t%s %2ld ==>", gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tS SH %s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 S SH\t%s %2d ==>", gs->gt_ids, gs->gt_new);
 #endif
 #endif
 	gs->gt_new = -1;			/* set SH slave output */
@@ -503,9 +504,9 @@ iC_rSsh(					/* R_SH slave action on SH */
     if (gs->gt_new != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tR SH %s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 R SH\t%s %2ld ==>", gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tR SH %s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 R SH\t%s %2d ==>", gs->gt_ids, gs->gt_new);
 #endif
 #endif
 	gs->gt_new = 0;				/* reset SH slave output */
@@ -548,7 +549,7 @@ iC_i_ff2(Gate * gm, int typ)			/* called via output lists */
 	"\nError:    %c\t%s\thas %c input action more than once (%.4x:%.4x)",
 		iC_os[iC_types[gm->gt_fni]], gs->gt_ids,
 		iC_fos[gm->gt_fni], gs->gt_mcnt, mask);
-	    iC_error_flag = 1;			/* cannot execute with this error */
+	    iC_error_flag |= 2;			/* cannot execute with this error */
 	}
 	gs->gt_mcnt |= mask;			/* allow other multiple inputs */
     }
@@ -583,7 +584,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	    "\nError:    %c	%s\thas %s inputs (%.4x:%.4x)",
 		opt, gm->gt_ids, gm->gt_mcnt ? "incompatible" : "no",
 		gm->gt_mcnt, mask);
-	    iC_error_flag = 1;			/* cannot execute with this error */
+	    iC_error_flag |= 2;			/* cannot execute with this error */
 #if YYDEBUG && !defined(_WINDOWS)
 	} else if (iC_debug & 0100) {
 	    fprintf(iC_outFP, "\n	    %c	%s:\t%.4x inputs",
@@ -608,7 +609,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	    if (*ep != '\0') {
 		fprintf(iC_outFP,
 		"\nError:    constant '%s' cannot be converted to a number", gm->gt_ids);
-		iC_error_flag = 1;		/* cannot execute with this error */
+		iC_error_flag |= 2;		/* cannot execute with this error */
 	    }
 	}
     } else {
@@ -655,17 +656,17 @@ iC_riMbit(					/* RI_BIT master action on EF */
 	iC_link_ol(gm, ma[FL_CLK]);		/* master action */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d", gm->gt_val);
+	    fprintf(iC_outFP, " %+d", gm->gt_val);
 	    if (iC_dc++ >= 4) {
 		iC_dc = 1;
-		putc('\n', iC_outFP);
+		fprintf(iC_outFP, "\n\t");
 	    }
-	    fprintf(iC_outFP, "\t%s %2d E=>",
+	    fprintf(iC_outFP, "\t%s %+d E=>",	/* slave */
 		iC_gx->gt_ids, iC_gx->gt_val);
 	}
 #endif
 	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch could reset here) */
-	iC_link_ol(iC_gx, iC_o_list);		/* set or reset slave output */
+	iC_link_ol(iC_gx, iC_o_list);		/* set or reset slave output when clocked */
     }
 } /* iC_riMbit */
 
@@ -687,14 +688,14 @@ iC_riSbit(					/* RI_BIT slave action */
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tE %s %2d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t-1 E\t%s %+d ==>", gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = 1;				/* reset slave output to LO */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d", gs->gt_val);
+	    fprintf(iC_outFP, " %+d", gs->gt_val);
 	}
 	/* on startup a reset action comes when EF is LO */
 #endif
@@ -734,21 +735,25 @@ iC_chMbit(					/* CH_BIT master action on VF */
 	iC_link_ol(gm, ma[FL_CLK]);		/* master action */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-	    fprintf(iC_outFP, " %ld", out_list != iC_o_list? gm->gt_new : (long)gm->gt_val);
-#else
-	    fprintf(iC_outFP, " %d", out_list != iC_o_list? gm->gt_new : gm->gt_val);
-#endif
+	    if (out_list != iC_o_list) {
+    #if INT_MAX == 32767 && defined (LONG16)
+		fprintf(iC_outFP, " %ld", gm->gt_new);
+    #else
+		fprintf(iC_outFP, " %d", gm->gt_new);
+    #endif
+	    } else {
+		fprintf(iC_outFP, " %+d", gm->gt_val);
+	    }
 	    if (iC_dc++ >= 4) {
 		iC_dc = 1;
-		putc('\n', iC_outFP);
+		fprintf(iC_outFP, "\n\t");
 	    }
-	    fprintf(iC_outFP, "\t%s %2d V=>",
+	    fprintf(iC_outFP, "\t%s %+d V=>",	/* slave */
 		iC_gx->gt_ids, iC_gx->gt_val);
 	}
 #endif
 	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch could reset here) */
-	iC_link_ol(iC_gx, iC_o_list);		/* set or reset slave output */
+	iC_link_ol(iC_gx, iC_o_list);		/* set or reset slave output when clocked */
     }
 } /* iC_chMbit */
 
@@ -782,14 +787,22 @@ iC_chSbit(					/* CH_BIT slave action */
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tV %s %2d ==>", gs->gt_ids, gs->gt_val);
+	    if (gm->gt_ini < 0) {
+#if INT_MAX == 32767 && defined (LONG16)
+		fprintf(iC_outFP, "\t%ld V\t%s %+d ==>", gm->gt_new, gs->gt_ids, gs->gt_val);
+#else
+		fprintf(iC_outFP, "\t%d V\t%s %+d ==>", gm->gt_new, gs->gt_ids, gs->gt_val);
+#endif
+	    } else {
+		fprintf(iC_outFP, "\t%+d V\t%s %+d ==>", gm->gt_val, gs->gt_ids, gs->gt_val);
+	    }
 	}
 #endif
 	gs->gt_val = 1;				/* reset slave output to LO */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d", gs->gt_val);
+	    fprintf(iC_outFP, " %+d", gs->gt_val);
 	}
 	/* on startup a reset action comes when VF is LO */
 #endif
@@ -827,7 +840,7 @@ iC_fMsw(					/* F_SW master action */
  *
  *	Execute a C statement or C statement block when triggered
  *	by a clocked logical or arithmetic change.
- *		SWITCH (expr) { case 1: i = 1; break; ... }
+ *		switch (expr) { case 1: i = 1; break; ... }
  *
  *******************************************************************/
 
@@ -848,17 +861,25 @@ iC_fSsw(					/* F_SW slave action on SW */
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF0x%lx(\n", (long)gm->gt_funct);
+#if INT_MAX == 32767 && defined (LONG16)
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2ld SW0x%lx{\n", gm->gt_new, (long)gm->gt_funct);
+#else
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2d SW0x%lx{\n", gm->gt_new, (long)gm->gt_funct);
+#endif
 #endif
 	((iC_CFunctp)(gm->gt_funct))(gm);
 #else
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%d(\n", gm->gt_functn);
+#if INT_MAX == 32767 && defined (LONG16)
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2ld SW%d{\n", gm->gt_new, gm->gt_functn);
+#else
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2d SW%d{\n", gm->gt_new, gm->gt_functn);
+#endif
 #endif
 	iC_exec(gm->gt_functn, gm);		/* must pass both -/+ */
 #endif
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, ")");
+	if (iC_debug & 0100) fprintf(iC_outFP, "}");
 #endif
     }
 } /* iC_fSsw */
@@ -867,7 +888,7 @@ iC_fSsw(					/* F_SW slave action on SW */
  *
  *	Master function for IF()
  *
- *	IF (expr) { ; }			triggers slave on rising edge only
+ *	if (expr) { ; }			triggers slave on rising edge only
  *
  *******************************************************************/
 
@@ -893,7 +914,7 @@ iC_fMcf(					/* F_CF master action */
  *
  *	Master function for IF() ELSE
  *
- *	IF (expr) { ; } ELSE { ; }	triggers slave on both edges
+ *	if (expr) { ; } else { ; }	triggers slave on both edges
  *
  *	The same C code fragment is executed on bothe edges. The code
  *	fragment has an if else test to decide which code to execute.
@@ -919,9 +940,10 @@ iC_fMce(					/* F_CE master action */
  *
  *	Execute a C statement or C statement block when triggered
  *	by a clocked logical or arithmetic change.
- *		IF (expr,clock) x = y * cfn(z);	// iClock is default
- *		IF (expr) { for (i = 0; i < 10; i++) cfn(z); z++; }
- *		IF (expr) { i++; } ELSE { j--; }
+ *		if (expr) { x = y * cfn(z); }	// iClock is default
+ *		if (expr,clock) { for (i = 0; i < 10; i++) cfn(i); }
+ *		if (expr) { i++; cfn(i) } else { i--; cfn(i) }
+ *	Note: braces { } around C statements are mandatory
  *
  *******************************************************************/
 
@@ -941,12 +963,12 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF0x%lx{\n", (long)gm->gt_funct);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d IF0x%lx{\n", gm->gt_val ? 1 : 0, (long)gm->gt_funct);
 #endif
 	((iC_CFunctp)(gm->gt_funct))(gm);
 #else
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\tF%d{\n", gm->gt_functn);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d IF%d{\n", gm->gt_val ? 1 : 0, gm->gt_functn);
 #endif
 	iC_exec(gm->gt_functn, gm);		/* must pass both -/+ */
 #endif
@@ -978,19 +1000,35 @@ iC_traMb(					/* TRAB master action */
     Gate *	gs;
 
     count = 0;
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 0100) {
+	iC_dc = 1;
+    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     diff = gm->gt_new ^ gm->gt_old;
     assert (diff && !(diff & ~0xff));
     while (diff) {
-	index = iC_bitIndex[diff];		/* returns 0 - 7 for values 1 - 255 */
-	assert(index < 8);			/* TODO can be removed after initial testing */
+	index = bitIndex[diff];			/* returns 0 - 7 for values 1 - 255 */
 	mask  = iC_bitMask[index];		/* returns hex 01 02 04 08 10 20 40 80 */
 	if ((gs = gm->gt_list[index]) != 0) {	/* is bit Gate allocated ? */
 	    val   = (gm->gt_new & mask) ? -1 : 1;	/* yes */
+#if YYDEBUG && !defined(_WINDOWS)
+	    if (iC_debug & 0100) {
+		if (iC_dc++ >= 4) {
+		    iC_dc = 1;
+		    fprintf(iC_outFP, "\n\t");
+		}
+		fprintf(iC_outFP, "\t%s %+d ==>", gs->gt_ids, gs->gt_val);
+	    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    if (gs->gt_val != val) {
 		gs->gt_val = val;
 		iC_link_ol(gs, iC_o_list);	/* fire input bit Gate */
 		count++;			/* count Gates linked */
 	    }
+#if YYDEBUG && !defined(_WINDOWS)
+	    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
 	diff &= ~mask;				/* clear the bit just processed */
     }
@@ -1077,13 +1115,13 @@ iC_outMw(					/* NEW OUTW master action */
 	channel = gm->gt_channel;		/* set up during registration */
 	assert(channel > 0);			/* -1 is error, 0 is not registered */
 	mask = gm->gt_mark;
-	val = gm->gt_old = gm->gt_new;		/* update gt_old since no iC_link_ol */
+	val = gm->gt_new;			/* modified value to send */
 	if (mask == B_WIDTH) {
 	    val = (char)val;			/* reduce to signed char - handles overflow */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hd,", channel, (short)val);/* signed char to output for QBx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd ==>> %hd", (short)(char)gm->gt_old, (short)val);
 #endif
 	} else
 	if (mask == W_WIDTH) {			/* output node that output are transferred to in  */
@@ -1091,7 +1129,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hd,", channel, (short)val);/* signed short to output for QWx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd ==>> %hd", (short)gm->gt_old, (short)val);
 #endif
 #if INT_MAX != 32767 || defined (LONG16)
 	} else
@@ -1100,13 +1138,13 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%ld,", channel, (long)val);/* signed long to output for QLx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%ld", val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%ld ==>> %ld", gm->gt_old, val);
 #endif
 #else
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%d,", channel, val);	/* signed int to output for QLx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%d", val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%d ==>> %d", gm->gt_old, val);
 #endif
 #endif
 #endif
@@ -1116,13 +1154,14 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hu,", channel, (unsigned short)val);/* unsigned bit mask to output for QXx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu", (unsigned short)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "0x%02x ==>> 0x%02x", (unsigned)gm->gt_old, (unsigned)val);
 #endif
 #ifndef _WINDOWS
 	} else {
 	    val = 0;				/* error - no output */
 #endif
 	}
+	gm->gt_old = gm->gt_new;		/* update gt_old now - completed debug output */
 	iC_outOffset += len;
 	gm->gt_out = val;			/* save for updates on window scrolling */
 	if (gm->gt_live & 0x8000) {		/* is live active ? */
@@ -1168,8 +1207,8 @@ iC_outMx(					/* NEW OUTX master action */
     assert(val != gs->gt_new);			/* should only fire when there is a change */
     gs->gt_new = val;
     if (
-	(gs->gt_old != gs->gt_new)		/* any change */
-	^ (gs->gt_next != 0)			/* xor glitch */
+	(gs->gt_old != gs->gt_new)		/* any change - maybe further change in same byte */
+	^ (gs->gt_next != 0)			/* in which case node is not linked again - xor glitch */
     ) {
 	iC_link_ol(gs, iC_s_list);		/* master action to send list */
     }
@@ -1395,9 +1434,9 @@ iC_clockSfn(					/* Clock function */
     assert(gm->gt_val < 0);			/* C clock receives -1 ==> 1 ??? */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tC %s", gs->gt_ids);
-	}
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, "\t-1 C\t%s", gs->gt_ids);
+    }
 #endif
     gs->gt_val = -1;				/* set for visualization only */
 #if defined(TCP) || defined(LOAD)
@@ -1465,7 +1504,7 @@ iC_timerSfn(					/* Timer function */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\tT %s", gs->gt_ids);
+	fprintf(iC_outFP, "\t-1 T\t%s", gs->gt_ids);
     }
 #endif
     gs->gt_val = -1;				/* set for visualization only */
@@ -1500,7 +1539,17 @@ iC_timerSfn(					/* Timer function */
 		    fprintf(iC_outFP, "\t%s", tp->gt_ids);
 		}
 #endif
-	    } while ((np = tp->gt_next) != gs && np->gt_mark == 0);
+		if ((np = tp->gt_next) != gs) {
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (iC_debug & 0100) {
+			iC_dc = 1;		/* allow for (time) */
+			fprintf(iC_outFP, "\t(%d)", np->gt_mark);
+		    }
+#endif
+		} else {
+		    break;
+		}
+	    } while (np->gt_mark == 0);
 #ifndef DEQ
 	    iC_c_list->gt_ptr->gt_next = gs->gt_next;/* => new */
 	    gs->gt_next = np;			/* timer => rest */
@@ -1523,7 +1572,9 @@ iC_timerSfn(					/* Timer function */
 
 /********************************************************************
  *
- *	Assign to an imm int node of type ARNC
+ *	Assign to an immC int node (type ARNC) with a choice of straight
+ *	assignment as well as pre/post increment/decrement operators
+ *	and all the assignment operators.
  *
  *	The node is linked to a_list when rv != new && new == old.
  *	If a second assignment occurs while node is still linked to
@@ -1531,77 +1582,291 @@ iC_timerSfn(					/* Timer function */
  *	else node is unlinked and new updated, making new == old.
  *	When rv == new, there is no change at all.
  *
+ *	This new implementation (jw 120722) is passed glv once and
+ *	does not need to be called twice for ++/-- or += which solves
+ *	the problem of side effects from calling macros with indexed
+ *	operators supplying glv twice. Also the C generator in gram.y
+ *	is much cleaner and works with immC variables inside index
+ *	expressions.
+ *
+ *	If glv == &iConst, iC_index was out of range and no assignment occurs.
+ *	This is done so that iC programs keep running - it would be drastic
+ *	to quit a running control application for a range error.
+ *	A Warning is issued on the console.
+ *
+ *	Return value is the value assigned or 0 if glv == &iConst.
+ *
+ *	NOTE: the switch cases for assignment operators must line up
+ *	with the ppi numbers defined in gram.y for 'assignment_operator'
+ *	and immediate INC_OP/DEC_OP expressions.
+ *
  *******************************************************************/
+#if YYDEBUG && !defined(_WINDOWS)
+
+static char *	ppiS[] = {
+    "=",
+    "=",
+    "*=",
+    "/=",
+    "%=",
+    "+=",
+    "-=",
+    "&=",
+    "^=",
+    "|=",
+    "<<=",
+    ">>=",
+    "++",
+    "--",
+    "++",
+    "--",
+};
+#endif
 
 #if INT_MAX == 32767 && defined (LONG16)
 long
-iC_assignA(Gate * gm, long rv)
+iC_assignA(Gate * glv, int ppi, long rv) {	/* } */
+    long nv;
+#if YYDEBUG && !defined(_WINDOWS)
+    long iv = rv;
+#endif
 #else
 int
-iC_assignA(Gate * gm, int rv)
-#endif
-{
-    assert(gm->gt_ini == -ARNC);
-    if (rv != gm->gt_new) {
+iC_assignA(Gate * glv, int ppi, int rv) {
+    int nv;
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-#if INT_MAX == 32767 && defined (LONG16)
-	    fprintf(iC_outFP, "\tAA %s %ld ==>", gm->gt_ids, gm->gt_new);
-#else
-	    fprintf(iC_outFP, "\tAA %s %d ==>", gm->gt_ids, gm->gt_new);
+    int iv = rv;
 #endif
-	}
 #endif
-	if (gm->gt_new == gm->gt_old || rv == gm->gt_old) {
-	    iC_link_ol(gm, iC_a_list);	/* arithmetic change or glitch */
-	}
-	gm->gt_new = rv;			/* first or later change */
+    if (glv == &iConst) return 0;		/* index out of range */
+    assert(glv->gt_ini == -ARNC);
+    nv = glv->gt_new;
+    switch (ppi) {
+    case 2:
+	rv = nv *= rv;
+	break;
+    case 3:
+	rv = nv /= rv;
+	break;
+    case 4:
+	rv = nv %= rv;
+	break;
+    case 5:
+	rv = nv += rv;
+	break;
+    case 6:
+	rv = nv -= rv;
+	break;
+    case 7:
+	rv = nv &= rv;
+	break;
+    case 8:
+	rv = nv ^= rv;
+	break;
+    case 9:
+	rv = nv |= rv;
+	break;
+    case 10:
+	rv = nv <<= rv;
+	break;
+    case 11:
+	rv = nv >>= rv;
+	break;
+    case 12:
+	rv = ++nv;
+	break;
+    case 13:
+	rv = --nv;
+	break;
+    case 14:
+	rv = nv++;
+	break;
+    case 15:
+	rv = nv--;
+	break;
+    case 0:
+    case 1:
+    default:
+	nv = rv;
+    }
 #if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 0100) {
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, " %ld\n", gm->gt_new);
+	if (ppi < 12) {
+	    fprintf(iC_outFP, "\tAA %ld %s %s %ld >", glv->gt_new, glv->gt_ids, ppiS[ppi], iv);
+	} else if (ppi < 14) {
+	    fprintf(iC_outFP, "\tAA %ld %s%s   >", glv->gt_new, ppiS[ppi], glv->gt_ids);
+	} else {
+	    fprintf(iC_outFP, "\tAA %ld   %s%s >", glv->gt_new, glv->gt_ids, ppiS[ppi]);
+	}
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, " %d\n", gm->gt_new);
-#endif
+	if (ppi < 12) {
+	    fprintf(iC_outFP, "\tAA %d %s %s %d >", glv->gt_new, glv->gt_ids, ppiS[ppi], iv);
+	} else if (ppi < 14) {
+	    fprintf(iC_outFP, "\tAA %d %s%s   >", glv->gt_new, ppiS[ppi], glv->gt_ids);
+	} else {
+	    fprintf(iC_outFP, "\tAA %d   %s%s >", glv->gt_new, glv->gt_ids, ppiS[ppi]);
+	}
 #endif
     }
+#endif
+    if (nv != glv->gt_new) {
+	if (glv->gt_new == glv->gt_old || nv == glv->gt_old) {
+	    iC_link_ol(glv, iC_a_list);	/* arithmetic change or glitch */
+	}
+	glv->gt_new = nv;			/* first or later change */
+    }
+#if YYDEBUG && !defined(_WINDOWS)
+#if INT_MAX == 32767 && defined (LONG16)
+    if (iC_debug & 0100) fprintf(iC_outFP, " %ld\n", glv->gt_new);
+#else
+    if (iC_debug & 0100) fprintf(iC_outFP, " %d\n", glv->gt_new);
+#endif
+#endif
     return rv;
 } /* iC_assignA */
 
 /********************************************************************
  *
- *	Assign to an imm bit node of type LOGC
+ *	Assign to an immC bit node (type LOGC) with a choice of straight
+ *	assignment as well as pre/post increment/decrement operators
+ *	and all the assignment operators.
+ *
+ *	The straight assignment makes a lot of sense for bit variables.
+ *	The other operators are of doubtful utility for immC bits but
+ *	are included anyway for completeness.
  *
  *	The node is linked to o_list when rv, interpreted as a logic
  *	value (0 is rv == 0, 1 is rv != 0) changes from its previous
  *	value.
  *
+ *	If glv == &iConst, iC_index was out of range and no assignment occurs.
+ *	This is done so that iC programs keep running - it would be drastic
+ *	to quit a running control application for a range error.
+ *	A Warning is issued on the console.
+ *
+ *	Return value is the logic value 0 or 1 assigned or 0 if glv == &iConst.
+ *
  *******************************************************************/
 
 #if INT_MAX == 32767 && defined (LONG16)
 long
-iC_assignL(Gate * gm, long rv)
+iC_assignL(Gate * glv, int ppi, long rv) {	/* } */
+    long nv;
+#if YYDEBUG && !defined(_WINDOWS)
+    long iv = rv;
+#endif
 #else
 int
-iC_assignL(Gate * gm, int rv)
+iC_assignL(Gate * glv, int ppi, int rv) {
+    int nv;
+#if YYDEBUG && !defined(_WINDOWS)
+    int iv = rv;
 #endif
-{
+#endif
     char val;
-
-    assert(gm->gt_ini == -LOGC);
-    val = rv ? -1 : 1;
-    if (gm->gt_val != val) {
-#if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\tLA %s %2d ==>", gm->gt_ids, gm->gt_val);
-	}
-#endif
-	gm->gt_val = val;
-	iC_link_ol(gm, iC_o_list);		/* logic change or glitch */
-#if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %d\n", gm->gt_val);
-	}
-#endif
+    if (glv == &iConst) return 0;		/* index out of range */
+    assert(glv->gt_ini == -LOGC);
+    nv = glv->gt_val < 0 ? 1 : 0;
+    switch (ppi) {
+    case 2:
+	rv = nv *= rv;
+	break;
+    case 3:
+	rv = nv /= rv;
+	break;
+    case 4:
+	rv = nv %= rv;
+	break;
+    case 5:
+	rv = nv += rv;
+	break;
+    case 6:
+	rv = nv -= rv;
+	break;
+    case 7:
+	rv = nv &= rv;
+	break;
+    case 8:
+	rv = nv ^= rv;
+	break;
+    case 9:
+	rv = nv |= rv;
+	break;
+    case 10:
+	rv = nv <<= rv;
+	break;
+    case 11:
+	rv = nv >>= rv;
+	break;
+    case 12:
+	rv = ++nv;
+	break;
+    case 13:
+	rv = --nv;
+	break;
+    case 14:
+	rv = nv++;
+	break;
+    case 15:
+	rv = nv--;
+	break;
+    case 0:
+    case 1:
+    default:
+	nv = rv;
     }
-    return rv != 0;				/* change to logic value 0 or 1 */
+    val = nv ? -1 : 1;
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 0100) {
+	if (ppi < 12) {
+#if INT_MAX == 32767 && defined (LONG16)
+	    fprintf(iC_outFP, "\tLA %+d %s %s %ld >", glv->gt_val, glv->gt_ids, ppiS[ppi], iv);
+#else
+	    fprintf(iC_outFP, "\tLA %+d %s %s %d >", glv->gt_val, glv->gt_ids, ppiS[ppi], iv);
+#endif
+	} else if (ppi < 14) {
+	    fprintf(iC_outFP, "\tLA %+d %s%s   >", glv->gt_val, ppiS[ppi], glv->gt_ids);
+	} else {
+	    fprintf(iC_outFP, "\tLA %+d   %s%s >", glv->gt_val, glv->gt_ids, ppiS[ppi]);
+	}
+    }
+#endif
+if (glv->gt_val != val) {
+    glv->gt_val = val;
+    iC_link_ol(glv, iC_o_list);		/* logic change or glitch */
+}
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, " %+d\n", glv->gt_val);
+    }
+#endif
+    return rv != 0;			/* change to logic value 0 or 1 */
 } /* iC_assignL */
+
+/********************************************************************
+ *
+ *	Evaluate an indexed reference to an immC array
+ *
+ *	The compiler stores the size of the initialised immC array in gt_old
+ *	A check is made that the index is not out of bounds - else quit
+ *
+ *	If there is a range error iConst is returned, which is checked by
+ *	iC_assign or returns logic or arithmetic 0 if referenced.
+
+ *	This is done so that iC programs keep running - it would be
+ *	drastic to quit a running control application for a range error.
+ *	A Warning is issued on the console.
+ *
+ *******************************************************************/
+
+Gate *
+iC_index(Gate * gm, int index)
+{
+    if (index >= gm->gt_old || index < 0) {
+	fprintf(iC_errFP, "\nWarning: %s: immC array reference %s[%d] is out of bounds (size = %d) - no action\n",
+	    iC_progname, gm->gt_ids, index, (int)gm->gt_old);
+	return &iConst;			/* stops assignment or 0 reference */
+    }
+    return gm->gt_rlist[index];
+} /* iC_index */

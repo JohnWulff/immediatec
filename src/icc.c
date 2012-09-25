@@ -1,8 +1,8 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.66 2011/10/24 05:55:21 jw Exp $";
+"@(#)$Id: icc.c,v 1.67 2012/08/25 21:48:27 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2011  John E. Wulff
+ *	Copyright (C) 1985-2012  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -114,8 +114,6 @@ static const char *	usage =
 #endif	/* RUN or TCP */
 "                 +4000  supress listing alias post processor (save temp files)\n"
 "                +10000  generate listing of compiler internal functions\n"
-"                +20000  use old style imm functions - no internal functions\n"
-"                +21000  outputs first (really old style) - no internal functions\n"
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        iC language source file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
@@ -160,8 +158,10 @@ static const char *	usage =
 #if YYDEBUG && !defined(_WINDOWS)
 "        -t              trace gate activity (equivalent to -d 1100)\n"
 "                        can be toggled at run time by typing t\n"
+#ifdef RUN
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
 "                        can be changed at run time by typing x or d\n"
+#endif	/* RUN */
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
@@ -176,14 +176,17 @@ static const char *	usage =
 #else	/* not TCP */
 "      %s -c <src.ic>; makeAll -R; before <src.ic> can be interpreted.\n"
 "      Typing 0 to 7 toggles simulated inputs IX0.0 to IX0.7\n"
+"      Normally 0 to 7 acts immediately. Preceding it with +\n"
+"      allows more simultaneous logic inputs - one for each +\n"
 "      Typing b<num> w<num> or l<num> alters simulated inputs IB1, IW2 or IL4\n"
 "              <num> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
 "      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
+"      Typing h provides a short help for simulated inputs\n"
 #endif	/* not TCP */
 "      Typing q or ctrl-C quits run mode.\n"
 #endif	/* RUN or TCP */
 "%s\n"
-"Copyright (C) 1985-2011 John E. Wulff     <immediateC@gmail.com>\n"
+"Copyright (C) 1985-2012 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -193,8 +196,9 @@ int		iC_Pflag = 0;		/* pedantic warning/error flag */
 int		iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
 unsigned short	iC_xflag;
 unsigned short	iFlag;
-unsigned short	iC_osc_max = MARKMAX;
+unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
 unsigned short	iC_osc_lim = MARKMAX;
+unsigned short	iC_osc_flag = 0;
 #if YYDEBUG
 extern	int	iCdebug;
 extern	int	c_debug;
@@ -271,10 +275,6 @@ char		iC_os[]		= OPS;
 char		iC_fos[]	= FOPS;
 char *		iC_useText[4]	= { USE_TEXT };
 
-unsigned char	iC_bitMask[]    = {
-    0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
-};
-
 /********************************************************************
  *
  *	I/O arrays also used at compile time
@@ -289,7 +289,6 @@ Gate *		iC_IW_[IXD];		/* pointers to word Input Gates */
 Gate *		iC_IL_[IXD];		/* pointers to long Input Gates */
 #endif	/* INT_MAX != 32767 or LONG16 */
 Gate *		iC_TX_[TXD*8];		/* pointers to bit System Gates */
-char		iC_QT_[IXD];		/* Output type of slots */
 int		iC_maxIO = IXD;		/* I/O index limited to 64 */
 #else	/*  not RUN */
 int		iC_maxIO = -1;		/* I/O index no limit */
@@ -302,24 +301,7 @@ Gate *		iC_pf0_1;		/* pointer to _f0_1 if generated in buildNet() */
 unsigned char	iC_QX_[IXD];		/* Output bit field slots (also used in compile) */
 
 #if defined(TCP)
-/********************************************************************
- *
- *	I/O links for display()
- *
- *******************************************************************/
-
-Gate *		iC_TX0p;			/* pointer to bit System byte Gates */
-
-Gate *		iC_IX0p;			/* pointer to Input Gate for bit iC_display */
-Gate *		iC_QX0p;			/* pointer to Output Gate for bit iC_display */
-Gate *		iC_IB1p;			/* pointer to Input Gate for byte iC_display */
-Gate *		iC_QB1p;			/* pointer to Output Gate for byte iC_display */
-Gate *		iC_IW2p;			/* pointer to Input Gate for word iC_display */
-Gate *		iC_QW2p;			/* pointer to Output Gate for word iC_display */
-#if	INT_MAX != 32767 || defined (LONG16)
-Gate *		iC_IL4p;			/* pointer to Input Gate for long iC_display */
-Gate *		iC_QL4p;			/* pointer to Output Gate for long iC_display */
-#endif	/* INT_MAX != 32767 || defined (LONG16) */
+Gate *		iC_TX0p;		/* pointer to bit System byte Gates */
 #endif	/* TCP */
 
 /********************************************************************
@@ -446,8 +428,8 @@ main(
 #if defined(RUN) || defined(TCP)
 		case 'n':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    iC_osc_lim = iC_osc_max = atoi(*argv);
-		    if (iC_osc_max > 15) goto error;
+		    iC_osc_lim = atoi(*argv);
+		    if (iC_osc_lim > 15) goto error;
 		    goto break2;
 #ifdef TCP
 		case 's':
@@ -477,13 +459,15 @@ main(
 		    iC_micro++;		/* microsecond info */
 		    break;
 #endif	/* TCP */
-		case 'x':
-		    iC_xflag = 1;	/* start with hexadecimal display */
-		    break;
 		case 't':
 		    iC_debug |= 01100;	/* trace gate activity */
 		    break;
 #endif	/* RUN or TCP */
+#ifdef RUN
+		case 'x':
+		    iC_xflag = 1;	/* start with hexadecimal display */
+		    break;
+#endif	/* RUN */
 		case 'd':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    sscanf(*argv, "%o", &debi);
@@ -768,7 +752,7 @@ main(
      *	Also as a side effect outFlag is set if outFN is set (-o option)
      *******************************************************************/
     if ((r = setjmp(beginMain)) ||
-	(r = compile(inpFN, listFN, errFN, outFN)) != 0) {
+	(r = iC_compile(inpFN, listFN, errFN, outFN)) != 0) {
 	ro = 5;				/* compile error */
     } else
     /********************************************************************
@@ -791,17 +775,13 @@ main(
     if ((r = iC_c_compile(T1FP, T3FP, C_PARSE|C_FIRST|C_BLOCK, 0)) != 0) {
 	ro = 6;				/* C-compile error */
     } else {
-#if defined(RUN) || defined(TCP)
-	Gate *		igp;
-#endif	/* RUN or TCP */
-	unsigned	gate_count[MAX_LS];	/* used in listNet and buildNet only */
 	if (inpFN) {
 	    strncpy(inpNM, inpFN, BUFS);	/* restore name if last #line was not inpFN */
 	}
 	/********************************************************************
 	 *	List network topology and statistics - this completes listing
 	 *******************************************************************/
-	if ((r = iC_listNet(gate_count)) == 0) {
+	if ((r = iC_listNet()) == 0) {
 	    /********************************************************************
 	     *	-o option: Output a C-file of all Gates, C-code and links
 	     *******************************************************************/
@@ -841,22 +821,25 @@ main(
 		    fclose(excFP);
 		}
 #if defined(RUN) || defined(TCP)
-	    } else
-	    /********************************************************************
-	     *	Build a network of Gates and links for direct execution
-	     *******************************************************************/
-	    if ((r = iC_buildNet(&igp, gate_count)) == 0) {
-		Symbol * sp = lookup("iClock");
-		unlinkTfiles();
+	    } else {
+		Gate **		sTable;			/* pointer to Symbol Table */
+		Gate **		sTend;			/* end of Symbol Table */
 		/********************************************************************
-		 *	Execute the compiled iC logic directly
+		 *	Build a network of Gates and links for direct execution
 		 *******************************************************************/
-		assert (sp);			/* iClock initialized in init() */
-		iC_c_list = sp->u_gate;		/* initialise clock list */
-		iC_icc(igp, gate_count);	/* execute the compiled logic */
-		/********************************************************************
-		 * never returns - exits via iC_quit()
-		 *******************************************************************/
+		if ((r = iC_buildNet(&sTable, &sTend)) == 0) {
+		    Symbol * sp = lookup("iClock");
+		    unlinkTfiles();
+		    /********************************************************************
+		     *	Execute the compiled iC logic directly
+		     *******************************************************************/
+		    assert (sp);			/* iClock initialized in init() */
+		    iC_c_list = sp->u_gate;		/* initialise clock list */
+		    iC_icc(sTable, sTend);		/* execute the compiled logic */
+		    /********************************************************************
+		     * never returns - exits via iC_quit()
+		     *******************************************************************/
+		}
 #endif	/* RUN or TCP */
 	    }
 	}
@@ -948,7 +931,7 @@ unlinkTfiles(void)
  *	cleared up in the listing. These changes affect only the
  *	listing. The output is correctly compiled.
  *
- *	When iC_path is not "", pplstfix fill be called with the log
+ *	When iC_path is not "", pplstfix will be called with the log
  *	option -l, which outputs to pplstfix.log. In this case
  *	when iC_progname is not just "immcc" but ends with a revision
  *	number, eg. immcc109, pplstfix will be called as pplstfix109.
@@ -963,6 +946,12 @@ unlinkTfiles(void)
  *	pplstfix sorts and re-arranges this sequence and changes names
  *	to resolve aliases, which is good for the final listing, but
  *	not for the logic generation or yacc listing.
+ *
+ *	JW 20120531
+ *	Some work has been done on pplstfix to work correctly with
+ *	the logic generation listing -d2. Nevertheless it is not
+ *	called automatically. To use it filter the logic generation
+ *	listing manually with pplstfix.
  *
  *******************************************************************/
 
@@ -1013,9 +1002,11 @@ iC_inversionCorrection(void)
 
 /* ############ POD to generate man page ##################################
 
+=encoding utf8
+
 =head1 NAME
 
- immcc - the immediate-C to C compiler
+immcc - the immediate-C to C compiler
 
 =head1 SYNOPSIS
 
@@ -1061,8 +1052,6 @@ iC_inversionCorrection(void)
          +1  iC yacc debug info  (on stdout only) (+4001 C yacc info)
       +4000  supress listing alias post processor (save temp files)
      +10000  generate listing of compiler internal functions
-     +20000  use old style imm functions - no internal functions
-     +21000  outputs first (really old style) - no internal functions
 
     <src.ic> iC language source file (extension .ic)
     -        or default: take iC source from stdin
@@ -1160,7 +1149,7 @@ L<iCmake(1)>, L<makeAll(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2011  John E. Wulff
+COPYRIGHT (C) 2000-2012  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

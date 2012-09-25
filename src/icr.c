@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.39 2011/11/04 01:55:13 jw Exp $";
+"@(#)$Id: icr.c,v 1.40 2012/07/16 06:41:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -48,11 +48,13 @@ static const char icr_c[] =
 #define INTR	0x1c			/* The clock tick interrupt */
 #define YSIZE	13			/* - and 10 dec digits or 12 oct digits */
 #define TLIMIT	4			/* TX0.4 is fastest timer */
+#define	MAX_IO	8
+#define	DIS_MAX	5			/* diplay heading after this many */
 
 #ifndef SIGRTMAX
 #define SIGRTMAX	32		/* for non-POSIX systems (Win32) */
 #endif
-#define QUIT_TERMINAL	(SIGRTMAX+1)
+#define QUIT_TERMINAL	(SIGRTMAX+3)
 
 static unsigned	time_cnt;		/* count time in ticks */
 static short	flag1C;
@@ -75,15 +77,17 @@ void interrupt handler1C(void);
 static fd_set	selectinfds;		/* Set of fd for input (stdin, sync) */
 static fd_set	readfds;		/* Read mask for select system call */
 static int	maxfd;			/* Highest fd in selectinfds */
-static struct timeval	timeOut = { 0, 50000 };	/* 50 mS */
-static struct timeval	to;
-static struct timeval *	top;
+static struct timeval	timeOut = { 0, 50000 };	/* 50 mS select timeout */
+static struct timeval	toCnt =   { 0, 50000 };	/* actual timeout counter that select uses */
+static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl pointer */
 
 static int		ttyparmFlag = 0;
 static struct termios	ttyparms;
 static struct termios	ttyparmh;
 
 # define max(x, y) ((x) > (y) ? (x) : (y))
+
+static void display(int * dis_cntp, int dis_max);
 
 static int
 kbhit(void)
@@ -94,11 +98,11 @@ kbhit(void)
     /* Wait until stdin is ready */
     do {
 	readfds = iC_infds;
-	if (top && top->tv_sec == 0 && top->tv_usec == 0) {
-	    *top = timeOut;
+	if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
+	    toCnt = timeOut;		/* transfer timeout value */
 	}
-    } while ((stat = select (maxfd + 1, &readfds, 0, 0, top)) == -1
-	   && errno == EINTR);
+    } while ((stat = select (maxfd + 1, &readfds, 0, 0, iC_osc_flag ? &toCnt : toCntp))
+	== -1 && errno == EINTR);
     if (stat == -1) {
 	fprintf(stderr, "error in select\n");
     } else if (stat == 0) {
@@ -151,9 +155,7 @@ unsigned long	glit_nxt;		/* count glitch scan */
  *******************************************************************/
 
 void
-iC_icc(
-    Gate *	g_lists,
-    unsigned	gate_count[])
+iC_icc(Gate ** sTable, Gate ** sTend)
 {
     int		i;
     short	pass;
@@ -196,10 +198,10 @@ iC_icc(
 	if (tim[cnt] != NULL) {		/* any of the 7 timers programmed ? */
 	    if (cnt < TLIMIT) {
 		fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_progname, cnt);
-		iC_quit(6);
+		iC_quit(SIGUSR1);
 	    }
-	    top = &to;			/* activate select timeout */
-	    break;			/* could optimise by varying delay */
+	    toCntp = &toCnt;		/* activate select timeout */
+	    break;			/* could optimise by varying timeout value */
 	}
     }
 
@@ -245,9 +247,9 @@ iC_icc(
      *******************************************************************/
     for (pass = 0; pass < 4; pass++) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "\nPass %d:", pass + 1);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\n== Pass %d:", pass + 1);
 #endif	/* YYDEBUG */
-	for (opp = iC_sTable; opp < iC_sTend; opp++) {
+	for (opp = sTable; opp < sTend; opp++) {
 	    gp = *opp;
 	    typ = gp->gt_ini > 0 ? AND : -gp->gt_ini;
 	    if (typ < MAX_OP) {
@@ -256,17 +258,18 @@ iC_icc(
 	    }
 	}
     }
+    iC_osc_max = iC_osc_lim;		/* during Init oscillations were not checked */
 
 #if	YYDEBUG
     if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\nInit complete =======\n");
+	fprintf(iC_outFP, "\n== Init complete =======\n");
     }
 #endif	/* YYDEBUG */
 
     if (iC_error_flag) {
-	if (iC_error_flag == 1) {
+	if (iC_error_flag >= 2) {
 	    fprintf(iC_outFP, "\n*** Fatal Errors ***\n");
-	    iC_quit(1);
+	    iC_quit(SIGUSR1);
 	}
 	fprintf(iC_outFP, "\n*** Warnings ***\n");
     }
@@ -431,7 +434,7 @@ iC_icc(
 	    fprintf(iC_outFP, "\n");
 	}
 #endif	/* YYDEBUG */
-	iC_display(&dis_cnt, DIS_MAX);		/* inputs and outputs */
+	display(&dis_cnt, DIS_MAX);		/* inputs and outputs */
 	/********************************************************************
 	 *  Input from keyboard and time input if used
 	 *******************************************************************/
@@ -475,14 +478,14 @@ iC_icc(
 		    goto skipT4;		/* excuse spaghetti - faster without flag */
 		}
 	    linkT4:
-		if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+		if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		gp->gt_val = - gp->gt_val;		/* complement input */
 		iC_link_ol(gp, iC_o_list);
 		cn = 0;					/* TX0.4 changed */
 		cnt++;
 #if	YYDEBUG
-		if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+		if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 	    skipT4: ;
 #endif	/* YYDEBUG */
 	    }
@@ -510,14 +513,14 @@ iC_icc(
 			goto skipT5;			/* excuse spaghetti - faster without flag */
 		    }
 		linkT5:
-		    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+		    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;		/* complement input */
 		    iC_link_ol(gp, iC_o_list);
 		    cn = 0;				/* TX0.5 changed */
 		    cnt++;
 #if	YYDEBUG
-		    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+		    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 		skipT5: ;
 #endif	/* YYDEBUG */
 		}
@@ -545,14 +548,14 @@ iC_icc(
 			    goto skipT6;		/* excuse spaghetti - faster without flag */
 			}
 		    linkT6:
-			if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+			if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;	/* complement input */
 			iC_link_ol(gp, iC_o_list);
 			cn = 0;				/* TX0.6 changed */
 			cnt++;
 #if	YYDEBUG
-			if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 		    skipT6: ;
 #endif	/* YYDEBUG */
 		    }
@@ -580,20 +583,24 @@ iC_icc(
 				goto skipT7;		/* excuse spaghetti - faster without flag */
 			    }
 			linkT7:
-			    if (iC_debug & 0100) fprintf(iC_outFP, " %s ", gp->gt_ids);
+			    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;	/* complement input */
 			    iC_link_ol(gp, iC_o_list);
 			    cn = 0;			/* TX0.7 changed */
 			    cnt++;
 #if	YYDEBUG
-			    if (iC_debug & 0100) putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
+			    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 			skipT7: ;
 #endif	/* YYDEBUG */
 			}
 		    }
 		}
 	    }
+	    if (iC_osc_flag) {
+		cnt++;				/* gates have been linked to alternate list */
+		iC_osc_flag = 0;		/* normal timer operation again */
+	    } else
 	    if (cn) {
 		goto TestInput;			/* no timer fired */
 	    }
@@ -627,21 +634,18 @@ iC_icc(
 		    cn++;			/* 1 extra input */
 		} else if (c == '-') {
 		    if (--cn <= 0) cn = 1;	/* at least 1 more in */
-		}
-		if (c == 'b') {
+		} else if (c == 'b') {
 		    if ((gp = iC_IB_[1]) != 0) {	/* b byte input to IB1 */
 			goto wordIn;
 		    }
 		    goto wordEr;		/* input not configured */
-		}
-		if (c == 'w') {
+		} else if (c == 'w') {
 		    if ((gp = iC_IW_[2]) != 0) {	/* w word input to IW2 */
 #if	INT_MAX != 32767 || defined (LONG16)
 			goto wordIn;
 		    }
 		    goto wordEr;		/* input not configured */
-		}
-		if (c == 'l') {
+		} else if (c == 'l') {
 		    if ((gp = iC_IL_[4]) != 0) {	/* l long input to IL4 */
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 		    wordIn:
@@ -718,6 +722,21 @@ iC_icc(
 		    cn = 0;
 		} else if (c == 'd') {
 		    iC_xflag = 0;			/* decimal output */
+		    cn = 0;
+		} else if (c == 'h') {
+		    fprintf(iC_outFP, "\n"
+"      Entering 0 to 7 toggles simulated inputs IX0.0 to IX0.7\n"
+"      Normally 0 to 7 acts immediately. Preceding it with +\n"
+"      allows more simultaneous logic inputs - one for each +\n"
+"      Entering b<num>CR alters simulated inputs IB1 if coded\n"
+"      Entering w<num>CR alters simulated inputs IW2 if coded\n"
+"      Entering l<num>CR alters simulated inputs IL4 if coded\n"
+"                <num> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
+"      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed\n"
+"      Entering d outputs QB1, QB2 and QL4 in decimal (default)\n"
+"      Entering x outputs QB1, QB2 and QL4 in hexadecimal\n"
+"      Entering q or ctrl-C quits the program\n"
+"      Entering any other character echos ?\n");
 		    cn = 0;
 		} else if (c == ENTER) {
 		    cn = 0;
@@ -816,6 +835,8 @@ void iC_quit(int sig)
 	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_progname);
     } else if (sig == SIGSEGV) {
 	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_progname);
+    } else if (sig == SIGUSR1) {
+	fprintf(iC_errFP, "\n'%s' stopped by 'non-recoverable run-time error'\n", iC_progname);
     }
     if (iC_outFP != stdout) {
 	fflush(iC_outFP);
@@ -841,3 +862,105 @@ void iC_quit(int sig)
     }
     exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
 } /* iC_quit */
+
+/********************************************************************
+ *
+ *	Display inputs & outputs
+ *
+ *******************************************************************/
+
+static void
+display(int * dis_cntp, int dis_max)
+{
+    int			n;
+    Gate *		gp;
+    unsigned char	x0;
+    int			b1;
+    int			w2;
+#if  INT_MAX != 32767 || defined (LONG16)
+    long		l4;
+#endif /* INT_MAX != 32767 || defined (LONG16) */
+
+    if ((*dis_cntp)++ >= dis_max) {	/* display header line */
+	*dis_cntp = 1;
+	for (n = 0; n < MAX_IO; n++) {
+	    if ((gp = iC_IX_[n]) != 0) fprintf(iC_outFP, " I%d", n);
+	}
+	if (iC_IB_[1] != 0) fprintf(iC_outFP, "  IB1");
+	if (iC_IW_[2] != 0) fprintf(iC_outFP, "    IW2");
+#if	INT_MAX != 32767 || defined (LONG16)
+	if (iC_IL_[4] != 0) fprintf(iC_outFP, "      IL4");
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+	fprintf(iC_outFP, "   ");
+	for (n = 0; n < MAX_IO; n++) {
+	    fprintf(iC_outFP, " Q%d", n);
+	}
+	fprintf(iC_outFP, "  QB1    QW2");
+#if	INT_MAX != 32767 || defined (LONG16)
+	fprintf(iC_outFP, "      QL4");
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+	fprintf(iC_outFP, "\n");
+    }
+    /* display IX0 .. IX7 - any that are active */
+    for (n = 0; n < MAX_IO; n++) {
+	if ((gp = iC_IX_[n]) != 0) {
+	    fprintf(iC_outFP, "  %c", gp->gt_val < 0 ? '1' : '0');
+	}
+    }
+    /* display IB1, IW2 and IL4 if active */
+    if (!iC_xflag) {
+#if INT_MAX == 32767 && defined (LONG16)
+	if ((gp = iC_IB_[1]) != 0) fprintf(iC_outFP, " %4ld", gp->gt_new);
+	if ((gp = iC_IW_[2]) != 0) fprintf(iC_outFP, " %6ld", gp->gt_new);
+	if ((gp = iC_IL_[4]) != 0) fprintf(iC_outFP, " %8ld", gp->gt_new);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+	if ((gp = iC_IB_[1]) != 0) fprintf(iC_outFP, " %4d", gp->gt_new);
+	if ((gp = iC_IW_[2]) != 0) fprintf(iC_outFP, " %6d", gp->gt_new);
+#if	INT_MAX != 32767
+	if ((gp = iC_IL_[4]) != 0) fprintf(iC_outFP, " %8d", gp->gt_new);
+#endif	/* INT_MAX != 32767 */
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+    } else {
+#if INT_MAX == 32767 && defined (LONG16)
+	if ((gp = iC_IB_[1]) != 0) fprintf(iC_outFP, " 0x%02lx", gp->gt_new);
+	if ((gp = iC_IW_[2]) != 0) fprintf(iC_outFP, " 0x%04lx", gp->gt_new);
+	if ((gp = iC_IL_[4]) != 0) fprintf(iC_outFP, " 0x%08lx", gp->gt_new);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+	if ((gp = iC_IB_[1]) != 0) fprintf(iC_outFP, " 0x%02x", gp->gt_new);
+	if ((gp = iC_IW_[2]) != 0) fprintf(iC_outFP, " 0x%04x", gp->gt_new);
+#if	INT_MAX != 32767
+	if ((gp = iC_IL_[4]) != 0) fprintf(iC_outFP, " 0x%08x", gp->gt_new);
+#endif	/* INT_MAX != 32767 */
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+    }
+    fprintf(iC_outFP, "   ");
+
+    x0 = iC_QX_[0];
+    b1 = iC_QX_[1];
+    w2 = *(short*)&iC_QX_[2];
+#if	INT_MAX == 32767
+    l4 = *(long*)&iC_QX_[4];
+#else	/* INT_MAX == 32767 */
+    l4 = *(int*)&iC_QX_[4];
+#endif	/* INT_MAX == 32767 */
+    /* display QX0 .. QX7 */
+    for (n = 0; n < MAX_IO; n++) {
+	fprintf(iC_outFP, "  %c", (x0 & 0x0001) ? '1' : '0');
+	x0 >>= 1;			/* scan output bits */
+    }
+    /* display QB1, QW2 and QL4 */
+    if (!iC_xflag) {
+#if	INT_MAX != 32767 || defined (LONG16)
+	fprintf(iC_outFP, " %4d %6hd %8ld\n", (int)b1, w2, l4);
+#else	/* INT_MAX != 32767 || defined (LONG16) */
+	fprintf(iC_outFP, " %4d %6hd\n", (int)b1, w2);	/* no QL4 */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
+    } else {
+#if	INT_MAX != 32767 || defined (LONG16)
+	fprintf(iC_outFP, "   0x%02x   0x%04hx 0x%08lx\n", (int)b1, w2, l4);
+#else	/* INT_MAX != 32767 || defined (LONG16) */
+	fprintf(iC_outFP, "   0x%02x   0x%04hx\n", (int)b1, w2);	/* no QL4 */
+#endif	/* INT_MAX != 32767 || defined (LONG16) */
+    }
+    fflush(iC_outFP);
+} /* display */
