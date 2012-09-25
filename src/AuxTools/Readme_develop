@@ -11,15 +11,17 @@ The development environment has been SuSE Linux 4.3 - 9.3 (1995 -2005)
 The distribution was tested under Red Hat Linux 7.2, Debian Linux and
 the Cygwin environment under Windows XP. A native Windows port with
 MS Visual C++ and Perl only is under development.
+All development since 2006 has been on SUSE Linux 10 andd 11.2 11.3 11.4
+Further work on MAC OS-X and Windows is planned for late 2012.
 
 Building the distribution is described in detail in README. The usual
 steps followed in Linux projects has been adopted: tar -x, configure,
 make, make test, make install.
 
-The compilers required are for C, Yacc and Lex. Building the system
-requires Perl 5, Bash, Make and Configure. (Older Sed and Awk scripts
-have been converted to Perl scripts). Running iC applications requires
-Perl 5 and Bash.
+The compilers required are for C, Yacc (Bison) and Lex (Flex). Building
+the system requires Perl 5, Bash, Make and Configure. (Older Sed
+and Awk scripts have been converted to Perl scripts). Running iC
+applications requires Perl 5 and Bash.
 
 This builds and installs 5 components from the sources:
 
@@ -27,11 +29,17 @@ This builds and installs 5 components from the sources:
 
     icr		an iC compiler with integrated run-time keyboard
 		I/O test environment (was used mainly under DOS)
+		now obselete
 
     ict		an iC compiler with integrated run-time TCP/IP
 		test environment (used with networking components)
+		also obselete
 
     libict.a	a static library to build stand alone applications
+		from iC sources for the TCP/IP support environment
+		supports full debugging output
+
+    libict.so	a dynamic library to build stand alone applications
 		from iC sources for the TCP/IP support environment
 
     lmain	lmain only tests the internal C-parser and is not
@@ -55,11 +63,12 @@ a TCP/IP networking environment for running iC applications:
 		with running iC applications over TCP/IP.
 
     iClive	a programming and debugging tool for iC applications.
-		It provides an edit window in which the text of an iC
-		source can be displayed and optionally edited and saved.
-		It is also a network client for a running application
-		and shows the state of nodes in the running application
-		as coloured text and as numerical information.
+		It provides an edit window in which the text of an
+		iC source can be displayed and optionally edited
+		and saved.  It is also a network client for a running
+		application and shows the live state of nodes in the
+		running application as coloured text and as numerical
+		information.
 
 The netorking components can be used on one computer using 'localhost',
 which is the default host name or distributed over several computers using
@@ -67,7 +76,7 @@ appropriate host names with the -s <host> option.  The default networking
 port is '8778'. Another port can be selected with the -p <port> option.
 
     iCmake	make one or more iC application(s) from iC or iCa
-		source(s).
+		source(s) supplemented by optional .ih headers.
 
 		If a source contains 'FOR loops', %define macro
 		definitions or there are -P macro definitions, the
@@ -80,7 +89,8 @@ port is '8778'. Another port can be selected with the -p <port> option.
 
 		Each iC source file is compiled using 'immcc' which
 		generates a C file, which in turn is compiled and
-		linked with 'libict.a' generating the application.
+		linked with 'libict.so' or 'libict.a' generating the
+		application.
 
     immac	translates an iCa language file <source>.ica to an
 		iC language file <source>.ic, which can then be
@@ -100,7 +110,7 @@ Scripts:
 		expected by configure and used in 'make install' if
 		configure cannot find a better BSD compatible 'install'
 		
-		Actuall use /usr/bin/install (file-4.13) via /usr/bin/ginstall
+		Actual use /usr/bin/install (file-4.13) via /usr/bin/ginstall
 		Also use /usr/bin/ranlib
 
     perlinstall:#!/bin/sh
@@ -164,8 +174,7 @@ Auxiliary scripts for testing compiler outputs
     mkpp:	#!/usr/bin/bash
 		make (or diff) version files for previous versions
 		of the iC system. Uses 'mkv' of John Wulff's version
-		control system.  Execute in directory Test2;
-		assumes version directories Alex??
+		control system.  Execute in directory Test2; etc
 
     ml:		#!/usr/bin/bash
 		make lists for immcc compiler tests; uses 'mklst'
@@ -323,6 +332,6 @@ Vim support files
 		table where descriptive names in the program are allocated to physical
 		I/O points. In the listings these aliases will show up nicely.
 
-    filetype.vim:	Vim filetype file selects *.ic *.ih and *.lst as iC files
+    filetype.vim:	Vim filetype file selects *.ic *.ica *.ih and *.lst as iC files
 
-    $Id: Readme_develop,v 1.16 2009/09/21 01:12:52 jw Exp $
+    $Id: Readme_develop,v 1.17 2012/09/25 06:28:39 jw Exp $
