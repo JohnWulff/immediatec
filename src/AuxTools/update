@@ -1,5 +1,5 @@
 #! /bin/bash
-# $Id: update,v 1.8 2008/06/27 12:55:58 jw Exp $
+# $Id: update,v 1.9 2012/11/15 03:13:19 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
@@ -18,29 +18,6 @@ if locked -q; then
 		echo "**** Warning: $name '$d' must be '$vp' followed by digits only, not '$nt' - ignored"
 	    else
 		n=$nt
-		cd $d
-		if locked -vq; then
-		    if [ -z "$previous" ]; then
-			echo "#### $d"
-			co $(locked -v)
-		    else
-			for f in $(locked -v); do
-			    if [ ! -e "$f" ]; then
-				if [ -L "../$previous/$f" ]; then
-				    echo "## $d cp ../$previous/$f ."
-				    cp -a "../$previous/$f" .
-				elif [ -f "../$previous/$f" ]; then
-				    echo "## $d ln -s ../$previous/$f ."
-				    ln -s "../$previous/$f" .
-				else
-				    echo "**** Error: $name has broken link to ../$previous/$fp"
-				fi
-			    fi
-			done
-		    fi
-		fi
-		cd ..
-		previous=$d
 	    fi
 	fi
     done
@@ -86,13 +63,6 @@ if locked -q; then
 	    for d in $wpath; do
 		if [ -d $d ]; then
 		    db=$d
-		    cd $db
-		    if locked -vq; then
-			echo "#### $db"
-			echo "==== " $(locked -v)
-			co $(locked -v)
-		    fi
-		    cd ..
 		fi
 	    done
 	    if [ -z $db ]; then
