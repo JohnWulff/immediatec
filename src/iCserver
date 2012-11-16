@@ -86,7 +86,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.41 2012/03/27 03:49:32 jw Exp $
+$Id: iCserver,v 1.42 2012/11/08 07:41:00 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -168,11 +168,14 @@ if ($opt_t) {
 #
 #	Server
 #
+#	Inhibit Nagle's algorithm
+#
 ########################################################################
 
 my $host = defined $opt_s ? $opt_s : '0.0.0.0';
 my $port = defined $opt_p ? $opt_p : 8778;
 
+Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
 Msg->new_server($host, $port, \&login_proc);
 print "$named created. Waiting for events\n";
 

@@ -1,9 +1,60 @@
-# $Id: Msg.pm,v 1.3 2000/05/30 22:10:09 jw Exp $
+# $Id: Msg.pm,v 1.4 2012/11/08 06:48:40 jw Exp $
+
+########################################################################
+#
+#   Originally described in "Advanced Perl Programming" by Sriram Srinivasan
+#   p. 203 as "Msg: Messaging Toolkit" and freely available on the internet
+#   as Msg.pm - use in the immediate C project is gratefully acknowledged.
+#
+#   Modification John Wulff 2000.05.27 - event_loop()
+#	select time_out is 0 if loop_count is defined
+#	else undef - which maintains previous functionality
+#
+#	if loop_count has a fractional part interpret it as
+#	the time_out value and set loop_count to 1 - useful for
+#	timed message loops
+#
+#   Modification John Wulff 2012.10.31 - enable non-blocking
+#	The original implemantion from 2000 had:
+#	  my $blocking_supported = 0;	# executed after BEGIN block
+#	leading to the situation that setting $blocking_supported in
+#	the BEGIN block was overwritten with 0 - inhibiting non-blocking.
+#
+#	Also set_non_blocking and set_blocking requires F_GETFL in the
+#	first fcntl() call, which was never executed because of the above.
+#
+#	According to the Errata for "Advanced Perl Programming"
+#	$offset in _rcv() was incorrectly calculated - fixed.
+#
+#   Modification John Wulff 2012.11.06 - disable Nagle's algorithm
+#	From <en.wikipedia.org/wiki/Nagle's_algorithm>
+#	Applications that expect real time response can react poorly to
+#	Nagle's algorithm. The algorithm purposefully delays transmission,
+#	increasing bandwidth efficiency at the expense of latency.
+#	For this reason applications with low bandwidth time sensitive
+#	transmissions typically use TCP_NODELAY to bypass the Nagle delay.
+#
+#	This very much applies to network traffic in the immediate C system.
+#	Messages are typically 5 to 10 bytes long staggered at intervals
+#	which are usually 10's of milliseconds to seconds apart, but can
+#	involve a burst of several messages as a result of the same trigger.
+#	Nagle's algorithm sends the first if these bursts and delays the
+#	rest for up to 500 ms or when an unrelated return message comes,
+#	which is much too late.	(Also changed for C code in tcpc.c)
+#
+#   Modification John Wulff 2012.11.08 - method to inhibit Nagle's algorithm
+#	  Msg->inhibit_nagle(1)	# inhibit Nagle's algorithm for real time reponse
+#	  Msg->inhibit_nagle(0)	# activate Nagle's algorithm again for throughput
+#	Without the first call Nagle's algorthm is active - so Msg.pm
+#	functions without change from the original for backwards compatibility.
+#
+########################################################################
 
 package Msg;
 use strict;
 use IO::Select;
 use IO::Socket;
+use Socket qw(IPPROTO_TCP TCP_NODELAY);
 use Carp;
 
 use vars qw (%rd_callbacks %wt_callbacks $rd_handles $wt_handles);
@@ -12,14 +63,22 @@ use vars qw (%rd_callbacks %wt_callbacks $rd_handles $wt_handles);
 %wt_callbacks = ();
 $rd_handles   = IO::Select->new();
 $wt_handles   = IO::Select->new();
-my $blocking_supported = 0;
+my $blocking_supported;			# executed after BEGIN block
+my $nagle;
 
 BEGIN {
     # Checks if blocking is supported
     eval {
-        require POSIX; POSIX->import(qw (F_SETFL O_NONBLOCK EAGAIN));
+        require POSIX; POSIX->import(qw (F_GETFL F_SETFL O_NONBLOCK EAGAIN));
     };
-    $blocking_supported = 1 unless $@;
+    $blocking_supported = ($@) ? 0 : 1;	# executed before my $blocking_supported;
+}
+
+#-----------------------------------------------------------------
+# Inhibit Nagle's algorithm (see in the first header)
+sub inhibit_nagle {
+    my ($pkg, $flag) = @_;
+    $nagle = $flag;		# 0 is active, 1 is inhibited
 }
 
 #-----------------------------------------------------------------
@@ -37,6 +96,7 @@ sub connect {
 
     return undef unless $sock;
 
+    setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, $nagle) if defined $nagle;	# inhibit Nagle's algorithm
     # Create a connection end-point object
     my $conn = bless {
         sock                   => $sock,
@@ -139,18 +199,18 @@ sub _err_will_block {
     }
     return 0;
 }
-sub set_non_blocking {                        # $conn->set_blocking
+sub set_non_blocking {
     if ($blocking_supported) {
-        # preserve other fcntl flags
-        my $flags = fcntl ($_[0], F_GETFL(), 0);
-        fcntl ($_[0], F_SETFL(), $flags | O_NONBLOCK());
+	my ($conn) = @_;
+        my $flags = fcntl($conn->{sock}, F_GETFL(), 0);
+        fcntl($conn->{sock}, F_SETFL(), $flags | O_NONBLOCK());
     }
 }
 sub set_blocking {
     if ($blocking_supported) {
-        my $flags = fcntl ($_[0], F_GETFL(), 0);
-        $flags  &= ~O_NONBLOCK(); # Clear blocking, but preserve other flags
-        fcntl ($_[0], F_SETFL(), $flags);
+	my ($conn) = @_;
+        my $flags = fcntl($conn->{sock}, F_GETFL(), 0);
+        fcntl($conn->{sock}, F_SETFL(), $flags & ~O_NONBLOCK());
     }
 }
 sub handle_send_err {
@@ -195,7 +255,7 @@ sub _rcv {                     # Complement to _send
     return unless defined($sock);
     if (exists $conn->{msg}) {
         $msg           = $conn->{msg};
-        $offset        = length($msg) - 1;  # sysread appends to it.
+        $offset        = length($msg);      # sysread appends to it. (- 1 incorrect according to Errata)
         $bytes_to_read = $conn->{bytes_to_read};
         delete $conn->{'msg'};              # have made a copy
     } else {
@@ -250,6 +310,7 @@ sub _rcv {                     # Complement to _send
 
 sub _new_client {
     my $sock = $main_socket->accept();
+    setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, $nagle) if defined $nagle;	# inhibit Nagle's algorithm
     my $conn = bless {
         'sock' =>  $sock,
         'state' => 'connected'
@@ -301,8 +362,8 @@ sub set_event_handler {
 #	else undef - which maintains previous functionality
 #
 #	if loop_count has a fractional part interpret it as
-#	the time_out value and set loop_count to 1
-#	- useful for timed message loops
+#	the time_out value and set loop_count to 1 - useful for
+#	timed message loops
 #
 ########################################################################
 

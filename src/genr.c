@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.77 2012/09/23 07:58:51 jw Exp $";
+"@(#)$Id: genr.c,v 1.78 2012/11/13 04:34:00 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -488,7 +488,7 @@ op_push(				/* reduce List_e stack to links */
 	    if ((lp = lsp->u_blist) == 0 ||	/* left not a @ symbol */
 		sp == lsp ||			/* or right == left */
 		(typ != op &&			/* or new operator */
-			/* TODO watch this when typ is ALIAS or UDF */
+			/* TD watch this when typ is ALIAS or UDF */
 		typ != TIM) ||			/* but left is not a timer */
 		(typ == op &&			/* or old operator */
 		right->le_val == (unsigned)-1))	/* and right is a delay for timer */
@@ -1470,7 +1470,7 @@ op_asgn(				/* asign List_e stack to links */
 			}
 		    }
 		}
-		if (gp->ftype == ARITH &&	/* && gp->u_blist TODO */
+		if (gp->ftype == ARITH &&	/* && gp->u_blist TD */
 		    sp->ftype != OUTW &&
 		    sp->type != ALIAS) {
 		    if ((val = lp->le_val) == (unsigned)-1) {
@@ -3967,7 +3967,7 @@ cloneFunction(Sym * fhs, Lis * plpl, Str * par)
 		assert(rsp);			/* return Symbol was set in Pass 1 */
 		rll.v = cloneList(sp2, &rsp, rsp, 1); /* clone the rest of the expression */
 	    } else if (sp2->u_blist) {		/* assign parameter or internal Symbol */
-		assert(sv.v);			/* TODO what happens to link if not used ??? */
+		assert(sv.v);			/* TD what happens to link if not used ??? */
 		csp = cloneSymbol(sp2);		/* clone parameter expression head Symbol */
 		sv.v->u_blist = cloneList(sp2, &csp, rsp, 2); /* clone the rest of the expression */
 	    }
@@ -4268,7 +4268,7 @@ cloneFunction(Sym * fhs, Lis * plpl, Str * par)
 			}
 		    }
 		} else {
-		    sv.v->type = iC_ctypes[sv.v->ftype]; /* TODO check sp1->type == UDF */
+		    sv.v->type = iC_ctypes[sv.v->ftype]; /* TD check sp1->type == UDF */
 		}
 	    } else
 	    if (iFunSymExt ||
@@ -4849,7 +4849,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 			}
 #endif
 		    } while (y <= index || lp1->le_next == 0);
-		    lp1->le_val = 0;		/* action on lp1 TODO */
+		    lp1->le_val = 0;		/* action on lp1 TD */
 		} else if (lp1->le_first) {
 		    assert(lp1->le_last);
 		    lp1->le_first += offset;	/* adjust offset in components of expression */

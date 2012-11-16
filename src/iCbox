@@ -13,7 +13,7 @@
 #	iCbox; generic Demo Box
 #	adapted from
 #	Example 14-1 Simple UI Code
-#	Sriram Srinivasan: Advanced Perl p. 224
+#	Sriram Srinivasan: Advanced Perl Programming p. 224
 #
 #	For measuring reaction times the Module Time::HiRes may be used.
 #	This activates the -m option.
@@ -73,7 +73,7 @@ my @bitIndex =	(
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<< [-bdHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    @<<<< [-bdrHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
 	  [ -c <col>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
 	ID	X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
@@ -102,6 +102,7 @@ Usage:
 	-f file read additional ID parameters from this file
 	-b	use buttons instead of checkboxes for digital I/O
 	-d	display external inputs IMn only (no ini values allowed)
+	-r	reverse - display inputs IMn, send outputs Qmn like inputs
 	-H      a Hold button is generated which holds input changes
 	-m	display elapsed time in seconds and microseconds
 	-t	trace debug messages
@@ -110,14 +111,14 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.49 2012/06/08 06:27:00 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.50 2012/11/08 06:53:13 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
-use vars qw($opt_b $opt_d $opt_H $opt_m $opt_x $opt_t $opt_T $opt_s $opt_p);
+use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_T $opt_s $opt_p);
 use vars qw($opt_n $opt_i $opt_c $opt_C $opt_R $opt_l $opt_f $opt_h);
 require "getopts.pl";
-&Getopts('bdHmxtTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
+&Getopts('bdrHmxtTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -142,9 +143,13 @@ if ($opt_b) {
     $redButton   = "'IndianRed1'";
 }
 
-my $QX        = $opt_d ? qr/^[IQ]X/        : qr/^QX/;
-my $Q_BWL_    = $opt_d ? qr/^[IQ][BWL]/    : qr/^Q[BWL]/;
-my $Q__XBWL__ = $opt_d ? qr/^[IQ]([XBWL])/ : qr/^Q([XBWL])/;
+my $QX        = $opt_d ? qr/^[IQ]X/        : $opt_r ? qr/^IX/        : qr/^QX/;
+my $Q_BWL_    = $opt_d ? qr/^[IQ][BWL]/    : $opt_r ? qr/^I[BWL]/    : qr/^Q[BWL]/;
+my $Q__XBWL__ = $opt_d ? qr/^[IQ]([XBWL])/ : $opt_r ? qr/^I([XBWL])/ : qr/^Q([XBWL])/;
+
+my $IX        = $opt_r ? qr/^QX/        : qr/^IX/;
+my $I_BWL_    = $opt_r ? qr/^Q[BWL]/    : qr/^I[BWL]/;
+my $I__XBWL__ = $opt_r ? qr/^Q([XBWL])/ : qr/^I([XBWL])/;
 
 my $instance = '';
 if (defined $opt_i and $opt_i ne '') {
@@ -393,6 +398,8 @@ if ($opt_t) {
 #
 #	Connect to server and register I/Os
 #
+#	Inhibit Nagle's algorithm
+#
 ########################################################################
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
@@ -400,6 +407,7 @@ my $port = defined $opt_p ? $opt_p : 8778;
 my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];
 $named = $name;			# use individual ID for warnings from now on
 
+Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
 
@@ -415,9 +423,9 @@ foreach $argNameRef (@ArgNames) {
     ($id, $ini, $from, $to, $resolution) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
-	$direction = $opt_d ? 'R' : 'S';
+	$direction = $opt_d || $opt_r ? 'R' : 'S';
     } elsif ($id =~ /^Q/) {
-	$direction = 'R';
+	$direction = $opt_r ? 'S' : 'R';
     } else {
 	die "$named: invalid argument '$id' - internal error";
     }
@@ -554,9 +562,9 @@ foreach $argNameRef (@ArgNames) {
     ($id, $ini, $from, $to, $resolution) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
-	$direction = $opt_d ? 'R' : 'S';
+	$direction = $opt_d || $opt_r ? 'R' : 'S';
     } elsif ($id =~ /^Q/) {
-	$direction = 'R';
+	$direction = $opt_r ? 'S' : 'R';
     } else {
 	goto WARN_REG_ID;
     }
@@ -595,7 +603,7 @@ foreach $argNameRef (@ArgNames) {
 ########################################################################
 
     my ($index, $text, $sel, $state, $borderwidth);
-    if ($id =~ /$QX/o) {		# /^QX/ or /^[IQ]X/ if $opt_d
+    if ($id =~ /$QX/o) {		# /^QX/ or /^[IQ]X/ if $opt_d or /^IX/ if $opt_r
 	for $index (0 .. 7) {
 	    $sel = $from & (1 << $index);
 	    $text = $sel ? "'.$index'" : "''";
@@ -627,7 +635,7 @@ foreach $argNameRef (@ArgNames) {
 #
 ########################################################################
 
-    elsif ($id =~ /^IX/) {
+    elsif ($id =~ /$IX/o) {		# /^IX/ or /^QX/ if $opt_r
 	for $index (0 .. 7) {
 	    $sel = $from & (1 << $index);
 	    $text        = $sel ? "'.$index'" : "''";
@@ -671,7 +679,7 @@ foreach $argNameRef (@ArgNames) {
 ########################################################################
 
     elsif ($id =~ /$Q_BWL_/o) {		# /^Q[BWL]/ or /^[IQ][BWL]/ if $opt_d
-	$frame->Scale(
+	$frame->Scale(			# /^I[BWL]/ if $opt_r
 	    -from        => $from,
 	    -to          => $to,
 	    -resolution  => $resolution,
@@ -692,7 +700,7 @@ foreach $argNameRef (@ArgNames) {
 #
 ########################################################################
 
-    elsif ($id =~ /^I[BWL]/) {
+    elsif ($id =~ /$I_BWL_/o) {		# /^I[BWL]/ or /^Q[BWL]/ if $opt_r
 	my $makeInScaleCheckbutton = "\
 	\$frame->Scale(\
 	    -from        => $from,\
@@ -798,26 +806,25 @@ sub rcvd_msg_from_server {
 	}
 	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId);
 	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
-	    if ($msg1 =~ /^(\d+):(.*)$/) {
+	    if ($msg1 =~ /^(\d+):(\d+)$/) {
 		$channel = $1;			## receive data as channel:value
 		$value   = $2;
 		$old = $ChannelsQ[$channel];
 		if (defined $old) {
 		    if ($value != $old) {
-			print "$named: $msg1	< $ChannelNames[$channel]\n" if $opt_t;
 			$bitRef = $ChannelsQX[$channel];
 			if (defined $bitRef) {
-			    my ($diff, $mask, $index, $val);
+			    my ($diff, $mask);
+			    goto WrongFormat if $value >= 0x100;	# only 8 bit map allowed
 			    $diff = $old ^ $value;	# $old initialized to a number for correct XOR
 			    while ($diff) {		# age old algorithm from CSR days
 				$mask = $diff & -$diff;	# rightmost set bit from diff
-				$index = $bitIndex[$mask];
-				$val = ($value & $mask) ? 1 : 0;
-				${$bitRef}[$index] = $val;	# modify viewable output
-				$diff &= ~$mask;		# clear rightmost bit in diff
+				${$bitRef}[$bitIndex[$mask]] = ($value & $mask) ? 1 : 0;
+				$diff &= ~$mask;	# modify viewable output - clear rightmost bit
 			    }
 			}
 			$ChannelsQ[$channel] = $value;	# ready for next message
+			print "$named: $msg1	< $ChannelNames[$channel]\n" if $opt_t;
 		    }
 		} else {
 		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
@@ -831,7 +838,7 @@ sub rcvd_msg_from_server {
 		$ri++;
 		my $dir = '';
 		if ($id =~ /$Q__XBWL__/o) {	# /^Q([XBWL])/ or /^[IQ]([XBWL])/ if $opt_d
-		    if ($channel == 0) {
+		    if ($channel == 0) {	# /^I([XBWL])/ if $opt_r
 			warn "$named: trying to register receiver '$id' at channel 0 - error\n";
 			next;
 		    }
@@ -842,7 +849,7 @@ sub rcvd_msg_from_server {
 			print "$named: registering receiver '$id' on channel $channel twice - equivalence\n" if $opt_t;
 		    } else {
 			$ChannelsQ[$channel] = 0;	# initial value and Q definition
-			## when this array element is defined, it is a Q[XBWL] receiver
+			## when this array element is defined, it is a Q[XBWL] receiver (or I[XBWL] if $opt_d or $opt_r)
 			if ($1 eq 'X') {
 			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
 			    ## when this array slice is defined, channel is a QXn.m
@@ -850,8 +857,8 @@ sub rcvd_msg_from_server {
 			}
 		    }
 		}
-		elsif ($id =~ /^I([XBWL])/) {
-		    if ($channel <= 0) {
+		elsif ($id =~ /$I__XBWL__/o) {	# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
+		    if ($channel == 0) {
 			warn "$named: trying to register sender '$id' twice - not allowed\n";
 			next;
 		    }
@@ -859,7 +866,7 @@ sub rcvd_msg_from_server {
 		    $frameCount++;
 		    ## initial value and I definition
 		    $ChannelsIq[$channel] = $ChannelsI[$channel] = $ini;
-		    ## when this array element is defined, it is a I[XBWL] sender
+		    ## when this array element is defined, it is a I[XBWL] sender (or Q[XBWL] if $opt_r)
 		    if ($1 eq 'X') {
 			for my $index (0 .. 7) {
 			    $ChannelsIX[$channel][$index] = ($ini & $masks[$index]) ? 1 : 0;
@@ -876,6 +883,7 @@ sub rcvd_msg_from_server {
 		    print "register: $regId	channel = $channel	in = $ini\n" if $opt_t;
 		}
 	    } else {
+	      WrongFormat:
 		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
 	    }
 	}
@@ -920,7 +928,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 
 =head1 SYNOPSIS
 
- iCbox [-bdHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+ iCbox [-bdrHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
        [ -c <col>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
@@ -947,6 +955,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -f file read additional ID parameters from this file
     -b      use buttons instead of checkboxes for digital I/O
     -d      display external inputs IMn only (no ini values allowed)
+    -r      reverse - display inputs IMn, send outputs Qmn like inputs
     -H      a Hold button is generated which holds input changes
     -m      display elapsed time in seconds and microseconds
     -t      trace debug messages

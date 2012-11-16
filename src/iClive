@@ -199,7 +199,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.49 2012/06/10 12:40:23 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.50 2012/11/08 06:55:03 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -307,7 +307,7 @@ my $fileTypes = [
 ];
 
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
-my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?)?)\s*((~ )?---|=$)?';
+my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)\s*((~ )?---|=$)?';
 my $bMsg = '';		# balloon message
 my $wIdx = '';		# Index of current wordstart
 my $pIdx = '';		# Index of previous wordstart
@@ -1136,6 +1136,8 @@ sub conn_send_now {
 #	Register at iCserver
 #	connection is maintained until iClive shuts down or iCserver disconnects
 #
+#	Inhibit Nagle's algorithm
+#
 #	Register read events
 #	Register I/O at iCserver and request Symbol Table if $scanFlag is set
 #
@@ -1144,6 +1146,7 @@ sub conn_send_now {
 sub register_at_server {
     my $i = 0;
     CONNECT: until ($conn) {
+	Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
 	$conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 	if ($conn) {
 	    print "Connection $named at server.\n";
@@ -1281,7 +1284,7 @@ sub rcvd_msg_from_server {
 			    if ($opt_T and ($l = length $symbol) > $maxSymbolLength) {
 				$maxSymbolLength = $l;
 			    }
-			    $stIndex++;
+			    $stIndex++ unless ($symbol =~ /\[\s*\d+\s*\]/);
 			}
 		    }
 		    elsif ($entry eq '2') {
@@ -1974,7 +1977,6 @@ sub do_scan {
 	$current = '1.0' unless defined $current;
 	$last    = 'end' unless defined $last;
 	my $length = '0';
-##	print "search: '$current' - '$last'\n";
 	while (1) {
 	    $current = $text->search(-count => \$length,
 				     '-regexp',
@@ -1984,10 +1986,13 @@ sub do_scan {
 				     $last);
 	    last if (!$current);
 	    $iw = $i = $text->get($current, "$current + $length char");
-	    $i =~ s/(-)?([~\t ]*)(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?)?)([~\t ]*)/$2$6/;
+	    ########################################################################
+	    # Match simple variables, IEC-1131 and derivatives as well as immC array members
+	    ########################################################################
+	    $i =~ s/(-)?([~\t ]*)(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)([~\t ]*)/$2$7/;
 	    $word = defined $1 ? "$1$3" : $3;	# word for the symbol table
 no warnings;
-	    $tag = "'$word' length=$length, iw='$iw' i='$i' 1='$1' 2='$2' 3='$3' 5='$5'\n" if $opt_T;
+	    $tag = "'$word' length=$length, iw='$iw' i='$i' 1='$1' 2='$2' 3='$3' 5='$5' 6='$6'\n" if $opt_T;
 use warnings;
 	    $word =~ s/\s//g;			# delete any white space
 	    if (defined $word and $symbolTable{$word}) {
@@ -2009,7 +2014,7 @@ use warnings;
 			colourTag($tag, $cs);	# initial tag colour
 		    }
 		    $text->tagAdd($tag, $current, "$current + $length char");
-		    if ($iw =~ /[\w.]+\s*=$/) {
+		    if ($iw =~ /[\w.]+(\s*\[\s*\d+\s*\])?\s*=$/) {
 			$tag = "$index=";
 			print "$tag	$word	'$iw'\n" if $opt_T;
 			unless ($activeSymbols[$index][0] & 04) {
@@ -2072,9 +2077,8 @@ use warnings;
 		    if ($stem =~ /^([IQT]X\d+\s*.\s*[0-7](_\d+)?)/) {
 			$word = $1;		# bit I/O variable found
 			$wlen = length $word;
-			$word =~ s/\s//g;	# delete possible white space around '.'
 		    }
-		    elsif ($stem =~ /^(\w[\$\w]*)/) {
+		    elsif ($stem =~ /^(\w[\w\$]*(\s*\[\s*\d+\s*\])?)/) {
 			$word = $1;		# number or variable found
 			$wlen = length $word;
 			if ($word =~ /\d+/) {
@@ -2090,6 +2094,7 @@ use warnings;
 		    } else {
 			return 0;		# unlikely with \W test above
 		    }
+		    $word =~ s/\s//g;		# delete possible white space around '.' and '[]'
 		    print "	word = $word\n" if $opt_T;
 		    if (not defined ($index = $symbolTable{$word}[1])) {
 			return 0;		# not found in S.T.

@@ -1,44 +1,37 @@
 /********************************************************************
  *
- *	First lift controller for completed iClift (V71)
+ *	Lift controller for completed iClift (V98)
  *
- *	for a very simple case of 1 lift with 3 floors
+ *	immac -P LIFTS=1 -P FLOORS=3 (default)
+ *	for any other case use different numbers for Lifts and/or FLOORS
+ *	The same number of LIFTS and FLOORS must be selected for iClift.
  *
- *	iCbox Monitor file generated with iClift -L1 -F3 -B id3B
+ *	Any Outside floor select button or inside cage button will
+ *	close both doors and move the lift to that floor, reset the
+ *	calling button and then open both doors. At that point an
+ *	output is generated with flickAny, which will select a random
+ *	floor button in iClift - repeating the cycle, if iClift is run
+ *	with the continuous option -C (useful for longterm tests).
+ *	The continuous option can also be toggled with the Escape Key
+ *	in iClift. To re-start continous mode select another floor for
+ *	each lift with the floor select buttons.
  *
- * IB0              # Cage 0: current cage position
- * QX0              # Lift 0: 0 show down 1 up   2 open inside door 3 close 4 fast 5 cage up   6 down 7 fast
- * IX1              # Lift 0: 0 cage near 1 home 2 inside door posn 3 near  4 home 5 AL button 6 ><   7 <>
- * QX1              # Lift 0: 0 - 4 misc_fun0 - misc_fun4        5 AL button reset 6 >< reset  7 <> reset
- * IX2,0b111        # Cage 0: floor 0 - 2 select buttons
- * QX2,0b111        # Cage 0: floor 0 - 2 select button resets
- * IX3,0b111        # Lift 0: floor 0 - 2 down buttons
- * QX3,0b111        # Lift 0: floor 0 - 2 down button resets
- * IX4,0b111        # Lift 0: floor 0 - 2 up buttons
- * QX4,0b111        # Lift 0: floor 0 - 2 up button resets
- * IX5,0b111        # Lift 0: floor 0 - 2 outside door posn
- * QX5,0b111        # Lift 0: floor 0 - 2 open outside door
- * IX6,0b111        # Lift 0: floor 0 - 2 outside door near
- * QX6,0b111        # Lift 0: floor 0 - 2 close outside door
- * IX7,0b111        # Lift 0: floor 0 - 2 outside door home
- * QX7,0b111        # Lift 0: floor 0 - 2 move outside door fast
- *
- *	Any Outside floor select button or cage button will
- *	close both doors and move the lift to that floor
- *	reset the calling button and then open both doors.
+ * @(#)$Id: lifts.ica,v 1.2 2012/11/14 08:49:17 jw Exp $
  *
  ********************************************************************/
 %define LIFTS	1
 %define FLOORS	3
-%define FPL	L*(8+(FLOORS/8)*6)	/* lift times floors per lift */
-%define FPLF	FPL+(2+(F/8)*6)		/* offset for per floor components */
+%define FPL	L*(10+((FLOORS-1)/8)*8)	/* lift times floor group offset */
+%define FPLF	FPL+(2+(F/8)*8)		/* offset for per floor components */
 
 use strict;
+
+imm timer t = TIMER(TX0.4);		/* 100 ms timer */
     FOR (L = 0; L < LIFTS; L++) {{
 
 /********************************************************************
  ********************************************************************
- **	Lift '[L]' control
+ **	Lift '[L+1]' control
  ********************************************************************
  ********************************************************************/
 
@@ -52,21 +45,23 @@ imm bit cageAlarm[L] =  IX[FPL+1].5;	// AL cage alarm button
 imm bit closeDoor[L] =  IX[FPL+1].6;	// >< door close button
 imm bit openDoor[L]  =  IX[FPL+1].7;	// <> door open button
 
+imm bit reset[L] = IX[FPL+3].0;	// reset from iClift startup via Floor '0'
+QX[FPL+3].0 = reset[L];		// down button bit, which does not exist
 QX[FPL+1].5 = D(cageAlarm[L]);	// AL button reset
 
-imm bit flick[L];
+imm bit flick[L], fa[L];
 	FOR (F = 0; F < FLOORS; F++) {{
 imm bit flick[L][F], selFloor[L][F];
 	}}
 imm bit doorCloseReq[L]  = closeDoor[L] FOR (F = 0; F < FLOORS; F++) {{ | selFloor[L][F] }};
-imm bit flickAny[L]      = flick[L] FOR (F = 0; F < FLOORS; F++) {{ | flick[L][F] }};
-QX[FPL+1].0 = JK(flickAny[L], flickAny[L]);
+imm bit flickAny[L]      = flick[L]     FOR (F = 0; F < FLOORS; F++) {{ | flick[L][F] }};
+QX[FPL+1].0 = ST(fa[L] = SR(flickAny[L] & ~fa[L], flickAny[L] & fa[L] | reset[L]), t, 5);
 
 imm bit doorClosed[L]    = ~doorPosn[L] & doorNear[L] & doorHome[L];
 imm bit doorOpened[L]    =  doorPosn[L] & doorNear[L] & doorHome[L];
 
 /********************************************************************
- *	Lift '[L]' cage control
+ *	Lift '[L+1]' cage control
  ********************************************************************/
 
 imm int cageTarget[L]    = FOR (F = 0; F < FLOORS; F++) {{ selFloor[L][F] ? [F] : }} cagePosn[L];	// cageTarget[L] =
@@ -78,32 +73,32 @@ imm bit nearTarget[L]    = rightFloor[L] & cageNear[L];
 imm bit reachedTarget[L] = rightFloor[L] & cageHome[L];
 imm bit up[L]            = (cageTarget[L] > cagePosn[L]) & ~downSlow[L] & doorClosed[L];
 imm bit down[L]          = (cageTarget[L] < cagePosn[L]) & ~upSlow[L]   & doorClosed[L];
-        upSlow[L]        = SR(up[L],       reachedTarget[L]);
-        downSlow[L]      = SR(down[L],     reachedTarget[L]);
-imm bit cageFast[L]      = SR(down[L] | up[L], nearTarget[L]);
+        upSlow[L]        = SR(up[L],       reachedTarget[L] | reset[L]);
+        downSlow[L]      = SR(down[L],     reachedTarget[L] | reset[L]);
+imm bit cageFast[L]      = SR(down[L] | up[L], nearTarget[L] | reset[L]);
 
-QX[FPL+0].0 = down[L];		// show down indicator
-QX[FPL+0].1 = up[L];		// show up indicator
+QX[FPL+0].0 = down[L];		// show cage down indicator (optional)
+QX[FPL+0].1 = up[L];		// show cage up indicator (optional)
 
 QX[FPL+0].6 = downSlow[L];
 QX[FPL+0].5 = upSlow[L];
 QX[FPL+0].7 = cageFast[L];
 
 /********************************************************************
- *	Lift '[L]' inside door control
+ *	Lift '[L+1]' inside door control
  ********************************************************************/
 
 imm bit openSlow[L], closeSlow[L];
 
-imm bit doorTarget[L]    = SR(RISE(reachedTarget[L]) | openDoor[L], doorCloseReq[L]);
+imm bit doorTarget[L]    = SR(RISE(reachedTarget[L]) | openDoor[L], doorCloseReq[L] | reset[L]);
 imm bit rightSide[L]     = doorTarget[L]  ^ ~doorPosn[L];			// equivalent to doorTarget[L] == doorPosn[L]
 imm bit nearSide[L]      = rightSide[L] &  doorNear[L];
 imm bit reachedSide[L]   = rightSide[L] &  doorHome[L];
 imm bit open[L]          =  doorTarget[L] & ~doorPosn[L] & ~closeSlow[L];	// equivalent to doorTarget[L] > doorPosn[L]
 imm bit close[L]         = ~doorTarget[L] &  doorPosn[L] & ~openSlow[L];	// equivalent to doorTarget[L] < doorPosn[L]
-        openSlow[L]      = SR(open[L],         reachedSide[L]);
-        closeSlow[L]     = SR(close[L],        reachedSide[L]);
-imm bit doorFast[L]      = SR(open[L] | close[L], nearSide[L]);
+        openSlow[L]      = SR(open[L],         reachedSide[L] | reset[L]);
+        closeSlow[L]     = SR(close[L],        reachedSide[L] | reset[L]);
+imm bit doorFast[L]      = SR(open[L] | close[L], nearSide[L] | reset[L]);
 
 QX[FPL+0].2 = openSlow[L];
 QX[FPL+0].3 = closeSlow[L];
@@ -116,18 +111,18 @@ flick[L] = RISE(doorPosn[L] & reachedSide[L]);
 	FOR (F = 0; F < FLOORS; F++) {{
 
 /********************************************************************
- *	Lift '[L]' Floor '[F]' outside door control
+ *	Lift '[L+1]' Floor '[F]' outside door control
  ********************************************************************/
 
 imm bit openSlow[L][F], closeSlow[L][F];
 
 QX[FPLF].[F%8] = IX[FPLF].[F%8] & reachedTarget[L];		// Floor '[F]' select button inside cage
-	IF (F > 0) {{
+	    IF (F > 0) {{
 QX[FPLF+1].[F%8] = IX[FPLF+1].[F%8] & reachedTarget[L];		// Floor '[F]' select button down on outside wall
-	}}
-	IF (F < FLOORS-1) {{
+	    }}
+	    IF (F < FLOORS-1) {{
 QX[FPLF+2].[F%8] = IX[FPLF+2].[F%8] & reachedTarget[L];		// Floor '[F]' select button up on outside wall
-	}}
+	    }}
 imm bit selFloor[L][F]     = IX[FPLF].[F%8] IF (F > 0) {{ | IX[FPLF+1].[F%8] }} IF (F < FLOORS-1) {{ | IX[FPLF+2].[F%8] }};
 imm bit reachedFloor[L][F] = QX[FPLF].[F%8] IF (F > 0) {{ | QX[FPLF+1].[F%8] }} IF (F < FLOORS-1) {{ | QX[FPLF+2].[F%8] }};
 
@@ -135,19 +130,22 @@ imm bit doorPosn[L][F]     =  IX[FPLF+3].[F%8];
 imm bit doorNear[L][F]     = ~IX[FPLF+4].[F%8];
 imm bit doorHome[L][F]     = ~IX[FPLF+5].[F%8];
 
-imm bit doorTarget[L][F]   = SR(RISE(reachedFloor[L][F]) | openDoor[L] & (cagePosn[L] == [F]), doorCloseReq[L]);
+imm bit doorTarget[L][F]   = SR(RISE(reachedFloor[L][F]) | openDoor[L] & (cagePosn[L] == [F]), doorCloseReq[L] | reset[L]);
 imm bit rightSide[L][F]    = doorTarget[L][F]  ^ ~doorPosn[L][F];
 imm bit nearSide[L][F]     = rightSide[L][F] &  doorNear[L][F];
 imm bit reachedSide[L][F]  = rightSide[L][F] &  doorHome[L][F];
 imm bit open[L][F]         =  doorTarget[L][F] & ~doorPosn[L][F] & ~closeSlow[L][F];
 imm bit close[L][F]        = ~doorTarget[L][F] &  doorPosn[L][F] & ~openSlow[L][F];
-        openSlow[L][F]     = SR(open[L][F],         reachedSide[L][F]);
-        closeSlow[L][F]    = SR(close[L][F],        reachedSide[L][F]);
-imm bit doorFast[L][F]     = SR(open[L][F] | close[L][F], nearSide[L][F]);
+        openSlow[L][F]     = SR(open[L][F],         reachedSide[L][F] | reset[L]);
+        closeSlow[L][F]    = SR(close[L][F],        reachedSide[L][F] | reset[L]);
+imm bit doorFast[L][F]     = SR(open[L][F] | close[L][F], nearSide[L][F] | reset[L]);
 
 QX[FPLF+3].[F%8] = openSlow[L][F];
 QX[FPLF+4].[F%8] = closeSlow[L][F];
 QX[FPLF+5].[F%8] = doorFast[L][F];
+
+QX[FPLF+6].[F%8] = down[L];		// show outside down indicator
+QX[FPLF+7].[F%8] = up[L];		// show outside up indicator
 
 flick[L][F] = RISE(doorPosn[L][F] & reachedSide[L][F]);
 	}}

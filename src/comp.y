@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.105 2012/09/23 04:52:26 jw Exp $";
+"@(#)$Id: comp.y,v 1.106 2012/11/13 04:33:17 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2521,7 +2521,7 @@ funcBody
 
 returnStatement
 	: RETURN ractexpr		{
-		$$.f = $2.f; $$.l = $2.l;		/* TODO $$.f should be func$ */
+		$$.f = $2.f; $$.l = $2.l;		/* TD $$.f should be func$ */
 		$$.v = returnStatement(&$2);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "returnStatement: RETURN ractexpr", &$$);
@@ -3009,7 +3009,7 @@ immCarray
 			    sp->type = ERR;
 			} else {
 			    if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
-				if (sp->type != ERR) {	/* TODO might be assertion because tested in extern decl */
+				if (sp->type != ERR) {	/* TD might be assertion because tested in extern decl */
 				    ierror("array member type does not match type of whole array:", tsp->name);
 				    sp->type = ERR;	/* can only happen if member alread existed */
 				}
@@ -3425,7 +3425,7 @@ extimmCarrayHead
 		    sp->v_cnt = $4.v;			/* array size or 0 */
 		} else {
 		    warning("second extern array declaration - ignored:", $2.v->name);
-		} /* TODO FIX */
+		} /* TD FIX */
 		if (iFunSymExt) {
 		    ierror("extern array declaration in function definition after assignment:", $2.v->name);
 		    sp->type = ERR;			/* stop use as a statement in function */
@@ -4507,7 +4507,7 @@ iClex(void)
 	    } else
 	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 0 LVARC 0 ... NUMBER ... val not needed */
 		c = lex_act[symp->ftype];	/* UNDEF AVAR LVAR ..YYERRCODE.. AOUT LOUT CVAR TVAR */
-	    } else if (typ != NUMBER && symp->ftype == UDFA) {
+	    } else if ((typ == ARNC || typ == LOGC) && symp->ftype == UDFA) {
 		c = IMMCARRAY;			/* UDFA ARNC and UDFA LOGC are immC arrays not UNDEF */
 	    }
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {
@@ -4911,7 +4911,7 @@ copyCfrag(char s, char m, char e, FILE * oFP)
 	    }
 	} else if (c == e) {			/* ')' or '}' */
 	    if (--brace <= 0) {
-		/* TODO fix lineno and name */
+		/* TD fix lineno and name */
 		if (brace == 0 && c == '}') {
 		    putc(c, oFP);		/* output '}' */
 		}

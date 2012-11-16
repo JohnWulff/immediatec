@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.57 2012/07/16 06:33:12 jw Exp $";
+"@(#)$Id: ict.c,v 1.58 2012/11/13 04:26:50 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -164,6 +164,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	fclose(iC_errFP);
     }
     iC_errFP = stderr;			/* standard error from here */
+    if (iC_micro) iC_microReset(0);	/* start timing */
 
     if ((gp = iC_TX0p) != 0) {		/* are EOI or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7 */
@@ -191,7 +192,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
 
 	/* Start TCP/IP communication before any inputs are generated => outputs */
-	if (iC_micro) iC_microReset(04);
 	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM);
 	if (iC_debug & 04) fprintf(iC_outFP, "%s: I/O registration objects\n", iC_iccNM);
 	for (i = 0; i < 3; i++) {
@@ -251,7 +251,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    /********************************************************************
 		     * buffer is about to overflow
 		     *******************************************************************/
-		    if (iC_micro) iC_microPrint("partial registration", 0);
+		    if (iC_micro & 06) iC_microPrint("partial registration", 0);
 		    regAck(sopp, opp);		/* send/receive partial registration */
 		    sopp = opp;
 		    tbp = regBuf;		/* start new string */
@@ -264,11 +264,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    }
 	}
 	strncpy(tbp + el, ",Z", tbc - el);	/* place termination in regBuf - 2 bytes are free */
-	if (iC_micro) iC_microPrint("last registration", 0);
+	if (iC_micro & 06) iC_microPrint("last registration", 0);
 	assert(opp == sTend);
 	regAck(sopp, opp);			/* send/receive last registration */
 	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
-	if (iC_micro) iC_microPrint("Send application name", 0);
+	if (iC_micro & 06) iC_microPrint("Send application name", 0);
 	iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
     }
 
@@ -404,7 +404,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
      *  Operational loop
      *******************************************************************/
     for (;;) {
-	if (iC_micro & 06) iC_microPrint("Input", 0);
 	if (++iC_mark_stamp == 0) {	/* next generation for check */
 	    iC_mark_stamp++;		/* leave out zero */
 	}
@@ -460,7 +459,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	 *******************************************************************/
 	if (msgOffset > liveOffset) {
 	    iC_send_msg_to_server(sockFN, msgBuf);
-	    if (iC_micro) iC_microReset(0);
 	}
 	/********************************************************************
 	 *  Initialise msgBuf for live data collection during next loop
@@ -493,6 +491,17 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
 	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
 
+	/********************************************************************
+	 *  Send output data collected in outBuf to iCserver
+	 *******************************************************************/
+	if (iC_outOffset > 1) {		/* if any item it is at least 2 long 'x,' */
+	    iC_outBuf[iC_outOffset - 1] = '\0';	/* clear last ',' */
+	    iC_send_msg_to_server(sockFN, iC_outBuf);
+	    memset(iC_outBuf, 0, REQUEST);	/* clear for next data from iC_outMw() */
+	    iC_outOffset = 0;
+	}
+	if (iC_micro) iC_microPrint("Scan complete", 0);
+
 	if (iC_osc_gp) {
 	    fprintf(iC_outFP,
 		"*** Warning: %s has oscillated %d times - check iC program!!!\n",
@@ -514,20 +523,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		fprintf(iC_outFP, "\n");
 	    }
 	    fprintf(iC_outFP, "======== WAIT ==========\n");
+	    fflush(iC_outFP);
 	}
 #endif	/* YYDEBUG */
-
-	/********************************************************************
-	 *  Send output data collected in outBuf to iCserver
-	 *******************************************************************/
-	if (iC_outOffset > 1) {		/* if any item it is at least 2 long 'x,' */
-	    iC_outBuf[iC_outOffset - 1] = '\0';	/* clear last ',' */
-	    if (iC_micro) iC_microPrint("New Send", 0);
-	    iC_send_msg_to_server(sockFN, iC_outBuf);
-	    memset(iC_outBuf, 0, REQUEST);	/* clear for next data from iC_outMw() */
-	    iC_outOffset = 0;
-	    if (iC_micro) iC_microReset(0);
-	}
 
 	/********************************************************************
 	 *  Input from external input modules and time input (if used)
@@ -539,7 +537,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		cnt++;				/* gates have been linked to alternate list */
 		iC_osc_flag = 0;		/* normal timer operation again */
 	    }
-	    if (iC_micro & 02) iC_microReset(0);
 
 	    if (retval == 0) {
 		if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
@@ -579,7 +576,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			goto skipT4;			/* excuse spaghetti - faster without flag */
 		    }
 		linkT4:
-		    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
+		    if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+		    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;		/* complement input */
 		    iC_link_ol(gp, iC_o_list);
@@ -613,7 +611,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			    goto skipT5;		/* excuse spaghetti - faster without flag */
 			}
 		    linkT5:
-			if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
+			if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;	/* complement input */
 			iC_link_ol(gp, iC_o_list);
@@ -647,7 +646,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				goto skipT6;		/* excuse spaghetti - faster without flag */
 			    }
 			linkT6:
-			    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
+			    if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+			    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;	/* complement input */
 			    iC_link_ol(gp, iC_o_list);
@@ -681,7 +681,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				    goto skipT7;	/* excuse spaghetti - faster without flag */
 				}
 			    linkT7:
-				if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
+				if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+				if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				gp->gt_val = - gp->gt_val;	/* complement input */
 				iC_link_ol(gp, iC_o_list);
@@ -699,7 +700,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    /********************************************************************
 		     *  TCP/IP input
 		     *******************************************************************/
-		    if (iC_micro) iC_microReset(04);
 		    if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
 #if	INT_MAX == 32767 && defined (LONG16)
 			long		val;
@@ -709,6 +709,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			unsigned short	channel;
 			static int	liveFlag;
 
+			if (iC_micro && !cnt) iC_microPrint("Input received", 0);
 			if (isdigit(rpyBuf[0])) {
 			    assert(Channels);
 			    cp = rpyBuf; cp--;
@@ -732,12 +733,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #if	YYDEBUG
 					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t", gp->gt_ids);
 #if	INT_MAX == 32767 && defined (LONG16)
-					    /* TODO - format for byte, word or long */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "0x%02lx ==>> 0x%02lx",
-						gp->gt_old, gp->gt_new);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t0x%02lx ==>> 0x%02lx",
+						channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "0x%02x ==>> 0x%02x",
-						gp->gt_old, gp->gt_new);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t0x%02x ==>> 0x%02x",
+						channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
 					    cnt += iC_traMb(gp, 0);	/* distribute bits directly */
@@ -746,16 +746,14 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #if	YYDEBUG
 					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s[\t", gp->gt_ids);
 #if	INT_MAX == 32767 && defined (LONG16)
-					    /* TODO - format for byte, word or long */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%ld ==>", gp->gt_old);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==>", channel, gp->gt_new, gp->gt_old);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%d ==>", gp->gt_old);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>", channel, gp->gt_new, gp->gt_old);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
 					    iC_link_ol(gp, iC_a_list);	/* no actions */
 #if	YYDEBUG
 #if	INT_MAX == 32767 && defined (LONG16)
-					    /* TODO - format for byte, word or long */
 					    if (iC_debug & 0100) fprintf(iC_outFP, " %ld", gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 					    if (iC_debug & 0100) fprintf(iC_outFP, " %d", gp->gt_new);
@@ -787,11 +785,29 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						    int		len;
 						    int		rest;
 						    int		fni;
+						    int		i;
 						    int		inverse = 0;
 						    char *	ids;
+						    Gate *	gm;
 
 						    gp = *opp;
 						    ids = gp->gt_ids;
+						    fni = gp->gt_fni;
+						    if (fni == UDFA && (gp->gt_ini == -ARNC || gp->gt_ini == -LOGC)) {
+							for (i = 0; i < gp->gt_old; i++) {	/* immC array */
+							    gm = gp->gt_rlist[i];	/* immC member */
+							    fni = MAX_FTY + gm->gt_fni;	/* match iClive */
+							    while (rest = REQUEST - regOffset, (len =
+								snprintf(&regBuf[regOffset], rest, ";%s[%d] %d %d",
+								ids, i, fni, gm->gt_live)) < 0 || len >= rest) {
+								regBuf[regOffset] = '\0';	/* terminate */
+								if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
+								iC_send_msg_to_server(sockFN, regBuf);
+								regOffset = liveOffset;
+							    }
+							    regOffset += len;
+							}
+						    }
 						    fni = gp->gt_fni;
 						    while (gp->gt_ini == -ALIAS) {
 							if (gp->gt_fni == GATE || gp->gt_fni == GATEX) {
@@ -808,24 +824,21 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 							snprintf(&regBuf[regOffset], rest, ";%s %d", ids, fni)
 							) < 0 || len >= rest) {
 							regBuf[regOffset] = '\0';	/* terminate */
-							if (iC_micro) iC_microPrint("Send Symbols intermediate", 0);
+							if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
 							iC_send_msg_to_server(sockFN, regBuf);
-							if (iC_micro) iC_microReset(0);
 							regOffset = liveOffset;
 						    }
 						    regOffset += len;
 						}
 						if (regOffset > liveOffset) {
-						    if (iC_micro) iC_microPrint("Send Symbols", 0);
+						    if (iC_micro & 06) iC_microPrint("Send Symbols", 0);
 						    iC_send_msg_to_server(sockFN, regBuf);
-						    if (iC_micro) iC_microReset(0);
 						}
 						/* end of symbol table - execute scan - follow with '0' to leave in iCserver */
 						regOffset = snprintf(regBuf, REQUEST, "%hu:4,%hu:0", C_channel, C_channel);
-						if (iC_micro) iC_microPrint("Send Scan Command", 0);
+						if (iC_micro & 06) iC_microPrint("Send Scan Command", 0);
 						iC_send_msg_to_server(sockFN, regBuf);
 						liveFlag = 1;		/* live inhibit bits are set */
-						if (iC_micro) iC_microReset(0);
 						break;
 
 					    case 3:		/* RECEIVE_ACTIVE_SYMBOLS */
@@ -842,7 +855,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						 *******************************************************************/
 						if (msgOffset > liveOffset) {
 						    iC_send_msg_to_server(sockFN, msgBuf);
-						    if (iC_micro) iC_microReset(0);
 						}
 						msgOffset = liveOffset;		/* msg = "C_channel:3" */
 						cp1 = rpyBuf;
@@ -877,7 +889,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						 *******************************************************************/
 						if (msgOffset > liveOffset) {
 						    iC_send_msg_to_server(sockFN, msgBuf);
-						    if (iC_micro) iC_microReset(0);
 						}
 						msgOffset = liveOffset;		/* msg = "C_channel:3" */
 						if (val == 4) {
@@ -897,9 +908,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						}
 						/* poll iClive with 'ch:2;<name>' */
 						regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
-						if (iC_micro) iC_microPrint("Send application name", 0);
+						if (iC_micro & 06) iC_microPrint("Send application name", 0);
 						iC_send_msg_to_server(sockFN, regBuf);
-						if (iC_micro) iC_microReset(0);
 						break;
 
 					    case 5:		/* GET_END */
@@ -914,7 +924,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						}
 						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
 						iC_send_msg_to_server(sockFN, regBuf);
-						if (iC_micro) iC_microReset(0);
 						break;
 
 					    case 6:		/* STOP PROGRAM */
@@ -995,7 +1004,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
     if (iC_debug & 04) fprintf(iC_outFP, "register:%s\n", regBuf);
     iC_send_msg_to_server(sockFN, regBuf);	/* register controller and IOs */
     if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
-	if (iC_micro) iC_microPrint("reply from server", 0);
+	if (iC_micro & 06) iC_microPrint("reply from server", 0);
 	if (iC_debug & 04) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 	if (Channels == NULL) {
 	    // C channel - messages from controller to debugger
@@ -1155,13 +1164,12 @@ void iC_quit(int sig)
 	    /* disconnect iClive - follow with '0' for iCserver */
 	    regOffset = snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
 	    iC_send_msg_to_server(sockFN, regBuf);
-	    if (iC_micro) iC_microReset(0);
 #ifdef	WIN32
 	    Sleep(200);				/* 200 ms in ms */
 #else	/* WIN32 */
 	    usleep(200000);			/* 200 ms in us */
 #endif	/* WIN32 */
-	    if (iC_micro) iC_microPrint("disconnected", 0);
+	    if (iC_micro) iC_microPrint("Disconnected", 0);
 	}
 	close(sockFN);				/* close connection to iCserver */
     }

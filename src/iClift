@@ -1,13 +1,71 @@
 #!/usr/bin/perl
 ########################################################################
-##
-##	iClift
-##	simulation of the physics and appearance of lifts in a building
-##
+#
+#	Copyright (C) 2000-2012  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file
+#
+#	iClift
+#	Simulation of the physics and appearance of lifts in a building
+#	with IEC inputs sent to an iC control application from simulated
+#	sensors and buttons
+#	and using IEC outputs received from an iC control application to
+#	initiate and stop simulated movement and to reset buttons.
+#
+#	For measuring reaction times the Module Time::HiRes may be used.
+#	This activates the -m option.
+#	Make sure you have installed Time::HiRes (provided in this distribution)
+#
 ########################################################################
-use Tk;
+
+use Tk;			# The graphical user interface toolkit perl/Tk
+			##                   by Nick Ing-Simmons
+use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+			##                   by Sriram Srinivasan
+			## modified by John Wulff to inhibit Nagle's algorithm
+			## which is essential for this application
 use strict;
 use warnings;
+$| = 1;			# autoflush STDOUT when outputting to a pipe or a file which is looked at by less (F)
+
+my @ArgNames;		# stores IO names and initialisers as generated from lifts and floors
+my @ChannelNames;	# stores IO names with instance for each registered channel
+my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
+my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
+my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
+my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
+my %IONames;		# stores channel for each IO name (aux use in initial pass)
+my $UnitRegistrations;	# stores the registration string
+my $testCount   = 0;	# count test runs initiated by -C option
+my $cmdFlag     = 0;	# delay execution of Q commands at start up
+my $hidden      = 0;	# 0 normal, 1 hidden, 2 show coloured wall
+my @hide_next   = (1, 2, 0);
+my @normal_hide = ('normal', 'hidden', 'normal');
+my @transp_show = ('transparent', 'transparent', undef);
+
+my @masks       = (1, 2, 4, 8, 16, 32, 64, 128);
+my @bitIndex    = (
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x20
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x40
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x80
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+);
 
 ########################################################################
 #
@@ -16,48 +74,144 @@ use warnings;
 ########################################################################
 
 my $named = $0; $named =~ s#.*[/\\]##;
-use vars qw($opt_c $opt_d $opt_W $opt_H $opt_t $opt_m $opt_T $opt_h);
+my ($host, $port, $name);
+use vars qw($opt_s $opt_p $opt_n $opt_i $opt_c $opt_d $opt_L $opt_F $opt_w $opt_k $opt_v $opt_o $opt_g
+    $opt_U $opt_J $opt_R $opt_u $opt_j $opt_r $opt_x $opt_t $opt_m $opt_T $opt_b $opt_B $opt_C $opt_I $opt_K $opt_h);
+my $ofh = select(STDERR);	# save old file handle
+$= = 1000;			# stop page overflow (default 60 lines)
+select($ofh);			# retore old file handle
+
 format STDERR =
 Usage:
-@<<<<<< [-tmTh][ -c cage_delay][ -d door_type][ -W width][ -H height]
+@<<<<<  [-tmTCIKxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-	-c del	delay between cage steps (default @<<< ms)
+	[ -L lifts][ -F floors|<basement>,<ground>,<top floor>] etc
+
+    Simulation of the physics and appearance of lifts in a building
+    with IEC inputs sent to an iC control application from simulated
+    sensors and buttons
+    and using IEC outputs received from an iC control application to
+    initiate and stop simulated movement and to reset buttons.
+
+	-s host	host name of server        (default localhost )
+	-p port	service port of server     (default 8778      )
+	-n name	registration name          (default iClift    )
+	-i inst instance ID for this iClift (1 to 3 numeric digits)
+	-L lifts  number of lifts          (default @<< lifts )
+						$opt_L
+	-F floors number of floors         (default @<< floors)
+						$opt_F
+	-b file	generate an iCbox ID parameter file for monitoring
+	-B file	generate an iCbox ID parameter file with comments
+	-C	run continuous test   (supported by controller)
+	-I	show up/down indicators in cage
+	-c del	delay between cage steps   (default @<< ms    )
 						$opt_c
 	-d typ	door type 0 open from centre, 1 left, -1 right
-	-W pix	width of canvas in pixels  (default @<<<)
-						$opt_W
-	-H pix	height of canvas in pixels (default @<<<)
-						$opt_H
+	-w pix	wall width                 (default @<< pixels)
+						$opt_w
+	-k pix	wall height                (default @<< pixels)
+						$opt_k
+	-v pix	door opening width         (default @<< pixels)
+						$opt_v
+	-g pix	door opening height        (default @<< pixels)
+						$opt_g
+	-o pix	door opening offset        (default @<< pixels)
+						$opt_o
+	-U pix	cage width                 (default @<< pixels)
+						$opt_U
+	-J pix	cage height                (default @<< pixels)
+						$opt_J
+	-R pix	cage sensor offset         (default @<< pixels)
+						$opt_R
+	-u pix	door width                 (default @<< pixels)
+						$opt_u
+	-j pix	door height                (default @<< pixels)
+						$opt_j
+	-r pix	door sensor offset         (default @<< pixels)
+						$opt_r
 	-t	trace debug messages
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
+	-x	exit after analyzing input parameters
 	-h	help, ouput this Usage text only
 
- Key bindings:
-    shift buttons
-	<-	open door
-	->	close door
-	@	move lift up	Page up    fast    Home   up continuous
-	'^'
-	v	move lift down	Page down  fast    End    down continuous
-	Ret	stop continuous
-	roll	move with respect to floors
+	-K	activate the following Key bindings: (default off)
+	    @	move lift 0 up   Home up continuous   Page up   fast
+	    '^'
+	    v	move lift 0 down End  down continuous Page down slow
+	    Ret	stop lift 0 continuous movement
 
-	q	quit
+	    <-	open  inside  door for lift 0 floor 0
+	    ->	close inside  door for lift 0 floor 0
+	    u 	open  inside  door for lift 0 continuous
+	    i 	close inside  door for lift 0 continuous
+	    o 	stop  inside  door for lift 0 continuous
+	    y 	fast  inside  door for lift 0
+	    t 	slow  inside  door for lift 0
+
+	    j 	open  outside door for lift 0
+	    k 	close outside door for lift 0
+	    g 	open  outside door for lift 0 continuous
+	    h 	close outside door for lift 0 continuous
+	    l 	stop  outside door for lift 0 continuous
+	    f 	fast  outside door for lift 0
+	    d 	slow  outside door for lift 0
+
+	    J 	open  outside door for lift 1
+	    K 	close outside door for lift 1
+	    G 	open  outside door for lift 1 continuous
+	    H 	close outside door for lift 1 continuous
+	    L 	stop  outside door for lift 1 continuous
+	    F 	fast  outside door for lift 1
+	    D 	slow  outside door for lift 1
+
+	    w	hide/show all walls        (always active)
+	    q	quit                       (always active)
+
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.8 2012/06/08 04:48:01 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClift,v 1.9 2012/11/14 02:55:28 jw Exp $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
 require "getopts.pl";
-&Getopts('c:d:W:H:tmTh');	# sets $opt_h if -h etc
+&Getopts('s:p:n:i:c:d:L:F:w:k:v:o:g:U:J:R:u:j:r:tmTb:B:CIKxh');	# sets $opt_h if -h etc
+
+########################################################################
+#	Note: all parameter y coordinates are reversed like engineering drawings
+########################################################################
 
 $opt_c = 7 unless defined $opt_c;	# delay between cage steps
 $opt_d = 0 unless defined $opt_d;	# door type 0 open from centre, 1 left, -1 right
-$opt_W = 400 unless defined $opt_W;	# width of canvas in pixels
-$opt_H = 850 unless defined $opt_H;	# height of canvas in pixels
-my $to = 2;			# triangle offset in square buttons
+$opt_L = 1 unless defined $opt_L;	# number of lifts
+$opt_F = 3 unless defined $opt_F;	# number of floors
+
+$opt_w = 255 unless defined $opt_w;	# wall width		(300)
+$opt_k = 175 unless defined $opt_k;	# wall height		(195)
+$opt_v = 100 unless defined $opt_v;	# door opening width
+$opt_g = 133 unless defined $opt_g;	# door opening height
+$opt_o = 15 unless defined $opt_o;	# door opening offset	(35)
+
+$opt_U = 110 unless defined $opt_U;	# cage width
+$opt_J = 145 unless defined $opt_J;	# cage height
+$opt_R = 10 unless defined $opt_R;	# cage sensor offset
+
+$opt_u = 55 unless defined $opt_u;	# door width
+$opt_j = 137 unless defined $opt_j;	# door height
+$opt_r = 5 unless defined $opt_r;	# door sensor offset
+
+my $tro = 2;				# triangle offset in square buttons
+
+my $i = '';
+if (defined $opt_i and $opt_i ne '') {
+    if ($opt_i =~ /^\d{1,3}$/) {	# INSTSIZE 3 defined in icc.h
+	$i = "-$opt_i";
+	print "instance = '$i'\n" if $opt_t;
+    } else {
+	warn "$named: badly formed option -i $opt_i - ignored\n";
+    }
+}
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -69,374 +223,1767 @@ if ($opt_m) {
     $t0 = [gettimeofday];	# start of program
 }
 
-my $thickness = 1;
-my $ropeThickness = 3;
-my $cageD = $opt_c;
+my ($lifts, $floors, $lift, $floor, $fR, $lw);
+my @floorNames = ();
+
+if ($opt_F =~ m/^\d+$/) {
+    $floors = $opt_F;
+    $lw     = $floors >= 100 ? 3 : 2;
+    for ($floor = 0; $floor < $floors; $floor++) {
+	push @floorNames, $floor;
+    }
+} elsif ($opt_F =~ m/((\D)(\d+))?,(.+),(\D)?(\d+)/) {
+    my $lower = defined $1 ? $3 : 0;
+    my $first = $4 eq "1" ? 1 : 0;
+    my $upper = defined $5 ? $5 : '';
+    $floors = $lower + 1 + $6 - $first;
+    $lw     = $lower >= 10 || $upper && $6 >= 10 || $6 >= 100 ? 3 : 2;
+    for ($floor = $lower; $floor > 0; $floor--) {
+	push @floorNames, "$2$floor";		# lower floors
+    }
+    push @floorNames, "$4";			# ground floor
+    for ($floor = 1 + $first; $floor <= $6; $floor++) {
+	push @floorNames, "$upper$floor";	# upper floors
+    }
+} else {
+    warn "$named: bad floor specification '-F $opt_F'\n";
+    write STDERR; exit 0;	# Usage
+}
+push @floorNames, ('AL', '><', '<>');
+$lifts = $opt_L;
+if ($floors < 2 or $lifts < 1) {
+    warn "$named: bad floor specification: $floors floor is not enough\n" if $floors < 2;
+    warn "$named: bad lift specification:  $lifts lifts is not enough\n" if $lifts < 1;
+    write STDERR; exit 0;	# Usage
+}
+print "lifts = $lifts, floors = $floors: @floorNames\n" if $opt_t;
+
+########################################################################
+#
+#	Produce a pseudo argument list similar to that used in iCbox
+#	as well as other auxiliary hashes.
+#
+## @Args = ('IB0', 'QX0', 'IX1', 'QX1,0b11100000',					# once per lift
+##	('X2,0b111', 'X3,0b111', 'X4,0b111', 'X5,0b111', 'X6,0b111', 'X7,0b111'));	# for 1 lift with 3 floors
+#
+## %Iec  key	"usage:$lift" 		where usage is independent of the floor
+##	 val	IECid			for that usage and lift nr
+##   or  key	"usage:$lift:$floor"	where $floor is every 8th floor
+##	 val	IECid			for that usage lift nr and floor group
+#
+## %IecC key	QXy[,0b111...]		IECid of a received output with optional bit field
+##	 val	[ "comment string" ]	Comment string to be output with -B ID_file for IECid
+#
+#	&iCmd initalises specific command arrays in %Cmd for QXy.x outputs from the controller
+#	which require an action routine. &iCmd cannot be called until after all walls and doors have
+#	been drawn and all I/Os generated in @Args have been registered, because &iCmd uses the
+#	QXy.x channel nummer in the specific command.
+#	Therefore all lifts and floors are looped through here to generate @Args, %Iec, %IecC and %But.
+#	After registration an identical set of loops calls &iCmd to initialise %Cmd correctly.
+#
+## &iCmd(USE, QXy, lift [floor])	initialises %Cmd for each bit QXy.0 .. QXy.7 from %Cmds
+#
+## %Cmds key	"USE.bit:val"		detailed call for each USE, bit and val 1 or 0
+##  or	 key	"USE:val"		for outside doors, where bit is derived from floor
+##	 val	( '\call, arg1, ...' )	generic command string with arguments supplied by &iCmd
+#
+## %Cmd  key	chR.x:val		IECid of a received output which triggers a command
+##	 val	[ \call, arg1, ... ]	specific command call with arguments derived from &iCmd
+#
+#	This application uses regular Tk buttons or buttons with own graphics in an unusual way.
+#	Normal Tk buttons are switched on and off from the graphics Perl/Tk program. Using one
+#	bit in a Send channel influencing IXy.x in the control application.
+#	The special transient buttons use two bit signals. IXy.x to Send the button press 'on'
+#	information. QXy.x (where y and x match IXy.x) is used by the controller to reset the
+#	button in the graphics when a short 1 followed by a 0 is sent. Not only does the colour
+#	of the corresponding button change to 'off'. The Tk program also sends a '0' back to
+#	the controller on IXy.x to indicate that the button is now off. This transition can be
+#	used at the controller to turn the reset signal on QXy.x to '0'. That way a round trip
+#	feedback is ensured, because short transients on a send line can get lost.
+#	Transient buttons can be reset in the regular way before a reset is sent from the
+#	controller - but it is not the way those buttons are supposed to be used. Control
+#	applications must take this fact into account. A floor select button in a lift cage
+#	may select a floor. Before reaching that floor, the user may change his mind and deselect
+#	that floor and select another floor. (This is a mode I have always wished for in lifts).
+#
+## %But  key	QXy-i	 		IECid with instance of a received output from controller
+##	 val	bit_field		marks every bit x in this QXy.x, which is a Button reset
+##  or   key	IXy-i.x			IECid with instance of a sent input which is an own Button
+##	 val	button_id		button which needs colour change when reset received
+#
+########################################################################
+
+my %Cmd  = ();				# specific command call with arguments derived from &iCmd
+my %Cmds = (				# generic command call with arguments derived from &iCmd
+    'Actuators.0:1' =>	'@cmdArray = ( \&fill_indicator, 0, $cages[$lift][0], 6, \'red\', );',	# Cage down indicators on  (optional)
+    'Actuators.0:0' =>	'@cmdArray = ( \&fill_indicator, 0, $cages[$lift][0], 6, \'grey\',);',	# Cage down indicators off (optional)
+    'Actuators.1:1' =>	'@cmdArray = ( \&fill_indicator, 0, $cages[$lift][0], 7, \'red\', );',	# Cage up indicators on    (optional)
+    'Actuators.1:0' =>	'@cmdArray = ( \&fill_indicator, 0, $cages[$lift][0], 7, \'grey\',);',	# Cage up indicators off   (optional)
+
+    'Actuators.2:1' =>	'@cmdArray = ( \&move_door, 0, $cages[$lift][0]->[3][0], $lift, -1, 1,  $slow,
+    	\$cages[$lift][0]->[3][1], \$cages[$lift][0]->[3][2], \1, \1, );',		# Inside doors open slow
+    'Actuators.2:0' =>	'@cmdArray = ( \&move_door, 0, $cages[$lift][0]->[3][0], $lift, -1, 0,     0,
+    	\$cages[$lift][0]->[3][1], \$cages[$lift][0]->[3][2], \1, \1, );',		# Inside doors stop open
+    'Actuators.3:1' =>	'@cmdArray = ( \&move_door, 0, $cages[$lift][0]->[3][0], $lift, -1, -1, $slow,
+    	\$cages[$lift][0]->[3][1], \$cages[$lift][0]->[3][2], \1, \1, );',		# Inside doors close slow
+    'Actuators.3:0' =>	'@cmdArray = ( \&move_door, 0, $cages[$lift][0]->[3][0], $lift, -1, 0,     0,
+    	\$cages[$lift][0]->[3][1], \$cages[$lift][0]->[3][2], \1, \1, );',		# Inside doors stop close
+    'Actuators.4:1' =>	'@cmdArray = ( \&move_door, 0, $cages[$lift][0]->[3][0], $lift, -1, undef, $fast,
+	\$cages[$lift][0]->[3][1], \$cages[$lift][0]->[3][2], \$ChannelsQX[$chO][2], \$ChannelsQX[$chC][3], );',# Inside doors fast
+    'Actuators.4:0' =>	'@cmdArray = ( \&move_door, 0, $cages[$lift][0]->[3][0], $lift, -1, undef, $slow,
+	\$cages[$lift][0]->[3][1], \$cages[$lift][0]->[3][2], \$ChannelsQX[$chO][2], \$ChannelsQX[$chC][3], );',# Inside doors slow 
+
+    'Actuators.5:1' =>	'@cmdArray = ( \&move_cage, 0, $cages[$lift][0], 1,     $slow,
+    	\$cages[$lift][1], \$cages[$lift][2], 0, 0, \1, \1, );',			# Lift up slow
+    'Actuators.5:0' =>	'@cmdArray = ( \&move_cage, 0, $cages[$lift][0], 0,     0,
+    	\$cages[$lift][1], \$cages[$lift][2], 0, 0, \1, \1, );',			# Lift stop up
+    'Actuators.6:1' =>	'@cmdArray = ( \&move_cage, 0, $cages[$lift][0], -1,    $slow,
+    	\$cages[$lift][1], \$cages[$lift][2], 0, 0, \1, \1, );',			# Lift down slow
+    'Actuators.6:0' =>	'@cmdArray = ( \&move_cage, 0, $cages[$lift][0], 0,     0,
+	\$cages[$lift][1], \$cages[$lift][2], 0, 0, \1, \1, );',			# Lift stop down
+    'Actuators.7:1' =>	'@cmdArray = ( \&move_cage, 0, $cages[$lift][0], undef, $fast,
+    	\$cages[$lift][1], \$cages[$lift][2], 0, 0, \1, \1, );',			# Lift fast
+    'Actuators.7:0' =>	'@cmdArray = ( \&move_cage, 0, $cages[$lift][0], undef, $slow,
+    	\$cages[$lift][1], \$cages[$lift][2], 0, 0, \1, \1, );',			# Lift slow
+
+    'MiscFuns.0:1' =>	'@cmdArray = ( \&misc_fun0, 0, 1, $lift, $floor, );',		# Turn on a random floor button for testing
+    'MiscFuns.0:0' =>	'@cmdArray = ( \&misc_fun0, 0, 0, $lift, $floor, );',
+    'MiscFuns.1:1' =>	'@cmdArray = ( \&misc_fun1, 0, 1, $lift, $floor, );',		# Null function for now
+    'MiscFuns.1:0' =>	'@cmdArray = ( \&misc_fun1, 0, 0, $lift, $floor, );',
+    'MiscFuns.2:1' =>	'@cmdArray = ( \&misc_fun2, 0, 1, $lift, $floor, );',		# Null function for now
+    'MiscFuns.2:0' =>	'@cmdArray = ( \&misc_fun2, 0, 0, $lift, $floor, );',
+    'MiscFuns.3:1' =>	'@cmdArray = ( \&misc_fun3, 0, 1, $lift, $floor, );',		# Null function for now
+    'MiscFuns.3:0' =>	'@cmdArray = ( \&misc_fun3, 0, 0, $lift, $floor, );',
+    'MiscFuns.4:1' =>	'@cmdArray = ( \&misc_fun4, 0, 1, $lift, $floor, );',		# Null function for now
+    'MiscFuns.4:0' =>	'@cmdArray = ( \&misc_fun4, 0, 0, $lift, $floor, );',
+
+    'DoorOpen:1'    =>	'@cmdArray = ( \&move_door, 0, $doors[$lift][$floor][0], $lift, $floor, 1,     $slow,
+    	\$doors[$lift][$floor][1], \$doors[$lift][$floor][2], \1, \1, );',		# Outside doors open slow
+    'DoorOpen:0'    =>	'@cmdArray = ( \&move_door, 0, $doors[$lift][$floor][0], $lift, $floor, 0,     0,
+    	\$doors[$lift][$floor][1], \$doors[$lift][$floor][2], \1, \1, );',		# Outside doors stop open
+    'DoorClose:1'   =>	'@cmdArray = ( \&move_door, 0, $doors[$lift][$floor][0], $lift, $floor, -1,    $slow,
+    	\$doors[$lift][$floor][1], \$doors[$lift][$floor][2], \1, \1, );',  		# Outside doors close slow
+    'DoorClose:0'   =>	'@cmdArray = ( \&move_door, 0, $doors[$lift][$floor][0], $lift, $floor, 0,     0,
+    	\$doors[$lift][$floor][1], \$doors[$lift][$floor][2], \1, \1, );',  		# Outside doors stop close
+    'DoorFast:1'    =>	'@cmdArray = ( \&move_door, 0, $doors[$lift][$floor][0], $lift, $floor, undef, $fast,
+	\$doors[$lift][$floor][1], \$doors[$lift][$floor][2], \$ChannelsQX[$chO][$bit], \$ChannelsQX[$chC][$bit], );',  # Outside doors fast
+    'DoorFast:0'    =>	'@cmdArray = ( \&move_door, 0, $doors[$lift][$floor][0], $lift, $floor, undef, $slow,
+	\$doors[$lift][$floor][1], \$doors[$lift][$floor][2], \$ChannelsQX[$chO][$bit], \$ChannelsQX[$chC][$bit], );',  # Outside doors slow
+
+    'FloorDnI:1' =>	'@cmdArray = ( \&fill_indicator, 0, $walls[$lift][$floor], 6, \'red\',  );',	# Floor down indicator on
+    'FloorDnI:0' =>	'@cmdArray = ( \&fill_indicator, 0, $walls[$lift][$floor], 6, \'grey\', );',	# Floor down indicator off
+    'FloorUpI:1' =>	'@cmdArray = ( \&fill_indicator, 0, $walls[$lift][$floor], 7, \'red\',  );',	# Floor up indicator on
+    'FloorUpI:0' =>	'@cmdArray = ( \&fill_indicator, 0, $walls[$lift][$floor], 7, \'grey\', );',	# Floor up indicator off
+);
+
+my @Fb = ( '', ',0b1', ',0b11', ',0b111', ',0b1111', ',0b11111', ',0b111111', ',0b1111111', '');	# bit fields for 0..8 bits used
+my @Fc = ( 0, 0b1, 0b11, 0b111, 0b1111, 0b11111, 0b111111, 0b1111111, 0b11111111);	# numerical bit field used as value in %But
+my @Args = ();			# fill dynamically
+my %Iec = ();			# IEC with key: USE:$lift[:$floor]
+my %IecC = ();			# IEC comment with key: IEC[,0b11111111]
+my %But = ();			# true id QXy resets a button, IXy.x wall button
+my $iec;
+my $ii = 0;			# IOindex - start with IB0
+
+########################################################################
+#	Inialise @Args, %Iec, %IecC and %But{QXy}.
+########################################################################
+
+for ($lift = 0; $lift < $lifts; $lift++) {
+    $iec =     "IB$ii$i"; push @Args, $iec;                $Iec{"CagePosn:$lift"}         = $iec;	# IB0
+    $IecC{$iec} = "Cage $lift: current cage position" if $opt_B;
+    $iec =     "QX$ii$i"; push @Args, $iec;                $Iec{"Actuators:$lift"}        = $iec;	# QX0
+    $IecC{$iec} = "Lift $lift: 0 show down 1 up   2 open inside door 3 close 4 fast 5 cage up   6 down 7 fast" if $opt_B;
+											$ii++;
+    $iec =     "IX$ii$i"; push @Args, $iec;                $Iec{"Sensors:$lift"}          = $iec;	# IX1
+    $IecC{$iec} = "Lift $lift: 0 cage near 1 home 2 inside door posn 3 near  4 home 5 AL button 6 ><   7 <>" if $opt_B;
+    $iec =     "QX$ii$i"; push @Args, $iec;                $Iec{"MiscFuns:$lift"}         = $iec;	# QX1
+    $IecC{$iec} = "Lift $lift: 0 - 4 misc_fun0 - misc_fun4        5 AL button reset 6 >< reset  7 <> reset" if $opt_B;
+							 $But{$iec} = 0b11100000;	$ii++;
+    for ($floor = 0; $floor < $floors; $floor += 8) {	# step in floor groups of 8
+	$fR = $floors - $floor;				# $floor = actualFloor & ~0x7 when used as key
+	$fR = 8 if $fR > 8;				# range 1 .. 8
+	$iec = "IX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorSelS:$lift:$floor"} = $iec;	# IX2
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Cage $lift: floor $floor - @{[$floor+$fR-1]} select buttons" if $opt_B;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorSelR:$lift:$floor"} = $iec;	# QX2
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Cage $lift: floor $floor - @{[$floor+$fR-1]} select button resets" if $opt_B;
+							 $But{$iec} = $Fc[$fR];		$ii++;
+	$iec = "IX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorDnS:$lift:$floor"}  = $iec;	# IX3
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} down buttons" if $opt_B;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorDnR:$lift:$floor"}  = $iec;	# QX3
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} down button resets" if $opt_B;
+							 $But{$iec} = $Fc[$fR];		$ii++;
+	$iec = "IX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorUpS:$lift:$floor"}  = $iec;	# IX4
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} up buttons" if $opt_B;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorUpR:$lift:$floor"}  = $iec;	# QX4
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} up button resets" if $opt_B;
+							 $But{$iec} = $Fc[$fR]; $ii++;
+	$iec = "IX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"DoorPosn:$lift:$floor"}  = $iec;	# IX5
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} outside door posn" if $opt_B;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"DoorOpen:$lift:$floor"}  = $iec;	# QX5
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} open outside door" if $opt_B;
+											$ii++;
+	$iec = "IX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"DoorNear:$lift:$floor"}  = $iec;	# IX6
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} outside door near" if $opt_B;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"DoorClose:$lift:$floor"} = $iec;	# QX6
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} close outside door" if $opt_B;
+											$ii++;
+	$iec = "IX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"DoorHome:$lift:$floor"}  = $iec;	# IX7
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} outside door home" if $opt_B;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"DoorFast:$lift:$floor"}  = $iec;	# QX7
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} move outside door fast" if $opt_B;
+											$ii++;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorDnI:$lift:$floor"}  = $iec;	# QX8
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} outside down indicator" if $opt_B;
+											$ii++;
+	$iec = "QX$ii$i"; push @Args, "$iec@{[$Fb[$fR]]}"; $Iec{"FloorUpI:$lift:$floor"}  = $iec;	# QX9
+	$IecC{"$iec@{[$Fb[$fR]]}"} = "Lift $lift: floor $floor - @{[$floor+$fR-1]} outside up indicator" if $opt_B;
+											$ii++;
+	print "lift = $lift, floor = $floor, floorRemainder = $fR, ii = $ii\n" if $opt_t;
+    }
+}
+print "Args: @Args\n" if $opt_t;
+if ($opt_t) {
+    print "Iec:\n";
+    for my $key (sort keys %Iec) {
+	print "$key\t$Iec{$key}\n";
+    }
+}
+
+if ($opt_B or $opt_b) {
+    my ($j, $arg);
+    my $idFile = defined $opt_B ? $opt_B : $opt_b;
+    $idFile =~ s/^(-*)//;		# ignore controlling - in file name
+    my $controlling = $1;		# save - here
+    open OUT, ">$idFile" or die "can't open $idFile for writing: $!";
+    print "idFile = $idFile controlling = $controlling\n" if $opt_t;
+    for ($j = 1; $j < 100000; $j++) {
+	$arg = shift @Args;		# no undef elements pushed
+	last unless $arg;
+	if ($controlling) {
+	    $arg =~ tr/QI/IQ/;		# transpose Q and I for controlling iCbox
+	}
+	if ($opt_B) {
+	    printf OUT "%-16s # %s\n", $arg, $IecC{$arg};
+	} else {
+	    print OUT $arg;
+	    if ($j%10) {
+		print OUT " ";
+	    } else {
+		print OUT "\n";
+	    }
+	}
+    }
+    print OUT "\n" unless $opt_B;
+    close(OUT);
+    exit(0);
+}
+
+########################################################################
+#
+#	Analyse ID parameters	(same as in iCbox - only bitmask is used)
+#
+#	X0 X2	generates inputs and outputs IX0 QX0 IX2 QX2 in that order
+#	B0-B2	generates inputs and outputs IB0 QB0 IB1 QB1 IB2 QB2
+#	IW3 IW7	generates only inputs IW3 and IW7
+#	QL4-QL7 generates only outputs QL4 QL5 QL6 and QL7
+#
+#	Combined input/output or input-only parameters can be initialised
+#	with =<number>.
+#	<number> may be decimal, octal, hexadecimal or binary as follows:
+#	X10=15 X11=017 IX12=0xf IX13=0b1111	all equal decimal 15
+#	only decimal initialisers may be preceded by a minus sign
+#	IW10=-100	initialises IW10 with -100
+#
+#	An initialiser may be placed after the second parameter of a range.
+#	Every input in the range will be initalised to the same value.
+#	IW20-IW27=100	initialises IW20 IW21 .. IW27 with 100
+#	X20-X27=0x3a	initialises IX20 IX21 .. IX27 with 0x3a
+#	Outputs cannot be initialised.
+#
+#	All digital parameters or parameter ranges may optionally be followed
+#	by one number separated by a comma representing a bitmask defining,
+#	whether a particular bit .0 to .7 is defined and should be implemented.
+#	Default ',255' which defines all 8 bits. The easiest way to declare
+#	the bit mask is as a binary number, eg: ',0b10001111'. This declares
+#	that bits .0, .1, .2, .3 and .7 are defined in the application and
+#	should be implemented. The bits which are not defined are left blank.
+#
+#	All analog parameters or parameter ranges may optionally be followed
+#	by two or three comma-separated numbers naming the start, finish
+#	and optionally the resolution of the numbers displayed by the analog
+#	scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
+#	resoltion reverses the direction of the slider. (0 not allowed)
+#
+########################################################################
+
+my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
+							# NOTE: oct() only handles lower case 0b, 0x
+my ($id, $ini, $from, $to, $resolution, $argNameRef);
+
+my ($argv);
+while ($argv = shift @Args) {
+    my ($start_iq_xbwl, $start_iq, $start_xbwl, $start_n, $si, $end_n, $ei, $fr_to_re, @list);
+    if ($argv =~ /^
+		    (				# $1   IEC-1131 ID
+			(			# $2   start_iq_xbwl
+			    ( [IQ]? )		# $3   start_iq
+			    ( [XBWL] )		# $4   start_xbwl
+			)
+			( \d+ )			# $5   start_n IEC addr <<<<<<<
+			(			# $6   optional
+			    -\d{1,3}		#      3 digit instance
+			)?
+		    )
+		    (				# $7   optional
+			\s*-\s*			#      '-' 2nd ID
+			(			# $8   IEC-1131 ID
+			    ( [IQ]?[XBWL] )	# $9   end_iq_xbwl
+			    ( \d+ )		# $10  end_n IEC addr
+			    (			# $11  optional
+				-\d{1,3}	#      3 digit instance
+			    )?
+			)
+		    )?
+		    (				# $12  optional
+			\s*=\s*			#      '='
+			( $nr )			# $13  number ($14 $nr intern)
+		    )?
+		    (				# $15  optional  from, to, resolution
+			(			# $16
+			    \s*,\s*		# ','
+			    $nr			# number ($17 $nr intern)
+			){0,3}
+		    )
+		$/xog) {
+	my ($n);
+	$ini = "0";				# default initial value
+	$start_iq_xbwl = $2;
+	$start_iq = $3;
+	$start_xbwl = $4;
+	$start_n = $end_n = $5;			# start_n addr (end_n in case no range)
+	$si = defined $6 ? $6 : '';		# start instance
+	if ($8) {		# end
+	    $end_n = defined $10 ? $10 : '';	# end_n addr
+	    $ei = defined $11 ? $11 : '';	# end instance
+	    if (not $9 or	# end_iq_xbwl
+		$start_iq_xbwl ne $9 or
+		not $end_n or	# end_n
+		$start_n > $end_n or
+		$si ne $ei)	# start must equal end instance
+	    {
+		goto ARG_WARN;	# iq_xbwl not identical or negative range
+	    }
+	}
+	if ($13) {		# initialiser
+	    if ($start_iq and $start_iq eq 'Q') {
+		warn "$named: $argv: output argument cannot be initialised - ignore initialiser\n";
+	    } else {
+		$ini = convert_nr($13, 0);	# = 0b111
+	    }
+	}
+	unless ($si) {
+	    $si = $i;
+	}
+	$fr_to_re = defined $15 ? $15 : '';
+	if ($fr_to_re) {			# [, start[, finish[, resolution]]]
+	    my $dummy;
+	    print "fr_to_re = $fr_to_re\n" if $opt_t;
+	    ($dummy, $from, $to, $resolution) = split /\s*,\s*/, $fr_to_re;
+	    ########################################################################
+	    ## $from, $to and $resolution are optional, so initialise them if undefined
+	    ## all we know that if they are defined, they consist of a valid number
+	    ## For digital I/O $from contains the bit mask defining which bits are
+	    ## to be used - $to and $resolution are not used and can have any value
+	    ## but they should not be defined by the user.
+	    ########################################################################
+	    $from = convert_nr($from, 0);
+	    if ($start_xbwl eq 'X' and (defined $to or defined $resolution)) {
+		warn "$named: $argv: badly formed digital range mask '($fr_to_re)' - ignored\n";
+	    }
+	    $to = convert_nr($to, 100);
+	    $resolution = convert_nr($resolution, 1);
+	    unless ($resolution) {
+		warn "$named: $argv: resolution '$resolution' must be non-zero - used '1'\n";
+		$resolution = 1;
+	    } elsif ($resolution < 0) {
+		my $tmp = $from;			# reverse direction of scale
+		$from = $to;
+		$to   = $tmp;
+		$resolution = -$resolution;
+	    }
+	} elsif ($start_xbwl eq 'X') {
+	    ($from, $to, $resolution) = (0xff, 0, 0);	# digital I/O default (bit mask for all 8 bits)
+	} else {
+	    ($from, $to, $resolution) = (0, 100, 1);	# analog I/O default
+	}
+	foreach $n ($start_n .. $end_n) {
+	    if ($start_iq) {
+		@list = ("$start_iq_xbwl$n$si");	# generate individual I/Os
+	    } else {
+		@list = ("I$start_iq_xbwl$n$si", "Q$start_iq_xbwl$n$si");	# both I/Os
+	    }
+	    foreach $id (@list) {
+		if ($IONames{$id}) {
+		    print "\n" if $opt_t;
+		    warn "$named: $id occurs twice - ignore second instance\n";
+		} else {
+		    $IONames{$id} = -1;		# mark as unregistered IO
+		    print " $id=$ini" if $opt_t;
+		    push @ArgNames, [ $id, $ini, $from, $to, $resolution ];	# argument order for generating widgets
+		}
+	    }
+	}
+	print "\n" if $opt_t;
+    } else {
+	ARG_WARN: warn "$named: $argv: badly formed ID argument - ignored\n";
+    }
+}
+@ArgNames or die "$named: no valid arguments - cannot make any boxes\n";
+
+if ($opt_t) {
+    print "LIST:\n";
+    foreach $argNameRef (@ArgNames) {
+	my $argLine = join "\t", @$argNameRef;
+	print "     $argLine\n";
+    }
+}
+
+%IONames = ();		# clear for channel entries
+
+########################################################################
+#
+#	Connect to server and register I/Os
+#
+#	Inhibit Nagle's algorithm
+#
+########################################################################
+
+$host = defined $opt_s ? $opt_s : 'localhost';
+$port = defined $opt_p ? $opt_p : 8778;
+$name = $opt_n ? "$opt_n$i" : "$named$i";
+$named = $name;			# use individual ID for warnings from now on
+
+Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
+my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+die "Client '$named' could not connect to $host:$port\n" unless $conn;
+
+############# send registration ############################
+
+my ($label, $direction);
+my $register = 1;		# tested in rcvd_msg_from_server() for registration reply
+my $ri = 0;			# registration index used in rcvd_msg_from_server()
+$UnitRegistrations = "N$name";	# initiate registration string
+
+foreach $argNameRef (@ArgNames) {
+    ($id, $ini, $from, $to, $resolution) = @$argNameRef;
+    $direction = $label = '';
+    if ($id =~ /^I/) {
+	$direction = 'S';
+    } elsif ($id =~ /^Q/) {
+	$direction = 'R';
+    } else {
+	die "$named: invalid argument '$id' - internal error";
+    }
+    if ((length($UnitRegistrations) + length($id)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
+	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+	$conn->send_now($UnitRegistrations);
+	my ($tmsg, $terr) = $conn->rcv_now();
+	print "$named: Reply: $tmsg\n" if $opt_t;
+	rcvd_msg_from_server($conn, $tmsg, $terr);	# receive registration acknowledgment
+	$UnitRegistrations = '';
+    }
+    $UnitRegistrations .= ",$direction$id";	# direction 1 ',Z' 2 term 1
+    print "register: $direction$id	inByte = $ini\n" if $opt_t;
+}
+$UnitRegistrations .= ",Z";	# terminate registration string
+print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+$conn->send_now($UnitRegistrations);
+my ($tmsg, $terr) = $conn->rcv_now();
+print "$named: Reply: $tmsg\n" if $opt_t;
+rcvd_msg_from_server($conn, $tmsg, $terr);	# receive final registration acknowledgment
+
+############# registration analysis ########################
+$ri == scalar @ArgNames or
+    die "$named: $ri: not enough registration replies from iCserver - system error";
+$register = 0;
+############# correct number of registration replies #######
+
+exit if $opt_x;	# deliberate exit with -x option
+
+########################################################################
+#
+#	Main window
+#
+########################################################################
+
+my ($ww, $wh, $dow, $doh, $doo, $cw, $ch, $cso, $dw, $dh, $dso) =
+    ($opt_w, $opt_k, $opt_v, $opt_g, $opt_o, $opt_U, $opt_J, $opt_R, $opt_u, $opt_j, $opt_r);
+my $c_width  = ($ww+5) * ($lifts < 4 ? $lifts : 4);
+my $c_height = ($wh+5) * ($floors < 5 ? $floors : 5) + 2;
 
 my $mw = MainWindow->new;
-$mw->title('Lift Model');
+$mw->title("$named -L $opt_L -F $opt_F");
 
-my $f = $mw->Frame(-relief   => 'groove',
-		-bd     => 2,
-	       )->pack(
-		-side => 'left',
-		-fill => 'y'
-	       );
-
-my $c = $mw->Scrolled('Canvas',
-		-cursor => 'left_ptr',
-		-width  => $opt_W,
-		-height => $opt_H,
-	       )->pack(
-		-side => 'left',
-		-fill => 'both',
-		-expand => 1,
-	       );
+my $c = $mw->Scrolled(
+    'Canvas',
+    -cursor => 'left_ptr',
+    -width  => $c_width,
+    -height => $c_height,
+)->pack( -side => 'left', -fill => 'both', -expand => 1,);
 my $canvas = $c->Subwidget('canvas');
 
-my $cageId;
-my $cage = draw_cage($canvas, 165, $opt_H - 215, 110, 145);
-my $door = draw_door($canvas, 165, $opt_H - 217,  55, 137, 2, $opt_d);
-my $wall_3 = draw_wall($canvas, 165, $opt_H - 215, 300, 200, 100, 133);
-my $wall_2 = draw_wall($canvas, 165, $opt_H - 420, 300, 200, 100, 133);
-my $wall_1 = draw_wall($canvas, 165, $opt_H - 625, 300, 200, 100, 133);
-my $wall_0 = draw_wall($canvas, 165, $opt_H - 830, 300, 200, 100, 133);
-$c->configure(-scrollregion => [$c->bbox("all")]);	# define scroll region
-# my ($canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd) = @$wall;
+my (@cages, @doors, @walls, @floor_text);
+@walls       = ();	# each lift has a wall with an opening on each floor
+@doors       = ();	# each wall opening has doors [lift][floor] - [0] door [1] idR [2] incR
+@cages       = ();	# each lift has a cage [lift] - [0] cage [1] idR [2] incR
+@floor_text  = ();	# each lift has a common floor text on each floor and in the cage
+my @base     = ();
+my @cagePosn = ();	# current floor index of cage in lift (changed in move_cage)
+my @cageTarg = ();	# y target coordinate at bottom of wall for each floor
+my @cageNear = ();	# cage near sensor
+my @cageHome = ();	# cage home sensor
+my @doorTarg = ();	# inside door posn sensor
+my @doorNear = ();	# inside door near sensor
+my @doorHome = ();	# inside door home sensor
 
-$mw->bind('<Key-Up>',	  [ \&move_cage, $cage, 1      ]);	# cage up
-$mw->bind('<Key-Down>',	  [ \&move_cage, $cage, -1     ]);	# cage down
-$mw->bind('<Key-Prior>',  [ \&move_cage, $cage, 5      ]);	# cage up fast
-$mw->bind('<Key-Next>',	  [ \&move_cage, $cage, -5     ]);	# cage down fast
-$mw->bind('<Key-Home>',	  [ \&move_cage, $cage, 1,  $cageD, \$cageId ]);	# cage up continuous
-$mw->bind('<Key-End>',	  [ \&move_cage, $cage, -1, $cageD, \$cageId ]);	# cage down continuous
-$mw->bind('<Key-Return>', [ \&move_cage, $cage, 0, 0,   \$cageId ]);	# stop cage continuous
-$mw->bind('<Key-Right>',  [ \&move_door, $door, 1  ]);	# close doors (front door right)
-$mw->bind('<Key-Left>',	  [ \&move_door, $door, -1 ]);	# open doors
-$mw->bind('<Key-q>',	  sub { exit(0); });	# quit
-$mw->bind('<Key-h>',	  sub { $canvas->itemconfigure($wall_3->[1], state => 'hidden'); });
-$mw->bind('<Key-n>',	  sub { $canvas->itemconfigure($wall_3->[1], state => 'normal'); });
-$mw->bind('<Key-a>',	  sub { $canvas->itemconfigure($wall_2->[1], state => 'hidden'); });
-$mw->bind('<Key-b>',	  sub { $canvas->itemconfigure($wall_2->[1], state => 'normal'); });
+my $ww_2     = $ww     * 0.5;	# half wall width
+my $wh_2     = ($wh+5) * 0.5;	# half wall height + distance bewtween walls
+my $cw_2     = $cw     * 0.5;	# half cage width
+my $dw_2     = $dw     * 0.5;	# half door width
+my $dow_2    = $dow    * 0.5;	# half door opening width
+my $thickness = 1;
+my $ropeThickness = 3;
+my $fast = $opt_c;
+my $slow = $fast * 4;
+my $text;
+my $y = $canvas->canvasy($floors*($wh+5));
+for ($floor = 0; $floor < $floors; $floor++) {
+    $cageTarg[$floor] = $y - ($floor * ($wh+5));
+    print "index = $floor floor = $floorNames[$floor] cageTarg = $cageTarg[$floor]\n" if $opt_t;
+}
+$y += $wh+5-$doh-10;
+print "y = $y\n" if $opt_t;
 
-no warnings;
-my ( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, );
-( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_3;
-print "wall_3: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
-( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_2;
-print "wall_2: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
-( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_1;
-print "wall_1: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
-( $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ) = @$wall_0;
-print "wall_0: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
-print "\$canvas: $canvas\n";
-use warnings;
+########################################################################
+#	Draw a cage for each lift and walls and outside doors for each floor.
+#	Draw cages first then doors followed by walls to achieve overlap.
+#	Initialise sensor arrays and send initial values to the controller.
+########################################################################
+
+for ($lift = 0; $lift < $lifts; $lift++) {
+    my $x = $canvas->canvasx(5+($ww_2)+($lift*(5+$ww))+$doo);
+    $base[$lift] = $canvas->createLine (		# bottom stop to extend display down
+	$x-20, $y,
+	$x+20, $y,
+	-width => $ropeThickness,
+	-fill => 'green',
+    );
+    $cages[$lift][0] = draw_cage($canvas, $lift);
+    for ($floor = 0; $floor < $floors; $floor++) {
+	$doors[$lift][$floor][0] = draw_door($canvas, $lift, $floor, 2, $opt_d, 'light blue');
+	$walls[$lift][$floor]    = draw_wall($canvas, $lift, $floor);
+	$doorTarg[$lift][$floor] = 0;
+	$doorNear[$lift][$floor] = $doorHome[$lift][$floor] = 1;	# home position
+    }
+    $cagePosn[$lift] = 0;				# cage is drawn at bottom
+    $floor_text[$lift] = $floorNames[$cagePosn[$lift]];	# display initial cage position
+    $cageHome[$lift] = $cageNear[$lift] = 1;		# cage sensors indicate home position
+    $doorTarg[$lift][$floor] = 0;
+    $doorNear[$lift][$floor] = $doorHome[$lift][$floor] = 1;	# home position
+}
+$c->configure(-scrollregion => [$c->bbox("all")]);	# define scroll region when canvases are drawn
+
+########################################################################
+#	Clear all inputs in iClift and the controller.
+#	Initialise %But{IXy.x} for clearing wall buttons
+#	Finalise initialisation of %Cmds, which needs cages and doors drawn
+#	and channel numbers for all I/Os registered from @Args.
+########################################################################
+
+printMicroSeconds();
+$ii = 0;						# IOindex - start with IB0
+for ($lift = 0; $lift < $lifts; $lift++) {
+    my ($chS, $iec, $bit, $button, $iecO, $iecC);
+    $chS = $IONames{"SIB$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IB0 = 0
+    $iec = "QX$ii$i"; iCmd('Actuators', $iec, $iec, $iec, $lift);		$ii++;	# QX0
+    $chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX1 = 0
+    $iec = "QX$ii$i"; iCmd('MiscFuns',  $iec, $iec, $iec, $lift);		$ii++;	# QX1
+    for ($floor = 0; $floor < $floors; $floor += 8) {	# step in floor groups of 8
+	$chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX2 = 0
+										$ii++;	# QX2
+	$chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX3 = 0
+	for ($bit = 0; $bit < 8; $bit++) {
+	    if (defined($button = $walls[$lift][$floor+$bit]->[3])) {			# down buttons
+		$But{"IX$ii$i.$bit"} = $button;
+	    }
+	}
+										$ii++;	# QX3
+	$chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX4 = 0
+	for ($bit = 0; $bit < 8; $bit++) {
+	    if (defined($button = $walls[$lift][$floor+$bit]->[2])) {			# up buttons
+		$But{"IX$ii$i.$bit"} = $button;
+	    }
+	}
+										$ii++;	# QX4
+	$chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX5 = 0
+	$iecO = $iec = "QX$ii$i"; iCmd('DoorOpen',  $iec, '', '', $lift, $floor);$ii++;	# QX5
+	$chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX6 = 0
+	$iecC = $iec = "QX$ii$i"; iCmd('DoorClose', $iec, '', '', $lift, $floor);$ii++;	# QX6
+	$chS = $IONames{"SIX$ii$i"}; $ChannelsI[$chS] = 0; $conn->send_now("$chS:0");	# IX7 = 0
+	$iec = "QX$ii$i"; iCmd('DoorFast',    $iec, $iecO, $iecC, $lift, $floor);$ii++;	# QX7
+	$iec = "QX$ii$i"; iCmd('FloorDnI',    $iec, '',    '',    $lift, $floor);$ii++;	# QX8
+	$iec = "QX$ii$i"; iCmd('FloorUpI',    $iec, '',    '',    $lift, $floor);$ii++;	# QX9
+	print "lift = $lift, floor = $floor, ii = $ii\n" if $opt_t;
+    }							# reset iC controller with dummy Floor 0 down button
+    wall_button(0, $canvas, $walls[$lift][0]->[3], 'red', 'FloorDnS', $lift, 0);	# IX3.0 = 1 
+}							# this can trigger some Q commands which are not executed in iClift
+$mw->after(200,
+    sub {
+	$cmdFlag = 1;					# start executing Q commands after startup delay
+	printMicroSeconds();
+	print "End of startup delay\n" if $opt_t;
+	if ($opt_C) {
+	    hide_wall($hidden = 1);			# hide walls for continuous testing to reduce CPU loading
+	    for ($lift = 0; $lift < $lifts; $lift++) {
+		misc_fun0(0, 0, $lift, $floors);	# set a random floor button for each lift
+	    }
+	}
+    }
+);
+
+if ($opt_K) {
+    $mw->bind('<Key-Up>',     [ \&move_cage, $cages[0][0], 1       ]); # cage up
+    $mw->bind('<Key-Down>',   [ \&move_cage, $cages[0][0], -1      ]); # cage down
+    $mw->bind('<Key-Home>',   [ \&move_cage, $cages[0][0], 1,     $slow, \$cages[0][1], \$cages[0][2] ]); # cage up continuous
+    $mw->bind('<Key-End>',    [ \&move_cage, $cages[0][0], -1,    $slow, \$cages[0][1], \$cages[0][2] ]); # cage down continuous
+    $mw->bind('<Key-Return>', [ \&move_cage, $cages[0][0], 0,     0,     \$cages[0][1], \$cages[0][2] ]); # stop cage continuous
+    $mw->bind('<Key-Prior>',  [ \&move_cage, $cages[0][0], undef, $fast, \$cages[0][1], \$cages[0][2] ]); # move cage fast
+    $mw->bind('<Key-Next>',   [ \&move_cage, $cages[0][0], undef, $slow, \$cages[0][1], \$cages[0][2] ]); # move cage slow
+
+    $mw->bind('<Key-j>',      [ \&move_door, $doors[0][0][0], 0, 0, 1  ]); # open doors
+    $mw->bind('<Key-k>',      [ \&move_door, $doors[0][0][0], 0, 0, -1 ]); # close doors (front door right)
+    $mw->bind('<Key-g>',      [ \&move_door, $doors[0][0][0], 0, 0, 1,     $slow, \$doors[0][0][1], \$doors[0][0][2] ]); # door open continuous
+    $mw->bind('<Key-h>',      [ \&move_door, $doors[0][0][0], 0, 0, -1,    $slow, \$doors[0][0][1], \$doors[0][0][2] ]); # door closed continuous
+    $mw->bind('<Key-l>',      [ \&move_door, $doors[0][0][0], 0, 0, 0,     0,     \$doors[0][0][1], \$doors[0][0][2] ]); # stop door continuous
+    $mw->bind('<Key-f>',      [ \&move_door, $doors[0][0][0], 0, 0, undef, $fast, \$doors[0][0][1], \$doors[0][0][2] ]); # move door fast
+    $mw->bind('<Key-d>',      [ \&move_door, $doors[0][0][0], 0, 0, undef, $slow, \$doors[0][0][1], \$doors[0][0][2] ]); # move door slow
+
+    $mw->bind('<Key-J>',      [ \&move_door, $doors[0][1][0], 0, 1, 1  ]); # open doors
+    $mw->bind('<Key-K>',      [ \&move_door, $doors[0][1][0], 0, 1, -1 ]); # close doors (front door right)
+    $mw->bind('<Key-G>',      [ \&move_door, $doors[0][1][0], 0, 1, 1,     $slow, \$doors[0][1][1], \$doors[0][1][2] ]); # door open continuous
+    $mw->bind('<Key-H>',      [ \&move_door, $doors[0][1][0], 0, 1, -1,    $slow, \$doors[0][1][1], \$doors[0][1][2] ]); # door closed continuous
+    $mw->bind('<Key-L>',      [ \&move_door, $doors[0][1][0], 0, 1, 0,     0,     \$doors[0][1][1], \$doors[0][0][2] ]); # stop door continuous
+    $mw->bind('<Key-F>',      [ \&move_door, $doors[0][1][0], 0, 1, undef, $fast, \$doors[0][1][1], \$doors[0][1][2] ]); # move door fast
+    $mw->bind('<Key-D>',      [ \&move_door, $doors[0][1][0], 0, 1, undef, $slow, \$doors[0][1][1], \$doors[0][1][2] ]); # move door slow
+
+    $mw->bind('<Key-Left>',   [ \&move_door, $cages[0][0]->[3][0], 0, -1, 1  ]); # open cage doors
+    $mw->bind('<Key-Right>',  [ \&move_door, $cages[0][0]->[3][0], 0, -1, -1 ]); # close cage doors (front door right)
+    $mw->bind('<Key-u>',      [ \&move_door, $cages[0][0]->[3][0], 0, -1, 1,  $slow,    \$cages[0][0]->[3][1], \$cages[0][0]->[3][2] ]); # open cage doors continuous
+    $mw->bind('<Key-i>',      [ \&move_door, $cages[0][0]->[3][0], 0, -1, -1, $slow,    \$cages[0][0]->[3][1], \$cages[0][0]->[3][2] ]); # close cage doors continuous
+    $mw->bind('<Key-o>',      [ \&move_door, $cages[0][0]->[3][0], 0, -1, 0,     0,     \$cages[0][0]->[3][1], \$cages[0][0]->[3][2] ]); # stop cage doors continuous
+    $mw->bind('<Key-y>',      [ \&move_door, $cages[0][0]->[3][0], 0, -1, undef, $fast, \$cages[0][0]->[3][1], \$cages[0][0]->[3][2] ]); # move cage doors fast
+    $mw->bind('<Key-t>',      [ \&move_door, $cages[0][0]->[3][0], 0, -1, undef, $slow, \$cages[0][0]->[3][1], \$cages[0][0]->[3][2] ]); # move cage doors slow
+}
+
+$mw->bind('<Key-q>',      sub { exit(0); });			# quit
+$mw->bind('<Key-Escape>', sub { $opt_C = not $opt_C; });	# turn continuous testing on and off
+
+########################################################################
+#
+#	w Hide and Show all walls for inspection
+#
+########################################################################
+
+$mw->bind('<Key-w>',      sub { hide_wall($hidden = $hide_next[$hidden]); }); # toggle between 'normal', 'hidden' and show colour
+
+########################################################################
+#
+#	Register read events
+#
+########################################################################
+
+$mw->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+
+########################################################################
+#
+#	Sit in an infinite loop dispatching incoming events.
+#
+########################################################################
 
 MainLoop;
+exit(0);
+
+####### End of main program ############################################
+
+########################################################################
+#
+#	Hide or Show all walls for inspection
+#
+########################################################################
+
+sub hide_wall {
+    my $hide = shift;
+    my ($lift, $floor );
+    print "Hide $hide\n" if $opt_t;
+    for ($lift = 0; $lift < $lifts; $lift++) {
+	for ($floor = 0; $floor < $floors; $floor++) {
+	    $canvas->itemconfigure($walls[$lift][$floor]->[1], -state   => $normal_hide[$hide]);
+	    $canvas->itemconfigure($walls[$lift][$floor]->[1], -stipple => $transp_show[$hide]);
+	}
+    }
+} # hide_wall
+
+########################################################################
+#
+#	Convert a number string obtained with $nr to an integer value
+#	retun initial value if undef
+#
+########################################################################
+
+sub convert_nr {
+    my ($val, $initial) = @_;
+    return $initial unless defined $val;
+    if ($val =~ /^-\s*0/) {
+	$val = 0;
+	print "\n" if $opt_t;
+	warn "$named: $argv: bin, oct or hex numbers may not be signed - ignore initialiser\n";
+    } else {
+	$val = oct($val) if $val =~ /^0/;	# handles 017 0xf 0b1111
+    }
+    $val = int($val);				# initialize to a number for correct AND/OR
+    return $val;
+} # convert_nr
 
 ########################################################################
 #
 #	Draw a wall with an opening for a lift door
 #	This widget sits in front of lift cage and lift doors and wall doors
 #	parameter 1:	canv	canvas this wall is drawn on
-#	parameter 2,3:	x,y	coordinates of bottom (floor) centre
-#	parameter 4,5:	w,h	width and height of wall
-#	parameter 6,7:	wd,hd	width and height of door opening
+#	parameter 2:	l	lift number (left to right)
+#	parameter 3:	f	floor number (bottom to top)
 #
-#	Note: all parameter y coordinates are reversed like engineering drawings
+#	Each wall can be hidden to show workings behind the wall
 #
 ########################################################################
 
 sub draw_wall {
-    my ($canv, $x, $y, $width, $height, $wDoor, $hDoor) = @_;
-    print "draw_wall:	x,y = '$x,$y'\t" if $opt_T;
-    $x = $canv->canvasx($x);
-    $y = $canv->canvasy($opt_H - $y);
-    print "lift_wall: x,y = '$x,$y' w = '$width' h = '$height' wd = '$wDoor' hd = '$hDoor'\n" if $opt_T;
+    my ($canv, $l, $f) = @_;
+    print "draw_wall:	l,f = '$l,$f'\t" if $opt_T;
 
-    my $width_2    = $width * 0.5;
-    my $wDoor_2    = $wDoor * 0.5;
+    my $xWall = $canv->canvasx(5+($ww_2)+($l*(5+$ww)));
+    my $yWall = $canv->canvasy(($floors-$f)*($wh+5));
+    print "lift_wall: x,y = '$xWall,$yWall' w = '$ww' h = '$wh' wd = '$dow' wo = '$doo' hd = '$doh'\n" if $opt_T;
 
-    my $xLeft      = $x - $width_2;
-    my $xRight     = $x + $width_2;
-    my $yTop       = $y - $height;
-    my $yBott      = $y;
-    my $xDoorLeft  = $x - $wDoor_2;
-    my $xDoorRight = $x + $wDoor_2;
-    my $yDoorTop   = $y - $hDoor;
+    my $xLeft      = $xWall - $ww_2;
+    my $xRight     = $xWall + $ww_2;
+    my $yWallTop   = $yWall - $wh;
+    my $yWallBot  = $yWall;
+    my $xDoorLeft  = $xWall + $doo - $dow_2;
+    my $xDoorRight = $xWall + $doo + $dow_2;
+    my $yDoorOpTop = $yWall - $doh;
 
     my $actualWall = $canv->createPolygon (
-	$xLeft,		$yTop,		# 0
-	$xRight,	$yTop,		# 1
-	$xRight,	$yBott,		# 2
-	$xDoorRight,	$yBott,		# 3
-	$xDoorRight,	$yDoorTop,	# 4
-	$xDoorLeft,	$yDoorTop,	# 5
-	$xDoorLeft,	$yBott,		# 6
-	$xLeft,		$yBott,		# 7
+	$xLeft,		$yWallTop,	# 0
+	$xRight,	$yWallTop,	# 1
+	$xRight,	$yWallBot,	# 2
+	$xDoorRight,	$yWallBot,	# 3
+	$xDoorRight,	$yDoorOpTop,	# 4
+	$xDoorLeft,	$yDoorOpTop,	# 5
+	$xDoorLeft,	$yWallBot,	# 6
+	$xLeft,		$yWallBot,	# 7
 	-width => $thickness,
 	-tags => 'wall',
 	-fill => 'cornsilk1',
+	-stipple  => 'transparent',
 	-outline => 'black',
     );
 
-    my $xBut = $xDoorRight + $wDoor * 0.1;	# x button position to right of centre
-    my $yBut = $yBott - $hDoor * 0.4;	# y button position from the floor
-    my $yOff = $hDoor * 0.07;		# vert space between buttons / 2
-    my $rBut = $wDoor * 0.05;		# radius of buttons
+    my $textId = $canv->createText(
+	$xRight   - 20,
+	$yWallTop + 20,
+	-text => "@{[$l+1]}/@{[$floorNames[$f]]}",
+    );
+
+    my $upBut = undef;
+    my $upTri = undef;
+    my $downBut = undef;
+    my $downTri = undef;
+
+    my $xBut = $xDoorRight + $dow * 0.1;# x button position to right of centre
+    my $yBut = $yWallBot - $doh * 0.4;	# y button position from the floor
+    my $yOff = $doh * 0.07;		# vert space between buttons / 2
+    my $rBut = $dow * 0.05;		# radius of buttons
 
     my $xtl = $xBut - $rBut;
     my $xbr = $xBut + $rBut;
     my $ytl = $yBut - $yOff - $rBut;
     my $ybr = $yBut - $yOff + $rBut;
 
-    my $upBut = $canv->create (
-	'oval',			# or rectangle
-	$xtl, $ytl,
-	$xbr, $ybr,
-	-width => $thickness,
-	-tags => 'but',
-	-fill => 'dark green',
-	-outline => 'black',
-    );
-
-    my $xpl = $xtl + $to;
-    my $xpr = $xbr - $to;
+    my $xpl = $xtl + $tro;
+    my $xpr = $xbr - $tro;
     my $xpm = ($xtl + $xbr) / 2;
-    my $ypt = $ytl + $to;
-    my $ypb = $ybr - $to-1;
+    my $ypt = $ytl + $tro;
+    my $ypb = $ybr - $tro-1;
 
-    my $upTri = $canv->create (
-	'polygon',
-	$xpl, $ypb,
-	$xpr, $ypb,
-	$xpm, $ypt,
-	-width => $thickness,
-	-tags => 'but',
-	-fill => 'yellow',
-	-outline => 'yellow',
-    );
+    if ($f < $floors-1) {
+	$upBut = $canv->create(
+	    'oval',			# or rectangle
+	    $xtl, $ytl,
+	    $xbr, $ybr,
+	    -width => $thickness,
+	    -tags => 'but',
+	    -fill => 'dark green',
+	    -outline => 'black',
+	);
 
+	$upTri = $canv->create(
+	    'polygon',
+	    $xpl, $ypb,
+	    $xpr, $ypb,
+	    $xpm, $ypt,
+	    -width => $thickness,
+	    -tags => 'but',
+	    -fill => 'yellow',
+	    -outline => 'yellow',
+	);
+    }
     $ytl = $yBut + $yOff - $rBut;
     $ybr = $yBut + $yOff + $rBut;
 
-    my $downBut = $canv->create (
-	'oval',			# or rectangle
-	$xtl, $ytl,
-	$xbr, $ybr,
+    if ($f > 0) {
+	$downBut = $canv->create(
+	    'oval',			# or rectangle
+	    $xtl, $ytl,
+	    $xbr, $ybr,
+	    -width => $thickness,
+	    -tags => 'but',
+	    -fill => 'dark green',
+	    -outline => 'black',
+	);
+
+	$ypt = $ytl + $tro+1;
+	$ypb = $ybr - $tro;
+
+	$downTri = $canv->create(
+	    'polygon',
+	    $xpl, $ypt,
+	    $xpr, $ypt,
+	    $xpm, $ypb,
+	    -tags => 'but',
+	    -fill => 'yellow',
+	    -outline => 'yellow',
+	);
+    }
+
+    my $to1 = 5;			# bigger triangles for up/down
+    $xtl = $xWall + $doo - $dow*0.33;	# centre of left down indicator
+    $ytl = $yWall - $doh - $to1*3;	# centre of top indicators
+
+    $xpl = $xtl - $to1;
+    $xpr = $xtl + $to1;
+    $ypt = $ytl + $to1;
+    $ypb = $ytl - $to1;
+
+    my $upInd = $canv->create(
+	'polygon',
+	$xpl, $ypb,
+	$xpr, $ypb,
+	$xtl, $ypt,
 	-width => $thickness,
-	-tags => 'but',
-	-fill => 'dark green',
+	-fill => 'grey',
 	-outline => 'black',
     );
 
-    $ypt = $ytl + $to+1;
-    $ypb = $ybr - $to;
+    $xtl = $xWall + $doo - $dow*0.17;	# centre of right up indicator
+    $xpl = $xtl - $to1;
+    $xpr = $xtl + $to1;
 
-    my $downTri = $canv->create (
+    my $downInd = $canv->create(
 	'polygon',
 	$xpl, $ypt,
 	$xpr, $ypt,
-	$xpm, $ypb,
-	-tags => 'but',
-	-fill => 'yellow',
-	-outline => 'yellow',
+	$xtl, $ypb,
+	-fill => 'grey',
+	-outline => 'black',
     );
 
-    my ($upInd, $downInd, $floorInd) = (-1, -2, -3);
+    $xtl = $xWall + $doo + $dow*0.25;	# centre of floor indicator
 
-    $canv->bind($upTri, '<Button-1>', [ \&wallButton, $canv, $upBut, 'red', $upTri, 'yellow', ]);
-    $canv->bind($downTri, '<Button-1>', [ \&wallButton, $canv, $downBut, 'red', $downTri, 'yellow', ]);
+    my $frm = $canvas->Frame(
+	-relief       => 'groove',
+	-borderwidth  => 2,
+    );
+    $frm->Label(
+	-textvariable => \$floor_text[$l],	# each lift has a common floor text on each floor and in the cage
+	-foreground   => 'red',
+	-width        => $lw,
+    )->pack();
+    my $floorInd = $canvas->createWindow($xtl, $ytl, -window => $frm);
+
+    if (defined $upTri) {
+	$canv->bind($upTri,   '<Button-1>', [ \&wall_button, $canv, $upBut,   'red',        'FloorUpS', $l, $f ]);
+	$canv->bind($upTri,   '<Button-3>', [ \&wall_button, $canv, $upBut,   'dark green', 'FloorUpS', $l, $f ]);
+    }
+    if (defined $downTri) {
+	$canv->bind($downTri, '<Button-1>', [ \&wall_button, $canv, $downBut, 'red',        'FloorDnS', $l, $f ]);
+	$canv->bind($downTri, '<Button-3>', [ \&wall_button, $canv, $downBut, 'dark green', 'FloorDnS', $l, $f ]);
+    }
 
 no warnings;
-print "wall $y: $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd,\n";
+    print "wall $yWall: $canv, $actualWall, $upBut, $downBut, $upTri, $downTri, $upInd, $downInd, $floorInd,\n" if $opt_T;
 use warnings;
-    return [ $canv, $actualWall, $upBut, $upTri, $downTri, $downBut, $upInd, $downInd, $floorInd, ];
+    return [ $canv, $actualWall, $upBut, $downBut, $upTri, $downTri, $upInd, $downInd, $floorInd ];
+    #        ->[0]  ->[1]        ->[2]   ->[3]     ->[4]   ->[5]     ->[6]   ->[7]     ->[8]
 } # draw_wall
 
 ########################################################################
 #
 #	Process a wall button (up or down)
-#	(call to controller)
+#	parameter 1:	dummy
+#	parameter 2:	canv
+#	parameter 3:	button
+#	parameter 4:	colour	'red' on or 'green' off
+#	parameter 5:	use	FloorUpS or FloorDnS
+#	parameter 6:	lift
+#	parameter 7:	floor
 #	Leave the output on until it is reset from the controller
-#	when the indication is also turned on. Or make it a
-#	short transient whose leading edge is significant. 2nd option
-#	may loose a pulse if OS has a hiccup.
+#	when the indication is also turned off; unless
+#	button turned off with any other colour than red
 #
 ########################################################################
 
-sub wallButton {
-    my ($dummy, $canv, $button, $butColour, $triangle, $triColour) = @_;
-    $canv->itemconfigure($button, -fill => $butColour);
-    $canv->itemconfigure($triangle, -fill => $triColour, -outline => $triColour);
-} # wallButton
+sub wall_button {
+    my ($dummy, $canv, $button, $colour, $use, $lift, $floor) = @_;
+    my $floorG = $floor & ~0x7;		# floor group
+    my $floorR = $floor - $floorG;	# floor remainder is bit index for bit I/O
+    my $iec    = $Iec{"$use:$lift:$floorG"};	# IEC name
+    my $chS    = $IONames{"S$iec"};
+    $ChannelsIX[$chS][$floorR] = ($colour eq 'red' ? 1 : 0);
+    button_command($chS, $floorR);
+    # fill should be reset by receive
+    $canv->itemconfigure($button, -fill => $colour);
+} # wall_button
+
+########################################################################
+#
+#	Fill (light up) Down and Up wall indicators on all floors
+#	parameter 1:	dummy
+#	parameter 2:	place	$walls[$lift][$floor] or $cages[$lift][0]
+#	parameter 3:	dir	down = 6, up = 7      sync with draw_wall and draw_cage return
+#	parameter 5:	colour	'red' or 'grey' works best
+#
+########################################################################
+
+sub fill_indicator {
+    my ($dummy, $place, $dir, $colour) = @_;
+    if (defined $place->[$dir]) {
+	print "fill_indicator: '$dir' '$colour'\n" if $opt_t;
+	$canvas->itemconfigure($place->[$dir], -fill => $colour);
+    }
+} # fill_indicator
+
+########################################################################
+#
+#	Miscellaneous functions activated by QX1.0 - QX1.4
+#	parameter 1:	dummy
+#	parameter 2:	bit value
+#	parameter 3:	l	lift number (left to right)
+#	parameter 4:	f	actually number of floors
+#
+########################################################################
+
+sub misc_fun0 {				# Turn on a random floor button for testing
+    my ($dummy, $bit, $l, $f) = @_;	# QX1.0
+    my ($floor, $button, $down, $use);
+    print "misc_fun0: $bit lift = $l, floor = $f\n" if $opt_t;
+    if ($opt_C and not $bit) {
+	do {
+	    $floor   = int(rand($f << 1));	# $f is number of floors
+	    $down    = $floor & 0x1;
+	    $floor >>= 1;
+	    $button  = $walls[$l][$floor]->[2 + $down];
+	} while ($floor == $cagePosn[$l] or not $button);
+	$use     = $down ? 'FloorDnS' : 'FloorUpS'; 
+	wall_button(0, $canvas, $button, 'red', $use, $l, $floor);
+	$testCount++;
+	print STDERR "$testCount\n" if $testCount%100 == 0;	# only happens if $opt_C	
+	print "misc_fun0: $testCount wall_button(button = $button, 'red', '$use', lift = $l, floor = $floor)\n" if $opt_t;
+    }
+} # misc_fun0
+
+sub misc_fun1 {
+    my ($dummy, $bit, $l, $f) = @_;	# QX1.1
+    print "misc_fun1: $bit lift = $l, floor = $f\n" if $opt_t;
+} # misc_fun1
+
+sub misc_fun2 {
+    my ($dummy, $bit, $l, $f) = @_;	# QX1.2
+    print "misc_fun2: $bit lift = $l, floor = $f\n" if $opt_t;
+} # misc_fun2
+
+sub misc_fun3 {
+    my ($dummy, $bit, $l, $f) = @_;	# QX1.3
+    print "misc_fun3: $bit lift = $l, floor = $f\n" if $opt_t;
+} # misc_fun3
+
+sub misc_fun4 {
+    my ($dummy, $bit, $l, $f) = @_;	# QX1.4
+    print "misc_fun4: $bit lift = $l, floor = $f\n" if $opt_t;
+} # misc_fun4
 
 ########################################################################
 #
 #	Draw a set of lift doors to close the opening in the wall
 #	parameter 1:	canv	canvas this door is drawn on
-#	parameter 2,3:	x,y	coordinates of bottom (floor) centre
-#	parameter 4,5:	w,h	width and height of one door
-#	parameter 6:	offset	initial offset (leaves a small opening for type 0)
-#	parameter 7:	type	0	2 door which move left and right
-#				1	2 doors which move left at different speeds
+#	parameter 2:	l	lift number (left to right)
+#	parameter 3:	f	floor number (bottom to top) -1 is cage door
+#	parameter 4:	offset	initial offset (leaves a small opening for type 0)
+#	parameter 5:	type	 0	2 door which move left and right
+#				 1	2 doors which move left at different speeds
 #				-1	2 doors which move right at different speeds
+#	parameter 6:	colour
 #
 ########################################################################
 
 sub draw_door {
-    my ($canv, $x, $y, $width, $height, $offset, $type) = @_;
-    print "draw_door:	x,y = '$x,$y'\t" if $opt_T;
-    $x = $canv->canvasx($x);
-    $y = $canv->canvasy($opt_H - $y);
-    print "lift_door: x,y = '$x,$y' w = '$width' h = '$height' o = '$offset' t = '$type'\n" if $opt_T;
+    my ($canv, $l, $f, $offset, $type, $colour) = @_;
+    print "draw_door:	l,f = '$l,$f'\t" if $opt_T;
+    if ($f < 0) {
+	$f = 0;				# drawn at initial cage position on floor 0
+    }
+    my $rev = 1;			# allows reversing on over or undershoot
+
+    my $xDoor = $canv->canvasx(5+($ww/2)+($l*(5+$ww))+$doo);
+    my $yDoor = $canv->canvasy(2+(($floors-$f)*($wh+5)));
+    print "lift_door: x,y = '$xDoor,$yDoor' w = '$dw' h = '$dh' o = '$offset' t = '$type'\n" if $opt_T;
 
     my ($backInc, $frontInc, $off);
     if ($type == 1) {
-	$backInc      = 1;
-	$frontInc     = 2;
+	$backInc      = -1;		# 1 left
+	$frontInc     = -2;		# 2 left
 	$off          = -$offset;	# -ve offset for overlapping doors
     }
     elsif ($type == -1) {
-	$backInc      = -1;
-	$frontInc     = -2;
+	$backInc      = 1;		# 1 right
+	$frontInc     = 2;		# 2 right
 	$off          = -$offset;	# -ve offset for overlapping doors
     }
     else {
-	$backInc      = -1;
-	$frontInc     = 1;
-	$off          = $offset;
+	$backInc      = 1;		# 1 right
+	$frontInc     = -1;		# 1 left
+	$off          = 0; # $offset;
     }
-    my $xMiddleBack   = $x - $backInc  * $off;
-    my $xOutsideBack  = $xMiddleBack  - $backInc * $width;
-    my $xMiddleFront  = $x + $backInc * $off;
-    my $xOutsideFront = $xMiddleFront + $backInc * $width;
-    my $yTop          = $y - $height;
-    my $yBott         = $y;
+    my $xMiddleBack   = $xDoor + $backInc  * $off;
+    my $xOutsideBack  = $xMiddleBack  + $backInc * $dw;
+    my $xMiddleFront  = $xDoor - $backInc * $off;
+    my $xOutsideFront = $xMiddleFront - $backInc * $dw;
+    my $yDoorTop      = $yDoor - $dh;
+    my $yDoorBot     = $yDoor;
 
     # draw backDoor first so it is at back if overlapped
-    my $backDoor = $canv->createRectangle (
-	$xOutsideBack, $yTop,
-	$xMiddleBack,  $yBott,
-	-width => $thickness,
-	-tags => 'door',
-	-fill => 'light green',
+    my $backDoor = $canv->createRectangle(
+	$xOutsideBack, $yDoorTop,
+	$xMiddleBack,  $yDoorBot,
+	-width   => $thickness,
+	-tags    => 'door',
+	-fill    => $colour,
 	-outline => 'black',
     );
 
     # draw frontDoor later so it is in front if overlapped
-    my $frontDoor = $canv->createRectangle (
-	$xOutsideFront, $yTop,
-	$xMiddleFront,  $yBott,
-	-width => $thickness,
-	-tags => 'door',
-	-fill => 'light blue',
+    my $frontDoor = $canv->createRectangle(
+	$xOutsideFront, $yDoorTop,
+	$xMiddleFront,  $yDoorBot,
+	-width   => $thickness,
+	-tags    => 'door',
+	-fill    => $colour,
 	-outline => 'black',
     );
-    return [ $canv, $backDoor, $frontDoor, $backInc, $frontInc, ];	# used in move_door()
+    my $doorPosn = $off;		# initial door position when drawn
+    return [ $canv, $doorPosn, $backDoor, $frontDoor, $backInc, $frontInc, $rev ];	# used in move_door() $doorPosn is [1]
+    #        ->[0]  ->[1]      ->[2]      ->[3]       ->[4]     ->[5]      ->[6]
 } # draw_door
 
 ########################################################################
 #
-#	Move door open or closed
+#	Move door open or closed with automatic limit stop
 #	Parameter 1:	dummy
-#	Parameter 2:	dor	door identification array ref
-#	Parameter 3:	inc	1..n	number of increments to open
-#				-1..-n	number of increments to close
+#	Parameter 2:	door	door identification array ref
+#	Parameter 3:	lift	1 .. m
+#	Parameter 4:	floor	1 .. n  undef or -1 is inside door
+#	Parameter 5:	inc	 1 .. n	number of increments to open
+#				-1 ..-n	number of increments to close
+#				undef   use previous inc when changing tim
+#	Parameter 6:	tim	undef	move once
+#				1..n	number of milliseconds between
+#					steps of continuous motion
+#				0	stop continous motion
+#	Parameter 7:	idR	reference to id returned by after or repeat
+#	Parameter 8:	incR	reference to previous inc for repeated motion
 #
 ########################################################################
 
 sub move_door {
-    my ($dummy, $dor, $inc) = @_;
-    my ($canv, $backDoor, $frontDoor, $backInc, $frontInc) = @$dor;
+    my ($dummy, $door, $lift, $floor, $inc, $tim, $idR, $incR, $RbitO, $RbitC) = @_;
+    my ($canv, $doorPosn, $backDoor, $frontDoor, $backInc, $frontInc, $rev) = @$door;
     printMicroSeconds();
-    print "door increment = '$inc'\n" if $opt_t;
-    $canv->move($backDoor,  $backInc  * $inc, 0);
-    $canv->move($frontDoor, $frontInc * $inc, 0);
+    my ($usePosn, $useNear, $useHome, $bitPosn, $bitNear, $bitHome, $f, $type);
+    if (defined $floor and $floor >= 0) {
+	$f       = $floor;
+	$usePosn = 'DoorPosn';
+	$useNear = 'DoorNear';
+	$useHome = 'DoorHome';
+	$bitPosn = $bitNear = $bitHome = $floor & 0x7;
+	$type    = 'outside';
+    } else {
+	$f       = $floors;
+	$usePosn = $useNear = $useHome = 'Sensors';
+	$bitPosn = 2;
+	$bitNear = 3;
+	$bitHome = 4;
+	$type    = 'inside';
+    }
+    if (defined $tim) {
+	if ($idR) {
+	    print "$lift $floor $type door" if $opt_t;
+	    if ($$idR and defined $inc) {
+		$$idR->cancel();	# stop continuous cage movement if running
+		$$idR = undef;		# and not changing $tim when $inc is undef
+		print ": stop - manual\t" if $opt_t;
+	    }
+	    elsif ($tim) {
+		if (defined $inc) {
+		    $tim = $$incR if defined $$incR and abs $$incR > 5;	# saved $tim from doorFast when no Slow movement
+		    $$incR = $inc;	# save $inc	(forward or reverse)
+		} else {
+		    $inc = $$incR;	# use saved $inc - doorFast
+		    $$idR->cancel() if $$idR;	# stop temporarily
+		}
+		if (not defined $RbitO or $$RbitO or not defined $RbitC or $$RbitC) {
+		    $$idR = $canv->repeat($tim, [ \&move_door, $dummy, $door, $lift, $floor, $inc, undef, $idR, $incR ]); # no time
+		    print ": change speed door - inc = $inc" if $opt_t;
+		} else {
+		    $$incR = $tim;	# save $tim when no slow movement
+		    print ": save time doorFast" if $opt_t;
+		}
+	    }
+	    print ": time = $tim\n" if $opt_t;
+	}
+    } else {
+	my $target = $doorTarg[$lift][$f];
+	$inc *= $rev;
+	$canv->move($backDoor,  $backInc  * $inc, 0);
+	$canv->move($frontDoor, $frontInc * $inc, 0);
+	$doorPosn += $inc;
+	$$door[1] = $doorPosn;
+	if ($doorPosn > 75 or $doorPosn < -20) {				# absolute absolute limits
+	    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+	    $$idR = undef;
+	    $$door[6] = 1;			# $rev normal for next iteration
+	    print STDERR "$lift $floor $type door: stop - auto, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
+	}
+	if ($inc > 0 and $doorPosn < 70 or $inc < 0 and $doorPosn > -15) {	# absolute limits
+	    print "$lift $floor $type door: $doorPosn $inc $target, rev = $rev\n" if $opt_t;
+	    if ($inc > 0) {			# door opening
+		if ($doorPosn > $target + $dw_2) {
+		    $doorTarg[$lift][$f] = $dw;		# door half open
+		    send_data($usePosn, $lift, $bitPosn, 1, $floor);		# IX1.2 = 1 door open
+		}
+		elsif ($doorPosn > $target + $dso) {
+		    if ($doorNear[$lift][$f]) {
+			$doorNear[$lift][$f] = 0;		# sensor near off
+			send_data($useNear, $lift, $bitNear, 1, $floor);	# IX1.3 = 1
+		    }
+		}
+		elsif ($doorPosn > $target) {
+		    if ($doorHome[$lift][$f]) {
+			$doorHome[$lift][$f] = 0;		# sensor home off
+			send_data($useHome, $lift, $bitHome, 1, $floor);	# IX1.4 = 1
+			if ($opt_C and $doorPosn > $dw) {
+			    print STDERR "$lift $floor $type door: overshoot  $doorPosn $testCount\n";
+			}
+		    }
+		}
+		elsif ($doorPosn >= $target) {
+		    unless ($doorHome[$lift][$f]) {
+			$doorHome[$lift][$f] = 1;		# sensor home on
+			send_data($useHome, $lift, $bitHome, 0, $floor);	# IX1.4 = 0
+			if ($rev == -1) {
+			    send_data($usePosn, $lift, $bitPosn, 0, $floor);	# IX1.2 = 1 door open (if stuck)
+			    print STDERR "$lift $floor $type door: complete - reverse, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
+			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+			    $$idR = undef;
+			    $$door[6] = 1;			# $rev normal for next iteration
+			}
+		    }
+		}
+		elsif ($doorPosn >= $target - $dso) {
+		    unless ($doorNear[$lift][$f]) {
+			$doorNear[$lift][$f] = 1;		# sensor near on
+			send_data($useNear, $lift, $bitNear, 0, $floor);	# IX1.3 = 0
+		    }
+		}
+	    } else {				# door closing
+		if ($doorPosn <= $target - $dw_2) {
+		    $doorTarg[$lift][$f] = 0;			# door half shut
+		    send_data($usePosn, $lift, $bitPosn, 0, $floor);		# IX1.2 = 0 door shut
+		}
+		elsif ($doorPosn < $target - $dso) {
+		    if ($doorNear[$lift][$f]) {
+			$doorNear[$lift][$f] = 0;		# sensor near off
+			send_data($useNear, $lift, $bitNear, 1, $floor);	# IX1.3 = 1
+		    }
+		}
+		elsif ($doorPosn < $target) {
+		    if ($doorHome[$lift][$f]) {
+			$doorHome[$lift][$f] = 0;		# sensor home off
+			send_data($useHome, $lift, $bitHome, 1, $floor);	# IX1.4 = 1
+			if ($opt_C and $doorPosn < 0) {
+			    print STDERR "$lift $floor $type door: undershoot $doorPosn $testCount\n";
+			}
+		    }
+		}
+		elsif ($doorPosn <= $target) {
+		    unless ($doorHome[$lift][$f]) {
+			$doorHome[$lift][$f] = 1;		# sensor home on
+			send_data($useHome, $lift, $bitHome, 0, $floor);	# IX1.4 = 0
+			if ($rev == -1) {
+			    send_data($usePosn, $lift, $bitPosn, 1, $floor);	# IX1.2 = 0 door shut (if stuck)
+			    print STDERR "$lift $floor $type door: complete - reverse, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
+			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+			    $$idR = undef;
+			    $$door[6] = 1;			# $rev normal for next iteration
+			}
+		    }
+		}
+		elsif ($doorPosn <= $target + $dso) {
+		    unless ($doorNear[$lift][$f]) {
+			$doorNear[$lift][$f] = 1;		# sensor near on
+			send_data($useNear, $lift, $bitNear, 0, $floor);	# IX1.3 = 0
+		    }
+		}
+	    }
+	} elsif (defined $idR) {
+	    $$door[6] = -1;		# $rev for next iteration
+	    print STDERR "$lift $floor $type door: stop - reverse, doorPosn = $doorPosn, inc = $inc, rev = $rev\n" if $opt_t or $opt_C;
+	} else {
+	    print STDERR "$lift $floor $type door: blocked\n" if $opt_t or $opt_C;
+	}
+    }
 } # move_door
 
 ########################################################################
 #
 #	Draw a lift cage
 #
+#	parameter 1:	canv	canvas this wall is drawn on
+#	parameter 2:	l	lift number (left to right)
+#
+#	start cage at bottom of lift well
+#
 ########################################################################
 
 sub draw_cage {
-    my ($canv, $x, $y, $width, $height) = @_;
-    print "draw_cage:	x,y = '$x,$y'\t" if $opt_T;
-    $x = $canv->canvasx($x);
-    $y = $canv->canvasy($opt_H - $y);
-    print "lift_cage: x,y = '$x,$y' w = '$width'\n" if $opt_T;
+    my ($canv, $l) = @_;
+    my ($floor, $floorG, $floorR, $iec, $chS);
+    print "draw_cage:	l,0 = '$l,0'\t" if $opt_T;
 
-    my $width_2    = $width * 0.5;
-    my $xLeft      = $x - $width_2;
-    my $xRight     = $x + $width_2;
-    my $yTop       = $y - $height;
-    my $yBott      = $y;
+    my $xCage = $canv->canvasx(5+($ww/2)+($l*(5+$ww))+$doo);
+    my $yCage = $canv->canvasy(($floors)*($wh+5));
+    print "lift_cage: x,y = '$xCage,$yCage' w = '$cw'\n" if $opt_T;
 
-    my @coordinates = (
-	$xLeft,		$yTop,	# 0
-	$xRight,	$yBott,	# 1
+    my $xLeft      = $xCage - $cw_2;
+    my $xRight     = $xCage + $cw_2;
+    my $cageTop    = $yCage - $ch;
+    my $cageBottom = $yCage;
+
+    my $basicCage  = $canv->createRectangle(
+	$xLeft,      $cageTop,			# 0
+	$xRight,     $cageBottom,		# 1
+	-width    => $thickness,
+	-tags     => 'cage',
+	-fill     => 'yellow',
+	-outline  => 'black',
     );
 
-    my $basicCage = $canv->createRectangle (
-	@coordinates,
-	-width => $thickness,
-	-tags => 'cage',
-	-fill => 'yellow',
-	-outline => 'black',
-    );
+    my ($upInd, $downInd);
+    if ($opt_I) {
+	my $to1 = 5;			# cage down/up indicator (optional)
+	my $xtl = $xCage-$ww_2+$dow*0.25;	# centre of left down indicator
+	my $ytl = $yCage-($floors+3)*22-$to1*3;	# centre of top indicators
 
-    my $rope = $canv->createLine (
-	$x, 0,
-	$x, $yTop,
+	my $xpl = $xtl - $to1;
+	my $xpr = $xtl + $to1;
+	my $ypt = $ytl + $to1;
+	my $ypb = $ytl - $to1;
+
+	$upInd = $canv->create(
+	    'polygon',
+	    $xpl, $ypb,
+	    $xpr, $ypb,
+	    $xtl, $ypt,
+	    -width => $thickness,
+	    -fill => 'grey',
+	    -outline => 'black',
+	);
+
+	$xtl = $xCage-$ww_2+$dow*0.42;		# centre of right up indicator
+	$xpl = $xtl - $to1;
+	$xpr = $xtl + $to1;
+
+	$downInd = $canv->create(
+	    'polygon',
+	    $xpl, $ypt,
+	    $xpr, $ypt,
+	    $xtl, $ypb,
+	    -fill => 'grey',
+	    -outline => 'black',
+	);
+    }
+
+    my $frm = $canv->Frame(
+	-relief       => 'groove',
+	-borderwidth  => 2,
+    );
+    $frm->Label(
+	-textvariable => \$floor_text[$l],	# each lift has a common floor text on each floor and in the cage
+	-foreground   => 'red',
+	-width        => $lw,
+    )->pack();
+    for ($floor = $floors-1; $floor >= -3; $floor--) {
+	$floorG = $floor & ~0x7;		# floor group
+	$floorR = $floor &  0x7;		# floor remainder is bit index for bit I/O
+	if ($floor >= 0) {
+	    $iec = $Iec{"FloorSelS:$l:$floorG"};# IEC name of floor select buttons
+	} else {
+	    $iec = $Iec{"Sensors:$l"};		# IEC name of misc buttons 'AL' '><' '<>'
+	}
+	$chS    = $IONames{"S$iec"};
+	print "S lift = $l, floor = $floor, floorG = $floorG, floorR = $floorR, iec = $iec, channel = $chS\n" if $opt_t;
+	$frm->Checkbutton(
+	    -text        => $floorNames[$floor],	# floors
+	    -variable    => \$ChannelsIX[$chS][$floorR],
+	    -selectcolor => 'red',
+	    -borderwidth => 1,
+	    -state       => 'normal',
+	    -indicatoron => 0,		# 0 button    1 checkbox
+	    -command     => [ \&button_command, $chS, $floorR, ],
+	)->pack(-side   => 'top', -expand => 1,);
+    }
+    my $cageButtons = $canv->createWindow($xCage-$ww_2, $yCage-($floors+4)*11, -window => $frm);	# half button height = 11
+
+    my @cageDoors;
+    $#cageDoors = 2;		# reserve 3 elements [0] door [1] idR [2] incR
+    $cageDoors[0] = draw_door($canv, $lift, -1, 2, $opt_d, 'light green');
+
+    my $rope = $canv->createLine(
+	$xCage, -$wh,
+	$xCage, $cageTop,
 	-width => $ropeThickness,
 	-tags => 'rope',
 	-fill => 'blue',
     );
-    return [ $canv, $basicCage, $rope, $x, $yTop, ];	# used in move_cage()
+    my $rev = 1;			# allows reversing on over or undershoot
+    print "drawCage: basicCage $basicCage cageDoors ${$cageDoors[0]}[2] ${$cageDoors[0]}[3] cageButtons $cageButtons\n" if $opt_t;
+    return [ $canv, $cageTop, $basicCage, \@cageDoors, $cageButtons, $l, $upInd, $downInd, $rev, $rope, $xCage ];	# used in move_cage() [3] cageDoors
+    #        ->[0]  ->[1]     ->[2]       ->[3]        ->[4]       ->[5] ->[6]   ->[7]     ->[8] ->[9]  ->[10]
 } # draw_cage
 
 ########################################################################
 #
-#	Move cage up or down
+#	Generate a button callback or output bit directly
+#
+########################################################################
+
+sub button_command {
+    my ($chS, $floorRem) = @_;
+    my $val = $ChannelsI[$chS];
+    print "button_command: val = $val ==>\t" if $opt_t;
+    if ($ChannelsIX[$chS][$floorRem]) {
+	$val |= $masks[$floorRem];  # set bit
+	print "|= $val\n" if $opt_t;
+    } else {
+	$val &= ~$masks[$floorRem]; # clear bit
+	print "&= $val\n" if $opt_t;
+    }
+    if ($val != $ChannelsI[$chS]) {
+	$conn->send_now("$chS:$val");
+	$ChannelsI[$chS] = $val;
+    }
+} #button_command
+
+########################################################################
+#
+#	Move cage up or down with automatic limit stop
 #	Parameter 1:	dummy
 #	Parameter 2:	cag	cage identification array ref
 #	Parameter 3:	inc	1..n	number of increments to move up
 #				-1..-n	number of increments to move down
+#				undef   use previous inc when changing tim
 #	Parameter 4:	tim	undef	move once
 #				1..n	number of milliseconds between
 #					steps of continuous motion
 #				0	stop continous motion
-#	Parameter 5:	idRef	reference to id returned by after or repeat
+#	Parameter 5:	idR	reference to id returned by after or repeat
 #
 ########################################################################
 
 no warnings;
 sub move_cage {
-    my ($dummy, $cag, $inc, $tim, $idR) = @_;
-    my ($canv, $basicCage, $rope, $x, $yTop) = @$cag;	# $yTop at index 4
+    my ($dummy, $cag, $inc, $tim, $idR, $incR) = @_;
+    my ($canv, $cageTop, $basicCage, $RAcageDoors, $cageButtons, $l, $upInd, $downInd, $rev, $rope, $xCage) = @$cag;	# $cageTop at index 1
+    my $cageBottom;
     printMicroSeconds();
     if (defined $tim) {
-	if ($$idR) {
-	    $$idR->cancel();	# stop continuous cage movement
-	    $$idR = undef;
+	if ($idR) {
+	    print "move_cage" if $opt_t;
+	    if ($$idR and defined $inc) {
+		$$idR->cancel();	# stop continuous cage movement
+		$$idR = undef;
+		print ": stop - manual\t" if $opt_t;
+	    }
+	    elsif ($tim) {
+		if (defined $inc) {
+		    $$incR = $inc;	# save $inc	(up or down)
+		} else {
+		    $inc = $$incR;	# use saved $inc
+		    $$idR->cancel() if $$idR;	# stop temporarily
+		    print ": change speed cage - inc = $inc\t" if $opt_t;
+		}
+		$$idR = $canv->repeat($tim, [ \&move_cage, $dummy, $cag, $inc, undef, $idR, $incR ]); # no time
+	    }
+	    print ": time = $tim\n" if $opt_t;
 	}
-	elsif ($tim) {
-	    $$idR = $canv->repeat($tim, [ \&move_cage, $dummy, $cag, $inc, ]); # no time
-	}
-	print "cage time = '$tim' id = '$$idR'\n" if $opt_t;
     } else {
-	print "cage increment = '$inc'\n" if $opt_t;
-	if ($inc) {
-	    $canv->move($basicCage, 0, -$inc);
-	    $yTop -= $inc;
-	    $$cag[4] = $yTop;
-	    $canv->coords($rope, $x, 0, $x, $yTop);	# move bottom of rope to stay attached to cage
+	my $target = $cageTarg[$cagePosn[$l]];
+	$inc *= $rev;
+	$canv->move($basicCage, 0, -$inc);
+	$canv->move($RAcageDoors->[0][2], 0, -$inc);		# back door
+	$canv->move($RAcageDoors->[0][3], 0, -$inc);		# front door
+	$canv->move($cageButtons, 0, -$inc);			# button panel
+	if ($opt_I) {
+	    $canv->move($upInd, 0, -$inc);			# up indicator (optional)
+	    $canv->move($downInd, 0, -$inc);			# down indicator
+	}
+	$cageTop -= $inc;
+	$$cag[1] = $cageTop;
+	$canv->coords($rope, $xCage, -$wh, $xCage, $cageTop);	# move bottom of rope to stay attached to cage
+	$cageBottom = $cageTop + $ch;
+	if ($inc > 0 and $cageTop > 0 or $inc < 0 and $cageTop < $floors*($wh+5)-$ch+$wh-$doh-7) {
+	    if ($inc > 0) {			# cage moving up
+		if ($cageBottom < $target - $wh_2) {
+		    $cagePosn[$l]++;		# next floor index
+		    $target = $cageTarg[$cagePosn[$l]];
+		    $floor_text[$l] = $floorNames[$cagePosn[$l]];	# display floor indicator directly
+		    send_data('CagePosn', $l, -1, $cagePosn[$l]);	# IB0 = floor postion
+		}
+		elsif ($cageBottom < $target - $cso) {
+		    if ($cageNear[$l]) {
+			$cageNear[$l] = 0;			# cage sensor near off
+			send_data('Sensors', $l, 0, 1);	# IX1.0 = 1
+		    }
+		}
+		elsif ($cageBottom < $target) {
+		    if ($cageHome[$l]) {
+			$cageHome[$l] = 0;			# cage sensor home off
+			send_data('Sensors', $l, 1, 1);	# IX1.1 = 1
+		    }
+		}
+		elsif ($cageBottom <= $target) {
+		    unless ($cageHome[$l]) {
+			$cageHome[$l] = 1;			# cage sensor home on
+			send_data('Sensors', $l, 1, 0);	# IX1.1 = 0
+			if ($rev == -1) {
+			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+			    $$idR = undef;
+			    $$cag[8] = 1;			# $rev normal for next iteration
+			}
+		    }
+		}
+		elsif ($cageBottom <= $target + $cso) {
+		    unless ($cageNear[$l]) {
+			$cageNear[$l] = 1;			# cage sensor near on
+			send_data('Sensors', $l, 0, 0);	# IX1.0 = 0
+		    }
+		}
+	    } else {				# cage moving down
+		if ($cageBottom >= $target + $wh_2) {
+		    $cagePosn[$l]--;		# previous floor index
+		    $target = $cageTarg[$cagePosn[$l]];
+		    $floor_text[$l] = $floorNames[$cagePosn[$l]];	# display floor indicator directly
+		    send_data('CagePosn', $l, -1, $cagePosn[$l]);	# IB0 = floor postion
+		}
+		elsif ($cageBottom > $target + $cso) {
+		    if ($cageNear[$l]) {
+			$cageNear[$l] = 0;			# cage sensor near off
+			send_data('Sensors', $l, 0, 1);	# IX1.0 = 1
+		    }
+		}
+		elsif ($cageBottom > $target) {
+		    if ($cageHome[$l]) {
+			$cageHome[$l] = 0;			# cage sensor home off
+			send_data('Sensors', $l, 1, 1);	# IX1.1 = 1
+		    }
+		}
+		elsif ($cageBottom >= $target) {
+		    unless ($cageHome[$l]) {
+			$cageHome[$l] = 1;			# cage sensor home on
+			send_data('Sensors', $l, 1, 0);	# IX1.1 = 0
+			if ($rev == -1) {
+			    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
+			    $$idR = undef;
+			    $$cag[8] = 1;			# $rev normal for next iteration
+			}
+		    }
+		}
+		elsif ($cageBottom >= $target - $cso) {
+		    unless ($cageNear[$l]) {
+			$cageNear[$l] = 1;			# cage sensor near on
+			send_data('Sensors', $l, 0, 0);	# IX1.0 = 0
+		    }
+		}
+	    }
+	    print "move_cage: increment = $inc Floor = $cageBottom cagePosn = $cagePosn[$l] cageTarg = $target\n" if $opt_t;
+	} elsif (defined $idR) {
+	    $$cag[8] = -1;		# $rev for next iteration
+	    print STDERR "move cage: stop - auto, cageBottom = $cageBottom, inc = $inc\n" if $opt_t or $opt_C;
+	} else {
+	    print "move_cage: blocked\n" if $opt_t;
 	}
     }
 } # move_cage
 use warnings;
+
+########################################################################
+#
+#	Send bit or word data to an IEC address identified by
+#		'USE' id, lift, a bit position and optionally a floor
+#	Parameter 1:	USE	see Specs
+#	Parameter 2:	lift	0..m lifts
+#	Parameter 3:	bit	0..7 or -1 which is send a word
+#	Parameter 3:	data	0/1  or word data
+#	parameter 4:	floor	0..n or undef or -1 if misc
+#
+########################################################################
+
+sub send_data {
+    my ($use, $lift, $bit, $data, $floor) = @_;
+    my ($iec, $chS, $val);
+    if (defined $floor and $floor >= 0) {
+	$floor &= ~0x7;			# select floor group
+	$iec = $Iec{"$use:$lift:$floor"};	# IEC name of floor IXy.x bits
+    } else {
+	$iec = $Iec{"$use:$lift"};		# IEC name of misc IXy.x bits or IBy word
+    }
+    $chS = $IONames{"S$iec"};
+    $val = $ChannelsI[$chS];
+no warnings;
+    print "send_data: $iec.$bit:$data $use, lift = $lift, floor = $floor, val = $val ==>\t" if $opt_t;
+use warnings;
+    if ($bit >= 0) {
+	if ($data) {
+	    $val |= $masks[$bit]; 	 # set bit
+	    print "|= $chS:$val\n" if $opt_t;
+	} else {
+	    $val &= ~$masks[$bit]; 	# clear bit
+	    print "&= $chS:$val\n" if $opt_t;
+	}
+    } else {
+	$val = $data;			# send a word
+	print "$chS:$val\n" if $opt_t;
+    }
+    if ($val != $ChannelsI[$chS]) {
+	$conn->send_now("$chS:$val");
+	$ChannelsI[$chS] = $val;
+    }
+} # send_data
+
+########################################################################
+#
+#	Receive message from server - adjust outputs - ack registrations
+#
+########################################################################
+
+sub rcvd_msg_from_server {
+    my ($conn, $msg, $err) = @_;
+    printMicroSeconds();
+    if (defined $msg) {
+        my $len = length $msg;
+	print "($len)$msg<\n" if $opt_T;
+	if ($len == 0) {
+	    $conn->disconnect();
+	    print "$named: disconnected by server\n";
+	    exit;
+	}
+	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId, $chS, $bitSef, $wordSef, $button, $butMask, $val, $RAcmd);
+	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
+	    if ($msg1 =~ /^(\d+):(\d+)$/) {
+		$channel = $1;			## receive data as channel:value
+		$value   = $2;
+		$old = $ChannelsQ[$channel];
+		if (defined $old) {
+		    if ($value != $old) {
+			$id = $ChannelNames[$channel];
+			print "$named: $msg1	< $id\n" if $opt_t;
+			$bitRef = $ChannelsQX[$channel];
+			$bitSef = $wordSef = undef;
+			if (defined $bitRef) {
+			    my ($diff, $mask, $bit);
+			    goto WrongFormat if $value > 0xff;	# only 8 bit map allowed
+			    if ($butMask = $But{$id}) {
+				$id =~ s/^Q/I/;		# all %But ids are with QXy - matching IXy
+				$chS = $IONames{"S$id"};
+				$bitSef = $ChannelsIX[$chS];
+			    }
+			    $diff = $old ^ $value;	# $old initialized to a number for correct XOR
+			    while ($diff) {		# age old algorithm from CSR days
+				$mask = $diff & -$diff;	# rightmost set bit from diff
+				$bit = $bitIndex[$mask];
+				if ($value & $mask) {
+				    ${$bitRef}[$bit] = $val = 1;	# set variable for normal QXy.bit
+				    if ($bitSef and $butMask & $mask and ${$bitSef}[$bit]) {
+					########################################################################
+					# process reset for a transient button on Q output 1
+					########################################################################
+					${$bitSef}[$bit] = 0;		# reset input bit IXy.bit
+					$wordSef = \$ChannelsI[$chS];	# a bit has changed
+					$$wordSef &= ~$mask;		# clear input variable for send
+					if ($button = $But{"$id.$bit"}) {
+					    print "rcv: reset button = '$id.$bit'\n" if $opt_t;
+					    $canvas->itemconfigure($button, -fill => 'dark green');
+					}
+				    }
+				} else {
+				    ${$bitRef}[$bit] = $val = 0;	# reset variable for normal QXy.bit
+				}
+				if ($cmdFlag and $RAcmd = $Cmd{"$channel.$bit:$val"}) {
+				    ########################################################################
+				    # process command linked to a Q output from controller
+				    ########################################################################
+no warnings;
+				    print "rcv: '$id.$bit:$val' &(@$RAcmd)\n" if $opt_t;	# RAcmd may contain undef
+use warnings;
+				    $RAcmd->[0]->(@$RAcmd[1..$#{$RAcmd}]);	# execute command linked to QXy.bit:val
+				}
+				$diff &= ~$mask;	# modify viewable output - clear rightmost bit
+			    }
+			    if ($wordSef) {
+				$conn->send_now("$chS:$$wordSef");	# send reset bit(s) to controller
+			    }
+			}
+			$ChannelsQ[$channel] = $value;	# ready for next message
+		    }
+		} else {
+		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
+		}
+	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
+		$channel = $1;			## receive channel of a registration acknowlwdgment
+		($id, $ini) = @{$ArgNames[$ri]};	# next 2 values
+		defined $id or
+		    die "$named: too many registration acknowledgments from iCserver - system error";
+		print "$named: $ri: registering '$id' on channel '$channel'\n" if $opt_t;
+		$ri++;
+		my $dir = '';
+		if ($id =~ /^Q([XBWL])/) {
+		    if ($channel == 0) {
+			warn "$named: trying to register receiver '$id' at channel 0 - error\n";
+			next;
+		    }
+		    $dir = 'R';
+		    if ($channel < 0) {
+			$channel = -$channel;
+			print "$named: registering receiver '$id' on channel $channel twice - equivalence\n" if $opt_t;
+		    } else {
+			$ChannelsQ[$channel] = 0;	# initial value and Q definition
+			## when this array element is defined, it is a Q[XBWL] receiver
+			if ($1 eq 'X') {
+			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
+			    ## when this array slice is defined, channel is a QXn.m
+			    ## Q[BWL]n have this slice undefined for their channel
+			}
+		    }
+		}
+		elsif ($id =~ /^I([XBWL])/) {
+		    if ($channel <= 0) {
+			warn "$named: trying to register sender '$id' twice - not allowed\n";
+			next;
+		    }
+		    $dir = 'S';
+		    ## initial value and I definition
+		    $ChannelsI[$channel] = $ini;
+		    ## when this array element is defined, it is a I[XBWL] sender
+		    if ($1 eq 'X') {
+			for my $index (0 .. 7) {
+			    $ChannelsIX[$channel][$index] = ($ini & $masks[$index]) ? 1 : 0;
+			}
+			## when this array slice is defined, channel is a IXn.m
+			## I[BWL]n have this slice undefined for their channel
+		    }
+		}
+		if ($dir) {
+		    $regId = "$dir$id";
+		    $ChannelNames[$channel] = "$id";
+		    $IONames{$regId} = $channel;
+		    ## build only boxes whose IONames entry is defined
+		    print "register: $regId	channel = $channel	in = $ini\n" if $opt_t;
+		}
+	    } else {
+	      WrongFormat:
+		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
+	    }
+	}
+    }
+} # rcvd_msg_from_server
+
+########################################################################
+#
+#	Initialise Command Hash indexed by received IEC codes QXy.x for use in
+#	rcvd_msg_from_server to call commands
+#
+## &iCmd(USE, QXy, lift [floor])	initialises %Cmd for each bit QXy.0 .. QXy.7 from %Cmds
+#
+## %Cmds key	"USE.bit:val"		detailed call for each USE, bit and val 1 or 0
+##  or	 key	"USE:val"		for outside doors, where bit is derived from floor
+##	 val	( '\call, arg1, ...' )	generic command call with arguments derived from &iCmd
+#
+## %Cmd  key	chR.x:val		IECid of a received output which triggers a command
+##	 val	[ \call, arg1, ... ]	specific command call with arguments derived from &iCmd
+#
+########################################################################
+
+sub iCmd {
+    my ($use, $id, $idO, $idC, $lift, $f) = @_;
+    my ($command, $floor, $bit, $val, $chR, $chO, $chC, $cmd, @cmdArray);
+    $chR = $IONames{"R$id"};			# use the channel directly
+    $chO = $IONames{"R$idO"};			# use the open inside door channel directly
+    $chC = $IONames{"R$idC"};			# use the close inside door channel directly
+    for ($bit = 0; $bit < 8; $bit++) {
+	for ($val = 0; $val < 2; $val++) {
+	    if ($use eq 'Actuators' or $use eq 'MiscFuns') {
+		$command = $Cmds{ "$use.$bit:$val" };
+		$floor = $floors;
+	    } else {
+		$command = $Cmds{ "$use:$val" };
+		$floor = $f + $bit;
+	    }
+	    print "iCmd: use = $use, bit = $bit, val = $val, id = $id, chR = $chR, lift = $lift, floor = $floor\n" if $opt_T;
+	    if ($command) {
+		print "iCmd: command = $command\n" if $opt_T;
+		eval $command;			# uses $lift $floor $bit $chO $chR
+		print $@;
+		$Cmd{"$chR.$bit:$val"} = [ @cmdArray ];
+		if ($opt_T) {
+		    for $cmd (@cmdArray) {
+			$cmd = 'undef' unless defined $cmd;
+			print " $cmd,";
+		    }
+		    print "\n";
+		}
+	    }
+	}
+    }
+} # iCmd
 
 ########################################################################
 #
@@ -463,7 +2010,8 @@ sub printMicroSeconds {
     } elsif ($opt_t) {
 	print "L: ";
     }
-}
+} # printMicroSeconds
+
 __END__
 
 ############ POD to generate man page ##################################
@@ -476,26 +2024,76 @@ iClift -simulation of the physics and appearance of lifts in a building
 
 =head1 SYNOPSIS
 
- iClift [-tmTh][ -c cage_delay][ -d door_type][ -W width][ -H height]
-	-c del	delay between cage steps             (default 7 ms)
+ iClift [-tmTCIKxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+	[ -L lifts][ -F floors|<basement>,<ground>,<top floor>] etc
+
+    Simulation of the physics and appearance of lifts in a building
+    with IEC inputs sent to an iC control application from simulated
+    sensors and buttons
+    and using IEC outputs received from an iC control application to
+    initiate and stop simulated movement and to reset buttons.
+
+	-s host	host name of server        (default localhost )
+	-p port	service port of server     (default 8778      )
+	-n name	registration name          (default iClift    )
+	-i inst instance ID for this iClift (1 to 3 numeric digits)
+	-L lifts  number of lifts          (default   1 lifts )
+	-F floors number of floors         (default   3 floors)
+	-b file	generate an iCbox ID parameter file for monitoring
+	-B file	generate an iCbox ID parameter file with comments
+	-C	run continuous test   (supported by controller)
+	-I	show up/down indicators in cage
+	-c del	delay between cage steps   (default 7    ms   )
 	-d typ	door type 0 open from centre, 1 left, -1 right
-	-W pix	width of canvas in pixels            (default 400)
-	-H pix	height of canvas in pixels           (default 850)
+	-w pix	wall width                 (default 300 pixels)
+	-k pix	wall height                (default 200 pixels)
+	-v pix	door opening width         (default 100 pixels)
+	-g pix	door opening height        (default 133 pixels)
+	-o pix	door opening offset        (default  40 pixels)
+	-U pix	cage width                 (default 110 pixels)
+	-J pix	cage height                (default 145 pixels)
+	-R pix	cage sensor offset         (default  10 pixels)
+	-u pix	door width                 (default  55 pixels)
+	-j pix	door height                (default 137 pixels)
+	-r pix	door sensor offset         (default   5 pixels)
 	-t	trace debug messages
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
-	-h      help, ouput this Usage text only
+	-x	exit after analyzing input parameters
+	-h	help, ouput this Usage text only
 
- Key bindings:
-    shift buttons
-	<-	open door
-	->	close door
-	^	move lift up	Page up    fast    Home   up continuous
-	v	move lift down	Page down  fast    End    down continuous
-	Ret	stop continuous
-	roll	move with respect to floors
+	-K	activate the following Key bindings: (default off)
+	    @	move lift 0 up   Home up continuous   Page up   fast
+	    '^'
+	    v	move lift 0 down End  down continuous Page down slow
+	    Ret	stop lift 0 continuous movement
 
-	q	quit
+	    <-	open  inside  door for lift 0 floor 0
+	    ->	close inside  door for lift 0 floor 0
+	    u 	open  inside  door for lift 0 continuous
+	    i 	close inside  door for lift 0 continuous
+	    o 	stop  inside  door for lift 0 continuous
+	    y 	fast  inside  door for lift 0
+	    t 	slow  inside  door for lift 0
+
+	    j 	open  outside door for lift 0
+	    k 	close outside door for lift 0
+	    g 	open  outside door for lift 0 continuous
+	    h 	close outside door for lift 0 continuous
+	    l 	stop  outside door for lift 0 continuous
+	    f 	fast  outside door for lift 0
+	    d 	slow  outside door for lift 0
+
+	    J 	open  outside door for lift 1
+	    K 	close outside door for lift 1
+	    G 	open  outside door for lift 1 continuous
+	    H 	close outside door for lift 1 continuous
+	    L 	stop  outside door for lift 1 continuous
+	    F 	fast  outside door for lift 1
+	    D 	slow  outside door for lift 1
+
+	    w	hide/show all walls        (always active)
+	    q	quit                       (always active)
 
 =head1 DESCRIPTION
 
@@ -509,57 +2107,112 @@ in the lift and position sensors, indicating the position of the lifts.
 
 The simulation shows an animated picture of the floors with suitable
 pushbuttons and indicators, outside and inside doors, which can be
-opened and closed, as well as lifts which can be moved at different
+opened and closed, as well as lift cages which can be moved at different
 speeds. In particular the lifts do not start and stop instantaneously,
 but rather with an acceleration and deceleration to simulate the
 inertia of the lifts.
 
 The number of lifts can be preset with the -L option. This must be
 matched by an equal number of lifts to be controlled by the control
-application. The same applies to the floors which are preset with
-the -F option. This option also determines the prefixes used for
-basement floors and the text used for the ground floor.  Ground floor
-can also be 0 or 1. Basement prefixes can vary. A prefix for upper
-floors could be provided, but is not usual.
+application. The same applies to the number of floors, which are preset
+with the -F option. This option is either a number or determines the
+prefixes used for basement floors and the text used for the ground
+floor. Ground floor can also be 0 or 1 (American usage). Basement
+prefixes can vary. If there are no characters before the first comma
+or the basement number is 0, there will be no basement floors. 0 for
+upper floors means only basement and a ground floor is implemented. A
+prefix can be provided for upper floors, but is not usual.
 
-    -F B3,G,3  would provide the following floors:   B3 B2 B1 G 1 2 3
-    -F B3,1,4  for american indications:             B3 B2 B1 1 2 3 4
-    -F U3,E,3  for german indications:               U3 U2 U1 E 1 2 3
-    -F S3,P,3  for french indications:               S3 S2 S1 P 1 2 3
-    -F -3,0,3  for equivalent numerical indications: -3 -2 -1 0 1 2 3
+  -F 7       simply show floor index:               0  1  2  3  4  5  6
+  -F B2,G,4  would provide the following floors:   B2 B1  G  1  2  3  4
+  -F B2,1,5  for American indications:             B2 B1  1  2  3  4  5
+  -F U2,E,4  for German indications:               U2 U1  E  1  2  3  4
+  -F S2,P,4  for French indications:               S2 S1  P  1  2  3  4
+  -F -2,0,4  for equivalent numerical indications: -2 -1  0  1  2  3  4
+  -F B0,G,6  English without any basement floors:   G  1  2  3  4  5  6
+  -F B6,G,0  English without any upper floors:     B6 B5 B4 B3 B2 B1  G
 
-Outputs from the control application:
+=head1 INPUTS AND OUTPUTS TO THE CONTROL APPLICATION
 
- Common to all floors:
-    Floor indicator:    QB1	# floor at which lift is currently
-    Lift up:            QX0.0
-    Lift slow:          QX0.1
-    Lift medium:        QX0.2
-    Lift fast:          QX0.3	# this may vary
- or Lift speed:         QB2     # +/-
+ [COMMON TO ALL FLOORS]		# USE: CagePosn
+    Floor indicator:    IB1	# cage position of lift
+				# sensors change half-way between floors
 
- Equivalences for Buttons in the lift:
- (order determines position starting at the top)
- [LIFT BUTTONS]
-    5    X1.5,  6    X1.6,	# actuators and indicators
-    3    X1.3,  4    X1.4,
-    1    X1.1,  2    X1.2,
-    B1   X0.7,  G    X1.0,
-    B3   X0.5,  B2   X0.6,
-    do   IX0.0, dc   IX0.1,     # door open and close, actuators only
- (the same list can be used in the control application)
+ [COMMON ACTUATORS]		# USE: Actuators
+    Down indicator:     QX0.0	# v indicator inside cage (optional)
+    Up   indicator:     QX0.1	# ^ indicator inside cage (optional)
+    Inside door open:   QX0.2	# open slow
+    Inside door close:  QX0.3	# close slow
+    Inside door fast:   QX0.4	# fast open or close
+    Move lift up:       QX0.5	# up slow
+    Move lift down:     QX0.6	# down slow
+    Move lift fast:     QX0.7	# fast up or down
 
- [FLOOR BUTTONS]
-    6    X4.4,  X4.5,		# up/down actuators and indicators
-    5    X4.2,  X4.3,
-    4    X4.0,  X4.1,
-    3    X3.6,  X3.7,
-    2    X3.4,  X3.5,
-    1    X3.2,  X3.3,
-    G    X3.0,  X3.1,
-    B1   X2.6,  X2.7,
-    B2   X2.4,  X2.5,
-    B3   X2.2.  X2.3,
+ [COMMON SENSORS]		# USE: Sensors	NOTE: inverted signals
+    Cage sensor near:   IX1.0	# ~IX1.0 cage is near home position
+    Cage sensor home:   IX1.1	# ~IX1.1 cage is at precise cage position
+    Inside door posn:   IX1.2	# ~IX1.2 door is shut - changes half way
+    Inside door near:   IX1.3	# ~IX1.3 door is near home position
+    Inside door home:   IX1.4	# ~IX1.4 door is at precise end position
+
+    Execute misc_fun0:  QX1.0	# USE: MiscFuns
+    Execute misc_fun1:  QX1.1
+    Execute misc_fun2:  QX1.2
+    Execute misc_fun3:  QX1.3
+    Execute misc_fun4:  QX1.4
+
+ [LIFT BUTTONS]			# USE: Sensors/MiscFuns
+ 9  AL   X1.5,			# door close button and indicator
+ 8  ><   X1.6,			# door open  button and indicator
+ 7  <>   X1.7,			# ALARM      button and indicator
+
+ 6  4    X2.6,			# USE: FloorSelS/FlooSelR
+ 5  3    X2.5,			# floor sel  button and indicator
+ 4  2    X2.4,
+ 3  1    X2.3,
+ 2  G    X2.2,
+ 1  B1   X2.1,
+ 0  B2   X2.0,
+
+ [FLOOR BUTTONS]		# USE: FloorDnS/FloorDnR, FloorUpS/FloorUpR
+ 6  4    X3.6, (X4.6),		# down/up    button and indicator
+ 5  3    X3.5,  X4.5,		# top floor has no up button X4.6
+ 4  2    X3.4,  X4.4,
+ 3  1    X3.3,  X4.3,		# use X3.0 as cage overshoot alarm and reset
+ 2  G    X3.2,  X4.2,		# use X4.6 as door overshoot alarm and reset
+ 1  B1   X3.1,  X4.1,
+ 0  B2  (X3.0), X4.0,		# bottom floor has no down button X3.0
+
+ [OUTSIDE DOOR SENSORS]		# USE: DoorPosn, DoorNear, DoorHome
+ 6  4    IX5.6,  IX6.6,  IX7.6,	# door shut changes half way
+ 5  3    IX5.5,  IX6.5,  IX7.5,	# common near and home at either end
+ 4  2    IX5.4,  IX6.4,  IX7.4,	# similar to inside door sensors
+ 3  1    IX5.3,  IX6.3,  IX7.3,	# NOTE: inverted signals
+ 2  G    IX5.2,  IX6.2,  IX7.2,
+ 1  B1   IX5.1,  IX6.1,  IX7.1,
+ 0  B2   IX5.0,  IX6.0,  IX7.0,
+
+ [OUTSIDE DOOR ACTUATORS]	# USE: DoorOpen, DoorClose, DoorFast
+ 6  4    QX5.6,  QX6.6,  QX7.6,	# outside door open, close, fast
+ 5  3    QX5.5,  QX6.5,  QX7.5,
+ 4  2    QX5.4,  QX6.4,  QX7.4,
+ 3  1    QX5.3,  QX6.3,  QX7.3,
+ 2  G    QX5.2,  QX6.2,  QX7.2,
+ 1  B1   QX5.1,  QX6.1,  QX7.1,
+ 0  B2   QX5.0,  QX6.0,  QX7.0,
+
+ [FLOOR DOWN/UP INDICATORS]	# USE: FloorDnI, FloorUpI
+ 6  4    QX8.6,  QX9.6,		# v indicator on outside wall
+ 5  3    QX8.5,  QX9.5,		# ^ indicator on outside wall
+ 4  2    QX8.4,  QX9.4,
+ 3  1    QX8.3,  QX9.3,
+ 2  G    QX8.2,  QX9.2,
+ 1  B1   QX8.1,  QX9.1,
+ 0  B2   QX8.0,  QX9.0,		# IX8 and IX9 not used
+
+ X2 - X9 need adjustment if number of floors exceed 8
+ Each lift gets appropriately adjusted higher numbers
+ (the same list must be used in the control application)
 
 =head1 AUTHOR
 

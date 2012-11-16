@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.52 2012/08/20 04:52:37 jw Exp $";
+"@(#)$Id: rsff.c,v 1.53 2012/10/29 03:11:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -122,6 +122,11 @@ iC_sMff(					/* S_FF master action on FF */
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
+    /********************************************************************
+     *	Live data need only be transmitted for Master gates and clock and
+     *	timer Slave gates. All other Slave gates will transmit their live
+     *	data on the following logic or arithmetic scan triggered by a change
+     *******************************************************************/
     if (gm->gt_live & 0x8000) {
 	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
     }
@@ -365,11 +370,6 @@ iC_dSsh(					/* D_SH slave action on SH */
 {
     Gate *	gs;
 
-#if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {			/* value can change more than once */
-	iC_liveData(gm->gt_live, gm->gt_new);	/* output final value here */
-    }
-#endif
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
@@ -777,12 +777,6 @@ iC_chSbit(					/* CH_BIT slave action */
     Gate *	gs;
 
     gm->gt_old = gm->gt_new;			/* now new value is fixed */
-#if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {			/* value can change more than once */
-	iC_liveData(gm->gt_live, gm->gt_ini < 0 ?	/* output final value here */
-	gm->gt_new : gm->gt_val < 0 ? 1 : 0);
-    }
-#endif
     gs = gm->gt_funct;
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
@@ -1121,7 +1115,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hd,", channel, (short)val);/* signed char to output for QBx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd ==>> %hd", (short)(char)gm->gt_old, (short)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%hd\t%hd ==>> %hd", channel, (short)val, (short)(char)gm->gt_old, (short)val);
 #endif
 	} else
 	if (mask == W_WIDTH) {			/* output node that output are transferred to in  */
@@ -1129,7 +1123,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hd,", channel, (short)val);/* signed short to output for QWx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd ==>> %hd", (short)gm->gt_old, (short)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%hd\t%hd ==>> %hd", channel, (short)val, (short)gm->gt_old, (short)val);
 #endif
 #if INT_MAX != 32767 || defined (LONG16)
 	} else
@@ -1138,13 +1132,13 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%ld,", channel, (long)val);/* signed long to output for QLx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%ld ==>> %ld", gm->gt_old, val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==>> %ld", channel, val, gm->gt_old, val);
 #endif
 #else
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%d,", channel, val);	/* signed int to output for QLx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%d ==>> %d", gm->gt_old, val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>> %d", channel, val, gm->gt_old, val);
 #endif
 #endif
 #endif
@@ -1154,7 +1148,7 @@ iC_outMw(					/* NEW OUTW master action */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hu,", channel, (unsigned short)val);/* unsigned bit mask to output for QXx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "0x%02x ==>> 0x%02x", (unsigned)gm->gt_old, (unsigned)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%u\t0x%02x ==>> 0x%02x", channel, (unsigned)val, (unsigned)gm->gt_old, (unsigned)val);
 #endif
 #ifndef _WINDOWS
 	} else {
@@ -1848,8 +1842,8 @@ if (glv->gt_val != val) {
  *
  *	Evaluate an indexed reference to an immC array
  *
- *	The compiler stores the size of the initialised immC array in gt_old
- *	A check is made that the index is not out of bounds - else quit
+ *	The compiler stores the size of the initialised immC array in gt_old.
+ *	An index within range returns the indexed member of the immC array.
  *
  *	If there is a range error iConst is returned, which is checked by
  *	iC_assign or returns logic or arithmetic 0 if referenced.

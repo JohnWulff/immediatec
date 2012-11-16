@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.92 2012/09/23 07:11:19 jw Exp $";
+"@(#)$Id: outp.c,v 1.93 2012/11/13 04:28:39 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -921,8 +921,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 				    *fp.gpp++ = tgp;
 				    *fp.gpp++ = 0;		/* room for clock or timer entry */
 				    *fp.gpp++ = 0;		/* room for time delay */
-				    /* TODO modify later to do this only for */
-				    /* TODO action gates controlled by a TIMER */
+				    /* could do this only for action gates controlled by a TIMER */
 				} else {
 				    /* F_SW, F_CF or F_CE action gate points to function */
 				    assert((sp->ftype == F_SW ||

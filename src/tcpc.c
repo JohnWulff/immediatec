@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.22 2012/07/16 06:36:57 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.23 2012/11/07 03:42:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -18,10 +18,27 @@ static const char RCS_Id[] =
  *
  *	W. R. Stevens, TCP/IP Illustrated, Vol 3, p 10
  *
+ *   Modification John Wulff 2012.11.06 - disable Nagle's algorithm
+ *	From <en.wikipedia.org/wiki/Nagle's_algorithm>
+ *	Applications that expect real time response can react poorly to
+ *	Nagle's algorithm. The algorithm purposefully delays transmission,
+ *	increasing bandwidth efficiency at the expense of latency.
+ *	For this reason applications with low bandwidth time sensitive
+ *	transmissions typically use TCP_NODELAY to bypass the Nagle delay.
+ *
+ *	This very much applies to network traffic in the immediate C system.
+ *	Messages are typically 5 to 10 bytes long staggered at intervals
+ *	which are usually 10's of milliseconds to seconds apart, but can
+ *	involve a burst of several messages as a result of the same trigger.
+ *	Nagle's algorithm sends the first if these bursts and delays the
+ *	rest for up to 500 ms or when an unrelated return message comes,
+ *	which is much too late.	(Also changed for Perl code in Msg.pm)
+ *
  *******************************************************************/
 
 #include	<stdio.h>
 #include	<signal.h>
+#include	<netinet/tcp.h>
 #ifdef	WIN32
 #include	<Time.h>
 #else	/* WIN32 */
@@ -137,6 +154,7 @@ iC_connect_to_server(const char *	host,
     struct in_addr	sin_addr;
     unsigned short int	sin_port;
     struct sockaddr_in	server;
+    int			flag = 1;		// support setting TCP_NODELAY
 #ifdef	WIN32
     WORD		wVersionRequested;
     WSADATA		wsaData;
@@ -221,6 +239,15 @@ iC_connect_to_server(const char *	host,
 	iC_quit(SIGUSR1);
     }
 #endif	/* WIN32 */
+
+    if (setsockopt(sock,		/* SOCKET affected */
+		   IPPROTO_TCP,		/* at tcp level */
+		   TCP_NODELAY,		/* disable Nagles algorithm */
+		   (char*)&flag,	/* historical crud */
+		   sizeof(int))) {	/* length of option value */
+	perror("setsockopt failed");
+	iC_quit(SIGUSR1);
+    }
 
     memset(&server, 0, sizeof(server));
     server.sin_family = AF_INET;
