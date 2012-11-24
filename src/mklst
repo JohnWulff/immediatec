@@ -37,13 +37,13 @@ Usage:	@<<<<<<< [-dgnecilL6paHsh] [-m px.lt] [file ...]
 		insert execution lines from px.lt as well
 		do not output .ic if not generated from .ica
 	-h	help, ouput this Usage text only
-$Id: mklst,v 1.14 2012/06/02 04:27:59 jw Exp $
+$Id: mklst,v 1.15 2012/11/24 04:58:59 jw Exp $
 .
 
 use vars qw($opt_c $opt_d $opt_D $opt_e $opt_g $opt_i $opt_l $opt_L $opt_n);
 use vars qw($opt_6 $opt_p $opt_a $opt_H $opt_s $opt_S $opt_m $opt_M $opt_h);
-require "getopts.pl";
-&Getopts('cdDegilLn6paHsSm:M:h');	# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('cdDegilLn6paHsSm:M:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
