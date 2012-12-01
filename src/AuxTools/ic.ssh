@@ -1,0 +1,79 @@
+# Style sheet for C
+# Copyright (c) 2012 John E. Wulff
+# $Id: ic.ssh,v 1.1 2012/12/01 03:01:31 jw Exp $
+#
+# append the following 5 lines (without the leading #) to
+# /usr/share/a2ps/sheets.map (or directory where style sheets are stored)
+## immediate C
+#ic:	/*.ic/
+#	/*.ih/
+#	/*.ica/
+#	/*.lst/
+#
+# This file is part of a2ps.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; see the file COPYING.  If not, write to
+# the Free Software Foundation, 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+#
+
+style "immediate C" is
+requires a2ps 4.13
+
+written by "John E. Wulff <immediateC@gmail.com>"
+version is 1.1
+
+documentation is
+   "immediate C can be in files with the extender .ic, .ica or listings in .lst"
+   "This style does highlight function block definitions, which are introduced"
+   "by the keyword imm followed by one of the types bit, int, clock or timer."
+end documentation
+
+alphabets are
+   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_#$%"
+
+case sensitive
+
+ancestors are
+  gnuc
+end ancestors
+
+# iC function block declaration
+operators in Plain are
+   (/(D)([ \t]*\\()/ \1 Keyword_strong, \2 Plain),
+   (/(SH)([ \t]*\\()/ \1 Keyword_strong, \2 Plain),
+   (/(imm|assign)?([ \t]*)(bit|int|clock|timer|void)(([ \t]*)([a-zA-Z_][a-zA-Z_0-9]*)([ \t]*\\())?/ 
+	\1 Keyword, \2 Plain, \3 Keyword, \5 Plain, \6 Label_strong, \7 Plain)
+end operators	
+
+keywords in Keyword are
+   immC, iC_Gt, Gate
+end keywords
+
+keywords in Keyword_strong are
+   /^%[ ]*(define|undef)/,
+   /^(use|no)[ \t](strict|alias)/,
+   DR_, DSR_, SHR_, SHSR_, CHANGE, RISE, SR, SR_, SRR, SRR_, CLOCK, TIMER, TIMER1, FORCE,
+   DR, DSR, FALL, LATCH, DLATCH, this
+end keywords
+
+keywords in Label_strong are
+   FOR, IF, ELSIF, ELSE
+end keywords
+
+operators in Label_strong are
+   "{{", "}}"
+end operators
+
+end style
