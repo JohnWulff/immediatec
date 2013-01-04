@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.106 2012/11/13 04:33:17 jw Exp $";
+"@(#)$Id: comp.y,v 1.107 2012/11/24 06:23:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -4824,7 +4824,7 @@ execerror(					/* recover from run-time error */
  *******************************************************************/
 
 void
-yyerror(char *	s)
+yyerror(const char *	s)
 {
     char *	cp = chbuf[lexflag&C_PARSE];
     int		n, n1;

@@ -111,14 +111,14 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.50 2012/11/08 06:53:13 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.51 2012/11/24 04:49:01 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
 use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_T $opt_s $opt_p);
 use vars qw($opt_n $opt_i $opt_c $opt_C $opt_R $opt_l $opt_f $opt_h);
-require "getopts.pl";
-&Getopts('bdrHmxtTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('bdrHmxtTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only

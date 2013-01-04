@@ -48,7 +48,7 @@ usage ()
   echo "	-n	generate no output, report $ICC compile errors only" >&2
   echo "		-t and -n generate 'cexe.c' for last file as a side effect" >&2
   echo '	-s	link with static library libict.a (default libict.so)' >&2
-  echo "	-f	force building of new output files - do not $IAC for .ic" >&2
+  echo "	-f	force building of new output files" >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
   echo '	-g	debugging with gdb - each expression has its own C code' >&2
   echo '		forces -s -- link with static library libict.a' >&2
@@ -93,7 +93,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.40 2012/05/16 07:16:40 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.41 2012/12/07 01:08:04 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -242,50 +242,41 @@ for arg in $*; do
     lk=$link				# temporary link mode for each file
     base=${arg%.*}
     ext=${arg#$base}
-    ica="$base.ica"
-    file="$base.ic"
+    icaFile="$base.ica"
+    icFile="$base.ic"
     if [ -n "$L" ]; then
 	L=" -l $base.log"		# will change for every arg once L is set
     fi
-# echo "arg=$arg, base=$base, ext=$ext, ica=$ica, file=$file, lk=$lk"
+# echo "arg=$arg, base=$base, ext=$ext, icaFile=$icaFile, icFile=$icFile, lk=$lk"
     stat=0
-    if [ -f $ica ]; then
-	if [ $ica -nt $file -o $force -ne 0 -a "$ext" = '.ica' ]; then
-	    if [ -w $file ]; then
-		mv -f $file "$file.bak"		# backup writable iC file
+    if [ -f $icaFile ]; then
+	if [ $icaFile -nt $icFile -o $force -ne 0 -a "$ext" != '.ic' ]; then
+	    if [ -w $icFile ]; then
+		mv -f $icFile "$icFile.bak"		# backup writable iC file
 	    fi
 	    if [ $q -eq 0 ]; then
 		if [ $z -eq 1 ]; then echo -n "# "; fi
-		echo $ica
+		echo $icaFile
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "$nice${b}$IAC$v$a$S$N$P$L -o $file $ica"	# may be copy if no iCa constructs
+		echo "$nice${b}$IAC$v$a$S$N$P$L -o $icFile $icaFile"	# may be copy if no iCa constructs
 	    fi
-	    if ! $nice${b}$IAC$v$a$S$N$P$L -o $file $ica; then	# translate iCa to iC file
+	    if ! $nice${b}$IAC$v$a$S$N$P$L -o $icFile $icaFile; then	# translate iCa to iC file
 		if [ $q -eq 0 ]; then
-		    echo "${b}$IAC$v compile errors in '$ica' - incorrect iC file '$file' generated" >&2
+		    echo "${b}$IAC$v compile errors in '$icaFile' - incorrect iC file '$icFile' generated" >&2
 		fi
 		stat=1
 		let status+=20			# immac error
 	    fi
 	fi
-    elif [ -f $file -a $force -eq 0 ]; then
-	if ! $nice${b}$IAC$v$S$N$P -t $file; then
-	    if [ $q -eq 0 ]; then
-		if [ $z -eq 1 ]; then echo -n "# "; fi
-		echo $ica
-	    fi
-	    if [ $z -eq 1 ]; then
-		echo "mv $file $ica; $nice${b}$IAC$v$a$S$N$P$L -o $file $ica	# ic file has iCa constructs"
-	    fi
-	    mv $file $ica				# there was no previous iCa file
-	    if ! $nice${b}$IAC$v$a$S$N$P$L -o $file $ica; then	# ic file has iCa constructs
-		if [ $q -eq 0 ]; then
-		    echo "${b}$IAC$v compile errors in '$ica' - incorrect iC file '$file' generated" >&2
-		fi
-		stat=1
-		let status+=20			# immac error
-	    fi
+    elif [ -f $icFile ]; then
+	if [ $z -eq 1 ]; then
+	    echo "if ! $nice${b}$IAC$v$S$N$P -t $icFile;"	# may be copy if no iCa constructs
+	fi
+	if ! $nice${b}$IAC$v$S$N$P -t $icFile; then
+	    echo "$? '$icFile' should be renamed '$icaFile' because it has iCa constructs" >&2
+	    stat=1
+	    let status+=20			# immac error
 	fi
     fi
     if [ -n "$ext" ]; then
@@ -299,22 +290,22 @@ for arg in $*; do
 	esac
     fi
 
-    if [ -f "$file" -a -z "$ic" -a "$stat" -eq 0 ]; then
+    if [ -f "$icFile" -a -z "$ic" -a "$stat" -eq 0 ]; then
 	case $lk in
 	0)				# default
 	    stat=0
-	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo $file
+		    echo $icFile
 		fi
 		rm -f $base.c
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
+		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile; then
 		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$file' - no executable '$base' generated" >&2
+			echo "${b}$ICC$v compile errors in '$icFile' - no executable '$base' generated" >&2
 		    fi
 		    stat=1
 		    let status+=1
@@ -347,28 +338,28 @@ for arg in $*; do
 		fi
 	    fi ;;
 	1)				# -l	link all iC-files into one executable
-	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
-		list="$list $file"	# compile and link all if one has changed
+	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
+		list="$list $icFile"	# compile and link all if one has changed
 	    fi
-	    files="$files $file"
+	    files="$files $icFile"
 	    ;;
 	2)				# -t	generate listings file.lst
 	    if [ -n "$first" ]; then
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$file" -nt "$base.lst$l" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$base.lst$l" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo "$base.lst$l"
 		fi
 		rm -f $base.lst$l
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$d -c -l $base.lst$l $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -c -l $base.lst$l $file; then
+		if ! $nice${b}$ICC$v$D$d -c -l $base.lst$l $icFile; then
 		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$file'" >&2
+			echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    fi
 		    let status+=1
 		fi
@@ -378,18 +369,18 @@ for arg in $*; do
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$file" -nt "$base.c" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo "$base.c"
 		fi
 		rm -f $base.c
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -o $base.c $file"
+		    echo "$nice${b}$ICC$v$D$d -o $base.c $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -o $base.c $file; then
+		if ! $nice${b}$ICC$v$D$d -o $base.c $icFile; then
 		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$file'" >&2
+			echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    fi
 		    let status+=1
 		fi
@@ -399,18 +390,18 @@ for arg in $*; do
 		echo "output file '$first' ignored" >&2
 		first=''
 	    fi
-	    if [ "$file" -nt "$base.c" -o "$file" -nt "$base.lst$l" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$base.c" -o "$icFile" -nt "$base.lst$l" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
 		    echo "$base.c $base.lst$l"
 		fi
 		rm -f $base.c $base.lst$l
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file"
+		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $file; then
+		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile; then
 		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$file'" >&2
+			echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    fi
 		    let status+=1
 		fi
@@ -418,25 +409,25 @@ for arg in $*; do
 	5)				# -n	generate no output, report immcc compile errors only
 	    if [ $q -eq 0 ]; then
 		if [ $z -eq 1 ]; then echo -n "# "; fi
-		echo $file
+		echo $icFile
 	    fi
 	    if [ -n "$first" ]; then
 		echo "output file '$first' ignored" >&2
 		first=''
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "$nice${b}$ICC$v$D$d -c $file"
+		echo "$nice${b}$ICC$v$D$d -c $icFile"
 	    fi
-	    if ! $nice${b}$ICC$v$D$d -c $file; then
+	    if ! $nice${b}$ICC$v$D$d -c $icFile; then
 		if [ $q -eq 0 ]; then
-		    echo "${b}$ICC$v compile errors in '$file'" >&2
+		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		fi
 		let status+=1
 	    fi ;;
 	esac
     elif [ -z "$ic" ]; then
 	if [ $q -eq 0 ]; then
-	    echo "Error: iC file '$file' does not exist or is in error" >&2
+	    echo "Error: iC file '$icFile' does not exist or is in error" >&2
 	fi
 	list="$list ERROR:$base.c"
 	let status+=1
@@ -445,17 +436,17 @@ done
 
 if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
     list=""
-    for file in $files; do	# recompile all files for aux and link
-	base=${file%.ic}
+    for icFile in $files; do	# recompile all files for aux and link
+	base=${icFile%.ic}
 	if [ $q -eq 0 ]; then
 	    if [ $z -eq 1 ]; then echo -n "# "; fi
-	    echo $file
+	    echo $icFile
 	fi
 	rm -f $base.c		# -f in case read only
 	if [ $z -eq 1 ]; then
-	    echo "$nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file"
+	    echo "$nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $icFile"
 	fi
-	if ! $nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $file; then
+	if ! $nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $icFile; then
 	    list="$list ERROR:"
 	    let status+=1
 	fi
@@ -541,7 +532,7 @@ iCmake - make one or more immediate-C applications
     -n      generate no output, report immcc compile errors only
             -t and -n generate 'cexe.c' for last file as a side effect
     -s	    link with static library libict.a (default libict.so)
-    -f      force building of new output files - do not immac for .ic
+    -f      force building of new output files
     -e      link all targets with -lefence to test with Electric Fence
     -g      debugging with gdb - each expression has its own C code
             forces -s -- link with static library libict.a
@@ -589,18 +580,19 @@ iCmake - make one or more immediate-C applications
 
 =head1 DESCRIPTION
 
-B<iCmake> is a shell script to compile iC sources into C sources using the
-B<immcc> compiler.  These in turn are compiled and linked into an executable
-iC applications by a C compiler - currently B<gcc> (this can be changed).
+B<iCmake> is a shell script to compile iCa and iC sources into C
+sources using the B<immac> and B<immcc> compilers.  These in turn
+are compiled and linked into an executable iC applications by a C
+compiler - currently B<gcc> (this can be changed).
 
-If a source contains 'FOR loops', %define macro definitions or there are
--P macro definitions, the source file is an iCa language file and is
-renamed <source>.ica - unless the source file has the .ica extension already.
-Isolated [index expressions] without at least one 'FOR loop' or %define
-are not sufficient to classify a file as an iCa language file.
-
-B<immac> translates an iCa language file to an iC language file <source>.ic,
-which is then compiled by B<immcc> and the C compiler.
+If a source file contains 'FOR loops', 'IF statements' or %define
+macro definitions, it is an iCa language file and should be named
+<source>.ica.  This is translated to an iC source file using the
+B<immac> pre-compiler, which is then translated into a C source be the
+B<immcc> compiler. Otherwise the source should have the extension .ic,
+which is translated directly by B<immcc>. If a file with the extension
+.ic has iCa constucts a warning is issued and no attempt is made to
+tranlsate it with B<immcc> (this would cause serious errors).
 
 Various options allow partial compilation and generation of listings.
 

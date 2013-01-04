@@ -39,19 +39,27 @@ Usage:
     iCa converter to change single braces in FOR control lines to twin
     braces
 
-$Id: immax,v 1.3 2012/03/27 03:50:51 jw Exp $
+$Id: immax,v 1.4 2012/12/06 22:28:03 jw Exp $
 .
 
-use vars qw($opt_o $opt_e $opt_U $opt_l $opt_P $opt_T $opt_h);
-require "getopts.pl";
-&Getopts('o:e:UlP:Th');	# sets $opt_h if -h etc
+use vars qw($opt_o $opt_e $opt_U $opt_l $opt_T $opt_h);
+my @opt_P;
+use Getopt::Long qw(:config no_ignore_case bundling);
+## getopts('o:e:UlP:Th');	# sets $opt_h if -h etc
+GetOptions (
+    'o=s' => \$opt_o,
+    'e=s' => \$opt_e,
+    'U'   => \$opt_U,
+    'l'   => \$opt_l,
+    'P=s' => \@opt_P,
+    'T'   => \$opt_T,
+    'h'   => \$opt_h);
 
 if ($opt_h) {
     write STDERR; exit 2;	# -h, ouput Usage only
 }
 
 my %defs = ();
-my @defines = ();
 my @def = ();
 my $df;
 my $val;
@@ -88,9 +96,8 @@ if ($opt_e) {				# must be last so STDERR remains open
     open STDERR, ">$opt_e" or die "Cannot open Error output file '$opt_e': $!";
 }
 
-if (defined $opt_P) {
-    @defines = split(' ', $opt_P);
-    foreach (@defines) {
+if (@opt_P) {
+    foreach (@opt_P) {
 	@def = split(/=/, $_);
 	$df = shift(@def);		# enter -P NAME(s) in associative array %defs
 	if ($df =~ /^[A-Z_a-z]\w*$/) {
@@ -247,7 +254,7 @@ sub processFile {
 					push @ids, $identifier;	# each iCa FOR loop only has one $identifier
 					print STDERR "+++ push @ids\n" if $opt_T;
 					$translate = $identifier;
-					if ($opt_U or $opt_l or $opt_P) {
+					if ($opt_U or $opt_l or @opt_P) {
 					    if (defined $defs{ $identifier} ) {
 						$translate = $defs{ $identifier};
 					    }

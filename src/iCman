@@ -114,7 +114,7 @@ Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman,v 1.14 2012/03/30 03:32:40 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.15 2012/11/24 04:50:34 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -173,8 +173,8 @@ $SIG{PIPE} = \&catch_sig;	# catch signal in pipe from man
 #	Command line options
 ########################################################################
 
-require "getopts.pl";
-&Getopts('cnk:f:F:l:w:g:rTXh');		# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('cnk:f:F:l:w:g:rTXh');	# sets $opt_h if -h etc
 
 exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
 $opt_l = 35 unless $opt_l;	# if any higher on 768 pixel high screen, status bar is hidden

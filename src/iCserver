@@ -86,12 +86,12 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.42 2012/11/08 07:41:00 jw Exp $
+$Id: iCserver,v 1.43 2012/11/24 04:51:07 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
-require "getopts.pl";
-&Getopts('agkrtTms:p:f:A:G:h');	# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('agkrtTms:p:f:A:G:h');	# sets $opt_h if -h etc
 $| = 1 if $opt_t or $opt_m;	# otherwise STDOUT is not flushed if piped
 
 if ($opt_h) {

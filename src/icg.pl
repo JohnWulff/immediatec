@@ -37,22 +37,25 @@ Usage:	@<<<<<<< [-h] [-D<def> ...] [<file> ...]
 		(could be several files)
 		if no <file> argument, stdin is copied to stdout
 	-h	help, ouput this Usage text only
-$Id: icg.pl,v 1.3 2009/08/21 06:05:15 jw Exp $
+$Id: icg.pl,v 1.4 2012/12/06 22:47:30 jw Exp $
 .
 
-use vars qw($opt_D $opt_h);
-require "getopts.pl";
-&Getopts('D:h');
+use vars qw($opt_h);
+my @opt_D;
+use Getopt::Long qw(:config no_ignore_case bundling);
+## getopts('D:h');
+GetOptions (
+    'D=s' => \@opt_D,
+    'h'   => \$opt_h);
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
-my @Doptions = split(' ', $opt_D);
 my $option;
 my $outFlag = 0;
 
-while ($option = shift @Doptions) {
+while ($option = shift @opt_D) {
     $option =~ s/=/\t\t/;
     print "#define	$option\n";
 }

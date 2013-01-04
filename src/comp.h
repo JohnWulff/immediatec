@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.61 2012/09/18 04:39:01 jw Exp $";
+"@(#)$Id: comp.h,v 1.62 2012/11/23 22:24:07 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -124,7 +124,7 @@ extern void execerror(char *, char *,
 
 extern int	c_lex(void);		/* produced by lexc.l for gram.y */
 #ifndef LMAIN
-extern void yyerror(char * s);		/* called for yacc syntax error */
+extern void yyerror(const char * s);	/* called for yacc syntax error */
 extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
 #endif
 extern int	ynerrs;			/* count of iCerror() calls */

@@ -56,12 +56,12 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.22 2012/06/03 01:09:53 jw Exp $
+$Id: pplstfix,v 1.23 2012/11/24 04:53:34 jw Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
-require "getopts.pl";
-&Getopts('o:l:h');		# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('o:l:h');		# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only

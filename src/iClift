@@ -103,6 +103,7 @@ Usage:
 						$opt_F
 	-b file	generate an iCbox ID parameter file for monitoring
 	-B file	generate an iCbox ID parameter file with comments
+		file '-' is stdout; +file outputs C comment block
 	-C	run continuous test   (supported by controller)
 	-I	show up/down indicators in cage
 	-c del	delay between cage steps   (default @<< ms    )
@@ -171,12 +172,12 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.9 2012/11/14 02:55:28 jw Exp $ uses Tk-@<<<<<<
+$Id: iClift,v 1.10 2012/11/27 08:51:42 jw Exp $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
-require "getopts.pl";
-&Getopts('s:p:n:i:c:d:L:F:w:k:v:o:g:U:J:R:u:j:r:tmTb:B:CIKxh');	# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('s:p:n:i:c:d:L:F:w:k:v:o:g:U:J:R:u:j:r:tmTb:B:CIKxh');	# sets $opt_h if -h etc
 
 ########################################################################
 #	Note: all parameter y coordinates are reversed like engineering drawings
@@ -453,18 +454,23 @@ if ($opt_t) {
 if ($opt_B or $opt_b) {
     my ($j, $arg);
     my $idFile = defined $opt_B ? $opt_B : $opt_b;
-    $idFile =~ s/^(-*)//;		# ignore controlling - in file name
-    my $controlling = $1;		# save - here
+    $idFile =~ s/^([-+]*)//;		# ignore controlling - in file name
+    my $control = $1;			# save - here
+    $control =~ s/(\+*)//;
+    my $star = ($1) ? " * " : "";
+    unless ($idFile) {
+	$idFile = "-";
+	$control =~ s/-//;		# take out 1 minus
+    }
+    print "idFile = '$idFile' control = '$control' star '$star'\n" if $opt_t;
     open OUT, ">$idFile" or die "can't open $idFile for writing: $!";
-    print "idFile = $idFile controlling = $controlling\n" if $opt_t;
+    print OUT "/********************************************************************\n *\n" if $opt_B and $star;
     for ($j = 1; $j < 100000; $j++) {
 	$arg = shift @Args;		# no undef elements pushed
 	last unless $arg;
-	if ($controlling) {
-	    $arg =~ tr/QI/IQ/;		# transpose Q and I for controlling iCbox
-	}
+	$arg =~ tr/QI/IQ/ if $control;	# transpose Q and I for controlling iCbox
 	if ($opt_B) {
-	    printf OUT "%-16s # %s\n", $arg, $IecC{$arg};
+	    printf OUT "%s%-16s # %s\n", $star, $arg, $IecC{$arg};
 	} else {
 	    print OUT $arg;
 	    if ($j%10) {
@@ -474,6 +480,7 @@ if ($opt_B or $opt_b) {
 	    }
 	}
     }
+    print OUT " *\n *******************************************************************/\n" if $opt_B and $star;
     print OUT "\n" unless $opt_B;
     close(OUT);
     exit(0);
@@ -2041,6 +2048,7 @@ iClift -simulation of the physics and appearance of lifts in a building
 	-F floors number of floors         (default   3 floors)
 	-b file	generate an iCbox ID parameter file for monitoring
 	-B file	generate an iCbox ID parameter file with comments
+		file '-' is stdout; +file outputs C comment block
 	-C	run continuous test   (supported by controller)
 	-I	show up/down indicators in cage
 	-c del	delay between cage steps   (default 7    ms   )

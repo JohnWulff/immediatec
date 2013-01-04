@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.31 2012/09/12 09:07:12 jw Exp $";
+"@(#)$Id: gram.y,v 1.32 2013/01/02 03:30:47 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -87,7 +87,7 @@ static void		pushEndStack(unsigned int value);
 static unsigned int	popEndStack(void);
 static unsigned int	peekEndStack(void);
 #else	/* LMAIN */
-static void		yyerror(char *s, ...);
+static void		yyerror(const char *s, ...);
 #endif	/* LMAIN */
 %}
 %union {					/* stack type */
@@ -174,12 +174,12 @@ function_definition				/* 3 */
 	    $$.symbol = NULL;
 #ifndef LMAIN
 	    clearParaList(0);			/* restore all overloaded parameters */
-#endif
+#endif	/* LMAIN */
 	}
 	| declaration_specifiers declarator {
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as function name */
-#endif
+#endif	/* LMAIN */
 	}
 					    function_body {
 	    $$.start = $1.start;
@@ -187,7 +187,7 @@ function_definition				/* 3 */
 	    delete_sym(&$2);			/* not deleted if imm */
 #ifndef LMAIN
 	    clearParaList(0);			/* restore all overloaded parameters */
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -211,7 +211,7 @@ declaration					/* 5 */
 	    $$.symbol = NULL;		/* (see also rule 17) */
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
-#endif
+#endif	/* LMAIN */
 	}
 	| declaration_specifiers init_declarator_list ';' {
 	    Symbol *	sp;
@@ -238,7 +238,7 @@ declaration					/* 5 */
 	    $$.symbol = NULL;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
-#endif
+#endif	/* LMAIN */
 	}
 	| declaration_specifiers error ';' {
 	    $$.start = $1.start;
@@ -246,7 +246,7 @@ declaration					/* 5 */
 	    $$.symbol = NULL;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as local var */
-#endif
+#endif	/* LMAIN */
 	    yyclearin; yyerrok;
 	}
 	;
@@ -273,7 +273,7 @@ declaration_specifiers				/* 7 -- at least 1 type */
 	    if (lexflag & C_FUNCTION) {
 		lexflag |= C_PARA;		/* function internal C var is coming */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| storage_class_specifier specifier_qualifier_list {
 	    $$.start = $1.start;
@@ -283,7 +283,7 @@ declaration_specifiers				/* 7 -- at least 1 type */
 	    if (lexflag & C_FUNCTION) {
 		lexflag |= C_PARA;		/* function internal C var is coming */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -682,7 +682,7 @@ declarator					/* 25 */
 	    ) {
 		immVarRemove($1.start, $1.end, $1.symbol);
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| pointer direct_declarator {
 	    $$.start = $1.start;
@@ -698,7 +698,7 @@ declarator					/* 25 */
 	    ) {
 		immVarRemove($2.start, $2.end, $2.symbol);
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -754,7 +754,7 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
-#endif
+#endif	/* LMAIN */
 	}
 	| parameter_head error ')' {
 	    $$.start = $1.start;
@@ -762,7 +762,7 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
-#endif
+#endif	/* LMAIN */
 	    yyclearin; yyerrok;
 	}
 	| parameter_head parameter_type_list ')' {
@@ -771,7 +771,7 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
-#endif
+#endif	/* LMAIN */
 	}
 	| parameter_head parameter_type_list error ')' {
 	    $$.start = $1.start;
@@ -779,7 +779,7 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
-#endif
+#endif	/* LMAIN */
 	    yyclearin; yyerrok;
 	}
 	| parameter_head parameter_identifier_list ')' {
@@ -788,7 +788,7 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
-#endif
+#endif	/* LMAIN */
 	}
 	| parameter_head parameter_identifier_list error ')' {
 	    $$.start = $1.start;
@@ -796,7 +796,7 @@ direct_declarator				/* 26 */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    lexflag &= ~C_PARA;			/* end of overloading imm as parameter */
-#endif
+#endif	/* LMAIN */
 	    yyclearin; yyerrok;
 	}
 	;
@@ -808,7 +808,7 @@ parameter_head					/* 26a */
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 	    clearParaList(1);			/* imm vars are temporarily overloaded */
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -1375,7 +1375,7 @@ assignment_expression				/* 48 */
 	    ) {
 		immAssignFound($1.start, $2.start, $3.end, $1.symbol, $2.inds);
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -1469,7 +1469,7 @@ conditional_expression				/* 50 */
 		warning("ISO C forbids omitting the middle term of a ?: expression", sp ? sp->name : NULL);
 	    }
 	    $$.symbol = NULL;
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -1726,7 +1726,7 @@ imm_unary_expression				/* 63a */
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: imm_postfix_expression %u %u %s\n",
 	    	$$.start, $$.end, $$.symbol->name);
 #endif
-#endif
+#endif	/* LMAIN */
 	}
 	| INC_OP imm_unary_expression {
 	    $$.start = $1.start;
@@ -1748,7 +1748,7 @@ imm_unary_expression				/* 63a */
 	    ) {
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 12);	/* ++x */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| DEC_OP imm_unary_expression {
 	    $$.start = $1.start;
@@ -1770,7 +1770,7 @@ imm_unary_expression				/* 63a */
 	    ) {
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 13);	/* --x */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| SIZEOF imm_unary_expression {
 	    $$.start = $1.start;
@@ -1798,7 +1798,7 @@ imm_unary_expression				/* 63a */
 	    ) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* adjust pEnd, set inds 0 inde early */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -1910,7 +1910,7 @@ imm_postfix_expression				/* 65a */
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_lvalue %u %u %s\n",
 	    	$$.start, $$.end, $$.symbol->name);
 #endif
-#endif
+#endif	/* LMAIN */
 	}
 	| imm_postfix_expression INC_OP {
 	    $$.start = $1.start;
@@ -1932,7 +1932,7 @@ imm_postfix_expression				/* 65a */
 	    ) {
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 14);	/* x++ */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| imm_postfix_expression DEC_OP {
 	    $$.start = $1.start;
@@ -1954,7 +1954,7 @@ imm_postfix_expression				/* 65a */
 	    ) {
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 15);	/* x-- */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -1970,7 +1970,7 @@ imm_lvalue					/* 65b */
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_lvalue: imm_identifier %u %u %s\n",
 		$$.start, $$.end, $$.symbol->name);
 #endif
-#endif
+#endif	/* LMAIN */
 	}
 	/* cannot have multiple immC array references */
 	| imm_array_identifier '[' expression ']' {
@@ -1993,7 +1993,7 @@ imm_lvalue					/* 65b */
 	    ) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* adjust pEnd, set inds inde */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| imm_array_identifier '[' expression error ']' {
 	    $$.start = $1.start;
@@ -2091,7 +2091,7 @@ imm_identifier					/* 69 */
 	    ) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, $$.symbol);
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| '(' imm_identifier ')' {
 	    /* stops this being a primary_expression which would lead to C assignment */
@@ -2114,7 +2114,7 @@ imm_identifier					/* 69 */
 	    ) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -2140,7 +2140,7 @@ imm_array_identifier				/* 70 */
 	    ) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, $$.symbol);
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	| '(' imm_array_identifier ')' {
 	    /* stops this being a primary_expression which would lead to C assignment */
@@ -2163,7 +2163,7 @@ imm_array_identifier				/* 70 */
 	    ) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	    }
-#endif
+#endif	/* LMAIN */
 	}
 	;
 
@@ -2176,7 +2176,7 @@ imm_array_identifier				/* 70 */
 
 #ifdef LMAIN
 static void
-yyerror(char *s, ...)
+yyerror(const char *s, ...)
 {
     fprintf(iC_outFP, "\n%*s\n%*s\n", column, "^", column, s);
     fflush(iC_outFP);
@@ -2196,7 +2196,7 @@ ierror(						/* print error message */
     fprintf(iC_outFP, "\n");
     fflush(iC_outFP);
 } /* ierror */
-#else
+#else	/* LMAIN */
 
 static char*	cMacro[] = { CMACRO_NAMES };
 
@@ -2571,7 +2571,6 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     Symbol **		hsp;
 #endif
     int			ml;
-    int			ftyp;
     int			ftypa;
     Symbol *		fsp = 0;
     static char *	f0_1 = "_f0_1";		/* name of literal function head */
@@ -2678,7 +2677,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	}
 	if (inde == LARGE && bytePos == vend && ppi >= 12) {
 	    /* pre/post-increment/decrement */
-	    /* ++x; --x; x++; x--; all now produce: iC_AA(2 , 12, 0); iC_AA(2 , 13, 0); etc jw120722 */
+	    /* ++x; --x; x++; x--; all now produce: iC_AA(2, 12, 0); iC_AA(2, 13, 0); etc jw120722 */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
 		obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, 0", ppi);
@@ -2726,10 +2725,6 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    sp     = p->sp;			/* associated Symbol */
 	    assert(sp);
 	    ml     = lp ? 0		 : CMACRO_LITERAL;	/*       0 or      9 */
-	    ftyp   = (sp->type == ERR)	 ? UDFA
-		   : (sp->ftype != UDFA) ? sp->ftype		/* ARITH 1 or GATE 2 */
-		   : (sp->type == ARNC)	 ? ARITH+CMACRO_INDEX
-		   : (sp->type == LOGC)	 ? GATE+CMACRO_INDEX : UDFA;
 	    ftypa  = (sp->type == ERR)	 ? UDFA
 		   : (inds == 0)	 ? CMACRO_SIZE		/* sizeof macro */
 		   : (sp->ftype != UDFA) ? ((equop == LARGE) ? sp->ftype	  : sp->ftype + CMACRO_ASSIGN)
@@ -2821,7 +2816,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		    lp2->le_val |= VAR_USE;	/* pre/post-inc/dec or marked as used */
 		}
 	    }
-	    endop = vend;			/* suppress variable name, which is replaced by cMacro */
+	    endop = (equop != LARGE && equop > vend)
+	    	? equop : vend;			/* suppress variable name, which is replaced by cMacro */
 	    pFlag = 0;
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
@@ -2876,7 +2872,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #endif
 	    if (ppi >= 12) {
 		/* pre/post-increment/decrement */
-		/* ++x; --x; x++; x--; all now produce: iC_AA(2 , 12, 0); iC_AA(2 , 13, 0); etc jw120722 */
+		/* ++x; --x; x++; x--; all now produce: iC_AA(2, 12, 0); iC_AA(2, 13, 0); etc jw120722 */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
 		    obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, 0", ppi);
@@ -2974,4 +2970,4 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "##### copyAdjust( END )\n");
 #endif
 } /* copyAdjust */
-#endif
+#endif	/* LMAIN */

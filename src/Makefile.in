@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.56 2012/05/13 04:39:09 jw Exp $
+# @(#)$Id: Makefile.in,v 1.57 2012/12/21 06:50:44 jw Exp $
 
 #######################################################################
 #
@@ -234,14 +234,14 @@ test:
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -Ajfw. ${srcdir}/Test0/*.ic* 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kel -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/Mdiff -kel -Ibytes -Isyntax.error -Iparse.error -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile with -S option and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -SAjfw. ${srcdir}/Test0/*.ic* 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)

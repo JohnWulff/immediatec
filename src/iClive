@@ -199,14 +199,14 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.50 2012/11/08 06:55:03 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.51 2012/11/25 01:38:33 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
-require "getopts.pl";
-&Getopts('tTmd:s:p:i:f:l:w:g:A:uXh');	# sets $opt_h if -h etc
+use Getopt::Std;		# replace require "getopts.pl";
+getopts('tTmd:s:p:i:f:l:w:g:A:uXh');	# sets $opt_h if -h etc
 
-exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
+exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
 $opt_l = 35 unless $opt_l;
 $opt_w = 80 unless $opt_w;
 $opt_A = 'iCbox' unless $opt_A;
