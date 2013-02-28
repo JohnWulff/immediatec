@@ -1,0 +1,68 @@
+[*]
+[*] immediate C @(#)     $Id: bar.sav,v 1.1 2013/02/03 07:14:30 jw Exp $
+[*] Sun Feb  3 07:14:11 2013
+[*]
+[dumpfile] "bar"
+[size] 1024 700
+[pos] -1 -1
+*-4.343955 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+@28
+bar.iClock
+@24
+bar.IB1[7:0]
+@28
+bar.\IX0.0
+bar.\IX0.1
+bar.\IX0.2
+bar.\IX0.3
+bar.\IX0.4
+bar.\IX2.0
+bar.\IX2.1
+bar.\IX2.2
+bar.\IX2.3
+bar.\IX2.4
+bar.\IX2.5
+bar.\IX2.6
+bar.\IX2.7
+@24
+bar.QB1[7:0]
+@28
+bar.\QX0.0
+bar.\QX0.1
+bar.\QX0.2
+bar.\QX0.3
+bar.\QX0.4
+bar.\QX0.5
+bar.\QX0.6
+bar.\QX0.7
+bar.\QX2.0
+bar.\QX2.1
+bar.\QX2.2
+bar.\QX2.3
+bar.\QX2.4
+@68
+bar.\QX2.5
+@28
+bar.\QX2.6
+bar.\QX2.7
+bar.\TX0.4
+@24
+bar.a[31:0]
+@28
+bar.b0
+bar.c0
+bar.c1
+@24
+bar.d0[7:0]
+@28
+bar.f0
+bar.m0
+bar.m1
+bar.m2
+bar.m3
+bar.m4
+bar.m5
+bar.m6
+bar.m7
+bar.m8
+bar.t
