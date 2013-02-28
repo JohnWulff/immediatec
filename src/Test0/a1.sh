@@ -9,11 +9,17 @@
 #	All digital inputs X0.0 to X0.7 and analog inputs IB1 and IW2
 #	act directly on the corresponding outputs.
 #
-#	IX0 is preset to 0x33, IB1 to 50 and IW2 to -10000.
+#	IX0 is preset to 0x33 which sets IX0.0, IX0.1, IX0.4 and IX0.5
+#	IB1 is preset to 50 and IW2 to -10000.
 #	The ranges of W2 have been changed from the default 0 to 100.
+#
+#	IX0.0 - IX0.3 have been made push-buttons with turn off delay
+#	of 500 ms (,,500,0x0f)
 #
 #	Stop the demo with ctrl-C
 #
+#	$Id: a1.sh,v 1.3 2013/02/26 03:44:10 jw Exp $
+#
 ########################################################################
 
-iCserver 'iCbox X0=0x33 B1=50 W2=-10000,-32568,32567' a1
+iCserver 'iCbox X0=0x33,,500,0x0f B1=50 W2=-10000,-32568,32567' a1
