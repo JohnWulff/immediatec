@@ -24,9 +24,11 @@ usage ()
 {
     echo 'Usage:' >&2
     echo " ${0##*/} [-qgclrtmCLRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]" >&2
-    echo '    call make for immcc, libict.a, icr, ict and lmain with correct options' >&2
+    echo '    call make for immcc, libict.so, libict.a, icr, ict and lmain with' >&2
+    echo '    correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
+    echo '	-p	compile and link for profiling with gprof (-pg)' >&2
     echo '	-c	make immcc iC compiler with YYDEBUG' >&2
     echo '	-l	make libict.a with YYDEBUG -t trace output possible' >&2
     echo '		also make libict.so without YYDEBUG if OSTYPE = linux' >&2
@@ -54,7 +56,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.33 2012/03/27 03:51:29 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.34 2013/01/10 04:33:56 jw Exp $' >&2
 }
 
 makeLib ()
@@ -65,7 +67,7 @@ makeLib ()
     else
 	mkdir LibObjs
     fi
-    make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" libict.a
+    make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" libict.a
     mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O LibObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -91,7 +93,7 @@ makeIcr ()
     else
 	mkdir IcrObjs
     fi
-    make OPT="-DRUN$r$u$d$e$o$s$y" CFLAGS="$cflags" icr
+    make OPT="-DRUN$r$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" icr
     mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -104,7 +106,7 @@ makeIct ()
     else
 	mkdir IctObjs
     fi
-    make OPT="-DTCP$t$u$d$e$o$s$y" CFLAGS="$cflags" ict
+    make OPT="-DTCP$t$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" ict
     mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -117,7 +119,7 @@ makeLmain ()
     else
 	mkdir LmainObjs
     fi
-    make OPT="-DLMAIN$m$u$d$e$o$s$y" CFLAGS="$cflags" lmain
+    make OPT="-DLMAIN$m$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" lmain
     mv misc.$O gram.$O lexc.$O symb.$O LmainObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -140,6 +142,7 @@ T=0
 M=0
 IM_LIB=1
 cflags="-O2"			# optimisation, no debugging info
+ldflags=""			# no profiling
 O="o"
 o=""
 w=""
@@ -147,10 +150,11 @@ z=0
 YN=0
 Y=""
 
-while getopts ":qgclrtmCLRTMudeD:W:syo:zh" opt; do
+while getopts ":qgpclrtmCLRTMudeD:W:syo:zh" opt; do
     case $opt in
     q )	q="q";;		# echo only - dont kill
     g )	cflags="-g";;	# debugging, no optimisation
+    p )	ldflags=" -pg";;	# profiling
     c )	C=1; IM_LIB=0; c="-DYYDEBUG"; YN=$(($YN|1));;
     l )	L=1; IM_LIB=0; l=" -DYYDEBUG"; YN=$(($YN|2));;
     r )	R=1; IM_LIB=0; r=" -DYYDEBUG";;
@@ -174,7 +178,7 @@ while getopts ":qgclrtmCLRTMudeD:W:syo:zh" opt; do
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
-cflags="$cflags$W";
+cflags="$cflags$ldflags$W";
 shift $(($OPTIND - 1))
 
 if [ -f Make_tmp ]; then
@@ -197,12 +201,12 @@ if ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
 fi
 
 if [ $IM_LIB = 1 ] || [ $C = 1 ]; then
-    echo "make OPT=\"$c$u$d$e$o$s$y\" CFLAGS=\"$cflags\" immcc"
-    make OPT="$c$u$d$e$o$s$y" CFLAGS="$cflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+    echo "make OPT=\"$c$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" immcc"
+    make OPT="$c$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
-    echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" libict.a"
+    echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
     if [ "$OSTYPE" = "linux" ]; then
 	echo "make OPT=\"-fPIC -DLOAD -DTCP$d$e$o$s$y\" CFLAGS=\"-O2$W\" libict.so"
@@ -211,17 +215,17 @@ if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
 fi
 
 if [ $R = 1 ]; then
-    echo "make OPT=\"-DRUN$r$u$d$e$o$s$y\" CFLAGS=\"$cflags\" icr"
+    echo "make OPT=\"-DRUN$r$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" icr"
     makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $T = 1 ]; then
-    echo "make OPT=\"-DTCP$t$u$d$e$o$s$y\" CFLAGS=\"$cflags\" ict"
+    echo "make OPT=\"-DTCP$t$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" ict"
     makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $M = 1 ]; then
-    echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$y\" CFLAGS=\"$cflags\" lmain"
+    echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
@@ -239,9 +243,11 @@ makeAll - supports Makefile in immediate-C develeopment
 =head1 SYNOPSIS
 
  makeAll [-qgclrtmCLRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]
- call make for immcc, libict.a, icr, ict and lmain with correct options
+ call make for immcc, libict.so, libict.a, icr, ict and lmain with
+ correct options
     -q      output only headings and error messages
     -g      compile for debugging and no optimisation (default -O2)
+    -p      compile and link for profiling with gprof (-pg)
     -c      make immcc iC compiler with YYDEBUG
     -l      make libict.a with YYDEBUG -t trace output possible
             also make libict.so without YYDEBUG if OSTYPE = linux >&2
@@ -273,8 +279,8 @@ makeAll - supports Makefile in immediate-C develeopment
 =head1 DESCRIPTION
 
 makeAll is a shell script to support the Makefile to build various
-versions of the immcc compiler. Normally only the 'immcc' compiler and
-'libict.a' are required for production systems.
+versions of the immcc compiler. Normally only the 'immcc' compiler
+'libict.so' and 'libict.a' are required for production systems.
 
 'icr' is an early version of the compiler which builds its run-time
 structures in memory and interprets these directly after compilation. I/O

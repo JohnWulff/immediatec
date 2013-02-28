@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.78 2012/11/13 04:34:00 jw Exp $";
+"@(#)$Id: genr.c,v 1.79 2013/02/14 00:46:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -951,7 +951,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	    sp->ftype == D_SH   ||
 	    sp->ftype == F_SW   ||
 	    sp->ftype == OUTW   ||
-	    sp->ftype == (CH_BIT && (typ == ARN || typ == ARNF)))) {	/* only arithmetic CHANGE */
+	    sp->ftype == CH_AR)) {		/* only arithmetic CHANGE */
 	    fprintf(iC_outFP, "\t\t//\t%s\t=", sp->name);
 	}
 	fprintf(iC_outFP, "\n");		/* all non Arithmetic and delay */

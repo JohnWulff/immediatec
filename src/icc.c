@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.67 2012/08/25 21:48:27 jw Exp $";
+"@(#)$Id: icc.c,v 1.68 2013/01/25 06:11:42 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -127,7 +127,7 @@ static const char *	usage =
 "Extra options for run mode: (direct interpretation)\n"
 " [ -n<count>"
 #ifdef TCP
-"][ -s <server>][ -p <port>][ -u <unitID>"
+"][ -s <server>][ -p <port>][ -u <unitID>][ -v <file.vcd>"
 #endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)
 "][ -tx"
@@ -141,6 +141,7 @@ static const char *	usage =
 "        -p service port of server      (default '%s')\n"
 "        -u unit ID      of this client (default base name of <src.ic>)\n"
 "        -i instance ID  of this client (default '%s'; 1 to %d numeric digits)\n"
+"        -v <file.vcd>   output a .vcd and a .sav file for gtkwave\n"
 #endif	/* TCP */
 "        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
 "                        0 allows unlimited oscillations\n"
@@ -190,6 +191,7 @@ static const char *	usage =
 ;
 
 char *		iC_progname;		/* name of this executable */
+char *		iC_vcd = NULL;
 short		iC_debug = 0;
 int		iC_micro = 0;
 int		iC_Pflag = 0;		/* pedantic warning/error flag */
@@ -454,6 +456,10 @@ main(
 			iC_iidNM = iC_emalloc(INSTSIZE+1);	/* +1 for '\0' */
 			strncpy(iC_iidNM, *argv, INSTSIZE);
 		    }
+		    goto break2;
+		case 'v':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    iC_vcd = *argv;	/* output vcd dump file for gtkwave */
 		    goto break2;
 		case 'm':
 		    iC_micro++;		/* microsecond info */

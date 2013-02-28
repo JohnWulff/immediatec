@@ -50,8 +50,8 @@ usage ()
   echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo "	-f	force building of new output files" >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
-  echo '	-g	debugging with gdb - each expression has its own C code' >&2
-  echo '		forces -s -- link with static library libict.a' >&2
+  echo '	-g	debugging with gdb - profiling with gprof - each expression has' >&2
+  echo '		its own C code - forces -s -- link with static library libict.a' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	strict compile - all immediate variables must be declared' >&2
   echo "		forces $IAC to only accept twin braces in FOR ... {{ }}" >&2
@@ -93,7 +93,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.41 2012/12/07 01:08:04 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.42 2013/01/10 04:44:48 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -173,7 +173,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     s ) lib="${LIB}libict.a$lwsock32";;
     f )	force=1;;
     e ) ef=" -lefence";;
-    g ) d="$d -g"; CFL="$CFL -g"; lib="${LIB}libict.a$lwsock32";;
+    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a$lwsock32";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
     p )	if [ -z "$p" ]; then p=" -P"; C="$C -pedantic"; fi; d="$d$p";;	# allows -pp => -P -P
@@ -534,8 +534,8 @@ iCmake - make one or more immediate-C applications
     -s	    link with static library libict.a (default libict.so)
     -f      force building of new output files
     -e      link all targets with -lefence to test with Electric Fence
-    -g      debugging with gdb - each expression has its own C code
-            forces -s -- link with static library libict.a
+    -g      debugging with gdb - profiling with gprof - each expression has
+            its own C code - forces -s -- link with static library libict.a
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S      strict compile - all immediate variables must be declared
             forces immac to only accept twin braces in FOR ... {{ }}

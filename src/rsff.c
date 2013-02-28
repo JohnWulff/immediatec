@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.53 2012/10/29 03:11:06 jw Exp $";
+"@(#)$Id: rsff.c,v 1.54 2013/02/15 04:16:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -117,19 +117,12 @@ static unsigned char	bitIndex[]   = {
 void
 iC_sMff(					/* S_FF master action on FF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
-    /********************************************************************
-     *	Live data need only be transmitted for Master gates and clock and
-     *	timer Slave gates. All other Slave gates will transmit their live
-     *	data on the following logic or arithmetic scan triggered by a change
-     *******************************************************************/
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if (
 	(
@@ -151,7 +144,7 @@ iC_sMff(					/* S_FF master action on FF */
 void
 iC_sSff(					/* S_FF slave action on FF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
@@ -160,14 +153,17 @@ iC_sSff(					/* S_FF slave action on FF */
     if (gs->gt_val > 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t-1 S\t%s %+d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t-1\t%s %+d S=>", gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = -1;			/* set slave output */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, 1);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %+d", gs->gt_val);
+	    fprintf(iC_outFP, " -1");
 	}
 #endif
     }
@@ -182,14 +178,12 @@ iC_sSff(					/* S_FF slave action on FF */
 void
 iC_rMff(					/* R_FF master action on FF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if (
 	(
@@ -211,7 +205,7 @@ iC_rMff(					/* R_FF master action on FF */
 void
 iC_rSff(					/* R_FF slave action on FF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
@@ -220,14 +214,17 @@ iC_rSff(					/* R_FF slave action on FF */
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t-1 R\t%s %+d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t-1\t%s %+d R=>", gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = 1;				/* reset slave output */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, 0);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %+d", gs->gt_val);
+	    fprintf(iC_outFP, " +1");
 	}
 #endif
     }
@@ -242,14 +239,12 @@ iC_rSff(					/* R_FF slave action on FF */
 void
 iC_dMff(					/* D_FF master action on FF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if (
 	((ma = gm->gt_list)[FL_GATE]->gt_val < 0)
@@ -269,7 +264,7 @@ iC_dMff(					/* D_FF master action on FF */
 void
 iC_dSff(					/* D_FF slave action on FF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
     char	val;
@@ -278,10 +273,13 @@ iC_dSff(					/* D_FF slave action on FF */
     if ((val = (gm->gt_val < 0) ? -1 : 1) != gs->gt_val) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t%+d D\t%s %+d ==>", val, gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t%+d\t%s %+d D=>", val, gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = val;			/* transfer val to slave */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, val < 0 ? 1 : 0);	/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
@@ -337,9 +335,7 @@ iC_dMsh(					/* D_SH master action on SH */
 	 *******************************************************************/
     }
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {			/* misses all but first change */
-	iC_liveData(gm->gt_live, gm->gt_new);	/* and return to old value */
-    }
+    iC_liveData(gm, gm->gt_new);		/* VCD and/or iClive */
 #endif
     /********************************************************************
      * SH master action is only called if gt_new has changed first time
@@ -366,22 +362,25 @@ iC_dMsh(					/* D_SH master action on SH */
 void
 iC_dSsh(					/* D_SH slave action on SH */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\t%ld SH\t%s %ld ==>", gm->gt_new, gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%ld\t%s %ld SH=>", gm->gt_new, gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d SH\t%s %d ==>", gm->gt_new, gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d\t%s %d SH=>", gm->gt_new, gs->gt_ids, gs->gt_new);
 #endif
 #endif
     /********************************************************************
      * since gm is still on clock list gt_new must differ from gt_old
      *******************************************************************/
     gs->gt_new = gm->gt_old = gm->gt_new;	/* transfer value to slave */
+#if defined(TCP) || defined(LOAD)
+    iC_liveData(gs, gs->gt_new);		/* VCD and/or iClive */
+#endif
     iC_link_ol(gs, iC_a_list);			/* fire new arithmetic action */
 
 #if YYDEBUG && !defined(_WINDOWS)
@@ -402,14 +401,12 @@ iC_dSsh(					/* D_SH slave action on SH */
 void
 iC_sMsh(					/* S_SH master action on SH */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if (
 	(
@@ -431,7 +428,7 @@ iC_sMsh(					/* S_SH master action on SH */
 void
 iC_sSsh(					/* S_SH slave action on SH */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
@@ -440,19 +437,18 @@ iC_sSsh(					/* S_SH slave action on SH */
     if (gs->gt_new != -1) {
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 S SH\t%s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %2ld S SH=>", gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 S SH\t%s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %2d S SH=>", gs->gt_ids, gs->gt_new);
 #endif
 #endif
 	gs->gt_new = -1;			/* set SH slave output */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, -1);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_a_list);
 #if YYDEBUG && !defined(_WINDOWS)
-#if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, " %ld", gs->gt_new);
-#else
-	if (iC_debug & 0100) fprintf(iC_outFP, " %d", gs->gt_new);
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
 #endif
     }
 } /* iC_sSsh */
@@ -466,14 +462,12 @@ iC_sSsh(					/* S_SH slave action on SH */
 void
 iC_rMsh(					/* R_SH master action on SH */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if (
 	(
@@ -495,7 +489,7 @@ iC_rMsh(					/* R_SH master action on SH */
 void
 iC_rSsh(					/* R_SH slave action on SH */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
@@ -504,19 +498,18 @@ iC_rSsh(					/* R_SH slave action on SH */
     if (gs->gt_new != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 R SH\t%s %2ld ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %2ld R SH=>", gs->gt_ids, gs->gt_new);
 #else
-	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1 R SH\t%s %2d ==>", gs->gt_ids, gs->gt_new);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %2d R SH=>", gs->gt_ids, gs->gt_new);
 #endif
 #endif
 	gs->gt_new = 0;				/* reset SH slave output */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, 0);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_a_list);
 #if YYDEBUG && !defined(_WINDOWS)
-#if INT_MAX == 32767 && defined (LONG16)
-	if (iC_debug & 0100) fprintf(iC_outFP, " %ld", gs->gt_new);
-#else
-	if (iC_debug & 0100) fprintf(iC_outFP, " %d", gs->gt_new);
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " 0");
 #endif
     }
 } /* iC_rSsh */
@@ -629,9 +622,9 @@ iC_Functp	iC_ff_i[] = {iC_pass1, iC_pass2, i_ff3, iC_pass4};
 /********************************************************************
  *
  *	Master function to detect RISE in logical input.
- *		O1 = RISE(I1,clock);	// clock has been defined
- *		O2 = RISE(I2);		// iClock is default
- *	This function goes HI when its input goes HI (rising edge).
+ *		O0 = RISE(IX0.1);		// iClock is default
+ *		O1 = RISE(IX0.0,clock);		// clock has been defined
+ *	This function goes HI when its input goes from LO to HI (rising edge).
  *	The function goes LO with the next clock in the slave action.
  *
  *	NOTE: global variable 'iC_gx' is shared with scan.c (declared in icc.h)
@@ -642,14 +635,12 @@ iC_Functp	iC_ff_i[] = {iC_pass1, iC_pass2, i_ff3, iC_pass4};
 void
 iC_riMbit(					/* RI_BIT master action on EF */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate **	ma;
 
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
     if (gm->gt_val < 0 || gm->gt_next) {
@@ -665,8 +656,11 @@ iC_riMbit(					/* RI_BIT master action on EF */
 		iC_gx->gt_ids, iC_gx->gt_val);
 	}
 #endif
-	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch could reset here) */
-	iC_link_ol(iC_gx, iC_o_list);		/* set or reset slave output when clocked */
+	iC_gx->gt_val = gm->gt_val;		/* immediate (glitch resets here if linked) */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(iC_gx, iC_gx->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+#endif
+	iC_link_ol(iC_gx, iC_o_list);		/* set (reset) slave output now - reset when clocked*/
     }
 } /* iC_riMbit */
 
@@ -680,7 +674,7 @@ iC_riMbit(					/* RI_BIT master action on EF */
 void
 iC_riSbit(					/* RI_BIT slave action */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
@@ -688,14 +682,17 @@ iC_riSbit(					/* RI_BIT slave action */
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t-1 E\t%s %+d ==>", gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t-1\t%s %+d E=>", gs->gt_ids, gs->gt_val);
 	}
 #endif
 	gs->gt_val = 1;				/* reset slave output to LO */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, 0);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %+d", gs->gt_val);
+	    fprintf(iC_outFP, " +1");
 	}
 	/* on startup a reset action comes when EF is LO */
 #endif
@@ -704,11 +701,11 @@ iC_riSbit(					/* RI_BIT slave action */
 
 /********************************************************************
  *
- *	Master function for CHANGE in logical or arithmetic input.
- *		O3 = CHANGE(I4,clock);	// clock has been defined
- *		O4 = CHANGE(I4);	// iClock is default
- *	This function goes HI when its logical input changes from
- *	HI to LO or from LO to HI or its arithmetic input changes.
+ *	Master function for CHANGE in logical input.
+ *		O2 = CHANGE(IX0.2);		// iClock is default
+ *		O3 = CHANGE(IX0.3,clock);	// clock has been defined
+ *	This function goes HI when its logical input changes from LO to HI
+ *	or from HI to LO.
  *	The function goes LO with the next clock in the slave action.
  *
  *	NOTE: global variable 'iC_gx' is shared with scan.c (declared in icc.h)
@@ -723,56 +720,130 @@ iC_chMbit(					/* CH_BIT master action on VF */
 {
     Gate **	ma;
 
+    assert (out_list == iC_o_list);		/* logic change */
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {			/* display all changes */
-	iC_liveData(gm->gt_live, gm->gt_ini < 0 ? gm->gt_new
-					     : gm->gt_val < 0 ? 1 : 0);
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
-    if (out_list == iC_o_list ||		/* logic or arithmetic change */
-	((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0))) {
-	iC_gx = (ma = gm->gt_list)[FL_GATE];	/* ignore input */
-	iC_link_ol(gm, ma[FL_CLK]);		/* master action */
+    iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
+    iC_link_ol(gm, ma[FL_CLK]);			/* ignore input - master action */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    if (out_list != iC_o_list) {
-    #if INT_MAX == 32767 && defined (LONG16)
-		fprintf(iC_outFP, " %ld", gm->gt_new);
-    #else
-		fprintf(iC_outFP, " %d", gm->gt_new);
-    #endif
-	    } else {
-		fprintf(iC_outFP, " %+d", gm->gt_val);
-	    }
-	    if (iC_dc++ >= 4) {
-		iC_dc = 1;
-		fprintf(iC_outFP, "\n\t");
-	    }
-	    fprintf(iC_outFP, "\t%s %+d V=>",	/* slave */
-		iC_gx->gt_ids, iC_gx->gt_val);
+    if (iC_debug & 0100) {
+	fprintf(iC_outFP, " %+d", gm->gt_val);
+	if (iC_dc++ >= 4) {
+	    iC_dc = 1;
+	    fprintf(iC_outFP, "\n\t");
 	}
-#endif
-	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch could reset here) */
-	iC_link_ol(iC_gx, iC_o_list);		/* set or reset slave output when clocked */
+	fprintf(iC_outFP, "\t%s %+d V=>",	/* slave */
+	    iC_gx->gt_ids, iC_gx->gt_val);
     }
+#endif
+    iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch resets here if linked) */
+#if defined(TCP) || defined(LOAD)
+    iC_liveData(iC_gx, iC_gx->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+#endif
+    iC_link_ol(iC_gx, iC_o_list);		/* set (glitch reset) slave output now - reset when clocked*/
 } /* iC_chMbit */
 
 /********************************************************************
  *
- *	Slave function for CHANGE in logical or arithmetic input.
+ *	Slave function for CHANGE in logical input.
  *	The function goes LO again here
- *
- *	All change nodes have storage for new and old, although only
- *	those fired from ARN type really need it.
- *	Up to this point changes in new back to old could have
- *	caused this Gate to be unlinked (glitch), which is no change.
  *
  *******************************************************************/
 
 void
 iC_chSbit(					/* CH_BIT slave action */
     Gate *	gm,
+    Gate *	out_list)			/* not used */
+{
+    Gate *	gs;
+
+    gs = gm->gt_funct;
+    if (gs->gt_val < 0) {
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "\t%+d\t%s %+d V=>", gm->gt_val, gs->gt_ids, gs->gt_val);
+	}
+#endif
+	gs->gt_val = 1;				/* reset slave output to LO */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, 0);			/* VCD and/or iClive */
+#endif
+	iC_link_ol(gs, iC_o_list);
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, " +1");
+	}
+	/* on startup a reset action comes when VF is LO */
+#endif
+    }
+} /* iC_chSbit */
+
+/********************************************************************
+ *
+ *	Master function for CHANGE in arithmetic input.
+ *		O4 = CHANGE(IB4);	// iClock is default
+ *		O5 = CHANGE(IB5,clock);	// clock has been defined
+ *	This function goes HI when its arithmetic input changes.
+ *	The function goes LO with the next clock in the slave action.
+ *
+ *	NOTE: global variable 'iC_gx' is shared with scan.c (declared in icc.h)
+ *	Gate *		iC_gx;	// used to point to action Gate in chMbit
+ *
+ *******************************************************************/
+
+void
+iC_chMar(					/* CH_AR master action on VF */
+    Gate *	gm,
     Gate *	out_list)
+{
+    Gate **	ma;
+
+    assert (out_list == iC_a_list);		/* arithmetic change */
+#if defined(TCP) || defined(LOAD)
+    iC_liveData(gm, gm->gt_new);		/* VCD and/or iClive */
+#endif
+    if ((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0)) {
+	iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
+	iC_link_ol(gm, ma[FL_CLK]);		/* ignore input - master action */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 0100) {
+    #if INT_MAX == 32767 && defined (LONG16)
+	    fprintf(iC_outFP, " %ld", gm->gt_new);
+    #else
+	    fprintf(iC_outFP, " %d", gm->gt_new);
+    #endif
+	    if (iC_dc++ >= 4) {
+		iC_dc = 1;
+		fprintf(iC_outFP, "\n\t");
+	    }
+	    fprintf(iC_outFP, "\t%s %+d v=>",	/* slave */
+		iC_gx->gt_ids, iC_gx->gt_val);
+	}
+#endif
+	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch resets here if linked) */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(iC_gx, iC_gx->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+#endif
+	iC_link_ol(iC_gx, iC_o_list);		/* set (reset) slave output now - reset when clocked*/
+    }
+} /* iC_chMar */
+
+/********************************************************************
+ *
+ *	Slave function for CHANGE in arithmetic input.
+ *	The function goes LO again here
+ *
+ *	Arithmetic change nodes have storage for new and old.
+ *	Up to this point changes in new back to old could have
+ *	caused this Gate to be unlinked (glitch), which is no change.
+ *
+ *******************************************************************/
+
+void
+iC_chSar(					/* CH_AR slave action */
+    Gate *	gm,
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 
@@ -781,27 +852,26 @@ iC_chSbit(					/* CH_BIT slave action */
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    if (gm->gt_ini < 0) {
 #if INT_MAX == 32767 && defined (LONG16)
-		fprintf(iC_outFP, "\t%ld V\t%s %+d ==>", gm->gt_new, gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t%ld\t%s %+d v=>", gm->gt_new, gs->gt_ids, gs->gt_val);
 #else
-		fprintf(iC_outFP, "\t%d V\t%s %+d ==>", gm->gt_new, gs->gt_ids, gs->gt_val);
+	    fprintf(iC_outFP, "\t%d\t%s %+d v=>", gm->gt_new, gs->gt_ids, gs->gt_val);
 #endif
-	    } else {
-		fprintf(iC_outFP, "\t%+d V\t%s %+d ==>", gm->gt_val, gs->gt_ids, gs->gt_val);
-	    }
 	}
 #endif
 	gs->gt_val = 1;				/* reset slave output to LO */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gs, 0);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %+d", gs->gt_val);
+	    fprintf(iC_outFP, " +1");
 	}
 	/* on startup a reset action comes when VF is LO */
 #endif
     }
-} /* iC_chSbit */
+} /* iC_chSar */
 
 /********************************************************************
  *
@@ -819,9 +889,7 @@ iC_fMsw(					/* F_SW master action */
 	gm->gt_new = gm->gt_val < 0 ? 1 : 0;
     }
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_new);
-    }
+    iC_liveData(gm, gm->gt_new);		/* VCD and/or iClive */
 #endif
     if ((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0)) {
 	iC_link_ol(gm, gm->gt_clk);		/* master action */
@@ -889,12 +957,10 @@ iC_fSsw(					/* F_SW slave action on SW */
 void
 iC_fMcf(					/* F_CF master action */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if (
 	gm->gt_val < 0  ||			/* rising edge */
@@ -918,12 +984,10 @@ iC_fMcf(					/* F_CF master action */
 void
 iC_fMce(					/* F_CE master action */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     iC_link_ol(gm, gm->gt_clk);			/* master action */
 } /* iC_fMce */
@@ -984,7 +1048,7 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 int
 iC_traMb(					/* TRAB master action */
     Gate *	gm,				/* NOTE: there is no slave action */
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     int		diff;
     int		index;
@@ -993,6 +1057,7 @@ iC_traMb(					/* TRAB master action */
     int		count;
     Gate *	gs;
 
+    iC_liveData(gm, gm->gt_new);		/* iClive only */
     count = 0;
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
@@ -1017,6 +1082,9 @@ iC_traMb(					/* TRAB master action */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    if (gs->gt_val != val) {
 		gs->gt_val = val;
+#if defined(TCP) || defined(LOAD)
+		iC_liveData(gs, gs->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+#endif
 		iC_link_ol(gs, iC_o_list);	/* fire input bit Gate */
 		count++;			/* count Gates linked */
 	    }
@@ -1027,9 +1095,6 @@ iC_traMb(					/* TRAB master action */
 	diff &= ~mask;				/* clear the bit just processed */
     }
     gm->gt_old = gm->gt_new;
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_old);	/* live is active */
-    }
     return count;				/* used to adjust YYDEBUG output */
 } /* iC_traMb */
 
@@ -1158,9 +1223,7 @@ iC_outMw(					/* NEW OUTW master action */
 	gm->gt_old = gm->gt_new;		/* update gt_old now - completed debug output */
 	iC_outOffset += len;
 	gm->gt_out = val;			/* save for updates on window scrolling */
-	if (gm->gt_live & 0x8000) {		/* is live active ? */
-	    iC_liveData(gm->gt_live, val);	/* yes - output long numerical value to debugger */
-	}
+	iC_liveData(gm, val);			/* iClive only */
     }
 } /* iC_outMw */
 
@@ -1175,17 +1238,15 @@ iC_outMw(					/* NEW OUTW master action */
 void
 iC_outMx(					/* NEW OUTX master action */
     Gate *	gm,				/* NOTE: there is no slave action */
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     int		mask;
     int		val;
     Gate *	gs;
 
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* iClive only */
     gs = (gm->gt_ptr);				/* OUTW Gate */
     mask = gm->gt_mark;
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
     val = gs->gt_new;
     if (gm->gt_val < 0) {			/* output action */
 	val |= mask;				/* set bit in byte Gate */
@@ -1370,12 +1431,10 @@ iC_outMx(					/* OLD OUTX master action */
 void
 iC_fMfn(					/* CLCK TIMR master action */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
 #if defined(TCP) || defined(LOAD)
-    if (gm->gt_live & 0x8000) {
-	iC_liveData(gm->gt_live, gm->gt_val < 0 ? 1 : 0);	/* live is active */
-    }
+    iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 #endif
     if ( gm->gt_val < 0 || gm->gt_next) {
 	iC_link_ol(gm, gm->gt_clk);		/* master action */
@@ -1397,7 +1456,7 @@ iC_fMfn(					/* CLCK TIMR master action */
  *
  *	Clock outputs are not logic signals but events of zero duration
  *	as far as logic signals are concerned. During these zero
- *	duration clock events, all actions dependent on a particular
+ *	duration clock events, all slave actions dependent on a particular
  *	clock are executed, resulting in possible changes to outputs.
  *	It is of major importance that all outputs which do change as
  *	a result of clocked actions have all changed simultaneously
@@ -1412,7 +1471,7 @@ iC_fMfn(					/* CLCK TIMR master action */
 void
 iC_clockSfn(					/* Clock function */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
 #if YYDEBUG && !defined(_WINDOWS) || defined(DEQ)
@@ -1429,14 +1488,12 @@ iC_clockSfn(					/* Clock function */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\t-1 C\t%s", gs->gt_ids);
+	fprintf(iC_outFP, "\t-1\t%s C:", gs->gt_ids);
     }
 #endif
     gs->gt_val = -1;				/* set for visualization only */
 #if defined(TCP) || defined(LOAD)
-    if (gs->gt_live & 0x8000) {
-	iC_liveData(gs->gt_live, 1L);		/* live is active */
-    }
+    iC_liveData(gs, 1);				/* VCD and/or iClive */
 #endif
     if (gs->gt_next != gs) {			/* skip if this clock list empty */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -1485,7 +1542,7 @@ iC_Functp	iC_clock_i[] = {iC_pass1, iC_null1, i_ff3, iC_null1};	/* no output lis
 void
 iC_timerSfn(					/* Timer function */
     Gate *	gm,
-    Gate *	out_list)
+    Gate *	out_list)			/* not used */
 {
     Gate *	gs;
     Gate *	tp;				/* functions which are timed */
@@ -1498,52 +1555,42 @@ iC_timerSfn(					/* Timer function */
     gs = gm->gt_funct;
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\t-1 T\t%s", gs->gt_ids);
+	fprintf(iC_outFP, "\t-1\t%s T", gs->gt_ids);
     }
 #endif
     gs->gt_val = -1;				/* set for visualization only */
 #if defined(TCP) || defined(LOAD)
-    if (gs->gt_live & 0x8000) {
-	iC_liveData(gs->gt_live, 1L);		/* live is active */
-    }
+    iC_liveData(gs, 1);				/* VCD and/or iClive */
 #endif
     if ((np = gs->gt_next) != gs) {		/* skip if this clock list empty */
-	np->gt_mark--;				/* count down first element */
+	np->gt_mark--;				/* count down first entry */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
 	    iC_dc = 1;				/* allow for (time) */
-	    fprintf(iC_outFP, "\t(%d)", np->gt_mark);
+	    fprintf(iC_outFP, "!(%d)\t%s", np->gt_mark, np->gt_ids);
 	}
 #endif
 	if (np->gt_mark == 0) {
 #ifdef DEQ
-	    /* link head of timer chain gs to end of c_list */
+	    /* DEQ link head of timer chain gs to end of c_list */
 	    tp = iC_c_list->gt_prev;		/* save c_list.previous */
 	    tp->gt_next = np;			/* c_list.last ==> new */
 	    np->gt_prev = tp;			/* c_list.last <== new */
 #endif
 	    do {
 		tp = np;
+		if ((np = tp->gt_next) == gs) {
+		    break;			/* end of list found */
 #if YYDEBUG && !defined(_WINDOWS)
-		if (iC_debug & 0100) {
+		} else if (iC_debug & 0100) {
 		    if (iC_dc++ >= 8) {
 			iC_dc = 1;
 			fprintf(iC_outFP, "\n\t");
 		    }
-		    fprintf(iC_outFP, "\t%s", tp->gt_ids);
-		}
+		    fprintf(iC_outFP, "\t!(%d)\t%s", np->gt_mark, np->gt_ids);
 #endif
-		if ((np = tp->gt_next) != gs) {
-#if YYDEBUG && !defined(_WINDOWS)
-		    if (iC_debug & 0100) {
-			iC_dc = 1;		/* allow for (time) */
-			fprintf(iC_outFP, "\t(%d)", np->gt_mark);
-		    }
-#endif
-		} else {
-		    break;
 		}
-	    } while (np->gt_mark == 0);
+	    } while (np->gt_mark == 0);		/* unlink sequence of 0 time entries */
 #ifndef DEQ
 	    iC_c_list->gt_ptr->gt_next = gs->gt_next;/* => new */
 	    gs->gt_next = np;			/* timer => rest */
@@ -1553,7 +1600,7 @@ iC_timerSfn(					/* Timer function */
 		gs->gt_ptr = np;		/* yes - fix timer last */
 	    }
 #else
-	    /* link tail of timer chain which is due to c_list */
+	    /* DEQ link tail of timer chain which is due to c_list */
 	    tp->gt_next = iC_c_list;		/* gs.last ==> c_list */
 	    iC_c_list->gt_prev = tp;		/* gs.last <== c_list */
 	    /* the re-linking of gs works correctly also if np == gs */
@@ -1705,16 +1752,20 @@ iC_assignA(Gate * glv, int ppi, int rv) {
     }
 #endif
     if (nv != glv->gt_new) {
-	if (glv->gt_new == glv->gt_old || nv == glv->gt_old) {
-	    iC_link_ol(glv, iC_a_list);	/* arithmetic change or glitch */
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(glv, nv);			/* VCD and/or iClive */
+#endif
+	if (glv->gt_new == glv->gt_old ||	/* first arithmetic change */
+	    nv == glv->gt_old) {		/* or glitch to old value */
+	    iC_link_ol(glv, iC_a_list);
 	}
 	glv->gt_new = nv;			/* first or later change */
     }
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
-    if (iC_debug & 0100) fprintf(iC_outFP, " %ld\n", glv->gt_new);
+    if (iC_debug & 0100) fprintf(iC_outFP, " %ld\n", nv);
 #else
-    if (iC_debug & 0100) fprintf(iC_outFP, " %d\n", glv->gt_new);
+    if (iC_debug & 0100) fprintf(iC_outFP, " %d\n", nv);
 #endif
 #endif
     return rv;
@@ -1826,13 +1877,16 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 	}
     }
 #endif
-if (glv->gt_val != val) {
-    glv->gt_val = val;
-    iC_link_ol(glv, iC_o_list);		/* logic change or glitch */
-}
+    if (glv->gt_val != val) {
+	glv->gt_val = val;
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(glv, nv ? 1 : 0);	/* VCD and/or iClive */
+#endif
+	iC_link_ol(glv, iC_o_list);	/* logic change or glitch */
+    }
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
-	fprintf(iC_outFP, " %+d\n", glv->gt_val);
+	fprintf(iC_outFP, " %+d\n", val);
     }
 #endif
     return rv != 0;			/* change to logic value 0 or 1 */

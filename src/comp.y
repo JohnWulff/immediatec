@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.107 2012/11/24 06:23:19 jw Exp $";
+"@(#)$Id: comp.y,v 1.108 2013/02/14 01:41:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -171,7 +171,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 	 ***********************************************************/
 
 %token	<sym>	UNDEF IMMCARRAY AVARC AVAR LVARC LVAR AOUT LOUT BFORCE
-%token	<sym>	BLTIN1 BLTIN2 BLTIN3 CVAR CBLTIN TVAR TBLTIN TBLTI1
+%token	<sym>	BLTIN1 BLTINC BLTIN2 BLTIN3 CVAR CBLTIN TVAR TBLTIN TBLTI1
 %token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE SIZEOF
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
 %token	<val>	CCFRAG NUMBER
@@ -1076,7 +1076,7 @@ expr	: UNDEF			{
 		if ($1.v == 0) YYERROR;		/* error in bltin() */
 		sp = $1.v->le_sym;
 		$$ = $1;
-		if (sp->ftype != iC_ftypes[sp->type]) {
+		if (sp->ftype != iC_ftypes[sp->type] && sp->ftype != CH_AR && sp->type != VF) {
 		    warning("not enough arguments for function", sp->name);
 		}
 		sp->ftype = sp->type == SH ? ARITH : GATE;
@@ -1811,18 +1811,37 @@ ctdref	: cexpr			{ $$ = $1; }		/* clock */
 	/************************************************************
 	 * D(aexpr[,(cexpr|texpr[,aexpr])])
 	 * SH(aexpr[,(cexpr|texpr[,aexpr])])
-	 * CHANGE(aexpr[,(cexpr|texpr[,aexpr])])
 	 * RISE(aexpr[,(cexpr|texpr[,aexpr])])
-	 *	D(..) SH(..) CHANGE(..) RISE(expr)
-	 *	D(..) SH(..) CHANGE(..) RISE(expr,clk)
-	 *	D(..) SH(..) CHANGE(..) RISE(expr,tim)
-	 *	D(..) SH(..) CHANGE(..) RISE(expr,tim,delay)
+	 *	D(..) SH(..) RISE(expr)
+	 *	D(..) SH(..) RISE(expr,clk)
+	 *	D(..) SH(..) RISE(expr,tim)
+	 *	D(..) SH(..) RISE(expr,tim,delay)
 	 ***********************************************************/
-fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH etc */
+fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH(expr); RISE(expr) */
 		$$.f = $1.f; $$.l = $5.l;
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTIN1", &$$);
+#endif
+	    }
+	/************************************************************
+	 * CHANGE(aexpr[,(cexpr|texpr[,aexpr])])
+	 *	CHANGE(expr)
+	 *	CHANGE(expr,clk)
+	 *	CHANGE(expr,tim)
+	 *	CHANGE(expr,tim,delay)
+	 ***********************************************************/
+	| BLTINC '(' aexpr cref ')' {			/* CHANGE(expr) */
+		Symbol *	sp;
+		sp = $3.v->le_sym;			/* aexpr symbol */
+		assert(sp && $1.v->ftype == CH_BIT);	/* process logical CHANGE via iC_chMbit() */
+		if (sp->ftype == ARITH) {
+		    $1.v = &iC_CHANGE_ar;		/* process arithmetic CHANGE via iC_chMar() */
+		}
+		$$.f = $1.f; $$.l = $5.l;
+		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTINC", &$$);
 #endif
 	    }
 	/************************************************************

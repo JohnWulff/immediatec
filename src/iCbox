@@ -30,6 +30,7 @@ use warnings;
 
 my @ArgNames;		# stores IO names and initialisers in argument list order
 my @ChannelNames;	# stores IO names with instance for each registered channel
+my @ChannelsRI;		# allow retrieval of @ArgNames info via $channel
 my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
 my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
 my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
@@ -88,8 +89,13 @@ Usage:
 	ID=ini	initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
 		applies only to input ID's. One =ini applies to each input
 		in a range of ID's; eg X5-X7=3 inits IX5 IX6 and IX7 to 3.
-	ID,63   select digital I/O buttons with a mask; default ,255
-	ID,0,50 number range of an analog scale is 0 to 50; default ,0,100,1
+	X0,0b11 select buttons X0.0 and X0.1 only with a bit mask
+		default X0 (= X0,0b11111111) selects X0.0 .. X0.7
+	X0,,200 digital I/O push-buttons X0.0 .. x0.7 reset after 200 ms
+		default on/off buttons, which must be reset by another click
+	X0,,200,0b11  only X0.0 and X0.1 are push-buttons - rest are on/off
+	B1,0,50 number range of an analog scale is 0 to 50; default ,0,100,1
+	B1,0,500,10  number range 0 to 500 with a resolution of 10
 	-s host	host name of server    (default 'localhost')
 	-p port	service port of server (default '8778')
 	-n name	registration name (default first full ID)
@@ -111,7 +117,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.51 2012/11/24 04:49:01 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.52 2013/02/26 09:04:15 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -208,7 +214,7 @@ if (defined $opt_i and $opt_i ne '') {
 
 my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
 							# NOTE: oct() only handles lower case 0b, 0x
-my ($id, $ini, $from, $to, $resolution, $argNameRef);
+my ($id, $ini, $from, $to, $res, $argNameRef);
 
 if ($opt_f) {
     open IN, $opt_f or die "can't open ID file $opt_f! $!";
@@ -233,14 +239,16 @@ if ($opt_f) {
 			    -\d{1,3}	# 3 digit instance
 			)?
 		    )?
-		    (			# optional
+		    (			# optional initialiser
 			\s*=\s*		# '='
-			$nr		# number
+			( $nr )?	# optional number
 		    )?
-		    (			# optional , from, to, resolution
-			\s*,\s*		# ','
-			$nr		# number
-		    ){0,3}
+		    (			# optional  from, to, resolution
+			(
+			    \s*,\s*	# ','
+			    ( $nr )?	# optional number
+			){0,3}		# 0 to 3 values ,<number>
+		    )
 		)/xog) {
 	    $lead = $1;
 	    $id = $2;
@@ -268,7 +276,7 @@ my ($argv);
 while ($argv = shift @ARGV) {
     my ($start_iq_xbwl, $start_iq, $start_xbwl, $start_n, $si, $end_n, $ei, $fr_to_re, @list);
     if ($argv =~ /^
-		    (				# $1   IEC-1131 ID
+		    (				# $1   start IEC-1131 ID
 			(			# $2   start_iq_xbwl
 			    ( [IQ]? )		# $3   start_iq
 			    ( [XBWL] )		# $4   start_xbwl
@@ -280,7 +288,7 @@ while ($argv = shift @ARGV) {
 		    )
 		    (				# $7   optional
 			\s*-\s*			#      '-' 2nd ID
-			(			# $8   IEC-1131 ID
+			(			# $8   end IEC-1131 ID
 			    ( [IQ]?[XBWL] )	# $9   end_iq_xbwl
 			    ( \d+ )		# $10  end_n IEC addr
 			    (			# $11  optional
@@ -288,77 +296,96 @@ while ($argv = shift @ARGV) {
 			    )?
 			)
 		    )?
-		    (				# $12  optional
+		    (				# $12  optional initialiser
 			\s*=\s*			#      '='
-			( $nr )			# $13  number ($14 $nr intern)
+			( $nr )?		# $13  internal $14 in $nr = qr...
 		    )?
 		    (				# $15  optional  from, to, resolution
 			(			# $16
 			    \s*,\s*		# ','
-			    $nr			# number ($17 $nr intern)
-			){0,3}
+			    ( $nr )?		# $17  internal $18 in $nr = qr...
+			){0,3}			# 0 to 3 values ,<number>
 		    )
 		$/xog) {
 	my ($n);
-	$ini = "0";				# default initial value
+	$ini = 0;				# default initial value
 	$start_iq_xbwl = $2;
 	$start_iq = $3;
 	$start_xbwl = $4;
 	$start_n = $end_n = $5;			# start_n addr (end_n in case no range)
 	$si = defined $6 ? $6 : '';		# start instance
-	if ($8) {		# end
-	    $end_n = defined $10 ? $10 : '';	# end_n addr
-	    $ei = defined $11 ? $11 : '';	# end instance
-	    if (not $9 or	# end_iq_xbwl
-		$start_iq_xbwl ne $9 or
-		not $end_n or	# end_n
+	if ($8) {				# end IEC-1131 ID
+	    $end_n = $10;			# end_n addr
+	    $ei = defined $11 ? $11 : $si;	# end instance (same as start instance if not defined)
+	    if (not $9 or			# end_iq_xbwl
+		$start_iq_xbwl ne $9 or		# start_iq_xbwl must equal end_iq_xbwl
+		not defined $end_n or		# $10 can never be '' with ( \d+ )
 		$start_n > $end_n or
-		$si ne $ei)	# start must equal end instance
+		$si ne $ei)			# start instance must equal end instance
 	    {
-		goto ARG_WARN;	# iq_xbwl not identical or negative range
+		goto ARG_WARN;			# iq_xbwl not identical or negative range
 	    }
 	}
 	if ($13) {		# initialiser
 	    if ($start_iq and $start_iq eq 'Q') {
 		warn "$named: $argv: output argument cannot be initialised - ignore initialiser\n";
 	    } else {
-		$ini = convert_nr($13, 0);	# = 0b111
+		$ini = convert_nr($13, 0);	# 7 or 07 or 0x7 or 0b111 Input initialiser
 	    }
 	}
 	unless ($si) {
 	    $si = $instance;
 	}
 	$fr_to_re = defined $15 ? $15 : '';
-	if ($fr_to_re) {			# [, start[, finish[, resolution]]]
+	if ($fr_to_re) {			# [, from[, to[, resolution]]]
 	    my $dummy;
-	    print "fr_to_re = $fr_to_re\n" if $opt_t;
-	    ($dummy, $from, $to, $resolution) = split /\s*,\s*/, $fr_to_re;
+	    print "fr_to_re = '$fr_to_re'\n" if $opt_t;
+	    ($dummy, $from, $to, $res) = split /\s*,\s*/, $fr_to_re;
 	    ########################################################################
-	    ## $from, $to and $resolution are optional, so initialise them if undefined
+	    ## $from, $to and $res are optional, so initialise them if undefined
 	    ## all we know that if they are defined, they consist of a valid number
-	    ## For digital I/O $from contains the bit mask defining which bits are
-	    ## to be used - $to and $resolution are not used and can have any value
-	    ## but they should not be defined by the user.
+	    ## For digital I/O:
+	    ## $ini contains the value of initial bits set (must be ANDED with $from)
+	    ## $from contains the bit mask defining which bits are to be used
+	    ##   if $from eq '' it is set to 255 - all 8 buttons present
+	    ##   if $from == 0 it becomes a dummy frame with no buttons
+	    ## $to is the pushbutton delay in ms (default '' or 0 is normal on/off button)
+	    ## $res contains the bit mask defining which bits are push buttons if $to != 0
 	    ########################################################################
-	    $from = convert_nr($from, 0);
-	    if ($start_xbwl eq 'X' and (defined $to or defined $resolution)) {
-		warn "$named: $argv: badly formed digital range mask '($fr_to_re)' - ignored\n";
-	    }
-	    $to = convert_nr($to, 100);
-	    $resolution = convert_nr($resolution, 1);
-	    unless ($resolution) {
-		warn "$named: $argv: resolution '$resolution' must be non-zero - used '1'\n";
-		$resolution = 1;
-	    } elsif ($resolution < 0) {
-		my $tmp = $from;			# reverse direction of scale
-		$from = $to;
-		$to   = $tmp;
-		$resolution = -$resolution;
+	    if ($start_xbwl eq 'X') {
+		$from = convert_nr($from, 0xff);	# digital I/O default bit mask for all 8 bits
+		$ini &= $from;				# $ini should not have more bits than defined bits
+		if ($start_iq and $start_iq eq 'Q' and defined $to) {
+		    warn "$named: $argv: digital output argument cannot cannot have a time delay - used 0\n";
+		    $to = 0;
+		} else {
+		    $to = convert_nr($to, 0);		# default 0 is normal Input on/off button
+		}
+		if ($to and $to < 50) {
+		    warn "$named: $argv: push button time delay '$to' must be >= 50 - used 50 ms\n";
+		    $to = 50;				# minimum push button time delay is 50 ms (not -ve)
+		}
+		$res = convert_nr($res, $to ? 0xff : 0);# push-button I/O default bit mask for all 8 bits if $to
+		$res &= $from;				# $res should not have more bits than defined bits
+	    } else {
+		$from = convert_nr($from, 0);		# analog I/O default from = 0
+		$to = convert_nr($to, 100);		# analog I/O default to   = 100
+		$res = convert_nr($res, 1);		# analog I/O default res  = 1
+		unless ($res) {
+		    warn "$named: $argv: resolution '$res' must be non-zero - used 1\n";
+		    $res = 1;
+		} elsif ($res < 0) {
+		    my $tmp = $from;			# reverse direction of scale
+		    $from = $to;
+		    $to   = $tmp;
+		    $res = -$res;
+		}
 	    }
 	} elsif ($start_xbwl eq 'X') {
-	    ($from, $to, $resolution) = (0xff, 0, 0);	# digital I/O default (bit mask for all 8 bits)
+	    ($from, $to, $res) = (0xff, 0, 0);		# digital I/O default bit mask for all 8 bits
+	    $ini &= 0xff;				# should never have more than 8 bits initialised
 	} else {
-	    ($from, $to, $resolution) = (0, 100, 1);	# analog I/O default
+	    ($from, $to, $res) = (0, 100, 1);		# analog I/O default
 	}
 	foreach $n ($start_n .. $end_n) {
 	    if ($start_iq) {
@@ -371,9 +398,9 @@ while ($argv = shift @ARGV) {
 		    print "\n" if $opt_t;
 		    warn "$named: $id occurs twice - ignore second instance\n";
 		} else {
-		    $IONames{$id} = -1;		# mark as unregistered IO
+		    $IONames{$id} = -1;			# mark as unregistered IO
 		    print " $id=$ini" if $opt_t;
-		    push @ArgNames, [ $id, $ini, $from, $to, $resolution ];	# argument order for generating widgets
+		    push @ArgNames, [ $id, $ini, $from, $to, $res ];	# argument order for generating widgets
 		}
 	    }
 	}
@@ -385,10 +412,10 @@ while ($argv = shift @ARGV) {
 @ArgNames or die "$named: no valid arguments - cannot make any boxes\n";
 
 if ($opt_t) {
-    print "LIST:\n";
+    print "LIST:	ID	ini	from	to	resolution\n";
     foreach $argNameRef (@ArgNames) {
 	my $argLine = join "\t", @$argNameRef;
-	print "     $argLine\n";
+	print "\t$argLine\n";
     }
 }
 
@@ -404,7 +431,7 @@ if ($opt_t) {
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
-my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];
+my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];	# : $ArgNames [first entry] [$id]
 $named = $name;			# use individual ID for warnings from now on
 
 Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
@@ -420,7 +447,7 @@ my $frameCount = 0;		# number of frames in the box
 $UnitRegistrations = "N$name";	# initiate registration string
 
 foreach $argNameRef (@ArgNames) {
-    ($id, $ini, $from, $to, $resolution) = @$argNameRef;
+    ($id, $ini, $from, $to, $res) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
 	$direction = $opt_d || $opt_r ? 'R' : 'S';
@@ -522,29 +549,37 @@ if ($opt_H) {
 	-indicatoron => $indicatoron,
 	-command     => sub {
 			     if ($hold) {
+				print "Hold start            [II]\n" if $opt_t;
 				$holdButton->configure(-text => '>');
 			     } else {
-				print "Hold release\n" if $opt_t;
+				print "Hold release          [>]\n" if $opt_t;
 				## scan list of changes on Hold Queue
 				my ($ch, $val);
-				my $msg = '';
 				foreach $ch (sort { $a <=> $b } keys %HoldQueue) {
 				    $val = $HoldQueue{$ch};	# retrieve latest value
 				    if ($val != $ChannelsIq[$ch]) {
-					print "$named: $ch:$val	> $ChannelNames[$ch] from hold queue\n" if $opt_t;
-					unless ($msg) {
-					    $msg = "$ch:$val";
-					} else {
-					    $msg = "$msg,$ch:$val";
-					}
-					$ChannelsIq[$ch] = $val;
+					send_input($ch, $val);	# send hold value
+					($id, $ini, $from, $to, $res) = @{$ArgNames[$ChannelsRI[$ch]]};	# all argument values
+					if ($to and				# process held delayed push-buttons
+					    $id =~ /$I__XBWL__/o and		# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
+					    $1 eq 'X') {			# only IXm.n
+					    my $resolution = $res & $val;	# only push-buttons which had been pushed need clearing
+					    if ($resolution) {
+						my $channel = $ch;
+						$mw->after($to, \(sub {
+						    for my $i (0 .. 7) {
+							$ChannelsIX[$channel][$i] = 0 if $resolution & (1 << $i);# clear delayed input bits
+						    }
+						    $ChannelsI[$channel] &= ~$resolution;
+						    send_input($channel, $ChannelsI[$channel]);		# send cleared bits after delay
+						}));		# end of after()
+					    }
+					}			# latest value sent is in $ChannelsIq[$ch] now
 				    }
 				}
-				if ($msg) {
-				    $conn->send_now("$msg");
-				}
-				%HoldQueue = ();	# delete all entries
+				%HoldQueue = ();		# delete all entries
 				$holdButton->configure(-text => 'II');
+				print "Hold release complete\n" if $opt_t;
 			     }
 			    },
 			)->pack(-side   => 'top',
@@ -559,7 +594,7 @@ if ($opt_H) {
 ########################################################################
 
 foreach $argNameRef (@ArgNames) {
-    ($id, $ini, $from, $to, $resolution) = @$argNameRef;
+    ($id, $ini, $from, $to, $res) = @$argNameRef;
     $direction = $label = '';
     if ($id =~ /^I/) {
 	$direction = $opt_d || $opt_r ? 'R' : 'S';
@@ -576,7 +611,7 @@ foreach $argNameRef (@ArgNames) {
 	    next;			# multiple input not registered
 	}
     }
-    print "$named: [$row:$column] label = '$label' in = '$ini' ch = '$ch'\n" if $opt_t;
+    print "$named: [$row:$column] label = '$label' ch = '$ch' ini = '$ini' from = '$from' to = '$to' res = '$res'\n" if $opt_t;
 
     $frame  = $pane->Frame(-label       => $label,
 			   -relief      => 'groove',
@@ -594,6 +629,7 @@ foreach $argNameRef (@ArgNames) {
 ########################################################################
 #
 #	either 8 output checkbuttons
+#	eval makes each of the 8 output CheckButtons in turn
 #
 #	Bug in Tk-804.027 (possibly only on MAC OsX-1.3-darwin)
 #	selectcolor for disabled has no effect
@@ -602,7 +638,7 @@ foreach $argNameRef (@ArgNames) {
 #
 ########################################################################
 
-    my ($index, $text, $sel, $state, $borderwidth);
+    my ($index, $text, $sel, $del, $state, $borderwidth);
     if ($id =~ /$QX/o) {		# /^QX/ or /^[IQ]X/ if $opt_d or /^IX/ if $opt_r
 	for $index (0 .. 7) {
 	    $sel = $from & (1 << $index);
@@ -632,15 +668,21 @@ foreach $argNameRef (@ArgNames) {
 ########################################################################
 #
 #	or 8 input checkbuttons
+#	eval makes each of the 8 input CheckButtons in turn
+#	generates -command code only if button is selected in $from (mask)
+#	handles push button with delay $del if $del != 0 (generates more code)
+#	must be processed by eval to make -command a closure
 #
 ########################################################################
 
     elsif ($id =~ /$IX/o) {		# /^IX/ or /^QX/ if $opt_r
 	for $index (0 .. 7) {
 	    $sel = $from & (1 << $index);
+	    $del = ($res & (1 << $index)) ? $to : 0;			# select bits which are push-buttons
 	    $text        = $sel ? "'.$index'" : "''";
 	    $borderwidth = $sel ? 2 : 0;
 	    $state       = $sel ? "'normal'" : "'disabled'";
+	    my $myself;
 	    my $makeInCheckbutton = "\
 	    \$frame->Checkbutton(\
 		-text        => $text,\
@@ -648,19 +690,24 @@ foreach $argNameRef (@ArgNames) {
 		-selectcolor => $greenButton,\
 		-borderwidth => $borderwidth,\
 		-state       => $state,\
-		-indicatoron => $indicatoron,\
-		-command     => sub {\
-				     my \$val = \$ChannelsI[$ch];\
-				     if (\$ChannelsIX[$ch][$index]) {\
-					 \$val |= $masks[$index];  # set bit\n\
+		-indicatoron => $indicatoron," . ($sel ? "\
+		-command     => \\(\$myself = sub {\
+				     my \$val = \$ChannelsI[$ch];" . ($del ? "\
+				     if (\$val & $masks[$index]) {\
+					 \$ChannelsIX[$ch][$index] = 0;	# reset bit indicator\
+					 \$val &= ~$masks[$index];	# clear bit after time delay\
+				     }els" : "\
+				     ") . "if (\$ChannelsIX[$ch][$index]) {\
+					 \$val |= $masks[$index];	# set bit" . ($del ? "\
+					 \$mw->after($del, \$myself) unless \$hold;	# clear bit after $del ms" : "") . "\
 				     } else {\
-					 \$val &= ~$masks[$index]; # clear bit\n\
+					 \$val &= ~$masks[$index];	# clear bit\
 				     }\
 				     if (\$val != \$ChannelsI[$ch]) {\
 					 send_input($ch, \$val);\
 					 \$ChannelsI[$ch] = \$val;\
 				     }\
-				    },\
+				    })," : "") . "\
 				)->pack(-side   => 'top',\
 					-expand => 1,\
 				       );\
@@ -669,7 +716,20 @@ foreach $argNameRef (@ArgNames) {
 	    eval $makeInCheckbutton;
 	    print $@;
 	}
-	send_input($ch, $ChannelsI[$ch]);	# executed at build time
+	send_input($ch, $ChannelsI[$ch]);				# send initial values at build time (set in registration)
+	if ($to) {							# process initial delayed push-buttons
+	    my $resolution = $res & $ini;				# no need to clear uninitialised bits
+	    if ($resolution) {
+		my $channel = $ch;
+		$mw->after($to, \(sub {
+		    for my $i (0 .. 7) {
+			$ChannelsIX[$channel][$i] = 0 if $resolution & (1 << $i);	# clear delayed input bits
+		    }
+		    $ChannelsI[$channel] &= ~$resolution;
+		    send_input($channel, $ChannelsI[$channel]);		# send cleared bits after delay
+		}));							# end of after()
+	    }
+	}								# latest value sent is in $ChannelsIq[$ch] now
     }
 
 ########################################################################
@@ -682,7 +742,7 @@ foreach $argNameRef (@ArgNames) {
 	$frame->Scale(			# /^I[BWL]/ if $opt_r
 	    -from        => $from,
 	    -to          => $to,
-	    -resolution  => $resolution,
+	    -resolution  => $res,
 	    -length      => $opt_l,
 	    -troughcolor => 'IndianRed1',
 	    -width       => '4m',
@@ -697,6 +757,7 @@ foreach $argNameRef (@ArgNames) {
 ########################################################################
 #
 #	or 1 analog input scale
+#	must be processed by eval to make -command a closure
 #
 ########################################################################
 
@@ -705,7 +766,7 @@ foreach $argNameRef (@ArgNames) {
 	\$frame->Scale(\
 	    -from        => $from,\
 	    -to          => $to,\
-	    -resolution  => $resolution,\
+	    -resolution  => $res,\
 	    -length      => $opt_l,\
 	    -troughcolor => 'light green',\
 	    -width       => '4m',\
@@ -750,13 +811,15 @@ exit(0);
 ########################################################################
 #
 #	Convert a number string obtained with $nr to an integer value
-#	retun initial value if undef
+#	Parameter 1:	dec, bin, oct or hex number string - dec may be signed
+#	Parameter 2:	initial value
+#	retun initial value if parameter 1 undef or ''
 #
 ########################################################################
 
 sub convert_nr {
     my ($val, $initial) = @_;
-    return $initial unless defined $val;
+    return $initial if not defined $val or $val eq '';
     if ($val =~ /^-\s*0/) {
 	$val = 0;
 	print "\n" if $opt_t;
@@ -779,11 +842,11 @@ sub send_input {
     printMicroSeconds();
     if ($hold) {
 	print "$named: $ch:$val	II $ChannelNames[$ch]\n" if $opt_t;
-	$HoldQueue{$ch} = $val;		# hold latest value
+	$HoldQueue{$ch} = $val;		# hold latest value - not sent now
     } else {
 	print "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
 	$conn->send_now("$ch:$val");	# send latest value
-	$ChannelsIq[$ch] = $val;
+	$ChannelsIq[$ch] = $val;	# always save latest value sent on this channel for hold
     }
 } # send_input
 
@@ -804,16 +867,16 @@ sub rcvd_msg_from_server {
 	    print "$named: disconnected by server\n";
 	    exit;
 	}
-	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId);
+	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $from, $to, $res, $regId);
 	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
-	    if ($msg1 =~ /^(\d+):(\d+)$/) {
+	    if ($msg1 =~ /^(\d+):(-?\d+)$/) {
 		$channel = $1;			## receive data as channel:value
-		$value   = $2;
+		$value   = $2;			## decimal value with optional sign
 		$old = $ChannelsQ[$channel];
 		if (defined $old) {
 		    if ($value != $old) {
 			$bitRef = $ChannelsQX[$channel];
-			if (defined $bitRef) {
+			if (defined $bitRef) {		# only defined for QXm digital
 			    my ($diff, $mask);
 			    goto WrongFormat if $value >= 0x100;	# only 8 bit map allowed
 			    $diff = $old ^ $value;	# $old initialized to a number for correct XOR
@@ -831,10 +894,11 @@ sub rcvd_msg_from_server {
 		}
 	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
 		$channel = $1;			## receive channel of a registration acknowlwdgment
-		($id, $ini) = @{$ArgNames[$ri]};	# next 2 values
+		($id, $ini, $from, $to, $res) = @{$ArgNames[$ri]};	# all argument values
 		defined $id or
 		    die "$named: too many registration acknowledgments from iCserver - system error";
 		print "$named: $ri: registering '$id' on channel '$channel'\n" if $opt_t;
+		$ChannelsRI[$channel] = $ri;	# allow retrieval of @ArgNames info via $channel
 		$ri++;
 		my $dir = '';
 		if ($id =~ /$Q__XBWL__/o) {	# /^Q([XBWL])/ or /^[IQ]([XBWL])/ if $opt_d
@@ -880,7 +944,7 @@ sub rcvd_msg_from_server {
 		    $ChannelNames[$channel] = "$id";
 		    $IONames{$regId} = $channel;
 		    ## build only boxes whose IONames entry is defined
-		    print "register: $regId	channel = $channel	in = $ini\n" if $opt_t;
+		    print "register: $regId channel = $channel ini = '$ini' from = '$from' to = '$to' res = '$res'\n" if $opt_t;
 		}
 	    } else {
 	      WrongFormat:
@@ -936,14 +1000,19 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
             default ID is X0 generating input IX0 and output QX0
             A range of ID's can be specified with -; eg IX0-IX7
     ID-inst Each ID can be followed by -<inst>, where <inst> consists
-	    of up to 3 numeric digits (usually 1 digit).
+            of up to 3 numeric digits (usually 1 digit).
             Such an appended instance code takes precedence over the
             general instance specified with the -i <inst> (see below).
     ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
             applies only to input ID's. One =ini applies to each input
             in a range of ID's; eg X5-X7=3 inits IX5 IX6 and IX7 to 3.
-    ID,63   select digital I/O buttons with a mask; default ,255
-    ID,0,50 number range of an analog scale is 0 to 50; default ,0,100,1
+    X0,0b11 select buttons X0.0 and X0.1 only with a bit mask
+            default X0 (= X0,0b11111111) selects X0.0 .. X0.7
+    X0,,200 digital I/O push-buttons X0.0 .. x0.7 reset after 200 ms
+            default on/off buttons, which must be reset by another click
+    X0,,200,0b11  only X0.0 and X0.1 are push-buttons - rest are on/off
+    B1,0,50 number range of an analog scale is 0 to 50; default ,0,100,1
+    B1,0,500,10  number range 0 to 500 with a resolution of 10
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
@@ -1000,34 +1069,57 @@ a red background and only display the value received by the widget.
  <number> may be decimal, octal, hexadecimal or binary as follows:
  X10=15 X11=017 IX12=0xf IX13=0b1111    all equal decimal 15
  only decimal initialisers may be preceded by a minus sign
- IW10=-100 initialises IW10 with -100
+ IW10=-70 initialises IW10 with -70 (IW10=-70,-100,0 to be useful)
 
- An initialiser may be placed after the second parameter of a range.
- Every input in the range will be initalised to the same value.
- IW20-IW27=100  initialises IW20 IW21 .. IW27 with 100
- X20-X27=0x3a   initialises IX20 IX21 .. IX27 with 0x3a
- Outputs cannot be initialised.
+An optional initialiser may be placed after the second parameter
+of a range.  Every input in the range will be initalised to the
+same value.  Outputs cannot be initialised.
 
-All digital parameters or parameter ranges may optionally be followed
-by one number separated by a comma representing a bitmask defining,
-whether a particular bit .0 to .7 is defined and should be implemented.
-Default ',255' which defines all 8 bits. The easiest way to declare
-the bit mask is as a binary number, eg: ',0b10001111'. This declares
-that bits .0, .1, .2, .3 and .7 are defined in the application and
-should be implemented. The bits which are not defined are left blank.
+ IW20-IW27=50  initialises IW20 IW21 .. IW27 with 50
+ For analog inputs this means that the slider and the output are
+ set to the value of 50, which happens to be in the middle.
+
+ X20-X27=0b1011 initialises IX20 IX21 .. IX27 with 0b1011
+ For digital inputs X20 this means that IX20.0 IX20.1 and IX20.3 are
+ set - all other bits remain reset. Similarly for IX21 to IX27.
 
 All analog parameters or parameter ranges may optionally be followed
 by two or three comma-separated numbers naming the start, finish
 and optionally the resolution of the numbers displayed by the analog
 scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
-resoltion reverses the direction of the slider. (0 not allowed)
+resoltion reverses the direction of the slider. (0 is not allowed)
+
+All digital parameters or parameter ranges may optionally be followed
+by one, two or three comma-separated numbers. Two consecutive commas
+or any numbers missing at the end will be filled with a default.
+
+ Number 1) is a bitmask defining, whether a particular bit .0 to .7
+           is defined and should be implemented.  Default ',255'
+           defines all 8 bits. The easiest way to declare the bit mask
+           is as a binary number, eg: ',0b10001111'. This declares that
+           bits .0, .1, .2, .3 and .7 are defined in the application
+           and should be implemented. The bits which are not defined
+           are left blank. Default 0b11111111 - all bits are defined.
+
+ Number 2) is a delay value in milli-seconds. Any value 50 and above
+	   is used to reset the button internally after that many
+	   milli-second, which makes it a push-button that only
+	   needs to be clicked once with the left mouse button.
+	   Non-zero values less than 50 (including negative values)
+	   are set to 50 ms. Default 0 - normal on/off button.
+
+ Number 3) is a bitmask defining, whether a particular bit .0 to .7
+	   is a push-button or is a normal on/off button. This is only
+	   useful if a delay value has been specified. This optional
+	   mask lets you select which bits in one group are to be
+	   push-buttons. Default 0x11111111 - all push-buttons.
 
 ID-parameter, range, initialiser and number-range must be written
 without spaces in the command line unless they are quoted. In the
 optional INI file which can be read with the -f option, white space
 can be placed between parameter, range, initialiser and number-range.
-They must only be all in one line. In an INI file any text following '#'
-is ignored and treated as a comment.
+They must only be all in one line. In an INI file any text following
+'#' is ignored and treated as a comment.
 
 A separate frame is generated for each input and output ID; two frames
 for an ID not specifying I or Q. Each frame is labelled with the ID
@@ -1039,24 +1131,33 @@ with the -c option (absolute maximum with -C).  If the number of
 I/O frames exceeds an absolute maximum of 18 columns and 3 rows,
 more rows are generated, which can be accessed with a scroll-bar.
 
-Digital frames have a vertical row of 8 Checkbuttons labelled .0 .1 ... .7
-for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set and
-may be pressed on and off; Output Checkbuttons are red when set and display
-an external value only - they cannot be pressed.
+Digital frames have a vertical row of 8 Checkbuttons labelled .0 .1
+... .7 for IX0.0 IX0.1 ... IX0.7; Input Checkbuttons are green when set
+and may be pressed on and off or on only if they are a push-button;
+Output Checkbuttons are red when set and display an external value
+only - they cannot be pressed.
 
-Analog frames have a vertical slider labelled 0 to 100 by default. Analog inputs
-have a green slider - analog outputs a red slider. Only input sliders can be
-moved manually.
+Analog frames have a vertical slider labelled 0 to 100 by default.
+Analog inputs have a green slider - analog outputs a red slider. Only
+input sliders can be moved to change an input value.
 
-An iCbox generated with the -d option will make input frames which behave
-like outputs (except for the labels). This is useful for monitoring real
-external inputs (and outputs).
+An B<iCbox> generated with the -d option will make input frames which
+behave like outputs (except for the labels). This is useful for
+monitoring real external inputs (and outputs).
+
+An B<iCbox> generated with the -r option will reverse the functionality
+of inputs and outputs. Frames whose ID starts with a Q can be modified
+whereas frames whose ID starts with I will only monitor. An B<iCbox> -r
+mimics an iC application during early development.
 
 An optional frame with a B<Hold> button is generated with the -H
-option.  After this button is pressed, any input changes are queued
-and not transmitted until the B<Hold> button is released. This is
-useful for testing iC programs in a situation when several inputs
-must arrive simultaneously.
+option showing [II] (press to hold).  After this button is pressed it
+shows [>] (press to continue).  While B<Hold> is pressed, any input
+changes are queued and not transmitted until the B<Hold> button
+is released. This is useful for testing iC programs in a situation
+when several inputs must arrive simultaneously. Push-buttons with an
+internal reset delay are also held, sending their on and delayed off
+state when the B<Hold> button is released.
 
 =head1 AUTHOR
 

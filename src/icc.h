@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.70 2012/09/23 01:27:06 jw Exp $";
+"@(#)$Id: icc.h,v 1.71 2013/02/14 07:30:50 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -92,23 +92,24 @@ static const char icc_h[] =
 #define	iC_S_SH		5	/* sample and hold set action */
 #define	iC_R_SH		6	/* sample and hold reset action */
 #define	iC_D_SH		7	/* sample and hold arithmetic action */
-#define	iC_CH_BIT	8	/* CHANGE logical or arithmetic action (iClive uses CH_BIT-RI_BIT) */
+#define	iC_CH_BIT	8	/* CHANGE logical action */
 #define	iC_S_FF		9	/* FF set logical action   requires 1001 at genr.c 233 */
 #define	iC_R_FF		10	/* FF reset logical action requires 1010 */
 #define	iC_D_FF		11	/* FF D logical action     requires 1011 */
-#define	iC_F_SW		12	/* SWITCH arithmetic action */
-#define	iC_F_CF		13	/* IF logical action */
-#define	iC_F_CE		14	/* IF ELSE logical action */
-#define	iC_CLCK		15	/* CLOCK logical action */
-#define	iC_TIMR		16	/* TIMER logical action */
+#define	iC_CH_AR	12	/* CHANGE arithmetic action */
+#define	iC_F_SW		13	/* SWITCH arithmetic action */
+#define	iC_F_CF		14	/* IF logical action */
+#define	iC_F_CE		15	/* IF ELSE logical action */
+#define	iC_CLCK		16	/* CLOCK logical action */
+#define	iC_TIMR		17	/* TIMER logical action */
 			    /* outputs to external sinks */
-#define	iC_TRAB		17	/* logical input byte transferred to INPX */
-#define	iC_OUTW		18	/* arithmetic output */
-#define	iC_OUTX		19	/* logical output */
+#define	iC_TRAB		18	/* logical input byte transferred to INPX */
+#define	iC_OUTW		19	/* arithmetic output */
+#define	iC_OUTX		20	/* logical output */
 			    /* clock outputs */
-#define	iC_CLCKL	20	/* clock action */
-#define	iC_TIMRL	21	/* timer action */
-#define	iC_F_ERR	22	/* error action */
+#define	iC_CLCKL	21	/* clock action */
+#define	iC_TIMRL	22	/* timer action */
+#define	iC_F_ERR	23	/* error action */
 
 typedef union GppIpI {
     struct Gate **	gpp;		/* Gate pointer array */
@@ -267,10 +268,11 @@ extern void		iC_efree(void *);
 #define	S_SH	iC_S_SH		/* sample and hold set action */
 #define	R_SH	iC_R_SH		/* sample and hold reset action */
 #define	D_SH	iC_D_SH		/* sample and hold arithmetic action */
-#define	CH_BIT	iC_CH_BIT	/* CHANGE logical or arithmetic action (iClive uses CH_BIT-RI_BIT) */
+#define	CH_BIT	iC_CH_BIT	/* CHANGE logical action */
 #define	S_FF	iC_S_FF		/* FF set logical action   requires 1001 at genr.c 233 */
 #define	R_FF	iC_R_FF		/* FF reset logical action requires 1010 */
 #define	D_FF	iC_D_FF		/* FF D logical action     requires 1011 */
+#define	CH_AR	iC_CH_AR	/* CHANGE arithmetic action */
 #define	F_SW	iC_F_SW		/* SWITCH arithmetic action */
 #define	F_CF	iC_F_CF		/* IF logical action */
 #define	F_CE	iC_F_CE		/* IF ELSE logical action */
@@ -320,6 +322,11 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 #else
 #define	Out_init(ol)	(ol->gt_next = ol->gt_prev = ol)
 #endif
+#if defined(TCP) || defined(LOAD)
+extern void	iC_gateMa(Gate *, Gate *);	/* GATE master action */
+#else	/* defined(TCP) || defined(LOAD) */
+#define		iC_gateMa	iC_link_ol
+#endif	/* defined(TCP) || defined(LOAD) */
 
 /********************************************************************
  *
@@ -343,7 +350,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 	"iC_SH","iC_FF","iC_EF","iC_VF","iC_SW","iC_CF","iC_NCONST","iC_INPB","iC_INPW","iC_INPX",\
 	"iC_CLK","iC_TIM","iC_ALIAS","iC_ERR","iC_KEYW","iC_CTYPE","iC_CWORD","iC_IFUNCT",
 
-#define	OPS	".-++\"^&|%*#/>({=][<:!@?ktwi"	/* DEBUG display of types */
+#define	OPS	".-++\"^&|%*#/>({=][<:!@?ktwi"	/* DEBUG display of types - line up with pplstfix */
 
 /* ftypes corresponding to types */
 #define	FTYPES \
@@ -354,10 +361,8 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 /* compiler tokens corresponding to type */
 #define	DEF_TYP \
 	0, AVARC, 0, 0, LVARC, 0, 0, 0, 0,\
-	0, 0, 0, 0, 0, 0, NUMBER,\
-	0, 0, 0,\
-	0, 0, 0, 0, \
-	0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, NUMBER, 0, 0, 0,\
+	0, 0, 0, 0,  0, 0, 0, 0,
 
 /* initialisation tables for different types (must have MAX_LS entries) */
 #define	I_LISTS \
@@ -370,7 +375,7 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
  *	The following lists are indexed by gt_fni (is ftype)
  *
  *	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH
- *	CH_BIT	S_FF	R_FF	D_FF	F_SW	F_CF	F_CE	CLCK	TIMR
+ *	CH_BIT	S_FF	R_FF	D_FF	CH_AR	F_SW	F_CF	F_CE	CLCK	TIMR
  *	TRAB	OUTW	OUTX	CLCKL	TIMRL	F_ERR
  *
  *******************************************************************/
@@ -378,63 +383,83 @@ typedef struct Gate	Gate;	/* iC_Gt equivalent to Gate */
 /* list of ftypes */
 #define	FULL_FTYPE \
 	"UDFA","ARITH","GATE","GATEX","RI_BIT","S_SH","R_SH","D_SH",\
-	"CH_BIT","S_FF","R_FF","D_FF","F_SW","F_CF","F_CE","CLCK","TIMR",\
+	"CH_BIT","S_FF","R_FF","D_FF","CH_AR","F_SW","F_CF","F_CE","CLCK","TIMR",\
 	"TRAB","OUTW","OUTX","CLCKL","TIMRL","F_ERR",
 
 /* list of iC_ extended ftypes in icg.h */
 #define	iC_EXT_FTYPE \
 	"iC_UDFA","iC_ARITH","iC_GATE","iC_GATEX","iC_RI_BIT","iC_S_SH","iC_R_SH","iC_D_SH",\
-	"iC_CH_BIT","iC_S_FF","iC_R_FF","iC_D_FF","iC_F_SW","iC_F_CF","iC_F_CE","iC_CLCK","iC_TIMR",\
+	"iC_CH_BIT","iC_S_FF","iC_R_FF","iC_D_FF","iC_CH_AR","iC_F_SW","iC_F_CF","iC_F_CE","iC_CLCK","iC_TIMR",\
 	"iC_TRAB","iC_OUTW","iC_OUTX","iC_CLCKL","iC_TIMRL","iC_F_ERR",
+
+/* list of VCD types for GTKWAVE - use first characters 'i' 'w' or 'e' for identification in some cases*/
+/* see gtkwave-3.3.43/src/vcd_keywords.c - wordlist[] */
+#define	VCD_FTYPE \
+	NULL,"integer","wire","wire","wire","wire","wire","integer",\
+	"wire","wire","wire","wire","integer","integer","wire","wire","wire","wire",\
+	NULL,NULL,NULL,"event","event",\
+	NULL,"integer","wire","wire","wire","wire",NULL,NULL,	/* ALIAS ARITH GATE GATEX INV_GATE INV_GATEX */\
+	NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,\
+	NULL,NULL,NULL,"event","event",				/* ALIAS CLCKL TIMRL */
+
+/* list of SAV types for GTKWAVE - 24 is decimal integer, 28 is bit 68 is inverted bit (for inverting ALIAS)*/
+/* see gtkwave-3.3.43/src/analyzer.h - TR_INVERT=0x40 TR_JUSTIFY=0x20 TR_BIN=0x08 TR_DEC=0x04 TR_HEX=0x02 */
+#define	SAV_FTYPE \
+	NULL,"24","28","28","28","28","28","24",\
+	"28","28","28","28","24","24","28","28","28","28",\
+	NULL,NULL,NULL,"28","28",\
+	NULL,"24","28","28","68","68",NULL,NULL,		/* ALIAS ARITH GATE GATEX INV_GATE INV_GATEX */\
+	NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,\
+	NULL,NULL,NULL,"28","28",				/* ALIAS CLCKL TIMRL */
 
 /* iC_Functp2		initAct[] = {		// called in pass4 */
 #define INIT_ACT \
-	iC_err_fn, iC_arithMa, iC_link_ol, iC_link_ol, iC_link_cl, iC_link_cl, iC_link_cl, iC_dMsh, \
-	iC_chMbit, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, \
+	iC_err_fn, iC_arithMa, iC_gateMa, iC_gateMa, iC_link_cl, iC_link_cl, iC_link_cl, iC_dMsh, \
+	iC_chMbit, iC_link_cl, iC_link_cl, iC_link_cl, iC_chMar, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, iC_link_cl, \
 	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp2		masterAct[] = {		// called in scan, scan_ar and pass4 */
 #define MASTER_ACT \
-	iC_err_fn, iC_arithMa, iC_link_ol, iC_link_ol, iC_riMbit, iC_sMsh, iC_rMsh, iC_dMsh, \
-	iC_chMbit, iC_sMff, iC_rMff, iC_dMff, iC_fMsw, iC_fMcf, iC_fMce, iC_fMfn, iC_fMfn, \
+	iC_err_fn, iC_arithMa, iC_gateMa, iC_gateMa, iC_riMbit, iC_sMsh, iC_rMsh, iC_dMsh, \
+	iC_chMbit, iC_sMff, iC_rMff, iC_dMff, iC_chMar, iC_fMsw, iC_fMcf, iC_fMce, iC_fMfn, iC_fMfn, \
 	iC_err_fn, iC_outMw, iC_outMx, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp2		slaveAct[] = {		// called in scan_clk */
 #define SLAVE_ACT \
 	iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_riSbit, iC_sSsh, iC_rSsh, iC_dSsh, \
-	iC_chSbit, iC_sSff, iC_rSff, iC_dSff, iC_fSsw, iC_fScf, iC_fScf, iC_clockSfn, iC_timerSfn, \
+	iC_chSbit, iC_sSff, iC_rSff, iC_dSff, iC_chSar, iC_fSsw, iC_fScf, iC_fScf, iC_clockSfn, iC_timerSfn, \
 	iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn, iC_err_fn,
 
 /* iC_Functp		init2[] = {		// called in pass2 */
 #define INIT2_ACT \
 	iC_null1, iC_gate2, iC_gate2, iC_gate2, iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_i_ff2, \
-	iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_null1, iC_null1, iC_null1, iC_i_ff2, iC_i_ff2, \
+	iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_i_ff2, iC_null1, iC_null1, iC_null1, iC_i_ff2, iC_i_ff2, \
 	iC_null1, iC_null1, iC_null1, iC_null1, iC_null1, iC_null1,
 
 /* unsigned int	iC_bit2[] = {			// used in i_ff2() and i_ff3() */
 #define BIT2_LST \
 	0, INPT_M, INPT_M, INPT_M, RI_B_M, S_SH_M, R_SH_M, D_SH_M, \
-	CH_B_M, S_FF_M, R_FF_M, D_FF_M, F_CW_M, F_CF_M, F_CF_M, CLCK_M, TIMR_M, \
+	CH_B_M, S_FF_M, R_FF_M, D_FF_M, CH_B_M, F_CW_M, F_CF_M, F_CF_M, CLCK_M, TIMR_M, \
 	0, OUTP_M, 0, 0, 0, 0,	/* TRAB and OUTX ==> 0 jw 040417 */
 
-#define	FOPS	"UA _EsrHVSRDIFGCTBWX:!e"	/* DEBUG display of ftypes */
+#define	FOPS	"UA _EsrHVSRDvIFGCTBWX:!e"	/* DEBUG display of ftypes - line up with pplstfix and iClive */
 
 /* types corresponding to ftypes */
 #define	TYPES \
 	UDF, ARN, OR, OR, EF, SH, SH, SH, \
-	VF, FF, FF, FF, SW, CF, CF, CLK, TIM, \
+	VF, FF, FF, FF, VF, SW, CF, CF, CLK, TIM, \
 	INPX, ARN, AND, ERR, ERR, ERR,
 
 /* C types corresponding to ftypes */
 #define	CTYPES \
 	UDF, ARNC, LOGC, LOGC, ERR, ERR, ERR, ERR, ERR,\
-	ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, \
+	ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, ERR, \
 	ERR, ARNC, LOGC,ERR, ERR, ERR,
 
 /* compiler tokens corresponding to ftype */
 #define	DEF_ACT \
 	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
-	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
+	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, AOUT, LOUT, CVAR, TVAR, YYERRCODE,
 
 #if INT_MAX == 32767
@@ -590,14 +615,17 @@ extern unsigned char	iC_bitMask[];
 
 extern int	iCbegin(void);			/* initialisation function */
 extern int	iCend(void);			/* termination function */
+
+extern void	iC_arithMa(Gate *, Gate *);	/* ARITH master action */
 extern void	iC_sMff(Gate *, Gate *);	/* S_FF master action on FF */
 extern void	iC_rMff(Gate *, Gate *);	/* R_FF master action on FF */
 extern void	iC_dMff(Gate *, Gate *);	/* D_FF master action on FF */
 extern void	iC_sMsh(Gate *, Gate *);	/* S_SH master action on SH */
 extern void	iC_rMsh(Gate *, Gate *);	/* R_SH master action on SH */
 extern void	iC_dMsh(Gate *, Gate *);	/* D_SH master action on SH */
-extern void	iC_chMbit(Gate *, Gate *);	/* CH_BIT master action on VF */
 extern void	iC_riMbit(Gate *, Gate *);	/* RI_BIT master action on EF */
+extern void	iC_chMbit(Gate *, Gate *);	/* CH_BIT master action on VF */
+extern void	iC_chMar(Gate *, Gate *);	/* CH_AR master action on VF */
 extern void	iC_fMsw(Gate *, Gate *);	/* F_SW master action */
 extern void	iC_fMcf(Gate *, Gate *);	/* F_CF master action */
 extern void	iC_fMce(Gate *, Gate *);	/* F_CE master action */
@@ -605,7 +633,6 @@ extern void	iC_fMfn(Gate *, Gate *);	/* CLCK TIMR master action */
 extern int	iC_traMb(Gate *, Gate *);	/* TRAB master action */
 extern void	iC_outMw(Gate *, Gate *);	/* OUTW master action */
 extern void	iC_outMx(Gate *, Gate *);	/* OUTX master action */
-extern void	iC_arithMa(Gate *, Gate *);	/* ARITH master action */
 
 extern void	iC_sSff(Gate *, Gate *);	/* S_FF slave action on FF */
 extern void	iC_rSff(Gate *, Gate *);	/* R_FF slave action on FF */
@@ -613,8 +640,9 @@ extern void	iC_dSff(Gate *, Gate *);	/* D_FF slave action on FF */
 extern void	iC_sSsh(Gate *, Gate *);	/* S_SH slave action on SH */
 extern void	iC_rSsh(Gate *, Gate *);	/* R_SH slave action on SH */
 extern void	iC_dSsh(Gate *, Gate *);	/* D_SH slave action on SH */
-extern void	iC_chSbit(Gate *, Gate *);	/* CH_BIT slave action on VF */
 extern void	iC_riSbit(Gate *, Gate *);	/* RI_BIT slave action on EF */
+extern void	iC_chSbit(Gate *, Gate *);	/* CH_BIT slave action on VF */
+extern void	iC_chSar(Gate *, Gate *);	/* CH_AR slave action on VF */
 extern void	iC_fSsw(Gate *, Gate *);	/* F_SW slave action on SW */
 extern void	iC_fScf(Gate *, Gate *);	/* F_CF F_CE slave action on CF */
 extern void	iC_clockSfn(Gate *, Gate *);	/* CLCK slave action on CLK */
@@ -675,9 +703,9 @@ extern int		iC_exec(int iC_indx, Gate * gp);
 #endif /* LOAD */
 
 #if INT_MAX == 32767 && defined (LONG16)
-extern void		iC_liveData(unsigned short index, long value);
+extern void		iC_liveData(Gate * gp, long value);	/* VCD and/or iClive */
 #else
-extern void		iC_liveData(unsigned short index, int value);
+extern void		iC_liveData(Gate * gp, int value);	/* VCD and/or iClive */
 #endif
 					/*   misc.c  */
 #ifdef	WIN32

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.39 2012/09/21 06:25:12 jw Exp $";
+"@(#)$Id: scan.c,v 1.40 2013/02/14 01:07:46 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -26,8 +26,8 @@ static const char scan_c[] =
  *
  *	The following 5 arrays are indexed by gt_fni (is ftype)
  *
- *	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH
- *	F_SW	S_FF	R_FF	D_FF	CH_BIT	F_CF	F_CE	CLCK	TIMR
+ *	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH	CH_BIT
+ *	S_FF	R_FF	D_FF	CH_AR	F_SW	F_CF	F_CE	CLCK	TIMR
  *	TRAB	OUTW	OUTX	CLCKL	TIMRL
  *
  *******************************************************************/
@@ -66,9 +66,9 @@ short		iC_dc;	/* debug display counter in scan and rsff */
  *
  *	The target nodes gp can trigger both arithmetic and logical actions.
  *
- *	The actions ARITH, D_SH, F_SW and CH_BIT require arithmetic processing.
- *	CH_BIT has a logical value which is triggered for every change in
- *	numerical value. The change is stored in CH_BIT when slave is clocked.
+ *	The actions ARITH, D_SH, F_SW and CH_AR require arithmetic processing.
+ *	CH_AR has a logical value which is triggered for every change in
+ *	numerical value. The change is stored in CH_AR when slave is clocked.
  *
  *	The remaining actions are first converted from int to bit
  *	and require logical processing only.
@@ -122,11 +122,6 @@ iC_scan_ar(Gate *	out_list)
 	    iC_dc = 0;
 	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-#if defined(TCP) || defined(LOAD)
-	if (op->gt_live & 0x8000) {
-	    iC_liveData(op->gt_live, op->gt_new);	/* live is active */
-	}
-#endif	/* defined(TCP) || defined(LOAD) */
 	lp = op->gt_list;
 	while ((gp = *lp++) != 0) {
 #ifdef LOAD
@@ -143,7 +138,7 @@ iC_scan_ar(Gate *	out_list)
 		if (gp->gt_fni == ARITH  ||
 		    gp->gt_fni == D_SH   ||
 		    gp->gt_fni == F_SW   ||
-		    gp->gt_fni == CH_BIT ||
+		    gp->gt_fni == CH_AR ||
 		    gp->gt_fni == OUTW) {
 #if INT_MAX == 32767 && defined (LONG16)
 		    fprintf(iC_outFP, "\t%s %ld ==>", gp->gt_ids, gp->gt_new);
@@ -173,8 +168,8 @@ iC_scan_ar(Gate *	out_list)
 	     *
 	     ***********************************************************/
 
-	    if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == F_SW ||
-		gp->gt_fni == CH_BIT || gp->gt_fni == OUTW) {
+	    if (gp->gt_fni == ARITH || gp->gt_fni == D_SH || gp->gt_fni == CH_AR ||
+		gp->gt_fni == F_SW || gp->gt_fni == OUTW) {
 		if (val != gp->gt_new) {
 		    gp->gt_new = val;
 		    (*masterAct[gp->gt_fni])(gp, iC_a_list); /* arithmetic master action */
@@ -188,8 +183,8 @@ iC_scan_ar(Gate *	out_list)
 	    if (iC_debug & 0100) {
 		if (iC_gx->gt_fni == ARITH  ||
 		    iC_gx->gt_fni == D_SH   ||
+		    iC_gx->gt_fni == CH_AR ||
 		    iC_gx->gt_fni == F_SW   ||
-		    iC_gx->gt_fni == CH_BIT ||
 		    iC_gx->gt_fni == OUTW) {
 #if INT_MAX == 32767 && defined (LONG16)
 		    fprintf(iC_outFP, " %ld", iC_gx->gt_new);
@@ -219,8 +214,6 @@ iC_scan_ar(Gate *	out_list)
  *	This is faster for the bulk of the plain logic actions which
  *	would be slowed down by an extra test in the scan.
  *
- *	The target action for GATE is to simply call iC_link_ol().
- *
  *******************************************************************/
 
 void
@@ -248,12 +241,6 @@ iC_scan(Gate *	out_list)
 	gp->gt_prev = out_list;				/* list <== next */
 	op->gt_next = op->gt_prev = 0;			/* unlink Gate */
 #endif	/* DEQ */
-#if defined(TCP) || defined(LOAD)
-	if (op->gt_live & 0x8000) {
-	    val = (op->gt_val < 0) ? 1 : 0;		/* live logic value */
-	    iC_liveData(op->gt_live, val);		/* live is active */
-	}
-#endif	/* defined(TCP) || defined(LOAD) */
 	/************************************************************
 	 * In the following code all proccessing for normal and
 	 * inverted targets are coded twice (identically) to speed up
@@ -1056,6 +1043,28 @@ iC_arithMa(						/* ARITH master action */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
     if ((gp->gt_new != gp->gt_old) ^ (gp->gt_next != 0)) {
+#if defined(TCP) || defined(LOAD)
+	iC_liveData(gp, gp->gt_new);			/* VCD and/or iClive */
+#endif
 	iC_link_ol(gp, iC_a_list);			/* link to arithmetic list */
     }
 } /* iC_arithMa */
+#if defined(TCP) || defined(LOAD)
+
+/********************************************************************
+ *
+ *	Logic Master action
+ *
+ *	NOTE: This action does not act on a clocked slave object.
+ *
+ *******************************************************************/
+
+void
+iC_gateMa(						/* GATE master action */
+    Gate *	gp,					/* NOTE: there is no slave action */
+    Gate *	out_list)
+{
+    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);		/* VCD and/or iClive */
+    iC_link_ol(gp, iC_o_list);				/* link to logic list */
+} /* iC_gateMa */
+#endif	/* else define iCgateMa iC_link_ol endif defined(TCP) || defined(LOAD) */

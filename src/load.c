@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.55 2012/09/21 06:11:22 jw Exp $";
+"@(#)$Id: load.c,v 1.56 2013/01/27 05:02:15 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -36,6 +36,7 @@ Gate		iClock = { -1, -CLK, CLCKL, 0, "iClock" };	/* active */
 
 unsigned	errCount;
 char *		iC_progname;		/* name of this executable */
+char *		iC_vcd = NULL;
 short		iC_debug = 0;
 int		iC_micro = 0;
 unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
@@ -55,13 +56,14 @@ static const char *	usage =
 #if YYDEBUG
 "[ -m[m]]"
 #endif	/* YYDEBUG */
-"[ -s <server>][ -p <port>][ -i <instance_id>]\n"
+"[ -s <server>][ -p <port>][ -i <instance_id>][ -v <file.vcd>]\n"
 #endif	/* TCP */
-"        [ -n<count>] [-d<debug>]\n"
+"        [ -n <count>][ -d <debug>]\n"
 #ifdef TCP
 "        -s host ID      of server      (default '%s')\n"
 "        -p service port of server      (default '%s')\n"
 "        -i instance ID  of this client (default '%s'; 1 to %d numeric digits)\n"
+"        -v <file.vcd>   output a .vcd and a .sav file for gtkwave\n"
 #endif	/* TCP */
 "        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
 "                        0 allows unlimited oscillations\n"
@@ -197,15 +199,15 @@ main(
 		switch (**argv) {
 #ifdef TCP
 		case 's':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    iC_hostNM = *argv;
 		    goto break2;
 		case 'p':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    iC_portNM = *argv;
 		    goto break2;
 		case 'i':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if ((eLen = strlen(*argv)) > INSTSIZE ||
 			eLen != strspn(*argv, "0123456789")) {
 			fprintf(stderr, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
@@ -216,12 +218,16 @@ main(
 			snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
 		    }
 		    goto break2;
+		case 'v':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    iC_vcd = *argv;	/* output vcd dump file for gtkwave */
+		    goto break2;
 		case 'm':
 		    iC_micro++;		/* microsecond info */
 		    break;
 #endif	/* TCP */
 		case 'd':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    sscanf(*argv, "%o", &df);
 		    iC_debug |= df;	/* short */
 		    df &= 040;		/* load listing */
@@ -230,7 +236,7 @@ main(
 		    iC_debug |= 01100;	/* trace gate activity */
 		    break;
 		case 'n':
-		    if (! *++*argv) { --argc, ++argv; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    iC_osc_lim = atoi(*argv);
 		    if (iC_osc_lim > 15) goto error;
 		    goto break2;
@@ -704,18 +710,16 @@ main(
  *******************************************************************/
 
     if (df) { printf("PASS 2 - symbol table: name inputs outputs delay-references\n"); fflush(stdout); }
-    /* iClock is sorted into Symbol table and does not deed to be reported seperately */
+    /* iClock is sorted into Symbol table and does not need to be reported seperately */
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
-	    if (op->gt_mark == 0 && (op == &iClock || op == &iConst)) {
+	    if (op->gt_mark == 0 && op == &iConst) {
 		if (df) printf(" %-8s %3d %3d - DELETED\n", op->gt_ids, op->gt_val, op->gt_mark);
 		for (lp = opp, tlp = lp + 1; tlp < sTend;) {
-		    *lp++ = *tlp++;			/* delete iClock or iConst from S.T. */
+		    *lp++ = *tlp++;			/* delete iConst from S.T. */
 		}
-		if (op == &iConst) {
-		    link_count--;			/* terminator for iConst not needed */
-		}
+		link_count--;				/* terminator for iConst not needed */
 		opp--;					/* neutralise opp++ in for loop */
 		sTend = lp;				/* S.T. is shortened */
 	    } else {
@@ -747,7 +751,8 @@ main(
 		    op->gt_ini != -LOGC &&
 		    op->gt_fni != TRAB &&
 		    op->gt_fni != OUTW &&
-		    op->gt_fni != OUTX) {
+		    op->gt_fni != OUTX &&
+		    op != & iClock) {
 		    fprintf(stderr, "WARNING '%s' has no output\n", op->gt_ids);
 		    if (df) printf("*** Warning: '%s' has no output\n", op->gt_ids);
 		}

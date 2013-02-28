@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.31 2012/07/16 06:40:08 jw Exp $";
+"@(#)$Id: link.c,v 1.32 2013/02/14 22:43:18 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -24,9 +24,9 @@ static const char link_c[] =
 #include	<signal.h>
 #include	"icc.h"
 
-unsigned short	iC_mark_stamp = 1;		/* incremented every scan */
+unsigned short	iC_mark_stamp = 1;		/* incremented every combinatorial scan */
 Gate *		iC_osc_gp = NULL;		/* report oscillations */
-static short	warn_cnt = OSC_WARN_CNT;/* limit the number of oscillator warnings */
+static short	warn_cnt = OSC_WARN_CNT;	/* limit the number of oscillator warnings */
 
 /* link a gate block into the output list */
 
@@ -115,7 +115,7 @@ iC_link_ol(
 #if YYDEBUG && !defined(_WINDOWS)
 		    if ((iC_debug & 0300) == 0300) putc('#', iC_outFP);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-		    out_list = out_list->gt_rptr; /* link gate next cycle */
+		    out_list = out_list->gt_rptr; /* link gate to alternate list */
 		    iC_osc_flag = 1;		/* activate fast timer to resolve oscillations */
 		    if (warn_cnt > 0
 #if YYDEBUG && !defined(_WINDOWS)
@@ -130,40 +130,46 @@ iC_link_ol(
 		if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "%d,%d", gp->gt_mcnt,iC_osc_lim);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    }
-	} else if (out_list->gt_fni == TIMRL) {	/* rest are actions */
+	} else
+	/********************************************************************
+	 * rest are clocked actions except OUTW or OUTX which is never linked to TIMRL
+	 * link to clock or other list in out_list unless clocked by TIMRL
+	 *******************************************************************/
+	if (out_list->gt_fni == TIMRL) {
 	    /********************************************************************
-	     * except OUTW or OUTX which is never linked to TIMRL - ignore
-	     *
-	     * action D_SH is always timed, even when arithmetic
-	     * value is 0 (ignore gt_val). This implements sample/hold
-	     *
-	     * the same applies to F_SW which is the 'switch' action and
-	     * to CH_BIT which is the CHANGE action. CHANGE times on both
-	     * edges, both for arithmetic as well as for logical input.
+	     * actions timed by a TIMER which are timed if input is a logical 'HI'
+	     * except actions D_SH (sample/hold action) F_SW ('switch' action) CH_BIT
+	     * and CH_AR (CHANGE action), which are always timed, even when arithmetic
+	     * value is 0 (ignore gt_val). These actions usually have an arithmetic
+	     * input. CH_BIT (CHANGE) times on both edges even for a logical input.
 	     *******************************************************************/
 	    if (
 		(
 		    (
 			gp->gt_val > 0 &&		/* 'LO' action gate and not */
-			gp->gt_fni != CH_BIT &&
-			gp->gt_fni != D_SH &&
-			gp->gt_fni != F_SW
+			gp->gt_fni != CH_BIT &&		/* CHANGE logical */
+			gp->gt_fni != CH_AR &&		/* CHANGE arithmetic */
+			gp->gt_fni != D_SH &&		/* SH */
+			gp->gt_fni != F_SW		/* switch */
 		    ) ||
-		    (time = gp->gt_time->gt_old) <= 0	/* or required time is 0 or -ve */
+		    (time = gp->gt_time->gt_old) <= 0	/* or required delay is 0 or -ve */
 		) &&
 		(time = out_list->gt_old) <= 0		/* and preset off time is 0 */
 	    ) {
-		out_list = iC_c_list;			/* put on 'clock' list imme */
+		out_list = iC_c_list;			/* put action on 'iClock' list imme */
 	    } else {
 		/********************************************************************
-		 * 'HI' action gate clocked by timer/counter (time >= 1)
+		 * 'HI' action gate clocked by timer,delay (delay >= 1)
 		 * or alternate 'LO' action if preset time is 1 (TIMER1)
-		 * which is equivalent to normal clocking.
-		 * Link Gate gp into list sorted by time order.
-		 * Negative times are treated like 0 times.
+		 * which is equivalent to normal clocking or SH, CHANGE or 'switch'.
+		 * Link action gate gp into list sorted by time order and then return.
+		 * For every tick of the timer the head of the sorted list will be
+		 * counted down until the head reaches 0, when that entry is unlinked
+		 * and put on iC_clist (iClock list). That is the timer clock event.
+		 * Negative delays are treated like a 0 delay.
 		 *******************************************************************/
 #if YYDEBUG && !defined(_WINDOWS)
-		if (iC_debug & 0100) fprintf(iC_outFP, "(%d)!", time);
+		if (iC_debug & 0100) fprintf(iC_outFP, "!(%d)", time);	/* delay time or preset time 1 */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		tp = out_list;
 		diff = 0;
@@ -193,7 +199,7 @@ iC_link_ol(
 #else	/* DEQ */
 		np->gt_prev = tp->gt_next = gp;		/* next, previous ==> new */
 		gp->gt_next = np;			/* new ==> next */
-		gp->gt_prev = tp;			/* previous <== newious */
+		gp->gt_prev = tp;			/* previous <== new */
 		if (np != out_list) {
 		    diff -= np->gt_mark;		/* full time to previous */
 		}

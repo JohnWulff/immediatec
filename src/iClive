@@ -32,6 +32,7 @@ use warnings;
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 my $t0 = [gettimeofday()];	# start time of program
 my %delayedColour;	# colour that should be restored after a flash
+my $shift_control_state = 0;
 
 ########################################################################
 #
@@ -48,28 +49,42 @@ my %delayedColour;	# colour that should be restored after a flash
 #	Uses Tk::After. Flash 2 clocks in a row white. This happens if
 #	CLOCK or TIMER has 2 slave gates which are fired together.
 #
-#	the following array is indexed by gt_fni is ftype (see icg.h)
+#	the following 2 arrays are indexed by gt_fni is ftype (see icc.h)
 #
 #	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH	0-8
-#	CH_BIT	S_FF	R_FF	D_FF	F_SW	F_CF	F_CE	CLCK	9-15
-#	TIMR	TRAB	OUTW	OUTX	CLCKL	TIMRL	F_ERR		16-22
-#	MAX_FTY	+ARITH	+GATE	+GATEX	+GATE+INV  ...	+CLCKL	+TIMRL	22-25...42-43
+#	CH_BIT	S_FF	R_FF	D_FF	CH_AR	F_SW	F_CF	F_CE	9-15
+#	CLCK	TIMR	TRAB	OUTW	OUTX	CLCKL	TIMRL	F_ERR	16-23
+#	MAX_FTY	+ARITH	+GATE	+GATEX	+GATE+INV  ...	+CLCKL	+TIMRL	23-28...44-45
 #
 #	ftype-abbreviations are used for debugging to list the Symbol Table.
 #	They are also indexed by gt_fni (holds ftype). (lines up with FOPS in icc.h)
 #
-## #define	FOPS	"UA _EsrHVSRDIFGCTBWX:!e"	/* DEBUG display of ftypes */
+## #define	FOPS	"UA _EsrHVSRDvIFGCTBWX:!e"	/* DEBUG display of ftypes */
+#
+## list of ftypes fromm icc.h
+## #define	FULL_FTYPE
+#	"UDFA","ARITH","GATE","GATEX","RI_BIT","S_SH","R_SH","D_SH",
+#	"CH_BIT","S_FF","R_FF","D_FF","CH_AR","F_SW","F_CF","F_CE","CLCK","TIMR",
+#	"TRAB","OUTW","OUTX","CLCKL","TIMRL","F_ERR",
 #
 ########################################################################
 
-my @abbrevSelect  = ( 'U','A',' ','_','E','s','r','H','V','S','R','D','I','F','G',
-		      'C','T','B','W','X',':','!',		   # as[ftype] 0 - 21
-		      'e','aA','a ','a_','~ ','~_','?','?','?','?','?','?','?','?',
-		      '?','?','?','?','?','a:','a!',		   # ALIAS    22 - 43
+my @abbrevSelect  = ( 'U','A',' ','_','E','s','r','H','V','S','R','D','v','I','F','G',
+		      'C','T','B','W','X',':','!',		     # as[ftype] 0 - 22
+		      'e','aA','a ','a_','~ ','~_','?','?','?','?','?','?','?','?','?',
+		      '?','?','?','?','?','a:','a!',		     # ALIAS    23 - 45
 		    );
 
-my @colourSelect  = ( 0,2,0,0,0,0,0,2,2,0,0,0,2,0,0,0,0,2,2,0,4,6, # cs[ftype] 0 - 21
-		      0,2,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,6, # ALIAS    22 - 43
+my @full_ftype    = ( 'UDFA','ARITH','GATE','GATEX','RI_BIT','S_SH','R_SH','D_SH',
+		      'CH_BIT','S_FF','R_FF','D_FF','CH_AR','F_SW','F_CF','F_CE','CLCK','TIMR',
+		      'TRAB','OUTW','OUTX','CLCKL','TIMRL',	     # as[ftype] 0 - 22
+		      'F_ERR','ARITH_ALIAS','GATE_ALIAS ','GATEX_ALIAS','INV_ALIAS ','INVX_ALIAS',
+		      '?','?','?','?','?','?','?','?','?','?','?','?','?','?',
+		      'CLCkL_ALIAS','TIMRL_ALIAS',		     # ALIAS    23 - 45
+		    );
+
+my @colourSelect  = ( 0,2,0,0,0,0,0,2,0,0,0,0,2,2,0,0,0,0,2,2,0,4,6, # cs[ftype] 0 - 22
+		      0,2,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,6, # ALIAS    23 - 45
 		    );
 
 #  live colouring     false 0          true 1             cs  ftype
@@ -144,12 +159,13 @@ Usage:
 
  Menu buttons:                   Action                      Accelerator
 
-    [File] New  provide a new empty file for editing.             Alt-n
-       Open     open and load the selected file.                  Alt-o
-       Open.lst open the listing x.lst corresponding to x.ic      Alt-l
-       Save     save the current file if modified.                Alt-s
-       SaveAs   store the current file at the selected path.      Alt-a
-       Quit     quit the program.                                 Alt-q
+    [File] New  empty file for editing                            Alt-n
+       Open     and load the selected file                        Alt-o
+       Reload   the current file (usually modified externally)    Alt-R
+       Swap.lst switch beteen iC-source and iC-Listing            Alt-l
+       Save     the current file if modified                      Alt-s
+       SaveAs   store the current file at the selected path       Alt-a
+       Quit     quit the program                                  Alt-q
 
     [Build]     build the C file and then optionally the executable
                 from the currently displayed iC program text.     Alt-b
@@ -168,9 +184,10 @@ Usage:
      Edit]      clears live markings in the Text window. In this mode
                 the text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
-                are described in the Tk::Text man page in the section
-                'KEYBOARD BINDINGS'.  If called with the -u option,
-                ctrl-U is the <<Undo>> binding.
+                are fully described in the @<<<<< man page under the
+			    $named
+                heading 'KEYBOARD BINDINGS'.  If called with the
+                -u option, ctrl-U is the <<Undo>> binding.
 
     [ / ]       Put focus in Search Entry window if cleared.      Alt-/
                     (simulates vi)
@@ -181,7 +198,7 @@ Usage:
        Search down       or                                      RETURN
                 displays a new group of hits.
        Search up         or                                   Shift-RET
-                reverses the direction of scrolling.
+                reverses the direction of displaying hits.
        Clear             or                                    Ctrl-RET
                 clears hits and the search Entry window.
      <>Go to line        or                                     Alt-RET
@@ -199,7 +216,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.51 2012/11/25 01:38:33 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.52 2013/02/22 11:58:34 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -436,21 +453,24 @@ $menuFile->command(-label       => 'New',				# 1
 $menuFile->command(-label       => 'Open',				# 2
 		   -accelerator => 'Alt-o',
 		   -command     => \&open_file);
-$menuFile->command(-label       => 'Open.lst',				# 3
+$menuFile->command(-label       => 'Reload',				# 3
+		   -accelerator => 'Alt-R',
+		   -command     => \&reload_file);
+$menuFile->command(-label       => 'Open.lst',				# 4 $menuFile->entryconfigure(4, -label => "$1.lst");
 		   -accelerator => 'Alt-l',
 		   -command     => \&open_list);
-$menuFile->command(-label       => 'Save',				# 4
+$menuFile->command(-label       => 'Save',				# 5
 		   -accelerator => 'Alt-s',
 		   -command     => \&save_file);
-$menuFile->command(-label       => 'SaveAs',				# 5
+$menuFile->command(-label       => 'SaveAs',				# 6
 		   -accelerator => 'Alt-a',
 		   -command     => \&saveAs_file);
-$menuFile->separator();							# 6
-$menuFile->command(-label       => 'Quit',				# 7
+$menuFile->separator();							# 7
+$menuFile->command(-label       => 'Quit',				# 8
 		   -accelerator => 'Alt-q',
 		   -command     => \&quit_program);
-$menuFile->separator();							# 8
-my $menuFileStart = 9;				# first dynamic entry:  # 9
+$menuFile->separator();							# 9
+my $menuFileStart = 10;				# first dynamic entry:  # 10
 my @dynamicFiles  = ();				# maintain local dynamic entries
 my $menuFileLim   = 10;				# number of dynamic entries
 
@@ -489,8 +509,8 @@ my $makeName = '';
 my $restartFlag = 0;
 
 ########################################################################
-#	Run or Stop button
-########################################################################
+    #	Run or Stop button
+    ########################################################################
 my $menuRun  = $menuBar->Button(-text        => 'Run ',
 				-relief      => 'raised',
 				-width       => 4,
@@ -734,11 +754,14 @@ my $xScrollbar = $text->Subwidget('xscrollbar');
 
 ####### Key and Mouse button bindings ##################################
 ####### Search entry bindings ##########################################
+$entrySearch->bind('<KeyPress>',		[ \&set_shift_control     ]); # Set Shift/Control state
+$entrySearch->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
 $entrySearch->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
 $entrySearch->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
 $entrySearch->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
 $entrySearch->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
 ####### File menu bindings #############################################
+$entrySearch->bind('<Alt-Key-R>',		[ \&reload_file           ]); # active in Live mode
 $entrySearch->bind('<Alt-Key-l>',		[ \&open_list             ]); # active in Live mode
 $entrySearch->bind('<Alt-Key-q>',		[ \&quit_program          ]); # active in Live mode
 $entrySearch->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
@@ -759,13 +782,15 @@ $entrySearch->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease 
 $text      ->bind('<KeyPress>',			[ \&report_cursor         ]); # change in cursor position
 $text      ->bind('<Button-1>',			[ \&report_cursor         ]); # change in cursor position
 $text      ->bind('<ButtonRelease>',		[ \&adjust_live           ]);
-$text      ->bind('<Double-1>',			[ \&pick_word             ]); # select a search word
+$text      ->bind('<Double-1>',			[ \&pick_word             ]); # select a search word (clashes with Text-binding)
 $text      ->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
 ####### Y-Scrollbar bindings ###########################################
-$yScrollbar->bind('<Key-l>',			[ \&open_list             ]);
-$yScrollbar->bind('<Alt-Key-l>',		[ \&open_list             ]);
-$yScrollbar->bind('<Key-q>',			[ \&quit_program          ]);
-$yScrollbar->bind('<Alt-Key-q>',		[ \&quit_program          ]);
+$yScrollbar->bind('<Key-R>',			[ \&reload_file           ]); # active in Live mode
+$yScrollbar->bind('<Alt-Key-R>',		[ \&reload_file           ]); # active in Live mode
+$yScrollbar->bind('<Key-l>',			[ \&open_list             ]); # active in Live mode
+$yScrollbar->bind('<Alt-Key-l>',		[ \&open_list             ]); # active in Live mode
+$yScrollbar->bind('<Key-q>',			[ \&quit_program          ]); # active in Live mode
+$yScrollbar->bind('<Alt-Key-q>',		[ \&quit_program          ]); # active in Live mode
 $yScrollbar->bind('<Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
 $yScrollbar->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
 $yScrollbar->bind('<Key-Right>',		[ \&scroll_x_text, 1      ]); # scroll right
@@ -786,7 +811,7 @@ $xScrollbar->bind('<Key-Next>',			[ \&scroll_text, $opt_l-2 ]); # next page
 $xScrollbar->bind('<Key-Prior>',		[ \&scroll_text, -$opt_l+2]); # prior page
 $xScrollbar->bind('<Key-Home>',			[ \&position_text, '1.0'  ]); # beginning
 $xScrollbar->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
-$xScrollbar->bind('<ButtonRelease>',		[ \&adjust_live ]);
+$xScrollbar->bind('<ButtonRelease>',		[ \&adjust_live           ]);
 ####### Search entry bindings ##########################################
 $xScrollbar->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
 $xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
@@ -797,6 +822,7 @@ $xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to
 ####### File menu bindings #############################################
 $text      ->bind('<Alt-Key-n>',		[ \&new_text              ]); # not active in Live mode
 $text      ->bind('<Alt-Key-o>',		[ \&open_file             ]); # not active in Live mode
+$text      ->bind('<Alt-Key-R>',		[ \&reload_file           ]); # active in Live mode
 $text      ->bind('<Alt-Key-l>',		[ \&open_list             ]); # active in Live mode
 $text      ->bind('<Alt-Key-s>',		[ \&save_file             ]); # not active in Live mode
 $text      ->bind('<Alt-Key-a>',		[ \&saveAs_file           ]); # not active in Live mode
@@ -813,7 +839,7 @@ $yScrollbar->bind('<Key-s>',			[ \&run_file              ]);
 ####### Live/Edit button binding #######################################
 $text      ->bind('<Alt-Key-e>',		[ \&scan                  ]); # active in Live mode
 $yScrollbar->bind('<Alt-Key-e>',		[ \&scan                  ]);
-$yScrollbar->bind('<Key-e>',			[ \&scan ]);
+$yScrollbar->bind('<Key-e>',			[ \&scan                  ]);
 ####### Help button binding ############################################
 $text      ->bind('<Alt-Key-h>',		[ \&fork_help             ]); # active in Live mode
 $yScrollbar->bind('<Alt-Key-h>',		[ \&fork_help             ]);
@@ -838,7 +864,7 @@ my $balloonAttached = 0;
 #	just forget about it ???	JW 2005/02/02
 ########################################################################
 # $mainWindow->OnDestroy(sub { $balloon->destroy; });
-$mainWindow->bind('<Configure>', [ \&adjust_live ]);
+$mainWindow->bind('<Configure>',		[ \&adjust_live           ]);
 
 ########################################################################
 #	Connect to iCserver
@@ -898,6 +924,7 @@ sub display_callback {
 	($delay, $colour, $message) = splice @infoMessages, 0, 3;	# shift 3
 	$infoBar->configure(-foreground => $colour) if $message ne '';
 	$info = $message;	# display now
+	print "display_callback: '$info'\n" if $opt_T;
 	if ($delay) {
 	    $infoDisplaying = 1;
 	    $text->after($delay, \&display_callback);	# call self in delay ms
@@ -1049,11 +1076,52 @@ sub report_cursor {
 		    }
 		}
 	    }
-	}
+	}		#    info_display(0, 'black', "$cursor '$c1 $c2' $dir $reg $stop n = $n '$current' $c3");
     }
-   info_display(0, 'black', "line $y, char $x");	# 'line 27 char 1'
-##    info_display(0, 'black', "$cursor '$c1 $c2' $dir $reg $stop n = $n '$current' $c3");
+    info_display(0, 'black', "line $y, char $x");	# 'line 27 char 1'
 } # report_cursor
+
+########################################################################
+#
+#	Set Shift/Control Key state only in Live mode
+#	none			0	balloon shows value of variable
+#	Shift_L			1	balloon shows index in S.T. (useful in checking for ALIASES)
+#	Control_L		2	balloon shows ftype as mnemonic
+#	Shift_L+Control_L	3	balloon shows ftype as number
+#
+########################################################################
+
+sub set_shift_control {
+    if ($scanFlag) {
+	my $k;				# Live mode
+	if (($k = $Tk::event->K) eq "Shift_L") {
+	    $shift_control_state |= 01;
+	} elsif ($k eq "Control_L") {
+	    $shift_control_state |= 02;
+	} else {
+	    $shift_control_state = 0;
+	}	# my $k = $Tk::event->K; my $n = $Tk::event->N; info_display(0, 'black', "KeySym=$k, numeric=$n");
+    }
+} # set_shift_control
+
+########################################################################
+#
+#	Reset Shift/Control Key state only in Live mode
+#
+########################################################################
+
+sub reset_shift_control {
+    if ($scanFlag) {
+	my $k;				# Live mode
+	if (($k = $Tk::event->K) eq "Shift_L") {
+	    $shift_control_state &= ~01;
+	} elsif ($k eq "Control_L") {
+	    $shift_control_state &= ~02;
+	} else {
+	    $shift_control_state = 0;
+	}	# my $k = $Tk::event->K; my $n = $Tk::event->N; info_display(0, 'red', "KeySym=$k, numeric=$n");
+    }
+} # reset_shift_control
 
 ########################################################################
 #
@@ -1093,6 +1161,7 @@ sub report_cursor {
 
 sub adjust_live {
     if ($scanFlag) {
+	$shift_control_state = 0;
 	my @position = $text->yview();
 	my $end = $text->index('end');	# re-compute in case text has changed
 	$end =~ s/(\d+).*/$1/;
@@ -1114,7 +1183,7 @@ no warnings;
 	    print "do_scan complete, $start, $last, '$_[1]'\n" if $opt_t;
 use warnings;
 	}
-	info_display(0, 'dark green', "line $start to line $l");
+	info_display(0, 'dark green', "line $start to line $l") if $searchText eq '';
     }
 } # adjust_live
 
@@ -1493,22 +1562,40 @@ sub restoreTag {
 
 ########################################################################
 #
-#	Pick a word to transfer to Search entry window
+#	Double-click on a word to transfer it to Search entry window
 #	parameter 1:	dummy for key bindings
+#
+#	Unfortunately this clashes with a Tk::Text binding:
+#	[2] Double-clicking with mouse button 1 selects the word under the
+#	   mouse and positions the insertion cursor at the beginning of the
+#	   word.
+#
+#	In practice pick_word() is executed first and marks the selection
+#	in black (search found). Underneath the Text selection is also
+#	there and can be shown and used for editing by clearing the search
+#	with ctrl-Return.
+#
+#	Double-click pick_word works well in Live mode, where the above
+#	is not a problem. For this reason this feature is only active
+#	in Live mode.
+#
+#	You may prefer to allow this in Edit mode
+#	- simply comment if ($scanflag) { ... } lines
 #
 ########################################################################
 
 sub pick_word {
-    my $start_index = $text->index('insert wordstart');
-    my $end_index = $text->index('insert lineend');
-    my $line = $text->get($start_index, $end_index);
-    $line =~ m/^([\w.]+)/;
-    if (defined $1) {
-	print "pick_word '$1'\n" if $opt_T;
-	$entrySearch->focus();			# initiate search entry
-	my $word = $1;			# search for this word only
-	search_now(1, $word, 0);
-    }
+    if ($scanFlag) {	### comment to allow pick_word in Edit mode
+	my $start_index = $text->index('insert wordstart');
+	my $end_index = $text->index('insert lineend');
+	my $line = $text->get($start_index, $end_index);
+	$line =~ m/^([\w.]+)/;
+	if (defined $1) {
+	    print "pick_word '$1'\n" if $opt_T;
+	    $entrySearch->focus();		# initiate search entry
+	    search_now(1, $1, 0);		# search for first word only
+	}
+    }			### comment to allow pick_word in Edit mode
 } # pick_word
 
 ########################################################################
@@ -1571,7 +1658,7 @@ sub SearchCancel {
 #	search_text() has completed execution, by posting the callback
 #	search_now(). No actual delay is necessary.
 #
-#	When called from build_file() to search for '*** ', which Error or
+#	When called from build_file() to search for /^*** /, which finds Error or
 #	Warning lines, suppress search statistics to retain display from build
 #
 ########################################################################
@@ -1606,7 +1693,7 @@ sub search_now {
     }
     $searchText = '' if not defined $searchText;
     $text->tagDelete('gotoTag');
-    while ($direction == 2 or $matchType eq 'g') {	# really if() {.. last; ..}
+    while ($direction == 2 or $matchType eq 'g') {	# really if() {.. last; ..return;}
 	########################################################################
 	##	Go to line $searchText (do exact match search if not numeric)
 	########################################################################
@@ -1642,36 +1729,36 @@ sub search_now {
 	########################################################################
 	#	Start of a new search
 	########################################################################
-	print "pattern: '$searchText' '$matchType'\n" if $opt_T;
+	print "pattern: \$searchText '$searchText' \$matchType '$matchType' \$prevText '$prevText' \$prevMatch '$prevMatch'\n" if $opt_T;
 	@hits = ();
 	@groups = ();
 	$gl = 0;
 	$text->tagDelete('searchTag') if $prevText;
 	$text->tagConfigure('searchTag',
-			    -background => 'black',	# same as 'less'
+			    -background => 'black',	# same as 'less' colouring
 			    -foreground => 'white',	# stands out amongst live colours
-			   );				# cannot see live status though
+			   );				# cannot see live status though except overhang
 	if ($matchType eq 'ri') {
 	    $matchType = '-regexp';
 	    $auxiliary = '-nocase';
 	} else {
-	    $auxiliary = '-forwards';	# fill as placeholder
+	    $auxiliary = '-forwards';			# fill as placeholder
 	}
 	$current = '1.0';
 	$length = '0';
 
 	########################################################################
 	#	Actual searches storing results in @hits
-	#	for every hit set a tag
+	#	for every hit set a 'searchTag'
 	########################################################################
 	while (1) {
 	    eval {
-		$current = $text->search(-count => \$length,
-					 $matchType,
-					 $auxiliary,
-					 '--',
-					 $searchText,
-					 $current,	# start index
+		$current = $text->search(-count => \$length,	# number of characters matched
+					 $matchType,	# -exact -nocase -regexp
+					 $auxiliary,	# -nocase -forwards (filler), (never search backwards)
+					 '--',		# forces next argument to be pattern
+					 $searchText,	# search pattern
+					 $current,	# start index - moves with every iteration
 					 'end',		# stop index
 					);
 	    };
@@ -1681,7 +1768,7 @@ sub search_now {
 		info_display(0, 'red', "ERROR: $@");	# error in search
 		last;
 	    }
-	    last unless $current and $length;
+	    last unless $current and $length;		# end of pattern search or 0 length match (clear)
 	    if ($opt_T) {
 		my @lineinfo = $text->dlineinfo($current);
 		my $word = $text->get($current, "$current + $length char");
@@ -1907,7 +1994,7 @@ sub clear_scan {
 	$balloonAttached = 0;
     }
     unless (@_) {		# skip if parameter 1 set
-	info_display(0, 'black', '');	# clears display_info
+	info_display(0, 'black', '') if $searchText eq '';	# clears display_info unless search
 	if ($conn) {
 	    ####################################################################
 	    ## clear active symbols in connected iC controller process
@@ -2104,7 +2191,22 @@ use warnings;
 		    $val = $activeSymbols[$index][1]; $val = 0 unless $val;
 		    print "	wlen = $wlen, index = $index, ftype = $ftype, val = $val\n" if $opt_T;
 		    $val ^= 1 if $colourSelect[$ftype] & 01; # inv ALIAS
-		    $bMsg = "$val";
+		    ########################################################################
+		    #	Shift/Control Key state
+		    #	none			0	balloon shows value of variable
+		    #	Shift_L			1	balloon shows index in S.T. (useful in checking for ALIASES)
+		    #	Control_L		2	balloon shows ftype as mnemonic
+		    #	Shift_L+Control_L	3	balloon shows ftype as number
+		    ########################################################################
+		    if ($shift_control_state == 0) {
+			$bMsg = "$val";
+		    } elsif ($shift_control_state == 1) {
+			$bMsg = "index=$index";
+		    } elsif ($shift_control_state == 2) {
+			$bMsg = "ftype=$full_ftype[$ftype]";
+		    } elsif ($shift_control_state == 3) {
+			$bMsg = "ftype=$ftype";
+		    }
 		    $text->tag('add', 'sel', $wIdx, "$wIdx + $wlen chars");
 		    ## a good place to put the balloon is below the last char in the word
 		    my $i = $text->index("$wIdx + $wlen_1 chars");
@@ -2186,9 +2288,11 @@ sub check_save {
     my $ret = 1;
     my $contents = $text->get("1.0", "end - 1 chars");	# whole text
     if ($contents ne $oldContents) {
-	my $l1 = length $contents;
-	my $l2 = length $oldContents;
-	print "length contents = $l1, length oldContents = $l2\n" if $opt_T;
+	if ($opt_T) {
+	    my $l1 = length $contents;
+	    my $l2 = length $oldContents;
+	    print "length contents = $l1, length oldContents = $l2\n";
+	}
 	my $dialog = $text->Dialog (-title   => 'Modified file',
 				    -bitmap  => 'question',
 				    -text    => 'Save modified file?',
@@ -2230,6 +2334,21 @@ sub new_text {
 
 ########################################################################
 #
+#	Reload the currently loaded iC $fileName unconditionally
+#	because it was (possibly) altered externally (usually by vi)
+#
+########################################################################
+
+sub reload_file {
+    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
+	open_file(1, "$1.ic");
+    } else {
+	info_display(2000, 'red', "ERROR: no file matching '$fileName$readOnly'");
+    }
+} # reload_file
+
+########################################################################
+#
 #	Open the list file (file.lst) for the currently loaded iC $fileName
 #	Alternatively open the corresponding file.ic
 #
@@ -2240,7 +2359,7 @@ sub open_list {
 	if ($4 eq 'ic') {
 	    open_file(0, "$1.lst");
 	} else {
-	    open_file(0, "$1.ic");
+	    open_file(1, "$1.ic");	# $1.lst not saved, since generated and RO
 	}
     } else {
 	info_display(2000, 'red', "ERROR: no list file matching '$fileName$readOnly'");
@@ -2271,6 +2390,9 @@ sub open_list {
 
 sub open_file {
     my ($unconditional, $fName) = @_;	# optional parameters
+no warnings;
+    print "open_file: \$unconditional = '$unconditional' \$fName = '$fName'\n" if $opt_T;
+use warnings;
     $unconditional = 0 unless $unconditional;	# stops trace errors
     my $ci = 0;
     unless (defined $fName and $fName ne '') {
@@ -2283,7 +2405,7 @@ sub open_file {
 	$fName =~ s#^C:/cygwin## or $fName =~ s#^([A-Z]):#/cygdrive/\l$1#;
 	$fName =~ s#^$cwd/##;
     }
-    if ($fName ne $fileName) {
+    if ($unconditional or $fName ne $fileName) {
 	print "open_file: $unconditional $fName\n" if $opt_T;
 	my $rName = $runName;
 	$rName =~ s/-\d+//;		# check without instance number
@@ -2338,10 +2460,10 @@ sub open_file {
 		    $procName = $3;
 		    $instName = "$procName$instanceText";
 		    if ($4 eq 'ic') {
-			$menuFile->entryconfigure(3, -label => "$1.lst");
+			$menuFile->entryconfigure(4, -label => "$1.lst");
 			check_menu($fileName, 'files');		# save ic name in file menu
 		    } else {
-			$menuFile->entryconfigure(3, -label => "$1.ic");
+			$menuFile->entryconfigure(4, -label => "$1.ic");
 			if ($4 eq 'ica') {
 			    check_menu($fileName, 'files');	# save ica name in file menu
 			}
@@ -2831,21 +2953,24 @@ sub check_menu {
     push(@$entriesArray, $newEntry) unless $delete;	# add to end of entriesArray
 
     if ($opt_T) {
-	if ($menuKey and $delete) {
+	if ($delete) {
 	    print "check_menu: [$menuKey] '$newEntry' deleted\n";
 	} else {
 	    print "check_menu: [$menuKey] '$newEntry' added\n";
 	}
     }
     if ($menuRef and not $delete) {		# menu for 'file' and 'searches' not 'last open file'
-	$menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
-			  -command => [ $commandRef, 1, $newEntry, 0 ]); # define 0 (down for search)
+	if ($commandRef) {
+	    print "check_menu: \$menuRef=$menuRef ->command(-label=>'$newEntry',-command=>['$commandRef',2,'$newEntry',0]\n" if $opt_T;
+	    $menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
+			      -command => [ $commandRef, 2, $newEntry, 0 ]); # define 0 (down for search)
+	}
 	if (scalar @$entriesArray > $entriesLim) {
 	    $e = shift(@$entriesArray);		# remove first entry in entriesArray
 	    my $label = $menuRef->entrycget($menuPos, '-label');	# check algorithm
 	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
 	    print "check_menu: [$menuKey] '$e' removed from front of menu\n" if $opt_T;
-	    $menuRef->delete($menuPos);	# remove first dynamic menu entry
+	    $menuRef->delete($menuPos);		# remove first dynamic menu entry
 	}
     }
 } # check_menu
@@ -2885,7 +3010,7 @@ sub ini_program {
     my ($menuData, $menuKey, $entry, $initialFile, $position);
     ## restore file and search menu lists from ~/.iC/iClive.ini
     if (($home = $ENV{HOME}) ne '' and
-	(-d "$home/.iC" or mkdir "$home/.iC") and
+	(-d "$home/.iC") and
 	open(INI, "$home/.iC/$named.ini")) {
 	while (<INI>) {
 	    chomp;
@@ -3123,12 +3248,13 @@ iClive - an editor and live debugger for immediate-C clients
 
  Menu buttons:                   Action                      Accelerator
 
-    [File] New  provide a new empty file for editing.             Alt-n
-       Open     open and load the selected file.                  Alt-o
-       Open.lst open the listing x.lst corresponding to x.ic      Alt-l
-       Save     save the current file if modified.                Alt-s
-       SaveAs   store the current file at the selected path.      Alt-a
-       Quit     quit the program.                                 Alt-q
+    [File] New  empty file for editing                            Alt-n
+       Open     and load the selected file                        Alt-o
+       Reload   the current file (usually modified externally)    Alt-R
+       Swap.lst switch beteen iC-source and iC-Listing            Alt-l
+       Save     the current file if modified                      Alt-s
+       SaveAs   store the current file at the selected path       Alt-a
+       Quit     the program                                       Alt-q
 
     [Build]     build the C file and then optionally the executable
                 from the currently displayed iC program text.     Alt-b
@@ -3147,9 +3273,9 @@ iClive - an editor and live debugger for immediate-C clients
      Edit]      clears live markings in the Text window. In this mode
                 the text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
-                are described in the Tk::Text man page in the section
-                'KEYBOARD BINDINGS'.  If called with the -u option,
-                ctrl-U is the <<Undo>> binding.
+                are described in the Tk::Text man page or below under
+                the heading 'KEYBOARD BINDINGS'.  If called with the
+                -u option, ctrl-U is the <<Undo>> binding.
 
     [ / ]       Put focus in Search Entry window if cleared.      Alt-/
                     (simulates vi)
@@ -3160,7 +3286,7 @@ iClive - an editor and live debugger for immediate-C clients
        Search down       or                                      RETURN
                 displays a new group of hits.
        Search up         or                                   Shift-RET
-                reverses the direction of scrolling.
+                reverses the direction of displaying hits.
        Clear             or                                    Ctrl-RET
                 clears hits and the search Entry window.
      <>Go to line        or                                     Alt-RET
@@ -3190,6 +3316,7 @@ button. An alternative command to autovivify may be entered with
 the B<-A> option: eg B<-A iClift> or B<-A 'iCbox -H'> If B<iClive>
 started B<iCserver>, it will also stop it when it is stopped. Stopping
 B<iCserver> automaticaly stops all running applications and IO's.
+
 When B<Live> mode is started, B<iClive> requests the symbol table of
 the application. It returns a list of words from the symbol table on
 which it wants live updates of the state of the nodes, named by each
@@ -3197,49 +3324,75 @@ word in the list. The application then provides updates to B<iClive>
 when the state of any node from the list changes as soon as possible
 after the change.
 
-All words in the text which exactly match any token in the list are
-marked with a colour depending on the current state of the node.
-Logical nodes are B<green/black> for B<false> and B<yellow/red> for
-B<true>.  Logical active words in the list which are preceded by ~
-or ! or which are followed by ~ show the inverse state of the node.
-Arithmetic nodes are B<blue>, clocks B<brown> and timers B<dark green>.
-Clocks and timers flash briefly (50 ms) every time they fire.  All coloured
-nodes are called 'active' words, because they display the live state of
-these nodes in the running application.
+In B<Live> mode all words in the text which exactly match any token
+in the list are marked with a colour depending on the current state
+of the node.  Logical nodes are B<green/black> for B<false> and
+B<yellow/red> for B<true>.  Logical active words in the list which
+are preceded by ~ or ! or which are followed by ~ show the inverse
+state of the node.  Arithmetic nodes are B<blue>, clocks B<brown> and
+timers B<dark green>.  Clocks and timers flash briefly (50 ms) every
+time they fire.  All coloured nodes are called 'active' words, because
+they display the live state of these nodes in the running application.
 
-When the mouse cursor sits on an active word the value of the node is
-displayed in a balloon window. This is useful for displaying the current
-value of arithmetic nodes. A line terminated with an active word followed
-by an equal sign will be followed by the value of the word in a live display.
+For B<Live> mode to be effective, the displayed text must be either
+the source of the running iC application or a text derived from that
+source, such as the iC listing.  Whenever a new iC text or another
+instance is selected, B<iClive> will automatically attach itself to
+the selected application (provided it is running).  B<iClive> shows
+the logical statements of the source and the colours will show what
+the current state is.  It is easy to inspect such a live listing and
+relate states with the logic of the application.
+
+In B<Live> mode, double-clicking with mouse button 1 transfers the
+word under the mouse to the Search Entry window and immediately starts
+a search for that word. In B<Edit> mode this action simply selects
+the word under the mouse (Text Binding [2]). The selected word can be
+pasted into the Search Entry window by positioning the mouse over the
+Search Entry window and clicking the middle mouse button [7]. A search
+can then be started by clicking on the [/] button or pressing RETURN.
+
+When the mouse cursor sits on an active word in B<Live> mode the
+value of the node is displayed in a balloon window. This is useful for
+displaying the current value of arithmetic nodes.
+
+When the mouse cursor sits on an active word in B<Live> mode and the
+focus is in the Search Entry window (click in it or type '/') and
+the left Shift-Key is pressed the balloon will display the 'index'
+of the variable in the Symbol Table. This is useful to check if an
+Alias or an immC array member has the same 'index' and is thus the same
+variable as a normal variable with a different name. The same 'index'
+is used in VCD files for GTKWave.  Simlarly when the left Control-Key
+is pressed the balloon will display the 'ftype' of the variable.
+
+A line terminated with an active word followed by an equal sign will
+be followed by the value of the word in a live display.
 
     eg.  // offset =
     will be displayed as
          // offset = 15
     (this construct is usually commented with //)
 
-To be effective, the displayed text must be either the source of the
-running iC application or a text derived from that source, such as the iC
-listing.  Whenever a new iC text or another instance is selected, B<iClive>
-will automatically attach itself to the selected application (provided it
-is running).  B<iClive> shows the logical statements of the source and the
-colours will show what the current state is.  It is easy to inspect
-such a live listing and relate states with the logic of the application.
+Tk::Text will open a dialog box when clicking the right mouse button
+in the text window. The features provided are self explanatory. It
+also has a search feature, which did not seem to be available when
+I started. The really useful feature there is the search/replace
+facility. Another useful feature is changing the wrap mode.
 
-This program uses the Tk::Text widget, an extension Tk::TextUndo may
+B<iClive> uses the Tk::Text widget. An extension Tk::TextUndo may
 be used to provide an UNDO facility while editing. This extension has
 disadvantages for the 'live display' - it is 7 times slower in making
 arithmetic updates and it causes the window to jump to the last updated
 text for value changes in the control application. This makes the 'live
 display' hard to interpret. This does not happen with Tk::Text. If you
 want to activate the UNDO facility use the -u option (recommended only
-for editing)
+for editing) Also see CAVEAT below.
 
-=head1 KEYBOARD BINDINGS (from Tk::Text)
+=head1 KEYBOARD BINDINGS
 
 Tk automatically creates class bindings for texts that give them
 the following default behavior.  In the descriptions below, 'word'
 refers to a contiguous group of letters, digits, or '_' characters,
-or any single character other than these.
+or any single character other than these. (from Tk::Text)
 
 [1] Clicking mouse button 1 positions the insertion cursor just before
    the character underneath the mouse cursor, sets the input focus to
@@ -3406,11 +3559,31 @@ or any single character other than these.
    Control-t reverses the order of the two characters to the right
    of the insertion cursor.
 
-The following extra bindings have been defined for iClive:
-
 [32]
-   Alt-n   open a New file
+   Control-z (and Control-underscore on UNIX when tk_strictMotif is
+   true)  undoes  the last edit action if the -undo option is true.
+   Does nothing otherwise.
+
+[33]
+   Control-Z (or Control-y on Windows) reapplies the last undone edit
+   action if the -undo option is true. Does nothing otherwise.
+   (see below)
+
+CAVEAT: These two Undo actions, if iClive -u is called, were found
+to be rather tricky.  Control-u as well as control-z undoes changes
+and both re-apply undone changes with the other. I found it very
+disturbing, that when you try to undo more than the last change, the
+whole window is cleared (undoes the load !!). Theoretically the text
+was in the state of the file originally loaded when this 'load undo'
+was executed. Control-z (or contrl-u) will bring it back. A better
+option is to do a File/Reload.  Control-Z does not seem to work!!
+
+The following extra Bindings have been defined for iClive:
+
+[iC1]
+   Alt-n   provide a New empty file
    Alt-o   Open a file
+   Alt-R   Reload the current file (usually modified externally)
    Alt-l   switch beteen iC-source and iC-Listing
    Alt-s   Save current file
    Alt-a   saveAs current file under a new name
@@ -3434,29 +3607,29 @@ In 'Live' mode the focus is normally on the y-Scrollbar or on the
 search-Entry window.  The following Bindings have been programmed for
 'Live' mode.
 
-[33]
+[iC2]
    The Left and Right keys scroll the whole text left and right one
    character at a time.
 
-[34]
+[iC3]
    The Up and Down keys scroll the text up and down one line at a time.
 
-[35]
+[iC4]
    The Next and Prior keys scroll the text up and down one page at
    a time.
 
-[36]
+[iC5]
    The Home and End keys move the text to the beginning or end.
 
 These scroll modes are also available in 'Edit' mode, by putting
 the focus in the 'search-Entry' window by clicking in it. To
 continue editing click in the text window again.
 
-[37]
+[iC6]
    The view in the widget can be adjusted by dragging with mouse
    button 3. (same in both modes)
 
-[38]
+[iC7]
    In 'Live' mode the following Accelerators work without
    the Alt-Key pressed:
     l   switch beteen iC-source and iC-Listing

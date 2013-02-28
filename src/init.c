@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.38 2012/09/06 08:29:11 jw Exp $";
+"@(#)$Id: init.c,v 1.39 2013/02/14 06:31:23 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -28,11 +28,11 @@ static const char init_c[] =
 Symbol *	iclock;			/* default clock */
 Symbol *	iconst;			/* pointer to Symbol "iConst" */
 Symbol *	icerr = 0;		/* pointer to Symbol "iCerr" */
+Symbol		iC_CHANGE_ar = { "CHANGE", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */
 
 /********************************************************************
  *
  *	Initialise Symbol table
- *
  *		reserved words:		type KEYW
  *					uVal = compiler_token
  *					ftype used in compilation
@@ -60,8 +60,8 @@ static struct bi builtins[] = {
   { "SH",	KEYW,	BLTIN1,	D_SH,	}, /* sample and hold */
   { "SHR_",	KEYW,	BLTIN2,	D_SH,	}, /* sample and hold with simple reset */
   { "SHSR_",	KEYW,	BLTIN3,	D_SH,	}, /* sample and hold with simple set/reset */
-  { "CHANGE",	KEYW,	BLTIN1,	CH_BIT,	}, /* pulse on anlog or digital change */
   { "RISE",	KEYW,	BLTIN1,	RI_BIT,	}, /* pulse on digital rising edge */
+  { "CHANGE",	KEYW,	BLTINC,	CH_BIT,	}, /* pulse on digital (CH_BIT) or analog (CH_AR) change */
   { "SR",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
   { "SR_",	KEYW,	BLTIN2,	S_FF,	}, /* R_FF for reset master */
   { "SRR",	KEYW,	BLTIN3,	S_FF,	}, /* R_FF for reset master */
@@ -192,10 +192,8 @@ init(void)				/* install constants and built-ins */
 }
 
 /********************************************************************
- *
  *	iC system function definitions
  *	keep SHR() at line 202, SHSR at line 204
- *
  *******************************************************************/
 
 const char initialFunctions[] = "\
@@ -241,8 +239,7 @@ imm bit DLATCH(bit set, bit res, clock clk) {\n\
  *  The first two function blocks generate C functions 1 and 2
  *  *** adjust line numbers to point to correct line in initialFunctions
  *  *** comment string is required in comp.y at /has comment string after/
- *  *** tab before comment is required in comp.y at /output comment string/
- *  *** adjust GEN_COUNT in comp.h to reflect correct number (used in comp.y)
+ *  *** adjust GEN_COUNT in comp.h to reflect correct number (used in icc.c)
  *
  *  genName and genLineNums are used to identify function lines in get()
  *  generated with genLines.

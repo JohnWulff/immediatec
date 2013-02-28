@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.40 2012/07/16 06:41:42 jw Exp $";
+"@(#)$Id: icr.c,v 1.41 2013/02/09 02:52:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -337,18 +337,14 @@ iC_icc(Gate ** sTable, Gate ** sTend)
      *  Operational loop
      *******************************************************************/
     for (;;) {
-	if (++iC_mark_stamp == 0) {	/* next generation for check */
-	    iC_mark_stamp++;		/* leave out zero */
-	}
-
-	time_cnt = 0;			/* clear time count */
-
 	/********************************************************************
-	 *  Sequencing of different action lists and New I/O handling
+	 *  Sequencing of different action lists and Old I/O handling
 	 *
 	 *  1   initialisation - put EOI on o_list
 	 *      # actions after an idle period:
-	 *  2   Loop:  scan a_list unless a_list empty
+	 *  2   Loop:  ++mark_stamp to control oscillations
+	 ****** COMBINATORIAL PHASE *****
+	 *             scan a_list unless a_list empty
 	 *                 INPW ARITH expr results to a_list
 	 *                 comparisons, &&, || to o_list
 	 *                 clocked actions to c_list via own clock list
@@ -357,29 +353,37 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	 *                 bits used in arithmetic to a_list (less common)
 	 *                 clocked actions to c_list via own clock list
 	 ****** CLOCK PHASE *******
-	 *  4        { scan c_list; DO 5; goto Loop } unless c_list empty
+	 *  4        { ++mark_stamp to control oscillations
+	 *             scan c_list; DO 5; goto Loop } unless c_list empty
 	 *                 transfer ARITH master values as slave values to a_list
 	 *                 transfer GATE master values as slave values to o_list
 	 *                 (does not use any combinatorial ARITH or GATE values)
 	 *                 transfer master entries on slave clock lists to c_list
 	 *                 (continue scanning c_list until all these have been handled)
 	 *                 defer 'if else switch' slave C actions to f_list
-	 ****** COMBINATORIAL *****
+	 ****** COMBINATORIAL PHASE *****
 	 *  5        { scan f_list; } unless f_list empty
 	 *                 C actions can use and generate combinatotrial ARITH and
 	 *                 GATE values, which is start of a new combinatorial scan
 	 *  6   scan s_list			# only one scan is required
-	 *          do OUTW Gates building send string
-	 *  7   send output string with final outputs only
+	 *          do OUTW and OUTX Gates via slot and cage
+	 *  7   distribute slots
 	 *  8   switch to alternate a_list and o_list
 	 *  9   IDLE - wait for next input
 	 * 10   read new input and link INPW Gates directly to a_list
-	 *      or via traMb to o_list; goto Loop
+	 *      link INPX Gates directly to o_list; goto Loop
 	 *******************************************************************/
+	if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
+	    iC_mark_stamp++;		/* leave out zero */
+	}
+	time_cnt = 0;			/* clear time count */
 	for (;;) {
 	    if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);           }
 	    if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); continue; }
 	    if (iC_c_list != iC_c_list->gt_next) {
+		if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
+		    iC_mark_stamp++;		/* leave out zero */
+		}
 		iC_scan_clk(iC_c_list);		/* new flist entries can only occurr here */
 		if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }
 		continue;
@@ -422,7 +426,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	}
 
 #if	YYDEBUG
-	if ((iC_debug & 0200) &&
+	if ((iC_debug & 0200) &&		/* osc info */
 	    (iC_a_list->gt_next != iC_a_list || iC_o_list->gt_next != iC_o_list)) {
 	    fprintf(iC_outFP, "OSC =");
 	    for (gp = iC_a_list->gt_next; gp != iC_a_list; gp = gp->gt_next) {
@@ -434,6 +438,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    fprintf(iC_outFP, "\n");
 	}
 #endif	/* YYDEBUG */
+	/********************************************************************
+	 *  Display inputs and outputs
+	 *******************************************************************/
 	display(&dis_cnt, DIS_MAX);		/* inputs and outputs */
 	/********************************************************************
 	 *  Input from keyboard and time input if used
@@ -748,7 +755,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	/* if many inputs change simultaneously increase oscillator limit */
 	iC_osc_lim = (cnt << 1) + 1;			/* (cnt * 2) + 1 */
 	if (iC_osc_lim < iC_osc_max) {
-	    iC_osc_lim = iC_osc_max;			/* cnt = 1, osc_lim = 3 default */
+	    iC_osc_lim = iC_osc_max;			/* cnt = 1, osc_lim = 4 default */
 	}
     } /* for (;;) */
 } /* iC_icc */

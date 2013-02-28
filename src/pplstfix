@@ -42,6 +42,8 @@
 #   V1.20: 25.06.08 Change Copyright to include 2008; email
 #   V1.21: 21.08.09 Change Copyright to include 2009; no email
 #   V1.22: 28.05.12 Accept TIMER1 type display mnemonic '!1' and extend it for backward references
+#   V1.23: 24.11.12 Replace require getopts.pl by use Getopt::Std
+#   V1.24: 18.02.13 add 'v' to $FOPS and $LOPS - is additional ftype CH_AR
 #
 #################################################################
 
@@ -56,7 +58,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.23 2012/11/24 04:53:34 jw Exp $
+$Id: pplstfix,v 1.24 2013/02/18 02:48:32 jw Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -71,8 +73,8 @@ my (%inv);
 %inv = ("~", " ", " ", "~");	# inversion symbols in listing
 
 my $OPS  = qr"[-.+\"^&|%*#/>({=\][<:!@?ktwi]";	# DEBUG display of types from icc.h
-my $FOPS = qr"[UA _EsrHVSRDIFGCTBWX:!e]";	# DEBUG display of ftypes from icc.h
-my $LOPS = qr"[UA _EsrHVSRDIFGCTBWX:!e~?]";	# DEBUG display of ftypes or negation
+my $FOPS = qr"[UA _EsrHVSRDvIFGCTBWX:!e]";	# DEBUG display of ftypes from icc.h
+my $LOPS = qr"[UA _EsrHVSRDvIFGCTBWX:!e~?]";	# DEBUG display of ftypes or negation
 
 
 open STDOUT, ">$opt_o" or die "Can't redirect stdout to '$opt_o': $!" if $opt_o;

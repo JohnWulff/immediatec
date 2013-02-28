@@ -67,15 +67,17 @@ Usage:
     in the previous session history.
 
  Menu buttons:                   Action                      Accelerator
+
     [man] Show  a new manpage - in this window                   RETURN
                 (followed by an optional section in parentheses)
                 Alternatively show a list of topics matching a key
                 with '-k <key>' or 'apropos <key>' entered in the
                 show window.
                 Double-clicking on a word in the text which is the
-                name of another man page will also open that page.
+                name of another man page will also open that page
        Open     a new window - to show selected manpage         Alt-RET
-       Quit     quit the program.                                   q
+       Reload   the current manpage (usually modified externally)   r
+       Quit     the program                                         q
 
     [ <= ]      Load the previous manpage in the history.           p
     [ => ]      Load the next manpage in the history.               n
@@ -94,7 +96,7 @@ Usage:
        Search down       or                                      RETURN
                 displays a new group of hits.
        Search up         or                                   Shift-RET
-                reverses the direction of scrolling.
+                reverses the direction of displaying hits.
        Clear             or                                    Ctrl-RET
                 clears hits and the search Entry window.
      <>Go to line        or                                     Alt-RET
@@ -114,7 +116,7 @@ Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman,v 1.15 2012/11/24 04:50:34 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.16 2013/02/23 00:00:53 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -176,7 +178,7 @@ $SIG{PIPE} = \&catch_sig;	# catch signal in pipe from man
 use Getopt::Std;		# replace require "getopts.pl";
 getopts('cnk:f:F:l:w:g:rTXh');	# sets $opt_h if -h etc
 
-exit -1 if $opt_X;		# $named -X called in forked process if first exec fails
+exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
 $opt_l = 35 unless $opt_l;	# if any higher on 768 pixel high screen, status bar is hidden
 $opt_w = 80 unless $opt_w;	# just allows all buttons to fit in the top menu bar
 				# also gives a bit more room for oversize texts
@@ -284,9 +286,12 @@ $menuMan->command(-label       => 'Show in this window',		# 1
 $menuMan->command(-label       => 'Open a new window',			# 2
 		   -accelerator => 'Alt-Ret',
 		   -command     => [ \&show_man, 0, undef, undef, 1 ]); # fork
-$menuMan->command(-label       => 'Quit',				# 3
+$menuMan->command(-label       => 'Reload current page',		# 3
+		   -accelerator => 'r',
+		   -command     => [ \&show_man, 0, 2, undef, 0     ]); # reload
+$menuMan->command(-label       => 'Quit',				# 4
 		   -accelerator => 'q',
-		   -command     => [ \&quit_program ]);			# quit
+		   -command     => [ \&quit_program                 ]);	# quit
 
 ########################################################################
 #	Man entry window
@@ -297,9 +302,10 @@ my $entryMan = $menuBar->Entry(-width       => 16,
 ####### Man entry bindings #############################################
 $entryMan->bind('<Key-Return>',		[ \&show_man, undef, undef, 0 ]); # overlay
 $entryMan->bind('<Alt-Key-Return>',	[ \&show_man, undef, undef, 1 ]); # fork
-$entryMan->bind('<Alt-Key-plus>',	[ \&change_font, 2     ]); # increase font
-$entryMan->bind('<Alt-Key-minus>',	[ \&change_font, -2    ]); # decrease font
-$entryMan->bind('<Alt-Key-q>',		[ \&quit_program ]);
+$entryMan->bind('<Alt-Key-plus>',	[ \&change_font, 2            ]); # increase font
+$entryMan->bind('<Alt-Key-minus>',	[ \&change_font, -2           ]); # decrease font
+$entryMan->bind('<Alt-Key-r>',		[ \&show_man, 2, undef, 0     ]); # Reload current manpage
+$entryMan->bind('<Alt-Key-q>',		[ \&quit_program              ]);
 
 ########################################################################
 #	Previous man page button
@@ -464,9 +470,9 @@ my %iniMenuData = (
     history	=> [
 	$manMenu,		# menuRef,	man menu
 	\@dynamicHistory,	# entriesArray,	maintain local dynamic entries
-	$manMenuStart,	# menuPos,	start of dynamic entries
-	$manMenuLim,	# entriesLim,	number of dynamic entries
-	\&open_file,		# commandRef,	call back for open file
+	$manMenuStart,		# menuPos,	start of dynamic entries
+	$manMenuLim,		# entriesLim,	number of dynamic entries
+	0,			# commandRef,	call back not used
     ],
     searches	=> [
 	$searchMenu,		# menuRef,	search menu
@@ -541,17 +547,21 @@ $entrySearch->bind('<Key-Next>',		[ \&scroll_text, $opt_l-2 ]); # next page
 $entrySearch->bind('<Key-Prior>',		[ \&scroll_text,-$opt_l+2 ]); # prior page
 $entrySearch->bind('<Alt-Key-plus>',		[ \&change_font, 2        ]); # increase font
 $entrySearch->bind('<Alt-Key-minus>',		[ \&change_font, -2       ]); # decrease font
+$entrySearch->bind('<Alt-Key-r>',		[ \&show_man, 2, undef, 0 ]); # Reload current manpage
 $entrySearch->bind('<Alt-Key-q>',		[ \&quit_program          ]);
 $entrySearch->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
 ####### Text window bindings ###########################################
 $text      ->bind('<Button-1>',			[ \&report_cursor         ]); # report cursor position
+$text      ->bind('<Key-r>',			[ \&show_man, 2, undef, 0 ]); # Reload current manpage
+$text      ->bind('<Alt-Key-r>',		[ \&show_man, 2, undef, 0 ]); # Reload current manpage
 $text      ->bind('<Key-q>',			[ \&quit_program          ]);
 $text      ->bind('<Alt-Key-q>',		[ \&quit_program          ]);
-$text      ->bind('<Double-1>',			[ \&pick_word, 0,         ]); # follow a text link
-# $text      ->bind('<Shift-Double-1>',		[ \&pick_word, 1,         ]); # follow a text link to a new window
+$text      ->bind('<Double-1>',			[ \&pick_word, 0,         ]); # select a search word
+$text      ->bind('<Control-Double-1>',		[ \&pick_word, 1,         ]); # follow a text link
 ####### Y-Scrollbar bindings ###########################################
 $yScrollbar->bind('<Key-p>',			[ \&show_man, -1          ]); # previous history entry
 $yScrollbar->bind('<Key-n>',			[ \&show_man, 1           ]); # next history entry
+$yScrollbar->bind('<Key-r>',			[ \&show_man, 2, undef, 0 ]); # Reload current manpage
 $yScrollbar->bind('<Key-h>',			[ \&show_help             ]);
 $yScrollbar->bind('<Key-q>',			[ \&quit_program          ]);
 $yScrollbar->bind('<Alt-Key-q>',		[ \&quit_program          ]);
@@ -678,6 +688,7 @@ sub seeCentre {
 #	parameter 1:	dummy for key bindings
 #	parameter 2:	hFlag if not true use showEntry text
 #			else 1/-1 get next/previous history entry
+#			else Reload current entry
 #	parameter 3:	buttonFlag if true command is from next/previous button
 #	parameter 4:	forkFlag if true Shift-RETURN from show->bind (fork)
 #
@@ -699,13 +710,15 @@ use warnings;
 		return;			# happens with 'n' key
 	    }
 	    $entry = $dynamicHistory[$hi++];	# next history entry
-	} else {
+	} elsif ($hFlag == -1) {
 	    if ($hi < 2) {
 		info_display('red', "History exhausted");
 		return;			# happens with 'p' key
 	    }
-	    $hi -= 2;
-	    $entry = $dynamicHistory[$hi++];	# previous history entry
+	    $entry = $dynamicHistory[$hi-2];	# previous history entry
+	    $hi--;
+	} else {
+	    $entry = $dynamicHistory[$hi-1];	# current history entry for Reload
 	}
 	print "show_man: history entry: '$entry'\n" if $opt_T;
 	$entryMan->delete('0', 'end');
@@ -969,30 +982,40 @@ sub is_valid_section {
 
 ########################################################################
 #
-#	Pick a word for creating a hyperlink
+#	Pick a word for starting a search or creating a hyperlink
 #	parameter 1:	dummy for key bindings
-#	Parameter 2:	0 open in new window
-#			1 fork to a new window
+#	Parameter 2:	0 start a search
+#			1 use word as a hyperlink to open a new page
 #
 ########################################################################
 
 sub pick_word {
-    my ($dummy, $forkFlag) = @_;
+    my ($dummy, $flag) = @_;
     my $start_index = $text->index('insert wordstart');
     my $end_index = $text->index('insert lineend');
     my $line = $text->get($start_index, $end_index);
-    my ($page, $section) = ($line =~ /^([\w:+.-]+)\s*(\(.*?\))?/);
-no warnings;
-    print "pick_word: forkFlag = $forkFlag page = '$page' section = '$section'\n" if $opt_T;
-use warnings;
-    if ($page) {
-	$entryMan->delete('0', 'end');
-	if ($section && is_valid_section($section)) {
-	    $entryMan->insert('end', "$page${section}");
-	} else {
-	    $entryMan->insert('end', $page);
+    print "pick_word: flag = $flag start_index = $start_index end_index = $end_index line = '$line'\n" if $opt_T;
+    if ($flag == 0) {				# mouse double-click 1
+	$line =~ m/^([\w.]+)/;
+	if (defined $1) {
+	    print "pick_word: word = '$1'\n" if $opt_T;
+	    $entrySearch->focus();		# initiate search entry
+	    search_now(1, $1, 0);		# search for first word only
 	}
-	show_man(undef, undef, undef, $forkFlag);
+    } else {					# mouse control-double-click 1
+	my ($page, $section) = ($line =~ /^([\w:+.-]+)\s*(\(.*?\))?/);
+no warnings;
+	print "pick_word: flag = $flag page = '$page' section = '$section'\n" if $opt_T;
+use warnings;
+	if ($page) {
+	    $entryMan->delete('0', 'end');
+	    if ($section && is_valid_section($section)) {
+		$entryMan->insert('end', "$page${section}");
+	    } else {
+		$entryMan->insert('end', $page);
+	    }
+	    show_man(undef, undef, undef, 0);
+	}
     }
 } # pick_word
 
@@ -1620,21 +1643,24 @@ sub check_menu {
     push(@$entriesArray, $newEntry) unless $delete;	# add to end of entriesArray
 
     if ($opt_T) {
-	if ($menuKey and $delete) {
+	if ($delete) {
 	    print "check_menu: [$menuKey] '$newEntry' deleted\n";
 	} else {
 	    print "check_menu: [$menuKey] '$newEntry' added\n";
 	}
     }
     if ($menuRef and not $delete) {		# menu for 'file' and 'searches' not 'last open file'
-	$menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
-			  -command => [ $commandRef, 1, $newEntry, 0 ]); # define 0 (down for search)
+	if ($commandRef) {
+	    print "check_menu: \$menuRef=$menuRef ->command(-label=>'$newEntry',-command=>['$commandRef',2,'$newEntry',0]\n" if $opt_T;
+	    $menuRef->command(-label   => "$newEntry",	# must use local $newEntry below
+			      -command => [ $commandRef, 2, $newEntry, 0 ]); # define 0 (down for search)
+	}
 	if (scalar @$entriesArray > $entriesLim) {
 	    $e = shift(@$entriesArray);		# remove first entry in entriesArray
 	    my $label = $menuRef->entrycget($menuPos, '-label');	# check algorithm
 	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
 	    print "check_menu: [$menuKey] '$e' removed from front of menu\n" if $opt_T;
-	    $menuRef->delete($menuPos);	# remove first dynamic menu entry
+	    $menuRef->delete($menuPos);		# remove first dynamic menu entry
 	}
     }
 } # check_menu
@@ -1671,7 +1697,7 @@ sub ini_program {
     my ($menuData, $menuKey, $entry, $initialFile, $position, $home);
     ## restore file and search menu lists from ~/.iC/iCman.ini
     if (($home = $ENV{HOME}) ne '' and
-	(-d "$home/.iC" or mkdir "$home/.iC") and
+	(-d "$home/.iC") and
 	open(INI, "$home/.iC/$named.ini")) {
 	while (<INI>) {
 	    chomp;
@@ -1768,9 +1794,10 @@ iCman - an interface to the on-line reference manuals
                 with '-k <key>' or 'apropos <key>' entered in the
                 show window.
                 Double-clicking on a word in the text which is the
-                name of another man page will also open that page.
+                name of another man page will also open that page
        Open     a new window - to show selected manpage         Alt-RET
-       Quit     quit the program.                                   q
+       Reload   the current manpage (usually modified externally)   r
+       Quit     the program                                         q
 
     [ <= ]      Load the previous manpage in the history.           p
     [ => ]      Load the next manpage in the history.               n
@@ -1789,7 +1816,7 @@ iCman - an interface to the on-line reference manuals
        Search down       or                                      RETURN
                 displays a new group of hits.
        Search up         or                                   Shift-RET
-                reverses the direction of scrolling.
+                reverses the direction of displaying hits.
        Clear             or                                    Ctrl-RET
                 clears hits and the search Entry window.
      <>Go to line        or                                     Alt-RET
@@ -1807,22 +1834,22 @@ iCman - an interface to the on-line reference manuals
 =head1 DESCRIPTION
 
 B<iCman> provides a read-only window in which man pages can be
-displayed. Each page argument given to B<man> is normally the name of
-a program, utility or function. The manual page associated with
-each of these arguments is then found and displayed. A section,
-if provided, will direct B<iCman> to look only in that section of the
-manual. The default action is to search in all of the available
-sections, following a pre-defined order and to show only the
-first page found, even if pages exist in several sections.
+displayed. Each page argument given to B<man> is normally the name of a
+program, utility or function. The manual page associated with each of
+these arguments is then found and displayed. A section, if provided,
+will direct B<iCman> to look only in that section of the manual. The
+default action is to search in all of the available sections, following
+a pre-defined order in the underlying 'man' call and to show only
+the first page found, even if pages exist in several sections.
 
 Other manual pages may be opened either by entering the name of a
 manual page optionally followed by a section in parentheses in the
-Man-Entry window and pressing RETURN, or by double clicking on a
-word representing a manual page - usually under the SEE ALSO heading
-or in a Section Index. Using ALT-RETURN or ALT-Double click will
-open the new manual page in a new instance of iCman.
+Man-Entry window and pressing RETURN, or by control-double-clicking
+on a word representing a manual page - usually under the SEE ALSO
+heading or in a Section Index. Using ALT-RETURN will open the new
+manual page in a new instance of B<iCman>.
 
-Alternatively '-k <key>' or 'B<apropos> <key>' may be used in
+Alternatively 'B<-k> <key>' or 'B<apropos> <key>' may be used in
 the Man-Entry window to search the manual page names and
 descriptions. This provides man page links to the topic described
 by <key>.  The default 'regex' behaviour of B<apropos> (man -k) is
@@ -1830,30 +1857,47 @@ used. No wildcard or exact option is provided. The text provided
 by 'man -k' is piped through 'sort -u' to delete duplicate entries.
 A sorted list with no duplicate entries is easier to analyze.
 
-Also '-f <page>' or 'B<whatis> <page>' in the Man-Entry window will
+Also 'B<-f> <page>' or 'B<whatis> <page>' in the Man-Entry window will
 display the short description of that manual page.
 
 The displayed text is read-only. It's position may be manipulated
 by the scroll bar(s) or the usual up/down/prior/next/home/end keys.
 A useful feature is the use of the middle mouse button to fast scroll
-in all 4 directions through the text. Other shortcuts are the 'p'
-and 'n' key to load the previous or next entry in the history. 'h'
-displays the iCman manual page and 'q' quits the program.
+in all 4 directions through the text.
 
-The search facility is much more powerful than that of 'less', the
-usual man page viewer. Searches may be for an exact match or for a full
-Perl-type regular expression. The \bword\b feature to find only whole
-words is particularly useful. Searches are normally case sensitive,
-but a case-insensitive search may be selectd. Once a search has been
+Other shortcuts are the 'p' and 'n' key to load the previous or next
+entry in the history.  The 'r' key reloads the current manpage,
+which is useful if the manpage is being developed and has been
+re-made externally.  'h' displays the B<iCman> manual page and 'q'
+quits the program.
+
+The search facility is much more powerful than that of 'less',
+the usual man page viewer. Activate the search by keying '/' or
+pressing the [/] button briefly.  Enter or paste a word into the
+Search Entry window and key RETURN or press the [/] button again.
+Searches may be for an exact match or for a full Perl-type regular
+expression. The \bword\b feature to find only whole words is
+particularly useful. Searches are normally case sensitive, but
+a case-insensitive search may be selectd. Once a search has been
 carried out, all the hits are highlighted. A first group of hits is
 displayed in the Text window. The text is moved to display as many
 hits as possible. When the user has analysed the first group of hits,
 hitting RETURN will display the next group of hits in the text and
 so on until the end of the text is reached. Another RETURN will start
 by displaying the first group at the top again. Hitting SHIFT-RETURN
-will reverse the direction of scrolling through the groups.
+will reverse the direction of displaying the groups.
 
-When iCman is started the first time, the names of all manual
+Double-clicking with mouse button 1 transfers the word under the
+mouse to the Search Entry window and immediately starts a search for
+that word. This is the quickest and best way to start a search.
+
+Tk::Text will open a dialog box when clicking the right mouse button
+in the text window. The features provided are self explanatory. It
+also has a search feature, which did not seem to be available when
+I started. The really useful feature there is the search/replace
+facility. Another useful feature is changing the wrap mode.
+
+When B<iCman> is started the first time, the names of all manual
 pages of every section in all directories of MANPATH are obtained.
 Since this may take some time, particularly if the system is busy,
 the result of the scan is cached in ~/.iC/iCman.sec.  A full scan is

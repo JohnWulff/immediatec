@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.62 2012/11/23 22:24:07 jw Exp $";
+"@(#)$Id: comp.h,v 1.63 2013/02/14 00:01:12 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -286,6 +286,7 @@ extern void	pu(enum stackType t, const char * token, void * node);
 extern Symbol *	iclock;			/* default clock */
 extern Symbol *	iconst;			/* pointer to Symbol "iConst" */
 extern Symbol *	icerr;			/* pointer to Symbol "iCerr" */
+extern Symbol	iC_CHANGE_ar;		/* alternative arithmetic CHANGE */
 extern void	init(void);		/* install constants and built-ins */
 extern const char initialFunctions[];	/* iC system function definitions */
 extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */

@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.17 2012/05/11 06:52:21 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.18 2013/01/24 07:08:07 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -78,6 +78,7 @@ extern void		iC_send_msg_to_server(SOCKET sock, const char* msg);
 extern fd_set		iC_rdfds;
 extern fd_set		iC_infds;
 
+extern char *		iC_vcd;
 extern int		iC_micro;
 extern void		iC_microPrint(const char * str, int mask);
 extern void		iC_microReset(int mask);

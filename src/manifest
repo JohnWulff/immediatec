@@ -1,4 +1,4 @@
-$Id: manifest,v 1.19 2012/12/30 03:56:29 jw Exp $
+$Id: manifest,v 1.20 2013/02/28 08:25:24 jw Exp $
 README
 doc/html/iC*.gif
 doc/html/iC*.html
@@ -19,9 +19,13 @@ src/Msg.pm
 src/README.tpl
 src/Test0
 src/bar.ic
+src/bar.sav
+src/bar.vcd
 src/bara.ica
 src/barb.ica
 src/barc.ica
+src/barx.sav
+src/barx.vcd
 src/cexe.h
 src/comp.c
 src/comp.h
@@ -36,6 +40,7 @@ src/gram.c
 src/gram.pl
 src/gram.y
 src/gram_tab.h
+src/gtkwave-3.1.10-4.33.i586.rpm
 src/hello.ic
 src/iCbox
 src/iClift
@@ -76,8 +81,10 @@ src/pplstfix
 src/rsff.c
 src/scan.c
 src/simple.ic
-src/sort32u.ica
-src/sort32v.ica
+src/sortm28.ica
+src/sortm28.sh
+src/sortm28_1.sav
+src/sortm28_1.vcd
 src/symb.c
 src/tcpc.c
 src/tcpc.h
