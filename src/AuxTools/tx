@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tx,v 1.5 2012/04/20 07:45:21 jw Exp $' >&2
+  echo '$Id: tx,v 1.6 2013/04/08 03:34:49 jw Exp $' >&2
 }
 
 usage()
@@ -33,11 +33,17 @@ usage()
   echo '	-v	author and version information' >&2
   echo '	-h	this help text' >&2
   echo '' >&2
-  echo '# To make a new set of V340 directories in Test1 to Test11 with links for identical files:' >&2
+  echo '# To make a new set of V340 directories in Test1 to Test13 with links for identical files:' >&2
+  echo '   time tt -AILsl -m"generate current version" V339 >> icc.tt_V339' >&2
   echo '   time tt -AIc -m"copy current test results to a temporary backup" W340 >> icc.tt_V340' >&2
   echo '   tx 339 340	# create links to V339 in V340 for files identical in V339 and W340' >&2
   echo '		# copy files from W340 to V340 which differ in V339 and W340' >&2
-  echo '   rm -fr Test*/W340	# in due course' >&2
+  echo '# To make a new set of V340a directories in Test11 to Test13 with links for identical files:' >&2
+  echo '   time tt -AILsla -t "Test11 Test12 Test13" -m"generate current -a version" V339 >> icc.tt_V339' >&2
+  echo '   time tt -AIca -m"copy current test results to a temporary backup" W340 >> icc.tt_V340' >&2
+  echo '   tx 339a 340a	# create links to V339a in V340a for files identical in V339a and W340a' >&2
+  echo '		# copy files from W340a to V340a which differ in V339a and W340a' >&2
+  echo '   rm -fr Test*/W340*	# in due course' >&2
   version
 }
 
