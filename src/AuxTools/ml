@@ -29,7 +29,7 @@ usage ()
     echo '		also ouput .ic if generated from .ica' >&2
     echo '	-g	pg.lt - exe .c .ini .lst .log .lst6 - generated including .lst6' >&2
     echo '	-n	pn.lt - exe .c .ini .lst .log .lst6 - generated corpses - no .ic to match' >&2
-    echo '	$Id: ml,v 1.18 2012/05/24 07:53:00 jw Exp $' >&2
+    echo '	$Id: ml,v 1.19 2013/04/19 06:37:45 jw Exp $' >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -59,18 +59,15 @@ if ls *.i[ch]* > /dev/null 2>&1; then
     mklst -d *.i[ch]* > pd.lt	# sources, includes and derived for comparing
     mklst -s *.i[ch]* > ps.lt	# iC or iCa sources and include files
 fi
-if ls *.ic* > /dev/null 2>&1; then
-    mklst -D *.ic* > pda.lt	# iCa sources, includes and derived from .ica for comparing
+if ls *.ica > /dev/null 2>&1; then
+    mklst -D *.ica > pda.lt	# iCa sources, includes and derived from .ica for comparing
     if [ ! -s pda.lt ]; then
 	rm pda.lt
     fi
-    if [ -f px.lt ]; then
-	mklst -m px.lt *.ic* > pm.lt	# special execution list for mm
-	mklst -M px.lt *.ic* > pma.lt	# iCa special execution list for mm
-    else
-	mklst -s *.ic* > pm.lt	# iC or iCa sources without include files
-	mklst -S *.ic* > pma.lt	# iCa sources without include files
-    fi
+fi
+if ls *.ic* > /dev/null 2>&1; then
+    mklst -m *.ic* > pm.lt	# special execution list for mm
+    mklst -M *.ica > pma.lt	# iCa special execution list for mm
     if [ ! -s pma.lt ]; then
 	rm pma.lt
     fi

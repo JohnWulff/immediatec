@@ -31,13 +31,13 @@ usage ()
     echo '	-y	make with -DLONG16        (make clean; makeAll first)' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-d<opt>	call ic[rt] with extra -d<opt> orred into normal -d474' >&2
-    echo 'if no iCtargets are specified, each single entry of file po.lt is made' >&2
+    echo 'if no iCtargets are specified, each single entry of file pp.lt is made' >&2
     echo '   outputs the common output to ListR/Init.out or ListT/Init.out' >&2
     echo '   restores a plain icr or ict at the end of the test run' >&2
-    echo '	-m	make each entry from pm.lt instead of default po.lt (takes longer)' >&2
+    echo '	-m	make each entry from pm.lt instead of default pp.lt (takes longer)' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
     echo '	-h	this help text' >&2
-    echo '	$Id: mo,v 1.22 2008/08/08 19:33:06 jw Exp $' >&2
+    echo '	$Id: mo,v 1.23 2012/09/04 21:44:30 jw Exp $' >&2
 }
 
 v=""
@@ -45,7 +45,7 @@ ic='ict'
 op='Tt'
 g=''
 p='T'
-list='po.lt'
+list='pp.lt'
 z=0
 
 while getopts ":RrTtmsyd:gO:zh" opt; do
@@ -68,6 +68,7 @@ done
 shift $(($OPTIND - 1))
 
 op="$op$g"
+orgp=$(pwd)
 devp=$(pwd)
 while [ -n "$devp" ]; do
     if [ -x $devp/$ic ]; then
@@ -96,7 +97,7 @@ if [ $# -ne 0 ]; then
 	base=${file%.*}
 	file="$base.ic"
 	if [ -f "$file" ]; then
-	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! diff -I 'was built with' cexe.c /tmp/cexe.c > /dev/null; then
 		if [ $z -eq 1 ]; then
 		    echo "$ic$v -c -d474 -l List$p/$base.lst $file" >&2	# only if different
 		fi
@@ -109,7 +110,7 @@ if [ $# -ne 0 ]; then
 		    echo "makeAll -$op" >&2
 		fi
 		makeAll -$op 2>&1 | if [ $z -ne 1 ]; then  grep -iE '(error|warning|:[0-9]+:)'; else cat; fi
-		cd - > /dev/null
+		cd $orgp
 		if [ -x $devp/$ic ]; then	# use newly generated compiler
 		    if [ $z -eq 1 ]; then
 			echo "$devp/$ic$v -d500 $file > List$p/$base.ini" >&2
@@ -135,7 +136,7 @@ elif [ -f $list ]; then
 	base=${file%.*}
 	file="$base.ic"
 	if [ -f "$file" ]; then
-	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! cmp -s cexe.c /tmp/cexe.c; then
+	    if $ic$v -c -d474 -l List$p/$base.lst $file && ! diff -I 'was built with' cexe.c /tmp/cexe.c > /dev/null; then
 		if [ $z -eq 1 ]; then
 		    echo "$ic$v -c -d474 -l List$p/$base.lst $file" >&2	# only if different
 		fi
@@ -148,7 +149,7 @@ elif [ -f $list ]; then
 		    echo "makeAll -$op" >&2
 		fi
 		makeAll -$op 2>&1 | if [ $z -ne 1 ]; then  grep -iE '(error|warning|:[0-9]+:)'; else cat; fi
-		cd - > /dev/null
+		cd $orgp
 		if [ -x $devp/$ic ]; then	# use newly generated compiler
 		    if [ $z -eq 1 ]; then
 			echo "$devp/$ic$v -d500 $file > List$p/$base.ini" >&2
@@ -175,7 +176,7 @@ elif [ -f $list ]; then
 	    echo "makeAll -$op" >&2
 	fi
 	makeAll -$op 2>&1 | if [ $z -ne 1 ]; then  grep -iE '(error|warning|:[0-9]+:)'; else cat; fi
-	cd - > /dev/null
+	cd $orgp
     fi
 else
     echo "ERROR: no list of test iC sources '$list' found - no $ic made" >&2
