@@ -1,5 +1,5 @@
 #! /bin/bash
-# $Id: update,v 1.9 2012/11/15 03:13:19 jw Exp $
+# $Id: update,v 1.10 2013/04/20 00:13:48 jw Exp $
 
 name=${0##*/}
 vp='V'		## save directory prefix
@@ -82,7 +82,7 @@ if locked -q; then
 		fi
 	    fi
 	    branch="$w$m"
-	    if ! Mdiff -wkLeq $(locked) $previous; then
+	    if ! Mdiff -wkLeq $(archived) $previous; then
 		echo "#### $name $branch"
 		mkdir $branch
 		cd $branch
@@ -98,6 +98,21 @@ if locked -q; then
 		rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 		cd ..
 		cp --remove-destination -p $(Mdiff -wkLel $(locked) $branch) $branch
+		for f in $(Mdiff -kLl $(locked -n) $previous); do
+		    echo "**** Note:    $f is not locked but differs from $previous - link from $head/$f"
+		    if diff -q -wB -I Id: -- $f $head/$f > /dev/null; then
+			if [ -L $head/$f ]; then
+			    cp --remove-destination -a $head/$f $branch/$f
+			elif [ -f $f ]; then
+			    rm -f $branch/$f
+			    ln -s ../$head/$f $branch/$f
+			else
+			    echo "**** Error: $name has strange file $head/$f - not backed up"
+			fi
+		    else
+			echo "**** Warning: $f does not match $head/$f although it is not locked - fix manually"
+		    fi
+		done
 	    else
 		echo "**** Warning: $name directory will get no new files - no $branch made"
 	    fi
