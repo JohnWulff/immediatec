@@ -66,13 +66,13 @@ usage ()
   echo '	        Note: do not use the same macros for the iC and the C phase' >&2
   echo '	-C<macro> predefine <macro> for the C preprocessor phase' >&2
   echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
-  echo "	-P<macro> predefine <macro> for $IAC pre-compiler (forces $IAC)" >&2
-  echo '		  also forces building of new iC output and the rest' >&2
+  echo "	-P<macro> predefine <macro> for $IAC pre-compiler. iC target base name" >&2
+  echo '	          is extended by the -P option. eg -P B=2 x target is x_B_2.ic' >&2
   echo '	-W[no-]<warn>                  positive/negative warning options' >&2
   echo '	    -W[no-]deprecated-logic    use of && || ! in pure bit expressions' >&2
   echo '	    -W[no-]function-parameter  unused parameters in functions' >&2
   echo '	    -W[no-]function-delete     delete before function re-definition' >&2
-  echo '	    -Wno-deprecated -Wdeprecated (default) all of the above' >&2
+  echo '	    -W[no-]deprecated          (default) [none]/all of the above' >&2
   echo "	-a      $IAC: output FOR loop control and %define lines as comments" >&2
   echo "	-L      generate auxiliary 'file.log' for debugging $IAC translation" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
@@ -93,7 +93,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.42 2013/01/10 04:44:48 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.43 2013/04/20 01:23:06 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -116,6 +116,7 @@ S=""
 N=""
 p=""
 P=""
+PA=""
 L=""
 a=""
 R=""
@@ -176,7 +177,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a$lwsock32";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
-    p )	if [ -z "$p" ]; then p=" -P"; C="$C -pedantic"; fi; d="$d$p";;	# allows -pp => -P -P
+    p )	if [ -z "$p" ]; then p=" -p"; fi; d="$d$p";;	# allows -pp => -p -p (-pedantic cannot handle generated C files)
     R )	if [ -z "$R" ]; then R=" -R"; d="$d$R"; fi;;
     a ) a=" -a";;
     L ) L=" -l x.log";;			# dummy string changed later
@@ -212,11 +213,11 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
 	;;
     d ) d="$d -d$OPTARG";;
     O ) d="$d -O$OPTARG";;
-    D ) D="$D -D$OPTARG";;
-    U ) D="$D -U$OPTARG";;
-    C ) D="$D -C$OPTARG"; C="$C -D$OPTARG";;
-    V ) D="$D -V$OPTARG"; C="$C -U$OPTARG";;
-    P ) P="$P -P$OPTARG";;
+    D ) D="$D -D '$OPTARG'";;
+    U ) D="$D -U '$OPTARG'";;
+    C ) D="$D -C '$OPTARG'"; C="$C -D '$OPTARG'";;
+    V ) D="$D -V '$OPTARG'"; C="$C -U '$OPTARG'";;
+    P ) P="$P -P '$OPTARG'"; Pa=${OPTARG%=*}; PA="${PA}_${Pa}"; if [ $Pa != $OPTARG ]; then Pz=${OPTARG#$Pa=}; PA="${PA}_${Pz}"; fi;;
     W ) D="$D -W$OPTARG";;
     z )	z=1;;
     h )	usage; exit 0;;
@@ -226,7 +227,7 @@ done
 shift $(($OPTIND - 1))
 
 lib="$lib$ef"
-# echo "I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib, force = $force"
+# echo "I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib, force = $force, D=$D, P=$P, PA=$PA"
 # echo "*='$*'"
 # exit
 
@@ -244,12 +245,16 @@ for arg in $*; do
     ext=${arg#$base}
     icaFile="$base.ica"
     icFile="$base.ic"
-    if [ -n "$L" ]; then
-	L=" -l $base.log"		# will change for every arg once L is set
-    fi
 # echo "arg=$arg, base=$base, ext=$ext, icaFile=$icaFile, icFile=$icFile, lk=$lk"
     stat=0
     if [ -f $icaFile ]; then
+	if [ -n "$PA" ]; then
+	    base="$base$PA"		# extend iC file and follow-on targets by -P options
+	    icFile="$base.ic"
+	fi
+	if [ -n "$L" ]; then
+	    L=" -l $base.log"		# will change for every arg once L is set
+	fi
 	if [ $icaFile -nt $icFile -o $force -ne 0 -a "$ext" != '.ic' ]; then
 	    if [ -w $icFile ]; then
 		mv -f $icFile "$icFile.bak"		# backup writable iC file
@@ -271,9 +276,9 @@ for arg in $*; do
 	fi
     elif [ -f $icFile ]; then
 	if [ $z -eq 1 ]; then
-	    echo "if ! $nice${b}$IAC$v$S$N$P -t $icFile;"	# may be copy if no iCa constructs
+	    echo "if ! $nice${b}$IAC$v$S$N -t $icFile;"	# may be copy if no iCa constructs
 	fi
-	if ! $nice${b}$IAC$v$S$N$P -t $icFile; then
+	if ! $nice${b}$IAC$v$S$N -t $icFile; then
 	    echo "$? '$icFile' should be renamed '$icaFile' because it has iCa constructs" >&2
 	    stat=1
 	    let status+=20			# immac error
@@ -444,9 +449,9 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	fi
 	rm -f $base.c		# -f in case read only
 	if [ $z -eq 1 ]; then
-	    echo "$nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $icFile"
+	    echo "$nice${b}$ICC$v$D$d$aux -o $base.c -l $base.lst$l $icFile"
 	fi
-	if ! $nice${b}$ICC$v$D$aux$d -o $base.c -l $base.lst$l $icFile; then
+	if ! $nice${b}$ICC$v$D$d$aux -o $base.c -l $base.lst$l $icFile; then
 	    list="$list ERROR:"
 	    let status+=1
 	fi
@@ -550,13 +555,13 @@ iCmake - make one or more immediate-C applications
             Note: do not use the same macros for the iC and the C phase
     -C <macro> predefine <macro> for the C preprocessor phase
     -V <macro> cancel previous definition of <macro> for the C phase
-    -P <macro> predefine <macro> for immac pre-compiler (forces immac)
-               also forces building of new iC output and the rest
+    -P <macro> predefine <macro> for immac pre-compiler. iC target base name
+              is extended by the -P option. eg -P B=2 x target is x_B_2.ic
     -W[no-]<warn>                  positive/negative warning options
         -W[no-]deprecated-logic    use of && || ! in pure bit expressions
         -W[no-]function-parameter  unused parameters in functions
         -W[no-]function-delete     delete before function re-definition
-        -Wno-deprecated -Wdeprecated (default) all of the above
+        -W[no-]deprecated          (default) [none]/all of the above
     -a      immac: output FOR loop control and %define lines as comments
     -L      generate auxiliary 'file.log' for debugging immac translation
     -k<lim> highest I/O index (default: no limit; 63 for -c mode)

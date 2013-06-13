@@ -1,4 +1,4 @@
-# $Id: Msg.pm,v 1.4 2012/11/08 06:48:40 jw Exp $
+# $Id: Msg.pm,v 1.5 2013/06/07 00:22:10 jw Exp $
 
 ########################################################################
 #
@@ -48,6 +48,30 @@
 #	Without the first call Nagle's algorthm is active - so Msg.pm
 #	functions without change from the original for backwards compatibility.
 #
+#   Modification John Wulff 2013.04.25 - modify send buffering
+#	The syswrite() call in _send() takes a short time to complete. The return
+#	from the OS is initiated by an interrupt. If another _send() is executed
+#	before the previous syswrite is complete, it causes a 2nd syswrite() of the
+#	same message at the head of the queue, because the message was not shifted
+#	until the 1st syswrite has completed. In the changed code $conn->{sendBusy} is
+#	set before starting to syswrite messages in the buffer. When another _send
+#	occurs while busy is set, _send returns immediately. The queued message
+#	is sent during the current loop emtying the buffer.
+#	By having the $conn->{sendBusy} flag, messages are written in the order
+#	they come in.  $conn->{sendBusy} only applies to one $conn. Other
+#	connections can barge in and pre-empt a sys_write without ill effects.
+#
+#	A similar modification has been implemented in _rcv() to buffer received
+#	messages when rcvd_notification_proc is interrupted starting another _rcv().
+#	This uses the $conn{rcvBusy} flag to return immediately.
+#
+#   Modification John Wulff 2013.04.28 - added trace arguments to inhibit_nagle()
+#	  Msg->inhibit_nagle(0)		# Nagle's algorithm active
+#	  Msg->inhibit_nagle(1)		# inhibit Nagle's algorithm - no traces
+#	  Msg->inhibit_nagle(1, 1)	# also trace rcv calls only
+#	  Msg->inhibit_nagle(1, 0, 1)	# also trace send calls only
+#	  Msg->inhibit_nagle(1, 1, 1)	# also trace rcv and send calls
+#
 ########################################################################
 
 package Msg;
@@ -64,7 +88,7 @@ use vars qw (%rd_callbacks %wt_callbacks $rd_handles $wt_handles);
 $rd_handles   = IO::Select->new();
 $wt_handles   = IO::Select->new();
 my $blocking_supported;			# executed after BEGIN block
-my $nagle;
+my ($nagle, $trace_rcv, $trace_send);	# global nagle and trace flags
 
 BEGIN {
     # Checks if blocking is supported
@@ -76,9 +100,12 @@ BEGIN {
 
 #-----------------------------------------------------------------
 # Inhibit Nagle's algorithm (see in the first header)
+				# $nagle 0 or undef is active, 1 is inhibited
+				# $trace_rcv  1 is trace rcv messages
+				# $trace_send 1 is trace send messages
 sub inhibit_nagle {
-    my ($pkg, $flag) = @_;
-    $nagle = $flag;		# 0 is active, 1 is inhibited
+    my $pkg;
+    ($pkg, $nagle, $trace_rcv, $trace_send) = @_;
 }
 
 #-----------------------------------------------------------------
@@ -98,34 +125,38 @@ sub connect {
 
     setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, $nagle) if defined $nagle;	# inhibit Nagle's algorithm
     # Create a connection end-point object
-    my $conn = bless {
+    my $conn = bless {			# Reference to $conn{sock} and $conn{rcvd_notification_proc}
         sock                   => $sock,
         rcvd_notification_proc => $rcvd_notification_proc,
-    }, $pkg;
+    }, $pkg;				# CLASSNAME $pkg
 
     if ($rcvd_notification_proc) {
         my $callback = sub {_rcv($conn, 0)};
         set_event_handler ($sock, "read" => $callback);
     }
-    $conn;
+    print "Msg.pm:connect\n" if $trace_rcv or $trace_send;
+    return $conn;
 }
 
 sub disconnect {
     my $conn = shift;
     my $sock = delete $conn->{sock};
     return unless defined($sock);
+    print "Msg.pm:disconnect\n" if $trace_rcv or $trace_send;
     set_event_handler ($sock, "read" => undef, "write" => undef);
     close($sock);
 }
 
 sub send_now {
     my ($conn, $msg) = @_;
+    print "Msg.pm:send_now    $msg\n" if $trace_send;
     _enqueue ($conn, $msg);
-    $conn->_send (1); # 1 ==> flush
+    $conn->_send (1); # 1 ==> $flush
 }
 
 sub send_later {
     my ($conn, $msg) = @_;
+    print "Msg.pm:send_later  $msg\n" if $trace_send;
     _enqueue($conn, $msg);
     my $sock = $conn->{sock};
     return unless defined($sock);
@@ -136,15 +167,16 @@ sub _enqueue {
     my ($conn, $msg) = @_;
     # prepend length (encoded as network long)
     my $len = length($msg);
+    print "Msg.pm:_enqueue [$len]$msg\n" if $trace_send;
     $msg = pack ('N', $len) . $msg;
-    push (@{$conn->{queue}}, $msg);
+    push (@{$conn->{sendQueue}}, $msg);
 }
 
 sub _send {
     my ($conn, $flush) = @_;
     my $sock = $conn->{sock};
     return unless defined($sock);
-    my ($rq) = $conn->{queue};
+    my $sq = $conn->{sendQueue};
 
     # If $flush is set, set the socket to blocking, and send all
     # messages in the queue - return only if there's an error
@@ -155,13 +187,33 @@ sub _send {
     $flush ? $conn->set_blocking() : $conn->set_non_blocking();
     my $offset = (exists $conn->{send_offset}) ? $conn->{send_offset} : 0;
 
-    while (@$rq) {
-        my $msg            = $rq->[0];
+    # If $conn->{sendBusy} is set, syswrite was interrupted by another _send_now
+    # or _send_later before syswrite has actually written the previous $msg
+    # or all of its parts if the $msg is long. The effect of this in the
+    # original implementation was, that later messages are actually
+    # written to the socket before early ones, which had drastic
+    # consequences for iC applications.
+    # By having the $conn->{sendBusy} flag, messages are written in the order
+    # they come in.  $conn->{sendBusy} only applies to one $conn. Other
+    # connections can barge in and pre-empt a sys_write without ill effects.
+    # jw 2013.04.25
+
+    if ($conn->{sendBusy}++) {
+	my $msg = $sq->[0];
+	my ($l, $m) = unpack "N A*", $msg;
+	print "Msg.pm:_send*0  [$l]$m sendBusy $conn->{sendBusy}\n" if $trace_send;
+	return 1;			# $msg is queued out of turn and sywrite not complete
+    }
+    while (@$sq) {
+        my $msg            = shift @$sq;
         my $bytes_to_write = length($msg) - $offset;
         my $bytes_written  = 0;
         while ($bytes_to_write) {
+	    my ($l, $m) = unpack "N A*", $msg;
+	    print "Msg.pm:_send*1  [$l]$m\n" if $trace_send;
             $bytes_written = syswrite ($sock, $msg,
                                        $bytes_to_write, $offset);
+	    print "Msg.pm:_send*2  [$l]$m\n" if $trace_send;
             if (!defined($bytes_written)) {
                 if (_err_will_block($!)) {
                     # Should happen only in deferred mode. Record how
@@ -172,7 +224,8 @@ sub _send {
                     return 1;
                 } else {    # Uh, oh
                     $conn->handle_send_err($!);
-                    return 0; # fail. Message remains in queue ..
+		    push (@$sq, $msg);
+                    return 0; # fail. Message is back in queue ..
                 }
             }
             $offset         += $bytes_written;
@@ -180,12 +233,12 @@ sub _send {
         }
         delete $conn->{send_offset};
         $offset = 0;
-        shift @$rq;
-        last unless $flush; # Go back to select and wait
-                            # for it to fire again.
+        last unless $flush;	# Go back to select and wait for it to fire again if $flush == 0
     }
+    print "Msg.pm:_send*end	sendBusy $conn->{sendBusy}\n" if $trace_send and $conn->{sendBusy} > 1;
+    $conn->{sendBusy} = 0;		# early syswrite $msg completed - later queued $msg picked up in loop
     # Call me back if queue has not been drained.
-    if (@$rq) {
+    if (@$sq) {
         set_event_handler ($sock, "write" => sub {$conn->_send(0)});
     } else {
         set_event_handler ($sock, "write" => undef);
@@ -217,7 +270,7 @@ sub handle_send_err {
    # For more meaningful handling of send errors, subclass Msg and
    # rebless $conn.
    my ($conn, $err_msg) = @_;
-   warn "Error while sending: $err_msg \n";
+   warn "Error while sending: $err_msg\n";
    set_event_handler ($conn->{sock}, "write" => undef);
 }
 
@@ -237,6 +290,7 @@ sub new_server {
                                           Proto     => 'tcp',
                                           Reuse     => 1);
     die "Could not create socket: $! \n" unless $main_socket;
+    print "Msg.pm:new_server\n" if $trace_rcv or $trace_send;
     set_event_handler ($main_socket, "read" => \&_new_client);
     $g_login_proc = $login_proc; $g_pkg = $pkg;
 }
@@ -244,6 +298,7 @@ sub new_server {
 sub rcv_now {
     my ($conn) = @_;
     my ($msg, $err) = _rcv ($conn, 1); # 1 ==> rcv now
+    print "Msg.pm:rcv_now     $msg\n" if $trace_rcv;
     return wantarray ? ($msg, $err) : $msg;
 }
 
@@ -258,6 +313,7 @@ sub _rcv {                     # Complement to _send
         $offset        = length($msg);      # sysread appends to it. (- 1 incorrect according to Errata)
         $bytes_to_read = $conn->{bytes_to_read};
         delete $conn->{'msg'};              # have made a copy
+	print "Msg.pm:_rcv*0   [$offset]$msg\n" if $trace_rcv;
     } else {
         # The typical case ...
         $msg           = "";                # Otherwise -w complains
@@ -277,6 +333,7 @@ sub _rcv {                     # Complement to _send
     }
     $conn->set_non_blocking() unless $rcv_now;
     while ($bytes_to_read) {
+	print "Msg.pm:_rcv*1   [$bytes_to_read]$msg\n" if $trace_rcv;
         $bytes_read = sysread ($sock, $msg, $bytes_to_read, $offset);
         if (defined ($bytes_read)) {
             if ($bytes_read == 0) {
@@ -289,6 +346,7 @@ sub _rcv {                     # Complement to _send
                 # Should come here only in non-blocking mode
                 $conn->{msg}           = $msg;
                 $conn->{bytes_to_read} = $bytes_to_read;
+		print "Msg.pm:_rcv*x   [$bytes_to_read]$msg\n" if $trace_rcv;
                 return ;   # .. _rcv will be called later
                            # when socket is readable again
             } else {
@@ -296,6 +354,7 @@ sub _rcv {                     # Complement to _send
             }
         }
     }
+    print "Msg.pm:_rcv*2   [$offset]$msg\n" if $trace_rcv;
 
   FINISH:
     if (length($msg) == 0) {
@@ -303,18 +362,30 @@ sub _rcv {                     # Complement to _send
     }
     if ($rcv_now) {
         return ($msg, $!);
-    } else {
-        &{$conn->{rcvd_notification_proc}}($conn, $msg, $!);
     }
+    push (@{$conn->{rcvQueue}}, $msg);	# queue received message just in case this interrupted rcvd_notification_proc
+    my $rq = $conn->{rcvQueue};
+    if ($conn->{rcvBusy}++) {
+	my $m = $rq->[0];
+	print "Msg.pm:_rcv*0       $m	rcvBusy $conn->{rcvBusy}\n" if $trace_rcv;
+	return 1;			# rcvd_notification_proc not complete - $msg is queued out of turn
+    }
+    while (@$rq) {			# process all queued received messages in reception order
+	my $msg = shift @$rq;
+	print "Msg.pm:_rcv*3       $msg\n" if $trace_rcv;
+	&{$conn->{rcvd_notification_proc}}($conn, $msg, $!);
+    }
+    print "Msg.pm:_rcv*end		rcvBusy $conn->{rcvBusy}\n" if $trace_rcv and $conn->{rcvBusy} > 1;
+    $conn->{rcvBusy} = 0;		# later queued $msg picked up in above loop
 }
 
 sub _new_client {
     my $sock = $main_socket->accept();
     setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, $nagle) if defined $nagle;	# inhibit Nagle's algorithm
-    my $conn = bless {
+    my $conn = bless {			# Reference to $conn{sock} and $conn{state}
         'sock' =>  $sock,
         'state' => 'connected'
-    }, $g_pkg;
+    }, $g_pkg;				# CLASSNAME $g_pkg from new_server
     my $rcvd_notification_proc =
         &$g_login_proc ($conn, $sock->peerhost(), $sock->peerport());
     if ($rcvd_notification_proc) {
@@ -324,6 +395,7 @@ sub _new_client {
     } else {  # Login failed
         $conn->disconnect();
     }
+    print "Msg.pm:_new_client\n" if $trace_rcv or $trace_send;
 }
 
 #----------------------------------------------------
@@ -369,7 +441,7 @@ sub set_event_handler {
 
 sub event_loop {
     my ($pkg, $loop_count) = @_; # event_loop(1) to process events once
-    my ($conn, $r, $w, $rset, $wset);
+    my ($r, $w, $rset, $wset);
     my $time_out = $loop_count;
     if (defined($loop_count)) {
 	if ($time_out == int $time_out) {

@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.71 2013/02/14 07:30:50 jw Exp $";
+"@(#)$Id: icc.h,v 1.72 2013/05/12 09:49:22 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -195,6 +195,9 @@ extern int		iC_assignA(iC_Gt * glv, int ppi, int rv);
 extern int		iC_assignL(iC_Gt * glv, int ppi, int rv);
 #endif
 extern iC_Gt *		iC_index(iC_Gt * gm, int index);
+extern struct timeval	iC_timeOut;	/* 50 mS select timeout - may be modified in iCbegin() */
+extern int		iCbegin(void);	/* initialisation function */
+extern int		iCend(void);	/* termination function */
 #endif	/* ICG_H */
 /* ENDFILE "icg.h" */
 
@@ -612,9 +615,6 @@ extern unsigned char	iC_bitMask[];
 #define	L_WIDTH		259		/* marks output as long width signed */
 #define	H_WIDTH		260		/* marks output as long long width signed */
 #endif
-
-extern int	iCbegin(void);			/* initialisation function */
-extern int	iCend(void);			/* termination function */
 
 extern void	iC_arithMa(Gate *, Gate *);	/* ARITH master action */
 extern void	iC_sMff(Gate *, Gate *);	/* S_FF master action on FF */

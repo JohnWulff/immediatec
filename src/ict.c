@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.59 2013/02/15 02:21:42 jw Exp $";
+"@(#)$Id: ict.c,v 1.60 2013/05/12 08:10:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -55,12 +55,18 @@ static const char ict_c[] =
 #define IOCHANNELS	30		/* initial Channels[] size */
 #define ENTRYSZ		16		/* entry "SIX0000-000\0" max length 12 */
 
-static struct timeval	timeOut = { 0, 50000 };	/* 50 mS select timeout */
+struct timeval	iC_timeOut = { 0, 50000 };	/* 50 mS select timeout - may be modified in iCbegin() */
 static struct timeval	toCnt =   { 0, 50000 };	/* actual timeout counter that select uses */
 static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl pointer */
 
 static void	regAck(Gate ** oStart, Gate ** oEnd);
 static void	storeChannel(unsigned short channel, Gate * gp);
+static char *
+#if	INT_MAX == 32767 && defined (LONG16)
+convert2binary(char * binBuf, long value, int bitFlag);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+convert2binary(char * binBuf, int value, int bitFlag);
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 static iC_Functp *	iC_i_lists[] = { I_LISTS };
 
 /********************************************************************
@@ -153,6 +159,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     int		retval;
     unsigned short index;
     FILE *	vcdFlag;
+    char	binBuf[33];		/* allows 32 bits */
 
 #ifdef	EFENCE
     msgBuf = iC_emalloc(REQUEST);
@@ -395,18 +402,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	char *	dumpvars;
 	char *	dumpPtr;
 	char *	dumpEnd;
-	char *	binPtr;
-	int	binFlag;
 #if	INT_MAX == 32767 && defined (LONG16)
 	long		value;
-	unsigned long	binMask;
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 	int		value;
-	unsigned int	binMask;
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	char	modName[256];
 	char	modPrev[256] = "";
-	char	binBuf[33];	/* allows 32 bits */
 
 	time(&walltime);
 	if ((iC_vcdFP = fopen(iC_vcd, "w")) == NULL) {
@@ -636,22 +638,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				break;
 			    case 'i':				/* integer */
 				assert(dumpPtr < dumpEnd - 38);	/* enough for one more entry */
-				if ((value = gp->gt_new) == 0) {	/* convert to binary string */
-				    strcpy(binBuf, "0");		/* '0' is the only digit */
-				} else {
-				    binPtr = binBuf;
-				    binFlag = 0;
-				    binMask = 1 << 31;
-				    do {
-					if (binMask & value) {
-					    *binPtr++ = '1';	/* start with the left-most '1' digit */
-					    binFlag = 1;
-					} else if (binFlag) {
-					    *binPtr++ = '0';
-					}
-				    } while ((binMask >>= 1) != 0);
-				    *binPtr++ = '\0';		/* there is at least 1 '1' digit */
-				}
+				convert2binary(binBuf, gp->gt_new, 0);	/* convert to 32 bit binary string */
 				dumpPtr += sprintf(dumpPtr, " b%s %hu", binBuf, gp->gt_live);
 				break;
 			    default:				/* hard error */
@@ -886,7 +873,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 
 	    if (retval == 0) {
 		if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
-		    toCnt = timeOut;		/* transfer timeout value */
+		    toCnt = iC_timeOut;		/* transfer timeout value */
 		}
 		/********************************************************************
 		 *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
@@ -1081,14 +1068,15 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 					/* arithmetic master action */
 					if (gp->gt_fni == TRAB) {
 #if	YYDEBUG
-					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t", gp->gt_ids);
 #if	INT_MAX == 32767 && defined (LONG16)
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t0x%02lx ==>> 0x%02lx",
-						channel, gp->gt_new, gp->gt_old, gp->gt_new);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t%hu:%ld\t0x%02lx ==>> 0x%02lx",
+						gp->gt_ids, channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t0x%02x ==>> 0x%02x",
-						channel, gp->gt_new, gp->gt_old, gp->gt_new);
+					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t%hu:%d\t0x%02x ==>> 0x%02x",
+						gp->gt_ids, channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
+					    else if (iC_debug & 020) fprintf(iC_outFP, "%s\t%2hu:%08s\n",
+						gp->gt_ids, channel, convert2binary(binBuf, gp->gt_new, 1));
 #endif	/* YYDEBUG */
 					    cnt += iC_traMb(gp, 0);			/* distribute bits directly */
 					} else
@@ -1440,13 +1428,6 @@ iC_liveData(Gate * gp, int value)
     int			len;
     int			rest;
     char *		code;
-    char *		binPtr;
-    int			binFlag;
-#if	INT_MAX == 32767 && defined (LONG16)
-    unsigned long	binMask;
-#else	/* INT_MAX == 32767 && defined (LONG16) */
-    unsigned int	binMask;
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
     char		binBuf[33];	/* allows 32 bits */
 
     index = gp->gt_live & 0x7fff;
@@ -1462,22 +1443,7 @@ iC_liveData(Gate * gp, int value)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	    break;
 	case 'i':			/* integer */
-	    if (value == 0) {		/* convert to binary string */
-		strcpy(binBuf, "0");/* '0' is the only digit */
-	    } else {
-		binPtr = binBuf;
-		binFlag = 0;
-		binMask = 1 << 31;
-		do {
-		    if (binMask & value) {
-			*binPtr++ = '1';/* start with the left-most '1' digit */
-			binFlag = 1;
-		    } else if (binFlag) {
-			*binPtr++ = '0';
-		    }
-		} while ((binMask >>= 1) != 0);
-		*binPtr++ = '\0';	/* there is at least 1 '1' digit */
-	    }
+	    convert2binary(binBuf, value, 0);	/* convert to 32 bit binary string */
 	    fprintf(iC_vcdFP, "b%s %hu\n", binBuf, index);
 	    break;
 	default:			/* hard error */
@@ -1506,6 +1472,48 @@ iC_liveData(Gate * gp, int value)
 	msgOffset += len;
     }
 } /* iC_liveData */
+
+/********************************************************************
+ *
+ *	Convert an integer to a binary string
+ *	binBuf	is a buffer which must be at least 33 characters long
+ *	value	is a 32 bit integer
+ *	binFlag is either 0, in which up to 32 bits are converted to
+ *		a binary string without leading 0's
+ *		or it is  1, in which case 8 bits with leading 0's are produced
+ *
+ *******************************************************************/
+
+static char *
+#if	INT_MAX == 32767 && defined (LONG16)
+convert2binary(char * binBuf, long value, int binFlag)
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+convert2binary(char * binBuf, int value, int binFlag)
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+{
+    char *		binPtr;
+#if	INT_MAX == 32767 && defined (LONG16)
+    unsigned long	binMask;
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+    unsigned int	binMask;
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+    if (binFlag == 0 && value == 0) {	/* convert to binary string */
+	strcpy(binBuf, "0");		/* '0' is the only digit */
+    } else {
+	binPtr = binBuf;
+	binMask = binFlag ? 1 << 7 : 1 << 31;
+	do {
+	    if (binMask & value) {
+		*binPtr++ = '1';	/* start with the left-most '1' digit */
+		binFlag = 1;
+	    } else if (binFlag) {
+		*binPtr++ = '0';
+	    }
+	} while ((binMask >>= 1) != 0);
+	*binPtr++ = '\0';		/* there is at least 1 '1' digit */
+    }
+    return binBuf;
+} /* convert2binary */
 
 /********************************************************************
  *

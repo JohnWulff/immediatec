@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.56 2013/01/27 05:02:15 jw Exp $";
+"@(#)$Id: load.c,v 1.57 2013/04/25 02:08:06 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -73,6 +73,9 @@ static const char *	usage =
 "                  +400  exit after initialisation\n"
 "                  +200  display oscillator info\n"
 "                  +100  initialisation and run time trace\n"
+#ifdef TCP
+"            or     +20  trace only logic inputs as binary bytes\n"
+#endif	/* TCP */
 #else	/* YYDEBUG */
 "        -d <debug> 400  exit after initialisation\n"
 #endif	/* YYDEBUG */
@@ -259,7 +262,7 @@ main(
 	    goto error;
 	}
     }
-    iC_debug &= 03747;			/* allow only cases specified */
+    iC_debug &= 03767;			/* allow only cases specified */
 
 /********************************************************************
  *

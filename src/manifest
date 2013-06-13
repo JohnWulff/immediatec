@@ -1,4 +1,4 @@
-$Id: manifest,v 1.20 2013/02/28 08:25:24 jw Exp $
+$Id: manifest,v 1.21 2013/04/04 04:29:32 jw Exp $
 README
 doc/html/iC*.gif
 doc/html/iC*.html
@@ -88,3 +88,4 @@ src/sortm28_1.vcd
 src/symb.c
 src/tcpc.c
 src/tcpc.h
+src/vcd2sav

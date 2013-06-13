@@ -62,7 +62,7 @@ my %sortOrder = (	# determines in which order iCboxes ar autovivified
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<<<<< [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+    @<<<<<<< [-agrktRSmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	$named
 	     [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
 	-s host	address of server - clients must specify the same address
@@ -77,7 +77,10 @@ Usage:
 	-k	kill previous client, when a new client with the same
 		name registers (default: do not accept the new client)
 	-t	trace messages for debugging
+	-R      trace rcv messages in Msg.pm
+	-S      trace send messages in Msg.pm
 	-m	display elapsed time in seconds and microseconds
+	-T      extra static debug messages
 	<list of equivalences>
 		eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
 	<list of client calls>
@@ -86,12 +89,12 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.43 2012/11/24 04:51:07 jw Exp $
+$Id: iCserver,v 1.44 2013/06/06 06:15:57 jw Exp $
 .
 
-use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
+use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_R $opt_S $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
 use Getopt::Std;		# replace require "getopts.pl";
-getopts('agkrtTms:p:f:A:G:h');	# sets $opt_h if -h etc
+getopts('agkrtRSmTs:p:f:A:G:h');	# sets $opt_h if -h etc
 $| = 1 if $opt_t or $opt_m;	# otherwise STDOUT is not flushed if piped
 
 if ($opt_h) {
@@ -155,6 +158,10 @@ if ($opt_a or $opt_m) {
 
 $SIG{PIPE} = \&catch_zap;		# signal 13
 $SIG{ALRM} = \&autoVivify;		# signal 14 - Timer signal from ualarm()
+if ($opt_t or $opt_R or $opt_S) {
+    $| = 1;			# autoflush stdout	
+}
+$SIG{INT}  = \&catch_int;	# signal 2	(ctrl-C interrupt from keyboard)
 if ($opt_t) {
     $SIG{HUP}  = \&catch_zap;	# signal 1
 ##    $SIG{USR1} = \&catch_zap;	# signal 10	(stop -10 iCserver)
@@ -175,9 +182,9 @@ if ($opt_t) {
 my $host = defined $opt_s ? $opt_s : '0.0.0.0';
 my $port = defined $opt_p ? $opt_p : 8778;
 
-Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
+Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
 Msg->new_server($host, $port, \&login_proc);
-print "$named created. Waiting for events\n";
+print STDERR "$named created. Waiting for events\n";
 
 ########################################################################
 #
@@ -250,6 +257,17 @@ sub exec_process {
 	}
     }
 } # exec_process
+
+########################################################################
+#
+#	Catch ctrl-C interrupt from keyboard
+#
+########################################################################
+
+sub catch_int {
+    print STDERR "\nInterrupt from keyboard - stop $named\n";
+    exit(0);
+} # catch_int
 
 ########################################################################
 #
@@ -846,7 +864,7 @@ use warnings;
 	    $rconn  = shift @$aref;		# the real connection object
 	    if (defined $rconn) {
 		$msg1 = join ',', @$aref;	# one or more channel:value pairs
-		print "$sender $msg1 => $ClientNames{$c}\n" if $opt_t;
+		print "$sender $msg1 => $ClientNames{$c}\n" if $opt_t or $opt_R or $opt_S;
 		$rconn->send_now("$msg1");	# send channel:value pairs to destination
 	    } else {
 		warnD("no message to send to connection '$c' ???\n");
@@ -870,7 +888,7 @@ iCserver - the central server for iC clients
 
 =head1 SYNOPSIS
 
- iCserver [-agrktmh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+ iCserver [-agrktRSmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
           [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
     -s host address of server - clients must specify the same address
             unless (default '0.0.0.0' which accepts any client)
@@ -884,7 +902,10 @@ iCserver - the central server for iC clients
     -k      kill previous client, when a new client with the same
             name registers (default: do not accept the new client)
     -t      trace messages for debugging
+    -R      trace rcv messages in Msg.pm
+    -S      trace send messages in Msg.pm
     -m      display elapsed time in seconds and microseconds
+    -T      extra static debug messages
     <list of equivalences>
             eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
     <list of client calls>

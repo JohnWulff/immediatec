@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.41 2013/02/09 02:52:48 jw Exp $";
+"@(#)$Id: icr.c,v 1.42 2013/05/12 08:09:09 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -77,7 +77,7 @@ void interrupt handler1C(void);
 static fd_set	selectinfds;		/* Set of fd for input (stdin, sync) */
 static fd_set	readfds;		/* Read mask for select system call */
 static int	maxfd;			/* Highest fd in selectinfds */
-static struct timeval	timeOut = { 0, 50000 };	/* 50 mS select timeout */
+struct timeval	iC_timeOut = { 0, 50000 };	/* 50 mS select timeout - may be modified in iCbegin() */
 static struct timeval	toCnt =   { 0, 50000 };	/* actual timeout counter that select uses */
 static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl pointer */
 
@@ -99,7 +99,7 @@ kbhit(void)
     do {
 	readfds = iC_infds;
 	if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
-	    toCnt = timeOut;		/* transfer timeout value */
+	    toCnt = iC_timeOut;		/* transfer timeout value */
 	}
     } while ((stat = select (maxfd + 1, &readfds, 0, 0, iC_osc_flag ? &toCnt : toCntp))
 	== -1 && errno == EINTR);

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.108 2013/02/14 01:41:16 jw Exp $";
+"@(#)$Id: comp.y,v 1.109 2013/04/18 02:44:53 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1380,17 +1380,18 @@ expr	: UNDEF			{
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist) &&
+		    $3.v &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist)) {
-		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
+		    lpR = op_force($3.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			warning("Use of '&&' with imm bit variables is deprecated (use '&'):", sp->name);
 		    }
 		} else {
-		    lpR = op_force($3.v, ARITH);
 		    lpL = op_force($1.v, ARITH);
+		    lpR = op_force($3.v, ARITH);
 		    $$.v = op_push(lpL, ARN, lpR);	/* arithmetic && */
 		    $$.v = op_force($$.v, GATE);	/* default GATE output */
 		}
@@ -1411,17 +1412,18 @@ expr	: UNDEF			{
 		if ($1.v &&
 		    (sp = $1.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist) &&
+		    $3.v &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist)) {
-		    lpR = op_force($3.v, GATE);
 		    lpL = op_force($1.v, GATE);
+		    lpR = op_force($3.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			warning("Use of '||' with imm bit variables is deprecated (use '|'):", sp->name);
 		    }
 		} else {
-		    lpR = op_force($3.v, ARITH);
 		    lpL = op_force($1.v, ARITH);
+		    lpR = op_force($3.v, ARITH);
 		    $$.v = op_push(lpL, ARN, lpR);	/* arithmetic || */
 		    $$.v = op_force($$.v, GATE);	/* default GATE output */
 		}
@@ -3568,7 +3570,7 @@ static int	lex_act[] = { DEF_ACT };	/* tokens corresponding to ftype */
  *
  *	Compile an iC language source file whose name is in 'inpPath'
  *	if inpPath is a null pointer use standard input (stdin)
- *	a copy of the source file name (or stdin) is kept in inpNM for
+ *	a copy of the source file name (or "stdin") is kept in inpNM for
  *	error messages. This name and the variable 'lineno' are
  *	modified by a #line 1 "file.ic" pre-processor directive.
  *
@@ -3613,24 +3615,25 @@ iC_compile(
 	strncpy(inpNM, inpPath, BUFS);
 	r = 0;
 	if (strlen(iC_defines) == 0) {
-	    /* pre-compile if iC files contains any #include, #define #if etc */
+	    /* pre-compile if iC files contains any #include, #define #if etc but not #line or # 1 etc */
+	    /* also pre-compile if iC files contains any %include, %define %if etc */
 #ifdef	WIN32
 	    fflush(iC_outFP);
 	    /* CMD.EXE does not know '' but does not interpret $, so use "" */
 	    /* don't use system() because Win98 command.com does not return exit status */
 	    /* use spawn() instead - spawnlp() searches Path */
-	    r = _spawnlp( _P_WAIT, "perl",  "perl",  "-e", "\"$s=1; while (<>) { if (/^[ \\t]*#/) { $s=0; last; } } exit $s;\"", inpPath, NULL );
+	    r = _spawnlp( _P_WAIT, "perl",  "perl",  "-e", "\"$s=1; while (<>) { if (/^\\s*[%#]\\s*[deiu]/) { $s=0; last; } } exit $s;\"", inpPath, NULL );
 	    if (r < 0) {
 		ierror("cannot spawn perl -e ...", inpPath);
 		perror("spawnlp");
 		return Iindex;			/* error opening input file */
 	    }
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e \"$s=1; print 'perl $s = ', $s, '...'; while (<>) { if (/^[ \\t]*#/) { $s=0; print 'perl $_ = ', $_, '...'; last; } } print 'perl $s = ', $s, '...'; exit $s;\" %s; $? = %d\n", inpPath, r);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e \"$s=1; print 'perl $s = ', $s, '...'; while (<>) { if (/^\\s*[%#]\\s*[deiu]/) { $s=0; print 'perl $_ = ', $_, '...'; last; } } print 'perl $s = ', $s, '...'; exit $s;\" %s; $? = %d\n", inpPath, r);
 #endif
 #else	/* not WIN32 */
-	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^[ \\t]*#/) { $s=0; last; } } exit $s;' %s", inpPath);
-	    r = system(execBuf);		/* test with perl script if #include in input */
+	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^\\s*[%#]\\s*[deiu]/) { $s=0; last; } } exit $s;' %s", inpPath);
+	    r = system(execBuf);		/* test with perl script if #include %include etc in input */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: %s; $? = %d\n", execBuf, r);
 #endif
@@ -3642,32 +3645,25 @@ iC_compile(
 	}
 #endif
 	if (r == 0) {
-	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #xxx was found by perl script */
+	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #if etc or %if etc was found by perl script */
 	    /* pass the input file through the C pre-compiler to resolve #includes and macros */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);
 		perror("unlink");
 		return T0index;			/* error unlinking temporary file */
 	    }
-#ifdef	WIN32
-	    /* cl does not know -x c, -E is preprocess to stdout, no -o option  */
-	    snprintf(execBuf, BUFS, "cl %s -E -C -I/usr/local/include %s > %s 2> %s",
-		iC_defines, inpPath, T0FN, T6FN);
-#else	/* not WIN32 */
-	    /* Cygnus does not understand cc - use macro CC=gcc, pass comments with -C */
-	    snprintf(execBuf, BUFS, SS(CC) "%s -E -C -I/usr/local/include -x c %s -o %s 2> %s",
-		iC_defines, inpPath, T0FN, T6FN);
-#endif	/* WIN32 */
-	    r1 = system(execBuf);		/* Pre-compile iC file */
+	    snprintf(execBuf, BUFS, "immac -m %s -I/usr/local/include -o %s %s 2> %s",
+		iC_defines, T0FN, inpPath, T6FN);
+	    r1 = system(execBuf);		/* Pre-compile iC file with immac */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
 #endif
 	    if (r1 != 0) {
 		if ((T6FP = fopen(T6FN, "r")) == NULL) {
-		    return T6index;		/* error opening CC error file */
+		    return T6index;		/* error opening immac error file */
 		}
 		while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
-		    ierror(SS(CC) ":", lineBuf);	/* CC error message */
+		    ierror("immac:", lineBuf);	/* immac error message */
 		}
 		fclose(T6FP);
 		if (!(iC_debug & 04000)) {
@@ -3684,7 +3680,7 @@ iC_compile(
 	} else if ((T0FP = fopen(inpNM, "r")) == NULL) {
 	    return Iindex;			/* error opening input file */
 	}
-    }
+    }						/* else inpPath == NULL T0FP is stdin inpNM is "stdin" */
     strncpy(prevNM, inpNM, BUFS);
     outFlag = outNM != 0;			/* global flag for compiled output */
     if (iC_debug & 046) {			/* begin source listing */
@@ -3703,7 +3699,7 @@ iC_compile(
     if (inpPath) fclose(T0FP);
     T0FP = 0;
     return errRet;
-} /* compile */
+} /* iC_compile */
 
 /********************************************************************
  *

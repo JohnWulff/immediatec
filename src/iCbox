@@ -41,6 +41,9 @@ my $UnitRegistrations;	# stores the registration string
 my %HoldQueue = ();	# Hold Queue
 my $holdButton;		# Hold button
 my $hold;		# state of Hold button
+my $setButton;		# Set all inputs button
+my $set;		# state of Set button
+my @allButtons = ();	# used to note all buttons to set
 my $indicatoron = 1;	# 0 button    1 checkbox
 my $greenButton = "'green'";
 my $redButton   = "'red'";
@@ -74,9 +77,10 @@ my @bitIndex =	(
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<< [-bdrHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    @<<<< [-bdrHmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-	  [ -c <col>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
+	  [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
+	  [ <ID>[-<ID>[=<ini>]] ...]
 	ID	X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
 		Any ID can be preceded by 'I' or 'Q' in which case
 		only that input or output is generated (default is both)
@@ -103,7 +107,7 @@ Usage:
 				    $named
 	-c col 	maximum number of columns in a row (default 12)
 	-C col 	absolute maximum number of columns in a row (default 18)
-	-R rows	absolute maximum number of rows (default 3)
+	-Q rows	absolute maximum number of rows (default 3)
 	-l len	length of scales (default 170)
 	-f file read additional ID parameters from this file
 	-b	use buttons instead of checkboxes for digital I/O
@@ -112,19 +116,21 @@ Usage:
 	-H      a Hold button is generated which holds input changes
 	-m	display elapsed time in seconds and microseconds
 	-t	trace debug messages
+	-R      trace rcv messages in Msg.pm
+	-S      trace send messages in Msg.pm
 	-T	extra static debug messages
 	-x	exit after analyzing input parameters
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.52 2013/02/26 09:04:15 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.53 2013/04/28 19:55:08 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
-use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_T $opt_s $opt_p);
-use vars qw($opt_n $opt_i $opt_c $opt_C $opt_R $opt_l $opt_f $opt_h);
+use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_R $opt_S $opt_T $opt_s $opt_p);
+use vars qw($opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_f $opt_h);
 use Getopt::Std;		# replace require "getopts.pl";
-getopts('bdrHmxtTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
+getopts('bdrHmxtRSTs:p:n:i:c:C:Q:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -139,9 +145,9 @@ if ($opt_m) {
 $opt_c = 12	unless $opt_c;	# default maximum number of columns
 $opt_C = 18	unless $opt_C;	# absolute maximum number of columns
 $opt_c = $opt_C	if $opt_c > $opt_C;
-$opt_R = 3	unless $opt_R;	# absolute maximum number of rows
+$opt_Q = 3	unless $opt_Q;	# absolute maximum number of rows
 $opt_l = 170	unless $opt_l;	# default length of analog scale
-print "c = $opt_c C = $opt_C R = $opt_R l = $opt_l\n" if $opt_t;
+print "c = $opt_c C = $opt_C Q = $opt_Q l = $opt_l\n" if $opt_t;
 
 if ($opt_b) {
     $indicatoron = 0;		# 0 button    1 checkbox
@@ -434,7 +440,7 @@ my $port = defined $opt_p ? $opt_p : 8778;
 my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];	# : $ArgNames [first entry] [$id]
 $named = $name;			# use individual ID for warnings from now on
 
-Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
+Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
 
@@ -486,11 +492,11 @@ my ($frame, $ch, $maxColumn, $mw, $pane);
 my ($row, $column, $scroll) = (0, 0, 0);
 
 $frameCount++ if $opt_H;			# extra Hold frame
-if ($frameCount > $opt_C*$opt_R) {
+if ($frameCount > $opt_C*$opt_Q) {
     $maxColumn = $opt_C;
     $scroll = 1;
 } else {
-    for (my $r = $opt_R; $r > 0; $r--) {
+    for (my $r = $opt_Q; $r > 0; $r--) {
 	my $r1 = $r - 1;
 	if ($frameCount > $opt_c*$r1) {
 	    $maxColumn = int(($frameCount + $r1) / $r);
@@ -513,7 +519,7 @@ if ($scroll) {
     use Tk::Pane;
     $pane = $mw->Scrolled('Pane',
 			  -scrollbars => 'oe',
-			  -height     => $opt_R * 218,	# 3 rows = 654
+			  -height     => $opt_Q * 218,	# 3 rows = 654
 			 )->pack(
 			         -fill   => 'both',
 			         -expand => 1,
@@ -548,43 +554,68 @@ if ($opt_H) {
 	-selectcolor => 'green',
 	-indicatoron => $indicatoron,
 	-command     => sub {
-			     if ($hold) {
-				print "Hold start            [II]\n" if $opt_t;
-				$holdButton->configure(-text => '>');
-			     } else {
-				print "Hold release          [>]\n" if $opt_t;
-				## scan list of changes on Hold Queue
-				my ($ch, $val);
-				foreach $ch (sort { $a <=> $b } keys %HoldQueue) {
-				    $val = $HoldQueue{$ch};	# retrieve latest value
-				    if ($val != $ChannelsIq[$ch]) {
-					send_input($ch, $val);	# send hold value
-					($id, $ini, $from, $to, $res) = @{$ArgNames[$ChannelsRI[$ch]]};	# all argument values
-					if ($to and				# process held delayed push-buttons
-					    $id =~ /$I__XBWL__/o and		# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
-					    $1 eq 'X') {			# only IXm.n
-					    my $resolution = $res & $val;	# only push-buttons which had been pushed need clearing
-					    if ($resolution) {
-						my $channel = $ch;
-						$mw->after($to, \(sub {
-						    for my $i (0 .. 7) {
-							$ChannelsIX[$channel][$i] = 0 if $resolution & (1 << $i);# clear delayed input bits
-						    }
-						    $ChannelsI[$channel] &= ~$resolution;
-						    send_input($channel, $ChannelsI[$channel]);		# send cleared bits after delay
-						}));		# end of after()
-					    }
-					}			# latest value sent is in $ChannelsIq[$ch] now
+	    if ($hold) {
+		print "Hold start            [II]\n" if $opt_t;
+		$holdButton->configure(-text => '>');
+	    } else {
+		print "Hold release          [>]\n" if $opt_t;
+		## scan list of changes on Hold Queue
+		my ($ch, $val);
+		foreach $ch (sort { $a <=> $b } keys %HoldQueue) {
+		    $val = $HoldQueue{$ch};	# retrieve latest value
+		    if ($val != $ChannelsIq[$ch]) {
+			send_input($ch, $val);	# send hold value
+			($id, $ini, $from, $to, $res) = @{$ArgNames[$ChannelsRI[$ch]]};	# all argument values
+			if ($to and				# process held delayed push-buttons
+			    $id =~ /$I__XBWL__/o and		# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
+			    $1 eq 'X') {			# only IXm.n
+			    my $resolution = $res & $val;	# only push-buttons which had been pushed need clearing
+			    if ($resolution) {
+				my $channel = $ch;
+				$mw->after($to, sub {
+				    for my $i (0 .. 7) {
+					$ChannelsIX[$channel][$i] = 0 if $resolution & (1 << $i);# clear delayed input bits
 				    }
-				}
-				%HoldQueue = ();		# delete all entries
-				$holdButton->configure(-text => 'II');
-				print "Hold release complete\n" if $opt_t;
-			     }
-			    },
-			)->pack(-side   => 'top',
-				-expand => 1,
-			       );
+				    $ChannelsI[$channel] &= ~$resolution;
+				    send_input($channel, $ChannelsI[$channel]);		# send cleared bits after delay
+				});		# end of after()
+			    }
+			}			# latest value sent is in $ChannelsIq[$ch] now
+		    }
+		}
+		%HoldQueue = ();		# delete all entries
+		$holdButton->configure(-text => 'II');
+		print "Hold release complete\n" if $opt_t;
+	    }
+	},
+    )->pack(-side   => 'top', -expand => 1,);
+    $setButton = $frame->Checkbutton(
+	-text        => 'all',
+	-width       => '2',
+	-variable    => \$set,
+	-selectcolor => 'green',
+	-indicatoron => $indicatoron,
+	-command     => sub {
+	    my ($val, $ref);
+	    if ($set) {
+		 print "                all [set]\n" if $opt_t;
+		 $val = 1;
+	    } else {
+		 print "                all [res]\n" if $opt_t;
+		 $val = 0;
+	    }
+	    foreach (@allButtons) {
+### 		print "$val@{[$_->cget(-text)]}";
+		$ref = $_->cget(-variable);
+		if ($$ref != $val) {
+		    $$ref = $val;
+		    $_->Callback(-command);
+### 		} else {
+### 		    print " == $$ref\n";
+		}
+	    }
+	},
+    )->pack(-side   => 'top', -expand => 1,);
 }
 
 ########################################################################
@@ -654,10 +685,8 @@ foreach $argNameRef (@ArgNames) {
 		-state              => 'disabled',\
 		-disabledforeground => 'dark red',\
 		-indicatoron        => $indicatoron,\
-				)->pack(-side   => 'top',\
-					-expand => 1,\
-				       );\
-	    ";
+	    )->pack(-side => 'top', -expand => 1,);\
+";									# end of eval
 	    print $makeOutCheckbutton if $opt_T;
 	    eval $makeOutCheckbutton;
 	    print $@;
@@ -682,36 +711,35 @@ foreach $argNameRef (@ArgNames) {
 	    $text        = $sel ? "'.$index'" : "''";
 	    $borderwidth = $sel ? 2 : 0;
 	    $state       = $sel ? "'normal'" : "'disabled'";
-	    my $myself;
-	    my $makeInCheckbutton = "\
-	    \$frame->Checkbutton(\
+	    my $makeInCheckbutton = ($del ? "\
+	    my \$myself;" : "") . "\
+	    my \$thisButton = \$frame->Checkbutton(\
 		-text        => $text,\
 		-variable    => \\\$ChannelsIX[$ch][$index],\
 		-selectcolor => $greenButton,\
 		-borderwidth => $borderwidth,\
 		-state       => $state,\
 		-indicatoron => $indicatoron," . ($sel ? "\
-		-command     => \\(\$myself = sub {\
-				     my \$val = \$ChannelsI[$ch];" . ($del ? "\
-				     if (\$val & $masks[$index]) {\
-					 \$ChannelsIX[$ch][$index] = 0;	# reset bit indicator\
-					 \$val &= ~$masks[$index];	# clear bit after time delay\
-				     }els" : "\
-				     ") . "if (\$ChannelsIX[$ch][$index]) {\
-					 \$val |= $masks[$index];	# set bit" . ($del ? "\
-					 \$mw->after($del, \$myself) unless \$hold;	# clear bit after $del ms" : "") . "\
-				     } else {\
-					 \$val &= ~$masks[$index];	# clear bit\
-				     }\
-				     if (\$val != \$ChannelsI[$ch]) {\
-					 send_input($ch, \$val);\
-					 \$ChannelsI[$ch] = \$val;\
-				     }\
-				    })," : "") . "\
-				)->pack(-side   => 'top',\
-					-expand => 1,\
-				       );\
-	    ";
+		-command     => " . ($del ? "\\(\$myself = " : "") . "sub {\
+		    my \$val = \$ChannelsI[$ch];" . ($del ? "\
+		    if (\$val & $masks[$index]) {\
+			\$ChannelsIX[$ch][$index] = 0;	# reset bit indicator\
+			\$val &= ~$masks[$index];	# clear bit after time delay\
+		    } els" : "\
+		    ") . "if (\$ChannelsIX[$ch][$index]) {\
+			\$val |= $masks[$index];	# set bit" . ($del ? "\
+			\$mw->after($del, \$myself) unless \$hold;	# clear bit after $del ms" : "") . "\
+		    } else {\
+			\$val &= ~$masks[$index];	# clear bit\
+		    }\
+		    if (\$val != \$ChannelsI[$ch]) {\
+			\$ChannelsI[$ch] = \$val;\
+			send_input($ch, \$val);\
+		    }\
+		}" . ($del ? ")" : "") . "," : "") . "\
+	    )->pack(-side   => 'top', -expand => 1,);" . (($sel and $opt_H) ? "\
+	    push \@allButtons, \$thisButton;	# prepare for all set/reset" : "") . "\
+";									# end of eval
 	    print $makeInCheckbutton if $opt_T;
 	    eval $makeInCheckbutton;
 	    print $@;
@@ -721,13 +749,13 @@ foreach $argNameRef (@ArgNames) {
 	    my $resolution = $res & $ini;				# no need to clear uninitialised bits
 	    if ($resolution) {
 		my $channel = $ch;
-		$mw->after($to, \(sub {
+		$mw->after($to, sub {
 		    for my $i (0 .. 7) {
 			$ChannelsIX[$channel][$i] = 0 if $resolution & (1 << $i);	# clear delayed input bits
 		    }
 		    $ChannelsI[$channel] &= ~$resolution;
 		    send_input($channel, $ChannelsI[$channel]);		# send cleared bits after delay
-		}));							# end of after()
+		});							# end of after()
 	    }
 	}								# latest value sent is in $ChannelsIq[$ch] now
     }
@@ -749,9 +777,7 @@ foreach $argNameRef (@ArgNames) {
 	    -variable    => \$ChannelsQ[$ch],
 	    -state       => 'disabled',
 	    -takefocus   => 0,
-		      )->pack(-side   => 'top',
-			      -expand => 1,
-			     );
+	)->pack(-side => 'top', -expand => 1,);
     }
 
 ########################################################################
@@ -772,12 +798,10 @@ foreach $argNameRef (@ArgNames) {
 	    -width       => '4m',\
 	    -variable    => \\\$ChannelsI[$ch],\
 	    -command     => sub {\
-				 send_input($ch, \$ChannelsI[$ch]);\
-				},\
-		      )->pack(-side   => 'top',\
-			      -expand => 1,\
-			     );\
-	";
+		send_input($ch, \$ChannelsI[$ch]);\
+	    },\
+	)->pack(-side => 'top', -expand => 1,);\
+";									# end of eval
 	print $makeInScaleCheckbutton if $opt_T;
 	eval $makeInScaleCheckbutton;
 	print $@;
@@ -842,11 +866,13 @@ sub send_input {
     printMicroSeconds();
     if ($hold) {
 	print "$named: $ch:$val	II $ChannelNames[$ch]\n" if $opt_t;
-	$HoldQueue{$ch} = $val;		# hold latest value - not sent now
-    } else {
+	$HoldQueue{$ch} = $val;			# hold latest value - not sent now
+    } elsif ($val != $ChannelsIq[$ch]) {
+	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel for hold
 	print "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
-	$conn->send_now("$ch:$val");	# send latest value
-	$ChannelsIq[$ch] = $val;	# always save latest value sent on this channel for hold
+### 	printf "%s	%2d:%08b\n", $ChannelNames[$ch], $ch, $val;
+	printf "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if $opt_S;
+	$conn->send_now("$ch:$val");		# send latest value
     }
 } # send_input
 
@@ -888,6 +914,7 @@ sub rcvd_msg_from_server {
 			}
 			$ChannelsQ[$channel] = $value;	# ready for next message
 			print "$named: $msg1	< $ChannelNames[$channel]\n" if $opt_t;
+			printf "%s	%2d:%d	<\n", $ChannelNames[$channel], $channel, $value if $opt_R;
 		    }
 		} else {
 		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
@@ -992,8 +1019,9 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 
 =head1 SYNOPSIS
 
- iCbox [-bdrHmtTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-       [ -c <col>][ -l <len>][ -f <file>][ <ID>[-<ID>[=<ini>]] ...]
+ iCbox [-bdrHmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+       [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
+       [ <ID>[-<ID>[=<ini>]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
             only that input or output is generated (default is both)
@@ -1019,7 +1047,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -i inst instance ID for this iCbox (1 to 3 numeric digits)
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)
-    -R rows absolute maximum number of rows (default 3)
+    -Q rows absolute maximum number of rows (default 3)
     -l len  length of scales (default 170)
     -f file read additional ID parameters from this file
     -b      use buttons instead of checkboxes for digital I/O
@@ -1028,6 +1056,8 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -H      a Hold button is generated which holds input changes
     -m      display elapsed time in seconds and microseconds
     -t      trace debug messages
+    -R      trace rcv messages in Msg.pm
+    -S      trace send messages in Msg.pm
     -T      extra static debug messages
     -x      exit after analyzing input parameters
     -h      help, ouput this Usage text only

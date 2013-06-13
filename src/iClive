@@ -166,6 +166,8 @@ Usage:
        Save     the current file if modified                      Alt-s
        SaveAs   store the current file at the selected path       Alt-a
        Quit     quit the program                                  Alt-q
+       ------   this is followed by a history of previous programs,
+                which can be selected.
 
     [Build]     build the C file and then optionally the executable
                 from the currently displayed iC program text.     Alt-b
@@ -207,6 +209,8 @@ Usage:
      <>Ignore case
      <>Regexp match
      <>Rgexp+ignore case
+       ------   this is followed by a history of previous search
+                strings, which can be selected for a repeat search.
 
     [ - ]       Zoom Out   decrease font size                     Alt -
     [ + ]       Zoom In    increase font size                     Alt +
@@ -216,7 +220,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.52 2013/02/22 11:58:34 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.53 2013/03/06 03:24:45 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -2967,8 +2971,8 @@ sub check_menu {
 	}
 	if (scalar @$entriesArray > $entriesLim) {
 	    $e = shift(@$entriesArray);		# remove first entry in entriesArray
-	    my $label = $menuRef->entrycget($menuPos, '-label');	# check algorithm
-	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
+#	    my $label = $menuRef->entrycget($menuPos, '-label');	# check algorithm
+#	    die "entry '$e' in entriesArray does not match menu entry '$label', stopped" if $e ne $label;
 	    print "check_menu: [$menuKey] '$e' removed from front of menu\n" if $opt_T;
 	    $menuRef->delete($menuPos);		# remove first dynamic menu entry
 	}
@@ -2981,7 +2985,7 @@ sub check_menu {
 #	and initialising file list and search list in menus
 #	IF there are no file arguments, open the last open file
 #	ELSE	open the first file in the argument list
-#		add any others to the file list menu
+#		add any others to the file menu list
 #
 #	structure of ~/.iC/iClive.ini
 #	[files]
@@ -3007,7 +3011,7 @@ sub check_menu {
 ########################################################################
 
 sub ini_program {
-    my ($menuData, $menuKey, $entry, $initialFile, $position);
+    my ($menuData, $menuKey, $entry, $initialFile, $position, $home);
     ## restore file and search menu lists from ~/.iC/iClive.ini
     if (($home = $ENV{HOME}) ne '' and
 	(-d "$home/.iC") and
@@ -3080,7 +3084,7 @@ use warnings;
 ########################################################################
 
 sub quit_program {
-    my ($menuKey, $entriesArray, $entry);
+    my ($menuKey, $entriesArray, $entry, $home);
     deleteAllTags();	# also clears @activeSymbols
     clear_scan();
     if (check_save()) {
@@ -3255,6 +3259,8 @@ iClive - an editor and live debugger for immediate-C clients
        Save     the current file if modified                      Alt-s
        SaveAs   store the current file at the selected path       Alt-a
        Quit     the program                                       Alt-q
+       ------   this is followed by a history of previous programs,
+                which can be selected.
 
     [Build]     build the C file and then optionally the executable
                 from the currently displayed iC program text.     Alt-b
@@ -3295,6 +3301,8 @@ iClive - an editor and live debugger for immediate-C clients
      <>Ignore case
      <>Regexp match
      <>Rgexp+ignore case
+       ------   this is followed by a history of previous search
+                strings, which can be selected for a repeat search.
 
     [ - ]       Zoom Out   decrease font size                     Alt -
     [ + ]       Zoom In    increase font size                     Alt +
