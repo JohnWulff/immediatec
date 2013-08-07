@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.34 2012/09/24 10:31:08 jw Exp $' >&2
+  echo '$Id: tt,v 1.35 2013/08/07 00:04:30 jw Exp $' >&2
 }
 
 usage()
@@ -233,8 +233,8 @@ if [ -n "$test1" ]; then
 			if [ -n "$r" ]; then
 			    Rdiff p*.lt
 			fi
-			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' \$(cat $pd$a.lt) $d1$a$d"
-			Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat $pd$a.lt) $d1$a$d
+			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d"
+			Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d
 		    else
 			mkdir $d1$a$d
 			if [ -d "$head" ]; then
@@ -251,8 +251,8 @@ if [ -n "$test1" ]; then
 			    done
 			    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			    cd ..
-			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
-			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
+			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
+			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
 			else
 			    echo; echo "========== $t cp -p \$(cat $pd$a.lt) $d1$a$d"
 			    cp -p $(cat $pd$a.lt) $d1$a$d
@@ -262,8 +262,8 @@ if [ -n "$test1" ]; then
 	    elif [ -d "$d1$a$d" -a -d "$d2$a$d" ]; then
 		cd $d1$a$d
 		eval d4="$d3"
-		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $d1$a$d/* $d4$a$d"
-		Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat ../$pd$a.lt) $d4$a$d
+		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$a$d/* $d4$a$d"
+		Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd$a.lt) $d4$a$d
 		cd ..
 	    else
 		echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -294,8 +294,8 @@ if [ -n "$test2" ]; then
 		    if [ -n "$r" ]; then
 			Rdiff p*.lt
 		    fi
-		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' \$(cat $pd.lt) $d1$d"
-		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat $pd.lt) $d1$d
+		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d"
+		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d
 		else
 		    mkdir $d1$d
 		    if [ -d "$head" ]; then
@@ -312,8 +312,8 @@ if [ -n "$test2" ]; then
 			done
 			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			cd ..
-			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted \$(cat $pd.lt) $d1$d) $d1$d"
-			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -IAborted $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
+			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d) $d1$d"
+			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
 		    else
 			echo; echo "========== $t cp -p \$(cat $pd.lt) $d1$d"
 			cp -p $(cat $pd.lt) $d1$d
@@ -323,8 +323,8 @@ if [ -n "$test2" ]; then
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
 	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $d1$d/* $d4$d"
-	    Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' $(cat ../$pd.lt) $d4$d
+	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$d/* $d4$d"
+	    Mdiff -k$l$e -I'ic[0-6c]\.' -I'undefined.reference' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd.lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2
