@@ -1,0 +1,45 @@
+/********************************************************************
+ * Generate the pre-compiled functions for including permanently in
+ * init.c from the iC source file ddd.ic
+ *
+ * This scheme only works for for simple functions with one level of
+ * master gates for each input and individual clocks for each input if
+ * the builtin function is clocked (all except FORCE() are clocked)
+ *
+ * execute the following after making a compiler with -D BOOT_COMPILE
+ *	immcc -d20000 ddd.ic | ddd.pl > ddd.out
+ *	vi ddd.out init.c	# insert the new code appropriately
+ *	# ddd.ic has the definitions of the buil-in functions with
+ *	# mangled names in an appropriate alphabetical order
+ *	# ddd.pl translates the mangled names to their proper names
+ *	# and moves the block of static Symbols ahead of the link
+ *	# definitions, so that addresses of static Symbols can be used
+ *	# in some links.
+ *	# use the modified init.c to make a new immcc compiler.
+ *	# (the original was produced manually and was used to check
+ *	# that this generated code produces the right results - now
+ *	# the automatic generator can be used to vary the built-ins)
+ *
+ * $Id: init_t.ic,v 1.1 2013/08/12 06:37:21 jw Exp $
+ *******************************************************************/
+
+use strict;
+
+imm bit Aorce(bit arg1, bit on, bit off) { this = FORCE(arg1, on, off); }
+imm bit B(bit expr, clock dcl) { this = D(expr, dcl); }
+imm bit Cr_(bit set, clock scl, bit res, clock rcl) { this = SR_(set, scl, res, rcl); }
+imm bit Dr_(bit expr, clock dcl, bit res, clock rcl) { this = DR_(expr, dcl, res, rcl); }
+imm bit Err_(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) { this = SRR_(set, scl, res, rcl, res2, r2cl); }
+imm bit Fsr_(bit expr, clock dcl, bit set, clock scl, bit res, clock rcl) { this = DSR_(expr, dcl, set, scl, res, rcl); }
+imm int Gh(int dat, clock dcl) { this = SH(dat, dcl); }
+imm int Hhr_(int dat, clock dcl, bit res, clock rcl) { this = SHR_(dat, dcl, res, rcl); }
+imm int Ihsr_(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) { this = SHSR_(dat, dcl, set, scl, res, rcl); }
+imm bit Jise(bit trig, clock clk) { this = RISE(trig, clk); }
+imm bit Khange(bit trig, clock clk) { this = CHANGE(trig, clk); }
+imm bit Khange2(int val, clock clk) { this = CHANGE(val, clk); }
+imm clock Llock(bit trig, clock clk) { this = CLOCK(trig, clk); }
+imm clock Llock2(bit trig, clock clk, bit trig2, clock clk2) { this = CLOCK(trig, clk, trig2, clk2); }
+imm timer Mimer(bit trig, clock clk) { this = TIMER(trig, clk); }
+imm timer Mimer2(bit trig, clock clk, bit trig2, clock clk2) { this = TIMER(trig, clk, trig2, clk2); }
+imm timer Nimer1(bit trig, clock clk) { this = TIMER1(trig, clk); }
+imm timer Nimer12(bit trig, clock clk, bit trig2, clock clk2) { this = TIMER1(trig, clk, trig2, clk2); }
