@@ -1,3 +1,4 @@
-@(#)$Id: doc.v,v 1.41 2013/06/15 06:06:22 jw Exp $
-iC.odt		1.41	;
+@(#)$Id: doc.v,v 1.42 2013/09/12 07:43:50 jw Exp $
+iC.pdf		1.42	;
+iC.odt		1.42	;
 icc.ods		1.22	;
