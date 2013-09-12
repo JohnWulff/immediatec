@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.72 2013/05/12 09:49:22 jw Exp $";
+"@(#)$Id: icc.h,v 1.73 2013/09/10 08:31:47 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -128,8 +128,8 @@ typedef union GppIpI {
 } GppIpI;				/* auxiliary union to avoid casts */
 
 typedef struct Gate {			/* Gate */
-	char		gt_val;		/* forward logic value */
-	char		gt_ini;		/* initial logic value */
+	signed char	gt_val;		/* forward logic value */
+	signed char	gt_ini;		/* initial logic value */
 	unsigned char	gt_fni;		/* function index */
 	unsigned char	gt_mcnt;	/* mark counter */
 	char *		gt_ids;		/* id string */
@@ -502,7 +502,7 @@ extern Gate		iConst;		/* defined in rsff.c */
 /* 6       */	"iC_LVI(",\
 /* 7       */	"iC_AAI(",\
 /* 8       */	"iC_LAI(",\
-/* 9 size  */	"iC_SZ(",\
+/* 9 size  */	"iC_SIZ(",\
 /* 10 literal */"iC_AVL(",\
 /* 11      */	"iC_LVL(",\
 /* 12      */	"iC_AAL(",\
@@ -511,7 +511,7 @@ extern Gate		iConst;		/* defined in rsff.c */
 /* 15      */	"iC_LVIL(",\
 /* 16      */	"iC_AAIL(",\
 /* 17      */	"iC_LAIL(",\
-/* 18 size */	"iC_SZL(",
+/* 18 size */	"iC_SIZL(",
 #define CMACRO_ASSIGN	2
 #define CMACRO_INDEX	4
 #define CMACRO_LITERAL	9

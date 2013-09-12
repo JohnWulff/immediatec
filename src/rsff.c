@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.54 2013/02/15 04:16:46 jw Exp $";
+"@(#)$Id: rsff.c,v 1.55 2013/08/25 01:51:37 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -267,7 +267,7 @@ iC_dSff(					/* D_FF slave action on FF */
     Gate *	out_list)			/* not used */
 {
     Gate *	gs;
-    char	val;
+    signed char	val;
 
     gs = gm->gt_funct;
     if ((val = (gm->gt_val < 0) ? -1 : 1) != gs->gt_val) {
@@ -1176,11 +1176,11 @@ iC_outMw(					/* NEW OUTW master action */
 	mask = gm->gt_mark;
 	val = gm->gt_new;			/* modified value to send */
 	if (mask == B_WIDTH) {
-	    val = (char)val;			/* reduce to signed char - handles overflow */
+	    val = (signed char)val;		/* reduce to signed char - handles overflow */
 	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
 		"%hu:%hd,", channel, (short)val);/* signed char to output for QBx */
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%hd\t%hd ==>> %hd", channel, (short)val, (short)(char)gm->gt_old, (short)val);
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%hd\t%hd ==>> %hd", channel, (short)val, (short)(signed char)gm->gt_old, (short)val);
 #endif
 	} else
 	if (mask == W_WIDTH) {			/* output node that output are transferred to in  */
@@ -1809,7 +1809,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
     int iv = rv;
 #endif
 #endif
-    char val;
+    signed char val;
     if (glv == &iConst) return 0;		/* index out of range */
     assert(glv->gt_ini == -LOGC);
     nv = glv->gt_val < 0 ? 1 : 0;

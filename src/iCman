@@ -19,7 +19,7 @@ use strict;
 # 4	Handle apropos topics with '-k <key>'
 # 5	Dynamic change of font size with Alt- Alt+ and [-] [+] buttons
 # 6	Handle whatis with '-f <page>'
-# 7	Introduce paleblue hyperlinks which double-click to that page
+# 7	Introduce paleblue hyper-links which double-click to that page
 # 8	Change man menu to hold history and manage <= and => buttons
 ########################################################################
 use Tk;			# The graphical user interface toolkit perl/Tk
@@ -30,7 +30,7 @@ my $enc = 'utf-8';	# suggested by Kardan
 # use utf8;		# <- makes everything worse
 
 my $named = $0; $named =~ s#.*[/\\]##;
-use vars qw($opt_c $opt_n $opt_k $opt_f $opt_F $opt_l $opt_w $opt_g $opt_r $opt_T $opt_X $opt_h);
+use vars qw($opt_c $opt_n $opt_k $opt_f $opt_F $opt_l $opt_w $opt_g $opt_r $opt_T $opt_M $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 100;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
@@ -39,14 +39,14 @@ format STDERR =
 Usage:
 @<<<< [ -cnrTh][ -k <key>][ -f <page>][ -F <font>][ -l <num>][ -w <num>]
  $named
-      [ -g <geometry>][ [<section>] <manpage> ...] ...
+      [ -g <geometry>][ -M <file>][ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
     -f page display the output of man -f <page> (whatis)
     -F font font or font size to use in Text window (default '14')
-    -l num  height of the Text window (default @<)
+    -l num  height of the Text window (default @<<)
 					$opt_l
-    -w num  width  of the Text window (default @<)
+    -w num  width  of the Text window (default @<<) -w0 is terminal width
 					$opt_w
     -g geom geometry for main window
     -c      build a new cache of section names (default: use cache)
@@ -54,6 +54,8 @@ Usage:
             (default is to fork the initial window)
     -r      restore last session with manpage and search history
     -T      trace output static debug messages
+    -M file store output of man command in file for debugging
+            warn about unusual ANSI ESC codes
     -h      help, ouput this Usage text only
 
     Manpage arguments may be of the form <section> <manpage>, which is
@@ -120,7 +122,7 @@ Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman,v 1.17 2013/04/18 01:54:20 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.18 2013/09/05 06:25:35 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -130,7 +132,6 @@ $Id: iCman,v 1.17 2013/04/18 01:54:20 jw Exp $ uses Tk-@<<<<<<<<<
 
 my $ignore_case;	# 1 if check-button on in Search menu
 my $match_type;		# '-regexp' or '-exact'.
-my $mainWindow;		# Main window
 my $text;		# Main text widget
 my $page;		# currently showing man page
 my $height;		# current height of a character
@@ -139,11 +140,19 @@ my $info = '';		# info messages in status bar
 my $pickFlag = 0;
 my $opt = '';
 my $searchText = '';
-my $see_start  = qr/^([A-Za-z][\w:+.-]*(\s*\(\s*(\w+)\s*\)))/;
-my $see_all    = qr /([A-Za-z][\w:+.-]*(\s*\(\s*(\w+)\s*\))?)/;
-
+my @tagArray =	(
+		    [ '' ],			# $tag = 0
+		    [ 'bd' ],			# $tag = 1
+		    [ '' ],			# $tag = 2
+		    [ '', 'bd' ],		# $tag = 3
+		    [ 'ul' ],			# $tag = 4
+		    [ 'bd', 'ul' ],		# $tag = 5
+		    [ '', 'ul' ],		# $tag = 6
+		    [ '', 'bd', 'ul' ],		# $tag = 7
+		);
 # has to be global, 'our' not portable yet
-my (@hits, @groups, $gi, $centre, $lineCnt);
+my (@hits, @groups, $gi, $centre);
+my $lineCnt = 0;
 my $gl = 0;
 my $prevText = '';
 my $prevMatch = '';
@@ -182,12 +191,21 @@ $SIG{PIPE} = \&catch_sig;	# catch signal in pipe from man
 ########################################################################
 
 use Getopt::Std;		# replace require "getopts.pl";
-getopts('cnk:f:F:l:w:g:rTXh');	# sets $opt_h if -h etc
+getopts('cnk:f:F:l:w:g:rTM:Xh');	# sets $opt_h if -h etc
 
 exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
-$opt_l = 35 unless $opt_l;	# if any higher on 768 pixel high screen, status bar is hidden
-$opt_w = 80 unless $opt_w;	# just allows all buttons to fit in the top menu bar
-				# also gives a bit more room for oversize texts
+
+my $size = `stty size`;
+chomp $size;
+my @sizes = $size ? split ' ', $size : (35, 85);
+print "size = '$size'\n" if $opt_T;
+$opt_l = $sizes[0] unless $opt_l;	# if any higher than 35 on 768 pixel high screen, status bar is hidden
+$opt_w = $sizes[1] if defined $opt_w and $opt_w == 0;	# adjust to terminal width
+					# @sizes made the same as terminal size because on Debian systems 'man'
+					# generates man pages the full width of the terminal (jw 20130829)
+$opt_w = 85 unless $opt_w;		# 85 just allows all buttons to fit in the top menu bar (this wide anyway)
+					# also gives a bit more room for oversize texts
+print "opt_l = '$opt_l' opt_w = '$opt_w'\n" if $opt_T;
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
@@ -224,6 +242,8 @@ use warnings;
 scout_man_dirs();
 to_background() unless $opt_n;	# run window as a  forked process
 
+my ($home);
+
 ########################################################################
 #
 #	Create main window and menus
@@ -233,10 +253,10 @@ to_background() unless $opt_n;	# run window as a  forked process
 #
 ########################################################################
 
-$mainWindow = MainWindow->new();
+my $mainWindow = MainWindow->new();
 my $arg = $ARGV[0];
 if ($arg and $arg =~ /^\d+x\d+(\+\d+\+\d+)?$/) {
-    $opt_g = $arg;		# iClive restored after logout and restore
+    $opt_g = $arg;		# iCman restored after logout and restore
     shift @ARGV;		# first ARGV was a geometry
 }
 if ($opt_g) {
@@ -249,6 +269,75 @@ if ($opt_g) {
 }
 $mainWindow->title("$named");
 $mainWindow->protocol('WM_DELETE_WINDOW', \&quit_program);	# Windows (X) pressed
+
+if (($home = $ENV{HOME}) ne '' and
+    (-d "$home/.iC" or mkdir "$home/.iC")) {
+    if ($opt_T or not -f "$home/.iC/$named.bit") {
+	if (open(INI, ">$home/.iC/$named.bit")) {
+	    print "$named: generate a new minimise icon file\n";
+	    print INI << "EOF";
+/* minimise icon 'iM' for iCman */
+\#define ic_width 48
+\#define ic_height 48
+static unsigned char ic_bits[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x3e, 0x00, 0x80, 0x0f,
+    0x00, 0x00, 0x3e, 0x00, 0x80, 0x0f,
+    0xe0, 0x00, 0x7e, 0x00, 0xc0, 0x0f,
+    0xf0, 0x01, 0x7e, 0x00, 0xc0, 0x0f,
+    0xf8, 0x03, 0xfe, 0x00, 0xe0, 0x0f,
+    0xf8, 0x03, 0xfe, 0x00, 0xe0, 0x0f,
+    0xf8, 0x03, 0xfe, 0x01, 0xf0, 0x0f,
+    0xf0, 0x01, 0xfe, 0x01, 0xf0, 0x0f,
+    0xe0, 0x00, 0xfe, 0x03, 0xf8, 0x0f,
+    0x00, 0x00, 0xfe, 0x03, 0xf8, 0x0f,
+    0x00, 0x00, 0xfe, 0x07, 0xfc, 0x0f,
+    0x00, 0x00, 0xbe, 0x07, 0xbc, 0x0f,
+    0x00, 0x00, 0xbe, 0x0f, 0xbe, 0x0f,
+    0x00, 0x00, 0x3e, 0x0f, 0x9e, 0x0f,
+    0xf8, 0x01, 0x3e, 0x1f, 0x9f, 0x0f,
+    0xf8, 0x01, 0x3e, 0x1e, 0x8f, 0x0f,
+    0xf8, 0x01, 0x3e, 0xbe, 0x8f, 0x0f,
+    0xf0, 0x01, 0x3e, 0xfc, 0x87, 0x0f,
+    0xf0, 0x01, 0x3e, 0xfc, 0x87, 0x0f,
+    0xf0, 0x01, 0x3e, 0xf8, 0x83, 0x0f,
+    0xf0, 0x01, 0x3e, 0xf8, 0x83, 0x0f,
+    0xf0, 0x01, 0x3e, 0xf0, 0x81, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf0, 0x01, 0x3e, 0x00, 0x80, 0x0f,
+    0xf8, 0x03, 0x7f, 0x00, 0xc0, 0x1f,
+    0xf8, 0x03, 0x7f, 0x00, 0xc0, 0x1f,
+    0xf8, 0x03, 0x7f, 0x00, 0xc0, 0x1f,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+EOF
+	    close(INI);
+	} else {
+	    warn "ERROR: Can't open ~/.iC/$named.bit: $!\n";
+	}
+    }
+    $mainWindow->iconbitmap("\@$home/.iC/$named.bit");
+}
+
 
 ########################################################################
 #	Menu bar
@@ -532,7 +621,7 @@ $text = $mainWindow->Scrolled('Text',
 			      -insertofftime => 0,
 			     )->pack(-fill => 'both', -expand => 1);
 unless ($opt_g) {
-    $text->configure (-width  => $opt_w);
+    $text->configure (-width  => $opt_w);	# will be ~85 if less because of $menuBar
     $text->configure (-height => $opt_l);
 }
 
@@ -547,10 +636,10 @@ my $colorBD = $colorUL;
 #     $xrdb =~ m/\*(colorBD|colorUL)\s*:\s*(\S+)/ || next;
 #     $1 eq "colorBD" ? $colorBD : $colorUL = $2;
 # }
-$text->tagConfigure('section', -font => $boldfont, -foreground => $colorBD);
-$text->tagConfigure('bd',  -font => $boldfont);
-$text->tagConfigure('ul',  -underline => 1,    -foreground => $colorUL);
-$text->tagConfigure('hyper_link', -background => 'lightblue', -foreground => $colorUL);
+$text->tagConfigure('heading', -font  => $boldfont,   -foreground => $colorBD);
+$text->tagConfigure('bd',      -font  => $boldfont);
+$text->tagConfigure('ul', -underline  => 1,           -foreground => $colorUL);
+$text->tagConfigure('hy', -background => 'lightblue', -foreground => $colorUL);
 
 ####### Key and Mouse button bindings ##################################
 ####### Search entry bindings ##########################################
@@ -574,7 +663,8 @@ $text      ->bind('<Key-q>',			[ \&quit_program          ]);
 $text      ->bind('<Alt-Key-q>',		[ \&quit_program          ]);
 $text      ->bind('<Button-1>',			[ \&report_cursor         ]); # report cursor position
 $text      ->bind('<Double-1>',			[ \&pick_word, 0,         ]); # select a search word
-$text   ->tagBind('hyper_link', '<Double-1>',	[ \&pick_word, 1,         ]); # follow a text link
+$text      ->bind('<Control-Double-1>',		[ \&pick_word, 1,         ]); # follow a hyper-link
+$text   ->tagBind('hy', '<Double-1>',		[ \&pick_word, 1,         ]); # follow a hyper-link
 ####### Y-Scrollbar bindings ###########################################
 $yScrollbar->bind('<Key-p>',			[ \&show_man, -1, 0       ]); # previous history entry
 $yScrollbar->bind('<Key-n>',			[ \&show_man, 1, 0        ]); # next history entry
@@ -679,6 +769,7 @@ unless ($opt_r) {
 #	set MAN_KEEP_FORMATTING to make 'man' output bold and underline codes
 ########################################################################
 $ENV{MAN_KEEP_FORMATTING} = 1;	# set for duration of this execution
+$ENV{MANWIDTH} = $opt_w;
 
 ini_program();					# restore last session
 
@@ -773,14 +864,14 @@ sub seeCentre {
 
 sub show_man {
     my ($dummy, $hFlag, $forkFlag) = @_;
-    my ($entry, $ret, $man, $section, $cmdLine, $i, $s, $pos, $position);
-    my $see_also = '';
+    my ($entry, $ret, $man, $section, $cmdLine, $i, $s, $idx, $position);
+    $lineCnt = 0;
 no warnings;
     if ($opt_T) {
 	my ($label, $n);
 	my @menuItems = ();
 	$n = 0;
-	print "show_man:\n";
+	print "show_man:$lineCnt:\n";
 	while ($n < $manMenuLen) {
 	    $label = $manMenu->menu->entrycget($manMenuStart+$n, '-label');
 	    push(@menuItems, $label);
@@ -791,7 +882,7 @@ no warnings;
 use warnings;
     if ($page) {
 	$manMenu->menu->entryconfigure($page, -state, 'normal');
-	$pos = $text->index('insert');
+	$idx = $text->index('insert');
     }
     if ($hFlag) {
 	if ($hFlag eq '1') {
@@ -811,20 +902,18 @@ use warnings;
 	} else {
 	    $entry = $hFlag;			# named menu command
 	}
-	print "show_man: history entry: '$entry'\n" if $opt_T;
+	print "show_man:$lineCnt: history entry: '$entry'\n" if $opt_T;
 	$entryMan->delete('0', 'end');
 	$entryMan->insert('end', $entry);
     } else {
 	$entry = $entryMan->get();		# get entry from $entryMan
-	print "show_man: show entry: '$entry'\n" if $opt_T;
+	print "show_man:$lineCnt: show entry: '$entry'\n" if $opt_T;
     }
     if ($entry =~ /^(-[fk]|\w+)\s+(\w[\w:+.-]*)/) {
 	if ($1 eq '-k' or $1 eq 'apropos') {
 	    ($opt, $man, $section) = ('-k ', $2, '');
-	    $see_also = $see_start;
 	} elsif ($1 eq '-f' or $1 eq 'whatis') {
 	    ($opt, $man, $section) = ('-f ', $2, '');
-	    $see_also = $see_start;
 	} elsif (is_valid_section($1)) {
 	    ($opt, $man, $section) = ('', $2, $1);
 	} else {
@@ -836,17 +925,16 @@ use warnings;
     if ($opt or not $section or not is_valid_section($section)) {
         $section = '';
     }
+no warnings;
     if ($section) {
 	$entry = "$opt$man($section)";
     } else {
 	$entry = "$opt$man";
     }
-no warnings;
     print "$entry: kopt = '$opt' man = '$man' section = '$section' forkFlag = '$forkFlag'\n" if $opt_T;
 use warnings;
     if ($forkFlag) {			# hFlag cannot be set
 	my @call = ($0, '-n', $man);
-#	$section =~ s/[()]//g;	# remove parens (will pass '' unchanged)
 	$section = $opt if $opt;
 	splice @call, 2, 0, $section if $section ne '';
 	print "fork_and_exec(@call)\n" if $opt_T;
@@ -860,19 +948,19 @@ use warnings;
     print "open (F, '$cmdLine')\n" if $opt_T;
     if ($ret = open (F, $cmdLine)) {
 	printf ("\$ret = '0x%x'\n", $ret) if $opt_T;
+	if ($opt_M) {
+	    open(M, ">$opt_M") or die "Can't create debugging man file '$opt_M': $!";
+	}
 	my $lineFlag = 0;
-	my $line;
-	my $mark;
-	my $prev;
-	my $tag;
+	my ($line, $mark, $prev, $tag, $pos, $ppos, %atoms, $atom, $more, %tags, $len, @seq);
 	while ($line = <F>) {
+	    print M $line if $opt_M;
 	    if ($lineFlag == 0) {
 		########################################################################
 		# First line - if open has error it reads a null file and never gets here
 		# Erase everything to do with current page (contents, menus, marks)
 		########################################################################
 		$lineFlag = 1;
-		$lineCnt = 0;
 		$text->configure (-state  => 'normal');
 		$text->configure (-cursor => 'watch' );
 		$text->update();
@@ -885,7 +973,18 @@ use warnings;
 		}
 		$text->delete('1.0', 'end');	# erase current page
 		$prev = '';
-		$tag = undef;			# not 'bd' or 'ul'
+		foreach $i (2, 3, 6, 7) {
+		    $tagArray[$i]->[0] = '';	# no hyper-link in line 1
+		}
+	    }
+	    if ($lineCnt == 1 or $lineCnt == 0 and $opt) {
+		foreach $i (2, 3, 6, 7) {
+		    $tagArray[$i]->[0] = 'hy';	# hyper-links if not line 1 or -k or -l
+		}
+	    } elsif (not $opt and eof(F)) {
+		foreach $i (2, 3, 6, 7) {
+		    $tagArray[$i]->[0] = '';	# no hyper-link in last line unless -k or -l
+		}
 	    }
 	    $mark = $line;
 	    chomp $mark;
@@ -893,27 +992,22 @@ use warnings;
 	    # Squeeze multiple blank lines producing only one blank line.
 	    ########################################################################
 	    if ($mark eq '' and $prev eq '') {
-		$see_also = '';			# also terminates heading
 		next;
 	    }
 	    $prev = $mark;
 	    ########################################################################
-	    # If first character is a capital letter, it's likely a section
+	    # If first character is a capital letter, it's likely a Heading
 	    # unless it is the first line (standard man heading)
 	    ########################################################################
 	    if ($lineCnt++ and not $opt and $line =~ s/^(\e\[(\d+)m)?([A-Z][\w :]*)(\e\[(\d+)m)?$/$3/) {
 		# Likely a section heading
+		print "show_man:$lineCnt: Heading: '$line'\n" if $opt_T;
 		$mark = $line;			# $mark has section title
 		$mark =~ s/.//g;		# take out possible bold and underline repeats
 		chomp $mark;
-		if ($mark =~ m/SEE ALSO/i) {
-		    $see_also = $see_all;
-		} else {
-		    $see_also = '';
-		}
 		my $index = $text->index('end');	# note current end location
-		# Give 'section' tag to the section title
-		$text->insert('end', "$mark\n", 'section');
+		# Give 'heading' tag to the Heading
+		$text->insert('end', "$mark\n", 'heading');
 		########################################################################
 		# Create a menu entry. Have callback invoke text widget's
 		# 'see' method to go to the index noted above (pass index in 1st parameter)
@@ -921,85 +1015,150 @@ use warnings;
 		$menu_headings->command(-label   => $mark,
 					-command => [ sub { seeCentre($_[0]) }, $index ],
 				       );
-	    } else {
+	    } else {				# -k or -l or first line or not section heading
 		if ($Tk::VERSION =~ /800/) {
 		    $line =~ s/\342\224\202/|/g;# man translates '|' into 226 148 130 ?! SuSE 9.1
 		    $line =~ s/\302\255/-/g;	# precedes '-' for word syllabification from 'man' SuSE 9.1
-		    $line =~ s/\342\200\220/-/g;# precedes '-' for word syllabification from 'man' SuSE 9.3
+		    $line =~ s/\342\200\220/-/g;# precedes '-' for word syllabification from 'man' SuSE 9.3 and later
 		    $line =~ s/\342\213\205/°/g;# bullet
 		    $line =~ s/\302\264/´/g;	# acute accent
 		    $line =~ s/\303\327/x/g;	# multiplication sign
+		    print "show_man:$lineCnt: VERSION 800: '$line'\n" if $opt_T;
 		} else {	# Tk-804.xxx
 		    $line = decode($enc, $line);	# take care of utf-8 chars
+		    print "show_man:$lineCnt: decode:  '$line'\n" if $opt_T;
 		}
 		########################################################################
-		# Underlining, Boldfacing
-		# assume oversriking and underlining with _^H is not mixed with ESC sequences
+		# State machine to convert Boldfacing, Underliningg with ^H to
+		# ESC sequences
 		########################################################################
-		while ($line =~ s/(.)//) {
-		    my $o = $1;
-		    $text->insert("end", $`);
-		    ($line = $') =~ s/^(.)//;
-		    if ($1 eq $o) {			# Overstrike
-			$text->insert ("end", $1, 'bd');
-			# $o can be any character
-			# 1 while s/^$o//; i.e. will fail on '/' and '\'
-			substr ($o, 0, 0) = "";
-			while (substr ($line, 0, 2) eq $o) {
-			    substr ($line, 0, 2) = "";	# Multiple overstrike
+		$ppos = -1;
+		$more = 0;
+		%atoms = ();
+		$line =~ s/(.)(\1)*/$1/g;	# replace more than one .^H by one .^H
+		while ($line =~ m/(.)(.)/g) {
+		    $atoms{ length $` } = $1;	# each element has length 3
+		}
+		foreach $pos (sort { $a <=> $b } keys %atoms) {
+		    $atom = $atoms{ $pos };	# process atoms in sequence
+		    if ($pos != $ppos) {
+			if ($ppos != -1) {
+			    substr($line, $ppos + $more, 0) = "\e\[0m";	# stop Underline or Bold
+			    $more += 4;
 			}
+			if ($atom eq "_") {
+			    substr($line, $pos + $more, 2) = "\e\[4m";	# start Underline
+			} else {
+			    substr($line, $pos + $more, 2) = "\e\[1m";	# start Bold
+			}
+			$more += 2;
+		    } else {
+			substr($line, $pos + $more, 2) = "";
+			$more -= 2;
 		    }
-		    elsif ($o eq "_") {		# Underline
-			$text->insert ("end", $1, 'ul');
-		    }
-		    else {				# NYI
-			$text->insert ("end", $1);
-		    }
+		    $ppos = $pos + 3;
+		}
+		if ($ppos != -1) {
+		    substr($line, $ppos + $more, 0) = "\e\[0m";		# stop final Underline or Bold
+		    $more += 4;
 		}
 		########################################################################
 		# Underlining, Boldfacing with ESC sequences
+		#
 		# ESC [ 1 m	start Bold
-		# ESC [ 1 m	start Bold
-		# ESC [ 0 m	stop Bold at end of line
-		# ESC [ 2 2 m	stop Bold in middle of line
 		# ESC [ 4 m	start Underline
+		# ESC [ 0 m	stop Bold or underline or any other code
+		# ESC [ 2 2 m	stop Bold in middle of line
 		# ESC [ 2 4 m	stop Underline
-		# assume any other number than 1 and 4 stops both Bold and Underline
-		# ussually last ESC code is a stop, although it does not have to be
+		# 
+		# Some man pages put the start Underline before a stop for a preceding
+		# Bold resizefs(8):7. Allow any order.
+		# Bolds and Underlines may be for any string lvextend(8):26. This is
+		# difficult with a regex - another state machine is called for.
 		########################################################################
-		while ($line =~ s/\e\[(\d+)m//) {
-		    unless ($see_also) {
-			if (length $`) {
-			    $text->insert("end", $`, $tag);	# text before ESC with current tag
-			}
-			$line = $';			# rest of the line after ESC code
-			if ($1 == 1) {
-			    $tag = 'bd';		# Bold
-			} elsif ($1 == 4) {
-			    $tag = 'ul';		# Undeline
-			} else {
-			    $tag = undef;		# normal text
-			}
-		    }
+		$ppos = -1;
+		$more = 0;
+		%atoms = ();
+		%tags = ();
+		@seq = ();
+		$tag = 0;
+		while ($line =~ m/(\e\[(\d+)m)/g) {
+		    $atoms{ length $` } = [ length $1, $2 ];	# all ANSI SGR ESC sequences
 		}
 		########################################################################
-		# Generate hyper-links
+		# remove ESC seqences from $line and mark in %tags with |= or &=
+		# 1  ==> |= 1	start Bold
+		# 4  ==> |= 4	start Underline
+		# hy ==> |= 2	start hyper-link
+		# 22 ==> &= ~1	stop Bold (may come after start Underline - so do not stop Underline)
+		# 24 ==> &= ~4	stop Underline (ergo)
+		# 0  ==> &= ~5	stop Bold and Underline
+		# hy ==> &= ~2	stop hyper-link
+		########################################################################
+		$tags{ 0 } = 0;					# start line at $pos = 0 with no Bold/Undeline/hyper-link tag
+		$tags{ length $line } = 0;			# finish at end of line with no Bold/Undeline/hyper-link tag
+		foreach $pos (sort { $a <=> $b } keys %atoms) {
+		    ($len, $atom) = @{ $atoms{ $pos } };	# process atoms in sequence
+		    substr($line, $pos + $more, $len) = "";	# remove all ESC sequences
+		    if ($atom == 0) {
+			$tag = 0;				# no hyper-link yet - stop all ANSI ESC actions
+		    } elsif ($atom <= 4) {
+			$tag |= $atom;				# start Bold or Underline
+		    } elsif ($atom == 22) {
+			$tag &= ~1;				# stop Bold only
+		    } elsif ($atom == 24) {
+			$tag &= ~4;				# stop Underline only
+		    } elsif ($opt_M) {				# 30-37 are colours - used in smb.conf(5)
+			warn "WARNING: $lineCnt: bad ANSI ESC sequence 'ESC [ $atom m' for man page - ignored\n";
+		    }
+		    $tags{ $pos + $more } = $tag;		# maintains independent Bold and Underline tags
+		    push(@seq, $pos + $more);			# allows retrieval of previous tag in position
+		    $more -= $len;
+		}
+		print "HYPER-LINK LEN: @{[length $line]} '$line'\n" if $opt_T;
+		push(@seq, length $line);			# have at least one entry higer than any hyper-link position
+		########################################################################
+		# Generate hyper-links in plain text and text with now removed ESCs
 		# do not check for valid sections - whatis and apropos sometimes provide
 		# invalid section names eg Tk::Text(3pm) which is really Tk::Text(3)
+		#
+		# interpolate hyper-links in %tags with previously generated ESC tags
 		########################################################################
-		if ($see_also) {
-		    while ($line =~ m/$see_also/g) {
-			if (length $`) {
-			    $text->insert("end", $`, $tag);	# text before the hyper_link
-			}
-			$text->insert('end', $1, 'hyper_link');	# hyper-link
-			$line = $';			# rest of the line
+		$ppos = $pos = 0;
+		while($line=~m/([A-Za-z][\w:+.-]*\s*\(\s*[pmn\d]*\s*\))/g) {
+		    $len = length $`;
+		    while ($pos <= $len) {
+			$tags{ $pos } &= ~2 if $pos < $len; # update previous Bold/Underline tag with stop hyper-link
+			$ppos = $pos;
+			$pos = shift(@seq);		# first in first out
 		    }
+		    $tag = $tags{ $ppos };		# previous Bold/Underline tag
+		    $tags{ $len } = $tag | 2;		# start hyper-link maintaining previous tag
+		    print "HYPER-LINK ON : $lineCnt:\t\$len = $len\t\$tag = $tag ==> $tags{ $len }\t '$1'\t$ppos, $pos @seq\n" if $opt_T;
+		    $len += length $1;
+		    while ($pos <= $len) {
+			$tags{ $pos } |= 2 if $pos < $len; # update previous Bold/Underline tag with start hyper-link
+			$ppos = $pos;
+			$pos = shift(@seq);		# first in first out
+		    }
+		    $tag = $tags{ $ppos };		# previous Bold/Underline tag
+		    $tags{ $len } = $tag & ~2;		# stop hyper-link maintaining previous tag
+		    print "HYPER-LINK OFF: $lineCnt:\t\$len = $len\t\$tag = $tag ==> $tags{ $len }\t '$1'\t$ppos, $pos @seq\n" if $opt_T;
 		}
-		$text->insert('end', $line, $tag);	# trailing text - just insert
+		########################################################################
+		# Analyse %tags and output whole of man text with correct tags applied
+		########################################################################
+		foreach $pos (sort { $a <=> $b } keys %tags) {
+		    if ($pos > 0) {
+			$text->insert("end", substr($line, $ppos, $pos - $ppos), $tagArray[$tag]); # text with appropriate tag
+			print "TEXT OUT      : $lineCnt:\t\$tagArray[$tag] = '@{$tagArray[$tag]}'\t $ppos $pos\t'@{[substr($line, $ppos, $pos - $ppos)]}'\n" if $opt_T;
+		    }
+		    $ppos = $pos;
+		    $tag = $tags{ $pos };		# process atoms in sequence starting at $pos = 0
+		}
 	    }
 	}
-	$see_also = '';
+	close(M) if $opt_M;
 	$ret = close(F);	# fails with $?/256 == 16 - page does not exist
 	if ($lineFlag) {
 	    $mainWindow->title("$named: $entry");
@@ -1016,14 +1175,16 @@ use warnings;
 		$position = '1.0';			# or show top of page
 	    }
 	    $text->markSet('insert', $position);
-	    $manMenuEntries{$page}[1] = $pos if $page;	# save postion for page just overwritten
+	    $manMenuEntries{$page}[1] = $idx if $page;	# save postion for page just overwritten
 	    check_menu($entry, 'pages');		# also enter into menu if new; adjust age for repeat
 	    $page = $entry;
+no warnings;
 	    if ($section) {
 		info_display('blue', "Loaded $opt $man($section) $lineCnt lines");
 	    } else {
 		info_display('blue', "Loaded $opt $man $lineCnt lines");
 	    }
+use warnings;
 	} else {
 	    check_menu($entry, 'pages', 1);		# delete menu $entry
 	    $entry = $page;				# restore current entry after not finding new entry
@@ -1036,7 +1197,7 @@ use warnings;
 	if ($entry) {
 	    $manMenu->menu->entryconfigure($entry, -state, 'disabled');
 	    $manMenuIndex = $manMenu->menu->index($entry) - $manMenuStart;
-	    print "show_man: showing '$entry' index $manMenuIndex length = $manMenuLen\n" if $opt_T;
+	    print "show_man:$lineCnt: showing '$entry' index $manMenuIndex length = $manMenuLen\n" if $opt_T;
 	}
 	if ($manMenuIndex < $manMenuLen - 1) {
 	    $nextButton->configure(-state => 'normal');
@@ -1076,10 +1237,10 @@ sub is_valid_section {
 
 ########################################################################
 #
-#	Pick a word for starting a search or following a hyperlink
+#	Pick a word for starting a search or following a hyper-link
 #	parameter 1:	dummy for key bindings
 #	Parameter 2:	0 start a search
-#			1 use word as a hyperlink to open a new page
+#			1 use word as a hyper-link to open a new page
 #
 ########################################################################
 
@@ -1135,7 +1296,7 @@ sub show_section_contents {
 	my $words_in_line = 0;  # New line when this goes to three
 	my ($man, $l);
 	foreach $man (@{$sections{$current_section}}) {
-	    $text->insert('end', $man, 'hyper_link');		# hyper-link can be selected by Button-1
+	    $text->insert('end', $man, 'hy');	# hyper-link can be selected by Button-1
 	    if (++$words_in_line  < 3) {
 		$text->insert('end', substr($spaces,0, (($l = length($man)) < 24) ? 24 - $l : 1));
 	    } else {
@@ -1194,9 +1355,15 @@ sub scout_man_dirs {
     print STDERR "Scouting man directories\n";
     if ($ENV{MANPATH}) {
         @man_dirs = split (/:/, $ENV{MANPATH});
+    } elsif (-x '/usr/bin/manpath') {
+	$man_dir = `/usr/bin/manpath -q`;
+	chomp $man_dir;
+	print "/usr/bin/manpath -q returns '$man_dir'\n" if $opt_T;
+        @man_dirs = split (/:/, $man_dir);
     } else {
-        push (@man_dirs, "/usr/man");
+        push (@man_dirs, "/usr/local/man");
     }
+    print "\@man_dirs = '@man_dirs'\n" if $opt_T;
     # Convert all relative man paths to fully qualified ones, by
     # prepending with $cwd
     my $cwd = cwd();
@@ -1205,6 +1372,7 @@ sub scout_man_dirs {
         $man_dir = "$cwd/$man_dir"; # Modifies entry in man_dirs
     }
     foreach $man_dir (@man_dirs) {
+	print "\$man_dir = '$man_dir'\n" if $opt_T;
         chdir $man_dir || next;
         # Now, in /usr/man, say. Get all the directories
         my @section_dirs = grep {-d $_} <man*>;
@@ -1580,7 +1748,7 @@ sub position_text {
 #	Increase or decrease font size
 #
 #	change normal text font (includes underline text)
-#	change 'section' headings which are bold
+#	change 'heading' text which is bold
 #	change 'bd' tagged words which are bold
 #	do not change miscellanous button text fonts
 #
@@ -1599,7 +1767,7 @@ sub change_font {
 	$boldfont   =~ s/fontSize/$fontSize/;
 	if ($increment) {
 	    $text->configure(-font => $font);	# re-configure only for changed fonts
-	    $text->tagConfigure('section', -font => $boldfont, -foreground => $colorBD);
+	    $text->tagConfigure('heading', -font => $boldfont, -foreground => $colorBD);
 	    $text->tagConfigure('bd',  -font => $boldfont);
 	    info_display('black', "font size $fontSize");
 	}
@@ -1889,19 +2057,21 @@ iCman - an interface to the on-line reference manuals
 =head1 SYNOPSIS
 
  iCman[ -cnrTh][ -k <key>][ -f <page>][ -F <font>][ -l <num>][ -w <num>]
-      [ -g <geometry>][ [<section>] <manpage> ...] ...
+      [ -g <geometry>][ -M <file>][ [<section>] <manpage> ...] ...
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
     -f page display the output of man -f <page> (whatis)
     -F font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default 35)
-    -w num  width  of the Text window (default 80)
+    -w num  width  of the Text window (default 85) -w0 is terminal width
     -g geom geometry for main window
     -c      build a new cache of section names (default: use cache)
     -n      no fork of initial window (used in internal fork call)
             (default is to fork the initial window)
     -r      restore last session with manpage and search history
     -T      trace output static debug messages
+    -M file store output of man command in file for debugging
+            warn about unusual ANSI ESC codes
     -h      help, ouput this Usage text only
 
     Manpage arguments may be of the form <section> <manpage>, which is
@@ -1974,11 +2144,36 @@ default action is to search in all of the available sections, following
 a pre-defined order in the underlying 'man' call and to show only
 the first page found, even if pages exist in several sections.
 
+The search facility is much more powerful than that of 'less',
+the usual man page viewer. Activate the search by keying '/' or
+pressing the [/] button briefly.  Enter or paste a word into the
+Search Entry window and key RETURN or press the [/] button again.
+Searches may be for an exact match or for a full Perl-type regular
+expression. The \bword\b feature to find only whole words is
+particularly useful. Searches are normally case sensitive, but
+a case-insensitive search may be selectd. Once a search has been
+carried out, all the hits are highlighted. A first group of hits is
+displayed in the Text window. The text is moved to display as many
+hits as possible. When the user has analysed the first group of hits,
+hitting RETURN will display the next group of hits in the text and
+so on until the end of the text is reached. Another RETURN will start
+by displaying the first group at the top again. Hitting SHIFT-RETURN
+will reverse the direction of displaying the groups.
+
+Double-clicking with mouse button 1 transfers the word under the
+mouse to the Search Entry window and immediately starts a search for
+that word. This is the quickest and best way to start a search.
+
 Other manual pages may be opened either by entering the name of a
 manual page optionally followed by a section in parentheses in the
-Man-Entry window and pressing RETURN, or by double-clicking on a manual
-page hyper-link (pale blue) - usually under the SEE ALSO heading or in a Section Index. Using
-ALT-RETURN will open the new manual page in a new instance of B<iCman>.
+Man-Entry window and pressing RETURN.  Using ALT-RETURN will open the
+new manual page in a new instance of B<iCman>. Alternatively a manual
+page can be opened by double-clicking on a manual page hyper-link
+(pale blue) - usually under the B<SEE ALSO> heading or in a Section
+Index. A hyper-link is charecterized by being being followed by a
+valid section in parentheses.  Sometimes a manual page reference is
+not followed by a section in parentheses. Such a reference can still be
+opened by double-clicking the reference with the Control key pressed.
 
 Alternatively 'B<-k> <key>' or 'B<apropos> <key>' may be used in the
 Man-Entry window to search the manual page names and descriptions for
@@ -2003,38 +2198,18 @@ which is useful if the manpage is being developed and has been
 re-made externally.  'h' displays the B<iCman> manual page and 'q'
 quits the program.
 
-The search facility is much more powerful than that of 'less',
-the usual man page viewer. Activate the search by keying '/' or
-pressing the [/] button briefly.  Enter or paste a word into the
-Search Entry window and key RETURN or press the [/] button again.
-Searches may be for an exact match or for a full Perl-type regular
-expression. The \bword\b feature to find only whole words is
-particularly useful. Searches are normally case sensitive, but
-a case-insensitive search may be selectd. Once a search has been
-carried out, all the hits are highlighted. A first group of hits is
-displayed in the Text window. The text is moved to display as many
-hits as possible. When the user has analysed the first group of hits,
-hitting RETURN will display the next group of hits in the text and
-so on until the end of the text is reached. Another RETURN will start
-by displaying the first group at the top again. Hitting SHIFT-RETURN
-will reverse the direction of displaying the groups.
-
-Double-clicking with mouse button 1 transfers the word under the
-mouse to the Search Entry window and immediately starts a search for
-that word. This is the quickest and best way to start a search.
-
 Tk::Text will open a dialog box when clicking the right mouse button
 in the text window. The features provided are self explanatory. It
 also has a search feature, which did not seem to be available when
 I started.  The only useful feature is changing the wrap mode.
 
-When B<iCman> is started the first time, the names of all manual
-pages of every section in all directories of MANPATH are obtained.
-Since this may take some time, particularly if the system is busy,
-the result of the scan is cached in ~/.iC/iCman.sec.  A full scan is
-carried out each new day. This should be sufficient to catch any
-new man entries. Alternetively 'iCman -c' may be used to build a new
-cache after new software has been installed.
+When B<iCman> is started the first time, the names of all manual pages
+of every section in all directories of $MANPATH or the execution
+of /usr/bin/manpath are obtained.  Since this may take some time,
+particularly if the system is busy, the result of the scan is cached in
+~/.iC/iCman.sec.  A full scan is carried out each new day. This should
+be sufficient to catch any new man entries. Alternetively 'iCman -c'
+may be used to build a new cache after new software has been installed.
 
 =head1 AUTHOR
 
@@ -2078,7 +2253,7 @@ in the subject field.
 
 =head1 SEE ALSO
 
-man(1), apropos(1), whatis(1), iClive(1)
+man(1), apropos(1), whatis(1), iClive(1), pod2man(1), perlpod(7)
 
 =head1 ACKNOWLEDGEMENTS
 

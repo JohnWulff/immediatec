@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.69 2013/04/18 03:10:51 jw Exp $";
+"@(#)$Id: icc.c,v 1.70 2013/09/10 08:31:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -14,6 +14,10 @@ static const char icc_c[] =
  *	command line interpretation and starter for immcc compiler
  *
  *******************************************************************/
+
+#ifdef	LOAD
+#error - must be compiled without LOAD defined to make an executable compiler
+#endif	/* LOAD */
 
 #include	<stdio.h>
 #include	<stdlib.h>
@@ -30,10 +34,9 @@ static const char icc_c[] =
 #ifdef TCP
 #include	"tcpc.h"
 #endif	/* TCP */
+#if defined(RUN) || defined(TCP)
 #include	"cexe.h"
-#ifdef	LOAD
-#error - must be compiled without LOAD defined to make an executable compiler
-#endif	/* LOAD */
+#endif	/* RUN or TCP */
 
 extern const char	iC_ID[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
@@ -47,15 +50,19 @@ int			iC_genCount;
 
 static const char *	usage =
 "Usage:\n"
-" %s [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]\n"
+" %s [-"
+#if defined(RUN) || defined(TCP)
+"c"
+#endif	/* RUN or TCP */
+"agASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]\n"
 "       [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]\n"
 "       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>|-]\n"
 #if defined(RUN) || defined(TCP)
-"Options in compile mode (-o or -c):\n"
-#endif	/* RUN or TCP */
-"        -o <out>        name of generated C output file\n"
+"Options in compile mode (-c or -o):\n"
 "        -c              generate C source cexe.c to extend 'icr' or 'ict' compiler\n"
 "                        (cannot be used if also compiling with -o)\n"
+#endif	/* RUN or TCP */
+"        -o <out>        name of generated C output file\n"
 "        -l <lst>        name of list file  (default: none, '' is stdout) output:\n"
 "                        listing with logic expansion, net topology and statistics\n"
 "        -e <err>        name of error file (default is stderr)\n"
@@ -82,7 +89,7 @@ static const char *	usage =
 "        -k <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
 #else	/* not RUN or TCP */
-"        -k <lim>        highest I/O index (default: no limit; %d for -c mode)\n"
+"        -k <lim>        highest I/O index (default: no limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
 "                        default: any index for bit, byte, word or long is allowed\n"
 #endif	/* RUN or TCP */
@@ -183,13 +190,15 @@ static const char *	usage =
 #endif	/* not TCP */
 #ifdef RUN
 "      %s -c <src.ic>; makeAll -R; before <src.ic> can be interpreted.\n"
+"\n"
 "      Typing 0 to 7 toggles simulated inputs IX0.0 to IX0.7\n"
 "      Normally 0 to 7 acts immediately. Preceding it with +\n"
 "      allows more simultaneous logic inputs - one for each +\n"
 "      Typing b<num> w<num> or l<num> alters simulated inputs IB1, IW2 or IL4\n"
 "              <num> may be decimal 255, octal 0177 or hexadecimal 0xff\n"
-"      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
 "      Typing h provides a short help for simulated inputs\n"
+"\n"
+"      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
 #endif	/* RUN */
 "      Typing q or ctrl-C quits run mode.\n"
 #endif	/* RUN or TCP */
@@ -234,7 +243,9 @@ char *		iC_Cdefines;
 FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
 
+#if defined(RUN) || defined(TCP)
 static FILE *	excFP;			/* cexe C out file pointer */
+#endif /* defined(RUN) || defined(TCP) */
 static char *	iC_path;		/* default pplstfix on PATH */
 jmp_buf		beginMain;
 int		iC_maxErrCount = 100;	/* default error count at which to abort compile */
@@ -390,8 +401,6 @@ main(
     char **	argv)
 {
     int		fd;
-#ifdef TCP
-#endif	/* TCP */
     int		r = 0;			/* return value of compile */
     int		ro = 4;			/* output message index */
     char *	cp;
@@ -517,7 +526,9 @@ main(
 #endif	/* YYDEBUG */
 		    goto break2;
 		case 'o':
+#if defined(RUN) || defined(TCP)
 		    if (excFN == 0) {
+#endif /* defined(RUN) || defined(TCP) */
 			if (! *++*argv) { --argc; if(! *++argv) goto error; }
 #ifdef	WIN32
 			if (strlen(*argv)) {
@@ -531,11 +542,13 @@ main(
 			if (strlen(*argv)) outFN = *argv;	/* compiler output file name */
 #endif	/* WIN32 */
 			goto break2;
+#if defined(RUN) || defined(TCP)
 		    } else {
 			fprintf(stderr,
 			    "%s: cannot use both -c and -o option\n", iC_progname);
 			goto error;
 		    }
+#endif /* defined(RUN) || defined(TCP) */
 		case 'l':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 #ifdef	WIN32
@@ -570,24 +583,29 @@ main(
 		case 'k':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    iC_maxIO = atoi(*argv) + 1;
-		    if (excFN != 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) goto maxIOerror;
+		    if (excFN != 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) {
+#if defined(RUN) || defined(TCP)
+		      maxIOerror:
+#endif /* defined(RUN) || defined(TCP) */
+			fprintf(stderr,
+			    "%s: -k %d exceeds %d for -c option\n",
+			    iC_progname, iC_maxIO-1, IXD-1);
+			goto error;
+		    }
 		    goto break2;
+#if defined(RUN) || defined(TCP)
 		case 'c':
 		    if (outFN == 0) {
 			excFN = "cexe.c";
 			if (iC_maxIO < 0) iC_maxIO = IXD;	/* pre-set for immcc is -1 */
-			if (iC_maxIO > IXD) {		/* I/O limit for -c mode */
-			    maxIOerror: fprintf(stderr,
-				"%s: -k %d exceeds %d for -c option\n",
-				iC_progname, iC_maxIO-1, IXD-1);
-			    goto error;
-			}
+			if (iC_maxIO > IXD) goto maxIOerror;	/* I/O limit for -c mode */
 		    } else {
 			fprintf(stderr,
 			    "%s: cannot use both -o and -c option\n", iC_progname);
 			goto error;
 		    }
 		    /* fall through -c implies -A */
+#endif /* defined(RUN) || defined(TCP) */
 		case 'A':
 		    iC_uses |= USE_ALIAS;	/* generate ARITH ALIAS in outFN */
 		    break;
@@ -724,9 +742,9 @@ main(
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, iC_progname, IXD-1, IXD-1,
+		    fprintf(stderr, usage, iC_progname, IXD-1,
 #if defined(RUN) || defined(TCP)
-		    MARKMAX,
+		    IXD-1, MARKMAX,
 #ifdef	TCP
 		    iC_hostNM, iC_portNM, iC_iidNM, INSTSIZE,
 #endif	/* TCP */
@@ -787,9 +805,9 @@ main(
     iC_genCount = ((iC_optimise & 04) != 0) ? 1 : GEN_COUNT;
     iFlag = 0;
     /********************************************************************
-     *	Generate and open temporary files T1FN T2FN T3FN
-     *	T0FN, T4FN and T5FN are only used if iC and/or C-include files
-     *	are actually parsed
+     *  Generate and open temporary files T1FN T2FN T3FN
+     *  T0FN, T4FN and T5FN are only used if iC and/or C-include files
+     *  are actually parsed
      *******************************************************************/
     szNames[T0index] = T0FN;
     szNames[T1index] = T1FN;
@@ -808,56 +826,57 @@ main(
 	r = T6index;			/* error making temporary name */
     } else
     /********************************************************************
-     *	Call the iC compiler which builds a Symbol table and a logic
-     *	net made up of the same Symbol structures linked by List_e's
+     *  Call the iC compiler which builds a Symbol table of all immediate
+     *  variables and a logic net made up of Symbol's in the Symbol table
+     *  linked by List_e's.
      *
-     *	As a side effect, all C-code fragments made up of literal blocks
-     *	and C-actions are collected in the temporary file T1FN
-     *	Also as a side effect outFlag is set if outFN is set (-o option)
+     *  As a side effect, all C-code fragments made up of literal blocks
+     *  and C-actions are collected in the temporary file T1FN
+     *  Also as a side effect outFlag is set if outFN is set (-o option)
      *******************************************************************/
     if ((r = setjmp(beginMain)) ||
 	(r = iC_compile(inpFN, listFN, errFN, outFN)) != 0) {
-	ro = 5;				/* compile error */
+	ro = 5;					/* iC compile error */
     } else
     /********************************************************************
-     *	Regroup the generated C-code into literal blocks first, followed
-     *	by C-actions. This is necessary to get all C-declarations at the
-     *	start of the C-code.
+     *  Regroup the generated C-code into literal blocks first, followed
+     *  by C-actions. This is necessary to get all C-declarations at the
+     *  start of the C-code.
      *
-     *	Call the C compiler which recognizes any variables declared as
-     *	imm bit or imm int variables. These variables can be used as
-     *	values anywhere in the C-code and appropriate modification is
-     *	carried out. Immediate variables which have been declared but
-     *	not yet assigned may be (multiply) assigned to in the C-code.
-     *	Such assignment expressions are recognised and converted to
-     *	function calls.
+     *  Call the C compiler which recognizes any variables declared as
+     *  imm bit or imm int variables. These variables can be used as
+     *  values anywhere in the C-code and appropriate modification is
+     *  carried out. Immediate variables which have been declared but
+     *  not yet assigned may be (multiply) assigned to in the C-code.
+     *  Such assignment expressions are recognised and converted to
+     *  function calls.
      *
-     *	If an immediate variable has already been (singly) assigned to
-     *	in the iC code, an attempt to assign to it in the C-code is an
-     *	error.
+     *  If an immediate variable has already been (singly) assigned to
+     *  in the iC code, an attempt to assign to it in the C-code is an
+     *  error.
      *******************************************************************/
     if ((r = iC_c_compile(T1FP, T3FP, C_PARSE|C_FIRST|C_BLOCK, 0)) != 0) {
-	ro = 6;				/* C-compile error */
+	ro = 6;					/* C compile error */
     } else {
 	if (inpFN) {
 	    strncpy(inpNM, inpFN, BUFS);	/* restore name if last #line was not inpFN */
 	}
 	/********************************************************************
-	 *	List network topology and statistics - this completes listing
+	 *  List network topology and statistics - this completes listing
 	 *******************************************************************/
 	if ((r = iC_listNet()) == 0) {
 	    /********************************************************************
-	     *	-o option: Output a C-file of all Gates, C-code and links
+	     *  -o option: Output a C-file of all Gates, C-code and links
 	     *******************************************************************/
 	    if (outFlag) {			/* -o option */
 		r = iC_outNet(T3FP, outFN);	/* generate network as C file */
-	    } else
-	    /********************************************************************
-	     *	-c option: Output a C-file cexe.c to rebuild compiler with C-code
-	     *******************************************************************/
-	    if (excFN) {			/* -c option */
+#if defined(RUN) || defined(TCP)
+	    } else if (excFN) {			/* -c option */
+		/********************************************************************
+		 *  -c option: Output a C-file cexe.c to rebuild icr or ict compiler
+		 *******************************************************************/
 		if ((excFP = fopen(excFN, "w")) == NULL) {
-		    r = COindex;
+		    r = COindex;		/* cannot open cexe.c for writing */
 		} else {
 		    unsigned	linecnt = 1;
 
@@ -867,12 +886,12 @@ main(
 		    /* copy literal blocks from C intermediate file to C output file */
 		    iC_copyXlate(T3FP, excFP, excFN, &linecnt, 01);
 		    /* write C execution file Part 2 */
-		    fprintf(excFP, cexe_part2);
+		    fprintf(excFP, cexe_part2, inpNM, iC_progname, iC_gflag ? "g" : "", iC_optimise, inpNM);
 		    linecnt += cexe_lines2;
 		    /* copy called function cases from C intermediate file to C output file */
 		    iC_copyXlate(T3FP, excFP, excFN, &linecnt, 02);
 		    /* write C execution file Part 3 */
-		    fprintf(excFP, cexe_part3, iC_progname, iC_gflag ? "g" : "", iC_optimise, inpNM);
+		    fprintf(excFP, cexe_part3);
 		    linecnt += cexe_lines3;
 		    if (linecnt > (1 + cexe_lines1 + cexe_lines2 + cexe_lines3)) {
 			fprintf(excFP, cexe_part4,
@@ -884,22 +903,21 @@ main(
 		    }
 		    fclose(excFP);
 		}
-#if defined(RUN) || defined(TCP)
 	    } else {
-		Gate **		sTable;			/* pointer to Symbol Table */
-		Gate **		sTend;			/* end of Symbol Table */
+		Gate **		sTable;		/* pointer to Symbol Table */
+		Gate **		sTend;		/* end of Symbol Table */
 		/********************************************************************
-		 *	Build a network of Gates and links for direct execution
+		 *  Build a network of Gates and links for direct execution
 		 *******************************************************************/
 		if ((r = iC_buildNet(&sTable, &sTend)) == 0) {
 		    Symbol * sp = lookup("iClock");
 		    unlinkTfiles();
 		    /********************************************************************
-		     *	Execute the compiled iC logic directly
+		     *  Execute the compiled iC logic directly
 		     *******************************************************************/
-		    assert (sp);			/* iClock initialized in init() */
-		    iC_c_list = sp->u_gate;		/* initialise clock list */
-		    iC_icc(sTable, sTend);		/* execute the compiled logic */
+		    assert (sp);		/* iClock initialized in init() */
+		    iC_c_list = sp->u_gate;	/* initialise clock list */
+		    iC_icc(sTable, sTend);	/* execute the compiled logic */
 		    /********************************************************************
 		     * never returns - exits via iC_quit()
 		     *******************************************************************/
@@ -908,7 +926,7 @@ main(
 	    }
 	}
 	/********************************************************************
-	 *	iC and C compilation, listing and generated C output complete
+	 *  iC and C compilation, listing and generated C output complete
 	 *******************************************************************/
 	if (r != 0) {
 	    ro = 7;				/* error in output */
@@ -1064,7 +1082,7 @@ iC_inversionCorrection(void)
     return r;
 } /* iC_inversionCorrection */
 
-/* ############ POD to generate man page ##################################
+/* ############ POD to generate immcc man page ############################
 
 =encoding utf8
 
@@ -1074,12 +1092,10 @@ immcc - the immediate-C to C compiler
 
 =head1 SYNOPSIS
 
- immcc [-acgASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
+ immcc [-agASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
        [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
        [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>|-]
     -o <out> name of generated C output file
-    -c       generate C source cexe.c to extend 'icr' or 'ict' compiler
-             (cannot be used if also compiling with -o)
     -l <lst> name of list file  (default: none, '' is stdout) output:
              listing with logic expansion, net topology and statistics
     -e <err> name of error file (default is stderr)
@@ -1102,7 +1118,7 @@ immcc - the immediate-C to C compiler
         -W[no-]function-parameter  unused parameters in functions
         -W[no-]function-delete     delete before function re-definition
         -Wno-deprecated -Wdeprecated (default) all of the above
-    -k <lim> highest I/O index (default: no limit; 63 for -c mode)
+    -k <lim> highest I/O index (default: no limit)
              if lim <= 63, mixed byte, word and long indices are tested
              default: any index for bit, byte, word or long is allowed
     -d <deb>                  LIST options
@@ -1124,36 +1140,37 @@ immcc - the immediate-C to C compiler
 =head1 DESCRIPTION
 
 B<immcc> translates an iC-source (extension: .ic) with iC-includes
-(extension: .ih) into a C file which can be compiled with a C
-compiler and linked with the iC project run time library B<libict.a>
+(extension: .ih) into a C file (extension: .c) which can be compiled
+with a C compiler and linked with either the dynamic iC project
+run time library B<libict.so> or the static library B<libict.a>
 (link option -lict) to produce an executable which communicates via
 TCP/IP with B<iCserver> and associated I/O-clients - usually B<iCbox>.
 
 B<immcc> reads and translates one iC-source eg file.ic. If no options are
 specified, only compilation errors (if any) are reported on 'stderr'.
 
-Before translation starts, file.ic is optionally passed through the
-C-preprocessor if it contains any lines starting with '#' or if -D or -U
-options were used in the command line.
+Before translation starts, file.ic is passed through B<immac -m>
+if it contains any lines starting with '#' or if -D or -U options
+were used in the command line.
 
 Immediate-C code consists of immediate statements and C literal blocks.
-Immediate statements translate into data tables for use at run time
-and C-actions generated by the immediate B<if>, B<else> and B<switch>
-statements. C literal blocks are C code enclosed in B<%{> and B<%}>
-braces.
+Immediate statements translate into pre-initialised data tables
+of nodes and their interconnections and C-actions generated by the
+immediate B<if>, B<else> and B<switch> statements. C literal blocks
+are C code enclosed in B<%{> and B<%}> braces.
 
-C code in C-actions and literal blocks is copied nearly verbatim into the
-target C file. Any C-preprocessor statements for the C-code in C-actions
-and literal blocks must have a B<%> immediately preceding the leading
-B<#>, eg B<%#include "f.h">. The B<'%'> is stripped before being copied
-to the target.
+C code in C-actions and in literal blocks is copied nearly verbatim
+into the target C file. Any C-preprocessor statements, such as #define
+etc, in the C-code in C-actions and in literal blocks must have a B<%>
+immediately preceding the leading B<#>, eg B<%#define X 3>. The B<'%'>
+is stripped before being copied to the target.
 
 The generated C-code is re-grouped into literal blocks first, followed
 by C-actions. This is necessary to place all C-declarations in literal
 blocks before any C-actions, which may require them.
 
 In a next pass an integrated special-purpose C compiler is run
-(preceded by a pass through the C-preprocessor, if necessary). The C
+(preceded by a pass through B<immac -m>, if necessary). The special C
 compiler recognizes any immediate variables in the embedded C code.
 Immediate variables are declared with B<imm bit> or B<imm int>
 in the iC code section.  These variables can be used as values
@@ -1161,22 +1178,22 @@ anywhere in the C-code and appropriate modification of the C code is
 carried out. Immediate variables which have been declared but not yet
 assigned may be (multiple) assigned to in the C-code.  Such assignment
 expressions are recognised and converted to function calls, which fire
-all immediate expressions dependent in the immediate variable.  If the
-B<strict> option (-S) is used for compilation, immediate variables
-to be assigned in C code must be declared with the type modifier
-B<immC> rather than with B<imm>.  This is particularly important if
-an immediate variable assigned to in C code is going to be used in
-another iC source.  If an immediate variable has already been (single)
-assigned to in an immediate statement, an attempt to assign to it in
-the C-code is an error. A syntax check of the embedded C code with
-appropriate error messages is a by-product of this procedure.
+all immediate expressions dependent in the immediate variable when its
+value changes.  If the B<strict> option (-S) is used for compilation,
+immediate variables to be assigned in C code must be declared with the
+type modifier B<immC> rather than with B<imm>.  This is particularly
+important if an immediate variable assigned to in C code is going to be
+used in another iC source.  If an immediate variable has already been
+(single) assigned to in an immediate statement, an attempt to assign
+to it in the C-code is an error. A syntax check of the embedded C
+code with appropriate error messages is a by-product of this procedure.
 
-The iC and C compiler also produces an optional listing (default file.lst).
-The listing displays the iC source lines with line numbers. These
-are interspersed with a detailed logic expansion of the generated
-code produced by the compiler. Study of this code gives insights
-into how iC-code is compiled and executed.  Aliases appear in the
-raw listing because of one pass compiler limitations. Aliases are
+The iC and C compiler also produces an optional listing (default
+file.lst).  The listing displays the iC source lines with line
+numbers. These are interspersed with a detailed logic expansion of
+the generated code produced by the compiler. Study of this code gives
+insights into how iC-code is compiled and executed.  Aliases appear in
+the raw listing because of one pass compiler limitations. Aliases are
 completely eliminated from the executable code, and should therefore
 not confuse readers of the listings. A correction is carried out by
 passing the listing - and only the listing through the perlscript
@@ -1209,7 +1226,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<iCmake(1)>, L<makeAll(1)>, L<iCserver(1)>, L<iCbox(1)>
+L<immac(1)>, L<iCmake(1)>, L<makeAll(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
@@ -1223,4 +1240,4 @@ to contact the author, see the README file.
 
 =cut
 
-   ############ end of POD to generate man page ########################### */
+   ############ end of POD to generate immcc man page ##################### */

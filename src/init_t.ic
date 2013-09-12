@@ -1,17 +1,28 @@
 /********************************************************************
+ *
+ *	Copyright (C) 2000-2013  John E. Wulff
+ *
+ * You may distribute under the terms of either the GNU General Public
+ * License or the Artistic License, as specified in the README file.
+ *
+ * For more information about this program, or for information on how
+ * to contact the author, see the README file
+ *
+ *	init_t.ic
+ *
  * Generate the pre-compiled functions for including permanently in
- * init.c from the iC source file ddd.ic
+ * init.c from the iC source file init_t.ic
  *
  * This scheme only works for for simple functions with one level of
  * master gates for each input and individual clocks for each input if
  * the builtin function is clocked (all except FORCE() are clocked)
  *
  * execute the following after making a compiler with -D BOOT_COMPILE
- *	immcc -d20000 ddd.ic | ddd.pl > ddd.out
- *	vi ddd.out init.c	# insert the new code appropriately
- *	# ddd.ic has the definitions of the buil-in functions with
+ *	immcc -d20000 init_t.ic | init_t.pl > init_t.out
+ *	vi init_t.out init.c	# insert the new code appropriately
+ *	# init_t.ic has the definitions of the buil-in functions with
  *	# mangled names in an appropriate alphabetical order
- *	# ddd.pl translates the mangled names to their proper names
+ *	# init_t.pl translates the mangled names to their proper names
  *	# and moves the block of static Symbols ahead of the link
  *	# definitions, so that addresses of static Symbols can be used
  *	# in some links.
@@ -20,7 +31,7 @@
  *	# that this generated code produces the right results - now
  *	# the automatic generator can be used to vary the built-ins)
  *
- * $Id: init_t.ic,v 1.1 2013/08/12 06:37:21 jw Exp $
+ * $Id: init_t.ic,v 1.2 2013/08/16 01:22:32 jw Exp $
  *******************************************************************/
 
 use strict;

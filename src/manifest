@@ -1,4 +1,4 @@
-$Id: manifest,v 1.21 2013/04/04 04:29:32 jw Exp $
+$Id: manifest,v 1.22 2013/08/23 04:02:24 jw Exp $
 README
 doc/html/iC*.gif
 doc/html/iC*.html
@@ -27,6 +27,7 @@ src/barc.ica
 src/barx.sav
 src/barx.vcd
 src/cexe.h
+src/cexe_t.c
 src/comp.c
 src/comp.h
 src/comp.pl
@@ -60,6 +61,8 @@ src/ict.c
 src/immac
 src/immax
 src/init.c
+src/init_t.ic
+src/init_t.pl
 src/install.sh
 src/lexc.c
 src/lexc.l

@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.93 2012/11/13 04:28:39 jw Exp $";
+"@(#)$Id: outp.c,v 1.94 2013/09/10 08:32:34 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -219,6 +219,139 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
     }
 } /* errorEmit */
 
+#ifdef BOOT_COMPILE
+#define SI	20				/* shift index in le_val */
+
+static void
+out_link(List_e * lp, int * picnt, int * pbcnt, int vflag)
+{
+    Symbol *		sp;
+    char *		name;
+    static int		acnt;
+    static char *	headName = 0;
+    static char		auxName[TSIZE];
+    static char		auxLink[TSIZE];
+
+    if (vflag == 2) {
+	acnt = 1;
+    }
+    if ((sp = lp->le_sym) != 0) {
+	name = sp->name;
+	if  (name) {
+	    if (strchr(name, '@') == 0) {
+		headName = name;		/* only set once as first name in function definiton */
+	    }
+	    snprintf(auxName, TSIZE, "0");
+	    if (vflag != 1) {
+		sp->v_cnt |= *pbcnt & 0777;		/* set link1 */
+	    } else {
+		sp->v_cnt |= (*pbcnt & 0777) << 9;	/* set link2 */
+	    }
+	} else {
+	    assert(headName);
+	    snprintf(auxName, TSIZE, "&%sa_%d", headName, acnt);
+	    if (vflag < 3) {
+		acnt++;
+		sp->name = iC_emalloc(strlen(auxName));	/* already 1 byte longer */
+		strcpy(sp->name, auxName+1);	/* pass name without leading '&' */
+	    }
+	}
+    } else {
+	name = "no var list Symbols";
+    }
+    if (lp->le_next) {
+	snprintf(auxLink, TSIZE, "&l[%d]", *pbcnt + 1);
+    } else {
+	snprintf(auxLink, TSIZE, "0");
+    }
+    printf("/* %3d */ { %-11s, %2d, %-7s, %-2s, %-2s, },	/* ==> %s%s */\n",
+	*pbcnt,
+	auxName,
+	lp->le_val,
+	auxLink,
+	lp->le_first ? "\"\"" : "0",
+	lp->le_last  ? "\"\"" : "0",
+	vflag <= 1 && (lp->le_val == NOT) ? "~" : " ",
+	name ? name : auxName+1);
+    assert(lp->le_val < 1 << SI);		/* make sure shifted index fits */
+    lp->le_val |= *pbcnt << SI;			/* save own index in l[] */
+    if (picnt) (*picnt)++;			/* count Symbol in S.T. */
+    (*pbcnt)++;					/* count link */
+} /* out_link */
+
+static void
+out_builtin(List_e * lp, int * picnt)
+{
+    Symbol *		sp;
+    char *		str_type;
+    char *		str_ftype;
+    char		str_list[10];
+    char		str_blist[10];
+    char		str_link1[10];
+    char		str_link2[20];
+    char		str_tail[20];
+    char		spaces[] = "              ";
+
+    sp = lp->le_sym;
+    assert(sp && sp->name);
+    str_type  = iC_full_type[sp->type];
+    str_ftype = iC_full_ftype[sp->ftype];
+    if (sp->list) snprintf(str_list, 10, "&l[%d]", sp->list->le_val >> SI); else strncpy(str_list, "0", 10);
+    if (sp->blist) snprintf(str_blist, 10, "&l[%d]", sp->blist->le_val >> SI); else strncpy(str_blist, "0", 10);
+    snprintf(str_link1, 10, "&l[%d]", sp->v_cnt & 0777);	/* link1 always used - first Symbol has &l[0] */
+    if (sp->v_cnt & 0777000000) {
+	snprintf(str_link2, 20, "(List_e*)&b[%d]", (sp->v_cnt & 0777000000) >> 18);
+	snprintf(str_tail,  20, "alternate %s", sp->name);
+	str_tail[strlen(str_tail)-1] = '\0';	/* chop trailing '2' of name */
+    } else {
+	if (sp->v_cnt & 0777000) {
+	    snprintf(str_link2, 20, "&l[%d]", (sp->v_cnt & 0777000) >> 9);
+	} else {
+	    strncpy(str_link2, "0", 20);	/* no link2 */
+	}
+	strncpy(str_tail, "function block", 20);
+    }
+    if (sp->type == IFUNCT) {
+	printf("  { \"%1$s\",%3$*2$.*2$s%4$s,%6$*5$.*5$s%7$s,%9$*8$.*8$s0x%10$02x, %11$-7s, %12$-7s, %13$-7s, %14$-7s, }, /* %15$d pre-installed %1$s %16$s */\n"
+	    , sp->name			/* 1$ */
+	    , 12 - strlen(sp->name)	/* 2$ */
+	    , spaces			/* 3$ */
+	    , str_type			/* 4$ */
+	    , 8 - strlen(str_type)	/* 5$ */
+	    , spaces			/* 6$ */
+	    , str_ftype			/* 7$ */
+	    , 6 - strlen(str_ftype)	/* 8$ */
+	    , spaces			/* 9$ */
+	    , sp->fm			/* 10$ */
+	    , str_list			/* 11$ */
+	    , str_blist			/* 12$ */
+	    , str_link1			/* 13$ */
+	    , str_link2			/* 14$ */
+	    , *picnt			/* 15$ */
+	    , str_tail			/* 16$ */
+	);	
+    } else {
+	printf("  { \"%1$s\",%3$*2$.*2$s%4$s,%6$*5$.*5$s%7$s,%9$*8$.*8$s0x%10$02x, %11$-7s, %12$-7s, %13$-7s, %14$-7s, },\n"
+	    , sp->name			/* 1$ */
+	    , 14 - strlen(sp->name)	/* 2$ */
+	    , spaces			/* 3$ */
+	    , str_type			/* 4$ */
+	    , 6 - strlen(str_type)	/* 5$ */
+	    , spaces			/* 6$ */
+	    , str_ftype			/* 7$ */
+	    , 6 - strlen(str_ftype)	/* 8$ */
+	    , spaces			/* 9$ */
+	    , sp->fm			/* 10$ */
+	    , str_list			/* 11$ */
+	    , str_blist			/* 12$ */
+	    , str_link1			/* 13$ */
+	    , str_link2			/* 14$ */
+	);	
+    }
+    (*picnt)++;
+} /* out_builtin */
+
+#endif	/* BOOT_COMPILE */
 /********************************************************************
  *
  *	Output the forward network as NET TOPOLOGY in the listing file.
@@ -261,7 +394,7 @@ iC_listNet(void)
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
-#if YYDEBUG	/* ############################################### */
+#if YYDEBUG	/* ############### SYMBOL TABLE ################## */
     if ((iC_debug & 04002) == 04002) {
 	int hspn = 0;
 	int hspf = 0;
@@ -306,6 +439,289 @@ iC_listNet(void)
 	}
     }
 #endif		/* ############################################### */
+#ifdef	BOOT_COMPILE
+    if (lineno && (iC_debug & 020000)) {
+	/********************************************************************
+	 * Generate the pre-compiled functions for including permanently in
+	 * init.c from the iC source file init_t.ic
+	 *
+	 * This scheme only works for for simple functions with one level of
+	 * master gates for each input and individual clocks for each input if
+	 * the builtin function is clocked (all except FORCE() are clocked)
+	 *
+	 * execute the following after making a compiler with -D BOOT_COMPILE
+	 *	immcc -d20000 init_t.ic | init_t.pl > init_t.out
+	 *	vi init_t.out init.c	# insert the new code appropriately
+	 *	# init_t.ic has the definitions of the buil-in functions with
+	 *	# mangled names in an appropriate alphabetical order
+	 *	# init_t.pl translates the mangled names to their proper names
+	 *	# and moves the block of static Symbols ahead of the link
+	 *	# definitions, so that addresses of static Symbols can be used
+	 *	# in some links.
+	 *	# use the modified init.c to make a new immcc compiler.
+	 *	# (the original was produced manually and was used to check
+	 *	# that this generated code produces the right results - now
+	 *	# the automatic generator can be used to vary the built-ins)
+	 *******************************************************************/
+	static Symbol *	vlist;
+	static Symbol *	vp;
+	static BuiltIn*	flist;
+	static int	bcnt = 0;
+	static int	icnt = 0;
+
+	Symbol *	functionHead;
+	List_e *	slp;
+	Symbol *	vsp;
+	List_e *	vlp;
+	char *		name;
+	int		parCnt;
+	int		indexChange;
+	int		indexClock;
+	int		indexTimer;
+	int		indexTimer1;
+
+	printf(
+"#ifdef BOOT_COMPILE\n"
+"Symbol		iC_CHANGE_ar = { \"CHANGE\", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */\n"
+"#else	/* BOOT_COMPILE */\n"
+"/********************************************************************\n"
+" * Pre-compiled built-in functions produced in functionDefinition()\n"
+" *\n"
+" * Bootstrapping the original built-in functions, requires an older\n"
+" * version of the compiler which compiles built-ins directly.\n"
+" *\n"
+" * if BOOT_COMPILE is defined this direct compilation is left active\n"
+" * and any pre-compiled functions are left out of init.c.\n"
+" *******************************************************************/\n"
+"\n"
+"static List_e	l[];\n"
+	);
+	printf(
+"static List_e	l[] = {\n"
+"/*         le_sym    le_val  le_next  le_first le_last */\n"
+	);
+	/********************************************************************
+	 * Scan Symbol Table and extract all function heads
+	 * This code only works correctly with file init_t.ic, which contains
+	 * function block definitions of the built-in functions to be compiled
+	 * with a BOOT_COMPILE old style iC compiler to produce a template for
+	 * each function which is printed by the following code
+	 *******************************************************************/
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (functionHead = *hsp; functionHead; functionHead = functionHead->next) {
+		name = functionHead->name + 1;		/* leave out first mangled character */
+		if (functionHead->type == IFUNCT) {
+		    printf( "\n");
+		    if (strcasecmp(name, "hange") == 0) {
+			functionHead->fm = 0x01;	/* 1 bit signature for CHANGE set manually */
+			indexChange = icnt;		/* save index in b[] for CHANGE2 */
+		    } else if (strcasecmp(name, "hange2") == 0) {
+			functionHead->fm = 0x02;	/* 1 int signature for CHANGE2 set manually */
+			functionHead->v_cnt |= indexChange << 18;	/* link from CHANGE2 to CHANGE */
+		    } else {
+			if (strcasecmp(name, "lock") == 0) {
+			    indexClock = icnt;		/* save index in b[] for CLOCK2 */
+			} else if (strcasecmp(name, "lock2") == 0) {
+			    functionHead->v_cnt |= indexClock << 18;	/* link from CLOCK2 to CLOCK */
+			} else if (strcasecmp(name, "imer") == 0) {
+			    indexTimer = icnt;		/* save index in b[] for TIMER2 */
+			} else if (strcasecmp(name, "imer2") == 0) {
+			    functionHead->v_cnt |= indexTimer << 18;	/* link from TIMER2 to TIMER */
+			} else if (strcasecmp(name, "imer1") == 0) {
+			    indexTimer1 = icnt;		/* save index in b[] for TIMER12 */
+			} else if (strcasecmp(name, "imer12") == 0) {
+			    functionHead->v_cnt |= indexTimer1 << 18;	/* link from TIMER12 to TIMER1 */
+			}
+		    }
+		    /********************************************************************
+		     * Boot Pass 1: function head list
+		     * do this list independently to make sure links are consecutive
+		     *******************************************************************/
+		    slp = functionHead->u_blist;	/* start of statement list */
+		    assert(slp);
+		    vlist = vp = 0;			/* var list Symbols */
+		    flist = 0;				/* function list BuiltIns */
+		    while (slp) {
+			sp = slp->le_sym;		/* formal satement head Symbol */
+			assert(sp);			/* do not handle functions with immC arrays */
+			lp = sp->list;			/* possible link to function head */
+			while (lp) {
+			    out_link(lp, &icnt, &bcnt, 0);	/* output feedback link */
+			    lp = lp->le_next;		/* has no follow ups - but just in case */
+			}
+			out_link(slp, &icnt, &bcnt, 2);	/* output statement list link */
+			vlp = slp->le_next;		/* next varList link */
+			assert(vlp);			/* statement list is in pairs */
+			out_link(vlp, 0, &bcnt, 3);	/* output var list link */
+			slp = vlp->le_next;		/* next statement link */
+		    }
+		    /********************************************************************
+		     * Boot Pass 2: statement list
+		     * no recursive scanning of expression links is needed, if first level
+		     * expression links are output from statement list and then all var
+		     * nodes with one level of expression links each
+		     *******************************************************************/
+		    assert(functionHead);
+		    slp = functionHead->u_blist;	/* start of statement list */
+		    while (slp) {
+			sp = slp->le_sym;		/* formal satement head Symbol */
+			lp = sp->u_blist;		/* cloned expression links */
+			while (lp) {
+			    out_link(lp, 0, &bcnt, 0);	/* output first level expression link */
+			    lp = lp->le_next;		/* next expression link */
+			}
+			vlp = slp->le_next;		/* next varList link */
+			vsp = vlp->le_sym;		/* varList of temp Symbols */
+			while (vsp) {			/* varList may be empty */
+			    lp = vsp->u_blist;		/* cloned expression links */
+			    while (lp) {
+				out_link(lp, 0, &bcnt, 0);	/* output var expression link */
+				lp = lp->le_next;	/* next expression link */
+			    }
+			    vsp = vsp->next;		/* next varList Symbol */
+			}
+			slp = vlp->le_next;		/* next statement link */
+		    }
+		    /********************************************************************
+		     * Boot Pass 3: parameter list
+		     * finally output links to real parameters
+		     *******************************************************************/
+		    slp = functionHead->list;		/* parameter list */
+		    assert(slp);
+		    parCnt = 0;
+		    while (slp) {
+			out_link(slp, &icnt, &bcnt, 1);	/* output parameter link */
+			if (slp->le_sym->ftype < MIN_ACT) {
+			    parCnt += 2;		/* count bit and int parameters in steps of 2 */
+			}
+			slp = slp->le_next;
+		    }
+		    assert(parCnt <= 6);
+		    if (functionHead->fm == 0) {
+			functionHead->fm = (1 << parCnt) - 1;	/* 0x03 0x0f 0x3f bit or int signature */
+		    }
+		}
+	    }
+	}
+	printf(
+"};\n"
+	);
+	/********************************************************************
+	 * Boot Interlude 1: output var list Symbols
+	 *******************************************************************/
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (functionHead = *hsp; functionHead; functionHead = functionHead->next) {
+		if (functionHead->type == IFUNCT) {
+		    slp = functionHead->u_blist;	/* start of statement list */
+		    while (slp) {
+			vlp = slp->le_next;		/* next varList link */
+			/********************************************************************
+			 * output individual var lists in reverse order so that .next links are defined
+			 * use latest C syntax to initialise named elements of a struct
+			 *******************************************************************/
+			for (tsp = 0; vlp->le_sym != tsp; tsp = vsp) {
+			    for (vsp = vlp->le_sym; vsp->next != tsp; vsp = vsp->next);
+			    assert(vsp->u_blist);
+			    if (vsp->next) {
+				printf("static Symbol	%-10s = { .type=%-3s, .ftype=%-6s, .fm=0x%02x, .u_blist=&l[%d], .next=&%s };\n",
+				    vsp->name,
+				    iC_full_type[vsp->type],
+				    iC_full_ftype[vsp->ftype],
+				    vsp->fm,
+				    vsp->u_blist->le_val >> SI,
+				    vsp->next->name);	/* link new var list */
+			    } else {
+				printf("static Symbol	%-10s = { .type=%-3s, .ftype=%-6s, .fm=0x%02x, .u_blist=&l[%d] };\n",
+				    vsp->name,
+				    iC_full_type[vsp->type],
+				    iC_full_ftype[vsp->ftype],
+				    vsp->fm,
+				    vsp->u_blist->le_val >> SI);
+			    }
+			}
+			slp = vlp->le_next;		/* next statement link */
+		    }
+		    printf("\n");
+		}
+	    }
+	}
+	printf(
+"#endif	/* BOOT_COMPILE */\n"
+"/********************************************************************\n"
+" *\n"
+" *	Initialise Symbol table with all reserved words for iC and C\n"
+" *\n"
+" *		built-in symbols:	\"name\"	for built-in\n"
+" *					type	for built-in\n"
+" *					ftype	for built-in\n"
+" *					fm	usage for built-in Symbol\n"
+" *					list	output list pointer\n"
+" *					blist	forward blist pointer\n"
+" *					link1	2 back links for new built-in\n"
+" *					link2	set up in BOOT_COMPILE\n"
+" *\n"
+" *		reserved words:		\"name\"\n"
+" *					type	KEYW etc\n"
+" *					ftype	used in compilation\n"
+" *					uVal	compiler_token\n"
+" *\n"
+" *******************************************************************/\n"
+"\n"
+"static BuiltIn b[] = {\n"
+"#ifndef BOOT_COMPILE\n"
+"  /* name            type   ftype  fm    list     blist    link1    link2/glist */\n"
+	);
+	/********************************************************************
+	 * Boot Interlude 2: output pre-defined Symbols
+	 *******************************************************************/
+	icnt = 0;
+	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
+	    for (functionHead = *hsp; functionHead; functionHead = functionHead->next) {
+		if (functionHead->type == IFUNCT) {
+		    /********************************************************************
+		     * Boot Pass 1: function head list
+		     * do this list independently to make sure links are consecutive
+		     *******************************************************************/
+		    slp = functionHead->u_blist;	/* start of statement list */
+		    assert(slp);
+		    vlist = vp = 0;			/* var list Symbols */
+		    flist = 0;				/* function list BuiltIns */
+		    while (slp) {
+			sp = slp->le_sym;		/* formal satement head Symbol */
+			assert(sp);			/* do not handle functions with immC arrays */
+			lp = sp->list;			/* possible link to function head */
+			while (lp) {
+			    out_builtin(lp, &icnt);	/* formal function head Symbol */
+			    lp = lp->le_next;		/* has no follow ups - but just in case */
+			}
+			out_builtin(slp, &icnt);	/* formal satement head Symbol */
+			vlp = slp->le_next;		/* next varList link */
+			slp = vlp->le_next;		/* next statement link */
+		    }
+		    /********************************************************************
+		     * Boot Pass 3: parameter list
+		     * finally output links to real parameters
+		     *******************************************************************/
+		    slp = functionHead->list;		/* parameter list */
+		    assert(slp);
+		    while (slp) {
+			out_builtin(slp, &icnt);	/* output parameter Symbol */
+			slp = slp->le_next;
+		    }
+		}
+	    }
+	}
+	printf(
+"									   /* %d pre-installed BuiltIn function Symbols */\n"
+"#else	/* not BOOT_COMPILE */\n"
+"    /* name	type	ftype	uVal	*/\n"
+	, icnt);
+	printf(
+"#endif	/* not BOOT_COMPILE */\n"
+"};\n"
+	);
+    }
+#endif	/* BOOT_COMPILE */
     /********************************************************************
      *	Clear all v_cnt fields to allow accumulation of gate inputs
      *******************************************************************/
@@ -1652,7 +2068,7 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 	    }
 	    if (functionUse[0].c_cnt & F_SIZE) {
 		fprintf(Fp, "\
-#define iC_SZ(n)	iC_gf->gt_list[n]->gt_old\n\
+#define iC_SIZ(n)	iC_gf->gt_list[n]->gt_old\n\
 ");	    linecnt += 1;
 	    }
 	}
@@ -1673,7 +2089,7 @@ iC_Gt **	iC_list[] = { iC_LIST 0, };\n\
 	    }
 	    if (functionUse[0].c_cnt & F_SIZE) {
 		fprintf(Fp, "\
-#define iC_SZL(n)	_f0_1.gt_list[n]->gt_old\n\
+#define iC_SIZL(n)	_f0_1.gt_list[n]->gt_old\n\
 ");	    linecnt += 1;
 	    }
 	}

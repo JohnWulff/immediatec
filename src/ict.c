@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.60 2013/05/12 08:10:47 jw Exp $";
+"@(#)$Id: ict.c,v 1.61 2013/08/07 04:39:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -398,17 +398,12 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	char *	savCode = "";
 	int	extended = 0;
 	int	extFlag = 0;
-	int	len;
+	int	len = 0;
 	char *	dumpvars;
 	char *	dumpPtr;
 	char *	dumpEnd;
-#if	INT_MAX == 32767 && defined (LONG16)
-	long		value;
-#else	/* INT_MAX == 32767 && defined (LONG16) */
-	int		value;
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
-	char	modName[256];
-	char	modPrev[256] = "";
+	char	modName[ESIZE];
+	char	modPrev[ESIZE] = "";
 
 	time(&walltime);
 	if ((iC_vcdFP = fopen(iC_vcd, "w")) == NULL) {
@@ -555,7 +550,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    extended = 0;
 		    if ((cp = strrchr(ids, '_')) != NULL) {
 			len = cp - ids;		/* length of base for generating module */
-			if (len > 255) len = 255;
+			if (len >= ESIZE) len = ESIZE-1;
 			if (strcmp(++cp, "0") == 0) continue;	/* ignore Qnn_0 */
 			extended = 1;		/* possibly an extended iC variable xxx_1 */
 			while (*cp) {
@@ -592,7 +587,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				}
 				fprintf(iC_vcdFP, "$scope module %s $end\n", modName);
 				extFlag = 1;
-				strncpy(modPrev, modName, 256);
+				strncpy(modPrev, modName, ESIZE);
 			    }
 			} else if (extFlag) {
 			    fprintf(iC_vcdFP, "$upscope $end\n");
@@ -1075,7 +1070,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t%hu:%d\t0x%02x ==>> 0x%02x",
 						gp->gt_ids, channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-					    else if (iC_debug & 020) fprintf(iC_outFP, "%s\t%2hu:%08s\n",
+					    else if (iC_debug & 020) fprintf(iC_outFP, "%s\t%2hu:%s\n",
 						gp->gt_ids, channel, convert2binary(binBuf, gp->gt_new, 1));
 #endif	/* YYDEBUG */
 					    cnt += iC_traMb(gp, 0);			/* distribute bits directly */

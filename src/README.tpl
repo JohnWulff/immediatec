@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.23 2013/02/28 06:31:52 jw Exp $
+#   $Id: README.tpl,v 1.24 2013/09/12 03:10:23 jw Exp $
 ########################################################################
 
 use strict;
@@ -332,15 +332,17 @@ print <<EOF;
     John E. Wulff   $YEAR.$MONTH.$DAY     <immediateC\@gmail.com>
 
 
-    I have now switched to openSUSE 11.4, which brings along Tk804.29,
-    which provides fast live updates in iClive again. They seem to be as
-    fast as with Tk800.24. This was only judged by observation - at least
-    the performance is now subjectively good and I suggest you get Tk804.29.
+    Main development is on openSUSE (currently 11.4) and perlTk Tk804.29, which
+    provides fast live updates in iClive again. They seem to be as fast as with
+    Tk800.24. A Test with Knoppix and Tk804.25, which is still available for
+    Debian also provided good performance with fast live updates in iClive.
 
-    A Test with Knoppix and Tk804.25, which is still available for Debian
-    also provided good performance with fast live updates in iClive.
-
-    No recent tests with MAC-OSX or Windows have been done - this will be
-    the next thing to do.
+    In Sept 2013 I ported immediate C to the Raspberry Pi running Raspbian. There
+    were no problems, except the gcc ARM compiler defaults to 'unsigned char'.
+    Since the core of the iC system is based on signed arithmetic with char's,
+    I had to change the declaration of those to 'signed char'. The following
+    package had to be installed with sudo apt-get install: perl-tk. The following
+    packages are optional but useful: bison, flex, gtkwave, rcs and vim. (2 weeks
+    with an old vi was punishment enough). After that all tests passed.
 EOF
 ########################################################################

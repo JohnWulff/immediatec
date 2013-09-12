@@ -44,6 +44,7 @@
 #   V1.22: 28.05.12 Accept TIMER1 type display mnemonic '!1' and extend it for backward references
 #   V1.23: 24.11.12 Replace require getopts.pl by use Getopt::Std
 #   V1.24: 18.02.13 add 'v' to $FOPS and $LOPS - is additional ftype CH_AR
+#   V1.25: 01.07.13 start processing after ******* to process null.lst correctly
 #
 #################################################################
 
@@ -58,7 +59,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.24 2013/02/18 02:48:32 jw Exp $
+$Id: pplstfix,v 1.25 2013/07/01 02:59:08 jw Exp $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -280,11 +281,14 @@ sub processFile {
     $nodeName = '!';					# name differs from '' for if switch
     $empty = 0;
     $removed = 0;
-    $cFlag = 0;						# iC LISTING
+    $cFlag = 5;						# before iC LISTING
   Line:
     while (<IN>) {
 	chomp;
-	unless ($cFlag == 4 or				# first listing complete
+	if ($cFlag == 5 and /^\*\*\*\*\*\*\* /) {
+	    $cFlag = 0;					# iC LISTING starts now
+	}
+	unless ($cFlag >= 4 or				# first listing not started or complete
 	    /^\*\*\* / or				# or '*** Error' or Warning line
 	    ($cFlag == 0 and /^[a-z>]/)) {		# or logic generation line
 	    if ($empty and /^$/) {

@@ -15,6 +15,10 @@
 #   Pre-compiler to convert "immediate C" source files containing arrays
 #   and object like or function like macros into straight "immediate C".
 #
+#   Also straight macro processor to replace cpp called with 'immac -m'
+#   handling #define #f etc only and special macro pre-processor for
+#   yacc called with 'immac -M' handling %define %if etc only.
+#
 ########################################################################
 
 use strict;
@@ -38,13 +42,15 @@ Usage:
     -m         process only #include #define #if etc directives (see <in.ic>)
 	       No iCa language translation (macro pre-processor replaces cpp)
 	       Warning if %include %define %if etc directives are used
+    -M         process only %include %define %if etc directives for yacc
+	       No iCa language translation (#directives are left untouched)
     -I <path>  scan %include and #include "files" on another path
     -P <macro> predefine <macro> evaluated directly by this program
                Usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
 		     '%define m 4' in the code (opposite to cpp)
-    -D <macro> predefine <macro> evaluated only with -m or <in.ic>
-    -U <macro> undefine <macro> evaluated only with -m or <in.ic>
+    -D <macro> predefine <macro> evaluated only with -m, -M or <in.ic>
+    -U <macro> undefine <macro> evaluated only with -m, -M or <in.ic>
     -a         output FOR IF ELSE ELSIF and %define lines as comments
     -S         forces @<<<< to only accept twin braces in FOR ... {{ }}
 			$named
@@ -60,11 +66,11 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac,v 1.22 2013/06/13 05:24:04 jw Exp $
+$Id: immac,v 1.23 2013/07/03 02:09:17 jw Exp $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
-use vars qw(@opt_I @opt_P @opt_D @opt_U $opt_t $opt_m $opt_T $opt_h);
+use vars qw(@opt_I @opt_P @opt_D @opt_U $opt_t $opt_m $opt_M $opt_T $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     'a'   => \$opt_a,
@@ -79,6 +85,7 @@ GetOptions (
     'D=s' => \@opt_D,
     'U=s' => \@opt_U,
     'm'   => \$opt_m,
+    'M'   => \$opt_M,
     't'   => \$opt_t,
     'T'   => \$opt_T,
     'h'   => \$opt_h);
@@ -122,35 +129,39 @@ my %iCaKey = (
 ########################################################################
 
 my %keywords = (
+    FORCE	=>	0x020,
     D		=>	0x030,	# D flip-flop
     DR		=>	0x030,	# D flip-flop with reset
     DR_		=>	0x030,	# D flip-flop with simple reset
     DSR		=>	0x030,	# D flip-flop with set/reset
     DSR_	=>	0x030,	# D flip-flop with simple set/reset
-    SH		=>	0x050,	# sample and hold
-    SHR		=>	0x030,	# sample and hold with reset
-    SHR_	=>	0x050,	# sample and hold with simple reset
-    SHSR	=>	0x030,	# sample and hold with set/reset
-    SHSR_	=>	0x050,	# sample and hold with simple set/reset
     SR		=>	0x030,	# R_FF for reset master
     SR_		=>	0x030,	# R_FF for reset master
     SRR		=>	0x030,	# R_FF for reset master
     SRR_	=>	0x030,	# R_FF for reset master
     SRX		=>	0x030,	# R_FF for reset master
     JK		=>	0x030,	# R_FF for reset master
-    LATCH	=>	0x020,
-    DLATCH	=>	0x020,
-    CHANGE	=>	0x070,	# pulse on anlog or digital change
-    RISE	=>	0x030,	# pulse on digital rising edge
     ST		=>	0x030,	# monoflop with timed reset
     SRT		=>	0x030,	# monoflop with reset and timed reset
+    SH		=>	0x050,	# sample and hold
+    SHR		=>	0x030,	# sample and hold with reset
+    SHR_	=>	0x050,	# sample and hold with simple reset
+    SHSR	=>	0x030,	# sample and hold with set/reset
+    SHSR_	=>	0x050,	# sample and hold with simple set/reset
+    LATCH	=>	0x020,
+    DLATCH	=>	0x020,
+    RISE	=>	0x030,	# pulse on digital rising edge
+    CHANGE	=>	0x070,	# pulse on anlog or digital change
+    CHANGE2	=>	0x070,	# alternate CHANGE on anlog change
+    CLOCK	=>	0x090,	# CLOCK with 1 or 2 inputs
+    CLOCK2	=>	0x090,	# alternate CLOCK with 2 inputs
+    TIMER	=>	0x0b0,	# TIMER with preset off 0
+    TIMER2	=>	0x0b0,	# alternate TIMER with 2 inputs
+    TIMER1	=>	0x0b0,	# TIMER1 with preset off 1
+    TIMER12	=>	0x0b0,	# alternate TIMER1 with 2 inputs
     if		=>	0x208,
     else	=>	0x208,
     switch	=>	0x208,
-    CLOCK	=>	0x090,
-    TIMER	=>	0x0b0,	# normal timer with preset off 0
-    TIMER1	=>	0x0b0,	# alternate timer with preset off 1
-    FORCE	=>	0x020,
     extern	=>	0x208,
     assign	=>	0x008,
     return	=>	0x208,
@@ -246,7 +257,7 @@ if ($argv = shift @ARGV) {
 use strict 'refs';
 
 if ($opt_t) {
-    $opt_o = $opt_e = $opt_m = $opt_l = $opt_L = '';
+    $opt_o = $opt_e = $opt_m = $opt_M = $opt_l = $opt_L = '';
 } else {
     if ($opt_l) {
 	if (-f $opt_l) {
@@ -279,6 +290,7 @@ if ($opt_t) {
     }
 }
 
+my $opt_m_or_opt_M = $opt_m || $opt_M;
 my $CdirectiveRegex = $opt_m ?
     qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
     qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
@@ -309,7 +321,7 @@ if (@opt_P) {
 	}
     }
 }
-if ($opt_m) {				# -D -U only processed for <in>.ic iC files or if -m
+if ($opt_m_or_opt_M) {			# -D -U only processed for <in>.ic iC files or if -m or -M
     if (@opt_D) {			# for compatibility with cpp
 	my ($df, $val);
 	foreach (@opt_D) {
@@ -583,17 +595,21 @@ sub process_file {
 	while (<$in>) {
 	    ########################################################################
 	    #   If -m then only %#directives are handled in this block
-	    #   $CdirecriveRegex = qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+	    #   $CdirectiveRegex = qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
 	    #   Else both #directives and %# directives are culled here
-	    #   $CdirecriveRegex = qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+	    #   $CdirectiveRegex = qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
 	    ########################################################################
 	    if ($Cdirective or m/$CdirectiveRegex/) {
 		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %#define etc output as is
 		unless ($opt_t) {
-		    if (not $opt_m and (@block or $finBlock or $opt_L)) {
+		    if ($si <= 0) {
+			$blankLines++;		# count lines not output as blank lines
+			next Line;		# do not output lines in false blocks
+		    }
+		    if (not $opt_m_or_opt_M and (@block or $finBlock or $opt_L)) {
 			push(@block, "\$out .= $_\";\n");
 		    } else {
-			if ($opt_m and $blankLines) {
+			if ($opt_m_or_opt_M and $blankLines) {
 			    blanks();		# print blank lines now
 			}
 			print;			# with direct print - cpp handles it
@@ -607,12 +623,8 @@ sub process_file {
 	    #	except warn if %directive used in straight iC file or in immac -m call
 	    ########################################################################
 	    if ($directive or s/^\s*([%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1$2/) {
-		if ($opt_m) {
-		    if ($directive eq "" and $1 eq "%") {
-			$mWarn = 1;		# output Warning later
-		    }
-		    $blankLines++;		# since %define and #define lines are not output treat it as a blank line
-		}
+		$mWarn = 1 if $opt_m and $directive eq "" and $1 eq "%";	# output Warning later for -m only
+		$blankLines++ if $opt_m_or_opt_M;	# since %define and #define lines are not output treat them as a blank line
 		if (s/\\\s*$//) {		# test for and then remove trailing '\'
 		    chomp;			# %define or %undef line terminated by '\'
 		    s!(\s*(/[*/]).*)$! !;	# change C or C++ comment into 1 trailing space
@@ -626,10 +638,10 @@ sub process_file {
 		}
 	    }					# treat final directive line as a blank line
 	    ########################################################################
-	    #   If -m then 8 or more blank or directive lines are ignored
+	    #   If -m or -M then 8 or more blank or directive lines are ignored
 	    #   # $. "file" is output instead (same as cpp)
 	    ########################################################################
-	    elsif ($opt_m) {
+	    elsif ($opt_m_or_opt_M) {
 		if ($_ eq "\n") {
 		    $blankLines++;
 		    next Line;
@@ -661,7 +673,7 @@ sub process_file {
 	    #   NOTE: no brace counting is necessary - only look for next opening
 	    #   brace(s) after a FOR IF ELSE or ELSIF.				{
 	    ########################################################################
-	    if (not $opt_m and
+	    if (not $opt_m_or_opt_M and
 		(m/(\bFOR\b|\bIF\b|\bELSE\b|\bELSIF\b|}|\[|\])/ or $FORline or $FORend or $SQline)) {
 		if ($FORline) {			# speeds up this scan
 		    s/^\s+//;			# delete leading blanks in follow on lines
@@ -913,7 +925,7 @@ no strict 'refs';
 			    if (open($in, $argv)) {
 				print LOG "### $_" if $opt_l;
 				print "//***** $_" if $opt_a;
-				if ($opt_m) {
+				if ($opt_m_or_opt_M) {
 				    if (--$blankLines) {	# $blankLines is at least 1 because it is a directive
 					blanks();		# print blank lines now
 				    }
@@ -929,18 +941,18 @@ use strict 'refs';
 			}
 		    }
 		    elsif ($def =~ m/^[%#]error$/) {
-			if (not $opt_m and $def eq "%error") {
+			if (not $opt_m_or_opt_M and $def eq "%error") {
 			    push(@lnErr, "//* Error: $def $macro\n");
 			    $r++;			# deliberate error
 			    unless ($opt_t) {
-				if (not $opt_m and (@block or $finBlock or $opt_L)) {
+				if (@block or $finBlock or $opt_L) {
 				    $macro =~ s/"/\\"/g;
 				    push(@block, "\$out .= \"%{\\n%#error $macro\\n%}\\n\";\n");
 				} else {
 				    print "%{\n%#error $macro\n%}\n";
 				}
 			    }
-			} else {			# $opt_m or "#error"
+			} else {			# -m or -M or "#error"
 			    print STDERR "$argv:$.:2: error: $def $macro\n";
 			    exit 1;			# deliberate error - emulate cpp
 			}
@@ -957,12 +969,12 @@ use strict 'refs';
 		next Line;				# do not output lines in false blocks
 	    }
 	    resolve_line();				# resolve  macros for the rest of the code
-	    if ($opt_m) {
-		print;					# just output macro procssed line for <in.ic>
+	    if ($opt_m_or_opt_M) {
+		print;					# just output macro processed line for <in.ic>
 		next Line;
 	    }
 	    ########################################################################
-	    #   Analyse a code line - not done with -m option or input file is <in.ic>
+	    #   Analyse a code line - not done with -m or -M option or input file is <in.ic>
 	    ########################################################################
 	    do {
 		if ($opt_a) {
@@ -1003,7 +1015,35 @@ use strict 'refs';
 		@atoms = ();
 		@nlTabs = ();
 		$control = $sqNest = $square = $offset = 0;
-		while (m/((\\\\)*)(\\?("|'|\[|\]|\n|\\n|\\t)|\/\*|\/\/|\*\/|#|%?({{?|}}?)|\w+|=|;)/g) {
+		while (m/
+			    (			# $1 leading backslah pairs
+				(\\\\)*		# $2
+			    )
+			    (			# $3 found token
+				\\?		#    with optional leading backslash
+				(		# ($4)
+				    "	|	#    " \"
+				    '	|	#    ' \'
+				    \[	|	#    [ \[
+				    \]	|	#    ] \]
+				    \n		#    EOL \EOL
+				)	|
+				%?		#    with optional leading %
+				(		# ($5)
+				    {{?	|	#    { {{ %{ (%{{)
+				    }}?		#    } }} %} (%}})
+				)
+					|	#    rest with no extra leading characters
+				\/\/	|	#    C++ comment
+				\/\*	|	#    start of C comment
+				\*\/	|	#    end of C comment
+				\w+	|	#    word identifier
+				\\n	|	#    char LF
+				\\t	|	#    char TAB
+				\S		#    any other non-space character
+			    )
+			/gx
+		) {
 		    push @atoms, [ length($`)+length($1), $3 ];	# [ $pos, $atom ]
 		}
 		########################################################################
@@ -1019,6 +1059,7 @@ use strict 'refs';
 		#	{{  }}	blocks controlled by a FOR IF ELSE or ELSIF statement
 		#	\w+	words and numbers - any type of program atom
 		#	=   ;	statement delimiter to trigger a preceding/follow on in FOR
+		#	\S	any other non-space character starts new output after }}
 		#   check atoms in sequence - positions in line may change now
 		#   translate atoms only in square brackets in code, comments and strings
 		#   and in iCa FOR control lines
@@ -1171,9 +1212,13 @@ use strict 'refs';
 				    $ref = $atoms[$aix + 1];	# next atom in @atoms [int] $identifier
 				    if (ref($ref) eq "ARRAY") {
 					( $pos, $identifier ) = @$ref;
+					if ($identifier eq "(") {
+					    $aix++;		# skip over "("
+					    goto retry;
+					}
 					if ($identifier eq "int") {
 					    substr($_, $pos + $offset, 4) = '';
-					    $offset -= 4;
+					    $offset -= 4;	# delete "int " from perl eval code
 					    $aix++;		# skip over "int"
 					    goto retry;
 					}
@@ -1595,7 +1640,7 @@ use strict 'refs';
 	    $argRef = pop(@argInfo);
 	    if (defined $argRef) {
 		($argv, $., $in) = @$argRef;	# restore previous file info
-		if ($opt_m) {
+		if ($opt_m_or_opt_M) {
 		    my $l = $. + ((eof $in) ? 0 : 1);
 		    print "# $l \"$argv\" 2\n";	# # 8 "file" 2 // close an include file
 		}
@@ -1776,8 +1821,8 @@ use warnings;
 		    $w++;			# warning found
 		}
 	    }
-	    if (not $opt_m and $translate !~ m/^\s*\d+\s*$/ and $translate !~ m/[^ \t()\d*\/%+-]/) {
-		my $tran = eval $translate;	# not -m and not a constant but a constant expression
+	    if (not $opt_m_or_opt_M and $translate !~ m/^\s*\d+\s*$/ and $translate !~ m/[^ \t()\d*\/%+-]/) {
+		my $tran = eval $translate;	# not -m and not -M and not a constant but a constant expression
 		if ($@) {
 		    push(@lnErr, "//* Error: start of Perl eval File $argv, line $.\n");
 		    push(@lnErr, sprintf("// %2d:	%s", 1, $_));	# append eval Perl code to iC file
@@ -2150,13 +2195,13 @@ sub remove_comment {
 
 ########################################################################
 #
-#   Print a group of blank lines (only when $opt_m)
+#   Print a group of blank lines (only when $opt_m or $opt_M)
 #
 ########################################################################
 
 sub blanks {
     print "//* $.:	blankLines = $blankLines\n" if $opt_T;
-    if ($blankLines >= 8) {
+    if ($blankLines >= 8 and not $opt_M) {
 	print "# $. \"$argv\"\n";	# # 23 "file" // block of 8 or more blank lines
     } else {
 	for (my $n = 0; $n < $blankLines; $n++) {
@@ -2190,13 +2235,15 @@ B<immac> [-tmaSNLTh][ -o <out>][ -l <log>][ -e <err>][ -I <path> ...]
     -m         process only #include #define #if etc directives (see <in.ic>)
 	       No iCa language translation (macro pre-processor replaces cpp)
 	       Warning if %include %define %if etc directives are used
+    -M         process only %include %define %if etc directives for yacc
+	       No iCa language translation (#directives are left untouched)
     -I <path>  scan %include and #include "files" on another path
     -P <macro> predefine <macro> evaluated directly by this program
                Usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
 		     '%define m 4' in the code (opposite to cpp)
-    -D <macro> predefine <macro> evaluated only with -m or <in.ic>
-    -U <macro> undefine <macro> evaluated only with -m or <in.ic>
+    -D <macro> predefine <macro> evaluated only with -m, -M or <in.ic>
+    -U <macro> undefine <macro> evaluated only with -m, -M or <in.ic>
     -a         output FOR IF ELSE ELSIF and %define lines as comments
     -S         forces immac to only accept twin braces in FOR ... {{ }}
     -N         negates use strict pragmas       (only for debugging)
@@ -2380,7 +2427,7 @@ This would normally produce this slighty different statement:
 The B<immac> compiler changes ,; to ; to produce correct iC code -
 the same as the previous example.
 
-The iC language and the B<immcc(3)> compiler have been changed to
+The iC language and the B<immcc> compiler have been changed to
 allow all imm extern and extern C declarations to be terminated by ,;
 - with the latest change described in the previous paragraph this is
 no longer needed.
@@ -2416,10 +2463,13 @@ The pre-compiler B<immac> provides a full macro facility very similar
 to that provided by the C pre-processor B<cpp>.  Object like macros
 without parameters as well as function like macros with parameters
 in parentheses are supported.  The keyword to introduce an B<immac>
-macro definition is B<%define> not B<#define>; that is reserved for
-B<cpp> or B<immac -m>. The latter is an alternative to B<cpp> and is
-used in conjunction with the full iC compiler B<immcc> to resolve C
-type macro's in embedded C code fragments.
+macro definition is B<%define> not B<#define>; that is reserved
+for B<cpp> or B<immac -m>. The latter is an alternative to B<cpp>
+and is used in conjunction with the full iC compiler B<immcc> to
+resolve C type macro's in embedded C code fragments. B<immac -M>
+on the other hand only handles B<%define> B<%if> etc which can be
+used to handle conditional grammar rules in yacc or bison. Both of
+the latter alternatives do not translate iCa language constructs.
 
     %define LENGTH	 4
 
@@ -2427,6 +2477,13 @@ The same macro term LENGTH could also be pre-defined in the
 command line with the -P option:
 
     immac -P LENGTH=8
+
+For immac -m and immac -M macros are pre-defined in the command line
+with the -D option (just like cpp). The -U option is also available
+in these cases:
+
+    immac -m -D LENGTH=8
+    immac -M -D LENGTH=8
 
 Unlike B<cpp>, the definition in the command line has precedence over
 the definition with a B<%define> line in the program. This allows
@@ -2494,6 +2551,12 @@ When B<immac> is called with the B<-m> option it simply becomes a
 macro processor handling #define, #undef, -D, -U, #include, #if,
 #else etc. No iCa constructs are translated in this mode. Every
 attempt has been made to make B<immac -m> equivalent to B<cpp>.
+
+When B<immac> is called with the B<-M> option it simply becomes a
+macro processor handling %define, %undef, -D, -U, %include, %if,
+%else etc. Again no iCa constructs or #directives are translated in
+this mode, which is useful for processing conditional grammar rules
+in yacc or bison.
 
 =head1 AUTHOR
 

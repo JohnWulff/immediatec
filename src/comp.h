@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.63 2013/02/14 00:01:12 jw Exp $";
+"@(#)$Id: comp.h,v 1.64 2013/07/22 08:45:26 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -58,16 +58,16 @@ typedef	struct Symbol {		/* symbol table entry */
 #if ! YYDEBUG || defined(SYUNION)
     union {
 #endif
+	List_e *	blist;	/* used in compile (1st union member to allow initialisation) */
 	Gate *		gate;	/* AND OR */
-	List_e *	blist;	/* used in compile */
 	unsigned int	val;	/* used to hold function number etc. */
 #if ! YYDEBUG || defined(SYUNION)
     } u;
     union {
 #endif
-	unsigned int	cnt;	/* used to hold link_count in listNet() */
 	List_e *	elist;	/* feedback list pointer */
 	struct Symbol *	glist;	/* mark symbols in C compile */
+	unsigned int	cnt;	/* used to hold link_count in listNet() */
 #if ! YYDEBUG || defined(SYUNION)
     } v;
 #endif
@@ -75,25 +75,27 @@ typedef	struct Symbol {		/* symbol table entry */
 } Symbol;
 
 #if ! YYDEBUG || defined(SYUNION)
-#define u_gate		u.gate
 #define u_blist		u.blist
+#define u_gate		u.gate
 #define u_val		u.val
-#define v_cnt		v.cnt
 #define v_elist		v.elist
 #define v_glist		v.glist
+#define v_cnt		v.cnt
 #else				/* no unions is easier for debugging with ddd */
-#define u_gate		gate
 #define u_blist		blist
+#define u_gate		gate
 #define u_val		val
-#define v_cnt		cnt
 #define v_elist		elist
 #define v_glist		glist
+#define v_cnt		cnt
 #endif
 
-#define EM		0x01	/* bit mask for extern in em */
-#define TM1		0x02	/* bit mask for TIMER1 in em */
-#define FM		0x80	/* bit wihch marks paramater and local var in function definition */
-#define FU		0x03	/* bit mask for use count 0, 1 or 2 */
+#define EM		0x01	/* em bit mask for extern */
+#define TM1		0x02	/* em bit mask for TIMER1 */
+#define FU		0x03	/* fm bit mask for use count 0, 1 or 2 */
+#define FI		0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
+#define FMI		0x30	/* fm bit mask for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
+#define FM		0x80	/* fm bit wihch marks parameter and local var in function definition */
 
 /* for use in a union identical first elements can be accesed */
 typedef struct Sym { char *f; char *l; Symbol * v;     } Sym;
@@ -109,6 +111,17 @@ typedef struct Token {		/* Token for gram.y grammar */
     unsigned int	inde;
     Symbol *		symbol;
 } Token;
+
+typedef struct BuiltIn {	/* initial Symbol info in init.c */
+    char *		name;
+    unsigned char	type;
+    unsigned char	ftype;
+    unsigned int	uVal;		/* yacc token for type KEYW */
+    List_e *		list;		/* output list pointer */
+    List_e *		blist;		/* forward blist pointer */
+    List_e *		link1;		/* 2 back links for new built-in */
+    List_e *		link2;		/* set up in BOOT_COMPILE */
+} BuiltIn;
 
 					/*  comp.y  */
 extern int  iCparse(void);		/* generated yacc parser function */
@@ -249,11 +262,10 @@ extern Symbol *	returnStatement(	/* value function return statement */
 	    Lis * actexpr);
 extern Symbol *	functionDefinition(	/* finalise function definition */
 	    Symbol * iFunHead, List_e * fParams);
-extern Symbol *	pushFunCall(Symbol *);	/* save global variables for nested function calls */
-extern List_e * handleRealParameter(	/* handle a real parameter of a called function */
-	    List_e * plp, List_e * alp);
+extern Symbol * getRealParameter(	/* get a real parameter of a called function */
+	    Symbol * hsp, List_e * lp);
 extern Lis	cloneFunction(		/* clone a function template in a function call */
-	    Sym * fhs, Lis * plpl, Str * par);
+	    Sym * fhs, Sym * hsym, Str * par);
 extern Symbol *	clearFunDef(		/* clear a previous function definition */
 	    Symbol * functionHead);
 extern List_e *	checkDecl(		/* check decleration of a function terminal */
@@ -286,7 +298,9 @@ extern void	pu(enum stackType t, const char * token, void * node);
 extern Symbol *	iclock;			/* default clock */
 extern Symbol *	iconst;			/* pointer to Symbol "iConst" */
 extern Symbol *	icerr;			/* pointer to Symbol "iCerr" */
+#ifdef BOOT_COMPILE
 extern Symbol	iC_CHANGE_ar;		/* alternative arithmetic CHANGE */
+#endif	/* BOOT_COMPILE */
 extern void	init(void);		/* install constants and built-ins */
 extern const char initialFunctions[];	/* iC system function definitions */
 extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */

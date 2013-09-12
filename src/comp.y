@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.109 2013/04/18 02:44:53 jw Exp $";
+"@(#)$Id: comp.y,v 1.110 2013/08/07 02:27:27 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -42,7 +42,9 @@ static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
 static Type	stype;			/* to save TYPE in decl */
+%ifdef	BOOT_COMPILE
 static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
+%endif	/* BOOT_COMPILE */
 static Symbol	nSym = { "", ERR, GATE, };
 static int	cFn = 0;
 
@@ -170,8 +172,10 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 	 *
 	 ***********************************************************/
 
-%token	<sym>	UNDEF IMMCARRAY AVARC AVAR LVARC LVAR AOUT LOUT BFORCE
-%token	<sym>	BLTIN1 BLTINC BLTIN2 BLTIN3 CVAR CBLTIN TVAR TBLTIN TBLTI1
+%token	<sym>	UNDEF IMMCARRAY AVARC AVAR AOUT LVARC LVAR LOUT CVAR TVAR
+%ifdef	BOOT_COMPILE
+%token	<sym>	BFORCE BLTIN1 BLTINC BLTIN2 BLTIN3 CBLTIN TBLTIN TBLTI1
+%endif	/* BOOT_COMPILE */
 %token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE SIZEOF
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
 %token	<val>	CCFRAG NUMBER
@@ -179,11 +183,14 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
 %type	<sym>	returnStatement formalParameter lBlock dVariable valueVariable cVariable outVariable
 %type	<sym>	useFlag decl extDecl immDecl asgn dasgn casgn dcasgn tasgn dtasgn
-%type	<sym>	iFunTrigger vFunCall vFunCallHead iFunCallHead cFunCallHead tFunCallHead
+%type	<sym>	iFunTrigger vFunCall rParams rPlist
 %type	<sym>	extCfunDecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
-%type	<list>	expr aexpr lexpr fexpr cexpr cfexpr texpr ractexpr actexpr tfexpr ifini ffexpr
+%type	<list>	expr aexpr cexpr texpr ractexpr actexpr ifini ffexpr
+%ifdef	BOOT_COMPILE
+%type	<list>	lexpr fexpr cfexpr tfexpr
+%endif	/* BOOT_COMPILE */
 %type	<list>	cref ctref ctdref cCall cParams cPlist dPar immCini immCiniList
-%type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall rParams rPlist
+%type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall
 %type	<val>	cBlock dParams dPlist immCindex constExpr
 %type	<typ>	declHead extDeclHead formalParaTypeDecl extCfunDeclHead
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
@@ -1071,21 +1078,6 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: outVariable", &$$);
 #endif
 	    }
-	| fexpr			{
-		Symbol *	sp;
-		if ($1.v == 0) YYERROR;		/* error in bltin() */
-		sp = $1.v->le_sym;
-		$$ = $1;
-		if (sp->ftype != iC_ftypes[sp->type] && sp->ftype != CH_AR && sp->type != VF) {
-		    warning("not enough arguments for function", sp->name);
-		}
-		sp->ftype = sp->type == SH ? ARITH : GATE;
-		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: fexpr", &$$);
-#endif
-	    }
 	| cCall			{
 		$$ = $1;
 		if ($$.v) {
@@ -1104,23 +1096,6 @@ expr	: UNDEF			{
 		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: iFunCall", &$$);
-#endif
-	    }
-	/************************************************************
-	 * FORCE(aexpr,aexpr,aexpr)
-	 *	FORCE(expr,on,off)
-	 * also implements LATCH(set, reset) via a pre-defined function block
-	 * also implements DLATCH(set, reset, clk) via a pre-defined function block
-	 ***********************************************************/
-	| BFORCE '(' aexpr ',' lexpr ')'	{	/* FORCE(expr,hi,lo) */
-		$$.f = $1.f; $$.l = $6.l;
-		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
-		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
-		$$.v->le_sym->type = LATCH;
-		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
-		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: BFORCE", &$$);
 #endif
 	    }
 	| '(' aexpr ')'		{
@@ -1595,6 +1570,40 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: '-' expr", &$$);
 #endif
 	    }
+%ifdef	BOOT_COMPILE
+	| fexpr			{
+		Symbol *	sp;
+		if ($1.v == 0) YYERROR;		/* error in bltin() */
+		sp = $1.v->le_sym;
+		$$ = $1;
+		if (sp->ftype != iC_ftypes[sp->type] && sp->ftype != CH_AR && sp->type != VF) {
+		    warning("not enough arguments for function", sp->name);
+		}
+		sp->ftype = sp->type == SH ? ARITH : GATE;
+		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: fexpr", &$$);
+#endif
+	    }
+	/************************************************************
+	 * FORCE(aexpr,aexpr,aexpr)
+	 *	FORCE(expr,on,off)
+	 * also implements LATCH(set, reset) via a pre-defined function block
+	 * also implements DLATCH(set, reset, clk) via a pre-defined function block
+	 ***********************************************************/
+	| BFORCE '(' aexpr ',' lexpr ')'	{	/* FORCE(expr,hi,lo) */
+		$$.f = $1.f; $$.l = $6.l;
+		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
+		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
+		$$.v->le_sym->type = LATCH;
+		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
+		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: BFORCE", &$$);
+#endif
+	    }
+%endif	/* BOOT_COMPILE */
 	;
 
 	/************************************************************
@@ -1674,6 +1683,7 @@ constExpr
 #endif
 	    }
 	;
+%ifdef	BOOT_COMPILE
 
 	/************************************************************
 	 *
@@ -1698,6 +1708,7 @@ lexpr	: aexpr ',' aexpr		{
 #endif
 	    }
 	;
+%endif	/* BOOT_COMPILE */
 
 	/************************************************************
 	 *
@@ -1799,6 +1810,7 @@ ctdref	: cexpr			{ $$ = $1; }		/* clock */
 		$$.v = op_push($1.v, TIM, $3.v);
 	    }
 	;
+%ifdef	BOOT_COMPILE
 
 	/************************************************************
 	 *
@@ -2039,6 +2051,7 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH(expr); RISE(expr) */
 #endif
 	    }
 	;
+%endif	/* BOOT_COMPILE */
 
 	/************************************************************
 	 *
@@ -2159,6 +2172,7 @@ casgn	: UNDEF '=' cexpr	{
 
 cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	| casgn			{ $$.v = sy_push($1.v); }
+%ifdef	BOOT_COMPILE
 	| cfexpr		{
 		Symbol *	sp = $1.v->le_sym;
 		assert(sp);
@@ -2168,6 +2182,7 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 		sp->ftype = CLCKL;			/* clock list head */
 		$$ = $1;
 	    }
+%endif	/* BOOT_COMPILE */
 	| cFunCall		{
 		Symbol *	sp = &nSym;
 		if ($1.v == 0 || (sp = $1.v->le_sym) == 0 || sp->ftype != CLCKL) {
@@ -2178,6 +2193,7 @@ cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	    }
 	| '(' cexpr ')'		{ $$ = $2; }
 	;
+%ifdef	BOOT_COMPILE
 
 	/************************************************************
 	 * CLOCK(aexpr[,(cexpr|texpr[,aexpr])])
@@ -2214,6 +2230,7 @@ cfexpr	: CBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, 0);
 	    }
 	;
+%endif	/* BOOT_COMPILE */
 
 	/************************************************************
 	 *
@@ -2256,6 +2273,7 @@ tasgn	: UNDEF '=' texpr	{
 
 texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 	| tasgn			{ $$.v = sy_push($1.v); }
+%ifdef	BOOT_COMPILE
 	| tfexpr		{
 		Symbol *	sp = $1.v->le_sym;
 		assert(sp);
@@ -2265,6 +2283,7 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 		sp->ftype = TIMRL;			/* timer list head */
 		$$ = $1;
 	    }
+%endif	/* BOOT_COMPILE */
 	| tFunCall		{
 		Symbol *	sp = &nSym;
 		if ($1.v == 0 || (sp = $1.v->le_sym) == 0 || sp->ftype != TIMRL) {
@@ -2275,6 +2294,7 @@ texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 	    }
 	| '(' texpr ')'		{ $$ = $2; }
 	;
+%ifdef	BOOT_COMPILE
 
 	/************************************************************
 	 *
@@ -2366,6 +2386,7 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 		$$.v = bltin(&$1, &$3, &$5, 0, 0, &$7, &$8, &val1);
 	    }
 	;
+%endif	/* BOOT_COMPILE */
 
 	/************************************************************
 	 *
@@ -2740,28 +2761,18 @@ formalParaTypeDecl
 	 *	QX0.0  = bf1(b1 | b2, if1(...) + 5, cf1(...), tf1(...), 2);
 	 ***********************************************************/
 
-iFunCallHead
-	: IFUNCTION '('			{
-		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+iFunCall: IFUNCTION '(' rParams ')'	{
+		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
+		$$ = cloneFunction(&$1, &$3, &$4);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(SYM, "iFunCallHead: IFUNCTION (", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "iFunCall: IFUNCTION (rParams)", &$$);
 #endif
 	    }
-	;
-
-iFunCall: iFunCallHead rParams ')'	{
+	| IFUNCTION '(' rParams error ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		$$ = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
+		$$ = cloneFunction(&$1, &$3, &$5);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "iFunCall: iFunCallHead rParams)", &$$);
-#endif
-	    }
-	| iFunCallHead rParams error ')'	{
-		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		$$ = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "iFunCall: iFunCallHead rParams error)", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "iFunCall: IFUNCTION (rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2773,28 +2784,18 @@ iFunCall: iFunCallHead rParams ')'	{
 	 *	clk = cf1(b1, iClock);
 	 ***********************************************************/
 
-cFunCallHead
-	: CFUNCTION '('			{
-		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+cFunCall: CFUNCTION '(' rParams ')'	{
+		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
+		$$ = cloneFunction(&$1, &$3, &$4);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(SYM, "cFunCallHead: CFUNCTION (", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cFunCall: CFUNCTION (rParams)", &$$);
 #endif
 	    }
-	;
-
-cFunCall: cFunCallHead rParams ')'	{
+	| CFUNCTION '(' rParams error ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		$$ = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
+		$$ = cloneFunction(&$1, &$3, &$5);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "cFunCall: cFunCallHead rParams)", &$$);
-#endif
-	    }
-	| cFunCallHead rParams error ')'	{
-		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		$$ = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "cFunCall: cFunCallHead rParams error)", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cFunCall: CFUNCTION (rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2806,29 +2807,18 @@ cFunCall: cFunCallHead rParams ')'	{
 	 *	tim = tf1(b2, clk);
 	 ***********************************************************/
 
-tFunCallHead
-	: TFUNCTION '('			{
-		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
+tFunCall: TFUNCTION '(' rParams ')'	{
+		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
+		$$ = cloneFunction(&$1, &$3, &$4);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(SYM, "tFunCallHead: TFUNCTION (", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall: TFUNCTION (rParams)", &$$);
 #endif
 	    }
-	;
-
-tFunCall: tFunCallHead rParams ')'	{
+	| TFUNCTION '(' rParams error ')'	{
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		$$ = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
+		$$ = cloneFunction(&$1, &$3, &$5);	/* clone function from call head */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall: tFunCallHead rParams)", &$$);
-#endif
-	    }
-	| tFunCallHead rParams error ')'	{
-		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		$$ = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall error", &$$);
-		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall: tFunCallHead rParams error)", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "tFunCall: TFUNCTION (rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
@@ -2841,41 +2831,47 @@ tFunCall: tFunCallHead rParams ')'	{
 	 *	vf1(b3, i3, b1 & IX0.0, delay * 10);
 	 ***********************************************************/
 
-vFunCallHead
-	: VFUNCTION '('			{
-		$$.f = $1.f; $$.l = $2.l;
-		$$.v = pushFunCall($1.v);		/* save globals for nested function calls */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCallHead: VFUNCTION (", &$$);
-#endif
-	    }
-	;
-
-vFunCall: vFunCallHead rParams ')'	{
+vFunCall: VFUNCTION '(' rParams ')'	{
 		Lis	lis;
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		lis = cloneFunction(&$1, &$2, &$3);	/* clone function from call head */
+		lis = cloneFunction(&$1, &$3, &$4);	/* clone function from call head */
 		$$.f = lis.f; $$.l = lis.l;
 		$$.v = 0;				/* $$.v is Sym - not compatible */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCall: vFunCallHead rParams)", &$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCall: VFUNCTION (rParams)", &$$);
 #endif
 	    }
-	| vFunCallHead rParams error ')'	{
+	| VFUNCTION '(' rParams error ')'	{
 		Lis	lis;
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
-		lis = cloneFunction(&$1, &$2, &$4);	/* clone function from call head */
+		lis = cloneFunction(&$1, &$3, &$5);	/* clone function from call head */
 		$$.f = lis.f; $$.l = lis.l;
 		$$.v = 0;				/* $$.v is Sym - not compatible */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCall: vFunCallHead rParams error)", &$$);
+		if ((iC_debug & 0402) == 0402) pu(SYM, "vFunCall: VFUNCTION (rParams error)", &$$);
 #endif
 		iclock->type = ERR; yyerrok;
 	    }
 	;
 
 	/************************************************************
-	 * real parameter list for immediate function calls
+	 *
+	 *	Get real parameter list for immediate function calls
+	 *
+	 *	The first call to getRealParameter(0, $1.v) will set up a Symbol,
+	 *	which is the head of a new parameter list. It is pointed at by hsp.
+	 *		hsp->list points to the first parameter
+	 *		hsp->u_blist points to the last parameter
+	 *		hsp->fm is filled with a signature of value parameters
+	 *
+	 *	Subsequent calls link the next parameter to hsp->u_blist->le_next
+	 *
+	 *	All this is done before the execution of cloneFunction(), which
+	 *	includes setting up the correct function head accrding to the
+	 *	signature returned, analysing the parameters against the formal
+	 *	parameters and actually cloning the function. Nested calls will
+	 *	have their own *hsp, which obviates the need for an extra stack.
+	 *
 	 ***********************************************************/
 
 rParams	: /* nothing */			{ $$.v =  0; }
@@ -2888,7 +2884,7 @@ rPlist	: actexpr			{
 		if ($1.v == 0) {
 		    if (const_push(&$1)) { errInt(); YYERROR; }
 		}
-		$$.v = handleRealParameter(0, $1.v);
+		$$.v = getRealParameter(0, $1.v);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "rPlist: actexpr", &$$);
 #endif
@@ -2898,7 +2894,7 @@ rPlist	: actexpr			{
 		if ($3.v == 0) {			/* must extract value from aexpr */
 		    if (const_push(&$3)) { errInt(); YYERROR; }
 		}
-		$$.v = handleRealParameter($1.v, $3.v);
+		$$.v = getRealParameter($1.v, $3.v);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "rPlist: rPlist , actexpr", &$$);
 #endif
@@ -3542,7 +3538,7 @@ static char	iCtext[YTOKSZ];			/* lex token */
 static int	iCleng;				/* length */
 static int	lineflag;
 static int	iniDebug;
-static char const * iniPtr;
+static char const * iniPtr = NULL;
 static char *	errFilename;
 static int	errFlag = 0;
 static int	errRet = 0;
@@ -3629,10 +3625,10 @@ iC_compile(
 		return Iindex;			/* error opening input file */
 	    }
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e \"$s=1; print 'perl $s = ', $s, '...'; while (<>) { if (/^\\s*[%#]\\s*[deiu]/) { $s=0; print 'perl $_ = ', $_, '...'; last; } } print 'perl $s = ', $s, '...'; exit $s;\" %s; $? = %d\n", inpPath, r);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e \"$s=1; print 'perl $s = ', $s, '...'; while (<>) { if (/^\\s*[%%#]\\s*[deiu]/) { $s=0; print 'perl $_ = ', $_, '...'; last; } } print 'perl $s = ', $s, '...'; exit $s;\" %s; $? = %d\n", inpPath, r);
 #endif
 #else	/* not WIN32 */
-	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^\\s*[%#]\\s*[deiu]/) { $s=0; last; } } exit $s;' %s", inpPath);
+	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^\\s*[%%#]\\s*[deiu]/) { $s=0; last; } } exit $s;' %s", inpPath);
 	    r = system(execBuf);		/* test with perl script if #include %include etc in input */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: %s; $? = %d\n", execBuf, r);
@@ -3686,9 +3682,11 @@ iC_compile(
     if (iC_debug & 046) {			/* begin source listing */
 	fprintf(iC_outFP, "******* %-15s ************************\n", inpNM);
     }
-    iniPtr = initialFunctions;			/* read system function definitions first */
-    iniDebug = iC_debug;			/* save iC_debug flag */
-    if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
+    if ((iC_debug & 020000) == 0) {
+	iniPtr = initialFunctions;		/* read system function definitions first */
+	iniDebug = iC_debug;			/* save iC_debug flag */
+	if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
+    }						/* unless generating BOOT_COMPILE for init.c */
     setjmp(begin);
     for (initcode(); iCparse(); initcode()) {
 	;

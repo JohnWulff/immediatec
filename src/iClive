@@ -139,9 +139,9 @@ Usage:
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -F font font or font size to use in Text window (default '14')
-    -l num  height of the Text window (default @<)
+    -l num  height of the Text window (default @<<)
 					$opt_l
-    -w num  width  of the Text window (default @<)
+    -w num  width  of the Text window (default @<<) -w0 is terminal width
 					$opt_w
     -g geom geometry for main window
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
@@ -220,7 +220,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.53 2013/03/06 03:24:45 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.54 2013/09/07 03:46:03 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -228,13 +228,23 @@ use Getopt::Std;		# replace require "getopts.pl";
 getopts('tTmd:s:p:i:f:l:w:g:A:uXh');	# sets $opt_h if -h etc
 
 exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
-$opt_l = 35 unless $opt_l;
-$opt_w = 80 unless $opt_w;
-$opt_A = 'iCbox' unless $opt_A;
+
+my $size = `stty size`;
+chomp $size;
+my @sizes = $size ? split ' ', $size : (35, 85);
+print "size = '$size'\n" if $opt_T;
+$opt_l = $sizes[0] unless $opt_l;	# if any higher than 35 on 768 pixel high screen, status bar is hidden
+$opt_w = $sizes[1] if defined $opt_w and $opt_w == 0;	# adjust to terminal width
+					# @sizes made the same as terminal size because on Debian systems 'man'
+					# generates man pages the full width of the terminal (jw 20130829)
+$opt_w = 85 unless $opt_w;		# 85 just allows all buttons to fit in the top menu bar (this wide anyway)
+					# also gives a bit more room for oversize texts
+print "opt_l = '$opt_l' opt_w = '$opt_w'\n" if $opt_T;
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
+$opt_A = 'iCbox' unless $opt_A;
 my $u = '';
 if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
@@ -384,22 +394,22 @@ static unsigned char ic_bits[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x1c,
-    0xe0, 0x00, 0x00, 0x00, 0x7f, 0x1c,
-    0xf0, 0x01, 0x00, 0xe0, 0xff, 0x1f,
-    0xf8, 0x03, 0x00, 0xf8, 0xff, 0x1f,
+    0x00, 0x00, 0x00, 0x00, 0x7f, 0x1c,
+    0xe0, 0x00, 0x00, 0xe0, 0xff, 0x1f,
+    0xf0, 0x01, 0x00, 0xf8, 0xff, 0x1f,
     0xf8, 0x03, 0x00, 0xfe, 0xff, 0x1f,
     0xf8, 0x03, 0x00, 0xff, 0xff, 0x1f,
-    0xf0, 0x01, 0x80, 0x7f, 0x00, 0x1f,
-    0xe0, 0x00, 0xc0, 0x1f, 0x00, 0x1c,
-    0x00, 0x00, 0xe0, 0x07, 0x00, 0x18,
+    0xf8, 0x03, 0x80, 0x7f, 0x00, 0x1f,
+    0xf0, 0x01, 0xc0, 0x1f, 0x00, 0x1c,
+    0xe0, 0x00, 0xe0, 0x07, 0x00, 0x18,
     0x00, 0x00, 0xf0, 0x03, 0x00, 0x00,
     0x00, 0x00, 0xf0, 0x01, 0x00, 0x00,
     0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
     0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
-    0xf8, 0x01, 0x7c, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x7c, 0x00, 0x00, 0x00,
     0xf8, 0x01, 0x7c, 0x00, 0x00, 0x00,
     0xf8, 0x01, 0x3c, 0x00, 0x00, 0x00,
-    0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
+    0xf8, 0x01, 0x3e, 0x00, 0x00, 0x00,
     0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
     0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
     0xf0, 0x01, 0x3e, 0x00, 0x00, 0x00,
@@ -417,15 +427,15 @@ static unsigned char ic_bits[] = {
     0xf0, 0x01, 0xc0, 0x1f, 0x00, 0x1c,
     0xf0, 0x01, 0x80, 0x7f, 0x00, 0x1f,
     0xf0, 0x01, 0x00, 0xff, 0xff, 0x1f,
-    0xf8, 0x03, 0x00, 0xfe, 0xff, 0x1f,
+    0xf0, 0x01, 0x00, 0xfe, 0xff, 0x1f,
     0xf8, 0x03, 0x00, 0xf8, 0xff, 0x0f,
     0xf8, 0x03, 0x00, 0xe0, 0xff, 0x03,
-    0x00, 0x00, 0x00, 0x00, 0x7f, 0x00,
+    0xf8, 0x03, 0x00, 0x00, 0x7f, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 EOF
 	    close(INI);
@@ -1218,17 +1228,32 @@ sub conn_send_now {
 
 sub register_at_server {
     my $i = 0;
-    CONNECT: until ($conn) {
-	Msg->inhibit_nagle(1);		# inhibit Nagle's algorithm for real time response
-	$conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-	if ($conn) {
-	    print "Connection $named at server.\n";
-	    $mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
-	    info_display(2000, 'blue', "Connection to '$host:$port'");
-	} else {
-	    last CONNECT if $i++ >= 3;
-	    fork_and_exec("iCserver", "-A", "$opt_A");	# start iCserver
-	    $server = 1;			# remember that this iClive started iCserver
+    if ($server >= 0) {
+	until ($conn) {
+	    Msg->inhibit_nagle(1);	# inhibit Nagle's algorithm for real time response
+	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+	    if ($conn) {
+		print "Connection $named at server.\n";
+		$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+		info_display(2000, 'blue', "Connection to '$host:$port'");
+	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
+		print "$named: '$host:iCserver -p $port -A $opt_A' cannot be started here - start it on $host\n";
+		$server = -1;		# no iCserver possible
+		last;
+	    } elsif ($server > 0) {
+		if ($i++ < 4) {
+		    print "$named: $i: wait 2 seconds for iCserver to start\n" if $opt_T;
+		    sleep 2;
+		} else {
+		    print "$named: waited 8 seconds for 'iCserver -p $port -A $opt_A' to start - give up\n";
+		    $server = -1;	# something wrong with iCserver
+		    last;
+		}
+	    } else {
+		print "$named starts 'iCserver -p $port -A $opt_A'\n";
+		fork_and_exec("iCserver", "-p", "$port", "-A", "$opt_A");	# start iCserver
+		$server = 1;		# remember that this iClive started iCserver
+	    }				# try to connect immediately
 	}
     }
     if ($instName ne '') {
@@ -2846,6 +2871,7 @@ sub run_file {
 	    ## generate the call
 	    $makeName = '';	# up to date build is running (unless deliberate No save)
 	    my @call = ($processName);
+	    splice @call, 1, 0, '-s', $opt_s if defined $opt_s;
 	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
 	    splice @call, 1, 0, '-t' if defined $opt_t;
 	    splice @call, 1, 0, "-d$opt_d" if defined $opt_d;
@@ -3115,7 +3141,7 @@ sub quit_program {
 	    warn "ERROR: Can't open ~/.iC/$named.ini: $!\n";
 	}
 	print "$named: quit\n" if $opt_T;
-	if ($server) {
+	if ($server > 0) {
 	   conn_send_now('X') if $conn;	# iClive started iCserver - stop it
 	} elsif ($runName ne '') {
 	    print "quit_program() sends '$D_channel:7,$D_channel:0'\n" if $opt_T;
@@ -3236,7 +3262,7 @@ iClive - an editor and live debugger for immediate-C clients
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -F font font or font size to use in Text window (default '14')
     -l num  height of the Text window (default 35)
-    -w num  width  of the Text window (default 80)
+    -w num  width  of the Text window (default 85) -w0 is terminal width
     -g geom geometry for main window
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
             if iCsever is started by this iClive call

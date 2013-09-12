@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.57 2012/12/21 06:50:44 jw Exp $
+# @(#)$Id: Makefile.in,v 1.58 2013/09/03 23:35:06 jw Exp $
 
 #######################################################################
 #
@@ -168,11 +168,12 @@ pplstfix:
     ifneq ($(YACC),)
 	$(SHELL) -ec 'if [ -f $(*)_tab.h ]; then mv -f $(*)_tab.h y.tab.t; fi'
 	rm -f y.tab.c $@
-	$(YACC) $(YFLAGS) $<
+	immac -M $(OPT) -o y.tab.y $<
+	$(YACC) $(YFLAGS) y.tab.y
 	perl $*.pl y.tab.c > $@
 	perl $*.pl y.tab.h > $(*)_tab.h
 	$(SHELL) -ec 'if cmp -s $(*)_tab.h y.tab.t; then mv y.tab.t $(*)_tab.h; fi'
-	rm -f y.tab.t y.tab.h y.tab.c
+	rm -f y.tab.t y.tab.h y.tab.c y.tab.y
 	chmod -w $(*)_tab.h $@
 	mv y.output $*.output
     else
@@ -186,8 +187,8 @@ pplstfix:
 	@pod2man -u -n $* -c 'iC Project Documentation' -r "`$(PSED) $(srcdir)/scid.c`" $< > $*.1
 	@gzip -f $*.1
 
-$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix $(srcdir)/../README
-	rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
+$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(srcdir)/../README
+	rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
 $(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
 	perl $(srcdir)/README.tpl $(srcdir)/icc.v > $(srcdir)/../README;
@@ -198,11 +199,9 @@ $(srcdir)/gram.c:	$(srcdir)/gram.y $(srcdir)/gram.pl
 
 $(srcdir)/lexc.c:	$(srcdir)/lexc.l $(srcdir)/gram.pl
 
-$(srcdir)/cexe.c:	$(srcdir)/cexe.h
-	rm -f /tmp/cexe.c
-	$(SHELL) -ec 'test -f $(srcdir)/cexe.c && mv $(srcdir)/cexe.c /tmp; ./immcc -c -d20000 < /dev/null; if cmp -s cexe.c /tmp/cexe.c; then mv /tmp/cexe.c .; fi'
-	$(SHELL) -ec 'if [ "$(srcdir)" != '.' ]; then mv cexe.c $(srcdir)/cexe.c; fi'
-	rm -f /tmp/cexe.c
+$(srcdir)/cexe.c:	$(srcdir)/cexe_t.c
+	cp -f $(srcdir)/cexe_t.c $(srcdir)/cexe.c
+	chmod +w $(srcdir)/cexe.c
 
 $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
 ####	@echo "pod2man -u -n immcc -c 'iC Project Documentation' -r \"`$(PSED) $(srcdir)/scid.c`\" $< > $(srcdir)/immcc.1"
@@ -259,7 +258,7 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
 	${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
 	${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
-	if [ "${OSTYPE}" = "linux" ]; then ${INSTALL_DATA} $(srcdir)/libict.so     ${libdir}/${libprefix}libict.so; fi
+	if [ -f $(srcdir)/libict.so ]; then ${INSTALL_DATA} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so; fi
 	${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
 	${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
@@ -288,7 +287,7 @@ uninstall:
 	rm -f ${bindir}/${binprefix}iCserver
 	rm -f ${bindir}/${binprefix}Mdiff
 	rm -f ${libdir}/${libprefix}libict.a
-	if [ "${OSTYPE}" = "linux" ]; then rm -f ${libdir}/${libprefix}libict.so; fi
+	rm -f ${libdir}/${libprefix}libict.so
 	rm -f ${includedir}/${includeprefix}icg.h
 	rm -f ${mandir}/man1/${manprefix}immcc.1.gz
 	rm -f ${mandir}/man1/${manprefix}immac.1.gz

@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.11 2013/04/03 04:37:41 jw Exp $";
+"@(#)$Id: misc.c,v 1.12 2013/08/07 05:28:04 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -15,6 +15,7 @@ static const char misc_c[] =
  *
  *******************************************************************/
 
+#define		_GNU_SOURCE
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
@@ -24,12 +25,6 @@ static const char misc_c[] =
 unsigned char	iC_bitMask[]    = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
 };
-
-#define		ABSIZE	256
-static char *	aBuf = NULL;
-static int	aSiz = 0;	/* dynamic size adjusted with realloc */
-static char *	bBuf = NULL;
-static int	bSiz = 0;	/* dynamic size adjusted with realloc */
 
 #ifdef	WIN32
 #include	<io.h>
@@ -122,6 +117,12 @@ iC_efree(void *	p)
  *
  *******************************************************************/
 
+#define		ABSIZE	256
+static char *	aBuf = NULL;
+static int	aSiz = 0;	/* dynamic size adjusted with realloc */
+static char *	bBuf = NULL;
+static int	bSiz = 0;	/* dynamic size adjusted with realloc */
+
 int
 iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
 {
@@ -129,7 +130,7 @@ iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
     char *	bp;
     char *	cp;
 
-    if (cp = strchr(ap = (*a)->gt_ids, '_')) {
+    if ((cp = strchr(ap = (*a)->gt_ids, '_')) != 0) {
 	while (strlen(ap) >= aSiz) {
 	    aBuf = (char *)realloc(aBuf, (aSiz + ABSIZE) * sizeof(char));
 	    assert(aBuf);
@@ -140,9 +141,9 @@ iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
 	ap = strncpy(aBuf, ap, aSiz);
 	do {
 	    *cp++ = '/';		/* change all '_' to '/' */
-	} while (cp = strchr(cp, '_'));
+	} while ((cp = strchr(cp, '_')) != 0);
     }
-    if (cp = strchr(bp = (*b)->gt_ids, '_')) {
+    if ((cp = strchr(bp = (*b)->gt_ids, '_')) != 0) {
 	while (strlen(bp) >= bSiz) {
 	    bBuf = (char *)realloc(bBuf, (bSiz + ABSIZE) * sizeof(char));
 	    assert(bBuf);
@@ -153,7 +154,7 @@ iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
 	bp = strncpy(bBuf, bp, bSiz);
 	do {
 	    *cp++ = '/';		/* change all '_' to '/' */
-	} while (cp = strchr(cp, '_'));
+	} while ((cp = strchr(cp, '_')) != 0);
     }
     return( strverscmp(ap, bp) );
 } /* iC_cmp_gt_ids */
