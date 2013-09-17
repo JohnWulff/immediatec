@@ -2,7 +2,7 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <john@je-wulff.de>
 " Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.8 2013/04/06 06:35:47 jw Exp $
+" $Id: ic.vim,v 1.9 2013/09/17 06:04:04 jw Exp $
 " for openSUSE ic.vim must be in /usr/share/vim/current/syntax
 " NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
 " local filetype.vim must be in ~/.vim (ic.vim does not work there)
@@ -22,6 +22,10 @@ else
   runtime! syntax/c.vim
   unlet b:current_syntax
 endif
+
+" Error in Debian c.vim causes all lines after (d0 or similar to be a comment - go figure
+let c_no_if0 = 1
+" This stops #if 0 ... #endif working as a blue highlighted block comment - no great loss
 
 " Accept %# for # (iC) and line numbers for highlighting listings *.lst
 syn region	cPreCondit	start="^[0-9\s]*\(%#\|%\|#\)\s*\(if\|ifdef\|ifndef\|elif\)\>" skip="\\$" end="$" end="//"me=s-1 contains=cComment,cCppString,cCharacter,cCppParen,cParenError,cNumbers,cCommentError,cSpaceError
