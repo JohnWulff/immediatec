@@ -14,6 +14,15 @@ MS Visual C++ and Perl only is under development.
 All development since 2006 has been on SUSE Linux 10 11.2 11.3 11.4
 and 12.2.  Further work on MAC OS-X and Windows is planned for 2013.
 
+In September 2013 iC was ported to Raspbian (Debian Wheezy) on the
+Raspberry Pi with arm11 processor. There were no problems, except the
+gcc ARM compiler defaults to 'unsigned char'.  Since the core of the iC
+system is based on signed arithmetic with char's, I had to change the
+declaration of those to 'signed char'. The following package had to be
+installed with sudo apt-get install: perl-tk. The following packages
+are optional but useful: bison, flex, gtkwave, rcs and vim. (2 weeks
+with an old vi was punishment enough). After that all tests passed.
+
 The compilers required are for C, Yacc (Bison) and Lex (Flex). Building
 the system requires Perl 5, Bash, Make and Configure. (Older Sed
 and Awk scripts have been converted to Perl scripts). Running iC
@@ -69,9 +78,13 @@ Postprocessors
 		Called from 'immcc', 'icr' and 'ict' while compiling.
 
     immac -m	execute the macro part of immac only to post-process
-		any C code while translating with immcc.
+		#define etc in C code while translating with immcc.
 		Called from 'immcc', 'icr' and 'ict' instead of the
 		full 'cpp' pre-compiler.
+
+    immac -M	execute the macro part of immac only to post-process
+		%define etc in yacc code while translating comp.y and
+		gram.y.  Called from 'make'.
 
 Additionally a number of Perl scripts are installed to establish
 a TCP/IP networking environment for running iC applications:
@@ -429,4 +442,4 @@ a2ps pretty printer support files
 			/*.ica/
 			/*.lst/
 
-    $Id: Readme_develop,v 1.19 2013/06/11 04:08:33 jw Exp $
+    $Id: Readme_develop,v 1.20 2013/09/20 04:21:50 jw Exp $
