@@ -1,5 +1,3 @@
-static const char iCpiFace_c[] =
-"@(#)$Id: iCpiFace.c,v 1.1 2014/03/24 08:18:29 pi Exp $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -18,15 +16,22 @@ static const char iCpiFace_c[] =
  *
  *******************************************************************/
 
-#include	<stdio.h>
+#include	"tcpc.h"
 #include	<signal.h>
 #include	<assert.h>
+#include	<errno.h>
+#include	<sys/stat.h>
+#include	<fcntl.h>
+#ifndef	SELECT 
+#include	<poll.h>
+#endif	/* SELECT */
 
 #if !defined(RASPBERRYPI) || !defined(TCP) || defined(_WINDOWS)
 #error - must be compiled with RASPBERRYPI and TCP defined and not _WINDOWS
 #else	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
 
-#include	"tcpc.h"
+#include	"icc.h"
+#include	"wiringPi.h"
 
 #define QUIT_TERMINAL	(SIGRTMAX+3)
 #define QUIT_DEBUGGER	(SIGRTMAX+4)
@@ -38,10 +43,14 @@ static const char iCpiFace_c[] =
 #define MAX_PIFACE_AD	8		/* maximum number of PiFace's */
 #define BS		64		/* buffer size for I/O strings */
 
-extern void *		iC_emalloc(unsigned);	/* check return from malloc */
+#undef	max
+#define	max(x, y) ((x) > (y) ? (x) : (y))
+
+extern void		iC_initIO(void);
 static void		storeChannel(unsigned short channel, int pa);
-static void		iC_initIO(void);
-extern void		iC_quit(int sig);
+extern void		doEdge(int pin);
+extern void		doUnexport(int pin);
+static int		gpio_fd_open(unsigned int gpio);
 
 static const char *	usage =
 "Usage:\n"
@@ -79,11 +88,12 @@ static const char *	usage =
 "		+200 show debugging details\n"
 "	-h	help, ouput this Usage text only\n"
 "Copyright (C) 2014 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c,v 1.1 2014/03/24 08:18:29 pi Exp $\n"
+"Version	$Id: iCpiFace.c,v 1.2 2014/04/02 05:16:10 pi Exp $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
 static char *	iC_path;
+static char *	iC_fullProgname;
 short		iC_debug = 0;
 int		iC_micro = 0;
 unsigned short	iC_osc_lim = 1;
@@ -110,6 +120,7 @@ int		ioChannels = 0;		/* allocated size of Channels[] */
 static unsigned short	topChannel = 0;
 static char	regBuf[REPLY];		/* data sent to iCserver */
 static char	rpyBuf[REPLY];		/* data received from iCserver */
+static char	spiBuf[REPLY];		/* data received from SPI read */
 
 char		inpBuf[BS];
 char		outBuf[BS];
@@ -118,7 +129,9 @@ FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
 short		errorFlag;
 
-static SOCKET	sockFN = 0;		/* TCP/IP socket file number */
+static SOCKET	sockFN = -1;		/* TCP/IP socket file number */
+static int	gpioFN = -1;		/* /sys/class/gpio SPI file number */
+static int	spidFN = -1;		/* /dev/spidev0.0 SPI file number */
 
 /********************************************************************
  *
@@ -138,6 +151,11 @@ main(
     char *	cp;
     unsigned short	channel;
     int		retval;
+#ifndef	SELECT
+    int		soc;			/* TCP/IP socket pollfd array index */
+    int		spi;			/* SPI out-of-band pollfd array index */
+    int		sti;			/* STDIN pollfd array index */
+#endif	/* SELECT */
 
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
@@ -145,19 +163,35 @@ main(
 
     /********************************************************************
      *
-     *	Process program name and arguments
+     *	Determine program name
      *
      *******************************************************************/
 
-    iC_path = *argv;			/* in case there is a leading path/ */
+    iC_path = argv[0];			/* in case there is a leading path/ */
+    len = strlen(iC_path);			/* strlen(outBuf) == len */
+    iC_fullProgname = iC_emalloc(len+1);
+    strcpy(iC_fullProgname, iC_path);
     if ((iC_progname = strrchr(iC_path, '/')) == NULL &&
-        (iC_progname = strrchr(iC_path, '\\')) == NULL) {
+        (iC_progname = strrchr(iC_path, '\\')) == NULL
+    ) {
 	iC_progname = iC_path;		/* no leading path */
 	iC_path     = "";		/* default path */
     } else {
 	*iC_progname++ = '\0';		/* path has been stripped and isolated */
     }
     iC_iccNM = NULL;			/* generate our own name - not 'stdin' from tcpc.c */
+
+    if (geteuid() != 0) {
+	fprintf(iC_errFP, "ERROR: %s: Must be root to run. Program should be suid root\n", iC_progname) ;
+	exit(1);
+    }
+
+    /********************************************************************
+     *
+     *	Process program arguments
+     *
+     *******************************************************************/
+
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;
@@ -285,6 +319,7 @@ main(
 	    }
 	}
     }
+    if (iC_debug & 0200)  fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n", iC_fullProgname, iC_path, iC_progname);
     if (regBufLen == 0) {
 	if (strlen(iC_iidNM) > 0) {				/* build default IX0 and QX0 */
 	    snprintf(inpBuf, BS, "IX0-%s", iC_iidNM);
@@ -327,6 +362,7 @@ main(
      *******************************************************************/
 
     sockFN = iC_connect_to_server(iC_hostNM, iC_portNM);
+
     regBufLen += strlen(iC_iccNM) + 4 + 4;			/* really ready to copy iecId's into regBuf  Nname...,Z\n */
     assert(regBufLen <= REQUEST);				/* should fit easily with name and 16 I/Os */
     if (strlen(iC_iidNM) == 0) {
@@ -369,13 +405,14 @@ main(
 			assert(*np == 'I');	
 			if (iC_debug & 0100) fprintf(iC_outFP, "piFace '%d' input  on channel %hu (%s)\n",
 			    pa, channel, pf[pa][0].iecName);
-			storeChannel(channel, pa);		/* link piFace input address to channel */
+			pf[pa][0].channel = channel;		/* link output channel to piFace input address */
+			storeChannel(channel, pa);		/* link piFace input address to output channel */
 		    } else {
 			assert(n == 1 && *(pf[pa][1].iecName) == 'Q');	
 			if (iC_debug & 0100) fprintf(iC_outFP, "piFace '%d' output on channel %hu (%s)\n",
 			    pa, channel, pf[pa][1].iecName);
-			pf[pa][1].channel = channel;		/* link channel to piFace output address */
-			storeChannel(channel, pa+10);		/* link piFace output address to channel */
+			pf[pa][1].channel = channel;		/* link input channel to piFace output address */
+			storeChannel(channel, pa+010);		/* link piFace output address to input channel */
 		    }
 		    cp = strchr(cp, ',');
 		}
@@ -386,49 +423,163 @@ main(
     } else {
 	iC_quit(QUIT_SERVER);					/* quit normally with 0 length message */
     }
+
+    /********************************************************************
+     *
+     *	Setup PiFace
+     *
+     *	Initialisation of /dev/spidev0.0 for SPI modes and read/writeBytes
+     *
+     *  Initialisation using the /sys/class/gpio interface to the GPIO
+     *	systems - slightly slower, but always usable as a non-root user
+     *	export GPIO pin 25, which is INTB of the MCP23S17 device.
+     *
+     *	Write to all relevant MCP23S17 registers to setup PIFACE
+     *
+     *	Wait for Interrupts on GPIO pin 25 which has been exported and then
+     *	opening /sys/class/gpio/gpio25/value
+     *
+     *	This is actually done via the /sys/class/gpio interface regardless of
+     *	the wiringPi access mode in-use. Maybe sometime it might get a better
+     *	way for a bit more efficiency.	(comment by Gordon Henderson)
+     *
+     *******************************************************************/
+
+    doEdge(25);				/* TODO allow for 2 pins */
+    if ((spidFN = wiringPiSetupPiFace()) < 0) {
+	fprintf(iC_errFP, "ERROR: '%s' PiFace setup: %s\n", iC_iccNM, strerror(errno));
+    }
+    if ((gpioFN = gpio_fd_open(25)) < 0) {
+	fprintf(iC_errFP, "ERROR: '%s' PiFace open gpio 25: %s\n", iC_iccNM, strerror(errno));
+    }
+
+    /********************************************************************
+     *
+     *	Set all bits to wait for interrupts
+     *
+     *******************************************************************/
+
+#ifdef	SELECT 
+    FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
+    FD_ZERO(&iC_ixfds);			/* should be done centrally if more than 1 connect */
+    FD_SET(sockFN, &iC_infds);		/* watch sock for inputs */
+    FD_SET(gpioFN, &iC_ixfds);		/* watch SPI for out-of-band input - do after iC_connect_to_server() */
+#ifndef	WIN32
+    FD_SET(0, &iC_infds);		/* watch stdin for inputs - FD_CLR on EOF */
+    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
+#endif	/* WIN32 */
+#else	/* ! SELECT */
+    soc = pollSet(sockFN, POLLIN);	/* watch TCP/IP socket for inputs */
+    spi = pollSet(gpioFN, POLLPRI);	/* watch SPI for out-of-band input - do after iC_connect_to_server() */
+#ifndef	WIN32
+    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
+    sti = pollSet(0, POLLIN);		/* watch stdin for inputs - pollClr(sti) on EOF */
+#endif	/* WIN32 */
+#endif	/* SELECT */
+
+    if (iC_debug & 0200) fprintf(iC_outFP, "sockFN = %d	gpioFN = %d spidFN = %d\n", sockFN, gpioFN, spidFN);
+
+    /********************************************************************
+     *
+     *  External input (TCP/IP via socket and SIO from PiFace)
+     *  Wait for input in a poll/select statement most of the time
+     *
+     *******************************************************************/
+
     for (;;) {
-	/********************************************************************
-	 *  External input (TCP/IP via socket and SIO from PiFace)
-	 *  Wait for input in a select statement most of the time
-	 *******************************************************************/
-	retval = iC_wait_for_next_event(sockFN, NULL);		/* no timer events */
-	if (retval > 0) {
-	    if (FD_ISSET(sockFN, &iC_rdfds)) {
+#ifdef	SELECT 
+	if ((retval = iC_wait_for_next_event(max(sockFN, gpioFN), NULL)) > 0)	/* no timer events */
+#else	/* ! SELECT */
+	if ((retval = iC_wait_for_next_event(-1)) > 0)		/* no timer events */
+#endif	/* SELECT */
+	{
+	    int x;
+	    int		val;
+
+#ifdef	SELECT 
+	    if (FD_ISSET(sockFN, &iC_rdfds))
+#else	/* ! SELECT */
+	    if (pollEvent(soc, POLLIN))
+#endif	/* SELECT */
+	    {
 		/********************************************************************
 		 *  TCP/IP input
 		 *******************************************************************/
 		if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
-		    int		val;
-
-		    if (iC_micro) iC_microPrint("Input received", 0);
-		    if (isdigit(rpyBuf[0])) {
-			assert(Channels);
-			cp = rpyBuf - 1;
-			do {
-			    if ((n = sscanf(++cp, "%hu:%d", &channel, &val)) == 2 &&
-				channel > 0	&&
-				channel <= topChannel &&
-				(pa = Channels[channel]) < 10	/* input piFace address */
-			    ) {
-			    } else {
-				fprintf(iC_errFP, "n = %d, channel = %hu, topChannel = %hu, pa = %d\n", n, channel, topChannel, pa);
-				goto RcvError;
-			    }
-			} while ((cp = strchr(cp, ',')) != NULL);
-		    }
-		    else {
-		      RcvError:
-			fprintf(iC_errFP, "ERROR: '%s' rcvd at '%s' ???\n", rpyBuf, iC_iccNM);
-		    }
+		    if (iC_micro) iC_microPrint("TCP input received", 0);
+		    assert(Channels);
+		    cp = rpyBuf - 1;
+		    do {
+			if ((n = sscanf(++cp, "%hu:%d", &channel, &val)) == 2 &&
+			    channel > 0	&&
+			    channel <= topChannel &&
+			    (Channels[channel] & ~07) == 010
+			) {
+			    assert(Channels[channel] == 010);	/* TODO this assumes we received for PiFace 0 */
+			    writeBytePiFaceA(val);	/* write data to PiFace A output */
+			} else {
+			    fprintf(iC_errFP, "ERROR: n = %d, channel = %hu, topChannel = %hu, val = %d, '%s'\n",
+				n, channel, topChannel, val, cp);
+			    break;
+			}
+		    } while ((cp = strchr(cp, ',')) != NULL);
 		} else {
-		    iC_quit(QUIT_SERVER);			/* quit normally with 0 length message */
+		    iC_quit(QUIT_SERVER);	/* quit normally with 0 length message from iCserver */
+		}
+	    }
+#ifdef	SELECT 
+	    if (FD_ISSET(gpioFN, &iC_exfds))	/* watch for out-of-band GPIO input */
+#else	/* ! SELECT */
+	    if (pollEvent(spi, POLLPRI))	/* watch for out-of-band GPIO input */
+#endif	/* SELECT */
+	    {
+		/********************************************************************
+		 *  SPI input
+		 *******************************************************************/
+		/********************************************************************
+		 *  Do a dummy read to clear the interrupt on /dev/class/gpio25/value
+		 *  A one character read appars to be enough (according to Gordon Henderson)
+		 *******************************************************************/
+		read (gpioFN, &x, 1);		/* dummy read to clear interrupt on /dev/class/gpio25/value */
+		if (iC_micro) iC_microPrint("SPI input received", 0);
+		val = readBytePiFaceIntCapB();	/* read of PiFace B at the time of the INTB interrupt */
+		/* TODO this assumes we received from PiFace 0 */
+		snprintf(regBuf, REPLY, "%hu:%d", pf[0][0].channel, val);	/* data telegram */
+		iC_send_msg_to_server(sockFN, regBuf);	/* send data value to iCserver */
+	    }
+#ifdef	SELECT 
+	    if (FD_ISSET(0, &iC_rdfds))
+#else	/* ! SELECT */
+	    if (pollEvent(sti, POLLIN))
+#endif	/* SELECT */
+	    {
+		/********************************************************************
+		 *  STDIN
+		 *******************************************************************/
+		if ((n = getchar()) == EOF) {
+		    fprintf(iC_errFP, "EOF received in stdin\n");
+#ifdef	SELECT 
+		    FD_CLR(0, &iC_infds);		/* ignore EOF - happens in bg */
+#else	/* ! SELECT */
+		    pollClr(sti);			/* ignore EOF - happens in bg */
+#endif	/* SELECT */
+		} else if (n == 'q') {
+		    iC_quit(QUIT_TERMINAL);		/* quit normally */
+		} else if (n == 't') {
+		    iC_debug ^= 0100;			/* toggle -t flag */
+		} else if (n == 'm') {
+		    iC_micro ^= 1;			/* toggle micro */
+		} else if (n == 'a') {
+		    					/* dummy SPI interrupt */
+		    x = digitalReadPiFace(0);
+		    fprintf(stderr, "SPI 0 = %d\n", x);
 		}
 	    }
 	} else if (retval == 0) {
 	    fprintf(iC_errFP, "ERROR: timer event from select ???\n");
-	    iC_quit(SIGUSR1);
-	} else {				/* retval -1 */
-	    perror("ERROR: select failed");
+	    iC_quit(SIGUSR1);			/* should definitely not happen */
+	} else {
+	    perror("ERROR: select failed");	/* retval -1 */
 	    iC_quit(SIGUSR1);
 	}
     }
@@ -440,11 +591,11 @@ main(
  *
  *******************************************************************/
 
-static void
+void
 iC_initIO(void)
 {
     signal(SIGSEGV, iC_quit);			/* catch memory access signal */
-}
+} /* iC_initIO */
 
 /********************************************************************
  *
@@ -478,11 +629,20 @@ storeChannel(unsigned short channel, int pa)
 void
 iC_quit(int sig)
 {
-    if (sockFN) {
+    if (spidFN > 0) {
+	close(spidFN);				/* close connection to /dev/spidev0.0 */
+    }
+    if (gpioFN > 0) {
+	close(gpioFN);				/* close connection to /sys/class/gpio/value */
+    }
+    doUnexport(25);				/* TODO allow for 2 pins */
+    if (sockFN > 0) {
 	close(sockFN);				/* close connection to iCserver */
     }
     if (sig == QUIT_TERMINAL) {
 	fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_iccNM);
+    } else if (sig == QUIT_DEBUGGER) {
+	fprintf(iC_errFP, "\n'%s' stopped by debugger\n", iC_iccNM);
     } else if (sig == QUIT_SERVER) {
 	fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
     } else if (sig == SIGINT) {
@@ -502,4 +662,139 @@ iC_quit(int sig)
     }
     exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
 } /* iC_quit */
+
+/****************************************************************
+ * gpio_fd_open
+ ****************************************************************/
+
+static int
+gpio_fd_open(unsigned int gpio)
+{
+    char	buf[32];
+
+    snprintf(buf, sizeof(buf), "/sys/class/gpio/gpio%d/value", gpio);
+    return open(buf, O_RDONLY | O_NONBLOCK );
+} /* gpio_fd_open */
+
+/********************************************************************
+ *
+ *   The following routines were extracted from gpio.c
+ *   Copyright (c) 2012 Gordon Henderson
+ *
+ *   It seems tidier to use these routines directly to access the
+ *   /sys/class/gpio device interface rather than execute 'gpio' from C
+ *
+ *   This version has been modified  by John E. Wulff	2014/03/25
+ *   for the immediate C system to interface with a PiFace in
+ *   accordance with the terms of the GNU Lesser General Public License
+ *
+ *******************************************************************/
+
+/********************************************************************
+ *
+ *	changeOwner:
+ *
+ *	Change the ownership of the file to the real userId of the calling
+ *	program so we can access it.
+ *
+ *******************************************************************/
+
+static void
+changeOwner(char *cmd, char *file)
+{
+    uid_t uid = getuid();
+    uid_t gid = getgid();
+
+    if (chown(file, uid, gid) != 0) {
+	if (errno == ENOENT) {			/* Warn that it's not there */
+	    fprintf(iC_errFP, "%s: Warning: File not present: %s\n", cmd, file);
+	} else {
+	    fprintf(iC_errFP, "%s: Unable to change ownership of %s: %s\n", cmd, file, strerror(errno));
+	    iC_quit(SIGUSR1);
+	}
+    }
+} /* changeOwner */
+
+/********************************************************************
+ *
+ *	doEdge:
+ *
+ *	To enable interrupts from PiFace 0-3 inputs export GPIO pin 25
+ *	To enable interrupts from PiFace 4-7 inputs export GPIO pin 24
+ *	(the latter can be selected on a PiRack)
+ *	in both cases set edge to falling
+ *
+ *	Easy access to changing the edge trigger on a GPIO pin
+ *	This uses the /sys/class/gpio device interface.
+ *
+ *******************************************************************/
+
+void
+doEdge(int pin)
+{
+    FILE *	fd;
+    char	fName[128];
+    char	pName[128];
+
+    assert(pin >= 0 && pin < 64);
+
+    /* Export the pin and set direction to input */
+
+    if ((fd = fopen("/sys/class/gpio/export", "w")) == NULL) {
+	fprintf(iC_errFP, "%s: Unable to open GPIO export interface: %s\n", iC_progname, strerror(errno));
+	iC_quit(SIGUSR1);
+    }
+
+    fprintf(fd, "%d\n", pin);
+    fclose(fd);
+    sprintf(fName, "/sys/class/gpio/gpio%d/direction", pin);
+    if ((fd = fopen(fName, "w")) == NULL) {
+	fprintf(iC_errFP, "%s: Unable to open GPIO direction interface for pin %d: %s\n", iC_progname, pin,strerror(errno));
+	iC_quit(SIGUSR1);
+    }
+
+    fprintf(fd, "in\n");
+    fclose(fd);
+
+    /* Set the edge for interrupts to falling */
+
+    sprintf(fName, "/sys/class/gpio/gpio%d/edge", pin);
+    if ((fd = fopen(fName, "w")) == NULL) {
+	fprintf(iC_errFP, "%s: Unable to open GPIO edge interface for pin %d: %s\n", iC_progname, pin,strerror(errno));
+	iC_quit(SIGUSR1);
+    }
+
+    fprintf(fd, "falling\n");
+    fclose(fd);
+
+    /* Change ownership of the value and edge files, so the current user can actually use it! */
+
+    sprintf(fName, "/sys/class/gpio/gpio%d/value", pin);
+    changeOwner(iC_fullProgname, fName);
+
+    sprintf(fName, "/sys/class/gpio/gpio%d/edge", pin);
+    changeOwner(iC_fullProgname, fName);
+} /* doEdge */
+
+/********************************************************************
+ *
+ *	doUnexport:
+ *
+ *	This uses the /sys/class/gpio device interface.
+ *
+ *******************************************************************/
+
+void
+doUnexport(int pin)
+{
+    FILE *	fd;
+
+    if ((fd = fopen("/sys/class/gpio/unexport", "w")) == NULL) {
+	fprintf(iC_errFP, "%s: Unable to open GPIO unexport interface: %s\n", iC_progname, strerror(errno));
+	iC_quit(SIGUSR1);
+    }
+
+    fprintf(fd, "%d\n", pin);
+    fclose(fd);
+} /* doUnexport */
 #endif	/* defined(RASPBERRYPI) && defined(TCP) && !defined(_WINDOWS) */
