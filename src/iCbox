@@ -74,7 +74,7 @@ my @bitIndex =	(
 #
 ########################################################################
 
-my $named = $0; $named =~ s#.*[/\\]##;
+my $named = untaint($0); $named =~ s#.*[/\\]##;
 my $nameo = $named;		# for generating bit map
 format STDERR =
 Usage:
@@ -124,7 +124,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.54 2013/09/05 08:13:31 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.55 2014/07/15 05:37:30 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -438,7 +438,7 @@ if ($opt_t) {
 
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
-my $name = $opt_n ? "$opt_n$instance" : $ArgNames[0][0];	# : $ArgNames [first entry] [$id]
+my $name = untaint($opt_n ? "$opt_n$instance" : $ArgNames[0][0]);	# : $ArgNames [first entry] [$id]
 $named = $name;			# use individual ID for warnings from now on
 
 Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
@@ -517,7 +517,7 @@ exit if $opt_x;	# deliberate exit with -x option
 
 $mw = MainWindow->new(-title => "$name");
 
-if (($home = $ENV{HOME}) ne '' and
+if (($home = untaint($ENV{HOME})) ne '' and
     (-d "$home/.iC" or mkdir "$home/.iC")) {
     if ($opt_T or not -f "$home/.iC/$nameo.bit") {
 	if (open(INI, ">$home/.iC/$nameo.bit")) {
@@ -638,7 +638,7 @@ if ($opt_H) {
 			($id, $ini, $from, $to, $res) = @{$ArgNames[$ChannelsRI[$ch]]};	# all argument values
 			if ($to and				# process held delayed push-buttons
 			    $id =~ /$I__XBWL__/o and		# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
-			    $1 eq 'X') {			# only IXm.n
+			    $1 eq 'X') {			# only IXx.y
 			    my $resolution = $res & $val;	# only push-buttons which had been pushed need clearing
 			    if ($resolution) {
 				my $channel = $ch;
@@ -1013,7 +1013,7 @@ sub rcvd_msg_from_server {
 			## when this array element is defined, it is a Q[XBWL] receiver (or I[XBWL] if $opt_d or $opt_r)
 			if ($1 eq 'X') {
 			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
-			    ## when this array slice is defined, channel is a QXn.m
+			    ## when this array slice is defined, channel is a QXx.y
 			    ## Q[BWL]n have this slice undefined for their channel
 			}
 		    }
@@ -1032,7 +1032,7 @@ sub rcvd_msg_from_server {
 			for my $index (0 .. 7) {
 			    $ChannelsIX[$channel][$index] = ($ini & $masks[$index]) ? 1 : 0;
 			}
-			## when this array slice is defined, channel is a IXn.m
+			## when this array slice is defined, channel is a IXx.y
 			## I[BWL]n have this slice undefined for their channel
 		    }
 		}
@@ -1077,6 +1077,21 @@ sub printMicroSeconds {
 	print "B: ";
     }
 } # printMicroSeconds
+
+########################################################################
+#
+#	Untaint a string for executing from a setuid program
+#
+########################################################################
+
+sub untaint {
+    my ($string) = @_;
+    if ($string =~ m/^([-\@\w.\/\\]+)$/) {
+	return $1;		# now untainted
+    } else {
+	die "Bad data in $string";
+    }
+} # untaint
 __END__
 
 ############ POD to generate man page ##################################
@@ -1135,7 +1150,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 =head1 DESCRIPTION
 
 The B<iCbox> widget contains one or more frames - each frame containing one
-digital or anolag input or output widget.
+digital or analog input or output widget.
 
 Digital I/O widgets consist of a row of 8 vertical checkbuttons
 labelled .0 to .7 - representing the 8 bits of one digital I/O byte

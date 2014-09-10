@@ -66,7 +66,7 @@ Usage:
 	$named
 	     [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
 	-s host	address of server - clients must specify the same address
-		unless (default '0.0.0.0' which accepts any client)
+		unless (default '0.0.0.0' which accepts any client host)
 	-p port	service port of server for all clients  (default '8778')
 	-f file	read options, equivalences and client calls from this file
 	-a	autovivify I/O clients for missing I/O's with cmd
@@ -82,14 +82,14 @@ Usage:
 	-m	display elapsed time in seconds and microseconds
 	-T      extra static debug messages
 	<list of equivalences>
-		eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
+	    eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
 	<list of client calls>
-		eg: 'iCbox X0-X3' 'iCbox X10' sort
+	    eg: 'iCbox X0-X3 X10' sort
 		if a client call has arguments, the call must be quoted
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.44 2013/06/06 06:15:57 jw Exp $
+$Id: iCserver,v 1.45 2014/09/10 03:40:02 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_R $opt_S $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -204,12 +204,18 @@ while ($argv = shift @ARGV) {
     if ($argv =~ /^\s*([\.\d\w_][-\.\d\w_]*)\s*=/) {	# recognise equivalence
 	my ($nm, $nn, $ch);
 	$nm = $1;
+	if ($nm !~ /^[IQ][XBWLH]\d+(-\d{1,3})?$/) {
+	    print STDERR "Warning $named: equivalence '$nm' is not an IEC base name - will probably not work!\n";
+	}
 	print "equivalence '$argv'\n" if $opt_t;
 	$ch = allocate_channel($nm);		# allocate new channel for first identifier
 	push @{$Equivalences{$nm}}, $ch;	# channel
 	$EquivChannels{$nm} = $nm;		# used in AutoVivify
 	while ($argv =~ /=\s*([\.\d\w_][-\.\d\w_]*)/g) {
 	    $nn = $1;
+	    if ($nn !~ /^[IQ][XBWLH]\d+(-\d{1,3})?$/) {
+		print STDERR "Warning $named: equivalence '$nn' is not an IEC base name - will probably not work!\n";
+	    }
 	    allocate_channel($nn, $ch);		# allocate same channel for next identifier
 	    push @{$Equivalences{$nm}}, $nn;	# equivalent name
 	    $EquivChannels{$nn} = $nm;		# used in AutoVivify
@@ -244,7 +250,7 @@ sub exec_process {
 	    splice @call, $n, 0, '-p', $opt_p if defined $opt_p;
 	    splice @call, $n, 0, '-t' if defined $opt_t;
 	    splice @call, $n, 0, '-m' if defined $opt_m;
-	    print "@call\n";
+	    print STDERR "@call\n";
 	    exec @call;
 	    exit;		# child process cannot be executed
 	} elsif ($! =~ /No more process/) {
@@ -292,7 +298,7 @@ sub catch_zap {
 
 sub login_proc {
     my ($conn, $host, $port) = @_;
-    print "Connection $host:$port at server\n";
+    print STDERR "Connection $host:$port at $named\n";
     return \&rcvd_msg_from_client;
 } # login_proc
 
@@ -605,7 +611,7 @@ use warnings;
 			    print "$ClientNames{$conn} $msg1 => dummy\n";	# not registered
 			}
 		    } else {
-			print "conn = $conn, channel [0] = $Senders[$channel][0]\n";
+			print STDERR "conn = $conn, channel [0] = $Senders[$channel][0]\n";
 			warnD("$ClientNames{$Senders[$channel][0]} $msg1 received on wrong connection $ClientNames{$conn}\n");
 		    }
 		}
@@ -829,9 +835,10 @@ use warnings;
 			}
 		    }
 		}
-		elsif ($msg1 eq 'X') {
-		    print "iClive stopped $named\n";
-		    exit 0;	# iClive started iCserver and now stopped it
+		elsif ($msg1 =~ /^X(.*)$/) {	# termination by named parent
+		    $name = $1 ? "'$1'" : "parent";
+		    print STDERR "$name stopped $named\n";
+		    exit 0;	# parent process - usually iClive started iCserver and now stopped it
 		}
 		elsif ($msg1 eq 'T' and $opt_t) {
 		    print_tables();
@@ -891,7 +898,7 @@ iCserver - the central server for iC clients
  iCserver [-agrktRSmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
           [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
     -s host address of server - clients must specify the same address
-            unless (default '0.0.0.0' which accepts any client)
+            unless (default '0.0.0.0' which accepts any client host)
     -p port service port of server for all clients  (default '8778')
     -f file read options, equivalences and client calls from this file
     -a      autovivify I/O clients for missing I/O's with cmd
@@ -907,9 +914,9 @@ iCserver - the central server for iC clients
     -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages
     <list of equivalences>
-            eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
+        eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
     <list of client calls>
-            eg: 'iCbox X0-X3' 'iCbox X10' sort
+        eg: 'iCbox X0-X3 X10' sort
             if a client call has arguments, the call must be quoted
     -h      help, ouput this Usage text only
 
@@ -925,12 +932,18 @@ the host address of the processor iCserver is running on.  On connection
 each client registers itself with iCserver.
 
 Clients for iCserver are iC control applications, I/O clients such
-as iCbox or similar real I/O clients and debugging programs such
-as iClive. These clients either send or receive data values from
-and to named I/O locations or debugging information. As far as
-iCserver is concerned I/O locations could have any name, but the iC
-language calls for I/O names or addresses according to the IEC-1131
-standard. Each client registers the I/O names it requires on connection
+as iCbox or similar real I/O clients and debugging programs such as
+iClive. These clients either send or receive data values from and
+to named I/O locations or debugging information.  As far as iCserver
+is concerned I/O locations could have any name, but the iC language
+calls for I/O names or addresses according to the IEC-1131 standard.
+Data values can be 8 bit bytes (eg: IB1 QB9), 16 bit words (IW2 QB10),
+32 bit long words (IL4 QL12) or 64 bit huge words (IH8 QH16), although
+thes have not been implemented in any client so far.  Bit values
+like IX0.0 IX0.1 QX8.2 QX8.3 are always transmitted as bytes - in
+this case via IX0 and QX8, which are the names used for registration.
+Whenever any bit in the byte changes, the whole byte is transmitted.
+Each client registers the I/O names it requires on connection
 to iCserver. Each unique name is stored in a Hash in iCserver,
 whose value is a channel number, which is used for all actual data
 transfers. The Hash is only required for registration. Each channel
@@ -944,7 +957,7 @@ Additional functionality in iCserver.
     iCserver. This option puts two or more entries in the Hash and
     assigns them a common channel number. Send or receive entries
     associated with the channel are undefined at this stage. Then
-    when registration of one of the equivalence names occurrs,
+    when registration of one of the equivalence names occurs,
     the common channel number is used. With this option different
     IEC-1131 addresses can be assigned to the same channel, thereby
     making them equivalent or interconnecting them.
@@ -980,30 +993,53 @@ Additional functionality in iCserver.
 
     Equivalencing two or more output addresses (Q...) will lead to
     an error, if both output addresses register as senders in an iC
-    control application - this would lead to two or more senders on
-    the same channel. When the second or later output sender registers,
-    the error will be reported. A similar error will be reported if a
-    second external input device in an equivalence chain is registered
-    as a second sender. This would happen if both IX8 and IX8-0 were
-    started as iCboxes after the equivalence statement in Example
-    2 above.
+    control application - this would lead to two or more senders on the
+    same channel. When the second or later output sender registers,
+    the error will be reported. A similar error will be reported
+    if a second external input device in an equivalence chain is
+    registered as a second sender. This would happen if both IX8 and
+    IX8-0 were started as iCboxes after the equivalence statement in
+    Example 2 above. In rare cases two outputs may be legitametely
+    equivalenced if an iC application uses a certain output name and
+    a real output with a different name must be used to accept that
+    output. This practice is highly deprecated, because transparency
+    in the documentation is lost.
 
- b) client calls - a list of calls with their parameters allow iCserver
-    to start a number of clients as separate processes like
-    a shell.  These are usually all the I/O client(s) and control
-    application(s) to make up a complete control system. By providing
+    Formally equivalences consist of two or more IEC base identifiers
+    followed by an optional 1 to 3 digit instance specifier separated
+    by an equal sign '='.
+
+    IEC base identifiers match /^[IQ][XBWLH]\d+(-\d{1,3})?$/
+
+    Although it is possible to equivalence IEC identifiers of different
+    types, this must be done with care since the consequences may not be
+    what is expected.
+
+    All equivalences must be defined before any registrations take
+    place. Since equivalences are declared as iCserver parameters
+    or with the -f option (see c) this will happen automatically at
+    iCserver startup.
+
+ b) client calls - a list of calls with their parameters allow
+    iCserver to start a number of clients as separate processes like
+    a shell.  These are usually all the control application(s) and
+    I/O client(s) to make up a complete control system. By providing
     this functionality in iCserver, all the information for starting
     a control system is grouped in one place.
+
+    Client calls consist of a program path optionally followed by a
+    space separated list of parameters.  Calls with parameters must
+    be quoted on the command line to make them a single parameter
+    for iCserver.
 
     Example 3:
 	'iCbox -n sorter-IO IX0 QX0 QX1' sorter
 
     This starts two clients - iCbox and the control application sorter.
-    Calls with parameters must be quoted on the command line.
 
  c) -f option - execute a file with iCserver options at startup.
     For very large equivalence tables a file defining equivalences and
-    possibly other iCserver options can be used.
+    possibly other iCserver switches and options can be used.
 
 	iCserver -f <equivalence_file>
 
@@ -1021,26 +1057,13 @@ Additional functionality in iCserver.
 	iCbox -n sorter-IO IX0 QX0 QX1
 	sorter
 
-    All equivalences must be defined before any registrations at
-    iCserver take place. Since equivalences are declared as iCserver
-    parameters or with the -f option this will happen automatically
-    at iCserver startup.
-
-    Formally equivalences consist of two or more identifiers separated
-    by an equal sign '='.
-
-    Client calls consist of an identifier optionally followed by a space
-    separated list of parameters.
-
-    Identifiers match /[\.\d\w_]+/
-
     Individual equivalences and client calls must be written without
     spaces in the command line unless they are quoted. In the optional
     INI file which can be read with the -f option, each equivalence
     and client call must be placed in a separate line. White spaces
     may be used in equivalence lines and must be used to separate a
-    client call from its parameters. Client calls need not be quoted
-    in the INI file.
+    client call path from its parameters. Client calls need not be
+    quoted in the INI file.
 
     Comments are started with any other character than [.\d\w_],
     usually #
@@ -1062,7 +1085,7 @@ Additional functionality in iCserver.
     Note: the -a option would be incompatible with a scenario, where
     several control clients communicate via equivalenced channels.
     To overcome this problem, a heuristic is used, where no outputs QNm
-    are autovivified, if they occurr anywhere in an equivalence list.
+    are autovivified, if they occur anywhere in an equivalence list.
     If an Input INm occurs in an equivalence list, the first variable
     in the equivalence list is autovivified instead, as long as that
     is also an input.
@@ -1120,8 +1143,9 @@ Additional functionality in iCserver.
 	r receiver unregisters from iCserver (used by iClive only)
 
 	<address_code>
-	The <address_code> is made up either of an IEC-1131 code
-	used in iC programs to identify (address) a particular
+
+	The <address_code> is made up either of an IEC-1131 base
+	name used in iC programs to identify (address) a particular
 	input or output or by a special address for communicating
 	with debugging and monitoring clients consisting of an
 	<address_code> starting with C,D or M are used. These are
@@ -1153,7 +1177,7 @@ Additional functionality in iCserver.
     acknowledge strings are always shorter than the registration
     strings - hence there is no danger of buffer overflow.
 
-	IEC-1131 names are as follows:
+	IEC-1131 base names are as follows:
 
 	    <io_op><size_op><address>
 
@@ -1161,10 +1185,11 @@ Additional functionality in iCserver.
 	    I data is input to an iC control client.
 	    Q data is output from an iC control client.
 
+			- the following are for debugging clients only
 	    C debug data is output from an iC control client to iClive
 	    D debug data is input to an iC control client from iClive
 	    M signifies a monitor device (none implemented so far).
-		more details for C, D and M in section 6)
+			- more details for C, D and M in section 6)
 
 	    <size_op>
 	    X signifies 8 bits of single bit data.
@@ -1186,8 +1211,10 @@ Additional functionality in iCserver.
 	    2, 3 and not 0, 2, 4, 6 as in previous implemetations. The
 	    same applies to L (32 bit) addresses.
 
-	NOTE: the syntax of a correct IEC-1131 name is not actually
-	checked by iCserver - it is listed here for reference only.
+	NOTE: the syntax of correct IEC-1131 base names is only checked
+	by iCserver for equivalence declarations. All other IEC_1131
+	base names are received from clients where they should have
+	been checked.
 
 	Examples:
 	SIX0    8 single bits IX0.0 to IX0.7 sent from an external source
@@ -1272,7 +1299,7 @@ Additional functionality in iCserver.
 
  5) On the other hand, only one client may register as the sender for
     a particular address. If iCserver did not catch this as an error,
-    serious malfunction would occurr, if several clients were to
+    serious malfunction would occur, if several clients were to
     send data, which would then be overwritten inconsistently at the
     destination sinks.
 
@@ -1339,7 +1366,7 @@ Additional functionality in iCserver.
     Although mixed registrations, in which clients of the same name
     are used with and without instance numbers as shown above will work
     correctly, this will cause confusion in the project documentation
-    and iCserver will issue a warning if it occurrs.
+    and iCserver will issue a warning if it occurs.
 
  8) Registration of clients from the view of iCserver
 

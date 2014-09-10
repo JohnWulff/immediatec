@@ -1,5 +1,5 @@
 static const char pifacecad_h[] =
-"$Id: pifacecad.h,v 1.1 2014/04/26 00:56:33 pi Exp $";
+"$Id: pifacecad.h,v 1.2 2014/06/04 07:22:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -49,6 +49,7 @@ extern "C" {
 
 #define DELAY_PULSE_NS 1000 // 1us
 #define DELAY_SETTLE_NS 40000 // 40us
+#define DELAY_CLEAR_NS 2600000L // 2.6ms
 #define DELAY_SETUP_0_NS 15000000L // 15ms
 #define DELAY_SETUP_1_NS 5000000L // 5ms
 #define DELAY_SETUP_2_NS 1000000L // 1ms
@@ -105,6 +106,9 @@ extern "C" {
 #define LCD_MAX_LINES 2
 #define LCD_WIDTH 16
 #define LCD_RAM_WIDTH 80 // RAM is 80 wide, split over two lines
+
+extern int	id;		/* used to indent traces if (iC_debug & 04) */
+extern char	sp[];
 
 static const uint8_t ROW_OFFSETS[] = {0, 0x40};
 

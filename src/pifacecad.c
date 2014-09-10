@@ -1,5 +1,5 @@
 static const char pifacecad_c[] =
-"$Id: pifacecad.c,v 1.1 2014/04/29 08:27:26 pi Exp $";
+"$Id: pifacecad.c,v 1.2 2014/06/04 07:19:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -32,6 +32,19 @@ static const char pifacecad_c[] =
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *  The commands pifacecad_lcd_clear() and pifacecad_lcd_home() require
+ *  a delay of 2.6 ms to bridge the execution time used internally for
+ *  clearing the display buffer.  For the first command no execution
+ *  time is specified in the HITACHI specification - the second one
+ *  is specified at 1.52 ms. Actual measurement using the Busy Flag
+ *  determined that the execution time of pifacecad_lcd_clear() is
+ *  between 1.75 and 2.6 ms. Without a delay of 2.6 ms after each of
+ *  these commands a following pifacecad_lcd_write() would frequently
+ *  garble the text. A pifacecad_lcd_display_off() or _on() does not
+ *  execute at all unless there is a delay of 2.6 ms after a prior
+ *  piface_lcd_clear(). Alle the other commands are followed by a
+ *  delay of 40 us, which is in line with the HITACHI spec.
  *
  *******************************************************************/
 
@@ -70,15 +83,15 @@ void pifacecad_lcd_init(int fd, uint8_t pfa)
     hw_addr = pfa;
 
     /* setup sequence */
-    sleep_ns(DELAY_SETUP_0_NS);
+    sleep_ns(DELAY_SETUP_0_NS);				/* 15 ms */
     writeByte(mcp23s17_fd, hw_addr, LCD_PORT, 0x03);
     pifacecad_lcd_pulse_enable();
 
-    sleep_ns(DELAY_SETUP_1_NS);
+    sleep_ns(DELAY_SETUP_1_NS);				/* 5 ms */
     writeByte(mcp23s17_fd, hw_addr, LCD_PORT, 0x03);
     pifacecad_lcd_pulse_enable();
 
-    sleep_ns(DELAY_SETUP_2_NS);
+    sleep_ns(DELAY_SETUP_2_NS);				/* 1 ms */
     writeByte(mcp23s17_fd, hw_addr, LCD_PORT, 0x03);
     pifacecad_lcd_pulse_enable();
 
@@ -96,8 +109,6 @@ void pifacecad_lcd_init(int fd, uint8_t pfa)
     cur_entry_mode |= LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
     pifacecad_lcd_send_command(LCD_ENTRYMODESET | cur_entry_mode);
 
-    cur_display_control |= LCD_DISPLAYON | LCD_CURSORON | LCD_BLINKON;
-    pifacecad_lcd_send_command(LCD_DISPLAYCONTROL | cur_display_control);
     if (iC_debug & 04) id-=2, fprintf(iC_outFP, "\n%*.*spifacecad_lcd_init END", id, id, sp);
 }
 
@@ -149,6 +160,7 @@ void pifacecad_lcd_clear(void)
 {
     if (iC_debug & 04) fprintf(iC_outFP, "\n%*.*spifacecad_lcd_clear()", id, id, sp), id+=2;
     pifacecad_lcd_send_command(LCD_CLEARDISPLAY);
+    sleep_ns(DELAY_CLEAR_NS);				/* 2.6 ms (not specified in data sheet */
     cur_address = 0;
     if (iC_debug & 040) fprintf(iC_outFP, "\n%*.*scur_address = %d", id, id, sp, cur_address);
     if (iC_debug & 04) id-=2, fprintf(iC_outFP, "\n%*.*spifacecad_lcd_clear END", id, id, sp);
@@ -158,6 +170,7 @@ void pifacecad_lcd_home(void)
 {
     if (iC_debug & 04) fprintf(iC_outFP, "\n%*.*spifacecad_lcd_home()", id, id, sp), id+=2;
     pifacecad_lcd_send_command(LCD_RETURNHOME);
+    sleep_ns(DELAY_CLEAR_NS);				/* 2.6 ms  - added JW 2014/05/14 */
     cur_address = 0;
     if (iC_debug & 040) fprintf(iC_outFP, "\n%*.*scur_address = %d", id, id, sp, cur_address);
     if (iC_debug & 04) id-=2, fprintf(iC_outFP, "\n%*.*spifacecad_lcd_home END", id, id, sp);
@@ -305,7 +318,7 @@ void pifacecad_lcd_send_command(uint8_t command)
     if (iC_debug & 04) fprintf(iC_outFP, "\n%*.*spifacecad_lcd_send_command(command = 0x%02x)", id, id, sp, (unsigned)command), id+=2;
     pifacecad_lcd_set_rs(0);
     pifacecad_lcd_send_byte(command);
-    sleep_ns(DELAY_SETTLE_NS);
+    sleep_ns(DELAY_SETTLE_NS);				/* 40 us */
     if (iC_debug & 04) id-=2, fprintf(iC_outFP, "\n%*.*spifacecad_lcd_send_command END", id, id, sp);
 }
 
@@ -314,15 +327,16 @@ void pifacecad_lcd_send_data(uint8_t data)
     if (iC_debug & 04) fprintf(iC_outFP, "\n%*.*spifacecad_lcd_send_data(data = 0x%02x)", id, id, sp, (unsigned)data), id+=2;
     pifacecad_lcd_set_rs(1);
     pifacecad_lcd_send_byte(data);
-    sleep_ns(DELAY_SETTLE_NS);
+    sleep_ns(DELAY_SETTLE_NS);				/* 40 us */
     if (iC_debug & 04) id-=2, fprintf(iC_outFP, "\n%*.*spifacecad_lcd_send_data END", id, id, sp);
 }
 
 void pifacecad_lcd_send_byte(uint8_t b)
 {
+    uint8_t current_state;
     if (iC_debug & 04) fprintf(iC_outFP, "\n%*.*spifacecad_lcd_send_byte(b = 0x%02x)", id, id, sp, (unsigned)b), id+=2;
     /* get current lcd port state and clear the data bits */
-    uint8_t current_state = readByte(mcp23s17_fd, hw_addr, LCD_PORT);
+    current_state = readData[hw_addr][LCD_PORT];
     current_state &= 0xf0; /* clear the data bits */
     if (iC_debug & 040) fprintf(iC_outFP, "\n%*.*s%02x", id, id, sp, current_state);
     if ((b & 0x7f) < 0x40 || (b & 0x7f) == 0x7f) {
@@ -376,9 +390,9 @@ void pifacecad_lcd_pulse_enable(void)
 {
     if (iC_debug & 04) fprintf(iC_outFP, "\n%*.*spifacecad_lcd_pulse_enable()", id, id, sp), id+=2;
     pifacecad_lcd_set_enable(1);
-    sleep_ns(DELAY_PULSE_NS);
+    sleep_ns(DELAY_PULSE_NS);					/* 1 us */
     pifacecad_lcd_set_enable(0);
-    sleep_ns(DELAY_PULSE_NS);
+    sleep_ns(DELAY_PULSE_NS);					/* 1 us */
     if (iC_debug & 04) id-=2, fprintf(iC_outFP, "\n%*.*spifacecad_lcd_pulse_enable END", id, id, sp);
 }
 

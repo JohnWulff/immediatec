@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.94 2013/09/10 08:32:34 jw Exp $";
+"@(#)$Id: outp.c,v 1.95 2014/08/18 08:24:43 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -445,7 +445,7 @@ iC_listNet(void)
 	 * Generate the pre-compiled functions for including permanently in
 	 * init.c from the iC source file init_t.ic
 	 *
-	 * This scheme only works for for simple functions with one level of
+	 * This scheme only works for simple functions with one level of
 	 * master gates for each input and individual clocks for each input if
 	 * the builtin function is clocked (all except FORCE() are clocked)
 	 *
@@ -481,9 +481,6 @@ iC_listNet(void)
 	int		indexTimer1;
 
 	printf(
-"#ifdef BOOT_COMPILE\n"
-"Symbol		iC_CHANGE_ar = { \"CHANGE\", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */\n"
-"#else	/* BOOT_COMPILE */\n"
 "/********************************************************************\n"
 " * Pre-compiled built-in functions produced in functionDefinition()\n"
 " *\n"
@@ -494,6 +491,7 @@ iC_listNet(void)
 " * and any pre-compiled functions are left out of init.c.\n"
 " *******************************************************************/\n"
 "\n"
+"#ifndef BOOT_COMPILE\n"
 "static List_e	l[];\n"
 	);
 	printf(
@@ -604,7 +602,7 @@ iC_listNet(void)
 	    }
 	}
 	printf(
-"};\n"
+"}; /* l[] */\n"
 	);
 	/********************************************************************
 	 * Boot Interlude 1: output var list Symbols
@@ -646,7 +644,10 @@ iC_listNet(void)
 	    }
 	}
 	printf(
+"#else	/* BOOT_COMPILE */\n"
+"Symbol		iC_CHANGE_ar = { \"CHANGE\", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */\n"
 "#endif	/* BOOT_COMPILE */\n"
+"\n"
 "/********************************************************************\n"
 " *\n"
 " *	Initialise Symbol table with all reserved words for iC and C\n"
@@ -712,13 +713,13 @@ iC_listNet(void)
 	    }
 	}
 	printf(
-"									   /* %d pre-installed BuiltIn function Symbols */\n"
-"#else	/* not BOOT_COMPILE */\n"
-"    /* name	type	ftype	uVal	*/\n"
+"										/* %d pre-installed BuiltIn function Symbols */\n"
+"#else	/* BOOT_COMPILE */\n"
+"  /* name	     type   ftype  uVal	*/\n"
 	, icnt);
 	printf(
-"#endif	/* not BOOT_COMPILE */\n"
-"};\n"
+"#endif	/* BOOT_COMPILE */\n"
+"}; /* b[] */\n"
 	);
     }
 #endif	/* BOOT_COMPILE */
@@ -2163,7 +2164,7 @@ static iC_Gt *	iC_l_[];\n\
 		/* generate action gt_list */
 		if (ftyp >= MIN_ACT && ftyp < MAX_ACT) {
 		    /* gt_list */
-		    fprintf(Fp, " &iC_l_[%d],", li);
+		    fprintf(Fp, " {&iC_l_[%d]},", li);
 		    if (fflag == 0) {		/* leave out _f0_1 */
 			li += 2;		/* space for action or function pointer + clock */
 			if ((lp = lp->le_next) != 0 &&
@@ -2193,7 +2194,7 @@ static iC_Gt *	iC_l_[];\n\
 		    if (iqt[0] == 'Q' &&	/* QB0_0 is cnt == 3 (no tail) */
 			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3) {
-			fprintf(Fp, " 0,");
+			fprintf(Fp, " {0},");
 		    } else {
 			goto OutErr;
 		    }
@@ -2202,7 +2203,7 @@ static iC_Gt *	iC_l_[];\n\
 		    if (iqt[0] == 'Q' &&
 			xbwl[0] == 'X' &&	/* QX0.0_0 is cnt == 5 */
 			cnt == 5 && bit < 8) {
-			fprintf(Fp, " 0,");
+			fprintf(Fp, " {0},");
 		    } else {
 		    OutErr:
 			fprintf(Fp, " 0,\n");
@@ -2213,7 +2214,7 @@ static iC_Gt *	iC_l_[];\n\
 			errorEmit(Fp, errorBuf, &linecnt);
 		    }
 		} else {
-		    fprintf(Fp, " 0,");		/* no action gt_list */
+		    fprintf(Fp, " {0},");	/* no action gt_list */
 		    if (ftyp == TIMRL) {
 			mask = sp->u_val	/* preset off value for TIMER1 */;
 			sp->u_val = 0;		/* restore temporary u to 0 */
@@ -2221,11 +2222,11 @@ static iC_Gt *	iC_l_[];\n\
 		}
 		/* generate gt_rlist */
 		if ((typ == ARNC || typ == LOGC) && sp->ftype == UDFA) {
-		    fprintf(Fp, " &iC_l_[%d],", li);	/* gt_rlist */
+		    fprintf(Fp, " {&iC_l_[%d]},", li);	/* gt_rlist */
 		    li += (mask = sp->list ? sp->list->le_val : 0) + 1;	/* immC array size + terminator */
 		} else
 		if (typ == ARN || (typ >= MIN_GT && typ < MAX_GT)) {
-		    fprintf(Fp, " &iC_l_[%d],", li);	/* gt_rlist */
+		    fprintf(Fp, " {&iC_l_[%d]},", li);	/* gt_rlist */
 		    if (fflag == 0) {		/* leave dummy pointer for _f0_1 in gt_rlist */
 			for (lp = sp->u_blist; lp; lp = lp->le_next) {
 			    li++;		/* mark space in input list */
@@ -2237,7 +2238,7 @@ static iC_Gt *	iC_l_[];\n\
 		    if (iqt[0] == 'I' &&	/* IB0 is cnt == 3 */
 			xbwl[0] != 'X' &&	/* can only be 'B', 'W' or 'L' */
 			cnt == 3) {
-			fprintf(Fp, " 0,");
+			fprintf(Fp, " {0},");
 		    } else {
 			goto InErr;
 		    }
@@ -2246,7 +2247,7 @@ static iC_Gt *	iC_l_[];\n\
 		    if (iqt[0] != 'Q' &&	/* can only be 'I' or 'T' */
 			xbwl[0] == 'X' &&	/* IX0.0 is cnt == 4 */
 			cnt == 4 && bit < 8) {
-			fprintf(Fp, " 0,");
+			fprintf(Fp, " {0},");
 		    } else {
 		    InErr:
 			fprintf(Fp, " 0,\n");
@@ -2257,7 +2258,7 @@ static iC_Gt *	iC_l_[];\n\
 			errorEmit(Fp, errorBuf, &linecnt);
 		    }
 		} else {
-		    fprintf(Fp, " 0,");		/* no gt_rlist */
+		    fprintf(Fp, " {0},");	/* no gt_rlist */
 		}
 		/* generate gt_next, which points to previous Gate */
 		fprintf(Fp, " %s%s", sam, nxs);
@@ -2300,7 +2301,7 @@ static iC_Gt *	iC_l_[];\n\
 		    tsp = tsp->list->le_sym;	/* point to original */
 		}
 		fprintf(Fp,
-		    " = { 1, -%s, %s, 0, \"%s\", 0, (iC_Gt**)&%s, %s%s, %d };\n",
+		    " = { 1, -%s, %s, 0, \"%s\", {0}, {(iC_Gt**)&%s}, %s%s, %d };\n",
 		    iC_ext_type[typ], iC_ext_ftype[ftyp], sp->name, mN(tsp), sam, nxs, val);
 		linecnt++;
 		nxs = modName;			/* previous Symbol name */

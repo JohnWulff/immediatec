@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.80 2013/08/13 11:00:00 jw Exp $";
+"@(#)$Id: genr.c,v 1.81 2014/08/07 07:18:50 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1317,7 +1317,8 @@ op_asgn(				/* asign List_e stack to links */
     sp = var;				/* start reduction with var */
     assert((t_first == 0 && t_last == 0) || (t_first >= iCbuf && t_last >= t_first && t_last < &iCbuf[IMMBUFSIZE]));
 #if YYDEBUG
-    if ((iC_debug & 0402) == 0402 && t_first) fprintf(iC_outFP, "resolve \"%*.*s\"\n", t_last-t_first, t_last-t_first, t_first);
+    if ((iC_debug & 0402) == 0402 && t_first) fprintf(iC_outFP, "resolve \"%*.*s\"\n",
+	(int)(t_last - t_first), (int)(t_last - t_first), t_first);
 #endif
     do {				/* marked symbol */
 	List_e *	saveBlist = 0;	/* prevent warning - only used when iFunSymExt != 0 */

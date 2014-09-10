@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.61 2013/08/07 04:39:43 jw Exp $";
+"@(#)$Id: ict.c,v 1.62 2014/09/10 04:28:02 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -26,11 +26,16 @@ static const char ict_c[] =
 #ifndef TCP
 #error - must be compiled with TCP defined to make a linkable library
 #else	/* TCP */
+#define		_GNU_SOURCE		/* for memrchr() in string.h */
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<string.h>
 #include	<time.h>
 #include	<errno.h>
 #include	<sys/types.h>
+#ifdef	POLL 
+#include	<poll.h>
+#endif	/* POLL */
 #ifdef	WIN32
 #include	<Time.h>
 #else	/* WIN32 */
@@ -41,26 +46,43 @@ static const char ict_c[] =
 #include	<assert.h>
 #include	"tcpc.h"
 #include	"icc.h"
+#ifdef	RASPBERRYPI
+#include	"rpi_gpio.h"
+#include	"mcp23s17.h"
+#include	"pifacecad.h"
+#endif	/* RASPBERRYPI */
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define TLIMIT	4			/* TX0.4 is fastest timer */
 
-#ifndef SIGRTMAX
-#define SIGRTMAX	32		/* for non-POSIX systems (Win32) */
-#endif
-#define QUIT_TERMINAL	(SIGRTMAX+3)
-#define QUIT_DEBUGGER	(SIGRTMAX+4)
-#define QUIT_SERVER	(SIGRTMAX+5)
-
 #define IOCHANNELS	30		/* initial Channels[] size */
-#define ENTRYSZ		16		/* entry "SIX0000-000\0" max length 12 */
+#define	OSIZ	20
 
-struct timeval	iC_timeOut = { 0, 50000 };	/* 50 mS select timeout - may be modified in iCbegin() */
-static struct timeval	toCnt =   { 0, 50000 };	/* actual timeout counter that select uses */
+char			iC_stdinBuf[REPLY];	/* store a line of STDIN - notified by TX0.1 */
+static int		stdinFlag = 0;
+#ifndef	POLL 
+struct timeval		iC_timeOut = { 0, 50000 }; /* 50 mS select timeout - may be modified in iCbegin() */
+static struct timeval	toCnt  = { 0, 50000 };	/* actual timeout counter that select uses */
+#ifdef	RASPBERRYPI
+static struct timeval *	toCoff = NULL;		/* select() timeout off when NULl pointer */
+#endif	/* RASPBERRYPI */
 static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl pointer */
+#else	/* POLL */
+static int		toCnt  = 50;		/* 50 ms poll() timeout */
+static int		toM1   = -1;		/* -1 causes poll() to never timeout */
+#ifdef	RASPBERRYPI
+static int *		toCoff = &toM1;		/* poll() timeout off when -1 */
+#endif	/* RASPBERRYPI */
+static int *		toCntp = &toM1;		/* initially -1, timeout turned on to 50 ms if needed */
+#endif	/* POLL */
 
 static void	regAck(Gate ** oStart, Gate ** oEnd);
-static void	storeChannel(unsigned short channel, Gate * gp);
+static void	sendOutput(void);
+static void	storeChannel(unsigned short channel, Gate * gp
+#ifdef	RASPBERRYPI
+			,    piFaceIO *		pfp
+#endif	/* RASPBERRYPI */
+			);
 static char *
 #if	INT_MAX == 32767 && defined (LONG16)
 convert2binary(char * binBuf, long value, int bitFlag);
@@ -97,40 +119,53 @@ unsigned	iC_glit_cnt;		/* count glitches */
 unsigned long	glit_nxt;		/* count glitch scan */
 #endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 
-static SOCKET	sockFN = 0;		/* TCP/IP socket file number */
-
 static Gate *	timNull[] = { 0, 0, 0, 0, 0, 0, 0, 0, }; /* speeds up tim[] lookup */
 static unsigned short	topChannel = 0;
-static unsigned short	C_channel = 0;	/* channel for sending messages to Debug */
-static Gate **	Channels = NULL;	/* dynamic array to store input gate addresses */
-static int	ioChannels = 0;		/* allocated size of Channels[] */
-static Gate	D_gate;			/* Gate on channel for receiving messages from Debug */
-static int	regOffset = 0;		/* for register send */
-static int	liveOffset = 0;		/* for live header */
-#ifndef	EFENCE
-static char	regBuf[REQUEST];
-#else	/* EFENCE */
-static char *	regBuf;
-#endif	/* EFENCE */
+#ifdef	RASPBERRYPI
 
-static int	msgOffset = 0;		/* for message send */
+static char *	texts[8] = {		/* current software can handle exactly 8 texts */
+    "00000000011111111112222222222333333333341234567890123456789012345678901234567890",
+    "OzBerryPi Users Group, 66 Oxford Street\nDarlinghurst 2010 NSW Australia",
+    "Look afar and see the\nend from the beginning",
+    "Every time I look at you I am more\nconvinced of Darwin's theory",
+    "Your life would be very empty\nif you had nothing to regret",
+    "For the next hour, WE will control\nall that you see and hear",
+    "I've enjoyed just about as\nmuch of this as I can stand",
+    "John E Wulff, Software Engineer\nimmediateC@gmail.com",
+};
+static char	buffer[BS];
+static int	fireInput(piFaceIO * pfp, int val);
+static void	writePiFace(piFaceIO * pfp, int val);
+static int	tcnt_750 = 15;		/* 750 ms timer for PiFaceCAD shift */
+static int	slr = 0;
+static int	cbc = 0x03;		/* first input will switch to cursor/blink off */
+static channelSel * Channels = NULL;	/* dynamic array to store input gate and PiFace pointers */
+#else	/* ! RASPBERRYPI */
+static Gate **	Channels = NULL;	/* dynamic array to store input gate addresses */
+#endif	/* ! RASPBERRYPI */
+
+static int	ioChannels = 0;		/* allocated size of Channels[] */
+unsigned short	C_channel = 0;		/* channel for sending messages to Debug in ict.c */
+static Gate	D_gate;			/* Gate on channel for receiving messages from Debug */
+static int	liveOffset = 0;		/* for live header */
+int		regOffset = 0;		/* for register send */
 #ifndef	EFENCE
-static char	msgBuf[REQUEST];
-char		iC_outBuf[REQUEST];	/* Buffer in which output is collected in rsff.c */
-char		rpyBuf[REPLY];		/* Buffer in which iCserver input is read to */
+char		msgBuf[REQUEST];	/* Buffer in which live data is collected */
+char		iC_outBuf[REQUEST];	/* Buffer in which output is collected in iC_output() */
 #else	/* EFENCE */
-static char *	msgBuf;
+char *		msgBuf;
 char *		iC_outBuf;
-static char *	rpyBuf;
 #endif	/* EFENCE */
-int		iC_outOffset;
+static char *	outPtr;
+static int	outBufLen = REQUEST;
+static int	msgOffset = 0;		/* for message send */
 extern const char	iC_ID[];
-static FILE *	iC_vcdFP = NULL;
 static char *	iC_sav = NULL;
-static FILE *	iC_savFP = NULL;
 static int	liveIndex = 0;
 static long	virtualTime = 0;
 static short	iClock_index;
+FILE *		iC_vcdFP = NULL;
+FILE *		iC_savFP = NULL;
 static char *	vcd_ftype[]	= { VCD_FTYPE };
 static char *	sav_ftype[]	= { SAV_FTYPE };
 
@@ -144,10 +179,11 @@ void
 iC_icc(Gate ** sTable, Gate ** sTend)
 {
     int		i;
-    short	pass;
     int		c;
-    short	typ;
     int		cnt;
+    short	pass;
+    short	typ;
+    unsigned short channel;
     Gate **	opp;
     char *	cp;
     Gate **	tim = timNull;		/* point to array of 8 null pointers */
@@ -157,15 +193,39 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     int		tcnt10 = 1;
     int		tcnt60 = 1;
     int		retval;
+#if	INT_MAX == 32767 && defined (LONG16)
+    long	val;
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+    int		val;
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+#ifdef	POLL
+    int		soc;			/* TCP/IP socket pollfd array index */
+#ifdef	RASPBERRYPI
+    int		gpi;			/* GPIO25 out-of-band pollfd array index */
+#endif	/* RASPBERRYPI */
+    int		sti;			/* STDIN pollfd array index */
+#endif	/* POLL */
     unsigned short index;
     FILE *	vcdFlag;
     char	binBuf[33];		/* allows 32 bits */
+#ifdef	RASPBERRYPI
+    piFaceIO *	pfp;
+    int		iq;
+    unsigned short marking;
+    unsigned short gl;
+//  const char	RSiq_e[2][2][4] = { {"RxxS", "RSxS"}, {"SxxR", "SSxR"} };	/* [iq][opt_E][gl] */
+union iq_e {
+    const char	s[17];			/* initialises to first member of the union with a terminating '\0' */
+    const char	e[2][2][4];
+}		RSiq = { "RxxSRSxSSxxRSSxR" };	/* [iq][opt_E][gl] '\0' */
+#define	RSiq_e	RSiq.e			/* clean debugging output with terminating '\0' */
+    char *	op;
+    int		ol;
+#endif	/* RASPBERRYPI */
 
 #ifdef	EFENCE
     msgBuf = iC_emalloc(REQUEST);
-    regBuf = iC_emalloc(REQUEST);
     iC_outBuf = iC_emalloc(REQUEST);
-    rpyBuf = iC_emalloc(REPLY);
 #endif	/* EFENCE */
     iC_initIO();			/* catch memory access signal */
 
@@ -188,19 +248,37 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     if ((gp = iC_TX0p) != 0) {		/* are EOI or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7 */
 	assert(tim);
-	for (cnt = 1; cnt < 8; cnt++) {
-	    if (tim[cnt] != NULL) {	/* any of the 7 timers programmed ? */
+	for (cnt = 2; cnt < 8; cnt++) {	/* TX0.1 is used to report receiving a new line on STDIN */
+	    if (tim[cnt] != NULL) {	/* any of the 6 timers 1 ms - 60 seconds programmed ? */
 		if (cnt < TLIMIT) {
 		    fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_iccNM, cnt);
 		    iC_quit(SIGUSR1);
 		}
+#ifdef	RASPBERRYPI
+		toCoff =		/* de-activate select timeout for PiFaceCAD shift */
+#endif	/* RASPBERRYPI */
 		toCntp = &toCnt;	/* activate select timeout */
 		break;			/* could optimise by varying timeout value */
 	    }
 	}
     }
+#ifndef	POLL 
+    FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 04) fprintf(iC_outFP, "*** all normal interrupts have been cleared\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+#ifdef	RASPBERRYPI
+    FD_ZERO(&iC_ixfds);
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 04) fprintf(iC_outFP, "*** all extra interrupts have been cleared\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+#endif	/* RASPBERRYPI */
+#endif	/* ! POLL */
 
     if ((iC_debug & 0400) == 0) {
+#ifdef	RASPBERRYPI
+      if (! iC_opt_P || iC_opt_L) {	/* no need for registration if only PiFace I/O */
+#endif	/* RASPBERRYPI */
 	char *		tbp = regBuf;	/* points to next entry in regBuf */
 	int		tbc = REQUEST;	/* length of filled entries */
 	char *		tbt;		/* temp pointer */
@@ -211,8 +289,73 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
 
 	/* Start TCP/IP communication before any inputs are generated => outputs */
-	sockFN = iC_connect_to_server(iC_hostNM, iC_portNM);
+	iC_sockFN = iC_connect_to_server(iC_hostNM, iC_portNM);
+	if (iC_sockFN > iC_maxFN) {
+	    iC_maxFN = iC_sockFN;
+	}
+#ifdef	RASPBERRYPI
+	if (iC_opt_B) {
+	    /********************************************************************
+	     *  Start an iCbox -d for display of Internal ane ExternOut variables
+	     *  before registering any of the I/O variables so -a does not catch them
+	     *******************************************************************/
+	    int		len;
+
+	    len = snprintf(buffer, BS, "iCbox -d -n %s-DI", iC_iccNM);	/* prepare to execute iCbox -d */
+	    op = buffer + len;
+	    ol = BS - len;
+	    for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+		for (iq = 0; iq <= 1; iq++) {
+		    if ((gp = pfp->s[iq].i.gate) != NULL &&
+			(((marking = gp->gt_live) == Internal && gp->gt_fni == TRAB) ||
+			marking == ExternOut)) {
+			assert(ol > 10);
+			len = snprintf(op, ol, " %s", gp->gt_ids);	/* add I/O name */
+			op += len;
+			ol -= len;
+			if (marking == Internal && strlen(iC_iidNM) > 0) {
+			    len = snprintf(op, ol, "-%s", iC_iidNM);	/* append instance ID */
+			    op += len;
+			    ol -= len;
+			}
+		    }
+		}
+	    }
+	    snprintf(op, ol, " &");		/* execute iCbox -d as a separate process */
+	    if (iC_debug & 04) fprintf(iC_outFP, "*** '%s'\n", buffer);
+	    if (system(buffer) != 0) {
+		perror("iCbox");
+		fprintf(stderr, "WARNING: %s: system(\"%s\") could not be executed\n",
+		    iC_progname, buffer);
+	    }
+	}
+#endif	/* RASPBERRYPI */
+
+	/********************************************************************
+	 *	Set all bits to wait for TCP/IP interrupts here
+	 *******************************************************************/
+#ifndef	POLL 
+	FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
+#else	/* POLL */
+	soc = pollSet(iC_sockFN, POLLIN);	/* watch TCP/IP socket for inputs */
+#endif	/* POLL */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has been primed\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+
+	/********************************************************************
+	 *  Do registration with iCserver, by sending a registration string
+	 *  consisting of N<progname>,SC<progname>,RD<progname>[,RIXx...][,SQXx...],Z
+	 *  for every input and output gate in the application (see iCserver spec).
+	 *  iCserver acknowledges the registration string by returning a comma
+	 *  separated list of channel numbers - one for each gate reistered.
+	 *  These real channel numbers are used to transmit I/O data from senders
+	 *  to receivers via iCserver.
+	 *******************************************************************/
+
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 04) fprintf(iC_outFP, "%s: I/O registration objects\n", iC_iccNM);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	for (i = 0; i < 3; i++) {
 	    tbp += el;
 	    tbc -= el;
@@ -232,21 +375,154 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    ep = entry;
 	    el = 0;
 	    mask = gp->gt_mark;
-	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T') {	/* suppress TX0 */
-		el = snprintf(ep, ENTRYSZ, ",R%s", gp->gt_ids);	/* read input at controller */
+#ifdef	RASPBERRYPI
+
+	    /********************************************************************
+	     *
+	     *  Marking values in gt_live to influence registration of I/Os:
+	     *
+	     *	0   External	// default  IXx <== iCserver <== QXx
+	     *	1   Internal	//          IXx <==   SIO    <== QXx
+	     *			// if opt_E    also iCserver <== IXx (display only)
+	     *			//             and  iCserver <== QXx
+	     *	2   Dummy	// ignore -    output WARNING    ***
+	     *	3   ExternOut	// like     iCserver (IXx)   <== SIO
+	     *			// iCpiFace SIO      (QXx)   <== iCserver
+	     *
+	     *  Signal flows for an arrangement of 2 apps, app1 and app2
+	     *  serviced by 2 PiFaces, PiFace0 and PiFace1 called as follows:
+	     *
+	     *    app1 -P IX0 QX0 IX2 QX2 IX1 QX1 IX3 QX3;
+	     *       uses IX0 QX0 IX1 QX1
+	     *    app2;
+	     *       uses IX2 QX2
+	     *            IX3 QX3 not used by anybody
+	     *
+	     *    PiFace0 provides IX0 QX0 Internal  1 to app1 by SIO
+	     *       also channels  3   4  if opt_E
+	     *    PiFace1 provides IX2 QX2 ExternOut 3 by SIO, TCP/IP
+	     *         on channels  7   8
+	     *                     IX1 QX1 External  0 default TCP/IP
+	     *         on channels  5   6
+	     *                     IX3 QX3 Dummy     2 go nowhere
+	     *
+	     * **********************************  
+	     * *         *  PiFace0  *  PiFace1 *
+	     * *         *  IX0 QX0  *  IX2 QX2 *
+	     * *         ****|***|*******|***|***   *************     ***********
+	     * * app1 -P     v   ^  -E   v   ^  *   *  iCserver *     *  iCbox  *
+	     * *             |   |       |   |  *   *           *     *         *
+	     * * IX0 -<----1-+---|-1E-->-|---|-SI---3->--IX0-->-3-----RI->- IX0d*
+	     * * QX0 ->--------1-+--1E->-|---|-SQ---4->--QX0-->-4-----RQ->- QX0 *
+	     * * IX1 -<--------------0---|---|-RI---5-<--IX1--<-5-----SI-<- IX1 *
+	     * * QX1 ->---------------0--|---|-SQ---6->--QX1-->-6-----RQ->- QX1 *
+	     * *                         +-3-|-SI---7->--IX2-->-7-+---RI->- IX2d*
+	     * *                            3+-RQ---8-<--QX2--<-8-|-+-RQ->- QX2 *
+	     * *      (IX3) -----<---2---       *   *           * | | *         *
+	     * *      (QX3) ----->----2--       *   ************* | | ***********
+	     * *                                *    \         /  v |
+	     * **********************************     channels    | ^ ***********
+	     *              \              /                      | | *  app2   *
+	     *               \  markings  /                       | | *         *
+	     *                                                    +-|-RI->- IX2 *
+	     *                                                      +-SQ-<- QX2 *
+	     *                                                        *         *
+	     *                                                        ***********
+	     *  Registration
+	     *
+	     *  After registration gt_live is used for other purposes, so the
+	     *  gt_live markings must be transferred.
+	     *
+	     *  Use the channelSel Channels[] with .g for Gate * .p for piFaceIO *
+	     *	For			IXx (-INTW)	QXx (OUTW)	flag interpretation
+	     *				.g	.p	.g	.p	.g	.p
+	     *		0 External	gp	NULL	gp f	NULL	1	0
+	     *		1 Internal	gp	pfp E	gp	pfp E	1	1
+	     *		2 Dummy		 -       -       -       -	0	0
+	     *		3 ExternOut	NULL	pfp	NULL	pfp	0	1
+	     *
+	     *  Input interrupt and output handling
+	     *
+	     *  TCP/IP interrupt provides "channel:val" for every changed byte
+	     *                  markings        External Internal Dummy    ExternOut
+	     *                                     0        1        2        3
+	     *    gp  = Channels[channel].g     // gp       (gp)     -        NULL
+	     *    pfp = Channels[channel].p     // NULL     (pfp)    -        pfp
+	     *    if (!gp && !pfp) Warning();	//	never called for Internal
+	     *    if (gp) traMb(gp, 0);         // RI External
+	     *    if (pfp)) writePF(pfp ...);   // RQ ExternOut
+	     *               
+	     *  SIO interrupt provides pfp1 and val
+	     *    channel = pfp1->channelSI;
+	     *    gp  = Channels[channel].g     // (gp)     gp       -        NULL
+	     *    pfp = Channels[channel].p     // (NULL)   pfp E    -        pfp
+	     *    assert(!gp || pfp);		//	never called for External
+	     *    if (gp) traMb(gp, 0);         // I  Internal
+	     *    if (pfp && (!gp || opt_E)) {
+	     *        assert(pfp1 == pfp);
+	     *        send_msg(channel ...);    // SI Internal & opt_E or ExternOut
+	     *    }
+	     *               
+	     *  iC_output(val, channel)
+	     *    gp  = Channels[channel].g     // gp       (gp)     -        (NULL)
+	     *    pfp = Channels[channel].p     // NULL     pfp E    -        (pfp)
+	     *    if (pfp)) writePF(pfp ...);   // Q  Internal
+	     *    assert(gp);			//	never called for ExternOut
+	     *    if (gp && (!pfp || iC_opt_E)) {
+	     *        send_msg(channel ...);    // SQ External or Internal & opt_E
+	     *    }
+	     *
+	     *******************************************************************/
+
+	  if ((gl = gp->gt_live) != Dummy && *gp->gt_ids != 'T') {	/* TX0 and Dummy arguments are not registered */
+	    assert(gl <= ExternOut);
+	    if (gp->gt_ini == -INPW)		/* IXx IBx ... */
+#else	/* ! RASPBERRYPI */
+	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T')	/* IXx IBx ... */
+#endif	/* ! RASPBERRYPI */
+	    {
+#ifdef	RASPBERRYPI
+		if ((c = RSiq_e[0][iC_opt_E][gl]) != 'x') {
+		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register R S x S input/ExternOut send */
+		} else {
+		    el = 0;			/* do not register this input */
+		    gp->gt_mark |= X_FLAG;	/* flag non-registration for regAck() */
+		}
+#if YYDEBUG && !defined(_WINDOWS)
+		if (iC_debug & 04) fprintf(iC_outFP,
+		    "%s	iq=0 opt_E=%d gl= %hu	gt_mark=0x%04x	\"%s\"	RSiq_e[0][%d] = '%s'\n",
+			gp->gt_ids, iC_opt_E, gl, gp->gt_mark, el ? ep : "", iC_opt_E, RSiq_e[0][iC_opt_E]);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+#else	/* ! RASPBERRYPI */
+	    	el = snprintf(ep, ENTRYSZ, ",R%s", gp->gt_ids);	/* register R input */
+#endif	/* ! RASPBERRYPI */
 		if (gp->gt_fni != TRAB) {
-		    mask = 0x100;	/*block output of used bits for analog I/O */
+		    mask = 0x100;		/* block output of used bits for analog I/O */
 		}
 	    } else
-	    if (gp->gt_fni == OUTW) {
-		el = snprintf(ep, ENTRYSZ, ",S%s", gp->gt_ids);	/* send output at controller */
-		if (gp->gt_ini == -ARN) {
+	    if (gp->gt_fni == OUTW) {		/* QXx */
+#ifdef	RASPBERRYPI
+		if ((c = RSiq_e[1][iC_opt_E][gl]) != 'x') {
+		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register S S x R output/ExternOut read */
+		} else {
+		    el = 0;			/* do not register this output */
+		    gp->gt_mark |= X_FLAG;	/* flag non-registration for regAck() */
+		}
+#if YYDEBUG && !defined(_WINDOWS)
+		if (iC_debug & 04) fprintf(iC_outFP,
+		    "%s	iq=1 opt_E=%d gl= %hu	gt_mark=0x%04x	\"%s\"	RSiq_e[1][%d] = '%s'\n",
+			gp->gt_ids, iC_opt_E, gl, gp->gt_mark, el ? ep : "", iC_opt_E, RSiq_e[1][iC_opt_E]);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+#else	/* ! RASPBERRYPI */
+		el = snprintf(ep, ENTRYSZ, ",S%s", gp->gt_ids);	/* register S output */
+#endif	/* ! RASPBERRYPI */
+		if (el > 0 && gp->gt_ini == -ARN) {
 		    if ((tbt = strrchr(ep, '_')) != NULL &&
 			*(tbt+1) == '0' &&
 			*(tbt+2) == '\0') {
 			*tbt = '\0';	/* strip trailing "_0" from internal output name */
 			el -= 2;
-			mask = 0x100;	/*block output of used bits for analog I/O */
+			mask = 0x100;	/* block output of used bits for analog I/O */
 			assert(el > 0);
 		    } else {
 			fprintf(iC_errFP, "\n%s: ill formed output name '%s'\n", iC_iccNM, ep + 1);
@@ -255,15 +531,16 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		}
 	    }
 	    if (el > 0) {
-		char * scp = "";
 		if (strlen(iC_iidNM) > 0) {
 		    el += snprintf(ep + el, ENTRYSZ - el, "-%s", iC_iidNM);	/* append instance ID */
-		    scp = "-";
 		}
+#if YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 04) fprintf(iC_outFP,
-		    "%s%s%s	%d	%d	(%d)\n", gp->gt_ids, scp, iC_iidNM, (int)gp->gt_ini, (int)gp->gt_fni, mask);
-		assert(mask);
-		if (mask < X_MASK) {
+		    "%s%s%s	%d	%d	(%d)	{%hu}\n",
+			gp->gt_ids, (strlen(iC_iidNM) > 0) ? "-" : "", iC_iidNM,
+			(int)gp->gt_ini, (int)gp->gt_fni, mask, gp->gt_live);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		if (mask && mask < X_MASK) {
 		    el += snprintf(ep + el, ENTRYSZ - el, "(%d)", mask);	/* mask of used bits */
 		}
 		if (tbc - el <= (opp+1 == sTend ? 2 : 0)) {	/* leave room for ",Z" at end */
@@ -281,6 +558,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		}
 		strncpy(tbp, ep, tbc);		/* place entry in regBuf */
 	    }
+#ifdef	RASPBERRYPI
+	  }
+#endif	/* RASPBERRYPI */
 	}
 	strncpy(tbp + el, ",Z", tbc - el);	/* place termination in regBuf - 2 bytes are free */
 	if (iC_micro & 06) iC_microPrint("last registration", 0);
@@ -288,8 +568,80 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	regAck(sopp, opp);			/* send/receive last registration */
 	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
 	if (iC_micro & 06) iC_microPrint("Send application name", 0);
-	iC_send_msg_to_server(sockFN, regBuf);			/* Application Name */
+	iC_send_msg_to_server(iC_sockFN, regBuf);		/* Application Name */
+#ifdef	RASPBERRYPI
+      }
+      if (iC_opt_P) {
+	/********************************************************************
+	 *  Allocate virtual channels for remaining Internal and ExternOut Gates.
+	 *  Internal Gates are already assigned to a real channel if opt_E.
+	 *  Virtual channels do not involve iCserver - they select pfi[] entries.
+	 *******************************************************************/
+	for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+	    for (iq = 0; iq <= 1; iq++) {
+		if ((gp = pfp->s[iq].i.gate) != NULL &&
+		    (!iC_opt_L || (gp->gt_mark & X_FLAG))) {	/* no X_FLAG set if !opt_L */
+		    gp->gt_mark &= ~X_FLAG;
+		    channel = ++topChannel;			/* extra channels */
+		    pfp->s[iq].channel = channel;		/* receive or send input */
+		    if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
+			storeChannel(channel, gp, pfp);
+		    } else if (marking == ExternOut) {
+			storeChannel(channel, NULL, pfp);
+		    } else {
+			assert(1);				/* never External, Dummy or other!!! */
+		    }
+		    if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
+			gp->gt_channel = channel;		/* <== Output */
+#if YYDEBUG && !defined(_WINDOWS)
+			if (iC_debug & 04) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
+			    gp->gt_ids, channel);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		    }
+
+		}
+#if YYDEBUG && !defined(_WINDOWS)
+		if (iC_debug & 04) fprintf(iC_outFP, "pfi[%d] %s:%d,%s:%d\n",
+		    pfp - pfi,
+		    pfp->Igate ? pfp->Igate->gt_ids : NULL, pfp->channelSI,
+		    pfp->Qgate ? pfp->Qgate->gt_ids : NULL, pfp->channelRQ);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	    }
+	}
+      }
+#endif	/* RASPBERRYPI */
     }
+
+    /********************************************************************
+     *	Set remaining bits to wait for SIO and stdin interrupts here
+     *******************************************************************/
+#ifndef	POLL 
+#ifdef	RASPBERRYPI
+    if (gpio25FN > 0) {
+	FD_SET(gpio25FN, &iC_ixfds);		/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 04) fprintf(iC_outFP, "*** SIO interrupt has been primed\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+    }
+#endif	/* RASPBERRYPI */
+#ifndef	WIN32
+    FD_SET(0, &iC_infds);			/* watch stdin for inputs - FD_CLR on EOF */
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has been primed\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
+#endif	/* WIN32 */
+#else	/* POLL */
+#ifdef	RASPBERRYPI
+    if (gpio25FN > 0) {
+	gpi = pollSet(gpio25FN, POLLPRI);	/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+    }
+#endif	/* RASPBERRYPI */
+#ifndef	WIN32
+    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
+    sti = pollSet(0, POLLIN);			/* watch stdin for inputs - pollClr(sti) on EOF */
+#endif	/* WIN32 */
+#endif	/* POLL */
 
 /********************************************************************
  *
@@ -419,7 +771,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    iC_sav = iC_emalloc(strlen(iC_vcd)+1);	/* +1 for '\0' */
 	    strcpy(iC_sav, iC_vcd);
 	    cp = strrchr(iC_sav, '.') + 1;
-	    strcpy(cp, "sav");		/* genrate xxx.sav only if xxx.vcd */
+	    strcpy(cp, "sav");		/* generate xxx.sav only if xxx.vcd */
 	    if ((iC_savFP = fopen(iC_sav, "w")) == NULL) {
 		fprintf(iC_errFP, "\n%s: cannot open sav file '%s'\n", iC_iccNM, iC_sav);
 		perror("fopen");
@@ -709,6 +1061,32 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	}
 #endif	/* YYDEBUG */
     }
+    outPtr = iC_outBuf;			/* used in folowing initialisation and operational loop only */
+    outBufLen = REQUEST;
+
+#ifdef	RASPBERRYPI
+    if (iC_opt_P) {
+	/********************************************************************
+	 *  Initialise IXx inputs directly or initialise receivers via iCserver
+	 *  Initialise a PiFaceCad
+	 *******************************************************************/
+	if (iC_debug & 0200) fprintf(iC_outFP, "== Initialise %d PiFace unit%s\n", npf, npf == 1 ? "" : "s");
+	gpio_read(gpio25FN);			/* dummy read to clear interrupt on /dev/class/gpio25/value */
+	if (iC_micro) iC_microPrint("SPI initialise", 0);
+	for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+	    if (pfp->pfa == 4 && pfp->intf == INTFA && pfp->Qname) {	/* registered PiFaceCAD */
+		pifacecad_lcd_clear();
+		pifacecad_lcd_write(texts[0]);	/* initial text */
+		pifacecad_lcd_display_on();	/* default is on */
+		pifacecad_lcd_set_backlight(1);	/* default is on */
+	    }
+	    fireInput(pfp, readByte(pfp->spiFN, pfp->pfa, pfp->inpr));	/* ini input Gates directly and/or via TCP/IP */
+	    pfp->valQ = 0;			/* initialise output for comparison (ignore if not registered) */
+	}
+	sendOutput();				/* Send 1 block of initialisation data */
+    }
+
+#endif	/* RASPBERRYPI */
     /********************************************************************
      *  Operational loop
      *******************************************************************/
@@ -776,18 +1154,29 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);           }
 	    break;
 	}
+	sendOutput();				/* Send last (usually only) block of output data */
+
+	/********************************************************************
+	 *  Switch to alternate lists
+	 *
+	 *  alternate list contains all those gates which were marked in
+	 *  the previous scan and which were active more than
+	 *  MARKMAX times. These are oscillators which wil be
+	 *  scanned again in the next cycle.
+	 *******************************************************************/
+	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
+	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
 
 	/********************************************************************
 	 *  Send live data collected in msgBuf during initialisation
-	 *  and previous loop to iCserver
+	 *  and previous loop to iCserver.
+	 *  Initialise msgBuf for live data collection during next loop.
 	 *******************************************************************/
 	if (msgOffset > liveOffset) {
-	    iC_send_msg_to_server(sockFN, msgBuf);
+	    iC_send_msg_to_server(iC_sockFN, msgBuf);
+	    msgOffset = liveOffset;			/* msg = "C_channel:3" */
 	}
-	/********************************************************************
-	 *  Initialise msgBuf for live data collection during next loop
-	 *******************************************************************/
-	msgOffset = liveOffset;				/* msg = "C_channel:3" */
+	if (iC_micro) iC_microPrint("Scan complete", 0);
 
 #if	YYDEBUG
 	if (iC_scan_cnt || iC_link_cnt) {
@@ -804,28 +1193,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    iC_scan_cnt = iC_link_cnt = 0;
 	}
 #endif	/* YYDEBUG */
-	/********************************************************************
-	 *  Switch to alternate lists
-	 *
-	 *  alternate list contains all those gates which were marked in
-	 *  the previous scan and which were active more than
-	 *  MARKMAX times. These are oscillators which wil be
-	 *  scanned again in the next cycle.
-	 *******************************************************************/
-	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
-	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
-
-	/********************************************************************
-	 *  Send output data collected in outBuf to iCserver
-	 *******************************************************************/
-	if (iC_outOffset > 1) {		/* if any item it is at least 2 long 'x,' */
-	    iC_outBuf[iC_outOffset - 1] = '\0';	/* clear last ',' */
-	    iC_send_msg_to_server(sockFN, iC_outBuf);
-	    memset(iC_outBuf, 0, REQUEST);	/* clear for next data from iC_outMw() */
-	    iC_outOffset = 0;
-	}
-	if (iC_micro) iC_microPrint("Scan complete", 0);
-
 	if (iC_osc_gp) {
 	    fprintf(iC_outFP,
 		"*** Warning: %s has oscillated %d times - check iC program!!!\n",
@@ -845,7 +1212,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 		}
 		fprintf(iC_outFP, "\n");
+		goto outWAIT;		/* output WAIT - do not test 0100 */
 	    }
+	}
+	if (iC_debug & 0100) {		/* end of cycle */
+	  outWAIT:
 	    fprintf(iC_outFP, "======== WAIT ==========\n");
 	    fflush(iC_outFP);
 	}
@@ -853,23 +1224,65 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 
 	/********************************************************************
 	 *  Input from external input modules and time input (if used)
-	 *  Wait for input in a select statement most of the time
 	 *******************************************************************/
 	if (iC_vcdFP) {
 	    virtualTime += 11;
 	    virtualTime -= (virtualTime%10 + 1);	/* next input is on 10's boundary */
 	}
 	for (cnt = 0; cnt == 0; ) {		/* stay in input loop if nothing linked */
-	    retval = iC_wait_for_next_event(sockFN, iC_osc_flag ? &toCnt : toCntp);	/* wait for inputs or timer */
+	    /********************************************************************
+	     *  Turn TX0.1 lo in a cycle by itself before waiting for further I/O
+	     *******************************************************************/
+	    if (stdinFlag) {
+		gp = tim[1];			/* TX0.1 */
+		assert(gp && gp->gt_val == -1);	/* must be programmed if stdinCnt was set */
+#if	YYDEBUG
+		if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
+#endif	/* YYDEBUG */
+		gp->gt_val = 1;			/* set  TX0.1 lo */
+		iC_liveData(gp, 0);		/* VCD and/or iClive */
+		iC_link_ol(gp, iC_o_list);	/* fire TX0.1 lo to terminate notification */
+#if	YYDEBUG
+		if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+		stdinFlag = 0;			/* ready for next STDIN */
+		break;				/* do a scan - no need to increment cnt by using break */
+	    }
+#ifndef	POLL 
+	    /********************************************************************
+	     *  Wait for external inputs or timer
+	     *  Wait for input in a select statement most of the time
+	     *******************************************************************/
+	    retval = iC_wait_for_next_event(iC_osc_flag ? &toCnt : toCntp);
+#else	/* POLL */
+	    retval = iC_wait_for_next_event(iC_osc_flag ? toCnt : *toCntp);
+#endif	/* POLL */
 	    if (iC_osc_flag) {
-		cnt++;				/* gates have been linked to alternate list */
+		cnt++;				/* gates have been linked to alternate list - do a scan */
 		iC_osc_flag = 0;		/* normal timer operation again */
 	    }
-
 	    if (retval == 0) {
+		/********************************************************************
+		 *  Timer interrupt
+		 *******************************************************************/
+#ifndef	POLL 
 		if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 		    toCnt = iC_timeOut;		/* transfer timeout value */
 		}
+#endif	/* POLL */
+#ifdef	RASPBERRYPI 
+		/********************************************************************
+		 *  Handle PiFaceCAD shift every 750 ms
+		 *******************************************************************/
+		if (slr && --tcnt_750 <= 0) {
+		    tcnt_750 = 15;			/* 750 ms timer (15*50ms) */
+		    if (slr & 0x08) {
+			pifacecad_lcd_move_left();	/* move text left every 750 ms */
+		    } else {
+			pifacecad_lcd_move_right();	/* move text right every 750 ms */
+		    }
+		}
+#endif	/* RASPBERRYPI */
 		/********************************************************************
 		 *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
 		 *
@@ -1028,36 +1441,46 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    }
 		}
 	    } else if (retval > 0) {
-		if (FD_ISSET(sockFN, &iC_rdfds)) {
+#ifndef	POLL 
+		if (iC_sockFN > 0 && FD_ISSET(iC_sockFN, &iC_rdfds))
+#else	/* POLL */
+		if (iC_sockFN > 0 && pollEvent(soc, POLLIN))
+#endif	/* POLL */
+		{
 		    /********************************************************************
 		     *  TCP/IP input
 		     *******************************************************************/
-		    if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
-#if	INT_MAX == 32767 && defined (LONG16)
-			long		val;
-#else	/* INT_MAX == 32767 && defined (LONG16) */
-			int		val;
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
-			unsigned short	channel;
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has occurred\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY)) {
 			static int	liveFlag;
 
 			if (iC_micro && !cnt) iC_microPrint("Input received", 0);
 			if (isdigit(rpyBuf[0])) {
 			    assert(Channels);
-			    cp = rpyBuf; cp--;
+			    cp = rpyBuf - 1;	/* point to dummy comma before first message in input */
 			    do {
 				int n;
 				if (
 #if	INT_MAX == 32767 && defined (LONG16)
-				    (n = sscanf(++cp, "%hu:%ld", &channel, &val))
+				    (n = sscanf(++cp, "%hu:%ld", &channel, &val))	/* skip comma */
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 				    (n = sscanf(++cp, "%hu:%d", &channel, &val))
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 				    == 2 &&
 				    channel > 0	&&
 				    channel <= topChannel &&
+#ifdef	RASPBERRYPI
+				    ((gp = Channels[channel].g) != NULL ||
+				    (pfp = Channels[channel].p) != NULL)
+#else	/* ! RASPBERRYPI */
 				    (gp = Channels[channel]) != NULL
+#endif	/* ! RASPBERRYPI */
 				) {
+#ifdef	RASPBERRYPI
+				  if (gp) {					/* RI External */
+#endif	/* RASPBERRYPI */
 				    if (val != gp->gt_new &&				/* first change or glitch */
 				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
 					/* arithmetic master action */
@@ -1137,7 +1560,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 								ids, i, fni, gm->gt_live)) < 0 || len >= rest) {
 								regBuf[regOffset] = '\0';	/* terminate */
 								if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
-								iC_send_msg_to_server(sockFN, regBuf);
+								iC_send_msg_to_server(iC_sockFN, regBuf);
 								regOffset = liveOffset;
 							    }
 							    regOffset += len;
@@ -1157,20 +1580,36 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 							) < 0 || len >= rest) {
 							regBuf[regOffset] = '\0';	/* terminate */
 							if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
-							iC_send_msg_to_server(sockFN, regBuf);
+							iC_send_msg_to_server(iC_sockFN, regBuf);
 							regOffset = liveOffset;
 						    }
 						    regOffset += len;
 						}
 						if (regOffset > liveOffset) {
 						    if (iC_micro & 06) iC_microPrint("Send Symbols", 0);
-						    iC_send_msg_to_server(sockFN, regBuf);
+						    iC_send_msg_to_server(iC_sockFN, regBuf);
 						}
 						/* end of symbol table - execute scan - follow with '0' to leave in iCserver */
 						regOffset = snprintf(regBuf, REQUEST, "%hu:4,%hu:0", C_channel, C_channel);
 						if (iC_micro & 06) iC_microPrint("Send Scan Command", 0);
-						iC_send_msg_to_server(sockFN, regBuf);
+						iC_send_msg_to_server(iC_sockFN, regBuf);
 						liveFlag = 1;				/* live inhibit bits are set */
+						break;
+
+					    case 2:					/* iClive POLL */
+						/********************************************************************
+						 *  Receive when re-registering - makes sure, that application is seen
+						 *******************************************************************/
+						if (liveFlag) {
+						    for (opp = sTable; opp < sTend; opp++) {
+							(*opp)->gt_live &= 0x7fff;	/* clear live active */
+						    }
+						    liveFlag = 0;
+						}
+						/* poll iClive with 'ch:2;<name>' */
+						regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
+						if (iC_micro & 06) iC_microPrint("Send application name", 0);
+						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
 					    case 3:					/* RECEIVE_ACTIVE_SYMBOLS */
@@ -1186,7 +1625,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						 *  (should go straight to scan())
 						 *******************************************************************/
 						if (msgOffset > liveOffset) {
-						    iC_send_msg_to_server(sockFN, msgBuf);
+						    iC_send_msg_to_server(iC_sockFN, msgBuf);
 						}
 						msgOffset = liveOffset;			/* msg = "C_channel:3" */
 						cp1 = rpyBuf;
@@ -1206,8 +1645,10 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 									: fni == OUTW	? gp->gt_out
 											: gp->gt_val < 0  ? 1
 													  : 0;
+#if YYDEBUG && !defined(_WINDOWS)
 						    if (iC_debug & 04) fprintf(iC_outFP, "%4hu %-15s %ld\n",
 							index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						    if (value) {
 							iC_liveData(gp, value);		/* initial active live values */
 						    }
@@ -1219,28 +1660,12 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						 *  also sends a live C_channel:3 block
 						 *******************************************************************/
 						if (msgOffset > liveOffset) {
-						    iC_send_msg_to_server(sockFN, msgBuf);
+						    iC_send_msg_to_server(iC_sockFN, msgBuf);
 						}
 						msgOffset = liveOffset;			/* msg = "C_channel:3" */
 						if (val == 4) {
 						    liveFlag = 1;			/* live inhibit bits are correct */
 						}
-						break;
-
-					    case 2:		/* POLL */
-						/********************************************************************
-						 *  Receive when re-registering - makes sure, that application is seen
-						 *******************************************************************/
-						if (liveFlag) {
-						    for (opp = sTable; opp < sTend; opp++) {
-							(*opp)->gt_live &= 0x7fff;	/* clear live active */
-						    }
-						    liveFlag = 0;
-						}
-						/* poll iClive with 'ch:2;<name>' */
-						regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
-						if (iC_micro & 06) iC_microPrint("Send application name", 0);
-						iC_send_msg_to_server(sockFN, regBuf);
 						break;
 
 					    case 5:					/* GET_END */
@@ -1254,7 +1679,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						    liveFlag = 0;
 						}
 						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
-						iC_send_msg_to_server(sockFN, regBuf);
+						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
 					    case 6:					/* STOP PROGRAM */
@@ -1266,34 +1691,131 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						if (iC_debug & 0100) fprintf(iC_outFP, "Debugger has stopped for '%s'\n", iC_iccNM);
 #endif	/* YYDEBUG */
 						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
-						iC_send_msg_to_server(sockFN, regBuf);
+						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
 					    default:
-						goto RcvError;				/* unknown C_channel:? case */
+						goto RcvWarning;			/* unknown C_channel:? case */
 					    }
-					} else goto RcvError;
+					} else goto RcvWarning;
 				    }
+#ifdef	RASPBERRYPI
+				  } else if (pfp) {				/* RQ ExternOut */
+				    assert(pfp && pfp->Qgate);		/* is output set up */
+				    if (iC_debug & 0100) fprintf(iC_outFP, "P: %s: %hu:%d	> %s\n",
+					iC_iccNM, channel, val, pfp->Qgate->gt_ids);
+				    writePiFace(pfp, val & X_MASK);		/* RQ ExternOut */
+				  }
+#endif	/* RASPBERRYPI */
 				} else {
 				    fprintf(iC_errFP, "n = %d, channel = %hu, topChannel = %hu, gp = %s\n", n, channel, topChannel, gp ? gp->gt_ids : "null");
-				    goto RcvError;
+				    goto RcvWarning;
 				}
-			    } while ((cp = strchr(cp, ',')) != NULL);
+			    } while ((cp = strchr(cp, ',')) != NULL);	/* find next comma in input */
 			}
 			else {
-			  RcvError:
-			    fprintf(iC_errFP, "ERROR: '%s' rcvd at '%s' ???\n", rpyBuf, iC_iccNM);
+			  RcvWarning:
+			    fprintf(iC_errFP, "WARNING: %s: received '%s' from iCserver ???\n", iC_iccNM, rpyBuf);
 			}
 		    } else {
 			iC_quit(QUIT_SERVER);		/* quit normally */
 		    }
-		} else if (FD_ISSET(0, &iC_rdfds)) {	/* unlikely to have both */
+		}
+#ifdef	RASPBERRYPI
+#ifndef	POLL 
+		if (gpio25FN > 0 && FD_ISSET(gpio25FN, &iC_exfds))	/* watch for out-of-band GPIO25 input */
+#else	/* POLL */
+		if (gpio25FN > 0 && pollEvent(gpi, POLLPRI))		/* poll for out-of-band GPIO25 input */
+#endif	/* POLL */
+		{
+		    int		val;
+#if YYDEBUG && !defined(_WINDOWS)
+		    int		m1 = 0;
+		    int		m;
+		    if (iC_debug & 04) fprintf(iC_outFP, "*** SIO interrupt has occurred\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		    /********************************************************************
+		     *  GPIO25 interrupt means SIO input
+		     *******************************************************************/
+		    if (iC_micro) iC_microPrint("SPI input received", 0);
+		    assert(outPtr == iC_outBuf);	/* was cleared after send loop */
+		    do {
+			/********************************************************************
+			 *  Scan PiFace units for input interrupts (even those not used)
+			 *  More interrupts can arrive for PiFace's already scanned, especially
+			 *  with bouncing mechanical contacts - repeat the scan until GPIO25 == 1
+			 *******************************************************************/
+#if YYDEBUG && !defined(_WINDOWS)
+			m = 0;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+			    if (readByte(pfp->spiFN, pfp->pfa, pfp->intf)) {	/* interrupt flag on this unit ? */
+				cnt += fireInput(pfp,	/* fire input Gates directly and/or via TCP/IP */
+				    readByte(pfp->spiFN,
+				    pfp->pfa,		/* read interrupting PiFace */
+				    pfp->inpr));	/* from B for PiFace, A for PiFaceCAD */
+#if YYDEBUG && !defined(_WINDOWS)
+				m++;			/* count INTF interrupts found */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			    }
+			}
+#if YYDEBUG && !defined(_WINDOWS)
+			m1++;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			if ((val = gpio_read(gpio25FN)) == -1) { 
+			    perror("GPIO25 read");
+			    fprintf(iC_errFP, "ERROR: %s: GPIO25 read failed\n", iC_progname);
+			    break;
+			}
+		    } while (val != 1);			/* catch interrupts which came in during for loop */
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (iC_debug & 0200) {
+			if (m1 > 1){
+			    fprintf(iC_errFP, "WARNING: %s: GPIO25 interrupt %d loops %d changes \"%s\"\n",
+				iC_progname, m1, m, iC_outBuf+1);
+			} else if (m == 0) {	/* for some reason this happens occasionaly - no inputs are missed though */
+			    fprintf(iC_errFP, "WARNING: %s: GPIO25 interrupt and no INTF set on PiFaces\n", iC_progname);
+			}
+		    }
+		    sendOutput();
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		}
+#endif	/* RASPBERRYPI */
+#ifndef	POLL 
+		if (FD_ISSET(0, &iC_rdfds))
+#else	/* POLL */
+		if (pollEvent(sti, POLLIN))
+#endif	/* POLL */
+		{
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has occurred\n");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    /********************************************************************
 		     *  STDIN
 		     *******************************************************************/
-		    if ((c = getchar()) == EOF) {
-			FD_CLR(0, &iC_infds);		/* ignore EOF - happens in bg */
-		    } else if (c == 'q') {
+		    gp = tim[1];			/* TX0.1 STDIN notification Gate */
+		    if (fgets(iC_stdinBuf, REPLY, stdin) == NULL) {	/* get input before TX0.1 notification */
+#ifndef	POLL 
+			FD_CLR(0, &iC_infds);		/* ignore EOF - happens in bg or file - turn off interrupts */
+#else	/* POLL */
+			pollClr(sti);			/* ignore EOF - happens in bg or file - turn off interrupts */
+#endif	/* POLL */
+			iC_stdinBuf[0] = '\0';		/* notify EOF to iC application by zero length iC_stdinBuf */
+		    }
+		    if (gp) {				/* TX0.1 is used to notify receiving a new line or EOF on STDIN */
+#if	YYDEBUG
+			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
+#endif	/* YYDEBUG */
+			assert(stdinFlag == 0 && gp->gt_val == 1);	/* TX0.1 lo */
+			gp->gt_val = -1;		/* set  TX0.1 hi */
+			iC_liveData(gp, 1);		/* VCD and/or iClive */
+			iC_link_ol(gp, iC_o_list);	/* fire TX0.1 hi to notify that a new line is available in iC_stdinBuf */
+			cnt++;
+#if	YYDEBUG
+			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+			stdinFlag = 1;			/* arm cycle for turning TX0.1 lo */
+		    } else if ((c = iC_stdinBuf[0]) == 'q') {
 			iC_quit(QUIT_TERMINAL);		/* quit normally */
 #if	YYDEBUG
 		    } else if (c == 't') {
@@ -1302,8 +1824,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			iC_micro++;			/* toggle more micro */
 			if (iC_micro >= 3) iC_micro = 0;
 #endif	/* YYDEBUG */
-		    }
-		    /* ignore the rest for now */
+		    }					/* ignore the rest of STDIN */
 		}
 	    } else {				/* retval -1 */
 		perror("ERROR: select failed");
@@ -1320,6 +1841,209 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 
 /********************************************************************
  *
+ *	Output data as a message to iCserver or directly
+ *
+ *******************************************************************/
+
+void
+#if	INT_MAX == 32767 && defined (LONG16)
+iC_output(long val, unsigned short channel)
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+iC_output(int val, unsigned short channel)
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+{
+    int			len = 0;
+
+#ifdef	RASPBERRYPI
+  piFaceIO*		pfp;
+  if ((pfp = Channels[channel].p) != NULL) {
+    writePiFace(pfp, val & X_MASK);			/* Q Internal */
+  }
+  assert(Channels[channel].g);				/* never called for ExternOut */
+  if (Channels[channel].g && (!pfp || iC_opt_E)) {	/* SQ External (default) or Q Internal && opt_E */
+#endif	/* RASPBERRYPI */
+    len = snprintf(outPtr, outBufLen,
+#if	INT_MAX == 32767 && defined (LONG16)
+	",%hu:%ld",					/* signed long to output for QXx QBx QWx QLx */
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+	",%hu:%d",					/* signed int to output for QXx QBx QWx QLx */
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+	channel, val);
+    if (len) {
+	outPtr += len;
+	outBufLen -= len;
+	if (outBufLen < OSIZ) {				/* holds 65535:-1879048193\0 max (18) */
+	    assert(outBufLen >= 0);			/* only fails if this len > OSIZ */
+	    sendOutput();				/* Send output data before it overflows */
+	}
+    }
+#ifdef	RASPBERRYPI
+  }
+#endif	/* RASPBERRYPI */
+} /* iC_output */
+
+/********************************************************************
+ *
+ *	Send output data collected in iC_outBuf to iCserver
+ *
+ *	Send TCP/IP output data collected in iC_outBuf to iCserver.
+ *	Can send more than one block sequentially to iCserver.
+ *	The output data will be distributed correctly.  If there is more than
+ *	1 block, early blocks are sent directly in iC_output(), which executes
+ *	in iC_scan_snd(iC_s_list) directly before the break in the Operational
+ *	loop just before this point.
+ *
+ *	More than one block is very unlikely except for deliberate strange
+ *	output strategies like modifying more than 250 OUTW Gates by the
+ *	same imput:
+ *	QX0.0 = ~IX0.0; QX1.0 = ~IX0.0; QX2.0 = ~IX0.0; ... QX299.0 = ~IX0.0;
+ *	Because of defensive programming in iC_output() this now works.
+ *
+ *******************************************************************/
+
+static void
+sendOutput(void)
+{
+    if (outPtr > iC_outBuf) {				/* any data for iCserver? */
+	assert(iC_outBuf[0] == ',');			/* skip first ',' */
+	iC_send_msg_to_server(iC_sockFN, iC_outBuf+1);	/* send block - usually the only one */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 04) fprintf(iC_outFP, "iC_outBuf[%d] \"%s\"\n", (int)(outPtr - iC_outBuf-1), iC_outBuf+1);
+	*(iC_outBuf+1) = '\0';				/* clean debug output next time */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	outPtr = iC_outBuf;				/* ready for next Operational loop */
+	outBufLen = REQUEST;
+    }
+} /* sendOutput */
+#ifdef	RASPBERRYPI
+
+/********************************************************************
+ *
+ *	Output values from SIO input interrupts or initialisation
+ *	directly by firing input Gates or as a message via iCserver
+ *
+ *******************************************************************/
+
+static int
+fireInput(piFaceIO * pfp, int val)
+{
+    unsigned short channel;
+    Gate *	gp;
+    int		cnt = 0;
+    int		len;
+    char	binBuf[33];		/* allows 32 bits */
+
+    if (pfp->Igate) {
+	assert(pfp->Igate->gt_ids);
+	channel = pfp->channelSI;
+#ifdef	TEST
+	if (channel == 0) {		/* happens on pfp set up for extra argument but not active */
+	    fprintf(iC_errFP, "WARNING: %s: un=%d npf=%d val=%d no channel on '%s:%d,%s:%d'\n",
+		iC_iccNM, pfp - pfi, npf, val,
+		pfp->Igate ? pfp->Igate->gt_ids : NULL, pfp->channelSI,
+		pfp->Qgate ? pfp->Qgate->gt_ids : NULL, pfp->channelRQ);
+	    return 0;			/* should not happen now with early test for pfp->Igate */
+	}
+#else	/* ! TEST */
+	assert(channel && channel < ioChannels);
+#endif	/* ! TEST */
+	assert(pfp == Channels[channel].p);		/* ExternOut or Intern with correct pfp */
+	if (val != pfp->valI) {
+	    if ((gp = Channels[channel].g) != NULL) {	/* I Internal */
+		assert(gp->gt_fni == TRAB);
+		gp->gt_new = val;
+#if	YYDEBUG
+		if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t%hu:%d\t0x%02x ==>> 0x%02x",
+		    gp->gt_ids, channel, gp->gt_new, gp->gt_old, gp->gt_new);
+		else if (iC_debug & 020) fprintf(iC_outFP, "%s\t%2hu:%s\n",
+		    gp->gt_ids, channel, convert2binary(binBuf, gp->gt_new, 1));
+#endif	/* YYDEBUG */
+		cnt = iC_traMb(gp, 0);			/* distribute bits directly */
+	    }
+	    if (!gp || iC_opt_E) {			/* SI ExternOut or Internal && opt_E */
+		len = snprintf(outPtr, outBufLen, ",%hu:%d", channel, val);
+		if (len) {
+		    outPtr += len;
+		    outBufLen -= len;
+		    assert(outBufLen >= 0);		/* unlikely to fail with PiFace I/O only */
+		}
+	    }
+	    pfp->valI = val;				/* store change for comparison */
+	}
+    } else if (iC_debug & 0300) {
+	if (iC_debug & 0100) fprintf(iC_outFP, "\n");
+	fprintf(iC_outFP, "Dummy PiFace %d:%hu input %s\n",
+	    pfp - pfi, pfp->pfa, convert2binary(binBuf, val, 1));
+    }
+    return cnt;
+} /* fireInput */
+
+/********************************************************************
+ *
+ *	Write bit data as a single byte to PiFace or PiFaceCAD
+ *
+ *******************************************************************/
+
+static void
+writePiFace(piFaceIO * pfp, int val)
+{
+    int		pfa;
+    int		m;
+
+    if ((pfa = pfp->pfa) != 4 || pfp->intf != INTFA) {	/* PiFace */
+	writeByte(pfp->spiFN, pfa, GPIOA, val);		/* write data to PiFace A output */
+    } else if ((m = val ^ pfp->valQ) != 0) {		/* PiFaceCAD */
+	if (m & 0x07) {
+	    pifacecad_lcd_clear();
+	    if (iC_micro) iC_microPrint("pifacecad lcd cleared", 0);
+	    pifacecad_lcd_write(texts[val & 0x07]);	/* new text */
+	    if (iC_micro) iC_microPrint("pifacecad lcd text written", 0);
+	}
+	if (m & 0x18) {					/* shift left or right */
+	    if ((slr = val & 0x18) != 0) {		/* start 750 ms timeout */
+		toCntp = &toCnt;			/* for regular shift */
+	    } else {					/* slr holds shift direction */
+		toCntp = toCoff;			/* stop 750 ms timeout unless iC TX0 uses it */
+	    }						/* for both off */
+	}
+	if ((m & 0x20) && (val & 0x20)) {
+	    switch (cbc = (cbc + 1) & 0x03) {		/* cbc holds cursor and blink state */
+	    case 0x01:
+		pifacecad_lcd_cursor_on();
+		pifacecad_lcd_blink_off();
+		break;
+	    case 0x02:
+		pifacecad_lcd_cursor_off();
+		pifacecad_lcd_blink_on();
+		break;
+	    case 0x03:
+		pifacecad_lcd_cursor_on();
+		pifacecad_lcd_blink_on();
+		break;
+	    case 0x00:
+	    default:
+		pifacecad_lcd_cursor_off();
+		pifacecad_lcd_blink_off();		/* default is both off */
+		break;
+	    }
+	}
+	if (m & 0x40) {
+	    if (val & 0x40) {
+		pifacecad_lcd_display_off();
+	    } else {
+		pifacecad_lcd_display_on();		/* default is on */
+	    }
+	}
+	if (m & 0x80) {
+	    pifacecad_lcd_set_backlight(!(val & 0x80));	/* default is on */
+	}
+	pfp->valQ = val;		/* store change for comparison */
+    }
+} /* writePiFace */
+#endif	/* RASPBERRYPI */
+
+/********************************************************************
+ *
  *	Send registration and receive acknowledgement
  *
  *******************************************************************/
@@ -1331,37 +2055,81 @@ regAck(Gate ** oStart, Gate ** oEnd)
     char *		cp;
     Gate *		gp;
     unsigned short	channel;
+#ifdef	RASPBERRYPI
+    unsigned short	marking;
+    piFaceIO *		pfp;
+#endif	/* RASPBERRYPI */
 
-    if (iC_debug & 04) fprintf(iC_outFP, "register:%s\n", regBuf);
-    iC_send_msg_to_server(sockFN, regBuf);	/* register controller and IOs */
-    if (iC_rcvd_msg_from_server(sockFN, rpyBuf, REPLY)) {
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 024) fprintf(iC_outFP, "register:%s\n", regBuf);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+    iC_send_msg_to_server(iC_sockFN, regBuf);	/* register controller and IOs */
+    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY)) {
 	if (iC_micro & 06) iC_microPrint("reply from server", 0);
-	if (iC_debug & 04) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 024) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	cp = rpyBuf - 1;
 	if (Channels == NULL) {
 	    // C channel - messages from controller to debugger
-	    C_channel = atoi(rpyBuf);
+	    C_channel = atoi(++cp);
 	    assert(C_channel > 0);
 	    if (C_channel > topChannel) {
 		topChannel = C_channel;
 	    }
+	    cp = strchr(cp, ',');
 	    // D channel - messages from debugger to controller
-	    cp = strchr(rpyBuf, ',');
 	    assert(cp);
 	    channel = atoi(++cp);
 	    assert(channel > 0);
 	    if (channel > topChannel) {
 		topChannel = channel;
 	    }
-	    storeChannel(channel, &D_gate);			/* ==> Debug input */
+	    storeChannel(channel, &D_gate			/* ==> Debug input */
+#ifdef	RASPBERRYPI
+		    ,    NULL
+#endif	/* RASPBERRYPI */
+	    );
 	    cp = strchr(cp, ',');
-	} else {
-	    cp = rpyBuf - 1;
 	}
 	// remaining input and output channel indices matching registrations
 	for (opp = oStart; opp < oEnd; opp++) {		/* sTable to sTend */
 	    gp = *opp;
+#ifdef	RASPBERRYPI
+	  if ((marking = gp->gt_live) != Dummy) {	/* extra I/O Dummy arguments are not registered */
+#endif	/* RASPBERRYPI */
 	    if ((gp->gt_ini == -INPW && *gp->gt_ids != 'T') ||	/* suppress TX0 */
 		gp->gt_fni == OUTW) {
+#ifdef	RASPBERRYPI
+		if (!(gp->gt_mark & X_FLAG)) {			/* do Internal/ExternalOut later */
+		    assert(cp);
+		    channel = atoi(++cp);
+		    assert(channel > 0);
+		    if (channel > topChannel) {
+			topChannel = channel;
+		    }
+		    if (marking == External) {			/* transfer markings */
+			storeChannel(channel, gp, NULL);
+		    } else {
+			pfp = gp->gt_pfp;			/* stored temporarily */
+			assert(pfp);				/* over written by gt_channel */
+			pfp->s[gp->gt_ini != -INPW].channel = channel;	/* receive or send input */
+			if (marking == Internal) {
+			    storeChannel(channel, gp, pfp);
+			} else if (marking == ExternOut) {
+			    storeChannel(channel, NULL, pfp);
+			}
+		    }
+		    if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
+			gp->gt_channel = channel;		/* <== Output */
+#if YYDEBUG && !defined(_WINDOWS)
+			if (iC_debug & 024) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
+			    gp->gt_ids, channel);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		    }
+		    cp = strchr(cp, ',');
+		}
+#else	/* ! RASPBERRYPI */
 		assert(cp);
 		channel = atoi(++cp);
 		assert(channel > 0);
@@ -1375,10 +2143,16 @@ regAck(Gate ** oStart, Gate ** oEnd)
 		    gp->gt_channel = channel;			/* <== Output */
 		}
 		cp = strchr(cp, ',');
+#endif	/* ! RASPBERRYPI */
 	    }
+#ifdef	RASPBERRYPI
+	  }
+#endif	/* RASPBERRYPI */
 	}
 	assert(cp == NULL);			/* Ack string matches Registration */
-	if (iC_debug & 04) fprintf(iC_outFP, "reply: Channels %hu\n", topChannel);
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 024) fprintf(iC_outFP, "reply: Channels %hu\n", topChannel);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     } else {
 	iC_quit(QUIT_SERVER);			/* quit normally */
     }
@@ -1392,18 +2166,45 @@ regAck(Gate ** oStart, Gate ** oEnd)
  *******************************************************************/
 
 static void
-storeChannel(unsigned short channel, Gate * gp)
+storeChannel(unsigned short channel, Gate * gp
+#ifdef	RASPBERRYPI
+	,    piFaceIO *		pfp
+#endif	/* RASPBERRYPI */
+	)
 {
     while (channel >= ioChannels) {
+#ifdef	RASPBERRYPI
+	Channels = (channelSel *)realloc(Channels,	/* initially NULL */
+	    (ioChannels + IOCHANNELS) * sizeof(channelSel));
+	assert(Channels);
+	memset(&Channels[ioChannels], '\0', IOCHANNELS * sizeof(channelSel));
+#else	/* ! RASPBERRYPI */
 	Channels = (Gate **)realloc(Channels,	/* initially NULL */
 	    (ioChannels + IOCHANNELS) * sizeof(Gate *));
 	assert(Channels);
 	memset(&Channels[ioChannels], '\0', IOCHANNELS * sizeof(Gate *));
+#endif	/* ! RASPBERRYPI */
 	ioChannels += IOCHANNELS;	/* increase the size of the array */
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 04) fprintf(iC_outFP, "storeChannel: Channels[%d] increase\n", ioChannels);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
-    if (iC_debug & 04) fprintf(iC_outFP, "storeChannel: Channels[%d] <= %s\n", channel, gp->gt_ids);
-    Channels[channel] = gp;		/* store input Gate address */
+#ifdef	RASPBERRYPI
+    Channels[channel].g = gp;		/* store Gate pointer */
+    Channels[channel].p = pfp;		/* store piFace pointer */
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 04) fprintf(iC_outFP, "storeChannel: Channels[%d].g <== %s	.p <== %s,%s\n",
+	channel,
+	gp ?  gp->gt_ids : NULL,
+	pfp ? (pfp->Igate ? pfp->Igate->gt_ids : NULL) : NULL,
+	pfp ? (pfp->Qgate ? pfp->Qgate->gt_ids : NULL) : NULL);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+#else	/* ! RASPBERRYPI */
+    Channels[channel] = gp;		/* store input Gate pointer */
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 04) fprintf(iC_outFP, "storeChannel: Channels[%d] <== %s\n", channel, gp->gt_ids);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+#endif	/* ! RASPBERRYPI */
 } /* storeChannel */
 
 /********************************************************************
@@ -1460,8 +2261,8 @@ iC_liveData(Gate * gp, int value)
 	    /********************************************************************
 	     *  Send live data collected in msgBuf before it overflows to iCserver
 	     *******************************************************************/
-	    msgBuf[msgOffset] = '\0';		/* terminate */
-	    iC_send_msg_to_server(sockFN, msgBuf);
+	    msgBuf[msgOffset] = '\0';			/* terminate */
+	    iC_send_msg_to_server(iC_sockFN, msgBuf);
 	    msgOffset = liveOffset;			/* msg = "C_channel:3" */
 	}
 	msgOffset += len;
@@ -1509,105 +2310,4 @@ convert2binary(char * binBuf, int value, int binFlag)
     }
     return binBuf;
 } /* convert2binary */
-
-/********************************************************************
- *
- *	Initialize IO
- *
- *******************************************************************/
-
-void iC_initIO(void)
-{
-    signal(SIGSEGV, iC_quit);			/* catch memory access signal */
-}
-
-/********************************************************************
- *
- *	Quit program with 'q' or ctrlC or Break via signal SIGINT
- *	or program abort on detected bugs.
- *
- *	Although nanosleep is supposed to be POSIX, it is not implemented
- *	under Windows/Cygwin - since the sleep in iC_quit is not critical
- *	usleep() has been used and not the following, which works under
- *	Linux and MAC-OsX
- *	    struct timespec ms200 = { 0, 200000000, };
- *	    nanosleep(&ms200, NULL);
- *
- *******************************************************************/
-
-void iC_quit(int sig)
-{
-    /********************************************************************
-     *  The following termination function is an empty function
-     *  in the libict.a support library.
-     *		int iCend(void) { return 0; }
-     *  It may be implemented in a literal block of an iC source, in
-     *  which case that function will be linked in preference.
-     *  User implementations of iCend() should return 1, to activate
-     *  the debug message "iend complete ======".
-     *
-     *  It can be used to free allocated memory, etc.
-     *
-     *  If the iCbegin() function contains a fork() call, iCend() may have
-     *  a matching wait() call.
-     *******************************************************************/
-    if ((sig >= QUIT_TERMINAL || sig == SIGINT) &&
-	iCend()) {				/* termination function */
-#if	YYDEBUG
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\niCend complete ======\n");
-	}
-#endif	/* YYDEBUG */
-    }
-    if (sockFN) {
-	if (C_channel) {
-	    /* disconnect iClive - follow with '0' for iCserver */
-	    regOffset = snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
-	    iC_send_msg_to_server(sockFN, regBuf);
-#ifdef	WIN32
-	    Sleep(200);				/* 200 ms in ms */
-#else	/* WIN32 */
-	    usleep(200000);			/* 200 ms in us */
-#endif	/* WIN32 */
-	    if (iC_micro) iC_microPrint("Disconnected", 0);
-	}
-	close(sockFN);				/* close connection to iCserver */
-    }
-    if (sig == QUIT_TERMINAL) {
-	fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_iccNM);
-    } else if (sig == QUIT_DEBUGGER) {
-	fprintf(iC_errFP, "\n'%s' stopped by debugger\n", iC_iccNM);
-    } else if (sig == QUIT_SERVER) {
-	fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
-    } else if (sig == SIGINT) {
-	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
-    } else if (sig == SIGSEGV) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);
-    } else if (sig == SIGUSR1) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'non-recoverable run-time error'\n", iC_iccNM);
-    }
-    if (iC_savFP) {
-	fflush(iC_savFP);
-	fclose(iC_savFP);
-    }
-    if (iC_vcdFP) {
-	fflush(iC_vcdFP);
-	fclose(iC_vcdFP);
-    }
-    if (iC_outFP != stdout) {
-	fflush(iC_outFP);
-	fclose(iC_outFP);
-    }
-    if (iC_errFP != stderr) {
-	fflush(iC_errFP);
-	fclose(iC_errFP);
-    }
-#ifdef	EFENCE
-    free(rpyBuf);
-    free(iC_outBuf);
-    free(regBuf);
-    free(msgBuf);
-#endif	/* EFENCE */
-    exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
-} /* iC_quit */
 #endif	/* TCP */

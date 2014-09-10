@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.110 2013/08/07 02:27:27 jw Exp $";
+"@(#)$Id: comp.y,v 1.111 2014/08/19 10:22:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -4054,14 +4054,23 @@ get(FILE* fp, int x)
 	    if ((lexflag & C_LINE) == 0) {
 		if (cFn && (iC_debug & 0402) != 0402) {
 		    if (cFn > iC_genCount || functionUse[cFn].c_cnt || (iC_debug & 010000)) {
-			fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]);
+			fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]); /* C function head listing */
 		    }
 		    cFn = 0;
-		} else if ((iC_debug & 06) && (lexflag & C_PARSE) && chbuf[x][0] != '\t' && chbuf[x][0] != ' ') {
-		    fprintf(iC_outFP, "%03d\t    %s", lineno, chbuf[x]);
+		} else if ((iC_debug & 06) &&
+		    (lexflag & C_PARSE) &&
+		    chbuf[x][0] != '\t' &&
+		    chbuf[x][0] != ' '  &&
+		    memcmp(chbuf[x], "//* ", 4) != 0) {
+		    fprintf(iC_outFP, "%03d\t    %s", lineno, chbuf[x]);	/* C listing without initial space */
 		} else if (((iC_debug & 06)  && (lexflag & C_PARSE)) ||
 		    ((iC_debug & 040)  && (lexflag & C_PARSE) == 0)) {
-		    fprintf(iC_outFP, "%03d\t%s", lineno, chbuf[x]);
+		    if (memcmp(chbuf[x], "//* ", 4) != 0) {
+			fprintf(iC_outFP, "%03d\t%s", lineno, chbuf[x]);	/* iC listing or C listing with space */
+		    } else {
+			fprintf(iC_outFP, "\t%s", chbuf[x]);			/* immac Warning or Error */
+			--lineno;						/* does not count as a listing line */
+		    }
 		}
 		iFlag = 1;				/* may need correction by pplstfix */
 	    } else if ((lexflag & (C_PARSE|C_FIRST)) != C_FIRST) {

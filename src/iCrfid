@@ -1,0 +1,501 @@
+#!/usr/bin/perl
+
+########################################################################
+#
+#	Copyright (C) 2014  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file
+#
+#	iCrfid - Rfid I/O for a Control Box
+#
+#	For measuring reaction times the Module Time::HiRes may be used.
+#	This activates the -m option.
+#	Make sure you have installed Time::HiRes (provided in this distribution)
+#
+########################################################################
+
+use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+			##                   by Sriram Srinivasan
+use strict;
+use warnings;
+
+my @ArgNames;		# stores IO names and initialisers in argument list order
+my @ChannelNames;	# stores IO names with instance for each registered channel
+my @ChannelsRI;		# allow retrieval of @ArgNames info via $channel
+my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
+my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
+my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
+my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
+my @ChannelsIq;		# stores values before queing for all I[XBWL]n inputs
+my %IONames;		# stores channel for each IO name (aux use in initial pass)
+my $UnitRegistrations;	# stores the registration string
+
+my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
+my @bitIndex =	(
+    0, 0, 1, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0,	# 0x01 0x02 0x04 0x08
+    4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	# 0x10
+    5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x20
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x40
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 	# 0x80
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+);
+
+########################################################################
+#
+#	Initialization
+#
+########################################################################
+
+my $named = $0; $named =~ s#.*[/\\]##;
+my $nameo = $named;		# for generating bit map
+format STDERR =
+Usage:
+    @<<<<< [-th][ -S <controlHost>][ -P <controlPort>]
+	$named
+	   [ -s <iChost>][ -p <iCport>][ -n <name>][ -i <inst>]
+	   [ -B <size>][ -T <seconds>][ -0 <msg0>][ -1 <msg1>]
+	   [ -2 <msg2>]...[ -7 <msg7>][ -M <mask>][ Xn]
+	Xn	one of X0 or X1 or X2 etc   (default X0)
+	-S host host name of Control Server (default 'localhost')
+	-P port service Port of Control Server (default '8777')
+	-s host host name of iCserver       (default 'localhost')
+	-p port service Port of iCserver    (default '8778')
+	-n name registration Name           (default RFID_0)
+	-i inst Instance ID for this @<<<<< (1 to 3 numeric digits)
+				    $named
+	-B size Buffer size for log data    (default 1400 bytes)
+	-T secs Time limit for sending logs (default 600 seconds)
+	-0 msg0 log message triggered by QXn.0
+	-1 msg1 log message triggered by QXn.1
+	-2 msg2 log message triggered by QXn.2
+	...
+	-7 msg7 log message triggered by QXn.7
+	-M mask 8 bit mask - each 1 means QXn.m log sent immediately
+	-R      trace send and rcv messages in Msg.pm
+	-t	trace activity for debugging
+	-h	help, ouput this Usage text only
+Copyright (C) 2014  John E. Wulff		<immediateC@gmail.com>
+							  '@'
+$Id: iCrfid,v 1.1 2014/05/16 03:32:14 jw Exp $
+.
+
+use vars qw($opt_S $opt_P $opt_s $opt_p $opt_n $opt_i $opt_B $opt_T);
+use vars qw($opt_0 $opt_1 $opt_2 $opt_3 $opt_4 $opt_5 $opt_6 $opt_7);
+use vars qw($opt_M $opt_R $opt_t $opt_h);
+use Getopt::Std;
+getopts('S:P:s:p:n:i:B:T:0:1:2:3:4:5:6:7:M:th');	# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+my $instance = '';
+if (defined $opt_i and $opt_i ne '') {
+    if ($opt_i =~ /^\d{1,3}$/) {	# INSTSIZE 3 defined in icc.h
+	$instance = "-$opt_i";
+	print "instance = '$instance'\n" if $opt_t;
+    } else {
+	warn "$named: badly formed option -i $opt_i - ignored\n";
+    }
+}
+
+my ($id, $n, @message);
+
+unshift(@ARGV, 'X0') unless @ARGV;	# default name X0
+print "ARGV:", join(':', @ARGV), ":\n" if $opt_t;
+
+my $argv = shift @ARGV;
+if ($argv !~ m/^X(\d+)$/) {
+    die "$named: $argv: badly formed Xn argument\n";
+} elsif (@ARGV) {
+    die "$named: $argv @ARGV: too many Xn arguments (only one allowed)\n";
+}
+my $name = $opt_n ? "$opt_n$instance" : "RFID_$1$instance";
+push @ArgNames, "I$argv";		# main argument IXn
+$opt_M = 0b00000000	unless $opt_M;	# mask for extra log messages
+my $flag = 0;
+no strict 'refs';
+for ($n = 0; $n < 8; $n++) {
+    my $opt = "opt_$n";			# generate symbolic reference to $opt_0 - $opt_7
+    if (defined ($message[$n][0] = $$opt)) {
+	$message[$n][1] = "Q$argv.$n";	# TODO store channel and val
+	$message[$n][2] = ($opt_M & (1 << $n)) ?  1 : 0;
+	print "$opt: $message[$n][1]:$message[$n][2] \"$message[$n][0]\"\n" if $opt_t;
+	$flag++;
+    }
+}
+use strict 'refs';
+if ($flag) {
+    push @ArgNames, "Q$argv";		# auxiliary argument QXn
+}
+
+%IONames = ();		# clear for channel entries
+
+## my $Chost = defined $opt_S ? $opt_S : 'localhost';
+## my $Cport = defined $opt_P ? $opt_P : 8777;
+
+########################################################################
+#
+#	Connect to iCserver and register I/Os
+#
+#	Inhibit Nagle's algorithm
+#
+########################################################################
+my $host = defined $opt_s ? $opt_s : 'localhost';
+my $port = defined $opt_p ? $opt_p : 8778;
+$named = $name;			# use individual ID for warnings from now on
+
+Msg->inhibit_nagle(1, $opt_R, $opt_R);	# inhibit Nagle's algorithm for real time response
+my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+die "Client '$named' could not connect to $host:$port\n" unless $conn;
+
+############# send registration ############################
+
+my $direction;
+my $register = 1;		# tested in rcvd_msg_from_server() for registration reply
+my $ri = 0;			# registration index used in rcvd_msg_from_server()
+$UnitRegistrations = "N$name";	# initiate registration string
+
+foreach $id (@ArgNames) {
+    $direction = '';
+    if ($id =~ /^I/) {
+	$direction = 'S';
+    } elsif ($id =~ /^Q/) {
+	$direction = 'R';
+    } else {
+	die "$named: invalid argument '$id' - internal error";
+    }
+    die " $named: too many argments - unlikely internal error ???" if (length($UnitRegistrations) + length($id)) > 1396;
+    $UnitRegistrations .= ",$direction$id";	# direction 1 ',Z' 2 term 1
+    print "register: $direction$id\n" if $opt_t;
+}
+$UnitRegistrations .= ",Z";	# terminate registration string
+print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
+$conn->send_now($UnitRegistrations);
+my ($tmsg, $terr) = $conn->rcv_now();
+print "$named: Reply: $tmsg\n" if $opt_t;
+rcvd_msg_from_server($conn, $tmsg, $terr);	# receive final registration acknowledgment
+
+############# registration analysis ########################
+$ri == scalar @ArgNames or
+    die "$named: $ri: not enough registration replies from iCserver - system error";
+$register = 0;
+############# correct number of registration replies #######
+
+my ($ch, $mw, $home);
+if (($home = $ENV{HOME}) ne '' and
+    (-d "$home/.iC" or mkdir "$home/.iC")) {
+    if ($opt_T or not -f "$home/.iC/$nameo.bit") {
+	if (open(INI, ">$home/.iC/$nameo.bit")) {
+	    print "$nameo: generate a new minimise icon file\n";
+	    print INI << "EOF";
+/* minimise icon 'Rfi' for iCrfid */
+\#define ic_width 48
+\#define ic_height 48
+static unsigned char ic_bits[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0x0f, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0x07, 0x00, 0x00,
+    0xe0, 0x00, 0x80, 0x07, 0x00, 0x00,
+    0xf0, 0x01, 0xc0, 0x07, 0x00, 0x00,
+    0xf8, 0x03, 0xc0, 0x03, 0x00, 0x00,
+    0xf8, 0x03, 0xc0, 0x03, 0x00, 0x00,
+    0xf8, 0x03, 0xe0, 0x03, 0x00, 0x00,
+    0xf0, 0x01, 0xe0, 0x01, 0x00, 0x00,
+    0xe0, 0x00, 0xe0, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0xf0, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x78, 0x80, 0x3f, 0x00,
+    0xf8, 0x01, 0x78, 0xe0, 0xff, 0x00,
+    0xf8, 0x01, 0x7c, 0xf0, 0xff, 0x01,
+    0xf8, 0x01, 0x3c, 0xf8, 0xff, 0x03,
+    0xf0, 0x01, 0x3c, 0xfc, 0xff, 0x07,
+    0xf0, 0x01, 0x3e, 0x7c, 0xc0, 0x07,
+    0xf0, 0x01, 0x1e, 0x3e, 0x80, 0x0f,
+    0xf0, 0x01, 0x1e, 0x3e, 0x80, 0x0f,
+    0xf0, 0x01, 0x1f, 0x3e, 0x80, 0x0f,
+    0xf0, 0x01, 0x0f, 0x1f, 0x00, 0x1f,
+    0xf0, 0x01, 0x0f, 0x1f, 0x00, 0x1f,
+    0xf0, 0x81, 0x0f, 0x1f, 0x00, 0x1f,
+    0xf0, 0x81, 0x07, 0x1f, 0x00, 0x1f,
+    0xf0, 0x81, 0x07, 0x1f, 0x00, 0x1f,
+    0xf0, 0xc1, 0x07, 0x1f, 0x00, 0x1f,
+    0xf0, 0xc1, 0x03, 0x1f, 0x00, 0x1f,
+    0xf0, 0xc1, 0x03, 0x3e, 0x80, 0x0f,
+    0xf0, 0xe1, 0x03, 0x3e, 0x80, 0x0f,
+    0xf0, 0xe1, 0x01, 0x3e, 0x80, 0x0f,
+    0xf0, 0xe1, 0x01, 0x7c, 0xc0, 0x07,
+    0xf0, 0xf1, 0x01, 0xfc, 0xff, 0x07,
+    0xf0, 0xf1, 0x00, 0xf8, 0xff, 0x03,
+    0xf8, 0xf3, 0x00, 0xf0, 0xff, 0x01,
+    0xf8, 0xfb, 0x00, 0xe0, 0xff, 0x00,
+    0xf8, 0x7b, 0x00, 0x80, 0x3f, 0x00,
+    0x00, 0x78, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x7c, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+EOF
+	    close(INI);
+	} else {
+	    warn "ERROR: Can't open ~/.iC/$nameo.bit: $!\n";
+	}
+    }
+    $mw->iconbitmap("\@$home/.iC/$nameo.bit");
+}
+
+########################################################################
+#
+#	Register read events
+#
+########################################################################
+
+$mw->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+
+########################################################################
+#
+#	Sit in an infinite loop dispatching incoming events.
+#
+########################################################################
+
+MainLoop();
+exit(0);
+
+####### End of main program ############################################
+
+########################################################################
+#
+#	Send input value, unless hold - in which case input is queued
+#
+########################################################################
+
+sub send_input {
+    my ($ch, $val) = @_;
+    if ($val != $ChannelsIq[$ch]) {
+	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel for hold
+	print "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
+### 	printf "%s	%2d:%08b\n", $ChannelNames[$ch], $ch, $val;
+	printf "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if $opt_S;
+	$conn->send_now("$ch:$val");		# send latest value
+    }
+} # send_input
+
+########################################################################
+#
+#	Receive message from server - adjust outputs - ack registrations
+#
+########################################################################
+
+my $frameCount;
+
+sub rcvd_msg_from_server {
+    my ($conn, $msg, $err) = @_;
+    if (defined $msg) {
+        my $len = length $msg;
+	print "($len)$msg<\n" if $opt_T;
+	if ($len == 0) {
+	    $conn->disconnect();
+	    print "$named: disconnected by server\n";
+	    exit;
+	}
+	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $from, $to, $res, $regId);
+	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
+	    if ($msg1 =~ /^(\d+):(-?\d+)$/) {
+		$channel = $1;			## receive data as channel:value
+		$value   = $2;			## decimal value with optional sign
+		$old = $ChannelsQ[$channel];
+		if (defined $old) {
+		    if ($value != $old) {
+			$bitRef = $ChannelsQX[$channel];
+			if (defined $bitRef) {		# only defined for QXm digital
+			    my ($diff, $mask);
+			    goto WrongFormat if $value >= 0x100;	# only 8 bit map allowed
+			    $diff = $old ^ $value;	# $old initialized to a number for correct XOR
+			    while ($diff) {		# age old algorithm from CSR days
+				$mask = $diff & -$diff;	# rightmost set bit from diff
+				${$bitRef}[$bitIndex[$mask]] = ($value & $mask) ? 1 : 0;
+				$diff &= ~$mask;	# modify viewable output - clear rightmost bit
+			    }
+			}
+			$ChannelsQ[$channel] = $value;	# ready for next message
+			print "$named: $msg1	< $ChannelNames[$channel]\n" if $opt_t;
+			printf "%s	%2d:%d	<\n", $ChannelNames[$channel], $channel, $value if $opt_R;
+		    }
+		} else {
+		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
+		}
+	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
+		$channel = $1;			## receive channel of a registration acknowlwdgment
+		($id, $ini, $from, $to, $res) = @{$ArgNames[$ri]};	# all argument values
+		defined $id or
+		    die "$named: too many registration acknowledgments from iCserver - system error";
+		print "$named: $ri: registering '$id' on channel '$channel'\n" if $opt_t;
+		$ChannelsRI[$channel] = $ri;	# allow retrieval of @ArgNames info via $channel
+		$ri++;
+		my $dir = '';
+		if ($id =~ /^QX/) {	# /^Q([XBWL])/ or /^[IQ]([XBWL])/ if $opt_d
+		    if ($channel == 0) {	# /^I([XBWL])/ if $opt_r
+			warn "$named: trying to register receiver '$id' at channel 0 - error\n";
+			next;
+		    }
+		    $dir = 'R';
+		    $frameCount++;
+		    if ($channel < 0) {
+			$channel = -$channel;
+			print "$named: registering receiver '$id' on channel $channel twice - equivalence\n" if $opt_t;
+		    } else {
+			$ChannelsQ[$channel] = 0;	# initial value and Q definition
+			## when this array element is defined, it is a Q[XBWL] receiver (or I[XBWL] if $opt_d or $opt_r)
+			if ($1 eq 'X') {
+			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
+			    ## when this array slice is defined, channel is a QXn.m
+			    ## Q[BWL]n have this slice undefined for their channel
+			}
+		    }
+		}
+		elsif ($id =~ /^IX/) {	# /^I([XBWL])/ or /^Q([XBWL])/ if $opt_r
+		    if ($channel == 0) {
+			warn "$named: trying to register sender '$id' twice - not allowed\n";
+			next;
+		    }
+		    $dir = 'S';
+		    $frameCount++;
+		    ## initial value and I definition
+		    $ChannelsIq[$channel] = $ChannelsI[$channel] = $ini;
+		    ## when this array element is defined, it is a I[XBWL] sender (or Q[XBWL] if $opt_r)
+		    if ($1 eq 'X') {
+			for my $index (0 .. 7) {
+			    $ChannelsIX[$channel][$index] = ($ini & $masks[$index]) ? 1 : 0;
+			}
+			## when this array slice is defined, channel is a IXn.m
+			## I[BWL]n have this slice undefined for their channel
+		    }
+		}
+		if ($dir) {
+		    $regId = "$dir$id";
+		    $ChannelNames[$channel] = "$id";
+		    $IONames{$regId} = $channel;
+		    ## build only boxes whose IONames entry is defined
+		    print "register: $regId channel = $channel ini = '$ini' from = '$from' to = '$to' res = '$res'\n" if $opt_t;
+		}
+	    } else {
+	      WrongFormat:
+		warn "$named: WARNING: '$msg1' out of '$msg' from iCserver has wrong format - ignored";
+	    }
+	}
+    }
+} # rcvd_msg_from_server
+
+############ POD to generate man page ##################################
+
+=encoding utf8
+
+=head1 NAME
+
+iCrfid - Rfid I/O for a Control Box
+
+=head1 SYNOPSIS
+
+ iCrfid [-th][ -S <controlHost>][ -P <controlPort>]
+        [ -s <iChost>][ -p <iCport>][ -n <name>][ -i <inst>]
+        [ -B <size>][ -T <seconds>][ -0 <msg0>][ -1 <msg1>]
+	[ -2 <msg2>]...[ -7 <msg7>][ -M <mask>][ Xn]
+    Xn      one of X0 or X1 or X2 etc   (default X0)
+    -S host host name of Control Server (default 'localhost')
+    -P port service Port of Control Server (default '8777')
+    -s host host name of iCserver       (default 'localhost')
+    -p port service Port of iCserver    (default '8778')
+    -n name registration Name           (default RFID_0)
+    -i inst Instance ID for this iCrfid (1 to 3 numeric digits)
+    -B size Buffer size for log data    (default 1400 bytes)
+    -T secs Time limit for sending logs (default 600 seconds)
+    -0 msg0 log message triggered by QXn.0
+    -1 msg1 log message triggered by QXn.1
+    -2 msg2 log message triggered by QXn.2
+    ...
+    -7 msg7 log message triggered by QXn.7
+    -M mask 8 bit mask - each 1 means QXn.m log sent immediately
+    -t      trace activity for debugging
+    -h      help, ouput this Usage text only
+
+=head1 DESCRIPTION
+
+B<iCrfid> executes in a Control Box connected to a Rfid USB reader
+and is a client program for two separate servers. One is the
+Control Server, which controls and monitors Control Boxes deployed
+in the field. The other is iCserver, which is the local server
+handling attached iC I/O controlling programs dealing with lights,
+buzzers and door locks as well as security inputs.
+
+The Rfid USB reader simulates keyboard input on stdin. For every Rfid
+card it reads, it transmits a string of 10 decimal digits terminated
+by a CR (the data could actually be any text string). The Rfid data
+is compared with entries in a hash, which is regularly updated from
+the Control Server.
+
+If the Rfid data exists in the hash IXn.0 is transmitted as a "1"
+for 50 ms to iCserver and from there to any registered application.
+
+If the Rfid data does not exist in the hash IXn.1 is transmitted as a
+"1" for 50 ms to iCserver and from there to any registered application.
+
+Each time either of these events ocurr a log entry is generated, which
+records the code read from the Rfid card, whether it was accepted
+or not and a time stamp. The log data is collected until a certain
+data size is reached or until a time limit is reached. Both of these
+parameters can be varied by command line entries with suiatble defaults
+in place.  When either of these limits is reached, the collected
+log data is transmitted to the Control Server together with a line,
+which identifies the Control Box the data is coming from.
+
+This software also reads 8 Outputs QXn.0 to QXn.7 from iCserver,
+which can generate extra log data to be transmitted to the Control
+Server either immediately or in the normal log transmission. This will
+allow the setting up of a security alarm system with the Control Box.
+
+This software can be tested without a Rfid reader by simulating the
+Rfid reader with keyboard input.
+
+=head1 AUTHOR
+
+John E. Wulff
+
+=head1 BUGS
+
+Email bug reports to B<immediateC@gmail.com> with L<iC Project> in the
+subject field.
+
+=head1 SEE ALSO
+
+L<iCpiFace(1)>, L<iCserver(1)>, L<iCbox(1)>
+
+=head1 COPYRIGHT
+
+COPYRIGHT (C) 2000-2012  John E. Wulff
+
+You may distribute under the terms of either the GNU General Public
+License or the Artistic License, as specified in the README file.
+
+For more information about this program, or for information on how
+to contact the author, see the README file.

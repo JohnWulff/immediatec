@@ -22,8 +22,17 @@ if echo $PATH | grep -q intel_cc; then
 else
     CC=gcc
 fi
-ldir=" -I/usr/local/include -L/usr/local/lib"
-LIB="/usr/local/lib/"
+
+case `uname -m` in
+    *x86_64* | *ppc64* | *s390x* )
+	LIB="/usr/local/lib64/"
+	;;
+    * )
+	LIB="/usr/local/lib/"
+	;;
+esac
+
+ldir=" -I/usr/local/include -L$LIB"
 ICC=immcc
 IAC=immac
 
@@ -93,7 +102,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.43 2013/04/20 01:23:06 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.44 2014/06/30 19:45:18 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -109,7 +118,7 @@ nice="nice "
 aux=""
 v=""
 b=""
-lib="-lict$lwsock32"
+lib="-lict -lrt$lwsock32"
 d=" -d474"
 A=""
 S=""
@@ -171,10 +180,10 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     c )	link=3; d="$A$S$R$k";;
     b ) link=4;;
     n ) link=5; d="$A$S$R$k";;
-    s ) lib="${LIB}libict.a$lwsock32";;
+    s ) lib="${LIB}libict.a -lrt$lwsock32";;
     f )	force=1;;
     e ) ef=" -lefence";;
-    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a$lwsock32";;
+    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a -lrt$lwsock32";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
     p )	if [ -z "$p" ]; then p=" -p"; fi; d="$d$p";;	# allows -pp => -p -p (-pedantic cannot handle generated C files)
@@ -196,7 +205,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     v ) if [ -z "$b" ]; then
 	    b="./"
 	fi
-	lib="${b}libict$OPTARG.a$lwsock32"
+	lib="${b}libict$OPTARG.a -lrt$lwsock32"
 	ldir=""
 	v="$OPTARG"
 	;;
@@ -207,7 +216,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
 	fi
 	b="$OPTARG/"
 	if [ -z "$v" ]; then
-	    lib="${b}libict.a$lwsock32"
+	    lib="${b}libict.a -lrt$lwsock32"
 	    ldir=""
 	fi
 	;;
@@ -226,7 +235,9 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
 done
 shift $(($OPTIND - 1))
 
-lib="$lib$ef"
+if [ -n "$ef" ]; then
+    lib="$lib$ef"
+fi
 # echo "I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib, force = $force, D=$D, P=$P, PA=$PA"
 # echo "*='$*'"
 # exit

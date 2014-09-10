@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.73 2013/09/10 08:31:47 jw Exp $";
+"@(#)$Id: icc.h,v 1.74 2014/09/10 02:39:01 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -37,9 +37,18 @@ static const char icc_h[] =
 #ifndef ICG_H
 #define ICG_H
 
+#include	<signal.h>
 #ifndef INT_MAX
 #include	<limits.h>
-#endif
+#endif	/* INT_MAX */
+
+#ifndef	max
+#define	max(x, y) ((x) > (y) ? (x) : (y))
+#endif	/* max */
+
+#ifndef	min
+#define	min(x, y) ((x) < (y) ? (x) : (y))
+#endif	/* min */
 
 /*	Function types 'op' 'Symbol.type' and display */
 
@@ -117,6 +126,9 @@ typedef union GppIpI {
     int		*	ip;		/* int array */
 #ifdef TCP
     unsigned short	channel;	/* output channel */
+#ifdef	RASPBERRYPI
+    struct piFaceIO *	pfp;		/* PiFace pointer */
+#endif	/* RASPBERRYPI */
 #if INT_MAX == 32767 && defined (LONG16)
     long		out;		/* out value for arithhmetic */
 #else
@@ -179,8 +191,12 @@ typedef struct Gate {			/* Gate */
 				/* reverse gate pointer */
 #define	gt_rptr		gt_rll.gp
 #ifdef TCP
-				/* OUT value for OUTW gates */
+				/* OUT value for OUTW gates after registration */
 #define	gt_out		gt_rll.out
+#ifdef	RASPBERRYPI
+				/* save pfp * until registration*/
+#define	gt_pfp		gt_rll.pfp
+#endif	/* RASPBERRYPI */
 #endif	/* TCP */
 				/* reverse C function number in int array */
 #define	gt_rfunctn	gt_rll.ip[FL_GATE]
@@ -198,6 +214,15 @@ extern iC_Gt *		iC_index(iC_Gt * gm, int index);
 extern struct timeval	iC_timeOut;	/* 50 mS select timeout - may be modified in iCbegin() */
 extern int		iCbegin(void);	/* initialisation function */
 extern int		iCend(void);	/* termination function */
+extern char		iC_stdinBuf[];	/* store a line of STDIN - reported by TX0.1 */
+extern void		iC_quit(int sig);	/* quit with correct interrupt vectors */
+
+#ifndef SIGRTMAX
+#define SIGRTMAX	32			/* for non-POSIX systems (Win32) */
+#endif
+#define QUIT_TERMINAL	(SIGRTMAX+3)
+#define QUIT_DEBUGGER	(SIGRTMAX+4)
+#define QUIT_SERVER	(SIGRTMAX+5)
 #endif	/* ICG_H */
 /* ENDFILE "icg.h" */
 
@@ -545,8 +570,8 @@ extern void	iC_link_cl(		/* link clocked Gate directly to c_list */
 		Gate * gp, Gate * out_list);	/* during pass4 initialisation */
 
 
-extern void	iC_icc(
-		Gate ** sTable, Gate ** sTend);	/* initialise and execute */
+extern void	iC_icc(			/* initialise and execute iC load object */
+		Gate ** sTable , Gate ** sTend);
 
 extern unsigned short	iC_osc_max;
 extern unsigned short	iC_osc_lim;
@@ -589,12 +614,6 @@ extern unsigned char	iC_pdata[];	/* rest used only locally */
 #else					/* NEW I/O */
 extern Gate *		iC_TX0p;	/* pointer to bit System Gates */
 #endif					/* END NEW I/O */
-#ifndef	EFENCE
-extern char		iC_outBuf[];
-#else	/* EFENCE */
-extern char *		iC_outBuf;
-#endif	/* EFENCE */
-extern int		iC_outOffset;
 
 extern Gate *		iC_a_list;
 extern Gate *		iC_o_list;
@@ -609,12 +628,16 @@ extern short		iC_dc;		/* debug display counter in scan and rsff */
 #endif
 extern unsigned char	iC_bitMask[];
 #define	X_MASK		0xff		/* mask to detect used bits in bit I/O byte */
-#define	B_WIDTH		257		/* marks output as byte width signed */
-#define	W_WIDTH		258		/* marks output as word width signed */
+#define	W_MASK		0x107		/* marks output as word I/O */
+#define	B_WIDTH		0x101		/* marks output as byte width signed */
+#define	W_WIDTH		0x102		/* marks output as word width signed */
 #if INT_MAX != 32767 || defined (LONG16)
-#define	L_WIDTH		259		/* marks output as long width signed */
-#define	H_WIDTH		260		/* marks output as long long width signed */
+#define	L_WIDTH		0x103		/* marks output as long width signed */
+#define	H_WIDTH		0x104		/* marks output as long long width signed */
 #endif
+#ifdef	RASPBERRYPI
+#define	X_FLAG		0x200		/* flag non-registration in gt_mark */
+#endif	/* RASPBERRYPI */
 
 extern void	iC_arithMa(Gate *, Gate *);	/* ARITH master action */
 extern void	iC_sMff(Gate *, Gate *);	/* S_FF master action on FF */
@@ -663,27 +686,125 @@ extern void	iC_pass2(Gate *, int);		/* Pass2 init on gates */
 extern void	iC_gate2(Gate *, int);		/* pass2 function init gates */
 extern void	iC_i_ff2(Gate *, int);		/* called via output lists */
 extern void	iC_pass4(Gate *, int);		/* Pass4 init on gates */
-#define	iC_null1 (iC_Functp)iC_null		/* null function for init lists */
+#define	iC_null1	(iC_Functp)iC_null	/* null function for init lists */
 
-extern iC_Functp iC_gate_i[];
-extern iC_Functp iC_ff_i[];
-extern iC_Functp iC_clock_i[];
+extern iC_Functp	iC_gate_i[];
+extern iC_Functp	iC_ff_i[];
+extern iC_Functp 	iC_clock_i[];
 
-#define	MARKMAX 4				/* number of oscillations allowed */
-#define	OSC_WARN_CNT 10				/* number of oscillation warnings */
+#define	MARKMAX		4			/* number of oscillations allowed */
+#define	OSC_WARN_CNT	10			/* number of oscillation warnings */
 
 extern unsigned short	iC_mark_stamp;		/* incremented every scan */
 extern Gate *		iC_osc_gp;		/* report oscillations */
 
-extern unsigned	iC_scan_cnt;			/* count scan operations */
-extern unsigned	iC_link_cnt;			/* count link operations */
+extern unsigned		iC_scan_cnt;		/* count scan operations */
+extern unsigned		iC_link_cnt;		/* count link operations */
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
-extern unsigned	iC_glit_cnt;			/* count glitches */
-extern unsigned	long glit_nxt;			/* count glitch scan */
+extern unsigned		iC_glit_cnt;		/* count glitches */
+extern unsigned	long	glit_nxt;		/* count glitch scan */
 #endif
 
-extern void	iC_initIO(void);		/* init signal and correct interrupt vectors */
-extern void	iC_quit(int sig);		/* quit with correct interrupt vectors */
+#ifdef	TCP
+#define ENTRYSZ		24			/* accomodates ",SIX123456.7,RQX123456.7" */
+extern unsigned short	C_channel;		/* channel for sending messages to Debug in ict.c */
+extern int		regOffset;		/* for register send */
+#ifndef	EFENCE
+extern char		regBuf[];
+extern char		rpyBuf[];		/* Buffer in which iCserver input is read to */
+extern char		msgBuf[];
+#else	/* EFENCE */
+extern char *		regBuf;
+extern char *		rpyBuf;
+extern char *		msgBuf;
+extern char *		iC_outBuf;		/* Buffer to transfer out data from iC_output() */
+#endif	/* EFENCE */
+extern FILE *		iC_vcdFP;
+extern FILE *		iC_savFP;
+
+#ifdef	RASPBERRYPI
+#include <stdint.h>			/* defines a set of integral type aliases */
+#define MAXPF		8		/* maximum number of PiFace's */
+#define IOUNITS		30		/* initial Units[] size */
+#define BS		256		/* buffer size for I/O strings */
+
+/********************************************************************
+ *	Used for marking I/O type in gt_live to influence registration.
+ *	gt_live is only used for VCD generation and normal live operation
+ *	after registration is completed. (gt_live is 0 because of emalloc()) 
+ *******************************************************************/
+
+#define External	0		/* default  IXx <== iCserver <== QXx */
+#define Internal	1		/*          IXx <==   SIO    <== QXx */
+					/* if opt_E    also iCserver <== IXx (display only) */
+					/*             and  iCserver <== QXx */
+#define Dummy		2		/* ignore -    output WARNING    *** */
+#define ExternOut	3		/* like     iCserver (IXx)   <== SIO */
+					/* iCpiFace SIO      (QXx)   <== iCserver */
+
+/********************************************************************
+ *
+ *	piFaceIO array pfi[unit] is organised as follows:
+ *	  [unit] is the PiFace unit index in address order
+ *	  each element of the array is a struct piFaceIO
+ *
+ *	A single PiFace can be addressed from 0 - 3 with jumpers.
+ *	With CE0 selected /dev/spidev0.0 is used for SPI transfers.
+ *	With CE1 selected /dev/spidev0.1 is used for SPI transfers.
+ *
+ *	A PiRack can accomodate up to 4 PiFaces (more if daisy-chained).
+ *	Also CE for each PiFace can be changed from CE0 (default) to CE1.
+ *	This changes the addresses above from 4 - 7 allowing a maximum
+ *	of 8 PiFaces to be used.
+ *
+ *******************************************************************/
+
+typedef struct	iqDetails {
+    union {
+	char *		name;		/* i.name IXn, IXn-i, QXn or QXn-i */
+	Gate *		gate;		/* i.gate named IXn, IXn-i, QXn or QXn-i */
+    } i;				/* name used in iCpiFace.c, gate used in load.c */
+    int			val;		/* previous input or output value */
+    unsigned short	channel;	/* channel to send I or receive Q to/from iCserver */
+} iqDetails;
+
+#define Iname		s[0].i.name	/* name IXn or IXn-i, used in iCpiFace.c */
+#define Qname		s[1].i.name	/* name QXn or QXn-i */
+#define Igate		s[0].i.gate	/* gate named IXn or IXn-i, used in load.c */
+#define Qgate		s[1].i.gate	/* gate named QXn or QXn-i */
+#define valI		s[0].val	/* previous input value */
+#define valQ		s[1].val	/* previous output value */
+#define channelSI	s[0].channel	/* channel number to send input to iCserver */
+#define channelRQ	s[1].channel	/* channel number to reveive output from iCserver */
+
+typedef struct	piFaceIO {
+    iqDetails		s[2];		/* select IXx with iq=0, QXx with iq=1 */
+    unsigned short	pfa;		/* PiFace address 0 - 7 */
+    uint8_t		intf;		/* PiFace INTFB PiFaceCAD INTFA */
+    uint8_t		inpr;		/* PiFace GPIOB PiFaceCAD GPIOA */
+    int			spiFN;		/* file number for CE0 or CE1 */
+} piFaceIO;
+
+typedef struct	channelSel {
+    Gate *		g;		/* gate named IXn, IXn-i, QXn or QXn-i */
+    piFaceIO *		p;		/* pointer to selected PiFace for direct I/O */
+} channelSel;
+
+extern int	iC_opt_P;
+extern int	iC_opt_B;
+extern int	iC_opt_E;
+extern int	iC_opt_L;
+extern int	npf;
+extern int	npfx;
+extern int	gpio23FN;		/* /sys/class/gpio/gpio23/value LIRC file number */
+extern int	gpio25FN;		/* /sys/class/gpio/gpio25/value SPI file number */
+extern int	spidFN[];		/* /dev/spidev0.0, /dev/spidev0.1 SPI file numbers */
+extern piFaceIO	pfi[];			/* piFace names/gates and channels */
+#endif	/* !RASPBERRYPI */
+
+#endif	/* TCP */
+
+extern void		iC_initIO(void);	/* init signal and correct interrupt vectors */
 
 #if defined(RUN) || defined(TCP) && ! defined(LOAD)
 extern Gate *		iC_pf0_1;		/* pointer to _f0_1 if generated in buildNet() */
@@ -703,14 +824,26 @@ extern int		iC_exec(int iC_indx, Gate * gp);
 #endif /* LOAD */
 
 #if INT_MAX == 32767 && defined (LONG16)
+void			iC_output(long val, unsigned short channel);
 extern void		iC_liveData(Gate * gp, long value);	/* VCD and/or iClive */
-#else
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+void			iC_output(int val, unsigned short channel);
 extern void		iC_liveData(Gate * gp, int value);	/* VCD and/or iClive */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 					/*   misc.c  */
+#ifdef	_MSDOS_
+#ifdef	MSC
+extern void (interrupt far *oldhandler)(void);
+#else	/* MSC */
+extern void (interrupt *oldhandler)(void);
+#endif	/* MSC */
+#else	/* ! _MSDOS_ Linux */
+extern int		ttyparmFlag;
+extern struct termios	ttyparms;
+#endif	/* ! _MSDOS_ Linux */
 #ifdef	WIN32
-#define snprintf    _snprintf
-extern int mkstemp(char * template);
+#define snprintf	 _snprintf
+extern int		mkstemp(char * template);
 #endif	/* WIN32 */
 
 #endif	/* ICC_H */

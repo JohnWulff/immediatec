@@ -47,7 +47,7 @@ CYCLE:
 	chomp();
 	$CondReg = 0;   # cleared on t
 BOS:;
-# # $Id: gram.pl,v 1.6 2012/07/16 01:45:09 jw Exp $
+# # $Id: gram.pl,v 1.7 2014/05/12 13:09:44 jw Exp $
 # s/yyparse/c_parse/g
 { $s = s /yyparse/c_parse/sg;
   $CondReg ||= $s;
@@ -56,6 +56,29 @@ BOS:;
 { $s = s /yylex/c_lex/sg;
   $CondReg ||= $s;
 }
+########################################################################
+#
+#  A serious problem with flex
+#  flex v2.5.37 on OpenSuse 13.1 (64 bit) declares size_t yyleng;
+#  flex v2.5.35 on Raspbian 7    (32 bit) declares int    yyleng;
+#  in both cases the template source for flex is embedded in the executable
+#  and cannot be changed.        jw 2014/05/12
+#  the same applies to yyget_leng() (which is not used - but fix anyway)
+#  comp.h declares c_leng (renamed from yyleng) as size_t c_leng;
+#  comp.y uses c_leng in yyerror() to produce error messages for embedded C
+#  A hard type mismatch error occurs in the lexc.c file on Raspbian
+#  Therefore make changes here - I believe this produces correct code
+#
+########################################################################
+# s/int c_leng/size_t c_leng/g
+{ $s = s /int(\s+)yyleng/size_t$1c_leng/sg;
+  $CondReg ||= $s;
+}
+# s/int yy_getleng/size_t yy_getleng/g
+{ $s = s /int(\s+)yyget_leng/size_t$1yyget_leng/sg;
+  $CondReg ||= $s;
+}
+########################################################################
 # s/yyleng/c_leng/g
 { $s = s /yyleng/c_leng/sg;
   $CondReg ||= $s;

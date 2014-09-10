@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.55 2013/08/25 01:51:37 jw Exp $";
+"@(#)$Id: rsff.c,v 1.56 2014/08/07 00:54:21 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -123,7 +123,7 @@ iC_sMff(					/* S_FF master action on FF */
 
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (
 	(
 	    (ma = gm->gt_list)[FL_GATE]->gt_val > 0 &&
@@ -152,20 +152,16 @@ iC_sSff(					/* S_FF slave action on FF */
     gs = gm->gt_funct;
     if (gs->gt_val > 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t-1\t%s %+d S=>", gs->gt_ids, gs->gt_val);
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %+d S=>", gs->gt_ids, gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = -1;			/* set slave output */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, 1);			/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " -1");
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_sSff */
 
@@ -184,7 +180,7 @@ iC_rMff(					/* R_FF master action on FF */
 
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (
 	(
 	    (ma = gm->gt_list)[FL_GATE]->gt_val < 0 &&
@@ -213,20 +209,16 @@ iC_rSff(					/* R_FF slave action on FF */
     gs = gm->gt_funct;
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t-1\t%s %+d R=>", gs->gt_ids, gs->gt_val);
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %+d R=>", gs->gt_ids, gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, 0);			/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " +1");
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_rSff */
 
@@ -245,7 +237,7 @@ iC_dMff(					/* D_FF master action on FF */
 
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (
 	((ma = gm->gt_list)[FL_GATE]->gt_val < 0)
 	^ (gm->gt_val < 0)			/* any change */
@@ -272,20 +264,16 @@ iC_dSff(					/* D_FF slave action on FF */
     gs = gm->gt_funct;
     if ((val = (gm->gt_val < 0) ? -1 : 1) != gs->gt_val) {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t%+d\t%s %+d D=>", val, gs->gt_ids, gs->gt_val);
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%+d\t%s %+d D=>", val, gs->gt_ids, gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = val;			/* transfer val to slave */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(gs, iC_o_list);
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " %+d", gs->gt_val);
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_dSff */
 
@@ -336,7 +324,7 @@ iC_dMsh(					/* D_SH master action on SH */
     }
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_new);		/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     /********************************************************************
      * SH master action is only called if gt_new has changed first time
      * versus gt_old or changed back, which is a glitch. This is already
@@ -373,14 +361,14 @@ iC_dSsh(					/* D_SH slave action on SH */
 #else
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d\t%s %d SH=>", gm->gt_new, gs->gt_ids, gs->gt_new);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     /********************************************************************
      * since gm is still on clock list gt_new must differ from gt_old
      *******************************************************************/
     gs->gt_new = gm->gt_old = gm->gt_new;	/* transfer value to slave */
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gs, gs->gt_new);		/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     iC_link_ol(gs, iC_a_list);			/* fire new arithmetic action */
 
 #if YYDEBUG && !defined(_WINDOWS)
@@ -389,7 +377,7 @@ iC_dSsh(					/* D_SH slave action on SH */
 #else
     if (iC_debug & 0100) fprintf(iC_outFP, " %d", gs->gt_new);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 } /* iC_dSsh */
 
 /********************************************************************
@@ -407,7 +395,7 @@ iC_sMsh(					/* S_SH master action on SH */
 
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (
 	(
 	    (ma = gm->gt_list)[FL_GATE]->gt_new != -1 &&
@@ -441,15 +429,15 @@ iC_sSsh(					/* S_SH slave action on SH */
 #else
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %2d S SH=>", gs->gt_ids, gs->gt_new);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_new = -1;			/* set SH slave output */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, -1);			/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(gs, iC_a_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_sSsh */
 
@@ -468,7 +456,7 @@ iC_rMsh(					/* R_SH master action on SH */
 
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (
 	(
 	    (ma = gm->gt_list)[FL_GATE]->gt_new != 0 &&
@@ -502,15 +490,15 @@ iC_rSsh(					/* R_SH slave action on SH */
 #else
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %2d R SH=>", gs->gt_ids, gs->gt_new);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_new = 0;				/* reset SH slave output */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, 0);			/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(gs, iC_a_list);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " 0");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_rSsh */
 
@@ -582,7 +570,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	} else if (iC_debug & 0100) {
 	    fprintf(iC_outFP, "\n	    %c	%s:\t%.4x inputs",
 		opt, gm->gt_ids, gm->gt_mcnt);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
     }
     if (typ < MAX_LV) {
@@ -594,7 +582,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	    gm != &iConst
 #else	/* ! LOAD */
 	    strcmp(gm->gt_ids, "iConst") != 0
-#endif	/* LOAD */
+#endif	/* ! LOAD */
 	) {
 	    char *	ep;
 	    /* convert constant 18 from dec, 077 from oct 0x1c from hex */
@@ -641,7 +629,7 @@ iC_riMbit(					/* RI_BIT master action on EF */
 
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
     if (gm->gt_val < 0 || gm->gt_next) {
 	iC_link_ol(gm, ma[FL_CLK]);		/* master action */
@@ -655,11 +643,11 @@ iC_riMbit(					/* RI_BIT master action on EF */
 	    fprintf(iC_outFP, "\t%s %+d E=>",	/* slave */
 		iC_gx->gt_ids, iC_gx->gt_val);
 	}
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_gx->gt_val = gm->gt_val;		/* immediate (glitch resets here if linked) */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(iC_gx, iC_gx->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(iC_gx, iC_o_list);		/* set (reset) slave output now - reset when clocked*/
     }
 } /* iC_riMbit */
@@ -681,21 +669,16 @@ iC_riSbit(					/* RI_BIT slave action */
     gs = gm->gt_funct;
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t-1\t%s %+d E=>", gs->gt_ids, gs->gt_val);
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %+d E=>", gs->gt_ids, gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output to LO */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, 0);			/* VCD and/or iClive */
-#endif
-	iC_link_ol(gs, iC_o_list);
+#endif /* defined(TCP) || defined(LOAD) */
+	iC_link_ol(gs, iC_o_list);		/* on startup a reset action comes when EF is LO */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " +1");
-	}
-	/* on startup a reset action comes when EF is LO */
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_riSbit */
 
@@ -723,7 +706,7 @@ iC_chMbit(					/* CH_BIT master action on VF */
     assert (out_list == iC_o_list);		/* logic change */
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
     iC_link_ol(gm, ma[FL_CLK]);			/* ignore input - master action */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -736,11 +719,11 @@ iC_chMbit(					/* CH_BIT master action on VF */
 	fprintf(iC_outFP, "\t%s %+d V=>",	/* slave */
 	    iC_gx->gt_ids, iC_gx->gt_val);
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch resets here if linked) */
 #if defined(TCP) || defined(LOAD)
     iC_liveData(iC_gx, iC_gx->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     iC_link_ol(iC_gx, iC_o_list);		/* set (glitch reset) slave output now - reset when clocked*/
 } /* iC_chMbit */
 
@@ -761,21 +744,16 @@ iC_chSbit(					/* CH_BIT slave action */
     gs = gm->gt_funct;
     if (gs->gt_val < 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\t%+d\t%s %+d V=>", gm->gt_val, gs->gt_ids, gs->gt_val);
-	}
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, "\t%+d\t%s %+d V=>", gm->gt_val, gs->gt_ids, gs->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output to LO */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, 0);			/* VCD and/or iClive */
-#endif
-	iC_link_ol(gs, iC_o_list);
+#endif /* defined(TCP) || defined(LOAD) */
+	iC_link_ol(gs, iC_o_list);		/* on startup a reset action comes when VF is LO */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " +1");
-	}
-	/* on startup a reset action comes when VF is LO */
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_chSbit */
 
@@ -802,17 +780,17 @@ iC_chMar(					/* CH_AR master action on VF */
     assert (out_list == iC_a_list);		/* arithmetic change */
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_new);		/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if ((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0)) {
 	iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
 	iC_link_ol(gm, ma[FL_CLK]);		/* ignore input - master action */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
-    #if INT_MAX == 32767 && defined (LONG16)
+#if INT_MAX == 32767 && defined (LONG16)
 	    fprintf(iC_outFP, " %ld", gm->gt_new);
-    #else
+#else
 	    fprintf(iC_outFP, " %d", gm->gt_new);
-    #endif
+#endif
 	    if (iC_dc++ >= 4) {
 		iC_dc = 1;
 		fprintf(iC_outFP, "\n\t");
@@ -820,11 +798,11 @@ iC_chMar(					/* CH_AR master action on VF */
 	    fprintf(iC_outFP, "\t%s %+d v=>",	/* slave */
 		iC_gx->gt_ids, iC_gx->gt_val);
 	}
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch resets here if linked) */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(iC_gx, iC_gx->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(iC_gx, iC_o_list);		/* set (reset) slave output now - reset when clocked*/
     }
 } /* iC_chMar */
@@ -858,18 +836,15 @@ iC_chSar(					/* CH_AR slave action */
 	    fprintf(iC_outFP, "\t%d\t%s %+d v=>", gm->gt_new, gs->gt_ids, gs->gt_val);
 #endif
 	}
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output to LO */
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(gs, 0);			/* VCD and/or iClive */
-#endif
-	iC_link_ol(gs, iC_o_list);
+#endif /* defined(TCP) || defined(LOAD) */
+	iC_link_ol(gs, iC_o_list);		/* on startup a reset action comes when VF is LO */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, " +1");
-	}
-	/* on startup a reset action comes when VF is LO */
-#endif
+	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_chSar */
 
@@ -890,7 +865,7 @@ iC_fMsw(					/* F_SW master action */
     }
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_new);		/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if ((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0)) {
 	iC_link_ol(gm, gm->gt_clk);		/* master action */
     }
@@ -915,7 +890,7 @@ iC_fSsw(					/* F_SW slave action on SW */
 	/* defer execution until f_list is scanned */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\tdefer () ");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_link_ol(gm, iC_f_list);
     } else {
 	assert(out_list == iC_f_list);
@@ -928,21 +903,21 @@ iC_fSsw(					/* F_SW slave action on SW */
 #else
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2d SW0x%lx{\n", gm->gt_new, (long)gm->gt_funct);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	((iC_CFunctp)(gm->gt_funct))(gm);
-#else
+#else	/* ! LOAD */
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2ld SW%d{\n", gm->gt_new, gm->gt_functn);
 #else
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%2d SW%d{\n", gm->gt_new, gm->gt_functn);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_exec(gm->gt_functn, gm);		/* must pass both -/+ */
-#endif
+#endif	/* ! LOAD */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "}");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_fSsw */
 
@@ -961,7 +936,7 @@ iC_fMcf(					/* F_CF master action */
 {
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (
 	gm->gt_val < 0  ||			/* rising edge */
 	gm->gt_next				/* or glitch */
@@ -988,7 +963,7 @@ iC_fMce(					/* F_CE master action */
 {
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     iC_link_ol(gm, gm->gt_clk);			/* master action */
 } /* iC_fMce */
 
@@ -1014,7 +989,7 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 	/* defer execution until f_list is scanned */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\tdefer {} ");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_link_ol(gm, iC_f_list);
     } else {
 	assert(out_list == iC_f_list);
@@ -1022,17 +997,17 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d IF0x%lx{\n", gm->gt_val ? 1 : 0, (long)gm->gt_funct);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	((iC_CFunctp)(gm->gt_funct))(gm);
-#else
+#else	/* ! LOAD */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%d IF%d{\n", gm->gt_val ? 1 : 0, gm->gt_functn);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_exec(gm->gt_functn, gm);		/* must pass both -/+ */
-#endif
+#endif	/* ! LOAD */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "}");
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* iC_fScf */
 #if defined(TCP) || defined(LOAD)
@@ -1060,9 +1035,7 @@ iC_traMb(					/* TRAB master action */
     iC_liveData(gm, gm->gt_new);		/* iClive only */
     count = 0;
 #if YYDEBUG && !defined(_WINDOWS)
-    if (iC_debug & 0100) {
-	iC_dc = 1;
-    }
+    if (iC_debug & 0100) { iC_dc = 1; }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     diff = gm->gt_new ^ gm->gt_old;
     assert (diff && !(diff & ~0xff));
@@ -1082,9 +1055,7 @@ iC_traMb(					/* TRAB master action */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    if (gs->gt_val != val) {
 		gs->gt_val = val;
-#if defined(TCP) || defined(LOAD)
 		iC_liveData(gs, gs->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
 		iC_link_ol(gs, iC_o_list);	/* fire input bit Gate */
 		count++;			/* count Gates linked */
 	    }
@@ -1101,7 +1072,8 @@ iC_traMb(					/* TRAB master action */
 /********************************************************************
  *
  * NEW
- *	Output to a word or byte whose Channel index is in gt_list.
+ *	Output to a word or byte whose Channel index is in gt_channel,
+ *	which is in union with gt_list.
  *		gt_mark == B_WIDTH means 1 byte is output
  *		gt_mark == W_WIDTH means 2 bytes or 1 word is output
  *		gt_mark == L_WIDTH means 4 bytes or 1 long is output
@@ -1109,13 +1081,14 @@ iC_traMb(					/* TRAB master action */
  *	For initialisation purposes this ftype OUTW node is acted on
  *	by exactly one ARITH node defined in an output assignment.
  *	This must line up with OUTP_M (1). This is checked in i_ff3().
- *		QB1 = b1;	// output b1 to byte on registered channel
- *		QW2 = w2;	// output w2 to word on registered channel
- *		QL4 = l4;	// output l4 to word on registered channel
- *	b1, w2  or l4 can be used as arithmetic values (ftype is ARITH)
- *	and may be any logical or arithmetic function, including INPUT.
+ *	    QB1_0 <== QB1 = b1; // output b1 to byte on registered channel
+ *	    QW2_0 <== QW2 = w2; // output w2 to word on registered channel
+ *	    QL4_0 <== QL4 = l4; // output l4 to word on registered channel
+ *	QB1, QW2  or QL4 can be used as arithmetic values (ftype is ARITH)
+ *	b1, w2  or l4 are expressions or alias's (ftype is ARITH)
+ *	they may be any logical or arithmetic expression including INPUT.
  *
- *	An ftype OUTW node QXn is also acted on by all bit outputs QXn.m.
+ *	An ftype OUTW node QXx is also acted on by all bit outputs QXx.y
  *	These execute outMx(), which links its output directly to s_list.
  *	These extra nodes are generated at load time - not compiled.
  *
@@ -1139,10 +1112,10 @@ iC_outMw(					/* NEW OUTW master action */
 #else
     int			val;
 #endif
+#if YYDEBUG && !defined(_WINDOWS)
     int			mask;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     unsigned short	channel;
-    int			rest;
-    int			len = 0;
 
     if (out_list == iC_a_list) {
 	/* defer execution until s_list is scanned */
@@ -1170,59 +1143,28 @@ iC_outMw(					/* NEW OUTW master action */
 	 *******************************************************************/
 	assert(out_list == iC_s_list);
 	assert(gm->gt_new != gm->gt_old);
+	assert(gm->gt_mark & (W_MASK | X_MASK));
 
 	channel = gm->gt_channel;		/* set up during registration */
 	assert(channel > 0);			/* -1 is error, 0 is not registered */
-	mask = gm->gt_mark;
-	val = gm->gt_new;			/* modified value to send */
-	if (mask == B_WIDTH) {
-	    val = (signed char)val;		/* reduce to signed char - handles overflow */
-	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%hu:%hd,", channel, (short)val);/* signed char to output for QBx */
+	val = gm->gt_new;			/* modified value to output */
+
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%hd\t%hd ==>> %hd", channel, (short)val, (short)(signed char)gm->gt_old, (short)val);
-#endif
+	if ((mask = gm->gt_mark) & X_MASK) {	/* Gate that output bits are xferred to in iC_outMx */
+	    assert(!((int)val & ~X_MASK));
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t0x%02x ==>> 0x%02x", channel, (int)val, (int)gm->gt_old, (int)val);
 	} else
-	if (mask == W_WIDTH) {			/* output node that output are transferred to in  */
-	    val = (short)val;			/* reduce to signed short - handles overflow */
-	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%hu:%hd,", channel, (short)val);/* signed short to output for QWx */
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%hd\t%hd ==>> %hd", channel, (short)val, (short)gm->gt_old, (short)val);
-#endif
-#if INT_MAX != 32767 || defined (LONG16)
-	} else
-	if (mask == L_WIDTH) {
-#if INT_MAX == 32767
-	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%hu:%ld,", channel, (long)val);/* signed long to output for QLx */
-#if YYDEBUG && !defined(_WINDOWS)
+	if (mask & W_MASK) {
+#if	INT_MAX == 32767 && defined (LONG16)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==>> %ld", channel, val, gm->gt_old, val);
-#endif
-#else
-	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%hu:%d,", channel, val);	/* signed int to output for QLx */
-#if YYDEBUG && !defined(_WINDOWS)
+#else	/* INT_MAX == 32767 && defined (LONG16) */
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>> %d", channel, val, gm->gt_old, val);
-#endif
-#endif
-#endif
-	} else
-	if (mask & X_MASK) {			/* Gate that output bits are xferred to in iC_outMx */
-	    assert((unsigned)val <= 0xff);
-	    len = snprintf(&iC_outBuf[iC_outOffset], rest = REQUEST - iC_outOffset,
-		"%hu:%hu,", channel, (unsigned short)val);/* unsigned bit mask to output for QXx */
-#if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%u\t0x%02x ==>> 0x%02x", channel, (unsigned)val, (unsigned)gm->gt_old, (unsigned)val);
-#endif
-#ifndef _WINDOWS
-	} else {
-	    val = 0;				/* error - no output */
-#endif
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
 	}
-	gm->gt_old = gm->gt_new;		/* update gt_old now - completed debug output */
-	iC_outOffset += len;
-	gm->gt_out = val;			/* save for updates on window scrolling */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+
+	gm->gt_old = gm->gt_out = val;		/* update gt_old now - gt_out for window scrolling */
+	iC_output(val, channel);		/* Output int/long data as a message to iCserver or directly */
 	iC_liveData(gm, val);			/* iClive only */
     }
 } /* iC_outMw */
@@ -1252,12 +1194,12 @@ iC_outMx(					/* NEW OUTX master action */
 	val |= mask;				/* set bit in byte Gate */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) putc('1', iC_outFP);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     } else {
 	val &= ~mask;				/* clear bit in byte gate */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) putc('0', iC_outFP);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
     assert(val != gs->gt_new);			/* should only fire when there is a change */
     gs->gt_new = val;
@@ -1333,7 +1275,7 @@ iC_outMw(					/* OLD OUTW master action */
 	    iC_QX_[slot] = val;			/* output byte to slot */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val & 0xff);	/* byte */
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	} else if (mask == W_WIDTH) {
 #ifndef _WINDOWS
 	    val &= 0xffff;			/* for display only */
@@ -1342,20 +1284,20 @@ iC_outMw(					/* OLD OUTW master action */
 	    *(short*)&iC_QX_[slot] = val;	/* output word to slot and slot+1 */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hd", (short)val);	/* word */
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #if INT_MAX != 32767 || defined (LONG16)
 	} else if (mask == L_WIDTH) {
 	    assert((slot & 0x03) == 0);		/* 4 byte I/O long address */
 #if INT_MAX == 32767
 	    *(long*)&iC_QX_[slot] = val;	/* output long from slot to slot+3 */
-#if YYDEBUG && !defined(_WINDOWS)
+	#if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%ld", val);	/* long */
-#endif
+	#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else
 	    *(int*)&iC_QX_[slot] = val;		/* output long from slot to slot+3 */
-#if YYDEBUG && !defined(_WINDOWS)
+	#if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%d", val);	/* long */
-#endif
+	#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
 #endif
 #ifndef _WINDOWS
@@ -1410,12 +1352,12 @@ iC_outMx(					/* OLD OUTX master action */
 	iC_QX_[slot] |= mask;			/* set bit at slot,mask */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) putc('1', iC_outFP);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     } else {
 	iC_QX_[slot] &= ~mask;			/* clear bit at slot,mask */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) putc('0', iC_outFP);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
     iC_QM_[cage] |= iC_bitMask[slot & 0x7];	/* mark the cage */
     iC_QMM |= iC_bitMask[cage & 0x7];		/* mark the rack */
@@ -1435,7 +1377,7 @@ iC_fMfn(					/* CLCK TIMR master action */
 {
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gm, gm->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if ( gm->gt_val < 0 || gm->gt_next) {
 	iC_link_ol(gm, gm->gt_clk);		/* master action */
     }
@@ -1476,7 +1418,7 @@ iC_clockSfn(					/* Clock function */
     Gate *	gs;
 #if YYDEBUG && !defined(_WINDOWS) || defined(DEQ)
     Gate *	tp;
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifdef DEQ
     Gate *	np;
 #endif
@@ -1490,11 +1432,11 @@ iC_clockSfn(					/* Clock function */
     if (iC_debug & 0100) {
 	fprintf(iC_outFP, "\t-1\t%s C:", gs->gt_ids);
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     gs->gt_val = -1;				/* set for visualization only */
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gs, 1);				/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if (gs->gt_next != gs) {			/* skip if this clock list empty */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
@@ -1507,12 +1449,12 @@ iC_clockSfn(					/* Clock function */
 		fprintf(iC_outFP, "\t%s", tp->gt_ids);
 	    }
 	}
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifndef DEQ
 	iC_c_list->gt_ptr->gt_next = gs->gt_next;
 	iC_c_list->gt_ptr = gs->gt_ptr; 	/* link gs */
 	iC_c_list->gt_ptr->gt_next = iC_c_list;	/* to c_list */
-#else
+#else	/* DEQ */
 	/* link chain of Gates on clock list gs to end of c_list */
 	tp = iC_c_list->gt_prev;		/* save c_list.previous */
 	tp->gt_next = np = gs->gt_next;		/* c_list.last ==> new */
@@ -1520,7 +1462,7 @@ iC_clockSfn(					/* Clock function */
 	tp = gs->gt_prev;			/* save gs.previous */
 	tp->gt_next = iC_c_list;		/* gs.last ==> c_list */
 	iC_c_list->gt_prev = tp;		/* gs.last <== c_list */
-#endif
+#endif	/* DEQ */
 	Out_init(gs);				/* relink empty gs */
     }
 } /* iC_clockSfn */
@@ -1557,11 +1499,11 @@ iC_timerSfn(					/* Timer function */
     if (iC_debug & 0100) {
 	fprintf(iC_outFP, "\t-1\t%s T", gs->gt_ids);
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     gs->gt_val = -1;				/* set for visualization only */
 #if defined(TCP) || defined(LOAD)
     iC_liveData(gs, 1);				/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
     if ((np = gs->gt_next) != gs) {		/* skip if this clock list empty */
 	np->gt_mark--;				/* count down first entry */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -1569,7 +1511,7 @@ iC_timerSfn(					/* Timer function */
 	    iC_dc = 1;				/* allow for (time) */
 	    fprintf(iC_outFP, "!(%d)\t%s", np->gt_mark, np->gt_ids);
 	}
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	if (np->gt_mark == 0) {
 #ifdef DEQ
 	    /* DEQ link head of timer chain gs to end of c_list */
@@ -1588,7 +1530,7 @@ iC_timerSfn(					/* Timer function */
 			fprintf(iC_outFP, "\n\t");
 		    }
 		    fprintf(iC_outFP, "\t!(%d)\t%s", np->gt_mark, np->gt_ids);
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		}
 	    } while (np->gt_mark == 0);		/* unlink sequence of 0 time entries */
 #ifndef DEQ
@@ -1599,14 +1541,14 @@ iC_timerSfn(					/* Timer function */
 	    if (np == gs) {			/* last entry ? */
 		gs->gt_ptr = np;		/* yes - fix timer last */
 	    }
-#else
+#else	/* DEQ */
 	    /* DEQ link tail of timer chain which is due to c_list */
 	    tp->gt_next = iC_c_list;		/* gs.last ==> c_list */
 	    iC_c_list->gt_prev = tp;		/* gs.last <== c_list */
 	    /* the re-linking of gs works correctly also if np == gs */
 	    gs->gt_next = np;			/* gs ==> new new */
 	    np->gt_prev = gs;			/* gs <== new new */
-#endif
+#endif	/* DEQ */
 	}
     }
 } /* iC_timerSfn */
@@ -1662,7 +1604,7 @@ static char *	ppiS[] = {
     "++",
     "--",
 };
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 #if INT_MAX == 32767 && defined (LONG16)
 long
@@ -1670,14 +1612,14 @@ iC_assignA(Gate * glv, int ppi, long rv) {	/* } */
     long nv;
 #if YYDEBUG && !defined(_WINDOWS)
     long iv = rv;
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else
 int
 iC_assignA(Gate * glv, int ppi, int rv) {
     int nv;
 #if YYDEBUG && !defined(_WINDOWS)
     int iv = rv;
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
     if (glv == &iConst) return 0;		/* index out of range */
     assert(glv->gt_ini == -ARNC);
@@ -1750,11 +1692,11 @@ iC_assignA(Gate * glv, int ppi, int rv) {
 	}
 #endif
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     if (nv != glv->gt_new) {
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(glv, nv);			/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	if (glv->gt_new == glv->gt_old ||	/* first arithmetic change */
 	    nv == glv->gt_old) {		/* or glitch to old value */
 	    iC_link_ol(glv, iC_a_list);
@@ -1767,7 +1709,7 @@ iC_assignA(Gate * glv, int ppi, int rv) {
 #else
     if (iC_debug & 0100) fprintf(iC_outFP, " %d\n", nv);
 #endif
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     return rv;
 } /* iC_assignA */
 
@@ -1800,14 +1742,14 @@ iC_assignL(Gate * glv, int ppi, long rv) {	/* } */
     long nv;
 #if YYDEBUG && !defined(_WINDOWS)
     long iv = rv;
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else
 int
 iC_assignL(Gate * glv, int ppi, int rv) {
     int nv;
 #if YYDEBUG && !defined(_WINDOWS)
     int iv = rv;
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
     signed char val;
     if (glv == &iConst) return 0;		/* index out of range */
@@ -1876,19 +1818,19 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 	    fprintf(iC_outFP, "\tLA %+d   %s%s >", glv->gt_val, glv->gt_ids, ppiS[ppi]);
 	}
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     if (glv->gt_val != val) {
 	glv->gt_val = val;
 #if defined(TCP) || defined(LOAD)
 	iC_liveData(glv, nv ? 1 : 0);	/* VCD and/or iClive */
-#endif
+#endif /* defined(TCP) || defined(LOAD) */
 	iC_link_ol(glv, iC_o_list);	/* logic change or glitch */
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
 	fprintf(iC_outFP, " %+d\n", val);
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     return rv != 0;			/* change to logic value 0 or 1 */
 } /* iC_assignL */
 

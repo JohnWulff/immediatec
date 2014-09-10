@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.24 2013/09/12 03:10:23 jw Exp $
+#   $Id: README.tpl,v 1.25 2014/09/10 05:37:06 jw Exp $
 ########################################################################
 
 use strict;
@@ -332,8 +332,8 @@ print <<EOF;
     John E. Wulff   $YEAR.$MONTH.$DAY     <immediateC\@gmail.com>
 
 
-    Main development is on openSUSE (currently 11.4) and perlTk Tk804.29, which
-    provides fast live updates in iClive again. They seem to be as fast as with
+    Main development is on openSUSE (currently 13.1) and perlTk Tk804.031,
+    which provides fast live updates in iClive. They seem to be as fast as with
     Tk800.24. A Test with Knoppix and Tk804.25, which is still available for
     Debian also provided good performance with fast live updates in iClive.
 
@@ -344,5 +344,8 @@ print <<EOF;
     package had to be installed with sudo apt-get install: perl-tk. The following
     packages are optional but useful: bison, flex, gtkwave, rcs and vim. (2 weeks
     with an old vi was punishment enough). After that all tests passed.
+    
+    During 2014 I wrote drivers for direct I/O for the PiFace and PiFaceCAD
+    digital interfaces for the RaspberryPi - see man page for iCpiFace.
 EOF
 ########################################################################

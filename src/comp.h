@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.64 2013/07/22 08:45:26 jw Exp $";
+"@(#)$Id: comp.h,v 1.65 2014/01/22 05:33:35 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -373,7 +373,7 @@ extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 
 					/*   lexc.l   */
-extern int	c_leng;
+extern size_t	c_leng;			/* defined in lexc.c */
 extern int	column;
 extern int	gramOffset;		/* count input in lex */
 extern void	delete_sym(Token* tokp);

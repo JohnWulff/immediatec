@@ -13,7 +13,7 @@
  * Generate the pre-compiled functions for including permanently in
  * init.c from the iC source file init_t.ic
  *
- * This scheme only works for for simple functions with one level of
+ * This scheme only works for simple functions with one level of
  * master gates for each input and individual clocks for each input if
  * the builtin function is clocked (all except FORCE() are clocked)
  *
@@ -31,7 +31,7 @@
  *	# that this generated code produces the right results - now
  *	# the automatic generator can be used to vary the built-ins)
  *
- * $Id: init_t.ic,v 1.2 2013/08/16 01:22:32 jw Exp $
+ * $Id: init_t.ic,v 1.3 2014/01/23 00:26:21 jw Exp $
  *******************************************************************/
 
 use strict;

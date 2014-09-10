@@ -15,7 +15,7 @@
 #   Generate the pre-compiled functions for including permanently in
 #   init.c from the iC source file init_t.ic
 #
-#   This scheme only works for for simple functions with one level of
+#   This scheme only works for simple functions with one level of
 #   master gates for each input and individual clocks for each input if
 #   the builtin function is clocked (all except FORCE() are clocked)
 #
@@ -33,7 +33,7 @@
 #	# that this generated code produces the right results - now
 #	# the automatic generator can be used to vary the built-ins)
 #
-# $Id: init_t.pl,v 1.2 2013/08/16 01:20:06 jw Exp $
+# $Id: init_t.pl,v 1.3 2014/01/23 00:16:42 jw Exp $
 ########################################################################
 
 use strict;
@@ -66,11 +66,11 @@ while (<>) {
     if (/^static List_e\s+l\[\] = {$/) {
 	$save = 1;
     }
-    if (/^#endif	\/\* BOOT_COMPILE \*\/$/) {
+    if (@block and /^#e\w+	\/\* BOOT_COMPILE \*\/$/) {
 	foreach $line (@block) {
 	    print $line;
 	}
-	print "\n";
+	@block = ();
     }
     foreach $key (sort keys %xlate) {
 	s/\b$key(2)?(a_[1-3])?\b/$xlate{$key}$1$2/g;
@@ -80,7 +80,7 @@ while (<>) {
     } else {
 	print;
     }
-    if ($save and /^};$/) {
+    if ($save and /^};/) {
 	$save = 0;
     }
 }

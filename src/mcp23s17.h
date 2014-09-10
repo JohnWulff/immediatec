@@ -16,18 +16,10 @@
 #ifndef MCP23S17_H
 #define MCP23S17_H
 static const char mcp23s17_h[] =
-"$Id: mcp23s17.h,v 1.1 2014/04/19 03:46:11 pi Exp $";
+"$Id: mcp23s17.h,v 1.2 2014/05/05 00:07:13 jw Exp $";
 
 #include	<stdio.h>
 #include	<stdint.h>
-//#include	<stdlib.h>
-//#include	<unistd.h>
-//#include	<signal.h>
-//#include	<assert.h>
-//#include	<errno.h>
-//#include	<sys/ioctl.h>
-//#include	<fcntl.h>
-//#include	<string.h>
 #include	<linux/spi/spidev.h>
 
 #define BUFSZ		32
@@ -57,6 +49,7 @@ static const char mcp23s17_h[] =
 #define	INTCAPB		0x11
 #define	GPIOB		0x13
 #define	OLATB		0x15
+#define MCP_MAX		0x16
 
 // Bits in the IOCON register
 
@@ -78,9 +71,16 @@ extern FILE *		iC_outFP;			/* listing file pointer */
 extern FILE *		iC_errFP;			/* error file pointer */
 extern short		iC_debug;
 
+extern int	id;		/* used to indent traces if (iC_debug & 04) */
+extern char	sp[];
+
+extern uint8_t	readData[8][MCP_MAX];
+
 extern int		setupSPI(int pfce);
-extern int		setupMCP23S17(int spiFd, int pfa, int odr, int inten);
+extern int		setupMCP23S17(int spiFd, int pfa, int odr, int inten, uint8_t intf);
 extern void		writeByte(int spiFd, int pfa, uint8_t reg, uint8_t data);
 extern uint8_t		readByte(int spiFd, int pfa, uint8_t reg);
+extern void		writeBit(int spiFd, int pfa, uint8_t reg, uint8_t bit, uint8_t data);
+extern uint8_t		readBit(int spiFd, int pfa, uint8_t reg, uint8_t bit);
 
 #endif	/* MCP23S17_H */

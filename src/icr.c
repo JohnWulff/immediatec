@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.42 2013/05/12 08:09:09 jw Exp $";
+"@(#)$Id: icr.c,v 1.43 2014/06/19 08:01:53 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -24,14 +24,14 @@ static const char icr_c[] =
 #ifdef	_MSDOS_
 #include	<dos.h>
 #include	<conio.h>
-#else	/* Linux */
+#else	/* ! _MSDOS_ Linux */
 #define getch() getchar()
 #define ungetch(x) ungetc(x, stdin)
 #include	<sys/types.h>
 #include	<sys/time.h>
 #include	<termios.h>
 #include	<unistd.h>
-#endif	/* Linux */
+#endif	/* ! _MSDOS_ Linux */
 #include	<signal.h>
 #include	<ctype.h>
 #include	"icc.h"
@@ -51,26 +51,19 @@ static const char icr_c[] =
 #define	MAX_IO	8
 #define	DIS_MAX	5			/* diplay heading after this many */
 
-#ifndef SIGRTMAX
-#define SIGRTMAX	32		/* for non-POSIX systems (Win32) */
-#endif
-#define QUIT_TERMINAL	(SIGRTMAX+3)
-
 static unsigned	time_cnt;		/* count time in ticks */
 static short	flag1C;
 
 #ifdef	_MSDOS_
 #ifdef	MSC
-void (interrupt far *oldhandler)();
 void interrupt far handler1C(void);
 #else	/* MSC */
-void interrupt (*oldhandler)(void);
 void interrupt handler1C(void);
 #endif	/* MSC */
 #define D10	3			/* 1/3 second interrupts under MSDOS */
 #define ENTER	'\r'
 
-#else	/* Linux */
+#else	/* ! _MSDOS_ Linux */
 
 #define D10	10			/* 1/10 second select timeout under Linux */
 #define ENTER	'\n'
@@ -80,9 +73,6 @@ static int	maxfd;			/* Highest fd in selectinfds */
 struct timeval	iC_timeOut = { 0, 50000 };	/* 50 mS select timeout - may be modified in iCbegin() */
 static struct timeval	toCnt =   { 0, 50000 };	/* actual timeout counter that select uses */
 static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl pointer */
-
-static int		ttyparmFlag = 0;
-static struct termios	ttyparms;
 static struct termios	ttyparmh;
 
 # define max(x, y) ((x) > (y) ? (x) : (y))
@@ -112,7 +102,7 @@ kbhit(void)
     }
     return stat;			/* can only be 0 or 1 */
 } /* kbhit */
-#endif	/* Linux */
+#endif	/* ! _MSDOS_ Linux */
 
 static iC_Functp * iC_i_lists[] = { I_LISTS };
 
@@ -180,6 +170,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     char *	yp;
 
     iC_initIO();			/* catch memory access signal */
+#ifdef	_MSDOS_
+    oldhandler = NULL;
+#endif	/* _MSDOS_ */
 
     if (iC_outFP && iC_outFP != stdout) {
 	fclose(iC_outFP);
@@ -211,13 +204,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #else	/* MSC */
     oldhandler = getvect(INTR);		/* save the old interrupt vector */
 #endif	/* MSC */
-#else	/* Linux */
+#else	/* ! _MSDOS_ Linux */
     /* Setup fd sets */
     FD_ZERO (&selectinfds);
     maxfd = 0;
     FD_SET (fileno (stdin), &selectinfds);
     maxfd = max(maxfd, (int)fileno(stdin));
-#endif	/* Linux */
+#endif	/* ! _MSDOS_ Linux */
 
 /********************************************************************
  *
@@ -790,85 +783,6 @@ void interrupt handler1C(void)
     oldhandler();
 } /* handler1C */
 #endif	/* _MSDOS_ */
-
-/********************************************************************
- *
- *	Initialize IO
- *
- *******************************************************************/
-
-void iC_initIO(void)
-{
-    signal(SIGSEGV, iC_quit);			/* catch memory access signal */
-#ifdef	_MSDOS_
-    oldhandler = NULL;
-#endif	/* _MSDOS_ */
-}
-
-/********************************************************************
- *
- *	Quit program with 'q' or ctrlC or Break via signal SIGINT
- *	or program abort on detected bugs.
- *
- *******************************************************************/
-
-void iC_quit(int sig)
-{
-    /********************************************************************
-     *  The following termination function is an empty function
-     *  in the libict.a support library.
-     *		int iCend(void) { return 0; }
-     *  It may be implemented in a literal block of an iC source, in
-     *  which case that function will be linked in preference.
-     *  User implementations of iCend() should return 1, to activate
-     *  the debug message "iend complete ======".
-     *
-     *  It can be used to free allocated memory, etc.
-     *
-     *  If the iCbegin() function contains a fork() call, iCend() may have
-     *  a matching wait() call.
-     *******************************************************************/
-    if ((sig >= QUIT_TERMINAL || sig == SIGINT) &&
-	iCend()) {				/* termination function */
-#if	YYDEBUG
-	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\niCend complete ======\n");
-	}
-#endif	/* YYDEBUG */
-    }
-    if (sig == QUIT_TERMINAL) {
-	fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_progname);
-    } else if (sig == SIGINT) {
-	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_progname);
-    } else if (sig == SIGSEGV) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_progname);
-    } else if (sig == SIGUSR1) {
-	fprintf(iC_errFP, "\n'%s' stopped by 'non-recoverable run-time error'\n", iC_progname);
-    }
-    if (iC_outFP != stdout) {
-	fflush(iC_outFP);
-	fclose(iC_outFP);
-    }
-#ifdef	_MSDOS_
-    if (oldhandler && iC_debug & 03000) {
-	/* reset the old interrupt handler */
-#ifdef	MSC
-	_dos_setvect(INTR, oldhandler);
-#else	/* MSC */
-	setvect(INTR, oldhandler);
-#endif	/* MSC */
-    }
-#else	/* Linux */
-    if (ttyparmFlag) {
-	if (tcsetattr(0, TCSAFLUSH, &ttyparms) == -1) exit(-1);
-    }
-#endif	/* Linux */
-    if (iC_errFP != stderr) {
-	fflush(iC_errFP);
-	fclose(iC_errFP);
-    }
-    exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
-} /* iC_quit */
 
 /********************************************************************
  *

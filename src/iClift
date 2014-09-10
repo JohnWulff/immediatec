@@ -35,9 +35,9 @@ $| = 1;			# autoflush STDOUT when outputting to a pipe or a file which is looked
 my @ArgNames;		# stores IO names and initialisers as generated from lifts and floors
 my @ChannelNames;	# stores IO names with instance for each registered channel
 my @ChannelsQ;		# stores received value for all Q[XBWL]n outputs
-my @ChannelsQX;		# stores computed bit value for all QXn.<0..7> outputs
+my @ChannelsQX;		# stores computed bit value for all QXx.<0..7> outputs
 my @ChannelsI;		# stores computed or selected value for all I[XBWL]n inputs
-my @ChannelsIX;		# stores selected bit values for all IXn.<0..7> inputs
+my @ChannelsIX;		# stores selected bit values for all IXx.<0..7> inputs
 my %IONames;		# stores channel for each IO name (aux use in initial pass)
 my $UnitRegistrations;	# stores the registration string
 my $testCount   = 0;	# count test runs initiated by -C option
@@ -177,7 +177,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.11 2013/06/06 06:04:39 jw Exp $ uses Tk-@<<<<<<
+$Id: iClift,v 1.12 2014/06/14 11:44:27 jw Exp $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -277,34 +277,34 @@ print "lifts = $lifts, floors = $floors: @floorNames\n" if $opt_t;
 ##   or  key	"usage:$lift:$floor"	where $floor is every 8th floor
 ##	 val	IECid			for that usage lift nr and floor group
 #
-## %IecC key	QXy[,0b111...]		IECid of a received output with optional bit field
+## %IecC key	QXx[,0b111...]		IECid of a received output with optional bit field
 ##	 val	[ "comment string" ]	Comment string to be output with -B ID_file for IECid
 #
-#	&iCmd initalises specific command arrays in %Cmd for QXy.x outputs from the controller
+#	&iCmd initalises specific command arrays in %Cmd for QXx.y outputs from the controller
 #	which require an action routine. &iCmd cannot be called until after all walls and doors have
 #	been drawn and all I/Os generated in @Args have been registered, because &iCmd uses the
-#	QXy.x channel nummer in the specific command.
+#	QXx.y channel nummer in the specific command.
 #	Therefore all lifts and floors are looped through here to generate @Args, %Iec, %IecC and %But.
 #	After registration an identical set of loops calls &iCmd to initialise %Cmd correctly.
 #
-## &iCmd(USE, QXy, lift [floor])	initialises %Cmd for each bit QXy.0 .. QXy.7 from %Cmds
+## &iCmd(USE, QXx, lift [floor])	initialises %Cmd for each bit QXx.0 .. QXx.7 from %Cmds
 #
 ## %Cmds key	"USE.bit:val"		detailed call for each USE, bit and val 1 or 0
 ##  or	 key	"USE:val"		for outside doors, where bit is derived from floor
 ##	 val	( '\call, arg1, ...' )	generic command string with arguments supplied by &iCmd
 #
-## %Cmd  key	chR.x:val		IECid of a received output which triggers a command
+## %Cmd  key	chR.y:val		IECid of a received output which triggers a command
 ##	 val	[ \call, arg1, ... ]	specific command call with arguments derived from &iCmd
 #
 #	This application uses regular Tk buttons or buttons with own graphics in an unusual way.
 #	Normal Tk buttons are switched on and off from the graphics Perl/Tk program. Using one
-#	bit in a Send channel influencing IXy.x in the control application.
-#	The special transient buttons use two bit signals. IXy.x to Send the button press 'on'
-#	information. QXy.x (where y and x match IXy.x) is used by the controller to reset the
+#	bit in a Send channel influencing IXx.y in the control application.
+#	The special transient buttons use two bit signals. IXx.y to Send the button press 'on'
+#	information. QXx.y (where y and x match IXx.y) is used by the controller to reset the
 #	button in the graphics when a short 1 followed by a 0 is sent. Not only does the colour
 #	of the corresponding button change to 'off'. The Tk program also sends a '0' back to
-#	the controller on IXy.x to indicate that the button is now off. This transition can be
-#	used at the controller to turn the reset signal on QXy.x to '0'. That way a round trip
+#	the controller on IXx.y to indicate that the button is now off. This transition can be
+#	used at the controller to turn the reset signal on QXx.y to '0'. That way a round trip
 #	feedback is ensured, because short transients on a send line can get lost.
 #	Transient buttons can be reset in the regular way before a reset is sent from the
 #	controller - but it is not the way those buttons are supposed to be used. Control
@@ -312,9 +312,9 @@ print "lifts = $lifts, floors = $floors: @floorNames\n" if $opt_t;
 #	may select a floor. Before reaching that floor, the user may change his mind and deselect
 #	that floor and select another floor. (This is a mode I have always wished for in lifts).
 #
-## %But  key	QXy-i	 		IECid with instance of a received output from controller
-##	 val	bit_field		marks every bit x in this QXy.x, which is a Button reset
-##  or   key	IXy-i.x			IECid with instance of a sent input which is an own Button
+## %But  key	QXx-i	 		IECid with instance of a received output from controller
+##	 val	bit_field		marks every bit x in this QXx.y, which is a Button reset
+##  or   key	IXx-i.y			IECid with instance of a sent input which is an own Button
 ##	 val	button_id		button which needs colour change when reset received
 #
 ########################################################################
@@ -387,12 +387,12 @@ my @Fc = ( 0, 0b1, 0b11, 0b111, 0b1111, 0b11111, 0b111111, 0b1111111, 0b11111111
 my @Args = ();			# fill dynamically
 my %Iec = ();			# IEC with key: USE:$lift[:$floor]
 my %IecC = ();			# IEC comment with key: IEC[,0b11111111]
-my %But = ();			# true id QXy resets a button, IXy.x wall button
+my %But = ();			# true id QXx resets a button, IXx.y wall button
 my $iec;
 my $ii = 0;			# IOindex - start with IB0
 
 ########################################################################
-#	Inialise @Args, %Iec, %IecC and %But{QXy}.
+#	Inialise @Args, %Iec, %IecC and %But{QXx}.
 ########################################################################
 
 for ($lift = 0; $lift < $lifts; $lift++) {
@@ -814,7 +814,7 @@ $c->configure(-scrollregion => [$c->bbox("all")]);	# define scroll region when c
 
 ########################################################################
 #	Clear all inputs in iClift and the controller.
-#	Initialise %But{IXy.x} for clearing wall buttons
+#	Initialise %But{IXx.y} for clearing wall buttons
 #	Finalise initialisation of %Cmds, which needs cages and doors drawn
 #	and channel numbers for all I/Os registered from @Args.
 ########################################################################
@@ -1797,9 +1797,9 @@ sub send_data {
     my ($iec, $chS, $val);
     if (defined $floor and $floor >= 0) {
 	$floor &= ~0x7;			# select floor group
-	$iec = $Iec{"$use:$lift:$floor"};	# IEC name of floor IXy.x bits
+	$iec = $Iec{"$use:$lift:$floor"};	# IEC name of floor IXx.y bits
     } else {
-	$iec = $Iec{"$use:$lift"};		# IEC name of misc IXy.x bits or IBy word
+	$iec = $Iec{"$use:$lift"};		# IEC name of misc IXx.y bits or IBy word
     }
     $chS = $IONames{"S$iec"};
     $val = $ChannelsI[$chS];
@@ -1875,7 +1875,7 @@ sub rcvd_msg_from_server {
 			    my ($diff, $mask, $bit);
 			    goto WrongFormat if $value > 0xff;	# only 8 bit map allowed
 			    if ($butMask = $But{$id}) {
-				$id =~ s/^Q/I/;		# all %But ids are with QXy - matching IXy
+				$id =~ s/^Q/I/;		# all %But ids are with QXx - matching IXx
 				$chS = $IONames{"S$id"};
 				$bitSef = $ChannelsIX[$chS];
 			    }
@@ -1884,12 +1884,12 @@ sub rcvd_msg_from_server {
 				$mask = $diff & -$diff;	# rightmost set bit from diff
 				$bit = $bitIndex[$mask];
 				if ($value & $mask) {
-				    ${$bitRef}[$bit] = $val = 1;	# set variable for normal QXy.bit
+				    ${$bitRef}[$bit] = $val = 1;	# set variable for normal QXx.bit
 				    if ($bitSef and $butMask & $mask and ${$bitSef}[$bit]) {
 					########################################################################
 					# process reset for a transient button on Q output 1
 					########################################################################
-					${$bitSef}[$bit] = 0;		# reset input bit IXy.bit
+					${$bitSef}[$bit] = 0;		# reset input bit IXx.bit
 					$wordSef = $ChannelsI[$chS] unless defined $wordSef;	# a bit has changed in $Channels[$chs]
 					$wordSef &= ~$mask;		# clear input variable for send
 					if ($button = $But{"$id.$bit"}) {
@@ -1898,7 +1898,7 @@ sub rcvd_msg_from_server {
 					}
 				    }
 				} else {
-				    ${$bitRef}[$bit] = $val = 0;	# reset variable for normal QXy.bit
+				    ${$bitRef}[$bit] = $val = 0;	# reset variable for normal QXx.bit
 				}
 				if ($cmdFlag and $RAcmd = $Cmd{"$channel.$bit:$val"}) {
 				    ########################################################################
@@ -1907,7 +1907,7 @@ sub rcvd_msg_from_server {
 no warnings;
 				    print "rcv: '$id.$bit:$val' &(@$RAcmd)\n" if $opt_t;	# RAcmd may contain undef
 use warnings;
-				    $RAcmd->[0]->(@$RAcmd[1..$#{$RAcmd}]);	# execute command linked to QXy.bit:val
+				    $RAcmd->[0]->(@$RAcmd[1..$#{$RAcmd}]);	# execute command linked to QXx.bit:val
 				}
 				$diff &= ~$mask;	# modify viewable output - clear rightmost bit
 			    }
@@ -1942,7 +1942,7 @@ use warnings;
 			## when this array element is defined, it is a Q[XBWL] receiver
 			if ($1 eq 'X') {
 			    @{$ChannelsQX[$channel]}[0..7] = (0,0,0,0,0,0,0,0);
-			    ## when this array slice is defined, channel is a QXn.m
+			    ## when this array slice is defined, channel is a QXx.y
 			    ## Q[BWL]n have this slice undefined for their channel
 			}
 		    }
@@ -1960,7 +1960,7 @@ use warnings;
 			for my $index (0 .. 7) {
 			    $ChannelsIX[$channel][$index] = ($ini & $masks[$index]) ? 1 : 0;
 			}
-			## when this array slice is defined, channel is a IXn.m
+			## when this array slice is defined, channel is a IXx.y
 			## I[BWL]n have this slice undefined for their channel
 		    }
 		}
@@ -1981,16 +1981,16 @@ use warnings;
 
 ########################################################################
 #
-#	Initialise Command Hash indexed by received IEC codes QXy.x for use in
+#	Initialise Command Hash indexed by received IEC codes QXx.y for use in
 #	rcvd_msg_from_server to call commands
 #
-## &iCmd(USE, QXy, lift [floor])	initialises %Cmd for each bit QXy.0 .. QXy.7 from %Cmds
+## &iCmd(USE, QXx, lift [floor])	initialises %Cmd for each bit QXx.0 .. QXx.7 from %Cmds
 #
 ## %Cmds key	"USE.bit:val"		detailed call for each USE, bit and val 1 or 0
 ##  or	 key	"USE:val"		for outside doors, where bit is derived from floor
 ##	 val	( '\call, arg1, ...' )	generic command call with arguments derived from &iCmd
 #
-## %Cmd  key	chR.x:val		IECid of a received output which triggers a command
+## %Cmd  key	chR.y:val		IECid of a received output which triggers a command
 ##	 val	[ \call, arg1, ... ]	specific command call with arguments derived from &iCmd
 #
 ########################################################################

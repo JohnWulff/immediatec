@@ -40,6 +40,7 @@ usage ()
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-M	make lmain only' >&2
+    echo '	-P	make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	see usage of immcc, icr, ict and applications for options' >&2
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
@@ -56,12 +57,12 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.36 2013/09/03 20:25:20 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.37 2014/07/27 06:13:55 jw Exp $' >&2
 }
 
 makeLib ()
 {
-    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O Make_tmp 2> /dev/null
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O link.$O rsff.$O scan.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O bcm2835.$O Make_tmp 2> /dev/null
     if [ -d LibObjs ]; then
 	mv LibObjs/* .
     else
@@ -69,12 +70,18 @@ makeLib ()
     fi
     make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" libict.a
     mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O LibObjs
+    if [[ "$o" =~ " -DRASPBERRYPI" ]]; then
+	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O LibObjs
+	if [[ "$o" =~ " -DBCM2835" ]]; then
+	    mv bcm2835.$O LibObjs
+	fi
+    fi
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeShared ()
 {
-    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O Make_tmp 2> /dev/null
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O bcm2835.$O Make_tmp 2> /dev/null
     if [ -d SharedObjs ]; then
 	mv SharedObjs/* .
     else
@@ -82,6 +89,12 @@ makeShared ()
     fi
     make OPT="-fPIC -DLOAD -DTCP$d$e$o$s$y" CFLAGS="-O2$W" libict.so
     mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O SharedObjs
+    if [[ "$o" =~ " -DRASPBERRYPI" ]]; then
+	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O SharedObjs
+	if [[ "$o" =~ " -DBCM2835" ]]; then
+	    mv bcm2835.$O SharedObjs
+	fi
+    fi
     mv Make_tmp/* . 2> /dev/null
 }
 
@@ -124,6 +137,29 @@ makeLmain ()
     mv Make_tmp/* . 2> /dev/null
 }
 
+makePiFace ()
+{
+    if [ -x /bin/uname ]; then
+	cpu=`/bin/uname -m`
+	case $cpu in
+	    armv6l) ;;
+	    *) echo "Error makeAll -P: cannot make iCpiFace for a '$cpu' cpu - only for a 'armv6l' on a Raspberry Pi"; exit 1;;
+	esac
+    fi
+    mv misc.$O icend.$O tcpc.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O bcm2835.$O Make_tmp 2> /dev/null
+    if [ -d PiFaceObjs ]; then
+	mv PiFaceObjs/* .
+    else
+	mkdir PiFaceObjs
+    fi
+    make OPT="-DRASPBERRYPI -DTCP -DYYDEBUG$o" CFLAGS="$cflags" LDFLAGS="$ldflags" iCpiFace
+    mv misc.$O icend.$O tcpc.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O PiFaceObjs
+    if [[ "$o" =~ " -DBCM2835" ]]; then
+	mv bcm2835.$O PiFaceObjs
+    fi
+    mv Make_tmp/* . 2> /dev/null
+}
+
 q=""
 c=""
 l=""
@@ -140,6 +176,7 @@ L=0
 R=0
 T=0
 M=0
+P=0
 IM_LIB=1
 cflags="-O2"			# optimisation, no debugging info
 ldflags=""			# no profiling
@@ -150,7 +187,7 @@ z=0
 YN=0
 Y=""
 
-while getopts ":qgpclrtmCLRTMudeD:W:syo:zh" opt; do
+while getopts ":qgpclrtmCLRTMPudeD:W:syo:zh" opt; do
     case $opt in
     q )	q="q";;		# echo only - dont kill
     g )	cflags="-g";;	# debugging, no optimisation
@@ -165,11 +202,12 @@ while getopts ":qgpclrtmCLRTMudeD:W:syo:zh" opt; do
     R )	R=1; IM_LIB=0;;
     T )	T=1; IM_LIB=0;;
     M )	M=1; IM_LIB=0;;
+    P )	P=1; IM_LIB=0;;
     u )	u=" -DSYUNION";;
     d )	d=" -DDEQ";;
     e )	e=" -DEFENCE";;
-    D ) o=" -D$OPTARG";;
-    W ) W=" -W$OPTARG";;
+    D ) o="$o -D$OPTARG";;
+    W ) W="$W -W$OPTARG";;
     s )	s=" -DINT_MAX=32767";;
     y )	y=" -DLONG16";;
     o ) O="$OPTARG";;
@@ -190,7 +228,7 @@ test -d Make_tmp || mkdir Make_tmp;
 if [ $YN -ne 0 ]; then
     Y=" -DYYDEBUG=$YN"
 fi
-if ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
+if [ $P -eq 0 ] && ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
     echo "Options changed to '$Y$u$d$e$o$s$y'"
     if [ $R -eq 0 ] && [ $T -eq 0 ]; then
 	echo "   make clean"
@@ -229,6 +267,11 @@ if [ $M = 1 ]; then
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
+if [ $P = 1 ]; then
+    echo "make OPT=\"-DRASPBERRYPI -DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiFace"
+    makePiFace  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
 rmdir Make_tmp
 exit 0
 
@@ -259,6 +302,7 @@ makeAll - supports Makefile in immediate-C develeopment
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -M      make lmain only
+    -P      make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only
     -D<OPT> make all targets with <OPT> defined
             see usage of immcc, icr, ict and applications for options
     -W<OPT> compile all C sources with -W<OPT> (useful for -Wall)
@@ -295,9 +339,12 @@ is via TCP/IP and iCserver.
 with gram.y and lexc.l. It test compiles C sources and generates debugging
 output and possibly error messages.
 
-'makeAll' keeps the directories 'LibObjs' 'SharedObjs' 'IcrObjs'
-'IctObjs' 'LmainObjs' to save object files which differ for the
-different targets.  Thus the following rules for 'make' are satisfied:
+'iCpiFace' is a real 8 bit input and 8 bit output client supporting one or
+more  PiFace controllers attached to a Raspberry Pi (Only useful for armv6l)
+
+'makeAll' keeps the directories 'LibObjs' 'SharedObjs' 'IcrObjs' 'IctObjs'
+'LmainObjs' 'PiFaceObjs' to save object files which differ for different
+targets.  Thus the following rules for 'make' are satisfied:
 
   to make immcc, make with OPT=''
   to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
@@ -305,6 +352,7 @@ different targets.  Thus the following rules for 'make' are satisfied:
   to make icr,        "     "    " and make with OPT='-DRUN -DYYDEBUG'
   to make ict,        "     "    " and make with OPT='-DTCP'
   to make lmain,      "     "    " and make with OPT='-DLMAIN -DYYDEBUG'
+  to make iCpiFace,   "     "    " and make with OPT='-DRASPBERRYPI -DTCP -DYYDEBUG'
 
     makeAll       # makes 'immcc' 'libict.a' and 'libict.so'
                   # without YYDEBUG support
@@ -312,7 +360,7 @@ different targets.  Thus the following rules for 'make' are satisfied:
 
 another useful call is:
 
-    makeAll -qgcrtlm;
+    makeAll -qgcrtlmP;
 
 which makes all quietly with debugging and YYDEBUG support
 

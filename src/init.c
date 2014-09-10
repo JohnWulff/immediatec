@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.40 2013/08/12 08:08:47 jw Exp $";
+"@(#)$Id: init.c,v 1.41 2014/05/10 00:46:31 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -75,15 +75,13 @@ init(void)
 	/* no name may occurr twice - otherwise install fails */
 	iconst = sp;	/* 'iconst' points to "iConst" when loop finishes */
 	sp = install(b[io].name, b[io].type, b[io].ftype);
-	if (b[io].type == KEYW) {		/* reserved word */
+	if ((lp = b[io].link1) == 0) {		/* reserved word */
 	    sp->u_val = b[io].uVal;		/* set u_val in Symbol just installed */
 	} else {
 	    sp->fm = b[io].uVal;		/* set fm in Symbol just installed */
 	    sp->list = b[io].list;		/* set list in Symbol just installed */
 	    sp->u_blist = b[io].blist;		/* set u_blist in Symbol just installed */
-	    if ((lp = b[io].link1) != 0) {
-		lp->le_sym = sp;		/* 1st back link to complete built-in net */
-	    }
+	    lp->le_sym = sp;			/* 1st back link to complete built-in net */
 	    if ((lp = b[io].link2) != 0) {
 		if (sp->type == IFUNCT) {
 		    tsp = lookup(((BuiltIn*)lp)->name);
@@ -154,9 +152,11 @@ init(void)
  *  The C keywords cause a syntax error if used as immediate variables.
  *  The erroneous line in the iC code is marked with a pointer to the
  *  offending keyword.
+ *
  *  Otherwise the C compiler would flag them with a syntax error message
  *  referring to the line number of the generated Gate in the C code
- *  produced by th iC compiler, which is harder to trace back to the source.
+ *  produced by the iC compiler, which is harder to trace back to the source.
+ *
  *  C keywords int if else extern return switch and void which are keywords
  *  in iC as well cause syntax errors also if used as immediate variables.
  *
@@ -215,9 +215,6 @@ imm bit DLATCH(bit set, bit res, clock clk) {\n\
 /* end iC system function definitions */\n\
 ";
 
-#ifdef BOOT_COMPILE
-Symbol		iC_CHANGE_ar = { "CHANGE", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */
-#else	/* BOOT_COMPILE */
 /********************************************************************
  * Pre-compiled built-in functions produced in functionDefinition()
  *
@@ -228,6 +225,7 @@ Symbol		iC_CHANGE_ar = { "CHANGE", KEYW, CH_AR, };	/* alternative arithmetic CHA
  * and any pre-compiled functions are left out of init.c.
  *******************************************************************/
 
+#ifndef BOOT_COMPILE
 static List_e	l[];
 
 static Symbol	Da_1       = { .type=OR , .ftype=D_FF  , .fm=0x01, .u_blist=&l[13] };
@@ -501,9 +499,11 @@ static List_e	l[] = {
 /* 202 */ { 0          ,  0, &l[203], "", "", },	/* ==>  TIMER12@clk */
 /* 203 */ { 0          ,  0, &l[204], "", "", },	/* ==>  TIMER12@trig2 */
 /* 204 */ { 0          ,  0, 0      , "", "", },	/* ==>  TIMER12@clk2 */
-};
-
+}; /* l[] */
+#else	/* BOOT_COMPILE */
+Symbol		iC_CHANGE_ar = { "CHANGE", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */
 #endif	/* BOOT_COMPILE */
+
 /********************************************************************
  *
  *	Initialise Symbol table with all reserved words for iC and C
@@ -624,75 +624,75 @@ static BuiltIn b[] = {
   { "TIMER12@clk",   CLK,   CLCKL, 0x81, 0      , 0      , &l[197], &l[202], },
   { "TIMER12@trig2", OR,    GATE,  0x81, 0      , 0      , &l[200], &l[203], },
   { "TIMER12@clk2",  CLK,   CLCKL, 0x81, 0      , 0      , &l[199], &l[204], },
-									   /* 97 pre-installed BuiltIn function Symbols */
-#else	/* not BOOT_COMPILE */
-    /* name	type	ftype	uVal	*/
-  { "FORCE",	KEYW,	0,	BFORCE,	0,	0,	0,	0,	}, /* FORCE function - generates LATCH */
-  { "D",	KEYW,	D_FF,	BLTIN1,	0,	0,	0,	0,	}, /* D flip-flop */
-  { "SR_",	KEYW,	S_FF,	BLTIN2,	0,	0,	0,	0,	}, /* R_FF for reset master */
-  { "DR_",	KEYW,	D_FF,	BLTIN2,	0,	0,	0,	0,	}, /* D flip-flop with simple reset */
-  { "SRR_",	KEYW,	S_FF,	BLTIN3,	0,	0,	0,	0,	}, /* R_FF for reset master */
-  { "DSR_",	KEYW,	D_FF,	BLTIN3,	0,	0,	0,	0,	}, /* D flip-flop with simple set/reset */
-  { "SH",	KEYW,	D_SH,	BLTIN1,	0,	0,	0,	0,	}, /* sample and hold */
-  { "SHR_",	KEYW,	D_SH,	BLTIN2,	0,	0,	0,	0,	}, /* sample and hold with simple reset */
-  { "SHSR_",	KEYW,	D_SH,	BLTIN3,	0,	0,	0,	0,	}, /* sample and hold with simple set/reset */
-  { "RISE",	KEYW,	RI_BIT,	BLTIN1,	0,	0,	0,	0,	}, /* pulse on digital rising edge */
-  { "CHANGE",	KEYW,	CH_BIT,	BLTINC,	0,	0,	0,	0,	}, /* pulse on digital (CH_BIT) or analog (CH_AR) change */
-  { "CLOCK",	KEYW,	CLCK,	CBLTIN,	0,	0,	0,	0,	}, /* clock */
-  { "TIMER",	KEYW,	TIMR,	TBLTIN,	0,	0,	0,	0,	}, /* normal timer with preset off 0 */
-  { "TIMER1",	KEYW,	TIMR,	TBLTI1,	0,	0,	0,	0,	}, /* alternate timer with preset off 1 */
-#endif	/* not BOOT_COMPILE */
-  { "if",	KEYW,	F_CF,	IF,	0,	0,	0,	0,	},
-  { "else",	KEYW,	F_CE,	ELSE,	0,	0,	0,	0,	},
-  { "switch",	KEYW,	F_SW,	SWITCH,	0,	0,	0,	0,	},
-  { "extern",	KEYW,	0,	EXTERN,	0,	0,	0,	0,	},
-  { "assign",	KEYW,	0,	ASSIGN,	0,	0,	0,	0,	},
-  { "return",	KEYW,	0,	RETURN,	0,	0,	0,	0,	},
-  { "no",	KEYW,	0,	USE,	0,	0,	0,	0,	}, /* turn off use */
-  { "use",	KEYW,	1,	USE,	0,	0,	0,	0,	}, /* turn on use */
-  { "alias",	KEYW,	0,     USETYPE,	0,	0,	0,	0,	}, /* check that USETYPE < MAXUSETYPE */
-  { "strict",	KEYW,	1,     USETYPE,	0,	0,	0,	0,	}, /* MAXUSETYPE 2 */
-  { "imm",	KEYW,	0,	IMM,	0,	0,	0,	0,	},
-  { "immC",	KEYW,	1,	IMM,	0,	0,	0,	0,	},
-  { "void",	KEYW,	UDFA,	VOID,	0,	0,	0,	0,	},
-  { "bit",	KEYW,	GATE,	TYPE,	0,	0,	0,	0,	},
-  { "int",	KEYW,	ARITH,	TYPE,	0,	0,	0,	0,	},
-  { "clock",	KEYW,	CLCKL,	TYPE,	0,	0,	0,	0,	},
-  { "timer",	KEYW,	TIMRL,	TYPE,	0,	0,	0,	0,	},
-  { "sizeof",	KEYW,	0,	SIZEOF,	0,	0,	0,	0,	},
-  { "this",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	}, /* only used in function block definitions */
-  { "auto",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	}, /* C keywords to cause syntax errors if used in iC */
-  { "break",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "case",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "char",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "const",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "continue",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "default",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "do",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "double",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "enum",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "float",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "for",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "goto",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "long",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "register",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "short",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "signed",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "static",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "struct",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "typedef",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "union",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "unsigned",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "volatile",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "while",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "fortran",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "asm",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	},
-  { "FOR",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	}, /* keyword used in immac FOR loops */
-  { "IF",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	}, /* keyword used in immac IF statements */
-  { "ELSE",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	}, /* keyword used in immac ELSE statements */
-  { "ELSIF",	KEYW,	0,	LEXERR,	0,	0,	0,	0,	}, /* keyword used in immac ELSIF statements */
-  { "iC_Gt",	CTYPE,	0,   YYERRCODE,	0,	0,	0,	0,	}, /* initial Gate C-type from icg.h */
-  { "iConst",	NCONST, ARITH,	0,	0,	0,	0,	0,	}, /* Symbol "iConst" must be second last non-zero entry */
-  { "iClock",	CLK,	CLCKL,	0,	0,	0,	0,	0,	}, /* Symbol "iClock" must be last non-zero entry */
-  { 0,		0,	0,	0,	0,	0,	0,	0,	}, /* terminate initialisation with name == 0 */
+										/* 97 pre-installed BuiltIn function Symbols */
+#else	/* BOOT_COMPILE */
+  /* name	     type   ftype  uVal	*/
+  { "FORCE",	     KEYW,  0,     BFORCE, 0    , 0      , 0      , 0      , }, /* FORCE function - generates LATCH */
+  { "D",	     KEYW,  D_FF,  BLTIN1, 0    , 0      , 0      , 0      , }, /* D flip-flop */
+  { "SR_",	     KEYW,  S_FF,  BLTIN2, 0    , 0      , 0      , 0      , }, /* R_FF for reset master */
+  { "DR_",	     KEYW,  D_FF,  BLTIN2, 0    , 0      , 0      , 0      , }, /* D flip-flop with simple reset */
+  { "SRR_",	     KEYW,  S_FF,  BLTIN3, 0    , 0      , 0      , 0      , }, /* R_FF for reset master */
+  { "DSR_",	     KEYW,  D_FF,  BLTIN3, 0    , 0      , 0      , 0      , }, /* D flip-flop with simple set/reset */
+  { "SH",	     KEYW,  D_SH,  BLTIN1, 0    , 0      , 0      , 0      , }, /* sample and hold */
+  { "SHR_",	     KEYW,  D_SH,  BLTIN2, 0    , 0      , 0      , 0      , }, /* sample and hold with simple reset */
+  { "SHSR_",	     KEYW,  D_SH,  BLTIN3, 0    , 0      , 0      , 0      , }, /* sample and hold with simple set/reset */
+  { "RISE",	     KEYW,  RI_BIT,BLTIN1, 0    , 0      , 0      , 0      , }, /* pulse on digital rising edge */
+  { "CHANGE",	     KEYW,  CH_BIT,BLTINC, 0    , 0      , 0      , 0      , }, /* pulse on digital (CH_BIT) or analog (CH_AR) change */
+  { "CLOCK",	     KEYW,  CLCK,  CBLTIN, 0    , 0      , 0      , 0      , }, /* clock */
+  { "TIMER",	     KEYW,  TIMR,  TBLTIN, 0    , 0      , 0      , 0      , }, /* normal timer with preset off 0 */
+  { "TIMER1",	     KEYW,  TIMR,  TBLTI1, 0    , 0      , 0      , 0      , }, /* alternate timer with preset off 1 */
+#endif	/* BOOT_COMPILE */
+  { "if",	     KEYW,  F_CF,  IF,     0    , 0      , 0      , 0      , },
+  { "else",	     KEYW,  F_CE,  ELSE,   0    , 0      , 0      , 0      , },
+  { "switch",	     KEYW,  F_SW,  SWITCH, 0    , 0      , 0      , 0      , },
+  { "extern",	     KEYW,  0,     EXTERN, 0    , 0      , 0      , 0      , },
+  { "assign",	     KEYW,  0,     ASSIGN, 0    , 0      , 0      , 0      , },
+  { "return",	     KEYW,  0,     RETURN, 0    , 0      , 0      , 0      , },
+  { "no",	     KEYW,  0,     USE,    0    , 0      , 0      , 0      , }, /* turn off use */
+  { "use",	     KEYW,  1,     USE,    0    , 0      , 0      , 0      , }, /* turn on use */
+  { "alias",	     KEYW,  0,     USETYPE,0    , 0      , 0      , 0      , }, /* check that USETYPE < MAXUSETYPE */
+  { "strict",	     KEYW,  1,     USETYPE,0    , 0      , 0      , 0      , }, /* MAXUSETYPE 2 */
+  { "imm",	     KEYW,  0,     IMM,    0    , 0      , 0      , 0      , },
+  { "immC",	     KEYW,  1,     IMM,    0    , 0      , 0      , 0      , },
+  { "void",	     KEYW,  UDFA,  VOID,   0    , 0      , 0      , 0      , },
+  { "bit",	     KEYW,  GATE,  TYPE,   0    , 0      , 0      , 0      , },
+  { "int",	     KEYW,  ARITH, TYPE,   0    , 0      , 0      , 0      , },
+  { "clock",	     KEYW,  CLCKL, TYPE,   0    , 0      , 0      , 0      , },
+  { "timer",	     KEYW,  TIMRL, TYPE,   0    , 0      , 0      , 0      , },
+  { "sizeof",	     KEYW,  0,     SIZEOF, 0    , 0      , 0      , 0      , },
+  { "this",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , }, /* only used in function block definitions */
+  { "auto",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , }, /* C keywords to cause syntax errors if used in iC */
+  { "break",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "case",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "char",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "const",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "continue",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "default",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "do",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "double",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "enum",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "float",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "for",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "goto",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "long",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "register",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "short",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "signed",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "static",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "struct",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "typedef",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "union",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "unsigned",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "volatile",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "while",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "fortran",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "asm",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , },
+  { "FOR",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , }, /* keyword used in immac FOR loops */
+  { "IF",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , }, /* keyword used in immac IF statements */
+  { "ELSE",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , }, /* keyword used in immac ELSE statements */
+  { "ELSIF",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0      , }, /* keyword used in immac ELSIF statements */
+  { "iC_Gt",	     CTYPE, 0,   YYERRCODE,0    , 0      , 0      , 0      , }, /* initial Gate C-type from icg.h */
+  { "iConst",	     NCONST,ARITH, 0,      0    , 0      , 0      , 0      , }, /* Symbol "iConst" must be second last non-zero entry */
+  { "iClock",	     CLK,   CLCKL, 0,      0    , 0      , 0      , 0      , }, /* Symbol "iClock" must be last non-zero entry */
+  { 0,  	     0,     0,     0,      0    , 0      , 0      , 0      , }, /* terminate initialisation with name == 0 */
 }; /* b[] */

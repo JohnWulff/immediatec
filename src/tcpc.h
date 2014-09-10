@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.18 2013/01/24 07:08:07 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.19 2014/08/03 09:10:56 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -32,7 +32,7 @@ static const char tcpc_h[] =
 #include	<sys/types.h>
 #ifdef	WIN32
 #include	<windows.h>
-#else	/* WIN32 */
+#else	/* ! WIN32 */
 #include	<unistd.h>
 #include	<sys/socket.h>
 #include	<netinet/in.h>
@@ -70,13 +70,31 @@ extern const char *	iC_portNM;	/* immcc service */
 extern char *		iC_iccNM;	/* immcc name qualified with instance */
 extern char *		iC_iidNM;	/* instance ID */
 
+extern SOCKET		iC_sockFN;	/* TCP/IP socket file number */
 extern SOCKET		iC_connect_to_server(const char* host, const char* port);
-extern int		iC_wait_for_next_event(int maxFN, struct timeval * ptv);
+extern int		iC_Xflag;	/* 1 if this process started iCserver */
+#ifndef	POLL 
+extern int		iC_wait_for_next_event(struct timeval * ptv);
+#else	/* POLL */
+extern int		iC_wait_for_next_event(int timeout);
+#endif	/* POLL */
 extern int		iC_rcvd_msg_from_server(SOCKET sock, char* buf, int maxLen);
 extern void		iC_send_msg_to_server(SOCKET sock, const char* msg);
 
+#ifndef	POLL 
+extern int		iC_maxFN;
 extern fd_set		iC_rdfds;
 extern fd_set		iC_infds;
+#ifdef RASPBERRYPI
+extern fd_set		iC_exfds;
+extern fd_set		iC_ixfds;
+#endif	/* RASPBERRYPI */
+#else	/* POLL */
+#define	MAX_POLLFD	3		/* allow for a socket stdin and 1 other file number in pllfd array */
+extern int		pollSet(int fd, short events);		/* activate the file number for poll events */
+extern int		pollEvent(int index, short events);	/* test revents of indexed element for poll events */
+extern int		pollClr(int index);			/* de-activate the indexed element for poll events */
+#endif	/* POLL */
 
 extern char *		iC_vcd;
 extern int		iC_micro;

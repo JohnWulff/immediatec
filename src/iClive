@@ -118,6 +118,66 @@ my %pGroup = (	'{' => [ '}', '-forwards',  '[{}\'"]',     'end', ],
 		']' => [ '[', '-backwards', '[\\[\\]\'"]', '1.0', ],
 	     );
 
+my %keyWords = (
+	imm	=> 1,		# immediate type modifiers
+	immC	=> 1,
+	bit	=> 1,		# immediate types
+	int	=> 1,
+	clock	=> 1,
+	timer	=> 1,
+	void	=> 1,
+	assign	=> 1,		# immediate parameter modifier
+	if	=> 1,		# immediate keywords
+	else	=> 1,
+	switch	=> 1,
+	this	=> 1,
+	return	=> 1,
+	extern	=> 1,
+	while	=> 1,		# only used in C code
+	for	=> 1,
+	static	=> 1,
+	iConst	=> 1,		# immediate built-in variables
+	iClock	=> 1,
+	FORCE	=> 1,		# immediate built-in functions
+	LATCH	=> 1,
+	DLATCH	=> 1,
+	D	=> 1,
+	DR	=> 1,
+	DR_	=> 1,
+	DSR	=> 1,
+	DSR_	=> 1,
+	SR	=> 1,
+	SR_	=> 1,
+	SRX	=> 1,
+	SRR	=> 1,
+	SRR_	=> 1,
+	ST	=> 1,
+	SRT	=> 1,
+	JK	=> 1,
+	SH	=> 1,
+	SHR	=> 1,
+	SHR_	=> 1,
+	SHSR	=> 1,
+	SHSR_	=> 1,
+	RISE	=> 1,
+	FALL	=> 1,
+	CHANGE	=> 1,
+	CLOCK	=> 1,
+	TIMER	=> 1,
+	TIMER1	=> 1,
+	use	=> 1,		# pragmas
+	no	=> 1,
+	restore	=> 1,
+	alias	=> 1,
+	strict	=> 1,
+	FOR	=> 1,		# iCa keywords
+	IF	=> 1,
+	ELSE	=> 1,
+	ELSIF	=> 1,
+	"{{"	=> 1,
+	"}}"	=> 1,
+);
+
 ########################################################################
 #
 #	Initialization
@@ -125,7 +185,7 @@ my %pGroup = (	'{' => [ '}', '-forwards',  '[{}\'"]',     'end', ],
 ########################################################################
 
 my $named = $0; $named =~ s#.*[/\\]##;
-use vars qw($opt_T $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i $opt_f $opt_l $opt_w $opt_g $opt_A $opt_u $opt_X $opt_h);
+use vars qw($opt_T $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i $opt_F $opt_l $opt_w $opt_g $opt_A $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
@@ -220,7 +280,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.54 2013/09/07 03:46:03 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.55 2014/08/03 09:49:47 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -251,12 +311,12 @@ if ($opt_u) {
     $u = ' -u';			# show -u option in title when editing
 }
 
-my ($fontSize, $font_t, $font);
-if (defined $opt_f) {
-    if ($opt_f =~ /^\d+$/) {
-	$fontSize = $opt_f;
+my ($fontSize, $font_t, $boldfont_t, $font, $boldfont);
+if (defined $opt_F) {
+    if ($opt_F =~ /^\d+$/) {
+	$fontSize = $opt_F;
     } else {
-	$font_t = $opt_f;
+	$font_t = $opt_F;
 	$fontSize = 14;
     }
 }
@@ -269,10 +329,16 @@ unless ($font_t) {
 	$font_t = "-adobe-courier-medium-r-normal--fontSize-100-100-100-m-90-iso8859-1";
     }
 }
+if ($font_t =~ /medium/) {
+    $boldfont_t = $font_t;
+    $boldfont_t =~ s/medium/bold/;
+} else {
+    $boldfont_t = "-adobe-courier-bold-r-normal--fontSize-100-100-100-m-90-iso8859-1";
+}
 change_font(0, 0);		# set initial font size to $fontSize
 
 no warnings;
-print "opt_f = '$opt_f' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
+print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
 use warnings;
 
 ########################################################################
@@ -738,7 +804,7 @@ my $infoBar = $mainWindow->Label(-textvariable => \$info,
 ########################################################################
 my $text;
 no warnings;
-print "opt_f = '$opt_f' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
+print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
 use warnings;
 if ($opt_u) {
     $text = $mainWindow->Scrolled('TextUndo',
@@ -956,15 +1022,14 @@ sub display_callback {
 
 sub tagComments {
     # Tk::Text->search() does not accept a pre-compiled regex qr/.../
-    my $reg = '(/[/*]|\\*/|[\'"])';
+    my $reg = '(/[/*]|\\*/|[\'"]|\w+|{{|}})';		# /* // */ \ ' " words {{ }}
     my $stop = '';
     my $length = 1;
     my $current = '1.0';	# start of text
     print "tagComments: $current\n" if $opt_T;
     $text->tagDelete('cTag');
-    $text->tagConfigure('cTag',
-			-foreground => 'blue',
-		       );
+    $text->tagConfigure('cTag', -foreground => 'blue',);
+    $text->tagConfigure('bd',   -font       => $boldfont);
     my $cStart = '';
     my $state = "P";		# Program text
     while (1) {
@@ -1013,10 +1078,14 @@ sub tagComments {
 	} elsif ($atom eq "*/") {
 	    info_display(2000, 'red', "$named: '$current' */ found after end of comment");
 	} elsif ($atom eq "//") {
-	    $state = "K";		# start of C++ comment found
-	    $cStart = $current;
+	    $cStart = $current;		# start of C++ comment found ($state remains "P")
 	    $current = $text->index("$current lineend");
 	    $text->tagAdd('cTag', $cStart, $current);
+	    next;
+	} elsif ($keyWords{$atom}) {
+	    $cStart = $current;		# keyword found ($state remains "P")
+	    $current = $text->index("$current + $length char");
+	    $text->tagAdd('bd', $cStart, $current);
 	    next;
 	}
 	$current = $text->index("$current + $length char");
@@ -2470,7 +2539,7 @@ use warnings;
 		}
 		$readOnly = (-w _) ? '' : ' (RO)';	# set new read-only flag correctly
 		print "$fName is read-only\n" if $readOnly and $opt_T;
-		$text->tagDelete('cTag');	# ->delete really slow if not done
+		$text->tagDelete('cTag', 'bd');	# ->delete really slow if not done
 		$text->delete("1.0", "end");	# clear the text area
 		$oldContents = '';
 		while (<FH>) {
@@ -2773,6 +2842,10 @@ sub position_text {
 #
 #	Increase or decrease font size
 #
+#	change normal text font (includes underline text)
+#	change 'bd' tagged words which are bold
+#	do not change miscellanous button text fonts
+#
 ########################################################################
 
 sub change_font {
@@ -2783,9 +2856,12 @@ sub change_font {
     } else {
 	print "font increment = '$increment' size = '$fontSize'\n" if $opt_T;
 	$font       = $font_t;
-	$font       =~ s/fontSize/$fontSize/;	# no change of -F was a specified font
+	$boldfont   = $boldfont_t;
+	$font       =~ s/fontSize/$fontSize/;	# no change if -F was a specified font
+	$boldfont   =~ s/fontSize/$fontSize/;
 	if ($increment) {
 	    $text->configure(-font => $font);	# re-configure only for changed fonts
+	    $text->tagConfigure('bd',  -font => $boldfont);
 	    info_display(0, 'black', "font size $fontSize");
 	}
     }
@@ -3142,7 +3218,7 @@ sub quit_program {
 	}
 	print "$named: quit\n" if $opt_T;
 	if ($server > 0) {
-	   conn_send_now('X') if $conn;	# iClive started iCserver - stop it
+	   conn_send_now("X$named") if $conn;	# iClive started iCserver - stop it
 	} elsif ($runName ne '') {
 	    print "quit_program() sends '$D_channel:7,$D_channel:0'\n" if $opt_T;
 	    conn_send_now("$D_channel:7,$D_channel:0");

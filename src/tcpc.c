@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.23 2012/11/07 03:42:31 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.24 2014/09/10 03:47:56 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -34,10 +34,21 @@ static const char RCS_Id[] =
  *	rest for up to 500 ms or when an unrelated return message comes,
  *	which is much too late.	(Also changed for Perl code in Msg.pm)
  *
+ *   Modification John Wulff 2014.03.31 - change from select() to poll().
+ *	This change is required for Raspberry Pi GPIO interrupts, because
+ *	the interrupts generated are classed as out-of-band input, which
+ *	is signalled by POLLPRI instead od POLLIN using poll(). See:
+ *	https://developer.ridgerun.com/wiki/index.php/How_to_use_GPIO_signals
+ *
+ *	Using the 3rd exceptiom parameter using select() works for GPIO
+ *	out-of-band interrupts. Since select() maintains correct timing,
+ *	select() is preferable to poll() and was made the default for iC.
+ *
  *******************************************************************/
 
 #include	<stdio.h>
 #include	<signal.h>
+#include	<poll.h>
 #include	<netinet/tcp.h>
 #ifdef	WIN32
 #include	<Time.h>
@@ -47,6 +58,9 @@ static const char RCS_Id[] =
 #endif	/* WIN32 */
 #include	<ctype.h>
 #include	<errno.h>
+#include	<assert.h>
+#include	<string.h>
+#include	<time.h>
 #include	"tcpc.h"
 #include	"icc.h"
 
@@ -54,12 +68,27 @@ const char *	iC_hostNM = "localhost";	/* 127.0.0.1 */
 const char *	iC_portNM = "8778";		/* iC service */
 char *		iC_iccNM  = "stdin";		/* immcc name qualified with instance */
 char *		iC_iidNM  = "";			/* instance ID */
+SOCKET		iC_sockFN = -1;			/* TCP/IP socket file number */
+int		iC_Xflag  = 0;			/* 1 if this process started iCserver */
+
+#ifndef	POLL 
+int		iC_maxFN = 0;
 fd_set		iC_rdfds;
 fd_set		iC_infds;
+#ifdef RASPBERRYPI
+fd_set		iC_exfds;
+fd_set		iC_ixfds;
+#endif	/* RASPBERRYPI */
+#else	/* POLL */
+static int	nfds = 0;			/* actual number of pollfd elements */
+static struct pollfd fdset[MAX_POLLFD];	/* pollfd array for socket and stdin initially */
+#endif	/* POLL */
 
 /********************************************************************
  *
  *	private structures and variables
+ *
+ *	NetBuffer matches buffer used in Perl module msg.pm
  *
  *******************************************************************/
 
@@ -76,10 +105,11 @@ typedef struct NetBuffer {
 static int	freqFlag;
 static double	frequency;
 static LARGE_INTEGER freq, start, end;
-#else	/* WIN32 */
+#else	/* ! WIN32 */
 static struct timeval	mt0;
 static struct timeval	mt1;
-#endif	/* WIN32 */
+static struct timespec	ms200 = { 0, 200000000, };
+#endif	/* ! WIN32 */
 
 /********************************************************************
  *
@@ -137,6 +167,55 @@ iC_microPrint(const char * str, int mask)
 #endif	/* WIN32 */
     iC_micro &= ~mask;
 } /* iC_microPrint */
+#ifdef	POLL 
+
+/********************************************************************
+ *
+ *	Initialise the elements fd and events for the next element
+ *	of the struct pollfd fdset array and adjust nfds
+ *	Return:	index into fdset[] array for this file number
+ *
+ *******************************************************************/
+
+int
+pollSet(int fd, short events)
+{
+    assert(nfds < MAX_POLLFD);
+    fdset[nfds].fd = fd;
+    fdset[nfds].events = events;
+    return nfds++;
+} /* pollSet */
+
+/********************************************************************
+ *
+ *	Test revents of indexed element for poll events
+ *
+ *******************************************************************/
+
+int
+pollEvent(int index, short events)
+{
+    assert(index < MAX_POLLFD);
+    return fdset[index].revents & events;
+} /* pollEvent */
+
+/********************************************************************
+ *
+ *	De-activate the indexed element for poll events
+ *
+ *******************************************************************/
+
+int
+pollClr(int index)
+{
+    int		fd;
+    assert(index < MAX_POLLFD);
+    if ((fd = fdset[index].fd) >= 0) {
+	fdset[index].fd = ~fd;	/* a negative fd field de-activates the element */
+    }
+    return;
+} /* pollClr */
+#endif	/* POLL */
 
 /********************************************************************
  *
@@ -155,6 +234,7 @@ iC_connect_to_server(const char *	host,
     unsigned short int	sin_port;
     struct sockaddr_in	server;
     int			flag = 1;		// support setting TCP_NODELAY
+    int			r;
 #ifdef	WIN32
     WORD		wVersionRequested;
     WSADATA		wsaData;
@@ -254,24 +334,33 @@ iC_connect_to_server(const char *	host,
     server.sin_addr = sin_addr;
     server.sin_port = sin_port;
 
-    if (connect(sock, (SA)&server, sizeof(server)) < 0) {
-	fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
-	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
-	perror("connect failed");
-	iC_quit(SIGUSR1);
+    for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; r++) {
+	if (r < 10) {
+	    if (r == 0 && errno == ECONNREFUSED && strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
+		if (system("iCserver -a &") != 0) {	/* execute iCserver -a as a separate process */
+		    perror("iCserver");
+		    fprintf(stderr, "ERROR: %s: system(\"iCserver -a &\") could not be executed\n", iC_progname);
+		}
+	    }
+	    iC_Xflag = 1;			/* this process started iCserver */
+#ifdef	WIN32
+	    Sleep(200);				/* 200 ms in ms */
+#else	/* ! WIN32 */
+	    nanosleep(&ms200, NULL);
+#endif	/* ! WIN32 */
+	} else {
+	    fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
+		iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
+	    perror("connect failed");
+	    iC_quit(SIGUSR1);
+	}
     }
 
     if (iC_osc_lim != 0) {		/* suppress connection info for unlimited oscillations */
-	fprintf(iC_outFP, "'%s' connected to server at '%s:%d'\n",
+	fprintf(iC_errFP, "'%s' connected to server at '%s:%d'\n",
 	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     }
 
-    FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
-#ifndef	WIN32
-    FD_SET(0, &iC_infds);		/* watch stdin for inputs - FD_CLR on EOF */
-    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
-#endif	/* WIN32 */
-    FD_SET(sock, &iC_infds);		/* watch sock for inputs */
     return sock;
 } /* iC_connect_to_server */
 
@@ -282,13 +371,31 @@ iC_connect_to_server(const char *	host,
  *******************************************************************/
 
 int
-iC_wait_for_next_event(int maxFN, struct timeval * ptv)
+#ifndef	POLL 
+iC_wait_for_next_event(struct timeval * ptv)
+#else	/* POLL */
+iC_wait_for_next_event(int timeout)
+#endif	/* POLL */
 {
     int	retval;
 
+#ifndef	POLL 
     do {				/* repeat for caught signal */
 	iC_rdfds = iC_infds;
-    } while ((retval = select(maxFN + 1, &iC_rdfds, 0, 0, ptv)) == -1 && errno == EINTR);
+#ifdef RASPBERRYPI
+	iC_exfds = iC_ixfds;
+#endif	/* RASPBERRYPI */
+    } while ((retval = select(iC_maxFN + 1, &iC_rdfds, 0,
+#ifdef RASPBERRYPI
+    							&iC_exfds,
+#else	/* !RASPBERRYPI */
+							0,
+#endif	/* RASPBERRYPI */
+					ptv)) == -1 && errno == EINTR);
+#else	/* POLL */
+    while ((retval = poll(fdset, nfds, timeout)) == -1 && errno == EINTR);
+#endif	/* POLL */
+
 #ifdef	WIN32
     if (retval == -1) {
 	fprintf(iC_errFP, "ERROR: select failed: %d\n", WSAGetLastError());
@@ -371,17 +478,14 @@ iC_send_msg_to_server(SOCKET sock, const char * msg)
     NetBuffer	netBuf;
     size_t	len = strlen(msg);
 
-    if (len >= sizeof netBuf.buffer) {
-	fprintf(iC_errFP, "ERROR in %s: message to send is too long: %d >= %d\n", iC_iccNM, len, sizeof netBuf.length);
-	len = sizeof netBuf.buffer - 1;
-    } else
+    assert(len < sizeof netBuf.buffer);		/* check when sending - should not trunctate message */
 #if YYDEBUG
     if (iC_debug & 01) {
 	fprintf(iC_outFP, "%s > '%s'\n", iC_iccNM, msg);	/* trace send buffer */
     }
 #endif
-    memcpy(netBuf.buffer, msg, len + 1);
     netBuf.length = htonl(len);
+    memcpy(netBuf.buffer, msg, len + 1);
     len += sizeof netBuf.length;
     if (send(sock, (char*)&netBuf, len, 0) != len) {
 	perror("send failed");

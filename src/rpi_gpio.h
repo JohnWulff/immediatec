@@ -17,7 +17,7 @@
 #ifndef RPI_GPIO_H
 #define RPI_GPIO_H
 static const char rpi_gpio_h[] =
-"$Id: rpi_gpio.h,v 1.1 2014/04/15 09:39:53 pi Exp $";
+"$Id: rpi_gpio.h,v 1.2 2014/05/21 09:36:11 jw Exp $";
 
 #include	<stdio.h>
 
@@ -27,8 +27,7 @@ extern short		iC_debug;
 
 extern int		gpio_fd_open(unsigned int gpio);
 extern int		gpio_read(int fd);
-extern void		doEdge(int gpio, const char * mode, const char * fullName);
-extern void		doUnexport(int gpio);
-extern void		iC_quit(int sig);
+extern int		doEdge(int gpio, const char * mode, int force, const char * fullName);
+extern int		doUnexport(int gpio);
 
 #endif	/* RPI_GPIO_H */
