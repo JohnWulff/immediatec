@@ -2,17 +2,16 @@
 
 usage()
 {
-    echo "Make iC components immcc and libict.a for debugging and install them" >&2
-    echo "Usage $name[ -irtmuedsyzh][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
-    echo "	-i	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
-    echo "		this is required to run make install as an ordinary user" >&2
+    echo "Make iC components immcc and libict.a for debugging and optionally install them" >&2
+    echo "Usage $name[ -clrtmpuedsyzIih][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
+    echo '		make immcc, libict.a and libict.so with no clrtm flags' >&2
+    echo '	-c	make immediate C compiler immcc' >&2
+    echo '	-l	make immediate C libraries libict.a, libict.so' >&2
+    echo '	-r	make standalone interpreter icr' >&2
+    echo '	-t	make standalone interpreter ict' >&2
+    echo '	-m	make standalone internal C compiler lmain' >&2
     echo '	-p	compile and link for profiling with gprof (-pg)' >&2
-    echo '	-r	additionally make standalone compiler icr' >&2
-    echo '	-t	additionally make standalone compiler ict' >&2
-    echo '	-m	additionally make standalone compiler lmain' >&2
     echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
-    echo '	-D<OPT>	make all targets with <OPT> defined' >&2
-    echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
     echo '	-d	make with DEQ - double ended queues are slightly faster' >&2
     echo '	-s	make with INT_MAX=32767' >&2
@@ -22,21 +21,42 @@ usage()
     echo '	-y	make with LONG16' >&2
     echo '		produces code for long int arithmetic on a 16 bit system' >&2
     echo '	-z	echo compiler calls with all options for debugging' >&2
+    echo '	-D<OPT>	make all targets with <OPT> defined' >&2
+    echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
+    echo "	-I	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
+    echo "		this is required to run make install as an ordinary user" >&2
+    echo '	-i	make install after makeAll' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m,v 1.13 2013/01/10 04:24:45 jw Exp $Id: m,v 1.13 2013/01/10 04:24:45 jw Exp $' >&2
+    echo '$Id: m,v 1.14 2014/09/12 07:44:40 jw Exp $Id: m,v 1.14 2014/09/12 07:44:40 jw Exp $' >&2
 }
 
 name=${0##*/}
-rtmudsyep=''
+clrtm=''
+pudsyez=''
 dw=''
+i=''
 z=0
 
-while getopts ":irtmudsyepD:W:zh" opt; do
+while getopts ":clrtmpudsyezD:W:Iih" opt; do
     case $opt in
-    i )
+    c ) clrtm="${clrtm}c";;
+    l ) clrtm="${clrtm}l";;
+    r ) clrtm="${clrtm}r";;
+    t ) clrtm="${clrtm}t";;
+    m ) clrtm="${clrtm}m";;
+    p ) pudsyez="${pudsyez}p";;
+    u ) pudsyez="${pudsyez}u";;
+    d ) pudsyez="${pudsyez}d";;
+    s ) pudsyez="${pudsyez}s";;
+    y ) pudsyez="${pudsyez}y";;
+    e ) pudsyez="${pudsyez}e";;
+    z )	pudsyez="${pudsyez}z";z=1;;
+    D ) dw="$dw -D$OPTARG";;
+    W ) dw="$dw -W$OPTARG";;
+    I )
 	echo "Enter root:" >&2
 	sudo chmod +s /usr/bin/install /usr/bin/ranlib
 	echo "chmod +s /usr/bin/install /usr/bin/ranlib" >&2
@@ -44,31 +64,21 @@ while getopts ":irtmudsyepD:W:zh" opt; do
 	sudo -k
 	exit
 	;;
-    r ) rtmudsyep="${rtmudsyep}r";;
-    t ) rtmudsyep="${rtmudsyep}t";;
-    m ) rtmudsyep="${rtmudsyep}m";;
-    u ) rtmudsyep="${rtmudsyep}u";;
-    d ) rtmudsyep="${rtmudsyep}d";;
-    s ) rtmudsyep="${rtmudsyep}s";;
-    y ) rtmudsyep="${rtmudsyep}y";;
-    e ) rtmudsyep="${rtmudsyep}e";;
-    p ) rtmudsyep="${rtmudsyep}p";;
-    D ) dw="$dw -D$OPTARG";;
-    W ) dw="$dw -W$OPTARG";;
-    z )	z=1;rtmudsyep="${rtmudsyep}z";;
+    i )	i="install";;
     h )	usage; exit 127;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
 
-echo "### makeAll -qgcl$rtmudsyep$dw"
-./makeAll -qgcl$rtmudsyep$dw
-echo "### make install"
-make install
-if [ $# -gt 0 ]; then
-    # optionally make selected iC applications with the new libict.a
-    # may use all options of iCmake with 'm'
-    echo "### iCmake $*"
-    iCmake $*
+if [ -z "$clrtm" ]; then
+    clrtm="cl"
+fi
+
+echo "### makeAll -qg$clrtm$pudsyez$dw"
+./makeAll -qg$clrtm$pudsyez$dw
+
+if [ -n "$i" ]; then
+    echo "### make install"
+    make install
 fi
