@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.36 2013/12/10 04:18:13 jw Exp $' >&2
+  echo '$Id: tt,v 1.37 2014/09/12 08:53:33 jw Exp $' >&2
 }
 
 usage()
@@ -101,7 +101,7 @@ L=""
 I=""
 g=""
 pd="pd"
-T="test"
+T=""		# no make test
 z=""
 head=""
 test1=""
