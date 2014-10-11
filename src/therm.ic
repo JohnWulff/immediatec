@@ -1,0 +1,26 @@
+/********************************************************************
+ *
+ *	Report output from iCtherm connected to a DS18B20 thermometer
+ * @(#)$Id: therm.ic,v 1.1 2014/10/11 03:41:51 jw Exp $
+ *******************************************************************/
+
+use strict;
+
+%{
+%#include	<stdio.h>
+%#include	<time.h>
+
+time_t	t;
+%}
+
+imm int		temperature = IW0;
+
+if (TX0.0) {			/* EOI end of initialisation */
+    t = time(0);
+    printf("%s\n", ctime(&t));
+}
+
+if (CHANGE(temperature)) {
+    t = time(0);
+    printf("%5.1f °C	%7.3f ms	%s", (double)temperature/10, (double)clock()/(CLOCKS_PER_SEC/1000), ctime(&t));
+}
