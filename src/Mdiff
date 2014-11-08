@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
-  echo '$Id: Mdiff,v 2.9 2009/10/14 03:46:59 archiv Exp $'
+  echo '$Id: Mdiff,v 2.10 2014/11/08 05:22:28 archiv Exp $'
   echo
 }
 
@@ -62,7 +62,7 @@ usage()
   echo '	-w	whitespace (spaces, tabs, blank lines) are significant'
   echo '		default: all whitespace is ignored (opposite to diff)'
   echo '	-x	ignore case differences in file contents'
-  echo '	-k	ignore RCS/CVS keyword lines containing the string $Id:'
+  echo '	-k	ignore RCS/CVS keyword lines containing the string '
   echo '	-I<regex>  ignore diff changes in lines that match <regex>'
   echo '	-f<filter> process the first file in a diff by <filter> before diff'
   echo '	-F<filter> process the second file in a diff by <filter> before diff'
@@ -106,6 +106,9 @@ header()
 	fi
 	headFlag=1
 	let headCnt+=1
+    fi
+    if [[ $t -eq 0 ]]; then
+	echo
     fi
 }
 
@@ -210,7 +213,6 @@ process()
 				fi
 				if [[ $q -eq 0 ]]; then
 				    header "$spath" "$cdir"
-				    echo
 				    echo "########## $sfile ##########"
 				    if [[ -z "$context" ]]; then
 					ls -lL -- $sfile
@@ -251,7 +253,9 @@ process()
     done
     if [[ $status -gt 0 ]]; then
 	if [[ $q -eq 0 ]]; then
-	    echo
+	    if [[ $t -eq 0 ]]; then
+		echo
+	    fi
 	    local files_differ="files differ"
 	    if [[ $status -eq 1 ]]; then
 		files_differ="file differs"
@@ -291,7 +295,9 @@ process()
 	    fi
 	done
 	if [[ $q -eq 0 && $level -eq 0 && $fullstatus -gt 0 ]]; then
-	    echo
+	    if [[ $t -eq 0 ]]; then
+		echo
+	    fi
 	    files_differ="files differ"
 	    if [[ $fullstatus -eq 1 ]]; then
 		files_differ="file differs"
@@ -528,7 +534,7 @@ exit
     -w    whitespace (spaces, tabs, blank lines) are significant
           default: all whitespace is ignored (opposite to diff)
     -x    ignore case differences in file contents
-    -k    ignore RCS/CVS keyword lines containing the string $Id:
+    -k    ignore RCS/CVS keyword lines containing the string 
     -I<regex>  ignore diff changes in lines that match <regex>
     -f<filter> process the first file in a diff by <filter> before diff
     -F<filter> process the second file in a diff by <filter> before diff
@@ -672,7 +678,7 @@ These lists are exclusive subsets of the complete set of selected files.
 
      -I <regex>
      Ignore changes that just insert or delete lines that match <regex>.
-     -k is shorthand for -I '\$Id:', which ignores RCS/CVS keyword lines.
+     -k is shorthand for -I '\', which ignores RCS/CVS keyword lines.
 
      -f<filter>
      -F<filter>
