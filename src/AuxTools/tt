@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.37 2014/09/12 08:53:33 jw Exp $' >&2
+  echo '$Id: tt,v 1.38 2015/02/27 21:31:32 jw Exp $' >&2
 }
 
 usage()
@@ -52,8 +52,9 @@ usage()
   echo '	-h	this help text' >&2
   echo '	--	all further arguments are treated as files' >&2
   echo >&2
-  echo "	$name must be called from a directory, which has a number of" >&2
-  echo "	sub-directories Test1, Test2, Test3 .. Test9 containg iC sources." >&2
+  echo "	$name must be called from a directory .T, which is a sub-directory of the" >&2
+  echo "	directory in which the iC system is made and in which 'make test' must be called." >&2
+  echo "	.T has a number of sub-directories Test1, Test2, Test3 .. Test13 containg iC sources." >&2
   echo "	Each iC source is made with iCmake, generating different files." >&2
   echo >&2
   echo "	<dir1> or <dir1>_<opt> are sub-directories of directory" >&2
@@ -101,7 +102,7 @@ L=""
 I=""
 g=""
 pd="pd"
-T=""		# no make test
+T="test"
 z=""
 head=""
 test1=""
@@ -189,8 +190,10 @@ else
 fi
 
 if [ -z "$d" -a -z "$c" -a -n "$d1" -a -z "$d2" -a -n "$T" ]; then
+    cd ..
     echo; echo "========== Test0 make $T"; echo
     make $T
+    cd -
 fi
 
 cd $t;
@@ -233,8 +236,8 @@ if [ -n "$test1" ]; then
 			if [ -n "$r" ]; then
 			    Rdiff p*.lt
 			fi
-			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d"
-			Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d
+			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d"
+			Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d
 		    else
 			mkdir $d1$a$d
 			if [ -d "$head" ]; then
@@ -251,8 +254,8 @@ if [ -n "$test1" ]; then
 			    done
 			    rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			    cd ..
-			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
-			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
+			    echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d) $d1$a$d"
+			    cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d) $d1$a$d 2> /dev/null
 			else
 			    echo; echo "========== $t cp -p \$(cat $pd$a.lt) $d1$a$d"
 			    cp -p $(cat $pd$a.lt) $d1$a$d
@@ -262,8 +265,8 @@ if [ -n "$test1" ]; then
 	    elif [ -d "$d1$a$d" -a -d "$d2$a$d" ]; then
 		cd $d1$a$d
 		eval d4="$d3"
-		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$a$d/* $d4$a$d"
-		Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd$a.lt) $d4$a$d
+		echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$a$d/* $d4$a$d"
+		Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd$a.lt) $d4$a$d
 		cd ..
 	    else
 		echo "ERROR: if two <directories> are specified they must exist" >&2
@@ -294,8 +297,8 @@ if [ -n "$test2" ]; then
 		    if [ -n "$r" ]; then
 			Rdiff p*.lt
 		    fi
-		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d"
-		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d
+		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d"
+		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d
 		else
 		    mkdir $d1$d
 		    if [ -d "$head" ]; then
@@ -312,8 +315,8 @@ if [ -n "$test2" ]; then
 			done
 			rm -f $(Mdiff -Lle * ..)	# remove links to files which no longer exist
 			cd ..
-			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d) $d1$d"
-			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
+			echo "========== $t cp --remove-destination -p \$(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d) $d1$d"
+			cp --remove-destination -p $(Mdiff -kLel$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d) $d1$d 2> /dev/null
 		    else
 			echo; echo "========== $t cp -p \$(cat $pd.lt) $d1$d"
 			cp -p $(cat $pd.lt) $d1$d
@@ -323,8 +326,8 @@ if [ -n "$test2" ]; then
 	elif [ -d "$d1$d" -a -d "$d2$d" ]; then
 	    cd $d1$d
 	    eval d4="$d3"
-	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$d/* $d4$d"
-	    Mdiff -k$l$e -I'ic[0-6c]\.' -I'.data+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd.lt) $d4$d
+	    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $d1$d/* $d4$d"
+	    Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat ../$pd.lt) $d4$d
 	    cd ..
 	else
 	    echo "ERROR: if two <directories> are specified they must exist" >&2

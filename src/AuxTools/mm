@@ -36,7 +36,7 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: mm,v 1.23 2012/06/03 08:00:19 jw Exp $' >&2
+  echo '$Id: mm,v 1.24 2015/02/27 21:31:32 jw Exp $' >&2
 }
 
 A=" -f"
@@ -86,9 +86,9 @@ if [ -f pm.lt ]; then
 	    iCmake$I$A $line
 	done < pm$a.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\./ s//\/tmp\/x./' > Init.out
     else
-	rm -f /tmp/cexe.c			# just in case
-	immcc -c < /dev/null			# uses installed iC compiler
-	mv cexe.c /tmp				# empty cexe.c for comparison
+##	rm -f /tmp/cexe.c			# just in case
+##	immcc -c < /dev/null			# uses installed iC compiler
+##	mv cexe.c /tmp				# empty cexe.c for comparison
 	while true; do
 	    read line
 	    if [[ -z "$line" ]]; then
