@@ -30,13 +30,16 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m,v 1.14 2014/09/12 07:44:40 jw Exp $Id: m,v 1.14 2014/09/12 07:44:40 jw Exp $' >&2
+    echo '$Id: m,v 1.15 2015/02/27 21:31:32 jw Exp $Id: m,v 1.15 2015/02/27 21:31:32 jw Exp $' >&2
 }
 
 name=${0##*/}
 clrtm=''
 pudsyez=''
 dw=''
+dx=''
+dopt=''
+ww=''
 i=''
 z=0
 
@@ -54,8 +57,8 @@ while getopts ":clrtmpudsyezD:W:Iih" opt; do
     y ) pudsyez="${pudsyez}y";;
     e ) pudsyez="${pudsyez}e";;
     z )	pudsyez="${pudsyez}z";z=1;;
-    D ) dw="$dw -D$OPTARG";;
-    W ) dw="$dw -W$OPTARG";;
+    D ) dw="$dw -D$OPTARG";dx="$dx-D$OPTARG";;
+    W ) ww="$ww -W$OPTARG";;
     I )
 	echo "Enter root:" >&2
 	sudo chmod +s /usr/bin/install /usr/bin/ranlib
@@ -70,15 +73,18 @@ while getopts ":clrtmpudsyezD:W:Iih" opt; do
     esac
 done
 shift $(($OPTIND - 1))
+if [ -n "$dx" ]; then
+    dopt=" OPT=\"$dx\""
+fi
 
 if [ -z "$clrtm" ]; then
     clrtm="cl"
 fi
 
-echo "### makeAll -qg$clrtm$pudsyez$dw"
-./makeAll -qg$clrtm$pudsyez$dw
+echo "### makeAll -qg$clrtm$pudsyez$dw$ww"
+./makeAll -qg$clrtm$pudsyez$dw$ww
 
 if [ -n "$i" ]; then
-    echo "### make install"
-    make install
+    echo "### make$dopt install"
+    make$dopt install
 fi
