@@ -1,0 +1,210 @@
+/********************************************************************
+ *
+ *	Test PiFaceCAD with iC system
+ *
+ *******************************************************************/
+
+use strict;
+
+imm timer t = TIMER(TX0.4, ~TX0.4);	/* 50 ms timer clock */
+
+immC int  lineIn;
+immC int  lineOut;
+
+/********************************************************************
+ *
+ *	Inputs come from switch contacts on the PiFaceCAD,
+ *	which may bounce on turn on and turn off.
+ *
+ *	All outputs turn on immediately the input rises and
+ *	turn off 100 to 150 ms after the input falls
+ *	due to the D flip flops with turn off delay.
+ *
+ *	Contact bounces less than 100 ms are thus ignored.
+ *	Since the actions of the outputs on the LCD display
+ *	are triggered mostly by the rising edges only, the late
+ *	falling edge has no effect.
+ *
+ *******************************************************************/
+
+%{	/* Start of literal C code */
+%#include	<stdio.h>
+%#include	<stdlib.h>
+%#include	<string.h>
+
+%#define	LINES	100
+%#define	LINELEN	40
+
+typedef	char	Line[LINELEN+1];	/* last character is always NULL */
+
+static Line *	lineBase;
+static int	eofFlag = 0;
+static int	lineOutManual = 0;
+
+/********************************************************************
+ *
+ *  Store 1 line of text in the extendible array lineBase[].
+ *  Input lines are truncated to 40 characters, which is the limit for
+ *  one PiFaceCAD display line (16 are shown - the rest may be shifted in).
+ *
+ *  All lines in lineBase[0] are NULL terminated.
+ *    40 characters not including a CR 	NULL in Line[40]
+ *    39 characters and a CR 		NULL in Line[40]
+ *    38 characters and a CR 		NULL in Line[39]
+ *	etc
+ *    no characters and a CR 		NULL in Line[1]
+ *
+ *  This means that 2 consecutive lines from lineBase[n] can be simply
+ *  concatenated with the following call to form a correct string for
+ *  output to PiFaceCAD:
+ *	snprintf(buf, 81, "%s%s", lineBase[n], lineBase[n+1]);
+ *  This string would never be longer than 80 bytes.
+ *
+ *******************************************************************/
+
+void
+storeLine(const char * buf)
+{
+    static int	lines = 0;
+    static int	line = 0;
+
+    while (line >= lines) {		/* insert new line */
+	lineBase = realloc(lineBase,	/* initially NULL */
+	    (lines + LINES) * sizeof(Line));
+	memset(&lineBase[lines], '\0', LINES * sizeof(Line));
+	lines += LINES;			/* increase the array size */
+    }
+    strncpy(lineBase[line++], buf, LINELEN);
+} /* storeLine */
+
+/********************************************************************
+ *
+ *  Concatenate 2 lines starting at index n and display them on PiFaceCAD
+ *
+ *******************************************************************/
+
+static void
+displayTwoLines(int n)
+{
+    char *	cp;
+    int		len;
+    static char	lineBuf[2*LINELEN+1];
+
+    snprintf(lineBuf, sizeof(lineBuf), "%s%s", lineBase[n], lineBase[n+1]);
+    writePiFaceCAD(lineBuf, P_channel);		/* write 2 lines via interface driver */
+} /* displayTwoLines */
+
+/********************************************************************
+ *
+ *  Replace
+ *    unsigned short P_channel = 0xffff;	// set in icbegin.c
+ *  by    
+ *    unsigned short P_channel = 0xfffe;	// to write direct to PiFaceCAD
+ *
+ *  if the system finds a real PiFaceCAD linked to the app, the system
+ *  will set P_channel to 0, which causes writePiFaceCAD() to write
+ *  direct to the PiFaceCAD
+ *  else
+ *  the system will register the string Gate named "PFCAD4" and set
+ *  P_channel to send strings to it with writePiFaceCAD() via iCserver.
+ *  On iCpiFace or an app with a PiFaceCAD, which has the PiFaceCAD digital
+ *  input declared ExternOut, PFCAD4 is registered as a string receiver.
+ *  When strings are received via PFCAD4 they are written to the PiFaceCAD.
+ *
+ *  NOTE 1: as with any immediate input or output IEC variable, there must
+ *  be either both a sender and at least one receiver for the PFCAD4
+ *  channel or the I/O can be direct on the one app. Otherwise run-time
+ *  errors will happen.
+ *
+ *  NOTE 2: any code, which defines iCbegin() must also define P_channel
+ *  and vice versa. Otherwise the linker will not find one or the other.
+ *
+ *******************************************************************/
+
+unsigned short	P_channel = 0xfffe;	/* this app wants to write to PiFaceCAD */
+
+int
+iCbegin(void)
+{
+    writePiFaceCAD(PIFACECAD_KEY, P_channel);		/* generate and test same key */
+    storeLine("\n");			/* make lineBase[0] an empty CR terminated line */
+    fprintf(stderr, "> ");
+    return 1;
+} /* iCbegin */
+%}	/* End of literal C code */
+
+/********************************************************************
+ *
+ *  Store text coming in on STDIN to the extendible array lineBase[].
+ *
+ *  A zero length string is EOF - it is converted to "EOF\n", which can
+ *  be conveniently shown on the PiFaceCAD to indicate what happened.
+ *
+ *******************************************************************/
+
+if (TX0.1) {				/* pulses when a line of stdin received */
+    if (strlen(iC_stdinBuf) == 0) {
+	strcpy(iC_stdinBuf, "EOF\n");
+	eofFlag++;			/* EOF on STDIN */
+    }
+    storeLine(iC_stdinBuf);
+    lineIn++;				/* triggers lineDelay (indexes previous line in lineBase[]) */
+}
+
+imm bit	lineDelay = ST(~lineDelay & (lineIn > lineOut), t, 20);
+if (lineDelay) {
+    displayTwoLines(lineOut++);		/* increments lineOut and stops triggering lineDelay */
+    if (lineOut >= lineIn) {
+	if (!eofFlag) {
+	    fprintf(stderr, "> ");
+	} else {
+	    fprintf(stderr, "EOF\n");	/* EOF on STDIN */
+	    iC_quit(QUIT_TERMINAL);
+	}
+    }
+}
+
+/********************************************************************
+ *
+ *  PiFaceCAD button actions interpreted locally
+ *  All actions start immediately switch goes hi
+ *  Switch going lo is delayed to inhibit bounce on closing and opening
+ *
+ *******************************************************************/
+
+if (~D(~IX4.0, t, 3)) {		/* display first 2 lines - manual home */
+    lineOutManual = 0;
+    if (lineOutManual < lineIn) {
+	displayTwoLines(lineOutManual++);
+    }
+}
+
+if (~D(~IX4.1, t, 3)) {		/* display next lines manually */
+    if (lineOutManual < lineIn) {
+	displayTwoLines(lineOutManual++);
+    }
+}
+
+if (~D(~IX4.2, t, 3)) {		/* display previous lines manually */
+    if (lineOutManual > 1) {
+	lineOutManual -= 2;
+	displayTwoLines(lineOutManual++);
+    }
+}
+
+/********************************************************************
+ *
+ *  PiFaceCAD button actions interpreted by PiFaceCAD driver
+ *
+ *******************************************************************/
+
+QX4.3 = ~D(~IX4.6, t, 3);		/* move text left */
+QX4.4 = ~D(~IX4.7, t, 3);		/* move text right */
+QX4.5 = ~D(~IX4.5, t, 3);		/* scroll cursor and blink */
+QX4.6 = ~D(~IX4.3, t, 3);		/* display off */
+QX4.7 = ~D(~IX4.4, t, 3);		/* led backlight off */
+
+if (~IX4.0 & IX4.1 & IX4.2 & IX4.3) {	/* press button 1 2 and 3 together */
+//    system("sudo shutdown -h now");	/* while button 0 is released to shutdown */
+    printf("sudo shutdown -h now\n");
+}
