@@ -3,13 +3,16 @@
 usage()
 {
     echo "Make iC components immcc and libict.a for debugging and optionally install them" >&2
-    echo "Usage $name[ -clrtmpuedsyzIih][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
-    echo '		make immcc, libict.a and libict.so with no clrtm flags' >&2
+    echo "Usage $name[ -clSPrtmgpuedsyzIih][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
+    echo '		with no clSPrtm flags make immcc, libict.a and libict.so' >&2
     echo '	-c	make immediate C compiler immcc' >&2
-    echo '	-l	make immediate C libraries libict.a, libict.so' >&2
+    echo '	-l	make immediate C static library libict.a' >&2
+    echo '	-S	make immediate C shared library libict.so' >&2
+    echo '	-P	make iCpiFace and iCgpioPUD for RASPBERRYPI' >&2
     echo '	-r	make standalone interpreter icr' >&2
     echo '	-t	make standalone interpreter ict' >&2
     echo '	-m	make standalone internal C compiler lmain' >&2
+    echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-p	compile and link for profiling with gprof (-pg)' >&2
     echo '	-u	make any compiler targets with Symbol SYUNION option' >&2
     echo '	-e	make all targets with EFENCE option and link with -lefence' >&2
@@ -30,26 +33,25 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m,v 1.15 2015/02/27 21:31:32 jw Exp $Id: m,v 1.15 2015/02/27 21:31:32 jw Exp $' >&2
+    echo '$Id: m,v 1.16 2015/04/09 02:18:00 jw Exp $' >&2
 }
 
 name=${0##*/}
-clrtm=''
+clSrtm=''
 pudsyez=''
 dw=''
-dx=''
-dopt=''
-ww=''
 i=''
+P=''
 z=0
 
-while getopts ":clrtmpudsyezD:W:Iih" opt; do
+while getopts ":clSPrtmpudsyezD:W:Iih" opt; do
     case $opt in
-    c ) clrtm="${clrtm}c";;
-    l ) clrtm="${clrtm}l";;
-    r ) clrtm="${clrtm}r";;
-    t ) clrtm="${clrtm}t";;
-    m ) clrtm="${clrtm}m";;
+    c ) clSrtm="${clSrtm}c";;
+    l ) clSrtm="${clSrtm}l";;
+    S ) clSrtm="${clSrtm}S";;
+    r ) clSrtm="${clSrtm}r";;
+    t ) clSrtm="${clSrtm}t";;
+    m ) clSrtm="${clSrtm}m";;
     p ) pudsyez="${pudsyez}p";;
     u ) pudsyez="${pudsyez}u";;
     d ) pudsyez="${pudsyez}d";;
@@ -57,8 +59,9 @@ while getopts ":clrtmpudsyezD:W:Iih" opt; do
     y ) pudsyez="${pudsyez}y";;
     e ) pudsyez="${pudsyez}e";;
     z )	pudsyez="${pudsyez}z";z=1;;
-    D ) dw="$dw -D$OPTARG";dx="$dx-D$OPTARG";;
-    W ) ww="$ww -W$OPTARG";;
+    D ) dw="$dw -D$OPTARG";;
+    W ) dw="$dw -W$OPTARG";;
+    P ) P="P";;
     I )
 	echo "Enter root:" >&2
 	sudo chmod +s /usr/bin/install /usr/bin/ranlib
@@ -73,18 +76,20 @@ while getopts ":clrtmpudsyezD:W:Iih" opt; do
     esac
 done
 shift $(($OPTIND - 1))
-if [ -n "$dx" ]; then
-    dopt=" OPT=\"$dx\""
+
+if [ -n "$P" ]; then
+    echo "### make iCpiFace and iCgpioPUD"
+    makeAll -gPG
+elif [ -z "$clSrtm" ]; then
+    clSrtm="cl"
 fi
 
-if [ -z "$clrtm" ]; then
-    clrtm="cl"
+if [ -n "$clSrtm" ]; then
+    echo "### makeAll -qg$clSrtm$pudsyez$dw"
+    makeAll -qg$clSrtm$pudsyez$dw
 fi
-
-echo "### makeAll -qg$clrtm$pudsyez$dw$ww"
-./makeAll -qg$clrtm$pudsyez$dw$ww
 
 if [ -n "$i" ]; then
-    echo "### make$dopt install"
-    make$dopt install
+    echo "### make install"
+    make install
 fi
