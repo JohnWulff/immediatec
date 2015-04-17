@@ -1,12 +1,20 @@
 /********************************************************************
  *
+ *	Copyright (C) 2015  John E. Wulff
+ *
+ *  You may distribute under the terms of either the GNU General Public
+ *  License or the Artistic License, as specified in the README file.
+ *
+ *  For more information about this program, or for information on how
+ *  to contact the author, see the README file
+ *
  *	rpi_rev.c
  *	adapted from raspberryalphaomega.org.uk by John E. Wulff 2015
  *
  *	Returns the following board revisions for differen Raspberry Pi models
- *		8  (0x08)	Rpi A
- *		15 (0x0e)	Rpi B	tested by JW
- *		16 (0x10)	Rpi B+	tested by JW
+ *		0	(8  0x08)	Rpi A
+ *		1	(15 0x0e)	Rpi B	tested by JW
+ *		2	(16 0x10)	Rpi B+	tested by JW
  *
  *	according to http://elinux.org/RPi_HardwareHistory
  *
@@ -34,4 +42,12 @@
  *
  *******************************************************************/
 
+#ifndef RPI_REV_H
+#define RPI_REV_H
+static const char rpi_rev_h[] =
+"$Id: rpi_rev.h,v 1.2 2015/02/25 21:06:04 jw Exp $";
+
 extern int	boardrev(void);
+extern int	gpioUsed[];
+
+#endif	/* RPI_REV_H */

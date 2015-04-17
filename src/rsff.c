@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.56 2014/08/07 00:54:21 jw Exp $";
+"@(#)$Id: rsff.c,v 1.57 2015/03/03 06:59:32 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -33,34 +33,6 @@ static const char rsff_c[] =
 
 Gate		iConst = { 1, -NCONST, ARITH, 0, "iConst" };
 
-#if defined(TCP) || defined(LOAD)
-/********************************************************************
- *
- *	bitIndex[] is a 256 byte array, whose values represent the
- *	bit position 0 - 7 of the rightmost 1 bit of the array index
- *
- *******************************************************************/
-
-static unsigned char	bitIndex[]   = {
- 0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
- 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
-};
-
-#endif /* defined(TCP) || defined(LOAD) */
 /********************************************************************
  *
  *	Clocked Flip Flop.
@@ -1038,9 +1010,9 @@ iC_traMb(					/* TRAB master action */
     if (iC_debug & 0100) { iC_dc = 1; }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     diff = gm->gt_new ^ gm->gt_old;
-    assert (diff && !(diff & ~0xff));
+    assert (!(diff & ~0xff));			/* diff may be 0 in rare cases when called with gt_new == gt_old */
     while (diff) {
-	index = bitIndex[diff];			/* returns 0 - 7 for values 1 - 255 */
+	index = iC_bitIndex[diff];		/* returns 0 - 7 for values 1 - 255 (avoid 0) */
 	mask  = iC_bitMask[index];		/* returns hex 01 02 04 08 10 20 40 80 */
 	if ((gs = gm->gt_list[index]) != 0) {	/* is bit Gate allocated ? */
 	    val   = (gm->gt_new & mask) ? -1 : 1;	/* yes */

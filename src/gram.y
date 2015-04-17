@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.32 2013/01/02 03:30:47 jw Exp $";
+"@(#)$Id: gram.y,v 1.33 2014/10/24 04:25:51 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -51,8 +51,8 @@ static char		inBuf[OUTBUFSIZE];
 static char		outBuf[OUTBUFSIZE];
 static char *		obp;
 static char *		ibp;
-#define OUTBUFEND	&outBuf[OUTBUFSIZE]
-#define INBUFEND	&inBuf[OUTBUFSIZE]
+#define OUTBUFEND	&outBuf[OUTBUFSIZE-1]
+#define INBUFEND	&inBuf[OUTBUFSIZE-1]
 static int		changeFlag;
 #endif
 typedef struct LineEntry {
@@ -2668,7 +2668,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     while ((c = getc(iFP)) != EOF) {
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {
-	    if (ibp < INBUFEND -1) *ibp++ = c;	/* keep Input for detailed debugging */
+	    if (ibp < INBUFEND) *ibp++ = c;	/* keep Input for detailed debugging */
 	}
 #endif
 	if (bytePos == endop) {
@@ -2680,7 +2680,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    /* ++x; --x; x++; x--; all now produce: iC_AA(2, 12, 0); iC_AA(2, 13, 0); etc jw120722 */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, 0", ppi);
+		obp += snprintf(obp, OUTBUFEND-obp, ", %u, 0", ppi);
+		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		changeFlag++;
 	    }
 #endif
@@ -2692,7 +2693,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    end = i >> 1;			/* 0 marker - new end for while */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		if (obp < OUTBUFEND -1) *obp++ = ')';
+		if (obp < OUTBUFEND) *obp++ = ')';
 		changeFlag++;
 	    }
 #endif
@@ -2736,7 +2737,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    if ((iC_debug & 0402) == 0402) {
 		fprintf(iC_outFP, "strt bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%s\n",
 		    bytePos, inds, inde, earlyop, equop, ppi, sp->name);
-		obp += snprintf(obp, OUTBUFEND-1-obp, "%s", cMacro[ml+ftypa]);
+		obp += snprintf(obp, OUTBUFEND-obp, "%s", cMacro[ml+ftypa]);
+		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		changeFlag++;
 	    }
 #endif
@@ -2821,7 +2823,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    pFlag = 0;
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		obp += snprintf(obp, OUTBUFEND-1-obp, "%d", sNr);
+		obp += snprintf(obp, OUTBUFEND-obp, "%d", sNr);
+		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		changeFlag++;
 	    }
 #endif
@@ -2847,7 +2850,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    pushEndStack(inde  << 1 | 1);	/* push this index end (in case embedded imm variable) */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		obp += snprintf(obp, OUTBUFEND-1-obp, ", ");
+		obp += snprintf(obp, OUTBUFEND-obp, ", ");
+		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		changeFlag++;
 	    }
 #endif
@@ -2875,7 +2879,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		/* ++x; --x; x++; x--; all now produce: iC_AA(2, 12, 0); iC_AA(2, 13, 0); etc jw120722 */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, 0", ppi);
+		    obp += snprintf(obp, OUTBUFEND-obp, ", %u, 0", ppi);
+		    if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		    changeFlag++;
 		}
 #endif
@@ -2900,7 +2905,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		/* x *= 15; produces: iC_AA(2, 3, 15); */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    obp += snprintf(obp, OUTBUFEND-1-obp, ", %u, ", ppi);
+		    obp += snprintf(obp, OUTBUFEND-obp, ", %u, ", ppi);
+		    if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		    changeFlag++;
 		}
 #endif
@@ -2923,7 +2929,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	if (pFlag) {
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		if (obp < OUTBUFEND -1) *obp++ = c;
+		if (obp < OUTBUFEND) *obp++ = c;
 	    }
 #endif
 	    putc(c, oFP);			/* output all except variables and ++ or -- from inc/dec etc */

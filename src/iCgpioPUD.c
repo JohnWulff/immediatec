@@ -41,7 +41,10 @@
 
 #include	<stdio.h>
 #include	<stdlib.h>
+#include	<unistd.h>
+#include	<sys/types.h>
 #include	<string.h>
+#include	<ctype.h>
 
 #ifndef RASPBERRYPI
 #error - must be compiled with RASPBERRYPI
@@ -57,7 +60,7 @@ static const char *	usage =
 "    NOTE:   This program must be suid root to run\n"
 "\n"
 "Copyright (C) 2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCgpioPUD.c,v 1.1 2015/04/08 23:45:27 pi Exp $\n"
+"Version	$Id: iCgpioPUD.c,v 1.2 2015/04/11 09:30:33 jw Exp $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -148,6 +151,7 @@ main(
 	exit(1);
     }
     bcm2835_gpio_set_pud(gpio, pud);			/* Modify Pull Up/Down */
+    bcm2835_close();
     return 0;
 } /* main */
 #endif	/* RASPBERRYPI */

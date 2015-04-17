@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.65 2014/01/22 05:33:35 jw Exp $";
+"@(#)$Id: comp.h,v 1.66 2015/01/21 06:54:50 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -95,12 +95,13 @@ typedef	struct Symbol {		/* symbol table entry */
 #define FU		0x03	/* fm bit mask for use count 0, 1 or 2 */
 #define FI		0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
 #define FMI		0x30	/* fm bit mask for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
+#define FA		0x40	/* fm bit wihch marks assign parameter in function definition */
 #define FM		0x80	/* fm bit wihch marks parameter and local var in function definition */
 
 /* for use in a union identical first elements can be accesed */
 typedef struct Sym { char *f; char *l; Symbol * v;     } Sym;
 typedef struct Lis { char *f; char *l; List_e * v;     } Lis;
-typedef struct Val { char *f; char *l; unsigned int v; } Val;
+typedef struct Val { char *f; char *l; int v;          } Val;
 typedef struct Typ { char *f; char *l; Type v;         } Typ;
 typedef struct Str { char *f; char *l; char v[2];      } Str;
 
@@ -219,6 +220,11 @@ typedef struct FuUse {			/* Function call count and C expression */
 	char *	expr;			/* C expression */
 	int	use;			/* final use count in outNet */
     } c;
+#ifdef BOOT_COMPILE
+    int		lineNo;			/* line number in iC source at actual compile time */
+    char *	inpNm;			/* input name of iC source at actual compile time */
+    char *	headNm;			/* function head name of iC function block at boot generation */
+#endif	/* BOOT_COMPILE */
 } FuUse;
 
 extern FuUse *	functionUse;		/* database to record function calls */
@@ -301,13 +307,10 @@ extern Symbol *	icerr;			/* pointer to Symbol "iCerr" */
 #ifdef BOOT_COMPILE
 extern Symbol	iC_CHANGE_ar;		/* alternative arithmetic CHANGE */
 #endif	/* BOOT_COMPILE */
-extern void	init(void);		/* install constants and built-ins */
-extern const char initialFunctions[];	/* iC system function definitions */
-extern const char * genLines[];		/* SHR, SHSR generate C functions 1 and 2 */
-extern const char * genName;
-extern int	    genLineNums[];
-#define GEN_COUNT 2			/* max number of C functions in precompiled functions */
-extern int	iC_genCount;		/* actual number of pre-comp C functions - varies with optimisation */
+extern void	iC_init(void);		/* install constants and built-ins */
+extern char *	iC_genName;
+extern int	iC_genLineNums[];
+extern int	iC_genCount;		/* actual number of pre-comp C functions */
 extern unsigned short	iC_gflag;	/* -g independent C code for gdb debugging */
 
 					/*   symb.c   */

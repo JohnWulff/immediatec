@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.59 2014/09/10 02:12:31 jw Exp $
+# @(#)$Id: Makefile.in,v 1.60 2015/04/15 03:25:24 jw Exp $
 
 #######################################################################
 #
@@ -111,13 +111,7 @@ SHELL = /bin/sh
 COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O)
 LOBJ =	link.$(O) rsff.$(O) scan.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
-ifeq ($(findstring BCM2835,$(OPT)),BCM2835)
-POBJ =	rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O) bcm2835.$(O)
-BCMH = 	$(srcdir)/bcm2835.h
-else
-POBJ =	rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O)
-BCMH =
-endif
+POBJ =	rpi_rev.$(O) rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O)
 else
 POBJ =
 endif
@@ -153,7 +147,7 @@ libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O)
 #### Shared run-time library ##########################################
 
 libict.so:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
-	$(CC) -shared -Wl,-soname,libict.so.1 -o libict.so.1.$(REV) load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
+	$(CC) -shared -Wl,-soname,libict.so.1 -o libict.so load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
 
 #### C-parser test ####################################################
 
@@ -161,15 +155,15 @@ lmain:	$(srcdir)/Makefile lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	$(CC) $(LDFLAGS) -o lmain lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O) $(EL)
 
 #### iCpiFace real I/O for Raspberry Pi ###############################
-####  install with set user ID if BCM2835 #############################
 
 iCpiFace:	$(srcdir)/Makefile iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ)
-	$(CC) $(LDFLAGS) -o iCpiFace iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ) -lrt $(EL)
-ifeq ($(findstring BCM2835,$(OPT)),BCM2835)
-	${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCpiFace ${bindir}/${binprefix}iCpiFace
-else
-	${INSTALL_PROGRAM} $(srcdir)/iCpiFace ${bindir}/${binprefix}iCpiFace
-endif
+	$(CC) $(LDFLAGS) -o iCpiFace iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ) $(EL)
+
+#### iCgpioPUD adjust pull-up/down for GPIO's on Raspberry Pi #########
+####  install with set user ID ########################################
+
+iCgpioPUD:	$(srcdir)/Makefile iCgpioPUD.$(O) bcm2835.$(O)
+	$(CC) $(LDFLAGS) -o iCgpioPUD iCgpioPUD.$(O) bcm2835.$(O) -lrt $(EL)
 
 #### Compile objects ##################################################
 
@@ -191,8 +185,9 @@ pplstfix:
     ifneq ($(YACC),)
 	$(SHELL) -ec 'if [ -f $(*)_tab.h ]; then mv -f $(*)_tab.h y.tab.t; fi'
 	rm -f y.tab.c $@
-	immac -M $(OPT) -o y.tab.y $<
-	$(YACC) $(YFLAGS) y.tab.y
+	$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; immac -M $(OPT) -o $< $(<).sav; fi'
+	$(YACC) $(YFLAGS) $<
+	$(SHELL) -ec 'if [ -f $(<).sav ]; then mv -f $(<).sav $<; fi'
 	perl $*.pl y.tab.c > $@
 	perl $*.pl y.tab.h > $(*)_tab.h
 	$(SHELL) -ec 'if cmp -s $(*)_tab.h y.tab.t; then mv y.tab.t $(*)_tab.h; fi'
@@ -206,7 +201,7 @@ pplstfix:
     endif
 
 %.1.gz:	%
-####	@echo "pod2man -u -n $* -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $*.1"
+	@echo "pod2man -u -n $* -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $*.1"
 	@pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
 	@gzip -f $*.1
 
@@ -227,7 +222,7 @@ $(srcdir)/cexe.c:	$(srcdir)/cexe_t.c
 	chmod +w $(srcdir)/cexe.c
 
 $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
-####	@echo "pod2man -u -n immcc -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/immcc.1"
+	@echo "pod2man -u -n immcc -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/immcc.1"
 	@pod2man -u -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
@@ -243,6 +238,8 @@ $(srcdir)/iCman.1.gz:	$(srcdir)/iCman $(srcdir)/scid.c
 
 $(srcdir)/iCserver.1.gz:	$(srcdir)/iCserver $(srcdir)/scid.c
 
+$(srcdir)/iCtherm.1.gz:	$(srcdir)/iCtherm $(srcdir)/scid.c
+
 $(srcdir)/immac.1.gz:	$(srcdir)/immac $(srcdir)/scid.c
 
 $(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
@@ -252,7 +249,7 @@ $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 $(srcdir)/Mdiff.1.gz:	$(srcdir)/Mdiff $(srcdir)/scid.c
 
 $(srcdir)/iCpiFace.1.gz:	$(srcdir)/iCpiFace.c $(srcdir)/scid.c
-####	@echo "pod2man -u -n iCpiFace -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/iCpiFace.1"
+	@echo "pod2man -u -n iCpiFace -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/iCpiFace.1"
 	@pod2man -u -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
 	@gzip -f $(srcdir)/iCpiFace.1
 
@@ -261,7 +258,7 @@ $(srcdir)/iCrfid.1.gz:	$(srcdir)/iCrfid $(srcdir)/scid.c
 test:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -Ajfw. ${srcdir}/Test0/*.ic* 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@-${srcdir}/iCmake -qAjfw. ${srcdir}/Test0/*.ic* 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
 	@if ${srcdir}/Mdiff -kel -Ibytes -Isyntax.error -Iparse.error -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
@@ -272,7 +269,7 @@ strict:
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
 	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
-install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
+install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	$(srcdir)/perlinstall -t $(srcdir)
 	${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1
 	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
@@ -286,10 +283,16 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
 	${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
 	${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
+ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
+	${INSTALL_PROGRAM} $(srcdir)/iCpiFace   ${bindir}/${binprefix}iCpiFace
+	sudo ln -sf ${bindir}/${binprefix}iCpiFace ${bindir}/${binprefix}iCpiGPIO
+	${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCgpioPUD ${bindir}/${binprefix}iCgpioPUD
+	${INSTALL_PROGRAM} $(srcdir)/iCtherm    ${bindir}/${binprefix}iCtherm
+endif
 	${INSTALL_PROGRAM} $(srcdir)/iCrfid     ${bindir}/${binprefix}iCrfid
 	${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
 	${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
-	if [ -f $(srcdir)/libict.so.1.$(REV) ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so.1.$(REV) ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
+	if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
 	${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
 	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
 	${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
@@ -301,45 +304,52 @@ install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir
 	${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
 	${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
 	${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
+	${INSTALL_DATA} $(srcdir)/iCtherm.1.gz  ${mandir}/man1/${manprefix}iCtherm.1.gz
 	${INSTALL_DATA} $(srcdir)/iCrfid.1.gz   ${mandir}/man1/${manprefix}iCrfid.1.gz
 	${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${mandir}/man1/${manprefix}makeAll.1.gz
 	${INSTALL_DATA} $(srcdir)/Mdiff.1.gz    ${mandir}/man1/${manprefix}Mdiff.1.gz
 
 uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)
-	rm -f `$(srcdir)/perlinstall`/Msg.pm
-	rm -f ${bindir}/${binprefix}immcc
-	rm -f ${bindir}/${binprefix}pplstfix
-	rm -f ${bindir}/${binprefix}immac
-	rm -f ${bindir}/${binprefix}immax
-	rm -f ${bindir}/${binprefix}iCbox
-	rm -f ${bindir}/${binprefix}iClift
-	rm -f ${bindir}/${binprefix}iClive
-	rm -f ${bindir}/${binprefix}iCmake
-	rm -f ${bindir}/${binprefix}iCman
-	rm -f ${bindir}/${binprefix}iCserver
-	rm -f ${bindir}/${binprefix}iCpiFace
-	rm -f ${bindir}/${binprefix}iCrfid
-	rm -f ${libdir}/${libprefix}libict.a
-	rm -f ${libdir}/${libprefix}libict.so
-	rm -f ${bindir}/${binprefix}Mdiff
-	rm -f ${includedir}/${includeprefix}icg.h
-	rm -f ${mandir}/man1/${manprefix}immcc.1.gz
-	rm -f ${mandir}/man1/${manprefix}immac.1.gz
-	rm -f ${mandir}/man1/${manprefix}immax.1.gz
-	rm -f ${mandir}/man1/${manprefix}iCbox.1.gz
-	rm -f ${mandir}/man1/${manprefix}iClift.1.gz
-	rm -f ${mandir}/man1/${manprefix}iClive.1.gz
-	rm -f ${mandir}/man1/${manprefix}iCmake.1.gz
-	rm -f ${mandir}/man1/${manprefix}iCman.1.gz
-	rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
-	rm -f ${mandir}/man1/${manprefix}iCpiFace.1.gz
-	rm -f ${mandir}/man1/${manprefix}iCrfid.1.gz
-	rm -f ${mandir}/man1/${manprefix}makeAll.1.gz
-	rm -f ${mandir}/man1/${manprefix}Mdiff.1.gz
+	sudo rm -f `$(srcdir)/perlinstall`/Msg.pm
+	sudo rm -f ${bindir}/${binprefix}immcc
+	sudo rm -f ${bindir}/${binprefix}pplstfix
+	sudo rm -f ${bindir}/${binprefix}immac
+	sudo rm -f ${bindir}/${binprefix}immax
+	sudo rm -f ${bindir}/${binprefix}iCbox
+	sudo rm -f ${bindir}/${binprefix}iClift
+	sudo rm -f ${bindir}/${binprefix}iClive
+	sudo rm -f ${bindir}/${binprefix}iCmake
+	sudo rm -f ${bindir}/${binprefix}iCman
+	sudo rm -f ${bindir}/${binprefix}iCserver
+	sudo rm -f ${bindir}/${binprefix}iCpiFace
+	sudo rm -f ${bindir}/${binprefix}iCpiGPIO
+	sudo rm -f ${bindir}/${binprefix}iCgpioPUD
+	sudo rm -f ${bindir}/${binprefix}iCtherm
+	sudo rm -f ${bindir}/${binprefix}iCrfid
+	sudo rm -f ${libdir}/${libprefix}libict.a
+	sudo rm -f ${libdir}/${libprefix}libict.so
+	sudo rm -f ${libdir}/${libprefix}libict.so.1
+	sudo rm -f ${libdir}/${libprefix}libict.so.1.$(REV)
+	sudo rm -f ${bindir}/${binprefix}Mdiff
+	sudo rm -f ${includedir}/${includeprefix}icg.h
+	sudo rm -f ${mandir}/man1/${manprefix}immcc.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}immac.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}immax.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCbox.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iClift.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iClive.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCmake.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCman.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCserver.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCpiFace.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCtherm.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}iCrfid.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}makeAll.1.gz
+	sudo rm -f ${mandir}/man1/${manprefix}Mdiff.1.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README
@@ -383,7 +393,11 @@ lmain.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 scid.$(O):	$(srcdir)/scid.c
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 
-iCpiFace.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(srcdir)/pifacecad.h $(BCMH)
+iCpiFace.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(srcdir)/pifacecad.h $(srcdir)/bcm2835.h
+
+iCgpioPUD.$(O):	$(srcdir)/bcm2835.h
+
+rpi_rev.$(O):	$(srcdir)/rpi_rev.h
 
 rpi_gpio.$(O):	$(srcdir)/rpi_gpio.h
 
@@ -391,13 +405,13 @@ mcp23s17.$(O):	$(srcdir)/mcp23s17.h $(srcdir)/pifacecad.h
 
 pifacecad.$(O):	$(srcdir)/pifacecad.h $(srcdir)/mcp23s17.h
 
-bcm2835.$(O):	$(BCMH)
+bcm2835.$(O):	$(srcdir)/bcm2835.h
 
-load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(BCMH)
+load.$(O):	$(srcdir)/icc.h $(srcdir)/rpi_rev.h $(srcdir)/tcpc.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(srcdir)/bcm2835.h
 
 ict.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(srcdir)/pifacecad.h
 
-misc.$(O):	$(srcdir)/icc.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(BCMH)
+misc.$(O):	$(srcdir)/icc.h $(srcdir)/rpi_gpio.h $(srcdir)/mcp23s17.h $(srcdir)/bcm2835.h
 else
 
 load.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h

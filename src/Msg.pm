@@ -1,4 +1,4 @@
-# $Id: Msg.pm,v 1.5 2013/06/07 00:22:10 jw Exp $
+# $Id: Msg.pm,v 1.6 2015/03/06 00:28:04 jw Exp $
 
 ########################################################################
 #
@@ -72,6 +72,22 @@
 #	  Msg->inhibit_nagle(1, 0, 1)	# also trace send calls only
 #	  Msg->inhibit_nagle(1, 1, 1)	# also trace rcv and send calls
 #
+#   Modification John Wulff 2015.03.06 - added time out delay to connect() calls
+#	Some iC clients, in particular iCbox, are started from applications
+#	automatically with a system() call. These same applications usually also
+#	start iCserver if it is not already running. This may involve a timing
+#	race and the client may not be able to connect to iCserver immediately.
+#	To guarantee a smooth startup sequence, connect() has been modified to
+#	retry 3 times at 2 second intervals.
+#	
+#	This action is not appropriate if there is no likelyhood of iCserver
+#	being started externally. This applies to iClive, which starts iCserver
+#	itself if there is none to connect to. To speed up startup of iClive
+#	an extra optional argument '$time_out_inhibit' has been added to connect().
+#	  Msg->connect($host, $port, $rcvd_notification_proc, $time_out_inhibit)
+#	$time_out_inhibit undef or 0	# retry 3 connects at 2 sec intervals
+#	$time_out_inhibit 1		# returns immediately if connect fails
+#
 ########################################################################
 
 package Msg;
@@ -111,17 +127,24 @@ sub inhibit_nagle {
 #-----------------------------------------------------------------
 # Send side routines
 sub connect {
-    my ($pkg, $to_host, $to_port,$rcvd_notification_proc) = @_;
+    my ($pkg, $to_host, $to_port, $rcvd_notification_proc, $time_out_inhibit) = @_;
+    my ($sock);
+    my $time_out = $time_out_inhibit ? 0 : 3;
 
     # Create a new internet socket
-
-    my $sock = IO::Socket::INET->new (
-                                      PeerAddr => $to_host,
-                                      PeerPort => $to_port,
-                                      Proto    => 'tcp',
-                                      Reuse    => 1);
-
-    return undef unless $sock;
+    until (defined (
+        $sock = IO::Socket::INET->new (
+                                       PeerAddr => $to_host,
+                                       PeerPort => $to_port,
+                                       Proto    => 'tcp',
+                                       Reuse    => 1)
+        )
+    ) {
+	unless ($time_out--) {
+	    return undef;
+	}
+	sleep(2);			# wait 2 seconds for server to start
+    }
 
     setsockopt($sock, IPPROTO_TCP, TCP_NODELAY, $nagle) if defined $nagle;	# inhibit Nagle's algorithm
     # Create a connection end-point object

@@ -124,14 +124,14 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.55 2014/07/15 05:37:30 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.56 2015/03/02 23:27:58 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
 use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_R $opt_S $opt_T $opt_s $opt_p);
 use vars qw($opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_f $opt_h);
 use Getopt::Std;		# replace require "getopts.pl";
-getopts('bdrHmxtRSTs:p:n:i:c:C:Q:l:f:h');	# sets $opt_h if -h etc
+getopts('bdrHmxtRSTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -939,9 +939,8 @@ sub send_input {
 	$HoldQueue{$ch} = $val;			# hold latest value - not sent now
     } elsif ($val != $ChannelsIq[$ch]) {
 	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel for hold
-	print "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
-### 	printf "%s	%2d:%08b\n", $ChannelNames[$ch], $ch, $val;
-	printf "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if $opt_S;
+	print "$named: $ch:$val	< $ChannelNames[$ch]\n" if $opt_t;
+	printf "%s	> %2d:%d\n", $ChannelNames[$ch], $ch, $val if $opt_S;
 	$conn->send_now("$ch:$val");		# send latest value
     }
 } # send_input
@@ -983,14 +982,15 @@ sub rcvd_msg_from_server {
 			    }
 			}
 			$ChannelsQ[$channel] = $value;	# ready for next message
-			print "$named: $msg1	< $ChannelNames[$channel]\n" if $opt_t;
-			printf "%s	%2d:%d	<\n", $ChannelNames[$channel], $channel, $value if $opt_R;
+			print "$named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
+			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_R;
 		    }
 		} else {
 		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
 		}
 	    } elsif ($register and $msg1 =~ /^(-?\d+)$/) {
-		$channel = $1;			## receive channel of a registration acknowlwdgment
+		next if $1 eq '-0';		## null acknowledgment
+		$channel = $1;			## receive channel of a registration acknowledgment
 		($id, $ini, $from, $to, $res) = @{$ArgNames[$ri]};	# all argument values
 		defined $id or
 		    die "$named: too many registration acknowledgments from iCserver - system error";

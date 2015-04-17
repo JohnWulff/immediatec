@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.111 2014/08/19 10:22:56 jw Exp $";
+"@(#)$Id: comp.y,v 1.112 2015/03/03 12:13:53 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -67,10 +67,10 @@ static void	clrBuf(void);
 %union {		/* stack type */
     Sym		sym;			/* symbol table pointer */
     Lis		list;			/* linked list elements */
-    Val		val;			/* int numerical values */
+    Val		vai;			/* int numerical values */
     Typ		typ;			/* type, ftype, em and fm */
     Str		str;			/* one character array */
-    /* allows storing character as iClval.val.v (2nd byte is NULL) */
+    /* allows storing character as iClval.vai.v (2nd byte is NULL) */
     /* then char array can be referenced as $1.v, single char as $1.v[0] */
 }
 
@@ -178,7 +178,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %endif	/* BOOT_COMPILE */
 %token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE SIZEOF
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
-%token	<val>	CCFRAG NUMBER
+%token	<vai>	CCFRAG NUMBER
 %token	<str>	LEXERR COMMENTEND LHEAD BE
 %type	<sym>	program statement funcStatement simpleStatement iFunDef iFunHead
 %type	<sym>	returnStatement formalParameter lBlock dVariable valueVariable cVariable outVariable
@@ -191,14 +191,14 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %endif	/* BOOT_COMPILE */
 %type	<list>	cref ctref ctdref cCall cParams cPlist dPar immCini immCiniList
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall
-%type	<val>	cBlock dParams dPlist immCindex constExpr
+%type	<vai>	cBlock dParams dPlist immCindex constExpr
 %type	<typ>	declHead extDeclHead formalParaTypeDecl extCfunDeclHead
 %type	<str>	'{' '[' '(' '"' '\'' ')' ']' '}' /* C/C++ brackets */
 %right	<str>	','		/* function seperator */
 %right	<str>	'=' OPE
 %right	<str>	'?' ':'		/* ? : */
-%right	<str>	OO		/* || */
-%right	<str>	AA 		/* && */
+%right	<str>	B_OR		/* || */
+%right	<str>	B_AND 		/* && */
 %right	<str>	'|'		/* logical or - must do before arithmetic operators */
 %right	<str>	'^'		/* logical exclusive or */
 %right	<str>	'&'		/* logical and */
@@ -414,7 +414,7 @@ extCfunDecl
 	| extCfunDeclHead UNDEF	'(' dParams ')'	{
 		$2.v->type = CWORD;			/* no longer an imm variable */
 		$2.v->u_val = CNAME;			/* yacc type */
-		$2.v->v_cnt = $4.v;			/* parameter count */
+		$2.v->v_cnt = (unsigned int)($4.v);	/* parameter count */
 		$$.v = $2.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
@@ -1346,7 +1346,7 @@ expr	: UNDEF			{
 	 * verting both imm bit (GATE) to ARITH, doing an arithmetic
 	 * operation and then having default GATE again.
 	 ***********************************************************/
-	| expr AA expr	{				/* binary && */
+	| expr B_AND expr	{			/* binary && */
 		Symbol *	sp;
 		int		typ;
 		List_e *	lpL;
@@ -1375,10 +1375,10 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr AA expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr B_AND expr", &$$);
 #endif
 	    }
-	| expr OO expr	{				/* binary || */
+	| expr B_OR expr	{			/* binary || */
 		Symbol *	sp;
 		int		typ;
 		List_e *	lpL;
@@ -1407,7 +1407,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr OO expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr B_OR expr", &$$);
 #endif
 	    }
 	/************************************************************
@@ -2687,7 +2687,7 @@ formalParameter
 		sp->type = typ;				/* only ARNC or LOGC (UDF on error) */
 		sp->ftype = UDFA;			/* immC array */
 		if (sp->type == ARNC || sp->type == LOGC) {
-		    if ((sp->v_cnt = $4.v) != 0) {	/* array size or 0 */
+		    if ((sp->v_cnt = (unsigned int)($4.v)) != 0) {		/* array size or 0 */
 			for (i = 0; i < sp->v_cnt; i++) {
 			    snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
 			    if ((tsp = lookup(tempBuf)) == 0) {
@@ -3140,7 +3140,7 @@ immCarrayHead
 		assert(($1.v.em & EM) == 0);		/* has been cleared in declHead */
 		sp->em    &= ~EM;			/* clear bit EM here */
 		if (sp->type == ARNC || sp->type == LOGC) {
-		    sp->v_cnt = $4.v;			/* array size or 0 */
+		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
 		} else {
 		    ierror("Definition of a non immC array is illegal:", $$.f);
 		    sp->type = ERR;
@@ -3164,7 +3164,7 @@ immCarrayHead
 		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 		} else
 		if (sp->em & EM) {
-		    if ($4.v > 0 && sp->list->le_val != $4.v) {
+		    if ($4.v > 0 && sp->list->le_val != (unsigned int)($4.v)) {
 			fprintf(stderr, "immCarrayHead: extern array size %u, array size %u\n", sp->list->le_val, $4.v);
 			ierror("array size does not match previous extern declaration:", $$.f);
 			sp->type = ERR;
@@ -3410,7 +3410,7 @@ extimmCarrayHead
 		assert($1.v.em & EM);			/* has been set in extDeclHead */
 		sp->em    |= EM;			/* set bit EM here */
 		if (sp->type == ARNC || sp->type == LOGC) {
-		    sp->v_cnt = $4.v;			/* array size or 0 */
+		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
 		} else {
 		    ierror("Extern declaration of a non immC array is illegal:", $$.f);
 		    sp->type = ERR;
@@ -3439,7 +3439,7 @@ extimmCarrayHead
 		    sp->ftype = UDFA;			/* makes it a IMMCARRAY */
 		    assert($1.v.em & EM);		/* has been set in extDeclHead */
 		    sp->em    |= EM;			/* set bit EM here */
-		    sp->v_cnt = $4.v;			/* array size or 0 */
+		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
 		} else {
 		    warning("second extern array declaration - ignored:", $2.v->name);
 		} /* TD FIX */
@@ -3537,8 +3537,6 @@ static char *	getp[2] = {NULL,NULL};		/* used in get() unget() andd yyerror() */
 static char	iCtext[YTOKSZ];			/* lex token */
 static int	iCleng;				/* length */
 static int	lineflag;
-static int	iniDebug;
-static char const * iniPtr = NULL;
 static char *	errFilename;
 static int	errFlag = 0;
 static int	errRet = 0;
@@ -3605,8 +3603,9 @@ iC_compile(
 	perror("chmod or fopen");
 	return Lindex;
     }
+    outFlag = outNM != 0;			/* global flag for compiled output */
     errFilename = errNM;			/* open on first error */
-    init();					/* initialise symbol table - allows ierror() */
+    iC_init();					/* install constants and built-ins - allows ierror() */
     if (inpPath) {
 	strncpy(inpNM, inpPath, BUFS);
 	r = 0;
@@ -3678,15 +3677,9 @@ iC_compile(
 	}
     }						/* else inpPath == NULL T0FP is stdin inpNM is "stdin" */
     strncpy(prevNM, inpNM, BUFS);
-    outFlag = outNM != 0;			/* global flag for compiled output */
     if (iC_debug & 046) {			/* begin source listing */
 	fprintf(iC_outFP, "******* %-15s ************************\n", inpNM);
     }
-    if ((iC_debug & 020000) == 0) {
-	iniPtr = initialFunctions;		/* read system function definitions first */
-	iniDebug = iC_debug;			/* save iC_debug flag */
-	if ((iC_debug & 010400) != 010400) iC_debug &= ~ 047; /* suppress logic expansion for ini code */
-    }						/* unless generating BOOT_COMPILE for init.c */
     setjmp(begin);
     for (initcode(); iCparse(); initcode()) {
 	;
@@ -3716,11 +3709,12 @@ get(FILE* fp, int x)
     int		temp1;
     int		slen;
     int		prevflag;
-    size_t	iniLen;
     char *	cp;
     char	tempNM[BUFS];
     char	tempBuf[TSIZE];
-    static int	gen_count = 0;
+%ifndef	BOOT_COMPILE
+    static int	genCount = 0;
+%endif	/* BOOT_COMPILE */
 
     /************************************************************
      *  The following block became necessary because 2 problems
@@ -3829,27 +3823,6 @@ get(FILE* fp, int x)
     prevflag = lineflag;
     while (getp[x] == 0 || (c = *getp[x]++) == 0) {
 	/************************************************************
-	 *  The following block takes input directly from the
-	 *  iC system function definitions in init.c. These definitions
-	 *  are parsed before any line of iC code is read.
-	 ************************************************************/
-	if (iniPtr) {
-	    iniLen = strcspn(iniPtr, "\n");
-	    if (iniPtr[iniLen] == '\n') {
-		iniLen++;
-	    }
-	    else if (iniLen == 0) {
-		iC_debug = iniDebug;		/* restore logic expansion */
-		iniPtr = getp[0] = 0;		/* iC system function definitions read */
-		clrBuf();			/* clear iCbuf after initial functions */
-		continue;
-	    }
-	    assert(iniLen < CBUFSZ);
-	    getp[0] = strncpy(chbuf[0], iniPtr, iniLen); /* copy with terminating \n */
-	    chbuf[0][iniLen] = '\0';
-	    iniPtr += iniLen;
-	}
-	/************************************************************
 	 *  getp has reached end of previous chbuf filling
 	 *  fill chbuf with a new line
 	 *  NOTE: getp === NULL at start of file (chbuf has EOF line)
@@ -3857,37 +3830,35 @@ get(FILE* fp, int x)
 	 *  Fill either from auxBuf if some lines were saved or from fp
 	 *  The first token will be in the last line of auxBuf[]
 	 ************************************************************/
-	else {
-	    if ((prevflag = lineflag) != 0) {
-		lineno++;			/* count previous line */
-	    }
-	    /************************************************************
-	     *  Input for get() is taken from auxBuf[] via auxp until that
-	     *  is exhausted. Then further input is take from the input file.
-	     ************************************************************/
-	    if (x == 0 && auxp) {
-		slen = strcspn(auxp, "\n");
-		if (auxp[slen] == '\n') {
-		    slen++;
-		}
-		getp[0] = strncpy(chbuf[0], auxp, slen); /* copy the BF + first part back to chbuf[] */
-		chbuf[0][slen] = '\0';		/* terminate */
-		auxp += slen;			/* get ready for more lines in auxBuf[] */
-		if (strlen(auxp) == 0) {
-		    auxp = 0;			/* that was it - now input is taken from file again */
-		}
-	    } else
-	    if ((getp[x] = fgets(chbuf[x], CBUFSZ, fp)) == NULL) {
-		if ((lexflag & C_PARSE) == 0) {
-		    eofLineno = lineno;		/* iC parse */
-		} else {
-		    lineno = eofLineno;		/* C parse with lex */
-		}
-		errline = lineno;		/* no listing line at EOF */
-		return (EOF);
-	    }
-	    lineflag = chbuf[x][strlen(chbuf[x])-1] == '\n' ? 1 : 0; /* this line terminated with \n */
+	if ((prevflag = lineflag) != 0) {
+	    lineno++;				/* count previous line */
 	}
+	/************************************************************
+	 *  Input for get() is taken from auxBuf[] via auxp until that
+	 *  is exhausted. Then further input is take from the input file.
+	 ************************************************************/
+	if (x == 0 && auxp) {
+	    slen = strcspn(auxp, "\n");
+	    if (auxp[slen] == '\n') {
+		slen++;
+	    }
+	    getp[0] = strncpy(chbuf[0], auxp, slen); /* copy the BF + first part back to chbuf[] */
+	    chbuf[0][slen] = '\0';		/* terminate */
+	    auxp += slen;			/* get ready for more lines in auxBuf[] */
+	    if (strlen(auxp) == 0) {
+		auxp = 0;			/* that was it - now input is taken from file again */
+	    }
+	} else
+	if ((getp[x] = fgets(chbuf[x], CBUFSZ, fp)) == NULL) {
+	    if ((lexflag & C_PARSE) == 0) {
+		eofLineno = lineno;		/* iC parse */
+	    } else {
+		lineno = eofLineno;		/* C parse with lex */
+	    }
+	    errline = lineno;			/* no listing line at EOF */
+	    return (EOF);
+	}
+	lineflag = chbuf[x][strlen(chbuf[x])-1] == '\n' ? 1 : 0; /* this line terminated with \n */
 
 	/********************************************************
 	 *  handle different preprocessor lines
@@ -3992,14 +3963,13 @@ get(FILE* fp, int x)
 		&temp1, tempNM, tempBuf)) >= 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;
+%ifndef	BOOT_COMPILE
 		if (slen == 3 &&		/* has comment string after #line x "init.c" */
-		    strcmp(tempNM, genName) == 0) {	/* in the system file "init.c" */
+		    iC_genName &&
+		    strcmp(tempNM, iC_genName) == 0) {	/* in the system file "init.c" */
 		    int	i;
 
-		    gen_count++;		/* count C functions in pre-compile code */
-		    if (iC_debug & 010000) {	/* generate listing of compiler */
-			goto listCfunction;	/* internal functions*/
-		    }
+		    genCount++;			/* count C functions in pre-compile code */
 		    for (i = 1; i <= iC_genCount; i++) {
 			/********************************************************
 			 * System C CODE
@@ -4008,17 +3978,18 @@ get(FILE* fp, int x)
 			 * function block will be listed if the function block is
 			 * in use on the basis of the first entry for the line.
 			 ********************************************************/
-			if (temp1 == genLineNums[i] &&	/* find i for this line */
-			    functionUse[i].c_cnt) {	/* is function block in use? */
-			    goto listCfunction;		/* yes */
+			if (temp1 == iC_genLineNums[i] &&	/* find i for this line */
+			    functionUse[i].c_cnt) {		/* is function block in use? */
+			    goto listCfunction;			/* yes */
 			}
 		    }
 		    continue;			/* no listing for system C CODE not in use */
-		} else if (gen_count) {
-		    assert(gen_count == iC_genCount);	/* correct in init.c */
-		    gen_count = 0;
+		} else if (genCount) {
+		    assert(genCount == iC_genCount);	/* correct in init.c */
+		    genCount = 0;
 		}
 	      listCfunction:
+%endif	/* BOOT_COMPILE */
 		strncpy(inpNM, tempNM, BUFS);	/* defer changing name until used */
 		if (iC_debug & 06) {
 		    if (lexflag & C_FIRST) {
@@ -4053,7 +4024,7 @@ get(FILE* fp, int x)
 	     ********************************************************/
 	    if ((lexflag & C_LINE) == 0) {
 		if (cFn && (iC_debug & 0402) != 0402) {
-		    if (cFn > iC_genCount || functionUse[cFn].c_cnt || (iC_debug & 010000)) {
+		    if (cFn > iC_genCount || functionUse[cFn].c_cnt) {
 			fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]); /* C function head listing */
 		    }
 		    cFn = 0;
@@ -4171,7 +4142,7 @@ iClex(void)
 	    ccfrag = 0;
 	    return 0;				/* EOF in copy C block or statement */
 	}
-	iClval.val.v = c_number << FUN_OFFSET;	/* return case # */
+	iClval.vai.v = c_number << FUN_OFFSET;	/* return case # */
 	ccfrag = 0;
 	c = CCFRAG;
 	goto retfl;
@@ -4191,7 +4162,7 @@ iClex(void)
 	}
 	if (isdigit(c)) {
 	    unget(c);				/* must be at least a single 0 */
-	    iClval.val.v = (unsigned int)getNumber();	/* decimal octal or hex - getNumber marks text boundaries */
+	    iClval.vai.v = (unsigned int)getNumber();	/* decimal octal or hex - getNumber marks text boundaries */
 	    c = NUMBER;				/* value used in immCarrayHead */
 	    goto retfl;
 	}
@@ -4527,10 +4498,12 @@ iClex(void)
 	    if (qtoken) {
 		c = qtoken;			/* LOUT or AOUT */
 	    } else
-	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 0 LVARC 0 ... NUMBER ... val not needed */
+	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 0 LVARC 0 ... NUMBER ... */
 		c = lex_act[symp->ftype];	/* UNDEF AVAR LVAR ..YYERRCODE.. AOUT LOUT CVAR TVAR */
 	    } else if ((typ == ARNC || typ == LOGC) && symp->ftype == UDFA) {
 		c = IMMCARRAY;			/* UDFA ARNC and UDFA LOGC are immC arrays not UNDEF */
+	    } else if (typ == NCONST) {		/* c === NUMBER */
+		iClval.vai.v = 0;		/* return vai although not needed - clean extended listing */
 	    }
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {
 		symp = lp->le_sym;		/* original via backptr */
@@ -4563,7 +4536,7 @@ iClex(void)
 		break;
 	    case '&':
 		if (c1 == '&') {
-		    c = AA; goto found;		/* && */
+		    c = B_AND; goto found;	/* && */
 		} else if (c1 == '=') {
 		    c = OPE; goto found;	/* &= */
 		}
@@ -4648,7 +4621,7 @@ iClex(void)
 		break;
 	    case '|':
 		if (c1 == '|') {
-		    c = OO; goto found;		/* || */
+		    c = B_OR; goto found;	/* || */
 		} else if (c1 == '=') {
 		    c = OPE; goto found;	/* |= */
 		}
@@ -4662,9 +4635,9 @@ iClex(void)
 	    }
 	    unget(c1);				/* c1 was not used (including EOF) */
 	found:
-	    iClval.val.v = c;			/* return to yacc as is */
+	    iClval.vai.v = c;			/* return to yacc as is */
 	retfl:
-	    iClval.val.f = iCstmtp;		/* all sources are iClval.val */
+	    iClval.vai.f = iCstmtp;		/* all sources are iClval.vai */
 	    if ((c == '+' || c == '-' || c == PPMM) &&
 		iCstmtp > iCbuf && *(iCstmtp-1) == *iCtext) {
 		*iCstmtp++ = ' ';		/* space between + + and - - */
@@ -4677,7 +4650,7 @@ iClex(void)
 		len = rest -1;
 		ierror("statement too long at: ", iCtext);
 	    }
-	    iClval.val.l = iCstmtp = strncpy(iCstmtp, iCtext, len) + len;
+	    iClval.vai.l = iCstmtp = strncpy(iCstmtp, iCtext, len) + len;
 	}
 	return c;				/* return token to yacc */
     }

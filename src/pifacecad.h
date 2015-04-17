@@ -1,5 +1,5 @@
 static const char pifacecad_h[] =
-"$Id: pifacecad.h,v 1.2 2014/06/04 07:22:07 jw Exp $";
+"$Id: pifacecad.h,v 1.3 2015/03/18 05:25:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -107,51 +107,20 @@ extern "C" {
 #define LCD_WIDTH 16
 #define LCD_RAM_WIDTH 80 // RAM is 80 wide, split over two lines
 
-extern int	id;		/* used to indent traces if (iC_debug & 04) */
-extern char	sp[];
-
 static const uint8_t ROW_OFFSETS[] = {0, 0x40};
 
-/**
- * Opens and initialises a PiFace Control and Display.
- * Returns a file descriptor for making raw SPI transactions to the
- * MCP23S17 (for advanced users only).
- *
- * Example:
- *
- *     pifacecad_open();
- *     int pifacedigital_fd = pifacecad_open(); // advanced
- *
- */
-int pifacecad_open(void);
+/* PiFace Control and Display is usually at /dev/spidev0.1, pfa = 4 */
+extern int	iC_CAD_FD;	/* MCP23S17 SPI file descriptor */
+extern int	iC_CADpfa;
+#define PIFACECAD_KEY	"iC PiFaceCAD I/O\n"	/* generate and test same key */
+#ifdef	TRACE 
+
+extern int	id;		/* used to indent traces if (iC_debug & 04) */
+extern char	sp[];
+#endif	/* TRACE */
 
 /**
- * Opens a PiFace Control and Display without initialising it.
- * Returns a file descriptor for making raw SPI transactions to the
- * MCP23S17 (for advanced users only).
- *
- * Example:
- *
- *     pifacecad_open_noinit();
- *     int pifacedigital_fd = pifacecad_open_noinit(); // advanced
- *
- */
-int pifacecad_open_noinit(void);
-
-/**
- * Closes a PiFace Control and Display (turns off interrupts, closes file
- * descriptor).
- *
- * Example:
- *
- *     pifacecad_close();
- *
- */
-void pifacecad_close(void);
-
-/**
- * Initialised the LCD. You will not need to call this if you have called
- * pifacecad_open.
+ * Initialised the LCD.
  *
  * Example:
  *
@@ -159,26 +128,6 @@ void pifacecad_close(void);
  *
  */
 void pifacecad_lcd_init(int fd, uint8_t pfa);
-
-/**
- * Reads the entire switch port.
- *
- * Example:
- *
- *     uint8_t switch_bits = pifacecad_read_switches();
- *
- */
-uint8_t pifacecad_read_switches(void);
-
-/**
- * Reads a single switch.
- *
- * Example (read switch 3):
- *
- *     uint8_t switch_value = pifacecad_read_switch(3);
- *
- */
-uint8_t pifacecad_read_switch(uint8_t switch_num);
 
 /**
  * Writes a message to the LCD screen starting from the current cursor
@@ -436,7 +385,7 @@ void pifacecad_lcd_send_data(uint8_t data);
  *     pifacecad_lcd_send_byte(0xaa);
  *
  */
-void pifacecad_lcd_send_byte(uint8_t byte);
+void pifacecad_lcd_send_byte(uint8_t b);
 
 /**
  * Set the RS pin on the HD44780.

@@ -55,7 +55,6 @@ usage ()
   echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
   echo '	-b	generate both listings and C outputs - no executable' >&2
   echo "	-n	generate no output, report $ICC compile errors only" >&2
-  echo "		-t and -n generate 'cexe.c' for last file as a side effect" >&2
   echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo "	-f	force building of new output files" >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
@@ -102,7 +101,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.44 2014/06/30 19:45:18 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.45 2015/04/03 02:01:45 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -119,6 +118,7 @@ aux=""
 v=""
 b=""
 lib="-lict -lrt$lwsock32"
+libfile="${LIB}libict.so"
 d=" -d474"
 A=""
 S=""
@@ -180,10 +180,10 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     c )	link=3; d="$A$S$R$k";;
     b ) link=4;;
     n ) link=5; d="$A$S$R$k";;
-    s ) lib="${LIB}libict.a -lrt$lwsock32";;
+    s ) lib="${LIB}libict.a -lrt$lwsock32"; libfile="${LIB}libict.a";;
     f )	force=1;;
     e ) ef=" -lefence";;
-    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a -lrt$lwsock32";;
+    g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a -lrt$lwsock32"; libfile="${LIB}libict.a";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
     p )	if [ -z "$p" ]; then p=" -p"; fi; d="$d$p";;	# allows -pp => -p -p (-pedantic cannot handle generated C files)
@@ -206,6 +206,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
 	    b="./"
 	fi
 	lib="${b}libict$OPTARG.a -lrt$lwsock32"
+	libfile="${b}libict$OPTARG.a"
 	ldir=""
 	v="$OPTARG"
 	;;
@@ -217,6 +218,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
 	b="$OPTARG/"
 	if [ -z "$v" ]; then
 	    lib="${b}libict.a -lrt$lwsock32"
+	    libfile="${b}libict.a"
 	    ldir=""
 	fi
 	;;
@@ -238,13 +240,6 @@ shift $(($OPTIND - 1))
 if [ -n "$ef" ]; then
     lib="$lib$ef"
 fi
-# echo "I=$I, k=$k, d=$d, l=$l, v=$v, b=$b, lib=$lib, force = $force, D=$D, P=$P, PA=$PA"
-# echo "*='$*'"
-# exit
-
-# if [ $q -eq 0 ]; then
-#     echo "########## '${0##*/}' ##########"
-# fi
 
 if [ -n "$aux" ]; then
     rm -f .iC_list1.h .iC_list2.h
@@ -256,7 +251,6 @@ for arg in $*; do
     ext=${arg#$base}
     icaFile="$base.ica"
     icFile="$base.ic"
-# echo "arg=$arg, base=$base, ext=$ext, icaFile=$icaFile, icFile=$icFile, lk=$lk"
     stat=0
     if [ -f $icaFile ]; then
 	if [ -n "$PA" ]; then
@@ -278,9 +272,7 @@ for arg in $*; do
 		echo "$nice${b}$IAC$v$a$S$N$P$L -o $icFile $icaFile"	# may be copy if no iCa constructs
 	    fi
 	    if ! $nice${b}$IAC$v$a$S$N$P$L -o $icFile $icaFile; then	# translate iCa to iC file
-		if [ $q -eq 0 ]; then
-		    echo "${b}$IAC$v compile errors in '$icaFile' - incorrect iC file '$icFile' generated" >&2
-		fi
+		echo "${b}$IAC$v compile errors in '$icaFile' - incorrect iC file '$icFile' generated" >&2
 		stat=1
 		let status+=20			# immac error
 	    fi
@@ -313,22 +305,24 @@ for arg in $*; do
 	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo $icFile
+		    echo "$base.c"
 		fi
 		rm -f $base.c
 		if [ $z -eq 1 ]; then
 		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile"
 		fi
 		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile; then
-		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$icFile' - no executable '$base' generated" >&2
-		    fi
+		    echo "${b}$ICC$v compile errors in '$icFile' - no executable '$base' generated" >&2
 		    stat=1
 		    let status+=1
 		fi
 	    fi
-	    if [ "$stat" -eq 0 ]; then	# do sequentially in case C file was already made
-		if [ "$base.c" -nt "$base" -o $force -ne 0 ]; then
+	    if [ "$stat" -eq 0 ]; then	# do sequentially in case C file was already made or library has changed
+		if [ "$base.c" -nt "$base" -o "$libfile" -nt "$base" -o $force -ne 0 ]; then
+		    if [ $q -eq 0 ]; then
+			if [ $z -eq 1 ]; then echo -n "# "; fi
+			echo $base
+		    fi
 		    rm -f $base
 		    if [ $z -eq 1 ]; then
 			echo "$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib"
@@ -339,24 +333,20 @@ for arg in $*; do
 				echo "./$base -d$I > $base.ini"
 			    fi
 			    if ! ./$base -d$I > $base.ini; then
-				if [ $q -eq 0 ]; then
-				    echo "run time error in initial execution of '$base'" >&2
-				fi
+				echo "run time error in initial execution of '$base'" >&2
 				let status+=1
 			    fi
 			fi
 		    else
-			if [ $q -eq 0 ]; then
-			    echo "$CC compile errors in '$base.c' - no executable '$base' generated" >&2
-			fi
+			echo "$CC compile errors in '$base.c' - no executable '$base' generated" >&2
 			let status+=1
 		    fi
 		fi
 	    fi ;;
 	1)				# -l	link all iC-files into one executable
-	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$base.c" -o "$libfile" -nt "$base" -o $force -ne 0 ]; then
 		list="$list $icFile"	# compile and link all if one has changed
-	    fi
+	    fi				# or library has changed
 	    files="$files $icFile"
 	    ;;
 	2)				# -t	generate listings file.lst
@@ -371,12 +361,10 @@ for arg in $*; do
 		fi
 		rm -f $base.lst$l
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -c -l $base.lst$l $icFile"
+		    echo "$nice${b}$ICC$v$D$d -l $base.lst$l $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -c -l $base.lst$l $icFile; then
-		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$icFile'" >&2
-		    fi
+		if ! $nice${b}$ICC$v$D$d -l $base.lst$l $icFile; then
+		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    let status+=1
 		fi
 	    fi ;;
@@ -395,9 +383,7 @@ for arg in $*; do
 		    echo "$nice${b}$ICC$v$D$d -o $base.c $icFile"
 		fi
 		if ! $nice${b}$ICC$v$D$d -o $base.c $icFile; then
-		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$icFile'" >&2
-		    fi
+		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    let status+=1
 		fi
 	    fi ;;
@@ -416,9 +402,7 @@ for arg in $*; do
 		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile"
 		fi
 		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile; then
-		    if [ $q -eq 0 ]; then
-			echo "${b}$ICC$v compile errors in '$icFile'" >&2
-		    fi
+		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    let status+=1
 		fi
 	    fi ;;
@@ -432,19 +416,15 @@ for arg in $*; do
 		first=''
 	    fi
 	    if [ $z -eq 1 ]; then
-		echo "$nice${b}$ICC$v$D$d -c $icFile"
+		echo "$nice${b}$ICC$v$D$d $icFile"
 	    fi
-	    if ! $nice${b}$ICC$v$D$d -c $icFile; then
-		if [ $q -eq 0 ]; then
-		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
-		fi
+	    if ! $nice${b}$ICC$v$D$d $icFile; then
+		echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		let status+=1
 	    fi ;;
 	esac
     elif [ -z "$ic" ]; then
-	if [ $q -eq 0 ]; then
-	    echo "Error: iC file '$icFile' does not exist or is in error" >&2
-	fi
+	echo "Error: iC file '$icFile' does not exist or is in error" >&2
 	list="$list ERROR:$base.c"
 	let status+=1
     fi
@@ -491,22 +471,16 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	    if [ -n "$I" ]; then
 		if [ $z -eq 1 ]; then echo "./$first -d$I > $first.ini"; fi
 		if ! ./$first -d$I > $first.ini; then
-		    if [ $q -eq 0 ]; then
-			echo "run time error in initial execution of '$first'" >&2
-		    fi
+		    echo "run time error in initial execution of '$first'" >&2
 		    let status+=1
 		fi
 	    fi
 	else
-	    if [ $q -eq 0 ]; then
-		echo "$CC link errors in '$list' - no executable '$first' generated" >&2
-	    fi
+	    echo "$CC link errors in '$list' - no executable '$first' generated" >&2
 	    let status+=1
 	fi
     else
-	if [ $q -eq 0 ]; then
-	    echo "${b}$ICC$v compile errors in '$list'" >&2
-	fi
+	echo "${b}$ICC$v compile errors in '$list'" >&2
     fi
 fi
 
@@ -515,9 +489,6 @@ if [ $x -ne 1 ]; then
     rm -f .iC_list1.h .iC_list2.h
 fi
 
-# if [ $status -ne 0 -a $q -eq 0 ]; then
-#     echo "########## $status errors ##########"
-# fi
 exit $status
 
 ############ POD to generate man page ##################################
@@ -546,7 +517,6 @@ iCmake - make one or more immediate-C applications
     -c      generate C outputs file.c ... only (-o target.c optional)
     -b      generate both listings and C outputs - no executable
     -n      generate no output, report immcc compile errors only
-            -t and -n generate 'cexe.c' for last file as a side effect
     -s	    link with static library libict.a (default libict.so)
     -f      force building of new output files
     -e      link all targets with -lefence to test with Electric Fence

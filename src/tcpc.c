@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.24 2014/09/10 03:47:56 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.25 2015/03/05 05:09:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -71,7 +71,6 @@ char *		iC_iidNM  = "";			/* instance ID */
 SOCKET		iC_sockFN = -1;			/* TCP/IP socket file number */
 int		iC_Xflag  = 0;			/* 1 if this process started iCserver */
 
-#ifndef	POLL 
 int		iC_maxFN = 0;
 fd_set		iC_rdfds;
 fd_set		iC_infds;
@@ -79,10 +78,6 @@ fd_set		iC_infds;
 fd_set		iC_exfds;
 fd_set		iC_ixfds;
 #endif	/* RASPBERRYPI */
-#else	/* POLL */
-static int	nfds = 0;			/* actual number of pollfd elements */
-static struct pollfd fdset[MAX_POLLFD];	/* pollfd array for socket and stdin initially */
-#endif	/* POLL */
 
 /********************************************************************
  *
@@ -167,55 +162,6 @@ iC_microPrint(const char * str, int mask)
 #endif	/* WIN32 */
     iC_micro &= ~mask;
 } /* iC_microPrint */
-#ifdef	POLL 
-
-/********************************************************************
- *
- *	Initialise the elements fd and events for the next element
- *	of the struct pollfd fdset array and adjust nfds
- *	Return:	index into fdset[] array for this file number
- *
- *******************************************************************/
-
-int
-pollSet(int fd, short events)
-{
-    assert(nfds < MAX_POLLFD);
-    fdset[nfds].fd = fd;
-    fdset[nfds].events = events;
-    return nfds++;
-} /* pollSet */
-
-/********************************************************************
- *
- *	Test revents of indexed element for poll events
- *
- *******************************************************************/
-
-int
-pollEvent(int index, short events)
-{
-    assert(index < MAX_POLLFD);
-    return fdset[index].revents & events;
-} /* pollEvent */
-
-/********************************************************************
- *
- *	De-activate the indexed element for poll events
- *
- *******************************************************************/
-
-int
-pollClr(int index)
-{
-    int		fd;
-    assert(index < MAX_POLLFD);
-    if ((fd = fdset[index].fd) >= 0) {
-	fdset[index].fd = ~fd;	/* a negative fd field de-activates the element */
-    }
-    return;
-} /* pollClr */
-#endif	/* POLL */
 
 /********************************************************************
  *
@@ -335,7 +281,7 @@ iC_connect_to_server(const char *	host,
     server.sin_port = sin_port;
 
     for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; r++) {
-	if (r < 10) {
+	if (r < 50) {			/* wait 10 seconds max - will break within 200 ms of connecting */
 	    if (r == 0 && errno == ECONNREFUSED && strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
 		if (system("iCserver -a &") != 0) {	/* execute iCserver -a as a separate process */
 		    perror("iCserver");
@@ -371,15 +317,10 @@ iC_connect_to_server(const char *	host,
  *******************************************************************/
 
 int
-#ifndef	POLL 
 iC_wait_for_next_event(struct timeval * ptv)
-#else	/* POLL */
-iC_wait_for_next_event(int timeout)
-#endif	/* POLL */
 {
     int	retval;
 
-#ifndef	POLL 
     do {				/* repeat for caught signal */
 	iC_rdfds = iC_infds;
 #ifdef RASPBERRYPI
@@ -392,9 +333,6 @@ iC_wait_for_next_event(int timeout)
 							0,
 #endif	/* RASPBERRYPI */
 					ptv)) == -1 && errno == EINTR);
-#else	/* POLL */
-    while ((retval = poll(fdset, nfds, timeout)) == -1 && errno == EINTR);
-#endif	/* POLL */
 
 #ifdef	WIN32
     if (retval == -1) {

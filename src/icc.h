@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.74 2014/09/10 02:39:01 jw Exp $";
+"@(#)$Id: icc.h,v 1.75 2015/04/08 12:22:06 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -128,6 +128,7 @@ typedef union GppIpI {
     unsigned short	channel;	/* output channel */
 #ifdef	RASPBERRYPI
     struct piFaceIO *	pfp;		/* PiFace pointer */
+    struct gpioIO *	gep;		/* GPIO pointer */
 #endif	/* RASPBERRYPI */
 #if INT_MAX == 32767 && defined (LONG16)
     long		out;		/* out value for arithhmetic */
@@ -194,8 +195,9 @@ typedef struct Gate {			/* Gate */
 				/* OUT value for OUTW gates after registration */
 #define	gt_out		gt_rll.out
 #ifdef	RASPBERRYPI
-				/* save pfp * until registration*/
+				/* save pfFaceIO * or gpioIO * until registration*/
 #define	gt_pfp		gt_rll.pfp
+#define	gt_gep		gt_rll.gep
 #endif	/* RASPBERRYPI */
 #endif	/* TCP */
 				/* reverse C function number in int array */
@@ -212,6 +214,7 @@ extern int		iC_assignL(iC_Gt * glv, int ppi, int rv);
 #endif
 extern iC_Gt *		iC_index(iC_Gt * gm, int index);
 extern struct timeval	iC_timeOut;	/* 50 mS select timeout - may be modified in iCbegin() */
+extern unsigned short	P_channel;	/* PiFaceCAD channel associated with iCbegin() */
 extern int		iCbegin(void);	/* initialisation function */
 extern int		iCend(void);	/* termination function */
 extern char		iC_stdinBuf[];	/* store a line of STDIN - reported by TX0.1 */
@@ -223,6 +226,12 @@ extern void		iC_quit(int sig);	/* quit with correct interrupt vectors */
 #define QUIT_TERMINAL	(SIGRTMAX+3)
 #define QUIT_DEBUGGER	(SIGRTMAX+4)
 #define QUIT_SERVER	(SIGRTMAX+5)
+
+/* Special code to support PiFace Control and Display */
+#define PIFACECAD_KEY	"iC PiFaceCAD I/O\n"	/* generate and test same key */
+extern void		writePiFaceCAD(		/* write display string either direct or via TCP/IP */
+			const char * displayString,
+			unsigned short channel);/* 0 = direct display or > 0 && <= 0xfff0 iCserver channel */
 #endif	/* ICG_H */
 /* ENDFILE "icg.h" */
 
@@ -486,57 +495,76 @@ extern void	iC_gateMa(Gate *, Gate *);	/* GATE master action */
 
 /* compiler tokens corresponding to ftype */
 #define	DEF_ACT \
-	UNDEF, AVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
+	UNDEF, AVAR, LVAR, LVAR, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE, YYERRCODE,\
 	YYERRCODE, AOUT, LOUT, CVAR, TVAR, YYERRCODE,
 
 #if INT_MAX == 32767
-#define VAR_USE		0x8000		/* largest value generating unsigned short */
-#define VAR_ASSIGN	0x4000		/* limits small model to 31 C functions !!! */
-#define USE_MASK	0xc000		/* (VAR_USE|VAR_ASSIGN) */
-#define VAR_MASK	0x3fff		/* (VAR_ASSIGN-1) is a positive value */
-#define USE_OFFSET	14
-#define VAL_MASK	0x1ff		/* index of arithmetic values (511 max) */
-#define FUN_OFFSET	9
-#define FUN_MAX		0x1f		/* (VAR_MASK>>FUN_OFFET) = 31 */
+#define USE_OFFSET	14	/* limits small model to 31 C functions !!! */
+#define FUN_OFFSET	9	/* limits arithmetic values to (511) */
 #else	/* INT_MAX != 32767 */
-#define VAR_USE		0x40000000	/* largest value generating signed int */
-#define VAR_ASSIGN	0x20000000	/* 8191 C functions !!! */
-#define USE_MASK	0x60000000	/* (VAR_USE|VAR_ASSIGN) */
-#define VAR_MASK	0x1fffffff	/* (VAR_ASSIGN-1) is a positive value */
-#define USE_OFFSET	29
-#define VAL_MASK	0xffff		/* index of arithmetic values (65535 max) */
-#define FUN_OFFSET	16
-#define FUN_MAX		0x1fff		/* (VAR_MASK>>FUN_OFFET) = 8191 */
+#define USE_OFFSET	29	/* limits large model to 8191 C functions !!! */
+#define FUN_OFFSET	16	/* limits arithmetic values to (65535) */
 #endif	/* INT_MAX == 32767 */
-#define USE_COUNT	(sizeof(unsigned int)*4)
-#define USE_TEXT	"??","="," v","=v",	/* must be 4 entries */
+#define VAR_USE		(1<<(USE_OFFSET+1))		/* 0x8000 0x40000000 */
+#define VAR_ASSIGN	(1<<USE_OFFSET)			/* 0x4000 0x20000000 */
+#define USE_MASK	(VAR_USE|VAR_ASSIGN)		/* 0xc000 0x60000000 */
+#define VAR_MASK	(VAR_ASSIGN-1)			/* 0x3fff 0x1fffffff */
+#define VAL_MASK	((1<<FUN_OFFSET)-1)		/*  0x1ff     0xffff */
+#define FUN_MAX		((1<<(USE_OFFSET-FUN_OFFSET))-1)/*   0x1f     0x1fff */
 
-#define YYERRCODE	256		/* defined in comp.c but not exported */
-					/* constant "iConst" Symbol is installed in S.T. */
-extern Gate		iConst;		/* defined in rsff.c */
+#define USE_COUNT	(sizeof(unsigned int)*4)
+#define USE_TEXT	"??","="," v","=v",		/* must be 4 entries */
+
+#define YYERRCODE	256	/* defined in comp.c but not exported */
+				/* constant "iConst" Symbol is installed in S.T. */
+extern Gate		iConst;	/* defined in rsff.c */
+
+/* Macro names defined once for genr.c init.c outp.c and cexe.h */
+/* as well as here for CMACRO_NAMES */
+#define MV	"iC_MV"		/* arithmetic int value in an iC arithmetic expression */
+
+#define AV	"iC_AV"		/* arithmetic int value in a C statement in an iC if else or switch block */
+#define LV	"iC_LV"		/* logical bit value in a C statement in an iC if else or switch block */
+#define AA	"iC_AA"		/* arithmetic int assignment in a C statement in an iC if else or switch block */
+#define LA	"iC_LA"		/* logical bit assignment in a C statement in an iC if else or switch block */
+#define AVI	"iC_AVI"	/* indexed arithmetic int value in a C statement in an iC if else or switch block */
+#define LVI	"iC_LVI"	/* indexed logical bit value in a C statement in an iC if else or switch block */
+#define AAI	"iC_AAI"	/* indexed arithmetic int assignment in a C statement in an iC if else or switch block */
+#define LAI	"iC_LAI"	/* indexed logical bit assignment in a C statement in an iC if else or switch block */
+#define SIZ	"iC_SIZ"	/* value of a sizeof statment in a C statement in an iC if else or switch block */
+
+#define AVL	"iC_AVL"	/* arithmetic int value in a C statement in a C literal block */
+#define LVL	"iC_LVL"	/* logical bit value in a C statement in a C literal block */
+#define AAL	"iC_AAL"	/* arithmetic int assignment in a C statement in a C literal block */
+#define LAL	"iC_LAL"	/* logical bit assignment in a C statement in a C literal block */
+#define AVIL	"iC_AVIL"	/* indexed arithmetic int value in a C statement in a C literal block */
+#define LVIL	"iC_LVIL"	/* indexed logical bit value in a C statement in a C literal block */
+#define AAIL	"iC_AAIL"	/* indexed arithmetic int assignment in a C statement in a C literal block */
+#define LAIL	"iC_LAIL"	/* indexed logical bit assignment in a C statement in a C literal block */
+#define SIZL	"iC_SIZL"	/* value of a sizeof statment in a C statement in a C literal block */
 
 /* cMacro names generated by gram.y for ARITH and GATE values and assignments */
 #define CMACRO_NAMES \
 /* 0  ERR  */	"iC_ERR(",\
-/* 1 ARITH */	"iC_AV(",\
-/* 2 GATE  */	"iC_LV(",\
-/* 3  asgn */	"iC_AA(",\
-/* 4       */	"iC_LA(",\
-/* 5 array */	"iC_AVI(",\
-/* 6       */	"iC_LVI(",\
-/* 7       */	"iC_AAI(",\
-/* 8       */	"iC_LAI(",\
-/* 9 size  */	"iC_SIZ(",\
-/* 10 literal */"iC_AVL(",\
-/* 11      */	"iC_LVL(",\
-/* 12      */	"iC_AAL(",\
-/* 13      */	"iC_LAL(",\
-/* 14      */	"iC_AVIL(",\
-/* 15      */	"iC_LVIL(",\
-/* 16      */	"iC_AAIL(",\
-/* 17      */	"iC_LAIL(",\
-/* 18 size */	"iC_SIZL(",
+/* 1 ARITH */	AV "(",\
+/* 2 GATE  */	LV "(",\
+/* 3  asgn */	AA "(",\
+/* 4       */	LA "(",\
+/* 5 array */	AVI "(",\
+/* 6       */	LVI "(",\
+/* 7       */	AAI "(",\
+/* 8       */	LAI "(",\
+/* 9 size  */	SIZ "(",\
+/* 10 literal */AVL "(",\
+/* 11      */	LVL "(",\
+/* 12      */	AAL "(",\
+/* 13      */	LAL "(",\
+/* 14      */	AVIL "(",\
+/* 15      */	LVIL "(",\
+/* 16      */	AAIL "(",\
+/* 17      */	LAIL "(",\
+/* 18 size */	SIZL "(",
 #define CMACRO_ASSIGN	2
 #define CMACRO_INDEX	4
 #define CMACRO_LITERAL	9
@@ -626,6 +654,7 @@ extern Gate *		iC_gx;		/* points to action Gate in chMbit and riMbit */
 #if YYDEBUG && !defined(_WINDOWS)
 extern short		iC_dc;		/* debug display counter in scan and rsff */
 #endif
+extern unsigned char	iC_bitIndex[];
 extern unsigned char	iC_bitMask[];
 #define	X_MASK		0xff		/* mask to detect used bits in bit I/O byte */
 #define	W_MASK		0x107		/* marks output as word I/O */
@@ -634,9 +663,13 @@ extern unsigned char	iC_bitMask[];
 #if INT_MAX != 32767 || defined (LONG16)
 #define	L_WIDTH		0x103		/* marks output as long width signed */
 #define	H_WIDTH		0x104		/* marks output as long long width signed */
+#define	S_WIDTH		0x108		/* marks output as string */
 #endif
 #ifdef	RASPBERRYPI
 #define	X_FLAG		0x200		/* flag non-registration in gt_mark */
+#define	P_FLAG		0x400		/* flag PiFace in or out Gate in gt_mark */
+#define	G_FLAG		0x800		/* flag GPIO in or out group Gate in gt_mark */
+#define	PG_MASK		0xC00		/* mask for the above 2 flags in gt_mark */
 #endif	/* RASPBERRYPI */
 
 extern void	iC_arithMa(Gate *, Gate *);	/* ARITH master action */
@@ -764,18 +797,10 @@ typedef struct	iqDetails {
 	char *		name;		/* i.name IXn, IXn-i, QXn or QXn-i */
 	Gate *		gate;		/* i.gate named IXn, IXn-i, QXn or QXn-i */
     } i;				/* name used in iCpiFace.c, gate used in load.c */
+    int			inv;		/* in or out inversion mask */
     int			val;		/* previous input or output value */
     unsigned short	channel;	/* channel to send I or receive Q to/from iCserver */
 } iqDetails;
-
-#define Iname		s[0].i.name	/* name IXn or IXn-i, used in iCpiFace.c */
-#define Qname		s[1].i.name	/* name QXn or QXn-i */
-#define Igate		s[0].i.gate	/* gate named IXn or IXn-i, used in load.c */
-#define Qgate		s[1].i.gate	/* gate named QXn or QXn-i */
-#define valI		s[0].val	/* previous input value */
-#define valQ		s[1].val	/* previous output value */
-#define channelSI	s[0].channel	/* channel number to send input to iCserver */
-#define channelRQ	s[1].channel	/* channel number to reveive output from iCserver */
 
 typedef struct	piFaceIO {
     iqDetails		s[2];		/* select IXx with iq=0, QXx with iq=1 */
@@ -785,22 +810,65 @@ typedef struct	piFaceIO {
     int			spiFN;		/* file number for CE0 or CE1 */
 } piFaceIO;
 
+/********************************************************************
+ *
+ *	gpioIO structures are organised as follows:
+ *	  each structure describes an independent IXx or QXx bit group
+ *	  which services up to 8 GPIO pins.
+ *
+ *******************************************************************/
+
+typedef struct	gpioIO {
+    iqDetails		s;		/* IXx or QXx details */
+    unsigned short	gpioNr[8];	/* gpio number for bits 0 - 7 */
+    int			gpioFN[8];	/* file number for bits 0 - 7 */
+    struct gpioIO *	nextIO;		/* arrange in null terminated linked list */
+} gpioIO;
+
+#define Iname		s[0].i.name	/* name IXn or IXn-i, used in iCpiFace.c */
+#define Qname		s[1].i.name	/* name QXn or QXn-i */
+#define Gname		s.i.name	/* GPIO name IXn QXn or IXn-i QXn-i */
+#define Igate		s[0].i.gate	/* gate named IXn or IXn-i, used in load.c */
+#define Qgate		s[1].i.gate	/* gate named QXn or QXn-i */
+#define Ggate		s.i.gate	/* GPIO gate named IXn QXn or IXn-i QXn-i */
+#define Iinv		s[0].inv	/* PiFace in inversion mask */
+#define Qinv		s[1].inv	/* PiFace out inversion mask */
+#define Ginv		s.inv		/* GPIO in or out inversion mask */
+#define Ival		s[0].val	/* PiFace previous input value */
+#define Qval		s[1].val	/* PiFace previous output value */
+#define Gval		s.val		/* GPIO previous input or output value */
+#define Ichannel	s[0].channel	/* PiFace channel number to send input to iCserver */
+#define Qchannel	s[1].channel	/* PiFace channel number to receive output from iCserver */
+#define Gchannel	s.channel	/* GPIO channel number to send or receive from iCserver */
+
+/********************************************************************
+ *
+ *	channelSel structures are used in ict.c for controlling direct I/O
+ *
+ *******************************************************************/
+
 typedef struct	channelSel {
     Gate *		g;		/* gate named IXn, IXn-i, QXn or QXn-i */
-    piFaceIO *		p;		/* pointer to selected PiFace for direct I/O */
+    int			pqs;		/* 0 no direct I/O, 1 piFaceIO, 2 gpioIO */
+    union {
+	piFaceIO *	p;		/* pointer to selected PiFace for direct I/O */
+	gpioIO *	q;		/* pointer to selected GPIO group for direct I/O */
+    };
 } channelSel;
 
 extern int	iC_opt_P;
+extern int	iC_opt_G;
 extern int	iC_opt_B;
 extern int	iC_opt_E;
 extern int	iC_opt_L;
 extern int	npf;
-extern int	npfx;
 extern int	gpio23FN;		/* /sys/class/gpio/gpio23/value LIRC file number */
 extern int	gpio25FN;		/* /sys/class/gpio/gpio25/value SPI file number */
 extern int	spidFN[];		/* /dev/spidev0.0, /dev/spidev0.1 SPI file numbers */
 extern piFaceIO	pfi[];			/* piFace names/gates and channels */
-#endif	/* !RASPBERRYPI */
+extern gpioIO *	gpioList[];		/* gpio name/gates and channels */
+extern void	iC_gpio_pud(int gpio, int pud);	/*  execute iCgpioPUD(gpio, pud) to set pull-up/down */
+#endif	/* RASPBERRYPI */
 
 #endif	/* TCP */
 

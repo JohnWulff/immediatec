@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.13 2014/08/11 05:40:18 jw Exp $";
+"@(#)$Id: misc.c,v 1.14 2015/04/13 00:14:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -35,10 +35,42 @@ static const char misc_c[] =
 #ifdef	RASPBERRYPI
 #include	"rpi_gpio.h"
 #include	"mcp23s17.h"
-#ifdef	BCM2835
+#include	"pifacecad.h"
 #include	"bcm2835.h"
-#endif	/* BCM2835 */
 #endif	/* RASPBERRYPI */
+
+/********************************************************************
+ *
+ *	iC_bitIndex[] is a 256 byte array, whose values represent the
+ *	bit position 0 - 7 of the rightmost 1 bit of the array index
+ *
+ *******************************************************************/
+
+unsigned char	iC_bitIndex[]   = {
+ 0, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,	/* index 0 has no 1's - points to 0 */
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 7, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 6, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 5, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+ 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0,
+};
+
+/********************************************************************
+ *
+ *	iC_bitMask[] is an 8 byte array, whose values are the mask for
+ *	bit position 0 - 7
+ *
+ *******************************************************************/
 
 unsigned char	iC_bitMask[]    = {
     0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80,	/* 0 1 2 3 4 5 6 7 */
@@ -56,6 +88,7 @@ char *		rpyBuf;
 
 #ifdef	RASPBERRYPI
 int		iC_opt_P;
+int		iC_opt_G;
 int		iC_opt_B;
 int		iC_opt_E;
 int		iC_opt_L;
@@ -63,13 +96,85 @@ int		npf;
 int		gpio23FN = -1;		/* /sys/class/gpio/gpio23/value LIRC file number */
 int		gpio25FN = -1;		/* /sys/class/gpio/gpio25/value SPI file number */
 int		spidFN[2] = { -1, -1 };	/* /dev/spidev0.0, /dev/spidev0.1 SPI file numbers */
-#else	/* ! RASPBERRYPI */
-#ifndef	WIN32
+piFaceIO	pfi[MAXPF];		/* piFace names/gates and channels */
+gpioIO *	gpioList[2] = { NULL, NULL };	/* GPIO names/gates and channels */
+#endif	/* RASPBERRYPI */
+#if	defined(LOAD) && ! defined(WIN32)
 #include	<time.h>
 static struct timespec	ms200 = { 0, 200000000, };
-#endif	/* ! WIN32 */
-#endif	/* ! RASPBERRYPI */
+#endif	/* defined(LOAD) && ! defined(WIN32) */
 
+/********************************************************************
+ *
+ *	Special code to support PiFace Control and Display.
+ *	Display a string either directly on a PiFaceCAD
+ *	or send it via TCP/IP on PFCAD4 to be displayed
+ *	  displayString	formatted for display on a PiFaceCAD
+ *	  channel	0 = direct display or > 0 && < 0xfff0 iCserver channel 
+ *
+ *******************************************************************/
+
+void
+writePiFaceCAD(const char * displayString, unsigned short channel)
+{
+    char *	cp;
+    char	buf[101];
+
+    if (channel == 0) {
+#ifdef	RASPBERRYPI
+	pifacecad_lcd_clear();
+	pifacecad_lcd_write(displayString);	/* write direct to PiFaceCAD */
+#else	/* RASPBERRYPI */
+	fprintf(stderr, "ERROR: cannot write directly to PiFaceCAD\n");
+	iC_quit(SIGUSR1);
+#endif	/* RASPBERRYPI */
+    } else
+    if (channel < 0xfff0) {
+	cp = buf;
+	if (snprintf(buf, 100, "%hu:%s", channel, displayString) > 100) {
+	    buf[100] = '\0';			/* terminate in case of overflow (unlikely) */
+	}
+#if	YYDEBUG
+	if (iC_debug & 0200) {
+	    fprintf(iC_outFP, "writePiFaceCAD: '%s'\n", buf);	/* terminate with a CR in case last line has none */
+	}
+#endif	/* YYDEBUG */
+	while ((cp = strchr(cp+1 , ',')) != NULL) {	/* no commas in channel: */
+	    *cp = '\036';			/* replace every comma by ASCII RS */
+	}
+	assert(iC_sockFN > 0);
+	iC_send_msg_to_server(iC_sockFN, buf);
+    } else {
+	fprintf(stderr, "ERROR: unable to register as PFCAD4 sender - is PiFaceCAD input correct ?\n");
+	iC_quit(SIGUSR1);
+    }
+} /* writePiFaceCAD */
+#ifdef	RASPBERRYPI
+
+/********************************************************************
+ *
+ *  Execute the SUID root progran iCgpioPUD(gpio, pud) to set pull-up/down
+ *      gpio	GPIO number in the range 0 - 27 (higher GPIO's are in the next block)
+ *      pud	0	BCM2835_GPIO_PUD_OFF
+ *      pud	1	BCM2835_GPIO_PUD_DOWN
+ *      pud	2	BCM2835_GPIO_PUD_UP
+ *
+ *******************************************************************/
+
+void
+iC_gpio_pud(int gpio, int pud)
+{
+    int		r;
+    char	buf[100];
+
+    snprintf(buf, 100, "iCgpioPUD -g %d -p %d", gpio, pud);	/* execute iCgpioPUD as a separate process */
+    if ((r = system(buf)) != 0) {
+	perror("iCgpioPUD");
+	fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
+	    iC_progname, buf, r);
+    }
+} /* iC_gpio_pud */
+#endif	/* RASPBERRYPI */
 #endif	/* TCP */
 
 #ifndef	_MSDOS_
@@ -160,11 +265,11 @@ iC_efree(void *	p)
 
 /********************************************************************
  *
- *	Compare gt_ids in two Gates support of qsort()
+ *  Compare gt_ids in two Gates support of qsort()
  *
- *	change the collating position of '_' before digits ('.' '/')
- *	change all '_' to '/' to get correct ordering (/ never occurs in C variable)
- *	use strverscmp(), which puts sequences of digits in number order.
+ *  change the collating position of '_' before digits ('.' '/')
+ *  change all '_' to '/' to get correct ordering (/ never occurs in C variable)
+ *  use strverscmp(), which puts sequences of digits in number order.
  *
  *******************************************************************/
 
@@ -212,7 +317,7 @@ iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
 
 /********************************************************************
  *
- *	Initialize IO
+ *  Initialize IO
  *
  *******************************************************************/
 
@@ -230,8 +335,8 @@ iC_initIO(void)
 
 /********************************************************************
  *
- *	Quit program with 'q' or ctrlC or Break via signal SIGINT
- *	or program abort on detected bugs.
+ *  Quit program with 'q' or ctrlC or Break via signal SIGINT
+ *  or program abort on detected bugs.
  *
  *******************************************************************/
 
@@ -244,53 +349,102 @@ iC_quit(int sig)
 {
 #ifdef	RASPBERRYPI
     if (iC_opt_P) {
-	int		un;
+	piFaceIO *	pfp;
 	int		pfce;
+	int		iq;
+	gpioIO *	gep;
+	unsigned short	bit;
+	unsigned short	gpio;
+	int		fn;
 
-#ifdef	BCM2835
 	/********************************************************************
-	 *	Disable the pullup resistor on gpio25/INTB
-	 *	Close the BCM2835 direct memory access
+	 *  Unexport and close all gpio files for all GPIO arguments
 	 *******************************************************************/
-	bcm2835_gpio_set_pud(25, BCM2835_GPIO_PUD_OFF);	/* Disable Pull Up */
-	bcm2835_close();
-#endif	/* BCM2835 */
-	/********************************************************************
-	 *	Close PiFaceCad
-	 *	Shutdown all slected PiFace Units leaving interrupts off and open drain
-	 *******************************************************************/
-	if (iC_debug & 0200) fprintf(iC_outFP, "### Shutdown %d unit(s)\n", npf);
-	for (un = 0; un < npf; un++) {
-	    if (setupMCP23S17(pfi[un].spiFN, pfi[un].pfa, IOCON_ODR, 0x00, 0) < 0) {
-		fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n", iC_progname, pfi[un].pfa);
+	for (iq = 0; iq <= 1; iq++) {
+	    for (gep = gpioList[iq]; gep; gep = gep->nextIO) {
+		for (bit = 0; bit <= 7; bit++) {
+		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
+			/********************************************************************
+			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to turn off pull-up/down
+			 *******************************************************************/
+			if (iq == 0) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
+			/********************************************************************
+			 *  Close GPIO N value 
+			 *******************************************************************/
+			if ((fn = gep->gpioFN[bit])> 0) {
+			    close(fn);			/* close connection to /sys/class/gpio/gpio_N/value */
+			}
+			/********************************************************************
+			 *  Force all outputs and inputs to direction "in" and "none" interrupts
+			 *******************************************************************/
+			if (sig != SIGUSR2 && gpio_export(gpio, "in", "none", 1, iC_progname) != 0) {
+			    sig = SIGUSR1;		/* unable to export gpio_N */
+			}
+			/********************************************************************
+			 *  free up the sysfs for gpio N unless used by another program (SIGUSR2)
+			 *******************************************************************/
+			if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO %hu\n", gpio);
+			if (sig != SIGUSR2 && gpio_unexport(gpio) != 0) {
+			    sig = SIGUSR1;		/* unable to unexport gpio_N */
+			}
+		    }
+		}
 	    }
 	}
 	/********************************************************************
-	 *	Close selected spidev devices
+	 *  PiFaces
 	 *******************************************************************/
-	for (pfce = 0; pfce < 2; pfce++) {
-	    if (spidFN[pfce] > 0) {
-		close(spidFN[pfce]);		/* close connection to /dev/spidev0.0, /dev/spidev0.1 */
+	if (npf) {
+	    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active PiFace units\n");
+	    /********************************************************************
+	     *  Turn off the pullup resistor on gpio25/INTB
+	     *******************************************************************/
+	    iC_gpio_pud(25, BCM2835_GPIO_PUD_OFF);
+	    for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+		/********************************************************************
+		 *  Clear active PiFace output and turn off active PiFaceCad
+		 *******************************************************************/
+		if (pfp->pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
+		    writeByte(pfp->spiFN, pfp->pfa, GPIOA, 0);
+		} else if (pfp->Qgate) {			/* PiFaceCAD */
+		    pifacecad_lcd_clear();
+		    pifacecad_lcd_display_off();
+		    pifacecad_lcd_set_backlight(0);
+		}
+		/********************************************************************
+		 *  Shutdown all active PiFace Units leaving interrupts off and open drain
+		 *******************************************************************/
+		if ((pfp->Igate || pfp->Qgate) &&	/* works for both iCpiFace and apps */
+		    setupMCP23S17(pfp->spiFN, pfp->pfa, IOCON_ODR, 0x00, 0) < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n", iC_progname, pfp->pfa);
+		}
 	    }
-	}
-	/********************************************************************
-	 *	Close GPIO25/INTB/INTA value 
-	 *******************************************************************/
-	if (gpio25FN > 0) {
-	    close(gpio25FN);			/* close connection to /sys/class/gpio/gpio25/value */
-	}
-	/********************************************************************
-	 *	free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
-	 *******************************************************************/
-	if (sig != SIGUSR2 && (un = doUnexport(25)) != 0) {
-	    sig = un;				/* unable to unexport gpio 25 */
+	    /********************************************************************
+	     *  Close selected spidev devices
+	     *******************************************************************/
+	    for (pfce = 0; pfce < 2; pfce++) {
+		if (spidFN[pfce] > 0) {
+		    close(spidFN[pfce]);		/* close connection to /dev/spidev0.0, /dev/spidev0.1 */
+		}
+	    }
+	    /********************************************************************
+	     *  Close GPIO25/INTB/INTA value 
+	     *  free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
+	     *******************************************************************/
+	    if (gpio25FN > 0) {
+		close(gpio25FN);			/* close connection to /sys/class/gpio/gpio25/value */
+		if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 25\n");
+		if (sig != SIGUSR2 && gpio_unexport(25) != 0) {
+		    sig = SIGUSR1;			/* unable to unexport gpio 25 */
+		}
+	    }
 	}
     } /* iC_opt_P */
 #endif	/* RASPBERRYPI */
     /********************************************************************
      *  The following termination function is an empty function
      *  in the libict.a support library.
-     *		int iCend(void) { return 0; }
+     *  	int iCend(void) { return 0; }
      *  It may be implemented in a literal block of an iC source, in
      *  which case that function will be linked in preference.
      *  User implementations of iCend() should return 1, to activate
@@ -312,7 +466,7 @@ iC_quit(int sig)
     }
 #ifdef TCP
     if (iC_sockFN > 0) {
-#ifndef RASPBERRYPI
+#ifdef LOAD
 	if (C_channel) {
 	    /* disconnect iClive - follow with '0' for iCserver */
 	    snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
@@ -324,16 +478,17 @@ iC_quit(int sig)
 #endif	/* WIN32 */
 	    if (iC_micro) iC_microPrint("Disconnected", 0);
 	}
-#endif /* ! RASPBERRYPI */
-	if (iC_Xflag) {			/* stop iCserver if this process started it */
+#endif /* LOAD */
+	if (iC_Xflag) {				/* stop iCserver if this process started it */
 	    snprintf(regBuf, REQUEST, "X%s", iC_iccNM);
 	    iC_send_msg_to_server(iC_sockFN, regBuf);
 	}
+	iC_send_msg_to_server(iC_sockFN, "");	/* zero length message to disconnect */
 	close(iC_sockFN);			/* close connection to iCserver */
     }
 #endif /* TCP */
     /********************************************************************
-     *	Normal quit
+     *  Normal quit
      *******************************************************************/
     fflush(iC_outFP);				/* in case dangling debug messages without CR */
     if (iC_outFP != stdout) {
@@ -352,7 +507,7 @@ iC_quit(int sig)
     } else if (sig == SIGUSR1) {
 	fprintf(iC_errFP, "\n'%s' stopped by 'non-recoverable run-time error'\n", iC_iccNM);
     }
-#if defined(TCP) && ! defined(RASPBERRYPI)
+#if defined(TCP) && defined(LOAD)
     if (iC_savFP) {
 	fflush(iC_savFP);
 	fclose(iC_savFP);
@@ -361,7 +516,7 @@ iC_quit(int sig)
 	fflush(iC_vcdFP);
 	fclose(iC_vcdFP);
     }
-#endif /* defined(TCP) && ! defined(RASPBERRYPI) */
+#endif /* defined(TCP) && defined(LOAD) */
 #ifdef	_MSDOS_
     if (oldhandler && iC_debug & 03000) {
 	/* reset the old interrupt handler */
@@ -380,18 +535,14 @@ iC_quit(int sig)
 	fflush(iC_errFP);
 	fclose(iC_errFP);
     }
-#ifdef	TCP
-#ifdef	EFENCE
+#if defined(TCP) && defined(EFENCE)
     free(rpyBuf);
     free(regBuf);
-#endif	/* EFENCE */
-#ifndef	RASPBERRYPI
-#ifdef	EFENCE
+#ifdef	LOAD
     free(msgBuf);
     free(iC_outBuf);
-#endif	/* EFENCE */
-#endif	/* !RASPBERRYPI */
-#endif	/* TCP */
+#endif	/* LOAD */
+#endif /* defined(TCP) && defined(EFENCE) */
     exit(sig < QUIT_TERMINAL ? sig : 0);	/* really quit */
 } /* iC_quit */
 #endif /* defined(RUN) || defined (TCP) || defined(LOAD) */

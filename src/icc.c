@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.70 2013/09/10 08:31:47 jw Exp $";
+"@(#)$Id: icc.c,v 1.71 2014/11/10 22:24:28 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -46,7 +46,6 @@ unsigned int		iC_useStack[USESTACKSZ];
 unsigned int		iC_useStackIndex = 0;
 
 unsigned short		iC_optimise = 07;	/* optimisation levels 0 - 7 */
-int			iC_genCount;
 
 static const char *	usage =
 "Usage:\n"
@@ -120,7 +119,9 @@ static const char *	usage =
 #endif	/* YACC */
 #endif	/* RUN or TCP */
 "                 +4000  supress listing alias post processor (save temp files)\n"
-"                +10000  generate listing of compiler internal functions\n"
+#ifdef BOOT_COMPILE
+"                +20000  generate pre-compiled function blocks for init.c\n"
+#endif	/* BOOT_COMPILE */
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        iC language source file (extension .ic)\n"
 "        -               or default: take iC source from stdin\n"
@@ -802,7 +803,6 @@ main(
 	exit(0);			/* check all option processing only */
     }
     iC_debug &= 037777;			/* allow only cases specified */
-    iC_genCount = ((iC_optimise & 04) != 0) ? 1 : GEN_COUNT;
     iFlag = 0;
     /********************************************************************
      *  Generate and open temporary files T1FN T2FN T3FN
@@ -1131,7 +1131,7 @@ immcc - the immediate-C to C compiler
          +2  logic generation                     (+4002 Symbol Table)
          +1  iC yacc debug info  (on stdout only) (+4001 C yacc info)
       +4000  supress listing alias post processor (save temp files)
-     +10000  generate listing of compiler internal functions
+     +20000  generate pre-compiled function blocks for init.c (BOOT_COMPILE)
 
     <src.ic> iC language source file (extension .ic)
     -        or default: take iC source from stdin

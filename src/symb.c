@@ -1,5 +1,5 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c,v 1.21 2012/08/29 05:03:57 jw Exp $";
+"@(#)$Id: symb.c,v 1.22 2014/10/06 07:03:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -135,7 +135,7 @@ link_sym(Symbol *	sp)			/* link Symbol into symbol table */
 } /* link_sym */
 
 Symbol *
-unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table */
+unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table - keep name and attributes */
 {
     Symbol *	tsp;
 
@@ -147,17 +147,17 @@ unlink_sym(Symbol *	sp)			/* unlink Symbol from symbol table */
 	} else {
 	    ierror("trying to delete a Symbol not yet installed:", sp->name);
 	}
-	if (sp->name) {
-	    free(sp->name);
-	    sp->name = 0;			/* flags that Symbol is not linked to S.T. */
-	}
+	sp->next = 0;				/* flags that Symbol is not linked to S.T. */
     }
-    return (sp);				/* Symbol has not been deleted from heap yet */
+    return (sp);				/* Symbol and its name has not been deleted from heap yet */
 } /* unlink_sym */
 
 void
 uninstall(Symbol *	sp)			/* completely remove the Symbol */
 {
     unlink_sym(sp);				/* unlink Symbol from symbol table */
-    free(sp);					/* delete Symbol name and Symbol space */
+    if (sp->name) {
+	free(sp->name);				/* free name space */
+    }
+    free(sp);					/* delete Symbol and free Symbol space */
 } /* uninstall */

@@ -16,7 +16,7 @@
 #ifndef MCP23S17_H
 #define MCP23S17_H
 static const char mcp23s17_h[] =
-"$Id: mcp23s17.h,v 1.2 2014/05/05 00:07:13 jw Exp $";
+"$Id: mcp23s17.h,v 1.3 2015/03/17 23:54:33 jw Exp $";
 
 #include	<stdio.h>
 #include	<stdint.h>
@@ -70,11 +70,13 @@ static const char mcp23s17_h[] =
 extern FILE *		iC_outFP;			/* listing file pointer */
 extern FILE *		iC_errFP;			/* error file pointer */
 extern short		iC_debug;
+#ifdef	TRACE 
 
 extern int	id;		/* used to indent traces if (iC_debug & 04) */
 extern char	sp[];
+#endif	/* TRACE */
 
-extern uint8_t	readData[8][MCP_MAX];
+extern uint8_t		readData[8][MCP_MAX];
 
 extern int		setupSPI(int pfce);
 extern int		setupMCP23S17(int spiFd, int pfa, int odr, int inten, uint8_t intf);

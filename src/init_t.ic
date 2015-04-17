@@ -31,26 +31,135 @@
  *	# that this generated code produces the right results - now
  *	# the automatic generator can be used to vary the built-ins)
  *
- * $Id: init_t.ic,v 1.3 2014/01/23 00:26:21 jw Exp $
+ * $Id: init_t.ic,v 1.4 2014/11/03 11:01:00 jw Exp $
  *******************************************************************/
 
 use strict;
 
-imm bit Aorce(bit arg1, bit on, bit off) { this = FORCE(arg1, on, off); }
-imm bit B(bit expr, clock dcl) { this = D(expr, dcl); }
-imm bit Cr_(bit set, clock scl, bit res, clock rcl) { this = SR_(set, scl, res, rcl); }
-imm bit Dr_(bit expr, clock dcl, bit res, clock rcl) { this = DR_(expr, dcl, res, rcl); }
-imm bit Err_(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) { this = SRR_(set, scl, res, rcl, res2, r2cl); }
-imm bit Fsr_(bit expr, clock dcl, bit set, clock scl, bit res, clock rcl) { this = DSR_(expr, dcl, set, scl, res, rcl); }
-imm int Gh(int dat, clock dcl) { this = SH(dat, dcl); }
-imm int Hhr_(int dat, clock dcl, bit res, clock rcl) { this = SHR_(dat, dcl, res, rcl); }
-imm int Ihsr_(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) { this = SHSR_(dat, dcl, set, scl, res, rcl); }
-imm bit Jise(bit trig, clock clk) { this = RISE(trig, clk); }
-imm bit Khange(bit trig, clock clk) { this = CHANGE(trig, clk); }
-imm bit Khange2(int val, clock clk) { this = CHANGE(val, clk); }
-imm clock Llock(bit trig, clock clk) { this = CLOCK(trig, clk); }
-imm clock Llock2(bit trig, clock clk, bit trig2, clock clk2) { this = CLOCK(trig, clk, trig2, clk2); }
-imm timer Mimer(bit trig, clock clk) { this = TIMER(trig, clk); }
-imm timer Mimer2(bit trig, clock clk, bit trig2, clock clk2) { this = TIMER(trig, clk, trig2, clk2); }
-imm timer Nimer1(bit trig, clock clk) { this = TIMER1(trig, clk); }
-imm timer Nimer12(bit trig, clock clk, bit trig2, clock clk2) { this = TIMER1(trig, clk, trig2, clk2); }
+/* low level built-in functions - functions which cannot be compiled as function blocks */
+     /* FORCE() */
+imm bit Aorce(bit arg1, bit on, bit off) {
+    this = FORCE(arg1, on, off);
+}
+     /* D() */
+imm bit B(bit expr, clock dcl) {
+    this = D(expr, dcl);
+}
+     /* SR_() */
+imm bit Cr_(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(set, scl, res, rcl);
+}
+     /* DR_() */
+imm bit Dr_(bit expr, clock dcl, bit res, clock rcl) {
+    this = DR_(expr, dcl, res, rcl);
+}
+     /* SRR_() */
+imm bit Err_(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) {
+    this = SRR_(set, scl, res, rcl, res2, r2cl);
+}
+     /* DSR_() */
+imm bit Fsr_(bit expr, clock dcl, bit set, clock scl, bit res, clock rcl) {
+    this = DSR_(expr, dcl, set, scl, res, rcl);
+}
+     /* SH() */
+imm int Gh(int dat, clock dcl) {
+    this = SH(dat, dcl);
+}
+     /* SHR_() */
+imm int Hhr_(int dat, clock dcl, bit res, clock rcl) {
+    this = SHR_(dat, dcl, res, rcl);
+}
+     /* SHSR_() */
+imm int Ihsr_(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {
+    this = SHSR_(dat, dcl, set, scl, res, rcl);
+}
+     /* RISE() */
+imm bit Jise(bit trig, clock clk) {
+    this = RISE(trig, clk);
+}
+     /* CHANGE() */
+imm bit Khange(bit trig, clock clk) {
+    this = CHANGE(trig, clk);
+}
+     /* CHANGE2() */
+imm bit Khange2(int val, clock clk) {
+    this = CHANGE(val, clk);
+}
+       /* CLOCK() */
+imm clock Llock(bit trig, clock clk) {
+    this = CLOCK(trig, clk);
+}
+       /* CLOCK2() */
+imm clock Llock2(bit trig, clock clk, bit trig2, clock clk2) {
+    this = CLOCK(trig, clk, trig2, clk2);
+}
+       /* TIMER() */
+imm timer Mimer(bit trig, clock clk) {
+    this = TIMER(trig, clk);
+}
+       /* TIMER02() */
+imm timer Mimer02(bit trig, clock clk, bit trig2, clock clk2) {
+    this = TIMER(trig, clk, trig2, clk2);
+}
+       /* TIMER1() */
+imm timer Mimer1(bit trig, clock clk) {
+    this = TIMER1(trig, clk);
+}
+       /* TIMER12() */
+imm timer Mimer12(bit trig, clock clk, bit trig2, clock clk2) {
+    this = TIMER1(trig, clk, trig2, clk2);
+}
+/* extended built-in functions - previously compiled as system function blocks at start up */
+     /* SR() */
+imm bit Nr(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(set, scl, res, rcl);
+}
+     /* SRX() */
+imm bit Orx(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(set & ~res, scl, ~set & res, rcl);
+}
+     /* JK() */
+imm bit Pk(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(~this & set, scl, this & res, rcl);
+}
+     /* SRR() */
+imm bit Qrr(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) {
+    this = SRR_(set, scl, res, rcl, res2, r2cl);
+}
+     /* DR() */
+imm bit Rr(bit dat, clock dcl, bit res, clock rcl) {
+    this = DR_(dat & ~res | this & res, dcl, res, rcl);
+}
+     /* DSR() */
+imm bit Ssr(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {
+    imm bit i = set | res; this = DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl);
+}
+     /* SHR() */
+imm int Thr(int dat, clock dcl, bit res, clock rcl) {
+    this = SHR_( res ? this : dat, dcl, res, rcl);	/* #line 139 "init_t.ic" */
+}
+     /* SHSR() */
+imm int Uhsr(int dat, clock dcl, bit set, clock scl, bit res, clock rcl) {
+    this = SHSR_(set | res ? this : dat, dcl, set & ~res, scl, ~set & res, rcl);
+}
+     /* ST() */
+imm bit Vt(bit set, clock scl, clock tcl) {
+    this = SR_(set, scl, this, tcl);
+}
+     /* SRT() */
+imm bit Wrt(bit set, clock scl, bit res, clock rcl, clock tcl) {
+    this = SRR_(set, scl, res, rcl, this, tcl);
+}
+     /* FALL() */
+imm bit Xall(bit fall, clock clk) {
+    this = RISE(~fall, clk);
+}
+     /* LATCH() */
+imm bit Yatch(bit set, bit res) {
+    this = FORCE(this, set, res);
+}
+     /* DLATCH() */
+imm bit Zlatch(bit set, bit res, clock clk) {
+    this = D(FORCE(this, set, res), clk);
+}
+/* end built-in functions */

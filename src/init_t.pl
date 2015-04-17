@@ -32,8 +32,11 @@
 #	# (the original was produced manually and was used to check
 #	# that this generated code produces the right results - now
 #	# the automatic generator can be used to vary the built-ins)
+#   to check the output init_t.out against init.c with the changes
+#   from v 1.3 to 1.4 do the following:
+#   perl -e 'while (<>) { s/0xc([12])/0x8$1/g; s/TIMER02/TIMER2/g; print; }' init_t.out | diff -wB - init.c | less
 #
-# $Id: init_t.pl,v 1.3 2014/01/23 00:16:42 jw Exp $
+# $Id: init_t.pl,v 1.4 2014/11/05 23:31:22 jw Exp $
 ########################################################################
 
 use strict;
@@ -43,27 +46,39 @@ my $save = 0;
 my $line;
 my @block = ();
 my %xlate = (
-    Aorce => "FORCE",
-    B => "D",
-    Cr_ => "SR_",
-    Dr_ => "DR_",
-    Err_ => "SRR_",
-    Fsr_ => "DSR_",
-    Gh => "SH",
-    Hhr_ => "SHR_",
-    Ihsr_ => "SHSR_",
-    Jise => "RISE",
-    Khange => "CHANGE",
-    Llock => "CLOCK",
-    Mimer => "TIMER",
-    Nimer1 => "TIMER1",
-    Olock => "CLOCK",
-    Pimer => "TIMER",
-    Qimer1 => "TIMER1",
+# low level built-in functions - functions which cannot be compiled as function blocks
+    Aorce	=> "FORCE",
+    B		=> "D",
+    Cr_		=> "SR_",
+    Dr_		=> "DR_",
+    Err_	=> "SRR_",
+    Fsr_	=> "DSR_",
+    Gh		=> "SH",
+    Hhr_	=> "SHR_",
+    Ihsr_	=> "SHSR_",
+    Jise	=> "RISE",
+    Khange	=> "CHANGE",
+    Llock	=> "CLOCK",
+    Mimer	=> "TIMER",
+# extended built-in functions - previously compiled as system function blocks at start up
+    Nr		=> "SR",
+    Orx		=> "SRX",
+    Pk		=> "JK",
+    Qrr		=> "SRR",
+    Rr		=> "DR",
+    Ssr		=> "DSR",
+    Thr		=> "SHR",
+    Uhsr	=> "SHSR",
+    Vt		=> "ST",
+    Wrt		=> "SRT",
+    Xall	=> "FALL",
+    Yatch	=> "LATCH",
+    Zlatch	=> "DLATCH",
+# end built-in functions
 );
 
 while (<>) {
-    if (/^static List_e\s+l\[\] = {$/) {
+    if (/^#define FO	FUN_OFFSET$/) {
 	$save = 1;
     }
     if (@block and /^#e\w+	\/\* BOOT_COMPILE \*\/$/) {
@@ -73,7 +88,7 @@ while (<>) {
 	@block = ();
     }
     foreach $key (sort keys %xlate) {
-	s/\b$key(2)?(a_[1-3])?\b/$xlate{$key}$1$2/g;
+	s/\b$key([012]*)(a_[1-9])?\b/$xlate{$key}$1$2/g;
     }
     if ($save) {
 	push(@block, $_);

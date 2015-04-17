@@ -89,7 +89,7 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.45 2014/09/10 03:40:02 jw Exp $
+$Id: iCserver,v 1.46 2015/03/31 07:17:26 jw Exp $
 .
 
 use vars qw($opt_a $opt_g $opt_k $opt_r $opt_t $opt_R $opt_S $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
@@ -164,11 +164,11 @@ if ($opt_t or $opt_R or $opt_S) {
 $SIG{INT}  = \&catch_int;	# signal 2	(ctrl-C interrupt from keyboard)
 if ($opt_t) {
     $SIG{HUP}  = \&catch_zap;	# signal 1
-##    $SIG{USR1} = \&catch_zap;	# signal 10	(stop -10 iCserver)
-##    $SIG{USR2} = \&catch_zap;	# signal 12	(stop -12 iCserver)
-##} else {
-##    $SIG{USR1} = 'IGNORE';	# signal 10	(stop -10 iCserver)
-##    $SIG{USR2} = 'IGNORE';	# signal 12	(stop -12 iCserver)
+    $SIG{USR1} = \&catch_zap;	# signal 10	(stop -10 iCserver)
+    $SIG{USR2} = \&catch_zap;	# signal 12	(stop -12 iCserver)
+} else {
+    $SIG{USR1} = 'IGNORE';	# signal 10	(stop -10 iCserver)
+    $SIG{USR2} = 'IGNORE';	# signal 12	(stop -12 iCserver)
 }
 
 ########################################################################
@@ -326,7 +326,7 @@ sub disconnect {
 		    $rflag = 1;
 		    $Senders[$channel][2] = 0;			# reset sender
 		}
-		print "$sender: S $channel undef\n" if $opt_t;
+		print "$sender: S $Senders[$channel][1]	$channel undef\n" if $opt_t;
 	    }
 	    if ($rflag) {
 		# scan once before slicing out any array elements
@@ -340,8 +340,8 @@ sub disconnect {
 	    my $i = 0;
 	    foreach $receiver (@{$Receivers[$channel]}) {
 		if ($$receiver[0] eq $conn) {
+		    print "$sender: R $$receiver[1]	$channel spliced out\n" if $opt_t;
 		    splice @{$Receivers[$channel]}, $i, 1;
-		    print "$sender: R $channel spliced out\n" if $opt_t;
 		    ############################################################
 		    ## checked that there are no multiple Receiver entries
 		    ## with the same $conn when registering
@@ -551,7 +551,7 @@ sub autoVivify {
 #	. zero length		client has signalled shutdown
 #	. comma separated list	break up into individual items $msg1
 #	each item $msg1 has the following charecteristics:
-#	. matches /^[NnSsRr]/	registration item
+#	. matches /^[NnSsRrZ]/	registration item
 #	. matches /\d+:\d+/	split into $channel and $value, send
 #				value to all receivers for the channel
 #	. matches /^[XT]/	special actions
@@ -594,7 +594,7 @@ use warnings;
 	}
 	else {
 	    foreach $msg1 (split /,/, $msg) {	# break up multiple messages
-		if ($msg1 =~ /^(\d+):(.*)$/) {	# data message
+		if ($msg1 =~ /^(\d+):(.*)$/s) {	# data message, which may include new lines
 		    ## $1 is channel : $2 is value
 		    $channel = $1;
 		    $con = $Senders[$channel][0];
@@ -694,7 +694,7 @@ use warnings;
 				if ($rconn) {
 				    pushReceiverData($rconn, "$channel:0");	# send initial value 0
 				} else {
-				    warn "$named: sender '$name' not connected when rgistering\n";
+				    warn "$named: sender '$name' not connected when registering\n";
 				}
 			    }
 			} else {				# no receiver registered
@@ -769,13 +769,16 @@ no warnings;
 			print "$ClientNames{$conn}: $direction $name	ack = $ack	ini = '$ini'\n" if $opt_t;
 use warnings;
 		    }
-		    if ($ackString) {
+		    if ($ackString ne '') {
 			$ackString = join ',', $ackString, $ack;
 		    } else {
 			$ackString = $ack;
 		    }
 		}
 		elsif ($msg1 eq 'Z') {
+		    if ($ackString eq '') {
+			$ackString = '-0';	# send a null acknowledgment
+		    }
 		    $regFlag = 0;		# registration string has terminated
 		}
 		elsif ($msg1 =~ /^n(.+)/) {
@@ -807,7 +810,7 @@ use warnings;
 			############################################################
 			if (defined ($con = $Senders[$channel][0]) and $con eq $conn) {
 			    $Senders[$channel][0] = undef;	# no need to splice out only array entry
-			    print "$sender: s $channel undef\n" if $opt_t;
+			    print "$sender: s $Senders[$channel][1]	$channel undef\n" if $opt_t;
 			} else {
 			    warnD("$ClientNames{$conn}: trying to unregister s $name not registered as sender - aborted\n");
 			}
@@ -820,8 +823,8 @@ use warnings;
 			my $i = 0;
 			foreach $receiver (@{$Receivers[$channel]}) {
 			    if ($$receiver[0] eq $conn) {
+				print "$sender: r $$receiver[1]	$channel spliced out\n" if $opt_t;
 				splice @{$Receivers[$channel]}, $i, 1;
-				print "$sender: r $channel spliced out\n" if $opt_t;
 				############################################################
 				## checked that there are no multiple Receiver entries
 				## with the same $conn when registering
@@ -845,7 +848,7 @@ use warnings;
 		}
 	    }
 	    $sender = $ClientNames{$conn};
-	    if ($ackString) {
+	    if ($ackString ne '') {
 		print "ACK: $ackString => $sender\n" if $opt_t;
 		$conn->send_now($ackString);	# registration acknowledgment
 		$ackString = '';
@@ -1239,7 +1242,7 @@ Additional functionality in iCserver.
 
  2) As indicated under <address> above, each data type QX, QB, QW, QL
     and QH as well as IX, IB, IW, IL and IH define their own
-    address space in iC control applications. This differs form the
+    address space in iC control applications. This differs from the
     implementations 1.1 to 1.105, which defined a joint address space
     for inputs and a separate but joint address space for outputs where
     16 bit words had to have an even byte address and 32 bit long

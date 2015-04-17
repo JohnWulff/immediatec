@@ -1,4 +1,4 @@
-$Id: manifest,v 1.23 2014/05/17 23:20:00 jw Exp $
+$Id: manifest,v 1.24 2015/04/09 07:03:11 jw Exp $
 README
 doc/html/iC*.gif
 doc/html/iC*.html
@@ -12,6 +12,7 @@ src/AuxTools/ic.vim
 src/AuxTools/m
 src/AuxTools/mklst
 src/AuxTools/ml
+src/AuxTools/wulff.vim
 src/COPYING
 src/Makefile.in
 src/Mdiff
@@ -43,9 +44,9 @@ src/gram.c
 src/gram.pl
 src/gram.y
 src/gram_tab.h
-src/gtkwave-3.1.10-4.33.i586.rpm
 src/hello.ic
 src/iCbox
+src/iCgpioPUD.c
 src/iClift
 src/iClive
 src/iCmake
@@ -54,6 +55,7 @@ src/iCpiFace.c
 src/iCrfid
 src/iCserver
 src/iCstop
+src/iCtherm
 src/icbegin.c
 src/icc.c
 src/icc.h
@@ -85,12 +87,16 @@ src/ml
 src/outp.c
 src/pawk.pl
 src/perlinstall
+src/pfcad.ic
 src/pifacecad.c
 src/pifacecad.h
 src/pod2man
 src/pplstfix
+src/rfid.ic
 src/rpi_gpio.c
 src/rpi_gpio.h
+src/rpi_rev.c
+src/rpi_rev.h
 src/rsff.c
 src/scan.c
 src/simple.ic
@@ -101,4 +107,5 @@ src/sortm28_1.vcd
 src/symb.c
 src/tcpc.c
 src/tcpc.h
+src/therm.ic
 src/vcd2sav

@@ -280,7 +280,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.55 2014/08/03 09:49:47 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.56 2015/03/06 00:33:47 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1300,7 +1300,7 @@ sub register_at_server {
     if ($server >= 0) {
 	until ($conn) {
 	    Msg->inhibit_nagle(1);	# inhibit Nagle's algorithm for real time response
-	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
 		print "Connection $named at server.\n";
 		$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
