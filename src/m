@@ -33,7 +33,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m,v 1.16 2015/04/09 02:18:00 jw Exp $' >&2
+    echo '$Id: m,v 1.17 2015/04/25 06:38:22 jw Exp $' >&2
 }
 
 name=${0##*/}
@@ -90,6 +90,6 @@ if [ -n "$clSrtm" ]; then
 fi
 
 if [ -n "$i" ]; then
-    echo "### make install"
-    make install
+    echo "### make OPT=\"$dw\" install"
+    make OPT="$dw" install
 fi
