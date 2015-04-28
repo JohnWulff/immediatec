@@ -33,7 +33,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m,v 1.17 2015/04/25 06:38:22 jw Exp $' >&2
+    echo '$Id: m,v 1.18 2015/04/28 04:55:10 jw Exp $' >&2
 }
 
 name=${0##*/}
@@ -43,6 +43,7 @@ dw=''
 i=''
 P=''
 z=0
+o=''
 
 while getopts ":clSPrtmpudsyezD:W:Iih" opt; do
     case $opt in
@@ -79,7 +80,7 @@ shift $(($OPTIND - 1))
 
 if [ -n "$P" ]; then
     echo "### make iCpiFace and iCgpioPUD"
-    makeAll -gPG
+    makeAll -qgPG$pudsyez$dw
 elif [ -z "$clSrtm" ]; then
     clSrtm="cl"
 fi
@@ -90,6 +91,14 @@ if [ -n "$clSrtm" ]; then
 fi
 
 if [ -n "$i" ]; then
-    echo "### make OPT=\"$dw\" install"
-    make OPT="$dw" install
+    if [ -x /bin/uname ]; then
+	cpu=`/bin/uname -m`
+	if [[ "$cpu" =~ "armv" ]]; then
+	    echo "### make iCpiFace and iCgpioPUD"
+	    makeAll -qgPG$pudsyez$dw
+	    o=" OPT=\"-DRASPBERRYPI\""
+	fi
+    fi
+    echo "### make$o install"
+    make$o install
 fi
