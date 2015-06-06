@@ -1,4 +1,4 @@
-$Id: manifest,v 1.24 2015/04/09 07:03:11 jw Exp $
+$Id: manifest,v 1.25 2015/06/06 11:56:41 jw Exp $
 README
 doc/html/iC*.gif
 doc/html/iC*.html
@@ -17,6 +17,7 @@ src/COPYING
 src/Makefile.in
 src/Mdiff
 src/Msg.pm
+src/README.RPi
 src/README.tpl
 src/Test0
 src/bar.ic
