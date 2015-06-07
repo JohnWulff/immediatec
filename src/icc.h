@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.75 2015/04/08 12:22:06 jw Exp $";
+"@(#)$Id: icc.h,v 1.76 2015/05/24 11:27:30 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -387,7 +387,7 @@ extern void	iC_gateMa(Gate *, Gate *);	/* GATE master action */
 	"iC_SH","iC_FF","iC_EF","iC_VF","iC_SW","iC_CF","iC_NCONST","iC_INPB","iC_INPW","iC_INPX",\
 	"iC_CLK","iC_TIM","iC_ALIAS","iC_ERR","iC_KEYW","iC_CTYPE","iC_CWORD","iC_IFUNCT",
 
-#define	OPS	".-++\"^&|%*#/>({=][<:!@?ktwi"	/* DEBUG display of types - line up with pplstfix */
+#define	OPS	".-++'^&|%*#/>({=][<:!@?ktwi"	/* DEBUG display of types - line up with pplstfix */
 
 /* ftypes corresponding to types */
 #define	FTYPES \
@@ -500,21 +500,20 @@ extern void	iC_gateMa(Gate *, Gate *);	/* GATE master action */
 	YYERRCODE, AOUT, LOUT, CVAR, TVAR, YYERRCODE,
 
 #if INT_MAX == 32767
-#define USE_OFFSET	14	/* limits small model to 31 C functions !!! */
-#define FUN_OFFSET	9	/* limits arithmetic values to (511) */
+#define FUN_OFFSET	9	/* limits small model to 127 C functions, 511 arith values */
 #else	/* INT_MAX != 32767 */
-#define USE_OFFSET	29	/* limits large model to 8191 C functions !!! */
-#define FUN_OFFSET	16	/* limits arithmetic values to (65535) */
+#define FUN_OFFSET	16	/* limits large model to 65535 C functions, 65535 arith values */
 #endif	/* INT_MAX == 32767 */
-#define VAR_USE		(1<<(USE_OFFSET+1))		/* 0x8000 0x40000000 */
-#define VAR_ASSIGN	(1<<USE_OFFSET)			/* 0x4000 0x20000000 */
-#define USE_MASK	(VAR_USE|VAR_ASSIGN)		/* 0xc000 0x60000000 */
-#define VAR_MASK	(VAR_ASSIGN-1)			/* 0x3fff 0x1fffffff */
-#define VAL_MASK	((1<<FUN_OFFSET)-1)		/*  0x1ff     0xffff */
-#define FUN_MAX		((1<<(USE_OFFSET-FUN_OFFSET))-1)/*   0x1f     0x1fff */
+#define VAR_ASSIGN	0x01	/* EA >> AU_OFS in comp.h */
+#define VAR_USE		0x02	/* EU >> AU_OFS in comp.h */
+#define USE_MASK	0x03	/* AU >> AU_OFS in comp.h */
+									/*  small       large   */
+#define VAL_MASK	((1<<FUN_OFFSET)-1)				/* 0x01ff    0x0000ffff */
+#define FUN_MASK	(~VAL_MASK)					/* 0xfe00    0xffff0000 */
+#define FUN_MAX		((1<<((sizeof(unsigned int)*8)-FUN_OFFSET))-1)	/* 0x007f    0x0000ffff */
 
-#define USE_COUNT	(sizeof(unsigned int)*4)
-#define USE_TEXT	"??","="," v","=v",		/* must be 4 entries */
+#define USE_COUNT	(sizeof(unsigned int)*(8/2))	/* 8 bit byte / require 2 bits each */
+#define USE_TEXT	"??","="," v","=v",		/* must be 4 entries for 2 bits under USE_MASK */
 
 #define YYERRCODE	256	/* defined in comp.c but not exported */
 				/* constant "iConst" Symbol is installed in S.T. */

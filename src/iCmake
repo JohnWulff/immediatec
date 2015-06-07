@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2012  John E. Wulff
+#	Copyright (C) 2000-2015  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -80,7 +80,10 @@ usage ()
   echo '	    -W[no-]deprecated-logic    use of && || ! in pure bit expressions' >&2
   echo '	    -W[no-]function-parameter  unused parameters in functions' >&2
   echo '	    -W[no-]function-delete     delete before function re-definition' >&2
-  echo '	    -W[no-]deprecated          (default) [none]/all of the above' >&2
+  echo '	    -W[no-]deprecated          [none]/all of the above' >&2
+  echo '	    -W[no-]undefined-gate      undefined gate' >&2
+  echo '	    -W[no-]unused-gate         unused gate' >&2
+  echo '	    -W[no-]all                 [no]/all warnings + -Wall for C compile' >&2
   echo "	-a      $IAC: output FOR loop control and %define lines as comments" >&2
   echo "	-L      generate auxiliary 'file.log' for debugging $IAC translation" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
@@ -101,7 +104,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.45 2015/04/03 02:01:45 jw Exp $' >&2
+  echo '	$Id: iCmake,v 1.46 2015/06/07 04:11:57 jw Exp $' >&2
 }
 
 lwsock32=""
@@ -229,7 +232,7 @@ while getopts ":lo:itcbnsfegASpRaLk:jIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     C ) D="$D -C '$OPTARG'"; C="$C -D '$OPTARG'";;
     V ) D="$D -V '$OPTARG'"; C="$C -U '$OPTARG'";;
     P ) P="$P -P '$OPTARG'"; Pa=${OPTARG%=*}; PA="${PA}_${Pa}"; if [ $Pa != $OPTARG ]; then Pz=${OPTARG#$Pa=}; PA="${PA}_${Pz}"; fi;;
-    W ) D="$D -W$OPTARG";;
+    W ) D="$D -W$OPTARG"; if [ "$OPTARG" = "all" ]; then  CFL="$CFL -Wall"; fi;;
     z )	z=1;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
@@ -542,7 +545,10 @@ iCmake - make one or more immediate-C applications
         -W[no-]deprecated-logic    use of && || ! in pure bit expressions
         -W[no-]function-parameter  unused parameters in functions
         -W[no-]function-delete     delete before function re-definition
-        -W[no-]deprecated          (default) [none]/all of the above
+        -W[no-]deprecated          [none]/all of the above
+        -W[no-]undefined-gate      undefined gate
+        -W[no-]unused-gate         unused gate
+        -W[no-]all                 [no]/all warnings + -Wall for C compile
     -a      immac: output FOR loop control and %define lines as comments
     -L      generate auxiliary 'file.log' for debugging immac translation
     -k<lim> highest I/O index (default: no limit; 63 for -c mode)
@@ -574,10 +580,10 @@ compiler - currently B<gcc> (this can be changed).
 If a source file contains 'FOR loops', 'IF statements' or %define
 macro definitions, it is an iCa language file and should be named
 <source>.ica.  This is translated to an iC source file using the
-B<immac> pre-compiler, which is then translated into a C source be the
+B<immac> pre-compiler, which is then translated into a C source by the
 B<immcc> compiler. Otherwise the source should have the extension .ic,
 which is translated directly by B<immcc>. If a file with the extension
-.ic has iCa constucts a warning is issued and no attempt is made to
+.ic has iCa constructs a warning is issued and no attempt is made to
 tranlsate it with B<immcc> (this would cause serious errors).
 
 Various options allow partial compilation and generation of listings.
@@ -599,7 +605,7 @@ L<immcc(1)>, L<immac(1)>, L<iClive(1)>, L<iCserver(1)>, L<iCbox(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2012  John E. Wulff
+COPYRIGHT (C) 2000-2015  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

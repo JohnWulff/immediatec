@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.71 2014/11/10 22:24:28 jw Exp $";
+"@(#)$Id: icc.c,v 1.72 2015/06/07 03:16:24 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -83,7 +83,10 @@ static const char *	usage =
 "            -W[no-]deprecated-logic    use of && || ! in pure bit expressions\n"
 "            -W[no-]function-parameter  unused parameters in functions\n"
 "            -W[no-]function-delete     delete before function re-definition\n"
-"            -W[no-]deprecated          (default) [none]/all of the above\n"
+"            -W[no-]deprecated          [none]/all of the above\n"
+"            -W[no-]undefined-gate      undefined gate\n"
+"            -W[no-]unused-gate         unused gate\n"
+"            -W[no-]all                 [no]/all warnings\n"
 #if defined(RUN) || defined(TCP)
 "        -k <lim>        highest I/O index (default: %d; also run and -c mode limit)\n"
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
@@ -212,7 +215,7 @@ char *		iC_vcd = NULL;
 short		iC_debug = 0;
 int		iC_micro = 0;
 int		iC_Pflag = 0;		/* pedantic warning/error flag */
-int		iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
+int		iC_Wflag = W_ALL;	/* by default all warnings are on */
 unsigned short	iC_xflag;
 unsigned short	iFlag;
 unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
@@ -468,12 +471,12 @@ main(
 			    ++argc; --argv;	/* push back -x option or <in>.ic after -p */
 			  Pedantic:
 			    iC_Pflag++;
-			    iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
+			    iC_Wflag |= W_ALL;	/* by default all warnings are on */
 			    goto break2;
 			}
 		    }
 		    iC_Pflag++;			/* -p is pedantic, -p -p or more is pedantic-error*/
-		    iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
+		    iC_Wflag |= W_ALL;
 		    break;
 		case 'u':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
@@ -622,12 +625,16 @@ main(
 #ifndef TCP
 		case 'p':			/* for TCP this option is interpreted with -p <port> */
 		    iC_Pflag++;			/* -p is pedantic, -pp or more is pedantic-error*/
-		    iC_Wflag = W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE;
+		    iC_Wflag |= W_ALL;		/* by default all warnings are on */
 		    break;
 #endif	/* not TCP */
 		case 'W':
 		    if (! iC_Pflag) {
-			if (strcmp(*argv, "Wdeprecated") == 0) {	/* default */
+			if (strcmp(*argv, "Wall") == 0) {	/* default */
+			    iC_Wflag |= W_ALL;
+			} else if (strcmp(*argv, "Wno-all") == 0) {
+			    iC_Wflag &= ~W_ALL;
+			} else if (strcmp(*argv, "Wdeprecated") == 0) {
 			    iC_Wflag |= (W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE);
 			} else if (strcmp(*argv, "Wno-deprecated") == 0) {
 			    iC_Wflag &= ~(W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE);
@@ -643,6 +650,14 @@ main(
 			    iC_Wflag |= W_FUNCTION_DELETE;
 			} else if (strcmp(*argv, "Wno-function-delete") == 0) {
 			    iC_Wflag &= ~W_FUNCTION_DELETE;
+			} else if (strcmp(*argv, "Wundefined-gate") == 0) {
+			    iC_Wflag |= W_UNDEFINED;
+			} else if (strcmp(*argv, "Wno-undefined-gate") == 0) {
+			    iC_Wflag &= ~W_UNDEFINED;
+			} else if (strcmp(*argv, "Wunused-gate") == 0) {
+			    iC_Wflag |= W_UNUSED;
+			} else if (strcmp(*argv, "Wno-unused-gate") == 0) {
+			    iC_Wflag &= ~W_UNUSED;
 			/* Insert other Waning switches here */
 			} else {
 			    goto cerror;
@@ -1117,7 +1132,10 @@ immcc - the immediate-C to C compiler
         -W[no-]deprecated-logic    use of && || ! in pure bit expressions
         -W[no-]function-parameter  unused parameters in functions
         -W[no-]function-delete     delete before function re-definition
-        -Wno-deprecated -Wdeprecated (default) all of the above
+        -W[no-]deprecated          [none]/all of the above
+        -W[no-]undefined-gate      undefined gate
+        -W[no-]unused-gate         unused gate
+        -W[no-]all                 [no]/all warnings
     -k <lim> highest I/O index (default: no limit)
              if lim <= 63, mixed byte, word and long indices are tested
              default: any index for bit, byte, word or long is allowed

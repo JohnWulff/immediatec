@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.25 2014/09/10 05:37:06 jw Exp $
+#   $Id: README.tpl,v 1.26 2015/06/06 08:48:15 jw Exp $
 ########################################################################
 
 use strict;
@@ -86,14 +86,16 @@ print <<EOF;
     Of course, the Artistic License spells all this out for your protection,
     so you may prefer to use that.
 
-    Acknowledgements to Larry Wall, whose README I used as a template.
+    Acknowledgments to Larry Wall, whose README I used as a template.
 				    and for Perl - which is just GREAT.
 
-    Acknowledgements to Nick Ing-Simmons for Perl/Tk - which is SMOOTH.
+    Acknowledgments to Nick Ing-Simmons for Perl/Tk - which is SMOOTH.
 
-    Acknowledgements to the developers of GTKWave - which is POWERFUL.
+    Acknowledgments to Sriram Srinivasan for Msg.pm - which is COOL.
 
-    Acknowledgements to Linus Torvalds and the Open-Software community
+    Acknowledgments to the developers of GTKWave - which is POWERFUL.
+
+    Acknowledgments to Linus Torvalds and the Open-Software community
 				    for Linux(R) - which is SOMETHING ELSE.
 
 --------------------------------------------------------------------------
@@ -110,22 +112,23 @@ print <<EOF;
 	    tar -xvzf icc_$REV.tgz
 	    cd icc_$REV/src
 
-    2)  Excute the following:
+    2)  Execute the following:
 
-	    configure     OR  ./configure    # if super user (depricated)
+	    configure     OR  ./configure    # if super user (deprecated)
 	To make a Debug version do
-	    makeAll -gcl  OR  makeAll -qgcl  # to supress intermediate output
+	    makeAll -gclS OR  makeAll -qgclS # to suppress intermediate output
+	
 	OR to make a Release version do
-	    make          OR  make quiet     # to supress intermediate output
+	    make          OR  make quiet     # to suppress intermediate output
 
-	this should build the files
+	this should build the following files without any errors
 	    immcc			     # the iC to C compiler
-	    libict.a			     # the run-time library
-	without any errors
+	    libict.a			     # the static run-time library
+	    libict.so			     # the dynamic run-time library
 
     3)  To compile and compare the test iC files in Test0 execute:
 
-	    make test
+	    make test			     # should output 'test OK'
 
     4)  To use the Perl support programs, it is mandatory that you install the
 	Perl packages Tk804.029 or later and Time::HiRes unless they are already
@@ -137,37 +140,33 @@ print <<EOF;
 	Skip to point 8) if you get a help output and no error message.
 	The last line tells you which version of Perl/Tk you are using.
 
-    5)  Unpack build and install the Time::HiRes archive in a suitable
-	working directory with:
-
-	    tar -xvzf Time-HiRes-01.20.tar.gz
-	    cd Time-HiRes-01.20; perl Makefile.PL; make; make test
-	    su		     ### Password  ###
-	    make install
-	    exit	     ### IMPORTANT ###
-	    cd ..; rm -rf Time-HiRes-01.20   # unless you want to keep it
-
-    6)  Perl/Tk is usually contained in Linux distributions and will
+    5)  Perl/Tk is usually contained in Linux distributions and will
 	be installed automatically when the package is selected.
 	If not, unpack, build and install Tk-804.029.tar.gz (or later).
 	Follow the instructions in the README and INSTALL files.
 	For Cygwin under WinXP a special binary distribution of Tk800.023
 	is included, which works fine.
 
-    7)  Return to the immediate C installtion
+    6)  Unpack build and install the Time::HiRes archive in a suitable
+	working directory with:
+
+	    tar -xvzf Time-HiRes-01.20.tar.gz
+	    cd Time-HiRes-01.20; perl Makefile.PL; make; make test
+	    sudo make install	     	     ### Password  ###
+	    cd ..; rm -rf Time-HiRes-01.20   # unless you want to keep it
+
+    7)  Return to the immediate C installation
 
 	    cd icc_$REV/src		     # or the correct iC src directory
 
-    8)  To install the iC-compiler, library and scripts execute the
+    8)  To install the iC-compiler, libraries and scripts execute the
 	following as super user:
 
-	    su		     ### Password  ###
-	    make install
-	    exit	     ### IMPORTANT ###
+	    sudo make install	     	     ### Password  ###
 
-	this copies the essential executables to /usr/local/bin
-	it also copies the include file icg.h to /usr/local/include
-	libict.a to /usr/local/lib and Msg.pm to /usr/lib/perl5/site...
+	this copies the executables to /usr/local/bin, the include file
+	icg.h to /usr/local/include, libict.a, libict.so to /usr/local/lib or
+	/usr/local/lib64 and Msg.pm to /usr/lib/perl5/site...
 
 	    (make uninstall as su will remove all these files)
 
@@ -216,7 +215,7 @@ print <<EOF;
 
     12) Applications can of course be run without iClive. They do need iCserver
 	though, which is a hub server for the TCP/IP packets exchanged between
-	iC applications, I/O apllications - currently only iCbox, iClift and
+	iC applications, I/O applications - currently only iCbox, iClift and
 	optionally iClive.
 
 	    iCserver &			     # server runs on the background
@@ -255,7 +254,7 @@ print <<EOF;
 	    sudo rpm -i gtkwave-3.1.10-4.33.i586.rpm
 
 	For other Linux distributions download and follow the instructions
-	in the internet to install GTKWave for those sytems.
+	in the internet to install GTKWave for those systems.
 
 	Since version 1.131 of the iC run-time a VCD file and an associated
 	SAV file is generated by an iC application when run with the -v
@@ -317,9 +316,9 @@ print <<EOF;
 	    hello -h			     # list available options
 
 	These options allow connecting to iCserver on another computer in a
-	LAN - or with a differnt port number. Very detailed debugging output,
+	LAN - or with a different port number. Very detailed debugging output,
 	showing the change of state of every event in the system is available
-	for the Debug version of the iC system. (Supressed for Release version)
+	for the Debug version of the iC system. (Suppressed for Release version)
 
     19) There are 'man' pages for all the tools used in the 'iC Project'.
 	These can be viewed with the normal 'man' command under Linux or with
@@ -346,6 +345,7 @@ print <<EOF;
     with an old vi was punishment enough). After that all tests passed.
     
     During 2014 I wrote drivers for direct I/O for the PiFace and PiFaceCAD
-    digital interfaces for the RaspberryPi - see man page for iCpiFace.
+    digital interfaces for the Raspberry Pi - see man page for iCpiFace and
+    README.RPi.
 EOF
 ########################################################################

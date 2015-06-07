@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.82 2015/01/21 07:05:45 jw Exp $";
+"@(#)$Id: genr.c,v 1.83 2015/06/05 07:44:26 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -491,7 +491,7 @@ op_push(					/* reduce List_e stack to links */
 	assert(lsp->type < IFUNCT);		/* allows IFUNCT to use union v.cnt */
 	if (lsp->ftype >= MIN_ACT && lsp->ftype < MAX_ACT) {
 #ifndef	BOOT_COMPILE
-	    assert(lsp->ftype >= F_SW && lsp->ftype <= F_CE);
+	    assert(lsp->ftype == F_SW || lsp->ftype == F_CF || lsp->ftype == F_CE);
 #endif	/* BOOT_COMPILE */
 	    if (rsp->ftype < S_FF) {		/* 'left' is a master action gate */
 		rsp->ftype = 0;			/* OK for any value of GATE */
@@ -1031,7 +1031,8 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
  *
  *******************************************************************/
 
-static void	pushMessage(char * message)
+static void
+pushMessage(char * message)
 {
     dlp = (MsL *) iC_emalloc(sizeof(MsL));
     dlp->msgp = iC_emalloc(strlen(message)+1);	/* +1 for '\0' */
@@ -1340,10 +1341,6 @@ op_asgn(				/* asign List_e stack to links */
 	if (t_first && t_last) {
 	    int len1 = t_last - t_first;
 	    fprintf(iC_outFP, "resolve \"%*.*s\"\n", len1, len1, t_first);
-    #if 0				/* TODO mostly Qxx_0 and FUN_1_i function internal variables */
-	} else {
-	    fprintf(iC_outFP, "resolve %s: \"\"\n", sp->name);
-    #endif
 	}
 	fflush(iC_outFP);
     }
@@ -1703,7 +1700,7 @@ op_asgn(				/* asign List_e stack to links */
 		    int		use;
 		    /* reference to a C fragment variable */
 		    assert(lp->le_val & 0xff);
-		    use = lp->le_val >> USE_OFFSET;
+		    use = (gp->em & AU) >> AU_OFS;
 		    assert(use < Sizeof(iC_useText));
 		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d %s", gp->name, iC_fos[gp->ftype],
 			iC_os[sp->type], lp->le_val & 0xff, iC_useText[use]);
@@ -2351,7 +2348,7 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
  *
  *******************************************************************/
 
-void
+static void
 assignOutput(Symbol * rsp, int ftyp, int ioTyp)
 {
     Sym		sy;
@@ -3366,7 +3363,7 @@ checkDecl(Symbol * terminal)
  *	Subsequent calls link the next parameter to hsp->u_blist->le_next
  *
  *	All this is done before the execution of cloneFunction(), which
- *	includes setting up the correct function head accrding to the
+ *	includes setting up the correct function head according to the
  *	signature returned, analysing the parameters against the formal
  *	parameters and actually cloning the function. Nested calls will
  *	have their own *hsp, which obviates the need for an extra stack.
@@ -3696,7 +3693,7 @@ handleRealParameter(List_e * plp, List_e * lp)
 		if (rsp->ftype != UDFA ||
 		    rsp->type != fsp->type ||
 		    rsp->list == 0 ||
-		    (fsp->v_cnt != 0 && fsp->v_cnt != rsp->list->le_val)) {
+		    (fsp->v_cnt != 0 && fsp->v_cnt != (rsp->list->le_val & VAL_MASK))) {
 		    ierror("wrong immC array parameter type or array size:", rsp->name);
 		    rsp->type = ERR;
 		} else if (fsp->v_cnt) {
@@ -4517,7 +4514,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 		    listGenOut(sv.v, 1);	/* listing of immC variable + possible real output */
 		} else if (sp1->ftype == UDFA) {
 		    assert(sv.v->list);
-		    listGenOut(sv.v, sv.v->list->le_val);/* listing of immC array variable */
+		    listGenOut(sv.v, sv.v->list->le_val & VAL_MASK);/* listing of immC array variable */
 		    for (lp1 = sv.v->list; lp1; lp1 = lp1->le_next) {
 			assert(lp1->le_sym);
 			if ((sp2 = lp1->le_sym)->type == UDF) {
@@ -4749,6 +4746,7 @@ cloneSymbol(Symbol * sp)
     rsp->type = sp->type;
     rsp->ftype = sp->ftype;
     rsp->fm |= sp->fm & FU;			/* transfer use count */
+    rsp->em |= sp->em & AU;			/* transfer assign+use bits */
     rsp->next = templist;			/* put at front of templist */
     templist = rsp;
     return rsp;
@@ -4841,6 +4839,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	    nlp = 0;
 	    nval = 0;
 	}
+	nsp->em |= fsp->em & AU;		/* transfer assign+use bits */
 	clp = sy_push(nsp);			/* clone one list element */
 	clp->le_val = flp->le_val ^ nval;	/* negation or arithmetic index in para */
 	assert(first == 0 || (first >= iCbuf && last < &iCbuf[IMMBUFSIZE]));
@@ -4871,6 +4870,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	nlp = sy_push(csp);			/* link to expression head for Pass 3 */
 	if (csp && csp->type == ALIAS) {
 	    assert((csp->em & EM) == 0 && (csp->fm & FM) == 0); /* not an external or function type */
+	    rlp->le_sym->em |= csp->em & AU;	/* transfer assign+use bits */
 	    *cspp = rlp->le_sym;		/* allow use of Symbol in optimisation */
 	    assert(*cspp);
 	    if ((iC_debug & 0402) == 0402) {

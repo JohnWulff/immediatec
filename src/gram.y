@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.33 2014/10/24 04:25:51 jw Exp $";
+"@(#)$Id: gram.y,v 1.34 2015/06/05 08:19:18 jw Exp $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -77,8 +77,6 @@ static unsigned int	udfCount = LEAI;	/* 170 is approx 4 kB */
 static unsigned int *	endStack = NULL;	/* these values will cause dynamic */
 static unsigned int *	esp = NULL;		/* allocation of first stack block */
 static int		endStackSize = 0;
-static int		sizeofFlag = 0;
-
 static void		immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, Symbol* sp);
 static void		immVarRemove(unsigned int start, unsigned int end, Symbol* sp);
 static void		immAssignFound(unsigned int start, unsigned int operator,
@@ -2607,9 +2605,9 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #endif
 
     if (lp) {					/* ffexpr head link */
-	assert(lp->le_val>>8 && lp->le_next == 0); /* must have function # and callled only once */
-	tsp = lp->le_sym;			/* master - must be ftype F_CF, F_CE or F_SW */
-	assert(tsp && (tsp->ftype == F_CF || tsp->ftype == F_CE || tsp->ftype == F_SW));
+	assert(lp->le_val >> FUN_OFFSET && lp->le_next == 0); /* must have function # and callled only once */
+	tsp = lp->le_sym;			/* master - must be ftype F_SW, F_CF or F_CE */
+	assert(tsp && (tsp->ftype == F_SW || tsp->ftype == F_CF || tsp->ftype == F_CE));
 	lp1 = tsp->u_blist;
 	assert(lp1);
 	tsp = lp1->le_sym;			/* clock for ffexpr head */
@@ -2720,7 +2718,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    vend   = p->vEnd;			/* end of actual variable */
 	    inds   = p->inds;			/* array index start */
 	    inde   = p->inde;			/* array index end */
-	    equop  = p->equOp;			/* operator in this entry */
+	    equop  = inds ? p->equOp : LARGE;	/* operator in this entry unless sizeof */
 	    end    = p->pEnd;			/* end of this entry */
 	    ppi    = p->ppi;			/* pre/post-inc/dec character value */
 	    sp     = p->sp;			/* associated Symbol */
@@ -2742,12 +2740,6 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		changeFlag++;
 	    }
 #endif
-	    if (sizeofFlag) {
-		if (inds) {
-		    fprintf(oFP, "sizeof ");	/* output supressed sizeof unless inds == 0 */
-		}
-		sizeofFlag = 0;
-	    }
 	    fprintf(oFP, "%s", cMacro[ml+ftypa]);	/* entry found - output cMacro start */
 	    assert(start <= vstart);
 	    assert(vstart < vend);
@@ -2798,11 +2790,9 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    sNr = lNr;				/* start at array pos after clock or timer,val */
 	    while ((lp2 = lp1->le_next) != 0) {
 		if (sp == lp2->le_sym) {
-		    assert((lp2->le_val & VAR_MASK) == sNr);
 		    break;			/* variable occurred previously */
 		}
 		sNr++;
-		assert(sNr < VAR_MASK);		/* limits # of variables to 16.384 if short */
 		lp1 = lp2;
 	    }
 	    if (lp2 == 0) {
@@ -2811,13 +2801,17 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		lp1->le_next = lp2;		/* place at end of list */
 	    }
 	    if (equop == LARGE) {
-		lp2->le_val |= VAR_USE;		/* variable value is used - no assignment selection */
+		sp->em |= EU;			/* variable value is used - no assignment selection */
 	    } else {
-		lp2->le_val |= VAR_ASSIGN;	/* variable is assigned to */
+		sp->em |= EA;			/* variable is assigned to */
 		if (ppi > 0) {
-		    lp2->le_val |= VAR_USE;	/* pre/post-inc/dec or marked as used */
+		    sp->em |= EU;		/* pre/post-inc/dec or marked as used */
 		}
 	    }
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "mark immC %s%s	em = 0x%02x\n",
+		sp->name, inds < LARGE ? "[]	" : "", sp->em);
+#endif
 	    endop = (equop != LARGE && equop > vend)
 	    	? equop : vend;			/* suppress variable name, which is replaced by cMacro */
 	    pFlag = 0;
@@ -2962,7 +2956,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    gp = lp1->le_sym;
 	    assert(gp);
 	    assert(gp->name);
-	    use = lp1->le_val >> USE_OFFSET;
+	    use = (gp->em & AU) >> AU_OFS;
 	    assert(use < Sizeof(iC_useText));
 	    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d %s", gp->name, iC_fos[gp->ftype],
 		iC_os[CF], lp1->le_val & 0xff, iC_useText[use]);

@@ -1,0 +1,319 @@
+
+		    Raspberry Pi Development and Run-time Environment
+
+    For building the immediate C system on a Raspberry Pi, the development
+    environment for the Raspbian distribution of Linux is just as powerful as
+    for Linux on a PC. It natively supports gcc 4.6.3 and perl 5.14. For the iC
+    system Perl/Tk, bison and flex are also required. Although one can do without
+    bison and flex, since the pre-compiled C files are distributed with the tar
+    ball, it is useful to have them for a complete distribution build. All of
+    these tools are available with apt-get. I also rely on vim for writing and
+    maintaining code, ddd for debugging, GTKWave for visualizing and RCS for
+    source code control.  These are also available for the Raspberry Pi.
+
+    The iC system consists of the immediate C compiler 'immcc', the static library
+    'libict.a', which has debugging support and the shared library 'libict.so',
+    which does not. On top of this is the Raspberry Pi specific I/O program
+    'iCpiFace' and a number of Perl scripts, which do not have to be built. The
+    'immcc' compiler has no Raspberry Pi specific code. The libraries have driver
+    extensions which are optionally compiled if RASPBERRYPI is defined. To build
+    the various components 'make' must be called with different options. The
+    auxiliary script 'makeAll' looks after this (see the 'makeAll' man page).
+    'makeAll' tests which processor it is running on and defines RASPBERRYPI if
+    it runs on an ARM processor. This means the calls to make are identical
+    on all processors (currently x86_64, armv6l and armv7l) The Makefile also
+    looks after storing the libraries in the correct directory - /usr/local/lib
+    or /usr/local/lib64 for 64 bit processors.  To make things even easier the
+    script 'm' builds various versions very simply. (I used to have a colleague
+    who found 'make' too long to type).
+
+	m		# build immcc and libict.a with debugging support
+	m -cl		# same as m
+	m -clS		# additionally build the shared library without debugging
+	m -P		# build the RPi I/O program iCpiFace and iCgpioPUD
+	m -i		# build immcc and libict.a and install everything
+	m -clSi		# build and install everything
+
+    On top of this all iC programs have to be re-compiled if 'immcc' has been
+    modified or simply re-linked if only the libraries have changed. The script
+    'iCmake' looks after this. It's arguments are one or more iC files ending
+    in .ic (or .ica, in which case more arguments are usually needed).
+
+	iCmake -sA *.ic	# re-link all iC files in the current directory
+			# with the static library libict.a for debugging
+			# the -A switch shows ALIASES as live data in iClive
+	iCmake -f *.ic	# force re-linking with the shared library libict.so
+
+    It may be worthwhile mentioning at this point, that the iC apps behaved very
+    strangely when I did a complete 'apt-get dist-upgrade' recently. Everything
+    worked again when I re-linked everything to the upgraded system libraries.
+
+    Build times of the complete iC compiler as well as static and shared libraries
+    on the RPi B and B+ versions, which have an ARM6 processor running at 700
+    MHz and 500 Mbytes of memory are 3 min 50 sec (230 seconds).
+
+    Build time for the RPi 2B version, which has a four core ARM7 processor
+    running at 800 MHz and 1 Gbyte of memory is 1 min 14 sec (74 seconds).
+
+    My development machine is a Compaq Presario CQ57 with a two core Intel
+    Pentium CPU 8940 (x86_64) running at 2.000 GHz with 4 Gbytes of memory
+    running openSUSE 13.1 Linux. It runs gcc 4.8.1 and perl 5.18.
+
+    Build time for the Compaq PC is 10.8 seconds, which makes a ratio of 21-7-1
+    for the 3 machines. Execution times for 'make test' for the 3 machines is
+    330 seconds, 117 seconds and 17.9 seconds, which is a ratio of 18.5-6.5-1,
+    which is similar.
+
+    The build times mentioned above are for a complete distribution clean
+    followed by compiling the iC and C yacc files and a lex file followed by
+    31 C compiles and 3 link compiles. Also 14 man page files are re-compiled
+    from POD-text attached directly to the relevant sources. All relevant files
+    are also installed. During normal development only one or a few files are
+    recompiled, which only takes seconds, even on the slow RPi B.
+
+    I have written, compiled and debugged all the RPi specific drivers on a RPi B
+    connected via ssh -X to a number of console windows on the Compaq PC. That way
+    I get the fastest turnaround time. The only program which does not run well in
+    a SSH window is ddd. It works perfectly in a native window on the RPi X system.
+
+    Also available is the Raspbian official cross compiling tool chain from Github:
+        git clone git://github.com/raspberrypi/tools.git
+    gcc-linaro-arm-linux-gnueabihf-raspbian-x64 is a gcc compiler that runs on
+    my 64 bit Compaq PC, which produces executables that run on the ARM6 or ARM7
+    on a RPi. It works well, but the saving in time is not enough to warrant
+    modifying the Makefile for the iC project, which generates executables
+    natively both on the PC and a RPi.
+
+    I also mount the central Compaq PC via nfs on each RPi. This allows archiving
+    of modified sources on the Compaq PC and distributing modified files to
+    other RPi's on the network.
+
+    The immediate C IDE program 'iClive' is both a text editor for writing
+    new iC programs or for updating them as well as a debugger for displaying
+    the state of immediate bit, int, clock and timer variables in real time by
+    colour changes of the variables in the program text or in balloon windows
+    for analog values.  iClive also has a button for executing the usual File
+    operations, a button to build an iC executable, a button to switch between
+    different instances of the current program, a button to switch between Edit
+    and Live mode and a button for a powerful search facility. The Edit window
+    provides a modest amount of syntax highlighting. Nevertheless I mostly use
+    vim for editing iC programs and iClive only for debugging. I provide 3 files:
+    ic.vim, filetype.vim and wulff.vim to provide syntax highlighting for iC
+    files in vim.  The command line tool 'iCmake' generates executables from
+    iC source file ending in .ic or .ica (see man pages for more details).
+
+    The graphical program iClive and a number of other support widgets (most
+    importantly iCbox) run perfectly on the Linux PC when started remotely on a
+    RPi in a ssh -X window.  This makes testing networked iC programs on several
+    RPi's very easy.
+
+		    Raspberry Pi Direct I/O with GPIO's
+
+    The ARM processors have GPIO signals, some of which are brought out on the
+    P1 connector of the Raspberry Pi boards.
+
+    The Raspberry Pi A or B brings out 17 GPIO signals on a 26 pin connector,
+    5 of which double up to do the SPI interface, 2 for a UART, leaving 10 for
+    general purpose input/output (there are 4 more on a 2nd connector, which
+    is not normally fitted). The Raspberry Pi B+ and 2B bring out 9 more GPIO
+    signals on their 40 pin connectors making a total of 19 free GPIO pins.
+    The Linux "sysfs" can access the value of these GPIO pins from user space
+    and more importantly can generate interrupts from them.
+
+    Because GPIO pins are not buffered, great care must be taken using them.
+    Output voltages are 0 volts (lo) and 3.3 volts (hi) and load current
+    is limited.  A useful indicator circuit is a low power LED connected to
+    3.3 volts via a 270 ohm resistor. This can be used as an output indicator
+    and provides input bias and an indicator for input switches connecting to 0
+    volts. For both inputs and outputs 0 volts (lo) is the active signal when the
+    light is on and the switch is closed. The software drivers provided allow for
+    this by arranging that both outputs and inputs can be independently active
+    hi or active lo.  (For GPIO's each bit can be independently active hi or lo).
+
+    All GPIO pin I/O in iC is handled by the Linux "sysfs" and its interrupts.
+
+    For details see:
+	http://elinux.org/RPi_Low-level_peripherals
+	http://www.auctoris.co.uk/2012/07/19/gpio-with-sysfs-on-a-raspberry-pi/
+
+		    PiFace I/O extension board
+
+    One PiFace board can be plugged directly into the 26 pin P1 connector of a
+    RPi B board. Up to 8 Piface boards can be connected using up to 3 PiRacks.
+    I have tested 4 PiFaces on one PiRack.  (I have so far not investigated
+    PiFaces for B+ or 2B boards with 40 pin P1 connectors).
+
+    Each PiFace provides 8 bits of buffered digital output, each of which is
+    connected to a LED indicator and 2 of which also drive relays with 1 changeover
+    switches each.  Each PiFace also provides 8 bits of buffered digital input,
+    4 of which are provided with pushbutton switches, which pull the input to
+    0 volts. All 8 outputs, the 6 wires from the contacts of the relays and the
+    8 inputs are brought out to terminal blocks
+
+    The output LED's and the relays are switched on when the output is 0 volts,
+    which is active lo.  The way the switches are arranged the input is also
+    active lo for the 4 switches.  Like for GPIO's the drivers can select either
+    active hi or active lo (for PiFaces all 8 outputs and independently all 8
+    inputs may be configured to be active hi or lo).
+
+		    PiFaceCAD I/O extension board
+
+    One PiFaceCAD board can be plugged directly into the 26 pin P1 connector of
+    a RPi B board or into the top connector of a PiRack together with PiFaces.
+
+    The PiFaceCAD uses output to control a 16 x 2 LCD character display.  It also
+    has 6 pushbutton switches and 1 changeover switch, which connect to 0 volts
+    when activated. The inputs are not brought out to a terminal block.
+
+		    RPi Drivers for GPIO's, PiFaces and a PiFaceCAD
+
+    Because the iC system is geared to using interrupts to get immediate response
+    from inputs, a common driver is preferable to handle interrupts via a single
+    select() call.
+
+    Two versions of the driver have been implemented. The simplest is a program
+    called 'iCpiFace', which takes input and sends output to GPIO's, PiFaces and
+    a PiFaceCAD from data transmitted to the app by TCP/IP messages transmitted
+    to and from an iC app via iCserver. This program can also be called by the
+    alternative name 'iCpiGPIO', in which case only GPIO's are handled.
+
+            +-----------+----------+     Fig. 1   iCpiFace connected to an
+            |    GPIO   |  PiFace1 |              iC app1 via iCserver
+            |  IX0 QX0  |  IX1 QX1 |
+     +------+---|---|---+---|---|--+   +-----------+
+     |          v   ^       v   ^  |   |           |
+     | iCpiFace |   |       |   |  |   |  iCserver |     +---------+
+     |          |   |       |   |  |   |           |     |  app1   |
+     |          |   |       |   |  |   |           |     |         |
+     |          |   |       |   \--8---8-<--QX1--<-8-----8--<- QX1 |
+     |          |   |       \------7---7->--IX1-->-7-----7-->- IX1 |
+     |          |   |              |   |           |     |         |
+     |          |   \--------------6---6-<--QX0--<-6-----6--<- QX0 |
+     |          \------------------5---5->--IX0-->-5-----5-->- IX0 |
+     |                             |   |           |     |         |
+     +-----------------------------+   +-----------+     +---------+
+
+    (The numbers at the boundaries of the three boxes are iCserver channel numbers)
+
+    The advantage of the 'iCpiFace' program is, that iC apps are compiled and
+    linked without regard to where the data originates.  The disadvantage is,
+    that I/O speeds are limited by the speed of transmission of the TCP/IP
+    messages and the time taken by iCserver. On an RPi 2B a turnaround time of
+    1.7 ms was measured if an input is switched on a GPIO or PiFace input and the
+    iC app immediately outputs it to a GPIO or PiFace output. On an RPi B or B+
+    this was 5.5 ms.  As can be seen in Fig. 1, four separate TCP/IP messages and
+    2 delays in iCserver are involved - iCpiFace input to iCserver - iCserver in
+    to out - iCserver to the iC app input - iC app output to iCserver - iCserver
+    in to out and iCserver to the iCpiFace output. This speed is similar to
+    the speed of a fast mechanical relay and is quite useful for many control
+    applications. It is still faster than most PLC's.
+
+    A second version of the driver is built directly into the run-time library
+    linked to iC apps and is therefore much faster.  External inputs interrupt
+    the system directly and act directly in the iC execution network generating
+    outputs, which are transmitted directly to external outputs. Turnaround times
+    of 90 us were measured for GPIO's on an RPi 2B (170 us on an RPi B or B+)
+    and 450 us for PiFaces on an RPi B. PiFaces are a bit slower, because speed
+    is limited by the serial transmissions of the SPI interface.
+
+            +-----------+----------+     Fig. 2   iC app2 linked with direct
+            |    GPIO   |  PiFace1 |              I/O run-time library
+            |  IX0 QX0  |  IX1 QX1 |
+     +------+---|---|---+---|---|--+-------+
+     |          v   ^       v   ^          |
+     |          |   |       |   |   app2   |
+     |          |   |       |   |          |
+     |          |   |       |   \---<- QX1 |
+     |          |   |       \------->- IX1 |
+     |          |   |                      |
+     |          |   \---------------<- QX0 |
+     |          \------------------->- IX0 |
+     |                                     |
+     +-------------------------------------+
+
+    A feature of the direct I/O in the run-time library is, that any GPIO or
+    PiFace I/O's, which are not called for in the iC app the library is linked
+    to, will be handled as TCP/IP I/O's, just like iCpiFace. This means several
+    iC apps can utilize GPIO and PiFace I/O's. Of course only one app can use
+    direct high-speed I/O.
+
+            +-----------+----------+     Fig. 3   iC app3 linked with direct
+            |    GPIO   |  PiFace1 |              I/O run-time library and at
+            |  IX0 QX0  |  IX1 QX1 |              the same time serving iC app4
+     +------+---|---|---+---|---|--+-------+      with external I/O
+     |          v   ^       v   ^          |
+     |          |   |       |   |   app3   |
+     |          |   |       |   |          |
+     |          |   |       |   \---<- QX1 |
+     |          |   |       \------->- IX1 |
+     |          |   |                      |
+     |          |   |                      |   +-----------+
+     |          |   |                      |   |           |
+     |          |   |                      |   |  iCserver |     +---------+
+     |          |   |                      |   |           |     |  app4   |
+     |          |   |                      |   |           |     |         |
+     |          |   \---------------<------6---6-<--QX0--<-6-----6--<- QX0 |
+     |          \------------------->------5---5->--IX0-->-5-----5-->- IX0 |
+     |                                     |   |           |     |         |
+     +-------------------------------------+   +-----------+     +---------+
+
+    The command line switches and I/O arguments are explained in detail in the 
+    'iCpiFace' man page and in the -h help output for 'iCpiFace' and each app
+    linked to the RPi library. These arguments are mostly identical for both
+    versions. Here are command line calls for the three examples above.
+
+    1)	iCpiFace -I IX0.0,18 QX0.0,24 X1:1  # all inputs and outputs active lo
+	iCpiFace ~IX0.0,18 ~QX0.0,24 ~X1:1  # OR separate in and output inversion
+					    # IX0.0 GPIO 18 external input
+					    # QX0.0 GPIO 24 external output
+					    # IX1.0-IX1.7 external on PiFace1
+					    # QX1.0-QX1.7 external on PiFace1
+
+	app1				    # uses IX0.0, QX0.0 as well as
+					    # IX1.0 - IX1.7 and QX1.0 - QX1.7
+
+    2)	app2 -I IX0.0,18 QX0.0,24 X1:1	    # all inputs and outputs active lo
+					    # app2 uses all inputs and outputs
+					    # IX0.0 GPIO 18 direct input
+					    # QX0.0 GPIO 24 direct output
+					    # IX1.0-IX1.7 direct on PiFace1
+					    # QX1.0-QX1.7 direct on PiFace1
+
+    3)	app3 -I IX0.0,18 QX0.0,24 X1:1	    # all inputs and outputs active lo
+					    # app3 uses IX1.0 - IX1.7 and
+					    # QX1.0 - QX1.7 only
+					    # IX1.0-IX1.7 direct on PiFace1
+					    # QX1.0-QX1.7 direct on PiFace1
+					    # IX0.0 GPIO 18 external input
+					    # QX0.0 GPIO 24 external output
+
+	app4				    # uses IX0.0, QX0.0 only
+
+    All calls to the I/O systems have been done with active lo inputs and outputs.
+    This means that if a variable is '1' in the iC app, it is 0 volts or lo at
+    the in or output terminal, which is appropriate for input switches connected
+    to 0 volts and driving LED's and relays connected to 3.3 volts. If inverting
+    buffers are used the calls can be adjusted appropriately.
+
+    When an app is called with only direct inputs and outputs, it does not
+    connect to iCserver at all, which means iClive cannot be used with that
+    app. To enable iClive, the app must be called with the -L option, which
+    connects it to iCserver anyway and thus enabling iClive debugging. Another
+    useful option is -B, which causes iCpiFace and an app with direct I/O to
+    generate an auxiliary iCbox to monitor the direct inputs and outputs, which
+    otherwise are only electrical signals at the I/O terminals.
+
+    A final option is the -E option, which causes all direct inputs and outputs to
+    also transmit their values to iCserver. This allows sharing or equivalencing
+    those inputs and outputs, Sharing means using an input or output in more
+    than one app.  Equivalencing is a command line option of iCserver, which
+    means using two or more names - possibly in different instances of an app
+    - on the same iCserver channel.  Effectively this means sharing the same
+    input or output - albeit with different names. Only inputs can be shared by
+    different iC apps. Outputs can only be shared to different I/O programs, like
+    iCpiFace, iCbox or iClift, which see that output as input to be displayed
+    or acted upon.  iCpiFace always communicates all its input and output via
+    iCserver, so it does not need a -E or -L option.
+
+    John E. Wulff   2015.04.29     <immediateC@gmail.com>
+    $Id: README.RPi,v 1.1 2015/06/06 12:30:08 jw Exp $

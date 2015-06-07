@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.96 2015/01/27 23:04:52 jw Exp $";
+"@(#)$Id: outp.c,v 1.97 2015/06/05 08:30:48 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -37,7 +37,6 @@ static const char outp_c[] =
 
 extern const char	iC_ID[];
 
-static int		icerrFlag = 0;
 typedef struct OverFlow {		/* allow alternate storage of Symbol or List_e pointers */
     Symbol *	target;			/* target Symbol * that overflowed */
     Symbol *	aux;			/* store linked Symbol * list of auxiliary gates */
@@ -360,7 +359,7 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 
 /********************************************************************
  *
- *	Output Symbola to be installed in S.T.s for the pre-compiled functions
+ *	Output Symbols to be installed in S.T.s for the pre-compiled functions
  *
  *	lp	link in a function template which points to a Symbol
  *	*picnt	pointer to Symbol count in S.T - independent of out_link()
@@ -454,7 +453,7 @@ out_builtin(List_e * lp, int * picnt)
  *	Output the forward network as NET TOPOLOGY in the listing file.
  *	Gather information on total memory required for generation in
  *	buildNet(). These are block_total, link_count and gate_count[]
- *	for each type of Gate. This must be done after the iC and
+ *	for each type of gate. This must be done after the iC and
  *	C compile phase but before buildNet().
  *
  *	outNet() and later load generate their own counts.
@@ -477,17 +476,20 @@ iC_listNet(void)
     Symbol *	sp;
     Symbol *	tsp;
     List_e *	lp;
+    List_e *	tlp;
     Symbol **	hsp;
     int		iClockAlias;
     int		iClockHidden;
     int		fcnt;
     int		typ;
     int		undefined;
+    int		unused;
     int		fflag;
     int		szFlag;
     int		szCount;
+    int		icerrFlag;
 
-    link_count = revl_count = block_total = undefined = iClockAlias = 0;	/* init each time */
+    link_count = revl_count = block_total = undefined = unused = iClockAlias = 0;	/* init each time */
     for (typ = 0; typ < MAX_LS; typ++) {
 	gate_count[typ] = 0;
     }
@@ -552,18 +554,18 @@ iC_listNet(void)
 	 * handled manually in the following code.
 	 *
 	 * execute the following after making a compiler with -D BOOT_COMPILE
-	 *	immcc -d20000 init_t.ic | init_t.pl > init_t.out
-	 *	vi init_t.out init.c	# insert the new code appropriately
-	 *	# init_t.ic has the definitions of the buil-in functions with
-	 *	# mangled names in an appropriate alphabetical order
-	 *	# init_t.pl translates the mangled names to their proper names
-	 *	# and moves the block of static Symbols ahead of the link
-	 *	# definitions, so that addresses of static Symbols can be used
-	 *	# in some links.
-	 *	# use the modified init.c to make a new immcc compiler.
-	 *	# (the original was produced manually and was used to check
-	 *	# that this generated code produces the right results - now
-	 *	# the automatic generator can be used to vary the built-ins)
+	 *  immcc -d20000 init_t.ic | init_t.pl > init_t.out
+	 *  vi init_t.out init.c	# insert the new code appropriately
+	 *  # init_t.ic has the definitions of the buil-in functions with
+	 *  # mangled names in an appropriate alphabetical order
+	 *  # init_t.pl translates the mangled names to their proper names
+	 *  # and moves the block of static Symbols ahead of the link
+	 *  # definitions, so that addresses of static Symbols can be used
+	 *  # in some links.
+	 *  # use the modified init.c to make a new immcc compiler.
+	 *  # (the original was produced manually and was used to check
+	 *  # that this generated code produces the right results - now
+	 *  # the automatic generator can be used to vary the built-ins)
 	 *******************************************************************/
 	static int	icnt;
 	static int	bcnt;
@@ -996,28 +998,37 @@ iC_listNet(void)
     }
 #endif	/* BOOT_COMPILE    ############################################ */
     /********************************************************************
-     *	Clear all v_cnt fields to allow accumulation of gate inputs
+     *  Clear all v_cnt fields to allow accumulation of gate inputs
      *  for detecting large AND or OR gates
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type < MAX_LS) {		/* allows IFUNCT to use union v.cnt */
 #if YYDEBUG && ! defined(SYUNION)
+		sp->u_blist = 0;
+		sp->u_gate = 0;
 		sp->v_elist = 0;
 		sp->v_glist = 0;
 #endif
+		sp->u_val = 0;			/* u.blist and u.gate no longer needed */
 		sp->v_cnt = 0;			/* v.elist and v.glist no longer needed */
 	    }
 	}
     }
     szFlag = szCount = 0;
     /********************************************************************
-     *	Detect large AND or OR gates > PPGATESIZE in this pass. (LATCH always small)
-     *	Since gates are forward linked an indirect stategy must be used.
-     *	Increment v_cnt in each target gate of type AND or OR
-     *	If v_cnt > PPGATESIZE store gate details and set a general flag szFlag.
-     *	Keep a list of these gates and generate auxiliary gates at
-     *	the end of this Pass (can only only install them between scans)
+     *  Detect large AND or OR gates > PPGATESIZE in this pass. (LATCH always small)
+     *  Since gates are forward linked an indirect stategy must be used.
+     *  Increment v_cnt in each target gate of type AND or OR
+     *  If v_cnt > PPGATESIZE store gate details and set a general flag szFlag.
+     *  Keep a list of these gates and generate auxiliary gates at
+     *  the end of this Pass (can only only install them between scans)
+     *
+     *  Check if iClock is referenced in an ALIAS
+     *  Change ARNF nodes to to ARN
+     *  Check the usage of non-function NCONST targets
+     *  Check the usage of variables in the lists passed to C literal blocks
+     *  and if else switch C blocks for checking in the NET TOPOLOGY pass
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
@@ -1081,6 +1092,51 @@ iC_listNet(void)
 			}
 		    }
 		}
+		/********************************************************************
+		 *  Transfer EU and EA of immC array variables in the lists passed to
+		 *  C literal blocks and if else switch C blocks to immC array members
+		 *  for checking in the NET TOPOLOGY pass
+		 *******************************************************************/
+		if (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) {
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP,
+			"transfer list %s\n", sp->name);
+#endif
+		    for (lp = sp->list; lp; lp = lp->le_next) {
+			tsp = lp->le_sym;
+			if (tsp && tsp != sp && (tsp->fm & FM) == 0) {
+			    if (((typ = tsp->type) == ARNC || typ == LOGC) && tsp->ftype == UDFA) {
+				int	mark;
+				mark = tsp->em & AU;	/* get EU and EA of immC array */
+#if YYDEBUG
+				if ((iC_debug & 0402) == 0402) fprintf(iC_outFP,
+				    "transfer immC %s[]		em = 0x%02x\n",
+				    tsp->name, tsp->em);
+#endif
+				for (tlp = tsp->list; tlp; tlp = tlp->le_next) {	/* immC array */
+				    tsp = tlp->le_sym;
+				    assert(tsp && tsp->name);
+				    tsp->em |= mark;	/* transfer EU and EA to members */
+#if YYDEBUG
+				    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP,
+					"      to immC[] member  %s%c	em = 0x%02x\n",
+					tsp->name, iC_os[tsp->type], tsp->em);
+#endif
+				}
+#if YYDEBUG
+			    } else {
+				if ((iC_debug & 0402) == 0402) fprintf(iC_outFP,
+				    "check    immC %s		em = 0x%02x\n",
+				    tsp->name, tsp->em);
+#endif
+			    }
+			}
+		    }
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP,
+			"transfer end  %s\n", sp->name);
+#endif
+		}
 	    }
 	}
     }
@@ -1090,10 +1146,10 @@ iC_listNet(void)
 	    fprintf(iC_outFP, "\n******* Large AND or OR gates detected *********\n");
 	}
 	/********************************************************************
-	 *	Large AND or OR gates have been detected and can now be split.
-	 *	Only here can the full size of a large gate be determined.
-	 *	The changes will appear in the Net Topology listing
-	 *	From then on all logic gates will be <= PPGATESIZE
+	 *  Large AND or OR gates have been detected and can now be split.
+	 *  Only here can the full size of a large gate be determined.
+	 *  The changes will appear in the Net Topology listing
+	 *  From then on all logic gates will be <= PPGATESIZE
 	 *******************************************************************/
 	int	i, j, inp, div, rem, direct, atn;
 	char *	cp;
@@ -1124,7 +1180,7 @@ iC_listNet(void)
 	    szList[i].div = div;
 	    szList[i].direct = direct;
 	    /********************************************************************
-	     *	Create div auxiliary gates and links and link them to the aux list
+	     *  Create div auxiliary gates and links and link them to the aux list
 	     *******************************************************************/
 	    atn = 0;
 	    strncpy(temp, tsp->name, TSIZE);
@@ -1163,7 +1219,7 @@ iC_listNet(void)
 	    }
 	}
 	/********************************************************************
-	 *	Clear all v_cnt fields again - some have been partially counted up
+	 *  Clear all v_cnt fields again - some have been partially counted up
 	 *******************************************************************/
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
@@ -1173,7 +1229,7 @@ iC_listNet(void)
 	    }
 	}
 	/********************************************************************
-	 *	Count auxiliary gates to original gates
+	 *  Count auxiliary gates to original gates
 	 *******************************************************************/
 	for (i = 0; i < szCount; i++) {
 	    tsp = szList[i].target;		/* overflow target */
@@ -1184,7 +1240,7 @@ iC_listNet(void)
 	    } while ((spAux = spPrev)!= 0);
 	}
 	/********************************************************************
-	 *	Relink overflow to auxiliary gates
+	 *  Relink overflow to auxiliary gates
 	 *******************************************************************/
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
@@ -1194,8 +1250,8 @@ iC_listNet(void)
 			    tsp = lp->le_sym;	/* logical target */
 			    if (tsp->v_cnt++ >= PPGATESIZE) {	/* count logical inputs of original target */
 				/********************************************************************
-				 *	Pick correct auxiliary gate computed by tsp->v_cnt relative to total size
-				 *	Must keep the orignal list so the Symbols can be link to S.T.
+				 *  Pick correct auxiliary gate computed by tsp->v_cnt relative to total size
+				 *  Must keep the orignal list so the Symbols can be link to S.T.
 				 *******************************************************************/
 				for (i = 0; i < szCount; i++) {
 				    if (szList[i].target == tsp) {
@@ -1217,7 +1273,7 @@ iC_listNet(void)
 	    }
 	}
 	/********************************************************************
-	 *	Install new nodes permanently
+	 *  Install new nodes permanently
 	 *******************************************************************/
 	for (i = 0; i < szCount; i++) {
 	    spAux = szList[i].aux;
@@ -1227,7 +1283,7 @@ iC_listNet(void)
 	    } while ((spAux = spPrev)!= 0);
 	}
 	/********************************************************************
-	 *	Clear all v_cnt fields again - some have been partially counted up
+	 *  Clear all v_cnt fields again - some have been partially counted up
 	 *******************************************************************/
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
@@ -1242,15 +1298,16 @@ iC_listNet(void)
 	fprintf(iC_outFP, "\n******* NET TOPOLOGY    ************************\n\n");
     }
     /********************************************************************
-     *	Continue normal processing
+     *  Continue normal processing
      *******************************************************************/
+    icerrFlag = 0;
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->em & EM) {
 		extFlag = 1;
 	    }
 	    if ((typ = sp->type) < MAX_LS && (sp->fm &= FM) == 0) {	/* clear use count in fm */
-		if (typ != NCONST || sp->u_val != 0) {
+		if (typ != NCONST || sp->u_val != 0) {	/* not NCONST or NCONST used as reference */
 		    if (sp == icerr && sp->list == 0) {
 			icerrFlag = 1;			/* uninstall iCerr at end of loop */
 			continue;
@@ -1320,10 +1377,11 @@ iC_listNet(void)
 				    fprintf(iC_outFP, "\n\t");
 				}
 				if (sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) {
+				    unsigned int	mask;
 				    /* unsigned case number of "if" or "switch" C fragment */
-				    if (lp->le_val > 0 && lp->le_val <= VAR_MASK) {
+				    if ((mask = lp->le_val & FUN_MASK) != 0) {
 					fprintf(iC_outFP, "\t%c (%d)",
-					    iC_os[iC_types[sp->ftype]], lp->le_val >> FUN_OFFSET);
+					    iC_os[iC_types[sp->ftype]], mask >> FUN_OFFSET);
 				    } else if (tsp == sp) {
 					fcnt--;		/* dummy link of _f0_1 */
 				    } else {
@@ -1350,9 +1408,124 @@ iC_listNet(void)
 			    fprintf(iC_outFP, "\n");
 			}
 			/* end of output of a NET TOPOLOGY line */
-			if (typ == UDF) {
-			    warning("undefined gate:", sp->name);
-			} else if (typ == ERR) {
+			if (iC_Wflag & W_UNDEFINED) {
+			    /********************************************************************
+			     *  imm variables must be assigned (defined) in iC code in the module
+			     *  in which they are locally declared, in which case they are no
+			     *  longer UDF. extern imm variables are not UDF and thus evoke no
+			     *  undefined warnings.
+			     *
+			     *  immC (ARNC or LOGC) can only be assigned in C code, in which case
+			     *  EA was set in em.
+			     *
+			     *  A special case is an immC or immC array variable, which has been
+			     *  declared extern (em & EX set). Such immC variables may have been
+			     *  defined in another module and no undefined warnings are issued
+			     *  in this module.
+			     *******************************************************************/
+			    if (typ == UDF) {
+				undefined++;		/* report total undefined only if W_UNDEFINED */
+				switch (sp->ftype) {	/* undefined and not extern imm */
+				case ARITH:
+				    warning("undefined imm int:", sp->name);
+				    break;
+				case GATE:
+				case GATEX:
+				    warning("undefined imm bit:", sp->name);
+				    break;
+				case CLCKL:
+				    warning("undefined imm clock:", sp->name);
+				    break;
+				case TIMRL:
+				    warning("undefined imm timer:", sp->name);
+				    break;
+				case UDFA:
+				    ierror("undefined variable:", sp->name);
+				    undefined--;
+				    break;
+				default:
+				    ierror("undefined ???:", sp->name);
+				    undefined--;
+				    break;
+				}
+			    } else if ((sp->em & (EA|EX)) == 0) {
+				if (typ == ARNC) {	/* undefined and not extern immC */
+				    undefined++;
+				    warning("undefined immC int:", sp->name);
+				} else if (typ == LOGC) {
+				    undefined++;
+				    warning("undefined immC bit:", sp->name);
+				}
+			    }
+			}
+			if ((iC_Wflag & W_UNUSED) &&
+			    /********************************************************************
+			     *  Any imm or immC may be used in iC code, in which case it has sp->list
+			     *  or it may be used in C code in which case EA was set in em.
+			     *
+			     *  A special case is an imm, immC or immC array variable, which has been
+			     *  declared extern (em & EX set). Such a variable may have been used
+			     *  in another module and no unused warnings are issued in this module.
+			     *
+			     *  NCONST may be generated and only used in an arith expression, in
+			     *  which case the constant is directly in the expression - ignore
+			     *
+			     *  OUTW and OUTX are send nodes which have no linked nodes
+			     *
+			     *  unused iClock only happnes if it was made type ERR - no warning
+			     *  iClock used as ERR indicator not used any more	JW 20150603
+			     *******************************************************************/
+			    sp->list == 0 &&
+			    (sp->em & (EU|EX)) == 0 &&	/* not used and not extern immC */
+			    typ != NCONST &&
+			    sp->ftype != OUTW &&
+			    sp->ftype != OUTX &&
+			    sp != iclock
+			) {
+			    unused++;		/* report total unused only if W_UNUSED */
+			    switch (sp->ftype) {
+			    case ARITH:
+				if (typ == ARNC) {
+				    warning("unused    immC int:", sp->name);
+				} else if (typ == LOGC) {
+				    warning("unused    immC bit int ???:", sp->name);
+				} else {
+				    warning("unused    imm int:", sp->name);
+				}
+				break;
+			    case GATE:
+			    case GATEX:
+				if (typ == LOGC) {
+				    warning("unused    immC bit:", sp->name);
+				} else if (typ == ARNC) {
+				    warning("unused    immC int bit ???:", sp->name);
+				} else {
+				    warning("unused    imm bit:", sp->name);
+				}
+				break;
+			    case CLCKL:
+				warning("unused    imm clock:", sp->name);
+				break;
+			    case TIMRL:
+				warning("unused    imm timer:", sp->name);
+				break;
+			    case UDFA:
+				if (typ == ARNC) {
+				    warning("unused    immC int array:", sp->name);
+				} else if (typ == LOGC) {
+				    warning("unused    immC bit array:", sp->name);
+				} else {
+				    ierror("unused    variable:", sp->name);
+				    unused--;
+				}
+				break;
+			    default:
+				ierror("unused    ???:", sp->name);
+				unused--;
+				break;
+			    }
+			}
+			if (typ == ERR) {
 			    ierror("gate:", sp->name);
 			}
 		    } else {
@@ -1360,24 +1533,28 @@ iC_listNet(void)
 		    }
 		}
 	    } else if (typ == UDF) {
-		undefined++;	/* cannot execute if function internal gate not defined */
-		ierror("undefined gate in function:", sp->name);
+		if ((iC_Wflag & W_UNDEFINED)) {
+		    undefined++;
+		}	/* cannot execute if function internal gate not defined */
+		ierror("undefined function internal gate:", sp->name);
 	    }
 	}
     }
     if (icerrFlag) {
 	uninstall(icerr);			/* iCerr was never used */
 	icerr = 0;
-	icerrFlag = 0;
     }
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (sp->type < MAX_LS) {		/* allows IFUNCT to use union v.cnt */
-		if (sp->v_cnt && (sp->type < AND || sp->type > LATCH)) {
-		    assert(sp->type == ARN || sp->type == SH || sp->type == NCONST || sp->type == ARNC || sp->type == ERR);
+	    if ((typ = sp->type) < MAX_LS) {	/* allows IFUNCT to use union v.cnt */
+		if (sp->v_cnt && (typ < AND || typ > LATCH)) {
+		    assert(typ == ARN || typ == SH || typ == NCONST || typ == ARNC || typ == ERR);
 		    link_count += sp->v_cnt + 1;	/* space for reverse links + function # */
 		}
 		sp->v_cnt = 0;			/* restore v_cnt for both uses */
+		if (typ != NCONST) {
+		    sp->u_val = 0;		/* restore u_val for both uses */
+		}
 	    }
 	}
     }
@@ -1403,24 +1580,33 @@ iC_listNet(void)
 	fprintf(iC_outFP, "\ncompiled by:\n%s -%sO%o\n",
 	    iC_ID, iC_gflag ? "g" : "", iC_optimise);
     }
-    if ((undefined += gate_count[UDF]) > 0) {
+    if (undefined || unused) {
 	char undBuf[32];
+	char unuBuf[32];
+	char warnBuf[68];
 	snprintf(undBuf, 32, "%d undefined gate%s",
 	    undefined,
 	    undefined > 1 ? "s" : "");
-	warning(undBuf, NS);
+	snprintf(unuBuf, 32, "%d unused gate%s",
+	    unused,
+	    unused > 1 ? "s" : "");
+	snprintf(warnBuf, 68, "%s%s%s",
+	    undefined			?  undBuf	: "",
+	    undefined && unused		? " and "	: "",
+	    unused			?  unuBuf	: "");
+	warning(warnBuf, NS);
     }
-    if (ynerrs || gate_count[ERR]) {
+    if (ynerrs || gnerrs) {
 	char synBuf[16];
 	char genBuf[16];
 	char errBuf[64];
 	snprintf(synBuf, 16, "%d syntax", ynerrs);
-	snprintf(genBuf, 16, "%d generate", gate_count[ERR]);
+	snprintf(genBuf, 16, "%d generate", gnerrs);
 	snprintf(errBuf, 64, "%s%s%s error%s - cannot execute",
-	    ynerrs			?  synBuf	: "",
-	    ynerrs && gate_count[ERR]	? " and "	: "",
-	    gate_count[ERR]		?  genBuf	: "",
-	    ynerrs + gate_count[ERR] >1	? "s"		: "");
+	    ynerrs		?  synBuf	: "",
+	    ynerrs && gnerrs	? " and "	: "",
+	    gnerrs		?  genBuf	: "",
+	    ynerrs + gnerrs >1	? "s"		: "");
 	ierror(errBuf, NS);
 	return 1;
     }
@@ -1431,7 +1617,7 @@ iC_listNet(void)
 /********************************************************************
  *
  *	Generate execution network for icr or ict direct execution
- *	igp ==> array of Gates generated with calloc(block_total)
+ *	igp ==> array of gates generated with calloc(block_total)
  *
  *******************************************************************/
 
@@ -1495,7 +1681,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 			gp->gt_ini = -typ;	/* overwritten for AND OR LATCH types */
 			gp->gt_fni = sp->ftype;	/* basic gate first */
 			gp->gt_ids = sp->name;	/* gate to symbol name */
-			gp->gt_next = g_list;	/* link rest of g_list to new Gate */
+			gp->gt_next = g_list;	/* link rest of g_list to new gate */
 			g_list = sp->u_gate = gp++;	/* symbol to gate - scrubs u_blist */
 			val++;
 		    }
@@ -1523,7 +1709,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 		}
 		*rp++ = 0;			/* immC array gate list terminator */
 		val++;				/* gp handled here - not in next loop */
-		gp->gt_next = g_list;		/* link rest of g_list to new Gate */
+		gp->gt_next = g_list;		/* link rest of g_list to new gate */
 		g_list = sp->u_gate = gp++;	/* symbol to gate - scrubs u_blist */
 	    }
 	}
@@ -1618,10 +1804,8 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 				    /* could do this only for action gates controlled by a TIMER */
 				} else {
 				    /* F_SW, F_CF or F_CE action gate points to function */
-				    assert((sp->ftype == F_SW ||
-					    sp->ftype == F_CF ||
-					    sp->ftype == F_CE) &&
-					   (lp->le_val & 0xff) == 0);
+				    assert((sp->ftype == F_SW || sp->ftype == F_CF || sp->ftype == F_CE) &&
+					   (lp->le_val & VAL_MASK) == 0);
 				    if (lp->le_val == 0) {
 					tgp = sp->u_gate;
 					assert(tgp && tsp == sp && strcmp(sp->name, "_f0_1") == 0);
@@ -1635,7 +1819,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 					i   = 3;	/* offset for above */
 				    }
 				    while ((lp = lp->le_next) != 0) {
-					val = lp->le_val & VAR_MASK;
+					val = lp->le_val;
 					tsp = lp->le_sym;
 					while (tsp->type == ALIAS) {
 					    tsp = tsp->list->le_sym;	/* point to original */
@@ -1691,7 +1875,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 			     * location of the function list (FL_GATE). The
 			     * clock reference is put in the second location
 			     * which was previously cleared by a terminator.
-			     * The 3rd location holds a pointer to a Gate of
+			     * The 3rd location holds a pointer to a gate of
 			     * ftype ARITH holding a time delay (ARN or NCONST).
 			     * All action gates were initialised first, because
 			     * typ < MAX_LV were done first.
@@ -1728,7 +1912,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 			    sp->u_gate == gp &&	/* exclude immC array - processed above */
 			    (sp->fm & FM) == 0 &&
 			    (typ != NCONST || sp->u_val != 0)) {
-			    if (sp->ftype == ARITH) {	/* Arithmetic Gate */
+			    if (sp->ftype == ARITH) {	/* Arithmetic gate */
 				for (lp = sp->list; lp; lp = lp->le_next) {
 				    tsp = lp->le_sym;
 				    assert(tsp && tsp->u_gate);
@@ -1736,12 +1920,12 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 					tgp = tsp->u_gate;
 					if (val == (unsigned)-1) {
 					    /**************************************************
-					     * The 3rd location holds a pointer to a Gate of
+					     * The 3rd location holds a pointer to a gate of
 					     * ftype ARITH holding a time delay (ARN or NCONST).
 					     **************************************************/
 					    tgp->gt_time = gp;
 					} else
-					if ((val &= VAR_MASK) != 0) {
+					if (val != 0) {
 					    /**************************************************
 					     * ftype ARITH - generate backward input list
 					     **************************************************/
@@ -1808,7 +1992,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
     if (rc == 0){
 #ifdef	TCP
 	/********************************************************************
-	 * Do ALIASes last to avoid forward references of Gates in gt_list
+	 * Do ALIASes last to avoid forward references of gates in gt_list
 	 * Resolve multiple ALIASes here for the same reason.
 	 * Generate all ALIASes for display, independent of -A flag
 	 *******************************************************************/
@@ -1822,7 +2006,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 			val ^= tsp->list->le_val;	/* negate if necessary */
 			tsp = tsp->list->le_sym;	/* point to original */
 		    }
-		    /* generate a new auxiliary Gate for ALIAS */
+		    /* generate a new auxiliary gate for ALIAS */
 		    eLen = strlen(sp->name) + 1;
 		    tgp = (Gate *) iC_emalloc(sizeof(Gate));
 		    tgp->gt_ids = iC_emalloc(eLen);	/* all bytes 0 */
@@ -1831,20 +2015,20 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 		    tgp->gt_fni = ftyp;			/* ftype */
 		    tgp->gt_rptr = tsp->u_gate;		/* link to original */
 		    tgp->gt_mark = val;			/* ALIAS inversion flag */
-		    tgp->gt_next = g_list;		/* link rest of g_list to new Gate */
-		    g_list = sp->u_gate = tgp;		/* symbol to gate and new Gate at front of g_list */
+		    tgp->gt_next = g_list;		/* link rest of g_list to new gate */
+		    g_list = sp->u_gate = tgp;		/* symbol to gate and new gate at front of g_list */
 		    block_total++;
 		}
 	    }
 	}
 	/********************************************************************
-	 * Generate an INPW/TRAB Gate IXx for each first IXx.y of gt_ini -INPX
-	 * Generate an INPW/TRAB Gate TXx for each first TXx.y of gt_ini -INPX
-	 * Generate an INPB/OUTW Gate QXx for each first QXx.y_0 of gt_fni OUTX
-	 * These new Gates are linked in an extra list, which can be scanned
+	 * Generate an INPW/TRAB gate IXx for each first IXx.y of gt_ini -INPX
+	 * Generate an INPW/TRAB gate TXx for each first TXx.y of gt_ini -INPX
+	 * Generate an INPB/OUTW gate QXx for each first QXx.y_0 of gt_fni OUTX
+	 * These new gates are linked in an extra list, which can be scanned
 	 * reasonably quickly for duplicates. At the end of Pass 0, the extra
 	 * list is linked into the start of the first entry in iC_list[], so the
-	 * newly generated Gates are also scanned in Pass 1 and 2 and then sorted.
+	 * newly generated gates are also scanned in Pass 1 and 2 and then sorted.
 	 *******************************************************************/
 	for (op = g_list; op; op = op->gt_next) {
 	    /********************************************************************
@@ -1863,12 +2047,12 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 			    goto linkIO;		/* previously generated */
 			}
 		    }
-		    /* generate a new auxiliary Gate for bit I/O */
+		    /* generate a new auxiliary gate for bit I/O */
 		    tgp = (Gate *) iC_emalloc(sizeof(Gate));
 		    tgp->gt_ids = iC_emalloc(eLen);	/* all bytes 0 */
 		    strncpy(tgp->gt_ids, eBuf, eLen);
-		    tgp->gt_next = e_list;		/* link rest of e_list to new Gate */
-		    e_list = tgp;			/* new Gate at front for speed */
+		    tgp->gt_next = e_list;		/* link rest of e_list to new gate */
+		    e_list = tgp;			/* new gate at front for speed */
 		    block_total++;
 		    if (op->gt_ini == -INPX) {
 			tgp->gt_ini = -INPW;
@@ -1881,7 +2065,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 		  linkIO:
 		    if (op->gt_ini == -INPX) {
 			if (i != 3 || op->gt_rlist != 0 || strcmp(iqt1, "Q") == 0) goto pass0Err;
-			tgp->gt_list[bit1] = op;	/* pointer to bit Gate */
+			tgp->gt_list[bit1] = op;	/* pointer to bit gate */
 			/* ###### no back link ####### */
 		    } else {			/* (op->gt_fni == OUTX) */
 			if (i != 4 || strcmp(tail1, "_0") != 0 || strcmp(iqt1, "Q") != 0) goto pass0Err;
@@ -2026,21 +2210,21 @@ iC_outNet(FILE * iFP, char * outfile)
     }
 
     /********************************************************************
-     *	Generate linked list header, for linking several independently
-     *	compiled modules
+     *  Generate linked list header, for linking several independently
+     *  compiled modules
      *
-     *	The following algorithm fails if two files are linked with names
-     *	'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
-     *	A multiple define error occurs for the name '_ab_cd_list' at link time.
-     *	The same error occurs if unfortunate path combinations are used
-     *	eg: ab/cd.ic and either of the above
-     *	Spaces and non-alpha-numeric characters are treated the same way
+     *  The following algorithm fails if two files are linked with names
+     *  'ab.cd.ic' and 'ab_cd.ic' - by Goedel there is hardly a way out of this.
+     *  A multiple define error occurs for the name '_ab_cd_list' at link time.
+     *  The same error occurs if unfortunate path combinations are used
+     *  eg: ab/cd.ic and either of the above
+     *  Spaces and non-alpha-numeric characters are treated the same way
      *
-     *	To allow file names starting with numerals (YUK) precede the generated
-     *	variable names with a '_' in that case only (does not break regression tests)
-     *	eg: 0.ic generates _0_list (iC_0_list in latest version)
-     *	This example generates the executable 0, which requires special
-     *	handling in Perl scripts (particularly iClive) (has been fixed - JW)
+     *  To allow file names starting with numerals (YUK) precede the generated
+     *  variable names with a '_' in that case only (does not break regression tests)
+     *  eg: 0.ic generates _0_list (iC_0_list in latest version)
+     *  This example generates the executable 0, which requires special
+     *  handling in Perl scripts (particularly iClive) (has been fixed - JW)
      *******************************************************************/
     module = iC_emalloc(strlen(inpNM)+2);	/* +2 for possible leading '_' and '\0' */
     if (isdigit(*inpNM)) {
@@ -2068,7 +2252,7 @@ iC_outNet(FILE * iFP, char * outfile)
     }
 
     /********************************************************************
-     *	Output C file header and includes
+     *  Output C file header and includes
      *******************************************************************/
     fprintf(Fp,
 "/********************************************************************\n"
@@ -2086,7 +2270,7 @@ iC_outNet(FILE * iFP, char * outfile)
     linecnt += 11;
 
     /********************************************************************
-     *	if iC_aflag generate auxiliary files .iC_list1.h and .iC_list2.h
+     *  if iC_aflag generate auxiliary files .iC_list1.h and .iC_list2.h
      *  else write direct to C file
      *******************************************************************/
 
@@ -2101,14 +2285,14 @@ iC_outNet(FILE * iFP, char * outfile)
 	linecnt += 2;
 	if (iC_lflag != 0) {				/* no previous auxiliary files */
 	    /********************************************************************
-	     *	iC_LIST and define optional tVar definition once
+	     *  iC_LIST and define optional tVar definition once
 	     *******************************************************************/
 	    fprintf(Fp,
 "iC_Gt **	iC_list[] = { iC_LIST 0, };\n"
 	    );						/* auxiliary list */
 	    linecnt += 1;
 	    /********************************************************************
-	     *	generate auxiliary files .iC_list1.h and .iC_list2.h
+	     *  generate auxiliary files .iC_list1.h and .iC_list2.h
 	     *******************************************************************/
 	    if ((H1p = fopen(H1name, "w")) == 0) {	/* declaration header .iC_list1.h */
 		rc = H1index; goto endh;
@@ -2122,7 +2306,7 @@ iC_outNet(FILE * iFP, char * outfile)
 	    fprintf(H2p, "#define	iC_LIST\\\n");	/* list header .iC_list2.h */
 	} else {
 	    /********************************************************************
-	     *	append to auxiliary files .iC_list1.h and .iC_list2.h
+	     *  append to auxiliary files .iC_list1.h and .iC_list2.h
 	     *******************************************************************/
 	    if ((H1p = fopen(H1name, "a")) == 0) {	/* declaration header .iC_list1.h */
 		rc = H1index; goto endh;
@@ -2134,19 +2318,19 @@ iC_outNet(FILE * iFP, char * outfile)
     }
 
     /********************************************************************
-     *  Ignore function gates marked with fm != 0
-     *  Output extern C statement for Gates which are UDF or marked with em
-     *	Reverse action links to input links for simple Gates
-     *	for Gates of ftype ARITH, keep the links in ascending order
+     *  Ignore gates marked with fm & FM (function internal)
+     *  Output extern C statement for gates marked with em EM (extern)
+     *  Reverse action links to input links for simple gates
+     *  for gates of ftype ARITH, keep the links in ascending order
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->fm == 0) {
-		if ((typ = sp->type) == UDF || (sp->em & EM)) {
+		if (sp->em & EM) {
 		    fprintf(Fp, "extern iC_Gt	%s;\n", mN(sp));
 		    linecnt++;
 		}
-		if (typ < MAX_LV) {
+		if ((typ = sp->type) < MAX_LV) {
 		    ftyp = sp->ftype;
 		    if (typ == INPX) {
 			assert(ftyp == GATE || ftyp == ARITH);
@@ -2206,7 +2390,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		     * is in the first location of the function list (FL_GATE).
 		     * The clock reference is put in the second location which was
 		     * previously cleared by a terminator. The 3rd location holds a
-		     * pointer to a Gate of ftype ARITH holding a time delay (ARN or NCONST).
+		     * pointer to a gate of ftype ARITH holding a time delay (ARN or NCONST).
 		     * During execution of an action this pointer is used to find the
 		     * correct clock block, which is used as the head of a clock list
 		     * to which the action is linked. The actual clock block is made
@@ -2318,7 +2502,7 @@ iC_outNet(FILE * iFP, char * outfile)
     }
 
     /********************************************************************
-     *	Output C file macros
+     *  Output C file macros
      *******************************************************************/
     fprintf(Fp,
 "\n"
@@ -2376,11 +2560,11 @@ iC_outNet(FILE * iFP, char * outfile)
 "static iC_Gt *	iC_l_[];\n"
     ); linecnt += 1;
     /********************************************************************
-     *	Output executable gates
+     *  Output executable gates
      *
-     *	This modifies the symbol table entries
-     *	the CLK and TIM list Symbols are reconnected
-     *	to the action Gates which they control
+     *  This modifies the symbol table entries
+     *  the CLK and TIM list Symbols are reconnected
+     *  to the action gates which they control
      *******************************************************************/
     fprintf(Fp,
 "\n"
@@ -2394,11 +2578,13 @@ iC_outNet(FILE * iFP, char * outfile)
 
     li = 0;
     nxs = "0";					/* 0 terminator for linked gate list */
-    sam = "";					/* no & for terminator in linked Gate list */
+    sam = "";					/* no & for terminator in linked gate list */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if ((typ = sp->type) > UDF && typ < MAX_OP && /* leave out EXT_TYPES */
-		(sp->em & EM) == 0 && sp->fm == 0 && sp != iclock) {
+	    if ((typ = sp->type) < MAX_OP &&	/* include UDF and all types except ALIAS here */
+		(sp->fm & FM) == 0 &&		/* leave out function variables */
+		(sp->em & EM) == 0 &&		/* leave out extern variables */
+		sp != iclock) {			/* leave out iClock */
 		mask = 0;
 		/********************************************************************
 		 * mN() sets cnt, iqt, xbwl, byte, bit and tail via IEC1131() as side effect
@@ -2415,11 +2601,11 @@ iC_outNet(FILE * iFP, char * outfile)
 		    if (sp->u_val == 0) {
 			continue;		/* do not include unused constants */
 		    }
-		    /* other NCONST Gates must be static because same constant */
+		    /* other NCONST gates must be static because same constant */
 		    /* may be used in several linked modules - not extern */
 		    fprintf(Fp, "static iC_Gt %-7s", modName);
 		} else if (sscanf(modName, "_f%d_%d%7s", &idx, &ext, tail2) == 2) {
-		    /* _fx.y if else switch Gates must be static because they are */
+		    /* _fx.y if else switch gates must be static because they are */
 		    /* generated and may be used in several linked modules - not extern */
 		    fprintf(Fp, "static iC_Gt %-7s", modName);
 		} else {
@@ -2447,7 +2633,7 @@ iC_outNet(FILE * iFP, char * outfile)
 			if ((lp = lp->le_next) != 0 &&
 			    (tsp = lp->le_sym) != 0 &&
 			    tsp->type == TIM && tsp->fm == 0) {
-			    li++;		/* space for pointer to delay time Gate */
+			    li++;		/* space for pointer to delay time gate */
 			    lp = lp->le_next;	/* point to delay time */
 			}
 		    }
@@ -2500,7 +2686,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		/* generate gt_rlist */
 		if ((typ == ARNC || typ == LOGC) && sp->ftype == UDFA) {
 		    fprintf(Fp, " {&iC_l_[%d]},", li);	/* gt_rlist */
-		    li += (mask = sp->list ? sp->list->le_val : 0) + 1;	/* immC array size + terminator */
+		    li += (mask = sp->list ? (sp->list->le_val & VAL_MASK) : 0) + 1;	/* immC array size + terminator */
 		} else
 		if (typ == ARN || (typ >= MIN_GT && typ < MAX_GT)) {
 		    fprintf(Fp, " {&iC_l_[%d]},", li);	/* gt_rlist */
@@ -2537,7 +2723,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		} else {
 		    fprintf(Fp, " {0},");	/* no gt_rlist */
 		}
-		/* generate gt_next, which points to previous Gate */
+		/* generate gt_next, which points to previous gate */
 		fprintf(Fp, " %s%s", sam, nxs);
 		/********************************************************************
 		 * optionally generate non-zero timer preset value in gt_mark
@@ -2556,9 +2742,9 @@ iC_outNet(FILE * iFP, char * outfile)
 	}
     }
     /********************************************************************
-     *	Do ALIASes last to avoid forward references of Gates in gt_list
-     *	Resolve multiple ALIASes here for the same reason.
-     *	Generate code for ARITH ALIAS only if iC_Aflag is set (-A option)
+     *  Do ALIASes last to avoid forward references of gates in gt_list
+     *  Resolve multiple ALIASes here for the same reason.
+     *  Generate code for ARITH ALIAS only if iC_Aflag is set (-A option)
      *******************************************************************/
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
@@ -2587,10 +2773,10 @@ iC_outNet(FILE * iFP, char * outfile)
 	}
     }
     /********************************************************************
-     *	Link counting in outNet() counts all reverse links and is thus very
-     *	different to listNet() therefore cannot compare link_count and li
+     *  Link counting in outNet() counts all reverse links and is thus very
+     *  different to listNet() therefore cannot compare link_count and li
      *
-     *	module string generated at start
+     *  module string generated at start
      *******************************************************************/
     fprintf(Fp,
 "\n"
@@ -2599,7 +2785,7 @@ iC_outNet(FILE * iFP, char * outfile)
     linecnt += 2;
     if (iC_aflag) {
 	/********************************************************************
-	 *	iC_list will be built from aux files
+	 *  iC_list will be built from aux files
 	 *******************************************************************/
 	assert(H1p && H2p);
 	fprintf(H1p, "extern iC_Gt *	iC_%s_list;\n",
@@ -2607,7 +2793,7 @@ iC_outNet(FILE * iFP, char * outfile)
 	fprintf(H2p, "	&iC_%s_list,\\\n", module);	/* list header .iC_list2.h */
     } else {
 	/********************************************************************
-	 *	iC_list already complete - no need for aux files
+	 *  iC_list already complete - no need for aux files
 	 *******************************************************************/
 	fprintf(Fp,
 "iC_Gt **	iC_list[] = { &iC_%s_list, 0, };\n"
@@ -2664,22 +2850,29 @@ iC_outNet(FILE * iFP, char * outfile)
 	goto endm;
     }
     /********************************************************************
-     *	produce initialised connection lists
-     *	using modified symbol table
+     *  produce initialised connection lists
+     *  using modified symbol table
      *******************************************************************/
     fprintf(Fp,
 "static iC_Gt *	iC_l_[] = {\n"
     ); linecnt += 1;
-    lc = 0;					/* count links */
+    lc = 0;					/* count links in connection lists */
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
-	    if (((typ = sp->type) == ARN ||		/* leave out UDF, ARNC, LOGC */
-		((typ == ARNC || typ == LOGC) && sp->ftype == UDFA) ||	/* except immC array */
-		(typ >= MIN_GT && typ < MAX_GT)) &&
-		(sp->em & EM) == 0 && sp-> fm == 0) {	/* leave out EXT_TYPES */
-		int		len = 16;
+	    if (
+		(
+		    (typ = sp->type) == ARN ||		/* arithmetic gates */
+		    (typ >= MIN_GT && typ < MAX_GT) ||	/* and all bit gates except UDF */
+		    (
+			(typ == ARNC || typ == LOGC) &&	/* leave out ARNC and LOGC */
+			sp->ftype == UDFA		/* except immC arrays */
+		    )
+		) &&
+		(sp->em & EM) == 0 &&			/* leave out extern variables */
+		(sp->fm & FM) == 0			/* leave out function variables */
+	    ) {
+		int	len = 16;
 		char *	fs = strlen(sp->name) > 1 ? "\t" : "\t\t";
-
 		fflag = 0;
 		fprintf(Fp, "/* %s */", sp->name);
 		if ((ftyp = sp->ftype) >= MIN_ACT && ftyp < MAX_ACT) {
@@ -2750,16 +2943,15 @@ iC_outNet(FILE * iFP, char * outfile)
 			    /********************************************************************
 			     *  Scan the imm C variable list generated by the C compile phase
 			     *  either as part of an if else or switch C fragment (_f1_1 ...)
-			     *  or as C statements in a literal block (_f0_1).
-			     *  Two use bits are set at the top end of le_val in the link for
-			     *  each imm variable found by the C compiler (USE_MASK).
-			     *  VAR_USE marks, that the variable is used as a value in an
-			     *  expression (marked by v in listing).
-			     *  VAR_ASSIGN marks, that the variable is assigned to in a
-			     *  statement (marked by = in listing). Care is taken, that the
-			     *  second or later assigned variable in a multiple assignment is
-			     *  also marked as a value. Operator assignments and pre/post-
-			     *  inc/dec operations mark both bits.
+			     *  or as C statements in a literal block (_f0_1). Two use bits 
+			     *  are set in em of each imm variable found by the C compiler (AU).
+			     *    EU marks, that the variable is used as a value in a C
+			     *    expression (shown by v in listing).
+			     *    EA marks, that the variable is assigned to in a C
+			     *    statement (shown by = in listing).
+			     *  Care is taken, that the second or later assigned variable in
+			     *  a multiple assignment is also marked as a value. Operator
+			     *  assignments and pre/post-inc/dec operations mark both bits.
 			     *  In the following the use bit pairs are grouped into words,
 			     *  as many as will fit and these words are then appended to the
 			     *  list of variables. The load routine collects the bits for
@@ -2769,8 +2961,8 @@ iC_outNet(FILE * iFP, char * outfile)
 			     *  This is now done for immediate variables used in C code, which
 			     *  makes the usage analysis complete. No analysis of C variables
 			     *  is done - here a correct algorithmic design and the interpre-
-			     *  tation of the final C compiler warnings, as in any C code
-			     *  is called for.
+			     *  tation of the final C compiler errors and warnings, as in any
+			     *  C code is called for.
 			     *******************************************************************/
 			    int	uc = 0;
 			    tlp = lp;		/* do not modify lp yet */
@@ -2790,7 +2982,7 @@ iC_outNet(FILE * iFP, char * outfile)
 				j = i = useWord = 0;
 				while ((lp = lp->le_next) != 0) {	/* scan C var list */
 				    tsp = lp->le_sym;
-				    useBits = lp->le_val >> USE_OFFSET;	/* use bits */
+				    useBits = (tsp->em & AU) >> AU_OFS;	/* use bits */
 				    assert(useBits > 0 && useBits < 4);
 				    useWord |= useBits << i;
 				    i += 2;

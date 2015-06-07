@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.59 2015/04/12 05:14:23 jw Exp $";
+"@(#)$Id: load.c,v 1.60 2015/05/24 07:07:45 jw Exp $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2015  John E. Wulff
@@ -1663,10 +1663,10 @@ main(
 				tlp = lp - 1;
 				*tlp = gp;		/* swap in real input */
 			    }
-			    if (useWord & (VAR_USE >> USE_OFFSET)) {
+			    if (useWord & VAR_USE) {	/* (EU >> AU_OFS) */
 				gp->gt_old++;		/* C function value parameter */
 			    }
-			    if (useWord & (VAR_ASSIGN >> USE_OFFSET)) {
+			    if (useWord & VAR_ASSIGN) {	/* (EA >> AU_OFS) */
 				assert(gp->gt_ini == -ARNC || gp->gt_ini == -LOGC);
 				gp->gt_val++;		/* C parameter is assigned */
 			    }
@@ -2058,7 +2058,7 @@ main(
 					inError(__LINE__, op, gp, "PASS 6: C parameter ALIAS not resolved");
 				    }
 				    if (df) printf("\tC%d %s %s,", i++, gp->gt_ids,
-					iC_useText[useWord & (USE_MASK >> USE_OFFSET)]);
+					iC_useText[useWord & USE_MASK]);	/* (AU >> AU_OFS) */
 				}
 			    }
 			    lp = slp;				/* skip over use words */

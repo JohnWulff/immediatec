@@ -16,14 +16,14 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.66 2015/01/21 06:54:50 jw Exp $";
+"@(#)$Id: comp.h,v 1.67 2015/06/03 08:20:13 jw Exp $";
 
 #include	<setjmp.h>
 
 #define NS		((char*)0)
 #define	TSIZE		256
 #define	IBUFSIZE	512
-#define	IMMBUFSIZE	8192	/* allows 16 bytes for each possible 508 inputs and 1 output in a statement */
+#define	IMMBUFSIZE	32768	/* allows 16 bytes for each possible 508 inputs and 1 output in a statement */
 #define	FUNUSESIZE	64
 
 #define	NOT	1		/* used in List_e.le_val */
@@ -75,28 +75,35 @@ typedef	struct Symbol {		/* symbol table entry */
 } Symbol;
 
 #if ! YYDEBUG || defined(SYUNION)
-#define u_blist		u.blist
-#define u_gate		u.gate
-#define u_val		u.val
-#define v_elist		v.elist
-#define v_glist		v.glist
-#define v_cnt		v.cnt
+#define u_blist	u.blist
+#define u_gate	u.gate
+#define u_val	u.val
+#define v_elist	v.elist
+#define v_glist	v.glist
+#define v_cnt	v.cnt
 #else				/* no unions is easier for debugging with ddd */
-#define u_blist		blist
-#define u_gate		gate
-#define u_val		val
-#define v_elist		elist
-#define v_glist		glist
-#define v_cnt		cnt
+#define u_blist	blist
+#define u_gate	gate
+#define u_val	val
+#define v_elist	elist
+#define v_glist	glist
+#define v_cnt	cnt
 #endif
 
-#define EM		0x01	/* em bit mask for extern */
-#define TM1		0x02	/* em bit mask for TIMER1 */
-#define FU		0x03	/* fm bit mask for use count 0, 1 or 2 */
-#define FI		0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
-#define FMI		0x30	/* fm bit mask for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
-#define FA		0x40	/* fm bit wihch marks assign parameter in function definition */
-#define FM		0x80	/* fm bit wihch marks parameter and local var in function definition */
+#define EM	0x01	/* em bit mask for extern until locally declared */
+#define EX	0x02	/* em bit mask for extern immC - can be used and defined externally */
+#define TM1	0x04	/* em bit mask for TIMER1 */
+#define AU_OFS	4	/* em offset for immC bit masks */
+#define EA	0x10	/* (1<<AU_OFS)   em bit mask for immC variable defined (replaces VAR_ASSIGN) */
+#define EU	0x20	/* (2<<AU_OFS+1) em bit mask for immC variable used (replaces VAR_USE) */
+#define AU	0x30	/* (EA|EU)       em bit mask for immC variable used or defined (replaces USE_MASK) */
+			/* if no higher bits in em AU need not be used after shifting EA or EU (use anyway) */
+
+#define FU	0x03	/* fm bit mask for use count 0, 1 or 2 */
+#define FI	0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
+#define FMI	0x30	/* fm bit mask for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
+#define FA	0x40	/* fm bit wihch marks assign parameter in function definition */
+#define FM	0x80	/* fm bit wihch marks parameter and local var in function definition */
 
 /* for use in a union identical first elements can be accesed */
 typedef struct Sym { char *f; char *l; Symbol * v;     } Sym;
@@ -141,14 +148,19 @@ extern int	c_lex(void);		/* produced by lexc.l for gram.y */
 extern void yyerror(const char * s);	/* called for yacc syntax error */
 extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
 #endif
-extern int	ynerrs;			/* count of iCerror() calls */
+extern int	ynerrs;			/* count of yyerror() calls */
+extern int	gnerrs;			/* count of ierror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 
 extern int	iC_Pflag;
 extern int	iC_Wflag;
-#define W_DEPRECATED_LOGIC	01	/* do/no logic warnings */
-#define W_FUNCTION_PARAMETER	02	/* do/no function parameter warnings */
-#define W_FUNCTION_DELETE	04	/* do/no function delete warnings */
+#define W_DEPRECATED_LOGIC	01	/* on/no logic warnings */
+#define W_FUNCTION_PARAMETER	02	/* on/no function parameter warnings */
+#define W_FUNCTION_DELETE	04	/* on/no function delete warnings */
+#define W_UNDEFINED		010	/* on/no undefined gate warnings */
+#define W_UNUSED		020	/* on/no unused gate warnings */
+#define W_ALL	(W_DEPRECATED_LOGIC | W_FUNCTION_PARAMETER | W_FUNCTION_DELETE |\
+		 W_UNDEFINED | W_UNUSED)	/* all warnings are on */
 /* define other Warning switches here */
 extern int	lexflag;
 /********************************************************************
