@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.57 2015/03/03 06:59:32 jw Exp $";
+"@(#)$Id: rsff.c,v 1.58 2015/09/29 06:55:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1122,16 +1122,16 @@ iC_outMw(					/* NEW OUTW master action */
 	val = gm->gt_new;			/* modified value to output */
 
 #if YYDEBUG && !defined(_WINDOWS)
-	if ((mask = gm->gt_mark) & X_MASK) {	/* Gate that output bits are xferred to in iC_outMx */
-	    assert(!((int)val & ~X_MASK));
-	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t0x%02x ==>> 0x%02x", channel, (int)val, (int)gm->gt_old, (int)val);
-	} else
-	if (mask & W_MASK) {
+	if ((mask = gm->gt_mark) & W_MASK) {	/* Word output Gate (ignore word length select bits in gt_mark) */
 #if	INT_MAX == 32767 && defined (LONG16)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==>> %ld", channel, val, gm->gt_old, val);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>> %d", channel, val, gm->gt_old, val);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
+	} else
+	if (mask & X_MASK) {			/* Gate that output bits were xferred to in iC_outMx */
+	    assert(!((int)val & ~X_MASK));
+	    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t0x%02x ==>> 0x%02x", channel, (int)val, (int)gm->gt_old, (int)val);
 	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 

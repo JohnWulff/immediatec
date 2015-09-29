@@ -24,8 +24,11 @@
 use Msg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use Time::HiRes qw(alarm gettimeofday sleep);
+use Fcntl qw(:flock);	# import LOCK_* constants
 use strict;
 use warnings;
+
+sub termQuit ($);
 
 my @ArgNames;		# stores IO names and initialisers in argument list order
 my @ChannelNames;	# stores IO names with instance for each registered channel
@@ -50,7 +53,8 @@ format STDERR =
 Usage:
     @<<<<<< [-wdlCFmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
-      [ -o <out>][ -r <time>][ -f <file>][ <IEC>[-<IEC>|:<tid>][-<inst>]] ...]
+      [ -o <out>][ -r <time>][ -W <GPIO>][ -f <file>]
+      [ <IEC>[-<IEC>|:<tid>][-<inst>]] ...]
     DIRECT OUTPUT OPTIONS (default no iC output unless IEC's are specified)
 	-w	write temperatures to terminal
 	-o out	write temperatures to file <out>
@@ -59,9 +63,10 @@ Usage:
 	-C	output temparature in 1/10th degrees Centigrade (default)
 	-F	output temparature in 1/10th degrees Fahrenheit
 	-r time	measurement repetition <time> in seconds (default 60 sec)
+	-W GPIO number used by the w1-gpio kernel module (default 4)
 	-f file read additional parameters from this <file>
     iC OUTPUT OPTIONS
-	IEC	IW0 IW1 IW2 ...  (default IEC is IW0 etc unless -w -o -d)
+	IEC	IW0 IW1 IW2 ... (default IEC is IW0 etc unless -w -o -d -l)
 	    A range of IEC's can be specified with -; eg IW0-IW3
 	    alternatively
 	IEC:tid	individual IECs may be followed by the thermometer
@@ -73,7 +78,7 @@ Usage:
 		general instance specified with the -i <inst> (see below).
 	-s host	host name of iCserver    (default 'localhost')
 	-p port	service port of iCserver (default '8778')
-	-n name	registration name (default first full IEC)
+	-n name	registration name        (default first full IEC)
 	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
 				    $named
     DEBUG OPTIONS
@@ -87,13 +92,13 @@ Usage:
 	-h	help, ouput this Usage text only
 Copyright (C) 2014  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCtherm,v 1.2 2014/11/29 06:31:53 jw Exp $
+$Id: iCtherm,v 1.3 2015/09/29 06:55:10 jw Exp $
 .
 
 use vars qw($opt_w $opt_d $opt_o $opt_l $opt_C $opt_F $opt_m $opt_t $opt_R $opt_S $opt_T);
-use vars qw($opt_s $opt_p $opt_n $opt_i $opt_r $opt_f $opt_x $opt_h);
+use vars qw($opt_s $opt_p $opt_n $opt_i $opt_r $opt_W $opt_f $opt_x $opt_h);
 use Getopt::Std;
-getopts('wdo:lCFmtRSTxs:p:n:i:r:f:h');	# sets $opt_h if -h etc
+getopts('wdo:lCFmtRSTxs:p:n:i:r:W:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -113,6 +118,11 @@ if ($opt_o) {
 if ($opt_d) {
     $opt_w = 1;			# -d implies -w
 }
+if (defined $opt_W) {
+    $opt_W < 32 or die "*** ERROR: $named: GPIO $opt_W is not valid for the kernel module w1-gpio - cannot execute\n";
+} else {
+    $opt_W = 4;			# default is GPIO 4 for kernel module w1-gpio
+}
 
 my $instance = '';
 if (defined $opt_i and $opt_i ne '') {
@@ -123,6 +133,88 @@ if (defined $opt_i and $opt_i ne '') {
 	warn "*** WARNING: $named: badly formed option -i $opt_i - ignored\n";
     }
 }
+$SIG{INT}  = \&termQuit;	# signal 2	(ctrl-C interrupt from keyboard)
+
+########################################################################
+#
+#	Check the lock file ~/.iC/gpios.used to see if GPIO 4
+#	or strictly GPIO $opt_W is free and has never been used for
+#	direct I/O with 'sysfs' by iCpiFace or iC apps supporting
+#	direct I/O or with 'pigpio' by iCpiPWM. These apps set bit 64
+#	in $used if they have used GPIO4 ($opt_W).
+#
+#	If it has, 'modprobe w1-gpio' will fail with a kernel Oops.
+#       To avoid this, check character 64 in $usedString, which is
+#	equivalent to checking bit 64 in $used.
+#
+#	None of the apps dealing with GPIOs can force bit 64 of $used
+#	to 0 because of the danger of a kernel Oops. If you have rebooted,
+#	which frees GPIO 4 ($opt_W) in the module w1-gpio again,
+#	delete the lock file by either running iCtherm -F immediately
+#				or 'rm ~/.iC/gpios.used'
+#	to allow iCtherm to run again.
+#
+#	Also set bit 4 ($opt_W) in $used and write the $used back to
+#	~/.iC/gpios.used to prevent other apps using GPIO 4 ($opt_W) while
+#	iCtherm is running. On termination reverse this action.
+#
+########################################################################
+
+my ($home, $usedFile, $used, $usedString, $usedMask);
+my $OopsFlag = 0;
+
+if (($home = $ENV{HOME}) ne '' and
+    (-d "$home/.iC" or mkdir "$home/.iC")) {
+    $usedFile = "$home/.iC/gpios.used";
+    if (-f $usedFile) {
+	open USED, "+< $usedFile"				or die "can't open $usedFile: $!";	# open exixting
+	$used = undef;
+    } else {
+	open USED, "+> $usedFile"				or die "can't create $usedFile: $!";	# create new
+	$used = pack("b128", "0" x 128);
+    }
+    flock(USED, LOCK_EX)					or die "can't lock $usedFile: $!";
+    unless ($used) {
+	sysread(USED, $used, 16)				or die "can't read $usedFile: $!";
+    }
+    $usedString = unpack("b128", $used);				print STDERR "usedString = $usedString\n" if $opt_T;
+    if (($usedString & ("0" x 64 . "1")) eq ("0" x 64 . "1")) {	# test Oops bit 64 in $usedString
+	my $key;						# iCtherm permanently blocked
+	print STDERR
+	    "Another app has used GPIO $opt_W for direct I/O with 'sysfs' or 'pigpio'.\n".
+	    "This would cause an Oops in module w1-gpio required by $named";
+	if ($opt_l and $opt_F and not $opt_w) {
+	    print STDERR
+		".\n".
+		"Have you rebooted? ";
+	    ;
+	    if (($key = getc()) eq 'y' or $key eq 'Y') {
+		$usedString &= "1" x 64 . "0";			# reset Oops bit 64 in $usedString
+		print STDERR
+		    "The locking file has been reset - you can call iCtherm normally if a thermometer\n".
+		    "has been recognised correctly.\n";
+	    } else {
+		$OopsFlag = 1;					# cannot continue without rebooting
+	    }
+	} else {
+	    print STDERR " - cannot execute.\n";
+	    $OopsFlag = 1;					# cannot continue
+	}
+    }
+    $usedMask = "0" x $opt_W . "1" . "0" x (63 - $opt_W);	print STDERR "usedMask   = $usedMask\n"   if $opt_T;
+    $usedString |= $usedMask;					print STDERR "usedString = $usedString\n" if $opt_T;
+    $used = pack("b128", $usedString);
+    seek(USED, 0, 0)						or die "can't seek to start of $usedFile: $!";
+    syswrite(USED, $used, 16)					or die "can't write $usedFile: $!";
+    flock(USED, LOCK_UN)					or die "can't unlock $usedFile: $!";
+    close USED							or die "can't close $usedFile: $!";
+} else {
+    die "*** ERROR: $named: cannot find env{HOME] or open make .iC directory - system error";
+}
+if ($OopsFlag) {
+    termQuit "To allow $named to work normally again, reboot the system and call $named -lF\n".
+	     "once to reset the Oops bit 1 in u.oops of the locking file ~/.iC/gpios.used\n";
+}
 
 ########################################################################
 #
@@ -132,7 +224,9 @@ if (defined $opt_i and $opt_i ne '') {
 
 my $therm = `/bin/bash -c 'sudo modprobe w1-gpio; sudo modprobe w1-therm; for f in \$(ls /sys/bus/w1/devices/); do if [[ "\$f" =~ "28-" ]]; then echo \$f; fi; done'`;
 chomp $therm;
-$therm or die "*** ERROR: $named: no DS18B20 digital thermometers detected - cannot measure tenperatues";
+unless ($therm) {
+    termQuit "No DS18B20 digital thermometers detected - cannot measure tenperatues\n";
+}
 print STDERR "therm = '$therm'\n" if $opt_t;
 $ix = 0;
 foreach $tid ( split ' ', $therm ) {
@@ -222,9 +316,9 @@ use warnings;
 #	Generate default IEC IDs if none supplied
 ########################################################################
 
-unless ($opt_w or @ARGV) {
+unless ($opt_w or $opt_l or @ARGV) {
     for ($ix = 0; $ix < $n_thermometers; $ix++) {
-	push(@ARGV, "IW$ix");		# default parameters IW0 etc unless -w
+	push(@ARGV, "IW$ix");		# default parameters IW0 etc unless -w or -l
     }
 }
 
@@ -295,13 +389,19 @@ while ($argv = shift @ARGV) {
 my $len_ArgNames = scalar @ArgNames;
 
 if ($len_ArgNames > $n_thermometers) {
-    die "The number of input arguments $len_ArgNames is greater than the number of thermometers $n_thermometers - cannot execute\n";
+    termQuit "*** ERROR: $len_ArgNames input arguments is greater than the number of thermometers ($n_thermometers) - cannot execute\n";
 }
-if (not $opt_w and $len_ArgNames < $n_thermometers) {
-    warn "*** WARNING: $named: the number of input arguments $len_ArgNames is less than the number of thermometers $n_thermometers - ignore extra thermometers\n";
+unless ($opt_w) {
+    if ($len_ArgNames < $n_thermometers) {
+	if ($len_ArgNames == 0) {
+	    if ($opt_l) {
+		termQuit "";			# only list thermometer ID's
+	    }
+	    termQuit "*** ERROR: $named: no valid IEC arguments - nothing to do!!\n";
+	}
+	warn "*** WARNING: $named: the number of input arguments $len_ArgNames is less than the number of thermometers $n_thermometers - ignore extra thermometers\n";
+    }
 }
-
-$len_ArgNames or $opt_w or die "*** ERROR: $named: no valid IEC arguments - nothing to do!!\n";
 
 ########################################################################
 #	Assign remaining thermometers to IDs not assigned above
@@ -321,7 +421,7 @@ foreach $argNameRef (@ArgNames) {
 		goto THERMOMETER_FOUND;		# unassigned thermometer found
 	    }
 	}
-	die "The number of IEC input arguments $len_ArgNames is greater than the number of thermometers $n_thermometers - cannot execute\n";
+	termQuit "The number of IEC input arguments $len_ArgNames is greater than the number of thermometers $n_thermometers - cannot execute\n";
     }
   THERMOMETER_FOUND:
     print STDERR " $tid:$iec\n" if $opt_t;
@@ -342,7 +442,7 @@ if ($opt_t) {
     }
 }
 
-exit if $opt_x;			# deliberate exit with -x option
+termQuit "" if $opt_x;		# deliberate exit with -x option
 
 my $conn;
 my $register = 0;		# tested in rcvd_msg_from_server() for registration reply
@@ -366,7 +466,7 @@ if ($len_ArgNames) {
 
     Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
     $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
-    die "Client '$named' could not connect to $host:$port\n" unless $conn;
+    $conn or termQuit "Client '$named' could not connect to $host:$port\n";
 
     ############# send registration ############################
 
@@ -403,7 +503,7 @@ if ($len_ArgNames) {
     $ri == scalar @ArgNames or
 	die "*** ERROR: $named: $ri: not enough registration replies from iCserver - system error";
     $thermometerCount != 0 or
-	die "*** ERROR: $named: no valid registrations - cannot output to iCserver\n";
+	termQuit "*** ERROR: $named: no valid registrations - cannot output to iCserver\n";
     $register = 0;
     ############# correct number of registration replies #######
 }
@@ -423,7 +523,11 @@ if ($opt_t) {
 ########################################################################
 
 $SIG{ALRM} = \&measureTemperatures;	# signal 14 - Timer signal from alarm()
-printf(STDERR "%s\tstart temperature measurements\n", scalar localtime);
+printf(STDERR "%s\tstart temperature measurements", scalar localtime);
+if ($opt_o) {
+    print STDERR " output to '$opt_o'";
+}
+print STDERR "\n";
 alarm(1, $opt_r);			# first measurement in 1 second
 
 if ($conn) {
@@ -433,12 +537,12 @@ if ($conn) {
 #	if connected to iCserver
 #
 ########################################################################
-Msg->event_loop();	# NOTE: there should be no events for this app
-} else {
+    Msg->event_loop();	# NOTE: no iCserver events for this app
+} else {		#       only SIG ALRM for timed measurements
 ########################################################################
 #
 #	Waste time waiting for SIG ALRM if -w -d or -o and no iC output
-#	with Linux this sleep() also wakes up for each SIG ALRM
+#	With Linux this sleep() also wakes up for each SIG ALRM
 #
 ########################################################################
     sleep(1000000) while 1;
@@ -481,8 +585,7 @@ sub rcvd_msg_from_server {
 	print STDERR "($len)$msg<\n" if $opt_T;
 	if ($len == 0) {
 	    $conn->disconnect();
-	    print STDERR "$named: disconnected by server\n";
-	    exit;
+	    termQuit "$named: disconnected by server\n";
 	}
 	my ($msg1, $channel, $iec);
 	foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
@@ -638,9 +741,46 @@ sub untaint {
     if ($string =~ m/^([-\@\w.\/\\]+)$/) {
 	return $1;		# now untainted
     } else {
-	die "Bad data in $string";
+	die "Bad data in $string\n";
     }
 } # untaint
+
+########################################################################
+#
+#	Quit this program
+#	Clear bit for GPIO 4 ($opt_W) in $usedString
+#	Write $usedString to ~/.iC/gpios.used
+#
+########################################################################
+
+sub termQuit ($) {
+    my ($sig) = @_;
+    if ($usedFile) {
+	open USED, "+< $usedFile"				or die "can't open $usedFile: $!";
+	flock(USED, LOCK_EX)					or die "can't lock $usedFile: $!";
+	sysread(USED, $used, 16)				or die "can't read $usedFile: $!";
+	$usedString = unpack("b128", $used);			print STDERR "usedString = $usedString\n" if $opt_T;
+	$usedString &= $usedMask ^ "\1" x 128;			print STDERR "usedString = $usedString\n" if $opt_T;
+	$used = pack("b128", $usedString);
+	seek(USED, 0, 0)					or die "can't seek to start of $usedFile: $!";
+	syswrite(USED, $used, 16)				or die "can't write $usedFile: $!";
+	flock(USED, LOCK_UN)					or die "can't unlock $usedFile: $!";
+	close USED						or die "can't close $usedFile: $!";
+	if ($usedString !~ m/1/) {
+	    unlink($usedFile) == 1				or die "can't remove $usedFile: $!";
+	}
+    } else {
+	die "*** ERROR: $named: cannot find env{HOME] or open make .iC directory - system error";
+    }
+    if ($sig eq "INT") {
+	$sig = 2;			# ctrl-C interrupt from keyboard
+	print STDERR "\nInterrupt from keyboard\n";
+    } else {
+	print $sig;
+	$sig = 0;
+    }
+    exit $sig;
+} # termQuit
 __END__
 
 ############ POD to generate man page ##################################
@@ -654,7 +794,8 @@ iCtherm - an iC or standalone program supplying temperature values
 =head1 SYNOPSIS
 
  iCtherm [-wdlCFmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-      [ -o <out>][ -r <time>][ -f <file>][ <IEC>[-<IEC>|:<tid>][-<inst>]] ...]
+      [ -o <out>][ -r <time>][ -W <GPIO>][ -f <file>]
+      [ <IEC>[-<IEC>|:<tid>][-<inst>]] ...]
     DIRECT OUTPUT OPTIONS (default no iC output unless IEC's are specified)
 	-w	write temperatures to terminal
 	-o out	write temperatures to file <out>
@@ -663,9 +804,10 @@ iCtherm - an iC or standalone program supplying temperature values
 	-C	output temparature in 1/10th degrees Centigrade (default)
 	-F	output temparature in 1/10th degrees Fahrenheit
 	-r time	measurement repetition <time> in seconds (default 60 sec)
+	-W GPIO number used by the w1-gpio kernel module (default 4)
 	-f file read additional parameters from this <file>
     iC OUTPUT OPTIONS
-	IEC	IW0 IW1 IW2 ...  (default IEC is IW0 etc unless -w -o -d)
+	IEC	IW0 IW1 IW2 ... (default IEC is IW0 etc unless -w -o -d -l)
 	    A range of IEC's can be specified with -; eg IW0-IW3
 	    alternatively
 	IEC:tid	individual IECs may be followed by the thermometer

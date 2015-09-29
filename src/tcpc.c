@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.25 2015/03/05 05:09:24 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.26 2015/09/29 06:55:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -18,7 +18,7 @@ static const char RCS_Id[] =
  *
  *	W. R. Stevens, TCP/IP Illustrated, Vol 3, p 10
  *
- *   Modification John Wulff 2012.11.06 - disable Nagle's algorithm
+ *   Modification John Wulff 1.23 2012.11.06 - disable Nagle's algorithm
  *	From <en.wikipedia.org/wiki/Nagle's_algorithm>
  *	Applications that expect real time response can react poorly to
  *	Nagle's algorithm. The algorithm purposefully delays transmission,
@@ -34,15 +34,26 @@ static const char RCS_Id[] =
  *	rest for up to 500 ms or when an unrelated return message comes,
  *	which is much too late.	(Also changed for Perl code in Msg.pm)
  *
- *   Modification John Wulff 2014.03.31 - change from select() to poll().
+ *   Modification John Wulff 1.24 2014.03.31 - change from select() to poll().
  *	This change is required for Raspberry Pi GPIO interrupts, because
  *	the interrupts generated are classed as out-of-band input, which
  *	is signalled by POLLPRI instead od POLLIN using poll(). See:
  *	https://developer.ridgerun.com/wiki/index.php/How_to_use_GPIO_signals
  *
+ *   Modification John Wulff 1.25 2015.02.08 - change again poll() to select().
  *	Using the 3rd exceptiom parameter using select() works for GPIO
  *	out-of-band interrupts. Since select() maintains correct timing,
  *	select() is preferable to poll() and was made the default for iC.
+ *
+ *   Modification John Wulff 1.25 2015.03.05 - when starting iCserver
+ *	extend retries from 10 to 50 - wait 10 seconds max - will break
+ *	break within 200 ms of connecting.
+ *
+ *   Modification John Wulff 1.26 2015.08.20 - when starting iCserver
+ *	while running process is SUID root, execute iCserver at uid priveleges.
+ *	Not doing this causes iCbox to throw an error message:
+ *		Insecure $ENV{PATH} while running setuid at
+ *		/usr/local/bin/iCserver line 254.
  *
  *******************************************************************/
 
@@ -283,10 +294,46 @@ iC_connect_to_server(const char *	host,
     for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; r++) {
 	if (r < 50) {			/* wait 10 seconds max - will break within 200 ms of connecting */
 	    if (r == 0 && errno == ECONNREFUSED && strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
-		if (system("iCserver -a &") != 0) {	/* execute iCserver -a as a separate process */
-		    perror("iCserver");
-		    fprintf(stderr, "ERROR: %s: system(\"iCserver -a &\") could not be executed\n", iC_progname);
+		int	i = 0;
+		char *	ex_arg = "/usr/bin/perl";	/* use execv() - do not search path - may be SUID */
+		char *	ex_args[12];			/* execute iCserver -a as a separate process */
+		pid_t	c_pid;
+		uid_t	euid;
+		uid_t	uid;
+		char	buffer[BS];			/* 256 in icc.h */
+
+		snprintf(buffer, BS, "perl -S iCserver -a");	/* prepare to execute iCserver -a */
+		fprintf(iC_errFP, "%s\n", buffer);
+		/* retrieve first token from buffer, separated using " " */
+		ex_args[i] = strtok(buffer, " ");
+		if (iC_debug & 04) fprintf(iC_errFP, "*** %d:	%s\n", i, ex_args[i]);
+		i++;
+		/* continue to retrieve tokens until NULL returned */
+		while(i < 12 && (ex_args[i] = strtok(NULL, " ")) != NULL) {
+		    if (iC_debug & 04) fprintf(iC_errFP, "*** %d:	%s\n", i, ex_args[i]);
+		    i++;
 		}
+		assert(i < 12);				/* should fit with  4 arguments in execute string */
+		uid = getuid();
+		euid = geteuid();
+		if (iC_debug & 04) fprintf(iC_errFP, "uid = %d euid = %d\n", (int)uid, (int)euid);
+		if ((c_pid = fork()) == 0) {
+		    /* child process */
+		    if (euid == 0) {
+			if (seteuid(uid) != 0) {	/* execute iCserver at uid privileges */
+			    perror("seteuid failed");	/* hard ERROR */
+			    iC_quit(SIGUSR1);
+			}
+		    }
+		    execv(ex_arg, ex_args);		/* execute iCserver -a call in parallel child process */
+		    /* only get here if exec fails */
+		    perror("execv failed");		/* hard ERROR */
+		    iC_quit(SIGUSR1);
+		} else if (c_pid < 0) {
+		    perror("fork failed");		/* hard ERROR */
+		    iC_quit(SIGUSR1);
+		}
+		/* continue parent process with extended privileges */
 	    }
 	    iC_Xflag = 1;			/* this process started iCserver */
 #ifdef	WIN32

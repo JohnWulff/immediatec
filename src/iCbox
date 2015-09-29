@@ -78,60 +78,63 @@ my $named = untaint($0); $named =~ s#.*[/\\]##;
 my $nameo = $named;		# for generating bit map
 format STDERR =
 Usage:
-    @<<<< [-bdrHmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    @<<<< [-HbdrmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
 	  [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
-	  [ <ID>[-<ID>[=<ini>]] ...]
-	ID	X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
+	  [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
+	ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
 		Any ID can be preceded by 'I' or 'Q' in which case
 		only that input or output is generated (default is both)
 		default ID is X0 generating input IX0 and output QX0
 		A range of ID's can be specified with -; eg IX0-IX7
-	ID-inst	Each ID can be followed by -<inst>, where <inst> consists
+	ID-inst Each ID can be followed by -<inst>, where <inst> consists
 		of up to 3 numeric digits (usually 1 digit).
 		Such an appended instance code takes precedence over the
-		general instance specified with the -i <inst> (see below).
-	ID=ini	initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
+		general instance specified with the -i <inst> (see below)
+	ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
 		applies only to input ID's. One =ini applies to each input
-		in a range of ID's; eg X5-X7=3 inits IX5 IX6 and IX7 to 3.
-	X0,0b11 select buttons X0.0 and X0.1 only with a bit mask
-		default X0 (= X0,0b11111111) selects X0.0 .. X0.7
-	X0,,200 digital I/O push-buttons X0.0 .. x0.7 reset after 200 ms
+		in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
+	ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
+	X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
+		with a bit mask - default X1 (= X1,0b11111111) selects all
+	X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
 		default on/off buttons, which must be reset by another click
-	X0,,200,0b11  only X0.0 and X0.1 are push-buttons - rest are on/off
-	B1,0,50 number range of an analog scale is 0 to 50; default ,0,100,1
-	B1,0,500,10  number range 0 to 500 with a resolution of 10
-	-s host	host name of server    (default 'localhost')
-	-p port	service port of server (default '8778')
-	-n name	registration name (default first full ID)
+		outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
+	IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
+	ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
+	B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
+	B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
+	-s host host name of server    (default 'localhost')
+	-p port service port of server (default '8778')
+	-n name registration name (default first full ID)
 	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
 				    $named
-	-c col 	maximum number of columns in a row (default 12)
-	-C col 	absolute maximum number of columns in a row (default 18)
-	-Q rows	absolute maximum number of rows (default 3)
-	-l len	length of scales (default 170)
+	-c col  maximum number of columns in a row (default 12)
+	-C col  absolute maximum number of columns in a row (default 18)
+	-Q rows absolute maximum number of rows (default 3)
+	-l len  length of scales (default 170 pixels)
 	-f file read additional ID parameters from this file
-	-b	use buttons instead of checkboxes for digital I/O
-	-d	display external inputs IMn only (no ini values allowed)
-	-r	reverse - display inputs IMn, send outputs Qmn like inputs
 	-H      a Hold button is generated which holds input changes
-	-m	display elapsed time in seconds and microseconds
-	-t	trace debug messages
+	-b      use buttons instead of checkboxes for digital I/O
+	-d      display inputs IMn (no change and no ini values allowed)
+	-r      reverse - display inputs IMn, send outputs QMn like inputs
+	-m      display elapsed time in seconds and microseconds
+	-t      trace debug messages
 	-R      trace rcv messages in Msg.pm
 	-S      trace send messages in Msg.pm
-	-T	extra static debug messages
-	-x	exit after analyzing input parameters
-	-h	help, ouput this Usage text only
+	-T      extra static debug messages
+	-x      exit after analyzing input parameters
+	-h      help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.56 2015/03/02 23:27:58 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.57 2015/09/29 06:55:10 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
 use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_R $opt_S $opt_T $opt_s $opt_p);
 use vars qw($opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_f $opt_h);
 use Getopt::Std;		# replace require "getopts.pl";
-getopts('bdrHmxtRSTs:p:n:i:c:C:R:l:f:h');	# sets $opt_h if -h etc
+getopts('bdrHmxtRSTs:p:n:i:c:C:Q:l:f:h');	# sets $opt_h if -h etc
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -463,23 +466,27 @@ foreach $argNameRef (@ArgNames) {
     } else {
 	die "$named: invalid argument '$id' - internal error";
     }
+    if ($opt_r and $id =~ /^.X/ and $from < 255) {
+	$id .= "($from)";				# bitmask for digital I/Os only if -r
+    }
     if ((length($UnitRegistrations) + length($id)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
 	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
-	$conn->send_now($UnitRegistrations);
-	my ($tmsg, $terr) = $conn->rcv_now();
+	$conn->send_now($UnitRegistrations);		# unlikely to overflow - tested with length() < 139
+	my ($tmsg, $terr) = $conn->rcv_now();		# receive registration acknowledgment
 	print "$named: Reply: $tmsg\n" if $opt_t;
-	rcvd_msg_from_server($conn, $tmsg, $terr);	# receive registration acknowledgment
-	$UnitRegistrations = '';
+	rcvd_msg_from_server($conn, $tmsg, $terr);	# process registration acknowledgment
+	$UnitRegistrations = "$direction$id"		# start new $unitRegistrations without comma
+    } else {
+	$UnitRegistrations .= ",$direction$id";	# direction 1 ',Z' 2 term 1
     }
-    $UnitRegistrations .= ",$direction$id";	# direction 1 ',Z' 2 term 1
     print "register: $direction$id	inByte = $ini\n" if $opt_t;
 }
-$UnitRegistrations .= ",Z";	# terminate registration string
+$UnitRegistrations .= ",Z";			# terminate registration string
 print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
 $conn->send_now($UnitRegistrations);
-my ($tmsg, $terr) = $conn->rcv_now();
+my ($tmsg, $terr) = $conn->rcv_now();		# receive final registration acknowledgment
 print "$named: Reply: $tmsg\n" if $opt_t;
-rcvd_msg_from_server($conn, $tmsg, $terr);	# receive final registration acknowledgment
+rcvd_msg_from_server($conn, $tmsg, $terr);	# process final registration acknowledgment
 
 ############# registration analysis ########################
 $ri == scalar @ArgNames or
@@ -1104,9 +1111,9 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 
 =head1 SYNOPSIS
 
- iCbox [-bdrHmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+ iCbox [-HbdrmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
        [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
-       [ <ID>[-<ID>[=<ini>]] ...]
+       [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
             only that input or output is generated (default is both)
@@ -1115,17 +1122,20 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     ID-inst Each ID can be followed by -<inst>, where <inst> consists
             of up to 3 numeric digits (usually 1 digit).
             Such an appended instance code takes precedence over the
-            general instance specified with the -i <inst> (see below).
+            general instance specified with the -i <inst> (see below)
     ID=ini  initial input value eg: 15, 017, 0xf, 0b1111 (default 0)
             applies only to input ID's. One =ini applies to each input
-            in a range of ID's; eg X5-X7=3 inits IX5 IX6 and IX7 to 3.
-    X0,0b11 select buttons X0.0 and X0.1 only with a bit mask
-            default X0 (= X0,0b11111111) selects X0.0 .. X0.7
-    X0,,200 digital I/O push-buttons X0.0 .. x0.7 reset after 200 ms
+            in a range of ID's; eg X5-X7=0b11 inits IX5 IX6 and IX7 to 3
+    ID,<button_select_mask>,<input_reset_time>,<reset_select_mask>
+    X1,0b11 select digital buttons IX0.0, IX0.1, QX0.0 and QX0.1 only
+            with a bit mask - default X1 (= X1,0b11111111) selects all
+    X1,,200 digital input push-buttons IX1.0 .. IX1.7 reset after 200 ms
             default on/off buttons, which must be reset by another click
-    X0,,200,0b11  only X0.0 and X0.1 are push-buttons - rest are on/off
-    B1,0,50 number range of an analog scale is 0 to 50; default ,0,100,1
-    B1,0,500,10  number range 0 to 500 with a resolution of 10
+            outputs QX1.0 .. QX1.7 are not affected by <input_reset time>
+    IX1,,200,0b11  only IX1.0 and IX1.1 are push-buttons - rest are on/off
+    ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
+    B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
+    B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
@@ -1133,12 +1143,12 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)
     -Q rows absolute maximum number of rows (default 3)
-    -l len  length of scales (default 170)
+    -l len  length of scales (default 170 pixels)
     -f file read additional ID parameters from this file
-    -b      use buttons instead of checkboxes for digital I/O
-    -d      display external inputs IMn only (no ini values allowed)
-    -r      reverse - display inputs IMn, send outputs Qmn like inputs
     -H      a Hold button is generated which holds input changes
+    -b      use buttons instead of checkboxes for digital I/O
+    -d      display inputs IMn (no change and no ini values allowed)
+    -r      reverse - display inputs IMn, send outputs QMn like inputs
     -m      display elapsed time in seconds and microseconds
     -t      trace debug messages
     -R      trace rcv messages in Msg.pm

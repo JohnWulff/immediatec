@@ -34,6 +34,7 @@
  *	0010 	Q3 2014 	B+ 	1.0 	512MB 	(Mfg by Sony)
  *	0011 	Q2 2014  Compute Module	1.0 	512MB 	(Mfg by Sony)
  *	0012 	Q4 2014 	A+ 	1.0 	256MB 	(Mfg by Sony) 
+ *	a21041 			2B 		1024MB
  *	If you see a "1000" at the front of the Revision, e.g. 10000002
  *	then it indicates[1] that your Raspberry Pi has been over-volted,
  *	and your board revision is simply the last 4 digits (i.e. 0002 in this example).
@@ -45,9 +46,21 @@
 #ifndef RPI_REV_H
 #define RPI_REV_H
 static const char rpi_rev_h[] =
-"$Id: rpi_rev.h,v 1.2 2015/02/25 21:06:04 jw Exp $";
+"$Id: rpi_rev.h,v 1.3 2015/09/29 06:55:10 jw Exp $";
 
-extern int	boardrev(void);
-extern int	gpioUsed[];
+typedef struct Used {
+    long long	used;
+    long long	oops;
+} Used;
+
+typedef struct ProcValidUsed {
+    int		proc;
+    long long	valid;
+    Used	u;
+} ProcValidUsed;
+
+extern int		boardrev(void);
+extern ProcValidUsed *	openLockGpios(int force);
+extern int		writeUnlockCloseGpios(void);
 
 #endif	/* RPI_REV_H */

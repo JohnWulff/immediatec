@@ -33,7 +33,8 @@
  *
  *******************************************************************/
 
-#include	"tcpc.h"
+#include	<stdio.h>
+#include	<stdlib.h>
 #include	<signal.h>
 #include	<string.h>
 #include	<ctype.h>
@@ -42,43 +43,49 @@
 #include	<unistd.h>
 #include	<sys/stat.h>
 #include	<fcntl.h>
+#include	<time.h>
 
 #if !defined(RASPBERRYPI) || !defined(PWM) || !defined(TCP) || defined(_WINDOWS)
 #error - must be compiled with RASPBERRYPI, PWM and TCP defined and not _WINDOWS
 #else	/* defined(RASPBERRYPI) && defined(PWM) && defined(TCP) && !defined(_WINDOWS) */
 
-#include	"icc.h"			/* declares iC_emalloc() in misc.c and iC_quit() */
+#include	"icc.h"			/* declares iC_emalloc() in misc.c */
+#include	"tcpc.h"
 #include	"rpi_rev.h"		/* Determine Raspberry Pi Board Rev */
 #include	<pigpio.h>		/* pigpio library */
 
-#define		DEFAULT_PWM_RANGE	100
-#define		DEFAULT_PWM_FREQUENCY	20000
+#define		DEFAULT_PWM_RANGE	500
+#define		DEFAULT_PWM_FREQUENCY	400
 #ifndef IOUNITS
 #define IOUNITS	30			/* initial Units[] size */
 #endif
 #undef  BS
 #define BS	1024			/* buffer size for I/O strings */
 
-static struct timeval	toC100   = { 0, 100000 };	/* 100 ms select() timeout - re-iniialising value */
-static struct timeval	toCnt    = { 0,  50000 };	/* 50 ms select() initial timeout */
+static struct timeval	toCnt;				/* A/D measurement repetition timeout counter */
+static struct timeval	toRep    = { 0, 100000 };	/* timeout re-initialising value (default 100 ms) */
 static struct timeval *	toCntp   = NULL;		/* select() timeout initial value off */
 static int		spiFN    = -1;			/* A/D on /dev/spidev0.0 */
-static char		txBuf[4] = "\x01\x80\0";	/* A/D SPI transmit buffer */
+static char		txBuf[4] = "\x01\x80\x00";	/* A/D SPI transmit buffer */
 static char		rxBuf[4];			/* A/D SPI receive buffer */
+static struct timespec	ms100 = { 0, 100000000, };
 
 static const char *	usage =
 "Usage:\n"
 " %s [-Bftmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
-"          [ -a <val>][ -b <val>][ -D <val>][ -E <val>]\n"
-"          [ -S <val>][ -C <val>][ -d <deb>]\n"
-"          [ [~]QW<x>,<gpio>,p[,<range>[,<freq>]][-<inst>] ...]\n"
-"          [ QW<x>,<gpio>,s[-<inst>] ...]\n"
-"          [ IW<x>,<adc_channel>[-<inst>] ...]\n"
-"                           # at least 1 IEC QW<x> or IW<x> argument\n"
+"         [ -a <val>][ -b <val>][ -D <val>][ -E <val>]\n"
+"         [ -S <val>][ -C <val>][ -d <deb>]\n"
+"         [ [~]QW<x>,<gpio>,p[,<range>[,<freq>]][-<inst>] ...]\n"
+"         [ QW<x>,<gpio>,s[-<inst>] ...]\n"
+"         [ IW<x>,<adc_channel>[-<inst>] ...]\n"
+"         [ -r <time>][ -e <expf>][ -H <hyst>]\n"
 "    -s host IP address of server    (default '%s')\n"
 "    -p port service port of server  (default '%s')\n"
 "    -i inst instance of this client (default '') or 1 to %d digits\n"
 "    -B      start iCbox -d to monitor active analog I/O\n"
+"    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).\n"
+"            When the GPIO with this number is used in this app, iCtherm is\n"
+"            permanently blocked to avoid Oops errors in module w1-gpio.\n"
 "    -f      force use of GPIO's required by this program\n" 
 "                      PIGPIO initialisation arguments\n"
 "    -a val  DMA mode, 0=AUTO, 1=PMAP, 2=MBOX,   default AUTO\n"
@@ -109,14 +116,38 @@ static const char *	usage =
 "            NOTE: inversion is not available for servo pulse outputs.\n"
 "                      MCP3008 ADC IEC input arguments\n"
 "    IW<x>,<adc_channel>\n"
-"            adc_channel can be 0 to 7\n"
-"	    TODO add optional measurement frequency and smoothing rate\n"
+"          <x>     is any unique and valid IEC number (0 - 65535)\n"
+"          <adc_channel> can be 0 to 7 or 10 to 17\n"
+"            0   single-ended CH0\n"
+"            1   single-ended CH1\n"
+"            2   single-ended CH2\n"
+"            3   single-ended CH3\n"
+"            4   single-ended CH4\n"
+"            5   single-ended CH5\n"
+"            6   single-ended CH6\n"
+"            7   single-ended CH7\n"
+"            10  differential CH0 = IN+ CH1 = IN-\n"
+"            11  differential CH0 = IN- CH1 = IN+\n"
+"            12  differential CH2 = IN+ CH3 = IN-\n"
+"            13  differential CH2 = IN- CH3 = IN+\n"
+"            14  differential CH4 = IN+ CH5 = IN-\n"
+"            15  differential CH4 = IN- CH5 = IN+\n"
+"            16  differential CH6 = IN+ CH7 = IN-\n"
+"            17  differential CH6 = IN- CH7 = IN+\n"
+"    -r time A/D measurement repetition time in ms (default 100 ms)\n"
+"    -e expf A/D measurement exponential smoothing factor (default 1)\n"
+"            If expf > 1, exponential smoothing is applied to each\n"
+"            measurement, which is equivalent to using an R/C filter.\n"
+"            Out = previousOut * (expf-1)/expf + measurement * 1/expf\n"
+"    -H hyst A/D measurement hysteresis (default 1)\n"
+"            If hyst > 1 measurements are only output if\n"
+"            abs(Out - prevOut) >= hyst\n"
 "                      COMMON extension\n"
 "    IEC-inst Each individual IEC argument can be followed by -<inst>,\n"
 "          where <inst> consists of 1 to %d numeric digits.\n"
 "          Such an appended instance code takes precedence over the\n"
 "          general instance specified with the -i <inst> option above.\n"
-"    NOTE: there must be at least one GPIO IEC argument.\n"
+"    NOTE: there must be at least 1 IEC QW<x> or IW<x> argument.\n"
 "          No IEC arguments are generated automatically for %s.\n"
 "                      DEBUG options\n"
 "    -t      trace arguments and activity (equivalent to -d100)\n"
@@ -125,30 +156,35 @@ static const char *	usage =
 "            +2   trace TCP/IP rcv  actions\n"
 "            +100 show arguments\n"
 "            +200 show more debugging details\n"
+"             300 show exponential averaging\n"
 "            +400 exit after initialisation\n"
 "    -h      help, ouput this Usage text only\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiPWM.c,v 1.1 2015/08/13 01:21:29 jw Exp $\n"
+"Version	$Id: iCpiPWM.c,v 1.2 2015/09/29 06:55:10 jw Exp $\n"
 ;
 
 /********************************************************************
  *
- *	gpioQW structures are organised as follows:
- *	  each structure describes an independent QWx word
+ *	gpioAD structures are organised as follows:
+ *	  each structure describes an independent QWx or IWx word
  *
  *******************************************************************/
 
-typedef struct	gpioQW {
-    char *		name;		/* QWx QWx-i */
-    unsigned		val;		/* previous output value */
-    unsigned short	channel;	/* channel to send I or receive Q to/from iCserver */
-    unsigned short	gpio;		/* gpio number */
+typedef struct	gpioAD {
+    char *		name;		/* QWx QWx-i or IWx IWx-i */
+    unsigned		val;		/* previous I/O value */
+    double		dval;		/* previous I/O float value for exponential smoothing */
+    unsigned short	channel;	/* channel to receive Q or send I from/to iCserver */
+    union {
+	unsigned short	gpio;		/* gpio number for QWx */
+	unsigned short	adch;		/* A/D channel for IWx */
+    };
     unsigned		range;		/* 0 = servo, >0 = pwm range */
     unsigned		inv;		/* normal/inverted pwm range */
     unsigned		freq;		/* pwm frequency */
-    struct gpioQW *	next;		/* arrange in null terminated linked list */
-} gpioQW;
+    struct gpioAD *	next;		/* arrange in null terminated linked list */
+} gpioAD;
 
 char *		iC_progname;		/* name of this executable */
 static char *	iC_path;
@@ -158,10 +194,14 @@ unsigned short	iC_osc_lim = 1;
 int		iC_opt_B = 0;
 static unsigned short	topChannel = 0;
 static char	buffer[BS];
+static char	SR[] = "SR";		/* generates SI for iq 0, RQ for iq 1 */
+static char	IQ[] = "IQ";
+static char *	ag[] = { "adch", "gpio" };
 static short	errorFlag = 0;
-static gpioQW *	gpioWords = NULL;	/* linked list of IEC word outputs */
-static gpioQW**	Units = NULL;		/* dynamic array to store GPIO links */
+static gpioAD *	gpioADlist[2] = { NULL, NULL };	/* linked lists of IEC word outputs or inputs */
+static gpioAD**	Units = NULL;		/* dynamic array to store GPIO links */
 static int	ioUnits = 0;		/* dynamically allocated size of Units[] */
+static long long ownUsed = 0LL;
 static unsigned bufferSizeMilliseconds = PI_DEFAULT_BUFFER_MILLIS;
 static unsigned clockMicros            = PI_DEFAULT_CLK_MICROS;
 static unsigned clockPeripheral        = PI_DEFAULT_CLK_PERIPHERAL;
@@ -169,8 +209,10 @@ static unsigned DMAprimaryChannel      = PI_DEFAULT_DMA_PRIMARY_CHANNEL;
 static unsigned DMAsecondaryChannel    = PI_DEFAULT_DMA_SECONDARY_CHANNEL;
 static unsigned memAllocMode           = PI_DEFAULT_MEM_ALLOC_MODE;
 
-static void	storeUnit(unsigned short channel, gpioQW * gep);
-static void	terminate_quit(int sig);	/* terminate pigpio functions - quit with correct interrupt vectors */
+static void	storeUnit(unsigned short channel, gpioAD * gep);
+static unsigned	readADC(gpioAD * gep);	/* Read A/D value */
+static int	termQuit(int sig);		/* terminate pigpio functions - clear and unexport RASPBERRYPI stuff */
+int		(*iC_term)(int) = &termQuit;	/* function pointer to clear and unexport RASPBERRYPI stuff */
 
 FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
@@ -186,11 +228,12 @@ main(
     int		argc,
     char **	argv)
 {
-    int			proc;		/* processor board for Raspberry Pi */
     char **		argp;
     int			len;
     int			b;
-    int			val;
+    int			iq;
+    int			iq1;
+    unsigned		val;
     unsigned short	iid;
     char		iids[6];
     int			regBufLen = 0;
@@ -203,27 +246,37 @@ main(
     unsigned short	channel = 0;
     int			retval;
     unsigned short	gpio;
+    unsigned short	adch;
     char		tail[128];	/* must match sscanf formats %127s for tail */
     char		iqc[2] = { '\0', '\0' };
     char		dum[2] = { '\0', '\0' };
     char		sp[2]  = { '\0', '\0' };
-    int			ieStart = 0;
-    gpioQW *		gep;
-    gpioQW *		gpioLast = NULL;
+    int			iec;
+    gpioAD *		gep;
+    gpioAD *		gpioLast[2] = { NULL, NULL };
     unsigned		range;
-    int			resolution = 1;
     unsigned		freq;
     int			invFlag;
+    int			gpioTherm;
     char **		argip;
     int			argic;
     char *		iidPtr;
     char *		iidSep;
+    unsigned		ad_expf = 1;
+    double		ad_expf0;
+    double		ad_expf1;
+    int			ad_hyst = 1;
+    long long		gpioMask;
+    ProcValidUsed *	gpiosp;
+    uid_t		euid;
+    uid_t		uid;
 
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
 
     assert(argc);
     invFlag = 0x00;
+    gpioTherm = 4;				/* default GPIO number used by kernel module w1-gpio */
     argip = iC_emalloc(argc * sizeof(char *));	/* temporary array to hold IEC arguments */
     argic = 0;
 
@@ -246,7 +299,8 @@ main(
 	*iC_progname++ = '\0';		/* path has been stripped and isolated */
     }
     iC_iccNM = iC_progname;		/* generate our own name - not 'stdin' from tcpc.c */
-    if (iC_debug & 0200)  fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n", iC_fullProgname, iC_path, iC_progname);
+    uid = getuid();
+    euid = geteuid();
 
     /********************************************************************
      *
@@ -287,6 +341,11 @@ main(
 		case 'B':
 		    iC_opt_B = 1;	/* start iCbox -d to monitor active GPIO I/O */
 		    break;
+		case 'W':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    gpioTherm = atoi(*argv);
+		    if (gpioTherm > 31) goto error;
+		    goto break2;
 		case 'f':
 		    forceFlag = 1;	/* force use of GPIO's required by this program */
 		    break;
@@ -358,6 +417,34 @@ main(
 			errorFlag++;
 		    }
 		    goto break2;
+		 case 'r':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    b = atoi(*argv);		/* A/D measurement repetition time in ms */
+		    if (b < 1) b = 1;			/* TODO adjust for slow RPi, OK on RPi2 */
+		    toRep.tv_sec = b / 1000;		/* seconds */
+		    toRep.tv_usec = (b % 1000) * 1000;	/* remainder in us */
+		    goto break2;
+		 case 'e':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    ad_expf = atoi(*argv);	/* A/D exponential smoothing factor */
+		    if (ad_expf > 65536) {
+			fprintf(iC_errFP, "ERROR: %s: exponential smoothing factor should be <= 65536 (%d)\n",
+			    iC_progname, ad_expf);
+			errorFlag++;
+		    }
+		    ad_expf0 = (double)ad_expf;
+		    ad_expf1 = (double)(ad_expf - 1);
+		    goto break2;
+		 case 'H':
+		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    ad_hyst = atoi(*argv);	/* A/D measurement hysteresis */
+		    if (ad_hyst > 511) {
+			fprintf(iC_errFP, "ERROR: %s: hysteresis should be <= 511 (%d)\n",
+			    iC_progname, ad_hyst);
+			errorFlag++;
+		    }
+		    if (ad_hyst < 1) ad_hyst = 1;
+		    goto break2;
 		case 'd':
 		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
 		    if ((slen = strlen(*argv)) != strspn(*argv, "01234567") ||	/* octal digits only */
@@ -403,12 +490,64 @@ main(
 	    argip[argic++] = *argv;
 	}
     }
-    proc = boardrev();			/* Determine Raspberry Pi Board revision 0=A+ 1=B 2=B+ */
-    if (iC_debug & 0200) fprintf(iC_outFP, "Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n", proc);
+    if (iC_debug & 0200) fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n",
+	iC_fullProgname, iC_path, iC_progname);
+    if (iC_debug & 0200) fprintf(iC_outFP, "uid = %d euid = %d\n", (int)uid, (int)euid);
     if (! errorFlag && argic) {
+	/********************************************************************
+	 *  Open or create and lock the auxiliary file ~/.iC/gpios.rev,
+	 *  which contains one binary struct ProcValidUsed gpios.
+	 *  Must be created with normal uid, not euid 0 (root), so that
+	 *  other processes like iCpiFace etc can modify gpios.rev.
+	 *
+	 *  If gpios.rev exists, gpios.proc and gpios.valid is checked
+	 *  against the values returned by boardrev(). (Must be the same)
+	 *  For an RPi B+ processor gpios.rev contains:
+	 *  	gpios.proc	1
+	 *  	gpios.valid	0x00000000fbc6cf9c
+	 *  	gpios.used	0x0000000000000000
+	 *
+	 *  gpios.proc is the int returned by boardrev() // Raspberry Pi Board revision
+	 *
+	 *  gpios.valid has 64 bits - a bit is set for each valid GPIO
+	 *
+	 *  gpios.used has 64 bits - a bit is set for each GPIO used in other apps.
+	 *  If -f (forceFlag) is set the gpios.used is cleared unconditionally
+	 *  Else only GPIO's not used in other apps can be used in this app.
+	 *
+	 *  Subsequently bits are set for GPIO's used in this app, so they are
+	 *  not used a 2nd time, which is effective immediately in this app.
+	 *
+	 *  Finally the modified gpios.used is written to gpios.rev by a call to
+	 *  writeUnlockCloseGpios(), so other apps see which GPIO's have been used.
+	 *******************************************************************/
+	if (euid == 0) {
+	    if (seteuid(uid) != 0) {		/* execute openLockGpios() at uid privileges */
+		perror("seteuid failed");	/* hard ERROR */
+		iC_quit(SIGUSR1);		/* error quit */
+	    }
+	}
+	if ((gpiosp = openLockGpios(forceFlag)) == NULL) {
+	    fprintf(iC_errFP, "ERROR: %s: in openLockGpios()\n",
+		iC_progname);
+	    errorFlag++;
+	    goto FreeNow;
+	}
+	if (euid == 0) {
+	    if (seteuid(euid) != 0) {		/* restore root privileges */
+		perror("seteuid failed");	/* hard ERROR */
+		iC_quit(SIGUSR1);		/* error quit */
+	    }
+	}
+	gpiosp->valid |= 0xffLL << 56;			/* TODO make dependent on available A/D */
+	if (iC_debug & 0200) fprintf(iC_outFP,
+	    "Raspberry Pi Board revision = %d (0 = A,A+; 1 = B; 2 = B+,2B)\n"
+	    "valid    = 0x%016llx\n",
+	    gpiosp->proc, gpiosp->valid);
 	/********************************************************************
 	 *  Analyze IEC arguments
 	 *******************************************************************/
+	gpioMask = 0LL;
 	for (argp = argip; argp < &argip[argic]; argp++) {
 	    if (strlen(*argp) >= 128) {
 		fprintf(iC_errFP, "ERROR: %s: command line argument too long: '%s'\n", iC_progname, *argp);
@@ -438,9 +577,9 @@ main(
 	    /********************************************************************
 	     *  Scan for IEC arguments IWX or QWx ..
 	     *******************************************************************/
-	    if ((b = sscanf(tail, "%1[IQ]W%5d,%hu%127s", iqc, &ieStart, &gpio, tail)) >= 3) {
+	    if ((b = sscanf(tail, "%1[IQ]W%5d,%hu%127s", iqc, &iec, &gpio, tail)) >= 3) {
 		if (b == 3) *tail = '\0';
-		if (*iqc == 'Q') {
+		if ((iq = (*iqc == 'Q') ? 1 : 0)) {
 		    /********************************************************************
 		     *  QWx - scan for ,p PWM or ,s SERVO
 		     *******************************************************************/
@@ -462,7 +601,22 @@ main(
 			goto illFormed;			/* must be ,s or ,p */
 		    }
 		} else {
-		    range = freq = 0;			/* IWx,adc_channel in gpio */
+		    /********************************************************************
+		     *  IWx,<adc_channel> - single-ended or differential adc_channel
+		     *  NOTE: single/diff bit 3 in parameter is inverted for MCP3008 hardware
+		     *******************************************************************/
+		    if (gpio == 8 || gpio == 9 || gpio >= 18) {
+			fprintf(iC_errFP, "ERROR: %s: IW%d,%hu - adc_channel must be 0 to 7 or 10 to 17\n",
+			    iC_progname, iec, gpio);
+			errorFlag++;
+			goto endOneArg;
+		    }
+		    if ((adch = gpio) >= 10) {
+			adch -= 2;			/* convert decimal to octal */
+		    }
+		    adch ^= 0x08;			/* invert single/diff bit 3 */
+		    adch <<= 4;				/* move to bit 7 to 4 for txBuf[1] */
+		    range = freq = 0;
 		}
 	      checkInstance:
 		if (*tail == '-') {
@@ -480,21 +634,29 @@ main(
 		errorFlag++;
 		goto endOneArg;
 	    }
-	    if (iC_debug & 0200) fprintf(iC_outFP,
-		"%cW%d gpio = %hu range = %u freq = %u instance = '%s' b = %d sp = '%s' tail = '%s'\n",
-		*iqc, ieStart, gpio, range, freq, iids, b, sp, tail);
 	    /********************************************************************
 	     *  Use the IEC argument to extend GPIO control structures
-	     *  Check IEC argument was not used before
+	     *  For QWx check that the GPIO for the IEC argument is valid for this RPi
+	     *  and was not used before in this or another app.
+	     *  For IWx check that the A/D channel was not used before in this app
+	     *  NOTE: for differential A/D 2 channels are used for each channel value
 	     *******************************************************************/
-	    if (*iqc == 'Q' && ((b = gpioUsed[gpio]) & (1 << proc)) == 0) {	/* TODO RPi model dependent GPIOs */
-		if (b == 0100000) {
-		    fprintf(iC_errFP, "ERROR: %s: trying to use gpio %hu a 2nd time on QW%hu%s\n",
-			iC_progname, gpio, ieStart, iids);
-		} else {
-		    fprintf(iC_errFP, "ERROR: %s: trying to use invalid gpio %hu on QW%hu%s on RPi board rev %d\n",
-			iC_progname, gpio, ieStart, iids, proc);
-		}
+	    gpioMask = iq ? 1LL << gpio						/* gpio is 0 - 55 max */
+		      : adch & 0x80 ? 1LL << (((adch & 0x0070) >> 4) + 56)	/* bit 56 - 63, single ended A/D */
+				    : 3LL << (((adch & 0x0060) >> 4) + 56);	/* bit 56 - 63, differential A/D */
+	    if (iC_debug & 0200) fprintf(iC_outFP,
+		"%cW%d %s = %hu range = %u freq = %u instance = '%s' b = %d sp = '%s' tail = '%s'\n"
+		"used     = 0x%016llx\n"
+		"gpioMask = 0x%016llx\n",
+		IQ[iq], iec, ag[iq], gpio, range, freq, iids, b, sp, tail,
+		gpiosp->u.used, gpioMask);
+	    if (!(gpiosp->valid & gpioMask)) {
+		fprintf(iC_errFP, "ERROR: %s: trying to use invalid %s %hu on %cW%hu%s on RPi board rev %d\n",
+		    iC_progname, ag[iq], gpio, IQ[iq], iec, iids, gpiosp->proc);
+		errorFlag++;
+	    } else if (gpiosp->u.used & gpioMask) {
+		fprintf(iC_errFP, "ERROR: %s: trying to use %s %hu a 2nd time on %cW%hu%s\n",
+		    iC_progname, ag[iq], gpio, IQ[iq], iec, iids);
 		errorFlag++;
 	    } else {
 		/********************************************************************
@@ -503,47 +665,78 @@ main(
 		if (iid != 0xffff && *iids == '\0') {
 		    snprintf(iids, 6, "-%d", iid);	/* global instance */
 		}
-		len = snprintf(buffer, BS, "%cW%d%s", *iqc, ieStart, iids);	/* IEC name with possible instance */
-		for (gep = gpioWords; gep; gep = gep->next) {
-		    if (strcmp(gep->name, buffer) == 0) {
-			fprintf(iC_errFP, "ERROR: %s: trying to use %s a 2nd time\n", iC_progname, buffer);
-			errorFlag++;
-			goto endOneArg;		/* not unique */
+		len = snprintf(buffer, BS, "%cW%d%s", IQ[iq], iec, iids);	/* IEC name with possible instance */
+		for (iq1 = 0; iq1 <= 1; iq1++) {
+		    for (gep = gpioADlist[iq1]; gep; gep = gep->next) {
+			if (strcmp(gep->name, buffer) == 0) {
+			    fprintf(iC_errFP, "ERROR: %s: trying to use %s a 2nd time\n", iC_progname, buffer);
+			    errorFlag++;
+			    goto endOneArg;		/* not unique */
+			}
 		    }
 		}
-		if (*iqc == 'Q') gpioUsed[gpio] = 0100000;	/* TODO mark gpio as used */
-		gep = iC_emalloc(sizeof(gpioQW));	/* new gpioQW element */
-		if (gpioWords == NULL) {
-		    gpioWords = gep;		/* first element */
+		gpiosp->u.used |= gpioMask;		/* mark gpio or adch used for ~/.iC/gpios.rev */
+		ownUsed        |= gpioMask;		/* mark gpio or adch in ownUsed for termination */
+		gep = iC_emalloc(sizeof(gpioAD));	/* new gpioAD element */
+		if (gpioADlist[iq] == NULL) {
+		    gpioADlist[iq] = gep;		/* first element */
 		} else {
-		    assert(gpioLast);
-		    gpioLast->next = gep;	/* previous last element linked to new element */
+		    assert(gpioLast[iq]);
+		    gpioLast[iq]->next = gep;	/* previous last element linked to new element */
 		}
-		gpioLast = gep;			/* this is new last element */
+		gpioLast[iq] = gep;		/* this is new last element */
 		gep->name = iC_emalloc(++len);
 		strcpy(gep->name, buffer);	/* store IEC name */
-		gep->gpio = gpio;		/* gpio number for this word - A/D channel for IWx */
+		if (iq) {
+		    gep->gpio = gpio;		/* gpio number for this QWx */
+		} else {
+		    gep->adch = adch;		/* A/D channel for IWx */
+		}
 		gep->range = range;		/* range (0 = servo or PWM range) for this word */
-		if (range && *buffer == 'Q') {
+		if (range && iq) {
 		    gep->inv = invFlag;		/* normal/inverted PWM output range unless SERVO */
 		} else if (invFlag) {
 		    fprintf(iC_errFP, "WARNING: %s: cannot invert SERVO output or A/D input %s - ignore\n", iC_progname, buffer);
 		}
 		gep->freq = freq;		/* PWM freq for this word */
+		/********************************************************************
+		 *  Check if GPIO number is used by w1-gpio kernel module to drive iCtherm
+		 *  If yes and bit 0 (OopsMask) has not been set in gpios->u.oops before
+		 *  remove w1-therm and w1-gpio and set bit 0 to block iCtherm
+		 *******************************************************************/
+		if (gpio == gpioTherm && !(gpiosp->u.oops & OopsMask)) {
+		    strncpy(buffer, "sudo modprobe -r w1-therm w1-gpio", BS);	/* remove kernel modules */
+		    if (iC_debug & 0200) fprintf(iC_outFP, "%s\n", buffer);
+		    if ((b = system(buffer)) != 0) {
+			perror("sudo modprobe");
+			fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
+			    iC_progname, buffer, b);
+		    }
+		    gpiosp->u.oops |= OopsMask;	/* block iCtherm permanently */
+		}
 	    }
 	  endOneArg: ;
 	    invFlag = 0x00;			/* start new tilde '~' analysis for next argument */
 	  skipInvFlag:;
 	}
+	gpiosp->valid &= ~(0xffLL << 56);		/* TODO make dependent on available A/D */
+	if (iC_debug & 0200) fprintf(iC_outFP, "used     = 0x%016llx\n"
+					       "oops     = 0x%016llx\n", gpiosp->u.used, gpiosp->u.oops);
+	if (writeUnlockCloseGpios() < 0) {
+	    fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
+		iC_progname);
+	    errorFlag++;
+	}
     }
+  FreeNow:
     free(argip);
-    if (gpioWords == NULL) {
+    if (errorFlag) {
+	iC_quit(-3);					/* after all the command line has been analyzed */
+    }
+    if (gpioADlist[0] == NULL && gpioADlist[1] == NULL) {
 	fprintf(iC_errFP, "ERROR: %s: no valid IEC arguments? there must be at least 1 valid argument\n",
 	    iC_progname);
 	goto error;					/* output usage */
-    }
-    if (errorFlag) {
-	iC_quit(-3);					/* after all the command line has been analyzed */
     }
     /* configure PIGPIO library */
     gpioCfgBufferSize(bufferSizeMilliseconds);
@@ -560,9 +753,12 @@ main(
     /********************************************************************
      *  Generate a meaningful name for network registration
      *******************************************************************/
-    len = snprintf(buffer, BS, "%s", iC_iccNM);
-    for (gep = gpioWords; gep; gep = gep->next) {
-	len += snprintf(buffer+len, BS-len, "_%hu", gep->gpio);	/* name GPIO gpio */
+    len = snprintf(buffer, BS, "%s_", iC_iccNM);
+    for (gep = gpioADlist[0]; gep; gep = gep->next) {
+	len += snprintf(buffer+len, BS-len, "A%ho", (gep->adch ^ 0x80) >> 4);	/* A/D channel */
+    }
+    for (gep = gpioADlist[1]; gep; gep = gep->next) {
+	len += snprintf(buffer+len, BS-len, "G%hu", gep->gpio);	/* GPIO */
     }
     if (strlen(iC_iidNM) > 0) {
 	len += snprintf(buffer+len, BS-len, "-%s", iC_iidNM);	/* name-instance header */
@@ -571,8 +767,8 @@ main(
     strcpy(iC_iccNM, buffer);
     if (iC_micro) iC_microReset(0);		/* start timing */
     if (iC_debug & 0200) fprintf(iC_outFP, "host = %s, port = %s, name = %s\n", iC_hostNM, iC_portNM, iC_iccNM);
-    if (iC_debug & 0400) terminate_quit(0);
-    signal(SIGINT, terminate_quit);			/* catch ctrlC and Break */
+    if (iC_debug & 0400) iC_quit(0);
+    signal(SIGINT, iC_quit);			/* catch ctrlC and Break */
 #ifdef	SIGTTIN
     /********************************************************************
      *  The following behaviour was observed on Linux kernel 2.2
@@ -608,27 +804,29 @@ main(
     cp = regBuf + len;
     regBufLen -= len;
     /********************************************************************
-     *  Extend registration string with all active GPIO output names
+     *  Extend registration string with all active GPIO output and A/D input names
      *******************************************************************/
-    for (gep = gpioWords; gep; gep = gep->next) {
-	assert(regBufLen > ENTRYSZ);		/* accomodates ",RQW123456,Z" */
-	len = snprintf(cp, regBufLen, ",R%s", gep->name);
-	cp += len;				/* output receive name */
-	regBufLen -= len;
+    for (iq = 0; iq <= 1; iq++) {
+	for (gep = gpioADlist[iq]; gep; gep = gep->next) {
+	    assert(regBufLen > ENTRYSZ);	/* accomodates ",RQW123456,Z" */
+	    len = snprintf(cp, regBufLen, ",%c%s", SR[iq], gep->name);
+	    cp += len;				/* input send name or output receive name */
+	    regBufLen -= len;
+	}
     }
     /********************************************************************
      *  Send registration string made up of all active I/O names
      *******************************************************************/
-    if (iC_debug & 0200)  fprintf(iC_outFP, "regBufLen = %d\n", regBufLen);
+    if (iC_debug & 0200) fprintf(iC_outFP, "regBufLen = %d\n", regBufLen);
     snprintf(cp, regBufLen, ",Z");		/* Z terminator */
-    if (iC_debug & 0200)  fprintf(iC_outFP, "register:%s\n", regBuf);
+    if (iC_debug & 0200) fprintf(iC_outFP, "register:%s\n", regBuf);
     if (iC_micro) iC_microPrint("send registration", 0);
     iC_send_msg_to_server(iC_sockFN, regBuf);	/* register IOs with iCserver */
     /********************************************************************
      *  Receive a channel number for each I/O name sent in registration
      *  Distribute read and/or write channels returned in acknowledgment
      *******************************************************************/
-    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY)) {	/* busy wait for acknowledgment reply */
+    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
 	if (iC_micro) iC_microPrint("ack received", 0);
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 	if (iC_opt_B) {
@@ -637,44 +835,46 @@ main(
 	    op = buffer + len;
 	    ol = BS - len;
 	}
-	cp = rpyBuf - 1;
+	cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 	/********************************************************************
 	 *  Channels for GPIO acknowledgments
 	 *******************************************************************/
-	for (gep = gpioWords; gep; gep = gep->next) {
-	    assert(cp);				/* not enough channels in ACK string */
-	    channel = atoi(++cp);		/* read channel from ACK string */
-	    assert(channel > 0);
-	    if (channel > topChannel) {
-		topChannel = channel;
-	    }
-	    if (iC_debug & 0200) {
-		fprintf(iC_outFP, "GPIO %hu	%s  on channel %hu\n", gep->gpio, gep->name, channel);
-	    }
-	    gep->channel = channel;		/* link channel to GPIO (ignore receive channel) */
-	    storeUnit(channel, gep);		/* link GPIO element pointer to send channel */
-	    if (iC_opt_B) {
-		assert(ol > 14);
-		len = snprintf(op, ol, " %s", gep->name);	/* add I/O name[-inst] to execute iCbox -d */
-		op += len;
-		ol -= len;
-		if (*gep->name == 'I') {
-		    len = snprintf(op, ol, ",0,1023");		/* A/D input iCbox slider */
-		} else
-		if ((range = gep->range) == 0) {
-		    len = snprintf(op, ol, ",500,2500,20");	/* SERVO range of iCbox slider */
-		} else {
-		    resolution = range / 100;
-		    if (resolution <= 1) {
-			len = snprintf(op, ol, ",0,%u", range);	/* PWM range of iCbox slider */
+	for (iq = 0; iq <= 1; iq++) {
+	    for (gep = gpioADlist[iq]; gep; gep = gep->next) {
+		assert(cp);			/* not enough channels in ACK string */
+		channel = atoi(++cp);		/* read channel from ACK string */
+		assert(channel > 0);
+		if (channel > topChannel) {
+		    topChannel = channel;
+		}
+		if (iC_debug & 0200) {
+		    if (iq == 0) {
+			fprintf(iC_outFP, "A/D %c%hu	%s  on channel %hu\n",
+			    (gep->adch & 0x80) ? 'S' : 'D', (gep->adch & 0x70) >> 4, gep->name, channel);
 		    } else {
-			len = snprintf(op, ol, ",0,%u,%d", range, resolution);
+			fprintf(iC_outFP, "GPIO %hu	%s  on channel %hu\n", gep->gpio, gep->name, channel);
 		    }
 		}
-		op += len;
-		ol -= len;
+		gep->channel = channel;		/* link channel to GPIO (ignore receive channel) */
+		storeUnit(channel, gep);	/* link GPIO element pointer to send channel */
+		if (iC_opt_B) {
+		    assert(ol > 14);
+		    len = snprintf(op, ol, " %s", gep->name);	/* add I/O name[-inst] to execute iCbox -d */
+		    op += len;
+		    ol -= len;
+		    if (iq == 0) {
+			len = snprintf(op, ol, ",0,1023");	/* A/D input iCbox slider */
+		    } else
+		    if ((range = gep->range) == 0) {
+			len = snprintf(op, ol, ",500,2500");	/* SERVO range of iCbox slider */
+		    } else {
+			len = snprintf(op, ol, ",0,%u", range);	/* PWM range of iCbox slider */
+		    }
+		    op += len;
+		    ol -= len;
+		}
+		cp = strchr(cp, ',');
 	    }
-	    cp = strchr(cp, ',');
 	}
 	assert(cp == NULL);			/* Ack string matches Registration */
 	/********************************************************************
@@ -682,10 +882,9 @@ main(
 	 *******************************************************************/
 	if (iC_opt_B) {
 	    int		i = 0;
-	    char *	ex_arg = "/usr/bin/perl";	/* use execv() - do not search path because SUID */
+	    char *	ex_arg = "/usr/bin/perl";	/* use execv() - do not search path - may be SUID */
 	    char *	ex_args[66];			/* execute iCbox -d as a separate process */
 	    pid_t	c_pid;
-	    uid_t	uid;
 
 	    fprintf(iC_outFP, "%s\n", buffer);
 	    /* retrieve first token from buffer, separated using " " */
@@ -700,48 +899,77 @@ main(
 	    if (i >= 66) {				/* should fit with a max of 32 possible GPIO's */
 		fprintf(iC_errFP, "ERROR: %s: iCbox -d call is limited to call + 64 parameters + terminator\n",
 		    iC_progname);
-		terminate_quit(SIGUSR1);
+		iC_quit(SIGUSR1);			/* error quit */
 	    }
-	    uid = getuid();
-	    if (iC_debug & 0200) fprintf(iC_outFP, "uid = %d euid = %d\n", (int)uid, (int)geteuid());
 	    if ((c_pid = fork()) == 0) {
 		/* child process */
-		if (seteuid(uid) != 0) {		/* execute iCbox at uid privileges */
-		    perror("seteuid failed");		/* hard ERROR */
-		    terminate_quit(SIGUSR1);
+		if (euid == 0) {
+		    if (seteuid(uid) != 0) {		/* execute iCbox at uid privileges */
+			perror("seteuid failed");	/* hard ERROR */
+			iC_quit(SIGUSR1);		/* error quit */
+		    }
 		}
 		execv(ex_arg, ex_args);			/* execute iCbox -d call in parallel child process */
 		/* only get here if exec fails */
 		perror("execv failed");			/* hard ERROR */
-		terminate_quit(SIGUSR1);
+		iC_quit(SIGUSR1);			/* error quit */
 	    } else if (c_pid < 0) {
 		perror("fork failed");			/* hard ERROR */
-		terminate_quit(SIGUSR1);
+		iC_quit(SIGUSR1);			/* error quit */
 	    }
 	    /* continue parent process with extended privileges */
 	}
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply: top channel = %hu\n", topChannel);
     } else {
-	terminate_quit(QUIT_SERVER);			/* quit normally with 0 length message */
+	iC_quit(QUIT_SERVER);				/* quit normally with 0 length message */
     }
     /********************************************************************
      *  Report results of argument analysis
      *******************************************************************/
     if (iC_debug & 0300) {
-	fprintf(iC_outFP, "Allocation for GPIO elements, global instance = \"%s\"\n", iC_iidNM);
-	fprintf(iC_outFP, "	IEC	gpio	range	 freq	channel	instance\n\n");
-	for (gep = gpioWords; gep; gep = gep->next) {
-	    strcpy(buffer, gep->name);		/* retrieve name[-instance] */
-	    if ((iidPtr = strchr(buffer, '-')) != NULL) {
-		*iidPtr++ = '\0';		/* separate name and instance */
-		iidSep = "	-";
-	    } else {
-		iidPtr = iidSep = "";
+	fprintf(iC_outFP, "Allocation for A/D and GPIO elements, global instance = \"%s\"\n", iC_iidNM);
+	fprintf(iC_outFP, "	IEC   adch/gpio	 range	 freq	channel	instance\n\n");
+	for (iq = 0; iq <= 1; iq++) {
+	    for (gep = gpioADlist[iq]; gep; gep = gep->next) {
+		strcpy(buffer, gep->name);	/* retrieve name[-instance] */
+		if ((iidPtr = strchr(buffer, '-')) != NULL) {
+		    *iidPtr++ = '\0';		/* separate name and instance */
+		    iidSep = "	-";
+		} else {
+		    iidPtr = iidSep = "";
+		}
+		if (iq == 0) {
+		    fprintf(iC_outFP, "	%s	 %c%hu			%4hu%s%s\n",
+			buffer, (gep->adch & 0x80) ? 'S' : 'D', (gep->adch & 0x70) >> 4,
+			gep->channel, iidSep, iidPtr);
+		} else {
+		    fprintf(iC_outFP, "	%s	 %2hu	%c%4u	%5u	%4hu%s%s\n",
+			buffer, gep->gpio, gep->inv ? '~' : ' ', gep->range, gep->freq, gep->channel, iidSep, iidPtr);
+		}
 	    }
-	    fprintf(iC_outFP, "	%s	%3hu	%c%4u	%5u	%3hu%s%s\n",
-		buffer, gep->gpio, gep->inv ? '~' : ' ', gep->range, gep->freq, gep->channel, iidSep, iidPtr);
 	}
 	fprintf(iC_outFP, "\n");
+    }
+    /********************************************************************
+     *  Open A/D on /dev/spidev0.0 and set timeout value if any IW<x> parameters
+     *******************************************************************/
+    if (gpioADlist[0]) {
+	assert(spiFN < 0);
+	if ((spiFN = spiOpen(0, 100000, 0)) < 0) {
+	    fprintf(iC_errFP, "WARNING: %s: open A/D on /dev/spidev0.0 failed\n", iC_progname);
+	} else {
+	    toCnt = toRep;			/* set timeout value for A/D conversions */
+	    toCntp = &toCnt;
+	}
+    }
+    /********************************************************************
+     *  Initialize active A/D inputs
+     *  Set initial dval to start off exponential smoothing correctly
+     *  Set initial val to an impossible value to force TCP output on first measurement
+     *******************************************************************/
+    for (gep = gpioADlist[0]; gep; gep = gep->next) {
+	gep->dval = readADC(gep);		/* 10 bit A/D conversion value */
+	gep->val = 65535;			/* impossible value > 1023 */
     }
     /********************************************************************
      *  Generate GPIO PWM initialisation for active outputs
@@ -749,47 +977,38 @@ main(
      *    SERVO: 0,     0,    0 # which turns SERVO off (no pulses)
      *    PWM:   range, freq, 0 # which turns PWM off (duty/cycle 0 = 0V out)
      *******************************************************************/
-    for (gep = gpioWords; gep; gep = gep->next) {
-	assert(gep->val == 0);			/* all gpioQW entries val initialised to 0 */
-	if (*(gep->name) == 'Q') {		/* QWx for PWM or SERVO output */
-	    if ((range = gep->range) == 0) {
-		/********************************************************************
-		 *  Write GPIO QWx SERVO initialisation outputs
-		 *******************************************************************/
-		if ((b = gpioServo(gep->gpio, gep->val)) < 0) {
-		    fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioServo(%hu, %u)' ?%d in pigpio library\n",
-			iC_progname, gep->gpio, gep->val, b);
-		}
-	    } else {
-		if ((b = gpioSetPWMfrequency(gep->gpio, gep->freq)) < 0) {	/* PWM frequency >= 0 - set nearest frequency */
-		    fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioSetPWMfrequency(%hu, %u)' ?%d in pigpio library\n",
-			iC_progname, gep->gpio, gep->freq, b);
-		}
-		if (iC_debug & 0100) fprintf(iC_outFP, "GPIO %hu: Real frequency = %d for requested frequency %u\n",
-		    gep->gpio, b, gep->freq);
-		gep->freq = (unsigned)b;
-		if ((b = gpioSetPWMrange(gep->gpio, range)) < 0) {	/* PWM frequency >= 0 - set nearest frequency */
-		    fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioSetPWMrange(%hu, %u)' ?%d in pigpio library\n",
-			iC_progname, gep->gpio, range, b);
-		}
-		if (iC_debug & 0100) fprintf(iC_outFP, "GPIO %hu: Real range = %d for requested range %u\n",
-		    gep->gpio, b, range);
-//	    gep->range = (unsigned)b;	/* TODO check relatiomship of freq, real range etc */
-		/********************************************************************
-		 *  Write GPIO QWx PWM initialisation outputs
-		 *******************************************************************/
-		val = gep->inv ? range : 0;				/* normal/inverted initial PWM output */
-		if ((b = gpioPWM(gep->gpio, val)) < 0) {
-		    fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioPWM(%hu, %u)' ?%d in pigpio library\n",
-			iC_progname, gep->gpio, val, b);
-		}
+    for (gep = gpioADlist[1]; gep; gep = gep->next) {
+	assert(gep->val == 0);			/* all gpioAD entries val initialised to 0 */
+	if ((range = gep->range) == 0) {
+	    /********************************************************************
+	     *  Write GPIO QWx SERVO initialisation outputs
+	     *******************************************************************/
+	    if ((b = gpioServo(gep->gpio, gep->val)) < 0) {
+		fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioServo(%hu, %u)' ?%d in pigpio library\n",
+		    iC_progname, gep->gpio, gep->val, b);
 	    }
-	} else if (spiFN < 0) {			/* IWx for A/D conversion input */
-	    if ((spiFN = spiOpen(0, 100000, 0)) < 0) {
-		fprintf(iC_errFP, "WARNING: %s: open A/D on /dev/spidev0.0 failed\n", iC_progname);
-	    } else {
-		toCnt = toC100;			/* set timeout value for A/D conversions */
-		toCntp = &toCnt;
+	} else {
+	    if ((b = gpioSetPWMfrequency(gep->gpio, gep->freq)) < 0) {	/* PWM frequency >= 0 - set nearest frequency */
+		fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioSetPWMfrequency(%hu, %u)' ?%d in pigpio library\n",
+		    iC_progname, gep->gpio, gep->freq, b);
+	    }
+	    if (iC_debug & 0100) fprintf(iC_outFP, "GPIO %hu: Real frequency = %d for requested frequency %u\n",
+		gep->gpio, b, gep->freq);
+	    gep->freq = (unsigned)b;
+	    if ((b = gpioSetPWMrange(gep->gpio, range)) < 0) {	/* PWM frequency >= 0 - set nearest frequency */
+		fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioSetPWMrange(%hu, %u)' ?%d in pigpio library\n",
+		    iC_progname, gep->gpio, range, b);
+	    }
+	    if (iC_debug & 0100) fprintf(iC_outFP, "GPIO %hu: Real range = %d for requested range %u\n",
+		gep->gpio, b, range);
+//	    gep->range = (unsigned)b;	/* TODO check relatiomship of freq, real range etc */
+	    /********************************************************************
+	     *  Write GPIO QWx PWM initialisation outputs
+	     *******************************************************************/
+	    val = gep->inv ? range : 0;				/* normal/inverted initial PWM output */
+	    if ((b = gpioPWM(gep->gpio, val)) < 0) {
+		fprintf(iC_errFP, "WARNING: %s: Can't execute initial 'gpioPWM(%hu, %u)' ?%d in pigpio library\n",
+		    iC_progname, gep->gpio, val, b);
 	    }
 	}
     }
@@ -811,7 +1030,7 @@ main(
 	if ((retval = iC_wait_for_next_event(toCntp)) == 0)
 	{
 	    if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
-		toCnt = toC100;			/* re-initialise timeout value */
+		toCnt = toRep;			/* re-initialise timeout value */
 		/********************************************************************
 		 *  Carry out A/D conversion on all allocated A/D channels
 		 *******************************************************************/
@@ -821,26 +1040,43 @@ main(
 		    op = buffer;
 		    ol = BS;
 		}
-		for (gep = gpioWords; gep; gep = gep->next) {
-		    if (*(gep->name) == 'I') {	/* IWx for A/D conversion input */
-			txBuf[1] = 0x80 | gep->gpio << 4;	/* single ended adc_channel */
-			if ((b = spiXfer(spiFN, txBuf, rxBuf, 3)) != 3) {
-			    fprintf(iC_errFP, "WARNING: %s: xfer A/D on /dev/spidev0.0 failed (%d)\n",
-				iC_progname, b);
-			}
-			val = (rxBuf[1] & 0x03) << 8 | rxBuf[2];	/* 10 bit A/D conversion value */
-			if (val != gep->val) {
-			    len = snprintf(cp, regBufLen, ",%hu:%d", gep->channel, val); /* data telegram */
-			    cp += len;
-			    regBufLen -= len;
-			    if (iC_debug & 0100) {
-				len = snprintf(op, ol, " A %s,%d", gep->name, gep->gpio); /* source name, adc_channel */
-				op += len;
-				ol -= len;
-			    }
-			    gep->val = val;	/* latest A/D value for comparison */
+		for (gep = gpioADlist[0]; gep; gep = gep->next) {	/* scan A/D conversion inputs */
+		    val = readADC(gep);				/* 10 bit A/D conversion value */
+		    if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "prev = %u	val = %u", gep->val, val);
+		    if (ad_expf > 1) {
+			/********************************************************************
+			 *  If expf > 1, exponential smoothing is applied to each
+			 *  measurement, which is equivalent to using an R/C filter.
+			 *  Out = previousOut * (expf-1)/expf + measurement * 1/expf
+			 *      ad_expf0 = (double)ad_expf;
+			 *      ad_expf1 = (double)(ad_expf - 1);
+			 *******************************************************************/
+			val = (unsigned)((gep->dval = (gep->dval * ad_expf1 + (double)val) / ad_expf0) + 0.5);
+			if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "	dval = %4.6f	val = %u", gep->dval, val);
+		    }
+		    if ((iC_debug & 0300) == 0300) fprintf(iC_outFP, "\n");
+		    if (ad_hyst > 1) {
+			/********************************************************************
+			 *  If hyst > 1 measurements are only output if
+			 *  abs(Out - prevOut) >= hyst
+			 *******************************************************************/
+			if (abs(val - gep->val) < ad_hyst) {
+			    goto skipDataTelegram;
 			}
 		    }
+		    if (val != gep->val) {
+			len = snprintf(cp, regBufLen, ",%hu:%u", gep->channel, val); /* data telegram */
+			cp += len;
+			regBufLen -= len;
+			if (iC_debug & 0100) {
+			    len = snprintf(op, ol, " A %s,%ho",	/* source name, adc_channel */
+				gep->name, (gep->adch ^ 0x80) >> 4);
+			    op += len;
+			    ol -= len;
+			}
+			gep->val = val;		/* latest A/D value for comparison */
+		    }
+		  skipDataTelegram: ;
 		}
 		if (cp > regBuf) {
 		    iC_send_msg_to_server(iC_sockFN, regBuf+1);	/* send data telegram(s) to iCserver */
@@ -856,7 +1092,7 @@ main(
 		if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
 		    if (iC_micro) iC_microPrint("TCP input received", 0);
 		    assert(Units);
-		    cp = rpyBuf - 1;		/* point to dummy comma before first message in input */
+		    cp = rpyBuf - 1;		/* increment to first character in rpyBuf in first use of cp */
 		    if (isdigit(rpyBuf[0])) {
 			char *	cpe;
 			char *	cps;
@@ -913,10 +1149,10 @@ main(
 		    }
 		    else {
 		      RcvWarning:
-			fprintf(iC_errFP, "WARNING: %s: received '%s' from iCserver ???\n", iC_iccNM, cp);
+			fprintf(iC_errFP, "WARNING: %s: received '%s' from iCserver ???\n", iC_iccNM, rpyBuf);
 		    }
 		} else {
-		    terminate_quit(QUIT_SERVER);	/* quit normally with 0 length message from iCserver */
+		    iC_quit(QUIT_SERVER);	/* quit normally with 0 length message from iCserver */
 		}
 	    }	/* end of TCP/IP input */
 	    /********************************************************************
@@ -928,7 +1164,7 @@ main(
 		    buffer[0] = '\0';		/* notify EOF to iC application by zero length buffer */
 		}
 		if ((b = buffer[0]) == 'q') {
-		    terminate_quit(QUIT_TERMINAL);	/* quit normally */
+		    iC_quit(QUIT_TERMINAL);	/* quit normally */
 		} else if (b == 't') {
 		    iC_debug ^= 0100;		/* toggle -t flag */
 		} else if (b == 'm') {
@@ -939,7 +1175,7 @@ main(
 	    }	/*  end of STDIN interrupt */
 	} else {
 	    perror("ERROR: select failed");	/* retval -1 */
-	    terminate_quit(SIGUSR1);
+	    iC_quit(SIGUSR1);			/* error quit */
 	}
     }
 } /* main */
@@ -947,44 +1183,65 @@ main(
 /********************************************************************
  *
  *	Initalise and expand dynamic array Units[] as necessary
- *	Store gpioQW * to current GPIO element
+ *	Store gpioAD * to current GPIO element
  *
  *******************************************************************/
 
 static void
-storeUnit(unsigned short channel, gpioQW * gep)
+storeUnit(unsigned short channel, gpioAD * gep)
 {
     while (channel >= ioUnits) {
-	Units = (gpioQW **)realloc(Units,		/* initially NULL */
-	    (ioUnits + IOUNITS) * sizeof(gpioQW *));
+	Units = (gpioAD **)realloc(Units,		/* initially NULL */
+	    (ioUnits + IOUNITS) * sizeof(gpioAD *));
 	assert(Units);
-	memset(&Units[ioUnits], '\0', IOUNITS * sizeof(gpioQW *));
+	memset(&Units[ioUnits], '\0', IOUNITS * sizeof(gpioAD *));
 	ioUnits += IOUNITS;			/* increase the size of the array */
 	if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] increase\n", ioUnits);
     }
     if (iC_debug & 0200) fprintf(iC_outFP, "storeUnit: Units[%d] <= %s\n", channel, gep->name);
-    Units[channel] = gep;			/* store gpioQW * */
+    Units[channel] = gep;			/* store gpioAD * */
 } /* storeUnit */
 
 /********************************************************************
  *
- *	Terminate pigpio functions
- *	Quit with correct interrupt vectors
+ *	Read A/D value
  *
  *******************************************************************/
 
-static void
-terminate_quit(int sig)
+static unsigned
+readADC(gpioAD * gep)
 {
-    int			b;
-    gpioQW *		gep;
+    txBuf[0] = 0x01;				/* start bit */
+    txBuf[1] = gep->adch;			/* single-ended or differential adc_channel */
+						/* txBuf[2] = Dont't Care; */
+    if (spiXfer(spiFN, txBuf, rxBuf, 3) != 3) {
+	fprintf(iC_errFP, "WARNING: %s: xfer A/D on /dev/spidev0.0 failed\n", iC_progname);
+    }
+    return (rxBuf[1] & 0x03) << 8 | rxBuf[2];	/* 10 bit A/D conversion value */
+} /* readADC */
 
-    for (gep = gpioWords; gep; gep = gep->next) {
-	gep->val = 0;		/* all gpioQW entries val back to 0 */
+/********************************************************************
+ *
+ *	Terminate pigpio functions
+ *	Clear gpiosp->u.used bits for GPIOs and A/D channels used in this app
+ *
+ *******************************************************************/
+
+static int
+termQuit(int sig)
+{
+    if (iC_debug & 0200) fprintf(iC_outFP, "=== Terminate GPIOs and pigpio functions ===\n");
+    int			b;
+    gpioAD *		gep;
+    ProcValidUsed *	gpiosp;
+
+    for (gep = gpioADlist[1]; gep; gep = gep->next) {
+	gep->val = 0;		/* all gpioAD entries val back to 0 */
 	if (gep->range == 0) {
 	    /********************************************************************
 	     *  Write GPIO QWx SERVO final 0 output
 	     *******************************************************************/
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Terminate SERVO output on GPIO %d\n", gep->gpio);
 	    if ((b = gpioServo(gep->gpio, gep->val)) < 0) {
 		fprintf(iC_errFP, "WARNING: %s: Can't execute final 'gpioServo(%hu, %u)' ?%d in pigpio library\n",
 		    iC_progname, gep->gpio, gep->val, b);
@@ -993,20 +1250,38 @@ terminate_quit(int sig)
 	    /********************************************************************
 	     *  Write GPIO QWx PWM final 0 output
 	     *******************************************************************/
+	    if (iC_debug & 0200) fprintf(iC_outFP, "### Terminate PWM output on GPIO %d\n", gep->gpio);
 	    if ((b = gpioPWM(gep->gpio, gep->val)) < 0) {
 		fprintf(iC_errFP, "WARNING: %s: Can't execute final 'gpioPWM(%hu, %u)' ?%d in pigpio library\n",
 		    iC_progname, gep->gpio, gep->val, b);
 	    }
 	}
     }
-    gpioDelay(100000);			/* settle for another 100 ms */
+    nanosleep(&ms100, NULL);		/* settle for another 100 ms */
     if (spiFN >= 0) {
 	spiClose(spiFN);
 	spiFN = -1;
     }
+    if (iC_debug & 0200) fprintf(iC_outFP, "### Terminate pigpio functions\n");
     gpioTerminate();			/* pigpio library stuff */
-    iC_quit(sig);			/* finally quit */
-} /* terminate_quit */
+    /********************************************************************
+     *  Open and lock the auxiliary file ~/.iC/gpios.rev again
+     *  Other apps may have set used bits since this app was started
+     *******************************************************************/
+    if ((gpiosp = openLockGpios(0)) == NULL) {
+	fprintf(iC_errFP, "ERROR: %s: in openLockGpios()\n",
+	    iC_progname);
+	return (SIGUSR1);		/* error quit */
+    }
+    gpiosp->u.used &= ~ownUsed;		/* clear all bits for GPIOs and A/D channels used in this app */
+    if (writeUnlockCloseGpios() < 0) {	/* unlink (remove) ~/.iC/gpios.rev if gpios->u.used and oops is 0 */
+	fprintf(iC_errFP, "ERROR: %s: in writeUnlockCloseGpios()\n",
+	    iC_progname);
+	return (SIGUSR1);		/* error quit */
+    }
+    if (iC_debug & 0200) fprintf(iC_outFP, "=== End Terminate GPIOs and pigpio =========\n");
+    return (sig);			/* finally quit */
+} /* termQuit */
 #endif	/* defined(RASPBERRYPI) && defined(PWM) && defined(TCP) && !defined(_WINDOWS) */
 
 /* ############ POD to generate iCpiPWM man page ############################
@@ -1025,11 +1300,14 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
          [ [~]QW<x>,<gpio>,p[,<range>[,<freq>]][-<inst>] ...]
          [ QW<x>,<gpio>,s[-<inst>] ...]
          [ IW<x>,<adc_channel>[-<inst>] ...]
-                           # at least 1 IEC QW<x> or IW<x> argument
+         [ -r <time>][ -e <expf>][ -H <hyst>]
     -s host IP address of server    (default 'localhost')
     -p port service port of server  (default '8778')
     -i inst instance of this client (default '') or 1 to 3 digits
     -B      start iCbox -d to monitor active analog I/O
+    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).
+            When the GPIO with this number is used in this app, iCtherm is
+            permanently blocked to avoid Oops errors in module w1-gpio.
     -f      force use of GPIO's required by this program\n" 
                       PIGPIO initialisation arguments
     -a val  DMA mode, 0=AUTO, 1=PMAP, 2=MBOX,   default AUTO
@@ -1045,8 +1323,8 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
           <x>     is any unique and valid IEC number (0 - 65535)
           <gpio>  is any unique GPIO supported by the board revision
                   and not used on iCpiFace or an iC app with direct I/O
-          <range> PWM range                     default 100
-          <freq>  PWM frequency >= 0            default 20000 Hz
+          <range> PWM range                     default 500
+          <freq>  PWM frequency >= 0            default 400 Hz
                   (selects closest valid frequency)
           for more details see the pigpio(3) man page
     ~QW<x>,<gpio>,p[,<range>[,<freq>]]
@@ -1060,13 +1338,38 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
             NOTE: inversion is not available for servo pulse outputs.
                       MCP3008 ADC IEC input arguments
     IW<x>,<adc_channel>
-            adc_channel can be 0 to 7
+          <x>     is any unique and valid IEC number (0 - 65535)
+          <adc_channel> can be 0 to 7 or 10 to 17
+            0   single-ended CH0
+            1   single-ended CH1
+            2   single-ended CH2
+            3   single-ended CH3
+            4   single-ended CH4
+            5   single-ended CH5
+            6   single-ended CH6
+            7   single-ended CH7
+            10  differential CH0 = IN+ CH1 = IN-
+            11  differential CH0 = IN- CH1 = IN+
+            12  differential CH2 = IN+ CH3 = IN-
+            13  differential CH2 = IN- CH3 = IN+
+            14  differential CH4 = IN+ CH5 = IN-
+            15  differential CH4 = IN- CH5 = IN+
+            16  differential CH6 = IN+ CH7 = IN-
+            17  differential CH6 = IN- CH7 = IN+
+    -r time A/D measurement repetition time in ms (default 100 ms)
+    -e expf A/D measurement exponential smoothing factor (default 1)
+            If expf > 1, exponential smoothing is applied to each
+            measurement, which is equivalent to using an R/C filter.
+            Out = previousOut * (expf-1)/expf + measurement * 1/expf
+    -H hyst A/D measurement hysteresis (default 1)
+            If hyst > 1 measurements are only output if
+            abs(Out - prevOut) >= hyst
                       COMMON extension
     IEC-inst Each individual IEC argument can be followed by -<inst>,
           where <inst> consists of 1 to 3 numeric digits.
           Such an appended instance code takes precedence over the
           general instance specified with the -i <inst> option above.
-    NOTE: there must be at least one GPIO IEC argument.
+    NOTE: there must be at least 1 IEC QW<x> or IW<x> argument.
           No IEC arguments are generated automatically for iCpiPWM.
                       DEBUG options
     -t      trace arguments and activity (equivalent to -d100)
@@ -1075,6 +1378,7 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
             +2   trace TCP/IP rcv  actions
             +100 show arguments
             +200 show more debugging details
+             300 show exponential averaging
             +400 exit after initialisation
     -h      help, ouput this Usage text only
 

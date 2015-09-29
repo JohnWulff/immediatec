@@ -73,18 +73,19 @@ Usage:
 
  Menu buttons:                   Action                      Accelerator
 
-    [man] Show  a new manpage - in this window                   RETURN
+    [man] ----- tear-off - menu can be moved and left open
+       Show     a new manpage - in this window                   RETURN
                 (followed by an optional section in parentheses)
                 Alternatively show a list of topics matching a key
                 with '-k <key>' or 'apropos <key>' entered in the
                 show window or '-f <page>' or 'whatis <page>'
                 Double-clicking on a hyper-link (pale blue) in
-		the main text will also open that page
+                the main text will also open that page
        Open     a new window - to show selected manpage         Alt-RET
        Reload   the current manpage (usually modified externally)   r
        Quit     the program                                         q
-       ------   this is followed by a history of previous pages,
-                which can be selected.
+       -------- this is followed by a history of previous pages,
+                which can be selected randomly
 
     [ <= ]      Load the previous manpage in the history            p
     [ => ]      Load the next manpage in the history                n
@@ -110,7 +111,7 @@ Usage:
      <>Ignore case
      <>Regexp match
      <>Rgexp+ignore case
-       ------   this is followed by a history of previous search
+       -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
     [ - ]       Zoom Out   decrease font size                     Alt -
@@ -123,7 +124,7 @@ Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman,v 1.19 2014/07/30 02:46:50 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.20 2015/09/29 06:55:10 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1800,7 +1801,7 @@ sub fork_and_exec {
     FORK: {
 	if ($pid = fork) {
 	    ## parent process
-	    sleep 0.2;	# wait for control program to be activated as child process
+	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
 	} elsif (defined $pid) {	# $pid is zero if defined
 	    ## dispatch child process
 	    exec @_;			# does not return unless exec failure
@@ -1808,7 +1809,7 @@ sub fork_and_exec {
 	    exec ("$named", '-X');	# cleanly exit overlay child process
 	} elsif ($! =~ /No more process/) {
 	    ## EAGAIN, recoverable fork error
-	    sleep 5;
+	    select undef, undef, undef, 5;
 	    redo FORK;
 	} else {
 	    ## weird fork error
@@ -2101,18 +2102,19 @@ iCman - an interface to the on-line reference manuals
 
  Menu buttons:                   Action                      Accelerator
 
-    [man] Show  a new manpage - in this window                   RETURN
+    [man] ----- tear-off - menu can be moved and left open
+       Show     a new manpage - in this window                   RETURN
                 (followed by an optional section in parentheses)
                 Alternatively show a list of topics matching a key
                 with '-k <key>' or 'apropos <key>' entered in the
                 show window or '-f <page>' or 'whatis <page>'
                 Double-clicking on a hyper-link (pale blue) in
-		the main text will also open that page
+                the main text will also open that page
        Open     a new window - to show selected manpage         Alt-RET
        Reload   the current manpage (usually modified externally)   r
        Quit     the program                                         q
-       ------   this is followed by a history of previous pages,
-                which can be selected.
+       -------- this is followed by a history of previous pages,
+                which can be selected randomly
 
     [ <= ]      Load the previous manpage in the history            p
     [ => ]      Load the next manpage in the history                n
@@ -2138,7 +2140,7 @@ iCman - an interface to the on-line reference manuals
      <>Ignore case
      <>Regexp match
      <>Rgexp+ignore case
-       ------   this is followed by a history of previous search
+       -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
     [ - ]       Zoom Out   decrease font size                     Alt -

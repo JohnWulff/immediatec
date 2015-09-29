@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.14 2015/04/13 00:14:10 jw Exp $";
+"@(#)$Id: misc.c,v 1.15 2015/09/29 06:55:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -32,12 +32,14 @@ static const char misc_c[] =
 #include	"tcpc.h"
 #endif	/* TCP */
 #include	"icc.h"
+#ifndef	PWM
 #ifdef	RASPBERRYPI
 #include	"rpi_gpio.h"
 #include	"mcp23s17.h"
 #include	"pifacecad.h"
 #include	"bcm2835.h"
 #endif	/* RASPBERRYPI */
+#endif	/* PWM */
 
 /********************************************************************
  *
@@ -86,6 +88,7 @@ char *		regBuf;
 char *		rpyBuf;
 #endif	/* EFENCE */
 
+#ifndef	PWM
 #ifdef	RASPBERRYPI
 int		iC_opt_P;
 int		iC_opt_G;
@@ -175,6 +178,7 @@ iC_gpio_pud(int gpio, int pud)
     }
 } /* iC_gpio_pud */
 #endif	/* RASPBERRYPI */
+#endif	/* PWM */
 #endif	/* TCP */
 
 #ifndef	_MSDOS_
@@ -348,98 +352,7 @@ void
 iC_quit(int sig)
 {
 #ifdef	RASPBERRYPI
-    if (iC_opt_P) {
-	piFaceIO *	pfp;
-	int		pfce;
-	int		iq;
-	gpioIO *	gep;
-	unsigned short	bit;
-	unsigned short	gpio;
-	int		fn;
-
-	/********************************************************************
-	 *  Unexport and close all gpio files for all GPIO arguments
-	 *******************************************************************/
-	for (iq = 0; iq <= 1; iq++) {
-	    for (gep = gpioList[iq]; gep; gep = gep->nextIO) {
-		for (bit = 0; bit <= 7; bit++) {
-		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			/********************************************************************
-			 *  Execute the SUID root progran iCgpioPUD(gpio, pud) to turn off pull-up/down
-			 *******************************************************************/
-			if (iq == 0) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
-			/********************************************************************
-			 *  Close GPIO N value 
-			 *******************************************************************/
-			if ((fn = gep->gpioFN[bit])> 0) {
-			    close(fn);			/* close connection to /sys/class/gpio/gpio_N/value */
-			}
-			/********************************************************************
-			 *  Force all outputs and inputs to direction "in" and "none" interrupts
-			 *******************************************************************/
-			if (sig != SIGUSR2 && gpio_export(gpio, "in", "none", 1, iC_progname) != 0) {
-			    sig = SIGUSR1;		/* unable to export gpio_N */
-			}
-			/********************************************************************
-			 *  free up the sysfs for gpio N unless used by another program (SIGUSR2)
-			 *******************************************************************/
-			if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO %hu\n", gpio);
-			if (sig != SIGUSR2 && gpio_unexport(gpio) != 0) {
-			    sig = SIGUSR1;		/* unable to unexport gpio_N */
-			}
-		    }
-		}
-	    }
-	}
-	/********************************************************************
-	 *  PiFaces
-	 *******************************************************************/
-	if (npf) {
-	    if ((iC_debug & 0200) != 0) fprintf(iC_outFP, "### Shutdown active PiFace units\n");
-	    /********************************************************************
-	     *  Turn off the pullup resistor on gpio25/INTB
-	     *******************************************************************/
-	    iC_gpio_pud(25, BCM2835_GPIO_PUD_OFF);
-	    for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
-		/********************************************************************
-		 *  Clear active PiFace output and turn off active PiFaceCad
-		 *******************************************************************/
-		if (pfp->pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
-		    writeByte(pfp->spiFN, pfp->pfa, GPIOA, 0);
-		} else if (pfp->Qgate) {			/* PiFaceCAD */
-		    pifacecad_lcd_clear();
-		    pifacecad_lcd_display_off();
-		    pifacecad_lcd_set_backlight(0);
-		}
-		/********************************************************************
-		 *  Shutdown all active PiFace Units leaving interrupts off and open drain
-		 *******************************************************************/
-		if ((pfp->Igate || pfp->Qgate) &&	/* works for both iCpiFace and apps */
-		    setupMCP23S17(pfp->spiFN, pfp->pfa, IOCON_ODR, 0x00, 0) < 0) {
-		    fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n", iC_progname, pfp->pfa);
-		}
-	    }
-	    /********************************************************************
-	     *  Close selected spidev devices
-	     *******************************************************************/
-	    for (pfce = 0; pfce < 2; pfce++) {
-		if (spidFN[pfce] > 0) {
-		    close(spidFN[pfce]);		/* close connection to /dev/spidev0.0, /dev/spidev0.1 */
-		}
-	    }
-	    /********************************************************************
-	     *  Close GPIO25/INTB/INTA value 
-	     *  free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
-	     *******************************************************************/
-	    if (gpio25FN > 0) {
-		close(gpio25FN);			/* close connection to /sys/class/gpio/gpio25/value */
-		if (iC_debug & 0200) fprintf(iC_outFP, "### Unexport GPIO 25\n");
-		if (sig != SIGUSR2 && gpio_unexport(25) != 0) {
-		    sig = SIGUSR1;			/* unable to unexport gpio 25 */
-		}
-	    }
-	}
-    } /* iC_opt_P */
+    sig = (*iC_term)(sig);			/* clear and unexport RASPBERRYPI stuff */
 #endif	/* RASPBERRYPI */
     /********************************************************************
      *  The following termination function is an empty function
@@ -456,8 +369,8 @@ iC_quit(int sig)
      *  a matching wait() call.
      *******************************************************************/
     if ((sig >= QUIT_TERMINAL || sig == SIGINT)
-	&& iCend()
-    ) {						/* termination function */
+	&& iCend()				/* iC termination function */
+    ) {	
 #if	YYDEBUG
 	if (iC_debug & 0100) {
 	    fprintf(iC_outFP, "\niCend complete ======\n");
@@ -466,24 +379,26 @@ iC_quit(int sig)
     }
 #ifdef TCP
     if (iC_sockFN > 0) {
+	if (sig < SIGUSR1 || sig == QUIT_TERMINAL || sig == QUIT_DEBUGGER) {	/* but not QUIT_SERVER */
 #ifdef LOAD
-	if (C_channel) {
-	    /* disconnect iClive - follow with '0' for iCserver */
-	    snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
-	    iC_send_msg_to_server(iC_sockFN, regBuf);
+	    if (C_channel) {
+		/* disconnect iClive - follow with '0' for iCserver */
+		snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
+		iC_send_msg_to_server(iC_sockFN, regBuf);
 #ifdef	WIN32
-	    Sleep(200);				/* 200 ms in ms */
+		Sleep(200);			/* 200 ms in ms */
 #else	/* WIN32 */
-	    nanosleep(&ms200, NULL);
+		nanosleep(&ms200, NULL);
 #endif	/* WIN32 */
-	    if (iC_micro) iC_microPrint("Disconnected", 0);
-	}
+		if (iC_micro) iC_microPrint("Disconnected", 0);
+	    }
 #endif /* LOAD */
-	if (iC_Xflag) {				/* stop iCserver if this process started it */
-	    snprintf(regBuf, REQUEST, "X%s", iC_iccNM);
-	    iC_send_msg_to_server(iC_sockFN, regBuf);
+	    if (iC_Xflag) {			/* stop iCserver if this process started it */
+		snprintf(regBuf, REQUEST, "X%s", iC_iccNM);
+		iC_send_msg_to_server(iC_sockFN, regBuf);
+	    }
+	    iC_send_msg_to_server(iC_sockFN, "");	/* 0 length message to disconnect from iCserver */
 	}
-	iC_send_msg_to_server(iC_sockFN, "");	/* zero length message to disconnect */
 	close(iC_sockFN);			/* close connection to iCserver */
     }
 #endif /* TCP */

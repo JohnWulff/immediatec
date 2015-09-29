@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.76 2015/05/24 11:27:30 jw Exp $";
+"@(#)$Id: icc.h,v 1.77 2015/09/29 06:55:10 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -656,7 +656,7 @@ extern short		iC_dc;		/* debug display counter in scan and rsff */
 extern unsigned char	iC_bitIndex[];
 extern unsigned char	iC_bitMask[];
 #define	X_MASK		0xff		/* mask to detect used bits in bit I/O byte */
-#define	W_MASK		0x107		/* marks output as word I/O */
+#define	W_MASK		0x100		/* marks output as word I/O */
 #define	B_WIDTH		0x101		/* marks output as byte width signed */
 #define	W_WIDTH		0x102		/* marks output as word width signed */
 #if INT_MAX != 32767 || defined (LONG16)
@@ -669,6 +669,8 @@ extern unsigned char	iC_bitMask[];
 #define	P_FLAG		0x400		/* flag PiFace in or out Gate in gt_mark */
 #define	G_FLAG		0x800		/* flag GPIO in or out group Gate in gt_mark */
 #define	PG_MASK		0xC00		/* mask for the above 2 flags in gt_mark */
+#define OopsMask	1LL		/* mask to protect iCtherm from modprobe Oops failure */
+extern int		(*iC_term)(int);	/* clear and unexport RASPBERRYPI stuff */
 #endif	/* RASPBERRYPI */
 
 extern void	iC_arithMa(Gate *, Gate *);	/* ARITH master action */
@@ -726,6 +728,7 @@ extern iC_Functp 	iC_clock_i[];
 
 #define	MARKMAX		4			/* number of oscillations allowed */
 #define	OSC_WARN_CNT	10			/* number of oscillation warnings */
+#define BS		256			/* buffer size for I/O strings */
 
 extern unsigned short	iC_mark_stamp;		/* incremented every scan */
 extern Gate *		iC_osc_gp;		/* report oscillations */
@@ -758,7 +761,6 @@ extern FILE *		iC_savFP;
 #include <stdint.h>			/* defines a set of integral type aliases */
 #define MAXPF		8		/* maximum number of PiFace's */
 #define IOUNITS		30		/* initial Units[] size */
-#define BS		256		/* buffer size for I/O strings */
 
 /********************************************************************
  *	Used for marking I/O type in gt_live to influence registration.

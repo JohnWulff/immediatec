@@ -23,7 +23,7 @@
 usage ()
 {
     echo 'Usage:' >&2
-    echo " ${0##*/} [-qgpclrtmCLSPGRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]" >&2
+    echo " ${0##*/} [-qgpclrtmCLSPGVRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]" >&2
     echo '    call make for immcc, libict.a, libict.so, icr, ict and lmain with' >&2
     echo '    correct options' >&2
     echo '	-q	output only headings and error messages' >&2
@@ -39,6 +39,7 @@ usage ()
     echo '	-S	make libict.so without YYDEBUG if OSTYPE ~= linux' >&2
     echo '	-P	make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only' >&2
     echo '	-G	make iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
+    echo '	-V	make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-M	make lmain only' >&2
@@ -58,7 +59,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.38 2015/04/08 07:24:09 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.39 2015/09/29 06:55:10 jw Exp $' >&2
 }
 
 makeLib ()
@@ -158,6 +159,23 @@ makeGpioPUD ()
     fi
 }
 
+makePiPWM ()
+{
+    if [[ "$cpu" =~ "armv" ]]; then
+	mv misc.$O icend.$O tcpc.$O rpi_rev.$O Make_tmp 2> /dev/null
+	if [ -d PiPWMObjs ]; then
+	    mv PiPWMObjs/* .
+	else
+	    mkdir PiPWMObjs
+	fi
+	make OPT="-DPWM -DTCP -DYYDEBUG$o" CFLAGS="$cflags" LDFLAGS="$ldflags" iCpiPWM
+	mv misc.$O icend.$O tcpc.$O rpi_rev.$O PiPWMObjs
+	mv Make_tmp/* . 2> /dev/null
+    else
+	echo "Error makeAll -P: cannot make iCpiPWM for a '$cpu' cpu - only for an 'armv*' on a Raspberry Pi"
+    fi
+}
+
 q=""
 c=""
 l=""
@@ -174,6 +192,7 @@ L=0
 S=0
 P=0
 G=0
+V=0
 R=0
 T=0
 M=0
@@ -188,7 +207,7 @@ YN=0
 Y=""
 cpu=""
 
-while getopts ":qgpclrtmCLSPGRTMuedsyzhD:W:o:" opt; do
+while getopts ":qgpclrtmCLSPGVRTMuedsyzhD:W:o:" opt; do
     case $opt in
     q )	q="q";;		# echo only - dont kill
     g )	cflags="-g";;	# debugging, no optimisation
@@ -203,6 +222,7 @@ while getopts ":qgpclrtmCLSPGRTMuedsyzhD:W:o:" opt; do
     S )	S=1; IM_LIB=0;;
     P )	P=1; IM_LIB=0;;
     G )	G=1; IM_LIB=0;;
+    V )	V=1; IM_LIB=0;;
     R )	R=1; IM_LIB=0;;
     T )	T=1; IM_LIB=0;;
     M )	M=1; IM_LIB=0;;
@@ -237,7 +257,7 @@ fi
 if [ $YN -ne 0 ]; then
     Y=" -DYYDEBUG=$YN"
 fi
-if [ $P -eq 0 ] && [ $G -eq 0 ] && ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
+if [ $P -eq 0 ] && [ $G -eq 0 ] && [ $V -eq 0 ] && ! perl icg.pl $Y$u$d$e$o$s$y icc.h | cmp -s - icg.h; then
     echo "Options changed to '$Y$u$d$e$o$s$y'"
     if [ $R -eq 0 ] && [ $T -eq 0 ]; then
 	echo "   make clean"
@@ -252,7 +272,7 @@ if [ $IM_LIB = 1 ] || [ $C = 1 ]; then
     make OPT="$c$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" immcc 2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
-if [ $IM_LIB = 1 ] || [ $L = 1 ]; then
+if [ $IM_LIB = 1 ] || [ $L = 1 ]; then		# echo must be before makeLib call - output is redirected - same for others
     echo "make OPT=\"-DLOAD -DTCP$l$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" libict.a"
     makeLib  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
@@ -282,13 +302,18 @@ if [ $M = 1 ]; then
 fi
 
 if [ $P = 1 ]; then
-    echo "make OPT=\"-DRASPBERRYPI -DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiFace"
+    echo "make OPT=\"-DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiFace"
     makePiFace  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $G = 1 ]; then
-    echo "make OPT=\"-DRASPBERRYPI CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCgpioPUD"
+    echo "make OPT=\"$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCgpioPUD"
     makeGpioPUD  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
+if [ $V = 1 ]; then
+    echo "make OPT=\"-DPWM -DTCP -DYYDEBUG$o\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" iCpiPWM"
+    makePiPWM  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 rmdir Make_tmp
@@ -304,7 +329,7 @@ makeAll - supports Makefile in immediate-C develeopment
 
 =head1 SYNOPSIS
 
- makeAll [-qgpclrtmCLSPGRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]
+ makeAll [-qgpclrtmCLSPGVRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]
  call make for immcc, libict.so, libict.a, icr, ict and lmain with
  correct options
     -q      output only headings and error messages
@@ -320,6 +345,7 @@ makeAll - supports Makefile in immediate-C develeopment
     -S      make libict.so without YYDEBUG if OSTYPE ~= linux
     -P      make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only
     -G	    make iCgpioPUD for RASPBERRYPI as SUID auxiliary program
+    -V	    make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -M      make lmain only

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.63 2015/04/13 01:28:12 jw Exp $";
+"@(#)$Id: ict.c,v 1.64 2015/09/29 06:55:10 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1693,7 +1693,7 @@ union iq_e {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
 			if (iC_micro && !cnt) iC_microPrint("Input received", 0);
-			cp = rpyBuf - 1;	/* point to dummy comma before first message in input */
+			cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 			if (isdigit(rpyBuf[0])) {
 			    char *	cpe;
 			    char *	cps;
@@ -1721,16 +1721,12 @@ union iq_e {
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #ifdef	RASPBERRYPI
 				  if (gp) {				/* RI External */
-				    if (gp->gt_mark == S_WIDTH) {
-					if (gp == &pfCADgate) {
-					    cp = cps - 1;		/* on : before display string */
-					    while ((cp = strchr(cp+1 , '\036')) != NULL) {	/* ASCII RS */
-						*cp = ',';		/* replace every RS by a comma */
-					    }
-					    writePiFaceCAD(cps, 0);	/* display on local PiFaceCAD */
-					} else {
-					    assert(0);			/* could have more string processing */
+				    if (gp == &pfCADgate) {
+					cp = cps - 1;			/* on : before display string */
+					while ((cp = strchr(cp+1 , '\036')) != NULL) {	/* ASCII RS */
+					    *cp = ',';			/* replace every RS by a comma */
 					}
+					writePiFaceCAD(cps, 0);		/* display on local PiFaceCAD */
 				    } else
 #endif	/* RASPBERRYPI */
 				    if (val != gp->gt_new &&		/* first change or glitch */
@@ -1969,7 +1965,7 @@ union iq_e {
 			}
 			else {
 			  RcvWarning:
-			    fprintf(iC_errFP, "WARNING: %s: received '%s' from iCserver ???\n", iC_iccNM, cp);
+			    fprintf(iC_errFP, "WARNING: %s: received '%s' from iCserver ???\n", iC_iccNM, rpyBuf);
 			}
 		    } else {
 			iC_quit(QUIT_SERVER);		/* quit normally with 0 length message from iCserver */
@@ -2199,7 +2195,7 @@ iC_output(int val, unsigned short channel)
 	mask  = iC_bitMask[bit];			/* returns hex 01 02 04 08 10 20 40 80 */
 	if ((fd = gep->gpioFN[bit]) != -1) {		/* is GPIO pin open ? */
 	    gpio_write(fd, val0 & mask);		/* yes - write to GPIO (does not need to be a bit) */
-	} else if (iC_debug & 0200) {
+	} else if ((iC_debug & 0300) == 0300) {
 	    fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
 		iC_progname, gep->Ggate->gt_ids, bit);
 	}
@@ -2461,12 +2457,12 @@ regAck(Gate ** oStart, Gate ** oEnd)
     if (iC_debug & 024) fprintf(iC_outFP, "register:%s\n", regBuf);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_send_msg_to_server(iC_sockFN, regBuf);	/* register controller and IOs */
-    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY)) {
+    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
 	if (iC_micro & 06) iC_microPrint("reply from server", 0);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 024) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	cp = rpyBuf - 1;
+	cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 	if (Channels == NULL) {
 	    // C channel - messages from controller to debugger
 	    C_channel = atoi(++cp);
