@@ -36,7 +36,7 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: mm,v 1.24 2015/02/27 21:31:32 jw Exp $' >&2
+  echo '$Id: mm,v 1.25 2015/10/31 05:34:52 jw Exp $' >&2
 }
 
 A=" -f"
@@ -59,7 +59,7 @@ while getopts ":d:gASO:PRseaLNjIJ6xzh" opt; do
     s )	A="$A -s";;
     e )	A="$A -e";;
     a )	a="a";A="$A -a";;
-    L )	A="$A -L";;
+    L )	A="$A -F";;		# option changed from iCmake -L to -F jw 20151015
     N )	A="$A -N";;
     j ) I=" -j";;
     I ) I=" -I";;
