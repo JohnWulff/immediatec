@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.64 2015/09/29 06:55:10 jw Exp $";
+"@(#)$Id: ict.c,v 1.65 2015/12/04 07:26:16 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -107,14 +107,14 @@ unsigned	iC_scan_cnt;		/* count scan operations */
 unsigned	iC_link_cnt;		/* count link operations */
 #if	YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 unsigned	iC_glit_cnt;		/* count glitches */
-unsigned long	glit_nxt;		/* count glitch scan */
+unsigned long	iC_glit_nxt;		/* count glitch scan */
 #endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 
 static Gate *	timNull[] = { 0, 0, 0, 0, 0, 0, 0, 0, }; /* speeds up tim[] lookup */
 static unsigned short	topChannel = 0;
+static char	buffer[BS];
 #ifdef	RASPBERRYPI
 
-static char	buffer[BS];
 static int	fireInput(piFaceIO * pfp, gpioIO * gep, int val);
 static void	writePiFace(piFaceIO * pfp, int val);
 static int	tcnt_750 = 15;		/* 750 ms timer for PiFaceCAD shift */
@@ -257,7 +257,7 @@ union iq_e {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif	/* RASPBERRYPI */
 
-    if ((iC_debug & 0400) == 0) {
+    if ((iC_debug & 0400) == 0 && iC_argh <= 0) {
 	char *		tbp;		/* points to next entry in regBuf */
 	int		tbc;		/* length of filled entries */
 	char *		tbt;		/* temp pointer */
@@ -267,7 +267,7 @@ union iq_e {
 	int		el;		/* entry length */
 	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
 #ifdef	RASPBERRYPI
-	int		en  = 0;	/* number of iCbox and registration items */
+	int		en;		/* number of registration items */
 	if (iC_opt_B) {
 	    /********************************************************************
 	     *  Start an iCbox -d for display of Internal in and ExternOut in/out
@@ -278,20 +278,21 @@ union iq_e {
 	     *  receiver would start another autovivified sender iCbox, which would
 	     *  clash with the sender in this application and cause failure.
 	     *******************************************************************/
-	    len = snprintf(buffer, BS, "perl -S iCbox -d -s %s -p %s -n %s-DI",	/* prepare to execute iCbox -d */
-		iC_hostNM, iC_portNM, iC_iccNM);
-	    op = buffer + len;
+	    len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
+	    b = 4;				/* initial number of tokens in buffer */
+	    op = buffer + len;			/* optional host and port appended in iC_fork_and_exec() */
 	    ol = BS - len;
 	    /********************************************************************
 	     *  PiFace arguments
 	     *******************************************************************/
-	    for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 		for (iq = 0; iq <= 1; iq++) {
 		    if ((gp = pfp->s[iq].i.gate) != NULL &&
 			(((marking = gp->gt_live) == Internal && gp->gt_fni == TRAB) ||
 			marking == ExternOut)) {
 			assert(ol > 10);
 			len = snprintf(op, ol, " %s", gp->gt_ids);	/* add I/O name */
+			b++;						/* count tokens in buffer */
 			op += len;
 			ol -= len;
 			if (marking == Internal && strlen(iC_iidNM) > 0) {
@@ -299,7 +300,6 @@ union iq_e {
 			    op += len;
 			    ol -= len;
 			}
-			en++;						/* count iCbox item */
 		    }
 		}
 	    }
@@ -307,13 +307,14 @@ union iq_e {
 	     *  GPIO arguments
 	     *******************************************************************/
 	    for (iq = 0; iq <= 1; iq++) {
-		for (gep = gpioList[iq]; gep; gep = gep->nextIO) {
+		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		    if ((gp = gep->s.i.gate) != NULL &&
 			(((marking = gp->gt_live) == Internal && gp->gt_fni == TRAB) ||
 			marking == ExternOut)) {
 			int	mask = 0;
 			assert(ol > 14);
 			len = snprintf(op, ol, " %s", gp->gt_ids);	/* add I/O name */
+			b++;						/* count tokens in buffer */
 			op += len;
 			ol -= len;
 			for (bit = 0; bit <= 7; bit++) {
@@ -331,18 +332,11 @@ union iq_e {
 			    op += len;
 			    ol -= len;
 			}
-			en++;						/* count iCbox item */
 		    }
 		}
 	    }
-	    if (en) {		/* any items for iCbox -d to show (without items IX0 QX0 are shown which causes error) */
-		snprintf(op, ol, " &");		/* execute iCbox -d as a separate process */
-		fprintf(iC_outFP, "%s\n", buffer);
-		if (system(buffer) != 0) {
-		    perror("iCbox");
-		    fprintf(stderr, "WARNING: %s: system(\"%s\") could not be executed\n",
-			iC_progname, buffer);
-		}
+	    if (b > 4) {	/* any items for iCbox -d to show (without items IX0 QX0 would be shown which causes error) */
+		iC_fork_and_exec(iC_string2argv(buffer, b));	/* fork iCbox -d */
 	    }
 	}
 	en = 0;			/* no registration items yet */
@@ -374,10 +368,10 @@ union iq_e {
 	D_gate.gt_old = -1;	/* never changes - not equal 0 - 5 for debug messages */
 #ifdef	RASPBERRYPI
 	if (iC_opt_P && !iC_opt_G) {
-	/********************************************************************
-	 *  Initialise active PiFaceCad
-	 *******************************************************************/
-	    for (pfp = pfi; pfp < &pfi[npf]; pfp++) {	/* scan for PiFaceCAD */
+	    /********************************************************************
+	     *  Initialise active PiFaceCad
+	     *******************************************************************/
+	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {	/* scan for PiFaceCAD */
 		if (pfp->pfa == 4 && pfp->intf == INTFA && (gp = pfp->Igate)) {
 		    if (iC_debug & 0200) fprintf(iC_outFP, "== Initialise active PiFaceCAD\n");
 		    pifacecad_lcd_clear();		/* active PiFaceCAD */
@@ -658,174 +652,180 @@ union iq_e {
 	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
 	if (iC_micro & 06) iC_microPrint("Send application name", 0);
 	iC_send_msg_to_server(iC_sockFN, regBuf);		/* Application Name */
+	/********************************************************************
+	 * Fork iClive
+	 *******************************************************************/
+	if (iC_opt_l) {
+	    snprintf(buffer, BS, "iClive %s.ic", iC_iccNM);
+	    iC_fork_and_exec(iC_string2argv(buffer, 2));	/* fork iClive app.ic */
+	}
 #ifdef	RASPBERRYPI
       }
-      if (iC_opt_P) {
-	/********************************************************************
-	 *  Allocate virtual channels for PiFace and GPIO Internal Gates, which
-	 *  do not involve iCserver - they select pfi[] or gpioList[] entries only.
-	 *  Internal Gates with opt_E have already been allocated to a real
-	 *  channel in regAck() as well as External and ExternOut Gates.
-	 *******************************************************************/
-	for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
-	    for (iq = 0; iq <= 1; iq++) {
-		if ((gp = pfp->s[iq].i.gate) != NULL &&
-		    (gp->gt_mark & X_FLAG)) {			/* no X_FLAG set if !opt_L */
-		    assert((gp->gt_mark & PG_MASK) == P_FLAG);
-		    gp->gt_mark &= ~(X_FLAG | PG_MASK);
-		    channel = ++topChannel;			/* extra virtual channel */
-		    pfp->s[iq].channel = channel;		/* receive or send input */
-		    if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
-			storeChannel(channel, gp, pfp, NULL);	/* Internal */
-		    } else if (marking == ExternOut) {
-			storeChannel(channel, NULL, pfp, NULL);	/* ExternOut */
-		    } else {
-			assert(0);				/* never External, Dummy or other!!! */
-		    }
-		    if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
-			gp->gt_channel = channel;		/* <== Output */
-#if YYDEBUG && !defined(_WINDOWS)
-			if (iC_debug & 04) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
-			    gp->gt_ids, channel);
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-		    }
-
-		}
-#if YYDEBUG && !defined(_WINDOWS)
-		if (iC_debug & 04) fprintf(iC_outFP, "pfi[%d] %s:%d,%s:%d\n",
-		    pfp - pfi,
-		    pfp->Igate ? pfp->Igate->gt_ids : NULL, pfp->Ichannel,
-		    pfp->Qgate ? pfp->Qgate->gt_ids : NULL, pfp->Qchannel);
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-	    }
-	}
-	/********************************************************************
-	 *  Allocate virtual channels for Internal GPIO Gates
-	 *******************************************************************/
-	for (iq = 0; iq <= 1; iq++) {
-	    for (gep = gpioList[iq]; gep; gep = gep->nextIO) {
-		if ((gp = gep->Ggate) != NULL &&
-		    (gp->gt_mark & X_FLAG)) {			/* no X_FLAG set if !opt_L */
-		    assert((gp->gt_mark & PG_MASK) == G_FLAG);
-		    gp->gt_mark &= ~(X_FLAG | PG_MASK);
-		    channel = ++topChannel;			/* extra virtual channel */
-		    gep->Gchannel = channel;			/* receive or send input */
-		    if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
-			storeChannel(channel, gp, NULL, gep);	/* Internal */
-		    } else if (marking == ExternOut) {
-			storeChannel(channel, NULL, NULL, gep);	/* ExternOut */
-		    } else {
-			assert(0);				/* never External, Dummy or other!!! */
-		    }
-		    if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
-			gp->gt_channel = channel;		/* <== Output */
-#if YYDEBUG && !defined(_WINDOWS)
-			if (iC_debug & 24) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
-			    gp->gt_ids, channel);
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-		    }
-		    if (iC_debug & 0100) {
-			fprintf(iC_outFP, "GPIO");
-			for (bit = 0; bit <= 7; bit++) {
-			    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-				fprintf(iC_outFP, ",%hu", gpio);
-			    } else {
-				fprintf(iC_outFP, ",d");
-			    }
-			}
-			fprintf(iC_outFP, "	%s  on channel %hu\n", gp->gt_ids, channel);
-		    }
-		}
-	    }
-	}
-#if	YYDEBUG
-	/********************************************************************
-	 *  Report results of argument analysis
-	 *******************************************************************/
-	if (iC_debug & 0300) {
-	    if (npf) {
-		fprintf(iC_outFP, "Allocation for %d PiFace unit%s, global instance = \"%s\"\n",
-		    npf, npf == 1 ? "" : "s", iC_iidNM);
-		fprintf(iC_outFP, "	IEC-in	IEC-out	ch-in	ch-out	pfa unit\n\n");
-		for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
-		    if (pfp->Igate != NULL) {
-			fprintf(iC_outFP, "	%c%s", pfp->Iinv ? '~' : ' ', pfp->Igate->gt_ids);
-		    } else {
-			fprintf(iC_outFP, "	Dummy");
-		    }
-		    if (pfp->Qgate != NULL) {
-			fprintf(iC_outFP, "	%c%s", pfp->Qinv ? ' ' : '~', pfp->Qgate->gt_ids);
-		    } else {
-			fprintf(iC_outFP, "	Dummy");
-		    }
-		    fprintf(iC_outFP, "	%3hu	%3hu	%2hu  %2d\n",
-			pfp->Ichannel, pfp->Qchannel, pfp->pfa, pfp - pfi);
-		    if (pfp == pfCADpfp) {
-			fprintf(iC_outFP, "	 %s		%3hu		%2hu  %2d\n",
-			    pfCADgate.gt_ids, pfCADchannel, pfp->pfa, pfp - pfi);
-		    }
-		}
-		fprintf(iC_outFP, "\n");
-	    }
-	    if (gpioList[0] || gpioList[1]) {
-		char *	iidPtr;
-		char *	iidSep;
-		fprintf(iC_outFP, "Allocation for GPIO elements, global instance = \"%s\"\n", iC_iidNM);
-		fprintf(iC_outFP, "	Bit IEC	gpio	channel	instance\n\n");
+	if (iC_opt_P) {
+	    /********************************************************************
+	     *  Allocate virtual channels for PiFace and GPIO Internal Gates, which
+	     *  do not involve iCserver - they select iC_pfL[] or iC_gpL[] entries only.
+	     *  Internal Gates with opt_E have already been allocated to a real
+	     *  channel in regAck() as well as External and ExternOut Gates.
+	     *******************************************************************/
+	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 		for (iq = 0; iq <= 1; iq++) {
-		    for (gep = gpioList[iq]; gep; gep = gep->nextIO) {
-			strcpy(buffer, gep->Ggate->gt_ids);		/* retrieve name[-instance] */
-			if ((iidPtr = strchr(buffer, '-')) != NULL) {
-			    *iidPtr++ = '\0';		/* separate name and instance */
-			    iidSep = "	-";
+		    if ((gp = pfp->s[iq].i.gate) != NULL &&
+			(gp->gt_mark & X_FLAG)) {		/* no X_FLAG set if !opt_L */
+			assert((gp->gt_mark & PG_MASK) == P_FLAG);
+			gp->gt_mark &= ~(X_FLAG | PG_MASK);
+			channel = ++topChannel;			/* extra virtual channel */
+			pfp->s[iq].channel = channel;		/* receive or send input */
+			if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
+			    storeChannel(channel, gp, pfp, NULL);	/* Internal */
+			} else if (marking == ExternOut) {
+			    storeChannel(channel, NULL, pfp, NULL);	/* ExternOut */
 			} else {
-			    iidPtr = iidSep = "";
+			    assert(0);				/* never External, Dummy or other!!! */
 			}
-			for (bit = 0; bit <= 7; bit++) {
-			    if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
-				fprintf(iC_outFP, "	%c%s.%hu	%3hu	%3hu%s%s\n",
-				    gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
-				    buffer, bit, gpio, gep->Gchannel, iidSep, iidPtr);
+			if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
+			    gp->gt_channel = channel;		/* <== Output */
+#if YYDEBUG && !defined(_WINDOWS)
+			    if (iC_debug & 04) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
+				gp->gt_ids, channel);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			}
+
+		    }
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (iC_debug & 04) fprintf(iC_outFP, "iC_pfL[%d] %s:%d,%s:%d\n",
+			pfp - iC_pfL,
+			pfp->Igate ? pfp->Igate->gt_ids : NULL, pfp->Ichannel,
+			pfp->Qgate ? pfp->Qgate->gt_ids : NULL, pfp->Qchannel);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		}
+	    }
+	    /********************************************************************
+	     *  Allocate virtual channels for Internal GPIO Gates
+	     *******************************************************************/
+	    for (iq = 0; iq <= 1; iq++) {
+		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
+		    if ((gp = gep->Ggate) != NULL &&
+			(gp->gt_mark & X_FLAG)) {		/* no X_FLAG set if !opt_L */
+			assert((gp->gt_mark & PG_MASK) == G_FLAG);
+			gp->gt_mark &= ~(X_FLAG | PG_MASK);
+			channel = ++topChannel;			/* extra virtual channel */
+			gep->Gchannel = channel;			/* receive or send input */
+			if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
+			    storeChannel(channel, gp, NULL, gep);	/* Internal */
+			} else if (marking == ExternOut) {
+			    storeChannel(channel, NULL, NULL, gep);	/* ExternOut */
+			} else {
+			    assert(0);				/* never External, Dummy or other!!! */
+			}
+			if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
+			    gp->gt_channel = channel;		/* <== Output */
+#if YYDEBUG && !defined(_WINDOWS)
+			    if (iC_debug & 24) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
+				gp->gt_ids, channel);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			}
+			if (iC_debug & 0100) {
+			    fprintf(iC_outFP, "GPIO");
+			    for (bit = 0; bit <= 7; bit++) {
+				if ((gpio = gep->gpioNr[bit]) != 0xffff) {
+				    fprintf(iC_outFP, ",%hu", gpio);
+				} else {
+				    fprintf(iC_outFP, ",d");
+				}
 			    }
+			    fprintf(iC_outFP, "	%s  on channel %hu\n", gp->gt_ids, channel);
+			}
+		    }
+		}
+	    }
+#if	YYDEBUG
+	    /********************************************************************
+	     *  Report results of argument analysis
+	     *******************************************************************/
+	    if (iC_debug & 0300) {
+		if (iC_npf) {
+		    fprintf(iC_outFP, "Allocation for %d PiFace unit%s, global instance = \"%s\"\n",
+			iC_npf, iC_npf == 1 ? "" : "s", iC_iidNM);
+		    fprintf(iC_outFP, "	IEC-in	IEC-out	ch-in	ch-out	pfa unit\n\n");
+		    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
+			if (pfp->Igate != NULL) {
+			    fprintf(iC_outFP, "	%c%s", pfp->Iinv ? '~' : ' ', pfp->Igate->gt_ids);
+			} else {
+			    fprintf(iC_outFP, "	Dummy");
+			}
+			if (pfp->Qgate != NULL) {
+			    fprintf(iC_outFP, "	%c%s", pfp->Qinv ? ' ' : '~', pfp->Qgate->gt_ids);
+			} else {
+			    fprintf(iC_outFP, "	Dummy");
+			}
+			fprintf(iC_outFP, "	%3hu	%3hu	%2hu  %2d\n",
+			    pfp->Ichannel, pfp->Qchannel, pfp->pfa, pfp - iC_pfL);
+			if (pfp == pfCADpfp) {
+			    fprintf(iC_outFP, "	 %s		%3hu		%2hu  %2d\n",
+				pfCADgate.gt_ids, pfCADchannel, pfp->pfa, pfp - iC_pfL);
 			}
 		    }
 		    fprintf(iC_outFP, "\n");
 		}
+		if (iC_gpL[0] || iC_gpL[1]) {
+		    char *	iidPtr;
+		    char *	iidSep;
+		    fprintf(iC_outFP, "Allocation for GPIO elements, global instance = \"%s\"\n", iC_iidNM);
+		    fprintf(iC_outFP, "	Bit IEC	gpio	channel	instance\n\n");
+		    for (iq = 0; iq <= 1; iq++) {
+			for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
+			    strcpy(buffer, gep->Ggate->gt_ids);		/* retrieve name[-instance] */
+			    if ((iidPtr = strchr(buffer, '-')) != NULL) {
+				*iidPtr++ = '\0';		/* separate name and instance */
+				iidSep = "	-";
+			    } else {
+				iidPtr = iidSep = "";
+			    }
+			    for (bit = 0; bit <= 7; bit++) {
+				if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
+				    fprintf(iC_outFP, "	%c%s.%hu	%3hu	%3hu%s%s\n",
+					gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
+					buffer, bit, gpio, gep->Gchannel, iidSep, iidPtr);
+				}
+			    }
+			}
+			fprintf(iC_outFP, "\n");
+		    }
+		}
 	    }
-	}
 #endif	/* YYDEBUG */
-      }
-#endif	/* RASPBERRYPI */
-    }
-#ifdef	RASPBERRYPI
-    /********************************************************************
-     *	Set bits to wait for SIO interrupts on GPIO25
-     *******************************************************************/
-    if (gpio25FN > 0) {
-	FD_SET(gpio25FN, &iC_ixfds);		/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+	}
+	/********************************************************************
+	 *	Set bits to wait for SIO interrupts on GPIO25
+	 *******************************************************************/
+	if (gpio25FN > 0) {
+	    FD_SET(gpio25FN, &iC_ixfds);		/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 04) fprintf(iC_outFP, "*** SIO interrupt has been primed\n");
+	    if (iC_debug & 04) fprintf(iC_outFP, "*** SIO interrupt has been primed\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-    }
-    /********************************************************************
-     *  Set all GPIO IXn input bits for interrupts
-     *******************************************************************/
-    for (gep = gpioList[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
-	for (bit = 0; bit <= 7; bit++) {
-	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-		assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
-		FD_SET(gep->gpioFN[bit], &iC_ixfds);	/* watch GPIO N for out-of-band input */
+	}
+	/********************************************************************
+	 *  Set all GPIO IXn input bits for interrupts
+	 *******************************************************************/
+	for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
+	    for (bit = 0; bit <= 7; bit++) {
+		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
+		    assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
+		    FD_SET(gep->gpioFN[bit], &iC_ixfds);	/* watch GPIO N for out-of-band input */
+		}
 	    }
 	}
-    }
 #endif	/* RASPBERRYPI */
 #ifndef	WIN32
-    FD_SET(0, &iC_infds);			/* watch stdin for inputs - FD_CLR on EOF */
+	if ((iC_debug & DZ) == 0) {
+	    FD_SET(0, &iC_infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
 #if YYDEBUG && !defined(_WINDOWS)
-    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has been primed\n");
+	    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has been primed\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
+	}	/* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
 #endif	/* WIN32 */
+    }
 
 /********************************************************************
  *
@@ -849,7 +849,13 @@ union iq_e {
     Out_init(iC_f_list);
     Out_init(iC_s_list);
 #if	YYDEBUG
-    if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
+    if (iC_debug & 0100) {
+	if (iC_debug & DQ) {
+	    fprintf(iC_outFP, "== Init scan ===========");
+	} else {
+	    fprintf(iC_outFP, "\nINITIALISATION\n");
+	}
+    }
 #endif	/* YYDEBUG */
 
     /* if (iC_debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
@@ -867,7 +873,7 @@ union iq_e {
      *******************************************************************/
     for (pass = 0; pass < 4; pass++) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "\n== Pass %d:", pass + 1);
+	if ((iC_debug & (DQ|0100)) == 0100) fprintf(iC_outFP, "\n== Pass %d:", pass + 1);
 #endif	/* YYDEBUG */
 	for (opp = sTable; opp < sTend; opp++) {
 	    gp = *opp;
@@ -929,7 +935,7 @@ union iq_e {
      *  Also generate a SAV file, which has information about the traces
      *  to display initially. Inverted ALIASES are handled correctly.
      *******************************************************************/
-    if (iC_vcd) {
+    if (iC_vcd && iC_argh <= 0) {
 	time_t walltime;
 	char *	savCode = "";
 	int	extended = 0;
@@ -1226,11 +1232,11 @@ union iq_e {
     /********************************************************************
      *  The following initialisation function is an empty function
      *  in the libict.a support library.
-     *		int iCbegin(void) { return 0; }
+     *		int iCbegin(int argc, char** argv) { return -1; }
      *  It may be implemented in a literal block of an iC source, in
      *  which case that function will be linked in preference.
-     *  User implementations of iCbegin() should return 1, to activate
-     *  the debug message "iCbegin complete ====".
+     *  User implementations of iCbegin() should not return -1, (usually 0)
+     *  to activate the debug message "== iCbegin complete ====".
      *
      *  It can be used to initialise immC variables etc. For this reason
      *  it should be executed once after EOI, but before normal processing.
@@ -1239,10 +1245,10 @@ union iq_e {
      *  If the iCbegin() function contains a fork() call, a child process is
      *  spawned, which will run in parallel with immediate processing.
      *******************************************************************/
-    if (iCbegin()) {			/* initialisation function */
+    if (iCbegin(iC_argc, iC_argv) != -1) {	/* initialisation function */
 #if	YYDEBUG
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\niCbegin complete ====\n");
+	    fprintf(iC_outFP, "\n== iCbegin complete ====\n");
 	}
 #endif	/* YYDEBUG */
     }
@@ -1260,7 +1266,7 @@ union iq_e {
 	    if (iC_debug & 0200) fprintf(iC_outFP, "== Initialise active PiFace units\n");
 	    gpio_read(gpio25FN);		/* dummy read to clear interrupt on /dev/class/gpio25/value */
 	    if (iC_micro) iC_microPrint("SPI initialise", 0);
-	    for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 		if (pfp->Igate) {
 		    val = readByte(pfp->spiFN, pfp->pfa, pfp->inpr);
 		    pfp->Ival = val ^ 0xff;	/* make sure val is distributed correctly */
@@ -1269,7 +1275,6 @@ union iq_e {
 		if (pfp->Qgate) {
 		    val = 0;				/* initialise with logical 0 */
 		    pfp->Qval = pfp->Qinv ^ 0xff;	/* force all output bits */
-		    //printf("Write PiFace: val = 0x%02x, channel = %hu Gval = 0x%02x Ginv = 0x%02x\n", (int)val, pfp->Qchannel, pfp->Qval, pfp->Qinv);
 		    iC_output(val, pfp->Qchannel);	/* write output Gates directly and/or via TCP/IP */
 		}
 	    }
@@ -1278,7 +1283,7 @@ union iq_e {
 	 *  Extend with GPIO IXn initialisation inputs
 	 *  There may be no GPIOs or only GPIO outputs - nothing to initialise
 	 *******************************************************************/
-	for (gep = gpioList[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
+	for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
 	    val = 0;
 	    for (bit = 0; bit <= 7; bit++) {
 		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
@@ -1300,7 +1305,7 @@ union iq_e {
 	/********************************************************************
 	 *  Write GPIO QXn initialisation outputs
 	 *******************************************************************/
-	for (gep = gpioList[1]; gep; gep = gep->nextIO) {	/* QXn outputs only */
+	for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* QXn outputs only */
 	    val = 0;				/* initialise with logical 0 */
 	    gep->Gval = gep->Ginv ^ 0xff;	/* force all output bits */
 	    iC_output(val, gep->Gchannel);	/* write output Gates directly and/or via TCP/IP */
@@ -1413,11 +1418,11 @@ union iq_e {
 		fprintf(iC_outFP, "scan = %5u  link = %5u",
 		    iC_scan_cnt, iC_link_cnt);
 		if (iC_glit_cnt) {
-		    fprintf(iC_outFP, "  glitch = %5u, %lu", iC_glit_cnt, glit_nxt);
+		    fprintf(iC_outFP, "  glitch = %5u, %lu", iC_glit_cnt, iC_glit_nxt);
 		}
 		fprintf(iC_outFP, "\n");
 	    }
-	    iC_glit_cnt = glit_nxt =
+	    iC_glit_cnt = iC_glit_nxt =
 	    iC_scan_cnt = iC_link_cnt = 0;
 	}
 #endif	/* YYDEBUG */
@@ -1560,7 +1565,7 @@ union iq_e {
 			goto skipT4;			/* excuse spaghetti - faster without flag */
 		    }
 		linkT4:
-		    if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+		    if (iC_micro && !cnt) iC_microPrint("Timer TX0.4 received", 0);
 		    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;		/* complement input */
@@ -1596,7 +1601,7 @@ union iq_e {
 			    goto skipT5;		/* excuse spaghetti - faster without flag */
 			}
 		    linkT5:
-			if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+			if (iC_micro && !cnt) iC_microPrint("Timer TX0.5 received", 0);
 			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;	/* complement input */
@@ -1632,7 +1637,7 @@ union iq_e {
 				goto skipT6;		/* excuse spaghetti - faster without flag */
 			    }
 			linkT6:
-			    if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+			    if (iC_micro && !cnt) iC_microPrint("Timer TX0.6 received", 0);
 			    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;	/* complement input */
@@ -1668,7 +1673,7 @@ union iq_e {
 				    goto skipT7;	/* excuse spaghetti - faster without flag */
 				}
 			    linkT7:
-				if (iC_micro && !cnt) iC_microPrint("Timer received", 0);
+				if (iC_micro && !cnt) iC_microPrint("Timer TX0.7 received", 0);
 				if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				gp->gt_val = - gp->gt_val;	/* complement input */
@@ -1999,7 +2004,7 @@ union iq_e {
 #if YYDEBUG && !defined(_WINDOWS)
 			m = 0;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-			for (pfp = pfi; pfp < &pfi[npf]; pfp++) {
+			for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 			    if (readByte(pfp->spiFN, pfp->pfa, pfp->intf)) {	/* interrupt flag on this unit ? */
 				cnt += fireInput(pfp,	/* fire input Gates directly and/or via TCP/IP */
 				    NULL,
@@ -2040,7 +2045,7 @@ union iq_e {
 		 *  GPIO N interrupt means GPIO n input
 		 *******************************************************************/
 		m1 = 0;
-		for (gep = gpioList[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
+		for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
 		    m = 0;
 		    val = gep->Gval;					/* old input value */
 		    for (bit = 0; bit <= 7; bit++) {
@@ -2104,11 +2109,11 @@ union iq_e {
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
 			stdinFlag = 1;			/* arm cycle for turning TX0.1 lo */
-		    } else if ((c = iC_stdinBuf[0]) == 'q') {
-			iC_quit(QUIT_TERMINAL);		/* quit normally */
+		    } else if ((c = iC_stdinBuf[0]) == 'q' || c == '\0') {
+			iC_quit(QUIT_TERMINAL);		/* quit normally with 'q' or ctrl+D */
 #if	YYDEBUG
 		    } else if (c == 't') {
-			iC_debug ^= 0100;		/* toggle -t flag */
+			iC_debug ^= 01100;		/* toggle -t flag */
 		    } else if (c == 'm') {
 			iC_micro++;			/* toggle more micro */
 			if (iC_micro >= 3) iC_micro = 0;
@@ -2304,7 +2309,7 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 	    snprintf(pgBuf, 4, " D");
 	    if (iC_debug & 0100) fprintf(iC_outFP, "\n");
 	    fprintf(iC_outFP, "Dummy PiFace %d:%hu input %s\n",
-		pfp - pfi, pfp->pfa, convert2binary(binBuf, val, 1));
+		pfp - iC_pfL, pfp->pfa, convert2binary(binBuf, val, 1));
 	}
     } else if (gep) {
 	assert(gep->Ggate);
@@ -2450,7 +2455,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
     }
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has been primed\n");
+    if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has been primed\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 #if YYDEBUG && !defined(_WINDOWS)

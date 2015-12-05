@@ -77,7 +77,7 @@ my @bitIndex    = (
 my $named = $0; $named =~ s#.*[/\\]##;
 my ($conn, $host, $port, $name);
 use vars qw($opt_s $opt_p $opt_n $opt_i $opt_c $opt_r $opt_L $opt_F $opt_w $opt_k $opt_v $opt_o $opt_g
-    $opt_U $opt_J $opt_Q $opt_u $opt_j $opt_q $opt_x $opt_t $opt_R $opt_S $opt_m $opt_T $opt_B
+    $opt_U $opt_J $opt_Y $opt_u $opt_j $opt_y $opt_x $opt_t $opt_R $opt_S $opt_m $opt_T $opt_q $opt_B
     $opt_C $opt_D $opt_I $opt_b $opt_e $opt_d $opt_l $opt_K $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
@@ -128,19 +128,20 @@ Usage:
 						$opt_U
 	-J pix	cage height                (default @<< pixels)
 						$opt_J
-	-Q pix	cage sensor offset         (default @<< pixels)
-						$opt_Q
+	-Y pix	cage sensor offset         (default @<< pixels)
+						$opt_Y
 	-u pix	door width                 (default @<< pixels)
 						$opt_u
 	-j pix	door height                (default @<< pixels)
 						$opt_j
-	-q pix	door sensor offset         (default @<< pixels)
-						$opt_q
+	-y pix	door sensor offset         (default @<< pixels)
+						$opt_y
 	-t	trace debug messages
 	-R	trace rcv messages in Msg.pm
 	-S	trace send messages in Msg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
+	-q	quiet - do not report clients connecting and disconnecting
 	-x	exit after analyzing input parameters
 	-h	help, ouput this Usage text only
 	-B file	generate an iCbox ID parameter file with comments
@@ -185,12 +186,12 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.13 2015/09/29 06:55:10 jw Exp $ uses Tk-@<<<<<<
+$Id: iClift,v 1.14 2015/11/07 20:59:48 jw Exp $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
 use Getopt::Std;
-getopts('s:p:n:i:L:F:CDIbedlc:r:w:k:v:g:o:U:J:Q:u:j:q:tRSmTxB:Kh');	# sets $opt_h if -h etc
+getopts('s:p:n:i:L:F:CDIbedlc:r:w:k:v:g:o:U:J:Y:u:j:y:tRSmTqxB:Kh');	# sets $opt_h if -h etc
 
 ########################################################################
 #	Note: all parameter y coordinates are reversed like engineering drawings
@@ -209,11 +210,17 @@ $opt_o = 15 unless defined $opt_o;	# door opening offset	(35)
 
 $opt_U = 110 unless defined $opt_U;	# cage width
 $opt_J = 145 unless defined $opt_J;	# cage height
-$opt_Q = 10 unless defined $opt_Q;	# cage sensor offset
+$opt_Y = 10 unless defined $opt_Y;	# cage sensor offset
 
 $opt_u = 55 unless defined $opt_u;	# door width
 $opt_j = 137 unless defined $opt_j;	# door height
-$opt_q = 5 unless defined $opt_q;	# door sensor offset
+$opt_y = 5 unless defined $opt_y;	# door sensor offset
+
+if ($opt_q) {
+    $opt_q = 'q';			# quiet option
+} else {
+    $opt_q = '';			# define $opt_q
+}
 
 my $tro = 2;				# triangle offset in square buttons
 
@@ -677,15 +684,17 @@ unless (-x $controller) {
 	$SIG{CHLD} = 'DEFAULT';
 	my @args = ("iCmake", "-qA", "-PLIFTS=$lifts", "-PFLOORS=$floors", "lifts.ica", "2>&1");	# -A useful for live display
 	print "qx(@args)\n" if $opt_T;
+	print STDERR "\$ @args\n" unless $opt_q;
 	my @errText = qx(@args);	# execute iCmake ...
 	my $ret = $? >> 8;
-	my $len = @errText;
+	my $len = scalar @errText;
 	my $gr = grep /^\*\*\* /, @errText;
 	$SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
 	if ($ret or $gr) {
 	    print "ret = $ret, len = $len, *** = $gr\n" if $opt_T;
+	    print STDERR "\$ @args\n" if $opt_q;
 	    print STDERR @errText;
-	    die "ERROR: $named: lifts control source lifts.ica or $controller.ic did not compile ???\n";
+	    die "ERROR: $named: lifts control source lifts.ica or $controller.ic did not compile\n";
 	}
     }
 }
@@ -767,14 +776,14 @@ $name = $opt_n ? "$opt_n$i" : "$named$i";
 $named = $name;			# use individual ID for warnings from now on
 
 connect_to_server(		# connects to $conn
-    $opt_d ? ("-A", "iCbox -d -Q@{[$lifts < 3 ? $lifts : 3]} -C@{[5+int(($floors+7)/8)*14]}")
+    "-z$opt_q",
+    $opt_d ? ("-A", "iCbox -d$opt_q -Q@{[$lifts < 3 ? $lifts : 3]} -C@{[5+int(($floors+7)/8)*14]}")
 	   : ("-a"));
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
 
 if ($opt_d) {
-    print "'$named -d -L $lifts -F $floors' starts '$controller'\n";
-    fork_and_exec("$controller");	# start lifts_... controller
-}					# sleeps 0.2 seconds before returning
+    fork_and_exec("$controller", "-z$opt_q");	# start lifts_... -z controller
+}						# sleeps 0.2 seconds before returning
 
 ############# send registration ############################
 
@@ -827,9 +836,8 @@ $register = 0;
 ########################################################################
 
 if ($opt_e) {
-    print "'$named -e -L $lifts -F $floors' starts '$controller'\n";
-    fork_and_exec("$controller");	# start lifts_... controller
-}					# sleeps 0.2 seconds before returning
+    fork_and_exec("$controller", "-z$opt_q");	# start lifts_... -z controller
+}						# sleeps 0.2 seconds before returning
 
 ########################################################################
 #
@@ -840,8 +848,7 @@ if ($opt_e) {
 ########################################################################
 
 if ($opt_l) {
-    print "'$named -l -L $lifts -F $floors' starts 'iClive $controller.ic'\n";
-    fork_and_exec("iClive", "$controller.ic");	# start iClive lifts_....ic
+    fork_and_exec("iClive", "-z$opt_q", "$controller.ic");	# start iClive lifts_....ic
 }					# sleeps 0.2 seconds before returning
 
 ########################################################################
@@ -851,7 +858,7 @@ if ($opt_l) {
 ########################################################################
 
 my ($ww, $wh, $dow, $doh, $doo, $cw, $ch, $cso, $dw, $dh, $dso) =
-    ($opt_w, $opt_k, $opt_v, $opt_g, $opt_o, $opt_U, $opt_J, $opt_Q, $opt_u, $opt_j, $opt_q);
+    ($opt_w, $opt_k, $opt_v, $opt_g, $opt_o, $opt_U, $opt_J, $opt_Y, $opt_u, $opt_j, $opt_y);
 my $c_width  = ($ww+5) * ($lifts < 4 ? $lifts : 4);
 my $c_height = ($wh+5) * ($floors < 5 ? $floors : 5) + 2;
 
@@ -898,6 +905,11 @@ for ($floor = 0; $floor < $floors; $floor++) {
 $y += $wh+5-$doh-10;
 print "y = $y\n" if $opt_t;
 
+my $controlWallButton;
+my @controlButtonName     = ('C',               'D',     'w');
+my @controlButtonVariable = (\$opt_C,           \$opt_D, \$controlWallButton);
+my @controlButtonFunction = (\&startContinuous, \&null,  \&hide_next_wall);
+
 ########################################################################
 #	Draw a cage for each lift and walls and outside doors for each floor.
 #	Draw cages first then doors followed by walls to achieve overlap.
@@ -925,6 +937,7 @@ for ($lift = 0; $lift < $lifts; $lift++) {
     $doorTarg[$lift][$floor] = 0;
     $doorNear[$lift][$floor] = $doorHome[$lift][$floor] = 1;	# home position
 }
+draw_control_buttons($canvas);
 $c->configure(-scrollregion => [$c->bbox("all")]);	# define scroll region when canvases are drawn
 
 ########################################################################
@@ -977,12 +990,7 @@ $mw->after(200,
 	$cmdFlag = 1;					# start executing Q commands after startup delay
 	printMicroSeconds();
 	print "End of startup delay\n" if $opt_t;
-	if ($opt_C) {
-	    hide_wall($hidden = 1);			# hide walls for continuous testing to reduce CPU loading
-	    for ($lift = 0; $lift < $lifts; $lift++) {
-		misc_fun0(0, 0, $lift, $floors);	# set a random floor button for each lift
-	    }
-	}
+	startContinuous();				# continuous testing and hide walls to reduce CPU loading
     }
 );
 
@@ -1021,7 +1029,7 @@ if ($opt_K) {
 }
 
 $mw->bind('<Key-q>',      \&quit_program);			# quit
-$mw->bind('<Key-Escape>', sub { $opt_C = not $opt_C; });	# turn continuous testing on and off
+$mw->bind('<Key-Escape>', sub { $opt_C = not $opt_C; startContinuous(); });	# turn continuous testing on and off
 
 ########################################################################
 #
@@ -1029,7 +1037,7 @@ $mw->bind('<Key-Escape>', sub { $opt_C = not $opt_C; });	# turn continuous testi
 #
 ########################################################################
 
-$mw->bind('<Key-w>',      sub { hide_wall($hidden = $hide_next[$hidden]); }); # toggle between 'normal', 'hidden' and show colour
+$mw->bind('<Key-w>',      \&hide_next_wall);
 
 ########################################################################
 #
@@ -1050,11 +1058,18 @@ exit(0);
 
 ####### End of main program ############################################
 
+sub null { }
+
 ########################################################################
 #
 #	Hide or Show all walls for inspection
 #
 ########################################################################
+
+sub hide_next_wall {
+    hide_wall($hidden = $hide_next[$hidden]);	# toggle between 'normal', 'hidden' and show colour
+    $controlWallButton = 0;
+}
 
 sub hide_wall {
     my $hide = shift;
@@ -1067,6 +1082,21 @@ sub hide_wall {
 	}
     }
 } # hide_wall
+
+########################################################################
+#
+#	Continuous testing and hide walls to reduce CPU loading
+#
+########################################################################
+
+sub startContinuous {
+    if ($opt_C) {
+	hide_wall($hidden = 1);			# hide walls for continuous testing to reduce CPU loading
+	for ($lift = 0; $lift < $lifts; $lift++) {
+	    misc_fun0(0, 0, $lift, $floors);	# set a random floor button for each lift
+	}
+    }
+}
 
 ########################################################################
 #
@@ -1727,6 +1757,40 @@ sub draw_cage {
 
 ########################################################################
 #
+#	Draw 3 control buttons for:	Key		Command line
+#	    C	Continuous testing	Key-Escape	-C
+#	    D	Disable stop on error			-D
+#	    w	hide and show wall	Key-w
+#
+#	parameter 1:	canv	canvas these buttons are drawn on
+#
+########################################################################
+
+sub draw_control_buttons {
+    my ($canv) = @_;
+    my ($idx);
+    print "draw_control_buttons\n" if $opt_T;
+    my $frm = $canv->Frame(
+	-relief       => 'groove',
+	-borderwidth  => 2,
+    );
+    for ($idx = 0; $idx < @controlButtonName; $idx++) {
+	$frm->Checkbutton(
+	    -text        => $controlButtonName[$idx],
+	    -variable    => \$controlButtonVariable[$idx],
+	    -selectcolor => 'red',
+	    -borderwidth => 1,
+	    -state       => 'normal',
+	    -indicatoron => 0,		# 0 button    1 checkbox
+	    -command     => [ $controlButtonFunction[$idx], ],
+	    -width       => 2,
+	)->pack(-side   => 'top', -expand => 1,);
+    }
+    my $controlButtons = $canv->createWindow(50, 100-3*11, -window => $frm);	# half button height = 11
+} # draw_control_buttons 
+
+########################################################################
+#
 #	Generate a button callback or output bit directly
 #
 ########################################################################
@@ -1962,7 +2026,7 @@ sub rcvd_msg_from_server {
 	print "($len)$msg<\n" if $opt_T;
 	if ($len == 0) {
 	    $conn->disconnect();
-	    print "$named: disconnected by server\n";
+	    print STDERR "iClift '$named' disconnected by server\n" unless $opt_q;
 	    exit;
 	}
 	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $regId, $chS, $bitSef, $wordSef, $button, $butMask, $val, $RAcmd);
@@ -2168,7 +2232,7 @@ sub connect_to_server {
 	    Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
 	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
-		print "Connection $named at iCserver\n";
+		print STDERR "iClift '$named' connecting at server\n" unless $opt_q;
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
 		print "$named: '$host:iCserver -p $port' cannot be started here - start it on $host\n";
 		$server = -1;		# no iCserver possible
@@ -2183,7 +2247,6 @@ sub connect_to_server {
 		    last;
 		}
 	    } else {
-		print "$named starts 'iCserver -p $port @_'\n";
 		fork_and_exec("iCserver", "-p", "$port", @_);	# start iCserver
 		$server = 1;		# remember that this iClift started iCserver
 	    }				# try to connect immediately
@@ -2207,6 +2270,7 @@ sub fork_and_exec {
 	    ## parent process
 	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
 	} elsif (defined $pid) {	# $pid is zero if defined
+	    print STDERR "\$ @_\n" unless $opt_q;
 	    ## dispatch child process
 	    exec @_;			# does not return unless exec failure
 	    warn "forked child process exited - failure exec '@_'\n";
@@ -2308,15 +2372,16 @@ iClift -simulation of the physics and appearance of lifts in a building
 	-o pix	door opening offset        (default  40 pixels)
 	-U pix	cage width                 (default 110 pixels)
 	-J pix	cage height                (default 145 pixels)
-	-Q pix	cage sensor offset         (default  10 pixels)
+	-Y pix	cage sensor offset         (default  10 pixels)
 	-u pix	door width                 (default  55 pixels)
 	-j pix	door height                (default 137 pixels)
-	-q pix	door sensor offset         (default   5 pixels)
+	-y pix	door sensor offset         (default   5 pixels)
 	-t	trace debug messages
 	-R      trace rcv messages in Msg.pm
 	-S      trace send messages in Msg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
+	-q	quiet - do not report clients connecting and disconnecting
 	-x	exit after analyzing input parameters
 	-h	help, ouput this Usage text only
 	-B file	generate an iCbox ID parameter file with comments

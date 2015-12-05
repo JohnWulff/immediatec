@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.113 2015/06/03 11:09:44 jw Exp $";
+"@(#)$Id: comp.y,v 1.114 2015/10/16 12:33:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -185,7 +185,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %type	<sym>	return_statement formalParameter lBlock dVariable valueVariable cVariable outVariable
 %type	<sym>	useFlag decl extDecl immDecl asgn dasgn casgn dcasgn tasgn dtasgn
 %type	<sym>	iFunTrigger vFunCall rParams rPlist
-%type	<sym>	extCfunDecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
+%type	<sym>	extCdecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
 %type	<list>	expr aexpr cexpr texpr actexpr comma_expr cexpr_comma_expr texpr_comma_expr ractexpr
 %ifdef	BOOT_COMPILE
 %type	<list>	lexpr fexpr cfexpr tfexpr
@@ -193,7 +193,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %type	<list>	cref ctref ctdref cCall cParams cPlist dPar immCini immCiniList ifini ffexpr
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall
 %type	<vai>	cBlock dParams dPlist immCindex Constant constExpr
-%type	<typ>	declHead extDeclHead formalParaTypeDecl extCfunDeclHead
+%type	<typ>	declHead extDeclHead formalParaTypeDecl extCdeclHead
 %type	<str>	'{' '"' '\'' '}'	/* C/C++ brackets */
 %left	<str>	','		/* comma, function seperator */
 %right	<str>	'=' OPE
@@ -278,8 +278,8 @@ simpleStatement
 		$$   = $1;
 		iFunSyText = 0;
 	    }
-	| extCfunDecl		{ $$   = $1; }		/* external C function declaration */
-	| extCfunDecl ','	{ $$   = $1; }		/* " new style for immac which can generate ,; */
+	| extCdecl		{ $$   = $1; }		/* external C function declaration */
+	| extCdecl ','		{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	| extDecl		{ $$   = $1; }		/* external declaration */
 	| extDecl ','		{ $$   = $1; }		/* " new style for immac which can generate ,; */
 	| extimmCarray		{ $$   = $1; }		/* declare an immC array extern */
@@ -398,22 +398,23 @@ useFlag	: USE USETYPE		{
 
 	/********************************************************************
 	 *
-	 * Extern C function or macro declaration
+	 * Extern C int variable, function or macro declaration
 	 *
-	 *	extern int rand();		// function with no parameters
+	 *	extern int var;			// C variable to use in an imm expression
+	 *	extern int rand();		// C function with no parameters
 	 *	extern int rand(void);		// alternative syntax
-	 *	extern int abs(int);		// function with 1 parameter
+	 *	extern int abs(int);		// C function with 1 parameter
 	 *	extern int min(int, int);	// macro with 2 parameters
 	 *
-	 * When 'strict' is active, any C functions or macros, which are called
-	 * in immediate expressions must be declared in the iC code. Since it is
-	 * easy to mistype the names of iC function blocks and such non-defined
-	 * function blocks will be compiled without error as a C function call,
-	 * the error is not discovered until link time. With declaration a clean
-	 * error message is produced and the extra effort is not great. When a C
-	 * function or macro is called in an immediate expression, a check is
-	 * made, that the number of parameters is correct. Otherwise an error
-	 * message is issued. No check is made for C calls in C fragments
+	 * When 'strict' is active, any C variables, functions or macros, which
+	 * are used in immediate expressions must be declared extern in the iC code.
+	 * Since it is easy to mistype the names of iC function blocks and such
+	 * non-defined function blocks will be compiled without error as a C
+	 * function call, the error is not discovered until link time. With extern
+	 * declarations clean error messages are produced and the extra effort is
+	 * not great. When a C function or macro is called in an immediate expression,
+	 * a check is made, that the number of parameters is correct. Otherwise an
+	 * error message is issued. No check is made for C calls in C fragments
 	 * controlled by if else or switch statements or other literal C code,
 	 * since the compilation is handled by the follow up C compiler.
 	 *
@@ -426,50 +427,61 @@ useFlag	: USE USETYPE		{
 	 *
 	 * The following declaration errors will evoke warnings or errors if 'strict'
 	 *
-	 *	extern int rand			// no ( parameters )
+	 *	extern int var()		// was previously declared as a variable
+	 *	extern int rand			// was previously declared as a function 
 	 *	extern clock rand()		// absolutely wrong return type
 	 *	extern timer rand()		// absolutely wrong return type
 	 *
 	 *******************************************************************/
 
-extCfunDecl
-	: extCfunDeclHead UNDEF			{
-		if (iC_Sflag) {
-		    ierror("strict: erroneous declaration of a C function - no ( parameters ):", $2.v->name);
+extCdecl
+	: extCdeclHead UNDEF			{
+		if ($2.v->ftype == UDFA) {		/* if not previously declared as imm */
+		    $2.v->type = CWORD;			/* no longer an imm variable */
+		    $2.v->u_val = CNAME;		/* yacc type */
+		    $2.v->v_cnt = (unsigned int)-1;	/* mark as variable */
+		    $$.v = $2.v;
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) {
+			fprintf(iC_outFP, "extCdecl: %s is a variable\n", $2.v->name);
+			fflush(iC_outFP);
+		    }
+#endif
 		} else {
-		    warning("erroneous declaration of a C function - no ( parameters ):", $2.v->name);
+		    if (iC_Sflag) {
+			ierror("strict: erroneous declaration of a C variable that was imm:", $2.v->name);
+		    } else {
+			warning("erroneous declaration of a C variable that was imm:", $2.v->name);
+		    }
+		    $$.v = 0;
 		}
-		if ($2.v->ftype == UDFA) {	/* if not previously declared as imm */
-		    uninstall($2.v);		/* delete dummy Symbol */
-		}
-		$$.v = 0;
 	    }
-	| extCfunDeclHead UNDEF	'(' dParams ')'	{
+	| extCdeclHead UNDEF	'(' dParams ')'	{
 		$2.v->type = CWORD;			/* no longer an imm variable */
 		$2.v->u_val = CNAME;			/* yacc type */
 		$2.v->v_cnt = (unsigned int)($4.v);	/* parameter count */
 		$$.v = $2.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fprintf(iC_outFP, "extCdecl: %s has %d parameters\n", $2.v->name, (int)$4.v);
 		    fflush(iC_outFP);
 		}
 #endif
 	    }
-	| extCfunDeclHead UNDEF '(' dParams error ')'	{
+	| extCdeclHead UNDEF '(' dParams error ')'	{
 		$2.v->type = CWORD;			/* no longer an imm variable */
 		$2.v->u_val = CNAME;			/* yacc type */
 		$2.v->v_cnt = $4.v;			/* parameter count */
 		$$.v = $2.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fprintf(iC_outFP, "extCdecl: %s has %d parameters\n", $2.v->name, (int)$4.v);
 		    fflush(iC_outFP);
 		}
 #endif
 		yyerrok;
 	    }
-	| extCfunDeclHead CNAME			{
+	| extCdeclHead CNAME			{
 		if (iC_Sflag) {
 		    ierror("strict: erroneous re-declaration of a C function - no ( parameters ):", $2.v->name);
 		} else {
@@ -477,40 +489,38 @@ extCfunDecl
 		}
 		$$.v = 0;
 	    }
-	| extCfunDeclHead CNAME '(' dParams ')'	{
+	| extCdeclHead CNAME '(' dParams ')'	{
 		if ($2.v->v_cnt != $4.v) {
 		    char	tempBuf[TSIZE];
-		    snprintf(tempBuf, TSIZE, "%s %d (%d)", $2.v->name, $4.v, $2.v->v_cnt);
+		    snprintf(tempBuf, TSIZE, "%s %d (%d)", $2.v->name, (int)$4.v, (int)$2.v->v_cnt);
 		    if (iC_Sflag) {
 			ierror("strict: parameter count does not match a previous C function declaration:", tempBuf);
 		    } else {
 			warning("parameter count does not match a previous C function declaration - ignore:", tempBuf);
 		    }
-		    $2.v->v_cnt = $4.v;			/* latest parameter count */
 		}
 		$$.v = $2.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fprintf(iC_outFP, "extCdecl: %s has %d parameters\n", $2.v->name, (int)$4.v);
 		    fflush(iC_outFP);
 		}
 #endif
 	    }
-	| extCfunDeclHead CNAME '(' dParams error ')'	{
+	| extCdeclHead CNAME '(' dParams error ')'	{
 		if ($2.v->v_cnt != $4.v) {
 		    char	tempBuf[TSIZE];
-		    snprintf(tempBuf, TSIZE, "%s %d (%d)", $2.v->name, $4.v, $2.v->v_cnt);
+		    snprintf(tempBuf, TSIZE, "%s %d (%d)", $2.v->name, (int)$4.v, (int)$2.v->v_cnt);
 		    if (iC_Sflag) {
 			ierror("strict: parameter count does not match a previous C function declaration:", tempBuf);
 		    } else {
 			warning("parameter count does not match a previous C function declaration - ignore:", tempBuf);
 		    }
-		    $2.v->v_cnt = $4.v;			/* latest parameter count */
 		}
 		$$.v = $2.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "extCfunDecl: %s has %d parameters\n", $2.v->name, $4.v);
+		    fprintf(iC_outFP, "extCdecl: %s has %d parameters\n", $2.v->name, (int)$4.v);
 		    fflush(iC_outFP);
 		}
 #endif
@@ -518,13 +528,16 @@ extCfunDecl
 	    }
 	;
 
-extCfunDeclHead
+extCdeclHead
 	: EXTERN TYPE		{
 		if ($2.v->ftype != ARITH) {
+		    if ($2.v->ftype == GATE) {
+			warning("type of an extern C declaration is bit not int - ignore:", $1.v->name);
+		    } else
 		    if (iC_Sflag) {
-			ierror("strict: incompatible return type for an extern C function declaration:", $2.v->name);
+			ierror("strict: incompatible type for an extern C declaration:", $2.v->name);
 		    } else {
-			warning("incompatible return type for an extern C function declaration:", $2.v->name);
+			warning("incompatible type for an extern C declaration:", $2.v->name);
 		    }
 		}
 		stype.ftype = ARITH;
@@ -533,13 +546,13 @@ extCfunDeclHead
 		stype.fm    = 0;
 		$$.v = stype;
 #if YYDEBUG == 2
-		if ((iC_debug & 0402) == 0402) pu(TYP, "extCfunDeclHead: EXTERN TYPE", &$$);
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extCdeclHead: EXTERN TYPE", &$$);
 #endif
 	    }
-	| extCfunDecl ','	{
+	| extCdecl ','	{
 		$$.v = stype;	/* first TYPE */
 #if YYDEBUG == 2
-		if ((iC_debug & 0402) == 0402) pu(TYP, "extCfunDeclHead: extCfunDecl", &$$);
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extCdeclHead: extCdecl", &$$);
 #endif
 	    }
 	;
@@ -556,7 +569,7 @@ dPlist	: dPar			{ $$.v = 1; }
 dPar	: TYPE dVar		{
 		if ($1.v->ftype != ARITH) {
 		    if ($1.v->ftype == GATE) {
-			warning("parameter type in an extern C function declaration other than int - ignore:", $1.v->name);
+			warning("parameter type in an extern C function declaration is bit not int - ignore:", $1.v->name);
 		    } else
 		    if (iC_Sflag) {
 			ierror("strict: incompatible parameter type in an extern C function declaration:", $1.v->name);
@@ -2509,62 +2522,82 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 
 	/************************************************************
 	 *
-	 * Embedded C function  or macro calls.
-	 * These functions or macros may be declared implicitly via a
-	 * #include or #define in a preceding literal block or declared
+	 * Embedded C variable, function or macro calls.
+	 *
+	 * These variables, functions or macros may be declared implicitly
+	 * via a #include or #define in a preceding literal block or declared
 	 * and or defined in a literal block.
 	 *
-	 * Such functions must have at least 1 parameter which is
-	 * immediate to trigger execution of the function. Any changes
-	 * in non-immediate parameters will not trigger execution and
-	 * should be handled with care.
+	 * Functions should have at least 1 parameter which is immediate
+	 * to trigger execution of the function. Any changes in
+	 * non-immediate parameters will not trigger execution and
+	 * should be handled with care. This applies particularly to
+	 * C int variables whose latest assigned value will be used.
+	 * They may be useful for command line parameters, which never
+	 * change during the remaining execution of the program although
+	 * even then the immediate expressions they are in are not
+	 * triggered at initialisation. Therefore it is recommended that
+	 * all variables used in C and iC code be declared as 'immC int',
+	 * which will trigger execution.
 	 *
-	 * All bit expressions in parameters will be converted to imm int.
+	 * All imm bit expressions in parameters will be converted to imm int.
 	 *
 	 * The return value of all functions must be int. If a function
-	 * is to be used with a different return value, define a wrapper
+	 * with a different return value is to be used, define a wrapper
 	 * function in a literal block.
 	 *
-	 * If a C function or macro is going to be used in an iC immediate
-	 * expression it must be declared with an extern C function
+	 * If a C variable, function or macro is going to be used in an iC
+	 * immediate expression it must be declared with an extern C function
 	 * declaration in the iC code - at least if 'use strict' is active.
 	 * (it is - isn't it) Such extern declarations make the debugging
-	 * of iC code much simpler.
+	 * of iC code much simpler. C variables must be declared extern,
+	 * even if not 'strict' because otherwise the compiler would
+	 * identify them as undeclared imm bit variables.
 	 *
 	 * C functions in blocks of C code controlled by iC if else or
 	 * switch are not limited in this way. They must fit in with
 	 * declarations made in C literal blocks and produce consistent
-	 * C code.
+	 * C code for the underlying C compiler.
 	 *
 	 ***********************************************************/
 
-cCall	: UNDEF '(' cParams ')'	{
-		$$.f = $1.f; $$.l = $4.l;
-		$$.v = cCallCount($1.v, $3.v);
+cCall	: CNAME			{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = cCallCount($1.v, NULL, -1);
+		if (iC_Wflag & W_DEPRECATED_LOGIC) {
+		    warning("C variable will not fire this expression:", $1.v->name);
+		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: UNDEF", &$$);
 #endif
 	    }
+	| UNDEF '(' cParams ')'	{
+		$$.f = $1.f; $$.l = $4.l;
+		$$.v = cCallCount($1.v, $3.v, $3.v ? $3.v->le_val : 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: UNDEF ( cParams )", &$$);
+#endif
+	    }
 	| CNAME '(' cParams ')'	{
 		$$.f = $1.f; $$.l = $4.l;
-		$$.v = cCallCount($1.v, $3.v);
+		$$.v = cCallCount($1.v, $3.v, $3.v ? $3.v->le_val : 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: CNAME", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: CNAME ( cParams )", &$$);
 #endif
 	    }
 	| UNDEF '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = cCallCount($1.v, $3.v);
+		$$.v = cCallCount($1.v, $3.v, $3.v ? $3.v->le_val : 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: UNDEF error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: UNDEF ( cParams error )", &$$);
 #endif
 		yyerrok;
 	    }
 	| CNAME '(' cParams error ')'	{
 		$$.f = $1.f; $$.l = $5.l;
-		$$.v = cCallCount($1.v, $3.v);
+		$$.v = cCallCount($1.v, $3.v, $3.v ? $3.v->le_val : 0);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: CNAME error", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cCall: CNAME ( cParams error)", &$$);
 #endif
 		yyerrok;
 	    }
@@ -3082,31 +3115,39 @@ rPlist	: ractexpr			{
 	 *	numerical indices may be used, whereas in C code either immediate or
 	 *	ordinary C variables in an index expression will be handled correctly.
 	 *
-	 *	    imm int n = ...	// compute selection index n in iC code
+	 *	    imm  bit trig = .;	// compute selection trigger trig in iC code
+	 *	    imm  int si = ...;	// compute selection index si in iC code
+	 *	    immC bit selAr[10];	// selection array
+	 *	    %{ static int t; %}	// temporary C variable to remember si between
+	 *				// the rising and falling edge of trig
+	 *				// si may have changed before trig falls
 	 *	    if (trig) {
-	 *	       selOpen[n] = 1;	// will set   open[n] to 1 // variable index
-	 *	    } else {
-	 *	       selOpen[n] = 0;	// will reset open[n] to 0
+	 *	       selAr[t=si] = 1;	// variable selection index si in C code
+	 *	    } else {		// remember value of si in t for else part
+	 *	       selAr[t]    = 0;	// selected array member is synchronous with trig
 	 *	    }
-	 *	    imm bit gate0 = ST(selOpen[0], tick, 10);	// same as ST(open0, ...
-	 *	    imm bit gate1 = ST(selOpen[1], tick, 10);	// same as ST(open1, ...
-	 *	    imm bit gate3 = ST(selOpen[2], tick, 10);	// note constant index
+	 *	    imm bit gate0 = ST(selAr[0], tick, 10);	// same as ST(selAr0, ...
+	 *	    imm bit gate1 = ST(selAr[1], tick, 10);	// same as ST(selAr1, ...
+	 *	    ...
+	 *	    imm bit gate9 = ST(selAr[9], tick, 10);	// constant index in iC code
 	 *
 	 *	This selection is much faster than having large numbers of comparisons
-	 *	with n as shown in the following iC code example doing the same as the
-	 *	code above:
+	 *	with si as shown in the following iC code example doing the same job as
+	 *	the code above:
 	 *
-	 *	    imm int n = ...	// compute selection index n in iC code
-	 *	    imm bit gate0 = ST(trig & n == 0, tick, 10);
-	 *	    imm bit gate1 = ST(trig & n == 1, tick, 10);
-	 *	    imm bit gate2 = ST(trig & n == 2, tick, 10);
+	 *	    imm int si = ...	// compute selection index si in iC code
+	 *	    imm bit gate0 = ST(trig & si == 0, tick, 10);
+	 *	    imm bit gate1 = ST(trig & si == 1, tick, 10);
+	 *	    ...
+	 *	    imm bit gate2 = ST(trig & si == 9, tick, 10);
 	 *
-	 *	In this example each statement is recomputed every time n changes,
-	 *	although only one of them fires. (Significant if selection is large).
+	 *	In this example all the selection comparisons are recomputed
+	 *	every time si changes, although only one of them fires.
+	 *	(Significant if selection is large).
 	 *
-	 *	For the selection with an immC array only one value is used - the
-	 *	one selected by index n in the C fragment triggers the correct
-	 *	gate immediately.
+	 *	For the selection with an immC array only one selection array
+	 *	element changes - the one selected by index si in the C fragment,
+	 *	which triggers the correct gate immediately.
 	 *
 	 *******************************************************************/
 

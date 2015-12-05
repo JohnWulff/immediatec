@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in,v 1.61 2015/09/29 06:55:10 jw Exp $
+# @(#)$Id: Makefile.in,v 1.62 2015/11/03 02:58:42 jw Exp $
 
 #######################################################################
 #
@@ -138,18 +138,18 @@ ict:	$(srcdir)/Makefile icc.$(O) misc.$(O) scid.$(O) ict.$(O) cexe.$(O) tcpc.$(O
 
 #### Aux library for icr and ict ######################################
 
-icbegin.a:	$(srcdir)/Makefile icbegin.$(O) icend.$(O)
-	ar -rvs icbegin.a icbegin.$(O) icend.$(O)
+icbegin.a:	$(srcdir)/Makefile icbegin.$(O) p_channel.$(O) icend.$(O)
+	ar -rvs icbegin.a icbegin.$(O) p_channel.$(O) icend.$(O)
 
 #### Static run-time library (for debugging) ##########################
 
-libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
-	ar -rvs libict.a load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
+libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) p_channel.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
+	ar -rvs libict.a load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) p_channel.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
 
 #### Shared run-time library ##########################################
 
-libict.so:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
-	$(CC) -shared -Wl,-soname,libict.so.1 -o libict.so load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
+libict.so:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) p_channel.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
+	$(CC) -shared -Wl,-soname,libict.so.1 -o libict.so load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) p_channel.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
 
 #### C-parser test ####################################################
 
@@ -273,67 +273,67 @@ $(srcdir)/iCrfid.1.gz:	$(srcdir)/iCrfid $(srcdir)/scid.c
 test:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -qAjfw. ${srcdir}/Test0/*.ic* 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@-${srcdir}/iCmake -qAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kel -Ibytes -Isyntax.error -Iparse.error -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile with -S option and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -SAjfw. ${srcdir}/Test0/*.ic* 2>&1 | $(PMOD) > ${srcdir}/Test0/Init.out 2>&1
+	@-${srcdir}/iCmake -qSAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/Mdiff -kLel -Ibytes -Isyntax.error -Iparse.error -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
-	$(srcdir)/perlinstall -t $(srcdir)
-	${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1
-	${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
-	${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
-	${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
-	${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
-	${INSTALL_PROGRAM} $(srcdir)/immax      ${bindir}/${binprefix}immax
-	${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
-	${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
-	${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
-	${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
-	${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
-	${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
+	@$(srcdir)/perlinstall -t $(srcdir)
+	@${INSTALL} -d ${bindir} ${libdir} ${includedir} ${mandir}/man1
+	@${INSTALL_PROGRAM} $(srcdir)/Msg.pm    `$(srcdir)/perlinstall`/Msg.pm
+	@${INSTALL_PROGRAM} $(srcdir)/immcc      ${bindir}/${binprefix}immcc
+	@${INSTALL_PROGRAM} $(srcdir)/pplstfix   ${bindir}/${binprefix}pplstfix
+	@${INSTALL_PROGRAM} $(srcdir)/immac      ${bindir}/${binprefix}immac
+	@${INSTALL_PROGRAM} $(srcdir)/immax      ${bindir}/${binprefix}immax
+	@${INSTALL_PROGRAM} $(srcdir)/iCbox      ${bindir}/${binprefix}iCbox
+	@${INSTALL_PROGRAM} $(srcdir)/iClift     ${bindir}/${binprefix}iClift
+	@${INSTALL_PROGRAM} $(srcdir)/iClive     ${bindir}/${binprefix}iClive
+	@${INSTALL_PROGRAM} $(srcdir)/iCmake     ${bindir}/${binprefix}iCmake
+	@${INSTALL_PROGRAM} $(srcdir)/iCman      ${bindir}/${binprefix}iCman
+	@${INSTALL_PROGRAM} $(srcdir)/iCserver   ${bindir}/${binprefix}iCserver
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
-	${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
-	sudo ln -sf ${bindir}/${binprefix}iCpiFace     ${bindir}/${binprefix}iCpiGPIO
-	${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCgpioPUD ${bindir}/${binprefix}iCgpioPUD
-	${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCpiPWM   ${bindir}/${binprefix}iCpiPWM
-	${INSTALL_PROGRAM} $(srcdir)/iCtherm           ${bindir}/${binprefix}iCtherm
-	${INSTALL_PROGRAM} $(srcdir)/../include/pigpio.h     ${includedir}/${includeprefix}pigpio.h
-	${INSTALL_PROGRAM} $(srcdir)/../include/pigpiod_if.h ${includedir}/${includeprefix}pigpiod_if.h
-	${INSTALL_PROGRAM} $(srcdir)/../lib/libpigpio.a      ${libdir}/${libprefix}libpigpio.a
-	${INSTALL_PROGRAM} $(srcdir)/../lib/libpigpiod_if.a  ${libdir}/${libprefix}libpigpiod_if.a
+	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
+	@sudo ln -sf ${bindir}/${binprefix}iCpiFace     ${bindir}/${binprefix}iCpiGPIO
+	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCgpioPUD ${bindir}/${binprefix}iCgpioPUD
+	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCpiPWM   ${bindir}/${binprefix}iCpiPWM
+	@${INSTALL_PROGRAM} $(srcdir)/iCtherm           ${bindir}/${binprefix}iCtherm
+	@${INSTALL_PROGRAM} $(srcdir)/../include/pigpio.h     ${includedir}/${includeprefix}pigpio.h
+	@${INSTALL_PROGRAM} $(srcdir)/../include/pigpiod_if.h ${includedir}/${includeprefix}pigpiod_if.h
+	@${INSTALL_PROGRAM} $(srcdir)/../lib/libpigpio.a      ${libdir}/${libprefix}libpigpio.a
+	@${INSTALL_PROGRAM} $(srcdir)/../lib/libpigpiod_if.a  ${libdir}/${libprefix}libpigpiod_if.a
 endif
-	${INSTALL_PROGRAM} $(srcdir)/iCrfid     ${bindir}/${binprefix}iCrfid
-	${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
-	${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
-	if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
-	${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
-	${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
-	${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
-	${INSTALL_DATA} $(srcdir)/immax.1.gz    ${mandir}/man1/${manprefix}immax.1.gz
-	${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${mandir}/man1/${manprefix}iCbox.1.gz
-	${INSTALL_DATA} $(srcdir)/iClift.1.gz   ${mandir}/man1/${manprefix}iClift.1.gz
-	${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${mandir}/man1/${manprefix}iClive.1.gz
-	${INSTALL_DATA} $(srcdir)/iCmake.1.gz   ${mandir}/man1/${manprefix}iCmake.1.gz
-	${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
-	${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
-	${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
-	${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
-	${INSTALL_DATA} $(srcdir)/iCtherm.1.gz  ${mandir}/man1/${manprefix}iCtherm.1.gz
-	${INSTALL_DATA} $(srcdir)/iCrfid.1.gz   ${mandir}/man1/${manprefix}iCrfid.1.gz
-	${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${mandir}/man1/${manprefix}makeAll.1.gz
-	${INSTALL_DATA} $(srcdir)/Mdiff.1.gz    ${mandir}/man1/${manprefix}Mdiff.1.gz
-	${INSTALL_DATA} $(srcdir)/../man/man1/pig2vcd.1    ${mandir}/man1/${manprefix}pig2vcd.1
-	${INSTALL_DATA} $(srcdir)/../man/man1/pigpiod.1    ${mandir}/man1/${manprefix}pigpiod.1
-	${INSTALL_DATA} $(srcdir)/../man/man1/pigs.1       ${mandir}/man1/${manprefix}pigs.1
-	${INSTALL_DATA} $(srcdir)/../man/man3/pigpio.3     ${mandir}/man3/${manprefix}pigpio.3
-	${INSTALL_DATA} $(srcdir)/../man/man3/pigpiod_if.3 ${mandir}/man3/${manprefix}pigpiod_if.3
+	@${INSTALL_PROGRAM} $(srcdir)/iCrfid     ${bindir}/${binprefix}iCrfid
+	@${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
+	@${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
+	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
+	@${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
+	@${INSTALL_DATA} $(srcdir)/immcc.1.gz    ${mandir}/man1/${manprefix}immcc.1.gz
+	@${INSTALL_DATA} $(srcdir)/immac.1.gz    ${mandir}/man1/${manprefix}immac.1.gz
+	@${INSTALL_DATA} $(srcdir)/immax.1.gz    ${mandir}/man1/${manprefix}immax.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCbox.1.gz    ${mandir}/man1/${manprefix}iCbox.1.gz
+	@${INSTALL_DATA} $(srcdir)/iClift.1.gz   ${mandir}/man1/${manprefix}iClift.1.gz
+	@${INSTALL_DATA} $(srcdir)/iClive.1.gz   ${mandir}/man1/${manprefix}iClive.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCmake.1.gz   ${mandir}/man1/${manprefix}iCmake.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCman.1.gz    ${mandir}/man1/${manprefix}iCman.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCserver.1.gz ${mandir}/man1/${manprefix}iCserver.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCpiFace.1.gz ${mandir}/man1/${manprefix}iCpiFace.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCpiPWM.1.gz  ${mandir}/man1/${manprefix}iCpiPWM.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCtherm.1.gz  ${mandir}/man1/${manprefix}iCtherm.1.gz
+	@${INSTALL_DATA} $(srcdir)/iCrfid.1.gz   ${mandir}/man1/${manprefix}iCrfid.1.gz
+	@${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${mandir}/man1/${manprefix}makeAll.1.gz
+	@${INSTALL_DATA} $(srcdir)/Mdiff.1.gz    ${mandir}/man1/${manprefix}Mdiff.1.gz
+	@${INSTALL_DATA} $(srcdir)/../man/man1/pig2vcd.1    ${mandir}/man1/${manprefix}pig2vcd.1
+	@${INSTALL_DATA} $(srcdir)/../man/man1/pigpiod.1    ${mandir}/man1/${manprefix}pigpiod.1
+	@${INSTALL_DATA} $(srcdir)/../man/man1/pigs.1       ${mandir}/man1/${manprefix}pigs.1
+	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpio.3     ${mandir}/man3/${manprefix}pigpio.3
+	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpiod_if.3 ${mandir}/man3/${manprefix}pigpiod_if.3
 
 uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)

@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.77 2015/09/29 06:55:10 jw Exp $";
+"@(#)$Id: icc.h,v 1.78 2015/11/05 22:13:58 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -215,10 +215,15 @@ extern int		iC_assignL(iC_Gt * glv, int ppi, int rv);
 extern iC_Gt *		iC_index(iC_Gt * gm, int index);
 extern struct timeval	iC_timeOut;	/* 50 mS select timeout - may be modified in iCbegin() */
 extern unsigned short	P_channel;	/* PiFaceCAD channel associated with iCbegin() */
-extern int		iCbegin(void);	/* initialisation function */
-extern int		iCend(void);	/* termination function */
+extern int		iCbegin(int argc, char** argv);	/* initialisation function */
+extern int		iCend(void);			/* termination function */
+extern char **		iC_string2argv(char * callString, int argc);	/* can be called in iCbegin() */
+extern void		iC_fork_and_exec(char ** argv);			/* can be called in iCbegin() */
 extern char		iC_stdinBuf[];	/* store a line of STDIN - reported by TX0.1 */
 extern void		iC_quit(int sig);	/* quit with correct interrupt vectors */
+extern short		iC_debug;	/* from -do argument in call to main + misc flag bits */
+#define	DZ		0100000		/* misc flag in iC_debug to block STDIN */
+#define	DQ		0040000		/* quiet operation on startup and shutdown of apps and iCserver */
 
 #ifndef SIGRTMAX
 #define SIGRTMAX	32			/* for non-POSIX systems (Win32) */
@@ -227,8 +232,8 @@ extern void		iC_quit(int sig);	/* quit with correct interrupt vectors */
 #define QUIT_DEBUGGER	(SIGRTMAX+4)
 #define QUIT_SERVER	(SIGRTMAX+5)
 
-/* Special code to support PiFace Control and Display */
-#define PIFACECAD_KEY	"iC PiFaceCAD I/O\n"	/* generate and test same key */
+/* Special code to support PiFace Control and Display on a RapberryPi from any networked computer */
+#define PIFACECAD_KEY	"iC PiFaceCAD I/O"	/* generate and test same key (TODO test currently not implemented)*/
 extern void		writePiFaceCAD(		/* write display string either direct or via TCP/IP */
 			const char * displayString,
 			unsigned short channel);/* 0 = direct display or > 0 && <= 0xfff0 iCserver channel */
@@ -579,7 +584,6 @@ extern char		iC_fos[];	/* FOPS */
 extern char *		iC_useText[4];	/* USE_TEXT */
 extern FILE *		iC_outFP;	/* output file pointer */
 extern FILE *		iC_errFP;	/* error file pointer */
-extern short		iC_debug;	/* from -do argument in call to main */
 extern void *		iC_emalloc(unsigned);	/* check return from malloc */
 
 typedef void		(*iC_Functp2)(Gate *, Gate *);
@@ -621,6 +625,9 @@ extern unsigned short	iC_lflag;	/* -a build new aux files */
 
 					/*   icc.c   */
 extern char *		iC_progname;	/* name of this executable */
+extern int		iC_argc;	/* extra options passed to iCbegin(int iC_argc, char** iC_argv) */
+extern char **		iC_argv;
+extern int		iC_argh;	/* block running iCserver before iCbegin() */
 extern unsigned short	iC_xflag;	/* -x flag signals hexadecimal output */
 extern unsigned short	iFlag;		/* inversion correction needed */
 extern int		iC_inversionCorrection(void);
@@ -728,7 +735,7 @@ extern iC_Functp 	iC_clock_i[];
 
 #define	MARKMAX		4			/* number of oscillations allowed */
 #define	OSC_WARN_CNT	10			/* number of oscillation warnings */
-#define BS		256			/* buffer size for I/O strings */
+#define BS		1024			/* buffer size for I/O strings and chained command lines */
 
 extern unsigned short	iC_mark_stamp;		/* incremented every scan */
 extern Gate *		iC_osc_gp;		/* report oscillations */
@@ -737,7 +744,7 @@ extern unsigned		iC_scan_cnt;		/* count scan operations */
 extern unsigned		iC_link_cnt;		/* count link operations */
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 extern unsigned		iC_glit_cnt;		/* count glitches */
-extern unsigned	long	glit_nxt;		/* count glitch scan */
+extern unsigned	long	iC_glit_nxt;		/* count glitch scan */
 #endif
 
 #ifdef	TCP
@@ -778,7 +785,7 @@ extern FILE *		iC_savFP;
 
 /********************************************************************
  *
- *	piFaceIO array pfi[unit] is organised as follows:
+ *	piFaceIO array iC_pfL[unit] is organised as follows:
  *	  [unit] is the PiFace unit index in address order
  *	  each element of the array is a struct piFaceIO
  *
@@ -862,15 +869,15 @@ extern int	iC_opt_G;
 extern int	iC_opt_B;
 extern int	iC_opt_E;
 extern int	iC_opt_L;
-extern int	npf;
+extern int	iC_npf;
 extern int	gpio23FN;		/* /sys/class/gpio/gpio23/value LIRC file number */
 extern int	gpio25FN;		/* /sys/class/gpio/gpio25/value SPI file number */
 extern int	spidFN[];		/* /dev/spidev0.0, /dev/spidev0.1 SPI file numbers */
-extern piFaceIO	pfi[];			/* piFace names/gates and channels */
-extern gpioIO *	gpioList[];		/* gpio name/gates and channels */
+extern piFaceIO	iC_pfL[];		/* piFace names/gates and channels */
+extern gpioIO *	iC_gpL[];		/* gpio name/gates and channels */
 extern void	iC_gpio_pud(int gpio, int pud);	/*  execute iCgpioPUD(gpio, pud) to set pull-up/down */
 #endif	/* RASPBERRYPI */
-
+extern int	iC_opt_l;
 #endif	/* TCP */
 
 extern void		iC_initIO(void);	/* init signal and correct interrupt vectors */

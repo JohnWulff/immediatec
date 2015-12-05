@@ -1,8 +1,8 @@
 static const char icbegin_c[] =
-"@(#)$Id: icbegin.c,v 1.5 2015/04/02 02:35:58 jw Exp $";
+"@(#)$Id: icbegin.c,v 1.6 2015/11/06 00:47:21 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2015  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,45 +16,117 @@ static const char icbegin_c[] =
  *******************************************************************/
 
 /********************************************************************
- *  
  *  The following initialisation function is one of two empty functions
  *  in the libict.a support library. The other is iCend().
+ *
+ *  iCbegin() can be used to initialise immC variables etc.
  *  Either or both may be implemented in a literal block in iC source(s),
  *  in which case those function will be linked in preference.
  *
- *  iCbegin() can be used to initialise immC variables etc.
+ *  This bare bones version, which is linked into every generated iC app
+ *  unless a different function iCbegin() is defined in the iC app source,
+ *  implements the --h and --R command line options to provide individual
+ *  help for each app and code to implement running another app as a separate
+ *  process. This is called "chaining". The initial Usage called up with the
+ *  --h option explains chaining of auxiliary apps with the --R option.
  *
- ********* PiFaceCAD handling ***************************************
- *
- *  Replace
- *    unsigned short P_channel = 0xffff;	// set here
- *  by    
- *    unsigned short P_channel = 0xfffe;	// to write direct to PiFaceCAD
- *
- *  if the system finds a real PiFaceCAD linked to the app, the system
- *  will set P_channel to 0, which causes writePiFaceCAD() to write
- *  direct to the PiFaceCAD
- *  else
- *  the system will register the string Gate named "PFCAD4" and set
- *  P_channel to send strings to it with writePiFaceCAD() via iCserver.
- *  On iCpiFace or an app with a PiFaceCAD, which has the PiFaceCAD digital
- *  input declared ExternOut, PFCAD4 is registered as a string receiver.
- *  When strings are received via PFCAD4 they are written to the PiFaceCAD.
- *
- *  NOTE 1: as with any immediate input or output IEC variable, there must
- *  be either both a sender and at least one receiver for the PFCAD4
- *  channel or the I/O can be direct on the one app. Otherwise run-time
- *  errors will happen.
- *
- *  NOTE 2: any code, which defines iCbegin() must also define P_channel
- *  and vice versa. Otherwise the linker will not find one or the other.
- *  
+ *  To obtain an extended iCbegin() in your own iC app:
+ *  1) copy the following code  starting at the line containing
+ *     "Start of literal C code" to the end into your new iC source.
+ *  2) remove the // coments from the first three lines and the last line.
+ *  3) add extra "case 'x':" lines for extra --x command line options after
+ *     "switch (**argv) {". ('x' may any letter except 'h' or 'R').
+ *  4) follow the the new "case" line with individual code - usually
+ *     setting a flag: eg "opt_x = 1;"
+ *  5) follow this with a "break;" for a -x command line switch without
+ *     arguments. If an argument is required see example code in main()
+ *     in "load.c". (The "case 'R':" is a rather complex example).
+ *  6) declare "static int opt_x;" and any other new variables before
+ *     "int iCbegin(...) {...}".
+ *  7) change "return -1;" at the end of "int iCbegin(...) {...}" to
+ *     "return 0;" if you want execution of your iCbegin() to be reported
+ *     on start up of your app with the -d100 option.
+ *  8) add help lines after "Usage:..." for extra --x command line options.
+ *  9) add extra C code before the line containing "End of literal C code".
+ *     Usually this is
+ *     a) extra %#include lines.
+ *     b) extra static variable declarations.
+ *     c) extra C functions using the new options.
  *******************************************************************/
 
-unsigned short	P_channel = 0xffff;	/* invalid PiFaceCAD channel */
+#include	<stdio.h>
+#include	"icc.h"		/* use <icg.h> in iC app.ic sources */
+
+// %{	/* Start of literal C code */
+// %#include	<stdio.h>
+// %#include	<icg.h>
+
+static const char *	usage =
+"Usage: %s --[ -h]|[ -R <app ...>]\n"
+"   --h           this help text\n"
+"                      AUXILIARY app\n"
+"   --R <app ...> run auxiliary app followed by -z and its arguments\n"
+"                 as a separate process; -R ... must be last arguments.\n"
+"\n"
+#if YYDEBUG && !defined(RUN)
+"            typing t toggles the -t debug info flag\n"
+"            typing m toggles the -m timing info flag\n"
+#endif	/* YYDEBUG && !defined(RUN) */
+"            typing q or ctrl+D stops the app\n"
+;
 
 int
-iCbegin(void)				/* default initialisation function */
+iCbegin(int argc, char** argv)	/* default initialisation function */
 {
-    return 0;				/* does nothing */
+    char *	progname = *argv;
+    char *	mqz = "-qz";
+    char *	mz  = "-z";
+
+    if (argc >= 0) {
+	/********************************************************************
+	 *  Process command line arguments
+	 *******************************************************************/
+	while (--argc > 0) {
+	    if (**++argv == '-') {
+		++*argv;
+		do {
+		    switch (**argv) {
+		    case '\0':
+			goto break2;		/* - ignore */
+		    case '-':
+			break;			/* ignore extra - */
+		    case 'R':
+			/********************************************************************
+			 *  Run auxiliary app with rest of command line
+			 *  splice in the "-z" option to block STDIN interrupts in chained apps
+			 *  alternatively "-qz" option for quiet operation and to block STDIN
+			 *******************************************************************/
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+			*(argv-1) = *argv;	/* move app string to previous argv array member */
+			*argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+			argv--;			/* start call with app string */
+			goto break3;
+		    missing:
+			fprintf(stderr, "ERROR: %s: missing value after '%s'\n", progname, ((*--argv)-=2, *argv));
+		    case 'h':
+		    case '?':
+			fprintf(stderr, usage, progname);
+			iC_quit(-2);
+		    default:
+			fprintf(stderr, "WARNING: %s: unknown option -%c\n", progname, **argv);
+			break;
+		    }
+		} while (*++*argv);
+		break2: ;
+	    } else fprintf(stderr, "WARNING: %s: unknown argument '%s'\n", progname, *argv);
+	}				/* end of command line analysis */
+    } else {
+	/********************************************************************
+	 *  Run auxiliary app
+	 *******************************************************************/
+      break3:
+	iC_fork_and_exec(argv);
+    }
+    return -1;			/* does nothing */
 } /* iCbegin */
+// %}	/* End of literal C code */

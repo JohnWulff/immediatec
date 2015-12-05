@@ -47,6 +47,7 @@ my @allButtons = ();	# used to note all buttons to set
 my $indicatoron = 1;	# 0 button    1 checkbox
 my $greenButton = "'green'";
 my $redButton   = "'red'";
+my @argv = ();
 
 my @masks =	(1, 2, 4, 8, 16, 32, 64, 128);
 my @bitIndex =	(
@@ -123,18 +124,144 @@ Usage:
 	-R      trace rcv messages in Msg.pm
 	-S      trace send messages in Msg.pm
 	-T      extra static debug messages
+        -q      quiet - do not report clients connecting and disconnecting
 	-x      exit after analyzing input parameters
 	-h      help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.57 2015/09/29 06:55:10 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox,v 1.58 2015/11/06 03:50:19 jw Exp $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
-use vars qw($opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_R $opt_S $opt_T $opt_s $opt_p);
-use vars qw($opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_f $opt_h);
-use Getopt::Std;		# replace require "getopts.pl";
-getopts('bdrHmxtRSTs:p:n:i:c:C:Q:l:f:h');	# sets $opt_h if -h etc
+########################################################################
+#	Handle -f option - count leading options up to -f
+#	splice out -f and shift its file_name_argument into @runArgs
+########################################################################
+
+my ($argIndex, $blank, $file, @runArgs);
+$argIndex = $blank = 0;
+@runArgs = ();
+# print "0 \@ARGV = '@ARGV'\n";
+foreach (@ARGV) {
+    if (s/^-f(.*)$/$1/) {
+	$blank = 1 if $_ eq "";		# -f <file>
+	$file = "";			# or -f<file>
+	last;
+    } elsif (s/^(-[^spnicCQlf]+)f(.*)$/$1/) {
+	$file = $2;			# -abcf <file>
+	$blank = -1 if $file ne "";	# or -abcf<file>
+	$argIndex++;
+	last;
+    }
+    $argIndex++;
+}
+# no warnings;
+# print "1 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$file = '$file' $#ARGV\n";
+# use warnings;
+@runArgs = splice(@ARGV, $argIndex, 1 + $blank);
+if (defined $file) {
+    shift(@runArgs) if $blank > 0;
+    unshift(@runArgs, $file) if $file ne "";
+}
+# print "2 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n";
+$file = shift(@runArgs) ;
+# print "3 \@ARGV = '@ARGV'	\$file = '$file'\n";
+
+########################################################################
+#	Read optional INI file
+########################################################################
+
+my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
+							# NOTE: oct() only handles lower case 0b, 0x
+my ($id, $ini, $from, $to, $res, $argNameRef);
+
+if ($file) {
+    open IN, $file or die "can't open ID file $file! $!";
+    LINE:
+    while (<IN>) {		# read next entry from ID file into $_
+	chomp;			# $_ is an ID line
+# print "$file:$.: '$_'\n";
+	my ($lead, $pos, $tail);
+	$pos = 0;
+	while (/(			# $1 lead
+		    .*?			# NOTE minimal matching
+		)
+		(			# $2 whole ID
+		    [IQ]?[XBWL]\d+	# IEC-1131 ID
+		    (			# optional
+			-\d{1,3}	# 3 digit instance
+		    )?
+		    (			# optional
+			\s*-\s*		# '-' 2nd ID
+			[IQ]?[XBWL]\d+	# IEC-1131 ID
+			(		# optional
+			    -\d{1,3}	# 3 digit instance
+			)?
+		    )?
+		    (			# optional initialiser
+			\s*=\s*		# '='
+			( $nr )?	# optional number
+		    )?
+		    (			# optional  from, to, resolution
+			(
+			    \s*,\s*	# ','
+			    ( $nr )?	# optional number
+			){0,3}		# 0 to 3 values ,<number>
+		    )
+		)/xog) {
+	    $lead = $1;
+	    $id = $2;
+	    $pos = pos;
+# print "$file:$.: pos = '$pos' lead = '$lead' id = '$id'\n";
+	    if ($lead =~ /^\s*(#.*)?$/) {
+		next LINE if $1;
+	    } else {
+		warn "$named: file $file:$.: '$_' contains badly formed ID '$lead'\n";
+	    }
+	    push(@ARGV, $id);	# put next ID on end of @ARGV
+	}
+	$tail = substr $_, $pos;
+# print "$file:$.: pos = '$pos' tail = '$tail'\n";
+	unless ($tail =~ /^\s*(#.*)?$/) {
+	    warn "$named: file $file:$.: '$_' contains badly formed ID '$tail'\n";
+	}
+    }
+    close IN;
+}
+
+########################################################################
+#	Handle all remaining -switch options and non-switch options
+########################################################################
+
+use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_R $opt_S $opt_T);
+use vars qw($opt_q $opt_z $opt_s $opt_p $opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_h);
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    ''    => \$opt_,			# lone - (not used)
+    '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
+    'b'   => \$opt_b,
+    'd'   => \$opt_d,
+    'r'   => \$opt_r,
+    'H'   => \$opt_H,
+    'm'   => \$opt_m,
+    'x'   => \$opt_x,
+    't'   => \$opt_t,
+    'R'   => \$opt_R,
+    'S'   => \$opt_S,
+    'q'   => \$opt_q,
+    'z'   => \$opt_z,
+    'T'   => \$opt_T,
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'n=s' => \$opt_n,
+    'i=i' => \$opt_i,
+    'c=i' => \$opt_c,
+    'C=i' => \$opt_C,
+    'Q=i' => \$opt_Q,
+    'l=i' => \$opt_l,
+    'h'   => \$opt_h,
+);
+scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
@@ -222,68 +349,11 @@ if (defined $opt_i and $opt_i ne '') {
 #
 ########################################################################
 
-my $nr = qr/-?[1-9]\d*|0(x[\da-fA-F]+|b[01]+|[0-7]*)/;	# precompiled regex for number in all representations
-							# NOTE: oct() only handles lower case 0b, 0x
-my ($id, $ini, $from, $to, $res, $argNameRef);
-
-if ($opt_f) {
-    open IN, $opt_f or die "can't open ID file $opt_f! $!";
-    LINE:
-    while (<IN>) {		# read next entry from ID file into $_
-	chomp;			# $_ is an ID line
-	print "$opt_f:$.: '$_'\n" if $opt_t;
-	my ($lead, $pos, $tail);
-	$pos = 0;
-	while (/(			# $1 lead
-		    .*?			# NOTE minimal matching
-		)
-		(			# $2 whole ID
-		    [IQ]?[XBWL]\d+	# IEC-1131 ID
-		    (			# optional
-			-\d{1,3}	# 3 digit instance
-		    )?
-		    (			# optional
-			\s*-\s*		# '-' 2nd ID
-			[IQ]?[XBWL]\d+	# IEC-1131 ID
-			(		# optional
-			    -\d{1,3}	# 3 digit instance
-			)?
-		    )?
-		    (			# optional initialiser
-			\s*=\s*		# '='
-			( $nr )?	# optional number
-		    )?
-		    (			# optional  from, to, resolution
-			(
-			    \s*,\s*	# ','
-			    ( $nr )?	# optional number
-			){0,3}		# 0 to 3 values ,<number>
-		    )
-		)/xog) {
-	    $lead = $1;
-	    $id = $2;
-	    $pos = pos;
-	    print "$opt_f:$.: pos = '$pos' lead = '$lead' id = '$id'\n" if $opt_t;
-	    if ($lead =~ /^\s*(#.*)?$/) {
-		next LINE if $1;
-	    } else {
-		warn "$named: file $opt_f:$.: '$_' contains badly formed ID '$lead'\n";
-	    }
-	    push(@ARGV, $id);	# put next ID on end of @ARGV
-	}
-	$tail = substr $_, $pos;
-	print "$opt_f:$.: pos = '$pos' tail = '$tail'\n" if $opt_t;
-	unless ($tail =~ /^\s*(#.*)?$/) {
-	    warn "$named: file $opt_f:$.: '$_' contains badly formed ID '$tail'\n";
-	}
-    }
-    close IN;
-}
-unshift(@ARGV, 'X0') unless @ARGV;	# default name X0
-print "ARGV:", join(':', @ARGV), ":\n" if $opt_t;
+unshift(@argv, 'X0') unless @argv;	# default name X0
+print "ARGV:", join(':', @argv), ":\n" if $opt_t;
 
 my ($argv);
-while ($argv = shift @ARGV) {
+while ($argv = shift @argv) {
     my ($start_iq_xbwl, $start_iq, $start_xbwl, $start_n, $si, $end_n, $ei, $fr_to_re, @list);
     if ($argv =~ /^
 		    (				# $1   start IEC-1131 ID
@@ -340,7 +410,7 @@ while ($argv = shift @ARGV) {
 	    if ($start_iq and $start_iq eq 'Q') {
 		warn "$named: $argv: output argument cannot be initialised - ignore initialiser\n";
 	    } else {
-		$ini = convert_nr($13, 0);	# 7 or 07 or 0x7 or 0b111 Input initialiser
+		$ini = convert_nr($13, 0, $argv);# 7 or 07 or 0x7 or 0b111 Input initialiser
 	    }
 	}
 	unless ($si) {
@@ -363,24 +433,24 @@ while ($argv = shift @ARGV) {
 	    ## $res contains the bit mask defining which bits are push buttons if $to != 0
 	    ########################################################################
 	    if ($start_xbwl eq 'X') {
-		$from = convert_nr($from, 0xff);	# digital I/O default bit mask for all 8 bits
+		$from = convert_nr($from, 0xff, $argv);	# digital I/O default bit mask for all 8 bits
 		$ini &= $from;				# $ini should not have more bits than defined bits
 		if ($start_iq and $start_iq eq 'Q' and defined $to) {
 		    warn "$named: $argv: digital output argument cannot cannot have a time delay - used 0\n";
 		    $to = 0;
 		} else {
-		    $to = convert_nr($to, 0);		# default 0 is normal Input on/off button
+		    $to = convert_nr($to, 0, $argv);	# default 0 is normal Input on/off button
 		}
 		if ($to and $to < 50) {
 		    warn "$named: $argv: push button time delay '$to' must be >= 50 - used 50 ms\n";
 		    $to = 50;				# minimum push button time delay is 50 ms (not -ve)
 		}
-		$res = convert_nr($res, $to ? 0xff : 0);# push-button I/O default bit mask for all 8 bits if $to
+		$res = convert_nr($res, $to ? 0xff : 0, $argv);# push-button I/O default bit mask for all 8 bits if $to
 		$res &= $from;				# $res should not have more bits than defined bits
 	    } else {
-		$from = convert_nr($from, 0);		# analog I/O default from = 0
-		$to = convert_nr($to, 100);		# analog I/O default to   = 100
-		$res = convert_nr($res, 1);		# analog I/O default res  = 1
+		$from = convert_nr($from, 0, $argv);	# analog I/O default from = 0
+		$to = convert_nr($to, 100, $argv);	# analog I/O default to   = 100
+		$res = convert_nr($res, 1, $argv);	# analog I/O default res  = 1
 		unless ($res) {
 		    warn "$named: $argv: resolution '$res' must be non-zero - used 1\n";
 		    $res = 1;
@@ -447,6 +517,7 @@ $named = $name;			# use individual ID for warnings from now on
 Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
+print STDERR "iCbox '$named' connecting at server\n" unless $opt_q;
 
 ############# send registration ############################
 
@@ -913,14 +984,15 @@ exit(0);
 #
 #	Convert a number string obtained with $nr to an integer value
 #	Parameter 1:	dec, bin, oct or hex number string - dec may be signed
-#	Parameter 2:	initial value
-#	retun initial value if parameter 1 undef or ''
+#	Parameter 2:	default value
+#	Parameter 3:	name of argument being converted
+#	retun numerical value or default value if parameter 1 undef or ''
 #
 ########################################################################
 
 sub convert_nr {
-    my ($val, $initial) = @_;
-    return $initial if not defined $val or $val eq '';
+    my ($val, $default, $argv) = @_;
+    return $default if not defined $val or $val eq '';
     if ($val =~ /^-\s*0/) {
 	$val = 0;
 	print "\n" if $opt_t;
@@ -966,7 +1038,7 @@ sub rcvd_msg_from_server {
 	print "($len)$msg<\n" if $opt_T;
 	if ($len == 0) {
 	    $conn->disconnect();
-	    print "$named: disconnected by server\n";
+	    print STDERR "iCbox '$named' disconnected by server\n" unless $opt_q;
 	    exit;
 	}
 	my ($msg1, $channel, $value, $old, $bitRef, $id, $ini, $from, $to, $res, $regId);

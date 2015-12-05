@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.72 2015/06/07 03:16:24 jw Exp $";
+"@(#)$Id: icc.c,v 1.73 2015/11/09 02:59:14 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -55,8 +55,13 @@ static const char *	usage =
 #endif	/* RUN or TCP */
 "agASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]\n"
 "       [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]\n"
-"       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>|-]\n"
+"       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>]\n"
 #if defined(RUN) || defined(TCP)
+"       [ --[ -h] ...]"
+#ifdef	TCP
+"|[ -R <app ...>]"
+#endif	/* TCP */
+"\n"
 "Options in compile mode (-c or -o):\n"
 "        -c              generate C source cexe.c to extend 'icr' or 'ict' compiler\n"
 "                        (cannot be used if also compiling with -o)\n"
@@ -95,7 +100,7 @@ static const char *	usage =
 "                        if lim <= %d, mixed byte, word and long indices are tested\n"
 "                        default: any index for bit, byte, word or long is allowed\n"
 #endif	/* RUN or TCP */
-"        -d <deb>                          LIST options\n"
+"        -d <deb>      LIST options\n"
 "                   +40  source listing\n"
 "                   +20  net topology\n"
 "                   +10  net statistics\n"
@@ -105,7 +110,7 @@ static const char *	usage =
 "                  +400  exit after initialisation\n"
 #endif	/* RUN or TCP */
 #if YYDEBUG && !defined(_WINDOWS)
-"                                          DEBUG options\n"
+"                      DEBUG options\n"
 #if defined(RUN) || defined(TCP)
 "                  +402  logic generation    (exits after initialisation)\n"
 #ifdef YACC
@@ -127,7 +132,7 @@ static const char *	usage =
 #endif	/* BOOT_COMPILE */
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        iC language source file (extension .ic)\n"
-"        -               or default: take iC source from stdin\n"
+"                        default: take iC source from stdin\n"
 "        -h              this help text\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
@@ -137,6 +142,9 @@ static const char *	usage =
 #if defined(RUN) || defined(TCP)
 "Extra options for run mode: (direct interpretation)\n"
 " [-"
+#ifdef	TCP
+"l"
+#endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)
 "t"
 #endif	/* YYDEBUG and not _WINDOWS */
@@ -149,17 +157,18 @@ static const char *	usage =
 "]"
 "[ -n<count>"
 #ifdef TCP
-"][ -s <server>][ -p <port>][ -u <unitID>][ -i <instanceID>]\n"
+"][ -s <host>][ -p <port>][ -u <unitID>][ -i <instanceID>]\n"
 " [ -v <file.vcd>"
 #endif	/* TCP */
 "]\n"
 "        -n <count>      maximum oscillator count (default is %d, limit 15)\n"
 "                        0 allows unlimited oscillations\n"
 #ifdef TCP
-"        -s host ID      of server         (default '%s')\n"
-"        -p service port of server (not p) (default '%s')\n"
-"        -u unit ID      of this client (default base name of <src.ic>)\n"
-"        -i instance ID  of this client (default '%s'; 1 to %d numeric digits)\n"
+"        -l              start 'iClive' with correct source\n"
+"        -s host         IP address of iCserver           (default '%s')\n"
+"        -p port         service port of iCserver (not p) (default '%s')\n"
+"        -u unitID       of this client (default base name of <src.ic>)\n"
+"        -i instanceID   of this client (default '%s'; 1 to %d numeric digits)\n"
 "        -v <file.vcd>   output a .vcd and a .sav file for gtkwave\n"
 #endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -185,6 +194,16 @@ static const char *	usage =
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                        can be toggled at run time by typing m\n"
+"        -q      quiet - do not report clients connecting and disconnecting\n"
+"        -z      block keyboard input on this app - used by -R\n"
+#endif	/* TCP */
+"                      EXTRA arguments\n"
+"        --      any further arguments after -- are passed to the app\n"
+"        --h     help with command line options particular to this app\n"
+#ifdef	TCP
+"                      AUXILIARY app\n"
+"        -R <app ...> run auxiliary app followed by -z and its arguments\n"
+"                     as a separate process; -R ... must be last arguments.\n"
 #endif	/* TCP */
 "      A <src.ic> containing only logical expressions can be interpreted\n"
 "      with  %s -t <src.ic>. A <src.ic> containing arithmetic expressions\n"
@@ -204,10 +223,10 @@ static const char *	usage =
 "\n"
 "      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
 #endif	/* RUN */
-"      Typing q or ctrl-C quits run mode.\n"
+"      Typing q or ctrl+D quits run mode.\n"
 #endif	/* RUN or TCP */
 "%s\n"
-"Copyright (C) 1985-2012 John E. Wulff     <immediateC@gmail.com>\n"
+"Copyright (C) 1985-2015 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -221,6 +240,9 @@ unsigned short	iFlag;
 unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
 unsigned short	iC_osc_lim = MARKMAX;
 unsigned short	iC_osc_flag = 0;
+int		iC_argc;		/* extra options passed to iCbegin(int argc, char** argv) */
+char **		iC_argv;
+int		iC_argh = 0;		/* block running iCserver before iCbegin() */
 #if YYDEBUG
 extern	int	iCdebug;
 extern	int	c_debug;
@@ -407,7 +429,12 @@ main(
     int		fd;
     int		r = 0;			/* return value of compile */
     int		ro = 4;			/* output message index */
+    int		b = 0;			/* aux flag */
     char *	cp;
+#ifdef	TCP
+    char *	mqz = "-qz";
+    char *	mz  = "-z";
+#endif	/* TCP */
 
     /* Process the arguments */
     iC_path = *argv;			/* in case there is a leading path/ */
@@ -445,18 +472,19 @@ main(
 		    char *	op;
 		    char	tempBuf[BUFS];
 
-		case '\0':
-		    inpFN = 0;		/* - is standard input */
 #if defined(RUN) || defined(TCP)
 		case 'n':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    iC_osc_lim = atoi(*argv);
-		    if (iC_osc_lim > 15) goto error;
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (strlen(*argv)) iC_osc_lim = atoi(*argv); else goto missing;
+		    if (iC_osc_lim > 15) {
+			fprintf(iC_errFP, "ERROR: %s: -n %hu value > 15\n", iC_progname, iC_osc_lim);
+			goto error;
+		    }
 		    goto break2;
 #ifdef TCP
 		case 's':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    if (strlen(*argv)) iC_hostNM = *argv;
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (strlen(*argv)) iC_hostNM = *argv; else goto missing;
 		    goto break2;
 		case 'p':
 		    if (! *++*argv) { --argc; if(! *++argv) goto Pedantic; }
@@ -479,14 +507,14 @@ main(
 		    iC_Wflag |= W_ALL;
 		    break;
 		case 'u':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    if (strlen(*argv)) iC_iccNM = *argv;
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (strlen(*argv)) iC_iccNM = *argv; else goto missing;
 		    goto break2;
 		case 'i':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if ((slen = strlen(*argv)) > INSTSIZE ||
 			slen != strspn(*argv, "0123456789")) {
-			fprintf(stderr, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
+			fprintf(iC_errFP, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
 			    *argv, INSTSIZE);
 		    } else {
 			iC_iidNM = iC_emalloc(INSTSIZE+1);	/* +1 for '\0' */
@@ -494,9 +522,9 @@ main(
 		    }
 		    goto break2;
 		case 'v':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    iC_vcd = *argv;	/* output vcd dump file for gtkwave */
-		    goto break2;
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (strlen(*argv)) iC_vcd = *argv; else goto missing;
+		    goto break2;	/* output vcd dump file for gtkwave */
 		case 'm':
 		    iC_micro++;		/* microsecond info */
 		    break;
@@ -513,8 +541,16 @@ main(
 #endif	/* RUN */
 #endif	/* RUN or TCP */
 		case 'd':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    sscanf(*argv, "%o", &debi);
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (!(slen = strlen(*argv))) goto missing;
+		    if (slen != strspn(*argv, "01234567") ||	/* octal digits only */
+			sscanf(*argv, "%o", &debi) != 1 ||
+			(debi & (DZ | DQ | ~0xffff))
+		    ) {
+			fprintf(iC_errFP, "ERROR: %s: '-d %s' is not a well formed octal string or exceeds range 37777\n",
+			    iC_progname, *argv);
+			exit(1);
+		    }
 		    iC_debug |= debi;	/* short */
 #if !defined(RUN) && !defined(TCP)
 		    iC_debug |= 0400;	/* always stops */
@@ -533,65 +569,109 @@ main(
 #if defined(RUN) || defined(TCP)
 		    if (excFN == 0) {
 #endif /* defined(RUN) || defined(TCP) */
-			if (! *++*argv) { --argc; if(! *++argv) goto error; }
-#ifdef	WIN32
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 			if (strlen(*argv)) {
+#ifdef	WIN32
 			    outFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 			    strcpy(outFN, *argv);
 			    while ((cp = strchr(outFN, '\\')) != 0) {
 				*cp = '/';		/* convert '\' to '/' under WIN32 */
 			    }
-			}
 #else	/* not WIN32 */
-			if (strlen(*argv)) outFN = *argv;	/* compiler output file name */
+			    outFN = *argv;		/* compiler output file name */
 #endif	/* WIN32 */
+			} else goto missing;
 			goto break2;
 #if defined(RUN) || defined(TCP)
 		    } else {
-			fprintf(stderr,
+			fprintf(iC_errFP,
 			    "%s: cannot use both -c and -o option\n", iC_progname);
 			goto error;
 		    }
 #endif /* defined(RUN) || defined(TCP) */
 		case 'l':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-#ifdef	WIN32
-		    if (strlen(*argv)) {
-			listFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
-			strcpy(listFN, *argv);
-			while ((cp = strchr(listFN, '\\')) != 0) {
-			    *cp = '/';		/* convert '\' to '/' under WIN32 */
-			}
+		    if (! *++*argv) {			/* step past 'l' */
+			--argc;
+			b = 1;				/* step to next argv */
+			if(! *++argv) goto tryLive;
 		    }
-#else	/* not WIN32 */
-		    if (strlen(*argv)) listFN = *argv;	/* listing file name */
-#endif	/* WIN32 */
+		    if (strlen(*argv) && (cp = strrchr(*argv, '.')) != 0) {
+			if (memcmp(cp, ".lst", 3) == 0) {	/* accept .lst6 etc */
+    #ifdef	WIN32
+			    listFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
+			    strcpy(listFN, *argv);
+			    while ((cp = strchr(listFN, '\\')) != 0) {
+				*cp = '/';		/* convert '\' to '/' under WIN32 */
+			    }
+    #else	/* not WIN32 */
+			    listFN = *argv;		/* listing file name */
+    #endif	/* WIN32 */
+			} else if (strcmp(cp, ".ic") == 0) {
+#ifdef	TCP
+			    if (outFN == 0 && excFN == 0) {
+				iC_opt_l = 1;		/* start iClive with correct source */
+				goto setInpFN;		/* found input name */
+			    }
+#endif	/* TCP */
+			    if (b == 0) ++argv;
+			    goto missing;
+			} else {
+			    goto strangeListFN;
+			}
+		    } else if (**argv == '-') {
+#ifdef	TCP
+			if (outFN == 0 && excFN == 0) {
+			    iC_opt_l = 1;		/* start iClive with correct source */
+			    break;			/* found more -options */
+			}
+#endif	/* TCP */
+			if (b == 0) ++argv;
+			goto missing;
+		    } else if (b) {
+		      strangeListFN:
+			fprintf(iC_errFP, "%s: WARNING: invalid list file -l '%s' - ignore\n", iC_progname, *argv);
+			goto break2;
+		    } else {
+			--argc;
+			++argv;
+		      tryLive:
+			++argc;
+			--*(--argv);
+#ifdef	TCP
+			if (outFN == 0 && excFN == 0) {
+			    iC_opt_l = 1;		/* start iClive with correct source */
+			    break;
+			}
+#endif	/* TCP */
+			++*(argv++);
+			goto missing;
+		    }
 		    if ((iC_debug & 077) == 0) {
 			iC_debug |= 074;	/* default listing, topology, stats and logic expansion */
 		    }
 		    goto break2;
 		case 'e':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-#ifdef	WIN32
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) {
+#ifdef	WIN32
 			errFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 			strcpy(errFN, *argv);
 			while ((cp = strchr(errFN, '\\')) != 0) {
 			    *cp = '/';		/* convert '\' to '/' under WIN32 */
 			}
-		    }
 #else	/* not WIN32 */
-		    if (strlen(*argv)) errFN = *argv;	/* error file name */
+			errFN = *argv;		/* error file name */
 #endif	/* WIN32 */
+		    } else goto missing;
 		    goto break2;
 		case 'k':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
-		    iC_maxIO = atoi(*argv) + 1;
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    if (strlen(*argv)) iC_maxIO = atoi(*argv) + 1; else goto missing;
 		    if (excFN != 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) {
 #if defined(RUN) || defined(TCP)
 		      maxIOerror:
 #endif /* defined(RUN) || defined(TCP) */
-			fprintf(stderr,
+			fprintf(iC_errFP,
 			    "%s: -k %d exceeds %d for -c option\n",
 			    iC_progname, iC_maxIO-1, IXD-1);
 			goto error;
@@ -604,7 +684,7 @@ main(
 			if (iC_maxIO < 0) iC_maxIO = IXD;	/* pre-set for immcc is -1 */
 			if (iC_maxIO > IXD) goto maxIOerror;	/* I/O limit for -c mode */
 		    } else {
-			fprintf(stderr,
+			fprintf(iC_errFP,
 			    "%s: cannot use both -o and -c option\n", iC_progname);
 			goto error;
 		    }
@@ -616,13 +696,13 @@ main(
 		case 'S':
 		    iC_uses |= USE_STRICT;	/* strict - all imm variables must be declared */
 		    break;
-		case 'R':
-		    iC_maxErrCount = INT_MAX;	/* maximum error count very high */
-		    break;
 		case 'a':
 		    iC_aflag = 1;		/* append for compile */
 		    break;
 #ifndef TCP
+		case 'R':			/* for TCP this option is interpreted with -R <call+opts> */
+		    iC_maxErrCount = INT_MAX;	/* maximum error count very high */
+		    break;
 		case 'p':			/* for TCP this option is interpreted with -p <port> */
 		    iC_Pflag++;			/* -p is pedantic, -pp or more is pedantic-error*/
 		    iC_Wflag |= W_ALL;		/* by default all warnings are on */
@@ -658,9 +738,9 @@ main(
 			    iC_Wflag |= W_UNUSED;
 			} else if (strcmp(*argv, "Wno-unused-gate") == 0) {
 			    iC_Wflag &= ~W_UNUSED;
-			/* Insert other Waning switches here */
+			    /* Insert other Waning switches here */
 			} else {
-			    goto cerror;
+			    fprintf(iC_errFP, "WARNING: %s: unknown option -%s\n", iC_progname, *argv);
 			}
 		    }
 		    goto break2;
@@ -668,9 +748,9 @@ main(
 		    iC_gflag = 1;		/* independent C code for gdb debugging */
 		    break;	/* allows setting breakpoints in C code in iC listings */
 		case 'O':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (sscanf(*argv, "%o%s", &debi, tempBuf) != 1 || debi > 07) {
-			fprintf(stderr,
+			fprintf(iC_errFP,
 			    "%s: -O levels can only be 0 - 7 (7 is default)\n", iC_progname);
 			goto error;
 		    }
@@ -691,16 +771,16 @@ main(
 		    op = iC_Cdefines;
 		    arg = **argv;
 		  buildDefines:
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) {
-			// fprintf(stderr, "*** *argv = %s iC_defines = '%s' iC_Cdefines = '%s'\n",
+			// fprintf(iC_errFP, "*** *argv = %s iC_defines = '%s' iC_Cdefines = '%s'\n",
 			//     *argv, iC_defines, iC_Cdefines);
 			/********************************************************************
 			 * copy -arg *argv to iC_defines or iC_Cdefines
 			 *******************************************************************/
 			slen = strlen(mp);			/* space used so far */
 			if (snprintf(mp + slen, BUFS - slen, " -%c %s", arg, *argv) >= BUFS - slen) {
-			    fprintf(stderr, "%s: -%c %s: does not fit in internal buffer\n",
+			    fprintf(iC_errFP, "%s: -%c %s: does not fit in internal buffer\n",
 				iC_progname, arg, *argv);
 			    goto error;
 			}
@@ -711,27 +791,27 @@ main(
 			    strncpy(tempBuf, op, BUFS);
 			    slen = strlen(tempBuf);
 			    if ((op = strpbrk(*argv, "=(")) != NULL) {
-				// fprintf(stderr, "*#* *argv = '%s' op = '%s'\n", *argv, op);
+				// fprintf(iC_errFP, "*#* *argv = '%s' op = '%s'\n", *argv, op);
 				*op = '\0';			/* terminate token on = or ) (no longer needed) */
 			    }
 			    cp = strtok(tempBuf+1, " ");	/* miss first -D -C -U or -V */
 			    while (cp) {
-				// fprintf(stderr, "*1* cp = '%s'\n", cp);
+				// fprintf(iC_errFP, "*1* cp = '%s'\n", cp);
 				if ((cp = strtok(NULL, " ")) == NULL) break;	/* next token */
-				// fprintf(stderr, "*2* cp = '%s'\n", cp);
+				// fprintf(iC_errFP, "*2* cp = '%s'\n", cp);
 				if ((mp = strpbrk(cp, "=(")) != NULL) {
 				    *mp = '\0';			/* terminate token on ( or = */
-				    // fprintf(stderr, "*3* cp = '%s'\n", cp);
+				    // fprintf(iC_errFP, "*3* cp = '%s'\n", cp);
 				}
 				if (strcmp(*argv, cp) == 0) {
-				    fprintf(stderr, "%s: must not use same macro '%s' for -D or -C\n",
+				    fprintf(iC_errFP, "%s: must not use same macro '%s' for -D or -C\n",
 					iC_progname, *argv);
 				    goto error;
 				}
 				cp = strtok(NULL, " ");		/* -D -C -U or -V */
 			    }
 			}
-		    }
+		    } else goto missing;
 		    goto break2;
 #ifdef EFENCE
 		case 'E':
@@ -751,14 +831,51 @@ main(
 		    iC_xflag = inpNM[0];	/* test Electric Fence FREE */
 		    goto error;			/* SIGSEGV if EF_PROTECT_FREE  */
 #endif	/* EFENCE */
-		cerror:
-		default:
-		    fprintf(stderr,
-			"%s: unknown command line switch '%s'\n", iC_progname, *argv);
+#ifdef	TCP
+		case 'q':
+		    iC_debug |= DQ;	/* -q    quiet operation of all apps and iCserver */
+		    break;
+		case 'z':
+		    iC_debug |= DZ;	/* -z    block all STDIN interrupts for this app */
+		    break;
+		case 'R':
+		    /********************************************************************
+		     *  Run auxiliary app with rest of command line
+		     *  splice in the "-z" option to block STDIN interrupts in chained apps
+		     *  alternatively "-qz" option for quiet operation and to block STDIN
+		     *******************************************************************/
+		    if (! *++*argv) { --argc; if(! *++argv) goto maxErr; }
+		    *(argv-1) = *argv;	/* move app string to previous argv array member */
+		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+		    argv--;		/* start call with app string */
+		    argc = -argc - 1;	/* negative argc signals -R option */
+		    goto break3;
+		  maxErr:
+		    iC_maxErrCount = INT_MAX;	/* maximum error count very high */
+		    break;
+#endif	/* TCP */
+#if defined(RUN) || defined(TCP)
+		case '-':
+		    /********************************************************************
+		     *  Pass rest of command line to app as extra options
+		     *  use the first option switch if it comes directly after -- (--h ---h)
+		     *******************************************************************/
+		    if (*++*argv) {	/* --    rest are extra options for compiled app */
+			++argc;		/*       positive argc signals -- option */
+			if (**argv != '-') {
+			    --*argv;	/* --x  */
+			}		/*  ^v  *argv points here */
+			--argv;		/* ---x */
+		    }			/* -- -x equivalent to previous 2 versions */
+		    goto break3;
+#endif	/* RUN or TCP */
+		missing:
+		    fprintf(iC_errFP, "ERROR: %s: missing value after '-%1.1s'\n", iC_progname, ((*--argv)--, *argv));
+		    exit(1);
 		case 'h':
 		case '?':
 		error:
-		    fprintf(stderr, usage, iC_progname, IXD-1,
+		    fprintf(iC_errFP, usage, iC_progname, IXD-1,
 #if defined(RUN) || defined(TCP)
 		    IXD-1, MARKMAX,
 #ifdef	TCP
@@ -768,29 +885,32 @@ main(
 #endif	/* RUN or TCP */
 		    iC_ID);
 		    exit(1);
+		default:
+		    fprintf(iC_errFP, "WARNING: %s: unknown option -%c\n", iC_progname, **argv);
+		    break;
 		}
 	    } while (*++*argv);
 	    break2: ;
 	} else {
-#ifdef	WIN32
+#ifdef	TCP
+	  setInpFN:
+#endif	/* TCP */
 	    if (strlen(*argv)) {
+#ifdef	WIN32
 		inpFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 		strcpy(inpFN, *argv);
 		while ((cp = strchr(inpFN, '\\')) != 0) {
 		    *cp = '/';		/* convert '\' to '/' under WIN32 */
 		}
-	    }
 #else	/* not WIN32 */
-	    if (strlen(*argv)) inpFN = *argv;
+		inpFN = *argv;
 #endif	/* WIN32 */
+	    }
 #ifdef	TCP
 	    if (strcmp(iC_iccNM, "stdin") == 0) {
 		iC_iccNM = iC_emalloc(strlen(inpFN)+1);	/* +1 for '\0' */
 		strcpy(iC_iccNM, inpFN);
-		if ((cp = strrchr(iC_iccNM, '.')) != 0 &&
-		    cp[1] == 'i' &&
-		    cp[2] == 'c' &&
-		    cp[3] == '\0') {
+		if ((cp = strrchr(iC_iccNM, '.')) != 0 && strcmp(cp, ".ic") == 0) {
 		    *cp = '\0';		/* terminate at trailing extension .ic */
 		}
 	    }
@@ -800,24 +920,61 @@ main(
 #endif	/* TCP */
 	}
     }
+#if defined(RUN) || defined(TCP)
+   break3:
+    /********************************************************************
+     *  Extra option switches and other arguments have been isolated after
+     *  -R or alternatively option -- (cannot have both)
+     *
+     *  Extra options passed to iCbegin(iC_argc, iC_argv) in the same way
+     *  as the shell passes the initial arguments to main(int argc, char** argv).
+     *  if argc < 0 argv contains call + arguments from -R option
+     *******************************************************************/
+    if (argc == 0) argc = 1;	/* no arguments - pass iC_progname anyway */
+    if (argc >= 0 && inpFN) {
+	int	i;
+	*argv = iC_emalloc(i = strlen(iC_progname) + strlen(inpFN) + 2);
+	snprintf(*argv, i, "%s %s", iC_progname, inpFN);
+    }
+    iC_argc = argc;		/* actual global variables passed to iCbegin() */
+    iC_argv = argv;
+    if (iC_debug & 0200) fprintf(iC_outFP, "Extra arguments:\n"
+					   "argc %d	%s\n", argc, *argv);
+    if (argc < 0) argc = -argc; /* -R call + options */
+    while (--argc > 0) {
+	if (iC_argc > 0) { 	/* else -- + options */
+	    if (**++argv == '-') {
+		cp = *argv;		/* save *argv before modifying it */
+		++*argv;
+		do {
+		    switch (**argv) {
+		    case 'R':
+			if (!iC_argh) iC_argh = -32768;	/* stop acting on --h in this app */
+			break;
+		    case 'h':
+		    case '?':
+			iC_argh++;	/* block running iCserver before iCbegin() */
+		    default:
+			break;
+		    }
+		} while (*++*argv);
+		*argv = cp;		/* restore *argv after modifying it */
+	    }
+	} else {
+	    ++argv;
+	}
+	if (iC_debug & 0200) fprintf(iC_outFP, "	%s\n", *argv);
+    }
+    if (*++argv != NULL) {
+	fprintf(iC_errFP, "WARNING: extra arguments are not NULL terminated: '%s'\n", *argv);
+    }
+#endif	/* RUN or TCP */
 #if defined(RUN)
     if (outFN == 0 && (iC_maxIO < 0 || iC_maxIO > IXD)) {	/* I/O limit for run mode */
-	fprintf(stderr, "%s: -k %d exceeds %d for run mode\n", iC_progname, iC_maxIO-1, IXD-1);
+	fprintf(iC_errFP, "%s: -k %d exceeds %d for run mode\n", iC_progname, iC_maxIO-1, IXD-1);
 	goto error;
     }
 #endif	/* RUN */
-    if (iC_debug & 040000) {
-#ifdef	TCP
-	fprintf(stderr, "*** iC_hostNM = '%s' iC_portNM = '%s' iC_iccNM = '%s' iC_iidNM = '%s' iC_vcd = '%s' iC_micro = %d\n",
-	    iC_hostNM, iC_portNM, iC_iccNM, iC_iidNM, iC_vcd, iC_micro);
-#endif	/* TCP */
-	fprintf(stderr, "*** iC_Pflag = %d iC_Wflag = 0x%04x\n",
-	    iC_Pflag, iC_Wflag);
-	fprintf(stderr, "*** iC_defines = '%s' iC_Cdefines = '%s'\n",
-	    iC_defines, iC_Cdefines);
-	exit(0);			/* check all option processing only */
-    }
-    iC_debug &= 037777;			/* allow only cases specified */
     iFlag = 0;
     /********************************************************************
      *  Generate and open temporary files T1FN T2FN T3FN
@@ -918,7 +1075,7 @@ main(
 		    }
 		    fclose(excFP);
 		}
-	    } else {
+	    } else if (listFN == 0 && errFN == 0) {
 		Gate **		sTable;		/* pointer to Symbol Table */
 		Gate **		sTend;		/* end of Symbol Table */
 		/********************************************************************
@@ -945,13 +1102,13 @@ main(
 	 *******************************************************************/
 	if (r != 0) {
 	    ro = 7;				/* error in output */
-	    fprintf(stderr, OutputMessage[r < 4 ? r : 7], iC_progname, szNames[r]);
+	    fprintf(iC_errFP, OutputMessage[r < 4 ? r : 7], iC_progname, szNames[r]);
 	    r += 10;
 	    goto closeFiles;
 	}
     }
     if (r != 0) {
-	fprintf(stderr, OutputMessage[ro], iC_progname, szNames[r]);
+	fprintf(iC_errFP, OutputMessage[ro], iC_progname, szNames[r]);
     }
 closeFiles: ;
     if (iC_outFP && iC_outFP != stdout) {
@@ -1072,7 +1229,7 @@ iC_inversionCorrection(void)
 	    unlink(tempName) < 0 ||
 	    rename(listFN, tempName) < 0 /* inversion correction needed */
 	) {
-	    fprintf(stderr, "%s: rename(%s, %s) failed\n",
+	    fprintf(iC_errFP, "%s: rename(%s, %s) failed\n",
 		iC_progname, listFN, tempName);
 	} else {
 	    if (strlen(iC_path) == 0) {
@@ -1087,7 +1244,7 @@ iC_inversionCorrection(void)
 		unlink(tempName);
 	    } else {
 		perror("pplstfix");
-		fprintf(stderr, "%s: system(\"%s\") could not be executed $? = %d\n",
+		fprintf(iC_errFP, "%s: system(\"%s\") could not be executed $? = %d\n",
 		    iC_progname, exStr, r);
 	    }
 	}
@@ -1109,7 +1266,7 @@ immcc - the immediate-C to C compiler
 
  immcc [-agASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]
        [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
-       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>|-]
+       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>]
     -o <out> name of generated C output file
     -l <lst> name of list file  (default: none, '' is stdout) output:
              listing with logic expansion, net topology and statistics
@@ -1152,7 +1309,7 @@ immcc - the immediate-C to C compiler
      +20000  generate pre-compiled function blocks for init.c (BOOT_COMPILE)
 
     <src.ic> iC language source file (extension .ic)
-    -        or default: take iC source from stdin
+             default: take iC source from stdin
     -h       this help text
 
 =head1 DESCRIPTION

@@ -52,6 +52,7 @@ my %sortOrder = (	# determines in which order iCboxes ar autovivified
     IL => 6, QL => 7,
     IH => 8, QH => 9,
 );
+my @argv = ();
 
 ########################################################################
 #
@@ -62,7 +63,7 @@ my %sortOrder = (	# determines in which order iCboxes ar autovivified
 my $named = $0; $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<<<<< [-adgrktRSmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+    @<<<<<<< [-adgrktRSmTqzh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
 	$named
 	     [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
 	-s host	address of server - clients must specify the same address
@@ -87,20 +88,150 @@ Usage:
 	-S      trace send messages in Msg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T      extra static debug messages
+	-q      quiet - do not report clients connecting and disconnecting
+	-z      block keyboard input
+	-h	help, ouput this Usage text only
 	<list of equivalences>
 	    eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
 	<list of client calls>
 	    eg: 'iCbox X0-X3 X10' sort
 		if a client call has arguments, the call must be quoted
-	-h	help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.47 2015/09/29 06:55:10 jw Exp $
+$Id: iCserver,v 1.48 2015/11/06 06:31:56 jw Exp $
 .
 
-use vars qw($opt_a $opt_d $opt_g $opt_k $opt_r $opt_t $opt_R $opt_S $opt_T $opt_m $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
-use Getopt::Std;		# replace require "getopts.pl";
-getopts('adgkrtRSmTs:p:f:A:G:h');	# sets $opt_h if -h etc
+########################################################################
+#	Handle -f option - count leading options up to -f
+#	splice out -f and shift its file_name_argument into @runArgs
+########################################################################
+
+my ($argIndex, $blank, $file, @runArgs);
+$argIndex = $blank = 0;
+@runArgs = ();
+# print "0 \@ARGV = '@ARGV'\n";
+foreach (@ARGV) {
+    if (s/^-f(.*)$/$1/) {
+	$blank = 1 if $_ eq "";		# -f <file>
+	$file = "";			# or -f<file>
+	last;
+    } elsif (s/^(-[^spfAGf]+)f(.*)$/$1/) {
+	$file = $2;			# -abcf <file>
+	$blank = -1 if $file ne "";	# or -abcf<file>
+	$argIndex++;
+	last;
+    }
+    $argIndex++;
+}
+# no warnings;
+# print "1 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$file = '$file' $#ARGV\n";
+# use warnings;
+@runArgs = splice(@ARGV, $argIndex, 1 + $blank);
+if (defined $file) {
+    shift(@runArgs) if $blank > 0;
+    unshift(@runArgs, $file) if $file ne "";
+}
+# print "2 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n";
+$file = shift(@runArgs) ;
+# print "3 \@ARGV = '@ARGV'	\$file = '$file'\n";
+
+########################################################################
+#	Read optional INI file
+#	Quoted entries are retained as single tokens
+#	Comments in the INI file are started with #
+########################################################################
+
+if ($file) {
+    my $state = "P";		# P outside of comments and quotes
+    my @lookfors = ('"',  "'", " ", "\t");	# quotes and white space
+    my ($lookfor, $atom, $pos, %atoms, @newArgs, $arg);
+    open INI, $file or die "can't open INI file $file! $!";
+    while (<INI>) {		# read next entry from INI file into $_
+# print "4 $file: $_";
+	chomp;			# $_
+	s/\s*#.*$//;		# strip trailing # comment
+	s/\s*([=:,;.])\s*/$1/g;	# remove spaces around separators
+	########################################################################
+	#   Mark spaces in quoted strings with ASCII RS (\036) to make them a
+	#   single token for @newArgs = split(" ", $_); # use trusty state machine
+	########################################################################
+	%atoms = ();
+	@newArgs = ();
+	foreach $lookfor (@lookfors) {
+	    for ($pos = $[;
+		($pos = index($_, $lookfor, $pos)) >= $[;
+		$pos += length $lookfor) {
+		$atoms{ $pos } = $lookfor;	# key is position of atom found
+	    }
+	}
+	########################################################################
+	#   This algorithm ensures that the next relevant atom is checked
+	#   in the state machine and not one much later in the line
+	########################################################################
+	foreach $pos (sort { $a <=> $b } keys %atoms) {
+	    $atom = $atoms{ $pos };	# process atoms in sequence
+	    if ($state eq "S") {	# double quoted string
+		if ($atom eq '"' and
+		    ($pos <  1 or  substr($_, $pos-1, 1) ne "\\" or
+		    ($pos >= 2 and substr($_, $pos-2, 1) eq "\\"))) {
+		    $state = "P";	# end of double quoted string
+		}
+	    } elsif ($state eq "H") {	# single quoted string
+		if ($atom eq "'" and
+		    ($pos <  1 or  substr($_, $pos-1, 1) ne "\\" or
+		    ($pos >= 2 and substr($_, $pos-2, 1) eq "\\"))) {
+		    $state = "P";	# end of single quoted string
+		}
+	    } elsif ($atom eq '"') {	# $state eq "P"
+		$state = "S";		# start of double quoted string
+	    } elsif ($atom eq "'") {
+		$state = "H";		# start of single quoted string
+	    }
+	    if (($atom eq " " or $atom eq "\t") and		# white space
+		($state eq "S" or $state eq "H")) {		# in quoted string
+		substr($_, $pos, length($atom)) = "\036";	# replace ASCII RS
+	    }
+	}
+	@newArgs = split(" ", $_);
+	foreach $arg (@newArgs) {
+	    $arg =~ s/\036+/ /g;	# replace space for ASCII RS after split()
+	}
+	push(@ARGV, @newArgs);		# concatenate new Args to existing ARGV
+    }
+    close INI;
+}
+# print "5 ARGV: ", join(':', @ARGV), ":\n"; exit;
+
+########################################################################
+#	Handle all remaining -switch options and non-switch options
+########################################################################
+
+use vars qw($opt_z $opt_a $opt_d $opt_g $opt_k $opt_r $opt_t $opt_R $opt_S);
+use vars qw($opt_m $opt_T $opt_q $opt_s $opt_p $opt_f $opt_A $opt_G $opt_h);
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    'z'   => \$opt_z,			# -z blocks STDIN
+    '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
+    'a'   => \$opt_a,
+    'd'   => \$opt_d,
+    'g'   => \$opt_g,
+    'k'   => \$opt_k,
+    'r'   => \$opt_r,
+    't'   => \$opt_t,
+    'R'   => \$opt_R,
+    'S'   => \$opt_S,
+    'm'   => \$opt_m,
+    'T'   => \$opt_T,
+    'q'   => \$opt_q,
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'f=s' => \$opt_f,
+    'A=s' => \$opt_A,
+    'G=s' => \$opt_G,
+    'h'   => \$opt_h,
+);
+scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
+
 $| = 1 if $opt_t or $opt_m;	# otherwise STDOUT is not flushed if piped
 
 if ($opt_h) {
@@ -112,53 +243,21 @@ if (defined $opt_A) {
     $opt_A =~ s/iCbox/iCbox -d/ if $opt_d;
 } elsif (defined $opt_d) {
     $opt_a = 1;
-    $opt_A = 'perl -S iCbox -d';
+    $opt_A = 'iCbox -d';
 } else {
-    $opt_A = 'perl -S iCbox';
+    $opt_A = 'iCbox';
 }
 if (defined $opt_G) {
     $opt_g = 1;
 } else {
-    $opt_G = 'perl -S iClive';
+    $opt_G = 'iClive';
 }
 
-########################################################################
-#
-#	Analyse equivalences and client call parameters
-#
-#	Equivalences consist of two or more identifiers separated by an
-#	equal sign (=).
-#
-#	Client calls consist of an identifier optionally followed by a
-#	spaced separated list of parameters.
-#
-#	Identifiers match /[\.\d\w_]+/
-#
-#	Individual equivalences and client calls must be written without
-#	spaces in the command line unless they are quoted. In the optional
-#	INI file which can be read with the -f option, each equivalence
-#	and client call must be placed in one line. White spaces may be
-#	used in equivalence lines and must be used to separate a client
-#	call from its parameters. Client calls need not be quoted in the
-#	INI file. If quoted it is stripped before pushing on @ARGV.
-#
-#	Comments are started with any other character than .\d\w_
-#
-########################################################################
-
-if ($opt_f) {
-    open IN, $opt_f or die "can't open ID file $opt_f! $!";
-    while (<IN>) {		# read next entry from ID file into $_
-	print "$opt_f: $_" if $opt_t;
-	chomp;			# $_
-	if (/^\s*(["']?)([.\d\w_][^"']*)/) {
-	    push(@ARGV, $2);	# put next ID on end of @ARGV
-	}
-	## any garbage in the file is skipped - treated as comments
-    }
-    close IN;
+if ($opt_q) {
+    $opt_q = 'q';			# quiet option
+} else {
+    $opt_q = '';			# define $opt_q
 }
-print "ARGV:", join(':', @ARGV), ":\n" if $opt_t and @ARGV;
 
 my ($t0, $t1);
 if ($opt_a or $opt_m) {
@@ -194,23 +293,37 @@ my $port = defined $opt_p ? $opt_p : 8778;
 
 Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
 Msg->new_server($host, $port, \&login_proc);
-print STDERR "$named created. Waiting for events\n";
+print STDERR "$named created. Waiting for events\n" unless $opt_q;
 
 ########################################################################
 #
+#	Analyse equivalences and client call parameters
+#
+#	Equivalences consist of two or more identifiers separated by an
+#	equal sign (=).
+#
+#	Individual equivalences must be written without spaces in the
+#	command line. In the optional INI file which can be read with
+#	the -f option, white spaces may be used in equivalence lines.
+#
+#	Client calls consist of an identifier optionally followed by a
+#	space separated list of parameters. Unless the client call is
+#	a single identifier it must be quoted in the usual shell manner
+#	both in the command line and the optional INI file.
+#
 #	Allocate equivalences and start clients named in argument list
 #
-#	start each argument as a separate process after splicing in
+#	Start each client call as a separate process after splicing in
 #	optional global switches -p <port> -t -m
 #
 ########################################################################
 
 my ($argv, $pid);
 
-if (scalar @ARGV > 1) {
+if (scalar @argv > 1) {
     $AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with more than 1 process
 }
-while ($argv = shift @ARGV) {
+while ($argv = shift @argv) {
     if ($argv =~ /^\s*([\.\d\w_][-\.\d\w_]*)\s*=/) {	# recognise equivalence
 	my ($nm, $nn, $ch);
 	$nm = $1;
@@ -236,7 +349,35 @@ while ($argv = shift @ARGV) {
     }
 }
 
+########################################################################
+#
+#	Register an event handler callback for STDIN to recognise
+#	q or ctrl+D from the keyboard to terminate the program
+#	unless $opt_z (-z) which blocks STDIN if called in a chain.
+#
+#	Sit in an infinite loop dispatching incoming events.
+#	if connected to iCserver
+#
+########################################################################
+Msg->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_z;
 Msg->event_loop();
+
+####### End of main program ############################################
+
+########################################################################
+#
+#	Read from STDIN
+#
+########################################################################
+
+sub readStdin {
+    my $line = readline(STDIN);
+    if (not defined $line or $line =~ m/^q/) {	# ctrl+D (EOF) or q
+	shutdown_server("stopped from terminal");
+    } else {
+	warn("*** WARNING: $named: not recognised: $line");
+    }
+} # readStdin
 
 ########################################################################
 #
@@ -248,28 +389,30 @@ sub exec_process {
     my ($argv) = @_;
     print "exec_process '$argv'\n" if $opt_t;
     FORK: {
-	select undef, undef, undef, 1 if defined $pid;
+	select undef, undef, undef, 1 if defined $pid;	# delay if previous fork
 	return if ($pid = fork);
 	if (defined $pid) {	# $pid is zero if defined
 	    ## dispatch child process
+	    $argv =~ s/['"]//g;
 	    my @call = split " ", $argv;
 	    my $n = 1;
 	    if ($call[0] eq "perl") {	# only needed for WIN32
 		 1 while $call[$n++] =~ /^-/;
 	    }				# end of code for WIN32
-	    splice @call, $n, 0, '-p', $opt_p if defined $opt_p;
-	    splice @call, $n, 0, '-t' if defined $opt_t;
-	    splice @call, $n, 0, '-m' if defined $opt_m;
-	    print STDERR "@call\n";
+	    splice @call, $n, 0, "-p", $opt_p if defined $opt_p;
+	    splice @call, $n, 0, "-t" if defined $opt_t;
+	    splice @call, $n, 0, "-m" if defined $opt_m;
+	    splice @call, $n, 0, "-z$opt_q";
+	    print STDERR "\$ @call\n" unless $opt_q;
 	    exec @call;
-	    exit;		# child process cannot be executed
+	    die "$named: returned from exec $call[0] ???: $!\n";
 	} elsif ($! =~ /No more process/) {
 	    ## EAGAIN, recoverable fork error
 	    select undef, undef, undef, 5;
 	    redo FORK;
 	} else {
 	    ## weird fork error
-	    die "$named: Can't fork: $!\n";
+	    die "$named: can't fork ???: $!\n";
 	}
     }
 } # exec_process
@@ -283,13 +426,13 @@ sub exec_process {
 
 sub shutdown_server {
     my $signame = shift;
-    my (@clients, $name, $con);
+    my ($name, $con);
     if ($signame =~ /^INT/) {
 	$signame = "Interrupt from keyboard";
     }
-    print STDERR "\n$signame - stop $named\n";
+    print STDERR "\n$signame - stop $named\n" unless $opt_q;
     foreach $name (keys %Clients) {
-	print STDERR "Shut down $name\n";
+	print STDERR "Shut down $name\n" unless $opt_q;
 	$con = $Clients{$name};
 	$con->send_now("");		# send null message to shut down client
     }
@@ -319,7 +462,7 @@ sub catch_zap {
 
 sub login_proc {
     my ($conn, $host, $port) = @_;
-    print STDERR "Connection $host:$port at $named\n";
+    print STDERR "Connection $host:$port at $named\n" unless $opt_q;
     return \&rcvd_msg_from_client;
 } # login_proc
 
@@ -374,7 +517,7 @@ sub disconnect {
 	}
 	delete $ClientNames{$conn};
 	delete $Clients{$sender};
-	print "Disconnected '$sender'\n";
+	print "Disconnected '$sender'\n" unless $opt_q;
 	$numberOfConnections--;
 	if ($numberOfConnections <= 0) {
 	    ############################################################
@@ -537,7 +680,7 @@ sub pushReceiverData {
 
 sub autoVivify {
     if (scalar keys %AutoVivify) {
-	my $autovivify = join ' ', sort {
+	my $autovivify = join " ", sort {
 	    my ($ha, $na, $za, $hb, $nb, $zb);
 	    $a =~ /([A-Z]+)(\d+)(.*)/; $ha = $sortOrder{$1}; $na = $2; $za = $3;
 	    $ha = $1 if not defined $ha;
@@ -677,7 +820,7 @@ use warnings;
 		    ALREADY_REGISTRERD:
 		    $numberOfConnections++;
 		    $regFlag = 1;			# registration string has started
-		    print "$name: client no. $numberOfConnections registering now\n" if $opt_t;
+		    print STDERR "$name: client no. $numberOfConnections registering now\n" unless $opt_q;
 		}
 		elsif ($msg1 =~ /^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?/) {
 		    ############################################################
@@ -726,6 +869,7 @@ use warnings;
 				not $EquivChannels{$name}) {	# not even first for senders
 				my $iCbox_param = $bits ? "$name,$bits" : $name;
 				$AutoVivify{$iCbox_param}++;
+				$ioName = "$ClientNames{$conn}-IO";
 				print "Autovivify sender '$iCbox_param'\n" if $opt_T;
 			    }
 			    if ($opt_g and			# C_channel only as trigger
@@ -784,6 +928,7 @@ use warnings;
 				if ($base) {
 				    my $iCbox_param = $bits ? "$base,$bits" : $base;
 				    $AutoVivify{$iCbox_param}++;
+				    $ioName = "$ClientNames{$conn}-IO";
 				    print "Autovivify receiver '$iCbox_param'\n" if $opt_T;
 				}
 			    }
@@ -885,7 +1030,6 @@ use warnings;
 			$iniString = '';
 		    }
 		    if (scalar keys %AutoVivify or $AutoDebug) {
-			$ioName = "$sender-IO";
 			ualarm($AutoDelay);		# defer the action to allow more registrations
 		    }
 		}
@@ -923,7 +1067,7 @@ iCserver - the central server for iC clients
 
 =head1 SYNOPSIS
 
- iCserver [-adgrktRSmTh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
+ iCserver [-adgrktRSmTqzh][ -s <host>][ -p <port>][ -f <file>][ -A <cmd>]
           [ -G <dbg>][ <list of equivalences>][ <list of client calls>]
     -s host address of server - clients must specify the same address
             unless (default '0.0.0.0' which accepts any client host)
@@ -947,12 +1091,14 @@ iCserver - the central server for iC clients
     -S      trace send messages in Msg.pm
     -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages
+    -q      quiet - do not report clients connecting and disconnecting
+    -z      block keyboard input
+    -h      help, ouput this Usage text only
     <list of equivalences>
         eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
     <list of client calls>
         eg: 'iCbox X0-X3 X10' sort
             if a client call has arguments, the call must be quoted
-    -h      help, ouput this Usage text only
 
 =head1 DESCRIPTION
 
@@ -997,10 +1143,11 @@ Additional functionality in iCserver.
     making them equivalent or interconnecting them.
 
     This functionality is required when the output of one iC control
-    application is to be input for another instance if the same
-    control application.  Several equivalences may be specified. The
-    order of the equivalence is not relevant (it is not an assignment).
-    For correct autovivification outputs should be named first though.
+    application is to be the input for another iC control application
+    (often a different instance of the same application).  Several
+    equivalences may be specified. The order of the equivalence is not
+    relevant (it is not an assignment). For correct autovivification
+    outputs should be named first though.
 
     Example 1:
         iCserver QX7-0=IX7-1 QX7-1=IX7-0
@@ -1063,8 +1210,8 @@ Additional functionality in iCserver.
 
     Client calls consist of a program path optionally followed by a
     space separated list of parameters.  Calls with parameters must
-    be quoted on the command line to make them a single parameter
-    for iCserver.
+    be quoted on the command line and the optional INI file to make
+    them a single parameter for iCserver.
 
     Example 3:
         iCserver 'iCbox -n sorter-IO IX0 QX0 QX1' sorter
@@ -1085,23 +1232,19 @@ Additional functionality in iCserver.
         <other_options>
 
     Example same as Example 1, 2 and 3 above with extra options:
-        QX7-0 = IX7-1
-        QX7-1 = IX7-0
-        IX8 = IX8-0 = IX8-1
-        IX9 = IX9-0 = IX9-1
-        iCbox -n sorter-IO IX0 QX0 QX1
-        sorter
+      QX7-0 = IX7-1 QX7-1 = IX7-0 # equivalences joining 2 instances
+      IX8 = IX8-0 = IX8-1         # input equivalences
+      IX9 = IX9-0 = IX9-1
+      'iCbox -n sorter-IO IX0 QX0 QX1' # quoted client call
+      sorter                      # plain client call
+      -ak                         # extra switches for iCserver
 
     Individual equivalences and client calls must be written without
-    spaces in the command line unless they are quoted. In the optional
-    INI file which can be read with the -f option, each equivalence
-    and client call must be placed in a separate line. White spaces
-    may be used in equivalence lines and must be used to separate a
-    client call path from its parameters. Client calls need not be
-    quoted in the INI file.
+    spaces in the command line unless client calls are quoted.
+    In the INI file white spaces before and after the = may be
+    used in equivalences
 
-    Comments are started with any other character than [.\d\w_],
-    usually #
+    Comments in the INI file are started with #
 
  d) Autovivification
     -a option - automatic startup of one or more iCbox

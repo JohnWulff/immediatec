@@ -1,4 +1,4 @@
-$Id: manifest,v 1.26 2015/09/29 06:55:10 jw Exp $
+$Id: manifest,v 1.27 2015/10/16 12:33:47 jw Exp $
 README
 doc/html/iC*.gif
 doc/html/iC*.html
@@ -95,6 +95,7 @@ src/misc.c
 src/mklst
 src/ml
 src/outp.c
+src/p_channel.c
 src/pawk.pl
 src/perlinstall
 src/pfcad.ic

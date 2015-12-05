@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.58 2015/09/29 06:55:10 jw Exp $";
+"@(#)$Id: rsff.c,v 1.59 2015/12/04 01:46:49 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -522,7 +522,7 @@ iC_i_ff2(Gate * gm, int typ)			/* called via output lists */
  *
  *******************************************************************/
 
-void
+static void
 i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 {
     unsigned int	mask;			/* action bit mask */
@@ -539,7 +539,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 		gm->gt_mcnt, mask);
 	    iC_error_flag |= 2;			/* cannot execute with this error */
 #if YYDEBUG && !defined(_WINDOWS)
-	} else if (iC_debug & 0100) {
+	} else if ((iC_debug & (DQ|0100)) == 0100) {
 	    fprintf(iC_outFP, "\n	    %c	%s:\t%.4x inputs",
 		opt, gm->gt_ids, gm->gt_mcnt);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */

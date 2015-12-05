@@ -1,8 +1,8 @@
 static const char icend_c[] =
-"@(#)$Id: icend.c,v 1.3 2009/08/21 06:05:03 jw Exp $";
+"@(#)$Id: icend.c,v 1.4 2015/10/31 03:40:08 jw Exp $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2015  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,18 +16,19 @@ static const char icend_c[] =
  *******************************************************************/
 
 /********************************************************************
- *  The following initialisation function is one of two empty functions
+ *  The following termination function is one of two empty functions
  *  in the libict.a support library. The other is iCbegin().
- *  Either or both may be implemented in a literal block in iC source(s),
+ *  Either or both may be implemented in a literal block in an iC source,
  *  in which case those function will be linked in preference.
  *******************************************************************/
 
 /********************************************************************
- *  iCend() can be used to free allocated memory etc.
+ *  iCend() can be used to free allocated memory etc.  It may also
+ *  contain a wait() call for any processes forked in iCbegin()
  *******************************************************************/
 
 int
 iCend(void)				/* default termination function */
 {
-    return 0;				/* does nothing */
+    return -1;				/* does nothing */
 } /* iCend */

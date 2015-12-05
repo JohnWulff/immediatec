@@ -59,19 +59,19 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.39 2015/09/29 06:55:10 jw Exp $' >&2
+    echo '	$Id: makeAll,v 1.40 2015/10/16 12:33:47 jw Exp $' >&2
 }
 
 makeLib ()
 {
-    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O link.$O rsff.$O scan.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O Make_tmp 2> /dev/null
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O p_channel.$O icend.$O tcpc.$O link.$O rsff.$O scan.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O Make_tmp 2> /dev/null
     if [ -d LibObjs ]; then
 	mv LibObjs/* .
     else
 	mkdir LibObjs
     fi
     make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" libict.a
-    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O LibObjs
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O p_channel.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O LibObjs
     if [[ "$o" =~ " -DRASPBERRYPI" ]]; then
 	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O LibObjs
     fi
@@ -80,14 +80,14 @@ makeLib ()
 
 makeShared ()
 {
-    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O Make_tmp 2> /dev/null
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O p_channel.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O Make_tmp 2> /dev/null
     if [ -d SharedObjs ]; then
 	mv SharedObjs/* .
     else
 	mkdir SharedObjs
     fi
     make OPT="-fPIC -DLOAD -DTCP$d$e$o$s$y" CFLAGS="-O2$W" libict.so
-    mv load.$O misc.$O scid.$O ict.$O icbegin.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O SharedObjs
+    mv load.$O misc.$O scid.$O ict.$O icbegin.$O p_channel.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O SharedObjs
     if [[ "$o" =~ " -DRASPBERRYPI" ]]; then
 	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O SharedObjs
     fi
@@ -96,27 +96,27 @@ makeShared ()
 
 makeIcr ()
 {
-    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
     if [ -d IcrObjs ]; then
 	mv IcrObjs/* .
     else
 	mkdir IcrObjs
     fi
     make OPT="-DRUN$r$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" icr
-    mv comp.$O genr.$O gram.$O icr.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
+    mv comp.$O genr.$O gram.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeIct ()
 {
-    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
     if [ -d IctObjs ]; then
 	mv IctObjs/* .
     else
 	mkdir IctObjs
     fi
     make OPT="-DTCP$t$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" ict
-    mv comp.$O genr.$O gram.$O ict.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
+    mv comp.$O genr.$O gram.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
 

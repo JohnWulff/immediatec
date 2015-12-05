@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.83 2015/06/05 07:44:26 jw Exp $";
+"@(#)$Id: genr.c,v 1.84 2015/10/16 12:33:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2443,8 +2443,8 @@ delayOne(List_e * tp)
 
 /********************************************************************
  *
- *	For 'strict' processing check parameter count in 'cCall'
- *	and clean away dummy list elements produced in 'cList'
+ *	Check parameter count in 'cCall' and clean away dummy list
+ *	elements produced in 'cList'
  *
  *	Algorithm:
  *	The first link in 'cParams' (if there is one) contains the
@@ -2464,62 +2464,63 @@ delayOne(List_e * tp)
  *******************************************************************/
 
 List_e *
-cCallCount(Symbol * cName, List_e * cParams)
+cCallCount(Symbol * cName, List_e * cParams, int pcnt)
 {
-    if (iC_Sflag) {
-	List_e *	lp;
-	List_e **	lpp;
-	Symbol *	sp;
-	int		pcnt = 0;
+    List_e *	lp;
+    List_e **	lpp;
+    Symbol *	sp;
 
-	if ((lp = cParams) != 0) {
-	    sp = lp->le_sym;
-	    assert(sp);
-	    pcnt = lp->le_val;
-	    for (lpp = &sp->u_blist; (lp = *lpp) != 0; ) {
-		if (lp->le_sym == 0) {
-		    *lpp = lp->le_next;		/* remove dummy link from list */
-		    sy_pop(lp);
-		} else {
-		    lpp = &lp->le_next;		/* next list element */
-		}
-	    }
-	    if (sp->u_blist == 0) {		/* sp has only links which have been popped */
-		freeTemp(cParams);		/* bypass sp on templist and delete cParams and sp */
-		cParams = 0;
+    if ((lp = cParams) != NULL) {
+	sp = lp->le_sym;
+	assert(sp);
+	for (lpp = &sp->u_blist; (lp = *lpp) != 0; ) {
+	    if (lp->le_sym == 0) {
+		*lpp = lp->le_next;		/* remove dummy link from list */
+		sy_pop(lp);
 	    } else {
-		cParams->le_val = 0;
+		lpp = &lp->le_next;		/* next list element */
 	    }
 	}
-#if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "cCall: %s has %d parameters\n", cName->name, pcnt);
-	    fflush(iC_outFP);
-	}
-#endif
-	if (cName->type == UDF) {
-	    cName->v_cnt = pcnt;		/* UNDEF stop more error messages */
-	    ierror("strict: call of an undeclared C function or macro:", cName->name);
-	} else
-	if (pcnt != cName->v_cnt) {
-	    char	tempBuf[TSIZE];		/* CNAME */
-	    snprintf(tempBuf, TSIZE, "%s %d (%d)", cName->name, pcnt, cName->v_cnt);
-	    ierror("strict: call parameter count does not match C function declaration:", tempBuf);
+	if (sp->u_blist == 0) {			/* sp has only links which have been popped */
+	    freeTemp(cParams);			/* bypass sp on templist and delete cParams and sp */
+	    cParams = NULL;
+	} else {
+	    cParams->le_val = 0;
 	}
     }
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "cCall: %s has %d parameters\n", cName->name, pcnt);
+	fflush(iC_outFP);
+    }
+#endif
     if (cName->type == UDF) {
 	cName->type  = CWORD;			/* no longer an imm variable */
 	cName->u_val = CNAME;			/* yacc type */
+	cName->v_cnt = pcnt;			/* UNDEF stop more error messages */
+	if (iC_Sflag) ierror("strict: call of an undeclared C function or macro:", cName->name);
+    } else
+    if (pcnt != cName->v_cnt) {
+	char	tempBuf[TSIZE];			/* CNAME */
+	snprintf(tempBuf, TSIZE, "%s %d (%d)", cName->name, pcnt, (int)cName->v_cnt);
+	if (iC_Sflag) {
+	    ierror("strict: call parameter count does not match extern C declaration:", tempBuf);
+	} else {
+	    warning("call parameter count does not match extern C declaration:", tempBuf);
+	}
+    }
+    if (pcnt == 0 && (iC_Wflag & W_DEPRECATED_LOGIC)) {
+	warning("C function will not fire this expression:", cName->name);
     }
     return cParams;
 } /* cCallCount */
 
 /********************************************************************
  *
- *	For 'strict' processing count parameters in 'cList'
- *	If 'aexpr == 0' generate a dummy link with a null pointer
+ *	Count parameters in 'cList'
+ *	If 'aexpr == NULL' generate a dummy link with a null pointer
  *	in le_sym for transporting pcnt in le_val. This link will
- *	be removed in 'cCall'
+ *	be removed in 'cCall' - actually cCallCount()
  *	If the first parameter is a dummy (aexpr == 0), a dummy
  *	temp Symbol is put on templist by op_push(), which must
  *	also be removed in 'cCall' if all other parameters are dummys
@@ -2531,26 +2532,22 @@ cListCount(List_e * cPlist, List_e * aexpr)
 {
     int		pcnt = 0;
 
-    if (iC_Sflag) {
-	if (cPlist) {
-	    pcnt = cPlist->le_val;	/* count from cPlist before sy_pop in op_push */
-	    cPlist->le_val = 0;		/* restore so that expression is correct */
-	}
-	if (aexpr == 0) {
-	    aexpr = sy_push(0);		/* dummy link for counting */
-	}
+    if (cPlist) {
+	pcnt = cPlist->le_val;	/* count from cPlist before sy_pop in op_push */
+	cPlist->le_val = 0;		/* restore so that expression is correct */
+    }
+    if (aexpr == NULL) {
+	aexpr = sy_push(NULL);		/* dummy link for counting */
     }
     aexpr = op_push(cPlist, ARN, op_force(aexpr, ARITH));
-    if (iC_Sflag) {
-	assert(aexpr);
-	aexpr->le_val = pcnt + 1;
+    assert(aexpr);
+    aexpr->le_val = pcnt + 1;
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "cPlist: parameter %d\n", aexpr->le_val);
-	    fflush(iC_outFP);
-	}
-#endif
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "cPlist: parameter %d\n", aexpr->le_val);
+	fflush(iC_outFP);
     }
+#endif
     return aexpr;
 } /* cListCount */
 

@@ -34,13 +34,16 @@ my @ArgNames;		# stores IO names and initialisers in argument list order
 my @ChannelNames;	# stores IO names with instance for each registered channel
 my @ChannelsIq;		# stores previous value for all IWx inputs
 my %IONames;		# stores channel for each IO name (aux use in initial pass)
+my @plain_opt_I;		# stores -I ids without :tid
 my $UnitRegistrations;	# stores the registration string
 my @thermometers;	# stores thermometer ID, pointer to rolling mean and channel
 my %thermometerIDs;	# used in argument analysis
 my %thermometerCHs;	# addresses for storing channel in registration
 my @Atx100;		# rolling mean for each thermometer, initially undef
 my @Apx100;		# previous output value for each thermometer
-my ($iec, $tid, $n_thermometers, $thermometerRef, $argNameRef, $ix);
+my @argv = ();
+my ($iec, $tid, $id, $n_thermometers, $thermometerRef, $argNameRef, $ix);
+%IONames = ();
 
 ########################################################################
 #
@@ -51,62 +54,144 @@ my ($iec, $tid, $n_thermometers, $thermometerRef, $argNameRef, $ix);
 my $named = untaint($0); $named =~ s#.*[/\\]##;
 format STDERR =
 Usage:
-    @<<<<<< [-wdlCFmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-	$named
-      [ -o <out>][ -r <time>][ -W <GPIO>][ -f <file>]
-      [ <IEC>[-<IEC>|:<tid>][-<inst>]] ...]
+ @<<<<<< [-wdlCFmtTxqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    $named
+         [ -o <out>][ -r <time>][ -W <GPIO>][ -I <id[:tid]> ...][ -d <i>]
+         [ <IEC>[-<IEC>|:<tid>][-<inst>] ...]
+         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     DIRECT OUTPUT OPTIONS (default no iC output unless IEC's are specified)
-	-w	write temperatures to terminal
-	-o out	write temperatures to file <out>
-	-d	write date and time with output
+        -w      write temperatures to terminal
+        -o<out> write temperatures to file <out>
+        -d      write date and time with output
+        -I <id> write id before new temperature eg 'inside' or 'outside'
+            alternatively
+        -I <id:tid> individual ids may be preceded by the thermometer id or
+                part of it; eg -I inside:28-0000062e8239 or -I inside:239
+                (default: thermometer ids in ascending numerical order).
+                Note: any -I <id...> option implies -w
     COMMON OPTIONS
-	-C	output temparature in 1/10th degrees Centigrade (default)
-	-F	output temparature in 1/10th degrees Fahrenheit
-	-r time	measurement repetition <time> in seconds (default 60 sec)
-	-W GPIO number used by the w1-gpio kernel module (default 4)
-	-f file read additional parameters from this <file>
+        -C      output temparature in 1/10th degrees Centigrade (default)
+        -F      output temparature in 1/10th degrees Fahrenheit
+        -r time measurement repetition <time> in seconds (default 60 sec)
+        -W GPIO number used by the w1-gpio kernel module (default 4)
     iC OUTPUT OPTIONS
-	IEC	IW0 IW1 IW2 ... (default IEC is IW0 etc unless -w -o -d -l)
-	    A range of IEC's can be specified with -; eg IW0-IW3
-	    alternatively
-	IEC:tid	individual IECs may be followed by the thermometer
-	    identification or part of it; eg IW0:28-0000062e8239 or IW0:239
-	    (default: thermometers connected in ascending numerical order).
-	IEC-inst Each IEC can be followed by -<inst>, where <inst> consists
-		of up to 3 numeric digits (usually 1 digit).
-		Such an appended instance code takes precedence over the
-		general instance specified with the -i <inst> (see below).
-	-s host	host name of iCserver    (default 'localhost')
-	-p port	service port of iCserver (default '8778')
-	-n name	registration name        (default first full IEC)
-	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
+        IEC     IW0 IW1 IW2 ... (default IEC is IW0 etc unless -w -o -d -l)
+                A range of IEC's can be specified with -; eg IW0-IW3
+            alternatively
+        IEC:tid	individual IECs may be followed by the thermometer id or
+                part of it; eg IW0:28-0000062e8239 or IW0:239
+                (default: thermometers connected in ascending numerical order).
+        IEC-inst Each IEC can be followed by -<inst>, where <inst> consists
+                of up to 3 numeric digits (usually 1 digit).
+                Such an appended instance code takes precedence over the
+                general instance specified with the -i <inst> (see below).
+        -S server +options+equivalences  (default 'iCserver -ak')
+        -s host host name of iCserver    (default 'localhost')
+        -p port service port of iCserver (default '8778')
+        -n name registration name        (default first full IEC)
+        -i inst instance ID for this iCtherm (1 to 3 numeric digits)
 				    $named
     DEBUG OPTIONS
-	-l	list connected thermometer identifications
-	-m	display elapsed time in seconds and microseconds
-	-t	trace debug messages
-	-R      trace rcv messages in Msg.pm
-	-S      trace send messages in Msg.pm
-	-T	extra static debug messages
-	-x	exit after analyzing input parameters
-	-h	help, ouput this Usage text only
-Copyright (C) 2014  John E. Wulff		<immediateC@gmail.com>
-							  '@'
-$Id: iCtherm,v 1.3 2015/09/29 06:55:10 jw Exp $
+        -l      list connected thermometer identifications
+        -m      display elapsed time in seconds and microseconds
+        -t      trace debug messages
+	-d <i>  trace 1=send 2=rcv 3=both messages in Msg.pm
+        -T      extra static debug messages
+        -x      exit after analyzing input parameters
+	-q      quiet - do not report clients connecting and disconnecting
+	-z      block keyboard input
+        -h      help, ouput this Usage text only
+    AUXILIARY app
+        -R <app ...> run auxiliary app followed by -z and its arguments
+                     as a separate process; -R ... must be last arguments.
+Copyright (C) 2014  John E. Wulff              <immediateC@gmail.com>
+							'@'
+$Id: iCtherm,v 1.4 2015/11/06 10:43:33 jw Exp $
 .
 
-use vars qw($opt_w $opt_d $opt_o $opt_l $opt_C $opt_F $opt_m $opt_t $opt_R $opt_S $opt_T);
-use vars qw($opt_s $opt_p $opt_n $opt_i $opt_r $opt_W $opt_f $opt_x $opt_h);
-use Getopt::Std;
-getopts('wdo:lCFmtRSTxs:p:n:i:r:W:f:h');	# sets $opt_h if -h etc
+########################################################################
+#	Handle -R option - count leading options up to -R
+#	splice -R to end - move app and remaining arguments to @runArgs
+########################################################################
+
+my ($argIndex, $blank, $app, @runArgs);
+$argIndex = $blank = 0;
+@runArgs = ();
+# print "0 \@ARGV = '@ARGV'\n";
+foreach (@ARGV) {
+    if (s/^-R(.*)$/$1/) {
+	$blank = 1 if $_ eq "";		# -R
+	$app = "";			# or -Rapp
+	last;
+    } elsif (s/^(-[^odISspnirWR]+)R(.*)$/$1/) {
+	$app = $2;			# -abcR or -abcRapp
+	$argIndex++;
+	last;
+    }
+    $argIndex++;
+}
+# no warnings;
+# print "1 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$app = '$app' $#ARGV\n";
+# use warnings;
+@runArgs = splice @ARGV, $argIndex;
+if (defined $app) {
+    shift(@runArgs) if $blank;
+    unshift(@runArgs, $app) if $app ne "";
+}				# append a -z$opt_q later to block STDIN
+# print "2 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n"; exit;
+
+########################################################################
+#	Handle all remaining -switch options and non-switch options
+########################################################################
+
+use vars qw($opt_ $opt_w $opt_o $opt_d @opt_I $opt_l $opt_C $opt_F $opt_m $opt_t $opt_T);
+use vars qw($opt_q $opt_z $opt_S $opt_s $opt_p $opt_n $opt_i $opt_r $opt_W $opt_x $opt_X $opt_h);
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    ''    => \$opt_,			# lone - blocks STDIN
+    '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
+    'w'   => \$opt_w,
+    'o=s' => \$opt_o,
+    'd:i' => \$opt_d,		# -d # output date -d1 # trace send -d2 # trace recv
+    'I=s' => \@opt_I,		# -I option may occurr more than once
+    'l'   => \$opt_l,
+    'C'   => \$opt_C,
+    'F'   => \$opt_F,
+    'm'   => \$opt_m,
+    't'   => \$opt_t,
+    'T'   => \$opt_T,
+    'q'   => \$opt_q,
+    'z'   => \$opt_z,
+    'S=s' => \$opt_S,
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'n=s' => \$opt_n,
+    'i=i' => \$opt_i,
+    'r=i' => \$opt_r,
+    'W=i' => \$opt_W,
+    'x'   => \$opt_x,
+    'X'   => \$opt_X,
+    'h'   => \$opt_h,
+);
+scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
+print "\@argv = '@argv'	\@runArgs = '@runArgs'\n" if $opt_T;
+
+########################################################################
+
+exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
-
 my ($t0, $t1, $sec, $usec);
 if ($opt_m) {
     $t0 = [gettimeofday];	# start of program
+}
+
+if ($opt_q) {
+    $opt_q = 'q';		# quiet option
+} else {
+    $opt_q = '';		# define $opt_q
 }
 
 $opt_F = undef	if $opt_C;	# Centigrade has precedence
@@ -115,14 +200,15 @@ if ($opt_o) {
     open STDOUT, ">$opt_o" or die "*** ERROR: $named: can't redirect stdout to '$opt_o': $!";
     $opt_w = 1;			# -o implies -w
 }
-if ($opt_d) {
-    $opt_w = 1;			# -d implies -w
+if ((defined $opt_d and $opt_d == 0) or @opt_I) {
+    $opt_w = 1;			# -d or any -I <id...> implies -w
 }
 if (defined $opt_W) {
     $opt_W < 32 or die "*** ERROR: $named: GPIO $opt_W is not valid for the kernel module w1-gpio - cannot execute\n";
 } else {
     $opt_W = 4;			# default is GPIO 4 for kernel module w1-gpio
 }
+$opt_S = "iCserver -ak" unless defined $opt_S;
 
 my $instance = '';
 if (defined $opt_i and $opt_i ne '') {
@@ -233,7 +319,7 @@ foreach $tid ( split ' ', $therm ) {
     my $Rtx100 = \$Atx100[$ix];			# pointer to current average temperature
     $Apx100[$ix] = -27310;			# impossible temperature * 100 value
     my $Rpx100 = \$Apx100[$ix++];		# pointer to previous output temperature
-    push @thermometers, [ $tid, 0, $Rtx100, $Rpx100 ];	# thermometer order for outputting temperature
+    push @thermometers, [ $tid, 0, $Rtx100, $Rpx100, '' ]; # thermometer order for outputting temperature
 }
 $n_thermometers = scalar @thermometers;
 
@@ -241,12 +327,10 @@ $opt_r = 60	unless $opt_r;	# default measurement repetition time
 $opt_r = $n_thermometers if $opt_r < $n_thermometers;	# give each thermometer 1 second to measure
 print STDERR "Measurement repetition time = $opt_r seconds\n" if $opt_t;
 
-print STDERR "The following $n_thermometers DS18B20 digital thermometers were detected:\n" if $opt_l;
 foreach $thermometerRef (@thermometers) {
-    ($tid, undef, undef, undef) = @$thermometerRef;
-    $thermometerIDs{$tid} = "";			# no IEC ID assigned yet
+    ($tid, undef, undef, undef, undef) = @$thermometerRef;
+    $thermometerIDs{$tid} = [ '', '' ];			# no IEC and ID assigned yet
     $thermometerCHs{$tid} = \$$thermometerRef[1];	# address for storing channel in registration
-    print STDERR "	$tid\n" if $opt_l;
 }
 
 ########################################################################
@@ -258,76 +342,22 @@ foreach $thermometerRef (@thermometers) {
 ########################################################################
 
 ########################################################################
-#	Scan for extra IEC parameters in $opt_f file
-########################################################################
-
-if ($opt_f) {
-    open IN, $opt_f or die "can't open option file $opt_f! $!";
-    LINE:
-    while (<IN>) {		# read next entry from option file into $_
-	chomp;			# $_ is an option line
-	print STDERR "$opt_f:$.: '$_'\n" if $opt_t;
-	my ($lead, $pos, $tail);
-	$pos = 0;
-	while (
-	    /
-		( .*? )				# $1 $lead - NOTE minimal matching
-		( IW\d+ )			# $2 IEC-1131 range start ID
-		(
-		    (
-			\s*(-)\s*		# $5 "-"
-			( IW\d+ )		# $6 IEC-1131 optional range end ID
-		    )
-		|				#        or alternatively
-		    (
-			\s*(:)\s*		# $8 ":"
-			( (28-)?[\da-fA-F]+ )	# $9 optional thermometer id or part of it
-		    )
-		)?				#        either is optional but not both
-		(
-		    \s*(-)\s*			# $12 "-"
-		    ( \d{1,3} )			# $13 optional 1 to 3 digit instance
-		)?
-	    /xg
-	) {
-	    $lead = $1;
-no warnings;
-	    $iec = "$2$5$6$8$9$12$13";		# leave out spaces
-use warnings;
-	    $pos = pos;
-	    print STDERR "$opt_f:$.: pos = '$pos' lead = '$lead' id = '$iec'\n" if $opt_t;
-	    if ($lead =~ /^\s*(#.*)?$/) {
-		next LINE if $1;	# skip next unless perl comment
-	    } else {
-		warn "*** WARNING: $named: file $opt_f:$.: '$_' contains badly formed IEC parameter '$lead'\n";
-	    }
-	    push(@ARGV, $iec);		# put next IEC on end of @ARGV
-	}
-	$tail = substr $_, $pos;
-	print STDERR "$opt_f:$.: pos = '$pos' tail = '$tail'\n" if $opt_t;
-	unless ($tail =~ /^\s*(#.*)?$/) {
-	    warn "*** WARNING: $named: file $opt_f:$.: '$_' contains badly formed IEC parameter '$tail'\n";
-	}
-    }
-    close IN;
-}
-
-########################################################################
 #	Generate default IEC IDs if none supplied
 ########################################################################
 
-unless ($opt_w or $opt_l or @ARGV) {
+unless ($opt_w or $opt_l or @argv) {
     for ($ix = 0; $ix < $n_thermometers; $ix++) {
-	push(@ARGV, "IW$ix");		# default parameters IW0 etc unless -w or -l
+	push(@argv, "IW$ix");		# default parameters IW0 etc unless -w or -l
     }
 }
 
 ########################################################################
-#	First scan of IEC arguments - check if thermometer is available
+#	First scan IEC arguments - check if thermometer is available
 ########################################################################
 
+%IONames = ();
 my ($argv);
-while ($argv = shift @ARGV) {
+while ($argv = shift @argv) {
     my ($n, $sn, $en, $ti, $si, $key, $iec1);
     if ($argv =~
 	    /^
@@ -347,9 +377,9 @@ while ($argv = shift @ARGV) {
 	if ($en < $sn) {
 	    goto ARG_WARN;			# must be equal or increasing range
 	}
-	Arg:
+      Arg:
 	foreach $n ($sn .. $en) {
-	    $iec = "IW$n$si";			# generate individual IEC ID with optional instance
+	    $iec = "IW$n$si";			# generate individual IEC with optional instance
 	    if (defined $IONames{$iec}) {
 		warn "*** WARNING: $named: $iec used twice - ignore second occurence\n";
 		next;
@@ -358,9 +388,9 @@ while ($argv = shift @ARGV) {
 	    print STDERR "*** iec = $iec, ti = '$ti';" if $opt_t;
 	    if ($ti) {
 		foreach $key (%thermometerIDs) {
-		    if ($key =~ m/$ti/) {
+		    if ($key =~ m/$ti/) {	# find partial thermometer id
 			print STDERR " key = $key, tid = '$tid';" if $opt_t;
-			if (($iec1 = $thermometerIDs{$key})) {
+			if (($iec1 = $thermometerIDs{$key}[0])) {
 			    print STDERR "\n" if $opt_t;
 			    warn "*** WARNING: $named: $iec:$ti already outputs on $iec1:$IONames{$iec1} - ignore $iec\n";
 			    next Arg;
@@ -372,34 +402,94 @@ while ($argv = shift @ARGV) {
 		}
 		unless ($tid) {
 		    print STDERR "\n" if $opt_t;
-		    warn "*** WARNING: $named: thermometer $ti not available - ignore $iec:$ti\n";
+		    warn "*** WARNING: $named: ignore $iec:$ti - thermometer $ti not available\n";
 		    next;
 		}
-		$thermometerIDs{$tid} = $iec;	# assign this IEC ID to a thermometer id if known
+		$thermometerIDs{$tid}[0] = $iec;	# assign this IEC to a thermometer id if known
 	    }
 	    print STDERR "\n" if $opt_t;
-	    $IONames{$iec} = $tid;		# mark valid IEC ID (thermometer known or unknown)
-	    push @ArgNames, [ $iec, $tid ];	# IEC parameter order for outputting temperature
+	    $IONames{$iec} = $tid;			# mark valid IEC (thermometer known or unknown)
+	    push @ArgNames, [ $iec, $tid];		# IEC parameter order for outputting temperature
 	}
     } else {
 	ARG_WARN: warn "*** WARNING: $named: $argv: badly formed IEC parameter - ignored\n";
     }
 }
 
-my $len_ArgNames = scalar @ArgNames;
+########################################################################
+#	Check number of IEC arguments matches thermometers available
+########################################################################
 
-if ($len_ArgNames > $n_thermometers) {
-    termQuit "*** ERROR: $len_ArgNames input arguments is greater than the number of thermometers ($n_thermometers) - cannot execute\n";
+my $lenArgNames = scalar @ArgNames;
+
+if ($lenArgNames > $n_thermometers) {
+    termQuit "*** ERROR: $lenArgNames input arguments is greater than the number of thermometers ($n_thermometers) - cannot execute\n";
 }
-unless ($opt_w) {
-    if ($len_ArgNames < $n_thermometers) {
-	if ($len_ArgNames == 0) {
-	    if ($opt_l) {
-		termQuit "";			# only list thermometer ID's
+unless ($opt_w or ($opt_l and not $lenArgNames)) {
+    if ($lenArgNames < $n_thermometers) {
+	if ($lenArgNames == 0) {
+	    unless ($opt_l) {
+		termQuit "*** ERROR: $named: no valid IEC arguments - nothing to do!!\n";
 	    }
-	    termQuit "*** ERROR: $named: no valid IEC arguments - nothing to do!!\n";
 	}
-	warn "*** WARNING: $named: the number of input arguments $len_ArgNames is less than the number of thermometers $n_thermometers - ignore extra thermometers\n";
+    }
+}
+
+########################################################################
+#	Then  scan -I id arguments - check if thermometer is available
+########################################################################
+
+my ($option);
+%IONames = ();
+@plain_opt_I = ();
+Option:
+while ($option = shift @opt_I) {
+    my ($ti, $key, $id1);
+    if ($option =~
+	    /^
+		( [^:]+ )			# $1 $sn id string
+		( :( (28-)?[\da-fA-F]+ ) ) ?	# $6 $ti thermometer id or part of it
+	    $/x
+    ) {
+	$id = $1;				# -I id
+	$ti = defined $3 ? $3 : '';		# optional thermometer id or part of it
+	if (defined $IONames{$id}) {
+	    warn "*** WARNING: $named: -I $id used twice - ignore second occurence\n";
+	    next;
+	}
+	$tid = '';
+	if ($ti) {
+	    foreach $key (%thermometerIDs) {
+		if ($key =~ m/$ti/) {	# find partial thermometer id
+		    if (($id1 = $thermometerIDs{$key}[1])) {
+			warn "*** WARNING: $named: $id:$ti already used on $id1:$IONames{$id1} - ignore -I $id\n";
+			next Option;
+		    } else {
+			$tid = $key;	# full thermometer id
+			last;
+		    }
+		}
+	    }
+	    unless ($tid) {
+		warn "*** WARNING: $named: ignore -I $id:$ti - thermometer $ti not available\n";
+		next;
+	    }
+	    $thermometerIDs{$tid}[1] = $id;	# assign this id to a thermometer id if known
+	} else {
+	    push(@plain_opt_I, $id);		# -I id without :tid
+	}
+	print STDERR "*** -I id = $id, ti = '$ti', tid = '$tid'\n" if $opt_t;
+	$IONames{$id} = $tid;			# mark valid id (thermometer known or unknown)
+	if ($tid) {
+	    foreach $thermometerRef (@thermometers) {
+		($ti, undef, undef, undef, undef) = @$thermometerRef;
+		if ($ti eq $tid) {
+		    $$thermometerRef[ 4 ] = $id;	# store id
+		}
+	    }
+	}
+    } else {
+	warn "*** WARNING: $named: -I '$option' badly formed id parameter - ignored\n";
     }
 }
 
@@ -410,49 +500,87 @@ unless ($opt_w) {
 #	Else there is an IEC argument for each thermometer
 ########################################################################
 
+%IONames = ();
 foreach $argNameRef (@ArgNames) {
     ($iec, $tid) = @$argNameRef;
     unless ($tid) {
 	foreach $tid (sort keys %thermometerIDs) {
-	    unless ($thermometerIDs{$tid}) {
-		$thermometerIDs{$tid} = $iec;	# assign this IEC ID to a thermometer ID
-		$IONames{$iec} = $tid;		# mark valid IEC ID with now known thermometer
+	    unless ($thermometerIDs{$tid}[0]) {
+		$thermometerIDs{$tid}[0] = $iec;# assign this IEC to a thermometer id
+		$IONames{$iec} = $tid;		# mark valid IEC with now known thermometer
 		$$argNameRef[ 1 ] = $tid;	# supply thermometer ID for registration
 		goto THERMOMETER_FOUND;		# unassigned thermometer found
 	    }
 	}
-	termQuit "The number of IEC input arguments $len_ArgNames is greater than the number of thermometers $n_thermometers - cannot execute\n";
+	termQuit "The number of IEC input arguments $lenArgNames is greater than the number of thermometers $n_thermometers - cannot execute\n";
     }
   THERMOMETER_FOUND:
     print STDERR " $tid:$iec\n" if $opt_t;
 }
 
-unless ($opt_w) {
+########################################################################
+#	Assign remaining thermometers to -I id strings not assigned above
+########################################################################
+
+$ix = 0;
+foreach $id (@plain_opt_I) {
+    foreach $thermometerRef (@thermometers) {
+	($tid, undef, undef, undef, $option) = @$thermometerRef;
+	unless ($option) {
+	    $$thermometerRef[ 4 ] = $id;	# store id
+	    goto TID_FOUND;			# unassigned thermometer found
+	}
+    }
+    warn "*** WARNING: $named: ignore excess -I id arguments '@{[splice(@plain_opt_I, $ix)]}'\n";
+    last;
+  TID_FOUND:
+    $ix++;
+    print STDERR " $id:$tid\n" if $opt_t;
+}
+
+########################################################################
+#	Evaluate argument analysis
+########################################################################
+
+unless ($opt_w or ($opt_l and not $lenArgNames)) {
     foreach $tid (sort keys %thermometerIDs) {
-	unless ($thermometerIDs{$tid}) {
+	unless ($thermometerIDs{$tid}[0]) {
 	    warn "*** WARNING: $named: ignore extra thermometer $tid\n";
 	}
     }
 }
 
 if ($opt_t) {
-    print STDERR "Thermometer:	IEC ID\n";
+    print STDERR "Thermometer	IEC\n";
     foreach $argNameRef (@ArgNames) {
-	print STDERR "$$argNameRef[1]:$$argNameRef[0]\n";
+	($iec, $tid) = @$argNameRef;
+	print STDERR "$tid	$iec\n";
     }
 }
 
-termQuit "" if $opt_x;		# deliberate exit with -x option
+if ($opt_l) {
+    print STDERR "The following $n_thermometers DS18B20 digital thermometers were detected:\n";
+    foreach $thermometerRef (@thermometers) {
+	($tid, undef, undef, undef, $id) = @$thermometerRef;
+	print STDERR "	$tid	$thermometerIDs{$tid}[0]	'$id'\n";
+    }
+}
+
+if ($opt_x or ($opt_l and not ($opt_w or $lenArgNames))) {
+    termQuit 0;			# deliberate exit with -x or -l option
+}
 
 my $conn;
 my $register = 0;		# tested in rcvd_msg_from_server() for registration reply
 my $ri = 0;			# registration index used in rcvd_msg_from_server()
 my $thermometerCount = 0;	# number of thermometers to output to iCserver
+my $server  = 0;
 
-if ($len_ArgNames) {
+if ($lenArgNames) {
     ########################################################################
     #
-    #	Connect to server and register I/Os
+    #	Connect to iCserver and register I/Os (start iCserver if not running)
+    #	connection is maintained until iCtherm shuts down or iCserver disconnects
     #
     #	Inhibit Nagle's algorithm
     #
@@ -460,12 +588,43 @@ if ($len_ArgNames) {
 
     my $host = defined $opt_s ? $opt_s : 'localhost';
     my $port = defined $opt_p ? $opt_p : 8778;
-    my $name = untaint($opt_n ? "$opt_n$instance" : $ArgNames[0][0]);	# : $ArgNames [first entry] [$iec]
+    my $name = untaint($opt_n ? "$opt_n$instance" : "$named$instance");
     $named = $name;			# use individual ID for warnings from now on
     $register = 1;
-
-    Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
-    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+    my $i = 0;
+    if ($server >= 0) {
+	print "send = '@{[defined $opt_d and ($opt_d & 1)]}' recv = '@{[defined $opt_d and ($opt_d & 2)]}'\n" if $opt_T;
+	Msg->inhibit_nagle(1,		# inhibit Nagle's algorithm for real time response
+	    defined $opt_d && ($opt_d & 2),	# trace recv messages
+	    defined $opt_d && ($opt_d & 1));	# trace send messages
+	until ($conn) {
+	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
+	    if ($conn) {
+		print STDERR "iCtherm '$named' connecting at server\n" unless $opt_q;
+	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
+		print "$named: '$host:iCserver -p $port -aA' cannot be started here - start it on $host\n";
+		$server = -1;		# no iCserver possible
+		last;
+	    } elsif ($server > 0) {
+		if ($i++ < 4) {
+		    print "$named: $i: wait 2 seconds for iCserver to start\n" if $opt_T;
+		    select undef, undef, undef, 2;
+		} else {
+		    print "$named: waited 8 seconds for 'iCserver -p $port -aA' to start - give up\n";
+		    $server = -1;	# something wrong with iCserver
+		    last;
+		}
+	    } else {
+		my @s = split(" ", $opt_S);
+		print "\@s = '@s'\n" if $opt_T;
+		splice(@s, 1, 0, "-p", "$port") unless $port eq "8778";
+		splice(@s, 1, 0, "-z$opt_q",);	# block STDIN for chained iCserver
+		print "\@s = '@s'\n" if $opt_T;
+		fork_and_exec(@s);	# start iCserver
+		$server = 1;		# remember that this iCtherm started iCserver
+	    }				# try to connect immediately
+	}
+    }
     $conn or termQuit "Client '$named' could not connect to $host:$port\n";
 
     ############# send registration ############################
@@ -500,20 +659,32 @@ if ($len_ArgNames) {
     rcvd_msg_from_server($conn, $tmsg, $terr);	# receive final registration acknowledgment
 
     ############# registration analysis ########################
-    $ri == scalar @ArgNames or
+    $ri == $lenArgNames or
 	die "*** ERROR: $named: $ri: not enough registration replies from iCserver - system error";
     $thermometerCount != 0 or
 	termQuit "*** ERROR: $named: no valid registrations - cannot output to iCserver\n";
     $register = 0;
     ############# correct number of registration replies #######
-}
-if ($opt_t) {
-    my $c;
-    print STDERR "Report result of registration\n";
-    foreach $thermometerRef (@thermometers) {
-	($tid, $c, undef, undef) = @$thermometerRef;
-	print STDERR "ti = $tid; channel = $c\n";
+    if ($opt_t) {
+	my $c;
+	print STDERR "Report result of registration\n";
+	foreach $thermometerRef (@thermometers) {
+	    ($tid, $c, undef, undef, $id) = @$thermometerRef;
+	    print STDERR "ti = $tid; channel = $c\n";
+	}
     }
+    ########################################################################
+    #	Optionally run -R option
+    ########################################################################
+    if (@runArgs) {
+	splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
+	splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+	splice(@runArgs, 1, 0, "-z$opt_q",);	# block STDIN for chained app
+	fork_and_exec(@runArgs);
+    }
+} elsif (@runArgs) {
+    warn("*** WARNING: $named: no IEC names registered\n".
+	 "		      no use running '@runArgs'\n");
 }
 
 ########################################################################
@@ -523,32 +694,66 @@ if ($opt_t) {
 ########################################################################
 
 $SIG{ALRM} = \&measureTemperatures;	# signal 14 - Timer signal from alarm()
-printf(STDERR "%s\tstart temperature measurements", scalar localtime);
-if ($opt_o) {
-    print STDERR " output to '$opt_o'";
+if ((defined $opt_d and $opt_d == 0) or ($lenArgNames and not @runArgs)) {
+    printf(STDERR "Start measuring\t%s\n", scalar localtime());
 }
-print STDERR "\n";
+if ($opt_o) {
+    print STDERR "Output to '$opt_o'\n";
+}
 alarm(1, $opt_r);			# first measurement in 1 second
 
 if ($conn) {
-########################################################################
-#
-#	Sit in an infinite loop dispatching incoming events.
-#	if connected to iCserver
-#
-########################################################################
+    ########################################################################
+    #
+    #	Register an event handler callback for STDIN to recognise
+    #	q or ctrl+D from the keyboard to terminate the program
+    #	unless $opt_ (lone -) which blocks STDIN if called in a chain.
+    #
+    #	Sit in an infinite loop dispatching incoming events.
+    #	if connected to iCserver
+    #
+    ########################################################################
+    Msg->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_;
     Msg->event_loop();	# NOTE: no iCserver events for this app
 } else {		#       only SIG ALRM for timed measurements
-########################################################################
-#
-#	Waste time waiting for SIG ALRM if -w -d or -o and no iC output
-#	With Linux this sleep() also wakes up for each SIG ALRM
-#
-########################################################################
-    sleep(1000000) while 1;
+    ########################################################################
+    #
+    #	Else waste time waiting for SIG ALRM if -w -d or -o and no iC output
+    #	Check keyboard for q or ctrl+D to terminate the program (never blocked).
+    #	With Linux this select() also wakes up for each SIG ALRM
+    #	Code from Programming Perl 3rd ed, page 781 - 782
+    #
+    ########################################################################
+    my ($rout, $rin, $nfound);
+    $rin = "";
+    vec($rin, fileno(STDIN), 1) = 1;
+    while (1) {
+	$nfound = select($rout = $rin, undef, undef, undef);
+	if ($nfound and vec($rout, fileno(STDIN), 1)) {
+	    readStdin();
+	}
+    }
 }
 
 ####### End of main program ############################################
+
+########################################################################
+#
+#	Read from STDIN
+#
+########################################################################
+
+sub readStdin {
+    my $line = readline(STDIN);
+    if (not defined $line or $line =~ m/^q/) {	# ctrl+D (EOF) or q
+	if ($server > 0) {
+	    $conn->send_now("X$named") if $conn;	# iCtherm started iCserver - stop it
+	}
+	termQuit "$named: stopped from terminal\n";
+    } else {
+	warn("*** WARNING: $named: not recognised: $line");
+    }
+} # readStdin
 
 ########################################################################
 #
@@ -562,10 +767,10 @@ sub send_input {
 	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel
 	printMicroSeconds();
 	print STDERR "$named: $ch:$val	> $ChannelNames[$ch]\n" if $opt_t;
-	printf STDERR "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if $opt_S;
+	printf STDERR "%s	%2d:%d	>\n", $ChannelNames[$ch], $ch, $val if defined $opt_d and ($opt_d & 1);
 	$conn->send_now("$ch:$val");		# send latest value
     } else {
-	warning("hysteresis not working correctly for channel $ch\n");
+	warn("*** WARNING: $named: hysteresis not working correctly for channel $ch\n");
     }
 } # send_input
 
@@ -661,11 +866,11 @@ sub rcvd_msg_from_server {
 ########################################################################
 
 sub measureTemperatures {
-    my ($tid, $channel, $Rtx100, $Rpx100, @temp, $tx16, $tx100, $tx10);
+    my ($tid, $id, $channel, $Rtx100, $Rpx100, @temp, $tx16, $tx100, $tx10);
     print STDERR "measureTemperatures\n" if $opt_T;
     READING:
     foreach $thermometerRef (@thermometers) {
-	($tid, $channel, $Rtx100, $Rpx100) = @$thermometerRef;
+	($tid, $channel, $Rtx100, $Rpx100, $id) = @$thermometerRef;
 	while (1) {
 	    @temp = split ' ', `/bin/bash -c 'f="/sys/bus/w1/devices/$tid/w1_slave"; if [ -f \$f ]; then cat \$f; fi'`;
 	    if (scalar @temp != 22) {
@@ -683,7 +888,7 @@ sub measureTemperatures {
 	    $$Rtx100 = $tx16 * 6.25;		# initial value degrees Centigrade * 100
 	}
 	$tx100 = $opt_F ? $$Rtx100 * 1.8 + 3200 : $$Rtx100;
-	printf(STDERR "%s	%3d	%3.6f °%s\n", scalar localtime, $tx16, $tx100/100, $opt_F ? "F" : "C") if $opt_t;
+	printf(STDERR "%s	%3d	%3.6f °%s\n", scalar localtime(), $tx16, $tx100/100, $opt_F ? "F" : "C") if $opt_t;
 	if ($tx100 >= $$Rpx100 + 6 || $tx100 < $$Rpx100 - 6) {	# hysteresis +- .01 <== (6-5)/100
 	    $tx10 = int(($tx100 + 5) / 10);	# round to degrees (C or F) * 10
 	    $$Rpx100 = $tx10 * 10;		# previous output value for comparison
@@ -691,17 +896,54 @@ sub measureTemperatures {
 		send_input($channel, $tx10);	# send temperature value to iCserver
 	    }
 	    if ($opt_w) {
-		if ($opt_d) {
-		    printf("%s\t", scalar localtime); # standard date and time string
+		if ($id) {
+		    printf("%s\t", $id);	# command line -I <id>
 		}
-		if ($n_thermometers > 1) {
+		elsif ($n_thermometers > 1) {
 		    printf("%s\t", $tid);	# thermometer id
 		}
-		printf("%3.1f °%s\n", $tx10/10, $opt_F ? "F" : "C");	# print temperature
+		printf("%3.1f °%s", $tx10/10, $opt_F ? "F" : "C");	# print temperature
+		if (defined $opt_d and $opt_d == 0) {
+		    printf("\t%s\n", scalar localtime()); # standard date and time string
+		} else {
+		    printf("\n");
+		}
 	    }
 	}
     }
 } # measureTemperatures
+
+########################################################################
+#
+#	Fork a new process - ignore CHLD signal
+#	Parameters: call + arguments
+#
+########################################################################
+
+sub fork_and_exec {
+    ## ignore CHLD signal of processes forked
+    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
+    my $pid;
+    FORK: {
+	if ($pid = fork) {
+	    ## parent process
+	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
+	} elsif (defined $pid) {	# $pid is zero if defined
+	    print STDERR "\$ @_\n" unless $opt_q;
+	    ## dispatch child process
+	    exec @_;			# does not return unless exec failure
+	    warn "*** WARNING: forked child process exited - failure exec '@_'\n";
+	    exec ("$named", '-X');	# cleanly exit overlay child process
+	} elsif ($! =~ /No more process/) {
+	    ## EAGAIN, recoverable fork error
+	    select undef, undef, undef, 5;
+	    redo FORK;
+	} else {
+	    ## weird fork error
+	    die "Can't fork: $!\n";
+	}
+    }
+} # fork_and_exec
 
 ########################################################################
 #
@@ -772,12 +1014,14 @@ sub termQuit ($) {
     } else {
 	die "*** ERROR: $named: cannot find env{HOME] or open make .iC directory - system error";
     }
-    if ($sig eq "INT") {
-	$sig = 2;			# ctrl-C interrupt from keyboard
-	print STDERR "\nInterrupt from keyboard\n";
-    } else {
-	print $sig;
-	$sig = 0;
+    if ($sig) {
+	if ($sig eq "INT") {
+	    $sig = 2;			# ctrl-C interrupt from keyboard
+	    print STDERR "\nInterrupt from keyboard\n";
+	} else {
+	    $sig = 0;
+	    print STDERR $sig unless $opt_q;
+	}
     }
     exit $sig;
 } # termQuit
@@ -789,53 +1033,64 @@ __END__
 
 =head1 NAME
 
-iCtherm - an iC or standalone program supplying temperature values
+iCtherm - an iC driver or standalone program supplying temperature values
 
 =head1 SYNOPSIS
 
- iCtherm [-wdlCFmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
-      [ -o <out>][ -r <time>][ -W <GPIO>][ -f <file>]
-      [ <IEC>[-<IEC>|:<tid>][-<inst>]] ...]
+ iCtherm [-wdlCFmtTxqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+         [ -o <out>][ -r <time>][ -W <GPIO>][ -I <id[:tid]> ...][ -d <i>]
+         [ <IEC>[-<IEC>|:<tid>][-<inst>] ...]
+         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     DIRECT OUTPUT OPTIONS (default no iC output unless IEC's are specified)
-	-w	write temperatures to terminal
-	-o out	write temperatures to file <out>
-	-d	write date and time with output
+        -w      write temperatures to terminal
+        -o<out> write temperatures to file <out>
+        -d      write date and time with output
+        -I <id> write id before new temperature eg 'inside' or 'outside'
+            alternatively
+        -I <id:tid> individual ids may be followed by the thermometer id or
+                part of it; eg -I inside:28-0000062e8239 or -I inside:239
+                (default: thermometer ids in ascending numerical order).
+                Note: any -I <id...> option implies -w
     COMMON OPTIONS
-	-C	output temparature in 1/10th degrees Centigrade (default)
-	-F	output temparature in 1/10th degrees Fahrenheit
-	-r time	measurement repetition <time> in seconds (default 60 sec)
-	-W GPIO number used by the w1-gpio kernel module (default 4)
-	-f file read additional parameters from this <file>
+        -C      output temparature in 1/10th degrees Centigrade (default)
+        -F      output temparature in 1/10th degrees Fahrenheit
+        -r time measurement repetition <time> in seconds (default 60 sec)
+        -W GPIO number used by the w1-gpio kernel module (default 4)
     iC OUTPUT OPTIONS
-	IEC	IW0 IW1 IW2 ... (default IEC is IW0 etc unless -w -o -d -l)
-	    A range of IEC's can be specified with -; eg IW0-IW3
-	    alternatively
-	IEC:tid	individual IECs may be followed by the thermometer
-	    identification or part of it; eg IW0:28-0000062e8239 or IW0:239
-	    (default: thermometers connected in ascending numerical order).
-	IEC-inst Each IEC can be followed by -<inst>, where <inst> consists
-		of up to 3 numeric digits (usually 1 digit).
-		Such an appended instance code takes precedence over the
-		general instance specified with the -i <inst> (see below).
-	-s host	host name of iCserver    (default 'localhost')
-	-p port	service port of iCserver (default '8778')
-	-n name	registration name (default first full IEC)
-	-i inst instance ID for this iCtherm (1 to 3 numeric digits)
+        IEC     IW0 IW1 IW2 ... (default IEC is IW0 etc unless -w -o -d -l)
+                A range of IEC's can be specified with -; eg IW0-IW3
+            alternatively
+        IEC:tid individual IECs may be followed by the thermometer id or
+                part of it; eg IW0:28-0000062e8239 or IW0:239
+                (default: thermometers connected in ascending numerical order).
+        IEC-inst Each IEC can be followed by -<inst>, where <inst> consists
+                of up to 3 numeric digits (usually 1 digit).
+                Such an appended instance code takes precedence over the
+                general instance specified with the -i <inst> (see below).
+        -S server +options+equivalences  (default 'iCserver -ak')
+        -s host host name of iCserver    (default 'localhost')
+        -p port service port of iCserver (default '8778')
+        -n name registration name        (default first full IEC)
+        -i inst instance ID for this iCtherm (1 to 3 numeric digits)
     DEBUG OPTIONS
-	-l	list connected thermometer identifications
-	-m	display elapsed time in seconds and microseconds
-	-t	trace debug messages
-	-R      trace rcv messages in Msg.pm
-	-S      trace send messages in Msg.pm
-	-T	extra static debug messages
-	-x	exit after analyzing input parameters
-	-h	help, ouput this Usage text only
+        -l      list connected thermometer identifications
+        -m      display elapsed time in seconds and microseconds
+        -t      trace debug messages
+	-d <i>  trace 1=send 2=rcv 3=both messages in Msg.pm
+        -T      extra static debug messages
+        -x      exit after analyzing input parameters
+	-q      quiet - do not report clients connecting and disconnecting
+	-z      block keyboard input
+        -h      help, ouput this Usage text only
+    AUXILIARY app
+        -R <app ...> run auxiliary app followed by -z and its arguments
+                     as a separate process; -R ... must be last arguments.
 
 =head1 DESCRIPTION
 
 The B<iCtherm> program measures temperature using one or more
-B<DS18B20> 1-Wire digital thermometers connected to GPIO4 of a
-Raspberry Pi.
+B<DS18B20> 1-Wire digital thermometers normally connected to GPIO4
+of a Raspberry Pi.
 
 The DS18B20 digital thermometer provides 9-bit to 12-bit Centigrade
 temperature measurements and has an alarm function with nonvolatile
@@ -861,10 +1116,12 @@ to be interpreted in the range of -55.0°C to +125.0°C.  (Fahrenheit
 values have a range of -670 to +2570 for the same temperatures -67.0°F
 to +257.0°F).
 
-Temperature values can also be printed directly to standard output or
-to a file with the -w or -o options. With the -d option each temperature
-output also has a date and time stamp. If no IEC ID parameters are
-given, the program acts as a standalone temperature recorder.
+Temperature values can also be printed directly to standard output
+or to a file with the -w or -o options. With the -d option each
+temperature output also has a date and time stamp.  With the -I
+option each thermometer output can be given an individual id string eg
+'inside' or 'outside'.  If no IEC parameters are given, the program
+acts as a standalone temperature recorder.
 
 Temperature readings are made at regular intervals - the default is
 60 seconds. This can be altered in 1 second steps with the -r option.
@@ -881,7 +1138,7 @@ or so - often longer if the temperature is stable.
 
  IEC     IW0 IW1 IW2 ...  (default IEC is IW0 etc unless -w -o -d)
          A range of IEC's can be specified -  eg IW0-IW3
-	 alternatively
+         alternatively
  IEC:tid individual IECs may be followed by the thermometer
          identification or part of it; eg IW0:28-0000062e8239 or IW0:239
          (default: thermometers connected in ascending numerical order).

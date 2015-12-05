@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.15 2015/09/29 06:55:10 jw Exp $";
+"@(#)$Id: misc.c,v 1.16 2015/11/06 00:57:07 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -79,7 +79,6 @@ unsigned char	iC_bitMask[]    = {
 };
 
 #ifdef	TCP
-
 #ifndef	EFENCE
 char		regBuf[REQUEST];
 char		rpyBuf[REPLY];		/* Buffer in which iCserver input is read to */
@@ -89,18 +88,19 @@ char *		rpyBuf;
 #endif	/* EFENCE */
 
 #ifndef	PWM
+int		iC_opt_l;
 #ifdef	RASPBERRYPI
 int		iC_opt_P;
 int		iC_opt_G;
 int		iC_opt_B;
 int		iC_opt_E;
 int		iC_opt_L;
-int		npf;
+int		iC_npf;
 int		gpio23FN = -1;		/* /sys/class/gpio/gpio23/value LIRC file number */
 int		gpio25FN = -1;		/* /sys/class/gpio/gpio25/value SPI file number */
 int		spidFN[2] = { -1, -1 };	/* /dev/spidev0.0, /dev/spidev0.1 SPI file numbers */
-piFaceIO	pfi[MAXPF];		/* piFace names/gates and channels */
-gpioIO *	gpioList[2] = { NULL, NULL };	/* GPIO names/gates and channels */
+piFaceIO	iC_pfL[MAXPF];		/* piFace names/gates and channels */
+gpioIO *	iC_gpL[2];		/* GPIO names/gates and channels */
 #endif	/* RASPBERRYPI */
 #if	defined(LOAD) && ! defined(WIN32)
 #include	<time.h>
@@ -171,6 +171,9 @@ iC_gpio_pud(int gpio, int pud)
     char	buf[100];
 
     snprintf(buf, 100, "iCgpioPUD -g %d -p %d", gpio, pud);	/* execute iCgpioPUD as a separate process */
+#if	YYDEBUG
+	if (iC_debug & 0200) { fprintf(iC_outFP, "*** %s: '%s'\n", iC_progname, buf); fflush(iC_outFP); }
+#endif	/* YYDEBUG */
     if ((r = system(buf)) != 0) {
 	perror("iCgpioPUD");
 	fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
@@ -269,6 +272,138 @@ iC_efree(void *	p)
 
 /********************************************************************
  *
+ *	Convert string of call + arguments to an argv call array
+ *	    callString	single space separated call + argument string
+ *	    argc	the number of call + arguments in callString
+ *
+ *	There must be at least one token string (the call) in callString
+ *	and argc must be the exact number of space separated strings in argv
+ *	otherwise a hard error will occurr (assert(0))
+ *
+ *	This routine can be called in iCbegin() to support iC_fork_and_exec()
+ *
+ *******************************************************************/
+
+char **
+iC_string2argv(char * callString, int argc)
+{
+    int	i;
+    char *	copy;			/* copy of call string to break into tokens */
+    char **	argv;			/* array of individual pointers to return */
+
+    copy = (char *)iC_emalloc(strlen(callString)+1);	/* +1 for '\0' */
+    argv = (char **)iC_emalloc((argc + 1) * sizeof(char*));
+    strcpy(copy, callString);
+    /* retrieve first token from copy, separated using " " */
+    if ((argv[i = 0] = strtok(copy, " ")) == NULL) assert(0);
+    /* continue to retrieve tokens until NULL is returned */
+    while (i <= argc && (argv[++i] = strtok(NULL, " ")) != NULL);
+    assert(i <= argc);			/*  programmer error */
+    return argv;
+} /* iC_string2argv */
+
+/********************************************************************
+ *
+ *	Fork and execute a new process
+ *	    argv	null terminated array of call + arguments
+ *
+ *	This routine can be called in iCbegin() to run a parallel process
+ *
+ *	Note: to allow splicing in of "-s" "host" and/or "-p" port" after
+ *	      the initial program to be executed, that program must
+ *	      be a direct call: eg "iCbox" and not "perl" "-S" "iCbox".
+ *	      The execvp() used can handle this type of call.
+ *
+ *******************************************************************/
+
+void
+iC_fork_and_exec(char ** argv)
+{
+    pid_t	pid;
+    uid_t	uid;
+    uid_t	euid;
+    char *	cp;
+    char **	cpp = argv;
+#ifdef	TCP 
+    char **	epp;
+    int		extraArgs = 0;
+    char *	hostp = NULL;
+    char *	portp = NULL;
+    if (strcmp(iC_hostNM, LOCALHOST) &&
+	strcmp(iC_hostNM, LOCALHOST1)) {
+	extraArgs += 2;
+	hostp = (char *)iC_hostNM;
+    }
+    if (strcmp(iC_portNM, iC_PORT)) {
+	extraArgs += 2;
+	portp = (char *)iC_portNM;
+    }
+    if (extraArgs) {
+	assert(*cpp);			/* must have at least one argument - the program to execute */
+	while (*cpp++) {
+	    extraArgs++;		/* add original number of arguments */
+	}
+	epp = cpp = (char **)iC_emalloc((extraArgs + 1) * sizeof(char*));
+	extraArgs--;			/* count arguments for final assertion check */
+	*epp++ = *argv++;		/* copy pointer to program first */
+	if (hostp) {
+	    extraArgs -= 2;
+	    *epp++ = "-s";
+	    *epp++ = hostp;		/* followed by optional -s hostp */
+	}
+	if (portp) {
+	    extraArgs -= 2;
+	    *epp++ = "-p";
+	    *epp++ = portp;		/* followed by optional -s portp */
+	}
+	while ((cp = *argv++) != NULL) {
+	    extraArgs--;
+	    *epp++ = cp;		/* copy rest of original argument pointers */
+	}
+	assert(extraArgs == 0);		/* final assertion check */
+	*epp = NULL;			/* argv terminator in extra element allowed for in malloc */
+	argv = cpp;			/* new extended arguments */
+    }
+#endif	/* TCP */
+    uid = getuid();
+    euid = geteuid();
+    if (iC_debug & 04) fprintf(iC_errFP, "uid = %d euid = %d\n", (int)uid, (int)euid);
+    /********************************************************************
+     *	Display the call + arguments to keep track of what is happening
+     *  unless -q quiet operation
+     *      $ call arg1 arg2 ... argn
+     *******************************************************************/
+    if ((iC_debug & DQ) == 0) {
+	fprintf(iC_errFP, "$");
+	while ((cp = *cpp++) != NULL) {
+	    fprintf(iC_errFP, " %s", cp);
+	}
+	fprintf(iC_errFP, "\n");
+    }
+    /********************************************************************
+     *	Fork now
+     *******************************************************************/
+    if ((pid = fork()) == 0) {
+	/* child process */
+	if (euid != uid) {
+	    if (seteuid(uid) != 0) {	/* execute child process at uid privileges */
+		perror("seteuid failed");	/* hard ERROR */
+		exit(SIGUSR1);
+	    }
+	}
+	execvp(*argv, argv);		/* execute call in parallel child process */
+	/* only get here if exec fails */
+	fprintf(iC_errFP, "Could not execute %s - ", *argv); perror("");	/* hard ERROR */
+	exit(SIGUSR1);			/* do not use iC_quit to avoid termQuit() for parent stuff */
+    } else if (pid < 0) {
+	perror("fork failed");		/* hard ERROR */
+	iC_quit(SIGUSR1);		/* still parent */
+    }
+    /* continue parent process with extended privileges */
+} /* iC_fork_and_exec */
+
+/********************************************************************
+ *
  *  Compare gt_ids in two Gates support of qsort()
  *
  *  change the collating position of '_' before digits ('.' '/')
@@ -357,11 +492,11 @@ iC_quit(int sig)
     /********************************************************************
      *  The following termination function is an empty function
      *  in the libict.a support library.
-     *  	int iCend(void) { return 0; }
+     *  	int iCend(void) { return -1; }
      *  It may be implemented in a literal block of an iC source, in
      *  which case that function will be linked in preference.
-     *  User implementations of iCend() should return 1, to activate
-     *  the debug message "iend complete ======".
+     *  User implementations of iCend() should return 0, to activate
+     *  the debug message "== iCend complete ======".
      *
      *  It can be used to free allocated memory, etc.
      *
@@ -369,11 +504,11 @@ iC_quit(int sig)
      *  a matching wait() call.
      *******************************************************************/
     if ((sig >= QUIT_TERMINAL || sig == SIGINT)
-	&& iCend()				/* iC termination function */
+	&& iCend() != -1			/* iC termination function */
     ) {	
 #if	YYDEBUG
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\niCend complete ======\n");
+	    fprintf(iC_outFP, "\n== iCend complete ======\n");
 	}
 #endif	/* YYDEBUG */
     }
@@ -409,13 +544,16 @@ iC_quit(int sig)
     if (iC_outFP != stdout) {
 	fclose(iC_outFP);
     }
-    if (sig == QUIT_TERMINAL) {
-	fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_iccNM);
-    } else if (sig == QUIT_DEBUGGER) {
-	fprintf(iC_errFP, "\n'%s' stopped by debugger\n", iC_iccNM);
-    } else if (sig == QUIT_SERVER) {
-	fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
-    } else if (sig == SIGINT) {
+    if ((iC_debug & DQ) == 0) {
+	if (sig == QUIT_TERMINAL) {
+	    fprintf(iC_errFP, "\n'%s' stopped from terminal\n", iC_iccNM);
+	} else if (sig == QUIT_DEBUGGER) {
+	    fprintf(iC_errFP, "\n'%s' stopped by debugger\n", iC_iccNM);
+	} else if (sig == QUIT_SERVER) {
+	    fprintf(iC_errFP, "\n'%s' disconnected by server\n", iC_iccNM);
+	}
+    }
+    if (sig == SIGINT) {
 	fprintf(iC_errFP, "\n'%s' stopped by interrupt from terminal\n", iC_iccNM);
     } else if (sig == SIGSEGV) {
 	fprintf(iC_errFP, "\n'%s' stopped by 'Invalid memory reference'\n", iC_iccNM);

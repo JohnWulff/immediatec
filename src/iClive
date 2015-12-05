@@ -33,6 +33,7 @@ use Time::HiRes qw(sleep gettimeofday tv_interval);
 my $t0 = [gettimeofday()];	# start time of program
 my %delayedColour;	# colour that should be restored after a flash
 my $shift_control_state = 0;
+my @argv = ();
 
 ########################################################################
 #
@@ -185,37 +186,44 @@ my %keyWords = (
 ########################################################################
 
 my $named = $0; $named =~ s#.*[/\\]##;
-use vars qw($opt_T $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i $opt_F $opt_l $opt_w $opt_g $opt_A $opt_u $opt_X $opt_h);
+use vars qw($opt_ $opt_T $opt_q $opt_z $opt_S $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i);
+use vars qw($opt_F $opt_l $opt_w $opt_g $opt_A $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
 
 format STDERR =
 Usage:
-@<<<<< [ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -F <font>][ -l <num>]
+@<<<<< [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -F <font>][ -l <num>]
  $named
        [ -w <num>][ -g <geometry>][ -A <cmd>][ -d <deb>][ <file> ...]
+       [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
-    -F font font or font size to use in Text window (default '14')
+    -F font font or font size to use in Text window (default '20')
+    -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default @<<)
 					$opt_l
     -w num  width  of the Text window (default @<<) -w0 is terminal width
 					$opt_w
     -g geom geometry for main window
+    -S server +options+equivalences  (default 'iCserver -k -A iCbox')
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
             if iCsever is started by this @<<<<< call
 					  $named
+                      DEBUG options
     -d deb  extra debug options (see iC-application -h)
     -t      trace gate activity in target application (-d1100)
     -m      output elapsed time in seconds and microseconds
     -T      trace output static debug messages
-    -u      activate undo edit facility (not recommended if Live display
-            is used, because display may skip to lines which change)
+    -q      quiet - do not report clients connecting and disconnecting
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
             rest will be stored in the File menu for later selection.
+                      AUXILIARY app
+    -R <app ...> run auxiliary app followed by -z and its arguments
+                 as a separate process; -R ... must be last arguments.
 
  Menu buttons:                   Action                      Accelerator
 
@@ -281,12 +289,83 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.57 2015/09/29 06:55:10 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.58 2015/11/06 22:06:35 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
-use Getopt::Std;		# replace require "getopts.pl";
-getopts('tTmd:s:p:i:f:l:w:g:A:uXh');	# sets $opt_h if -h etc
+########################################################################
+#	Restore geometry
+########################################################################
+
+my $arg = $ARGV[0];
+if ($arg and $arg =~ /^\d+x\d+(\+\d+\+\d+)?$/) {
+    $opt_g = $arg;		# iClive restored after logout and restore
+    shift @ARGV;		# first ARGV was a geometry
+}
+
+########################################################################
+#	Handle -R option - count leading options up to -R
+#	splice -R to end - move app and remaining arguments to @runArgs
+########################################################################
+
+my ($argIndex, $blank, $app, @runArgs);
+$argIndex = $blank = 0;
+@runArgs = ();
+# print "0 \@ARGV = '@ARGV'\n";
+foreach (@ARGV) {
+    if (s/^-R(.*)$/$1/) {
+	$blank = 1 if $_ eq "";		# -R
+	$app = "";			# or -Rapp
+	last;
+    } elsif (s/^(-[^dspiFlwgAR]+)R(.*)$/$1/) {
+	$app = $2;			# -abcR or -abcRapp
+	$argIndex++;
+	last;
+    }
+    $argIndex++;
+}
+# no warnings;
+# print "1 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$app = '$app' $#ARGV\n";
+# use warnings;
+@runArgs = splice @ARGV, $argIndex;
+if (defined $app) {
+    shift(@runArgs) if $blank;
+    unshift(@runArgs, $app) if $app ne "";
+    splice(@runArgs, 1, 0, "-d1000");	# do not trace non-active timers TX0.n
+}				# append a -z$opt_q later (-z not used in iClive)
+# print "2 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n"; exit;
+
+########################################################################
+#	Handle all remaining -switch options and non-switch options
+########################################################################
+
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    ''    => \$opt_,			# lone - (not used)
+    '<>'  => sub { push(@argv, @_); },	# Transfer file argument to @argv
+    't'   => \$opt_t,
+    'T'   => \$opt_T,
+    'S'   => \$opt_S,
+    'm'   => \$opt_m,
+    'u'   => \$opt_u,
+    'X'   => \$opt_X,
+    'q'   => \$opt_q,
+    'z'   => \$opt_z,
+    'd=i' => \$opt_d,
+    's=s' => \$opt_s,
+    'p=s' => \$opt_p,
+    'i=i' => \$opt_i,
+    'F=s' => \$opt_F,
+    'l=i' => \$opt_l,
+    'w=i' => \$opt_w,
+    'g=s' => \$opt_g,
+    'A=s' => \$opt_A,
+    'h'   => \$opt_h,
+);
+scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
+print "\@argv = '@argv'	\@runArgs = '@runArgs'\n" if $opt_T;
+
+########################################################################
 
 exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
 
@@ -305,7 +384,14 @@ if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
+if ($opt_q) {
+    $opt_q = 'q';			# quiet option
+} else {
+    $opt_q = '';			# define $opt_q
+}
+
 $opt_A = 'iCbox' unless $opt_A;
+$opt_S = 'iCserver' unless defined $opt_S;
 my $u = '';
 if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
@@ -318,7 +404,7 @@ if (defined $opt_F) {
 	$fontSize = $opt_F;
     } else {
 	$font_t = $opt_F;
-	$fontSize = 14;
+	$fontSize = 20;
     }
 }
 unless ($font_t) {
@@ -326,7 +412,7 @@ unless ($font_t) {
 	$fontSize = 12 unless $fontSize;
 	$font_t = "{Lucida Console} fontSize normal";
     } else {			# Linux
-	$fontSize = 14 unless $fontSize;
+	$fontSize = 20 unless $fontSize;
 	$font_t = "-adobe-courier-medium-r-normal--fontSize-100-100-100-m-90-iso8859-1";
     }
 }
@@ -429,11 +515,6 @@ my $server  = 0;
 ########################################################################
 
 my $mainWindow = MainWindow->new();
-my $arg = $ARGV[0];
-if ($arg and $arg =~ /^\d+x\d+(\+\d+\+\d+)?$/) {
-    $opt_g = $arg;		# iClive restored after logout and restore
-    shift @ARGV;		# first ARGV was a geometry
-}
 if ($opt_g) {
     if ($opt_g =~ /^(\d+x\d+)?([+-]\d+[+-]\d+)?$/) {
 	$mainWindow->geometry($opt_g);
@@ -955,6 +1036,16 @@ print "$named: initial register_at_server\n" if $opt_T;
 register_at_server();
 
 ########################################################################
+#	Optionally run -R option
+########################################################################
+if (@runArgs) {
+    splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
+    splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+    splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iClive - place holder
+    fork_and_exec(@runArgs);
+}
+
+########################################################################
 #	Initialise file and search menu lists, open the first file.
 #	NOTE:
 #	must be called after register_at_server() - if not causes
@@ -1267,7 +1358,7 @@ sub adjust_live {
 	    $prevLast  = $last;
 	    printMicroSeconds("adjust live");
 no warnings;
-	    print "do_scan complete, $start, $last, '$_[1]'\n" if $opt_t;
+	    print "do_scan complete, $start, $last, '$_[1]'\n" if $opt_t and not $opt_q;
 use warnings;
 	}
 	info_display(0, 'dark green', "line $start to line $l") if $searchText eq '';
@@ -1302,11 +1393,13 @@ sub conn_send_now {
 sub register_at_server {
     my $i = 0;
     if ($server >= 0) {
+	Msg->inhibit_nagle(1,		# inhibit Nagle's algorithm for real time response
+	    defined $opt_d && ($opt_d & 2),	# trace recv messages
+	    defined $opt_d && ($opt_d & 1));	# trace send messages
 	until ($conn) {
-	    Msg->inhibit_nagle(1);	# inhibit Nagle's algorithm for real time response
 	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
-		print "Connection $named at server.\n";
+		print STDERR "$named connecting at server\n" unless $opt_q;
 		$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 		info_display(2000, 'blue', "Connection to '$host:$port'");
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
@@ -1323,9 +1416,13 @@ sub register_at_server {
 		    last;
 		}
 	    } else {
-		print "$named starts 'iCserver -p $port -A $opt_A'\n";
-		fork_and_exec("iCserver", "-p", "$port", "-A", "$opt_A");	# start iCserver
-		$server = 1;		# remember that this iClive started iCserver
+		my @s = split(" ", $opt_S);
+		print "\@s = '@s'\n" if $opt_T;
+		splice(@s, 1, 0, "-p", "$port") unless $port eq "8778";
+		splice(@s, 1, 0, "-z$opt_q", "-k", "-A", "$opt_A");	# block STDIN for chained iCserver
+		print "\@s = '@s'\n" if $opt_T;
+		fork_and_exec(@s);	# start iCserver
+		$server = 1;		# remember that this iCtherm started iCserver
 	    }				# try to connect immediately
 	}
     }
@@ -1416,7 +1513,7 @@ sub rcvd_msg_from_server {
 	} else {
 	    my ($msg1);
 	    printMicroSeconds("received message from server");
-	    print "rcvd '$msg'\n" if $opt_t;
+	    print "rcvd '$msg'\n" if $opt_t and not $opt_q;
 	    foreach $msg1 (split /,/, $msg) {	# break up comma separated multiple messages
 		my @symbols = split /;/, $msg1;	# break up message
 		my $entry = shift @symbols;		# first entry is an operation
@@ -1548,7 +1645,7 @@ no warnings;
 				}
 			    }
 			    printMicroSeconds("symbol table entry");
-			    print "$index	$value\n" if $opt_t;
+			    print "$index	$value\n" if $opt_t and not $opt_q;
 			}
 			if ($normalFlag) {
 			    $text->configure(-state => 'disabled');
@@ -1617,7 +1714,7 @@ use warnings;
 		}
 		printMicroSeconds("stored one message");
 	    }
-	    print "rcvd end\n" if $opt_t;
+	    print "rcvd end\n" if $opt_t and not $opt_q;
 	}
     } else {
 	print "undefined message< iCserver\n" if $opt_T;
@@ -2263,7 +2360,7 @@ use warnings;
 		if ((length($msg) + length($index)) > 1393) {	# REPLY 1400 - (6+1) in tcpc.h
 		    conn_send_now("$D_channel:3$msg");	# send intermediate active symbols
 		    printMicroSeconds("sent one active symbol string to server");
-		    print "sent '$D_channel:3$msg'\n" if $opt_t;
+		    print "sent '$D_channel:3$msg'\n" if $opt_t and not $opt_q;
 		    $msg = '';
 		}
 		print "$index\n" if $opt_T;
@@ -2273,7 +2370,7 @@ use warnings;
 	if ($msg) {
 	    conn_send_now("$D_channel:4$msg");		# send last active symbols
 	    printMicroSeconds("sent last active symbol string to server");
-	    print "sent '$D_channel:4$msg'\n" if $opt_t;
+	    print "sent '$D_channel:4$msg'\n" if $opt_t and not $opt_q;
 	}
 	conn_send_now("$D_channel:0");			# reset last value in iCserver
 
@@ -2922,6 +3019,7 @@ sub fork_and_exec {
 	    ## parent process
 	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
 	} elsif (defined $pid) {	# $pid is zero if defined
+	    print STDERR "\$ @_\n" unless $opt_q;
 	    ## dispatch child process
 	    exec @_;			# does not return unless exec failure
 	    warn "forked child process exited - failure exec '@_'\n";
@@ -2986,12 +3084,14 @@ sub run_file {
 	    ## generate the call
 	    $makeName = '';	# up to date build is running (unless deliberate No save)
 	    my @call = ($processName);
-	    splice @call, 1, 0, '-s', $opt_s if defined $opt_s;
-	    splice @call, 1, 0, '-p', $opt_p if defined $opt_p;
-	    splice @call, 1, 0, '-t' if defined $opt_t;
+	    splice @call, 1, 0, "-s", $opt_s if defined $opt_s;
+	    splice @call, 1, 0, "-p", $opt_p if defined $opt_p;
+	    splice @call, 1, 0, "-t" if defined $opt_t;
 	    splice @call, 1, 0, "-d$opt_d" if defined $opt_d;
-	    splice @call, 1, 0, '-m' if defined $opt_m;
+	    splice @call, 1, 0, "-m" if defined $opt_m;
 	    splice @call, 1, 0, "-i$instance" if (defined $instance and $instance ne '');
+	    splice @call, 1, 0, "-d1000";	# do not trace non-active timers TX0.n
+	    splice @call, 1, 0, "-q" if $opt_q;	# allow user to control and stop app (no -z)
 	    print "@call\n" if $opt_T;
 	    ## fork and exec the call
 	    fork_and_exec(@call);	# if application starts it will send back <ch>:2;<name>
@@ -3170,7 +3270,7 @@ sub ini_program {
 	}
 	close(INI);
     }	# ignore if ~/.iC/iClive.ini cannot be opened or found
-    $initialFile = shift @ARGV;			# ARGV may be empty
+    $initialFile = shift @argv;			# ARGV may be empty
     unless (defined $initialFile and $initialFile ne '') {
 	($initialFile, $position, $entry) = @lastFile;
 	if (not defined $entry and defined $position and $position =~ /^\d+$/) {
@@ -3204,7 +3304,7 @@ use warnings;
 	$position = "1.0";
     }
     $text->markSet('insert', $position);
-    foreach $initialFile (@ARGV) {
+    foreach $initialFile (@argv) {
 	check_menu($initialFile, 'files');	# stuff the rest in the file menu list
     }
 } # ini_program
@@ -3289,12 +3389,12 @@ sub printMicroSeconds {
 	    $sec--;
 	    $usec += 1000000;
 	}
-	if ($opt_t) {
+	if ($opt_t and not $opt_q) {
 	    printf "D%3d.%03d,%03d: %s:", $sec, int($usec/1000), $usec%1000, $string;
 	} else {
 	    printf "D%3d.%03d,%03d %s\n", $sec, int($usec/1000), $usec%1000, $string;
 	}
-    } elsif ($opt_t) {
+    } elsif ($opt_t and not $opt_q) {
 	print "D: ";
     }
     $t0 = [gettimeofday()];
@@ -3370,26 +3470,32 @@ iClive - an editor and live debugger for immediate-C clients
 
 =head1 SYNOPSIS
 
- iClive [ -umtTh][ -s <host>][ -p <port>][ -i <inst>][ -F <font>][ -l <num>]
+ iClive [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -F <font>][ -l <num>]
         [ -w <num>][ -g <geometry>][ -A <cmd>][ -d <deb>][ <file> ...]
+        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
-    -F font font or font size to use in Text window (default '14')
+    -F font font or font size to use in Text window (default '20')
+    -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default 35)
     -w num  width  of the Text window (default 85) -w0 is terminal width
     -g geom geometry for main window
+    -S server +options+equivalences  (default 'iCserver -k -A iCbox')
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
             if iCsever is started by this iClive call
+                      DEBUG options
     -d deb  extra debug options (see iC-application -h)
     -t      trace gate activity in target application (-d1100)
     -m      output elapsed time in seconds and microseconds
     -T      trace output static debug messages
-    -u      activate undo edit facility (not recommended if Live display
-            is used, because display may skip to lines which change)
+    -q      quiet - do not report clients connecting and disconnecting
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
             rest will be stored in the File menu for later selection.
+                      AUXILIARY app
+    -R <app ...> run auxiliary app followed by -z and its arguments
+                 as a separate process; -R ... must be last arguments.
 
  Menu buttons:                   Action                      Accelerator
 

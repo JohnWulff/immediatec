@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.20 2015/02/07 22:02:50 jw Exp $";
+"@(#)$Id: tcpc.h,v 1.21 2015/10/18 23:29:08 jw Exp $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -52,21 +52,15 @@ static const char tcpc_h[] =
 #define REQUEST	1400			/* max size of request, in bytes */
 #define REPLY	1400			/* max size of reply, in bytes */
 
-#define UDP_SERV_PORT	7777		/* UDP server's wel-known port */
-#define TCP_SERV_PORT	8888		/* TCP server's wel-known port */
-#define TTCP_SERV_PORT	9999		/* TTCP server's wel-known port */
+#define LOCALHOST	"localhost"
+#define LOCALHOST1	"127.0.0.1"
+#define iC_PORT		"8778"
 
     /* Following shortens all the type casts of pointer arguments */
 #define SA		struct sockaddr *
 
-#ifdef STEVENS
-void	err_quit(const char *, ...);
-void	err_sys(const char *, ...);
-void	read_stream(int, char *, int);
-#endif
-
-extern const char *	iC_hostNM;	/* 127.0.0.1 */
-extern const char *	iC_portNM;	/* immcc service */
+extern const char *	iC_hostNM;	/* LOCALHOST */
+extern const char *	iC_portNM;	/* iC_PORT */
 extern char *		iC_iccNM;	/* immcc name qualified with instance */
 extern char *		iC_iidNM;	/* instance ID */
 

@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.43 2014/06/19 08:01:53 jw Exp $";
+"@(#)$Id: icr.c,v 1.44 2015/10/31 01:26:33 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -135,7 +135,7 @@ unsigned	iC_scan_cnt;		/* count scan operations */
 unsigned	iC_link_cnt;		/* count link operations */
 #if	YYDEBUG && !defined(_WINDOWS)
 unsigned	iC_glit_cnt;		/* count glitches */
-unsigned long	glit_nxt;		/* count glitch scan */
+unsigned long	iC_glit_nxt;		/* count glitch scan */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 /********************************************************************
@@ -306,11 +306,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     /********************************************************************
      *  The following initialisation function is an empty function
      *  in the libict.a support library.
-     *		int iCbegin(void) { return 0; }
+     *		int iCbegin(int argc, char** argv) { return -1; }
      *  It may be implemented in a literal block of an iC source, in
      *  which case that function will be linked in preference.
-     *  User implementations of iCbegin() should return 1, to activate
-     *  the debug message "iCbegin complete ====".
+     *  User implementations of iCbegin() should not return -1, (usually 0)
+     *  to activate the debug message "== iCbegin complete ====".
      *
      *  It can be used to initialise immC variables etc. For this reason
      *  it should be executed once after EOI, but before normal processing.
@@ -319,10 +319,10 @@ iC_icc(Gate ** sTable, Gate ** sTend)
      *  If the iCbegin() function contains a fork() call, a child process is
      *  spawned, which will run in parallel with immediate processing.
      *******************************************************************/
-    if (iCbegin()) {			/* initialisation function */
+    if (iCbegin(iC_argc, iC_argv) != -1) {	/* initialisation function */
 #if	YYDEBUG
 	if (iC_debug & 0100) {
-	    fprintf(iC_outFP, "\niCbegin complete ====\n");
+	    fprintf(iC_outFP, "\n== iCbegin complete ====\n");
 	}
 #endif	/* YYDEBUG */
     }
@@ -392,11 +392,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		fprintf(iC_outFP, "scan = %5u  link = %5u  time = %5u ms",
 		    iC_scan_cnt, iC_link_cnt, time_cnt);
 		if (iC_glit_cnt) {
-		    fprintf(iC_outFP, "  glitch = %5u, %lu", iC_glit_cnt, glit_nxt);
+		    fprintf(iC_outFP, "  glitch = %5u, %lu", iC_glit_cnt, iC_glit_nxt);
 		}
 		fprintf(iC_outFP, "\n");
 	    }
-	    iC_glit_cnt = glit_nxt =
+	    iC_glit_cnt = iC_glit_nxt =
 #endif	/* YYDEBUG */
 	    iC_scan_cnt = iC_link_cnt = 0;
 	}

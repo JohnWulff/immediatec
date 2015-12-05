@@ -1,5 +1,5 @@
 static const char pifacecad_h[] =
-"$Id: pifacecad.h,v 1.3 2015/03/18 05:25:33 jw Exp $";
+"$Id: pifacecad.h,v 1.4 2015/10/16 12:33:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 2014  John E. Wulff
@@ -112,7 +112,6 @@ static const uint8_t ROW_OFFSETS[] = {0, 0x40};
 /* PiFace Control and Display is usually at /dev/spidev0.1, pfa = 4 */
 extern int	iC_CAD_FD;	/* MCP23S17 SPI file descriptor */
 extern int	iC_CADpfa;
-#define PIFACECAD_KEY	"iC PiFaceCAD I/O\n"	/* generate and test same key */
 #ifdef	TRACE 
 
 extern int	id;		/* used to indent traces if (iC_debug & 04) */

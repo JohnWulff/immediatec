@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.67 2015/06/03 08:20:13 jw Exp $";
+"@(#)$Id: comp.h,v 1.68 2015/10/16 12:33:47 jw Exp $";
 
 #include	<setjmp.h>
 
@@ -269,7 +269,7 @@ extern void	listGenOut(		/* listing for undefined immC variable */
 	    Symbol * sp, int size);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
 extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
-	    Symbol * cName, List_e * cParams);
+	    Symbol * cName, List_e * cParams, int pcnt);
 extern List_e *	cListCount(		/* count parameters in 'cList' */
 	    List_e * cPlist, List_e * aexpr);
 extern Symbol *	functionDefHead(	/* set up the function definition head */

@@ -1,26 +1,130 @@
 /********************************************************************
  *
  *	Report output from iCtherm connected to a DS18B20 thermometer
- * @(#)$Id: therm.ic,v 1.1 2014/10/11 03:41:51 jw Exp $
+ * @(#)$Id: therm.ic,v 1.2 2015/11/06 10:51:30 jw Exp $
  *******************************************************************/
 
 use strict;
 
-%{
+%{	/* Start of literal C code */
 %#include	<stdio.h>
+%#include	<icg.h>
 %#include	<time.h>
 
-time_t	t;
-%}
+static time_t	t;
+static char *	opt_I = NULL;		/* default is no id string */
+static int	opt_d = 1;		/* default is date and time */
+static char	opt_C = 'C';		/* default is degrees centigrade */
+
+static const char *	usage =
+"Usage: %s[ --[ -h]|[[ -dnCF][ -I <id>][ -R <app ...>]]]\n"
+"     --I <id> display id before new temperature eg 'inside' or 'outside'\n"
+"     --C      display temparature in 1/10th degrees Centigrade (default)\n"
+"     --F      display temparature in 1/10th degrees Fahrenheit\n"
+"              Note: -C or -F must match the setting in iCtherm\n"
+"     --d      display date and time after new temperature (default)\n"
+"     --n      do not display date and time after new temperature\n"
+"     --h           this help text\n"
+"                      AUXILIARY app\n"
+"     --R <app ...> run auxiliary app followed by -z and its arguments\n"
+"                   as a separate process; -R ... must be last arguments.\n"
+"\n"
+"              type q or ctrl+D on the keyboard to stop the program\n"
+;
+
+int
+iCbegin(int argc, char** argv)
+{
+    char *	progname = *argv;
+    char *	mqz = "-qz";
+    char *	mz  = "-z";
+
+    if (argc >= 0) {
+	/********************************************************************
+	 *  Process command line arguments
+	 *******************************************************************/
+	while (--argc > 0) {
+	    if (**++argv == '-') {
+		++*argv;
+		do {
+		    switch (**argv) {
+		    case 'I':
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+			opt_I = *argv;
+			goto break2;
+		    case 'd':
+			opt_d = 1;		/* display date and time (default) */
+			break;
+		    case 'n':
+			opt_d = 0;		/* do not display date and time */
+			break;
+		    case 'C':
+		    case 'F':
+			opt_C = **argv;
+			break;
+		    case '\0':
+			goto break2;		/* lone   - ignore */
+		    case '-':
+			break;			/* extra -- ignore */
+		    case 'R':
+			/********************************************************************
+			 *  Run auxiliary app with rest of command line
+			 *  splice in the "-z" option to block STDIN interrupts in chained apps
+			 *  alternatively "-qz" option for quiet operation and to block STDIN
+			 *******************************************************************/
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+			*(argv-1) = *argv;	/* move app string to previous argv array member */
+			*argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+			argv--;			/* start call with app string */
+			goto break3;
+		    missing:
+			fprintf(stderr, "WARNING: %s: missing value after '%s'\n", progname, ((*--argv)-=2, *argv));
+		    case 'h':
+		    case '?':
+			fprintf(stderr, usage, progname);
+			iC_quit(-2);
+		    default:
+			fprintf(stderr, "WARNING: %s: unknown option -%c\n", progname, **argv);
+			break;
+		    }
+		} while (*++*argv);
+		break2: ;
+	    } else fprintf(stderr, "WARNING: %s: unknown argument '%s'\n", progname, *argv);
+	}					/* end of command line analysis */
+    } else {
+	/********************************************************************
+	 *  Run auxiliary app
+	 *******************************************************************/
+      break3:
+	iC_fork_and_exec(argv);
+    }
+    return 0;				/* no errors */
+} /* iCbegin */
+%}	/* End of literal C code */
 
 imm int		temperature = IW0;
 
-if (TX0.0) {			/* EOI end of initialisation */
-    t = time(0);
-    printf("%s\n", ctime(&t));
+if (TX0.0) {				/* EOI end of initialisation */
+    if (opt_I) {
+	printf("%s	", opt_I);
+    }
+    if (opt_d) {
+	t = time(0);
+	printf("start recording	%s", ctime(&t));
+    } else {
+	printf("\n");
+    }
 }
 
 if (CHANGE(temperature)) {
-    t = time(0);
-    printf("%5.1f °C	%7.3f ms	%s", (double)temperature/10, (double)clock()/(CLOCKS_PER_SEC/1000), ctime(&t));
+    if (opt_I) {
+	printf("%s	", opt_I);
+    }
+    printf("%5.1f °%c", (double)temperature/10.0, opt_C);
+    if (opt_d) {
+	t = time(0);
+	printf("	%s", ctime(&t));
+    } else {
+	printf("\n");
+    }
 }

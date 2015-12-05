@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.32 2013/02/14 22:43:18 jw Exp $";
+"@(#)$Id: link.c,v 1.33 2015/10/24 03:34:03 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -52,7 +52,7 @@ iC_link_ol(
 	diff = 0;				/* save time remaining */
 	while (tp->gt_next != gp) {		/* find previous entry */
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
-	    glit_nxt++;				/* count glitch scan */
+	    iC_glit_nxt++;			/* count glitch scan */
 #endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 	    diff += tp->gt_mark;		/* makes sense for TIMRL */
 	    if ((tp = tp->gt_next) == ap) {	/* end of one list */

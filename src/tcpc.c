@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.26 2015/09/29 06:55:10 jw Exp $";
+"@(#)$Id: tcpc.c,v 1.27 2015/11/06 22:48:02 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -75,8 +75,8 @@ static const char RCS_Id[] =
 #include	"tcpc.h"
 #include	"icc.h"
 
-const char *	iC_hostNM = "localhost";	/* 127.0.0.1 */
-const char *	iC_portNM = "8778";		/* iC service */
+const char *	iC_hostNM = LOCALHOST;		/* localhost or 127.0.0.1 */
+const char *	iC_portNM = iC_PORT;		/* 8778 iC well known port */
 char *		iC_iccNM  = "stdin";		/* immcc name qualified with instance */
 char *		iC_iidNM  = "";			/* instance ID */
 SOCKET		iC_sockFN = -1;			/* TCP/IP socket file number */
@@ -138,23 +138,24 @@ iC_microReset(int mask)
 void
 iC_microPrint(const char * str, int mask)
 {
+    if (iC_debug & 0100) fprintf(iC_outFP, "\n");
 #ifdef	WIN32
     double fi;
 
     if (freqFlag == 0 && QueryPerformanceFrequency(&freq)) {
 	freqFlag = 1;
 	frequency = freq.HighPart * 4294967296.0 + freq.LowPart;
-        // printf("frequency is %f\n", frequency);
+        // fprintf(iC_outFP, "frequency is %f\n", frequency);
     }
     if (freqFlag && QueryPerformanceCounter(&end)) {
-	// printf("start %d.%u\n", start.HighPart, start.LowPart);
-	// printf("end   %d.%u\n", end.HighPart, end.LowPart);
+	// fprintf(iC_outFP, "start %d.%u\n", start.HighPart, start.LowPart);
+	// fprintf(iC_outFP, "end   %d.%u\n", end.HighPart, end.LowPart);
 	fi = ((double)(end.LowPart - start.LowPart) +
 	     (double)(end.HighPart - start.HighPart) * 4294967296.0) / frequency;
-	printf("%10.6f: %s\n", fi, str);
+	fprintf(iC_outFP, "%10.6f: %s\n", fi, str);
         QueryPerformanceCounter(&start);	/* start of next measurement without print time */
     } else {
-        printf("micro: %s\n", str);
+        fprintf(iC_outFP, "micro: %s\n", str);
     }
 #else	/* WIN32 */
     long	sec;
@@ -167,7 +168,7 @@ iC_microPrint(const char * str, int mask)
 	    sec--;
 	    usec += 1000000;
 	}
-	printf("%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
+	fprintf(iC_outFP, "%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
     gettimeofday(&mt0, 0);			/* start of next measurement without print time */
 #endif	/* WIN32 */
@@ -192,6 +193,7 @@ iC_connect_to_server(const char *	host,
     struct sockaddr_in	server;
     int			flag = 1;		// support setting TCP_NODELAY
     int			r;
+    char *		cp;
 #ifdef	WIN32
     WORD		wVersionRequested;
     WSADATA		wsaData;
@@ -292,50 +294,18 @@ iC_connect_to_server(const char *	host,
     server.sin_port = sin_port;
 
     for (r = 0; connect(sock, (SA)&server, sizeof(server)) < 0; r++) {
-	if (r < 50) {			/* wait 10 seconds max - will break within 200 ms of connecting */
-	    if (r == 0 && errno == ECONNREFUSED && strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
-		int	i = 0;
-		char *	ex_arg = "/usr/bin/perl";	/* use execv() - do not search path - may be SUID */
-		char *	ex_args[12];			/* execute iCserver -a as a separate process */
-		pid_t	c_pid;
-		uid_t	euid;
-		uid_t	uid;
-		char	buffer[BS];			/* 256 in icc.h */
-
-		snprintf(buffer, BS, "perl -S iCserver -a");	/* prepare to execute iCserver -a */
-		fprintf(iC_errFP, "%s\n", buffer);
-		/* retrieve first token from buffer, separated using " " */
-		ex_args[i] = strtok(buffer, " ");
-		if (iC_debug & 04) fprintf(iC_errFP, "*** %d:	%s\n", i, ex_args[i]);
-		i++;
-		/* continue to retrieve tokens until NULL returned */
-		while(i < 12 && (ex_args[i] = strtok(NULL, " ")) != NULL) {
-		    if (iC_debug & 04) fprintf(iC_errFP, "*** %d:	%s\n", i, ex_args[i]);
-		    i++;
-		}
-		assert(i < 12);				/* should fit with  4 arguments in execute string */
-		uid = getuid();
-		euid = geteuid();
-		if (iC_debug & 04) fprintf(iC_errFP, "uid = %d euid = %d\n", (int)uid, (int)euid);
-		if ((c_pid = fork()) == 0) {
-		    /* child process */
-		    if (euid == 0) {
-			if (seteuid(uid) != 0) {	/* execute iCserver at uid privileges */
-			    perror("seteuid failed");	/* hard ERROR */
-			    iC_quit(SIGUSR1);
-			}
-		    }
-		    execv(ex_arg, ex_args);		/* execute iCserver -a call in parallel child process */
-		    /* only get here if exec fails */
-		    perror("execv failed");		/* hard ERROR */
-		    iC_quit(SIGUSR1);
-		} else if (c_pid < 0) {
-		    perror("fork failed");		/* hard ERROR */
+	if (r < 50 ||  errno != ECONNREFUSED) {	/* wait 10 seconds max - will break within 200 ms of connecting */
+	    if (r == 0) {
+		if (strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
+		    cp = (iC_debug & DQ) ? "iCserver -akqz" : "iCserver -akz";
+		    iC_fork_and_exec(iC_string2argv(cp, 2));	/* fork iCserver -ak[q]z block STDIN [quiet] */
+		    iC_Xflag = 1;		/* this process started iCserver */
+		} else {
+		    fprintf(iC_errFP, "ERROR: %s: '%s:iCserver -p %s -akz' cannot be started here - start it on '%s' to connect\n",
+			iC_iccNM, host, port, host);
 		    iC_quit(SIGUSR1);
 		}
-		/* continue parent process with extended privileges */
 	    }
-	    iC_Xflag = 1;			/* this process started iCserver */
 #ifdef	WIN32
 	    Sleep(200);				/* 200 ms in ms */
 #else	/* ! WIN32 */
@@ -349,7 +319,7 @@ iC_connect_to_server(const char *	host,
 	}
     }
 
-    if (iC_osc_lim != 0) {		/* suppress connection info for unlimited oscillations */
+    if (iC_osc_lim != 0 && (iC_debug & DQ) == 0) { /* suppress connection info for unlimited oscillations */
 	fprintf(iC_errFP, "'%s' connected to server at '%s:%d'\n",
 	    iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
     }

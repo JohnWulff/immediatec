@@ -3,6 +3,9 @@
  *	RFID demo for Mini Makers Faire, Powerhouse Museum
  *	16-17 August 2014
  *	16 March 2015	v9	normalised I/O
+ *	14 October 2015	v11	add full command line analysis
+ *
+ * @(#)$Id: rfid.ic,v 1.2 2015/11/06 07:04:10 jw Exp $
  *
  *******************************************************************/
 
@@ -24,8 +27,9 @@ QX2.5 = IX2.1;			// echo button 1
 QX2.6 = IX2.2;			// echo button 2
 QX2.7 = IX2.3;			// echo button 3
 
-%{
+%{	/* Start of literal C code */
 %#include	<stdio.h>
+%#include	<icg.h>
 %#include	<stdlib.h>
 %#include	<string.h>
 
@@ -40,20 +44,92 @@ static int	code = 0;
 static int	c;
 static int	c1;
 static char *	colour;
-static char *	Usage = {
-"\n  Usage:\n"
+static char *	usage =
+"Usage: %s"
+%#ifdef	RASPBERRYPI
+"[ -I X2]"
+%#endif
+"[ --[ -h]|[ -R <app ...>]]\n"
+%#ifdef	RASPBERRYPI
+"    -I X2   activate IX2.0-3 and QX2.0-7 for inverting PiFace\n"
+%#endif
+"   --h           this help text\n"
+"   --R <app ...> run auxiliary app followed by -z and its arguments\n"
+"                 as a separate process; -R ... must be last arguments.\n"
+"%s"
+;
+static char *	local =
+"\n"
 "    Swipe a RFID card over the rfid reader:\n"
 "      shows RED if card is not recognised\n"
-"        press button 1 to add card code to data base\n"
+"        Press button 1 to add card code to data base\n"
 "      shows GREEN if card is recognised\n"
-"        press button 2 to remove card code from data base\n"
-"    Press ctrl+D or ctrl+C on the keyboard to stop the program\n"
-"    Press Button 1 2 and 3 while Button 0 is released to shutdown\n"
-};
-%}
+"        Press button 2 to remove card code from data base\n"
+"    press button 0 and 1 together to repeat this help text\n"
+"    type ctrl+D on the keyboard to stop the program\n"
+%#ifdef	RASPBERRYPI
+"    press button 1 2 and 3 while button 0 is released to shutdown\n"
+%#endif
+;
+
+int
+iCbegin(int argc, char** argv)
+{
+    char *	progname = *argv;
+    char *	mqz = "-qz";
+    char *	mz  = "-z";
+
+    if (argc >= 0) {
+	/********************************************************************
+	 *  Process command line arguments
+	 *******************************************************************/
+	while (--argc > 0) {
+	    if (**++argv == '-') {
+		++*argv;
+		do {
+		    switch (**argv) {
+		    case '\0':
+			goto break2;	/* - ignore */
+		    case '-':
+			break;		/* ignore extra - */
+		    case 'R':
+			/********************************************************************
+			 *  Run auxiliary app with rest of command line
+			 *  splice in the "-z" option to block STDIN interrupts in chained apps
+			 *  alternatively "-qz" option for quiet operation and to block STDIN
+			 *******************************************************************/
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+			*(argv-1) = *argv;	/* move app string to previous argv array member */
+			*argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+			argv--;			/* start call with app string */
+			goto break3;
+		    missing:
+			fprintf(stderr, "WARNING: %s: missing value after '%s'\n", progname, ((*--argv)-=2, *argv));
+		    case 'h':
+		    case '?':
+			fprintf(stderr, usage, progname, local);
+			iC_quit(-2);
+		    default:
+			fprintf(stderr, "WARNING: %s: unknown option -%c\n", progname, **argv);
+			break;
+		    }
+		} while (*++*argv);
+		break2: ;
+	    } else fprintf(stderr, "WARNING: %s: unknown argument '%s'\n", progname, *argv);
+	}					/* end of command line analysis */
+    } else {
+	/********************************************************************
+	 *  Run auxiliary app
+	 *******************************************************************/
+      break3:
+	iC_fork_and_exec(argv);
+    }
+    return 0;				/* no errors */
+} /* iCbegin */
+%}	/* End of literal C code */
 
 if (RISE(eoi) | IX2.0 & IX2.1) {
-    printf("%s\n", Usage);
+    printf("%s\n", local);
 }
 
 if (TX0.1) {			// pulses when a line of stdin received
@@ -116,5 +192,10 @@ if (IX2.2) {
 }
 
 if (~IX2.0 & IX2.1 & IX2.2 & IX2.3) {	// press button 1 2 and 3 together
-    system("sudo shutdown -h now");	// while button 0 is released to shutdown
+    if (system("uname -m | grep armv") == 0) {
+	fprintf(stderr, "sudo shutdown -h now\n");
+	system("sudo shutdown -h now");	// while button 0 is released to shutdown
+    } else {
+	fprintf(stderr, "shutdown only allowed on Raspberry Pi (armv) processors\n");
+    }
 }

@@ -28,16 +28,20 @@ format STDERR =
 Usage:	@<<<<<<< [-h] [-D<def> ...] [<file> ...]
 	$named
 	-D<def>	zero or more -D<def> options may be supplied
-		each will be output to stdout in one line as
-		#define <def>
-		if <def> is in the form xxx=yyy, '=' is replaced by tabs
-		#define xxx  yyy
+		each will be output to stdout in 3 lines as
+		    #ifndef <def>
+		    #define <def>
+		    #endif
+		if <def> is in the form xxx=yyy, '=' is replaced by tab
+		    #ifndef xxx
+		    #define xxx  yyy
+		    #endif
 	<file>	finally <file> is copied from the line following one containing
 		'STARTFILE' to one before one containing 'ENDFILE' to stdout
 		(could be several files)
 		if no <file> argument, stdin is copied to stdout
 	-h	help, ouput this Usage text only
-$Id: icg.pl,v 1.4 2012/12/06 22:47:30 jw Exp $
+$Id: icg.pl,v 1.5 2015/10/16 12:33:47 jw Exp $
 .
 
 use vars qw($opt_h);
@@ -52,12 +56,16 @@ if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
 }
 
-my $option;
+my ($option, $macro);
 my $outFlag = 0;
 
-while ($option = shift @opt_D) {
-    $option =~ s/=/\t\t/;
-    print "#define	$option\n";
+while ($option = $macro = shift @opt_D) {
+    if ($macro =~ s/(\w+)=/$1\t/) {
+	$option = $1;
+    }
+    print "#ifndef	$option\n".
+	  "#define	$macro\n".
+	  "#endif\n";
 }
 
 while (<>) {

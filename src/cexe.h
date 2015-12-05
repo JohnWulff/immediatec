@@ -19,10 +19,11 @@ static const char cexe_part1[] =
 " *******************************************************************/\n"
 "\n"
 "static const char cexe_h[] =\n"
-"\"@(#)$Id: cexe.h,v 1.30 2014/11/06 23:27:33 jw Exp $\";\n"
+"\"@(#)$Id: cexe.h,v 1.31 2015/10/30 04:40:11 jw Exp $\";\n"
 "\n"
 "#include	<stdio.h>\n"
 "#include	<signal.h>\n"
+"#include	<string.h>\n"
 "#include	\"icc.h\"\n"
 "#include	\"comp.h\"\n"
 "\n"
@@ -54,7 +55,7 @@ static const char cexe_part1[] =
 " *******************************************************************/\n"
 "\n"
 ;
-static const int cexe_lines1 = 42;
+static const int cexe_lines1 = 43;
 
 static const char cexe_part2[] =
 "#if INT_MAX == 32767 && defined (LONG16)\n"
@@ -66,20 +67,18 @@ static const char cexe_part2[] =
 "{\n"
 "    static int	flag = 1;\n"
 "\n"
-"    if (flag) {\n"
-"	if (strcmp(inpNM, \"%s\") != 0) {\n"
-"	    fflush(iC_outFP);\n"
-"	    fprintf(iC_errFP,\n"
-"		\"\\n*** Error: cexe.c: was built with '%s -c -%sO%o %s'\\n\"\n"
-"		  \"*** Rebuild compilers using '%%s -c -%%sO%%o %%s; m -rt'\\n\"\n"
-"		  , iC_progname, iC_gflag ? \"g\" : \"\", iC_optimise, inpNM);\n"
-"	    iC_quit(SIGUSR1);\n"
-"	}\n"
-"	flag = 0;		/* do strcmp() only once */\n"
+"    if (flag-- > 0 && strcmp(inpNM, \"%s\") != 0) {\n"
+"	fflush(iC_outFP);	/* do strcmp() only once */\n"
+"	fprintf(iC_errFP,\n"
+"	    \"\\n*** Error: cexe.c: was built with '%s -c -%sO%o %s'\\n\"\n"
+"	      \"*** Rebuild compilers using '%%s -c -%%sO%%o %%s; m -rt'\\n\"\n"
+"	      , iC_progname, iC_gflag ? \"g\" : \"\", iC_optimise, inpNM);\n"
+"	iC_quit(SIGUSR1);\n"
 "    }\n"
+"\n"
 "    switch (iC_indx) {\n"
 ;
-static const int cexe_lines2 = 21;
+static const int cexe_lines2 = 20;
 
 static const char cexe_part3[] =
 "    default:\n"

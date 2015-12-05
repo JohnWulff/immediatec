@@ -44,7 +44,7 @@ Usage:
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
     -f page display the output of man -f <page> (whatis)
-    -F font font or font size to use in Text window (default '14')
+    -F font font or font size to use in Text window (default '18')
     -l num  height of the Text window (default @<<)
 					$opt_l
     -w num  width  of the Text window (default @<<) -w0 is terminal width
@@ -124,7 +124,7 @@ Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman,v 1.20 2015/09/29 06:55:10 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCman,v 1.21 2015/10/27 07:53:09 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -218,7 +218,7 @@ if (defined $opt_F) {
 	$fontSize = $opt_F;
     } else {
 	$font_t = $opt_F;
-	$fontSize = 14;
+	$fontSize = 18;
     }
 }
 unless ($font_t) {
@@ -226,7 +226,7 @@ unless ($font_t) {
 	$fontSize = 12 unless $fontSize;
 	$font_t = "{Lucida Console} fontSize normal";
     } else {			# Linux
-	$fontSize = 14 unless $fontSize;
+	$fontSize = 18 unless $fontSize;
 	$font_t = "-adobe-courier-medium-r-normal--fontSize-100-100-100-m-90-iso8859-1";
     }
 }
@@ -2075,7 +2075,7 @@ iCman - an interface to the on-line reference manuals
     -k key  display the output of man -k <key> (apropos) which provides
             man page links to the topic described by <key>.
     -f page display the output of man -f <page> (whatis)
-    -F font font or font size to use in Text window (default '14')
+    -F font font or font size to use in Text window (default '18')
     -l num  height of the Text window (default 35)
     -w num  width  of the Text window (default 85) -w0 is terminal width
     -g geom geometry for main window

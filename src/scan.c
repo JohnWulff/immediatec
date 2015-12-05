@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.40 2013/02/14 01:07:46 jw Exp $";
+"@(#)$Id: scan.c,v 1.41 2015/12/04 23:57:09 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -642,7 +642,7 @@ gate3(Gate * gp, int typ)				/* Pass3 init on gates */
 	    iC_error_flag |= 1;				/* can execute with this warning */
     } else {
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 0100) {
+	if ((iC_debug & (DQ|0100)) == 0100) {
 	    fprintf(iC_outFP, "\n	    %c	%s:\t%d inputs",
 		opt, gp->gt_ids, typ == ARNC || typ == LOGC ? gp->gt_mark : gp->gt_mcnt);
 	}
@@ -747,13 +747,13 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 	} else
 	if (op->gt_fni == ARITH) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) {
+	    if ((iC_debug & 0100) && (!(iC_debug & DQ) || *lp)) {
 #if INT_MAX == 32767 && defined (LONG16)
 		fprintf(iC_outFP, "\n%s:	%ld", op->gt_ids, op->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 		fprintf(iC_outFP, "\n%s:	%d", op->gt_ids, op->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-		iC_dc = 1;
+		iC_dc = (iC_debug & DQ) ? 0 : 1;
 	    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    /************************************************************
@@ -839,10 +839,10 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 	    }
 	} else if (op->gt_fni == GATE || op->gt_fni == GATEX) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 0100) {
+	    if ((iC_debug & (DQ|0100)) == 0100) {
 		fprintf(iC_outFP, "\n%s:	%+d", op->gt_ids, op->gt_val);
-		iC_dc = 1;
 	    }
+	    iC_dc = (iC_debug & DQ) ? 0 : 1;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    /************************************************************
 	     * Scan normal logical outputs
@@ -856,6 +856,9 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 #if YYDEBUG && !defined(_WINDOWS)
 		    iC_gx = gp;				/* save old gp in iC_gx */
 		    if (iC_debug & 0100) {
+			if (iC_dc == 0) {
+			    fprintf(iC_outFP, "\n%s:	%+d", op->gt_ids, op->gt_val);
+			}
 			if (iC_dc++ >= 4) {
 			    iC_dc = 1;
 			    fprintf(iC_outFP, "\n\t");
@@ -883,6 +886,9 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 #if YYDEBUG && !defined(_WINDOWS)
 		iC_gx = gp;				/* save old gp in iC_gx */
 		if (iC_debug & 0100) {
+		    if (iC_dc == 0) {
+			fprintf(iC_outFP, "\n%s:	%+d", op->gt_ids, op->gt_val);
+		    }
 		    if (iC_dc++ >= 4) {
 			iC_dc = 1;
 			fprintf(iC_outFP, "\n\t");

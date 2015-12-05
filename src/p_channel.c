@@ -1,5 +1,5 @@
 static const char p_channel_c[] =
-"@(#)$Id: p_channel.c,v 1.1 2015/10/04 03:42:41 jw Exp $";
+"@(#)$Id: p_channel.c,v 1.2 2015/10/16 12:33:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 2015  John E. Wulff
@@ -33,7 +33,7 @@ unsigned short P_channel = 0xffff;		/* not interested in PiFaceCAD */
 //    unsigned short P_channel = 0xfffe;	/* want to write direct to PiFaceCAD */
 //
 //    int
-//    iCbegin(void)
+//    iCbegin(int argc, char** argv)
 //    {
 //	...					/* code supporting PiFaceCAD */
 //	return 1;

@@ -72,13 +72,14 @@ static struct timespec	ms100 = { 0, 100000000, };
 
 static const char *	usage =
 "Usage:\n"
-" %s [-Bftmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
+" %s [-Bftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]\n"
 "         [ -a <val>][ -b <val>][ -D <val>][ -E <val>]\n"
-"         [ -S <val>][ -C <val>][ -d <deb>]\n"
+"         [ -A <val>][ -C <val>][ -d <deb>]\n"
 "         [ [~]QW<x>,<gpio>,p[,<range>[,<freq>]][-<inst>] ...]\n"
 "         [ QW<x>,<gpio>,s[-<inst>] ...]\n"
 "         [ IW<x>,<adc_channel>[-<inst>] ...]\n"
 "         [ -r <time>][ -e <expf>][ -H <hyst>]\n"
+"         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments\n"
 "    -s host IP address of server    (default '%s')\n"
 "    -p port service port of server  (default '%s')\n"
 "    -i inst instance of this client (default '') or 1 to %d digits\n"
@@ -92,7 +93,7 @@ static const char *	usage =
 "    -b val  gpio sample buffer in milliseconds, default 120\n"
 "    -D val  primary DMA channel, 0-14,          default 14\n"
 "    -E val  secondary DMA channel, 0-6,         default 5\n"
-"    -S val  sample rate, 1, 2, 4, 5, 8, or 10,  default 5 us\n"
+"    -A val  sample rate, 1, 2, 4, 5, 8, or 10,  default 5 us\n"
 "    -C val  clock peripheral, 0=PWM 1=PCM,      default PCM\n"
 "                      GPIO SERVO and PWM IEC output arguments\n"
 "    QW<x>,<gpio>,p[,<range>[,<freq>]]\n"
@@ -158,10 +159,16 @@ static const char *	usage =
 "            +200 show more debugging details\n"
 "             300 show exponential averaging\n"
 "            +400 exit after initialisation\n"
-"    -h      help, ouput this Usage text only\n"
+"    -q      quiet - do not report clients connecting and disconnecting\n"
+"    -z      block keyboard input on this app - used by -R\n"
+"    -h      this help text\n"
+"                    typing q or ctrl+D stops %s\n"
+"                      AUXILIARY app\n"
+"    -R <app ...> run auxiliary app followed by -z and its arguments\n"
+"                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiPWM.c,v 1.2 2015/09/29 06:55:10 jw Exp $\n"
+"Version	$Id: iCpiPWM.c,v 1.3 2015/11/06 07:56:43 jw Exp $\n"
 ;
 
 /********************************************************************
@@ -248,6 +255,8 @@ main(
     unsigned short	gpio;
     unsigned short	adch;
     char		tail[128];	/* must match sscanf formats %127s for tail */
+    char *		mqz = "-qz";
+    char *		mz  = "-z";
     char		iqc[2] = { '\0', '\0' };
     char		dum[2] = { '\0', '\0' };
     char		sp[2]  = { '\0', '\0' };
@@ -319,15 +328,15 @@ main(
 		    int		i;
 		    int		slen;
 		case 's':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) iC_hostNM = *argv;
 		    goto break2;
 		case 'p':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) iC_portNM = *argv;
 		    goto break2;
 		case 'i':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if ((slen = strlen(*argv)) > INSTSIZE ||
 			slen != strspn(*argv, "0123456789")) {
 			fprintf(iC_errFP, "ERROR: %s: '-i %s' is non numeric or longer than %d digits\n",
@@ -342,15 +351,18 @@ main(
 		    iC_opt_B = 1;	/* start iCbox -d to monitor active GPIO I/O */
 		    break;
 		case 'W':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    gpioTherm = atoi(*argv);
-		    if (gpioTherm > 31) goto error;
+		    if (gpioTherm > 31) {
+			fprintf(iC_errFP, "ERROR: %s: -W %hu value > 31\n", iC_progname, gpioTherm);
+			goto error;
+		    }
 		    goto break2;
 		case 'f':
 		    forceFlag = 1;	/* force use of GPIO's required by this program */
 		    break;
 		 case 'a':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    i = atoi(*argv);
 		    if ((i >= PI_MEM_ALLOC_AUTO) && (i <= PI_MEM_ALLOC_MAILBOX)) {
 			memAllocMode = i;
@@ -360,7 +372,7 @@ main(
 		    }
 		    goto break2;
 		 case 'b':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    i = atoi(*argv);
 		    if ((i >= PI_BUF_MILLIS_MIN) && (i <= PI_BUF_MILLIS_MAX)) {
 			bufferSizeMilliseconds = i;
@@ -370,7 +382,7 @@ main(
 		    }
 		    goto break2;
 		 case 'D':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    i = atoi(*argv);
 		    if ((i >= PI_MIN_DMA_CHANNEL) && (i <= PI_MAX_PRIMARY_CHANNEL)) {
 			DMAprimaryChannel = i;
@@ -380,7 +392,7 @@ main(
 		    }
 		    goto break2;
 		 case 'E':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    i = atoi(*argv);
 		    if ((i >= PI_MIN_DMA_CHANNEL) && (i <= PI_MAX_SECONDARY_CHANNEL)) {
 			DMAsecondaryChannel = i;
@@ -389,8 +401,8 @@ main(
 			errorFlag++;
 		    }
 		    goto break2;
-		 case 'S':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		 case 'A':
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    i = atoi(*argv);
 		    switch(i) {
 		    case 1:
@@ -402,13 +414,13 @@ main(
 			clockMicros = i;
 			break;
 		    default:
-			fprintf(iC_errFP, "ERROR: %s: invalid -S option (%d)\n", iC_progname, i);
+			fprintf(iC_errFP, "ERROR: %s: invalid -A option (%d)\n", iC_progname, i);
 			errorFlag++;
 			break;
 		    }
 		    goto break2;
 		 case 'C':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    i = atoi(*argv);
 		    if ((i >= PI_CLOCK_PWM) && (i <= PI_CLOCK_PCM)) {
 			clockPeripheral = i;
@@ -418,14 +430,14 @@ main(
 		    }
 		    goto break2;
 		 case 'r':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    b = atoi(*argv);		/* A/D measurement repetition time in ms */
 		    if (b < 1) b = 1;			/* TODO adjust for slow RPi, OK on RPi2 */
 		    toRep.tv_sec = b / 1000;		/* seconds */
 		    toRep.tv_usec = (b % 1000) * 1000;	/* remainder in us */
 		    goto break2;
 		 case 'e':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    ad_expf = atoi(*argv);	/* A/D exponential smoothing factor */
 		    if (ad_expf > 65536) {
 			fprintf(iC_errFP, "ERROR: %s: exponential smoothing factor should be <= 65536 (%d)\n",
@@ -436,7 +448,7 @@ main(
 		    ad_expf1 = (double)(ad_expf - 1);
 		    goto break2;
 		 case 'H':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    ad_hyst = atoi(*argv);	/* A/D measurement hysteresis */
 		    if (ad_hyst > 511) {
 			fprintf(iC_errFP, "ERROR: %s: hysteresis should be <= 511 (%d)\n",
@@ -446,7 +458,7 @@ main(
 		    if (ad_hyst < 1) ad_hyst = 1;
 		    goto break2;
 		case 'd':
-		    if (! *++*argv) { --argc; if(! *++argv) goto error; }
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if ((slen = strlen(*argv)) != strspn(*argv, "01234567") ||	/* octal digits only */
 			sscanf(*argv, "%o", &i) != 1 ||
 			i & ~0777) {
@@ -459,22 +471,41 @@ main(
 		case 't':
 		    iC_debug |= 0100;	/* trace arguments and activity */
 		    break;
-		default:
-		    fprintf(iC_errFP,
-			"%s: unknown command line switch '%s'\n", iC_progname, *argv);
+		case 'q':
+		    iC_debug |= DQ;	/* -q    quiet operation of all apps and iCserver */
+		    break;
+		case 'z':
+		    iC_debug |= DZ;	/* -z    block all STDIN interrupts for this app */
+		    break;
+		case 'R':
+		    /********************************************************************
+		     *  Run auxiliary app with rest of command line
+		     *  splice in the "-z" option to block STDIN interrupts in chained apps
+		     *  alternatively "-qz" option for quiet operation and to block STDIN
+		     *******************************************************************/
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    *(argv-1) = *argv;	/* move app string to previous argv array member */
+		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+		    argv--;			/* start call with app string */
+		    goto break3;
+		missing:
+		    fprintf(iC_errFP, "ERROR: %s: missing value after '%s'\n", iC_progname, ((*--argv)-=2, *argv));
 		case 'h':
 		case '?':
 	      error:
 		    fprintf(iC_errFP, usage, iC_progname, iC_hostNM, iC_portNM, INSTSIZE,
-			DEFAULT_PWM_RANGE, DEFAULT_PWM_FREQUENCY, iC_progname, INSTSIZE, iC_progname);
-		    exit(1);
+			DEFAULT_PWM_RANGE, DEFAULT_PWM_FREQUENCY, iC_progname, INSTSIZE, iC_progname, iC_progname);
+		    exit(-1);
+		default:
+		    fprintf(iC_errFP, "WARNING: %s: unknown option -%c\n", iC_progname, **argv);
+		    break;
 		}
 	    } while (*++*argv);
 	  break2: ;
 	} else {
 	    /********************************************************************
 	     *  Save IEC arguments for later analysis after all options have
-	     *  been determined. IEC arguments and options may be mixed.
+	     *  been determined. IEC arguments and options may be mixed (except -R).
 	     *  IEC arguments must start with ~ I or Q.
 	     *  A special case is the HOME evironment variable, which is generated
 	     *  by the Linux shell for ~. It is converted back to ~ here.
@@ -490,6 +521,12 @@ main(
 	    argip[argic++] = *argv;
 	}
     }
+  break3:
+    /********************************************************************
+     *  if argc != 0 then -R and argv points to auxialliary app + arguments 
+     *               do not fork and execute aux app until this app has
+     *               connected to iCserver and registered all its I/Os
+     *******************************************************************/
     if (iC_debug & 0200) fprintf(iC_outFP, "fullPath = '%s' path = '%s' progname = '%s'\n",
 	iC_fullProgname, iC_path, iC_progname);
     if (iC_debug & 0200) fprintf(iC_outFP, "uid = %d euid = %d\n", (int)uid, (int)euid);
@@ -704,7 +741,7 @@ main(
 		 *  If yes and bit 0 (OopsMask) has not been set in gpios->u.oops before
 		 *  remove w1-therm and w1-gpio and set bit 0 to block iCtherm
 		 *******************************************************************/
-		if (gpio == gpioTherm && !(gpiosp->u.oops & OopsMask)) {
+		if (gpio == gpioTherm) {
 		    strncpy(buffer, "sudo modprobe -r w1-therm w1-gpio", BS);	/* remove kernel modules */
 		    if (iC_debug & 0200) fprintf(iC_outFP, "%s\n", buffer);
 		    if ((b = system(buffer)) != 0) {
@@ -736,7 +773,7 @@ main(
     if (gpioADlist[0] == NULL && gpioADlist[1] == NULL) {
 	fprintf(iC_errFP, "ERROR: %s: no valid IEC arguments? there must be at least 1 valid argument\n",
 	    iC_progname);
-	goto error;					/* output usage */
+	iC_quit(-4);					/* call termQuit() to terminate I/O */
     }
     /* configure PIGPIO library */
     gpioCfgBufferSize(bufferSizeMilliseconds);
@@ -827,12 +864,13 @@ main(
      *  Distribute read and/or write channels returned in acknowledgment
      *******************************************************************/
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
+	int	ntok;
 	if (iC_micro) iC_microPrint("ack received", 0);
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
-	if (iC_opt_B) {
-	    len = snprintf(buffer, BS, "perl -S iCbox -d -s %s -p %s -n %s-DI",
-		iC_hostNM, iC_portNM, iC_iccNM);	/* prepare to execute iCbox -d */
-	    op = buffer + len;
+	if (iC_opt_B) {				/* prepare to execute iCbox -d */
+	    len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
+	    b = ntok = 4;			/* initial number of tokens in buffer */
+	    op = buffer + len;			/* optional host and port appended in iC_fork_and_exec() */
 	    ol = BS - len;
 	}
 	cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
@@ -858,7 +896,7 @@ main(
 		gep->channel = channel;		/* link channel to GPIO (ignore receive channel) */
 		storeUnit(channel, gep);	/* link GPIO element pointer to send channel */
 		if (iC_opt_B) {
-		    assert(ol > 14);
+		    assert(ol > 24);
 		    len = snprintf(op, ol, " %s", gep->name);	/* add I/O name[-inst] to execute iCbox -d */
 		    op += len;
 		    ol -= len;
@@ -870,6 +908,7 @@ main(
 		    } else {
 			len = snprintf(op, ol, ",0,%u", range);	/* PWM range of iCbox slider */
 		    }
+		    b++;			/* count tokens in buffer */
 		    op += len;
 		    ol -= len;
 		}
@@ -880,44 +919,8 @@ main(
 	/********************************************************************
 	 *  ACK string complete
 	 *******************************************************************/
-	if (iC_opt_B) {
-	    int		i = 0;
-	    char *	ex_arg = "/usr/bin/perl";	/* use execv() - do not search path - may be SUID */
-	    char *	ex_args[66];			/* execute iCbox -d as a separate process */
-	    pid_t	c_pid;
-
-	    fprintf(iC_outFP, "%s\n", buffer);
-	    /* retrieve first token from buffer, separated using " " */
-	    ex_args[i] = strtok(buffer, " ");
-	    if (iC_debug & 0200) fprintf(iC_outFP, "*** %d:	%s\n", i, ex_args[i]);
-	    i++;
-	    /* continue to retrieve tokens until NULL returned */
-	    while(i < 66 && (ex_args[i] = strtok(NULL, " ")) != NULL) {
-		if (iC_debug & 0200) fprintf(iC_outFP, "*** %d:	%s\n", i, ex_args[i]);
-		i++;
-	    }
-	    if (i >= 66) {				/* should fit with a max of 32 possible GPIO's */
-		fprintf(iC_errFP, "ERROR: %s: iCbox -d call is limited to call + 64 parameters + terminator\n",
-		    iC_progname);
-		iC_quit(SIGUSR1);			/* error quit */
-	    }
-	    if ((c_pid = fork()) == 0) {
-		/* child process */
-		if (euid == 0) {
-		    if (seteuid(uid) != 0) {		/* execute iCbox at uid privileges */
-			perror("seteuid failed");	/* hard ERROR */
-			iC_quit(SIGUSR1);		/* error quit */
-		    }
-		}
-		execv(ex_arg, ex_args);			/* execute iCbox -d call in parallel child process */
-		/* only get here if exec fails */
-		perror("execv failed");			/* hard ERROR */
-		iC_quit(SIGUSR1);			/* error quit */
-	    } else if (c_pid < 0) {
-		perror("fork failed");			/* hard ERROR */
-		iC_quit(SIGUSR1);			/* error quit */
-	    }
-	    /* continue parent process with extended privileges */
+	if (iC_opt_B && b > ntok) {
+	    iC_fork_and_exec(iC_string2argv(buffer, b));	/* fork iCbox -d */
 	}
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply: top channel = %hu\n", topChannel);
     } else {
@@ -1012,16 +1015,21 @@ main(
 	    }
 	}
     }
+    if (argc != 0) {
+	/********************************************************************
+	 *  -R and argv points to auxialliary app + arguments 
+	 *  This app has now connected to iCserver and registered all its I/Os
+	 *******************************************************************/
+	assert(argv && *argv);
+	iC_fork_and_exec(argv);			/* run auxiliary app */
+    }
     /********************************************************************
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
     FD_ZERO(&iC_infds);				/* should be done centrally if more than 1 connect */
     FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
+    if ((iC_debug & DZ) == 0) FD_SET(0, &iC_infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
     if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d\n", iC_sockFN);
-#ifndef	WIN32
-    FD_SET(0, &iC_infds);			/* watch stdin for inputs - FD_CLR on EOF */
-    /* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
-#endif	/* WIN32 */
     /********************************************************************
      *  External input (TCP/IP via socket and STDIN)
      *  Wait for input in a select statement most of the time
@@ -1163,8 +1171,8 @@ main(
 		    FD_CLR(0, &iC_infds);	/* ignore EOF - happens in bg or file - turn off interrupts */
 		    buffer[0] = '\0';		/* notify EOF to iC application by zero length buffer */
 		}
-		if ((b = buffer[0]) == 'q') {
-		    iC_quit(QUIT_TERMINAL);	/* quit normally */
+		if ((b = buffer[0]) == 'q' || b == '\0') {
+		    iC_quit(QUIT_TERMINAL);	/* quit normally with 'q' or ctrl+D */
 		} else if (b == 't') {
 		    iC_debug ^= 0100;		/* toggle -t flag */
 		} else if (b == 'm') {
@@ -1294,13 +1302,14 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
 
 =head1 SYNOPSIS
 
- iCpiPWM [-Bftmh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+ iCpiPWM [-Bftmqzh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
          [ -a <val>][ -b <val>][ -D <val>][ -E <val>]
-         [ -S <val>][ -C <val>][ -d <deb>]
+         [ -A <val>][ -C <val>][ -d <deb>]
          [ [~]QW<x>,<gpio>,p[,<range>[,<freq>]][-<inst>] ...]
          [ QW<x>,<gpio>,s[-<inst>] ...]
          [ IW<x>,<adc_channel>[-<inst>] ...]
          [ -r <time>][ -e <expf>][ -H <hyst>]
+         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host IP address of server    (default 'localhost')
     -p port service port of server  (default '8778')
     -i inst instance of this client (default '') or 1 to 3 digits
@@ -1314,7 +1323,7 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
     -b val  gpio sample buffer in milliseconds, default 120
     -D val  primary DMA channel, 0-14,          default 14
     -E val  secondary DMA channel, 0-6,         default 5
-    -S val  sample rate, 1, 2, 4, 5, 8, or 10,  default 5 us
+    -A val  sample rate, 1, 2, 4, 5, 8, or 10,  default 5 us
     -C val  clock peripheral, 0=PWM 1=PCM,      default PCM
                       GPIO PWM and SERVO IEC output arguments
     QW<x>,<gpio>,p[,<range>[,<freq>]]
@@ -1380,7 +1389,13 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
             +200 show more debugging details
              300 show exponential averaging
             +400 exit after initialisation
-    -h      help, ouput this Usage text only
+    -q      quiet - do not report clients connecting and disconnecting
+    -z      block keyboard input on this app - used by -R
+    -h      this help text
+                    typing q or ctrl+D stops iCpiPWM
+                      AUXILIARY app
+    -R <app ...> run auxiliary app followed by -z and its arguments
+                 as a separate process; -R ... must be last arguments.
 
 =head1 DESCRIPTION
 

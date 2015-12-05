@@ -1,6 +1,10 @@
 /********************************************************************
  *
  *	Test PiFaceCAD with iC system
+ *	2  April 2015	v15	operate via PFCAD4 over network
+ *	14 October 2015	v17	add full command line analysis
+ *
+ * @(#)$Id: pfcad.ic,v 1.2 2015/11/06 07:04:32 jw Exp $
  *
  *******************************************************************/
 
@@ -29,6 +33,7 @@ immC int  lineOut;
 
 %{	/* Start of literal C code */
 %#include	<stdio.h>
+%#include	<icg.h>
 %#include	<stdlib.h>
 %#include	<string.h>
 
@@ -116,20 +121,97 @@ displayTwoLines(int n)
  *  channel or the I/O can be direct on the one app. Otherwise run-time
  *  errors will happen.
  *
- *  NOTE 2: any code, which defines iCbegin() must also define P_channel
- *  and vice versa. Otherwise the linker will not find one or the other.
- *
  *******************************************************************/
 
 unsigned short	P_channel = 0xfffe;	/* this app wants to write to PiFaceCAD */
 
+static const char *	usage =
+"Usage: %s"
+%#ifdef	RASPBERRYPI
+"[ X4:4]"
+%#endif
+"[ --[ -h]|[[ -s <text>][ -R <app ...>]]]\n"
+%#ifdef	RASPBERRYPI
+"    X4:4   activate IX4.0-7 for PiFaceCAD\n"
+%#endif
+"   --s <text>    initial text - default: '%s'\n"
+"   --h           this help text\n"
+"                      AUXILIARY app\n"
+"   --R <app ...> run auxiliary app followed by -z and its arguments\n"
+"                 as a separate process; -R ... must be last arguments.\n"
+"\n"
+"    type any text line for display on the PiFaceCAD\n"
+"    the display can be reset to the first line entered with button 0\n"
+"    the display can be scrolled up and down with button 1 and 2\n"
+"    the display can be scrolled left and right with the toggle switch\n"
+"    type ctrl+D on the keyboard to stop the app\n"
+%#ifdef	RASPBERRYPI
+"    press button 1 2 and 3 while button 0 is released to shutdown\n"
+%#endif
+;
+
 int
-iCbegin(void)
+iCbegin(int argc, char** argv)
 {
-    writePiFaceCAD(PIFACECAD_KEY, P_channel);		/* generate and test same key */
+    char *	progname = *argv;
+    char *	mqz = "-qz";
+    char *	mz  = "-z";
+    char *	header   = PIFACECAD_KEY;
+
+    if (argc >= 0) {
+	/********************************************************************
+	 *  Process command line arguments
+	 *******************************************************************/
+	while (--argc > 0) {
+	    if (**++argv == '-') {
+		++*argv;
+		do {
+		    switch (**argv) {
+		    case 's':
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+			header = *argv;
+			goto break2;
+		    case '\0':
+			goto break2;	/* - ignore */
+		    case '-':
+			break;		/* ignore extra - */
+		    case 'R':
+			/********************************************************************
+			 *  Run auxiliary app with rest of command line
+			 *  splice in the "-z" option to block STDIN interrupts in chained apps
+			 *  alternatively "-qz" option for quiet operation and to block STDIN
+			 *******************************************************************/
+			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+			*(argv-1) = *argv;	/* move app string to previous argv array member */
+			*argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+			argv--;			/* start call with app string */
+			goto break3;
+		    missing:
+			fprintf(stderr, "WARNING: %s: missing value after '%s'\n", progname, ((*--argv)-=2, *argv));
+		    case 'h':
+		    case '?':
+			fprintf(stderr, usage, progname, PIFACECAD_KEY);
+			iC_quit(-2);
+		    default:
+			fprintf(stderr, "WARNING: %s: unknown option -%c\n", progname, **argv);
+			break;
+		    }
+		} while (*++*argv);
+		break2: ;
+	    } else fprintf(stderr, "WARNING: %s: unknown argument '%s'\n", progname, *argv);
+	}					/* end of command line analysis */
+    } else {
+	/********************************************************************
+	 *  Run auxiliary app
+	 *******************************************************************/
+      break3:
+	iC_fork_and_exec(argv);
+    }
+
+    writePiFaceCAD(header, P_channel);	/* generate and test same key */
     storeLine("\n");			/* make lineBase[0] an empty CR terminated line */
     fprintf(stderr, "> ");
-    return 1;
+    return 0;				/* no errors */
 } /* iCbegin */
 %}	/* End of literal C code */
 
@@ -204,7 +286,11 @@ QX4.5 = ~D(~IX4.5, t, 3);		/* scroll cursor and blink */
 QX4.6 = ~D(~IX4.3, t, 3);		/* display off */
 QX4.7 = ~D(~IX4.4, t, 3);		/* led backlight off */
 
-if (~IX4.0 & IX4.1 & IX4.2 & IX4.3) {	/* press button 1 2 and 3 together */
-//    system("sudo shutdown -h now");	/* while button 0 is released to shutdown */
-    printf("sudo shutdown -h now\n");
+if (~IX4.0 & IX4.1 & IX4.2 & IX4.3) {	// press button 1 2 and 3 together
+    if (system("uname -m | grep armv") == 0) {
+	fprintf(stderr, "sudo shutdown -h now\n");
+	system("sudo shutdown -h now");	// while button 0 is released to shutdown
+    } else {
+	fprintf(stderr, "shutdown only allowed on Raspberry Pi (armv) processors\n");
+    }
 }

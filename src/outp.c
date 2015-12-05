@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.97 2015/06/05 08:30:48 jw Exp $";
+"@(#)$Id: outp.c,v 1.98 2015/10/16 12:33:47 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -342,7 +342,7 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 	    snprintf(auxLink, TSIZE, "&l[%d]", (int)(lp->le_last - iCbuf));	/* avoid cast warning */
 	    lp->le_last = NULL;
 	}
-	printf("/* %3d */ { %-11s, %-9s, %-7s, %-14s, 0 },	/* ==> %s%s */\n",
+	fprintf(iC_outFP, "/* %3d */ { %-11s, %-9s, %-7s, %-14s, 0 },	/* ==> %s%s */\n",
 	    *pbcnt,
 	    auxName,
 	    auxVal,
@@ -406,7 +406,7 @@ out_builtin(List_e * lp, int * picnt)
 	strncpy(str_tail, "function block", 20);
     }
     if (sp->type == IFUNCT) {
-	printf("  { \"%1$s\",%3$*2$.*2$s%4$s,%6$*5$.*5$s%7$s,%9$*8$.*8$s0x%10$02x, %11$-7s,"
+	fprintf(iC_outFP, "  { \"%1$s\",%3$*2$.*2$s%4$s,%6$*5$.*5$s%7$s,%9$*8$.*8$s0x%10$02x, %11$-7s,"
 	       " %12$-7s, %13$-7s, %14$-15s },	/* %15$d pre-installed \"%1$s\" %16$s */\n"
 	    , sp->name				/* 1$ */
 	    , (int)(12 - strlen(sp->name))	/* 2$ */
@@ -426,7 +426,7 @@ out_builtin(List_e * lp, int * picnt)
 	    , str_tail				/* 16$ */
 	);	
     } else {
-	printf("  { \"%1$s\",%3$*2$.*2$s%4$s,%6$*5$.*5$s%7$s,%9$*8$.*8$s0x%10$02x, %11$-7s,"
+	fprintf(iC_outFP, "  { \"%1$s\",%3$*2$.*2$s%4$s,%6$*5$.*5$s%7$s,%9$*8$.*8$s0x%10$02x, %11$-7s,"
 	       " %12$-7s, %13$-7s, %14$-15s },\n"
 	    , sp->name				/* 1$ */
 	    , (int)(14 - strlen(sp->name))	/* 2$ */
@@ -586,7 +586,7 @@ iC_listNet(void)
 	int		c;
 	int		tlink;
 
-	printf(
+	fprintf(iC_outFP, 
 "static BuiltIn	b[];\n"
 "int		iC_genCount = 0;	/* count pre-compiled ar expressions - if any */\n"
 "\n"
@@ -637,7 +637,7 @@ iC_listNet(void)
 		    if (functionHead->type == IFUNCT) {
 			head = functionHead->name;
 			if (pass == 1) {
-			    printf( "\n");		/* function head found */
+			    fprintf(iC_outFP,  "\n");		/* function head found */
 			    if (strcasecmp(head+1, "hange") == 0) {
 				functionHead->fm = 0x01;/* 1 bit signature for CHANGE set manually */
 				indexChange = icnt;	/* save index in b[] for CHANGE2 */
@@ -725,7 +725,7 @@ iC_listNet(void)
 		}
 	    }
 	}
-	printf(
+	fprintf(iC_outFP, 
 "}; /* l[] */\n"
 	);
 	/********************************************************************
@@ -745,7 +745,7 @@ iC_listNet(void)
 			    for (vsp = vlp->le_sym; vsp->next != tsp; vsp = vsp->next);
 			    assert(vsp->u_blist);
 			    if (vsp->next) {
-				printf("static Symbol	%-10s = { .type=%-3s, .ftype=%-6s, .fm=0x%02x, .u_blist=&l[%d], .next=&%s };\n",
+				fprintf(iC_outFP, "static Symbol	%-10s = { .type=%-3s, .ftype=%-6s, .fm=0x%02x, .u_blist=&l[%d], .next=&%s };\n",
 				    vsp->name,
 				    iC_full_type[vsp->type],
 				    iC_full_ftype[vsp->ftype],
@@ -753,7 +753,7 @@ iC_listNet(void)
 				    vsp->u_blist->le_val >> SI,
 				    vsp->next->name);	/* link new var list */
 			    } else {
-				printf("static Symbol	%-10s = { .type=%-3s, .ftype=%-6s, .fm=0x%02x, .u_blist=&l[%d] };\n",
+				fprintf(iC_outFP, "static Symbol	%-10s = { .type=%-3s, .ftype=%-6s, .fm=0x%02x, .u_blist=&l[%d] };\n",
 				    vsp->name,
 				    iC_full_type[vsp->type],
 				    iC_full_ftype[vsp->ftype],
@@ -763,7 +763,7 @@ iC_listNet(void)
 			}
 			slp = vlp->le_next;		/* next statement link */
 		    }
-		    printf("\n");
+		    fprintf(iC_outFP, "\n");
 		}
 	    }
 	}
@@ -771,7 +771,7 @@ iC_listNet(void)
 	 * Boot Interlude 2: output arithmetic expressions with file name
 	 * and line number info
 	 *******************************************************************/
-	printf(
+	fprintf(iC_outFP, 
 "\n"
 "/********************************************************************\n"
 " *\n"
@@ -788,28 +788,28 @@ iC_listNet(void)
 		functionUse[funNo].lineNo &&
 		functionUse[funNo].inpNm &&
 		functionUse[funNo].headNm);
-	    printf(
+	    fprintf(iC_outFP, 
 "    {\n"
 "	\""
 	    );
 	    for (cp = functionUse[funNo].c.expr; (c = *cp & 0377) != 0; cp++) {
 		if (c < 040 || c >= 0377) {
-		    printf("\\%03o", c);
+		    fprintf(iC_outFP, "\\%03o", c);
 		} else {
-		    printf("%c", c);
+		    fprintf(iC_outFP, "%c", c);
 		}
 	    }
-	    printf(
+	    fprintf(iC_outFP, 
 "\",	/* (%d) */\n"
 	    , funNo);
-	    printf(
+	    fprintf(iC_outFP, 
 "	\"#line %d \\\"%s\\\"	/* in pre-compiled function block %s */\",\n"
 "    },\n"
 	    , functionUse[funNo].lineNo
 	    , functionUse[funNo].inpNm
 	    , functionUse[funNo].headNm);
 	}
-	printf(
+	fprintf(iC_outFP, 
 "    { NULL, NULL, },			/* terminator */\n"
 "};\n"
 "\n"
@@ -820,7 +820,7 @@ iC_listNet(void)
 	/********************************************************************
 	 * Boot Interlude 3: output pre-defined Symbols in array b[]
 	 *******************************************************************/
-	printf(
+	fprintf(iC_outFP, 
 "\n"
 "#else	/* BOOT_COMPILE */\n"
 "Symbol		iC_CHANGE_ar = { \"CHANGE\", KEYW, CH_AR, };	/* alternative arithmetic CHANGE */\n"
@@ -856,7 +856,7 @@ iC_listNet(void)
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (functionHead = *hsp; functionHead; functionHead = functionHead->next) {
 		if (functionHead->type == IFUNCT) {
-		    printf("\n");
+		    fprintf(iC_outFP, "\n");
 		    /********************************************************************
 		     * Boot 3.1: function head list
 		     * do this list independently to make sure links are consecutive
@@ -888,11 +888,11 @@ iC_listNet(void)
 		}
 	    }
 	}
-	printf(
+	fprintf(iC_outFP, 
 "\n"
 "											/* %d pre-installed BuiltIn function Symbols */\n"
 	, icnt);
-	printf(
+	fprintf(iC_outFP, 
 "#else	/* BOOT_COMPILE */\n"
 "  /* name	     type   ftype  uVal	*/\n"
 "  { \"FORCE\",	     KEYW,  0,     BFORCE, 0    , 0      , 0      , 0 },	/* FORCE function - generates LATCH */\n"
@@ -962,36 +962,36 @@ iC_listNet(void)
 "  { \"iC_Gt\",	     CTYPE, 0,   YYERRCODE,0    , 0      , 0      , 0 },	/* initial Gate C-type from icg.h */\n"
 	);
 	if ((tlink = iconst->v_cnt & 0777) != 0) {
-	    printf(
+	    fprintf(iC_outFP, 
 "#ifndef BOOT_COMPILE\n"
 "  { \"iConst\",	     NCONST,ARITH, 0,      0    , 0      , &l[%3d], 0 },	/* Symbol \"iConst\" must be second last non-zero entry */\n"
 "#else	/* BOOT_COMPILE */\n"
 	    , tlink);
 	}
-	printf(
+	fprintf(iC_outFP, 
 "  { \"iConst\",	     NCONST,ARITH, 0,      0    , 0      , 0      , 0 },	/* Symbol \"iConst\" must be second last non-zero entry */\n"
 	);
 	if (tlink != 0) {
-	    printf(
+	    fprintf(iC_outFP, 
 "#endif	/* BOOT_COMPILE */\n"
 	    );
 	}
 	if ((tlink = iclock->v_cnt & 0777) != 0) {
-	    printf(
+	    fprintf(iC_outFP, 
 "#ifndef BOOT_COMPILE\n"
 "  { \"iClock\",	     CLK,   CLCKL, 0,      0    , 0      , &l[%3d], 0 },	/* Symbol \"iClock\" must be last non-zero entry */\n"
 "#else	/* BOOT_COMPILE */\n"
 	    , tlink);
 	}
-	printf(
+	fprintf(iC_outFP, 
 "  { \"iClock\",	     CLK,   CLCKL, 0,      0    , 0      , 0      , 0 },	/* Symbol \"iClock\" must be last non-zero entry */\n"
 	);
 	if (tlink != 0) {
-	    printf(
+	    fprintf(iC_outFP, 
 "#endif	/* BOOT_COMPILE */\n"
 	    );
 	}
-	printf(
+	fprintf(iC_outFP, 
 "  { 0,  	     0,     0,     0,      0    , 0      , 0      , 0 },	/* terminate initialisation of S.T. with name == 0 */\n"
 "}; /* b[] */\n"
 	);
