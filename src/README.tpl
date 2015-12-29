@@ -14,7 +14,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 #   NOTE: the 'ident' filter is no longer used, since it is part of
 #         the 'RCS' package and may not be installed by some users.
 #         The power of Perl regular expressions is used instead.
-#   $Id: README.tpl,v 1.26 2015/06/06 08:48:15 jw Exp $
+#   $Id: README.tpl,v 1.27 2015/12/28 12:24:21 jw Exp $
 ########################################################################
 
 use strict;
@@ -102,17 +102,17 @@ print <<EOF;
 
     Notes for the installation of iC rev $REV
 
-    1)  Pre-requisites. You need the following on your system:
+    1)	Pre-requisites. You need the following on your system:
 
 	    C compiler			     # tested with gcc, MSC
 	    Perl, Perl/Tk and Time::HiRes    # to build iC applications
 
-    1)  Unpack the iC-archive in a suitable working directory with:
+    1)	Unpack the iC-archive in a suitable working directory with:
 
 	    tar -xvzf icc_$REV.tgz
 	    cd icc_$REV/src
 
-    2)  Execute the following:
+    2)	Execute the following:
 
 	    configure     OR  ./configure    # if super user (deprecated)
 	To make a Debug version do
@@ -126,53 +126,29 @@ print <<EOF;
 	    libict.a			     # the static run-time library
 	    libict.so			     # the dynamic run-time library
 
-    3)  To compile and compare the test iC files in Test0 execute:
+    3)	To compile and compare the test iC files in Test0 execute:
 
 	    make test			     # should output 'test OK'
 
-    4)  To use the Perl support programs, it is mandatory that you install the
-	Perl packages Tk804.029 or later and Time::HiRes unless they are already
-	installed on your system.  Both are included with this distribution.
-	This can be checked by executing the following at this point:
-
-	    iClive -h
-
-	Skip to point 8) if you get a help output and no error message.
-	The last line tells you which version of Perl/Tk you are using.
-
-    5)  Perl/Tk is usually contained in Linux distributions and will
-	be installed automatically when the package is selected.
-	If not, unpack, build and install Tk-804.029.tar.gz (or later).
-	Follow the instructions in the README and INSTALL files.
-	For Cygwin under WinXP a special binary distribution of Tk800.023
-	is included, which works fine.
-
-    6)  Unpack build and install the Time::HiRes archive in a suitable
-	working directory with:
-
-	    tar -xvzf Time-HiRes-01.20.tar.gz
-	    cd Time-HiRes-01.20; perl Makefile.PL; make; make test
-	    sudo make install	     	     ### Password  ###
-	    cd ..; rm -rf Time-HiRes-01.20   # unless you want to keep it
-
-    7)  Return to the immediate C installation
-
-	    cd icc_$REV/src		     # or the correct iC src directory
-
-    8)  To install the iC-compiler, libraries and scripts execute the
+    4)	To install the iC-compiler, libraries and scripts execute the
 	following as super user:
 
-	    sudo make install	     	     ### Password  ###
+	    sudo make install		     ### Password  ###
 
 	this copies the executables to /usr/local/bin, the include file
 	icg.h to /usr/local/include, libict.a, libict.so to /usr/local/lib or
 	/usr/local/lib64 and Msg.pm to /usr/lib/perl5/site...
 
-	    (make uninstall as su will remove all these files)
+	    sudo make uninstall		     # remove all these files
 
-    9)  To build and run the very simple iC application "hello.ic" do
+    5)	To use the Perl support programs, it is mandatory that you install the
+	Perl packages Tk804.029 or later and Time::HiRes unless they are alreadys
+	installed on your system.  Both can be found on the internet.  For Cygwin
+	under Windows a special binary distribution of Tk800.023 is included.
 
-	    iClive hello.ic		     # starts the IDE with hell0.ic
+    6)	To build and run the iC application "hello.ic" do
+
+	    iClive hello.ic		     # starts the IDE with hello.ic
 	    press Build / Build executable   # displays 'hello' successfully built
 	    press Run			     # opens an iCbox with 1 button IX0.0
 	    press button IX0.0 in iCbox	     # button turns HI (input is green)
@@ -184,12 +160,12 @@ print <<EOF;
 		# display changes to green/black, indicating LO.
 	    press File / Quit		     # 'hello' and iCbox are terminated
 
-    10) A slightly bigger application is "simple.ic". Build and run it with iClive.
+    7)	A slightly bigger application is "simple.ic". Build and run it with iClive.
 	An iCbox with 16 inputs and 8 outputs is started automatically.
 	Explore the logic of the statements by changing inputs and following
 	the outputs in iCbox and the live display in iClive.
 
-    11) The application "bar.ic" uses flip flops to produce a bar of running lights.
+    8)	The application "bar.ic" uses flip flops to produce a bar of running lights.
 	The application also explores the use of programmable time delays, giving
 	some idea of the scope of the iC language.
 
@@ -213,42 +189,76 @@ print <<EOF;
 	This is achieved by starting iClive with the -u option. Use this option
 	only for editing. In 'Live' mode the display is very jerky with -u active.
 
-    12) Applications can of course be run without iClive. They do need iCserver
-	though, which is a hub server for the TCP/IP packets exchanged between
-	iC applications, I/O applications - currently only iCbox, iClift and
-	optionally iClive.
+    9)	iCserver distributes TCP/IP messages between iC apps and iC real and
+	virtual I/O drivers.
 
-	    iCserver &			     # server runs on the background
-	    iCbox IX0 &			     # start IX0 manually
-	    hello			     # start application
+    10)	iCserver is usually started with the -a (auto-vivify) option, which will
+	start a simulated I/O iCbox for every input and output, every time an
+	iC application is started.  Otherwise these must be started manually,
+	which can be tedious for large applications.
 
-	    iCstop iCserver		     # kill iCserver, hello and iCbox
+		    iCserver -a &	# auto-vivify iCbox for application
+		    simple		# starts iCbox with 3 sets of I/O
 
-	A better way is to start iCserver with the -a (auto-vivify) option,
-	which will start simulated I/O iCbox, every time an iC application
-	is started. Otherwise these must be started manually, which can be
-	tedious for larger applications.
+	If iClive is started first, it does all this automatically.  It then
+	stops iCserver automatically when it quits.  When iCserver stops it
+	stops all registered applications and I/O's.
 
-	    iCserver -a &		     # auto-vivify iCbox for application
-	    simple			     # iCbox with 3 sets of I/O starts
+    11)	iC applications can of course be run without iClive.  They do need
+	iCserver though, which every app starts automatically in auto-vivify
+	mode unless it is already running.
 
-	If iClive is started first, it does all this automatically. It then kills
-	iCserver automatically when it quits. When iCserver quits it kills all
-	registered applications and I/O's.
+		    hello		# start hello + iCserver -ak + iCbox	
+	    OR	    hello -l		# additionally start iClive	
+		    type q		# to stop hello, iCserver and iCbox
 
-    13) Another powerful debugging tool is the GTKWave Wave Analyzer.
+    12)	Bernstein chaining.  If several different iC applications, or different
+	instances of the same application are to be started together, they must
+	all run in parallel as separate processes (and in parallel with iCserver,
+	iCbox and iClive).  This is difficult to achieve with shell commands.
 
-	GTKWave (an open-source program) is an analysis tool originally
-	intended to perform debugging on Verilog or VHDL simulation
-	models. With the exception of interactive VCD viewing, it is not
-	intended to run interactively with simulation, but instead relies on
-	a post-mortem approach through the use of dumpfiles. Various dumpfile
-	formats are supported: VCD: Value Change Dump. This is an industry
-	standard file format generated by most Verilog simulators and is
-	specified in IEEE-1364.  (Extract from the GTKWave 3.3 Wave Analyzer
-	User's Guide) Use in the iC system is hereby gratefully acknowledged.
+		    bar; bar -i1	# does not start bar -i1 until bar stops
+		    bar &; bar -i1	# is a shell syntax error
 
-	gtkwave-3.1.10-4.33.i586.rpm is distributed with immediate C.
+	neither of which is what we want.  Several apps started in a pipeline do
+	start in parallel, but we do not want the pipes between iC apps.
+	To achieve the desired result, Bernstein chaining has been implemented
+	with the -R option for every iC app and for all iC drivers.
+
+		    bar -R bar -i1	# starts bar and bar -i1 in parallel
+
+		    bar -l -R bar -i1 -R bar -i2 -R bar -i3	# starts:	
+			    iCserver -z -ak	
+			    iClive			# from -l	
+			    bar -z -i1 -R bar -i2 -R bar -i3	
+			    bar -z -i2 -R bar -i3	
+			    bar -z -i3	
+      iCserver starts:	    iCbox X0 B1 X2		# for bar	
+      by auto-vivification  iCbox X0-1 B1-1 X2-1	# for bar -i1	
+			    iCbox X0-2 B1-2 X2-2	# for bar -i2	
+			    iCbox X0-3 B1-3 X2-3	# for bar -i3
+
+	Only the first app in the chain has keyboard input and can be stopped
+	by typing 'q'.  This in turn stops iCserver, which stops all other apps
+	in the chain.  (-z blocks keyboard input for all chained apps).
+
+	Chaining is important for driver calls with real I/O arguments.
+
+    13)	Another powerful debugging tool is the GTKWave Wave Analyzer.
+
+	    GTKWave (an open-source program) is an analysis tool
+	    originally intended to perform debugging on Verilog or
+	    VHDL simulation models. With the exception of interactive
+	    VCD viewing, it is not intended to run interactively
+	    with simulation, but instead relies on a post-mortem
+	    approach through the use of dumpfiles. Various dumpfile
+	    formats are supported: VCD: Value Change Dump. This is an
+	    industry standard file format generated by most Verilog
+	    simulators and is specified in IEEE-1364.
+	    (Extract from the GTKWave 3.3 Wave Analyzer User's Guide)
+	    Use in the iC system is hereby gratefully acknowledged.
+
+	gtkwave-3.1.10-4.33.i586.rpm was downloaded from the internet.
 	To install gtkwave on OpenSUSE Linux do:
 
 	    sudo rpm -i gtkwave-3.1.10-4.33.i586.rpm
@@ -265,12 +275,15 @@ print <<EOF;
 	external input (Ixn.m, IBn, IWn ILn or TX0.m) occurs on the next 10
 	virtual microsecond boundary. To test this do:
 
-	    iCserver -a &		     # auto-vivify iCbox for application
-	    simple -v simple.vcd	     # writes simple.vcd and simple.sav
+	    simple -v simple.vcd	    # writes simple.vcd and simple.sav
 	    # press IX0.0 to IX0.7 in iCbox one after the other to turn them on
 	    # then press IX0.0 to IX0.7 one after the other to turn them off again
-	    iCstop iCserver		     # kill iCserver, simple and iCbox
-	    gtkwave simple.vcd simple.sav    # display all non-extended variables
+	    type q			    # stop simple, iCserver, iCbox
+
+	This writes simple.vcd and simple.sav
+
+	    gtkwave simple.vcd simple.sav   # displays timing
+	    				    # for all non-extended variables
 
 	A more detailed example uses the running of 'bar -v bar.vcd' shown in the
 	iC manual iC.pdf and barx.sav, which is in the distribution and which shows
@@ -280,24 +293,17 @@ print <<EOF;
 
 	    gtkwave bar.vcd barx.sav	    # display some extended variables
 
-    14) A fairly varied example is sortm28.ica, which is described fully under
+    14)	A fairly varied example is sortm28.ica, which is described fully under
 	7.3 'Parcel Sorter' in the iC.odt handbook. It produces good GTKwave traces.
 
-    15) I have included a script called 'iCstop' from my private toolkit.
+    15)	I have included a script called 'iCstop' from my private toolkit.
 	It can be used effectively to kill iCserver when it is executing
 	in the background, which is appropriate for a server.
 
 	    iCserver &
-	    .....
-	    iCstop iCserver		     # local copy of 'iCstop'
+	    iCstop iCserver		    # local copy of 'iCstop'
 
-	I have tried to use 'kill' with named processes as described in
-	the 'kill' manpage, but it does not seem to work, even called as
-	'command kill iCserver'.
-	You will have to install 'iCstop' manually in a PATH directory to
-	use it anywhere in your system. (see 'iCstop -h' for help)
-
-    16) To make executable applications from iC sources, use the script iCmake.
+    16)	To make executable applications from iC sources, use the script iCmake.
 	iCmake is a shell script to compile iC sources into C sources using the
 	'immcc' compiler.  These in turn are compiled and linked into an
 	executable iC applications (currently using gcc - this can be changed).
@@ -305,22 +311,23 @@ print <<EOF;
 
 	    iCmake -h  OR  iCman iCmake	     # gives a lot of help
 
-    17) The LibreOffice 3.3.1 document doc/iC.odt (or doc/iC.pdf, doc/iC.html)
+    17)	The LibreOffice 3.3.1 document doc/iC.odt (or doc/iC.pdf, doc/iC.html)
 	is the handbook for the iC Programming Language. It opens the way to
 	use "immediate C" fully.
 
-    18) There is a generous help output for every tool in the 'iC Project'
+    18)	There is a generous help output for every tool in the 'iC Project'
 	initiated with the -h option. Each generated iC application also
 	has a help output:
 
 	    hello -h			     # list available options
 
-	These options allow connecting to iCserver on another computer in a
-	LAN - or with a different port number. Very detailed debugging output,
-	showing the change of state of every event in the system is available
-	for the Debug version of the iC system. (Suppressed for Release version)
+	The extra options shown in the help output explain how to  connect to
+	iCserver on another computer in a LAN with the -s option - or with a
+	different port number with -p.  Very detailed debugging output, showing
+	the change of state of every event in the system is available for the
+	Debug version of the iC system with -t. (Suppressed for Release version)
 
-    19) There are 'man' pages for all the tools used in the 'iC Project'.
+    19)	There are 'man' pages for all the tools used in the 'iC Project'.
 	These can be viewed with the normal 'man' command under Linux or with
 	'iCman'.  The man page viewer 'iCman' has some nifty web-browser
 	features to view and search man pages - try it with 'iCman iCman'.

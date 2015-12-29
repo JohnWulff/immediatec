@@ -16,7 +16,7 @@
 #ifndef MCP23S17_H
 #define MCP23S17_H
 static const char mcp23s17_h[] =
-"$Id: mcp23s17.h,v 1.3 2015/03/17 23:54:33 jw Exp $";
+"$Id: mcp23s17.h,v 1.4 2015/12/18 07:02:24 jw Exp $";
 
 #include	<stdio.h>
 #include	<stdint.h>
@@ -79,7 +79,7 @@ extern char	sp[];
 extern uint8_t		readData[8][MCP_MAX];
 
 extern int		setupSPI(int pfce);
-extern int		setupMCP23S17(int spiFd, int pfa, int odr, int inten, uint8_t intf);
+extern int		setupMCP23S17(int spiFd, int pfa, uint8_t odr, uint8_t inten, uint8_t inputA, uint8_t inputB);
 extern void		writeByte(int spiFd, int pfa, uint8_t reg, uint8_t data);
 extern uint8_t		readByte(int spiFd, int pfa, uint8_t reg);
 extern void		writeBit(int spiFd, int pfa, uint8_t reg, uint8_t bit, uint8_t data);

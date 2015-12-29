@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.65 2015/12/04 07:26:16 jw Exp $";
+"@(#)$Id: ict.c,v 1.66 2015/12/26 05:43:08 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -71,7 +71,7 @@ static void	regAck(Gate ** oStart, Gate ** oEnd);
 static void	sendOutput(void);
 static void	storeChannel(unsigned short channel, Gate * gp
 #ifdef	RASPBERRYPI
-			    , piFaceIO * pfp, gpioIO * gep
+			    , piFaceIO * pfp, gpioIO * gep, int iq
 #endif	/* RASPBERRYPI */
 			    );
 static char *
@@ -116,7 +116,7 @@ static char	buffer[BS];
 #ifdef	RASPBERRYPI
 
 static int	fireInput(piFaceIO * pfp, gpioIO * gep, int val);
-static void	writePiFace(piFaceIO * pfp, int val);
+static void	writePiFace(piFaceIO * pfp, int val, int iq);
 static int	tcnt_750 = 15;		/* 750 ms timer for PiFaceCAD shift */
 static int	slr = 0;
 static int	cbc = 0x03;		/* first input will switch to cursor/blink off */
@@ -175,6 +175,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     int			tcnt10 = 1;
     int			tcnt60 = 1;
     int			retval;
+    int			mask;
 #if	INT_MAX == 32767 && defined (LONG16)
     long		val;
 #else	/* INT_MAX == 32767 && defined (LONG16) */
@@ -185,14 +186,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     char		binBuf[33];	/* allows 32 bits */
 #ifdef	RASPBERRYPI
     piFaceIO *		pfp;
+    iqDetails *		pfq;
     int			iq;
     unsigned short	marking;
-    unsigned short	gl;
-union iq_e {
-    const char		s[17];		/* initialises to first member of the union with a terminating '\0' */
-    const char		e[2][2][4];	/* { {"RxxS", "RSxS"}, {"SxxR", "SSxR"} };	// [iq][opt_E][gl] */
-}			RSiq = { "RxxSRSxSSxxRSSxR" };
-#define	RSiq_e	RSiq.e			/* clean debugging output with terminating '\0' */
+    const char		RSin[2][4]  = { "RxxS", "RSxS" };		// [opt_E][marking] */
+    const char		RSout[2][4] = { "SxxR", "SSxR" };		// [opt_E][marking] */
     char *		op;
     int			ol;
     int			m;
@@ -270,7 +268,7 @@ union iq_e {
 	int		en;		/* number of registration items */
 	if (iC_opt_B) {
 	    /********************************************************************
-	     *  Start an iCbox -d for display of Internal in and ExternOut in/out
+	     *  Start an iCbox -d for display of Internal in and ExtOut in/out
 	     *  variables before registering any of the I/O variables so that
 	     *  iCserver -a does not catch them.
 	     *  Internal out variables will be displayed on an autovivified iCbox
@@ -286,17 +284,23 @@ union iq_e {
 	     *  PiFace arguments
 	     *******************************************************************/
 	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-		for (iq = 0; iq <= 1; iq++) {
-		    if ((gp = pfp->s[iq].i.gate) != NULL &&
+		for (iq = 0; iq < 3; iq++) {
+		    pfq = &(pfp->s[iq]);
+		    if ((gp = pfq->i.gate) != NULL &&
 			(((marking = gp->gt_live) == Internal && gp->gt_fni == TRAB) ||
-			marking == ExternOut)) {
+			marking == ExtOut)) {
 			assert(ol > 10);
 			len = snprintf(op, ol, " %s", gp->gt_ids);	/* add I/O name */
 			b++;						/* count tokens in buffer */
 			op += len;
 			ol -= len;
-			if (marking == Internal && strlen(iC_iidNM) > 0) {
+			if (marking == Internal && *iC_iidNM) {
 			    len = snprintf(op, ol, "-%s", iC_iidNM);	/* append instance ID */
+			    op += len;
+			    ol -= len;
+			}
+			if ((mask = pfq->bmask) != 0xff) {
+			    len = snprintf(op, ol, ",%d", mask);	/* mask out any PiFace bits not used */
 			    op += len;
 			    ol -= len;
 			}
@@ -306,28 +310,22 @@ union iq_e {
 	    /********************************************************************
 	     *  GPIO arguments
 	     *******************************************************************/
-	    for (iq = 0; iq <= 1; iq++) {
+	    for (iq = 0; iq < 2; iq++) {
 		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		    if ((gp = gep->s.i.gate) != NULL &&
 			(((marking = gp->gt_live) == Internal && gp->gt_fni == TRAB) ||
-			marking == ExternOut)) {
-			int	mask = 0;
+			marking == ExtOut)) {
 			assert(ol > 14);
 			len = snprintf(op, ol, " %s", gp->gt_ids);	/* add I/O name */
 			b++;						/* count tokens in buffer */
 			op += len;
 			ol -= len;
-			for (bit = 0; bit <= 7; bit++) {
-			    if (gep->gpioNr[bit] != 0xffff) {
-				mask  |= iC_bitMask[bit];		/* OR hex 01 02 04 08 10 20 40 80 */
-			    }
-			}
-			if (marking == Internal && strlen(iC_iidNM) > 0) {
+			if (marking == Internal && *iC_iidNM) {
 			    len = snprintf(op, ol, "-%s", iC_iidNM);	/* append instance ID */
 			    op += len;
 			    ol -= len;
 			}
-			if (mask != 0xff) {
+			if ((mask = gep->Gbmask) != 0xff) {
 			    len = snprintf(op, ol, ",%d", mask);	/* mask out any GPIO bits not used */
 			    op += len;
 			    ol -= len;
@@ -379,14 +377,14 @@ union iq_e {
 		    pifacecad_lcd_set_backlight(1);	/* default is on */
 		    /********************************************************************
 		     *  At this stage marking is still stored in gp->gt_live
-		     *  Register PFCAD4 as receiver if PiFaceCAD is called for ExternOut input
+		     *  Register PFCAD4 as receiver if PiFaceCAD is called for ExtOut input
 		     *******************************************************************/
-		    if (gp->gt_live == ExternOut) {	/* current marking */
+		    if (gp->gt_live == ExtOut) {	/* current marking */
 			tbp += el;
 			tbc -= el;
 			el = snprintf(tbp, tbc, ",R%s", pfCADgate.gt_ids);	/* receiver on PFCAD4 */
 			pfCADpfp = pfp;			/* use in regAck() */
-			P_channel = 0xfffd;		/* in case direct combined with ExternOut */
+			P_channel = 0xfffd;		/* in case direct combined with ExtOut */
 		    } else if (P_channel == 0xfffe) {
 			P_channel = 0;			/* direct with writePiFaceCAD() */
 		    }
@@ -399,8 +397,8 @@ union iq_e {
 	 *  Register PFCAD4 as sender unless PiFaceCAD is called for Intern input
 	 *	P_channel	0xffff	this app is not interested in PiFaceCAD (default)
 	 *	P_channel	0xfffe	this app wants to write to PiFaceCAD
-	 *	P_channel	0xfffd	this app wants to write to PiFaceCAD - error ExternOut
-	 *	P_channel	0	this app has an active PiFaceCAD not ExternOut input
+	 *	P_channel	0xfffd	this app wants to write to PiFaceCAD - error ExtOut
+	 *	P_channel	0	this app has an active PiFaceCAD not ExtOut input
 	 *******************************************************************/
 	if (P_channel == 0xfffe) {
 	    tbp += el;
@@ -411,7 +409,6 @@ union iq_e {
 	 *  Registration of normal immediate variables in the app
 	 *******************************************************************/
 	for (opp = sopp = sTable; opp < sTend; opp++) {
-	    int mask;
 	    gp = *opp;
 	    tbp += el;
 	    tbc -= el;
@@ -434,7 +431,7 @@ union iq_e {
 	     *
 	     *	2   Dummy	// ignore -    output WARNING  *****
 	     *
-	     *	3   ExternOut	// like iCpiFace      iCserver <=SI= SIO/GPIO (IXx)
+	     *	3   ExtOut	// like iCpiFace      iCserver <=SI= SIO/GPIO (IXx)
 	     *			//		      SIO/GPIO <=RQ= iCserver (QXx)
 	     *
 	     *  Signal flows for an arrangement of 2 apps, app1 and app2
@@ -448,7 +445,7 @@ union iq_e {
 	     *
 	     *    PiFace0 provides IX0 QX0 Internal  1 to app1 by SIO
 	     *       also channels  3   4  if opt_E
-	     *    PiFace1 provides IX2 QX2 ExternOut 3 by SIO, TCP/IP
+	     *    PiFace1 provides IX2 QX2 ExtOut    3 by SIO, TCP/IP
 	     *         on channels  7   8
 	     *                     IX1 QX1 External  0 default TCP/IP
 	     *         on channels  5   6
@@ -464,8 +461,8 @@ union iq_e {
 	     * * QX0 ->--------1-+--1E->-|---|-SQ---4->--QX0-->-4-|-|-RQ->- QX0 * Internal with opt_E
 	     * * IX1 -<--------------0---|---|-RI---5-<--IX1--<-5-+-|-RI-<- IX1d* External display
 	     * * QX1 ->---------------0--|---|-SQ---6->--QX1-->-6---+-RQ->- QX1 * External display
-	     * *                         +-3-|-SI---7->--IX2-->-7-+---RI->- IX2d* ExternOut display
-	     * *                            3+-RQ---8-<--QX2--<-8-|-+-RQ->- QX2 * ExternOut display
+	     * *                         +-3-|-SI---7->--IX2-->-7-+---RI->- IX2d* ExtOut display
+	     * *                            3+-RQ---8-<--QX2--<-8-|-+-RQ->- QX2 * ExtOut display
 	     * *      (IX3) -----<---2---       *   *           * | | *         * Dummy
 	     * *      (QX3) ----->----2--       *   *           * | | *         * Dummy
 	     * **********************************   ************* | | ***********
@@ -473,8 +470,8 @@ union iq_e {
 	     *               \  markings  /          \ channels/  | | ***********
 	     *                                                    | | *  app2   *
 	     *                                                    | | *         *
-	     *                                                    +-|-RI->- IX2 * ExternOut
-	     *                                                      +-SQ-<- QX2 * ExternOut
+	     *                                                    +-|-RI->- IX2 * ExtOut
+	     *                                                      +-SQ-<- QX2 * ExtOut
 	     *                                                        *         *
 	     *                                                        ***********
 	     *
@@ -486,8 +483,8 @@ union iq_e {
 	     * *             |   |       |   |  *   *           *     ***********
 	     * * IX0 -<----1-+   |       |   |  *   *           *     *  app2   * Internal
 	     * * QX0 ->--------1-+       |      *   *           R     *         * Internal
-	     * *                         +-3-|-SI---7->--IX2-->-7-----RI->- IX2 * ExternOut
-	     * *                            3+-RQ---8-<--QX2--<-8-----SQ-<- QX2 * ExternOut
+	     * *                         +-3-|-SI---7->--IX2-->-7-----RI->- IX2 * ExtOut
+	     * *                            3+-RQ---8-<--QX2--<-8-----SQ-<- QX2 * ExtOut
 	     * *                                *   *           *     *         *
 	     * **********************************   *************     ***********
 	     *              \              /        \           /
@@ -505,18 +502,18 @@ union iq_e {
 	     *		0 External	gp	NULL	gp f	NULL	1	0
 	     *		1 Internal	gp	pfp E	gp	pfp E	1	1
 	     *		2 Dummy		 -       -       -       -	0	0
-	     *		3 ExternOut	NULL	pfp	NULL	pfp	0	1
+	     *		3 ExtOut	NULL	pfp	NULL	pfp	0	1
 	     *
 	     *  Input interrupt and output handling
 	     *
 	     *  TCP/IP interrupt provides "channel:val" for every changed byte
-	     *                  markings        External Internal Dummy    ExternOut
+	     *                  markings        External Internal Dummy    ExtOut
 	     *                                     0        1        2        3
 	     *    gp  = Channels[channel].g     // gp       (gp)     -        NULL
 	     *    pfp = Channels[channel].p     // NULL     (pfp)    -        pfp
 	     *    if (!gp && !pfp) Warning();	//	never called for Internal
 	     *    if (gp) traMb(gp, 0);         // RI External
-	     *    if (pfp)) writePF(pfp ...);   // RQ ExternOut
+	     *    if (pfp)) writePF(pfp ...);   // RQ ExtOut
 	     *               
 	     *  SIO interrupt provides pfp1 and val
 	     *    channel = pfp1->Ichannel;
@@ -526,7 +523,7 @@ union iq_e {
 	     *    if (gp) traMb(gp, 0);         // I  Internal
 	     *    if (pfp && (!gp || opt_E)) {
 	     *        assert(pfp1 == pfp);
-	     *        send_msg(channel ...);    // SI Internal & opt_E or ExternOut
+	     *        send_msg(channel ...);    // SI Internal & opt_E or ExtOut
 	     *    }
 	     *               
 	     *  GPIO interrupt provides pfp1 and val	TODO
@@ -537,38 +534,38 @@ union iq_e {
 	     *    if (gp) traMb(gp, 0);         // I  Internal
 	     *    if (pfp && (!gp || opt_E)) {
 	     *        assert(pfp1 == pfp);
-	     *        send_msg(channel ...);    // SI Internal & opt_E or ExternOut
+	     *        send_msg(channel ...);    // SI Internal & opt_E or ExtOut
 	     *    }
 	     *               
 	     *  iC_output(val, channel)
 	     *    gp  = Channels[channel].g     // gp       (gp)     -        (NULL)
 	     *    pfp = Channels[channel].p     // NULL     pfp E    -        (pfp)
 	     *    if (pfp) writePF(pfp ...);    // Q  Internal
-	     *    assert(gp);			//	never called for ExternOut
+	     *    assert(gp);			//	never called for ExtOut
 	     *    if (gp && (!pfp || iC_opt_E)) {
 	     *        send_msg(channel ...);    // SQ External or Internal & opt_E
 	     *    }
 	     *
 	     *******************************************************************/
 
-	  if ((gl = gp->gt_live) != Dummy && *gp->gt_ids != 'T') {	/* TX0 and Dummy arguments are not registered */
-	    assert(gl <= ExternOut);
+	  if ((marking = gp->gt_live) != Dummy && *gp->gt_ids != 'T') {	/* TX0 and Dummy arguments are not registered */
+	    assert(marking <= ExtOut);
 	    if (gp->gt_ini == -INPW)		/* IXx IBx ... */
 #else	/* ! RASPBERRYPI */
 	    if (gp->gt_ini == -INPW && *gp->gt_ids != 'T')	/* IXx IBx ... */
 #endif	/* ! RASPBERRYPI */
 	    {
 #ifdef	RASPBERRYPI
-		if ((c = RSiq_e[0][iC_opt_E][gl]) != 'x') {
-		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register R S x S input/ExternOut send */
+		if ((c = RSin[iC_opt_E][marking]) != 'x') {
+		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register R S x S input/ExtOut send */
 		} else {
 		    el = 0;			/* input Internal !opt_E - do not register this input */
 		    gp->gt_mark |= X_FLAG;	/* flag non-registration in regAck() - allocate virtual channel */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 04) fprintf(iC_outFP,
-		    "%s	iq=0 opt_E=%d gl= %hu	gt_mark=0x%04x	\"%s\"	RSiq_e[0][%d] = '%s'\n",
-		    gp->gt_ids, iC_opt_E, gl, gp->gt_mark, el ? ep : "", iC_opt_E, RSiq_e[0][iC_opt_E]);
+		    "%s	iq=1 opt_E=%d marking= %hu	gt_mark=0x%04x	\"%s\"	RSin[%d] = '%s'\n",
+		    gp->gt_ids, iC_opt_E, marking, gp->gt_mark, el ? ep : "", iC_opt_E, RSin[iC_opt_E]);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else	/* ! RASPBERRYPI */
 	    	el = snprintf(ep, ENTRYSZ, ",R%s", gp->gt_ids);	/* register R input */
@@ -579,16 +576,16 @@ union iq_e {
 	    } else
 	    if (gp->gt_fni == OUTW) {		/* QXx */
 #ifdef	RASPBERRYPI
-		if ((c = RSiq_e[1][iC_opt_E][gl]) != 'x') {
-		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register S S x R output/ExternOut read */
+		if ((c = RSout[iC_opt_E][marking]) != 'x') {
+		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register S S x R output/ExtOut read */
 		} else {
 		    el = 0;			/* output Internal !opt_E - do not register this output */
 		    gp->gt_mark |= X_FLAG;	/* flag non-registration in regAck() - allocate virtual channel */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 04) fprintf(iC_outFP,
-		    "%s	iq=1 opt_E=%d gl= %hu	gt_mark=0x%04x	\"%s\"	RSiq_e[1][%d] = '%s'\n",
-			gp->gt_ids, iC_opt_E, gl, gp->gt_mark, el ? ep : "", iC_opt_E, RSiq_e[1][iC_opt_E]);
+		    "%s	iq=0 opt_E=%d marking= %hu	gt_mark=0x%04x	\"%s\"	RSout[%d] = '%s'\n",
+			gp->gt_ids, iC_opt_E, marking, gp->gt_mark, el ? ep : "", iC_opt_E, RSout[iC_opt_E]);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else	/* ! RASPBERRYPI */
 		el = snprintf(ep, ENTRYSZ, ",S%s", gp->gt_ids);	/* register S output */
@@ -608,13 +605,13 @@ union iq_e {
 		}
 	    }
 	    if (el > 0) {
-		if (strlen(iC_iidNM) > 0) {
+		if (*iC_iidNM) {
 		    el += snprintf(ep + el, ENTRYSZ - el, "-%s", iC_iidNM);	/* append instance ID */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 04) fprintf(iC_outFP,
 		    "%s%s%s	%d	%d	(%d)	{%hu}\n",
-		    gp->gt_ids, (strlen(iC_iidNM) > 0) ? "-" : "", iC_iidNM,
+		    gp->gt_ids, (*iC_iidNM) ? "-" : "", iC_iidNM,
 		    (int)gp->gt_ini, (int)gp->gt_fni, mask, gp->gt_live);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		if (mask && mask < X_MASK) {
@@ -656,8 +653,8 @@ union iq_e {
 	 * Fork iClive
 	 *******************************************************************/
 	if (iC_opt_l) {
-	    snprintf(buffer, BS, "iClive %s.ic", iC_iccNM);
-	    iC_fork_and_exec(iC_string2argv(buffer, 2));	/* fork iClive app.ic */
+	    snprintf(buffer, BS, "iClive -z%s %s.ic", (iC_debug & DQ) ? "q" : "", iC_iccNM);
+	    iC_fork_and_exec(iC_string2argv(buffer, 3));	/* fork iClive -zq app.ic */
 	}
 #ifdef	RASPBERRYPI
       }
@@ -666,20 +663,21 @@ union iq_e {
 	     *  Allocate virtual channels for PiFace and GPIO Internal Gates, which
 	     *  do not involve iCserver - they select iC_pfL[] or iC_gpL[] entries only.
 	     *  Internal Gates with opt_E have already been allocated to a real
-	     *  channel in regAck() as well as External and ExternOut Gates.
+	     *  channel in regAck() as well as External and ExtOut Gates.
 	     *******************************************************************/
 	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-		for (iq = 0; iq <= 1; iq++) {
-		    if ((gp = pfp->s[iq].i.gate) != NULL &&
+		for (iq = 0; iq < 3; iq++) {
+		    pfq = &(pfp->s[iq]);
+		    if ((gp = pfq->i.gate) != NULL &&
 			(gp->gt_mark & X_FLAG)) {		/* no X_FLAG set if !opt_L */
-			assert((gp->gt_mark & PG_MASK) == P_FLAG);
+			assert(gp->gt_mark & P_FLAG);		/* P_FLAG || PB_FLAG */
 			gp->gt_mark &= ~(X_FLAG | PG_MASK);
 			channel = ++topChannel;			/* extra virtual channel */
-			pfp->s[iq].channel = channel;		/* receive or send input */
+			pfq->channel = channel;			/* receive or send input */
 			if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
-			    storeChannel(channel, gp, pfp, NULL);	/* Internal */
-			} else if (marking == ExternOut) {
-			    storeChannel(channel, NULL, pfp, NULL);	/* ExternOut */
+			    storeChannel(channel, gp, pfp, NULL, iq);	/* Internal */
+			} else if (marking == ExtOut) {
+			    storeChannel(channel, NULL, pfp, NULL, iq);	/* ExtOut */
 			} else {
 			    assert(0);				/* never External, Dummy or other!!! */
 			}
@@ -703,7 +701,7 @@ union iq_e {
 	    /********************************************************************
 	     *  Allocate virtual channels for Internal GPIO Gates
 	     *******************************************************************/
-	    for (iq = 0; iq <= 1; iq++) {
+	    for (iq = 0; iq < 2; iq++) {
 		for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		    if ((gp = gep->Ggate) != NULL &&
 			(gp->gt_mark & X_FLAG)) {		/* no X_FLAG set if !opt_L */
@@ -712,9 +710,9 @@ union iq_e {
 			channel = ++topChannel;			/* extra virtual channel */
 			gep->Gchannel = channel;			/* receive or send input */
 			if ((marking = gp->gt_live) == Internal) {	/* transfer markings */
-			    storeChannel(channel, gp, NULL, gep);	/* Internal */
-			} else if (marking == ExternOut) {
-			    storeChannel(channel, NULL, NULL, gep);	/* ExternOut */
+			    storeChannel(channel, gp, NULL, gep, 0);	/* Internal */
+			} else if (marking == ExtOut) {
+			    storeChannel(channel, NULL, NULL, gep, 0);	/* ExtOut */
 			} else {
 			    assert(0);				/* never External, Dummy or other!!! */
 			}
@@ -739,54 +737,94 @@ union iq_e {
 		    }
 		}
 	    }
-#if	YYDEBUG
 	    /********************************************************************
 	     *  Report results of argument analysis
+	     *  Port A outputs are inverted by hardware
+	     *  Port B inputs and outputs are direct
 	     *******************************************************************/
 	    if (iC_debug & 0300) {
+		char *	iidPtr;
+		char *	iidSep;
 		if (iC_npf) {
 		    fprintf(iC_outFP, "Allocation for %d PiFace unit%s, global instance = \"%s\"\n",
 			iC_npf, iC_npf == 1 ? "" : "s", iC_iidNM);
-		    fprintf(iC_outFP, "	IEC-in	IEC-out	ch-in	ch-out	pfa unit\n\n");
+		    fprintf(iC_outFP, "	IEC-out	IEC-in	mask-i	IEC+out	mask+o	ch-out	ch-in	ch+out	pfa unit\n\n");
 		    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-			if (pfp->Igate != NULL) {
-			    fprintf(iC_outFP, "	%c%s", pfp->Iinv ? '~' : ' ', pfp->Igate->gt_ids);
-			} else {
-			    fprintf(iC_outFP, "	Dummy");
-			}
 			if (pfp->Qgate != NULL) {
-			    fprintf(iC_outFP, "	%c%s", pfp->Qinv ? ' ' : '~', pfp->Qgate->gt_ids);
+			    assert(pfp->Qbmask == 0xff);		/* all 8 bits always output */
+			    if (*iC_iidNM == '\0' || strchr(pfp->Qgate->gt_ids, '-') != NULL) {
+				iidSep = iidPtr = "";		/* null instance or local instance */
+			    } else {
+				iidSep = "-";
+				iidPtr = iC_iidNM;			/* global instance */
+			    }
+			    fprintf(iC_outFP, "	%c%s%s%s",
+				pfp->Qinv ? ' ' : '~', pfp->Qgate->gt_ids, iidSep, iidPtr);	/* double inversion */
 			} else {
 			    fprintf(iC_outFP, "	Dummy");
 			}
-			fprintf(iC_outFP, "	%3hu	%3hu	%2hu  %2d\n",
-			    pfp->Ichannel, pfp->Qchannel, pfp->pfa, pfp - iC_pfL);
+			if (pfp->Igate != NULL) {
+			    if (*iC_iidNM == '\0' || strchr(pfp->Igate->gt_ids, '-') != NULL) {
+				iidSep = iidPtr = "";		/* null instance or local instance */
+			    } else {
+				iidSep = "-";
+				iidPtr = iC_iidNM;			/* global instance */
+			    }
+			    if (pfp->Ibmask == 0xff) {
+				fprintf(iC_outFP, "	%c%s%s%s	",
+				    pfp->Iinv ? '~' : ' ', pfp->Igate->gt_ids, iidSep, iidPtr);
+			    } else {
+				fprintf(iC_outFP, "	%c%s%s%s	0x%02x",
+				    pfp->Iinv ? '~' : ' ', pfp->Igate->gt_ids, iidSep, iidPtr, pfp->Ibmask);
+			    }
+			} else {
+			    fprintf(iC_outFP, (pfp->QPgate != NULL) ? "		" : "	Dummy	");
+			}
+			if (pfp->QPgate != NULL) {
+			    if (*iC_iidNM == '\0' || strchr(pfp->QPgate->gt_ids, '-') != NULL) {
+				iidSep = iidPtr = "";		/* null instance or local instance */
+			    } else {
+				iidSep = "-";
+				iidPtr = iC_iidNM;			/* global instance */
+			    }
+			    if (pfp->QPbmask == 0xff) {
+				fprintf(iC_outFP, "	%c%s%s%s	",
+				    pfp->QPinv ? '~' : ' ', pfp->QPgate->gt_ids, iidSep, iidPtr);
+			    } else {
+				fprintf(iC_outFP, "	%c%s%s%s	0x%02x",
+				    pfp->QPinv ? '~' : ' ', pfp->QPgate->gt_ids, iidSep, iidPtr, pfp->QPbmask);
+			    }
+			} else {
+			    fprintf(iC_outFP, "		");
+			}
+			fprintf(iC_outFP, "	%3hu	%3hu	%3hu	%2hu  %2d\n",
+			    pfp->Qchannel, pfp->Ichannel, pfp->QPchannel, pfp->pfa, pfp - iC_pfL);
 			if (pfp == pfCADpfp) {
-			    fprintf(iC_outFP, "	 %s		%3hu		%2hu  %2d\n",
+			    fprintf(iC_outFP, "	 %s					%3hu			%2hu  %2d\n",
 				pfCADgate.gt_ids, pfCADchannel, pfp->pfa, pfp - iC_pfL);
 			}
 		    }
 		    fprintf(iC_outFP, "\n");
 		}
 		if (iC_gpL[0] || iC_gpL[1]) {
-		    char *	iidPtr;
-		    char *	iidSep;
 		    fprintf(iC_outFP, "Allocation for GPIO elements, global instance = \"%s\"\n", iC_iidNM);
-		    fprintf(iC_outFP, "	Bit IEC	gpio	channel	instance\n\n");
-		    for (iq = 0; iq <= 1; iq++) {
+		    fprintf(iC_outFP, "	Bit IEC	inst	gpio	channel\n\n");
+		    for (iq = 0; iq < 2; iq++) {
 			for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 			    strcpy(buffer, gep->Ggate->gt_ids);		/* retrieve name[-instance] */
+			    iidSep = "-";
 			    if ((iidPtr = strchr(buffer, '-')) != NULL) {
 				*iidPtr++ = '\0';		/* separate name and instance */
-				iidSep = "	-";
+			    } else if (*iC_iidNM) {
+				iidPtr = iC_iidNM;		/* global instance */
 			    } else {
-				iidPtr = iidSep = "";
+				iidSep = iidPtr = "";		/* null instance */
 			    }
 			    for (bit = 0; bit <= 7; bit++) {
 				if ((gpio = gep->gpioNr[bit]) != 0xffff) {	/* saved gpio number for this bit */
-				    fprintf(iC_outFP, "	%c%s.%hu	%3hu	%3hu%s%s\n",
+				    fprintf(iC_outFP, "	%c%s.%hu	%s%s	%3hu	%3hu\n",
 					gep->Ginv & iC_bitMask[bit] ? '~' : ' ',
-					buffer, bit, gpio, gep->Gchannel, iidSep, iidPtr);
+					buffer, bit, iidSep, iidPtr, gpio, gep->Gchannel);
 				}
 			    }
 			}
@@ -794,7 +832,6 @@ union iq_e {
 		    }
 		}
 	    }
-#endif	/* YYDEBUG */
 	}
 	/********************************************************************
 	 *	Set bits to wait for SIO interrupts on GPIO25
@@ -808,7 +845,7 @@ union iq_e {
 	/********************************************************************
 	 *  Set all GPIO IXn input bits for interrupts
 	 *******************************************************************/
-	for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
+	for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
 	    for (bit = 0; bit <= 7; bit++) {
 		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 		    assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
@@ -1267,15 +1304,20 @@ union iq_e {
 	    gpio_read(gpio25FN);		/* dummy read to clear interrupt on /dev/class/gpio25/value */
 	    if (iC_micro) iC_microPrint("SPI initialise", 0);
 	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-		if (pfp->Igate) {
-		    val = readByte(pfp->spiFN, pfp->pfa, pfp->inpr);
-		    pfp->Ival = val ^ 0xff;	/* make sure val is distributed correctly */
-		    fireInput(pfp, NULL, val);	/* ini input Gates directly and/or via TCP/IP */
-		}
 		if (pfp->Qgate) {
 		    val = 0;				/* initialise with logical 0 */
-		    pfp->Qval = pfp->Qinv ^ 0xff;	/* force all output bits */
+		    pfp->Qval = pfp->Qinv ^ 0xff;	/* inverted to force all output bits */
 		    iC_output(val, pfp->Qchannel);	/* write output Gates directly and/or via TCP/IP */
+		}
+		if (pfp->Igate) {
+		    val = readByte(pfp->spiFN, pfp->pfa, pfp->inpr);
+		    pfp->Ival = val ^ 0xff;		/* inverted to force distributing input bits */
+		    fireInput(pfp, NULL, val);		/* ini input Gates directly and/or via TCP/IP */
+		}
+		if (pfp->QPgate) {
+		    val = 0;				/* initialise with logical 0 */
+		    pfp->QPval = pfp->QPinv ^ 0xff;	/* inverted to force all output bits */
+		    iC_output(val, pfp->QPchannel);	/* write output Gates directly and/or via TCP/IP */
 		}
 	    }
 	}
@@ -1283,7 +1325,7 @@ union iq_e {
 	 *  Extend with GPIO IXn initialisation inputs
 	 *  There may be no GPIOs or only GPIO outputs - nothing to initialise
 	 *******************************************************************/
-	for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
+	for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
 	    val = 0;
 	    for (bit = 0; bit <= 7; bit++) {
 		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
@@ -1295,7 +1337,7 @@ union iq_e {
 		    }
 		}
 	    }
-	    gep->Gval = val ^ 0xff;		/* make sure val is distributed correctly */
+	    gep->Gval = val ^ 0xff;		/* inverted to force distributing input bits */
 	    fireInput(NULL, gep, val);		/* ini input Gates directly and/or via TCP/IP */
 	}
 	/********************************************************************
@@ -1305,9 +1347,9 @@ union iq_e {
 	/********************************************************************
 	 *  Write GPIO QXn initialisation outputs
 	 *******************************************************************/
-	for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* QXn outputs only */
+	for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* QXn outputs only */
 	    val = 0;				/* initialise with logical 0 */
-	    gep->Gval = gep->Ginv ^ 0xff;	/* force all output bits */
+	    gep->Gval = gep->Ginv ^ 0xff;	/* inverted to force all output bits */
 	    iC_output(val, gep->Gchannel);	/* write output Gates directly and/or via TCP/IP */
 	}
     }
@@ -1720,7 +1762,7 @@ union iq_e {
 #endif	/* RASPBERRYPI */
 				) {
 #if	INT_MAX == 32767 && defined (LONG16)
-				    val = atol(++cps);			/* val required for RQ ExternOut */
+				    val = atol(++cps);			/* val required for RQ ExtOut */
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 				    val = atoi(++cps);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
@@ -1959,7 +2001,7 @@ union iq_e {
 #ifdef	RASPBERRYPI
 				  } else {
 				    assert(pqSel);
-				    iC_output(val & X_MASK, channel);	/* RQ ExternOut */
+				    iC_output(val & X_MASK, channel);	/* RQ ExtOut */
 				  }
 #endif	/* RASPBERRYPI */
 				} else {
@@ -2006,17 +2048,21 @@ union iq_e {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 			for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 			    if (readByte(pfp->spiFN, pfp->pfa, pfp->intf)) {	/* interrupt flag on this unit ? */
-				cnt += fireInput(pfp,	/* fire input Gates directly and/or via TCP/IP */
+				cnt += fireInput(
+				    pfp,		/* fire input Gates directly and/or via TCP/IP */
 				    NULL,
-				    readByte(pfp->spiFN,
-				    pfp->pfa,		/* read interrupting PiFace */
-				    pfp->inpr));	/* from B for PiFace, A for PiFaceCAD */
+				    readByte(
+					pfp->spiFN,
+					pfp->pfa,	/* read interrupting PiFace */
+					pfp->inpr	/* from B for PiFace, A for PiFaceCAD */
+				    )
+				);
 #if YYDEBUG && !defined(_WINDOWS)
-				    if (iC_debug & 0100) {
-					len = snprintf(op, ol, " P%d %s", pfp->pfa, pfp->Igate->gt_ids); /* source name */
-					op += len;
-					ol -= len;
-				    }
+				if (iC_debug & 0100) {
+				    len = snprintf(op, ol, " P%d %s", pfp->pfa, pfp->Igate->gt_ids); /* source name */
+				    op += len;
+				    ol -= len;
+				}
 				m++;			/* count INTF interrupts found */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 			    }
@@ -2045,7 +2091,7 @@ union iq_e {
 		 *  GPIO N interrupt means GPIO n input
 		 *******************************************************************/
 		m1 = 0;
-		for (gep = iC_gpL[0]; gep; gep = gep->nextIO) {	/* IXn inputs only */
+		for (gep = iC_gpL[1]; gep; gep = gep->nextIO) {	/* IXn inputs only */
 		    m = 0;
 		    val = gep->Gval;					/* old input value */
 		    for (bit = 0; bit <= 7; bit++) {
@@ -2155,62 +2201,65 @@ iC_output(int val, unsigned short channel)
 {
     int			len = 0;
 #ifdef	RASPBERRYPI
-  piFaceIO*		pfp = NULL;
-  gpioIO*		gep = NULL;
-  int			pqSel;
-  if ((pqSel = Channels[channel].pqs) == 1) {
-    /********************************************************************
-     *  direct PiFace output
-     *******************************************************************/
-    pfp = Channels[channel].p;
-    assert(pfp && pfp->Qgate && pfp->Qgate->gt_ids && *pfp->Qgate->gt_ids == 'Q');	/* make sure this is really a PiFace output */
+    piFaceIO*		pfp = NULL;
+    gpioIO*		gep = NULL;
+    channelSel *	channelSp;
+    int			pqSel;
+
+    channelSp = &Channels[channel];
+    if ((pqSel = channelSp->pqs) == 1) {
+	/********************************************************************
+	 *  direct PiFace output
+	 *******************************************************************/
+	pfp = channelSp->p;
+	assert(pfp && pfp->Qgate && pfp->Qgate->gt_ids && *pfp->Qgate->gt_ids == 'Q');	/* make sure this is really a PiFace output */
 #if YYDEBUG && !defined(_WINDOWS)
-    if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\nP: %s:	%hu:%d P%d	> %s",
-	    iC_iccNM, channel, (int)val, pfp->pfa, pfp->Qgate->gt_ids);
-	toCntp = &toCnt; slr |= 0x07;			/* activate 350 ms debug message timeout */
-    }
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-    writePiFace(pfp, val & X_MASK);			/* Q Internal */
-  } else if (pqSel == 2) {
-    /********************************************************************
-     *  direct GPIO output
-     *******************************************************************/
-    int			val0;
-    int			diff;
-    int			mask;
-    int			fd;
-    unsigned short	bit;
-    gep = Channels[channel].q;
-    assert(gep && gep->Ggate && gep->Ggate->gt_ids && *gep->Ggate->gt_ids == 'Q');	/* make sure this is really a GPIO output */
-#if YYDEBUG && !defined(_WINDOWS)
-    if (iC_debug & 0100) {
-	fprintf(iC_outFP, "\nP: %s:	%hu:%d G	> %s",
-	    iC_iccNM, channel, (int)val, gep->Ggate->gt_ids);
-	toCntp = &toCnt; slr |= 0x07;			/* activate 350 ms debug message timeout */
-    }
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-    val0 = val ^ gep->Ginv; /* normally write non-inverted data to GPIO output - invert data for -I */
-    diff = val0 ^ gep->Gval;				/* bits which are going to change */
-    if (iC_debug & 04) fprintf(iC_outFP, "*** val0 = 0x%02x	Gval = 0x%02x	diff = 0x%02x	Ginv = 0x%02x\n",
-	(int)val0, gep->Gval, diff, gep->Ginv);
-    assert ((diff & ~0xff) == 0);			/* may receive a message which involves no change */
-    while (diff) {
-	bit = iC_bitIndex[diff];			/* returns 0 - 7 for values 1 - 255 (avoid 0) */
-	mask  = iC_bitMask[bit];			/* returns hex 01 02 04 08 10 20 40 80 */
-	if ((fd = gep->gpioFN[bit]) != -1) {		/* is GPIO pin open ? */
-	    gpio_write(fd, val0 & mask);		/* yes - write to GPIO (does not need to be a bit) */
-	} else if ((iC_debug & 0300) == 0300) {
-	    fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
-		iC_progname, gep->Ggate->gt_ids, bit);
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "\nP: %s:	%hu:%d P%d	> %s",
+		iC_iccNM, channel, (int)val, pfp->pfa, pfp->Qgate->gt_ids);
+	    toCntp = &toCnt; slr |= 0x07;		/* activate 350 ms debug message timeout */
 	}
-	diff &= ~mask;					/* clear the bit just processed */	
-	if (iC_debug & 04) fprintf(iC_outFP, "***   bit = %hu	mask = 0x%02x	val0&mask = 0x%02x	diff = 0x%02x\n",
-	    bit, mask, val0&mask, diff);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	writePiFace(pfp, val & X_MASK, channelSp->iqs);	/* Q Internal */
+    } else if (pqSel == 2) {
+	/********************************************************************
+	 *  direct GPIO output
+	 *******************************************************************/
+	int			val0;
+	int			diff;
+	int			mask;
+	int			fd;
+	unsigned short	bit;
+	gep = channelSp->q;
+	assert(gep && gep->Ggate && gep->Ggate->gt_ids && *gep->Ggate->gt_ids == 'Q');	/* make sure this is really a GPIO output */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 0100) {
+	    fprintf(iC_outFP, "\nP: %s:	%hu:%d G	> %s",
+		iC_iccNM, channel, (int)val, gep->Ggate->gt_ids);
+	    toCntp = &toCnt; slr |= 0x07;		/* activate 350 ms debug message timeout */
+	}
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	val0 = val ^ gep->Ginv; /* normally write non-inverted data to GPIO output - invert data for -I */
+	diff = val0 ^ gep->Gval;				/* bits which are going to change */
+	if (iC_debug & 04) fprintf(iC_outFP, "*** val0 = 0x%02x	Gval = 0x%02x	diff = 0x%02x	Ginv = 0x%02x\n",
+	    (int)val0, gep->Gval, diff, gep->Ginv);
+	assert ((diff & ~0xff) == 0);			/* may receive a message which involves no change */
+	while (diff) {
+	    bit = iC_bitIndex[diff];			/* returns 0 - 7 for values 1 - 255 (avoid 0) */
+	    mask  = iC_bitMask[bit];			/* returns hex 01 02 04 08 10 20 40 80 */
+	    if ((fd = gep->gpioFN[bit]) != -1) {		/* is GPIO pin open ? */
+		gpio_write(fd, val0 & mask);		/* yes - write to GPIO (does not need to be a bit) */
+	    } else if ((iC_debug & 0300) == 0300) {
+		fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
+		    iC_progname, gep->Ggate->gt_ids, bit);
+	    }
+	    diff &= ~mask;				/* clear the bit just processed */	
+	    if (iC_debug & 04) fprintf(iC_outFP, "***   bit = %hu	mask = 0x%02x	val0&mask = 0x%02x	diff = 0x%02x\n",
+		bit, mask, val0&mask, diff);
+	}
+	gep->Gval = val0;				/* ready for next output */
     }
-    gep->Gval = val0;					/* ready for next output */
-  }
-  if (Channels[channel].g && (pqSel == 0 || iC_opt_E)) { /* SQ External (default) or Q Internal && opt_E */
+  if (channelSp->g && (pqSel == 0 || iC_opt_E)) { /* SQ External (default) or Q Internal && opt_E */
 #endif	/* RASPBERRYPI */
     /********************************************************************
      *  TCP/IP output
@@ -2248,7 +2297,7 @@ iC_output(int val, unsigned short channel)
  *
  *	More than one block is very unlikely except for deliberate strange
  *	output strategies like modifying more than 250 OUTW Gates by the
- *	same imput:
+ *	same input:
  *	QX0.0 = ~IX0.0; QX1.0 = ~IX0.0; QX2.0 = ~IX0.0; ... QX299.0 = ~IX0.0;
  *	Because of defensive programming in iC_output() this now works.
  *
@@ -2279,7 +2328,7 @@ sendOutput(void)
  *
  *	Output values from SIO or GPIO input interrupts or initialisation
  *	directly by firing input Gates as was well as a possible message
- *	via iCserver if opt_E or ExternOut
+ *	via iCserver if opt_E or ExtOut
  *
  *******************************************************************/
 
@@ -2300,8 +2349,9 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 	    assert(pfp->Igate->gt_ids);
 	    channel = pfp->Ichannel;
 	    assert(channel && channel < ioChannels);	/* should not happen now with early test for pfp->Igate */
-	    assert(pfp == Channels[channel].p);		/* ExternOut or Intern with correct pfp */
-	    invMask = pfp->Iinv;
+	    assert(pfp == Channels[channel].p);		/* ExtOut or Intern with correct pfp */
+	    val &= pfp->Ibmask;			/* mask out any bits on Port B which are output */
+	    invMask = pfp->Iinv;		/* any masked bits are never inverted */
 	    valOld = pfp->Ival;
 	    pfp->Ival = val;			/* store change for comparison */
 	    snprintf(pgBuf, 4, " P%d", pfp->pfa);
@@ -2315,8 +2365,8 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 	assert(gep->Ggate);
 	channel = gep->Gchannel;
 	assert(channel && channel < ioChannels);	/* should not happen now with early assert */
-	assert(gep == Channels[channel].q);		/* ExternOut or Intern with correct gep */
-	invMask = gep->Ginv;
+	assert(gep == Channels[channel].q);		/* ExtOut or Intern with correct gep */
+	invMask = gep->Ginv;			/* any unused GPIOs are never inverted */
 	valOld = gep->Gval;
 	gep->Gval = val;			/* store change for comparison */
 	snprintf(pgBuf, 4, " G");
@@ -2341,7 +2391,7 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 #endif	/* YYDEBUG */
 	    cnt = iC_traMb(gp, 0);		/* distribute bits directly */
 	}
-	if (gp == NULL || iC_opt_E) {		/* SI ExternOut or Internal && opt_E */
+	if (gp == NULL || iC_opt_E) {		/* SI ExtOut or Internal && opt_E */
 	    assert(outBufLen > 11);		/* fits largest data telegram */
 	    len = snprintf(outPtr, outBufLen, ",%hu:%d", channel, val);
 	    if (len) {
@@ -2361,14 +2411,22 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
  *******************************************************************/
 
 static void
-writePiFace(piFaceIO * pfp, int val)
+writePiFace(piFaceIO * pfp, int val, int iq)
 {
+    iqDetails *	pfq;
     int		pfa;
     int		m;
     int		v18;
 
     if ((pfa = pfp->pfa) != 4 || pfp->intf != INTFA) {	/* PiFace */
-	writeByte(pfp->spiFN, pfa, GPIOA, val ^ pfp->Qinv);	/* normally write inverted data to PiFace A output */
+	/********************************************************************
+	 *  Direct output to a PiFace
+	 *******************************************************************/
+	pfq = &(pfp->s[iq]);
+	writeByte(pfp->spiFN, pfa,
+		    iq ? OLATB : OLATA,
+		    (val & pfq->bmask) ^ pfq->inv
+		 );	/* normally write inverted data to PiFace A output */
     } else if ((m = val ^ pfp->Qval) != 0) {		/* PiFaceCAD */
 	if (m & 0x07) {
 	    /* TODO */
@@ -2433,12 +2491,14 @@ regAck(Gate ** oStart, Gate ** oEnd)
     Gate **		opp;
     char *		cp;
     Gate *		gp;
-    unsigned short	channel;
 #ifdef	RASPBERRYPI
-    unsigned short	marking;
     piFaceIO *		pfp;
     gpioIO *		gep;
+    int			iq;
+    unsigned short	marking;
+    unsigned short	pgFlag;
 #endif	/* RASPBERRYPI */
+    unsigned short	channel;
     if (iC_sockFN <= 0) {
 	/********************************************************************
 	 *  Start TCP/IP communication before any inputs are generated => outputs
@@ -2459,13 +2519,13 @@ regAck(Gate ** oStart, Gate ** oEnd)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 #if YYDEBUG && !defined(_WINDOWS)
-    if (iC_debug & 024) fprintf(iC_outFP, "register:%s\n", regBuf);
+    if (iC_debug & 0224) fprintf(iC_outFP, "register:%s\n", regBuf);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_send_msg_to_server(iC_sockFN, regBuf);	/* register controller and IOs */
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
 	if (iC_micro & 06) iC_microPrint("reply from server", 0);
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 024) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
+	if (iC_debug & 0224) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 	if (Channels == NULL) {
@@ -2485,7 +2545,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	    }
 	    storeChannel(channel, &D_gate	/* ==> Debug input */
 #ifdef	RASPBERRYPI
-					, NULL, NULL
+					, NULL, NULL, 0
 #endif	/* RASPBERRYPI */
 	    );
 	    cp = strchr(cp, ',');
@@ -2498,7 +2558,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 		if (channel > topChannel) {
 		    topChannel = channel;
 		}
-		storeChannel(channel, &pfCADgate, pfCADpfp, NULL);
+		storeChannel(channel, &pfCADgate, pfCADpfp, NULL, 0);
 		pfCADchannel = channel;
 		cp = strchr(cp, ',');
 	    }
@@ -2517,7 +2577,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 		}
 		storeChannel(channel, &pfCADgate
 #ifdef	RASPBERRYPI
-						, NULL, NULL
+						, NULL, NULL, 0
 #endif	/* RASPBERRYPI */
 		);
 		P_channel = channel;
@@ -2537,7 +2597,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	    if ((gp->gt_ini == -INPW && *gp->gt_ids != 'T') ||	/* suppress TX0 */
 		gp->gt_fni == OUTW) {
 #ifdef	RASPBERRYPI
-		if (!(gp->gt_mark & X_FLAG)) {			/* do Internal/ExternalOut later */
+		if (!(gp->gt_mark & X_FLAG)) {			/* do Internal/ExtOut later */
 		    assert(cp);
 		    channel = atoi(++cp);
 		    assert(channel > 0);
@@ -2545,32 +2605,42 @@ regAck(Gate ** oStart, Gate ** oEnd)
 			topChannel = channel;
 		    }
 		    if (marking == External) {			/* transfer markings */
-			storeChannel(channel, gp, NULL, NULL);
-		    } else if ((gp->gt_mark & PG_MASK) == P_FLAG) {
+			storeChannel(channel, gp, NULL, NULL, 0);
+		    } else if ((pgFlag = gp->gt_mark & PG_MASK) == P_FLAG) {
 			pfp = gp->gt_pfp;			/* stored temporarily in load.c */
 			assert(pfp);				/* over written by gt_channel */
-			pfp->s[gp->gt_ini != -INPW].channel = channel;	/* receive or send input */
+			pfp->s[iq = gp->gt_ini == -INPW].channel = channel;	/* receive or send input */
 			if (marking == Internal) {
-			    storeChannel(channel, gp, pfp, NULL);
-			} else if (marking == ExternOut) {
-			    storeChannel(channel, NULL, pfp, NULL);
+			    storeChannel(channel, gp, pfp, NULL, iq);
+			} else if (marking == ExtOut) {
+			    storeChannel(channel, NULL, pfp, NULL, iq);
 			}
-		    } else if ((gp->gt_mark & PG_MASK) == G_FLAG) {
+		    } else if (pgFlag == PB_FLAG) {
+			pfp = gp->gt_pfp;			/* stored temporarily in load.c */
+			assert(pfp);				/* over written by gt_channel */
+			assert(gp->gt_ini != -INPW);		/* Relay+ Port B output only */
+			pfp->s[2].channel = channel;		/* send input */
+			if (marking == Internal) {
+			    storeChannel(channel, gp, pfp, NULL, 2);
+			} else if (marking == ExtOut) {
+			    storeChannel(channel, NULL, pfp, NULL, 2);
+			}
+		    } else if (pgFlag == G_FLAG) {
 			gep = gp->gt_gep;			/* stored temporarily in load.c */
 			assert(gep);				/* over written by gt_channel */
 			gep->Gchannel = channel;		/* receive or send input */
 			if (marking == Internal) {
-			    storeChannel(channel, gp, NULL, gep);
-			} else if (marking == ExternOut) {
-			    storeChannel(channel, NULL, NULL, gep);
+			    storeChannel(channel, gp, NULL, gep, 0);
+			} else if (marking == ExtOut) {
+			    storeChannel(channel, NULL, NULL, gep, 0);
 			}
 		    } else {
-			assert(0);				/* Internal or ExternOut must have P_FLAG or G_FLAG */
+			assert(0);	/* Internal or ExtOut must have P_FLAG, PB_FLAG or G_FLAG */
 		    }
 		    if (gp->gt_ini != -INPW && gp->gt_fni == OUTW) {
 			gp->gt_channel = channel;		/* <== Output */
 #if YYDEBUG && !defined(_WINDOWS)
-			if (iC_debug & 024) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
+			if (iC_debug & 0224) fprintf(iC_outFP, "store output: channel:  %s <== %hu\n",
 			    gp->gt_ids, channel);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    }
@@ -2598,7 +2668,7 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	}
 	assert(cp == NULL);			/* Ack string matches Registration */
 #if YYDEBUG && !defined(_WINDOWS)
-	if (iC_debug & 024) fprintf(iC_outFP, "reply: Channels %hu\n", topChannel);
+	if (iC_debug & 0224) fprintf(iC_outFP, "reply: Channels %hu\n", topChannel);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     } else {
 	iC_quit(QUIT_SERVER);			/* quit normally */
@@ -2610,17 +2680,21 @@ regAck(Gate ** oStart, Gate ** oEnd)
  *	Initalise and expand dynamic array Channels[] as necessary
  *	Store input Gate address in Channels[]
  *	For RASPBERRYPI store piFaceIO/gpioIO pointer in Channels[]
- *	as well as pqs to select 0 External 1 piFaceIOi*, 2 gpioIO*
+ *	as well as pqs to select 0 External 1 piFaceIO*, 2 gpioIO*
+ *	and iqs to select Port A output, Port B/A input or Port B output
  *
  *******************************************************************/
 
 static void
 storeChannel(unsigned short channel, Gate * gp
 #ifdef	RASPBERRYPI
-	,    piFaceIO *	pfp, gpioIO * gep
+	    , piFaceIO * pfp, gpioIO * gep, int iq
 #endif	/* RASPBERRYPI */
 	)
 {
+#ifdef	RASPBERRYPI
+    channelSel *	channelSp;
+#endif	/* ! RASPBERRYPI */
     while (channel >= ioChannels) {
 #ifdef	RASPBERRYPI
 	Channels = (channelSel *)realloc(Channels,	/* initially NULL */
@@ -2639,14 +2713,16 @@ storeChannel(unsigned short channel, Gate * gp
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 #ifdef	RASPBERRYPI
-    Channels[channel].g = gp;		/* store Gate pointer */
-    Channels[channel].pqs = 0;		/* assume no direct I/O - External only */
-    Channels[channel].p = pfp;		/* store piFace pointer or NULL if External */
+    channelSp = &Channels[channel];
+    channelSp->g = gp;		/* store Gate pointer */
+    channelSp->pqs = 0;		/* assume no direct I/O - External only */
+    channelSp->p = pfp;		/* store piFace pointer or NULL if External */
+    channelSp->iqs = iq;	/* PiFace Port A or Port B I/O selection */
     if (pfp) {
-	Channels[channel].pqs = 1;	/* PiFace */
+	channelSp->pqs = 1;	/* PiFace */
     } else if (gep) {
-	Channels[channel].pqs = 2;	/* GPIO */
-	Channels[channel].q = gep;	/* store gpioIO pointer */
+	channelSp->pqs = 2;	/* GPIO */
+	channelSp->q = gep;	/* store gpioIO pointer */
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 24) {

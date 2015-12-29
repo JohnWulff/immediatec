@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.62 2015/11/06 03:18:05 jw Exp $";
+"@(#)$Id: load.c,v 1.63 2015/12/26 09:35:16 jw Exp $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2015  John E. Wulff
@@ -58,9 +58,10 @@ FILE *		iC_errFP;		/* error file pointer */
 #include	"bcm2835.h"
 #include	"pifacecad.h"
 static char	buffer[BS];
-static char	IQ[] = "IQ";
-static int	unit = 0;
+static char	IQ[] = "QIQ";
+static char *	markings[] = { "External", "Internal", "Dummy", "ExtOut", };
 static long long ownUsed = 0LL;
+static long	convert_nr(const char * str, char ** endptr);
 static int	termQuit(int sig);		/* clear and unexport RASPBERRYPI stuff */
 int		(*iC_term)(int) = &termQuit;	/* function pointer to clear and unexport RASPBERRYPI stuff */
 #endif	/* RASPBERRYPI */
@@ -90,7 +91,7 @@ static const char *	usage =
 #endif	/* TCP */
 "[ -n <count>][ -d <debug>][ --]\n"
 #ifdef	RASPBERRYPI
-"          [ [~]<IEC>[-<IEC>][:<pfa>][-<inst>] ...]\n"
+"          [ [~]<IEC>[-<IEC>|+[<mask>]][:<pfa>][-<inst>] ...]\n"
 "          [ [~]<IEC>,<gpio>[,<gpio>,...][-<inst>] ...]\n"
 "          [ [~]<IEC>.<bit>,<gpio>[-<inst>] ...]\n"
 #endif	/* RASPBERRYPI */
@@ -117,10 +118,6 @@ static const char *	usage =
 "    -B      start iCbox -d to monitor PiFace and/or GPIO I/O (implies -E)\n"
 "    -L      connect to iCserver for live dislay, even if not required for I/O\n"
 "    -l      start 'iClive' with correct source               (implies -L)\n"
-#else	/* RASPBERRYPI */
-"    -l      start 'iClive' with correct source\n"
-#endif	/* RASPBERRYPI */
-#ifdef	RASPBERRYPI
 "          All the above options also allow direct action of GPIO I/O\n"
 "            A 1 to PiFace and GPIO outputs generates hi - LED and relay off\n"
 "            A 0 to PiFace and GPIO outputs generates lo - LED and relay on\n"
@@ -144,7 +141,7 @@ static const char *	usage =
 "          QXx.y used in the application are generated as direct inputs\n"
 "          and outputs in ascending order for each PiFace present.\n"
 "          ALTERNATIVELY to change the order or name unused PiFace I/Os:\n"
-"    IEC      X1 X2 IX8 QX9\n"
+"    IEC      X1 X2 IX8 QX9  (for IEC-1131 names - see iCserver man page)\n"
 "          The argument Xn can optionally be preceded by either I for\n"
 "          inputs or Q for outputs. The IEC-1131 IEC's generated are\n"
 "          followed by a bit selector in the range .0 to .7.\n"
@@ -170,6 +167,15 @@ static const char *	usage =
 "          the iC application code and other I/O's.\n"
 "    D ID QD may be used as dummy IEC's instead of Xn IXn QXn to exclude a\n"
 "          PiFace unit or an individual PiFace input or output.\n"
+"                      PIFACE GPIOB+ extra arguments\n"
+"    QXn+  The whole GPIOB register is a 2nd output rather than an input\n"
+"    QXn+<mask>  Only the masked bits of GPIOB register are output bits\n"
+"    IXn+        The whole GPIOB register is an input (same as IXn)\n"
+"    IXn+<mask>  Only the masked bits of GPIOB register are input bits\n"
+"          <mask> for bits 0 - 3 may be expressed as 0b1111, 0xf, 017 or 15\n"
+"          The masks for output and input may not both contain the same bit\n"
+"    QXn+:<pfa> etc Associate a particular IEC+ with a specific PiFace address\n"
+"          PiFace GPIOB+ selections cannot be part of a range.\n"
 "                      GPIO arguments (never generated automatically)\n"
 "          Any IEC I/Os IXx.y and QXx.y used in the application which are\n"
 "          to be linked to GPIO direct inputs or outputs must be named in\n"
@@ -207,12 +213,20 @@ static const char *	usage =
 "            On the other hand any missing IEC arguments (particulatly all\n"
 "          analog IEC's) will be supplied by iCserver via TCP/IP from\n"
 "          external I/O units in the usual way.\n"
+"    For a full Description and Technical Background of the PiFace and GPIO\n"
+"    driver software see the iCpiFace man page\n"
 "                      CAVEAT\n"
-"    Only one instance of iCpiFace may be run and all GPIOs, PiFaces\n"
-"    and an optional PiFaceCAD must be controlled by this one instance.\n"
-"    If two instances were running, the common interrupts would clash.\n"
-"    Also no other program controlling GPIOs and PiFaces like\n"
-"    'PiFace Digital Emulator' may be run with this application.\n"
+"    Only one instance of this app with IEC parameters or iCpiFace may be run\n"
+"    and all GPIOs, PiFaces and an optional PiFaceCAD must be controlled by\n"
+"    this one instance. If two instances were running, the common interrupts\n"
+"    would clash. Also no other program controlling GPIOs and PiFaces like\n"
+"    'PiFace Digital Emulator' may be run at the same time as this application.\n"
+"    An exception is iCpiPWM which controls GPIOs by DMA and not by interrupts.\n"
+"    Another exception is iCtherm which controls GPIO 4 by the 1Wire interface.\n"
+"    Care is taken that any GPIOs or PiFaces used in one app, iCpiFace, iCpiPWM\n"
+"    or even iCtherm do not clash with another app (using ~/.iC/gpios.used).\n"
+#else	/* RASPBERRYPI */
+"    -l      start 'iClive' with correct source\n"
 #endif	/* RASPBERRYPI */
 #endif	/* TCP */
 "                      DEBUG options\n"
@@ -339,31 +353,38 @@ main(
     int			pfce;
     unsigned short	pfa;
     unsigned short	pfe;
+    unsigned short	pff;
     int			value;
     int			sig;
     int			n;
     int			m;
     int			un;
     int			iq;
-    int			unitA[2] = { 0, 0 };
+    int			unit;
+    int			maxUnit = 0;
+    int			unitA[3] = { 0, 0, 0 };
     unsigned short	iid;
     char		iids[6];
     unsigned short	iidN = 0xffff;	/* internal instance "" initially */
     int			forceFlag = 0;
     char *		iC_fullProgname;
     piFaceIO *		pfp;
+    iqDetails *		pfq;
     char		xd[2]  = { '\0', '\0' };
     char		iqc[2] = { '\0', '\0' };
     char		iqe[2] = { '\0', '\0' };
     char		dum[2] = { '\0', '\0' };
     int			iqStart;
     int			iqEnd;
+    int			iqExtra;
     int			ieStart = 0;
     int			ieEnd   = 0;
     unsigned short	bitStart, bitEnd;
     unsigned short	gpio;
-    int			piFaceFlag;
-    int			gpioFlag;
+    unsigned short	directFlag;		/* or PF for PiFace, GP for GPIO, DR direct for both */
+    #define		PF	1
+    #define		GP	2
+    #define		DR	4
     gpioIO *		gep;
     gpioIO **		gpioLast;
     unsigned short	gpioSav[8];
@@ -468,9 +489,7 @@ main(
 		    break;
 		case 'l':
 		    iC_opt_l = 1;	/* start iClive with correct source */
-#ifndef	RASPBERRYPI
-		    break;
-#else	/* RASPBERRYPI */
+#ifdef	RASPBERRYPI
 		    iC_opt_L = 1;	/* -l implies -L but not -P for RPi */
 		    break;
 		case 'B':
@@ -503,8 +522,8 @@ main(
 		    goto break2;
 		case 'f':
 		    forceFlag = 1;	/* force use of gpio 25 */
-		    break;
 #endif	/* RASPBERRYPI */
+		    break;
 #endif	/* TCP */
 		case 'd':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
@@ -625,8 +644,8 @@ main(
     }
     iC_argc = argc;		/* actual global variables passed to iCbegin() */
     iC_argv = argv;
-    if (iC_debug & 0200) fprintf(iC_outFP, "Extra arguments:\n"
-					   "argc %d	%s\n", argc, *argv);
+ //    if (iC_debug & 0200) fprintf(iC_outFP, "Extra arguments:\n"
+ //					   "argc %d	%s\n", argc, *argv);
     if (argc < 0) argc = -argc; /* -R call + options */
     while (--argc > 0) {
 	if (iC_argc > 0) { 	/* else -- + options */
@@ -650,13 +669,13 @@ main(
 	} else {
 	    ++argv;
 	}
-	if (iC_debug & 0200) fprintf(iC_outFP, "	%s\n", *argv);
+ //	if (iC_debug & 0200) fprintf(iC_outFP, "	%s\n", *argv);
     }
     if (*++argv != NULL) {
 	fprintf(iC_errFP, "WARNING: extra arguments are not NULL terminated: '%s'\n", *argv);
     }
 #ifdef	RASPBERRYPI
-    piFaceFlag = gpioFlag = 0;
+    directFlag = 0;
     if (! errorFlag && iC_opt_P) {
 	/********************************************************************
 	 *  Open or create and lock the auxiliary file ~/.iC/gpios.rev,
@@ -690,10 +709,12 @@ main(
 	     *  Initialise PiFace software control structures
 	     *******************************************************************/
 	    for (pfp = iC_pfL; pfp < &iC_pfL[MAXPF]; pfp++) {
-		for (iq = 0; iq <= 1; iq++) {
-		    pfp->s[iq].i.gate = NULL;	/* PiFace IEC in or output not active */
-		    pfp->s[iq].val = -1;	/* Dummy place holder for all PiFaces */
-		    pfp->s[iq].channel = 0xffff;
+		for (iq = 0; iq < 3; iq++) {
+		    pfq = &(pfp->s[iq]);
+		    pfq->i.name = NULL;		/* PiFace IEC in or output not active */
+		    pfq->val = -1;		/* Dummy place holder for all PiFaces */
+		    pfq->channel = 0xffff;
+		    pfq->bmask = 0x00;
 		}
 		pfp->pfa = 0xffff;		/* no pfa assigned */
 		pfp->spiFN = -1;		/* no SPI file open */
@@ -727,20 +748,20 @@ main(
 	     *
 	     *******************************************************************/
 	    pfp = iC_pfL;
-	    pfa = pfe = value = iC_npf = 0;
+	    pfa = pfe = pff = value = iC_npf = 0;
 	    for (pfce = 0; pfce < 2; pfce++) {		/* scan CE0 and CE1 groups */
 		if ((spidFN[pfce] = setupSPI(pfce)) < 0) {
 		    fprintf(iC_errFP, "ERROR: %s: setup /dev/spidev0.%d failed: %s\n", iC_progname, pfce, strerror(errno));
 		}
-		pfe += 4;
 		m = 0;
-		for ( ; pfa < pfe; pfa++) {		/* scan 4 PiFaces in each group */
-		    if (setupMCP23S17(spidFN[pfce], pfa, IOCON_ODR, 0x00, 0) < 0) {	/* detect presence */
+		for (pfa = pfe ; pfa < 8; pfa++) {	/* scan 8 or 4 PiFaces in each group */
+		    if (setupMCP23S17(spidFN[pfce], pfa, IOCON_ODR, 0, 0x00, 0x00) < 0) {	/* detect presence */
 			continue;			/* no PiFace at this address */
 		    }
+		    pff = pfa;
 		    assert(iC_npf < MAXPF);
 		    pfp->pfa = pfa;			/* PiFace             selection fixed in iC_pfL[] entry */
-		    if (pfa == 4) {			/* detect PiFaceCAD */
+		    if (pfa == 4 && pfe == 4) {		/* detect PiFaceCAD */
 			/********************************************************************
 			 *  potentially a PiFaceCAD - test gpio 23 the LIRC output
 			 *******************************************************************/
@@ -789,6 +810,10 @@ main(
 		if (m == 0) {
 		    close(spidFN[pfce]);		/* no active PiFaces in this CE group */
 		    spidFN[pfce] = -1;
+		}
+		pfe += 4;
+		if (pff >= pfe) {
+		    break;				/* PiFace Relay+ - adress range 0 - 7 */
 		}
 	    }
 	    if (iC_npf) {
@@ -890,6 +915,7 @@ main(
 	for (argp = argip; argp < &argip[argic]; argp++) {
 	    pfa = 0xffff;
 	    ieStart = ieEnd = 0;
+	    directFlag &= DR;				/* clear all bits except DR for each new argument */
 	    if (strlen(*argp) >= 128) {
 		fprintf(iC_errFP, "ERROR: %s: command line argument too long: '%s'\n", iC_progname, *argp);
 		exit(1);
@@ -915,11 +941,17 @@ main(
 		}
 	    }
 	    /********************************************************************
+	     *  Look for a '+' in the argument for GPIOB+ outputs
+	     *******************************************************************/
+	    iqExtra = (strchr(tail, '+')) ? 2 : 0;
+	    mask = 0xff;				/* default is all bits of input or output active */
+	    /********************************************************************
 	     *  Scan for an optional I or Q in IEC arguments IXx or QXx
 	     *******************************************************************/
 	    if (sscanf(tail, "%1[IQ]%127s", iqc, tail) == 2) {
-		iqStart = iqEnd = (*iqc == 'Q');	/* 0 for 'I', 1 for 'Q' */
+		iqStart = iqEnd = (*iqc == 'I') ? 1 : iqExtra;	/* 0 for 'Q', 1 for 'I', 2 for Qn+ */
 	    } else {
+		if (iqExtra == 2) goto illFormed;	/* fails if Xn+ without I or Q */
 		*iqc    = '\0';				/* no I or Q IEC */
 		iqStart = 0;				/* or lone I or Q - trapped in next sscanf */
 		iqEnd   = 1;
@@ -941,8 +973,24 @@ main(
 		ieEnd = ieStart;			/* assume a single Xn IEC */
 		*iqe = *iqc;
 		if (n == 2) {
-		    *tail = '\0';			/* single PiFace IEC argument without instance or :pfa */
+		    *tail = '\0';			/* single IEC argument without -<i> or + or :pfa */
 		    goto check_opt_G;
+		}
+		if (*tail == '+') {			/* extra I/O for GPIOB+ */
+		    if (iqExtra == 0) goto illFormed;	/* GPIOB+ extra I/O must be 1 for 'I' or 2 for 'Q'*/
+		    if ((n = sscanf(tail, "+%16[0-9xa-fXA-F]%126s", buffer, tail)) > 0) {
+			char * endptr;
+			mask = convert_nr(buffer, &endptr);
+			if (mask > 0xff || *endptr != '\0') {
+			    goto illFormed;		/* not a proper number or >= 8 */
+			} else if (mask == 0) {
+			    fprintf(iC_errFP, "WARNING: %s: Useless!! No bits selected in %s - not registered\n", iC_progname, *argp);
+			}
+			if (n == 1) *tail = '\0';
+		    } else {
+			memmove(tail, tail+1, 126);	/* mask == 0xff by default */
+		    }
+		    if (*tail != ':') goto check_opt_G;
 		}
 		if (*tail == '-') {			/* range or instance alternatives start with '-' */
 		    /********************************************************************
@@ -955,6 +1003,7 @@ main(
 			ieEnd = ieStart;		/* a single Xn-i IEC with -instance and no :pfa */
 			goto check_opt_G;
 		    }
+		    if (iqExtra == 2) goto illFormed;	/* GPIOB+ extra output may not have a range */
 		    if (ieEnd < ieStart) {		/* *tail remains '-' */
 			fprintf(iC_errFP, "ERROR: %s: '%s' is not a positive IEC range\n", iC_progname, *argp);
 			errorFlag++;
@@ -985,12 +1034,12 @@ main(
 		    }
 		    if (iC_debug & 0200) fprintf(iC_outFP, "%sX%d-%sX%d:%hu%s\n",
 			iqc, ieStart, iqe, ieEnd, pfa, iids);
-		    piFaceFlag = 1;
+		    directFlag |= PF | DR;
 		} else {
 		    /********************************************************************
 		     *  GPIO IEC arguments with .<bit>,gpio or ,gpio,gpio,... 
 		     *******************************************************************/
-		    if (iqStart != iqEnd || ieStart != ieEnd) {
+		    if (iqStart != iqEnd || ieStart != ieEnd || iqExtra == 2) {
 			goto illFormed;		/* GPIO argument must be single IXn or QXn */
 		    }
 		    if (*tail == '.') {
@@ -1015,7 +1064,7 @@ main(
 			    goto illFormed;
 			}
 			if (n == 1) *tail = '\0';
-			gpioFlag = 1;
+			directFlag |= GP | DR;
 			if (*dum == '\0') {
 			    gpioSav[bit] = gpio;	/*  Save list of GPIO numbers for later building */
 			    if (iC_debug & 0200) fprintf(iC_outFP, "%sX%d.%hu	gpio = %hu\n",
@@ -1048,8 +1097,8 @@ main(
 	     *  Use the IEC argument to extend PiFace or GPIO control structures
 	     *  Check IEC argument was not used before
 	     *******************************************************************/
-	    if (piFaceFlag) {
-		assert(gpioFlag == 0);		/* should not have both */
+	    if (directFlag & PF) {
+		assert((directFlag & GP) == 0);		/* should not have both */
 		int		ie;
 		/********************************************************************
 		 *  Build one or more PiFace control structures iC_pfL[un]
@@ -1062,6 +1111,7 @@ main(
 		for (ie = ieStart; ie <= ieEnd; ie++) {
 		    int		ie1;
 		    for (iq = iqStart; iq <= iqEnd; iq++) {
+			int	em;
 			for (un = 0; un < iC_npf; un++) {
 			    if ((ie1 = iC_pfL[un].s[iq].val) == ie &&
 				ie >= 0 &&	/* can have any number of dummies on same pfa selection */
@@ -1077,6 +1127,7 @@ main(
 				    if (unit == unitA[iq]) {	/* is this the next available iC_pfL[] entry ? */
 					unitA[iq]++;		/* step past it for use with direct pfa later */
 				    }
+				    if (unit > maxUnit) maxUnit = unit;
 				    goto pfaFound;
 				}
 				fprintf(iC_errFP, "ERROR: %s: PiFace %hu used more than once with %cX%d%s and %cX%d%s\n",
@@ -1088,11 +1139,12 @@ main(
 			if (pfa == 0xffff) {
 			    do {
 				if ((unit = unitA[iq]++) >= iC_npf) {	/* maximum unassigned unit found so far */
-				    fprintf(iC_errFP, "ERROR: %s: 'too many PiFace IEC arguments (%d max)\n", iC_progname, iC_npf);
+				    fprintf(iC_errFP, "ERROR: %s: '%d is too many PiFace IEC arguments (%d max)\n", iC_progname, unit+1, iC_npf);
 				    errorFlag++;
 				    goto endOneArg;
 				}
 			    } while (iC_pfL[unit].s[iq].val >= 0);	/* use the next unused pfa entry */
+			    if (unit > maxUnit) maxUnit = unit;
 			} else {
 			    fprintf(iC_errFP, "ERROR: %s: PiFace %hu named in %cX%d:%hu%s is not available\n",
 				iC_progname, pfa, IQ[iq], ie, pfa, iids);
@@ -1100,7 +1152,7 @@ main(
 			    goto endOneArg;
 			}
 		      pfaFound:
-			for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {	/* check IEC not used for GPIO */
+			for (gep = iC_gpL[iq & 0x01]; gep; gep = gep->nextIO) {	/* check IEC not used for GPIO */
 			    if (gep->Gval == ie &&
 				gep->Gchannel == iid) {
 				fprintf(iC_errFP, "ERROR: %s: PiFace IEC %cX%d:%hu%s has already been used as a GPIO IEC\n",
@@ -1108,16 +1160,29 @@ main(
 				errorFlag++;
 				goto endOneArg;
 			    }
-			    gpioLast = &gep->nextIO;
 			}
 			pfp = &iC_pfL[unit];
+			pfq = &(pfp->s[iq]);
+			pfq->inv = invMask ^ invFlag;	/* by default do not invert PiFace inputs and Port B outputs */
 			if (iq == 0) {
-			    pfp->Iinv = invMask ^ invFlag;	/* by default do not invert PiFace inputs - inverted with -I or '~' */
-			} else {
-			    pfp->Qinv = invMask ^ invFlag ^ 0xff; /* by default invert PiFace outputs - inverted again with -I or '~' */
+			    pfq->inv ^= 0xff;		/* by default invert PiFace Port A outputs - inverted again with -I or '~' */
+			} else
+			if ((em = mask & pfp->s[iq^0x03].bmask)) {	/* IXn or QXn+ */
+			    unsigned short	iid1;
+			    char		iids1[6];
+			    *iids1 = '\0';		/* instance string of alternate I/O */
+			    if ((iid1 = pfp->s[iq^0x03].channel) != 0xffff) {
+				snprintf(iids1, 6, "-%hu", iid1);	/* instance "-0" to "-999" */
+			    }
+			    fprintf(iC_errFP, "WARNING: %s: %cX%d+0x%02x:%hu%s conflicts with %cX%d+0x%02x:%hu%s in bits 0x%02x - ignore these bits\n",
+				iC_progname, IQ[iq], ie, mask, pfa, iids,
+				IQ[iq^0x03], pfp->s[iq^0x03].val, pfp->s[iq^0x03].bmask, pfa, iids1, em);
+			    mask &= ~em;		/* clear conflicting bits */
 			}
-			pfp->s[iq].val = ie;			/* valid IEC argument Xn (iq in index) */
-			pfp->s[iq].channel = iid;		/* argument instance or 0xffff */
+			pfq->inv &= mask;		/* masked bits are never inverted */
+			pfq->bmask = mask;		/* bmask may be 0, which means it is not registered */
+			pfq->val = ie;			/* valid IEC argument Xn (iq in index) */
+			pfq->channel = iid;		/* argument instance or 0xffff */
 		    }
 		    if (pfa < MAXPF) {
 			pfa++;					/* takes care of range:pfa */
@@ -1125,10 +1190,10 @@ main(
 			pfa = 0xffff;
 		    }
 		}
-	    } else if (gpioFlag) {
+	    } else if (directFlag & GP) {
 		/********************************************************************
 		 *  Build or extend a new gpioIO structure and store in iC_gpL[iqStart]
-		 *      iqStart 0 = 'I', 1 = 'Q'
+		 *      iqStart 0 = 'Q', 1 = 'I'
 		 *  temporarily store ieStart (IEC number) in val of iqDetails
 		 *  temporarily store iid (instance) in channel of iqDetails
 		 *  Check that the GPIO for the IEC argument is valid for this RPi
@@ -1153,6 +1218,7 @@ main(
 		}
 		*gpioLast = gep = iC_emalloc(sizeof(gpioIO));	/* new gpioIO element */
 		gep->Ggate = NULL;		/* GPIO IEC in or output not active */
+		gep->Gbmask = 0;
 		gep->Gval = ieStart;
 		gep->Gchannel = iid;		/* temporary IEC details in new element */
 		for (bit = 0; bit <= 7; bit++) {
@@ -1191,6 +1257,7 @@ main(
 			    gpiosp->u.used |= gpioMask;	/* mark gpio used for ~/.iC/gpios.rev */
 			    ownUsed        |= gpioMask;	/* mark gpio in ownUsed for termination */
 			    gep->gpioNr[bit] = gpio;	/* save gpio number for this bit */
+			    gep->Gbmask |= iC_bitMask[bit];	/* OR hex 01 02 04 08 10 20 40 80 */
 			    /********************************************************************
 			     *  Check if GPIO number is used by w1-gpio kernel module to drive iCtherm
 			     *  If yes and bit 0 (OopsMask) has not been set in gpios->u.oops before
@@ -1345,7 +1412,7 @@ main(
 	 *      instance matches the global instance are marked as 'Internal'.
 	 *  2)  Bit variables which have a PFI or GPIO entry and which are not
 	 *      confirmed here as being used in the application or whose
-	 *      instance does not match the global instance are marked 'ExternOut'.
+	 *      instance does not match the global instance are marked 'ExtOut'.
 	 *  3)  New bit variables - generate a PFI entry - mark as 'Internal'
 	 *      unless their iC_pfL index would exceed iC_npf, in which case
 	 *      they are NOT associated with a PFI entry - mark as 'External'
@@ -1367,22 +1434,26 @@ main(
 	 *
 	 *  2   Dummy	    // ignore -    output WARNING    ***
 	 *
-	 *  3   ExternOut    // like iCpiFace   iCserver <== SIO/GPIO (IXx)
+	 *  3   ExtOut      // like iCpiFace    iCserver <== SIO/GPIO (IXx)
 	 *		    //		        SIO/GPIO <== iCserver (QXx)
+	 *
+	 *  Generate IEC names for all arguments which have a PiFace and a
+	 *	non-zero bmask. PiFace arguments with zero bmask are not registered.
+	 *  Do this here because instance was not yet determind when IEC name
+	 *  was found
 	 *******************************************************************/
-	unitA[0] = unitA[1] = unit = max(unitA[0], unitA[1]);	/* unused PiFace(s) beyond unit */
-	assert(unit <= MAXPF);
 	for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-	    for (iq = 0; iq <= 1; iq++) {
-		if ((n = pfp->s[iq].val) >= 0) {	/* valid IEC argument Xn ? */
+	    for (iq = 0; iq < 3; iq++) {
+		pfq = &(pfp->s[iq]);
+		if (pfq->bmask && (n = pfq->val) >= 0) {	/* valid IEC argument Xn ? */
 		    len = snprintf(buffer, BS, "%cX%d", IQ[iq], n);	/* IEC name without instance */
-		    if ((iid = pfp->s[iq].channel) != iidN) {
+		    if ((iid = pfq->channel) != iidN) {
 			/********************************************************************
-			 *  Instance does not match instance of this executable - ExternOut
+			 *  Instance does not match instance of this executable - ExtOut
 			 *  If there is a variable in e_list with the same name it is a
 			 *  different instance and not to be confused with the local instance.
 			 *******************************************************************/
-			goto GenerateExternOut;
+			goto GenerateExtOut;
 		    }
 		    /********************************************************************
 		     *  Instance matches - internal IEC name never has an instance extension
@@ -1394,10 +1465,10 @@ main(
 			}
 		    }
 		    /********************************************************************
-		     *  Command line variable not used in this application - ExternOut
+		     *  Command line variable not used in this application - ExtOut
 		     *  Generate a new variable to use for communication with iCserver
 		     *******************************************************************/
-		  GenerateExternOut:
+		  GenerateExtOut:
 		    if (iid != 0xffff) {		/* append possible global instance */
 			len = snprintf(buffer, BS, "%cX%d-%hu", IQ[iq], n, iid);
 		    }
@@ -1410,45 +1481,46 @@ main(
 		    }
 		    e_list = tgp;			/* new Gate at front for speed */
 		    e_cnt++;				/* count e_list node */
-		    if (iq == 0) {			/* IN */
+		    if (iq == 1) {			/* IN */
 			tgp->gt_ini = -INPW;
 			tgp->gt_fni = TRAB;		/* tgp->gt_list is left NULL */
-		    } else {				/* (iq == 1) OUT */
+		    } else {				/* (iq == 0 || iq == 2) OUT */
 			tgp->gt_ini = -INPB;
 			tgp->gt_fni = OUTW;
 		    }
-		    tgp->gt_live = ExternOut;
+		    tgp->gt_live = ExtOut;
 		  NextVariable:
 		    assert(tgp && (tgp->gt_mark & PG_MASK) == 0);
-		    tgp->gt_mark |= P_FLAG;		/* 1<< 10 defines this as a PiFace device Gate */
+		    tgp->gt_mark |= (iq < 2) ? P_FLAG : PB_FLAG;	/* PiFace device Gate */
 		    tgp->gt_pfp = pfp;			/* store pfp * till registration - then gt_channel */
-		    pfp->s[iq].i.gate = tgp;		/* store whole Gate rather than just the name */
-#if	YYDEBUG
+		    pfq->i.gate = tgp;			/* store whole Gate rather than just the name */
 		    if (iC_debug & 0200) {
-			if (iq == 0) {
-			    fprintf(iC_outFP, "### store iC_pfL[%d][0]	%c%s\n", pfp - iC_pfL, pfp->Iinv ? '~' : ' ', tgp->gt_ids);
-			} else {
-			    fprintf(iC_outFP, "### store iC_pfL[%d][1]	%c%s\n", pfp - iC_pfL, pfp->Qinv ? ' ' : '~', tgp->gt_ids);
+			if (iq == 0) {			/* Port A output */
+			    fprintf(iC_outFP, "### store iC_pfL[%d][0]	%c%s\n", pfp - iC_pfL, pfp->Qinv ? ' ' : '~', tgp->gt_ids);
+			} else if (iq == 1) {		/* Port B input */
+			    fprintf(iC_outFP, "### store iC_pfL[%d][1]	%c%s\n", pfp - iC_pfL, pfp->Iinv ? '~' : ' ', tgp->gt_ids);
+			} else {			/* Port B output */
+			    fprintf(iC_outFP, "### store iC_pfL[%d][2]	%c%s\n", pfp - iC_pfL, pfp->QPinv ? '~' : ' ', tgp->gt_ids);
 			}
 		    }
-#endif	/* YYDEBUG */
 		}
 	    }
 	}
 	/********************************************************************
+	 *  Generate IEC names for all GPIO output and input arguments
 	 *  Do the same for iC_gpL[0] and iC_gpL[1]
 	 *******************************************************************/
-	for (iq = 0; iq <= 1; iq++) {
+	for (iq = 0; iq < 2; iq++) {
 	    for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		if ((n = gep->Gval) >= 0) {	/* valid IEC argument IXn QXn ? */
 		    len = snprintf(buffer, BS, "%cX%d", IQ[iq], n);	/* IEC name without instance */
 		    if ((iid = gep->Gchannel) != iidN) {
 			/********************************************************************
-			 *  Instance does not match instance of this executable - ExternOut
+			 *  Instance does not match instance of this executable - ExtOut
 			 *  If there is a variable in e_list with the same name it is a
 			 *  different instance and not to be confused with the local instance.
 			 *******************************************************************/
-			goto GenerateExternOutG;
+			goto GenerateExtOutG;
 		    }
 		    /********************************************************************
 		     *  Instance matches - internal IEC name never has an instance extension
@@ -1460,10 +1532,10 @@ main(
 			}
 		    }
 		    /********************************************************************
-		     *  Command line variable not used in this application - ExternOut
+		     *  Command line variable not used in this application - ExtOut
 		     *  Generate a new variable to use for communication with iCserver
 		     *******************************************************************/
-		  GenerateExternOutG:
+		  GenerateExtOutG:
 		    if (iid != 0xffff) {		/* append possible global instance */
 			len = snprintf(buffer, BS, "%cX%d-%hu", IQ[iq], n, iid);
 		    }
@@ -1476,22 +1548,20 @@ main(
 		    }
 		    e_list = tgp;			/* new Gate at front for speed */
 		    e_cnt++;				/* count e_list node */
-		    if (iq == 0) {			/* IN */
-			tgp->gt_ini = -INPW;
-			tgp->gt_fni = TRAB;		/* tgp->gt_list is left NULL */
-		    } else {				/* (iq == 1) OUT */
+		    if (iq == 0) {			/* OUT */
 			tgp->gt_ini = -INPB;
 			tgp->gt_fni = OUTW;
+		    } else {				/* (iq == 1) IN */
+			tgp->gt_ini = -INPW;
+			tgp->gt_fni = TRAB;		/* tgp->gt_list is left NULL */
 		    }
-		    tgp->gt_live = ExternOut;
+		    tgp->gt_live = ExtOut;
 		  NextVariableG:
 		    assert(tgp && (tgp->gt_mark & PG_MASK) == 0);
-		    tgp->gt_mark |= G_FLAG;		/* 2 << 10 defines this as a GPIO group Gate */
+		    tgp->gt_mark |= G_FLAG;		/* GPIO group Gate */
 		    tgp->gt_gep = gep;			/* store gep * till registration - then gt_channel */
 		    gep->Ggate = tgp;			/* store whole Gate rather than just the name */
-#if	YYDEBUG
 		    if (iC_debug & 0200) fprintf(iC_outFP, "### store iC_gpL[%d]	%s\n", iq, tgp->gt_ids);
-#endif	/* YYDEBUG */
 		}
 	    }
 	}
@@ -1504,11 +1574,14 @@ main(
 	 *  with lower addressed PiFaces. (qsort requires early sTable)
 	 *
 	 *  pfp points to remaining iC_pfL[] entries (not used here).
-	 *  unitA[0] == initA[1] == unit, which are the starting index for the
+	 *  unitA[0], initA[1] (maxUnit+1) are the starting indeces for the
 	 *  remaining iC_pfL[] entries, which can be filled independently (I, Q).
 	 *  This is necessary, because all the IXx variables come before
 	 *  all the QXx variables after sorting with qsort().
+	 *  NOTE: PiFace Port B outputs (iq == 2) are not set up automatically.
 	 *******************************************************************/
+	assert(maxUnit < MAXPF);
+	unitA[0] = unitA[1] = maxUnit + 1;	/* unused PiFace(s) beyond maxUnit */
 	val += e_cnt + 2;			/* count e_list, iClock and iConst */
 	sTable = sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
 	for (tgp = e_list; tgp != NULL; tgp = tgp->gt_next) {
@@ -1519,47 +1592,46 @@ main(
 	    tgp = *opp;
 	    if (tgp->gt_live == External &&	/* ignore previously marked or TX0 IB1 QW2_0 etc */
 		sscanf(tgp->gt_ids, "%1[IQ]X%5d%31s", iqc, &n, tail) == 2 &&
-		(unit = unitA[iq = (*iqc == 'Q')]++) < iC_npf) {	/* rest remain External */
+		(unit = unitA[iq = (*iqc == 'I')]++) < iC_npf) {	/* rest remain External */
 		pfp = &iC_pfL[unit];
 		assert(pfp->pfa != 0xffff);/* by only going up to iC_npf we should not strike uninitialised Pifaces */
 		tgp->gt_live = Internal;
 		assert((tgp->gt_mark & PG_MASK) == 0);
-		tgp->gt_mark |= P_FLAG;		/* 1<< 10 defines this as a PiFace device Gate */
+		tgp->gt_mark |= P_FLAG;		/* PiFace device Gate - no automatic Port B output */
 		tgp->gt_pfp = &iC_pfL[unit];	/* store pfp* till registration - then gt_channel */
 		pfp->s[iq].i.gate = tgp;	/* store whole Gate rather than just the name */
-		if (iq == 0) {
+		if (iq == 1) {
 		    pfp->Iinv = invMask;	/* by default do not invert PiFace inputs - inverted with -I or '~' */
-#if	YYDEBUG
-		    if (iC_debug & 0200) fprintf(iC_outFP, "### store iC_pfL[%d][0]	%c%s\n", unit, pfp->Iinv ? '~' : ' ', tgp->gt_ids);
-#endif	/* YYDEBUG */
+		    if (iC_debug & 0200) fprintf(iC_outFP, "### store iC_pfL[%d][1]	%c%s\n", unit, pfp->Iinv ? '~' : ' ', tgp->gt_ids);
 		} else {
 		    pfp->Qinv = invMask ^ 0xff; /* by default invert PiFace outputs - inverted again with -I or '~' */
-#if	YYDEBUG
-		    if (iC_debug & 0200) fprintf(iC_outFP, "### store iC_pfL[%d][1]	%c%s\n", unit, pfp->Qinv ? ' ' : '~', tgp->gt_ids);
-#endif	/* YYDEBUG */
+		    if (iC_debug & 0200) fprintf(iC_outFP, "### store iC_pfL[%d][0]	%c%s\n", unit, pfp->Qinv ? ' ' : '~', tgp->gt_ids);
 		}
-		piFaceFlag = 1;
+		directFlag |= PF | DR;
 	    }
 	}
 	/********************************************************************
 	 *  Clear channel members in iC_pfL[] entries
 	 *******************************************************************/
 	for (pfp = iC_pfL; pfp < &iC_pfL[MAXPF]; pfp++) {
-	    for (iq = 0; iq <= 1; iq++) {
-		pfp->s[iq].channel = 0;
+	    for (iq = 0; iq < 3; iq++) {
+		pfq = &(pfp->s[iq]);
+		pfq->val = 0;			/* restore values */
+		pfq->channel = 0;
 	    }
 	}
 	/********************************************************************
 	 *  Do the same for iC_gpL[0] and iC_gpL[1] - finalise Ginv
 	 *******************************************************************/
-	for (iq = 0; iq <= 1; iq++) {
+	for (iq = 0; iq < 2; iq++) {
 	    for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		assert(gep->Ggate);		/* later scans rely on a gate */
 		gep->Ginv ^= invMask;		/* by default do not invert GPIO in or outputs - inverted with -I or '~' */
+		gep->Gval = 0;			/* restore values */
 		gep->Gchannel = 0;
 	    }
 	}
-	if (!piFaceFlag && !gpioFlag) {
+	if (directFlag == 0) {
 	    iC_opt_P = 0;			/* no IEC arguments for direct I/O - network I/O only */
 	}
     } else
@@ -2354,32 +2426,39 @@ main(
 	/********************************************************************
 	 *  End of PiFace detection
 	 *******************************************************************/
-	if (iC_debug & 0200) {
-	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-		gp = pfp->Igate;
-		tgp = pfp->Qgate;
-		fprintf(iC_outFP, "***	%s%s  un = %d pfa = %d	%-6s %hu	%-6s %hu\n",
-		    pfp->intf ? "PiFace" : "      ", pfp->intf == INTFA ? "CAD" : "   ",
-		    pfp - iC_pfL, pfp->pfa,
-		    gp  ? gp->gt_ids  : NULL, gp  ? gp->gt_live  : 5,
-		    tgp ? tgp->gt_ids : NULL, tgp ? tgp->gt_live : 5);
-	    }
-	}
-	/********************************************************************
-	 *  Final setup with correct IOCON_ODR for all PiFace Units with I/O.
-	 *  Active driver output if only one PiFace else open drain
-	 *******************************************************************/
 	for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
-	    if (pfp->Igate || pfp->Qgate) {
-#if	YYDEBUG
-		if (iC_debug & 0200) fprintf(iC_outFP, "###	un = %d pfa = %d	%s	%s\n",
-		    pfp - iC_pfL, pfp->pfa,
-		    (pfp->Igate != NULL) ? pfp->Igate->gt_ids : NULL,
-		    (pfp->Qgate != NULL) ? pfp->Qgate->gt_ids : NULL);
-#endif	/* YYDEBUG */
-		if (setupMCP23S17(pfp->spiFN, pfp->pfa, (iC_npf == 1) ? 0 : IOCON_ODR, 0xff, pfp->intf) < 0) {
-		    fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n",
-			iC_progname, pfp->pfa);
+	    if (pfp->Qgate || pfp->Igate || pfp->QPgate) {
+		char *	piFext;
+		uint8_t	inputA;
+		uint8_t	inputB;
+		if (pfp->intf == INTFA) {
+		    piFext = "CAD";
+		    inputA = 0xff;		/* PiFaceCAD all bits input on Port A */
+		    inputB = 0x00;		/* PiFaceCAD has no input on Port B */
+		} else {
+		    piFext = "   ";
+		    inputA = 0x00;		/* PiFace has no input on Port A */
+		    inputB = pfp->Ibmask;	/* PiFace input on port B, may be 0 if all output */
+		}
+		if (iC_debug & 0200) {
+		    gp = pfp->Qgate;
+		    tgp = pfp->Igate;
+		    ttgp = pfp->QPgate;
+		    fprintf(iC_outFP, "###	%s%s  un = %d pfa = %d	%-6s %s	%-6s %s	%-6s %s\n",
+			pfp->intf ? "PiFace" : "      ", piFext,	/* may be Dummy */
+			pfp - iC_pfL, pfp->pfa,
+			gp   ? gp->gt_ids   : NULL, markings[gp   ? gp->gt_live   : Dummy],
+			tgp  ? tgp->gt_ids  : NULL, markings[tgp  ? tgp->gt_live  : Dummy],
+			ttgp ? ttgp->gt_ids : NULL, markings[ttgp ? ttgp->gt_live : Dummy]
+		    );
+		}
+		/********************************************************************
+		 *  Final setup with correct IOCON_ODR for all PiFace Units with I/O.
+		 *  Active driver output if only one PiFace else open drain
+		 *******************************************************************/
+		if (setupMCP23S17(pfp->spiFN, pfp->pfa, (iC_npf == 1) ? 0x00 : IOCON_ODR, 1, inputA, inputB) < 0) {
+		    fprintf(iC_errFP, "ERROR: %s: PiFace%s %hu not found after succesful test ???\n",
+			iC_progname, piFext, pfp->pfa);
 		}
 	    }
 	}
@@ -2388,11 +2467,11 @@ main(
 	 *  open /sys/class/gpio/gpioN/value permanently for obtaining
 	 *  out-of-band interrupts and to allow read and write operations
 	 *******************************************************************/
-	for (iq = 0; iq <= 1; iq++) {
+	for (iq = 0; iq < 2; iq++) {
 	    for (gep = iC_gpL[iq]; gep; gep = gep->nextIO) {
 		for (bit = 0; bit <= 7; bit++) {
 		    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
-			if (iq) {
+			if (iq == 0) {
 			    /********************************************************************
 			     *  QXn gpio N export with direction out and no interrupts
 			     *******************************************************************/
@@ -2427,7 +2506,7 @@ main(
 			if (gep->gpioFN[bit] > iC_maxFN) {
 			    iC_maxFN = gep->gpioFN[bit];
 			}
-		    } else if (iq == 0) {
+		    } else if (iq == 1) {
 			gep->Ginv &= ~iC_bitMask[bit];	/* blank out missing GPIO input bits IXx.y */
 		    }
 		}
@@ -2449,6 +2528,37 @@ main(
 
 /********************************************************************
  *
+ *	Convert a string to integer using the first characters to determine the base
+ *	    0		return 0
+ *	    0b[01]*	convert binary string
+ *	    0x[0-9a-f]*	convert hexadeximal string
+ *	    0X[0-9A-F]*	convert hexadeximal string
+ *	    0[0-7]*	convert octal string
+ *	    [1-9][0-9]*	convert decimal string
+ *	    error	return 0x7fffffff	// LONG_MAX
+ *
+ *******************************************************************/
+
+static long
+convert_nr(const char * str, char ** endptr)
+{
+    long	val;
+
+    errno = 0;				/* to distinguisg success/failure after call */
+    if (*str == '0' && (*(str + 1) == 'b' || *(str + 1) == 'B')) {
+	val = strtol(str+2, endptr, 2);	/* convert base 2 binary */
+    } else {
+	val = strtol(str, endptr, 0);	/* convert hex, octal or decimal */
+    }
+    if ((errno == ERANGE && (val == LONG_MAX || val == LONG_MIN))
+	|| (errno != 0 && val == 0)) {	/* Check for various possible errors */
+	return LONG_MAX;
+    }
+    return val;
+} /* convert_nr */
+
+/********************************************************************
+ *
  *	Unexport GPIOs and close PiFaces if any real I/O parameters
  *	Clear gpiosp->u.used bits for GPIOs and A/D channels used in this app
  *
@@ -2458,9 +2568,7 @@ static int
 termQuit(int sig)
 {
     if (iC_opt_P || iC_npf) {	/* test iC_npf in case -P option with PiFace but no IEC parameters and no IX or QX in app */
-#if	YYDEBUG
 	if (iC_debug & 0200) fprintf(iC_outFP, "=== Unexport GPIOs and close PiFaces =======\n");
-#endif	/* YYDEBUG */
 	piFaceIO *	pfp;
 	int		pfce;
 	int		iq;
@@ -2515,21 +2623,26 @@ termQuit(int sig)
 	    iC_gpio_pud(25, BCM2835_GPIO_PUD_OFF);
 	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 		/********************************************************************
-		 *  Clear active PiFace output and turn off active PiFaceCad
-		 *******************************************************************/
-		if (pfp->pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
-		    writeByte(pfp->spiFN, pfp->pfa, GPIOA, 0);
-		} else if (pfp->Qgate) {			/* PiFaceCAD */
-		    pifacecad_lcd_clear();
-		    pifacecad_lcd_display_off();
-		    pifacecad_lcd_set_backlight(0);
-		}
-		/********************************************************************
+		 *  Clear active PiFace outputs and turn off active PiFaceCad
 		 *  Shutdown all active PiFace Units leaving interrupts off and open drain
 		 *******************************************************************/
-		if ((pfp->Igate || pfp->Qgate) &&	/* works for both iCpiFace and apps */
-		    setupMCP23S17(pfp->spiFN, pfp->pfa, IOCON_ODR, 0x00, 0) < 0) {
-		    fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n", iC_progname, pfp->pfa);
+		if (pfp->Qgate || pfp->Igate || pfp->QPgate) {		/* works for both iCpiFace and apps */
+		    if (pfp->Qgate) {
+			if (pfp->pfa != 4 || pfp->intf != INTFA) {	/* PiFace */
+			    writeByte(pfp->spiFN, pfp->pfa, OLATA, pfp->Qinv);
+			} else {					/* PiFaceCAD */
+			    pifacecad_lcd_clear();
+			    pifacecad_lcd_display_off();
+			    pifacecad_lcd_set_backlight(0);
+			}
+		    }
+		    if (pfp->QPgate) {
+			writeByte(pfp->spiFN, pfp->pfa, OLATB, pfp->QPinv);
+		    }
+		    if (setupMCP23S17(pfp->spiFN, pfp->pfa, IOCON_ODR, 0, 0x00, 0x00) < 0) {
+			fprintf(iC_errFP, "ERROR: %s: PiFace %d not found after succesful test ???\n",
+			    iC_progname, pfp->pfa);
+		    }
 		}
 	    }
 	    /********************************************************************
@@ -2567,9 +2680,7 @@ termQuit(int sig)
 		iC_progname);
 	    return (SIGUSR1);			/* error quit */
 	}
-#if	YYDEBUG
 	if (iC_debug & 0200) fprintf(iC_outFP, "=== End Unexport GPIOs and close PiFaces ===\n");
-#endif	/* YYDEBUG */
     } /* iC_opt_P */
     return (sig);			/* finally quit */
 } /* termQuit */

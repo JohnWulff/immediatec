@@ -1,10 +1,10 @@
-@(#)$Id: icc.v,v 1.138 2015/12/05 00:46:08 jw Exp $
+@(#)$Id: icc.v,v 1.139 2015/12/29 04:40:15 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 Makefile.in     1.62    2015/11/03  02:58:42  jw      Exp
 Msg.pm          1.6     2015/03/06  00:28:04  jw      Exp
-README.RPi      1.1     2015/06/06  12:30:08  jw      Exp
-README.tpl      1.26    2015/06/06  08:48:15  jw      Exp
+README.RPi      1.2     2015/12/28  12:49:23  jw      Exp
+README.tpl      1.27    2015/12/28  12:24:21  jw      Exp
 bcm2835.c       1.22    2015/03/29  08:14:44  jw      Exp
 bcm2835.h       1.19    2015/03/30  23:01:11  jw      Exp
 cexe.h          1.31    2015/10/30  04:40:11  jw      Exp
@@ -23,18 +23,18 @@ iClift          1.14    2015/11/07  20:59:48  jw      Exp
 iClive          1.58    2015/11/06  22:06:35  jw      Exp
 iCmake          1.47    2015/11/02  11:34:56  jw      Exp
 iCman           1.21    2015/10/27  07:53:09  jw      Exp
-iCpiFace.c      1.6     2015/11/06  07:56:47  jw      Exp
+iCpiFace.c      1.7     2015/12/26  09:35:24  jw      Exp
 iCpiPWM.c       1.3     2015/11/06  07:56:43  jw      Exp
 iCrfid          1.1     2014/05/16  03:32:14  jw      Exp
 iCserver        1.48    2015/11/06  06:31:56  jw      Exp
 iCtherm         1.4     2015/11/06  10:43:33  jw      Exp
 icbegin.c       1.6     2015/11/06  00:47:21  jw      Exp
 icc.c           1.73    2015/11/09  02:59:14  jw      Exp
-icc.h           1.78    2015/11/05  22:13:58  jw      Exp
+icc.h           1.79    2015/12/22  02:03:02  jw      Exp
 icend.c         1.4     2015/10/31  03:40:08  jw      Exp
 icg.pl          1.5     2015/10/16  12:33:47  jw      Exp
 icr.c           1.44    2015/10/31  01:26:33  jw      Exp
-ict.c           1.65    2015/12/04  07:26:16  jw      Exp
+ict.c           1.66    2015/12/26  05:43:08  jw      Exp
 immac           1.24    2015/10/19  10:18:25  jw      Exp
 immax           1.4     2012/12/06  22:28:03  jw      Exp
 init.c          1.42    2015/01/22  07:53:37  jw      Exp
@@ -45,12 +45,12 @@ lexc.l          1.33    2014/10/22  03:08:15  jw      Exp
 lifts.ica       1.3     2013/05/13  07:55:40  jw      Exp
 link.c          1.33    2015/10/24  03:34:03  jw      Exp
 lmain.c         1.18    2009/08/21  06:26:19  jw      Exp
-load.c          1.62    2015/11/06  03:18:05  jw      Exp
+load.c          1.63    2015/12/26  09:35:16  jw      Exp
 m               1.19    2015/09/29  07:32:32  jw      Exp
 makeAll         1.40    2015/10/16  12:33:47  jw      Exp
 manifest        1.27    2015/10/16  12:33:47  jw      Exp
-mcp23s17.c      1.3     2015/04/17  00:29:37  jw      Exp
-mcp23s17.h      1.3     2015/03/17  23:54:33  jw      Exp
+mcp23s17.c      1.4     2015/12/23  23:52:15  jw      Exp
+mcp23s17.h      1.4     2015/12/18  07:02:24  jw      Exp
 misc.c          1.16    2015/11/06  00:57:07  jw      Exp
 outp.c          1.98    2015/10/16  12:33:47  jw      Exp
 p_channel.c     1.2     2015/10/16  12:33:47  jw      Exp

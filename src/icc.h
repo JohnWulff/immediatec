@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.78 2015/11/05 22:13:58 jw Exp $";
+"@(#)$Id: icc.h,v 1.79 2015/12/22 02:03:02 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -673,9 +673,10 @@ extern unsigned char	iC_bitMask[];
 #endif
 #ifdef	RASPBERRYPI
 #define	X_FLAG		0x200		/* flag non-registration in gt_mark */
-#define	P_FLAG		0x400		/* flag PiFace in or out Gate in gt_mark */
+#define	P_FLAG		0x400		/* flag PiFace Port A out or PortB in Gate in gt_mark */
+#define	PB_FLAG		0xC00		/* flag PiFace Port B out Gate in gt_mark */
 #define	G_FLAG		0x800		/* flag GPIO in or out group Gate in gt_mark */
-#define	PG_MASK		0xC00		/* mask for the above 2 flags in gt_mark */
+#define	PG_MASK		0xC00		/* mask for the above 3 flags in gt_mark */
 #define OopsMask	1LL		/* mask to protect iCtherm from modprobe Oops failure */
 extern int		(*iC_term)(int);	/* clear and unexport RASPBERRYPI stuff */
 #endif	/* RASPBERRYPI */
@@ -775,13 +776,13 @@ extern FILE *		iC_savFP;
  *	after registration is completed. (gt_live is 0 because of emalloc()) 
  *******************************************************************/
 
-#define External	0		/* default  IXx <== iCserver <== QXx */
-#define Internal	1		/*          IXx <==   SIO    <== QXx */
-					/* if opt_E    also iCserver <== IXx (display only) */
-					/*             and  iCserver <== QXx */
+#define External	0		/* default  IXn <== iCserver <== QXn */
+#define Internal	1		/*          IXn <==   SIO    <== QXn */
+					/* if opt_E    also iCserver <== IXn (display only) */
+					/*             and  iCserver <== QXn */
 #define Dummy		2		/* ignore -    output WARNING    *** */
-#define ExternOut	3		/* like     iCserver (IXx)   <== SIO */
-					/* iCpiFace SIO      (QXx)   <== iCserver */
+#define ExtOut		3		/* like     iCserver (IXn)   <== SIO */
+					/* iCpiFace SIO      (QXn)   <== iCserver */
 
 /********************************************************************
  *
@@ -808,10 +809,11 @@ typedef struct	iqDetails {
     int			inv;		/* in or out inversion mask */
     int			val;		/* previous input or output value */
     unsigned short	channel;	/* channel to send I or receive Q to/from iCserver */
+    uint8_t		bmask;		/* selected bits for this input or output */
 } iqDetails;
 
 typedef struct	piFaceIO {
-    iqDetails		s[2];		/* select IXx with iq=0, QXx with iq=1 */
+    iqDetails		s[3];		/* select QXn with iq=0, IXn with iq=1, QXn+ with iq=2 */
     unsigned short	pfa;		/* PiFace address 0 - 7 */
     uint8_t		intf;		/* PiFace INTFB PiFaceCAD INTFA */
     uint8_t		inpr;		/* PiFace GPIOB PiFaceCAD GPIOA */
@@ -821,33 +823,42 @@ typedef struct	piFaceIO {
 /********************************************************************
  *
  *	gpioIO structures are organised as follows:
- *	  each structure describes an independent IXx or QXx bit group
+ *	  each structure describes an independent IXn or QXn bit group
  *	  which services up to 8 GPIO pins.
  *
  *******************************************************************/
 
 typedef struct	gpioIO {
-    iqDetails		s;		/* IXx or QXx details */
+    iqDetails		s;		/* IXn or QXn details */
     unsigned short	gpioNr[8];	/* gpio number for bits 0 - 7 */
     int			gpioFN[8];	/* file number for bits 0 - 7 */
     struct gpioIO *	nextIO;		/* arrange in null terminated linked list */
 } gpioIO;
 
-#define Iname		s[0].i.name	/* name IXn or IXn-i, used in iCpiFace.c */
-#define Qname		s[1].i.name	/* name QXn or QXn-i */
+#define Qname		s[0].i.name	/* name QXn or QXn-i, used in iCpiFace.c */
+#define Iname		s[1].i.name	/* name IXn or IXn-i */
+#define QPname		s[2].i.name	/* name QXn or QXn-i, used Relay+ */
 #define Gname		s.i.name	/* GPIO name IXn QXn or IXn-i QXn-i */
-#define Igate		s[0].i.gate	/* gate named IXn or IXn-i, used in load.c */
-#define Qgate		s[1].i.gate	/* gate named QXn or QXn-i */
+#define Qgate		s[0].i.gate	/* gate named QXn or QXn-i, used in load.c */
+#define Igate		s[1].i.gate	/* gate named IXn or IXn-i */
+#define QPgate		s[2].i.gate	/* name QXn or QXn-i, used Relay+ */
 #define Ggate		s.i.gate	/* GPIO gate named IXn QXn or IXn-i QXn-i */
-#define Iinv		s[0].inv	/* PiFace in inversion mask */
-#define Qinv		s[1].inv	/* PiFace out inversion mask */
+#define Qinv		s[0].inv	/* PiFace out inversion mask */
+#define Iinv		s[1].inv	/* PiFace in inversion mask */
+#define QPinv		s[2].inv	/* PiFace out+ inversion mask */
 #define Ginv		s.inv		/* GPIO in or out inversion mask */
-#define Ival		s[0].val	/* PiFace previous input value */
-#define Qval		s[1].val	/* PiFace previous output value */
+#define Qval		s[0].val	/* PiFace previous out value */
+#define Ival		s[1].val	/* PiFace previous in value */
+#define QPval		s[2].val	/* PiFace previous out+ value */
 #define Gval		s.val		/* GPIO previous input or output value */
-#define Ichannel	s[0].channel	/* PiFace channel number to send input to iCserver */
-#define Qchannel	s[1].channel	/* PiFace channel number to receive output from iCserver */
+#define Qchannel	s[0].channel	/* PiFace channel number to receive out from iCserver */
+#define Ichannel	s[1].channel	/* PiFace channel number to send in to iCserver */
+#define QPchannel	s[2].channel	/* PiFace channel number to receive out+ from iCserver */
 #define Gchannel	s.channel	/* GPIO channel number to send or receive from iCserver */
+#define Qbmask		s[0].bmask	/* PiFace bmask for out from iCserver */
+#define Ibmask		s[1].bmask	/* PiFace bmask for in to iCserver */
+#define QPbmask		s[2].bmask	/* PiFace bmask for out+ from iCserver */
+#define Gbmask		s.bmask		/* GPIO for send or receive from iCserver */
 
 /********************************************************************
  *
@@ -858,6 +869,7 @@ typedef struct	gpioIO {
 typedef struct	channelSel {
     Gate *		g;		/* gate named IXn, IXn-i, QXn or QXn-i */
     int			pqs;		/* 0 no direct I/O, 1 piFaceIO, 2 gpioIO */
+    int			iqs;		/* 0 Port A output, 1 Port B input, 2 Port B output */
     union {
 	piFaceIO *	p;		/* pointer to selected PiFace for direct I/O */
 	gpioIO *	q;		/* pointer to selected GPIO group for direct I/O */

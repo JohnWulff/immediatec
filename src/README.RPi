@@ -13,19 +13,18 @@
 
     The iC system consists of the immediate C compiler 'immcc', the static library
     'libict.a', which has debugging support and the shared library 'libict.so',
-    which does not. On top of this is the Raspberry Pi specific I/O program
-    'iCpiFace' and a number of Perl scripts, which do not have to be built. The
-    'immcc' compiler has no Raspberry Pi specific code. The libraries have driver
-    extensions which are optionally compiled if RASPBERRYPI is defined. To build
-    the various components 'make' must be called with different options. The
-    auxiliary script 'makeAll' looks after this (see the 'makeAll' man page).
-    'makeAll' tests which processor it is running on and defines RASPBERRYPI if
-    it runs on an ARM processor. This means the calls to make are identical
-    on all processors (currently x86_64, armv6l and armv7l) The Makefile also
-    looks after storing the libraries in the correct directory - /usr/local/lib
-    or /usr/local/lib64 for 64 bit processors.  To make things even easier the
-    script 'm' builds various versions very simply. (I used to have a colleague
-    who found 'make' too long to type).
+    which does not.  On top of this are the Raspberry Pi specific I/O drivers
+    iCpiFace, iCpiPWM and iCtherm.  The 'immcc' compiler has no Raspberry Pi
+    specific code. The libraries have driver extensions which are optionally
+    compiled if RASPBERRYPI is defined. To build the various components 'make'
+    must be called with different options. The auxiliary script 'makeAll' looks
+    after this (see the 'makeAll' man page).  'makeAll' tests which processor it
+    is running on and defines RASPBERRYPI if it runs on an ARM processor. This
+    means the calls to make are identical on all processors (currently x86_64,
+    armv6l and armv7l) The Makefile also looks after storing the libraries in the
+    correct directory - /usr/local/lib or /usr/local/lib64 for 64 bit processors.
+    To make things even easier the script 'm' builds various versions very simply.
+    (I used to have a colleague who found 'make' too long to type).
 
 	m		# build immcc and libict.a with debugging support
 	m -cl		# same as m
@@ -136,19 +135,19 @@
 	http://elinux.org/RPi_Low-level_peripherals
 	http://www.auctoris.co.uk/2012/07/19/gpio-with-sysfs-on-a-raspberry-pi/
 
-		    PiFace I/O extension board
+		    PiFace I/O extension boards
 
-    One PiFace board can be plugged directly into the 26 pin P1 connector of a
-    RPi B board. Up to 8 Piface boards can be connected using up to 3 PiRacks.
-    I have tested 4 PiFaces on one PiRack.  (I have so far not investigated
-    PiFaces for B+ or 2B boards with 40 pin P1 connectors).
+    One PiFace 1 board can be plugged directly into the 26 pin P1 connector of
+    a RPi B board.  Up to 8 Piface boards can be connected using up to 3 PiRacks.
+    I have tested 4 PiFace 1's on one PiRack as well as a 40 pin PiFace 2 and
+    2 x PiFace Relay+ with Relay Extra extensions together on a RPi2.
 
     Each PiFace provides 8 bits of buffered digital output, each of which is
     connected to a LED indicator and 2 of which also drive relays with 1 changeover
-    switches each.  Each PiFace also provides 8 bits of buffered digital input,
-    4 of which are provided with pushbutton switches, which pull the input to
-    0 volts. All 8 outputs, the 6 wires from the contacts of the relays and the
-    8 inputs are brought out to terminal blocks
+    switch each.  Each PiFace also has 8 bits of digital input, which can be
+    configured as extra outputs. 4 pushbutton switches pull inputs 0 to 3 to 0 volts.
+    All 8 outputs, the 6 wires from the contacts of the relays and the 8 inputs are
+    brought out to terminal blocks.
 
     The output LED's and the relays are switched on when the output is 0 volts,
     which is active lo.  The way the switches are arranged the input is also
@@ -315,5 +314,5 @@
     or acted upon.  iCpiFace always communicates all its input and output via
     iCserver, so it does not need a -E or -L option.
 
-    John E. Wulff   2015.04.29     <immediateC@gmail.com>
-    $Id: README.RPi,v 1.1 2015/06/06 12:30:08 jw Exp $
+    John E. Wulff   2015.12.28     <immediateC@gmail.com>
+    $Id: README.RPi,v 1.2 2015/12/28 12:49:23 jw Exp $
