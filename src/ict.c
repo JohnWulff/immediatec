@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.66 2015/12/26 05:43:08 jw Exp $";
+"@(#)$Id: ict.c,v 1.67 2016/01/02 23:38:52 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2159,7 +2159,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			iC_quit(QUIT_TERMINAL);		/* quit normally with 'q' or ctrl+D */
 #if	YYDEBUG
 		    } else if (c == 't') {
-			iC_debug ^= 01100;		/* toggle -t flag */
+			iC_debug |= 01000;		/* block inactive timers */
+			iC_debug ^= 0100;		/* toggle -t flag */
 		    } else if (c == 'm') {
 			iC_micro++;			/* toggle more micro */
 			if (iC_micro >= 3) iC_micro = 0;

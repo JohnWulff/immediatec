@@ -98,7 +98,7 @@ Usage:
 		if a client call has arguments, the call must be quoted
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.48 2015/11/06 06:31:56 jw Exp $
+$Id: iCserver,v 1.49 2016/01/02 23:05:00 jw Exp $
 .
 
 ########################################################################
@@ -345,7 +345,7 @@ while ($argv = shift @argv) {
 	}
 	$AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with equivalences
     } else {
-	exec_process($argv);
+	fork_and_exec($argv);
     }
 }
 
@@ -385,9 +385,8 @@ sub readStdin {
 #
 ########################################################################
 
-sub exec_process {
+sub fork_and_exec {
     my ($argv) = @_;
-    print "exec_process '$argv'\n" if $opt_t;
     FORK: {
 	select undef, undef, undef, 1 if defined $pid;	# delay if previous fork
 	return if ($pid = fork);
@@ -403,7 +402,7 @@ sub exec_process {
 	    splice @call, $n, 0, "-t" if defined $opt_t;
 	    splice @call, $n, 0, "-m" if defined $opt_m;
 	    splice @call, $n, 0, "-z$opt_q";
-	    print STDERR "\$ @call\n" unless $opt_q;
+	    print STDERR "\$ @call &\n" unless $opt_q;
 	    exec @call;
 	    die "$named: returned from exec $call[0] ???: $!\n";
 	} elsif ($! =~ /No more process/) {
@@ -415,7 +414,7 @@ sub exec_process {
 	    die "$named: can't fork ???: $!\n";
 	}
     }
-} # exec_process
+} # fork_and_exec
 
 ########################################################################
 #
@@ -696,13 +695,13 @@ sub autoVivify {
 	} keys %AutoVivify;
 	$autovivify = "$opt_A -n$ioName $autovivify";
 	print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
-	exec_process($autovivify);
+	fork_and_exec($autovivify);
 	%AutoVivify = ();
 	$opt_a = undef if $opt_A =~ m/\s-\w*d\w*\b/;	# stop recursive exec of iCbox -d
     }							# other iCbox switches are ignored
     if ($AutoDebug) {
 	print "AUTODEBUG: '$AutoDebug'\n" if $opt_t;
-	exec_process($AutoDebug);
+	fork_and_exec($AutoDebug);
 	$AutoDebug = '';
     }
 } # autoVivify

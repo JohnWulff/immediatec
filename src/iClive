@@ -187,7 +187,7 @@ my %keyWords = (
 
 my $named = $0; $named =~ s#.*[/\\]##;
 use vars qw($opt_ $opt_T $opt_q $opt_z $opt_S $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i);
-use vars qw($opt_F $opt_l $opt_w $opt_g $opt_A $opt_u $opt_X $opt_h);
+use vars qw($opt_F $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
@@ -212,6 +212,8 @@ Usage:
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
             if iCsever is started by this @<<<<< call
 					  $named
+                      BUILD option
+    -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
                       DEBUG options
     -d deb  extra debug options (see iC-application -h)
     -t      trace gate activity in target application (-d1100)
@@ -289,7 +291,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.58 2015/11/06 22:06:35 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive,v 1.59 2016/01/23 00:38:42 jw Exp $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -360,6 +362,7 @@ GetOptions (
     'w=i' => \$opt_w,
     'g=s' => \$opt_g,
     'A=s' => \$opt_A,
+    'L=s' => \@opt_L,
     'h'   => \$opt_h,
 );
 scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Long Getoptions() ???\n";
@@ -423,6 +426,8 @@ if ($font_t =~ /medium/) {
     $boldfont_t = "-adobe-courier-bold-r-normal--fontSize-100-100-100-m-90-iso8859-1";
 }
 change_font(0, 0);		# set initial font size to $fontSize
+
+@opt_L = split(/,/, join(',', @opt_L));	# allow -L lm,rt instead of -L lm -L rt
 
 no warnings;
 print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
@@ -623,7 +628,7 @@ $menuFile->command(-label       => 'Open.lst',				# 4 $menuFile->entryconfigure(
 		   -command     => \&open_list);
 $menuFile->command(-label       => 'Save',				# 5
 		   -accelerator => 'Alt-s',
-		   -command     => \&save_file);
+		   -command     => [ \&save_file, 0, 0 ]);
 $menuFile->command(-label       => 'SaveAs',				# 6
 		   -accelerator => 'Alt-a',
 		   -command     => \&saveAs_file);
@@ -987,7 +992,7 @@ $text      ->bind('<Alt-Key-n>',		[ \&new_text              ]); # not active in 
 $text      ->bind('<Alt-Key-o>',		[ \&open_file             ]); # not active in Live mode
 $text      ->bind('<Alt-Key-R>',		[ \&reload_file           ]); # active in Live mode
 $text      ->bind('<Alt-Key-l>',		[ \&open_list             ]); # active in Live mode
-$text      ->bind('<Alt-Key-s>',		[ \&save_file             ]); # not active in Live mode
+$text      ->bind('<Alt-Key-s>',		[ \&save_file, 0          ]); # not active in Live mode
 $text      ->bind('<Alt-Key-a>',		[ \&saveAs_file           ]); # not active in Live mode
 $text      ->bind('<Alt-Key-q>',		[ \&quit_program          ]); # active in Live mode
 ####### Build menu bindings ############################################
@@ -1109,18 +1114,19 @@ sub display_callback {
 
 ########################################################################
 #
-#	Tag all comments in text
+#	Tag all comments in text with tag 'ctag'	BLUE
+#	Tag all keywords in program text with tag 'bd'	BOLD
 #
 ########################################################################
 
 sub tagComments {
     # Tk::Text->search() does not accept a pre-compiled regex qr/.../
-    my $reg = '(/[/*]|\\*/|[\'"]|\w+|{{|}})';		# /* // */ \ ' " words {{ }}
+    my $reg = '(/[/*]|[[*]/|[\'"]|\w+)';	# /* // */ ' " words
     my $stop = '';
     my $length = 1;
     my $current = '1.0';	# start of text
     print "tagComments: $current\n" if $opt_T;
-    $text->tagDelete('cTag');
+    $text->tagDelete('cTag', 'bd');
     $text->tagConfigure('cTag', -foreground => 'blue');
     $text->tagConfigure('bd',   -font       => $boldfont);
     my $cStart = '';
@@ -1140,8 +1146,9 @@ sub tagComments {
 	if ($atom eq '"' or $atom eq "'") {
 	    my $c4 = $text->get($text->index("$current - 1 char"));
 	    my $c5 = $text->get($text->index("$current - 2 char"));
-	    if ($c4 eq '\\' and $c5 ne '\\') {
-		$atom = '';		# ignore \" and \' but not \\" and \\'
+	    if (($c4 eq "\\" and $c5 ne "\\") ||	# ignore \" and \' but not \\" and \\'
+		($atom eq "'" and $c4 eq "-" and $c5 ne "'")) {
+		$atom = '';		# also ignore -' LOGC flag in listing but not '-' and -"
 	    }
 	}
 	if ($state eq "S") {		# string constant
@@ -2501,20 +2508,21 @@ sub register_now {
 #
 #	Check if a file has been modified and needs to be saved
 #
-#	IF contents has changed AND Button 'Yes' is pressed
+#	IF contents has changed
+#	    IF Button 'Yes' is pressed
 #		saves $fileName
 #		changes entry box text to $fileName if successful
-#		returns 1 if successful else 0
+#		return 1 if successful else 0
+#	    ELSIF Button 'No' is pressed
+#		return 0
+#	    ELSIF Button 'Cancel' is pressed
+#		return -1
 #	ELSE
-#		does nothing
-#		returns 0 if 'Cancel' else 1 ('No')
-#
-#	no regex matches allowed for run_file()
+#	    return 1
 #
 ########################################################################
 
 sub check_save {
-    my $ret = 1;
     my $contents = $text->get("1.0", "end - 1 chars");	# whole text
     if ($contents ne $oldContents) {
 	if ($opt_T) {
@@ -2531,13 +2539,16 @@ sub check_save {
 				       -relief       => 'ridge',
 				      )->pack(-side => 'bottom', -fill => 'x');
 	my $answer = $dialog->Show();
-	if ($answer eq 'Cancel') {
-	    $ret = 0;			# cancel operation
-	} elsif ($answer eq 'Yes') {
-	    $ret = save_file(1);	# save modified $fileName
+	if ($answer eq 'Yes') {
+	    return save_file(0, 1);	# Yes - save modified $fileName
+	} elsif ($answer eq 'No') {
+	    return -1;			# No - abort saving
+	} elsif ($answer eq 'Cancel') {
+	    return 0;			# Cancel operation
 	}
+    } else {
+	return 1;
     }
-    return $ret;
 } # check_save
 
 ########################################################################
@@ -2724,7 +2735,7 @@ use warnings;
 ########################################################################
 #
 #	Saves the file previously loaded or last saved
-#		parameter 1:	1 overwrite file unconditionally (new destination)
+#		2nd parameter:	1 overwrite file unconditionally (new destination)
 #				0 or '' overwrite if contents has changed (default)
 #
 ########################################################################
@@ -2732,7 +2743,7 @@ use warnings;
 sub save_file {
     my $ret = 1;		# good return
     if (defined $fileName and $fileName ne $newName and $fileName ne '') {
-	my ($unconditional) = @_;	# optional parameter
+	my ($unconditional) = $_[1];	# optional 2nd parameter
 	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
 	## allow non existing file to be written by setting to $fileTime if undef
 	if ($ftime != $fileTime) {
@@ -2778,6 +2789,7 @@ sub save_file {
 		## read last modified time from new stat now as it changed since last stat
 		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
+		tagComments();					# comments and/or keywords may have changed
 		info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved (backup $fileName.bak)");
 		check_menu($fileName, 'files');
 	    } else {
@@ -2816,7 +2828,7 @@ sub saveAs_file {
 	$fileName =~ s#^C:/cygwin## or $fileName =~ s#^([A-Z]):#/cygdrive/\l$1#;
 	$fileName =~ s#^$cwd/##;
 	print "saveAs_file: $fileName\n" if $opt_T;
-	if (save_file($fileName ne $oldName) == 0) {
+	if (save_file(0, $fileName ne $oldName) == 0) {
 	    ## could not save $fileName
 	    $fileName = $oldName;	# restore fileName
 	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
@@ -2859,26 +2871,34 @@ sub build_file {
     } else {
 	my $baseName = $1;
 	my $buildName = "$fileName$readOnly";	# $fileName will change in open_file() if error
+	my $targetName = $par2 == 2 ? "$baseName.c" : $baseName;
 	deleteAllTags();		# also clears @activeSymbols
 	reset_scan(1);			# must be done before save_file, because live expands text
 	if ($par2 == 1) {
-	    $saved = save_file(1);	# save unconditionally
+	    $saved = save_file(0, 1);	# save unconditionally
 	} else {
 	    $saved = check_save();
+	    info_display(2000, 'dark green', "'$targetName' was not saved - no new build") if $saved < 0;
 	}
-	if ($saved) {
-	    my $targetName = $par2 == 2 ? "$baseName.c" : $baseName;
+	if ($saved > 0) {
 	    my $ftime = (stat($fileName))[9]; $ftime = 0 unless defined $ftime;
 	    my $mtime = (stat($targetName))[9]; $mtime = 0 unless defined $mtime;
 	    my $ret = 0;
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-qfaAd200", $fileName, "2>&1");	# -A useful for live display
-		if ($par2 == 2) {
+		my @args = ("iCmake", "-qfasAd200", $fileName, "2>&1");	# -A useful for live display
+		if ($par2 == 2) {		# link with static (debug) library - generate // x =
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
+		} else {
+		    my $lib;
+		    my $i = 1;
+		    foreach $lib (@opt_L) {
+			splice(@args, $i, 0, '-L', $lib);	# add BUILD library options
+			$i += 2;
+		    }
 		}
-		print "qx(@args)\n" if $opt_T;
+		print STDERR "\$ @args\n" unless $opt_q;
 		my @errText = qx(@args);	# execute iCmake ...
 		$ret = $? >> 8;
 		my $len = @errText;
@@ -3019,7 +3039,7 @@ sub fork_and_exec {
 	    ## parent process
 	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
 	} elsif (defined $pid) {	# $pid is zero if defined
-	    print STDERR "\$ @_\n" unless $opt_q;
+	    print STDERR "\$ @_ &\n" unless $opt_q;
 	    ## dispatch child process
 	    exec @_;			# does not return unless exec failure
 	    warn "forked child process exited - failure exec '@_'\n";
@@ -3357,6 +3377,7 @@ sub quit_program {
 	}
 	print "$named: quit\n" if $opt_T;
 	if ($server > 0) {
+	    print "quit_program() sends 'X$named'\n" if $opt_T;
 	   conn_send_now("X$named") if $conn;	# iClive started iCserver - stop it
 	} elsif ($runName ne '') {
 	    print "quit_program() sends '$D_channel:7,$D_channel:0'\n" if $opt_T;
@@ -3366,7 +3387,9 @@ sub quit_program {
 	    ## is available in iCserver for next iClive start
 	    ####################################################
 	}
+	print "quit_program() \$maindWindow->destroy()\n" if $opt_T;
 	$mainWindow->destroy();
+	print "quit_program() exit(0)\n" if $opt_T;
 	exit(0);
     }
     ## continue if check_save() was cancelled
@@ -3484,6 +3507,8 @@ iClive - an editor and live debugger for immediate-C clients
     -S server +options+equivalences  (default 'iCserver -k -A iCbox')
     -A cmd  use <cmd> to autovivify I/O clients (default 'iCbox')
             if iCsever is started by this iClive call
+                      BUILD option
+    -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
                       DEBUG options
     -d deb  extra debug options (see iC-application -h)
     -t      trace gate activity in target application (-d1100)

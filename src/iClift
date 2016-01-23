@@ -186,7 +186,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.14 2015/11/07 20:59:48 jw Exp $ uses Tk-@<<<<<<
+$Id: iClift,v 1.15 2016/01/02 22:44:29 jw Exp $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -683,7 +683,6 @@ unless (-x $controller) {
 	## system() requires signal CHLD to notify completion
 	$SIG{CHLD} = 'DEFAULT';
 	my @args = ("iCmake", "-qA", "-PLIFTS=$lifts", "-PFLOORS=$floors", "lifts.ica", "2>&1");	# -A useful for live display
-	print "qx(@args)\n" if $opt_T;
 	print STDERR "\$ @args\n" unless $opt_q;
 	my @errText = qx(@args);	# execute iCmake ...
 	my $ret = $? >> 8;
@@ -2270,7 +2269,7 @@ sub fork_and_exec {
 	    ## parent process
 	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
 	} elsif (defined $pid) {	# $pid is zero if defined
-	    print STDERR "\$ @_\n" unless $opt_q;
+	    print STDERR "\$ @_ &\n" unless $opt_q;
 	    ## dispatch child process
 	    exec @_;			# does not return unless exec failure
 	    warn "forked child process exited - failure exec '@_'\n";

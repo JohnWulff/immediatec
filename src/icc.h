@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.79 2015/12/22 02:03:02 jw Exp $";
+"@(#)$Id: icc.h,v 1.80 2016/01/05 01:09:42 jw Exp $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -912,10 +912,10 @@ extern int		iC_exec(int iC_indx, Gate * gp);
 #endif /* LOAD */
 
 #if INT_MAX == 32767 && defined (LONG16)
-void			iC_output(long val, unsigned short channel);
+extern void		iC_output(long val, unsigned short channel);
 extern void		iC_liveData(Gate * gp, long value);	/* VCD and/or iClive */
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-void			iC_output(int val, unsigned short channel);
+extern void		iC_output(int val, unsigned short channel);
 extern void		iC_liveData(Gate * gp, int value);	/* VCD and/or iClive */
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 					/*   misc.c  */

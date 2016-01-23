@@ -1,4 +1,4 @@
-@(#)$Id: icc.v,v 1.139 2015/12/29 04:40:15 jw Exp $
+@(#)$Id: icc.v,v 1.140 2016/01/23 01:08:33 jw Exp $
 ARTISTIC        1.1     2001/03/02  16:43:55  jw      Exp
 COPYING         1.1     2001/03/02  16:43:55  jw      Exp
 Makefile.in     1.62    2015/11/03  02:58:42  jw      Exp
@@ -14,27 +14,27 @@ comp.pl         1.6     2009/08/21  06:01:04  jw      Exp
 comp.y          1.114   2015/10/16  12:33:47  jw      Exp
 configure       1.6     2005/07/29  17:51:13  jw      Exp
 configure.in    1.4     2005/02/01  16:37:44  jw      Exp
-genr.c          1.84    2015/10/16  12:33:47  jw      Exp
+genr.c          1.85    2016/01/03  10:18:20  jw      Exp
 gram.pl         1.7     2014/05/12  13:09:44  jw      Exp
 gram.y          1.34    2015/06/05  08:19:18  jw      Exp
 iCbox           1.58    2015/11/06  03:50:19  jw      Exp
 iCgpioPUD.c     1.2     2015/04/11  09:30:33  jw      Exp
-iClift          1.14    2015/11/07  20:59:48  jw      Exp
-iClive          1.58    2015/11/06  22:06:35  jw      Exp
+iClift          1.15    2016/01/02  22:44:29  jw      Exp
+iClive          1.59    2016/01/23  00:38:42  jw      Exp
 iCmake          1.47    2015/11/02  11:34:56  jw      Exp
 iCman           1.21    2015/10/27  07:53:09  jw      Exp
 iCpiFace.c      1.7     2015/12/26  09:35:24  jw      Exp
 iCpiPWM.c       1.3     2015/11/06  07:56:43  jw      Exp
 iCrfid          1.1     2014/05/16  03:32:14  jw      Exp
-iCserver        1.48    2015/11/06  06:31:56  jw      Exp
-iCtherm         1.4     2015/11/06  10:43:33  jw      Exp
+iCserver        1.49    2016/01/02  23:05:00  jw      Exp
+iCtherm         1.5     2016/01/02  22:52:34  jw      Exp
 icbegin.c       1.6     2015/11/06  00:47:21  jw      Exp
 icc.c           1.73    2015/11/09  02:59:14  jw      Exp
-icc.h           1.79    2015/12/22  02:03:02  jw      Exp
+icc.h           1.80    2016/01/05  01:09:42  jw      Exp
 icend.c         1.4     2015/10/31  03:40:08  jw      Exp
 icg.pl          1.5     2015/10/16  12:33:47  jw      Exp
 icr.c           1.44    2015/10/31  01:26:33  jw      Exp
-ict.c           1.66    2015/12/26  05:43:08  jw      Exp
+ict.c           1.67    2016/01/02  23:38:52  jw      Exp
 immac           1.24    2015/10/19  10:18:25  jw      Exp
 immax           1.4     2012/12/06  22:28:03  jw      Exp
 init.c          1.42    2015/01/22  07:53:37  jw      Exp
@@ -51,7 +51,7 @@ makeAll         1.40    2015/10/16  12:33:47  jw      Exp
 manifest        1.27    2015/10/16  12:33:47  jw      Exp
 mcp23s17.c      1.4     2015/12/23  23:52:15  jw      Exp
 mcp23s17.h      1.4     2015/12/18  07:02:24  jw      Exp
-misc.c          1.16    2015/11/06  00:57:07  jw      Exp
+misc.c          1.17    2016/01/02  22:54:19  jw      Exp
 outp.c          1.98    2015/10/16  12:33:47  jw      Exp
 p_channel.c     1.2     2015/10/16  12:33:47  jw      Exp
 pawk.pl         1.7     2009/08/21  06:08:31  jw      Exp

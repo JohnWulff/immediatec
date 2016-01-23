@@ -106,7 +106,7 @@ Usage:
                      as a separate process; -R ... must be last arguments.
 Copyright (C) 2014  John E. Wulff              <immediateC@gmail.com>
 							'@'
-$Id: iCtherm,v 1.4 2015/11/06 10:43:33 jw Exp $
+$Id: iCtherm,v 1.5 2016/01/02 22:52:34 jw Exp $
 .
 
 ########################################################################
@@ -929,7 +929,7 @@ sub fork_and_exec {
 	    ## parent process
 	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
 	} elsif (defined $pid) {	# $pid is zero if defined
-	    print STDERR "\$ @_\n" unless $opt_q;
+	    print STDERR "\$ @_ &\n" unless $opt_q;
 	    ## dispatch child process
 	    exec @_;			# does not return unless exec failure
 	    warn "*** WARNING: forked child process exited - failure exec '@_'\n";

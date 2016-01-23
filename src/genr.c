@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.84 2015/10/16 12:33:47 jw Exp $";
+"@(#)$Id: genr.c,v 1.85 2016/01/03 10:18:20 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -798,7 +798,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 				assert(y < caSize);	/* repeated term */
 				if (iC_debug & 04) {
 				    fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, y);
-				    if (liveDisp) {
+				    if (liveDisp && gp->ftype == ARITH) {
 					fprintf(iC_outFP, "\t%s\t=", gp->name);
 				    }
 				    fprintf(iC_outFP, "\n");
@@ -893,7 +893,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 			    fprintf(iC_outFP, "\t\t\t");
 			}				/* expression till now */
 			fprintf(iC_outFP, "%s\t// %d", tOut, x);
-			if (liveDisp) {
+			if (liveDisp && gp->ftype == ARITH) {
 			    fprintf(iC_outFP, "\t%s\t=", gp->name);
 			}
 			fprintf(iC_outFP, "\n");
@@ -961,7 +961,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 			    fprintf(iC_outFP, "\t\t\t");
 			}				/* expression till now */
 			fprintf(iC_outFP, "%s\t// %d", tOut, x1);
-			if (liveDisp) {
+			if (liveDisp && gp->ftype == ARITH) {
 			    fprintf(iC_outFP, "\t%s\t=", gp->name);
 			}
 			fprintf(iC_outFP, "\n");
@@ -985,7 +985,7 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 			x1 = caList[y].x;		/* real index of non NCONST's */
 			if (iC_debug & 04) {		/* repeated term */
 			    fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, x1);
-			    if (liveDisp) {
+			    if (liveDisp && gp->ftype == ARITH) {
 				fprintf(iC_outFP, "\t%s\t=", gp->name);
 			    }
 			    fprintf(iC_outFP, "\n");
@@ -1704,7 +1704,7 @@ op_asgn(				/* asign List_e stack to links */
 		    assert(use < Sizeof(iC_useText));
 		    fprintf(iC_outFP, "\t%s\t%c<---%c\t\t\t// %d %s", gp->name, iC_fos[gp->ftype],
 			iC_os[sp->type], lp->le_val & 0xff, iC_useText[use]);
-		    if (liveDisp) {
+		    if (liveDisp && gp->ftype == ARITH) {
 			fprintf(iC_outFP, "\t%s\t=", gp->name);
 		    }
 		} else
@@ -1718,7 +1718,7 @@ op_asgn(				/* asign List_e stack to links */
 		if (gp->ftype < MAX_AR && lp->le_val == (unsigned)-1) {
 		    /* reference to a timer value - no link */
 		    fprintf(iC_outFP, "\t%s\t%c<---%c", gp->name, iC_fos[gp->ftype], iC_os[sp->type]);
-		    if (liveDisp) {
+		    if (liveDisp && gp->ftype == ARITH) {
 			fprintf(iC_outFP, "\t\t\t\t//\t%s\t=", gp->name);
 		    }
 		} else
@@ -1739,9 +1739,6 @@ op_asgn(				/* asign List_e stack to links */
 		     * case number of "if" or "switch" C fragment
 		     *******************************************************************/
 		    fprintf(iC_outFP, "\t// (%d)", lp->le_val >> FUN_OFFSET);
-		    if (liveDisp) {
-			fprintf(iC_outFP, "\t%s\t=", gp->name);
-		    }
 		} else
 		if ((gp->ftype == TIMR && lp->le_val > 0)) {
 		    /********************************************************************
@@ -1829,7 +1826,7 @@ op_asgn(				/* asign List_e stack to links */
 				    assert(y < caSize);
 				    if (iC_debug & 04) {	/* repeated term */
 					fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, y);
-					if (liveDisp) {
+					if (liveDisp && gp->ftype == ARITH) {
 					    fprintf(iC_outFP, "\t%s\t=", gp->name);
 					}
 					fprintf(iC_outFP, "\n");
@@ -1957,7 +1954,7 @@ op_asgn(				/* asign List_e stack to links */
 		    }
 		    if (iC_debug & 04) {
 			fprintf(iC_outFP, "\t\t\t\t\t%s;\t// (%d)", tOut, z1);
-			if (liveDisp) {
+			if (liveDisp && sp->ftype == ARITH) {
 			    fprintf(iC_outFP, "\t%s\t=", sp->name);
 			}
 			fprintf(iC_outFP, "\n");

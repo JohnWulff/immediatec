@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.16 2015/11/06 00:57:07 jw Exp $";
+"@(#)$Id: misc.c,v 1.17 2016/01/02 22:54:19 jw Exp $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -378,7 +378,7 @@ iC_fork_and_exec(char ** argv)
 	while ((cp = *cpp++) != NULL) {
 	    fprintf(iC_errFP, " %s", cp);
 	}
-	fprintf(iC_errFP, "\n");
+	fprintf(iC_errFP, " &\n");
     }
     /********************************************************************
      *	Fork now
