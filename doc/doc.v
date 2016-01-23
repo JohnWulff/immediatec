@@ -1,5 +1,23 @@
-@(#)$Id: doc.v,v 1.49 2015/12/29 06:06:55 jw Exp $
-iC.pdf		1.49	;
+@(#)$Id: doc.v,v 1.50 2016/01/23 03:09:27 jw Exp $
+html/iC.html	1.1	;
+html/iC_html_16e7567.gif	1.1	;
+html/iC_html_2ff018e6.jpg	1.1	;
+html/iC_html_39829ba7.jpg	1.1	;
+html/iC_html_4324c569.jpg	1.1	;
+html/iC_html_650dbd65.jpg	1.1	;
+html/iC_html_7b8cca7d.jpg	1.1	;
+html/iC_html_83c69566.jpg	1.1	;
+html/iC_html_88c76df0.jpg	1.1	;
+html/iC_html_8cb233de.gif	1.1	;
+html/iC_html_92e10d51.jpg	1.1	;
+html/iC_html_a692a283.jpg	1.1	;
+html/iC_html_b951a043.gif	1.1	;
+html/iC_html_dedbccb6.gif	1.1	;
+html/iC_html_e25581be.gif	1.1	;
+html/iC_html_eee3ff13.gif	1.1	;
+html/iC_html_f3c5a020.jpg	1.1	;
+html/iC_html_f46b922b.jpg	1.1	;
 iC.odp		1.2	;
-iC.odt		1.49	;
+iC.odt		1.50	;
+iC.pdf		1.50	;
 icc.ods		1.24	;
