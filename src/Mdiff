@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
-  echo '$Id: Mdiff,v 2.10 2014/11/08 05:22:28 archiv Exp $'
+  echo '$Id: Mdiff,v 2.11 2015/11/01 23:36:37 archiv Exp $'
   echo
 }
 
@@ -52,6 +52,7 @@ usage()
   echo '	-i	identical files output:	==== file ===='
   echo '		default: ignore identical files in output'
   echo '	-e	non-existing files put:	**** file does not exist'
+  echo '	-E	non-existing files: diff files with zero length file "0"'
   echo '		default: ignore non-existing files (unless only 1 file)'
   echo '	-l	list only files which differ - no other output'
   echo '	-li	list only files which are identical'
@@ -130,6 +131,16 @@ process()
     headFlag=0
     local status=0
     local alldirs allfiles sfile file sdir dir cfile
+    if [[ $E -ne 0 ]]; then
+	if [[ -e /tmp/0 ]]; then
+	    if [[ -w /tmp/0 ]]; then
+		rm -f /tmp/0
+	    else
+		exit 13
+	    fi
+	fi
+	touch /tmp/0
+    fi
     if [[ $all -eq 0 ]]; then
 	alldirs="$spath*"
     else
@@ -232,7 +243,16 @@ process()
 			test $T -eq 1 && echo -n "*** $cfile does not exist; status = $status: "
 			if [[ $q -eq 0 ]]; then
 			    header "$spath" "$cdir"
-			    echo "********** $cfile does not exist"
+			    if [[ $E -eq 0 ]]; then
+				echo "********** $cfile does not exist"
+			    else
+				echo "########## $sfile **********"
+				if [[ -z "$context" ]]; then
+				    ls -lL -- $sfile
+				    ls -lL -- /tmp/0
+				fi
+				diff $w$context -- $sfile /tmp/0
+			    fi
 			elif [[ $li -eq 1 ]]; then
 			    echo "$sfile"		# -le or -el option
 			fi
@@ -309,6 +329,15 @@ process()
 	    echo "########## $fullstatus $files_differ in $headCnt $directories ##########"
 	fi
     fi
+    if [[ $E -ne 0 ]]; then
+	if [[ -e /tmp/0 ]]; then
+	    if [[ -w /tmp/0 ]]; then
+		rm -f /tmp/0
+	    else
+		exit 14
+	    fi
+	fi
+    fi
     return $fullstatus
 }
 
@@ -334,6 +363,7 @@ Z=0
 pipe=''
 i=0
 e=0
+E=0
 t=1
 q=0
 li=0
@@ -349,7 +379,7 @@ fullstatus=0
 while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZpPvh" opt; do
     case $opt in
     e )	e=1;;
-    E )	e=1; let "li|=2";;
+    E )	E=1; e=1; let "li|=2";;
     i )	i=1; let "li|=2";;
     l )	t=1; q=1; let "li|=1"; if [[ $e -eq 1 ]]; then e=2; fi;;
     t )	t=$q;;

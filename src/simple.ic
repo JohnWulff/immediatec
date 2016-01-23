@@ -1,0 +1,80 @@
+/********************************************************************
+ *
+ *	Simple logical iC statements
+ *
+ *******************************************************************/
+
+		// immediate variables should be declared
+use strict;	// they must be declared when using "strict"
+
+imm bit sw0, sw1, sw2, sw3, sw4, sw5, sw6, sw7;
+imm bit sw10, sw11, sw12, sw13, sw14, sw15, sw16, sw17;
+imm bit motor0, motor1, motor2, motor3, control, controx;
+imm bit light4, light5, light6;
+
+/********************************************************************
+ *  The later iC statements have been written with descriptive names.
+ *  The following table translates these to IEC-1131 I/O names.
+ *  Each statement provides an alias name for the name on the right.
+ *******************************************************************/
+
+sw0  = IX0.0;
+sw1  = IX0.1;
+sw2  = IX0.2;
+sw3  = IX0.3;
+sw4  = IX0.4;
+sw5  = IX0.5;
+sw6  = IX0.6;
+sw7  = IX0.7;
+
+sw10 = IX1.0;
+sw11 = IX1.1;
+sw12 = IX1.2;
+sw13 = IX1.3;
+sw14 = IX1.4;
+sw15 = IX1.5;
+sw16 = IX1.6;
+sw17 = IX1.7;
+
+QX0.0 = motor0;
+QX0.1 = motor1;
+QX0.2 = motor2;
+QX0.3 = motor3;
+
+QX0.4 = light4;
+QX0.5 = light5;
+QX0.6 = light6;
+
+QX0.7 = control;	// auxiliary output of an internal variable
+
+/********************************************************************
+ *  The actual iC statements
+ *******************************************************************/
+
+light4 = sw0 & sw7;		// simple AND bit operation
+light5 = sw1 | sw2 | sw3;	// simple OR  bit operation
+
+// each switch can independently switch the light on and off
+// an arrangement usually found in stair wells
+
+light6 = sw14 ^ sw15 ^ sw16 ^ sw17;	// XOR bit operation
+
+// a slightly more complex set of immediate statements acting on 4 motors
+
+control = sw1 & sw2 & sw3
+        | sw4 & sw5 & sw6
+        ;
+// The previous immediate statement has bee written in the shape of a
+// ladder diagram - one of the languages used for programming PLC's.
+// It can of course be written in C style - the result is the same,
+// but the first form has advantages when viewing a live debug display.
+
+controx = sw1 & sw2 & sw3 | sw4 & sw5 & sw6;
+
+// It is of course very inefficient to write the same complex expression
+// twice - the compiler does not optimise this. (the lvalue must be different)
+
+motor0 = sw10 & control;
+motor1 = sw11 & control;
+motor2 = sw12 & controx;
+motor3 = sw13 & controx;

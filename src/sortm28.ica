@@ -1,0 +1,107 @@
+/********************************************************************
+ *
+ *	Parcel sorter control - using analog memory for destinations
+ *
+ *******************************************************************/
+
+use strict;
+%define GATES		8		// number of gate destinations per belt
+%define GATES_2		((GATES-1)/2)
+%define GATE_OFFSET	12
+%define GATE_FACTOR	"34 / 3"	// 11.333 no parentheses
+%define GATE_OPEN	10
+
+/********************************************************************
+ *	Step timer
+ *******************************************************************/
+
+imm timer tick = TIMER(TX0.4, ~TX0.4);
+
+/********************************************************************
+ *	Destination selection inputs
+ *******************************************************************/
+
+FOR (J = 0; (1<<J) < GATES; J++) {{
+imm bit inp[J] =	IX[(1<<J)/8].[(1<<J)%8]\
+    FOR (I = (1<<J)+1; I < GATES; I++) {{
+	IF (I & (1<<J)) {{		// uses every 2nd input
+[I%8 == ((1<<J)&7) ? " |\n\t\t" : " | "]IX[I/8].[I%8]\
+	}}\
+    }};
+
+}}
+imm bit trans =	RISE(
+		IX0.0\
+FOR (I = 1; I < GATES; I++) {{[I%8==0?" |\n\t\t":" | "]IX[I/8].[I%8]}});
+
+/********************************************************************
+ *	Generate analog value of destination
+ *******************************************************************/
+
+imm int dest = [GATES > 1 ? "inp0" : "0"]\
+    FOR (J = 1; 1<<J < GATES; J++) {{ + inp[J]*[1<<J]}};	// dest =
+
+/********************************************************************
+ *	Generate delay along sorting belt.
+ *	This delay value changes every time one of the destination
+ *	selection inputs 'IX0.0 - IX[(GATES-1)/8].[(GATES-1)%8]' is activated.
+ *	This delay is used to set a delay timer immediately.
+ *	NOTE: GATE_FACTOR_ can be a fractional factor by putting it in
+ *	double quotes
+ *******************************************************************/
+
+imm int del = GATE_OFFSET + dest * [GATE_FACTOR];	// del =
+
+/********************************************************************
+ *	As parcels travel along the sorting belt there have to be a
+ *	number of simultaneous delay timers 'pt' - one for each group.
+ *	Worst case is a delay timer per gate if parcels are all for
+ *	the final destination and placed on the belt as fast as possible.
+ *
+ *	A timer should only be used, if the timers in the previous
+ *	groups are already running. That makes simultaneous parallel
+ *	timers for each parcel input possible. The same applies to the
+ *	logic opening the gates, which may also happen simultaneously
+ *	if several timers happen to finish simultaneously.
+ *******************************************************************/
+
+FOR (I = 0; I < GATES; I++) {{
+imm bit xt[I];
+imm bit tr[I]  =	SR(trans & ~tr[I]\
+    FOR (J = I-1; J >= 0; J--) {{[J%8==7?" &\n\t\t":" & "]tr[J]}}, xt[I]);
+imm bit dt[I]  =	RISE(tr[I]);
+imm bit pt[I]  =	D(tr[I], tick, del);
+        xt[I]  =	tr[I] & pt[I]\
+    FOR (J = I-1; J >= 0; J--) {{[J%8==7?" &\n\t\t":" & "]~pt[J]}};
+imm int ma[I]  =	SH(dt[I] ? dest : ma[I]);
+
+}}
+/********************************************************************
+ *	Output gates - selected via imm int busa and immC bit array openGate[]
+ *******************************************************************/
+
+imm int busa =	xt[0] ? ma[0]\
+    FOR (I = 1; I < GATES; I++) {{[I%4==0?" :\n\t\t":" : "]xt[I] ? ma[I]}} : 0;
+
+imm bit trig =	xt[0]\
+    FOR (I = 1; I < GATES; I++) {{[I%8==0?" |\n\t\t":" | "]xt[I]}};
+
+immC bit	openGate[[GATES]];
+
+%{
+static int	temp;
+%}
+
+if (trig) {
+    openGate[temp = busa] = 1;
+} else {
+    openGate[temp] = 0;	/* temp is changed on the next rising trig */
+}
+
+FOR (I = 0; I < GATES; I++) {{
+imm bit gate[I] = ST(openGate[[I]], tick, GATE_OPEN);
+}}
+
+FOR (I = 0; I < GATES; I++) {{
+QX[I/8].[I%8] = gate[I];
+}}
