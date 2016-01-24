@@ -1,0 +1,77 @@
+******* ./Test0/aa4c.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	aa4c.ic and aa4d.ic produce identical code in the final call
+004	 *
+005	 *	imm int function blocks called in int expressions compile OK
+006	 *
+007	 *******************************************************************/
+008
+009	imm int Sub0() {
+010	    return IB0 * IB1 + IB2;
+
+	IB0     A ---+  Sub0@   A       IB0     // 1
+	IB1     A ---+                  *IB1    // 2
+	IB2     A ---+                  +IB2    // 3
+	                                ;       // (2)
+
+011	}
+012
+013	imm int Sub1() {
+014	    return IB3 * (IB4 + IB5);
+
+	IB3     A ---+  Sub1@   A       IB3     // 1
+	IB4     A ---+                  *(IB4   // 2
+	IB5     A ---+                  +IB5    // 3
+	                                );      // (3)
+
+015	}
+016
+017	QB0 = IB6 + Sub0() * Sub1() * IB7;
+
+	IB6     A ---+  QB0     A       IB6     // 1
+	IB0     A ---+                  +(IB0   // 2
+	IB1     A ---+                  *IB1    // 3
+	IB2     A ---+                  +IB2    // 4
+	IB3     A ---+                  )*(IB3  // 5
+	IB4     A ---+                  *(IB4   // 6
+	IB5     A ---+                  +IB5    // 7
+	IB7     A ---+                  ))*IB7  // 8
+	                                ;       // (4)
+
+
+	QB0     A ---+  QB0_0   W       QB0     // 1
+
+******* C CODE          ************************
+
+010	(2) 	return iC_MV(1)*iC_MV(2)+iC_MV(3);
+
+014	(3) 	return iC_MV(1)*(iC_MV(2)+iC_MV(3));
+
+017	(4) 	return iC_MV(1)+(iC_MV(2)*iC_MV(3)+iC_MV(4))*(iC_MV(5)*(iC_MV(6)+iC_MV(7)))*iC_MV(8);
+
+******* NET TOPOLOGY    ************************
+
+IB0     [  A  QB0+
+IB1     [  A  QB0+
+IB2     [  A  QB0+
+IB3     [  A  QB0+
+IB4     [  A  QB0+
+IB5     [  A  QB0+
+IB6     [  A  QB0+
+IB7     [  A  QB0+
+QB0     +  A  QB0_0+
+QB0_0   +  W
+
+******* NET STATISTICS  ************************
+
+ARN	+      2 blocks
+INPW	[      8 blocks
+
+TOTAL	      10 blocks
+	      27 links
+
+compiled by:
+@(#)     $Id: aa4c.lst,v 1.1 2015/05/24 00:51:46 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4c.c  (58 lines)

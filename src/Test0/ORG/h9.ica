@@ -1,0 +1,36 @@
+/********************************************************************
+ *
+ *	simple iC program with arrays
+ *
+ *******************************************************************/
+
+%{
+%#include	<stdio.h>
+%}
+
+%define LIM 2
+%{
+    int d;
+%}
+
+if (IX0.7) { for (d = 0; d <= LIM; d++) { printf("%d: Hello world Nr. %d\n", d, LIM); } }
+else { for (d = 0; d <= LIM; d++) { printf("%d: Good bye Nr. %d\n", d, LIM); } }
+
+FOR (D = 0; D <= LIM; D++) {{
+    if (IX0.[D]) { printf("%d: Immediate Nr. %d\n", [D], LIM); }
+}}
+
+switch (IB1) {
+case 0:
+  for (d = 0; d <= LIM; d++) { printf("%d: Low Nr. %d\n", d, 0); }
+    break;
+case 1:
+  for (d = 0; d <= LIM; d++) { printf("%d: Med Nr. %d\n", d, 1); }
+    break;
+case LIM:
+  for (d = 0; d <= LIM; d++) { printf("%d: Hi  Nr. %d\n", d, LIM); }
+    break;
+default:
+  for (d = 0; d <= LIM; d++) { printf("%d: Off Nr. %d\n", d, IB1); }
+    break;
+}

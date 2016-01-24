@@ -1,0 +1,5809 @@
+******* ./Test0/compTest2a.ic ************************
+001	%{
+002	static int x = 0;
+003	%}
+004	use strict;
+005	imm clock clk0;
+006	imm clock clk1;
+007	imm clock clk2;
+008	imm clock clk3;
+009	imm clock clk4;
+010	imm clock clk5;
+011	imm clock clk6;
+012	imm clock clk7;
+013	imm clock clk8;
+014
+015	imm timer tim0;
+016	imm timer tim1;
+017	imm timer tim2;
+018	imm timer tim3;
+019	imm timer tim4;
+020	imm timer t1m0;
+021	imm timer t1m1;
+022	imm timer t1m2;
+023	imm timer t1m3;
+024
+025	imm int aexpr = 		IB16;
+
+	IB16    A ---@  aexpr   A
+
+026	imm clock clk = 		clk0;
+
+	clk0    : ---@  clk     :
+
+027	imm clock clkExpr = 		clk1;
+
+	clk1    : ---@  clkExpr :
+
+028	imm clock clkExprReset = 	clk2;
+
+	clk2    : ---@  clkExprReset :
+
+029	imm clock clkReset = 		clk3;
+
+	clk3    : ---@  clkReset :
+
+030	imm clock clkSet = 		clk4;
+
+	clk4    : ---@  clkSet  :
+
+031	imm clock clkSet1 = 		clk5;
+
+	clk5    : ---@  clkSet1 :
+
+032	imm clock clkSet1Set2 = 	clk6;
+
+	clk6    : ---@  clkSet1Set2 :
+
+033	imm clock clkSet2 = 		clk7;
+
+	clk7    : ---@  clkSet2 :
+
+034	imm clock clkSetReset = 	clk8;
+
+	clk8    : ---@  clkSetReset :
+
+035	imm int delay = 		3;
+
+	3       A ---@  delay   A
+
+036	imm int delayExpr = 		3;
+
+	3       A ---@  delayExpr A
+
+037	imm int delayExprReset = 	3;
+
+	3       A ---@  delayExprReset A
+
+038	imm int delayReset = 		3;
+
+	3       A ---@  delayReset A
+
+039	imm int delaySet = 		3;
+
+	3       A ---@  delaySet A
+
+040	imm int delaySet1 = 		3;
+
+	3       A ---@  delaySet1 A
+
+041	imm int delaySet1Set2 = 	3;
+
+	3       A ---@  delaySet1Set2 A
+
+042	imm int delaySet2 = 		3;
+
+	3       A ---@  delaySet2 A
+
+043	imm int delaySetReset = 	3;
+
+	3       A ---@  delaySetReset A
+
+044	imm bit expr =		 	IX0.0;
+
+	IX0.0     ---@  expr
+
+045	imm bit on = 			IX0.1;
+
+	IX0.1     ---@  on
+
+046	imm bit off = 			IX0.2;
+
+	IX0.2     ---@  off
+
+047	imm bit set = 			IX0.3;
+
+	IX0.3     ---@  set
+
+048	imm bit reset =		 	IX0.4;
+
+	IX0.4     ---@  reset
+
+049	imm bit set1 = 			IX0.5;
+
+	IX0.5     ---@  set1
+
+050	imm bit set2 = 			IX0.6;
+
+	IX0.6     ---@  set2
+
+051	imm timer tim = 		tim0;
+
+	tim0    ! ---@  tim     !
+
+052	imm timer timExpr = 		tim1;
+
+	tim1    ! ---@  timExpr !
+
+053	imm timer timExprReset = 	tim2;
+
+	tim2    ! ---@  timExprReset !
+
+054	imm timer timReset = 		tim3;
+
+	tim3    ! ---@  timReset !
+
+055	imm timer timSet = 		tim4;
+
+	tim4    ! ---@  timSet  !
+
+056	imm timer timSet1 = 		t1m0;
+
+	t1m0    ! ---@  timSet1 !
+
+057	imm timer timSet1Set2 = 	t1m1;
+
+	t1m1    ! ---@  timSet1Set2 !
+
+058	imm timer timSet2 = 		t1m2;
+
+	t1m2    ! ---@  timSet2 !
+
+059	imm timer timSetReset = 	t1m3;
+
+	t1m3    ! ---@  timSetReset !
+
+060
+061	QX0.1 =	LATCH(set,reset);
+
+	QX0.1     ---%  QX0.1
+	IX0.3     ---%
+	IX0.4   ~ ---%
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+062	QX0.3 =	FORCE(expr,on,off);
+
+	IX0.0     ---%  QX0.3
+	IX0.1     ---%
+	IX0.2   ~ ---%
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+063
+064	QX0.4 =	D(expr                                         );
+
+	QX0.4_1 D ---#  QX0.4
+
+	iClock  : ---|  QX0.4_1 D
+	IX0.0     ---|
+
+
+	QX0.4     ---|  QX0.4_0 X
+
+065	QX0.5 =	D(expr,clk                                     );
+
+	QX0.5_1 D ---#  QX0.5
+
+	clk0    : ---|  QX0.5_1 D
+	IX0.0     ---|
+
+
+	QX0.5     ---|  QX0.5_0 X
+
+066	QX0.6 =	D(expr,tim                                     );
+
+	QX0.6_1 D ---#  QX0.6
+
+	tim0    ! ---|  QX0.6_1 D
+	1       A<---|
+	IX0.0     ---|
+
+
+	QX0.6     ---|  QX0.6_0 X
+
+067	QX0.7 =	D(expr,tim,delay                               );
+
+	QX0.7_1 D ---#  QX0.7
+
+	tim0    ! ---|  QX0.7_1 D
+	3       A<---|
+	IX0.0     ---|
+
+
+	QX0.7     ---|  QX0.7_0 X
+
+068	QX1.0 =	DR(expr,                                       reset);
+
+	QX1.0_1 D ---#  QX1.0
+	QX1.0_2 R ---#
+
+	iClock  : ---|  QX1.0_1 D
+	QX1.0_3   ---|
+	QX1.0_4   ---|
+
+	iClock  : ---|  QX1.0_2 R
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.0_3
+	IX0.4   ~ ---&
+
+	QX1.0     ---&  QX1.0_4
+	IX0.4     ---&
+
+
+	QX1.0     ---|  QX1.0_0 X
+
+069	QX1.1 =	DR(expr,                                       reset,clkExprReset);
+
+	QX1.1_1 D ---#  QX1.1
+	QX1.1_2 R ---#
+
+	clk2    : ---|  QX1.1_1 D
+	QX1.1_3   ---|
+	QX1.1_4   ---|
+
+	clk2    : ---|  QX1.1_2 R
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.1_3
+	IX0.4   ~ ---&
+
+	QX1.1     ---&  QX1.1_4
+	IX0.4     ---&
+
+
+	QX1.1     ---|  QX1.1_0 X
+
+070	QX1.2 =	DR(expr,                                       reset,timExprReset);
+
+	QX1.2_1 D ---#  QX1.2
+	QX1.2_2 R ---#
+
+	tim2    ! ---|  QX1.2_1 D
+	1       A<---|
+	QX1.2_3   ---|
+	QX1.2_4   ---|
+
+	tim2    ! ---|  QX1.2_2 R
+	1       A<---|
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.2_3
+	IX0.4   ~ ---&
+
+	QX1.2     ---&  QX1.2_4
+	IX0.4     ---&
+
+
+	QX1.2     ---|  QX1.2_0 X
+
+071	QX1.3 =	DR(expr,                                       reset,timExprReset,delayExprReset);
+
+	QX1.3_1 D ---#  QX1.3
+	QX1.3_2 R ---#
+
+	tim2    ! ---|  QX1.3_1 D
+	3       A<---|
+	QX1.3_3   ---|
+	QX1.3_4   ---|
+
+	tim2    ! ---|  QX1.3_2 R
+	3       A<---|
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.3_3
+	IX0.4   ~ ---&
+
+	QX1.3     ---&  QX1.3_4
+	IX0.4     ---&
+
+
+	QX1.3     ---|  QX1.3_0 X
+
+072	QX1.4 =	DR(expr,clkExpr,                               reset);
+
+	QX1.4_1 D ---#  QX1.4
+	QX1.4_2 R ---#
+
+	clk1    : ---|  QX1.4_1 D
+	QX1.4_3   ---|
+	QX1.4_4   ---|
+
+	iClock  : ---|  QX1.4_2 R
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.4_3
+	IX0.4   ~ ---&
+
+	QX1.4     ---&  QX1.4_4
+	IX0.4     ---&
+
+
+	QX1.4     ---|  QX1.4_0 X
+
+073	QX1.5 =	DR(expr,clkExpr,                               reset,clkReset);
+
+	QX1.5_1 D ---#  QX1.5
+	QX1.5_2 R ---#
+
+	clk1    : ---|  QX1.5_1 D
+	QX1.5_3   ---|
+	QX1.5_4   ---|
+
+	clk3    : ---|  QX1.5_2 R
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.5_3
+	IX0.4   ~ ---&
+
+	QX1.5     ---&  QX1.5_4
+	IX0.4     ---&
+
+
+	QX1.5     ---|  QX1.5_0 X
+
+074	QX1.6 =	DR(expr,clkExpr,                               reset,timReset);
+
+	QX1.6_1 D ---#  QX1.6
+	QX1.6_2 R ---#
+
+	clk1    : ---|  QX1.6_1 D
+	QX1.6_3   ---|
+	QX1.6_4   ---|
+
+	tim3    ! ---|  QX1.6_2 R
+	1       A<---|
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.6_3
+	IX0.4   ~ ---&
+
+	QX1.6     ---&  QX1.6_4
+	IX0.4     ---&
+
+
+	QX1.6     ---|  QX1.6_0 X
+
+075	QX1.7 =	DR(expr,clkExpr,                               reset,timReset,delayReset);
+
+	QX1.7_1 D ---#  QX1.7
+	QX1.7_2 R ---#
+
+	clk1    : ---|  QX1.7_1 D
+	QX1.7_3   ---|
+	QX1.7_4   ---|
+
+	tim3    ! ---|  QX1.7_2 R
+	3       A<---|
+	IX0.4     ---|
+
+	IX0.0     ---&  QX1.7_3
+	IX0.4   ~ ---&
+
+	QX1.7     ---&  QX1.7_4
+	IX0.4     ---&
+
+
+	QX1.7     ---|  QX1.7_0 X
+
+076	QX2.0 =	DR(expr,timExpr,delayExpr,                     reset);
+
+	QX2.0_1 D ---#  QX2.0
+	QX2.0_2 R ---#
+
+	tim1    ! ---|  QX2.0_1 D
+	3       A<---|
+	QX2.0_3   ---|
+	QX2.0_4   ---|
+
+	iClock  : ---|  QX2.0_2 R
+	IX0.4     ---|
+
+	IX0.0     ---&  QX2.0_3
+	IX0.4   ~ ---&
+
+	QX2.0     ---&  QX2.0_4
+	IX0.4     ---&
+
+
+	QX2.0     ---|  QX2.0_0 X
+
+077	QX2.1 =	DR(expr,timExpr,delayExpr,                     reset,clkReset);
+
+	QX2.1_1 D ---#  QX2.1
+	QX2.1_2 R ---#
+
+	tim1    ! ---|  QX2.1_1 D
+	3       A<---|
+	QX2.1_3   ---|
+	QX2.1_4   ---|
+
+	clk3    : ---|  QX2.1_2 R
+	IX0.4     ---|
+
+	IX0.0     ---&  QX2.1_3
+	IX0.4   ~ ---&
+
+	QX2.1     ---&  QX2.1_4
+	IX0.4     ---&
+
+
+	QX2.1     ---|  QX2.1_0 X
+
+078	QX2.2 =	DR(expr,timExpr,delayExpr,                     reset,timReset);
+
+	QX2.2_1 D ---#  QX2.2
+	QX2.2_2 R ---#
+
+	tim1    ! ---|  QX2.2_1 D
+	3       A<---|
+	QX2.2_3   ---|
+	QX2.2_4   ---|
+
+	tim3    ! ---|  QX2.2_2 R
+	1       A<---|
+	IX0.4     ---|
+
+	IX0.0     ---&  QX2.2_3
+	IX0.4   ~ ---&
+
+	QX2.2     ---&  QX2.2_4
+	IX0.4     ---&
+
+
+	QX2.2     ---|  QX2.2_0 X
+
+079	QX2.3 =	DR(expr,timExpr,delayExpr,                     reset,timReset,delayReset);
+
+	QX2.3_1 D ---#  QX2.3
+	QX2.3_2 R ---#
+
+	tim1    ! ---|  QX2.3_1 D
+	3       A<---|
+	QX2.3_3   ---|
+	QX2.3_4   ---|
+
+	tim3    ! ---|  QX2.3_2 R
+	3       A<---|
+	IX0.4     ---|
+
+	IX0.0     ---&  QX2.3_3
+	IX0.4   ~ ---&
+
+	QX2.3     ---&  QX2.3_4
+	IX0.4     ---&
+
+
+	QX2.3     ---|  QX2.3_0 X
+
+080	QX2.4 =	DSR(expr,                  set,                reset);
+
+	IX0.3     ---|  DSR_1_i
+	IX0.4     ---|
+
+
+	QX2.4_1 D ---#  QX2.4
+	QX2.4_2 S ---#
+	QX2.4_3 R ---#
+
+	iClock  : ---|  QX2.4_1 D
+	QX2.4_4   ---|
+	QX2.4_5   ---|
+
+	iClock  : ---&  QX2.4_2 S
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QX2.4_3 R
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX2.4_4
+	DSR_1_i ~ ---&
+
+	QX2.4     ---&  QX2.4_5
+	DSR_1_i   ---&
+
+
+	QX2.4     ---|  QX2.4_0 X
+
+081	QX2.5 =	DSR(expr,                  set,                reset,clkExprReset);
+
+	IX0.3     ---|  DSR_2_i
+	IX0.4     ---|
+
+
+	QX2.5_1 D ---#  QX2.5
+	QX2.5_2 S ---#
+	QX2.5_3 R ---#
+
+	clk2    : ---|  QX2.5_1 D
+	QX2.5_4   ---|
+	QX2.5_5   ---|
+
+	clk2    : ---&  QX2.5_2 S
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk2    : ---&  QX2.5_3 R
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX2.5_4
+	DSR_2_i ~ ---&
+
+	QX2.5     ---&  QX2.5_5
+	DSR_2_i   ---&
+
+
+	QX2.5     ---|  QX2.5_0 X
+
+082	QX2.6 =	DSR(expr,                  set,                reset,timExprReset);
+
+	IX0.3     ---|  DSR_3_i
+	IX0.4     ---|
+
+
+	QX2.6_1 D ---#  QX2.6
+	QX2.6_2 S ---#
+	QX2.6_3 R ---#
+
+	tim2    ! ---|  QX2.6_1 D
+	1       A<---|
+	QX2.6_4   ---|
+	QX2.6_5   ---|
+
+	tim2    ! ---&  QX2.6_2 S
+	1       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim2    ! ---&  QX2.6_3 R
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX2.6_4
+	DSR_3_i ~ ---&
+
+	QX2.6     ---&  QX2.6_5
+	DSR_3_i   ---&
+
+
+	QX2.6     ---|  QX2.6_0 X
+
+083	QX2.7 =	DSR(expr,                  set,                reset,timExprReset,delayExprReset);
+
+	IX0.3     ---|  DSR_4_i
+	IX0.4     ---|
+
+
+	QX2.7_1 D ---#  QX2.7
+	QX2.7_2 S ---#
+	QX2.7_3 R ---#
+
+	tim2    ! ---|  QX2.7_1 D
+	3       A<---|
+	QX2.7_4   ---|
+	QX2.7_5   ---|
+
+	tim2    ! ---&  QX2.7_2 S
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim2    ! ---&  QX2.7_3 R
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX2.7_4
+	DSR_4_i ~ ---&
+
+	QX2.7     ---&  QX2.7_5
+	DSR_4_i   ---&
+
+
+	QX2.7     ---|  QX2.7_0 X
+
+084	QX3.0 =	DSR(expr,clkExpr,          set,                reset);
+
+	IX0.3     ---|  DSR_5_i
+	IX0.4     ---|
+
+
+	QX3.0_1 D ---#  QX3.0
+	QX3.0_2 S ---#
+	QX3.0_3 R ---#
+
+	clk1    : ---|  QX3.0_1 D
+	QX3.0_4   ---|
+	QX3.0_5   ---|
+
+	iClock  : ---&  QX3.0_2 S
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QX3.0_3 R
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX3.0_4
+	DSR_5_i ~ ---&
+
+	QX3.0     ---&  QX3.0_5
+	DSR_5_i   ---&
+
+
+	QX3.0     ---|  QX3.0_0 X
+
+085	QX3.1 =	DSR(expr,clkExpr,          set,                reset,clkSetReset);
+
+	IX0.3     ---|  DSR_6_i
+	IX0.4     ---|
+
+
+	QX3.1_1 D ---#  QX3.1
+	QX3.1_2 S ---#
+	QX3.1_3 R ---#
+
+	clk1    : ---|  QX3.1_1 D
+	QX3.1_4   ---|
+	QX3.1_5   ---|
+
+	clk8    : ---&  QX3.1_2 S
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk8    : ---&  QX3.1_3 R
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX3.1_4
+	DSR_6_i ~ ---&
+
+	QX3.1     ---&  QX3.1_5
+	DSR_6_i   ---&
+
+
+	QX3.1     ---|  QX3.1_0 X
+
+086	QX3.2 =	DSR(expr,clkExpr,          set,                reset,timSetReset);
+
+	IX0.3     ---|  DSR_7_i
+	IX0.4     ---|
+
+
+	QX3.2_1 D ---#  QX3.2
+	QX3.2_2 S ---#
+	QX3.2_3 R ---#
+
+	clk1    : ---|  QX3.2_1 D
+	QX3.2_4   ---|
+	QX3.2_5   ---|
+
+	t1m3    ! ---&  QX3.2_2 S
+	1       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	t1m3    ! ---&  QX3.2_3 R
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX3.2_4
+	DSR_7_i ~ ---&
+
+	QX3.2     ---&  QX3.2_5
+	DSR_7_i   ---&
+
+
+	QX3.2     ---|  QX3.2_0 X
+
+087	QX3.3 =	DSR(expr,clkExpr,          set,                reset,timSetReset,delaySetReset);
+
+	IX0.3     ---|  DSR_8_i
+	IX0.4     ---|
+
+
+	QX3.3_1 D ---#  QX3.3
+	QX3.3_2 S ---#
+	QX3.3_3 R ---#
+
+	clk1    : ---|  QX3.3_1 D
+	QX3.3_4   ---|
+	QX3.3_5   ---|
+
+	t1m3    ! ---&  QX3.3_2 S
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	t1m3    ! ---&  QX3.3_3 R
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX3.3_4
+	DSR_8_i ~ ---&
+
+	QX3.3     ---&  QX3.3_5
+	DSR_8_i   ---&
+
+
+	QX3.3     ---|  QX3.3_0 X
+
+088	QX3.4 =	DSR(expr,clkExpr,          set,clkSet,         reset);
+
+	IX0.3     ---|  DSR_9_i
+	IX0.4     ---|
+
+
+	QX3.4_1 D ---#  QX3.4
+	QX3.4_2 S ---#
+	QX3.4_3 R ---#
+
+	clk1    : ---|  QX3.4_1 D
+	QX3.4_4   ---|
+	QX3.4_5   ---|
+
+	clk4    : ---&  QX3.4_2 S
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QX3.4_3 R
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.0     ---&  QX3.4_4
+	DSR_9_i ~ ---&
+
+	QX3.4     ---&  QX3.4_5
+	DSR_9_i   ---&
+
+
+	QX3.4     ---|  QX3.4_0 X
+
+089	QX3.5 =	DSR(expr,clkExpr,          set,clkSet,         reset,clkReset);
+
+	IX0.3      ---|  DSR_10_i
+	IX0.4      ---|
+
+
+	QX3.5_1  D ---#  QX3.5
+	QX3.5_2  S ---#
+	QX3.5_3  R ---#
+
+	clk1     : ---|  QX3.5_1  D
+	QX3.5_4    ---|
+	QX3.5_5    ---|
+
+	clk4     : ---&  QX3.5_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	clk3     : ---&  QX3.5_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX3.5_4
+	DSR_10_i ~ ---&
+
+	QX3.5      ---&  QX3.5_5
+	DSR_10_i   ---&
+
+
+	QX3.5      ---|  QX3.5_0  X
+
+090	QX3.6 =	DSR(expr,clkExpr,          set,clkSet,         reset,timReset);
+
+	IX0.3      ---|  DSR_11_i
+	IX0.4      ---|
+
+
+	QX3.6_1  D ---#  QX3.6
+	QX3.6_2  S ---#
+	QX3.6_3  R ---#
+
+	clk1     : ---|  QX3.6_1  D
+	QX3.6_4    ---|
+	QX3.6_5    ---|
+
+	clk4     : ---&  QX3.6_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX3.6_3  R
+	1        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX3.6_4
+	DSR_11_i ~ ---&
+
+	QX3.6      ---&  QX3.6_5
+	DSR_11_i   ---&
+
+
+	QX3.6      ---|  QX3.6_0  X
+
+091	QX3.7 =	DSR(expr,clkExpr,          set,clkSet,         reset,timReset,delayReset);
+
+	IX0.3      ---|  DSR_12_i
+	IX0.4      ---|
+
+
+	QX3.7_1  D ---#  QX3.7
+	QX3.7_2  S ---#
+	QX3.7_3  R ---#
+
+	clk1     : ---|  QX3.7_1  D
+	QX3.7_4    ---|
+	QX3.7_5    ---|
+
+	clk4     : ---&  QX3.7_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX3.7_3  R
+	3        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX3.7_4
+	DSR_12_i ~ ---&
+
+	QX3.7      ---&  QX3.7_5
+	DSR_12_i   ---&
+
+
+	QX3.7      ---|  QX3.7_0  X
+
+092	QX4.0 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset);
+
+	IX0.3      ---|  DSR_13_i
+	IX0.4      ---|
+
+
+	QX4.0_1  D ---#  QX4.0
+	QX4.0_2  S ---#
+	QX4.0_3  R ---#
+
+	clk1     : ---|  QX4.0_1  D
+	QX4.0_4    ---|
+	QX4.0_5    ---|
+
+	tim4     ! ---&  QX4.0_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	iClock   : ---&  QX4.0_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.0_4
+	DSR_13_i ~ ---&
+
+	QX4.0      ---&  QX4.0_5
+	DSR_13_i   ---&
+
+
+	QX4.0      ---|  QX4.0_0  X
+
+093	QX4.1 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset,clkReset);
+
+	IX0.3      ---|  DSR_14_i
+	IX0.4      ---|
+
+
+	QX4.1_1  D ---#  QX4.1
+	QX4.1_2  S ---#
+	QX4.1_3  R ---#
+
+	clk1     : ---|  QX4.1_1  D
+	QX4.1_4    ---|
+	QX4.1_5    ---|
+
+	tim4     ! ---&  QX4.1_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	clk3     : ---&  QX4.1_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.1_4
+	DSR_14_i ~ ---&
+
+	QX4.1      ---&  QX4.1_5
+	DSR_14_i   ---&
+
+
+	QX4.1      ---|  QX4.1_0  X
+
+094	QX4.2 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset);
+
+	IX0.3      ---|  DSR_15_i
+	IX0.4      ---|
+
+
+	QX4.2_1  D ---#  QX4.2
+	QX4.2_2  S ---#
+	QX4.2_3  R ---#
+
+	clk1     : ---|  QX4.2_1  D
+	QX4.2_4    ---|
+	QX4.2_5    ---|
+
+	tim4     ! ---&  QX4.2_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX4.2_3  R
+	1        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.2_4
+	DSR_15_i ~ ---&
+
+	QX4.2      ---&  QX4.2_5
+	DSR_15_i   ---&
+
+
+	QX4.2      ---|  QX4.2_0  X
+
+095	QX4.3 =	DSR(expr,clkExpr,          set,timSet,delaySet,reset,timReset,delayReset);
+
+	IX0.3      ---|  DSR_16_i
+	IX0.4      ---|
+
+
+	QX4.3_1  D ---#  QX4.3
+	QX4.3_2  S ---#
+	QX4.3_3  R ---#
+
+	clk1     : ---|  QX4.3_1  D
+	QX4.3_4    ---|
+	QX4.3_5    ---|
+
+	tim4     ! ---&  QX4.3_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX4.3_3  R
+	3        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.3_4
+	DSR_16_i ~ ---&
+
+	QX4.3      ---&  QX4.3_5
+	DSR_16_i   ---&
+
+
+	QX4.3      ---|  QX4.3_0  X
+
+096	QX4.4 =	DSR(expr,timExpr,delayExpr,set,                reset);
+
+	IX0.3      ---|  DSR_17_i
+	IX0.4      ---|
+
+
+	QX4.4_1  D ---#  QX4.4
+	QX4.4_2  S ---#
+	QX4.4_3  R ---#
+
+	tim1     ! ---|  QX4.4_1  D
+	3        A<---|
+	QX4.4_4    ---|
+	QX4.4_5    ---|
+
+	iClock   : ---&  QX4.4_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	iClock   : ---&  QX4.4_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.4_4
+	DSR_17_i ~ ---&
+
+	QX4.4      ---&  QX4.4_5
+	DSR_17_i   ---&
+
+
+	QX4.4      ---|  QX4.4_0  X
+
+097	QX4.5 =	DSR(expr,timExpr,delayExpr,set,                reset,clkSetReset);
+
+	IX0.3      ---|  DSR_18_i
+	IX0.4      ---|
+
+
+	QX4.5_1  D ---#  QX4.5
+	QX4.5_2  S ---#
+	QX4.5_3  R ---#
+
+	tim1     ! ---|  QX4.5_1  D
+	3        A<---|
+	QX4.5_4    ---|
+	QX4.5_5    ---|
+
+	clk8     : ---&  QX4.5_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	clk8     : ---&  QX4.5_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.5_4
+	DSR_18_i ~ ---&
+
+	QX4.5      ---&  QX4.5_5
+	DSR_18_i   ---&
+
+
+	QX4.5      ---|  QX4.5_0  X
+
+098	QX4.6 =	DSR(expr,timExpr,delayExpr,set,                reset,timSetReset);
+
+	IX0.3      ---|  DSR_19_i
+	IX0.4      ---|
+
+
+	QX4.6_1  D ---#  QX4.6
+	QX4.6_2  S ---#
+	QX4.6_3  R ---#
+
+	tim1     ! ---|  QX4.6_1  D
+	3        A<---|
+	QX4.6_4    ---|
+	QX4.6_5    ---|
+
+	t1m3     ! ---&  QX4.6_2  S
+	1        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	t1m3     ! ---&  QX4.6_3  R
+	1        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.6_4
+	DSR_19_i ~ ---&
+
+	QX4.6      ---&  QX4.6_5
+	DSR_19_i   ---&
+
+
+	QX4.6      ---|  QX4.6_0  X
+
+099	QX4.7 =	DSR(expr,timExpr,delayExpr,set,                reset,timSetReset,delaySetReset);
+
+	IX0.3      ---|  DSR_20_i
+	IX0.4      ---|
+
+
+	QX4.7_1  D ---#  QX4.7
+	QX4.7_2  S ---#
+	QX4.7_3  R ---#
+
+	tim1     ! ---|  QX4.7_1  D
+	3        A<---|
+	QX4.7_4    ---|
+	QX4.7_5    ---|
+
+	t1m3     ! ---&  QX4.7_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	t1m3     ! ---&  QX4.7_3  R
+	3        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX4.7_4
+	DSR_20_i ~ ---&
+
+	QX4.7      ---&  QX4.7_5
+	DSR_20_i   ---&
+
+
+	QX4.7      ---|  QX4.7_0  X
+
+100	QX5.0 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset);
+
+	IX0.3      ---|  DSR_21_i
+	IX0.4      ---|
+
+
+	QX5.0_1  D ---#  QX5.0
+	QX5.0_2  S ---#
+	QX5.0_3  R ---#
+
+	tim1     ! ---|  QX5.0_1  D
+	3        A<---|
+	QX5.0_4    ---|
+	QX5.0_5    ---|
+
+	clk4     : ---&  QX5.0_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	iClock   : ---&  QX5.0_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.0_4
+	DSR_21_i ~ ---&
+
+	QX5.0      ---&  QX5.0_5
+	DSR_21_i   ---&
+
+
+	QX5.0      ---|  QX5.0_0  X
+
+101	QX5.1 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset,clkReset);
+
+	IX0.3      ---|  DSR_22_i
+	IX0.4      ---|
+
+
+	QX5.1_1  D ---#  QX5.1
+	QX5.1_2  S ---#
+	QX5.1_3  R ---#
+
+	tim1     ! ---|  QX5.1_1  D
+	3        A<---|
+	QX5.1_4    ---|
+	QX5.1_5    ---|
+
+	clk4     : ---&  QX5.1_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	clk3     : ---&  QX5.1_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.1_4
+	DSR_22_i ~ ---&
+
+	QX5.1      ---&  QX5.1_5
+	DSR_22_i   ---&
+
+
+	QX5.1      ---|  QX5.1_0  X
+
+102	QX5.2 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset);
+
+	IX0.3      ---|  DSR_23_i
+	IX0.4      ---|
+
+
+	QX5.2_1  D ---#  QX5.2
+	QX5.2_2  S ---#
+	QX5.2_3  R ---#
+
+	tim1     ! ---|  QX5.2_1  D
+	3        A<---|
+	QX5.2_4    ---|
+	QX5.2_5    ---|
+
+	clk4     : ---&  QX5.2_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX5.2_3  R
+	1        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.2_4
+	DSR_23_i ~ ---&
+
+	QX5.2      ---&  QX5.2_5
+	DSR_23_i   ---&
+
+
+	QX5.2      ---|  QX5.2_0  X
+
+103	QX5.3 =	DSR(expr,timExpr,delayExpr,set,clkSet,         reset,timReset,delayReset);
+
+	IX0.3      ---|  DSR_24_i
+	IX0.4      ---|
+
+
+	QX5.3_1  D ---#  QX5.3
+	QX5.3_2  S ---#
+	QX5.3_3  R ---#
+
+	tim1     ! ---|  QX5.3_1  D
+	3        A<---|
+	QX5.3_4    ---|
+	QX5.3_5    ---|
+
+	clk4     : ---&  QX5.3_2  S
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX5.3_3  R
+	3        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.3_4
+	DSR_24_i ~ ---&
+
+	QX5.3      ---&  QX5.3_5
+	DSR_24_i   ---&
+
+
+	QX5.3      ---|  QX5.3_0  X
+
+104	QX5.4 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset);
+
+	IX0.3      ---|  DSR_25_i
+	IX0.4      ---|
+
+
+	QX5.4_1  D ---#  QX5.4
+	QX5.4_2  S ---#
+	QX5.4_3  R ---#
+
+	tim1     ! ---|  QX5.4_1  D
+	3        A<---|
+	QX5.4_4    ---|
+	QX5.4_5    ---|
+
+	tim4     ! ---&  QX5.4_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	iClock   : ---&  QX5.4_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.4_4
+	DSR_25_i ~ ---&
+
+	QX5.4      ---&  QX5.4_5
+	DSR_25_i   ---&
+
+
+	QX5.4      ---|  QX5.4_0  X
+
+105	QX5.5 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,clkReset);
+
+	IX0.3      ---|  DSR_26_i
+	IX0.4      ---|
+
+
+	QX5.5_1  D ---#  QX5.5
+	QX5.5_2  S ---#
+	QX5.5_3  R ---#
+
+	tim1     ! ---|  QX5.5_1  D
+	3        A<---|
+	QX5.5_4    ---|
+	QX5.5_5    ---|
+
+	tim4     ! ---&  QX5.5_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	clk3     : ---&  QX5.5_3  R
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.5_4
+	DSR_26_i ~ ---&
+
+	QX5.5      ---&  QX5.5_5
+	DSR_26_i   ---&
+
+
+	QX5.5      ---|  QX5.5_0  X
+
+106	QX5.6 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset);
+
+	IX0.3      ---|  DSR_27_i
+	IX0.4      ---|
+
+
+	QX5.6_1  D ---#  QX5.6
+	QX5.6_2  S ---#
+	QX5.6_3  R ---#
+
+	tim1     ! ---|  QX5.6_1  D
+	3        A<---|
+	QX5.6_4    ---|
+	QX5.6_5    ---|
+
+	tim4     ! ---&  QX5.6_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX5.6_3  R
+	1        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.6_4
+	DSR_27_i ~ ---&
+
+	QX5.6      ---&  QX5.6_5
+	DSR_27_i   ---&
+
+
+	QX5.6      ---|  QX5.6_0  X
+
+107	QX5.7 =	DSR(expr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset,delayReset);
+
+	IX0.3      ---|  DSR_28_i
+	IX0.4      ---|
+
+
+	QX5.7_1  D ---#  QX5.7
+	QX5.7_2  S ---#
+	QX5.7_3  R ---#
+
+	tim1     ! ---|  QX5.7_1  D
+	3        A<---|
+	QX5.7_4    ---|
+	QX5.7_5    ---|
+
+	tim4     ! ---&  QX5.7_2  S
+	3        A<---&
+	IX0.3      ---&
+	IX0.4    ~ ---&
+
+	tim3     ! ---&  QX5.7_3  R
+	3        A<---&
+	IX0.3    ~ ---&
+	IX0.4      ---&
+
+	IX0.0      ---&  QX5.7_4
+	DSR_28_i ~ ---&
+
+	QX5.7      ---&  QX5.7_5
+	DSR_28_i   ---&
+
+
+	QX5.7      ---|  QX5.7_0  X
+
+108
+109	QX6.0 =	CHANGE(expr);
+
+	QX6.0_1 V --->  QX6.0
+
+	iClock  : ---|  QX6.0_1 V
+	IX0.0     ---|
+
+
+	QX6.0     ---|  QX6.0_0 X
+
+110	QX6.1 =	CHANGE(expr,clk);
+
+	QX6.1_1 V --->  QX6.1
+
+	clk0    : ---|  QX6.1_1 V
+	IX0.0     ---|
+
+
+	QX6.1     ---|  QX6.1_0 X
+
+111	QX6.2 =	CHANGE(expr,tim);
+
+	QX6.2_1 V --->  QX6.2
+
+	tim0    ! ---|  QX6.2_1 V
+	1       A<---|
+	IX0.0     ---|
+
+
+	QX6.2     ---|  QX6.2_0 X
+
+112	QX6.3 =	CHANGE(expr,tim,delay);
+
+	QX6.3_1 V --->  QX6.3
+
+	tim0    ! ---|  QX6.3_1 V
+	3       A<---|
+	IX0.0     ---|
+
+
+	QX6.3     ---|  QX6.3_0 X
+
+113
+114	QX6.4 =	RISE(expr);
+
+	QX6.4_1 E ---/  QX6.4
+
+	iClock  : ---|  QX6.4_1 E
+	IX0.0     ---|
+
+
+	QX6.4     ---|  QX6.4_0 X
+
+115	QX6.5 =	RISE(expr,clk);
+
+	QX6.5_1 E ---/  QX6.5
+
+	clk0    : ---|  QX6.5_1 E
+	IX0.0     ---|
+
+
+	QX6.5     ---|  QX6.5_0 X
+
+116	QX6.6 =	RISE(expr,tim);
+
+	QX6.6_1 E ---/  QX6.6
+
+	tim0    ! ---|  QX6.6_1 E
+	1       A<---|
+	IX0.0     ---|
+
+
+	QX6.6     ---|  QX6.6_0 X
+
+117	QX6.7 =	RISE(expr,tim,delay);
+
+	QX6.7_1 E ---/  QX6.7
+
+	tim0    ! ---|  QX6.7_1 E
+	3       A<---|
+	IX0.0     ---|
+
+
+	QX6.7     ---|  QX6.7_0 X
+
+118
+119	QX7.4 =	DLATCH(set,reset);
+
+	QX7.4_1 D ---#  QX7.4
+
+	iClock  : ---%  QX7.4_1 D
+	QX7.4     ---%
+	IX0.3     ---%
+	IX0.4   ~ ---%
+
+
+	QX7.4     ---|  QX7.4_0 X
+
+120	QX7.5 =	DLATCH(set,reset,timSetReset);
+
+	QX7.5_1 D ---#  QX7.5
+
+	t1m3    ! ---%  QX7.5_1 D
+	1       A<---%
+	QX7.5     ---%
+	IX0.3     ---%
+	IX0.4   ~ ---%
+
+
+	QX7.5     ---|  QX7.5_0 X
+
+121	QX7.6 =	DLATCH(set,reset,clkSetReset);
+
+	QX7.6_1 D ---#  QX7.6
+
+	clk8    : ---%  QX7.6_1 D
+	QX7.6     ---%
+	IX0.3     ---%
+	IX0.4   ~ ---%
+
+
+	QX7.6     ---|  QX7.6_0 X
+
+122	QX7.7 =	DLATCH(set,reset,timSetReset,delaySetReset);
+
+	QX7.7_1 D ---#  QX7.7
+
+	t1m3    ! ---%  QX7.7_1 D
+	3       A<---%
+	QX7.7     ---%
+	IX0.3     ---%
+	IX0.4   ~ ---%
+
+
+	QX7.7     ---|  QX7.7_0 X
+
+123
+124	QX8.0 =	SR(set,                reset);
+
+	QX8.0_1 S ---#  QX8.0
+	QX8.0_2 R ---#
+
+	iClock  : ---|  QX8.0_1 S
+	IX0.3     ---|
+
+	iClock  : ---|  QX8.0_2 R
+	IX0.4     ---|
+
+
+	QX8.0     ---|  QX8.0_0 X
+
+125	QX8.1 =	SR(set,                reset,clkSetReset);
+
+	QX8.1_1 S ---#  QX8.1
+	QX8.1_2 R ---#
+
+	clk8    : ---|  QX8.1_1 S
+	IX0.3     ---|
+
+	clk8    : ---|  QX8.1_2 R
+	IX0.4     ---|
+
+
+	QX8.1     ---|  QX8.1_0 X
+
+126	QX8.2 =	SR(set,                reset,timSetReset);
+
+	QX8.2_1 S ---#  QX8.2
+	QX8.2_2 R ---#
+
+	t1m3    ! ---|  QX8.2_1 S
+	1       A<---|
+	IX0.3     ---|
+
+	t1m3    ! ---|  QX8.2_2 R
+	1       A<---|
+	IX0.4     ---|
+
+
+	QX8.2     ---|  QX8.2_0 X
+
+127	QX8.3 =	SR(set,                reset,timSetReset,delaySetReset);
+
+	QX8.3_1 S ---#  QX8.3
+	QX8.3_2 R ---#
+
+	t1m3    ! ---|  QX8.3_1 S
+	3       A<---|
+	IX0.3     ---|
+
+	t1m3    ! ---|  QX8.3_2 R
+	3       A<---|
+	IX0.4     ---|
+
+
+	QX8.3     ---|  QX8.3_0 X
+
+128	QX8.4 =	SR(set,clkSet,         reset);
+
+	QX8.4_1 S ---#  QX8.4
+	QX8.4_2 R ---#
+
+	clk4    : ---|  QX8.4_1 S
+	IX0.3     ---|
+
+	iClock  : ---|  QX8.4_2 R
+	IX0.4     ---|
+
+
+	QX8.4     ---|  QX8.4_0 X
+
+129	QX8.5 =	SR(set,clkSet,         reset,clkReset);
+
+	QX8.5_1 S ---#  QX8.5
+	QX8.5_2 R ---#
+
+	clk4    : ---|  QX8.5_1 S
+	IX0.3     ---|
+
+	clk3    : ---|  QX8.5_2 R
+	IX0.4     ---|
+
+
+	QX8.5     ---|  QX8.5_0 X
+
+130	QX8.6 =	SR(set,clkSet,         reset,timReset);
+
+	QX8.6_1 S ---#  QX8.6
+	QX8.6_2 R ---#
+
+	clk4    : ---|  QX8.6_1 S
+	IX0.3     ---|
+
+	tim3    ! ---|  QX8.6_2 R
+	1       A<---|
+	IX0.4     ---|
+
+
+	QX8.6     ---|  QX8.6_0 X
+
+131	QX8.7 =	SR(set,clkSet,         reset,timReset,delayReset);
+
+	QX8.7_1 S ---#  QX8.7
+	QX8.7_2 R ---#
+
+	clk4    : ---|  QX8.7_1 S
+	IX0.3     ---|
+
+	tim3    ! ---|  QX8.7_2 R
+	3       A<---|
+	IX0.4     ---|
+
+
+	QX8.7     ---|  QX8.7_0 X
+
+132	QX9.0 =	SR(set,timSet,delaySet,reset);
+
+	QX9.0_1 S ---#  QX9.0
+	QX9.0_2 R ---#
+
+	tim4    ! ---|  QX9.0_1 S
+	3       A<---|
+	IX0.3     ---|
+
+	iClock  : ---|  QX9.0_2 R
+	IX0.4     ---|
+
+
+	QX9.0     ---|  QX9.0_0 X
+
+133	QX9.1 =	SR(set,timSet,delaySet,reset,clkReset);
+
+	QX9.1_1 S ---#  QX9.1
+	QX9.1_2 R ---#
+
+	tim4    ! ---|  QX9.1_1 S
+	3       A<---|
+	IX0.3     ---|
+
+	clk3    : ---|  QX9.1_2 R
+	IX0.4     ---|
+
+
+	QX9.1     ---|  QX9.1_0 X
+
+134	QX9.2 =	SR(set,timSet,delaySet,reset,timReset);
+
+	QX9.2_1 S ---#  QX9.2
+	QX9.2_2 R ---#
+
+	tim4    ! ---|  QX9.2_1 S
+	3       A<---|
+	IX0.3     ---|
+
+	tim3    ! ---|  QX9.2_2 R
+	1       A<---|
+	IX0.4     ---|
+
+
+	QX9.2     ---|  QX9.2_0 X
+
+135	QX9.3 =	SR(set,timSet,delaySet,reset,timReset,delayReset);
+
+	QX9.3_1 S ---#  QX9.3
+	QX9.3_2 R ---#
+
+	tim4    ! ---|  QX9.3_1 S
+	3       A<---|
+	IX0.3     ---|
+
+	tim3    ! ---|  QX9.3_2 R
+	3       A<---|
+	IX0.4     ---|
+
+
+	QX9.3     ---|  QX9.3_0 X
+
+136
+137	QX9.4 =	JK(set,                reset);
+
+	QX9.4_1 S ---#  QX9.4
+	QX9.4_2 R ---#
+
+	iClock  : ---&  QX9.4_1 S
+	QX9.4   ~ ---&
+	IX0.3     ---&
+
+	iClock  : ---&  QX9.4_2 R
+	QX9.4     ---&
+	IX0.4     ---&
+
+
+	QX9.4     ---|  QX9.4_0 X
+
+138	QX9.5 =	JK(set,                reset,clkSetReset);
+
+	QX9.5_1 S ---#  QX9.5
+	QX9.5_2 R ---#
+
+	clk8    : ---&  QX9.5_1 S
+	QX9.5   ~ ---&
+	IX0.3     ---&
+
+	clk8    : ---&  QX9.5_2 R
+	QX9.5     ---&
+	IX0.4     ---&
+
+
+	QX9.5     ---|  QX9.5_0 X
+
+139	QX9.6 =	JK(set,                reset,timSetReset);
+
+	QX9.6_1 S ---#  QX9.6
+	QX9.6_2 R ---#
+
+	t1m3    ! ---&  QX9.6_1 S
+	1       A<---&
+	QX9.6   ~ ---&
+	IX0.3     ---&
+
+	t1m3    ! ---&  QX9.6_2 R
+	1       A<---&
+	QX9.6     ---&
+	IX0.4     ---&
+
+
+	QX9.6     ---|  QX9.6_0 X
+
+140	QX9.7 =	JK(set,                reset,timSetReset,delaySetReset);
+
+	QX9.7_1 S ---#  QX9.7
+	QX9.7_2 R ---#
+
+	t1m3    ! ---&  QX9.7_1 S
+	3       A<---&
+	QX9.7   ~ ---&
+	IX0.3     ---&
+
+	t1m3    ! ---&  QX9.7_2 R
+	3       A<---&
+	QX9.7     ---&
+	IX0.4     ---&
+
+
+	QX9.7     ---|  QX9.7_0 X
+
+141	QX10.0 =	JK(set,clkSet,         reset);
+
+	QX10.0_1 S ---#  QX10.0
+	QX10.0_2 R ---#
+
+	clk4     : ---&  QX10.0_1 S
+	QX10.0   ~ ---&
+	IX0.3      ---&
+
+	iClock   : ---&  QX10.0_2 R
+	QX10.0     ---&
+	IX0.4      ---&
+
+
+	QX10.0     ---|  QX10.0_0 X
+
+142	QX10.1 =	JK(set,clkSet,         reset,clkReset);
+
+	QX10.1_1 S ---#  QX10.1
+	QX10.1_2 R ---#
+
+	clk4     : ---&  QX10.1_1 S
+	QX10.1   ~ ---&
+	IX0.3      ---&
+
+	clk3     : ---&  QX10.1_2 R
+	QX10.1     ---&
+	IX0.4      ---&
+
+
+	QX10.1     ---|  QX10.1_0 X
+
+143	QX10.2 =	JK(set,clkSet,         reset,timReset);
+
+	QX10.2_1 S ---#  QX10.2
+	QX10.2_2 R ---#
+
+	clk4     : ---&  QX10.2_1 S
+	QX10.2   ~ ---&
+	IX0.3      ---&
+
+	tim3     ! ---&  QX10.2_2 R
+	1        A<---&
+	QX10.2     ---&
+	IX0.4      ---&
+
+
+	QX10.2     ---|  QX10.2_0 X
+
+144	QX10.3 =	JK(set,clkSet,         reset,timReset,delayReset);
+
+	QX10.3_1 S ---#  QX10.3
+	QX10.3_2 R ---#
+
+	clk4     : ---&  QX10.3_1 S
+	QX10.3   ~ ---&
+	IX0.3      ---&
+
+	tim3     ! ---&  QX10.3_2 R
+	3        A<---&
+	QX10.3     ---&
+	IX0.4      ---&
+
+
+	QX10.3     ---|  QX10.3_0 X
+
+145	QX10.4 =	JK(set,timSet,delaySet,reset);
+
+	QX10.4_1 S ---#  QX10.4
+	QX10.4_2 R ---#
+
+	tim4     ! ---&  QX10.4_1 S
+	3        A<---&
+	QX10.4   ~ ---&
+	IX0.3      ---&
+
+	iClock   : ---&  QX10.4_2 R
+	QX10.4     ---&
+	IX0.4      ---&
+
+
+	QX10.4     ---|  QX10.4_0 X
+
+146	QX10.5 =	JK(set,timSet,delaySet,reset,clkReset);
+
+	QX10.5_1 S ---#  QX10.5
+	QX10.5_2 R ---#
+
+	tim4     ! ---&  QX10.5_1 S
+	3        A<---&
+	QX10.5   ~ ---&
+	IX0.3      ---&
+
+	clk3     : ---&  QX10.5_2 R
+	QX10.5     ---&
+	IX0.4      ---&
+
+
+	QX10.5     ---|  QX10.5_0 X
+
+147	QX10.6 =	JK(set,timSet,delaySet,reset,timReset);
+
+	QX10.6_1 S ---#  QX10.6
+	QX10.6_2 R ---#
+
+	tim4     ! ---&  QX10.6_1 S
+	3        A<---&
+	QX10.6   ~ ---&
+	IX0.3      ---&
+
+	tim3     ! ---&  QX10.6_2 R
+	1        A<---&
+	QX10.6     ---&
+	IX0.4      ---&
+
+
+	QX10.6     ---|  QX10.6_0 X
+
+148	QX10.7 =	JK(set,timSet,delaySet,reset,timReset,delayReset);
+
+	QX10.7_1 S ---#  QX10.7
+	QX10.7_2 R ---#
+
+	tim4     ! ---&  QX10.7_1 S
+	3        A<---&
+	QX10.7   ~ ---&
+	IX0.3      ---&
+
+	tim3     ! ---&  QX10.7_2 R
+	3        A<---&
+	QX10.7     ---&
+	IX0.4      ---&
+
+
+	QX10.7     ---|  QX10.7_0 X
+
+149
+150	QX11.0 =	ST(set,                                                 iClock);
+
+	QX11.0_1 S ---#  QX11.0
+	QX11.0_2 R ---#
+
+	iClock   : ---|  QX11.0_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX11.0_2 R
+	QX11.0     ---|
+
+
+	QX11.0     ---|  QX11.0_0 X
+
+151	QX11.1 =	ST(set,                                                clk);
+
+	QX11.1_1 S ---#  QX11.1
+	QX11.1_2 R ---#
+
+	iClock   : ---|  QX11.1_1 S
+	IX0.3      ---|
+
+	clk0     : ---|  QX11.1_2 R
+	QX11.1     ---|
+
+
+	QX11.1     ---|  QX11.1_0 X
+
+152	QX11.2 =	ST(set,                                                tim);
+
+	QX11.2_1 S ---#  QX11.2
+	QX11.2_2 R ---#
+
+	iClock   : ---|  QX11.2_1 S
+	IX0.3      ---|
+
+	tim0     ! ---|  QX11.2_2 R
+	1        A<---|
+	QX11.2     ---|
+
+
+	QX11.2     ---|  QX11.2_0 X
+
+153	QX11.3 =	ST(set,                                                tim,delay);
+
+	QX11.3_1 S ---#  QX11.3
+	QX11.3_2 R ---#
+
+	iClock   : ---|  QX11.3_1 S
+	IX0.3      ---|
+
+	tim0     ! ---|  QX11.3_2 R
+	3        A<---|
+	QX11.3     ---|
+
+
+	QX11.3     ---|  QX11.3_0 X
+
+154	QX11.4 =	ST(set,clkSet,                                         clk);
+
+	QX11.4_1 S ---#  QX11.4
+	QX11.4_2 R ---#
+
+	clk4     : ---|  QX11.4_1 S
+	IX0.3      ---|
+
+	clk0     : ---|  QX11.4_2 R
+	QX11.4     ---|
+
+
+	QX11.4     ---|  QX11.4_0 X
+
+155	QX11.5 =	ST(set,clkSet,                                         tim);
+
+	QX11.5_1 S ---#  QX11.5
+	QX11.5_2 R ---#
+
+	clk4     : ---|  QX11.5_1 S
+	IX0.3      ---|
+
+	tim0     ! ---|  QX11.5_2 R
+	1        A<---|
+	QX11.5     ---|
+
+
+	QX11.5     ---|  QX11.5_0 X
+
+156	QX11.6 =	ST(set,clkSet,                                         tim,delay);
+
+	QX11.6_1 S ---#  QX11.6
+	QX11.6_2 R ---#
+
+	clk4     : ---|  QX11.6_1 S
+	IX0.3      ---|
+
+	tim0     ! ---|  QX11.6_2 R
+	3        A<---|
+	QX11.6     ---|
+
+
+	QX11.6     ---|  QX11.6_0 X
+
+157	QX11.7 =	ST(set,timSet,delaySet,                                clk);
+
+	QX11.7_1 S ---#  QX11.7
+	QX11.7_2 R ---#
+
+	tim4     ! ---|  QX11.7_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	clk0     : ---|  QX11.7_2 R
+	QX11.7     ---|
+
+
+	QX11.7     ---|  QX11.7_0 X
+
+158	QX12.0 =	ST(set,timSet,delaySet,                                tim);
+
+	QX12.0_1 S ---#  QX12.0
+	QX12.0_2 R ---#
+
+	tim4     ! ---|  QX12.0_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	tim0     ! ---|  QX12.0_2 R
+	1        A<---|
+	QX12.0     ---|
+
+
+	QX12.0     ---|  QX12.0_0 X
+
+159	QX12.1 =	ST(set,timSet,delaySet,                                tim,delay);
+
+	QX12.1_1 S ---#  QX12.1
+	QX12.1_2 R ---#
+
+	tim4     ! ---|  QX12.1_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	tim0     ! ---|  QX12.1_2 R
+	3        A<---|
+	QX12.1     ---|
+
+
+	QX12.1     ---|  QX12.1_0 X
+
+160	QX12.2 =	SRT(set,                reset,                           iClock);
+
+	QX12.2_1 S ---#  QX12.2
+	QX12.2_2 R ---#
+	QX12.2_3 R ---#
+
+	iClock   : ---|  QX12.2_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX12.2_2 R
+	IX0.4      ---|
+
+	iClock   : ---|  QX12.2_3 R
+	QX12.2     ---|
+
+
+	QX12.2     ---|  QX12.2_0 X
+
+161	QX12.3 =	SRT(set,                reset,                          clk);
+
+	QX12.3_1 S ---#  QX12.3
+	QX12.3_2 R ---#
+	QX12.3_3 R ---#
+
+	iClock   : ---|  QX12.3_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX12.3_2 R
+	IX0.4      ---|
+
+	clk0     : ---|  QX12.3_3 R
+	QX12.3     ---|
+
+
+	QX12.3     ---|  QX12.3_0 X
+
+162	QX12.4 =	SRT(set,                reset,                          tim);
+
+	QX12.4_1 S ---#  QX12.4
+	QX12.4_2 R ---#
+	QX12.4_3 R ---#
+
+	iClock   : ---|  QX12.4_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX12.4_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX12.4_3 R
+	1        A<---|
+	QX12.4     ---|
+
+
+	QX12.4     ---|  QX12.4_0 X
+
+163	QX12.5 =	SRT(set,                reset,                          tim,delay);
+
+	QX12.5_1 S ---#  QX12.5
+	QX12.5_2 R ---#
+	QX12.5_3 R ---#
+
+	iClock   : ---|  QX12.5_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX12.5_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX12.5_3 R
+	3        A<---|
+	QX12.5     ---|
+
+
+	QX12.5     ---|  QX12.5_0 X
+
+164	QX12.6 =	SRT(set,                reset,clkSetReset,              clk);
+
+	QX12.6_1 S ---#  QX12.6
+	QX12.6_2 R ---#
+	QX12.6_3 R ---#
+
+	clk8     : ---|  QX12.6_1 S
+	IX0.3      ---|
+
+	clk8     : ---|  QX12.6_2 R
+	IX0.4      ---|
+
+	clk0     : ---|  QX12.6_3 R
+	QX12.6     ---|
+
+
+	QX12.6     ---|  QX12.6_0 X
+
+165	QX12.7 =	SRT(set,                reset,clkSetReset,              tim);
+
+	QX12.7_1 S ---#  QX12.7
+	QX12.7_2 R ---#
+	QX12.7_3 R ---#
+
+	clk8     : ---|  QX12.7_1 S
+	IX0.3      ---|
+
+	clk8     : ---|  QX12.7_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX12.7_3 R
+	1        A<---|
+	QX12.7     ---|
+
+
+	QX12.7     ---|  QX12.7_0 X
+
+166	QX13.0 =	SRT(set,                reset,clkSetReset,              tim,delay);
+
+	QX13.0_1 S ---#  QX13.0
+	QX13.0_2 R ---#
+	QX13.0_3 R ---#
+
+	clk8     : ---|  QX13.0_1 S
+	IX0.3      ---|
+
+	clk8     : ---|  QX13.0_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX13.0_3 R
+	3        A<---|
+	QX13.0     ---|
+
+
+	QX13.0     ---|  QX13.0_0 X
+
+167	QX13.1 =	SRT(set,                reset,timSetReset,delaySetReset,clk);
+
+	QX13.1_1 S ---#  QX13.1
+	QX13.1_2 R ---#
+	QX13.1_3 R ---#
+
+	t1m3     ! ---|  QX13.1_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	t1m3     ! ---|  QX13.1_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	clk0     : ---|  QX13.1_3 R
+	QX13.1     ---|
+
+
+	QX13.1     ---|  QX13.1_0 X
+
+168	QX13.2 =	SRT(set,                reset,timSetReset,delaySetReset,tim);
+
+	QX13.2_1 S ---#  QX13.2
+	QX13.2_2 R ---#
+	QX13.2_3 R ---#
+
+	t1m3     ! ---|  QX13.2_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	t1m3     ! ---|  QX13.2_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	tim0     ! ---|  QX13.2_3 R
+	1        A<---|
+	QX13.2     ---|
+
+
+	QX13.2     ---|  QX13.2_0 X
+
+169	QX13.3 =	SRT(set,                reset,timSetReset,delaySetReset,tim,delay);
+
+	QX13.3_1 S ---#  QX13.3
+	QX13.3_2 R ---#
+	QX13.3_3 R ---#
+
+	t1m3     ! ---|  QX13.3_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	t1m3     ! ---|  QX13.3_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	tim0     ! ---|  QX13.3_3 R
+	3        A<---|
+	QX13.3     ---|
+
+
+	QX13.3     ---|  QX13.3_0 X
+
+170	QX13.4 =	SRT(set,clkSet,         reset,                           iClock);
+
+	QX13.4_1 S ---#  QX13.4
+	QX13.4_2 R ---#
+	QX13.4_3 R ---#
+
+	clk4     : ---|  QX13.4_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX13.4_2 R
+	IX0.4      ---|
+
+	iClock   : ---|  QX13.4_3 R
+	QX13.4     ---|
+
+
+	QX13.4     ---|  QX13.4_0 X
+
+171	QX13.5 =	SRT(set,clkSet,         reset,                          clk);
+
+	QX13.5_1 S ---#  QX13.5
+	QX13.5_2 R ---#
+	QX13.5_3 R ---#
+
+	clk4     : ---|  QX13.5_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX13.5_2 R
+	IX0.4      ---|
+
+	clk0     : ---|  QX13.5_3 R
+	QX13.5     ---|
+
+
+	QX13.5     ---|  QX13.5_0 X
+
+172	QX13.6 =	SRT(set,clkSet,         reset,                          tim);
+
+	QX13.6_1 S ---#  QX13.6
+	QX13.6_2 R ---#
+	QX13.6_3 R ---#
+
+	clk4     : ---|  QX13.6_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX13.6_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX13.6_3 R
+	1        A<---|
+	QX13.6     ---|
+
+
+	QX13.6     ---|  QX13.6_0 X
+
+173	QX13.7 =	SRT(set,clkSet,         reset,                          tim,delay);
+
+	QX13.7_1 S ---#  QX13.7
+	QX13.7_2 R ---#
+	QX13.7_3 R ---#
+
+	clk4     : ---|  QX13.7_1 S
+	IX0.3      ---|
+
+	iClock   : ---|  QX13.7_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX13.7_3 R
+	3        A<---|
+	QX13.7     ---|
+
+
+	QX13.7     ---|  QX13.7_0 X
+
+174	QX14.0 =	SRT(set,clkSet,         reset,clkReset,                 clk);
+
+	QX14.0_1 S ---#  QX14.0
+	QX14.0_2 R ---#
+	QX14.0_3 R ---#
+
+	clk4     : ---|  QX14.0_1 S
+	IX0.3      ---|
+
+	clk3     : ---|  QX14.0_2 R
+	IX0.4      ---|
+
+	clk0     : ---|  QX14.0_3 R
+	QX14.0     ---|
+
+
+	QX14.0     ---|  QX14.0_0 X
+
+175	QX14.1 =	SRT(set,clkSet,         reset,clkReset,                 tim);
+
+	QX14.1_1 S ---#  QX14.1
+	QX14.1_2 R ---#
+	QX14.1_3 R ---#
+
+	clk4     : ---|  QX14.1_1 S
+	IX0.3      ---|
+
+	clk3     : ---|  QX14.1_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX14.1_3 R
+	1        A<---|
+	QX14.1     ---|
+
+
+	QX14.1     ---|  QX14.1_0 X
+
+176	QX14.2 =	SRT(set,clkSet,         reset,clkReset,                 tim,delay);
+
+	QX14.2_1 S ---#  QX14.2
+	QX14.2_2 R ---#
+	QX14.2_3 R ---#
+
+	clk4     : ---|  QX14.2_1 S
+	IX0.3      ---|
+
+	clk3     : ---|  QX14.2_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX14.2_3 R
+	3        A<---|
+	QX14.2     ---|
+
+
+	QX14.2     ---|  QX14.2_0 X
+
+177	QX14.3 =	SRT(set,clkSet,         reset,timReset,delayReset,      clk);
+
+	QX14.3_1 S ---#  QX14.3
+	QX14.3_2 R ---#
+	QX14.3_3 R ---#
+
+	clk4     : ---|  QX14.3_1 S
+	IX0.3      ---|
+
+	tim3     ! ---|  QX14.3_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	clk0     : ---|  QX14.3_3 R
+	QX14.3     ---|
+
+
+	QX14.3     ---|  QX14.3_0 X
+
+178	QX14.4 =	SRT(set,clkSet,         reset,timReset,delayReset,      tim);
+
+	QX14.4_1 S ---#  QX14.4
+	QX14.4_2 R ---#
+	QX14.4_3 R ---#
+
+	clk4     : ---|  QX14.4_1 S
+	IX0.3      ---|
+
+	tim3     ! ---|  QX14.4_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	tim0     ! ---|  QX14.4_3 R
+	1        A<---|
+	QX14.4     ---|
+
+
+	QX14.4     ---|  QX14.4_0 X
+
+179	QX14.5 =	SRT(set,clkSet,         reset,timReset,delayReset,      tim,delay);
+
+	QX14.5_1 S ---#  QX14.5
+	QX14.5_2 R ---#
+	QX14.5_3 R ---#
+
+	clk4     : ---|  QX14.5_1 S
+	IX0.3      ---|
+
+	tim3     ! ---|  QX14.5_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	tim0     ! ---|  QX14.5_3 R
+	3        A<---|
+	QX14.5     ---|
+
+
+	QX14.5     ---|  QX14.5_0 X
+
+180	QX14.6 =	SRT(set,timSet,delaySet,reset,                           iClock);
+
+	QX14.6_1 S ---#  QX14.6
+	QX14.6_2 R ---#
+	QX14.6_3 R ---#
+
+	tim4     ! ---|  QX14.6_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	iClock   : ---|  QX14.6_2 R
+	IX0.4      ---|
+
+	iClock   : ---|  QX14.6_3 R
+	QX14.6     ---|
+
+
+	QX14.6     ---|  QX14.6_0 X
+
+181	QX14.7 =	SRT(set,timSet,delaySet,reset,                          clk);
+
+	QX14.7_1 S ---#  QX14.7
+	QX14.7_2 R ---#
+	QX14.7_3 R ---#
+
+	tim4     ! ---|  QX14.7_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	iClock   : ---|  QX14.7_2 R
+	IX0.4      ---|
+
+	clk0     : ---|  QX14.7_3 R
+	QX14.7     ---|
+
+
+	QX14.7     ---|  QX14.7_0 X
+
+182	QX15.0 =	SRT(set,timSet,delaySet,reset,                          tim);
+
+	QX15.0_1 S ---#  QX15.0
+	QX15.0_2 R ---#
+	QX15.0_3 R ---#
+
+	tim4     ! ---|  QX15.0_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	iClock   : ---|  QX15.0_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX15.0_3 R
+	1        A<---|
+	QX15.0     ---|
+
+
+	QX15.0     ---|  QX15.0_0 X
+
+183	QX15.1 =	SRT(set,timSet,delaySet,reset,                          tim,delay);
+
+	QX15.1_1 S ---#  QX15.1
+	QX15.1_2 R ---#
+	QX15.1_3 R ---#
+
+	tim4     ! ---|  QX15.1_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	iClock   : ---|  QX15.1_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX15.1_3 R
+	3        A<---|
+	QX15.1     ---|
+
+
+	QX15.1     ---|  QX15.1_0 X
+
+184	QX15.2 =	SRT(set,timSet,delaySet,reset,clkReset,                 clk);
+
+	QX15.2_1 S ---#  QX15.2
+	QX15.2_2 R ---#
+	QX15.2_3 R ---#
+
+	tim4     ! ---|  QX15.2_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	clk3     : ---|  QX15.2_2 R
+	IX0.4      ---|
+
+	clk0     : ---|  QX15.2_3 R
+	QX15.2     ---|
+
+
+	QX15.2     ---|  QX15.2_0 X
+
+185	QX15.3 =	SRT(set,timSet,delaySet,reset,clkReset,                 tim);
+
+	QX15.3_1 S ---#  QX15.3
+	QX15.3_2 R ---#
+	QX15.3_3 R ---#
+
+	tim4     ! ---|  QX15.3_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	clk3     : ---|  QX15.3_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX15.3_3 R
+	1        A<---|
+	QX15.3     ---|
+
+
+	QX15.3     ---|  QX15.3_0 X
+
+186	QX15.4 =	SRT(set,timSet,delaySet,reset,clkReset,                 tim,delay);
+
+	QX15.4_1 S ---#  QX15.4
+	QX15.4_2 R ---#
+	QX15.4_3 R ---#
+
+	tim4     ! ---|  QX15.4_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	clk3     : ---|  QX15.4_2 R
+	IX0.4      ---|
+
+	tim0     ! ---|  QX15.4_3 R
+	3        A<---|
+	QX15.4     ---|
+
+
+	QX15.4     ---|  QX15.4_0 X
+
+187	QX15.5 =	SRT(set,timSet,delaySet,reset,timReset,delayReset,      clk);
+
+	QX15.5_1 S ---#  QX15.5
+	QX15.5_2 R ---#
+	QX15.5_3 R ---#
+
+	tim4     ! ---|  QX15.5_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	tim3     ! ---|  QX15.5_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	clk0     : ---|  QX15.5_3 R
+	QX15.5     ---|
+
+
+	QX15.5     ---|  QX15.5_0 X
+
+188	QX15.6 =	SRT(set,timSet,delaySet,reset,timReset,delayReset,      tim);
+
+	QX15.6_1 S ---#  QX15.6
+	QX15.6_2 R ---#
+	QX15.6_3 R ---#
+
+	tim4     ! ---|  QX15.6_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	tim3     ! ---|  QX15.6_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	tim0     ! ---|  QX15.6_3 R
+	1        A<---|
+	QX15.6     ---|
+
+
+	QX15.6     ---|  QX15.6_0 X
+
+189	QX15.7 =	SRT(set,timSet,delaySet,reset,timReset,delayReset,      tim,delay);
+
+	QX15.7_1 S ---#  QX15.7
+	QX15.7_2 R ---#
+	QX15.7_3 R ---#
+
+	tim4     ! ---|  QX15.7_1 S
+	3        A<---|
+	IX0.3      ---|
+
+	tim3     ! ---|  QX15.7_2 R
+	3        A<---|
+	IX0.4      ---|
+
+	tim0     ! ---|  QX15.7_3 R
+	3        A<---|
+	QX15.7     ---|
+
+
+	QX15.7     ---|  QX15.7_0 X
+
+190
+191	QB16 =	SH(aexpr                                         );
+
+	QB16_1  H ---*  QB16    A
+
+	iClock  : ---+  QB16_1  H
+	IB16    A ---+                  IB16    // 1
+
+
+	QB16    A ---+  QB16_0  W       QB16    // 1
+
+192	QB17 =	SH(aexpr,clk                                     );
+
+	QB17_1  H ---*  QB17    A
+
+	clk0    : ---+  QB17_1  H
+	IB16    A ---+                  IB16    // 1
+
+
+	QB17    A ---+  QB17_0  W       QB17    // 1
+
+193	QB18 =	SH(aexpr,tim                                     );
+
+	QB18_1  H ---*  QB18    A
+
+	tim0    ! ---+  QB18_1  H
+	1       A<---+
+	IB16    A ---+                  IB16    // 1
+
+
+	QB18    A ---+  QB18_0  W       QB18    // 1
+
+194	QB19 =	SH(aexpr,tim,delay                               );
+
+	QB19_1  H ---*  QB19    A
+
+	tim0    ! ---+  QB19_1  H
+	3       A<---+
+	IB16    A ---+                  IB16    // 1
+
+
+	QB19    A ---+  QB19_0  W       QB19    // 1
+
+195	QB20 =	SHR(aexpr,                                       reset);
+
+	QB20_1  H ---*  QB20    A
+	QB20_2  r ---*
+
+	iClock  : ---+  QB20_1  H
+	QB20_3  A ---+                  QB20_3  // 1
+	QB20    A ---+                  ?QB20   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	iClock  : ---|  QB20_2  r
+	IX0.4     ---|
+
+	IX0.4     ---|  QB20_3  A
+
+
+	QB20    A ---+  QB20_0  W       QB20    // 1
+
+196	QB21 =	SHR(aexpr,                                       reset,clkExprReset);
+
+	QB21_1  H ---*  QB21    A
+	QB21_2  r ---*
+
+	clk2    : ---+  QB21_1  H
+	QB21_3  A ---+                  QB21_3  // 1
+	QB21    A ---+                  ?QB21   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk2    : ---|  QB21_2  r
+	IX0.4     ---|
+
+	IX0.4     ---|  QB21_3  A
+
+
+	QB21    A ---+  QB21_0  W       QB21    // 1
+
+197	QB22 =	SHR(aexpr,                                       reset,timExprReset);
+
+	QB22_1  H ---*  QB22    A
+	QB22_2  r ---*
+
+	tim2    ! ---+  QB22_1  H
+	1       A<---+
+	QB22_3  A ---+                  QB22_3  // 1
+	QB22    A ---+                  ?QB22   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim2    ! ---|  QB22_2  r
+	1       A<---|
+	IX0.4     ---|
+
+	IX0.4     ---|  QB22_3  A
+
+
+	QB22    A ---+  QB22_0  W       QB22    // 1
+
+198	QB23 =	SHR(aexpr,                                       reset,timExprReset,delayExprReset);
+
+	QB23_1  H ---*  QB23    A
+	QB23_2  r ---*
+
+	tim2    ! ---+  QB23_1  H
+	3       A<---+
+	QB23_3  A ---+                  QB23_3  // 1
+	QB23    A ---+                  ?QB23   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim2    ! ---|  QB23_2  r
+	3       A<---|
+	IX0.4     ---|
+
+	IX0.4     ---|  QB23_3  A
+
+
+	QB23    A ---+  QB23_0  W       QB23    // 1
+
+199	QB24 =	SHR(aexpr,clkExpr,                               reset);
+
+	QB24_1  H ---*  QB24    A
+	QB24_2  r ---*
+
+	clk1    : ---+  QB24_1  H
+	QB24_3  A ---+                  QB24_3  // 1
+	QB24    A ---+                  ?QB24   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	iClock  : ---|  QB24_2  r
+	IX0.4     ---|
+
+	IX0.4     ---|  QB24_3  A
+
+
+	QB24    A ---+  QB24_0  W       QB24    // 1
+
+200	QB25 =	SHR(aexpr,clkExpr,                               reset,clkReset);
+
+	QB25_1  H ---*  QB25    A
+	QB25_2  r ---*
+
+	clk1    : ---+  QB25_1  H
+	QB25_3  A ---+                  QB25_3  // 1
+	QB25    A ---+                  ?QB25   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk3    : ---|  QB25_2  r
+	IX0.4     ---|
+
+	IX0.4     ---|  QB25_3  A
+
+
+	QB25    A ---+  QB25_0  W       QB25    // 1
+
+201	QB26 =	SHR(aexpr,clkExpr,                               reset,timReset);
+
+	QB26_1  H ---*  QB26    A
+	QB26_2  r ---*
+
+	clk1    : ---+  QB26_1  H
+	QB26_3  A ---+                  QB26_3  // 1
+	QB26    A ---+                  ?QB26   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim3    ! ---|  QB26_2  r
+	1       A<---|
+	IX0.4     ---|
+
+	IX0.4     ---|  QB26_3  A
+
+
+	QB26    A ---+  QB26_0  W       QB26    // 1
+
+202	QB27 =	SHR(aexpr,clkExpr,                               reset,timReset,delayReset);
+
+	QB27_1  H ---*  QB27    A
+	QB27_2  r ---*
+
+	clk1    : ---+  QB27_1  H
+	QB27_3  A ---+                  QB27_3  // 1
+	QB27    A ---+                  ?QB27   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim3    ! ---|  QB27_2  r
+	3       A<---|
+	IX0.4     ---|
+
+	IX0.4     ---|  QB27_3  A
+
+
+	QB27    A ---+  QB27_0  W       QB27    // 1
+
+203	QB28 =	SHR(aexpr,timExpr,delayExpr,                     reset);
+
+	QB28_1  H ---*  QB28    A
+	QB28_2  r ---*
+
+	tim1    ! ---+  QB28_1  H
+	3       A<---+
+	QB28_3  A ---+                  QB28_3  // 1
+	QB28    A ---+                  ?QB28   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	iClock  : ---|  QB28_2  r
+	IX0.4     ---|
+
+	IX0.4     ---|  QB28_3  A
+
+
+	QB28    A ---+  QB28_0  W       QB28    // 1
+
+204	QB29 =	SHR(aexpr,timExpr,delayExpr,                     reset,clkReset);
+
+	QB29_1  H ---*  QB29    A
+	QB29_2  r ---*
+
+	tim1    ! ---+  QB29_1  H
+	3       A<---+
+	QB29_3  A ---+                  QB29_3  // 1
+	QB29    A ---+                  ?QB29   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk3    : ---|  QB29_2  r
+	IX0.4     ---|
+
+	IX0.4     ---|  QB29_3  A
+
+
+	QB29    A ---+  QB29_0  W       QB29    // 1
+
+205	QB30 =	SHR(aexpr,timExpr,delayExpr,                     reset,timReset);
+
+	QB30_1  H ---*  QB30    A
+	QB30_2  r ---*
+
+	tim1    ! ---+  QB30_1  H
+	3       A<---+
+	QB30_3  A ---+                  QB30_3  // 1
+	QB30    A ---+                  ?QB30   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim3    ! ---|  QB30_2  r
+	1       A<---|
+	IX0.4     ---|
+
+	IX0.4     ---|  QB30_3  A
+
+
+	QB30    A ---+  QB30_0  W       QB30    // 1
+
+206	QB31 =	SHR(aexpr,timExpr,delayExpr,                     reset,timReset,delayReset);
+
+	QB31_1  H ---*  QB31    A
+	QB31_2  r ---*
+
+	tim1    ! ---+  QB31_1  H
+	3       A<---+
+	QB31_3  A ---+                  QB31_3  // 1
+	QB31    A ---+                  ?QB31   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim3    ! ---|  QB31_2  r
+	3       A<---|
+	IX0.4     ---|
+
+	IX0.4     ---|  QB31_3  A
+
+
+	QB31    A ---+  QB31_0  W       QB31    // 1
+
+207	QB32 =	SHSR(aexpr,set,                                  reset);
+
+	QB32_1  H ---*  QB32    A
+	QB32_2  s ---*
+	QB32_3  r ---*
+
+	iClock  : ---+  QB32_1  H
+	QB32_4  A ---+                  QB32_4  // 1
+	QB32    A ---+                  ?QB32   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	iClock  : ---&  QB32_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB32_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB32_4  A
+	IX0.4     ---|
+
+
+	QB32    A ---+  QB32_0  W       QB32    // 1
+
+208	QB33 =	SHSR(aexpr,set,                                  reset,clkExprReset);
+
+	QB33_1  H ---*  QB33    A
+	QB33_2  s ---*
+	QB33_3  r ---*
+
+	clk2    : ---+  QB33_1  H
+	QB33_4  A ---+                  QB33_4  // 1
+	QB33    A ---+                  ?QB33   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk2    : ---&  QB33_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk2    : ---&  QB33_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB33_4  A
+	IX0.4     ---|
+
+
+	QB33    A ---+  QB33_0  W       QB33    // 1
+
+209	QB34 =	SHSR(aexpr,set,                                  reset,timExprReset);
+
+	QB34_1  H ---*  QB34    A
+	QB34_2  s ---*
+	QB34_3  r ---*
+
+	tim2    ! ---+  QB34_1  H
+	1       A<---+
+	QB34_4  A ---+                  QB34_4  // 1
+	QB34    A ---+                  ?QB34   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim2    ! ---&  QB34_2  s
+	1       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim2    ! ---&  QB34_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB34_4  A
+	IX0.4     ---|
+
+
+	QB34    A ---+  QB34_0  W       QB34    // 1
+
+210	QB35 =	SHSR(aexpr,set,                                  reset,timExprReset,delayExprReset);
+
+	QB35_1  H ---*  QB35    A
+	QB35_2  s ---*
+	QB35_3  r ---*
+
+	tim2    ! ---+  QB35_1  H
+	3       A<---+
+	QB35_4  A ---+                  QB35_4  // 1
+	QB35    A ---+                  ?QB35   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim2    ! ---&  QB35_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim2    ! ---&  QB35_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB35_4  A
+	IX0.4     ---|
+
+
+	QB35    A ---+  QB35_0  W       QB35    // 1
+
+211	QB36 =	SHSR(aexpr,clkExpr,          set,                reset);
+
+	QB36_1  H ---*  QB36    A
+	QB36_2  s ---*
+	QB36_3  r ---*
+
+	clk1    : ---+  QB36_1  H
+	QB36_4  A ---+                  QB36_4  // 1
+	QB36    A ---+                  ?QB36   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	iClock  : ---&  QB36_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB36_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB36_4  A
+	IX0.4     ---|
+
+
+	QB36    A ---+  QB36_0  W       QB36    // 1
+
+212	QB37 =	SHSR(aexpr,clkExpr,          set,                reset,clkSetReset);
+
+	QB37_1  H ---*  QB37    A
+	QB37_2  s ---*
+	QB37_3  r ---*
+
+	clk1    : ---+  QB37_1  H
+	QB37_4  A ---+                  QB37_4  // 1
+	QB37    A ---+                  ?QB37   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk8    : ---&  QB37_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk8    : ---&  QB37_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB37_4  A
+	IX0.4     ---|
+
+
+	QB37    A ---+  QB37_0  W       QB37    // 1
+
+213	QB38 =	SHSR(aexpr,clkExpr,          set,                reset,timSetReset);
+
+	QB38_1  H ---*  QB38    A
+	QB38_2  s ---*
+	QB38_3  r ---*
+
+	clk1    : ---+  QB38_1  H
+	QB38_4  A ---+                  QB38_4  // 1
+	QB38    A ---+                  ?QB38   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	t1m3    ! ---&  QB38_2  s
+	1       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	t1m3    ! ---&  QB38_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB38_4  A
+	IX0.4     ---|
+
+
+	QB38    A ---+  QB38_0  W       QB38    // 1
+
+214	QB39 =	SHSR(aexpr,clkExpr,          set,                reset,timSetReset,delaySetReset);
+
+	QB39_1  H ---*  QB39    A
+	QB39_2  s ---*
+	QB39_3  r ---*
+
+	clk1    : ---+  QB39_1  H
+	QB39_4  A ---+                  QB39_4  // 1
+	QB39    A ---+                  ?QB39   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	t1m3    ! ---&  QB39_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	t1m3    ! ---&  QB39_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB39_4  A
+	IX0.4     ---|
+
+
+	QB39    A ---+  QB39_0  W       QB39    // 1
+
+215	QB40 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset);
+
+	QB40_1  H ---*  QB40    A
+	QB40_2  s ---*
+	QB40_3  r ---*
+
+	clk1    : ---+  QB40_1  H
+	QB40_4  A ---+                  QB40_4  // 1
+	QB40    A ---+                  ?QB40   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB40_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB40_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB40_4  A
+	IX0.4     ---|
+
+
+	QB40    A ---+  QB40_0  W       QB40    // 1
+
+216	QB41 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset,clkReset);
+
+	QB41_1  H ---*  QB41    A
+	QB41_2  s ---*
+	QB41_3  r ---*
+
+	clk1    : ---+  QB41_1  H
+	QB41_4  A ---+                  QB41_4  // 1
+	QB41    A ---+                  ?QB41   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB41_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk3    : ---&  QB41_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB41_4  A
+	IX0.4     ---|
+
+
+	QB41    A ---+  QB41_0  W       QB41    // 1
+
+217	QB42 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset,timReset);
+
+	QB42_1  H ---*  QB42    A
+	QB42_2  s ---*
+	QB42_3  r ---*
+
+	clk1    : ---+  QB42_1  H
+	QB42_4  A ---+                  QB42_4  // 1
+	QB42    A ---+                  ?QB42   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB42_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB42_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB42_4  A
+	IX0.4     ---|
+
+
+	QB42    A ---+  QB42_0  W       QB42    // 1
+
+218	QB43 =	SHSR(aexpr,clkExpr,          set,clkSet,         reset,timReset,delayReset);
+
+	QB43_1  H ---*  QB43    A
+	QB43_2  s ---*
+	QB43_3  r ---*
+
+	clk1    : ---+  QB43_1  H
+	QB43_4  A ---+                  QB43_4  // 1
+	QB43    A ---+                  ?QB43   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB43_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB43_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB43_4  A
+	IX0.4     ---|
+
+
+	QB43    A ---+  QB43_0  W       QB43    // 1
+
+219	QB44 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset);
+
+	QB44_1  H ---*  QB44    A
+	QB44_2  s ---*
+	QB44_3  r ---*
+
+	clk1    : ---+  QB44_1  H
+	QB44_4  A ---+                  QB44_4  // 1
+	QB44    A ---+                  ?QB44   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB44_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB44_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB44_4  A
+	IX0.4     ---|
+
+
+	QB44    A ---+  QB44_0  W       QB44    // 1
+
+220	QB45 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset,clkReset);
+
+	QB45_1  H ---*  QB45    A
+	QB45_2  s ---*
+	QB45_3  r ---*
+
+	clk1    : ---+  QB45_1  H
+	QB45_4  A ---+                  QB45_4  // 1
+	QB45    A ---+                  ?QB45   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB45_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk3    : ---&  QB45_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB45_4  A
+	IX0.4     ---|
+
+
+	QB45    A ---+  QB45_0  W       QB45    // 1
+
+221	QB46 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset,timReset);
+
+	QB46_1  H ---*  QB46    A
+	QB46_2  s ---*
+	QB46_3  r ---*
+
+	clk1    : ---+  QB46_1  H
+	QB46_4  A ---+                  QB46_4  // 1
+	QB46    A ---+                  ?QB46   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB46_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB46_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB46_4  A
+	IX0.4     ---|
+
+
+	QB46    A ---+  QB46_0  W       QB46    // 1
+
+222	QB47 =	SHSR(aexpr,clkExpr,          set,timSet,delaySet,reset,timReset,delayReset);
+
+	QB47_1  H ---*  QB47    A
+	QB47_2  s ---*
+	QB47_3  r ---*
+
+	clk1    : ---+  QB47_1  H
+	QB47_4  A ---+                  QB47_4  // 1
+	QB47    A ---+                  ?QB47   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB47_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB47_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB47_4  A
+	IX0.4     ---|
+
+
+	QB47    A ---+  QB47_0  W       QB47    // 1
+
+223	QB48 =	SHSR(aexpr,timExpr,delayExpr,set,                reset);
+
+	QB48_1  H ---*  QB48    A
+	QB48_2  s ---*
+	QB48_3  r ---*
+
+	tim1    ! ---+  QB48_1  H
+	3       A<---+
+	QB48_4  A ---+                  QB48_4  // 1
+	QB48    A ---+                  ?QB48   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	iClock  : ---&  QB48_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB48_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB48_4  A
+	IX0.4     ---|
+
+
+	QB48    A ---+  QB48_0  W       QB48    // 1
+
+224	QB49 =	SHSR(aexpr,timExpr,delayExpr,set,                reset,clkSetReset);
+
+	QB49_1  H ---*  QB49    A
+	QB49_2  s ---*
+	QB49_3  r ---*
+
+	tim1    ! ---+  QB49_1  H
+	3       A<---+
+	QB49_4  A ---+                  QB49_4  // 1
+	QB49    A ---+                  ?QB49   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk8    : ---&  QB49_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk8    : ---&  QB49_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB49_4  A
+	IX0.4     ---|
+
+
+	QB49    A ---+  QB49_0  W       QB49    // 1
+
+225	QB50 =	SHSR(aexpr,timExpr,delayExpr,set,                reset,timSetReset);
+
+	QB50_1  H ---*  QB50    A
+	QB50_2  s ---*
+	QB50_3  r ---*
+
+	tim1    ! ---+  QB50_1  H
+	3       A<---+
+	QB50_4  A ---+                  QB50_4  // 1
+	QB50    A ---+                  ?QB50   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	t1m3    ! ---&  QB50_2  s
+	1       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	t1m3    ! ---&  QB50_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB50_4  A
+	IX0.4     ---|
+
+
+	QB50    A ---+  QB50_0  W       QB50    // 1
+
+226	QB51 =	SHSR(aexpr,timExpr,delayExpr,set,                reset,timSetReset,delaySetReset);
+
+	QB51_1  H ---*  QB51    A
+	QB51_2  s ---*
+	QB51_3  r ---*
+
+	tim1    ! ---+  QB51_1  H
+	3       A<---+
+	QB51_4  A ---+                  QB51_4  // 1
+	QB51    A ---+                  ?QB51   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	t1m3    ! ---&  QB51_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	t1m3    ! ---&  QB51_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB51_4  A
+	IX0.4     ---|
+
+
+	QB51    A ---+  QB51_0  W       QB51    // 1
+
+227	QB52 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset);
+
+	QB52_1  H ---*  QB52    A
+	QB52_2  s ---*
+	QB52_3  r ---*
+
+	tim1    ! ---+  QB52_1  H
+	3       A<---+
+	QB52_4  A ---+                  QB52_4  // 1
+	QB52    A ---+                  ?QB52   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB52_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB52_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB52_4  A
+	IX0.4     ---|
+
+
+	QB52    A ---+  QB52_0  W       QB52    // 1
+
+228	QB53 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset,clkReset);
+
+	QB53_1  H ---*  QB53    A
+	QB53_2  s ---*
+	QB53_3  r ---*
+
+	tim1    ! ---+  QB53_1  H
+	3       A<---+
+	QB53_4  A ---+                  QB53_4  // 1
+	QB53    A ---+                  ?QB53   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB53_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk3    : ---&  QB53_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB53_4  A
+	IX0.4     ---|
+
+
+	QB53    A ---+  QB53_0  W       QB53    // 1
+
+229	QB54 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset,timReset);
+
+	QB54_1  H ---*  QB54    A
+	QB54_2  s ---*
+	QB54_3  r ---*
+
+	tim1    ! ---+  QB54_1  H
+	3       A<---+
+	QB54_4  A ---+                  QB54_4  // 1
+	QB54    A ---+                  ?QB54   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB54_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB54_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB54_4  A
+	IX0.4     ---|
+
+
+	QB54    A ---+  QB54_0  W       QB54    // 1
+
+230	QB55 =	SHSR(aexpr,timExpr,delayExpr,set,clkSet,         reset,timReset,delayReset);
+
+	QB55_1  H ---*  QB55    A
+	QB55_2  s ---*
+	QB55_3  r ---*
+
+	tim1    ! ---+  QB55_1  H
+	3       A<---+
+	QB55_4  A ---+                  QB55_4  // 1
+	QB55    A ---+                  ?QB55   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	clk4    : ---&  QB55_2  s
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB55_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB55_4  A
+	IX0.4     ---|
+
+
+	QB55    A ---+  QB55_0  W       QB55    // 1
+
+231	QB56 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset);
+
+	QB56_1  H ---*  QB56    A
+	QB56_2  s ---*
+	QB56_3  r ---*
+
+	tim1    ! ---+  QB56_1  H
+	3       A<---+
+	QB56_4  A ---+                  QB56_4  // 1
+	QB56    A ---+                  ?QB56   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB56_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	iClock  : ---&  QB56_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB56_4  A
+	IX0.4     ---|
+
+
+	QB56    A ---+  QB56_0  W       QB56    // 1
+
+232	QB57 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset,clkReset);
+
+	QB57_1  H ---*  QB57    A
+	QB57_2  s ---*
+	QB57_3  r ---*
+
+	tim1    ! ---+  QB57_1  H
+	3       A<---+
+	QB57_4  A ---+                  QB57_4  // 1
+	QB57    A ---+                  ?QB57   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB57_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	clk3    : ---&  QB57_3  r
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB57_4  A
+	IX0.4     ---|
+
+
+	QB57    A ---+  QB57_0  W       QB57    // 1
+
+233	QB58 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset);
+
+	QB58_1  H ---*  QB58    A
+	QB58_2  s ---*
+	QB58_3  r ---*
+
+	tim1    ! ---+  QB58_1  H
+	3       A<---+
+	QB58_4  A ---+                  QB58_4  // 1
+	QB58    A ---+                  ?QB58   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB58_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB58_3  r
+	1       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB58_4  A
+	IX0.4     ---|
+
+
+	QB58    A ---+  QB58_0  W       QB58    // 1
+
+234	QB59 =	SHSR(aexpr,timExpr,delayExpr,set,timSet,delaySet,reset,timReset,delayReset);
+
+	QB59_1  H ---*  QB59    A
+	QB59_2  s ---*
+	QB59_3  r ---*
+
+	tim1    ! ---+  QB59_1  H
+	3       A<---+
+	QB59_4  A ---+                  QB59_4  // 1
+	QB59    A ---+                  ?QB59   // 2
+	IB16    A ---+                  :IB16   // 3
+	                                ;       // (1)
+
+	tim4    ! ---&  QB59_2  s
+	3       A<---&
+	IX0.3     ---&
+	IX0.4   ~ ---&
+
+	tim3    ! ---&  QB59_3  r
+	3       A<---&
+	IX0.3   ~ ---&
+	IX0.4     ---&
+
+	IX0.3     ---|  QB59_4  A
+	IX0.4     ---|
+
+
+	QB59    A ---+  QB59_0  W       QB59    // 1
+
+235
+236		if (expr)	    { x++; }
+
+
+	_f1_1   F ---{                          // (2)
+
+	iClock  : ---|  _f1_1   F
+	IX0.0     ---|
+
+237		if (expr,clk)	    { x++; }
+
+
+	_f2_1   F ---{                          // (3)
+
+	clk0    : ---|  _f2_1   F
+	IX0.0     ---|
+
+238		if (expr,tim)	    { x++; }
+
+
+	_f3_1   F ---{                          // (4)
+
+	tim0    ! ---|  _f3_1   F
+	1       A<---|
+	IX0.0     ---|
+
+239		if (expr,tim,delay) { x++; }
+
+
+	_f4_1   F ---{                          // (5)
+
+	tim0    ! ---|  _f4_1   F
+	3       A<---|
+	IX0.0     ---|
+
+240		if (expr)	    { x++; } else { x--; }
+
+
+
+	_f5_1   G ---{                          // (6)
+
+	iClock  : ---|  _f5_1   G
+	IX0.0     ---|
+
+241		if (expr,clk)	    { x++; } else { x--; }
+
+
+
+	_f6_1   G ---{                          // (7)
+
+	clk0    : ---|  _f6_1   G
+	IX0.0     ---|
+
+242		if (expr,tim)	    { x++; } else { x--; }
+
+
+
+	_f7_1   G ---{                          // (8)
+
+	tim0    ! ---|  _f7_1   G
+	1       A<---|
+	IX0.0     ---|
+
+243		if (expr,tim,delay) { x++; } else { x--; }
+
+
+
+	_f8_1   G ---{                          // (9)
+
+	tim0    ! ---|  _f8_1   G
+	3       A<---|
+	IX0.0     ---|
+
+244
+245		switch (expr)		{ case 0: x=0; break; default: x++; }
+
+
+	_f9_1   I ---(                          // (10)
+
+	iClock  : ---|  _f9_1   I
+	IX0.0     ---|
+
+246		switch (expr,clk)	{ case 0: x=0; break; default: x++; }
+
+
+	_f10_1  I ---(                          // (11)
+
+	clk0    : ---|  _f10_1  I
+	IX0.0     ---|
+
+247		switch (expr,tim)	{ case 0: x=0; break; default: x++; }
+
+
+	_f11_1  I ---(                          // (12)
+
+	tim0    ! ---|  _f11_1  I
+	1       A<---|
+	IX0.0     ---|
+
+248		switch (expr,tim,delay) { case 0: x=0; break; default: x++; }
+
+
+	_f12_1  I ---(                          // (13)
+
+	tim0    ! ---|  _f12_1  I
+	3       A<---|
+	IX0.0     ---|
+
+249
+250	imm clock clk4 =	CLOCK(set1);
+
+	clk4_1  C ---:  clk4    :
+
+	iClock  : ---|  clk4_1  C
+	IX0.5     ---|
+
+251	imm clock clk5 =	CLOCK(set1,clkSet1);
+
+	clk5_1  C ---:  clk5    :
+
+	clk5    : ---|  clk5_1  C
+	IX0.5     ---|
+
+252	imm clock clk6 =	CLOCK(set1,timSet1);
+
+	clk6_1  C ---:  clk6    :
+
+	t1m0    ! ---|  clk6_1  C
+	1       A<---|
+	IX0.5     ---|
+
+253	imm clock clk7 =	CLOCK(set1,timSet1,delaySet1);
+
+	clk7_1  C ---:  clk7    :
+
+	t1m0    ! ---|  clk7_1  C
+	3       A<---|
+	IX0.5     ---|
+
+254
+255	imm clock clk12 =	CLOCK(set1,set2);
+
+	clk12_1 C ---:  clk12   :
+	clk12_2 C ---:
+
+	iClock  : ---|  clk12_1 C
+	IX0.5     ---|
+
+	iClock  : ---|  clk12_2 C
+	IX0.6     ---|
+
+256	imm clock clk13 =	CLOCK(set1,set2,clkSet1Set2);
+
+	clk13_1 C ---:  clk13   :
+	clk13_2 C ---:
+
+	clk6    : ---|  clk13_1 C
+	IX0.5     ---|
+
+	clk6    : ---|  clk13_2 C
+	IX0.6     ---|
+
+257	imm clock clk14 =	CLOCK(set1,set2,timSet1Set2);
+
+	clk14_1 C ---:  clk14   :
+	clk14_2 C ---:
+
+	t1m1    ! ---|  clk14_1 C
+	1       A<---|
+	IX0.5     ---|
+
+	t1m1    ! ---|  clk14_2 C
+	1       A<---|
+	IX0.6     ---|
+
+258	imm clock clk15 =	CLOCK(set1,set2,timSet1Set2,delaySet1Set2);
+
+	clk15_1 C ---:  clk15   :
+	clk15_2 C ---:
+
+	t1m1    ! ---|  clk15_1 C
+	3       A<---|
+	IX0.5     ---|
+
+	t1m1    ! ---|  clk15_2 C
+	3       A<---|
+	IX0.6     ---|
+
+259
+260	imm clock clk24 =	CLOCK(set1,clkSet1,          set2);
+
+	clk24_1 C ---:  clk24   :
+	clk24_2 C ---:
+
+	clk5    : ---|  clk24_1 C
+	IX0.5     ---|
+
+	iClock  : ---|  clk24_2 C
+	IX0.6     ---|
+
+261	imm clock clk25 =	CLOCK(set1,clkSet1,          set2,clkSet2);
+
+	clk25_1 C ---:  clk25   :
+	clk25_2 C ---:
+
+	clk5    : ---|  clk25_1 C
+	IX0.5     ---|
+
+	clk7    : ---|  clk25_2 C
+	IX0.6     ---|
+
+262	imm clock clk26 =	CLOCK(set1,clkSet1,          set2,timSet2);
+
+	clk26_1 C ---:  clk26   :
+	clk26_2 C ---:
+
+	clk5    : ---|  clk26_1 C
+	IX0.5     ---|
+
+	t1m2    ! ---|  clk26_2 C
+	1       A<---|
+	IX0.6     ---|
+
+263	imm clock clk27 =	CLOCK(set1,clkSet1,          set2,timSet2,delaySet2);
+
+	clk27_1 C ---:  clk27   :
+	clk27_2 C ---:
+
+	clk5    : ---|  clk27_1 C
+	IX0.5     ---|
+
+	t1m2    ! ---|  clk27_2 C
+	3       A<---|
+	IX0.6     ---|
+
+264	imm clock clk28 =	CLOCK(set1,timSet1,delaySet1,set2);
+
+	clk28_1 C ---:  clk28   :
+	clk28_2 C ---:
+
+	t1m0    ! ---|  clk28_1 C
+	3       A<---|
+	IX0.5     ---|
+
+	iClock  : ---|  clk28_2 C
+	IX0.6     ---|
+
+265	imm clock clk29 =	CLOCK(set1,timSet1,delaySet1,set2,clkSet2);
+
+	clk29_1 C ---:  clk29   :
+	clk29_2 C ---:
+
+	t1m0    ! ---|  clk29_1 C
+	3       A<---|
+	IX0.5     ---|
+
+	clk7    : ---|  clk29_2 C
+	IX0.6     ---|
+
+266	imm clock clk30 =	CLOCK(set1,timSet1,delaySet1,set2,timSet2);
+
+	clk30_1 C ---:  clk30   :
+	clk30_2 C ---:
+
+	t1m0    ! ---|  clk30_1 C
+	3       A<---|
+	IX0.5     ---|
+
+	t1m2    ! ---|  clk30_2 C
+	1       A<---|
+	IX0.6     ---|
+
+267	imm clock clk31 =	CLOCK(set1,timSet1,delaySet1,set2,timSet2,delaySet2);
+
+	clk31_1 C ---:  clk31   :
+	clk31_2 C ---:
+
+	t1m0    ! ---|  clk31_1 C
+	3       A<---|
+	IX0.5     ---|
+
+	t1m2    ! ---|  clk31_2 C
+	3       A<---|
+	IX0.6     ---|
+
+268
+269	imm timer tim4 =	TIMER(set1);
+
+	tim4_1  T ---!  tim4    !
+
+	iClock  : ---|  tim4_1  T
+	IX0.5     ---|
+
+270	imm timer tim5 =	TIMER(set1,clkSet1);
+
+	tim5_1  T ---!  tim5    !
+
+	clk5    : ---|  tim5_1  T
+	IX0.5     ---|
+
+271	imm timer tim6 =	TIMER(set1,timSet1);
+
+	tim6_1  T ---!  tim6    !
+
+	t1m0    ! ---|  tim6_1  T
+	1       A<---|
+	IX0.5     ---|
+
+272	imm timer tim7 =	TIMER(set1,timSet1,delaySet1);
+
+	tim7_1  T ---!  tim7    !
+
+	t1m0    ! ---|  tim7_1  T
+	3       A<---|
+	IX0.5     ---|
+
+273
+274	imm timer tim12 =	TIMER(set1,set2);
+
+	tim12_1 T ---!  tim12   !
+	tim12_2 T ---!
+
+	iClock  : ---|  tim12_1 T
+	IX0.5     ---|
+
+	iClock  : ---|  tim12_2 T
+	IX0.6     ---|
+
+275	imm timer tim13 =	TIMER(set1,set2,clkSet1Set2);
+
+	tim13_1 T ---!  tim13   !
+	tim13_2 T ---!
+
+	clk6    : ---|  tim13_1 T
+	IX0.5     ---|
+
+	clk6    : ---|  tim13_2 T
+	IX0.6     ---|
+
+276	imm timer tim14 =	TIMER(set1,set2,timSet1Set2);
+
+	tim14_1 T ---!  tim14   !
+	tim14_2 T ---!
+
+	t1m1    ! ---|  tim14_1 T
+	1       A<---|
+	IX0.5     ---|
+
+	t1m1    ! ---|  tim14_2 T
+	1       A<---|
+	IX0.6     ---|
+
+277	imm timer tim15 =	TIMER(set1,set2,timSet1Set2,delaySet1Set2);
+
+	tim15_1 T ---!  tim15   !
+	tim15_2 T ---!
+
+	t1m1    ! ---|  tim15_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	t1m1    ! ---|  tim15_2 T
+	3       A<---|
+	IX0.6     ---|
+
+278
+279	imm timer tim24 =	TIMER(set1,clkSet1,          set2);
+
+	tim24_1 T ---!  tim24   !
+	tim24_2 T ---!
+
+	clk5    : ---|  tim24_1 T
+	IX0.5     ---|
+
+	iClock  : ---|  tim24_2 T
+	IX0.6     ---|
+
+280	imm timer tim25 =	TIMER(set1,clkSet1,          set2,clkSet2);
+
+	tim25_1 T ---!  tim25   !
+	tim25_2 T ---!
+
+	clk5    : ---|  tim25_1 T
+	IX0.5     ---|
+
+	clk7    : ---|  tim25_2 T
+	IX0.6     ---|
+
+281	imm timer tim26 =	TIMER(set1,clkSet1,          set2,timSet2);
+
+	tim26_1 T ---!  tim26   !
+	tim26_2 T ---!
+
+	clk5    : ---|  tim26_1 T
+	IX0.5     ---|
+
+	t1m2    ! ---|  tim26_2 T
+	1       A<---|
+	IX0.6     ---|
+
+282	imm timer tim27 =	TIMER(set1,clkSet1,          set2,timSet2,delaySet2);
+
+	tim27_1 T ---!  tim27   !
+	tim27_2 T ---!
+
+	clk5    : ---|  tim27_1 T
+	IX0.5     ---|
+
+	t1m2    ! ---|  tim27_2 T
+	3       A<---|
+	IX0.6     ---|
+
+283	imm timer tim28 =	TIMER(set1,timSet1,delaySet1,set2);
+
+	tim28_1 T ---!  tim28   !
+	tim28_2 T ---!
+
+	t1m0    ! ---|  tim28_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	iClock  : ---|  tim28_2 T
+	IX0.6     ---|
+
+284	imm timer tim29 =	TIMER(set1,timSet1,delaySet1,set2,clkSet2);
+
+	tim29_1 T ---!  tim29   !
+	tim29_2 T ---!
+
+	t1m0    ! ---|  tim29_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	clk7    : ---|  tim29_2 T
+	IX0.6     ---|
+
+285	imm timer tim30 =	TIMER(set1,timSet1,delaySet1,set2,timSet2);
+
+	tim30_1 T ---!  tim30   !
+	tim30_2 T ---!
+
+	t1m0    ! ---|  tim30_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	t1m2    ! ---|  tim30_2 T
+	1       A<---|
+	IX0.6     ---|
+
+286	imm timer tim31 =	TIMER(set1,timSet1,delaySet1,set2,timSet2,delaySet2);
+
+	tim31_1 T ---!  tim31   !
+	tim31_2 T ---!
+
+	t1m0    ! ---|  tim31_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	t1m2    ! ---|  tim31_2 T
+	3       A<---|
+	IX0.6     ---|
+
+287
+288	imm timer t1m16 =	TIMER1(set1);
+
+	t1m16_1 T ---!  t1m16   !1
+
+	iClock  : ---|  t1m16_1 T
+	IX0.5     ---|
+
+289	imm timer t1m17 =	TIMER1(set1,                  set2);
+
+	t1m17_1 T ---!  t1m17   !1
+	t1m17_2 T ---!
+
+	iClock  : ---|  t1m17_1 T
+	IX0.5     ---|
+
+	iClock  : ---|  t1m17_2 T
+	IX0.6     ---|
+
+290	imm timer t1m18 =	TIMER1(set1,                  set2,clkSet1Set2);
+
+	t1m18_1 T ---!  t1m18   !1
+	t1m18_2 T ---!
+
+	clk6    : ---|  t1m18_1 T
+	IX0.5     ---|
+
+	clk6    : ---|  t1m18_2 T
+	IX0.6     ---|
+
+291	imm timer t1m19 =	TIMER1(set1,                  set2,timSet1Set2);
+
+	t1m19_1 T ---!  t1m19   !1
+	t1m19_2 T ---!
+
+	t1m1    ! ---|  t1m19_1 T
+	1       A<---|
+	IX0.5     ---|
+
+	t1m1    ! ---|  t1m19_2 T
+	1       A<---|
+	IX0.6     ---|
+
+292	imm timer t1m20 =	TIMER1(set1,                  set2,timSet1Set2,delaySet1Set2);
+
+	t1m20_1 T ---!  t1m20   !1
+	t1m20_2 T ---!
+
+	t1m1    ! ---|  t1m20_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	t1m1    ! ---|  t1m20_2 T
+	3       A<---|
+	IX0.6     ---|
+
+293	imm timer t1m21 =	TIMER1(set1,clkSet1);
+
+	t1m21_1 T ---!  t1m21   !1
+
+	clk5    : ---|  t1m21_1 T
+	IX0.5     ---|
+
+294	imm timer t1m22 =	TIMER1(set1,clkSet1,          set2);
+
+	t1m22_1 T ---!  t1m22   !1
+	t1m22_2 T ---!
+
+	clk5    : ---|  t1m22_1 T
+	IX0.5     ---|
+
+	iClock  : ---|  t1m22_2 T
+	IX0.6     ---|
+
+295	imm timer t1m23 =	TIMER1(set1,clkSet1,          set2,clkSet2);
+
+	t1m23_1 T ---!  t1m23   !1
+	t1m23_2 T ---!
+
+	clk5    : ---|  t1m23_1 T
+	IX0.5     ---|
+
+	clk7    : ---|  t1m23_2 T
+	IX0.6     ---|
+
+296	imm timer t1m24 =	TIMER1(set1,clkSet1,          set2,timSet2);
+
+	t1m24_1 T ---!  t1m24   !1
+	t1m24_2 T ---!
+
+	clk5    : ---|  t1m24_1 T
+	IX0.5     ---|
+
+	t1m2    ! ---|  t1m24_2 T
+	1       A<---|
+	IX0.6     ---|
+
+297	imm timer t1m25 =	TIMER1(set1,clkSet1,          set2,timSet2,delaySet2);
+
+	t1m25_1 T ---!  t1m25   !1
+	t1m25_2 T ---!
+
+	clk5    : ---|  t1m25_1 T
+	IX0.5     ---|
+
+	t1m2    ! ---|  t1m25_2 T
+	3       A<---|
+	IX0.6     ---|
+
+298	imm timer t1m26 =	TIMER1(set1,timSet1);
+
+	t1m26_1 T ---!  t1m26   !1
+
+	t1m0    ! ---|  t1m26_1 T
+	1       A<---|
+	IX0.5     ---|
+
+299	imm timer t1m27 =	TIMER1(set1,timSet1,delaySet1);
+
+	t1m27_1 T ---!  t1m27   !1
+
+	t1m0    ! ---|  t1m27_1 T
+	3       A<---|
+	IX0.5     ---|
+
+300	imm timer t1m28 =	TIMER1(set1,timSet1,delaySet1,set2);
+
+	t1m28_1 T ---!  t1m28   !1
+	t1m28_2 T ---!
+
+	t1m0    ! ---|  t1m28_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	iClock  : ---|  t1m28_2 T
+	IX0.6     ---|
+
+301	imm timer t1m29 =	TIMER1(set1,timSet1,delaySet1,set2,clkSet2);
+
+	t1m29_1 T ---!  t1m29   !1
+	t1m29_2 T ---!
+
+	t1m0    ! ---|  t1m29_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	clk7    : ---|  t1m29_2 T
+	IX0.6     ---|
+
+302	imm timer t1m30 =	TIMER1(set1,timSet1,delaySet1,set2,timSet2);
+
+	t1m30_1 T ---!  t1m30   !1
+	t1m30_2 T ---!
+
+	t1m0    ! ---|  t1m30_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	t1m2    ! ---|  t1m30_2 T
+	1       A<---|
+	IX0.6     ---|
+
+303	imm timer t1m31 =	TIMER1(set1,timSet1,delaySet1,set2,timSet2,delaySet2);
+
+	t1m31_1 T ---!  t1m31   !1
+	t1m31_2 T ---!
+
+	t1m0    ! ---|  t1m31_1 T
+	3       A<---|
+	IX0.5     ---|
+
+	t1m2    ! ---|  t1m31_2 T
+	3       A<---|
+	IX0.6     ---|
+
+******* C CODE          ************************
+
+001
+002	    static int x = 0;
+003
+	#line 139 "init_t.ic"	/* in pre-compiled function block SHR */
+139	(1) 	return iC_MV(1)?iC_MV(2):iC_MV(3);
+	#line 236 "./Test0/compTest2a.ic"
+236	(2) { x++; }
+
+237	(3) { x++; }
+
+238	(4) { x++; }
+
+239	(5) { x++; }
+
+240	(6) { x++; }
+
+240	    { x--; }
+
+241	(7) { x++; }
+
+241	    { x--; }
+
+242	(8) { x++; }
+
+242	    { x--; }
+
+243	(9) { x++; }
+
+243	    { x--; }
+
+245	(10) { case 0: x=0; break; default: x++; }
+
+246	(11) { case 0: x=0; break; default: x++; }
+
+247	(12) { case 0: x=0; break; default: x++; }
+
+248	(13) { case 0: x=0; break; default: x++; }
+
+******* NET TOPOLOGY    ************************
+
+1              =  A <QX0.6_1|  <QX1.2_2|  <QX1.2_1|  <QX1.6_2|  <QX2.2_2|  <QX2.6_3&  <QX2.6_2&  <QX2.6_1|
+                    <QX3.2_3&  <QX3.2_2&  <QX3.6_3&  <QX4.2_3&  <QX4.6_3&  <QX4.6_2&  <QX5.2_3&  <QX5.6_3&
+                    <QX6.2_1|  <QX6.6_1|  <QX7.5_1%  <QX8.2_2|  <QX8.2_1|  <QX8.6_2|  <QX9.2_2|  <QX9.6_2&
+                    <QX9.6_1&  <QX10.2_2& <QX10.6_2& <QX11.2_2| <QX11.5_2| <QX12.0_2| <QX12.4_3| <QX12.7_3|
+                    <QX13.2_3| <QX13.6_3| <QX14.1_3| <QX14.4_3| <QX15.0_3| <QX15.3_3| <QX15.6_3| <QB18_1+
+                    <QB22_2|   <QB22_1+   <QB26_2|   <QB30_2|   <QB34_3&   <QB34_2&   <QB34_1+   <QB38_3&
+                    <QB38_2&   <QB42_3&   <QB46_3&   <QB50_3&   <QB50_2&   <QB54_3&   <QB58_3&   <_f3_1|
+                    <_f7_1|    <_f11_1|   <clk6_1|   <clk14_2|  <clk14_1|  <clk26_2|  <clk30_2|  <tim6_1|
+                    <tim14_2|  <tim14_1|  <tim26_2|  <tim30_2|  <t1m19_2|  <t1m19_1|  <t1m24_2|  <t1m26_1|
+                    <t1m30_2|
+3              =  A <QX0.7_1|  <QX1.3_2|  <QX1.3_1|  <QX1.7_2|  <QX2.0_1|  <QX2.1_1|  <QX2.2_1|  <QX2.3_2|
+                    <QX2.3_1|  <QX2.7_3&  <QX2.7_2&  <QX2.7_1|  <QX3.3_3&  <QX3.3_2&  <QX3.7_3&  <QX4.0_2&
+                    <QX4.1_2&  <QX4.2_2&  <QX4.3_3&  <QX4.3_2&  <QX4.4_1|  <QX4.5_1|  <QX4.6_1|  <QX4.7_3&
+                    <QX4.7_2&  <QX4.7_1|  <QX5.0_1|  <QX5.1_1|  <QX5.2_1|  <QX5.3_3&  <QX5.3_1|  <QX5.4_2&
+                    <QX5.4_1|  <QX5.5_2&  <QX5.5_1|  <QX5.6_2&  <QX5.6_1|  <QX5.7_3&  <QX5.7_2&  <QX5.7_1|
+                    <QX6.3_1|  <QX6.7_1|  <QX7.7_1%  <QX8.3_2|  <QX8.3_1|  <QX8.7_2|  <QX9.0_1|  <QX9.1_1|
+                    <QX9.2_1|  <QX9.3_2|  <QX9.3_1|  <QX9.7_2&  <QX9.7_1&  <QX10.3_2& <QX10.4_1& <QX10.5_1&
+                    <QX10.6_1& <QX10.7_2& <QX10.7_1& <QX11.3_2| <QX11.6_2| <QX11.7_1| <QX12.0_1| <QX12.1_2|
+                    <QX12.1_1| <QX12.5_3| <QX13.0_3| <QX13.1_2| <QX13.1_1| <QX13.2_2| <QX13.2_1| <QX13.3_3|
+                    <QX13.3_2| <QX13.3_1| <QX13.7_3| <QX14.2_3| <QX14.3_2| <QX14.4_2| <QX14.5_3| <QX14.5_2|
+                    <QX14.6_1| <QX14.7_1| <QX15.0_1| <QX15.1_3| <QX15.1_1| <QX15.2_1| <QX15.3_1| <QX15.4_3|
+                    <QX15.4_1| <QX15.5_2| <QX15.5_1| <QX15.6_2| <QX15.6_1| <QX15.7_3| <QX15.7_2| <QX15.7_1|
+                    <QB19_1+   <QB23_2|   <QB23_1+   <QB27_2|   <QB28_1+   <QB29_1+   <QB30_1+   <QB31_2|
+                    <QB31_1+   <QB35_3&   <QB35_2&   <QB35_1+   <QB39_3&   <QB39_2&   <QB43_3&   <QB44_2&
+                    <QB45_2&   <QB46_2&   <QB47_3&   <QB47_2&   <QB48_1+   <QB49_1+   <QB50_1+   <QB51_3&
+                    <QB51_2&   <QB51_1+   <QB52_1+   <QB53_1+   <QB54_1+   <QB55_3&   <QB55_1+   <QB56_2&
+                    <QB56_1+   <QB57_2&   <QB57_1+   <QB58_2&   <QB58_1+   <QB59_3&   <QB59_2&   <QB59_1+
+                    <_f4_1|    <_f8_1|    <_f12_1|   <clk7_1|   <clk15_2|  <clk15_1|  <clk27_2|  <clk28_1|
+                    <clk29_1|  <clk30_1|  <clk31_2|  <clk31_1|  <tim7_1|   <tim15_2|  <tim15_1|  <tim27_2|
+                    <tim28_1|  <tim29_1|  <tim30_1|  <tim31_2|  <tim31_1|  <t1m20_2|  <t1m20_1|  <t1m25_2|
+                    <t1m27_1|  <t1m28_1|  <t1m29_1|  <t1m30_1|  <t1m31_2|  <t1m31_1|
+DSR_10_i       |     QX3.5_5& ~QX3.5_4&
+DSR_11_i       |     QX3.6_5& ~QX3.6_4&
+DSR_12_i       |     QX3.7_5& ~QX3.7_4&
+DSR_13_i       |     QX4.0_5& ~QX4.0_4&
+DSR_14_i       |     QX4.1_5& ~QX4.1_4&
+DSR_15_i       |     QX4.2_5& ~QX4.2_4&
+DSR_16_i       |     QX4.3_5& ~QX4.3_4&
+DSR_17_i       |     QX4.4_5& ~QX4.4_4&
+DSR_18_i       |     QX4.5_5& ~QX4.5_4&
+DSR_19_i       |     QX4.6_5& ~QX4.6_4&
+DSR_1_i        |     QX2.4_5& ~QX2.4_4&
+DSR_20_i       |     QX4.7_5& ~QX4.7_4&
+DSR_21_i       |     QX5.0_5& ~QX5.0_4&
+DSR_22_i       |     QX5.1_5& ~QX5.1_4&
+DSR_23_i       |     QX5.2_5& ~QX5.2_4&
+DSR_24_i       |     QX5.3_5& ~QX5.3_4&
+DSR_25_i       |     QX5.4_5& ~QX5.4_4&
+DSR_26_i       |     QX5.5_5& ~QX5.5_4&
+DSR_27_i       |     QX5.6_5& ~QX5.6_4&
+DSR_28_i       |     QX5.7_5& ~QX5.7_4&
+DSR_2_i        |     QX2.5_5& ~QX2.5_4&
+DSR_3_i        |     QX2.6_5& ~QX2.6_4&
+DSR_4_i        |     QX2.7_5& ~QX2.7_4&
+DSR_5_i        |     QX3.0_5& ~QX3.0_4&
+DSR_6_i        |     QX3.1_5& ~QX3.1_4&
+DSR_7_i        |     QX3.2_5& ~QX3.2_4&
+DSR_8_i        |     QX3.3_5& ~QX3.3_4&
+DSR_9_i        |     QX3.4_5& ~QX3.4_4&
+IB16           [  A  QB16_1+  QB17_1+  QB18_1+  QB19_1+  QB20_1+  QB21_1+  QB22_1+  QB23_1+
+                     QB24_1+  QB25_1+  QB26_1+  QB27_1+  QB28_1+  QB29_1+  QB30_1+  QB31_1+
+                     QB32_1+  QB33_1+  QB34_1+  QB35_1+  QB36_1+  QB37_1+  QB38_1+  QB39_1+
+                     QB40_1+  QB41_1+  QB42_1+  QB43_1+  QB44_1+  QB45_1+  QB46_1+  QB47_1+
+                     QB48_1+  QB49_1+  QB50_1+  QB51_1+  QB52_1+  QB53_1+  QB54_1+  QB55_1+
+                     QB56_1+  QB57_1+  QB58_1+  QB59_1+
+IX0.0          <     QX0.3%    QX0.4_1|  QX0.5_1|  QX0.6_1|  QX0.7_1|  QX1.0_3&  QX1.1_3&  QX1.2_3&
+                     QX1.3_3&  QX1.4_3&  QX1.5_3&  QX1.6_3&  QX1.7_3&  QX2.0_3&  QX2.1_3&  QX2.2_3&
+                     QX2.3_3&  QX2.4_4&  QX2.5_4&  QX2.6_4&  QX2.7_4&  QX3.0_4&  QX3.1_4&  QX3.2_4&
+                     QX3.3_4&  QX3.4_4&  QX3.5_4&  QX3.6_4&  QX3.7_4&  QX4.0_4&  QX4.1_4&  QX4.2_4&
+                     QX4.3_4&  QX4.4_4&  QX4.5_4&  QX4.6_4&  QX4.7_4&  QX5.0_4&  QX5.1_4&  QX5.2_4&
+                     QX5.3_4&  QX5.4_4&  QX5.5_4&  QX5.6_4&  QX5.7_4&  QX6.0_1|  QX6.1_1|  QX6.2_1|
+                     QX6.3_1|  QX6.4_1|  QX6.5_1|  QX6.6_1|  QX6.7_1|  _f1_1|    _f2_1|    _f3_1|
+                     _f4_1|    _f5_1|    _f6_1|    _f7_1|    _f8_1|    _f9_1|    _f10_1|   _f11_1|
+                     _f12_1|
+IX0.1          <     QX0.3%
+IX0.2          <    ~QX0.3%
+IX0.3          <     QX0.1%     DSR_1_i|  ~QX2.4_3&   QX2.4_2&   DSR_2_i|  ~QX2.5_3&   QX2.5_2&   DSR_3_i|
+                    ~QX2.6_3&   QX2.6_2&   DSR_4_i|  ~QX2.7_3&   QX2.7_2&   DSR_5_i|  ~QX3.0_3&   QX3.0_2&
+                     DSR_6_i|  ~QX3.1_3&   QX3.1_2&   DSR_7_i|  ~QX3.2_3&   QX3.2_2&   DSR_8_i|  ~QX3.3_3&
+                     QX3.3_2&   DSR_9_i|  ~QX3.4_3&   QX3.4_2&   DSR_10_i| ~QX3.5_3&   QX3.5_2&   DSR_11_i|
+                    ~QX3.6_3&   QX3.6_2&   DSR_12_i| ~QX3.7_3&   QX3.7_2&   DSR_13_i| ~QX4.0_3&   QX4.0_2&
+                     DSR_14_i| ~QX4.1_3&   QX4.1_2&   DSR_15_i| ~QX4.2_3&   QX4.2_2&   DSR_16_i| ~QX4.3_3&
+                     QX4.3_2&   DSR_17_i| ~QX4.4_3&   QX4.4_2&   DSR_18_i| ~QX4.5_3&   QX4.5_2&   DSR_19_i|
+                    ~QX4.6_3&   QX4.6_2&   DSR_20_i| ~QX4.7_3&   QX4.7_2&   DSR_21_i| ~QX5.0_3&   QX5.0_2&
+                     DSR_22_i| ~QX5.1_3&   QX5.1_2&   DSR_23_i| ~QX5.2_3&   QX5.2_2&   DSR_24_i| ~QX5.3_3&
+                     QX5.3_2&   DSR_25_i| ~QX5.4_3&   QX5.4_2&   DSR_26_i| ~QX5.5_3&   QX5.5_2&   DSR_27_i|
+                    ~QX5.6_3&   QX5.6_2&   DSR_28_i| ~QX5.7_3&   QX5.7_2&   QX7.4_1%   QX7.5_1%   QX7.6_1%
+                     QX7.7_1%   QX8.0_1|   QX8.1_1|   QX8.2_1|   QX8.3_1|   QX8.4_1|   QX8.5_1|   QX8.6_1|
+                     QX8.7_1|   QX9.0_1|   QX9.1_1|   QX9.2_1|   QX9.3_1|   QX9.4_1&   QX9.5_1&   QX9.6_1&
+                     QX9.7_1&   QX10.0_1&  QX10.1_1&  QX10.2_1&  QX10.3_1&  QX10.4_1&  QX10.5_1&  QX10.6_1&
+                     QX10.7_1&  QX11.0_1|  QX11.1_1|  QX11.2_1|  QX11.3_1|  QX11.4_1|  QX11.5_1|  QX11.6_1|
+                     QX11.7_1|  QX12.0_1|  QX12.1_1|  QX12.2_1|  QX12.3_1|  QX12.4_1|  QX12.5_1|  QX12.6_1|
+                     QX12.7_1|  QX13.0_1|  QX13.1_1|  QX13.2_1|  QX13.3_1|  QX13.4_1|  QX13.5_1|  QX13.6_1|
+                     QX13.7_1|  QX14.0_1|  QX14.1_1|  QX14.2_1|  QX14.3_1|  QX14.4_1|  QX14.5_1|  QX14.6_1|
+                     QX14.7_1|  QX15.0_1|  QX15.1_1|  QX15.2_1|  QX15.3_1|  QX15.4_1|  QX15.5_1|  QX15.6_1|
+                     QX15.7_1| ~QB32_3&    QB32_2&    QB32_4|   ~QB33_3&    QB33_2&    QB33_4|   ~QB34_3&
+                     QB34_2&    QB34_4|   ~QB35_3&    QB35_2&    QB35_4|   ~QB36_3&    QB36_2&    QB36_4|
+                    ~QB37_3&    QB37_2&    QB37_4|   ~QB38_3&    QB38_2&    QB38_4|   ~QB39_3&    QB39_2&
+                     QB39_4|   ~QB40_3&    QB40_2&    QB40_4|   ~QB41_3&    QB41_2&    QB41_4|   ~QB42_3&
+                     QB42_2&    QB42_4|   ~QB43_3&    QB43_2&    QB43_4|   ~QB44_3&    QB44_2&    QB44_4|
+                    ~QB45_3&    QB45_2&    QB45_4|   ~QB46_3&    QB46_2&    QB46_4|   ~QB47_3&    QB47_2&
+                     QB47_4|   ~QB48_3&    QB48_2&    QB48_4|   ~QB49_3&    QB49_2&    QB49_4|   ~QB50_3&
+                     QB50_2&    QB50_4|   ~QB51_3&    QB51_2&    QB51_4|   ~QB52_3&    QB52_2&    QB52_4|
+                    ~QB53_3&    QB53_2&    QB53_4|   ~QB54_3&    QB54_2&    QB54_4|   ~QB55_3&    QB55_2&
+                     QB55_4|   ~QB56_3&    QB56_2&    QB56_4|   ~QB57_3&    QB57_2&    QB57_4|   ~QB58_3&
+                     QB58_2&    QB58_4|   ~QB59_3&    QB59_2&    QB59_4|
+IX0.4          <    ~QX0.1%     QX1.0_2|   QX1.0_4&  ~QX1.0_3&   QX1.1_2|   QX1.1_4&  ~QX1.1_3&   QX1.2_2|
+                     QX1.2_4&  ~QX1.2_3&   QX1.3_2|   QX1.3_4&  ~QX1.3_3&   QX1.4_2|   QX1.4_4&  ~QX1.4_3&
+                     QX1.5_2|   QX1.5_4&  ~QX1.5_3&   QX1.6_2|   QX1.6_4&  ~QX1.6_3&   QX1.7_2|   QX1.7_4&
+                    ~QX1.7_3&   QX2.0_2|   QX2.0_4&  ~QX2.0_3&   QX2.1_2|   QX2.1_4&  ~QX2.1_3&   QX2.2_2|
+                     QX2.2_4&  ~QX2.2_3&   QX2.3_2|   QX2.3_4&  ~QX2.3_3&   DSR_1_i|   QX2.4_3&  ~QX2.4_2&
+                     DSR_2_i|   QX2.5_3&  ~QX2.5_2&   DSR_3_i|   QX2.6_3&  ~QX2.6_2&   DSR_4_i|   QX2.7_3&
+                    ~QX2.7_2&   DSR_5_i|   QX3.0_3&  ~QX3.0_2&   DSR_6_i|   QX3.1_3&  ~QX3.1_2&   DSR_7_i|
+                     QX3.2_3&  ~QX3.2_2&   DSR_8_i|   QX3.3_3&  ~QX3.3_2&   DSR_9_i|   QX3.4_3&  ~QX3.4_2&
+                     DSR_10_i|  QX3.5_3&  ~QX3.5_2&   DSR_11_i|  QX3.6_3&  ~QX3.6_2&   DSR_12_i|  QX3.7_3&
+                    ~QX3.7_2&   DSR_13_i|  QX4.0_3&  ~QX4.0_2&   DSR_14_i|  QX4.1_3&  ~QX4.1_2&   DSR_15_i|
+                     QX4.2_3&  ~QX4.2_2&   DSR_16_i|  QX4.3_3&  ~QX4.3_2&   DSR_17_i|  QX4.4_3&  ~QX4.4_2&
+                     DSR_18_i|  QX4.5_3&  ~QX4.5_2&   DSR_19_i|  QX4.6_3&  ~QX4.6_2&   DSR_20_i|  QX4.7_3&
+                    ~QX4.7_2&   DSR_21_i|  QX5.0_3&  ~QX5.0_2&   DSR_22_i|  QX5.1_3&  ~QX5.1_2&   DSR_23_i|
+                     QX5.2_3&  ~QX5.2_2&   DSR_24_i|  QX5.3_3&  ~QX5.3_2&   DSR_25_i|  QX5.4_3&  ~QX5.4_2&
+                     DSR_26_i|  QX5.5_3&  ~QX5.5_2&   DSR_27_i|  QX5.6_3&  ~QX5.6_2&   DSR_28_i|  QX5.7_3&
+                    ~QX5.7_2&  ~QX7.4_1%  ~QX7.5_1%  ~QX7.6_1%  ~QX7.7_1%   QX8.0_2|   QX8.1_2|   QX8.2_2|
+                     QX8.3_2|   QX8.4_2|   QX8.5_2|   QX8.6_2|   QX8.7_2|   QX9.0_2|   QX9.1_2|   QX9.2_2|
+                     QX9.3_2|   QX9.4_2&   QX9.5_2&   QX9.6_2&   QX9.7_2&   QX10.0_2&  QX10.1_2&  QX10.2_2&
+                     QX10.3_2&  QX10.4_2&  QX10.5_2&  QX10.6_2&  QX10.7_2&  QX12.2_2|  QX12.3_2|  QX12.4_2|
+                     QX12.5_2|  QX12.6_2|  QX12.7_2|  QX13.0_2|  QX13.1_2|  QX13.2_2|  QX13.3_2|  QX13.4_2|
+                     QX13.5_2|  QX13.6_2|  QX13.7_2|  QX14.0_2|  QX14.1_2|  QX14.2_2|  QX14.3_2|  QX14.4_2|
+                     QX14.5_2|  QX14.6_2|  QX14.7_2|  QX15.0_2|  QX15.1_2|  QX15.2_2|  QX15.3_2|  QX15.4_2|
+                     QX15.5_2|  QX15.6_2|  QX15.7_2|  QB20_2|    QB20_3|    QB21_2|    QB21_3|    QB22_2|
+                     QB22_3|    QB23_2|    QB23_3|    QB24_2|    QB24_3|    QB25_2|    QB25_3|    QB26_2|
+                     QB26_3|    QB27_2|    QB27_3|    QB28_2|    QB28_3|    QB29_2|    QB29_3|    QB30_2|
+                     QB30_3|    QB31_2|    QB31_3|    QB32_3&   ~QB32_2&    QB32_4|    QB33_3&   ~QB33_2&
+                     QB33_4|    QB34_3&   ~QB34_2&    QB34_4|    QB35_3&   ~QB35_2&    QB35_4|    QB36_3&
+                    ~QB36_2&    QB36_4|    QB37_3&   ~QB37_2&    QB37_4|    QB38_3&   ~QB38_2&    QB38_4|
+                     QB39_3&   ~QB39_2&    QB39_4|    QB40_3&   ~QB40_2&    QB40_4|    QB41_3&   ~QB41_2&
+                     QB41_4|    QB42_3&   ~QB42_2&    QB42_4|    QB43_3&   ~QB43_2&    QB43_4|    QB44_3&
+                    ~QB44_2&    QB44_4|    QB45_3&   ~QB45_2&    QB45_4|    QB46_3&   ~QB46_2&    QB46_4|
+                     QB47_3&   ~QB47_2&    QB47_4|    QB48_3&   ~QB48_2&    QB48_4|    QB49_3&   ~QB49_2&
+                     QB49_4|    QB50_3&   ~QB50_2&    QB50_4|    QB51_3&   ~QB51_2&    QB51_4|    QB52_3&
+                    ~QB52_2&    QB52_4|    QB53_3&   ~QB53_2&    QB53_4|    QB54_3&   ~QB54_2&    QB54_4|
+                     QB55_3&   ~QB55_2&    QB55_4|    QB56_3&   ~QB56_2&    QB56_4|    QB57_3&   ~QB57_2&
+                     QB57_4|    QB58_3&   ~QB58_2&    QB58_4|    QB59_3&   ~QB59_2&    QB59_4|
+IX0.5          <     clk4_1|   clk5_1|   clk6_1|   clk7_1|   clk12_1|  clk13_1|  clk14_1|  clk15_1|
+                     clk24_1|  clk25_1|  clk26_1|  clk27_1|  clk28_1|  clk29_1|  clk30_1|  clk31_1|
+                     tim4_1|   tim5_1|   tim6_1|   tim7_1|   tim12_1|  tim13_1|  tim14_1|  tim15_1|
+                     tim24_1|  tim25_1|  tim26_1|  tim27_1|  tim28_1|  tim29_1|  tim30_1|  tim31_1|
+                     t1m16_1|  t1m17_1|  t1m18_1|  t1m19_1|  t1m20_1|  t1m21_1|  t1m22_1|  t1m23_1|
+                     t1m24_1|  t1m25_1|  t1m26_1|  t1m27_1|  t1m28_1|  t1m29_1|  t1m30_1|  t1m31_1|
+IX0.6          <     clk12_2|  clk13_2|  clk14_2|  clk15_2|  clk24_2|  clk25_2|  clk26_2|  clk27_2|
+                     clk28_2|  clk29_2|  clk30_2|  clk31_2|  tim12_2|  tim13_2|  tim14_2|  tim15_2|
+                     tim24_2|  tim25_2|  tim26_2|  tim27_2|  tim28_2|  tim29_2|  tim30_2|  tim31_2|
+                     t1m17_2|  t1m18_2|  t1m19_2|  t1m20_2|  t1m22_2|  t1m23_2|  t1m24_2|  t1m25_2|
+                     t1m28_2|  t1m29_2|  t1m30_2|  t1m31_2|
+QB16           *  A  QB16_0+
+QB16_0         +  W
+QB16_1         +  H  QB16*
+QB17           *  A  QB17_0+
+QB17_0         +  W
+QB17_1         +  H  QB17*
+QB18           *  A  QB18_0+
+QB18_0         +  W
+QB18_1         +  H  QB18*
+QB19           *  A  QB19_0+
+QB19_0         +  W
+QB19_1         +  H  QB19*
+QB20           *  A  QB20_1+  QB20_0+
+QB20_0         +  W
+QB20_1         +  H  QB20*
+QB20_2         |  r  QB20*
+QB20_3         |  A  QB20_1+
+QB21           *  A  QB21_1+  QB21_0+
+QB21_0         +  W
+QB21_1         +  H  QB21*
+QB21_2         |  r  QB21*
+QB21_3         |  A  QB21_1+
+QB22           *  A  QB22_1+  QB22_0+
+QB22_0         +  W
+QB22_1         +  H  QB22*
+QB22_2         |  r  QB22*
+QB22_3         |  A  QB22_1+
+QB23           *  A  QB23_1+  QB23_0+
+QB23_0         +  W
+QB23_1         +  H  QB23*
+QB23_2         |  r  QB23*
+QB23_3         |  A  QB23_1+
+QB24           *  A  QB24_1+  QB24_0+
+QB24_0         +  W
+QB24_1         +  H  QB24*
+QB24_2         |  r  QB24*
+QB24_3         |  A  QB24_1+
+QB25           *  A  QB25_1+  QB25_0+
+QB25_0         +  W
+QB25_1         +  H  QB25*
+QB25_2         |  r  QB25*
+QB25_3         |  A  QB25_1+
+QB26           *  A  QB26_1+  QB26_0+
+QB26_0         +  W
+QB26_1         +  H  QB26*
+QB26_2         |  r  QB26*
+QB26_3         |  A  QB26_1+
+QB27           *  A  QB27_1+  QB27_0+
+QB27_0         +  W
+QB27_1         +  H  QB27*
+QB27_2         |  r  QB27*
+QB27_3         |  A  QB27_1+
+QB28           *  A  QB28_1+  QB28_0+
+QB28_0         +  W
+QB28_1         +  H  QB28*
+QB28_2         |  r  QB28*
+QB28_3         |  A  QB28_1+
+QB29           *  A  QB29_1+  QB29_0+
+QB29_0         +  W
+QB29_1         +  H  QB29*
+QB29_2         |  r  QB29*
+QB29_3         |  A  QB29_1+
+QB30           *  A  QB30_1+  QB30_0+
+QB30_0         +  W
+QB30_1         +  H  QB30*
+QB30_2         |  r  QB30*
+QB30_3         |  A  QB30_1+
+QB31           *  A  QB31_1+  QB31_0+
+QB31_0         +  W
+QB31_1         +  H  QB31*
+QB31_2         |  r  QB31*
+QB31_3         |  A  QB31_1+
+QB32           *  A  QB32_1+  QB32_0+
+QB32_0         +  W
+QB32_1         +  H  QB32*
+QB32_2         &  s  QB32*
+QB32_3         &  r  QB32*
+QB32_4         |  A  QB32_1+
+QB33           *  A  QB33_1+  QB33_0+
+QB33_0         +  W
+QB33_1         +  H  QB33*
+QB33_2         &  s  QB33*
+QB33_3         &  r  QB33*
+QB33_4         |  A  QB33_1+
+QB34           *  A  QB34_1+  QB34_0+
+QB34_0         +  W
+QB34_1         +  H  QB34*
+QB34_2         &  s  QB34*
+QB34_3         &  r  QB34*
+QB34_4         |  A  QB34_1+
+QB35           *  A  QB35_1+  QB35_0+
+QB35_0         +  W
+QB35_1         +  H  QB35*
+QB35_2         &  s  QB35*
+QB35_3         &  r  QB35*
+QB35_4         |  A  QB35_1+
+QB36           *  A  QB36_1+  QB36_0+
+QB36_0         +  W
+QB36_1         +  H  QB36*
+QB36_2         &  s  QB36*
+QB36_3         &  r  QB36*
+QB36_4         |  A  QB36_1+
+QB37           *  A  QB37_1+  QB37_0+
+QB37_0         +  W
+QB37_1         +  H  QB37*
+QB37_2         &  s  QB37*
+QB37_3         &  r  QB37*
+QB37_4         |  A  QB37_1+
+QB38           *  A  QB38_1+  QB38_0+
+QB38_0         +  W
+QB38_1         +  H  QB38*
+QB38_2         &  s  QB38*
+QB38_3         &  r  QB38*
+QB38_4         |  A  QB38_1+
+QB39           *  A  QB39_1+  QB39_0+
+QB39_0         +  W
+QB39_1         +  H  QB39*
+QB39_2         &  s  QB39*
+QB39_3         &  r  QB39*
+QB39_4         |  A  QB39_1+
+QB40           *  A  QB40_1+  QB40_0+
+QB40_0         +  W
+QB40_1         +  H  QB40*
+QB40_2         &  s  QB40*
+QB40_3         &  r  QB40*
+QB40_4         |  A  QB40_1+
+QB41           *  A  QB41_1+  QB41_0+
+QB41_0         +  W
+QB41_1         +  H  QB41*
+QB41_2         &  s  QB41*
+QB41_3         &  r  QB41*
+QB41_4         |  A  QB41_1+
+QB42           *  A  QB42_1+  QB42_0+
+QB42_0         +  W
+QB42_1         +  H  QB42*
+QB42_2         &  s  QB42*
+QB42_3         &  r  QB42*
+QB42_4         |  A  QB42_1+
+QB43           *  A  QB43_1+  QB43_0+
+QB43_0         +  W
+QB43_1         +  H  QB43*
+QB43_2         &  s  QB43*
+QB43_3         &  r  QB43*
+QB43_4         |  A  QB43_1+
+QB44           *  A  QB44_1+  QB44_0+
+QB44_0         +  W
+QB44_1         +  H  QB44*
+QB44_2         &  s  QB44*
+QB44_3         &  r  QB44*
+QB44_4         |  A  QB44_1+
+QB45           *  A  QB45_1+  QB45_0+
+QB45_0         +  W
+QB45_1         +  H  QB45*
+QB45_2         &  s  QB45*
+QB45_3         &  r  QB45*
+QB45_4         |  A  QB45_1+
+QB46           *  A  QB46_1+  QB46_0+
+QB46_0         +  W
+QB46_1         +  H  QB46*
+QB46_2         &  s  QB46*
+QB46_3         &  r  QB46*
+QB46_4         |  A  QB46_1+
+QB47           *  A  QB47_1+  QB47_0+
+QB47_0         +  W
+QB47_1         +  H  QB47*
+QB47_2         &  s  QB47*
+QB47_3         &  r  QB47*
+QB47_4         |  A  QB47_1+
+QB48           *  A  QB48_1+  QB48_0+
+QB48_0         +  W
+QB48_1         +  H  QB48*
+QB48_2         &  s  QB48*
+QB48_3         &  r  QB48*
+QB48_4         |  A  QB48_1+
+QB49           *  A  QB49_1+  QB49_0+
+QB49_0         +  W
+QB49_1         +  H  QB49*
+QB49_2         &  s  QB49*
+QB49_3         &  r  QB49*
+QB49_4         |  A  QB49_1+
+QB50           *  A  QB50_1+  QB50_0+
+QB50_0         +  W
+QB50_1         +  H  QB50*
+QB50_2         &  s  QB50*
+QB50_3         &  r  QB50*
+QB50_4         |  A  QB50_1+
+QB51           *  A  QB51_1+  QB51_0+
+QB51_0         +  W
+QB51_1         +  H  QB51*
+QB51_2         &  s  QB51*
+QB51_3         &  r  QB51*
+QB51_4         |  A  QB51_1+
+QB52           *  A  QB52_1+  QB52_0+
+QB52_0         +  W
+QB52_1         +  H  QB52*
+QB52_2         &  s  QB52*
+QB52_3         &  r  QB52*
+QB52_4         |  A  QB52_1+
+QB53           *  A  QB53_1+  QB53_0+
+QB53_0         +  W
+QB53_1         +  H  QB53*
+QB53_2         &  s  QB53*
+QB53_3         &  r  QB53*
+QB53_4         |  A  QB53_1+
+QB54           *  A  QB54_1+  QB54_0+
+QB54_0         +  W
+QB54_1         +  H  QB54*
+QB54_2         &  s  QB54*
+QB54_3         &  r  QB54*
+QB54_4         |  A  QB54_1+
+QB55           *  A  QB55_1+  QB55_0+
+QB55_0         +  W
+QB55_1         +  H  QB55*
+QB55_2         &  s  QB55*
+QB55_3         &  r  QB55*
+QB55_4         |  A  QB55_1+
+QB56           *  A  QB56_1+  QB56_0+
+QB56_0         +  W
+QB56_1         +  H  QB56*
+QB56_2         &  s  QB56*
+QB56_3         &  r  QB56*
+QB56_4         |  A  QB56_1+
+QB57           *  A  QB57_1+  QB57_0+
+QB57_0         +  W
+QB57_1         +  H  QB57*
+QB57_2         &  s  QB57*
+QB57_3         &  r  QB57*
+QB57_4         |  A  QB57_1+
+QB58           *  A  QB58_1+  QB58_0+
+QB58_0         +  W
+QB58_1         +  H  QB58*
+QB58_2         &  s  QB58*
+QB58_3         &  r  QB58*
+QB58_4         |  A  QB58_1+
+QB59           *  A  QB59_1+  QB59_0+
+QB59_0         +  W
+QB59_1         +  H  QB59*
+QB59_2         &  s  QB59*
+QB59_3         &  r  QB59*
+QB59_4         |  A  QB59_1+
+QX0.1          %     QX0.1%    QX0.1_0|
+QX0.1_0        |  X
+QX0.3          %     QX0.3_0|
+QX0.3_0        |  X
+QX0.4          #     QX0.4_0|
+QX0.4_0        |  X
+QX0.4_1        |  D  QX0.4#
+QX0.5          #     QX0.5_0|
+QX0.5_0        |  X
+QX0.5_1        |  D  QX0.5#
+QX0.6          #     QX0.6_0|
+QX0.6_0        |  X
+QX0.6_1        |  D  QX0.6#
+QX0.7          #     QX0.7_0|
+QX0.7_0        |  X
+QX0.7_1        |  D  QX0.7#
+QX1.0          #     QX1.0_4&  QX1.0_0|
+QX1.0_0        |  X
+QX1.0_1        |  D  QX1.0#
+QX1.0_2        |  R  QX1.0#
+QX1.0_3        &     QX1.0_1|
+QX1.0_4        &     QX1.0_1|
+QX1.1          #     QX1.1_4&  QX1.1_0|
+QX1.1_0        |  X
+QX1.1_1        |  D  QX1.1#
+QX1.1_2        |  R  QX1.1#
+QX1.1_3        &     QX1.1_1|
+QX1.1_4        &     QX1.1_1|
+QX1.2          #     QX1.2_4&  QX1.2_0|
+QX1.2_0        |  X
+QX1.2_1        |  D  QX1.2#
+QX1.2_2        |  R  QX1.2#
+QX1.2_3        &     QX1.2_1|
+QX1.2_4        &     QX1.2_1|
+QX1.3          #     QX1.3_4&  QX1.3_0|
+QX1.3_0        |  X
+QX1.3_1        |  D  QX1.3#
+QX1.3_2        |  R  QX1.3#
+QX1.3_3        &     QX1.3_1|
+QX1.3_4        &     QX1.3_1|
+QX1.4          #     QX1.4_4&  QX1.4_0|
+QX1.4_0        |  X
+QX1.4_1        |  D  QX1.4#
+QX1.4_2        |  R  QX1.4#
+QX1.4_3        &     QX1.4_1|
+QX1.4_4        &     QX1.4_1|
+QX1.5          #     QX1.5_4&  QX1.5_0|
+QX1.5_0        |  X
+QX1.5_1        |  D  QX1.5#
+QX1.5_2        |  R  QX1.5#
+QX1.5_3        &     QX1.5_1|
+QX1.5_4        &     QX1.5_1|
+QX1.6          #     QX1.6_4&  QX1.6_0|
+QX1.6_0        |  X
+QX1.6_1        |  D  QX1.6#
+QX1.6_2        |  R  QX1.6#
+QX1.6_3        &     QX1.6_1|
+QX1.6_4        &     QX1.6_1|
+QX1.7          #     QX1.7_4&  QX1.7_0|
+QX1.7_0        |  X
+QX1.7_1        |  D  QX1.7#
+QX1.7_2        |  R  QX1.7#
+QX1.7_3        &     QX1.7_1|
+QX1.7_4        &     QX1.7_1|
+QX10.0         #     QX10.0_2& ~QX10.0_1&  QX10.0_0|
+QX10.0_0       |  X
+QX10.0_1       &  S  QX10.0#
+QX10.0_2       &  R  QX10.0#
+QX10.1         #     QX10.1_2& ~QX10.1_1&  QX10.1_0|
+QX10.1_0       |  X
+QX10.1_1       &  S  QX10.1#
+QX10.1_2       &  R  QX10.1#
+QX10.2         #     QX10.2_2& ~QX10.2_1&  QX10.2_0|
+QX10.2_0       |  X
+QX10.2_1       &  S  QX10.2#
+QX10.2_2       &  R  QX10.2#
+QX10.3         #     QX10.3_2& ~QX10.3_1&  QX10.3_0|
+QX10.3_0       |  X
+QX10.3_1       &  S  QX10.3#
+QX10.3_2       &  R  QX10.3#
+QX10.4         #     QX10.4_2& ~QX10.4_1&  QX10.4_0|
+QX10.4_0       |  X
+QX10.4_1       &  S  QX10.4#
+QX10.4_2       &  R  QX10.4#
+QX10.5         #     QX10.5_2& ~QX10.5_1&  QX10.5_0|
+QX10.5_0       |  X
+QX10.5_1       &  S  QX10.5#
+QX10.5_2       &  R  QX10.5#
+QX10.6         #     QX10.6_2& ~QX10.6_1&  QX10.6_0|
+QX10.6_0       |  X
+QX10.6_1       &  S  QX10.6#
+QX10.6_2       &  R  QX10.6#
+QX10.7         #     QX10.7_2& ~QX10.7_1&  QX10.7_0|
+QX10.7_0       |  X
+QX10.7_1       &  S  QX10.7#
+QX10.7_2       &  R  QX10.7#
+QX11.0         #     QX11.0_2|  QX11.0_0|
+QX11.0_0       |  X
+QX11.0_1       |  S  QX11.0#
+QX11.0_2       |  R  QX11.0#
+QX11.1         #     QX11.1_2|  QX11.1_0|
+QX11.1_0       |  X
+QX11.1_1       |  S  QX11.1#
+QX11.1_2       |  R  QX11.1#
+QX11.2         #     QX11.2_2|  QX11.2_0|
+QX11.2_0       |  X
+QX11.2_1       |  S  QX11.2#
+QX11.2_2       |  R  QX11.2#
+QX11.3         #     QX11.3_2|  QX11.3_0|
+QX11.3_0       |  X
+QX11.3_1       |  S  QX11.3#
+QX11.3_2       |  R  QX11.3#
+QX11.4         #     QX11.4_2|  QX11.4_0|
+QX11.4_0       |  X
+QX11.4_1       |  S  QX11.4#
+QX11.4_2       |  R  QX11.4#
+QX11.5         #     QX11.5_2|  QX11.5_0|
+QX11.5_0       |  X
+QX11.5_1       |  S  QX11.5#
+QX11.5_2       |  R  QX11.5#
+QX11.6         #     QX11.6_2|  QX11.6_0|
+QX11.6_0       |  X
+QX11.6_1       |  S  QX11.6#
+QX11.6_2       |  R  QX11.6#
+QX11.7         #     QX11.7_2|  QX11.7_0|
+QX11.7_0       |  X
+QX11.7_1       |  S  QX11.7#
+QX11.7_2       |  R  QX11.7#
+QX12.0         #     QX12.0_2|  QX12.0_0|
+QX12.0_0       |  X
+QX12.0_1       |  S  QX12.0#
+QX12.0_2       |  R  QX12.0#
+QX12.1         #     QX12.1_2|  QX12.1_0|
+QX12.1_0       |  X
+QX12.1_1       |  S  QX12.1#
+QX12.1_2       |  R  QX12.1#
+QX12.2         #     QX12.2_3|  QX12.2_0|
+QX12.2_0       |  X
+QX12.2_1       |  S  QX12.2#
+QX12.2_2       |  R  QX12.2#
+QX12.2_3       |  R  QX12.2#
+QX12.3         #     QX12.3_3|  QX12.3_0|
+QX12.3_0       |  X
+QX12.3_1       |  S  QX12.3#
+QX12.3_2       |  R  QX12.3#
+QX12.3_3       |  R  QX12.3#
+QX12.4         #     QX12.4_3|  QX12.4_0|
+QX12.4_0       |  X
+QX12.4_1       |  S  QX12.4#
+QX12.4_2       |  R  QX12.4#
+QX12.4_3       |  R  QX12.4#
+QX12.5         #     QX12.5_3|  QX12.5_0|
+QX12.5_0       |  X
+QX12.5_1       |  S  QX12.5#
+QX12.5_2       |  R  QX12.5#
+QX12.5_3       |  R  QX12.5#
+QX12.6         #     QX12.6_3|  QX12.6_0|
+QX12.6_0       |  X
+QX12.6_1       |  S  QX12.6#
+QX12.6_2       |  R  QX12.6#
+QX12.6_3       |  R  QX12.6#
+QX12.7         #     QX12.7_3|  QX12.7_0|
+QX12.7_0       |  X
+QX12.7_1       |  S  QX12.7#
+QX12.7_2       |  R  QX12.7#
+QX12.7_3       |  R  QX12.7#
+QX13.0         #     QX13.0_3|  QX13.0_0|
+QX13.0_0       |  X
+QX13.0_1       |  S  QX13.0#
+QX13.0_2       |  R  QX13.0#
+QX13.0_3       |  R  QX13.0#
+QX13.1         #     QX13.1_3|  QX13.1_0|
+QX13.1_0       |  X
+QX13.1_1       |  S  QX13.1#
+QX13.1_2       |  R  QX13.1#
+QX13.1_3       |  R  QX13.1#
+QX13.2         #     QX13.2_3|  QX13.2_0|
+QX13.2_0       |  X
+QX13.2_1       |  S  QX13.2#
+QX13.2_2       |  R  QX13.2#
+QX13.2_3       |  R  QX13.2#
+QX13.3         #     QX13.3_3|  QX13.3_0|
+QX13.3_0       |  X
+QX13.3_1       |  S  QX13.3#
+QX13.3_2       |  R  QX13.3#
+QX13.3_3       |  R  QX13.3#
+QX13.4         #     QX13.4_3|  QX13.4_0|
+QX13.4_0       |  X
+QX13.4_1       |  S  QX13.4#
+QX13.4_2       |  R  QX13.4#
+QX13.4_3       |  R  QX13.4#
+QX13.5         #     QX13.5_3|  QX13.5_0|
+QX13.5_0       |  X
+QX13.5_1       |  S  QX13.5#
+QX13.5_2       |  R  QX13.5#
+QX13.5_3       |  R  QX13.5#
+QX13.6         #     QX13.6_3|  QX13.6_0|
+QX13.6_0       |  X
+QX13.6_1       |  S  QX13.6#
+QX13.6_2       |  R  QX13.6#
+QX13.6_3       |  R  QX13.6#
+QX13.7         #     QX13.7_3|  QX13.7_0|
+QX13.7_0       |  X
+QX13.7_1       |  S  QX13.7#
+QX13.7_2       |  R  QX13.7#
+QX13.7_3       |  R  QX13.7#
+QX14.0         #     QX14.0_3|  QX14.0_0|
+QX14.0_0       |  X
+QX14.0_1       |  S  QX14.0#
+QX14.0_2       |  R  QX14.0#
+QX14.0_3       |  R  QX14.0#
+QX14.1         #     QX14.1_3|  QX14.1_0|
+QX14.1_0       |  X
+QX14.1_1       |  S  QX14.1#
+QX14.1_2       |  R  QX14.1#
+QX14.1_3       |  R  QX14.1#
+QX14.2         #     QX14.2_3|  QX14.2_0|
+QX14.2_0       |  X
+QX14.2_1       |  S  QX14.2#
+QX14.2_2       |  R  QX14.2#
+QX14.2_3       |  R  QX14.2#
+QX14.3         #     QX14.3_3|  QX14.3_0|
+QX14.3_0       |  X
+QX14.3_1       |  S  QX14.3#
+QX14.3_2       |  R  QX14.3#
+QX14.3_3       |  R  QX14.3#
+QX14.4         #     QX14.4_3|  QX14.4_0|
+QX14.4_0       |  X
+QX14.4_1       |  S  QX14.4#
+QX14.4_2       |  R  QX14.4#
+QX14.4_3       |  R  QX14.4#
+QX14.5         #     QX14.5_3|  QX14.5_0|
+QX14.5_0       |  X
+QX14.5_1       |  S  QX14.5#
+QX14.5_2       |  R  QX14.5#
+QX14.5_3       |  R  QX14.5#
+QX14.6         #     QX14.6_3|  QX14.6_0|
+QX14.6_0       |  X
+QX14.6_1       |  S  QX14.6#
+QX14.6_2       |  R  QX14.6#
+QX14.6_3       |  R  QX14.6#
+QX14.7         #     QX14.7_3|  QX14.7_0|
+QX14.7_0       |  X
+QX14.7_1       |  S  QX14.7#
+QX14.7_2       |  R  QX14.7#
+QX14.7_3       |  R  QX14.7#
+QX15.0         #     QX15.0_3|  QX15.0_0|
+QX15.0_0       |  X
+QX15.0_1       |  S  QX15.0#
+QX15.0_2       |  R  QX15.0#
+QX15.0_3       |  R  QX15.0#
+QX15.1         #     QX15.1_3|  QX15.1_0|
+QX15.1_0       |  X
+QX15.1_1       |  S  QX15.1#
+QX15.1_2       |  R  QX15.1#
+QX15.1_3       |  R  QX15.1#
+QX15.2         #     QX15.2_3|  QX15.2_0|
+QX15.2_0       |  X
+QX15.2_1       |  S  QX15.2#
+QX15.2_2       |  R  QX15.2#
+QX15.2_3       |  R  QX15.2#
+QX15.3         #     QX15.3_3|  QX15.3_0|
+QX15.3_0       |  X
+QX15.3_1       |  S  QX15.3#
+QX15.3_2       |  R  QX15.3#
+QX15.3_3       |  R  QX15.3#
+QX15.4         #     QX15.4_3|  QX15.4_0|
+QX15.4_0       |  X
+QX15.4_1       |  S  QX15.4#
+QX15.4_2       |  R  QX15.4#
+QX15.4_3       |  R  QX15.4#
+QX15.5         #     QX15.5_3|  QX15.5_0|
+QX15.5_0       |  X
+QX15.5_1       |  S  QX15.5#
+QX15.5_2       |  R  QX15.5#
+QX15.5_3       |  R  QX15.5#
+QX15.6         #     QX15.6_3|  QX15.6_0|
+QX15.6_0       |  X
+QX15.6_1       |  S  QX15.6#
+QX15.6_2       |  R  QX15.6#
+QX15.6_3       |  R  QX15.6#
+QX15.7         #     QX15.7_3|  QX15.7_0|
+QX15.7_0       |  X
+QX15.7_1       |  S  QX15.7#
+QX15.7_2       |  R  QX15.7#
+QX15.7_3       |  R  QX15.7#
+QX2.0          #     QX2.0_4&  QX2.0_0|
+QX2.0_0        |  X
+QX2.0_1        |  D  QX2.0#
+QX2.0_2        |  R  QX2.0#
+QX2.0_3        &     QX2.0_1|
+QX2.0_4        &     QX2.0_1|
+QX2.1          #     QX2.1_4&  QX2.1_0|
+QX2.1_0        |  X
+QX2.1_1        |  D  QX2.1#
+QX2.1_2        |  R  QX2.1#
+QX2.1_3        &     QX2.1_1|
+QX2.1_4        &     QX2.1_1|
+QX2.2          #     QX2.2_4&  QX2.2_0|
+QX2.2_0        |  X
+QX2.2_1        |  D  QX2.2#
+QX2.2_2        |  R  QX2.2#
+QX2.2_3        &     QX2.2_1|
+QX2.2_4        &     QX2.2_1|
+QX2.3          #     QX2.3_4&  QX2.3_0|
+QX2.3_0        |  X
+QX2.3_1        |  D  QX2.3#
+QX2.3_2        |  R  QX2.3#
+QX2.3_3        &     QX2.3_1|
+QX2.3_4        &     QX2.3_1|
+QX2.4          #     QX2.4_5&  QX2.4_0|
+QX2.4_0        |  X
+QX2.4_1        |  D  QX2.4#
+QX2.4_2        &  S  QX2.4#
+QX2.4_3        &  R  QX2.4#
+QX2.4_4        &     QX2.4_1|
+QX2.4_5        &     QX2.4_1|
+QX2.5          #     QX2.5_5&  QX2.5_0|
+QX2.5_0        |  X
+QX2.5_1        |  D  QX2.5#
+QX2.5_2        &  S  QX2.5#
+QX2.5_3        &  R  QX2.5#
+QX2.5_4        &     QX2.5_1|
+QX2.5_5        &     QX2.5_1|
+QX2.6          #     QX2.6_5&  QX2.6_0|
+QX2.6_0        |  X
+QX2.6_1        |  D  QX2.6#
+QX2.6_2        &  S  QX2.6#
+QX2.6_3        &  R  QX2.6#
+QX2.6_4        &     QX2.6_1|
+QX2.6_5        &     QX2.6_1|
+QX2.7          #     QX2.7_5&  QX2.7_0|
+QX2.7_0        |  X
+QX2.7_1        |  D  QX2.7#
+QX2.7_2        &  S  QX2.7#
+QX2.7_3        &  R  QX2.7#
+QX2.7_4        &     QX2.7_1|
+QX2.7_5        &     QX2.7_1|
+QX3.0          #     QX3.0_5&  QX3.0_0|
+QX3.0_0        |  X
+QX3.0_1        |  D  QX3.0#
+QX3.0_2        &  S  QX3.0#
+QX3.0_3        &  R  QX3.0#
+QX3.0_4        &     QX3.0_1|
+QX3.0_5        &     QX3.0_1|
+QX3.1          #     QX3.1_5&  QX3.1_0|
+QX3.1_0        |  X
+QX3.1_1        |  D  QX3.1#
+QX3.1_2        &  S  QX3.1#
+QX3.1_3        &  R  QX3.1#
+QX3.1_4        &     QX3.1_1|
+QX3.1_5        &     QX3.1_1|
+QX3.2          #     QX3.2_5&  QX3.2_0|
+QX3.2_0        |  X
+QX3.2_1        |  D  QX3.2#
+QX3.2_2        &  S  QX3.2#
+QX3.2_3        &  R  QX3.2#
+QX3.2_4        &     QX3.2_1|
+QX3.2_5        &     QX3.2_1|
+QX3.3          #     QX3.3_5&  QX3.3_0|
+QX3.3_0        |  X
+QX3.3_1        |  D  QX3.3#
+QX3.3_2        &  S  QX3.3#
+QX3.3_3        &  R  QX3.3#
+QX3.3_4        &     QX3.3_1|
+QX3.3_5        &     QX3.3_1|
+QX3.4          #     QX3.4_5&  QX3.4_0|
+QX3.4_0        |  X
+QX3.4_1        |  D  QX3.4#
+QX3.4_2        &  S  QX3.4#
+QX3.4_3        &  R  QX3.4#
+QX3.4_4        &     QX3.4_1|
+QX3.4_5        &     QX3.4_1|
+QX3.5          #     QX3.5_5&  QX3.5_0|
+QX3.5_0        |  X
+QX3.5_1        |  D  QX3.5#
+QX3.5_2        &  S  QX3.5#
+QX3.5_3        &  R  QX3.5#
+QX3.5_4        &     QX3.5_1|
+QX3.5_5        &     QX3.5_1|
+QX3.6          #     QX3.6_5&  QX3.6_0|
+QX3.6_0        |  X
+QX3.6_1        |  D  QX3.6#
+QX3.6_2        &  S  QX3.6#
+QX3.6_3        &  R  QX3.6#
+QX3.6_4        &     QX3.6_1|
+QX3.6_5        &     QX3.6_1|
+QX3.7          #     QX3.7_5&  QX3.7_0|
+QX3.7_0        |  X
+QX3.7_1        |  D  QX3.7#
+QX3.7_2        &  S  QX3.7#
+QX3.7_3        &  R  QX3.7#
+QX3.7_4        &     QX3.7_1|
+QX3.7_5        &     QX3.7_1|
+QX4.0          #     QX4.0_5&  QX4.0_0|
+QX4.0_0        |  X
+QX4.0_1        |  D  QX4.0#
+QX4.0_2        &  S  QX4.0#
+QX4.0_3        &  R  QX4.0#
+QX4.0_4        &     QX4.0_1|
+QX4.0_5        &     QX4.0_1|
+QX4.1          #     QX4.1_5&  QX4.1_0|
+QX4.1_0        |  X
+QX4.1_1        |  D  QX4.1#
+QX4.1_2        &  S  QX4.1#
+QX4.1_3        &  R  QX4.1#
+QX4.1_4        &     QX4.1_1|
+QX4.1_5        &     QX4.1_1|
+QX4.2          #     QX4.2_5&  QX4.2_0|
+QX4.2_0        |  X
+QX4.2_1        |  D  QX4.2#
+QX4.2_2        &  S  QX4.2#
+QX4.2_3        &  R  QX4.2#
+QX4.2_4        &     QX4.2_1|
+QX4.2_5        &     QX4.2_1|
+QX4.3          #     QX4.3_5&  QX4.3_0|
+QX4.3_0        |  X
+QX4.3_1        |  D  QX4.3#
+QX4.3_2        &  S  QX4.3#
+QX4.3_3        &  R  QX4.3#
+QX4.3_4        &     QX4.3_1|
+QX4.3_5        &     QX4.3_1|
+QX4.4          #     QX4.4_5&  QX4.4_0|
+QX4.4_0        |  X
+QX4.4_1        |  D  QX4.4#
+QX4.4_2        &  S  QX4.4#
+QX4.4_3        &  R  QX4.4#
+QX4.4_4        &     QX4.4_1|
+QX4.4_5        &     QX4.4_1|
+QX4.5          #     QX4.5_5&  QX4.5_0|
+QX4.5_0        |  X
+QX4.5_1        |  D  QX4.5#
+QX4.5_2        &  S  QX4.5#
+QX4.5_3        &  R  QX4.5#
+QX4.5_4        &     QX4.5_1|
+QX4.5_5        &     QX4.5_1|
+QX4.6          #     QX4.6_5&  QX4.6_0|
+QX4.6_0        |  X
+QX4.6_1        |  D  QX4.6#
+QX4.6_2        &  S  QX4.6#
+QX4.6_3        &  R  QX4.6#
+QX4.6_4        &     QX4.6_1|
+QX4.6_5        &     QX4.6_1|
+QX4.7          #     QX4.7_5&  QX4.7_0|
+QX4.7_0        |  X
+QX4.7_1        |  D  QX4.7#
+QX4.7_2        &  S  QX4.7#
+QX4.7_3        &  R  QX4.7#
+QX4.7_4        &     QX4.7_1|
+QX4.7_5        &     QX4.7_1|
+QX5.0          #     QX5.0_5&  QX5.0_0|
+QX5.0_0        |  X
+QX5.0_1        |  D  QX5.0#
+QX5.0_2        &  S  QX5.0#
+QX5.0_3        &  R  QX5.0#
+QX5.0_4        &     QX5.0_1|
+QX5.0_5        &     QX5.0_1|
+QX5.1          #     QX5.1_5&  QX5.1_0|
+QX5.1_0        |  X
+QX5.1_1        |  D  QX5.1#
+QX5.1_2        &  S  QX5.1#
+QX5.1_3        &  R  QX5.1#
+QX5.1_4        &     QX5.1_1|
+QX5.1_5        &     QX5.1_1|
+QX5.2          #     QX5.2_5&  QX5.2_0|
+QX5.2_0        |  X
+QX5.2_1        |  D  QX5.2#
+QX5.2_2        &  S  QX5.2#
+QX5.2_3        &  R  QX5.2#
+QX5.2_4        &     QX5.2_1|
+QX5.2_5        &     QX5.2_1|
+QX5.3          #     QX5.3_5&  QX5.3_0|
+QX5.3_0        |  X
+QX5.3_1        |  D  QX5.3#
+QX5.3_2        &  S  QX5.3#
+QX5.3_3        &  R  QX5.3#
+QX5.3_4        &     QX5.3_1|
+QX5.3_5        &     QX5.3_1|
+QX5.4          #     QX5.4_5&  QX5.4_0|
+QX5.4_0        |  X
+QX5.4_1        |  D  QX5.4#
+QX5.4_2        &  S  QX5.4#
+QX5.4_3        &  R  QX5.4#
+QX5.4_4        &     QX5.4_1|
+QX5.4_5        &     QX5.4_1|
+QX5.5          #     QX5.5_5&  QX5.5_0|
+QX5.5_0        |  X
+QX5.5_1        |  D  QX5.5#
+QX5.5_2        &  S  QX5.5#
+QX5.5_3        &  R  QX5.5#
+QX5.5_4        &     QX5.5_1|
+QX5.5_5        &     QX5.5_1|
+QX5.6          #     QX5.6_5&  QX5.6_0|
+QX5.6_0        |  X
+QX5.6_1        |  D  QX5.6#
+QX5.6_2        &  S  QX5.6#
+QX5.6_3        &  R  QX5.6#
+QX5.6_4        &     QX5.6_1|
+QX5.6_5        &     QX5.6_1|
+QX5.7          #     QX5.7_5&  QX5.7_0|
+QX5.7_0        |  X
+QX5.7_1        |  D  QX5.7#
+QX5.7_2        &  S  QX5.7#
+QX5.7_3        &  R  QX5.7#
+QX5.7_4        &     QX5.7_1|
+QX5.7_5        &     QX5.7_1|
+QX6.0          >     QX6.0_0|
+QX6.0_0        |  X
+QX6.0_1        |  V  QX6.0>
+QX6.1          >     QX6.1_0|
+QX6.1_0        |  X
+QX6.1_1        |  V  QX6.1>
+QX6.2          >     QX6.2_0|
+QX6.2_0        |  X
+QX6.2_1        |  V  QX6.2>
+QX6.3          >     QX6.3_0|
+QX6.3_0        |  X
+QX6.3_1        |  V  QX6.3>
+QX6.4          /     QX6.4_0|
+QX6.4_0        |  X
+QX6.4_1        |  E  QX6.4/
+QX6.5          /     QX6.5_0|
+QX6.5_0        |  X
+QX6.5_1        |  E  QX6.5/
+QX6.6          /     QX6.6_0|
+QX6.6_0        |  X
+QX6.6_1        |  E  QX6.6/
+QX6.7          /     QX6.7_0|
+QX6.7_0        |  X
+QX6.7_1        |  E  QX6.7/
+QX7.4          #     QX7.4_1%  QX7.4_0|
+QX7.4_0        |  X
+QX7.4_1        %  D  QX7.4#
+QX7.5          #     QX7.5_1%  QX7.5_0|
+QX7.5_0        |  X
+QX7.5_1        %  D  QX7.5#
+QX7.6          #     QX7.6_1%  QX7.6_0|
+QX7.6_0        |  X
+QX7.6_1        %  D  QX7.6#
+QX7.7          #     QX7.7_1%  QX7.7_0|
+QX7.7_0        |  X
+QX7.7_1        %  D  QX7.7#
+QX8.0          #     QX8.0_0|
+QX8.0_0        |  X
+QX8.0_1        |  S  QX8.0#
+QX8.0_2        |  R  QX8.0#
+QX8.1          #     QX8.1_0|
+QX8.1_0        |  X
+QX8.1_1        |  S  QX8.1#
+QX8.1_2        |  R  QX8.1#
+QX8.2          #     QX8.2_0|
+QX8.2_0        |  X
+QX8.2_1        |  S  QX8.2#
+QX8.2_2        |  R  QX8.2#
+QX8.3          #     QX8.3_0|
+QX8.3_0        |  X
+QX8.3_1        |  S  QX8.3#
+QX8.3_2        |  R  QX8.3#
+QX8.4          #     QX8.4_0|
+QX8.4_0        |  X
+QX8.4_1        |  S  QX8.4#
+QX8.4_2        |  R  QX8.4#
+QX8.5          #     QX8.5_0|
+QX8.5_0        |  X
+QX8.5_1        |  S  QX8.5#
+QX8.5_2        |  R  QX8.5#
+QX8.6          #     QX8.6_0|
+QX8.6_0        |  X
+QX8.6_1        |  S  QX8.6#
+QX8.6_2        |  R  QX8.6#
+QX8.7          #     QX8.7_0|
+QX8.7_0        |  X
+QX8.7_1        |  S  QX8.7#
+QX8.7_2        |  R  QX8.7#
+QX9.0          #     QX9.0_0|
+QX9.0_0        |  X
+QX9.0_1        |  S  QX9.0#
+QX9.0_2        |  R  QX9.0#
+QX9.1          #     QX9.1_0|
+QX9.1_0        |  X
+QX9.1_1        |  S  QX9.1#
+QX9.1_2        |  R  QX9.1#
+QX9.2          #     QX9.2_0|
+QX9.2_0        |  X
+QX9.2_1        |  S  QX9.2#
+QX9.2_2        |  R  QX9.2#
+QX9.3          #     QX9.3_0|
+QX9.3_0        |  X
+QX9.3_1        |  S  QX9.3#
+QX9.3_2        |  R  QX9.3#
+QX9.4          #     QX9.4_2& ~QX9.4_1&  QX9.4_0|
+QX9.4_0        |  X
+QX9.4_1        &  S  QX9.4#
+QX9.4_2        &  R  QX9.4#
+QX9.5          #     QX9.5_2& ~QX9.5_1&  QX9.5_0|
+QX9.5_0        |  X
+QX9.5_1        &  S  QX9.5#
+QX9.5_2        &  R  QX9.5#
+QX9.6          #     QX9.6_2& ~QX9.6_1&  QX9.6_0|
+QX9.6_0        |  X
+QX9.6_1        &  S  QX9.6#
+QX9.6_2        &  R  QX9.6#
+QX9.7          #     QX9.7_2& ~QX9.7_1&  QX9.7_0|
+QX9.7_0        |  X
+QX9.7_1        &  S  QX9.7#
+QX9.7_2        &  R  QX9.7#
+_f10_1         |  I ( (11)
+_f11_1         |  I ( (12)
+_f12_1         |  I ( (13)
+_f1_1          |  F { (2)
+_f2_1          |  F { (3)
+_f3_1          |  F { (4)
+_f4_1          |  F { (5)
+_f5_1          |  G { (6)
+_f6_1          |  G { (7)
+_f7_1          |  G { (8)
+_f8_1          |  G { (9)
+_f9_1          |  I ( (10)
+aexpr          @  A  IB16[
+clk            @  :  clk0.
+clk0           .  :  QX0.5_1|   QX6.1_1|   QX6.5_1|   QX11.1_2|  QX11.4_2|  QX11.7_2|  QX12.3_3|  QX12.6_3|
+                     QX13.1_3|  QX13.5_3|  QX14.0_3|  QX14.3_3|  QX14.7_3|  QX15.2_3|  QX15.5_3|  QB17_1+
+                     _f2_1|     _f6_1|     _f10_1|
+*** Warning: undefined imm clock: clk0 File ./Test0/compTest2a.ic, line 304
+clk1           .  :  QX1.4_1|  QX1.5_1|  QX1.6_1|  QX1.7_1|  QX3.0_1|  QX3.1_1|  QX3.2_1|  QX3.3_1|
+                     QX3.4_1|  QX3.5_1|  QX3.6_1|  QX3.7_1|  QX4.0_1|  QX4.1_1|  QX4.2_1|  QX4.3_1|
+                     QB24_1+   QB25_1+   QB26_1+   QB27_1+   QB36_1+   QB37_1+   QB38_1+   QB39_1+
+                     QB40_1+   QB41_1+   QB42_1+   QB43_1+   QB44_1+   QB45_1+   QB46_1+   QB47_1+
+*** Warning: undefined imm clock: clk1 File ./Test0/compTest2a.ic, line 304
+clk12          :  :
+*** Warning: unused    imm clock: clk12 File ./Test0/compTest2a.ic, line 304
+clk12_1        |  C  clk12:
+clk12_2        |  C  clk12:
+clk13          :  :
+*** Warning: unused    imm clock: clk13 File ./Test0/compTest2a.ic, line 304
+clk13_1        |  C  clk13:
+clk13_2        |  C  clk13:
+clk14          :  :
+*** Warning: unused    imm clock: clk14 File ./Test0/compTest2a.ic, line 304
+clk14_1        |  C  clk14:
+clk14_2        |  C  clk14:
+clk15          :  :
+*** Warning: unused    imm clock: clk15 File ./Test0/compTest2a.ic, line 304
+clk15_1        |  C  clk15:
+clk15_2        |  C  clk15:
+clk2           .  :  QX1.1_2|  QX1.1_1|  QX2.5_3&  QX2.5_2&  QX2.5_1|  QB21_2|   QB21_1+   QB33_3&
+                     QB33_2&   QB33_1+
+*** Warning: undefined imm clock: clk2 File ./Test0/compTest2a.ic, line 304
+clk24          :  :
+*** Warning: unused    imm clock: clk24 File ./Test0/compTest2a.ic, line 304
+clk24_1        |  C  clk24:
+clk24_2        |  C  clk24:
+clk25          :  :
+*** Warning: unused    imm clock: clk25 File ./Test0/compTest2a.ic, line 304
+clk25_1        |  C  clk25:
+clk25_2        |  C  clk25:
+clk26          :  :
+*** Warning: unused    imm clock: clk26 File ./Test0/compTest2a.ic, line 304
+clk26_1        |  C  clk26:
+clk26_2        |  C  clk26:
+clk27          :  :
+*** Warning: unused    imm clock: clk27 File ./Test0/compTest2a.ic, line 304
+clk27_1        |  C  clk27:
+clk27_2        |  C  clk27:
+clk28          :  :
+*** Warning: unused    imm clock: clk28 File ./Test0/compTest2a.ic, line 304
+clk28_1        |  C  clk28:
+clk28_2        |  C  clk28:
+clk29          :  :
+*** Warning: unused    imm clock: clk29 File ./Test0/compTest2a.ic, line 304
+clk29_1        |  C  clk29:
+clk29_2        |  C  clk29:
+clk3           .  :  QX1.5_2|   QX2.1_2|   QX3.5_3&   QX4.1_3&   QX5.1_3&   QX5.5_3&   QX8.5_2|   QX9.1_2|
+                     QX10.1_2&  QX10.5_2&  QX14.0_2|  QX14.1_2|  QX14.2_2|  QX15.2_2|  QX15.3_2|  QX15.4_2|
+                     QB25_2|    QB29_2|    QB41_3&    QB45_3&    QB53_3&    QB57_3&
+*** Warning: undefined imm clock: clk3 File ./Test0/compTest2a.ic, line 304
+clk30          :  :
+*** Warning: unused    imm clock: clk30 File ./Test0/compTest2a.ic, line 304
+clk30_1        |  C  clk30:
+clk30_2        |  C  clk30:
+clk31          :  :
+*** Warning: unused    imm clock: clk31 File ./Test0/compTest2a.ic, line 304
+clk31_1        |  C  clk31:
+clk31_2        |  C  clk31:
+clk4           :  :  QX3.4_2&   QX3.5_2&   QX3.6_2&   QX3.7_2&   QX5.0_2&   QX5.1_2&   QX5.2_2&   QX5.3_2&
+                     QX8.4_1|   QX8.5_1|   QX8.6_1|   QX8.7_1|   QX10.0_1&  QX10.1_1&  QX10.2_1&  QX10.3_1&
+                     QX11.4_1|  QX11.5_1|  QX11.6_1|  QX13.4_1|  QX13.5_1|  QX13.6_1|  QX13.7_1|  QX14.0_1|
+                     QX14.1_1|  QX14.2_1|  QX14.3_1|  QX14.4_1|  QX14.5_1|  QB40_2&    QB41_2&    QB42_2&
+                     QB43_2&    QB52_2&    QB53_2&    QB54_2&    QB55_2&
+clk4_1         |  C  clk4:
+clk5           :  :  clk5_1|   clk24_1|  clk25_1|  clk26_1|  clk27_1|  tim5_1|   tim24_1|  tim25_1|
+                     tim26_1|  tim27_1|  t1m21_1|  t1m22_1|  t1m23_1|  t1m24_1|  t1m25_1|
+clk5_1         |  C  clk5:
+clk6           :  :  clk13_2|  clk13_1|  tim13_2|  tim13_1|  t1m18_2|  t1m18_1|
+clk6_1         |  C  clk6:
+clk7           :  :  clk25_2|  clk29_2|  tim25_2|  tim29_2|  t1m23_2|  t1m29_2|
+clk7_1         |  C  clk7:
+clk8           .  :  QX3.1_3&   QX3.1_2&   QX4.5_3&   QX4.5_2&   QX7.6_1%   QX8.1_2|   QX8.1_1|   QX9.5_2&
+                     QX9.5_1&   QX12.6_2|  QX12.6_1|  QX12.7_2|  QX12.7_1|  QX13.0_2|  QX13.0_1|  QB37_3&
+                     QB37_2&    QB49_3&    QB49_2&
+*** Warning: undefined imm clock: clk8 File ./Test0/compTest2a.ic, line 304
+clkExpr        @  :  clk1.
+clkExprReset   @  :  clk2.
+clkReset       @  :  clk3.
+clkSet         @  :  clk4:
+clkSet1        @  :  clk5:
+clkSet1Set2    @  :  clk6:
+clkSet2        @  :  clk7:
+clkSetReset    @  :  clk8.
+delay          @  A  3=
+delayExpr      @  A  3=
+delayExprReset @  A  3=
+delayReset     @  A  3=
+delaySet       @  A  3=
+delaySet1      @  A  3=
+delaySet1Set2  @  A  3=
+delaySet2      @  A  3=
+delaySetReset  @  A  3=
+expr           @     IX0.0<
+iClock         :  :  QX0.4_1|   QX1.0_2|   QX1.0_1|   QX1.4_2|   QX2.0_2|   QX2.4_3&   QX2.4_2&   QX2.4_1|
+                     QX3.0_3&   QX3.0_2&   QX3.4_3&   QX4.0_3&   QX4.4_3&   QX4.4_2&   QX5.0_3&   QX5.4_3&
+                     QX6.0_1|   QX6.4_1|   QX7.4_1%   QX8.0_2|   QX8.0_1|   QX8.4_2|   QX9.0_2|   QX9.4_2&
+                     QX9.4_1&   QX10.0_2&  QX10.4_2&  QX11.0_2|  QX11.0_1|  QX11.1_1|  QX11.2_1|  QX11.3_1|
+                     QX12.2_3|  QX12.2_2|  QX12.2_1|  QX12.3_2|  QX12.3_1|  QX12.4_2|  QX12.4_1|  QX12.5_2|
+                     QX12.5_1|  QX13.4_3|  QX13.4_2|  QX13.5_2|  QX13.6_2|  QX13.7_2|  QX14.6_3|  QX14.6_2|
+                     QX14.7_2|  QX15.0_2|  QX15.1_2|  QB16_1+    QB20_2|    QB20_1+    QB24_2|    QB28_2|
+                     QB32_3&    QB32_2&    QB32_1+    QB36_3&    QB36_2&    QB40_3&    QB44_3&    QB48_3&
+                     QB48_2&    QB52_3&    QB56_3&    _f1_1|     _f5_1|     _f9_1|     clk4_1|    clk12_2|
+                     clk12_1|   clk24_2|   clk28_2|   tim4_1|    tim12_2|   tim12_1|   tim24_2|   tim28_2|
+                     t1m16_1|   t1m17_2|   t1m17_1|   t1m22_2|   t1m28_2|
+off            @     IX0.2<
+on             @     IX0.1<
+reset          @     IX0.4<
+set            @     IX0.3<
+set1           @     IX0.5<
+set2           @     IX0.6<
+t1m0           .  !  clk6_1|   clk7_1|   clk28_1|  clk29_1|  clk30_1|  clk31_1|  tim6_1|   tim7_1|
+                     tim28_1|  tim29_1|  tim30_1|  tim31_1|  t1m26_1|  t1m27_1|  t1m28_1|  t1m29_1|
+                     t1m30_1|  t1m31_1|
+*** Warning: undefined imm timer: t1m0 File ./Test0/compTest2a.ic, line 304
+t1m1           .  !  clk14_2|  clk14_1|  clk15_2|  clk15_1|  tim14_2|  tim14_1|  tim15_2|  tim15_1|
+                     t1m19_2|  t1m19_1|  t1m20_2|  t1m20_1|
+*** Warning: undefined imm timer: t1m1 File ./Test0/compTest2a.ic, line 304
+t1m16          !1 !
+*** Warning: unused    imm timer: t1m16 File ./Test0/compTest2a.ic, line 304
+t1m16_1        |  T  t1m16!1
+t1m17          !1 !
+*** Warning: unused    imm timer: t1m17 File ./Test0/compTest2a.ic, line 304
+t1m17_1        |  T  t1m17!1
+t1m17_2        |  T  t1m17!1
+t1m18          !1 !
+*** Warning: unused    imm timer: t1m18 File ./Test0/compTest2a.ic, line 304
+t1m18_1        |  T  t1m18!1
+t1m18_2        |  T  t1m18!1
+t1m19          !1 !
+*** Warning: unused    imm timer: t1m19 File ./Test0/compTest2a.ic, line 304
+t1m19_1        |  T  t1m19!1
+t1m19_2        |  T  t1m19!1
+t1m2           .  !  clk26_2|  clk27_2|  clk30_2|  clk31_2|  tim26_2|  tim27_2|  tim30_2|  tim31_2|
+                     t1m24_2|  t1m25_2|  t1m30_2|  t1m31_2|
+*** Warning: undefined imm timer: t1m2 File ./Test0/compTest2a.ic, line 304
+t1m20          !1 !
+*** Warning: unused    imm timer: t1m20 File ./Test0/compTest2a.ic, line 304
+t1m20_1        |  T  t1m20!1
+t1m20_2        |  T  t1m20!1
+t1m21          !1 !
+*** Warning: unused    imm timer: t1m21 File ./Test0/compTest2a.ic, line 304
+t1m21_1        |  T  t1m21!1
+t1m22          !1 !
+*** Warning: unused    imm timer: t1m22 File ./Test0/compTest2a.ic, line 304
+t1m22_1        |  T  t1m22!1
+t1m22_2        |  T  t1m22!1
+t1m23          !1 !
+*** Warning: unused    imm timer: t1m23 File ./Test0/compTest2a.ic, line 304
+t1m23_1        |  T  t1m23!1
+t1m23_2        |  T  t1m23!1
+t1m24          !1 !
+*** Warning: unused    imm timer: t1m24 File ./Test0/compTest2a.ic, line 304
+t1m24_1        |  T  t1m24!1
+t1m24_2        |  T  t1m24!1
+t1m25          !1 !
+*** Warning: unused    imm timer: t1m25 File ./Test0/compTest2a.ic, line 304
+t1m25_1        |  T  t1m25!1
+t1m25_2        |  T  t1m25!1
+t1m26          !1 !
+*** Warning: unused    imm timer: t1m26 File ./Test0/compTest2a.ic, line 304
+t1m26_1        |  T  t1m26!1
+t1m27          !1 !
+*** Warning: unused    imm timer: t1m27 File ./Test0/compTest2a.ic, line 304
+t1m27_1        |  T  t1m27!1
+t1m28          !1 !
+*** Warning: unused    imm timer: t1m28 File ./Test0/compTest2a.ic, line 304
+t1m28_1        |  T  t1m28!1
+t1m28_2        |  T  t1m28!1
+t1m29          !1 !
+*** Warning: unused    imm timer: t1m29 File ./Test0/compTest2a.ic, line 304
+t1m29_1        |  T  t1m29!1
+t1m29_2        |  T  t1m29!1
+t1m3           .  !  QX3.2_3&   QX3.2_2&   QX3.3_3&   QX3.3_2&   QX4.6_3&   QX4.6_2&   QX4.7_3&   QX4.7_2&
+                     QX7.5_1%   QX7.7_1%   QX8.2_2|   QX8.2_1|   QX8.3_2|   QX8.3_1|   QX9.6_2&   QX9.6_1&
+                     QX9.7_2&   QX9.7_1&   QX13.1_2|  QX13.1_1|  QX13.2_2|  QX13.2_1|  QX13.3_2|  QX13.3_1|
+                     QB38_3&    QB38_2&    QB39_3&    QB39_2&    QB50_3&    QB50_2&    QB51_3&    QB51_2&
+*** Warning: undefined imm timer: t1m3 File ./Test0/compTest2a.ic, line 304
+t1m30          !1 !
+*** Warning: unused    imm timer: t1m30 File ./Test0/compTest2a.ic, line 304
+t1m30_1        |  T  t1m30!1
+t1m30_2        |  T  t1m30!1
+t1m31          !1 !
+*** Warning: unused    imm timer: t1m31 File ./Test0/compTest2a.ic, line 304
+t1m31_1        |  T  t1m31!1
+t1m31_2        |  T  t1m31!1
+tim            @  !  tim0.
+tim0           .  !  QX0.6_1|   QX0.7_1|   QX6.2_1|   QX6.3_1|   QX6.6_1|   QX6.7_1|   QX11.2_2|  QX11.3_2|
+                     QX11.5_2|  QX11.6_2|  QX12.0_2|  QX12.1_2|  QX12.4_3|  QX12.5_3|  QX12.7_3|  QX13.0_3|
+                     QX13.2_3|  QX13.3_3|  QX13.6_3|  QX13.7_3|  QX14.1_3|  QX14.2_3|  QX14.4_3|  QX14.5_3|
+                     QX15.0_3|  QX15.1_3|  QX15.3_3|  QX15.4_3|  QX15.6_3|  QX15.7_3|  QB18_1+    QB19_1+
+                     _f3_1|     _f4_1|     _f7_1|     _f8_1|     _f11_1|    _f12_1|
+*** Warning: undefined imm timer: tim0 File ./Test0/compTest2a.ic, line 304
+tim1           .  !  QX2.0_1|  QX2.1_1|  QX2.2_1|  QX2.3_1|  QX4.4_1|  QX4.5_1|  QX4.6_1|  QX4.7_1|
+                     QX5.0_1|  QX5.1_1|  QX5.2_1|  QX5.3_1|  QX5.4_1|  QX5.5_1|  QX5.6_1|  QX5.7_1|
+                     QB28_1+   QB29_1+   QB30_1+   QB31_1+   QB48_1+   QB49_1+   QB50_1+   QB51_1+
+                     QB52_1+   QB53_1+   QB54_1+   QB55_1+   QB56_1+   QB57_1+   QB58_1+   QB59_1+
+*** Warning: undefined imm timer: tim1 File ./Test0/compTest2a.ic, line 304
+tim12          !  !
+*** Warning: unused    imm timer: tim12 File ./Test0/compTest2a.ic, line 304
+tim12_1        |  T  tim12!
+tim12_2        |  T  tim12!
+tim13          !  !
+*** Warning: unused    imm timer: tim13 File ./Test0/compTest2a.ic, line 304
+tim13_1        |  T  tim13!
+tim13_2        |  T  tim13!
+tim14          !  !
+*** Warning: unused    imm timer: tim14 File ./Test0/compTest2a.ic, line 304
+tim14_1        |  T  tim14!
+tim14_2        |  T  tim14!
+tim15          !  !
+*** Warning: unused    imm timer: tim15 File ./Test0/compTest2a.ic, line 304
+tim15_1        |  T  tim15!
+tim15_2        |  T  tim15!
+tim2           .  !  QX1.2_2|  QX1.2_1|  QX1.3_2|  QX1.3_1|  QX2.6_3&  QX2.6_2&  QX2.6_1|  QX2.7_3&
+                     QX2.7_2&  QX2.7_1|  QB22_2|   QB22_1+   QB23_2|   QB23_1+   QB34_3&   QB34_2&
+                     QB34_1+   QB35_3&   QB35_2&   QB35_1+
+*** Warning: undefined imm timer: tim2 File ./Test0/compTest2a.ic, line 304
+tim24          !  !
+*** Warning: unused    imm timer: tim24 File ./Test0/compTest2a.ic, line 304
+tim24_1        |  T  tim24!
+tim24_2        |  T  tim24!
+tim25          !  !
+*** Warning: unused    imm timer: tim25 File ./Test0/compTest2a.ic, line 304
+tim25_1        |  T  tim25!
+tim25_2        |  T  tim25!
+tim26          !  !
+*** Warning: unused    imm timer: tim26 File ./Test0/compTest2a.ic, line 304
+tim26_1        |  T  tim26!
+tim26_2        |  T  tim26!
+tim27          !  !
+*** Warning: unused    imm timer: tim27 File ./Test0/compTest2a.ic, line 304
+tim27_1        |  T  tim27!
+tim27_2        |  T  tim27!
+tim28          !  !
+*** Warning: unused    imm timer: tim28 File ./Test0/compTest2a.ic, line 304
+tim28_1        |  T  tim28!
+tim28_2        |  T  tim28!
+tim29          !  !
+*** Warning: unused    imm timer: tim29 File ./Test0/compTest2a.ic, line 304
+tim29_1        |  T  tim29!
+tim29_2        |  T  tim29!
+tim3           .  !  QX1.6_2|   QX1.7_2|   QX2.2_2|   QX2.3_2|   QX3.6_3&   QX3.7_3&   QX4.2_3&   QX4.3_3&
+                     QX5.2_3&   QX5.3_3&   QX5.6_3&   QX5.7_3&   QX8.6_2|   QX8.7_2|   QX9.2_2|   QX9.3_2|
+                     QX10.2_2&  QX10.3_2&  QX10.6_2&  QX10.7_2&  QX14.3_2|  QX14.4_2|  QX14.5_2|  QX15.5_2|
+                     QX15.6_2|  QX15.7_2|  QB26_2|    QB27_2|    QB30_2|    QB31_2|    QB42_3&    QB43_3&
+                     QB46_3&    QB47_3&    QB54_3&    QB55_3&    QB58_3&    QB59_3&
+*** Warning: undefined imm timer: tim3 File ./Test0/compTest2a.ic, line 304
+tim30          !  !
+*** Warning: unused    imm timer: tim30 File ./Test0/compTest2a.ic, line 304
+tim30_1        |  T  tim30!
+tim30_2        |  T  tim30!
+tim31          !  !
+*** Warning: unused    imm timer: tim31 File ./Test0/compTest2a.ic, line 304
+tim31_1        |  T  tim31!
+tim31_2        |  T  tim31!
+tim4           !  !  QX4.0_2&   QX4.1_2&   QX4.2_2&   QX4.3_2&   QX5.4_2&   QX5.5_2&   QX5.6_2&   QX5.7_2&
+                     QX9.0_1|   QX9.1_1|   QX9.2_1|   QX9.3_1|   QX10.4_1&  QX10.5_1&  QX10.6_1&  QX10.7_1&
+                     QX11.7_1|  QX12.0_1|  QX12.1_1|  QX14.6_1|  QX14.7_1|  QX15.0_1|  QX15.1_1|  QX15.2_1|
+                     QX15.3_1|  QX15.4_1|  QX15.5_1|  QX15.6_1|  QX15.7_1|  QB44_2&    QB45_2&    QB46_2&
+                     QB47_2&    QB56_2&    QB57_2&    QB58_2&    QB59_2&
+tim4_1         |  T  tim4!
+tim5           !  !
+*** Warning: unused    imm timer: tim5 File ./Test0/compTest2a.ic, line 304
+tim5_1         |  T  tim5!
+tim6           !  !
+*** Warning: unused    imm timer: tim6 File ./Test0/compTest2a.ic, line 304
+tim6_1         |  T  tim6!
+tim7           !  !
+*** Warning: unused    imm timer: tim7 File ./Test0/compTest2a.ic, line 304
+tim7_1         |  T  tim7!
+timExpr        @  !  tim1.
+timExprReset   @  !  tim2.
+timReset       @  !  tim3.
+timSet         @  !  tim4!
+timSet1        @  !  t1m0.
+timSet1Set2    @  !  t1m1.
+timSet2        @  !  t1m2.
+timSetReset    @  !  t1m3.
+
+******* NET STATISTICS  ************************
+
+UDF	.     13 blocks
+ARN	+     88 blocks
+AND	&    216 blocks
+OR	|    496 blocks
+LATCH	%      6 blocks
+SH	*     44 blocks
+FF	#    112 blocks
+EF	/      4 blocks
+VF	>      4 blocks
+NCONST	=      2 blocks
+INPW	[      1 blocks
+INPX	<      7 blocks
+CLK	:     17 blocks
+TIM	!     32 blocks
+ALIAS	@     35
+
+TOTAL	    1042 blocks
+	    3731 links
+
+compiled by:
+@(#)     $Id: compTest2a.lst,v 1.1 2015/06/03 06:49:59 jw Exp $ -O7
+*** Warning: 13 undefined gates and 43 unused gates. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX0.6_1' controlled by timer '1' has no clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX0.7_1' controlled by timer '3' has no clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB17_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB18_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB19_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB21_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB21_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB22_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB22_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB23_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB23_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB24_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB25_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB25_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB26_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB26_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB27_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB27_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB28_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB29_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB29_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB30_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB30_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB31_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB31_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB33_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB33_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB33_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB34_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB34_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB34_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB35_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB35_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB35_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB36_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB37_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB37_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB37_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB38_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB38_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB38_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB39_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB39_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB39_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB40_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB41_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB41_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB42_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB42_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB43_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB43_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB44_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB44_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB45_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB45_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB45_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB46_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB46_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB46_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB47_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB47_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB47_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB48_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB49_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB49_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB49_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB50_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB50_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB50_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB51_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB51_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB51_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB52_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB53_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB53_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB54_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB54_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB55_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB55_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB56_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB56_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB57_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB57_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB57_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB58_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB58_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB58_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB59_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB59_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QB59_3' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX0.5_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX0.6_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX0.7_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.1_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.1_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.2_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.2_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.3_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.3_2' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: Action gate 'QX1.4_1' has no valid clock. File ./Test0/compTest2a.ic, line 304
+*** ErrorEmit: too many errors - iC compilation aborted. File ./Test0/compTest2a.ic, line 304

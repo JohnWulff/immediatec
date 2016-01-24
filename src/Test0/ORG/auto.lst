@@ -1,0 +1,49 @@
+******* ./Test0/auto.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	protect against C keywords in iC programs
+004	 *
+005	 *******************************************************************/
+006
+007	imm bit auto, char, continue, while;
+*** ------------^ syntax error, unexpected LEXERR 1 in ./Test0/auto.ic
+008
+009	auto = char & continue & while;	// strange
+*** ----^ syntax error, unexpected LEXERR 2 in ./Test0/auto.ic
+010
+011	char     = IX0.0 & IX0.7;
+*** ----^ syntax error, unexpected LEXERR 3 in ./Test0/auto.ic
+012	continue = IX0.1 & IX0.7;
+*** ----^ syntax error, unexpected LEXERR 4 in ./Test0/auto.ic
+013	while    = IX0.2 & IX0.7;
+*** ----^ syntax error, unexpected LEXERR 5 in ./Test0/auto.ic
+014
+015	QX0.0    = auto;
+*** ---------------^ syntax error, unexpected LEXERR 6 in ./Test0/auto.ic
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <
+*** Warning: unused    imm bit: IX0.0 File ./Test0/auto.ic, line 16
+IX0.1   <
+*** Warning: unused    imm bit: IX0.1 File ./Test0/auto.ic, line 16
+IX0.2   <
+*** Warning: unused    imm bit: IX0.2 File ./Test0/auto.ic, line 16
+IX0.7   <
+*** Warning: unused    imm bit: IX0.7 File ./Test0/auto.ic, line 16
+QX0.0   .
+*** Warning: undefined imm bit: QX0.0 File ./Test0/auto.ic, line 16
+*** Warning: unused    imm bit: QX0.0 File ./Test0/auto.ic, line 16
+
+******* NET STATISTICS  ************************
+
+UDF	.      1 blocks
+INPX	<      4 blocks
+
+TOTAL	       5 blocks
+	      10 links
+
+compiled by:
+@(#)     $Id: auto.lst,v 1.1 2015/06/04 01:36:55 jw Exp $ -O7
+*** Warning: 1 undefined gate and 5 unused gates. File ./Test0/auto.ic, line 16
+*** Error: 6 syntax errors - cannot execute. File ./Test0/auto.ic, line 16

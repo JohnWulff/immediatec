@@ -1,0 +1,904 @@
+******* ./Test0/qf3.ic  ************************
+001	/* display logic */
+002
+003	cl00 =	I0 & I1;
+*** Error: strict: use of an undeclared imm variable: I0 File ./Test0/qf3.ic, line 3
+*** Error: strict: use of an undeclared imm variable: I1 File ./Test0/qf3.ic, line 3
+*** Error: strict: assignment to an undeclared imm variable: cl00 File ./Test0/qf3.ic, line 3
+
+	I0      ? ---&  cl00
+	I1      ? ---&
+
+004	op00 =	I0 & I2;
+*** Error: strict: use of an undeclared imm variable: I2 File ./Test0/qf3.ic, line 4
+*** Error: strict: assignment to an undeclared imm variable: op00 File ./Test0/qf3.ic, line 4
+
+	I0      ? ---&  op00
+	I2      ? ---&
+
+005
+006	o100 =	cl00 & ~I3 & ~op00;
+*** Error: strict: use of an undeclared imm variable: I3 File ./Test0/qf3.ic, line 6
+*** Error: strict: assignment to an undeclared imm variable: o100 File ./Test0/qf3.ic, line 6
+
+	cl00    ? ---&  o100
+	I3      ? ---&
+	op00    ? ---&
+
+007	o200 =	op00 & ~I4;
+*** Error: strict: use of an undeclared imm variable: I4 File ./Test0/qf3.ic, line 7
+*** Error: strict: assignment to an undeclared imm variable: o200 File ./Test0/qf3.ic, line 7
+
+	op00    ? ---&  o200
+	I4      ? ---&
+
+008
+009	cc00 =	I3 & ~o200 & o900;
+*** Error: strict: use of an undeclared imm variable: o900 File ./Test0/qf3.ic, line 9
+*** Error: strict: assignment to an undeclared imm variable: cc00 File ./Test0/qf3.ic, line 9
+
+	I3      ? ---&  cc00
+	o200    ? ---&
+	o900    ? ---&
+
+010	co00 =	I4 & ~o100 & ~o900;
+*** Error: strict: assignment to an undeclared imm variable: co00 File ./Test0/qf3.ic, line 10
+
+	I4      ? ---&  co00
+	o100    ? ---&
+	o900    ? ---&
+
+011	o900 =	SR(op00 | I2 & co00, cl00 | I1 & cc00 & ~I2);
+
+	o900_1  S ---?  o900
+	o900_2  R ---?
+
+	iClock  : ---|  o900_1  S
+	op00    ? ---|
+	o900_4    ---|
+
+	iClock  : ---|  o900_2  R
+	cl00    ? ---|
+	o900_3    ---|
+
+	I1      ? ---&  o900_3
+	cc00    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o900_4
+	co00    ? ---&
+
+012
+013	o400 =	~o900 & I3 | cc00 & I8 | I9;
+*** Error: strict: use of an undeclared imm variable: I8 File ./Test0/qf3.ic, line 13
+*** Error: strict: use of an undeclared imm variable: I9 File ./Test0/qf3.ic, line 13
+*** Error: strict: assignment to an undeclared imm variable: o400 File ./Test0/qf3.ic, line 13
+
+	o400_1    ---|  o400
+	o400_2    ---|
+	I9      ? ---|
+
+	o900    ? ---&  o400_1
+	I3      ? ---&
+
+	cc00    ? ---&  o400_2
+	I8      ? ---&
+
+014	o500 =	o900 & I4 | co00 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o500 File ./Test0/qf3.ic, line 14
+
+	o500_1    ---|  o500
+	o500_2    ---|
+	I9      ? ---|
+
+	o900    ? ---&  o500_1
+	I4      ? ---&
+
+	co00    ? ---&  o500_2
+	I8      ? ---&
+
+015
+016	o700 =	cc00 | co00;
+*** Error: strict: assignment to an undeclared imm variable: o700 File ./Test0/qf3.ic, line 16
+
+	cc00    ? ---|  o700
+	co00    ? ---|
+
+017
+018	cl01 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl01 File ./Test0/qf3.ic, line 18
+
+	I0      ? ---&  cl01
+	I1      ? ---&
+
+019	op01 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op01 File ./Test0/qf3.ic, line 19
+
+	I0      ? ---&  op01
+	I2      ? ---&
+
+020
+021	o101 =	cl01 & ~I3 & ~op01;
+*** Error: strict: assignment to an undeclared imm variable: o101 File ./Test0/qf3.ic, line 21
+
+	cl01    ? ---&  o101
+	I3      ? ---&
+	op01    ? ---&
+
+022	o201 =	op01 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o201 File ./Test0/qf3.ic, line 22
+
+	op01    ? ---&  o201
+	I4      ? ---&
+
+023
+024	cc01 =	I3 & ~o201 & o901;
+*** Error: strict: use of an undeclared imm variable: o901 File ./Test0/qf3.ic, line 24
+*** Error: strict: assignment to an undeclared imm variable: cc01 File ./Test0/qf3.ic, line 24
+
+	I3      ? ---&  cc01
+	o201    ? ---&
+	o901    ? ---&
+
+025	co01 =	I4 & ~o101 & ~o901;
+*** Error: strict: assignment to an undeclared imm variable: co01 File ./Test0/qf3.ic, line 25
+
+	I4      ? ---&  co01
+	o101    ? ---&
+	o901    ? ---&
+
+026	o901 =	SR(op01 | I2 & co01, cl01 | I1 & cc01 & ~I2);
+
+	o901_1  S ---?  o901
+	o901_2  R ---?
+
+	iClock  : ---|  o901_1  S
+	op01    ? ---|
+	o901_4    ---|
+
+	iClock  : ---|  o901_2  R
+	cl01    ? ---|
+	o901_3    ---|
+
+	I1      ? ---&  o901_3
+	cc01    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o901_4
+	co01    ? ---&
+
+027
+028	o401 =	~o901 & I3 | cc01 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o401 File ./Test0/qf3.ic, line 28
+
+	o401_1    ---|  o401
+	o401_2    ---|
+	I9      ? ---|
+
+	o901    ? ---&  o401_1
+	I3      ? ---&
+
+	cc01    ? ---&  o401_2
+	I8      ? ---&
+
+029	o501 =	o901 & I4 | co01 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o501 File ./Test0/qf3.ic, line 29
+
+	o501_1    ---|  o501
+	o501_2    ---|
+	I9      ? ---|
+
+	o901    ? ---&  o501_1
+	I4      ? ---&
+
+	co01    ? ---&  o501_2
+	I8      ? ---&
+
+030
+031	o701 =	cc01 | co01;
+*** Error: strict: assignment to an undeclared imm variable: o701 File ./Test0/qf3.ic, line 31
+
+	cc01    ? ---|  o701
+	co01    ? ---|
+
+032
+033	cl02 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl02 File ./Test0/qf3.ic, line 33
+
+	I0      ? ---&  cl02
+	I1      ? ---&
+
+034	op02 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op02 File ./Test0/qf3.ic, line 34
+
+	I0      ? ---&  op02
+	I2      ? ---&
+
+035
+036	o102 =	cl02 & ~I3 & ~op02;
+*** Error: strict: assignment to an undeclared imm variable: o102 File ./Test0/qf3.ic, line 36
+
+	cl02    ? ---&  o102
+	I3      ? ---&
+	op02    ? ---&
+
+037	o202 =	op02 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o202 File ./Test0/qf3.ic, line 37
+
+	op02    ? ---&  o202
+	I4      ? ---&
+
+038
+039	cc02 =	I3 & ~o202 & o902;
+*** Error: strict: use of an undeclared imm variable: o902 File ./Test0/qf3.ic, line 39
+*** Error: strict: assignment to an undeclared imm variable: cc02 File ./Test0/qf3.ic, line 39
+
+	I3      ? ---&  cc02
+	o202    ? ---&
+	o902    ? ---&
+
+040	co02 =	I4 & ~o102 & ~o902;
+*** Error: strict: assignment to an undeclared imm variable: co02 File ./Test0/qf3.ic, line 40
+
+	I4      ? ---&  co02
+	o102    ? ---&
+	o902    ? ---&
+
+041	o902 =	SR(op02 | I2 & co02, cl02 | I1 & cc02 & ~I2);
+
+	o902_1  S ---?  o902
+	o902_2  R ---?
+
+	iClock  : ---|  o902_1  S
+	op02    ? ---|
+	o902_4    ---|
+
+	iClock  : ---|  o902_2  R
+	cl02    ? ---|
+	o902_3    ---|
+
+	I1      ? ---&  o902_3
+	cc02    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o902_4
+	co02    ? ---&
+
+042
+043	o402 =	~o902 & I3 | cc02 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o402 File ./Test0/qf3.ic, line 43
+
+	o402_1    ---|  o402
+	o402_2    ---|
+	I9      ? ---|
+
+	o902    ? ---&  o402_1
+	I3      ? ---&
+
+	cc02    ? ---&  o402_2
+	I8      ? ---&
+
+044	o502 =	o902 & I4 | co02 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o502 File ./Test0/qf3.ic, line 44
+
+	o502_1    ---|  o502
+	o502_2    ---|
+	I9      ? ---|
+
+	o902    ? ---&  o502_1
+	I4      ? ---&
+
+	co02    ? ---&  o502_2
+	I8      ? ---&
+
+045
+046	o702 =	cc02 | co02;
+*** Error: strict: assignment to an undeclared imm variable: o702 File ./Test0/qf3.ic, line 46
+
+	cc02    ? ---|  o702
+	co02    ? ---|
+
+047
+048	cl03 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl03 File ./Test0/qf3.ic, line 48
+
+	I0      ? ---&  cl03
+	I1      ? ---&
+
+049	op03 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op03 File ./Test0/qf3.ic, line 49
+
+	I0      ? ---&  op03
+	I2      ? ---&
+
+050
+051	o103 =	cl03 & ~I3 & ~op03;
+*** Error: strict: assignment to an undeclared imm variable: o103 File ./Test0/qf3.ic, line 51
+
+	cl03    ? ---&  o103
+	I3      ? ---&
+	op03    ? ---&
+
+052	o203 =	op03 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o203 File ./Test0/qf3.ic, line 52
+
+	op03    ? ---&  o203
+	I4      ? ---&
+
+053
+054	cc03 =	I3 & ~o203 & o903;
+*** Error: strict: use of an undeclared imm variable: o903 File ./Test0/qf3.ic, line 54
+*** Error: strict: assignment to an undeclared imm variable: cc03 File ./Test0/qf3.ic, line 54
+
+	I3      ? ---&  cc03
+	o203    ? ---&
+	o903    ? ---&
+
+055	co03 =	I4 & ~o103 & ~o903;
+*** Error: strict: assignment to an undeclared imm variable: co03 File ./Test0/qf3.ic, line 55
+
+	I4      ? ---&  co03
+	o103    ? ---&
+	o903    ? ---&
+
+056	o903 =	SR(op03 | I2 & co03, cl03 | I1 & cc03 & ~I2);
+
+	o903_1  S ---?  o903
+	o903_2  R ---?
+
+	iClock  : ---|  o903_1  S
+	op03    ? ---|
+	o903_4    ---|
+
+	iClock  : ---|  o903_2  R
+	cl03    ? ---|
+	o903_3    ---|
+
+	I1      ? ---&  o903_3
+	cc03    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o903_4
+	co03    ? ---&
+
+057
+058	o403 =	~o903 & I3 | cc03 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o403 File ./Test0/qf3.ic, line 58
+
+	o403_1    ---|  o403
+	o403_2    ---|
+	I9      ? ---|
+
+	o903    ? ---&  o403_1
+	I3      ? ---&
+
+	cc03    ? ---&  o403_2
+	I8      ? ---&
+
+059	o503 =	o903 & I4 | co03 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o503 File ./Test0/qf3.ic, line 59
+
+	o503_1    ---|  o503
+	o503_2    ---|
+	I9      ? ---|
+
+	o903    ? ---&  o503_1
+	I4      ? ---&
+
+	co03    ? ---&  o503_2
+	I8      ? ---&
+
+060
+061	o703 =	cc03 | co03;
+*** Error: strict: assignment to an undeclared imm variable: o703 File ./Test0/qf3.ic, line 61
+
+	cc03    ? ---|  o703
+	co03    ? ---|
+
+062
+063	cl04 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl04 File ./Test0/qf3.ic, line 63
+
+	I0      ? ---&  cl04
+	I1      ? ---&
+
+064	op04 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op04 File ./Test0/qf3.ic, line 64
+
+	I0      ? ---&  op04
+	I2      ? ---&
+
+065
+066	o104 =	cl04 & ~I3 & ~op04;
+*** Error: strict: assignment to an undeclared imm variable: o104 File ./Test0/qf3.ic, line 66
+
+	cl04    ? ---&  o104
+	I3      ? ---&
+	op04    ? ---&
+
+067	o204 =	op04 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o204 File ./Test0/qf3.ic, line 67
+
+	op04    ? ---&  o204
+	I4      ? ---&
+
+068
+069	cc04 =	I3 & ~o204 & o904;
+*** Error: strict: use of an undeclared imm variable: o904 File ./Test0/qf3.ic, line 69
+*** Error: strict: assignment to an undeclared imm variable: cc04 File ./Test0/qf3.ic, line 69
+
+	I3      ? ---&  cc04
+	o204    ? ---&
+	o904    ? ---&
+
+070	co04 =	I4 & ~o104 & ~o904;
+*** Error: strict: assignment to an undeclared imm variable: co04 File ./Test0/qf3.ic, line 70
+
+	I4      ? ---&  co04
+	o104    ? ---&
+	o904    ? ---&
+
+071	o904 =	SR(op04 | I2 & co04, cl04 | I1 & cc04 & ~I2);
+
+	o904_1  S ---?  o904
+	o904_2  R ---?
+
+	iClock  : ---|  o904_1  S
+	op04    ? ---|
+	o904_4    ---|
+
+	iClock  : ---|  o904_2  R
+	cl04    ? ---|
+	o904_3    ---|
+
+	I1      ? ---&  o904_3
+	cc04    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o904_4
+	co04    ? ---&
+
+072
+073	o404 =	~o904 & I3 | cc04 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o404 File ./Test0/qf3.ic, line 73
+
+	o404_1    ---|  o404
+	o404_2    ---|
+	I9      ? ---|
+
+	o904    ? ---&  o404_1
+	I3      ? ---&
+
+	cc04    ? ---&  o404_2
+	I8      ? ---&
+
+074	o504 =	o904 & I4 | co04 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o504 File ./Test0/qf3.ic, line 74
+
+	o504_1    ---|  o504
+	o504_2    ---|
+	I9      ? ---|
+
+	o904    ? ---&  o504_1
+	I4      ? ---&
+
+	co04    ? ---&  o504_2
+	I8      ? ---&
+
+075
+076	o704 =	cc04 | co04;
+*** Error: strict: assignment to an undeclared imm variable: o704 File ./Test0/qf3.ic, line 76
+
+	cc04    ? ---|  o704
+	co04    ? ---|
+
+077
+078	cl05 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl05 File ./Test0/qf3.ic, line 78
+
+	I0      ? ---&  cl05
+	I1      ? ---&
+
+079	op05 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op05 File ./Test0/qf3.ic, line 79
+
+	I0      ? ---&  op05
+	I2      ? ---&
+
+080
+081	o105 =	cl05 & ~I3 & ~op05;
+*** Error: strict: assignment to an undeclared imm variable: o105 File ./Test0/qf3.ic, line 81
+
+	cl05    ? ---&  o105
+	I3      ? ---&
+	op05    ? ---&
+
+082	o205 =	op05 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o205 File ./Test0/qf3.ic, line 82
+
+	op05    ? ---&  o205
+	I4      ? ---&
+
+083
+084	cc05 =	I3 & ~o205 & o905;
+*** Error: strict: use of an undeclared imm variable: o905 File ./Test0/qf3.ic, line 84
+*** Error: strict: assignment to an undeclared imm variable: cc05 File ./Test0/qf3.ic, line 84
+
+	I3      ? ---&  cc05
+	o205    ? ---&
+	o905    ? ---&
+
+085	co05 =	I4 & ~o105 & ~o905;
+*** Error: strict: assignment to an undeclared imm variable: co05 File ./Test0/qf3.ic, line 85
+
+	I4      ? ---&  co05
+	o105    ? ---&
+	o905    ? ---&
+
+086	o905 =	SR(op05 | I2 & co05, cl05 | I1 & cc05 & ~I2);
+
+	o905_1  S ---?  o905
+	o905_2  R ---?
+
+	iClock  : ---|  o905_1  S
+	op05    ? ---|
+	o905_4    ---|
+
+	iClock  : ---|  o905_2  R
+	cl05    ? ---|
+	o905_3    ---|
+
+	I1      ? ---&  o905_3
+	cc05    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o905_4
+	co05    ? ---&
+
+087
+088	o405 =	~o905 & I3 | cc05 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o405 File ./Test0/qf3.ic, line 88
+
+	o405_1    ---|  o405
+	o405_2    ---|
+	I9      ? ---|
+
+	o905    ? ---&  o405_1
+	I3      ? ---&
+
+	cc05    ? ---&  o405_2
+	I8      ? ---&
+
+089	o505 =	o905 & I4 | co05 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o505 File ./Test0/qf3.ic, line 89
+
+	o505_1    ---|  o505
+	o505_2    ---|
+	I9      ? ---|
+
+	o905    ? ---&  o505_1
+	I4      ? ---&
+
+	co05    ? ---&  o505_2
+	I8      ? ---&
+
+090
+091	o705 =	cc05 | co05;
+*** Error: strict: assignment to an undeclared imm variable: o705 File ./Test0/qf3.ic, line 91
+
+	cc05    ? ---|  o705
+	co05    ? ---|
+
+092
+093	cl06 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl06 File ./Test0/qf3.ic, line 93
+
+	I0      ? ---&  cl06
+	I1      ? ---&
+
+094	op06 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op06 File ./Test0/qf3.ic, line 94
+
+	I0      ? ---&  op06
+	I2      ? ---&
+
+095
+096	o106 =	cl06 & ~I3 & ~op06;
+*** Error: strict: assignment to an undeclared imm variable: o106 File ./Test0/qf3.ic, line 96
+
+	cl06    ? ---&  o106
+	I3      ? ---&
+	op06    ? ---&
+
+097	o206 =	op06 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o206 File ./Test0/qf3.ic, line 97
+
+	op06    ? ---&  o206
+	I4      ? ---&
+
+098
+099	cc06 =	I3 & ~o206 & o906;
+*** Error: strict: use of an undeclared imm variable: o906 File ./Test0/qf3.ic, line 99
+*** Error: strict: assignment to an undeclared imm variable: cc06 File ./Test0/qf3.ic, line 99
+
+	I3      ? ---&  cc06
+	o206    ? ---&
+	o906    ? ---&
+
+100	co06 =	I4 & ~o106 & ~o906;
+*** Error: strict: assignment to an undeclared imm variable: co06 File ./Test0/qf3.ic, line 100
+
+	I4      ? ---&  co06
+	o106    ? ---&
+	o906    ? ---&
+
+101	o906 =	SR(op06 | I2 & co06, cl06 | I1 & cc06 & ~I2);
+
+	o906_1  S ---?  o906
+	o906_2  R ---?
+
+	iClock  : ---|  o906_1  S
+	op06    ? ---|
+	o906_4    ---|
+
+	iClock  : ---|  o906_2  R
+	cl06    ? ---|
+	o906_3    ---|
+
+	I1      ? ---&  o906_3
+	cc06    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o906_4
+	co06    ? ---&
+
+102
+103	o406 =	~o906 & I3 | cc06 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o406 File ./Test0/qf3.ic, line 103
+
+	o406_1    ---|  o406
+	o406_2    ---|
+	I9      ? ---|
+
+	o906    ? ---&  o406_1
+	I3      ? ---&
+
+	cc06    ? ---&  o406_2
+	I8      ? ---&
+
+104	o506 =	o906 & I4 | co06 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o506 File ./Test0/qf3.ic, line 104
+
+	o506_1    ---|  o506
+	o506_2    ---|
+	I9      ? ---|
+
+	o906    ? ---&  o506_1
+	I4      ? ---&
+
+	co06    ? ---&  o506_2
+	I8      ? ---&
+
+105
+106	o706 =	cc06 | co06;
+*** Error: strict: assignment to an undeclared imm variable: o706 File ./Test0/qf3.ic, line 106
+
+	cc06    ? ---|  o706
+	co06    ? ---|
+
+107
+108	cl07 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl07 File ./Test0/qf3.ic, line 108
+
+	I0      ? ---&  cl07
+	I1      ? ---&
+
+109	op07 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op07 File ./Test0/qf3.ic, line 109
+
+	I0      ? ---&  op07
+	I2      ? ---&
+
+110
+111	o107 =	cl07 & ~I3 & ~op07;
+*** Error: strict: assignment to an undeclared imm variable: o107 File ./Test0/qf3.ic, line 111
+
+	cl07    ? ---&  o107
+	I3      ? ---&
+	op07    ? ---&
+
+112	o207 =	op07 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o207 File ./Test0/qf3.ic, line 112
+
+	op07    ? ---&  o207
+	I4      ? ---&
+
+113
+114	cc07 =	I3 & ~o207 & o907;
+*** Error: strict: use of an undeclared imm variable: o907 File ./Test0/qf3.ic, line 114
+*** Error: strict: assignment to an undeclared imm variable: cc07 File ./Test0/qf3.ic, line 114
+
+	I3      ? ---&  cc07
+	o207    ? ---&
+	o907    ? ---&
+
+115	co07 =	I4 & ~o107 & ~o907;
+*** Error: strict: assignment to an undeclared imm variable: co07 File ./Test0/qf3.ic, line 115
+
+	I4      ? ---&  co07
+	o107    ? ---&
+	o907    ? ---&
+
+116	o907 =	SR(op07 | I2 & co07, cl07 | I1 & cc07 & ~I2);
+
+	o907_1  S ---?  o907
+	o907_2  R ---?
+
+	iClock  : ---|  o907_1  S
+	op07    ? ---|
+	o907_4    ---|
+
+	iClock  : ---|  o907_2  R
+	cl07    ? ---|
+	o907_3    ---|
+
+	I1      ? ---&  o907_3
+	cc07    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o907_4
+	co07    ? ---&
+
+117
+118	o407 =	~o907 & I3 | cc07 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o407 File ./Test0/qf3.ic, line 118
+
+	o407_1    ---|  o407
+	o407_2    ---|
+	I9      ? ---|
+
+	o907    ? ---&  o407_1
+	I3      ? ---&
+
+	cc07    ? ---&  o407_2
+	I8      ? ---&
+
+119	o507 =	o907 & I4 | co07 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o507 File ./Test0/qf3.ic, line 119
+
+	o507_1    ---|  o507
+	o507_2    ---|
+	I9      ? ---|
+
+	o907    ? ---&  o507_1
+	I4      ? ---&
+
+	co07    ? ---&  o507_2
+	I8      ? ---&
+
+120
+121	o707 =	cc07 | co07;
+*** Error: strict: assignment to an undeclared imm variable: o707 File ./Test0/qf3.ic, line 121
+
+	cc07    ? ---|  o707
+	co07    ? ---|
+
+122
+123	cl08 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl08 File ./Test0/qf3.ic, line 123
+
+	I0      ? ---&  cl08
+	I1      ? ---&
+
+124	op08 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op08 File ./Test0/qf3.ic, line 124
+
+	I0      ? ---&  op08
+	I2      ? ---&
+
+125
+126	o108 =	cl08 & ~I3 & ~op08;
+*** Error: strict: assignment to an undeclared imm variable: o108 File ./Test0/qf3.ic, line 126
+
+	cl08    ? ---&  o108
+	I3      ? ---&
+	op08    ? ---&
+
+127	o208 =	op08 & ~I4;
+*** Error: strict: assignment to an undeclared imm variable: o208 File ./Test0/qf3.ic, line 127
+
+	op08    ? ---&  o208
+	I4      ? ---&
+
+128
+129	cc08 =	I3 & ~o208 & o908;
+*** Error: strict: use of an undeclared imm variable: o908 File ./Test0/qf3.ic, line 129
+*** Error: strict: assignment to an undeclared imm variable: cc08 File ./Test0/qf3.ic, line 129
+
+	I3      ? ---&  cc08
+	o208    ? ---&
+	o908    ? ---&
+
+130	co08 =	I4 & ~o108 & ~o908;
+*** Error: strict: assignment to an undeclared imm variable: co08 File ./Test0/qf3.ic, line 130
+
+	I4      ? ---&  co08
+	o108    ? ---&
+	o908    ? ---&
+
+131	o908 =	SR(op08 | I2 & co08, cl08 | I1 & cc08 & ~I2);
+
+	o908_1  S ---?  o908
+	o908_2  R ---?
+
+	iClock  : ---|  o908_1  S
+	op08    ? ---|
+	o908_4    ---|
+
+	iClock  : ---|  o908_2  R
+	cl08    ? ---|
+	o908_3    ---|
+
+	I1      ? ---&  o908_3
+	cc08    ? ---&
+	I2      ? ---&
+
+	I2      ? ---&  o908_4
+	co08    ? ---&
+
+132
+133	o408 =	~o908 & I3 | cc08 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o408 File ./Test0/qf3.ic, line 133
+
+	o408_1    ---|  o408
+	o408_2    ---|
+	I9      ? ---|
+
+	o908    ? ---&  o408_1
+	I3      ? ---&
+
+	cc08    ? ---&  o408_2
+	I8      ? ---&
+
+134	o508 =	o908 & I4 | co08 & I8 | I9;
+*** Error: strict: assignment to an undeclared imm variable: o508 File ./Test0/qf3.ic, line 134
+
+	o508_1    ---|  o508
+	o508_2    ---|
+	I9      ? ---|
+
+	o908    ? ---&  o508_1
+	I4      ? ---&
+
+	co08    ? ---&  o508_2
+	I8      ? ---&
+
+135
+136	o708 =	cc08 | co08;
+*** Error: strict: assignment to an undeclared imm variable: o708 File ./Test0/qf3.ic, line 136
+
+	cc08    ? ---|  o708
+	co08    ? ---|
+
+137
+138	cl09 =	I0 & I1;
+*** Error: strict: assignment to an undeclared imm variable: cl09 File ./Test0/qf3.ic, line 138
+
+	I0      ? ---&  cl09
+	I1      ? ---&
+
+139	op09 =	I0 & I2;
+*** Error: strict: assignment to an undeclared imm variable: op09 File ./Test0/qf3.ic, line 139
+
+	I0      ? ---&  op09
+	I2      ? ---&
+
+140
+141	o109 =	cl09 & ~I3 & ~op09;
+*** Error: strict: assignment to an undeclared imm variable: o109 File ./Test0/qf3.ic, line 141
+*** Error: too many errors - compilation aborted. File ./Test0/qf3.ic, line 141
+
+	cl09    ? ---&  o109
+	I3      ? ---&
+	op09    ? ---&
+

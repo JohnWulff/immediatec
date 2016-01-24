@@ -1,0 +1,70 @@
+/********************************************************************
+ *
+ *	simple iC program with arrays
+ *
+ *******************************************************************/
+
+%{
+%#include	<stdio.h>
+%}
+
+    if (IX0.0) {
+	int n;
+	for (n = 0; n <= 0; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 0);
+	}
+    }
+    if (IX0.1) {
+	int n;
+	for (n = 0; n <= 1; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 1);
+	}
+    }
+    if (IX0.2) {
+	int n;
+	for (n = 0; n <= 2; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 2);
+	}
+    }
+    if (IX0.3) {
+	int n;
+	for (n = 0; n <= 3; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 3);
+	}
+    }
+    if (IX0.4) {
+	int n;
+	for (n = 0; n <= 4; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 4);
+	}
+    }
+    if (IX0.5) {
+	int n;
+	for (n = 0; n <= 5; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 5);
+	}
+    }
+    if (IX0.6) {
+	int n;
+	for (n = 0; n <= 6; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 6);
+	}
+    }
+    if (IX0.7) {
+	int n;
+	for (n = 0; n <= 7; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 7);
+	}
+    }
+    if (IX1.0) {
+	int n;
+	for (n = 0; n <= 8; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 8);
+	}
+    }
+    if (IX1.1) {
+	int n;
+	for (n = 0; n <= 9; n++) {
+	    printf("%d: Hello Nr. %d\n", n, 9);
+	}
+    }

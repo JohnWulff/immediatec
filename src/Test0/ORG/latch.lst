@@ -1,0 +1,216 @@
+******* ./Test0/latch.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	generate a LATCH from a FORCE function
+004	 *	to illustrate a point in Ic.sdw page 9
+005	 *
+006	 *******************************************************************/
+007
+008	use strict;
+009
+010	imm bit t5, t6, t7;
+011
+012	QX0.0 = LATCH(IX0.0, IX0.1);		// this statement and
+
+	QX0.0     ---%  QX0.0
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+013	QX0.1 = FORCE(QX0.1, IX0.0, IX0.1);	// this statement produce identical code
+
+	QX0.1     ---%  QX0.1
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+014
+015	imm clock c = CLOCK(CHANGE(IX0.2));
+
+	c_1     C ---:  c       :
+
+	iClock  : ---|  c_1     C
+	c_2       ---|
+
+	c_3     V --->  c_2
+
+	iClock  : ---|  c_3     V
+	IX0.2     ---|
+
+016
+017	QX0.2 = DLATCH(IX0.0, IX0.1, c);	// this statement and
+
+	QX0.2_1 D ---#  QX0.2
+
+	c       : ---%  QX0.2_1 D
+	QX0.2     ---%
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+018	QX0.3 = D(LATCH(IX0.0, IX0.1), c);	// this statement produce identical code
+
+	QX0.3_1 D ---#  QX0.3
+
+	c       : ---|  QX0.3_1 D
+	QX0.3_2   ---|
+
+	QX0.3_2   ---%  QX0.3_2
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+019	QX0.4 = D(FORCE(QX0.4, IX0.0, IX0.1), c);	// so does this statement
+
+	QX0.4_1 D ---#  QX0.4
+
+	c       : ---%  QX0.4_1 D
+	QX0.4     ---%
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.4     ---|  QX0.4_0 X
+
+020	QX0.5 = t5 = D(FORCE(t5, IX0.0, IX0.1), c);	// and this statement
+
+	t5_1    D ---#  t5
+
+	c       : ---%  t5_1    D
+	t5        ---%
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	t5        ---@  QX0.5
+
+
+	t5        ---|  QX0.5_0 X
+
+021		// the following 2 statements are not identical to DLATCH() above
+022		// feedback comes from the internal temporary assignments
+023	QX0.6 = D((t6 = FORCE(t6, IX0.0, IX0.1)), c);	// the following is the same
+
+	t6        ---%  t6
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.6_1 D ---#  QX0.6
+
+	c       : ---|  QX0.6_1 D
+	t6        ---|
+
+
+	QX0.6     ---|  QX0.6_0 X
+
+024	QX0.7 = D((t7 = LATCH(IX0.0, IX0.1)), c);
+
+	t7        ---%  t7
+	IX0.0     ---%
+	IX0.1   ~ ---%
+
+
+	QX0.7_1 D ---#  QX0.7
+
+	c       : ---|  QX0.7_1 D
+	t7        ---|
+
+
+	QX0.7     ---|  QX0.7_0 X
+
+025
+026	/********************************************************************
+027	 *
+028	 *	The difference can be tested. When the set input is turned
+029	 *	on and off between clocks, the outpt of DLATCH() and D(LATCH())
+030	 *	does not change, whereas the internal simulated latch in the
+031	 *	last statement sets, which is reflected in the Output of D()
+032	 *	The same applies analogously to the reset input.
+033	 *
+034	 *******************************************************************/
+035
+036	QX1.0 = SR(IX0.0, IX0.1, c);	// SR can reset while set is still on
+
+	QX1.0_1 S ---#  QX1.0
+	QX1.0_2 R ---#
+
+	c       : ---|  QX1.0_1 S
+	IX0.0     ---|
+
+	c       : ---|  QX1.0_2 R
+	IX0.1     ---|
+
+
+	QX1.0     ---|  QX1.0_0 X
+
+037					// and vice versa, which latches can not
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     QX0.0%    QX0.1%    QX0.2_1%  QX0.3_2%  QX0.4_1%  t5_1%     t6%       t7%
+              QX1.0_1|
+IX0.1   <    ~QX0.0%   ~QX0.1%   ~QX0.2_1% ~QX0.3_2% ~QX0.4_1% ~t5_1%    ~t6%      ~t7%
+              QX1.0_2|
+IX0.2   <     c_3|
+QX0.0   %     QX0.0%    QX0.0_0|
+QX0.0_0 |  X
+QX0.1   %     QX0.1%    QX0.1_0|
+QX0.1_0 |  X
+QX0.2   #     QX0.2_1%  QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 %  D  QX0.2#
+QX0.3   #     QX0.3_0|
+QX0.3_0 |  X
+QX0.3_1 |  D  QX0.3#
+QX0.3_2 %     QX0.3_1|  QX0.3_2%
+QX0.4   #     QX0.4_1%  QX0.4_0|
+QX0.4_0 |  X
+QX0.4_1 %  D  QX0.4#
+QX0.5   @     t5#
+QX0.5_0 |  X
+QX0.6   #     QX0.6_0|
+QX0.6_0 |  X
+QX0.6_1 |  D  QX0.6#
+QX0.7   #     QX0.7_0|
+QX0.7_0 |  X
+QX0.7_1 |  D  QX0.7#
+QX1.0   #     QX1.0_0|
+QX1.0_0 |  X
+QX1.0_1 |  S  QX1.0#
+QX1.0_2 |  R  QX1.0#
+c       :  :  QX0.2_1%  QX0.3_1|  QX0.4_1%  t5_1%     QX0.6_1|  QX0.7_1|  QX1.0_2|  QX1.0_1|
+c_1     |  C  c:
+c_2     >     c_1|
+c_3     |  V  c_2>
+iClock  :  :  c_1|    c_3|
+t5      #     t5_1%     QX0.5_0|
+t5_1    %  D  t5#
+t6      %     t6%       QX0.6_1|
+t7      %     t7%       QX0.7_1|
+
+******* NET STATISTICS  ************************
+
+OR	|     16 blocks
+LATCH	%      8 blocks
+FF	#      7 blocks
+VF	>      1 blocks
+INPX	<      3 blocks
+CLK	:      2 blocks
+ALIAS	@      1
+
+TOTAL	      37 blocks
+	     102 links
+
+compiled by:
+@(#)     $Id: latch.lst,v 1.1 2015/05/24 00:51:54 jw Exp $ -O7
+
+C OUTPUT: ./Test0/latch.c  (93 lines)

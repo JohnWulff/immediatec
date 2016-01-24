@@ -1,0 +1,55 @@
+
+    imm bit a0 = IB0;
+    imm bit a1 = IB1;
+    imm bit a2 = IB2;
+    imm bit a3 = IB3;
+    imm bit a4 = IB4;
+    imm bit a5 = IB5;
+    imm bit a6 = IB6;
+    imm bit a7 = IB7;
+    imm bit a8 = IB8;
+    imm bit a9 = IB9;
+    imm bit a10 = IB10;
+    imm bit a11 = IB11;
+    imm bit a12 = IB12;
+    imm bit a13 = IB13;
+    imm bit a14 = IB14;
+    imm bit a15 = IB15;
+    imm bit a16 = IB16;
+    imm bit a17 = IB17;
+    imm bit a18 = IB18;
+    imm bit a19 = IB19;
+    imm bit a20 = IB20;
+    imm bit a21 = IB21;
+    imm bit a22 = IB22;
+    imm bit a23 = IB23;
+
+QX0.0 = IX0.0 & a0;
+QX0.1 = IX0.1 & a1;
+QX0.2 = IX0.2 & a2;
+QX0.3 = IX0.3 & a3;
+
+QX1.0 = IX1.0 & a4;
+QX1.1 = IX1.1 & a5;
+QX1.2 = IX1.2 & a6;
+QX1.3 = IX1.3 & a7;
+
+QX2.0 = IX2.0 & a8;
+QX2.1 = IX2.1 & a9;
+QX2.2 = IX2.2 & a10;
+QX2.3 = IX2.3 & a11;
+
+QX3.0 = IX3.0 & a12;
+QX3.1 = IX3.1 & a13;
+QX3.2 = IX3.2 & a14;
+QX3.3 = IX3.3 & a15;
+
+QX4.0 = IX4.0 & a16;
+QX4.1 = IX4.1 & a17;
+QX4.2 = IX4.2 & a18;
+QX4.3 = IX4.3 & a19;
+
+QX5.0 = IX5.0 & a20;
+QX5.1 = IX5.1 & a21;
+QX5.2 = IX5.2 & a22;
+QX5.3 = IX5.3 & a23;

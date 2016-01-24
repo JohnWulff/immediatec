@@ -1,0 +1,121 @@
+******* ./Test0/plus1.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Int function with simple and more complex call parameters
+004	 *
+005	 *	Int expressions returned by an imm int function block are
+006	 *	associated with a pre-compiled C-function, which cannot be
+007	 *	merged with the expression in which that function might be
+008	 *	called, which is associated with a different C-function, in
+009	 *	which the called function block is one element. For this
+010	 *	reason special provisions have been taken in the compiler to
+011	 *	make the 'type' returned by an imm int function block
+012	 *	different from a normal int (ARNF rather than ARN). This
+013	 *	prevents merging of ARNF expressions with ARN expressions
+014	 *	in op_push(). Otherwise ARNF and ARN expressions are handled
+015	 *	the same and produce the same code. Later in the first loop
+016	 *	of listNet() all ARNF nodes are changed back to ARN nodes
+017	 *	so the execution code did not need to be changed. No ARNF
+018	 *	nodes are visible to the user; both are marked by + in the
+019	 *	listing.
+020	 *
+021	 *******************************************************************/
+022
+023	imm int plus(int i0, int i1) {
+024	    this = i0 + i1;
+
+	plus@i0 A ---+  plus@   A       plus@i0  // 1
+	plus@i1 A ---+                  +plus@i1 // 2
+	                                ;        // (2)
+
+025	}
+026
+027	QB0 = plus(IB0, IB1);				// simple call
+
+	IB0     A ---+  QB0     A       IB0     // 1
+	IB1     A ---+                  +IB1    // 2
+	                                ;       // (2)
+
+
+	QB0     A ---+  QB0_0   W       QB0     // 1
+
+028	QB1 = (IB0 + IB1) + (IB2 + IB3);		// one arithmetic expression
+
+	IB0     A ---+  QB1     A       (IB0    // 1
+	IB1     A ---+                  +IB1    // 2
+	IB2     A ---+                  )+(IB2  // 3
+	IB3     A ---+                  +IB3    // 4
+	                                );      // (3)
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+029
+030	QB2 = plus(IB0, IB1) + plus(IB2, IB3);		// not merged into one node
+
+	IB0     A ---+  QB2     A       (IB0    // 1
+	IB1     A ---+                  +IB1    // 2
+	IB2     A ---+                  )+(IB2  // 3
+	IB3     A ---+                  +IB3    // 4
+	                                );      // (3)
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+031	QB3 = plus(plus(IB0, IB1), plus(IB2, IB3));	// same - complex parameters not merged
+
+	IB0     A ---+  QB3     A       (IB0    // 1
+	IB1     A ---+                  +IB1    // 2
+	IB2     A ---+                  )+(IB2  // 3
+	IB3     A ---+                  +IB3    // 4
+	                                );      // (3)
+
+
+	QB3     A ---+  QB3_0   W       QB3     // 1
+
+032	QB4 = plus(IB0 + IB1, IB2 + IB3);		// same as previous two
+
+	IB0     A ---+  QB4     A       (IB0    // 1
+	IB1     A ---+                  +IB1    // 2
+	IB2     A ---+                  )+(IB2  // 3
+	IB3     A ---+                  +IB3    // 4
+	                                );      // (3)
+
+
+	QB4     A ---+  QB4_0   W       QB4     // 1
+
+******* C CODE          ************************
+
+024	(2) 	return iC_MV(1)+iC_MV(2);
+
+028	(3) 	return (iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4));
+
+******* NET TOPOLOGY    ************************
+
+IB0     [  A  QB0+    QB1+    QB2+    QB3+    QB4+
+IB1     [  A  QB0+    QB1+    QB2+    QB3+    QB4+
+IB2     [  A  QB1+    QB2+    QB3+    QB4+
+IB3     [  A  QB1+    QB2+    QB3+    QB4+
+QB0     +  A  QB0_0+
+QB0_0   +  W
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QB3     +  A  QB3_0+
+QB3_0   +  W
+QB4     +  A  QB4_0+
+QB4_0   +  W
+
+******* NET STATISTICS  ************************
+
+ARN	+     10 blocks
+INPW	[      4 blocks
+
+TOTAL	      14 blocks
+	      55 links
+
+compiled by:
+@(#)     $Id: plus1.lst,v 1.1 2015/05/24 00:51:54 jw Exp $ -O7
+
+C OUTPUT: ./Test0/plus1.c  (75 lines)

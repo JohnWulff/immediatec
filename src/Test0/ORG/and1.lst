@@ -1,0 +1,103 @@
+******* ./Test0/and1.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Bit function with simple and more complex call parameters
+004	 *
+005	 *	Value parameters which are called as iC expressions, may be
+006	 *	used more than once inside a function and are therefore not
+007	 *	merged with iC expressions with the same operator.
+008	 *
+009	 *	By counting whether a parameter is only used once, merging
+010	 *	might be attempted in that case, but the extra complication
+011	 *	was not deemed necessary or particularly useful.
+012	 *
+013	 *******************************************************************/
+014
+015	imm bit and(bit i0, bit i1) {
+016	    this = i0 & i1;
+
+	and@i0    ---&  and@
+	and@i1    ---&
+
+017	}
+018
+019	QX0.0 = and(IX0.0, IX0.1);				// simple call
+
+	IX0.0     ---&  QX0.0
+	IX0.1     ---&
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+020	QX0.1 = (IX0.0 & IX0.1) & (IX0.2 & IX0.3);		// merged into one node
+
+	IX0.0     ---&  QX0.1
+	IX0.1     ---&
+	IX0.2     ---&
+	IX0.3     ---&
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+021	QX0.2 = and(IX0.0, IX0.1) & and(IX0.2, IX0.3);		// same - merged into one node
+
+	IX0.0     ---&  QX0.2
+	IX0.1     ---&
+	IX0.2     ---&
+	IX0.3     ---&
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+022
+023	QX0.3 = and(and(IX0.0, IX0.1), and(IX0.2, IX0.3));	// complex parameters not merged
+
+	IX0.0     ---&  QX0.3
+	IX0.1     ---&
+	IX0.2     ---&
+	IX0.3     ---&
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+024	QX0.4 = and(IX0.0 & IX0.1, IX0.2 & IX0.3);		// same as previous
+
+	IX0.0     ---&  QX0.4
+	IX0.1     ---&
+	IX0.2     ---&
+	IX0.3     ---&
+
+
+	QX0.4     ---|  QX0.4_0 X
+
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     QX0.0&  QX0.1&  QX0.2&  QX0.3&  QX0.4&
+IX0.1   <     QX0.0&  QX0.1&  QX0.2&  QX0.3&  QX0.4&
+IX0.2   <     QX0.1&  QX0.2&  QX0.3&  QX0.4&
+IX0.3   <     QX0.1&  QX0.2&  QX0.3&  QX0.4&
+QX0.0   &     QX0.0_0|
+QX0.0_0 |  X
+QX0.1   &     QX0.1_0|
+QX0.1_0 |  X
+QX0.2   &     QX0.2_0|
+QX0.2_0 |  X
+QX0.3   &     QX0.3_0|
+QX0.3_0 |  X
+QX0.4   &     QX0.4_0|
+QX0.4_0 |  X
+
+******* NET STATISTICS  ************************
+
+AND	&      5 blocks
+OR	|      5 blocks
+INPX	<      4 blocks
+
+TOTAL	      14 blocks
+	      41 links
+
+compiled by:
+@(#)     $Id: and1.lst,v 1.1 2015/05/24 00:51:48 jw Exp $ -O7
+
+C OUTPUT: ./Test0/and1.c  (56 lines)

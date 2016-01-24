@@ -1,0 +1,151 @@
+/********************************************************************
+ *
+ *	Parcel sorter control - using analog memory for destinations
+ *
+ *******************************************************************/
+
+use strict;
+
+/********************************************************************
+ *	Step timer
+ *******************************************************************/
+
+imm timer tick = TIMER(TX0.4, ~TX0.4);
+
+/********************************************************************
+ *	Destination selection inputs
+ *******************************************************************/
+
+imm bit inp0 =	IX0.1 | IX0.3 | IX0.5 | IX0.7;
+
+imm bit inp1 =	IX0.2 | IX0.3 | IX0.6 | IX0.7;
+
+imm bit inp2 =	IX0.4 | IX0.5 | IX0.6 | IX0.7;
+
+imm bit trans =	RISE(
+		IX0.0 | IX0.1 | IX0.2 | IX0.3 | IX0.4 | IX0.5 | IX0.6 | IX0.7);
+
+/********************************************************************
+ *	Generate analog value of destination
+ *******************************************************************/
+
+imm int dest = inp0 + inp1*2 + inp2*4;	// dest =
+
+/********************************************************************
+ *	Generate delay along sorting belt.
+ *	This delay value changes every time one of the destination
+ *	selection inputs 'IX0.0 - IX0.7' is activated.
+ *	This delay is used to set a delay timer immediately.
+ *	NOTE: GATE_FACTOR_ can be a fractional factor by putting it in
+ *	double quotes
+ *******************************************************************/
+
+imm int del = 12 + dest * 34 / 3;	// del =
+
+/********************************************************************
+ *	As parcels travel along the sorting belt there have to be a
+ *	number of simultaneous delay timers 'pt' - one for each group.
+ *	Worst case is a delay timer per gate if parcels are all for
+ *	the final destination and placed on the belt as fast as possible.
+ *
+ *	A timer should only be used, if the timers in the previous
+ *	groups are already running. That makes simultaneous parallel
+ *	timers for each parcel input possible. The same applies to the
+ *	logic opening the gates, which may also happen simultaneously
+ *	if several timers happen to finish simultaneously.
+ *******************************************************************/
+
+imm bit xt0;
+imm bit tr0  =	SR(trans & ~tr0, xt0);
+imm bit dt0  =	RISE(tr0);
+imm bit pt0  =	D(tr0, tick, del);
+        xt0  =	tr0 & pt0;
+imm int ma0  =	SH(dt0 ? dest : ma0);
+
+imm bit xt1;
+imm bit tr1  =	SR(trans & ~tr1 & tr0, xt1);
+imm bit dt1  =	RISE(tr1);
+imm bit pt1  =	D(tr1, tick, del);
+        xt1  =	tr1 & pt1 & ~pt0;
+imm int ma1  =	SH(dt1 ? dest : ma1);
+
+imm bit xt2;
+imm bit tr2  =	SR(trans & ~tr2 & tr1 & tr0, xt2);
+imm bit dt2  =	RISE(tr2);
+imm bit pt2  =	D(tr2, tick, del);
+        xt2  =	tr2 & pt2 & ~pt1 & ~pt0;
+imm int ma2  =	SH(dt2 ? dest : ma2);
+
+imm bit xt3;
+imm bit tr3  =	SR(trans & ~tr3 & tr2 & tr1 & tr0, xt3);
+imm bit dt3  =	RISE(tr3);
+imm bit pt3  =	D(tr3, tick, del);
+        xt3  =	tr3 & pt3 & ~pt2 & ~pt1 & ~pt0;
+imm int ma3  =	SH(dt3 ? dest : ma3);
+
+imm bit xt4;
+imm bit tr4  =	SR(trans & ~tr4 & tr3 & tr2 & tr1 & tr0, xt4);
+imm bit dt4  =	RISE(tr4);
+imm bit pt4  =	D(tr4, tick, del);
+        xt4  =	tr4 & pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+imm int ma4  =	SH(dt4 ? dest : ma4);
+
+imm bit xt5;
+imm bit tr5  =	SR(trans & ~tr5 & tr4 & tr3 & tr2 & tr1 & tr0, xt5);
+imm bit dt5  =	RISE(tr5);
+imm bit pt5  =	D(tr5, tick, del);
+        xt5  =	tr5 & pt5 & ~pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+imm int ma5  =	SH(dt5 ? dest : ma5);
+
+imm bit xt6;
+imm bit tr6  =	SR(trans & ~tr6 & tr5 & tr4 & tr3 & tr2 & tr1 & tr0, xt6);
+imm bit dt6  =	RISE(tr6);
+imm bit pt6  =	D(tr6, tick, del);
+        xt6  =	tr6 & pt6 & ~pt5 & ~pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+imm int ma6  =	SH(dt6 ? dest : ma6);
+
+imm bit xt7;
+imm bit tr7  =	SR(trans & ~tr7 & tr6 & tr5 & tr4 & tr3 & tr2 & tr1 & tr0, xt7);
+imm bit dt7  =	RISE(tr7);
+imm bit pt7  =	D(tr7, tick, del);
+        xt7  =	tr7 & pt7 & ~pt6 & ~pt5 & ~pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+imm int ma7  =	SH(dt7 ? dest : ma7);
+
+/********************************************************************
+ *	Output gates - selected via imm int busa and immC bit array openGate[]
+ *******************************************************************/
+
+imm int busa =	xt0 ? ma0 : xt1 ? ma1 : xt2 ? ma2 : xt3 ? ma3 :
+		xt4 ? ma4 : xt5 ? ma5 : xt6 ? ma6 : xt7 ? ma7 : 0;
+
+imm bit trig =	xt0 | xt1 | xt2 | xt3 | xt4 | xt5 | xt6 | xt7;
+
+immC bit	openGate[8];
+
+%{
+static int	temp;
+%}
+
+if (trig) {
+    openGate[temp = busa] = 1;
+} else {
+    openGate[temp] = 0;	/* temp is changed on the next rising trig */
+}
+
+imm bit gate0 = ST(openGate[0], tick, 10);
+imm bit gate1 = ST(openGate[1], tick, 10);
+imm bit gate2 = ST(openGate[2], tick, 10);
+imm bit gate3 = ST(openGate[3], tick, 10);
+imm bit gate4 = ST(openGate[4], tick, 10);
+imm bit gate5 = ST(openGate[5], tick, 10);
+imm bit gate6 = ST(openGate[6], tick, 10);
+imm bit gate7 = ST(openGate[7], tick, 10);
+
+QX0.0 = gate0;
+QX0.1 = gate1;
+QX0.2 = gate2;
+QX0.3 = gate3;
+QX0.4 = gate4;
+QX0.5 = gate5;
+QX0.6 = gate6;
+QX0.7 = gate7;

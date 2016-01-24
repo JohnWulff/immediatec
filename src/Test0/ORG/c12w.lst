@@ -1,0 +1,172 @@
+******* ./Test0/c12w.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	test arnc and logc assignment
+004	 *
+005	 *******************************************************************/
+006
+007	imm int a1, a2, a3;
+008	imm bit b1, b2, b3;
+009
+010	%{
+011	int
+012	cf1(void)
+013	{
+014	    a1 = b3 * a3;	// must be very careful variables are
+015	    a2 = a1 + a3;	// updated sequentially
+016	    b1 = a2 < 10;	// if a2 is evaluated before a1, a2 will be wrong
+017	    b2 = a2 < 20 || b3;
+018	    return a1 + a2;
+019	} /* cf1 */
+020	%}
+021	a3 = IB1 + IB2;
+
+	IB1     A ---+  a3      A       IB1     // 1
+	IB2     A ---+                  +IB2    // 2
+	                                ;       // (2)
+
+022	b3 = IX0.0 & IX0.1;
+
+	IX0.0     ---&  b3
+	IX0.1     ---&
+
+023
+024	QB1 = a1;	// a1 =
+
+	a1      A ---@  QB1     A
+
+
+	a1      A ---+  QB1_0   W       a1      // 1
+
+025	QB2 = a2;	// a2 =
+
+	a2      A ---@  QB2     A
+
+
+	a2      A ---+  QB2_0   W       a2      // 1
+
+026	QB3 = a3;	// a3 =
+
+	a3      A ---@  QB3     A
+
+
+	a3      A ---+  QB3_0   W       a3      // 1
+
+027	QB4 = IB4 + cf1();	// cf1() only executed when IB4 changes
+*** Warning: C function will not fire this expression: cf1 File ./Test0/c12w.ic, line 27
+
+	IB4     A ---+  QB4     A       IB4     // 1
+	                                +cf1(); // (3)
+
+
+	QB4     A ---+  QB4_0   W       QB4     // 1
+
+028			// QB4 =
+029
+030	QX0.1 = b1;
+
+	b1        ---@  QX0.1
+
+
+	b1        ---|  QX0.1_0 X
+
+031	QX0.2 = b2;
+
+	b2        ---@  QX0.2
+
+
+	b2        ---|  QX0.2_0 X
+
+032	QX0.3 = b3;
+
+	b3        ---@  QX0.3
+
+
+	b3        ---|  QX0.3_0 X
+
+******* C CODE          ************************
+
+010
+011	    int
+012	    cf1(void)
+013	    {
+014	    a1 = b3 * a3;	// must be very careful variables are
+
+		= ----	a1	A
+
+015	    a2 = a1 + a3;	// updated sequentially
+
+		= ----	a2	A
+
+016	    b1 = a2 < 10;	// if a2 is evaluated before a1, a2 will be wrong
+
+		= ---'	b1
+
+017	    b2 = a2 < 20 || b3;
+
+		= ---'	b2
+
+018	    return a1 + a2;
+019	    } /* cf1 */
+020
+
+021	(2) 	return iC_MV(1)+iC_MV(2);
+
+027	(3) 	return iC_MV(1)+cf1();
+
+
+	_f0_1	F ---{			// (L)
+	a1	A<---{			// 0 =v
+	b3	 <---{			// 1  v
+	a3	A<---{			// 2  v
+	a2	A<---{			// 3 =v
+	b1	 <---{			// 4 =
+	b2	 <---{			// 5 =
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  a3+
+IB2     [  A  a3+
+IB4     [  A  QB4+
+IX0.0   <     b3&
+IX0.1   <     b3&
+QB1     @  A  a1-
+QB1_0   +  W
+QB2     @  A  a2-
+QB2_0   +  W
+QB3     @  A  a3+
+QB3_0   +  W
+QB4     +  A  QB4_0+
+QB4_0   +  W
+QX0.1   @     b1'
+QX0.1_0 |  X
+QX0.2   @     b2'
+QX0.2_0 |  X
+QX0.3   @     b3&
+QX0.3_0 |  X
+_f0_1   |  F  a1-     b3&     a3+     a2-     b1'     b2'
+a1      -  A  QB1_0+
+a2      -  A  QB2_0+
+a3      +  A  QB3_0+
+b1      '     QX0.1_0|
+b2      '     QX0.2_0|
+b3      &     QX0.3_0|
+
+******* NET STATISTICS  ************************
+
+ARNC	-      2 blocks
+ARN	+      6 blocks
+LOGC	'      2 blocks
+AND	&      1 blocks
+OR	|      4 blocks
+INPW	[      3 blocks
+INPX	<      2 blocks
+ALIAS	@      6
+
+TOTAL	      20 blocks
+	      40 links
+
+compiled by:
+@(#)     $Id: c12w.lst,v 1.1 2015/10/09 03:31:12 jw Exp $ -O7
+
+C OUTPUT: ./Test0/c12w.c  (106 lines)

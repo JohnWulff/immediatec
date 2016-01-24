@@ -1,0 +1,158 @@
+/********************************************************************
+ *
+ *	barc.ica - vertical bar demo
+ *
+ *	with 2-dimensional arrays to get variable length counters
+ *		    and multiple instances
+ *
+ *	Uses C type 'for loops'
+ *
+ *******************************************************************/
+
+use strict;
+
+imm timer t = TIMER(TX0.4);
+
+imm int d0 = IB1;			// IB1 =
+imm bit f0 = IB1;			// d0  =
+
+imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+imm clock c0 = CLOCK(b0);
+
+imm bit m0x0;
+imm bit m0x1;
+imm bit m0x2;
+imm bit m0x3;
+imm bit m0x4;
+imm bit m0x5;
+imm bit m0x6;
+imm bit m0x7;
+imm bit m0x8;
+
+m0x0 = SR(~m0x8       , m0x8 & ~m0x1, c0);
+m0x1 = SR(~m0x8 & m0x0, m0x8 & ~m0x2, c0);
+m0x2 = SR(~m0x8 & m0x1, m0x8 & ~m0x3, c0);
+m0x3 = SR(~m0x8 & m0x2, m0x8 & ~m0x4, c0);
+m0x4 = SR(~m0x8 & m0x3, m0x8 & ~m0x5, c0);
+m0x5 = SR(~m0x8 & m0x4, m0x8 & ~m0x6, c0);
+m0x6 = SR(~m0x8 & m0x5, m0x8 & ~m0x7, c0);
+m0x7 = SR(~m0x8 & m0x6, m0x8        , c0);
+m0x8 = SR(~m0x8 & m0x7, m0x8 & ~m0x0, c0);
+
+QX0.0 = m0x0;
+QX0.1 = m0x1;
+QX0.2 = m0x2;
+QX0.3 = m0x3;
+QX0.4 = m0x4;
+QX0.5 = m0x5;
+QX0.6 = m0x6;
+QX0.7 = m0x7;
+QX1.0 = m0x8;
+
+imm int d1 = IB3;			// IB3 =
+imm bit f1 = IB3;			// d1  =
+
+imm bit b1 = D(~b1 & f1, t, d1) | CHANGE(IX0.0 & ~f1);
+imm clock c1 = CLOCK(b1);
+
+imm bit m1x0;
+imm bit m1x1;
+imm bit m1x2;
+imm bit m1x3;
+imm bit m1x4;
+imm bit m1x5;
+imm bit m1x6;
+imm bit m1x7;
+imm bit m1x8;
+
+m1x0 = SR(~m1x8       , m1x8 & ~m1x1, c1);
+m1x1 = SR(~m1x8 & m1x0, m1x8 & ~m1x2, c1);
+m1x2 = SR(~m1x8 & m1x1, m1x8 & ~m1x3, c1);
+m1x3 = SR(~m1x8 & m1x2, m1x8 & ~m1x4, c1);
+m1x4 = SR(~m1x8 & m1x3, m1x8 & ~m1x5, c1);
+m1x5 = SR(~m1x8 & m1x4, m1x8 & ~m1x6, c1);
+m1x6 = SR(~m1x8 & m1x5, m1x8 & ~m1x7, c1);
+m1x7 = SR(~m1x8 & m1x6, m1x8        , c1);
+m1x8 = SR(~m1x8 & m1x7, m1x8 & ~m1x0, c1);
+
+QX2.0 = m1x0;
+QX2.1 = m1x1;
+QX2.2 = m1x2;
+QX2.3 = m1x3;
+QX2.4 = m1x4;
+QX2.5 = m1x5;
+QX2.6 = m1x6;
+QX2.7 = m1x7;
+QX3.0 = m1x8;
+
+imm int d2 = IB5;			// IB5 =
+imm bit f2 = IB5;			// d2  =
+
+imm bit b2 = D(~b2 & f2, t, d2) | CHANGE(IX0.0 & ~f2);
+imm clock c2 = CLOCK(b2);
+
+imm bit m2x0;
+imm bit m2x1;
+imm bit m2x2;
+imm bit m2x3;
+imm bit m2x4;
+imm bit m2x5;
+imm bit m2x6;
+imm bit m2x7;
+imm bit m2x8;
+
+m2x0 = SR(~m2x8       , m2x8 & ~m2x1, c2);
+m2x1 = SR(~m2x8 & m2x0, m2x8 & ~m2x2, c2);
+m2x2 = SR(~m2x8 & m2x1, m2x8 & ~m2x3, c2);
+m2x3 = SR(~m2x8 & m2x2, m2x8 & ~m2x4, c2);
+m2x4 = SR(~m2x8 & m2x3, m2x8 & ~m2x5, c2);
+m2x5 = SR(~m2x8 & m2x4, m2x8 & ~m2x6, c2);
+m2x6 = SR(~m2x8 & m2x5, m2x8 & ~m2x7, c2);
+m2x7 = SR(~m2x8 & m2x6, m2x8        , c2);
+m2x8 = SR(~m2x8 & m2x7, m2x8 & ~m2x0, c2);
+
+QX4.0 = m2x0;
+QX4.1 = m2x1;
+QX4.2 = m2x2;
+QX4.3 = m2x3;
+QX4.4 = m2x4;
+QX4.5 = m2x5;
+QX4.6 = m2x6;
+QX4.7 = m2x7;
+QX5.0 = m2x8;
+
+imm int d3 = IB7;			// IB7 =
+imm bit f3 = IB7;			// d3  =
+
+imm bit b3 = D(~b3 & f3, t, d3) | CHANGE(IX0.0 & ~f3);
+imm clock c3 = CLOCK(b3);
+
+imm bit m3x0;
+imm bit m3x1;
+imm bit m3x2;
+imm bit m3x3;
+imm bit m3x4;
+imm bit m3x5;
+imm bit m3x6;
+imm bit m3x7;
+imm bit m3x8;
+
+m3x0 = SR(~m3x8       , m3x8 & ~m3x1, c3);
+m3x1 = SR(~m3x8 & m3x0, m3x8 & ~m3x2, c3);
+m3x2 = SR(~m3x8 & m3x1, m3x8 & ~m3x3, c3);
+m3x3 = SR(~m3x8 & m3x2, m3x8 & ~m3x4, c3);
+m3x4 = SR(~m3x8 & m3x3, m3x8 & ~m3x5, c3);
+m3x5 = SR(~m3x8 & m3x4, m3x8 & ~m3x6, c3);
+m3x6 = SR(~m3x8 & m3x5, m3x8 & ~m3x7, c3);
+m3x7 = SR(~m3x8 & m3x6, m3x8        , c3);
+m3x8 = SR(~m3x8 & m3x7, m3x8 & ~m3x0, c3);
+
+QX6.0 = m3x0;
+QX6.1 = m3x1;
+QX6.2 = m3x2;
+QX6.3 = m3x3;
+QX6.4 = m3x4;
+QX6.5 = m3x5;
+QX6.6 = m3x6;
+QX6.7 = m3x7;
+QX7.0 = m3x8;

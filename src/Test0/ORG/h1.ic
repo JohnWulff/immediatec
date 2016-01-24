@@ -1,0 +1,50 @@
+/********************************************************************
+ *
+ *	simple iC program with arrays
+ *
+ *******************************************************************/
+
+%{
+%#include	<stdio.h>
+%}
+
+    switch (IB0) {
+	case 0:
+	printf("Hello Nr. %d\n", 0);
+    }
+    switch (IB1) {
+	case 1:
+	printf("Hello Nr. %d\n", 1);
+    }
+    switch (IB2) {
+	case 2:
+	printf("Hello Nr. %d\n", 2);
+    }
+    switch (IB3) {
+	case 3:
+	printf("Hello Nr. %d\n", 3);
+    }
+    switch (IB4) {
+	case 4:
+	printf("Hello Nr. %d\n", 4);
+    }
+    switch (IB5) {
+	case 5:
+	printf("Hello Nr. %d\n", 5);
+    }
+    switch (IB6) {
+	case 6:
+	printf("Hello Nr. %d\n", 6);
+    }
+    switch (IB7) {
+	case 7:
+	printf("Hello Nr. %d\n", 7);
+    }
+    switch (IB8) {
+	case 8:
+	printf("Hello Nr. %d\n", 8);
+    }
+    switch (IB9) {
+	case 9:
+	printf("Hello Nr. %d\n", 9);
+    }

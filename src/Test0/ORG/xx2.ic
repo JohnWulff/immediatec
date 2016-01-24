@@ -1,0 +1,50 @@
+
+    imm bit a0 = IB0;
+    imm bit a1 = IB1;
+    imm bit a2 = IB2;
+    imm bit a3 = IB3;
+    imm bit a4 = IB4;
+    imm bit a5 = IB5;
+    imm bit a6 = IB6;
+    imm bit a7 = IB7;
+    imm bit a8 = IB8;
+    imm bit a9 = IB9;
+    imm bit a10 = IB10;
+    imm bit a11 = IB11;
+    imm bit a12 = IB12;
+    imm bit a13 = IB13;
+    imm bit a14 = IB14;
+    imm bit a15 = IB15;
+    imm bit a16 = IB16;
+    imm bit a17 = IB17;
+    imm bit a18 = IB18;
+    imm bit a19 = IB19;
+    imm bit a20 = IB20;
+    imm bit a21 = IB21;
+    imm bit a22 = IB22;
+    imm bit a23 = IB23;
+//* 13	    FOR (M = 0; x < LENGTH; x++) {{
+//* Error: C variable 'x' (bare word) in FOR line. File ./Test0/xx2.ica, line 13
+//* Error: C variable 'x' (bare word) in FOR line. File ./Test0/xx2.ica, line 13
+//* 14	QX[N].[x] = IX[N].[x] & a[N*LENGTH+x];
+//* Error: Index expression [x] in iC code contains C variable x. File ./Test0/xx2.ica, line 14
+//* Error: Index expression [x] in iC code contains C variable x. File ./Test0/xx2.ica, line 14
+//* Error: Index expression [N*4+x] in iC code contains C variable x. File ./Test0/xx2.ica, line 14
+//* 16	}}
+//* Error: start of Perl eval File ./Test0/xx2.ica, line 10
+//  1:	for (my $N = 0; $N < 6; $N++) {
+//  2:	$out .= "\n";
+//  3:	    for (my $M = 0; x < 4; x++) {
+//  4:	$out .= "QX@{[$N]}.[x] = IX@{[$N]}.[x] & a[$N*4+x];\n";
+//  5:	    }
+//  6:	}
+//* Error: end of Perl eval (6 lines) File ./Test0/xx2.ica, line 16
+/** Error messages from Perl eval:    **\
+Can't modify constant item in postincrement (++) at (eval 4) line 3, near "x++"
+Bareword "x" not allowed while "strict subs" in use at (eval 4) line 3, <IN> line 16.
+Bareword "x" not allowed while "strict subs" in use at (eval 4) line 3, <IN> line 16.
+\** End Error messages from Perl eval **/
+//* 16	}}
+%{
+%#error immac found 6 compilation errors - see comments in iC list file
+%}

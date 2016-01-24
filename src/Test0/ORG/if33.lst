@@ -1,0 +1,127 @@
+******* ./Test0/if33.ic ************************
+001	%{
+002	%#include	<stdio.h>
+003	%}
+004
+005	imm int del1;
+006	imm int del2;
+007	imm int ib1;
+008	del1 = IX0.0 ? IB1 : 5;
+
+	del1_1  A ---+  del1    A       del1_1  // 1
+	IB1     A ---+                  ?IB1    // 2
+	                                :5;     // (2)
+
+	IX0.0     ---|  del1_1  A
+
+009	t  = TIMER(CHANGE(IX0.3));
+
+	t_1     T ---!  t       !
+
+	iClock  : ---|  t_1     T
+	t_2       ---|
+
+	t_3     V --->  t_2
+
+	iClock  : ---|  t_3     V
+	IX0.3     ---|
+
+010	t1 = t;
+
+	t       ! ---@  t1      !
+
+011	switch (ib1, t1, del2) {
+012	    case 0:
+013		printf("IB1 is 0!!\n");
+014		break;
+015	    case 1:
+016		printf("IB1 is 1!!\n");
+017		break;
+018	    case 2:
+019		printf("IB1 is 2!!\n");
+020		break;
+021	    case 3:
+022		printf("IB1 is 3!!\n");
+023		break;
+024	    default:
+025		printf("IB1 is >= 4!!\n");
+026		break;
+027	}
+
+
+	_f1_1   I ---(                          // (3)
+
+	t       ! ---+  _f1_1   I
+	del1    A<---+
+	IB1     A ---+                  IB1     // 1
+
+028
+029	ib1 = IB1;	/* ALIAS after use */
+
+	IB1     A ---@  ib1     A
+
+030	del2 = del1;
+
+	del1    A ---@  del2    A
+
+******* C CODE          ************************
+
+001
+002	    #include	<stdio.h>
+003
+
+008	(2) 	return iC_MV(1)?iC_MV(2):5;
+
+011	(3) {
+012	    case 0:
+013		printf("IB1 is 0!!\n");
+014		break;
+015	    case 1:
+016		printf("IB1 is 1!!\n");
+017		break;
+018	    case 2:
+019		printf("IB1 is 2!!\n");
+020		break;
+021	    case 3:
+022		printf("IB1 is 3!!\n");
+023		break;
+024	    default:
+025		printf("IB1 is >= 4!!\n");
+026		break;
+027	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  _f1_1+  del1+
+IX0.0   <     del1_1|
+IX0.3   <     t_3|
+_f1_1   +  I ( (3)
+del1    +  A <_f1_1+
+del1_1  |  A  del1+
+del2    @  A  del1+
+iClock  :  :  t_1|    t_3|
+ib1     @  A  IB1[
+t       !  !  _f1_1+
+t1      @  !  t!
+t_1     |  T  t!
+t_2     >     t_1|
+t_3     |  V  t_2>
+
+******* NET STATISTICS  ************************
+
+ARN	+      2 blocks
+OR	|      3 blocks
+VF	>      1 blocks
+INPW	[      1 blocks
+INPX	<      2 blocks
+CLK	:      1 blocks
+TIM	!      1 blocks
+ALIAS	@      3
+
+TOTAL	      11 blocks
+	      27 links
+
+compiled by:
+@(#)     $Id: if33.lst,v 1.1 2015/05/24 00:51:54 jw Exp $ -O7
+
+C OUTPUT: ./Test0/if33.c  (93 lines)

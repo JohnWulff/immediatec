@@ -1,0 +1,49 @@
+******* ./Test0/if1.ic  ************************
+001	%{
+002	%#include	<stdio.h>
+003	%}
+004
+005	in1 = IX0.0;
+*** Error: strict: assignment to an undeclared imm variable: in1 File ./Test0/if1.ic, line 5
+
+	IX0.0     ---@  in1
+
+006	if (in1) { printf("iC is here!!\n"); }
+
+
+	_f1_1   F ---{                          // (2)
+
+	iClock  : ---|  _f1_1   F
+	in1     ? ---|
+
+******* C CODE          ************************
+
+001
+002	    #include	<stdio.h>
+003
+
+006	(2) { printf("iC is here!!\n"); }
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <
+*** Warning: unused    imm bit: IX0.0 File ./Test0/if1.ic, line 7
+_f1_1   |  F { (2)
+iClock  :  :  _f1_1|
+in1     ?     IX0.0<  _f1_1|
+*** Error: gate: in1 File ./Test0/if1.ic, line 7
+
+******* NET STATISTICS  ************************
+
+OR	|      1 blocks
+INPX	<      1 blocks
+CLK	:      1 blocks
+ERR	?      1
+
+TOTAL	       3 blocks
+	       5 links
+
+compiled by:
+@(#)     $Id: if1.lst,v 1.1 2015/11/03 03:23:05 jw Exp $ -O7
+*** Warning: 1 unused gate. File ./Test0/if1.ic, line 7
+*** Error: 2 generate errors - cannot execute. File ./Test0/if1.ic, line 7

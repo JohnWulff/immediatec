@@ -1,0 +1,2514 @@
+******* ./Test0/sort32u.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Parcel sorter for long belts
+004	 *	Author:	J.E. Wulff
+005	 *	Source: sort32.icx
+006	 *
+007	 *	Trial source for using arrays in "iC programs"
+008	 *
+009	 *******************************************************************/
+010
+011	use strict;
+012
+013	/********************************************************************
+014	 *
+015	 *	Feeder segment
+016	 *
+017	 *******************************************************************/
+018
+019	imm bit feeder(			/* feeds code into feeder segment */
+020		imm bit transfer,	/* photo cell to transfer code */
+021	 assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+022		imm int code,		/* destination code - 0 .. 9 */
+023		imm int length,		/* sets the length of the segment */
+024		imm int width,		/* width of lock frame 6 + 6 for 0x7f */
+025		imm clock c,		/* stepping clock for the belt */
+026	    )
+027	{
+028	    extern imm bit reset;	/* general re-initialisation */
+029	    imm bit pip   = RISE(transfer & ~this & ~reset, c);
+
+	feeder@pip_1    E ---/  feeder@pip
+
+	feeder@c        : ---&  feeder@pip_1 E
+	feeder@transfer   ---&
+	feeder@         ~ ---&
+	IX0.7           ~ ---&
+
+030	    imm int shift = SHR((shift << 1) + (pip * (0x41 + (code << 1))), c, reset);
+
+	feeder@shift_1 H ---*  feeder@shift   A
+	feeder@shift_2 r ---*
+
+	feeder@c       : ---+  feeder@shift_1 H
+	feeder@shift_3 A ---+                         feeder@shift_3       // 1
+	feeder@shift   A ---+                         ?feeder@shift        // 2
+	feeder@shift_4 A ---+                         :feeder@shift_4      // 3
+	                                              ;                    // (1)
+
+	iClock         : ---|  feeder@shift_2 r
+	IX0.7            ---|
+
+	IX0.7            ---|  feeder@shift_3 A
+
+	feeder@shift   A ---+  feeder@shift_4 A       (feeder@shift        // 1
+	feeder@shift_5 A ---+                         <<1)+(feeder@shift_5 // 2
+	feeder@code    A ---+                         *(0x41+(feeder@code  // 3
+	                                              <<1)));              // (2)
+
+	feeder@pip       ---|  feeder@shift_5 A
+
+031	    imm int mask  = 0x41 << width;
+
+	feeder@width A ---+  feeder@mask A       0x41<<feeder@width // 1
+	                                         ;                  // (3)
+
+032	    carryOut = (shift >> length) & 1;
+
+	feeder@shift  A ---+  feeder@carryOut A       (feeder@shift   // 1
+	feeder@length A ---+                          >>feeder@length // 2
+	                                              )&1;            // (4)
+
+033	    this = SRX(pip,		/* unlock after width steps */
+034		       (shift & mask) == mask | reset, c);
+
+	feeder@_1    S ---#  feeder@
+	feeder@_2    R ---#
+
+	feeder@c     : ---&  feeder@_1 S
+	feeder@pip     ---&
+	feeder@_3    ~ ---&
+
+	feeder@c     : ---&  feeder@_2 R
+	feeder@pip   ~ ---&
+	feeder@_3      ---&
+
+	feeder@_4      ---|  feeder@_3
+	IX0.7          ---|
+
+	feeder@shift A ---+  feeder@_4         (feeder@shift  // 1
+	feeder@mask  A ---+                    &feeder@mask   // 2
+	                                       )==feeder@mask // 2
+	                                       ;              // (5)
+
+035	}
+036
+037	/********************************************************************
+038	 *
+039	 *	Segment
+040	 *
+041	 *	Each segment controls one gate and may be up to 32 steps long
+042	 *
+043	 *******************************************************************/
+044
+045	imm bit segment(		/* returns gate control output */
+046		imm int carryIn,	/* shift bit (as int) from the previous segment */
+047	 assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+048		imm int code,		/* code identifying this segment */
+049		imm int length,		/* segment length */
+050		imm int width,		/* width of the gate */
+051		imm clock c,		/* stepping clock for the belt */
+052	    )
+053	{
+054	    extern imm bit reset;	/* general re-initialisation */
+055	    imm int shift = SHR((shift << 1) + carryIn, c, reset);
+
+	segment@shift_1 H ---*  segment@shift   A
+	segment@shift_2 r ---*
+
+	segment@c       : ---+  segment@shift_1 H
+	segment@shift_3 A ---+                          segment@shift_3      // 1
+	segment@shift   A ---+                          ?segment@shift       // 2
+	segment@shift_4 A ---+                          :segment@shift_4     // 3
+	                                                ;                    // (1)
+
+	iClock          : ---|  segment@shift_2 r
+	IX0.7             ---|
+
+	IX0.7             ---|  segment@shift_3 A
+
+	segment@shift   A ---+  segment@shift_4 A       (segment@shift       // 1
+	segment@carryIn A ---+                          <<1)+segment@carryIn // 2
+	                                                ;                    // (6)
+
+056	    imm int mask  = 0x41 << width;
+
+	segment@width A ---+  segment@mask A       0x41<<segment@width // 1
+	                                           ;                   // (3)
+
+057	    carryOut = (shift >> length) & 1;
+
+	segment@shift  A ---+  segment@carryOut A       (segment@shift   // 1
+	segment@length A ---+                           >>segment@length // 2
+	                                                )&1;             // (4)
+
+058	    this = SRX((shift & 0x7f) == 0x41 + (code << 1),
+059		       (shift & mask) == mask | reset, c);
+
+	segment@_1    S ---#  segment@
+	segment@_2    R ---#
+
+	segment@c     : ---&  segment@_1 S
+	segment@_3      ---&
+	segment@_4    ~ ---&
+
+	segment@c     : ---&  segment@_2 R
+	segment@_3    ~ ---&
+	segment@_4      ---&
+
+	segment@shift A ---+  segment@_3         (segment@shift             // 1
+	segment@code  A ---+                     &0x7f)==0x41+(segment@code // 2
+	                                         <<1);                      // (7)
+
+	segment@_5      ---|  segment@_4
+	IX0.7           ---|
+
+	segment@shift A ---+  segment@_5         (segment@shift             // 1
+	segment@mask  A ---+                     &segment@mask              // 2
+	                                         )==segment@mask            // 2
+	                                         ;                          // (5)
+
+060	}
+061
+062	/********************************************************************
+063	 *
+064	 *	Belt
+065	 *
+066	 *	Each belt has 10 gates
+067	 *
+068	 *******************************************************************/
+069
+070	imm int belt(
+071	    	assign	imm bit lock,	/* lock indicator */
+072		assign  imm bit gate0,
+073		assign  imm bit gate1,
+074		assign  imm bit gate2,
+075		assign  imm bit gate3,
+076		assign  imm bit gate4,
+077		assign  imm bit gate5,
+078		assign  imm bit gate6,
+079		assign  imm bit gate7,
+080		assign  imm bit gate8,
+081		assign  imm bit gate9,
+082			imm int code,	/* gate code 0 .. 9  - for parcel destination */
+083			imm bit p_cell,	/* photo cell monitoring parcel onto belt */
+084			imm bit strobe,	/* strobe pulse from belt movement */
+085	    )
+086	{
+087	    imm int car0;		/* carry bit: 0 */
+088	    imm int car1;		/* carry bit: 1 */
+089	    imm int car2;		/* carry bit: 2 */
+090	    imm int car3;		/* carry bit: 3 */
+091	    imm int car4;		/* carry bit: 4 */
+092	    imm int car5;		/* carry bit: 5 */
+093	    imm int car6;		/* carry bit: 6 */
+094	    imm int car7;		/* carry bit: 7 */
+095	    imm int car8;		/* carry bit: 8 */
+096	    imm int car9;		/* carry bit: 9 */
+097	    imm int car10;		/* carry bit: 10 */
+098
+099	    imm clock clk = CLOCK(strobe);
+
+	belt@clk_1  C ---:  belt@clk   :
+
+	iClock      : ---|  belt@clk_1 C
+	belt@strobe   ---|
+
+100
+101	    lock   = feeder(p_cell, car0, code, 12, 11, clk);
+
+	belt@pip_1   E ---/  belt@pip
+
+	belt@clk     : ---&  belt@pip_1   E
+	belt@p_cell    ---&
+	belt@pip_2   ~ ---&
+	IX0.7        ~ ---&
+
+	belt@pip_3   S ---#  belt@pip_2
+	belt@pip_4   R ---#
+
+	belt@clk     : ---&  belt@pip_3   S
+	belt@pip       ---&
+	belt@pip_5   ~ ---&
+
+	belt@clk     : ---&  belt@pip_4   R
+	belt@pip     ~ ---&
+	belt@pip_5     ---&
+
+	belt@pip_6     ---|  belt@pip_5
+	IX0.7          ---|
+
+	belt@shift   A ---+  belt@pip_6           (belt@shift        // 1
+	belt@mask    A ---+                       &belt@mask         // 2
+	                                          )==belt@mask       // 2
+	                                          ;                  // (5)
+
+
+	belt@shift_1 H ---*  belt@shift   A
+	belt@shift_2 r ---*
+
+	belt@clk     : ---+  belt@shift_1 H
+	belt@shift_3 A ---+                       belt@shift_3       // 1
+	belt@shift   A ---+                       ?belt@shift        // 2
+	belt@shift_4 A ---+                       :belt@shift_4      // 3
+	                                          ;                  // (1)
+
+	iClock       : ---|  belt@shift_2 r
+	IX0.7          ---|
+
+	IX0.7          ---|  belt@shift_3 A
+
+	belt@shift   A ---+  belt@shift_4 A       (belt@shift        // 1
+	belt@shift_5 A ---+                       <<1)+(belt@shift_5 // 2
+	belt@code    A ---+                       *(0x41+(belt@code  // 3
+	                                          <<1)));            // (2)
+
+	belt@pip       ---|  belt@shift_5 A
+
+
+	iConst       A ---+  belt@mask    A       0x41<<11;          // (8)
+
+
+	belt@shift   A ---+  belt@car0    A       (belt@shift        // 1
+	                                          >>12)&1;           // (9)
+
+
+	belt@pip_2     ---@  belt@lock
+
+102	    gate0 = segment(car0, car1,    0, 12,  7, clk);
+
+	belt@shift1_1 H ---*  belt@shift1   A
+	belt@shift1_2 r ---*
+
+	belt@clk      : ---+  belt@shift1_1 H
+	belt@shift1_3 A ---+                        belt@shift1_3        // 1
+	belt@shift1   A ---+                        ?belt@shift1         // 2
+	belt@shift1_4 A ---+                        :belt@shift1_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift1_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift1_3 A
+
+	belt@shift1   A ---+  belt@shift1_4 A       (belt@shift1         // 1
+	belt@car0     A ---+                        <<1)+belt@car0       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask1    A       0x41<<7;             // (10)
+
+
+	belt@shift1   A ---+  belt@car1     A       (belt@shift1         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate0_1  S ---#  belt@gate0
+	belt@gate0_2  R ---#
+
+	belt@clk      : ---&  belt@gate0_1  S
+	belt@gate0_3    ---&
+	belt@gate0_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate0_2  R
+	belt@gate0_3  ~ ---&
+	belt@gate0_4    ---&
+
+	belt@shift1   A ---+  belt@gate0_3          (belt@shift1         // 1
+	                                            &0x7f)==0x41+(0<<1); // (11)
+
+	belt@gate0_5    ---|  belt@gate0_4
+	IX0.7           ---|
+
+	belt@shift1   A ---+  belt@gate0_5          (belt@shift1         // 1
+	belt@mask1    A ---+                        &belt@mask1          // 2
+	                                            )==belt@mask1        // 2
+	                                            ;                    // (5)
+
+103	    gate1 = segment(car1, car2,    1, 12,  7, clk);
+
+	belt@shift2_1 H ---*  belt@shift2   A
+	belt@shift2_2 r ---*
+
+	belt@clk      : ---+  belt@shift2_1 H
+	belt@shift2_3 A ---+                        belt@shift2_3        // 1
+	belt@shift2   A ---+                        ?belt@shift2         // 2
+	belt@shift2_4 A ---+                        :belt@shift2_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift2_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift2_3 A
+
+	belt@shift2   A ---+  belt@shift2_4 A       (belt@shift2         // 1
+	belt@car1     A ---+                        <<1)+belt@car1       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask2    A       0x41<<7;             // (10)
+
+
+	belt@shift2   A ---+  belt@car2     A       (belt@shift2         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate1_1  S ---#  belt@gate1
+	belt@gate1_2  R ---#
+
+	belt@clk      : ---&  belt@gate1_1  S
+	belt@gate1_3    ---&
+	belt@gate1_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate1_2  R
+	belt@gate1_3  ~ ---&
+	belt@gate1_4    ---&
+
+	belt@shift2   A ---+  belt@gate1_3          (belt@shift2         // 1
+	                                            &0x7f)==0x41+(1<<1); // (12)
+
+	belt@gate1_5    ---|  belt@gate1_4
+	IX0.7           ---|
+
+	belt@shift2   A ---+  belt@gate1_5          (belt@shift2         // 1
+	belt@mask2    A ---+                        &belt@mask2          // 2
+	                                            )==belt@mask2        // 2
+	                                            ;                    // (5)
+
+104	    gate2 = segment(car2, car3,    2, 12,  7, clk);
+
+	belt@shift3_1 H ---*  belt@shift3   A
+	belt@shift3_2 r ---*
+
+	belt@clk      : ---+  belt@shift3_1 H
+	belt@shift3_3 A ---+                        belt@shift3_3        // 1
+	belt@shift3   A ---+                        ?belt@shift3         // 2
+	belt@shift3_4 A ---+                        :belt@shift3_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift3_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift3_3 A
+
+	belt@shift3   A ---+  belt@shift3_4 A       (belt@shift3         // 1
+	belt@car2     A ---+                        <<1)+belt@car2       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask3    A       0x41<<7;             // (10)
+
+
+	belt@shift3   A ---+  belt@car3     A       (belt@shift3         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate2_1  S ---#  belt@gate2
+	belt@gate2_2  R ---#
+
+	belt@clk      : ---&  belt@gate2_1  S
+	belt@gate2_3    ---&
+	belt@gate2_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate2_2  R
+	belt@gate2_3  ~ ---&
+	belt@gate2_4    ---&
+
+	belt@shift3   A ---+  belt@gate2_3          (belt@shift3         // 1
+	                                            &0x7f)==0x41+(2<<1); // (13)
+
+	belt@gate2_5    ---|  belt@gate2_4
+	IX0.7           ---|
+
+	belt@shift3   A ---+  belt@gate2_5          (belt@shift3         // 1
+	belt@mask3    A ---+                        &belt@mask3          // 2
+	                                            )==belt@mask3        // 2
+	                                            ;                    // (5)
+
+105	    gate3 = segment(car3, car4,    3, 12,  7, clk);
+
+	belt@shift4_1 H ---*  belt@shift4   A
+	belt@shift4_2 r ---*
+
+	belt@clk      : ---+  belt@shift4_1 H
+	belt@shift4_3 A ---+                        belt@shift4_3        // 1
+	belt@shift4   A ---+                        ?belt@shift4         // 2
+	belt@shift4_4 A ---+                        :belt@shift4_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift4_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift4_3 A
+
+	belt@shift4   A ---+  belt@shift4_4 A       (belt@shift4         // 1
+	belt@car3     A ---+                        <<1)+belt@car3       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask4    A       0x41<<7;             // (10)
+
+
+	belt@shift4   A ---+  belt@car4     A       (belt@shift4         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate3_1  S ---#  belt@gate3
+	belt@gate3_2  R ---#
+
+	belt@clk      : ---&  belt@gate3_1  S
+	belt@gate3_3    ---&
+	belt@gate3_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate3_2  R
+	belt@gate3_3  ~ ---&
+	belt@gate3_4    ---&
+
+	belt@shift4   A ---+  belt@gate3_3          (belt@shift4         // 1
+	                                            &0x7f)==0x41+(3<<1); // (14)
+
+	belt@gate3_5    ---|  belt@gate3_4
+	IX0.7           ---|
+
+	belt@shift4   A ---+  belt@gate3_5          (belt@shift4         // 1
+	belt@mask4    A ---+                        &belt@mask4          // 2
+	                                            )==belt@mask4        // 2
+	                                            ;                    // (5)
+
+106	    gate4 = segment(car4, car5,    4, 12,  7, clk);
+
+	belt@shift5_1 H ---*  belt@shift5   A
+	belt@shift5_2 r ---*
+
+	belt@clk      : ---+  belt@shift5_1 H
+	belt@shift5_3 A ---+                        belt@shift5_3        // 1
+	belt@shift5   A ---+                        ?belt@shift5         // 2
+	belt@shift5_4 A ---+                        :belt@shift5_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift5_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift5_3 A
+
+	belt@shift5   A ---+  belt@shift5_4 A       (belt@shift5         // 1
+	belt@car4     A ---+                        <<1)+belt@car4       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask5    A       0x41<<7;             // (10)
+
+
+	belt@shift5   A ---+  belt@car5     A       (belt@shift5         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate4_1  S ---#  belt@gate4
+	belt@gate4_2  R ---#
+
+	belt@clk      : ---&  belt@gate4_1  S
+	belt@gate4_3    ---&
+	belt@gate4_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate4_2  R
+	belt@gate4_3  ~ ---&
+	belt@gate4_4    ---&
+
+	belt@shift5   A ---+  belt@gate4_3          (belt@shift5         // 1
+	                                            &0x7f)==0x41+(4<<1); // (15)
+
+	belt@gate4_5    ---|  belt@gate4_4
+	IX0.7           ---|
+
+	belt@shift5   A ---+  belt@gate4_5          (belt@shift5         // 1
+	belt@mask5    A ---+                        &belt@mask5          // 2
+	                                            )==belt@mask5        // 2
+	                                            ;                    // (5)
+
+107	    gate5 = segment(car5, car6,    5, 12,  7, clk);
+
+	belt@shift6_1 H ---*  belt@shift6   A
+	belt@shift6_2 r ---*
+
+	belt@clk      : ---+  belt@shift6_1 H
+	belt@shift6_3 A ---+                        belt@shift6_3        // 1
+	belt@shift6   A ---+                        ?belt@shift6         // 2
+	belt@shift6_4 A ---+                        :belt@shift6_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift6_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift6_3 A
+
+	belt@shift6   A ---+  belt@shift6_4 A       (belt@shift6         // 1
+	belt@car5     A ---+                        <<1)+belt@car5       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask6    A       0x41<<7;             // (10)
+
+
+	belt@shift6   A ---+  belt@car6     A       (belt@shift6         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate5_1  S ---#  belt@gate5
+	belt@gate5_2  R ---#
+
+	belt@clk      : ---&  belt@gate5_1  S
+	belt@gate5_3    ---&
+	belt@gate5_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate5_2  R
+	belt@gate5_3  ~ ---&
+	belt@gate5_4    ---&
+
+	belt@shift6   A ---+  belt@gate5_3          (belt@shift6         // 1
+	                                            &0x7f)==0x41+(5<<1); // (16)
+
+	belt@gate5_5    ---|  belt@gate5_4
+	IX0.7           ---|
+
+	belt@shift6   A ---+  belt@gate5_5          (belt@shift6         // 1
+	belt@mask6    A ---+                        &belt@mask6          // 2
+	                                            )==belt@mask6        // 2
+	                                            ;                    // (5)
+
+108	    gate6 = segment(car6, car7,    6, 12,  7, clk);
+
+	belt@shift7_1 H ---*  belt@shift7   A
+	belt@shift7_2 r ---*
+
+	belt@clk      : ---+  belt@shift7_1 H
+	belt@shift7_3 A ---+                        belt@shift7_3        // 1
+	belt@shift7   A ---+                        ?belt@shift7         // 2
+	belt@shift7_4 A ---+                        :belt@shift7_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift7_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift7_3 A
+
+	belt@shift7   A ---+  belt@shift7_4 A       (belt@shift7         // 1
+	belt@car6     A ---+                        <<1)+belt@car6       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask7    A       0x41<<7;             // (10)
+
+
+	belt@shift7   A ---+  belt@car7     A       (belt@shift7         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate6_1  S ---#  belt@gate6
+	belt@gate6_2  R ---#
+
+	belt@clk      : ---&  belt@gate6_1  S
+	belt@gate6_3    ---&
+	belt@gate6_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate6_2  R
+	belt@gate6_3  ~ ---&
+	belt@gate6_4    ---&
+
+	belt@shift7   A ---+  belt@gate6_3          (belt@shift7         // 1
+	                                            &0x7f)==0x41+(6<<1); // (17)
+
+	belt@gate6_5    ---|  belt@gate6_4
+	IX0.7           ---|
+
+	belt@shift7   A ---+  belt@gate6_5          (belt@shift7         // 1
+	belt@mask7    A ---+                        &belt@mask7          // 2
+	                                            )==belt@mask7        // 2
+	                                            ;                    // (5)
+
+109	    gate7 = segment(car7, car8,    7, 12,  7, clk);
+
+	belt@shift8_1 H ---*  belt@shift8   A
+	belt@shift8_2 r ---*
+
+	belt@clk      : ---+  belt@shift8_1 H
+	belt@shift8_3 A ---+                        belt@shift8_3        // 1
+	belt@shift8   A ---+                        ?belt@shift8         // 2
+	belt@shift8_4 A ---+                        :belt@shift8_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift8_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift8_3 A
+
+	belt@shift8   A ---+  belt@shift8_4 A       (belt@shift8         // 1
+	belt@car7     A ---+                        <<1)+belt@car7       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask8    A       0x41<<7;             // (10)
+
+
+	belt@shift8   A ---+  belt@car8     A       (belt@shift8         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate7_1  S ---#  belt@gate7
+	belt@gate7_2  R ---#
+
+	belt@clk      : ---&  belt@gate7_1  S
+	belt@gate7_3    ---&
+	belt@gate7_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate7_2  R
+	belt@gate7_3  ~ ---&
+	belt@gate7_4    ---&
+
+	belt@shift8   A ---+  belt@gate7_3          (belt@shift8         // 1
+	                                            &0x7f)==0x41+(7<<1); // (18)
+
+	belt@gate7_5    ---|  belt@gate7_4
+	IX0.7           ---|
+
+	belt@shift8   A ---+  belt@gate7_5          (belt@shift8         // 1
+	belt@mask8    A ---+                        &belt@mask8          // 2
+	                                            )==belt@mask8        // 2
+	                                            ;                    // (5)
+
+110	    gate8 = segment(car8, car9,    8, 12,  7, clk);
+
+	belt@shift9_1 H ---*  belt@shift9   A
+	belt@shift9_2 r ---*
+
+	belt@clk      : ---+  belt@shift9_1 H
+	belt@shift9_3 A ---+                        belt@shift9_3        // 1
+	belt@shift9   A ---+                        ?belt@shift9         // 2
+	belt@shift9_4 A ---+                        :belt@shift9_4       // 3
+	                                            ;                    // (1)
+
+	iClock        : ---|  belt@shift9_2 r
+	IX0.7           ---|
+
+	IX0.7           ---|  belt@shift9_3 A
+
+	belt@shift9   A ---+  belt@shift9_4 A       (belt@shift9         // 1
+	belt@car8     A ---+                        <<1)+belt@car8       // 2
+	                                            ;                    // (6)
+
+
+	iConst        A ---+  belt@mask9    A       0x41<<7;             // (10)
+
+
+	belt@shift9   A ---+  belt@car9     A       (belt@shift9         // 1
+	                                            >>12)&1;             // (9)
+
+
+	belt@gate8_1  S ---#  belt@gate8
+	belt@gate8_2  R ---#
+
+	belt@clk      : ---&  belt@gate8_1  S
+	belt@gate8_3    ---&
+	belt@gate8_4  ~ ---&
+
+	belt@clk      : ---&  belt@gate8_2  R
+	belt@gate8_3  ~ ---&
+	belt@gate8_4    ---&
+
+	belt@shift9   A ---+  belt@gate8_3          (belt@shift9         // 1
+	                                            &0x7f)==0x41+(8<<1); // (19)
+
+	belt@gate8_5    ---|  belt@gate8_4
+	IX0.7           ---|
+
+	belt@shift9   A ---+  belt@gate8_5          (belt@shift9         // 1
+	belt@mask9    A ---+                        &belt@mask9          // 2
+	                                            )==belt@mask9        // 2
+	                                            ;                    // (5)
+
+111	    gate9 = segment(car9, car10,    9, 12,  7, clk);
+
+	belt@shift10_1 H ---*  belt@shift10   A
+	belt@shift10_2 r ---*
+
+	belt@clk       : ---+  belt@shift10_1 H
+	belt@shift10_3 A ---+                         belt@shift10_3       // 1
+	belt@shift10   A ---+                         ?belt@shift10        // 2
+	belt@shift10_4 A ---+                         :belt@shift10_4      // 3
+	                                              ;                    // (1)
+
+	iClock         : ---|  belt@shift10_2 r
+	IX0.7            ---|
+
+	IX0.7            ---|  belt@shift10_3 A
+
+	belt@shift10   A ---+  belt@shift10_4 A       (belt@shift10        // 1
+	belt@car9      A ---+                         <<1)+belt@car9       // 2
+	                                              ;                    // (6)
+
+
+	iConst         A ---+  belt@mask10    A       0x41<<7;             // (10)
+
+
+	belt@shift10   A ---+  belt@car10     A       (belt@shift10        // 1
+	                                              >>12)&1;             // (9)
+
+
+	belt@gate9_1   S ---#  belt@gate9
+	belt@gate9_2   R ---#
+
+	belt@clk       : ---&  belt@gate9_1   S
+	belt@gate9_3     ---&
+	belt@gate9_4   ~ ---&
+
+	belt@clk       : ---&  belt@gate9_2   R
+	belt@gate9_3   ~ ---&
+	belt@gate9_4     ---&
+
+	belt@shift10   A ---+  belt@gate9_3           (belt@shift10        // 1
+	                                              &0x7f)==0x41+(9<<1); // (20)
+
+	belt@gate9_5     ---|  belt@gate9_4
+	IX0.7            ---|
+
+	belt@shift10   A ---+  belt@gate9_5           (belt@shift10        // 1
+	belt@mask10    A ---+                         &belt@mask10         // 2
+	                                              )==belt@mask10       // 2
+	                                              ;                    // (5)
+
+112	    this = car10;		/* allows concatenation of "belts" */
+
+	belt@car10 A ---@  belt@   A
+
+113	}
+114
+115	/********************************************************************
+116	 *
+117	 *	Generate tick
+118	 *	input fast1 or fast2 cause 50 ms ticks
+119	 *	else tick for every change of manual input
+120	 *
+121	 *******************************************************************/
+122
+123	imm bit tick(bit manual, bit fast1, bit fast2) {
+124	    imm bit fast = fast1 | fast2;
+
+	tick@fast1   ---|  tick@fast
+	tick@fast2   ---|
+
+125	    this = CHANGE(manual & ~fast | TX0.4 & fast);
+
+	tick@_1     V --->  tick@
+
+	iClock      : ---|  tick@_1 V
+	tick@_2       ---|
+	tick@_3       ---|
+
+	tick@manual   ---&  tick@_2
+	tick@fast   ~ ---&
+
+	TX0.4         ---&  tick@_3
+	tick@fast     ---&
+
+126	}
+127
+128	/********************************************************************
+129	 *
+130	 *	2 belts
+131	 *
+132	 *	Each belt has 10 gates
+133	 *
+134	 *******************************************************************/
+135
+136	imm bit reset = IX0.7;		/* general re-initialisation */
+
+	IX0.7     ---@  reset
+
+137
+138	    QX4.0 = belt(
+139		QX4.2,		/* lock indicator */
+140		QX0.0,
+141		QX0.1,
+142		QX0.2,
+143		QX0.3,
+144		QX0.4,
+145		QX0.5,
+146		QX0.6,
+147		QX0.7,
+148		QX1.0,
+149		QX1.1,
+150		IB1,		/* gate code 0 .. 9  - for parcel destination */
+151		IX0.1,		/* photo cell monitoring parcel onto belt */
+152		tick(IX0.0, IX0.6, IX0.5),	/* "strobe pulse" from belt movement */
+
+	IX0.6     ---|  tick_1_fast
+	IX0.5     ---|
+
+153	    );
+
+	belt_1_shift     A ---+  belt_1_car0      A       (belt_1_shift        // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift1    A ---+  belt_1_car1      A       (belt_1_shift1       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift2    A ---+  belt_1_car2      A       (belt_1_shift2       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift3    A ---+  belt_1_car3      A       (belt_1_shift3       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift4    A ---+  belt_1_car4      A       (belt_1_shift4       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift5    A ---+  belt_1_car5      A       (belt_1_shift5       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift6    A ---+  belt_1_car6      A       (belt_1_shift6       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift7    A ---+  belt_1_car7      A       (belt_1_shift7       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift8    A ---+  belt_1_car8      A       (belt_1_shift8       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift9    A ---+  belt_1_car9      A       (belt_1_shift9       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_shift10   A ---+  belt_1_car10     A       (belt_1_shift10      // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_1_clk_1     C ---:  belt_1_clk       :
+
+	iClock           : ---|  belt_1_clk_1     C
+	belt_1_clk_2       ---|
+
+	belt_1_clk_3     V --->  belt_1_clk_2
+
+	iClock           : ---|  belt_1_clk_3     V
+	belt_1_clk_4       ---|
+	belt_1_clk_5       ---|
+
+	IX0.0              ---&  belt_1_clk_4
+	tick_1_fast      ~ ---&
+
+	TX0.4              ---&  belt_1_clk_5
+	tick_1_fast        ---&
+
+
+	belt_1_pip_1     E ---/  belt_1_pip
+
+	belt_1_clk       : ---&  belt_1_pip_1     E
+	IX0.1              ---&
+	belt_1_pip_2     ~ ---&
+	IX0.7            ~ ---&
+
+	belt_1_pip_3     S ---#  belt_1_pip_2
+	belt_1_pip_4     R ---#
+
+	belt_1_clk       : ---&  belt_1_pip_3     S
+	belt_1_pip         ---&
+	belt_1_pip_5     ~ ---&
+
+	belt_1_clk       : ---&  belt_1_pip_4     R
+	belt_1_pip       ~ ---&
+	belt_1_pip_5       ---&
+
+	belt_1_pip_6       ---|  belt_1_pip_5
+	IX0.7              ---|
+
+	belt_1_shift     A ---+  belt_1_pip_6             (belt_1_shift        // 1
+	belt_1_mask      A ---+                           &belt_1_mask         // 2
+	                                                  )==belt_1_mask       // 2
+	                                                  ;                    // (5)
+
+
+	belt_1_shift_1   H ---*  belt_1_shift     A
+	belt_1_shift_2   r ---*
+
+	belt_1_clk       : ---+  belt_1_shift_1   H
+	belt_1_shift_3   A ---+                           belt_1_shift_3       // 1
+	belt_1_shift     A ---+                           ?belt_1_shift        // 2
+	belt_1_shift_4   A ---+                           :belt_1_shift_4      // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift_2   r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift_3   A
+
+	belt_1_shift     A ---+  belt_1_shift_4   A       (belt_1_shift        // 1
+	belt_1_shift_5   A ---+                           <<1)+(belt_1_shift_5 // 2
+	IB1              A ---+                           *(0x41+(IB1          // 3
+	                                                  <<1)));              // (2)
+
+	belt_1_pip         ---|  belt_1_shift_5   A
+
+
+	iConst           A ---+  belt_1_mask      A       0x41<<11;            // (8)
+
+
+	belt_1_pip_2       ---@  QX4.2
+
+
+	belt_1_pip_2       ---|  QX4.2_0          X
+
+
+	belt_1_shift1_1  H ---*  belt_1_shift1    A
+	belt_1_shift1_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift1_1  H
+	belt_1_shift1_3  A ---+                           belt_1_shift1_3      // 1
+	belt_1_shift1    A ---+                           ?belt_1_shift1       // 2
+	belt_1_shift1_4  A ---+                           :belt_1_shift1_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift1_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift1_3  A
+
+	belt_1_shift1    A ---+  belt_1_shift1_4  A       (belt_1_shift1       // 1
+	belt_1_car0      A ---+                           <<1)+belt_1_car0     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask1     A       0x41<<7;             // (10)
+
+
+	QX0.0_1          S ---#  QX0.0
+	QX0.0_2          R ---#
+
+	belt_1_clk       : ---&  QX0.0_1          S
+	QX0.0_3            ---&
+	QX0.0_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.0_2          R
+	QX0.0_3          ~ ---&
+	QX0.0_4            ---&
+
+	belt_1_shift1    A ---+  QX0.0_3                  (belt_1_shift1       // 1
+	                                                  &0x7f)==0x41+(0<<1); // (11)
+
+	QX0.0_5            ---|  QX0.0_4
+	IX0.7              ---|
+
+	belt_1_shift1    A ---+  QX0.0_5                  (belt_1_shift1       // 1
+	belt_1_mask1     A ---+                           &belt_1_mask1        // 2
+	                                                  )==belt_1_mask1      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.0              ---|  QX0.0_0          X
+
+
+	belt_1_shift2_1  H ---*  belt_1_shift2    A
+	belt_1_shift2_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift2_1  H
+	belt_1_shift2_3  A ---+                           belt_1_shift2_3      // 1
+	belt_1_shift2    A ---+                           ?belt_1_shift2       // 2
+	belt_1_shift2_4  A ---+                           :belt_1_shift2_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift2_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift2_3  A
+
+	belt_1_shift2    A ---+  belt_1_shift2_4  A       (belt_1_shift2       // 1
+	belt_1_car1      A ---+                           <<1)+belt_1_car1     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask2     A       0x41<<7;             // (10)
+
+
+	QX0.1_1          S ---#  QX0.1
+	QX0.1_2          R ---#
+
+	belt_1_clk       : ---&  QX0.1_1          S
+	QX0.1_3            ---&
+	QX0.1_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.1_2          R
+	QX0.1_3          ~ ---&
+	QX0.1_4            ---&
+
+	belt_1_shift2    A ---+  QX0.1_3                  (belt_1_shift2       // 1
+	                                                  &0x7f)==0x41+(1<<1); // (12)
+
+	QX0.1_5            ---|  QX0.1_4
+	IX0.7              ---|
+
+	belt_1_shift2    A ---+  QX0.1_5                  (belt_1_shift2       // 1
+	belt_1_mask2     A ---+                           &belt_1_mask2        // 2
+	                                                  )==belt_1_mask2      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.1              ---|  QX0.1_0          X
+
+
+	belt_1_shift3_1  H ---*  belt_1_shift3    A
+	belt_1_shift3_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift3_1  H
+	belt_1_shift3_3  A ---+                           belt_1_shift3_3      // 1
+	belt_1_shift3    A ---+                           ?belt_1_shift3       // 2
+	belt_1_shift3_4  A ---+                           :belt_1_shift3_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift3_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift3_3  A
+
+	belt_1_shift3    A ---+  belt_1_shift3_4  A       (belt_1_shift3       // 1
+	belt_1_car2      A ---+                           <<1)+belt_1_car2     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask3     A       0x41<<7;             // (10)
+
+
+	QX0.2_1          S ---#  QX0.2
+	QX0.2_2          R ---#
+
+	belt_1_clk       : ---&  QX0.2_1          S
+	QX0.2_3            ---&
+	QX0.2_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.2_2          R
+	QX0.2_3          ~ ---&
+	QX0.2_4            ---&
+
+	belt_1_shift3    A ---+  QX0.2_3                  (belt_1_shift3       // 1
+	                                                  &0x7f)==0x41+(2<<1); // (13)
+
+	QX0.2_5            ---|  QX0.2_4
+	IX0.7              ---|
+
+	belt_1_shift3    A ---+  QX0.2_5                  (belt_1_shift3       // 1
+	belt_1_mask3     A ---+                           &belt_1_mask3        // 2
+	                                                  )==belt_1_mask3      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.2              ---|  QX0.2_0          X
+
+
+	belt_1_shift4_1  H ---*  belt_1_shift4    A
+	belt_1_shift4_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift4_1  H
+	belt_1_shift4_3  A ---+                           belt_1_shift4_3      // 1
+	belt_1_shift4    A ---+                           ?belt_1_shift4       // 2
+	belt_1_shift4_4  A ---+                           :belt_1_shift4_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift4_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift4_3  A
+
+	belt_1_shift4    A ---+  belt_1_shift4_4  A       (belt_1_shift4       // 1
+	belt_1_car3      A ---+                           <<1)+belt_1_car3     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask4     A       0x41<<7;             // (10)
+
+
+	QX0.3_1          S ---#  QX0.3
+	QX0.3_2          R ---#
+
+	belt_1_clk       : ---&  QX0.3_1          S
+	QX0.3_3            ---&
+	QX0.3_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.3_2          R
+	QX0.3_3          ~ ---&
+	QX0.3_4            ---&
+
+	belt_1_shift4    A ---+  QX0.3_3                  (belt_1_shift4       // 1
+	                                                  &0x7f)==0x41+(3<<1); // (14)
+
+	QX0.3_5            ---|  QX0.3_4
+	IX0.7              ---|
+
+	belt_1_shift4    A ---+  QX0.3_5                  (belt_1_shift4       // 1
+	belt_1_mask4     A ---+                           &belt_1_mask4        // 2
+	                                                  )==belt_1_mask4      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.3              ---|  QX0.3_0          X
+
+
+	belt_1_shift5_1  H ---*  belt_1_shift5    A
+	belt_1_shift5_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift5_1  H
+	belt_1_shift5_3  A ---+                           belt_1_shift5_3      // 1
+	belt_1_shift5    A ---+                           ?belt_1_shift5       // 2
+	belt_1_shift5_4  A ---+                           :belt_1_shift5_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift5_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift5_3  A
+
+	belt_1_shift5    A ---+  belt_1_shift5_4  A       (belt_1_shift5       // 1
+	belt_1_car4      A ---+                           <<1)+belt_1_car4     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask5     A       0x41<<7;             // (10)
+
+
+	QX0.4_1          S ---#  QX0.4
+	QX0.4_2          R ---#
+
+	belt_1_clk       : ---&  QX0.4_1          S
+	QX0.4_3            ---&
+	QX0.4_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.4_2          R
+	QX0.4_3          ~ ---&
+	QX0.4_4            ---&
+
+	belt_1_shift5    A ---+  QX0.4_3                  (belt_1_shift5       // 1
+	                                                  &0x7f)==0x41+(4<<1); // (15)
+
+	QX0.4_5            ---|  QX0.4_4
+	IX0.7              ---|
+
+	belt_1_shift5    A ---+  QX0.4_5                  (belt_1_shift5       // 1
+	belt_1_mask5     A ---+                           &belt_1_mask5        // 2
+	                                                  )==belt_1_mask5      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.4              ---|  QX0.4_0          X
+
+
+	belt_1_shift6_1  H ---*  belt_1_shift6    A
+	belt_1_shift6_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift6_1  H
+	belt_1_shift6_3  A ---+                           belt_1_shift6_3      // 1
+	belt_1_shift6    A ---+                           ?belt_1_shift6       // 2
+	belt_1_shift6_4  A ---+                           :belt_1_shift6_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift6_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift6_3  A
+
+	belt_1_shift6    A ---+  belt_1_shift6_4  A       (belt_1_shift6       // 1
+	belt_1_car5      A ---+                           <<1)+belt_1_car5     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask6     A       0x41<<7;             // (10)
+
+
+	QX0.5_1          S ---#  QX0.5
+	QX0.5_2          R ---#
+
+	belt_1_clk       : ---&  QX0.5_1          S
+	QX0.5_3            ---&
+	QX0.5_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.5_2          R
+	QX0.5_3          ~ ---&
+	QX0.5_4            ---&
+
+	belt_1_shift6    A ---+  QX0.5_3                  (belt_1_shift6       // 1
+	                                                  &0x7f)==0x41+(5<<1); // (16)
+
+	QX0.5_5            ---|  QX0.5_4
+	IX0.7              ---|
+
+	belt_1_shift6    A ---+  QX0.5_5                  (belt_1_shift6       // 1
+	belt_1_mask6     A ---+                           &belt_1_mask6        // 2
+	                                                  )==belt_1_mask6      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.5              ---|  QX0.5_0          X
+
+
+	belt_1_shift7_1  H ---*  belt_1_shift7    A
+	belt_1_shift7_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift7_1  H
+	belt_1_shift7_3  A ---+                           belt_1_shift7_3      // 1
+	belt_1_shift7    A ---+                           ?belt_1_shift7       // 2
+	belt_1_shift7_4  A ---+                           :belt_1_shift7_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift7_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift7_3  A
+
+	belt_1_shift7    A ---+  belt_1_shift7_4  A       (belt_1_shift7       // 1
+	belt_1_car6      A ---+                           <<1)+belt_1_car6     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask7     A       0x41<<7;             // (10)
+
+
+	QX0.6_1          S ---#  QX0.6
+	QX0.6_2          R ---#
+
+	belt_1_clk       : ---&  QX0.6_1          S
+	QX0.6_3            ---&
+	QX0.6_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.6_2          R
+	QX0.6_3          ~ ---&
+	QX0.6_4            ---&
+
+	belt_1_shift7    A ---+  QX0.6_3                  (belt_1_shift7       // 1
+	                                                  &0x7f)==0x41+(6<<1); // (17)
+
+	QX0.6_5            ---|  QX0.6_4
+	IX0.7              ---|
+
+	belt_1_shift7    A ---+  QX0.6_5                  (belt_1_shift7       // 1
+	belt_1_mask7     A ---+                           &belt_1_mask7        // 2
+	                                                  )==belt_1_mask7      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.6              ---|  QX0.6_0          X
+
+
+	belt_1_shift8_1  H ---*  belt_1_shift8    A
+	belt_1_shift8_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift8_1  H
+	belt_1_shift8_3  A ---+                           belt_1_shift8_3      // 1
+	belt_1_shift8    A ---+                           ?belt_1_shift8       // 2
+	belt_1_shift8_4  A ---+                           :belt_1_shift8_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift8_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift8_3  A
+
+	belt_1_shift8    A ---+  belt_1_shift8_4  A       (belt_1_shift8       // 1
+	belt_1_car7      A ---+                           <<1)+belt_1_car7     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask8     A       0x41<<7;             // (10)
+
+
+	QX0.7_1          S ---#  QX0.7
+	QX0.7_2          R ---#
+
+	belt_1_clk       : ---&  QX0.7_1          S
+	QX0.7_3            ---&
+	QX0.7_4          ~ ---&
+
+	belt_1_clk       : ---&  QX0.7_2          R
+	QX0.7_3          ~ ---&
+	QX0.7_4            ---&
+
+	belt_1_shift8    A ---+  QX0.7_3                  (belt_1_shift8       // 1
+	                                                  &0x7f)==0x41+(7<<1); // (18)
+
+	QX0.7_5            ---|  QX0.7_4
+	IX0.7              ---|
+
+	belt_1_shift8    A ---+  QX0.7_5                  (belt_1_shift8       // 1
+	belt_1_mask8     A ---+                           &belt_1_mask8        // 2
+	                                                  )==belt_1_mask8      // 2
+	                                                  ;                    // (5)
+
+
+	QX0.7              ---|  QX0.7_0          X
+
+
+	belt_1_shift9_1  H ---*  belt_1_shift9    A
+	belt_1_shift9_2  r ---*
+
+	belt_1_clk       : ---+  belt_1_shift9_1  H
+	belt_1_shift9_3  A ---+                           belt_1_shift9_3      // 1
+	belt_1_shift9    A ---+                           ?belt_1_shift9       // 2
+	belt_1_shift9_4  A ---+                           :belt_1_shift9_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift9_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift9_3  A
+
+	belt_1_shift9    A ---+  belt_1_shift9_4  A       (belt_1_shift9       // 1
+	belt_1_car8      A ---+                           <<1)+belt_1_car8     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask9     A       0x41<<7;             // (10)
+
+
+	QX1.0_1          S ---#  QX1.0
+	QX1.0_2          R ---#
+
+	belt_1_clk       : ---&  QX1.0_1          S
+	QX1.0_3            ---&
+	QX1.0_4          ~ ---&
+
+	belt_1_clk       : ---&  QX1.0_2          R
+	QX1.0_3          ~ ---&
+	QX1.0_4            ---&
+
+	belt_1_shift9    A ---+  QX1.0_3                  (belt_1_shift9       // 1
+	                                                  &0x7f)==0x41+(8<<1); // (19)
+
+	QX1.0_5            ---|  QX1.0_4
+	IX0.7              ---|
+
+	belt_1_shift9    A ---+  QX1.0_5                  (belt_1_shift9       // 1
+	belt_1_mask9     A ---+                           &belt_1_mask9        // 2
+	                                                  )==belt_1_mask9      // 2
+	                                                  ;                    // (5)
+
+
+	QX1.0              ---|  QX1.0_0          X
+
+
+	belt_1_shift10_1 H ---*  belt_1_shift10   A
+	belt_1_shift10_2 r ---*
+
+	belt_1_clk       : ---+  belt_1_shift10_1 H
+	belt_1_shift10_3 A ---+                           belt_1_shift10_3     // 1
+	belt_1_shift10   A ---+                           ?belt_1_shift10      // 2
+	belt_1_shift10_4 A ---+                           :belt_1_shift10_4    // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_1_shift10_2 r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_1_shift10_3 A
+
+	belt_1_shift10   A ---+  belt_1_shift10_4 A       (belt_1_shift10      // 1
+	belt_1_car9      A ---+                           <<1)+belt_1_car9     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_1_mask10    A       0x41<<7;             // (10)
+
+
+	QX1.1_1          S ---#  QX1.1
+	QX1.1_2          R ---#
+
+	belt_1_clk       : ---&  QX1.1_1          S
+	QX1.1_3            ---&
+	QX1.1_4          ~ ---&
+
+	belt_1_clk       : ---&  QX1.1_2          R
+	QX1.1_3          ~ ---&
+	QX1.1_4            ---&
+
+	belt_1_shift10   A ---+  QX1.1_3                  (belt_1_shift10      // 1
+	                                                  &0x7f)==0x41+(9<<1); // (20)
+
+	QX1.1_5            ---|  QX1.1_4
+	IX0.7              ---|
+
+	belt_1_shift10   A ---+  QX1.1_5                  (belt_1_shift10      // 1
+	belt_1_mask10    A ---+                           &belt_1_mask10       // 2
+	                                                  )==belt_1_mask10     // 2
+	                                                  ;                    // (5)
+
+
+	QX1.1              ---|  QX1.1_0          X
+
+
+	belt_1_car10     A ---+  QX4.0                    belt_1_car10         // 1
+
+
+	QX4.0              ---|  QX4.0_0          X
+
+154
+155	    QX4.1 = belt(
+156		QX4.3,		/* lock indicator */
+157		QX2.0,
+158		QX2.1,
+159		QX2.2,
+160		QX2.3,
+161		QX2.4,
+162		QX2.5,
+163		QX2.6,
+164		QX2.7,
+165		QX3.0,
+166		QX3.1,
+167		IB3,		/* gate code 0 .. 9  - for parcel destination */
+168		IX2.1,		/* photo cell monitoring parcel onto belt */
+169		tick(IX2.0, IX2.6, IX0.5),	/* "strobe pulse" from belt movement */
+
+	IX2.6     ---|  tick_2_fast
+	IX0.5     ---|
+
+170	    );
+
+	belt_2_shift     A ---+  belt_2_car0      A       (belt_2_shift        // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift1    A ---+  belt_2_car1      A       (belt_2_shift1       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift2    A ---+  belt_2_car2      A       (belt_2_shift2       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift3    A ---+  belt_2_car3      A       (belt_2_shift3       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift4    A ---+  belt_2_car4      A       (belt_2_shift4       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift5    A ---+  belt_2_car5      A       (belt_2_shift5       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift6    A ---+  belt_2_car6      A       (belt_2_shift6       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift7    A ---+  belt_2_car7      A       (belt_2_shift7       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift8    A ---+  belt_2_car8      A       (belt_2_shift8       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift9    A ---+  belt_2_car9      A       (belt_2_shift9       // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_shift10   A ---+  belt_2_car10     A       (belt_2_shift10      // 1
+	                                                  >>12)&1;             // (9)
+
+
+	belt_2_clk_1     C ---:  belt_2_clk       :
+
+	iClock           : ---|  belt_2_clk_1     C
+	belt_2_clk_2       ---|
+
+	belt_2_clk_3     V --->  belt_2_clk_2
+
+	iClock           : ---|  belt_2_clk_3     V
+	belt_2_clk_4       ---|
+	belt_2_clk_5       ---|
+
+	IX2.0              ---&  belt_2_clk_4
+	tick_2_fast      ~ ---&
+
+	TX0.4              ---&  belt_2_clk_5
+	tick_2_fast        ---&
+
+
+	belt_2_pip_1     E ---/  belt_2_pip
+
+	belt_2_clk       : ---&  belt_2_pip_1     E
+	IX2.1              ---&
+	belt_2_pip_2     ~ ---&
+	IX0.7            ~ ---&
+
+	belt_2_pip_3     S ---#  belt_2_pip_2
+	belt_2_pip_4     R ---#
+
+	belt_2_clk       : ---&  belt_2_pip_3     S
+	belt_2_pip         ---&
+	belt_2_pip_5     ~ ---&
+
+	belt_2_clk       : ---&  belt_2_pip_4     R
+	belt_2_pip       ~ ---&
+	belt_2_pip_5       ---&
+
+	belt_2_pip_6       ---|  belt_2_pip_5
+	IX0.7              ---|
+
+	belt_2_shift     A ---+  belt_2_pip_6             (belt_2_shift        // 1
+	belt_2_mask      A ---+                           &belt_2_mask         // 2
+	                                                  )==belt_2_mask       // 2
+	                                                  ;                    // (5)
+
+
+	belt_2_shift_1   H ---*  belt_2_shift     A
+	belt_2_shift_2   r ---*
+
+	belt_2_clk       : ---+  belt_2_shift_1   H
+	belt_2_shift_3   A ---+                           belt_2_shift_3       // 1
+	belt_2_shift     A ---+                           ?belt_2_shift        // 2
+	belt_2_shift_4   A ---+                           :belt_2_shift_4      // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift_2   r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift_3   A
+
+	belt_2_shift     A ---+  belt_2_shift_4   A       (belt_2_shift        // 1
+	belt_2_shift_5   A ---+                           <<1)+(belt_2_shift_5 // 2
+	IB3              A ---+                           *(0x41+(IB3          // 3
+	                                                  <<1)));              // (2)
+
+	belt_2_pip         ---|  belt_2_shift_5   A
+
+
+	iConst           A ---+  belt_2_mask      A       0x41<<11;            // (8)
+
+
+	belt_2_pip_2       ---@  QX4.3
+
+
+	belt_2_pip_2       ---|  QX4.3_0          X
+
+
+	belt_2_shift1_1  H ---*  belt_2_shift1    A
+	belt_2_shift1_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift1_1  H
+	belt_2_shift1_3  A ---+                           belt_2_shift1_3      // 1
+	belt_2_shift1    A ---+                           ?belt_2_shift1       // 2
+	belt_2_shift1_4  A ---+                           :belt_2_shift1_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift1_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift1_3  A
+
+	belt_2_shift1    A ---+  belt_2_shift1_4  A       (belt_2_shift1       // 1
+	belt_2_car0      A ---+                           <<1)+belt_2_car0     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask1     A       0x41<<7;             // (10)
+
+
+	QX2.0_1          S ---#  QX2.0
+	QX2.0_2          R ---#
+
+	belt_2_clk       : ---&  QX2.0_1          S
+	QX2.0_3            ---&
+	QX2.0_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.0_2          R
+	QX2.0_3          ~ ---&
+	QX2.0_4            ---&
+
+	belt_2_shift1    A ---+  QX2.0_3                  (belt_2_shift1       // 1
+	                                                  &0x7f)==0x41+(0<<1); // (11)
+
+	QX2.0_5            ---|  QX2.0_4
+	IX0.7              ---|
+
+	belt_2_shift1    A ---+  QX2.0_5                  (belt_2_shift1       // 1
+	belt_2_mask1     A ---+                           &belt_2_mask1        // 2
+	                                                  )==belt_2_mask1      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.0              ---|  QX2.0_0          X
+
+
+	belt_2_shift2_1  H ---*  belt_2_shift2    A
+	belt_2_shift2_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift2_1  H
+	belt_2_shift2_3  A ---+                           belt_2_shift2_3      // 1
+	belt_2_shift2    A ---+                           ?belt_2_shift2       // 2
+	belt_2_shift2_4  A ---+                           :belt_2_shift2_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift2_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift2_3  A
+
+	belt_2_shift2    A ---+  belt_2_shift2_4  A       (belt_2_shift2       // 1
+	belt_2_car1      A ---+                           <<1)+belt_2_car1     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask2     A       0x41<<7;             // (10)
+
+
+	QX2.1_1          S ---#  QX2.1
+	QX2.1_2          R ---#
+
+	belt_2_clk       : ---&  QX2.1_1          S
+	QX2.1_3            ---&
+	QX2.1_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.1_2          R
+	QX2.1_3          ~ ---&
+	QX2.1_4            ---&
+
+	belt_2_shift2    A ---+  QX2.1_3                  (belt_2_shift2       // 1
+	                                                  &0x7f)==0x41+(1<<1); // (12)
+
+	QX2.1_5            ---|  QX2.1_4
+	IX0.7              ---|
+
+	belt_2_shift2    A ---+  QX2.1_5                  (belt_2_shift2       // 1
+	belt_2_mask2     A ---+                           &belt_2_mask2        // 2
+	                                                  )==belt_2_mask2      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.1              ---|  QX2.1_0          X
+
+
+	belt_2_shift3_1  H ---*  belt_2_shift3    A
+	belt_2_shift3_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift3_1  H
+	belt_2_shift3_3  A ---+                           belt_2_shift3_3      // 1
+	belt_2_shift3    A ---+                           ?belt_2_shift3       // 2
+	belt_2_shift3_4  A ---+                           :belt_2_shift3_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift3_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift3_3  A
+
+	belt_2_shift3    A ---+  belt_2_shift3_4  A       (belt_2_shift3       // 1
+	belt_2_car2      A ---+                           <<1)+belt_2_car2     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask3     A       0x41<<7;             // (10)
+
+
+	QX2.2_1          S ---#  QX2.2
+	QX2.2_2          R ---#
+
+	belt_2_clk       : ---&  QX2.2_1          S
+	QX2.2_3            ---&
+	QX2.2_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.2_2          R
+	QX2.2_3          ~ ---&
+	QX2.2_4            ---&
+
+	belt_2_shift3    A ---+  QX2.2_3                  (belt_2_shift3       // 1
+	                                                  &0x7f)==0x41+(2<<1); // (13)
+
+	QX2.2_5            ---|  QX2.2_4
+	IX0.7              ---|
+
+	belt_2_shift3    A ---+  QX2.2_5                  (belt_2_shift3       // 1
+	belt_2_mask3     A ---+                           &belt_2_mask3        // 2
+	                                                  )==belt_2_mask3      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.2              ---|  QX2.2_0          X
+
+
+	belt_2_shift4_1  H ---*  belt_2_shift4    A
+	belt_2_shift4_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift4_1  H
+	belt_2_shift4_3  A ---+                           belt_2_shift4_3      // 1
+	belt_2_shift4    A ---+                           ?belt_2_shift4       // 2
+	belt_2_shift4_4  A ---+                           :belt_2_shift4_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift4_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift4_3  A
+
+	belt_2_shift4    A ---+  belt_2_shift4_4  A       (belt_2_shift4       // 1
+	belt_2_car3      A ---+                           <<1)+belt_2_car3     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask4     A       0x41<<7;             // (10)
+
+
+	QX2.3_1          S ---#  QX2.3
+	QX2.3_2          R ---#
+
+	belt_2_clk       : ---&  QX2.3_1          S
+	QX2.3_3            ---&
+	QX2.3_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.3_2          R
+	QX2.3_3          ~ ---&
+	QX2.3_4            ---&
+
+	belt_2_shift4    A ---+  QX2.3_3                  (belt_2_shift4       // 1
+	                                                  &0x7f)==0x41+(3<<1); // (14)
+
+	QX2.3_5            ---|  QX2.3_4
+	IX0.7              ---|
+
+	belt_2_shift4    A ---+  QX2.3_5                  (belt_2_shift4       // 1
+	belt_2_mask4     A ---+                           &belt_2_mask4        // 2
+	                                                  )==belt_2_mask4      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.3              ---|  QX2.3_0          X
+
+
+	belt_2_shift5_1  H ---*  belt_2_shift5    A
+	belt_2_shift5_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift5_1  H
+	belt_2_shift5_3  A ---+                           belt_2_shift5_3      // 1
+	belt_2_shift5    A ---+                           ?belt_2_shift5       // 2
+	belt_2_shift5_4  A ---+                           :belt_2_shift5_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift5_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift5_3  A
+
+	belt_2_shift5    A ---+  belt_2_shift5_4  A       (belt_2_shift5       // 1
+	belt_2_car4      A ---+                           <<1)+belt_2_car4     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask5     A       0x41<<7;             // (10)
+
+
+	QX2.4_1          S ---#  QX2.4
+	QX2.4_2          R ---#
+
+	belt_2_clk       : ---&  QX2.4_1          S
+	QX2.4_3            ---&
+	QX2.4_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.4_2          R
+	QX2.4_3          ~ ---&
+	QX2.4_4            ---&
+
+	belt_2_shift5    A ---+  QX2.4_3                  (belt_2_shift5       // 1
+	                                                  &0x7f)==0x41+(4<<1); // (15)
+
+	QX2.4_5            ---|  QX2.4_4
+	IX0.7              ---|
+
+	belt_2_shift5    A ---+  QX2.4_5                  (belt_2_shift5       // 1
+	belt_2_mask5     A ---+                           &belt_2_mask5        // 2
+	                                                  )==belt_2_mask5      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.4              ---|  QX2.4_0          X
+
+
+	belt_2_shift6_1  H ---*  belt_2_shift6    A
+	belt_2_shift6_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift6_1  H
+	belt_2_shift6_3  A ---+                           belt_2_shift6_3      // 1
+	belt_2_shift6    A ---+                           ?belt_2_shift6       // 2
+	belt_2_shift6_4  A ---+                           :belt_2_shift6_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift6_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift6_3  A
+
+	belt_2_shift6    A ---+  belt_2_shift6_4  A       (belt_2_shift6       // 1
+	belt_2_car5      A ---+                           <<1)+belt_2_car5     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask6     A       0x41<<7;             // (10)
+
+
+	QX2.5_1          S ---#  QX2.5
+	QX2.5_2          R ---#
+
+	belt_2_clk       : ---&  QX2.5_1          S
+	QX2.5_3            ---&
+	QX2.5_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.5_2          R
+	QX2.5_3          ~ ---&
+	QX2.5_4            ---&
+
+	belt_2_shift6    A ---+  QX2.5_3                  (belt_2_shift6       // 1
+	                                                  &0x7f)==0x41+(5<<1); // (16)
+
+	QX2.5_5            ---|  QX2.5_4
+	IX0.7              ---|
+
+	belt_2_shift6    A ---+  QX2.5_5                  (belt_2_shift6       // 1
+	belt_2_mask6     A ---+                           &belt_2_mask6        // 2
+	                                                  )==belt_2_mask6      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.5              ---|  QX2.5_0          X
+
+
+	belt_2_shift7_1  H ---*  belt_2_shift7    A
+	belt_2_shift7_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift7_1  H
+	belt_2_shift7_3  A ---+                           belt_2_shift7_3      // 1
+	belt_2_shift7    A ---+                           ?belt_2_shift7       // 2
+	belt_2_shift7_4  A ---+                           :belt_2_shift7_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift7_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift7_3  A
+
+	belt_2_shift7    A ---+  belt_2_shift7_4  A       (belt_2_shift7       // 1
+	belt_2_car6      A ---+                           <<1)+belt_2_car6     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask7     A       0x41<<7;             // (10)
+
+
+	QX2.6_1          S ---#  QX2.6
+	QX2.6_2          R ---#
+
+	belt_2_clk       : ---&  QX2.6_1          S
+	QX2.6_3            ---&
+	QX2.6_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.6_2          R
+	QX2.6_3          ~ ---&
+	QX2.6_4            ---&
+
+	belt_2_shift7    A ---+  QX2.6_3                  (belt_2_shift7       // 1
+	                                                  &0x7f)==0x41+(6<<1); // (17)
+
+	QX2.6_5            ---|  QX2.6_4
+	IX0.7              ---|
+
+	belt_2_shift7    A ---+  QX2.6_5                  (belt_2_shift7       // 1
+	belt_2_mask7     A ---+                           &belt_2_mask7        // 2
+	                                                  )==belt_2_mask7      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.6              ---|  QX2.6_0          X
+
+
+	belt_2_shift8_1  H ---*  belt_2_shift8    A
+	belt_2_shift8_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift8_1  H
+	belt_2_shift8_3  A ---+                           belt_2_shift8_3      // 1
+	belt_2_shift8    A ---+                           ?belt_2_shift8       // 2
+	belt_2_shift8_4  A ---+                           :belt_2_shift8_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift8_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift8_3  A
+
+	belt_2_shift8    A ---+  belt_2_shift8_4  A       (belt_2_shift8       // 1
+	belt_2_car7      A ---+                           <<1)+belt_2_car7     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask8     A       0x41<<7;             // (10)
+
+
+	QX2.7_1          S ---#  QX2.7
+	QX2.7_2          R ---#
+
+	belt_2_clk       : ---&  QX2.7_1          S
+	QX2.7_3            ---&
+	QX2.7_4          ~ ---&
+
+	belt_2_clk       : ---&  QX2.7_2          R
+	QX2.7_3          ~ ---&
+	QX2.7_4            ---&
+
+	belt_2_shift8    A ---+  QX2.7_3                  (belt_2_shift8       // 1
+	                                                  &0x7f)==0x41+(7<<1); // (18)
+
+	QX2.7_5            ---|  QX2.7_4
+	IX0.7              ---|
+
+	belt_2_shift8    A ---+  QX2.7_5                  (belt_2_shift8       // 1
+	belt_2_mask8     A ---+                           &belt_2_mask8        // 2
+	                                                  )==belt_2_mask8      // 2
+	                                                  ;                    // (5)
+
+
+	QX2.7              ---|  QX2.7_0          X
+
+
+	belt_2_shift9_1  H ---*  belt_2_shift9    A
+	belt_2_shift9_2  r ---*
+
+	belt_2_clk       : ---+  belt_2_shift9_1  H
+	belt_2_shift9_3  A ---+                           belt_2_shift9_3      // 1
+	belt_2_shift9    A ---+                           ?belt_2_shift9       // 2
+	belt_2_shift9_4  A ---+                           :belt_2_shift9_4     // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift9_2  r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift9_3  A
+
+	belt_2_shift9    A ---+  belt_2_shift9_4  A       (belt_2_shift9       // 1
+	belt_2_car8      A ---+                           <<1)+belt_2_car8     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask9     A       0x41<<7;             // (10)
+
+
+	QX3.0_1          S ---#  QX3.0
+	QX3.0_2          R ---#
+
+	belt_2_clk       : ---&  QX3.0_1          S
+	QX3.0_3            ---&
+	QX3.0_4          ~ ---&
+
+	belt_2_clk       : ---&  QX3.0_2          R
+	QX3.0_3          ~ ---&
+	QX3.0_4            ---&
+
+	belt_2_shift9    A ---+  QX3.0_3                  (belt_2_shift9       // 1
+	                                                  &0x7f)==0x41+(8<<1); // (19)
+
+	QX3.0_5            ---|  QX3.0_4
+	IX0.7              ---|
+
+	belt_2_shift9    A ---+  QX3.0_5                  (belt_2_shift9       // 1
+	belt_2_mask9     A ---+                           &belt_2_mask9        // 2
+	                                                  )==belt_2_mask9      // 2
+	                                                  ;                    // (5)
+
+
+	QX3.0              ---|  QX3.0_0          X
+
+
+	belt_2_shift10_1 H ---*  belt_2_shift10   A
+	belt_2_shift10_2 r ---*
+
+	belt_2_clk       : ---+  belt_2_shift10_1 H
+	belt_2_shift10_3 A ---+                           belt_2_shift10_3     // 1
+	belt_2_shift10   A ---+                           ?belt_2_shift10      // 2
+	belt_2_shift10_4 A ---+                           :belt_2_shift10_4    // 3
+	                                                  ;                    // (1)
+
+	iClock           : ---|  belt_2_shift10_2 r
+	IX0.7              ---|
+
+	IX0.7              ---|  belt_2_shift10_3 A
+
+	belt_2_shift10   A ---+  belt_2_shift10_4 A       (belt_2_shift10      // 1
+	belt_2_car9      A ---+                           <<1)+belt_2_car9     // 2
+	                                                  ;                    // (6)
+
+
+	iConst           A ---+  belt_2_mask10    A       0x41<<7;             // (10)
+
+
+	QX3.1_1          S ---#  QX3.1
+	QX3.1_2          R ---#
+
+	belt_2_clk       : ---&  QX3.1_1          S
+	QX3.1_3            ---&
+	QX3.1_4          ~ ---&
+
+	belt_2_clk       : ---&  QX3.1_2          R
+	QX3.1_3          ~ ---&
+	QX3.1_4            ---&
+
+	belt_2_shift10   A ---+  QX3.1_3                  (belt_2_shift10      // 1
+	                                                  &0x7f)==0x41+(9<<1); // (20)
+
+	QX3.1_5            ---|  QX3.1_4
+	IX0.7              ---|
+
+	belt_2_shift10   A ---+  QX3.1_5                  (belt_2_shift10      // 1
+	belt_2_mask10    A ---+                           &belt_2_mask10       // 2
+	                                                  )==belt_2_mask10     // 2
+	                                                  ;                    // (5)
+
+
+	QX3.1              ---|  QX3.1_0          X
+
+
+	belt_2_car10     A ---+  QX4.1                    belt_2_car10         // 1
+
+
+	QX4.1              ---|  QX4.1_0          X
+
+******* C CODE          ************************
+	#line 139 "init_t.ic"	/* in pre-compiled function block SHR */
+139	(1) 	return iC_MV(1)?iC_MV(2):iC_MV(3);
+	#line 30 "./Test0/sort32u.ic"
+030	(2) 	return (iC_MV(1)<<1)+(iC_MV(2)*(0x41+(iC_MV(3)<<1)));
+
+031	(3) 	return 0x41<<iC_MV(1);
+
+032	(4) 	return (iC_MV(1)>>iC_MV(2))&1;
+
+034	(5) 	return (iC_MV(1)&iC_MV(2))==iC_MV(2);
+
+055	(6) 	return (iC_MV(1)<<1)+iC_MV(2);
+
+059	(7) 	return (iC_MV(1)&0x7f)==0x41+(iC_MV(2)<<1);
+
+101	(8) 	return 0x41<<11;
+
+101	(9) 	return (iC_MV(1)>>12)&1;
+
+102	(10) 	return 0x41<<7;
+
+102	(11) 	return (iC_MV(1)&0x7f)==0x41+(0<<1);
+
+103	(12) 	return (iC_MV(1)&0x7f)==0x41+(1<<1);
+
+104	(13) 	return (iC_MV(1)&0x7f)==0x41+(2<<1);
+
+105	(14) 	return (iC_MV(1)&0x7f)==0x41+(3<<1);
+
+106	(15) 	return (iC_MV(1)&0x7f)==0x41+(4<<1);
+
+107	(16) 	return (iC_MV(1)&0x7f)==0x41+(5<<1);
+
+108	(17) 	return (iC_MV(1)&0x7f)==0x41+(6<<1);
+
+109	(18) 	return (iC_MV(1)&0x7f)==0x41+(7<<1);
+
+110	(19) 	return (iC_MV(1)&0x7f)==0x41+(8<<1);
+
+111	(20) 	return (iC_MV(1)&0x7f)==0x41+(9<<1);
+
+******* NET TOPOLOGY    ************************
+
+IB1              [  A  belt_1_shift_4+
+IB3              [  A  belt_2_shift_4+
+IX0.0            <     belt_1_clk_4&
+IX0.1            <     belt_1_pip_1&
+IX0.5            <     tick_1_fast|  tick_2_fast|
+IX0.6            <     tick_1_fast|
+IX0.7            <    ~belt_1_pip_1&      belt_1_pip_5|      belt_1_shift_2|    belt_1_shift_3|    belt_1_shift1_2|   belt_1_shift1_3|   QX0.0_4|           belt_1_shift2_2|
+                       belt_1_shift2_3|   QX0.1_4|           belt_1_shift3_2|   belt_1_shift3_3|   QX0.2_4|           belt_1_shift4_2|   belt_1_shift4_3|   QX0.3_4|
+                       belt_1_shift5_2|   belt_1_shift5_3|   QX0.4_4|           belt_1_shift6_2|   belt_1_shift6_3|   QX0.5_4|           belt_1_shift7_2|   belt_1_shift7_3|
+                       QX0.6_4|           belt_1_shift8_2|   belt_1_shift8_3|   QX0.7_4|           belt_1_shift9_2|   belt_1_shift9_3|   QX1.0_4|           belt_1_shift10_2|
+                       belt_1_shift10_3|  QX1.1_4|          ~belt_2_pip_1&      belt_2_pip_5|      belt_2_shift_2|    belt_2_shift_3|    belt_2_shift1_2|   belt_2_shift1_3|
+                       QX2.0_4|           belt_2_shift2_2|   belt_2_shift2_3|   QX2.1_4|           belt_2_shift3_2|   belt_2_shift3_3|   QX2.2_4|           belt_2_shift4_2|
+                       belt_2_shift4_3|   QX2.3_4|           belt_2_shift5_2|   belt_2_shift5_3|   QX2.4_4|           belt_2_shift6_2|   belt_2_shift6_3|   QX2.5_4|
+                       belt_2_shift7_2|   belt_2_shift7_3|   QX2.6_4|           belt_2_shift8_2|   belt_2_shift8_3|   QX2.7_4|           belt_2_shift9_2|   belt_2_shift9_3|
+                       QX3.0_4|           belt_2_shift10_2|  belt_2_shift10_3|  QX3.1_4|
+IX2.0            <     belt_2_clk_4&
+IX2.1            <     belt_2_pip_1&
+IX2.6            <     tick_2_fast|
+QX0.0            #     QX0.0_0|
+QX0.0_0          |  X
+QX0.0_1          &  S  QX0.0#
+QX0.0_2          &  R  QX0.0#
+QX0.0_3          +    ~QX0.0_2&  QX0.0_1&
+QX0.0_4          |     QX0.0_2& ~QX0.0_1&
+QX0.0_5          +     QX0.0_4|
+QX0.1            #     QX0.1_0|
+QX0.1_0          |  X
+QX0.1_1          &  S  QX0.1#
+QX0.1_2          &  R  QX0.1#
+QX0.1_3          +    ~QX0.1_2&  QX0.1_1&
+QX0.1_4          |     QX0.1_2& ~QX0.1_1&
+QX0.1_5          +     QX0.1_4|
+QX0.2            #     QX0.2_0|
+QX0.2_0          |  X
+QX0.2_1          &  S  QX0.2#
+QX0.2_2          &  R  QX0.2#
+QX0.2_3          +    ~QX0.2_2&  QX0.2_1&
+QX0.2_4          |     QX0.2_2& ~QX0.2_1&
+QX0.2_5          +     QX0.2_4|
+QX0.3            #     QX0.3_0|
+QX0.3_0          |  X
+QX0.3_1          &  S  QX0.3#
+QX0.3_2          &  R  QX0.3#
+QX0.3_3          +    ~QX0.3_2&  QX0.3_1&
+QX0.3_4          |     QX0.3_2& ~QX0.3_1&
+QX0.3_5          +     QX0.3_4|
+QX0.4            #     QX0.4_0|
+QX0.4_0          |  X
+QX0.4_1          &  S  QX0.4#
+QX0.4_2          &  R  QX0.4#
+QX0.4_3          +    ~QX0.4_2&  QX0.4_1&
+QX0.4_4          |     QX0.4_2& ~QX0.4_1&
+QX0.4_5          +     QX0.4_4|
+QX0.5            #     QX0.5_0|
+QX0.5_0          |  X
+QX0.5_1          &  S  QX0.5#
+QX0.5_2          &  R  QX0.5#
+QX0.5_3          +    ~QX0.5_2&  QX0.5_1&
+QX0.5_4          |     QX0.5_2& ~QX0.5_1&
+QX0.5_5          +     QX0.5_4|
+QX0.6            #     QX0.6_0|
+QX0.6_0          |  X
+QX0.6_1          &  S  QX0.6#
+QX0.6_2          &  R  QX0.6#
+QX0.6_3          +    ~QX0.6_2&  QX0.6_1&
+QX0.6_4          |     QX0.6_2& ~QX0.6_1&
+QX0.6_5          +     QX0.6_4|
+QX0.7            #     QX0.7_0|
+QX0.7_0          |  X
+QX0.7_1          &  S  QX0.7#
+QX0.7_2          &  R  QX0.7#
+QX0.7_3          +    ~QX0.7_2&  QX0.7_1&
+QX0.7_4          |     QX0.7_2& ~QX0.7_1&
+QX0.7_5          +     QX0.7_4|
+QX1.0            #     QX1.0_0|
+QX1.0_0          |  X
+QX1.0_1          &  S  QX1.0#
+QX1.0_2          &  R  QX1.0#
+QX1.0_3          +    ~QX1.0_2&  QX1.0_1&
+QX1.0_4          |     QX1.0_2& ~QX1.0_1&
+QX1.0_5          +     QX1.0_4|
+QX1.1            #     QX1.1_0|
+QX1.1_0          |  X
+QX1.1_1          &  S  QX1.1#
+QX1.1_2          &  R  QX1.1#
+QX1.1_3          +    ~QX1.1_2&  QX1.1_1&
+QX1.1_4          |     QX1.1_2& ~QX1.1_1&
+QX1.1_5          +     QX1.1_4|
+QX2.0            #     QX2.0_0|
+QX2.0_0          |  X
+QX2.0_1          &  S  QX2.0#
+QX2.0_2          &  R  QX2.0#
+QX2.0_3          +    ~QX2.0_2&  QX2.0_1&
+QX2.0_4          |     QX2.0_2& ~QX2.0_1&
+QX2.0_5          +     QX2.0_4|
+QX2.1            #     QX2.1_0|
+QX2.1_0          |  X
+QX2.1_1          &  S  QX2.1#
+QX2.1_2          &  R  QX2.1#
+QX2.1_3          +    ~QX2.1_2&  QX2.1_1&
+QX2.1_4          |     QX2.1_2& ~QX2.1_1&
+QX2.1_5          +     QX2.1_4|
+QX2.2            #     QX2.2_0|
+QX2.2_0          |  X
+QX2.2_1          &  S  QX2.2#
+QX2.2_2          &  R  QX2.2#
+QX2.2_3          +    ~QX2.2_2&  QX2.2_1&
+QX2.2_4          |     QX2.2_2& ~QX2.2_1&
+QX2.2_5          +     QX2.2_4|
+QX2.3            #     QX2.3_0|
+QX2.3_0          |  X
+QX2.3_1          &  S  QX2.3#
+QX2.3_2          &  R  QX2.3#
+QX2.3_3          +    ~QX2.3_2&  QX2.3_1&
+QX2.3_4          |     QX2.3_2& ~QX2.3_1&
+QX2.3_5          +     QX2.3_4|
+QX2.4            #     QX2.4_0|
+QX2.4_0          |  X
+QX2.4_1          &  S  QX2.4#
+QX2.4_2          &  R  QX2.4#
+QX2.4_3          +    ~QX2.4_2&  QX2.4_1&
+QX2.4_4          |     QX2.4_2& ~QX2.4_1&
+QX2.4_5          +     QX2.4_4|
+QX2.5            #     QX2.5_0|
+QX2.5_0          |  X
+QX2.5_1          &  S  QX2.5#
+QX2.5_2          &  R  QX2.5#
+QX2.5_3          +    ~QX2.5_2&  QX2.5_1&
+QX2.5_4          |     QX2.5_2& ~QX2.5_1&
+QX2.5_5          +     QX2.5_4|
+QX2.6            #     QX2.6_0|
+QX2.6_0          |  X
+QX2.6_1          &  S  QX2.6#
+QX2.6_2          &  R  QX2.6#
+QX2.6_3          +    ~QX2.6_2&  QX2.6_1&
+QX2.6_4          |     QX2.6_2& ~QX2.6_1&
+QX2.6_5          +     QX2.6_4|
+QX2.7            #     QX2.7_0|
+QX2.7_0          |  X
+QX2.7_1          &  S  QX2.7#
+QX2.7_2          &  R  QX2.7#
+QX2.7_3          +    ~QX2.7_2&  QX2.7_1&
+QX2.7_4          |     QX2.7_2& ~QX2.7_1&
+QX2.7_5          +     QX2.7_4|
+QX3.0            #     QX3.0_0|
+QX3.0_0          |  X
+QX3.0_1          &  S  QX3.0#
+QX3.0_2          &  R  QX3.0#
+QX3.0_3          +    ~QX3.0_2&  QX3.0_1&
+QX3.0_4          |     QX3.0_2& ~QX3.0_1&
+QX3.0_5          +     QX3.0_4|
+QX3.1            #     QX3.1_0|
+QX3.1_0          |  X
+QX3.1_1          &  S  QX3.1#
+QX3.1_2          &  R  QX3.1#
+QX3.1_3          +    ~QX3.1_2&  QX3.1_1&
+QX3.1_4          |     QX3.1_2& ~QX3.1_1&
+QX3.1_5          +     QX3.1_4|
+QX4.0            +     QX4.0_0|
+QX4.0_0          |  X
+QX4.1            +     QX4.1_0|
+QX4.1_0          |  X
+QX4.2            @     belt_1_pip_2#
+QX4.2_0          |  X
+QX4.3            @     belt_2_pip_2#
+QX4.3_0          |  X
+TX0.4            <     belt_1_clk_5&  belt_2_clk_5&
+belt_1_car0      +  A  belt_1_shift1_4+
+belt_1_car1      +  A  belt_1_shift2_4+
+belt_1_car10     +  A  QX4.0+
+belt_1_car2      +  A  belt_1_shift3_4+
+belt_1_car3      +  A  belt_1_shift4_4+
+belt_1_car4      +  A  belt_1_shift5_4+
+belt_1_car5      +  A  belt_1_shift6_4+
+belt_1_car6      +  A  belt_1_shift7_4+
+belt_1_car7      +  A  belt_1_shift8_4+
+belt_1_car8      +  A  belt_1_shift9_4+
+belt_1_car9      +  A  belt_1_shift10_4+
+belt_1_clk       :  :  belt_1_pip_1&      belt_1_pip_4&      belt_1_pip_3&      belt_1_shift_1+    belt_1_shift1_1+   QX0.0_2&           QX0.0_1&           belt_1_shift2_1+
+                       QX0.1_2&           QX0.1_1&           belt_1_shift3_1+   QX0.2_2&           QX0.2_1&           belt_1_shift4_1+   QX0.3_2&           QX0.3_1&
+                       belt_1_shift5_1+   QX0.4_2&           QX0.4_1&           belt_1_shift6_1+   QX0.5_2&           QX0.5_1&           belt_1_shift7_1+   QX0.6_2&
+                       QX0.6_1&           belt_1_shift8_1+   QX0.7_2&           QX0.7_1&           belt_1_shift9_1+   QX1.0_2&           QX1.0_1&           belt_1_shift10_1+
+                       QX1.1_2&           QX1.1_1&
+belt_1_clk_1     |  C  belt_1_clk:
+belt_1_clk_2     >     belt_1_clk_1|
+belt_1_clk_3     |  V  belt_1_clk_2>
+belt_1_clk_4     &     belt_1_clk_3|
+belt_1_clk_5     &     belt_1_clk_3|
+belt_1_mask      +  A  belt_1_pip_6+
+belt_1_mask1     +  A  QX0.0_5+
+belt_1_mask10    +  A  QX1.1_5+
+belt_1_mask2     +  A  QX0.1_5+
+belt_1_mask3     +  A  QX0.2_5+
+belt_1_mask4     +  A  QX0.3_5+
+belt_1_mask5     +  A  QX0.4_5+
+belt_1_mask6     +  A  QX0.5_5+
+belt_1_mask7     +  A  QX0.6_5+
+belt_1_mask8     +  A  QX0.7_5+
+belt_1_mask9     +  A  QX1.0_5+
+belt_1_pip       /    ~belt_1_pip_4&    belt_1_pip_3&    belt_1_shift_5|
+belt_1_pip_1     &  E  belt_1_pip/
+belt_1_pip_2     #    ~belt_1_pip_1&  QX4.2_0|
+belt_1_pip_3     &  S  belt_1_pip_2#
+belt_1_pip_4     &  R  belt_1_pip_2#
+belt_1_pip_5     |     belt_1_pip_4& ~belt_1_pip_3&
+belt_1_pip_6     +     belt_1_pip_5|
+belt_1_shift     *  A  belt_1_car0+     belt_1_pip_6+    belt_1_shift_1+  belt_1_shift_4+
+belt_1_shift1    *  A  belt_1_car1+      belt_1_shift1_1+  belt_1_shift1_4+  QX0.0_5+          QX0.0_3+
+belt_1_shift10   *  A  belt_1_car10+      belt_1_shift10_1+  belt_1_shift10_4+  QX1.1_5+           QX1.1_3+
+belt_1_shift10_1 +  H  belt_1_shift10*
+belt_1_shift10_2 |  r  belt_1_shift10*
+belt_1_shift10_3 |  A  belt_1_shift10_1+
+belt_1_shift10_4 +  A  belt_1_shift10_1+
+belt_1_shift1_1  +  H  belt_1_shift1*
+belt_1_shift1_2  |  r  belt_1_shift1*
+belt_1_shift1_3  |  A  belt_1_shift1_1+
+belt_1_shift1_4  +  A  belt_1_shift1_1+
+belt_1_shift2    *  A  belt_1_car2+      belt_1_shift2_1+  belt_1_shift2_4+  QX0.1_5+          QX0.1_3+
+belt_1_shift2_1  +  H  belt_1_shift2*
+belt_1_shift2_2  |  r  belt_1_shift2*
+belt_1_shift2_3  |  A  belt_1_shift2_1+
+belt_1_shift2_4  +  A  belt_1_shift2_1+
+belt_1_shift3    *  A  belt_1_car3+      belt_1_shift3_1+  belt_1_shift3_4+  QX0.2_5+          QX0.2_3+
+belt_1_shift3_1  +  H  belt_1_shift3*
+belt_1_shift3_2  |  r  belt_1_shift3*
+belt_1_shift3_3  |  A  belt_1_shift3_1+
+belt_1_shift3_4  +  A  belt_1_shift3_1+
+belt_1_shift4    *  A  belt_1_car4+      belt_1_shift4_1+  belt_1_shift4_4+  QX0.3_5+          QX0.3_3+
+belt_1_shift4_1  +  H  belt_1_shift4*
+belt_1_shift4_2  |  r  belt_1_shift4*
+belt_1_shift4_3  |  A  belt_1_shift4_1+
+belt_1_shift4_4  +  A  belt_1_shift4_1+
+belt_1_shift5    *  A  belt_1_car5+      belt_1_shift5_1+  belt_1_shift5_4+  QX0.4_5+          QX0.4_3+
+belt_1_shift5_1  +  H  belt_1_shift5*
+belt_1_shift5_2  |  r  belt_1_shift5*
+belt_1_shift5_3  |  A  belt_1_shift5_1+
+belt_1_shift5_4  +  A  belt_1_shift5_1+
+belt_1_shift6    *  A  belt_1_car6+      belt_1_shift6_1+  belt_1_shift6_4+  QX0.5_5+          QX0.5_3+
+belt_1_shift6_1  +  H  belt_1_shift6*
+belt_1_shift6_2  |  r  belt_1_shift6*
+belt_1_shift6_3  |  A  belt_1_shift6_1+
+belt_1_shift6_4  +  A  belt_1_shift6_1+
+belt_1_shift7    *  A  belt_1_car7+      belt_1_shift7_1+  belt_1_shift7_4+  QX0.6_5+          QX0.6_3+
+belt_1_shift7_1  +  H  belt_1_shift7*
+belt_1_shift7_2  |  r  belt_1_shift7*
+belt_1_shift7_3  |  A  belt_1_shift7_1+
+belt_1_shift7_4  +  A  belt_1_shift7_1+
+belt_1_shift8    *  A  belt_1_car8+      belt_1_shift8_1+  belt_1_shift8_4+  QX0.7_5+          QX0.7_3+
+belt_1_shift8_1  +  H  belt_1_shift8*
+belt_1_shift8_2  |  r  belt_1_shift8*
+belt_1_shift8_3  |  A  belt_1_shift8_1+
+belt_1_shift8_4  +  A  belt_1_shift8_1+
+belt_1_shift9    *  A  belt_1_car9+      belt_1_shift9_1+  belt_1_shift9_4+  QX1.0_5+          QX1.0_3+
+belt_1_shift9_1  +  H  belt_1_shift9*
+belt_1_shift9_2  |  r  belt_1_shift9*
+belt_1_shift9_3  |  A  belt_1_shift9_1+
+belt_1_shift9_4  +  A  belt_1_shift9_1+
+belt_1_shift_1   +  H  belt_1_shift*
+belt_1_shift_2   |  r  belt_1_shift*
+belt_1_shift_3   |  A  belt_1_shift_1+
+belt_1_shift_4   +  A  belt_1_shift_1+
+belt_1_shift_5   |  A  belt_1_shift_4+
+belt_2_car0      +  A  belt_2_shift1_4+
+belt_2_car1      +  A  belt_2_shift2_4+
+belt_2_car10     +  A  QX4.1+
+belt_2_car2      +  A  belt_2_shift3_4+
+belt_2_car3      +  A  belt_2_shift4_4+
+belt_2_car4      +  A  belt_2_shift5_4+
+belt_2_car5      +  A  belt_2_shift6_4+
+belt_2_car6      +  A  belt_2_shift7_4+
+belt_2_car7      +  A  belt_2_shift8_4+
+belt_2_car8      +  A  belt_2_shift9_4+
+belt_2_car9      +  A  belt_2_shift10_4+
+belt_2_clk       :  :  belt_2_pip_1&      belt_2_pip_4&      belt_2_pip_3&      belt_2_shift_1+    belt_2_shift1_1+   QX2.0_2&           QX2.0_1&           belt_2_shift2_1+
+                       QX2.1_2&           QX2.1_1&           belt_2_shift3_1+   QX2.2_2&           QX2.2_1&           belt_2_shift4_1+   QX2.3_2&           QX2.3_1&
+                       belt_2_shift5_1+   QX2.4_2&           QX2.4_1&           belt_2_shift6_1+   QX2.5_2&           QX2.5_1&           belt_2_shift7_1+   QX2.6_2&
+                       QX2.6_1&           belt_2_shift8_1+   QX2.7_2&           QX2.7_1&           belt_2_shift9_1+   QX3.0_2&           QX3.0_1&           belt_2_shift10_1+
+                       QX3.1_2&           QX3.1_1&
+belt_2_clk_1     |  C  belt_2_clk:
+belt_2_clk_2     >     belt_2_clk_1|
+belt_2_clk_3     |  V  belt_2_clk_2>
+belt_2_clk_4     &     belt_2_clk_3|
+belt_2_clk_5     &     belt_2_clk_3|
+belt_2_mask      +  A  belt_2_pip_6+
+belt_2_mask1     +  A  QX2.0_5+
+belt_2_mask10    +  A  QX3.1_5+
+belt_2_mask2     +  A  QX2.1_5+
+belt_2_mask3     +  A  QX2.2_5+
+belt_2_mask4     +  A  QX2.3_5+
+belt_2_mask5     +  A  QX2.4_5+
+belt_2_mask6     +  A  QX2.5_5+
+belt_2_mask7     +  A  QX2.6_5+
+belt_2_mask8     +  A  QX2.7_5+
+belt_2_mask9     +  A  QX3.0_5+
+belt_2_pip       /    ~belt_2_pip_4&    belt_2_pip_3&    belt_2_shift_5|
+belt_2_pip_1     &  E  belt_2_pip/
+belt_2_pip_2     #    ~belt_2_pip_1&  QX4.3_0|
+belt_2_pip_3     &  S  belt_2_pip_2#
+belt_2_pip_4     &  R  belt_2_pip_2#
+belt_2_pip_5     |     belt_2_pip_4& ~belt_2_pip_3&
+belt_2_pip_6     +     belt_2_pip_5|
+belt_2_shift     *  A  belt_2_car0+     belt_2_pip_6+    belt_2_shift_1+  belt_2_shift_4+
+belt_2_shift1    *  A  belt_2_car1+      belt_2_shift1_1+  belt_2_shift1_4+  QX2.0_5+          QX2.0_3+
+belt_2_shift10   *  A  belt_2_car10+      belt_2_shift10_1+  belt_2_shift10_4+  QX3.1_5+           QX3.1_3+
+belt_2_shift10_1 +  H  belt_2_shift10*
+belt_2_shift10_2 |  r  belt_2_shift10*
+belt_2_shift10_3 |  A  belt_2_shift10_1+
+belt_2_shift10_4 +  A  belt_2_shift10_1+
+belt_2_shift1_1  +  H  belt_2_shift1*
+belt_2_shift1_2  |  r  belt_2_shift1*
+belt_2_shift1_3  |  A  belt_2_shift1_1+
+belt_2_shift1_4  +  A  belt_2_shift1_1+
+belt_2_shift2    *  A  belt_2_car2+      belt_2_shift2_1+  belt_2_shift2_4+  QX2.1_5+          QX2.1_3+
+belt_2_shift2_1  +  H  belt_2_shift2*
+belt_2_shift2_2  |  r  belt_2_shift2*
+belt_2_shift2_3  |  A  belt_2_shift2_1+
+belt_2_shift2_4  +  A  belt_2_shift2_1+
+belt_2_shift3    *  A  belt_2_car3+      belt_2_shift3_1+  belt_2_shift3_4+  QX2.2_5+          QX2.2_3+
+belt_2_shift3_1  +  H  belt_2_shift3*
+belt_2_shift3_2  |  r  belt_2_shift3*
+belt_2_shift3_3  |  A  belt_2_shift3_1+
+belt_2_shift3_4  +  A  belt_2_shift3_1+
+belt_2_shift4    *  A  belt_2_car4+      belt_2_shift4_1+  belt_2_shift4_4+  QX2.3_5+          QX2.3_3+
+belt_2_shift4_1  +  H  belt_2_shift4*
+belt_2_shift4_2  |  r  belt_2_shift4*
+belt_2_shift4_3  |  A  belt_2_shift4_1+
+belt_2_shift4_4  +  A  belt_2_shift4_1+
+belt_2_shift5    *  A  belt_2_car5+      belt_2_shift5_1+  belt_2_shift5_4+  QX2.4_5+          QX2.4_3+
+belt_2_shift5_1  +  H  belt_2_shift5*
+belt_2_shift5_2  |  r  belt_2_shift5*
+belt_2_shift5_3  |  A  belt_2_shift5_1+
+belt_2_shift5_4  +  A  belt_2_shift5_1+
+belt_2_shift6    *  A  belt_2_car6+      belt_2_shift6_1+  belt_2_shift6_4+  QX2.5_5+          QX2.5_3+
+belt_2_shift6_1  +  H  belt_2_shift6*
+belt_2_shift6_2  |  r  belt_2_shift6*
+belt_2_shift6_3  |  A  belt_2_shift6_1+
+belt_2_shift6_4  +  A  belt_2_shift6_1+
+belt_2_shift7    *  A  belt_2_car7+      belt_2_shift7_1+  belt_2_shift7_4+  QX2.6_5+          QX2.6_3+
+belt_2_shift7_1  +  H  belt_2_shift7*
+belt_2_shift7_2  |  r  belt_2_shift7*
+belt_2_shift7_3  |  A  belt_2_shift7_1+
+belt_2_shift7_4  +  A  belt_2_shift7_1+
+belt_2_shift8    *  A  belt_2_car8+      belt_2_shift8_1+  belt_2_shift8_4+  QX2.7_5+          QX2.7_3+
+belt_2_shift8_1  +  H  belt_2_shift8*
+belt_2_shift8_2  |  r  belt_2_shift8*
+belt_2_shift8_3  |  A  belt_2_shift8_1+
+belt_2_shift8_4  +  A  belt_2_shift8_1+
+belt_2_shift9    *  A  belt_2_car9+      belt_2_shift9_1+  belt_2_shift9_4+  QX3.0_5+          QX3.0_3+
+belt_2_shift9_1  +  H  belt_2_shift9*
+belt_2_shift9_2  |  r  belt_2_shift9*
+belt_2_shift9_3  |  A  belt_2_shift9_1+
+belt_2_shift9_4  +  A  belt_2_shift9_1+
+belt_2_shift_1   +  H  belt_2_shift*
+belt_2_shift_2   |  r  belt_2_shift*
+belt_2_shift_3   |  A  belt_2_shift_1+
+belt_2_shift_4   +  A  belt_2_shift_1+
+belt_2_shift_5   |  A  belt_2_shift_4+
+iClock           :  :  belt_1_clk_1|      belt_1_clk_3|      belt_1_shift_2|    belt_1_shift1_2|   belt_1_shift2_2|   belt_1_shift3_2|   belt_1_shift4_2|   belt_1_shift5_2|
+                       belt_1_shift6_2|   belt_1_shift7_2|   belt_1_shift8_2|   belt_1_shift9_2|   belt_1_shift10_2|  belt_2_clk_1|      belt_2_clk_3|      belt_2_shift_2|
+                       belt_2_shift1_2|   belt_2_shift2_2|   belt_2_shift3_2|   belt_2_shift4_2|   belt_2_shift5_2|   belt_2_shift6_2|   belt_2_shift7_2|   belt_2_shift8_2|
+                       belt_2_shift9_2|   belt_2_shift10_2|
+iConst           =  A  belt_1_mask+    belt_1_mask1+   belt_1_mask2+   belt_1_mask3+   belt_1_mask4+   belt_1_mask5+   belt_1_mask6+   belt_1_mask7+
+                       belt_1_mask8+   belt_1_mask9+   belt_1_mask10+  belt_2_mask+    belt_2_mask1+   belt_2_mask2+   belt_2_mask3+   belt_2_mask4+
+                       belt_2_mask5+   belt_2_mask6+   belt_2_mask7+   belt_2_mask8+   belt_2_mask9+   belt_2_mask10+
+reset            @     IX0.7<
+tick_1_fast      |     belt_1_clk_5& ~belt_1_clk_4&
+tick_2_fast      |     belt_2_clk_5& ~belt_2_clk_4&
+
+******* NET STATISTICS  ************************
+
+ARN	+    132 blocks
+AND	&     50 blocks
+OR	|     98 blocks
+SH	*     22 blocks
+FF	#     22 blocks
+EF	/      2 blocks
+VF	>      2 blocks
+NCONST	=      1 blocks
+INPW	[      2 blocks
+INPX	<      9 blocks
+CLK	:      3 blocks
+ALIAS	@      3
+
+TOTAL	     343 blocks
+	    1409 links
+
+compiled by:
+@(#)     $Id: sort32u.lst,v 1.1 2015/05/24 00:51:56 jw Exp $ -O7
+
+C OUTPUT: ./Test0/sort32u.c  (796 lines)

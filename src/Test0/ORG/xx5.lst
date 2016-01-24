@@ -1,0 +1,143 @@
+******* ./Test0/xx5.ic  ************************
+001
+002
+003	imm bit abcx0 = IX0.0 & IX1.0;
+
+	IX0.0     ---&  abcx0
+	IX1.0     ---&
+
+004	imm bit abcx1 = IX0.1 & IX1.1;
+
+	IX0.1     ---&  abcx1
+	IX1.1     ---&
+
+005	imm bit abcx2 = IX0.2 & IX1.2;
+
+	IX0.2     ---&  abcx2
+	IX1.2     ---&
+
+006	imm bit abcx3 = IX0.3 & IX1.3;
+
+	IX0.3     ---&  abcx3
+	IX1.3     ---&
+
+007
+008	imm bit defx0 = IX0.0 & IX1.0;
+
+	IX0.0     ---&  defx0
+	IX1.0     ---&
+
+009	imm bit defx1 = IX0.1 & IX1.1;
+
+	IX0.1     ---&  defx1
+	IX1.1     ---&
+
+010	imm bit defx2 = IX0.2 & IX1.2;
+
+	IX0.2     ---&  defx2
+	IX1.2     ---&
+
+011	imm bit defx3 = IX0.3 & IX1.3;
+
+	IX0.3     ---&  defx3
+	IX1.3     ---&
+
+012
+013	imm bit ghix0 = IX0.0 & IX1.0;
+
+	IX0.0     ---&  ghix0
+	IX1.0     ---&
+
+014	imm bit ghix1 = IX0.1 & IX1.1;
+
+	IX0.1     ---&  ghix1
+	IX1.1     ---&
+
+015	imm bit ghix2 = IX0.2 & IX1.2;
+
+	IX0.2     ---&  ghix2
+	IX1.2     ---&
+
+016	imm bit ghix3 = IX0.3 & IX1.3;
+
+	IX0.3     ---&  ghix3
+	IX1.3     ---&
+
+017
+018	imm bit jklx0 = IX0.0 & IX1.0;
+
+	IX0.0     ---&  jklx0
+	IX1.0     ---&
+
+019	imm bit jklx1 = IX0.1 & IX1.1;
+
+	IX0.1     ---&  jklx1
+	IX1.1     ---&
+
+020	imm bit jklx2 = IX0.2 & IX1.2;
+
+	IX0.2     ---&  jklx2
+	IX1.2     ---&
+
+021	imm bit jklx3 = IX0.3 & IX1.3;
+
+	IX0.3     ---&  jklx3
+	IX1.3     ---&
+
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     abcx0&  defx0&  ghix0&  jklx0&
+IX0.1   <     abcx1&  defx1&  ghix1&  jklx1&
+IX0.2   <     abcx2&  defx2&  ghix2&  jklx2&
+IX0.3   <     abcx3&  defx3&  ghix3&  jklx3&
+IX1.0   <     abcx0&  defx0&  ghix0&  jklx0&
+IX1.1   <     abcx1&  defx1&  ghix1&  jklx1&
+IX1.2   <     abcx2&  defx2&  ghix2&  jklx2&
+IX1.3   <     abcx3&  defx3&  ghix3&  jklx3&
+abcx0   &
+*** Warning: unused    imm bit: abcx0 File ./Test0/xx5.ic, line 22
+abcx1   &
+*** Warning: unused    imm bit: abcx1 File ./Test0/xx5.ic, line 22
+abcx2   &
+*** Warning: unused    imm bit: abcx2 File ./Test0/xx5.ic, line 22
+abcx3   &
+*** Warning: unused    imm bit: abcx3 File ./Test0/xx5.ic, line 22
+defx0   &
+*** Warning: unused    imm bit: defx0 File ./Test0/xx5.ic, line 22
+defx1   &
+*** Warning: unused    imm bit: defx1 File ./Test0/xx5.ic, line 22
+defx2   &
+*** Warning: unused    imm bit: defx2 File ./Test0/xx5.ic, line 22
+defx3   &
+*** Warning: unused    imm bit: defx3 File ./Test0/xx5.ic, line 22
+ghix0   &
+*** Warning: unused    imm bit: ghix0 File ./Test0/xx5.ic, line 22
+ghix1   &
+*** Warning: unused    imm bit: ghix1 File ./Test0/xx5.ic, line 22
+ghix2   &
+*** Warning: unused    imm bit: ghix2 File ./Test0/xx5.ic, line 22
+ghix3   &
+*** Warning: unused    imm bit: ghix3 File ./Test0/xx5.ic, line 22
+jklx0   &
+*** Warning: unused    imm bit: jklx0 File ./Test0/xx5.ic, line 22
+jklx1   &
+*** Warning: unused    imm bit: jklx1 File ./Test0/xx5.ic, line 22
+jklx2   &
+*** Warning: unused    imm bit: jklx2 File ./Test0/xx5.ic, line 22
+jklx3   &
+*** Warning: unused    imm bit: jklx3 File ./Test0/xx5.ic, line 22
+
+******* NET STATISTICS  ************************
+
+AND	&     16 blocks
+INPX	<      8 blocks
+
+TOTAL	      24 blocks
+	      80 links
+
+compiled by:
+@(#)     $Id: xx5.lst,v 1.1 2015/06/03 06:50:08 jw Exp $ -O7
+*** Warning: 16 unused gates. File ./Test0/xx5.ic, line 22
+
+C OUTPUT: ./Test0/xx5.c  (72 lines)

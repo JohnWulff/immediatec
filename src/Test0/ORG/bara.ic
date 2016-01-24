@@ -1,0 +1,59 @@
+/********************************************************************
+ *
+ *	bara.ica - vertical bar demo
+ *
+ *	with arrays to get variable length counters
+ *
+ *	QX0 outputs the value of a shift register made up of SR flip
+ *	flops m0 to m7. These are clocked by an internally generated
+ *	clock c0. It looks like running lights when displayed.
+ *
+ *	By changing the input IB1 the clocking speed on m0 to m7,
+ *	which is output on QX0.0 to QX0.7 is set to IB1 * 50 ms.
+ *	A value of 0 on input IB1 lets you clock the running
+ *	lights manually via input IX0.0
+ *
+ *	Output QX2.0 indicates the direction of the running
+ *	lights on QmX0 - just to show a bit of internal logic.
+ *
+ *******************************************************************/
+
+use strict;
+
+imm timer t = TIMER(TX0.4);
+
+imm int d0 = IB1;			// IB1 =
+imm bit f0 = IB1;			// d0  =
+
+imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+imm clock c0 = CLOCK(b0);
+
+imm bit m0;
+imm bit m1;
+imm bit m2;
+imm bit m3;
+imm bit m4;
+imm bit m5;
+imm bit m6;
+imm bit m7;
+imm bit m8;
+
+m0 = SR(~m8     , m8 & ~m1, c0);
+m1 = SR(~m8 & m0, m8 & ~m2, c0);
+m2 = SR(~m8 & m1, m8 & ~m3, c0);
+m3 = SR(~m8 & m2, m8 & ~m4, c0);
+m4 = SR(~m8 & m3, m8 & ~m5, c0);
+m5 = SR(~m8 & m4, m8 & ~m6, c0);
+m6 = SR(~m8 & m5, m8 & ~m7, c0);
+m7 = SR(~m8 & m6, m8      , c0);
+m8 = SR(~m8 & m7, m8 & ~m0, c0);
+
+QX0.0 = m0;
+QX0.1 = m1;
+QX0.2 = m2;
+QX0.3 = m3;
+QX0.4 = m4;
+QX0.5 = m5;
+QX0.6 = m6;
+QX0.7 = m7;
+QX1.0 = m8;

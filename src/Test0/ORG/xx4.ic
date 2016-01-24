@@ -1,0 +1,21 @@
+
+
+imm bit abcx0 = IX0.0 & IX1.0;
+imm bit abcx1 = IX0.1 & IX1.1;
+imm bit abcx2 = IX0.2 & IX1.2;
+imm bit abcx3 = IX0.3 & IX1.3;
+
+imm bit defx0 = IX0.0 & IX1.0;
+imm bit defx1 = IX0.1 & IX1.1;
+imm bit defx2 = IX0.2 & IX1.2;
+imm bit defx3 = IX0.3 & IX1.3;
+
+imm bit ghix0 = IX0.0 & IX1.0;
+imm bit ghix1 = IX0.1 & IX1.1;
+imm bit ghix2 = IX0.2 & IX1.2;
+imm bit ghix3 = IX0.3 & IX1.3;
+
+imm bit jklx0 = IX0.0 & IX1.0;
+imm bit jklx1 = IX0.1 & IX1.1;
+imm bit jklx2 = IX0.2 & IX1.2;
+imm bit jklx3 = IX0.3 & IX1.3;

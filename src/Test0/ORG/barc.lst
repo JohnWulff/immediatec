@@ -1,0 +1,1187 @@
+******* ./Test0/barc.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	barc.ica - vertical bar demo
+004	 *
+005	 *	with 2-dimensional arrays to get variable length counters
+006	 *		    and multiple instances
+007	 *
+008	 *	Uses C type 'for loops'
+009	 *
+010	 *******************************************************************/
+011
+012	use strict;
+013
+014	imm timer t = TIMER(TX0.4);
+
+	t_1     T ---!  t       !
+
+	iClock  : ---|  t_1     T
+	TX0.4     ---|
+
+015
+016	imm int d0 = IB1;			// IB1 =
+
+	IB1     A ---@  d0      A
+
+017	imm bit f0 = IB1;			// d0  =
+
+	IB1     A ---+  f0              IB1     // 1
+
+018
+019	imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+
+	b0_1      ---|  b0
+	b0_2      ---|
+
+	b0_4    D ---#  b0_1
+
+	b0_3    V --->  b0_2
+
+	iClock  : ---&  b0_3    V
+	IX0.0     ---&
+	f0      ~ ---&
+
+	t       ! ---&  b0_4    D
+	IB1     A<---&
+	b0      ~ ---&
+	f0        ---&
+
+020	imm clock c0 = CLOCK(b0);
+
+	c0_1    C ---:  c0      :
+
+	iClock  : ---|  c0_1    C
+	b0        ---|
+
+021
+022	imm bit m0x0;
+023	imm bit m0x1;
+024	imm bit m0x2;
+025	imm bit m0x3;
+026	imm bit m0x4;
+027	imm bit m0x5;
+028	imm bit m0x6;
+029	imm bit m0x7;
+030	imm bit m0x8;
+031
+032	m0x0 = SR(~m0x8       , m0x8 & ~m0x1, c0);
+
+	m0x0_1  S ---#  m0x0
+	m0x0_2  R ---#
+
+	c0      : ---|  m0x0_1  S
+	m0x8    ~ ---|
+
+	c0      : ---&  m0x0_2  R
+	m0x8      ---&
+	m0x1    ~ ---&
+
+033	m0x1 = SR(~m0x8 & m0x0, m0x8 & ~m0x2, c0);
+
+	m0x1_1  S ---#  m0x1
+	m0x1_2  R ---#
+
+	c0      : ---&  m0x1_1  S
+	m0x8    ~ ---&
+	m0x0      ---&
+
+	c0      : ---&  m0x1_2  R
+	m0x8      ---&
+	m0x2    ~ ---&
+
+034	m0x2 = SR(~m0x8 & m0x1, m0x8 & ~m0x3, c0);
+
+	m0x2_1  S ---#  m0x2
+	m0x2_2  R ---#
+
+	c0      : ---&  m0x2_1  S
+	m0x8    ~ ---&
+	m0x1      ---&
+
+	c0      : ---&  m0x2_2  R
+	m0x8      ---&
+	m0x3    ~ ---&
+
+035	m0x3 = SR(~m0x8 & m0x2, m0x8 & ~m0x4, c0);
+
+	m0x3_1  S ---#  m0x3
+	m0x3_2  R ---#
+
+	c0      : ---&  m0x3_1  S
+	m0x8    ~ ---&
+	m0x2      ---&
+
+	c0      : ---&  m0x3_2  R
+	m0x8      ---&
+	m0x4    ~ ---&
+
+036	m0x4 = SR(~m0x8 & m0x3, m0x8 & ~m0x5, c0);
+
+	m0x4_1  S ---#  m0x4
+	m0x4_2  R ---#
+
+	c0      : ---&  m0x4_1  S
+	m0x8    ~ ---&
+	m0x3      ---&
+
+	c0      : ---&  m0x4_2  R
+	m0x8      ---&
+	m0x5    ~ ---&
+
+037	m0x5 = SR(~m0x8 & m0x4, m0x8 & ~m0x6, c0);
+
+	m0x5_1  S ---#  m0x5
+	m0x5_2  R ---#
+
+	c0      : ---&  m0x5_1  S
+	m0x8    ~ ---&
+	m0x4      ---&
+
+	c0      : ---&  m0x5_2  R
+	m0x8      ---&
+	m0x6    ~ ---&
+
+038	m0x6 = SR(~m0x8 & m0x5, m0x8 & ~m0x7, c0);
+
+	m0x6_1  S ---#  m0x6
+	m0x6_2  R ---#
+
+	c0      : ---&  m0x6_1  S
+	m0x8    ~ ---&
+	m0x5      ---&
+
+	c0      : ---&  m0x6_2  R
+	m0x8      ---&
+	m0x7    ~ ---&
+
+039	m0x7 = SR(~m0x8 & m0x6, m0x8        , c0);
+
+	m0x7_1  S ---#  m0x7
+	m0x7_2  R ---#
+
+	c0      : ---&  m0x7_1  S
+	m0x8    ~ ---&
+	m0x6      ---&
+
+	c0      : ---|  m0x7_2  R
+	m0x8      ---|
+
+040	m0x8 = SR(~m0x8 & m0x7, m0x8 & ~m0x0, c0);
+
+	m0x8_1  S ---#  m0x8
+	m0x8_2  R ---#
+
+	c0      : ---&  m0x8_1  S
+	m0x8    ~ ---&
+	m0x7      ---&
+
+	c0      : ---&  m0x8_2  R
+	m0x8      ---&
+	m0x0    ~ ---&
+
+041
+042	QX0.0 = m0x0;
+
+	m0x0      ---@  QX0.0
+
+
+	m0x0      ---|  QX0.0_0 X
+
+043	QX0.1 = m0x1;
+
+	m0x1      ---@  QX0.1
+
+
+	m0x1      ---|  QX0.1_0 X
+
+044	QX0.2 = m0x2;
+
+	m0x2      ---@  QX0.2
+
+
+	m0x2      ---|  QX0.2_0 X
+
+045	QX0.3 = m0x3;
+
+	m0x3      ---@  QX0.3
+
+
+	m0x3      ---|  QX0.3_0 X
+
+046	QX0.4 = m0x4;
+
+	m0x4      ---@  QX0.4
+
+
+	m0x4      ---|  QX0.4_0 X
+
+047	QX0.5 = m0x5;
+
+	m0x5      ---@  QX0.5
+
+
+	m0x5      ---|  QX0.5_0 X
+
+048	QX0.6 = m0x6;
+
+	m0x6      ---@  QX0.6
+
+
+	m0x6      ---|  QX0.6_0 X
+
+049	QX0.7 = m0x7;
+
+	m0x7      ---@  QX0.7
+
+
+	m0x7      ---|  QX0.7_0 X
+
+050	QX1.0 = m0x8;
+
+	m0x8      ---@  QX1.0
+
+
+	m0x8      ---|  QX1.0_0 X
+
+051
+052	imm int d1 = IB3;			// IB3 =
+
+	IB3     A ---@  d1      A
+
+053	imm bit f1 = IB3;			// d1  =
+
+	IB3     A ---+  f1              IB3     // 1
+
+054
+055	imm bit b1 = D(~b1 & f1, t, d1) | CHANGE(IX0.0 & ~f1);
+
+	b1_1      ---|  b1
+	b1_2      ---|
+
+	b1_4    D ---#  b1_1
+
+	b1_3    V --->  b1_2
+
+	iClock  : ---&  b1_3    V
+	IX0.0     ---&
+	f1      ~ ---&
+
+	t       ! ---&  b1_4    D
+	IB3     A<---&
+	b1      ~ ---&
+	f1        ---&
+
+056	imm clock c1 = CLOCK(b1);
+
+	c1_1    C ---:  c1      :
+
+	iClock  : ---|  c1_1    C
+	b1        ---|
+
+057
+058	imm bit m1x0;
+059	imm bit m1x1;
+060	imm bit m1x2;
+061	imm bit m1x3;
+062	imm bit m1x4;
+063	imm bit m1x5;
+064	imm bit m1x6;
+065	imm bit m1x7;
+066	imm bit m1x8;
+067
+068	m1x0 = SR(~m1x8       , m1x8 & ~m1x1, c1);
+
+	m1x0_1  S ---#  m1x0
+	m1x0_2  R ---#
+
+	c1      : ---|  m1x0_1  S
+	m1x8    ~ ---|
+
+	c1      : ---&  m1x0_2  R
+	m1x8      ---&
+	m1x1    ~ ---&
+
+069	m1x1 = SR(~m1x8 & m1x0, m1x8 & ~m1x2, c1);
+
+	m1x1_1  S ---#  m1x1
+	m1x1_2  R ---#
+
+	c1      : ---&  m1x1_1  S
+	m1x8    ~ ---&
+	m1x0      ---&
+
+	c1      : ---&  m1x1_2  R
+	m1x8      ---&
+	m1x2    ~ ---&
+
+070	m1x2 = SR(~m1x8 & m1x1, m1x8 & ~m1x3, c1);
+
+	m1x2_1  S ---#  m1x2
+	m1x2_2  R ---#
+
+	c1      : ---&  m1x2_1  S
+	m1x8    ~ ---&
+	m1x1      ---&
+
+	c1      : ---&  m1x2_2  R
+	m1x8      ---&
+	m1x3    ~ ---&
+
+071	m1x3 = SR(~m1x8 & m1x2, m1x8 & ~m1x4, c1);
+
+	m1x3_1  S ---#  m1x3
+	m1x3_2  R ---#
+
+	c1      : ---&  m1x3_1  S
+	m1x8    ~ ---&
+	m1x2      ---&
+
+	c1      : ---&  m1x3_2  R
+	m1x8      ---&
+	m1x4    ~ ---&
+
+072	m1x4 = SR(~m1x8 & m1x3, m1x8 & ~m1x5, c1);
+
+	m1x4_1  S ---#  m1x4
+	m1x4_2  R ---#
+
+	c1      : ---&  m1x4_1  S
+	m1x8    ~ ---&
+	m1x3      ---&
+
+	c1      : ---&  m1x4_2  R
+	m1x8      ---&
+	m1x5    ~ ---&
+
+073	m1x5 = SR(~m1x8 & m1x4, m1x8 & ~m1x6, c1);
+
+	m1x5_1  S ---#  m1x5
+	m1x5_2  R ---#
+
+	c1      : ---&  m1x5_1  S
+	m1x8    ~ ---&
+	m1x4      ---&
+
+	c1      : ---&  m1x5_2  R
+	m1x8      ---&
+	m1x6    ~ ---&
+
+074	m1x6 = SR(~m1x8 & m1x5, m1x8 & ~m1x7, c1);
+
+	m1x6_1  S ---#  m1x6
+	m1x6_2  R ---#
+
+	c1      : ---&  m1x6_1  S
+	m1x8    ~ ---&
+	m1x5      ---&
+
+	c1      : ---&  m1x6_2  R
+	m1x8      ---&
+	m1x7    ~ ---&
+
+075	m1x7 = SR(~m1x8 & m1x6, m1x8        , c1);
+
+	m1x7_1  S ---#  m1x7
+	m1x7_2  R ---#
+
+	c1      : ---&  m1x7_1  S
+	m1x8    ~ ---&
+	m1x6      ---&
+
+	c1      : ---|  m1x7_2  R
+	m1x8      ---|
+
+076	m1x8 = SR(~m1x8 & m1x7, m1x8 & ~m1x0, c1);
+
+	m1x8_1  S ---#  m1x8
+	m1x8_2  R ---#
+
+	c1      : ---&  m1x8_1  S
+	m1x8    ~ ---&
+	m1x7      ---&
+
+	c1      : ---&  m1x8_2  R
+	m1x8      ---&
+	m1x0    ~ ---&
+
+077
+078	QX2.0 = m1x0;
+
+	m1x0      ---@  QX2.0
+
+
+	m1x0      ---|  QX2.0_0 X
+
+079	QX2.1 = m1x1;
+
+	m1x1      ---@  QX2.1
+
+
+	m1x1      ---|  QX2.1_0 X
+
+080	QX2.2 = m1x2;
+
+	m1x2      ---@  QX2.2
+
+
+	m1x2      ---|  QX2.2_0 X
+
+081	QX2.3 = m1x3;
+
+	m1x3      ---@  QX2.3
+
+
+	m1x3      ---|  QX2.3_0 X
+
+082	QX2.4 = m1x4;
+
+	m1x4      ---@  QX2.4
+
+
+	m1x4      ---|  QX2.4_0 X
+
+083	QX2.5 = m1x5;
+
+	m1x5      ---@  QX2.5
+
+
+	m1x5      ---|  QX2.5_0 X
+
+084	QX2.6 = m1x6;
+
+	m1x6      ---@  QX2.6
+
+
+	m1x6      ---|  QX2.6_0 X
+
+085	QX2.7 = m1x7;
+
+	m1x7      ---@  QX2.7
+
+
+	m1x7      ---|  QX2.7_0 X
+
+086	QX3.0 = m1x8;
+
+	m1x8      ---@  QX3.0
+
+
+	m1x8      ---|  QX3.0_0 X
+
+087
+088	imm int d2 = IB5;			// IB5 =
+
+	IB5     A ---@  d2      A
+
+089	imm bit f2 = IB5;			// d2  =
+
+	IB5     A ---+  f2              IB5     // 1
+
+090
+091	imm bit b2 = D(~b2 & f2, t, d2) | CHANGE(IX0.0 & ~f2);
+
+	b2_1      ---|  b2
+	b2_2      ---|
+
+	b2_4    D ---#  b2_1
+
+	b2_3    V --->  b2_2
+
+	iClock  : ---&  b2_3    V
+	IX0.0     ---&
+	f2      ~ ---&
+
+	t       ! ---&  b2_4    D
+	IB5     A<---&
+	b2      ~ ---&
+	f2        ---&
+
+092	imm clock c2 = CLOCK(b2);
+
+	c2_1    C ---:  c2      :
+
+	iClock  : ---|  c2_1    C
+	b2        ---|
+
+093
+094	imm bit m2x0;
+095	imm bit m2x1;
+096	imm bit m2x2;
+097	imm bit m2x3;
+098	imm bit m2x4;
+099	imm bit m2x5;
+100	imm bit m2x6;
+101	imm bit m2x7;
+102	imm bit m2x8;
+103
+104	m2x0 = SR(~m2x8       , m2x8 & ~m2x1, c2);
+
+	m2x0_1  S ---#  m2x0
+	m2x0_2  R ---#
+
+	c2      : ---|  m2x0_1  S
+	m2x8    ~ ---|
+
+	c2      : ---&  m2x0_2  R
+	m2x8      ---&
+	m2x1    ~ ---&
+
+105	m2x1 = SR(~m2x8 & m2x0, m2x8 & ~m2x2, c2);
+
+	m2x1_1  S ---#  m2x1
+	m2x1_2  R ---#
+
+	c2      : ---&  m2x1_1  S
+	m2x8    ~ ---&
+	m2x0      ---&
+
+	c2      : ---&  m2x1_2  R
+	m2x8      ---&
+	m2x2    ~ ---&
+
+106	m2x2 = SR(~m2x8 & m2x1, m2x8 & ~m2x3, c2);
+
+	m2x2_1  S ---#  m2x2
+	m2x2_2  R ---#
+
+	c2      : ---&  m2x2_1  S
+	m2x8    ~ ---&
+	m2x1      ---&
+
+	c2      : ---&  m2x2_2  R
+	m2x8      ---&
+	m2x3    ~ ---&
+
+107	m2x3 = SR(~m2x8 & m2x2, m2x8 & ~m2x4, c2);
+
+	m2x3_1  S ---#  m2x3
+	m2x3_2  R ---#
+
+	c2      : ---&  m2x3_1  S
+	m2x8    ~ ---&
+	m2x2      ---&
+
+	c2      : ---&  m2x3_2  R
+	m2x8      ---&
+	m2x4    ~ ---&
+
+108	m2x4 = SR(~m2x8 & m2x3, m2x8 & ~m2x5, c2);
+
+	m2x4_1  S ---#  m2x4
+	m2x4_2  R ---#
+
+	c2      : ---&  m2x4_1  S
+	m2x8    ~ ---&
+	m2x3      ---&
+
+	c2      : ---&  m2x4_2  R
+	m2x8      ---&
+	m2x5    ~ ---&
+
+109	m2x5 = SR(~m2x8 & m2x4, m2x8 & ~m2x6, c2);
+
+	m2x5_1  S ---#  m2x5
+	m2x5_2  R ---#
+
+	c2      : ---&  m2x5_1  S
+	m2x8    ~ ---&
+	m2x4      ---&
+
+	c2      : ---&  m2x5_2  R
+	m2x8      ---&
+	m2x6    ~ ---&
+
+110	m2x6 = SR(~m2x8 & m2x5, m2x8 & ~m2x7, c2);
+
+	m2x6_1  S ---#  m2x6
+	m2x6_2  R ---#
+
+	c2      : ---&  m2x6_1  S
+	m2x8    ~ ---&
+	m2x5      ---&
+
+	c2      : ---&  m2x6_2  R
+	m2x8      ---&
+	m2x7    ~ ---&
+
+111	m2x7 = SR(~m2x8 & m2x6, m2x8        , c2);
+
+	m2x7_1  S ---#  m2x7
+	m2x7_2  R ---#
+
+	c2      : ---&  m2x7_1  S
+	m2x8    ~ ---&
+	m2x6      ---&
+
+	c2      : ---|  m2x7_2  R
+	m2x8      ---|
+
+112	m2x8 = SR(~m2x8 & m2x7, m2x8 & ~m2x0, c2);
+
+	m2x8_1  S ---#  m2x8
+	m2x8_2  R ---#
+
+	c2      : ---&  m2x8_1  S
+	m2x8    ~ ---&
+	m2x7      ---&
+
+	c2      : ---&  m2x8_2  R
+	m2x8      ---&
+	m2x0    ~ ---&
+
+113
+114	QX4.0 = m2x0;
+
+	m2x0      ---@  QX4.0
+
+
+	m2x0      ---|  QX4.0_0 X
+
+115	QX4.1 = m2x1;
+
+	m2x1      ---@  QX4.1
+
+
+	m2x1      ---|  QX4.1_0 X
+
+116	QX4.2 = m2x2;
+
+	m2x2      ---@  QX4.2
+
+
+	m2x2      ---|  QX4.2_0 X
+
+117	QX4.3 = m2x3;
+
+	m2x3      ---@  QX4.3
+
+
+	m2x3      ---|  QX4.3_0 X
+
+118	QX4.4 = m2x4;
+
+	m2x4      ---@  QX4.4
+
+
+	m2x4      ---|  QX4.4_0 X
+
+119	QX4.5 = m2x5;
+
+	m2x5      ---@  QX4.5
+
+
+	m2x5      ---|  QX4.5_0 X
+
+120	QX4.6 = m2x6;
+
+	m2x6      ---@  QX4.6
+
+
+	m2x6      ---|  QX4.6_0 X
+
+121	QX4.7 = m2x7;
+
+	m2x7      ---@  QX4.7
+
+
+	m2x7      ---|  QX4.7_0 X
+
+122	QX5.0 = m2x8;
+
+	m2x8      ---@  QX5.0
+
+
+	m2x8      ---|  QX5.0_0 X
+
+123
+124	imm int d3 = IB7;			// IB7 =
+
+	IB7     A ---@  d3      A
+
+125	imm bit f3 = IB7;			// d3  =
+
+	IB7     A ---+  f3              IB7     // 1
+
+126
+127	imm bit b3 = D(~b3 & f3, t, d3) | CHANGE(IX0.0 & ~f3);
+
+	b3_1      ---|  b3
+	b3_2      ---|
+
+	b3_4    D ---#  b3_1
+
+	b3_3    V --->  b3_2
+
+	iClock  : ---&  b3_3    V
+	IX0.0     ---&
+	f3      ~ ---&
+
+	t       ! ---&  b3_4    D
+	IB7     A<---&
+	b3      ~ ---&
+	f3        ---&
+
+128	imm clock c3 = CLOCK(b3);
+
+	c3_1    C ---:  c3      :
+
+	iClock  : ---|  c3_1    C
+	b3        ---|
+
+129
+130	imm bit m3x0;
+131	imm bit m3x1;
+132	imm bit m3x2;
+133	imm bit m3x3;
+134	imm bit m3x4;
+135	imm bit m3x5;
+136	imm bit m3x6;
+137	imm bit m3x7;
+138	imm bit m3x8;
+139
+140	m3x0 = SR(~m3x8       , m3x8 & ~m3x1, c3);
+
+	m3x0_1  S ---#  m3x0
+	m3x0_2  R ---#
+
+	c3      : ---|  m3x0_1  S
+	m3x8    ~ ---|
+
+	c3      : ---&  m3x0_2  R
+	m3x8      ---&
+	m3x1    ~ ---&
+
+141	m3x1 = SR(~m3x8 & m3x0, m3x8 & ~m3x2, c3);
+
+	m3x1_1  S ---#  m3x1
+	m3x1_2  R ---#
+
+	c3      : ---&  m3x1_1  S
+	m3x8    ~ ---&
+	m3x0      ---&
+
+	c3      : ---&  m3x1_2  R
+	m3x8      ---&
+	m3x2    ~ ---&
+
+142	m3x2 = SR(~m3x8 & m3x1, m3x8 & ~m3x3, c3);
+
+	m3x2_1  S ---#  m3x2
+	m3x2_2  R ---#
+
+	c3      : ---&  m3x2_1  S
+	m3x8    ~ ---&
+	m3x1      ---&
+
+	c3      : ---&  m3x2_2  R
+	m3x8      ---&
+	m3x3    ~ ---&
+
+143	m3x3 = SR(~m3x8 & m3x2, m3x8 & ~m3x4, c3);
+
+	m3x3_1  S ---#  m3x3
+	m3x3_2  R ---#
+
+	c3      : ---&  m3x3_1  S
+	m3x8    ~ ---&
+	m3x2      ---&
+
+	c3      : ---&  m3x3_2  R
+	m3x8      ---&
+	m3x4    ~ ---&
+
+144	m3x4 = SR(~m3x8 & m3x3, m3x8 & ~m3x5, c3);
+
+	m3x4_1  S ---#  m3x4
+	m3x4_2  R ---#
+
+	c3      : ---&  m3x4_1  S
+	m3x8    ~ ---&
+	m3x3      ---&
+
+	c3      : ---&  m3x4_2  R
+	m3x8      ---&
+	m3x5    ~ ---&
+
+145	m3x5 = SR(~m3x8 & m3x4, m3x8 & ~m3x6, c3);
+
+	m3x5_1  S ---#  m3x5
+	m3x5_2  R ---#
+
+	c3      : ---&  m3x5_1  S
+	m3x8    ~ ---&
+	m3x4      ---&
+
+	c3      : ---&  m3x5_2  R
+	m3x8      ---&
+	m3x6    ~ ---&
+
+146	m3x6 = SR(~m3x8 & m3x5, m3x8 & ~m3x7, c3);
+
+	m3x6_1  S ---#  m3x6
+	m3x6_2  R ---#
+
+	c3      : ---&  m3x6_1  S
+	m3x8    ~ ---&
+	m3x5      ---&
+
+	c3      : ---&  m3x6_2  R
+	m3x8      ---&
+	m3x7    ~ ---&
+
+147	m3x7 = SR(~m3x8 & m3x6, m3x8        , c3);
+
+	m3x7_1  S ---#  m3x7
+	m3x7_2  R ---#
+
+	c3      : ---&  m3x7_1  S
+	m3x8    ~ ---&
+	m3x6      ---&
+
+	c3      : ---|  m3x7_2  R
+	m3x8      ---|
+
+148	m3x8 = SR(~m3x8 & m3x7, m3x8 & ~m3x0, c3);
+
+	m3x8_1  S ---#  m3x8
+	m3x8_2  R ---#
+
+	c3      : ---&  m3x8_1  S
+	m3x8    ~ ---&
+	m3x7      ---&
+
+	c3      : ---&  m3x8_2  R
+	m3x8      ---&
+	m3x0    ~ ---&
+
+149
+150	QX6.0 = m3x0;
+
+	m3x0      ---@  QX6.0
+
+
+	m3x0      ---|  QX6.0_0 X
+
+151	QX6.1 = m3x1;
+
+	m3x1      ---@  QX6.1
+
+
+	m3x1      ---|  QX6.1_0 X
+
+152	QX6.2 = m3x2;
+
+	m3x2      ---@  QX6.2
+
+
+	m3x2      ---|  QX6.2_0 X
+
+153	QX6.3 = m3x3;
+
+	m3x3      ---@  QX6.3
+
+
+	m3x3      ---|  QX6.3_0 X
+
+154	QX6.4 = m3x4;
+
+	m3x4      ---@  QX6.4
+
+
+	m3x4      ---|  QX6.4_0 X
+
+155	QX6.5 = m3x5;
+
+	m3x5      ---@  QX6.5
+
+
+	m3x5      ---|  QX6.5_0 X
+
+156	QX6.6 = m3x6;
+
+	m3x6      ---@  QX6.6
+
+
+	m3x6      ---|  QX6.6_0 X
+
+157	QX6.7 = m3x7;
+
+	m3x7      ---@  QX6.7
+
+
+	m3x7      ---|  QX6.7_0 X
+
+158	QX7.0 = m3x8;
+
+	m3x8      ---@  QX7.0
+
+
+	m3x8      ---|  QX7.0_0 X
+
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  f0+    <b0_4&
+IB3     [  A  f1+    <b1_4&
+IB5     [  A  f2+    <b2_4&
+IB7     [  A  f3+    <b3_4&
+IX0.0   <     b0_3&   b1_3&   b2_3&   b3_3&
+QX0.0   @     m0x0#
+QX0.0_0 |  X
+QX0.1   @     m0x1#
+QX0.1_0 |  X
+QX0.2   @     m0x2#
+QX0.2_0 |  X
+QX0.3   @     m0x3#
+QX0.3_0 |  X
+QX0.4   @     m0x4#
+QX0.4_0 |  X
+QX0.5   @     m0x5#
+QX0.5_0 |  X
+QX0.6   @     m0x6#
+QX0.6_0 |  X
+QX0.7   @     m0x7#
+QX0.7_0 |  X
+QX1.0   @     m0x8#
+QX1.0_0 |  X
+QX2.0   @     m1x0#
+QX2.0_0 |  X
+QX2.1   @     m1x1#
+QX2.1_0 |  X
+QX2.2   @     m1x2#
+QX2.2_0 |  X
+QX2.3   @     m1x3#
+QX2.3_0 |  X
+QX2.4   @     m1x4#
+QX2.4_0 |  X
+QX2.5   @     m1x5#
+QX2.5_0 |  X
+QX2.6   @     m1x6#
+QX2.6_0 |  X
+QX2.7   @     m1x7#
+QX2.7_0 |  X
+QX3.0   @     m1x8#
+QX3.0_0 |  X
+QX4.0   @     m2x0#
+QX4.0_0 |  X
+QX4.1   @     m2x1#
+QX4.1_0 |  X
+QX4.2   @     m2x2#
+QX4.2_0 |  X
+QX4.3   @     m2x3#
+QX4.3_0 |  X
+QX4.4   @     m2x4#
+QX4.4_0 |  X
+QX4.5   @     m2x5#
+QX4.5_0 |  X
+QX4.6   @     m2x6#
+QX4.6_0 |  X
+QX4.7   @     m2x7#
+QX4.7_0 |  X
+QX5.0   @     m2x8#
+QX5.0_0 |  X
+QX6.0   @     m3x0#
+QX6.0_0 |  X
+QX6.1   @     m3x1#
+QX6.1_0 |  X
+QX6.2   @     m3x2#
+QX6.2_0 |  X
+QX6.3   @     m3x3#
+QX6.3_0 |  X
+QX6.4   @     m3x4#
+QX6.4_0 |  X
+QX6.5   @     m3x5#
+QX6.5_0 |  X
+QX6.6   @     m3x6#
+QX6.6_0 |  X
+QX6.7   @     m3x7#
+QX6.7_0 |  X
+QX7.0   @     m3x8#
+QX7.0_0 |  X
+TX0.4   <     t_1|
+b0      |    ~b0_4&   c0_1|
+b0_1    #     b0|
+b0_2    >     b0|
+b0_3    &  V  b0_2>
+b0_4    &  D  b0_1#
+b1      |    ~b1_4&   c1_1|
+b1_1    #     b1|
+b1_2    >     b1|
+b1_3    &  V  b1_2>
+b1_4    &  D  b1_1#
+b2      |    ~b2_4&   c2_1|
+b2_1    #     b2|
+b2_2    >     b2|
+b2_3    &  V  b2_2>
+b2_4    &  D  b2_1#
+b3      |    ~b3_4&   c3_1|
+b3_1    #     b3|
+b3_2    >     b3|
+b3_3    &  V  b3_2>
+b3_4    &  D  b3_1#
+c0      :  :  m0x0_2&  m0x0_1|  m0x1_2&  m0x1_1&  m0x2_2&  m0x2_1&  m0x3_2&  m0x3_1&
+              m0x4_2&  m0x4_1&  m0x5_2&  m0x5_1&  m0x6_2&  m0x6_1&  m0x7_2|  m0x7_1&
+              m0x8_2&  m0x8_1&
+c0_1    |  C  c0:
+c1      :  :  m1x0_2&  m1x0_1|  m1x1_2&  m1x1_1&  m1x2_2&  m1x2_1&  m1x3_2&  m1x3_1&
+              m1x4_2&  m1x4_1&  m1x5_2&  m1x5_1&  m1x6_2&  m1x6_1&  m1x7_2|  m1x7_1&
+              m1x8_2&  m1x8_1&
+c1_1    |  C  c1:
+c2      :  :  m2x0_2&  m2x0_1|  m2x1_2&  m2x1_1&  m2x2_2&  m2x2_1&  m2x3_2&  m2x3_1&
+              m2x4_2&  m2x4_1&  m2x5_2&  m2x5_1&  m2x6_2&  m2x6_1&  m2x7_2|  m2x7_1&
+              m2x8_2&  m2x8_1&
+c2_1    |  C  c2:
+c3      :  :  m3x0_2&  m3x0_1|  m3x1_2&  m3x1_1&  m3x2_2&  m3x2_1&  m3x3_2&  m3x3_1&
+              m3x4_2&  m3x4_1&  m3x5_2&  m3x5_1&  m3x6_2&  m3x6_1&  m3x7_2|  m3x7_1&
+              m3x8_2&  m3x8_1&
+c3_1    |  C  c3:
+d0      @  A  IB1[
+d1      @  A  IB3[
+d2      @  A  IB5[
+d3      @  A  IB7[
+f0      +    ~b0_3&   b0_4&
+f1      +    ~b1_3&   b1_4&
+f2      +    ~b2_3&   b2_4&
+f3      +    ~b3_3&   b3_4&
+iClock  :  :  t_1|    b0_3&   c0_1|   b1_3&   c1_1|   b2_3&   c2_1|   b3_3&
+              c3_1|
+m0x0    #     m0x1_1&  ~m0x8_2&   QX0.0_0|
+m0x0_1  |  S  m0x0#
+m0x0_2  &  R  m0x0#
+m0x1    #    ~m0x0_2&   m0x2_1&   QX0.1_0|
+m0x1_1  &  S  m0x1#
+m0x1_2  &  R  m0x1#
+m0x2    #    ~m0x1_2&   m0x3_1&   QX0.2_0|
+m0x2_1  &  S  m0x2#
+m0x2_2  &  R  m0x2#
+m0x3    #    ~m0x2_2&   m0x4_1&   QX0.3_0|
+m0x3_1  &  S  m0x3#
+m0x3_2  &  R  m0x3#
+m0x4    #    ~m0x3_2&   m0x5_1&   QX0.4_0|
+m0x4_1  &  S  m0x4#
+m0x4_2  &  R  m0x4#
+m0x5    #    ~m0x4_2&   m0x6_1&   QX0.5_0|
+m0x5_1  &  S  m0x5#
+m0x5_2  &  R  m0x5#
+m0x6    #    ~m0x5_2&   m0x7_1&   QX0.6_0|
+m0x6_1  &  S  m0x6#
+m0x6_2  &  R  m0x6#
+m0x7    #    ~m0x6_2&   m0x8_1&   QX0.7_0|
+m0x7_1  &  S  m0x7#
+m0x7_2  |  R  m0x7#
+m0x8    #     m0x0_2&  ~m0x0_1|   m0x1_2&  ~m0x1_1&   m0x2_2&  ~m0x2_1&   m0x3_2&  ~m0x3_1&
+              m0x4_2&  ~m0x4_1&   m0x5_2&  ~m0x5_1&   m0x6_2&  ~m0x6_1&   m0x7_2|  ~m0x7_1&
+              m0x8_2&  ~m0x8_1&   QX1.0_0|
+m0x8_1  &  S  m0x8#
+m0x8_2  &  R  m0x8#
+m1x0    #     m1x1_1&  ~m1x8_2&   QX2.0_0|
+m1x0_1  |  S  m1x0#
+m1x0_2  &  R  m1x0#
+m1x1    #    ~m1x0_2&   m1x2_1&   QX2.1_0|
+m1x1_1  &  S  m1x1#
+m1x1_2  &  R  m1x1#
+m1x2    #    ~m1x1_2&   m1x3_1&   QX2.2_0|
+m1x2_1  &  S  m1x2#
+m1x2_2  &  R  m1x2#
+m1x3    #    ~m1x2_2&   m1x4_1&   QX2.3_0|
+m1x3_1  &  S  m1x3#
+m1x3_2  &  R  m1x3#
+m1x4    #    ~m1x3_2&   m1x5_1&   QX2.4_0|
+m1x4_1  &  S  m1x4#
+m1x4_2  &  R  m1x4#
+m1x5    #    ~m1x4_2&   m1x6_1&   QX2.5_0|
+m1x5_1  &  S  m1x5#
+m1x5_2  &  R  m1x5#
+m1x6    #    ~m1x5_2&   m1x7_1&   QX2.6_0|
+m1x6_1  &  S  m1x6#
+m1x6_2  &  R  m1x6#
+m1x7    #    ~m1x6_2&   m1x8_1&   QX2.7_0|
+m1x7_1  &  S  m1x7#
+m1x7_2  |  R  m1x7#
+m1x8    #     m1x0_2&  ~m1x0_1|   m1x1_2&  ~m1x1_1&   m1x2_2&  ~m1x2_1&   m1x3_2&  ~m1x3_1&
+              m1x4_2&  ~m1x4_1&   m1x5_2&  ~m1x5_1&   m1x6_2&  ~m1x6_1&   m1x7_2|  ~m1x7_1&
+              m1x8_2&  ~m1x8_1&   QX3.0_0|
+m1x8_1  &  S  m1x8#
+m1x8_2  &  R  m1x8#
+m2x0    #     m2x1_1&  ~m2x8_2&   QX4.0_0|
+m2x0_1  |  S  m2x0#
+m2x0_2  &  R  m2x0#
+m2x1    #    ~m2x0_2&   m2x2_1&   QX4.1_0|
+m2x1_1  &  S  m2x1#
+m2x1_2  &  R  m2x1#
+m2x2    #    ~m2x1_2&   m2x3_1&   QX4.2_0|
+m2x2_1  &  S  m2x2#
+m2x2_2  &  R  m2x2#
+m2x3    #    ~m2x2_2&   m2x4_1&   QX4.3_0|
+m2x3_1  &  S  m2x3#
+m2x3_2  &  R  m2x3#
+m2x4    #    ~m2x3_2&   m2x5_1&   QX4.4_0|
+m2x4_1  &  S  m2x4#
+m2x4_2  &  R  m2x4#
+m2x5    #    ~m2x4_2&   m2x6_1&   QX4.5_0|
+m2x5_1  &  S  m2x5#
+m2x5_2  &  R  m2x5#
+m2x6    #    ~m2x5_2&   m2x7_1&   QX4.6_0|
+m2x6_1  &  S  m2x6#
+m2x6_2  &  R  m2x6#
+m2x7    #    ~m2x6_2&   m2x8_1&   QX4.7_0|
+m2x7_1  &  S  m2x7#
+m2x7_2  |  R  m2x7#
+m2x8    #     m2x0_2&  ~m2x0_1|   m2x1_2&  ~m2x1_1&   m2x2_2&  ~m2x2_1&   m2x3_2&  ~m2x3_1&
+              m2x4_2&  ~m2x4_1&   m2x5_2&  ~m2x5_1&   m2x6_2&  ~m2x6_1&   m2x7_2|  ~m2x7_1&
+              m2x8_2&  ~m2x8_1&   QX5.0_0|
+m2x8_1  &  S  m2x8#
+m2x8_2  &  R  m2x8#
+m3x0    #     m3x1_1&  ~m3x8_2&   QX6.0_0|
+m3x0_1  |  S  m3x0#
+m3x0_2  &  R  m3x0#
+m3x1    #    ~m3x0_2&   m3x2_1&   QX6.1_0|
+m3x1_1  &  S  m3x1#
+m3x1_2  &  R  m3x1#
+m3x2    #    ~m3x1_2&   m3x3_1&   QX6.2_0|
+m3x2_1  &  S  m3x2#
+m3x2_2  &  R  m3x2#
+m3x3    #    ~m3x2_2&   m3x4_1&   QX6.3_0|
+m3x3_1  &  S  m3x3#
+m3x3_2  &  R  m3x3#
+m3x4    #    ~m3x3_2&   m3x5_1&   QX6.4_0|
+m3x4_1  &  S  m3x4#
+m3x4_2  &  R  m3x4#
+m3x5    #    ~m3x4_2&   m3x6_1&   QX6.5_0|
+m3x5_1  &  S  m3x5#
+m3x5_2  &  R  m3x5#
+m3x6    #    ~m3x5_2&   m3x7_1&   QX6.6_0|
+m3x6_1  &  S  m3x6#
+m3x6_2  &  R  m3x6#
+m3x7    #    ~m3x6_2&   m3x8_1&   QX6.7_0|
+m3x7_1  &  S  m3x7#
+m3x7_2  |  R  m3x7#
+m3x8    #     m3x0_2&  ~m3x0_1|   m3x1_2&  ~m3x1_1&   m3x2_2&  ~m3x2_1&   m3x3_2&  ~m3x3_1&
+              m3x4_2&  ~m3x4_1&   m3x5_2&  ~m3x5_1&   m3x6_2&  ~m3x6_1&   m3x7_2|  ~m3x7_1&
+              m3x8_2&  ~m3x8_1&   QX7.0_0|
+m3x8_1  &  S  m3x8#
+m3x8_2  &  R  m3x8#
+t       !  !  b0_4&   b1_4&   b2_4&   b3_4&
+t_1     |  T  t!
+
+******* NET STATISTICS  ************************
+
+ARN	+      4 blocks
+AND	&     72 blocks
+OR	|     53 blocks
+FF	#     40 blocks
+VF	>      4 blocks
+INPW	[      4 blocks
+INPX	<      2 blocks
+CLK	:      5 blocks
+TIM	!      1 blocks
+ALIAS	@     40
+
+TOTAL	     185 blocks
+	     572 links
+
+compiled by:
+@(#)     $Id: barc.lst,v 1.1 2015/05/24 00:51:49 jw Exp $ -O7
+
+C OUTPUT: ./Test0/barc.c  (385 lines)

@@ -1,0 +1,28 @@
+/********************************************************************
+ *
+ *	simple iC program with arrays
+ *
+ *******************************************************************/
+
+%{
+%#include	<stdio.h>
+%}
+
+	if (IX0.1) {
+	    printf("Hello Nr. %d, 0\n", 1);
+	}
+	if (IX0.2) {
+	    printf("Hello Nr. %d, 0\n", 2);
+	}
+	if (IX0.2) {
+	    printf("Hello Nr. %d, 1\n", 2);
+	}
+	if (IX0.3) {
+	    printf("Hello Nr. %d, 0\n", 3);
+	}
+	if (IX0.3) {
+	    printf("Hello Nr. %d, 1\n", 3);
+	}
+	if (IX0.3) {
+	    printf("Hello Nr. %d, 2\n", 3);
+	}

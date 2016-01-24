@@ -1,0 +1,200 @@
+******* ./Test0/aa4z8.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	nested bit functions
+004	 *
+005	 *******************************************************************/
+006
+007	imm bit Sub3(bit ib1, bit ib2) {
+008	    return ib1 & ib2;
+
+	Sub3@ib1   ---&  Sub3@
+	Sub3@ib2   ---&
+
+009	}
+010
+011	imm bit Sub33(bit ib3, bit ib4) {
+012	    this = ib3 & ib4;
+
+	Sub33@ib3   ---&  Sub33@
+	Sub33@ib4   ---&
+
+013	}
+014
+015	imm bit Sub4() {
+016	    return IX0.4;
+
+	IX0.4     ---@  Sub4@
+
+017	}
+018
+019	imm bit Sub44() {
+020	    this = 4 & 4;
+*** Error: constant assignment to imm bit: Sub44@ File ./Test0/aa4z8.ic, line 20
+021	}
+*** Error: no return statement in function: Sub44 File ./Test0/aa4z8.ic, line 21
+*** Error: function has no statements! Sub44 File ./Test0/aa4z8.ic, line 21
+022
+023	imm bit Sub5() {
+024	    this = IX0.5;
+
+	IX0.5     ---@  Sub5@
+
+025	}
+026
+027	imm bit Nest1(bit i1, bit i2) {
+028	    return Sub3(i1, i2) & Sub4();
+
+	Nest1@i1   ---&  Nest1@
+	Nest1@i2   ---&
+	IX0.4      ---&
+
+029	}
+030	imm bit Nest2(bit i3, bit i4) {
+031	    this = Sub4() & Sub33(i3, i4);
+
+	IX0.4      ---&  Nest2@
+	Nest2@i3   ---&
+	Nest2@i4   ---&
+
+032	}
+033	imm bit Nest3(bit i1, bit i2, bit i3, bit i4) {
+034	    return Sub3(i1, i2) & Sub33(i3, i4);
+
+	Nest3@i1   ---&  Nest3@
+	Nest3@i2   ---&
+	Nest3@i3   ---&
+	Nest3@i4   ---&
+
+035	}
+036	imm bit Nest4(bit i3, bit i4) {
+037	    this = Sub44() & Sub33(i3, i4);
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 37
+*** Error: no constant allowed in bit expression. File ./Test0/aa4z8.ic, line 37
+038	}
+*** Error: no return statement in function: Nest4 File ./Test0/aa4z8.ic, line 38
+*** Warning: function parameter was never used: Nest4@i3 File ./Test0/aa4z8.ic, line 38
+*** Warning: function parameter was never used: Nest4@i4 File ./Test0/aa4z8.ic, line 38
+*** Error: function has no statements! Nest4 File ./Test0/aa4z8.ic, line 38
+039	imm bit Nest5(bit i3, bit i4) {
+040	    return Sub33(i3, i4) & Sub44();
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 40
+*** Error: no constant allowed in bit expression. File ./Test0/aa4z8.ic, line 40
+041	}
+*** Error: no return statement in function: Nest5 File ./Test0/aa4z8.ic, line 41
+*** Warning: function parameter was never used: Nest5@i3 File ./Test0/aa4z8.ic, line 41
+*** Warning: function parameter was never used: Nest5@i4 File ./Test0/aa4z8.ic, line 41
+*** Error: function has no statements! Nest5 File ./Test0/aa4z8.ic, line 41
+042	imm bit Nest6() {
+043	    this = Sub4() & Sub5();
+
+	IX0.4     ---&  Nest6@
+	IX0.5     ---&
+
+044	}
+045
+046	QX0.1 = Nest1(Sub4(), Sub5()) & Sub4();
+
+	IX0.4     ---&  QX0.1
+	IX0.5     ---&
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+047	QX0.2 = Sub4() & Nest2(Sub44(), Nest6());
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 47
+
+	IX0.4     ---&  QX0.2
+	QX0.2_1   ---&
+	IX0.5     ---&
+
+	iConst  A ---+  QX0.2_1         Sub44(); // (2)
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+048	QX0.3 = Nest3(Sub4(), Sub5(), Sub44(), Nest6()) & Sub33(Sub44(), Nest6());
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 48
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 48
+
+	IX0.4     ---&  QX0.3
+	IX0.5     ---&
+	QX0.3_1   ---&
+	QX0.3_2   ---&
+
+	iConst  A ---+  QX0.3_1         Sub44(); // (2)
+
+	iConst  A ---+  QX0.3_2         Sub44(); // (2)
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+049	QX0.4 = Sub44() & Nest4(Sub44(), Nest6());
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 49
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 49
+*** Error: called function has too many real parameters:. File ./Test0/aa4z8.ic, line 49
+*** Error: called function has too many real parameters:. File ./Test0/aa4z8.ic, line 49
+*** Error: called function has no statements - cannot execute! Nest4 File ./Test0/aa4z8.ic, line 49
+*** Error: constant assignment to imm bit: QX0.4 File ./Test0/aa4z8.ic, line 49
+050	QX0.5 = Nest5(Sub44(), Nest6()) & Sub44();
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 50
+*** Error: called function has too many real parameters:. File ./Test0/aa4z8.ic, line 50
+*** Error: called function has too many real parameters:. File ./Test0/aa4z8.ic, line 50
+*** Error: called function has no statements - cannot execute! Nest5 File ./Test0/aa4z8.ic, line 50
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z8.ic, line 50
+*** Error: constant assignment to imm bit: QX0.5 File ./Test0/aa4z8.ic, line 50
+051	QX0.6 = Sub4() & Nest6();
+
+	IX0.4     ---&  QX0.6
+	IX0.5     ---&
+
+
+	QX0.6     ---|  QX0.6_0 X
+
+******* C CODE          ************************
+
+047	(2) 	return Sub44();
+*** --------------------------^ C syntax error, unexpected error 1 in ./Test0/aa4z8.ic
+
+******* NET TOPOLOGY    ************************
+
+IX0.4   <     QX0.1&  QX0.2&  QX0.3&  QX0.6&
+IX0.5   <     QX0.1&  QX0.2&  QX0.3&  QX0.6&
+*** Error: undefined function internal gate: Nest4@ File ./Test0/aa4z8.ic, line 52
+*** Error: undefined function internal gate: Nest5@ File ./Test0/aa4z8.ic, line 52
+QX0.1   &     QX0.1_0|
+QX0.1_0 |  X
+QX0.2   &     QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 +     QX0.2&
+QX0.3   &     QX0.3_0|
+QX0.3_0 |  X
+QX0.3_1 +     QX0.3&
+QX0.3_2 +     QX0.3&
+QX0.4   .
+*** Warning: undefined imm bit: QX0.4 File ./Test0/aa4z8.ic, line 52
+*** Warning: unused    imm bit: QX0.4 File ./Test0/aa4z8.ic, line 52
+QX0.5   .
+*** Warning: undefined imm bit: QX0.5 File ./Test0/aa4z8.ic, line 52
+*** Warning: unused    imm bit: QX0.5 File ./Test0/aa4z8.ic, line 52
+QX0.6   &     QX0.6_0|
+QX0.6_0 |  X
+*** Error: undefined function internal gate: Sub44@ File ./Test0/aa4z8.ic, line 52
+iConst  =  A  QX0.2_1+  QX0.3_2+  QX0.3_1+
+
+******* NET STATISTICS  ************************
+
+UDF	.      2 blocks
+ARN	+      3 blocks
+AND	&      4 blocks
+OR	|      4 blocks
+NCONST	=      1 blocks
+INPX	<      2 blocks
+
+TOTAL	      16 blocks
+	      47 links
+
+compiled by:
+@(#)     $Id: aa4z8.lst,v 1.1 2015/06/04 01:36:55 jw Exp $ -O7
+*** Warning: 5 undefined gates and 2 unused gates. File ./Test0/aa4z8.ic, line 52
+*** Error: 1 syntax and 29 generate errors - cannot execute. File ./Test0/aa4z8.ic, line 52

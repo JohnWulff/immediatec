@@ -1,0 +1,147 @@
+******* ./Test0/aa4y.ic ************************
+001	imm void Sub() {
+002	    return this;
+*** ---------------^ syntax error, unexpected LEXERR 1 in ./Test0/aa4y.ic
+003	}
+*** Error: function has no statements! Sub File ./Test0/aa4y.ic, line 3
+004
+005	imm void Sub0() {
+006	    return IX0.0 & IX0.1;
+*** Error: return statement in void function: Sub0@ File ./Test0/aa4y.ic, line 6
+007	}
+*** Error: function has no statements! Sub0 File ./Test0/aa4y.ic, line 7
+008
+009	imm void Sub00() {
+010	    this = IX0.0 & IX0.1;
+*** --------^ syntax error, unexpected LEXERR 2 in ./Test0/aa4y.ic
+011	}
+*** Error: function has no statements! Sub00 File ./Test0/aa4y.ic, line 11
+012
+013	imm bit Sub1() {
+014	    return IX0.0 & IX0.1;
+
+	IX0.0     ---&  Sub1@
+	IX0.1     ---&
+
+015	}
+016
+017	imm bit Sub11() {
+018	    this = IX0.0 & IX0.1;
+
+	IX0.0     ---&  Sub11@
+	IX0.1     ---&
+
+019	}
+020
+021	imm bit Sub2() {
+022	    return 2;
+*** Error: no constant allowed in bit expression. File ./Test0/aa4y.ic, line 22
+023	}
+*** Error: no return statement in function: Sub2 File ./Test0/aa4y.ic, line 23
+*** Error: function has no statements! Sub2 File ./Test0/aa4y.ic, line 23
+024
+025	imm bit Sub22() {
+026	    this = 2 + 2;
+*** Error: constant assignment to imm bit: Sub22@ File ./Test0/aa4y.ic, line 26
+027	}
+*** Error: no return statement in function: Sub22 File ./Test0/aa4y.ic, line 27
+*** Error: function has no statements! Sub22 File ./Test0/aa4y.ic, line 27
+028
+029	imm int Sub3() {
+030	    return IB1 + IB2;
+
+	IB1     A ---+  Sub3@   A       IB1     // 1
+	IB2     A ---+                  +IB2    // 2
+	                                ;       // (2)
+
+031	}
+032
+033	imm int Sub33() {
+034	    this = IB1 + IB2;
+
+	IB1     A ---+  Sub33@  A       IB1     // 1
+	IB2     A ---+                  +IB2    // 2
+	                                ;       // (2)
+
+035	}
+036
+037	imm int Sub4() {
+038	    return 4;
+
+	4       A ---@  Sub4@   A
+
+039	}
+040
+041	imm int Sub44() {
+042	    this = 4 + 4;
+
+	iConst  A ---+  Sub44@  A       4+4;    // (3)
+
+043	}
+044
+045	QX0.0 = Sub1() & Sub11();
+
+	IX0.0     ---&  QX0.0
+	IX0.1     ---&
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+046	QB1 = Sub3() + Sub4();
+
+	IB1     A ---+  QB1     A       (IB1    // 1
+	IB2     A ---+                  +IB2    // 2
+	                                )+4;    // (4)
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+047	QB2 = Sub33() + Sub44();
+
+	IB1     A ---+  QB2     A       (IB1     // 1
+	IB2     A ---+                  +IB2     // 2
+	                                )+(4+4); // (5)
+
+
+	QB2     A ---+  QB2_0   W       QB2      // 1
+
+******* C CODE          ************************
+
+030	(2) 	return iC_MV(1)+iC_MV(2);
+
+042	(3) 	return 4+4;
+
+046	(4) 	return (iC_MV(1)+iC_MV(2))+4;
+
+047	(5) 	return (iC_MV(1)+iC_MV(2))+(4+4);
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QB1+    QB2+
+IB2     [  A  QB1+    QB2+
+IX0.0   <     QX0.0&
+IX0.1   <     QX0.0&
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QX0.0   &     QX0.0_0|
+QX0.0_0 |  X
+*** Error: undefined function internal gate: Sub22@ File ./Test0/aa4y.ic, line 48
+*** Error: undefined function internal gate: Sub2@ File ./Test0/aa4y.ic, line 48
+
+******* NET STATISTICS  ************************
+
+ARN	+      4 blocks
+AND	&      1 blocks
+OR	|      1 blocks
+INPW	[      2 blocks
+INPX	<      2 blocks
+
+TOTAL	      10 blocks
+	      25 links
+
+compiled by:
+@(#)     $Id: aa4y.lst,v 1.1 2015/06/03 11:13:21 jw Exp $ -O7
+*** Warning: 2 undefined gates. File ./Test0/aa4y.ic, line 48
+*** Error: 2 syntax and 12 generate errors - cannot execute. File ./Test0/aa4y.ic, line 48

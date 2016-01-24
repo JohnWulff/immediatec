@@ -1,0 +1,215 @@
+******* ./Test0/h1.ic   ************************
+001	/********************************************************************
+002	 *
+003	 *	simple iC program with arrays
+004	 *
+005	 *******************************************************************/
+006
+007	%{
+008	%#include	<stdio.h>
+009	%}
+010
+011	    switch (IB0) {
+012		case 0:
+013		printf("Hello Nr. %d\n", 0);
+014	    }
+
+
+	_f1_1   I ---(                          // (2)
+
+	iClock  : ---+  _f1_1   I
+	IB0     A ---+                  IB0     // 1
+
+015	    switch (IB1) {
+016		case 1:
+017		printf("Hello Nr. %d\n", 1);
+018	    }
+
+
+	_f2_1   I ---(                          // (3)
+
+	iClock  : ---+  _f2_1   I
+	IB1     A ---+                  IB1     // 1
+
+019	    switch (IB2) {
+020		case 2:
+021		printf("Hello Nr. %d\n", 2);
+022	    }
+
+
+	_f3_1   I ---(                          // (4)
+
+	iClock  : ---+  _f3_1   I
+	IB2     A ---+                  IB2     // 1
+
+023	    switch (IB3) {
+024		case 3:
+025		printf("Hello Nr. %d\n", 3);
+026	    }
+
+
+	_f4_1   I ---(                          // (5)
+
+	iClock  : ---+  _f4_1   I
+	IB3     A ---+                  IB3     // 1
+
+027	    switch (IB4) {
+028		case 4:
+029		printf("Hello Nr. %d\n", 4);
+030	    }
+
+
+	_f5_1   I ---(                          // (6)
+
+	iClock  : ---+  _f5_1   I
+	IB4     A ---+                  IB4     // 1
+
+031	    switch (IB5) {
+032		case 5:
+033		printf("Hello Nr. %d\n", 5);
+034	    }
+
+
+	_f6_1   I ---(                          // (7)
+
+	iClock  : ---+  _f6_1   I
+	IB5     A ---+                  IB5     // 1
+
+035	    switch (IB6) {
+036		case 6:
+037		printf("Hello Nr. %d\n", 6);
+038	    }
+
+
+	_f7_1   I ---(                          // (8)
+
+	iClock  : ---+  _f7_1   I
+	IB6     A ---+                  IB6     // 1
+
+039	    switch (IB7) {
+040		case 7:
+041		printf("Hello Nr. %d\n", 7);
+042	    }
+
+
+	_f8_1   I ---(                          // (9)
+
+	iClock  : ---+  _f8_1   I
+	IB7     A ---+                  IB7     // 1
+
+043	    switch (IB8) {
+044		case 8:
+045		printf("Hello Nr. %d\n", 8);
+046	    }
+
+
+	_f9_1   I ---(                          // (10)
+
+	iClock  : ---+  _f9_1   I
+	IB8     A ---+                  IB8     // 1
+
+047	    switch (IB9) {
+048		case 9:
+049		printf("Hello Nr. %d\n", 9);
+050	    }
+
+
+	_f10_1  I ---(                          // (11)
+
+	iClock  : ---+  _f10_1  I
+	IB9     A ---+                  IB9     // 1
+
+******* C CODE          ************************
+
+007
+008	    #include	<stdio.h>
+009
+
+011	(2) {
+012		case 0:
+013		printf("Hello Nr. %d\n", 0);
+014	    }
+
+015	(3) {
+016		case 1:
+017		printf("Hello Nr. %d\n", 1);
+018	    }
+
+019	(4) {
+020		case 2:
+021		printf("Hello Nr. %d\n", 2);
+022	    }
+
+023	(5) {
+024		case 3:
+025		printf("Hello Nr. %d\n", 3);
+026	    }
+
+027	(6) {
+028		case 4:
+029		printf("Hello Nr. %d\n", 4);
+030	    }
+
+031	(7) {
+032		case 5:
+033		printf("Hello Nr. %d\n", 5);
+034	    }
+
+035	(8) {
+036		case 6:
+037		printf("Hello Nr. %d\n", 6);
+038	    }
+
+039	(9) {
+040		case 7:
+041		printf("Hello Nr. %d\n", 7);
+042	    }
+
+043	(10) {
+044		case 8:
+045		printf("Hello Nr. %d\n", 8);
+046	    }
+
+047	(11) {
+048		case 9:
+049		printf("Hello Nr. %d\n", 9);
+050	    }
+
+******* NET TOPOLOGY    ************************
+
+IB0     [  A  _f1_1+
+IB1     [  A  _f2_1+
+IB2     [  A  _f3_1+
+IB3     [  A  _f4_1+
+IB4     [  A  _f5_1+
+IB5     [  A  _f6_1+
+IB6     [  A  _f7_1+
+IB7     [  A  _f8_1+
+IB8     [  A  _f9_1+
+IB9     [  A  _f10_1+
+_f10_1  +  I ( (11)
+_f1_1   +  I ( (2)
+_f2_1   +  I ( (3)
+_f3_1   +  I ( (4)
+_f4_1   +  I ( (5)
+_f5_1   +  I ( (6)
+_f6_1   +  I ( (7)
+_f7_1   +  I ( (8)
+_f8_1   +  I ( (9)
+_f9_1   +  I ( (10)
+iClock  :  :  _f1_1+   _f2_1+   _f3_1+   _f4_1+   _f5_1+   _f6_1+   _f7_1+   _f8_1+
+              _f9_1+   _f10_1+
+
+******* NET STATISTICS  ************************
+
+ARN	+     10 blocks
+INPW	[     10 blocks
+CLK	:      1 blocks
+
+TOTAL	      21 blocks
+	      50 links
+
+compiled by:
+@(#)     $Id: h1.lst,v 1.1 2015/10/15 06:27:20 jw Exp $ -O7
+
+C OUTPUT: ./Test0/h1.c  (185 lines)

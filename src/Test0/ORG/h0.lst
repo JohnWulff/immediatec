@@ -1,0 +1,210 @@
+******* ./Test0/h0.ic   ************************
+001	/********************************************************************
+002	 *
+003	 *	simple iC program with arrays
+004	 *
+005	 *******************************************************************/
+006
+007	%{
+008	%#include	<stdio.h>
+009	%}
+010
+011	    if (IX0.0) {
+012		printf("Hello world!\n");
+013	    }
+
+
+	_f1_1   F ---{                          // (2)
+
+	iClock  : ---|  _f1_1   F
+	IX0.0     ---|
+
+014	    if (IX0.0) {
+015		printf("Hello Nr.0\n");
+016	    }
+
+
+	_f2_1   F ---{                          // (3)
+
+	iClock  : ---|  _f2_1   F
+	IX0.0     ---|
+
+017	    if (IX0.1) {
+018		printf("Hello Nr.1\n");
+019	    }
+
+
+	_f3_1   F ---{                          // (4)
+
+	iClock  : ---|  _f3_1   F
+	IX0.1     ---|
+
+020	    if (IX0.2) {
+021		printf("Hello Nr.2\n");
+022	    }
+
+
+	_f4_1   F ---{                          // (5)
+
+	iClock  : ---|  _f4_1   F
+	IX0.2     ---|
+
+023	    if (IX0.3) {
+024		printf("Hello Nr.3\n");
+025	    }
+
+
+	_f5_1   F ---{                          // (6)
+
+	iClock  : ---|  _f5_1   F
+	IX0.3     ---|
+
+026	    if (IX0.4) {
+027		printf("Hello Nr.4\n");
+028	    }
+
+
+	_f6_1   F ---{                          // (7)
+
+	iClock  : ---|  _f6_1   F
+	IX0.4     ---|
+
+029	    if (IX0.5) {
+030		printf("Hello Nr.5\n");
+031	    }
+
+
+	_f7_1   F ---{                          // (8)
+
+	iClock  : ---|  _f7_1   F
+	IX0.5     ---|
+
+032	    if (IX0.6) {
+033		printf("Hello Nr.6\n");
+034	    }
+
+
+	_f8_1   F ---{                          // (9)
+
+	iClock  : ---|  _f8_1   F
+	IX0.6     ---|
+
+035	    if (IX0.7) {
+036		printf("Hello Nr.7\n");
+037	    }
+
+
+	_f9_1   F ---{                          // (10)
+
+	iClock  : ---|  _f9_1   F
+	IX0.7     ---|
+
+038	    if (IX1.0) {
+039		printf("Hello Nr.8\n");
+040	    }
+
+
+	_f10_1  F ---{                          // (11)
+
+	iClock  : ---|  _f10_1  F
+	IX1.0     ---|
+
+041	    if (IX1.1) {
+042		printf("Hello Nr.9\n");
+043	    }
+
+
+	_f11_1  F ---{                          // (12)
+
+	iClock  : ---|  _f11_1  F
+	IX1.1     ---|
+
+******* C CODE          ************************
+
+007
+008	    #include	<stdio.h>
+009
+
+011	(2) {
+012		printf("Hello world!\n");
+013	    }
+
+014	(3) {
+015		printf("Hello Nr.0\n");
+016	    }
+
+017	(4) {
+018		printf("Hello Nr.1\n");
+019	    }
+
+020	(5) {
+021		printf("Hello Nr.2\n");
+022	    }
+
+023	(6) {
+024		printf("Hello Nr.3\n");
+025	    }
+
+026	(7) {
+027		printf("Hello Nr.4\n");
+028	    }
+
+029	(8) {
+030		printf("Hello Nr.5\n");
+031	    }
+
+032	(9) {
+033		printf("Hello Nr.6\n");
+034	    }
+
+035	(10) {
+036		printf("Hello Nr.7\n");
+037	    }
+
+038	(11) {
+039		printf("Hello Nr.8\n");
+040	    }
+
+041	(12) {
+042		printf("Hello Nr.9\n");
+043	    }
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     _f1_1|  _f2_1|
+IX0.1   <     _f3_1|
+IX0.2   <     _f4_1|
+IX0.3   <     _f5_1|
+IX0.4   <     _f6_1|
+IX0.5   <     _f7_1|
+IX0.6   <     _f8_1|
+IX0.7   <     _f9_1|
+IX1.0   <     _f10_1|
+IX1.1   <     _f11_1|
+_f10_1  |  F { (11)
+_f11_1  |  F { (12)
+_f1_1   |  F { (2)
+_f2_1   |  F { (3)
+_f3_1   |  F { (4)
+_f4_1   |  F { (5)
+_f5_1   |  F { (6)
+_f6_1   |  F { (7)
+_f7_1   |  F { (8)
+_f8_1   |  F { (9)
+_f9_1   |  F { (10)
+iClock  :  :  _f1_1|   _f2_1|   _f3_1|   _f4_1|   _f5_1|   _f6_1|   _f7_1|   _f8_1|
+              _f9_1|   _f10_1|  _f11_1|
+
+******* NET STATISTICS  ************************
+
+OR	|     11 blocks
+INPX	<     10 blocks
+CLK	:      1 blocks
+
+TOTAL	      22 blocks
+	      64 links
+
+compiled by:
+@(#)     $Id: h0.lst,v 1.1 2015/10/15 06:27:20 jw Exp $ -O7
+
+C OUTPUT: ./Test0/h0.c  (187 lines)

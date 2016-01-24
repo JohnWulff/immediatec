@@ -1,0 +1,227 @@
+******* ./Test0/alex10.ic ************************
+001	/********************************************************************
+002	 *	Test alex10.ic
+003	 *******************************************************************/
+004
+005	%{
+006	%#include	<stdio.h>
+007	%}
+008
+009	imm int x, y, sum;
+010
+011	QX0.0 = IX0.0;
+
+	IX0.0     ---@  QX0.0
+
+
+	IX0.0     ---|  QX0.0_0 X
+
+012	QX0.1 = IX0.0 | IX0.1 | IX0.2 | IX0.3;
+
+	IX0.0     ---|  QX0.1
+	IX0.1     ---|
+	IX0.2     ---|
+	IX0.3     ---|
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+013	QX0.2 = IX0.0 & IX0.1 |
+014	                        IX0.2 & IX0.3;
+
+	QX0.2_1   ---|  QX0.2
+	QX0.2_2   ---|
+
+	IX0.0     ---&  QX0.2_1
+	IX0.1     ---&
+
+	IX0.2     ---&  QX0.2_2
+	IX0.3     ---&
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+015	QX0.3 = IX0.0 & IX0.1 & IX0.2 & IX0.3;
+
+	IX0.0     ---&  QX0.3
+	IX0.1     ---&
+	IX0.2     ---&
+	IX0.3     ---&
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+016
+017	x = IB4;
+
+	IB4     A ---@  x       A
+
+018	y = IB5;
+
+	IB5     A ---@  y       A
+
+019
+020	QB1 = y;
+
+	IB5     A ---@  QB1     A
+
+
+	IB5     A ---+  QB1_0   W       IB5     // 1
+
+021	QW2 = !(sum > 100) ? sum : 200 - sum;
+
+	sum     A ---+  QW2     A       !(sum     // 1
+	                                >100)?sum // 1
+	                                :200-sum  // 1
+	                                ;         // (2)
+
+
+	QW2     A ---+  QW2_0   W       QW2       // 1
+
+022	sum = x + y;
+
+	IB4     A ---+  sum     A       IB4     // 1
+	IB5     A ---+                  +IB5    // 2
+	                                ;       // (3)
+
+023
+024	QX0.4 = x <  y;
+
+	IB4     A ---+  QX0.4           IB4     // 1
+	IB5     A ---+                  <IB5    // 2
+	                                ;       // (4)
+
+
+	QX0.4     ---|  QX0.4_0 X
+
+025	QX0.5 = x == y;
+
+	IB4     A ---+  QX0.5           IB4     // 1
+	IB5     A ---+                  ==IB5   // 2
+	                                ;       // (5)
+
+
+	QX0.5     ---|  QX0.5_0 X
+
+026	QX0.6 = x >  y;
+
+	IB4     A ---+  QX0.6           IB4     // 1
+	IB5     A ---+                  >IB5    // 2
+	                                ;       // (6)
+
+
+	QX0.6     ---|  QX0.6_0 X
+
+027
+028	QX0.7 = x==0 | x==100 | y==0 | y==100;
+
+	QX0.7_1   ---|  QX0.7
+	QX0.7_2   ---|
+	QX0.7_3   ---|
+	QX0.7_4   ---|
+
+	IB4     A ---+  QX0.7_1         IB4     // 1
+	                                ==0;    // (8)
+
+	IB4     A ---+  QX0.7_2         IB4     // 1
+	                                ==100;  // (7)
+
+	IB5     A ---+  QX0.7_3         IB5     // 1
+	                                ==0;    // (8)
+
+	IB5     A ---+  QX0.7_4         IB5     // 1
+	                                ==100;  // (7)
+
+
+	QX0.7     ---|  QX0.7_0 X
+
+029
+030	if (x < y) { printf("alex was here !\n"); }
+
+
+	_f1_1   F ---{                          // (9)
+
+	iClock  : ---+  _f1_1   F
+	IB4     A ---+                  IB4     // 1
+	IB5     A ---+                  <IB5    // 2
+	                                ;       // (4)
+
+******* C CODE          ************************
+
+005
+006	    #include	<stdio.h>
+007
+
+021	(2) 	return !(iC_MV(1)>100)?iC_MV(1):200-iC_MV(1);
+
+022	(3) 	return iC_MV(1)+iC_MV(2);
+
+024	(4) 	return iC_MV(1)<iC_MV(2);
+
+025	(5) 	return iC_MV(1)==iC_MV(2);
+
+026	(6) 	return iC_MV(1)>iC_MV(2);
+
+028	(7) 	return iC_MV(1)==100;
+
+028	(8) 	return iC_MV(1)==0;
+
+030	(9) { printf("alex was here !\n"); }
+
+******* NET TOPOLOGY    ************************
+
+IB4     [  A  sum+      QX0.4+    QX0.5+    QX0.6+    QX0.7_2+  QX0.7_1+  _f1_1+
+IB5     [  A  QB1_0+    sum+      QX0.4+    QX0.5+    QX0.6+    QX0.7_4+  QX0.7_3+  _f1_1+
+IX0.0   <     QX0.0_0|  QX0.1|    QX0.2_1&  QX0.3&
+IX0.1   <     QX0.1|    QX0.2_1&  QX0.3&
+IX0.2   <     QX0.1|    QX0.2_2&  QX0.3&
+IX0.3   <     QX0.1|    QX0.2_2&  QX0.3&
+QB1     @  A  IB5[
+QB1_0   +  W
+QW2     +  A  QW2_0+
+QW2_0   +  W
+QX0.0   @     IX0.0<
+QX0.0_0 |  X
+QX0.1   |     QX0.1_0|
+QX0.1_0 |  X
+QX0.2   |     QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 &     QX0.2|
+QX0.2_2 &     QX0.2|
+QX0.3   &     QX0.3_0|
+QX0.3_0 |  X
+QX0.4   +     QX0.4_0|
+QX0.4_0 |  X
+QX0.5   +     QX0.5_0|
+QX0.5_0 |  X
+QX0.6   +     QX0.6_0|
+QX0.6_0 |  X
+QX0.7   |     QX0.7_0|
+QX0.7_0 |  X
+QX0.7_1 +     QX0.7|
+QX0.7_2 +     QX0.7|
+QX0.7_3 +     QX0.7|
+QX0.7_4 +     QX0.7|
+_f1_1   +  F { (9)
+iClock  :  :  _f1_1+
+sum     +  A  QW2+
+x       @  A  IB4[
+y       @  A  IB5[
+
+******* NET STATISTICS  ************************
+
+ARN	+     12 blocks
+AND	&      3 blocks
+OR	|     11 blocks
+INPW	[      2 blocks
+INPX	<      4 blocks
+CLK	:      1 blocks
+ALIAS	@      4
+
+TOTAL	      33 blocks
+	     109 links
+
+compiled by:
+@(#)     $Id: alex10.lst,v 1.1 2015/05/24 00:51:48 jw Exp $ -O7
+
+C OUTPUT: ./Test0/alex10.c  (157 lines)

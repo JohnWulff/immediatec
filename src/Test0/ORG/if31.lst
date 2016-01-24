@@ -1,0 +1,76 @@
+******* ./Test0/if31.ic ************************
+001	%{
+002	%#include	<stdio.h>
+003	%}
+004
+005	if (IX0.0) {
+006	    printf("IX0.0 is TRUE\n");
+007	} else {
+008	    printf("IX0.0 is FALSE\n");
+009	}
+
+
+
+	_f1_1   G ---{                          // (2)
+
+	iClock  : ---|  _f1_1   G
+	IX0.0     ---|
+
+010	if (IB1) {
+011	    printf("IB1 is TRUE\n");
+012	} else {
+013	    printf("IB1 is FALSE\n");
+014	}
+
+
+
+	_f2_1   G ---{                          // (3)
+
+	iClock  : ---+  _f2_1   G
+	IB1     A ---+                  IB1     // 1
+
+******* C CODE          ************************
+
+001
+002	    #include	<stdio.h>
+003
+
+005	(2) {
+006	    printf("IX0.0 is TRUE\n");
+007	    }
+
+007	    {
+008	    printf("IX0.0 is FALSE\n");
+009	    }
+
+010	(3) {
+011	    printf("IB1 is TRUE\n");
+012	    }
+
+012	    {
+013	    printf("IB1 is FALSE\n");
+014	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  _f2_1+
+IX0.0   <     _f1_1|
+_f1_1   |  G { (2)
+_f2_1   +  G { (3)
+iClock  :  :  _f1_1|  _f2_1+
+
+******* NET STATISTICS  ************************
+
+ARN	+      1 blocks
+OR	|      1 blocks
+INPW	[      1 blocks
+INPX	<      1 blocks
+CLK	:      1 blocks
+
+TOTAL	       5 blocks
+	      11 links
+
+compiled by:
+@(#)     $Id: if31.lst,v 1.1 2015/05/24 00:51:53 jw Exp $ -O7
+
+C OUTPUT: ./Test0/if31.c  (83 lines)

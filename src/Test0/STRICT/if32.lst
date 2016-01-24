@@ -1,0 +1,109 @@
+******* ./Test0/if32.ic ************************
+001	%{
+002	%#include	<stdio.h>
+003	%}
+004
+005	imm int del1;
+006	del1 = IX0.0 ? IB1 : 5;
+
+	del1_1  A ---+  del1    A       del1_1  // 1
+	IB1     A ---+                  ?IB1    // 2
+	                                :5;     // (2)
+
+	IX0.0     ---|  del1_1  A
+
+007	t  = TIMER(CHANGE(IX0.3));
+*** Error: strict: assignment to an undeclared 'imm timer': t File ./Test0/if32.ic, line 7
+
+	t_1     T ---!  t       !
+
+	iClock  : ---|  t_1     T
+	t_2       ---|
+
+	t_3     V --->  t_2
+
+	iClock  : ---|  t_3     V
+	IX0.3     ---|
+
+008	switch (IB1, t, del1) {
+009	    case 0:
+010		printf("IB1 is 0!!\n");
+011		break;
+012	    case 1:
+013		printf("IB1 is 1!!\n");
+014		break;
+015	    case 2:
+016		printf("IB1 is 2!!\n");
+017		break;
+018	    case 3:
+019		printf("IB1 is 3!!\n");
+020		break;
+021	    default:
+022		printf("IB1 is >= 4!!\n");
+023		break;
+024	}
+
+
+	_f1_1   I ---(                          // (3)
+
+	t       ? ---+  _f1_1   I
+	del1    A<---+
+	IB1     A ---+                  IB1     // 1
+
+******* C CODE          ************************
+
+001
+002	    #include	<stdio.h>
+003
+
+006	(2) 	return iC_MV(1)?iC_MV(2):5;
+
+008	(3) {
+009	    case 0:
+010		printf("IB1 is 0!!\n");
+011		break;
+012	    case 1:
+013		printf("IB1 is 1!!\n");
+014		break;
+015	    case 2:
+016		printf("IB1 is 2!!\n");
+017		break;
+018	    case 3:
+019		printf("IB1 is 3!!\n");
+020		break;
+021	    default:
+022		printf("IB1 is >= 4!!\n");
+023		break;
+024	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  del1+   _f1_1+
+IX0.0   <     del1_1|
+IX0.3   <     t_3|
+_f1_1   +  I ( (3)
+del1    +  A <_f1_1+
+del1_1  |  A  del1+
+iClock  :  :  t_1|    t_3|
+t       ?  !  _f1_1+
+*** Error: gate: t File ./Test0/if32.ic, line 25
+t_1     |  T  t?
+t_2     >     t_1|
+t_3     |  V  t_2>
+
+******* NET STATISTICS  ************************
+
+ARN	+      2 blocks
+OR	|      3 blocks
+VF	>      1 blocks
+INPW	[      1 blocks
+INPX	<      2 blocks
+CLK	:      1 blocks
+ERR	?      1
+
+TOTAL	      10 blocks
+	      27 links
+
+compiled by:
+@(#)     $Id: if32.lst,v 1.1 2015/11/03 03:23:05 jw Exp $ -O7
+*** Error: 2 generate errors - cannot execute. File ./Test0/if32.ic, line 25

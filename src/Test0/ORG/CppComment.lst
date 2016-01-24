@@ -1,0 +1,60 @@
+******* ./Test0/CppComment.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Test detection of C++ comments in embedded C code
+004	 *
+005	 *******************************************************************/
+006
+007	// C++ style comment in iC code is always OK
+008
+009	if (IX0.0) {
+010	    QB1 = IB1 + IB2;	// C++ comment in embedded C reported by -P option
+011	}
+
+
+		= ----	QB1	A
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+
+	_f1_1   F ---{                          // (2)
+	QB1     A<---{                          // 2 =
+	IB1     A<---{                          // 3  v
+	IB2     A<---{                          // 4  v
+
+	iClock  : ---|  _f1_1   F
+	IX0.0     ---|
+
+******* C CODE          ************************
+
+009	(2) {
+010	    iC_AA(2, 0,  iC_AV(3) + iC_AV(4));	// C++ comment in embedded C reported by -P option
+011	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A
+IB2     [  A
+IX0.0   <     _f1_1|
+QB1     -  A  QB1_0+
+QB1_0   +  W
+_f1_1   |  F { (2)    QB1-    IB1[    IB2[
+iClock  :  :  _f1_1|
+
+******* NET STATISTICS  ************************
+
+ARNC	-      1 blocks
+ARN	+      1 blocks
+OR	|      1 blocks
+INPW	[      2 blocks
+INPX	<      1 blocks
+CLK	:      1 blocks
+
+TOTAL	       7 blocks
+	      13 links
+
+compiled by:
+@(#)     $Id: CppComment.lst,v 1.1 2015/05/24 00:51:45 jw Exp $ -O7
+
+C OUTPUT: ./Test0/CppComment.c  (62 lines)

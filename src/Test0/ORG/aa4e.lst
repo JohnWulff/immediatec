@@ -1,0 +1,190 @@
+******* ./Test0/aa4e.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	aa4e.ic
+004	 *
+005	 *	The built in int function blocks SHR() and SHSR() return
+006	 *	the arithmetic type SH (*), which is built up from a compiled
+007	 *	node H r or H s r, which are cloned correctly and form single
+008	 *	independent nodes in arithemetic expressions in which SHR()
+009	 *	or SHSR() are used as values. No attempt is made to merge these
+010	 *	into the arithmetic expression.
+011	 *
+012	 *******************************************************************/
+013
+014	QB0 = IB6 + SH(IB0) * SH(IB3) * IB7;
+
+	IB6     A ---+  QB0     A       IB6     // 1
+	QB0_1   A ---+                  +QB0_1  // 2
+	QB0_2   A ---+                  *QB0_2  // 3
+	IB7     A ---+                  *IB7    // 4
+	                                ;       // (2)
+
+	QB0_4   H ---*  QB0_1   A
+
+	QB0_3   H ---*  QB0_2   A
+
+	iClock  : ---+  QB0_3   H
+	IB3     A ---+                  IB3     // 1
+
+	iClock  : ---+  QB0_4   H
+	IB0     A ---+                  IB0     // 1
+
+
+	QB0     A ---+  QB0_0   W       QB0     // 1
+
+015	QB1 = IB6 + SHR(IB0, IX0.1) * SHR(IB3, IX0.1) * IB7;
+
+	IB6     A ---+  QB1     A       IB6     // 1
+	QB1_1   A ---+                  +QB1_1  // 2
+	QB1_2   A ---+                  *QB1_2  // 3
+	IB7     A ---+                  *IB7    // 4
+	                                ;       // (2)
+
+	QB1_6   H ---*  QB1_1   A
+	QB1_7   r ---*
+
+	QB1_3   H ---*  QB1_2   A
+	QB1_4   r ---*
+
+	iClock  : ---+  QB1_3   H
+	QB1_5   A ---+                  QB1_5   // 1
+	QB1_2   A ---+                  ?QB1_2  // 2
+	IB3     A ---+                  :IB3    // 3
+	                                ;       // (1)
+
+	iClock  : ---|  QB1_4   r
+	IX0.1     ---|
+
+	IX0.1     ---|  QB1_5   A
+
+	iClock  : ---+  QB1_6   H
+	QB1_8   A ---+                  QB1_8   // 1
+	QB1_1   A ---+                  ?QB1_1  // 2
+	IB0     A ---+                  :IB0    // 3
+	                                ;       // (1)
+
+	iClock  : ---|  QB1_7   r
+	IX0.1     ---|
+
+	IX0.1     ---|  QB1_8   A
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+016	QB2 = IB6 + SHSR(IB0, IX0.0, IX0.1) * SHSR(IB3, IX0.0, IX0.1) * IB7;
+
+	IB6     A ---+  QB2     A       IB6     // 1
+	QB2_1   A ---+                  +QB2_1  // 2
+	QB2_2   A ---+                  *QB2_2  // 3
+	IB7     A ---+                  *IB7    // 4
+	                                ;       // (2)
+
+	QB2_7   H ---*  QB2_1   A
+	QB2_8   s ---*
+	QB2_9   r ---*
+
+	QB2_3   H ---*  QB2_2   A
+	QB2_4   s ---*
+	QB2_5   r ---*
+
+	iClock  : ---+  QB2_3   H
+	QB2_6   A ---+                  QB2_6   // 1
+	QB2_2   A ---+                  ?QB2_2  // 2
+	IB3     A ---+                  :IB3    // 3
+	                                ;       // (1)
+
+	iClock  : ---&  QB2_4   s
+	IX0.0     ---&
+	IX0.1   ~ ---&
+
+	iClock  : ---&  QB2_5   r
+	IX0.0   ~ ---&
+	IX0.1     ---&
+
+	IX0.0     ---|  QB2_6   A
+	IX0.1     ---|
+
+	iClock  : ---+  QB2_7   H
+	QB2_10  A ---+                  QB2_10  // 1
+	QB2_1   A ---+                  ?QB2_1  // 2
+	IB0     A ---+                  :IB0    // 3
+	                                ;       // (1)
+
+	iClock  : ---&  QB2_8   s
+	IX0.0     ---&
+	IX0.1   ~ ---&
+
+	iClock  : ---&  QB2_9   r
+	IX0.0   ~ ---&
+	IX0.1     ---&
+
+	IX0.0     ---|  QB2_10  A
+	IX0.1     ---|
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+******* C CODE          ************************
+	#line 139 "init_t.ic"	/* in pre-compiled function block SHR */
+139	(1) 	return iC_MV(1)?iC_MV(2):iC_MV(3);
+	#line 14 "./Test0/aa4e.ic"
+014	(2) 	return iC_MV(1)+iC_MV(2)*iC_MV(3)*iC_MV(4);
+
+******* NET TOPOLOGY    ************************
+
+IB0     [  A  QB0_4+  QB1_6+  QB2_7+
+IB3     [  A  QB0_3+  QB1_3+  QB2_3+
+IB6     [  A  QB0+    QB1+    QB2+
+IB7     [  A  QB0+    QB1+    QB2+
+IX0.0   <    ~QB2_5&   QB2_4&   QB2_6|  ~QB2_9&   QB2_8&   QB2_10|
+IX0.1   <     QB1_4|   QB1_5|   QB1_7|   QB1_8|   QB2_5&  ~QB2_4&   QB2_6|   QB2_9&
+             ~QB2_8&   QB2_10|
+QB0     +  A  QB0_0+
+QB0_0   +  W
+QB0_1   *  A  QB0+
+QB0_2   *  A  QB0+
+QB0_3   +  H  QB0_2*
+QB0_4   +  H  QB0_1*
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB1_1   *  A  QB1+    QB1_6+
+QB1_2   *  A  QB1+    QB1_3+
+QB1_3   +  H  QB1_2*
+QB1_4   |  r  QB1_2*
+QB1_5   |  A  QB1_3+
+QB1_6   +  H  QB1_1*
+QB1_7   |  r  QB1_1*
+QB1_8   |  A  QB1_6+
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QB2_1   *  A  QB2+    QB2_7+
+QB2_10  |  A  QB2_7+
+QB2_2   *  A  QB2+    QB2_3+
+QB2_3   +  H  QB2_2*
+QB2_4   &  s  QB2_2*
+QB2_5   &  r  QB2_2*
+QB2_6   |  A  QB2_3+
+QB2_7   +  H  QB2_1*
+QB2_8   &  s  QB2_1*
+QB2_9   &  r  QB2_1*
+iClock  :  :  QB0_3+  QB0_4+  QB1_4|  QB1_3+  QB1_7|  QB1_6+  QB2_5&  QB2_4&
+              QB2_3+  QB2_9&  QB2_8&  QB2_7+
+
+******* NET STATISTICS  ************************
+
+ARN	+     12 blocks
+AND	&      4 blocks
+OR	|      6 blocks
+SH	*      6 blocks
+INPW	[      4 blocks
+INPX	<      2 blocks
+CLK	:      1 blocks
+
+TOTAL	      35 blocks
+	     133 links
+
+compiled by:
+@(#)     $Id: aa4e.lst,v 1.1 2015/05/24 00:51:46 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4e.c  (111 lines)

@@ -1,0 +1,150 @@
+******* ./Test0/f2.ic   ************************
+001	c =	CLOCK((CHANGE(IB1) | reset) & ~QX0.2);
+*** Error: strict: use of an undeclared imm variable: reset File ./Test0/f2.ic, line 1
+*** Error: strict: assignment to an undeclared 'imm clock': c File ./Test0/f2.ic, line 1
+
+	c_1     C ---:  c       :
+
+	iClock  : ---&  c_1     C
+	c_2       ---&
+	QX0.2   ~ ---&
+
+	c_3       ---|  c_2
+	reset   ? ---|
+
+	c_4     v --->  c_3
+
+	iClock  : ---+  c_4     v
+	IB1     A ---+                  IB1     // 1
+
+002	reset =	CHANGE(IX0.0, c);
+
+	reset_1 V ---?  reset
+
+	c       ? ---|  reset_1 V
+	IX0.0     ---|
+
+003	QB1 =	SH(IB1, c);
+
+	QB1_1   H ---*  QB1     A
+
+	c       ? ---+  QB1_1   H
+	IB1     A ---+                  IB1     // 1
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+004	hilo =	IB1 - QB1 > 1 | QB1 - IB1 > 1;
+*** Error: strict: assignment to an undeclared imm variable: hilo File ./Test0/f2.ic, line 4
+
+	hilo_1    ---|  hilo
+	hilo_2    ---|
+
+	IB1     A ---+  hilo_1          IB1     // 1
+	QB1     A ---+                  -QB1    // 2
+	                                >1;     // (2)
+
+	QB1     A ---+  hilo_2          QB1     // 1
+	IB1     A ---+                  -IB1    // 2
+	                                >1;     // (2)
+
+005	QX0.0 =	LATCH(hilo, IB1 == QB1);
+
+	QX0.0     ---%  QX0.0
+	hilo    ? ---%
+	QX0.0_1 ~ ---%
+
+	IB1     A ---+  QX0.0_1         IB1     // 1
+	QB1     A ---+                  ==QB1   // 2
+	                                ;       // (3)
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+006	QX0.1 =	SR(hilo,    reset);
+
+	QX0.1_1 S ---#  QX0.1
+	QX0.1_2 R ---#
+
+	iClock  : ---|  QX0.1_1 S
+	hilo    ? ---|
+
+	iClock  : ---|  QX0.1_2 R
+	reset   ? ---|
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+007	QX0.2 =	SR(hilo, c, reset);
+
+	QX0.2_1 S ---#  QX0.2
+	QX0.2_2 R ---#
+
+	c       ? ---|  QX0.2_1 S
+	hilo    ? ---|
+
+	iClock  : ---|  QX0.2_2 R
+	reset   ? ---|
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+******* C CODE          ************************
+
+004	(2) 	return iC_MV(1)-iC_MV(2)>1;
+
+005	(3) 	return iC_MV(1)==iC_MV(2);
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  c_4+      QB1_1+    hilo_2+   hilo_1+   QX0.0_1+
+IX0.0   <     reset_1|
+QB1     *  A  QB1_0+    hilo_2+   hilo_1+   QX0.0_1+
+QB1_0   +  W
+QB1_1   +  H  QB1*
+QX0.0   %     QX0.0%    QX0.0_0|
+QX0.0_0 |  X
+QX0.0_1 +    ~QX0.0%
+QX0.1   #     QX0.1_0|
+QX0.1_0 |  X
+QX0.1_1 |  S  QX0.1#
+QX0.1_2 |  R  QX0.1#
+QX0.2   #    ~c_1&      QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 |  S  QX0.2#
+QX0.2_2 |  R  QX0.2#
+c       ?  :  reset_1|  QB1_1+    QX0.2_1|
+*** Error: gate: c File ./Test0/f2.ic, line 8
+c_1     &  C  c?
+c_2     |     c_1&
+c_3     >     c_2|
+c_4     +  v  c_3>
+hilo    ?     QX0.0%    QX0.1_1|  QX0.2_1|
+*** Error: gate: hilo File ./Test0/f2.ic, line 8
+hilo_1  +     hilo?
+hilo_2  +     hilo?
+iClock  :  :  c_1&      c_4+      QX0.1_2|  QX0.1_1|  QX0.2_2|
+reset   ?     c_2|      QX0.1_2|  QX0.2_2|
+*** Error: gate: reset File ./Test0/f2.ic, line 8
+reset_1 |  V  reset?
+
+******* NET STATISTICS  ************************
+
+ARN	+      6 blocks
+AND	&      1 blocks
+OR	|      9 blocks
+LATCH	%      1 blocks
+SH	*      1 blocks
+FF	#      2 blocks
+VF	>      1 blocks
+INPW	[      1 blocks
+INPX	<      1 blocks
+CLK	:      1 blocks
+ERR	?      3
+
+TOTAL	      24 blocks
+	      73 links
+
+compiled by:
+@(#)     $Id: f2.lst,v 1.1 2015/11/03 03:23:03 jw Exp $ -O7
+*** Error: 6 generate errors - cannot execute. File ./Test0/f2.ic, line 8

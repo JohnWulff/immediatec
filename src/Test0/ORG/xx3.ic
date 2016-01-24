@@ -1,0 +1,55 @@
+
+    imm bit a0 = IB0;
+    imm bit a1 = IB1;
+    imm bit a2 = IB2;
+    imm bit a3 = IB3;
+    imm bit a4 = IB4;
+    imm bit a5 = IB5;
+    imm bit a6 = IB6;
+    imm bit a7 = IB7;
+    imm bit a8 = IB8;
+    imm bit a9 = IB9;
+    imm bit a10 = IB10;
+    imm bit a11 = IB11;
+    imm bit a12 = IB12;
+    imm bit a13 = IB13;
+    imm bit a14 = IB14;
+    imm bit a15 = IB15;
+    imm bit a16 = IB16;
+    imm bit a17 = IB17;
+    imm bit a18 = IB18;
+    imm bit a19 = IB19;
+    imm bit a20 = IB20;
+    imm bit a21 = IB21;
+    imm bit a22 = IB22;
+    imm bit a23 = IB23;
+
+imm bit a0xabc = IX0.0 & IX1.0;
+imm bit a0xdef = IX0.0 & IX1.0;
+imm bit a0xghi = IX0.0 & IX1.0;
+imm bit a0xjkl = IX0.0 & IX1.0;
+
+imm bit a1xabc = IX0.1 & IX1.1;
+imm bit a1xdef = IX0.1 & IX1.1;
+imm bit a1xghi = IX0.1 & IX1.1;
+imm bit a1xjkl = IX0.1 & IX1.1;
+
+imm bit a2xabc = IX0.2 & IX1.2;
+imm bit a2xdef = IX0.2 & IX1.2;
+imm bit a2xghi = IX0.2 & IX1.2;
+imm bit a2xjkl = IX0.2 & IX1.2;
+
+imm bit a3xabc = IX0.3 & IX1.3;
+imm bit a3xdef = IX0.3 & IX1.3;
+imm bit a3xghi = IX0.3 & IX1.3;
+imm bit a3xjkl = IX0.3 & IX1.3;
+
+imm bit a4xabc = IX0.4 & IX1.4;
+imm bit a4xdef = IX0.4 & IX1.4;
+imm bit a4xghi = IX0.4 & IX1.4;
+imm bit a4xjkl = IX0.4 & IX1.4;
+
+imm bit a5xabc = IX0.5 & IX1.5;
+imm bit a5xdef = IX0.5 & IX1.5;
+imm bit a5xghi = IX0.5 & IX1.5;
+imm bit a5xjkl = IX0.5 & IX1.5;

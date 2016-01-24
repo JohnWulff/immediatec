@@ -1,0 +1,143 @@
+******* ./Test0/conditional.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	test short conditional expression
+004	 *
+005	 * Conditional expression expr1 ? : expr3
+006	 * Excerpt from 'info gcc'
+007	 * ======================================
+008	 * 5.8 Conditionals with Omitted Operands
+009	 * ======================================
+010	 * The middle operand in a conditional expression may be omitted.  Then if
+011	 * the first operand is nonzero, its value is the value of the conditional
+012	 * expression.
+013	 *
+014	 *    Therefore, the expression
+015	 *
+016	 *      x ? : y
+017	 *
+018	 * has the value of `x' if that is nonzero; otherwise, the value of `y'.
+019	 *
+020	 *    This example is perfectly equivalent to
+021	 *
+022	 *      x ? x : y
+023	 *
+024	 * In this simple case, the ability to omit the middle operand is not
+025	 * especially useful.  When it becomes useful is when the first operand
+026	 * does, or may (if it is a macro argument), contain a side effect.  Then
+027	 * repeating the operand in the middle would perform the side effect
+028	 * twice.  Omitting the middle operand uses the value already computed
+029	 * without the undesirable effects of recomputing it.
+030	 *
+031	 * warning: ISO C forbids omitting the middle term of a ?: expression
+032	 *
+033	 *******************************************************************/
+034
+035	immC int a;
+
+		= ----	a	A
+
+036	immC int b;
+
+		= ----	b	A
+
+037
+038	QB1 = IB1 ? : IB2;		/* compiled as iC statement */
+
+	IB1     A ---+  QB1     A       IB1     // 1
+	IB2     A ---+                  ?:IB2   // 2
+	                                ;       // (2)
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+039
+040	if (IX0.0) {
+041	    QB2 = IB1 ? : IB2;		/* compiled as C statement */
+042	    QB3 = a++ ? : IB2;		/* conditional with side effect */
+043	    QB4 = b++ ? b++ : IB2;	/* conditional with active side effect */
+044	}
+*** Error: strict: C assignment to an imm variable (should be immC): QB2 File ./Test0/conditional.ic, line 41
+*** Error: strict: C assignment to an imm variable (should be immC): QB3 File ./Test0/conditional.ic, line 42
+*** Error: strict: C assignment to an imm variable (should be immC): QB4 File ./Test0/conditional.ic, line 43
+
+
+	_f1_1   F ---{                          // (3)
+	QB2     A<---{                          // 2 =
+	IB1     A<---{                          // 3  v
+	IB2     A<---{                          // 4  v
+	QB3     A<---{                          // 5 =
+	a       A<---{                          // 6 =v
+	QB4     A<---{                          // 7 =
+	b       A<---{                          // 8 =v
+
+	iClock  : ---|  _f1_1   F
+	IX0.0     ---|
+
+045
+046	if (IX0.1) {
+047	    a = b = 0;			/* reset a and b */
+048	}
+
+
+	_f2_1   F ---{                          // (4)
+	a       A<---{                          // 2 =v
+	b       A<---{                          // 3 =v
+
+	iClock  : ---|  _f2_1   F
+	IX0.1     ---|
+
+******* C CODE          ************************
+
+038	(2) 	return iC_MV(1)?:iC_MV(2);
+
+040	(3) {
+041	    iC_ERR(2, 0,  iC_AV(3) ? : iC_AV(4));		/* compiled as C statement */
+042	    iC_ERR(5, 0,  iC_AA(6, 14, 0) ? : iC_AV(4));		/* conditional with side effect */
+043	    iC_ERR(7, 0,  iC_AA(8, 14, 0) ? iC_AA(8, 14, 0) : iC_AV(4));	/* conditional with active side effect */
+044	    }
+
+046	(4) {
+047	    iC_AA(2, 0,  iC_AA(3, 1,  0));			/* reset a and b */
+048	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QB1+
+IB2     [  A  QB1+
+IX0.0   <     _f1_1|
+IX0.1   <     _f2_1|
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     ?  A
+*** Warning: unused    imm int: QB2 File ./Test0/conditional.ic, line 49
+*** Error: gate: QB2 File ./Test0/conditional.ic, line 49
+QB3     ?  A
+*** Warning: unused    imm int: QB3 File ./Test0/conditional.ic, line 49
+*** Error: gate: QB3 File ./Test0/conditional.ic, line 49
+QB4     ?  A
+*** Warning: unused    imm int: QB4 File ./Test0/conditional.ic, line 49
+*** Error: gate: QB4 File ./Test0/conditional.ic, line 49
+_f1_1   |  F { (3)    QB2?    IB1[    IB2[    QB3?    a-      QB4?    b-
+_f2_1   |  F { (4)    a-      b-
+a       -  A
+b       -  A
+iClock  :  :  _f1_1|  _f2_1|
+
+******* NET STATISTICS  ************************
+
+ARNC	-      2 blocks
+ARN	+      2 blocks
+OR	|      2 blocks
+INPW	[      2 blocks
+INPX	<      2 blocks
+CLK	:      1 blocks
+ERR	?      3
+
+TOTAL	      11 blocks
+	      32 links
+
+compiled by:
+@(#)     $Id: conditional.lst,v 1.1 2015/11/03 03:23:02 jw Exp $ -O7
+*** Warning: 3 unused gates. File ./Test0/conditional.ic, line 49
+*** Error: 6 generate errors - cannot execute. File ./Test0/conditional.ic, line 49

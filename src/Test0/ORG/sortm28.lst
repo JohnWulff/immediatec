@@ -1,0 +1,1010 @@
+******* ./Test0/sortm28.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Parcel sorter control - using analog memory for destinations
+004	 *
+005	 *******************************************************************/
+006
+007	use strict;
+008
+009	/********************************************************************
+010	 *	Step timer
+011	 *******************************************************************/
+012
+013	imm timer tick = TIMER(TX0.4, ~TX0.4);
+
+	tick_1  T ---!  tick    !
+	tick_2  T ---!
+
+	iClock  : ---|  tick_1  T
+	TX0.4     ---|
+
+	iClock  : ---|  tick_2  T
+	TX0.4   ~ ---|
+
+014
+015	/********************************************************************
+016	 *	Destination selection inputs
+017	 *******************************************************************/
+018
+019	imm bit inp0 =	IX0.1 | IX0.3 | IX0.5 | IX0.7;
+
+	IX0.1     ---|  inp0
+	IX0.3     ---|
+	IX0.5     ---|
+	IX0.7     ---|
+
+020
+021	imm bit inp1 =	IX0.2 | IX0.3 | IX0.6 | IX0.7;
+
+	IX0.2     ---|  inp1
+	IX0.3     ---|
+	IX0.6     ---|
+	IX0.7     ---|
+
+022
+023	imm bit inp2 =	IX0.4 | IX0.5 | IX0.6 | IX0.7;
+
+	IX0.4     ---|  inp2
+	IX0.5     ---|
+	IX0.6     ---|
+	IX0.7     ---|
+
+024
+025	imm bit trans =	RISE(
+026			IX0.0 | IX0.1 | IX0.2 | IX0.3 | IX0.4 | IX0.5 | IX0.6 | IX0.7);
+
+	trans_1 E ---/  trans
+
+	iClock  : ---|  trans_1 E
+	IX0.0     ---|
+	IX0.1     ---|
+	IX0.2     ---|
+	IX0.3     ---|
+	IX0.4     ---|
+	IX0.5     ---|
+	IX0.6     ---|
+	IX0.7     ---|
+
+027
+028	/********************************************************************
+029	 *	Generate analog value of destination
+030	 *******************************************************************/
+031
+032	imm int dest = inp0 + inp1*2 + inp2*4;	// dest =
+
+	dest_1  A ---+  dest    A       dest_1    // 1
+	dest_2  A ---+                  +dest_2   // 2
+	dest_3  A ---+                  *2+dest_3 // 3
+	                                *4;       // (2)
+
+	inp0      ---|  dest_1  A
+
+	inp1      ---|  dest_2  A
+
+	inp2      ---|  dest_3  A
+
+033
+034	/********************************************************************
+035	 *	Generate delay along sorting belt.
+036	 *	This delay value changes every time one of the destination
+037	 *	selection inputs 'IX0.0 - IX0.7' is activated.
+038	 *	This delay is used to set a delay timer immediately.
+039	 *	NOTE: GATE_FACTOR_ can be a fractional factor by putting it in
+040	 *	double quotes
+041	 *******************************************************************/
+042
+043	imm int del = 12 + dest * 34 / 3;	// del =
+
+	dest    A ---+  del     A       12+dest // 1
+	                                *34/3;  // (3)
+
+044
+045	/********************************************************************
+046	 *	As parcels travel along the sorting belt there have to be a
+047	 *	number of simultaneous delay timers 'pt' - one for each group.
+048	 *	Worst case is a delay timer per gate if parcels are all for
+049	 *	the final destination and placed on the belt as fast as possible.
+050	 *
+051	 *	A timer should only be used, if the timers in the previous
+052	 *	groups are already running. That makes simultaneous parallel
+053	 *	timers for each parcel input possible. The same applies to the
+054	 *	logic opening the gates, which may also happen simultaneously
+055	 *	if several timers happen to finish simultaneously.
+056	 *******************************************************************/
+057
+058	imm bit xt0;
+059	imm bit tr0  =	SR(trans & ~tr0, xt0);
+
+	tr0_1   S ---#  tr0
+	tr0_2   R ---#
+
+	iClock  : ---&  tr0_1   S
+	trans     ---&
+	tr0     ~ ---&
+
+	iClock  : ---|  tr0_2   R
+	xt0       ---|
+
+060	imm bit dt0  =	RISE(tr0);
+
+	dt0_1   E ---/  dt0
+
+	iClock  : ---|  dt0_1   E
+	tr0       ---|
+
+061	imm bit pt0  =	D(tr0, tick, del);
+
+	pt0_1   D ---#  pt0
+
+	tick    ! ---|  pt0_1   D
+	del     A<---|
+	tr0       ---|
+
+062	        xt0  =	tr0 & pt0;
+
+	tr0       ---&  xt0
+	pt0       ---&
+
+063	imm int ma0  =	SH(dt0 ? dest : ma0);
+
+	ma0_1   H ---*  ma0     A
+
+	iClock  : ---+  ma0_1   H
+	ma0_2   A ---+                  ma0_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma0     A ---+                  :ma0    // 3
+	                                ;       // (1)
+
+	dt0       ---|  ma0_2   A
+
+064
+065	imm bit xt1;
+066	imm bit tr1  =	SR(trans & ~tr1 & tr0, xt1);
+
+	tr1_1   S ---#  tr1
+	tr1_2   R ---#
+
+	iClock  : ---&  tr1_1   S
+	trans     ---&
+	tr1     ~ ---&
+	tr0       ---&
+
+	iClock  : ---|  tr1_2   R
+	xt1       ---|
+
+067	imm bit dt1  =	RISE(tr1);
+
+	dt1_1   E ---/  dt1
+
+	iClock  : ---|  dt1_1   E
+	tr1       ---|
+
+068	imm bit pt1  =	D(tr1, tick, del);
+
+	pt1_1   D ---#  pt1
+
+	tick    ! ---|  pt1_1   D
+	del     A<---|
+	tr1       ---|
+
+069	        xt1  =	tr1 & pt1 & ~pt0;
+
+	tr1       ---&  xt1
+	pt1       ---&
+	pt0     ~ ---&
+
+070	imm int ma1  =	SH(dt1 ? dest : ma1);
+
+	ma1_1   H ---*  ma1     A
+
+	iClock  : ---+  ma1_1   H
+	ma1_2   A ---+                  ma1_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma1     A ---+                  :ma1    // 3
+	                                ;       // (1)
+
+	dt1       ---|  ma1_2   A
+
+071
+072	imm bit xt2;
+073	imm bit tr2  =	SR(trans & ~tr2 & tr1 & tr0, xt2);
+
+	tr2_1   S ---#  tr2
+	tr2_2   R ---#
+
+	iClock  : ---&  tr2_1   S
+	trans     ---&
+	tr2     ~ ---&
+	tr1       ---&
+	tr0       ---&
+
+	iClock  : ---|  tr2_2   R
+	xt2       ---|
+
+074	imm bit dt2  =	RISE(tr2);
+
+	dt2_1   E ---/  dt2
+
+	iClock  : ---|  dt2_1   E
+	tr2       ---|
+
+075	imm bit pt2  =	D(tr2, tick, del);
+
+	pt2_1   D ---#  pt2
+
+	tick    ! ---|  pt2_1   D
+	del     A<---|
+	tr2       ---|
+
+076	        xt2  =	tr2 & pt2 & ~pt1 & ~pt0;
+
+	tr2       ---&  xt2
+	pt2       ---&
+	pt1     ~ ---&
+	pt0     ~ ---&
+
+077	imm int ma2  =	SH(dt2 ? dest : ma2);
+
+	ma2_1   H ---*  ma2     A
+
+	iClock  : ---+  ma2_1   H
+	ma2_2   A ---+                  ma2_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma2     A ---+                  :ma2    // 3
+	                                ;       // (1)
+
+	dt2       ---|  ma2_2   A
+
+078
+079	imm bit xt3;
+080	imm bit tr3  =	SR(trans & ~tr3 & tr2 & tr1 & tr0, xt3);
+
+	tr3_1   S ---#  tr3
+	tr3_2   R ---#
+
+	iClock  : ---&  tr3_1   S
+	trans     ---&
+	tr3     ~ ---&
+	tr2       ---&
+	tr1       ---&
+	tr0       ---&
+
+	iClock  : ---|  tr3_2   R
+	xt3       ---|
+
+081	imm bit dt3  =	RISE(tr3);
+
+	dt3_1   E ---/  dt3
+
+	iClock  : ---|  dt3_1   E
+	tr3       ---|
+
+082	imm bit pt3  =	D(tr3, tick, del);
+
+	pt3_1   D ---#  pt3
+
+	tick    ! ---|  pt3_1   D
+	del     A<---|
+	tr3       ---|
+
+083	        xt3  =	tr3 & pt3 & ~pt2 & ~pt1 & ~pt0;
+
+	tr3       ---&  xt3
+	pt3       ---&
+	pt2     ~ ---&
+	pt1     ~ ---&
+	pt0     ~ ---&
+
+084	imm int ma3  =	SH(dt3 ? dest : ma3);
+
+	ma3_1   H ---*  ma3     A
+
+	iClock  : ---+  ma3_1   H
+	ma3_2   A ---+                  ma3_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma3     A ---+                  :ma3    // 3
+	                                ;       // (1)
+
+	dt3       ---|  ma3_2   A
+
+085
+086	imm bit xt4;
+087	imm bit tr4  =	SR(trans & ~tr4 & tr3 & tr2 & tr1 & tr0, xt4);
+
+	tr4_1   S ---#  tr4
+	tr4_2   R ---#
+
+	iClock  : ---&  tr4_1   S
+	trans     ---&
+	tr4     ~ ---&
+	tr3       ---&
+	tr2       ---&
+	tr1       ---&
+	tr0       ---&
+
+	iClock  : ---|  tr4_2   R
+	xt4       ---|
+
+088	imm bit dt4  =	RISE(tr4);
+
+	dt4_1   E ---/  dt4
+
+	iClock  : ---|  dt4_1   E
+	tr4       ---|
+
+089	imm bit pt4  =	D(tr4, tick, del);
+
+	pt4_1   D ---#  pt4
+
+	tick    ! ---|  pt4_1   D
+	del     A<---|
+	tr4       ---|
+
+090	        xt4  =	tr4 & pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+
+	tr4       ---&  xt4
+	pt4       ---&
+	pt3     ~ ---&
+	pt2     ~ ---&
+	pt1     ~ ---&
+	pt0     ~ ---&
+
+091	imm int ma4  =	SH(dt4 ? dest : ma4);
+
+	ma4_1   H ---*  ma4     A
+
+	iClock  : ---+  ma4_1   H
+	ma4_2   A ---+                  ma4_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma4     A ---+                  :ma4    // 3
+	                                ;       // (1)
+
+	dt4       ---|  ma4_2   A
+
+092
+093	imm bit xt5;
+094	imm bit tr5  =	SR(trans & ~tr5 & tr4 & tr3 & tr2 & tr1 & tr0, xt5);
+
+	tr5_1   S ---#  tr5
+	tr5_2   R ---#
+
+	iClock  : ---&  tr5_1   S
+	trans     ---&
+	tr5     ~ ---&
+	tr4       ---&
+	tr3       ---&
+	tr2       ---&
+	tr1       ---&
+	tr0       ---&
+
+	iClock  : ---|  tr5_2   R
+	xt5       ---|
+
+095	imm bit dt5  =	RISE(tr5);
+
+	dt5_1   E ---/  dt5
+
+	iClock  : ---|  dt5_1   E
+	tr5       ---|
+
+096	imm bit pt5  =	D(tr5, tick, del);
+
+	pt5_1   D ---#  pt5
+
+	tick    ! ---|  pt5_1   D
+	del     A<---|
+	tr5       ---|
+
+097	        xt5  =	tr5 & pt5 & ~pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+
+	tr5       ---&  xt5
+	pt5       ---&
+	pt4     ~ ---&
+	pt3     ~ ---&
+	pt2     ~ ---&
+	pt1     ~ ---&
+	pt0     ~ ---&
+
+098	imm int ma5  =	SH(dt5 ? dest : ma5);
+
+	ma5_1   H ---*  ma5     A
+
+	iClock  : ---+  ma5_1   H
+	ma5_2   A ---+                  ma5_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma5     A ---+                  :ma5    // 3
+	                                ;       // (1)
+
+	dt5       ---|  ma5_2   A
+
+099
+100	imm bit xt6;
+101	imm bit tr6  =	SR(trans & ~tr6 & tr5 & tr4 & tr3 & tr2 & tr1 & tr0, xt6);
+
+	tr6_1   S ---#  tr6
+	tr6_2   R ---#
+
+	iClock  : ---&  tr6_1   S
+	trans     ---&
+	tr6     ~ ---&
+	tr5       ---&
+	tr4       ---&
+	tr3       ---&
+	tr2       ---&
+	tr1       ---&
+	tr0       ---&
+
+	iClock  : ---|  tr6_2   R
+	xt6       ---|
+
+102	imm bit dt6  =	RISE(tr6);
+
+	dt6_1   E ---/  dt6
+
+	iClock  : ---|  dt6_1   E
+	tr6       ---|
+
+103	imm bit pt6  =	D(tr6, tick, del);
+
+	pt6_1   D ---#  pt6
+
+	tick    ! ---|  pt6_1   D
+	del     A<---|
+	tr6       ---|
+
+104	        xt6  =	tr6 & pt6 & ~pt5 & ~pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+
+	tr6       ---&  xt6
+	pt6       ---&
+	pt5     ~ ---&
+	pt4     ~ ---&
+	pt3     ~ ---&
+	pt2     ~ ---&
+	pt1     ~ ---&
+	pt0     ~ ---&
+
+105	imm int ma6  =	SH(dt6 ? dest : ma6);
+
+	ma6_1   H ---*  ma6     A
+
+	iClock  : ---+  ma6_1   H
+	ma6_2   A ---+                  ma6_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma6     A ---+                  :ma6    // 3
+	                                ;       // (1)
+
+	dt6       ---|  ma6_2   A
+
+106
+107	imm bit xt7;
+108	imm bit tr7  =	SR(trans & ~tr7 & tr6 & tr5 & tr4 & tr3 & tr2 & tr1 & tr0, xt7);
+
+	tr7_1   S ---#  tr7
+	tr7_2   R ---#
+
+	iClock  : ---&  tr7_1   S
+	trans     ---&
+	tr7     ~ ---&
+	tr6       ---&
+	tr5       ---&
+	tr4       ---&
+	tr3       ---&
+	tr2       ---&
+	tr1       ---&
+	tr0       ---&
+
+	iClock  : ---|  tr7_2   R
+	xt7       ---|
+
+109	imm bit dt7  =	RISE(tr7);
+
+	dt7_1   E ---/  dt7
+
+	iClock  : ---|  dt7_1   E
+	tr7       ---|
+
+110	imm bit pt7  =	D(tr7, tick, del);
+
+	pt7_1   D ---#  pt7
+
+	tick    ! ---|  pt7_1   D
+	del     A<---|
+	tr7       ---|
+
+111	        xt7  =	tr7 & pt7 & ~pt6 & ~pt5 & ~pt4 & ~pt3 & ~pt2 & ~pt1 & ~pt0;
+
+	tr7       ---&  xt7
+	pt7       ---&
+	pt6     ~ ---&
+	pt5     ~ ---&
+	pt4     ~ ---&
+	pt3     ~ ---&
+	pt2     ~ ---&
+	pt1     ~ ---&
+	pt0     ~ ---&
+
+112	imm int ma7  =	SH(dt7 ? dest : ma7);
+
+	ma7_1   H ---*  ma7     A
+
+	iClock  : ---+  ma7_1   H
+	ma7_2   A ---+                  ma7_2   // 1
+	dest    A ---+                  ?dest   // 2
+	ma7     A ---+                  :ma7    // 3
+	                                ;       // (1)
+
+	dt7       ---|  ma7_2   A
+
+113
+114	/********************************************************************
+115	 *	Output gates - selected via imm int busa and immC bit array openGate[]
+116	 *******************************************************************/
+117
+118	imm int busa =	xt0 ? ma0 : xt1 ? ma1 : xt2 ? ma2 : xt3 ? ma3 :
+119			xt4 ? ma4 : xt5 ? ma5 : xt6 ? ma6 : xt7 ? ma7 : 0;
+
+	busa_1  A ---+  busa    A       busa_1  // 1
+	ma0     A ---+                  ?ma0    // 2
+	busa_2  A ---+                  :busa_2 // 3
+	ma1     A ---+                  ?ma1    // 4
+	busa_3  A ---+                  :busa_3 // 5
+	ma2     A ---+                  ?ma2    // 6
+	busa_4  A ---+                  :busa_4 // 7
+	ma3     A ---+                  ?ma3    // 8
+	busa_5  A ---+                  :busa_5 // 9
+	ma4     A ---+                  ?ma4    // 10
+	busa_6  A ---+                  :busa_6 // 11
+	ma5     A ---+                  ?ma5    // 12
+	busa_7  A ---+                  :busa_7 // 13
+	ma6     A ---+                  ?ma6    // 14
+	busa_8  A ---+                  :busa_8 // 15
+	ma7     A ---+                  ?ma7    // 16
+	                                :0;     // (4)
+
+	xt0       ---|  busa_1  A
+
+	xt1       ---|  busa_2  A
+
+	xt2       ---|  busa_3  A
+
+	xt3       ---|  busa_4  A
+
+	xt4       ---|  busa_5  A
+
+	xt5       ---|  busa_6  A
+
+	xt6       ---|  busa_7  A
+
+	xt7       ---|  busa_8  A
+
+120
+121	imm bit trig =	xt0 | xt1 | xt2 | xt3 | xt4 | xt5 | xt6 | xt7;
+
+	xt0       ---|  trig
+	xt1       ---|
+	xt2       ---|
+	xt3       ---|
+	xt4       ---|
+	xt5       ---|
+	xt6       ---|
+	xt7       ---|
+
+122
+123	immC bit	openGate[8];
+
+		= ---'	openGate	[8]
+
+		= ---'	openGate0
+		= ---'	openGate1
+		= ---'	openGate2
+		= ---'	openGate3
+		= ---'	openGate4
+		= ---'	openGate5
+		= ---'	openGate6
+		= ---'	openGate7
+
+124
+125	%{
+126	static int	temp;
+127	%}
+128
+129	if (trig) {
+130	    openGate[temp = busa] = 1;
+131	} else {
+132	    openGate[temp] = 0;	/* temp is changed on the next rising trig */
+133	}
+
+
+
+	_f1_1    G ---{                          // (5)
+	openGate U<---{                          // 2 =
+	busa     A<---{                          // 3  v
+
+	iClock   : ---|  _f1_1   G
+	trig       ---|
+
+134
+135	imm bit gate0 = ST(openGate[0], tick, 10);
+
+	gate0_1   S ---#  gate0
+	gate0_2   R ---#
+
+	iClock    : ---|  gate0_1 S
+	openGate0   ---|
+
+	tick      ! ---|  gate0_2 R
+	10        A<---|
+	gate0       ---|
+
+136	imm bit gate1 = ST(openGate[1], tick, 10);
+
+	gate1_1   S ---#  gate1
+	gate1_2   R ---#
+
+	iClock    : ---|  gate1_1 S
+	openGate1   ---|
+
+	tick      ! ---|  gate1_2 R
+	10        A<---|
+	gate1       ---|
+
+137	imm bit gate2 = ST(openGate[2], tick, 10);
+
+	gate2_1   S ---#  gate2
+	gate2_2   R ---#
+
+	iClock    : ---|  gate2_1 S
+	openGate2   ---|
+
+	tick      ! ---|  gate2_2 R
+	10        A<---|
+	gate2       ---|
+
+138	imm bit gate3 = ST(openGate[3], tick, 10);
+
+	gate3_1   S ---#  gate3
+	gate3_2   R ---#
+
+	iClock    : ---|  gate3_1 S
+	openGate3   ---|
+
+	tick      ! ---|  gate3_2 R
+	10        A<---|
+	gate3       ---|
+
+139	imm bit gate4 = ST(openGate[4], tick, 10);
+
+	gate4_1   S ---#  gate4
+	gate4_2   R ---#
+
+	iClock    : ---|  gate4_1 S
+	openGate4   ---|
+
+	tick      ! ---|  gate4_2 R
+	10        A<---|
+	gate4       ---|
+
+140	imm bit gate5 = ST(openGate[5], tick, 10);
+
+	gate5_1   S ---#  gate5
+	gate5_2   R ---#
+
+	iClock    : ---|  gate5_1 S
+	openGate5   ---|
+
+	tick      ! ---|  gate5_2 R
+	10        A<---|
+	gate5       ---|
+
+141	imm bit gate6 = ST(openGate[6], tick, 10);
+
+	gate6_1   S ---#  gate6
+	gate6_2   R ---#
+
+	iClock    : ---|  gate6_1 S
+	openGate6   ---|
+
+	tick      ! ---|  gate6_2 R
+	10        A<---|
+	gate6       ---|
+
+142	imm bit gate7 = ST(openGate[7], tick, 10);
+
+	gate7_1   S ---#  gate7
+	gate7_2   R ---#
+
+	iClock    : ---|  gate7_1 S
+	openGate7   ---|
+
+	tick      ! ---|  gate7_2 R
+	10        A<---|
+	gate7       ---|
+
+143
+144	QX0.0 = gate0;
+
+	gate0     ---@  QX0.0
+
+
+	gate0     ---|  QX0.0_0 X
+
+145	QX0.1 = gate1;
+
+	gate1     ---@  QX0.1
+
+
+	gate1     ---|  QX0.1_0 X
+
+146	QX0.2 = gate2;
+
+	gate2     ---@  QX0.2
+
+
+	gate2     ---|  QX0.2_0 X
+
+147	QX0.3 = gate3;
+
+	gate3     ---@  QX0.3
+
+
+	gate3     ---|  QX0.3_0 X
+
+148	QX0.4 = gate4;
+
+	gate4     ---@  QX0.4
+
+
+	gate4     ---|  QX0.4_0 X
+
+149	QX0.5 = gate5;
+
+	gate5     ---@  QX0.5
+
+
+	gate5     ---|  QX0.5_0 X
+
+150	QX0.6 = gate6;
+
+	gate6     ---@  QX0.6
+
+
+	gate6     ---|  QX0.6_0 X
+
+151	QX0.7 = gate7;
+
+	gate7     ---@  QX0.7
+
+
+	gate7     ---|  QX0.7_0 X
+
+******* C CODE          ************************
+
+125
+126	    static int	temp;
+127
+	#line 139 "init_t.ic"	/* in pre-compiled function block SHR */
+139	(1) 	return iC_MV(1)?iC_MV(2):iC_MV(3);
+	#line 32 "./Test0/sortm28.ic"
+032	(2) 	return iC_MV(1)+iC_MV(2)*2+iC_MV(3)*4;
+
+043	(3) 	return 12+iC_MV(1)*34/3;
+
+119	(4) 	return iC_MV(1)?iC_MV(2):iC_MV(3)?iC_MV(4):iC_MV(5)?iC_MV(6):iC_MV(7)?iC_MV(8):iC_MV(9)?iC_MV(10):iC_MV(11)?iC_MV(12):iC_MV
+119	    (13)?iC_MV(14):iC_MV(15)?iC_MV(16):0;
+
+129	(5) {
+130	    iC_LAI(2, temp = iC_AV(3) , 0,  1);
+131	    }
+
+131	    {
+132	    iC_LAI(2, temp , 0,  0);	/* temp is changed on the next rising trig */
+133	    }
+
+******* NET TOPOLOGY    ************************
+
+10        =  A <gate0_2| <gate1_2| <gate2_2| <gate3_2| <gate4_2| <gate5_2| <gate6_2| <gate7_2|
+IX0.0     <     trans_1|
+IX0.1     <     inp0|     trans_1|
+IX0.2     <     inp1|     trans_1|
+IX0.3     <     inp0|     inp1|     trans_1|
+IX0.4     <     inp2|     trans_1|
+IX0.5     <     inp0|     inp2|     trans_1|
+IX0.6     <     inp1|     inp2|     trans_1|
+IX0.7     <     inp0|     inp1|     inp2|     trans_1|
+QX0.0     @     gate0#
+QX0.0_0   |  X
+QX0.1     @     gate1#
+QX0.1_0   |  X
+QX0.2     @     gate2#
+QX0.2_0   |  X
+QX0.3     @     gate3#
+QX0.3_0   |  X
+QX0.4     @     gate4#
+QX0.4_0   |  X
+QX0.5     @     gate5#
+QX0.5_0   |  X
+QX0.6     @     gate6#
+QX0.6_0   |  X
+QX0.7     @     gate7#
+QX0.7_0   |  X
+TX0.4     <    ~tick_2|  tick_1|
+_f1_1     |  G { (5)       openGate'  busa+
+busa      +  A
+busa_1    |  A  busa+
+busa_2    |  A  busa+
+busa_3    |  A  busa+
+busa_4    |  A  busa+
+busa_5    |  A  busa+
+busa_6    |  A  busa+
+busa_7    |  A  busa+
+busa_8    |  A  busa+
+del       +  A <pt0_1| <pt1_1| <pt2_1| <pt3_1| <pt4_1| <pt5_1| <pt6_1| <pt7_1|
+dest      +  A  del+    ma0_1+  ma1_1+  ma2_1+  ma3_1+  ma4_1+  ma5_1+  ma6_1+
+                ma7_1+
+dest_1    |  A  dest+
+dest_2    |  A  dest+
+dest_3    |  A  dest+
+dt0       /     ma0_2|
+dt0_1     |  E  dt0/
+dt1       /     ma1_2|
+dt1_1     |  E  dt1/
+dt2       /     ma2_2|
+dt2_1     |  E  dt2/
+dt3       /     ma3_2|
+dt3_1     |  E  dt3/
+dt4       /     ma4_2|
+dt4_1     |  E  dt4/
+dt5       /     ma5_2|
+dt5_1     |  E  dt5/
+dt6       /     ma6_2|
+dt6_1     |  E  dt6/
+dt7       /     ma7_2|
+dt7_1     |  E  dt7/
+gate0     #     gate0_2|  QX0.0_0|
+gate0_1   |  S  gate0#
+gate0_2   |  R  gate0#
+gate1     #     gate1_2|  QX0.1_0|
+gate1_1   |  S  gate1#
+gate1_2   |  R  gate1#
+gate2     #     gate2_2|  QX0.2_0|
+gate2_1   |  S  gate2#
+gate2_2   |  R  gate2#
+gate3     #     gate3_2|  QX0.3_0|
+gate3_1   |  S  gate3#
+gate3_2   |  R  gate3#
+gate4     #     gate4_2|  QX0.4_0|
+gate4_1   |  S  gate4#
+gate4_2   |  R  gate4#
+gate5     #     gate5_2|  QX0.5_0|
+gate5_1   |  S  gate5#
+gate5_2   |  R  gate5#
+gate6     #     gate6_2|  QX0.6_0|
+gate6_1   |  S  gate6#
+gate6_2   |  R  gate6#
+gate7     #     gate7_2|  QX0.7_0|
+gate7_1   |  S  gate7#
+gate7_2   |  R  gate7#
+iClock    :  :  tick_2|   tick_1|   trans_1|  tr0_2|    tr0_1&    dt0_1|    ma0_1+    tr1_2|
+                tr1_1&    dt1_1|    ma1_1+    tr2_2|    tr2_1&    dt2_1|    ma2_1+    tr3_2|
+                tr3_1&    dt3_1|    ma3_1+    tr4_2|    tr4_1&    dt4_1|    ma4_1+    tr5_2|
+                tr5_1&    dt5_1|    ma5_1+    tr6_2|    tr6_1&    dt6_1|    ma6_1+    tr7_2|
+                tr7_1&    dt7_1|    ma7_1+    _f1_1|    gate0_1|  gate1_1|  gate2_1|  gate3_1|
+                gate4_1|  gate5_1|  gate6_1|  gate7_1|
+inp0      |     dest_1|
+inp1      |     dest_2|
+inp2      |     dest_3|
+ma0       *  A  ma0_1+  busa+
+ma0_1     +  H  ma0*
+ma0_2     |  A  ma0_1+
+ma1       *  A  ma1_1+  busa+
+ma1_1     +  H  ma1*
+ma1_2     |  A  ma1_1+
+ma2       *  A  ma2_1+  busa+
+ma2_1     +  H  ma2*
+ma2_2     |  A  ma2_1+
+ma3       *  A  ma3_1+  busa+
+ma3_1     +  H  ma3*
+ma3_2     |  A  ma3_1+
+ma4       *  A  ma4_1+  busa+
+ma4_1     +  H  ma4*
+ma4_2     |  A  ma4_1+
+ma5       *  A  ma5_1+  busa+
+ma5_1     +  H  ma5*
+ma5_2     |  A  ma5_1+
+ma6       *  A  ma6_1+  busa+
+ma6_1     +  H  ma6*
+ma6_2     |  A  ma6_1+
+ma7       *  A  ma7_1+  busa+
+ma7_1     +  H  ma7*
+ma7_2     |  A  ma7_1+
+openGate  '  U  openGate0'  openGate1'  openGate2'  openGate3'  openGate4'  openGate5'  openGate6'  openGate7'
+openGate0 '     gate0_1|
+openGate1 '     gate1_1|
+openGate2 '     gate2_1|
+openGate3 '     gate3_1|
+openGate4 '     gate4_1|
+openGate5 '     gate5_1|
+openGate6 '     gate6_1|
+openGate7 '     gate7_1|
+pt0       #     xt0&   ~xt1&   ~xt2&   ~xt3&   ~xt4&   ~xt5&   ~xt6&   ~xt7&
+pt0_1     |  D  pt0#
+pt1       #     xt1&   ~xt2&   ~xt3&   ~xt4&   ~xt5&   ~xt6&   ~xt7&
+pt1_1     |  D  pt1#
+pt2       #     xt2&   ~xt3&   ~xt4&   ~xt5&   ~xt6&   ~xt7&
+pt2_1     |  D  pt2#
+pt3       #     xt3&   ~xt4&   ~xt5&   ~xt6&   ~xt7&
+pt3_1     |  D  pt3#
+pt4       #     xt4&   ~xt5&   ~xt6&   ~xt7&
+pt4_1     |  D  pt4#
+pt5       #     xt5&   ~xt6&   ~xt7&
+pt5_1     |  D  pt5#
+pt6       #     xt6&   ~xt7&
+pt6_1     |  D  pt6#
+pt7       #     xt7&
+pt7_1     |  D  pt7#
+tick      !  !  pt0_1|    pt1_1|    pt2_1|    pt3_1|    pt4_1|    pt5_1|    pt6_1|    pt7_1|
+                gate0_2|  gate1_2|  gate2_2|  gate3_2|  gate4_2|  gate5_2|  gate6_2|  gate7_2|
+tick_1    |  T  tick!
+tick_2    |  T  tick!
+tr0       #    ~tr0_1&  dt0_1|  pt0_1|  xt0&    tr1_1&  tr2_1&  tr3_1&  tr4_1&
+                tr5_1&  tr6_1&  tr7_1&
+tr0_1     &  S  tr0#
+tr0_2     |  R  tr0#
+tr1       #    ~tr1_1&  dt1_1|  pt1_1|  xt1&    tr2_1&  tr3_1&  tr4_1&  tr5_1&
+                tr6_1&  tr7_1&
+tr1_1     &  S  tr1#
+tr1_2     |  R  tr1#
+tr2       #    ~tr2_1&  dt2_1|  pt2_1|  xt2&    tr3_1&  tr4_1&  tr5_1&  tr6_1&
+                tr7_1&
+tr2_1     &  S  tr2#
+tr2_2     |  R  tr2#
+tr3       #    ~tr3_1&  dt3_1|  pt3_1|  xt3&    tr4_1&  tr5_1&  tr6_1&  tr7_1&
+tr3_1     &  S  tr3#
+tr3_2     |  R  tr3#
+tr4       #    ~tr4_1&  dt4_1|  pt4_1|  xt4&    tr5_1&  tr6_1&  tr7_1&
+tr4_1     &  S  tr4#
+tr4_2     |  R  tr4#
+tr5       #    ~tr5_1&  dt5_1|  pt5_1|  xt5&    tr6_1&  tr7_1&
+tr5_1     &  S  tr5#
+tr5_2     |  R  tr5#
+tr6       #    ~tr6_1&  dt6_1|  pt6_1|  xt6&    tr7_1&
+tr6_1     &  S  tr6#
+tr6_2     |  R  tr6#
+tr7       #    ~tr7_1&  dt7_1|  pt7_1|  xt7&
+tr7_1     &  S  tr7#
+tr7_2     |  R  tr7#
+trans     /     tr0_1&  tr1_1&  tr2_1&  tr3_1&  tr4_1&  tr5_1&  tr6_1&  tr7_1&
+trans_1   |  E  trans/
+trig      |     _f1_1|
+xt0       &     tr0_2|   busa_1|  trig|
+xt1       &     tr1_2|   busa_2|  trig|
+xt2       &     tr2_2|   busa_3|  trig|
+xt3       &     tr3_2|   busa_4|  trig|
+xt4       &     tr4_2|   busa_5|  trig|
+xt5       &     tr5_2|   busa_6|  trig|
+xt6       &     tr6_2|   busa_7|  trig|
+xt7       &     tr7_2|   busa_8|  trig|
+
+******* NET STATISTICS  ************************
+
+ARN	+     11 blocks
+LOGC	'      9 blocks
+AND	&     16 blocks
+OR	|     75 blocks
+SH	*      8 blocks
+FF	#     24 blocks
+EF	/      9 blocks
+NCONST	=      1 blocks
+INPX	<      9 blocks
+CLK	:      1 blocks
+TIM	!      1 blocks
+ALIAS	@      8
+
+TOTAL	     164 blocks
+	     631 links
+
+compiled by:
+@(#)     $Id: sortm28.lst,v 1.1 2015/11/03 02:59:25 jw Exp $ -O7
+
+C OUTPUT: ./Test0/sortm28.c  (374 lines)

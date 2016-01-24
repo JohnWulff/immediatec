@@ -1,0 +1,115 @@
+******* ./Test0/zuelke.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Zuelke Beispiel - Luzern 19.Apil.2005
+004	 *
+005	 *******************************************************************/
+006
+007	use strict;
+008
+009	imm bit Up   = IX0.0;	// move up
+
+	IX0.0     ---@  Up
+
+010	imm bit Down = IX0.1;	// move down
+
+	IX0.1     ---@  Down
+
+011	imm bit Stop = IX0.2;	// stop motor
+
+	IX0.2     ---@  Stop
+
+012	imm bit Top  = IX0.3;	// stop up movement because top limit has been reached
+
+	IX0.3     ---@  Top
+
+013	imm bit Bot  = IX0.4;	// stop down movement because bottom limit has been reached
+
+	IX0.4     ---@  Bot
+
+014
+015	imm bit Moving, MotorUp,  MotorDown;
+016	Moving    = MotorUp | MotorDown;
+
+	MotorUp     ---|  Moving
+	MotorDown   ---|
+
+017	MotorUp   = LATCH(Up   & ~Moving, Top | Stop);
+
+	MotorUp     ---%  MotorUp
+	MotorUp_1   ---%
+	MotorUp_2 ~ ---%
+
+	IX0.0       ---&  MotorUp_1
+	Moving    ~ ---&
+
+	IX0.3       ---|  MotorUp_2
+	IX0.2       ---|
+
+018	MotorDown = LATCH(Down & ~Moving, Bot | Stop);
+
+	MotorDown     ---%  MotorDown
+	MotorDown_1   ---%
+	MotorDown_2 ~ ---%
+
+	IX0.1         ---&  MotorDown_1
+	Moving      ~ ---&
+
+	IX0.4         ---|  MotorDown_2
+	IX0.2         ---|
+
+019
+020	QX0.0 = MotorUp;
+
+	MotorUp   ---@  QX0.0
+
+
+	MotorUp   ---|  QX0.0_0 X
+
+021	QX0.1 = MotorDown;
+
+	MotorDown   ---@  QX0.1
+
+
+	MotorDown   ---|  QX0.1_0 X
+
+
+******* NET TOPOLOGY    ************************
+
+Bot         @     IX0.4<
+Down        @     IX0.1<
+IX0.0       <     MotorUp_1&
+IX0.1       <     MotorDown_1&
+IX0.2       <     MotorUp_2|    MotorDown_2|
+IX0.3       <     MotorUp_2|
+IX0.4       <     MotorDown_2|
+MotorDown   %     Moving|     MotorDown%  QX0.1_0|
+MotorDown_1 &     MotorDown%
+MotorDown_2 |    ~MotorDown%
+MotorUp     %     Moving|   MotorUp%  QX0.0_0|
+MotorUp_1   &     MotorUp%
+MotorUp_2   |    ~MotorUp%
+Moving      |    ~MotorUp_1&   ~MotorDown_1&
+QX0.0       @     MotorUp%
+QX0.0_0     |  X
+QX0.1       @     MotorDown%
+QX0.1_0     |  X
+Stop        @     IX0.2<
+Top         @     IX0.3<
+Up          @     IX0.0<
+
+******* NET STATISTICS  ************************
+
+AND	&      2 blocks
+OR	|      5 blocks
+LATCH	%      2 blocks
+INPX	<      5 blocks
+ALIAS	@      7
+
+TOTAL	      14 blocks
+	      42 links
+
+compiled by:
+@(#)     $Id: zuelke.lst,v 1.1 2015/05/24 00:52:00 jw Exp $ -O7
+
+C OUTPUT: ./Test0/zuelke.c  (62 lines)

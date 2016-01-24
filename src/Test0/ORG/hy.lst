@@ -1,0 +1,213 @@
+******* ./Test0/hy.ic   ************************
+001	/********************************************************************
+002	 *
+003	 *	simple iC program with arrays
+004	 *
+005	 *******************************************************************/
+006
+007	%{
+008	%#include	<stdio.h>
+009	%}
+010
+011		if (IX0.1) {
+012		    printf("Hello Nr. %d, 0\n", 1);
+013		} else {
+014		    printf("Bye Nr. %d, 0\n", 1);
+015		}
+
+
+
+	_f1_1   G ---{                          // (2)
+
+	iClock  : ---|  _f1_1   G
+	IX0.1     ---|
+
+016		if (IX0.2) {
+017		    printf("Hello Nr. %d, 0\n", 2);
+018		} else {
+019		    printf("Bye Nr. %d, 0\n", 2);
+020		}
+
+
+
+	_f2_1   G ---{                          // (3)
+
+	iClock  : ---|  _f2_1   G
+	IX0.2     ---|
+
+021		if (IX0.2) {
+022		    printf("Hello Nr. %d, 1\n", 2);
+023		} else {
+024		    printf("Bye Nr. %d, 1\n", 2);
+025		}
+
+
+
+	_f3_1   G ---{                          // (4)
+
+	iClock  : ---|  _f3_1   G
+	IX0.2     ---|
+
+026		if (IX0.3) {
+027		    printf("Hello Nr. %d, 0\n", 3);
+028		} else {
+029		    printf("Bye Nr. %d, 0\n", 3);
+030		}
+
+
+
+	_f4_1   G ---{                          // (5)
+
+	iClock  : ---|  _f4_1   G
+	IX0.3     ---|
+
+031		if (IX0.3) {
+032		    printf("Hello Nr. %d, 1\n", 3);
+033		} else {
+034		    printf("Bye Nr. %d, 1\n", 3);
+035		}
+
+
+
+	_f5_1   G ---{                          // (6)
+
+	iClock  : ---|  _f5_1   G
+	IX0.3     ---|
+
+036		if (IX0.3) {
+037		    printf("Hello Nr. %d, 2\n", 3);
+038		} else {
+039		    printf("Bye Nr. %d, 2\n", 3);
+040		}
+
+
+
+	_f6_1   G ---{                          // (7)
+
+	iClock  : ---|  _f6_1   G
+	IX0.3     ---|
+
+041
+042	    QB0 = IB0;
+
+	IB0     A ---@  QB0     A
+
+
+	IB0     A ---+  QB0_0   W       IB0     // 1
+
+043	    QB1 = IB1;
+
+	IB1     A ---@  QB1     A
+
+
+	IB1     A ---+  QB1_0   W       IB1     // 1
+
+044	    QB2 = IB2;
+
+	IB2     A ---@  QB2     A
+
+
+	IB2     A ---+  QB2_0   W       IB2     // 1
+
+045	    QB3 = IB3;
+
+	IB3     A ---@  QB3     A
+
+
+	IB3     A ---+  QB3_0   W       IB3     // 1
+
+******* C CODE          ************************
+
+007
+008	    #include	<stdio.h>
+009
+
+011	(2) {
+012		    printf("Hello Nr. %d, 0\n", 1);
+013		}
+
+013	    {
+014		    printf("Bye Nr. %d, 0\n", 1);
+015		}
+
+016	(3) {
+017		    printf("Hello Nr. %d, 0\n", 2);
+018		}
+
+018	    {
+019		    printf("Bye Nr. %d, 0\n", 2);
+020		}
+
+021	(4) {
+022		    printf("Hello Nr. %d, 1\n", 2);
+023		}
+
+023	    {
+024		    printf("Bye Nr. %d, 1\n", 2);
+025		}
+
+026	(5) {
+027		    printf("Hello Nr. %d, 0\n", 3);
+028		}
+
+028	    {
+029		    printf("Bye Nr. %d, 0\n", 3);
+030		}
+
+031	(6) {
+032		    printf("Hello Nr. %d, 1\n", 3);
+033		}
+
+033	    {
+034		    printf("Bye Nr. %d, 1\n", 3);
+035		}
+
+036	(7) {
+037		    printf("Hello Nr. %d, 2\n", 3);
+038		}
+
+038	    {
+039		    printf("Bye Nr. %d, 2\n", 3);
+040		}
+
+******* NET TOPOLOGY    ************************
+
+IB0     [  A  QB0_0+
+IB1     [  A  QB1_0+
+IB2     [  A  QB2_0+
+IB3     [  A  QB3_0+
+IX0.1   <     _f1_1|
+IX0.2   <     _f2_1|  _f3_1|
+IX0.3   <     _f4_1|  _f5_1|  _f6_1|
+QB0     @  A  IB0[
+QB0_0   +  W
+QB1     @  A  IB1[
+QB1_0   +  W
+QB2     @  A  IB2[
+QB2_0   +  W
+QB3     @  A  IB3[
+QB3_0   +  W
+_f1_1   |  G { (2)
+_f2_1   |  G { (3)
+_f3_1   |  G { (4)
+_f4_1   |  G { (5)
+_f5_1   |  G { (6)
+_f6_1   |  G { (7)
+iClock  :  :  _f1_1|  _f2_1|  _f3_1|  _f4_1|  _f5_1|  _f6_1|
+
+******* NET STATISTICS  ************************
+
+ARN	+      4 blocks
+OR	|      6 blocks
+INPW	[      4 blocks
+INPX	<      3 blocks
+CLK	:      1 blocks
+ALIAS	@      4
+
+TOTAL	      18 blocks
+	      38 links
+
+compiled by:
+@(#)     $Id: hy.lst,v 1.1 2015/10/15 06:27:21 jw Exp $ -O7
+
+C OUTPUT: ./Test0/hy.c  (172 lines)

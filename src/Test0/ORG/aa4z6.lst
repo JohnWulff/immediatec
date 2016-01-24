@@ -1,0 +1,185 @@
+******* ./Test0/aa4z6.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	nested bit functions
+004	 *
+005	 *******************************************************************/
+006
+007	imm bit Sub3(bit ib1, bit ib2) {
+008	    return ib1 & ib2;
+
+	Sub3@ib1   ---&  Sub3@
+	Sub3@ib2   ---&
+
+009	}
+010
+011	imm bit Sub33(bit ib3, bit ib4) {
+012	    this = ib3 & ib4;
+
+	Sub33@ib3   ---&  Sub33@
+	Sub33@ib4   ---&
+
+013	}
+014
+015	imm bit Sub4() {
+016	    return IX0.4;
+
+	IX0.4     ---@  Sub4@
+
+017	}
+018
+019	imm bit Sub44() {
+020	    this = IX0.1 & IX0.2;
+
+	IX0.1     ---&  Sub44@
+	IX0.2     ---&
+
+021	}
+022
+023	imm bit Sub5() {
+024	    this = IX0.5;
+
+	IX0.5     ---@  Sub5@
+
+025	}
+026
+027	imm bit Nest1(bit i1, bit i2) {
+028	    return Sub3(i1, i2) & Sub4();
+
+	Nest1@i1   ---&  Nest1@
+	Nest1@i2   ---&
+	IX0.4      ---&
+
+029	}
+030	imm bit Nest2(bit i3, bit i4) {
+031	    this = Sub4() & Sub33(i3, i4);
+
+	IX0.4      ---&  Nest2@
+	Nest2@i3   ---&
+	Nest2@i4   ---&
+
+032	}
+033	imm bit Nest3(bit i1, bit i2, bit i3, bit i4) {
+034	    return Sub3(i1, i2) & Sub33(i3, i4);
+
+	Nest3@i1   ---&  Nest3@
+	Nest3@i2   ---&
+	Nest3@i3   ---&
+	Nest3@i4   ---&
+
+035	}
+036	imm bit Nest4(bit i3, bit i4) {
+037	    this = Sub44() & Sub33(i3, i4);
+
+	IX0.1      ---&  Nest4@
+	IX0.2      ---&
+	Nest4@i3   ---&
+	Nest4@i4   ---&
+
+038	}
+039	imm bit Nest5(bit i3, bit i4) {
+040	    return Sub33(i3, i4) & Sub44();
+
+	Nest5@i3   ---&  Nest5@
+	Nest5@i4   ---&
+	IX0.1      ---&
+	IX0.2      ---&
+
+041	}
+042	imm bit Nest6() {
+043	    this = Sub4() & Sub5();
+
+	IX0.4     ---&  Nest6@
+	IX0.5     ---&
+
+044	}
+045
+046	QX0.1 = Nest1(Sub4(), Sub5()) & Sub4();
+
+	IX0.4     ---&  QX0.1
+	IX0.5     ---&
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+047	QX0.2 = Sub4() & Nest2(Sub44(), Nest6());
+
+	IX0.4     ---&  QX0.2
+	IX0.1     ---&
+	IX0.2     ---&
+	IX0.5     ---&
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+048	QX0.3 = Nest3(Sub4(), Sub5(), Sub44(), Nest6()) & Sub33(Sub44(), Nest6());
+
+	IX0.4     ---&  QX0.3
+	IX0.5     ---&
+	IX0.1     ---&
+	IX0.2     ---&
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+049	QX0.4 = Sub44() & Nest4(Sub44(), Nest6());
+
+	IX0.1     ---&  QX0.4
+	IX0.2     ---&
+	IX0.4     ---&
+	IX0.5     ---&
+
+
+	QX0.4     ---|  QX0.4_0 X
+
+050	QX0.5 = Nest5(Sub44(), Nest6()) & Sub44();
+
+	IX0.1     ---&  QX0.5
+	IX0.2     ---&
+	IX0.4     ---&
+	IX0.5     ---&
+
+
+	QX0.5     ---|  QX0.5_0 X
+
+051	QX0.6 = Sub4() & Nest6();
+
+	IX0.4     ---&  QX0.6
+	IX0.5     ---&
+
+
+	QX0.6     ---|  QX0.6_0 X
+
+
+******* NET TOPOLOGY    ************************
+
+IX0.1   <     QX0.2&  QX0.3&  QX0.4&  QX0.5&
+IX0.2   <     QX0.2&  QX0.3&  QX0.4&  QX0.5&
+IX0.4   <     QX0.1&  QX0.2&  QX0.3&  QX0.4&  QX0.5&  QX0.6&
+IX0.5   <     QX0.1&  QX0.2&  QX0.3&  QX0.4&  QX0.5&  QX0.6&
+QX0.1   &     QX0.1_0|
+QX0.1_0 |  X
+QX0.2   &     QX0.2_0|
+QX0.2_0 |  X
+QX0.3   &     QX0.3_0|
+QX0.3_0 |  X
+QX0.4   &     QX0.4_0|
+QX0.4_0 |  X
+QX0.5   &     QX0.5_0|
+QX0.5_0 |  X
+QX0.6   &     QX0.6_0|
+QX0.6_0 |  X
+
+******* NET STATISTICS  ************************
+
+AND	&      6 blocks
+OR	|      6 blocks
+INPX	<      4 blocks
+
+TOTAL	      16 blocks
+	      46 links
+
+compiled by:
+@(#)     $Id: aa4z6.lst,v 1.1 2015/05/24 00:51:48 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4z6.c  (60 lines)

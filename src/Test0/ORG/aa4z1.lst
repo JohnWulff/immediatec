@@ -1,0 +1,147 @@
+******* ./Test0/aa4z1.ic ************************
+001	imm int Sub3() {
+002	    return IB1 + IB2;
+
+	IB1     A ---+  Sub3@   A       IB1     // 1
+	IB2     A ---+                  +IB2    // 2
+	                                ;       // (2)
+
+003	}
+004
+005	imm int Sub33() {
+006	    this = IB3 + IB4;
+
+	IB3     A ---+  Sub33@  A       IB3     // 1
+	IB4     A ---+                  +IB4    // 2
+	                                ;       // (2)
+
+007	}
+008
+009	imm int Sub4() {
+010	    return 4;
+
+	4       A ---@  Sub4@   A
+
+011	}
+012
+013	imm int Sub44() {
+014	    this = 4 + 4;
+
+	iConst  A ---+  Sub44@  A       4+4;    // (3)
+
+015	}
+016
+017	imm int Sub55() {
+018	    this = 5 + 5;
+
+	iConst  A ---+  Sub55@  A       5+5;    // (4)
+
+019	}
+020
+021	QB1 = Sub3() + Sub4();
+
+	IB1     A ---+  QB1     A       (IB1    // 1
+	IB2     A ---+                  +IB2    // 2
+	                                )+4;    // (5)
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+022	QB2 = Sub4() + Sub33();
+
+	IB3     A ---+  QB2     A       4+(IB3  // 1
+	IB4     A ---+                  +IB4    // 2
+	                                );      // (6)
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+023	QB3 = Sub3() + Sub33();
+
+	IB1     A ---+  QB3     A       (IB1    // 1
+	IB2     A ---+                  +IB2    // 2
+	IB3     A ---+                  )+(IB3  // 3
+	IB4     A ---+                  +IB4    // 4
+	                                );      // (7)
+
+
+	QB3     A ---+  QB3_0   W       QB3     // 1
+
+024	QB4 = Sub44() + Sub33();
+
+	IB3     A ---+  QB4     A       (4+4)+(IB3 // 1
+	IB4     A ---+                  +IB4       // 2
+	                                );         // (8)
+
+
+	QB4     A ---+  QB4_0   W       QB4        // 1
+
+025	QB5 = Sub33() + Sub44();
+
+	IB3     A ---+  QB5     A       (IB3     // 1
+	IB4     A ---+                  +IB4     // 2
+	                                )+(4+4); // (9)
+
+
+	QB5     A ---+  QB5_0   W       QB5      // 1
+
+026	QB6 = Sub4() + Sub55();
+
+	iConst  A ---+  QB6     A       4+(5+5); // (10)
+
+
+	QB6     A ---+  QB6_0   W       QB6      // 1
+
+******* C CODE          ************************
+
+002	(2) 	return iC_MV(1)+iC_MV(2);
+
+014	(3) 	return 4+4;
+
+018	(4) 	return 5+5;
+
+021	(5) 	return (iC_MV(1)+iC_MV(2))+4;
+
+022	(6) 	return 4+(iC_MV(1)+iC_MV(2));
+
+023	(7) 	return (iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4));
+
+024	(8) 	return (4+4)+(iC_MV(1)+iC_MV(2));
+
+025	(9) 	return (iC_MV(1)+iC_MV(2))+(4+4);
+
+026	(10) 	return 4+(5+5);
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QB1+    QB3+
+IB2     [  A  QB1+    QB3+
+IB3     [  A  QB2+    QB3+    QB4+    QB5+
+IB4     [  A  QB2+    QB3+    QB4+    QB5+
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QB3     +  A  QB3_0+
+QB3_0   +  W
+QB4     +  A  QB4_0+
+QB4_0   +  W
+QB5     +  A  QB5_0+
+QB5_0   +  W
+QB6     +  A  QB6_0+
+QB6_0   +  W
+iConst  =  A  QB6+
+
+******* NET STATISTICS  ************************
+
+ARN	+     12 blocks
+NCONST	=      1 blocks
+INPW	[      4 blocks
+
+TOTAL	      17 blocks
+	      49 links
+
+compiled by:
+@(#)     $Id: aa4z1.lst,v 1.1 2015/05/24 00:51:47 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4z1.c  (104 lines)

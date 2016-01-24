@@ -1,0 +1,375 @@
+******* ./Test0/xx3.ic  ************************
+001
+002	    imm bit a0 = IB0;
+
+	IB0     A ---+  a0              IB0     // 1
+
+003	    imm bit a1 = IB1;
+
+	IB1     A ---+  a1              IB1     // 1
+
+004	    imm bit a2 = IB2;
+
+	IB2     A ---+  a2              IB2     // 1
+
+005	    imm bit a3 = IB3;
+
+	IB3     A ---+  a3              IB3     // 1
+
+006	    imm bit a4 = IB4;
+
+	IB4     A ---+  a4              IB4     // 1
+
+007	    imm bit a5 = IB5;
+
+	IB5     A ---+  a5              IB5     // 1
+
+008	    imm bit a6 = IB6;
+
+	IB6     A ---+  a6              IB6     // 1
+
+009	    imm bit a7 = IB7;
+
+	IB7     A ---+  a7              IB7     // 1
+
+010	    imm bit a8 = IB8;
+
+	IB8     A ---+  a8              IB8     // 1
+
+011	    imm bit a9 = IB9;
+
+	IB9     A ---+  a9              IB9     // 1
+
+012	    imm bit a10 = IB10;
+
+	IB10    A ---+  a10             IB10    // 1
+
+013	    imm bit a11 = IB11;
+
+	IB11    A ---+  a11             IB11    // 1
+
+014	    imm bit a12 = IB12;
+
+	IB12    A ---+  a12             IB12    // 1
+
+015	    imm bit a13 = IB13;
+
+	IB13    A ---+  a13             IB13    // 1
+
+016	    imm bit a14 = IB14;
+
+	IB14    A ---+  a14             IB14    // 1
+
+017	    imm bit a15 = IB15;
+
+	IB15    A ---+  a15             IB15    // 1
+
+018	    imm bit a16 = IB16;
+
+	IB16    A ---+  a16             IB16    // 1
+
+019	    imm bit a17 = IB17;
+
+	IB17    A ---+  a17             IB17    // 1
+
+020	    imm bit a18 = IB18;
+
+	IB18    A ---+  a18             IB18    // 1
+
+021	    imm bit a19 = IB19;
+
+	IB19    A ---+  a19             IB19    // 1
+
+022	    imm bit a20 = IB20;
+
+	IB20    A ---+  a20             IB20    // 1
+
+023	    imm bit a21 = IB21;
+
+	IB21    A ---+  a21             IB21    // 1
+
+024	    imm bit a22 = IB22;
+
+	IB22    A ---+  a22             IB22    // 1
+
+025	    imm bit a23 = IB23;
+
+	IB23    A ---+  a23             IB23    // 1
+
+026
+027	imm bit a0xabc = IX0.0 & IX1.0;
+
+	IX0.0     ---&  a0xabc
+	IX1.0     ---&
+
+028	imm bit a0xdef = IX0.0 & IX1.0;
+
+	IX0.0     ---&  a0xdef
+	IX1.0     ---&
+
+029	imm bit a0xghi = IX0.0 & IX1.0;
+
+	IX0.0     ---&  a0xghi
+	IX1.0     ---&
+
+030	imm bit a0xjkl = IX0.0 & IX1.0;
+
+	IX0.0     ---&  a0xjkl
+	IX1.0     ---&
+
+031
+032	imm bit a1xabc = IX0.1 & IX1.1;
+
+	IX0.1     ---&  a1xabc
+	IX1.1     ---&
+
+033	imm bit a1xdef = IX0.1 & IX1.1;
+
+	IX0.1     ---&  a1xdef
+	IX1.1     ---&
+
+034	imm bit a1xghi = IX0.1 & IX1.1;
+
+	IX0.1     ---&  a1xghi
+	IX1.1     ---&
+
+035	imm bit a1xjkl = IX0.1 & IX1.1;
+
+	IX0.1     ---&  a1xjkl
+	IX1.1     ---&
+
+036
+037	imm bit a2xabc = IX0.2 & IX1.2;
+
+	IX0.2     ---&  a2xabc
+	IX1.2     ---&
+
+038	imm bit a2xdef = IX0.2 & IX1.2;
+
+	IX0.2     ---&  a2xdef
+	IX1.2     ---&
+
+039	imm bit a2xghi = IX0.2 & IX1.2;
+
+	IX0.2     ---&  a2xghi
+	IX1.2     ---&
+
+040	imm bit a2xjkl = IX0.2 & IX1.2;
+
+	IX0.2     ---&  a2xjkl
+	IX1.2     ---&
+
+041
+042	imm bit a3xabc = IX0.3 & IX1.3;
+
+	IX0.3     ---&  a3xabc
+	IX1.3     ---&
+
+043	imm bit a3xdef = IX0.3 & IX1.3;
+
+	IX0.3     ---&  a3xdef
+	IX1.3     ---&
+
+044	imm bit a3xghi = IX0.3 & IX1.3;
+
+	IX0.3     ---&  a3xghi
+	IX1.3     ---&
+
+045	imm bit a3xjkl = IX0.3 & IX1.3;
+
+	IX0.3     ---&  a3xjkl
+	IX1.3     ---&
+
+046
+047	imm bit a4xabc = IX0.4 & IX1.4;
+
+	IX0.4     ---&  a4xabc
+	IX1.4     ---&
+
+048	imm bit a4xdef = IX0.4 & IX1.4;
+
+	IX0.4     ---&  a4xdef
+	IX1.4     ---&
+
+049	imm bit a4xghi = IX0.4 & IX1.4;
+
+	IX0.4     ---&  a4xghi
+	IX1.4     ---&
+
+050	imm bit a4xjkl = IX0.4 & IX1.4;
+
+	IX0.4     ---&  a4xjkl
+	IX1.4     ---&
+
+051
+052	imm bit a5xabc = IX0.5 & IX1.5;
+
+	IX0.5     ---&  a5xabc
+	IX1.5     ---&
+
+053	imm bit a5xdef = IX0.5 & IX1.5;
+
+	IX0.5     ---&  a5xdef
+	IX1.5     ---&
+
+054	imm bit a5xghi = IX0.5 & IX1.5;
+
+	IX0.5     ---&  a5xghi
+	IX1.5     ---&
+
+055	imm bit a5xjkl = IX0.5 & IX1.5;
+
+	IX0.5     ---&  a5xjkl
+	IX1.5     ---&
+
+
+******* NET TOPOLOGY    ************************
+
+IB0     [  A  a0+
+IB1     [  A  a1+
+IB10    [  A  a10+
+IB11    [  A  a11+
+IB12    [  A  a12+
+IB13    [  A  a13+
+IB14    [  A  a14+
+IB15    [  A  a15+
+IB16    [  A  a16+
+IB17    [  A  a17+
+IB18    [  A  a18+
+IB19    [  A  a19+
+IB2     [  A  a2+
+IB20    [  A  a20+
+IB21    [  A  a21+
+IB22    [  A  a22+
+IB23    [  A  a23+
+IB3     [  A  a3+
+IB4     [  A  a4+
+IB5     [  A  a5+
+IB6     [  A  a6+
+IB7     [  A  a7+
+IB8     [  A  a8+
+IB9     [  A  a9+
+IX0.0   <     a0xabc&  a0xdef&  a0xghi&  a0xjkl&
+IX0.1   <     a1xabc&  a1xdef&  a1xghi&  a1xjkl&
+IX0.2   <     a2xabc&  a2xdef&  a2xghi&  a2xjkl&
+IX0.3   <     a3xabc&  a3xdef&  a3xghi&  a3xjkl&
+IX0.4   <     a4xabc&  a4xdef&  a4xghi&  a4xjkl&
+IX0.5   <     a5xabc&  a5xdef&  a5xghi&  a5xjkl&
+IX1.0   <     a0xabc&  a0xdef&  a0xghi&  a0xjkl&
+IX1.1   <     a1xabc&  a1xdef&  a1xghi&  a1xjkl&
+IX1.2   <     a2xabc&  a2xdef&  a2xghi&  a2xjkl&
+IX1.3   <     a3xabc&  a3xdef&  a3xghi&  a3xjkl&
+IX1.4   <     a4xabc&  a4xdef&  a4xghi&  a4xjkl&
+IX1.5   <     a5xabc&  a5xdef&  a5xghi&  a5xjkl&
+a0      +
+*** Warning: unused    imm bit: a0 File ./Test0/xx3.ic, line 56
+a0xabc  &
+*** Warning: unused    imm bit: a0xabc File ./Test0/xx3.ic, line 56
+a0xdef  &
+*** Warning: unused    imm bit: a0xdef File ./Test0/xx3.ic, line 56
+a0xghi  &
+*** Warning: unused    imm bit: a0xghi File ./Test0/xx3.ic, line 56
+a0xjkl  &
+*** Warning: unused    imm bit: a0xjkl File ./Test0/xx3.ic, line 56
+a1      +
+*** Warning: unused    imm bit: a1 File ./Test0/xx3.ic, line 56
+a10     +
+*** Warning: unused    imm bit: a10 File ./Test0/xx3.ic, line 56
+a11     +
+*** Warning: unused    imm bit: a11 File ./Test0/xx3.ic, line 56
+a12     +
+*** Warning: unused    imm bit: a12 File ./Test0/xx3.ic, line 56
+a13     +
+*** Warning: unused    imm bit: a13 File ./Test0/xx3.ic, line 56
+a14     +
+*** Warning: unused    imm bit: a14 File ./Test0/xx3.ic, line 56
+a15     +
+*** Warning: unused    imm bit: a15 File ./Test0/xx3.ic, line 56
+a16     +
+*** Warning: unused    imm bit: a16 File ./Test0/xx3.ic, line 56
+a17     +
+*** Warning: unused    imm bit: a17 File ./Test0/xx3.ic, line 56
+a18     +
+*** Warning: unused    imm bit: a18 File ./Test0/xx3.ic, line 56
+a19     +
+*** Warning: unused    imm bit: a19 File ./Test0/xx3.ic, line 56
+a1xabc  &
+*** Warning: unused    imm bit: a1xabc File ./Test0/xx3.ic, line 56
+a1xdef  &
+*** Warning: unused    imm bit: a1xdef File ./Test0/xx3.ic, line 56
+a1xghi  &
+*** Warning: unused    imm bit: a1xghi File ./Test0/xx3.ic, line 56
+a1xjkl  &
+*** Warning: unused    imm bit: a1xjkl File ./Test0/xx3.ic, line 56
+a2      +
+*** Warning: unused    imm bit: a2 File ./Test0/xx3.ic, line 56
+a20     +
+*** Warning: unused    imm bit: a20 File ./Test0/xx3.ic, line 56
+a21     +
+*** Warning: unused    imm bit: a21 File ./Test0/xx3.ic, line 56
+a22     +
+*** Warning: unused    imm bit: a22 File ./Test0/xx3.ic, line 56
+a23     +
+*** Warning: unused    imm bit: a23 File ./Test0/xx3.ic, line 56
+a2xabc  &
+*** Warning: unused    imm bit: a2xabc File ./Test0/xx3.ic, line 56
+a2xdef  &
+*** Warning: unused    imm bit: a2xdef File ./Test0/xx3.ic, line 56
+a2xghi  &
+*** Warning: unused    imm bit: a2xghi File ./Test0/xx3.ic, line 56
+a2xjkl  &
+*** Warning: unused    imm bit: a2xjkl File ./Test0/xx3.ic, line 56
+a3      +
+*** Warning: unused    imm bit: a3 File ./Test0/xx3.ic, line 56
+a3xabc  &
+*** Warning: unused    imm bit: a3xabc File ./Test0/xx3.ic, line 56
+a3xdef  &
+*** Warning: unused    imm bit: a3xdef File ./Test0/xx3.ic, line 56
+a3xghi  &
+*** Warning: unused    imm bit: a3xghi File ./Test0/xx3.ic, line 56
+a3xjkl  &
+*** Warning: unused    imm bit: a3xjkl File ./Test0/xx3.ic, line 56
+a4      +
+*** Warning: unused    imm bit: a4 File ./Test0/xx3.ic, line 56
+a4xabc  &
+*** Warning: unused    imm bit: a4xabc File ./Test0/xx3.ic, line 56
+a4xdef  &
+*** Warning: unused    imm bit: a4xdef File ./Test0/xx3.ic, line 56
+a4xghi  &
+*** Warning: unused    imm bit: a4xghi File ./Test0/xx3.ic, line 56
+a4xjkl  &
+*** Warning: unused    imm bit: a4xjkl File ./Test0/xx3.ic, line 56
+a5      +
+*** Warning: unused    imm bit: a5 File ./Test0/xx3.ic, line 56
+a5xabc  &
+*** Warning: unused    imm bit: a5xabc File ./Test0/xx3.ic, line 56
+a5xdef  &
+*** Warning: unused    imm bit: a5xdef File ./Test0/xx3.ic, line 56
+a5xghi  &
+*** Warning: unused    imm bit: a5xghi File ./Test0/xx3.ic, line 56
+a5xjkl  &
+*** Warning: unused    imm bit: a5xjkl File ./Test0/xx3.ic, line 56
+a6      +
+*** Warning: unused    imm bit: a6 File ./Test0/xx3.ic, line 56
+a7      +
+*** Warning: unused    imm bit: a7 File ./Test0/xx3.ic, line 56
+a8      +
+*** Warning: unused    imm bit: a8 File ./Test0/xx3.ic, line 56
+a9      +
+*** Warning: unused    imm bit: a9 File ./Test0/xx3.ic, line 56
+
+******* NET STATISTICS  ************************
+
+ARN	+     24 blocks
+AND	&     24 blocks
+INPW	[     24 blocks
+INPX	<     12 blocks
+
+TOTAL	      84 blocks
+	     216 links
+
+compiled by:
+@(#)     $Id: xx3.lst,v 1.1 2015/06/03 06:50:08 jw Exp $ -O7
+*** Warning: 48 unused gates. File ./Test0/xx3.ic, line 56
+
+C OUTPUT: ./Test0/xx3.c  (164 lines)

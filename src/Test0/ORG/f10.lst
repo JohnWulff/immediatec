@@ -1,0 +1,213 @@
+******* ./Test0/f10.ic  ************************
+001	%{
+002	%#include <stdlib.h>
+003	static int Div(int numer, int denom);
+004	static int Remainder(int numer, int denom);
+005	%}
+006
+007	QB0 = rand() + IB1;
+*** Warning: C function will not fire this expression: rand File ./Test0/f10.ic, line 7
+
+	IB1     A ---+  QB0     A       rand()+IB1 // 1
+	                                ;          // (2)
+
+
+	QB0     A ---+  QB0_0   W       QB0        // 1
+
+008	QB1 = IB1 + rand();
+*** Warning: C function will not fire this expression: rand File ./Test0/f10.ic, line 8
+
+	IB1     A ---+  QB1     A       IB1      // 1
+	                                +rand(); // (3)
+
+
+	QB1     A ---+  QB1_0   W       QB1      // 1
+
+009	QB2 = abs(IB1);
+
+	IB1     A ---+  QB2     A       abs(IB1 // 1
+	                                );      // (4)
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+010
+011	%{
+012	%#define max(x,y) ((x) > (y) ? (x) : (y))
+013	%#define min(x,y) ((x) < (y) ? (x) : (y))
+014	%}
+015
+016	QB3 = min(IB1, IB2);
+
+	IB1     A ---+  QB3     A       min(IB1 // 1
+	IB2     A ---+                  ,IB2    // 2
+	                                );      // (5)
+
+
+	QB3     A ---+  QB3_0   W       QB3     // 1
+
+017	QB4 = min(20, IB2);
+
+	IB2     A ---+  QB4     A       min(20,IB2 // 1
+	                                );         // (6)
+
+
+	QB4     A ---+  QB4_0   W       QB4        // 1
+
+018	QB5 = max(IB1, 10);
+
+	IB1     A ---+  QB5     A       max(IB1 // 1
+	                                ,10);   // (7)
+
+
+	QB5     A ---+  QB5_0   W       QB5     // 1
+
+019	QB6 = min(20, max(IB2, 10));
+
+	IB2     A ---+  QB6     A       min(20,max(IB2 // 1
+	                                ,10));         // (8)
+
+
+	QB6     A ---+  QB6_0   W       QB6            // 1
+
+020	QB7 = min(max(IX0.0 & IX0.1 | IX0.2, IB2), 20);
+
+	QB7_1   A ---+  QB7     A       min(max(QB7_1 // 1
+	IB2     A ---+                  ,IB2          // 2
+	                                ),20);        // (9)
+
+	QB7_2     ---|  QB7_1   A
+	IX0.2     ---|
+
+	IX0.0     ---&  QB7_2
+	IX0.1     ---&
+
+
+	QB7     A ---+  QB7_0   W       QB7           // 1
+
+021	QW8 = Div(IW8, 10) + IW10;
+
+	IW8     A ---+  QW8     A       Div(IW8   // 1
+	IW10    A ---+                  ,10)+IW10 // 2
+	                                ;         // (10)
+
+
+	QW8     A ---+  QW8_0   W       QW8       // 1
+
+022	QW10 = Remainder(IW8, 10) + IW10;
+
+	IW8     A ---+  QW10    A       Remainder(IW8 // 1
+	IW10    A ---+                  ,10)+IW10     // 2
+	                                ;             // (11)
+
+
+	QW10    A ---+  QW10_0  W       QW10          // 1
+
+023
+024	%{
+025	static int
+026	Div(int numer, int denom)
+027	{
+028	    return denom ? div(numer, denom).quot : 0;
+029	}
+030
+031	static int
+032	Remainder(int numer, int denom)
+033	{
+034	    return denom ? div(numer, denom).rem : 0;
+035	}
+036	%}
+******* C CODE          ************************
+
+001
+002	    #include <stdlib.h>
+003	    static int Div(int numer, int denom);
+004	    static int Remainder(int numer, int denom);
+005
+
+011
+012	    #define max(x,y) ((x) > (y) ? (x) : (y))
+013	    #define min(x,y) ((x) < (y) ? (x) : (y))
+014
+
+024
+025	    static int
+026	    Div(int numer, int denom)
+027	    {
+028	    return denom ? div(numer, denom).quot : 0;
+029	    }
+030
+031	    static int
+032	    Remainder(int numer, int denom)
+033	    {
+034	    return denom ? div(numer, denom).rem : 0;
+035	    }
+036
+
+007	(2) 	return rand()+iC_MV(1);
+
+008	(3) 	return iC_MV(1)+rand();
+
+009	(4) 	return abs(iC_MV(1));
+
+016	(5) 	return min(iC_MV(1),iC_MV(2));
+
+017	(6) 	return min(20,iC_MV(1));
+
+018	(7) 	return max(iC_MV(1),10);
+
+019	(8) 	return min(20,max(iC_MV(1),10));
+
+020	(9) 	return min(max(iC_MV(1),iC_MV(2)),20);
+
+021	(10) 	return Div(iC_MV(1),10)+iC_MV(2);
+
+022	(11) 	return Remainder(iC_MV(1),10)+iC_MV(2);
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QB0+    QB1+    QB2+    QB3+    QB5+
+IB2     [  A  QB3+    QB4+    QB6+    QB7+
+IW10    [  A  QW8+    QW10+
+IW8     [  A  QW8+    QW10+
+IX0.0   <     QB7_2&
+IX0.1   <     QB7_2&
+IX0.2   <     QB7_1|
+QB0     +  A  QB0_0+
+QB0_0   +  W
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QB3     +  A  QB3_0+
+QB3_0   +  W
+QB4     +  A  QB4_0+
+QB4_0   +  W
+QB5     +  A  QB5_0+
+QB5_0   +  W
+QB6     +  A  QB6_0+
+QB6_0   +  W
+QB7     +  A  QB7_0+
+QB7_0   +  W
+QB7_1   |  A  QB7+
+QB7_2   &     QB7_1|
+QW10    +  A  QW10_0+
+QW10_0  +  W
+QW8     +  A  QW8_0+
+QW8_0   +  W
+
+******* NET STATISTICS  ************************
+
+ARN	+     20 blocks
+AND	&      1 blocks
+OR	|      1 blocks
+INPW	[      4 blocks
+INPX	<      3 blocks
+
+TOTAL	      29 blocks
+	      75 links
+
+compiled by:
+@(#)     $Id: f10.lst,v 1.1 2015/10/09 03:31:13 jw Exp $ -O7
+
+C OUTPUT: ./Test0/f10.c  (181 lines)

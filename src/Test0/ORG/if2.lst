@@ -1,0 +1,51 @@
+******* ./Test0/if2.ic  ************************
+001	%{
+002	%#include	<stdio.h>
+003	%}
+004
+005	if (IX0.1) {
+006	    printf("IX0.0 is on!!\n");
+007	} else {
+008	    printf("IX0.0 is off again!!\n");
+009	}
+
+
+
+	_f1_1   G ---{                          // (2)
+
+	iClock  : ---|  _f1_1   G
+	IX0.1     ---|
+
+******* C CODE          ************************
+
+001
+002	    #include	<stdio.h>
+003
+
+005	(2) {
+006	    printf("IX0.0 is on!!\n");
+007	    }
+
+007	    {
+008	    printf("IX0.0 is off again!!\n");
+009	    }
+
+******* NET TOPOLOGY    ************************
+
+IX0.1   <     _f1_1|
+_f1_1   |  G { (2)
+iClock  :  :  _f1_1|
+
+******* NET STATISTICS  ************************
+
+OR	|      1 blocks
+INPX	<      1 blocks
+CLK	:      1 blocks
+
+TOTAL	       3 blocks
+	       6 links
+
+compiled by:
+@(#)     $Id: if2.lst,v 1.1 2015/05/24 00:51:53 jw Exp $ -O7
+
+C OUTPUT: ./Test0/if2.c  (64 lines)

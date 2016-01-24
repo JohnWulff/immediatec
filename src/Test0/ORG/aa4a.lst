@@ -1,0 +1,84 @@
+******* ./Test0/aa4a.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	aa4a.ic and aa4b.ic produce identical code in the final call
+004	 *
+005	 *	imm bit function blocks called in bit expressions compile OK
+006	 *
+007	 *******************************************************************/
+008
+009	imm bit Sub0() {
+010	    return IX0.0 & IX0.1 | IX0.2;
+
+	Sub0@_1   ---|  Sub0@
+	IX0.2     ---|
+
+	IX0.0     ---&  Sub0@_1
+	IX0.1     ---&
+
+011	}
+012
+013	imm bit Sub1() {
+014	    return IX0.3 & (IX0.4 | IX0.5);
+
+	IX0.3     ---&  Sub1@
+	Sub1@_1   ---&
+
+	IX0.4     ---|  Sub1@_1
+	IX0.5     ---|
+
+015	}
+016
+017	QX0.0 = IX0.6 | Sub0() & Sub1() & IX0.7;
+
+	IX0.6     ---|  QX0.0
+	QX0.0_1   ---|
+
+	QX0.0_2   ---&  QX0.0_1
+	IX0.3     ---&
+	QX0.0_3   ---&
+	IX0.7     ---&
+
+	QX0.0_4   ---|  QX0.0_2
+	IX0.2     ---|
+
+	IX0.4     ---|  QX0.0_3
+	IX0.5     ---|
+
+	IX0.0     ---&  QX0.0_4
+	IX0.1     ---&
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     QX0.0_4&
+IX0.1   <     QX0.0_4&
+IX0.2   <     QX0.0_2|
+IX0.3   <     QX0.0_1&
+IX0.4   <     QX0.0_3|
+IX0.5   <     QX0.0_3|
+IX0.6   <     QX0.0|
+IX0.7   <     QX0.0_1&
+QX0.0   |     QX0.0_0|
+QX0.0_0 |  X
+QX0.0_1 &     QX0.0|
+QX0.0_2 |     QX0.0_1&
+QX0.0_3 |     QX0.0_1&
+QX0.0_4 &     QX0.0_2|
+
+******* NET STATISTICS  ************************
+
+AND	&      2 blocks
+OR	|      4 blocks
+INPX	<      8 blocks
+
+TOTAL	      14 blocks
+	      39 links
+
+compiled by:
+@(#)     $Id: aa4a.lst,v 1.1 2015/05/24 00:51:45 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4a.c  (52 lines)

@@ -1,0 +1,74 @@
+******* ./Test0/aa4s.ic ************************
+001	use strict;
+002
+003	imm void fun(int a, assign imm int b) {
+004	    b = a + 2;
+
+	fun@a   A ---+  fun@b   A       fun@a   // 1
+	                                +2;     // (2)
+
+005	}
+006
+007	imm int x;
+008
+009	fun(IB1, x);	/* x is declared */
+
+	IB1     A ---+  x       A       IB1     // 1
+	                                +2;     // (2)
+
+010	fun(IB2, y);	/* y is not declared (default bit) */
+*** Error: strict: use of an undeclared imm variable: y File ./Test0/aa4s.ic, line 10
+
+	IB2     A ---?  y
+
+011
+012	QB1 = x + 3;
+
+	x       A ---+  QB1     A       x       // 1
+	                                +3;     // (3)
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+013	QB2 = y + 3;
+
+	QB2_1   A ---+  QB2     A       QB2_1   // 1
+	                                +3;     // (3)
+
+	y       ? ---|  QB2_1   A
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+******* C CODE          ************************
+
+004	(2) 	return iC_MV(1)+2;
+
+012	(3) 	return iC_MV(1)+3;
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  x+
+IB2     [  A  y?
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QB2_1   |  A  QB2+
+x       +  A  QB1+
+y       ?     QB2_1|
+*** Error: gate: y File ./Test0/aa4s.ic, line 14
+
+******* NET STATISTICS  ************************
+
+ARN	+      5 blocks
+OR	|      1 blocks
+INPW	[      2 blocks
+ERR	?      1
+
+TOTAL	       8 blocks
+	      20 links
+
+compiled by:
+@(#)     $Id: aa4s.lst,v 1.1 2015/06/03 08:45:27 jw Exp $ -O7
+*** Error: 2 generate errors - cannot execute. File ./Test0/aa4s.ic, line 14

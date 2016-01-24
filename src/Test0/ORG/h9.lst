@@ -1,0 +1,137 @@
+******* ./Test0/h9.ic   ************************
+001	/********************************************************************
+002	 *
+003	 *	simple iC program with arrays
+004	 *
+005	 *******************************************************************/
+006
+007	%{
+008	%#include	<stdio.h>
+009	%}
+010
+011	%{
+012	    int d;
+013	%}
+014
+015	if (IX0.7) { for (d = 0; d <= 2; d++) { printf("%d: Hello world Nr. %d\n", d, 2); } }
+016	else { for (d = 0; d <= 2; d++) { printf("%d: Good bye Nr. %d\n", d, 2); } }
+
+
+
+	_f1_1   G ---{                          // (2)
+
+	iClock  : ---|  _f1_1   G
+	IX0.7     ---|
+
+017
+018	    if (IX0.0) { printf("%d: Immediate Nr. %d\n", 0, 2); }
+
+
+	_f2_1   F ---{                          // (3)
+
+	iClock  : ---|  _f2_1   F
+	IX0.0     ---|
+
+019	    if (IX0.1) { printf("%d: Immediate Nr. %d\n", 1, 2); }
+
+
+	_f3_1   F ---{                          // (4)
+
+	iClock  : ---|  _f3_1   F
+	IX0.1     ---|
+
+020	    if (IX0.2) { printf("%d: Immediate Nr. %d\n", 2, 2); }
+
+
+	_f4_1   F ---{                          // (5)
+
+	iClock  : ---|  _f4_1   F
+	IX0.2     ---|
+
+021
+022	switch (IB1) {
+023	case 0:
+024	  for (d = 0; d <= 2; d++) { printf("%d: Low Nr. %d\n", d, 0); }
+025	    break;
+026	case 1:
+027	  for (d = 0; d <= 2; d++) { printf("%d: Med Nr. %d\n", d, 1); }
+028	    break;
+029	case 2:
+030	  for (d = 0; d <= 2; d++) { printf("%d: Hi  Nr. %d\n", d, 2); }
+031	    break;
+032	default:
+033	  for (d = 0; d <= 2; d++) { printf("%d: Off Nr. %d\n", d, IB1); }
+034	    break;
+035	}
+
+
+	_f5_1   I ---(                          // (6)
+	IB1     A<---(                          // 2  v
+
+	iClock  : ---+  _f5_1   I
+	IB1     A ---+                  IB1     // 1
+
+******* C CODE          ************************
+
+007
+008	    #include	<stdio.h>
+009
+
+011
+012	    int d;
+013
+
+015	(2) { for (d = 0; d <= 2; d++) { printf("%d: Hello world Nr. %d\n", d, 2); } }
+
+016	    { for (d = 0; d <= 2; d++) { printf("%d: Good bye Nr. %d\n", d, 2); } }
+
+018	(3) { printf("%d: Immediate Nr. %d\n", 0, 2); }
+
+019	(4) { printf("%d: Immediate Nr. %d\n", 1, 2); }
+
+020	(5) { printf("%d: Immediate Nr. %d\n", 2, 2); }
+
+022	(6) {
+023	    case 0:
+024	  for (d = 0; d <= 2; d++) { printf("%d: Low Nr. %d\n", d, 0); }
+025	    break;
+026	    case 1:
+027	  for (d = 0; d <= 2; d++) { printf("%d: Med Nr. %d\n", d, 1); }
+028	    break;
+029	    case 2:
+030	  for (d = 0; d <= 2; d++) { printf("%d: Hi  Nr. %d\n", d, 2); }
+031	    break;
+032	    default:
+033	  for (d = 0; d <= 2; d++) { printf("%d: Off Nr. %d\n", d, iC_AV(2)); }
+034	    break;
+035	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  _f5_1+
+IX0.0   <     _f2_1|
+IX0.1   <     _f3_1|
+IX0.2   <     _f4_1|
+IX0.7   <     _f1_1|
+_f1_1   |  G { (2)
+_f2_1   |  F { (3)
+_f3_1   |  F { (4)
+_f4_1   |  F { (5)
+_f5_1   +  I ( (6)    IB1[
+iClock  :  :  _f1_1|  _f2_1|  _f3_1|  _f4_1|  _f5_1+
+
+******* NET STATISTICS  ************************
+
+ARN	+      1 blocks
+OR	|      4 blocks
+INPW	[      1 blocks
+INPX	<      4 blocks
+CLK	:      1 blocks
+
+TOTAL	      11 blocks
+	      30 links
+
+compiled by:
+@(#)     $Id: h9.lst,v 1.1 2015/10/15 06:27:21 jw Exp $ -O7
+
+C OUTPUT: ./Test0/h9.c  (128 lines)

@@ -1,0 +1,355 @@
+******* ./Test0/bar1.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	bar1.ic - vertical bar demo
+004	 *
+005	 *	QX0 outputs the value of a shift register made up of SR flip
+006	 *	flops m0 to m7. These are clocked by an internally generated
+007	 *	clock c0. It looks like running lights when displayed.
+008	 *
+009	 *	By changing the input IB4 the clocking speed on m0 to m7,
+010	 *	which is output on QX0.0 to QX0.7 is set to IB4 * 50 ms.
+011	 *	A value of 0 on input IB4 lets you clock the running
+012	 *	lights manually via input IX0.0
+013	 *
+014	 *	Output QX1.0 indicates the direction of the running
+015	 *	lights on QX0 - just to show a bit of internal logic.
+016	 *
+017	 *******************************************************************/
+018
+019	imm timer t = TIMER(TX0.4, ~TX0.4);	/* 50 ms timer */
+
+	t_1     T ---!  t       !
+	t_2     T ---!
+
+	iClock  : ---|  t_1     T
+	TX0.4     ---|
+
+	iClock  : ---|  t_2     T
+	TX0.4   ~ ---|
+
+020
+021	imm int d0 = IB4;
+
+	IB4     A ---@  d0      A
+
+022	imm bit f0 = IB4;
+
+	IB4     A ---+  f0              IB4     // 1
+
+023
+024	imm bit b0 = D(~b0 & f0, t, d0) | CHANGE(IX0.0 & ~f0);
+
+	b0_1      ---|  b0
+	b0_2      ---|
+
+	b0_4    D ---#  b0_1
+
+	b0_3    V --->  b0_2
+
+	iClock  : ---&  b0_3    V
+	IX0.0     ---&
+	f0      ~ ---&
+
+	t       ! ---&  b0_4    D
+	IB4     A<---&
+	b0      ~ ---&
+	f0        ---&
+
+025	imm clock c0 = CLOCK(b0);
+
+	c0_1    C ---:  c0      :
+
+	iClock  : ---|  c0_1    C
+	b0        ---|
+
+026
+027	imm bit m0 = SR(~up     , up & ~m1, c0);
+
+	m0_1    S ---#  m0
+	m0_2    R ---#
+
+	c0      : ---|  m0_1    S
+	up      ~ ---|
+
+	c0      : ---&  m0_2    R
+	up        ---&
+	m1      ~ ---&
+
+028	imm bit m1 = SR(~up & m0, up & ~m2, c0);
+
+	m1_1    S ---#  m1
+	m1_2    R ---#
+
+	c0      : ---&  m1_1    S
+	up      ~ ---&
+	m0        ---&
+
+	c0      : ---&  m1_2    R
+	up        ---&
+	m2      ~ ---&
+
+029	imm bit m2 = SR(~up & m1, up & ~m3, c0);
+
+	m2_1    S ---#  m2
+	m2_2    R ---#
+
+	c0      : ---&  m2_1    S
+	up      ~ ---&
+	m1        ---&
+
+	c0      : ---&  m2_2    R
+	up        ---&
+	m3      ~ ---&
+
+030	imm bit m3 = SR(~up & m2, up & ~m4, c0);
+
+	m3_1    S ---#  m3
+	m3_2    R ---#
+
+	c0      : ---&  m3_1    S
+	up      ~ ---&
+	m2        ---&
+
+	c0      : ---&  m3_2    R
+	up        ---&
+	m4      ~ ---&
+
+031	imm bit m4 = SR(~up & m3, up & ~m5, c0);
+
+	m4_1    S ---#  m4
+	m4_2    R ---#
+
+	c0      : ---&  m4_1    S
+	up      ~ ---&
+	m3        ---&
+
+	c0      : ---&  m4_2    R
+	up        ---&
+	m5      ~ ---&
+
+032	imm bit m5 = SR(~up & m4, up & ~m6, c0);
+
+	m5_1    S ---#  m5
+	m5_2    R ---#
+
+	c0      : ---&  m5_1    S
+	up      ~ ---&
+	m4        ---&
+
+	c0      : ---&  m5_2    R
+	up        ---&
+	m6      ~ ---&
+
+033	imm bit m6 = SR(~up & m5, up & ~m7, c0);
+
+	m6_1    S ---#  m6
+	m6_2    R ---#
+
+	c0      : ---&  m6_1    S
+	up      ~ ---&
+	m5        ---&
+
+	c0      : ---&  m6_2    R
+	up        ---&
+	m7      ~ ---&
+
+034	imm bit m7 = SR(~up & m6, up      , c0);
+
+	m7_1    S ---#  m7
+	m7_2    R ---#
+
+	c0      : ---&  m7_1    S
+	up      ~ ---&
+	m6        ---&
+
+	c0      : ---|  m7_2    R
+	up        ---|
+
+035
+036	imm bit up = SR(~m7 & m6, m0 & ~m1, c0);
+
+	up_1    S ---#  up
+	up_2    R ---#
+
+	c0      : ---&  up_1    S
+	m7      ~ ---&
+	m6        ---&
+
+	c0      : ---&  up_2    R
+	m0        ---&
+	m1      ~ ---&
+
+037
+038	QX0.0 = m0;
+
+	m0        ---@  QX0.0
+
+
+	m0        ---|  QX0.0_0 X
+
+039	QX0.1 = m1;
+
+	m1        ---@  QX0.1
+
+
+	m1        ---|  QX0.1_0 X
+
+040	QX0.2 = m2;
+
+	m2        ---@  QX0.2
+
+
+	m2        ---|  QX0.2_0 X
+
+041	QX0.3 = m3;
+
+	m3        ---@  QX0.3
+
+
+	m3        ---|  QX0.3_0 X
+
+042	QX0.4 = m4;
+
+	m4        ---@  QX0.4
+
+
+	m4        ---|  QX0.4_0 X
+
+043	QX0.5 = m5;
+
+	m5        ---@  QX0.5
+
+
+	m5        ---|  QX0.5_0 X
+
+044	QX0.6 = m6;
+
+	m6        ---@  QX0.6
+
+
+	m6        ---|  QX0.6_0 X
+
+045	QX0.7 = m7;
+
+	m7        ---@  QX0.7
+
+
+	m7        ---|  QX0.7_0 X
+
+046
+047	QX1.0 = up;
+
+	up        ---@  QX1.0
+
+
+	up        ---|  QX1.0_0 X
+
+048	QX1.4 = f0;
+
+	f0        ---@  QX1.4
+
+
+	f0        ---|  QX1.4_0 X
+
+049
+050	QB4   = d0;
+
+	IB4     A ---@  QB4     A
+
+
+	IB4     A ---+  QB4_0   W       IB4     // 1
+
+
+******* NET TOPOLOGY    ************************
+
+IB4     [  A  f0+    <b0_4&   QB4_0+
+IX0.0   <     b0_3&
+QB4     @  A  IB4[
+QB4_0   +  W
+QX0.0   @     m0#
+QX0.0_0 |  X
+QX0.1   @     m1#
+QX0.1_0 |  X
+QX0.2   @     m2#
+QX0.2_0 |  X
+QX0.3   @     m3#
+QX0.3_0 |  X
+QX0.4   @     m4#
+QX0.4_0 |  X
+QX0.5   @     m5#
+QX0.5_0 |  X
+QX0.6   @     m6#
+QX0.6_0 |  X
+QX0.7   @     m7#
+QX0.7_0 |  X
+QX1.0   @     up#
+QX1.0_0 |  X
+QX1.4   @     f0+
+QX1.4_0 |  X
+TX0.4   <    ~t_2|    t_1|
+b0      |    ~b0_4&   c0_1|
+b0_1    #     b0|
+b0_2    >     b0|
+b0_3    &  V  b0_2>
+b0_4    &  D  b0_1#
+c0      :  :  m0_2&   m0_1|   m1_2&   m1_1&   m2_2&   m2_1&   m3_2&   m3_1&
+              m4_2&   m4_1&   m5_2&   m5_1&   m6_2&   m6_1&   m7_2|   m7_1&
+              up_2&   up_1&
+c0_1    |  C  c0:
+d0      @  A  IB4[
+f0      +    ~b0_3&     b0_4&     QX1.4_0|
+iClock  :  :  t_2|    t_1|    b0_3&   c0_1|
+m0      #     m1_1&     up_2&     QX0.0_0|
+m0_1    |  S  m0#
+m0_2    &  R  m0#
+m1      #    ~m0_2&     m2_1&    ~up_2&     QX0.1_0|
+m1_1    &  S  m1#
+m1_2    &  R  m1#
+m2      #    ~m1_2&     m3_1&     QX0.2_0|
+m2_1    &  S  m2#
+m2_2    &  R  m2#
+m3      #    ~m2_2&     m4_1&     QX0.3_0|
+m3_1    &  S  m3#
+m3_2    &  R  m3#
+m4      #    ~m3_2&     m5_1&     QX0.4_0|
+m4_1    &  S  m4#
+m4_2    &  R  m4#
+m5      #    ~m4_2&     m6_1&     QX0.5_0|
+m5_1    &  S  m5#
+m5_2    &  R  m5#
+m6      #    ~m5_2&     m7_1&     up_1&     QX0.6_0|
+m6_1    &  S  m6#
+m6_2    &  R  m6#
+m7      #    ~m6_2&    ~up_1&     QX0.7_0|
+m7_1    &  S  m7#
+m7_2    |  R  m7#
+t       !  !  b0_4&
+t_1     |  T  t!
+t_2     |  T  t!
+up      #     m0_2&    ~m0_1|     m1_2&    ~m1_1&     m2_2&    ~m2_1&     m3_2&    ~m3_1&
+              m4_2&    ~m4_1&     m5_2&    ~m5_1&     m6_2&    ~m6_1&     m7_2|    ~m7_1&
+              QX1.0_0|
+up_1    &  S  up#
+up_2    &  R  up#
+
+******* NET STATISTICS  ************************
+
+ARN	+      2 blocks
+AND	&     18 blocks
+OR	|     16 blocks
+FF	#     10 blocks
+VF	>      1 blocks
+INPW	[      1 blocks
+INPX	<      2 blocks
+CLK	:      2 blocks
+TIM	!      1 blocks
+ALIAS	@     12
+
+TOTAL	      53 blocks
+	     155 links
+
+compiled by:
+@(#)     $Id: bar1.lst,v 1.1 2015/05/24 00:51:48 jw Exp $ -O7
+
+C OUTPUT: ./Test0/bar1.c  (132 lines)

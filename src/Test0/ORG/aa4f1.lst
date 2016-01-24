@@ -1,0 +1,55 @@
+******* ./Test0/aa4f1.ic ************************
+001	QX0.0 = ~IB1;
+
+	IB1     A ---+  QX0.0           ~IB1    // 1
+	                                ;       // (2)
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+002	QB1 = ~IB1;
+
+	IB1     A ---+  QB1     A       ~IB1    // 1
+	                                ;       // (2)
+
+
+	QB1     A ---+  QB1_0   W       QB1     // 1
+
+003	QB2 = ~4;
+
+	iConst  A ---+  QB2     A       ~4;     // (3)
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+******* C CODE          ************************
+
+001	(2) 	return ~iC_MV(1);
+
+003	(3) 	return ~4;
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QX0.0+  QB1+
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QX0.0   +     QX0.0_0|
+QX0.0_0 |  X
+iConst  =  A  QB2+
+
+******* NET STATISTICS  ************************
+
+ARN	+      5 blocks
+OR	|      1 blocks
+NCONST	=      1 blocks
+INPW	[      1 blocks
+
+TOTAL	       8 blocks
+	      18 links
+
+compiled by:
+@(#)     $Id: aa4f1.lst,v 1.1 2015/05/24 00:51:46 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4f1.c  (65 lines)

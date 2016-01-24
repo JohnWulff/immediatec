@@ -1,0 +1,69 @@
+******* ./Test0/aa4sn.ic ************************
+001	use alias, strict;
+002
+003	imm void fun(int a, assign imm int b) {
+004	    b = a + 2;
+
+	fun@a   A ---+  fun@b   A       fun@a   // 1
+	                                +2;     // (2)
+
+005	}
+006
+007	imm int x;
+008
+009	fun(IB1, x);	/* x is declared */
+
+	IB1     A ---+  x       A       IB1     // 1
+	                                +2;     // (2)
+
+010	no strict;
+011	fun(IB2, y);	/* y is not declared (default bit) */
+
+	IB2     A ---+  y               IB2     // 1
+	                                +2;     // (2)
+
+012	use strict;
+013
+014	QB1 = x;
+
+	x       A ---@  QB1     A
+
+
+	x       A ---+  QB1_0   W       x       // 1
+
+015	QB2 = y;
+
+	y         ---|  QB2     A
+
+
+	QB2     A ---+  QB2_0   W       QB2     // 1
+
+******* C CODE          ************************
+
+004	(2) 	return iC_MV(1)+2;
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  x+
+IB2     [  A  y+
+QB1     @  A  x+
+QB1_0   +  W
+QB2     |  A  QB2_0+
+QB2_0   +  W
+x       +  A  QB1_0+
+y       +     QB2|
+
+******* NET STATISTICS  ************************
+
+ARN	+      4 blocks
+OR	|      1 blocks
+INPW	[      2 blocks
+ALIAS	@      1
+
+TOTAL	       7 blocks
+	      15 links
+
+compiled by:
+@(#)     $Id: aa4sn.lst,v 1.1 2015/05/24 00:51:47 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4sn.c  (58 lines)

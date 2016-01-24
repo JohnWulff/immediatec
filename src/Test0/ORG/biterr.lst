@@ -1,0 +1,148 @@
+******* ./Test0/biterr.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	error I/O bit  address >= 8	for IX and QX
+004	 *	error I/O byte address >= IXD	for IX IB and IW, QX QB or QW
+005	 *	error I/O byte address >= 1	for TX
+006	 *	error I/O byte address >= 0	for TB amd TW (always error)
+007	 *
+008	 *******************************************************************/
+009
+010	QX0.7 = IX0.7 & IX0.6;		// OK
+
+	IX0.7     ---&  QX0.7
+	IX0.6     ---&
+
+
+	QX0.7     ---|  QX0.7_0 X
+
+011	QX0.8 = IX0.8 & IX0.9;		// I/O bit  address >= 8
+*** Error: I/O bit address must be less than 8: QX0.8  File ./Test0/biterr.ic, line 11
+*** Error: I/O bit address must be less than 8: IX0.8  File ./Test0/biterr.ic, line 11
+*** Error: I/O bit address must be less than 8: IX0.9; File ./Test0/biterr.ic, line 11
+
+	IX0.8     ---&  QX0.8
+	IX0.9     ---&
+
+
+	QX0.8     ---|  QX0.8_0 X
+
+012	QX0.17 = IX0.17 & IX0.16;	// I/O bit  address >= 8
+*** Error: I/O bit address must be less than 8: QX0.17  File ./Test0/biterr.ic, line 12
+*** Error: I/O bit address must be less than 8: IX0.17  File ./Test0/biterr.ic, line 12
+*** Error: I/O bit address must be less than 8: IX0.16; File ./Test0/biterr.ic, line 12
+
+	IX0.17    ---&  QX0.17
+	IX0.16    ---&
+
+
+	QX0.17    ---|  QX0.17_0 X
+
+013	QX128.0 = IX128.0 & IX128.1;	// I/O byte address >= IXD
+
+	IX128.0   ---&  QX128.0
+	IX128.1   ---&
+
+
+	QX128.0   ---|  QX128.0_0 X
+
+014	QX129.8 = IX129.8 & IX129.9;	// I/O byte address >= IXD, bit address >= 8
+*** Error: I/O bit address must be less than 8: QX129.8  File ./Test0/biterr.ic, line 14
+*** Error: I/O bit address must be less than 8: IX129.8  File ./Test0/biterr.ic, line 14
+*** Error: I/O bit address must be less than 8: IX129.9; File ./Test0/biterr.ic, line 14
+
+	IX129.8   ---&  QX129.8
+	IX129.9   ---&
+
+
+	QX129.8   ---|  QX129.8_0 X
+
+015
+016	imm clock clk = CLOCK(TX0.4);	// OK
+
+	clk_1   C ---:  clk     :
+
+	iClock  : ---|  clk_1   C
+	TX0.4     ---|
+
+017	imm timer tim = TIMER(TX1.4);	// I/O byte address >= 1
+*** Error: I/O byte address must be less than 1: TX1.4) File ./Test0/biterr.ic, line 17
+
+	tim_1   T ---!  tim     !
+
+	iClock  : ---|  tim_1   T
+	TX1.4     ---|
+
+018	QB1 = TB0;			// not allwowed
+*** Error: I/O byte address must be less than 0: TB0; File ./Test0/biterr.ic, line 18
+
+	TB0     A ---@  QB1     A
+
+
+	TB0     A ---+  QB1_0   W       TB0     // 1
+
+019	QB2 = TB1;			// not allwowed
+*** Error: I/O byte address must be less than 0: TB1; File ./Test0/biterr.ic, line 19
+
+	TB1     A ---@  QB2     A
+
+
+	TB1     A ---+  QB2_0   W       TB1     // 1
+
+
+******* NET TOPOLOGY    ************************
+
+IX0.16    <     QX0.17&
+IX0.17    <     QX0.17&
+IX0.6     <     QX0.7&
+IX0.7     <     QX0.7&
+IX0.8     <     QX0.8&
+IX0.9     <     QX0.8&
+IX128.0   <     QX128.0&
+IX128.1   <     QX128.0&
+IX129.8   <     QX129.8&
+IX129.9   <     QX129.8&
+QB1       @  A  TB0[
+QB1_0     +  W
+QB2       @  A  TB1[
+QB2_0     +  W
+QX0.17    &     QX0.17_0|
+QX0.17_0  |  X
+QX0.7     &     QX0.7_0|
+QX0.7_0   |  X
+QX0.8     &     QX0.8_0|
+QX0.8_0   |  X
+QX128.0   &     QX128.0_0|
+QX128.0_0 |  X
+QX129.8   &     QX129.8_0|
+QX129.8_0 |  X
+TB0       [  A  QB1_0+
+TB1       [  A  QB2_0+
+TX0.4     <     clk_1|
+TX1.4     <     tim_1|
+clk       :  :
+*** Warning: unused    imm clock: clk File ./Test0/biterr.ic, line 20
+clk_1     |  C  clk:
+iClock    :  :  clk_1|  tim_1|
+tim       !  !
+*** Warning: unused    imm timer: tim File ./Test0/biterr.ic, line 20
+tim_1     |  T  tim!
+
+******* NET STATISTICS  ************************
+
+ARN	+      2 blocks
+AND	&      5 blocks
+OR	|      7 blocks
+INPW	[      2 blocks
+INPX	<     12 blocks
+CLK	:      2 blocks
+TIM	!      1 blocks
+ALIAS	@      2
+
+TOTAL	      31 blocks
+	      61 links
+
+compiled by:
+@(#)     $Id: biterr.lst,v 1.1 2015/06/03 08:45:30 jw Exp $ -O7
+*** Warning: 2 unused gates. File ./Test0/biterr.ic, line 20
+*** Error: 12 generate errors - cannot execute. File ./Test0/biterr.ic, line 20

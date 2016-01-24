@@ -1,0 +1,95 @@
+******* ./Test0/sr1.ic  ************************
+001	QX0.0 = SR(~IX0.0, IX0.0 &  IX0.2);
+
+	QX0.0_1 S ---#  QX0.0
+	QX0.0_2 R ---#
+
+	iClock  : ---|  QX0.0_1 S
+	IX0.0   ~ ---|
+
+	iClock  : ---&  QX0.0_2 R
+	IX0.0     ---&
+	IX0.2     ---&
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+002	QX0.1 = SR_(~IX0.0 & ~res, IX0.0 & (res = IX0.0 & IX0.2));
+*** Error: strict: use of an undeclared imm variable: res File ./Test0/sr1.ic, line 2
+
+	IX0.0     ---?  res
+	IX0.2     ---?
+
+
+	QX0.1_1 S ---#  QX0.1
+	QX0.1_2 R ---#
+
+	iClock  : ---&  QX0.1_1 S
+	IX0.0   ~ ---&
+	res     ? ---&
+
+	iClock  : ---&  QX0.1_2 R
+	IX0.0     ---&
+	res     ? ---&
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+003	QX0.2 = ~IX0.0 & ~(IX0.0 &  IX0.2);
+
+	IX0.0   ~ ---&  QX0.2
+	QX0.2_1   ---&
+
+	IX0.0   ~ ---|  QX0.2_1
+	IX0.2   ~ ---|
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+004	QX0.3 =  IX0.0 &  (IX0.0 &  IX0.2);
+
+	IX0.0     ---&  QX0.3
+	IX0.2     ---&
+
+
+	QX0.3     ---|  QX0.3_0 X
+
+005
+006
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     QX0.0_2& ~QX0.0_1|  res?      QX0.1_2& ~QX0.1_1& ~QX0.2&   ~QX0.2_1|  QX0.3&
+IX0.2   <     QX0.0_2&  res?     ~QX0.2_1|  QX0.3&
+QX0.0   #     QX0.0_0|
+QX0.0_0 |  X
+QX0.0_1 |  S  QX0.0#
+QX0.0_2 &  R  QX0.0#
+QX0.1   #     QX0.1_0|
+QX0.1_0 |  X
+QX0.1_1 &  S  QX0.1#
+QX0.1_2 &  R  QX0.1#
+QX0.2   &     QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 |     QX0.2&
+QX0.3   &     QX0.3_0|
+QX0.3_0 |  X
+iClock  :  :  QX0.0_2&  QX0.0_1|  QX0.1_2&  QX0.1_1&
+res     ?     QX0.1_2& ~QX0.1_1&
+*** Error: gate: res File ./Test0/sr1.ic, line 7
+
+******* NET STATISTICS  ************************
+
+AND	&      5 blocks
+OR	|      6 blocks
+FF	#      2 blocks
+INPX	<      2 blocks
+CLK	:      1 blocks
+ERR	?      1
+
+TOTAL	      16 blocks
+	      43 links
+
+compiled by:
+@(#)     $Id: sr1.lst,v 1.1 2015/11/03 03:23:10 jw Exp $ -O7
+*** Error: 2 generate errors - cannot execute. File ./Test0/sr1.ic, line 7

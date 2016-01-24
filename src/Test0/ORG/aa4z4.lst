@@ -1,0 +1,195 @@
+******* ./Test0/aa4z4.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	nested int functions
+004	 *
+005	 *******************************************************************/
+006
+007	imm int Sub3(int ib1, int ib2) {
+008	    return ib1 + ib2;
+
+	Sub3@ib1 A ---+  Sub3@   A       Sub3@ib1  // 1
+	Sub3@ib2 A ---+                  +Sub3@ib2 // 2
+	                                 ;         // (2)
+
+009	}
+010
+011	imm int Sub33(int ib3, int ib4) {
+012	    this = ib3 + ib4;
+
+	Sub33@ib3 A ---+  Sub33@  A       Sub33@ib3  // 1
+	Sub33@ib4 A ---+                  +Sub33@ib4 // 2
+	                                  ;          // (2)
+
+013	}
+014
+015	imm int Sub4() {
+016	    return 4;
+
+	4       A ---@  Sub4@   A
+
+017	}
+018
+019	imm int Sub44() {
+020	    this = 4 + 4;
+
+	iConst  A ---+  Sub44@  A       4+4;    // (3)
+
+021	}
+022
+023	imm int Sub5() {
+024	    this = 5;
+
+	5       A ---@  Sub5@   A
+
+025	}
+026
+027	imm int Nest1(int i1, int i2) {
+028	    return Sub3(i1, i2) + Sub4();
+
+	Nest1@i1 A ---+  Nest1@  A       (Nest1@i1 // 1
+	Nest1@i2 A ---+                  +Nest1@i2 // 2
+	                                 )+4;      // (4)
+
+029	}
+030	imm int Nest2(int i3, int i4) {
+031	    this = Sub4() + Sub33(i3, i4);
+
+	Nest2@i3 A ---+  Nest2@  A       4+(Nest2@i3 // 1
+	Nest2@i4 A ---+                  +Nest2@i4   // 2
+	                                 );          // (5)
+
+032	}
+033	imm int Nest3(int i1, int i2, int i3, int i4) {
+034	    return Sub3(i1, i2) + Sub33(i3, i4);
+
+	Nest3@i1 A ---+  Nest3@  A       (Nest3@i1   // 1
+	Nest3@i2 A ---+                  +Nest3@i2   // 2
+	Nest3@i3 A ---+                  )+(Nest3@i3 // 3
+	Nest3@i4 A ---+                  +Nest3@i4   // 4
+	                                 );          // (6)
+
+035	}
+036	imm int Nest4(int i3, int i4) {
+037	    this = Sub44() + Sub33(i3, i4);
+
+	Nest4@i3 A ---+  Nest4@  A       (4+4)+(Nest4@i3 // 1
+	Nest4@i4 A ---+                  +Nest4@i4       // 2
+	                                 );              // (7)
+
+038	}
+039	imm int Nest5(int i3, int i4) {
+040	    return Sub33(i3, i4) + Sub44();
+
+	Nest5@i3 A ---+  Nest5@  A       (Nest5@i3 // 1
+	Nest5@i4 A ---+                  +Nest5@i4 // 2
+	                                 )+(4+4);  // (8)
+
+041	}
+042	imm int Nest6() {
+043	    this = Sub4() + Sub5();
+
+	iConst  A ---+  Nest6@  A       4+5;    // (9)
+
+044	}
+045
+046	QB1 = Nest1(Sub4(), Sub5()) + Sub4();
+
+	iConst  A ---+  QB1     A       ((4+5)+4)+4; // (10)
+
+
+	QB1     A ---+  QB1_0   W       QB1          // 1
+
+047	QB2 = Sub4() + Nest2(Sub44(), Nest6());
+
+	iConst  A ---+  QB2     A       4+(4+((4+4)+(4+5))); // (11)
+
+
+	QB2     A ---+  QB2_0   W       QB2                  // 1
+
+048	QB3 = Nest3(Sub4(), Sub5(), Sub44(), Nest6()) + Sub33(Sub44(), Nest6());
+
+	iConst  A ---+  QB3     A       ((4+5)+((4+4)+(4+5)))+((4+4)+(4+5)); // (12)
+
+
+	QB3     A ---+  QB3_0   W       QB3                                  // 1
+
+049	QB4 = Sub44() + Nest4(Sub44(), Nest6());
+
+	iConst  A ---+  QB4     A       (4+4)+((4+4)+((4+4)+(4+5))); // (13)
+
+
+	QB4     A ---+  QB4_0   W       QB4                          // 1
+
+050	QB5 = Nest5(Sub44(), Nest6()) + Sub44();
+
+	iConst  A ---+  QB5     A       (((4+4)+(4+5))+(4+4))+(4+4); // (14)
+
+
+	QB5     A ---+  QB5_0   W       QB5                          // 1
+
+051	QB6 = Sub4() + Nest6();
+
+	iConst  A ---+  QB6     A       4+(4+5); // (15)
+
+
+	QB6     A ---+  QB6_0   W       QB6      // 1
+
+******* C CODE          ************************
+
+008	(2) 	return iC_MV(1)+iC_MV(2);
+
+020	(3) 	return 4+4;
+
+028	(4) 	return (iC_MV(1)+iC_MV(2))+4;
+
+031	(5) 	return 4+(iC_MV(1)+iC_MV(2));
+
+034	(6) 	return (iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4));
+
+037	(7) 	return (4+4)+(iC_MV(1)+iC_MV(2));
+
+040	(8) 	return (iC_MV(1)+iC_MV(2))+(4+4);
+
+043	(9) 	return 4+5;
+
+046	(10) 	return ((4+5)+4)+4;
+
+047	(11) 	return 4+(4+((4+4)+(4+5)));
+
+048	(12) 	return ((4+5)+((4+4)+(4+5)))+((4+4)+(4+5));
+
+049	(13) 	return (4+4)+((4+4)+((4+4)+(4+5)));
+
+050	(14) 	return (((4+4)+(4+5))+(4+4))+(4+4);
+
+051	(15) 	return 4+(4+5);
+
+******* NET TOPOLOGY    ************************
+
+QB1     +  A  QB1_0+
+QB1_0   +  W
+QB2     +  A  QB2_0+
+QB2_0   +  W
+QB3     +  A  QB3_0+
+QB3_0   +  W
+QB4     +  A  QB4_0+
+QB4_0   +  W
+QB5     +  A  QB5_0+
+QB5_0   +  W
+QB6     +  A  QB6_0+
+QB6_0   +  W
+iConst  =  A  QB1+    QB2+    QB3+    QB4+    QB5+    QB6+
+
+******* NET STATISTICS  ************************
+
+ARN	+     12 blocks
+NCONST	=      1 blocks
+
+TOTAL	      13 blocks
+	      31 links
+
+compiled by:
+@(#)     $Id: aa4z4.lst,v 1.1 2015/05/24 00:51:47 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa4z4.c  (100 lines)

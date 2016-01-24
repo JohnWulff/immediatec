@@ -1,0 +1,159 @@
+******* ./Test0/jk2.ic  ************************
+001	imm clock clk1 = CLOCK(IX0.6, ~IX0.6);
+
+	clk1_1  C ---:  clk1    :
+	clk1_2  C ---:
+
+	iClock  : ---|  clk1_1  C
+	IX0.6     ---|
+
+	iClock  : ---|  clk1_2  C
+	IX0.6   ~ ---|
+
+002	imm clock clk2 = CLOCK(IX0.7, ~IX0.7);
+
+	clk2_1  C ---:  clk2    :
+	clk2_2  C ---:
+
+	iClock  : ---|  clk2_1  C
+	IX0.7     ---|
+
+	iClock  : ---|  clk2_2  C
+	IX0.7   ~ ---|
+
+003	QX0.0 = JK((IB1 & 0x7f) == 0x41 + (IB2 << 1), (IB1 & IB3) == IB3 | IX0.0, iClock);
+
+	QX0.0_1 S ---#  QX0.0
+	QX0.0_2 R ---#
+
+	iClock  : ---&  QX0.0_1 S
+	QX0.0   ~ ---&
+	QX0.0_4   ---&
+
+	iClock  : ---&  QX0.0_2 R
+	QX0.0     ---&
+	QX0.0_3   ---&
+
+	QX0.0_5   ---|  QX0.0_3
+	IX0.0     ---|
+
+	IB1     A ---+  QX0.0_4         (IB1              // 1
+	IB2     A ---+                  &0x7f)==0x41+(IB2 // 2
+	                                <<1);             // (3)
+
+	IB1     A ---+  QX0.0_5         (IB1              // 1
+	IB3     A ---+                  &IB3              // 2
+	                                )==IB3            // 2
+	                                ;                 // (2)
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+004	QX0.1 = JK(IB4 - 1, IB5 - 1, clk2);
+
+	QX0.1_1 S ---#  QX0.1
+	QX0.1_2 R ---#
+
+	clk2    : ---&  QX0.1_1 S
+	QX0.1   ~ ---&
+	QX0.1_4   ---&
+
+	clk2    : ---&  QX0.1_2 R
+	QX0.1     ---&
+	QX0.1_3   ---&
+
+	IB5     A ---+  QX0.1_3         IB5     // 1
+	                                -1;     // (4)
+
+	IB4     A ---+  QX0.1_4         IB4     // 1
+	                                -1;     // (4)
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+005	QX0.2 = JK(IB6 - 1, clk1, IB7 - 1, clk2);
+
+	QX0.2_1 S ---#  QX0.2
+	QX0.2_2 R ---#
+
+	clk1    : ---&  QX0.2_1 S
+	QX0.2   ~ ---&
+	QX0.2_4   ---&
+
+	clk2    : ---&  QX0.2_2 R
+	QX0.2     ---&
+	QX0.2_3   ---&
+
+	IB7     A ---+  QX0.2_3         IB7     // 1
+	                                -1;     // (4)
+
+	IB6     A ---+  QX0.2_4         IB6     // 1
+	                                -1;     // (4)
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+******* C CODE          ************************
+
+003	(2) 	return (iC_MV(1)&iC_MV(2))==iC_MV(2);
+
+003	(3) 	return (iC_MV(1)&0x7f)==0x41+(iC_MV(2)<<1);
+
+004	(4) 	return iC_MV(1)-1;
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QX0.0_5+  QX0.0_4+
+IB2     [  A  QX0.0_4+
+IB3     [  A  QX0.0_5+
+IB4     [  A  QX0.1_4+
+IB5     [  A  QX0.1_3+
+IB6     [  A  QX0.2_4+
+IB7     [  A  QX0.2_3+
+IX0.0   <     QX0.0_3|
+IX0.6   <    ~clk1_2|  clk1_1|
+IX0.7   <    ~clk2_2|  clk2_1|
+QX0.0   #     QX0.0_2& ~QX0.0_1&  QX0.0_0|
+QX0.0_0 |  X
+QX0.0_1 &  S  QX0.0#
+QX0.0_2 &  R  QX0.0#
+QX0.0_3 |     QX0.0_2&
+QX0.0_4 +     QX0.0_1&
+QX0.0_5 +     QX0.0_3|
+QX0.1   #     QX0.1_2& ~QX0.1_1&  QX0.1_0|
+QX0.1_0 |  X
+QX0.1_1 &  S  QX0.1#
+QX0.1_2 &  R  QX0.1#
+QX0.1_3 +     QX0.1_2&
+QX0.1_4 +     QX0.1_1&
+QX0.2   #     QX0.2_2& ~QX0.2_1&  QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 &  S  QX0.2#
+QX0.2_2 &  R  QX0.2#
+QX0.2_3 +     QX0.2_2&
+QX0.2_4 +     QX0.2_1&
+clk1    :  :  QX0.2_1&
+clk1_1  |  C  clk1:
+clk1_2  |  C  clk1:
+clk2    :  :  QX0.1_2&  QX0.1_1&  QX0.2_2&
+clk2_1  |  C  clk2:
+clk2_2  |  C  clk2:
+iClock  :  :  clk1_2|   clk1_1|   clk2_2|   clk2_1|   QX0.0_2&  QX0.0_1&
+
+******* NET STATISTICS  ************************
+
+ARN	+      6 blocks
+AND	&      6 blocks
+OR	|      8 blocks
+FF	#      3 blocks
+INPW	[      7 blocks
+INPX	<      3 blocks
+CLK	:      3 blocks
+
+TOTAL	      36 blocks
+	     106 links
+
+compiled by:
+@(#)     $Id: jk2.lst,v 1.1 2015/05/24 00:51:54 jw Exp $ -O7
+
+C OUTPUT: ./Test0/jk2.c  (112 lines)

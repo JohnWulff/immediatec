@@ -1,0 +1,128 @@
+******* ./Test0/a1.ic   ************************
+001	/********************************************************************
+002	 *
+003	 *	copy input to output for bit byte and word input
+004	 *
+005	 *******************************************************************/
+006
+007	QX0.0 = IX0.0;	// handle bit values 0 and 1
+
+	IX0.0     ---@  QX0.0
+
+
+	IX0.0     ---|  QX0.0_0 X
+
+008	QX0.1 = IX0.1;
+
+	IX0.1     ---@  QX0.1
+
+
+	IX0.1     ---|  QX0.1_0 X
+
+009	QX0.2 = IX0.2;
+
+	IX0.2     ---@  QX0.2
+
+
+	IX0.2     ---|  QX0.2_0 X
+
+010	QX0.3 = IX0.3;
+
+	IX0.3     ---@  QX0.3
+
+
+	IX0.3     ---|  QX0.3_0 X
+
+011	QX0.4 = IX0.4;
+
+	IX0.4     ---@  QX0.4
+
+
+	IX0.4     ---|  QX0.4_0 X
+
+012	QX0.5 = IX0.5;
+
+	IX0.5     ---@  QX0.5
+
+
+	IX0.5     ---|  QX0.5_0 X
+
+013	QX0.6 = IX0.6;
+
+	IX0.6     ---@  QX0.6
+
+
+	IX0.6     ---|  QX0.6_0 X
+
+014	QX0.7 = IX0.7;
+
+	IX0.7     ---@  QX0.7
+
+
+	IX0.7     ---|  QX0.7_0 X
+
+015
+016	QB1 = IB1;	// handle unsigned values in the range 0 to 255
+
+	IB1     A ---@  QB1     A
+
+
+	IB1     A ---+  QB1_0   W       IB1     // 1
+
+017
+018	QW2 = IW2;	// handle signed values in the range -32568 to 32567
+
+	IW2     A ---@  QW2     A
+
+
+	IW2     A ---+  QW2_0   W       IW2     // 1
+
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A  QB1_0+
+IW2     [  A  QW2_0+
+IX0.0   <     QX0.0_0|
+IX0.1   <     QX0.1_0|
+IX0.2   <     QX0.2_0|
+IX0.3   <     QX0.3_0|
+IX0.4   <     QX0.4_0|
+IX0.5   <     QX0.5_0|
+IX0.6   <     QX0.6_0|
+IX0.7   <     QX0.7_0|
+QB1     @  A  IB1[
+QB1_0   +  W
+QW2     @  A  IW2[
+QW2_0   +  W
+QX0.0   @     IX0.0<
+QX0.0_0 |  X
+QX0.1   @     IX0.1<
+QX0.1_0 |  X
+QX0.2   @     IX0.2<
+QX0.2_0 |  X
+QX0.3   @     IX0.3<
+QX0.3_0 |  X
+QX0.4   @     IX0.4<
+QX0.4_0 |  X
+QX0.5   @     IX0.5<
+QX0.5_0 |  X
+QX0.6   @     IX0.6<
+QX0.6_0 |  X
+QX0.7   @     IX0.7<
+QX0.7_0 |  X
+
+******* NET STATISTICS  ************************
+
+ARN	+      2 blocks
+OR	|      8 blocks
+INPW	[      2 blocks
+INPX	<      8 blocks
+ALIAS	@     10
+
+TOTAL	      20 blocks
+	      28 links
+
+compiled by:
+@(#)     $Id: a1.lst,v 1.1 2015/05/24 00:51:45 jw Exp $ -O7
+
+C OUTPUT: ./Test0/a1.c  (72 lines)

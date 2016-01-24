@@ -1,0 +1,35 @@
+/********************************************************************
+ *
+ *	simple iC program with arrays
+ *
+ *******************************************************************/
+
+%{
+%#include	<stdio.h>
+%}
+
+%{
+    int d;
+%}
+
+if (IX0.7) { for (d = 0; d <= 2; d++) { printf("%d: Hello world Nr. %d\n", d, 2); } }
+else { for (d = 0; d <= 2; d++) { printf("%d: Good bye Nr. %d\n", d, 2); } }
+
+    if (IX0.0) { printf("%d: Immediate Nr. %d\n", 0, 2); }
+    if (IX0.1) { printf("%d: Immediate Nr. %d\n", 1, 2); }
+    if (IX0.2) { printf("%d: Immediate Nr. %d\n", 2, 2); }
+
+switch (IB1) {
+case 0:
+  for (d = 0; d <= 2; d++) { printf("%d: Low Nr. %d\n", d, 0); }
+    break;
+case 1:
+  for (d = 0; d <= 2; d++) { printf("%d: Med Nr. %d\n", d, 1); }
+    break;
+case 2:
+  for (d = 0; d <= 2; d++) { printf("%d: Hi  Nr. %d\n", d, 2); }
+    break;
+default:
+  for (d = 0; d <= 2; d++) { printf("%d: Off Nr. %d\n", d, IB1); }
+    break;
+}

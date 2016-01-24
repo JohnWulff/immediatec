@@ -1,0 +1,170 @@
+/********************************************************************
+ *
+ *	Parcel sorter for long belts
+ *	Author:	J.E. Wulff
+ *	Source: sort32.icx
+ *
+ *	Trial source for using arrays in "iC programs"
+ *
+ *******************************************************************/
+
+use strict;
+
+/********************************************************************
+ *
+ *	Feeder segment
+ *
+ *******************************************************************/
+
+imm bit feeder(			/* feeds code into feeder segment */
+	imm bit transfer,	/* photo cell to transfer code */
+ assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+	imm int code,		/* destination code - 0 .. 9 */
+	imm int length,		/* sets the length of the segment */
+	imm int width,		/* width of lock frame 6 + 6 for 0x7f */
+	imm clock c,		/* stepping clock for the belt */
+    )
+{
+    extern imm bit reset;	/* general re-initialisation */
+    imm bit pip   = RISE(transfer & ~this & ~reset, c);
+    imm int shift = SHR((shift << 1) + (pip * (0x41 + (code << 1))), c, reset);
+    imm int mask  = 0x41 << width;
+    carryOut = (shift >> length) & 1;
+    this = SRX(pip,		/* unlock after width steps */
+	       (shift & mask) == mask | reset, c);
+}
+
+/********************************************************************
+ *
+ *	Segment
+ *
+ *	Each segment controls one gate and may be up to 32 steps long
+ *
+ *******************************************************************/
+
+imm bit segment(		/* returns gate control output */
+	imm int carryIn,	/* shift bit (as int) from the previous segment */
+ assign	imm int carryOut,	/* shift bit (as int) for the following segment */
+	imm int code,		/* code identifying this segment */
+	imm int length,		/* segment length */
+	imm int width,		/* width of the gate */
+	imm clock c,		/* stepping clock for the belt */
+    )
+{
+    extern imm bit reset;	/* general re-initialisation */
+    imm int shift = SHR((shift << 1) + carryIn, c, reset);
+    imm int mask  = 0x41 << width;
+    carryOut = (shift >> length) & 1;
+    this = SRX((shift & 0x7f) == 0x41 + (code << 1),
+	       (shift & mask) == mask | reset, c);
+}
+
+/********************************************************************
+ *
+ *	Belt
+ *
+ *	Each belt has 10 gates
+ *
+ *******************************************************************/
+
+imm int belt(
+    	assign	imm bit lock,	/* lock indicator */
+	assign  imm bit gate0,
+	assign  imm bit gate1,
+	assign  imm bit gate2,
+	assign  imm bit gate3,
+	assign  imm bit gate4,
+	assign  imm bit gate5,
+	assign  imm bit gate6,
+	assign  imm bit gate7,
+	assign  imm bit gate8,
+	assign  imm bit gate9,
+		imm int code,	/* gate code 0 .. 9  - for parcel destination */
+		imm bit p_cell,	/* photo cell monitoring parcel onto belt */
+		imm bit strobe,	/* strobe pulse from belt movement */
+    )
+{
+    imm int car0;		/* carry bit: 0 */
+    imm int car1;		/* carry bit: 1 */
+    imm int car2;		/* carry bit: 2 */
+    imm int car3;		/* carry bit: 3 */
+    imm int car4;		/* carry bit: 4 */
+    imm int car5;		/* carry bit: 5 */
+    imm int car6;		/* carry bit: 6 */
+    imm int car7;		/* carry bit: 7 */
+    imm int car8;		/* carry bit: 8 */
+    imm int car9;		/* carry bit: 9 */
+    imm int car10;		/* carry bit: 10 */
+
+    imm clock clk = CLOCK(strobe);
+
+    lock   = feeder(p_cell, car0, code, 12, 11, clk);
+    gate0 = segment(car0, car1,    0, 12,  7, clk);
+    gate1 = segment(car1, car2,    1, 12,  7, clk);
+    gate2 = segment(car2, car3,    2, 12,  7, clk);
+    gate3 = segment(car3, car4,    3, 12,  7, clk);
+    gate4 = segment(car4, car5,    4, 12,  7, clk);
+    gate5 = segment(car5, car6,    5, 12,  7, clk);
+    gate6 = segment(car6, car7,    6, 12,  7, clk);
+    gate7 = segment(car7, car8,    7, 12,  7, clk);
+    gate8 = segment(car8, car9,    8, 12,  7, clk);
+    gate9 = segment(car9, car10,    9, 12,  7, clk);
+    this = car10;		/* allows concatenation of "belts" */
+}
+
+/********************************************************************
+ *
+ *	Generate tick
+ *	input fast1 or fast2 cause 50 ms ticks
+ *	else tick for every change of manual input
+ *
+ *******************************************************************/
+
+imm bit tick(bit manual, bit fast1, bit fast2) {
+    imm bit fast = fast1 | fast2;
+    this = CHANGE(manual & ~fast | TX0.4 & fast);
+}
+
+/********************************************************************
+ *
+ *	2 belts
+ *
+ *	Each belt has 10 gates
+ *
+ *******************************************************************/
+
+imm bit reset = IX0.7;		/* general re-initialisation */
+
+    QX4.0 = belt(
+	QX4.2,		/* lock indicator */
+	QX0.0,
+	QX0.1,
+	QX0.2,
+	QX0.3,
+	QX0.4,
+	QX0.5,
+	QX0.6,
+	QX0.7,
+	QX1.0,
+	QX1.1,
+	IB1,		/* gate code 0 .. 9  - for parcel destination */
+	IX0.1,		/* photo cell monitoring parcel onto belt */
+	tick(IX0.0, IX0.6, IX0.5),	/* "strobe pulse" from belt movement */
+    );
+
+    QX4.1 = belt(
+	QX4.3,		/* lock indicator */
+	QX2.0,
+	QX2.1,
+	QX2.2,
+	QX2.3,
+	QX2.4,
+	QX2.5,
+	QX2.6,
+	QX2.7,
+	QX3.0,
+	QX3.1,
+	IB3,		/* gate code 0 .. 9  - for parcel destination */
+	IX2.1,		/* photo cell monitoring parcel onto belt */
+	tick(IX2.0, IX2.6, IX0.5),	/* "strobe pulse" from belt movement */
+    );

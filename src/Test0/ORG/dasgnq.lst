@@ -1,0 +1,30 @@
+******* ./Test0/dasgnq.ic ************************
+001	imm bit QX0.0 = IX0.0 & IX0.1;
+
+	IX0.0     ---&  QX0.0
+	IX0.1     ---&
+
+
+	QX0.0     ---|  QX0.0_0 X
+
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     QX0.0&
+IX0.1   <     QX0.0&
+QX0.0   &     QX0.0_0|
+QX0.0_0 |  X
+
+******* NET STATISTICS  ************************
+
+AND	&      1 blocks
+OR	|      1 blocks
+INPX	<      2 blocks
+
+TOTAL	       4 blocks
+	       9 links
+
+compiled by:
+@(#)     $Id: dasgnq.lst,v 1.1 2015/05/24 00:51:50 jw Exp $ -O7
+
+C OUTPUT: ./Test0/dasgnq.c  (38 lines)

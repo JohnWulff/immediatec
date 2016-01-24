@@ -1,0 +1,39 @@
+******* ./Test0/aa4z7.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	error bit functions
+004	 *
+005	 *******************************************************************/
+006
+007	imm bit Sub44() {
+008	    this = 4 & 4;
+*** Error: constant assignment to imm bit: Sub44@ File ./Test0/aa4z7.ic, line 8
+009	}
+*** Error: no return statement in function: Sub44 File ./Test0/aa4z7.ic, line 9
+*** Error: function has no statements! Sub44 File ./Test0/aa4z7.ic, line 9
+010
+011	QX0.0 = IX0.1 & Sub44();
+*** Error: called function has no statements - cannot execute! Sub44 File ./Test0/aa4z7.ic, line 11
+*** Error: no constant allowed in bit expression. File ./Test0/aa4z7.ic, line 11
+
+******* NET TOPOLOGY    ************************
+
+IX0.1   <
+*** Warning: unused    imm bit: IX0.1 File ./Test0/aa4z7.ic, line 12
+QX0.0   .
+*** Warning: undefined imm bit: QX0.0 File ./Test0/aa4z7.ic, line 12
+*** Warning: unused    imm bit: QX0.0 File ./Test0/aa4z7.ic, line 12
+*** Error: undefined function internal gate: Sub44@ File ./Test0/aa4z7.ic, line 12
+
+******* NET STATISTICS  ************************
+
+UDF	.      1 blocks
+INPX	<      1 blocks
+
+TOTAL	       2 blocks
+	       4 links
+
+compiled by:
+@(#)     $Id: aa4z7.lst,v 1.1 2015/06/04 01:36:55 jw Exp $ -O7
+*** Warning: 2 undefined gates and 2 unused gates. File ./Test0/aa4z7.ic, line 12
+*** Error: 6 generate errors - cannot execute. File ./Test0/aa4z7.ic, line 12

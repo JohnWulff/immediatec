@@ -1,0 +1,76 @@
+******* ./Test0/aa1w.ic ************************
+001	imm timer t = TIMER(IX0.0, ~IX0.0);
+
+	t_1     T ---!  t       !
+	t_2     T ---!
+
+	iClock  : ---|  t_1     T
+	IX0.0     ---|
+
+	iClock  : ---|  t_2     T
+	IX0.0   ~ ---|
+
+002	QX0.1 = D(IX0.1, t, 10);
+
+	QX0.1_1 D ---#  QX0.1
+
+	t       ! ---|  QX0.1_1 D
+	10      A<---|
+	IX0.1     ---|
+
+
+	QX0.1     ---|  QX0.1_0 X
+
+003	QX0.2 = D(IX0.2, t, 010 * 0xa);
+
+	QX0.2_1 D ---#  QX0.2
+
+	t       ! ---|  QX0.2_1 D
+	QX0.2_2 A<---|
+	IX0.2     ---|
+
+	iConst  A ---+  QX0.2_2 A       010*0xa; // (2)
+
+
+	QX0.2     ---|  QX0.2_0 X
+
+******* C CODE          ************************
+
+003	(2) 	return 010*0xa;
+
+******* NET TOPOLOGY    ************************
+
+10      =  A <QX0.1_1|
+IX0.0   <    ~t_2|    t_1|
+IX0.1   <     QX0.1_1|
+IX0.2   <     QX0.2_1|
+QX0.1   #     QX0.1_0|
+QX0.1_0 |  X
+QX0.1_1 |  D  QX0.1#
+QX0.2   #     QX0.2_0|
+QX0.2_0 |  X
+QX0.2_1 |  D  QX0.2#
+QX0.2_2 +  A <QX0.2_1|
+iClock  :  :  t_2|    t_1|
+iConst  =  A  QX0.2_2+
+t       !  !  QX0.1_1|  QX0.2_1|
+t_1     |  T  t!
+t_2     |  T  t!
+
+******* NET STATISTICS  ************************
+
+ARN	+      1 blocks
+OR	|      6 blocks
+FF	#      2 blocks
+NCONST	=      2 blocks
+INPX	<      3 blocks
+CLK	:      1 blocks
+TIM	!      1 blocks
+
+TOTAL	      16 blocks
+	      34 links
+
+compiled by:
+@(#)     $Id: aa1w.lst,v 1.1 2015/05/24 00:51:45 jw Exp $ -O7
+
+C OUTPUT: ./Test0/aa1w.c  (67 lines)

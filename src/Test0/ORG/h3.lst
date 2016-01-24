@@ -1,0 +1,325 @@
+******* ./Test0/h3.ic   ************************
+001	/********************************************************************
+002	 *
+003	 *	simple iC program with arrays
+004	 *
+005	 *******************************************************************/
+006
+007	%{
+008	%#include	<stdio.h>
+009	%}
+010
+011	    if (IX0.0) {
+012		int n;
+013		for (n = 0; n <= 0; n++) {
+014		    printf("%d: Hello Nr. %d\n", n, 0);
+015		}
+016	    } else {
+017		printf("Good bye Nr.0\n");
+018	    }
+
+
+
+	_f1_1   G ---{                          // (2)
+
+	iClock  : ---|  _f1_1   G
+	IX0.0     ---|
+
+019	    if (IX0.1) {
+020		int n;
+021		for (n = 0; n <= 1; n++) {
+022		    printf("%d: Hello Nr. %d\n", n, 1);
+023		}
+024	    } else {
+025		printf("Good bye Nr.1\n");
+026	    }
+
+
+
+	_f2_1   G ---{                          // (3)
+
+	iClock  : ---|  _f2_1   G
+	IX0.1     ---|
+
+027	    if (IX0.2) {
+028		int n;
+029		for (n = 0; n <= 2; n++) {
+030		    printf("%d: Hello Nr. %d\n", n, 2);
+031		}
+032	    } else {
+033		printf("Good bye Nr.2\n");
+034	    }
+
+
+
+	_f3_1   G ---{                          // (4)
+
+	iClock  : ---|  _f3_1   G
+	IX0.2     ---|
+
+035	    if (IX0.3) {
+036		int n;
+037		for (n = 0; n <= 3; n++) {
+038		    printf("%d: Hello Nr. %d\n", n, 3);
+039		}
+040	    } else {
+041		printf("Good bye Nr.3\n");
+042	    }
+
+
+
+	_f4_1   G ---{                          // (5)
+
+	iClock  : ---|  _f4_1   G
+	IX0.3     ---|
+
+043	    if (IX0.4) {
+044		int n;
+045		for (n = 0; n <= 4; n++) {
+046		    printf("%d: Hello Nr. %d\n", n, 4);
+047		}
+048	    } else {
+049		printf("Good bye Nr.4\n");
+050	    }
+
+
+
+	_f5_1   G ---{                          // (6)
+
+	iClock  : ---|  _f5_1   G
+	IX0.4     ---|
+
+051	    if (IX0.5) {
+052		int n;
+053		for (n = 0; n <= 5; n++) {
+054		    printf("%d: Hello Nr. %d\n", n, 5);
+055		}
+056	    } else {
+057		printf("Good bye Nr.5\n");
+058	    }
+
+
+
+	_f6_1   G ---{                          // (7)
+
+	iClock  : ---|  _f6_1   G
+	IX0.5     ---|
+
+059	    if (IX0.6) {
+060		int n;
+061		for (n = 0; n <= 6; n++) {
+062		    printf("%d: Hello Nr. %d\n", n, 6);
+063		}
+064	    } else {
+065		printf("Good bye Nr.6\n");
+066	    }
+
+
+
+	_f7_1   G ---{                          // (8)
+
+	iClock  : ---|  _f7_1   G
+	IX0.6     ---|
+
+067	    if (IX0.7) {
+068		int n;
+069		for (n = 0; n <= 7; n++) {
+070		    printf("%d: Hello Nr. %d\n", n, 7);
+071		}
+072	    } else {
+073		printf("Good bye Nr.7\n");
+074	    }
+
+
+
+	_f8_1   G ---{                          // (9)
+
+	iClock  : ---|  _f8_1   G
+	IX0.7     ---|
+
+075	    if (IX1.0) {
+076		int n;
+077		for (n = 0; n <= 8; n++) {
+078		    printf("%d: Hello Nr. %d\n", n, 8);
+079		}
+080	    } else {
+081		printf("Good bye Nr.8\n");
+082	    }
+
+
+
+	_f9_1   G ---{                          // (10)
+
+	iClock  : ---|  _f9_1   G
+	IX1.0     ---|
+
+083	    if (IX1.1) {
+084		int n;
+085		for (n = 0; n <= 9; n++) {
+086		    printf("%d: Hello Nr. %d\n", n, 9);
+087		}
+088	    } else {
+089		printf("Good bye Nr.9\n");
+090	    }
+
+
+
+	_f10_1  G ---{                          // (11)
+
+	iClock  : ---|  _f10_1  G
+	IX1.1     ---|
+
+******* C CODE          ************************
+
+007
+008	    #include	<stdio.h>
+009
+
+011	(2) {
+012		int n;
+013		for (n = 0; n <= 0; n++) {
+014		    printf("%d: Hello Nr. %d\n", n, 0);
+015		}
+016	    }
+
+016	    {
+017		printf("Good bye Nr.0\n");
+018	    }
+
+019	(3) {
+020		int n;
+021		for (n = 0; n <= 1; n++) {
+022		    printf("%d: Hello Nr. %d\n", n, 1);
+023		}
+024	    }
+
+024	    {
+025		printf("Good bye Nr.1\n");
+026	    }
+
+027	(4) {
+028		int n;
+029		for (n = 0; n <= 2; n++) {
+030		    printf("%d: Hello Nr. %d\n", n, 2);
+031		}
+032	    }
+
+032	    {
+033		printf("Good bye Nr.2\n");
+034	    }
+
+035	(5) {
+036		int n;
+037		for (n = 0; n <= 3; n++) {
+038		    printf("%d: Hello Nr. %d\n", n, 3);
+039		}
+040	    }
+
+040	    {
+041		printf("Good bye Nr.3\n");
+042	    }
+
+043	(6) {
+044		int n;
+045		for (n = 0; n <= 4; n++) {
+046		    printf("%d: Hello Nr. %d\n", n, 4);
+047		}
+048	    }
+
+048	    {
+049		printf("Good bye Nr.4\n");
+050	    }
+
+051	(7) {
+052		int n;
+053		for (n = 0; n <= 5; n++) {
+054		    printf("%d: Hello Nr. %d\n", n, 5);
+055		}
+056	    }
+
+056	    {
+057		printf("Good bye Nr.5\n");
+058	    }
+
+059	(8) {
+060		int n;
+061		for (n = 0; n <= 6; n++) {
+062		    printf("%d: Hello Nr. %d\n", n, 6);
+063		}
+064	    }
+
+064	    {
+065		printf("Good bye Nr.6\n");
+066	    }
+
+067	(9) {
+068		int n;
+069		for (n = 0; n <= 7; n++) {
+070		    printf("%d: Hello Nr. %d\n", n, 7);
+071		}
+072	    }
+
+072	    {
+073		printf("Good bye Nr.7\n");
+074	    }
+
+075	(10) {
+076		int n;
+077		for (n = 0; n <= 8; n++) {
+078		    printf("%d: Hello Nr. %d\n", n, 8);
+079		}
+080	    }
+
+080	    {
+081		printf("Good bye Nr.8\n");
+082	    }
+
+083	(11) {
+084		int n;
+085		for (n = 0; n <= 9; n++) {
+086		    printf("%d: Hello Nr. %d\n", n, 9);
+087		}
+088	    }
+
+088	    {
+089		printf("Good bye Nr.9\n");
+090	    }
+
+******* NET TOPOLOGY    ************************
+
+IX0.0   <     _f1_1|
+IX0.1   <     _f2_1|
+IX0.2   <     _f3_1|
+IX0.3   <     _f4_1|
+IX0.4   <     _f5_1|
+IX0.5   <     _f6_1|
+IX0.6   <     _f7_1|
+IX0.7   <     _f8_1|
+IX1.0   <     _f9_1|
+IX1.1   <     _f10_1|
+_f10_1  |  G { (11)
+_f1_1   |  G { (2)
+_f2_1   |  G { (3)
+_f3_1   |  G { (4)
+_f4_1   |  G { (5)
+_f5_1   |  G { (6)
+_f6_1   |  G { (7)
+_f7_1   |  G { (8)
+_f8_1   |  G { (9)
+_f9_1   |  G { (10)
+iClock  :  :  _f1_1|   _f2_1|   _f3_1|   _f4_1|   _f5_1|   _f6_1|   _f7_1|   _f8_1|
+              _f9_1|   _f10_1|
+
+******* NET STATISTICS  ************************
+
+OR	|     10 blocks
+INPX	<     10 blocks
+CLK	:      1 blocks
+
+TOTAL	      21 blocks
+	      60 links
+
+compiled by:
+@(#)     $Id: h3.lst,v 1.1 2015/10/15 06:27:20 jw Exp $ -O7
+
+C OUTPUT: ./Test0/h3.c  (265 lines)

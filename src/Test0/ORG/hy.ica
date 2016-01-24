@@ -1,0 +1,23 @@
+/********************************************************************
+ *
+ *	simple iC program with arrays
+ *
+ *******************************************************************/
+
+%{
+%#include	<stdio.h>
+%}
+
+FOR (I = 0; I < 4; I++) {{	// C++ comment
+    FOR (J = 0; J < I; J++) {{	/* C comment */
+	if (IX[I/8].[I%8]) {
+	    printf("Hello Nr. %d, [J]\n", [I]);
+	} else {
+	    printf("Bye Nr. %d, [J]\n", [I]);
+	}
+    }}
+}}
+
+FOR (J = 0; J < 4; J++) {{	# Perl comment (only in control lines)
+    QB[J] = IB[J];
+}}

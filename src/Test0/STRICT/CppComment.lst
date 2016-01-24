@@ -1,0 +1,55 @@
+******* ./Test0/CppComment.ic ************************
+001	/********************************************************************
+002	 *
+003	 *	Test detection of C++ comments in embedded C code
+004	 *
+005	 *******************************************************************/
+006
+007	// C++ style comment in iC code is always OK
+008
+009	if (IX0.0) {
+010	    QB1 = IB1 + IB2;	// C++ comment in embedded C reported by -P option
+011	}
+*** Error: strict: C assignment to an imm variable (should be immC): QB1 File ./Test0/CppComment.ic, line 10
+
+
+	_f1_1   F ---{                          // (2)
+	QB1     A<---{                          // 2 =
+	IB1     A<---{                          // 3  v
+	IB2     A<---{                          // 4  v
+
+	iClock  : ---|  _f1_1   F
+	IX0.0     ---|
+
+******* C CODE          ************************
+
+009	(2) {
+010	    iC_ERR(2, 0,  iC_AV(3) + iC_AV(4));	// C++ comment in embedded C reported by -P option
+011	    }
+
+******* NET TOPOLOGY    ************************
+
+IB1     [  A
+IB2     [  A
+IX0.0   <     _f1_1|
+QB1     ?  A
+*** Warning: unused    imm int: QB1 File ./Test0/CppComment.ic, line 12
+*** Error: gate: QB1 File ./Test0/CppComment.ic, line 12
+_f1_1   |  F { (2)    QB1?    IB1[    IB2[
+iClock  :  :  _f1_1|
+
+******* NET STATISTICS  ************************
+
+OR	|      1 blocks
+INPW	[      2 blocks
+INPX	<      1 blocks
+CLK	:      1 blocks
+ERR	?      1
+
+TOTAL	       5 blocks
+	      11 links
+
+compiled by:
+@(#)     $Id: CppComment.lst,v 1.1 2015/11/03 03:22:57 jw Exp $ -O7
+*** Warning: 1 unused gate. File ./Test0/CppComment.ic, line 12
+*** Error: 2 generate errors - cannot execute. File ./Test0/CppComment.ic, line 12
