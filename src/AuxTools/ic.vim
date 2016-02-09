@@ -1,11 +1,12 @@
 " Vim syntax file
 " Language:	iC
-" Maintainer:	John E. Wulff <john@je-wulff.de>
-" Last Change:	2007 Apr 11
-" $Id: ic.vim,v 1.9 2013/09/17 06:04:04 jw Exp $
+" Maintainer:	John E. Wulff <wulff.johne@gmail.com>
+" Last Change:	2007 Apr 11 - 2015 Apr 6
+" $Id: ic.vim,v 1.10 2015/04/06 02:26:40 jw Exp $
 " for openSUSE ic.vim must be in /usr/share/vim/current/syntax
 " NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
 " local filetype.vim must be in ~/.vim (ic.vim does not work there)
+" for Raspian copy ic.vim to /usr/share/vim/vim73/syntax/ic.vim
 
 " For version 5.x: Clear all syntax items
 " For version 6.x: Quit when a syntax file was already loaded

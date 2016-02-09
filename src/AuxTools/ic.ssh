@@ -1,6 +1,6 @@
 # Style sheet for C
 # Copyright (c) 2012 John E. Wulff
-# $Id: ic.ssh,v 1.1 2012/12/01 03:01:31 jw Exp $
+# $Id: ic.ssh,v 1.2 2015/02/27 21:31:32 jw Exp $
 #
 # append the following 5 lines (without the leading #) to
 # /usr/share/a2ps/sheets.map (or directory where style sheets are stored)
@@ -37,7 +37,7 @@ version is 1.1
 documentation is
    "immediate C can be in files with the extender .ic, .ica or listings in .lst"
    "This style does highlight function block definitions, which are introduced"
-   "by the keyword imm followed by one of the types bit, int, clock or timer."
+   "by the keyword imm followed by one of the types void, bit, int, clock or timer."
 end documentation
 
 alphabets are
@@ -49,23 +49,28 @@ ancestors are
   gnuc
 end ancestors
 
-# iC function block declaration
-operators in Plain are
-   (/(D)([ \t]*\\()/ \1 Keyword_strong, \2 Plain),
-   (/(SH)([ \t]*\\()/ \1 Keyword_strong, \2 Plain),
-   (/(imm|assign)?([ \t]*)(bit|int|clock|timer|void)(([ \t]*)([a-zA-Z_][a-zA-Z_0-9]*)([ \t]*\\())?/ 
-	\1 Keyword, \2 Plain, \3 Keyword, \5 Plain, \6 Label_strong, \7 Plain)
-end operators	
-
+# iC type modifiers and types (int already defined in c.ssh)
 keywords in Keyword are
-   immC, iC_Gt, Gate
+   imm, immC, bit, clock, timer
 end keywords
 
+# iC function block declaration (imm has already been seen!!)
+operators in Plain are
+   (/([ \t]+)(bit|int|clock|timer|void)([ \t]+)([a-zA-Z_][a-zA-Z_0-9]*)([ \t]*)\\(/ 
+	\1 Plain, \2 Keyword, \3 Plain, \4 Label_strong, \5 Plain, "(" Plain)
+end operators	
+
+operators in Keyword_strong are
+   /^[ \t]*%[ \t]*(define|e(l(if|se)|ndif)|i(f(|def|ndef))|undef)/,
+   /^[ \t]*(use|no)[ \t]+(strict|alias)/,
+   /[IQT]X([0-9]*\.[0-7])?/,
+   /[IQ][BWLH][0-9]*/
+end operators
+
 keywords in Keyword_strong are
-   /^%[ ]*(define|undef)/,
-   /^(use|no)[ \t](strict|alias)/,
-   DR_, DSR_, SHR_, SHSR_, CHANGE, RISE, SR, SR_, SRR, SRR_, CLOCK, TIMER, TIMER1, FORCE,
-   DR, DSR, FALL, LATCH, DLATCH, this
+   assign, this,
+   FORCE, SR_, D, DR_, SRR_, DSR_, SH, SHR_, SHSR_, RISE, CHANGE, CLOCK, TIMER, TIMER1,
+   SR, SRX, JK, SRR, DR, DSR, SHR, SHSR, ST, SRT, FALL, LATCH, DLATCH
 end keywords
 
 keywords in Label_strong are

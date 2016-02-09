@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.38 2015/02/27 21:31:32 jw Exp $' >&2
+  echo '$Id: tt,v 1.39 2015/11/01 04:33:48 jw Exp $' >&2
 }
 
 usage()
@@ -41,9 +41,10 @@ usage()
   echo '		and make only iCa files and compare them with "<dir1>a"' >&2
   echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
-  echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
-  echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
-  echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
+  echo '	-E	store error output of iC and C compile in file.ini' >&2
+  echo '	-j	append output of an initial run to file.ini      (implies -s)' >&2
+  echo '	-I	append output of run INITIALIZATION only to file.ini  ( " -s)' >&2
+  echo '	-J	append output of full INITIALIZATION info to file.ini ( " -s)' >&2
   echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
   echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 Test12 Test13' >&2
   echo '	-T <string of directory names for Test2 group> default Test2 - Test8, Test10' >&2
@@ -99,6 +100,7 @@ e=""
 ao="x"
 A=""
 L=""
+E=""
 I=""
 g=""
 pd="pd"
@@ -110,7 +112,7 @@ test2=""
 Test1='Test1 Test9 Test11 Test12 Test13'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
-while getopts ":cm:d:lwrgASO:PRseaLNjIJ6x:f:F:t:T:zvh" opt; do
+while getopts ":cm:d:lwrgASO:PRseaLNEjIJ6x:f:F:t:T:zvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
@@ -129,6 +131,7 @@ while getopts ":cm:d:lwrgASO:PRseaLNjIJ6x:f:F:t:T:zvh" opt; do
     a )	ao=a;;
     L )	L=" -L";;
     N )	A="$A -N";;
+    E ) E=" -E";;
     j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
@@ -173,7 +176,7 @@ shift $(($OPTIND - 1))
 
 l="$l$x$f$F"
 if [ -n "$z" ]; then
-    echo "c = !$c! A = !$A! I = !$I! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! pd = !$pd!"
+    echo "c = !$c! A = !$A! I = !$I! E = !$E! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! pd = !$pd!"
 fi
 
 d1=$1
@@ -227,8 +230,8 @@ if [ -n "$test1" ]; then
 		    fi
 		    ml
 		    rm -f $(cat p[g$g].lt)
-		    echo; echo "========== $t mm$I$v$A$L$ae"
-		    mm$I$v$A$L$ae	# do twice if -a
+		    echo; echo "========== $t mm$I$E$v$A$L$ae"
+		    mm$I$E$v$A$L$ae	# do twice if -a
 		    ml
 		fi
 		if [ -n "$d1" ]; then
@@ -288,8 +291,8 @@ if [ -n "$test2" ]; then
 	    if [ -z "$c" ]; then
 		ml
 		rm -f $(cat p[g$g].lt)
-		echo; echo "========== $t my$I$v$A"
-		my$I$v$A
+		echo; echo "========== $t my$I$E$v$A"
+		my$I$E$v$A
 		ml
 	    fi
 	    if [ -n "$d1" ]; then

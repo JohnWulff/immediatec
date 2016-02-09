@@ -2,14 +2,14 @@ Notes on the development environment of the iC components
 
 	John E. Wulff   04 February 2007
 
-    $Id: Readme_develop,v 1.21 2015/02/27 21:31:32 jw Exp $
+    $Id: Readme_develop,v 1.22 2015/12/05 03:00:35 jw Exp $
 
 Originally the system was developed under Unix Sytem V (1985 - 1986)
 The system was ported to DOS with the MS-C compiler (1987 -1989)
 and Borland C++ 3.1 (1990 - 1994) both with the MKS toolkit.
 
 The development environment has been SuSE Linux 4.3 - 9.3 (1995-2005).
-Various versions of openSUSE - up to 13.1 (Bottle) (x86_64) (2006-2014).
+Various versions of openSUSE - up to 13.1 (Bottle) (x86_64) (2006-2015).
 The distribution was tested under Red Hat Linux 7.2, Debian Linux and
 the Cygwin environment under Windows XP. A native Windows port with
 MS Visual C++ and Perl only is under development.
@@ -97,7 +97,8 @@ a TCP/IP networking environment for running iC applications:
     iCbox	a network client I/O component to generate digital
 		or anlog input for an iC application and to display
 		digital or analog output from an iC application.
-		(This is a simulation of real I/O components)
+		This is a simulation of real I/O components.  Can also
+		be used to monitor real I/O when called with -d
 
     iClive	the IDE for immediate C - a programming and debugging
 		tool for iC applications.  It provides an edit window
@@ -192,6 +193,29 @@ testing full scale iC applications under realistic conditions.
 #	A similar modification has been implemented in _rcv() to buffer received
 #	messages when rcvd_notification_proc is interrupted starting another _rcv().
 #	This uses the $conn{rcvBusy} flag to return immediately.
+#
+#   Modification John Wulff 2013.04.28 - added trace arguments to inhibit_nagle()
+#	  Msg->inhibit_nagle(0)		# Nagle's algorithm active
+#	  Msg->inhibit_nagle(1)		# inhibit Nagle's algorithm - no traces
+#	  Msg->inhibit_nagle(1, 1)	# also trace rcv calls only
+#	  Msg->inhibit_nagle(1, 0, 1)	# also trace send calls only
+#	  Msg->inhibit_nagle(1, 1, 1)	# also trace rcv and send calls
+#
+#   Modification John Wulff 2015.03.06 - added time out delay to connect() calls
+#	Some iC clients, in particular iCbox, are started from applications
+#	automatically with a system() call. These same applications usually also
+#	start iCserver if it is not already running. This may involve a timing
+#	race and the client may not be able to connect to iCserver immediately.
+#	To guarantee a smooth startup sequence, connect() has been modified to
+#	retry 3 times at 2 second intervals.
+#	
+#	This action is not appropriate if there is no likelyhood of iCserver
+#	being started externally. This applies to iClive, which starts iCserver
+#	itself if there is none to connect to. To speed up startup of iClive
+#	an extra optional argument '$time_out_inhibit' has been added to connect().
+#	  Msg->connect($host, $port, $rcvd_notification_proc, $time_out_inhibit)
+#	$time_out_inhibit undef or 0	# retry 3 connects at 2 sec intervals
+#	$time_out_inhibit 1		# returns immediately if connect fails
 
     iCmake	make one or more iC application(s) from iC or iCa
 		source(s) supplemented by optional .ih headers.
@@ -277,10 +301,11 @@ Scripts:
 			(on a 16 bit system INT_MAX is 32767 and -s is not required)
 			simulates compilation for a 16 bit system, which does
 			no 32 bit arithmetic and rejects QL.. and IL.. I/O unless
-		-z	make with -DLONG16        (make clean required first)
+		-y	make with -DLONG16        (make clean required first)
 			produces code for long int arithmetic on a 16 bit system
 		-h	this help text
 		<iC_sources>  list of iC source files which will be made with iCmake
+		for other options see m -h
 
 Auxiliary scripts for testing compiler outputs
 
@@ -524,7 +549,7 @@ and arranged as if each had been compiled to a function block
 template. Calling these manually compiled function blocks produced
 the same code as the directly compiled built-in functions.
 
-In a second phase if bootstrapping the manual process was replaced
+In a second phase of bootstrapping the manual process was replaced
 by a generator, which was called once to produce the source code of
 the nodes and links for function block templates for the low level
 built-in functions. This source code was edited manually into the
@@ -537,9 +562,9 @@ For some reason the extended built-in functions which are compiled
 from built-in text each time the compiler is started were ignored
 during the second bootstrapping phase.
 
-In a third bootstrapping phase the extended built-in functions will
-also be pre-compiled and patched into the source code of the symbol
-table, which will make the slightly messy compiling of these function
+In a third bootstrapping phase the extended built-in functions were
+also pre-compiled and patched into the source code of the symbol
+table, which makes the slightly messy compiling of these function
 blocks unnecessary. Since generating the bootstrapping data is
 competely automatic it will still be possible to extend the language.
 
@@ -573,3 +598,5 @@ it is of the order of 30,000 inputs - I can sleep easy with that.
 Option 3 would have been easy but seemed unsatisfactory after so much
 work was put into minimising the size of a node. The effect would have
 been the same as for option 2.
+
+Development of auxiliary drivers

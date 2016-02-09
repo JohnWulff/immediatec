@@ -15,26 +15,28 @@ usage ()
   echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
   echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
-  echo '	-j	produce file.ini with load info but no INITIALIZATION' >&2
-  echo '	-I	produce file.ini with load info and full INITIALIZATION' >&2
-  echo '	-J	produce file.ini without load info but full INITIALIZATION' >&2
+  echo '	-E	store error output of iC and C compile in file.ini' >&2
+  echo '	-j	append output of an initial run to file.ini      (implies -s)' >&2
+  echo '	-I	append output of run INITIALIZATION only to file.ini  ( " -s)' >&2
+  echo '	-J	append output of full INITIALIZATION info to file.ini ( " -s)' >&2
   echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
   echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo 'uses immcc -d76 -d<opt> -O<level> x.ic to make each line of the list pp.lt' >&2
   echo 'uses immcc -d74 -d<opt> -O<level> -o x.c x.ic to make each line of the list pp.lt' >&2
-  echo '	$Id: my,v 1.19 2015/02/27 21:31:32 jw Exp $' >&2
+  echo '	$Id: my,v 1.20 2015/11/01 04:34:32 jw Exp $' >&2
 }
 
 d=""
 x=""
 z=""
 A=" -f"
+E=""
 I=""
 g=""
 
-while getopts ":d:gASO:PRseNjIJ6xzh" opt; do
+while getopts ":d:gASO:PRseNEjIJ6xzh" opt; do
     case $opt in
     d ) d="$d -d$OPTARG";;
     g )	A="$A -g";;
@@ -46,6 +48,7 @@ while getopts ":d:gASO:PRseNjIJ6xzh" opt; do
     s )	A="$A -s";;
     e )	A="$A -e";;
     N )	A="$A -N";;
+    E ) E=" -E";;
     j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
@@ -63,9 +66,9 @@ if [ -f pp.lt ]; then
 	for file in $(cat pp.lt); do
 	    f=${file%.*}
 	    if [ -n "$z" ]; then
-		echo "iCmake$I$d$A $f.ic" >&2
+		echo "iCmake$I$E$d$A $f.ic" >&2
 	    fi
-	    iCmake$I$d$A $f.ic
+	    iCmake$I$E$d$A $f.ic
 	done 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\./ s//\/tmp\/x./' > Init.out
     else
 ##	rm -f /tmp/cexe.c			# just in case
@@ -74,10 +77,10 @@ if [ -f pp.lt ]; then
 	for file in $(cat pp.lt); do
 	    f=${file%.*}
 	    if [ -n "$z" ]; then
-		echo "iCmake$I$d$A -6t $f.ic" >&2
+		echo "iCmake$I$E$d$A -6t $f.ic" >&2
 	    fi
 	    rm -f cexe.c
-	    iCmake$I$d$A -6t $f.ic
+	    iCmake$I$E$d$A -6t $f.ic
 	    if test -f cexe.c &&
 		! diff -q -I'was built with' cexe.c /tmp/cexe.c > /dev/null; then
 		if [ -n "$z" ]; then
