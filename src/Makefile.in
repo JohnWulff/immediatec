@@ -275,14 +275,14 @@ test:
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -qAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/ORG; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/ORG/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile with -S option and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -qSAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/*.* ${srcdir}/Test0/STRICT; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@$(srcdir)/perlinstall -t $(srcdir)
@@ -329,11 +329,11 @@ endif
 	@${INSTALL_DATA} $(srcdir)/iCrfid.1.gz   ${mandir}/man1/${manprefix}iCrfid.1.gz
 	@${INSTALL_DATA} $(srcdir)/makeAll.1.gz  ${mandir}/man1/${manprefix}makeAll.1.gz
 	@${INSTALL_DATA} $(srcdir)/Mdiff.1.gz    ${mandir}/man1/${manprefix}Mdiff.1.gz
-	@${INSTALL_DATA} $(srcdir)/../man/man1/pig2vcd.1    ${mandir}/man1/${manprefix}pig2vcd.1
-	@${INSTALL_DATA} $(srcdir)/../man/man1/pigpiod.1    ${mandir}/man1/${manprefix}pigpiod.1
-	@${INSTALL_DATA} $(srcdir)/../man/man1/pigs.1       ${mandir}/man1/${manprefix}pigs.1
-	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpio.3     ${mandir}/man3/${manprefix}pigpio.3
-	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpiod_if.3 ${mandir}/man3/${manprefix}pigpiod_if.3
+	@${INSTALL_DATA} $(srcdir)/../man/man1/pig2vcd.1.gz    ${mandir}/man1/${manprefix}pig2vcd.1.gz
+	@${INSTALL_DATA} $(srcdir)/../man/man1/pigpiod.1.gz    ${mandir}/man1/${manprefix}pigpiod.1.gz
+	@${INSTALL_DATA} $(srcdir)/../man/man1/pigs.1.gz       ${mandir}/man1/${manprefix}pigs.1.gz
+	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpio.3.gz     ${mandir}/man3/${manprefix}pigpio.3.gz
+	@${INSTALL_DATA} $(srcdir)/../man/man3/pigpiod_if.3.gz ${mandir}/man3/${manprefix}pigpiod_if.3.gz
 
 uninstall:
 	$(srcdir)/perlinstall -r $(srcdir)
@@ -389,7 +389,8 @@ clean:
 	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/*.1.gz
 
 distclean: clean
-	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/gram.c $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/../README
+	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/comp.output $(srcdir)/comp_tab.h $(srcdir)/gram.c $(srcdir)/gram.output $(srcdir)/gram_tab.h $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log $(srcdir)/../README
+	cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 
 distribution:
 	@echo "making icc_$(REV).tgz"; cd ${srcdir}/../..; test -h icc_$(REV) || ln -s ic icc_$(REV); tar -czf icc_$(REV).tgz `$(PADD) icc_$(REV)/src/manifest`; cd -;
