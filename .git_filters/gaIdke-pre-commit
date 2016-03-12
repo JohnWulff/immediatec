@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.8 $
+# $Id: gaIdke-pre-commit 1.9 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -58,7 +58,7 @@
 #        ln -s ../../.git_filters/gaIdke-prepare-commit-msg ./prepare-commit-msg #optional
 #
 #    add the following line to <project>/.gitattributes
-#         *.* filter=gaIdke
+#         * filter=gaIdke
 #
 #    add the following [filter] lines to ~/.gitconfig
 #	 [filter "gaIdke"]
