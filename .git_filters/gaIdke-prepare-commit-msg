@@ -1,0 +1,50 @@
+#!/usr/bin/perl
+########################################################################
+#
+# $Id: gaIdke-prepare-commit-msg 1.5 $
+# $IdBlockFurtherExpansion$
+#
+# Git filters to implement RCS $Id: keyword expansion
+#
+# prepare-commit-msg:
+#         Obtain the list of files which have been updated with an
+#         incremented <rev> in pre-commit from .gitSmudgeList. Each
+#         smudgeLine in .gitSmudgeList is formatted as follows by pre-commit:
+#
+#             <path> <rev>
+#         or  <path> <rev> <- <previous_filename>
+#
+#         These lines preceded by '    Id: ' are added before the first
+#         comment of the new commit message. No lines are added for any
+#         files in the commit, which do not have a $Id string.
+#
+# To activate this filter put a symlink in .git/hooks to this file.
+#
+########################################################################
+
+$commitMsg = shift;
+if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $Ids
+    qx(mv -f "$commitMsg" "$commitMsg.bak");
+    open IN, "$commitMsg.bak" or die "Cannot open '$commitMsg.bak': $!";
+    open OUT, ">$commitMsg" or die "Cannot create '$commitMsg': $!";
+    while (<IN>) {
+	if (not $smudgeLine and m/^\s*#/) {
+	    print OUT "\n";
+	    while ($smudgeLine = <SMUDGE>) {
+		print OUT "    Id: $smudgeLine";
+	    }
+	    $smudgeLine = "EOF";	# use as flag to block repeats
+	}
+	print OUT;
+    }
+    if (not $smudgeLine) {	# in case there are no comments - unlikely but defensive
+	print OUT "\n";
+	while ($smudgeLine = <SMUDGE>) {
+	    print OUT "    Id: $smudgeLine";
+	}
+    }
+    close OUT;
+    close IN;
+    close SMUDGE;
+    qx(rm -f "$commitMsg.bak");
+}

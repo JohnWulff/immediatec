@@ -1,0 +1,51 @@
+#!/usr/bin/perl
+########################################################################
+#
+# $Id: gaIdke.smudge 1.8 $
+# $IdBlockFurtherExpansion$
+#
+# Git filters to implement RCS $Id: keyword expansion
+#
+# smudge: insert git SHA-1 hash, iso commit date and author name after
+#         $Id: followed by two initial white-space seperated entries
+#         <filename>, which is updated and <rev> which is passed on unchanged.
+#         <filename> and <rev> can be any non white-space characters except
+#         <filename> and <rev> may not start with a $ to prevent a Heisenbug.
+#         This smudge filter replaces the previous filename by the
+#         filename in file_path passed by git to the smudge filter.
+#         This replaces a possible RCS filnames,v with the plain filename and
+#         takes care of renamed files.
+#         The filter also works on un-clean $Id:'s remaining from RCS import,
+#         but not on plain $Id\$ (these are expanded in the pre-commit filter).
+#         This makes it far less likely that binary files are corrupted.
+#
+# modified extensively from code by Kimmo R. M. Hovi, Fair Warning, Inc.
+#
+# Usage:      .git_filter/gaIdke.smudge file_path < file_contents
+#
+# NOTE:   gaIdke.smudge itself is not smudged on checkout because gaIdke.smudge
+#         is temporarily removed during gaIdke-post-commit before git checkout.
+#
+########################################################################
+
+$path = shift;
+if ($path =~ m/.*\/(.*)/) {
+    $filename = $1;
+} else {
+    $filename = $path;
+}
+
+$log = qx(git log -1 --pretty=format:"%h %ai %an");
+
+$allowIdExpansion = 1;				# allow $Id expansion initially
+while (<STDIN>) {
+    if ($allowIdExpansion and m/\$Id/) {	# speed up scan by pre-selecting $Id lines
+	if (m/\$IdBlockFurtherExpansion\$/) {
+	    $allowIdExpansion = 0;		# block $Id expansion for texts describing this feature
+	} else {
+	    s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $2 $log \$/;
+	}
+    }
+} continue {
+    print or die "-p destination: $!\n";
+}

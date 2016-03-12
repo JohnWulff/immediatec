@@ -1,0 +1,120 @@
+#!/usr/bin/perl
+########################################################################
+#
+# $Id: gaIdke-pre-commit 1.8 $
+# $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
+#
+# Git filters to implement RCS $Id: keyword expansion
+#
+# pre-commit:
+#         Obtain the list of files currently being committed (staged)
+#         and not modified since they were added to the index (dirty).
+#         Back up each file and rewrite the file - scanning for $Id
+#         lines.
+#
+#         Increment the last number in <rev> of any $Id: <path> <rev>
+#         line in the file, which will be committed as modified.
+#         <path> is obtained from a 'git diff --name-only --cached'
+#         command, which is the list of files staged for commit.
+#         If a file has been renamed, the new path is written in the
+#         $Id: string.
+#
+#         Create a new revision 1.1 for a line containing $Id$ to start
+#         the process.
+#
+#         Append the path and modified revision to .gitSmudgeList. This
+#         list is stored for use by post-commit for a checkout and smudge
+#         of modified files.  The information in .gitSmudgeList is also
+#         used by prepare-commit-msg to pre-format a list of $Id incremented
+#         files as a tail for the commit message. This is optional and
+#         can be supressed by not activating prepare-commit-msg.
+#
+#         If no $Id string is found, the backup of the file is restored
+#         and that filename is not recorded in .gitSmudgeList. This
+#         means that file will not be smudged in post-commit and because
+#         it's modify date is not changed here or in post-commit, the file
+#         will not trigger a subsequent 'make'. The operation is completely
+#         transparent to GIT for this case.
+#
+#         $Id keyword expansion can be supressed by placing the string
+#         $IdBlockFurtherExpansion$ after an initial $Id keyword line,
+#         which will be expanded and before any line containing $Id$ or
+#         $Id: path rev $, which would otherwise be expanded. This is
+#         only required for files like this one describing the features.
+#
+# Usage:  To add automatic keyword incrementing and expansion:
+#
+#    copy the following files to your project in <project>/.git_filters/
+#        .git_filters/gaIdke-pre-commit
+#        .git_filters/gaIdke-prepare-commit-msg
+#        .git_filters/gaIdke-post-commit
+#        .git_filters/gaIdke.clean
+#        .git_filters/gaIdke.smudge
+#
+#    symlink the following files to <project>/.git/hooks/ as follows
+#        cd <project>/.git/hooks/
+#        ln -s ../../.git_filters/gaIdke-pre-commit ./pre-commit
+#        ln -s ../../.git_filters/gaIdke-post-commit ./post-commit
+#        ln -s ../../.git_filters/gaIdke-prepare-commit-msg ./prepare-commit-msg #optional
+#
+#    add the following line to <project>/.gitattributes
+#         *.* filter=gaIdke
+#
+#    add the following [filter] lines to ~/.gitconfig
+#	 [filter "gaIdke"]
+#		clean  = .git_filters/gaIdke.clean
+#		aIdke.smudge %f
+#
+########################################################################
+
+@modifyList = ();
+$smudgeList = "";
+@dirtyList = split " ", qx(git diff --name-only);
+@dirtyHash{@dirtyList} = "1" x @dirtyList;	# populate %dirtyHash with number of entries in @dirtyList
+foreach $path (split " ", qx(git diff --name-only --cached)) {
+    next if $dirtyHash{$path} or not -f $path;	# skip dirty or non-existing files - will be comitted without $Id increment
+    qx(mv -f "$path" "$path.bak");
+    open IN, "$path.bak" or die "Cannot open '$path.bak': $!";
+    open OUT, ">$path" or die "Cannot create '$path': $!";
+    if ($path =~ m/.*\/(.*)/) {
+	$filename = $1;
+    } else {
+	$filename = $path;
+    }
+    $minorRevision = 0;
+    $allowIdExpansion = 1;			# allow $Id expansion initially
+    while (<IN>) {
+	if ($allowIdExpansion and m/\$Id/) {	# speed up scan by pre-selecting $Id lines
+	    if (m/\$IdBlockFurtherExpansion\$/) {
+		$allowIdExpansion = 0;		# block $Id expansion for texts describing this feature
+	    }
+	    elsif (m/\$Id:\s+([^\$\s]\S*)\s+(([^.\$\s]\S*\.)*)(\d+)\s+[^\$]*\$/) {
+		$mod = $filename ne $1 ? " <- $1" : "";
+		$majorRevision = $2;
+		$minorRevision = $4 + 1;	# increment minor revision - must be numeric
+		s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $majorRevision$minorRevision \$/;
+	    }
+	    elsif (s/\$Id\$/\$Id: $filename 1.1 \$/) {
+		$mod = "";
+		$majorRevision = "1.";		# expand an initial $Id$ entry
+		$minorRevision = 1;
+	    }
+	}
+	print OUT;
+    }
+    close OUT;
+    close IN;
+    if ($minorRevision) {
+	push @modifyList, $path;		# file has been modified
+	$smudgeList .= "$path $majorRevision$minorRevision$mod\n"; # for prepare-commit-msg and post-commit
+	qx(chmod --reference="$path.bak" "$path");
+    } else {
+	qx(mv -f "$path.bak" "$path");		# no change - restore original unmodified file
+    }
+}
+if (@modifyList) {
+    qx(git add @modifyList);			# some files have been modified - add them to git index
+    open SMUDGE, ">.gitSmudgeList" or die "Cannot create '.gitSmudgeList': $!";
+    print SMUDGE "$smudgeList";
+    close SMUDGE;
+}
