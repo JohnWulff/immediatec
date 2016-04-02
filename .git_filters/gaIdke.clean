@@ -1,32 +1,36 @@
 #!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.clean 1.5 $
+# $Id: gaIdke.clean 1.7 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
 #
-#  clean: filter git SHA-1 hash Date and Author, in fact anything
-#         after $Id <filename> <rev> up to a final mandatory $
-#         separated from each other and the tail (possibly only the $)
-#         by white-space.
-#         <filename> and <rev> can be any non white-space characters except
-#         <filename> and <rev> may not start with a $ to prevent a Heisenbug.
+# clean:  remove git SHA-1 hash, iso commit date and author name before
+#         the final $ of a correctly smudged $Id string, which is
+#         '$Id: <filename> <ver> <hash> ...$'.
+#         <filename> and <ver> can be any non white-space characters except
+#         <filename> and <ver> may not start with a $ to prevent a Heisenbug.
+#         <hash> is any length word consisting of lower case hex digits.
 #
-#  NOTE:  this filter can be run on itself without changing anything.
+#         Only $Id strings which contain a white-space separated <hash> in
+#         the right place are cleaned. This makes sure that any $Id strings
+#         imported from legacy repositories are not modified.
+#
+#  NOTE:  'clean' can be run on its own output without changing anything.
 #
 # modified extensively from code by Kimmo R. M. Hovi, Fair Warning, Inc.
 #
 ########################################################################
 
 BEGIN {
-    $allowIdExpansion = 1;		# allow $Id expansion initially
+    $allowIdExpansion = 1;			# allow $Id expansion initially
 }
 
-if ($allowIdExpansion and m/\$Id/) {	# speed up scan by pre-selecting $Id lines
+if (m/\$Id/ and $allowIdExpansion) {		# speed up scan by pre-selecting $Id lines
     if (m/\$IdBlockFurtherExpansion\$/) {
-	$allowIdExpansion = 0;		# block $Id expansion for texts describing this feature
+	$allowIdExpansion = 0;			# block $Id expansion for texts describing this feature
     } else {
-	s/\$Id:\s+([^\$\s]\S*)\s+(([^.\$\s]\S*\.)*)(\d+)\s+[^\$]*\$/\$Id: $1 $2$4 \$/;
+	s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[\da-f]+\s+[^\$]*\$/\$Id: $1 $2 \$/;
     }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.9 $
+# $Id: gaIdke-pre-commit 1.10 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -12,22 +12,22 @@
 #         Back up each file and rewrite the file - scanning for $Id
 #         lines.
 #
-#         Increment the last number in <rev> of any $Id: <path> <rev>
+#         Increment the last number in <ver> of any $Id: <path> <ver>
 #         line in the file, which will be committed as modified.
 #         <path> is obtained from a 'git diff --name-only --cached'
 #         command, which is the list of files staged for commit.
 #         If a file has been renamed, the new path is written in the
 #         $Id: string.
 #
-#         Create a new revision 1.1 for a line containing $Id$ to start
+#         Create a new version 1.1 for a line containing $Id$ to start
 #         the process.
 #
-#         Append the path and modified revision to .gitSmudgeList. This
+#         Append the path and modified version to .gitSmudgeList. This
 #         list is stored for use by post-commit for a checkout and smudge
 #         of modified files.  The information in .gitSmudgeList is also
 #         used by prepare-commit-msg to pre-format a list of $Id incremented
 #         files as a tail for the commit message. This is optional and
-#         can be supressed by not activating prepare-commit-msg.
+#         can be suppressed by not activating prepare-commit-msg.
 #
 #         If no $Id string is found, the backup of the file is restored
 #         and that filename is not recorded in .gitSmudgeList. This
@@ -36,11 +36,11 @@
 #         will not trigger a subsequent 'make'. The operation is completely
 #         transparent to GIT for this case.
 #
-#         $Id keyword expansion can be supressed by placing the string
+#         $Id keyword expansion can be suppressed by placing the string
 #         $IdBlockFurtherExpansion$ after an initial $Id keyword line,
 #         which will be expanded and before any line containing $Id$ or
-#         $Id: path rev $, which would otherwise be expanded. This is
-#         only required for files like this one describing the features.
+#         $Id: <path> <ver> $, which would otherwise be expanded. This is
+#         only required for files like this one describing $Id features.
 #
 # Usage:  To add automatic keyword incrementing and expansion:
 #
@@ -55,15 +55,17 @@
 #        cd <project>/.git/hooks/
 #        ln -s ../../.git_filters/gaIdke-pre-commit ./pre-commit
 #        ln -s ../../.git_filters/gaIdke-post-commit ./post-commit
-#        ln -s ../../.git_filters/gaIdke-prepare-commit-msg ./prepare-commit-msg #optional
+#    the following symlink is optional but recommended
+#        ln -s ../../.git_filters/gaIdke-prepare-commit-msg ./prepare-commit-msg
 #
 #    add the following line to <project>/.gitattributes
 #         * filter=gaIdke
 #
-#    add the following [filter] lines to ~/.gitconfig
-#	 [filter "gaIdke"]
-#		clean  = .git_filters/gaIdke.clean
-#		aIdke.smudge %f
+#    add the following [filter] lines to .git/config
+#                                  or to ~/.gitconfig for all projects
+#         [filter "gaIdke"]
+#         	clean  = .git_filters/gaIdke.clean
+#         	smudge = .git_filters/gaIdke.smudge %f
 #
 ########################################################################
 
@@ -91,7 +93,7 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
 	    elsif (m/\$Id:\s+([^\$\s]\S*)\s+(([^.\$\s]\S*\.)*)(\d+)\s+[^\$]*\$/) {
 		$mod = $filename ne $1 ? " <- $1" : "";
 		$majorRevision = $2;
-		$minorRevision = $4 + 1;	# increment minor revision - must be numeric
+		$minorRevision = $4 + 1;	# increment minor version - must be numeric
 		s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $majorRevision$minorRevision \$/;
 	    }
 	    elsif (s/\$Id\$/\$Id: $filename 1.1 \$/) {

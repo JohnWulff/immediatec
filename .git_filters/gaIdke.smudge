@@ -1,23 +1,18 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.smudge 1.8 $
+# $Id: gaIdke.smudge 1.10 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
 #
-# smudge: insert git SHA-1 hash, iso commit date and author name after
-#         $Id: followed by two initial white-space seperated entries
-#         <filename>, which is updated and <rev> which is passed on unchanged.
-#         <filename> and <rev> can be any non white-space characters except
-#         <filename> and <rev> may not start with a $ to prevent a Heisenbug.
-#         This smudge filter replaces the previous filename by the
-#         filename in file_path passed by git to the smudge filter.
-#         This replaces a possible RCS filnames,v with the plain filename and
-#         takes care of renamed files.
-#         The filter also works on un-clean $Id:'s remaining from RCS import,
-#         but not on plain $Id\$ (these are expanded in the pre-commit filter).
-#         This makes it far less likely that binary files are corrupted.
+# smudge: insert git SHA-1 hash, iso commit date and author name before the
+#         final $ of a clean $Id string, which is '$Id: <filename> <ver> $'.
+#         <filename> and <ver> can be any non white-space characters except
+#         <filename> and <ver> may not start with a $ to prevent a Heisenbug.
+#
+#         Only 'clean' $Id strings are smudged. This makes sure that any
+#         $Id strings imported from legacy repositories are not modified.
 #
 # modified extensively from code by Kimmo R. M. Hovi, Fair Warning, Inc.
 #
@@ -28,24 +23,21 @@
 #
 ########################################################################
 
-$path = shift;
-if ($path =~ m/.*\/(.*)/) {
-    $filename = $1;
-} else {
-    $filename = $path;
+BEGIN {
+    $path = shift;
+    if ($path =~ m/.*\/(.*)/) {
+	$filename = $1;
+    } else {
+	$filename = $path;
+    }
+    $log = qx(git log -1 --pretty=format:"%h %ai %an");
+    $allowIdExpansion = 1;			# allow $Id expansion initially
 }
 
-$log = qx(git log -1 --pretty=format:"%h %ai %an");
-
-$allowIdExpansion = 1;				# allow $Id expansion initially
-while (<STDIN>) {
-    if ($allowIdExpansion and m/\$Id/) {	# speed up scan by pre-selecting $Id lines
-	if (m/\$IdBlockFurtherExpansion\$/) {
-	    $allowIdExpansion = 0;		# block $Id expansion for texts describing this feature
-	} else {
-	    s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $2 $log \$/;
-	}
+if (m/\$Id/ and $allowIdExpansion) {		# speed up scan by pre-selecting $Id lines
+    if (m/\$IdBlockFurtherExpansion\$/) {
+	$allowIdExpansion = 0;			# block $Id expansion for texts describing this feature
+    } else {
+	s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+\$/\$Id: $filename $2 $log \$/;
     }
-} continue {
-    print or die "-p destination: $!\n";
 }

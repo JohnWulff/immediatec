@@ -8,11 +8,11 @@
 #
 # prepare-commit-msg:
 #         Obtain the list of files which have been updated with an
-#         incremented <rev> in pre-commit from .gitSmudgeList. Each
+#         incremented <ver> in pre-commit from .gitSmudgeList. Each
 #         smudgeLine in .gitSmudgeList is formatted as follows by pre-commit:
 #
-#             <path> <rev>
-#         or  <path> <rev> <- <previous_filename>
+#             <path> <ver>
+#         or  <path> <ver> <- <previous_filename>
 #
 #         These lines preceded by '    Id: ' are added before the first
 #         comment of the new commit message. No lines are added for any
