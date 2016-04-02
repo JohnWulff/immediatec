@@ -1,7 +1,7 @@
 #!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.smudge 1.10 $
+# $Id: gaIdke.smudge 1.11 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -30,7 +30,7 @@ BEGIN {
     } else {
 	$filename = $path;
     }
-    $log = qx(git log -1 --pretty=format:"%h %ai %an");
+    $log = qx(git log -1 --pretty=format:"%h %ai %an" $path);
     $allowIdExpansion = 1;			# allow $Id expansion initially
 }
 
