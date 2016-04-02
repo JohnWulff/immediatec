@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c,v 1.73 2015/11/09 02:59:14 jw Exp $";
+"@(#)$Id: icc.c 1.74 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -508,7 +508,14 @@ main(
 		    break;
 		case 'u':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
-		    if (strlen(*argv)) iC_iccNM = *argv; else goto missing;
+		    if (strlen(*argv)) {
+			if (strcmp(iC_iccNM, "stdin") == 0) {
+			    iC_iccNM = iC_emalloc(strlen(*argv)+INSTSIZE+2);	/* +2 for '-...\0' */
+			    strcpy(iC_iccNM, *argv);
+			}
+		    } else {
+			goto missing;
+		    }
 		    goto break2;
 		case 'i':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
@@ -516,9 +523,10 @@ main(
 			slen != strspn(*argv, "0123456789")) {
 			fprintf(iC_errFP, "WARNING '-i %s' is non numeric or longer than %d characters - ignored\n",
 			    *argv, INSTSIZE);
+		    } else if (*iC_iidNM != '\0') {
+			fprintf(iC_errFP, "WARNING '-i %s' called a second time - ignored\n", *argv);
 		    } else {
-			iC_iidNM = iC_emalloc(INSTSIZE+1);	/* +1 for '\0' */
-			strncpy(iC_iidNM, *argv, INSTSIZE);
+			iC_iidNM = *argv;
 		    }
 		    goto break2;
 		case 'v':
@@ -890,7 +898,7 @@ main(
 		    break;
 		}
 	    } while (*++*argv);
-	    break2: ;
+	  break2: ;
 	} else {
 #ifdef	TCP
 	  setInpFN:
@@ -908,20 +916,22 @@ main(
 	    }
 #ifdef	TCP
 	    if (strcmp(iC_iccNM, "stdin") == 0) {
-		iC_iccNM = iC_emalloc(strlen(inpFN)+1);	/* +1 for '\0' */
+		iC_iccNM = iC_emalloc(strlen(inpFN)+INSTSIZE+2);	/* +2 for '-...\0' */
 		strcpy(iC_iccNM, inpFN);
 		if ((cp = strrchr(iC_iccNM, '.')) != 0 && strcmp(cp, ".ic") == 0) {
 		    *cp = '\0';		/* terminate at trailing extension .ic */
 		}
 	    }
-	    if (strlen(iC_iidNM) > 0) {
-		snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
-	    }
 #endif	/* TCP */
 	}
     }
 #if defined(RUN) || defined(TCP)
-   break3:
+#ifdef	TCP
+    if (strcmp(iC_iccNM, "stdin") != 0 && strlen(iC_iidNM) > 0) {
+	snprintf(iC_iccNM + strlen(iC_iccNM), INSTSIZE+2, "-%s", iC_iidNM);
+    }
+#endif	/* TCP */
+  break3:
     /********************************************************************
      *  Extra option switches and other arguments have been isolated after
      *  -R or alternatively option -- (cannot have both)

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c,v 1.67 2016/01/02 23:38:52 jw Exp $";
+"@(#)$Id: ict.c 1.68 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -653,7 +653,14 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	 * Fork iClive
 	 *******************************************************************/
 	if (iC_opt_l) {
-	    snprintf(buffer, BS, "iClive -z%s %s.ic", (iC_debug & DQ) ? "q" : "", iC_iccNM);
+	    int	ii;
+	    if ((ii = strlen(iC_iidNM)) == 0) {
+		snprintf(buffer, BS, "iClive -z%s %s.ic", (iC_debug & DQ) ? "q" : "", iC_iccNM);
+	    } else {
+		ii = strlen(iC_iccNM) - 1 - ii;			/* remove -instance qualification */
+		snprintf(buffer, BS, "iClive -z%si%s %*.*s.ic",
+		    (iC_debug & DQ) ? "q" : "", iC_iidNM, ii, ii, iC_iccNM);
+	    }
 	    iC_fork_and_exec(iC_string2argv(buffer, 3));	/* fork iClive -zq app.ic */
 	}
 #ifdef	RASPBERRYPI
