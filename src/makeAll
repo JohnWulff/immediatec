@@ -59,7 +59,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll,v 1.40 2015/10/16 12:33:47 jw Exp $' >&2
+    echo '	$Id: makeAll 1.41 $' >&2
 }
 
 makeLib ()
@@ -102,7 +102,7 @@ makeIcr ()
     else
 	mkdir IcrObjs
     fi
-    make OPT="-DRUN$r$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" icr
+    make OPT="-DRUN$r$u$d$e$os$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" icr
     mv comp.$O genr.$O gram.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -115,7 +115,7 @@ makeIct ()
     else
 	mkdir IctObjs
     fi
-    make OPT="-DTCP$t$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" ict
+    make OPT="-DTCP$t$u$d$e$os$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" ict
     mv comp.$O genr.$O gram.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -128,7 +128,7 @@ makeLmain ()
     else
 	mkdir LmainObjs
     fi
-    make OPT="-DLMAIN$m$u$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" lmain
+    make OPT="-DLMAIN$m$u$d$e$os$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" lmain
     mv misc.$O gram.$O lexc.$O symb.$O LmainObjs
     mv Make_tmp/* . 2> /dev/null
 }
@@ -248,6 +248,7 @@ if [ -f Make_tmp ]; then
 fi
 test -d Make_tmp || mkdir Make_tmp;
 
+os="$o"
 if [ -x /bin/uname ]; then
     cpu=`/bin/uname -m`
     if [[ "$cpu" =~ "armv" ]]; then
@@ -287,17 +288,17 @@ if [ $IM_LIB = 1 ] || [ $S = 1 ]; then
 fi
 
 if [ $R = 1 ]; then
-    echo "make OPT=\"-DRUN$r$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" icr"
+    echo "make OPT=\"-DRUN$r$u$d$e$os$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" icr"
     makeIcr  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $T = 1 ]; then
-    echo "make OPT=\"-DTCP$t$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" ict"
+    echo "make OPT=\"-DTCP$t$u$d$e$os$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" ict"
     makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
 if [ $M = 1 ]; then
-    echo "make OPT=\"-DLMAIN$m$u$d$e$o$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" lmain"
+    echo "make OPT=\"-DLMAIN$m$u$d$e$os$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
