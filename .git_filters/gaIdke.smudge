@@ -1,7 +1,7 @@
 #!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.smudge 1.11 $
+# $Id: gaIdke.smudge 1.12 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -10,6 +10,10 @@
 #         final $ of a clean $Id string, which is '$Id: <filename> <ver> $'.
 #         <filename> and <ver> can be any non white-space characters except
 #         <filename> and <ver> may not start with a $ to prevent a Heisenbug.
+#
+#         To find the right commit for this file and version in case this script
+#         is called by git checkout for a non HEAD commit, the whole log has to
+#         be scanned for 'Id: file ver' inserted by gaIdke-prepare-commit-message.
 #
 #         Only 'clean' $Id strings are smudged. This makes sure that any
 #         $Id strings imported from legacy repositories are not modified.
@@ -30,14 +34,25 @@ BEGIN {
     } else {
 	$filename = $path;
     }
-    $log = qx(git log -1 --pretty=format:"%h %ai %an" $path);
     $allowIdExpansion = 1;			# allow $Id expansion initially
 }
 
-if (m/\$Id/ and $allowIdExpansion) {		# speed up scan by pre-selecting $Id lines
+if ($allowIdExpansion and m/\$Id/) {		# speed up scan by pre-selecting $Id lines
     if (m/\$IdBlockFurtherExpansion\$/) {
 	$allowIdExpansion = 0;			# block $Id expansion for texts describing this feature
-    } else {
-	s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+\$/\$Id: $filename $2 $log \$/;
+    } elsif (m/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+\$/ and $filename eq $1) {
+	$ver = $2;
+	open(LOG, "git log -- $path |") or die "can't fork: $!";
+	$commit = '';				# look for right $commit in the whole log for this file
+	while ($l = <LOG>) {
+	    if ($l =~ m/^commit ([\da-f]+)$/) {
+		$commit = $1;
+	    } elsif ($l =~ m/Id: $path $ver/) {
+		$log = qx(git log $commit -1 --pretty=format:"%h %ai %an" -- $path);
+		s/\$Id:\s+[^\$\s]\S*\s+[^\$\s]\S*\s+\$/\$Id: $filename $ver $log \$/;
+		last;	# found 'Id: file ver' in commit message written by gaIdke-prepare-commit-message
+	    }
+	}
+	close LOG;
     }
 }

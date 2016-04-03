@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.10 $
+# $Id: gaIdke-pre-commit 1.11 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -23,11 +23,12 @@
 #         the process.
 #
 #         Append the path and modified version to .gitSmudgeList. This
-#         list is stored for use by post-commit for a checkout and smudge
+#         list is stored for use by post-commit for a 'checkout' and 'smudge'
 #         of modified files.  The information in .gitSmudgeList is also
-#         used by prepare-commit-msg to pre-format a list of $Id incremented
-#         files as a tail for the commit message. This is optional and
-#         can be suppressed by not activating prepare-commit-msg.
+#         used by 'prepare-commit-msg' to pre-format a list of $Id incremented
+#         files as a tail for the commit message. This is not optional because
+#         'smudge' uses this information in the log to find the right commit
+#         for this version of the file.
 #
 #         If no $Id string is found, the backup of the file is restored
 #         and that filename is not recorded in .gitSmudgeList. This
@@ -55,7 +56,6 @@
 #        cd <project>/.git/hooks/
 #        ln -s ../../.git_filters/gaIdke-pre-commit ./pre-commit
 #        ln -s ../../.git_filters/gaIdke-post-commit ./post-commit
-#    the following symlink is optional but recommended
 #        ln -s ../../.git_filters/gaIdke-prepare-commit-msg ./prepare-commit-msg
 #
 #    add the following line to <project>/.gitattributes
