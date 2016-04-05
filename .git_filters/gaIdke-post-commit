@@ -1,18 +1,16 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-post-commit 1.5 $
+# $Id: gaIdke-post-commit 1.6 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
 #
 # post-commit:
 #         Obtain the list of files which have been updated with an
-#         incremented <ver> in pre-commit from .gitSmudgeList.
-#         Remove each of these files and checkout update from repository.
-#         (checkout without previous removal would do nothing).
-#         git checkout will call smudge so the file in the working
-#         directory will have a $Id with an incremented <ver> followed
+#         incremented <rev> in pre-commit from .gitSmudgeList. Execute
+#         'git checkout HEAD' to call smudge so the file in the working
+#         directory will have a $Id with an incremented <rev> followed
 #         by the commit hash, the author commit date and the author name.
 #         Also remove the backup file here.
 #
@@ -23,14 +21,14 @@
 #         in git commit and the git philosophy is to always modify dates
 #         on checkout it was felt best to not touch the checked out file.
 #         This way a make immediately after commit will bring the updated
-#         <ver> Id's into the binaries, if $Ids are stored in binaries.
+#         <rev> Id's into the binaries, if $Ids are stored in binaries.
 #
 ########################################################################
 
 if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $Ids
     while (<SMUDGE>) {
 	($path, $remainder) = split " ", $_, 2;
-	qx(rm -f $path "$path.bak"; git checkout $path);
+	qx(git checkout HEAD $path; rm -f "$path.bak");
     }
     close SMUDGE;
     qx(rm .gitSmudgeList);		# do only once at end of commit

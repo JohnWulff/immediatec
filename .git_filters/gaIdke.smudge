@@ -1,7 +1,7 @@
 #!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.smudge 1.12 $
+# $Id: gaIdke.smudge 1.13 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -18,12 +18,15 @@
 #         Only 'clean' $Id strings are smudged. This makes sure that any
 #         $Id strings imported from legacy repositories are not modified.
 #
-# modified extensively from code by Kimmo R. M. Hovi, Fair Warning, Inc.
-#
 # Usage:      .git_filter/gaIdke.smudge file_path < file_contents
+#
+# Environment:
+#         export GAIDKE=verbose # causes 'smudge' to output extra debug output.
 #
 # NOTE:   gaIdke.smudge itself is not smudged on checkout because gaIdke.smudge
 #         is temporarily removed during gaIdke-post-commit before git checkout.
+#
+# modified extensively from code by Kimmo R. M. Hovi, Fair Warning, Inc.
 #
 ########################################################################
 
@@ -34,6 +37,8 @@ BEGIN {
     } else {
 	$filename = $path;
     }
+    $ga = $ENV{GAIDKE};				# environment variable GAIDKE can be set to
+    print STDERR "smudge	$path\n" if $ga =~ m/\bv/i;					# v[erbose]
     $allowIdExpansion = 1;			# allow $Id expansion initially
 }
 
@@ -44,11 +49,13 @@ if ($allowIdExpansion and m/\$Id/) {		# speed up scan by pre-selecting $Id lines
 	$ver = $2;
 	open(LOG, "git log -- $path |") or die "can't fork: $!";
 	$commit = '';				# look for right $commit in the whole log for this file
-	while ($l = <LOG>) {
+	while (defined($l = <LOG>)) {
 	    if ($l =~ m/^commit ([\da-f]+)$/) {
 		$commit = $1;
+		print STDERR " commit	$commit\n" if $ga =~ m/\bv/i;				# v[erbose]
 	    } elsif ($l =~ m/Id: $path $ver/) {
 		$log = qx(git log $commit -1 --pretty=format:"%h %ai %an" -- $path);
+		print STDERR "	\$Id: $filename $ver $log \$\n" if $ga =~ m/\bv/i;	# v[erbose]
 		s/\$Id:\s+[^\$\s]\S*\s+[^\$\s]\S*\s+\$/\$Id: $filename $ver $log \$/;
 		last;	# found 'Id: file ver' in commit message written by gaIdke-prepare-commit-message
 	    }

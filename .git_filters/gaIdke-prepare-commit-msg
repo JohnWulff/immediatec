@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-prepare-commit-msg 1.5 $
+# $Id: gaIdke-prepare-commit-msg 1.6 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -30,7 +30,7 @@ if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $I
     while (<IN>) {
 	if (not $smudgeLine and m/^\s*#/) {
 	    print OUT "\n";
-	    while ($smudgeLine = <SMUDGE>) {
+	    while (defined($smudgeLine = <SMUDGE>)) {
 		print OUT "    Id: $smudgeLine";
 	    }
 	    $smudgeLine = "EOF";	# use as flag to block repeats
@@ -39,7 +39,7 @@ if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $I
     }
     if (not $smudgeLine) {	# in case there are no comments - unlikely but defensive
 	print OUT "\n";
-	while ($smudgeLine = <SMUDGE>) {
+	while (defined($smudgeLine = <SMUDGE>)) {
 	    print OUT "    Id: $smudgeLine";
 	}
     }
