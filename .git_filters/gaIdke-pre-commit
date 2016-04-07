@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.11 $
+# $Id: gaIdke-pre-commit 1.12 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -22,7 +22,11 @@
 #         Create a new version 1.1 for a line containing $Id$ to start
 #         the process.
 #
-#         Append the path and modified version to .gitSmudgeList. This
+#         The above applies if the commit is executed in the master branch.
+#         Special handling applies if the commit is executed in any other
+#         branch (see gaIDke-README).
+#
+#         Finally append the path and modified version to .gitSmudgeList. This
 #         list is stored for use by post-commit for a 'checkout' and 'smudge'
 #         of modified files.  The information in .gitSmudgeList is also
 #         used by 'prepare-commit-msg' to pre-format a list of $Id incremented
@@ -30,42 +34,18 @@
 #         'smudge' uses this information in the log to find the right commit
 #         for this version of the file.
 #
-#         If no $Id string is found, the backup of the file is restored
+#         If no valid $Id string is found, the backup of the file is restored
 #         and that filename is not recorded in .gitSmudgeList. This
 #         means that file will not be smudged in post-commit and because
 #         it's modify date is not changed here or in post-commit, the file
 #         will not trigger a subsequent 'make'. The operation is completely
 #         transparent to GIT for this case.
 #
-#         $Id keyword expansion can be suppressed by placing the string
-#         $IdBlockFurtherExpansion$ after an initial $Id keyword line,
+#         Further $Id keyword expansion can be suppressed by placing the
+#         string $IdBlockFurtherExpansion$ after an initial $Id keyword line,
 #         which will be expanded and before any line containing $Id$ or
 #         $Id: <path> <ver> $, which would otherwise be expanded. This is
 #         only required for files like this one describing $Id features.
-#
-# Usage:  To add automatic keyword incrementing and expansion:
-#
-#    copy the following files to your project in <project>/.git_filters/
-#        .git_filters/gaIdke-pre-commit
-#        .git_filters/gaIdke-prepare-commit-msg
-#        .git_filters/gaIdke-post-commit
-#        .git_filters/gaIdke.clean
-#        .git_filters/gaIdke.smudge
-#
-#    symlink the following files to <project>/.git/hooks/ as follows
-#        cd <project>/.git/hooks/
-#        ln -s ../../.git_filters/gaIdke-pre-commit ./pre-commit
-#        ln -s ../../.git_filters/gaIdke-post-commit ./post-commit
-#        ln -s ../../.git_filters/gaIdke-prepare-commit-msg ./prepare-commit-msg
-#
-#    add the following line to <project>/.gitattributes
-#         * filter=gaIdke
-#
-#    add the following [filter] lines to .git/config
-#                                  or to ~/.gitconfig for all projects
-#         [filter "gaIdke"]
-#         	clean  = .git_filters/gaIdke.clean
-#         	smudge = .git_filters/gaIdke.smudge %f
 #
 ########################################################################
 
@@ -73,6 +53,21 @@
 $smudgeList = "";
 @dirtyList = split " ", qx(git diff --name-only);
 @dirtyHash{@dirtyList} = "1" x @dirtyList;	# populate %dirtyHash with number of entries in @dirtyList
+
+########################################################################
+#    Determine the GIT branch we are on
+########################################################################
+open(BRANCH, "git branch |") or die "can't fork: $!";
+$branch = '';
+while (<BRANCH>) {
+    if (m/^\* (\w+)/) {
+	$branch = $1;				# * branch   # found
+	last;
+    }
+}
+close BRANCH;
+die "ERROR: pre-commit: no branch found\n" unless $branch;	# should not happen if in a git environment
+
 foreach $path (split " ", qx(git diff --name-only --cached)) {
     next if $dirtyHash{$path} or not -f $path;	# skip dirty or non-existing files - will be comitted without $Id increment
     qx(mv -f "$path" "$path.bak");
@@ -83,32 +78,66 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
     } else {
 	$filename = $path;
     }
-    $minorRevision = 0;
+    $minorVersion = 0;
     $allowIdExpansion = 1;			# allow $Id expansion initially
     while (<IN>) {
 	if ($allowIdExpansion and m/\$Id/) {	# speed up scan by pre-selecting $Id lines
 	    if (m/\$IdBlockFurtherExpansion\$/) {
 		$allowIdExpansion = 0;		# block $Id expansion for texts describing this feature
 	    }
-	    elsif (m/\$Id:\s+([^\$\s]\S*)\s+(([^.\$\s]\S*\.)*)(\d+)\s+[^\$]*\$/) {
+	    elsif (m/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/) {
 		$mod = $filename ne $1 ? " <- $1" : "";
-		$majorRevision = $2;
-		$minorRevision = $4 + 1;	# increment minor version - must be numeric
-		s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $majorRevision$minorRevision \$/;
+		@versions = split /\./, $2;
+		$vCnt = scalar @versions;
+		if ($vCnt == 1) {
+		    unshift @versions, "";	# special case for imported single SVN version number
+		    $vCnt = 2;
+		}
+		if ($vCnt and ($vCnt % 2) == 0) {	# elements must be in pairs - else ignore
+		    if ($branch eq "master") {
+			$branch = $versions[0];	# first major version identifies master branch
+		    }
+		    $numeric = 1;
+		    $versionHead = "";
+		    for ($i = 0; $i < $vCnt; $i += 2) {
+			$versionHead .= "$versions[$i].";
+			$minorVersion = $versions[$i+1];
+			if ($minorVersion !~ m/^\d+$/) {
+			    $numeric = 0;	# minor versions must be numeric - ignore this Id
+			    last;
+			}
+			if ($branch ne $versions[$i]) {
+			    $versionHead .= "$minorVersion.";
+			} else {
+			    last;		# stop when branch is found
+			}
+		    }
+		    if ($numeric) {
+			if ($i >= $vCnt) {
+			    $versionHead .= "$branch.";
+			    $minorVersion = 0;	# extend Id version with start of new branch
+			}
+			$minorVersion++;	# increment minor version
+			s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $versionHead$minorVersion \$/;
+		    }
+		}
 	    }
-	    elsif (s/\$Id\$/\$Id: $filename 1.1 \$/) {
+	    elsif (m/\$Id\$/) {
 		$mod = "";
-		$majorRevision = "1.";		# expand an initial $Id$ entry
-		$minorRevision = 1;
+		$versionHead = $branch eq "master"
+			     ? "1."		# expand an initial master $Id$ entry
+			     : "1.1.$branch.";	# expand an initial branch $Id$ entry
+		$minorVersion = 1;
+		s/\$Id\$/\$Id: $filename $versionHead$minorVersion \$/;
 	    }
 	}
 	print OUT;
     }
     close OUT;
     close IN;
-    if ($minorRevision) {
+    if ($minorVersion) {
 	push @modifyList, $path;		# file has been modified
-	$smudgeList .= "$path $majorRevision$minorRevision$mod\n"; # for prepare-commit-msg and post-commit
+	$smudgeList .= "$path $versionHead$minorVersion$mod\n"; # for prepare-commit-msg and post-commit
 	qx(chmod --reference="$path.bak" "$path");
     } else {
 	qx(mv -f "$path.bak" "$path");		# no change - restore original unmodified file
