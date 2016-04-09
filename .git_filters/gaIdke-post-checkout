@@ -1,0 +1,38 @@
+#!/bin/sh
+########################################################################
+#
+# $Id: gaIdke-post-checkout 1.1 $
+# $IdBlockFurtherExpansion$
+#
+# Git filters to implement RCS $Id: keyword expansion
+#
+# post-checkout:
+#         for every file, which has a $Id line but whose Id could not be
+#         found in the log, 'smudge' outputs the files path to .gitSmudgeFailed.
+#
+#         This happens during a checkout to a branch which is above the
+#         branch we are coming from, because HEAD is not moved until after
+#         the checked out files have been smudged after 'git checkout'.
+#
+#         This filter is called after the checkout is complete and HEAD
+#         has been moved and can call 'post-commit' to smudge the files
+#         correctly.
+#
+#         This filter is only run once after a checkout to break an
+#         infinite loop, by blocking writing to .gitSmudgeList in 'smudge'
+#         when 'post-commit' is called from this filter, which calls
+#         'git checkout' again which calls 'smudge' with the correct HEAD.
+#         This should not happen with a correct HEAD but you never know.
+#
+########################################################################
+
+if [ -r ".gitSmudgeFailed" ]; then
+    if [ "${GAIDKE#V}" != "$GAIDKE" ]; then
+	echo >&2 "post-checkout '$1' '$2' '$3'"
+	cat .gitSmudgeFailed >&2
+    fi
+    mv -f .gitSmudgeFailed .gitSmudgeList
+    export GAIDKE_P_C=1			# block writing to .gitSmudgeFailed
+    .git_filters/gaIdke-post-commit
+    export GAIDKE_P_C=
+fi

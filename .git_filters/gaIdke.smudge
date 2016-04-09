@@ -1,7 +1,7 @@
 #!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.smudge 1.13 $
+# $Id: gaIdke.smudge 1.14 $
 # $IdBlockFurtherExpansion$
 #
 # Git filters to implement RCS $Id: keyword expansion
@@ -31,6 +31,9 @@
 ########################################################################
 
 BEGIN {
+    ########################################################################
+    #    Determine filename from input parameter path
+    ########################################################################
     $path = shift;
     if ($path =~ m/.*\/(.*)/) {
 	$filename = $1;
@@ -38,8 +41,9 @@ BEGIN {
 	$filename = $path;
     }
     $ga = $ENV{GAIDKE};				# environment variable GAIDKE can be set to
-    print STDERR "smudge	$path\n" if $ga =~ m/\bv/i;					# v[erbose]
+    print STDERR "smudge	$path\n" if $ga =~ m/\bV/;				# V[erbose]
     $allowIdExpansion = 1;			# allow $Id expansion initially
+    $log = "no Id";
 }
 
 if ($allowIdExpansion and m/\$Id/) {		# speed up scan by pre-selecting $Id lines
@@ -48,11 +52,11 @@ if ($allowIdExpansion and m/\$Id/) {		# speed up scan by pre-selecting $Id lines
     } elsif (m/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+\$/ and $filename eq $1) {
 	$ver = $2;
 	open(LOG, "git log -- $path |") or die "can't fork: $!";
-	$commit = '';				# look for right $commit in the whole log for this file
+	$commit = $log = '';			# look for right $commit in the whole log for this file
 	while (defined($l = <LOG>)) {
 	    if ($l =~ m/^commit ([\da-f]+)$/) {
 		$commit = $1;
-		print STDERR " commit	$commit\n" if $ga =~ m/\bv/i;				# v[erbose]
+		print STDERR " commit	$commit\n" if $ga =~ m/\bV/;			# V[erbose]
 	    } elsif ($l =~ m/Id: $path $ver/) {
 		$log = qx(git log $commit -1 --pretty=format:"%h %ai %an" -- $path);
 		print STDERR "	\$Id: $filename $ver $log \$\n" if $ga =~ m/\bv/i;	# v[erbose]
@@ -61,5 +65,13 @@ if ($allowIdExpansion and m/\$Id/) {		# speed up scan by pre-selecting $Id lines
 	    }
 	}
 	close LOG;
+    }
+}
+
+END {
+    unless ($log or $ENV{GAIDKE_P_C}) {		# block if called via 'post-checkout'
+	open SMUDGE, ">> .gitSmudgeFailed" or die "Cannot create '.gitSmudgeFailed': $!";
+	print SMUDGE "$path $ver\n";		# append if $Id but no corresponfing log
+	close SMUDGE;
     }
 }
