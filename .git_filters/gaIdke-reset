@@ -1,0 +1,84 @@
+#!/bin/sh
+########################################################################
+#
+# $Id: gaIdke-reset 1.1 $
+# $IdBlockFurtherExpansion$
+#
+#  Copyright © 2016 John E Wulff <immediatec@gmail.com>
+#  SPDX-License-Identifier: MIT
+#
+# Filters and hooks to implement 'Automatic GIT $Id: Keyword Expansion'
+#
+# reset [-h]
+#         To recover modified files containing $Id lines after aborting
+#         a commit by competely clearing the commit message execute
+#         '.git_filters/gaIdke-reset' (an empty commit message aborts
+#         a commit in GIT).
+#
+#         At that point the files in the working directory which have
+#         been staged will have cleaned and incremented $Id lines, but
+#         there will also be a backup copy of each of these files with
+#         the suffix .gaidke. To recover the state before the aborted
+#         commit, each of the .gaidke backup files is moved back to the
+#         original working file, but only if the working file has not
+#         been changed since the aborted commit. Also the recovered
+#         files are staged again with 'git add'.
+#
+#         If a staged file has been changed and a .gaidke file for it
+#         exists, only the $Id line must be copied back to that file and
+#         staged again.
+#
+#         Files which are staged to be deleted can be ignored. They have
+#         already been removed from the working directory.
+#
+########################################################################
+
+usage()
+{
+  echo "Usage:	$name [-h][ --verbose]" >&2
+  echo '	-v --verbose	list files that have been recovered' >&2
+  echo '	-h --help	this help text' >&2
+}
+
+name=${0##*/}
+global=''
+GAIDKE=''
+flag=''
+while :; do
+    case "$1" in
+    -v|--v*) GAIDKE=v;;
+    -V|--V*) GAIDKE=v;;
+    -h|--h*) usage; exit 0;;
+    -?*)     printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2 ;;
+    *) break;	# Default case: If no more options then break out of the loop.
+    esac
+    shift
+done
+mywd=$(pwd)
+git_base=$(git rev-parse  --show-toplevel)
+if [ -n "$git_base" ]; then
+    cd $git_base
+    for f in $(git diff --name-only --cached); do	# staged file paths
+	if [ -f $f.gaidke ]; then			# ignore non Id and deleted files
+	    if diff -I '\$Id\(: \|\$\)' $f.gaidke $f > /dev/null; then
+		mv -f $f.gaidke $f 
+		git add $f
+		if [ "$GAIDKE" = "v" ]; then
+		    echo "$f has been recovered" >&2
+		fi
+	    else
+		echo "$f has been modified - fix manually by copying the \$Id line" >&2
+		echo "from $f.gaidke to $f; rm $f.gaidke; git add $f;" >&2
+		flag=1;
+	    fi
+	fi
+    done
+    if [ -z "$flag" ]; then
+	echo "recovery complete" >&2
+    else
+	echo "partial recovery" >&2
+    fi
+    cd $mywd
+else
+    echo "Oops, you are not in a GIT project" >&2
+fi

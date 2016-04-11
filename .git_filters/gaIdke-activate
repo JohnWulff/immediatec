@@ -1,0 +1,113 @@
+#!/bin/sh
+########################################################################
+#
+# $Id: gaIdke-activate 1.1 $
+# $IdBlockFurtherExpansion$
+#
+#  Copyright © 2016 John E Wulff <immediatec@gmail.com>
+#  SPDX-License-Identifier: MIT
+#
+# Filters and hooks to implement 'Automatic GIT $Id: Keyword Expansion'
+#
+# activate [-h][ --global][ --verbose]
+#         Execute '.git_filters/gaIdke-activate' after cloning a project
+#         containing 'Automatic GIT Id Keyword Expansion' gaIdke, to place
+#         the correct symlinks in .git/hooks, and write a [filter "gaIdke"]
+#         entry in .git/config.
+#
+#         If '.git_filters/gaIdke-activate --global' is executed also copy
+#         all the files in '.git_filters' to '/usr/local/share/git_filters',
+#         symlink the hooks to them and write a global [filter "gaIdke"]
+#         entry in ~/.gitconfig.
+#         This way you can use 'Automatic GIT Id Keyword Expansion' in
+#         other GIT projects, although you need to copy all the files in
+#         '.git_filters' to another project if you want to publish it.
+#
+# modified extensively from code by Kimmo R. M. Hovi, Fair Warning, Inc.
+#
+########################################################################
+
+usage()
+{
+  echo "Usage:	$name [-h][ --global][ --verbose]" >&2
+  echo '	-g --global	activate for several GIT projects' >&2
+  echo '	-v --verbose	show files that are smudged' >&2
+  echo '	-h --help	this help text' >&2
+}
+
+name=${0##*/}
+global=''
+GAIDKE=''
+while :; do
+    case "$1" in
+    -g|--g*) global=1;;
+    -v|--v*) GAIDKE=v;;
+    -V|--V*) GAIDKE=V;;
+    -h|--h*) usage; exit 0;;
+    -?*)     printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2 ;;
+    *) break;	# Default case: If no more options then break out of the loop.
+    esac
+    shift
+done
+mywd=$(pwd)
+git_base=$(git rev-parse  --show-toplevel)
+if [ -n "$git_base" ]; then
+    cd $git_base
+    if [ -n "$global" ]; then
+	if [ ! -d /usr/local/share/git_filters ]; then
+	    sudo mkdir -p /usr/local/share/git_filters
+	    sudo chmod 0755 /usr/local/share/git_filters
+	    sudo chown $USER /usr/local/share/git_filters
+	    cp .git_filters/gaIdke.smudge /usr/local/share/git_filters
+	    cp .git_filters/gaIdke.clean /usr/local/share/git_filters
+	    chmod 0755 /usr/local/share/git_filters/gaIdke.{clean,smudge}
+	    if [ "$GAIDKE" = "V" ]; then
+		echo "gaIdke filters installed in /usr/local/share/git_filters" >&2
+	    fi
+	fi
+	cd .git/hooks
+	for f in post-checkout post-commit pre-commit prepare-commit-msg; do
+	    cp ../../.git_filters/gaIdke-$f /usr/local/share/git_filters
+	    chmod 0755 /usr/local/share/git_filters/gaIdke-$f
+	    ln -f -s /usr/local/share/git_filters/gaIdke-$f $f
+	done
+	ln -f -s /usr/local/share/git_filters/gaIdke-post-checkout post-merge
+	if [ "$GAIDKE" = "V" ]; then
+	    echo "gaIdke hooks in /usr/local/share/git_filters symlinked to .git/hooks" >&2
+	fi
+	cd ../..
+	git config --global filter.gaIdke.clean "/usr/local/share/git_filters/gaIdke.clean"
+	git config --global filter.gaIdke.smudge "/usr/local/share/git_filters/gaIdke.smudge %f"
+	if [ "$GAIDKE" = "V" ]; then
+	    echo "gaIdke filters configured globally in ~/.gitconfig" >&2
+	fi
+    else
+	cd .git/hooks
+	for f in post-checkout post-commit pre-commit prepare-commit-msg; do
+	    ln -f -s ../../.git_filters/gaIdke-$f $f
+	done
+	ln -f -s ../../.git_filters/gaIdke-post-checkout post-merge
+	if [ "$GAIDKE" = "V" ]; then
+	    echo "gaIdke hooks symlinked to .git/hooks" >&2
+	fi
+	cd ../..
+	git config filter.gaIdke.clean ".git_filters/gaIdke.clean"
+	git config filter.gaIdke.smudge ".git_filters/gaIdke.smudge %f"
+	if [ "$GAIDKE" = "V" ]; then
+	    echo "gaIdke filters configured locally in .git/config" >&2
+	fi
+    fi
+    if ! grep -q 'filter=gaIdke' .gitattributes; then
+	echo '* filter=gaIdke' >> .gitattributes
+	git commit -a -m "'Automatic GIT Id Keyword Expansion' gaIdke has been activated"
+	echo "'.gitattributes has been modified and comitted" >&2
+    fi
+    git checkout HEAD -- $(grep -El '\$Id: [^$ ][^ ]* [^$ ][^ ]* \$' $(git ls-files))
+    if [ -z "$global" ]; then
+	echo ".git_filters/gaIdke.smudge cannot smudge itself - ignore the previous error" >&2
+    fi
+    echo "'Automatic GIT Id Keyword Expansion' gaIdke has been activated" >&2
+    cd $mywd
+else
+    echo "Oops, you are not in a GIT project" >&2
+fi

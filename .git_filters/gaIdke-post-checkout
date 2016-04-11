@@ -1,22 +1,28 @@
 #!/bin/sh
 ########################################################################
 #
-# $Id: gaIdke-post-checkout 1.1 $
+# $Id: gaIdke-post-checkout 1.2 $
 # $IdBlockFurtherExpansion$
 #
-# Git filters to implement RCS $Id: keyword expansion
+#  Copyright © 2016 John E Wulff <immediatec@gmail.com>
+#  SPDX-License-Identifier: MIT
+#
+# Filters and hooks to implement 'Automatic GIT $Id: Keyword Expansion'
 #
 # post-checkout:
-#         for every file, which has a $Id line but whose Id could not be
+#
+#         Same script used for 'post-checkout' and for 'post-merge'.
+#
+#         For every file, which has a $Id line but whose Id could not be
 #         found in the log, 'smudge' outputs the files path to .gitSmudgeFailed.
 #
-#         This happens during a checkout to a branch which is above the
+#         This happens in 'git checkout branch' when branch is above the
 #         branch we are coming from, because HEAD is not moved until after
 #         the checked out files have been smudged after 'git checkout'.
 #
-#         This filter is called after the checkout is complete and HEAD
-#         has been moved and can call 'post-commit' to smudge the files
-#         correctly.
+#         This filter is called after the checkout is complete and
+#         HEAD has been moved. It calls'post-commit' to smudge the
+#         files correctly.
 #
 #         This filter is only run once after a checkout to break an
 #         infinite loop, by blocking writing to .gitSmudgeList in 'smudge'
@@ -28,11 +34,11 @@
 
 if [ -r ".gitSmudgeFailed" ]; then
     if [ "${GAIDKE#V}" != "$GAIDKE" ]; then
-	echo >&2 "post-checkout '$1' '$2' '$3'"
+	echo "post-checkout '$1' '$2' '$3'" >&2
 	cat .gitSmudgeFailed >&2
     fi
     mv -f .gitSmudgeFailed .gitSmudgeList
     export GAIDKE_P_C=1			# block writing to .gitSmudgeFailed
     .git_filters/gaIdke-post-commit
-    export GAIDKE_P_C=
+    export GAIDKE_P_C=			# allow writing to .gitSmudgeFailed
 fi

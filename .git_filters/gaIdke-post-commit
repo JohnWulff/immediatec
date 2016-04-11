@@ -1,10 +1,13 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-post-commit 1.6 $
+# $Id: gaIdke-post-commit 1.7 $
 # $IdBlockFurtherExpansion$
 #
-# Git filters to implement RCS $Id: keyword expansion
+#  Copyright © 2016 John E Wulff <immediatec@gmail.com>
+#  SPDX-License-Identifier: MIT
+#
+# Filters and hooks to implement 'Automatic GIT $Id: Keyword Expansion'
 #
 # post-commit:
 #         Obtain the list of files which have been updated with an
@@ -28,8 +31,8 @@
 if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $Ids
     while (<SMUDGE>) {
 	($path, $remainder) = split " ", $_, 2;
-	qx(git checkout HEAD $path; rm -f "$path.bak");
+	qx(git checkout HEAD $path; rm -f "$path.gaidke");
     }
     close SMUDGE;
-    qx(rm .gitSmudgeList);		# do only once at end of commit
+    qx(rm -f .gitSmudgeList);		# do only once at end of commit
 }

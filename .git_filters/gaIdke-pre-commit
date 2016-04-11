@@ -1,10 +1,13 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.12 $
+# $Id: gaIdke-pre-commit 1.13 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
-# Git filters to implement RCS $Id: keyword expansion
+#  Copyright © 2016 John E Wulff <immediatec@gmail.com>
+#  SPDX-License-Identifier: MIT
+#
+# Filters and hooks to implement 'Automatic GIT $Id: Keyword Expansion'
 #
 # pre-commit:
 #         Obtain the list of files currently being committed (staged)
@@ -53,25 +56,13 @@
 $smudgeList = "";
 @dirtyList = split " ", qx(git diff --name-only);
 @dirtyHash{@dirtyList} = "1" x @dirtyList;	# populate %dirtyHash with number of entries in @dirtyList
-
-########################################################################
-#    Determine the GIT branch we are on
-########################################################################
-open(BRANCH, "git branch |") or die "can't fork: $!";
-$branch = '';
-while (<BRANCH>) {
-    if (m/^\* (\w+)/) {
-	$branch = $1;				# * branch   # found
-	last;
-    }
-}
-close BRANCH;
-die "ERROR: pre-commit: no branch found\n" unless $branch;	# should not happen if in a git environment
+$gBranch = qx(git rev-parse --abbrev-ref HEAD);	# current GIT branch
+chomp $gBranch;
 
 foreach $path (split " ", qx(git diff --name-only --cached)) {
     next if $dirtyHash{$path} or not -f $path;	# skip dirty or non-existing files - will be comitted without $Id increment
-    qx(mv -f "$path" "$path.bak");
-    open IN, "$path.bak" or die "Cannot open '$path.bak': $!";
+    qx(mv -f "$path" "$path.gaidke");
+    open IN, "$path.gaidke" or die "Cannot open '$path.gaidke': $!";
     open OUT, ">$path" or die "Cannot create '$path': $!";
     if ($path =~ m/.*\/(.*)/) {
 	$filename = $1;
@@ -80,6 +71,7 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
     }
     $minorVersion = 0;
     $allowIdExpansion = 1;			# allow $Id expansion initially
+    $branch = $gBranch;				# restore branch for each file
     while (<IN>) {
 	if ($allowIdExpansion and m/\$Id/) {	# speed up scan by pre-selecting $Id lines
 	    if (m/\$IdBlockFurtherExpansion\$/) {
@@ -94,7 +86,7 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
 		    $vCnt = 2;
 		}
 		if ($vCnt and ($vCnt % 2) == 0) {	# elements must be in pairs - else ignore
-		    if ($branch eq "master") {
+		    if ($gBranch eq "master") {
 			$branch = $versions[0];	# first major version identifies master branch
 		    }
 		    $numeric = 1;
@@ -124,7 +116,7 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
 	    }
 	    elsif (m/\$Id\$/) {
 		$mod = "";
-		$versionHead = $branch eq "master"
+		$versionHead = $gBranch eq "master"
 			     ? "1."		# expand an initial master $Id$ entry
 			     : "1.1.$branch.";	# expand an initial branch $Id$ entry
 		$minorVersion = 1;
@@ -138,11 +130,12 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
     if ($minorVersion) {
 	push @modifyList, $path;		# file has been modified
 	$smudgeList .= "$path $versionHead$minorVersion$mod\n"; # for prepare-commit-msg and post-commit
-	qx(chmod --reference="$path.bak" "$path");
+	qx(chmod --reference="$path.gaidke" "$path");
     } else {
-	qx(mv -f "$path.bak" "$path");		# no change - restore original unmodified file
+	qx(mv -f "$path.gaidke" "$path");	# no change - restore original unmodified file
     }
 }
+
 if (@modifyList) {
     qx(git add @modifyList);			# some files have been modified - add them to git index
     open SMUDGE, ">.gitSmudgeList" or die "Cannot create '.gitSmudgeList': $!";

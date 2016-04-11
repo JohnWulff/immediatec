@@ -1,27 +1,37 @@
 #!/usr/bin/perl -p
 ########################################################################
 #
-# $Id: gaIdke.smudge 1.14 $
+# $Id: gaIdke.smudge 1.15 $
 # $IdBlockFurtherExpansion$
 #
-# Git filters to implement RCS $Id: keyword expansion
+#  Copyright © 2016 John E Wulff <immediatec@gmail.com>
+#  SPDX-License-Identifier: MIT
 #
-# smudge: insert git SHA-1 hash, iso commit date and author name before the
-#         final $ of a clean $Id string, which is '$Id: <filename> <ver> $'.
-#         <filename> and <ver> can be any non white-space characters except
-#         <filename> and <ver> may not start with a $ to prevent a Heisenbug.
+# Filters and hooks to implement 'Automatic GIT $Id: Keyword Expansion'
 #
-#         To find the right commit for this file and version in case this script
-#         is called by git checkout for a non HEAD commit, the whole log has to
-#         be scanned for 'Id: file ver' inserted by gaIdke-prepare-commit-message.
+# smudge <p1>
+#         <p1> path of the file to be smudged relative to GIT base.
+#
+#         Insert git SHA-1 hash, iso commit date and author name before the
+#         final $ of a clean $Id string, which is '$Id: <filename> <> $'.
+#         <filename> and <> can be any non white-space characters except
+#         <filename> and <> may not start with a $ to prevent a Heisenbug.
 #
 #         Only 'clean' $Id strings are smudged. This makes sure that any
 #         $Id strings imported from legacy repositories are not modified.
 #
-# Usage:      .git_filter/gaIdke.smudge file_path < file_contents
+#         'smudge' is called by 'git merge', 'git checkout' and indirectly
+#         by 'git pull', git clone' and 'post-commit'.
+#
+#         To find the right commit for this file and version in case this
+#         script is called for a non HEAD commit, the whole log has to be
+#         scanned for 'Id: file ' inserted by gaIdke-prepare-commit-message.
+#         This search may fail in which case it is corrected in 'post-checkout'.
 #
 # Environment:
-#         export GAIDKE=verbose # causes 'smudge' to output extra debug output.
+#         export GAIDKE=verbose # output extra debug messages.
+#         export GAIDKE=Verbose # output even more debug messages.
+#         export GAIDKE=        # no debug output.
 #
 # NOTE:   gaIdke.smudge itself is not smudged on checkout because gaIdke.smudge
 #         is temporarily removed during gaIdke-post-commit before git checkout.
@@ -71,7 +81,7 @@ if ($allowIdExpansion and m/\$Id/) {		# speed up scan by pre-selecting $Id lines
 END {
     unless ($log or $ENV{GAIDKE_P_C}) {		# block if called via 'post-checkout'
 	open SMUDGE, ">> .gitSmudgeFailed" or die "Cannot create '.gitSmudgeFailed': $!";
-	print SMUDGE "$path $ver\n";		# append if $Id but no corresponfing log
+	print SMUDGE "$path $ver\n";		# append if $Id but no corresponding log
 	close SMUDGE;
     }
 }
