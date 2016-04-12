@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.63 $
+# @(#)$Id: Makefile.in 1.64 $
 
 #######################################################################
 #
@@ -171,7 +171,10 @@ iCgpioPUD:	$(srcdir)/Makefile iCgpioPUD.$(O) bcm2835.$(O)
 #### iCpiPWM real real serVo and PWM I/O for Raspberry Pi #############
 ####  install with set user ID ########################################
 
-iCpiPWM:	$(srcdir)/Makefile iCpiPWM.$(O) misc.$(O) icend.$(O) tcpc.$(O) rpi_rev.$(O)
+${libdir}/${libprefix}libpigpio.a:	$(srcdir)/../lib/libpigpio.a
+	@${INSTALL_DATA} $(srcdir)/../lib/libpigpio.a      ${libdir}/${libprefix}libpigpio.a
+
+iCpiPWM:	$(srcdir)/Makefile iCpiPWM.$(O) misc.$(O) icend.$(O) tcpc.$(O) rpi_rev.$(O) ${libdir}/${libprefix}libpigpio.a
 	$(CC) $(LDFLAGS) -o iCpiPWM iCpiPWM.$(O) misc.$(O) icend.$(O) tcpc.$(O) rpi_rev.$(O) -lpigpio -lpthread -lrt $(EL)
 
 endif
@@ -302,12 +305,12 @@ ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} $(srcdir)/iCpiFace          ${bindir}/${binprefix}iCpiFace
 	@sudo ln -sf ${bindir}/${binprefix}iCpiFace     ${bindir}/${binprefix}iCpiGPIO
 	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCgpioPUD ${bindir}/${binprefix}iCgpioPUD
-	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCpiPWM   ${bindir}/${binprefix}iCpiPWM
 	@${INSTALL_PROGRAM} $(srcdir)/iCtherm           ${bindir}/${binprefix}iCtherm
-	@${INSTALL_PROGRAM} $(srcdir)/../include/pigpio.h     ${includedir}/${includeprefix}pigpio.h
-	@${INSTALL_PROGRAM} $(srcdir)/../include/pigpiod_if.h ${includedir}/${includeprefix}pigpiod_if.h
-	@${INSTALL_PROGRAM} $(srcdir)/../lib/libpigpio.a      ${libdir}/${libprefix}libpigpio.a
-	@${INSTALL_PROGRAM} $(srcdir)/../lib/libpigpiod_if.a  ${libdir}/${libprefix}libpigpiod_if.a
+	@${INSTALL_DATA} $(srcdir)/../include/pigpio.h     ${includedir}/${includeprefix}pigpio.h
+	@${INSTALL_DATA} $(srcdir)/../include/pigpiod_if.h ${includedir}/${includeprefix}pigpiod_if.h
+	@${INSTALL_DATA} $(srcdir)/../lib/libpigpio.a      ${libdir}/${libprefix}libpigpio.a
+	@${INSTALL_DATA} $(srcdir)/../lib/libpigpiod_if.a  ${libdir}/${libprefix}libpigpiod_if.a
+	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCpiPWM   ${bindir}/${binprefix}iCpiPWM
 endif
 	@${INSTALL_PROGRAM} $(srcdir)/iCrfid     ${bindir}/${binprefix}iCrfid
 	@${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
@@ -435,7 +438,10 @@ iCpiFace.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h $(srcdir)/rp
 
 iCgpioPUD.$(O):	$(srcdir)/bcm2835.h
 
-iCpiPWM.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h
+${includedir}/${includeprefix}pigpio.h:	$(srcdir)/../include/pigpio.h
+	@${INSTALL_DATA} $(srcdir)/../include/pigpio.h     ${includedir}/${includeprefix}pigpio.h
+
+iCpiPWM.$(O):	$(srcdir)/icc.h $(srcdir)/tcpc.h $(srcdir)/rpi_rev.h ${includedir}/${includeprefix}pigpio.h
 
 rpi_rev.$(O):	$(srcdir)/rpi_rev.h
 
