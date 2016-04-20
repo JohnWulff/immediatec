@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: configure,v 1.6 2005/07/29 17:51:13 jw Exp $
+# $Id: configure 1.7 $
 # make yacc the first choice - CHANGE from autoconf John Wulff
 # leave YACC as empty string if none found - CHANGE from autoconf John Wulff
 
@@ -5423,6 +5423,18 @@ chmod +x $CONFIG_STATUS
 ac_clean_files=$ac_clean_files_save
 
 
+# do gaIdke-activate if cloned GIT with gaIdke - CHANGE from autoconf John Wulff
+git_base=$(git rev-parse  --show-toplevel)
+if [ -n "$git_base" \
+     -a -f "$git_base/.git_filters/gaIdke-activate" \
+     -a ! -e "$git_base/.git/hooks/post-checkout" \
+     -a ! -e "$git_base/.git/hooks/post-commit" \
+     -a ! -e "$git_base/.git/hooks/post-merge" \
+     -a ! -e "$git_base/.git/hooks/pre-commit" \
+     -a ! -e "$git_base/.git/hooks/prepare-commit-msg" ]; then
+    . $git_base/.git_filters/gaIdke-activate
+fi
+
 # configure is writing to config.log, and then calls config.status.
 # config.status does its own redirection, appending to config.log.
 # Unfortunately, on DOS this fails, as config.log is still kept open
@@ -5443,4 +5455,3 @@ if test "$no_create" != yes; then
   # would make configure fail if this is the last instruction.
   $ac_cs_success || { (exit 1); exit 1; }
 fi
-

@@ -1,7 +1,7 @@
 #!/bin/sh
 ########################################################################
 #
-# $Id: gaIdke-activate 1.1 $
+# $Id: gaIdke-activate 1.2 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -58,12 +58,12 @@ if [ -n "$git_base" ]; then
 	    sudo mkdir -p /usr/local/share/git_filters
 	    sudo chmod 0755 /usr/local/share/git_filters
 	    sudo chown $USER /usr/local/share/git_filters
-	    cp .git_filters/gaIdke.smudge /usr/local/share/git_filters
-	    cp .git_filters/gaIdke.clean /usr/local/share/git_filters
-	    chmod 0755 /usr/local/share/git_filters/gaIdke.{clean,smudge}
-	    if [ "$GAIDKE" = "V" ]; then
-		echo "gaIdke filters installed in /usr/local/share/git_filters" >&2
-	    fi
+	fi
+	cp .git_filters/gaIdke.smudge /usr/local/share/git_filters
+	cp .git_filters/gaIdke.clean /usr/local/share/git_filters
+	chmod 0755 /usr/local/share/git_filters/gaIdke.{clean,smudge}
+	if [ "$GAIDKE" = "V" ]; then
+	    echo "gaIdke filters installed in /usr/local/share/git_filters" >&2
 	fi
 	cd .git/hooks
 	for f in post-checkout post-commit pre-commit prepare-commit-msg; do

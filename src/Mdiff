@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
-  echo '$Id: Mdiff,v 2.11 2015/11/01 23:36:37 archiv Exp $'
+  echo '$Id: Mdiff 2.12 $'
   echo
 }
 
@@ -258,14 +258,15 @@ process()
 			fi
 		    fi
 		elif [[ $q -eq 0 ]]; then
-		    let status+=1			# count as error (-i -e nothing)
 		    local nwc=${sfile%\*}		# weed out wild cards if no file found
 		    if [[ "$sfile" = "$nwc" ]]; then
 			test $T -eq 1 && echo -n "*** $sfile does not exist; status = $status: "
 			header "$spath" "$cdir"
 			echo "**SOURCE** $sfile does not exist"
-		    else
+			let status+=1			# count as error (-i -e nothing)
+		    elif [[ ! "$nwc" =~ (\.\.\?|\.\[\^\.\]|/)$ ]]; then
 			echo "**SOURCE** no files match"
+			let status+=1			# count as error (-i -e nothing)
 		    fi
 		fi
 	    fi
