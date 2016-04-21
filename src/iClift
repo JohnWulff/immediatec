@@ -186,7 +186,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift,v 1.15 2016/01/02 22:44:29 jw Exp $ uses Tk-@<<<<<<
+$Id: iClift 1.16 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -676,10 +676,10 @@ if ($opt_t) {
 ########################################################################
 
 my $controller = "lifts_LIFTS_${lifts}_FLOORS_${floors}";	# specific controller
-unless (-x $controller) {
+if ($opt_b) {
     die "ERROR: $named: lifts control source 'lifts.ica' is not readable or does not exist ???\n" unless -r "lifts.ica";
-    die "ERROR: $named: lifts control program $controller exists and is not executable ???\n" if -e $controller;
-    if ($opt_b) {
+    die "ERROR: $named: lifts control program $controller exists and is not executable ???\n" if -e $controller and not -x _;
+    if (not -x _ or -M _ > -M "lifts.ica") {
 	## system() requires signal CHLD to notify completion
 	$SIG{CHLD} = 'DEFAULT';
 	my @args = ("iCmake", "-qA", "-PLIFTS=$lifts", "-PFLOORS=$floors", "lifts.ica", "2>&1");	# -A useful for live display
