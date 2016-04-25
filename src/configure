@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: configure 1.7 $
+# $Id: configure 1.8 $
 # make yacc the first choice - CHANGE from autoconf John Wulff
 # leave YACC as empty string if none found - CHANGE from autoconf John Wulff
 
@@ -5424,7 +5424,7 @@ ac_clean_files=$ac_clean_files_save
 
 
 # do gaIdke-activate if cloned GIT with gaIdke - CHANGE from autoconf John Wulff
-git_base=$(git rev-parse  --show-toplevel)
+git_base=$(git rev-parse  --show-toplevel 2> /dev/null)
 if [ -n "$git_base" \
      -a -f "$git_base/.git_filters/gaIdke-activate" \
      -a ! -e "$git_base/.git/hooks/post-checkout" \

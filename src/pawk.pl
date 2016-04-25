@@ -6,7 +6,7 @@ eval 'exec /usr/bin/perl -S $0 ${1+"$@"}'
 
 ########################################################################
 #
-#	Copyright (C) 2000-2009  John E. Wulff
+#	Copyright (C) 2000-2016  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -28,26 +28,41 @@ use strict;
 
 eval '$'.$1.'$2;' while $ARGV[0] =~ /^([A-Za-z_0-9]+=)(.*)/ && shift;
 			# process any FOO=bar switches
-my $rev = '@(#)     $Id: pawk.pl,v 1.7 2009/08/21 06:08:31 jw Exp $';
+my $rev = '@(#)     $Id: pawk.pl 1.8 $';
 my $name = 'iC_ID';
 my $X = '';
 my $mod = '';
-my $id = "Id";
+my $ID = "Id:";
+my $describe = '';
+my $patch = '';
+my $RV = "Revision:";
 
 while (<>) {
     chomp;	# strip record separator
-    if (/(\$$id:[^\$]*\$)/o) {
+    if (/(\$$ID[^\$]*\$)/o) {
 	printf "%sconst char %s%s[] =\n", $mod, $name, $X;
+	if ($mod) {
+	    printf "\t\"@%s     %s\";\n", '(#)', $1;
+	} else {
+	    if ($describe = qx(git describe --always --dirty 2> /dev/null)) {
+		chomp $describe;
+		print "\t\"\$$RV $describe \$\";\n";
+		if ($patch = qx(git diff HEAD)) {
+		    $patch =~ s/\\/\\\\/g;
+		    $patch =~ s/"/\\"/g;
+		    $patch =~ s/\n/\\n"\n"/g;
+		}
+	    } else {
+		printf "\t\"@%s     %s\";\n", '(#)', $1;
+	    }
+	    print "const char iC_PATCH[] =\n\t\"$patch\";\n";
+	    print "#ifndef LOAD\n";
+	}
 	$X++;
 	$mod = 'static ';
-	printf "\t\"@%s     %s\";\n", '(#)', $1;
-	if ($X <= 1) {
-	    printf (("#ifndef LOAD\n"));
-	}
     }
 }
 
-printf (("#endif\n"));
+print "#endif\n";
 printf "%sconst char %s%s[] =\n", $mod, $name, $X;
 printf "\t\"%s\";\n", $rev;
-

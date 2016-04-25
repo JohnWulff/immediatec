@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.74 $";
+"@(#)$Id: icc.c 1.75 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -39,6 +39,7 @@ static const char icc_c[] =
 #endif	/* RUN or TCP */
 
 extern const char	iC_ID[];
+extern const char	iC_PATCH[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
 
 unsigned int		iC_uses = 0;		/* 01=alias 02=strict as bit field */
@@ -53,7 +54,11 @@ static const char *	usage =
 #if defined(RUN) || defined(TCP)
 "c"
 #endif	/* RUN or TCP */
-"agASRh][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]\n"
+"agASpR"
+#if !defined(RUN) && !defined(TCP)
+"v"
+#endif	/* not RUN and not TCP */
+"Ph][ -o<out>][ -l<lst>][ -e<err>][ -k<lim>][ -d<deb>]\n"
 "       [ -O<level>][ -Dmacro[=defn]...][ -Umacro...]\n"
 "       [ -Cmacro[=defn]...][ -Vmacro...][ -W[no-]<warn>...][ <src.ic>]\n"
 #if defined(RUN) || defined(TCP)
@@ -133,6 +138,10 @@ static const char *	usage =
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        iC language source file (extension .ic)\n"
 "                        default: take iC source from stdin\n"
+#if !defined(RUN) && !defined(TCP)
+"        -v              version\n"
+#endif	/* not RUN and not TCP */
+"        -P              GIT patch if made with dirty version\n"
 "        -h              this help text\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
@@ -876,10 +885,17 @@ main(
 			--argv;		/* ---x */
 		    }			/* -- -x equivalent to previous 2 versions */
 		    goto break3;
-#endif	/* RUN or TCP */
+#else	/* not RUN and not TCP */
+		case 'v':
+		    fprintf(iC_outFP, "%s\n", iC_ID);
+		    exit(0);		/* output version */
+#endif	/* not RUN and not TCP */
 		missing:
 		    fprintf(iC_errFP, "ERROR: %s: missing value after '-%1.1s'\n", iC_progname, ((*--argv)--, *argv));
 		    exit(1);
+		case 'P':
+		    fprintf(iC_outFP, "%s", iC_PATCH);
+		    exit(0);		/* output GIT patch if made with dirty version */
 		case 'h':
 		case '?':
 		error:
@@ -1320,6 +1336,8 @@ immcc - the immediate-C to C compiler
 
     <src.ic> iC language source file (extension .ic)
              default: take iC source from stdin
+    -v       version\n"
+    -P       GIT patch if made with dirty version\n"
     -h       this help text
 
 =head1 DESCRIPTION

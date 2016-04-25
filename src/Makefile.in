@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.64 $
+# @(#)$Id: Makefile.in 1.65 $
 
 #######################################################################
 #
@@ -218,11 +218,8 @@ pplstfix:
 	@pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
 	@gzip -f $*.1
 
-$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(srcdir)/../README
+$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix
 	rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
-
-$(srcdir)/../README:	$(srcdir)/icc.v $(srcdir)/README.tpl
-	perl $(srcdir)/README.tpl $(srcdir)/icc.v > $(srcdir)/../README;
 
 $(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.pl
 
@@ -392,7 +389,7 @@ clean:
 	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/*.1.gz
 
 distclean: clean
-	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/comp.output $(srcdir)/comp_tab.h $(srcdir)/gram.c $(srcdir)/gram.output $(srcdir)/gram_tab.h $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log $(srcdir)/../README
+	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/comp.output $(srcdir)/comp_tab.h $(srcdir)/gram.c $(srcdir)/gram.output $(srcdir)/gram_tab.h $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log
 	cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 
 distribution:

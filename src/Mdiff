@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
-  echo '$Id: Mdiff 2.12 $'
+  echo '$Id: Mdiff 2.13 $'
   echo
 }
 
@@ -389,7 +389,7 @@ while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZpPvh" opt; do
     C )	context="$context -C $OPTARG";;
     u ) context="$context -u";;
     U )	context="$context -U $OPTARG";;
-    k )	w="$w -I \$Id[$:]";;
+    k )	w="$w -I \$Id[$:] -I \$Revision[$:]";;
     w )	w=;;
     x )	w="$w -i";;
     a )	all=1;;

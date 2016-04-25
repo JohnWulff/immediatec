@@ -1,0 +1,322 @@
+
+			immediate C, iC rev icc_2.3
+
+	Copyright © 1985-2016 John E Wulff <immediatec@gmail.com>
+	SPDX-License-Identifier: GPL-2.0+ OR  Artistic-1.0
+
+    Acknowledgments to Larry Wall, whose README I used as a template.
+				   and for Perl     - which is just GREAT.
+
+    Acknowledgments to Nick Ing-Simmons for Perl/Tk - which is SMOOTH.
+
+    Acknowledgments to Sriram Srinivasan for Msg.pm - which is COOL.
+
+    Acknowledgments to the developers of GTKWave    - which is POWERFUL.
+
+    Acknowledgments to Linus Torvalds and the Open-Source community
+				   for Linux(R) - which is SOMETHING ELSE.
+
+--------------------------------------------------------------------------
+
+    Notes for the installation of iC rev icc_2.3
+
+    0)	Pre-requisites. You need the following on your system:
+
+	    C compiler			     # tested with gcc, Clang
+	    bison or yacc, flex or lex	     # to translate the grammar
+	    Perl, Perl/Tk and Time::HiRes    # to build and run iC applications
+
+    1)	To start with immediate C, clone the whole GIT repository from
+	https://github.com/JohnWulff/immediatec.git OR download the ZIP file
+	of the latest release from the same GitHub site and unzip it.
+
+	    cd immediatec/src
+
+    2)	Execute the following:
+
+	    configure	OR  ./configure      # it helps to put . in your PATH
+	    m -I			     # do once as SU
+		this executes chmod +s /usr/bin/install /usr/bin/ranlib
+		to allow running make install as an ordinary user
+
+	To make a Debug version (and  install) do
+	    m -clS	OR   m -clSi	     # makes the following
+		immcc			     # the iC to C compiler
+		libict.a		     # the static run-time library
+		libict.so		     # the dynamic run-time library
+
+	For a regression test (with the debug version) do
+	    make test			     # should output 'test OK'
+		Note: for the release version .ini files don't match
+
+    3)	To make a Release version do
+	    make          OR  make quiet     # to suppress intermediate output
+
+    4)	To install immcc, libraries and scripts do (unless m -clSi above)
+
+	    make install		     ### SU Password required  ###
+
+	this copies the executables to /usr/local/bin, the include file
+	icg.h to /usr/local/include, libict.a, libict.so to /usr/local/lib or
+	/usr/local/lib64 and Msg.pm to /usr/lib/perl5/site...
+
+	    make uninstall		     # remove all these files
+
+    5)	To use the Perl support programs, it is mandatory that you install the
+	Perl packages Tk804.029 or later and Time::HiRes unless they are alreadys
+	installed on your system.  Both can be found on the internet.
+
+    6)	To build and run the iC application 'hello.ic' do
+
+	    iClive hello.ic		     # starts the IDE with hello.ic
+	    press Build / Build executable   # displays 'hello' successfully built
+	    press Run			     # opens an iCbox with 1 button IX0.0
+	    press button IX0.0 in iCbox	     # button turns HI (input is green)
+		# 'Hello! world' is output in the window iClive was started from
+	    press Live
+		# The word IX0.0 (the only immediate variable in hello.ic)
+		# is coloured yellow/red, because IX0.0 is HI.
+		# When IX0.0 is pressed again to LO, the colour in the live
+		# display changes to green/black, indicating LO.
+	    press File / Quit		     # 'hello' and iCbox are terminated
+
+    7)	A slightly bigger application is 'simple.ic'. Build and run it with iClive.
+	An iCbox with 16 inputs and 8 outputs is started automatically.
+	Explore the logic of the statements by changing inputs and following
+	the outputs in iCbox and the live display in iClive.
+
+    8)	The application 'bar.ic' uses flip flops to produce a bar of running lights.
+	The application also explores the use of programmable time delays, giving
+	some idea of the scope of the iC language.
+
+	Running 'iClive bar.ic' as a separate process, while 'bar' is running,
+	will display the source listing (in the edit window), connects to iCServer
+	as an auxiliary client to receive updates of all variables from the running
+	iC program (bar). These updates will change the colours of all words,
+	which are immediate variables.  (green/black = 0, yellow/red = 1)
+	This 'live display' shows the current state of logical relationships in
+	visible statements of the iC program. Arithmetic variables are displayed
+	in a balloon, when the cursor rests on a variable.
+	(Arithmetic variables have a blue background).
+
+	In 'Live' mode, when a 'live display' is shown, the text is read only.
+	When the 'Edit' button is pressed 'iClive' is a full featured editor.
+	The edit facilities of this program are described in the iClive man page
+	under the Heading 'KEYBOARD BINDINGS' (press Help button in 'iClive').
+
+	'iClive' can use the Tk::TextUndo package, an extension of Tk::Text. This
+	allows undoing changes with the Ctrl-u key. (Control-u is <<Undo>>)
+	This is achieved by starting iClive with the -u option. Use this option
+	only for editing. In 'Live' mode the display is very jerky with -u active.
+
+    9)	iCserver distributes TCP/IP messages between iC apps and iC real and
+	virtual I/O drivers. It is started automatically by any iC app or driver
+	unless it is already running. iCserver can be started manually in another
+	window to have more control over the iC network configuration with real
+	inputs.
+
+    10)	iCserver is usually started with the -a (auto-vivify) option, which will
+	start a simulated I/O iCbox for every input and output, every time an
+	iC application is started.  Otherwise these must be started manually,
+	which can be tedious for large applications.
+
+		    iCserver -a &	# auto-vivify iCbox for application
+		    simple		# starts iCbox with 3 sets of I/O
+
+	If iClive is started first, it does all this automatically.  It then
+	stops iCserver automatically when it quits.  When iCserver stops it
+	stops all registered applications and I/O's.
+
+    11)	iC applications can of course be run without iClive.  They do need
+	iCserver though, which every app starts automatically in auto-vivify
+	mode unless it is already running.
+
+		    hello		# start hello + iCserver -ak + iCbox	
+	    OR	    hello -l		# additionally start iClive	
+		    type q		# to stop hello, iCserver and iCbox
+
+    12)	Bernstein chaining.  If several different iC applications, or different
+	instances of the same application are to be started together, they must
+	all run in parallel as separate processes (and in parallel with iCserver,
+	iCbox and iClive).  This is difficult to achieve with shell commands.
+
+	    THESE DO NOT WORK!
+		    bar; bar -i1	# does not start bar -i1 until bar stops
+
+		    bar &; bar -i1	# is a shell syntax error
+
+		    bar &		# this starts processes in parallel
+		    bar -i1		# but initialisation sequences clash
+
+	None of these is what we want.	To achieve the desired result,
+	Bernstein chaining has been implemented with the -R option
+	for every iC app and for all iC drivers.
+
+		    bar -R bar -i1	# starts bar and bar -i1 in parallel
+					# with well sequenced initialisation
+
+		    bar -l -R bar -i1 -R bar -i2 -R bar -i3	# starts:	
+			    iCserver -z -ak	
+			    iClive			# from -l	
+			    bar -z -i1 -R bar -i2 -R bar -i3	
+			    bar -z -i2 -R bar -i3	
+			    bar -z -i3	
+					# iCserver starts by auto-vivification:
+			    iCbox X0 B1 X2		# for bar	
+			    iCbox X0-1 B1-1 X2-1	# for bar -i1	
+			    iCbox X0-2 B1-2 X2-2	# for bar -i2	
+			    iCbox X0-3 B1-3 X2-3	# for bar -i3
+
+	Only the first app in the chain has keyboard input. It can be stopped
+	by typing 'q'.  This in turn stops iCserver, which stops all other apps
+	in the chain.  (-z blocks keyboard input for all chained apps).
+
+	Chaining is important for driver calls with real I/O arguments.
+
+    13)	A reasonably large iC app controlling 'iClift' shows the full power
+	of iC.
+
+	iClift, a Perl/Tk GUI, is a simulation of the physics and
+	appearance of lifts in a building with IEC inputs sent to an
+	iC control application from simulated sensors and buttons and
+	using IEC outputs received from an iC control application to
+	initiate and stop simulated movement and to reset buttons and
+	activate indicators.
+
+		    iClift -e		# run iClift with the default
+		    			# 1 Lift and 3 Floors and execute
+					# a matching iC control program
+
+		    iClift -L2 -F5 -l	# run iClift with 2 lifts
+		    			# and 5 floors, build and execute
+					# a matching iC control program
+					# and open iClive
+
+	With any configuration of lifts, you can call lifts to any floor
+	and then use the column of buttons to send the lift to another
+	floor as well as being able to open and close doors.  Pressing
+	the [C] button at the top left starts continuous testing.
+	Adding the -d option to the above calls will start a monitoring
+	iCbox, which shows the state of all the IEC signals passing
+	from iClift to the iC control program and back. These signals
+	as well as all internal variables of the control program can be
+	monitored in the iClive display with the [Live] button pressed.
+
+    14)	Another powerful debugging tool is the GTKWave Wave Analyzer.
+
+	    GTKWave (an open-source program) is an analysis tool
+	    originally intended to perform debugging on Verilog or
+	    VHDL simulation models. With the exception of interactive
+	    VCD viewing, it is not intended to run interactively
+	    with simulation, but instead relies on a post-mortem
+	    approach through the use of dumpfiles. Various dumpfile
+	    formats are supported: VCD: Value Change Dump. This is an
+	    industry standard file format generated by most Verilog
+	    simulators and is specified in IEEE-1364.
+	    (Extract from the GTKWave 3.3 Wave Analyzer User's Guide)
+	    Use in the iC system is hereby gratefully acknowledged.
+
+	gtkwave-3.1.10-4.33.i586.rpm was downloaded from the internet.
+	To install gtkwave on OpenSUSE Linux do:
+
+	    sudo rpm -i gtkwave-3.1.10-4.33.i586.rpm
+
+	For other Linux distributions download and follow the instructions
+	in the internet to install GTKWave for those systems.
+
+	Since version 1.131 of the iC run-time a VCD file and an associated
+	SAV file is generated by an iC application when run with the -v
+	option. This allows the interactive or post-mortem viewing of both
+	logic and analog traces against a virtual time scale. This time scale
+	was chosen so that each sequential change in any signal is 1 virtual
+	microsecond. iClock cycles take up 2 virtual microseconds. Each new
+	external input (Ixn.m, IBn, IWn ILn or TX0.m) occurs on the next 10
+	virtual microsecond boundary. To test this do:
+
+	    simple -v simple.vcd	    # writes simple.vcd and simple.sav
+					    # press IX0.0 to IX0.7 in iCbox one
+					    # after the other to turn them on
+					    # then press IX0.0 to IX0.7 one after
+					    # the other to turn them off again
+	    type q			    # stop simple, iCserver, iCbox. This
+	    				    # writes simple.vcd and simple.sav
+
+	    gtkwave simple.vcd simple.sav   # displays timing
+	    				    # for all non-extended variables
+
+	A more detailed example uses the running of 'bar -v bar.vcd' shown in the
+	iC manual iC.pdf and barx.sav, which is in the distribution and which shows
+	extra extended gates and markers used in the description in the manual.
+	barx.sav was generated by first running gtkwave bar.vcd bar.sav - inserting
+	extended variables from modules, setting markers and then saving as barx.sav.
+
+	    gtkwave bar.vcd barx.sav	    # display some extended variables
+
+    15)	I have included a script called 'iCstop' from my private toolkit.
+	It can be used effectively to kill iCserver when it is executing
+	in the background, which is appropriate for a server.
+
+	    iCserver &
+	    iCstop iCserver		    # local copy of 'iCstop'
+
+    16)	To make executable applications from iC sources, use the script iCmake.
+	iCmake is a shell script to compile iC sources into C sources using the
+	'immcc' compiler.  These in turn are compiled and linked into an
+	executable iC applications (currently using gcc - this can be changed).
+	Various options allow partial compilation and generation of listings.
+
+	    iCmake -h  OR  iCman iCmake	     # gives a lot of help
+
+    17) The LibreOffice 3.3.1 document doc/iC.odt (or doc/iC.pdf)
+	is the Reference Manual for the iC Programming Language. It
+	opens the way to use "immediate C" fully.
+
+    18)	There is a generous help output for every tool in the 'iC Project'
+	initiated with the -h option. Each generated iC application also
+	has two help outputs:
+
+	    hello -h			     # list available common options
+	    hello --h			     # extra app specific help
+
+	The common options shown in the help output explain how to  connect to
+	iCserver on another computer in a LAN with the -s option or with a
+	different port number with -p.  Very detailed debugging output, showing
+	the change of state of every event in the system is available for the
+	Debug version of the iC system with -t. (Suppressed for Release version)
+
+	Extra options and help output specific to a particular iC app can be
+	inserted in the C function 
+
+	    int iCbegin(int argc, char **argv);
+
+	in a literal block of your iC source (see rfid.ic for an example).
+
+    19)	There are 'man' pages for all the tools used in the 'iC Project'.
+	These can be viewed with the normal 'man' command under Linux or with
+	'iCman'.  The man page viewer 'iCman' has some nifty web-browser
+	features to view and search man pages - try it with 'iCman iCman'.
+
+
+    Lots of success
+
+    $Id: README 1.28 $
+
+    Main development is on openSUSE (currently 13.1) and perlTk
+    Tk804.031, which provides fast live updates in iClive. They seem
+    to be as fast as with Tk800.24. A Test with Knoppix and Tk804.25,
+    which is still available for Debian also provided good performance
+    with fast live updates in iClive.
+
+    In Sept 2013 I ported immediate C to the Raspberry Pi running
+    Raspbian. There were no problems, except the gcc ARM compiler
+    defaults to 'unsigned char'.  Since the core of the iC system
+    is based on signed arithmetic with char's, I had to change the
+    declaration of those to 'signed char'. The following packages
+    had to be installed with sudo apt-get install: perl-tk, bison and
+    flex. The following packages are optional but useful: git, gtkwave
+    and vim. (2 weeks with an old vi was punishment enough). After
+    that all tests passed.
+
+    During 2014 I wrote drivers for direct I/O for the PiFace and
+    PiFaceCAD digital interfaces for the Raspberry Pi - see man page
+    for iCpiFace and README.RPi.
