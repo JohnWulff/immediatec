@@ -19,7 +19,7 @@ usage()
   echo "Usage:	$name [-1|-2|...|-29] [-leh] [-a[x]] program ..." >&2
   echo ' Stops processes with the given program names by determining their' >&2
   echo ' PID with ps and executing a kill <PID> ...' >&2
-  echo '	-1	kill -1, -2 etc instead of default -15' >&2
+  echo "	-1	kill -1, -2 etc instead of default $id" >&2
   echo '	-l	local programs only' >&2
   echo '	-e	echo PIDs only - dont kill programs' >&2
   echo '	-a	all processes with the given program OR directory OR' >&2
@@ -34,7 +34,7 @@ usage()
   echo '          named directories in their program path are killed. (A feature)' >&2
   echo " EXAMPLE: $name -a bin; stops all programs out of /bin/ /usr/bin/ ..." >&2
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: iCstop,v 1.12 2009/10/14 03:51:56 archiv Exp $' >&2
+  echo '$Id: iCstop 1.13 $' >&2
 }
 
 ########################################################################
@@ -69,14 +69,14 @@ process()
 	    pids=$(processNumbers)
 	    if [ -n "$pids" ]; then
 		if [ "$e" != 1 ]; then
-		    kill $s$pids
+		    kill$s $pids
 		    # do not follow up on signal USR1 (10) and USR2 (12)
-		    if [ "$s" != -10 ] && [ "$s" != -12 ]; then
+		    if [ "$s" != " -10" ] && [ "$s" != " -12" ]; then
 			if [ -n "$(processNumbers)" ]; then
 			    sleep 1	# some processes take a little time to die
 			    pids1=$(processNumbers)
 			    if [ -n "$pids1" ]; then
-				echo "$p:$pids kill $sd,$pids1 NOT killed; try stop -9"
+				echo "$p:$pids kill$s $pids1 NOT killed; try $name -9"
 				let status=$status+1
 				continue
 			    fi
@@ -103,14 +103,13 @@ name=${0##*/}
 name=${name%.*}
 e=""
 l=""
-s=""
+s=" -9"
 a=""
-sd="-15"
 
 while [ $# -gt 0 ]; do
     case $1 in
     -)	shift; break;;
-    -[0-9]*) s="$1"; sd="$1";;	# last signal wins if more than one
+    -[0-9]*) s=" $1";;	# last signal wins if more than one
     -a)  a=" a";;	# all processes including those of other users
     -ax) a=" ax";;	# all processes including those not controlled by a terminal
     -*)	option=${1#?}

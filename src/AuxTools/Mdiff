@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
-  echo '$Id: Mdiff 2.13 $'
+  echo '$Id: Mdiff 2.14 $'
   echo
 }
 

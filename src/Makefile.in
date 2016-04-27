@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.65 $
+# @(#)$Id: Makefile.in 1.66 $
 
 #######################################################################
 #
@@ -214,8 +214,7 @@ pplstfix:
     endif
 
 %.1.gz:	%
-	@echo "pod2man -u -n $* -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $*.1"
-	@pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
+	pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
 	@gzip -f $*.1
 
 $(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix
@@ -232,8 +231,7 @@ $(srcdir)/cexe.c:	$(srcdir)/cexe_t.c
 	chmod +w $(srcdir)/cexe.c
 
 $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
-	@echo "pod2man -u -n immcc -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/immcc.1"
-	@pod2man -u -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
+	pod2man -u -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
@@ -256,16 +254,16 @@ $(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
 
 $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
-$(srcdir)/Mdiff.1.gz:	$(srcdir)/Mdiff $(srcdir)/scid.c
+$(srcdir)/Mdiff.1.gz:	$(srcdir)/AuxTools/Mdiff $(srcdir)/scid.c
+	pod2man -u -n Mdiff -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/Mdiff.1
+	@gzip -f $(srcdir)/Mdiff.1
 
 $(srcdir)/iCpiFace.1.gz:	$(srcdir)/iCpiFace.c $(srcdir)/scid.c
-	@echo "pod2man -u -n iCpiFace -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/iCpiFace.1"
-	@pod2man -u -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
+	pod2man -u -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
 	@gzip -f $(srcdir)/iCpiFace.1
 
 $(srcdir)/iCpiPWM.1.gz:	$(srcdir)/iCpiPWM.c $(srcdir)/scid.c
-	@echo "pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r \"icc.v $(REV)\" $< > $(srcdir)/iCpiPWM.1"
-	@pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
+	pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
 	@gzip -f $(srcdir)/iCpiPWM.1
 
 $(srcdir)/iCrfid.1.gz:	$(srcdir)/iCrfid $(srcdir)/scid.c
@@ -275,14 +273,14 @@ test:
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -qAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
-	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/ORG/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
+	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/ORG/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 
 strict:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile with -S option and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
 	@-${srcdir}/iCmake -qSAIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/STRICT ..."
-	@if ${srcdir}/Mdiff -kLel -I'(eval' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
+	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/STRICT/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/STRICT"; fi
 
 install:	$(srcdir)/immcc.1.gz $(srcdir)/immac.1.gz $(srcdir)/immax.1.gz $(srcdir)/iCbox.1.gz $(srcdir)/iClift.1.gz $(srcdir)/iClive.1.gz $(srcdir)/iCmake.1.gz $(srcdir)/iCman.1.gz $(srcdir)/iCserver.1.gz $(srcdir)/iCpiFace.1.gz $(srcdir)/iCpiPWM.1.gz $(srcdir)/iCrfid.1.gz $(srcdir)/iCtherm.1.gz $(srcdir)/makeAll.1.gz $(srcdir)/Mdiff.1.gz
 	@$(srcdir)/perlinstall -t $(srcdir)
@@ -310,7 +308,7 @@ ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 	@${INSTALL_PROGRAM} -m 4755 $(srcdir)/iCpiPWM   ${bindir}/${binprefix}iCpiPWM
 endif
 	@${INSTALL_PROGRAM} $(srcdir)/iCrfid     ${bindir}/${binprefix}iCrfid
-	@${INSTALL_PROGRAM} $(srcdir)/Mdiff      ${bindir}/${binprefix}Mdiff
+	@${INSTALL_PROGRAM} $(srcdir)/AuxTools/Mdiff      ${bindir}/${binprefix}Mdiff
 	@${INSTALL_DATA} $(srcdir)/libict.a      ${libdir}/${libprefix}libict.a
 	@if [ -f $(srcdir)/libict.so ]; then ${INSTALL_PROGRAM} $(srcdir)/libict.so ${libdir}/${libprefix}libict.so.1.$(REV); sudo /sbin/ldconfig ${libdir}; cd ${libdir}/; sudo ln -sf ${libprefix}libict.so.1.$(REV) ${libprefix}libict.so; cd -; fi
 	@${INSTALL_DATA} $(srcdir)/icg.h         ${includedir}/${includeprefix}icg.h
@@ -393,7 +391,7 @@ distclean: clean
 	cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 
 distribution:
-	@echo "making icc_$(REV).tgz"; cd ${srcdir}/../..; test -h icc_$(REV) || ln -s ic icc_$(REV); tar -czf icc_$(REV).tgz `$(PADD) icc_$(REV)/src/manifest`; cd -;
+	@echo "making icc_$(REV).tgz"; cd ${srcdir}/../..; test -h icc_$(REV) || ln -s immediatec icc_$(REV); tar -czf icc_$(REV).tgz `$(PADD) icc_$(REV)/src/manifest`; cd -;
 
 genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
 
