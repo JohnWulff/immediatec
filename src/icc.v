@@ -1,8 +1,8 @@
-$Revision icc_2.3 $
-@(#)$Id: icc.v 2.3 $
+$Revision icc_2.4 $
+@(#)$Id: icc.v 2.4 $
 ARTISTIC        1.1     2001/03/02 16:43:55 jw Exp
 COPYING         1.1     2001/03/02 16:43:55 jw Exp
-Makefile.in     1.65    3db2e45 2016-04-25 14:42:07 +1000 John E Wulff
+Makefile.in     1.66    263b257 2016-04-27 16:28:42 +1000 John E Wulff
 Msg.pm          1.6     2015/03/06 00:28:04 jw Exp
 README          1.28    3db2e45 2016-04-25 14:42:07 +1000 John E Wulff
 README.RPi      1.2     2015/12/28 12:49:23 jw Exp
@@ -31,7 +31,7 @@ iCpiFace.c      1.7     2015/12/26 09:35:24 jw Exp
 iCpiPWM.c       1.3     2015/11/06 07:56:43 jw Exp
 iCrfid          1.1     2014/05/16 03:32:14 jw Exp
 iCserver        1.49    2016/01/02 23:05:00 jw Exp
-iCstop          1.12    2009/10/14 03:51:56 archiv Exp
+iCstop          1.13    263b257 2016-04-27 16:28:42 +1000 John E Wulff
 iCtherm         1.5     2016/01/02 22:52:34 jw Exp
 icbegin.c       1.6     2015/11/06 00:47:21 jw Exp
 icc.c           1.75    3db2e45 2016-04-25 14:42:07 +1000 John E Wulff
@@ -52,7 +52,7 @@ lmain.c         1.18    2009/08/21 06:26:19 jw Exp
 load.c          1.63    2015/12/26 09:35:16 jw Exp
 m               1.19    2015/09/29 07:32:32 jw Exp
 makeAll         1.41    3cfef88 2016-04-02 16:46:50 +1100 John E Wulff
-manifest        1.27    2015/10/16 12:33:47 jw Exp
+manifest        1.28    263b257 2016-04-27 16:28:42 +1000 John E Wulff
 mcp23s17.c      1.4     2015/12/23 23:52:15 jw Exp
 mcp23s17.h      1.4     2015/12/18 07:02:24 jw Exp
 misc.c          1.17    2016/01/02 22:54:19 jw Exp
