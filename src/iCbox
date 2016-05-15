@@ -45,7 +45,7 @@ my $setButton;		# Set all inputs button
 my $set;		# state of Set button
 my @allButtons = ();	# used to note all buttons to set
 my $indicatoron = 1;	# 0 button    1 checkbox
-my $greenButton = "'green'";
+my $greenButton = "'green4'";
 my $redButton   = "'red'";
 my @argv = ();
 
@@ -129,7 +129,7 @@ Usage:
 	-h      help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox,v 1.58 2015/11/06 03:50:19 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.59 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -699,7 +699,7 @@ if ($opt_H) {
 	-text        => 'II',
 	-width       => '2',
 	-variable    => \$hold,
-	-selectcolor => 'green',
+	-selectcolor => 'green4',
 	-indicatoron => $indicatoron,
 	-command     => sub {
 	    if ($hold) {
@@ -741,7 +741,7 @@ if ($opt_H) {
 	-text        => 'all',
 	-width       => '2',
 	-variable    => \$set,
-	-selectcolor => 'green',
+	-selectcolor => 'green4',
 	-indicatoron => $indicatoron,
 	-command     => sub {
 	    my ($val, $ref);
@@ -753,14 +753,26 @@ if ($opt_H) {
 		 $val = 0;
 	    }
 	    foreach (@allButtons) {
-### 		print "$val@{[$_->cget(-text)]}";
 		$ref = $_->cget(-variable);
 		if ($$ref != $val) {
 		    $$ref = $val;
 		    $_->Callback(-command);
-### 		} else {
-### 		    print " == $$ref\n";
 		}
+	    }
+	},
+    )->pack(-side   => 'top', -expand => 1,);
+    $setButton = $frame->Checkbutton(
+	-text        => '~all',
+	-width       => '2',
+	-selectcolor => 'green4',
+	-indicatoron => $indicatoron,
+	-command     => sub {
+	    my ($val, $ref);
+	    print "                all invert\n" if $opt_t;
+	    foreach (@allButtons) {
+		$ref = $_->cget(-variable);
+		$$ref ^= 1;
+		$_->Callback(-command);
 	    }
 	},
     )->pack(-side   => 'top', -expand => 1,);
@@ -942,7 +954,7 @@ foreach $argNameRef (@ArgNames) {
 	    -to          => $to,\
 	    -resolution  => $res,\
 	    -length      => $opt_l,\
-	    -troughcolor => 'light green',\
+	    -troughcolor => 'medium spring green',\
 	    -width       => '4m',\
 	    -variable    => \\\$ChannelsI[$ch],\
 	    -command     => sub {\
@@ -1349,12 +1361,15 @@ mimics an iC application during early development.
 
 An optional frame with a B<Hold> button is generated with the -H
 option showing [II] (press to hold).  After this button is pressed it
-shows [>] (press to continue).  While B<Hold> is pressed, any input
-changes are queued and not transmitted until the B<Hold> button
-is released. This is useful for testing iC programs in a situation
-when several inputs must arrive simultaneously. Push-buttons with an
-internal reset delay are also held, sending their on and delayed off
-state when the B<Hold> button is released.
+shows [>] (release to continue).  While [>] is pressed, any input
+changes are queued and not transmitted until the [>] button is released.
+This is useful for testing iC programs in a situation when several
+inputs must arrive simultaneously. Analog input scales and Push-buttons
+with an internal reset delay are also held, the latter sending their on
+and delayed off state when the [>] button is released.  Two further
+buttons showing [all] and [~all] are generated. The former sets all
+inputs when pressed and resets all inputs when released. The latter
+inverts all inputs when pressed and inverts them again when released.
 
 =head1 AUTHOR
 

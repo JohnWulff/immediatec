@@ -1,5 +1,6 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c,v 1.98 2015/10/16 12:33:47 jw Exp $";
+"@(#)$Id: outp.c 1.99 $";
+static const char outp_c[] =
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -388,7 +389,7 @@ out_builtin(List_e * lp, int * picnt)
     str_type  = iC_full_type[sp->type];
     str_ftype = iC_full_ftype[sp->ftype];
     if (sp->list) snprintf(str_list, 10, "&l[%d]", sp->list->le_val >> SI); else strncpy(str_list, "0", 10);
-    if (sp->blist) snprintf(str_blist, 10, "&l[%d]", sp->blist->le_val >> SI); else strncpy(str_blist, "0", 10);
+    if (sp->u_blist) snprintf(str_blist, 10, "&l[%d]", sp->u_blist->le_val >> SI); else strncpy(str_blist, "0", 10);
     snprintf(str_link1, 10, "&l[%d]", sp->v_cnt & 0777);/* link1 always used - first Symbol has &l[0] */
     if (sp->v_cnt & 0777000000) {			/* 2nd alternative function */
 	snprintf(str_link2, 20, "(List_e*)&b[%d]", (sp->v_cnt & 0777000000) >> 18);	/* link to 1st function */
@@ -1467,19 +1468,22 @@ iC_listNet(void)
 			     *  declared extern (em & EX set). Such a variable may have been used
 			     *  in another module and no unused warnings are issued in this module.
 			     *
-			     *  NCONST may be generated and only used in an arith expression, in
-			     *  which case the constant is directly in the expression - ignore
+			     *  type NCONST may be generated and only used in an arith expression,
+			     *  in which case the constant is directly in the expression - ignore
 			     *
 			     *  OUTW and OUTX are send nodes which have no linked nodes
 			     *
-			     *  unused iClock only happnes if it was made type ERR - no warning
+			     *  unused iClock only happens if it was made type ERR - no warning
 			     *  iClock used as ERR indicator not used any more	JW 20150603
+			     *
+			     *  type ERR - ignore
 			     *******************************************************************/
 			    sp->list == 0 &&
 			    (sp->em & (EU|EX)) == 0 &&	/* not used and not extern immC */
 			    typ != NCONST &&
 			    sp->ftype != OUTW &&
 			    sp->ftype != OUTX &&
+			    typ != ERR &&
 			    sp != iclock
 			) {
 			    unused++;		/* report total unused only if W_UNUSED */
@@ -3235,7 +3239,7 @@ endc:
  *
  *******************************************************************/
 
-static int	 precompileFlag = 0;
+static int	 precompileFlag;
 
 static int
 copyBlocks(FILE * iFP, FILE * oFP, int mode)
@@ -3249,23 +3253,15 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 
     /* rewind intermediate file */
     if (fseek(iFP, 0L, SEEK_SET) != 0) {
-	return T1index;
+	return T1index;				/* error in temporary file */
     }
 
-#ifdef PRECOMPILE_C_OUTPUT
-    if(iFP != T4FP && strlen(iC_Cdefines)) {
-	if (precompileFlag == 0) {		/* may only be used in final C-compile */
-	    if ((c = iC_openT4T5(0)) != 0) return c;	/* re-open if necessary */
-	}
-	precompileFlag |= 2;			/* 2 marks -D, #define or #if */
-    }
-#endif
     while (fgets(lineBuf, sizeof lineBuf, iFP)) {
 	if (strcmp(lineBuf, "%{\n") == 0) {
 	    mask = 01;				/* copy literal blocks */
 	} else if (strcmp(lineBuf, "%}\n") == 0) {
 	    mask = 02;				/* copy functions or cases */
-	} else if (mode & mask) {		/* seperates literal blocks and functions */
+	} else if (mode & mask) {		/* separates literal blocks and functions */
 	    for (lp = lineBuf; (c = *lp++) != 0; ) {
 		if (lf || c != '%' || *lp != '#') {	/* converts %# to # */
 		    putc(c, oFP);
@@ -3279,8 +3275,7 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		 *  lp now points to the beginning of a line past % but to #
 		 *  handle pre-processor #include <stdio.h> or "icc.h"
 		 ********************************************************/
-		if (precompileFlag <= 1 &&
-		    sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
+		if (sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
 		    if(iFP == T4FP) {
 			ierror("copyBlocks: if else or switch has:", lstBuf);
 			continue;
@@ -3290,29 +3285,8 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    }
 		    if (iC_debug & 02) fprintf(iC_outFP, "####### c_parse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
-		    precompileFlag |= 1;	/* 1 marks #include */
+		    precompileFlag = 1;	/* 1 marks #include */
 		}
-#ifdef PRECOMPILE_C_OUTPUT
-		/********************************************************
-		 *  Handle pre-processor #define and #if
-		 *  No need to scan for #else or #endif; if they occurr
-		 *  there must have been a #if - unless serious C error.
-		 *  Other preprocessor directives do not affect outcome.
-		 ********************************************************/
-		else if (sscanf(lp, " # define %[A-Za-z_0-9]", lstBuf) == 1 ||
-		    sscanf(lp, " # if %s", lstBuf) == 1 ||
-		    sscanf(lp, " # ifdef %s", lstBuf) == 1 ||
-		    sscanf(lp, " # ifndef %s", lstBuf) == 1) {
-		    if(iFP == T4FP) {
-			ierror("copyBlocks: if else or switch has:", lstBuf);
-			continue;
-		    }
-		    if (precompileFlag == 0) {
-			if ((c = iC_openT4T5(0)) != 0) return c;	/* re-open if necessary */
-		    }
-		    precompileFlag |= 2;	/* 2 marks -D, #define or #if */
-		}
-#endif
 	    }
 	}
     }
@@ -3342,6 +3316,7 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
     char	lineBuf[BUFS];
 
     lexflag = flag;				/* output partial source listing */
+    precompileFlag = 0;
 
     if (ftell(T2FP)) {
 	fclose (T2FP);				/* overwrite intermediate file */
@@ -3350,7 +3325,7 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	}
     }
     if (copyBlocks(iFP, T2FP, 01)) {
-	return T1index;
+	return T1index;				/* error in temporary file */
     }
     if (outFlag == 0) {				/* -c option to produce cexe.c */
 #if INT_MAX == 32767 && defined (LONG16)
@@ -3362,14 +3337,11 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	fprintf(T2FP, "/*##*/\n");		/* -o option - separate blocks */
     }
     if (copyBlocks(iFP, T2FP, 02)) {
-	return T1index;
+	return T1index;				/* error in temporary file */
     }
     if (outFlag == 0) {
 	fprintf(T2FP, "/*##*/}}\n");
     }
-#ifdef PRECOMPILE_C_OUTPUT
-    fclose (T2FP);				/* close intermediate file */
-#endif
     if (precompileFlag == 1) {
 	/********************************************************
 	 *  pre-process and C-parse #include <stdio.h> and "icc.h" etc
@@ -3411,51 +3383,9 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	}
 	lexflag &= ~C_NO_COUNT;			/* count characters again */
     }
-#ifdef PRECOMPILE_C_OUTPUT
-    /* The listing produced is not complete - functionality is doubtful */
-    else if (precompileFlag > 1) {
-	/********************************************************
-	 *  Alternatively
-	 *  pre-process generated C code with # define and/or #if
-	 *  or if iC_Cdefines contains -C or -V definitions
-	 ********************************************************/
-	int	r1;
-	/* Cygnus does not understand cc - use macro CC=gcc - pass comments with -C */
-	snprintf(execBuf, BUFS, SS(CC) "%s -E -C -I/usr/local/include -x c %s -o %s 2> %s",
-	    iC_Cdefines, T2FN, T5FN, T6FN);
-	r1 = system(execBuf);			/* Pre-compile generated C file */
-#if YYDEBUG
-	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
-#endif
-	if (r1 != 0) {
-	    if ((T6FP = fopen(T6FN, "r")) == NULL) {
-		return T6index;			/* error opening CC error file */
-	    }
-	    while (fgets(lineBuf, sizeof lineBuf, T6FP)) {
-		ierror(SS(CC) ":", lineBuf);	/* CC error message */
-	    }
-	    fclose(T6FP);
-	    if (!(iC_debug & 04000)) {
-		unlink(T6FN);
-	    }
-	    ierror("compile: cannot run:", execBuf);
-	    return T0index;
-	}
-	if (!(iC_debug & 04000)) {
-	    unlink(T6FN);
-	}
-	if ((T2FP = fopen(T5FN, "r")) == NULL) {
-	    return T2index;			/* error opening intermediate file */
-	}
-    }
-    else if ((T2FP = fopen(T2FN, "r")) == NULL) {
-	return T2index;				/* error opening input file */
-    }
-#else
     if (fseek(T2FP, 0L, SEEK_SET) != 0) {	/* rewind intermediate file */
 	return T2index;
     }
-#endif
     copyAdjust(NULL, NULL, 0);			/* initialize lineEntryArray */
     gramOffset = lineno = 0;
     yyin = T2FP;				/* C input to C parser */

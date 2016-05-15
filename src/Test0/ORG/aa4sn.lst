@@ -17,7 +17,7 @@
 	                                +2;     // (2)
 
 010	no strict;
-011	fun(IB2, y);	/* y is not declared (default bit) */
+011	fun(IB2, y);	/* y is not declared (ftype from IB2) */
 
 	IB2     A ---+  y               IB2     // 1
 	                                +2;     // (2)
@@ -33,10 +33,10 @@
 
 015	QB2 = y;
 
-	y         ---|  QB2     A
+	y       A ---@  QB2     A
 
 
-	QB2     A ---+  QB2_0   W       QB2     // 1
+	y       A ---+  QB2_0   W       y       // 1
 
 ******* C CODE          ************************
 
@@ -48,22 +48,21 @@ IB1     [  A  x+
 IB2     [  A  y+
 QB1     @  A  x+
 QB1_0   +  W
-QB2     |  A  QB2_0+
+QB2     @  A  y+
 QB2_0   +  W
 x       +  A  QB1_0+
-y       +     QB2|
+y       +  A  QB2_0+
 
 ******* NET STATISTICS  ************************
 
 ARN	+      4 blocks
-OR	|      1 blocks
 INPW	[      2 blocks
-ALIAS	@      1
+ALIAS	@      2
 
-TOTAL	       7 blocks
-	      15 links
+TOTAL	       6 blocks
+	      12 links
 
 compiled by:
-@(#)     $Id: aa4sn.lst,v 1.1 2015/05/24 00:51:47 jw Exp $ -O7
+$Revision: icc_2.4-dirty $ -O7
 
-C OUTPUT: ./Test0/aa4sn.c  (58 lines)
+C OUTPUT: ./Test0/aa4sn.c  (57 lines)

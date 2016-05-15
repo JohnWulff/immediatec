@@ -4,12 +4,10 @@
     For building the immediate C system on a Raspberry Pi, the development
     environment for the Raspbian distribution of Linux is just as powerful as
     for Linux on a PC. It natively supports gcc 4.6.3 and perl 5.14. For the iC
-    system Perl/Tk, bison and flex are also required. Although one can do without
-    bison and flex, since the pre-compiled C files are distributed with the tar
-    ball, it is useful to have them for a complete distribution build. All of
-    these tools are available with apt-get. I also rely on vim for writing and
-    maintaining code, ddd for debugging, GTKWave for visualizing and RCS for
-    source code control.  These are also available for the Raspberry Pi.
+    system Perl/Tk, bison and flex are also required. All of these tools are
+    available with apt-get. I also rely on vim for writing and maintaining code,
+    ddd for debugging, GTKWave for visualizing and RCS for source code control.
+    These are also available for the Raspberry Pi.
 
     The iC system consists of the immediate C compiler 'immcc', the static library
     'libict.a', which has debugging support and the shared library 'libict.so',
@@ -73,7 +71,7 @@
     I have written, compiled and debugged all the RPi specific drivers on a RPi B
     connected via ssh -X to a number of console windows on the Compaq PC. That way
     I get the fastest turnaround time. The only program which does not run well in
-    a SSH window is ddd. It works perfectly in a native window on the RPi X system.
+    a SSH window is ddd. It works perfectly in a native window on the Raspberry Pi.
 
     Also available is the Raspbian official cross compiling tool chain from Github:
         git clone git://github.com/raspberrypi/tools.git
@@ -314,5 +312,5 @@
     or acted upon.  iCpiFace always communicates all its input and output via
     iCserver, so it does not need a -E or -L option.
 
-    John E. Wulff   2015.12.28     <immediateC@gmail.com>
-    $Id: README.RPi,v 1.2 2015/12/28 12:49:23 jw Exp $
+    John E. Wulff   2016.05.11     <immediateC@gmail.com>
+    $Id: README.RPi 1.3 $

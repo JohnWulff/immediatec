@@ -8,7 +8,7 @@ imm int x;
 
 fun(IB1, x);	/* x is declared */
 no strict;
-fun(IB2, y);	/* y is not declared (default bit) */
+fun(IB2, y);	/* y is not declared (ftype from IB2) */
 use strict;
 
 QB1 = x;

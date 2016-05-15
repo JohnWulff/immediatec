@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.66 $
+# @(#)$Id: Makefile.in 1.67 $
 
 #######################################################################
 #
@@ -95,7 +95,7 @@ mandir = @mandir@
 manext = 1
 manprefix =
 
-REV  = $(shell perl -e 'while (<>) { if ( m/\bicc.v,v (\d+)\.(\d+)\b/ ) { print "$$1.$$2"; last; } }' $(srcdir)/icc.v)
+REV  = $(shell perl -e 'while (<>) { if ( m/\$$(Revision: icc_|Id: icc.v(,v)? )(\d+)\.(\d+)\b/ ) { print "$$3.$$4"; last; } }' $(srcdir)/icc.v)
 PMOD = perl -e 'while (<>) { if ( m /^\/tmp\/[a-z_A-Z]\w*\.o(\(\.data\+0x[a-f\d]+\))*:/ ) { s //\/tmp\/x.o:/; } print; }'
 PADD = perl -e 'while (<>) { if ( m /^[a-z_A-Z]/ ) { s /^/icc_$(REV)\//; print; } }'
 

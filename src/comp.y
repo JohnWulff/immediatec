@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y,v 1.114 2015/10/16 12:33:47 jw Exp $";
+"@(#)$Id: comp.y 1.115 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -600,7 +600,8 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 *
 	 * The extern type declaration in iC declares that an immediate
 	 * variable has been assigned in another module and may be used
-	 * as an rvalue in immediate expressions in this module.
+	 * as an rvalue in immediate expressions in iC or C code in this
+	 * module.
 	 *
 	 * Because of the single assignment rule, such an extern immediate
 	 * variable may normally not be assigned in this module. An exception
@@ -610,7 +611,8 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 *	extern immC bit  b2;	extern immC int  a2;
 	 *
 	 * Variables declared extern with the special type modifier 'immC'
-	 * may be used as rvalues and may be assigned in a C statement.
+	 * may be used as rvalues in iC or C code and may be assigned in
+	 * C statements in this module.
 	 *
 	 * To allow lists of extern immediate declarations of all variables
 	 * in a common include file, a simple immediate type declaration
@@ -622,14 +624,20 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 * extern declaration.
 	 *
 	 * The use of 'immC' in a simple type declaration defines the Gate
-	 * object, like in C. It must match the previous extern immC type.
+	 * object, like in C. It must match the previous 'extern immC' type.
 	 * In any other context 'immC' is equivalent to 'imm'.
 	 *
-	 * An extern type declaration of a particular variable may not
-	 * occurr after its simple declaration or its assignment or if it
-	 * is an input variable, which is implicitly assigned. Since no
-	 * real harm is done, a warning is issued and the extern declaration
-	 * is ignored.
+	 * IEC-1131 input and output variables are pre-declared for iC code
+	 * and normally do not need to be declared except for the following
+	 * cases:
+	 *
+	 * An 'extern imm' type declaration of an input or output variable
+	 * is needed if that I/O variable is used in iC or C code in this
+	 * module, but is defined in iC code in another module. If the
+	 * declaration is 'extern immC' the output variable may be assigned
+	 * in C code but not in iC code.
+	 *
+	 * See * Immediate type declaration * for more details
 	 *
 	 * If a variable is declared extern in several sources which will
 	 * later be linked and that variable is erroneously declared and
@@ -649,16 +657,16 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 *              therefore no undefined warning in this module.
 	 *      EX set	variable may be used in another module;
 	 *              therefore no unused warning in this module.
-	 * This also applies to extern immC array declarations.
+	 * This also applies to 'extern immC' array declarations.
 	 *
-	 * See use of extern type declaration in a function definition
-	 * under 'Immediate functions' below.
+	 * See use of extern type declarations in function block definitions
+	 * under * DefineFunction * in genr.c
 	 * In particulat iFunSyText is not set for an extDecl and thus the
 	 * variables declared extern keep their unchanged global names.
 	 *
-	 * If an extDecl occurrs in a function definition, a check is made
-	 * that the name does not clash with one of the local names in the
-	 * function.
+	 * If an extDecl occurrs in a function block definition, a check is
+	 * made that the name does not clash with one of the local names in
+	 * the function block.
 	 *
 	 ***********************************************************/
 
@@ -676,37 +684,40 @@ extDecl	: extDeclHead UNDEF	{
 	    }
 	| extDeclHead dVariable	{
 		int		typ;
+		int		typ1;
 		char *		cp;
 		Symbol *	sp;
+		typ1  = $1.v.type;		/* UDF for all TYPEs except ARNC LOGC INPX INPW */
 		sp = $$.v = $2.v;
 		if (sp) {
-		    if (sp->ftype != $1.v.ftype) {
+		    assert(($1.v.em & EM|EX) == EM|EX);	/* has been set in extDeclHead */
+		    if (((typ = sp->type) == INPW || typ == INPX) &&
+			(typ1 == ARNC || typ1 == LOGC) &&
+			sp->type != ERR) {
+			ierror("extern immC declaration of an input variable is invalid:", sp->name);
+		    } else
+		    if (sp->ftype != $1.v.ftype && sp->type != ERR) {
 			ierror("extern declaration does not match previous declaration:", sp->name);
 			sp->type = ERR;	/* cannot execute properly */
 		    }
 		    if (iFunSymExt && (cp = strchr(sp->name, '@'))) {
 			warning("extern declaration of internal function variable - ignored:", cp+1);
 		    } else
-		    if ((typ = sp->type) == UDF ||	/* extern of unused imm or QXx.y QBz */
-			((sp->em & EM) && typ != ERR)) {	/* or prev extern but not ERROR */
-			sp->ftype = $1.v.ftype;
-			sp->type  = $1.v.type;/* UDF unless ARGC or LOGC */
-			assert($1.v.em & (EM|EX));	/* has been set in extDeclHead */
+		    if (typ == UDF ||			/* extern of unused imm or QXx.y QBz */
+			typ == INPW || typ == INPX ||	/* or IXx.y IBz */
+			((sp->em & EM) && typ != ERR)) {/* or prev extern but not ERROR */
+			if (typ != INPW && typ != INPX) {
+			    sp->ftype = $1.v.ftype;
+			    sp->type  = $1.v.type;	/* UDF unless ARNC or LOGC */
+			}
 			sp->em    |= EM|EX;		/* set em for extern declaration */
 		    } else
 		    if (iFunSymExt) {
 			ierror("extern declaration in function definition after assignment:", sp->name);
 			sp->type = ERR;	/* stop use as a statement in function */
 			sp->em   |= EM|EX;
-		    } else
-		    if (typ == INPW || typ == INPX) {
-			if (iC_Sflag) {
-			    warning("strict: extern declaration of an input variable - ignored:", sp->name);
-			}
 		    } else if (typ == ARNC || typ == LOGC) {
 			warning("extern immC declaration after definition - ignored:", sp->name);
-		    } else {
-			warning("extern declaration after assignment - ignored:", sp->name);
 		    }
 #if YYDEBUG
 		    if ((iC_debug & 0402) == 0402) {
@@ -774,33 +785,66 @@ extDeclHead
 	 *	imm bit   b1;		imm int   a1;
 	 *	imm clock c1;		imm timer t1;
 	 *
+	 * immediate variables declared with 'imm' must be assigned once
+	 * and only once in the current source module (usually directly
+	 * after the declaration like a C initalization, unless the
+	 * declaration is a forward declaration, which is frequently
+	 * necessary). Alternatively a variable declared with a simple
+	 * 'imm' may be assigned in C code unless 'use strict' mode has
+	 * been specified (or -S on the command line). Such a C assignment
+	 * to an 'imm' variable is deprecated - use 'immC' instead.
 	 * Multiple declarations of the same variable with the same
-	 * immediate type are silently ignored. If correctly declared
-	 * after an assignment a warning is still issued, except for
-	 * input variables which are never assigned, rather predeclared.
+	 * immediate type are silently ignored.
 	 *
 	 *	immC bit   b1;		immC int   a1;
 	 *
 	 * The use of 'immC' in a simple type declaration defines the Gate
-	 * object, like in C. Such an object may only be used in a C assignment
-	 * or as an immediate rvalue. By defining an object, no C assignment
-	 * in the current source is necessary. An assignment can occurr in
-	 * another source, in which the same variable is declared with an
-	 * extern immC type. An assignment in some source should take place
-	 * to avoid an algorithmic error. The load module detects and counts
-	 * assignments during initialization and warns if no assignments have
-	 * occurred.
+	 * object, like in C. Such an object may only be assigned in C code
+	 * but may be used as an immediate rvalue in iC as well as in C code.
+	 * By defining an object, no C assignment in the current source is
+	 * necessary. An assignment can occurr in another source, in which
+	 * the same variable is declared with an 'extern immC' declaration.
+	 * An assignment in some source should take place to avoid an
+	 * algorithmic error. The load module detects and counts assignments
+	 * during initialization and warns if no assignments have occurred.
 	 *
-	 * immC type declarations may not be combined with a dasgn, since no
+	 * IEC-1131 input and output variables are pre-declared for iC code
+	 * and normally do not need to be declared except for the following
+	 * cases:
+	 *
+	 * An 'imm' or 'immC' type declaration of an input or output variable
+	 * is needed if that variable has already been declared with an
+	 * 'extern imm' or 'extern immC' declaration in this source module
+	 * (usually in an included .ih header) or is going to be used in C
+	 * code. The direct 'imm' declaration defines an input node in this
+	 * module and declares that an output variable must be assigned in
+	 * this module. Individual input and output variables may only be
+	 * used without 'extern imm' or 'extern immC' in case of output
+	 * variables or simply declared with 'imm' or 'immC' in one source
+	 * module only, because their storage is defined in that source.
+	 * Multiply defined link errors will occur if this rule is ignored.
+	 * Also individual inputs and output must be defined in one source
+	 * either by using them without an 'extera immn' declaration in that
+	 * source or following the 'extern imm' declaration with a simple
+	 * 'imm' declaration to avoid an undefined link error.
+	 *
+	 * These rules for input and output variables are the same as for
+	 * ordinary immediate variables, except that an I/O variable which
+	 * has not been declared 'extern imm' does not need to be declared
+	 * at all (defined when used in iC code by default) except if it is
+	 * going to be used only in C code and not in iC code.
+	 *
+	 * 'immC' type declarations may not be combined with a dasgn, since no
 	 * immediate assignment may occurr if a variable has been declared
-	 * and defined as an ARNC or LOGC type with immC. Such an attempted
+	 * and defined as an ARNC or LOGC type with 'immC'. Such an attempted
 	 * assignment is flagged as an error.
 	 *
-	 * immC type declarations may also not be combined with an immediate
-	 * function definition - that is a hard error.
+	 * 'immC' type declarations may not be combined with an immediate
+	 * function block definition - a function block can never be called
+	 * in C code and can never return type 'immC'.
 	 *
 	 * declHead has type UDF for all TYPEs except ARNC and LOGC, which
-	 * are the TYPEs given to completed immC Gate objects.
+	 * are the TYPEs given to completed 'immC' Gate objects.
 	 *
 	 ***********************************************************/
 
@@ -814,7 +858,7 @@ decl	: declHead UNDEF	{
 		sp->ftype = $1.v.ftype;		/* bit int clock timer */
 		sp->type  = $1.v.type;
 		assert(($1.v.em & EM) == 0);	/* has been cleared in declHead */
-		sp->em    &= ~EM;		/* clear only bit EM here, leave bir EX */
+		sp->em    &= ~EM;		/* clear only bit EM here, leave bit EX */
 		if (sp->type != UDF) {
 		    listGenOut(sp, 1);		/* list immC node and generate possible output */
 		}
@@ -835,53 +879,53 @@ decl	: declHead UNDEF	{
 	    }
 	| declHead dVariable	{
 		int		typ;
+		int		typ1;
 		int		ftyp;
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
 		ftyp = $1.v.ftype;		/* ARITH GATE CLCKL TIMRL */
-		typ  = $1.v.type;		/* UDF for all TYPEs except ARNC and LOGC */
+		typ1  = $1.v.type;		/* UDF for all TYPEs except ARNC LOGC INPX INPW */
 		sp = $$.v = $2.v;
 		if (sp) {
 #if YYDEBUG
 		    Symbol t = *(sp);
 #endif
-		    if (sp->ftype != ftyp) {
+		    if (((typ = sp->type) == INPW || typ == INPX) &&
+			(typ1 == ARNC || typ1 == LOGC) &&
+			sp->type != ERR) {
+			ierror("immC declaration of an input variable is invalid:", sp->name);
+		    } else
+		    if (sp->ftype != $1.v.ftype && sp->type != ERR) {
 			ierror("declaration does not match previous declaration:", sp->name);
 			if (! iFunSymExt) $2.v->type = ERR;	/* cannot execute properly */
 		    } else
 		    if ((sp->em & EM) || sp->type == UDF) {
 			sp->ftype = ftyp;	/* bit int clock timer */
-			if (typ != UDF) {	/* UDF for all TYPEs except ARNC and LOGC */
+			if (typ1 != UDF) {	/* UDF for all TYPEs except ARNC and LOGC */
 			    char *	name;
 			    char	y1[2];
 			    int	yn;
 			    if ((name = sp->name) &&
-				sscanf(name, "Q%1[XBWL]%d", y1, &yn) != 2 &&
-				sp->type != typ) {
+				sscanf(name, "Q%1[XBWL]%d", y1, &yn) != 2 &&	/* skip QX etc */
+				sp->type != typ1) {
 				ierror("declaration does not match previous extern imm declaration:", name);
-				typ = ERR;	/* cannot execute properly */
+				typ1 = ERR;	/* cannot execute properly */
 			    } else {
-				sp->type = typ;	/* UDF for all TYPEs except ARNC and LOGC */
+				sp->type = typ1;	/* UDF for all TYPEs except ARNC and LOGC */
 				sp->em &= ~EM;
 				listGenOut(sp, 1);	/* list immC node and generate possible output */
 			    }
 			} else
 			if ((sp->em & EM) && (sp->type == ARNC || sp->type == LOGC)) {
 			    ierror("declaration does not match previous extern immC declaration:", sp->name);
-			    typ = ERR;		/* cannot execute properly */
+			    typ1 = ERR;		/* cannot execute properly */
 			}
-			sp->type = typ;		/* fix type */
+			if (typ != INPW && typ != INPX) {
+			    sp->type = typ1;	/* fix type */
+			}
 			sp->em &= ~EM;		/* no longer extern - leave EX */
-		    } else
-		    if (sp->type == INPW || sp->type == INPX) {
-			if (iC_Sflag) {
-			    warning("strict: declaration of an input variable - ignored:", sp->name);
-			}
 		    } else if (sp->type == ARNC || sp->type == LOGC) {
 			warning("immC declaration after definition - ignored:", sp->name);
-		    } else
-		    if (sp->type != ERR) {
-			warning("declaration after assignment - ignored:", sp->name);
 		    }
 #if YYDEBUG
 		    if ((iC_debug & 0402) == 0402) pd("decl", sp, $1.v, &t);
@@ -1009,8 +1053,11 @@ dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
 	 ***********************************************************/
 
 asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
+		Symbol *	sp;
 		$$.f = $1.f; $$.l = $3.l;
-		$1.v->ftype = GATE;		/* not strict - implicitly declared as 'imm bit' */
+		sp = $3.v->le_sym;
+		assert(sp && (sp->ftype < MIN_ACT && sp->ftype != UDFA));	/* GATEX GATE ARITH */
+		$1.v->ftype = sp->ftype;	/* not strict - implicitly declared from aexpr */
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 		if (iC_Sflag) {
 		    ierror("strict: assignment to an undeclared imm variable:", $1.v->name);
@@ -1028,7 +1075,15 @@ asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 #endif
 	    }
 	| AVAR '=' aexpr		{
+		Symbol *	sp;
 		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v != NULL &&
+		    (sp = $3.v->le_sym) != NULL &&
+		    sp->type < MAX_GT &&
+		    sp->u_blist == NULL) {
+		    assert($1.v->ftype == ARITH);
+		    sp->ftype = ARITH;		/* aexpr has never been used - change ftype */
+		}
 		if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: AVAR", &$$);
@@ -1042,7 +1097,15 @@ asgn	: UNDEF '=' aexpr	{		/* asgn is an aexpr */
 #endif
 	    }
 	| AOUT '=' aexpr		{
+		Symbol *	sp;
 		$$.f = $1.f; $$.l = $3.l;
+		if ($3.v != NULL &&
+		    (sp = $3.v->le_sym) != NULL &&
+		    sp->type < MAX_GT &&
+		    sp->u_blist == NULL) {
+		    assert($1.v->ftype == ARITH);
+		    sp->ftype = ARITH;		/* aexpr has never been used - change ftype */
+		}
 		if (($$.v = assignExpression(&$1, &$3, OUTW)) == 0) YYERROR;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "asgn: AOUT", &$$);
@@ -1094,7 +1157,7 @@ aexpr	: expr			{
 expr	: UNDEF			{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = checkDecl($1.v);
-		$1.v->ftype = GATE;
+		$1.v->ftype = GATE;		/* imm bit default if not declared */
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
 #if YYDEBUG
@@ -3065,10 +3128,10 @@ rPlist	: ractexpr			{
 	 *
 	 *	immC array declaration - these are arrays of immC bit or immC int nodes.
 	 *
-	 *	An immC array is declared and initialised with immC nodes in the
+	 *	An 'immC' array is declared and initialised with 'immC' nodes in the
 	 *	declaration. If no initialising list of members is given directly
 	 *	in the declaration, the call will automatically generate a list of
-	 *	immC nodes of the same type as the array being declared. The names
+	 *	'immC' nodes of the same type as the array being declared. The names
 	 *	of the members are given the name of the array with a number 0 to n-1
 	 *	appended, where n is the the size of the array, which must be specified
 	 *	in this case. The number appended to the array base name is the index
@@ -3081,9 +3144,9 @@ rPlist	: ractexpr			{
 	 *				// and initialises them as array members of
 	 *				// array immC int selInt, which is also defined
 	 *
-	 *	Alternatively an immC array may be declared and initialised in the
-	 *	declaration with differently named immC variables of the same
-	 *	immC type as the immC array. In this case the size specification is
+	 *	Alternatively an 'immC' array may be declared and initialised in the
+	 *	declaration with differently named 'immC' variables of the same
+	 * 'immC' type as the 'immC' array. In this case the size specification is
 	 *	optional.
 	 *
 	 *	    immC bit selOpen[3] = { open0, open1, open2, };
@@ -3095,21 +3158,21 @@ rPlist	: ractexpr			{
 	 *
 	 *	In either case the member names of the array (either generated names
 	 *	or names provided in the optional initialiser list) may be previously
-	 *	declared immC variables. In this case those immC variables will be used.
-	 *	A check is made, that those members are the same immC type as the array.
-	 *	Alternatively if the names are undefined, the immC array declaration will
-	 *	declare and reserve storage for the named members. The type (immC bit or
-	 *	immC int) will be taken from the type of the array being declared.
+	 *	declared 'immC' variables. In this case those 'immC' variables will be used.
+	 *	A check is made, that those members are the same 'immC' type as the array.
+	 *	Alternatively if the names are undefined, the 'immC' array declaration will
+	 *	declare and reserve storage for the named members. The type ('immC bit' or
+	 *	'immC int') will be taken from the type of the array being declared.
 	 *
-	 *	immC arrays may only be declared and optionally called with an initialiser
-	 *	list once in one statement. Like simmple immC declarations, immC array
-	 *	declarations reserve and initialise storage. immC array declarations
-	 *	can be included in a comma separated list of immC declarations. The
+	 *	'immC' arrays may only be declared and optionally called with an initialiser
+	 *	list once in one statement. Like simmple 'immC' declarations, 'immC' array
+	 *	declarations reserve and initialise storage. 'immC' array declarations
+	 *	can be included in a comma separated list of 'immC' declarations. The
 	 *	keywords 'immC bit' or 'immC int' at the head of the list need only be
 	 *	given once.
 	 *
-	 *	immC arrays are accessed with a numeric index, which selects a
-	 *	particular immC node stored during initialisation (similar to ALIAS).
+	 *	'immC' arrays are accessed with a numeric index, which selects a
+	 *	particular 'immC' node stored during initialisation (similar to ALIAS).
 	 *	Being immC, they may only be assigned in C code. Their value may be
 	 *	accessed and used in any iC or C expression. In iC code only constant
 	 *	numerical indices may be used, whereas in C code either immediate or
@@ -3145,7 +3208,7 @@ rPlist	: ractexpr			{
 	 *	every time si changes, although only one of them fires.
 	 *	(Significant if selection is large).
 	 *
-	 *	For the selection with an immC array only one selection array
+	 *	For the selection with an 'immC' array only one selection array
 	 *	element changes - the one selected by index si in the C fragment,
 	 *	which triggers the correct gate immediately.
 	 *
@@ -3401,7 +3464,7 @@ immCiniList
 	 *
 	 *	Extern immC array declaration
 	 *
-	 *	An immC array in another source may be declared extern, in which case
+	 *	An 'immC' array in another source may be declared extern, in which case
 	 *	the array and its members may be accessed in that source.
 	 *
 	 *	The form of the extern declaration must be the same as the normal
@@ -3410,9 +3473,9 @@ immCiniList
 	 *	the extern declaration must be provided with an identical initialiser
 	 *	list. If the final declaration will be without an initialiser list
 	 *	the extern declaration must be the same. The reason for this is, that
-	 *	an extern array declaration not only declares the immC array extern
+	 *	an extern array declaration not only declares the 'immC' array extern
 	 *	but it also declares all of its members extern. Only this way can the
-	 *	members of an immC array be accessed correctly in another source.
+	 *	members of an 'immC' array be accessed correctly in another source.
 	 *
 	 *	The four arrays declared in the previous section are declared extern
 	 *	as follows:
@@ -3432,21 +3495,21 @@ immCiniList
 	 *	    extern immC bit open0, open1, open2;
 	 *	    extern immC int numb0, numb1, numb2;
 	 *
-	 *	If these simple extern immC declarations had already been coded
+	 *	If these simple 'extern immC' declarations had already been coded
 	 *	previously, only a check is made that the types match.
 	 *
-	 *	Like simple extern immC declarations, extern immC array declarations
-	 *	do not reserve any storage. Extern immC array declarations can be
-	 *	included in a comma separated list of extern immC declarations. The
+	 *	Like 'extern immC' variable declarations, 'extern immC' array declarations
+	 *	do not reserve any storage. 'extern immC' array declarations can be
+	 *	included in a comma separated list of 'extern immC' declarations. The
 	 *	keywords 'extern immC bit' or 'extern immC int' at the head of the
 	 *	list need only be given once.
 	 *
 	 *	Bits EM and EX are set in em, just like in extern declarations for
 	 *	scalar immediate variables.
 	 *
-	 *	In good C practice, the extern immC array declarations should be
+	 *	In good C practice, the 'extern immC' array declarations should be
 	 *	coded in a header file, which is to be included in each source
-	 *	using the immC array. In the source finally declaring, defining and
+	 *	using the 'immC' array. In the source finally declaring, defining and
 	 *	initialising the array, the extern declaration in the header will
 	 *	precede the full declaration. At that point a check is made, that
 	 *	the type of the array and the types and names of all of its members
@@ -3631,17 +3694,17 @@ extimmCarrayHead
 	 *
 	 *	immC array variable
 	 *
-	 *	An immC array member may be used as an immediate variable
-	 *	like any other immC variable.
+	 *	An 'immC' array member may be used as an immediate variable
+	 *	like any other 'immC' variable.
 	 *
 	 *	    selOpen[0]
 	 *	    selNumb[1]
 	 *
 	 *	A numerical index in the range of 0 to n-1 may be used
-	 *	where n is the size of the immC array
+	 *	where n is the size of the 'immC' array
 	 *
-	 *	The return is the immC member of the array, which can
-	 *	even be used to initialise other immC arrays
+	 *	The return is the 'immC' member of the array, which can
+	 *	even be used to initialise other 'immC' arrays
 	 *
 	 ***********************************************************/
 
@@ -4667,7 +4730,7 @@ iClex(void)
 		c = symp->u_val;		/* reserved word or C-type */
 	    } else
 	    if (qtoken) {
-		c = qtoken;			/* LOUT or AOUT */
+		c = qtoken;			/* first time LOUT or AOUT */
 	    } else
 	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 0 LVARC 0 ... NUMBER ... */
 		c = lex_act[symp->ftype];	/* UNDEF AVAR LVAR ..YYERRCODE.. AOUT LOUT CVAR TVAR */
@@ -4688,7 +4751,7 @@ iClex(void)
 		ierror("statement too long at: ", symp->name);
 	    }
 	    iClval.sym.l = iCstmtp += len;
-	} else {
+	} else {				/* not digit alpha '_' or '$' */
 	    c1 = get(T0FP, 0);			/* unget possible EOF after c has been processed */
 	    switch (c) {
 	    case '!':
