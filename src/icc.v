@@ -1,11 +1,11 @@
-$Revision icc_2.4 $
-@(#)$Id: icc.v 2.4 $
+$Revision icc_2.5 $
+@(#)$Id: icc.v 2.5 $
 ARTISTIC        1.1     2001/03/02 16:43:55 jw Exp
 COPYING         1.1     2001/03/02 16:43:55 jw Exp
-Makefile.in     1.66    263b257 2016-04-27 16:28:42 +1000 John E Wulff
+Makefile.in     1.67    23ea270 2016-05-15 10:20:16 +1000 John E Wulff
 Msg.pm          1.6     2015/03/06 00:28:04 jw Exp
 README          1.28    3db2e45 2016-04-25 14:42:07 +1000 John E Wulff
-README.RPi      1.2     2015/12/28 12:49:23 jw Exp
+README.RPi      1.3     23ea270 2016-05-15 10:20:16 +1000 John E Wulff
 bar.sav         1.1     2013/02/03 07:14:30 jw Exp
 bar.vcd         1.1     2013/02/03 07:14:30 jw Exp
 barx.vcd        1.1     2013/02/01 23:41:01 jw Exp
@@ -15,13 +15,13 @@ cexe.h          1.31    2015/10/30 04:40:11 jw Exp
 cexe_t.c        1.1     2013/09/10 08:31:47 jw Exp
 comp.h          1.68    2015/10/16 12:33:47 jw Exp
 comp.pl         1.6     2009/08/21 06:01:04 jw Exp
-comp.y          1.114   2015/10/16 12:33:47 jw Exp
+comp.y          1.116   e99140f 2016-05-16 12:06:50 +1000 John E Wulff
 configure       1.8     3db2e45 2016-04-25 14:42:07 +1000 John E Wulff
 configure.in    1.4     2005/02/01 16:37:44 jw Exp
 genr.c          1.85    2016/01/03 10:18:20 jw Exp
 gram.pl         1.7     2014/05/12 13:09:44 jw Exp
 gram.y          1.34    2015/06/05 08:19:18 jw Exp
-iCbox           1.58    2015/11/06 03:50:19 jw Exp
+iCbox           1.59    23ea270 2016-05-15 10:20:16 +1000 John E Wulff
 iCgpioPUD.c     1.2     2015/04/11 09:30:33 jw Exp
 iClift          1.16    54abfd1 2016-04-22 09:58:59 +1000 John E Wulff
 iClive          1.59    2016/01/23 00:38:42 jw Exp
@@ -58,7 +58,7 @@ mcp23s17.h      1.4     2015/12/18 07:02:24 jw Exp
 misc.c          1.17    2016/01/02 22:54:19 jw Exp
 mklst           1.16    2013/04/19 06:48:33 jw Exp
 ml              1.19    2013/04/19 06:37:45 jw Exp
-outp.c          1.98    2015/10/16 12:33:47 jw Exp
+outp.c          1.100   e99140f 2016-05-16 12:06:50 +1000 John E Wulff
 p_channel.c     1.2     2015/10/16 12:33:47 jw Exp
 pawk.pl         1.8     3db2e45 2016-04-25 14:42:07 +1000 John E Wulff
 perlinstall     1.11    2009/08/21 06:08:40 jw Exp
