@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.115 $";
+"@(#)$Id: comp.y 1.116 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -690,7 +690,7 @@ extDecl	: extDeclHead UNDEF	{
 		typ1  = $1.v.type;		/* UDF for all TYPEs except ARNC LOGC INPX INPW */
 		sp = $$.v = $2.v;
 		if (sp) {
-		    assert(($1.v.em & EM|EX) == EM|EX);	/* has been set in extDeclHead */
+		    assert(($1.v.em & (EM|EX)) == (EM|EX));	/* has been set in extDeclHead */
 		    if (((typ = sp->type) == INPW || typ == INPX) &&
 			(typ1 == ARNC || typ1 == LOGC) &&
 			sp->type != ERR) {

@@ -1,6 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.99 $";
-static const char outp_c[] =
+"@(#)$Id: outp.c 1.100 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
