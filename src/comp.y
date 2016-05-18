@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.116 $";
+"@(#)$Id: comp.y 1.117 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -599,7 +599,7 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 *	extern imm clock c1;	extern imm timer t1;
 	 *
 	 * The extern type declaration in iC declares that an immediate
-	 * variable has been assigned in another module and may be used
+	 * variable will be assigned in another module and may be used
 	 * as an rvalue in immediate expressions in iC or C code in this
 	 * module.
 	 *
@@ -809,30 +809,27 @@ extDeclHead
 	 * during initialization and warns if no assignments have occurred.
 	 *
 	 * IEC-1131 input and output variables are pre-declared for iC code
-	 * and normally do not need to be declared except for the following
-	 * cases:
+	 * and C code normally do not need to be declared except for the
+	 * following cases:
 	 *
-	 * An 'imm' or 'immC' type declaration of an input or output variable
-	 * is needed if that variable has already been declared with an
+	 * An 'imm' type declaration of an input variable is needed if that
+	 * variable has already been declared with an 'extern imm' declaration
+	 * in this source module (usually in an included .ih header) and its
+	 * storage is going to be defined in this source.
+	 *
+	 * An 'imm' or 'immC' type declaration of an output variable is
+	 * needed if that variable has already been declared with an
 	 * 'extern imm' or 'extern immC' declaration in this source module
-	 * (usually in an included .ih header) or is going to be used in C
-	 * code. The direct 'imm' declaration defines an input node in this
-	 * module and declares that an output variable must be assigned in
-	 * this module. Individual input and output variables may only be
-	 * used without 'extern imm' or 'extern immC' in case of output
-	 * variables or simply declared with 'imm' or 'immC' in one source
-	 * module only, because their storage is defined in that source.
-	 * Multiply defined link errors will occur if this rule is ignored.
-	 * Also individual inputs and output must be defined in one source
-	 * either by using them without an 'extera immn' declaration in that
-	 * source or following the 'extern imm' declaration with a simple
-	 * 'imm' declaration to avoid an undefined link error.
+	 * (usually in an included .ih header) and its storage is going to
+	 * be defined in this source. This also means that the output variable
+	 * should be assigned in this source.
 	 *
 	 * These rules for input and output variables are the same as for
 	 * ordinary immediate variables, except that an I/O variable which
 	 * has not been declared 'extern imm' does not need to be declared
-	 * at all (defined when used in iC code by default) except if it is
-	 * going to be used only in C code and not in iC code.
+	 * at all (defined when used in iC code and C code by default) except
+	 * that output variables which are to be assigned in C code must
+	 * be declared with 'immC' like ordinary immediate variables.
 	 *
 	 * 'immC' type declarations may not be combined with a dasgn, since no
 	 * immediate assignment may occurr if a variable has been declared

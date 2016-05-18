@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c,v 1.63 2015/12/26 09:35:16 jw Exp $";
+"@(#)$Id: load.c 1.64 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2015  John E. Wulff
@@ -1947,7 +1947,9 @@ main(
 				gp->gt_old++;		/* C function value parameter */
 			    }
 			    if (useWord & VAR_ASSIGN) {	/* (EA >> AU_OFS) */
-				assert(gp->gt_ini == -ARNC || gp->gt_ini == -LOGC);
+				if (gp->gt_ini != -ARNC && gp->gt_ini != -LOGC) {
+				    inError(__LINE__, op, gp, "PASS 1: variable is not declared immC");
+				}
 				gp->gt_val++;		/* C parameter is assigned */
 			    }
 			}

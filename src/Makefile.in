@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.67 $
+# @(#)$Id: Makefile.in 1.68 $
 
 #######################################################################
 #
@@ -110,11 +110,15 @@ SHELL = /bin/sh
 
 #######################################################################
 
+CSRC =	$(srcdir)/comp.c $(srcdir)/genr.c $(srcdir)/init.c $(srcdir)/symb.c $(srcdir)/outp.c $(srcdir)/gram.c $(srcdir)/lexc.c
 COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O)
+LSRC =	$(srcdir)/link.c $(srcdir)/rsff.c $(srcdir)/scan.c
 LOBJ =	link.$(O) rsff.$(O) scan.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
+PSRC =	$(srcdir)/rpi_rev.c $(srcdir)/rpi_gpio.c $(srcdir)/mcp23s17.c $(srcdir)/pifacecad.c
 POBJ =	rpi_rev.$(O) rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O)
 else
+PSRC =
 POBJ =
 endif
 
@@ -217,7 +221,7 @@ pplstfix:
 	pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
 	@gzip -f $*.1
 
-$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix
+$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/misc.c $(CSRC) $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(LSRC) $(PSRC)
 	rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
 $(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.pl
