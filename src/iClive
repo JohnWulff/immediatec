@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2012  John E. Wulff
+#	Copyright (C) 2000-2016  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@
 #
 #	For measuring reaction times the Module Time::HiRes is used.
 #	This is activated by the -m option.
-#	Make sure you have installed Time::HiRes (provided in this distribution)
+#	Make sure you have installed Time::HiRes
 #
 ########################################################################
 
@@ -279,7 +279,7 @@ Usage:
      <>Exact match
      <>Ignore case
      <>Regexp match
-     <>Rgexp+ignore case
+     <>Regexp+ignore case
        -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
@@ -289,9 +289,9 @@ Usage:
     [Help]      Display the @<<<<< man page.                      Alt-h
 			    $named
 
-Copyright (C) 2000-2012  John E. Wulff          <immediateC@gmail.com>
+Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive,v 1.59 2016/01/23 00:38:42 jw Exp $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.60 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -2640,6 +2640,7 @@ no warnings;
 use warnings;
     $unconditional = 0 unless $unconditional;	# stops trace errors
     my $ci = 0;
+    my $no = 0;
     unless (defined $fName and $fName ne '') {
 	$fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
 	unless (defined $fName and $fName ne '') {
@@ -2666,12 +2667,15 @@ use warnings;
 					   -relief       => 'ridge',
 					  )->pack(-side => 'bottom', -fill => 'x');
 	    my $answer = $dialog->Show();
-	    if ($answer eq 'Cancel') {
-		info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
-		return 0;			# cancel operation
-	    } elsif ($answer eq 'Yes') {
+	    if ($answer eq 'Yes') {
 		print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
 		stop_file();			# $runName = ''
+	    } elsif ($answer eq 'No') {
+		print "open_file: open '$fName' leave '$runName'\n" if $opt_T;
+		$no = 1;
+	    } else {				# 'Cancel'
+		info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
+		return 0;			# cancel operation
 	    }
 	}
 	if ($unconditional or check_save()) {
@@ -2702,19 +2706,22 @@ use warnings;
 		tagComments();
 		info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
 		if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
-		    $procName = $3;
-		    $instName = "$procName$instanceText";
-		    if ($4 eq 'ic') {
-			$menuFile->entryconfigure(4, -label => "$1.lst");
+		    my ($s1, $s3, $s4) = ($1, $3, $4);
+		    $procName = $s3;
+		    if ($s4 eq 'ic') {
+			$menuFile->entryconfigure(4, -label => "$s1.lst");
 			check_menu($fileName, 'files');		# save ic name in file menu
 		    } else {
-			$menuFile->entryconfigure(4, -label => "$1.ic");
-			if ($4 eq 'ica') {
+			$menuFile->entryconfigure(4, -label => "$s1.ic");
+			if ($s4 eq 'ica') {
 			    check_menu($fileName, 'files');	# save ica name in file menu
 			}
 		    }
-		    $ci = change_instance();
-		    adjust_live(-1, -1);
+		    unless ($no) {
+			$instName = "$procName$instanceText";	# previous executable was stopped
+			$ci = change_instance();
+			adjust_live(-1, -1);
+		    }
 		}
 		$prevText = '';		# start a new search
 		if ($readOnly) {
@@ -3573,7 +3580,7 @@ iClive - an editor and live debugger for immediate-C clients
      <>Exact match
      <>Ignore case
      <>Regexp match
-     <>Rgexp+ignore case
+     <>Regexp+ignore case
        -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
@@ -3621,7 +3628,7 @@ In B<Live> mode, double-clicking with mouse button 1 transfers the
 word under the mouse to the Search Entry window and immediately starts
 a search for that word. This is the quickest and best way to start a
 search. In B<Edit> mode this action simply selects the word under the
-mouse (Text Binding [2]).  If necessary clear the prevous serach by
+mouse (Text Binding [2]).  If necessary clear the prevous search by
 pressing ctrl-RETURN.  The selected word can be pasted into the Search
 Entry window by positioning the mouse over the Search Entry window
 and clicking the middle mouse button (Text Binding [7]). A search
@@ -3635,7 +3642,7 @@ facility. Another useful feature is changing the wrap mode.
 
 B<iClive> is a client of B<iCserver>, like all running iC applications
 and IO's. On startup B<iClive> will start B<iCserver -A iCbox>,
-unless it is already running. This will automatically autovivify
+unless iCserver is already running. This will automatically autovivify
 the correct B<iCbox> when an application is started with the B<Run>
 button. An alternative command to autovivify may be entered with
 the B<-A> option: eg B<-A iClift> or B<-A 'iCbox -H'> If B<iClive>
@@ -3682,8 +3689,8 @@ variable as a normal variable with a different name. The same 'index'
 is used in VCD files for GTKWave.  Simlarly when the left Control-Key
 is pressed the balloon will display the 'ftype' of the variable.
 
-A line terminated with an active word followed by an equal sign will
-be followed by the value of the word in a live display.
+In B<Live> mode an active word in a comment followed by an equal sign
+at the very end of the line will show the changing value of the word.
 
     eg.  // offset =
     will be displayed as
