@@ -98,7 +98,7 @@ Usage:
 		if a client call has arguments, the call must be quoted
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver,v 1.49 2016/01/02 23:05:00 jw Exp $
+$Id: iCserver 1.50 $
 .
 
 ########################################################################
@@ -1012,7 +1012,8 @@ use warnings;
 		}
 		elsif ($msg1 eq 'T') {
 		    print_tables();
-		} else {
+		}
+		elsif ($msg1 ne '') {		# ignore empty message before leading comma ",SIX123,..."
 		    warn "$named: strange msg1 '$msg1' in received msg '$msg'\n";
 		}
 	    }

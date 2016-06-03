@@ -1,0 +1,336 @@
+/********************************************************************
+ *
+ *  iC program to run Keith Burstons Meccano Lift
+ *
+ *  Lift inputs from call button contacts:		11
+ *  CALL_UP_1	CALL_UP_2	CALL_UP_3
+ *  		CALL_DOWN_2	CALL_DOWN_3	CALL_DOWN_4	
+ *  I_REQUEST_1	I_REQUEST_2	I_REQUEST_3	I_REQUEST_4	
+ *  I_REQUEST_OPEN
+ *
+ *  Lift inputs from micro-switch sensors:		6
+ *  LIFT_AT_1	LIFT_AT_2	LIFT_AT_3	LIFT_AT_4	
+ *  DOOR_OPEN	DOOR_SHUT
+ *
+ *  All inputs from the lift are debounced with a 50 - 100 ms
+ *  turn off delay
+ *
+ *  Outputs to indicator lights:			18
+ *  GOING_UP_1	GOING_UP_2	GOING_UP_3
+ *  		GOING_DOWN_2	GOING_DOWN_3	GOING_DOWN_4	
+ *  CALL_UP_1_LIGHT       CALL_UP_2_LIGHT       CALL_UP_3_LIGHT
+ *  		CALL_DOWN_2_LIGHT
+ *  				CALL_DOWN_3_LIGHT
+ *  						CALL_DOWN_4_LIGHT	
+ *  I_REQUEST_1_LIGHT
+ *  		I_REQUEST_2_LIGHT
+ *  				I_REQUEST_3_LIGHT
+ *  						I_REQUEST_4_LIGHT	
+ *  I_GOING_UP_LIGHT		I_GOING_DOWN_LIGHT
+ *
+ *  Multiplexed outputs to lights motors and bell:	7
+ *  I_AT_LIGHT5	I_AT_LIGHT6
+ *  LiftMotor1	LiftMotor2
+ *  DoorMotor3	DoorMotor4
+ *  RingBell
+ *
+ *  Safe de-multiplexed signals to lights and motors:
+ *  atFloor1	atFloor2	atFloor3	atFloor4	
+ *  cageUp	cageDn		openDoor	closeDoor
+ *
+ *******************************************************************
+ *
+ *  Run simLift in parallel with kbLift, when Meccano lift is not available
+ *
+ *  Lift inputs and outputs X40-X43 and X0-X3 to simLift.ic are reversed.
+ *
+ *  Call  iCserver QX40=IX0 QX41=IX1 QX42=IX2 QX43=IX3 \
+ *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
+ *  or with iCserver -f kbLift.is         // script with full setup
+ *
+ *  $Id: kbLift.ic 1.1 $
+ *
+ *******************************************************************/
+
+use strict;
+
+/********************************************************************
+ * Function block to de-bounce switch contact inputs
+ *     output will rise with first rising input
+ *     output will fall after input has been low for 50 to 100 ms
+ *******************************************************************/
+
+imm bit   deBounce(bit contact)
+{
+    extern imm timer	t50;
+    this = ~D(~contact, t50, 2);
+}
+
+/********************************************************************
+ * Processor inputs
+ *******************************************************************/
+
+imm timer t50 = TIMER(TX0.4, ~TX0.4);		// 50 ms timer
+imm bit   eoi = ST(TX0.0, iClock);		// pulse at end of initialisation
+
+/********************************************************************
+ * INPUTS - Port B
+ *******************************************************************/
+
+// Device Address 0
+imm bit LIFT_AT_2	= deBounce(IX0.0);	// Lift aligned with level 2
+imm bit CALL_UP_2	= deBounce(IX0.1);	// Request up from level 2
+imm bit CALL_DOWN_2	= deBounce(IX0.2);	// Request down from level 2
+imm bit LIFT_AT_1	= deBounce(IX0.3);	// Lift aligned with level 1
+imm bit CALL_UP_1	= deBounce(IX0.4);	// Request up from level 1
+
+// Device Address 1				// not used for inputs
+
+// Device Address 2
+imm bit I_REQUEST_OPEN	= deBounce(IX2.0);	// Open door button inside lift
+imm bit I_REQUEST_4	= deBounce(IX2.1);	// Lift to level 4 request inside lift
+imm bit I_REQUEST_3	= deBounce(IX2.2);	// Lift to level 3 request inside lift
+imm bit I_REQUEST_2	= deBounce(IX2.3);	// Lift to level 2 request inside lift
+imm bit I_REQUEST_1	= deBounce(IX2.4);	// Lift to level 1 request inside lift
+imm bit CALL_DOWN_3	= deBounce(IX2.5);	// Request down from level 3
+imm bit CALL_UP_3	= deBounce(IX2.6);	// Request up from level 3
+imm bit LIFT_AT_3	= deBounce(IX2.7);	// Lift aligned with level 3
+
+// Device Address 3
+imm bit DOOR_OPEN	= deBounce(IX3.0);	// Lift door in open position
+imm bit LIFT_AT_4	= deBounce(IX3.1);	// Lift aligned with level 4
+imm bit CALL_DOWN_4	= deBounce(IX3.2);	// Request down from level 4
+imm bit DOOR_SHUT	= deBounce(IX3.3);	// Lift doors in closed position
+
+imm bit goingUp, closeDoor;
+imm bit sameFloorUp, sameFloorDn, sameFloor;
+imm bit forwardUp2, forwardUp3, forwardDn3, forwardDn2;
+imm bit reqFloorUp2, reqFloorUp3, reqFloorDn3, reqFloorDn2;
+
+/********************************************************************
+ *  minimum delay to keep door open * 0.1 second
+ *******************************************************************/
+imm int doorDelay	= IB3 * 2 ? : 50 * 2;		// default 5 seconds
+imm bit doorOpenMin	= D(DOOR_OPEN & ~sameFloor, t50, doorDelay);	// doorDelay =
+
+/********************************************************************
+ *  Current cage position is set on the leading edges of LIFT_AT_1 to
+ *  LIFT_AT_4 either going up or coming down. This means that when one
+ *  of those switches is already on, and that position has been noted
+ *  it is too late to select that position as a new target destination.
+ *  This avoids trying to stop the lift towards the end of the time
+ *  one of those switches is activated - the switch could jiggle as the
+ *  door opens causing problems. We stop hard on the leading edge of
+ *  one of the LIFT_AT_x switches or not at all.
+ *******************************************************************/
+imm bit atFloor1	= SR(LIFT_AT_1 | eoi, LIFT_AT_2 | LIFT_AT_3 | LIFT_AT_4);
+imm bit atFloor2	= SR(LIFT_AT_2,       LIFT_AT_1 | LIFT_AT_3 | LIFT_AT_4);
+imm bit atFloor3	= SR(LIFT_AT_3,       LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_4);
+imm bit atFloor4	= SR(LIFT_AT_4,       LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3);
+
+imm int cagePosition	= atFloor1 ? 1 : atFloor2 ? 2 : atFloor3 ? 3 : atFloor4 ? 4 : 0;
+imm bit at_a_floor	= D(LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3 | LIFT_AT_4);	// sync with atFloor1 to 4
+
+imm bit goingDn		= ~goingUp;
+
+imm bit atFloorUp2	= atFloor2  & goingUp;
+imm bit atFloorUp3	= atFloor3  & goingUp;
+imm bit atFloorDn3	= atFloor3  & goingDn;
+imm bit atFloorDn2	= atFloor2  & goingDn;
+
+imm bit goingUp2	= LIFT_AT_2 & goingUp;
+imm bit goingUp3	= LIFT_AT_3 & goingUp;
+imm bit goingDn3	= LIFT_AT_3 & goingDn;
+imm bit goingDn2	= LIFT_AT_2 & goingDn;
+
+/********************************************************************
+ *  Alternatively if doorOpneMin has expired and next target is on the same floor
+ *      simply reset that next target because request has alredy been honoured.
+ *******************************************************************/
+imm bit nxtFloorUp2	= doorOpenMin & forwardUp2 & atFloor2 & goingDn & reqFloorUp2;
+imm bit nxtFloorUp3	= doorOpenMin & forwardUp3 & atFloor3 & goingDn & reqFloorUp3;
+imm bit nxtFloorDn3	= doorOpenMin & forwardDn3 & atFloor3 & goingUp & reqFloorDn3;
+imm bit nxtFloorDn2	= doorOpenMin & forwardDn2 & atFloor2 & goingUp & reqFloorDn2;
+
+	sameFloorUp	= RISE(nxtFloorUp2 | nxtFloorUp3);
+	sameFloorDn	= RISE(nxtFloorDn3 | nxtFloorDn2);
+	sameFloor	= sameFloorUp | sameFloorDn;
+
+/********************************************************************
+ *  Set target requests
+ *      Floor 1 and 4 wall requests and all requests from in the cage
+ *      are up/down independent, which means lift will stop next time
+ *      it comes by the target floor whether going up or down.
+ *      Floor 2 and 3 wall requests are split into up and down requests,
+ *      which means lift will only stop if going in the right direction.
+ *  Block all requests if lift is stopped at the requested target floor.
+ *******************************************************************/
+imm bit reqFloor1	= SR((CALL_UP_1   | I_REQUEST_1)       & ~LIFT_AT_1, LIFT_AT_1             );
+	reqFloorUp2	= SR( CALL_UP_2                        & ~goingUp2 , goingUp2 | nxtFloorUp2);
+imm bit reqFloor2	= SR(               I_REQUEST_2        & ~LIFT_AT_2, LIFT_AT_2             );
+imm bit reqFloor3	= SR(               I_REQUEST_3        & ~LIFT_AT_3, LIFT_AT_3             );
+	reqFloorUp3	= SR( CALL_UP_3                        & ~goingUp3 , goingUp3 | nxtFloorUp3);
+imm bit reqFloor4	= SR((CALL_DOWN_4 | I_REQUEST_4 | eoi) & ~LIFT_AT_4, LIFT_AT_4             );
+	reqFloorDn3	= SR( CALL_DOWN_3                      & ~goingDn3 , goingDn3 | nxtFloorDn3);
+	reqFloorDn2	= SR( CALL_DOWN_2                      & ~goingDn2 , goingDn2 | nxtFloorDn2);
+
+imm bit newTarget	= reqFloor1                & ~LIFT_AT_1 |
+	   (reqFloorUp2 | reqFloor2 | reqFloorDn2) & ~LIFT_AT_2 |
+	   (reqFloorUp3 | reqFloor3 | reqFloorDn3) & ~LIFT_AT_3 |
+			  reqFloor4                & ~LIFT_AT_4 ;
+
+/********************************************************************
+ *  Determine next target position
+ *  Lift positions and target requests are in a circle as follows
+ *  	1	2|up2	3|up3	4	3|dn3	2|dn2	1
+ *
+ *  Target requests for floors 1 and 4 are the same from the single
+ *  wall buttons on those floors or from inside the lift. Target
+ *  requests for floors 2 and 3 from inside the lift will cause the
+ *  lift to stop when comimg past those floors going up or down.
+ *  Target requests for floors 2 and 3 from the up/down wall buttons
+ *  will cause the lift to stop at those floors only when going in
+ *  the right direction.
+ *
+ *  Starting at the current position the next target is the next
+ *  requested floor on the right. As the lift is moving new requests
+ *  may come in, in which case the lift will stop early, if the new
+ *  request is between the then current position and the previous
+ *  next target.
+ *  Since one atFloorX will always be hi, the forwardX ring will be
+ *  broken at the current position if reqTarget (no latching).
+ *******************************************************************/
+imm bit reqTarget	= reqFloor1 | reqFloorUp2 | reqFloor2 | reqFloorUp3 |
+			  reqFloor4 | reqFloorDn3 | reqFloor3 | reqFloorDn2 ;
+
+imm bit forwardDn2;
+imm bit forward1	= forwardDn2 & ~reqFloorDn2 & ~reqFloor2 & ~atFloor1   |
+					reqTarget                &  atFloor1   ;
+imm bit forwardUp2	= forward1   & ~reqFloor1                & ~atFloorUp2 |
+					reqTarget                &  atFloorUp2 ;
+imm bit forwardUp3	= forwardUp2 & ~reqFloorUp2 & ~reqFloor2 & ~atFloorUp3 |
+					reqTarget                &  atFloorUp3 ;
+imm bit forward4	= forwardUp3 & ~reqFloorUp3 & ~reqFloor3 & ~atFloor4   |
+					reqTarget                &  atFloor4   ;
+imm bit forwardDn3	= forward4   & ~reqFloor4                & ~atFloorDn3 |
+					reqTarget                &  atFloorDn3 ;
+	forwardDn2	= forwardDn3 & ~reqFloorDn3 & ~reqFloor3 & ~atFloorDn2 |
+					reqTarget                &  atFloorDn2 ;
+
+imm bit notAtFloor2AndReqFloor2	= ~atFloor2 & reqFloor2;
+imm bit notAtFloor3AndReqFloor3	= ~atFloor3 & reqFloor3;
+imm bit doorClosing	= closeDoor & DOOR_SHUT;
+
+imm int targetPosition	= SH(doorClosing &  forward1   &  ~atFloor1   & reqFloor1       ? 1 : // targetPosition =
+			     doorClosing & (forwardUp2 & (~atFloorUp2 & reqFloorUp2 |
+							   notAtFloor2AndReqFloor2  ) |
+					    forwardDn2 & (~atFloorDn2 & reqFloorDn2 |
+							   notAtFloor2AndReqFloor2  ) ) ? 2 :
+			     doorClosing & (forwardUp3 & (~atFloorUp3 & reqFloorUp3 |
+							   notAtFloor3AndReqFloor3  ) |
+					    forwardDn3 & (~atFloorDn3 & reqFloorDn3 |
+							   notAtFloor3AndReqFloor3  ) ) ? 3 :
+			     doorClosing &  forward4   &  ~atFloor4   & reqFloor4 | eoi ? 4 : targetPosition);
+
+/********************************************************************
+ *  Move cage up
+ *      if target position is above cage position
+ *  Move cage down
+ *      if target position is below cage position
+ *  Stop moving cage
+ *      if target position equals cage position
+ *      or door not shut or reached lower or upper limit (safety measure)
+ *******************************************************************/
+
+imm bit cageUp		= targetPosition >  cagePosition;	// cagePosition   =
+imm bit cageDn		= targetPosition <  cagePosition;	// targetPosition =
+imm bit atTarget	= targetPosition == cagePosition;
+imm bit cageSTOP	= atTarget           |	// hard stop when at target
+			 ~DOOR_SHUT          |	// hard stop when door not shut
+			  cageDn & LIFT_AT_1 |	// hard stop at floor 1 going down
+			  cageUp & LIFT_AT_4 ;	// hard stop at floor 4 going up
+	goingUp		= SR(cageUp | sameFloorUp, cageDn | sameFloorDn);
+
+imm bit LiftMotor1	= D(cageUp | cageSTOP);	// Lift cage up or hard stop for any reason
+imm bit LiftMotor2	= D(cageDn | cageSTOP);	// Lift cage down or hard stop for any reason
+
+/********************************************************************
+ *  Open door
+ *      if at a floor and at target (at which point cage will have stopped) and door shut
+ *      or I_REQUEST_OPEN button but only if door is not yet fully shut
+ *         this will open the door again - go through door timeout and select next target again
+ *  Stop opening door   DOOR_OPEN
+ *******************************************************************/
+imm bit openDoor	= SR(at_a_floor & (atTarget       & D(DOOR_SHUT)            |
+					   I_REQUEST_OPEN &  ~DOOR_SHUT & ~DOOR_OPEN),
+			     DOOR_OPEN);	// atTarget is delayed by 1 iClock from DOOR_SHUT - use D()
+
+imm bit RingBell	= ST(openDoor | sameFloor, t50, 2);	// <100ms active high pulse
+
+/********************************************************************
+ *  Close door
+ *      if doorOpenMin (started by DOOR_OPEN) has expired and a new target is available
+ *  Stop closing door
+ *      DOOR_SHUT or I_REQUEST_OPEN
+ *
+ *******************************************************************/
+	closeDoor	= SR(doorOpenMin & ~sameFloor & newTarget & ~I_REQUEST_OPEN & ~openDoor,
+			     DOOR_SHUT | I_REQUEST_OPEN);
+imm bit doorSTOP	= ~(openDoor ^ closeDoor) |	// hard stop when both off (or both on)
+			  ~at_a_floor             |	// hard stop when not at a floor
+			   openDoor  & DOOR_OPEN  |	// hard stop when openening and fully open
+			   closeDoor & DOOR_SHUT  ;	// hard stop when closing and fully shut
+
+imm bit DoorMotor3	= D(openDoor  | doorSTOP);	// open door or hard stop for any reason
+imm bit DoorMotor4	= D(closeDoor | doorSTOP);	// close door or hard stop for any reason
+
+/********************************************************************
+ *  Multiplex inside lift floor indicators
+ *******************************************************************/
+imm bit I_AT_LIGHT5	= atFloor3 | atFloor4;	// multiplexed light inside lift floors 3 or 4
+imm bit I_AT_LIGHT6	= atFloor2 | atFloor4;	// multiplexed light inside lift floors 2 or 4
+
+/********************************************************************
+ * OUTPUTS - Port A
+ *******************************************************************/
+
+imm bit I_REQUEST_4_LIGHT, I_REQUEST_3_LIGHT, I_REQUEST_2_LIGHT, I_REQUEST_1_LIGHT;
+imm bit GOING_DOWN_4,      CALL_DOWN_4_LIGHT, GOING_UP_3,        GOING_DOWN_3;
+
+// Device Address 0
+QX0.0	= I_REQUEST_4_LIGHT	= reqFloor4;	// Level 4 requested from inside lift
+QX0.1	= I_REQUEST_3_LIGHT	= reqFloor3;	// Level 3 requested from inside lift
+QX0.2	= I_REQUEST_2_LIGHT	= reqFloor2;	// Level 2 requested from inside lift
+QX0.3	= I_REQUEST_1_LIGHT	= reqFloor1;	// Level 1 requested from inside lift
+QX0.4	= GOING_DOWN_4		= atFloor4;	// On level 4 indicating lift going down
+QX0.5	= CALL_DOWN_4_LIGHT	= reqFloor4;	// Down requested on level 4
+QX0.6	= GOING_UP_3		= atFloorUp3;	// On level 3 indicating lift going up
+QX0.7	= GOING_DOWN_3		= atFloorDn3;	// On level 3 indicating lift going down
+
+imm bit CALL_UP_3_LIGHT, CALL_DOWN_3_LIGHT, GOING_UP_2, GOING_DOWN_2;
+imm bit CALL_UP_2_LIGHT, CALL_DOWN_2_LIGHT, GOING_UP_1, CALL_UP_1_LIGHT;
+
+// Device Address 1
+QX1.0	= CALL_UP_3_LIGHT	= reqFloorUp3;	// Up requested on level 3
+QX1.1	= CALL_DOWN_3_LIGHT	= reqFloorDn3;	// Down requested on level 3
+QX1.2	= GOING_UP_2		= atFloorUp2;	// On level 2 indicating lift going up
+QX1.3	= GOING_DOWN_2		= atFloorDn2;	// On level 2 indicating lift going down
+QX1.4	= CALL_UP_2_LIGHT	= reqFloorUp2;	// Up requested on level 2
+QX1.5	= CALL_DOWN_2_LIGHT	= reqFloorDn2;	// Down requested on level 2
+QX1.6	= GOING_UP_1		= atFloor1;	// On level 1 indicating lift going up
+QX1.7	= CALL_UP_1_LIGHT	= reqFloor1;	// Up requested on level 1
+
+imm bit I_GOING_UP_LIGHT, I_GOING_DOWN_LIGHT;
+
+// Device Address 2
+QX2.0	= I_GOING_UP_LIGHT	= goingUp;	// Lift "going up" light inside lift
+QX2.1	= I_GOING_DOWN_LIGHT	= goingDn;	// Lift "going down" light inside lift
+
+// Device Address 3
+QX3.0	= RingBell;				// <100ms active high pulse
+QX3.1	= LiftMotor1;				// 2 bits to control 3 motor states
+QX3.2	= LiftMotor2;
+QX3.3	= DoorMotor3;				// 2 bits to control 3 motor states
+QX3.4	= DoorMotor4;
+QX3.5	= I_AT_LIGHT5;				// 2 bits multiplexed to drive one of four lights
+QX3.6	= I_AT_LIGHT6;

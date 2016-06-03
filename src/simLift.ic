@@ -1,0 +1,282 @@
+/********************************************************************
+ *
+ *	iC program to simulate Keith Burstons Meccano Lift
+ *
+ *  Lift inputs from call button contacts:		11
+ *  CALL_UP_1	CALL_UP_2	CALL_UP_3
+ *  		CALL_DOWN_2	CALL_DOWN_3	CALL_DOWN_4	
+ *  I_REQUEST_1	I_REQUEST_2	I_REQUEST_3	I_REQUEST_4	
+ *  I_REQUEST_OPEN
+ *
+ *  Lift inputs from micro-switch sensors:		6
+ *  LIFT_AT_1	LIFT_AT_2	LIFT_AT_3	LIFT_AT_4	
+ *  DOOR_OPEN	DOOR_SHUT
+ *
+ *  All inputs from the lift are debounced with a 50 - 100 ms
+ *  turn off delay
+ *
+ *  Outputs to indicator lights:			18
+ *  GOING_UP_1	GOING_UP_2	GOING_UP_3
+ *  		GOING_DOWN_2	GOING_DOWN_3	GOING_DOWN_4	
+ *  CALL_UP_1_LIGHT	CALL_UP_2_LIGHT	CALL_UP_3_LIGHT
+ *  		CALL_DOWN_2_LIGHT
+ *  				CALL_DOWN_3_LIGHT
+ *  						CALL_DOWN_4_LIGHT	
+ *  I_REQUEST_1_LIGHT
+ *  		I_REQUEST_2_LIGHT
+ *  				I_REQUEST_3_LIGHT
+ *  						I_REQUEST_4_LIGHT	
+ *  I_GOING_UP_LIGHT		I_GOING_DOWN_LIGHT
+ *
+ *  Multiplexed outputs to lights motors and bell:	7
+ *  I_AT_LIGHT5	I_AT_LIGHT6
+ *  LiftMotor1	LiftMotor2
+ *  DoorMotor3	DoorMotor4
+ *  RingBell
+ *
+ *******************************************************************
+ *
+ *  Run in parallel with kbLift, when Meccano lift is not available
+ *
+ *  Lift inputs and outputs X0-X3 and X40-X43 to kbLift.ic are reversed.
+ *
+ *  Call  iCserver QX40=IX0 QX41=IX1 QX42=IX2 QX43=IX3 \
+ *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
+ *  or with iCserver -f kbLift.is         // script with full setup
+ *
+ *  $Id: simLift.ic 1.1 $
+ *
+ *******************************************************************/
+
+use strict;
+
+imm timer t50 = TIMER(TX0.4, ~TX0.4);
+imm bit   eoi = TX0.0;				// end of initialisation
+
+/********************************************************************
+ *  Simulated internal panel buttons
+ *******************************************************************/
+imm bit I_REQUEST_1	= IX22.1;		// Lift to level 1 request inside lift
+imm bit I_REQUEST_2	= IX22.2;		// Lift to level 2 request inside lift
+imm bit I_REQUEST_3	= IX22.3;		// Lift to level 3 request inside lift
+imm bit I_REQUEST_4	= IX22.4;		// Lift to level 4 request inside lift
+
+imm bit I_REQUEST_OPEN	= IX22.6;		// Open door button inside lift
+
+/********************************************************************
+ *  Cage/Door speed setting - in 50 ms steps for 1/10th floor or 1/10th door
+ *******************************************************************/
+imm bit manualClk	= IX22.7;		// step manually in steps of 5
+imm int cds		= IB23;			// cage and door speed
+
+/********************************************************************
+ *  Simulated wall UP buttons
+ *******************************************************************/
+imm bit CALL_UP_1	= IX32.1;		// Request up from level 1
+imm bit CALL_UP_2	= IX32.2;		// Request up from level 2
+imm bit CALL_UP_3	= IX32.3;		// Request up from level 3
+
+/********************************************************************
+ *  Simulated wall DOWN buttons
+ *******************************************************************/
+imm bit CALL_DOWN_2	= IX34.2;		// Request down from level 2
+imm bit CALL_DOWN_3	= IX34.3;		// Request down from level 3
+imm bit CALL_DOWN_4	= IX34.4;		// Request down from level 4
+
+imm bit RESETALARM	= IX34.7;		// Reset cage and door alarms
+
+// OUTPUTS - Port A
+
+// Equivalence inputs for Device Address 0 outputs QX0.0 - QX0.7
+imm bit I_REQUEST_4_LIGHT	= IX40.0;	// Level 4 requested from inside lift
+imm bit I_REQUEST_3_LIGHT	= IX40.1;	// Level 3 requested from inside lift
+imm bit I_REQUEST_2_LIGHT	= IX40.2;	// Level 2 requested from inside lift
+imm bit I_REQUEST_1_LIGHT	= IX40.3;	// Level 1 requested from inside lift
+imm bit GOING_DOWN_4		= IX40.4;	// On level 4 indicating lift going down
+imm bit CALL_DOWN_4_LIGHT	= IX40.5;	// Down requested on level 4
+imm bit GOING_UP_3		= IX40.6;	// On level 3 indicating lift going up
+imm bit GOING_DOWN_3		= IX40.7;	// On level 3 indicating lift going down
+
+// Equivalence inputs for Device Address 1 outputs QX1.0 - QX1.7
+imm bit CALL_UP_3_LIGHT		= IX41.0;	// Up requested on level 3
+imm bit CALL_DOWN_3_LIGHT	= IX41.1;	// Down requested on level 3
+imm bit GOING_UP_2		= IX41.2;	// On level 2 indicating lift going up
+imm bit GOING_DOWN_2		= IX41.3;	// On level 2 indicating lift going down
+imm bit CALL_UP_2_LIGHT		= IX41.4;	// Up requested on level 2
+imm bit CALL_DOWN_2_LIGHT	= IX41.5;	// Down requested on level 2
+imm bit GOING_UP_1		= IX41.6;	// On level 1 indicating lift going up
+imm bit CALL_UP_1_LIGHT		= IX41.7;	// Up requested on level 1
+
+// Equivalence inputs for Device Address 2 outputs QX2.0 - QX2.1
+imm bit I_GOING_UP_LIGHT	= IX42.0;	// Lift "going up" light inside lift
+imm bit I_GOING_DOWN_LIGHT	= IX42.1;	// Lift "going down" light inside lift
+
+// Equivalence inputs for Device Address 3 outputs QX0.3 - QX3.6
+
+imm bit RingBell		= IX43.0;	// <100ms active high pulse
+imm bit LiftMotor1		= IX43.1;	// 2 bits to control 3 motor states
+imm bit LiftMotor2     		= IX43.2;
+imm bit DoorMotor3		= IX43.3;	// 2 bits to control 3 motor states
+imm bit DoorMotor4     		= IX43.4; 
+imm bit I_AT_LIGHT5		= IX43.5;	// 2 bits multiplexed to drive one of four lights
+imm bit I_AT_LIGHT6    		= IX43.6; 
+
+/********************************************************************
+ *  Lift cage simulation
+ *      the cage is simulated by a counter with 10 steps per floor
+ *      from floor 1 at 10 to floor 4 at 40
+ *******************************************************************/
+
+imm bit   f		= cds > 0;		// manual/automatic
+imm int   i		= cds ? 1 : 5;		// manual step 5, automatic step 1 per clock
+imm bit   b		= D(~b & f, t50, cds)  | manualClk & ~f;
+imm clock c		= CLOCK(b);		// clock cage and door counters
+imm bit   ResetAlarm	= ST(RESETALARM | FALL(f) | RISE(eoi), c);
+
+imm int CageMovement	= SH( ResetAlarm               ? 10               :	// CageMovement =
+			      LiftMotor1 & ~LiftMotor2 ? CageMovement + i :
+			     ~LiftMotor1 &  LiftMotor2 ? CageMovement - i :
+			      CageMovement, c);	// hold position if both hi
+
+imm bit LiftMotorAlarm	= SR(~LiftMotor1 & ~LiftMotor2, ResetAlarm);
+imm bit CageUnderAlarm	= SR( CageMovement < 10, ResetAlarm);
+
+imm bit LIFT_AT_1	= CageMovement == 10;	// Lift aligned with level 1
+imm bit LIFT_AT_2	= CageMovement == 20;	// Lift aligned with level 2
+imm bit LIFT_AT_3	= CageMovement == 30;	// Lift aligned with level 3
+imm bit LIFT_AT_4	= CageMovement == 40;	// Lift aligned with level 4
+
+imm bit CageOverAlarm	= SR( CageMovement > 40, ResetAlarm);
+
+/********************************************************************
+ *  Lift door simulation
+ *      the door is simulated by a counter with 10 steps per opening
+ *      from shut at 60 to open at 70
+ *******************************************************************/
+
+imm int DoorMovement	= SH( ResetAlarm               ? 60               :	// DoorMovement =
+			      DoorMotor3 & ~DoorMotor4 ? DoorMovement + i :
+			     ~DoorMotor3 &  DoorMotor4 ? DoorMovement - i :
+			      DoorMovement, c);	// hold position if both hi
+
+imm bit DoorMotorAlarm	= SR(~DoorMotor3 & ~DoorMotor4, ResetAlarm);
+imm bit DoorUnderAlarm	= SR( DoorMovement < 60, ResetAlarm);
+
+imm bit DOOR_SHUT	= DoorMovement == 60;	// Lift doors in closed position
+imm bit DOOR_OPEN	= DoorMovement == 70;	// Lift doors in open position
+
+imm bit DoorOverAlarm	= SR( DoorMovement > 70, ResetAlarm);
+
+/********************************************************************
+ *  Make a short sound (bell.oga takes about 150 ms)
+ *  better sound is complete.oga but it takes 1.1 seconds to execute
+ *******************************************************************/
+
+if (RingBell) { system("play -q /usr/share/sounds/freedesktop/stereo/complete.oga &"); }
+
+/********************************************************************
+ *  Simulated internal panel indicators
+ *******************************************************************/
+QX20.1	= ~I_AT_LIGHT5 & ~I_AT_LIGHT6;		// On level 1 light inside lift
+QX20.2	= ~I_AT_LIGHT5 &  I_AT_LIGHT6;		// On level 2 light inside lift
+QX20.3	=  I_AT_LIGHT5 & ~I_AT_LIGHT6;		// On level 3 light inside lift
+QX20.4	=  I_AT_LIGHT5 &  I_AT_LIGHT6;		// On level 4 light inside lift
+
+QX20.6	= I_GOING_DOWN_LIGHT;			// Lift "going down" light inside lift
+QX20.7	= I_GOING_UP_LIGHT;			// Lift "going up" light inside lift
+
+QX21.1	= I_REQUEST_1_LIGHT;			// Level 1 requested from inside lift
+QX21.2	= I_REQUEST_2_LIGHT;			// Level 2 requested from inside lift
+QX21.3	= I_REQUEST_3_LIGHT;			// Level 3 requested from inside lift
+QX21.4	= I_REQUEST_4_LIGHT;			// Level 4 requested from inside lift
+
+/********************************************************************
+ *  Simulated wall UP indicators
+ *******************************************************************/
+QX30.1	= GOING_UP_1;				// On level 1 indicating lift going up
+QX30.2	= GOING_UP_2;				// On level 2 indicating lift going up
+QX30.3	= GOING_UP_3;				// On level 3 indicating lift going up
+
+QX31.1	= CALL_UP_1_LIGHT;			// Up requested on level 1
+QX31.2	= CALL_UP_2_LIGHT;			// Up requested on level 2
+QX31.3	= CALL_UP_3_LIGHT;			// Up requested on level 3
+
+QX31.6	= LiftMotorAlarm;			// Lift motor signals both off
+QX31.7	= DoorMotorAlarm;			// Door motor signals both off
+
+/********************************************************************
+ *  Simulated cage movement
+ *******************************************************************/
+QB33	= CageMovement;				// floors are at 10 20 30 40
+
+QX35.0	= CageUnderAlarm;			// cage counter < 10
+
+/********************************************************************
+ *  Simulated wall DOWN indicators
+ *******************************************************************/
+QX35.2	= CALL_DOWN_2_LIGHT;			// Down requested on level 2
+QX35.3	= CALL_DOWN_3_LIGHT;			// Down requested on level 3
+QX35.4	= CALL_DOWN_4_LIGHT;			// Down requested on level 4
+
+QX35.7	= CageOverAlarm;			// cage counter > 40
+
+QX36.2	= GOING_DOWN_2;				// On level 2 indicating lift going down
+QX36.3	= GOING_DOWN_3;				// On level 3 indicating lift going down
+QX36.4	= GOING_DOWN_4;				// On level 4 indicating lift going down
+
+QX36.6	= DoorUnderAlarm;			// cage counter < 60
+QX36.7	= DoorOverAlarm;			// cage counter > 70
+
+/********************************************************************
+ *  Simulated mechanical switch outputs
+ *******************************************************************/
+QX37.1	= LIFT_AT_1;				// Lift aligned with level 1
+QX37.2	= LIFT_AT_2;				// Lift aligned with level 2
+QX37.3	= LIFT_AT_3;				// Lift aligned with level 3
+QX37.4	= LIFT_AT_4;				// Lift aligned with level 4
+
+QX37.6	= DOOR_SHUT;				// Lift doors in closed position
+QX37.7	= DOOR_OPEN;				// Lift doors in open position
+
+/********************************************************************
+ *  Simulated control inputs
+ *******************************************************************/
+QX38.0	= RingBell;				// <100ms active high pulse
+QX38.1	= LiftMotor1;				// 2 bits to control 3 motor states
+QX38.2	= LiftMotor2;
+QX38.3	= DoorMotor3;				// 2 bits to control 3 motor states
+QX38.4	= DoorMotor4;
+QX38.5	= I_AT_LIGHT5;				// 2 bits multiplexed to drive one of four lights
+QX38.6	= I_AT_LIGHT6;
+
+/********************************************************************
+ *  Simulated door movement
+ *******************************************************************/
+QB39	= DoorMovement;				// shut 60, open 70
+
+// INPUTS - Port B
+
+// Equivalence outputs for Device Address 0 inputs IX0.0 - IX0.4
+QX40.0	= LIFT_AT_2;				// Lift aligned with level 2
+QX40.1	= CALL_UP_2;				// Request up from level 2
+QX40.2	= CALL_DOWN_2;				// Request down from level 2
+QX40.3	= LIFT_AT_1;				// Lift aligned with level 1
+QX40.4	= CALL_UP_1;				// Request up from level 1
+
+// Device Address 1				// not used
+
+// Equivalence outputs for Device Address 2 inputs IX2.0 - IX2.7
+QX42.0	= I_REQUEST_OPEN;			// Open door button inside lift
+QX42.1	= I_REQUEST_4;				// Lift to level 4 request inside lift
+QX42.2	= I_REQUEST_3;				// Lift to level 3 request inside lift
+QX42.3	= I_REQUEST_2;				// Lift to level 2 request inside lift
+QX42.4	= I_REQUEST_1;				// Lift to level 1 request inside lift
+QX42.5	= CALL_DOWN_3;				// Request down from level 3
+QX42.6	= CALL_UP_3;				// Request up from level 3
+QX42.7	= LIFT_AT_3;				// Lift aligned with level 3
+
+// Equivalence outputs for Device Address 3 inputs IX3.0 - IX3.3
+QX43.0	= DOOR_OPEN;				// Lift door in open position
+QX43.1	= LIFT_AT_4;				// Lift aligned with level 4
+QX43.2	= CALL_DOWN_4;				// Request down from level 4
+QX43.3	= DOOR_SHUT;				// Lift doors in closed position
