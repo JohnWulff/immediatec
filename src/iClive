@@ -89,12 +89,12 @@ my @colourSelect  = ( 0,2,0,0,0,0,0,2,0,0,0,0,2,2,0,0,0,0,2,2,0,4,6, # cs[ftype]
 		    );
 
 #  live colouring     false 0          true 1             cs  ftype
-my @tagBackground = ('PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
+my @tagBackground = ('PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
 		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
 		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
 							## cs|010 no change
-		     'PaleGreen1'   , 'yellow'       ,  # 0 1 GATE
+		     'PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
 		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
 		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
@@ -268,13 +268,13 @@ Usage:
                 the Entry window. All hits will be marked.
             Holding this button down briefly will open a menu of
             extra search options and a history of previous searches.
-       Search down       or                                      RETURN
+       Search down      or                                       RETURN
                 displays a new group of hits.
-       Search up         or                                   Shift-RET
+       Search up        or                                    Shift-RET
                 reverses the direction of displaying hits.
-       Clear             or                                    Ctrl-RET
+       Clear            or double-click search Entry window or Ctrl-RET
                 clears hits and the search Entry window.
-     <>Go to line        or                                     Alt-RET
+     <>Go to line       or                                      Alt-RET
                 goes to the line entered in the Entry window.
      <>Exact match
      <>Ignore case
@@ -291,7 +291,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.60 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.61 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -496,7 +496,11 @@ my $fileTypes = [
 ];
 
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
-my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)\s*((~ )?---|=$)?';
+# This pattern colours all leading and trailing spaces (used initially)
+# my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)\s*((~ )?---|=$)?';
+# This pattern colours only one leading space or tab or '~' and one trailing space or tab
+# NOTE the order of the regexes in the final (\s*((~ )?---|=$)|\s) - the final single white space is last or
+my $scanPattern = '(\s?|~\s*)(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)(\s*((~ )?---|=$)|\s)?';
 my $bMsg = '';		# balloon message
 my $wIdx = '';		# Index of current wordstart
 my $pIdx = '';		# Index of previous wordstart
@@ -925,7 +929,8 @@ $entrySearch->bind('<KeyPress>',		[ \&set_shift_control     ]); # Set Shift/Cont
 $entrySearch->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
 $entrySearch->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
 $entrySearch->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
-$entrySearch->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
+$entrySearch->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear search
+$entrySearch->bind('<Double-1>',		[ \&search_now, '',    0  ]); # clear search
 $entrySearch->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
 ####### File menu bindings #############################################
 $entrySearch->bind('<Alt-Key-R>',		[ \&reload_file           ]); # active in Live mode
@@ -1791,17 +1796,17 @@ sub restoreTag {
 ########################################################################
 
 sub pick_word {
-    if ($scanFlag) {	### comment to allow pick_word in Edit mode
-	my $start_index = $text->index('insert wordstart');
-	my $end_index = $text->index('insert lineend');
-	my $line = $text->get($start_index, $end_index);
-	$line =~ m/^([\w.]+)/;
-	if (defined $1) {
-	    print "pick_word '$1'\n" if $opt_T;
-	    $entrySearch->focus();		# initiate search entry
-	    search_now(1, $1, 0);		# search for first word only
-	}
-    }			### comment to allow pick_word in Edit mode
+# if ($scanFlag) {	### comment to allow pick_word in Edit mode
+    my $start_index = $text->index('insert wordstart');
+    my $end_index = $text->index('insert lineend');
+    my $line = $text->get($start_index, $end_index);
+    $line =~ m/^([\w.]+)/;
+    if (defined $1) {
+	print "pick_word '$1'\n" if $opt_T;
+	$entrySearch->focus();		# initiate search entry
+	search_now(1, $1, 0);		# search for first word only
+    }
+# }			### comment to allow pick_word in Edit mode
 } # pick_word
 
 ########################################################################
@@ -3569,13 +3574,13 @@ iClive - an editor and live debugger for immediate-C clients
                 the Entry window. All hits will be marked.
             Holding this button down briefly will open a menu of
             extra search options and a history of previous searches.
-       Search down       or                                      RETURN
+       Search down      or                                       RETURN
                 displays a new group of hits.
-       Search up         or                                   Shift-RET
+       Search up        or                                    Shift-RET
                 reverses the direction of displaying hits.
-       Clear             or                                    Ctrl-RET
+       Clear            or double-click search Entry window or Ctrl-RET
                 clears hits and the search Entry window.
-     <>Go to line        or                                     Alt-RET
+     <>Go to line       or                                      Alt-RET
                 goes to the line entered in the Entry window.
      <>Exact match
      <>Ignore case
@@ -3624,15 +3629,17 @@ so on until the end of the text is reached. Another RETURN will start
 by displaying the first group at the top again. Hitting SHIFT-RETURN
 will reverse the direction of displaying the groups.
 
-In B<Live> mode, double-clicking with mouse button 1 transfers the
-word under the mouse to the Search Entry window and immediately starts
-a search for that word. This is the quickest and best way to start a
-search. In B<Edit> mode this action simply selects the word under the
-mouse (Text Binding [2]).  If necessary clear the prevous search by
-pressing ctrl-RETURN.  The selected word can be pasted into the Search
-Entry window by positioning the mouse over the Search Entry window
-and clicking the middle mouse button (Text Binding [7]). A search
-can then be started by clicking on the [/] button or pressing RETURN.
+Double-clicking with mouse button 1 transfers the word under the
+mouse to the Search Entry window and immediately starts a search for
+that word. This is the quickest and best way to start a search. This
+action masks the selection of the text under the mouse (Text Binding
+[2]).  If necessary clear the prevous search by pressing ctrl-RETURN.
+The search can be continued by clicking on the [/] button or pressing
+RETURN.
+
+Double-clicking with mouse button 1 while the word in the Search
+Entry window is selected or by pressing ctrl-RETURN will clear the
+search completely.
 
 Tk::Text will open a dialog box when clicking the right mouse button
 in the text window. The features provided are self explanatory. It

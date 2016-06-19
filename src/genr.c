@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c,v 1.85 2016/01/03 10:18:20 jw Exp $";
+"@(#)$Id: genr.c 1.86 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1752,7 +1752,8 @@ op_asgn(				/* asign List_e stack to links */
 	    copyArithmetic(lp, sp, gp, gt_input, sflag, cFn); /* final "\n" with current expression */
 	    sflag &= ~0200;				/* iCdebug & 0200 old style listing removed */
 	    if (sp == gp && (sp->type != LATCH || lp->le_val != (NOT^NOT))) {
-		warning("input equals output at gate:", sp->name);
+		ierror("input equals output at gate:", sp->name);
+		sp->type = ERR;				/* cannot execute properly */
 	    }
 	  nextInputLink:
 	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {

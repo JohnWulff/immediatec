@@ -44,7 +44,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: simLift.ic 1.1 $
+ *  $Id: simLift.ic 1.2 $
  *
  *******************************************************************/
 
@@ -83,8 +83,6 @@ imm bit CALL_DOWN_2	= IX34.2;		// Request down from level 2
 imm bit CALL_DOWN_3	= IX34.3;		// Request down from level 3
 imm bit CALL_DOWN_4	= IX34.4;		// Request down from level 4
 
-imm bit RESETALARM	= IX34.7;		// Reset cage and door alarms
-
 // OUTPUTS - Port A
 
 // Equivalence inputs for Device Address 0 outputs QX0.0 - QX0.7
@@ -120,6 +118,8 @@ imm bit DoorMotor3		= IX43.3;	// 2 bits to control 3 motor states
 imm bit DoorMotor4     		= IX43.4; 
 imm bit I_AT_LIGHT5		= IX43.5;	// 2 bits multiplexed to drive one of four lights
 imm bit I_AT_LIGHT6    		= IX43.6; 
+
+imm bit RESETALARM	= IX34.7 | IX43.7;	// Reset cage and door alarms from button or lift control
 
 /********************************************************************
  *  Lift cage simulation

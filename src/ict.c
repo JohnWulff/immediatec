@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.68 $";
+"@(#)$Id: ict.c 1.69 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1261,9 +1261,29 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	free(dumpvars);
     } /* end of VCD SAV initialisation */
 
+    /********************************************************************
+     *  0 Carry out one clock scan of all master gates with inverted inputs
+     *    before EOI so that inverted timer delays can be masked with EOI
+     *******************************************************************/
+    if (iC_c_list != iC_c_list->gt_next) {
+	if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
+	    iC_mark_stamp++;		/* leave out zero */
+	}
+	if (iC_vcdFP) {
+	    fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
+	    vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
+	}
+	iC_scan_clk(iC_c_list);		/* ignore f_list entries can only occurr here */
+	if (iC_vcdFP) {
+	    fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
+	}
+    }
+    /********************************************************************
+     *  1 Set and fire "End Of Initialisation" if TX0.0 is in the program
+     *******************************************************************/
     if ((gp = tim[0]) != NULL) {
 #if	YYDEBUG
-	if (iC_debug & 0100) fprintf(iC_outFP, "EOI:\t%s  1 ==>", gp->gt_ids);
+	if (iC_debug & 0100) fprintf(iC_outFP, "\n== end of initialisation\nEOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
 	gp->gt_val = -1;		/* set EOI once as first action */
 	iC_liveData(gp, 1);		/* VCD and/or iClive */
@@ -1370,7 +1390,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	 *  Sequencing of different action lists and New I/O handling
 	 *
 	 ****** INITIALISATION *****
-	 *  0          build ini string
+	 * -1          build ini string
+	 *  0          scan c_list for inverted ini inputs unless c_list empty
 	 *  1          put EOI on o_list
 	 *    Loop:
 	 *  2          ++mark_stamp to control oscillations
