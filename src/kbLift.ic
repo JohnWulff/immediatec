@@ -26,7 +26,7 @@
  *  		I_REQUEST_2_LIGHT
  *  				I_REQUEST_3_LIGHT
  *  						I_REQUEST_4_LIGHT	
- *  I_GOING_UP_LIGHT		I_GOING_DOWN_LIGHT
+ *  I_GOING_DOWN_LIGHT		I_GOING_UP_LIGHT
  *
  *  Multiplexed outputs to lights motors and bell:	7
  *  I_AT_LIGHT5	I_AT_LIGHT6
@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.2 $
+ *  $Id: kbLift.ic 1.3 $
  *
  *******************************************************************/
 
@@ -189,6 +189,11 @@ imm bit newWallReq	= RISE(reqFloor1)   |
 			  RISE(reqFloorDn3) |
 			  RISE(reqFloorDn2) ;
 
+imm bit newRequest	= newWallReq           |
+			  RISE(reqFloor2)      |
+			  RISE(reqFloor3)      |
+			  closeDoor & DOOR_SHUT;
+
 /********************************************************************
  *  Determine next target position
  *  Lift positions and target requests are in a circle as follows
@@ -226,8 +231,6 @@ imm bit forwardDn3	= forward4   & ~reqFloor4                & ~atFloorDn3 |
 imm bit forwardDn2	= forwardDn3 & ~reqFloorDn3 & ~reqFloor3 & ~atFloorDn2 |
 					reqTarget                &  atFloorDn2 ;
 
-imm bit doorClosed	= closeDoor & DOOR_SHUT;
-
 imm bit target1		= forward1   & ~atFloor1   & reqFloor1  ;
 imm bit targetUp2	= forwardUp2 & ~atFloorUp2 & reqFloorUp2;
 imm bit targetUp3	= forwardUp3 & ~atFloorUp3 & reqFloorUp3;
@@ -235,14 +238,14 @@ imm bit target4		= forward4   & ~atFloor4   & reqFloor4  ;
 imm bit targetDn3	= forwardDn3 & ~atFloorDn3 & reqFloorDn3;
 imm bit targetDn2	= forwardDn2 & ~atFloorDn2 & reqFloorDn2;
 
-imm int targetPosition	= SH(doorClosed &  target1                               ? 1 :	// targetPosition =
-			     doorClosed & (targetUp2 |
+imm int targetPosition	= SH(newRequest &  target1                               ? 1 :	// targetPosition =
+			     newRequest & (targetUp2 |
 					   targetDn2 |
 			      (forwardUp2 | forwardDn2) & ~atFloor2 & reqFloor2) ? 2 :
-			     doorClosed & (targetUp3 |
+			     newRequest & (targetUp3 |
 					   targetDn3 |
 			      (forwardUp3 | forwardDn3) & ~atFloor3 & reqFloor3) ? 3 :
-			     doorClosed &  target4   | eoi                       ? 4 : targetPosition);
+			     newRequest &  target4   | eoi                       ? 4 : targetPosition);
 
 imm bit liftAt1or3	= LIFT_AT_1 | LIFT_AT_3;
 imm bit liftAt2or4	= LIFT_AT_2 | LIFT_AT_4;
@@ -377,8 +380,8 @@ QX1.7	= CALL_UP_1_LIGHT	= reqFloor1;	// Up requested on level 1
 imm bit I_GOING_UP_LIGHT, I_GOING_DOWN_LIGHT;
 
 // Device Address 2
-QX2.0	= I_GOING_UP_LIGHT	= goingUp;	// Lift "going up" light inside lift
-QX2.1	= I_GOING_DOWN_LIGHT	= goingDn;	// Lift "going down" light inside lift
+QX2.0	= I_GOING_DOWN_LIGHT	= goingDn;	// Lift "going down" light inside lift
+QX2.1	= I_GOING_UP_LIGHT	= goingUp;	// Lift "going up" light inside lift
 
 // Device Address 3
 QX3.0	= RingBell;				// <100ms active high pulse

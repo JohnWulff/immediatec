@@ -26,7 +26,7 @@
  *  		I_REQUEST_2_LIGHT
  *  				I_REQUEST_3_LIGHT
  *  						I_REQUEST_4_LIGHT	
- *  I_GOING_UP_LIGHT		I_GOING_DOWN_LIGHT
+ *  I_GOING_DOWN_LIGHT		I_GOING_UP_LIGHT
  *
  *  Multiplexed outputs to lights motors and bell:	7
  *  I_AT_LIGHT5	I_AT_LIGHT6
@@ -44,7 +44,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: simLift.ic 1.2 $
+ *  $Id: simLift.ic 1.3 $
  *
  *******************************************************************/
 
@@ -106,8 +106,8 @@ imm bit GOING_UP_1		= IX41.6;	// On level 1 indicating lift going up
 imm bit CALL_UP_1_LIGHT		= IX41.7;	// Up requested on level 1
 
 // Equivalence inputs for Device Address 2 outputs QX2.0 - QX2.1
-imm bit I_GOING_UP_LIGHT	= IX42.0;	// Lift "going up" light inside lift
-imm bit I_GOING_DOWN_LIGHT	= IX42.1;	// Lift "going down" light inside lift
+imm bit I_GOING_DOWN_LIGHT	= IX42.0;	// Lift "going down" light inside lift
+imm bit I_GOING_UP_LIGHT	= IX42.1;	// Lift "going up" light inside lift
 
 // Equivalence inputs for Device Address 3 outputs QX0.3 - QX3.6
 
