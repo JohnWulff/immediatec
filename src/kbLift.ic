@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.4 $
+ *  $Id: kbLift.ic 1.5 $
  *
  *******************************************************************/
 
@@ -102,7 +102,7 @@ imm bit LIFT_AT_4	= deBounce(IX3.1);	// Lift aligned with level 4
 imm bit CALL_DOWN_4	= deBounce(IX3.2);	// Request down from level 4
 imm bit DOOR_SHUT	= deBounce(IX3.3);	// Lift doors in closed position
 
-imm bit goingUp, goingDn, closeDoor, sameFloor;
+imm bit goingUp, closeDoor, sameFloor;
 imm bit forwardUp2, forwardUp3, forwardDn3, forwardDn2;
 imm bit reqFloorUp2, reqFloorUp3, reqFloorDn3, reqFloorDn2;
 
@@ -129,6 +129,8 @@ imm bit atFloor4	= SR(LIFT_AT_4,       LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3);
 
 imm int cagePosition	= atFloor1 ? 1 : atFloor2 ? 2 : atFloor3 ? 3 : atFloor4 ? 4 : 0;
 imm bit at_a_floor	= D(LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3 | LIFT_AT_4);	// sync with atFloor1 to 4
+
+imm bit goingDn		= ~goingUp;
 
 imm bit atFloorUp2	= atFloor2  & goingUp;
 imm bit atFloorUp3	= atFloor3  & goingUp;
@@ -289,11 +291,14 @@ imm bit cageSTOP	= atTarget           |		// hard stop when at target
 			  cageDn & LIFT_AT_1 |		// hard stop at floor 1 going down
 			  cageUp & LIFT_AT_4 ;		// hard stop at floor 4 going up
 
+imm bit LiftMotor1	= D(cageUp | cageSTOP);		// Lift cage up or hard stop for any reason
+imm bit LiftMotor2	= D(cageDn | cageSTOP);		// Lift cage down or hard stop for any reason
+
 imm bit sameFloorUp	= RISE(nxtFloorUp2 | nxtFloorUp3);
 imm bit sameFloorDn	= RISE(nxtFloorDn2 | nxtFloorDn3);
 imm bit sameFloor	= sameFloorUp | sameFloorDn;
 
-imm bit moveUp		= SR(RISE(LIFT_AT_1)                                             |	// up
+imm bit goingUp		= SR(RISE(LIFT_AT_1)                                             |	// up
 			     sameFloorUp                                                 |
 			     RISE((approachUp2 | approachUp3 | approach4) & ~at_a_floor) |
 			     RISE(cageUp) & (reqFloor2 | reqFloor3 | reqFloor4)          ,
@@ -303,11 +308,15 @@ imm bit moveUp		= SR(RISE(LIFT_AT_1)                                            
 			     RISE(cageDn) & (reqFloor1 | reqFloor2 | reqFloor3)          );
 
 imm bit notWaiting	=  reqTarget | (at_a_floor & ~doorOpenMin);
-imm bit goingUp		=  moveUp & notWaiting;
-imm bit goingDn		= ~moveUp & notWaiting;
+imm bit I_GOING_UP_LIGHT   =  goingUp & notWaiting;
+imm bit I_GOING_DOWN_LIGHT = ~goingUp & notWaiting;
 
-imm bit LiftMotor1	= D(cageUp | cageSTOP);		// Lift cage up or hard stop for any reason
-imm bit LiftMotor2	= D(cageDn | cageSTOP);		// Lift cage down or hard stop for any reason
+imm bit GOING_UP_1	= approach1   & notWaiting;
+imm bit GOING_UP_2	= approachUp2 & notWaiting;
+imm bit GOING_UP_3	= approachUp3 & notWaiting;
+imm bit GOING_DOWN_4	= approach4   & notWaiting;
+imm bit GOING_DOWN_3	= approachDn3 & notWaiting;
+imm bit GOING_DOWN_2	= approachDn2 & notWaiting;
 
 /********************************************************************
  *  Open door
@@ -354,36 +363,34 @@ imm bit I_AT_LIGHT6	= atFloor2 | atFloor4;	// multiplexed light inside lift floo
  *******************************************************************/
 
 imm bit I_REQUEST_4_LIGHT, I_REQUEST_3_LIGHT, I_REQUEST_2_LIGHT, I_REQUEST_1_LIGHT;
-imm bit GOING_DOWN_4, CALL_DOWN_4_LIGHT, GOING_UP_3, GOING_DOWN_3;
+imm bit CALL_DOWN_4_LIGHT;
 
 // Device Address 0
 QX0.0	= I_REQUEST_4_LIGHT	= reqFloor4;	// Level 4 requested from inside lift
 QX0.1	= I_REQUEST_3_LIGHT	= reqFloor3;	// Level 3 requested from inside lift
 QX0.2	= I_REQUEST_2_LIGHT	= reqFloor2;	// Level 2 requested from inside lift
 QX0.3	= I_REQUEST_1_LIGHT	= reqFloor1;	// Level 1 requested from inside lift
-QX0.4	= GOING_DOWN_4		= approach4;	// On level 4 indicating lift going down
+QX0.4	= GOING_DOWN_4;				// On level 4 indicating lift going down
 QX0.5	= CALL_DOWN_4_LIGHT	= reqFloor4;	// Down requested on level 4
-QX0.6	= GOING_UP_3		= approachUp3;	// On level 3 indicating lift going up
-QX0.7	= GOING_DOWN_3		= approachDn3;	// On level 3 indicating lift going down
+QX0.6	= GOING_UP_3;				// On level 3 indicating lift going up
+QX0.7	= GOING_DOWN_3;				// On level 3 indicating lift going down
 
-imm bit CALL_UP_3_LIGHT, CALL_DOWN_3_LIGHT, GOING_UP_2, GOING_DOWN_2;
-imm bit CALL_UP_2_LIGHT, CALL_DOWN_2_LIGHT, GOING_UP_1, CALL_UP_1_LIGHT;
+imm bit CALL_UP_3_LIGHT, CALL_DOWN_3_LIGHT;
+imm bit CALL_UP_2_LIGHT, CALL_DOWN_2_LIGHT, CALL_UP_1_LIGHT;
 
 // Device Address 1
 QX1.0	= CALL_UP_3_LIGHT	= reqFloorUp3;	// Up requested on level 3
 QX1.1	= CALL_DOWN_3_LIGHT	= reqFloorDn3;	// Down requested on level 3
-QX1.2	= GOING_UP_2		= approachUp2;	// On level 2 indicating lift going up
-QX1.3	= GOING_DOWN_2		= approachDn2;	// On level 2 indicating lift going down
+QX1.2	= GOING_UP_2;				// On level 2 indicating lift going up
+QX1.3	= GOING_DOWN_2;				// On level 2 indicating lift going down
 QX1.4	= CALL_UP_2_LIGHT	= reqFloorUp2;	// Up requested on level 2
 QX1.5	= CALL_DOWN_2_LIGHT	= reqFloorDn2;	// Down requested on level 2
-QX1.6	= GOING_UP_1		= approach1;	// On level 1 indicating lift going up
+QX1.6	= GOING_UP_1;				// On level 1 indicating lift going up
 QX1.7	= CALL_UP_1_LIGHT	= reqFloor1;	// Up requested on level 1
 
-imm bit I_GOING_DOWN_LIGHT, I_GOING_UP_LIGHT;
-
 // Device Address 2
-QX2.0	= I_GOING_DOWN_LIGHT	= goingDn;	// Lift "going down" light inside lift
-QX2.1	= I_GOING_UP_LIGHT	= goingUp;	// Lift "going up" light inside lift
+QX2.0	= I_GOING_DOWN_LIGHT;			// Lift "going down" light inside lift
+QX2.1	= I_GOING_UP_LIGHT;			// Lift "going up" light inside lift
 
 // Device Address 3
 QX3.0	= RingBell;				// <100ms active high pulse
