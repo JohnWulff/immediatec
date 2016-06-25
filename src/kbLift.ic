@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.5 $
+ *  $Id: kbLift.ic 1.6 $
  *
  *******************************************************************/
 
@@ -102,7 +102,7 @@ imm bit LIFT_AT_4	= deBounce(IX3.1);	// Lift aligned with level 4
 imm bit CALL_DOWN_4	= deBounce(IX3.2);	// Request down from level 4
 imm bit DOOR_SHUT	= deBounce(IX3.3);	// Lift doors in closed position
 
-imm bit goingUp, closeDoor, sameFloor;
+imm bit goingUp, closeDoor, sameFloor, atTargetShut;
 imm bit forwardUp2, forwardUp3, forwardDn3, forwardDn2;
 imm bit reqFloorUp2, reqFloorUp3, reqFloorDn3, reqFloorDn2;
 
@@ -123,9 +123,9 @@ imm bit doorOpenMin	= D(DOOR_OPEN & ~sameFloor, t50, doorDelay);	// doorDelay =
  *  one of the LIFT_AT_x switches or not at all.
  *******************************************************************/
 imm bit atFloor1	= SR(LIFT_AT_1 | eoi, LIFT_AT_2 | LIFT_AT_3 | LIFT_AT_4);
-imm bit atFloor2	= SR(LIFT_AT_2,       LIFT_AT_1 | LIFT_AT_3 | LIFT_AT_4);
-imm bit atFloor3	= SR(LIFT_AT_3,       LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_4);
-imm bit atFloor4	= SR(LIFT_AT_4,       LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3);
+imm bit atFloor2	= SR(LIFT_AT_2      , LIFT_AT_1 | LIFT_AT_3 | LIFT_AT_4);
+imm bit atFloor3	= SR(LIFT_AT_3      , LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_4);
+imm bit atFloor4	= SR(LIFT_AT_4      , LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3);
 
 imm int cagePosition	= atFloor1 ? 1 : atFloor2 ? 2 : atFloor3 ? 3 : atFloor4 ? 4 : 0;
 imm bit at_a_floor	= D(LIFT_AT_1 | LIFT_AT_2 | LIFT_AT_3 | LIFT_AT_4);	// sync with atFloor1 to 4
@@ -189,10 +189,21 @@ imm bit newWallReq	= RISE(reqFloor1)   |
 			  RISE(reqFloorDn3) |
 			  RISE(reqFloorDn2) ;
 
-imm bit newRequest	= newWallReq           |
-			  RISE(reqFloor2)      |
-			  RISE(reqFloor3)      |
-			  closeDoor & DOOR_SHUT;
+/********************************************************************
+ *  Targets can be changed with a new request right up to the point
+ *  where the door is opened with 'atTargetShut'. At that point the
+ *  door continues to open at the current target and the target is
+ *  not changed, which would lead to the situation where the door and
+ *  the cage move together - locking up the system. The new request
+ *  is guaranteed to be honoured because the door will shut again,
+ *  at which point the target is changed with 'closeDoor & DOOR_SHUT'.
+ *******************************************************************/
+
+imm bit newRequest	= (~at_a_floor | ~atTargetShut) & (
+			     newWallReq      |
+			     RISE(reqFloor2) |
+			     RISE(reqFloor3)              ) |
+			     closeDoor     & DOOR_SHUT      ;
 
 /********************************************************************
  *  Determine next target position
@@ -212,40 +223,36 @@ imm bit newRequest	= newWallReq           |
  *  may come in, in which case the lift will stop early, if the new
  *  request is between the then current position and the previous
  *  next target.
+ *
  *  Since one atFloorX will always be hi, the forwardX ring will be
- *  broken at the current position if reqTarget (no latching).
+ *  broken at the current position if 'reqTarget' is hi (no latching).
+ *  Nevertheless 'atFloorX' variables are ANDED with 'reqTarget' as well
+ *  to prevent spurious multiple changes when there is no request, which
+ *  look like oscillations. There are up to 5 changes in intermediate
+ *  variables if this is not done. When there is a request this does
+ *  not happen, because the forward ring is broken at the request.
  *******************************************************************/
 imm bit reqTarget	= reqFloor1 | reqFloorUp2 | reqFloor2 | reqFloorUp3 |
 			  reqFloor4 | reqFloorDn3 | reqFloor3 | reqFloorDn2 ;
 
-imm bit forward1	= forwardDn2 & ~reqFloorDn2 & ~reqFloor2 & ~atFloor1   |
-					reqTarget                &  atFloor1   ;
-imm bit forwardUp2	= forward1   & ~reqFloor1                & ~atFloorUp2 |
-					reqTarget                &  atFloorUp2 ;
-imm bit forwardUp3	= forwardUp2 & ~reqFloorUp2 & ~reqFloor2 & ~atFloorUp3 |
-					reqTarget                &  atFloorUp3 ;
-imm bit forward4	= forwardUp3 & ~reqFloorUp3 & ~reqFloor3 & ~atFloor4   |
-					reqTarget                &  atFloor4   ;
-imm bit forwardDn3	= forward4   & ~reqFloor4                & ~atFloorDn3 |
-					reqTarget                &  atFloorDn3 ;
-imm bit forwardDn2	= forwardDn3 & ~reqFloorDn3 & ~reqFloor3 & ~atFloorDn2 |
-					reqTarget                &  atFloorDn2 ;
+imm bit forward1	= reqTarget & (forwardDn2 & ~reqFloor2 & ~reqFloorDn2 & ~atFloor1   | atFloor1  );
+imm bit forwardUp2	= reqTarget & (forward1   & ~reqFloor1                & ~atFloorUp2 | atFloorUp2);
+imm bit forwardUp3	= reqTarget & (forwardUp2 & ~reqFloor2 & ~reqFloorUp2 & ~atFloorUp3 | atFloorUp3);
+imm bit forward4	= reqTarget & (forwardUp3 & ~reqFloor3 & ~reqFloorUp3 & ~atFloor4   | atFloor4  );
+imm bit forwardDn3	= reqTarget & (forward4   & ~reqFloor4                & ~atFloorDn3 | atFloorDn3);
+imm bit forwardDn2	= reqTarget & (forwardDn3 & ~reqFloor3 & ~reqFloorDn3 & ~atFloorDn2 | atFloorDn2);
 
-imm bit target1		= forward1   & ~atFloor1   & reqFloor1  ;
-imm bit targetUp2	= forwardUp2 & ~atFloorUp2 & reqFloorUp2;
-imm bit targetUp3	= forwardUp3 & ~atFloorUp3 & reqFloorUp3;
-imm bit target4		= forward4   & ~atFloor4   & reqFloor4  ;
-imm bit targetDn3	= forwardDn3 & ~atFloorDn3 & reqFloorDn3;
-imm bit targetDn2	= forwardDn2 & ~atFloorDn2 & reqFloorDn2;
+imm bit target1		= forward1   &   ~atFloor1 & reqFloor1                                ;
+imm bit targetUp2	= forwardUp2 & ((~atFloor2 & reqFloor2) | (~atFloorUp2 & reqFloorUp2));
+imm bit targetUp3	= forwardUp3 & ((~atFloor3 & reqFloor3) | (~atFloorUp3 & reqFloorUp3));
+imm bit target4		= forward4   &   ~atFloor4 & reqFloor4                                ;
+imm bit targetDn3	= forwardDn3 & ((~atFloor3 & reqFloor3) | (~atFloorDn3 & reqFloorDn3));
+imm bit targetDn2	= forwardDn2 & ((~atFloor2 & reqFloor2) | (~atFloorDn2 & reqFloorDn2));
 
-imm int targetPosition	= SH(newRequest &  target1                               ? 1 :	// targetPosition =
-			     newRequest & (targetUp2 |
-					   targetDn2 |
-			      (forwardUp2 | forwardDn2) & ~atFloor2 & reqFloor2) ? 2 :
-			     newRequest & (targetUp3 |
-					   targetDn3 |
-			      (forwardUp3 | forwardDn3) & ~atFloor3 & reqFloor3) ? 3 :
-			     newRequest &  target4   | eoi                       ? 4 : targetPosition);
+imm int targetPosition	= SH(newRequest &  target1                ? 1 :	// targetPosition =
+			     newRequest & (targetUp2 | targetDn2) ? 2 :
+			     newRequest & (targetUp3 | targetDn3) ? 3 :
+			     newRequest &  target4   | eoi        ? 4 : targetPosition);
 
 imm bit liftAt1or3	= LIFT_AT_1 | LIFT_AT_3;
 imm bit liftAt2or4	= LIFT_AT_2 | LIFT_AT_4;
@@ -286,6 +293,7 @@ imm bit approachDn2	= SRX(liftAt1or3 &  targetDn2                            ,
 imm bit cageUp		= targetPosition >  cagePosition;	// cagePosition   =
 imm bit cageDn		= targetPosition <  cagePosition;	// targetPosition =
 imm bit atTarget	= targetPosition == cagePosition;
+
 imm bit cageSTOP	= atTarget           |		// hard stop when at target
 			 ~DOOR_SHUT          |		// hard stop when door not shut
 			  cageDn & LIFT_AT_1 |		// hard stop at floor 1 going down
@@ -298,14 +306,14 @@ imm bit sameFloorUp	= RISE(nxtFloorUp2 | nxtFloorUp3);
 imm bit sameFloorDn	= RISE(nxtFloorDn2 | nxtFloorDn3);
 imm bit sameFloor	= sameFloorUp | sameFloorDn;
 
-imm bit goingUp		= SR(RISE(LIFT_AT_1)                                             |	// up
-			     sameFloorUp                                                 |
-			     RISE((approachUp2 | approachUp3 | approach4) & ~at_a_floor) |
-			     RISE(cageUp) & (reqFloor2 | reqFloor3 | reqFloor4)          ,
-			     RISE(LIFT_AT_4)                                             |	// down
-			     sameFloorDn                                                 |
-			     RISE((approach1 | approachDn2 | approachDn3) & ~at_a_floor) |
-			     RISE(cageDn) & (reqFloor1 | reqFloor2 | reqFloor3)          );
+imm bit goingUp		= SR(RISE(LIFT_AT_1) |		// up
+			     sameFloorUp     |
+			     newRequest & (targetUp2 | targetUp3 | target4  )
+			    ,
+			     RISE(LIFT_AT_4) |		// down
+			     sameFloorDn     |
+			     newRequest & (target1   | targetDn2 | targetDn3)
+			    );
 
 imm bit notWaiting	=  reqTarget | (at_a_floor & ~doorOpenMin);
 imm bit I_GOING_UP_LIGHT   =  goingUp & notWaiting;
@@ -321,16 +329,18 @@ imm bit GOING_DOWN_2	= approachDn2 & notWaiting;
 /********************************************************************
  *  Open door
  *      if at a floor and at target (at which point cage will have stopped)
- *         and door is shut
+ *         and door is shut (atTargetShut)
  *      or I_REQUEST_OPEN button but only if door is not yet fully shut
  *         this will open the door again - go through door timeout and
  *         select next target again
  *  Stop opening door   DOOR_OPEN
  *  atTarget is delayed by 1 iClock from DOOR_SHUT - use D(DOOR_SHUT)
  *******************************************************************/
-imm bit openDoor	= SR(at_a_floor & (atTarget       & D(DOOR_SHUT)             |		// open
-					   I_REQUEST_OPEN &  ~DOOR_SHUT & ~DOOR_OPEN),
-			     DOOR_OPEN                                               );		// stop
+imm bit atTargetShut	= atTarget & D(DOOR_SHUT);	// also used to block selecting new target
+
+imm bit openDoor	= SR(at_a_floor & (atTargetShut                              |
+					   I_REQUEST_OPEN &  ~DOOR_SHUT & ~DOOR_OPEN),	// open
+			     DOOR_OPEN                                               );	// stop
 
 imm bit RingBell	= ST(openDoor | sameFloor, t50, 2);	// <100ms active high pulse
 
@@ -344,6 +354,7 @@ imm bit RingBell	= ST(openDoor | sameFloor, t50, 2);	// <100ms active high pulse
  *******************************************************************/
 imm bit closeDoor	= SR(doorOpenMin & ~sameFloor & newTarget & ~I_REQUEST_OPEN,
 			     DOOR_SHUT | I_REQUEST_OPEN);
+
 imm bit doorSTOP	= ~(openDoor ^ closeDoor) |	// hard stop when both off (or both on)
 			  ~at_a_floor             |	// hard stop when not at a floor
 			   openDoor  & DOOR_OPEN  |	// hard stop when openening and fully open
