@@ -291,7 +291,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.61 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.62 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -3613,39 +3613,9 @@ the default until more extensive tests have been done.  If you want
 to activate the UNDO facility use iClive -u option (recommended only
 for editing) Also see CAVEAT below.
 
-A powerful search facility to find groups of words or regular
-expressions has been implemented on top of Text::Tk.  Activate the
-search by keying '/' or pressing the [/] button briefly.  Enter or
-paste a word into the Search Entry window and key RETURN or press the
-[/] button again.  Searches may be for an exact match or for a full
-Perl-type regular expression. The \bword\b feature to find only whole
-words is particularly useful. Searches are normally case sensitive,
-but a case-insensitive search may be selectd. Once a search has been
-carried out, all the hits are highlighted. A first group of hits is
-displayed in the Text window. The text is moved to display as many
-hits as possible. When the user has analysed the first group of hits,
-hitting RETURN will display the next group of hits in the text and
-so on until the end of the text is reached. Another RETURN will start
-by displaying the first group at the top again. Hitting SHIFT-RETURN
-will reverse the direction of displaying the groups.
-
-Double-clicking with mouse button 1 transfers the word under the
-mouse to the Search Entry window and immediately starts a search for
-that word. This is the quickest and best way to start a search. This
-action masks the selection of the text under the mouse (Text Binding
-[2]).  If necessary clear the prevous search by pressing ctrl-RETURN.
-The search can be continued by clicking on the [/] button or pressing
-RETURN.
-
-Double-clicking with mouse button 1 while the word in the Search
-Entry window is selected or by pressing ctrl-RETURN will clear the
-search completely.
-
-Tk::Text will open a dialog box when clicking the right mouse button
-in the text window. The features provided are self explanatory. It
-also has a search feature, which did not seem to be available when
-I started. The really useful feature there is the search/replace
-facility. Another useful feature is changing the wrap mode.
+Holding down the [file] button shows extra file options including a
+history of previously opened files. The 'file menu' can be detached
+with the tear line ---------.
 
 B<iClive> is a client of B<iCserver>, like all running iC applications
 and IO's. On startup B<iClive> will start B<iCserver -A iCbox>,
@@ -3702,7 +3672,51 @@ at the very end of the line will show the changing value of the word.
     eg.  // offset =
     will be displayed as
          // offset = 15
-    (this construct is usually commented with //)
+    this construct is usually commented with //
+
+A powerful search facility to find groups of words or regular
+expressions has been implemented on top of Text::Tk.  Activate the
+search by keying '/' or pressing the [/] button briefly.  Enter or
+paste a word into the Search Entry window and key RETURN or press the
+[/] button again.  Searches may be for an exact match or for a full
+Perl-type regular expression. The \bword\b feature to find only whole
+words is particularly useful. Searches are normally case sensitive,
+but a case-insensitive search may be selectd. Once a search has been
+carried out, all the hits are highlighted. A first group of hits is
+displayed in the Text window. The text is moved to display as many
+hits as possible. When the user has analysed the first group of hits,
+hitting RETURN will display the next group of hits in the text and
+so on until the end of the text is reached. Another RETURN will start
+by displaying the first group at the top again. Hitting SHIFT-RETURN
+will reverse the direction of displaying the groups.
+
+Double-clicking with mouse button 1 transfers the word under the
+mouse to the Search Entry window and immediately starts a search for
+that word. This is the quickest and best way to start a search. This
+action masks the selection of the text under the mouse (Text Binding
+[2]).  If necessary clear the prevous search by pressing ctrl-RETURN.
+The search can be continued by clicking on the [/] button or pressing
+RETURN.
+
+Double-clicking with mouse button 1 with the cursor in the Search Entry
+window or by pressing ctrl-RETURN will clear the search completely.
+
+Holding down the search key [/] will show the different search options
+for 'Exact match' or 'Regexp match' either case sensitive or not.
+This is followed by a history of previous searches - most recent at
+the end, which can be selected for a repeat search. This search menu
+can be detached with the tear line ---------.
+
+The position of the displayed text may be manipulated by the scroll
+bar(s) or the usual up/down/prior/next/home/end keys.  A useful
+feature is the use of the middle mouse button to fast scroll in all
+4 directions through the text.
+
+Tk::Text will open a dialog box when clicking the right mouse button
+in the text window. The features provided are self explanatory. It
+also has a search feature, which did not seem to be available when
+I started. The really useful feature there is the search/replace
+facility. Another useful feature is changing the wrap mode.
 
 =head1 KEYBOARD BINDINGS
 
