@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.8 $
+ *  $Id: kbLift.ic 1.9 $
  *
  *******************************************************************/
 
@@ -288,11 +288,11 @@ imm int targetPosition	= SH(newRequest &  target1                ? 1 :	// target
  *  of atFloorX. This allows setting of the intermediate SR flip flops.
  *******************************************************************/
 imm bit Dtarget1	= D(target1)  ;
-imm bit DtargetUp2	= D(targetUp2);
-imm bit DtargetUp3	= D(targetUp3);
+imm bit DtargetUp2	= D(targetUp2 & ~atFloorDn2);
+imm bit DtargetUp3	= D(targetUp3 & ~atFloorDn3);
 imm bit Dtarget4	= D(target4)  ;
-imm bit DtargetDn3	= D(targetDn3);
-imm bit DtargetDn2	= D(targetDn2);
+imm bit DtargetDn3	= D(targetDn3 & ~atFloorUp3);
+imm bit DtargetDn2	= D(targetDn2 & ~atFloorUp2);
 
 /********************************************************************
  *  Reset approachX flip flops on the leading edge of closeDoor
@@ -313,23 +313,23 @@ imm bit notWaiting	= reqTarget | (at_a_floor & ~doorOpenMin);
  *  times out and starts to close. During this time the light is on
  *  for 2 floors.
  *******************************************************************/
-imm bit approach1	= (Dtarget1   | SR( Dtarget1              & atFloor1  ,
-					    RcloseDoor            & LIFT_AT_1 )
+imm bit approach1	= (Dtarget1   | SR( approach1   & atFloor1              ,
+					    RcloseDoor               & LIFT_AT_1)
 			  ) & notWaiting;
-imm bit approachUp2	= (DtargetUp2 | SR( DtargetUp2            & atFloorUp2,
-					   (RcloseDoor | nextDn2) & goingUp2  )
+imm bit approachUp2	= (DtargetUp2 | SR( approachUp2 & atFloorUp2 | nextUp2  ,
+					   (RcloseDoor  | nextDn2)   & goingUp2 )
 			  ) & notWaiting;
-imm bit approachUp3	= (DtargetUp3 | SR( DtargetUp3            & atFloorUp3,
-					   (RcloseDoor | nextDn3) & goingUp3  )
+imm bit approachUp3	= (DtargetUp3 | SR( approachUp3 & atFloorUp3 | nextUp3  ,
+					   (RcloseDoor  | nextDn3)   & goingUp3 )
 			  ) & notWaiting;
-imm bit approach4	= (Dtarget4   | SR( Dtarget4              & atFloor4   ,
-					    RcloseDoor            & LIFT_AT_4 )
+imm bit approach4	= (Dtarget4   | SR( approach4   & atFloor4              ,
+					    RcloseDoor               & LIFT_AT_4)
 			  ) & notWaiting;
-imm bit approachDn3	= (DtargetDn3 | SR( DtargetDn3            & atFloorDn3,
-					   (RcloseDoor | nextUp3) & goingDn3  )
+imm bit approachDn3	= (DtargetDn3 | SR( approachDn3 & atFloorDn3 | nextDn3  ,
+					   (RcloseDoor  | nextUp3)   & goingDn3 )
 			  ) & notWaiting;
-imm bit approachDn2	= (DtargetDn2 | SR( DtargetDn2            & atFloorDn2,
-					   (RcloseDoor | nextUp2) & goingDn2  )
+imm bit approachDn2	= (DtargetDn2 | SR( approachDn2 & atFloorDn2 | nextDn2  ,
+					   (RcloseDoor  | nextUp2)   & goingDn2 )
 			  ) & notWaiting;
 
 /********************************************************************
