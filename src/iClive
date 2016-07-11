@@ -291,7 +291,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.62 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.63 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -498,9 +498,11 @@ my $fileTypes = [
 # in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
 # This pattern colours all leading and trailing spaces (used initially)
 # my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)\s*((~ )?---|=$)?';
-# This pattern colours only one leading space or tab or '~' and one trailing space or tab
+# This pattern colours only one leading space or tab or '~' and one trailing space or tab; with numbers
+# my $scanPattern = '(\s?|~\s*)(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)(\s*((~ )?---|=$)|\s)?';
+# This pattern colours only one leading space or tab or '~' and one trailing space or tab; leave out numbers
 # NOTE the order of the regexes in the final (\s*((~ )?---|=$)|\s) - the final single white space is last or
-my $scanPattern = '(\s?|~\s*)(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)(\s*((~ )?---|=$)|\s)?';
+my $scanPattern = '(\s?|~\s*)([A-Z_a-z][\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)(\s*((~ )?---|=$)|\s)?';
 my $bMsg = '';		# balloon message
 my $wIdx = '';		# Index of current wordstart
 my $pIdx = '';		# Index of previous wordstart
