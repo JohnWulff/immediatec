@@ -186,7 +186,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift 1.16 $ uses Tk-@<<<<<<
+$Id: iClift 1.17 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -1173,10 +1173,10 @@ sub draw_wall {
     my $downBut = undef;
     my $downTri = undef;
 
-    my $xBut = $xDoorRight + $dow * 0.1;# x button position to right of centre
+    my $xBut = $xDoorRight + $dow * 0.15;# x button position to right of centre
     my $yBut = $yWallBot - $doh * 0.4;	# y button position from the floor
-    my $yOff = $doh * 0.07;		# vert space between buttons / 2
-    my $rBut = $dow * 0.05;		# radius of buttons
+    my $yOff = $doh * 0.10;		# vert space between buttons / 2
+    my $rBut = $dow * 0.07;		# radius of buttons
 
     my $xtl = $xBut - $rBut;
     my $xbr = $xBut + $rBut;

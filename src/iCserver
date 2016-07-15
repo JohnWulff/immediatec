@@ -98,7 +98,7 @@ Usage:
 		if a client call has arguments, the call must be quoted
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.50 $
+$Id: iCserver 1.51 $
 .
 
 ########################################################################
@@ -253,12 +253,6 @@ if (defined $opt_G) {
     $opt_G = 'iClive';
 }
 
-if ($opt_q) {
-    $opt_q = 'q';			# quiet option
-} else {
-    $opt_q = '';			# define $opt_q
-}
-
 my ($t0, $t1);
 if ($opt_a or $opt_m) {
     use Time::HiRes qw(ualarm gettimeofday);
@@ -401,7 +395,8 @@ sub fork_and_exec {
 	    splice @call, $n, 0, "-p", $opt_p if defined $opt_p;
 	    splice @call, $n, 0, "-t" if defined $opt_t;
 	    splice @call, $n, 0, "-m" if defined $opt_m;
-	    splice @call, $n, 0, "-z$opt_q";
+	    splice @call, $n, 0, "-z" if defined $opt_z;
+	    splice @call, $n, 0, "-q" if defined $opt_q;
 	    print STDERR "\$ @call &\n" unless $opt_q;
 	    exec @call;
 	    die "$named: returned from exec $call[0] ???: $!\n";
