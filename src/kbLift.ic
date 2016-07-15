@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.11 $
+ *  $Id: kbLift.ic 1.12 $
  *
  *******************************************************************/
 
@@ -189,22 +189,28 @@ imm bit nextDn2		= doorOpenMin & sameDn2;
  *      which means lift will only stop if going in the right direction.
  *  Block all requests if lift is stopped at the requested target floor.
  *******************************************************************/
-imm bit req1		= SR((CALL_UP1   | I_REQUEST1)       & ~LIFT_AT1,
-			      LIFT_AT1                                  );
-imm bit reqUp2		= SR( CALL_UP2                       & ~goingUp2,
-			      RgoingUp2  & StargetUp2 | nextUp2         );
-imm bit req2		= SR(              I_REQUEST2        & ~LIFT_AT2,
-			      LIFT_AT2   & Starget2                     );
-imm bit reqUp3		= SR( CALL_UP3                       & ~goingUp3,
-			      RgoingUp3  & StargetUp3 | nextUp3         );
-imm bit req4		= SR((CALL_DOWN4 | I_REQUEST4 | eoi) & ~LIFT_AT4,
-			      LIFT_AT4                                  );
-imm bit reqDn3		= SR( CALL_DOWN3                     & ~goingDn3,
-			      RgoingDn3  & StargetDn3 | nextDn3         );
-imm bit req3		= SR(              I_REQUEST3        & ~LIFT_AT3,
-			      LIFT_AT3   & Starget3                     );
-imm bit reqDn2		= SR( CALL_DOWN2                     & ~goingDn2,
-			      RgoingDn2  & StargetDn2 | nextDn2         );
+imm bit reqW1		= SR( CALL_UP1                & ~LIFT_AT1,
+			      LIFT_AT1                           );
+imm bit reqI1		= SR( I_REQUEST1              & ~LIFT_AT1,
+			      LIFT_AT1                           );
+imm bit reqUp2		= SR( CALL_UP2                & ~goingUp2,
+			      RgoingUp2  & StargetUp2 |  nextUp2 );
+imm bit req2		= SR( I_REQUEST2              & ~LIFT_AT2,
+			      LIFT_AT2   & Starget2              );
+imm bit reqUp3		= SR( CALL_UP3                & ~goingUp3,
+			      RgoingUp3  & StargetUp3 |  nextUp3 );
+imm bit reqW4		= SR( CALL_DOWN4              & ~LIFT_AT4,
+			      LIFT_AT4                           );
+imm bit reqI4		= SR((I_REQUEST4 | eoi)       & ~LIFT_AT4,
+			      LIFT_AT4                           );
+imm bit reqDn3		= SR( CALL_DOWN3              & ~goingDn3,
+			      RgoingDn3  & StargetDn3 |  nextDn3 );
+imm bit req3		= SR( I_REQUEST3              & ~LIFT_AT3,
+			      LIFT_AT3   & Starget3              );
+imm bit reqDn2		= SR( CALL_DOWN2              & ~goingDn2,
+			      RgoingDn2  & StargetDn2 |  nextDn2 );
+imm bit req1		= reqW1 | reqI1;
+imm bit req4		= reqW4 | reqI4;
 
 /********************************************************************
  *  Hold target request made for current floor until cage has moved
@@ -433,12 +439,12 @@ imm bit I_REQUEST_4_LIGHT, I_REQUEST_3_LIGHT, I_REQUEST_2_LIGHT, I_REQUEST_1_LIG
 imm bit GOING_DOWN4, CALL_DOWN_4_LIGHT, GOING_UP3, GOING_DOWN3;
 
 // Device Address 0
-QX0.0	= I_REQUEST_4_LIGHT	= req4;		// Level 4 requested from inside lift
+QX0.0	= I_REQUEST_4_LIGHT	= reqI4;	// Level 4 requested from inside lift
 QX0.1	= I_REQUEST_3_LIGHT	= req3;		// Level 3 requested from inside lift
 QX0.2	= I_REQUEST_2_LIGHT	= req2;		// Level 2 requested from inside lift
-QX0.3	= I_REQUEST_1_LIGHT	= req1;		// Level 1 requested from inside lift
+QX0.3	= I_REQUEST_1_LIGHT	= reqI1;	// Level 1 requested from inside lift
 QX0.4	= GOING_DOWN4		= approach4;	// On level 4 indicating lift going down
-QX0.5	= CALL_DOWN_4_LIGHT	= req4;		// Down requested on level 4
+QX0.5	= CALL_DOWN_4_LIGHT	= reqW4;	// Down requested on level 4
 QX0.6	= GOING_UP3		= approachUp3;	// On level 3 indicating lift going up
 QX0.7	= GOING_DOWN3		= approachDn3;	// On level 3 indicating lift going down
 
@@ -453,7 +459,7 @@ QX1.3	= GOING_DOWN2		= approachDn2;	// On level 2 indicating lift going down
 QX1.4	= CALL_UP_2_LIGHT	= reqUp2;	// Up requested on level 2
 QX1.5	= CALL_DOWN_2_LIGHT	= reqDn2;	// Down requested on level 2
 QX1.6	= GOING_UP1		= approach1;	// On level 1 indicating lift going up
-QX1.7	= CALL_UP_1_LIGHT	= req1;		// Up requested on level 1
+QX1.7	= CALL_UP_1_LIGHT	= reqW1;	// Up requested on level 1
 
 // Device Address 2
 QX2.0	= I_GOING_DOWN_LIGHT;			// Lift "going down" light inside lift
@@ -468,4 +474,5 @@ QX3.4	= DoorMotor4;
 QX3.5	= I_AT_LIGHT5;				// 2 bits multiplexed to drive one of four lights
 QX3.6	= I_AT_LIGHT6;
 
-QX3.7	= eoi;					// reset cage and door alarms in simulation
+QX3.7	= eoi;					// reset cage and door alarms in simulation simLift.ic
+QB3	= targetPosition - 1;			// for jwLift.ic to control iClift

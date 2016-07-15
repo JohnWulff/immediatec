@@ -10,7 +10,7 @@
 #
 #  Call: iCserver -f kbLift.is
 #
-#  $Id: kbLift.is 1.3 $
+#  $Id: kbLift.is 1.4 $
 #
 ########################################################################
 
@@ -18,13 +18,13 @@
 -k
 
 # Equivalences:
-QX40=IX0 QX41=IX1 QX42=IX2 QX43=IX3
+QX40=IX0 QX41=IX1 QX42=IX2 QX43=IX3 QB43=IB3
 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
 
 # iCboxes:
 # IB3 maximum delay to keep door open * 0.1 second
 # digital inputs are all push buttons
-'iCbox -nsimLift-IO -c 16 IB3 QX20,222 QX21,30 IX22,222,200 IB23 IB24 QX30,14 QX31,206 IX32,14,200 QB33 IX34,156,200 QX35,157 QX36,220 QX37,222 QX38,127 QB39'
+'iCbox -nsimLift-IO -c 17 B3 QX20,222 QX21,30 IX22,222,200 IB23 IB24 QX30,14 QX31,206 IX32,14,200 QB33 IX34,156,200 QX35,157 QX36,220 QX37,222 QX38,127 QB39'
 
 # monitor inputs and outputs equivalenced from simLift and kbLift inputs and outputs
 'iCbox -d -nkbLift-IO IX0,31 QX0 QX1 IX2 QX2,3 IX3,15 QX3 QX40,31 IX40 IX41 QX42 IX42,3 QX43,15 IX43'
