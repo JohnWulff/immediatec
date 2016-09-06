@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.100 $";
+"@(#)$Id: outp.c 1.101 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1033,6 +1033,7 @@ iC_listNet(void)
     for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if (sp->type < MAX_LS) {
+		sp->fm &= FM;			/* clear use count in fm */
 		if (sp->ftype == GATE) {
 		    for (lp = sp->list; lp; lp = lp->le_next) {
 			tsp = lp->le_sym;	/* logical target */
@@ -1306,7 +1307,7 @@ iC_listNet(void)
 	    if (sp->em & EM) {
 		extFlag = 1;
 	    }
-	    if ((typ = sp->type) < MAX_LS && (sp->fm &= FM) == 0) {	/* clear use count in fm */
+	    if ((typ = sp->type) < MAX_LS && sp->fm == 0) {	/* use count in fm cleared earlier */
 		if (typ != NCONST || sp->u_val != 0) {	/* not NCONST or NCONST used as reference */
 		    if (sp == icerr && sp->list == 0) {
 			icerrFlag = 1;			/* uninstall iCerr at end of loop */
@@ -1371,7 +1372,7 @@ iC_listNet(void)
 			    fcnt = 0;
 			    for (lp = sp->list; lp; lp = lp->le_next) {
 				tsp = lp->le_sym;
-				if (tsp && tsp->fm != 0) continue;	/* no function internal variables */
+				if (tsp && (tsp->fm & (FM|FA)) != 0) continue;	/* no function internal variables */
 				if (fcnt++ >= 8) {
 				    fcnt = 1;
 				    fprintf(iC_outFP, "\n\t");
@@ -2340,22 +2341,30 @@ iC_outNet(FILE * iFP, char * outfile)
 			assert(sp->u_blist == 0);
 		    }
 		    if (ftyp == ARITH) {
-			for (lpp = &sp->list; (lp = *lpp) != 0; ) {
-			    List_e **	tlpp;
-			    /* leave out timing controls */
-			    if ((val = lp->le_val) != (unsigned)-1) {
-				tsp = lp->le_sym;	/* reverse action links */
-				for (tlpp = &tsp->u_blist;
-				    (tlp = *tlpp) != 0 && tlp->le_val <= val;
-				    tlpp = &tlp->le_next) {
-				    assert(val != tlp->le_val);
+			/********************************************************************
+			 *  NCONST arithmetic Symbols passed to an if else switch C block were
+			 *  marked with a pointer to themselves in op_asgn() so iC_listNet()
+			 *  counts them in u_val and later instantiates a constant Gate.
+			 *  But such a constant Symbol must not be linked into other nodes.
+			 *******************************************************************/
+			if (typ != NCONST || !sp->list || sp->list->le_sym != sp) {
+			    for (lpp = &sp->list; (lp = *lpp) != 0; ) {
+				List_e **	tlpp;
+				/* leave out timing controls */
+				if ((val = lp->le_val) != (unsigned)-1) {
+				    tsp = lp->le_sym;	/* reverse action links */
+				    for (tlpp = &tsp->u_blist;
+					(tlp = *tlpp) != 0 && tlp->le_val <= val;
+					tlpp = &tlp->le_next) {
+					assert(val != tlp->le_val);
+				    }
+				    *tlpp = lp;		/* to input links */
+				    *lpp = lp->le_next;
+				    lp->le_sym = sp;
+				    lp->le_next = tlp;	/* lpp is not changed */
+				} else {
+				    lpp = &lp->le_next;	/* lpp to next link */
 				}
-				*tlpp = lp;		/* to input links */
-				*lpp = lp->le_next;
-				lp->le_sym = sp;
-				lp->le_next = tlp;	/* lpp is not changed */
-			    } else {
-				lpp = &lp->le_next;	/* lpp to next link */
 			    }
 			}
 		    } else
@@ -2616,7 +2625,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		}
 		fprintf(Fp, " = { 1, -%s,", iC_ext_type[typ]);	/* -gt_ini */
 		ftyp = sp->ftype;
-		if ((lp = sp->list) != 0 && lp->le_sym == sp) {
+		if ((lp = sp->list) != 0 && lp->le_sym == sp && typ != NCONST) {
 		    fflag = 1;			/* leave out _f0_1 */
 		    /* generate gt_fni (ftype), gt_mcnt (1) and gt_ids */
 		    fprintf(Fp, " %s, 1, \"%s\",",
@@ -2986,7 +2995,7 @@ iC_outNet(FILE * iFP, char * outfile)
 				while ((lp = lp->le_next) != 0) {	/* scan C var list */
 				    tsp = lp->le_sym;
 				    useBits = (tsp->em & AU) >> AU_OFS;	/* use bits */
-				    assert(useBits > 0 && useBits < 4);
+//				    assert(useBits > 0 && useBits < 4);
 				    useWord |= useBits << i;
 				    i += 2;
 				    if (i >= (USE_COUNT << 1)) {

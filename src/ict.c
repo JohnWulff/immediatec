@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.69 $";
+"@(#)$Id: ict.c 1.70 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1277,6 +1277,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	if (iC_vcdFP) {
 	    fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
 	}
+	if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }	/* execute f_list entries */
     }
     /********************************************************************
      *  1 Set and fire "End Of Initialisation" if TX0.0 is in the program
@@ -1448,7 +1449,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		if (iC_vcdFP) {
 		    fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
 		}
-		if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }
+		if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }	/* execute f_list entries */
 		continue;
 	    } else if (vcdFlag) {
 		fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark non active iClock in VCD output */

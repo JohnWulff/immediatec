@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.64 $";
+"@(#)$Id: load.c 1.65 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2015  John E. Wulff
@@ -32,6 +32,7 @@ static const char load_c[] =
 #define STS	1
 
 extern const char	iC_ID[];
+extern const char	iC_PATCH[];
 
 Gate		iClock = { -1, -CLK, CLCKL, 0, "iClock" };	/* active */
 
@@ -259,6 +260,7 @@ static const char *	usage =
 "    -q      quiet - do not report clients connecting and disconnecting\n"
 "    -z      block keyboard input on this app - used by -R\n"
 #endif	/* TCP */
+"    -Z      GIT patch if made with dirty version\n"
 "    -h      this help text\n"
 "                      EXTRA arguments\n"
 "    --      any further arguments after -- are passed to the app\n"
@@ -555,6 +557,9 @@ main(
 		case 'z':
 		    iC_debug |= DZ;	/* -z    block all STDIN interrupts for this app */
 		    break;
+		case 'Z':
+		    fprintf(iC_outFP, "%s", iC_PATCH);
+		    exit(0);		/* output GIT patch if made with dirty version */
 #ifdef	TCP
 		case 'R':
 		    /********************************************************************

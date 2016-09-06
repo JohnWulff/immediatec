@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.75 $";
+"@(#)$Id: icc.c 1.76 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -141,7 +141,7 @@ static const char *	usage =
 #if !defined(RUN) && !defined(TCP)
 "        -v              version\n"
 #endif	/* not RUN and not TCP */
-"        -P              GIT patch if made with dirty version\n"
+"        -Z              GIT patch if made with dirty version\n"
 "        -h              this help text\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
@@ -893,7 +893,7 @@ main(
 		missing:
 		    fprintf(iC_errFP, "ERROR: %s: missing value after '-%1.1s'\n", iC_progname, ((*--argv)--, *argv));
 		    exit(1);
-		case 'P':
+		case 'Z':
 		    fprintf(iC_outFP, "%s", iC_PATCH);
 		    exit(0);		/* output GIT patch if made with dirty version */
 		case 'h':
@@ -1337,7 +1337,7 @@ immcc - the immediate-C to C compiler
     <src.ic> iC language source file (extension .ic)
              default: take iC source from stdin
     -v       version\n"
-    -P       GIT patch if made with dirty version\n"
+    -Z       GIT patch if made with dirty version\n"
     -h       this help text
 
 =head1 DESCRIPTION

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.86 $";
+"@(#)$Id: genr.c 1.87 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -38,6 +38,7 @@ lp->le_sym ? lp->le_sym->name : "(0)"
 #define STX	'\x02'
 #define ETX	'\x03'
 #define CASIZE	64
+#define FLPSIZE	64
 
 FuUse *		functionUse = NULL;	/* database to record function calls */
 int		functionUseSize = 0;	/* dynamic size adjusted with realloc */
@@ -80,6 +81,9 @@ typedef struct SymList {		/* allow alternate storage of Symbol or List_e pointer
 } SymList;
 static SymList*	caList = NULL;		/* dynamic auxiliary input gate list for copyArithmetic */
 static int	caSize = 0;		/* allocated size of caList */
+static List_e**	flpList = NULL;		/* dynamic auxiliary list for if else switch variables */
+static int	flpSize = 0;		/* allocated size of flpList */
+static List_e**	flpp = NULL;
 
 static Sym	vaList[0x80];		/* stores text and Symbol pointers for repeat elements */
 int		z = 0;			/* index into vaList[] - circular list of 128 elements */
@@ -205,14 +209,18 @@ op_force(				/* force linked Symbol to correct ftype */
     Symbol *		sp;
     List_e *		lp1;
     int			typ;
+    unsigned char	ft;
 
     if (lp && (sp = lp->le_sym) != 0 && sp->ftype != ftyp) {
 	if (sp->u_blist == 0	||	/* not a @ symbol or */
 	    sp->type >= MAX_GT	||	/* SH, FF, EF, VF, SW, CF or */
 	    (sp->type == LATCH && sp->u_blist->le_sym == sp)		/* LATCH(set,res) */
 	) {
-	    if ((typ = iC_types[sp->ftype]) == ERR) {
-		ierror("cannot force from", iC_full_ftype[sp->ftype]);	/* CLCKL or TIMRL */
+	    if ((typ = iC_types[ft = sp->ftype]) == ERR ||
+		ft == OUTW ||
+		ft == OUTX) {
+		ierror("cannot force from", iC_full_ftype[ft]);		/* OUTW OUTX CLCKL or TIMRL */
+		typ = ERR;
 	    }
 	    lp1 = op_push(0, typ, lp);
 	    assert(lp->le_first == 0 || (lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]));
@@ -737,6 +745,13 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	gp->ftype == ARITH &&
 	lp->le_val != (unsigned)-1) {
 	assert(caList && ePtr && gPtr && tPtr && tOut);
+	if (x == 0xff) {
+	    for (y = 1; y < caSize; y++) {
+		if (gp == caList[y].s) {
+		    x = caList[y].x;			/* reference to (unsigned)-1 delay */
+		}
+	    }
+	}
 	if (cFn == 0) {				/* STANDARD C EXPRESSION */
 	    if (t_first) {				/* end of arith */
 #ifndef EFENCE
@@ -1094,7 +1109,7 @@ writeCexeTail(FILE * oFP, const char * tail, int cn)
 
 /********************************************************************
  *
- *	asign List_e stack to links
+ *	assign List_e stack to links
  *
  *	Sym sv contains Symbol *v and char *f and *l to source
  *	Lis lr contains List_e *v and char *f and *l to source
@@ -1103,7 +1118,7 @@ writeCexeTail(FILE * oFP, const char * tail, int cn)
  *******************************************************************/
 
 Symbol *
-op_asgn(				/* asign List_e stack to links */
+op_asgn(				/* assign List_e stack to links */
     Sym *		sv,		/* may be 0 for ffexpr */
     Lis *		rl,		/* in case of parse error rl->v may be 0 */
     unsigned char	ft)
@@ -1424,7 +1439,7 @@ op_asgn(				/* asign List_e stack to links */
 	lp = 0;
 	fflag = (sp->type == SW || sp->type == CF) ? 1 : 0;
 	sflag &= ~01;				/* stop loop in case of error */
-	ilp = 0;
+	ilp = NULL;
 	while ((plp = lp, lp = sp->u_blist) != 0) {
 	    sp->u_blist = lp->le_next;
 	    if ((gp = lp->le_sym) == rsp && var->type != ALIAS) {
@@ -1458,7 +1473,7 @@ op_asgn(				/* asign List_e stack to links */
 	    }
 #endif	/* BOOT_COMPILE */
 	    assert(gp && gp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
-	    if (gp->type == NCONST && lp->le_val != (unsigned)-1 && (sflag & 01) == 0) {
+	    if (gp->type == NCONST && lp->le_val != (unsigned)-1 && !fflag && (sflag & 01) == 0) {
 		if ((val = lp->le_val >> FUN_OFFSET) > 0) {
 		    if (cFn == 0) {
 			cFn = val;		/* case number from function */
@@ -1512,6 +1527,34 @@ op_asgn(				/* asign List_e stack to links */
 		    tlp = nlp->le_next;		/* next link to a feedback Symbol */
 		    sy_pop(nlp);		/* delete a feedback list link */
 		    nlp = tlp;
+		}
+	    }
+	    if (fflag && gp->ftype == ARITH) {
+		if (gp->type == NCONST && gp->list == 0) {
+		    gp->list = lp;		/* mark NCONST for use count in iC_listNet() */
+		} else if (gp->u_blist) {
+		    assert(gp->list == NULL);	/* check for expression to if else or switch */
+		    /********************************************************************
+		     *  Save List_e* lp pointing to an expandable expression, which is used
+		     *  in an if else switch C block arithmetic, in dynamic array flpList.
+		     *  These require the le_first and le_last members of the full expression.
+		     *  These expressions are reduced in reverse order.
+		     *******************************************************************/
+		    if (flpp - flpList >= flpSize) {
+			flpList = (List_e**)realloc(flpList,	/* initially NULL */
+			    (flpSize + FLPSIZE) * sizeof(List_e*));
+			assert(flpList);
+			memset(&flpList[flpSize], '\0', FLPSIZE * sizeof(List_e*));
+			flpSize += FLPSIZE;		/* increase the size of the array */
+			if (flpp == NULL) {
+			    flpp = flpList;
+			}
+#if YYDEBUG
+			if ((iC_debug & 0402) == 0402)
+			    fprintf(iC_outFP, "op_asgn: flpList[%d] increase\n", flpSize);
+#endif
+		    }
+		    *flpp++ = lp;		/* fully expand arithmetic expression linked to C code */
 		}
 	    }
 	    if (! fflag || ! plp) {		/* bypass first link for if else or switch */
@@ -1590,12 +1633,29 @@ op_asgn(				/* asign List_e stack to links */
 			     * loop to find duplicate link (possibly inverted)
 			     * start at beginning and test for duplicate up to end
 			     * put new Symbol after last unless duplicate
+			     *
+			     * Duplicate inputs for AND and OR Gates are silently ignored unless
+			     * they are an input and its inverse which produces a Warning.
+			     * Duplicate inputs for XOR and LATCH Gates always produce Warnings.
+			     * Duplicate arithmetic Gate inputs are expanded in copyArithmetic()
+			     * unless the first was a timer delay, in which case the arithmetic
+			     * input is a new input.
 			     *******************************************************************/
 			  loop:				/* special loop with test in middle */
 			    if (tlp->le_sym == sp) {
+				val = tlp->le_val;
 				if (gp->ftype == OUTW || gp->ftype == OUTX) {
 				    warning("input equals output at output gate:", gp->name);
-				} else if (gp->ftype == ARITH || tlp->le_val == lp->le_val) {
+				} else if (sp->type == XOR) {
+				    if (val == lp->le_val) {
+					warning("XOR gate has 2 identical inputs which is always 0:", gp->name);
+				    } else {
+					warning("XOR gate has input and inverse which is always 1:", gp->name);
+				    }
+				} else if (sp->type == LATCH) {
+				    warning("LATCH gate has 2 identical inputs which is indeterminate:", gp->name);
+				} else if (val == lp->le_val ||
+				    (gp->ftype == ARITH && val != (unsigned)-1)) {
 				    if (gp != iconst) {
 					copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 02, cFn);
 					gt_count++;	/* count duplicates except iConst */
@@ -1607,8 +1667,12 @@ op_asgn(				/* asign List_e stack to links */
 				    }
 				    sy_pop(lp);		/* ignore duplicate link */
 				    goto nextInputLink;
-				} else {
-				    warning("gate has input and inverse:", gp->name);
+				} else if (val != (unsigned)-1) {
+				    if (sp->type == AND) {
+					warning("AND gate has input and inverse which is always 0:", gp->name);
+				    } else {
+					warning("OR gate has input and inverse which is always 1:", gp->name);
+				    }
 				}
 			    }
 			    if (tlp->le_next) {
@@ -1633,9 +1697,19 @@ op_asgn(				/* asign List_e stack to links */
 		     *******************************************************************/
 		    for (tlp = saveBlist; tlp && tlp != lp; tlp = tlp->le_next) {
 			if (tlp->le_sym == gp) {
+			    val = tlp->le_val;
 			    if (gp->ftype == OUTW || gp->ftype == OUTX) {
 				warning("input equals output at output gate:", gp->name);
-			    } else if (gp->ftype == ARITH || tlp->le_val == lp->le_val) {
+			    } else if (sp->type == XOR) {
+				if (val == lp->le_val) {
+				    warning("XOR gate has 2 identical inputs which is always 0:", gp->name);
+				} else {
+				    warning("XOR gate has input and inverse which is always 1:", gp->name);
+				}
+			    } else if (sp->type == LATCH) {
+				warning("LATCH gate has 2 identical inputs which is indeterminate:", gp->name);
+			    } else if (val == lp->le_val ||
+				(gp->ftype == ARITH && val != (unsigned)-1)) {
 				assert(plp);		/* cannot be first link in chain */
 				plp->le_next = sp->u_blist;	/* relink the chain */
 				if (gp->type == ARN || gp->type == ARNF) {
@@ -1659,8 +1733,12 @@ op_asgn(				/* asign List_e stack to links */
 				sy_pop(lp);		/* ignore duplicate link */
 				lp = plp;
 				goto nextInputLink;
-			    } else {
-				warning("gate has input and inverse:", gp->name);
+			    } else if (val != (unsigned)-1) {
+				if (sp->type == AND) {
+				    warning("AND gate has input and inverse which is always 0:", gp->name);
+				} else {
+				    warning("OR gate has input and inverse which is always 1:", gp->name);
+				}
 			    }
 			}
 		    }
@@ -2005,42 +2083,49 @@ op_asgn(				/* asign List_e stack to links */
 		}
 		if ((typ1 = sp->type) == ARN || typ1 == ARNF) {
 		    tlp = sp->list;
-		    if (tlp == 0) {
-			assert(var->type == SW || var->type == CF);
-			tlp = sp->u_blist;		/* SW or CF - inputs are not reduced */
-		    }
-		    assert(tlp);
-		    t_first = tlp->le_first;
-		    t_last = tlp->le_last;
-		    if (sp->v_cnt > 1 && t_first && (c = *t_first & 0xff) >= 0x80) {
-			assert(t_last == t_first + 1);
-			c -= 0x80;
-			assert(sp == vaList[c].v);
-#if YYDEBUG
-			cp = t_first;			/* for debug output */
-#endif
-			t_first = vaList[c].f;
-			t_last = vaList[c].l;
-#if YYDEBUG
-			if ((iC_debug & 0402) == 0402) {
-			    if (t_last && t_first) {
-				int len1 = t_last - t_first;
-				fprintf(iC_outFP, "sp: c=%2d	%-15s %-6s v_cnt = %2d '%1.1s' {%*.*s}\n",
-				    c, sp->name, iC_full_type[sp->type], sp->v_cnt, cp,
-				    len1, len1, t_first);
-			    } else {
-				fprintf(iC_outFP, "sp: c=%2d	%-15s %-6s v_cnt = %2d '%1.1s' {}\n",
-				    c, sp->name, iC_full_type[sp->type], sp->v_cnt, cp);
-			    }
-			    fflush(iC_outFP);
+		    if (flpp > flpList && (var->type == SW || var->type == CF)) {
+			assert(flpp <= &flpList[flpSize]);	/* not over */
+			nlp  = *(flpp-1);
+			assert(nlp);
+			if (nlp->le_sym == sp) {
+			    tlp = nlp;			/* SW or CF - inputs are not reduced */
+			    --flpp;
 			}
-#endif
 		    }
-		    assert((t_first == 0 && t_last == 0) || (t_first >= iCbuf && t_last >= t_first && t_last < &iCbuf[IMMBUFSIZE]));
+		    if (tlp) {
+			t_first = tlp->le_first;
+			t_last = tlp->le_last;
+			if (sp->v_cnt > 1 && t_first && (c = *t_first & 0xff) >= 0x80) {
+			    assert(t_last == t_first + 1);
+			    c -= 0x80;
+			    assert(sp == vaList[c].v);
+#if YYDEBUG
+			    cp = t_first;		/* for debug output */
+#endif
+			    t_first = vaList[c].f;
+			    t_last = vaList[c].l;
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				if (t_last && t_first) {
+				    int len1 = t_last - t_first;
+				    fprintf(iC_outFP, "sp: c=%2d	%-15s %-6s v_cnt = %2d '%1.1s' {%*.*s}\n",
+					c, sp->name, iC_full_type[sp->type], sp->v_cnt, cp,
+					len1, len1, t_first);
+				} else {
+				    fprintf(iC_outFP, "sp: c=%2d	%-15s %-6s v_cnt = %2d '%1.1s' {}\n",
+					c, sp->name, iC_full_type[sp->type], sp->v_cnt, cp);
+				}
+				fflush(iC_outFP);
+			    }
+#endif
+			}
+			assert((t_first == 0 && t_last == 0) || (t_first >= iCbuf && t_last >= t_first && t_last < &iCbuf[IMMBUFSIZE]));
+		    }
 		}
 	    }
 	}
     } while (sp);			/* 1 symbol resolved */
+    assert(flpp == flpList);				/* not used or restored correctly */
     if ((t_last = right->le_last, t_first = right->le_first) != 0) {	/* full text of expression */
 	assert(t_first >= iCbuf && t_last >= t_first && t_last < &iCbuf[IMMBUFSIZE]);
 	memset(t_first, '#', t_last - t_first);	/* mark embedded assignments */
@@ -2820,8 +2905,6 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
     Symbol *	sp;
     Symbol *	sp1;
     Symbol **	spp;
-    char *	np;
-    char *	cp;
     int		instanceNum;			/* save early union u.val u.blist */
     int		saveCount = 0;			/* count parameter links for saving */
 
@@ -2836,8 +2919,8 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 	}
 	assert(iRetSymbol.v->u_blist == 0);	/* state after expression reduction */
 	iRetSymbol.v->u_blist = iRetSymbol.v->list;
-	iRetSymbol.v->fm |= FM;			/* mark return Symbol - not used */
-	iRetSymbol.v->list = sy_push(functionHead);	/* with own function head */
+	iRetSymbol.v->fm |= FM|FA|FP|0x01;	/* mark return Symbol 'this' as used once, assigned and parameter */
+	iRetSymbol.v->list = sy_push(functionHead);	/* point to own function head */
 	iRetSymbol.v = 0;			/* no need to report as undefined */
     }
     iFunSymExt = 0;				/* end of function compilation */
@@ -2862,16 +2945,16 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 	    sp->u_blist = sp->list;		/* expression now ready for cloning */
 	    sp->list = 0;			/* clear pointer to real Symbol */
 	    saveCount++;			/* space for saving nested decl or assign parameter */
-	    sp->fm |= FM;			/* mark as function Symbol */
+	    sp->fm |= FM|FA;			/* mark as assigned function Symbol */
 	    if (sp->ftype == UDFA && (sp->type == ARNC || sp->type == LOGC)) {
 		for (lp1 = sp->u_blist; lp1; lp1 = lp1->le_next) {	/* immC array - scan member list */
 		    assert(lp1->le_sym);
-		    lp1->le_sym->fm |= FM;	/* mark array member as function Symbol */
+		    lp1->le_sym->fm |= FM;	/* mark array member as non-assigned function Symbol */
 		    saveCount++;		/* space for saving nested statement array members */
 		}
 	    }
 	} else {
-	    assert(sp->list && sp->list->le_sym == functionHead);	/* marked return */
+	    assert(sp->list && sp->list->le_sym == functionHead);	/* 'this' marked above */
 	}
 	lp = lp->le_next;			/* next varList link */
 	assert(lp);				/* statement list is in pairs */
@@ -2891,9 +2974,6 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
      * Mark each formal parameter in fm except assign parameters, which
      * were already marked in the statement scan.
      * Count space for saving in case of nested definitions.
-     *
-     * If an assign parameter is an alias, swap its symbol with the alias
-     * target. This involves relinking both symbols in the Symbol Table.
      *******************************************************************/
     functionHead->list = lp = fParams;		/* yacc stack value of parameter list */
     while (lp) {				/* mark formal parameter list */
@@ -2906,10 +2986,10 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 	    sp->u_blist = sp->list;		/* immC array now ready for cloning */
 	    sp->list = 0;			/* clear pointer to real Symbol */
 	    saveCount++;			/* space for saving nested decl or assign parameter */
-	    sp->fm = FM|0x02;			/* set immC array parameter as used - no merge */
+	    sp->fm = FM|FP|0x02;		/* set immC array parameter as used - no merge */
 	    for (lp1 = sp->u_blist; lp1; lp1 = lp1->le_next) {	/* immC array - scan member list */
 		assert(lp1->le_sym);
-		lp1->le_sym->fm |= FM;		/* mark array member as function Symbol */
+		lp1->le_sym->fm |= FM|FP;	/* mark parameter array member as non-assigned function Symbol */
 		saveCount++;			/* space for saving nested array parameter members */
 	    }
 	} else {
@@ -2921,45 +3001,11 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 		}
 		sp->list = 0;			/* clear pointer to real parameter */
 	    }
+	    sp->fm |= FM|FP;			/* mark as function Symbol and parameter */
 	    if (sp->u_blist == 0) {
 		saveCount++;			/* space for saving nested read parameter */
-		sp->fm |= FM|FA;		/* mark as function Symbol and parameter */
 	    } else {
-		assert((sp->fm & FM) != 0);	/* assign was marked in statement list scan */
-		while (sp->type == ALIAS) {
-		    lp1 = sp->u_blist;
-		    assert(lp1);
-		    sp1 = lp1->le_sym;
-		    assert(sp1);
-		    if (sp1->fm & FA) {
-			sp->fm |= FA;		/* do not uninstall assign ALIAS of a parameter */
-			break;
-		    }
-		    if (sp1->type < ARNF || sp1->type == LOGC || sp1->type > LATCH) break;
-		    np = sp->name;		/* name no longer cleared in unlink_sym - jw 20141007 */
-		    assert(np);			/* name used to be cleared - jw 20120823 */
-		    cp = sp1->name;		/* name no longer cleared in unlink_sym - jw 20141007 */
-		    assert(cp);			/* name used to be cleared - jw 20120823 */
-#if YYDEBUG
-		    if ((iC_debug & 0402) == 0402) {
-			fprintf(iC_outFP, "iFunDef:  swap assign alias %s <==> %s\n", np, cp);
-			fflush(iC_outFP);
-		    }
-#endif
-		    unlink_sym(sp);		/* take named alias symbol out of ST */
-		    unlink_sym(sp1);		/* take named statement symbol out of ST */
-		    sp->name = cp;
-		    link_sym(sp);		/* put back in ST with its new name */
-		    sp1->name = np;		/* swap names from assign alias to target */
-		    link_sym(sp1);		/* put back in ST with its new name */
-		    lp->le_sym = sp1;		/* make target the assign parameter */
-		    assert((sp1->fm & FM) != 0);/* target was marked in statement list scan */
-		    if (lp1->le_val == NOT) {
-			op_not(lp1);		/* negate target expression */
-		    }
-		    lp1->le_sym = 0;		/* isolate assignment alias */
-		    sp = sp1;
-		}
+		assert(sp->fm & FA);		/* assign was marked in statement list scan */
 		sp->fm |= 0x02;			/* mark used - no merge (ALIAS and target have FM set) */
 	    }
 	}
@@ -2991,10 +3037,20 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 		    if (sp1->type == ALIAS) {
 			vlp = sp1->u_blist;	/* inversion is taken care of */
 			assert(vlp);
+			if (((sp1->fm & FM) != 0 || sp1->name == 0) &&	/* no globals, no '@' in Pass 1 */
+			    (sp1->fm & 0x02) == 0) {/* target not used more than once */
+			    sp1->fm++;		/* count ALIAS use in merge candidate */
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, "iFunDef:  ALIAS use count %d for %s\n", sp1->fm & FU, sp1->name);
+				fflush(iC_outFP);
+			    }
+#endif
+			}
 			sp1 = vlp->le_sym;
 			assert(sp1);
 			lp1->le_sym = sp1;	/* transfer alias target to net list element */
-		    }
+		    } else			/* do not count target of ALIAS twice */
 		    if (((sp1->fm & FM) != 0 || sp1->name == 0) &&	/* no globals, no '@' in Pass 1 */
 			(sp1->fm & 0x02) == 0) {/* target not used more than once */
 			sp1->fm++;		/* count use in merge candidate */
@@ -3020,9 +3076,15 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
     lpp = &functionHead->u_blist;		/* statement list */
     while ((lp = *lpp) != 0) {
 	sp = lp->le_sym;			/* return, assign parameter or internal declaration */
+	if (sp && (sp->fm & FU) == 0 &&
+	    sp->type != SW && sp->type != CF &&
+	    (iC_Wflag & W_FUNCTION_PARAMETER)) {
+	    warning("function variable was never used:", sp->name);
+	}
 	vlp = lp->le_next;			/* next varList link */
-	if (sp->type == ALIAS && (sp->fm & FA) == 0 &&			/* exclude ALIAS assignment to parameter */
-	    (sp->list == 0 || sp->list->le_sym != functionHead)) {	/* exclude ALIAS asignment to this */
+	if (sp->type == ALIAS &&		/* exclude ALIAS assignment to parameter or this */
+	    (sp->fm & (FA|FP)) != (FA|FP) &&
+	    (sp->list == 0 || sp->list->le_sym != functionHead)) {
 	    lp1 = sp->u_blist;
 	    assert(lp1);
 	    sp1 = lp1->le_sym;
@@ -3912,6 +3974,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
     Symbol *		sp;
     Symbol *		sp1;
     Symbol *		sp2;			/* Symbol in expression template */
+    Symbol *		sp3;
     Symbol *		vsp;			/* Symbol in varList */
     Symbol *		csp;			/* Symbol in cloned expresssion */
     Symbol *		rsp;			/* return Symbol for feedback */
@@ -3926,6 +3989,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
     unsigned char	fm;
     unsigned int	lval;			/* logical sign of a temp */
     char *		cp;
+    char *		ep;
     char		temp[TSIZE];
 
     assert(functionHead);
@@ -3948,13 +4012,15 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
      *				01 01	00 01x	00 00x
      *				01 10	00 00x	00 10x etc
      *******************************************************************/
+    fm = functionHead->fm;			/* save functionHead->fm to restore it */
     if (hsp) {
-	while ((fm = functionHead->fm) !=0) {
+	while (fm !=0) {
 	    if (hsp->fm == (hsp->fm & fm)) {	
 		break;				/* correct function head found */
 	    } else {
 		if (functionHead->v_glist) {	/* this function has an alternative parameter ramp */
 		    functionHead = functionHead->v_glist;
+		    fm = functionHead->fm;	/* save again to restore it */
 		} else {
 		    warning("called function has incorrect parameters:", functionHead->name);
 		    break;
@@ -4150,6 +4216,8 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 		 * listing.
 		 *******************************************************************/
 		rsp->type = ARNF;		/* change ARN to ARNF */
+	    } else if (rsp->type == ALIAS) {
+		iC_optimise |= 0x80;		/* block iC_optimise & 02 for ALIAS function return */
 	    }
 	}					/* assign parameters alrady have a link */
 	slp = vlp->le_next;			/* next statement */
@@ -4157,7 +4225,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
     /********************************************************************
      * Pass 2: scan again and clone the expression for each statement
      *******************************************************************/
-    if (iC_optimise & 02) {
+    if ((iC_optimise & 0x82) == 0x02) {		/* do not optimise if ALIAS function return */
 #if YYDEBUG
 	tfirst = rll.f;				/* start of replacement arithmetic string */
 	tlast = rll.l;				/* rll was set up early in clonFunction */
@@ -4200,7 +4268,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	}
 	slp = vlp->le_next;			/* next statement */
     }
-    if ((iC_optimise & 02) && ttp > iCstmtp) {
+    if ((iC_optimise & 0x82) == 0x02 && ttp > iCstmtp) {
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {
 	    fprintf(iC_outFP, "cloneFunction: ar optimisation  %s\t'%s'\n",
@@ -4528,6 +4596,21 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 		sv.v->u_blist = 0;		/* restore for op_asgn */
 		if (lp->le_val == NOT && sv.v->ftype == GATE) {
 		    op_not(sl.v);		/* negated assign parameter */
+		} else {
+		    /********************************************************************
+		     *  Remove arithmetic alias in a function block and assign real expression
+		     *******************************************************************/
+		    while ( sl.v &&
+			    (sp2 = sl.v->le_sym) &&
+			    sp2->type == ALIAS &&
+			    (lp2 = sp2->u_blist) != NULL &&
+			    (sp3 = lp2->le_sym) != NULL &&
+			    (sp3->type == ARN || sp3->type == ARNF)
+			) {
+			sl.v = lp2;
+			sl.f = sl.v->le_first;
+			sl.l = sl.v->le_last;
+		    }
 		}
 		if ((name = sv.v->name) && sscanf(name, "Q%1[XBWL]%d", y1, &yn) == 2) {
 		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
@@ -4723,6 +4806,19 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 #endif
     }
     free(iSav);					/* free memory - no need for size */
+    functionHead->fm = fm;			/* restore original functionHead->fm */
+    /********************************************************************
+     * adjust call string if ALIAS function return for arithmetic expansion
+     * by trans-mogrifying function name
+     *******************************************************************/
+    if ((iC_optimise & 0x80) && (cp = strstr(rll.f, functionHead->name)) != NULL) {
+	ep = cp + strlen(functionHead->name);
+	while (cp < ep) {
+	    *cp++ = '#';
+	}
+	assert(*cp == '(');
+    }
+    iC_optimise &= ~0x80;
     return rll;					/* return expression or 0 for void function */
 } /* cloneFunction */
 
@@ -4740,7 +4836,7 @@ cloneSymbol(Symbol * sp)
     rsp = atSymbol();
     rsp->type = sp->type;
     rsp->ftype = sp->ftype;
-    rsp->fm |= sp->fm & FU;			/* transfer use count */
+    rsp->fm |= sp->fm & (FA|FP|FU);		/* transfer parameter type and use count */
     rsp->em |= sp->em & AU;			/* transfer assign+use bits */
     rsp->next = templist;			/* put at front of templist */
     templist = rsp;
@@ -4777,6 +4873,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
     static unsigned	recursions = 0;
 
     assert(recursions < 1000);
+    assert(ssp);
     flp = ssp->u_blist;				/* link to formal expression */
     csp = *cspp;				/* cloned head of the expression */
     recursions++;
@@ -4793,6 +4890,9 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	if (fsp->fm & FM) {			/* formal parameter or declared value */
 	    if ((nlp = fsp->list) != 0 &&	/* link to real Symbol */
 		(nsp = nlp->le_sym) != 0) {	/* real Symbol cloned before */
+		if ((nsp->fm & FU) == 0 && (fsp->fm & 0x2) != 0) {
+		    nsp->fm |= fsp->fm & FU;	/* transfer high use count for op_push'ed nodes */
+		}
 		nval = nlp->le_val;		/* logical sign of a real GATE parameter */
 		first = nlp->le_first;		/* transfer arithmetic text */
 		last = nlp->le_last;
@@ -4863,7 +4963,9 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
     if (rlp && call) {				/* rlp == 0 if break: no link from formal to real */
 	assert(recursions == 0);
 	nlp = sy_push(csp);			/* link to expression head for Pass 3 */
-	if (csp && csp->type == ALIAS) {
+	if (csp && csp->type == ALIAS &&
+	    ((csp->fm & (FA|FP)) != (FA|FP) ||	/* alias but not assign parameter*/
+	    (ssp->list && ssp->list->le_sym == iCallHead))) {
 	    assert((csp->em & EM) == 0 && (csp->fm & FM) == 0); /* not an external or function type */
 	    rlp->le_sym->em |= csp->em & AU;	/* transfer assign+use bits */
 	    *cspp = rlp->le_sym;		/* allow use of Symbol in optimisation */
@@ -4904,7 +5006,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
      * All csp->type's for call == 1 are ARNF (see assert above) - re-confirmed JW 20070608
      * Has been abandoned for now - JW 20070627 - Mezieres/Switzerland
      *******************************************************************/
-    if (csp->type == ARNF && (iC_optimise & 02) && call == 1) {
+    if (csp->type == ARNF && (iC_optimise & 0x82) == 0x02 && call == 1) {
 	Symbol *	icp;
 	Symbol *	sp1;
 	Symbol *	sp2;

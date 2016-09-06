@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h,v 1.68 2015/10/16 12:33:47 jw Exp $";
+"@(#)$Id: comp.h 1.69 $";
 
 #include	<setjmp.h>
 
@@ -102,8 +102,9 @@ typedef	struct Symbol {		/* symbol table entry */
 #define FU	0x03	/* fm bit mask for use count 0, 1 or 2 */
 #define FI	0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
 #define FMI	0x30	/* fm bit mask for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
-#define FA	0x40	/* fm bit wihch marks assign parameter in function definition */
-#define FM	0x80	/* fm bit wihch marks parameter and local var in function definition */
+#define FP	0x04	/* fm bit which marks parameter in function definition */
+#define FA	0x40	/* fm bit which marks assign parameter and variable in function definition */
+#define FM	0x80	/* fm bit wihch marks parameter and local variable in function definition */
 
 /* for use in a union identical first elements can be accesed */
 typedef struct Sym { char *f; char *l; Symbol * v;     } Sym;
@@ -299,7 +300,7 @@ extern int	const_push(Lis * expr);	/* numeric constant push */
 extern List_e *	op_not(List_e *);	/* logical negation */
 extern void	writeCexeString(FILE * oFP, int cn);
 extern void	writeCexeTail(FILE * oFP, const char * tail, int cn);
-extern Symbol *	op_asgn(Sym *, Lis *,	/* asign List_e stack to links */
+extern Symbol *	op_asgn(Sym *, Lis *,	/* assign List_e stack to links */
 	    unsigned char);		/*   var, right, ftyp   */
 extern List_e * bltin(			/* generate built in iC functions */
 	    Sym* fname,			/* function name and ftype */
