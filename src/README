@@ -1,5 +1,5 @@
 
-			immediate C, iC rev icc_2.3
+			immediate C, iC rev icc_2.6
 
 	Copyright © 1985-2016 John E Wulff <immediatec@gmail.com>
 	SPDX-License-Identifier: GPL-2.0+ OR  Artistic-1.0
@@ -18,7 +18,7 @@
 
 --------------------------------------------------------------------------
 
-    Notes for the installation of iC rev icc_2.3
+    Notes for the installation of iC rev icc_2.6
 
     0)	Pre-requisites. You need the following on your system:
 
@@ -299,10 +299,10 @@
 
     Lots of success
 
-    $Id: README 1.28 $
+    $Id: README 1.29 $
 
-    Main development is on openSUSE (currently 13.1) and perlTk
-    Tk804.031, which provides fast live updates in iClive. They seem
+    Main development is on openSUSE (currently Leap 42.1) and perlTk
+    Tk804.033, which provides fast live updates in iClive. They seem
     to be as fast as with Tk800.24. A Test with Knoppix and Tk804.25,
     which is still available for Debian also provided good performance
     with fast live updates in iClive.
