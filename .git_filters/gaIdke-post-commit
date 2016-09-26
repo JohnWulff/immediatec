@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-post-commit 1.7 $
+# $Id: gaIdke-post-commit 1.8 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -29,9 +29,14 @@
 ########################################################################
 
 if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $Ids
+    $ga = $ENV{GAIDKE};			# environment variable GAIDKE can be set to v or V
     while (<SMUDGE>) {
 	($path, $remainder) = split " ", $_, 2;
-	qx(git checkout HEAD $path; rm -f "$path.gaidke");
+	print STDERR "post-commit	$path\n" if $ga =~ m/\bv/i;	# v[erbose]
+	if (-f "$path.gaidke") {
+	    qx(mv -f "$path.gaidke" $path);
+	}
+	qx(git checkout HEAD $path);
     }
     close SMUDGE;
     qx(rm -f .gitSmudgeList);		# do only once at end of commit

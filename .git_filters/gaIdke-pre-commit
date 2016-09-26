@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.13 $
+# $Id: gaIdke-pre-commit 1.14 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -22,7 +22,7 @@
 #         If a file has been renamed, the new path is written in the
 #         $Id: string.
 #
-#         Create a new version 1.1 for a line containing $Id$ to start
+#         Create a new version 1.1 for a line containing $Id: gaIdke-pre-commit 1.2 $ to start
 #         the process.
 #
 #         The above applies if the commit is executed in the master branch.
@@ -56,8 +56,21 @@
 $smudgeList = "";
 @dirtyList = split " ", qx(git diff --name-only);
 @dirtyHash{@dirtyList} = "1" x @dirtyList;	# populate %dirtyHash with number of entries in @dirtyList
-$gBranch = qx(git rev-parse --abbrev-ref HEAD);	# current GIT branch
+$ga = $ENV{GAIDKE};				# environment variable GAIDKE can be set to v or V
+if (length(qx(git branch)) == 0) {
+    $git_base = qx(git rev-parse  --show-toplevel);
+    chomp $git_base;
+    if (-r "$git_base/.git/HEAD") {
+	$gBranch = qx(cat $git_base/.git/HEAD);
+	$gBranch =~ s#([^/]*/)*##;
+    } else {
+	die "Oops - no '.git/HEAD'\n";
+    }
+} else {
+    $gBranch = qx(git rev-parse --abbrev-ref HEAD);	# current GIT branch
+}
 chomp $gBranch;
+print STDERR "pre-commit	branch = $gBranch\n" if $ga =~ m/\bv/i;		# v[erbose]
 
 foreach $path (split " ", qx(git diff --name-only --cached)) {
     next if $dirtyHash{$path} or not -f $path;	# skip dirty or non-existing files - will be comitted without $Id increment
@@ -111,16 +124,18 @@ foreach $path (split " ", qx(git diff --name-only --cached)) {
 			}
 			$minorVersion++;	# increment minor version
 			s/\$Id:\s+([^\$\s]\S*)\s+([^\$\s]\S*)\s+[^\$]*\$/\$Id: $filename $versionHead$minorVersion \$/;
+			print STDERR "pre-commit	$_" if $ga =~ m/\bv/i;	# v[erbose]
 		    }
 		}
 	    }
 	    elsif (m/\$Id\$/) {
 		$mod = "";
 		$versionHead = $gBranch eq "master"
-			     ? "1."		# expand an initial master $Id$ entry
-			     : "1.1.$branch.";	# expand an initial branch $Id$ entry
+			     ? "1."		# expand an initial master $Id: gaIdke-pre-commit 1.1 6d61c17 2016-09-26 18:48:34 +1000 John Wulff $ entry
+			     : "1.1.$branch.";	# expand an initial branch $Id: gaIdke-pre-commit 1.1 6d61c17 2016-09-26 18:48:34 +1000 John Wulff $ entry
 		$minorVersion = 1;
 		s/\$Id\$/\$Id: $filename $versionHead$minorVersion \$/;
+		print STDERR "pre-commit	$_" if $ga =~ m/\bv/i;		# v[erbose]
 	    }
 	}
 	print OUT;
