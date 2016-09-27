@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-post-commit 1.8 $
+# $Id: gaIdke-post-commit 1.9 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -17,14 +17,13 @@
 #         by the commit hash, the author commit date and the author name.
 #         Also remove the backup file here.
 #
-#         The backup could be used here to 'touch -r' the checked out file
-#         to leave the modify date of the file unchanged after git commit,
-#         although it has actually been modified. This would be similar
-#         to the RCS 'co -M' option. Since there is no access to options
-#         in git commit and the git philosophy is to always modify dates
-#         on checkout it was felt best to not touch the checked out file.
-#         This way a make immediately after commit will bring the updated
-#         <rev> Id's into the binaries, if $Ids are stored in binaries.
+#         In GIT versions prior to 2.6.6 'git checkout HEAD' would execute
+#         unconditionally and smudge the file. This no longer happens if
+#         the file to be checked out is identical to the GIT archive file
+#         and has a time stamp of the same second as the GIT archive file.
+#         For this reason the .gaidke backup is moved back to make it
+#         different to the committed file, which also removes it, because
+#         the checked out file overwrites it with the committed file.
 #
 ########################################################################
 
@@ -36,7 +35,7 @@ if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $I
 	if (-f "$path.gaidke") {
 	    qx(mv -f "$path.gaidke" $path);
 	}
-	qx(git checkout HEAD $path);
+	qx(git checkout HEAD $path);	# overwrite old file and smudge committed file
     }
     close SMUDGE;
     qx(rm -f .gitSmudgeList);		# do only once at end of commit

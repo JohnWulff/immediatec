@@ -1,4 +1,4 @@
-$Id: gaIdke-README 1.8 $
+$Id: gaIdke-README 1.9 $
 $IdBlockFurtherExpansion$
 
   Copyright (C) 2016 John E Wulff <immediatec@gmail.com>
@@ -191,6 +191,14 @@ gaIdke-post-commit:
         directory will have a $Id with an incremented <ver> followed
         by the commit hash, the author commit date and the author name.
         Also remove the backup file here.
+
+        In GIT versions prior to 2.6.6 'git checkout HEAD' would execute
+        unconditionally and smudge the file. This no longer happens if
+        the file to be checked out is identical to the GIT archive file
+        and has a time stamp of the same second as the GIT archive file.
+        For this reason the .gaidke backup is moved back to make it
+        different to the committed file, which also removes it, because
+        the checked out file overwrites it with the committed file.
 
 gaIdke.smudge <p1>
         <p1> path of the file to be smudged relative to GIT base.

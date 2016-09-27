@@ -1,7 +1,7 @@
 #!/bin/bash
 ########################################################################
 #
-# $Id: gaIdke-activate 1.3 $
+# $Id: gaIdke-activate 1.4 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -41,7 +41,7 @@ GAIDKE=''
 while :; do
     case "$1" in
     -g|--g*) global=1;;
-    -v|--v*) GAIDKE=v;;
+    -v|--v*) GAIDKE=V;;
     -V|--V*) GAIDKE=V;;
     -h|--h*) usage; exit 0;;
     -?*)     printf 'WARN: Unknown option (ignored): %s\n' "$1" >&2 ;;
@@ -98,7 +98,7 @@ if [ -n "$git_base" ]; then
 	fi
     fi
     if [ ! -f .gitattributes ] || ! grep -q 'filter=gaIdke' .gitattributes; then
-	echo '# $Id: gaIdke-activate 1.2 $' >> .gitattributes
+	echo '# $Id$' >> .gitattributes
 	echo '* filter=gaIdke' >> .gitattributes
 	git add .gitattributes .git_filters/gaIdke*
 	git commit -m "'Automatic GIT Id Keyword Expansion' gaIdke has been activated"
@@ -106,7 +106,9 @@ if [ -n "$git_base" ]; then
     fi
     branch=$(git branch)
     if [ -n "$branch" ]; then
-	git checkout HEAD -- $(grep -El '\$Id: [^$ ][^ ]* [^$ ][^ ]* \$' $(git ls-files))
+	clean_files=$(grep -El '\$Id: [^$ ][^ ]* [^$ ][^ ]* \$' $(git ls-files))
+	touch $clean_files
+	git checkout HEAD -- $clean_files
     fi
     if [ -z "$global" ]; then
 	echo ".git_filters/gaIdke.smudge cannot smudge itself - ignore the previous error" >&2
