@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.76 $";
+"@(#)$Id: icc.c 1.77 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -42,7 +42,7 @@ extern const char	iC_ID[];
 extern const char	iC_PATCH[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
 
-unsigned int		iC_uses = 0;		/* 01=alias 02=strict as bit field */
+unsigned int		iC_uses = USE_STRICT;	/* 01=alias 02=strict; strict is default */
 unsigned int		iC_useStack[USESTACKSZ];
 unsigned int		iC_useStackIndex = 0;
 
@@ -78,7 +78,8 @@ static const char *	usage =
 "        -a              compile with linking information in auxiliary files\n"
 "        -g              each expression has its own C code for debugging with gdb\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
-"        -S              strict compile - all immediate variables must be declared\n"
+"        -S              use strict - immediate variables must be declared (default)\n"
+"        -N              no strict - deprecated style - undeclared variables imm bit\n"
 "        -p              pedantic: warning if variable contains $ (default $ allowed)\n"
 "        -pp             pedantic-error: error if variable contains $\n"
 "        -R              no maximum error count (default: abort after 100 errors)\n"
@@ -713,6 +714,9 @@ main(
 		case 'S':
 		    iC_uses |= USE_STRICT;	/* strict - all imm variables must be declared */
 		    break;
+		case 'N':
+		    iC_uses &= ~USE_STRICT;	/* no strict - strict is now default - JW 20160925 */
+		    break;
 		case 'a':
 		    iC_aflag = 1;		/* append for compile */
 		    break;
@@ -1300,7 +1304,8 @@ immcc - the immediate-C to C compiler
     -a       compile with linking information in auxiliary files
     -g       each expression has its own C code for debugging with gdb
     -A       compile output ARITHMETIC ALIAS nodes for symbol debugging
-    -S       strict compile - all immediate variables must be declared
+    -S       use strict - immediate variables must be declared (default)
+    -N       no strict - deprecated style - undeclared variables imm bit
     -p       pedantic: warning if variable contains $ (default $ allowed)
     -pp      pedantic-error: error if variable contains $
     -R       no maximum error count (default: abort after 100 errors)
@@ -1382,7 +1387,7 @@ carried out. Immediate variables which have been declared but not yet
 assigned may be (multiple) assigned to in the C-code.  Such assignment
 expressions are recognised and converted to function calls, which fire
 all immediate expressions dependent in the immediate variable when its
-value changes.  If the B<strict> option (-S) is used for compilation,
+value changes.  Unless the B<no strict> option (-N) is used for compilation,
 immediate variables to be assigned in C code must be declared with the
 type modifier B<immC> rather than with B<imm>.  This is particularly
 important if an immediate variable assigned to in C code is going to be

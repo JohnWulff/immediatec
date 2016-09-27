@@ -67,9 +67,9 @@ usage ()
   echo '	-g	debugging with gdb - profiling with gprof - each expression has' >&2
   echo '		its own C code - forces -s -- link with static library libict.a' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
-  echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-S	use strict - immediate variables must be declared (default)' >&2
   echo "		forces $IAC to only accept twin braces in FOR ... {{ }}" >&2
-  echo "		-N negates use strict pragmas in $IAC for testing" >&2
+  echo '	-N	no strict - deprecated style - undeclared variables imm bit' >&2
   echo '	-p	pedantic: warning if variable contains $ (default: $ allowed)' >&2
   echo '	-pp	pedantic-error: error if variable contains $' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
@@ -110,11 +110,11 @@ fi
   echo "	-w<dir>	use $IAC, $ICC, pplstfix and libict.a in directory <dir>" >&2
   echo "		(default: use installed $ICC, pplstfix and -lict)" >&2
   echo "	-d<opt>	call $ICC with extra -d<opt> orred into normal -d474" >&2
-  echo "	-N	No nice with calls of $ICC, $CC and $IAC compilers" >&2
+  echo "	-y	No nice with calls of $ICC, $CC and $IAC compilers" >&2
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake,v 1.47 2015/11/02 11:34:56 jw Exp $' >&2
+  echo '	$Id: iCmake 1.48 $' >&2
 }
 
 lwsock32=""
@@ -161,7 +161,7 @@ if $ICC < /dev/null 2>&1| grep -q 'Electric Fence'; then
     ef=" -lefence"
 fi
 
-while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
+while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
     case $opt in
     l )	link=1
 	aux=" -a"			# generate aux files with 'immcc -a' for linking
@@ -192,9 +192,9 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
 	;;
     i )	ic="ica";;
     t )	link=2;;
-    c )	link=3; d="$A$S$R$k";;
+    c )	link=3; d="$A$S$N$R$k";;
     b ) link=4;;
-    n ) link=5; d="$A$S$R$k";;
+    n ) link=5; d="$A$S$N$R$k";;
     s ) lib="${LIB}libict.a$lwsock32"; libfile="${LIB}libict.a";;
     L ) L="$L -$OPTARG";;
     f )	force=1;;
@@ -202,6 +202,7 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     g ) d="$d -g"; CFL="$CFL -g -pg"; lib="${LIB}libict.a$lwsock32"; libfile="${LIB}libict.a";;
     A )	if [ -z "$A" ]; then A=" -A"; d="$d$A"; fi;;
     S )	if [ -z "$S" ]; then S=" -S"; d="$d$S"; fi;;
+    N )	if [ -z "$N" ]; then N=" -N"; d="$d$N"; fi;;
     p )	if [ -z "$p" ]; then p=" -p"; fi; d="$d$p";;	# allows -pp => -p -p (-pedantic cannot handle generated C files)
     R )	if [ -z "$R" ]; then R=" -R"; d="$d$R"; fi;;
     a ) a=" -a";;
@@ -218,7 +219,6 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     6 )	d="$d -d2"; l="6";;
     x )	d="$d -d4000"; x="1";;
     q )	q=1;;
-    N ) nice=""; N=" -N";;
     v ) if [ -z "$b" ]; then
 	    b="./"
 	fi
@@ -247,6 +247,7 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:zh" opt; do
     V ) D="$D -V '$OPTARG'"; C="$C -U '$OPTARG'";;
     P ) P="$P -P '$OPTARG'"; Pa=${OPTARG%=*}; PA="${PA}_${Pa}"; if [ $Pa != $OPTARG ]; then Pz=${OPTARG#$Pa=}; PA="${PA}_${Pz}"; fi;;
     W ) D="$D -W$OPTARG"; if [ "$OPTARG" = "all" ]; then  CFL="$CFL -Wall"; fi;;
+    y ) nice="";;
     z )	z=1;;
     h )	usage; exit 0;;
     \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
@@ -346,7 +347,7 @@ for arg in $*; do
 	case $ext in
 	.lst )	lk=2;;
 	.lst6 )	lk=2; d="$d -d2"; l="6";;
-	.c )	lk=3; d="$A$S$R$k";;
+	.c )	lk=3; d="$A$S$N$R$k";;
 	.ic )	;;
 	.ica )	;;
 	* )	echo "*** bad file extension '$ext' in '$arg'" >&2; usage; exit 127;;
@@ -659,9 +660,9 @@ iCmake - make one or more immediate-C applications
     -g      debugging with gdb - profiling with gprof - each expression has
             its own C code - forces -s -- link with static library libict.a
     -A      compile output ARITHMETIC ALIAS nodes for symbol debugging
-    -S      strict compile - all immediate variables must be declared
+    -S      use strict - immediate variables must be declared (default)
             forces immac to only accept twin braces in FOR ... {{ }}
-            -N negates use strict pragmas in immac for testing
+    -N      no strict - deprecated style - undeclared variables imm bit
     -p      pedantic: warning if variable contains $ (default: $ allowed)
     -pp     pedantic-error: error if variable contains $
     -O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate
@@ -700,7 +701,7 @@ iCmake - make one or more immediate-C applications
     -w<dir> use immac, immcc, pplstfix and libict.a in directory <dir>
             (default: use installed immcc, pplstfix and -lict)
     -d<opt> call immcc with extra -d<opt> orred into normal -d474
-    -N      No nice with calls of immcc, gcc and immac compilers
+    -y      No nice with calls of immcc, gcc and immac compilers
             (default: nice)
     -z      echo compiler calls with all options for debugging
     -h      this help text

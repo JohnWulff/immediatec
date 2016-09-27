@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.68 $
+# @(#)$Id: Makefile.in 1.69 $
 
 #######################################################################
 #
@@ -275,7 +275,7 @@ $(srcdir)/iCrfid.1.gz:	$(srcdir)/iCrfid $(srcdir)/scid.c
 test:
 	@cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 	@echo "compile and generate all executables from iC and iCa files in ${srcdir}/Test0 ..."
-	@-${srcdir}/iCmake -qAIEfw. ${srcdir}/Test0/*.ic*; :
+	@-${srcdir}/iCmake -qANIEfw. ${srcdir}/Test0/*.ic*; :
 	@echo "diffing generated files in ${srcdir}/Test0 with originals in ${srcdir}/Test0/ORG ..."
 	@if ${srcdir}/AuxTools/Mdiff -kLel -I'(eval' ${srcdir}/Test0/ORG/*.* ${srcdir}/Test0; then echo "test OK"; if ! ${srcdir}/iCserver -h 2> /dev/null; then echo "- suggest you install Time::HiRes as described in the README followed by"; fi; echo "- make install as su"; else echo "test FAILED - differences in listed files and ${srcdir}/Test0/ORG"; fi
 

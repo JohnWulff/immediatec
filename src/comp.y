@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.117 $";
+"@(#)$Id: comp.y 1.118 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -324,8 +324,8 @@ outVariable
 	 *	use alias;		// equivalent to -A option
 	 *	no alias;		// turns off -A option
 	 *
-	 *	use strict;		// equivalent to -S option
-	 *	no strict;		// turns off -S option
+	 *	use strict;		// equivalent to -S option - default - JW 20160925
+	 *	no strict;		// equivalent to -N option
 	 *
 	 *	use strict, alias;	// equivalent to -AS option
 	 *	no alias, strict;	// turn off both options
@@ -340,14 +340,20 @@ outVariable
 	 * the -A flag when compiling. The -A compiler flag is still useful
 	 * for generating extra ALIAS nodes for debugging with iClive.
 	 *
-	 * The 'use strict' statement should always be put at the start of
-	 * code in future iC programs. Nevertheless very simple iC programs
-	 * with mainly bit nodes will still work without having to declare
-	 * every variable. The 'no strict' option should be avoided and
-	 * is only included for completeness. It should be very easy to
-	 * add extra declarations to satisfy the 'strict' criterion.
-	 * But one never knows and as a language designer I feel this is
-	 * a good way. (grateful acknowledgements to the designers of PERL)
+	 * The 'use strict' statement is now optional, because since September
+	 * 2016 the 'strict' flag is set by default. It is left for completeness
+	 * to be able to turn the 'strict' flag on if for some reason it was
+	 * turned off with 'no strict' or the -N command line option.
+	 *
+	 * Nevertheless very simple legacy iC programs with mainly bit nodes
+	 * can still be run without the 'strict' flag by compiling such a
+	 * program with the new -N option or writing 'no strict'.
+	 *
+	 * The 'no strict' option should be avoided and is only included for
+	 * completeness. It should be very easy to add extra declarations to
+	 * satisfy the 'strict' criterion.  But one never knows and as a
+	 * language designer I feel this is a good way.
+	 * (grateful acknowledgements to the designers of PERL)
 	 *
 	 * As noted earlier, C functions and macros should be declared
 	 * extern with their correct parameter ramp and return value.
@@ -790,8 +796,8 @@ extDeclHead
 	 * after the declaration like a C initalization, unless the
 	 * declaration is a forward declaration, which is frequently
 	 * necessary). Alternatively a variable declared with a simple
-	 * 'imm' may be assigned in C code unless 'use strict' mode has
-	 * been specified (or -S on the command line). Such a C assignment
+	 * 'imm' may be assigned in C code if 'no strict' mode has
+	 * been specified (or -N on the command line). Such a C assignment
 	 * to an 'imm' variable is deprecated - use 'immC' instead.
 	 * Multiple declarations of the same variable with the same
 	 * immediate type are silently ignored.
@@ -2608,8 +2614,8 @@ tfexpr	: TBLTIN '(' aexpr cref ')'	{
 	 *
 	 * If a C variable, function or macro is going to be used in an iC
 	 * immediate expression it must be declared with an extern C function
-	 * declaration in the iC code - at least if 'use strict' is active.
-	 * (it is - isn't it) Such extern declarations make the debugging
+	 * declaration in the iC code - at least unless 'no strict' is active.
+	 * (it isn't - is it) Such extern declarations make the debugging
 	 * of iC code much simpler. C variables must be declared extern,
 	 * even if not 'strict' because otherwise the compiler would
 	 * identify them as undeclared imm bit variables.
