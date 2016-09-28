@@ -9,12 +9,12 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt,v 1.39 2015/11/01 04:33:48 jw Exp $' >&2
+  echo '$Id: tt 1.40 $' >&2
 }
 
 usage()
 {
-  echo "Usage: $name [-clrgASP[P]RaLNjIJ6x:f:F:zvh][ -O<level>]" >&2
+  echo "Usage: $name [-clrgASNP[P]RaLjIJ6x:f:F:yzvh][ -O<level>]" >&2
   echo "          [ -m<txt>][ -d<opt>][ -x<regex>][ -f|F<filter>] <dir1>[ <dir2>]" >&2
   echo '	-m<txt>	place <txt> message in log file just after full date' >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
@@ -28,7 +28,8 @@ usage()
   echo '	-F<filter> process the second file in an Mdiff by <filter> before diff' >&2
   echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
-  echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-S	use strict - immediate variables must be declared (default)' >&2
+  echo '	-N	no strict - deprecated style - undeclared variables imm bit' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
   echo '	-PP	pedantic-error: error if variable contains $' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
@@ -40,7 +41,6 @@ usage()
   echo '		do an extra run in those test directories which contain iCa files' >&2
   echo '		and make only iCa files and compare them with "<dir1>a"' >&2
   echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
-  echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-E	store error output of iC and C compile in file.ini' >&2
   echo '	-j	append output of an initial run to file.ini      (implies -s)' >&2
   echo '	-I	append output of run INITIALIZATION only to file.ini  ( " -s)' >&2
@@ -48,6 +48,7 @@ usage()
   echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
   echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 Test12 Test13' >&2
   echo '	-T <string of directory names for Test2 group> default Test2 - Test8, Test10' >&2
+  echo '	-y	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-v	author and version information' >&2
   echo '	-h	this help text' >&2
@@ -112,7 +113,7 @@ test2=""
 Test1='Test1 Test9 Test11 Test12 Test13'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
-while getopts ":cm:d:lwrgASO:PRseaLNEjIJ6x:f:F:t:T:zvh" opt; do
+while getopts ":cm:d:lwrgASNO:PRseaLEjIJ6x:f:F:t:T:yzvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
@@ -123,6 +124,7 @@ while getopts ":cm:d:lwrgASO:PRseaLNEjIJ6x:f:F:t:T:zvh" opt; do
     g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";T="strict";;
+    N )	A="$A -N";;
     O )	A="$A -O$OPTARG";;
     P )	if [ -z "$P" ]; then P=" -P";T="pedantic";x="$x -IC.OUTPUT -I__GNUC__ -I__extension__ -I#endif"; fi;A="$A$P";;	# allows -PP => -P -P
     R )	A="$A -R";;
@@ -130,7 +132,6 @@ while getopts ":cm:d:lwrgASO:PRseaLNEjIJ6x:f:F:t:T:zvh" opt; do
     e )	A="$A -e";e=" -I Electric.Fence";;
     a )	ao=a;;
     L )	L=" -L";;
-    N )	A="$A -N";;
     E ) E=" -E";;
     j ) I=" -j";;
     I ) I=" -I";;
@@ -141,10 +142,11 @@ while getopts ":cm:d:lwrgASO:PRseaLNEjIJ6x:f:F:t:T:zvh" opt; do
     F )	F="/home/archiv/bin/$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable" >&2; usage; exit 126; fi; F=" -F$F";;
     t )	test1="$OPTARG";;
     T )	test2="$OPTARG";;
+    y )	A="$A -y";;
     z )	v="$v -z";z="z";;
     v )	version; exit 0;;
     h )	usage; exit 0;;
-    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
+    \?)	echo "$name: illegal option '-$OPTARG' >&2"; usage; exit 127;;
     esac
 done
 

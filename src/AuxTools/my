@@ -2,11 +2,12 @@
 
 usage ()
 {
-  echo "Usage:	${0##*/} [-gASRNjIJ6xzh][ -d<opt>][ -O<level>]" >&2
+  echo "Usage:	${0##*/} [-gASNRjIJ6xyzh][ -d<opt>][ -O<level>]" >&2
   echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
-  echo '	-S	strict compile - all immediate variables must be declared' >&2
+  echo '	-S	use strict - immediate variables must be declared (default)' >&2
+  echo '	-N	no strict - deprecated style - undeclared variables imm bit' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
   echo '	-PP	pedantic-error: error if variable contains $' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
@@ -14,18 +15,18 @@ usage ()
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
-  echo '	-N	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-E	store error output of iC and C compile in file.ini' >&2
   echo '	-j	append output of an initial run to file.ini      (implies -s)' >&2
   echo '	-I	append output of run INITIALIZATION only to file.ini  ( " -s)' >&2
   echo '	-J	append output of full INITIALIZATION info to file.ini ( " -s)' >&2
   echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
   echo '	-x	auxiliary files .iC_list1.h .iC_list2.h not deleted' >&2
+  echo '	-y	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
   echo 'uses immcc -d76 -d<opt> -O<level> x.ic to make each line of the list pp.lt' >&2
   echo 'uses immcc -d74 -d<opt> -O<level> -o x.c x.ic to make each line of the list pp.lt' >&2
-  echo '	$Id: my,v 1.20 2015/11/01 04:34:32 jw Exp $' >&2
+  echo '	$Id: my 1.21 $' >&2
 }
 
 d=""
@@ -36,27 +37,28 @@ E=""
 I=""
 g=""
 
-while getopts ":d:gASO:PRseNEjIJ6xzh" opt; do
+while getopts ":d:gASNO:PRseEjIJ6xyzh" opt; do
     case $opt in
     d ) d="$d -d$OPTARG";;
     g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";;
+    N )	A="$A -N";;
     O )	A="$A -O$OPTARG";;
     P )	A="$A -P";;
     R )	A="$A -R";;
     s )	A="$A -s";;
     e )	A="$A -e";;
-    N )	A="$A -N";;
     E ) E=" -E";;
     j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
     6 ) g="6";;
     x )	x=" -x";A="$A -x";;
+    y )	A="$A -y";;
     z )	z=" -z";A="$A -z";;
     h )	usage; exit 0;;
-    \?)	echo "$name: illegal option '-$OPTARG'"; usage; exit 127;;
+    \?)	echo "$name: illegal option '-$OPTARG'" >&2; usage; exit 127;;
     esac
 done
 shift $(($OPTIND - 1))
