@@ -738,7 +738,7 @@
 	I5      ? ---|
 
 105	v6 = LATCH(I6, I7);		// unclocked latch
-*** Warning: input equals output at gate: v6 File ./Test0/demo.ic, line 105
+*** Error: input equals output at gate: v6 File ./Test0/demo.ic, line 105
 
 	v6      ? ---?  v6
 	I6      ? ---?
@@ -1191,12 +1191,5 @@ IX3.6   <
 IX3.7   <
 *** Warning: unused    imm bit: IX3.7 File ./Test0/demo.ic, line 165
 O0      ?
-*** Warning: unused    imm bit: O0 File ./Test0/demo.ic, line 165
 *** Error: gate: O0 File ./Test0/demo.ic, line 165
-O0_1    &     O0?
-O0_2    &     O0?
-O0_3    &     O0?
-O1      ?
-*** Warning: unused    imm bit: O1 File ./Test0/demo.ic, line 165
-*** Error: gate: O1 File ./Test0/demo.ic, line 165
 *** Error: too many errors - compilation aborted. File ./Test0/demo.ic, line 165

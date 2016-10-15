@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c,v 1.41 2015/12/04 23:57:09 jw Exp $";
+"@(#)$Id: scan.c 1.42 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -649,10 +649,23 @@ gate3(Gate * gp, int typ)				/* Pass3 init on gates */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	switch (typ) {
 	case ARNC:
+	    if (gp->gt_fni == UDFA) {
+		gp->gt_old = gp->gt_mark;		/* immC array size */
+	    } else {
+		gp->gt_old = gp->gt_new;		/* immC int may be initialised to non-zero */
+	    }
+	    gp->gt_val = 1;
+	    break;
 	case LOGC:
+	    if ((gp->gt_new & ~0x1) != 0) {
+		fprintf(iC_outFP,
+		    "\nWarning:    %d	%s\timmC bit initialiser should be 1 or 0 (default)",
+		    gp->gt_new, gp->gt_ids);
+		    iC_error_flag |= 1;			/* can execute with this warning */
+	    }
+	    gp->gt_val = gp->gt_new ? -1 : 1;		/* initialise immC bit to 1 or 0 */
 	    gp->gt_new = 0;
 	    gp->gt_old = gp->gt_mark;			/* immC array size if array else 0 */
-	    gp->gt_val = 1;
 	    break;
 	case ARN:
 	    gp->gt_new = gp->gt_old = 0;
@@ -847,11 +860,12 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 	    /************************************************************
 	     * Scan normal logical outputs
 	     ***********************************************************/
-	    while ((gp = *lp++) != 0) {			/* ignore direct outputs except F_SW F_CE */
+	    while ((gp = *lp++) != 0) {			/* ignore direct outputs except F_SW F_CE and pre-initialised immC bits */
+		/************************************************************
+		 * no need to optimize for GATEX in this initialization
+		 * - always test for XOR
+		 ***********************************************************/
 		if (gp->gt_fni == F_SW || gp->gt_fni == F_CE) {
-		    /************************************************************
-		     * Special initial treatment for ftypes F_SW F_CE normal outputs
-		     ***********************************************************/
 		    iC_scan_cnt++;			/* count scan operations */
 #if YYDEBUG && !defined(_WINDOWS)
 		    iC_gx = gp;				/* save old gp in iC_gx */
@@ -863,11 +877,81 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 			    iC_dc = 1;
 			    fprintf(iC_outFP, "\n\t");
 			}
-			fprintf(iC_outFP, "\t%s %+d ==>", gp->gt_ids, gp->gt_val);
 		    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
+		    /************************************************************
+		     * Special initial treatment for ftypes F_SW F_CE normal 1 outputs
+		     ***********************************************************/
+		    if (op->gt_ini == -LOGC && op->gt_val < 0) {	/* only initialised immC bit */
+			if (gp->gt_ini != 0) {		/* logic not including XOR */
+#if YYDEBUG && !defined(_WINDOWS)
+			    if (iC_debug & 0100) {
+				fprintf(iC_outFP, "\t%s %+d +=>", gp->gt_ids, gp->gt_val);
+			    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			    /************************************************************
+			     * GATE logical types AND OR LATCH for normal 1 outputs
+			     ***********************************************************/
+			    if (--gp->gt_val == 0) {	/* gate function */
+				--gp->gt_val;
+			    }
+			} else {
+#if YYDEBUG && !defined(_WINDOWS)
+			    if (iC_debug & 0100) {
+				fprintf(iC_outFP, "\t%s %+d ^=>", gp->gt_ids, gp->gt_val);
+			    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			    /************************************************************
+			     * XOR for normal 1 outputs
+			     ***********************************************************/
+			    gp->gt_val = -gp->gt_val;	/* xor independent of change */
+			}
+		    } else {
+			fprintf(iC_outFP, "\t%s %+d ==>", gp->gt_ids, gp->gt_val);
+		    }
 		    if (gp->gt_next == 0) {		/* execute unconditionally unless linked */
 			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_cl() */
+		    }
+#if YYDEBUG && !defined(_WINDOWS)
+		    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", iC_gx->gt_val);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		} else if (op->gt_ini == -LOGC && op->gt_val < 0) {	/* only initialised immC bit */
+		    /************************************************************
+		     * Initial treatment for normal 1 outputs
+		     ***********************************************************/
+		    if (gp->gt_ini != 0) {		/* logic not including XOR */
+			iC_scan_cnt++;			/* count scan operations */
+#if YYDEBUG && !defined(_WINDOWS)
+			iC_gx = gp;			/* save old gp in iC_gx */
+			if (iC_debug & 0100) {
+			    if (iC_dc == 0) {
+				fprintf(iC_outFP, "\n%s:	%+d", op->gt_ids, op->gt_val);
+			    }
+			    if (iC_dc++ >= 4) {
+				iC_dc = 1;
+				fprintf(iC_outFP, "\n\t");
+			    }
+			    fprintf(iC_outFP, "\t%s %+d -=>", gp->gt_ids, gp->gt_val);
+			}
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			/************************************************************
+			 * GATE logical types AND OR LATCH for normal 1 outputs
+			 ***********************************************************/
+			if (--gp->gt_val == 0) {	/* gate function */
+			    --gp->gt_val;
+			    (*initAct[gp->gt_fni])(gp, iC_o_list);	/* init action */
+			}
+		    } else {
+#if YYDEBUG && !defined(_WINDOWS)
+			if (iC_debug & 0100) {
+			    fprintf(iC_outFP, "\t%s %+d ^=>", gp->gt_ids, gp->gt_val);
+			}
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			/************************************************************
+			 * XOR for normal 1 outputs
+			 ***********************************************************/
+			gp->gt_val = -gp->gt_val;	/* xor independent of change */
+			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* init action every time */
 		    }
 #if YYDEBUG && !defined(_WINDOWS)
 		    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", iC_gx->gt_val);
@@ -896,38 +980,40 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 		}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		if (gp->gt_fni == F_SW || gp->gt_fni == F_CE) {
-		    /************************************************************
-		     * Special initial treatment for ftypes F_SW F_CE inverted outputs
-		     ***********************************************************/
-		    if (gp->gt_ini != 0) {		/* logic not including XOR */
-#if YYDEBUG && !defined(_WINDOWS)
-			if (iC_debug & 0100) {
-			    fprintf(iC_outFP, "\t%s %+d -=>", gp->gt_ids, gp->gt_val);
-			}
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		    if (op->gt_ini != -LOGC || op->gt_val > 0) {	/* except initialised immC bit */
 			/************************************************************
-			 * GATE logical types AND OR LATCH for inverted outputs
+			 * Special initial treatment for ftypes F_SW F_CE inverted 0 outputs
 			 ***********************************************************/
-			if (--gp->gt_val == 0) {	/* gate function */
-			    --gp->gt_val;
-			}
-		    } else {
+			if (gp->gt_ini != 0) {		/* logic not including XOR */
 #if YYDEBUG && !defined(_WINDOWS)
-			if (iC_debug & 0100) {
-			    fprintf(iC_outFP, "\t%s %+d ^=>", gp->gt_ids, gp->gt_val);
-			}
+			    if (iC_debug & 0100) {
+				fprintf(iC_outFP, "\t%s %+d -=>", gp->gt_ids, gp->gt_val);
+			    }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-			/************************************************************
-			 * XOR for inverted outputs
-			 ***********************************************************/
-			gp->gt_val = -gp->gt_val;	/* xor independent of change */
+			    /************************************************************
+			     * GATE logical types AND OR LATCH for inverted 0 outputs
+			     ***********************************************************/
+			    if (--gp->gt_val == 0) {	/* gate function */
+				--gp->gt_val;
+			    }
+			} else {
+#if YYDEBUG && !defined(_WINDOWS)
+			    if (iC_debug & 0100) {
+				fprintf(iC_outFP, "\t%s %+d ^=>", gp->gt_ids, gp->gt_val);
+			    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			    /************************************************************
+			     * XOR for inverted 0 outputs
+			     ***********************************************************/
+			    gp->gt_val = -gp->gt_val;	/* xor independent of change */
+			}
 		    }
 		    if (gp->gt_next == 0) {		/* execute unconditionally unless linked */
 			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_cl() */
 		    }
-		} else {
+		} else if (op->gt_ini != -LOGC || op->gt_val > 0) {	/* except initialised immC bit */
 		    /************************************************************
-		     * Initial treatment for inverted outputs
+		     * Initial treatment for inverted 0 outputs (exclude inverted 1 immC bits)
 		     ***********************************************************/
 		    if (gp->gt_ini != 0) {		/* logic not including XOR */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -936,7 +1022,7 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 			}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 			/************************************************************
-			 * GATE logical types AND OR LATCH for inverted outputs
+			 * GATE logical types AND OR LATCH for inverted 0 outputs
 			 ***********************************************************/
 			if (--gp->gt_val == 0) {	/* gate function */
 			    --gp->gt_val;
@@ -949,7 +1035,7 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 			}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 			/************************************************************
-			 * XOR for inverted outputs
+			 * XOR for inverted 0 outputs
 			 ***********************************************************/
 			gp->gt_val = -gp->gt_val;	/* xor independent of change */
 			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* init action every time */

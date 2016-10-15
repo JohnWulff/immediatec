@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.69 $";
+"@(#)$Id: comp.h 1.70 $";
 
 #include	<setjmp.h>
 
@@ -94,10 +94,13 @@ typedef	struct Symbol {		/* symbol table entry */
 #define EX	0x02	/* em bit mask for extern immC - can be used and defined externally */
 #define TM1	0x04	/* em bit mask for TIMER1 */
 #define AU_OFS	4	/* em offset for immC bit masks */
+#define EO	0x08	/* em bit to indicate LOUT or AOUT Q... variable recognised in iClex */
 #define EA	0x10	/* (1<<AU_OFS)   em bit mask for immC variable defined (replaces VAR_ASSIGN) */
 #define EU	0x20	/* (2<<AU_OFS+1) em bit mask for immC variable used (replaces VAR_USE) */
 #define AU	0x30	/* (EA|EU)       em bit mask for immC variable used or defined (replaces USE_MASK) */
 			/* if no higher bits in em AU need not be used after shifting EA or EU (use anyway) */
+#define EI	0x40	/* em bit to indicate immC initialiser has been saved */
+#define ED	0x80	/* em bit to indicate immC variable has been defined in listGenOut() */
 
 #define FU	0x03	/* fm bit mask for use count 0, 1 or 2 */
 #define FI	0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
@@ -240,6 +243,14 @@ typedef struct FuUse {			/* Function call count and C expression */
 #endif	/* BOOT_COMPILE */
 } FuUse;
 
+typedef struct immCini {			/* dynamic auxiliary list element for saving immC initialisers */
+    Symbol *	symbol;
+    int		value;
+} immCini;
+
+extern immCini*	iC_iniList;		/* dynamic auxiliary list for saving immC initialisers */
+extern immCini*	iC_inip;		/* stored in listGenOut(); used in iC_outNet() */
+
 extern FuUse *	functionUse;		/* database to record function calls */
 extern int	functionUseSize;	/* dynamic size adjusted with realloc */
 
@@ -267,7 +278,7 @@ extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
 extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
 	    Sym * sv, Lis * lv, int ioTyp);
 extern void	listGenOut(		/* listing for undefined immC variable */
-	    Symbol * sp, int size);
+	    Symbol * sp, int size, int ini);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
 extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
 	    Symbol * cName, List_e * cParams, int pcnt);

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.87 $";
+"@(#)$Id: genr.c 1.88 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -39,6 +39,7 @@ lp->le_sym ? lp->le_sym->name : "(0)"
 #define ETX	'\x03'
 #define CASIZE	64
 #define FLPSIZE	64
+#define INISIZE	64
 
 FuUse *		functionUse = NULL;	/* database to record function calls */
 int		functionUseSize = 0;	/* dynamic size adjusted with realloc */
@@ -84,6 +85,9 @@ static int	caSize = 0;		/* allocated size of caList */
 static List_e**	flpList = NULL;		/* dynamic auxiliary list for if else switch variables */
 static int	flpSize = 0;		/* allocated size of flpList */
 static List_e**	flpp = NULL;
+immCini*	iC_iniList = NULL;	/* dynamic auxiliary list for saving immC initialisers */
+static int	iniSize = 0;		/* allocated size of iC_iniList */
+immCini*	iC_inip = NULL;
 
 static Sym	vaList[0x80];		/* stores text and Symbol pointers for repeat elements */
 int		z = 0;			/* index into vaList[] - circular list of 128 elements */
@@ -2456,51 +2460,105 @@ assignOutput(Symbol * rsp, int ftyp, int ioTyp)
  *	Generate and assign output I/O if it is a Q[XBWL]n variable
  *
  *	Format lists with size - if size == 0 put lines close together
- *				    size  > 0 space 1 line before and after
+ *				 if size != 0 space 1 line before and after
+ *				 if size >= 0 no ini value output
+ *				 if size <  0 output ini value in listing
+ *					      save ini value in a dynamic array
  *	if sp is an immC array ((ARNC || LOGC) && UDFA) size is array size
+ *
+ *	Set 'em' bit ED in Symbol to indicate that an immC variable has
+ *	been defined.
+ *	Set 'em' bit EI in Symbol to indicate that an initialiser has
+ *	been saved.
  *
  *******************************************************************/
 
 void
-listGenOut(Symbol * sp, int size)
+listGenOut(Symbol * sp, int size, int ini)
 {
     char *	name;
-    char	y1[2];
-    int		yn;
     int		ioTyp;
     static int	shortFlag;
 
-    if (iC_debug & 04) {
-	/********************************************************************
-	 * compile listing output for undefined C variable
-	 *******************************************************************/
-	if (sp) {
-	    if (size) {
-		fprintf(iC_outFP, "\n");/* NL at beginning of item */
-		shortFlag = 0;		/* reset list */
-	    } else {
-		shortFlag = 1;		/* a list item was seen */
-	    }
-	    fprintf(iC_outFP, "\t\t= ---%c\t%s", iC_os[sp->type], sp->name);
-	    if (sp->ftype != GATE) {
-		if (sp->ftype == UDFA && (sp->type == ARNC || sp->type == LOGC)) {
-		    fprintf(iC_outFP, "\t[%d]", size);	/* immC array size */
+    if (sp == NULL || (sp->em & ED) == 0) {	/* do not repeat if already defined */
+	if (iC_debug & 04) {
+	    /********************************************************************
+	     * compile listing output for undefined C variable
+	     *******************************************************************/
+	    if (sp) {
+		if (size != 0) {
+		    fprintf(iC_outFP, "\n");/* NL at beginning of item */
+		    shortFlag = 0;		/* reset list */
 		} else {
-		    fprintf(iC_outFP, "\t%c", iC_fos[sp->ftype]);
+		    shortFlag = 1;		/* a list item was seen */
 		}
+		fprintf(iC_outFP, "\t\t= ---%c\t%s", iC_os[sp->type], sp->name);
+		if (sp->ftype != GATE) {
+		    if (sp->ftype == UDFA && (sp->type == ARNC || sp->type == LOGC)) {
+			fprintf(iC_outFP, "\t[%d]", size);	/* immC array size */
+		    } else {
+			fprintf(iC_outFP, "\t%c", iC_fos[sp->ftype]);
+		    }
+		}
+		if (size < 0) {
+		    if (sp->ftype == GATE) fprintf(iC_outFP, "\t");
+		    fprintf(iC_outFP, "\t%d", ini);	/* initialiser value */
+		}
+		fprintf(iC_outFP, "\n");	/* NL at end of item */
 	    }
-	    fprintf(iC_outFP, "\n");	/* NL at end of item */
+	    if (size != 0 && (sp != NULL || shortFlag)) {
+		fprintf(iC_outFP, "\n");	/* extra NL at end of single item or list */
+	    }
 	}
-	if (size && (sp || shortFlag)) {
-	    fprintf(iC_outFP, "\n");	/* extra NL at end of single item or list */
+	if (sp) {
+	    sp->em |= ED;			/* immC variable has been defined */
+	    if (size < 0) {
+		/********************************************************************
+		 * Save immC int or immC bit initialiser value in a dynamic array
+		 * 'iC_iniList[]', since there are no spare members in Symbol.
+		 *******************************************************************/
+		if (iC_inip - iC_iniList >= iniSize) {
+		    iC_iniList = (immCini*)realloc(iC_iniList,	/* initially NULL */
+			(iniSize + INISIZE) * sizeof(immCini));
+		    assert(iC_iniList);
+		    memset(&iC_iniList[iniSize], '\0', INISIZE * sizeof(immCini));
+		    iniSize += INISIZE;	/* increase the size of the array */
+		    if (iC_inip == NULL) {
+			iC_inip = iC_iniList;
+		    }
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402)
+			fprintf(iC_outFP, "listGenOut: iC_iniList[%d] increase\n", iniSize);
+#endif
+		}
+		iC_inip->symbol = sp;	/* allows searching for the Symbol */
+		iC_inip->value  = ini;	/* corresponding initial value */
+		iC_inip++;			/* ready for next entry to iC_iniList */
+		sp->em |= EI;		/* mark that initialiser is available */
+	    }
+	    if (sp->em & EO) {		/* QXx.y QBz etc */
+		/********************************************************************
+		 * generate and assign output I/O
+		 *******************************************************************/
+		name = sp->name;
+		assert(name[0] == 'Q');
+		switch (name[1]) {
+		case 'X':
+		    ioTyp = OUTX;
+		    break;
+		case 'B':
+		case 'W':
+		case 'L':
+		case 'H':
+		    ioTyp = OUTW;
+		    break;
+		default:
+		    assert(0);		/* illegal Q variable */
+		    break;
+		}
+		assignOutput(sp, sp->ftype, ioTyp);	/* assign to I/O output variable */
+	    }
 	}
-    }
-    if (sp && (name = sp->name) && sscanf(name, "Q%1[XBWL]%d", y1, &yn) == 2) {
-	/********************************************************************
-	 * generate and assign output I/O
-	 *******************************************************************/
-	ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
-	assignOutput(sp, sp->ftype, ioTyp);	/* assign to I/O output variable */
     }
 } /* listGenOut */
 
@@ -3766,6 +3824,14 @@ handleRealParameter(List_e * plp, List_e * lp)
 		}
 		break;
 	    case ARITH:
+		/********************************************************************
+		 *  A formal const parameter must be matched by a real parameter with
+		 *  type NCONST, which is either a constant number or a constant expression
+		 *******************************************************************/
+		if (fsp->type == NCONST && rsp->type != NCONST) {
+		    ierror("formal const parameter not matched by a constant expression:", rsp->name);
+		    rsp->type = ERR;		/* check for ERR when using this parameter */
+		}	/* could use else here because bit clock or timer will not be NCONST (?) */
 		if (rsp->ftype == GATE) {
 		    if (fsp->u_blist == 0) {	/* assign parameter forced in op_asgn */
 			rlp = op_force(rlp, ARITH);	/* force value parameter to int */
@@ -4563,8 +4629,6 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	typ = sp1->type;
 	assert(lp);				/* internal Symbols linked in pass 1 */
 	if ((sv.v = lp->le_sym) != functionHead) {
-	    char	y1[2];			/* assign parameter or internal Symbol */
-	    int		yn;
 	    int		ioTyp;
 	    /********************************************************************
 	     * assign the expression associated with this assign para or internal statement
@@ -4574,15 +4638,15 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	    sv.f = sv.l = sl.f = sl.l = 0;	/* clear internal expression text */
 	    if (typ == ARNC || typ == LOGC) {
 		if (sp1->u_blist == 0) {
-		    listGenOut(sv.v, 1);	/* listing of immC variable + possible real output */
+		    listGenOut(sv.v, 1, 0);	/* listing of immC variable + possible real output */
 		} else if (sp1->ftype == UDFA) {
 		    assert(sv.v->list);
-		    listGenOut(sv.v, sv.v->list->le_val & VAL_MASK);/* listing of immC array variable */
+		    listGenOut(sv.v, sv.v->list->le_val & VAL_MASK, 0);/* listing of immC array variable */
 		    for (lp1 = sv.v->list; lp1; lp1 = lp1->le_next) {
 			assert(lp1->le_sym);
 			if ((sp2 = lp1->le_sym)->type == UDF) {
 			    sp2->type = typ;		/* type UDF for auto members in Pass1 */
-			    listGenOut(lp1->le_sym, 0);	/* listing of auto immC array member */
+			    listGenOut(lp1->le_sym, 0, 0);	/* listing of auto immC array member */
 			}
 		    }
 		} else {
@@ -4612,8 +4676,23 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 			sl.l = sl.v->le_last;
 		    }
 		}
-		if ((name = sv.v->name) && sscanf(name, "Q%1[XBWL]%d", y1, &yn) == 2) {
-		    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
+		if (sv.v->em & EO) {		/* QXx.y QBz etc */
+		    name = sv.v->name;
+		    assert(name[0] == 'Q');
+		    switch (name[1]) {
+		    case 'X':
+			ioTyp = OUTX;
+			break;
+		    case 'B':
+		    case 'W':
+		    case 'L':
+		    case 'H':
+			ioTyp = OUTW;
+			break;
+		    default:
+			assert(0);		/* illegal Q variable */
+			break;
+		    }
 		} else {
 		    ioTyp = 0;			/* flags that no I/O is generated */
 		}

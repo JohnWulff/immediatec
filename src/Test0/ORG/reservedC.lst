@@ -27,7 +27,7 @@
 023	imm bit char		= IX0.0 & IX0.1;
 *** ------------^ syntax error, unexpected LEXERR 4 in ./Test0/reservedC.ic
 024	imm bit const		= IX0.0 & IX0.1;
-*** ------------^ syntax error, unexpected LEXERR 5 in ./Test0/reservedC.ic
+*** ------------^ syntax error, unexpected CONST 5 in ./Test0/reservedC.ic
 025	imm bit continue	= IX0.0 & IX0.1;
 *** ------------^ syntax error, unexpected LEXERR 6 in ./Test0/reservedC.ic
 026	imm bit default		= IX0.0 & IX0.1;
@@ -148,6 +148,6 @@ TOTAL	       4 blocks
 	       6 links
 
 compiled by:
-@(#)     $Id: reservedC.lst,v 1.1 2015/06/03 11:13:29 jw Exp $ -O7
+$Revision: icc_2.6-5-g921c98d-dirty $ -O7
 *** Warning: 4 unused gates. File ./Test0/reservedC.ic, line 77
 *** Error: 35 syntax and 1 generate errors - cannot execute. File ./Test0/reservedC.ic, line 77

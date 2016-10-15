@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.118 $";
+"@(#)$Id: comp.y 1.119 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -177,14 +177,15 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %ifdef	BOOT_COMPILE
 %token	<sym>	BFORCE BLTIN1 BLTINC BLTIN2 BLTIN3 CBLTIN TBLTIN TBLTI1
 %endif	/* BOOT_COMPILE */
-%token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM VOID TYPE SIZEOF
+%token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM IMMC VOID CONST TYPE SIZEOF
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
 %token	<vai>	CCFRAG NUMBER
 %token	<str>	LEXERR COMMENTEND LHEAD BE
 %type	<sym>	program statement funcStatement simpleStatement asgnStatement iFunDef iFunHead
-%type	<sym>	return_statement formalParameter lBlock dVariable valueVariable cVariable outVariable
-%type	<sym>	useFlag decl extDecl immDecl asgn dasgn casgn dcasgn tasgn dtasgn
-%type	<sym>	iFunTrigger vFunCall rParams rPlist
+%type	<sym>	return_statement formalParameter lBlock dVariable dIVariable dIMVariable dMVariable
+%type	<sym>	dCVariable valueVariable valueIVariable valueCVariable cVariable outVariable
+%type	<sym>	useFlag decl declC extDecl immDecl immCDecl asgn dasgn casgn dcasgn tasgn dtasgn
+%type	<sym>	iFunTrigger vFunCall rParams rPlist immT constType
 %type	<sym>	extCdecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
 %type	<list>	expr aexpr cexpr texpr actexpr comma_expr cexpr_comma_expr texpr_comma_expr ractexpr
 %ifdef	BOOT_COMPILE
@@ -193,7 +194,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %type	<list>	cref ctref ctdref cCall cParams cPlist dPar immCini immCiniList ifini ffexpr
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall
 %type	<vai>	cBlock dParams dPlist immCindex Constant constExpr
-%type	<typ>	declHead extDeclHead formalParaTypeDecl extCdeclHead
+%type	<typ>	declHead declCHead extDeclHead formalParaTypeDecl extCdeclHead
 %type	<str>	'{' '"' '\'' '}'	/* C/C++ brackets */
 %left	<str>	','		/* comma, function seperator */
 %right	<str>	'=' OPE
@@ -262,11 +263,19 @@ funcStatement
 simpleStatement
 	: asgnStatement		{ $$   = $1; }		/* empty or all assignments and vFunCall */
 	| useFlag		{ $$   = $1; }		/* use flags */
-	| immDecl		{			/* immediate declaration */
+	| immDecl		{			/* imm declaration */
 		$$   = $1;
 		iFunSyText = 0;
 	    }
 	| immDecl ','		{			/* " new style for immac which can generate ,; */
+		$$   = $1;
+		iFunSyText = 0;
+	    }
+	| immCDecl		{			/* immC declaration */
+		$$   = $1;
+		iFunSyText = 0;
+	    }
+	| immCDecl ','		{			/* " new style for immac which can generate ,; */
 		$$   = $1;
 		iFunSyText = 0;
 	    }
@@ -295,20 +304,47 @@ asgnStatement			/* all declarations are not 'asgnStatement' because they may con
 	;
 
 dVariable
-	: valueVariable		{ $$   = $1; }		/* value variable */
-	| outVariable		{ $$   = $1; }		/* output variable */
-	| CVAR			{ $$   = $1; }		/* clock variable */
-	| TVAR			{ $$   = $1; }		/* timer variable */
-	| Constant		{			/* numeric expression */
+	: valueVariable		{ $$   = $1; }		/* imm value variable LVAR AVAR LVARC AVARC */
+	| outVariable		{ $$   = $1; }		/* output variable LOUT AOUT */
+	| dMVariable		{ $$   = $1; }		/* misc variable CVAR TVAR Constant */
+	;
+
+dIVariable
+	: dIMVariable		{ $$   = $1; }		/* imm value variable LVAR AVAR CVAR TVAR Constant */
+	| outVariable		{ $$   = $1; }		/* output variable LOUT AOUT */
+	;
+
+dIMVariable
+	: valueIVariable	{ $$   = $1; }		/* imm value variable LVAR AVAR */
+	| dMVariable		{ $$   = $1; }		/* misc variable CVAR TVAR Constant */
+	;
+
+dMVariable
+	: CVAR			{ $$   = $1; }		/* clock variable CVAR */
+	| TVAR			{ $$   = $1; }		/* timer variable TVAR */
+	| Constant		{			/* numeric constant */
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = 0;				/* no node, do not need value */
 	    }
 	;
 
+dCVariable
+	: valueCVariable	{ $$   = $1; }		/* imm value variable LVARC AVARC */
+	| outVariable		{ $$   = $1; }		/* output variable LOUT AOUT */
+	;
+
 valueVariable
+	: valueIVariable	{ $$   = $1; }		/* LVAR AVAR */
+	| valueCVariable	{ $$   = $1; }		/* LVARC AVARC */
+	;
+
+valueIVariable
 	: LVAR			{ $$   = $1; }		/* logical bit variable */
 	| AVAR			{ $$   = $1; }		/* arithmetic variable */
-	| LVARC			{ $$   = $1; }		/* logical C bit variable */
+	;
+
+valueCVariable
+	: LVARC			{ $$   = $1; }		/* logical C bit variable */
 	| AVARC			{ $$   = $1; }		/* arithmetic C variable */
 	;
 
@@ -680,7 +716,7 @@ extDecl	: extDeclHead UNDEF	{
 		$$.v = $2.v;
 		$$.v->ftype = $1.v.ftype;
 		$$.v->type  = $1.v.type;
-		assert($1.v.em & (EM|EX));	/* has been set in extDeclHead */
+		assert(($1.v.em & (EM|EX)) == (EM|EX));	/* has been set in extDeclHead */
 		$$.v->em    |= EM|EX;		/* set em for extern declaration */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) {
@@ -688,33 +724,36 @@ extDecl	: extDeclHead UNDEF	{
 		}
 #endif
 	    }
-	| extDeclHead dVariable	{
-		int		typ;
+	| extDeclHead dVariable	{		/* LVAR AVAR LVARC AVARC LOUT AOUT CVAR TVAR Constant */
 		int		typ1;
+		int		typ2;
+		int		ftyp;
 		char *		cp;
 		Symbol *	sp;
 		typ1  = $1.v.type;		/* UDF for all TYPEs except ARNC LOGC INPX INPW */
 		sp = $$.v = $2.v;
 		if (sp) {
 		    assert(($1.v.em & (EM|EX)) == (EM|EX));	/* has been set in extDeclHead */
-		    if (((typ = sp->type) == INPW || typ == INPX) &&
+		    if (((typ2 = sp->type) == INPW || typ2 == INPX) &&
 			(typ1 == ARNC || typ1 == LOGC) &&
 			sp->type != ERR) {
 			ierror("extern immC declaration of an input variable is invalid:", sp->name);
 		    } else
-		    if (sp->ftype != $1.v.ftype && sp->type != ERR) {
+		    if (sp->ftype != (ftyp = $1.v.ftype) && sp->type != ERR) {
 			ierror("extern declaration does not match previous declaration:", sp->name);
 			sp->type = ERR;	/* cannot execute properly */
 		    }
 		    if (iFunSymExt && (cp = strchr(sp->name, '@'))) {
 			warning("extern declaration of internal function variable - ignored:", cp+1);
 		    } else
-		    if (typ == UDF ||			/* extern of unused imm or QXx.y QBz */
-			typ == INPW || typ == INPX ||	/* or IXx.y IBz */
-			((sp->em & EM) && typ != ERR)) {/* or prev extern but not ERROR */
-			if (typ != INPW && typ != INPX) {
-			    sp->ftype = $1.v.ftype;
-			    sp->type  = $1.v.type;	/* UDF unless ARNC or LOGC */
+		    if (typ2 == UDF ||			/* extern of unused imm or QXx.y QBz */
+			typ2 == INPW || typ2 == INPX ||	/* or IXx.y IBz */
+			((sp->em & EM) && typ2 != ERR)) {	/* or prev extern but not ERROR */
+			if (typ2 != INPW && typ2 != INPX) {
+			    if ((sp->em & EO) == 0) {
+				sp->ftype = ftyp;	/* adjust ftype from extern type unless QXx.y QBz */
+			    }
+			    sp->type  = typ1;		/* adjust type UDF unless ARNC or LOGC */
 			}
 			sp->em    |= EM|EX;		/* set em for extern declaration */
 		    } else
@@ -722,7 +761,7 @@ extDecl	: extDeclHead UNDEF	{
 			ierror("extern declaration in function definition after assignment:", sp->name);
 			sp->type = ERR;	/* stop use as a statement in function */
 			sp->em   |= EM|EX;
-		    } else if (typ == ARNC || typ == LOGC) {
+		    } else if (typ2 == ARNC || typ2 == LOGC) {
 			warning("extern immC declaration after definition - ignored:", sp->name);
 		    }
 #if YYDEBUG
@@ -736,12 +775,16 @@ extDecl	: extDeclHead UNDEF	{
 	    }
 	;
 
+immT	: IMM			{ $$   = $1; }		/* imm */
+	| IMMC			{ $$   = $1; }		/* immC */
+	;
+
 extDeclHead
-	: EXTERN IMM TYPE	{
+	: EXTERN immT TYPE	{
 		int		typ;
 		int		ftyp;
 		ftyp = $3.v->ftype;		/* ARITH GATE CLCKL TIMRL */
-		if ($2.v->ftype == 1) {		/* ftype field in IMM for immC */
+		if ($2.v->ftype == 1) {		/* ftype field in IMMC for immC */
 		    if (ftyp == ARITH) {
 			typ = ARNC;		/* immC int */
 		    } else
@@ -751,7 +794,7 @@ extDeclHead
 			warning("extern declaration of an immC type other than bit or int - ignore:", $3.v->name);
 			goto extImmType;
 		    }
-		} else {			/* IMM is imm */
+		} else {			/* immT is imm */
 		  extImmType:
 		    if (ftyp >= CLCKL) {	/* check that CLCKL TIMRL */
 			ftyp -= CLCKL - CLCK;	/* and CLCK TIMR are adjacent */
@@ -765,7 +808,7 @@ extDeclHead
 		$$.v = stype;
 		iFunSyText = 0;			/* no function symbols for extern */
 #if YYDEBUG == 2
-		if ((iC_debug & 0402) == 0402) pu(TYP, "extDeclHead: EXTERN IMM TYPE", &$$);
+		if ((iC_debug & 0402) == 0402) pu(TYP, "extDeclHead: EXTERN immT TYPE", &$$);
 #endif
 	    }
 	| extDecl ','		{
@@ -788,8 +831,11 @@ extDeclHead
 	 *
 	 * Immediate type declaration - may be combined with dasgn
 	 *
-	 *	imm bit   b1;		imm int   a1;
-	 *	imm clock c1;		imm timer t1;
+	 *	imm bit   b1;		 imm int   a1;
+	 *	imm clock c1;		 imm timer t1;
+	 *
+	 *	imm bit   b2 = d & e;	 imm int   a2 = a1 * 2;
+	 *	imm clock c2 = CLOCK(x); imm timer t2 = TIMER(y);
 	 *
 	 * immediate variables declared with 'imm' must be assigned once
 	 * and only once in the current source module (usually directly
@@ -802,18 +848,6 @@ extDeclHead
 	 * Multiple declarations of the same variable with the same
 	 * immediate type are silently ignored.
 	 *
-	 *	immC bit   b1;		immC int   a1;
-	 *
-	 * The use of 'immC' in a simple type declaration defines the Gate
-	 * object, like in C. Such an object may only be assigned in C code
-	 * but may be used as an immediate rvalue in iC as well as in C code.
-	 * By defining an object, no C assignment in the current source is
-	 * necessary. An assignment can occurr in another source, in which
-	 * the same variable is declared with an 'extern immC' declaration.
-	 * An assignment in some source should take place to avoid an
-	 * algorithmic error. The load module detects and counts assignments
-	 * during initialization and warns if no assignments have occurred.
-	 *
 	 * IEC-1131 input and output variables are pre-declared for iC code
 	 * and C code normally do not need to be declared except for the
 	 * following cases:
@@ -823,12 +857,11 @@ extDeclHead
 	 * in this source module (usually in an included .ih header) and its
 	 * storage is going to be defined in this source.
 	 *
-	 * An 'imm' or 'immC' type declaration of an output variable is
-	 * needed if that variable has already been declared with an
-	 * 'extern imm' or 'extern immC' declaration in this source module
-	 * (usually in an included .ih header) and its storage is going to
-	 * be defined in this source. This also means that the output variable
-	 * should be assigned in this source.
+	 * An 'imm' type declaration of an output variable is needed if that
+	 * variable has already been declared with an 'extern imm' declaration
+	 * in this source module (usually in an included .ih header) and its
+	 * storage is going to be defined in this source. This also means that
+	 * the output variable should be assigned in this source.
 	 *
 	 * These rules for input and output variables are the same as for
 	 * ordinary immediate variables, except that an I/O variable which
@@ -837,15 +870,6 @@ extDeclHead
 	 * that output variables which are to be assigned in C code must
 	 * be declared with 'immC' like ordinary immediate variables.
 	 *
-	 * 'immC' type declarations may not be combined with a dasgn, since no
-	 * immediate assignment may occurr if a variable has been declared
-	 * and defined as an ARNC or LOGC type with 'immC'. Such an attempted
-	 * assignment is flagged as an error.
-	 *
-	 * 'immC' type declarations may not be combined with an immediate
-	 * function block definition - a function block can never be called
-	 * in C code and can never return type 'immC'.
-	 *
 	 * declHead has type UDF for all TYPEs except ARNC and LOGC, which
 	 * are the TYPEs given to completed 'immC' Gate objects.
 	 *
@@ -853,18 +877,13 @@ extDeclHead
 
 decl	: declHead UNDEF	{
 		Symbol *	sp;
-#if YYDEBUG
-		Symbol t = *($2.v);
-#endif
 		$$.f = $1.f; $$.l = $2.l;
 		sp = $$.v = $2.v;
 		sp->ftype = $1.v.ftype;		/* bit int clock timer */
 		sp->type  = $1.v.type;
 		assert(($1.v.em & EM) == 0);	/* has been cleared in declHead */
 		sp->em    &= ~EM;		/* clear only bit EM here, leave bit EX */
-		if (sp->type != UDF) {
-		    listGenOut(sp, 1);		/* list immC node and generate possible output */
-		}
+		assert(sp->type == UDF);
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
@@ -877,60 +896,37 @@ decl	: declHead UNDEF	{
 		    iFunSyText = 0;		/* no more function symbols */
 		}
 #if YYDEBUG
+		Symbol t = *(sp);
 		if ((iC_debug & 0402) == 0402) pd("decl", sp, $1.v, &t);
 #endif
 	    }
-	| declHead dVariable	{
-		int		typ;
-		int		typ1;
+	| declHead dIVariable	{		/* LVAR AVAR LOUT AOUT CVAR TVAR Constant */
+		int		typ1;		/* not LVARC AVARC */
+		int		typ2;
 		int		ftyp;
 		Symbol *	sp;
 		$$.f = $1.f; $$.l = $2.l;
 		ftyp = $1.v.ftype;		/* ARITH GATE CLCKL TIMRL */
-		typ1  = $1.v.type;		/* UDF for all TYPEs except ARNC LOGC INPX INPW */
+		typ1  = $1.v.type;		/* UDF for all TYPEs except INPX INPW */
 		sp = $$.v = $2.v;
 		if (sp) {
-#if YYDEBUG
-		    Symbol t = *(sp);
-#endif
-		    if (((typ = sp->type) == INPW || typ == INPX) &&
-			(typ1 == ARNC || typ1 == LOGC) &&
-			sp->type != ERR) {
-			ierror("immC declaration of an input variable is invalid:", sp->name);
-		    } else
-		    if (sp->ftype != $1.v.ftype && sp->type != ERR) {
+		    assert(typ1 != LOGC && typ1 != ARNC);
+		    if ((typ2 = sp->type) != ERR && sp->ftype != ftyp) {
 			ierror("declaration does not match previous declaration:", sp->name);
 			if (! iFunSymExt) $2.v->type = ERR;	/* cannot execute properly */
 		    } else
-		    if ((sp->em & EM) || sp->type == UDF) {
-			sp->ftype = ftyp;	/* bit int clock timer */
-			if (typ1 != UDF) {	/* UDF for all TYPEs except ARNC and LOGC */
-			    char *	name;
-			    char	y1[2];
-			    int	yn;
-			    if ((name = sp->name) &&
-				sscanf(name, "Q%1[XBWL]%d", y1, &yn) != 2 &&	/* skip QX etc */
-				sp->type != typ1) {
-				ierror("declaration does not match previous extern imm declaration:", name);
-				typ1 = ERR;	/* cannot execute properly */
-			    } else {
-				sp->type = typ1;	/* UDF for all TYPEs except ARNC and LOGC */
-				sp->em &= ~EM;
-				listGenOut(sp, 1);	/* list immC node and generate possible output */
-			    }
-			} else
-			if ((sp->em & EM) && (sp->type == ARNC || sp->type == LOGC)) {
-			    ierror("declaration does not match previous extern immC declaration:", sp->name);
-			    typ1 = ERR;		/* cannot execute properly */
+		    if ((sp->em & EM) || typ2 == UDF) {
+			if ((sp->em & EO) == 0) {
+			    sp->ftype = ftyp;	/* adjust ftype from extern type unless QXx.y QBz */
 			}
-			if (typ != INPW && typ != INPX) {
+			assert(typ1 == UDF);	/* UDF for all TYPEs */
+			if (typ2 != INPW && typ2 != INPX) {
 			    sp->type = typ1;	/* fix type */
 			}
 			sp->em &= ~EM;		/* no longer extern - leave EX */
-		    } else if (sp->type == ARNC || sp->type == LOGC) {
-			warning("immC declaration after definition - ignored:", sp->name);
 		    }
 #if YYDEBUG
+		    Symbol t = *(sp);
 		    if ((iC_debug & 0402) == 0402) pd("decl", sp, $1.v, &t);
 #endif
 		} else {
@@ -938,9 +934,142 @@ decl	: declHead UNDEF	{
 		}
 		iFunSyText = 0;			/* no more function symbols */
 	    }
+	| declHead valueCVariable	{	/* ARNC LOGC */
+		Symbol *	sp;		/* not LVAR AVAR LOUT AOUT CVAR TVAR Constant */
+		$$.f = $1.f; $$.l = $2.l;
+		sp = $$.v = $2.v;
+		sp->ftype = $1.v.ftype;		/* ARITH GATE */
+		ierror("declaration does not match previous extern immC declaration:", sp->name);
+	    }
 	;
 
-immDecl	: decl			{		/* immediate declaration */
+	/************************************************************
+	 *
+	 * Immediate immC type definition - may be initialised with a
+	 * constant expression.
+	 *
+	 *	immC bit   b1;		immC int   a1;
+	 *	immC bit   b2 = 1;	immC int   a2 = 15 * 3;
+	 *
+	 * The use of 'immC' in a simple type declaration defines the Gate
+	 * object, like in C. An immC object may optionally be initialised
+	 * with a constant expression in the declaration (default value 0)
+	 * just like in C.
+	 *
+	 * Apart from that an immC Gate object may only be assigned in C code
+	 * but may be used as an immediate rvalue in iC as well as in C code.
+	 * By defining an object, no C assignment in the current source is
+	 * necessary. An assignment can occurr in another source, in which
+	 * the same variable is declared with an 'extern immC' declaration.
+	 * An assignment in some source should take place (initialisation
+	 * will do) to avoid an algorithmic error. The load module detects
+	 * and counts assignments during initialization and warns if no
+	 * assignments or initialisation have occurred.
+	 *
+	 * IEC-1131 input and output variables are pre-declared for iC code
+	 * and C code normally do not need to be declared except for the
+	 * following cases:
+	 *
+	 * An 'immC' type declaration of an output variable is needed if
+	 * that variable has already been declared with an 'extern immC'
+	 * declaration in this source module (usually in an included .ih
+	 * header) and its storage is going to be defined in this source.
+	 * This also means that the optional initialisation should be done
+	 * in this source.
+	 *
+	 * Apart from initialisation with a constant expression, 'immC' type
+	 * declarations may not be combined with a dasgn, since no immediate
+	 * assignment may occurr if a variable has been declared and defined
+	 * as an ARNC or LOGC type with 'immC'. Such an attempted assignment
+	 * is flagged as a hard error.
+	 *
+	 * 'immC' type declarations may not be combined with an immediate
+	 * function block definition - a function block can never be called
+	 * in C code. A function block may return a type 'immC' internal
+	 * variable as an 'imm' value, which is actually an 'immC' alias,
+	 * although it is poor form to rely on this, because code in
+	 * function blocks may change.
+	 *
+	 * declCHead has type ARNC and LOGC, which are the TYPEs given to
+	 * completed 'immC' Gate objects.
+	 *
+	 ***********************************************************/
+
+declC	: declCHead UNDEF	{
+		Symbol *	sp;
+		$$.f = $1.f; $$.l = $2.l;
+		sp = $$.v = $2.v;
+		sp->ftype = $1.v.ftype;		/* bit int */
+		sp->type  = $1.v.type;
+		assert(($1.v.em & EM) == 0);	/* has been cleared in declCHead */
+		sp->em    &= ~EM;		/* clear only bit EM here, leave bit EX */
+		assert(sp->type == ARNC || sp->type == LOGC);
+		if (iFunSymExt) {
+		    char *	cp;
+		    Symbol *	sp1;
+		    cp = strchr(sp->name, '@'); /* locate original extension */
+		    assert(cp && isprint(cp[1])); /* extension must be at least 1 character */
+		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
+			warning("declaration of an extern variable in a function - ignored:", cp);
+		    }
+		    collectStatement(sp);
+		    iFunSyText = 0;		/* no more function symbols */
+		}
+#if YYDEBUG
+		Symbol t = *(sp);
+		if ((iC_debug & 0402) == 0402) pd("declC: declCHead UNDEF", sp, $1.v, &t);
+#endif
+	    }
+	| declCHead dCVariable	{		/* LVARC AVARC LOUT AOUT */
+		int		typ2;		/* not LVAR AVAR CVAR TVAR Constant */
+		int		typ1;
+		int		ftyp;
+		Symbol *	sp;
+		$$.f = $1.f; $$.l = $2.l;
+		ftyp = $1.v.ftype;		/* ARITH GATE CLCKL TIMRL */
+		typ1  = $1.v.type;		/* UDF for all TYPEs except ARNC LOGC INPX INPW */
+		sp = $$.v = $2.v;
+		assert(sp && (typ1 == LOGC || typ1 == ARNC));
+		if ((typ2 = sp->type) == INPW || typ2 == INPX) {
+		    ierror("immC declaration of an input variable is invalid:", sp->name);
+		    sp->em |= ED;		/* do not define */
+		} else
+		if (typ2 != ERR && sp->ftype != ftyp) {
+		    ierror("declaration does not match previous declaration:", sp->name);
+		    sp->em |= ED;		/* do not define */
+		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
+		} else
+		if ((sp->em & EM) || sp->type == UDF) {
+		    if ((sp->em & EO) == 0) {
+			sp->ftype = ftyp;	/* adjust ftype from extern type unless QXx.y QBz */
+		    }
+		    sp->type = typ1;	/* ARNC or LOGC */
+		    sp->em &= ~EM;		/* no longer extern - leave EX */
+		} else if (sp->type == ARNC || sp->type == LOGC) {
+		    warning("immC declaration after definition - ignored:", sp->name);
+		}
+#if YYDEBUG
+		Symbol t = *(sp);
+		if ((iC_debug & 0402) == 0402) pd("declC: declCHead dCVariable", sp, $1.v, &t);
+#endif
+		iFunSyText = 0;			/* no more function symbols */
+	    }
+	| declCHead dIMVariable	{		/* LVAR AVAR CVAR TVAR Constant */
+		Symbol *	sp;		/* not LVARC AVARC LOUT AOUT */
+		int		typ2;
+		$$.f = $1.f; $$.l = $2.l;
+		sp = $$.v = $2.v;
+		sp->ftype = $1.v.ftype;		/* ARITH GATE */
+		if (((typ2 = sp->type) == INPW || typ2 == INPX)) {
+		    ierror("immC declaration of an input variable is invalid:", sp->name);
+		} else {
+		    ierror("declaration does not match previous extern imm declaration:", sp->name);
+		}
+		sp->em |= ED;			/* do not define */
+	    }
+	;
+
+immDecl	: decl			{		/* imm declaration */
 		$$   = $1;			/* not strictly necessary - stype holds data */
 		if (iFunSymExt) {
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
@@ -966,28 +1095,29 @@ immDecl	: decl			{		/* immediate declaration */
 	    }
 	;
 
+immCDecl
+	: declC			{		/* immC declaration */
+		$$   = $1;			/* not strictly necessary - stype holds data */
+		listGenOut($1.v, 1, 0);		/* list immC node without initialisation */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	| declC '=' constExpr	{
+		$$   = $1;			/* not strictly necessary - stype holds data */
+		listGenOut($1.v, -1, $3.v);	/* list immC node with initialiser value */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+	    }
+	;
+
 declHead
 	: IMM TYPE		{
-		int		typ;
-		int		ftyp;
 		$$.f = $$.l = $2.l;		/* do not include in expression string */
-		ftyp = $2.v->ftype;		/* ARITH GATE CLCKL TIMRL */
-		if ($1.v->ftype == 1) {		/* immC in init.c */
-		    if (ftyp == ARITH) {
-			typ = ARNC;		/* immC int */
-		    } else
-		    if (ftyp == GATE) {
-			typ = LOGC;		/* immC bit */
-		    } else {
-			warning("declaration of an immC type other than bit or int - ignore:", $2.v->name);
-			goto immType;
-		    }
-		} else {			/* simple imm */
-		  immType:
-		    typ = UDF;
-		}
-		stype.ftype = ftyp;
-		stype.type  = typ;
+		assert($1.v->ftype == 0);	/* imm in init.c */
+		stype.ftype = $2.v->ftype;	/* ARITH GATE CLCKL TIMRL */
+		stype.type  = UDF;
 		stype.em &= ~EM;		/* no longer extern - leave EX if it was set */
 		stype.fm = 0;
 		$$.v = stype;
@@ -1005,11 +1135,48 @@ declHead
 		if ((iC_debug & 0402) == 0402) pu(TYP, "declHead: immDecl ,", &$$);
 #endif
 	    }
+	;
+
+declCHead
+	: IMMC TYPE		{
+		int		typ;
+		int		ftyp;
+		$$.f = $$.l = $2.l;		/* do not include in expression string */
+		ftyp = $2.v->ftype;		/* ARITH GATE CLCKL TIMRL */
+		assert($1.v->ftype == 1);	/* immC in init.c */
+		if (ftyp == ARITH) {
+		    typ = ARNC;		/* immC int */
+		} else
+		if (ftyp == GATE) {
+		    typ = LOGC;		/* immC bit */
+		} else {
+		    warning("declaration of an immC type other than bit or int - ignore:", $2.v->name);
+		    typ = UDF;
+		}
+		stype.ftype = ftyp;
+		stype.type  = typ;
+		stype.em &= ~EM;		/* no longer extern - leave EX if it was set */
+		stype.fm = 0;
+		$$.v = stype;
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "declHead: IMMC TYPE", &$$);
+#endif
+	    }
+	| immCDecl ','		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = stype;			/* first TYPE */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "declCHead: immCDecl ,", &$$);
+#endif
+	    }
 	| immCarray ','		{
 		$$.f = $1.f; $$.l = $1.l;
 		$$.v = stype;			/* first TYPE */
 #if YYDEBUG == 2
-		if ((iC_debug & 0402) == 0402) pu(TYP, "declHead: immCarray ,", &$$);
+		if ((iC_debug & 0402) == 0402) pu(TYP, "declCHead: immCarray ,", &$$);
 #endif
 	    }
 	;
@@ -1024,27 +1191,35 @@ declHead
 	 ***********************************************************/
 
 dasgn	: decl '=' aexpr	{		/* dasgn is NOT an aexpr */
-		char	y1[2];
-		int	yn;
+		char *	name;
 		int	ioTyp;
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v) {
-		    if ($1.v->type == ARNC || $1.v->type == LOGC) {
-			ierror("immC declaration may not be combined with an immediate assignment:", $1.v->name);
-			$1.v->type = iFunSymExt ? UDF : ERR;
-		    } else {
-			if (sscanf($1.v->name, "Q%1[XBWL]%d", y1, &yn) == 2) {
-			    ioTyp = (y1[0] == 'X') ? OUTX : OUTW;
-			} else {
-			    ioTyp = 0;		/* flags that no I/O is generated */
+		    assert($1.v->type != ARNC && $1.v->type != LOGC);
+		    if ($1.v->em & EO) {	/* QXx.y QBz etc */
+			name = $1.v->name;
+			assert(name[0] == 'Q');
+			switch (name[1]) {
+			case 'X':
+			    ioTyp = OUTX;
+			    break;
+			case 'B':
+			case 'W':
+			case 'L':
+			case 'H':
+			    ioTyp = OUTW;
+			    break;
+			default:
+			    assert(0);		/* illegal Q variable */
+			    break;
 			}
-			if (($$.v = assignExpression(&$1, &$3, ioTyp)) == 0) YYERROR;
-#if YYDEBUG
-			if ((iC_debug & 0402) == 0402) pu(SYM, "dasgn: decl = aexpr", &$$);
-#endif
+		    } else {
+			ioTyp = 0;		/* flags that no I/O is generated */
 		    }
-		} else {
-		    ierror("direct assignment to a number is illegal:", $$.f);
+		    if (($$.v = assignExpression(&$1, &$3, ioTyp)) == 0) YYERROR;
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) pu(SYM, "dasgn: decl = aexpr", &$$);
+#endif
 		}
 	    }
 	;
@@ -1852,6 +2027,23 @@ constExpr
 		$$.v = $2.v;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: (constExpr)", &$$);
+#endif
+	    }
+	/************************************************************
+	 * Unary + or -
+	 ***********************************************************/
+	| '+' constExpr %prec '!'	{		/* unary + */
+		$$.f = $1.f; $$.l = $2.l;
+		$$.v = $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: + constExpr", &$$);
+#endif
+	    }
+	| '-' constExpr %prec '!'	{		/* unary - */
+		$$.f = $1.f; $$.l = $2.l;
+		$$.v = - $2.v;
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: - constExpr", &$$);
 #endif
 	    }
 	;
@@ -2736,7 +2928,7 @@ iFunHead
 	 *	imm void  vf1(assign bit a1, assign int a2, bit p1, int p2) {...}
 	 ***********************************************************/
 
-	| IMM VOID iFunTrigger '('	{
+	| immT VOID iFunTrigger '('	{
 		$$.f = $1.f; $$.l = $4.l;
 		if ($1.v->ftype == 1) {		/* immC in init.c */
 		    ierror("Definition of an immC void function is illegal:", $$.f);
@@ -2860,18 +3052,17 @@ fPlist	: formalParameter		{
 	 * in the function block definition and since they are in their
 	 * own namespace, with the function name prefix @ they cannot
 	 * be anything but UNDEF, except NUMBER or IO variables, which
-	 * will cause a syntax error.
+	 * will cause a hard error.
 	 ***********************************************************/
 
 formalParameter
 	: ASSIGN formalParaTypeDecl UNDEF	{
 		$$ = $3;				/* formal assign parameter Symbol */
 		$$.v->ftype = $2.v.ftype;		/* TYPE bit int clock timer */
-		$$.v->type  = $2.v.type;		/* assign parameter is set to UDF */
-		if ($$.v->type != UDF) {
-		    warning("immC type is not allowed for formal assign parameter - ignore:", NS);
-		    $$.v->type = UDF;
+		if ($2.v.type != UDF) {
+		    warning("immC type is not allowed for formal assign parameter - ignore:", $$.v->name);
 		}
+		$$.v->type  = UDF;			/* assign parameter is set to UDF */
 		iFunSyText = 0;				/* no more function symbols */
 	    }
 	| formalParaTypeDecl UNDEF	{
@@ -2879,8 +3070,8 @@ formalParameter
 
 		$$ = $2;				/* formal value parameter Symbol */
 		$$.v->ftype = ft = $1.v.ftype;		/* TYPE bit int clock timer */
-		if ($$.v->type != UDF) {
-		    warning("immC type is not allowed for formal value parameter - ignore:", NS);
+		if ($1.v.type != UDF) {
+		    warning("immC type is not allowed for formal value parameter - ignore:", $$.v->name);
 		}
 		if (ft >= CLCKL) {			/* check that CLCKL TIMRL */
 		    ft -= CLCKL - CLCK;			/* and CLCK and TIMR are adjacent */
@@ -2933,6 +3124,38 @@ formalParameter
 		}
 		iFunSyText = 0;				/* no more function symbols */
 	    }
+	| constType UNDEF	{
+		$$ = $2;				/* formal constant parameter Symbol */
+		assert($1.v->ftype == ARITH);
+		$$.v->ftype = ARITH;			/* TYPE int only */
+		$$.v->type = NCONST;			/* TODO how to pass min/max */
+		iFunSyText = 0;				/* no more function symbols */
+	    }
+	;
+
+constType
+	: CONST				{
+		$$ = $1;				/* formal value parameter const (int) */
+	    }
+	| CONST TYPE			{
+		switch ($2.v->ftype) {
+		case ARITH:
+		    break;				/* correct type const int */
+		case GATE:
+		    warning("const bit is deprecated as a formal parameter - const int assumed:", NS);
+		    break;
+		case CLCKL:
+		    ierror("const clock is not allowed as a formal parameter:", NS);
+		    break;
+		case TIMRL:
+		    ierror("const timer is not allowed as a formal parameter:", NS);
+		    break;
+		default:
+		    assert(0);
+		    break;
+		}
+		$$ = $1;				/* formal value parameter const int */
+	    }
 	;
 
 formalParaTypeDecl
@@ -2947,7 +3170,7 @@ formalParaTypeDecl
 		if ((iC_debug & 0402) == 0402) pu(TYP, "formalParaTypeDecl: TYPE", &$$);
 #endif
 	    }
-	| IMM TYPE			{
+	| immT TYPE			{
 		int		typ;
 		int		ftyp;
 		$$.f = $$.l = $2.l;			/* do not include in expression string */
@@ -2966,13 +3189,13 @@ formalParaTypeDecl
 		  immTypeF:
 		    typ = UDF;
 		}
-		$$.v.ftype = ftyp;			/* IMM is optional */
+		$$.v.ftype = ftyp;			/* immT is optional */
 		$$.v.type = typ;
 		$$.v.em &= ~EM;
 		$$.v.fm = 0;
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 #if YYDEBUG == 2
-		if ((iC_debug & 0402) == 0402) pu(TYP, "formalParaTypeDecl: IMM TYPE", &$$);
+		if ((iC_debug & 0402) == 0402) pu(TYP, "formalParaTypeDecl: immT TYPE", &$$);
 #endif
 	    }
 	;
@@ -3231,12 +3454,12 @@ immCarray
 		    ierror("must specify array size since there is no member initialiser list:", $$.f);
 		    sp->type = ERR;
 		} else if ((lp = sp->list) == 0) {
-		    listGenOut(sp, sp->v_cnt);		/* list immC array node */
+		    listGenOut(sp, sp->v_cnt, 0);	/* list immC array node */
 		    for (i = 0; i < sp->v_cnt; i++) {
 			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
 			if ((tsp = lookup(tempBuf)) == 0) {
 			    tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
-			    listGenOut(tsp, 0);		/* list immC node and generate possible output */
+			    listGenOut(tsp, 0, 0);	/* list immC node and generate possible output */
 			}				/* not listed if member node already defined */
 			if (sp->type != tsp->type && sp->type != ERR) {
 			    ierror("array member type does not match type of whole array:", tsp->name);
@@ -3249,10 +3472,10 @@ immCarray
 			    lp = lp->le_next = sy_push(tsp);	/* link to end of new member list */
 			}
 		    }
-		    listGenOut(NULL, 1);		/* terminate immC array node list */
+		    listGenOut(NULL, 1, 0);		/* terminate immC array node list */
 		} else {
 		    assert(lp->le_val == sp->v_cnt);	/* previously declared extern */
-		    listGenOut(sp, sp->v_cnt);		/* list immC array node */
+		    listGenOut(sp, sp->v_cnt, 0);	/* list immC array node */
 		    for (i = 0; i < sp->v_cnt; i++) {	/* use member list set up in extern declaration */
 			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
 			if ((tsp = lookup(tempBuf)) != 0 && lp && tsp != lp->le_sym) {
@@ -3266,12 +3489,12 @@ immCarray
 				}
 			    } else if (tsp->em & EM) {	/* extern ARNC or LOGC ? */
 				tsp->em &= ~EM;		/* no longer extern */
-				listGenOut(tsp, 0);	/* list immC node and generate possible output */
+				listGenOut(tsp, 0, 0);	/* list immC node and generate possible output */
 			    }
 			}
 			lp = lp->le_next;
 		    }
-		    listGenOut(NULL, 1);		/* terminate immC array node list */
+		    listGenOut(NULL, 1, 0);		/* terminate immC array node list */
 		}
 		sp->v_cnt = 0;				/* must be cleared for gram.y */
 		if (iFunSymExt) {
@@ -3307,7 +3530,7 @@ immCarray
 		sp->v_cnt = $4.v->le_val;		/* number of member initialisers is array size */
 		/* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
 		tlp = ttlp = sp->list;			/* extern declaration if set */
-		listGenOut(sp, sp->v_cnt);		/* list immC array node */
+		listGenOut(sp, sp->v_cnt, 0);		/* list immC array node */
 		for (lp = $4.v, i = 0; lp; lp = lp->le_next, i++) {
 		    if (tlp && (ttlp = tlp->le_next, 1) && (tsp = sy_pop(tlp)) != lp->le_sym) {	/* remove extern List_e */
 			ierror("different array member to member in extern declaration:", tsp->name);
@@ -3318,7 +3541,7 @@ immCarray
 			    lp->le_sym->type = sp->type;/* turn into immC variable */
 			    lp->le_sym->ftype = iC_ftypes[sp->type];
 			    assert((lp->le_sym->em & EM) == 0);
-			    listGenOut(lp->le_sym, 0);	/* list immC node and generate possible output */
+			    listGenOut(lp->le_sym, 0, 0);	/* list immC node and generate possible output */
 			} else {
 			    goto TypErr;
 			}
@@ -3331,11 +3554,11 @@ immCarray
 			}
 		    } else if (lp->le_sym->em & EM) {	/* extern ARNC or LOGC ? */
 			lp->le_sym->em &= ~EM;		/* no longer extern */
-			listGenOut(lp->le_sym, 0);	/* list immC node and generate possible output */
+			listGenOut(lp->le_sym, 0, 0);	/* list immC node and generate possible output */
 		    }
 		    tlp = ttlp;
 		}
-		listGenOut(NULL, 1);			/* terminate immC array node list */
+		listGenOut(NULL, 1, 0);			/* terminate immC array node list */
 		assert(tlp == NULL && i == sp->v_cnt);
 		sp->list = $4.v;			/* head of the member list - inherits initialiser count */
 		sp->v_cnt = 0;				/* must be cleared for gram.y */
@@ -3362,16 +3585,13 @@ immCindex
 	;
 
 immCarrayHead
-	: declHead UNDEF '[' immCindex ']'	{
+	: declCHead UNDEF '[' immCindex ']'	{
 		Symbol *	sp;
-#if YYDEBUG
-		Symbol t = *($2.v);
-#endif
 		$$.f = $1.f; $$.l = $5.l;
 		sp = $$.v = $2.v;
 		sp->type  = $1.v.type;			/* only ARNC and LOGC */
 		sp->ftype = UDFA;			/* makes it a IMMCARRAY */
-		assert(($1.v.em & EM) == 0);		/* has been cleared in declHead */
+		assert(($1.v.em & EM) == 0);		/* has been cleared in declCHead */
 		sp->em    &= ~EM;			/* clear bit EM here */
 		if (sp->type == ARNC || sp->type == LOGC) {
 		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
@@ -3380,19 +3600,17 @@ immCarrayHead
 		    sp->type = ERR;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pd("immCarrayHead: declHead UNDEF [ immCindex ]", sp, $1.v, &t);
+		Symbol t = *(sp);
+		if ((iC_debug & 0402) == 0402) pd("immCarrayHead: declCHead UNDEF [ immCindex ]", sp, $1.v, &t);
 #endif
 	    }
-	| declHead IMMCARRAY '[' immCindex ']'	{
+	| declCHead IMMCARRAY '[' immCindex ']'	{
 		int		typ;			/* gets here when IMMCARRAY was */
 		Symbol *	sp;			/* previously declared extern */
 		$$.f = $1.f; $$.l = $5.l;
 		sp = $$.v = $2.v;
 		typ  = $1.v.type;			/* ARNC and LOGC */
 		assert(sp && (typ == ARNC || typ == LOGC));
-#if YYDEBUG
-		Symbol t = *(sp);
-#endif
 		if (sp->ftype != UDFA || sp->type != typ || sp->list->le_val == 0) {
 		    ierror("declaration does not match previous declaration:", sp->name);
 		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
@@ -3410,7 +3628,8 @@ immCarrayHead
 		    sp->type = ERR;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pd("immCarrayHead: declHead IMMCARRAY [ immCindex ]", sp, $1.v, &t);
+		Symbol t = *(sp);
+		if ((iC_debug & 0402) == 0402) pd("immCarrayHead: declCHead IMMCARRAY [ immCindex ]", sp, $1.v, &t);
 #endif
 		iFunSyText = 0;				/* no more function symbols */
 	    }
@@ -3738,7 +3957,7 @@ immCarrayVariable
 		    } else {
 			for (i = 0; i < $3.v; i++) {
 			    lp = lp->le_next;		/* select indexed member */
-			    if (lp == NULL && lp->le_sym == NULL) {
+			    if (lp == NULL || lp->le_sym == NULL) {
 				execerror("immCarrayVariable: member not initialised by compiler", sp->name, __FILE__, __LINE__);
 				/* compiler error - flushes rest of file */
 			    }
@@ -4734,12 +4953,13 @@ iClex(void)
 	    } else
 	    if (qtoken) {
 		c = qtoken;			/* first time LOUT or AOUT */
+		symp->em |= EO;			/* marks variable as LOUT AOUT Q... */
 	    } else
 	    if ((c = lex_typ[typ]) == 0) {	/* 0 AVARC 0 0 LVARC 0 ... NUMBER ... */
 		c = lex_act[symp->ftype];	/* UNDEF AVAR LVAR ..YYERRCODE.. AOUT LOUT CVAR TVAR */
 	    } else if ((typ == ARNC || typ == LOGC) && symp->ftype == UDFA) {
 		c = IMMCARRAY;			/* UDFA ARNC and UDFA LOGC are immC arrays not UNDEF */
-	    } else if (typ == NCONST) {		/* c === NUMBER */
+	    } else if (typ == NCONST) {		/* c === NUMBER from lex_typ[NCONST] */
 		iClval.vai.v = 0;		/* return vai although not needed - clean extended listing */
 	    }
 	    if (symp->ftype == OUTW && (lp = symp->list) != 0) {

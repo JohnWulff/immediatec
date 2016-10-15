@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.101 $";
+"@(#)$Id: outp.c 1.102 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -921,10 +921,11 @@ iC_listNet(void)
 "  { \"alias\",	     KEYW,  0,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - check that USETYPE < MAXUSETYPE */\n"
 "  { \"strict\",	     KEYW,  1,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - MAXUSETYPE 2 */\n"
 "  { \"imm\",	     KEYW,  0,     IMM,    0    , 0      , 0      , 0 },\n"
-"  { \"immC\",	     KEYW,  1,     IMM,    0    , 0      , 0      , 0 },\n"
+"  { \"immC\",	     KEYW,  1,     IMMC,   0    , 0      , 0      , 0 },\n"
 "  { \"void\",	     KEYW,  UDFA,  VOID,   0    , 0      , 0      , 0 },\n"
 "  { \"bit\",	     KEYW,  GATE,  TYPE,   0    , 0      , 0      , 0 },\n"
 "  { \"int\",	     KEYW,  ARITH, TYPE,   0    , 0      , 0      , 0 },\n"
+"  { \"const\",	     KEYW,  ARITH, CONST,  0    , 0      , 0      , 0 },	/* used as function block formal parameter */\n"
 "  { \"clock\",	     KEYW,  CLCKL, TYPE,   0    , 0      , 0      , 0 },\n"
 "  { \"timer\",	     KEYW,  TIMRL, TYPE,   0    , 0      , 0      , 0 },\n"
 "  { \"sizeof\",	     KEYW,  0,     SIZEOF, 0    , 0      , 0      , 0 },\n"
@@ -933,7 +934,6 @@ iC_listNet(void)
 "  { \"break\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
 "  { \"case\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
 "  { \"char\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
-"  { \"const\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
 "  { \"continue\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
 "  { \"default\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
 "  { \"do\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },\n"
@@ -1341,14 +1341,14 @@ iC_listNet(void)
 					if (sp->ftype < MAX_AR &&	/* arithmetic function */
 					    lp->le_val != 0    &&
 					    (tsp = lp->le_sym) != 0) {
-					    assert(
-						tsp->type == ARNC ||
-						tsp->type == ARNF ||
-						tsp->type == ARN ||
-						tsp->type == SH ||
-						tsp->type == NCONST ||
-						tsp->type == INPW ||
-						tsp->type == ERR);
+// *					    assert(
+// *						tsp->type == ARNC ||
+// *						tsp->type == ARNF ||
+// *						tsp->type == ARN ||
+// *						tsp->type == SH ||
+// *						tsp->type == NCONST ||
+// *						tsp->type == INPW ||
+// *						tsp->type == ERR);
 					    /* also not IFUNCT, allows IFUNCT to use union v.cnt */
 					    tsp->v_cnt++;	/* count reverse parameter */
 					}
@@ -1417,7 +1417,8 @@ iC_listNet(void)
 			     *  undefined warnings.
 			     *
 			     *  immC (ARNC or LOGC) can only be assigned in C code, in which case
-			     *  EA was set in em.
+			     *  EA was set in em. Alternatively in immC variable which was
+			     *  initialised (em & EI set) is also considered defined.
 			     *
 			     *  A special case is an immC or immC array variable, which has been
 			     *  declared extern (em & EX set). Such immC variables may have been
@@ -1449,7 +1450,7 @@ iC_listNet(void)
 				    undefined--;
 				    break;
 				}
-			    } else if ((sp->em & (EA|EX)) == 0) {
+			    } else if ((sp->em & (EI|EA|EX)) == 0) {
 				if (typ == ARNC) {	/* undefined and not extern immC */
 				    undefined++;
 				    warning("undefined immC int:", sp->name);
@@ -1552,7 +1553,7 @@ iC_listNet(void)
 	for (sp = *hsp; sp; sp = sp->next) {
 	    if ((typ = sp->type) < MAX_LS) {	/* allows IFUNCT to use union v.cnt */
 		if (sp->v_cnt && (typ < AND || typ > LATCH)) {
-		    assert(typ == ARN || typ == SH || typ == NCONST || typ == ARNC || typ == ERR);
+// *		    assert(typ == ARN || typ == SH || typ == NCONST || typ == ARNC || typ == ERR);
 		    link_count += sp->v_cnt + 1;	/* space for reverse links + function # */
 		}
 		sp->v_cnt = 0;			/* restore v_cnt for both uses */
@@ -2623,7 +2624,8 @@ iC_outNet(FILE * iFP, char * outfile)
 		} else {
 		    fprintf(Fp, "iC_Gt %-8s", modName);
 		}
-		fprintf(Fp, " = { 1, -%s,", iC_ext_type[typ]);	/* -gt_ini */
+		/* open Gate initialiser */
+		fprintf(Fp, " = { 1, -%s,", iC_ext_type[typ]);	/* gt_val, -gt_ini */
 		ftyp = sp->ftype;
 		if ((lp = sp->list) != 0 && lp->le_sym == sp && typ != NCONST) {
 		    fflag = 1;			/* leave out _f0_1 */
@@ -2745,7 +2747,41 @@ iC_outNet(FILE * iFP, char * outfile)
 		 *******************************************************************/
 		if (mask != 0) {
 		    fprintf(Fp, ", %d", mask);	/* bitMask for OUT or immC array size in gt_mark */
+		} else
+		/********************************************************************
+		 * optionally output immC int or immC bit initialiser in gt_new
+		 * NOTE: no initialisers for immC arrays
+		 *
+		 * if an immC variable has been declared with an initial value sp->em & EI is set.
+		 * immC initialisers are stored in the dynamic array 'iC_iniList[]'
+		 * scan 'iC_iniList' for the current Symbol sp and fetch the
+		 * corresponding inital value.
+		 *******************************************************************/
+		if (iC_iniList &&			/* pass if no initialisers */
+		    (typ == ARNC || typ == LOGC) &&	/* and not an immC */
+		    (sp->em & EI)			/* and not marked as initialised */
+		) {
+		    immCini*	ip;
+		    int		val;
+
+		    for (ip = iC_iniList; ip < iC_inip; ip++) {
+			if (sp == ip->symbol) {
+			    val = ip->value;
+			    break;
+			}
+		    }
+		    assert(ip < iC_inip);	/* compiler error if initialiser not found */
+		    fprintf(Fp, ", 0, 0");	/* fillers for gt_mark, gt_live */
+#ifdef DEQ
+		    fprintf(Fp, ", 0");		/* filler for gt_prev */
+#endif
+#if INT_MAX == 32767 && defined (LONG16)
+		    fprintf(Fp, ", %ld", (long)val);	/* gt_new = immC initialiser */
+#else
+		    fprintf(Fp, ", %d", val);		/* gt_new = immC initialiser */
+#endif
 		}
+		/* close Gate initialiser */
 		fprintf(Fp, " };\n");
 		linecnt++;
 		nxs = modName;			/* previous Symbol name */

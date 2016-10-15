@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c,v 1.42 2015/01/22 07:53:37 jw Exp $";
+"@(#)$Id: init.c 1.43 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -883,10 +883,11 @@ static BuiltIn b[] = {
   { "alias",	     KEYW,  0,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - check that USETYPE < MAXUSETYPE */
   { "strict",	     KEYW,  1,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - MAXUSETYPE 2 */
   { "imm",	     KEYW,  0,     IMM,    0    , 0      , 0      , 0 },
-  { "immC",	     KEYW,  1,     IMM,    0    , 0      , 0      , 0 },
+  { "immC",	     KEYW,  1,     IMMC,   0    , 0      , 0      , 0 },
   { "void",	     KEYW,  UDFA,  VOID,   0    , 0      , 0      , 0 },
   { "bit",	     KEYW,  GATE,  TYPE,   0    , 0      , 0      , 0 },
   { "int",	     KEYW,  ARITH, TYPE,   0    , 0      , 0      , 0 },
+  { "const",	     KEYW,  ARITH, CONST,  0    , 0      , 0      , 0 },	/* used as function block formal parameter */
   { "clock",	     KEYW,  CLCKL, TYPE,   0    , 0      , 0      , 0 },
   { "timer",	     KEYW,  TIMRL, TYPE,   0    , 0      , 0      , 0 },
   { "sizeof",	     KEYW,  0,     SIZEOF, 0    , 0      , 0      , 0 },
@@ -895,7 +896,6 @@ static BuiltIn b[] = {
   { "break",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },
   { "case",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },
   { "char",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },
-  { "const",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },
   { "continue",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },
   { "default",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },
   { "do",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },

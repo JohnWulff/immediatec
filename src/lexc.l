@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l,v 1.33 2014/10/22 03:08:15 jw Exp $";
+"@(#)$Id: lexc.l 1.34 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -486,6 +486,7 @@ check_type(c_STYPE* u, int qtoken)
 	 *  Recognise and install undefined IEC1131 I/O variables. Otherwise
 	 *  they have to be declared as imm variables, which is not consistent
 	 *  with the iC use of I/O variables, which need not be declared.
+	 *  Mark QXx.y QBz etc by setting em |= EO (also done in iClex())
 	 *******************************************************************/
 	if ((n = sscanf(buffer, "%1[IQT]%1[XBWL]%d.%d", iqt, xbwl, &byte, &bit)) >= 3) {
 	    unsigned char	wplus = 0;
@@ -509,6 +510,9 @@ check_type(c_STYPE* u, int qtoken)
 		    }
 		    if (ixd < 0 || byte < ixd) {
 			sp = install(buffer, typ, ftyp);
+			if (iqt[0] == 'Q') {
+			    sp->em |= EO;	/* marks variable as Q... */
+			}
 			goto foundSymbol;
 		    } else {
 			char errorMsg[41];	/* length of message + 5 digit number + \0 */

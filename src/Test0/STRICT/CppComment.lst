@@ -33,7 +33,6 @@ IB1     [  A
 IB2     [  A
 IX0.0   <     _f1_1|
 QB1     ?  A
-*** Warning: unused    imm int: QB1 File ./Test0/CppComment.ic, line 12
 *** Error: gate: QB1 File ./Test0/CppComment.ic, line 12
 _f1_1   |  F { (2)    QB1?    IB1[    IB2[
 iClock  :  :  _f1_1|
@@ -50,6 +49,5 @@ TOTAL	       5 blocks
 	      11 links
 
 compiled by:
-@(#)     $Id: CppComment.lst,v 1.1 2015/11/03 03:22:57 jw Exp $ -O7
-*** Warning: 1 unused gate. File ./Test0/CppComment.ic, line 12
+$Revision: icc_2.6-5-g921c98d-dirty $ -O7
 *** Error: 2 generate errors - cannot execute. File ./Test0/CppComment.ic, line 12

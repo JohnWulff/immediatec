@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y,v 1.34 2015/06/05 08:19:18 jw Exp $";
+"@(#)$Id: gram.y 1.35 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -2411,7 +2411,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 			    } while (lookup(temp) != 0);
 			    sp1 = install(temp, sp->type, ftyp);	/* new real immC */
 			    sp1->list = sp->list;	/* transfer expression */
-			    listGenOut(sp1, 1);		/* list immC node and generate possible output */
+			    listGenOut(sp1, 1, 0);	/* list immC node and generate possible output */
 			    if (iFunSymExt) {
 				collectStatement(sp1);	/* put immC node in stmtList */
 			    }
@@ -2426,7 +2426,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 				fprintf(iC_outFP, "\n\n");
 			    }
 			} else {
-			    listGenOut(sp, 1);		/* list immC node which is not 'this' */
+			    listGenOut(sp, 1, 0);	/* list immC node which is not 'this' */
 			}
 			if (iFunSymExt) {
 			    collectStatement(sp);	/* put normal or alias node in stmtList */
