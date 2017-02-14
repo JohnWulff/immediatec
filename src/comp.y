@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.119 $";
+"@(#)$Id: comp.y 1.120 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -28,12 +28,12 @@
 #include	<assert.h>
 #include	<errno.h>
 
-#include	"icc.h"
 #include	"comp.h"
+#include	"comp.tab.h"
 
+static int	yylex(void);		/* lexer for immcc renamed iClex() */
 static void	unget(int);		/* shares buffers with get() */
 static long	getNumber(void);	/* shares buffers with get() */
-static int	iClex(void);
 int		ynerrs;			/* count of yyerror() calls */
 int		gnerrs;			/* count of ierror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
@@ -61,7 +61,7 @@ char *		iFunEnd;		/* pointer to end */
 char *		iFunSymExt = 0;		/* pointer to imm function symbol Extension */
 static char *	iFunSyText = 0;		/* pointer to function symbol text when active */
 Sym		iRetSymbol;		/* .v is pointer to imm function return Symbol */
-char *		iCstmtp;		/* manipulated in iClex() (reset in clrBuf()) */
+char *		iCstmtp;		/* manipulated in yylex() (reset in clrBuf()) */
 static void	clrBuf(void);
 %}
 
@@ -69,8 +69,8 @@ static void	clrBuf(void);
     Sym		sym;			/* symbol table pointer */
     Lis		list;			/* linked list elements */
     Val		vai;			/* int numerical values */
+    Vap		vap;			/* union { int, Symbol* } */
     Typ		typ;			/* type, ftype, em and fm */
-    Str		str;			/* one character array */
     /* allows storing character as iClval.vai.v (2nd byte is NULL) */
     /* then char array can be referenced as $1.v, single char as $1.v[0] */
 }
@@ -89,7 +89,7 @@ clrBuf(void)
  *	Detailed logic generation debugging output for different stack types
  *	usually only called if ((iC_debug & 0402) == 0402)
  *				pu(SYM, "dasgn: decl = aexpr", &$$);
- *		Parameter 1:	one of SYM LIS VAL TYP or STR
+ *		Parameter 1:	one of SYM LIS VAL VAP or TYP
  *		Parameter 2:	a message - usually the grammar rule
  *		Parameter 3:	a pointer to the full yacc stack type token
  *
@@ -100,9 +100,9 @@ clrBuf(void)
  *	of the token itself which is in:
  *		Symbol * v	// Symbol name
  *		List_e * v	// name of Symbol List_e points to
- *		uint     v	// numerical value
- *		Type     v	// type information
- *	or	char     v[2]	// 2 character string
+ *		int      v	// numerical value
+ *		Valp     v	// numerical value or List_e*
+ *	or	Type     v	// type information
  *
  *******************************************************************/
 
@@ -123,7 +123,7 @@ pu(enum stackType t, const char * token, void * node)
 	break;
     case LIS:
 	if (((Lis*)node)->v) {
-	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, ((Lis*)node)->v->le_sym ? ((Lis*)node)->v->le_sym->name : "(0)");
+	    fprintf(iC_outFP, ">>>Lis	%s	%s =	", token, ((Lis*)node)->v->le_sym ? ((Lis*)node)->v->le_sym->name : "@0");
 	} else {
 	    fprintf(iC_outFP, ">>>Lis	%s	0 =	", token);
 	}
@@ -131,13 +131,20 @@ pu(enum stackType t, const char * token, void * node)
     case VAL:
 	fprintf(iC_outFP, ">>>Val	%s	%d =	", token, ((Val*)node)->v);
 	break;
+    case VAP:
+	if (((Vap*)node)->v.lfl == 0) {
+	    fprintf(iC_outFP, ">>>Vap	%s	%d =	", token, ((Vap*)node)->v.nuv);
+	} else
+	if (((Vap*)node)->v.lfl == 1) {
+	    fprintf(iC_outFP, ">>>Vap	%s *	%s =	", token, ((Vap*)node)->v.lpt->le_sym ? ((Vap*)node)->v.lpt->le_sym->name : "@0");
+	} else {
+	    fprintf(iC_outFP, ">>>Vap	%s *	error =	", token);
+	}
+	break;
     case TYP:
 	/* single character for type, . normal or - external, ftype */
 	fprintf(iC_outFP, ">>>Typ	%s	%c%c %c =	", token,
 	    iC_os[((Typ*)node)->v.type],  iC_os[((Typ*)node)->v.em  & EM], iC_fos[((Typ*)node)->v.ftype]);
-	break;
-    case STR:
-	fprintf(iC_outFP, ">>>Str	%s	%2.2s =	", token, ((Str*)node)->v);
 	break;
     }
     len = (t_last = ((Sym*)node)->l) - (t_first = ((Sym*)node)->f);
@@ -180,12 +187,12 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM IMMC VOID CONST TYPE SIZEOF
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
 %token	<vai>	CCFRAG NUMBER
-%token	<str>	LEXERR COMMENTEND LHEAD BE
+%token	<vai>	LEXERR COMMENTEND LHEAD BE
 %type	<sym>	program statement funcStatement simpleStatement asgnStatement iFunDef iFunHead
 %type	<sym>	return_statement formalParameter lBlock dVariable dIVariable dIMVariable dMVariable
 %type	<sym>	dCVariable valueVariable valueIVariable valueCVariable cVariable outVariable
 %type	<sym>	useFlag decl declC extDecl immDecl immCDecl asgn dasgn casgn dcasgn tasgn dtasgn
-%type	<sym>	iFunTrigger vFunCall rParams rPlist immT constType
+%type	<sym>	iFunTrigger vFunCall rParams rPlist immT
 %type	<sym>	extCdecl dVar immCarray immCarrayHead extimmCarray extimmCarrayHead immCarrayVariable
 %type	<list>	expr aexpr cexpr texpr actexpr comma_expr cexpr_comma_expr texpr_comma_expr ractexpr
 %ifdef	BOOT_COMPILE
@@ -193,24 +200,25 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 %endif	/* BOOT_COMPILE */
 %type	<list>	cref ctref ctdref cCall cParams cPlist dPar immCini immCiniList ifini ffexpr
 %type	<list>	fParams fPlist funcBody iFunCall cFunCall tFunCall
-%type	<vai>	cBlock dParams dPlist immCindex Constant constExpr
-%type	<typ>	declHead declCHead extDeclHead formalParaTypeDecl extCdeclHead
-%type	<str>	'{' '"' '\'' '}'	/* C/C++ brackets */
-%left	<str>	','		/* comma, function seperator */
-%right	<str>	'=' OPE
-%right	<str>	'?' ':'		/* ? : */
-%left	<str>	B_OR		/* || */
-%left	<str>	B_AND 		/* && */
-%left	<str>	'|'		/* logical or - must do before arithmetic operators */
-%left	<str>	'^'		/* logical exclusive or */
-%left	<str>	'&'		/* logical and */
-%left	<str>	EQU		/* equality operators == != */
-%left	<str>	CMP		/* comparison operators < <= > >= */
-%left	<str>	LEFT_OP RIGHT_OP/* arithmetic operators << >> */
-%left	<str>	'+' '-'		/* arithmetic operators + - */
-%left	<str>	'*' AOP		/* arithmetic operators * / % */
-%right	<str>	'!' '~' PPMM	/* unary operators ! ~ ++ -- (+ - & *) */
-%left	<str>	'(' ')' '[' ']' PR	/* parentheses -> . */
+%type	<vai>	cBlock dParams dPlist Constant
+%type	<vap>	immCindex constExpr
+%type	<typ>	declHead extDeclHead declCHead extCdeclHead formalParaTypeDecl formalConstTypeDecl
+%type	<vai>	'{' '"' '\'' '}'	/* C/C++ brackets */
+%left	<vai>	','		/* comma, function seperator */
+%right	<vai>	'=' OPE
+%right	<vai>	'?' ':'		/* ? : */
+%left	<vai>	B_OR		/* || */
+%left	<vai>	B_AND 		/* && */
+%left	<vai>	'|'		/* logical or - must do before arithmetic operators */
+%left	<vai>	'^'		/* logical exclusive or */
+%left	<vai>	'&'		/* logical and */
+%left	<vai>	EQU		/* equality operators == != */
+%left	<vai>	CMP		/* comparison operators < <= > >= */
+%left	<vai>	LEFT_SH RIGHT_SH/* arithmetic operators << >> */
+%left	<vai>	'+' '-'		/* arithmetic operators + - */
+%left	<vai>	'*' DIV		/* arithmetic operators * / % */
+%right	<vai>	'!' '~' PPMM	/* unary operators ! ~ ++ -- (+ - & *) */
+%left	<vai>	'(' ')' '[' ']' PR	/* parentheses -> . */
 %%
 
 	/************************************************************
@@ -852,23 +860,19 @@ extDeclHead
 	 * and C code normally do not need to be declared except for the
 	 * following cases:
 	 *
-	 * An 'imm' type declaration of an input variable is needed if that
-	 * variable has already been declared with an 'extern imm' declaration
-	 * in this source module (usually in an included .ih header) and its
-	 * storage is going to be defined in this source.
-	 *
-	 * An 'imm' type declaration of an output variable is needed if that
-	 * variable has already been declared with an 'extern imm' declaration
-	 * in this source module (usually in an included .ih header) and its
-	 * storage is going to be defined in this source. This also means that
-	 * the output variable should be assigned in this source.
+	 * An 'imm' type declaration of an input or output variable is needed
+	 * if that variable has already been declared with an 'extern imm'
+	 * declaration in this source module (usually in an included .ih header)
+	 * and its storage is to be defined in this source. This also means for
+	 * declared output variables that they should be assigned in this source.
 	 *
 	 * These rules for input and output variables are the same as for
 	 * ordinary immediate variables, except that an I/O variable which
 	 * has not been declared 'extern imm' does not need to be declared
 	 * at all (defined when used in iC code and C code by default) except
 	 * that output variables which are to be assigned in C code must
-	 * be declared with 'immC' like ordinary immediate variables.
+	 * be declared with 'immC' like ordinary immediate variables, even
+	 * when they have not been previously declared with 'extern immC'.
 	 *
 	 * declHead has type UDF for all TYPEs except ARNC and LOGC, which
 	 * are the TYPEs given to completed 'immC' Gate objects.
@@ -1102,13 +1106,51 @@ immCDecl
 		if (iFunSymExt) {
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "immCdecl: declC", &$$);
+#endif
 	    }
-	| declC '=' constExpr	{
+	| declC '=' iFunCall	{		/* make immC variable ALIAS of return from const expression */
+		List_e *	lp;
+		Symbol *	sp;
 		$$   = $1;			/* not strictly necessary - stype holds data */
-		listGenOut($1.v, -1, $3.v);	/* list immC node with initialiser value */
+		if ((lp = $3.v) != 0 &&
+		    (sp = lp->le_sym) != 0) {
+		    assert($1.v->type == ARNC || $1.v->type == LOGC);
+		    if (sp->type == ARNC &&		/* TODO what about LOGC */
+			(sp->em & EI) != 0 &&
+			sp->u_blist == 0) {		/* this ensures assignment will be an ALIAS */
+			$1.v->type = UDF;		/* to allow ALIAS assignment */
+			if (($$.v = assignExpression(&$1, &$3, 0)) == 0) YYERROR;
+		    } else if (sp->type == NCONST) {
+			Valp	v;			/* initialisation similar to constExpr */
+			v.lfl = 0;
+			v.nuv = sp->u_val;		/* numeric value returned by function */
+			listGenOut($1.v, -1, &v);	/* list immC node with initialiser value */
+		    } else {
+			goto NotConstFunReturn;
+		    }
+		} else {
+		  NotConstFunReturn:
+		    listGenOut($1.v, 1, 0);		/* list immC node without initialisation */
+		    warning("immC initialiser not a constant function return:", $1.v->name);
+		}
 		if (iFunSymExt) {
 		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
 		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "immCdecl: declC = iFunCall", &$$);
+#endif
+	    }
+	| declC '=' constExpr	{
+		$$   = $1;			/* not strictly necessary - stype holds data */
+		listGenOut($1.v, -1, &($3.v));	/* list immC node with initialiser value */
+		if (iFunSymExt) {
+		    iFunSyText = iFunBuffer;	/* expecting a new function symbol */
+		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "immCdecl: declC = constExpr", &$$);
+#endif
 	    }
 	;
 
@@ -1184,7 +1226,7 @@ declCHead
 	/************************************************************
 	 *
 	 * Assignment combined with a declaration
-	 * an output can only be recognised by its name: Q[XBWL]%d
+	 * an output is recognised by em & EO set (picks Q[XBWL]%d)
 	 *
 	 * Report an error if the type is an ARNC or LOGC, defined with immC
 	 *
@@ -1523,7 +1565,7 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr * expr", &$$);
 #endif
 	    }
-	| expr AOP expr		{			/* / % */
+	| expr DIV expr		{			/* / % */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -1534,7 +1576,7 @@ expr	: UNDEF			{
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr AOP expr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr DIV expr", &$$);
 #endif
 	    }
 	| expr '+' expr		{			/* binary + */
@@ -1565,7 +1607,7 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr '-' expr", &$$);
 #endif
 	    }
-	| expr LEFT_OP expr		{		/* << */
+	| expr LEFT_SH expr		{		/* << */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -1579,7 +1621,7 @@ expr	: UNDEF			{
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: expr << expr", &$$);
 #endif
 	    }
-	| expr RIGHT_OP expr		{		/* >> */
+	| expr RIGHT_SH expr		{		/* >> */
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
@@ -1866,9 +1908,9 @@ expr	: UNDEF			{
 	/************************************************************
 	 * Comma expression - lowest precedence
 	 * Very limited use in immediate C - only in parentheses
-	 * All except the last element, whose value is returned
-	 * must be an assignment - otherwise there would be a free
-	 * expression whose value goes nowhere.
+	 * All except the last element, whose value is returned,
+	 * must be an assignment or void function call - otherwise
+	 * there would be a free expression whose value goes nowhere.
 	 ***********************************************************/
 
 comma_expr
@@ -1981,72 +2023,15 @@ Constant
 	;
 
 constExpr
-	: Constant		{
-		$$ = $1;
+	: aexpr		{
+		$$.f = $1.f; $$.l = $1.l;
+		$$.v = evalConstExpr(&$1);		/* returns a Valp */
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: Constant", &$$);
-#endif
-	    }
-	| constExpr '*' constExpr		{	/* binary * */
-		$$.f = $1.f; $$.l = $3.l;
-		$$.v = $1.v * $3.v;			/* division not allowed in constant expressions */
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr * constExpr", &$$);
-#endif
-	    }
-	| constExpr '+' constExpr		{	/* binary + */
-		$$.f = $1.f; $$.l = $3.l;
-		$$.v = $1.v + $3.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr '+' constExpr", &$$);
-#endif
-	    }
-	| constExpr '-' constExpr		{	/* binary - */
-		$$.f = $1.f; $$.l = $3.l;
-		$$.v = $1.v - $3.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr '-' constExpr", &$$);
-#endif
-	    }
-	| constExpr LEFT_OP constExpr		{	/* << */
-		$$.f = $1.f; $$.l = $3.l;
-		$$.v = $1.v << $3.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr << constExpr", &$$);
-#endif
-	    }
-	| constExpr RIGHT_OP constExpr		{	/* >> */
-		$$.f = $1.f; $$.l = $3.l;
-		$$.v = $1.v >> $3.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: constExpr >> constExpr", &$$);
-#endif
-	    }
-	| '(' constExpr ')'		{
-		$$.f = $1.f; $$.l = $3.l;
-		$$.v = $2.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: (constExpr)", &$$);
-#endif
-	    }
-	/************************************************************
-	 * Unary + or -
-	 ***********************************************************/
-	| '+' constExpr %prec '!'	{		/* unary + */
-		$$.f = $1.f; $$.l = $2.l;
-		$$.v = $2.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: + constExpr", &$$);
-#endif
-	    }
-	| '-' constExpr %prec '!'	{		/* unary - */
-		$$.f = $1.f; $$.l = $2.l;
-		$$.v = - $2.v;
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(VAL, "constExpr: - constExpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(VAP, "constExpr: aexpr", &$$);
 #endif
 	    }
 	;
+
 %ifdef	BOOT_COMPILE
 
 	/************************************************************
@@ -2166,7 +2151,7 @@ ctref	: ctdref		{ $$ = $1; }		/* clock or timer with delay */
 ctdref	: cexpr			{ $$ = $1; }		/* clock */
 	| texpr ',' aexpr	{			/* timer with delay expression */
 		$$ = $1; $$.l = $3.l;
-		if ($3.v == 0) {
+		if (checkConstExpr($3.v) == NULL) {
 		    if (const_push(&$3)) { errInt(); YYERROR; }
 		}
 		$3.v = op_force($3.v, ARITH);
@@ -3041,7 +3026,7 @@ fPlist	: formalParameter		{
 		lp->le_first = $3.f;
 		lp->le_last = $3.l;
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "fPlist: fPlist , formalParameter", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fPlist: fPlist formalParameter", &$$);
 #endif
 	    }
 	;
@@ -3064,6 +3049,9 @@ formalParameter
 		}
 		$$.v->type  = UDF;			/* assign parameter is set to UDF */
 		iFunSyText = 0;				/* no more function symbols */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "formalParameter: ASSIGN formalParaTypeDecl UNDEF", &$$);
+#endif
 	    }
 	| formalParaTypeDecl UNDEF	{
 		int	ft;
@@ -3078,6 +3066,9 @@ formalParameter
 		}
 		$$.v->type = iC_types[ft];		/* value parameter has type set */
 		iFunSyText = 0;				/* no more function symbols */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "formalParameter: formalParaTypeDecl UNDEF", &$$);
+#endif
 	    }
 	| formalParaTypeDecl UNDEF '[' immCindex ']'	{
 		int		typ;
@@ -3104,57 +3095,46 @@ formalParameter
 		sp->type = typ;				/* only ARNC or LOGC (UDF on error) */
 		sp->ftype = UDFA;			/* immC array */
 		if (sp->type == ARNC || sp->type == LOGC) {
-		    if ((sp->v_cnt = (unsigned int)($4.v)) != 0) {		/* array size or 0 */
-			for (i = 0; i < sp->v_cnt; i++) {
-			    snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
-			    if ((tsp = lookup(tempBuf)) == 0) {
-				tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+		    if ($4.v.lfl == 0) {
+			if ((sp->v_cnt = (unsigned int)($4.v.nuv)) != 0) {	/* array size or 0 */
+			    for (i = 0; i < sp->v_cnt; i++) {
+				snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+				if ((tsp = lookup(tempBuf)) == 0) {
+				    tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+				}
+				if (sp->list == 0) {
+				    sp->list = lp = sy_push(tsp);	/* head of new member list */
+				    lp->le_val = sp->v_cnt;
+				} else {
+				    lp = lp->le_next = sy_push(tsp);	/* link to end of new member list */
+				}
 			    }
-			    if (sp->list == 0) {
-				sp->list = lp = sy_push(tsp);	/* head of new member list */
-				lp->le_val = sp->v_cnt;
-			    } else {
-				lp = lp->le_next = sy_push(tsp);/* link to end of new member list */
-			    }
-			}
-		    }					/* if array size 0 this is an anonymous array */
+			}				/* if array size 0 this is an anonymous array */
+			sp->em &= ~EI;			/* mark as constant */
+		    } else
+		    if ($4.v.lfl == 1) {
+			sp->v_elist = $4.v.lpt;		/* pointer to constant parameter */
+			sp->em |= EI;			/* mark as pointer */
+		    }
 		} else {
 		    ierror("formal array parameter other than immC bit or immC int:", sp->name);
 		    sp->type = ERR;
 		}
 		iFunSyText = 0;				/* no more function symbols */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "formalParameter: formalParaTypeDecl UNDEF [ immCindex ]", &$$);
+#endif
 	    }
-	| constType UNDEF	{
+	| formalConstTypeDecl UNDEF	{
 		$$ = $2;				/* formal constant parameter Symbol */
-		assert($1.v->ftype == ARITH);
-		$$.v->ftype = ARITH;			/* TYPE int only */
-		$$.v->type = NCONST;			/* TODO how to pass min/max */
+		assert($1.v.ftype == ARITH);
+		$$.v->ftype = ARITH;
+		$$.v->type = ARN;			/* int */
+		$$.v->em |= EI;				/* mark parameter as a const */
 		iFunSyText = 0;				/* no more function symbols */
-	    }
-	;
-
-constType
-	: CONST				{
-		$$ = $1;				/* formal value parameter const (int) */
-	    }
-	| CONST TYPE			{
-		switch ($2.v->ftype) {
-		case ARITH:
-		    break;				/* correct type const int */
-		case GATE:
-		    warning("const bit is deprecated as a formal parameter - const int assumed:", NS);
-		    break;
-		case CLCKL:
-		    ierror("const clock is not allowed as a formal parameter:", NS);
-		    break;
-		case TIMRL:
-		    ierror("const timer is not allowed as a formal parameter:", NS);
-		    break;
-		default:
-		    assert(0);
-		    break;
-		}
-		$$ = $1;				/* formal value parameter const int */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "formalParameter: formalConstTypeDecl UNDEF", &$$);
+#endif
 	    }
 	;
 
@@ -3162,8 +3142,8 @@ formalParaTypeDecl
 	: TYPE				{
 		$$.f = $$.l = $1.l;			/* do not include in expression string */
 		$$.v.ftype = $1.v->ftype;		/* ARITH GATE CLCKL TIMRL */
-		$$.v.em &= ~EM;
 		$$.v.type = UDF;
+		$$.v.em &= ~EM;
 		$$.v.fm = 0;
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 #if YYDEBUG == 2
@@ -3196,6 +3176,76 @@ formalParaTypeDecl
 		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
 #if YYDEBUG == 2
 		if ((iC_debug & 0402) == 0402) pu(TYP, "formalParaTypeDecl: immT TYPE", &$$);
+#endif
+	    }
+	;
+
+	/************************************************************
+	 * Allowing CONST without a following TYPE (only int is legitimate)
+	 * leads to a grammar inconsistency.
+	 *	iFunSyText = iFunBuffer; would not be executed until the
+	 * following UNDEF is seen, because a TYPE may follow.
+	 * This is too late to precede the UNDEF with iFunSymExt.
+	 * This would make the parameter look like an undefined extern.
+	 ***********************************************************/
+
+formalConstTypeDecl
+	: CONST TYPE			{
+		$$.f = $$.l = $2.l;			/* do not include in expression string */
+		switch ($2.v->ftype) {
+		case ARITH:
+		    break;				/* correct type const int */
+		case GATE:
+		    ierror("const bit is not allowed as a formal parameter:", NS);
+		    break;
+		case CLCKL:
+		    ierror("const clock is not allowed as a formal parameter:", NS);
+		    break;
+		case TIMRL:
+		    ierror("const timer is not allowed as a formal parameter:", NS);
+		    break;
+		default:
+		    assert(0);
+		    break;
+		}
+		$$.v.type = UDF;			/* formal value parameter const int */
+		$$.v.ftype = ARITH;
+		$$.v.em &= ~EM;
+		$$.v.fm = 0;
+		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "formalConstTypeDecl: CONST TYPE", &$$);
+#endif
+	    }
+	| immT CONST TYPE			{
+		$$.f = $$.l = $3.l;			/* do not include in expression string */
+		if ($1.v->ftype == 1) {			/* immC in init.c */
+		    ierror("immC const is not allowed as a formal parameter:", NS);
+		} else {
+		    switch ($3.v->ftype) {
+		    case ARITH:
+			break;				/* correct type const int */
+		    case GATE:
+			ierror("imm const bit is not allowed as a formal parameter:", NS);
+			break;
+		    case CLCKL:
+			ierror("imm const clock is not allowed as a formal parameter:", NS);
+			break;
+		    case TIMRL:
+			ierror("imm const timer is not allowed as a formal parameter:", NS);
+			break;
+		    default:
+			assert(0);
+			break;
+		    }
+		}
+		$$.v.type = UDF;			/* formal value parameter const int */
+		$$.v.ftype = ARITH;
+		$$.v.em &= ~EM;
+		$$.v.fm = 0;
+		iFunSyText = iFunBuffer;		/* expecting a new function symbol */
+#if YYDEBUG == 2
+		if ((iC_debug & 0402) == 0402) pu(TYP, "formalConstTypeDecl: IMM CONST TYPE", &$$);
 #endif
 	    }
 	;
@@ -3316,7 +3366,7 @@ vFunCall: VFUNCTION '(' rParams ')'	{
 	 *	Subsequent calls link the next parameter to hsp->u_blist->le_next
 	 *
 	 *	All this is done before the execution of cloneFunction(), which
-	 *	includes setting up the correct function head accrding to the
+	 *	includes setting up the correct function head according to the
 	 *	signature returned, analysing the parameters against the formal
 	 *	parameters and actually cloning the function. Nested calls will
 	 *	have their own *hsp, which obviates the need for an extra stack.
@@ -3330,7 +3380,7 @@ rParams	: /* nothing */			{ $$.v =  0; }
 
 rPlist	: ractexpr			{
 		$$.f = $1.f; $$.l = $1.l;
-		if ($1.v == 0) {
+		if (checkConstExpr($1.v) == NULL) {
 		    if (const_push(&$1)) { errInt(); YYERROR; }
 		}
 		$$.v = getRealParameter(0, $1.v);
@@ -3340,12 +3390,12 @@ rPlist	: ractexpr			{
 	    }
 	| rPlist ',' ractexpr		{
 		$$.f = $1.f; $$.l = $3.l;
-		if ($3.v == 0) {			/* must extract value from aexpr */
+		if (checkConstExpr($3.v) == NULL) {			/* must extract value from aexpr */
 		    if (const_push(&$3)) { errInt(); YYERROR; }
 		}
 		$$.v = getRealParameter($1.v, $3.v);
 #if YYDEBUG
-		if ((iC_debug & 0402) == 0402) pu(LIS, "rPlist: rPlist , ractexpr", &$$);
+		if ((iC_debug & 0402) == 0402) pu(LIS, "rPlist: rPlist, ractexpr", &$$);
 #endif
 	    }
 	;
@@ -3372,7 +3422,7 @@ rPlist	: ractexpr			{
 	 *
 	 *	Alternatively an 'immC' array may be declared and initialised in the
 	 *	declaration with differently named 'immC' variables of the same
-	 * 'immC' type as the 'immC' array. In this case the size specification is
+	 *	'immC' type as the 'immC' array. In this case the size specification is
 	 *	optional.
 	 *
 	 *	    immC bit selOpen[3] = { open0, open1, open2, };
@@ -3392,10 +3442,11 @@ rPlist	: ractexpr			{
 	 *
 	 *	'immC' arrays may only be declared and optionally called with an initialiser
 	 *	list once in one statement. Like simmple 'immC' declarations, 'immC' array
-	 *	declarations reserve and initialise storage. 'immC' array declarations
-	 *	can be included in a comma separated list of 'immC' declarations. The
-	 *	keywords 'immC bit' or 'immC int' at the head of the list need only be
-	 *	given once.
+	 *	declarations reserve and initialise storage, but only to 0.
+	 *
+	 *	'immC' array declarations can be included in a comma separated list of
+	 *	'immC' declarations. The keywords 'immC bit' or 'immC int' at the head
+	 *	of the list need only be given once.
 	 *
 	 *	'immC' arrays are accessed with a numeric index, which selects a
 	 *	particular 'immC' node stored during initialisation (similar to ALIAS).
@@ -3446,55 +3497,66 @@ immCarray
 		Symbol *	tsp;
 		List_e *	lp;
 		int		i;
+		Valp		v;
 		char		tempBuf[TSIZE];
 		$$.f = $1.f; $$.l = $1.l;
 		sp = $$.v = $1.v;
 		assert((sp->em & EM) == 0 && (sp->type == ARNC || sp->type == LOGC || sp->type == ERR));
-		if (sp->v_cnt <= 0) {
-		    ierror("must specify array size since there is no member initialiser list:", $$.f);
-		    sp->type = ERR;
-		} else if ((lp = sp->list) == 0) {
-		    listGenOut(sp, sp->v_cnt, 0);	/* list immC array node */
-		    for (i = 0; i < sp->v_cnt; i++) {
-			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
-			if ((tsp = lookup(tempBuf)) == 0) {
-			    tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
-			    listGenOut(tsp, 0, 0);	/* list immC node and generate possible output */
-			}				/* not listed if member node already defined */
-			if (sp->type != tsp->type && sp->type != ERR) {
-			    ierror("array member type does not match type of whole array:", tsp->name);
-			    sp->type = ERR;		/* can only happen if member alread existed */
-			}
-			if (sp->list == 0) {
-			    sp->list = lp = sy_push(tsp);	/* head of new member list */
-			    lp->le_val = sp->v_cnt;
-			} else {
-			    lp = lp->le_next = sy_push(tsp);	/* link to end of new member list */
-			}
-		    }
-		    listGenOut(NULL, 1, 0);		/* terminate immC array node list */
+		if (sp->em & EI) {
+		    v.lfl = 1;
+		    v.lpt = sp->v_elist;
+		    listGenOut(sp, -2, &v);			/* list immC array node with const parameter size */
+		    assert(sp->list == 0);
+		    sp->list = sp->v_elist;			/* transfer dynamic size expression pointer */
+		    sp->v_elist = 0;				/* must be cleared for gram.y */
 		} else {
-		    assert(lp->le_val == sp->v_cnt);	/* previously declared extern */
-		    listGenOut(sp, sp->v_cnt, 0);	/* list immC array node */
-		    for (i = 0; i < sp->v_cnt; i++) {	/* use member list set up in extern declaration */
-			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
-			if ((tsp = lookup(tempBuf)) != 0 && lp && tsp != lp->le_sym) {
-			    ierror("different array member to member in extern declaration:", tsp->name);
-			    sp->type = ERR;
-			} else {
-			    if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
-				if (sp->type != ERR) {	/* TD might be assertion because tested in extern decl */
-				    ierror("array member type does not match type of whole array:", tsp->name);
-				    sp->type = ERR;	/* can only happen if member alread existed */
-				}
-			    } else if (tsp->em & EM) {	/* extern ARNC or LOGC ? */
-				tsp->em &= ~EM;		/* no longer extern */
-				listGenOut(tsp, 0, 0);	/* list immC node and generate possible output */
+		    if (sp->v_cnt == 0) {
+			ierror("must specify array size since there is no member initialiser list:", $$.f);
+			sp->type = ERR;
+		    } else
+		    if ((lp = sp->list) == 0) {
+			listGenOut(sp, sp->v_cnt, 0);		/* list immC array node with numerical size */
+			for (i = 0; i < sp->v_cnt; i++) {
+			    snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			    if ((tsp = lookup(tempBuf)) == 0) {
+				tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+				listGenOut(tsp, 0, 0);		/* list immC node and generate possible output */
+			    }					/* not listed if member node already defined */
+			    if (sp->type != tsp->type && sp->type != ERR) {
+				ierror("array member type does not match type of whole array:", tsp->name);
+				sp->type = ERR;			/* can only happen if member alread existed */
+			    }
+			    if (sp->list == 0) {
+				sp->list = lp = sy_push(tsp);	/* head of new member list */
+				lp->le_val = sp->v_cnt;
+			    } else {
+				lp = lp->le_next = sy_push(tsp);/* link to end of new member list */
 			    }
 			}
-			lp = lp->le_next;
+			listGenOut(NULL, 1, 0);			/* terminate immC array node list */
+		    } else {
+			assert(lp->le_val == sp->v_cnt);	/* previously declared extern */
+			listGenOut(sp, sp->v_cnt, 0);		/* list immC array node */
+			for (i = 0; i < sp->v_cnt; i++) {	/* use member list set up in extern declaration */
+			    snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			    if ((tsp = lookup(tempBuf)) != 0 && lp && tsp != lp->le_sym) {
+				ierror("different array member to member in extern declaration:", tsp->name);
+				sp->type = ERR;
+			    } else {
+				if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
+				    if (sp->type != ERR) {	/* TD might be assertion because tested in extern decl */
+					ierror("array member type does not match type of whole array:", tsp->name);
+					sp->type = ERR;	/* can only happen if member alread existed */
+				    }
+				} else if (tsp->em & EM) {	/* extern ARNC or LOGC ? */
+				    tsp->em &= ~EM;		/* no longer extern */
+				    listGenOut(tsp, 0, 0);	/* list immC node and generate possible output */
+				}
+			    }
+			    lp = lp->le_next;
+			}
+			listGenOut(NULL, 1, 0);		/* terminate immC array node list */
 		    }
-		    listGenOut(NULL, 1, 0);		/* terminate immC array node list */
 		}
 		sp->v_cnt = 0;				/* must be cleared for gram.y */
 		if (iFunSymExt) {
@@ -3522,56 +3584,61 @@ immCarray
 		$$.f = $1.f; $$.l = $5.l;
 		sp = $$.v = $1.v;
 		assert((sp->em & EM) == 0 && (sp->type == ARNC || sp->type == LOGC || sp->type == ERR));
-		if (sp->v_cnt > 0 && sp->v_cnt != $4.v->le_val) {
-		    fprintf(stderr, "immCarray: array size %u, initaliser count %u\n", sp->v_cnt, $4.v->le_val);
-		    ierror("array size does not match number of member initialisers:", $$.f);
+		if (sp->em & EI) {
+		    ierror("array size set by a constant parameter cannot have member initialisers:", $$.f);
 		    sp->type = ERR;
-		}
-		sp->v_cnt = $4.v->le_val;		/* number of member initialisers is array size */
-		/* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
-		tlp = ttlp = sp->list;			/* extern declaration if set */
-		listGenOut(sp, sp->v_cnt, 0);		/* list immC array node */
-		for (lp = $4.v, i = 0; lp; lp = lp->le_next, i++) {
-		    if (tlp && (ttlp = tlp->le_next, 1) && (tsp = sy_pop(tlp)) != lp->le_sym) {	/* remove extern List_e */
-			ierror("different array member to member in extern declaration:", tsp->name);
+		} else {
+		    if (sp->v_cnt > 0 && sp->v_cnt != $4.v->le_val) {
+			fprintf(stderr, "immCarray: array size %u, initaliser count %u\n", sp->v_cnt, $4.v->le_val);
+			ierror("array size does not match number of member initialisers:", $$.f);
 			sp->type = ERR;
 		    }
-		    if (lp->le_sym->type == UDF) {
-			if (lp->le_sym->ftype == UDFA) {
-			    lp->le_sym->type = sp->type;/* turn into immC variable */
-			    lp->le_sym->ftype = iC_ftypes[sp->type];
-			    assert((lp->le_sym->em & EM) == 0);
-			    listGenOut(lp->le_sym, 0, 0);	/* list immC node and generate possible output */
-			} else {
-			    goto TypErr;
-			}
-		    } else
-		    if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
-			if (sp->type != ERR) {
-			  TypErr:
-			    ierror("array member type does not match type of whole array:", lp->le_sym->name);
+		    sp->v_cnt = $4.v->le_val;			/* number of member initialisers is array size */
+		    /* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
+		    tlp = ttlp = sp->list;			/* extern declaration if set */
+		    listGenOut(sp, sp->v_cnt, 0);		/* list immC array node */
+		    for (lp = $4.v, i = 0; lp; lp = lp->le_next, i++) {
+			if (tlp && (ttlp = tlp->le_next, 1) && (tsp = sy_pop(tlp)) != lp->le_sym) {	/* remove extern List_e */
+			    ierror("different array member to member in extern declaration:", tsp->name);
 			    sp->type = ERR;
 			}
-		    } else if (lp->le_sym->em & EM) {	/* extern ARNC or LOGC ? */
-			lp->le_sym->em &= ~EM;		/* no longer extern */
-			listGenOut(lp->le_sym, 0, 0);	/* list immC node and generate possible output */
+			if (lp->le_sym->type == UDF) {
+			    if (lp->le_sym->ftype == UDFA) {
+				lp->le_sym->type = sp->type;	/* turn into immC variable */
+				lp->le_sym->ftype = iC_ftypes[sp->type];
+				assert((lp->le_sym->em & EM) == 0);
+				listGenOut(lp->le_sym, 0, 0);	/* list immC node and generate possible output */
+			    } else {
+				goto TypErr;
+			    }
+			} else
+			if (sp->type != lp->le_sym->type) {	/* ARNC or LOGC asserted above */
+			    if (sp->type != ERR) {
+			      TypErr:
+				ierror("array member type does not match type of whole array:", lp->le_sym->name);
+				sp->type = ERR;
+			    }
+			} else if (lp->le_sym->em & EM) {	/* extern ARNC or LOGC ? */
+			    lp->le_sym->em &= ~EM;		/* no longer extern */
+			    listGenOut(lp->le_sym, 0, 0);	/* list immC node and generate possible output */
+			}
+			tlp = ttlp;
 		    }
-		    tlp = ttlp;
+		    listGenOut(NULL, 1, 0);			/* terminate immC array node list */
+		    assert(tlp == NULL && i == sp->v_cnt);
+		    sp->list = $4.v;				/* head of the member list - inherits initialiser count */
 		}
-		listGenOut(NULL, 1, 0);			/* terminate immC array node list */
-		assert(tlp == NULL && i == sp->v_cnt);
-		sp->list = $4.v;			/* head of the member list - inherits initialiser count */
-		sp->v_cnt = 0;				/* must be cleared for gram.y */
+		sp->v_cnt = 0;					/* must be cleared for gram.y */
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
-		    cp = strchr(sp->name, '@');		/* locate original extension */
-		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
+		    cp = strchr(sp->name, '@');			/* locate original extension */
+		    assert(cp && isprint(cp[1]));		/* extension must be at least 1 character */
 		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
 			warning("declaration of an extern variable in a function - ignored:", cp);
 		    }
 		    collectStatement(sp);
-		    iFunSyText = 0;			/* no more function symbols */
+		    iFunSyText = 0;				/* no more function symbols */
 		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "immCarray: immCarrayHead = { immCini }", &$$);
@@ -3580,8 +3647,8 @@ immCarray
 	;
 
 immCindex
-	: /* nothing */		{ $$.v =  0; }
-	| constExpr		{ $$   = $1; }		/* constant expression */
+	: /* nothing */		{ $$.v.lfl = $$.v.nuv = 0; }
+	| constExpr		{ $$ = $1; }		/* constant expression or parameter* */
 	;
 
 immCarrayHead
@@ -3594,7 +3661,14 @@ immCarrayHead
 		assert(($1.v.em & EM) == 0);		/* has been cleared in declCHead */
 		sp->em    &= ~EM;			/* clear bit EM here */
 		if (sp->type == ARNC || sp->type == LOGC) {
-		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
+		    if ($4.v.lfl == 0) {
+			sp->v_cnt = (unsigned int)($4.v.nuv);	/* array size or 0 */
+			sp->em &= ~EI;			/* mark as constant */
+		    } else
+		    if ($4.v.lfl == 1) {
+			sp->v_elist = $4.v.lpt;		/* pointer to constant parameter */
+			sp->em |= EI;			/* mark as pointer */
+		    }
 		} else {
 		    ierror("Definition of a non immC array is illegal:", $$.f);
 		    sp->type = ERR;
@@ -3616,9 +3690,18 @@ immCarrayHead
 		    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 		} else
 		if (sp->em & EM) {
-		    if ($4.v > 0 && sp->list->le_val != (unsigned int)($4.v)) {
-			fprintf(stderr, "immCarrayHead: extern array size %u, array size %u\n", sp->list->le_val, $4.v);
-			ierror("array size does not match previous extern declaration:", $$.f);
+		    if ($4.v.lfl == 0) {
+			if ($4.v.nuv > 0 && sp->list->le_val != (unsigned int)($4.v.nuv)) {
+			    fprintf(stderr, "immCarrayHead: extern array size %u, array size %u\n", sp->list->le_val, $4.v.nuv);
+			    ierror("array size does not match previous extern declaration:", $$.f);
+			    sp->type = ERR;
+			}
+			sp->em &= ~EI;			/* mark as constant */
+		    } else
+		    if ($4.v.lfl == 1) {
+			/* can only get here if extern declaration had a fixed size and this one is dynamic */
+			fprintf(stderr, "immCarrayHead: extern array size %u\n", sp->list->le_val);
+			ierror("dynamic array size cannot match previous fixed extern declaration:", $$.f);
 			sp->type = ERR;
 		    }
 		    sp->em    &= ~EM;			/* clear bit EM here */
@@ -3760,40 +3843,38 @@ extimmCarray
 		    }
 		    sp->list = NULL;
 		}
-		if (sp->v_cnt <= 0) {
-		    ierror("must specify array size since there is no member initialiser list:", $$.f);
+		if (iFunSymExt) {
+		    ierror("cannot extern declare an array in a function block:", $$.f);
+		    sp->type = ERR;
+		} else
+		if (sp->em & EI) {
+		    ierror("extern array cannot have size set by a constant parameter:", $$.f);
 		    sp->type = ERR;
 		} else {
-		    for (i = 0; i < sp->v_cnt; i++) {
-			snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
-			if ((tsp = lookup(tempBuf)) == 0) {
-			    tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
-			    tsp->em |= EM|EX;		/* make newly created member external immC */
-			}
-			if (sp->type != tsp->type && sp->type != ERR) {
-			    ierror("array member type does not match type of whole array:", tsp->name);
-			    sp->type = ERR;		/* can only happen if member alread existed */
-			}
-			if (sp->list == NULL) {
-			    sp->list = lp = sy_push(tsp);/* head of the member list */
-			    lp->le_val = sp->v_cnt;
-			} else {
-			    lp = lp->le_next = sy_push(tsp);
+		    if (sp->v_cnt == 0) {
+			ierror("must specify array size since there is no member initialiser list:", $$.f);
+			sp->type = ERR;
+		    } else {
+			for (i = 0; i < sp->v_cnt; i++) {
+			    snprintf(tempBuf, TSIZE, "%s%d", sp->name, i);	/* base name + index */
+			    if ((tsp = lookup(tempBuf)) == 0) {
+				tsp = install(tempBuf, sp->type, iC_ftypes[sp->type]);
+				tsp->em |= EM|EX;	/* make newly created member external immC */
+			    }
+			    if (sp->type != tsp->type && sp->type != ERR) {
+				ierror("array member type does not match type of whole array:", tsp->name);
+				sp->type = ERR;		/* can only happen if member alread existed */
+			    }
+			    if (sp->list == NULL) {
+				sp->list = lp = sy_push(tsp);	/* head of the member list */
+				lp->le_val = sp->v_cnt;
+			    } else {
+				lp = lp->le_next = sy_push(tsp);
+			    }
 			}
 		    }
 		}
 		sp->v_cnt = 0;				/* must be cleared for gram.y */
-		if (iFunSymExt) {
-		    char *	cp;
-		    Symbol *	sp1;
-		    cp = strchr(sp->name, '@');		/* locate original extension */
-		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
-		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
-			warning("declaration of an extern variable in a function - ignored:", cp);
-		    }
-		    collectStatement(sp);
-		    iFunSyText = 0;			/* no more function symbols */
-		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead", &$$);
 #endif
@@ -3814,42 +3895,40 @@ extimmCarray
 		    }
 		    sp->list = NULL;
 		}
-		if (sp->v_cnt > 0 && sp->v_cnt != $4.v->le_val) {
-		    fprintf(stderr, "extimmCarray: array size %u, initaliser count %u\n", sp->v_cnt, $4.v->le_val);
-		    ierror("array size does not match number of member initialisers:", $$.f);
+		if (iFunSymExt) {
+		    ierror("cannot extern declare an array in a function block:", $$.f);
 		    sp->type = ERR;
-		}
-		sp->v_cnt = $4.v->le_val;		/* number of member initialisers is array size */
-		/* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
-		for (lp = $4.v; lp; lp = lp->le_next) {
-		    if (lp->le_sym->type == UDF) {
-			if (lp->le_sym->ftype == UDFA) {
-			    lp->le_sym->type = sp->type;/* turn into immC variable */
-			    lp->le_sym->ftype = iC_ftypes[sp->type];
-			    lp->le_sym->em |= EM|EX;	/* make member external immC */
-			} else {
-			    goto ExtTypErr;
-			}
-		    }
-		    if (sp->type != lp->le_sym->type && sp->type != ERR) {
-		      ExtTypErr:
-			ierror("array member type does not match type of whole array:", lp->le_sym->name);
+		} else
+		if (sp->em & EI) {
+		    ierror("extern array cannot have size set by a constant parameter:", $$.f);
+		    sp->type = ERR;
+		} else {
+		    if (sp->v_cnt > 0 && sp->v_cnt != $4.v->le_val) {
+			fprintf(stderr, "extimmCarray: array size %u, initaliser count %u\n", sp->v_cnt, $4.v->le_val);
+			ierror("array size does not match number of member initialisers:", $$.f);
 			sp->type = ERR;
 		    }
-		}
-		sp->list = $4.v;			/* head of the member list - inherits initialiser count */
-		sp->v_cnt = 0;				/* must be cleared for gram.y */
-		if (iFunSymExt) {
-		    char *	cp;
-		    Symbol *	sp1;
-		    cp = strchr(sp->name, '@');		/* locate original extension */
-		    assert(cp && isprint(cp[1]));	/* extension must be at least 1 character */
-		    if ((sp1 = lookup(++cp)) != 0 && (sp1->em & EM)) {
-			warning("declaration of an extern variable in a function - ignored:", cp);
+		    sp->v_cnt = $4.v->le_val;			/* number of member initialisers is array size */
+		    /* v_cnt is not preserved to outNet() - but list and count in list->le_val is */
+		    for (lp = $4.v; lp; lp = lp->le_next) {
+			if (lp->le_sym->type == UDF) {
+			    if (lp->le_sym->ftype == UDFA) {
+				lp->le_sym->type = sp->type;	/* turn into immC variable */
+				lp->le_sym->ftype = iC_ftypes[sp->type];
+				lp->le_sym->em |= EM|EX;	/* make member external immC */
+			    } else {
+				goto ExtTypErr;
+			    }
+			}
+			if (sp->type != lp->le_sym->type && sp->type != ERR) {
+			  ExtTypErr:
+			    ierror("array member type does not match type of whole array:", lp->le_sym->name);
+			    sp->type = ERR;
+			}
 		    }
-		    collectStatement(sp);
-		    iFunSyText = 0;			/* no more function symbols */
+		    sp->list = $4.v;				/* head of the member list - inherits initialiser count */
 		}
+		sp->v_cnt = 0;					/* must be cleared for gram.y */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead = { immCini }", &$$);
 #endif
@@ -3866,9 +3945,16 @@ extimmCarrayHead
 		assert($1.v.em & (EM|EX));		/* has been set in extDeclHead */
 		sp->em    |= EM|EX;			/* set em for extern declaration */
 		if (sp->type == ARNC || sp->type == LOGC) {
-		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
+		    if ($4.v.lfl == 0) {
+			sp->v_cnt = (unsigned int)($4.v.nuv);	/* array size or 0 */
+			sp->em &= ~EI;			/* mark as constant */
+		    } else
+		    if ($4.v.lfl == 1) {
+			ierror("extern declaration of a parameterised function internal immC array is illegal:", $$.f);
+			sp->type = ERR;
+		    }
 		} else {
-		    ierror("Extern declaration of a non immC array is illegal:", $$.f);
+		    ierror("extern declaration of a non immC array is illegal:", $$.f);
 		    sp->type = ERR;
 		}
 #if YYDEBUG
@@ -3895,7 +3981,14 @@ extimmCarrayHead
 		    sp->ftype = UDFA;			/* makes it a IMMCARRAY */
 		    assert($1.v.em & (EM|EX));		/* has been set in extDeclHead */
 		    sp->em    |= EM|EX;			/* set em for extern declaration */
-		    sp->v_cnt = (unsigned int)($4.v);	/* array size or 0 */
+		    if ($4.v.lfl == 0) {
+			sp->v_cnt = (unsigned int)($4.v.nuv);	/* array size or 0 */
+			sp->em &= ~EI;			/* mark as constant */
+		    } else
+		    if ($4.v.lfl == 1) {
+			ierror("extern declaration of a parameterised function internal immC array is illegal:", $$.f);
+			sp->type = ERR;
+		    }
 		} else {
 		    warning("second extern array declaration - ignored:", $2.v->name);
 		} /* TD FIX */
@@ -3935,6 +4028,7 @@ immCarrayVariable
 		$$.f = $1.f; $$.l = $4.l;
 		Symbol *	sp;
 		List_e *	lp;
+		int		index;
 		int		i;
 		$$.v = sp = $1.v;
 		assert(sp && sp->ftype == UDFA);
@@ -3948,21 +4042,29 @@ immCarrayVariable
 		    $$.v->type = ERR;			/* in case of error */
 		    ierror("immC array must be initialised to use its members:", sp->name);
 		} else {
-		    if ($3.v < 0 || $3.v >= lp->le_val) {
-			if (($$.v = lookup("iCerr")) == 0) {
-			    icerr = $$.v = install("iCerr", ERR, GATE);
-			}
-			$$.v->type = ERR;		/* in case of error */
-			ierror("immC array member is not in range:", sp->name);
-		    } else {
-			for (i = 0; i < $3.v; i++) {
-			    lp = lp->le_next;		/* select indexed member */
-			    if (lp == NULL || lp->le_sym == NULL) {
-				execerror("immCarrayVariable: member not initialised by compiler", sp->name, __FILE__, __LINE__);
-				/* compiler error - flushes rest of file */
+		    if ($3.v.lfl == 0) {
+			index = $3.v.nuv;		/* array index */
+			if (index < 0 || index >= lp->le_val) {
+			    if (($$.v = lookup("iCerr")) == 0) {
+				icerr = $$.v = install("iCerr", ERR, GATE);
 			    }
+			    $$.v->type = ERR;		/* in case of error */
+			    ierror("immC array member is not in range:", sp->name);
+			} else {
+			    for (i = 0; i < index; i++) {
+				lp = lp->le_next;	/* select indexed member */
+				if (lp == NULL || lp->le_sym == NULL) {
+				    execerror("immCarrayVariable: member not initialised by compiler", sp->name, __FILE__, __LINE__);
+				    /* compiler error - flushes rest of file */
+				}
+			    }
+			    $$.v = lp->le_sym;		/* return the member Symbol */
+			    $$.v->em &= ~EI;		/* mark as member returned by constant index */
 			}
-			$$.v = lp->le_sym;		/* return the member Symbol */
+		    } else
+		    if ($3.v.lfl == 1) {
+			$$.v->v_elist = $3.v.lpt;	/* pointer to constant parameter */
+			$$.v->em |= EI;			/* mark as pointer */
 		    }
 		}
 #if YYDEBUG
@@ -4066,8 +4168,8 @@ iC_compile(
 	strncpy(inpNM, inpPath, BUFS);
 	r = 0;
 	if (strlen(iC_defines) == 0) {
-	    /* pre-compile if iC files contains any #include, #define #if etc but not #line or # 1 etc */
-	    /* also pre-compile if iC files contains any %include, %define %if etc */
+	    /* pre-compile if iC files contains any #include, #define etc but not #line or # 1 etc */
+	    /* also pre-compile if iC files contains any %include, %define etc */
 #ifdef	WIN32
 	    fflush(iC_outFP);
 	    /* CMD.EXE does not know '' but does not interpret $, so use "" */
@@ -4096,7 +4198,7 @@ iC_compile(
 	}
 #endif
 	if (r == 0) {
-	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #if etc or %if etc was found by perl script */
+	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #if etc etc was found by perl script */
 	    /* pass the input file through the C pre-compiler to resolve #includes and macros */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);
@@ -4205,7 +4307,7 @@ get(FILE* fp, int x)
      *  out to find a token (which is any non white space string).
      *  If that token is "else" proceed as before. Otherwise replace
      *  the initial space in auxBuf with the character '\x1f'. In
-     *  iClex this will generate the BF yacc token, which must appear
+     *  yylex this will generate the BF yacc token, which must appear
      *  at the end of ffexpr in a statement (another change).
      *
      *  Unfortunately the whole comment recognising gumph must be put
@@ -4583,7 +4685,7 @@ getNumber(void)
  *******************************************************************/
 
 static int
-iClex(void)
+yylex(void)
 {
     int		c;
     int		c1;
@@ -4738,6 +4840,7 @@ iClex(void)
 			    if (y0[0] == 'Q') {
 				qtoken = lex_act[OUTX - wplus]; /* LOUT or AOUT */
 			    } else {
+				qtoken = 1;		/* I... */
 				typ = INPX - wplus;	/* INPX or INPW */
 				if (y0[0] != 'T') {
 				    qmask <<= 4;	/* IX, IB, IW or IL */
@@ -4845,7 +4948,7 @@ iClex(void)
 	    if (strcmp(iCtext, "__END__") == 0) {
 		return 0;			/* early termination */
 	    }
-	    if (iFunSymExt && ! qtoken) {	/* in function definition */
+	    if (iFunSymExt && ! qtoken) {	/* in function definition and not I/O */
 		if (iRetSymbol.v && strcmp(iCtext, "this") == 0) {
 		    symp = iRetSymbol.v;	/* function return Symbol */
 		} else {
@@ -4909,7 +5012,7 @@ iClex(void)
 	    }
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		fprintf(iC_outFP, "iClex: %s %s %s\n",
+		fprintf(iC_outFP, "yylex: %s %s %s\n",
 		    symp->name, iC_full_type[symp->type], iC_full_ftype[symp->ftype]);
 		fflush(iC_outFP);
 	    }
@@ -4951,7 +5054,7 @@ iClex(void)
 	    if (typ >= KEYW) {
 		c = symp->u_val;		/* reserved word or C-type */
 	    } else
-	    if (qtoken) {
+	    if (qtoken > 1) {			/* ignore I... */
 		c = qtoken;			/* first time LOUT or AOUT */
 		symp->em |= EO;			/* marks variable as LOUT AOUT Q... */
 	    } else
@@ -4989,7 +5092,7 @@ iClex(void)
 		} else if (c1 == '=') {
 		    c = OPE; goto found;	/* %= */
 		}
-		c = AOP;			/* % */
+		c = DIV;			/* % */
 		break;
 	    case '&':
 		if (c1 == '&') {
@@ -5036,7 +5139,7 @@ iClex(void)
 		} else if (c1 == '=') {
 		    c = OPE; goto found;	/* /= */
 		} else {
-		    c = AOP;			/* / */
+		    c = DIV;			/* / */
 		    break;
 		}
 		iCleng = 0;			/* end of comment */
@@ -5046,7 +5149,7 @@ iClex(void)
 		    if ((c1 = get(T0FP, 0)) == '=') {
 			c = OPE; goto found;	/* <<= */
 		    }
-		    c = LEFT_OP;		/* << */
+		    c = LEFT_SH;		/* << */
 		    break;
 		}
 		if (c1 != '=') {
@@ -5064,7 +5167,7 @@ iClex(void)
 		    if ((c1 = get(T0FP, 0)) == '=') {
 			c = OPE; goto found;	/* >>= */
 		    }
-		    c = RIGHT_OP;		/* >> */
+		    c = RIGHT_SH;		/* >> */
 		    break;
 		}
 		if (c1 != '=') {
@@ -5112,7 +5215,7 @@ iClex(void)
 	return c;				/* return token to yacc */
     }
     return 0;					/* EOF */
-} /* iClex */
+} /* yylex */
 
 /********************************************************************
  *
@@ -5280,6 +5383,7 @@ yyerror(const char *	s)
 {
     char *	cp = chbuf[lexflag&C_PARSE];
     int		n, n1;
+    static char * lc[2] = { "", "C " };	/* this used to be done in gram.pl - jw 20161106 */
     char	erbuf[TSIZE];
 
     errLine();
@@ -5288,7 +5392,7 @@ yyerror(const char *	s)
     if ((lexflag & C_PARSE) == 0) {
 	n = getp[0] - chbuf[0] - iCleng;
     } else {
-	n = column - c_leng;
+	n = column - yyleng;
     }
     for (n1 = 0; n > 0; n--, cp++) {
 	n1++;
@@ -5300,9 +5404,9 @@ yyerror(const char *	s)
     }
     ynerrs++;			/* count mostly syntax errors */
 #ifdef NEWSTYLE
-    n = snprintf(erbuf, TSIZE, "%s '%s'", s, inpNM);
+    n = snprintf(erbuf, TSIZE, "%s%s '%s'", lc[lexflag&C_PARSE], s, inpNM);
 #else
-    n = snprintf(erbuf, TSIZE, "%s %d in %s", s, ynerrs, inpNM);
+    n = snprintf(erbuf, TSIZE, "%s%s %d in %s", lc[lexflag&C_PARSE], s, ynerrs, inpNM);
 #endif
     if (n1 < n + 5) {
 	n1 += 4;
@@ -5328,7 +5432,7 @@ yyerror(const char *	s)
 /********************************************************************
  *
  *	Copy a C fragment to T1FP for an lBlock and T4FP for a cBlock
- *	when yacc token CCFRAG is recognised in iClex()
+ *	when yacc token CCFRAG is recognised in yylex()
  *
  *******************************************************************/
 

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l 1.34 $";
+"@(#)$Id: lexc.l 1.35 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -43,16 +43,15 @@ WS			[ \t\v\f\n]
 #include	<string.h>
 #include	<assert.h>
 #include	<errno.h>
-#include	"icc.h"
 #include	"comp.h"
-#include	"gram_tab.h"
+#include	"gram.tab.h"
 
-static int	c_comment(c_STYPE* u);
-static int	cpp_comment(c_STYPE* u);
-static int	preprocess(c_STYPE* u);
-static int	ignore(c_STYPE* u);
-static void	count(c_STYPE* u);
-static int	check_type(c_STYPE* u, int qtoken);
+static int	yycomment(YYSTYPE* u);
+static int	cpp_comment(YYSTYPE* u);
+static int	preprocess(YYSTYPE* u);
+static int	ignore(YYSTYPE* u);
+static void	count(YYSTYPE* u);
+static int	check_type(YYSTYPE* u, int qtoken);
 
 #define YY_NO_UNPUT
 
@@ -78,117 +77,117 @@ static Symbol *	paraList = &markerSymbol;
 %}
 
 %%
-"/*"			{ if (c_comment(&c_lval)) yyterminate(); }
-"//"			{ if (cpp_comment(&c_lval)) yyterminate(); }
-^[ \t]*#		{ if (preprocess(&c_lval)) yyterminate(); }
+"/*"			{ if (yycomment(&yylval)) yyterminate(); }
+"//"			{ if (cpp_comment(&yylval)) yyterminate(); }
+^[ \t]*#		{ if (preprocess(&yylval)) yyterminate(); }
 
-"auto"			{ count(&c_lval); return AUTO; }
-"break"			{ count(&c_lval); return BREAK; }
-"case"			{ count(&c_lval); return CASE; }
-"char"			{ count(&c_lval); return CHAR; }
-(__)?const(__)?		{ count(&c_lval); return CONST; }
-"continue"		{ count(&c_lval); return CONTINUE; }
-"default"		{ count(&c_lval); return DEFAULT; }
-"do"			{ count(&c_lval); return DO; }
-"double"		{ count(&c_lval); return DOUBLE; }
-"else"			{ count(&c_lval); return ELSE; }
-"enum"			{ count(&c_lval); return ENUM; }
-"extern"		{ count(&c_lval); return EXTERN; }
-"float"			{ count(&c_lval); return FLOAT; }
-"for"			{ count(&c_lval); return FOR; }
-"goto"			{ count(&c_lval); return GOTO; }
-"if"			{ count(&c_lval); return IF; }
-"int"			{ count(&c_lval); return INT; }
-"long"			{ count(&c_lval); return LONG; }
-"register"		{ count(&c_lval); return REGISTER; }
-"return"		{ count(&c_lval); return RETURN; }
-"short"			{ count(&c_lval); return SHORT; }
-(__)?signed(__)?	{ count(&c_lval); return SIGNED; }
-"sizeof"		{ count(&c_lval); return SIZEOF; }
-"static"		{ count(&c_lval); return STATIC; }
-"struct"		{ count(&c_lval); return STRUCT; }
-"switch"		{ count(&c_lval); return SWITCH; }
-"typedef"		{ count(&c_lval); return TYPEDEF; }
-(__)?typeof(__)?	{ count(&c_lval); return TYPEOF; }
-"union"			{ count(&c_lval); return UNION; }
-(__)?unsigned(__)?	{ count(&c_lval); return UNSIGNED; }
-"void"			{ count(&c_lval); return VOID; }
-(__)?volatile(__)?	{ count(&c_lval); return VOLATILE; }
-"while"			{ count(&c_lval); return WHILE; }
-(__)?builtin_va_list	{ count(&c_lval); return TYPE_NAME;	/* type in GCC 3.2 */ }
-(__)?attribute(__)?	{ if (ignore(&c_lval)) yyterminate(); }
-(__)?asm(__)?		{ if (ignore(&c_lval)) yyterminate(); }
-(__)?extension(__)?	{ count(&c_lval);		/* ignore */ }
-(__)?inline(__)?	{ count(&c_lval);		/* ignore */ }
-(__)?restrict(__)?	{ count(&c_lval);		/* ignore */ }
-"__LINE__"		{ count(&c_lval); return CONSTANT;	/* no need to identify octal */ }
-"__FILE__"		{ count(&c_lval); return STRING_LITERAL; }
+"auto"			{ count(&yylval); return AUTO; }
+"break"			{ count(&yylval); return BREAK; }
+"case"			{ count(&yylval); return CASE; }
+"char"			{ count(&yylval); return CHAR; }
+(__)?const(__)?		{ count(&yylval); return CONST; }
+"continue"		{ count(&yylval); return CONTINUE; }
+"default"		{ count(&yylval); return DEFAULT; }
+"do"			{ count(&yylval); return DO; }
+"double"		{ count(&yylval); return DOUBLE; }
+"else"			{ count(&yylval); return ELSE; }
+"enum"			{ count(&yylval); return ENUM; }
+"extern"		{ count(&yylval); return EXTERN; }
+"float"			{ count(&yylval); return FLOAT; }
+"for"			{ count(&yylval); return FOR; }
+"goto"			{ count(&yylval); return GOTO; }
+"if"			{ count(&yylval); return IF; }
+"int"			{ count(&yylval); return INT; }
+"long"			{ count(&yylval); return LONG; }
+"register"		{ count(&yylval); return REGISTER; }
+"return"		{ count(&yylval); return RETURN; }
+"short"			{ count(&yylval); return SHORT; }
+(__)?signed(__)?	{ count(&yylval); return SIGNED; }
+"sizeof"		{ count(&yylval); return SIZEOF; }
+"static"		{ count(&yylval); return STATIC; }
+"struct"		{ count(&yylval); return STRUCT; }
+"switch"		{ count(&yylval); return SWITCH; }
+"typedef"		{ count(&yylval); return TYPEDEF; }
+(__)?typeof(__)?	{ count(&yylval); return TYPEOF; }
+"union"			{ count(&yylval); return UNION; }
+(__)?unsigned(__)?	{ count(&yylval); return UNSIGNED; }
+"void"			{ count(&yylval); return VOID; }
+(__)?volatile(__)?	{ count(&yylval); return VOLATILE; }
+"while"			{ count(&yylval); return WHILE; }
+(__)?builtin_va_list	{ count(&yylval); return TYPE_NAME;	/* type in GCC 3.2 */ }
+(__)?attribute(__)?	{ if (ignore(&yylval)) yyterminate(); }
+(__)?asm(__)?		{ if (ignore(&yylval)) yyterminate(); }
+(__)?extension(__)?	{ count(&yylval);		/* ignore */ }
+(__)?inline(__)?	{ count(&yylval);		/* ignore */ }
+(__)?restrict(__)?	{ count(&yylval);		/* ignore */ }
+"__LINE__"		{ count(&yylval); return CONSTANT;	/* no need to identify octal */ }
+"__FILE__"		{ count(&yylval); return STRING_LITERAL; }
 
 	/* allow white space because Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1 */
-(I|Q|T)X{D}+{WS}*\.{WS}*{D}+(_{D}+)?	{ count(&c_lval); return check_type(&c_lval, 2); }
-(I|Q)(B|W|L){D}+(_{D}+)?		{ count(&c_lval); return check_type(&c_lval, 1); }
-{L}{S}*					{ count(&c_lval); return check_type(&c_lval, 0); }
+(I|Q|T)X{D}+{WS}*\.{WS}*{D}+(_{D}+)?	{ count(&yylval); return check_type(&yylval, 2); }
+(I|Q)(B|W|L){D}+(_{D}+)?		{ count(&yylval); return check_type(&yylval, 1); }
+{L}{S}*					{ count(&yylval); return check_type(&yylval, 0); }
 
-0[xX]{H}+{IS}*		{ count(&c_lval); return CONSTANT;	/* 0xac8 0XAC8UL */ }
-{D}+{IS}*		{ count(&c_lval); return CONSTANT;	/* 12 12l 12u 12UL */ }
-'(\\.|[^\\'])+'		{ count(&c_lval); return CONSTANT;	/* '\n' 'A' 'ABC' */ }
+0[xX]{H}+{IS}*		{ count(&yylval); return CONSTANT;	/* 0xac8 0XAC8UL */ }
+{D}+{IS}*		{ count(&yylval); return CONSTANT;	/* 12 12l 12u 12UL */ }
+'(\\.|[^\\'])+'		{ count(&yylval); return CONSTANT;	/* '\n' 'A' 'ABC' */ }
 
-{D}+{E}{FS}?		{ count(&c_lval); return CONSTANT;	/* 12e2 12e2f 12E2L */ }
-{D}*"."{D}+({E})?{FS}?	{ count(&c_lval); return CONSTANT;	/* .1 0.1 1.0 1.0e2 */ }
-{D}+"."{D}*({E})?{FS}?	{ count(&c_lval); return CONSTANT;	/* 1. 1.e2 */ }
+{D}+{E}{FS}?		{ count(&yylval); return CONSTANT;	/* 12e2 12e2f 12E2L */ }
+{D}*"."{D}+({E})?{FS}?	{ count(&yylval); return CONSTANT;	/* .1 0.1 1.0 1.0e2 */ }
+{D}+"."{D}*({E})?{FS}?	{ count(&yylval); return CONSTANT;	/* 1. 1.e2 */ }
 
-\"(\\.|[^\\"])*\"	{ count(&c_lval); return STRING_LITERAL; }
+\"(\\.|[^\\"])*\"	{ count(&yylval); return STRING_LITERAL; }
 
-">>="			{ count(&c_lval); return RIGHT_ASSIGN; }
-"<<="			{ count(&c_lval); return LEFT_ASSIGN; }
-"+="			{ count(&c_lval); return ADD_ASSIGN; }
-"-="			{ count(&c_lval); return SUB_ASSIGN; }
-"*="			{ count(&c_lval); return MUL_ASSIGN; }
-"/="			{ count(&c_lval); return DIV_ASSIGN; }
-"%="			{ count(&c_lval); return MOD_ASSIGN; }
-"&="			{ count(&c_lval); return AND_ASSIGN; }
-"^="			{ count(&c_lval); return XOR_ASSIGN; }
-"|="			{ count(&c_lval); return OR_ASSIGN; }
-">>"			{ count(&c_lval); return RIGHT_OP; }
-"<<"			{ count(&c_lval); return LEFT_OP; }
-"++"			{ count(&c_lval); return INC_OP; }
-"--"			{ count(&c_lval); return DEC_OP; }
-"->"			{ count(&c_lval); return PTR_OP; }
-"&&"			{ count(&c_lval); return AND_OP; }
-"||"			{ count(&c_lval); return OR_OP; }
-"<="			{ count(&c_lval); return LE_OP; }
-">="			{ count(&c_lval); return GE_OP; }
-"=="			{ count(&c_lval); return EQ_OP; }
-"!="			{ count(&c_lval); return NE_OP; }
-"..."			{ count(&c_lval); return ELIPSIS; }
-";"			{ count(&c_lval); return ';'; }
-"{"			{ count(&c_lval); return '{'; }
-"}"			{ count(&c_lval); return '}'; }
-","			{ count(&c_lval); return ','; }
-":"			{ count(&c_lval); return ':'; }
-"="			{ count(&c_lval); return '='; }
-"("			{ count(&c_lval); return '('; }
-")"			{ count(&c_lval); return ')'; }
-"["			{ count(&c_lval); return '['; }
-"]"			{ count(&c_lval); return ']'; }
-"."			{ count(&c_lval); return '.'; }
-"&"			{ count(&c_lval); return '&'; }
-"!"			{ count(&c_lval); return '!'; }
-"~"			{ count(&c_lval); return '~'; }
-"-"			{ count(&c_lval); return '-'; }
-"+"			{ count(&c_lval); return '+'; }
-"*"			{ count(&c_lval); return '*'; }
-"/"			{ count(&c_lval); return '/'; }
-"%"			{ count(&c_lval); return '%'; }
-"<"			{ count(&c_lval); return '<'; }
-">"			{ count(&c_lval); return '>'; }
-"^"			{ count(&c_lval); return '^'; }
-"|"			{ count(&c_lval); return '|'; }
-"?"			{ count(&c_lval); return '?'; }
+">>="			{ count(&yylval); return RIGHT_ASSIGN; }
+"<<="			{ count(&yylval); return LEFT_ASSIGN; }
+"+="			{ count(&yylval); return ADD_ASSIGN; }
+"-="			{ count(&yylval); return SUB_ASSIGN; }
+"*="			{ count(&yylval); return MUL_ASSIGN; }
+"/="			{ count(&yylval); return DIV_ASSIGN; }
+"%="			{ count(&yylval); return MOD_ASSIGN; }
+"&="			{ count(&yylval); return AND_ASSIGN; }
+"^="			{ count(&yylval); return XOR_ASSIGN; }
+"|="			{ count(&yylval); return OR_ASSIGN; }
+">>"			{ count(&yylval); return RIGHT_SH; }
+"<<"			{ count(&yylval); return LEFT_SH; }
+"++"			{ count(&yylval); return INC_OP; }
+"--"			{ count(&yylval); return DEC_OP; }
+"->"			{ count(&yylval); return PTR_OP; }
+"&&"			{ count(&yylval); return AND_OP; }
+"||"			{ count(&yylval); return OR_OP; }
+"<="			{ count(&yylval); return LE_OP; }
+">="			{ count(&yylval); return GE_OP; }
+"=="			{ count(&yylval); return EQ_OP; }
+"!="			{ count(&yylval); return NE_OP; }
+"..."			{ count(&yylval); return ELIPSIS; }
+";"			{ count(&yylval); return ';'; }
+"{"			{ count(&yylval); return '{'; }
+"}"			{ count(&yylval); return '}'; }
+","			{ count(&yylval); return ','; }
+":"			{ count(&yylval); return ':'; }
+"="			{ count(&yylval); return '='; }
+"("			{ count(&yylval); return '('; }
+")"			{ count(&yylval); return ')'; }
+"["			{ count(&yylval); return '['; }
+"]"			{ count(&yylval); return ']'; }
+"."			{ count(&yylval); return '.'; }
+"&"			{ count(&yylval); return '&'; }
+"!"			{ count(&yylval); return '!'; }
+"~"			{ count(&yylval); return '~'; }
+"-"			{ count(&yylval); return '-'; }
+"+"			{ count(&yylval); return '+'; }
+"*"			{ count(&yylval); return '*'; }
+"/"			{ count(&yylval); return '/'; }
+"%"			{ count(&yylval); return '%'; }
+"<"			{ count(&yylval); return '<'; }
+">"			{ count(&yylval); return '>'; }
+"^"			{ count(&yylval); return '^'; }
+"|"			{ count(&yylval); return '|'; }
+"?"			{ count(&yylval); return '?'; }
 
-[ \t\v\f]+		{ count(&c_lval); }
-"\n"			{ count(&c_lval);	/* individual token */ }
-.			{ count(&c_lval); 	/* ignore bad characters */ }
+[ \t\v\f]+		{ count(&yylval); }
+"\n"			{ count(&yylval);	/* individual token */ }
+.			{ count(&yylval); 	/* ignore bad characters */ }
 
 %%
 
@@ -211,7 +210,7 @@ yywrap(void)
  *******************************************************************/
 
 static int
-c_comment(c_STYPE* u)
+yycomment(YYSTYPE* u)
 {
     int c;
 
@@ -250,7 +249,7 @@ c_comment(c_STYPE* u)
 #endif
 
     return 0;
-} /* c_comment */
+} /* yycomment */
 
 /********************************************************************
  *
@@ -261,7 +260,7 @@ c_comment(c_STYPE* u)
  *******************************************************************/
 
 static int
-cpp_comment(c_STYPE* u)
+cpp_comment(YYSTYPE* u)
 {
     int c;
 #ifndef LMAIN
@@ -279,7 +278,7 @@ cpp_comment(c_STYPE* u)
     } while (c != '\n');
 #ifndef LMAIN
     if (iC_Pflag && errorCnt++ == 0) {	/* report only once */
-	warning("C++ style comments are not allowed in ISO C90:", c_text);
+	warning("C++ style comments are not allowed in ISO C90:", yytext);
     }
 #endif
     column = 0;
@@ -296,7 +295,7 @@ cpp_comment(c_STYPE* u)
  *******************************************************************/
 
 static int
-preprocess(c_STYPE* u)
+preprocess(YYSTYPE* u)
 {
     int c = 0;
     int prev;
@@ -326,7 +325,7 @@ preprocess(c_STYPE* u)
  *******************************************************************/
 
 static int
-ignore(c_STYPE* u)
+ignore(YYSTYPE* u)
 {
     int c;
     int  bracketCount = 0;
@@ -363,23 +362,23 @@ ignore(c_STYPE* u)
  *	When include files are processed (lexflag & C_NO_COUNT)
  *	it is important that "\n" are individual tokens not grouped
  *	as white space. Otherwise the trailing whitespace from an
- *	include file is grouped in c_text[] with the leading whitespace
+ *	include file is grouped in yytext[] with the leading whitespace
  *	after the #include line and counted after C_NO_COUNT is reset.
  *
  *******************************************************************/
 
 static void
-count(c_STYPE* u)
+count(YYSTYPE* u)
 {
     int i;
 
     u->tok.start = gramOffset;
 
-    for (i = 0; c_text[i] != '\0'; i++) {
-	if (c_text[i] == '\n') {
+    for (i = 0; yytext[i] != '\0'; i++) {
+	if (yytext[i] == '\n') {
 	    column = 0;
 	    gramLine++;
-	} else if (c_text[i] == '\t') {
+	} else if (yytext[i] == '\t') {
 	    column += 8 - (column % 8);
 	} else {
 	    column++;
@@ -414,7 +413,7 @@ count(c_STYPE* u)
  *******************************************************************/
 
 static int
-check_type(c_STYPE* u, int qtoken)
+check_type(YYSTYPE* u, int qtoken)
 {
     Symbol *	sp = 0;
     int		n;
@@ -424,7 +423,7 @@ check_type(c_STYPE* u, int qtoken)
     int		bit;
     int		ixd;
 #ifdef LMAIN
-#define buffer	c_text
+#define buffer	yytext
     ixd = -1;				/* limit for I/O index (-1 no limit) */
 
 #else
@@ -434,20 +433,20 @@ check_type(c_STYPE* u, int qtoken)
     char	tail[8];		/* compiler generated suffix _123456 max */
 
     ixd = iC_maxIO;			/* limit for I/O index (-1 no limit) */
-    if (c_text[0] == '$') {
+    if (yytext[0] == '$') {
 	/********************************************************************
 	 *  Identifier starts with a '$'. gcc can handle this if the next character
 	 *  is alpha but not if it is a digit.
 	 *  Most assemblers have problems with leading '$' - hence the warning.
 	 *******************************************************************/
-	if (isdigit(c_text[1])) {
-	    ierror("asm error due to '$' followed by digit starting identifier:", c_text);
+	if (isdigit(yytext[1])) {
+	    ierror("asm error due to '$' followed by digit starting identifier:", yytext);
 	} else {
-	    warning("possible asm error due to '$' character starting identifier:", c_text);
+	    warning("possible asm error due to '$' character starting identifier:", yytext);
 	}
     }
     if (qtoken == 2) {
-	iC_toIEC1131(c_text, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
+	iC_toIEC1131(yytext, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 	/********************************************************************
 	 *  the Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1
 	 *  Generally if yacc were to handle the '.' as a seperate token,
@@ -455,7 +454,7 @@ check_type(c_STYPE* u, int qtoken)
 	 *  If we allow white space here we will have the same effect without
 	 *  changing the grammar.
 	 *******************************************************************/
-	for (i = n = 0; n <= c_leng; n++) {
+	for (i = n = 0; n <= yyleng; n++) {
 	    c = buffer[n];
 	    if (! isspace(c)) {		/* space \f \n \r \t \v */
 		if (i < n) {
@@ -465,13 +464,13 @@ check_type(c_STYPE* u, int qtoken)
 	    }
 	}
     } else {
-	strncpy(buffer, c_text, BUFS);
+	strncpy(buffer, yytext, BUFS);
     }
     if (iFunSymExt && !qtoken) {
-	if (iRetSymbol.v && strcmp(c_text, "this") == 0) {
+	if (iRetSymbol.v && strcmp(yytext, "this") == 0) {
 	    sp = iRetSymbol.v;		/* function return Symbol */
 	} else {
-	    strncpy(iFunSymExt, c_text, iFunEnd - iFunSymExt);
+	    strncpy(iFunSymExt, yytext, iFunEnd - iFunSymExt);
 	    sp = lookup(iFunBuffer);	/* maybe function internal Symbol */
 	    *iFunSymExt = '\0';
 	}
@@ -573,8 +572,8 @@ check_type(c_STYPE* u, int qtoken)
   inInclude:
 #endif
     sp = (Symbol *) iC_emalloc(sizeof(Symbol));
-    sp->name = iC_emalloc(c_leng + 1);	/* +1 for '\0' */
-    strcpy(sp->name, c_text);
+    sp->name = iC_emalloc(yyleng + 1);	/* +1 for '\0' */
+    strcpy(sp->name, yytext);
     sp->type = CWORD;
     sp->ftype = UDFA;
     u->tok.symbol = sp;			/* sp->next === NULL */

@@ -35,7 +35,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m,v 1.19 2015/09/29 07:32:32 jw Exp $' >&2
+    echo '$Id: m 1.20 $' >&2
 }
 
 name=${0##*/}
@@ -99,7 +99,8 @@ fi
 if [ -n "$i" ]; then
     if [ -x /bin/uname ]; then
 	cpu=`/bin/uname -m`
-	if [[ "$cpu" =~ "armv" ]]; then
+	tail=${cpu#"armv"}
+	if [[ "$cpu" != "$tail" ]]; then
 	    echo "### make iCpiFace, iCpiPUD and iCgpioPWM"
 	    makeAll -qgPGV$pudsyez$dw
 	    o=" OPT=\"-DRASPBERRYPI\""

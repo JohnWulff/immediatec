@@ -1,4 +1,4 @@
-$Id: manifest 1.28 $
+$Id: manifest 1.29 $
 doc/iC.odt
 doc/iC.pdf
 include/pigpio.h
@@ -37,19 +37,20 @@ src/bcm2835.c
 src/bcm2835.h
 src/cexe.h
 src/cexe_t.c
-src/comp.c
 src/comp.h
-src/comp.pl
+src/comp.tab.c
+src/comp.tab.h
 src/comp.y
-src/comp_tab.h
 src/configure
 src/configure.in
+src/cons.tab.c
+src/cons.tab.h
+src/cons.y
 src/demo.ic
 src/genr.c
-src/gram.c
-src/gram.pl
+src/gram.tab.c
+src/gram.tab.h
 src/gram.y
-src/gram_tab.h
 src/hello.ic
 src/iCbox
 src/iCgpioPUD.c
@@ -77,7 +78,9 @@ src/init.c
 src/init_t.ic
 src/init_t.pl
 src/install.sh
-src/lexc.c
+src/kbLift.ic
+src/kbLift.is
+src/lex.yy.c
 src/lexc.l
 src/lifts.ica
 src/link.c
@@ -107,6 +110,7 @@ src/rpi_rev.c
 src/rpi_rev.h
 src/rsff.c
 src/scan.c
+src/simLift.ic
 src/simple.ic
 src/sortm28.ica
 src/sortm28.sh

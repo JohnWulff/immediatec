@@ -26,21 +26,21 @@
 015	imm int Sub4() {
 016	    return 4;
 
-	4       A ---@  Sub4@   A
+	4       A ---@  Sub4@   A       4
 
 017	}
 018
 019	imm int Sub44() {
 020	    this = 4 + 4;
 
-	iConst  A ---+  Sub44@  A       4+4;    // (3)
+	8       A ---@  Sub44@  A       4+4
 
 021	}
 022
 023	imm int Sub55() {
 024	    this = 5 + 5;
 
-	iConst  A ---+  Sub55@  A       5+5;    // (4)
+	10      A ---@  Sub55@  A       5+5
 
 025	}
 026
@@ -49,7 +49,7 @@
 
 	IB1     A ---+  Nest1@  A       (IB1    // 1
 	IB2     A ---+                  +IB2    // 2
-	                                )+4;    // (5)
+	                                )+4;    // (3)
 
 029	}
 030	imm int Nest2() {
@@ -57,7 +57,7 @@
 
 	IB3     A ---+  Nest2@  A       4+(IB3  // 1
 	IB4     A ---+                  +IB4    // 2
-	                                );      // (6)
+	                                );      // (4)
 
 032	}
 033	imm int Nest3() {
@@ -67,29 +67,30 @@
 	IB2     A ---+                  +IB2    // 2
 	IB3     A ---+                  )+(IB3  // 3
 	IB4     A ---+                  +IB4    // 4
-	                                );      // (7)
+	                                );      // (5)
 
 035	}
 036	imm int Nest4() {
 037	    this = Sub44() + Sub33();
 
-	IB3     A ---+  Nest4@  A       (4+4)+(IB3 // 1
-	IB4     A ---+                  +IB4       // 2
-	                                );         // (8)
+	IB3     A ---+  Nest4@  A       8+(IB3  // 1
+	IB4     A ---+                  +IB4    // 2
+	                                );      // (6)
 
 038	}
 039	imm int Nest5() {
 040	    return Sub33() + Sub44();
 
-	IB3     A ---+  Nest5@  A       (IB3     // 1
-	IB4     A ---+                  +IB4     // 2
-	                                )+(4+4); // (9)
+	IB3     A ---+  Nest5@  A       (IB3    // 1
+	IB4     A ---+                  +IB4    // 2
+	                                )+8;    // (7)
 
 041	}
 042	imm int Nest6() {
 043	    this = Sub4() + Sub55();
 
-	iConst  A ---+  Nest6@  A       4+(5+5); // (10)
+
+	14      A ---@  Nest6@  A       4+10
 
 044	}
 045
@@ -97,7 +98,7 @@
 
 	IB1     A ---+  QB1     A       ((IB1   // 1
 	IB2     A ---+                  +IB2    // 2
-	                                )+4)+4; // (11)
+	                                )+4)+4; // (8)
 
 
 	QB1     A ---+  QB1_0   W       QB1     // 1
@@ -106,7 +107,7 @@
 
 	IB3     A ---+  QB2     A       4+(4+(IB3 // 1
 	IB4     A ---+                  +IB4      // 2
-	                                ));       // (12)
+	                                ));       // (9)
 
 
 	QB2     A ---+  QB2_0   W       QB2       // 1
@@ -119,70 +120,64 @@
 	IB4     A ---+                  +IB4    // 4
 	                                ))+(IB3 // 3
 	                                +IB4    // 4
-	                                );      // (13)
+	                                );      // (10)
 
 
 	QB3     A ---+  QB3_0   W       QB3     // 1
 
 049	QB4 = Sub44() + Nest4();
 
-	IB3     A ---+  QB4     A       (4+4)+((4+4)+(IB3 // 1
-	IB4     A ---+                  +IB4              // 2
-	                                ));               // (14)
+	IB3     A ---+  QB4     A       8+(8+(IB3 // 1
+	IB4     A ---+                  +IB4      // 2
+	                                ));       // (11)
 
 
-	QB4     A ---+  QB4_0   W       QB4               // 1
+	QB4     A ---+  QB4_0   W       QB4       // 1
 
 050	QB5 = Nest5() + Sub44();
 
-	IB3     A ---+  QB5     A       ((IB3           // 1
-	IB4     A ---+                  +IB4            // 2
-	                                )+(4+4))+(4+4); // (15)
+	IB3     A ---+  QB5     A       ((IB3   // 1
+	IB4     A ---+                  +IB4    // 2
+	                                )+8)+8; // (12)
 
 
-	QB5     A ---+  QB5_0   W       QB5             // 1
+	QB5     A ---+  QB5_0   W       QB5     // 1
 
 051	QB6 = Sub4() + Nest6();
 
-	iConst  A ---+  QB6     A       4+(4+(5+5)); // (16)
+
+	18      A ---@  QB6     A       4+14
 
 
-	QB6     A ---+  QB6_0   W       QB6          // 1
+	18      A ---+  QB6_0   W       18      // 1
 
 ******* C CODE          ************************
 
 008	(2) 	return iC_MV(1)+iC_MV(2);
 
-020	(3) 	return 4+4;
+028	(3) 	return (iC_MV(1)+iC_MV(2))+4;
 
-024	(4) 	return 5+5;
+031	(4) 	return 4+(iC_MV(1)+iC_MV(2));
 
-028	(5) 	return (iC_MV(1)+iC_MV(2))+4;
+034	(5) 	return (iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4));
 
-031	(6) 	return 4+(iC_MV(1)+iC_MV(2));
+037	(6) 	return 8+(iC_MV(1)+iC_MV(2));
 
-034	(7) 	return (iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4));
+040	(7) 	return (iC_MV(1)+iC_MV(2))+8;
 
-037	(8) 	return (4+4)+(iC_MV(1)+iC_MV(2));
+046	(8) 	return ((iC_MV(1)+iC_MV(2))+4)+4;
 
-040	(9) 	return (iC_MV(1)+iC_MV(2))+(4+4);
+047	(9) 	return 4+(4+(iC_MV(1)+iC_MV(2)));
 
-043	(10) 	return 4+(5+5);
+048	(10) 	return ((iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4)))+(iC_MV(3)+iC_MV(4));
 
-046	(11) 	return ((iC_MV(1)+iC_MV(2))+4)+4;
+049	(11) 	return 8+(8+(iC_MV(1)+iC_MV(2)));
 
-047	(12) 	return 4+(4+(iC_MV(1)+iC_MV(2)));
-
-048	(13) 	return ((iC_MV(1)+iC_MV(2))+(iC_MV(3)+iC_MV(4)))+(iC_MV(3)+iC_MV(4));
-
-049	(14) 	return (4+4)+((4+4)+(iC_MV(1)+iC_MV(2)));
-
-050	(15) 	return ((iC_MV(1)+iC_MV(2))+(4+4))+(4+4);
-
-051	(16) 	return 4+(4+(5+5));
+050	(12) 	return ((iC_MV(1)+iC_MV(2))+8)+8;
 
 ******* NET TOPOLOGY    ************************
 
+18      =  A  QB6_0+
 IB1     [  A  QB1+    QB3+
 IB2     [  A  QB1+    QB3+
 IB3     [  A  QB2+    QB3+    QB4+    QB5+
@@ -197,20 +192,20 @@ QB4     +  A  QB4_0+
 QB4_0   +  W
 QB5     +  A  QB5_0+
 QB5_0   +  W
-QB6     +  A  QB6_0+
+QB6     @  A  18=
 QB6_0   +  W
-iConst  =  A  QB6+
 
 ******* NET STATISTICS  ************************
 
-ARN	+     12 blocks
+ARN	+     11 blocks
 NCONST	=      1 blocks
 INPW	[      4 blocks
+ALIAS	@      1
 
-TOTAL	      17 blocks
-	      49 links
+TOTAL	      16 blocks
+	      45 links
 
 compiled by:
-@(#)     $Id: aa4z2.lst,v 1.1 2015/05/24 00:51:47 jw Exp $ -O7
+$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
 
-C OUTPUT: ./Test0/aa4z2.c  (104 lines)
+C OUTPUT: ./Test0/aa4z2.c  (97 lines)

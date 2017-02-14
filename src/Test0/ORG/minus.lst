@@ -7,21 +7,21 @@
 006
 007	QB1 = -1;
 
-	-1      A ---@  QB1     A
+	-1      A ---@  QB1     A       -1
 
 
 	-1      A ---+  QB1_0   W       -1      // 1
 
 008	QW2 = - 999;
 
-	-999    A ---@  QW2     A
+	-999    A ---@  QW2     A       -999
 
 
 	-999    A ---+  QW2_0   W       -999    // 1
 
 009	QL4 = -		1001;
 
-	-1001   A ---@  QL4     A
+	-1001   A ---@  QL4     A       -1001
 
 
 	-1001   A ---+  QL4_0   W       -1001   // 1
@@ -49,6 +49,6 @@ TOTAL	       6 blocks
 	       6 links
 
 compiled by:
-@(#)     $Id: minus.lst,v 1.1 2015/05/24 00:51:54 jw Exp $ -O7
+$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
 
 C OUTPUT: ./Test0/minus.c  (44 lines)

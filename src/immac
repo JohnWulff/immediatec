@@ -42,8 +42,10 @@ Usage:
     -m         process only #include #define #if etc directives (see <in.ic>)
 	       No iCa language translation (macro pre-processor replaces cpp)
 	       Warning if %include %define %if etc directives are used
-    -M         process only %include %define %if etc directives for yacc
+    -M         process only %include %define %if etc directives
 	       No iCa language translation (#directives are left untouched)
+    -Y         process only %if directives - enables optional compiling for
+	       yacc, bison or flex; %define directives are left untouched
     -I <path>  scan %include and #include "files" on another path
     -P <macro> predefine <macro> evaluated directly by this program
                Usually defined with a numeric value eg. -P m=8
@@ -66,11 +68,11 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac,v 1.24 2015/10/19 10:18:25 jw Exp $
+$Id: immac 1.25 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
-use vars qw(@opt_I @opt_P @opt_D @opt_U $opt_t $opt_m $opt_M $opt_T $opt_h);
+use vars qw(@opt_I @opt_P @opt_D @opt_U $opt_t $opt_m $opt_M $opt_Y $opt_T $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
     'a'   => \$opt_a,
@@ -86,6 +88,7 @@ GetOptions (
     'U=s' => \@opt_U,
     'm'   => \$opt_m,
     'M'   => \$opt_M,
+    'Y'   => \$opt_Y,
     't'   => \$opt_t,
     'T'   => \$opt_T,
     'h'   => \$opt_h);
@@ -257,7 +260,7 @@ if ($argv = shift @ARGV) {
 use strict 'refs';
 
 if ($opt_t) {
-    $opt_o = $opt_e = $opt_m = $opt_M = $opt_l = $opt_L = '';
+    $opt_o = $opt_e = $opt_m = $opt_M = $opt_Y = $opt_l = $opt_L = '';
 } else {
     if ($opt_l) {
 	if (-f $opt_l) {
@@ -290,10 +293,15 @@ if ($opt_t) {
     }
 }
 
-my $opt_m_or_opt_M = $opt_m || $opt_M;
-my $CdirectiveRegex = $opt_m ?
-    qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
-    qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+my $opt_m_or_opt_M = $opt_m || $opt_M || $opt_Y;
+my $CdirectiveRegex = $opt_m ?		# only %#directives are excluded
+    qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o  :
+		      $opt_M ?		# both #directives and %# directives are excluded
+    qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
+		      $opt_Y ?		# additionally %define %undef %include are excluded
+    qr/^\s*(%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o :
+		      # Else none	# both #directives and %# directives are excluded
+    qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
 
 if (@opt_P) {
     my ($df, $val);
@@ -594,13 +602,21 @@ sub process_file {
       Line:
 	while (<$in>) {
 	    ########################################################################
-	    #   If -m then only %#directives are handled in this block
-	    #   $CdirectiveRegex = qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
-	    #   Else both #directives and %# directives are culled here
-	    #   $CdirectiveRegex = qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+	    #   If -m then only %#directives are excluded in this block
+	    #       $CdirectiveRegex =
+	    #       qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+	    #   Else if -M both #directives and %# directives are excluded
+	    #       $CdirectiveRegex =
+	    #       qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+	    #   Else if -Y additionally %define %undef %include are excluded
+	    #       $CdirectiveRegex =
+	    #       qr/^\s*(%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o;
+	    #   Else if none of the above
+	    #       $CdirectiveRegex =
+	    #       qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
 	    ########################################################################
 	    if ($Cdirective or m/$CdirectiveRegex/) {
-		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %#define etc output as is
+		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %#define etc output as is up to line without trailing \
 		unless ($opt_t) {
 		    if ($si <= 0) {
 			$blankLines++;		# count lines not output as blank lines
@@ -618,7 +634,7 @@ sub process_file {
 		next Line;			# must not modify because of comments
 	    }
 	    ########################################################################
-	    #   If not -m then #directives have been handled in the previous section
+	    #   If not -m then #directives have been excluded in the previous section
 	    #   From now on treat %directives and #directives equivalently
 	    #	except warn if %directive used in straight iC file or in immac -m call
 	    ########################################################################
@@ -638,7 +654,7 @@ sub process_file {
 		}
 	    }					# treat final directive line as a blank line
 	    ########################################################################
-	    #   If -m or -M then 8 or more blank or directive lines are ignored
+	    #   If -m -M or -Y then 8 or more blank or directive lines are ignored
 	    #   # $. "file" is output instead (same as cpp)
 	    ########################################################################
 	    elsif ($opt_m_or_opt_M) {
@@ -1650,7 +1666,7 @@ use strict 'refs';
 	last Level;
     }						# exhaust all nested include files
     ########################################################################
-    #   If -m or -M then output any blank lines at the end of the file
+    #   If -m -M or -Y then output any blank lines at the end of the file
     ########################################################################
     if (($opt_m_or_opt_M) && $blankLines) {
 	blanks();				# print blank lines now
@@ -1916,7 +1932,7 @@ sub resolve {
 	$iPos   = length($`);					# position of 'word' found
 	$atom1  = $1;						# 'word' found
 	$length = length $atom1;
-	$spLen  = length $4;					# spaces after 'word'
+	$spLen  = defined $4 ? length $4 : 0;			# spaces after 'word'
 	$openP  = $5;						# '('
 	$tail   = $';						# string after 'word' or 'word ('
 	$lPos   = pos($line);
@@ -2241,8 +2257,10 @@ B<immac> [-tmaSNLTh][ -o <out>][ -l <log>][ -e <err>][ -I <path> ...]
     -m         process only #include #define #if etc directives (see <in.ic>)
 	       No iCa language translation (macro pre-processor replaces cpp)
 	       Warning if %include %define %if etc directives are used
-    -M         process only %include %define %if etc directives for yacc
+    -M         process only %include %define %if etc directives
 	       No iCa language translation (#directives are left untouched)
+    -Y         process only %if directives - enables optional compiling for
+	       yacc, bison or flex; %define directives are left untouched
     -I <path>  scan %include and #include "files" on another path
     -P <macro> predefine <macro> evaluated directly by this program
                Usually defined with a numeric value eg. -P m=8
@@ -2317,7 +2335,7 @@ block in iC or blocks in C. In rare cases, the braces used for iC/C
 code would get mixed up with the braces marking an iCa FOR block. To
 overcome this, twin braces were introduced.  It was also found, that
 the iCa language was easier to read, if control variables used in a FOR
-loop were upper case.  This is only a recomendation. the B<immax(1)>
+loop were upper case.  This is only a recomendation. the B<immax>
 converter will convert old iCa code to the new dialect.
 
 Another variant is to use the following "perlish" syntax using lists
@@ -2329,7 +2347,7 @@ output as the first example:
     }}
 
 The 'int' type specifier of the control variable is optional - it
-may be used in both variants to make the syntax look more correct.
+may be used in both variants to make the syntax look more natural.
 
 With Perl type lists it is possible to use strings as well as numbers
 as values for the loop variable. In iCa such strings in a FOR control

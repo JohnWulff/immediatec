@@ -1,5 +1,5 @@
 static const char cexe_t_c[] =
-"@(#)$Id: cexe_t.c,v 1.1 2013/09/10 08:31:47 jw Exp $";
+"@(#)$Id: cexe_t.c 1.2 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2013  John E. Wulff
@@ -18,7 +18,6 @@ static const char cexe_t_c[] =
 
 #include	<stdio.h>
 #include	<signal.h>
-#include	"icc.h"
 #include	"comp.h"
 
 #if INT_MAX == 32767 && defined (LONG16)

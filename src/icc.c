@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.77 $";
+"@(#)$Id: icc.c 1.78 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -29,7 +29,6 @@ static const char icc_c[] =
 #include	<setjmp.h>
 #include	<assert.h>
 #include	<errno.h>
-#include	"icc.h"
 #include	"comp.h"
 #ifdef TCP
 #include	"tcpc.h"
@@ -255,7 +254,7 @@ char **		iC_argv;
 int		iC_argh = 0;		/* block running iCserver before iCbegin() */
 #if YYDEBUG
 extern	int	iCdebug;
-extern	int	c_debug;
+extern	int	yydebug;
 #endif	/* YYDEBUG */
 
 #define errFN	szNames[2]		/* error file name */
@@ -576,7 +575,7 @@ main(
 #if YYDEBUG
 		    if (iC_debug & 0400) {
 			if (iC_debug & 04000) {
-			    c_debug = iC_debug & 01;
+			    yydebug = iC_debug & 01;
 			} else {
 			    iCdebug = iC_debug & 01;
 			}

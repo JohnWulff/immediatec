@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c 1.43 $";
+"@(#)$Id: init.c 1.44 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -21,9 +21,8 @@ static const char init_c[] =
 #include	<stdio.h>
 #include	<assert.h>
 #include	<string.h>
-#include	"icc.h"
 #include	"comp.h"
-#include	"comp_tab.h"
+#include	"comp.tab.h"
 
 Symbol *	iclock;			/* default clock */
 Symbol *	iconst;			/* pointer to Symbol "iConst" */

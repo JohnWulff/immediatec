@@ -6,7 +6,7 @@
  *******************************************************************/
 
 static const char	iC_compiler[] =
-"@(#)     $Id: aa4z5.c,v 1.1 2015/05/24 00:51:48 jw Exp $ -O7";
+"$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7";
 
 #include	<icg.h>
 
@@ -43,41 +43,41 @@ iC_Gt **	iC_list[] = { &iC___Test0_aa4z5_list, 0, };
  *
  *******************************************************************/
 
-static int iC_9(iC_Gt * iC_gf) {
+static int iC_8(iC_Gt * iC_gf) {
 #line 46 "./Test0/aa4z5.ic"
 	return ((iC_MV(1)+iC_MV(2))+iC_MV(1))+iC_MV(1);
 #line 50 "./Test0/aa4z5.c"
+} /* iC_8 */
+
+static int iC_9(iC_Gt * iC_gf) {
+#line 47 "./Test0/aa4z5.ic"
+	return iC_MV(1)+(iC_MV(1)+((8)+(iC_MV(1)+iC_MV(2))));
+#line 56 "./Test0/aa4z5.c"
 } /* iC_9 */
 
 static int iC_10(iC_Gt * iC_gf) {
-#line 47 "./Test0/aa4z5.ic"
-	return iC_MV(1)+(iC_MV(1)+((4+4)+(iC_MV(1)+iC_MV(2))));
-#line 56 "./Test0/aa4z5.c"
+#line 48 "./Test0/aa4z5.ic"
+	return ((iC_MV(1)+iC_MV(2))+((8)+(iC_MV(1)+iC_MV(2))))+((8)+(iC_MV(1)+iC_MV(2)));
+#line 62 "./Test0/aa4z5.c"
 } /* iC_10 */
 
 static int iC_11(iC_Gt * iC_gf) {
-#line 48 "./Test0/aa4z5.ic"
-	return ((iC_MV(1)+iC_MV(2))+((4+4)+(iC_MV(1)+iC_MV(2))))+((4+4)+(iC_MV(1)+iC_MV(2)));
-#line 62 "./Test0/aa4z5.c"
+#line 49 "./Test0/aa4z5.ic"
+	return 8+(8+((8)+(iC_MV(1)+iC_MV(2))));
+#line 68 "./Test0/aa4z5.c"
 } /* iC_11 */
 
 static int iC_12(iC_Gt * iC_gf) {
-#line 49 "./Test0/aa4z5.ic"
-	return (4+4)+((4+4)+((4+4)+(iC_MV(1)+iC_MV(2))));
-#line 68 "./Test0/aa4z5.c"
+#line 50 "./Test0/aa4z5.ic"
+	return (((8)+(iC_MV(1)+iC_MV(2)))+8)+8;
+#line 74 "./Test0/aa4z5.c"
 } /* iC_12 */
 
 static int iC_13(iC_Gt * iC_gf) {
-#line 50 "./Test0/aa4z5.ic"
-	return (((4+4)+(iC_MV(1)+iC_MV(2)))+(4+4))+(4+4);
-#line 74 "./Test0/aa4z5.c"
-} /* iC_13 */
-
-static int iC_14(iC_Gt * iC_gf) {
 #line 51 "./Test0/aa4z5.ic"
 	return iC_MV(1)+(iC_MV(1)+iC_MV(2));
 #line 80 "./Test0/aa4z5.c"
-} /* iC_14 */
+} /* iC_13 */
 
 /********************************************************************
  *
@@ -86,16 +86,16 @@ static int iC_14(iC_Gt * iC_gf) {
  *******************************************************************/
 
 static iC_Gt *	iC_l_[] = {
-/* QB1 */	(iC_Gt*)iC_9, &IB4, &IB5, 0,
+/* QB1 */	(iC_Gt*)iC_8, &IB4, &IB5, 0,
 /* QB1_0 */	(iC_Gt*)0, &QB1, 0,
-/* QB2 */	(iC_Gt*)iC_10, &IB4, &IB5, 0,
+/* QB2 */	(iC_Gt*)iC_9, &IB4, &IB5, 0,
 /* QB2_0 */	(iC_Gt*)0, &QB2, 0,
-/* QB3 */	(iC_Gt*)iC_11, &IB4, &IB5, 0,
+/* QB3 */	(iC_Gt*)iC_10, &IB4, &IB5, 0,
 /* QB3_0 */	(iC_Gt*)0, &QB3, 0,
-/* QB4 */	(iC_Gt*)iC_12, &IB4, &IB5, 0,
+/* QB4 */	(iC_Gt*)iC_11, &IB4, &IB5, 0,
 /* QB4_0 */	(iC_Gt*)0, &QB4, 0,
-/* QB5 */	(iC_Gt*)iC_13, &IB4, &IB5, 0,
+/* QB5 */	(iC_Gt*)iC_12, &IB4, &IB5, 0,
 /* QB5_0 */	(iC_Gt*)0, &QB5, 0,
-/* QB6 */	(iC_Gt*)iC_14, &IB4, &IB5, 0,
+/* QB6 */	(iC_Gt*)iC_13, &IB4, &IB5, 0,
 /* QB6_0 */	(iC_Gt*)0, &QB6, 0,
 };

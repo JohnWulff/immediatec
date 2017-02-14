@@ -68,14 +68,14 @@
 037	imm int Sub4() {
 038	    return 4;
 
-	4       A ---@  Sub4@   A
+	4       A ---@  Sub4@   A       4
 
 039	}
 040
 041	imm int Sub44() {
 042	    this = 4 + 4;
 
-	iConst  A ---+  Sub44@  A       4+4;    // (3)
+	8       A ---@  Sub44@  A       4+4
 
 043	}
 044
@@ -91,29 +91,27 @@
 
 	IB1     A ---+  QB1     A       (IB1    // 1
 	IB2     A ---+                  +IB2    // 2
-	                                )+4;    // (4)
+	                                )+4;    // (3)
 
 
 	QB1     A ---+  QB1_0   W       QB1     // 1
 
 047	QB2 = Sub33() + Sub44();
 
-	IB1     A ---+  QB2     A       (IB1     // 1
-	IB2     A ---+                  +IB2     // 2
-	                                )+(4+4); // (5)
+	IB1     A ---+  QB2     A       (IB1    // 1
+	IB2     A ---+                  +IB2    // 2
+	                                )+8;    // (4)
 
 
-	QB2     A ---+  QB2_0   W       QB2      // 1
+	QB2     A ---+  QB2_0   W       QB2     // 1
 
 ******* C CODE          ************************
 
 030	(2) 	return iC_MV(1)+iC_MV(2);
 
-042	(3) 	return 4+4;
+046	(3) 	return (iC_MV(1)+iC_MV(2))+4;
 
-046	(4) 	return (iC_MV(1)+iC_MV(2))+4;
-
-047	(5) 	return (iC_MV(1)+iC_MV(2))+(4+4);
+047	(4) 	return (iC_MV(1)+iC_MV(2))+8;
 
 ******* NET TOPOLOGY    ************************
 
@@ -142,6 +140,6 @@ TOTAL	      10 blocks
 	      25 links
 
 compiled by:
-@(#)     $Id: aa4y.lst,v 1.1 2015/06/03 11:13:21 jw Exp $ -O7
+$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
 *** Warning: 2 undefined gates. File ./Test0/aa4y.ic, line 48
 *** Error: 2 syntax and 12 generate errors - cannot execute. File ./Test0/aa4y.ic, line 48

@@ -114,7 +114,7 @@ fi
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.48 $' >&2
+  echo '	$Id: iCmake 1.49 $' >&2
 }
 
 lwsock32=""
@@ -393,9 +393,9 @@ for arg in $*; do
 			echo "$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib$E"
 		    fi
 		    if [ -n "$E" ]; then
-			$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib |& sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $base.ini
+			$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $base.ini
 		    else
-			$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib |& sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
+			$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
 		    fi
 		    if [ -x ./$base ]; then
 			if [ -n "$I" ]; then
@@ -575,9 +575,9 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	    echo "$nice$CC$CFL -I.$ldir$C -o $first $list $lib$E"
 	fi
 	if [ -n "$E" ]; then
-	    $nice$CC$CFL -I.$ldir$C -o $first $list $lib |& sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $first.ini
+	    $nice$CC$CFL -I.$ldir$C -o $first $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $first.ini
 	else
-	    $nice$CC$CFL -I.$ldir$C -o $first $list $lib |& sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
+	    $nice$CC$CFL -I.$ldir$C -o $first $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
 	fi
 	if [ -x ./$first ]; then
 	    if [ -n "$I" ]; then

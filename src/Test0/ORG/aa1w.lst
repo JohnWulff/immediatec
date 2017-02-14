@@ -26,21 +26,17 @@
 	QX0.2_1 D ---#  QX0.2
 
 	t       ! ---|  QX0.2_1 D
-	QX0.2_2 A<---|
+	80      A<---|
 	IX0.2     ---|
-
-	iConst  A ---+  QX0.2_2 A       010*0xa; // (2)
 
 
 	QX0.2     ---|  QX0.2_0 X
 
-******* C CODE          ************************
-
-003	(2) 	return 010*0xa;
 
 ******* NET TOPOLOGY    ************************
 
 10      =  A <QX0.1_1|
+80      =  A <QX0.2_1|
 IX0.0   <    ~t_2|    t_1|
 IX0.1   <     QX0.1_1|
 IX0.2   <     QX0.2_1|
@@ -50,16 +46,13 @@ QX0.1_1 |  D  QX0.1#
 QX0.2   #     QX0.2_0|
 QX0.2_0 |  X
 QX0.2_1 |  D  QX0.2#
-QX0.2_2 +  A <QX0.2_1|
 iClock  :  :  t_2|    t_1|
-iConst  =  A  QX0.2_2+
 t       !  !  QX0.1_1|  QX0.2_1|
 t_1     |  T  t!
 t_2     |  T  t!
 
 ******* NET STATISTICS  ************************
 
-ARN	+      1 blocks
 OR	|      6 blocks
 FF	#      2 blocks
 NCONST	=      2 blocks
@@ -67,10 +60,10 @@ INPX	<      3 blocks
 CLK	:      1 blocks
 TIM	!      1 blocks
 
-TOTAL	      16 blocks
-	      34 links
+TOTAL	      15 blocks
+	      30 links
 
 compiled by:
-@(#)     $Id: aa1w.lst,v 1.1 2015/05/24 00:51:45 jw Exp $ -O7
+$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
 
-C OUTPUT: ./Test0/aa1w.c  (67 lines)
+C OUTPUT: ./Test0/aa1w.c  (52 lines)

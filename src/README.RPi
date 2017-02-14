@@ -6,8 +6,8 @@
     for Linux on a PC. It natively supports gcc 4.6.3 and perl 5.14. For the iC
     system Perl/Tk, bison and flex are also required. All of these tools are
     available with apt-get. I also rely on vim for writing and maintaining code,
-    ddd for debugging, GTKWave for visualizing and RCS for source code control.
-    These are also available for the Raspberry Pi.
+    DDD for debugging, GTKWave for visualizing and GIT (previously RCS) for
+    source code control.  These are all available for the Raspberry Pi.
 
     The iC system consists of the immediate C compiler 'immcc', the static library
     'libict.a', which has debugging support and the shared library 'libict.so',
@@ -313,4 +313,4 @@
     iCserver, so it does not need a -E or -L option.
 
     John E. Wulff   2016.05.11     <immediateC@gmail.com>
-    $Id: README.RPi 1.3 $
+    $Id: README.RPi 1.4 $

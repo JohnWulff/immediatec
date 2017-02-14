@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.69 $
+# @(#)$Id: Makefile.in 1.70 $
 
 #######################################################################
 #
@@ -31,9 +31,9 @@
 #	  makeAll -P;   # make iCpiFace real I/O program with YYDEBUG support
 #	  makeAll -V;   # make iCpiPWM real serVo and PWM I/O program with YYDEBUG support
 #
-#	Do not rm comp.c, gram.c and lexc.c with make clean in case the target
+#	Do not rm comp.tab.c, gram.tab.c and lex.yy.c with make clean in case the target
 #	system has no bison or yacc and no flex or lex (some Knoppix distributions)
-#	Define YYERROR_VERBOSE for bison generated files comp.c and gram.c
+#	Define YYERROR_VERBOSE for bison generated files comp.tab.c and gram.tab.c
 #	26.Mar.2008
 #
 #######################################################################
@@ -110,8 +110,8 @@ SHELL = /bin/sh
 
 #######################################################################
 
-CSRC =	$(srcdir)/comp.c $(srcdir)/genr.c $(srcdir)/init.c $(srcdir)/symb.c $(srcdir)/outp.c $(srcdir)/gram.c $(srcdir)/lexc.c
-COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O)
+CSRC =	$(srcdir)/comp.y $(srcdir)/genr.c $(srcdir)/init.c $(srcdir)/symb.c $(srcdir)/outp.c $(srcdir)/gram.y $(srcdir)/lexc.l $(srcdir)/cons.y
+COBJ =	comp.$(O) genr.$(O) init.$(O) symb.$(O) outp.$(O) gram.$(O) lexc.$(O) cons.$(O)
 LSRC =	$(srcdir)/link.c $(srcdir)/rsff.c $(srcdir)/scan.c
 LOBJ =	link.$(O) rsff.$(O) scan.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
@@ -121,6 +121,9 @@ else
 PSRC =
 POBJ =
 endif
+compPREFIX = -Dapi.prefix=iC
+consPREFIX = -Dapi.prefix=cn
+gramPREFIX =
 
 #### Standalone versions ##############################################
 #### make icr and lmain with YYDEBUG, since they need it for normal operation
@@ -187,55 +190,41 @@ endif
 pplstfix:
 	@$(SHELL) -ec 'if [ ! -x pplstfix -a ! -L pplstfix -a -x $(srcdir)/pplstfix ]; then rm -f pplstfix; echo "ln -s $(srcdir)/pplstfix ."; ln -s $(srcdir)/pplstfix .; fi'
 
-%.c:	%.l
+$(srcdir)/lex.yy.c:	$(srcdir)/lexc.l
     ifneq ($(LEX),)
-	rm -f $@
-	$(LEX) -t $< | perl $(srcdir)/gram.pl > $@
-	chmod -w $@
+	$(SHELL) -ec 'if $(LEX) $<; then mv -f lex.yy.c yy.tab.t; perl -e "while(<>){s/(\bId:\s)lexc.l/\1lex.yy.c/;print;}" < yy.tab.t > lex.yy.c; rm -f yy.tab.t; else echo "$(LEX) error return"; fi'
     else
-	@echo "System has no lex or flex - install one of them"
-	@echo "Otherwise do not modify $< - use $@ in distribution"
-	test -f $@ && touch $@
+	@echo "System has no flex or lex - install one of them"
+	@echo "Otherwise do not modify $< - C compile lex.yy.c in distribution"
+	test -f $(srcdir)/lex.yy.c && touch $(srcdir)/lex.yy.c
     endif
 
-%.c:	%.y
+$(srcdir)/%.tab.c:	$(srcdir)/%.y
     ifneq ($(YACC),)
-	$(SHELL) -ec 'if [ -f $(*)_tab.h ]; then mv -f $(*)_tab.h y.tab.t; fi'
-	rm -f y.tab.c $@
-	$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; immac -M $(OPT) -o $< $(<).sav; fi'
-	$(YACC) $(YFLAGS) $<
+	$(SHELL) -ec 'if [ -f $(*).tab.h ]; then mv -f $(*).tab.h yy.tab.t; fi'
+	$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; immac -Y $(OPT) -o $< $(<).sav; fi'
+	$(SHELL) -ec 'if $(YACC) $(YFLAGS) $($(*)PREFIX) $<; then mv -f $(*).tab.c yy.tab.t; perl -e "while(<>){s/(\bId:\s)$(*).y/\1$(*).tab.c/;print;}" < yy.tab.t > $(*).tab.c; rm -f yy.tab.t; else echo "$(YACC) error return"; fi'
 	$(SHELL) -ec 'if [ -f $(<).sav ]; then mv -f $(<).sav $<; fi'
-	perl $*.pl y.tab.c > $@
-	perl $*.pl y.tab.h > $(*)_tab.h
-	$(SHELL) -ec 'if cmp -s $(*)_tab.h y.tab.t; then mv y.tab.t $(*)_tab.h; fi'
-	rm -f y.tab.t y.tab.h y.tab.c y.tab.y
-	chmod -w $(*)_tab.h $@
-	mv y.output $*.output
+	$(SHELL) -ec 'if cmp -s $(*).tab.h yy.tab.t; then mv yy.tab.t $(*).tab.h; else rm -f yy.tab.t; fi'
     else
-	@echo "System has no yacc, bison or byacc - install one of them"
-	@echo "Otherwise do not modify $< - use $@ and $(*)_tab.h in distribution"
-	test -f $@ && touch $@
+	@echo "System has no bison, yacc or byacc - install one of them"
+	@echo "Otherwise do not modify $< - C compile $(*).tab.c in distribution"
+	test -f $(srcdir)/$(*).tab.c && touch $(srcdir)/$(*).tab.c
     endif
 
 %.1.gz:	%
-	pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
+	@pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
 	@gzip -f $*.1
 
-$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/misc.c $(CSRC) $(srcdir)/pawk.pl $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(LSRC) $(PSRC)
-	rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/comp.pl $(srcdir)/gram.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
-
-$(srcdir)/comp.c:	$(srcdir)/comp.y $(srcdir)/comp.pl
-
-$(srcdir)/gram.c:	$(srcdir)/gram.y $(srcdir)/gram.pl
-
-$(srcdir)/lexc.c:	$(srcdir)/lexc.l $(srcdir)/gram.pl
+$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/icc.c $(srcdir)/misc.c $(CSRC) $(srcdir)/pawk.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(LSRC) $(PSRC)
+	@rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
 $(srcdir)/cexe.c:	$(srcdir)/cexe_t.c
 	cp -f $(srcdir)/cexe_t.c $(srcdir)/cexe.c
 	chmod +w $(srcdir)/cexe.c
 
 $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
-	pod2man -u -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
+	@pod2man -u -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
 	@gzip -f $(srcdir)/immcc.1
 
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
@@ -259,15 +248,15 @@ $(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
 $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
 $(srcdir)/Mdiff.1.gz:	$(srcdir)/AuxTools/Mdiff $(srcdir)/scid.c
-	pod2man -u -n Mdiff -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/Mdiff.1
+	@pod2man -u -n Mdiff -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/Mdiff.1
 	@gzip -f $(srcdir)/Mdiff.1
 
 $(srcdir)/iCpiFace.1.gz:	$(srcdir)/iCpiFace.c $(srcdir)/scid.c
-	pod2man -u -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
+	@pod2man -u -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
 	@gzip -f $(srcdir)/iCpiFace.1
 
 $(srcdir)/iCpiPWM.1.gz:	$(srcdir)/iCpiPWM.c $(srcdir)/scid.c
-	pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
+	@pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
 	@gzip -f $(srcdir)/iCpiPWM.1
 
 $(srcdir)/iCrfid.1.gz:	$(srcdir)/iCrfid $(srcdir)/scid.c
@@ -391,24 +380,24 @@ clean:
 	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/*.1.gz
 
 distclean: clean
-	rm -f $(srcdir)/Makefile $(srcdir)/comp.c $(srcdir)/comp.output $(srcdir)/comp_tab.h $(srcdir)/gram.c $(srcdir)/gram.output $(srcdir)/gram_tab.h $(srcdir)/lexc.c $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log
+	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log
 	cd ${srcdir}/Test0/; rm -f `cat pg.lt`; cd - > /dev/null;
 
 distribution:
 	@echo "making icc_$(REV).tgz"; cd ${srcdir}/../..; test -h icc_$(REV) || ln -s immediatec icc_$(REV); tar -czf icc_$(REV).tgz `$(PADD) icc_$(REV)/src/manifest`; cd -;
 
-genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
+genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
 
-init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
+init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
 
-symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp_tab.h
+symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
 
-comp.$(O):	$(srcdir)/comp.c $(srcdir)/icc.h $(srcdir)/comp.h
-	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) $(O0) $<
+comp.$(O):	$(srcdir)/comp.tab.c $(srcdir)/icc.h $(srcdir)/comp.h
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/comp.tab.c
 
 icc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h
 
-outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
+outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h gram.tab.c
 
 cexe.$(O):	$(srcdir)/cexe.c $(srcdir)/icc.h $(srcdir)/comp.h
 
@@ -422,11 +411,14 @@ link.$(O):	$(srcdir)/icc.h
 
 scan.$(O):	$(srcdir)/icc.h
 
-gram.$(O):	$(srcdir)/gram.c $(srcdir)/icc.h $(srcdir)/comp.h
-	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) $(O0) $<
+gram.$(O):	$(srcdir)/gram.tab.c $(srcdir)/icc.h $(srcdir)/comp.h
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/gram.tab.c
 
-lexc.$(O):	$(srcdir)/lexc.c $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram_tab.h
-	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) $(O0) $<
+lexc.$(O):	$(srcdir)/lex.yy.c $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram.tab.h
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/lex.yy.c
+
+cons.$(O):	$(srcdir)/cons.tab.c
+	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/cons.tab.c
 
 lmain.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 

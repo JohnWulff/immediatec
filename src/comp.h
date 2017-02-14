@@ -16,9 +16,10 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.70 $";
+"@(#)$Id: comp.h 1.71 $";
 
 #include	<setjmp.h>
+#include	"icc.h"		/* fir definition of struct Gate */
 
 #define NS		((char*)0)
 #define	TSIZE		256
@@ -58,37 +59,29 @@ typedef	struct Symbol {		/* symbol table entry */
 #if ! YYDEBUG || defined(SYUNION)
     union {
 #endif
-	List_e *	blist;	/* used in compile (1st union member to allow initialisation) */
-	Gate *		gate;	/* AND OR */
-	unsigned int	val;	/* used to hold function number etc. */
+	List_e *	u_blist;/* used in compile (1st union member to allow initialisation) */
+	Gate *		u_gate;	/* AND OR */
+	unsigned int	u_val;	/* used to hold function number etc. */
 #if ! YYDEBUG || defined(SYUNION)
-    } u;
+    };				/* no unions is easier for debugging with ddd */
     union {
 #endif
-	List_e *	elist;	/* feedback list pointer */
-	struct Symbol *	glist;	/* mark symbols in C compile */
-	unsigned int	cnt;	/* used to hold link_count in listNet() */
+	List_e *	v_elist;/* feedback list pointer */
+	struct Symbol *	v_glist;/* mark symbols in C compile */
+	unsigned int	v_cnt;	/* used to hold link_count in listNet() */
 #if ! YYDEBUG || defined(SYUNION)
-    } v;
+    };
 #endif
     struct Symbol *	next;	/* to link to another Symbol, mostly in ST */
 } Symbol;
 
-#if ! YYDEBUG || defined(SYUNION)
-#define u_blist	u.blist
-#define u_gate	u.gate
-#define u_val	u.val
-#define v_elist	v.elist
-#define v_glist	v.glist
-#define v_cnt	v.cnt
-#else				/* no unions is easier for debugging with ddd */
-#define u_blist	blist
-#define u_gate	gate
-#define u_val	val
-#define v_elist	elist
-#define v_glist	glist
-#define v_cnt	cnt
-#endif
+typedef	struct Valp {		/* auxiliary compile type to hold alternate int or List_e* */
+    union {
+	int		nuv;	/* numeric value */
+	List_e *	lpt;	/* List_e* */
+    };
+    unsigned int	lfl;	/* List_e Flag: 0: int; 1: List_e* 2: err */
+} Valp;
 
 #define EM	0x01	/* em bit mask for extern until locally declared */
 #define EX	0x02	/* em bit mask for extern immC - can be used and defined externally */
@@ -99,22 +92,23 @@ typedef	struct Symbol {		/* symbol table entry */
 #define EU	0x20	/* (2<<AU_OFS+1) em bit mask for immC variable used (replaces VAR_USE) */
 #define AU	0x30	/* (EA|EU)       em bit mask for immC variable used or defined (replaces USE_MASK) */
 			/* if no higher bits in em AU need not be used after shifting EA or EU (use anyway) */
-#define EI	0x40	/* em bit to indicate immC initialiser has been saved */
+#define EI	0x40	/* em bit to indicate immC initialiser has been saved or imm int parameter is const int */
 #define ED	0x80	/* em bit to indicate immC variable has been defined in listGenOut() */
 
 #define FU	0x03	/* fm bit mask for use count 0, 1 or 2 */
+#define FP	0x04	/* fm bit which marks parameter in function definition */
+#define FA	0x08	/* fm bit which marks assign parameter and variable in function definition */
 #define FI	0x10	/* fm increment for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
 #define FMI	0x30	/* fm bit mask for input count 0, 1 or 2 (0x00, 0x10, 0x20) */
-#define FP	0x04	/* fm bit which marks parameter in function definition */
-#define FA	0x40	/* fm bit which marks assign parameter and variable in function definition */
-#define FM	0x80	/* fm bit wihch marks parameter and local variable in function definition */
+#define FT	0x40	/* fm bit which marks temporary '@' Symbol on templist */
+#define FM	0x80	/* fm bit which marks parameter and local variable in function definition */
 
 /* for use in a union identical first elements can be accesed */
 typedef struct Sym { char *f; char *l; Symbol * v;     } Sym;
 typedef struct Lis { char *f; char *l; List_e * v;     } Lis;
-typedef struct Val { char *f; char *l; int v;          } Val;
+typedef struct Val { char *f; char *l; int  v;         } Val;
+typedef struct Vap { char *f; char *l; Valp v;         } Vap;
 typedef struct Typ { char *f; char *l; Type v;         } Typ;
-typedef struct Str { char *f; char *l; char v[2];      } Str;
 
 typedef struct Token {		/* Token for gram.y grammar */
     unsigned int	start;
@@ -136,7 +130,6 @@ typedef struct BuiltIn {	/* initial Symbol info in init.c */
 } BuiltIn;
 
 					/*  comp.y  */
-extern int  iCparse(void);		/* generated yacc parser function */
 extern int  iC_compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
@@ -147,7 +140,6 @@ extern void warning(char *, char *);	/* print warning message */
 extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */
 
-extern int	c_lex(void);		/* produced by lexc.l for gram.y */
 #ifndef LMAIN
 extern void yyerror(const char * s);	/* called for yacc syntax error */
 extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
@@ -170,14 +162,14 @@ extern int	lexflag;
 /********************************************************************
  *	lexflag is bitmapped and controls the input for lexers
  *
- *	bit	mask	iCparse	c_parse	function
+ *	bit	mask	iCparse	yyparse	function
  *  C_PARSE	01	00	01	select parser
  *  C_FIRST	02	02	02	set for first line of listing
- *  C_BLOCK	04	-	04	block c_parse source listing
- *  C_NO_COUNT	010	-	010	c_parse blocks counting chars
+ *  C_BLOCK	04	-	04	block yyparse source listing
+ *  C_NO_COUNT	010	-	010	yyparse blocks counting chars
  *  C_LINE	020	-	020	# 1 or # line seen
  *  C_LINE1	040	-	040	# line seen
- *  C_BLOCK1	0100	-	0100	block c_parse listing completely
+ *  C_BLOCK1	0100	-	0100	block yyparse listing completely
  *  C_PARA	0200	-	0200	C function parameters are being collected
  *  C_FUNCTION	0400	-	0400	C function is being parsed
  *******************************************************************/
@@ -243,9 +235,9 @@ typedef struct FuUse {			/* Function call count and C expression */
 #endif	/* BOOT_COMPILE */
 } FuUse;
 
-typedef struct immCini {			/* dynamic auxiliary list element for saving immC initialisers */
-    Symbol *	symbol;
-    int		value;
+typedef struct immCini {		/* dynamic auxiliary list element for saving immC initialisers */
+    Symbol *	immCvar;		/* immC variable which has an initialiser */
+    Valp	v;			/* v.lfl: 0 is int nuv; 1 is List_e * lpt to const int paramater expression; 2 err */
 } immCini;
 
 extern immCini*	iC_iniList;		/* dynamic auxiliary list for saving immC initialisers */
@@ -277,9 +269,16 @@ extern char *	iFunSymExt;		/* flags that function is being compiled */
 extern Sym	iRetSymbol;		/* .v is pointer to imm function return Symbol */
 extern Symbol * assignExpression(	/* assignment of an aexpr to a variable */
 	    Sym * sv, Lis * lv, int ioTyp);
+extern Valp	extractConstIni(	/* Extract immC int or immC bit const int initialiser value */
+	    Symbol * sp);
+extern Valp	evalConstExpr(		/* evaluate a constant expression */
+	    Lis * lv);
 extern void	listGenOut(		/* listing for undefined immC variable */
-	    Symbol * sp, int size, int ini);
+	    Symbol * sp, int size, Valp * ini);
 extern List_e *	delayOne(List_e * tp);	/* implicit delay of 1 tick for ctref : texpr ; */
+extern void	freeTemp(List_e * lp);	/* unlink a temporary object from templist and free it */
+extern Symbol *	resolveAlias(		/* resolve possible alias chain */
+	    List_e * lp);
 extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
 	    Symbol * cName, List_e * cParams, int pcnt);
 extern List_e *	cListCount(		/* count parameters in 'cList' */
@@ -295,7 +294,7 @@ extern Symbol *	functionDefinition(	/* finalise function definition */
 extern Symbol * getRealParameter(	/* get a real parameter of a called function */
 	    Symbol * hsp, List_e * lp);
 extern Lis	cloneFunction(		/* clone a function template in a function call */
-	    Sym * fhs, Sym * hsym, Str * par);
+	    Sym * fhs, Sym * hsym, Val * par);
 extern Symbol *	clearFunDef(		/* clear a previous function definition */
 	    Symbol * functionHead);
 extern List_e *	checkDecl(		/* check decleration of a function terminal */
@@ -308,6 +307,8 @@ extern List_e * op_force(		/* force linked Symbol to ftype */
 extern List_e *	op_push(List_e *,	/* reduce List_e stack to links */
 	    unsigned char, List_e *);	/*   left, typ, right   */
 extern int	const_push(Lis * expr);	/* numeric constant push */
+extern List_e *	checkConstExpr(
+	    List_e * lp);		/* check for constant expression */
 extern List_e *	op_not(List_e *);	/* logical negation */
 extern void	writeCexeString(FILE * oFP, int cn);
 extern void	writeCexeTail(FILE * oFP, const char * tail, int cn);
@@ -320,7 +321,7 @@ extern List_e * bltin(			/* generate built in iC functions */
 	    Lis* ae3, Lis* cr3,		/* optional reset */
 	    Val* pVal);			/* optional cblock# or off-delay */
 #if YYDEBUG
-enum stackType { SYM, LIS, VAL, TYP, STR };
+enum stackType { SYM, LIS, VAL, VAP, TYP };
 extern void	pu(enum stackType t, const char * token, void * node);
 #endif
 
@@ -399,8 +400,11 @@ extern int	iC_outNet(FILE * iFP, char * outfile);	/* generate network as C file 
 extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 
+					/*   gram.y   */
+extern void	copyAdjust(FILE* iFP, FILE* oFP, List_e* lp);
+
 					/*   lexc.l   */
-extern size_t	c_leng;			/* defined in lexc.c */
+extern size_t	yyleng;			/* defined in lexc.c */
 extern int	column;
 extern int	gramOffset;		/* count input in lex */
 extern void	delete_sym(Token* tokp);
@@ -408,7 +412,7 @@ extern void	delete_sym(Token* tokp);
 extern void	markParaList(Symbol * sp); /* mark Symbol as parameter on glist */
 extern void	clearParaList(int flag); /* clear parameter list from extraneous entries */
 #endif
-					/*   gram.y   */
-extern int	c_parse(void);		/* generated yacc parser function */
-extern void	copyAdjust(FILE* iFP, FILE* oFP, List_e* lp);
+
+					/*   cons.y   */
+extern int	parseConstantExpression(char * expressionText, int * valp, int r);
 #endif	/* COMP_H */

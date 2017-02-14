@@ -96,17 +96,17 @@ Usage:
     [ / ]       Put focus in Search Entry window if cleared.        /
                     (simulates vi)                            or  Alt-/
                 Else start or continue a search of text in
-                the Entry window. All hits will be marked.
+                the Search Entry window. All hits will be marked.
             Holding this button down briefly will open a menu of
             extra search options
        Search down      or                                       RETURN
                 displays a new group of hits
        Search up        or                                    Shift-RET
                 reverses the direction of displaying hits
-       Clear            or double-click search Entry window or Ctrl-RET
-                clears hits and the search Entry window
+       Clear            or double-click Search Entry window or Ctrl-RET
+                clears hits and the Search Entry window
      <>Go to line       or                                      Alt-RET
-                goes to the line entered in the Entry window
+                goes to the line entered in the Search Entry window
      <>Exact match
      <>Ignore case
      <>Regexp match
@@ -124,7 +124,7 @@ Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman 1.23 $ uses Tk-@<<<<<<<<<
+$Id: iCman 1.24 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -2126,17 +2126,17 @@ iCman - an interface to the on-line reference manuals
     [ / ]       Put focus in Search Entry window if cleared.        /
                     (simulates vi)                            or  Alt-/
                 Else start or continue a search of text in
-                the Entry window. All hits will be marked.
+                the Search Entry window. All hits will be marked.
             Holding this button down briefly will open a menu of
             extra search options
        Search down      or                                       RETURN
                 displays a new group of hits
        Search up        or                                    Shift-RET
                 reverses the direction of displaying hits
-       Clear            or double-click search Entry window or Ctrl-RET
-                clears hits and the search Entry window
+       Clear            or double-click Search Entry window or Ctrl-RET
+                clears hits and the Search Entry window
      <>Go to line       or                                      Alt-RET
-                goes to the line entered in the Entry window
+                goes to the line entered in the Search Entry window
      <>Exact match
      <>Ignore case
      <>Regexp match

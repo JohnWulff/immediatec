@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.102 $";
+"@(#)$Id: outp.c 1.103 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -30,8 +30,8 @@ static const char outp_c[] =
 #include	<ctype.h>
 #include	<assert.h>
 #include	<errno.h>
-#include	"icc.h"
 #include	"comp.h"
+#include	"gram.tab.h"
 
 #define SZSIZE	64
 
@@ -157,9 +157,12 @@ iC_toIEC1131(char * name, char * buf, int bufLen,
  *	If name is not modified, name is copied to names and iqt[0]
  *	is cleared.
  *
- *	Because names[] has 3 static arrays, used in rotating-pong fashion,
+ *	Because names[] has 4 static arrays, used in rotating-pong fashion,
  *	a pointer to the current names entry can still be used after a 2nd
  *	and a 3rd call to mN(). Used in loops to provide previous name.
+ *
+ *	original algorithm fails after 4 unused constants. FIX by incrementing
+ *	ix when mN() names[] entry actually gets used. jw 20161215
  *
  *******************************************************************/
 
@@ -176,8 +179,8 @@ static unsigned	cnt;				/* used as side-effect in OUTW - INPX */
 static char *
 mN(Symbol * sp)
 {
-    char * np = names[ix++];			/* alternate ix = 0, 1 or 2 */
     if (ix >= SZ) ix = 0;			/* rotate buffers */
+    char * np = names[ix];			/* alternate ix = 0, 1, 2 or 3 */
     if (sp == 0) return strncpy(np, "0", 2);	/* in case of suprises */
     if (sp->name == 0) return strncpy(np, "(null)", 7);	/* in case of more suprises */
     cnt = IEC1131(sp->name, np, BUFS, iqt, xbwl, &byte, &bit, tail);
@@ -1417,7 +1420,7 @@ iC_listNet(void)
 			     *  undefined warnings.
 			     *
 			     *  immC (ARNC or LOGC) can only be assigned in C code, in which case
-			     *  EA was set in em. Alternatively in immC variable which was
+			     *  EA was set in em. Alternatively an immC variable which was
 			     *  initialised (em & EI set) is also considered defined.
 			     *
 			     *  A special case is an immC or immC array variable, which has been
@@ -1463,7 +1466,7 @@ iC_listNet(void)
 			if ((iC_Wflag & W_UNUSED) &&
 			    /********************************************************************
 			     *  Any imm or immC may be used in iC code, in which case it has sp->list
-			     *  or it may be used in C code in which case EA was set in em.
+			     *  or it may be used in C code in which case EU was set in em.
 			     *
 			     *  A special case is an imm, immC or immC array variable, which has been
 			     *  declared extern (em & EX set). Such a variable may have been used
@@ -2757,28 +2760,19 @@ iC_outNet(FILE * iFP, char * outfile)
 		 * scan 'iC_iniList' for the current Symbol sp and fetch the
 		 * corresponding inital value.
 		 *******************************************************************/
-		if (iC_iniList &&			/* pass if no initialisers */
-		    (typ == ARNC || typ == LOGC) &&	/* and not an immC */
-		    (sp->em & EI)			/* and not marked as initialised */
-		) {
-		    immCini*	ip;
-		    int		val;
-
-		    for (ip = iC_iniList; ip < iC_inip; ip++) {
-			if (sp == ip->symbol) {
-			    val = ip->value;
-			    break;
-			}
-		    }
-		    assert(ip < iC_inip);	/* compiler error if initialiser not found */
-		    fprintf(Fp, ", 0, 0");	/* fillers for gt_mark, gt_live */
+		if (iC_iniList &&			/* extract if initialisers */
+		    (typ == ARNC || typ == LOGC) &&	/* and an immC variable */
+		    (sp->em & EI)) {			/* and marked as initialised */
+		    Valp	v;
+		    fprintf(Fp, ", 0, 0");		/* fillers for gt_mark, gt_live */
 #ifdef DEQ
-		    fprintf(Fp, ", 0");		/* filler for gt_prev */
+		    fprintf(Fp, ", 0");			/* filler for gt_prev */
 #endif
+		    v = extractConstIni(sp);		/* obtain numerical value */
 #if INT_MAX == 32767 && defined (LONG16)
-		    fprintf(Fp, ", %ld", (long)val);	/* gt_new = immC initialiser */
+		    fprintf(Fp, ", %ld", (long)v.nuv);	/* gt_new = immC initialiser */
 #else
-		    fprintf(Fp, ", %d", val);		/* gt_new = immC initialiser */
+		    fprintf(Fp, ", %d", v.nuv);		/* gt_new = immC initialiser */
 #endif
 		}
 		/* close Gate initialiser */
@@ -2786,6 +2780,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		linecnt++;
 		nxs = modName;			/* previous Symbol name */
 		sam = "&";
+		ix++;
 	    }
 	}
     }
@@ -2804,6 +2799,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		((ftyp = sp->ftype) == GATE || ftyp == ARITH || ftyp == CLCKL || ftyp == TIMRL)
 	    ) {
 		modName = mN(sp);		/* modified string, byte and bit */
+		ix++;
 		fprintf(Fp, "iC_Gt %-8s", modName);
 		val = sp->list->le_val;
 		tsp = sp->list->le_sym;
@@ -2814,6 +2810,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		fprintf(Fp,
 		    " = { 1, -%s, %s, 0, \"%s\", {0}, {(iC_Gt**)&%s}, %s%s, %d };\n",
 		    iC_ext_type[typ], iC_ext_ftype[ftyp], sp->name, mN(tsp), sam, nxs, val);
+		ix++;
 		linecnt++;
 		nxs = modName;			/* previous Symbol name */
 		sam = "&";
@@ -3327,7 +3324,7 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    if (precompileFlag == 0) {
 			if ((c = iC_openT4T5(0)) != 0) return c;	/* re-open if necessary */
 		    }
-		    if (iC_debug & 02) fprintf(iC_outFP, "####### c_parse #include %s\n", lstBuf);
+		    if (iC_debug & 02) fprintf(iC_outFP, "####### yyparse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
 		    precompileFlag = 1;	/* 1 marks #include */
 		}
@@ -3422,7 +3419,7 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
 	yyout = iC_outFP;			/* list file */
 	lexflag |= C_PARSE|C_NO_COUNT|C_FIRST;	/* do not count characters for include files */
 	gramOffset = lineno = 0;
-	if (c_parse() != 0) {			/* C parse headers to obtain CTYPE's in ST */
+	if (yyparse() != 0) {			/* C parse headers to obtain CTYPE's in ST */
 	    ierror("c_compile: Parse error in includes\n", T5FN);
 	}
 	lexflag &= ~C_NO_COUNT;			/* count characters again */
@@ -3434,7 +3431,7 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
     gramOffset = lineno = 0;
     yyin = T2FP;				/* C input to C parser */
     yyout = iC_outFP;				/* list file */
-    if (c_parse() != 0) {			/* actual C parser call */
+    if (yyparse() != 0) {			/* actual C parser call */
 	ierror("c_compile: Parse error\n", NULL);
     }
     if (fseek(T2FP, 0L, SEEK_SET) != 0) {	/* rewind intermediate file */

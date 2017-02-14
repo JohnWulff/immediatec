@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.35 $";
+"@(#)$Id: gram.y 1.36 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -31,15 +31,20 @@
 #include	<assert.h>
 #include	<stdarg.h>
 #include	<string.h>
-
-#include	"icc.h"
+#ifndef LMAIN
+#undef	yyerror
+#define yyerror	iCerror				/* use full yyerror in comp.y */
+#endif
 #include	"comp.h"
+#include	"gram.tab.h"
 
 #define ENDSTACKSIZE	100
 #define AUXBUFSIZE	256
 // #define LEAS		2
 #define LEAI		170
 #define LARGE		(~0U>>2)
+
+extern int		yylex(void);		/* produced by lexc.l */
 static const char	idOp[] = "+-+-";	/* increment/decrement operator selection */
 
 static Symbol		typedefSymbol = { "typedef", UDF, UDFA, };
@@ -93,7 +98,7 @@ static void		yyerror(const char *s, ...);
 }
 
 %token	<tok> IDENTIFIER IMM_IDENTIFIER IMM_ARRAY_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
-%token	<tok> PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
+%token	<tok> PTR_OP INC_OP DEC_OP LEFT_SH RIGHT_SH LE_OP GE_OP EQ_OP NE_OP
 %token	<tok> AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	<tok> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
 %token	<tok> XOR_ASSIGN OR_ASSIGN TYPE_NAME
@@ -1596,12 +1601,12 @@ shift_expression				/* 59 */
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
-	| shift_expression LEFT_OP additive_expression {
+	| shift_expression LEFT_SH additive_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;
 	}
-	| shift_expression RIGHT_OP additive_expression {
+	| shift_expression RIGHT_SH additive_expression {
 	    $$.start = $1.start;
 	    $$.end = $3.end;
 	    $$.symbol = NULL;

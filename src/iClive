@@ -262,20 +262,20 @@ Usage:
                 heading 'KEYBOARD BINDINGS'.  If called with the
                 -u option, ctrl-U is the <<Undo>> binding.
 
-    [ / ]       Put focus in Search Entry window if cleared.      Alt-/
-                    (simulates vi)
+    [ / ]       Put focus in Search Entry window if cleared.        /
+                    (simulates vi)                            or  Alt-/
                 Else start or continue a search of text in
-                the Entry window. All hits will be marked.
+                the Search Entry window. All hits will be marked.
             Holding this button down briefly will open a menu of
-            extra search options and a history of previous searches.
+            extra search options
        Search down      or                                       RETURN
-                displays a new group of hits.
+                displays a new group of hits
        Search up        or                                    Shift-RET
-                reverses the direction of displaying hits.
-       Clear            or double-click search Entry window or Ctrl-RET
-                clears hits and the search Entry window.
+                reverses the direction of displaying hits
+       Clear            or double-click Search Entry window or Ctrl-RET
+                clears hits and the Search Entry window
      <>Go to line       or                                      Alt-RET
-                goes to the line entered in the Entry window.
+                goes to the line entered in the Search Entry window
      <>Exact match
      <>Ignore case
      <>Regexp match
@@ -291,7 +291,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.63 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.64 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -3570,20 +3570,20 @@ iClive - an editor and live debugger for immediate-C clients
                 the heading 'KEYBOARD BINDINGS'.  If called with the
                 -u option, ctrl-U is the <<Undo>> binding.
 
-    [ / ]       Put focus in Search Entry window if cleared.      Alt-/
-                    (simulates vi)
+    [ / ]       Put focus in Search Entry window if cleared.        /
+                    (simulates vi)                            or  Alt-/
                 Else start or continue a search of text in
-                the Entry window. All hits will be marked.
+                the Search Entry window. All hits will be marked.
             Holding this button down briefly will open a menu of
-            extra search options and a history of previous searches.
+            extra search options
        Search down      or                                       RETURN
-                displays a new group of hits.
+                displays a new group of hits
        Search up        or                                    Shift-RET
-                reverses the direction of displaying hits.
-       Clear            or double-click search Entry window or Ctrl-RET
-                clears hits and the search Entry window.
+                reverses the direction of displaying hits
+       Clear            or double-click Search Entry window or Ctrl-RET
+                clears hits and the Search Entry window
      <>Go to line       or                                      Alt-RET
-                goes to the line entered in the Entry window.
+                goes to the line entered in the Search Entry window
      <>Exact match
      <>Ignore case
      <>Regexp match

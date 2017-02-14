@@ -59,7 +59,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.41 $' >&2
+    echo '	$Id: makeAll 1.42 $' >&2
 }
 
 makeLib ()
@@ -72,7 +72,7 @@ makeLib ()
     fi
     make OPT="-DLOAD -DTCP$l$d$e$o$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" libict.a
     mv load.$O misc.$O scid.$O ict.$O icbegin.$O p_channel.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O LibObjs
-    if [[ "$o" =~ " -DRASPBERRYPI" ]]; then
+    if [[ -n "$raspberrypi" ]]; then
 	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O LibObjs
     fi
     mv Make_tmp/* . 2> /dev/null
@@ -88,7 +88,7 @@ makeShared ()
     fi
     make OPT="-fPIC -DLOAD -DTCP$d$e$o$s$y" CFLAGS="-O2$W" libict.so
     mv load.$O misc.$O scid.$O ict.$O icbegin.$O p_channel.$O icend.$O tcpc.$O  link.$O rsff.$O scan.$O SharedObjs
-    if [[ "$o" =~ " -DRASPBERRYPI" ]]; then
+    if [[ -n "$raspberrypi" ]]; then
 	mv rpi_gpio.$O mcp23s17.$O pifacecad.$O SharedObjs
     fi
     mv Make_tmp/* . 2> /dev/null
@@ -135,7 +135,7 @@ makeLmain ()
 
 makePiFace ()
 {
-    if [[ "$cpu" =~ "armv" ]]; then
+    if [[ -n "$raspberrypi" ]]; then
 	mv misc.$O icend.$O tcpc.$O rpi_gpio.$O mcp23s17.$O pifacecad.$O Make_tmp 2> /dev/null
 	if [ -d PiFaceObjs ]; then
 	    mv PiFaceObjs/* .
@@ -152,7 +152,7 @@ makePiFace ()
 
 makeGpioPUD ()
 {
-    if [[ "$cpu" =~ "armv" ]]; then
+    if [[ -n "$raspberrypi" ]]; then
 	make OPT="$o" CFLAGS="$cflags" LDFLAGS="$ldflags" iCgpioPUD
     else
 	echo "Error makeAll -P: cannot make iCgpioPUD for a '$cpu' cpu - only for an 'armv*' on a Raspberry Pi"
@@ -161,7 +161,7 @@ makeGpioPUD ()
 
 makePiPWM ()
 {
-    if [[ "$cpu" =~ "armv" ]]; then
+    if [[ -n "$raspberrypi" ]]; then
 	mv misc.$O icend.$O tcpc.$O rpi_rev.$O Make_tmp 2> /dev/null
 	if [ -d PiPWMObjs ]; then
 	    mv PiPWMObjs/* .
@@ -206,6 +206,7 @@ z=0
 YN=0
 Y=""
 cpu=""
+raspberrypi=""
 
 while getopts ":qgpclrtmCLSPGVRTMuedsyzhD:W:o:" opt; do
     case $opt in
@@ -251,8 +252,10 @@ test -d Make_tmp || mkdir Make_tmp;
 os="$o"
 if [ -x /bin/uname ]; then
     cpu=`/bin/uname -m`
-    if [[ "$cpu" =~ "armv" ]]; then
+    tail=${cpu#"armv"}
+    if [[ "$cpu" != "$tail" ]]; then
 	o="$o -DRASPBERRYPI"
+	raspberrypi="$cpu"
     fi
 fi
 if [ $YN -ne 0 ]; then

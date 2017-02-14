@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.88 $";
+"@(#)$Id: genr.c 1.89 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -26,9 +26,9 @@ static const char genr_c[] =
 #include	<string.h>
 #include	<assert.h>
 #include	<ctype.h>
-#include	"icc.h"
+#include	<limits.h>
 #include	"comp.h"
-#include	"comp_tab.h"
+#include	"comp.tab.h"
 
 #define VSIZE	11
 #define v(lp)	(lp->le_val == 0) ? " " : (lp->le_val == NOT) ? "~" : (snprintf(vBuf, VSIZE, "<%x>", lp->le_val), vBuf),\
@@ -64,7 +64,6 @@ static char *	tPtr = 0;		/* temporary text expression buffer input pointer */
 static char *	tOut = 0;		/* temporary text expression buffer output pointer */
 static char *	t_first = 0;
 static char *	t_last = 0;
-static char *	iC_One = "1";		/* name for constant 1 Symbol (installed in S.T.) */
 static Symbol *	iCallHead = 0;		/* function head seen at start of imm call */
 static Symbol *	varList = 0;		/* list of temp Symbols while compiling function */
 static List_e *	stmtList = 0;		/* list of statement Symbols making function body */
@@ -74,6 +73,9 @@ static char *	tfirst;			/* start of replacement arithmetic string */
 static char *	tlast;			/* rll was set up early in cloneFunction */
 #endif
 static char *	ttp;			/* pointer into extended arithmetic text */
+#ifndef	NOCONSTLIST 
+static char *	constExprString;
+#endif	/* NOCONSTLIST */
 
 typedef struct SymList {		/* allow alternate storage of Symbol or List_e pointers */
     List_e *	l;			/* store link List_e * */
@@ -94,6 +96,7 @@ int		z = 0;			/* index into vaList[] - circular list of 128 elements */
 static int	liveDisp;		/* set when arithmetic values will generate live display */
 static void	assignOutput(		/* generate and assign an output node */
 			     Symbol * rsp, int ftyp, int ioTyp);
+static int	evalConstParameter(List_e * lp);
 
 #if YYDEBUG
 typedef struct MsL {
@@ -189,6 +192,7 @@ atSymbol(void)
 
     sp = (Symbol *) iC_emalloc(sizeof(Symbol));
     sp->name = NS;			/* no name at present */
+    sp->fm |= FT;			/* marks temporary Symbol */
 #if YYDEBUG
     if ((iC_debug & 0402) == 0402) {	/* DEBUG name */
 	snprintf(temp, TSIZE, "@%d", ++tn);
@@ -215,7 +219,7 @@ op_force(				/* force linked Symbol to correct ftype */
     int			typ;
     unsigned char	ft;
 
-    if (lp && (sp = lp->le_sym) != 0 && sp->ftype != ftyp) {
+    if (lp && (sp = lp->le_sym) != 0 && sp->ftype != ftyp && sp->type != NCONST) {
 	if (sp->u_blist == 0	||	/* not a @ symbol or */
 	    sp->type >= MAX_GT	||	/* SH, FF, EF, VF, SW, CF or */
 	    (sp->type == LATCH && sp->u_blist->le_sym == sp)		/* LATCH(set,res) */
@@ -227,6 +231,7 @@ op_force(				/* force linked Symbol to correct ftype */
 		typ = ERR;
 	    }
 	    lp1 = op_push(0, typ, lp);
+	    assert(lp1);
 	    assert(lp->le_first == 0 || (lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]));
 	    lp1->le_first = lp->le_first;
 	    lp1->le_last = lp->le_last;
@@ -249,35 +254,77 @@ op_force(				/* force linked Symbol to correct ftype */
  *
  *	Unlink a temporary object from templist - free the list
  *	element and the Symbol and the name of the Symbol if YYDEBUG
+ *	unless templist is empty, in which case lp does not point
+ *	to a temporary @ Symbol.
  *
  *******************************************************************/
 
 static void
-freeTemp(List_e * lp)
+freeTempSym(Symbol * sp)			/* free Symbol without popping link */
 {
     Symbol * tsp;
-    Symbol * sp;
 
-    sp =  sy_pop(lp);			/* free link */
-    if (templist == sp) {
-	templist = sp->next;		/* unlink first object */
-    } else {
-	tsp = templist;			/* bypass sp on templist */
-	while (tsp->next != sp) {	/* scan templist */
-	    tsp = tsp->next;		/* find sp in templist */
-	    if (tsp == 0) {
-		execerror("temp not found ???\n", NS, __FILE__, __LINE__);
+    if (sp) {
+	assert(templist);
+	if (templist == sp) {
+	    templist = sp->next;		/* unlink first object */
+	} else {
+	    tsp = templist;			/* bypass sp on templist */
+	    while (tsp->next != sp) {		/* scan templist */
+		tsp = tsp->next;		/* find sp in templist */
+		if (tsp == 0) {
+		    execerror("freeTemp: not found in templist", sp->name, __FILE__, __LINE__);
+		}
 	    }
+	    tsp->next = sp->next;		/* unlink sp from templist */
 	}
-	tsp->next = sp->next;		/* unlink sp from templist */
-    }
 #if YYDEBUG
-    if ((iC_debug & 0402) == 0402) {
-	free(sp->name);			/* free name space */
-    }
+	if ((iC_debug & 0402) == 0402) {
+	    free(sp->name);			/* free name space */
+	}
 #endif
-    free(sp);				/* free Symbol */
+	free(sp);				/* free Symbol */
+    }
+} /* freeTempSym */
+
+void
+freeTemp(List_e * lp)
+{
+    if (lp && templist) {
+	freeTempSym(sy_pop(lp));		/* free link, Symbol and its name */
+    }
 } /* freeTemp */
+
+/********************************************************************
+ *
+ *	Resolve a possible ALIAS chain - return the first non-alias
+ *	Symbol pointed to by lp
+ *	An ALIAS must have a gate it points to via list.
+ *
+ *******************************************************************/
+
+Symbol *
+resolveAlias(List_e * lp)
+{
+    Symbol *	sp  = lp->le_sym;
+    Symbol *	tsp = 0;
+    while (sp &&
+	   sp->type == ALIAS &&			/* scan down list of aliases */
+	   sp->list != 0			/* alias has been assigned */
+	  ) {
+	if (tsp == sp) {
+	    tsp->type = ERR;			/* error found */
+	    ierror("circular list of aliases:", tsp->name);
+	    break;				/* circular list of aliases */
+	}
+	if (tsp == 0) tsp = sp;			/* start of alias chain */
+	lp->le_val ^= sp->list->le_val;		/* handle possible inverting alias */
+	sp = sp->list->le_sym;
+	lp->le_sym = sp;
+    }
+    assert(sp);					/* lp or ALIAS points to nothing ??? */
+    return sp;
+} /* resolveAlias */
 
 /********************************************************************
  *
@@ -322,7 +369,6 @@ op_push(					/* reduce List_e stack to links */
     List_e *		rlp;
     Symbol *		rsp;			/* current temporary Symbol */
     Symbol *		lsp;
-    Symbol *		tsp;
     List_e *		lp;
     List_e *		tlp;
     int			typ;
@@ -374,31 +420,6 @@ op_push(					/* reduce List_e stack to links */
 		}
 #endif
 	    }
-	    if (left &&				/* must retain either 'left' or 'right' */
-		right->le_val != (unsigned)-1 &&/* and 'right' is not a delay for timer */
-#if ! YYDEBUG || defined(SYUNION)
-		rsp->type < KEYW &&		/* required to stop using u_blist when u_val = CNAME */
-#endif
-		(tlp = rsp->u_blist) != 0 &&	/* must parenthesise call returning */
-		(tsp = tlp->le_sym) != 0 &&	/* constant expression before deleting */
-		tsp == iconst)			/* link to "iConst" */
-	    {
-		assert(right->le_next == 0);
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "op_push:  free right %s which points to iConst\n", rsp->name);
-		    fflush(iC_outFP);
-		}
-#endif
-		rsp->u_blist = tlp->le_next;
-		sy_pop(tlp);			/* pop link to "iConst" */
-		if (rsp->u_blist == 0) {
-		    freeTemp(right);		/* bypass rsp on templist and delete 'right' and rsp */
-		    right = 0;			/* needed for Electric fence */
-		    rlp = left;			/* swapped 'left' to 'right' */
-		    rsp = rlp->le_sym;
-		}
-	    }
 	}
 	if (lsp) {
 	    if (lsp->type == ARNF && op == ARN) {
@@ -434,29 +455,6 @@ op_push(					/* reduce List_e stack to links */
 		}
 #endif
 	    }
-	    if (rlp == right &&			/* don't delete both 'right' and 'left' */
-		left->le_val != (unsigned)-1 &&	/* and 'left' is not a delay for timer */
-#if ! YYDEBUG || defined(SYUNION)
-		lsp->type < KEYW &&		/* required to stop using u_blist when u_val = CNAME */
-#endif
-		(tlp = lsp->u_blist) != 0 &&	/* must parenthesise call returning */
-		(tsp = tlp->le_sym) != 0 &&	/* constant expression before deleting */
-		tsp == iconst)			/* link to "iConst" */
-	    {
-		assert(left->le_next == 0);
-#if YYDEBUG
-		if ((iC_debug & 0402) == 0402) {
-		    fprintf(iC_outFP, "op_push:  free left %s which points to iConst\n", lsp->name);
-		    fflush(iC_outFP);
-		}
-#endif
-		lsp->u_blist = tlp->le_next;
-		sy_pop(tlp);			/* pop link to "iConst" */
-		if (lsp->u_blist == 0) {
-		    freeTemp(left);		/* bypass lsp on templist and delete 'left' and tsp */
-		    left = 0;
-		}
-	    }
 	}
 	if (rlp != right) {
 	    left = 0;				/* 'right' is only used in 'left' section */
@@ -474,15 +472,10 @@ op_push(					/* reduce List_e stack to links */
 #if ! YYDEBUG || defined(SYUNION)
 	    (lp = 0, rsp->v_cnt) > 2 &&
 #endif
-	    (lp = rsp->v_elist) != 0 && (rsp->name == 0
-#if YYDEBUG
-							|| (rsp->name)[0] == '@'
-#endif
-	)) {					/* not marked symbol */
+	    (lp = rsp->v_elist) != 0 && (rsp->fm & FT) == 0) {	/* not marked symbol */
+	    rsp->v_elist = 0;			/* clear the feedback list (sizeof elist > sizeof cnt for 64 bit) */
 #if ! YYDEBUG || defined(SYUNION)
-	    rsp->v_cnt = 2;			/* clear the feedback list but retain high use count */
-#else
-	    rsp->v_elist = 0;			/* clear the feedback list */
+	    rsp->v_cnt = 2;			/* but retain high use count when elist was high */
 #endif
 	    while (lp) {			/* list with feedback to this Symbol */
 		tlp = lp->le_next;		/* next link to a feedback Symbol */
@@ -522,15 +515,10 @@ op_push(					/* reduce List_e stack to links */
 #if ! YYDEBUG || defined(SYUNION)
 		(lp = 0, lsp->v_cnt) > 2 &&
 #endif
-		(lp = lsp->v_elist) != 0 && (lsp->name == 0
-#if YYDEBUG
-							    || (lsp->name)[0] == '@'
-#endif
-	    )) {				/* not marked symbol */
+		(lp = lsp->v_elist) != 0 && (lsp->fm & FT) == 0) {	/* not marked symbol */
+		lsp->v_elist = 0;		/* clear the feedback list (sizeof elist > sizeof cnt for 64 bit) */
 #if ! YYDEBUG || defined(SYUNION)
-		lsp->v_cnt = 2;			/* clear the feedback list but retain high use count */
-#else
-		lsp->v_elist = 0;		/* clear the feedback list */
+		lsp->v_cnt = 2;			/* but retain high use count when elist was high */
 #endif
 		while (lp) {			/* list with feedback to this Symbol */
 		    tlp = lp->le_next;		/* next link to a feedback Symbol */
@@ -584,58 +572,121 @@ op_push(					/* reduce List_e stack to links */
 
 /********************************************************************
  *
- *	numeric constant push
+ *	Numeric constant expresssiont push
+ *
+ *	return	link to a new or old NCONST Symbol with numeric name
+ *		if non numeric and r == 0	link to an NCONST Symbol "0"
+ *		if non numeric and r != 0	NULL
+ *
+ *******************************************************************/
+
+static List_e *
+constExpr_push(char * exprBuf, int r)
+{
+    Symbol *	sp;
+#ifndef	NOCONSTLIST 
+    char *	cp;
+    char *	dp;
+    int		stxFlag;
+    int		c;
+#endif	/* NOCONSTLIST */
+    int		value;
+    char	buf[TSIZE];
+
+    if (parseConstantExpression(exprBuf, &value, r)) {	/* convert constant expression */
+	if (r) return NULL;				/* not numeric for r != 0 */
+	value = 0;					/* return a link to "0" Symbol */
+	ierror("not a constant expression:", exprBuf);
+    }
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "constExpr_push: '%s' converted to %d\n", exprBuf, value);
+	fflush(iC_outFP);
+    }
+#endif
+    snprintf(buf, TSIZE, "%d", value);
+    if ((sp = lookup(buf)) == 0) {		/* install name of decimal conversion */
+	sp = install(buf, NCONST, ARITH);
+	sp->u_val = (unsigned int)value;
+    } else if (sp->type != NCONST || sp->ftype != ARITH || sp->u_val != (unsigned int)value) {
+	ierror("use of a constant which was previously used for a different purpose:", buf);
+    }
+#ifndef	NOCONSTLIST 
+    constExprString = strdup(exprBuf);
+    stxFlag = 0;
+    for (cp = dp = constExprString; (c = *cp) != 0; cp++) {
+	if (isspace(c) || c == '#') continue;	/* ignore white space and # */
+	if (c == STX) {
+	    stxFlag++;
+	    continue;
+	}
+	if (c == ETX) {
+	    stxFlag--;
+	    continue;
+	}
+	if (stxFlag > 0) {
+	    continue;				/* ignore text bracketed by STX ETX */
+	}
+	assert(stxFlag == 0);			/* never should go -ve */
+	*dp++ = c;				/* copy expression text - always fits */
+    }
+    *dp = '\0';					/* terminate early if changed */
+#endif	/* NOCONSTLIST */
+    return sy_push(sp);
+} /* constExpr_push */
+
+/********************************************************************
+ *
+ *	Numeric constant push
+ *
+ *	Previous version used to only generate an NCONST node for a
+ *	a string which consisted only of numerical digits.
+ *
+ *	New version (jw 20161112) converts all constant expression
+ *	strings to an int and generates an NCONST node for each.
  *
  *******************************************************************/
 
 int
 const_push(Lis * expr)
 {
-    char *	cp = expr->f;
-    char *	ep = expr->l;
-    int		bc = TSIZE;
+    int		len2;
     char	buf[TSIZE];
-    char *	bp = buf;
-    Symbol *	sp;
-    List_e *	lp;
-    char *	endptr;
-    long	value;
 
-    while (cp < ep) {
-	if (--bc == 0 || !isprint(*bp++ = *cp++)) {
-	    return 1;			/* error - too big or not printable */
-	}
-    }
-    *bp = 0;				/* terminate - there is room in buf */
-    value = strtol(buf, &endptr, 0);	/* convert to check for error */
-    if (*endptr != '\0') {
-	/* const @ symbol */
-	assert(iconst);			/* only cleared in listNet() if not used */
-	lp = sy_push(iconst);		/* link to "iConst" */
-	expr->v = op_push(0, ARN, lp);
-	assert(expr->f == 0 || (expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]));
-	expr->v->le_first = lp->le_first = expr->f;	/* identifies as const expression */
-	expr->v->le_last  = lp->le_last  = expr->l;
-    } else {
-#if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "const_push: '%s' converted to %ld\n", buf, value);
-	    fflush(iC_outFP);
-	}
-#endif
-	snprintf(buf, TSIZE, "%ld", value);
-	if ((sp = lookup(buf)) == 0) {	/* install name of decimal conversion */
-	    sp = install(buf, NCONST, ARITH);
-	} else if (sp->type != NCONST && sp->ftype != ARITH) {
-	    ierror("use of a constant which was previously used for a different purpose:", buf);
-	}
-	expr->v = sy_push(sp);		/* expr->v->le_first == 0 is simple const */
-	assert(expr->f == 0 || (expr->f >= iCbuf && expr->l < &iCbuf[IMMBUFSIZE]));
-	expr->v->le_first = expr->f;	/* identifies as const expression */
-	expr->v->le_last  = expr->l;	/* no need to be 0 - JW 12.Apr.2007 */
-    }
+    len2 = expr->l - expr->f;
+    assert(expr->f >= iCbuf && expr->f <= expr->l && expr->l < &iCbuf[IMMBUFSIZE] && len2 < TSIZE);
+    strncpy(buf, expr->f, len2);
+    buf[len2] = '\0';			/* null terminated expression text in buf[] */
+    expr->v = constExpr_push(buf, 0);
+    expr->v->le_first = expr->f;	/* identifies as const expression */
+    expr->v->le_last  = expr->l;	/* no need to be 0 - JW 12.Apr.2007 */
     return 0;				/* correct - no error */
 } /* const_push */
+
+/********************************************************************
+ *
+ *	Check for a constant or a constant expression
+ *
+ *******************************************************************/
+
+List_e *
+checkConstExpr(List_e * lp)
+{
+    Symbol *	sp;
+    List_e *	lp1;
+    Symbol *	sp1;
+
+    if (lp == NULL ||			/* a constant */
+	    ((sp = lp->le_sym) != NULL &&
+	    sp->ftype == ARITH &&
+	    (sp->type == ARN || sp->type == ARNF) &&
+	    (lp1 = sp->u_blist) != NULL &&
+	    (sp1 = lp1->le_sym) != NULL &&
+	    sp1->type == NCONST)) {	/* or a constant expression */
+	return NULL;
+    }
+    return lp;
+} /* checkConstExpr */
 
 /********************************************************************
  *
@@ -838,104 +889,51 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 		assert(stxFlag == 0);
 	    }
 	    *tPtr = '\0';
-	    if (gp == iconst) {				/* "iConst" */
-		assert(sp->u_blist == 0);		/* make sure no other inputs */
-		if (t_first) {				/* end of arith */
-		    if (lp->le_first == 0) lp->le_first = t_first;
-		    if (lp->le_last == 0) lp->le_last = t_last;
-		    assert(t_first == lp->le_first);
-		    assert(t_first >= iCbuf && lp->le_last >= t_first && lp->le_last < &iCbuf[IMMBUFSIZE]);
-		    stxFlag = 0;
-		    while (t_first < lp->le_last) {
-			if ((c = *t_first++ & 0xff) == STX) {
-			    stxFlag++;			/* block copying call text */
-			}
-			if (stxFlag == 0 && c != '#') {	/* transmogrified '=' */
-			    if (c >= 0x80) {
-				z1 = c - 0x80;
-				sp1 = vaList[z1].v;
-				assert(sp1);
-				cp = sp1->name;		/* this variable to tBuf including NCONST */
-				assert(cp);
-				len = strlen(cp);
-				assert(len);
-#if YYDEBUG
-				if ((iC_debug & 0402) == 0402) {
-				    if (vaList[z1].l && vaList[z1].f) {
-					int len1 = vaList[z1].l - vaList[z1].f;
-					sprintf(debugTemp, "cA: z1=%2d	%-15s %-6s v_cnt = %2d [%*.*s] '%1.1s' {%*.*s}\n",
-					    z1, sp1->name, iC_full_type[sp1->type], sp1->v_cnt, len, len, cp, t_first-1,
-					    len1, len1, vaList[z1].f);
-				    } else {
-					sprintf(debugTemp, "cA: z1=%2d	%-15s %-6s v_cnt = %2d [%*.*s] '%1.1s' {}\n",
-					    z1, sp1->name, iC_full_type[sp1->type], sp1->v_cnt, len, len, cp, t_first-1);
-				    }
-				    pushMessage(debugTemp);
-				}
-#endif
-				tPtr = strncpy(tPtr, cp, len+1) + len;
-				assert(sp1->type == NCONST);
-				ePtr = strncpy(ePtr, cp, len+1) + len;
-				gPtr = strncpy(gPtr, cp, len+1) + len;
-				assert(ePtr + 10 < eEnd);	/* checks previous copying */
-			    } else
-			    *tPtr++ = *gPtr++ = *ePtr++ = c;
-			}
-			if (c == ETX) {
-			    assert(stxFlag > 0);
-			    --stxFlag;			/* end of call text */
-			}
-		    }
-		    assert(stxFlag == 0);
-		}
-		*tPtr = '\0';
+	    cp = gp->name;				/* this variable to tBuf including NCONST */
+	    len = strlen(cp);
+	    tPtr = strncpy(tPtr, cp, len+1) + len;	/* variable name */
+	    if (sflag == 04) {
+		assert(gp->type == NCONST);		/* auxiliary storage of NCONST text */
+		ePtr = strncpy(ePtr, cp, len+1) + len;
+		gPtr = strncpy(gPtr, cp, len+1) + len;
 	    } else {
-		cp = gp->name;				/* this variable to tBuf including NCONST */
-		len = strlen(cp);
-		tPtr = strncpy(tPtr, cp, len+1) + len;	/* variable name */
-		if (sflag == 04) {
-		    assert(gp->type == NCONST);		/* auxiliary storage of NCONST text */
-		    ePtr = strncpy(ePtr, cp, len+1) + len;
-		    gPtr = strncpy(gPtr, cp, len+1) + len;
-		} else {
-		    if (iC_debug & 04) {
-			/* only logic gate or SH can be aux expression */
-			if (sflag == 02) {
-			    fprintf(iC_outFP, "\t\t\t\t\t"); /* auxiliary call for duplicate link */
-			} else
-			if (sflag & 0200) {
-			    if (sp->ftype == GATE) {
-				putc('\t', iC_outFP);
-			    }
+		if (iC_debug & 04) {
+		    /* only logic gate or SH can be aux expression */
+		    if (sflag == 02) {
+			fprintf(iC_outFP, "\t\t\t\t\t"); /* auxiliary call for duplicate link */
+		    } else
+		    if (sflag & 0200) {
+			if (sp->ftype == GATE) {
 			    putc('\t', iC_outFP);
-			} else {
-			    fprintf(iC_outFP, "\t\t\t");
-			}				/* expression till now */
-			fprintf(iC_outFP, "%s\t// %d", tOut, x);
-			if (liveDisp && gp->ftype == ARITH) {
-			    fprintf(iC_outFP, "\t%s\t=", gp->name);
 			}
-			fprintf(iC_outFP, "\n");
+			putc('\t', iC_outFP);
+		    } else {
+			fprintf(iC_outFP, "\t\t\t");
+		    }					/* expression till now */
+		    fprintf(iC_outFP, "%s\t// %d", tOut, x);
+		    if (liveDisp && gp->ftype == ARITH) {
+			fprintf(iC_outFP, "\t%s\t=", gp->name);
 		    }
-		    tOut = tPtr;			/* alternative tOut = tPtr = tBuf */
-		    assert(ePtr + 10 < eEnd);		/* checks previous copying */
-		    ePtr += sprintf(ePtr, MV "(%d)", x);	/* iC_MV */
-		    gPtr += sprintf(gPtr, "\xff%c", x);	/* bound to fit since shorter */
+		    fprintf(iC_outFP, "\n");
 		}
-		t_first = lp->le_last;			/* skip current expression */
+		tOut = tPtr;				/* alternative tOut = tPtr = tBuf */
+		assert(ePtr + 10 < eEnd);		/* checks previous copying */
+		ePtr += sprintf(ePtr, MV "(%d)", x);	/* iC_MV */
+		gPtr += sprintf(gPtr, "\xff%c", x);	/* bound to fit since shorter */
+	    }
+	    t_first = lp->le_last;			/* skip current expression */
 #ifndef EFENCE
-		assert(t_first == 0 || (t_first >= iCbuf && t_first < &iCbuf[IMMBUFSIZE]));
+	    assert(t_first == 0 || (t_first >= iCbuf && t_first < &iCbuf[IMMBUFSIZE]));
 #else
-		if (t_first != 0 && (t_first < iCbuf || t_first >= &iCbuf[IMMBUFSIZE])) {
-		    fprintf(iC_outFP, "\nt_first = %p >= iCbuf = %p\n", t_first, iCbuf);
-		    fflush(iC_outFP);
-		    ierror("Assertion 2:", NULL);
+	    if (t_first != 0 && (t_first < iCbuf || t_first >= &iCbuf[IMMBUFSIZE])) {
+		fprintf(iC_outFP, "\nt_first = %p >= iCbuf = %p\n", t_first, iCbuf);
+		fflush(iC_outFP);
+		ierror("Assertion 2:", NULL);
 //##		    exit(-1);
-		}
+	    }
 #endif
-		if (t_last < t_first) {
-		    t_last = t_first;			/* skip part of arithmetic expression */
-		}
+	    if (t_last < t_first) {
+		t_last = t_first;			/* skip part of arithmetic expression */
 	    }
 	} else {				/* CLONED C EXPRESSION */
 	    assert(cPtr);	/* cp points to current start of cloning expression in cBuf */
@@ -955,66 +953,63 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	    tPtr = strncpy(tPtr, cp, len+1) + len;	/* code from cloning expression */
 	    ePtr = strncpy(ePtr, cp, len+1) + len;
 	    gPtr = strncpy(gPtr, cp, len+1) + len;
-	    if (gp != iconst) {				/* not "iConst" */
-		if (y != x) {
-		    assert(sflag == 02);		/* duplicate call needs adjusting */
-		    caList[y].x = x;			/* in case also duplicate in template */
-		    x = y;				/* look for duplicates up to and including y */
-		}
-		cp = gp->name;				/* this variable to tBuf including NCONST */
-		len = strlen(cp);
-		tPtr = strncpy(tPtr, cp, len+1) + len;	/* variable name */
-		if (sflag == 04) {
-		    assert(gp->type == NCONST);		/* auxiliary storage of NCONST text */
-		    ePtr = strncpy(ePtr, cp, len+1) + len;
-		    gPtr = strncpy(gPtr, cp, len+1) + len;
-		} else {
-		    x1 = caList[y].x;			/* real index */
-		    if (iC_debug & 04) {
-			if (sflag & 0200) {
-			    if (sp->ftype == GATE) {
-				putc('\t', iC_outFP);
-			    }
+	    if (y != x) {
+		caList[y].x = x;			/* in case also duplicate in template */
+		x = y;				/* look for duplicates up to and including y */
+	    }
+	    cp = gp->name;				/* this variable to tBuf including NCONST */
+	    len = strlen(cp);
+	    tPtr = strncpy(tPtr, cp, len+1) + len;	/* variable name */
+	    if (sflag == 04) {
+		assert(gp->type == NCONST);		/* auxiliary storage of NCONST text */
+		ePtr = strncpy(ePtr, cp, len+1) + len;
+		gPtr = strncpy(gPtr, cp, len+1) + len;
+	    } else {
+		x1 = caList[y].x;			/* real index */
+		if (iC_debug & 04) {
+		    if (sflag & 0200) {
+			if (sp->ftype == GATE) {
 			    putc('\t', iC_outFP);
-			} else {
-			    fprintf(iC_outFP, "\t\t\t");
-			}				/* expression till now */
-			fprintf(iC_outFP, "%s\t// %d", tOut, x1);
+			}
+			putc('\t', iC_outFP);
+		    } else {
+			fprintf(iC_outFP, "\t\t\t");
+		    }				/* expression till now */
+		    fprintf(iC_outFP, "%s\t// %d", tOut, x1);
+		    if (liveDisp && gp->ftype == ARITH) {
+			fprintf(iC_outFP, "\t%s\t=", gp->name);
+		    }
+		    fprintf(iC_outFP, "\n");
+		}
+		tOut = tPtr;			/* alternative tOut = tPtr = tBuf */
+		assert(ePtr + 10 < eEnd);		/* checks previous copying */
+		ePtr += sprintf(ePtr, MV "(%d)", x1);	/* iC_MV */
+		gPtr += sprintf(gPtr, "\xff%c", x1);	/* bound to fit since shorter */
+	    }
+	    while ((cp = strchr(ep, '\xff')) != 0 &&/* look ahead to next macro */
+		(y = cp[1]) <= x) {
+		gp = caList[y].s;			/* y should be stored in pre-scan */
+		assert(gp);
+		*cp = '\0';				/* modify \xff to \0 */
+		tPtr += sprintf(tPtr, "%s%s", ep, gp->name);	/* NCONST caught also */
+		assert(ePtr + 10 < eEnd);		/* checks previous copying */
+		if (gp->type == NCONST) {
+		    ePtr += sprintf(ePtr, "%s%s", ep, gp->name);
+		    gPtr += sprintf(gPtr, "%s%s", ep, gp->name);
+		} else {
+		    x1 = caList[y].x;		/* real index of non NCONST's */
+		    if (iC_debug & 04) {		/* repeated term */
+			fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, x1);
 			if (liveDisp && gp->ftype == ARITH) {
 			    fprintf(iC_outFP, "\t%s\t=", gp->name);
 			}
 			fprintf(iC_outFP, "\n");
 		    }
-		    tOut = tPtr;			/* alternative tOut = tPtr = tBuf */
-		    assert(ePtr + 10 < eEnd);		/* checks previous copying */
-		    ePtr += sprintf(ePtr, MV "(%d)", x1);	/* iC_MV */
-		    gPtr += sprintf(gPtr, "\xff%c", x1);	/* bound to fit since shorter */
+		    tOut = tPtr;
+		    ePtr += sprintf(ePtr, "%s" MV "(%d)", ep, x1);	/* iC_MV */
+		    gPtr += sprintf(gPtr, "%s\xff%c", ep, x1);	/* bound to fit since shorter */
 		}
-		while ((cp = strchr(ep, '\xff')) != 0 &&/* look ahead to next macro */
-		    (y = cp[1]) <= x) {
-		    gp = caList[y].s;			/* y should be stored in pre-scan */
-		    assert(gp);
-		    *cp = '\0';				/* modify \xff to \0 */
-		    tPtr += sprintf(tPtr, "%s%s", ep, gp->name);	/* NCONST caught also */
-		    assert(ePtr + 10 < eEnd);		/* checks previous copying */
-		    if (gp->type == NCONST) {
-			ePtr += sprintf(ePtr, "%s%s", ep, gp->name);
-			gPtr += sprintf(gPtr, "%s%s", ep, gp->name);
-		    } else {
-			x1 = caList[y].x;		/* real index of non NCONST's */
-			if (iC_debug & 04) {		/* repeated term */
-			    fprintf(iC_outFP, "\t\t\t\t\t%s\t// %d", tOut, x1);
-			    if (liveDisp && gp->ftype == ARITH) {
-				fprintf(iC_outFP, "\t%s\t=", gp->name);
-			    }
-			    fprintf(iC_outFP, "\n");
-			}
-			tOut = tPtr;
-			ePtr += sprintf(ePtr, "%s" MV "(%d)", ep, x1);	/* iC_MV */
-			gPtr += sprintf(gPtr, "%s\xff%c", ep, x1);	/* bound to fit since shorter */
-		    }
-		    cPtr = ep = cp + 2;
-		}
+		cPtr = ep = cp + 2;
 	    }
 	}
     } else
@@ -1135,13 +1130,13 @@ op_asgn(				/* assign List_e stack to links */
     List_e *	tlp;
     List_e *	nlp;
     List_e *	right;
-    List_e *	ilp;
     List_e **	lpp;
     int		atn;
     int		sflag;
     int		fflag;
     int		c;
     int		stxFlag;
+    int		len;
     Symbol *	sr;
     int		typ;
     int		typ1;
@@ -1193,6 +1188,7 @@ op_asgn(				/* assign List_e stack to links */
 	}
     }
     if (templist == 0 || rsp->u_blist == 0 || rsp->type == NCONST) {	/* right must be a @ symbol */
+      makeAlias:
 	if (var->type != ERR) {
 	    var->type = ALIAS;		/* alias found */
 	}
@@ -1238,6 +1234,13 @@ op_asgn(				/* assign List_e stack to links */
 		iC_os[var->type], var->name);	/* type is ALIAS or ERR */
 	    if (var->ftype != GATE) {
 		fprintf(iC_outFP, "\t%c", iC_fos[var->ftype]);
+#ifndef	NOCONSTLIST 
+		if (constExprString && rsp->type == NCONST) {
+		    fprintf(iC_outFP, "\t%s", constExprString);
+		    free(constExprString);
+		    constExprString = NULL;
+		}
+#endif	/* NOCONSTLIST */
 		if (liveDisp && var->ftype == ARITH) {
 		    fprintf(iC_outFP, "\t\t//\t%s\t=", var->name);
 		}
@@ -1251,7 +1254,7 @@ op_asgn(				/* assign List_e stack to links */
 	    memset(t_first, '#', sv->l - t_first);	/* mark left var, leave ALIAS */
 	}
 	return var;			/* needs no reduction */
-    }
+    }	/* end of ALIAS */
 
     /********************************************************************
      * 'rsp' is put at head of templist, if it is not already there
@@ -1279,15 +1282,10 @@ op_asgn(				/* assign List_e stack to links */
 #if ! YYDEBUG || defined(SYUNION)
 	(lp = 0, rsp->v_cnt) > 2 &&
 #endif
-	(lp = rsp->v_elist) != 0 && (rsp->name == 0
-#if YYDEBUG
-						    || (rsp->name)[0] == '@'
-#endif
-    )) {				/* not marked symbol */
+	(lp = rsp->v_elist) != 0 && (rsp->fm & FT) == 0) {	/* not marked symbol */
+	rsp->v_elist = 0;		/* clear the feedback list (sizeof elist > sizeof cnt for 64 bit) */
 #if ! YYDEBUG || defined(SYUNION)
-	rsp->v_cnt = 2;			/* clear the feedback list but retain high use count */
-#else
-	rsp->v_elist = 0;		/* clear the feedback list */
+	rsp->v_cnt = 2;			/* but retain high use count when elist was high */
 #endif
 	while (lp) {			/* list of Symbols with feedback to this Symbol */
 	    sp = lp->le_sym;		/* points to Symbol with feedback */
@@ -1374,7 +1372,6 @@ op_asgn(				/* assign List_e stack to links */
 	char *		cp;
 	int		gt_input;
 	int		gt_count;
-	int		len;
 	unsigned int	val;
 	unsigned int	val1;
 	int		cFn = 0;
@@ -1387,14 +1384,10 @@ op_asgn(				/* assign List_e stack to links */
 	cEnd = &cBuf[EBSIZE];		/* end of temporary expression buffer */
 	gPtr = gBuf;			/* temporary clone expression in buffer pointer */
 	tOut = tPtr = tBuf;		/* temporary text expression buffer pointers */
-#if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    memset(eBuf, '\0', EBSIZE);
-	    memset(cBuf, '\0', EBSIZE);
-	    memset(gBuf, '\0', EBSIZE);
-	    memset(tBuf, '\0', EBSIZE);
-	}
-#endif
+	memset(eBuf, '\0', EBSIZE);
+	memset(cBuf, '\0', EBSIZE);
+	memset(gBuf, '\0', EBSIZE);
+	memset(tBuf, '\0', EBSIZE);
 	/********************************************************************
 	 * Prepare a list of input Symbol pointers in caList[].s for
 	 * copyArithmetic, while the list is not reversed yet to allow
@@ -1428,6 +1421,12 @@ op_asgn(				/* assign List_e stack to links */
 			}
 			caList[gt_count].s = gp;	/* for checking duplicates */
 			caList[gt_count].x = gt_input;	/* for indexing without NCONST */
+#if YYDEBUG
+			if ((iC_debug & 0402) == 0402)
+			    fprintf(iC_outFP, "op_asgn: caList[%d] .l->le_sym %s%c le_val = 0x%04x .s %s type = %d .x %d\n",
+				gt_count, lp->le_sym->name, (int)gp->type != NCONST ? ' ' : '*', val,
+				gp->name, gp->type, gt_input);
+#endif
 		    }
 		}
 	    }
@@ -1443,7 +1442,6 @@ op_asgn(				/* assign List_e stack to links */
 	lp = 0;
 	fflag = (sp->type == SW || sp->type == CF) ? 1 : 0;
 	sflag &= ~01;				/* stop loop in case of error */
-	ilp = NULL;
 	while ((plp = lp, lp = sp->u_blist) != 0) {
 	    sp->u_blist = lp->le_next;
 	    if ((gp = lp->le_sym) == rsp && var->type != ALIAS) {
@@ -1492,16 +1490,12 @@ op_asgn(				/* assign List_e stack to links */
 		    }
 		    gt_input++;			/* count NCONST if cloned */
 		}
-		if (gp == iconst) {		/* ignore iConst if it was injected at end */
-		    ilp = lp;			/* save link with its function number */
-		} else {			/* not iConst */
-		    copyArithmetic(lp, sp, gp, gt_input, 04, cFn);	/* insert numeric text */
-		    if (iFunSymExt) {
-			assert(saveAdress);
-			*saveAdress = lp->le_next;
-		    }
-		    sy_pop(lp);			/* pop all NCONST links */
-		}				/* link in caList is 0 */
+		copyArithmetic(lp, sp, gp, gt_input, 04, cFn);	/* insert numeric text */
+		if (iFunSymExt) {
+		    assert(saveAdress);
+		    *saveAdress = lp->le_next;
+		}
+		sy_pop(lp);			/* pop all NCONST links */
 		lp = plp;
 		goto nextInputLink;
 	    }
@@ -1512,20 +1506,15 @@ op_asgn(				/* assign List_e stack to links */
 #if ! YYDEBUG || defined(SYUNION)
 		(nlp = 0, gp->v_cnt) > 2 &&
 #endif
-		(nlp = gp->v_elist) != 0 && (gp->name == 0
-#if YYDEBUG
-							   || (gp->name)[0] == '@'
-#endif
-	    )) {			/* not marked symbol */
+		(nlp = gp->v_elist) != 0 && (gp->fm & FT) == 0) {	/* not marked symbol */
 		/********************************************************************
 		 * A feedback element has occurred in the middle of an expression
 		 * reduction. Since this element will not be assigned to a differnt
 		 * var, the feedback list can be removed now.
 		 *******************************************************************/
+		gp->v_elist = 0;		/* clear the feedback list (sizeof elist > sizeof cnt for 64 bit) */
 #if ! YYDEBUG || defined(SYUNION)
-		gp->v_cnt = 2;			/* clear the feedback list but retain high use count */
-#else
-		gp->v_elist = 0;		/* clear the feedback list */
+		gp->v_cnt = 2;			/* but retain high use count when elist was high */
 #endif
 		while (nlp) {			/* list with feedback to this Symbol */
 		    tlp = nlp->le_next;		/* next link to a feedback Symbol */
@@ -1660,10 +1649,8 @@ op_asgn(				/* assign List_e stack to links */
 				    warning("LATCH gate has 2 identical inputs which is indeterminate:", gp->name);
 				} else if (val == lp->le_val ||
 				    (gp->ftype == ARITH && val != (unsigned)-1)) {
-				    if (gp != iconst) {
-					copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 02, cFn);
-					gt_count++;	/* count duplicates except iConst */
-				    }
+				    copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 02, cFn);
+				    gt_count++;		/* count duplicates */
 				    if (sp->type == ARN || sp->type == ARNF) {
 					calpp = &caList[gt_count].l;
 					assert(*calpp == lp);
@@ -1725,10 +1712,8 @@ op_asgn(				/* assign List_e stack to links */
 				    }
 #endif
 				}
-				if (gp != iconst) {
-				    copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 02, cFn);
-				    gt_count++;		/* count duplicates except iConst */
-				}
+				copyArithmetic(lp, sp, gp, tlp->le_val & 0xff, 02, cFn);
+				gt_count++;		/* count duplicates */
 				if (sp->type == ARN || sp->type == ARNF) {
 				    calpp = &caList[gt_count].l;
 				    assert(*calpp == lp);
@@ -1837,22 +1822,8 @@ op_asgn(				/* assign List_e stack to links */
 		ierror("input equals output at gate:", sp->name);
 		sp->type = ERR;				/* cannot execute properly */
 	    }
-	  nextInputLink:
-	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
-		sp->u_blist = lp = ilp ? ilp : sy_push(iconst);	/* only NCONST's - inject "iConst" */
-		caList[1].l = lp;			/* for re-numbering optimisation */
-		caList[1].s = iconst;			/* for checking duplicates */
-		caList[1].x = 1;			/* for indexing */
-		ilp = 0;
-		if (iFunSymExt) *saveAdress = lp;
-		assert((sflag & 01) == 0);		/* stop loop in case of error */
-		sflag |= 01;				/* may only occurr once per node */
-		gt_input = 0;				/* now iConst is output with // 1 */
-	    }
+	  nextInputLink: ;
 	}						/* end output scan for 1 gate */
-	if (ilp) {
-	    sy_pop(ilp);				/* iConst in expression was merged */
-	}
 	if (iFunSymExt) sp->u_blist = saveBlist;
 	if ((typ1 = sp->type) == ARN || typ1 == ARNF) {
 	    /********************************************************************
@@ -1936,6 +1907,11 @@ op_asgn(				/* assign List_e stack to links */
 		gPtr = strncpy(gPtr, cPtr, len+1) + len;
 		cPtr += len;
 	    }					/* END TAIL */
+	    if (sp->u_blist == 0 && gp->ftype < MIN_ACT && gt_count == 0) {
+		right = constExpr_push(tBuf, 0);
+		rsp = right->le_sym;
+		goto makeAlias;
+	    }
 	    if (sp->ftype != OUTW) {			/* output cexe function */
 		assert(gp);				/* gp must be initialised */
 		if (strcmp(gBuf, "\xff\x01") == 0) {
@@ -2024,7 +2000,7 @@ op_asgn(				/* assign List_e stack to links */
 				    val != (unsigned)-1 &&	/* skip delays */
 				    gp1->ftype > UDFA &&
 				    gp1->ftype < MAX_ACT &&
-				    (gp1->type != NCONST || gp1 == iconst)) {
+				    gp1->type != NCONST) {
 				    lp->le_val = val1++;	/* update expression reference */
 				}
 			    }
@@ -2456,29 +2432,331 @@ assignOutput(Symbol * rsp, int ftyp, int ioTyp)
 
 /********************************************************************
  *
+ *	Save immC int or immC bit const int initialiser value
+ *	or a Symbol * to the const int parameter in a function block
+ *	definition in a dynamic array 'iC_iniList[]'.
+ *	This is necessary because there are no spare members in Symbol.
+ *
+ *******************************************************************/
+
+static void
+saveIniList(Symbol * sp, Valp * ini)
+{
+    if (iC_inip - iC_iniList >= iniSize) {
+	iC_iniList = (immCini*)realloc(iC_iniList,	/* initially NULL */
+	    (iniSize + INISIZE) * sizeof(immCini));
+	assert(iC_iniList);
+	memset(&iC_iniList[iniSize], '\0', INISIZE * sizeof(immCini));
+	iniSize += INISIZE;		/* increase the size of the array */
+	if (iC_inip == NULL) {
+	    iC_inip = iC_iniList;
+	}
+#if YYDEBUG
+	if ((iC_debug & 0402) == 0402)
+	    fprintf(iC_outFP, "saveIniList: iC_iniList[%d] increase\n", iniSize);
+#endif
+    }
+    iC_inip->immCvar = sp;		/* allows searching for the Symbol in iC_iniList */
+    iC_inip->v       = *ini;		/* ini.lfl: 0 is a numerical initialiser; 1 is initialising const parameter; 2 err */
+    iC_inip++;				/* ready for next entry to iC_iniList */
+    sp->em |= EI;			/* mark that initialiser is available */
+} /* saveIniList */
+
+/********************************************************************
+ *
+ *	Extract immC int or immC bit const int initialiser value
+ *	or a Symbol * to the const int parameter in a function block
+ *	definition from the dynamic array 'iC_iniList[]'.
+ *
+ *	if an immC variable has been declared with an initial value sp->em & EI is set.
+ *	immC initialisers are stored in the dynamic array 'iC_iniList[]'
+ *	scan 'iC_iniList' for the current Symbol sp and fetch the
+ *	corresponding inital value.
+ *
+ *******************************************************************/
+
+Valp
+extractConstIni(Symbol * sp)
+{
+    Valp	v;
+    immCini*	ip;
+
+    assert(sp->em & EI);
+    v.lfl = v.nuv = 0;
+    for (ip = iC_iniList; ip < iC_inip; ip++) {
+	if (sp == ip->immCvar) {
+	    if (ip->v.lfl == 0) {
+		v = ip->v;
+	    } else
+	    if (ip->v.lfl == 1) {
+		if (iFunSymExt == 0) {
+		    v.nuv = evalConstParameter(ip->v.lpt);
+		} else {
+		    ierror("function with nested const parameters not implemented:", sp->name);	/* TODO */
+		}
+	    }			/* ignore ip->v.lfl == 2 err */
+	    break;
+	}
+    }
+    assert(ip < iC_inip);		/* compiler error if initialiser not found */
+    return v;
+} /* extractConstIni */
+
+/********************************************************************
+ *
+ *	Evaluate a constant expression
+ *
+ *******************************************************************/
+
+Valp
+evalConstExpr(Lis * lv)
+{
+    List_e *	lp;
+    List_e *	lp1;
+    Symbol *	sp;
+    Symbol *	sp1;
+    char *	cp;
+    int		len;
+    int		mal;
+    Valp	v;
+    char	buf[TSIZE];
+    char	temp[TSIZE];
+
+    v.lfl = 0;					/* assume an int val return */
+    if (checkConstExpr(lp = lv->v) == NULL) {
+	len = lv->l - lv->f;
+	assert(lv->f >= iCbuf && lv->l < &iCbuf[IMMBUFSIZE] && len < TSIZE);
+	strncpy(buf, lv->f, len);
+	buf[len] = '\0';			/* null terminated expression text in buf[] */
+	if (parseConstantExpression(buf, &v.nuv, 0)) { /* determine numerical value of constant expression */
+	    ierror("not a constant expression:", buf);
+	}
+#if YYDEBUG
+	else if ((iC_debug & 0402) == 0402) {
+	    fprintf(iC_outFP, "evalConstExpr: buf '%s' has value %d\n", buf, v.nuv);
+	}
+#endif
+    } else
+    if ((sp = lp->le_sym) != 0) {
+	if (sp->type == NCONST) {
+	    v.nuv = sp->u_val;			/* value of constant for immCindex and immC ini */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "evalConstExpr: Constant '%s' has value %d\n", sp->name, v.nuv);
+	    }
+#endif
+	} else
+	if (sp->type == ARNC) {			/* only immC int variable can have an initialiser */
+	    if (iC_iniList && (sp->em & (ED|EI)) == (ED|EI) && sp->u_blist == 0) {
+		v = extractConstIni(sp);
+		sp->em |= EU;			/* mark immC variable as used */
+	    } else {
+		goto NotConstant;
+	    }
+	} else
+	if (sp->type == ARN || sp->type == ARNF) {
+	    if (iFunSymExt == 0) {
+		len = lp->le_last - lp->le_first;
+		assert(lp->le_next == 0 && lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE] && len < TSIZE);
+		strncpy(buf, lp->le_first, TSIZE);	/* the whole expression */
+		buf[len] = '\0';			/* without statement terminator ; */
+		mal = 0;
+		for (lp1 = sp->u_blist; lp1; lp1 = lp1->le_next) {
+		    if ((sp1 = lp1->le_sym) != 0 && sp1->type == ARNC &&
+			iC_iniList && (sp1->em & (ED|EI)) == (ED|EI) &&
+			sp1->u_blist == 0) {
+			v = extractConstIni(sp1);	/* obtain numerical value */
+			len = lp1->le_last - lp1->le_first;
+			assert(lp1->le_first >= iCbuf && lp1->le_last < &iCbuf[IMMBUFSIZE] && len < TSIZE);
+			strncpy(temp, lp1->le_first, len);
+			temp[len] = '\0';		/* null terminated function text in temp[] */
+			if ((cp = strstr(buf, temp)) != 0) {	/* find function text in the expression */
+			    strncpy(temp, cp + len, TSIZE);	/* save remaining expression after function text */
+			    snprintf(cp, TSIZE, "%d", v.nuv);	/* append numerical value returned by function */
+			    strncat(buf, temp, TSIZE);		/* append saved remaining expression */
+			    sp1->em |= EU;			/* mark immC variable as used */
+			} else {
+			    mal++;			/* each function text must occurr for each member of the expression */
+			}
+		    } else {
+			mal++;				/* no non const function calls in expression */
+		    }
+		}
+		if (mal || parseConstantExpression(buf, &(v.nuv), 1)) { /* determine numerical value of constant expression */
+		    goto NotConstant;
+		}
+	    } else {				/* iFunSymExt != 0 */
+		len = 0;				/* clear for use as const expression flag */
+		if ((sp->em & EI) && sp->u_blist == 0) {
+		    len = 1;				/* flags constant parameter */
+		    if ((sp->fm & FU) <= 1) {		/* target not used more than once */
+			sp->fm++;			/* count use of const parameter*/
+#if YYDEBUG
+			if ((iC_debug & 0402) == 0402) {
+			    fprintf(iC_outFP, "evalConstExpr:  const parameter use count %d for %s\n", sp->fm & FU, sp->name);
+			    fflush(iC_outFP);
+			}
+#endif
+		    }
+		} else if ((sp->fm & FT) && sp->u_blist) {
+		    for (lp1 = sp->u_blist; lp1; lp1 = lp1->le_next) {
+			sp1 = lp1->le_sym;		/* scan members of the @ expression */
+			assert(sp1);
+			if ((sp1->type == ARN || sp1->type == ARNF) &&
+			    (sp1->em & EI) && sp1->u_blist == 0) {
+			    if (len == 0) len = 1;	/* flags constant parameter in expression */
+			} else {
+			    len = 2;			/* a non const in the expression blocks other const */
+			    sp1->em |= EU;		/* mark variable as used to supress warning */
+			}
+			if ((sp1->fm & FU) <= 1) {	/* target not used more than once */
+			    sp1->fm++;			/* count use of parameter*/
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, "evalConstExpr:  parameter use count %d for %s\n", sp1->fm & FU, sp1->name);
+				fflush(iC_outFP);
+			    }
+#endif
+			}
+		    }
+		}
+		if (len == 1) {			/* constant parameter or expression with only constant parameters */
+		    /********************************************************************
+		     *  Store a permanent copy of the constant expression at le_first/le_last
+		     *  in a separate storage block and point le_first/le_last to that permanent block.
+		     *******************************************************************/
+		    assert(lp && lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]);
+		    len = lp->le_last - lp->le_first;
+		    cp = iC_emalloc(len+1);		/* +1 for '\0' */
+		    strncpy(cp, lp->le_first, len+1);
+		    cp[len] = '\0';			/* null terminated expression text in permanent copy */
+		    lp->le_first = cp;		/* point to permanent copy */
+		    lp->le_last  = cp + len;	/* point to end of permanent copy */
+		    v.lpt = lp;			/* return pointer to constant parameter expression */
+		    v.lfl = 1;			/* mark as pointer return */
+		} else {
+		    goto NotConstant;
+		}
+	    }
+	} else {
+	    goto NotConstant;
+	}
+    } else {
+      NotConstant:
+	v.lfl = 2;				/* mark as error */
+	v.nuv = 0;				/* do not mark sp with ERR - it is OK */
+	ierror("constExpr is not a constant:", sp->name);
+    }
+    return v;
+} /* evalConstExpr */
+
+/********************************************************************
+ *
+ *	Evaluate a const parameter expression
+ *
+ *	    List_e * lp either points to a const arithmetic parameter
+ *			marked by em & EI and u_blist == 0
+ *	    or		by an arithmetic @ expression containing only
+ *			const arithmetic parameters marked by em & EI
+ *
+ *	A permanent copy of the constant expression available during
+ *	function block definition has been copied to a permanent storage
+ *	block and linked to lp->le_first instead of the volatile version
+ *	in iCtext.
+ *
+ *	Since constant expressions are executed here at compile time,
+ *	every time the function block containing this constant expression
+ *	is cloned, this different mechanism is called for.
+ *
+ *	For regular immediate arithmetic expressions, which compile to a
+ *	C function executed at run time, similar blocks are created and
+ *	linked to functionUse[z1].c.exp, indexed by C function number z1.
+ *
+ *******************************************************************/
+
+static int
+evalConstParameter(List_e * lp)
+{
+    List_e *	lp1;
+    Symbol *	sp;
+    Symbol *	sp1;
+    int		mal = 0;
+    int		value;
+    char *	formalName;
+    char *	callName;
+    char *	cp;
+    char	buf[TSIZE];
+    char	temp[TSIZE];
+
+    assert(lp && lp->le_sym && lp->le_next == 0 && lp->le_first && lp->le_last && *(lp->le_last) == '\0');
+    strncpy(buf, lp->le_first, TSIZE);
+    if ((sp = lp->le_sym)->u_blist == 0) {
+	if ((sp->em & EI) == 0) goto MalFormed;					/* else evaluate single constant parameter */
+    } else {
+	if ((sp->em & EI) != 0 || (lp = sp->u_blist) == 0) goto MalFormed;	/* else evaluate constant parameter expression */
+    }
+    for ( ; lp; lp = lp->le_next) {	/* scan either single or expression parameters */
+	sp = lp->le_sym;
+	assert(sp && sp->name && sp->type == ARN && sp->list && sp->u_blist == 0);
+	if ((sp->em & EI) == 0) {
+	    mal++;
+	    continue;
+	}
+	formalName = sp->name;		/* parameter name used in the constant expression */
+	lp1 = sp->list;
+	assert(lp1 && lp1->le_next == 0);
+	sp1 = lp1->le_sym;
+	if (!sp1 || !sp1->name || sp1->type != NCONST) goto MalFormed;
+	callName = sp1->name;		/* numerical constant text */
+	if ((cp = strstr(buf, formalName)) != 0) {
+	    strncpy(temp, cp + strlen(formalName), TSIZE);
+	    *cp = '\0';
+	    strncat(buf, callName, TSIZE);
+	    strncat(buf, temp, TSIZE);	/* replace formal name by call name in expression */
+	} else {
+	    mal++;			/* each formal name must occurr for each member of the expression */
+	}
+    }
+    if (mal || parseConstantExpression(buf, &value, 0)) { /* determine numerical value of constant expression */
+      MalFormed:
+	ierror("const parameter expression is mal-formed:", buf);
+	value = 0;
+    }
+#ifndef	NOCONSTLIST 
+    constExprString = strdup(buf);
+#endif	/* NOCONSTLIST */
+    return value;
+ } /* evalConstParameter */
+
+/********************************************************************
+ *
  *	Listing for undefined C variable
  *	Generate and assign output I/O if it is a Q[XBWL]n variable
  *
  *	Format lists with size - if size == 0 put lines close together
  *				 if size != 0 space 1 line before and after
  *				 if size >= 0 no ini value output
- *				 if size <  0 output ini value in listing
- *					      save ini value in a dynamic array
- *	if sp is an immC array ((ARNC || LOGC) && UDFA) size is array size
+ *				 if size == -1 output ini.val or ini.sym in listing
+ *					      save ini in a dynamic array
+ *				 if sp is an immC array ((ARNC || LOGC) && UDFA) &&
+ *				    size >   1 size is array size
+ *				    size == -2 ini.sym is array size const parameter
  *
  *	Set 'em' bit ED in Symbol to indicate that an immC variable has
  *	been defined.
- *	Set 'em' bit EI in Symbol to indicate that an initialiser has
- *	been saved.
+ *	If ini value has been saved set 'em' bit EI in Symbol to indicate
+ *	that an initialiser has been saved.
  *
  *******************************************************************/
 
 void
-listGenOut(Symbol * sp, int size, int ini)
+listGenOut(Symbol * sp, int size, Valp * ini)
 {
     char *	name;
     int		ioTyp;
     static int	shortFlag;
+    List_e *	lp;
+    int		len;
 
     if (sp == NULL || (sp->em & ED) == 0) {	/* do not repeat if already defined */
 	if (iC_debug & 04) {
@@ -2495,14 +2773,31 @@ listGenOut(Symbol * sp, int size, int ini)
 		fprintf(iC_outFP, "\t\t= ---%c\t%s", iC_os[sp->type], sp->name);
 		if (sp->ftype != GATE) {
 		    if (sp->ftype == UDFA && (sp->type == ARNC || sp->type == LOGC)) {
-			fprintf(iC_outFP, "\t[%d]", size);	/* immC array size */
+			if (size == -2) {
+			    if (ini->lfl == 1) {
+				lp = ini->lpt;
+				assert(lp);
+				len = lp->le_last - lp->le_first;
+				fprintf(iC_outFP, "\t[%*.*s]", len, len, lp->le_first);	/* immC array size expression */
+			    }			/* ignore ip->v.lfl == 2 err */
+			} else {
+			    fprintf(iC_outFP, "\t[%d]", size);		/* immC array numeric size */
+			}
 		    } else {
 			fprintf(iC_outFP, "\t%c", iC_fos[sp->ftype]);
 		    }
 		}
-		if (size < 0) {
+		if (size == -1) {
 		    if (sp->ftype == GATE) fprintf(iC_outFP, "\t");
-		    fprintf(iC_outFP, "\t%d", ini);	/* initialiser value */
+		    if (ini->lfl == 0) {
+			fprintf(iC_outFP, "\t%d", ini->nuv);		/* immc initialiser numeric value */
+		    } else
+		    if (ini->lfl == 1) {
+			lp = ini->lpt;
+			assert(lp);
+			len = lp->le_last - lp->le_first;
+			fprintf(iC_outFP, "\t%*.*s", len, len, lp->le_first);	/* immC initialiser const expression */
+		    }							/* ignore ip->v.lfl == 2 err */
 		}
 		fprintf(iC_outFP, "\n");	/* NL at end of item */
 	    }
@@ -2512,29 +2807,12 @@ listGenOut(Symbol * sp, int size, int ini)
 	}
 	if (sp) {
 	    sp->em |= ED;			/* immC variable has been defined */
-	    if (size < 0) {
+	    if (size == -1) {
 		/********************************************************************
 		 * Save immC int or immC bit initialiser value in a dynamic array
 		 * 'iC_iniList[]', since there are no spare members in Symbol.
 		 *******************************************************************/
-		if (iC_inip - iC_iniList >= iniSize) {
-		    iC_iniList = (immCini*)realloc(iC_iniList,	/* initially NULL */
-			(iniSize + INISIZE) * sizeof(immCini));
-		    assert(iC_iniList);
-		    memset(&iC_iniList[iniSize], '\0', INISIZE * sizeof(immCini));
-		    iniSize += INISIZE;	/* increase the size of the array */
-		    if (iC_inip == NULL) {
-			iC_inip = iC_iniList;
-		    }
-#if YYDEBUG
-		    if ((iC_debug & 0402) == 0402)
-			fprintf(iC_outFP, "listGenOut: iC_iniList[%d] increase\n", iniSize);
-#endif
-		}
-		iC_inip->symbol = sp;	/* allows searching for the Symbol */
-		iC_inip->value  = ini;	/* corresponding initial value */
-		iC_inip++;			/* ready for next entry to iC_iniList */
-		sp->em |= EI;		/* mark that initialiser is available */
+		saveIniList(sp, ini);
 	    }
 	    if (sp->em & EO) {		/* QXx.y QBz etc */
 		/********************************************************************
@@ -2569,15 +2847,22 @@ listGenOut(Symbol * sp, int size, int ini)
  *
  *******************************************************************/
 
+static Symbol *
+symbolOne(void)
+{
+    Symbol *	sp;
+    if ((sp = lookup("1")) == 0) {		/* Constant Symbol "1" */
+	sp = install("1", NCONST, ARITH);
+	sp->u_val = 1;
+    }
+    return sp;
+} /* symbolOne */
+
 List_e *
 delayOne(List_e * tp)
 {
-    Symbol *	sp;				/* with implicit delay of 1 */
     List_e *	lp;
-    if ((sp = lookup(iC_One)) == 0) {
-	sp = install(iC_One, NCONST, ARITH);
-    }
-    lp = sy_push(sp);
+    lp = sy_push(symbolOne());
     lp->le_val = (unsigned)-1;			/* mark link as timer value */
     return op_push(tp, TIM, lp);
 } /* delayOne */
@@ -2698,6 +2983,8 @@ cListCount(List_e * cPlist, List_e * aexpr)
  * class DefineFunction
  *
  *	Code for generating the template for an immediate function.
+ *	In the rest of the documentation these are called immediate
+ *	function blocks to distinguish them from C-functions.
  *
  * Algorithm:
  *	The UNDEF function head Symbol for a function definition
@@ -2742,18 +3029,31 @@ cListCount(List_e * cPlist, List_e * aexpr)
  *	function, must be declared extern in the function. This means that
  *	in a function, any variable must be declared before it is used. The
  *	possible options are:
- *	1)  imm <type> functionName(<parameter list>) for value functions
- *	    the name of the function return object in expressions is "this".
- *	2a) assign <type> <name> for an assign parameter or
- *	2b) <type> <name> for a value parameter, both in the comma separated
- *	    parameter list. The modifier imm is optional before <type>.
- *	3)  imm <type> <name> in the body of the function declares a function
+ *
+ *	1a) imm void <function name>(<parameter list>) {<function body>} for
+ *	    void functions or
+ *	1b) imm <type> <function name>(<parameter list>) {<function body>} for
+ *	    value functions. The name of the function return object in value
+ *	    function expressions is "this" (no "this" in void functions).
+ *
+ *	2a) <type> <name> for a value parameter or
+ *	2b) assign <type> <name> for an assign parameter or
+ *	2c) <type> <name>[<size>] for an array parameter (<size> is optional).
+ *	    The modifier imm is optional before <type> for 2a) to 2c) - or
+ *	2d) const int <name> for a constant value parameter (no imm allowed).
+ *	    Any number of 2a) to 2d) parameters can be used in any order in
+ *	    the comma separated <parameter list>.
+ *
+ *	3)  imm <type> <name> in the <function body> declares a function
  *	    internal variable which will be cloned with different names in
  *	    different instances, when the function is called.
- *	4)  extern imm <type> <name> means that name will be assigned outside the
- *	    function. Such a global variable may not be declared or assigned
- *	    before its declaration in the function. After the function definition
- *	    it must be declared in the source in which it will be assigned.
+ *
+ *	4)  extern imm <type> <name> in the <function body> declares that
+ *	    name will be assigned outside the function. Such a global variable
+ *	    may not be declared locally or assigned before its declaration in
+ *	    the function. After the function definition it must be declared in
+ *	    the source in which it will be assigned or used.
+ *
  *	The upshot is, that any variable used in a function must be declared
  *	before it is used in a function. This was found to be more important
  *	for functions, where bugs can easily creep in when one assumes a
@@ -2761,9 +3061,9 @@ cListCount(List_e * cPlist, List_e * aexpr)
  *	and it is then accidentally compiled as global. This would not become
  *	evident until the function is used. It also makes the use of global
  *	variables in a function a little bit more onerous, which it should be,
- *	since their use can cause loss of a broad overview. By having the extern
- *	declaration, at least one knows which names are used for what in each
- *	function. Breaking this rule will cause a warning - not an error.
+ *	since their use can cause loss of a broad overview. By having the
+ *	extern declaration, at least one knows which names are used for what in
+ *	each function. Breaking this rule will cause a warning, not an error.
  *
  ********************************************************************
  *******************************************************************/
@@ -3096,7 +3396,7 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 			vlp = sp1->u_blist;	/* inversion is taken care of */
 			assert(vlp);
 			if (((sp1->fm & FM) != 0 || sp1->name == 0) &&	/* no globals, no '@' in Pass 1 */
-			    (sp1->fm & 0x02) == 0) {/* target not used more than once */
+			    (sp1->fm & FU) <= 1) {/* target not used more than once */
 			    sp1->fm++;		/* count ALIAS use in merge candidate */
 #if YYDEBUG
 			    if ((iC_debug & 0402) == 0402) {
@@ -3110,7 +3410,7 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
 			lp1->le_sym = sp1;	/* transfer alias target to net list element */
 		    } else			/* do not count target of ALIAS twice */
 		    if (((sp1->fm & FM) != 0 || sp1->name == 0) &&	/* no globals, no '@' in Pass 1 */
-			(sp1->fm & 0x02) == 0) {/* target not used more than once */
+			(sp1->fm & FU) <= 1) {/* target not used more than once */
 			sp1->fm++;		/* count use in merge candidate */
 #if YYDEBUG
 			if ((iC_debug & 0402) == 0402) {
@@ -3135,7 +3435,7 @@ functionDefinition(Symbol * functionHead, List_e * fParams)
     while ((lp = *lpp) != 0) {
 	sp = lp->le_sym;			/* return, assign parameter or internal declaration */
 	if (sp && (sp->fm & FU) == 0 &&
-	    sp->type != SW && sp->type != CF &&
+	    sp->type != SW && sp->type != CF && sp->type != ALIAS &&
 	    (iC_Wflag & W_FUNCTION_PARAMETER)) {
 	    warning("function variable was never used:", sp->name);
 	}
@@ -3390,8 +3690,8 @@ clearFunDef(Symbol * functionHead)
  *	use in a function.  Like all variables declared extern, these
  *	must be declared again simply before they are assigned.
  *
- *	I/O variables are universally global and do not need to be
- *	declared extern (Input variables cannot be declared extern)
+ *	Constants and I/O variables are universally global and do not
+ *	need to be declared extern (Input variables not declared extern).
  *	Output variables can be declared extern, but don't need to be
  *	because if they are they need to be declared again, which would
  *	be confusing. This is only done if Output variables are assigned
@@ -3413,6 +3713,7 @@ checkDecl(Symbol * terminal)
 	if (iFunSymExt &&
 	    strncmp(terminal->name, iFunBuffer, iFunSymExt - iFunBuffer) != 0 &&
 	    (terminal->em & EM) == 0 &&
+	    typ != NCONST &&
 	    typ != INPX &&
 	    typ != INPW &&
 	    typ != ERR &&
@@ -3749,7 +4050,7 @@ handleRealParameter(List_e * plp, List_e * lp)
     Symbol *	rsp;				/* real parameter Symbol */
     Symbol *	psp;				/* previous real parameter Symbol */
     Symbol *	tsp;				/* temporary Symbol */
-    Symbol *	dsp;				/* delay Symbol */
+    Symbol *	dsp = 0;			/* delay Symbol */
     List_e *	rlp;				/* return link if clock is a timer */
     List_e *	clp;				/* list element for missing clocks */
     List_e *	lp1;
@@ -3759,9 +4060,7 @@ handleRealParameter(List_e * plp, List_e * lp)
 
     if (lp == 0) {				/* final call from cloneFunction() */
 	if (plp) {				/* to clear unresolved formal parameters */
-	    if ((rsp = lookup(iC_One)) == 0) {	/* default delay 1 after last timer parameter */
-		rsp = install(iC_One, NCONST, ARITH);
-	    }
+	    rsp = symbolOne();			/* default delay 1 after last timer parameter */
 	} else {
 	    if (iFormCurr && iFormPrev && iFormPrev->ftype == CLCKL) {
 		if ((rsp = lookup("iCerr")) == 0) {
@@ -3782,9 +4081,27 @@ handleRealParameter(List_e * plp, List_e * lp)
 	fsp = iFormCurr->le_sym;		/* current formal parameter Symbol */
 	assert(fsp && fsp->fm);			/* u_blist not cleared on parse error */
 	if (plp) {
-	    if (rsp->ftype == GATE) {		/* previous clock parameter was a timer */
-		rlp = op_force(rlp, ARITH);	/* force to int */
-		rsp = rlp->le_sym;		/* needed for iFunClock scan */
+	    if (rsp->ftype == GATE && iFormCurr->le_next) {	/* previous clock parameter was a timer */
+		/********************************************************************
+		 * If there is no formal parameter for this bit, it is a "wrong parameter type".
+		 *
+		 * A real bit parameter after a timer is not usually meant to be a
+		 * delay value, whereas an int after a timer usually is a delay. Therefore
+		 * provide the default 1 delay before a real bit parameter after a timer..
+		 * If an int parameter after a timer is not meant to be the delay, one
+		 * must precede it with a real parameter 1 to simulate the default delay.
+		 * Else a parameter count error.
+		 *
+		 * If for some obscure reason a bit is supposed to be the delay
+		 * (can only be 0 or 1) the bit must be forced to an int by an expression
+		 * ie: +IX0.0.  (This is the bit to int cast mechanism in iC).
+		 * Else a parameter count error.
+		 *******************************************************************/
+		dsp = symbolOne();		/* default delay 1 for timer parameter before bit */
+		iFormPrev = fsp;		/* save previous parameter Symbol on stack */
+		iFormCurr = iFormCurr->le_next;	/* skip timer - next formal parameter to process */
+		fsp = iFormCurr->le_sym;	/* now current formal parameter Symbol */
+		goto HandleRealParameter;	/* handle this bit; then distribute previous timer */
 	    } else
 	    if (rsp->ftype != ARITH) {
 		ierror("wrong parameter type for timer delay:", rsp->name);
@@ -3798,11 +4115,12 @@ handleRealParameter(List_e * plp, List_e * lp)
 		 * which must be cloned differently - action gate must be linked to
 		 * le_next of delay link rather than to clock link which is now timer
 		 *******************************************************************/
-		lp = plp->le_next = rlp;		/* install delay with previous timer */
+		lp = plp->le_next = rlp;	/* install delay with previous timer */
 		rlp->le_val = (unsigned)-1;	/* mark link as timer value */
 	    }
 	    /* used up a real ARITH or GATE parameter for timer delay - else error */
 	} else {
+	  HandleRealParameter:
 	    switch (fsp->ftype) {
 	    case UDFA:
 		if (rsp->ftype != UDFA ||
@@ -3828,7 +4146,7 @@ handleRealParameter(List_e * plp, List_e * lp)
 		 *  A formal const parameter must be matched by a real parameter with
 		 *  type NCONST, which is either a constant number or a constant expression
 		 *******************************************************************/
-		if (fsp->type == NCONST && rsp->type != NCONST) {
+		if ((fsp->em & EI) && rsp->type != NCONST) {
 		    ierror("formal const parameter not matched by a constant expression:", rsp->name);
 		    rsp->type = ERR;		/* check for ERR when using this parameter */
 		}	/* could use else here because bit clock or timer will not be NCONST (?) */
@@ -3939,9 +4257,19 @@ handleRealParameter(List_e * plp, List_e * lp)
 	if (iFormPrev && iFormPrev->ftype == CLCKL) {
 	    tlp = iFormPrev->list;		/* not two consecutive clocks */
 	    if ((tsp = tlp->le_sym) != 0) {	/* previous clock or timer */
+		/********************************************************************
+		 * Link the previous real clock or timer + delay, which was deferred
+		 * until this non CLCKL to all previous unresolved formal clock parameters
+		 *******************************************************************/
+		if (dsp) {
+		    assert(tlp->le_next == 0);	/* no delay attached to timer yet */
+		    tlp->le_next = lp1 = sy_push(dsp);	/* default delay 1 before a bit parameter */
+		    lp1->le_val = (unsigned)-1;	/* mark link as timer value */
+		}
 		if ((tlp = tlp->le_next) != 0) {
 		    dsp = tlp->le_sym;		/* previous timer delay */
-		}
+		    assert(dsp->ftype == ARITH);
+		}				/* else clock with tlp == 0 */
 		while (iFunClock) {		/* find unresolved formal clock parameters */
 		    iFunClock->le_sym = tsp;	/* link unresloved clock to this clock */
 		    clp = iFunClock->le_next;	/* next unresolved clock */
@@ -4024,7 +4352,7 @@ handleRealParameter(List_e * plp, List_e * lp)
  *******************************************************************/
 
 Lis
-cloneFunction(Sym * fhs, Sym * hsym, Str * par)
+cloneFunction(Sym * fhs, Sym * hsym, Val * par)
 {
     Symbol *		functionHead = fhs->v;	/* actual function head */
     Symbol *		hsp = hsym->v;		/* head of actual rParams - could be 0 */
@@ -4035,7 +4363,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
     List_e *		lp;
     List_e *		lp1;
     List_e *		lp2;
-    List_e *		lp3;
+    List_e *		lp3 = 0;
     List_e **		lpp;
     Symbol *		sp;
     Symbol *		sp1;
@@ -4056,9 +4384,22 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
     unsigned int	lval;			/* logical sign of a temp */
     char *		cp;
     char *		ep;
+    int			len;
+    int			len1;
+    int			size;
+    int			i;
     char		temp[TSIZE];
 
     assert(functionHead);
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "cloneFunction: start\n");
+	fflush(iC_outFP);
+    }
+#endif
+#ifndef	NOCONSTLIST 
+    constExprString = NULL;
+#endif	/* NOCONSTLIST */
     rll.v = 0;					/* return link */
     rll.f = fhs->f; rll.l = par->l;		/* adjust old text limits */
     /********************************************************************
@@ -4161,9 +4502,11 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	    vsp = vsp->next;			/* next varList Symbol */
 	}
 	/********************************************************************
-	 * Clone the expression head associated with this statement
-	 * list == 0 indicates a function internal Symbol
-	 * by doing this after varList, cloned head is at front of templist
+	 * if list != 0 clone the expression head associated with this statement.
+	 *   By doing this after varList, cloned head is at front of templist.
+	 * if list == 0 indicates a function internal Symbol - only generate
+	 *   simple immC variables with our without fixed or dynamic initialiser 
+	 *   and immC arrays with fixed or dynamic size.
 	 * The remaining internal statement head Symbols are not cloned till Pass2.
 	 * They then come even earlier on templist. This is necessary because
 	 * these statements are assigned before the return statement.
@@ -4172,46 +4515,86 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	assert(sp1);				/* check in Pass 1 only */
 	assert(sp1->name);
 	if ((lp = sp1->list) == 0) {		/* function internal variable */
-	    if (sp1->type == ARNC || sp1->type == LOGC) {
-		typ = sp1->type;		/* immC */
+	    if ((typ = sp1->type) == ARNC || typ == LOGC) {
 		if (sp1->ftype == UDFA) {	/* immC array */
-		    for (lp1 = sp1->u_blist; lp1; lp1 = lp1->le_next) {
-			sp2 = lp1->le_sym;	/* clone immC members */
-			assert(sp2 && (sp2->type == ARNC || sp2->type == LOGC));
-			if (sp2->list == 0) {	/* unless immC member separately declared */
-			    if (iFunSymExt) {
-				int	n = 0;	/* cloned in a function definition */
-				cp = sp2->name + strlen(functionHead->name);	/* locate original extension */
-				assert(cp[0] == '@' && isprint(cp[1]));		/* extension must be at least 1 character */
-				strncpy(iFunSymExt, cp+1, iFunEnd - iFunSymExt);/* copy ext to new fun name */
-				cp = iFunBuffer + strlen(iFunBuffer);		/* end of new var name */
-				while (lookup(iFunBuffer) != 0) {		/* accepts original name for first instance */
-				    snprintf(cp, iFunEnd - cp, "%d", ++n);	/* simply count up */
-				}						/* position in ST located in while */
-				sv.v = install(iFunBuffer, UDF, sp2->ftype);	/* UDF to locate auto member in Pass 3 */
-				*iFunSymExt = '\0';
-			    } else {				/* see comments in next section */
-				cp = sp2->name + strlen(functionHead->name);	/* locate original extension */
-				assert(cp[0] == '@');		/* has failed during development */
-				snprintf(temp, TSIZE, "%s_%d_%s", functionHead->name, instanceNum, cp+1);
-				instanceFlg++;			/* instanceNum was used so update */
+		    if ((sp1->em & EI) && (lp1 = sp1->u_blist) != 0) {
+			/********************************************************************
+			 * generate a dynamic immC array whose size is determined by const parameter(s)
+			 *******************************************************************/
+			if (iFunSymExt == 0) {
+			    size = evalConstParameter(lp1);
+#if YYDEBUG
+			    if ((iC_debug & 0402) == 0402) {
+				fprintf(iC_outFP, "cloneFunction: %s[%d] has dynamic size\n", sp1->name, size);
+				fflush(iC_outFP);
+			    }
+#endif
+			    assert(size > 0);
+			    cp = sp1->name + strlen(functionHead->name);/* locate original extension of dynamic array */
+			    assert(cp[0] == '@');			/* has failed during development */
+			    snprintf(temp, TSIZE, "%s_%d_%s", functionHead->name, instanceNum, cp+1);
+			    instanceFlg++;				/* instanceNum was used so update */
+			    for (i = 0; i < size; i++) {		/* generate consecutively numbered members */
+				snprintf(temp, TSIZE, "%s_%d_%s%d", functionHead->name, instanceNum, cp+1, i);
 				if ((sv.v = lookup(temp)) == 0) {	/* locate position in ST */
-				    sv.v = install(temp, UDF, sp2->ftype);	/* UDF to locate auto member in Pass 3 */
+				    sv.v = install(temp, UDF, iC_ftypes[sp1->type]);	/* UDF to locate auto member in Pass 3 */
+				}
+				if (i == 0) {
+				    lp3 = lp2 = sy_push(sv.v);		/* head of new member list */
+				    lp2->le_val = size;
+				} else {
+				    lp2 = lp2->le_next = sy_push(sv.v);	/* link to end of new member list */
 				}
 			    }
-			    sp2->list = sy_push(sv.v);		/* link internal cloned Symbol to template */
+
 			} else {
-			    sv.v = sp2->list->le_sym;		/* previously declared immC Symbol */
+			    ierror("function with nested const parameters not implemented:", sp1->name);	/* TODO */
 			}
-			if (lp1 == sp1->u_blist) {
-			    lp3 = lp2 = sy_push(sv.v);		/* link cloned or previously declared Symbol to array */
-			    lp2->le_val = lp1->le_val;		/* transfer array size to first new link */
-			} else {
-			    lp2 = lp2->le_next = sy_push(sv.v);	/* link later link to previous link */
+		    } else {
+			/********************************************************************
+			 * generate a fixed immC array whose size is determined by a constant
+			 *******************************************************************/
+			for (lp1 = sp1->u_blist; lp1; lp1 = lp1->le_next) {
+			    sp2 = lp1->le_sym;	/* clone immC members */
+			    assert(sp2 && (sp2->type == ARNC || sp2->type == LOGC));
+			    if (sp2->list == 0) {	/* unless immC member separately declared */
+				if (iFunSymExt) {
+				    int	n = 0;	/* cloned in a function definition */
+				    cp = sp2->name + strlen(functionHead->name);/* locate original extension */
+				    assert(cp[0] == '@' && isprint(cp[1]));	/* extension must be at least 1 character */
+				    strncpy(iFunSymExt, cp+1, iFunEnd - iFunSymExt);/* copy ext to new fun name */
+				    cp = iFunBuffer + strlen(iFunBuffer);	/* end of new var name */
+				    while (lookup(iFunBuffer) != 0) {		/* accepts original name for first instance */
+					snprintf(cp, iFunEnd - cp, "%d", ++n);	/* simply count up */
+				    }						/* position in ST located in while */
+				    sv.v = install(iFunBuffer, UDF, sp2->ftype);/* UDF to locate auto member in Pass 3 */
+				    *iFunSymExt = '\0';
+				} else {				/* see naming comments in next section */
+				    cp = sp2->name + strlen(functionHead->name);	/* locate original extension */
+				    assert(cp[0] == '@');		/* has failed during development */
+				    snprintf(temp, TSIZE, "%s_%d_%s", functionHead->name, instanceNum, cp+1);
+				    instanceFlg++;			/* instanceNum was used so update */
+				    if ((sv.v = lookup(temp)) == 0) {	/* locate position in ST */
+					sv.v = install(temp, UDF, sp2->ftype);	/* UDF to locate auto member in Pass 3 */
+				    }
+				}
+				sp2->list = sy_push(sv.v);		/* link internal cloned Symbol to template */
+			    } else {
+				sv.v = sp2->list->le_sym;		/* previously declared immC Symbol */
+			    }
+			    if (lp1 == sp1->u_blist) {
+				lp3 = lp2 = sy_push(sv.v);		/* link cloned or previously declared Symbol to array */
+				lp2->le_val = lp1->le_val;		/* transfer array size to first new link */
+			    } else {
+				lp2 = lp2->le_next = sy_push(sv.v);	/* link later link to previous link */
+			    }
 			}
 		    }
 		}
 	    } else {
+		/********************************************************************
+		 * generate a simple immC variable
+		 *******************************************************************/
 		typ = UDF;			/* imm */
 	    }
 	    if (iFunSymExt) {
@@ -4257,8 +4640,20 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 		}
 	    }
 	    sp1->list = sy_push(sv.v);		/* link internal cloned Symbol to template */
-	    if (sp1->ftype == UDFA && (sp1->type == ARNC || sp1->type == LOGC)) {
-		sv.v->list = lp3;		/* complete immC array with link to member list */
+	    if (sp1->type == ARNC || sp1->type == LOGC) {
+		Valp	v;
+		if (sp1->ftype == UDFA) {
+		    sv.v->list = lp3;		/* complete immC array with link to member list */
+		} else if (iC_iniList && (sp1->em & EI)) {
+		    v = extractConstIni(sp1);
+		    saveIniList(sv.v, &v);	/* transfer const ini value or expression link to cloned immC variable */
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) {
+			fprintf(iC_outFP, "cloneFunction: Pass 1: %s immC variable with initialiser %d saved\n", sv.v->name, v.nuv);
+			fflush(iC_outFP);
+		    }
+#endif
+		}
 	    }
 	} else
 	if (lp->le_sym == functionHead) {
@@ -4637,17 +5032,31 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	    sl.v = sv.v->u_blist;		/* link to expression head */
 	    sv.f = sv.l = sl.f = sl.l = 0;	/* clear internal expression text */
 	    if (typ == ARNC || typ == LOGC) {
-		if (sp1->u_blist == 0) {
-		    listGenOut(sv.v, 1, 0);	/* listing of immC variable + possible real output */
-		} else if (sp1->ftype == UDFA) {
+		if (sp1->ftype == UDFA) {
 		    assert(sv.v->list);
 		    listGenOut(sv.v, sv.v->list->le_val & VAL_MASK, 0);/* listing of immC array variable */
 		    for (lp1 = sv.v->list; lp1; lp1 = lp1->le_next) {
 			assert(lp1->le_sym);
 			if ((sp2 = lp1->le_sym)->type == UDF) {
-			    sp2->type = typ;		/* type UDF for auto members in Pass1 */
+			    sp2->type = typ;			/* type UDF for auto members in Pass1 */
 			    listGenOut(lp1->le_sym, 0, 0);	/* listing of auto immC array member */
 			}
+		    }
+		} else
+		if (sp1->u_blist == 0) {
+		    if ((sp1->em & EI) == 0) {
+			listGenOut(sv.v, 1, 0);			/* listing of immC variable + possible real output */
+		    } else
+		    if (iC_iniList) {
+			Valp	v;
+			v = extractConstIni(sv.v);
+#if YYDEBUG
+			if ((iC_debug & 0402) == 0402) {
+			    fprintf(iC_outFP, "cloneFunction: Pass 3: %s immC variable with initialiser %d extracted\n", sv.v->name, v.nuv);
+			    fflush(iC_outFP);
+			}
+#endif
+			listGenOut(sv.v, -1, &v);	/* listing of immC variable + initialiser */
 		    }
 		} else {
 		    sv.v->type = iC_ctypes[sv.v->ftype]; /* TD check sp1->type == UDF */
@@ -4898,6 +5307,31 @@ cloneFunction(Sym * fhs, Sym * hsym, Str * par)
 	assert(*cp == '(');
     }
     iC_optimise &= ~0x80;
+    if ((iC_optimise & 02) && rsp && rsp->type == ARNF) {
+	lp = rll.v;
+	assert(lp && lp->le_first >= iCbuf && lp->le_first <= lp->le_last && lp->le_last < &iCbuf[IMMBUFSIZE]);
+	len = lp->le_last - lp->le_first;
+	strncpy(temp, lp->le_first, len);
+	temp[len] = '\0';
+	if ((lp1 = constExpr_push(temp, 1)) != NULL) {
+	    cp = lp1->le_sym->name;
+	    len1 = strlen(cp);
+	    assert(len1 <= len);		/* TODO this may not be true if division is used */
+	    cp = strncpy(lp->le_first, cp, len1) + len1;	/* replace expression by numeric value */
+	    ep = cp + len;
+	    while (cp < ep) {
+		*cp++ = '#';
+	    }
+	    freeTemp(lp);			/* free previous link and temporary Symbol */
+	    rll.v = lp1;
+	}
+    }
+#if YYDEBUG
+    if ((iC_debug & 0402) == 0402) {
+	fprintf(iC_outFP, "cloneFunction: end\n");
+	fflush(iC_outFP);
+    }
+#endif
     return rll;					/* return expression or 0 for void function */
 } /* cloneFunction */
 
@@ -4969,7 +5403,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	if (fsp->fm & FM) {			/* formal parameter or declared value */
 	    if ((nlp = fsp->list) != 0 &&	/* link to real Symbol */
 		(nsp = nlp->le_sym) != 0) {	/* real Symbol cloned before */
-		if ((nsp->fm & FU) == 0 && (fsp->fm & 0x2) != 0) {
+		if ((nsp->fm & FU) == 0 && (fsp->fm & FU) > 1) {
 		    nsp->fm |= fsp->fm & FU;	/* transfer high use count for op_push'ed nodes */
 		}
 		nval = nlp->le_val;		/* logical sign of a real GATE parameter */
@@ -5055,7 +5489,7 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 		fflush(iC_outFP);
 	    }
 	    csp = *cspp;
-	    freeTemp(nlp);			/* free link and Symbol and name of Smbol if YYDEBUG */
+	    freeTemp(nlp);			/* free link and Symbol and name of Symbol if YYDEBUG */
 	    nlp = 0;
 	} else {
 	    rlp = nlp;
@@ -5086,7 +5520,6 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
      * Has been abandoned for now - JW 20070627 - Mezieres/Switzerland
      *******************************************************************/
     if (csp->type == ARNF && (iC_optimise & 0x82) == 0x02 && call == 1) {
-	Symbol *	icp;
 	Symbol *	sp1;
 	Symbol *	sp2;
 	List_e *	lp1;
@@ -5112,10 +5545,9 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	    fflush(iC_outFP);
 	}
 #endif
-	assert(ttp >= iCbuf);			/* ttp = iCstmtp if iC_optimis & 02 in Pass 2 */
+	assert(ttp >= iCbuf && ttp < &iCbuf[IMMBUFSIZE]);	/* ttp = iCstmtp if iC_optimise & 02 in Pass 2 */
 	rlp->le_first = ttp;			/* first of this statement expression text */
 	*ttp++ = '#';				/* room to parenthesise arithmetic function expression */
-	icp = 0;
 	index = 0;
 	for (lpp = &csp->u_blist; (lp1 = *lpp) != 0; ) {
 	    sp1 = lp1->le_sym;		/* input to this ARN */
@@ -5157,9 +5589,18 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 			x = lval >> FUN_OFFSET;		/* function number */
 			assert(x < functionUseSize);
 			ccp = strncpy(cBuf, functionUse[x].c.expr, EBSIZE);	/* cloning expression */
+#if YYDEBUG
+			if ((iC_debug & 0402) == 0402)
+			    fprintf(iC_outFP, "cloneList: functionUse[%d].c.epr = '%s'\n", x, ccp);
+#endif
 		    }
 		    assert(index == (lval & VAL_MASK));		/* function offset */
 		    caList[index].l = lp1;
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402)
+			fprintf(iC_outFP, "cloneList: caList[%d] .l->le_sym %s le_val = 0x%04x\n",
+			    index, lp1->le_sym->name, lval);
+#endif
 		    repeat = 0;
 		    repeatMark[0] = '\0';
 		    do {
@@ -5181,28 +5622,20 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 			}
 			ttp += len1;
 			assert(y <= index);
-			if (sp1 == iconst) {
-			    assert(ccp == ep && y == 0);
-			    icp = iconst;			/* retain if no other links */
-			    *lpp = lp1->le_next;		/* point to next link */
-			    sy_pop(lp1);			/* unlink iConst */
-			    lp1 = 0;
-			    goto putTrailer;
-			} else
 			if (y == 0) break;		/* tail is finalised */
 			ccp = ep;
 			lp2 = caList[y].l;
 			assert(lp2);
 			sp2 = lp2->le_sym;
 			assert(sp2);
-			if ((sp2->type == ARN || sp2->type == ARNF) &&
-			    sp2->u_blist &&
+			if ((((sp2->type == ARN || sp2->type == ARNF) && sp2->u_blist) ||
+			    sp2->type == NCONST) &&
 			    sp2->v_cnt == 1) {
 			    *ttp++ = '(';		/* parameter expressions must be parenthesised */
 			}
 			/********************************************************************
 			 * Either a ARN(F), INPW or SH.
-			 * Some function variables have no le_first - le_last (iConst ...)
+			 * Some function variables have no le_first - le_last
 			 * Other temp variables have a null name pointer - so have both.
 			 * Arithmetic built in (SH is only candidate) is left as a null string
 			 * (or temp name @n for logic generation output). The parameters are
@@ -5211,7 +5644,11 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 			 * the iC code in iCbuf.
 			 *******************************************************************/
 			len1 = 0;				/* in case temp variable has sp->name == 0 */
-			if ((sp2->type == ARN || sp2->type == ARNF || sp2->type == INPW || sp2->u_blist == 0) &&
+			if ((sp2->type == ARN   ||
+			    sp2->type == ARNF   ||
+			    sp2->type == INPW   ||
+			    sp2->type == NCONST ||
+			    sp2->u_blist == 0) &&		/* NCONST u_val union u_blist if SYUNION */
 			    (len1 = lp2->le_first && lp2->le_last ? lp2->le_last - lp2->le_first : 0) != 0) {
 			    if (sp2->v_cnt <= 1 && sp2->type != INPW) {
 				assert(len1 > 0);		/* text of variable from iC source */
@@ -5251,11 +5688,11 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 			    assert(len1);
 			    cp = sp2->name;			/* name of variable from generated node */
 			}
-			if (len1 && strncmp(cp, "iConst", len1) == 0) {
-			    len1 = 0;				/* leave out "iConst" which is only a trigger */
-			}
 			if (len1) {
 			    strncpy(ttp, cp, len1);		/* copy the expression to end of iCbuf */
+			} else {
+			    len1 = 2;				/* for case where temporary sp2->name is NULL */
+			    strcpy(ttp, "@0");			/* copy dummy expression to make it non-constant */
 			}
 			if (y == index && repeat == 0) {
 			    offset = lp2->le_first ? ttp - lp2->le_first : 0;	/* avoid 32 bit int overflow in subtraction */
@@ -5264,8 +5701,8 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 			    repeat++;
 			}
 			ttp += len1;
-			if ((sp2->type == ARN || sp2->type == ARNF) &&
-			    sp2->u_blist &&
+			if ((((sp2->type == ARN || sp2->type == ARNF) && sp2->u_blist) ||
+			    sp2->type == NCONST) &&
 			    sp2->v_cnt == 1) {
 			    *ttp++ = ')';		/* parameter expressions must be parenthesised */
 			}
@@ -5330,13 +5767,9 @@ cloneList(Symbol * ssp, Symbol ** cspp, Symbol * rsp, int call)
 	    lp1->le_val = 0;			/* clear the function indices */
 	    lpp = &lp1->le_next;		/* is skipped if merged  */
 	}
-      putTrailer:
 	*ttp++ = '#';				/* room to parenthesise arithmetic function expression */
-	if (icp && csp->u_blist == 0) {		/* only constants - no other links */
-	    csp->u_blist = sy_push(icp);	/* link pointer to iConst */
-	}
 	rlp->le_last = ttp;			/* last of this statement expression text */
-    }					/* end of arithmetic optimisation */
+    }	/* end of arithmetic optimisation */
 #if YYDEBUG
     if ((iC_debug & 0402) == 0402) {
 	fprintf(iC_outFP, "cloneList: expression end  %s ==> %s\n",

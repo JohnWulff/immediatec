@@ -98,7 +98,7 @@ Usage:
 		if a client call has arguments, the call must be quoted
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.51 $
+$Id: iCserver 1.52 $
 .
 
 ########################################################################
@@ -1112,7 +1112,7 @@ iClive. These clients either send or receive data values from and
 to named I/O locations or debugging information.  As far as iCserver
 is concerned I/O locations could have any name, but the iC language
 calls for I/O names or addresses according to the IEC-1131 standard.
-Data values can be 8 bit bytes (eg: IB1 QB9), 16 bit words (IW2 QB10),
+Data values can be 8 bit bytes (eg: IB1 QB9), 16 bit words (IW2 QW10),
 32 bit long words (IL4 QL12) or 64 bit huge words (IH8 QH16), although
 thes have not been implemented in any client so far.  Bit values
 like IX0.0 IX0.1 QX8.2 QX8.3 are always transmitted as bytes - in
@@ -1694,7 +1694,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2000-2012  John E. Wulff
+Copyright (C) 2000-2016  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

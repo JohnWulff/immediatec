@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c,v 1.18 2009/08/21 06:26:19 jw Exp $";
+"@(#)$Id: lmain.c 1.19 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -21,7 +21,6 @@ static const char lmain_c[] =
 #include	<unistd.h>
 #endif	/* _WINDOWS */
 #include	<string.h>
-#include 	"icc.h"
 #include 	"comp.h"
 
 static const char *	usage =
@@ -71,7 +70,7 @@ unsigned short	iC_xflag;
 char *		listFN = 0;		/* name of list file */
 short		iC_debug = 0400;
 #if YYDEBUG
-extern	int	c_debug;
+extern	int	yydebug;
 #endif
 
 int
@@ -110,7 +109,7 @@ main(
 		    sscanf(*argv, "%o", &debi);
 		    iC_debug |= debi;	/* short */
 #if YYDEBUG
-		    if (iC_debug & 0400) c_debug = iC_debug & 01;
+		    if (iC_debug & 0400) yydebug = iC_debug & 01;
 #endif
 		    goto break2;
 		case 'l':
@@ -230,7 +229,7 @@ main(
 	return -1;
     }
 
-    r = c_parse();
+    r = yyparse();
     if (!(iC_debug & 04000)) {
 	unlink(T0FN);
     }

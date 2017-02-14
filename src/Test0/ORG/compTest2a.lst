@@ -65,39 +65,39 @@
 
 035	imm int delay = 		3;
 
-	3       A ---@  delay   A
+	3       A ---@  delay   A       3
 
 036	imm int delayExpr = 		3;
 
-	3       A ---@  delayExpr A
+	3       A ---@  delayExpr A       3
 
 037	imm int delayExprReset = 	3;
 
-	3       A ---@  delayExprReset A
+	3       A ---@  delayExprReset A       3
 
 038	imm int delayReset = 		3;
 
-	3       A ---@  delayReset A
+	3       A ---@  delayReset A       3
 
 039	imm int delaySet = 		3;
 
-	3       A ---@  delaySet A
+	3       A ---@  delaySet A       3
 
 040	imm int delaySet1 = 		3;
 
-	3       A ---@  delaySet1 A
+	3       A ---@  delaySet1 A       3
 
 041	imm int delaySet1Set2 = 	3;
 
-	3       A ---@  delaySet1Set2 A
+	3       A ---@  delaySet1Set2 A       3
 
 042	imm int delaySet2 = 		3;
 
-	3       A ---@  delaySet2 A
+	3       A ---@  delaySet2 A       3
 
 043	imm int delaySetReset = 	3;
 
-	3       A ---@  delaySetReset A
+	3       A ---@  delaySetReset A       3
 
 044	imm bit expr =		 	IX0.0;
 
@@ -5704,7 +5704,7 @@ TOTAL	    1042 blocks
 	    3731 links
 
 compiled by:
-@(#)     $Id: compTest2a.lst,v 1.1 2015/06/03 06:49:59 jw Exp $ -O7
+$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
 *** Warning: 13 undefined gates and 43 unused gates. File ./Test0/compTest2a.ic, line 304
 *** ErrorEmit: Action gate 'QX0.6_1' controlled by timer '1' has no clock. File ./Test0/compTest2a.ic, line 304
 *** ErrorEmit: Action gate 'QX0.7_1' controlled by timer '3' has no clock. File ./Test0/compTest2a.ic, line 304
