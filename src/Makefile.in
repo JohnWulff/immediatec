@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.70 $
+# @(#)$Id: Makefile.in 1.71 $
 
 #######################################################################
 #
@@ -192,7 +192,7 @@ pplstfix:
 
 $(srcdir)/lex.yy.c:	$(srcdir)/lexc.l
     ifneq ($(LEX),)
-	$(SHELL) -ec 'if $(LEX) $<; then mv -f lex.yy.c yy.tab.t; perl -e "while(<>){s/(\bId:\s)lexc.l/\1lex.yy.c/;print;}" < yy.tab.t > lex.yy.c; rm -f yy.tab.t; else echo "$(LEX) error return"; fi'
+	$(SHELL) -ec 'if $(LEX) $<; then mv -f lex.yy.c yy.tab.lt; perl -e "while(<>){s/(\bId:\s)lexc.l/\1lex.yy.c/;print;}" < yy.tab.lt > lex.yy.c; rm -f yy.tab.lt; else echo "$(LEX) error return"; fi'
     else
 	@echo "System has no flex or lex - install one of them"
 	@echo "Otherwise do not modify $< - C compile lex.yy.c in distribution"
@@ -201,14 +201,14 @@ $(srcdir)/lex.yy.c:	$(srcdir)/lexc.l
 
 $(srcdir)/%.tab.c:	$(srcdir)/%.y
     ifneq ($(YACC),)
-	$(SHELL) -ec 'if [ -f $(*).tab.h ]; then mv -f $(*).tab.h yy.tab.t; fi'
-	$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; immac -Y $(OPT) -o $< $(<).sav; fi'
-	$(SHELL) -ec 'if $(YACC) $(YFLAGS) $($(*)PREFIX) $<; then mv -f $(*).tab.c yy.tab.t; perl -e "while(<>){s/(\bId:\s)$(*).y/\1$(*).tab.c/;print;}" < yy.tab.t > $(*).tab.c; rm -f yy.tab.t; else echo "$(YACC) error return"; fi'
+	$(SHELL) -ec 'if [ -f $(*).tab.h ]; then mv -f $(*).tab.h yy.tab.ht; fi'
+	$(SHELL) -ec 'if grep -q %if $<; then mv $< $(<).sav; ./immac -Y $(OPT) -o $< $(<).sav; fi'
+	$(SHELL) -ec 'if $(YACC) $(YFLAGS) $($(*)PREFIX) $<; then mv -f $(*).tab.c yy.tab.yt; perl -e "while(<>){s/(\bId:\s)$(*).y/\1$(*).tab.c/;print;}" < yy.tab.yt > $(*).tab.c; rm -f yy.tab.yt; else echo "$(YACC) error return"; fi'
 	$(SHELL) -ec 'if [ -f $(<).sav ]; then mv -f $(<).sav $<; fi'
-	$(SHELL) -ec 'if cmp -s $(*).tab.h yy.tab.t; then mv yy.tab.t $(*).tab.h; else rm -f yy.tab.t; fi'
+	$(SHELL) -ec 'if cmp -s $(*).tab.h yy.tab.ht; then mv yy.tab.ht $(*).tab.h; else rm -f yy.tab.ht; fi'
     else
 	@echo "System has no bison, yacc or byacc - install one of them"
-	@echo "Otherwise do not modify $< - C compile $(*).tab.c in distribution"
+	@echo "Otherwise do not modify $< - C compile $(*).tab.c and $(*).tab.h in distribution"
 	test -f $(srcdir)/$(*).tab.c && touch $(srcdir)/$(*).tab.c
     endif
 

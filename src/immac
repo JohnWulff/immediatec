@@ -68,7 +68,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.25 $
+$Id: immac 1.26 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -249,7 +249,7 @@ if ($argv = shift @ARGV) {
     die "Too many input file arguments (only one allowed)" if scalar @ARGV;
     open $in, $argv or die "Cannot open iCa input file '$argv': $!";
     ($devIn, $inoIn) = stat $argv;	# prevent writing to the input file later
-    if ($argv =~ m/\.ic$/) {
+    if ($argv !~ m/\.ica$/ and not $opt_M and not $opt_Y) {
 	$opt_m = 1;			# force macro processing only unless $opt_t
     }
 } else {
@@ -293,7 +293,8 @@ if ($opt_t) {
     }
 }
 
-my $opt_m_or_opt_M = $opt_m || $opt_M || $opt_Y;
+my $opt_m_M_or_Y = ($opt_m or $opt_M or $opt_Y);
+print " opt_m = '$opt_m' opt_M = '$opt_M' opt_Y = '$opt_Y' opt_m_M_or_Y = '$opt_m_M_or_Y'\n" if $opt_T and not $opt_l;
 my $CdirectiveRegex = $opt_m ?		# only %#directives are excluded
     qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o  :
 		      $opt_M ?		# both #directives and %# directives are excluded
@@ -329,7 +330,7 @@ if (@opt_P) {
 	}
     }
 }
-if ($opt_m_or_opt_M) {			# -D -U only processed for <in>.ic iC files or if -m or -M
+if ($opt_m_M_or_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -Y
     if (@opt_D) {			# for compatibility with cpp
 	my ($df, $val);
 	foreach (@opt_D) {
@@ -622,10 +623,10 @@ sub process_file {
 			$blankLines++;		# count lines not output as blank lines
 			next Line;		# do not output lines in false blocks
 		    }
-		    if (not $opt_m_or_opt_M and (@block or $finBlock or $opt_L)) {
+		    if (not $opt_m_M_or_Y and (@block or $finBlock or $opt_L)) {
 			push(@block, "\$out .= $_\";\n");
 		    } else {
-			if ($opt_m_or_opt_M and $blankLines) {
+			if ($opt_m_M_or_Y and $blankLines) {
 			    blanks();		# print blank lines now
 			}
 			print;			# with direct print - cpp handles it
@@ -640,7 +641,7 @@ sub process_file {
 	    ########################################################################
 	    if ($directive or s/^\s*([%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1$2/) {
 		$mWarn = 1 if $opt_m and $directive eq "" and $1 eq "%";	# output Warning later for -m only
-		$blankLines++ if $opt_m_or_opt_M;	# since %define and #define lines are not output treat them as a blank line
+		$blankLines++ if $opt_m_M_or_Y;	# since %define and #define lines are not output treat them as a blank line
 		if (s/\\\s*$//) {		# test for and then remove trailing '\'
 		    chomp;			# %define or %undef line terminated by '\'
 		    s!(\s*(/[*/]).*)$! !;	# change C or C++ comment into 1 trailing space
@@ -657,7 +658,7 @@ sub process_file {
 	    #   If -m -M or -Y then 8 or more blank or directive lines are ignored
 	    #   # $. "file" is output instead (same as cpp)
 	    ########################################################################
-	    elsif ($opt_m_or_opt_M) {
+	    elsif ($opt_m_M_or_Y) {
 		if ($_ eq "\n") {
 		    $blankLines++;
 		    next Line;
@@ -689,7 +690,7 @@ sub process_file {
 	    #   NOTE: no brace counting is necessary - only look for next opening
 	    #   brace(s) after a FOR IF ELSE or ELSIF.				{
 	    ########################################################################
-	    if (not $opt_m_or_opt_M and
+	    if (not $opt_m_M_or_Y and
 		(m/(\bFOR\b|\bIF\b|\bELSE\b|\bELSIF\b|}|\[|\])/ or $FORline or $FORend or $SQline)) {
 		if ($FORline) {			# speeds up this scan
 		    s/^\s+//;			# delete leading blanks in follow on lines
@@ -941,7 +942,7 @@ no strict 'refs';
 			    if (open($in, $argv)) {
 				print LOG "### $_" if $opt_l;
 				print "//***** $_" if $opt_a;
-				if ($opt_m_or_opt_M) {
+				if ($opt_m_M_or_Y) {
 				    if (--$blankLines) {	# $blankLines is at least 1 because it is a directive
 					blanks();		# print blank lines now
 				    }
@@ -957,7 +958,7 @@ use strict 'refs';
 			}
 		    }
 		    elsif ($def =~ m/^[%#]error$/) {
-			if (not $opt_m_or_opt_M and $def eq "%error") {
+			if (not $opt_m_M_or_Y and $def eq "%error") {
 			    push(@lnErr, "//* Error: $def $macro\n");
 			    $r++;			# deliberate error
 			    unless ($opt_t) {
@@ -985,12 +986,12 @@ use strict 'refs';
 		next Line;				# do not output lines in false blocks
 	    }
 	    resolve_line();				# resolve  macros for the rest of the code
-	    if ($opt_m_or_opt_M) {
+	    if ($opt_m_M_or_Y) {
 		print;					# just output macro processed line for <in.ic>
 		next Line;
 	    }
 	    ########################################################################
-	    #   Analyse a code line - not done with -m or -M option or input file is <in.ic>
+	    #   Analyse a code line - not done with -m -M or -Y option or input file is <in.ic>
 	    ########################################################################
 	    do {
 		if ($opt_a) {
@@ -1074,7 +1075,7 @@ use strict 'refs';
 		#	{   }	iC/C compound statements blocks
 		#	{{  }}	blocks controlled by a FOR IF ELSE or ELSIF statement
 		#	\w+	words and numbers - any type of program atom
-		#	=   ;	statement delimiter to trigger a preceding/follow on in FOR
+		#	=   ;	statement delimiter to trigger a preceding/follow on in FOR {{
 		#	\S	any other non-space character starts new output after }}
 		#   check atoms in sequence - positions in line may change now
 		#   translate atoms only in square brackets in code, comments and strings
@@ -1656,7 +1657,7 @@ use strict 'refs';
 	    $argRef = pop(@argInfo);
 	    if (defined $argRef) {
 		($argv, $., $in) = @$argRef;	# restore previous file info
-		if ($opt_m_or_opt_M) {
+		if ($opt_m_M_or_Y) {
 		    my $l = $. + ((eof $in) ? 0 : 1);
 		    print "# $l \"$argv\" 2\n";	# # 8 "file" 2 // close an include file
 		}
@@ -1668,7 +1669,7 @@ use strict 'refs';
     ########################################################################
     #   If -m -M or -Y then output any blank lines at the end of the file
     ########################################################################
-    if (($opt_m_or_opt_M) && $blankLines) {
+    if (($opt_m_M_or_Y) and $blankLines) {
 	blanks();				# print blank lines now
     }
     ########################################################################
@@ -1843,7 +1844,7 @@ use warnings;
 		    $w++;			# warning found
 		}
 	    }
-	    if (not $opt_m_or_opt_M and $translate !~ m/^\s*\d+\s*$/ and $translate !~ m/[^ \t()\d*\/%+-]/) {
+	    if (not $opt_m_M_or_Y and $translate !~ m/^\s*\d+\s*$/ and $translate !~ m/[^ \t()\d*\/%+-]/) {
 		my $tran = eval $translate;	# not -m and not -M and not a constant but a constant expression
 		if ($@) {
 		    push(@lnErr, "//* Error: start of Perl eval File $argv, line $.\n");
@@ -2217,7 +2218,7 @@ sub remove_comment {
 
 ########################################################################
 #
-#   Print a group of blank lines (only when $opt_m or $opt_M)
+#   Print a group of blank lines (only when $opt_m $opt_M or $opt_Y)
 #
 ########################################################################
 
