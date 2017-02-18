@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c 1.44 $";
+"@(#)$Id: init.c 1.45 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -25,7 +25,6 @@ static const char init_c[] =
 #include	"comp.tab.h"
 
 Symbol *	iclock;			/* default clock */
-Symbol *	iconst;			/* pointer to Symbol "iConst" */
 Symbol *	icerr = 0;		/* pointer to Symbol "iCerr" */
 					/* ### insert generated data here ### */
 static BuiltIn	b[];
@@ -51,96 +50,96 @@ static List_e	l[];
  *******************************************************************/
 
 
-static Symbol	Da_1       = { .type=OR , .ftype=D_FF  , .fm=0x01, .u_blist=&l[13] };
+static Symbol	Da_1       = { .type=OR , .ftype=D_FF  , .fm=0x41, .u_blist=&l[13] };
 
-static Symbol	SR_a_2     = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[24] };
-static Symbol	SR_a_1     = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[22], .next=&SR_a_2 };
+static Symbol	SR_a_2     = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[24] };
+static Symbol	SR_a_1     = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[22], .next=&SR_a_2 };
 
-static Symbol	DR_a_2     = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[37] };
-static Symbol	DR_a_1     = { .type=OR , .ftype=D_FF  , .fm=0x01, .u_blist=&l[35], .next=&DR_a_2 };
+static Symbol	DR_a_2     = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[37] };
+static Symbol	DR_a_1     = { .type=OR , .ftype=D_FF  , .fm=0x41, .u_blist=&l[35], .next=&DR_a_2 };
 
-static Symbol	SRR_a_3    = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[53] };
-static Symbol	SRR_a_2    = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[51], .next=&SRR_a_3 };
-static Symbol	SRR_a_1    = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[49], .next=&SRR_a_2 };
+static Symbol	SRR_a_3    = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[53] };
+static Symbol	SRR_a_2    = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[51], .next=&SRR_a_3 };
+static Symbol	SRR_a_1    = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[49], .next=&SRR_a_2 };
 
-static Symbol	DSR_a_3    = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[71] };
-static Symbol	DSR_a_2    = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[69], .next=&DSR_a_3 };
-static Symbol	DSR_a_1    = { .type=OR , .ftype=D_FF  , .fm=0x01, .u_blist=&l[67], .next=&DSR_a_2 };
+static Symbol	DSR_a_3    = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[71] };
+static Symbol	DSR_a_2    = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[69], .next=&DSR_a_3 };
+static Symbol	DSR_a_1    = { .type=OR , .ftype=D_FF  , .fm=0x41, .u_blist=&l[67], .next=&DSR_a_2 };
 
-static Symbol	SHa_1      = { .type=ARN, .ftype=D_SH  , .fm=0x01, .u_blist=&l[83] };
+static Symbol	SHa_1      = { .type=ARN, .ftype=D_SH  , .fm=0x41, .u_blist=&l[83] };
 
-static Symbol	SHR_a_2    = { .type=OR , .ftype=R_SH  , .fm=0x01, .u_blist=&l[94] };
-static Symbol	SHR_a_1    = { .type=ARN, .ftype=D_SH  , .fm=0x01, .u_blist=&l[92], .next=&SHR_a_2 };
+static Symbol	SHR_a_2    = { .type=OR , .ftype=R_SH  , .fm=0x41, .u_blist=&l[94] };
+static Symbol	SHR_a_1    = { .type=ARN, .ftype=D_SH  , .fm=0x41, .u_blist=&l[92], .next=&SHR_a_2 };
 
-static Symbol	SHSR_a_3   = { .type=OR , .ftype=R_SH  , .fm=0x01, .u_blist=&l[110] };
-static Symbol	SHSR_a_2   = { .type=OR , .ftype=S_SH  , .fm=0x01, .u_blist=&l[108], .next=&SHSR_a_3 };
-static Symbol	SHSR_a_1   = { .type=ARN, .ftype=D_SH  , .fm=0x01, .u_blist=&l[106], .next=&SHSR_a_2 };
+static Symbol	SHSR_a_3   = { .type=OR , .ftype=R_SH  , .fm=0x41, .u_blist=&l[110] };
+static Symbol	SHSR_a_2   = { .type=OR , .ftype=S_SH  , .fm=0x41, .u_blist=&l[108], .next=&SHSR_a_3 };
+static Symbol	SHSR_a_1   = { .type=ARN, .ftype=D_SH  , .fm=0x41, .u_blist=&l[106], .next=&SHSR_a_2 };
 
-static Symbol	RISEa_1    = { .type=OR , .ftype=RI_BIT, .fm=0x01, .u_blist=&l[122] };
+static Symbol	RISEa_1    = { .type=OR , .ftype=RI_BIT, .fm=0x41, .u_blist=&l[122] };
 
-static Symbol	CHANGEa_1  = { .type=OR , .ftype=CH_BIT, .fm=0x01, .u_blist=&l[130] };
+static Symbol	CHANGEa_1  = { .type=OR , .ftype=CH_BIT, .fm=0x41, .u_blist=&l[130] };
 
-static Symbol	CHANGE2a_1 = { .type=ARN, .ftype=CH_AR , .fm=0x01, .u_blist=&l[138] };
+static Symbol	CHANGE2a_1 = { .type=ARN, .ftype=CH_AR , .fm=0x41, .u_blist=&l[138] };
 
-static Symbol	CLOCKa_1   = { .type=OR , .ftype=CLCK  , .fm=0x01, .u_blist=&l[146] };
+static Symbol	CLOCKa_1   = { .type=OR , .ftype=CLCK  , .fm=0x41, .u_blist=&l[146] };
 
-static Symbol	CLOCK2a_2  = { .type=OR , .ftype=CLCK  , .fm=0x01, .u_blist=&l[157] };
-static Symbol	CLOCK2a_1  = { .type=OR , .ftype=CLCK  , .fm=0x01, .u_blist=&l[155], .next=&CLOCK2a_2 };
+static Symbol	CLOCK2a_2  = { .type=OR , .ftype=CLCK  , .fm=0x41, .u_blist=&l[157] };
+static Symbol	CLOCK2a_1  = { .type=OR , .ftype=CLCK  , .fm=0x41, .u_blist=&l[155], .next=&CLOCK2a_2 };
 
-static Symbol	TIMERa_1   = { .type=OR , .ftype=TIMR  , .fm=0x01, .u_blist=&l[167] };
+static Symbol	TIMERa_1   = { .type=OR , .ftype=TIMR  , .fm=0x41, .u_blist=&l[167] };
 
-static Symbol	TIMER02a_2 = { .type=OR , .ftype=TIMR  , .fm=0x01, .u_blist=&l[178] };
-static Symbol	TIMER02a_1 = { .type=OR , .ftype=TIMR  , .fm=0x01, .u_blist=&l[176], .next=&TIMER02a_2 };
+static Symbol	TIMER02a_2 = { .type=OR , .ftype=TIMR  , .fm=0x41, .u_blist=&l[178] };
+static Symbol	TIMER02a_1 = { .type=OR , .ftype=TIMR  , .fm=0x41, .u_blist=&l[176], .next=&TIMER02a_2 };
 
-static Symbol	TIMER1a_1  = { .type=OR , .ftype=TIMR  , .fm=0x01, .u_blist=&l[188] };
+static Symbol	TIMER1a_1  = { .type=OR , .ftype=TIMR  , .fm=0x41, .u_blist=&l[188] };
 
-static Symbol	TIMER12a_2 = { .type=OR , .ftype=TIMR  , .fm=0x01, .u_blist=&l[199] };
-static Symbol	TIMER12a_1 = { .type=OR , .ftype=TIMR  , .fm=0x01, .u_blist=&l[197], .next=&TIMER12a_2 };
+static Symbol	TIMER12a_2 = { .type=OR , .ftype=TIMR  , .fm=0x41, .u_blist=&l[199] };
+static Symbol	TIMER12a_1 = { .type=OR , .ftype=TIMR  , .fm=0x41, .u_blist=&l[197], .next=&TIMER12a_2 };
 
-static Symbol	SRa_2      = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[212] };
-static Symbol	SRa_1      = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[210], .next=&SRa_2 };
+static Symbol	SRa_2      = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[212] };
+static Symbol	SRa_1      = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[210], .next=&SRa_2 };
 
-static Symbol	SRXa_2     = { .type=AND, .ftype=R_FF  , .fm=0x01, .u_blist=&l[226] };
-static Symbol	SRXa_1     = { .type=AND, .ftype=S_FF  , .fm=0x01, .u_blist=&l[223], .next=&SRXa_2 };
+static Symbol	SRXa_2     = { .type=AND, .ftype=R_FF  , .fm=0x41, .u_blist=&l[226] };
+static Symbol	SRXa_1     = { .type=AND, .ftype=S_FF  , .fm=0x41, .u_blist=&l[223], .next=&SRXa_2 };
 
-static Symbol	JKa_2      = { .type=AND, .ftype=R_FF  , .fm=0x01, .u_blist=&l[241] };
-static Symbol	JKa_1      = { .type=AND, .ftype=S_FF  , .fm=0x01, .u_blist=&l[238], .next=&JKa_2 };
+static Symbol	JKa_2      = { .type=AND, .ftype=R_FF  , .fm=0x41, .u_blist=&l[241] };
+static Symbol	JKa_1      = { .type=AND, .ftype=S_FF  , .fm=0x41, .u_blist=&l[238], .next=&JKa_2 };
 
-static Symbol	SRRa_3     = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[258] };
-static Symbol	SRRa_2     = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[256], .next=&SRRa_3 };
-static Symbol	SRRa_1     = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[254], .next=&SRRa_2 };
+static Symbol	SRRa_3     = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[258] };
+static Symbol	SRRa_2     = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[256], .next=&SRRa_3 };
+static Symbol	SRRa_1     = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[254], .next=&SRRa_2 };
 
-static Symbol	DRa_2      = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[278] };
-static Symbol	DRa_1      = { .type=OR , .ftype=D_FF  , .fm=0x01, .u_blist=&l[275], .next=&DRa_2 };
-static Symbol	DRa_4      = { .type=AND, .ftype=GATE  , .fm=0x01, .u_blist=&l[273], .next=&DRa_1 };
-static Symbol	DRa_3      = { .type=AND, .ftype=GATE  , .fm=0x01, .u_blist=&l[271], .next=&DRa_4 };
+static Symbol	DRa_2      = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[278] };
+static Symbol	DRa_1      = { .type=OR , .ftype=D_FF  , .fm=0x41, .u_blist=&l[275], .next=&DRa_2 };
+static Symbol	DRa_4      = { .type=AND, .ftype=GATE  , .fm=0x41, .u_blist=&l[273], .next=&DRa_1 };
+static Symbol	DRa_3      = { .type=AND, .ftype=GATE  , .fm=0x41, .u_blist=&l[271], .next=&DRa_4 };
 
-static Symbol	DSRa_3     = { .type=AND, .ftype=R_FF  , .fm=0x01, .u_blist=&l[304] };
-static Symbol	DSRa_2     = { .type=AND, .ftype=S_FF  , .fm=0x01, .u_blist=&l[301], .next=&DSRa_3 };
-static Symbol	DSRa_1     = { .type=OR , .ftype=D_FF  , .fm=0x01, .u_blist=&l[298], .next=&DSRa_2 };
-static Symbol	DSRa_5     = { .type=AND, .ftype=GATE  , .fm=0x01, .u_blist=&l[296], .next=&DSRa_1 };
-static Symbol	DSRa_4     = { .type=AND, .ftype=GATE  , .fm=0x01, .u_blist=&l[294], .next=&DSRa_5 };
+static Symbol	DSRa_3     = { .type=AND, .ftype=R_FF  , .fm=0x41, .u_blist=&l[304] };
+static Symbol	DSRa_2     = { .type=AND, .ftype=S_FF  , .fm=0x41, .u_blist=&l[301], .next=&DSRa_3 };
+static Symbol	DSRa_1     = { .type=OR , .ftype=D_FF  , .fm=0x41, .u_blist=&l[298], .next=&DSRa_2 };
+static Symbol	DSRa_5     = { .type=AND, .ftype=GATE  , .fm=0x41, .u_blist=&l[296], .next=&DSRa_1 };
+static Symbol	DSRa_4     = { .type=AND, .ftype=GATE  , .fm=0x41, .u_blist=&l[294], .next=&DSRa_5 };
 
-static Symbol	SHRa_2     = { .type=OR , .ftype=R_SH  , .fm=0x01, .u_blist=&l[323] };
-static Symbol	SHRa_1     = { .type=ARN, .ftype=D_SH  , .fm=0x01, .u_blist=&l[319], .next=&SHRa_2 };
-static Symbol	SHRa_3     = { .type=OR , .ftype=ARITH , .fm=0x01, .u_blist=&l[318], .next=&SHRa_1 };
+static Symbol	SHRa_2     = { .type=OR , .ftype=R_SH  , .fm=0x41, .u_blist=&l[323] };
+static Symbol	SHRa_1     = { .type=ARN, .ftype=D_SH  , .fm=0x41, .u_blist=&l[319], .next=&SHRa_2 };
+static Symbol	SHRa_3     = { .type=OR , .ftype=ARITH , .fm=0x41, .u_blist=&l[318], .next=&SHRa_1 };
 
-static Symbol	SHSRa_3    = { .type=AND, .ftype=R_SH  , .fm=0x01, .u_blist=&l[344] };
-static Symbol	SHSRa_2    = { .type=AND, .ftype=S_SH  , .fm=0x01, .u_blist=&l[341], .next=&SHSRa_3 };
-static Symbol	SHSRa_1    = { .type=ARN, .ftype=D_SH  , .fm=0x01, .u_blist=&l[337], .next=&SHSRa_2 };
-static Symbol	SHSRa_4    = { .type=OR , .ftype=ARITH , .fm=0x01, .u_blist=&l[335], .next=&SHSRa_1 };
+static Symbol	SHSRa_3    = { .type=AND, .ftype=R_SH  , .fm=0x41, .u_blist=&l[344] };
+static Symbol	SHSRa_2    = { .type=AND, .ftype=S_SH  , .fm=0x41, .u_blist=&l[341], .next=&SHSRa_3 };
+static Symbol	SHSRa_1    = { .type=ARN, .ftype=D_SH  , .fm=0x41, .u_blist=&l[337], .next=&SHSRa_2 };
+static Symbol	SHSRa_4    = { .type=OR , .ftype=ARITH , .fm=0x41, .u_blist=&l[335], .next=&SHSRa_1 };
 
-static Symbol	STa_2      = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[360] };
-static Symbol	STa_1      = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[358], .next=&STa_2 };
+static Symbol	STa_2      = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[360] };
+static Symbol	STa_1      = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[358], .next=&STa_2 };
 
-static Symbol	SRTa_3     = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[375] };
-static Symbol	SRTa_2     = { .type=OR , .ftype=R_FF  , .fm=0x01, .u_blist=&l[373], .next=&SRTa_3 };
-static Symbol	SRTa_1     = { .type=OR , .ftype=S_FF  , .fm=0x01, .u_blist=&l[371], .next=&SRTa_2 };
+static Symbol	SRTa_3     = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[375] };
+static Symbol	SRTa_2     = { .type=OR , .ftype=R_FF  , .fm=0x41, .u_blist=&l[373], .next=&SRTa_3 };
+static Symbol	SRTa_1     = { .type=OR , .ftype=S_FF  , .fm=0x41, .u_blist=&l[371], .next=&SRTa_2 };
 
-static Symbol	FALLa_1    = { .type=OR , .ftype=RI_BIT, .fm=0x01, .u_blist=&l[386] };
+static Symbol	FALLa_1    = { .type=OR , .ftype=RI_BIT, .fm=0x41, .u_blist=&l[386] };
 
 
-static Symbol	DLATCHa_1  = { .type=LATCH, .ftype=D_FF  , .fm=0x01, .u_blist=&l[402] };
+static Symbol	DLATCHa_1  = { .type=LATCH, .ftype=D_FF  , .fm=0x41, .u_blist=&l[402] };
 
 
 /********************************************************************
@@ -646,212 +645,212 @@ static BuiltIn b[] = {
 /*  "name"           type   ftype  fm    list     blist    link1    link2/glist     */
 
   { "FORCE",       IFUNCT,  GATE,  0x3f, &l[6]  , &l[1]  , &l[0]  , 0               },	/* 0 pre-installed "FORCE" function block */
-  { "FORCE@",        LATCH, GATE,  0x80, &l[0]  , &l[3]  , &l[1]  , 0               },
-  { "FORCE@arg1",    OR,    GATE,  0xc1, 0      , 0      , &l[3]  , &l[6]           },
-  { "FORCE@on",      OR,    GATE,  0xc1, 0      , 0      , &l[4]  , &l[7]           },
-  { "FORCE@off",     OR,    GATE,  0xc1, 0      , 0      , &l[5]  , &l[8]           },
+  { "FORCE@",        LATCH, GATE,  0x8d, &l[0]  , &l[3]  , &l[1]  , 0               },
+  { "FORCE@arg1",    OR,    GATE,  0x85, 0      , 0      , &l[3]  , &l[6]           },
+  { "FORCE@on",      OR,    GATE,  0x85, 0      , 0      , &l[4]  , &l[7]           },
+  { "FORCE@off",     OR,    GATE,  0x85, 0      , 0      , &l[5]  , &l[8]           },
 
   { "D",           IFUNCT,  GATE,  0x03, &l[15] , &l[10] , &l[9]  , 0               },	/* 5 pre-installed "D" function block */
-  { "D@",            FF,    GATE,  0x80, &l[9]  , &l[12] , &l[10] , 0               },
-  { "D@expr",        OR,    GATE,  0xc1, 0      , 0      , &l[14] , &l[15]          },
-  { "D@dcl",         CLK,   CLCKL, 0xc1, 0      , 0      , &l[13] , &l[16]          },
+  { "D@",            FF,    GATE,  0x8d, &l[9]  , &l[12] , &l[10] , 0               },
+  { "D@expr",        OR,    GATE,  0x85, 0      , 0      , &l[14] , &l[15]          },
+  { "D@dcl",         CLK,   CLCKL, 0x85, 0      , 0      , &l[13] , &l[16]          },
 
   { "SR_",         IFUNCT,  GATE,  0x0f, &l[26] , &l[18] , &l[17] , 0               },	/* 9 pre-installed "SR_" function block */
-  { "SR_@",          FF,    GATE,  0x80, &l[17] , &l[20] , &l[18] , 0               },
-  { "SR_@set",       OR,    GATE,  0xc1, 0      , 0      , &l[23] , &l[26]          },
-  { "SR_@scl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[22] , &l[27]          },
-  { "SR_@res",       OR,    GATE,  0xc1, 0      , 0      , &l[25] , &l[28]          },
-  { "SR_@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[24] , &l[29]          },
+  { "SR_@",          FF,    GATE,  0x8d, &l[17] , &l[20] , &l[18] , 0               },
+  { "SR_@set",       OR,    GATE,  0x85, 0      , 0      , &l[23] , &l[26]          },
+  { "SR_@scl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[22] , &l[27]          },
+  { "SR_@res",       OR,    GATE,  0x85, 0      , 0      , &l[25] , &l[28]          },
+  { "SR_@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[24] , &l[29]          },
 
   { "DR_",         IFUNCT,  GATE,  0x0f, &l[39] , &l[31] , &l[30] , 0               },	/* 15 pre-installed "DR_" function block */
-  { "DR_@",          FF,    GATE,  0x80, &l[30] , &l[33] , &l[31] , 0               },
-  { "DR_@expr",      OR,    GATE,  0xc1, 0      , 0      , &l[36] , &l[39]          },
-  { "DR_@dcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[35] , &l[40]          },
-  { "DR_@res",       OR,    GATE,  0xc1, 0      , 0      , &l[38] , &l[41]          },
-  { "DR_@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[37] , &l[42]          },
+  { "DR_@",          FF,    GATE,  0x8d, &l[30] , &l[33] , &l[31] , 0               },
+  { "DR_@expr",      OR,    GATE,  0x85, 0      , 0      , &l[36] , &l[39]          },
+  { "DR_@dcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[35] , &l[40]          },
+  { "DR_@res",       OR,    GATE,  0x85, 0      , 0      , &l[38] , &l[41]          },
+  { "DR_@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[37] , &l[42]          },
 
   { "SRR_",        IFUNCT,  GATE,  0x3f, &l[55] , &l[44] , &l[43] , 0               },	/* 21 pre-installed "SRR_" function block */
-  { "SRR_@",         FF,    GATE,  0x80, &l[43] , &l[46] , &l[44] , 0               },
-  { "SRR_@set",      OR,    GATE,  0xc1, 0      , 0      , &l[50] , &l[55]          },
-  { "SRR_@scl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[49] , &l[56]          },
-  { "SRR_@res",      OR,    GATE,  0xc1, 0      , 0      , &l[52] , &l[57]          },
-  { "SRR_@rcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[51] , &l[58]          },
-  { "SRR_@res2",     OR,    GATE,  0xc1, 0      , 0      , &l[54] , &l[59]          },
-  { "SRR_@r2cl",     CLK,   CLCKL, 0xc1, 0      , 0      , &l[53] , &l[60]          },
+  { "SRR_@",         FF,    GATE,  0x8d, &l[43] , &l[46] , &l[44] , 0               },
+  { "SRR_@set",      OR,    GATE,  0x85, 0      , 0      , &l[50] , &l[55]          },
+  { "SRR_@scl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[49] , &l[56]          },
+  { "SRR_@res",      OR,    GATE,  0x85, 0      , 0      , &l[52] , &l[57]          },
+  { "SRR_@rcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[51] , &l[58]          },
+  { "SRR_@res2",     OR,    GATE,  0x85, 0      , 0      , &l[54] , &l[59]          },
+  { "SRR_@r2cl",     CLK,   CLCKL, 0x85, 0      , 0      , &l[53] , &l[60]          },
 
   { "DSR_",        IFUNCT,  GATE,  0x3f, &l[73] , &l[62] , &l[61] , 0               },	/* 29 pre-installed "DSR_" function block */
-  { "DSR_@",         FF,    GATE,  0x80, &l[61] , &l[64] , &l[62] , 0               },
-  { "DSR_@expr",     OR,    GATE,  0xc1, 0      , 0      , &l[68] , &l[73]          },
-  { "DSR_@dcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[67] , &l[74]          },
-  { "DSR_@set",      OR,    GATE,  0xc1, 0      , 0      , &l[70] , &l[75]          },
-  { "DSR_@scl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[69] , &l[76]          },
-  { "DSR_@res",      OR,    GATE,  0xc1, 0      , 0      , &l[72] , &l[77]          },
-  { "DSR_@rcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[71] , &l[78]          },
+  { "DSR_@",         FF,    GATE,  0x8d, &l[61] , &l[64] , &l[62] , 0               },
+  { "DSR_@expr",     OR,    GATE,  0x85, 0      , 0      , &l[68] , &l[73]          },
+  { "DSR_@dcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[67] , &l[74]          },
+  { "DSR_@set",      OR,    GATE,  0x85, 0      , 0      , &l[70] , &l[75]          },
+  { "DSR_@scl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[69] , &l[76]          },
+  { "DSR_@res",      OR,    GATE,  0x85, 0      , 0      , &l[72] , &l[77]          },
+  { "DSR_@rcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[71] , &l[78]          },
 
   { "SH",          IFUNCT,  ARITH, 0x03, &l[85] , &l[80] , &l[79] , 0               },	/* 37 pre-installed "SH" function block */
-  { "SH@",           SH,    ARITH, 0x80, &l[79] , &l[82] , &l[80] , 0               },
-  { "SH@dat",        ARN,   ARITH, 0xc1, 0      , 0      , &l[84] , &l[85]          },
-  { "SH@dcl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[83] , &l[86]          },
+  { "SH@",           SH,    ARITH, 0x8d, &l[79] , &l[82] , &l[80] , 0               },
+  { "SH@dat",        ARN,   ARITH, 0x85, 0      , 0      , &l[84] , &l[85]          },
+  { "SH@dcl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[83] , &l[86]          },
 
   { "SHR_",        IFUNCT,  ARITH, 0x0f, &l[96] , &l[88] , &l[87] , 0               },	/* 41 pre-installed "SHR_" function block */
-  { "SHR_@",         SH,    ARITH, 0x80, &l[87] , &l[90] , &l[88] , 0               },
-  { "SHR_@dat",      ARN,   ARITH, 0xc1, 0      , 0      , &l[93] , &l[96]          },
-  { "SHR_@dcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[92] , &l[97]          },
-  { "SHR_@res",      OR,    GATE,  0xc1, 0      , 0      , &l[95] , &l[98]          },
-  { "SHR_@rcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[94] , &l[99]          },
+  { "SHR_@",         SH,    ARITH, 0x8d, &l[87] , &l[90] , &l[88] , 0               },
+  { "SHR_@dat",      ARN,   ARITH, 0x85, 0      , 0      , &l[93] , &l[96]          },
+  { "SHR_@dcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[92] , &l[97]          },
+  { "SHR_@res",      OR,    GATE,  0x85, 0      , 0      , &l[95] , &l[98]          },
+  { "SHR_@rcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[94] , &l[99]          },
 
   { "SHSR_",       IFUNCT,  ARITH, 0x3f, &l[112], &l[101], &l[100], 0               },	/* 47 pre-installed "SHSR_" function block */
-  { "SHSR_@",        SH,    ARITH, 0x80, &l[100], &l[103], &l[101], 0               },
-  { "SHSR_@dat",     ARN,   ARITH, 0xc1, 0      , 0      , &l[107], &l[112]         },
-  { "SHSR_@dcl",     CLK,   CLCKL, 0xc1, 0      , 0      , &l[106], &l[113]         },
-  { "SHSR_@set",     OR,    GATE,  0xc1, 0      , 0      , &l[109], &l[114]         },
-  { "SHSR_@scl",     CLK,   CLCKL, 0xc1, 0      , 0      , &l[108], &l[115]         },
-  { "SHSR_@res",     OR,    GATE,  0xc1, 0      , 0      , &l[111], &l[116]         },
-  { "SHSR_@rcl",     CLK,   CLCKL, 0xc1, 0      , 0      , &l[110], &l[117]         },
+  { "SHSR_@",        SH,    ARITH, 0x8d, &l[100], &l[103], &l[101], 0               },
+  { "SHSR_@dat",     ARN,   ARITH, 0x85, 0      , 0      , &l[107], &l[112]         },
+  { "SHSR_@dcl",     CLK,   CLCKL, 0x85, 0      , 0      , &l[106], &l[113]         },
+  { "SHSR_@set",     OR,    GATE,  0x85, 0      , 0      , &l[109], &l[114]         },
+  { "SHSR_@scl",     CLK,   CLCKL, 0x85, 0      , 0      , &l[108], &l[115]         },
+  { "SHSR_@res",     OR,    GATE,  0x85, 0      , 0      , &l[111], &l[116]         },
+  { "SHSR_@rcl",     CLK,   CLCKL, 0x85, 0      , 0      , &l[110], &l[117]         },
 
   { "RISE",        IFUNCT,  GATE,  0x03, &l[124], &l[119], &l[118], 0               },	/* 55 pre-installed "RISE" function block */
-  { "RISE@",         EF,    GATE,  0x80, &l[118], &l[121], &l[119], 0               },
-  { "RISE@trig",     OR,    GATE,  0xc1, 0      , 0      , &l[123], &l[124]         },
-  { "RISE@clk",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[122], &l[125]         },
+  { "RISE@",         EF,    GATE,  0x8d, &l[118], &l[121], &l[119], 0               },
+  { "RISE@trig",     OR,    GATE,  0x85, 0      , 0      , &l[123], &l[124]         },
+  { "RISE@clk",      CLK,   CLCKL, 0x85, 0      , 0      , &l[122], &l[125]         },
 
   { "CHANGE",      IFUNCT,  GATE,  0x01, &l[132], &l[127], &l[126], 0               },	/* 59 pre-installed "CHANGE" function block */
-  { "CHANGE@",       VF,    GATE,  0x80, &l[126], &l[129], &l[127], 0               },
-  { "CHANGE@trig",   OR,    GATE,  0xc1, 0      , 0      , &l[131], &l[132]         },
-  { "CHANGE@clk",    CLK,   CLCKL, 0xc1, 0      , 0      , &l[130], &l[133]         },
+  { "CHANGE@",       VF,    GATE,  0x8d, &l[126], &l[129], &l[127], 0               },
+  { "CHANGE@trig",   OR,    GATE,  0x85, 0      , 0      , &l[131], &l[132]         },
+  { "CHANGE@clk",    CLK,   CLCKL, 0x85, 0      , 0      , &l[130], &l[133]         },
 
   { "CHANGE2",     IFUNCT,  GATE,  0x02, &l[140], &l[135], &l[134], (List_e*)&b[59] },	/* 63 pre-installed "CHANGE2" alternate "CHANGE" */
-  { "CHANGE2@",      VF,    GATE,  0x80, &l[134], &l[137], &l[135], 0               },
-  { "CHANGE2@val",   ARN,   ARITH, 0xc1, 0      , 0      , &l[139], &l[140]         },
-  { "CHANGE2@clk",   CLK,   CLCKL, 0xc1, 0      , 0      , &l[138], &l[141]         },
+  { "CHANGE2@",      VF,    GATE,  0x8d, &l[134], &l[137], &l[135], 0               },
+  { "CHANGE2@val",   ARN,   ARITH, 0x85, 0      , 0      , &l[139], &l[140]         },
+  { "CHANGE2@clk",   CLK,   CLCKL, 0x85, 0      , 0      , &l[138], &l[141]         },
 
   { "CLOCK",       IFUNCT,  CLCKL, 0x03, &l[148], &l[143], &l[142], 0               },	/* 67 pre-installed "CLOCK" function block */
-  { "CLOCK@",        CLK,   CLCKL, 0x80, &l[142], &l[145], &l[143], 0               },
-  { "CLOCK@trig",    OR,    GATE,  0xc1, 0      , 0      , &l[147], &l[148]         },
-  { "CLOCK@clk",     CLK,   CLCKL, 0xc1, 0      , 0      , &l[146], &l[149]         },
+  { "CLOCK@",        CLK,   CLCKL, 0x8d, &l[142], &l[145], &l[143], 0               },
+  { "CLOCK@trig",    OR,    GATE,  0x85, 0      , 0      , &l[147], &l[148]         },
+  { "CLOCK@clk",     CLK,   CLCKL, 0x85, 0      , 0      , &l[146], &l[149]         },
 
   { "CLOCK2",      IFUNCT,  CLCKL, 0x0f, &l[159], &l[151], &l[150], (List_e*)&b[67] },	/* 71 pre-installed "CLOCK2" alternate "CLOCK" */
-  { "CLOCK2@",       CLK,   CLCKL, 0x80, &l[150], &l[153], &l[151], 0               },
-  { "CLOCK2@trig",   OR,    GATE,  0xc1, 0      , 0      , &l[156], &l[159]         },
-  { "CLOCK2@clk",    CLK,   CLCKL, 0xc1, 0      , 0      , &l[155], &l[160]         },
-  { "CLOCK2@trig2",  OR,    GATE,  0xc1, 0      , 0      , &l[158], &l[161]         },
-  { "CLOCK2@clk2",   CLK,   CLCKL, 0xc1, 0      , 0      , &l[157], &l[162]         },
+  { "CLOCK2@",       CLK,   CLCKL, 0x8d, &l[150], &l[153], &l[151], 0               },
+  { "CLOCK2@trig",   OR,    GATE,  0x85, 0      , 0      , &l[156], &l[159]         },
+  { "CLOCK2@clk",    CLK,   CLCKL, 0x85, 0      , 0      , &l[155], &l[160]         },
+  { "CLOCK2@trig2",  OR,    GATE,  0x85, 0      , 0      , &l[158], &l[161]         },
+  { "CLOCK2@clk2",   CLK,   CLCKL, 0x85, 0      , 0      , &l[157], &l[162]         },
 
   { "TIMER",       IFUNCT,  TIMRL, 0x03, &l[169], &l[164], &l[163], 0               },	/* 77 pre-installed "TIMER" function block */
-  { "TIMER@",        TIM,   TIMRL, 0x80, &l[163], &l[166], &l[164], 0               },
-  { "TIMER@trig",    OR,    GATE,  0xc1, 0      , 0      , &l[168], &l[169]         },
-  { "TIMER@clk",     CLK,   CLCKL, 0xc1, 0      , 0      , &l[167], &l[170]         },
+  { "TIMER@",        TIM,   TIMRL, 0x8d, &l[163], &l[166], &l[164], 0               },
+  { "TIMER@trig",    OR,    GATE,  0x85, 0      , 0      , &l[168], &l[169]         },
+  { "TIMER@clk",     CLK,   CLCKL, 0x85, 0      , 0      , &l[167], &l[170]         },
 
   { "TIMER02",     IFUNCT,  TIMRL, 0x0f, &l[180], &l[172], &l[171], (List_e*)&b[77] },	/* 81 pre-installed "TIMER02" alternate "TIMER" */
-  { "TIMER02@",      TIM,   TIMRL, 0x80, &l[171], &l[174], &l[172], 0               },
-  { "TIMER02@trig",  OR,    GATE,  0xc1, 0      , 0      , &l[177], &l[180]         },
-  { "TIMER02@clk",   CLK,   CLCKL, 0xc1, 0      , 0      , &l[176], &l[181]         },
-  { "TIMER02@trig2", OR,    GATE,  0xc1, 0      , 0      , &l[179], &l[182]         },
-  { "TIMER02@clk2",  CLK,   CLCKL, 0xc1, 0      , 0      , &l[178], &l[183]         },
+  { "TIMER02@",      TIM,   TIMRL, 0x8d, &l[171], &l[174], &l[172], 0               },
+  { "TIMER02@trig",  OR,    GATE,  0x85, 0      , 0      , &l[177], &l[180]         },
+  { "TIMER02@clk",   CLK,   CLCKL, 0x85, 0      , 0      , &l[176], &l[181]         },
+  { "TIMER02@trig2", OR,    GATE,  0x85, 0      , 0      , &l[179], &l[182]         },
+  { "TIMER02@clk2",  CLK,   CLCKL, 0x85, 0      , 0      , &l[178], &l[183]         },
 
   { "TIMER1",      IFUNCT,  TIMRL, 0x03, &l[190], &l[185], &l[184], 0               },	/* 87 pre-installed "TIMER1" function block */
-  { "TIMER1@",       TIM,   TIMRL, 0x80, &l[184], &l[187], &l[185], 0               },
-  { "TIMER1@trig",   OR,    GATE,  0xc1, 0      , 0      , &l[189], &l[190]         },
-  { "TIMER1@clk",    CLK,   CLCKL, 0xc1, 0      , 0      , &l[188], &l[191]         },
+  { "TIMER1@",       TIM,   TIMRL, 0x8d, &l[184], &l[187], &l[185], 0               },
+  { "TIMER1@trig",   OR,    GATE,  0x85, 0      , 0      , &l[189], &l[190]         },
+  { "TIMER1@clk",    CLK,   CLCKL, 0x85, 0      , 0      , &l[188], &l[191]         },
 
   { "TIMER12",     IFUNCT,  TIMRL, 0x0f, &l[201], &l[193], &l[192], (List_e*)&b[87] },	/* 91 pre-installed "TIMER12" alternate "TIMER1" */
-  { "TIMER12@",      TIM,   TIMRL, 0x80, &l[192], &l[195], &l[193], 0               },
-  { "TIMER12@trig",  OR,    GATE,  0xc1, 0      , 0      , &l[198], &l[201]         },
-  { "TIMER12@clk",   CLK,   CLCKL, 0xc1, 0      , 0      , &l[197], &l[202]         },
-  { "TIMER12@trig2", OR,    GATE,  0xc1, 0      , 0      , &l[200], &l[203]         },
-  { "TIMER12@clk2",  CLK,   CLCKL, 0xc1, 0      , 0      , &l[199], &l[204]         },
+  { "TIMER12@",      TIM,   TIMRL, 0x8d, &l[192], &l[195], &l[193], 0               },
+  { "TIMER12@trig",  OR,    GATE,  0x85, 0      , 0      , &l[198], &l[201]         },
+  { "TIMER12@clk",   CLK,   CLCKL, 0x85, 0      , 0      , &l[197], &l[202]         },
+  { "TIMER12@trig2", OR,    GATE,  0x85, 0      , 0      , &l[200], &l[203]         },
+  { "TIMER12@clk2",  CLK,   CLCKL, 0x85, 0      , 0      , &l[199], &l[204]         },
 
   { "SR",          IFUNCT,  GATE,  0x0f, &l[214], &l[206], &l[205], 0               },	/* 97 pre-installed "SR" function block */
-  { "SR@",           FF,    GATE,  0x80, &l[205], &l[208], &l[206], 0               },
-  { "SR@set",        OR,    GATE,  0xc1, 0      , 0      , &l[211], &l[214]         },
-  { "SR@scl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[210], &l[215]         },
-  { "SR@res",        OR,    GATE,  0xc1, 0      , 0      , &l[213], &l[216]         },
-  { "SR@rcl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[212], &l[217]         },
+  { "SR@",           FF,    GATE,  0x8d, &l[205], &l[208], &l[206], 0               },
+  { "SR@set",        OR,    GATE,  0x85, 0      , 0      , &l[211], &l[214]         },
+  { "SR@scl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[210], &l[215]         },
+  { "SR@res",        OR,    GATE,  0x85, 0      , 0      , &l[213], &l[216]         },
+  { "SR@rcl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[212], &l[217]         },
 
   { "SRX",         IFUNCT,  GATE,  0x0f, &l[229], &l[219], &l[218], 0               },	/* 103 pre-installed "SRX" function block */
-  { "SRX@",          FF,    GATE,  0x80, &l[218], &l[221], &l[219], 0               },
-  { "SRX@set",       OR,    GATE,  0xc2, 0      , 0      , &l[227], &l[229]         },
-  { "SRX@scl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[223], &l[230]         },
-  { "SRX@res",       OR,    GATE,  0xc2, 0      , 0      , &l[228], &l[231]         },
-  { "SRX@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[226], &l[232]         },
+  { "SRX@",          FF,    GATE,  0x8d, &l[218], &l[221], &l[219], 0               },
+  { "SRX@set",       OR,    GATE,  0x86, 0      , 0      , &l[227], &l[229]         },
+  { "SRX@scl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[223], &l[230]         },
+  { "SRX@res",       OR,    GATE,  0x86, 0      , 0      , &l[228], &l[231]         },
+  { "SRX@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[226], &l[232]         },
 
   { "JK",          IFUNCT,  GATE,  0x0f, &l[244], &l[234], &l[233], 0               },	/* 109 pre-installed "JK" function block */
-  { "JK@",           FF,    GATE,  0x82, &l[233], &l[236], &l[234], &l[242]         },
-  { "JK@set",        OR,    GATE,  0xc1, 0      , 0      , &l[240], &l[244]         },
-  { "JK@scl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[238], &l[245]         },
-  { "JK@res",        OR,    GATE,  0xc1, 0      , 0      , &l[243], &l[246]         },
-  { "JK@rcl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[241], &l[247]         },
+  { "JK@",           FF,    GATE,  0x8e, &l[233], &l[236], &l[234], &l[242]         },
+  { "JK@set",        OR,    GATE,  0x85, 0      , 0      , &l[240], &l[244]         },
+  { "JK@scl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[238], &l[245]         },
+  { "JK@res",        OR,    GATE,  0x85, 0      , 0      , &l[243], &l[246]         },
+  { "JK@rcl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[241], &l[247]         },
 
   { "SRR",         IFUNCT,  GATE,  0x3f, &l[260], &l[249], &l[248], 0               },	/* 115 pre-installed "SRR" function block */
-  { "SRR@",          FF,    GATE,  0x80, &l[248], &l[251], &l[249], 0               },
-  { "SRR@set",       OR,    GATE,  0xc1, 0      , 0      , &l[255], &l[260]         },
-  { "SRR@scl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[254], &l[261]         },
-  { "SRR@res",       OR,    GATE,  0xc1, 0      , 0      , &l[257], &l[262]         },
-  { "SRR@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[256], &l[263]         },
-  { "SRR@res2",      OR,    GATE,  0xc1, 0      , 0      , &l[259], &l[264]         },
-  { "SRR@r2cl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[258], &l[265]         },
+  { "SRR@",          FF,    GATE,  0x8d, &l[248], &l[251], &l[249], 0               },
+  { "SRR@set",       OR,    GATE,  0x85, 0      , 0      , &l[255], &l[260]         },
+  { "SRR@scl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[254], &l[261]         },
+  { "SRR@res",       OR,    GATE,  0x85, 0      , 0      , &l[257], &l[262]         },
+  { "SRR@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[256], &l[263]         },
+  { "SRR@res2",      OR,    GATE,  0x85, 0      , 0      , &l[259], &l[264]         },
+  { "SRR@r2cl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[258], &l[265]         },
 
   { "DR",          IFUNCT,  GATE,  0x0f, &l[280], &l[267], &l[266], 0               },	/* 123 pre-installed "DR" function block */
-  { "DR@",           FF,    GATE,  0x81, &l[266], &l[269], &l[267], &l[273]         },
-  { "DR@dat",        OR,    GATE,  0xc1, 0      , 0      , &l[271], &l[280]         },
-  { "DR@dcl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[275], &l[281]         },
-  { "DR@res",        OR,    GATE,  0xc2, 0      , 0      , &l[279], &l[282]         },
-  { "DR@rcl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[278], &l[283]         },
+  { "DR@",           FF,    GATE,  0x8e, &l[266], &l[269], &l[267], &l[273]         },
+  { "DR@dat",        OR,    GATE,  0x85, 0      , 0      , &l[271], &l[280]         },
+  { "DR@dcl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[275], &l[281]         },
+  { "DR@res",        OR,    GATE,  0x86, 0      , 0      , &l[279], &l[282]         },
+  { "DR@rcl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[278], &l[283]         },
 
-  { "DSR@i",         OR,    GATE,  0x82, 0      , &l[289], &l[297], 0               },
+  { "DSR@i",         OR,    GATE,  0x8a, 0      , &l[289], &l[297], 0               },
   { "DSR",         IFUNCT,  GATE,  0x3f, &l[307], &l[284], &l[286], 0               },	/* 130 pre-installed "DSR" function block */
-  { "DSR@",          FF,    GATE,  0x81, &l[286], &l[291], &l[287], &l[296]         },
-  { "DSR@dat",       OR,    GATE,  0xc1, 0      , 0      , &l[294], &l[307]         },
-  { "DSR@dcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[298], &l[308]         },
-  { "DSR@set",       OR,    GATE,  0xc2, 0      , 0      , &l[305], &l[309]         },
-  { "DSR@scl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[301], &l[310]         },
-  { "DSR@res",       OR,    GATE,  0xc2, 0      , 0      , &l[306], &l[311]         },
-  { "DSR@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[304], &l[312]         },
+  { "DSR@",          FF,    GATE,  0x8e, &l[286], &l[291], &l[287], &l[296]         },
+  { "DSR@dat",       OR,    GATE,  0x85, 0      , 0      , &l[294], &l[307]         },
+  { "DSR@dcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[298], &l[308]         },
+  { "DSR@set",       OR,    GATE,  0x86, 0      , 0      , &l[305], &l[309]         },
+  { "DSR@scl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[301], &l[310]         },
+  { "DSR@res",       OR,    GATE,  0x86, 0      , 0      , &l[306], &l[311]         },
+  { "DSR@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[304], &l[312]         },
 
   { "SHR",         IFUNCT,  ARITH, 0x0f, &l[325], &l[314], &l[313], 0               },	/* 138 pre-installed "SHR" function block */
-  { "SHR@",          SH,    ARITH, 0x81, &l[313], &l[316], &l[314], &l[321]         },
-  { "SHR@dat",       ARN,   ARITH, 0xc1, 0      , 0      , &l[322], &l[325]         },
-  { "SHR@dcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[319], &l[326]         },
-  { "SHR@res",       OR,    GATE,  0xc2, 0      , 0      , &l[324], &l[327]         },
-  { "SHR@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[323], &l[328]         },
+  { "SHR@",          SH,    ARITH, 0x8e, &l[313], &l[316], &l[314], &l[321]         },
+  { "SHR@dat",       ARN,   ARITH, 0x85, 0      , 0      , &l[322], &l[325]         },
+  { "SHR@dcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[319], &l[326]         },
+  { "SHR@res",       OR,    GATE,  0x86, 0      , 0      , &l[324], &l[327]         },
+  { "SHR@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[323], &l[328]         },
 
   { "SHSR",        IFUNCT,  ARITH, 0x3f, &l[347], &l[330], &l[329], 0               },	/* 144 pre-installed "SHSR" function block */
-  { "SHSR@",         SH,    ARITH, 0x81, &l[329], &l[332], &l[330], &l[339]         },
-  { "SHSR@dat",      ARN,   ARITH, 0xc1, 0      , 0      , &l[340], &l[347]         },
-  { "SHSR@dcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[337], &l[348]         },
-  { "SHSR@set",      OR,    GATE,  0xc2, 0      , 0      , &l[345], &l[349]         },
-  { "SHSR@scl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[341], &l[350]         },
-  { "SHSR@res",      OR,    GATE,  0xc2, 0      , 0      , &l[346], &l[351]         },
-  { "SHSR@rcl",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[344], &l[352]         },
+  { "SHSR@",         SH,    ARITH, 0x8e, &l[329], &l[332], &l[330], &l[339]         },
+  { "SHSR@dat",      ARN,   ARITH, 0x85, 0      , 0      , &l[340], &l[347]         },
+  { "SHSR@dcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[337], &l[348]         },
+  { "SHSR@set",      OR,    GATE,  0x86, 0      , 0      , &l[345], &l[349]         },
+  { "SHSR@scl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[341], &l[350]         },
+  { "SHSR@res",      OR,    GATE,  0x86, 0      , 0      , &l[346], &l[351]         },
+  { "SHSR@rcl",      CLK,   CLCKL, 0x85, 0      , 0      , &l[344], &l[352]         },
 
   { "ST",          IFUNCT,  GATE,  0x03, &l[362], &l[354], &l[353], 0               },	/* 152 pre-installed "ST" function block */
-  { "ST@",           FF,    GATE,  0x81, &l[353], &l[356], &l[354], &l[361]         },
-  { "ST@set",        OR,    GATE,  0xc1, 0      , 0      , &l[359], &l[362]         },
-  { "ST@scl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[358], &l[363]         },
-  { "ST@tcl",        CLK,   CLCKL, 0xc1, 0      , 0      , &l[360], &l[364]         },
+  { "ST@",           FF,    GATE,  0x8e, &l[353], &l[356], &l[354], &l[361]         },
+  { "ST@set",        OR,    GATE,  0x85, 0      , 0      , &l[359], &l[362]         },
+  { "ST@scl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[358], &l[363]         },
+  { "ST@tcl",        CLK,   CLCKL, 0x85, 0      , 0      , &l[360], &l[364]         },
 
   { "SRT",         IFUNCT,  GATE,  0x0f, &l[377], &l[366], &l[365], 0               },	/* 157 pre-installed "SRT" function block */
-  { "SRT@",          FF,    GATE,  0x81, &l[365], &l[368], &l[366], &l[376]         },
-  { "SRT@set",       OR,    GATE,  0xc1, 0      , 0      , &l[372], &l[377]         },
-  { "SRT@scl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[371], &l[378]         },
-  { "SRT@res",       OR,    GATE,  0xc1, 0      , 0      , &l[374], &l[379]         },
-  { "SRT@rcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[373], &l[380]         },
-  { "SRT@tcl",       CLK,   CLCKL, 0xc1, 0      , 0      , &l[375], &l[381]         },
+  { "SRT@",          FF,    GATE,  0x8e, &l[365], &l[368], &l[366], &l[376]         },
+  { "SRT@set",       OR,    GATE,  0x85, 0      , 0      , &l[372], &l[377]         },
+  { "SRT@scl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[371], &l[378]         },
+  { "SRT@res",       OR,    GATE,  0x85, 0      , 0      , &l[374], &l[379]         },
+  { "SRT@rcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[373], &l[380]         },
+  { "SRT@tcl",       CLK,   CLCKL, 0x85, 0      , 0      , &l[375], &l[381]         },
 
   { "FALL",        IFUNCT,  GATE,  0x03, &l[388], &l[383], &l[382], 0               },	/* 164 pre-installed "FALL" function block */
-  { "FALL@",         EF,    GATE,  0x80, &l[382], &l[385], &l[383], 0               },
-  { "FALL@fall",     OR,    GATE,  0xc1, 0      , 0      , &l[387], &l[388]         },
-  { "FALL@clk",      CLK,   CLCKL, 0xc1, 0      , 0      , &l[386], &l[389]         },
+  { "FALL@",         EF,    GATE,  0x8d, &l[382], &l[385], &l[383], 0               },
+  { "FALL@fall",     OR,    GATE,  0x85, 0      , 0      , &l[387], &l[388]         },
+  { "FALL@clk",      CLK,   CLCKL, 0x85, 0      , 0      , &l[386], &l[389]         },
 
   { "LATCH",       IFUNCT,  GATE,  0x0f, &l[396], &l[391], &l[390], 0               },	/* 168 pre-installed "LATCH" function block */
-  { "LATCH@",        LATCH, GATE,  0x81, &l[390], &l[393], &l[391], &l[393]         },
-  { "LATCH@set",     OR,    GATE,  0xc1, 0      , 0      , &l[394], &l[396]         },
-  { "LATCH@res",     OR,    GATE,  0xc1, 0      , 0      , &l[395], &l[397]         },
+  { "LATCH@",        LATCH, GATE,  0x8e, &l[390], &l[393], &l[391], &l[393]         },
+  { "LATCH@set",     OR,    GATE,  0x85, 0      , 0      , &l[394], &l[396]         },
+  { "LATCH@res",     OR,    GATE,  0x85, 0      , 0      , &l[395], &l[397]         },
 
   { "DLATCH",      IFUNCT,  GATE,  0x0f, &l[406], &l[399], &l[398], 0               },	/* 172 pre-installed "DLATCH" function block */
-  { "DLATCH@",       FF,    GATE,  0x81, &l[398], &l[401], &l[399], &l[403]         },
-  { "DLATCH@set",    OR,    GATE,  0xc1, 0      , 0      , &l[404], &l[406]         },
-  { "DLATCH@res",    OR,    GATE,  0xc1, 0      , 0      , &l[405], &l[407]         },
-  { "DLATCH@clk",    CLK,   CLCKL, 0xc1, 0      , 0      , &l[402], &l[408]         },
+  { "DLATCH@",       FF,    GATE,  0x8e, &l[398], &l[401], &l[399], &l[403]         },
+  { "DLATCH@set",    OR,    GATE,  0x85, 0      , 0      , &l[404], &l[406]         },
+  { "DLATCH@res",    OR,    GATE,  0x85, 0      , 0      , &l[405], &l[407]         },
+  { "DLATCH@clk",    CLK,   CLCKL, 0x85, 0      , 0      , &l[402], &l[408]         },
 
 											/* 177 pre-installed BuiltIn function Symbols */
 #else	/* BOOT_COMPILE */
@@ -921,7 +920,6 @@ static BuiltIn b[] = {
   { "ELSE",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },	/* keyword used in immac ELSE statements */
   { "ELSIF",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },	/* keyword used in immac ELSIF statements */
   { "iC_Gt",	     CTYPE, 0,   YYERRCODE,0    , 0      , 0      , 0 },	/* initial Gate C-type from icg.h */
-  { "iConst",	     NCONST,ARITH, 0,      0    , 0      , 0      , 0 },	/* Symbol "iConst" must be second last non-zero entry */
   { "iClock",	     CLK,   CLCKL, 0,      0    , 0      , 0      , 0 },	/* Symbol "iClock" must be last non-zero entry */
   { 0,  	     0,     0,     0,      0    , 0      , 0      , 0 },	/* terminate initialisation of S.T. with name == 0 */
 }; /* b[] */
@@ -959,7 +957,6 @@ iC_init(void)
      *******************************************************************/
     for (io = 0; b[io].name; io++) {
 	/* no name may occurr twice - otherwise install fails */
-	iconst = sp;	/* 'iconst' points to "iConst" when loop finishes */
 	sp = install(b[io].name, b[io].type, b[io].ftype);
 #ifndef BOOT_COMPILE
 	if ((lp = b[io].link1) == 0) {		/* reserved word */

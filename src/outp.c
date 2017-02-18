@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.103 $";
+"@(#)$Id: outp.c 1.104 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -964,21 +964,6 @@ iC_listNet(void)
 "  { \"ELSIF\",	     KEYW,  0,     LEXERR, 0    , 0      , 0      , 0 },	/* keyword used in immac ELSIF statements */\n"
 "  { \"iC_Gt\",	     CTYPE, 0,   YYERRCODE,0    , 0      , 0      , 0 },	/* initial Gate C-type from icg.h */\n"
 	);
-	if ((tlink = iconst->v_cnt & 0777) != 0) {
-	    fprintf(iC_outFP, 
-"#ifndef BOOT_COMPILE\n"
-"  { \"iConst\",	     NCONST,ARITH, 0,      0    , 0      , &l[%3d], 0 },	/* Symbol \"iConst\" must be second last non-zero entry */\n"
-"#else	/* BOOT_COMPILE */\n"
-	    , tlink);
-	}
-	fprintf(iC_outFP, 
-"  { \"iConst\",	     NCONST,ARITH, 0,      0    , 0      , 0      , 0 },	/* Symbol \"iConst\" must be second last non-zero entry */\n"
-	);
-	if (tlink != 0) {
-	    fprintf(iC_outFP, 
-"#endif	/* BOOT_COMPILE */\n"
-	    );
-	}
 	if ((tlink = iclock->v_cnt & 0777) != 0) {
 	    fprintf(iC_outFP, 
 "#ifndef BOOT_COMPILE\n"
@@ -2607,13 +2592,6 @@ iC_outNet(FILE * iFP, char * outfile)
 		 *******************************************************************/
 		modName = mN(sp);		/* modified string, bit is used in block */
 		if (typ == NCONST) {
-		    if (sp == iconst) {
-			if (sp->u_val != 0) {
-			    fprintf(Fp, "extern iC_Gt %s; /* %d */\n", modName, sp->u_val);
-			    linecnt++;
-			}
-			continue;
-		    } else
 		    if (sp->u_val == 0) {
 			continue;		/* do not include unused constants */
 		    }

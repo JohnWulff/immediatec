@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.71 $";
+"@(#)$Id: comp.h 1.72 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -327,7 +327,6 @@ extern void	pu(enum stackType t, const char * token, void * node);
 
 					/*   init.c  */
 extern Symbol *	iclock;			/* default clock */
-extern Symbol *	iconst;			/* pointer to Symbol "iConst" */
 extern Symbol *	icerr;			/* pointer to Symbol "iCerr" */
 #ifdef BOOT_COMPILE
 extern Symbol	iC_CHANGE_ar;		/* alternative arithmetic CHANGE */

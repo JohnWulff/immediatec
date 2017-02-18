@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h,v 1.80 2016/01/05 01:09:42 jw Exp $";
+"@(#)$Id: icc.h 1.81 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -521,8 +521,6 @@ extern void	iC_gateMa(Gate *, Gate *);	/* GATE master action */
 #define USE_TEXT	"??","="," v","=v",		/* must be 4 entries for 2 bits under USE_MASK */
 
 #define YYERRCODE	256	/* defined in comp.c but not exported */
-				/* constant "iConst" Symbol is installed in S.T. */
-extern Gate		iConst;	/* defined in rsff.c */
 
 /* Macro names defined once for genr.c init.c outp.c and cexe.h */
 /* as well as here for CMACRO_NAMES */

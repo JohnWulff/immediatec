@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c,v 1.59 2015/12/04 01:46:49 jw Exp $";
+"@(#)$Id: rsff.c 1.60 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -30,8 +30,6 @@ static const char rsff_c[] =
 #ifndef	WIN32
 #define min(x,y) ((x) < (y) ? (x) : (y))
 #endif	/* WIN32 */
-
-Gate		iConst = { 1, -NCONST, ARITH, 0, "iConst" };
 
 /********************************************************************
  *
@@ -549,13 +547,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
 	gm->gt_val = 1;				/* set fblk gates to +1 anyway */
 	if (typ == SH || typ == INPW) {
 	    gm->gt_new = gm->gt_old = 0;	/* clear arithmetic */
-	} else if (typ == NCONST &&
-#ifdef	LOAD
-	    gm != &iConst
-#else	/* ! LOAD */
-	    strcmp(gm->gt_ids, "iConst") != 0
-#endif	/* ! LOAD */
-	) {
+	} else if (typ == NCONST) {
 	    char *	ep;
 	    /* convert constant 18 from dec, 077 from oct 0x1c from hex */
 	    gm->gt_new = gm->gt_old = strtol(gm->gt_ids, &ep, 0); /* long to int or long */
@@ -1544,12 +1536,12 @@ iC_timerSfn(					/* Timer function */
  *	is much cleaner and works with immC variables inside index
  *	expressions.
  *
- *	If glv == &iConst, iC_index was out of range and no assignment occurs.
+ *	If glv == &iClock, iC_index was out of range and no assignment occurs.
  *	This is done so that iC programs keep running - it would be drastic
  *	to quit a running control application for a range error.
  *	A Warning is issued on the console.
  *
- *	Return value is the value assigned or 0 if glv == &iConst.
+ *	Return value is the value assigned or 0 if glv == &iClock.
  *
  *	NOTE: the switch cases for assignment operators must line up
  *	with the ppi numbers defined in gram.y for 'assignment_operator'
@@ -1593,7 +1585,7 @@ iC_assignA(Gate * glv, int ppi, int rv) {
     int iv = rv;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
-    if (glv == &iConst) return 0;		/* index out of range */
+    if (glv == &iClock) return 0;		/* index out of range */
     assert(glv->gt_ini == -ARNC);
     nv = glv->gt_new;
     switch (ppi) {
@@ -1699,12 +1691,12 @@ iC_assignA(Gate * glv, int ppi, int rv) {
  *	value (0 is rv == 0, 1 is rv != 0) changes from its previous
  *	value.
  *
- *	If glv == &iConst, iC_index was out of range and no assignment occurs.
+ *	If glv == &iClock, iC_index was out of range and no assignment occurs.
  *	This is done so that iC programs keep running - it would be drastic
  *	to quit a running control application for a range error.
  *	A Warning is issued on the console.
  *
- *	Return value is the logic value 0 or 1 assigned or 0 if glv == &iConst.
+ *	Return value is the logic value 0 or 1 assigned or 0 if glv == &iClock.
  *
  *******************************************************************/
 
@@ -1724,7 +1716,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
     signed char val;
-    if (glv == &iConst) return 0;		/* index out of range */
+    if (glv == &iClock) return 0;		/* index out of range */
     assert(glv->gt_ini == -LOGC);
     nv = glv->gt_val < 0 ? 1 : 0;
     switch (ppi) {
@@ -1813,22 +1805,24 @@ iC_assignL(Gate * glv, int ppi, int rv) {
  *	The compiler stores the size of the initialised immC array in gt_old.
  *	An index within range returns the indexed member of the immC array.
  *
- *	If there is a range error iConst is returned, which is checked by
- *	iC_assign or returns logic or arithmetic 0 if referenced.
+ *	If there is a range error a Warning is issued on the console and
+ *	iClock is returned.  This is checked by iC_assignA() and iC_assignL(),
+ *	which return arithmetic or logic 0 if assignment to an out of range
+ *	array member is attempted. No array member is modified.
 
  *	This is done so that iC programs keep running - it would be
  *	drastic to quit a running control application for a range error.
- *	A Warning is issued on the console.
  *
  *******************************************************************/
 
 Gate *
 iC_index(Gate * gm, int index)
 {
+    assert((gm->gt_ini == -iC_ARNC || gm->gt_ini == -iC_LOGC) && gm->gt_fni == iC_UDFA);
     if (index >= gm->gt_old || index < 0) {
 	fprintf(iC_errFP, "\nWarning: %s: immC array reference %s[%d] is out of bounds (size = %d) - no action\n",
 	    iC_progname, gm->gt_ids, index, (int)gm->gt_old);
-	return &iConst;			/* stops assignment or 0 reference */
+	return &iClock;			/* stops assignment or 0 reference */
     }
-    return gm->gt_rlist[index];
+    return gm->gt_rlist[index];		/* immC member of array gm[index] */
 } /* iC_index */

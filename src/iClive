@@ -120,15 +120,16 @@ my %pGroup = (	'{' => [ '}', '-forwards',  '[{}\'"]',     'end', ],
 	     );
 
 my %keyWords = (
-	imm	=> 1,		# immediate type modifiers
+	imm	=> 1,		# iC type modifiers
 	immC	=> 1,
-	bit	=> 1,		# immediate types
+	bit	=> 1,		# iC types
 	int	=> 1,
 	clock	=> 1,
 	timer	=> 1,
 	void	=> 1,
-	assign	=> 1,		# immediate parameter modifier
-	if	=> 1,		# immediate keywords
+	assign	=> 1,		# iC parameter modifiers
+	const	=> 1,
+	if	=> 1,		# iC keywords
 	else	=> 1,
 	switch	=> 1,
 	this	=> 1,
@@ -136,10 +137,10 @@ my %keyWords = (
 	extern	=> 1,
 	while	=> 1,		# only used in C code
 	for	=> 1,
+	do	=> 1,
 	static	=> 1,
-	iConst	=> 1,		# immediate built-in variables
-	iClock	=> 1,
-	FORCE	=> 1,		# immediate built-in functions
+	iClock	=> 1,		# iC built-in variable
+	FORCE	=> 1,		# iC built-in functions
 	LATCH	=> 1,
 	DLATCH	=> 1,
 	D	=> 1,
@@ -166,7 +167,7 @@ my %keyWords = (
 	CLOCK	=> 1,
 	TIMER	=> 1,
 	TIMER1	=> 1,
-	use	=> 1,		# pragmas
+	use	=> 1,		# iC pragmas
 	no	=> 1,
 	restore	=> 1,
 	alias	=> 1,
@@ -291,7 +292,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.64 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.65 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 

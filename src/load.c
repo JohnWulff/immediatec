@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.65 $";
+"@(#)$Id: load.c 1.66 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2015  John E. Wulff
@@ -1587,7 +1587,7 @@ main(
 	 *******************************************************************/
 	assert(maxUnit < MAXPF);
 	unitA[0] = unitA[1] = maxUnit + 1;	/* unused PiFace(s) beyond maxUnit */
-	val += e_cnt + 2;			/* count e_list, iClock and iConst */
+	val += e_cnt + 1;			/* count e_list and iClock */
 	sTable = sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
 	for (tgp = e_list; tgp != NULL; tgp = tgp->gt_next) {
 	    *sTend++ = tgp;			/* enter node into sTable early */
@@ -1648,7 +1648,7 @@ main(
  *
  *  Allocate space for the symbol table array.
  *
- *  Enter iClock, iConst and each node in iC_list into symbol table sTable.
+ *  Enter each node in iC_list and iClock into symbol table sTable.
  *  At the end of this pass sTend will hold the end of the table.
  *
  *  The length of a pointer array for such a symbol table is
@@ -1663,11 +1663,10 @@ main(
 	    ttgp->gt_next = *iC_list[0];	/* link iClist[0] to last entry in e_list  */
 	    *iC_list[0] = e_list;		/* usually a non-null entry - works even if not */
 	}
-	val += e_cnt + 2;			/* count e_list, iClock and iConst */
+	val += e_cnt + 1;			/* count e_list and iClock */
 	sTable = sTend = (Gate **)calloc(val, sizeof(Gate *));	/* node* */
     }
     *sTend++ = &iClock;				/* enter iClock into sTable */
-    *sTend++ = &iConst;				/* enter iConst into sTable */
 
     for (oppp = iC_list; (opp = *oppp++) != 0; ) {
 	for (op = *opp; op != 0; op = op->gt_next) {
@@ -2002,63 +2001,53 @@ main(
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {
-	    if (op->gt_mark == 0 && op == &iConst) {
-		if (df) fprintf(iC_outFP, " %-8s %3d %3d - DELETED\n", op->gt_ids, op->gt_val, op->gt_mark);
-		for (lp = opp, tlp = lp + 1; tlp < sTend;) {
-		    *lp++ = *tlp++;			/* delete iConst from S.T. */
-		}
-		link_count--;				/* terminator for iConst not needed */
-		opp--;					/* neutralise opp++ in for loop */
-		sTend = lp;				/* S.T. is shortened */
-	    } else {
-		if (df) {
-		    fprintf(iC_outFP, " %-8s %3d %3d", op->gt_ids, op->gt_val, op->gt_mark);
-		    if (op->gt_old) {
+	    if (df) {
+		fprintf(iC_outFP, " %-8s %3d %3d", op->gt_ids, op->gt_val, op->gt_mark);
+		if (op->gt_old) {
 #if	INT_MAX == 32767 && defined (LONG16)
-			fprintf(iC_outFP, " %3ld\n", op->gt_old);	/* delay references */
+		    fprintf(iC_outFP, " %3ld\n", op->gt_old);	/* delay references */
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-			fprintf(iC_outFP, " %3d\n", op->gt_old);	/* delay references */
+		    fprintf(iC_outFP, " %3d\n", op->gt_old);	/* delay references */
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-		    } else {
-			fprintf(iC_outFP, "\n");
-		    }
+		} else {
+		    fprintf(iC_outFP, "\n");
 		}
-		if (op->gt_val == 0 &&
-		    op->gt_mcnt == 0 &&			/* leave out _f0_1 or immC array */
-		    op->gt_ini != -ARNC &&
-		    op->gt_ini != -LOGC &&
-		    op->gt_ini != -INPB &&
-		    op->gt_ini != -INPW &&
-		    op->gt_ini != -INPX) {
-		    fprintf(iC_errFP, "WARNING '%s' has no input\n", op->gt_ids);
-		    if (df) fprintf(iC_outFP, "*** Warning: '%s' has no input\n", op->gt_ids);
-		}
-		if (op->gt_mark == 0 &&
-		    op->gt_old == 0 &&
-		    op->gt_ini != -ARNC &&
-		    op->gt_ini != -LOGC &&
-		    op->gt_fni != TRAB &&
-		    op->gt_fni != OUTW &&
-		    op->gt_fni != OUTX &&
-		    op != & iClock) {
-		    fprintf(iC_errFP, "WARNING '%s' has no output\n", op->gt_ids);
-		    if (df) fprintf(iC_outFP, "*** Warning: '%s' has no output\n", op->gt_ids);
-		}
-		if (op->gt_fni == ARITH) {
-		    op->gt_old = 0;		/* clear for run time after ARITH was delay */
-		    fp += op->gt_mark;
-		    *fp = 0;			/* last output terminator */
-		    op->gt_list = fp++;
-		} else
-		if (op->gt_fni == GATE) {
-		    fp += op->gt_mark + 1;
-		    *fp = 0;			/* last output terminator */
-		    op->gt_list = fp++;
-		}
-		if (op->gt_ini != -INPW && op->gt_fni != OUTW && op->gt_fni != OUTX &&
-		    ((op->gt_ini != -ARNC && op->gt_ini != -LOGC) || op->gt_fni != UDFA)) {
-		    op->gt_mark = 0;		/* must be cleared for run-time */
-		}
+	    }
+	    if (op->gt_val == 0 &&
+		op->gt_mcnt == 0 &&		/* leave out _f0_1 or immC array */
+		op->gt_ini != -ARNC &&
+		op->gt_ini != -LOGC &&
+		op->gt_ini != -INPB &&
+		op->gt_ini != -INPW &&
+		op->gt_ini != -INPX) {
+		fprintf(iC_errFP, "WARNING '%s' has no input\n", op->gt_ids);
+		if (df) fprintf(iC_outFP, "*** Warning: '%s' has no input\n", op->gt_ids);
+	    }
+	    if (op->gt_mark == 0 &&
+		op->gt_old == 0 &&
+		op->gt_ini != -ARNC &&
+		op->gt_ini != -LOGC &&
+		op->gt_fni != TRAB &&
+		op->gt_fni != OUTW &&
+		op->gt_fni != OUTX &&
+		op != & iClock) {
+		fprintf(iC_errFP, "WARNING '%s' has no output\n", op->gt_ids);
+		if (df) fprintf(iC_outFP, "*** Warning: '%s' has no output\n", op->gt_ids);
+	    }
+	    if (op->gt_fni == ARITH) {
+		op->gt_old = 0;			/* clear for run time after ARITH was delay */
+		fp += op->gt_mark;
+		*fp = 0;			/* last output terminator */
+		op->gt_list = fp++;
+	    } else
+	    if (op->gt_fni == GATE) {
+		fp += op->gt_mark + 1;
+		*fp = 0;			/* last output terminator */
+		op->gt_list = fp++;
+	    }
+	    if (op->gt_ini != -INPW && op->gt_fni != OUTW && op->gt_fni != OUTX &&
+		((op->gt_ini != -ARNC && op->gt_ini != -LOGC) || op->gt_fni != UDFA)) {
+		op->gt_mark = 0;		/* must be cleared for run-time */
 	    }
 	} else
 	if (df) {
