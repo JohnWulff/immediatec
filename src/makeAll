@@ -12,8 +12,8 @@
 #
 #	make immcc and libict.a by default
 #
-#	make immcc, libict.a, libict.so, icr, ict or lmain individually
-#	with -C -L -S -R -T or -M flags
+#	make immcc, libict.a, libict.so, icr, ict, const or lmain
+#	individually with -C -L -S -R -T -N or -M flags
 #	when any of these are set, cexe.c is not modified
 #
 #	use egrep rather than grep -E so it works on older Unix systems
@@ -23,9 +23,9 @@
 usage ()
 {
     echo 'Usage:' >&2
-    echo " ${0##*/} [-qgpclrtmCLSPGVRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]" >&2
-    echo '    call make for immcc, libict.a, libict.so, icr, ict and lmain with' >&2
-    echo '    correct options' >&2
+    echo " ${0##*/} [-qgpclrtmCLSPGVRTNMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]" >&2
+    echo '    call make for immcc, libict.a, libict.so, icr, ict, const and lmain' >&2
+    echo '    with correct options' >&2
     echo '	-q	output only headings and error messages' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-p	compile and link for profiling with gprof (-pg)' >&2
@@ -42,6 +42,7 @@ usage ()
     echo '	-V	make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
+    echo '	-N	make const test internal constant expression compiler only' >&2
     echo '	-M	make lmain only' >&2
     echo '	-D<OPT>	make all targets with <OPT> defined' >&2
     echo '	see usage of immcc, icr, ict and applications for options' >&2
@@ -59,7 +60,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.42 $' >&2
+    echo '	$Id: makeAll 1.43 $' >&2
 }
 
 makeLib ()
@@ -96,27 +97,40 @@ makeShared ()
 
 makeIcr ()
 {
-    mv comp.$O genr.$O gram.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O cons.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O Make_tmp 2> /dev/null
     if [ -d IcrObjs ]; then
 	mv IcrObjs/* .
     else
 	mkdir IcrObjs
     fi
     make OPT="-DRUN$r$u$d$e$os$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" icr
-    mv comp.$O genr.$O gram.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
+    mv comp.$O genr.$O gram.$O cons.$O icr.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O IcrObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
 makeIct ()
 {
-    mv comp.$O genr.$O gram.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
+    mv comp.$O genr.$O gram.$O cons.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O Make_tmp 2> /dev/null
     if [ -d IctObjs ]; then
 	mv IctObjs/* .
     else
 	mkdir IctObjs
     fi
     make OPT="-DTCP$t$u$d$e$os$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" ict
-    mv comp.$O genr.$O gram.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
+    mv comp.$O genr.$O gram.$O cons.$O ict.$O icbegin.$O p_channel.$O icend.$O misc.$O init.$O lexc.$O link.$O icc.$O outp.$O rsff.$O scan.$O symb.$O tcpc.$O IctObjs
+    mv Make_tmp/* . 2> /dev/null
+}
+
+makeConst ()
+{
+    mv cons.$O Make_tmp 2> /dev/null
+    if [ -d ConstObjs ]; then
+	mv ConstObjs/* .
+    else
+	mkdir ConstObjs
+    fi
+    make OPT="-DTESTCONS$m$u$d$e$os$s$y" CFLAGS="$cflags" LDFLAGS="$ldflags" const
+    mv cons.$O ConstObjs
     mv Make_tmp/* . 2> /dev/null
 }
 
@@ -195,6 +209,7 @@ G=0
 V=0
 R=0
 T=0
+N=0
 M=0
 IM_LIB=1
 cflags="-O2"			# optimisation, no debugging info
@@ -208,7 +223,7 @@ Y=""
 cpu=""
 raspberrypi=""
 
-while getopts ":qgpclrtmCLSPGVRTMuedsyzhD:W:o:" opt; do
+while getopts ":qgpclrtmCLSPGVRTNMuedsyzhD:W:o:" opt; do
     case $opt in
     q )	q="q";;		# echo only - dont kill
     g )	cflags="-g";;	# debugging, no optimisation
@@ -226,6 +241,7 @@ while getopts ":qgpclrtmCLSPGVRTMuedsyzhD:W:o:" opt; do
     V )	V=1; IM_LIB=0;;
     R )	R=1; IM_LIB=0;;
     T )	T=1; IM_LIB=0;;
+    N )	N=1; IM_LIB=0;;
     M )	M=1; IM_LIB=0;;
     u )	u=" -DSYUNION";;
     d )	d=" -DDEQ";;
@@ -300,6 +316,11 @@ if [ $T = 1 ]; then
     makeIct  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
 fi
 
+if [ $N = 1 ]; then
+    echo "make OPT=\"-DTESTCONS$m$u$d$e$os$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" const"
+    makeConst  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
+fi
+
 if [ $M = 1 ]; then
     echo "make OPT=\"-DLMAIN$m$u$d$e$os$s$y\" CFLAGS=\"$cflags\" LDFLAGS=\"$ldflags\" lmain"
     makeLmain  2>&1 | if [ -n "$q" ]; then egrep -i "(\berror|warning|unrecognized|up to date|:[A-Z_a-z. 0-9]+:)"; else cat; fi
@@ -334,8 +355,8 @@ makeAll - supports Makefile in immediate-C develeopment
 =head1 SYNOPSIS
 
  makeAll [-qgpclrtmCLSPGVRTMuedsyzh][ -D<OPT>][ -W<OPT>][ -o<OBJ>]
- call make for immcc, libict.so, libict.a, icr, ict and lmain with
- correct options
+ call make for immcc, libict.so, libict.a, icr, ict, const and lmain
+ with correct options
     -q      output only headings and error messages
     -g      compile for debugging and no optimisation (default -O2)
     -p      compile and link for profiling with gprof (-pg)
@@ -352,6 +373,7 @@ makeAll - supports Makefile in immediate-C develeopment
     -V	    make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
+    -N      make const test internal constant expression compiler
     -M      make lmain only
     -D<OPT> make all targets with <OPT> defined
             see usage of immcc, icr, ict and applications for options
@@ -401,14 +423,15 @@ and a 2x16 character text display, which can be modified over the iC network.
 (Only useful for armv6l, armv7l etc processors)
 
 'makeAll' keeps the directories 'LibObjs' 'SharedObjs' 'IcrObjs' 'IctObjs'
-'LmainObjs' 'PiFaceObjs' to save object files which differ for different
-targets.  Thus the following rules for 'make' are satisfied:
+'ConstObjs' 'LmainObjs' 'PiFaceObjs' to save object files which differ for
+different targets.  Thus the following rules for 'make' are satisfied:
 
   to make immcc, make with OPT=''
   to make libict.a, remove all objects and make with OPT='-DLOAD -DTCP'
   to make libict.so,  "     "    " and make with OPT='-fPIC -DLOAD -DTCP'
   to make icr,        "     "    " and make with OPT='-DRUN -DYYDEBUG'
   to make ict,        "     "    " and make with OPT='-DTCP'
+  to make const,      "     "    " and make with OPT='-DTESTCONS'
   to make lmain,      "     "    " and make with OPT='-DLMAIN -DYYDEBUG'
   to make iCpiFace,   "     "    " and make with OPT='-DRASPBERRYPI -DTCP -DYYDEBUG'
 

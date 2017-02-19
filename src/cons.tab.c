@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "cons.y"
  static const char cons_y[] =
-"@(#)$Id: cons.tab.c 1.1 $";
+"@(#)$Id: cons.tab.c 1.2 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -141,11 +141,9 @@
 #define STX	'\x02'
 #define ETX	'\x03'
 #ifndef	TESTCONS
-extern void warning(char *, char *);	/* print warning message */
-extern void iCerror(const char * s);	/* use full yyerror in comp.y */
-#else	/* TESTCONS */
-static void	warning (const char * warnMsg, const char * msg);
+extern void	iCerror(const char * s);	/* use full yyerror in comp.y */
 #endif	/* TESTCONS */
+extern void	warning(char *, char *);	/* print warning message */
 static void	yyerror (int * retValue, const char * msg);
 static int	yylex(void);
 static char *	in;
@@ -176,7 +174,7 @@ parseConstantExpression(char * expressionText, int * valp, int r)
 /* use default YYSTYPE int */
 
 /* Line 371 of yacc.c  */
-#line 180 "cons.tab.c"
+#line 178 "cons.tab.c"
 
 # ifndef YY_NULL
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -261,7 +259,7 @@ int cnparse ();
 /* Copy the second part of user declarations.  */
 
 /* Line 390 of yacc.c  */
-#line 265 "cons.tab.c"
+#line 263 "cons.tab.c"
 
 #ifdef short
 # undef short
@@ -560,9 +558,9 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,   124,   124,   128,   129,   132,   140,   148,   151,   154,
-     157,   160,   163,   166,   175,   178,   181,   184,   187,   190,
-     193,   196,   199,   202,   205,   208,   211,   214,   217
+       0,   122,   122,   126,   127,   130,   138,   146,   149,   152,
+     155,   158,   161,   164,   173,   176,   179,   182,   185,   188,
+     191,   194,   197,   200,   203,   206,   209,   212,   215
 };
 #endif
 
@@ -1522,19 +1520,19 @@ yyreduce:
     {
         case 2:
 /* Line 1792 of yacc.c  */
-#line 124 "cons.y"
+#line 122 "cons.y"
     { *retValue = (yyvsp[(1) - (1)]); }
     break;
 
   case 3:
 /* Line 1792 of yacc.c  */
-#line 128 "cons.y"
+#line 126 "cons.y"
     { (yyval) = (yyvsp[(1) - (1)]); }
     break;
 
   case 4:
 /* Line 1792 of yacc.c  */
-#line 129 "cons.y"
+#line 127 "cons.y"
     {	/* * */
 		(yyval) = (yyvsp[(1) - (3)]) * (yyvsp[(3) - (3)]);
 	    }
@@ -1542,7 +1540,7 @@ yyreduce:
 
   case 5:
 /* Line 1792 of yacc.c  */
-#line 132 "cons.y"
+#line 130 "cons.y"
     {	/* / */
 		if ((yyvsp[(3) - (3)]) == 0) {
 		    warning("division by zero", in);
@@ -1555,7 +1553,7 @@ yyreduce:
 
   case 6:
 /* Line 1792 of yacc.c  */
-#line 140 "cons.y"
+#line 138 "cons.y"
     {	/* % */
 		if ((yyvsp[(3) - (3)]) == 0) {
 		    warning("remainder of division by zero", in);
@@ -1568,7 +1566,7 @@ yyreduce:
 
   case 7:
 /* Line 1792 of yacc.c  */
-#line 148 "cons.y"
+#line 146 "cons.y"
     {	/* binary + */
 		(yyval) = (yyvsp[(1) - (3)]) + (yyvsp[(3) - (3)]);
 	    }
@@ -1576,7 +1574,7 @@ yyreduce:
 
   case 8:
 /* Line 1792 of yacc.c  */
-#line 151 "cons.y"
+#line 149 "cons.y"
     {	/* binary - */
 		(yyval) = (yyvsp[(1) - (3)]) - (yyvsp[(3) - (3)]);
 	    }
@@ -1584,7 +1582,7 @@ yyreduce:
 
   case 9:
 /* Line 1792 of yacc.c  */
-#line 154 "cons.y"
+#line 152 "cons.y"
     {	/* << */
 		(yyval) = (yyvsp[(1) - (3)]) << (yyvsp[(3) - (3)]);
 	    }
@@ -1592,7 +1590,7 @@ yyreduce:
 
   case 10:
 /* Line 1792 of yacc.c  */
-#line 157 "cons.y"
+#line 155 "cons.y"
     {	/* >> */
 		(yyval) = (yyvsp[(1) - (3)]) >> (yyvsp[(3) - (3)]);
 	    }
@@ -1600,7 +1598,7 @@ yyreduce:
 
   case 11:
 /* Line 1792 of yacc.c  */
-#line 160 "cons.y"
+#line 158 "cons.y"
     {	/* unary + */
 		(yyval) = (yyvsp[(2) - (2)]);
 	    }
@@ -1608,7 +1606,7 @@ yyreduce:
 
   case 12:
 /* Line 1792 of yacc.c  */
-#line 163 "cons.y"
+#line 161 "cons.y"
     {	/* unary - */
 		(yyval) = - (yyvsp[(2) - (2)]);
 	    }
@@ -1616,7 +1614,7 @@ yyreduce:
 
   case 13:
 /* Line 1792 of yacc.c  */
-#line 166 "cons.y"
+#line 164 "cons.y"
     {
 		(yyval) = (yyvsp[(2) - (3)]);
 	    }
@@ -1624,7 +1622,7 @@ yyreduce:
 
   case 14:
 /* Line 1792 of yacc.c  */
-#line 175 "cons.y"
+#line 173 "cons.y"
     {	/* & */
 		(yyval) = (yyvsp[(1) - (3)]) & (yyvsp[(3) - (3)]);
 	    }
@@ -1632,7 +1630,7 @@ yyreduce:
 
   case 15:
 /* Line 1792 of yacc.c  */
-#line 178 "cons.y"
+#line 176 "cons.y"
     {	/* ^ */
 		(yyval) = (yyvsp[(1) - (3)]) ^ (yyvsp[(3) - (3)]);
 	    }
@@ -1640,7 +1638,7 @@ yyreduce:
 
   case 16:
 /* Line 1792 of yacc.c  */
-#line 181 "cons.y"
+#line 179 "cons.y"
     {	/* | */
 		(yyval) = (yyvsp[(1) - (3)]) | (yyvsp[(3) - (3)]);
 	    }
@@ -1648,7 +1646,7 @@ yyreduce:
 
   case 17:
 /* Line 1792 of yacc.c  */
-#line 184 "cons.y"
+#line 182 "cons.y"
     {	/* < */
 		(yyval) = (yyvsp[(1) - (3)]) < (yyvsp[(3) - (3)]);
 	    }
@@ -1656,7 +1654,7 @@ yyreduce:
 
   case 18:
 /* Line 1792 of yacc.c  */
-#line 187 "cons.y"
+#line 185 "cons.y"
     {	/* <= */
 		(yyval) = (yyvsp[(1) - (3)]) <= (yyvsp[(3) - (3)]);
 	    }
@@ -1664,7 +1662,7 @@ yyreduce:
 
   case 19:
 /* Line 1792 of yacc.c  */
-#line 190 "cons.y"
+#line 188 "cons.y"
     {	/* > */
 		(yyval) = (yyvsp[(1) - (3)]) > (yyvsp[(3) - (3)]);
 	    }
@@ -1672,7 +1670,7 @@ yyreduce:
 
   case 20:
 /* Line 1792 of yacc.c  */
-#line 193 "cons.y"
+#line 191 "cons.y"
     {	/* >= */
 		(yyval) = (yyvsp[(1) - (3)]) >= (yyvsp[(3) - (3)]);
 	    }
@@ -1680,7 +1678,7 @@ yyreduce:
 
   case 21:
 /* Line 1792 of yacc.c  */
-#line 196 "cons.y"
+#line 194 "cons.y"
     {	/* == */
 		(yyval) = (yyvsp[(1) - (3)]) == (yyvsp[(3) - (3)]);
 	    }
@@ -1688,7 +1686,7 @@ yyreduce:
 
   case 22:
 /* Line 1792 of yacc.c  */
-#line 199 "cons.y"
+#line 197 "cons.y"
     {	/* != */
 		(yyval) = (yyvsp[(1) - (3)]) != (yyvsp[(3) - (3)]);
 	    }
@@ -1696,7 +1694,7 @@ yyreduce:
 
   case 23:
 /* Line 1792 of yacc.c  */
-#line 202 "cons.y"
+#line 200 "cons.y"
     {	/* && */
 		(yyval) = (yyvsp[(1) - (3)]) && (yyvsp[(3) - (3)]);
 	    }
@@ -1704,7 +1702,7 @@ yyreduce:
 
   case 24:
 /* Line 1792 of yacc.c  */
-#line 205 "cons.y"
+#line 203 "cons.y"
     {	/* || */
 		(yyval) = (yyvsp[(1) - (3)]) || (yyvsp[(3) - (3)]);
 	    }
@@ -1712,7 +1710,7 @@ yyreduce:
 
   case 25:
 /* Line 1792 of yacc.c  */
-#line 208 "cons.y"
+#line 206 "cons.y"
     {	/* ? : */
 		(yyval) = (yyvsp[(1) - (5)]) ? (yyvsp[(3) - (5)]) : (yyvsp[(5) - (5)]);
 	    }
@@ -1720,7 +1718,7 @@ yyreduce:
 
   case 26:
 /* Line 1792 of yacc.c  */
-#line 211 "cons.y"
+#line 209 "cons.y"
     {	/* ?: */
 		(yyval) = (yyvsp[(1) - (4)]) ? : (yyvsp[(4) - (4)]);
 	    }
@@ -1728,7 +1726,7 @@ yyreduce:
 
   case 27:
 /* Line 1792 of yacc.c  */
-#line 214 "cons.y"
+#line 212 "cons.y"
     {	/* unary arithmetic ! */
 		(yyval) = ! (yyvsp[(2) - (2)]);
 	    }
@@ -1736,7 +1734,7 @@ yyreduce:
 
   case 28:
 /* Line 1792 of yacc.c  */
-#line 217 "cons.y"
+#line 215 "cons.y"
     {	/* unary bitwise ~ */
 		(yyval) = ~ (yyvsp[(2) - (2)]);
 	    }
@@ -1744,7 +1742,7 @@ yyreduce:
 
 
 /* Line 1792 of yacc.c  */
-#line 1748 "cons.tab.c"
+#line 1746 "cons.tab.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -1976,7 +1974,7 @@ yyreturn:
 
 
 /* Line 2055 of yacc.c  */
-#line 231 "cons.y"
+#line 229 "cons.y"
 
 
 #include	<stdlib.h>
@@ -2100,58 +2098,11 @@ yyerror (int * retValue, const char * msg)
 
 /********************************************************************
  *
- *	Main program for testing this parser
- *
- *******************************************************************/
-
-static char *	iC_progname;		/* name of this executable */
-static const char *	usage =
-"Usage: %s constant_expression_text [...]\n"
-"        -h              this help text\n"
-"Copyright (C) 2016 John E. Wulff     <immediateC@gmail.com>\n"
-;
-
-int
-main(int argc, char **argv)
-{
-    int		value;
-    int		n = 0;
-
-    iC_progname = *argv;
-    if (argc <= 1) goto error;
-    while (--argc > 0) {
-	if (**++argv == '-') {
-	    ++*argv;
-	    do {
-		switch (**argv) {
-		case 'h':
-		case '?':
-		error:
-		    printf(usage, iC_progname);
-		    exit(1);
-		default:
-		    printf("WARNING: %s: unknown option -%c\n", iC_progname, **argv);
-		    break;
-		}
-	    } while (*++*argv);
-	} else {
-	    if (parseConstantExpression(*argv, &value, 0)) {
-		warning("not a constant expression", *argv);	/* parse error */
-	    } else {
-		printf("%d	'%s' ==> %d\n", ++n, *argv, value);
-	    }
-	}
-    }
-    return 0;
-} /* main */
-
-/********************************************************************
- *
  *	Warning function for test version - use full Warning for immcc
  *
  *******************************************************************/
 
-static void
+void
 warning (const char * warnMsg, const char * msg)
 {
     printf("*** Warning: %s: %s\n", warnMsg, msg);

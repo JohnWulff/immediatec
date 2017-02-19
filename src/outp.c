@@ -1951,9 +1951,16 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 			(typ != NCONST || sp->u_val != 0)) {
 			tgp->gt_new = 0;	/* restore gt_new */
 		    }
-		    if (((typ = sp->type) == ARNC || typ == LOGC) && sp->ftype == UDFA && (sp->fm & FM) == 0) {
-			assert(sp->u_gate == gp);	/* count immC array now */
-			gp++;
+		    if (((typ = sp->type) == ARNC || typ == LOGC) && (sp->fm & FM) == 0) {
+			if (sp->ftype == UDFA) {
+			    assert(sp->u_gate == gp);
+			    gp++;			/* count immC array now */
+			} else if (iC_iniList) {
+			    Valp	v;
+			    assert(sp->u_gate);
+			    v = extractConstIni(sp);	/* obtain numerical value */
+			    sp->u_gate->gt_new = v.nuv;	/* to set immC initialiser */
+			}
 		    }
 		}
 	    }

@@ -3,7 +3,7 @@
 usage()
 {
     echo "Make iC components immcc and libict.a for debugging and optionally install them" >&2
-    echo "Usage $name[ -clSPrtmgpuedsyzIih][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
+    echo "Usage $name[ -clSPrtNmgpuedsyzIih][ -D<OPT>][ -W<OPT>][[ <iCmake_options>] <iC_sources>]" >&2
     echo '		with no clSPrtm flags make immcc, libict.a and libict.so' >&2
     echo '	-c	make immediate C compiler immcc' >&2
     echo '	-l	make immediate C static library libict.a' >&2
@@ -13,6 +13,7 @@ usage()
     echo '	-V	make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program' >&2
     echo '	-r	make standalone interpreter icr' >&2
     echo '	-t	make standalone interpreter ict' >&2
+    echo '	-N	make const test internal constant expression compiler only' >&2
     echo '	-m	make standalone internal C compiler lmain' >&2
     echo '	-g	compile for debugging and no optimisation (default -O2)' >&2
     echo '	-p	compile and link for profiling with gprof (-pg)' >&2
@@ -35,7 +36,7 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.20 $' >&2
+    echo '$Id: m 1.21 $' >&2
 }
 
 name=${0##*/}
@@ -43,13 +44,14 @@ clSrtm=''
 pudsyez=''
 dw=''
 i=''
+N=''
 P=''
 G=''
 V=''
 z=0
 o=''
 
-while getopts ":clSPGVrtmpudsyezD:W:Iih" opt; do
+while getopts ":clSNPGVrtmpudsyezD:W:Iih" opt; do
     case $opt in
     c ) clSrtm="${clSrtm}c";;
     l ) clSrtm="${clSrtm}l";;
@@ -66,6 +68,7 @@ while getopts ":clSPGVrtmpudsyezD:W:Iih" opt; do
     z )	pudsyez="${pudsyez}z";z=1;;
     D ) dw="$dw -D$OPTARG";;
     W ) dw="$dw -W$OPTARG";;
+    N ) N="N";;
     P ) P="P";;
     G ) G="G";;
     V ) V="V";;
@@ -84,9 +87,9 @@ while getopts ":clSPGVrtmpudsyezD:W:Iih" opt; do
 done
 shift $(($OPTIND - 1))
 
-if [ -n "$P" -o -n "$G" -o -n "$V" ]; then
-    echo "### make iCpiFace and/or iCgpioPUD and/or iCpiPWM"
-    makeAll -qg$P$G$V$pudsyez$dw
+if [ -n "$N" -o -n "$P" -o -n "$G" -o -n "$V" ]; then
+    echo "### make Const and/or iCpiFace and/or iCgpioPUD and/or iCpiPWM"
+    makeAll -qg$N$P$G$V$pudsyez$dw
 elif [ -z "$clSrtm" ]; then
     clSrtm="cl"
 fi

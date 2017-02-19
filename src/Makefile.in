@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.71 $
+# @(#)$Id: Makefile.in 1.72 $
 
 #######################################################################
 #
@@ -22,6 +22,7 @@
 #	to make libict.so, remove all objects and make with OPT='-fPIC -DLOAD -DTCP'
 #	to make icr, remove all objects and make with OPT='-DRUN -DYYDEBUG'
 #	to make ict, remove all objects and make with OPT='-DTCP'
+#	to make const, remove all objects and make with OPT='-DTESTCONS'
 #	to make lmain, remove all objects and make with OPT='-DLMAIN -DYYDEBUG'
 #	to make iCpiFace, remove all objects and make with OPT='-DRASPBERRYPI -DTCP -DYYDEBUG'
 #	to make iCpiPWM, remove all objects and make with OPT='-DRASPBERRYPI -DPWM -DTCP -DYYDEBUG'
@@ -158,12 +159,19 @@ libict.a:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O)
 libict.so:	$(srcdir)/Makefile load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) p_channel.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
 	$(CC) -shared -Wl,-soname,libict.so.1 -o libict.so load.$(O) misc.$(O) scid.$(O) ict.$(O) icbegin.$(O) p_channel.$(O) icend.$(O) tcpc.$(O) $(LOBJ) $(POBJ)
 
-#### C-parser test ####################################################
+#### Const expression parser test #####################################
+
+const:	$(srcdir)/Makefile const.$(O) cons.$(O)
+	$(CC) $(LDFLAGS) -o const const.$(O) cons.$(O) $(EL)
+
+#### C compiler parser test ###########################################
 
 lmain:	$(srcdir)/Makefile lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O)
 	$(CC) $(LDFLAGS) -o lmain lmain.$(O) misc.$(O) gram.$(O) lexc.$(O) symb.$(O) $(EL)
 
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
+#### Raspberry Pi apps ################################################
+
 #### iCpiFace real I/O for Raspberry Pi ###############################
 
 iCpiFace:	$(srcdir)/Makefile iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ)
@@ -377,7 +385,7 @@ uninstall:
 	sudo rm -f ${mandir}/man3/${manprefix}pigpiod_if.3.gz
 
 clean:
-	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/*.1.gz
+	rm -rf *.$(O) $(srcdir)/LibObjs $(srcdir)/SharedObjs $(srcdir)/IcrObjs $(srcdir)/IctObjs $(srcdir)/ConstObjs $(srcdir)/LmainObjs $(srcdir)/PiFaceObjs $(srcdir)/PiPWMObjs $(srcdir)/cexe.c $(srcdir)/scid.c $(srcdir)/icg.h $(srcdir)/core $(srcdir)/immcc $(srcdir)/libict* $(srcdir)/icbegin.a $(srcdir)/icr $(srcdir)/ict $(srcdir)/const $(srcdir)/lmain $(srcdir)/iCpiFace $(srcdir)/iCgpioPUD $(srcdir)/iCpiPWM $(srcdir)/*.1.gz
 
 distclean: clean
 	rm -f $(srcdir)/Makefile $(srcdir)/comp.tab.c $(srcdir)/comp.tab.h $(srcdir)/comp.output $(srcdir)/gram.tab.c $(srcdir)/gram.tab.h $(srcdir)/gram.output $(srcdir)/lex.yy.c $(srcdir)/cons.tab.c $(srcdir)/cons.tab.h $(srcdir)/cons.output $(srcdir)/config.status $(srcdir)/config.log $(srcdir)/config.cache $(srcdir)/pplstfix.log
@@ -390,7 +398,7 @@ genr.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
 
 init.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
 
-symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/comp.tab.h
+symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 
 comp.$(O):	$(srcdir)/comp.tab.c $(srcdir)/icc.h $(srcdir)/comp.h
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/comp.tab.c
@@ -419,6 +427,8 @@ lexc.$(O):	$(srcdir)/lex.yy.c $(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/gram.ta
 
 cons.$(O):	$(srcdir)/cons.tab.c
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/cons.tab.c
+
+const.$(O):	$(srcdir)/comp.h
 
 lmain.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 

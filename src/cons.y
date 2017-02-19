@@ -1,5 +1,5 @@
 %{ static const char cons_y[] =
-"@(#)$Id: cons.y 1.1 $";
+"@(#)$Id: cons.y 1.2 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -67,11 +67,9 @@
 #define STX	'\x02'
 #define ETX	'\x03'
 #ifndef	TESTCONS
-extern void warning(char *, char *);	/* print warning message */
-extern void iCerror(const char * s);	/* use full yyerror in comp.y */
-#else	/* TESTCONS */
-static void	warning (const char * warnMsg, const char * msg);
+extern void	iCerror(const char * s);	/* use full yyerror in comp.y */
 #endif	/* TESTCONS */
+extern void	warning(char *, char *);	/* print warning message */
 static void	yyerror (int * retValue, const char * msg);
 static int	yylex(void);
 static char *	in;
@@ -351,58 +349,11 @@ yyerror (int * retValue, const char * msg)
 
 /********************************************************************
  *
- *	Main program for testing this parser
- *
- *******************************************************************/
-
-static char *	iC_progname;		/* name of this executable */
-static const char *	usage =
-"Usage: %s constant_expression_text [...]\n"
-"        -h              this help text\n"
-"Copyright (C) 2016 John E. Wulff     <immediateC@gmail.com>\n"
-;
-
-int
-main(int argc, char **argv)
-{
-    int		value;
-    int		n = 0;
-
-    iC_progname = *argv;
-    if (argc <= 1) goto error;
-    while (--argc > 0) {
-	if (**++argv == '-') {
-	    ++*argv;
-	    do {
-		switch (**argv) {
-		case 'h':
-		case '?':
-		error:
-		    printf(usage, iC_progname);
-		    exit(1);
-		default:
-		    printf("WARNING: %s: unknown option -%c\n", iC_progname, **argv);
-		    break;
-		}
-	    } while (*++*argv);
-	} else {
-	    if (parseConstantExpression(*argv, &value, 0)) {
-		warning("not a constant expression", *argv);	/* parse error */
-	    } else {
-		printf("%d	'%s' ==> %d\n", ++n, *argv, value);
-	    }
-	}
-    }
-    return 0;
-} /* main */
-
-/********************************************************************
- *
  *	Warning function for test version - use full Warning for immcc
  *
  *******************************************************************/
 
-static void
+void
 warning (const char * warnMsg, const char * msg)
 {
     printf("*** Warning: %s: %s\n", warnMsg, msg);

@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.60 $";
+"@(#)$Id: rsff.c 1.61 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1536,12 +1536,12 @@ iC_timerSfn(					/* Timer function */
  *	is much cleaner and works with immC variables inside index
  *	expressions.
  *
- *	If glv == &iClock, iC_index was out of range and no assignment occurs.
- *	This is done so that iC programs keep running - it would be drastic
- *	to quit a running control application for a range error.
- *	A Warning is issued on the console.
+ *	If glv->gt_fni == UDFA, an out of range Warning was issued on
+ *	the console and no assignment occurs here. This is done so that
+ *	iC programs keep running despite an attempted out of range array
+ *	reference.
  *
- *	Return value is the value assigned or 0 if glv == &iClock.
+ *	Return value is the value assigned or 0 if index was out of range.
  *
  *	NOTE: the switch cases for assignment operators must line up
  *	with the ppi numbers defined in gram.y for 'assignment_operator'
@@ -1585,7 +1585,7 @@ iC_assignA(Gate * glv, int ppi, int rv) {
     int iv = rv;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
-    if (glv == &iClock) return 0;		/* index out of range */
+    if (glv->gt_fni == UDFA) return 0;		/* index out of range */
     assert(glv->gt_ini == -ARNC);
     nv = glv->gt_new;
     switch (ppi) {
@@ -1691,12 +1691,13 @@ iC_assignA(Gate * glv, int ppi, int rv) {
  *	value (0 is rv == 0, 1 is rv != 0) changes from its previous
  *	value.
  *
- *	If glv == &iClock, iC_index was out of range and no assignment occurs.
- *	This is done so that iC programs keep running - it would be drastic
- *	to quit a running control application for a range error.
- *	A Warning is issued on the console.
+ *	If glv->gt_fni == UDFA, an out of range Warning was issued on
+ *	the console and no assignment occurs here. This is done so that
+ *	iC programs keep running despite an attempted out of range array
+ *	reference.
  *
- *	Return value is the logic value 0 or 1 assigned or 0 if glv == &iClock.
+ *	Return value is the logic value 0 or 1 assigned or 0 if index was
+ *	out of range.
  *
  *******************************************************************/
 
@@ -1716,7 +1717,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
     signed char val;
-    if (glv == &iClock) return 0;		/* index out of range */
+    if (glv->gt_fni == UDFA) return 0;		/* index out of range */
     assert(glv->gt_ini == -LOGC);
     nv = glv->gt_val < 0 ? 1 : 0;
     switch (ppi) {
@@ -1805,10 +1806,11 @@ iC_assignL(Gate * glv, int ppi, int rv) {
  *	The compiler stores the size of the initialised immC array in gt_old.
  *	An index within range returns the indexed member of the immC array.
  *
- *	If there is a range error a Warning is issued on the console and
- *	iClock is returned.  This is checked by iC_assignA() and iC_assignL(),
- *	which return arithmetic or logic 0 if assignment to an out of range
- *	array member is attempted. No array member is modified.
+ *	If there is a range error a Warning is issued on the console and the
+ *	array itself is returned.  The arithmetic or logical value returned
+ *	if this is accessed is 0.  It is also checked by iC_assignA() and
+ *	iC_assignL(), which return arithmetic or logic 0 if assignment to an
+ *	out of range array member is attempted. No array member is modified.
 
  *	This is done so that iC programs keep running - it would be
  *	drastic to quit a running control application for a range error.
@@ -1818,11 +1820,12 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 Gate *
 iC_index(Gate * gm, int index)
 {
-    assert((gm->gt_ini == -iC_ARNC || gm->gt_ini == -iC_LOGC) && gm->gt_fni == iC_UDFA);
+    assert((gm->gt_ini == -ARNC || gm->gt_ini == -LOGC) && gm->gt_fni == UDFA);
     if (index >= gm->gt_old || index < 0) {
 	fprintf(iC_errFP, "\nWarning: %s: immC array reference %s[%d] is out of bounds (size = %d) - no action\n",
 	    iC_progname, gm->gt_ids, index, (int)gm->gt_old);
-	return &iClock;			/* stops assignment or 0 reference */
+	assert(gm->gt_new == 0 && gm->gt_val >= 0);
+	return gm;			/* array itself - returns 0 if accessed - stops assignment */
     }
     return gm->gt_rlist[index];		/* immC member of array gm[index] */
 } /* iC_index */

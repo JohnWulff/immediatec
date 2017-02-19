@@ -1,5 +1,5 @@
 static const char lmain_c[] =
-"@(#)$Id: lmain.c 1.19 $";
+"@(#)$Id: lmain.c 1.20 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -22,6 +22,12 @@ static const char lmain_c[] =
 #endif	/* _WINDOWS */
 #include	<string.h>
 #include 	"comp.h"
+
+#ifndef	LMAIN
+#error - must be compiled with LMAIN defined to link correctly
+#else	/* LMAIN */
+
+extern int yyparse (void);
 
 static const char *	usage =
 "USAGE: %s [-h][ -l<lst>][ -Dmacro[=defn]...][ -Umacro...][ -d<debug>] <C_src>\n"
@@ -264,3 +270,4 @@ main(
 #endif	/* EFENCE */
     return r;
 } /* main */
+#endif	/* LMAIN */
