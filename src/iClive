@@ -292,7 +292,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.65 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.66 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -958,7 +958,7 @@ $text      ->bind('<KeyPress>',			[ \&set_shift_control     ]); # Set Shift/Cont
 $text      ->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
 $text      ->bind('<Button-1>',			[ \&report_cursor         ]); # change in cursor position
 $text      ->bind('<ButtonRelease>',		[ \&adjust_live           ]);
-$text      ->bind('<Double-1>',			[ \&pick_word             ]); # select a search word (clashes with Text-binding)
+$text      ->bind('<Double-1>',			[ \&pick_word             ]); # select a search word in Live mode
 $text      ->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
 ####### Y-Scrollbar bindings ###########################################
 $yScrollbar->bind('<KeyPress>',			[ \&set_shift_control     ]); # Set Shift/Control state
@@ -1794,22 +1794,22 @@ sub restoreTag {
 #	in Live mode.
 #
 #	You may prefer to allow this in Edit mode
-#	- simply comment if ($scanflag) { ... } lines
+#	- simply comment if ($scanflag) { and matching } lines
 #
 ########################################################################
 
 sub pick_word {
-# if ($scanFlag) {	### comment to allow pick_word in Edit mode
-    my $start_index = $text->index('insert wordstart');
-    my $end_index = $text->index('insert lineend');
-    my $line = $text->get($start_index, $end_index);
-    $line =~ m/^([\w.]+)/;
-    if (defined $1) {
-	print "pick_word '$1'\n" if $opt_T;
-	$entrySearch->focus();		# initiate search entry
-	search_now(1, $1, 0);		# search for first word only
-    }
-# }			### comment to allow pick_word in Edit mode
+    if ($scanFlag) {	### comment to allow pick_word in Edit mode
+	my $start_index = $text->index('insert wordstart');
+	my $end_index = $text->index('insert lineend');
+	my $line = $text->get($start_index, $end_index);
+	$line =~ m/^([\w.]+)/;
+	if (defined $1) {
+	    print "pick_word '$1'\n" if $opt_T;
+	    $entrySearch->focus();		# initiate search entry
+	    search_now(1, $1, 0);		# search for first word only
+	}
+    }			### comment to allow pick_word in Edit mode
 } # pick_word
 
 ########################################################################
@@ -2189,7 +2189,7 @@ sub scan {
 #	########################################################################
 #	$text->editReset;	# clears the undo and redo stacks for Tk::TextUndo
 #    }
-#    This code does not work for Tk::TextUndo ??? not imlemented for Tk::Text
+#    This code does not work for Tk::TextUndo ??? not implemented for Tk::Text
 #    $text->editReset does not clear the undo stack
 #
 ########################################################################
@@ -2198,9 +2198,7 @@ sub reset_scan {
     if ($scanFlag) {
 	$scanFlag = 0;
 	$menuScan->configure(-text => 'Live');
-	if ($runName ne '') {
-	    clear_scan(@_);
-	}
+	clear_scan(@_);
     }
 } # reset_scan
 
@@ -2393,7 +2391,7 @@ use warnings;
 	## Attach balloon processing
 	####################################################################
 
-	unless ($balloonAttached) {
+	if ($runName ne '' and not $balloonAttached) {
 	    $balloon->attach($text,
 	       -balloonmsg      => \$bMsg,
 	       -balloonposition => 'mouse', # not used since postcommand returns real position
@@ -3693,13 +3691,17 @@ so on until the end of the text is reached. Another RETURN will start
 by displaying the first group at the top again. Hitting SHIFT-RETURN
 will reverse the direction of displaying the groups.
 
-Double-clicking with mouse button 1 transfers the word under the
-mouse to the Search Entry window and immediately starts a search for
-that word. This is the quickest and best way to start a search. This
-action masks the selection of the text under the mouse (Text Binding
-[2]).  If necessary clear the prevous search by pressing ctrl-RETURN.
-The search can be continued by clicking on the [/] button or pressing
-RETURN.
+In 'Live' mode, double-clicking with mouse button 1 transfers the
+word under the mouse to the Search Entry window and immediately
+starts a search for that word. This is the quickest and best way to
+start a search.  The search can be continued by clicking on the [/]
+button or pressing RETURN.
+
+If this quick search action were taken in 'Edit' mode it would
+mask the selection of the text under the mouse (Text Binding [2]).
+To start a quick search in 'Edit' mode, briefly switch to 'Live' mode,
+double-click a word and then revert to 'Edit' mode. Continue search in
+'Edit' mode by clicking on the [/] button.
 
 Double-clicking with mouse button 1 with the cursor in the Search Entry
 window or by pressing ctrl-RETURN will clear the search completely.
@@ -3724,9 +3726,9 @@ facility. Another useful feature is changing the wrap mode.
 =head1 KEYBOARD BINDINGS
 
 Tk automatically creates class bindings for texts that give them
-the following default behavior.  In the descriptions below, 'word'
-refers to a contiguous group of letters, digits, or '_' characters,
-or any single character other than these. (from Tk::Text)
+the following default behavior in 'Edit' mode.  In the descriptions
+below, 'word' refers to a contiguous group of letters, digits, or '_'
+characters, or any single character other than these. (from Tk::Text)
 
 [1] Clicking mouse button 1 positions the insertion cursor just before
    the character underneath the mouse cursor, sets the input focus to

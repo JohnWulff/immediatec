@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "cons.y"
  static const char cons_y[] =
-"@(#)$Id: cons.tab.c 1.2 $";
+"@(#)$Id: cons.tab.c 1.4 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -2103,7 +2103,7 @@ yyerror (int * retValue, const char * msg)
  *******************************************************************/
 
 void
-warning (const char * warnMsg, const char * msg)
+warning(char * warnMsg, char * msg)
 {
     printf("*** Warning: %s: %s\n", warnMsg, msg);
 } /* warning */
