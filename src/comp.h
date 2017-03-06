@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.72 $";
+"@(#)$Id: comp.h 1.73 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -141,7 +141,7 @@ extern void execerror(char *, char *,
 		    char *, int);	/* recover from run-time error */
 
 #ifndef LMAIN
-extern void yyerror(const char * s);	/* called for yacc syntax error */
+extern void iCerror(const char * s);	/* called for yacc syntax error in cons.y */
 extern int  get(FILE* fp, int x);	/* character input shared with lexc.l */
 #endif
 extern int	ynerrs;			/* count of yyerror() calls */
@@ -414,4 +414,5 @@ extern void	clearParaList(int flag); /* clear parameter list from extraneous ent
 
 					/*   cons.y   */
 extern int	parseConstantExpression(char * expressionText, int * valp, int r);
+extern long	getNumber(char * numStr, char ** epp, int r);
 #endif	/* COMP_H */

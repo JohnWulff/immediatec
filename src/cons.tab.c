@@ -136,19 +136,23 @@
 #include	<limits.h>
 #include	<stdio.h>
 #include	<assert.h>
+#include	"comp.h"
 #include	"cons.tab.h"
 
 #define STX	'\x02'
 #define ETX	'\x03'
-#ifndef	TESTCONS
+#ifdef	TESTCONS
+static int	suppressWarning = 0;		/* output warnings in getNumber() for test compiler */
+int		iC_Wflag = W_DEPRECATED_LOGIC;
+#else	/* ! TESTCONS */
+static int	suppressWarning = 1;		/* suppress warnings for constant expression compiler */
 extern void	iCerror(const char * s);	/* use full yyerror in comp.y */
 #endif	/* TESTCONS */
-extern void	warning(char *, char *);	/* print warning message */
 static void	yyerror (int * retValue, const char * msg);
 static int	yylex(void);
 static char *	in;
 static char *	inp;
-static int	supressErrorMsg = 0;
+static int	suppressErrorMsg = 0;
 static int	stxFlag = 0;
 
 /********************************************************************
@@ -160,13 +164,15 @@ static int	stxFlag = 0;
  *		1 if non numeric and r == 0
  *		if r != 0 suppress yacc syntax (and other) error messages
  *
+ *	parseConstantExpression() is used in comp.y
+ *
  *******************************************************************/
 
 int
 parseConstantExpression(char * expressionText, int * valp, int r)
 {
     in = inp = expressionText;		/* ready for yylex */
-    supressErrorMsg = r;
+    suppressErrorMsg = r;
     *valp = 0;
     return yyparse(valp);
 } /* parseConstantExpression */
@@ -174,7 +180,7 @@ parseConstantExpression(char * expressionText, int * valp, int r)
 /* use default YYSTYPE int */
 
 /* Line 371 of yacc.c  */
-#line 178 "cons.tab.c"
+#line 184 "cons.tab.c"
 
 # ifndef YY_NULL
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -259,7 +265,7 @@ int cnparse ();
 /* Copy the second part of user declarations.  */
 
 /* Line 390 of yacc.c  */
-#line 263 "cons.tab.c"
+#line 269 "cons.tab.c"
 
 #ifdef short
 # undef short
@@ -558,9 +564,9 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,   122,   122,   126,   127,   130,   138,   146,   149,   152,
-     155,   158,   161,   164,   173,   176,   179,   182,   185,   188,
-     191,   194,   197,   200,   203,   206,   209,   212,   215
+       0,   128,   128,   132,   133,   136,   144,   152,   155,   158,
+     161,   164,   167,   170,   179,   182,   185,   188,   191,   194,
+     197,   200,   203,   206,   209,   212,   215,   218,   221
 };
 #endif
 
@@ -1520,19 +1526,19 @@ yyreduce:
     {
         case 2:
 /* Line 1792 of yacc.c  */
-#line 122 "cons.y"
+#line 128 "cons.y"
     { *retValue = (yyvsp[(1) - (1)]); }
     break;
 
   case 3:
 /* Line 1792 of yacc.c  */
-#line 126 "cons.y"
+#line 132 "cons.y"
     { (yyval) = (yyvsp[(1) - (1)]); }
     break;
 
   case 4:
 /* Line 1792 of yacc.c  */
-#line 127 "cons.y"
+#line 133 "cons.y"
     {	/* * */
 		(yyval) = (yyvsp[(1) - (3)]) * (yyvsp[(3) - (3)]);
 	    }
@@ -1540,7 +1546,7 @@ yyreduce:
 
   case 5:
 /* Line 1792 of yacc.c  */
-#line 130 "cons.y"
+#line 136 "cons.y"
     {	/* / */
 		if ((yyvsp[(3) - (3)]) == 0) {
 		    warning("division by zero", in);
@@ -1553,7 +1559,7 @@ yyreduce:
 
   case 6:
 /* Line 1792 of yacc.c  */
-#line 138 "cons.y"
+#line 144 "cons.y"
     {	/* % */
 		if ((yyvsp[(3) - (3)]) == 0) {
 		    warning("remainder of division by zero", in);
@@ -1566,7 +1572,7 @@ yyreduce:
 
   case 7:
 /* Line 1792 of yacc.c  */
-#line 146 "cons.y"
+#line 152 "cons.y"
     {	/* binary + */
 		(yyval) = (yyvsp[(1) - (3)]) + (yyvsp[(3) - (3)]);
 	    }
@@ -1574,7 +1580,7 @@ yyreduce:
 
   case 8:
 /* Line 1792 of yacc.c  */
-#line 149 "cons.y"
+#line 155 "cons.y"
     {	/* binary - */
 		(yyval) = (yyvsp[(1) - (3)]) - (yyvsp[(3) - (3)]);
 	    }
@@ -1582,7 +1588,7 @@ yyreduce:
 
   case 9:
 /* Line 1792 of yacc.c  */
-#line 152 "cons.y"
+#line 158 "cons.y"
     {	/* << */
 		(yyval) = (yyvsp[(1) - (3)]) << (yyvsp[(3) - (3)]);
 	    }
@@ -1590,7 +1596,7 @@ yyreduce:
 
   case 10:
 /* Line 1792 of yacc.c  */
-#line 155 "cons.y"
+#line 161 "cons.y"
     {	/* >> */
 		(yyval) = (yyvsp[(1) - (3)]) >> (yyvsp[(3) - (3)]);
 	    }
@@ -1598,7 +1604,7 @@ yyreduce:
 
   case 11:
 /* Line 1792 of yacc.c  */
-#line 158 "cons.y"
+#line 164 "cons.y"
     {	/* unary + */
 		(yyval) = (yyvsp[(2) - (2)]);
 	    }
@@ -1606,7 +1612,7 @@ yyreduce:
 
   case 12:
 /* Line 1792 of yacc.c  */
-#line 161 "cons.y"
+#line 167 "cons.y"
     {	/* unary - */
 		(yyval) = - (yyvsp[(2) - (2)]);
 	    }
@@ -1614,7 +1620,7 @@ yyreduce:
 
   case 13:
 /* Line 1792 of yacc.c  */
-#line 164 "cons.y"
+#line 170 "cons.y"
     {
 		(yyval) = (yyvsp[(2) - (3)]);
 	    }
@@ -1622,7 +1628,7 @@ yyreduce:
 
   case 14:
 /* Line 1792 of yacc.c  */
-#line 173 "cons.y"
+#line 179 "cons.y"
     {	/* & */
 		(yyval) = (yyvsp[(1) - (3)]) & (yyvsp[(3) - (3)]);
 	    }
@@ -1630,7 +1636,7 @@ yyreduce:
 
   case 15:
 /* Line 1792 of yacc.c  */
-#line 176 "cons.y"
+#line 182 "cons.y"
     {	/* ^ */
 		(yyval) = (yyvsp[(1) - (3)]) ^ (yyvsp[(3) - (3)]);
 	    }
@@ -1638,7 +1644,7 @@ yyreduce:
 
   case 16:
 /* Line 1792 of yacc.c  */
-#line 179 "cons.y"
+#line 185 "cons.y"
     {	/* | */
 		(yyval) = (yyvsp[(1) - (3)]) | (yyvsp[(3) - (3)]);
 	    }
@@ -1646,7 +1652,7 @@ yyreduce:
 
   case 17:
 /* Line 1792 of yacc.c  */
-#line 182 "cons.y"
+#line 188 "cons.y"
     {	/* < */
 		(yyval) = (yyvsp[(1) - (3)]) < (yyvsp[(3) - (3)]);
 	    }
@@ -1654,7 +1660,7 @@ yyreduce:
 
   case 18:
 /* Line 1792 of yacc.c  */
-#line 185 "cons.y"
+#line 191 "cons.y"
     {	/* <= */
 		(yyval) = (yyvsp[(1) - (3)]) <= (yyvsp[(3) - (3)]);
 	    }
@@ -1662,7 +1668,7 @@ yyreduce:
 
   case 19:
 /* Line 1792 of yacc.c  */
-#line 188 "cons.y"
+#line 194 "cons.y"
     {	/* > */
 		(yyval) = (yyvsp[(1) - (3)]) > (yyvsp[(3) - (3)]);
 	    }
@@ -1670,7 +1676,7 @@ yyreduce:
 
   case 20:
 /* Line 1792 of yacc.c  */
-#line 191 "cons.y"
+#line 197 "cons.y"
     {	/* >= */
 		(yyval) = (yyvsp[(1) - (3)]) >= (yyvsp[(3) - (3)]);
 	    }
@@ -1678,7 +1684,7 @@ yyreduce:
 
   case 21:
 /* Line 1792 of yacc.c  */
-#line 194 "cons.y"
+#line 200 "cons.y"
     {	/* == */
 		(yyval) = (yyvsp[(1) - (3)]) == (yyvsp[(3) - (3)]);
 	    }
@@ -1686,7 +1692,7 @@ yyreduce:
 
   case 22:
 /* Line 1792 of yacc.c  */
-#line 197 "cons.y"
+#line 203 "cons.y"
     {	/* != */
 		(yyval) = (yyvsp[(1) - (3)]) != (yyvsp[(3) - (3)]);
 	    }
@@ -1694,7 +1700,7 @@ yyreduce:
 
   case 23:
 /* Line 1792 of yacc.c  */
-#line 200 "cons.y"
+#line 206 "cons.y"
     {	/* && */
 		(yyval) = (yyvsp[(1) - (3)]) && (yyvsp[(3) - (3)]);
 	    }
@@ -1702,7 +1708,7 @@ yyreduce:
 
   case 24:
 /* Line 1792 of yacc.c  */
-#line 203 "cons.y"
+#line 209 "cons.y"
     {	/* || */
 		(yyval) = (yyvsp[(1) - (3)]) || (yyvsp[(3) - (3)]);
 	    }
@@ -1710,7 +1716,7 @@ yyreduce:
 
   case 25:
 /* Line 1792 of yacc.c  */
-#line 206 "cons.y"
+#line 212 "cons.y"
     {	/* ? : */
 		(yyval) = (yyvsp[(1) - (5)]) ? (yyvsp[(3) - (5)]) : (yyvsp[(5) - (5)]);
 	    }
@@ -1718,7 +1724,7 @@ yyreduce:
 
   case 26:
 /* Line 1792 of yacc.c  */
-#line 209 "cons.y"
+#line 215 "cons.y"
     {	/* ?: */
 		(yyval) = (yyvsp[(1) - (4)]) ? : (yyvsp[(4) - (4)]);
 	    }
@@ -1726,7 +1732,7 @@ yyreduce:
 
   case 27:
 /* Line 1792 of yacc.c  */
-#line 212 "cons.y"
+#line 218 "cons.y"
     {	/* unary arithmetic ! */
 		(yyval) = ! (yyvsp[(2) - (2)]);
 	    }
@@ -1734,7 +1740,7 @@ yyreduce:
 
   case 28:
 /* Line 1792 of yacc.c  */
-#line 215 "cons.y"
+#line 221 "cons.y"
     {	/* unary bitwise ~ */
 		(yyval) = ~ (yyvsp[(2) - (2)]);
 	    }
@@ -1742,7 +1748,7 @@ yyreduce:
 
 
 /* Line 1792 of yacc.c  */
-#line 1746 "cons.tab.c"
+#line 1752 "cons.tab.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -1974,28 +1980,124 @@ yyreturn:
 
 
 /* Line 2055 of yacc.c  */
-#line 229 "cons.y"
+#line 235 "cons.y"
 
 
 #include	<stdlib.h>
+#include	<string.h>
 #include	<ctype.h>
 
 /********************************************************************
  *
- *	Get a number, which may be decimal, octal or hexadecimal.
- *	Use this simpler version with different parameters rather
- *	than the very different version in the main grammar.
+ *	Get a number, which may be decimal, octal or hexadecimal
+ *	as well as a C type character constants '\0' '\n' 'a' etc
+ *	as well as Octal or Hex character constants.
+ *	    '\123' == 83
+ *	    '\x23' == 35
+ *	Multibyte character constants are handled like in C
+ *	    '0123' == 0x30313233 == 808530483
+ *	even
+ *	    '\x30\x31\x32\x33' == 0x30313233 == 808530483
+ *	or any mixture of octal or hex bytes and ascii characters in ''
+ *
+ *	One difference was found between this algorithm JW and the output
+ *	of the gcc C compiler.
+ *	Hex character constants longer then 2 characters are accepted with
+ *	the warning: hex escape sequence out of range [enabled by default]
+ *	MADE THE SAME by not defining JW (pretty obscure anyway).
+ *	Intrestingly octal multi-byte character constants are limited
+ *	to 3 characters by gcc C.
+ *
+ *	In C all multi-byte character constants evoke:
+ *	warning: multi-character character constant [-Wmultichar]
+ *	To be consistent the same has been done in iC.
+ *
+ *	Character constants are probably not very useful in iC
+ *	but at least there will not be any errors if somebody
+ *	decides to write obfuscated iC code.
+ *
+ *	getNumber() is also used in comp.y
+ *
+ *	Since getNumber is called twice for every number in a constant
+ *	expression - once by comp.y and again by cons.y if the number
+ *	is actually part of a constant expression - warnings are
+ *	blocked for the second call in this parser to suppress 2nd
+ *	identical warning.
+ *		if r == 0 output compiler warnings
+ *		if r != 0 suppress compiler warnings
  *
  *******************************************************************/
 
-static long
-getNumber(const char * numStr, int * len)
+long
+getNumber(char * numStr, char ** epp, int r)
 {
-    long	value;
-    char *	ep;
+    char *		cp = numStr;
+    char *		cp1;
+    long		value = 0L;
+    unsigned int	v;
+    int			c;
+    int			n;
+    int			i;
 
-    value = strtol(numStr, &ep, 0);		/* convert to long */
-    *len  = ep - numStr;
+    if ((c = *cp++) == '\'') {
+	for (i = 0; (c = *cp++) != '\'' && c != '\0'; i++) {
+	    if (c == '\\') {
+		v = 0;
+		cp1 = cp;
+		if (isdigit(c = *cp++)) {
+		    if (sscanf(cp1, "%3o%n", &v, &n) == 1) {
+			cp = cp1 + n;
+		    }
+		} else if (c == 'x' || c == 'X') {
+#ifdef JW 
+		    if (sscanf(cp, "%2x%n", &v, &n) == 1) {	/* n cannot be > 2 } */
+#else
+		    if (sscanf(cp, "%x%n", &v, &n) == 1) {
+			if (r == 0 && n > 2) {	/* warning enabled by default as in C */
+			    warning("hex escape sequence out of range:", numStr);
+			}
+#endif
+			cp += n;
+		    } else if (r == 0) {
+			warning("\\x used with no following hex digits:", numStr);
+		    }
+		} else {
+		    switch (c) {
+		    case 'a':  v =  7; break;
+		    case 'b':  v =  8; break;
+		    case 't':  v =  9; break;
+		    case 'n':  v = 10; break;
+		    case 'v':  v = 11; break;
+		    case 'f':  v = 12; break;
+		    case 'r':  v = 13; break;
+		    case '\"': v = 34; break;
+		    case '\'': v = 39; break;
+		    case '\?': v = 63; break;
+		    case '\\': v = 92; break;
+		    default:			/* warning enabled by default as in C */
+			if (r == 0) warning("unknown escape sequence:", numStr);
+			goto DirectConversion;	/* none of the above - treat '\c' as 'c' as in C */
+		    }
+		}
+	    } else {
+	      DirectConversion:
+		v = c;
+	    }
+	    value <<= 8;
+	    value |= v & 0xff;
+	}
+	if (r == 0) {
+	    if (i == 0 || i > 4) {
+		warning("character constant out of range:", numStr);
+	    } else
+	    if (i > 1 && iC_Wflag & W_DEPRECATED_LOGIC) {
+		warning("multi-character character constant:", numStr);
+	    }
+	}
+	*epp = cp;				/* 1 past character constant */
+    } else {
+	value = strtol(numStr, epp, 0);		/* convert to long */
+    }
     return value;
 } /* getNumber */
 
@@ -2010,7 +2112,6 @@ yylex(void)
 {
     int		c;
     int		c1;
-    int		l;
 
     while ((c = *inp++) != 0) {
 	if (isspace(c) || c == '#') continue;	/* ignore white space and # */
@@ -2026,10 +2127,9 @@ yylex(void)
 	    continue;				/* ignore text bracketed by STX ETX */
 	}
 	assert(stxFlag == 0);			/* never should go -ve */
-	if (isdigit(c)) {
-	    yylval = (int)getNumber(--inp, &l); /* must be at least a single 0 */
-	    inp += l;				/* step past number */
-	    c = NUMBER;				/* decimal octal or hex */
+	if (isdigit(c) || c == '\'') {
+	    yylval = (int)getNumber(--inp, &inp, suppressWarning); /* decimal octal, hex or character constant */
+	    c = NUMBER;				/* must be at least a single 0 */
 	    goto found;
 	}
 	c1 = *inp++;
@@ -2088,12 +2188,12 @@ yylex(void)
  *******************************************************************/
 
 static void
-yyerror (int * retValue, const char * msg)
+cnerror (int * retValue, const char * msg)
 {
-    if (supressErrorMsg == 0) {
+    if (suppressErrorMsg == 0) {
 	iCerror("cons syntax error");				/* use full yyerror in comp.y */
     }
-} /* yyerror */
+} /* cnerror */
 #else	/* TESTCONS */
 
 /********************************************************************

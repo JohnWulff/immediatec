@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "comp.y"
  static const char comp_y[] =
-"@(#)$Id: comp.tab.c 1.120 $";
+"@(#)$Id: comp.tab.c 1.121 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -107,7 +107,6 @@
 
 static int	yylex(void);		/* lexer for immcc renamed iClex() */
 static void	unget(int);		/* shares buffers with get() */
-static long	getNumber(void);	/* shares buffers with get() */
 int		ynerrs;			/* count of yyerror() calls */
 int		gnerrs;			/* count of ierror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
@@ -132,6 +131,7 @@ char *		iCbuf;			/* buffer to build imm statement */
 char *		iFunBuffer;		/* buffer to build imm function symbols */
 char *		iFunEnd;		/* pointer to end */
 #endif	/* EFENCE */
+
 char *		iFunSymExt = 0;		/* pointer to imm function symbol Extension */
 static char *	iFunSyText = 0;		/* pointer to function symbol text when active */
 Sym		iRetSymbol;		/* .v is pointer to imm function return Symbol */
@@ -6500,37 +6500,6 @@ unget(int c)
 
 /********************************************************************
  *
- *	Get a number, which may be decimal, octal or hexadecimal
- *
- *	Convert from getp in chbuf - termination will be at least at
- *	newline supplied by fgets() or final '\0'. Usually it is
- *	earlier and that part is copied into iCtext with get().
- *
- *******************************************************************/
-
-static long
-getNumber(void)
-{
-    long	value;
-    char *	cp;
-    char *	ep;
-
-    value = strtol(getp[0], &ep, 0);		/* convert to long */
-    assert (ep <= &chbuf[0][CBUFSZ]);
-    for (cp = getp[0]; cp < ep; cp++) {
-	get(T0FP, 0);				/* transfer to iCtext */
-    }
-#if YYDEBUG
-    if ((iC_debug & 0402) == 0402) {
-	fprintf(iC_outFP, "getNumber: '%s' converted to %ld\n", iCtext, value);
-	fflush(iC_outFP);
-    }
-#endif
-    return value;
-} /* getNumber */
-
-/********************************************************************
- *
  *	Lexer for iC grammar
  *
  *******************************************************************/
@@ -6561,6 +6530,8 @@ yylex(void)
 	Symbol *	symp;
 	Symbol *	sp;
 	List_e *	lp;
+	char *		cp;
+	char *		ep;
 	int		len;
 	int		rest;
 	char		tempBuf[TSIZE];		/* make long enough for format below */
@@ -6569,10 +6540,20 @@ yylex(void)
 	    iCleng = 0;
 	    continue;				/* ignore white space */
 	}
-	if (isdigit(c)) {
+	if (isdigit(c) || c == '\'') {
 	    unget(c);				/* must be at least a single 0 */
-	    iClval.vai.v = (unsigned int)getNumber();	/* decimal octal or hex - getNumber marks text boundaries */
-	    c = NUMBER;				/* value used in immCarrayHead */
+	    iClval.vai.v = (unsigned int)getNumber(getp[0], &ep, 0); /* decimal octal, hex or character constant */
+	    assert (ep <= &chbuf[0][CBUFSZ]);
+	    for (cp = getp[0]; cp < ep; cp++) {
+		get(T0FP, 0);			/* transfer to iCtext to mark text boundaries */
+	    }
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "yylex: '%s' converted to %u\n", iCtext, iClval.vai.v);
+		fflush(iC_outFP);
+	    }
+#endif
+	    c = NUMBER;				/* value used in immCarrayHead TODO check */
 	    goto retfl;
 	}
 	if (isalpha(c) || c == '_' || c == '$') {	/* first may not be '@' */
