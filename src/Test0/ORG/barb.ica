@@ -20,9 +20,9 @@
  *******************************************************************/
 
 use strict;
-%define LAST 8		/* counters 0 ... LAST */
-%define INST 4		/* number of instances */
-%define F ((LAST/8+1)*8)
+%%define LAST 8		/* counters 0 ... LAST */
+%%define INST 4		/* number of instances */
+%%define F ((LAST/8+1)*8)
 
 imm timer t = TIMER(TX0.4);
   FOR (int I = 0; I < INST; I++) {{

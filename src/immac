@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2013  John E. Wulff
+#	Copyright (C) 2000-2017  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -12,12 +12,48 @@
 #
 #	immac
 #
-#   Pre-compiler to convert "immediate C" source files containing arrays
-#   and object like or function like macros into straight "immediate C".
+#   Pre-compiler to convert "immediate C with arrays" (iCa) source files.
 #
-#   Also straight macro processor to replace cpp called with 'immac -m'
-#   handling #define #f etc only and special macro pre-processor for
-#   yacc called with 'immac -M' handling %define %if etc only.
+#   Expands FOR loops and handles IF ELSE statements as well as object
+#   like or function like macros with pre-compile prefix %% into straight
+#   "immediate C" (iC).
+#       'immac' handles %%define %%if etc for a file with .ica extension
+#       'immac' handles %define %if etc for a file with .ic extension
+#       without FOR expansion etc, which is the same as calling 'immac -M'
+#       (used to be same as 'immac -m' in iC version 2 or less)
+#
+#   Also several options to handle macros only (no FOR expansion etc):
+#       'immac -M' handles %define %if etc only for straight iC code
+#       'immac -m' handles #define #if etc only to replace cpp for C code
+#       'immac -Y' handles %if etc only (no %define) for conditionals in
+#       yacc code (yacc and/or bison use %define themselves).
+#
+#   This version of immac is for the iC language version 3 and up.
+#
+#   The following prefixes have been changed from iC version 2:
+#       "pre-compiler prefix in"    vers 2        vers 3
+#        iC code in .ic and .ica       #             %
+#        iCa code in .ica              %             %%
+#        C code in literal blocks      %#            #
+#   These are the only changes in the iC language version 3.
+#
+#   This means that #define #if etc macros in C literal blocks will be
+#   written just like in C and passed unchanged to the generated C code.
+#
+#   The original kludge using %#define etc in C literal blocks was done
+#   because 'cpp' was used for pre-compiling both iC code before the iC
+#   compile and C code, in which %#define had been changed to #define
+#   before the C compile. This was done before "immediate C with arrays"
+#   was defined and 'immac' was developed to replace 'cpp' for pre-compiling
+#   iC and generated C code. (It was always an eye sore - JW 20170311).
+#
+#   For backwards compatibility %#define directives in C literal blocks are
+#   still accepted by immac and converted to #define directives by 'immcc'.
+#   #define directives in iC code must be changed to %define directives.
+#   %define directives in iCa code must be changed to %%define directives.
+#
+#   The filter 'Auxfiles/filter_iC2toiC3' converts iC and iCa vers 2 files
+#   to version 3 files.
 #
 ########################################################################
 
@@ -39,21 +75,21 @@ Usage:
     -l <log>   name of Perl log file                 (default: none)
     -e <err>   name of error file                    (default: stderr)
     -t         test if source is an iCa language file - return 1 if it is
-    -m         process only #include #define #if etc directives (see <in.ic>)
+    -m         process only #include #define #if etc directives
 	       No iCa language translation (macro pre-processor replaces cpp)
 	       Warning if %include %define %if etc directives are used
-    -M         process only %include %define %if etc directives
+    -M         process only %include %define %if etc directives (see <in.ic>)
 	       No iCa language translation (#directives are left untouched)
-    -Y         process only %if directives - enables optional compiling for
-	       yacc, bison or flex; %define directives are left untouched
+    -Y         process only %if directives - enables conditional compiling
+	       for yacc, bison or flex; %define directives are left untouched
     -I <path>  scan %include and #include "files" on another path
     -P <macro> predefine <macro> evaluated directly by this program
-               Usually defined with a numeric value eg. -P m=8
+               <macro> usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
-		     '%define m 4' in the code (opposite to cpp)
-    -D <macro> predefine <macro> evaluated only with -m, -M or <in.ic>
-    -U <macro> undefine <macro> evaluated only with -m, -M or <in.ic>
-    -a         output FOR IF ELSE ELSIF and %define lines as comments
+		     '%%define m 4' in the code (opposite to cpp)
+    -D <macro> predefine <macro> evaluated only with -m, -M, -Y or <in.ic>
+    -U <macro> undefine <macro> evaluated only with -m, -M, -Y or <in.ic>
+    -a         output FOR IF ELSE ELSIF and %%define lines as comments
     -S         forces @<<<< to only accept twin braces in FOR ... {{ }}
 			$named
     -N         negates use strict pragmas       (only for debugging)
@@ -61,14 +97,16 @@ Usage:
     -T         extra Trace output
     -h         this help text
     <in.ica>   iCa source file with array definitions (default: stdin)
-    <in.ic>    iC source file - only #include #define #if etc directives are
-               processed unless called with -t option (same as -m option)
-	       Warning if %include %define %if etc directives are used
+               only processes %%include %%define %%if etc directives when
+	       called without -m, -M or -Y options
+    <in.ic>    iC source file - only %include %define %if etc directives are
+               processed unless called with -t option (same as -M option)
+	       No iCa language translation (#directives are left untouched)
 
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.26 $
+$Id: immac 1.27 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -249,8 +287,8 @@ if ($argv = shift @ARGV) {
     die "Too many input file arguments (only one allowed)" if scalar @ARGV;
     open $in, $argv or die "Cannot open iCa input file '$argv': $!";
     ($devIn, $inoIn) = stat $argv;	# prevent writing to the input file later
-    if ($argv !~ m/\.ica$/ and not $opt_M and not $opt_Y) {
-	$opt_m = 1;			# force macro processing only unless $opt_t
+    if ($argv !~ m/\.ica$/ and not $opt_m and not $opt_Y) {
+	$opt_M = 1;			# force macro processing only unless $opt_t
     }
 } else {
     open $in, "<-" or die "Cannot re-open STDIN: $!";
@@ -295,14 +333,14 @@ if ($opt_t) {
 
 my $opt_m_M_or_Y = ($opt_m or $opt_M or $opt_Y);
 print " opt_m = '$opt_m' opt_M = '$opt_M' opt_Y = '$opt_Y' opt_m_M_or_Y = '$opt_m_M_or_Y'\n" if $opt_T and not $opt_l;
-my $CdirectiveRegex = $opt_m ?		# only %#directives are excluded
-    qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o  :
-		      $opt_M ?		# both #directives and %# directives are excluded
-    qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
-		      $opt_Y ?		# additionally %define %undef %include are excluded
-    qr/^\s*(%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o :
-		      # Else none	# both #directives and %# directives are excluded
-    qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
+my $CdirectiveRegex = $opt_m ?		# both %%directives and %#directives are excluded - #define and %define (warning)
+    qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o    :
+		      $opt_M ?		# %%directives, #directives and %#directives are excluded - %define %if only
+    qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
+		      $opt_Y ?		# additionally %define %undef %include are excluded - %define only (no %if)
+    qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o :
+		      # Else none	# %directives, #directives and %# directives are excluded - only %%directives
+    qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
 
 if (@opt_P) {
     my ($df, $val);
@@ -603,21 +641,18 @@ sub process_file {
       Line:
 	while (<$in>) {
 	    ########################################################################
-	    #   If -m then only %#directives are excluded in this block
 	    #       $CdirectiveRegex =
-	    #       qr/^\s*%#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
-	    #   Else if -M both #directives and %# directives are excluded
-	    #       $CdirectiveRegex =
-	    #       qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
-	    #   Else if -Y additionally %define %undef %include are excluded
-	    #       $CdirectiveRegex =
-	    #       qr/^\s*(%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o;
-	    #   Else if none of the above
-	    #       $CdirectiveRegex =
-	    #       qr/^\s*%?#\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o;
+	    #   If -m then both %%directives and %#directives are excluded - #define and %define (warning)
+	    #       qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o    :
+	    #   Else if -M %%directives, #directives and %#directives are excluded - %define %if only
+	    #       qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
+	    #   Else if -Y additionally %define %undef %include are excluded - %define only (no %if)
+	    #       qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o :
+	    #   Else if none of the above %directives, #directives and %# directives are excluded - only %%directives
+	    #       qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
 	    ########################################################################
 	    if ($Cdirective or m/$CdirectiveRegex/) {
-		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %#define etc output as is up to line without trailing \
+		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %define etc output as is up to line without trailing \
 		unless ($opt_t) {
 		    if ($si <= 0) {
 			$blankLines++;		# count lines not output as blank lines
@@ -636,10 +671,10 @@ sub process_file {
 	    }
 	    ########################################################################
 	    #   If not -m then #directives have been excluded in the previous section
-	    #   From now on treat %directives and #directives equivalently
+	    #   From now on treat %%directives, %directives and #directives equivalently
 	    #	except warn if %directive used in straight iC file or in immac -m call
 	    ########################################################################
-	    if ($directive or s/^\s*([%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1$2/) {
+	    if ($directive or s/^\s*(%%|[%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1$2/) {
 		$mWarn = 1 if $opt_m and $directive eq "" and $1 eq "%";	# output Warning later for -m only
 		$blankLines++ if $opt_m_M_or_Y;	# since %define and #define lines are not output treat them as a blank line
 		if (s/\\\s*$//) {		# test for and then remove trailing '\'
@@ -833,7 +868,7 @@ sub process_file {
 		chomp $macro;				# does not have leading blanks (because of split)
 		$macro =~ s!\s*(//.*)?$!!;		# delete C++ comment and trailing blanks
 		# print "//* $.:	$def $macro\n" if $opt_T;
-		if ($def =~ m/^([%#])if(\w*)$/) {	# %if or #if...
+		if ($def =~ m/^(%%|[%#])if(\w*)$/) {	# %%if, %if or #if...
 		    ########################################################################
 		    # $si =  +1  initial value of sense indicator	output	%else or %elif not allowed
 		    # $si == +2  #ifdef defined #ifndef !defined #if 1	output	%else or %elif allowed
@@ -861,7 +896,7 @@ sub process_file {
 			$si = -1;			# %ifxx seen - allow %else or %elif again at this level
 		    }
 		}
-		elsif ($def =~ m/^[%#]elif$/) {		# elif expression
+		elsif ($def =~ m/^(%%|[%#])elif$/) {		# elif expression
 		    if ($#stk >= 0 and ($si & ~0x1) != 0) {
 			$si = ($stk[$#stk] <= 0 or $si > 0) ? -1 : eval_if($macro);	# eval if previous false else false
 		    } else {
@@ -869,7 +904,7 @@ sub process_file {
 			$w++;			# warning found
 		    }
 		}
-		elsif ($def =~ m/^[%#]else$/) {		# else
+		elsif ($def =~ m/^(%%|[%#])else$/) {		# else
 		    if ($#stk >= 0 and ($si & ~0x1) != 0) {
 			$si = ($stk[$#stk] <= 0 or $si > 0) ? 0 : 1;	# invert sense indicator marking %else
 		    } else {
@@ -877,7 +912,7 @@ sub process_file {
 			$w++;			# warning found
 		    }
 		}
-		elsif ($def =~ m/^[%#]endif$/) {		# endif
+		elsif ($def =~ m/^(%%|[%#])endif$/) {		# endif
 		    if ($#stk >= 0) {
 			$si = pop @stk;			# retrieve stacked sense indicator
 		    } else {
@@ -886,13 +921,13 @@ sub process_file {
 		    }
 		}
 		elsif ($si > 0) {
-		    if ($def =~ m/^[%#]define$/) {
+		    if ($def =~ m/^(%%|[%#])define$/) {
 			resolve_line();			# resolve embedded macros
 			($def, $macro) = split " ", $_, 2;	# split again after resolve_line()
 			$macro =~ s!\s*(//.*)?$!!;		# delete C++ comment and trailing blanks
 			scan_define($., $def, $macro);	# scan and save macro in %defs
 		    }
-		    elsif ($def =~ m/^[%#]undef$/) {
+		    elsif ($def =~ m/^(%%|[%#])undef$/) {
 			if ($macro =~ m/^[A-Z_a-z]\w*$/) {
 			    if (exists $defs{ $macro }) {
 				print LOG "### $_" if $opt_l;
@@ -907,7 +942,7 @@ sub process_file {
 			    $w++;			# warning found
 			}
 		    }
-		    elsif ($def =~ m/^[%#]include$/) {
+		    elsif ($def =~ m/^(%%|[%#])include$/) {
 			my ($file, $f, $p);
 			$macro =~ s/\s+//;			# take out any white space - just in case
 			if ($macro =~ m!^"(([A-Za-z]:)?[/\\]?[A-Z_a-z.][\w/\\.]*)"$!) {
@@ -957,16 +992,16 @@ no strict 'refs';
 use strict 'refs';
 			}
 		    }
-		    elsif ($def =~ m/^[%#]error$/) {
+		    elsif ($def =~ m/^(%%|[%#])error$/) {
 			if (not $opt_m_M_or_Y and $def eq "%error") {
 			    push(@lnErr, "//* Error: $def $macro\n");
 			    $r++;			# deliberate error
 			    unless ($opt_t) {
 				if (@block or $finBlock or $opt_L) {
 				    $macro =~ s/"/\\"/g;
-				    push(@block, "\$out .= \"%{\\n%#error $macro\\n%}\\n\";\n");
+				    push(@block, "\$out .= \"%{\\n#error $macro\\n%}\\n\";\n");
 				} else {
-				    print "%{\n%#error $macro\n%}\n";
+				    print "%{\n#error $macro\n%}\n";
 				}
 			    }
 			} else {			# -m or -M or "#error"
@@ -1694,8 +1729,8 @@ use strict 'refs';
     eval_block(\@block, "LAST BLOCK @{[++$evalBlock]} at ", $el) if @block;
     if ($r or $w) {
 	push(@lnErr, "%{\n");
-	push(@lnErr, "%#error immac found $r compilation error@{[$r>1?'s':'']} - see comments in iC list file\n") if $r;
-	push(@lnErr, "%#warning immac found $w compilation warning@{[$w>1?'s':'']} - see comments in iC list file\n") if $w;
+	push(@lnErr, "#error immac found $r compilation error@{[$r>1?'s':'']} - see comments in iC list file\n") if $r;
+	push(@lnErr, "#warning immac found $w compilation warning@{[$w>1?'s':'']} - see comments in iC list file\n") if $w;
 	push(@lnErr, "%}\n");
     }
     output_error($., $listLine) if @lnErr and not $opt_t;
@@ -1875,9 +1910,8 @@ use warnings;
 
 ########################################################################
 #
-#   Resolve %define or #define macros in lines of code
-#
-#   The only directives which are resolved are %define or #define
+#   Resolve %%define, %define and #define macros in lines of code
+#   which may occur in the remaining lines after some have been excluded
 #
 ########################################################################
 
@@ -1896,7 +1930,8 @@ sub resolve_line {
 
 ########################################################################
 #
-#   Resolve %define or #define macros and call resolve($translate) recursively
+#   Resolve %%define, %define and #define macros
+#   Call resolve($translate) recursively
 #
 #   Two types of macros are resolved:
 #
@@ -1920,26 +1955,28 @@ sub resolve {
     $prevAtom1 = '';
     undef $pos;
     undef $translate;
-    while ($line =~ m/			# look for 'word' 'word (' '%word' or '#word' in $line
+    while ($line =~ m/			# look for 'word' 'word (' '%%word' '%word' or '#word' in $line
 	(				# $1
-	    ([%#]\s*)?			# $2 optional % or # followed by optional spaces
-	    [A-Z_a-z]\w*		#    macro (not optional C style word)
+	    (				# $2 optional %%, % or #
+		(%%|[%#])		# $3
+	    \s*)?			#    followed by optional spaces
+	    [A-Z_a-z]\w*		#    followed by macro (not optional C style word)
 	)
-	(				# $3
-	    (\s*)			# $4 spaces preceding '(' (maybe null string')
-	    (\()			# $5 '(' marking start of function like macro
+	(				# $4
+	    (\s*)			# $5 spaces preceding '(' (maybe null string')
+	    (\()			# $6 '(' marking start of function like macro
 	)?				#    missing for object like macro
     /xg) {
 	$iPos   = length($`);					# position of 'word' found
 	$atom1  = $1;						# 'word' found
 	$length = length $atom1;
-	$spLen  = defined $4 ? length $4 : 0;			# spaces after 'word'
-	$openP  = $5;						# '('
+	$spLen  = defined $5 ? length $5 : 0;			# spaces after 'word'
+	$openP  = $6;						# '('
 	$tail   = $';						# string after 'word' or 'word ('
 	$lPos   = pos($line);
 	print "//2 $.:	re = $re atom1 = '$atom1' iPos = $iPos lPos = $lPos\n" if $opt_T;
-	if (not $pos and $prevAtom1 =~ m/^[%#]define$/) {
-	    $defineFlag = 1;	# suppress translation of redefined macro name (first word after %define or #define)
+	if (not $pos and $prevAtom1 =~ m/^(%%|[%#])define$/) {
+	    $defineFlag = 1;	# suppress translation of redefined macro name (first word after %%, %define or #define)
 	} elsif (defined ($Aref = $defs{ $atom1 }) and		# expand object like macro defined without parameters
 	    ($Aref->[1] == 0 or $openP) and			# or function like macro defined and called with (
 	    defined ($translate = $Aref->[0])) {		# do not expand function like macro called as object
@@ -2598,7 +2635,7 @@ L<immcc(1)>, L<iCmake(1)>, L<iCserver(1)>, L<iCbox(1)>, L<cpp(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2013  John E. Wulff
+COPYRIGHT (C) 2000-2017  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

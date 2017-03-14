@@ -6,7 +6,7 @@
 005	 *******************************************************************/
 006
 007	%{
-008	%#include	<stdio.h>
+008	#include	<stdio.h>
 009	%}
 010
 011	%{
@@ -174,6 +174,6 @@ TOTAL	      11 blocks
 	      29 links
 
 compiled by:
-@(#)     $Id: h7.lst,v 1.1 2015/10/15 06:27:21 jw Exp $ -O7
+$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
 
 C OUTPUT: ./Test0/h7.c  (145 lines)

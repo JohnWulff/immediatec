@@ -1,8 +1,8 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.121 $";
+"@(#)$Id: comp.y 1.122 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2011  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -4205,9 +4205,9 @@ iC_compile(
 		perror("unlink");
 		return T0index;			/* error unlinking temporary file */
 	    }
-	    snprintf(execBuf, BUFS, "immac -m %s -I/usr/local/include -o %s %s 2> %s",
+	    snprintf(execBuf, BUFS, "immac -M %s -I/usr/local/include -o %s %s 2> %s",
 		iC_defines, T0FN, inpPath, T6FN);
-	    r1 = system(execBuf);		/* Pre-compile iC file with immac */
+	    r1 = system(execBuf);		/* Pre-compile iC file with immac -M */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
 #endif

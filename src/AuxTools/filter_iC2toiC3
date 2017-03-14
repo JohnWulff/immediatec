@@ -1,0 +1,243 @@
+#!/usr/bin/perl
+
+########################################################################
+#
+#	Copyright (C) 2000-2017  John E. Wulff
+#
+#   You may distribute under the terms of either the GNU General Public
+#   License or the Artistic License, as specified in the README file.
+#
+#   For more information about this program, or for information on how
+#   to contact the author, see the README file
+#
+#	filter_iC2toiC3
+#
+#	For the change in the pre-processor language from iC vers 2.6 to
+#	vers 3.1 change pre-processor prefixes character as follows:
+#	    %#	==> #	usually in C literal blocks %{ ... %} warn if not
+#	    #	==> %	except when in a literal block %{ ... %}
+#	    %	==> %%	only expected in iCa files outside C literal blocks
+#
+#	Only make changes if prefix character is followed by pre-process
+#	keywords (optional spaces or tabs are allowed and not changed).
+#	    define undef include
+#	    ifdef ifndef if else elif endif
+#	    error
+#
+#	Pre-rocess commands must be outside of C comments and strings
+#	either the first token at the beginning of a line
+#	or directly following a %{ opening literal block brace
+#	or directly following a %} opening literal block brace.
+#	All may optionally be preceded by spaces or tabs and line numbers.
+#
+########################################################################
+
+use strict;
+
+my $named = $0; $named =~ s#.*[/\\]##;
+format STDERR =
+Usage:
+    @<<<<<<<<<<<<<<[ -wh][ <] v2_iCfile > v3_iCfile
+	$named
+	-w	output warnings - normally filter is quiet
+		unless v2_iCfile is named (not < STDIN)
+	-h	help, ouput this Usage text only
+Copyright (C) 2017  John E. Wulff		<immediateC@gmail.com>
+							  '@'
+$Id: filter_iC2toiC3 1.1 $
+.
+
+use vars qw($opt_w $opt_h);
+use Getopt::Long qw(:config no_ignore_case bundling);
+GetOptions (
+    'w'   => \$opt_w,
+    'h'   => \$opt_h,
+);
+
+if ($opt_h) {
+    write STDERR; exit 0;		# -h, ouput Usage only
+}
+
+my ($atom, $error, $lookfor, $pos, $state, $pState, %atoms, @errors, $tFlag, $pFlag);
+my ($literalPos, $literalEnd, $offset, $cppPos, $pPos, @lookfors, $cFlag, $argv);
+
+if (scalar @ARGV == 0) {
+    $argv = "stdin";
+} elsif (scalar @ARGV == 1) {
+    $argv = $ARGV[0];
+    $opt_w = 1;				# output warnings when file is named
+} else {
+    die "*** ERROR: $named: only one file argument allowed - not '@ARGV'\n";
+}
+
+@lookfors = ('"',			# #defines in strings unlikely but avoids strange errors
+	    "/*", "//", "*/",		# // before */ starts C++ comment
+	    "%{", "%}", "%#",		# C literal block braces
+	    "##", "#*", );		# ## and #* are perl comments in .log file
+
+$state = $pState = "P";			# P outside of comments and quotes
+$pFlag = 0;
+
+line:
+while (<>) {
+    if (m/\*\* C CODE\b/ or m/^ \*\tOUTPUT:/) {
+	$cFlag = 1;			# no changes in C CODE of .lst files or any .c file
+	$state = "P"
+    } elsif (m/C OUTPUT:/) {
+	$cFlag = 0;			# changes again for follow on .lst listings
+	$state = "P"
+    }
+    next line if $cFlag;
+    %atoms = ();
+    @errors = ();
+    $tFlag = $offset = $literalPos = $literalEnd = 0;	# new line
+    $cppPos = $pPos = 0;		# end possible C++ or perl comment
+    if ($pFlag) {
+	$state = "P";			# end of literal block found
+	$pFlag = 0;
+    }
+
+    foreach $lookfor (@lookfors) {
+	for ($pos = 0;
+	    ($pos = index($_, $lookfor, $pos)) >= 0;
+	    $pos += length $lookfor) {
+	    if ($lookfor eq "*/") {
+		$pos++;			# end of */ atom for overlap with //
+	    }
+	    $atoms{ $pos } = $lookfor;	# key is position of atom found
+	}
+    }
+
+    # this algorithm ensures that relevant atoms are checked in sequence
+
+    if (scalar %atoms) {
+	foreach $pos (sort { $a <=> $b } keys %atoms) {
+	    last if $cppPos;		# ignore everything in C++ comment but not perl comment
+	    $atom = $atoms{ $pos };	# process atoms in sequence
+	    if ($state eq "S") {	# string constant
+		if ($atom eq '"' and
+		    ($pos <  1 or  substr($_, $pos-1, 1) ne "\\" or
+		    ($pos >= 2 and substr($_, $pos-2, 1) eq "\\"))) {
+		    $state = $pState;	# end of string constant found
+		}
+	    } elsif ($state eq "C") {	# C comment
+		if ($atom eq "*/") {
+		    $state = $pState;	# end of C comment found
+		} elsif ($atom eq "/*") {
+		    push(@errors, "Warning: $argv:$.: /* found during comment") if $opt_w;
+		}
+	    } elsif ($state eq "L") {	# in C literal block
+		########################################################################
+		#    Stay in state "L" till the beginning of the next line
+		#    If there is a preprocessor command in this line it must be either
+		#    at the beginning of the line or first token after %{, which is "L".
+		#    It cannot come after the %} and be recognised for change in any state.
+		########################################################################
+		if ($atom eq "%#") {
+		    $tFlag = 1;		# %# token found before end of literal block
+		} elsif ($atom eq "%}") {
+		    if ($tFlag) {
+			$pFlag = 1;	# defer change of state from "L" to "P"
+			$tFlag = 0;
+		    } else {
+			$state = "P";	# end of literal block found
+		    }
+		    $literalEnd = $pos + 2;	# search for pre-processor command from here
+		} elsif ($atom eq "%{") {
+		    push(@errors, "Warning: $argv:$.: nested literal blocks are illegal") if $opt_w;
+		} elsif ($atom eq '"') {
+		    $pState = $state;
+		    $state = "S";	# start of string found in C literal block
+		} elsif ($atom eq "/*") {
+		    $pState = $state;
+		    $state = "C";	# start of C comment found in C literal block
+		} elsif ($atom eq "*/") {
+		    push(@errors, "Warning: $argv:$.: */ found after end of comment") if $opt_w;
+		} elsif ($atom eq "//") {
+		    $cppPos = $pPos = $pos + 2 unless $pPos;	# start of C++ comment found in C literal block
+		} elsif ($atom eq "#*") {
+		    $pPos = $pos + 2 unless $pPos;	# #* perl comment in .log found
+		}
+	    } elsif ($atom eq "%{") {	# $state eq "P"
+		$state = "L";		# start of literal block found
+		$literalPos = $pos + 2;	# search for pre-processor command from here
+	    } elsif ($atom eq "%}") {
+		push(@errors, "Warning: $argv:$.: *} when not in C literal block is illegal") if $opt_w;
+	    } elsif ($atom eq "%#") {
+		push(@errors, "Warning: $argv:$.: '%#' should not be used outside of C literal block") if $opt_w;
+	    } elsif ($atom eq '"') {
+		$pState = $state;
+		$state = "S";		# start of string found
+	    } elsif ($atom eq "/*") {
+		$pState = $state;
+		$state = "C";		# start of C comment found
+	    } elsif ($atom eq "*/") {
+		push(@errors, "Warning: $argv:$.: */ found after end of comment") if $opt_w;
+	    } elsif ($atom eq "//") {
+		$cppPos = $pPos = $pos + 2 unless $pPos;	# start of C++ comment found
+	    } elsif ($atom eq "##") {
+		$pPos = $pos + 2 unless $pPos;	# ## perl comment in .log found
+	    }
+	}
+    }
+    if (m/\b(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning)\b/) {
+	########################################################################
+	#    Change prefix character as follows:
+	#        #	==> %	except when in a literal block %{ ... %}
+	#        %#	==> #	usually in C literal blocks %{ ... %} warn if not
+	#        %	==> %%	only expected in iCa files outside C literal blocks
+	#    Change only the first occurence of a pre-proccessor command
+	########################################################################
+	if ($state eq "L" or $literalPos != 0) {
+	    # in a literal block %{ ... %} - ignore #define etc
+	    if (substr($_, $literalPos) =~
+		s/^(\d*\s*)%#(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning)\b/$1#$2$3/) {
+		$offset = -1;
+	    }
+	    if (substr($_, $literalPos) =~ 
+		m/^(\d*\s*)%(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/) {
+		push(@errors, "Warning: $argv:$.: '%$2$3' should not have been used in C literal block - edit manually") if $opt_w;
+	    }
+	}
+	if ($state eq "P" or $literalEnd != 0) {	# may have 2 changes in the same line
+	    # outside a literal block
+	    $literalEnd += $offset;
+	    substr($_, $literalEnd) =~
+	    s/^(\d*\s*)%(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1%%$2$3/;	# do first
+	    substr($_, $literalEnd) =~
+	    s/^(\d*\s*)#(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1%$2$3/;
+	    if (substr($_, $literalPos) =~ 
+		m/^(\d*\s*)%#(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning)\b/) {
+		push(@errors, "Warning: $argv:$.: '%#$2$3' should not have been used in iC code - edit manually") if $opt_w;
+	    }
+	}
+	if ($pPos) {
+	    if ($state eq "P") {
+		substr($_, $pPos) =~			# for iCa line comments in generated .ic files
+		s/([^%])%(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1%%$2$3/;
+	    } elsif ($state eq "L") {
+		if (not $cppPos) {
+		    substr($_, $pPos) =~		# for iCa perl comments in generated .log files
+		    s/%#(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning)\b/#$1$2/;
+		}
+		if (substr($_, $pPos) =~ 
+		    m/%(\s*)(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/) {
+		    push(@errors, "Warning: $argv:$.: '%$2$3' should not have been used in C literal block - edit manually") if $opt_w;
+		}
+	    }
+	}
+    }
+}
+continue {
+    print;
+    while ($error = shift @errors) {
+	print STDERR "$error\n";	# output errors and warnings
+    }
+} #line
+if ($opt_w) {
+    if ($state eq "L") {
+	print STDERR "Warning: $argv:$.: file text ends in a literal block (state \"L\")\n";
+    } elsif ($state ne "P") {
+	print STDERR "Warning: $argv:$.: file text ends in state \"$state\" C=comment S=string\n";
+    }
+}

@@ -1,6 +1,6 @@
 ******* ./Test0/f10.ic  ************************
 001	%{
-002	%#include <stdlib.h>
+002	#include <stdlib.h>
 003	static int Div(int numer, int denom);
 004	static int Remainder(int numer, int denom);
 005	%}
@@ -33,8 +33,8 @@
 
 010
 011	%{
-012	%#define max(x,y) ((x) > (y) ? (x) : (y))
-013	%#define min(x,y) ((x) < (y) ? (x) : (y))
+012	#define max(x,y) ((x) > (y) ? (x) : (y))
+013	#define min(x,y) ((x) < (y) ? (x) : (y))
 014	%}
 015
 016	QB3 = min(IB1, IB2);
@@ -208,6 +208,6 @@ TOTAL	      29 blocks
 	      75 links
 
 compiled by:
-@(#)     $Id: f10.lst,v 1.1 2015/10/09 03:31:13 jw Exp $ -O7
+$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
 
 C OUTPUT: ./Test0/f10.c  (181 lines)

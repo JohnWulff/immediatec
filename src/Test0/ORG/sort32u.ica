@@ -10,7 +10,7 @@
 
 use strict;
 
-%define GATES 10		// number of gate destinations per belt
+%%define GATES 10		// number of gate destinations per belt
 /********************************************************************
  *
  *	Feeder segment
@@ -104,8 +104,8 @@ imm bit tick(bit manual, bit fast1, bit fast2) {
     this = CHANGE(manual & ~fast | TX0.4 & fast);
 }
 
-%define BELTS 2	
-%define LAST  ((GATES+7)/8*BELTS)	/* last QX index */
+%%define BELTS 2	
+%%define LAST  ((GATES+7)/8*BELTS)	/* last QX index */
 /********************************************************************
  *
  *	BELTS belts

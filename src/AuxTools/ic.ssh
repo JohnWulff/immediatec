@@ -1,6 +1,6 @@
-# Style sheet for C
+# Style sheet for immediate C
 # Copyright (c) 2012 John E. Wulff
-# $Id: ic.ssh,v 1.2 2015/02/27 21:31:32 jw Exp $
+# $Id: ic.ssh 1.3 $
 #
 # append the following 5 lines (without the leading #) to
 # /usr/share/a2ps/sheets.map (or directory where style sheets are stored)
@@ -32,12 +32,14 @@ style "immediate C" is
 requires a2ps 4.13
 
 written by "John E. Wulff <immediateC@gmail.com>"
-version is 1.1
+version is 1.3
 
 documentation is
-   "immediate C can be in files with the extender .ic, .ica or listings in .lst"
-   "This style does highlight function block definitions, which are introduced"
-   "by the keyword imm followed by one of the types void, bit, int, clock or timer."
+   "immediate C can be in files with the extender .ic, .ih, .ica or listings in .lst"
+   "This style highlights function block definitions, which are introduced by the"
+   "keyword imm followed by one of the types void, bit, int, clock or timer"
+   "as well as iC buit-in function block names and iC and iCa pre-processor commands"
+   "%include, %%include, %define, %%define, %if, %%if etc"
 end documentation
 
 alphabets are
@@ -61,7 +63,7 @@ operators in Plain are
 end operators	
 
 operators in Keyword_strong are
-   /^[ \t]*%[ \t]*(define|e(l(if|se)|ndif)|i(f(|def|ndef))|undef)/,
+   /^[ \t]*%%?[ \t]*(define|e(l(if|se)|ndif)|i(f(|def|ndef))|undef)/,
    /^[ \t]*(use|no)[ \t]+(strict|alias)/,
    /[IQT]X([0-9]*\.[0-7])?/,
    /[IQ][BWLH][0-9]*/

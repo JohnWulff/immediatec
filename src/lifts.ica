@@ -18,13 +18,13 @@
  *	in iClift. To re-start continous mode select another floor for
  *	each lift with the floor select buttons.
  *
- * @(#)$Id: lifts.ica 1.5 $
+ * @(#)$Id: lifts.ica 1.6 $
  *
  ********************************************************************/
-%define LIFTS	1			/* default number of lifts  - vary with -P LISTS=x */
-%define FLOORS	3			/* default number of floors - vary with -P FLOORS=y */
-%define FPL	L*(10+((FLOORS-1)/8)*8)	/* current lift times floor group offset */
-%define FPLF	FPL+(2+(F/8)*8)		/* offset for per floor components */
+%%define LIFTS	1			/* default number of lifts  - vary with -P LISTS=x */
+%%define FLOORS	3			/* default number of floors - vary with -P FLOORS=y */
+%%define FPL	L*(10+((FLOORS-1)/8)*8)	/* current lift times floor group offset */
+%%define FPLF	FPL+(2+(F/8)*8)		/* offset for per floor components */
 
 use strict;
 

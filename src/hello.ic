@@ -1,2 +1,2 @@
-%{ %#include <stdio.h> %}
+%{ #include <stdio.h> %}
 if (IX0.0) { printf("hello, world\n"); }

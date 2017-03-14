@@ -5,10 +5,10 @@
  *******************************************************************/
 
 %{
-%#include	<stdio.h>
+#include	<stdio.h>
 %}
 
-%define LIM 2
+%%define LIM 2
 %{
     int d;
 %}

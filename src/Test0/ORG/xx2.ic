@@ -46,5 +46,5 @@ Bareword "x" not allowed while "strict subs" in use at (eval 4) line 3, <IN> lin
 \** End Error messages from Perl eval **/
 //* 16	}}
 %{
-%#error immac found 6 compilation errors - see comments in iC list file
+#error immac found 6 compilation errors - see comments in iC list file
 %}

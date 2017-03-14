@@ -1,8 +1,8 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.104 $";
+"@(#)$Id: outp.c 1.105 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2011  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -3241,21 +3241,28 @@ endc:
 
 /********************************************************************
  *
- *	copy C intermediate file up to EOF to C output file.
- *	Translate any ALIAS references as part of C compile phase.
+ *      copy C intermediate file up to EOF to C output file.
+ *      Translate any ALIAS references as part of C compile phase.
  *
- *	mode 01         Copy only literal blocks %{ ... %}
- *	mode 02 default Copy only C blocks, functions or cases
- *	mode 03         Copy literal blocks and C blocks
+ *      mode 01         Copy only literal blocks %{ ... %}
+ *      mode 02 default Copy only C blocks, functions or cases
+ *      mode 03         Copy literal blocks and C blocks
+ *
+ * For iC version 3, #include, #define, #ifdef etc are written without
+ * preceding the # with %. For backward compatibility with iC version 2
+ * the conversion in the next paragraph is still carried out here, but
+ * for iC version 3 the % before # is optional.
  *
  * The characters %# occurring at the start of a line in a literal or C
  * block will be converted to a plain #. This allows the use of
  * C-preprocessor statements in literal or C blocks which will be
- * resolved after the iC compilation. They must be written as
- * %#include
- * %#define
- * %#ifdef etc
+ * resolved after the iC compilation. They ''may'' be written as:
+ *     iC vers 2                iC vers 3
+ *     %#include                #include
+ *     %#define                 #define
+ *     %#ifdef etc              #ifdef etc
  *
+ * The following still holds in iC version 3:
  * lines starting with %## will be replaced by #line nn "fn"
  * where nn is the following line number and fn the name of the iC file
  * NOTE: this line must be shorter than BUFS (currently 128).
@@ -3263,17 +3270,27 @@ endc:
  * NOTE: lineBuf[] must be large enough to hold a complete
  *       pre-processor line for the following sscanf()s
  *
+ * NOTE: the following is an important change in iC version 3:
+ *       #include, #define, #ifdef etc lines outside of C literal blocks,
+ *       which affect iC code and which was the rule for iC version 2
+ *       files must now be written as %include, %define, %ifdef etc in
+ *       iC version 3. This is not optional, but since pre-processor
+ *       directives in iC code are fairly rare, whereas they are common
+ *       in C code, most old style iC version 2 files will be backwards
+ *       compatible and compile Ok. Any version 2 style # pre-processor
+ *       directives in iC sections will lead to warnings or errors.
+ *
  *******************************************************************/
 
-static int	 precompileFlag;
+static int	precompileFlag;
 
 static int
 copyBlocks(FILE * iFP, FILE * oFP, int mode)
 {
     int		c;
     int		mask = 02;			/* default is functions or cases */
-    int		lf = 0;				/* set by first non white space in a line */
-    char *	lp;
+    int		lFlag = 0;			/* set by first non white space in a line */
+    char *	cp;
     char	lstBuf[BUFS];			/* include file name */
     char	lineBuf[BUFS];			/* can be smaller than a line */
 
@@ -3282,26 +3299,31 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 	return T1index;				/* error in temporary file */
     }
 
+    /********************************************************
+     *  read each line of the input file iFP
+     ********************************************************/
     while (fgets(lineBuf, sizeof lineBuf, iFP)) {
 	if (strcmp(lineBuf, "%{\n") == 0) {
 	    mask = 01;				/* copy literal blocks */
 	} else if (strcmp(lineBuf, "%}\n") == 0) {
 	    mask = 02;				/* copy functions or cases */
 	} else if (mode & mask) {		/* separates literal blocks and functions */
-	    for (lp = lineBuf; (c = *lp++) != 0; ) {
-		if (lf || c != '%' || *lp != '#') {	/* converts %# to # */
-		    putc(c, oFP);
-		    if (c == '\n') {
-			lf = 0;			/* start of a new line */
-		    } else if (c != ' ' && c != '\t') {
-			lf = 1;			/* not white space */
-		    }
-		} else
-		/********************************************************
-		 *  lp now points to the beginning of a line past % but to #
-		 *  handle pre-processor #include <stdio.h> or "icc.h"
-		 ********************************************************/
-		if (sscanf(lp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
+	    lFlag = 0;				/* start of a new line to copy */
+	    /********************************************************
+	     *  scan each character in a line
+	     ********************************************************/
+	    for (cp = lineBuf; (c = *cp) != 0; cp++) {
+		if (lFlag == 0 && c == '%' && *(cp+1) == '#') {
+		    c = *++cp;				/* remove optional % before first # */
+		}
+		putc(c, oFP);				/* copy character to output file oFP */
+		if (lFlag == 0 && c == '#' &&
+		    /********************************************************
+		     *  cp now points to the first # in a line past optional
+		     *  white space (and optional % which was not copied).
+		     *  Handle pre-processor #include <stdio.h> or "icc.h"
+		     ********************************************************/
+		    sscanf(cp, " # include %[<\"/A-Za-z_.0-9>]", lstBuf) == 1) {
 		    if(iFP == T4FP) {
 			ierror("copyBlocks: if else or switch has:", lstBuf);
 			continue;
@@ -3311,7 +3333,9 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 		    }
 		    if (iC_debug & 02) fprintf(iC_outFP, "####### yyparse #include %s\n", lstBuf);
 		    fprintf(T4FP, "#include %s\n", lstBuf);	/* a little C file !!! */
-		    precompileFlag = 1;	/* 1 marks #include */
+		    precompileFlag = lFlag = 1;			/* 1 marks #include */
+		} else if (c != ' ' && c != '\t') {
+		    lFlag = 1;				/* not white space */
 		}
 	    }
 	}
@@ -3322,12 +3346,23 @@ copyBlocks(FILE * iFP, FILE * oFP, int mode)
 /********************************************************************
  *
  *	To handle immediate variables in C code, the output of the first
- *	two passes of copyBlocks is separated by a line containing
- *	## in C comment delimiters
- *	and output to T2FP.
+ *	two passes of copyBlocks() is separated by a line containing
+ *	## in C comment delimiters and output to T2FP.
  *
- *	For auxiliary parse of iC if - else and switch functions
- *	iFP == T4FP which have no need for C - pre-processor includes
+ *	copyBlocks() also isolates #include lines in C literal blocks and
+ *	copies them into a small C file T4FN and then sets precompileFlag.
+ *	if (precompileFlag != 0) {
+ *	    T4FN will be pre-compiled by gcc -E T4FN -o T5FN
+ *	    T5FN // is the expansion of the #include files in T4FN
+ *	    which is then parsed by own C compiler yyparse()
+ *	    to extract possible CTYPE definitions required in
+ *	    C code embedded in the iC file for the main yyparse()
+ *	}
+ *	this is followed by the main yyparse() to convert all
+ *	immediate variable names and assignments in C code to macros.
+ *
+ *	For auxiliary yyparse() of iC if - else and switch blocks,
+ *	which have no need for C - pre-processor includes, iFP is T4FP
  *
  *******************************************************************/
 
@@ -3368,7 +3403,7 @@ iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp)
     if (outFlag == 0) {
 	fprintf(T2FP, "/*##*/}}\n");
     }
-    if (precompileFlag == 1) {
+    if (precompileFlag != 0) {
 	/********************************************************
 	 *  pre-process and C-parse #include <stdio.h> and "icc.h" etc
 	 *  add CTYPE's as symbols to iC symbol table for main C-parse

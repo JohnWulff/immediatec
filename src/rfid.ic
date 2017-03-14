@@ -4,8 +4,9 @@
  *	16-17 August 2014
  *	16 March 2015	v9	normalised I/O
  *	14 October 2015	v11	add full command line analysis
+ *	11 March 2017		change to iC version 3
  *
- * @(#)$Id: rfid.ic,v 1.2 2015/11/06 07:04:10 jw Exp $
+ * @(#)$Id: rfid.ic 1.3 $
  *
  *******************************************************************/
 
@@ -28,13 +29,13 @@ QX2.6 = IX2.2;			// echo button 2
 QX2.7 = IX2.3;			// echo button 3
 
 %{	/* Start of literal C code */
-%#include	<stdio.h>
-%#include	<icg.h>
-%#include	<stdlib.h>
-%#include	<string.h>
+#include	<stdio.h>
+#include	<icg.h>
+#include	<stdlib.h>
+#include	<string.h>
 
-%#define	CODES	30
-%#define	CODELEN	16
+#define	CODES	30
+#define	CODELEN	16
 
 typedef	char	Code[CODELEN];
 
@@ -46,13 +47,13 @@ static int	c1;
 static char *	colour;
 static char *	usage =
 "Usage: %s"
-%#ifdef	RASPBERRYPI
+#ifdef	RASPBERRYPI
 "[ -I X2]"
-%#endif
+#endif
 "[ --[ -h]|[ -R <app ...>]]\n"
-%#ifdef	RASPBERRYPI
+#ifdef	RASPBERRYPI
 "    -I X2   activate IX2.0-3 and QX2.0-7 for inverting PiFace\n"
-%#endif
+#endif
 "   --h           this help text\n"
 "   --R <app ...> run auxiliary app followed by -z and its arguments\n"
 "                 as a separate process; -R ... must be last arguments.\n"
@@ -67,9 +68,9 @@ static char *	local =
 "        Press button 2 to remove card code from data base\n"
 "    press button 0 and 1 together to repeat this help text\n"
 "    type ctrl+D on the keyboard to stop the program\n"
-%#ifdef	RASPBERRYPI
+#ifdef	RASPBERRYPI
 "    press button 1 2 and 3 while button 0 is released to shutdown\n"
-%#endif
+#endif
 ;
 
 int

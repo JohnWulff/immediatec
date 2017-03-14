@@ -1,5 +1,5 @@
 %{
-%#include <stdlib.h>
+#include <stdlib.h>
 static int Div(int numer, int denom);
 static int Remainder(int numer, int denom);
 %}
@@ -9,8 +9,8 @@ QB1 = IB1 + rand();
 QB2 = abs(IB1);
 
 %{
-%#define max(x,y) ((x) > (y) ? (x) : (y))
-%#define min(x,y) ((x) < (y) ? (x) : (y))
+#define max(x,y) ((x) > (y) ? (x) : (y))
+#define min(x,y) ((x) < (y) ? (x) : (y))
 %}
 
 QB3 = min(IB1, IB2);

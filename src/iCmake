@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2015  John E. Wulff
+#	Copyright (C) 2000-2017  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -23,14 +23,14 @@ else
     CC=gcc
 fi
 
-D=""
+m=""
 case `uname -m` in
     *x86_64* | *ppc64* | *s390x* )
 	LIB="/usr/local/lib64/"
 	;;
     *armv* )
 	LIB="/usr/local/lib/"
-	D=" -D RASPBERRYPI"
+	m="armv"
 	;;
     * )
 	LIB="/usr/local/lib/"
@@ -76,8 +76,8 @@ usage ()
   echo '		   duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
-if [ -n "$D" ]; then
-  echo '		-D RASPBERRYPI is predefined on a Raspberry Pi (armv) processor' >&2
+if [ -n "$m" ]; then
+  echo '		-D RASPBERRYPI may be predefined on a Raspberry Pi (armv) processor' >&2
 fi
   echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
   echo '	        Note: do not use the same macros for the iC and the C phase' >&2
@@ -93,7 +93,7 @@ fi
   echo '	    -W[no-]undefined-gate      undefined gate' >&2
   echo '	    -W[no-]unused-gate         unused gate' >&2
   echo '	    -W[no-]all                 [no]/all warnings + -Wall for C compile' >&2
-  echo "	-a      $IAC: output FOR loop control and %define lines as comments" >&2
+  echo "	-a      $IAC: output FOR loop control and %%define lines as comments" >&2
   echo "	-F      generate auxiliary 'file.log' for debugging $IAC translation" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
   echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
@@ -114,7 +114,7 @@ fi
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.49 $' >&2
+  echo '	$Id: iCmake 1.50 $' >&2
 }
 
 lwsock32=""
@@ -135,6 +135,7 @@ lib="-lict$lwsock32"
 libfile="${LIB}libict.so"
 L=""
 d=" -d474"
+D=""
 A=""
 S=""
 N=""
@@ -255,6 +256,7 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
 done
 shift $(($OPTIND - 1))
 
+Dbak=$D
 if [ -n "$L" ]; then
     lib="$lib$L"
 fi
@@ -355,6 +357,9 @@ for arg in $*; do
     fi
 
     if [ -f "$icFile" -a -z "$ic" -a "$stat" -eq 0 ]; then
+	if [ -n $m ] && grep -q RASPBERRYPI $icFile; then
+	    D="$Dbak -D RASPBERRYPI"
+	fi
 	case $lk in
 	0)				# default
 	    stat=0
@@ -511,6 +516,7 @@ for arg in $*; do
 		let status+=1
 	    fi ;;
 	esac
+	D=$Dbak
     elif [ -z "$ic" ]; then
 	if [ -n "$E" ]; then
 	    echo "Error: iC file '$icFile' does not exist or is in error" >> $base.ini
@@ -532,6 +538,9 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	E=" >> $first.ini 2>&1"
     fi
     for icFile in $files; do	# recompile all files for aux and link
+	if [ -n $m ] && grep -q RASPBERRYPI $icFile; then
+	    D="$Dbak -D RASPBERRYPI"
+	fi
 	base=${icFile%.ic}
 	if [ -z "$first" ]; then
 	    first=$base
@@ -558,6 +567,7 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	fi
 	list="$list $base.c"
 	slist="$slist $base.lst$l"
+	D=$Dbak
     done
     if [ $status -eq 0 ]; then
 	rm -f $first
@@ -669,7 +679,7 @@ iCmake - make one or more immediate-C applications
                duplicate arithmetic expressions -O7 all (default)
     -R      no maximum error count (default: abort after 100 errors)
     -D <macro> predefine <macro> for the iC preprocessor phase
-            -D RASPBERRYPI is predefined on a Raspberry Pi (armv) processor
+            -D RASPBERRYPI may be predefined on a Raspberry Pi (armv) processor
     -U <macro> cancel previous definition of <macro> for the iC phase
             Note: do not use the same macros for the iC and the C phase
     -C <macro> predefine <macro> for the C preprocessor phase
@@ -684,7 +694,7 @@ iCmake - make one or more immediate-C applications
         -W[no-]undefined-gate      undefined gate
         -W[no-]unused-gate         unused gate
         -W[no-]all                 [no]/all warnings + -Wall for C compile
-    -a      immac: output FOR loop control and %define lines as comments
+    -a      immac: output FOR loop control and %%define lines as comments
     -F      generate auxiliary 'file.log' for debugging immac translation
     -k<lim> highest I/O index (default: no limit; 63 for -c mode)
             if lim <= 63, mixed byte, word and long indices are tested

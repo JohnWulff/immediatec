@@ -6,7 +6,7 @@
 005	 *******************************************************************/
 006
 007	%{
-008	%#include	<stdio.h>
+008	#include	<stdio.h>
 009	%}
 010
 011	    if (IX0.0) {
@@ -190,6 +190,6 @@ TOTAL	      21 blocks
 	      60 links
 
 compiled by:
-@(#)     $Id: h.lst,v 1.1 2015/10/15 06:27:20 jw Exp $ -O7
+$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
 
 C OUTPUT: ./Test0/h.c  (175 lines)

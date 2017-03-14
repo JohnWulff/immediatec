@@ -1,6 +1,6 @@
 ******* ./Test0/if33.ic ************************
 001	%{
-002	%#include	<stdio.h>
+002	#include	<stdio.h>
 003	%}
 004
 005	imm int del1;
@@ -126,5 +126,5 @@ TOTAL	      10 blocks
 	      27 links
 
 compiled by:
-$Revision: icc_2.6-5-g921c98d-dirty $ -O7
+$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
 *** Error: 4 generate errors - cannot execute. File ./Test0/if33.ic, line 31

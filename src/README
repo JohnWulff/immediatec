@@ -1,7 +1,7 @@
 
-			immediate C, iC rev icc_2.6
+			immediate C, iC rev icc_3.1
 
-	Copyright © 1985-2016 John E Wulff <immediatec@gmail.com>
+	Copyright © 1985-2017 John E Wulff <immediatec@gmail.com>
 	SPDX-License-Identifier: GPL-2.0+ OR  Artistic-1.0
 
     Acknowledgments to Larry Wall, whose README I used as a template.
@@ -18,7 +18,7 @@
 
 --------------------------------------------------------------------------
 
-    Notes for the installation of iC rev icc_2.6
+    Notes for the installation of iC rev icc_3.1
 
     0)	Pre-requisites. You need the following on your system:
 
@@ -161,7 +161,7 @@
 			    bar -z -i1 -R bar -i2 -R bar -i3	
 			    bar -z -i2 -R bar -i3	
 			    bar -z -i3	
-					# iCserver starts by auto-vivification:
+					# by auto-vivification iCserver starts:
 			    iCbox X0 B1 X2		# for bar	
 			    iCbox X0-1 B1-1 X2-1	# for bar -i1	
 			    iCbox X0-2 B1-2 X2-2	# for bar -i2	
@@ -289,7 +289,7 @@
 
 	    int iCbegin(int argc, char **argv);
 
-	in a literal block of your iC source (see rfid.ic for an example).
+	in a literal block of your iC source (see rfid.ic for help).
 
     19)	There are 'man' pages for all the tools used in the 'iC Project'.
 	These can be viewed with the normal 'man' command under Linux or with
@@ -297,9 +297,9 @@
 	features to view and search man pages - try it with 'iCman iCman'.
 
 
-    Lots of success
+    Lots of success with iC
 
-    $Id: README 1.29 $
+    $Id: README 1.30 $
 
     Main development is on openSUSE (currently Leap 42.1) and perlTk
     Tk804.033, which provides fast live updates in iClive. They seem
@@ -314,8 +314,8 @@
     declaration of those to 'signed char'. The following packages
     had to be installed with sudo apt-get install: perl-tk, bison and
     flex. The following packages are optional but useful: git, gtkwave
-    and vim. (2 weeks with an old vi was punishment enough). After
-    that all tests passed.
+    and vim. (2 weeks with an old vi from the Raspbian distribution
+    was punishment enough). After that all tests passed.
 
     During 2014 I wrote drivers for direct I/O for the PiFace and
     PiFaceCAD digital interfaces for the Raspberry Pi - see man page

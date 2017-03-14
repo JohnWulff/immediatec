@@ -2,7 +2,7 @@
 " Language:	iC
 " Maintainer:	John E. Wulff <wulff.johne@gmail.com>
 " Last Change:	2007 Apr 11 - 2015 Apr 6
-" $Id: ic.vim,v 1.10 2015/04/06 02:26:40 jw Exp $
+" $Id: ic.vim 1.11 $
 " for openSUSE ic.vim must be in /usr/share/vim/current/syntax
 " NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
 " local filetype.vim must be in ~/.vim (ic.vim does not work there)
@@ -28,21 +28,21 @@ endif
 let c_no_if0 = 1
 " This stops #if 0 ... #endif working as a blue highlighted block comment - no great loss
 
-" Accept %# for # (iC) and line numbers for highlighting listings *.lst
-syn region	cPreCondit	start="^[0-9\s]*\(%#\|%\|#\)\s*\(if\|ifdef\|ifndef\|elif\)\>" skip="\\$" end="$" end="//"me=s-1 contains=cComment,cCppString,cCharacter,cCppParen,cParenError,cNumbers,cCommentError,cSpaceError
-syn match	cPreCondit	display "[0-9\s]*\(%#\|%\|#\)\s*\(else\|endif\)\>"
+" Accept %% for iCa, % for iC, # for C and line numbers for highlighting listings *.lst (iC vers 3)
+syn region	cPreCondit	start="^[0-9\s]*\(%%\|%\|#\)\s*\(if\|ifdef\|ifndef\|elif\)\>" skip="\\$" end="$" end="//"me=s-1 contains=cComment,cCppString,cCharacter,cCppParen,cParenError,cNumbers,cCommentError,cSpaceError
+syn match	cPreCondit	display "[0-9\s]*\(%%\|%\|#\)\s*\(else\|endif\)\>"
 if !exists("c_no_if0")
-  syn region	cCppOut		start="[0-9\s]*\(%#\|#\)\s*if\s\+0\+\>" end=".\@=\|$" contains=cCppOut2
-  syn region	cCppOut2	contained start="0" end="[0-9\s]*\(%#\|%\|#\)\s*\(endif\>\|else\>\|elif\>\)" contains=cSpaceError,cCppSkip
-  syn region	cCppSkip	contained start="[0-9\s]*\(%#\|%\|#\)\s*\(if\>\|ifdef\>\|ifndef\>\)" skip="\\$" end="[0-9\s]*\(%#\|#\)\s*endif\>" contains=cSpaceError,cCppSkip
+  syn region	cCppOut		start="[0-9\s]*\(%%\|#\)\s*if\s\+0\+\>" end=".\@=\|$" contains=cCppOut2
+  syn region	cCppOut2	contained start="0" end="[0-9\s]*\(%%\|%\|#\)\s*\(endif\>\|else\>\|elif\>\)" contains=cSpaceError,cCppSkip
+  syn region	cCppSkip	contained start="[0-9\s]*\(%%\|%\|#\)\s*\(if\>\|ifdef\>\|ifndef\>\)" skip="\\$" end="[0-9\s]*\(%%\|%\|#\)\s*endif\>" contains=cSpaceError,cCppSkip
 endif
 syn region	cIncluded	display contained start=+"+ skip=+\\\\\|\\"+ end=+"+
 syn match	cIncluded	display contained "<[^>]*>"
-syn match	cInclude	display "[0-9\s]*\(%#\|%\|#\)\s*include\>\s*["<]" contains=cIncluded
+syn match	cInclude	display "[0-9\s]*\(%%\|%\|#\)\s*include\>\s*["<]" contains=cIncluded
 "syn match cLineSkip	"\\$"
 syn cluster	cPreProcGroup	contains=cPreCondit,cIncluded,cInclude,cDefine,cErrInParen,cErrInBracket,cUserLabel,cSpecial,cOctalZero,cCppOut,cCppOut2,cCppSkip,cFormat,cNumber,cFloat,cOctal,cOctalError,cNumbersCom,cString,cCommentSkip,cCommentString,cComment2String,@cCommentGroup,cCommentStartError,cParen,cBracket,cMulti
-syn region	cDefine		start="[0-9\s]*\(%#\|%\|#\)\s*\(define\|undef\)\>" skip="\\$" end="$" end="//"me=s-1 contains=ALLBUT,@cPreProcGroup,@Spell
-syn region	cPreProc	start="[0-9\s]*\(%#\|%\|#\)\s*\(pragma\>\|line\>\|warning\>\|warn\>\|error\>\)" skip="\\$" end="$" keepend contains=ALLBUT,@cPreProcGroup,@Spell
+syn region	cDefine		start="[0-9\s]*\(%%\|%\|#\)\s*\(define\|undef\)\>" skip="\\$" end="$" end="//"me=s-1 contains=ALLBUT,@cPreProcGroup,@Spell
+syn region	cPreProc	start="[0-9\s]*\(%%\|%\|#\)\s*\(pragma\>\|line\>\|warning\>\|warn\>\|error\>\)" skip="\\$" end="$" keepend contains=ALLBUT,@cPreProcGroup,@Spell
 
 " iC extentions
 syn keyword icStatement		this use no restore alias strict

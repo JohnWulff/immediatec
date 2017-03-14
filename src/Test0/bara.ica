@@ -19,7 +19,7 @@
  *******************************************************************/
 
 use strict;
-%define LAST 8
+%%define LAST 8
 
 imm timer t = TIMER(TX0.4);
 

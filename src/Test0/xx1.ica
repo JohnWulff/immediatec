@@ -1,6 +1,6 @@
-%define LENGTH	 4
-%define WIDTH	 (5+1)			/* C comment */
-%define AREA	 (LENGTH * WIDTH)	// C++ comment
+%%define LENGTH	 4
+%%define WIDTH	 (5+1)			/* C comment */
+%%define AREA	 (LENGTH * WIDTH)	// C++ comment
 
 FOR (I = 0; I < AREA; I++)
 {{

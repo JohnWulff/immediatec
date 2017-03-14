@@ -1,15 +1,15 @@
 /********************************************************************
  *
  *	Report output from iCtherm connected to a DS18B20 thermometer
- * @(#)$Id: therm.ic,v 1.2 2015/11/06 10:51:30 jw Exp $
+ * @(#)$Id: therm.ic 1.3 $
  *******************************************************************/
 
 use strict;
 
 %{	/* Start of literal C code */
-%#include	<stdio.h>
-%#include	<icg.h>
-%#include	<time.h>
+#include	<stdio.h>
+#include	<icg.h>
+#include	<time.h>
 
 static time_t	t;
 static char *	opt_I = NULL;		/* default is no id string */
