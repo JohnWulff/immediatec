@@ -119,14 +119,14 @@
 ******* C CODE          ************************
 
 007
-008	    #include	<stdio.h>
+008	#include	<stdio.h>
 009
 
 011	(2) {
 012		    printf("Hello Nr. %d, 0\n", 1);
 013		}
 
-013	    {
+013	{
 014		    printf("Bye Nr. %d, 0\n", 1);
 015		}
 
@@ -134,7 +134,7 @@
 017		    printf("Hello Nr. %d, 0\n", 2);
 018		}
 
-018	    {
+018	{
 019		    printf("Bye Nr. %d, 0\n", 2);
 020		}
 
@@ -142,7 +142,7 @@
 022		    printf("Hello Nr. %d, 1\n", 2);
 023		}
 
-023	    {
+023	{
 024		    printf("Bye Nr. %d, 1\n", 2);
 025		}
 
@@ -150,7 +150,7 @@
 027		    printf("Hello Nr. %d, 0\n", 3);
 028		}
 
-028	    {
+028	{
 029		    printf("Bye Nr. %d, 0\n", 3);
 030		}
 
@@ -158,7 +158,7 @@
 032		    printf("Hello Nr. %d, 1\n", 3);
 033		}
 
-033	    {
+033	{
 034		    printf("Bye Nr. %d, 1\n", 3);
 035		}
 
@@ -166,7 +166,7 @@
 037		    printf("Hello Nr. %d, 2\n", 3);
 038		}
 
-038	    {
+038	{
 039		    printf("Bye Nr. %d, 2\n", 3);
 040		}
 
@@ -208,6 +208,6 @@ TOTAL	      18 blocks
 	      38 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/hy.c  (172 lines)

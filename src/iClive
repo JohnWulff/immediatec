@@ -292,7 +292,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.66 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.67 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -683,8 +683,8 @@ my $makeName = '';
 my $restartFlag = 0;
 
 ########################################################################
-    #	Run or Stop button
-    ########################################################################
+#	Run or Stop button
+########################################################################
 my $menuRun  = $menuBar->Button(-text        => 'Run ',
 				-relief      => 'raised',
 				-width       => 4,

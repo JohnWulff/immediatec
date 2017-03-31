@@ -129,7 +129,7 @@ Usage:
 	-h      help, ouput this Usage text only
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.59 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.60 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -594,6 +594,8 @@ exit if $opt_x;	# deliberate exit with -x option
 ########################################################################
 
 $mw = MainWindow->new(-title => "$name");
+$mw->protocol('WM_DELETE_WINDOW', \&quit_program);	# Windows (X) pressed
+$mw->bind('<Key-q>',      \&quit_program);		# quit and stop iCserver
 
 if (($home = untaint($ENV{HOME})) ne '' and
     (-d "$home/.iC" or mkdir "$home/.iC")) {
@@ -991,6 +993,19 @@ MainLoop();
 exit(0);
 
 ####### End of main program ############################################
+
+########################################################################
+#
+#	Quit program and stop iCserver, which stops all registered apps
+#
+########################################################################
+
+sub quit_program {
+    print "$named: quit\n" if $opt_T;
+    $conn->send_now("X$named") if $conn;	# stop iCserver
+    $mw->destroy();
+    exit(0);
+} # quit_program
 
 ########################################################################
 #

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c 1.42 $";
+"@(#)$Id: scan.c 1.43 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -906,9 +906,12 @@ iC_pass4(Gate * op, int typ)				/* Pass4 init on gates */
 			     ***********************************************************/
 			    gp->gt_val = -gp->gt_val;	/* xor independent of change */
 			}
-		    } else {
+		    }
+#if YYDEBUG && !defined(_WINDOWS)
+		    else if (iC_debug & 0100) {
 			fprintf(iC_outFP, "\t%s %+d ==>", gp->gt_ids, gp->gt_val);
 		    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (gp->gt_next == 0) {		/* execute unconditionally unless linked */
 			(*initAct[gp->gt_fni])(gp, iC_o_list);	/* link_cl() */
 		    }

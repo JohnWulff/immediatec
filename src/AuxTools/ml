@@ -1,123 +1,645 @@
-#!/bin/bash
+#! /usr/bin/perl
 
-########################################################################
+#################################################################
 #
-#	make lists for immcc test
+#   Make lists of all files derived from *.ic and *.ica
+#   for immcc test
 #
-########################################################################
+#   ml
+#       v 1.20 21 March 2017  changed from bash to perl script
+#                             integrating mklst as a function
+#
+#################################################################
 
-usage ()
-{
-    echo 'Usage:	'${0##*/}' [-h]' >&2
-    echo '	-h	this help text' >&2
-    echo 'make different lists in a Test directory' >&2
-    echo '	p.lt	# all for copying' >&2
-    echo '	pd.lt	# sources, includes and derived for comparing' >&2
-    echo '	pda.lt	# iCa sources, includes and derived from .ica for comparing' >&2
-    echo '	pm.lt	# sources for making' >&2
-    echo '	pma.lt	# iCa sources for making .ica files only' >&2
-    echo '	pe.lt	# executables only' >&2
-    echo '	pc.lt	# C files only' >&2
-    echo '	pi.lt	# ini files only' >&2
-    echo '	pl.lt	# lst files only' >&2
-    echo '	pL.lt	# log files only' >&2
-    echo '	p6.lt	# lst6 files only' >&2
-    echo '	pp.lt	# iC files .ic and .ih only' >&2
-    echo '	pa.lt	# iCa files .ica and .ih only' >&2
-    echo '	ps.lt	# iC(a) source files .ica or .ic and .ih' >&2
-    echo '	pg.lt	# exe .c .ini .lst .log - generated - may be deleted in source dir' >&2
-    echo '		also ouput .ic if generated from .ica' >&2
-    echo '	-g	pg.lt - exe .c .ini .lst .log .lst6 - generated including .lst6' >&2
-    echo '	-n	pn.lt - exe .c .ini .lst .log .lst6 - generated corpses - no .ic to match' >&2
-    echo '	$Id: ml,v 1.19 2013/04/19 06:37:45 jw Exp $' >&2
+use strict;
+
+my $named = $0;
+$named =~ s#.*[/\\]##;		# delete directory names in path
+format STDERR =
+Usage:	@<  [-gnrTh]
+	$named
+	    [-dDGecilL6paHsSmM][ iCfile ...]
+make the following lists derived from all iC and iCa files in current directory
+	p.lt	# all iC iCa and derived files
+	ps.lt	# iC and iCa source and included files
+	pS.lt	# iCa source and iCa included files
+	pa.lt	# iCa source files
+	ph.lt	# iC and iCa included files
+	pd.lt	# all iC sources, includes and derived for comparing
+	pda.lt	# iCa sources, includes and derived from .ica for comparing
+	pm.lt	# special execution list for mm
+	pma.lt	# special execution list for mm -a
+	pe.lt	# derived executables
+	pc.lt	# derived C files
+	pl.lt	# derived lst files
+	p6.lt	# derived lst6 files
+	pi.lt	# derived ini files
+	pL.lt	# derived log files
+	pp.lt	# iC source files not derived from iCa
+	pg.lt	# derived exe .c .ini .lst .log files,
+		  which may be deleted in source directory
+		  also .ic files if derived from .ica files
+make special lists derived from all iC and iCa files in current directory
+	-g	pg.lt - exe .c .ini .lst .log .lst6 - derived including .lst6
+	-gr -r	same  - then actually rm -f all entries in pg.lt
+	-n	pn.lt - .ini .lst .lst6 - corpses - no .ic to match
+	-nr	same  - then actually rm -f all entries in pn.lt
+make individual list derived from iC and iCa files in argument list to STDOUT
+if no argument list is given, all iC and iCa files in current direcrory are used
+	-d	output .c .cc .ini .lst .log .ic .ica .ih .iha - for comparisons
+	-D	output .c .cc .ini .lst .log .ic .ica .iha - if derived from .ica
+		or if .ic or .ica contains %directives or if px.lt line contains -D or -P
+	-G	output exe .c .cc .ini .lst .lst6 .log - generated - may be deleted in source dir
+		also ouput .ic if generated from .ica
+	-e	output only base without extension
+	-c	output only base with .c and .cc extension
+	-i	output only base with .ini extension
+	-l	output only base with .lst extension
+	-L	output only base with .log extension
+	-6	output only base with .lst6 and .cc extension
+	-p	output only base with .ic extension
+	-a	output only base with .ica extension
+	-H	output only base with .ih or .iha extension (includes)
+	-s	output only base with .ic or .ica or .ih or .iha extension
+		output .ic only if not generated from .ica (all primary sources)
+	-S	output only base with .ica or .iha extension (iCa sources)
+	-m	output only base with .ic or .ica unless they occurr in file px.lt
+		in which case insert execution lines from px.lt instead
+	-M	output only base with .ica unless they occurr in file px.lt
+		in which case insert execution lines from px.lt instead
+		or if .ic or .ica contains %directives or if px.lt line contains -D or -P
+debugging and help
+	-T	trace output
+	-h	this help text
+	$Id: ml 1.20 $
+.
+
+use vars qw($opt_g $opt_n $opt_r $opt_d $opt_D $opt_G $opt_e $opt_c $opt_i $opt_l $opt_L);
+use vars qw($opt_6 $opt_p $opt_a $opt_H $opt_s $opt_S $opt_m $opt_M $opt_T $opt_h);
+use Getopt::Std;
+getopts('gnrdDGecilL6paHsSmMTh');	# sets $opt_h if -h etc
+
+if ($opt_h) {
+    write STDERR; exit 0;	# -h, ouput Usage only
 }
 
-while [ $# -gt 0 ]; do
-    case $1 in
-    -)	shift; break;;
-    -*)	option=${1#?}
-	while [ -n "$option" ]; do
-	    case "$option" in
-	    g*) mklst -g6 *.ic* > pg.lt		# generated files including .lst6
-		exit;;
-	    n*) mklst -n *.lst* *.log *.ini > pn.lt	# corpses only
-		exit;;
-	    h*)	usage; exit 255;;
-	    *) aflag="-$option"; break;;
-	    esac
-	    option=${option#?}
-	done;;
-    *)	break;;
-    esac
-    shift
-done
+sub mklst ($$@);
+sub recurse ($);
 
-rm -f p.lt pd.lt pda.lt ps.lt pm.lt pma.lt pg.lt pe.lt pc.lt pi.lt pl.lt pL.lt p6.lt pp.lt pa.lt ph.lt
+my %mx = ();
+my %iCheaders = ();
+my %iCsources = ();
+my %directives = ();
+my %generated_ic = ();
+my %outHash = ();
+my %prev = ();
+my $x_file = "px.lt";
+my ($f, $i, $ext, $r);
 
-if ls *.i[ch]* > /dev/null 2>&1; then
-    mklst    *.i[ch]* > p.lt	# all for copying
-    mklst -d *.i[ch]* > pd.lt	# sources, includes and derived for comparing
-    mklst -s *.i[ch]* > ps.lt	# iC or iCa sources and include files
-fi
-if ls *.ica > /dev/null 2>&1; then
-    mklst -D *.ica > pda.lt	# iCa sources, includes and derived from .ica for comparing
-    if [ ! -s pda.lt ]; then
-	rm pda.lt
-    fi
-fi
-if ls *.ic* > /dev/null 2>&1; then
-    mklst -m *.ic* > pm.lt	# special execution list for mm
-    mklst -M *.ica > pma.lt	# iCa special execution list for mm
-    if [ ! -s pma.lt ]; then
-	rm pma.lt
-    fi
-    mklst -g *.ic*    > pg.lt	# generated exe .c .ini .lst for deletion in source dir
-    mklst -e *.ic*    > pe.lt	# executables only
-fi
-if ls *.c > /dev/null 2>&1; then
-    mklst -c *.ic*    > pc.lt	# C files only
-fi
-if ls *.ini > /dev/null 2>&1; then
-    mklst -i *.ic*    > pi.lt	# ini files only
-fi
-if ls *.lst > /dev/null 2>&1; then
-    mklst -l *.ic*    > pl.lt	# lst files only
-fi
-if ls *.log > /dev/null 2>&1; then
-    mklst -L *.ic*    > pL.lt	# log files only
-fi
-if ls *.lst6 > /dev/null 2>&1; then
-    mklst -6 *.ic*    > p6.lt	# lst6 files only
-fi
-if ls *.ic > /dev/null 2>&1; then
-    mklst -p *.ic      > pp.lt	# iC source files not generated from iCa only
-fi
-if ls *.ica > /dev/null 2>&1; then
-    mklst -a *.ica     > pa.lt	# iCa source files only
-fi
-if ls *.ih* > /dev/null 2>&1; then
-    mklst -H *.ih*    > ph.lt	# iC include files only
-fi
+########################################################################
+#   Collect iC and iCa source names into various arrays
+########################################################################
 
-if [ -f Init.out ]; then
-    echo Init.out >> p.lt
-    echo Init.out >> pd.lt
-    echo Init.out >> pg.lt
-    if [ -s pma.lt ]; then
-	echo Init.out >> pda.lt
-    fi
-fi
+my @ica =	sort glob("*.ica");
+print "### \@ica ### $#ica\n@ica\n" if $opt_T;
+my @ic =	sort glob("*.ic");
+print "### \@ic ### $#ic\n@ic\n" if $opt_T;
+my @ics =	sort glob("*.ic*");
+print "### \@ics ### $#ics\n@ics\n" if $opt_T;
+my @i_ch_s =	sort glob("*.i[ch]*");
+print "### \@i_ch_s ### $#i_ch_s\n@i_ch_s\n" if $opt_T;
+my @corpses =	sort glob("*.lst* *.ini *.ih*");	# for determining corpses
+print "### \@corpses ### $#corpses\n@corpses\n" if $opt_T;
 
-if [ -f Init.out6 ]; then
-    echo Init.out6 >> p6.lt
-    echo Init.out6 >> pg.lt
-fi
+########################################################################
+#   Analyze command lines in px.lt if it exists
+########################################################################
 
-if [ -f ErrorMessages.err ]; then
-    echo ErrorMessages.err >> p.lt
-    echo ErrorMessages.err >> pd.lt
-    echo ErrorMessages.err >> pg.lt
-    if [ -s pma.lt ]; then
-	echo ErrorMessages.err >> pda.lt
-    fi
-fi
+if ( -f $x_file and -s $x_file) {
+    my ($e, $b, $c, $t, $s);
+    if (open (IN, $x_file)) {
+	while (<IN>) {
+	    $t = $_;
+	    chop $t;
+	    while (/(([A-Z_a-z]\w*)\.(ica?))/g) {
+		$f = $1;
+		$e = $b = $c = $s = $2;
+		$ext = $3;
+		unless (-f $f) {
+		    if (-e $f) {
+			warn "$named: '$f' referred to in '$x_file' is not a regular file\n";
+		    } else {
+			warn "$named: '$f' referred to in '$x_file' does not exist\n";
+		    }
+		}
+		if ($t =~ m/-[PDC]/) {
+		    while ($t =~ m/-P\s*(\w+)((=(\w+))?)/g) {
+			$b .= "_$1";	# derived .lst .c modified with -P options
+			$b .= "_$4" if $2;
+			$e = $b;	# executable and .ini modified also
+			if ($ext eq "ica") {
+			    $c = $b;	# also modify derived .ic with -P options
+			} else {
+			    warn "$named: '$f' referred to in '$x_file' has useless -P option\n";
+			}
+		    }
+		    if ($c ne $s) {			# wait till all modifications have been made
+			$generated_ic{$c}++;		# this .ic file should not be made from its name
+		    }
+		    while ($t =~ m/-D\s*(\w+)((=(\w+))?)/g) {
+			$b .= "_$1";	# derived .lst .c modified with -D options
+			$b .= "_$4" if $2;
+			$e = $b;	# executable and .ini modified also
+		    }
+		    while ($t =~ m/-C\s*(\w+)((=(\w+))?)/g) {
+			$e .= "_$1";	# executable and .ini modified with -C options
+			$e .= "_$4" if $2;
+		    }
+		}
+		push @{$mx{$s}}, [ $e, $b, $c, $t ];	# save possibly modified target bases for iCa and iC sources
+	    }
+	}
+	if ($opt_T) {
+	    print "*** x_file = $x_file\n";
+	    foreach $s (sort keys %mx) {
+		my ($ref1, $ref2, $i);
+		if (($ref1 = $mx{$s}) =~ m/ARRAY/) {
+		    $i = 0;
+		    foreach $ref2 (@$ref1) {
+			($e, $b, $c, $t) = @$ref2;
+			print "%%% \$mx{$s}[$i] = [ $e, $b, $c, $t ]\n";
+			$i++;
+		    }
+		} else {
+		    die "programming error - should never happen\n";
+		}
+	    }
+	    print "*** END $x_file\n";
+	}
+	close(IN);
+    } else {
+	warn "$named: cannot open pre_defined file $x_file\n";
+    }
+}
+
+########################################################################
+#   Analyze iCa files for %%include and extract header name
+#   Analyze iC files for %directives, for %include extract header name
+#   Headers can then be associated with files in which they are included
+#   iC files with %directives or %directives in included headers will be
+#   included in pda.lt and pma.lt
+########################################################################
+
+foreach $f (@i_ch_s) {
+    open(IN, "$f") or die "cannot open '$f' for reading: $!";
+    while (<IN>) {
+	if (m/^\s*(%%?)\s*include\s+"([a-zA-z_][\w.]*)"/) {
+	    if ($1 eq '%%') {
+		if ($f !~ m/\.i[ch]a$/) {
+		    warn "$named: \%\%include \"$2\" in '$f:$.', which is not an iCa file\n";
+		}
+	    } elsif ($1 ne '%') {
+		warn "$named: coding error in '$f:$.' ???\n";
+	    }
+	    push @{$iCheaders{$f}}, $2;	# note header included in source (can have more in one file)
+	    push @{$iCsources{$2}}, $f;	# note source including header (can have more for one header)
+	    $directives{$f}++;		# note %include has been used as a %directive in this file
+	}
+	elsif (m/^\s*%\s*(define|undef|ifdef|ifndef|if|elif|else|endif|error)\b/) {
+	    $directives{$f}++;		# note other %directive has been used in this file
+	}
+    }
+    close(IN);
+}
+########################################################################
+#   Clean up nested iC(a) headers associating them with their original
+#   .ic or .iCa source files
+########################################################################
+foreach $i (sort keys %iCsources) {
+    foreach $f (@{$iCsources{$i}}) {
+	print ".   $i	$f" if $opt_T;
+	if ($f =~ m/\.iha?/) {		# nested header
+	    my $g;
+	    $r = 0;
+	    $g = recurse($f);		# recurse until an iC or iCa source located
+	    if ($g =~ m/\.ica?/) {		# iC or iCa source found
+		push @{$iCsources{$i}}, $g;	# transfer nested header to original source
+		push @{$iCheaders{$g}}, $i;	# update % headers for good measure
+		print "push $i $g" if $opt_T;
+	    }
+	}
+	print "\n" if $opt_T;
+    }
+}
+foreach $i (sort keys %iCsources) {
+    $r = 0;
+    foreach $f (@{$iCsources{$i}}) {
+	print ": $r $i	$f" if $opt_T;
+	if (not $f or $f =~ m/\.iha?/) {
+	    splice @{$iCsources{$i}}, $r, 1;	# splice out .ih and .iha sources
+	    print " <S>" if $opt_T;
+	} else {
+	    $r++;
+	}
+	print "\n" if $opt_T;
+    }
+    unless (@{$iCsources{$i}}) {
+	delete $iCsources{$i};
+    }
+}
+
+if ($opt_T) {
+    print "\%iCheaders	\%(\%)include headers in iC(a) files\n";
+    foreach $f (sort keys %iCheaders) {
+	print "    $f	@{$iCheaders{$f}}\n";
+    }
+    print "\%iCsources	iC(a) files including \%(\%)include headers\n";
+    foreach $f (sort keys %iCsources) {
+	print "    $f	@{$iCsources{$f}}\n";
+    }
+    print "\%directives	number of \%directives contained in each file\n";
+    foreach $f (sort keys %directives) {
+	print "    $f	$directives{$f}\n";
+    }
+}
+
+########################################################################
+#   iC and iCa include files are not generated by iC(a) sources.
+#   They are only relevant if included in some .ic or .ica file
+#   or in another .ih or .iha header, which is itself included
+#   in an .ic or .ica file (%iCsources).
+########################################################################
+my @ihs =	sort keys %iCsources;	# only include files actually included in iC(a) files
+print "### \@ihs ### $#ihs\n@ihs\n" if $opt_T;
+
+########################################################################
+#   Call sub mklst with option, output file, sources array
+########################################################################
+
+if ($opt_d or $opt_D or $opt_G or $opt_e or $opt_c or $opt_i or $opt_l or $opt_L or
+    $opt_6 or $opt_p or $opt_a or $opt_H or $opt_s or $opt_S or $opt_m or $opt_M) {
+    my @op = ();
+    my ($ref1, $ref2, $select);
+    push @op, [ "-s", \@i_ch_s ] if $opt_s;	# iC and iCa source and include files
+    push @op, [ "-S", \@i_ch_s ] if $opt_S;	# iCa source and iCa include files
+    push @op, [ "-a", \@ica    ] if $opt_a;	# iCa source files
+    push @op, [ "-H", \@ihs    ] if $opt_H;	# iC and iCa include files
+    push @op, [ "-d", \@i_ch_s ] if $opt_d;	# all iC sources, includes and derived for comparing
+    push @op, [ "-D", \@i_ch_s ] if $opt_D;	# iCa sources, includes and derived from .ica for comparing
+    push @op, [ "-m", \@ics    ] if $opt_m;	# special execution list for mm
+    push @op, [ "-M", \@i_ch_s ] if $opt_M;	# special execution list for mm -a
+    push @op, [ "-e", \@ics    ] if $opt_e;	# derived executables
+    push @op, [ "-c", \@ics    ] if $opt_c;	# derived C files
+    push @op, [ "-l", \@ics    ] if $opt_l;	# derived lst files
+    push @op, [ "-6", \@ics    ] if $opt_6;	# derived lst6 files
+    push @op, [ "-i", \@ics    ] if $opt_i;	# derived ini files
+    push @op, [ "-L", \@ica    ] if $opt_L;	# derived log files
+    push @op, [ "-p", \@ic     ] if $opt_p;	# iC source files not derived from iCa
+    push @op, [ "-g", \@ics    ] if $opt_G;	# derived exe .c .ini .lst for deletion in source dir
+    foreach $ref1 (@op) {
+	($select, $ref2) = @$ref1;
+	if (@ARGV) {
+	    $ref2 = \@ARGV;
+	}
+	print "$select	@$ref2\n" if $opt_T;
+	print "### @{$ref1}[0] ###\n" if scalar @op > 1;
+	mklst($select, "-", @$ref2);	# output to STDOUT with file "-"
+    }
+}
+elsif ($opt_g or $opt_n or $opt_r) {
+    if ($opt_g or ($opt_r and not $opt_n)) {
+	mklst("-g6", "pg.lt", @ics);	# derived exe .c .ini .lst .lst6 for deletion in source dir
+	if ($opt_r and %outHash) {
+	    unlink keys %outHash;	# rm -f now
+	}
+    }
+    if ($opt_n) {
+	mklst("-n", "pn.lt", @corpses);	# .ini .lst .lst6 - corpses - no .ic to match
+	if ($opt_r and %outHash) {
+	    unlink keys %outHash;	# rm -f now
+	}
+    }
+} else {
+    mklst("  ", "p.lt",  @i_ch_s);	# all iC iCa and derived files
+    mklst("-s", "ps.lt", @i_ch_s);	# iC and iCa source and include files
+    mklst("-S", "pS.lt", @i_ch_s);	# iCa source and iCa include files
+    mklst("-a", "pa.lt", @ica);		# iCa source files
+    mklst("-H", "ph.lt", @ihs);		# iC and iCa include files
+    mklst("-d", "pd.lt", @i_ch_s);	# all iC sources, includes and derived for comparing
+    mklst("-D", "pda.lt", @i_ch_s);	# iCa sources, includes and derived from .ica for comparing
+    mklst("-m", "pm.lt", @ics);		# special execution list for mm
+    mklst("-M", "pma.lt", @i_ch_s);	# special execution list for mm -a
+    mklst("-e", "pe.lt", @ics);		# derived executables
+    mklst("-c", "pc.lt", @ics);		# derived C files
+    mklst("-l", "pl.lt", @ics);		# derived lst files
+    mklst("-6", "p6.lt", @ics);		# derived lst6 files
+    mklst("-i", "pi.lt", @ics);		# derived ini files
+    mklst("-L", "pL.lt", @ica);		# derived log files
+    mklst("-p", "pp.lt", @ic);		# iC source files not derived from iCa
+    mklst("-g", "pg.lt", @ics);		# derived exe .c .ini .lst for deletion in source dir
+}
+
+########################################################################
+#   End of main
+########################################################################
+
+########################################################################
+#
+#   Make a list of all files derived from *.ic and *.ica
+#
+#   options are passed in $o:
+#   -d	output .c .cc .ini .lst .log .ic .ica .ih .iha - for comparisons
+#   -D	output .c .cc .ini .lst .log .ic .ica .iha - if derived from .ica
+#	or if .ic or .ica contains %directives or if px.lt line contains -D or -P
+#   -g	output exe .c .cc .ini .lst .lst6 .log - derived - may be deleted in source dir
+#	also ouput .ic if derived from .ica
+#   -n	output .ini .lst .lst6 - derived corpses - no .ic or .ica to match
+#	also output .h and .iha files never included in any .ic or .ica
+#   -e	output only base without extension (executable)
+#   -c	output only base with .c and .cc extension
+#   -i	output only base with .ini extension
+#   -l	output only base with .lst extension
+#   -L	output only base with .log extension
+#   -6	output only base with .lst6 and .cc extension
+#   -p	output only base with .ic extension
+#   -a	output only base with .ica extension
+#   -H	output only base with .ih or .iha extension (includes)
+#   -s	output only base with .ic or .ica or .ih or .iha extension
+#	output .ic only if not derived from .ica (all primary sources)
+#   -S	output only base with .ica or .iha extension (iCa sources)
+#   -m	output only base with .ic or .ica unless they occurr in file px.lt
+#	in which case insert execution lines from px.lt instead
+#   -M	output only base with .ica unless they occurr in file px.lt
+#	in which case insert execution lines from px.lt instead
+#	or if .ic or .ica contains %directives or if px.lt line contains -D or -P
+#   " "	output all .ic and .ica files and those derived from them
+#
+########################################################################
+
+sub mklst ($$@) {
+    my ($o, $out, @argv) = @_;		# transfer arguments
+    my $current = -1;
+    my ($source, $sf, $ln, $argv, $ref1, $ref2, $i);
+    my ($e, $b, $c, $t, $s, $f, $ext);
+
+    %outHash = ();
+    print "### \@argv = @argv\n" if $opt_T;
+  ARG:
+    while ($argv = shift @argv) {
+	if ($o eq "-n") {				# > pn.lt
+	    if ($argv =~ m/^([A-Z_a-z]\w*)\.(lst6?|ini)$/) {	# do not check .c or .log - too dangerous
+		$e = $b = $c = $t = $s = $f = $1;
+		unless ($prev{$f}) {
+		    $prev{$f}++;			# do not try a second time
+		    $ext = $2;
+		    if (-f "$c.ic" or -f "$s.ica") {	# try both direct variants of sources
+			print "%%% $argv not a corpse\n" if $opt_T;
+			next ARG;			# not a corpse - accept this .ini or .lst
+		    }
+		    foreach $s (keys %mx) {		# try sources of all modified names
+			if (($ref1 = $mx{$s}) =~ m/ARRAY/) {
+			    $i = 0;
+			    foreach $ref2 (@$ref1) {
+				($e, $b, $c, $t) = @$ref2;
+				if ($argv eq "$b.$ext" and
+				    (-f "$c.ic" or -f "$s.ica")) {
+				    print "%%% \$mx{$s}[$i] = [ $e, $b, $c, $t ]; $argv not a corpse\n" if $opt_T;
+				    next ARG;		# not a corpse - accept this .ini or .lst
+				}
+				$i++;
+			    }
+			}
+		    }
+		    # found no .ic or .ica for this .ini or .lst file - must be corpses
+		    $outHash{"$f"}++ if -f "$f";
+		    $outHash{"$f.c"}++ if -f "$f.c";
+		    $outHash{"$f.cc"}++ if -f "$f.cc";
+		    $outHash{"$f.exe"}++ if -f "$f.exe";
+		    $outHash{"$f.ini"}++ if -f "$f.ini";
+		    $outHash{"$f.log"}++ if -f "$f.log";
+		    $outHash{"$f.lst"}++ if -f "$f.lst";
+		    $outHash{"$f.lst6"}++ if -f "$f.lst6";
+		}
+	    }
+	    elsif ($argv =~ m/^[A-Z_a-z]\w*\.iha?$/) {	# all iC(a) include files
+		if ($iCsources{$argv}) {
+		    print "%%% $argv not a corpse\n" if $opt_T;
+		}
+		elsif (not $prev{$argv}) {		# if not in %iCsources header is a corpse
+		    $prev{$argv}++;			# do not output a second time
+		    $outHash{"$argv"}++ if -f "$argv";
+		}
+	    }
+	} elsif ($o eq "-H") {				# > ph.lt
+	    if ($argv =~ m/^([A-Z_a-z]\w*)\.iha?$/) {
+		$outHash{"$1.ih"}++ if -f "$1.ih";
+		$outHash{"$1.iha"}++ if -f "$1.iha";
+	    }
+	} elsif ($argv =~ m/^([A-Z_a-z]\w*)\.(i[ch]a?)$/) {
+	    $e = $b = $c = $s = $1;
+	    print "### \$argv = $argv	\$s = $s\n" if $opt_T;
+	    if ($x_file and defined ($ref1 = $mx{$s}) and $ref1 !~ /ARRAY/) {
+		undef $ref1;				# TODO - should no longer happen
+	    }
+	    for ($ref2 = 1, $i = 0; $ref2; $i++) {
+		if ($ref1) {
+		    $ref2 = @$ref1[$i];
+		    next ARG unless $ref2;
+		    ($e, $b, $c, $t) = @$ref2;
+		    print "*** \$s = $s	\$b = $b	\$c = $c\n" if $opt_T;
+		} else {
+		    undef $ref2;			# not in %mx - stop loop after one iteration
+		    undef $t;
+		    print "*** \$s = $s	\$b = $b\n" if $opt_T;
+		}
+		if ($o eq "-d") {				# > pd.lt
+		    $outHash{"$b.c"}++ if -f "$b.c";
+		    $outHash{"$b.cc"}++ if -f "$b.cc";
+		    $outHash{"$c.ic"}++ if -f "$c.ic";
+		    $outHash{"$s.ica"}++ if -f "$s.ica";
+		    $outHash{"$e.ini"}++ if -f "$e.ini";
+		    $outHash{"$b.log"}++ if -f "$b.log";
+		    $outHash{"$b.lst"}++ if -f "$b.lst";
+		    $outHash{"$b.ih"}++ if -f "$b.ih";
+		    $outHash{"$b.iha"}++ if -f "$b.iha";
+		} elsif ($o eq "-D") {			# > pda.lt
+		    if (-f "$s.ica" or $directives{"$s.ic"}) {
+			print "$o $out    $s.ica	@{[$directives{'$s.ica'}]}\n" if $opt_T;
+			$outHash{"$b.c"}++ if -f "$b.c";
+			$outHash{"$b.cc"}++ if -f "$b.cc";
+			$outHash{"$c.ic"}++ if -f "$c.ic";
+			$outHash{"$s.ica"}++ if -f "$s.ica";
+			$outHash{"$e.ini"}++ if -f "$e.ini";
+			$outHash{"$b.log"}++ if -f "$b.log";
+			$outHash{"$b.lst"}++ if -f "$b.lst";
+			$outHash{"$b.iha"}++ if -f "$b.iha";
+		    }
+		} elsif ($o =~ m/-g/) {			# > pg.lt -g or -g6
+		    $outHash{"$e"}++ if -f "$e";
+		    $outHash{"$e.exe"}++ if -f "$e.exe";
+		    $outHash{"$b.c"}++ if -f "$b.c";
+		    $outHash{"$b.cc"}++ if -f "$b.cc";
+		    $outHash{"$c.ic"}++ if -f "$s.ica" and -f "$c.ic";
+		    $outHash{"$e.ini"}++ if -f "$e.ini";
+		    $outHash{"$b.log"}++ if -f "$b.log";
+		    $outHash{"$b.lst"}++ if -f "$b.lst";
+		    if ($o eq "-6") {
+			$outHash{"$b.lst6"}++ if -f "$b.lst6";
+		    }
+		} elsif ($o eq "-e") {			# > pe.lt
+		    $outHash{"$e"}++ if -f "$e";
+		    $outHash{"$e.exe"}++ if -f "$e.exe";
+		} elsif ($o eq "-c") {			# > pc.lt
+		    $outHash{"$b.c"}++ if -f "$b.c";
+		    $outHash{"$b.cc"}++ if -f "$b.cc";
+		} elsif ($o eq "-i") {			# > pi.lt
+		    $outHash{"$e.ini"}++ if -f "$e.ini";
+		} elsif ($o eq "-l") {			# > pl.lt
+		    $outHash{"$b.lst"}++ if -f "$b.lst";
+		} elsif ($o eq "-L") {			# > pL.lt
+		    $outHash{"$b.log"}++ if -f "$b.log";
+		} elsif ($o eq "-6") {			# > p6.lt -6 only
+		    $outHash{"$b.cc"}++ if -f "$b.cc";
+		    $outHash{"$b.lst6"}++ if -f "$b.lst6";
+		} elsif ($o eq "-p") {			# > pp.lt
+		    $outHash{"$c.ic"}++ if -f "$c.ic";
+		} elsif ($o eq "-a") {			# > pa.lt
+		    $outHash{"$s.ica"}++ if -f "$s.ica";
+		} elsif ($o eq "-s" or $o eq "-S" or	# > ps.lt ( > pm.lt and pma.lt if no px.lt )
+			 $o eq "-m" or $o eq "-M") {	# > pm.lt and pma.lt
+		    $source = '';
+		    $sf = ($o eq "-s" or $o eq "-m") ? 'T' : '';# force output for -s or -m but not for -S or -M
+		    if (-f "$s.ica") {
+			$sf = $source = "$s.ica";	# force output for -M if iCa file
+		    } elsif (-f "$c.ic") {
+			$source = "$c.ic";
+			if ($directives{$source}) {
+			    $sf = $source;		# force output for -M if iC file contains %directives
+			    print "$o $out    $source	$directives{$source}	$sf\n" if $opt_T;
+			}
+			$sf = 0 if $generated_ic{$c};
+		    }
+		    if (($o eq "-m" or $o eq "-M") and defined $t) {
+			$outHash{"$t"}++ if $sf;	# line from px.lt with sources
+		    } elsif ($sf and -f $source) {
+			$outHash{"$source"}++;		# or source only if not in px.lt or -s;
+		    }
+		    if ($o eq "-s" or $o eq "-S") {
+			if ($o eq "-S") {
+			    if (($ref1 = $iCheaders{"$s.ica"}) =~ m/ARRAY/) {
+				foreach $f (@$ref1) {
+				    if (-f "$f") {
+					$outHash{"$f"}++;	# included header in this iCa source
+				    }
+				}
+			    }
+			}
+			if (($ref1 = $iCheaders{"$c.ic"}) =~ m/ARRAY/) {
+			    foreach $f (@$ref1) {
+				if (-f "$f") {
+				    $outHash{"$f"}++;	# included header in this iC source
+				}
+			    }
+			}
+		    }
+		} else {				# > p.lt
+		    $outHash{"$e"}++ if -f "$e";
+		    $outHash{"$e.exe"}++ if -f "$e.exe";
+		    $outHash{"$b.c"}++ if -f "$b.c";
+		    $outHash{"$b.cc"}++ if -f "$b.cc";
+		    $outHash{"$e.ini"}++ if -f "$e.ini";
+		    $outHash{"$b.log"}++ if -f "$b.log";
+		    $outHash{"$b.lst"}++ if -f "$b.lst";
+		    $outHash{"$c.ic"}++ if -f "$c.ic";
+		    $outHash{"$s.ica"}++ if -f "$s.ica";
+		    $outHash{"$b.ih"}++ if -f "$b.ih";
+		    $outHash{"$b.iha"}++ if -f "$b.iha";
+		}
+	    }
+	}
+    }
+    if (%outHash) {
+	if ($out eq "p.lt" or $out eq "pd.lt" or $out eq "pda.lt" or $out eq "pg.lt") {
+	    $outHash{"Init.out"}++ if -f "Init.out";
+	    $outHash{"ErrorMessages.err"}++ if -f "ErrorMessages.err";
+	}
+	if ($out eq "p6.lt" or $out eq "pg.lt") {
+	    $outHash{"Init.out6"}++ if -f "Init.out6";
+	}
+	open(OUT, ">$out") or die "cannot create '$out' for output: $!";
+	foreach $f (sort filesFirst keys %outHash) {
+	    print OUT "$f\n";
+	}
+	close(OUT);
+    } elsif (-f $out) {
+	unlink "$out";
+    }
+} # mklst
+
+########################################################################
+#   Change sorting by putting the file list before options stating with -
+#	-l -DINCLUDE adb.ic ada.ic	==> adb.ic ada.ic -l -DINCLUDE
+#	-l ada.ic adc.ic		==> ada.ic adc.ic -l
+#   This puts list in first file order, which generates the name of the
+#   executable by iCmake
+#   NOTE: you cannot assign $sa = $a early and then assign something else
+#         to $sa, because that also modifies $a, because the early assignment
+#         makes $sa an alias of $a, which is an alias of the internal value.
+########################################################################
+
+sub filesFirst {
+    my ($term, @files, @options, $sa, $sb);
+    if ($a =~ m/ /) {
+	print "*** \$a = $a" if $opt_T;
+	@files   = ();
+	@options = ();
+	foreach $term (split(" ", $a)) {
+	    if ($term =~ m/\.ica?/) {
+		push @files, $term;
+	    } else {
+		push @options, $term;
+	    }
+	}
+	$sa = join " ", @files, @options;
+	print "	*** \$sa = $sa\n" if $opt_T;
+    } else {
+	$sa = $a;		# cannot assign early and then modify $sa
+    }
+    if ($b =~ m/ /) {
+	print "*** \$b = $b" if $opt_T;
+	@files   = ();
+	@options = ();
+	foreach $term (split(" ", $b)) {
+	    if ($term =~ m/\.ica?/) {
+		push @files, $term;
+	    } else {
+		push @options, $term;
+	    }
+	}
+	$sb = join " ", @files, @options;
+	print "	*** \$sb = $sb\n" if $opt_T;
+    } else {
+	$sb = $b;		# cannot assign early and then modify $sb
+    }
+    return $sa cmp $sb;
+} # filesFirst
+
+########################################################################
+#   Clean up recursively
+########################################################################
+
+sub recurse ($) {
+    my ($i) = @_;
+    my ($f, $g);
+    ++$r;
+    foreach $f (@{$iCsources{$i}}) {
+	$g = $f;
+	print "	>$r  $f" if $opt_T;
+	if ($f =~ m/\.iha?/) {		# nested header
+	    $g = recurse($f);		# recurse until an iC or iCa source located
+	}
+	print " :	$g  <$r" if $opt_T;
+    }
+    $r--;
+    return $g;
+} # recurse

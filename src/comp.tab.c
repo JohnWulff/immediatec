@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "comp.y"
  static const char comp_y[] =
-"@(#)$Id: comp.tab.c 1.122 $";
+"@(#)$Id: comp.tab.c 1.123 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -6056,9 +6056,9 @@ iC_compile(
 		perror("unlink");
 		return T0index;			/* error unlinking temporary file */
 	    }
-	    snprintf(execBuf, BUFS, "immac -M %s -I/usr/local/include -o %s %s 2> %s",
-		iC_defines, T0FN, inpPath, T6FN);
-	    r1 = system(execBuf);		/* Pre-compile iC file with immac -M */
+	    snprintf(execBuf, BUFS, "immac -M%s %s -I/usr/local/include -o %s %s 2> %s",
+		iC_aflag, iC_defines, T0FN, inpPath, T6FN);
+	    r1 = system(execBuf);		/* Pre-compile iC file with immac -M or immac -Ma */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### pre-compile: %s; $? = %d\n", execBuf, r1>>8);
 #endif
@@ -6437,12 +6437,6 @@ get(FILE* fp, int x)
 			fprintf(iC_outFP, "%03d\t(%d) %s", lineno, cFn, chbuf[x]); /* C function head listing */
 		    }
 		    cFn = 0;
-		} else if ((iC_debug & 06) &&
-		    (lexflag & C_PARSE) &&
-		    chbuf[x][0] != '\t' &&
-		    chbuf[x][0] != ' '  &&
-		    memcmp(chbuf[x], "//* ", 4) != 0) {
-		    fprintf(iC_outFP, "%03d\t    %s", lineno, chbuf[x]);	/* C listing without initial space */
 		} else if (((iC_debug & 06)  && (lexflag & C_PARSE)) ||
 		    ((iC_debug & 040)  && (lexflag & C_PARSE) == 0)) {
 		    if (memcmp(chbuf[x], "//* ", 4) != 0) {

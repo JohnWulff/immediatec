@@ -30,7 +30,7 @@
 
 009	(2) {
 010	    iC_AA(2, 0,  iC_AV(3) + iC_AV(4));	// C++ comment in embedded C reported by -P option
-011	    }
+011	}
 
 ******* NET TOPOLOGY    ************************
 
@@ -55,6 +55,6 @@ TOTAL	       7 blocks
 	      13 links
 
 compiled by:
-@(#)     $Id: CppComment.lst,v 1.1 2015/05/24 00:51:45 jw Exp $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/CppComment.c  (62 lines)

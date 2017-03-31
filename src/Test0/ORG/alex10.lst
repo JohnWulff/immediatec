@@ -149,7 +149,7 @@
 ******* C CODE          ************************
 
 005
-006	    #include	<stdio.h>
+006	#include	<stdio.h>
 007
 
 021	(2) 	return !(iC_MV(1)>100)?iC_MV(1):200-iC_MV(1);
@@ -222,6 +222,6 @@ TOTAL	      33 blocks
 	     109 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/alex10.c  (157 lines)

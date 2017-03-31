@@ -6,7 +6,7 @@
  *	14 October 2015	v11	add full command line analysis
  *	11 March 2017		change to iC version 3
  *
- * @(#)$Id: rfid.ic 1.3 $
+ * @(#)$Id: rfid.ic 1.4 $
  *
  *******************************************************************/
 
@@ -52,7 +52,7 @@ static char *	usage =
 #endif
 "[ --[ -h]|[ -R <app ...>]]\n"
 #ifdef	RASPBERRYPI
-"    -I X2   activate IX2.0-3 and QX2.0-7 for inverting PiFace\n"
+"    -I X2        activate IX2.0-3 and QX2.0-7 for inverting PiFace\n"
 #endif
 "   --h           this help text\n"
 "   --R <app ...> run auxiliary app followed by -z and its arguments\n"

@@ -21,8 +21,9 @@ usage ()
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
   echo '	-s	link with static library libict.a (default libict.so)' >&2
   echo '	-e	link all targets with -lefence to test with Electric Fence' >&2
-  echo '	-a      immac: output for loop control and %define lines as comments' >&2
-  echo '		make only iCa files - listed by ml in pma.lt' >&2
+  echo '	-a	list iC preprocessor commands %define %include etc as comments' >&2
+  echo '		list iCa FOR loop control lines and %%define etc as comments' >&2
+  echo '		make only files modified by preprocessing listed by ml in pma.lt' >&2
   echo '		listed by ml in pda.lt for generated dependencies to compare' >&2
   echo '	-L      generate auxiliary 'file.log' for debugging immac translation' >&2
   echo '	-E	store error output of iC and C compile in file.ini' >&2
@@ -38,7 +39,7 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: mm 1.27 $' >&2
+  echo '$Id: mm 1.28 $' >&2
 }
 
 A=" -f"
@@ -91,9 +92,9 @@ if [ -f pm.lt ]; then
 	    iCmake$I$E$A $line
 	done < pm$a.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\./ s//\/tmp\/x./' > Init.out
     else
-##	rm -f /tmp/cexe.c			# just in case
-##	immcc -c < /dev/null			# uses installed iC compiler
-##	mv cexe.c /tmp				# empty cexe.c for comparison
+	rm -f /tmp/cexe.c			# just in case
+	immcc -c < /dev/null			# uses installed iC compiler
+	mv cexe.c /tmp				# empty cexe.c for comparison
 	while true; do
 	    read line
 	    if [[ -z "$line" ]]; then

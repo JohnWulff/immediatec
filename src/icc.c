@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.78 $";
+"@(#)$Id: icc.c 1.79 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -74,7 +74,7 @@ static const char *	usage =
 "        -l <lst>        name of list file  (default: none, '' is stdout) output:\n"
 "                        listing with logic expansion, net topology and statistics\n"
 "        -e <err>        name of error file (default is stderr)\n"
-"        -a              compile with linking information in auxiliary files\n"
+"        -L              compile with linking information in auxiliary files\n"
 "        -g              each expression has its own C code for debugging with gdb\n"
 "        -A              compile output ARITHMETIC ALIAS nodes for symbol debugging\n"
 "        -S              use strict - immediate variables must be declared (default)\n"
@@ -87,6 +87,8 @@ static const char *	usage =
 "        -D <macro>      predefine <macro> for the iC preprocessor phase\n"
 "        -U <macro>      cancel previous definition of <macro> for the iC phase\n"
 "                        Note: do not use the same macros for the iC and the C phase\n"
+"        -a              list iC preprocessor commands %%define %%include etc and\n"
+"                        command line macros as comments (default: do not list)\n"
 "        -C <macro>      predefine <macro> for the C preprocessor phase\n"
 "        -V <macro>      cancel previous definition of <macro> for the C phase\n"
 "        -W[no-]<warn>                  positive/negative warning options\n"
@@ -235,7 +237,7 @@ static const char *	usage =
 "      Typing q or ctrl+D quits run mode.\n"
 #endif	/* RUN or TCP */
 "%s\n"
-"Copyright (C) 1985-2015 John E. Wulff     <immediateC@gmail.com>\n"
+"Copyright (C) 1985-2017 John E. Wulff     <immediateC@gmail.com>\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -244,6 +246,9 @@ short		iC_debug = 0;
 int		iC_micro = 0;
 int		iC_Pflag = 0;		/* pedantic warning/error flag */
 int		iC_Wflag = W_ALL;	/* by default all warnings are on */
+char *		iC_aflag;			/* -a list iC preprocessor commands with immac -Ma */
+unsigned short	iC_Lflag;			/* -L compile with linking information */
+unsigned short	iC_lflag;			/* -L build new aux files  */
 unsigned short	iC_xflag;
 unsigned short	iFlag;
 unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
@@ -468,7 +473,8 @@ main(
     T0FP = stdin;			/* input file pointer */
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
-    iC_aflag = iC_lflag = 0;		/* don't append for compile */
+    iC_aflag = "";			/* don't list iC preprocessor commands with immac -M */
+    iC_Lflag = iC_lflag = 0;		/* don't append for compile */
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;
@@ -716,8 +722,11 @@ main(
 		case 'N':
 		    iC_uses &= ~USE_STRICT;	/* no strict - strict is now default - JW 20160925 */
 		    break;
+		case 'L':
+		    iC_Lflag = 1;		/* compile with linking information */
+		    break;
 		case 'a':
-		    iC_aflag = 1;		/* append for compile */
+		    iC_aflag = "a";		/* list iC preprocessor commands with immac -Ma */
 		    break;
 #ifndef TCP
 		case 'R':			/* for TCP this option is interpreted with -R <call+opts> */
@@ -1300,7 +1309,7 @@ immcc - the immediate-C to C compiler
     -l <lst> name of list file  (default: none, '' is stdout) output:
              listing with logic expansion, net topology and statistics
     -e <err> name of error file (default is stderr)
-    -a       compile with linking information in auxiliary files
+    -L       compile with linking information in auxiliary files
     -g       each expression has its own C code for debugging with gdb
     -A       compile output ARITHMETIC ALIAS nodes for symbol debugging
     -S       use strict - immediate variables must be declared (default)
@@ -1313,6 +1322,8 @@ immcc - the immediate-C to C compiler
     -D <macro> predefine <macro> for the iC preprocessor phase
     -U <macro> cancel previous definition of <macro> for the iC phase
             Note: do not use the same macros for the iC and the C phase
+    -a      list iC preprocessor commands %define %include etc and
+"           command line macros as comments (default: do not list)
     -C <macro> predefine <macro> for the C preprocessor phase
     -V <macro> cancel previous definition of <macro> for the C phase
     -W[no-]<warn>                  positive/negative warning options

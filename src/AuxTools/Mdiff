@@ -206,9 +206,9 @@ process()
 				    eval $F $cfile >> $tmp2
 				    cf=$tmp2
 				fi
-				test $T -eq 1 && echo "diff $w$context -- $sf $cf"
+				test $T -eq 1 && echo "diff$w$k$context -- $sf $cf"
 			    fi
-			    if diff -q $w -- $sf $cf > /dev/null; then
+			    if diff -q$w$k -- $sf $cf > /dev/null; then
 				if [[ $q -eq 0 ]]; then
 				    if [[ $i -eq 1 ]]; then
 					header "$spath" "$cdir"
@@ -229,7 +229,7 @@ process()
 					ls -lL -- $sfile
 					ls -lL -- $cfile
 				    fi
-				    diff $w$context -- $sf $cf
+				    diff$w$k$context -- $sf $cf
 				elif [[ $li -eq 1 && $e -ne 1 ]]; then
 				    echo "$sfile"		# -l or -el option
 				fi
@@ -251,7 +251,7 @@ process()
 				    ls -lL -- $sfile
 				    ls -lL -- /tmp/0
 				fi
-				diff $w$context -- $sfile /tmp/0
+				diff$w$k$context -- $sfile /tmp/0
 			    fi
 			elif [[ $li -eq 1 ]]; then
 			    echo "$sfile"		# -le or -el option
@@ -366,7 +366,8 @@ E=0
 t=1
 q=0
 li=0
-w='-wB'
+k=''
+w=" -wB"
 filter=0
 f=''
 F=''
@@ -387,14 +388,14 @@ while getopts ":eEiltqcC:uU:kI:waLrR:xf:F:X:TZpPvh" opt; do
     C )	context="$context -C $OPTARG";;
     u ) context="$context -u";;
     U )	context="$context -U $OPTARG";;
-    k )	w="$w -I \$Id[$:] -I \$Revision[$:]";;
-    w )	w=;;
-    x )	w="$w -i";;
+    k )	k="$k -I \$Id[$:] -I \$Revision[$:]";;
+    w )	w='';;
+    x )	k="$k -i";;
     a )	all=1;;
     L )	link=1;;
     r )	recursive=1;;
     R )	regex="$OPTARG";;
-    I )	w="$w -I $OPTARG";;
+    I )	k="$k -I $OPTARG";;
     f )	filter=1; f="$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable"; usage; exit 126; fi;;
     F )	filter=1; F="$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable"; usage; exit 126; fi;;
     X )	cmd="$OPTARG";;
@@ -707,7 +708,7 @@ These lists are exclusive subsets of the complete set of selected files.
 
      -I <regex>
      Ignore changes that just insert or delete lines that match <regex>.
-     -k is shorthand for -I '\$Id[$:] -I \$Revision[$:]', which ignores
+     -k is shorthand for -I '\$Id[$:]' -I '\$Revision[$:]', which ignores
      RCS/CVS keyword lines containing $Id or $Revision.
 
      -f<filter>

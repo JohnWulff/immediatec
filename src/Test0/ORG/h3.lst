@@ -172,7 +172,7 @@
 ******* C CODE          ************************
 
 007
-008	    #include	<stdio.h>
+008	#include	<stdio.h>
 009
 
 011	(2) {
@@ -182,7 +182,7 @@
 015		}
 016	    }
 
-016	    {
+016	{
 017		printf("Good bye Nr.0\n");
 018	    }
 
@@ -193,7 +193,7 @@
 023		}
 024	    }
 
-024	    {
+024	{
 025		printf("Good bye Nr.1\n");
 026	    }
 
@@ -204,7 +204,7 @@
 031		}
 032	    }
 
-032	    {
+032	{
 033		printf("Good bye Nr.2\n");
 034	    }
 
@@ -215,7 +215,7 @@
 039		}
 040	    }
 
-040	    {
+040	{
 041		printf("Good bye Nr.3\n");
 042	    }
 
@@ -226,7 +226,7 @@
 047		}
 048	    }
 
-048	    {
+048	{
 049		printf("Good bye Nr.4\n");
 050	    }
 
@@ -237,7 +237,7 @@
 055		}
 056	    }
 
-056	    {
+056	{
 057		printf("Good bye Nr.5\n");
 058	    }
 
@@ -248,7 +248,7 @@
 063		}
 064	    }
 
-064	    {
+064	{
 065		printf("Good bye Nr.6\n");
 066	    }
 
@@ -259,7 +259,7 @@
 071		}
 072	    }
 
-072	    {
+072	{
 073		printf("Good bye Nr.7\n");
 074	    }
 
@@ -270,7 +270,7 @@
 079		}
 080	    }
 
-080	    {
+080	{
 081		printf("Good bye Nr.8\n");
 082	    }
 
@@ -281,7 +281,7 @@
 087		}
 088	    }
 
-088	    {
+088	{
 089		printf("Good bye Nr.9\n");
 090	    }
 
@@ -320,6 +320,6 @@ TOTAL	      21 blocks
 	      60 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/h3.c  (265 lines)

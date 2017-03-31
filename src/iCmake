@@ -23,14 +23,12 @@ else
     CC=gcc
 fi
 
-m=""
 case `uname -m` in
     *x86_64* | *ppc64* | *s390x* )
 	LIB="/usr/local/lib64/"
 	;;
     *armv* )
 	LIB="/usr/local/lib/"
-	m="armv"
 	;;
     * )
 	LIB="/usr/local/lib/"
@@ -55,7 +53,7 @@ usage ()
   echo '		complete listing of all files is in first.lst' >&2
   echo "	-o<exe>	place output in file 'exe' (implies -l if first option)" >&2
   echo '		complete listing of all files is in exe.lst' >&2
-  echo "	-i      generate iC file.ic .. only (runs $IAC pre-compiler only)" >&2
+  echo "	-i	generate iC file.ic .. only (runs $IAC pre-compiler only)" >&2
   echo '	-t	generate listings file.lst .. only (-o target.lst optional)' >&2
   echo '	-c	generate C outputs file.c ... only (-o target.c optional)' >&2
   echo '	-b	generate both listings and C outputs - no executable' >&2
@@ -74,17 +72,19 @@ usage ()
   echo '	-pp	pedantic-error: error if variable contains $' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		   duplicate arithmetic expressions -O7 all (default)' >&2
-  echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
-  echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
-if [ -n "$m" ]; then
-  echo '		-D RASPBERRYPI may be predefined on a Raspberry Pi (armv) processor' >&2
-fi
-  echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
-  echo '	        Note: do not use the same macros for the iC and the C phase' >&2
-  echo '	-C<macro> predefine <macro> for the C preprocessor phase' >&2
-  echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
+  echo '	-R	no maximum error count (default: abort after 100 errors)' >&2
   echo "	-P<macro> predefine <macro> for $IAC pre-compiler. iC target base name" >&2
-  echo '	          is extended by the -P option. eg -P B=2 x target is x_B_2.ic' >&2
+  echo '		  is extended by the -P option. eg -P E=2 x.ica, target is x_E_2.ic' >&2
+  echo '	-D<macro> predefine <macro> for the iC preprocessor phase' >&2
+  echo '		  iC base name for generated files .lst and .c is extended' >&2
+  echo '		  by the -D option. eg -D F=3 y.ic, list file is y_F_3.lst' >&2
+  echo '	-U<macro> cancel previous definition of <macro> for the iC phase' >&2
+  echo '		  Note: do not use the same macros for the iC and the C phase' >&2
+  echo '	-C<macro> predefine <macro> for the C preprocessor phase. Name of executable' >&2
+  echo '		  is extended by the -C option. eg -C G=4 z.ic, executable is z_G_4' >&2
+  echo '	-V<macro> cancel previous definition of <macro> for the C phase' >&2
+  echo '	-a	list iC preprocessor commands %define %include etc as comments' >&2
+  echo '		list iCa FOR loop control lines and %%define etc as comments' >&2
   echo '	-W[no-]<warn>                  positive/negative warning options' >&2
   echo '	    -W[no-]deprecated-logic    use of && || ! in pure bit expressions' >&2
   echo '	    -W[no-]function-parameter  unused parameters in functions' >&2
@@ -93,11 +93,10 @@ fi
   echo '	    -W[no-]undefined-gate      undefined gate' >&2
   echo '	    -W[no-]unused-gate         unused gate' >&2
   echo '	    -W[no-]all                 [no]/all warnings + -Wall for C compile' >&2
-  echo "	-a      $IAC: output FOR loop control and %%define lines as comments" >&2
-  echo "	-F      generate auxiliary 'file.log' for debugging $IAC translation" >&2
+  echo "	-F	generate auxiliary 'file.log' for debugging $IAC translation" >&2
   echo '	-k<lim>	highest I/O index (default: no limit; 63 for -c mode)' >&2
-  echo '	        if lim <= 63, mixed byte, word and long indices are tested' >&2
-  echo '	        default: any index for bit, byte, word or long is allowed' >&2
+  echo '		if lim <= 63, mixed byte, word and long indices are tested' >&2
+  echo '		default: any index for bit, byte, word or long is allowed' >&2
   echo '	-E	store error output of iC and C compile in file.ini' >&2
   echo '	-j	append output of an initial run to file.ini      (implies -s)' >&2
   echo '	-I	append output of run INITIALIZATION only to file.ini  ( " -s)' >&2
@@ -114,7 +113,7 @@ fi
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.50 $' >&2
+  echo '	$Id: iCmake 1.51 $' >&2
 }
 
 lwsock32=""
@@ -136,6 +135,8 @@ libfile="${LIB}libict.so"
 L=""
 d=" -d474"
 D=""
+DA=""
+CA=""
 A=""
 S=""
 N=""
@@ -157,6 +158,7 @@ E=""
 I=""
 C=""
 CFL=""
+first=""
 
 if $ICC < /dev/null 2>&1| grep -q 'Electric Fence'; then
     ef=" -lefence"
@@ -165,7 +167,7 @@ fi
 while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
     case $opt in
     l )	link=1
-	aux=" -a"			# generate aux files with 'immcc -a' for linking
+	aux=" -L"			# generate aux files with 'immcc -L' for linking
 	if [ -z "$A" ]; then
 	    A=" -A"			# must have ARITH ALIAS for linking
 	    d="$d$A"
@@ -173,7 +175,7 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
 	;;
     o ) if [ $link -eq 0 ]; then	# don't necessarily generate aux files
 	    link=1
-	    aux=" -a"			# generate aux files with 'immcc -a' for linking
+	    aux=" -L"			# generate aux files with 'immcc -L' for linking
 	    if [ -z "$A" ]; then
 		A=" -A"			# must have ARITH ALIAS for linking
 		d="$d$A"
@@ -242,11 +244,11 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
 	;;
     d ) d="$d -d$OPTARG";;
     O ) d="$d -O$OPTARG";;
-    D ) D="$D -D '$OPTARG'";;
-    U ) D="$D -U '$OPTARG'";;
-    C ) D="$D -C '$OPTARG'"; C="$C -D '$OPTARG'";;
-    V ) D="$D -V '$OPTARG'"; C="$C -U '$OPTARG'";;
-    P ) P="$P -P '$OPTARG'"; Pa=${OPTARG%=*}; PA="${PA}_${Pa}"; if [ $Pa != $OPTARG ]; then Pz=${OPTARG#$Pa=}; PA="${PA}_${Pz}"; fi;;
+    P ) P="$P -P $OPTARG"; Pa=${OPTARG%=*}; PA="${PA}_${Pa}"; if [ $Pa != $OPTARG ]; then Pz=${OPTARG#$Pa=}; PA="${PA}_${Pz}"; fi;;
+    D ) D="$D -D $OPTARG"; Da=${OPTARG%=*}; DA="${DA}_${Da}"; if [ $Da != $OPTARG ]; then Dz=${OPTARG#$Da=}; DA="${DA}_${Dz}"; fi;;
+    U ) D="$D -U $OPTARG";;
+    C ) D="$D -C $OPTARG"; C="$C -D $OPTARG"; Ca=${OPTARG%=*}; CA="${CA}_${Ca}"; if [ $Ca != $OPTARG ]; then Cz=${OPTARG#$Ca=}; CA="${CA}_${Cz}"; fi;;
+    V ) D="$D -V $OPTARG"; C="$C -U $OPTARG";;
     W ) D="$D -W$OPTARG"; if [ "$OPTARG" = "all" ]; then  CFL="$CFL -Wall"; fi;;
     y ) nice="";;
     z )	z=1;;
@@ -256,7 +258,6 @@ while getopts ":lo:itcbnsL:fegASpRaFk:EjIJ6xqNv:w:d:O:D:U:C:V:P:W:yzh" opt; do
 done
 shift $(($OPTIND - 1))
 
-Dbak=$D
 if [ -n "$L" ]; then
     lib="$lib$L"
 fi
@@ -265,9 +266,7 @@ if [ -n "$ef" ]; then
     lib="$lib$ef"
 fi
 
-if [ -n "$aux" ]; then
-    rm -f .iC_list1.h .iC_list2.h
-fi
+rm -f .iC_list1.h .iC_list2.h		# remove left over files from previous make
 
 for arg in $*; do
     lk=$link				# temporary link mode for each file
@@ -275,17 +274,20 @@ for arg in $*; do
     ext=${arg#$base}
     icaFile="$base.ica"
     icFile="$base.ic"
+    ini="$base.ini"
     if [ -n "$E" ]; then
-	E=" >> $base.ini 2>&1"
+	E=" >> $ini 2>&1"
     fi
     if [ $link -ne 1 ]; then
-	rm -f $base.ini			# also overwritten if error in immac calls below
+	rm -f $ini			# also overwritten if error in immac calls below
     fi
     stat=0
     if [ -f $icaFile ]; then
-	if [ -n "$PA" ]; then
-	    base="$base$PA"		# extend iC file and follow-on targets by -P options
-	    icFile="$base.ic"
+	base="$base$PA"			# extend iC file and follow-on targets by -P options
+	icFile="$base.ic"
+	ini="$base.ini"
+	if [ -n "$E" ]; then
+	    E=" >> $ini 2>&1"
 	fi
 	if [ -n "$F" ]; then
 	    F=" -l $base.log"		# will change for every arg once F is set
@@ -304,7 +306,7 @@ for arg in $*; do
 	    if [ -n "$E" ]; then					# translate iCa to iC file
 		if $nice${b}$IAC$v$a$S$N$P$F -o $icFile $icaFile > $base.err 2>&1; then e=0; else e=1; fi
 		if [ -s $base.err ]; then
-		    mv $base.err $base.ini	# old overwritten if warnings or errors
+		    mv $base.err $ini		# old overwritten if warnings or errors
 		else
 		    rm $base.err
 		fi
@@ -313,7 +315,7 @@ for arg in $*; do
 	    fi
 	    if [ $e -eq 1 ]; then
 		if [ -n "$E" ]; then
-		    echo "${b}$IAC$v compile errors in '$icaFile' - incorrect iC file '$icFile' generated" >> $base.ini
+		    echo "${b}$IAC$v compile errors in '$icaFile' - incorrect iC file '$icFile' generated" >> $ini
 		else
 		    echo "${b}$IAC$v compile errors in '$icaFile' - incorrect iC file '$icFile' generated" >&2
 		fi
@@ -328,7 +330,7 @@ for arg in $*; do
 	if [ -n "$E" ]; then					# translate iCa to iC file
 	    if $nice${b}$IAC$v$S$N -t $icFile >> $base.err 2>&1; then e=0; else e=1; fi
 	    if [ -s $base.err ]; then
-		mv $base.err $base.ini		# old overwritten if warnings or errors
+		mv $base.err $ini		# old overwritten if warnings or errors
 	    else
 		rm $base.err
 	    fi
@@ -337,7 +339,7 @@ for arg in $*; do
 	fi
 	if [ $e -eq 1 ]; then
 	    if [ -n "$E" ]; then
-		echo "$? '$icFile' should be renamed '$icaFile' because it has iCa constructs" > $base.ini
+		echo "$? '$icFile' should be renamed '$icaFile' because it has iCa constructs" > $ini
 	    else
 		echo "$? '$icFile' should be renamed '$icaFile' because it has iCa constructs" >&2
 	    fi
@@ -357,144 +359,151 @@ for arg in $*; do
     fi
 
     if [ -f "$icFile" -a -z "$ic" -a "$stat" -eq 0 ]; then
-	if [ -n $m ] && grep -q RASPBERRYPI $icFile; then
-	    D="$Dbak -D RASPBERRYPI"
+	base="$base$DA"			# extend generated files .lst .c by -D options
+	cFile="$base.c"
+	lstFile="$base.lst$l"
+	exe="$base$CA"			# extend executable and .ini by -C options
+	if [ "$ini" != "$exe.ini" ]; then
+	    ini="$exe.ini"		# ini file uses new exe file name as base
+	    if [ -n "$E" ]; then
+		E=" >> $ini 2>&1"
+	    fi
 	fi
 	case $lk in
 	0)				# default
 	    stat=0
-	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$cFile" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo "$base.c"
+		    echo "$cFile"
 		fi
-		rm -f $base.c
+		rm -f $cFile
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile$E"
+		    echo "$nice${b}$ICC$v$a$D$d -o $cFile -l $lstFile $icFile$E"
 		fi
 		if [ -n "$E" ]; then
-		    if $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile >> $base.ini 2>&1; then e=0; else e=1; fi
+		    if $nice${b}$ICC$v$a$D$d -o $cFile -l $lstFile $icFile >> $ini 2>&1; then e=0; else e=1; fi
 		else
-		    if $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile; then e=0; else e=1; fi
+		    if $nice${b}$ICC$v$a$D$d -o $cFile -l $lstFile $icFile; then e=0; else e=1; fi
 		fi
 		if [ $e -eq 1 ]; then
 		    if [ -n "$E" ]; then
-			echo "${b}$ICC$v compile errors in '$icFile' - no executable '$base' generated" >> $base.ini
+			echo "${b}$ICC$v compile errors in '$icFile' - no executable '$exe' generated" >> $ini
 		    else
-			echo "${b}$ICC$v compile errors in '$icFile' - no executable '$base' generated" >&2
+			echo "${b}$ICC$v compile errors in '$icFile' - no executable '$exe' generated" >&2
 		    fi
 		    stat=1
 		    let status+=1
 		fi
 	    fi
 	    if [ "$stat" -eq 0 ]; then	# do sequentially in case C file was already made or library has changed
-		if [ "$base.c" -nt "$base" -o "$libfile" -nt "$base" -o $force -ne 0 ]; then
+		if [ "$cFile" -nt "$exe" -o "$libfile" -nt "$exe" -o $force -ne 0 ]; then
 		    if [ $q -eq 0 ]; then
 			if [ $z -eq 1 ]; then echo -n "# "; fi
-			echo $base
+			echo $exe
 		    fi
-		    rm -f $base
+		    rm -f $exe
 		    if [ $z -eq 1 ]; then
-			echo "$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib$E"
+			echo "$nice$CC$CFL -I.$ldir$C -o $exe $cFile $lib$E"
 		    fi
 		    if [ -n "$E" ]; then
-			$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $base.ini
+			$nice$CC$CFL -I.$ldir$C -o $exe $cFile $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $ini
 		    else
-			$nice$CC$CFL -I.$ldir$C -o $base $base.c $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
+			$nice$CC$CFL -I.$ldir$C -o $exe $cFile $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
 		    fi
-		    if [ -x ./$base ]; then
+		    if [ -x ./$exe ]; then
 			if [ -n "$I" ]; then
 			    if [ -n "$E" ]; then
 				if [ $z -eq 1 ]; then
-				    echo "./$base -d$I >> $base.ini 2>&1"
+				    echo "./$exe -d$I >> $ini 2>&1"
 				fi
-				if ./$base -d$I >> $base.ini 2> $base.err; then e=0; else e=1; fi
-				cat $base.err >> $base.ini
-				rm $base.err
+				if ./$exe -d$I >> $ini 2> $exe.err; then e=0; else e=1; fi
+				cat $exe.err >> $ini
+				rm $exe.err
 			    else
 				if [ $z -eq 1 ]; then
-				    echo "./$base -d$I >> $base.ini"
+				    echo "./$exe -d$I >> $ini"
 				fi
-				if ./$base -d$I >> $base.ini; then e=0; else e=1; fi
+				if ./$exe -d$I >> $ini; then e=0; else e=1; fi
 			    fi
 			    if [ $e -eq 1 ]; then
 				if [ -n "$E" ]; then
-				    echo "run time error in initial execution of '$base'" >> $base.ini
+				    echo "run time error in initial execution of '$exe'" >> $ini
 				else
-				    echo "run time error in initial execution of '$base'" >&2
+				    echo "run time error in initial execution of '$exe'" >&2
 				fi
 				let status+=1
 			    fi
 			fi
 		    else
 			if [ -n "$E" ]; then
-			    echo "$CC compile errors in '$base.c' - no executable '$base' generated" >> $base.ini
+			    echo "$CC compile errors in '$cFile' - no executable '$exe' generated" >> $ini
 			else
-			    echo "$CC compile errors in '$base.c' - no executable '$base' generated" >&2
+			    echo "$CC compile errors in '$cFile' - no executable '$exe' generated" >&2
 			fi
 			let status+=1
 		    fi
 		fi
 	    fi ;;
 	1)				# -l	link all iC files into one executable
-	    if [ "$icFile" -nt "$base.c" -o "$libfile" -nt "$base" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$cFile" -o "$libfile" -nt "$exe" -o $force -ne 0 ]; then
 		list="$list $icFile"	# compile and link all if one has changed
 	    fi				# or library has changed
 	    files="$files $icFile"
 	    ;;
 	2)				# -t	generate listings file.lst
-	    if [ -n "$first" ]; then
+	    if [ -n "$first" ]; then	# -o <$first> is the name of the listing file 
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$icFile" -nt "$base.lst$l" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$lstFile" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo "$base.lst$l"
+		    echo "$lstFile"
 		fi
-		rm -f $base.lst$l
+		rm -f $lstFile
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -l $base.lst$l $icFile"
+		    echo "$nice${b}$ICC$v$a$D$d -l $lstFile $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -l $base.lst$l $icFile; then
+		if ! $nice${b}$ICC$v$a$D$d -l $lstFile $icFile; then
 		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    let status+=1
 		fi
 	    fi ;;
 	3)				# -c	generate C outputs file.c
-	    if [ -n "$first" ]; then
+	    if [ -n "$first" ]; then	# -o <$first> is the name of the C output file 
 		base=${first%.*}
 		first=''		# -o applied only to first file
 	    fi
-	    if [ "$icFile" -nt "$base.c" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$cFile" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo "$base.c"
+		    echo "$cFile"
 		fi
-		rm -f $base.c
+		rm -f $cFile
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -o $base.c $icFile"
+		    echo "$nice${b}$ICC$v$D$d -o $cFile $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -o $base.c $icFile; then
+		if ! $nice${b}$ICC$v$D$d -o $cFile $icFile; then
 		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    let status+=1
 		fi
 	    fi ;;
 	4)				# -b	generate both listings and C outputs
-	    if [ -n "$first" ]; then
+	    if [ -n "$first" ]; then	# -o <$first> is the name of the listing and C output file 
 		echo "output file '$first' ignored" >&2
 		first=''
 	    fi
-	    if [ "$icFile" -nt "$base.c" -o "$icFile" -nt "$base.lst$l" -o $force -ne 0 ]; then
+	    if [ "$icFile" -nt "$cFile" -o "$icFile" -nt "$lstFile" -o $force -ne 0 ]; then
 		if [ $q -eq 0 ]; then
 		    if [ $z -eq 1 ]; then echo -n "# "; fi
-		    echo "$base.c $base.lst$l"
+		    echo "$cFile $lstFile"
 		fi
-		rm -f $base.c $base.lst$l
+		rm -f $cFile $lstFile
 		if [ $z -eq 1 ]; then
-		    echo "$nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile"
+		    echo "$nice${b}$ICC$v$a$D$d -o $cFile -l $lstFile $icFile"
 		fi
-		if ! $nice${b}$ICC$v$D$d -o $base.c -l $base.lst$l $icFile; then
+		if ! $nice${b}$ICC$v$a$D$d -o $cFile -l $lstFile $icFile; then
 		    echo "${b}$ICC$v compile errors in '$icFile'" >&2
 		    let status+=1
 		fi
@@ -516,118 +525,126 @@ for arg in $*; do
 		let status+=1
 	    fi ;;
 	esac
-	D=$Dbak
     elif [ -z "$ic" ]; then
 	if [ -n "$E" ]; then
-	    echo "Error: iC file '$icFile' does not exist or is in error" >> $base.ini
+	    echo "Error: iC file '$icFile' does not exist or is in error" >> $ini
 	else
 	    echo "Error: iC file '$icFile' does not exist or is in error" >&2
 	fi
-	list="$list ERROR:$base.c"
+	list="$list ERROR:$cFile"
 	let status+=1
     fi
-    if [ -f $base.ini -a ! -s $base.ini ]; then rm $base.ini; fi	# delete zero length ini file
+    if [ -f $ini -a ! -s $ini ]; then rm $ini; fi	# delete zero length ini file
 done
 
 if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
-    list=""
-    if [ -n "$first" ]; then
-	rm -f $first.ini
-    fi
-    if [ -n "$E" ]; then
-	E=" >> $first.ini 2>&1"
+    list=""			# $list now collects recompiled .c files for linking
+    exe=""
+    if [ -n "$first" ]; then	# -o <$first> is the name of the executable
+	exe=$first
+	ini=$exe
+	rm -f $ini
+	if [ -n "$E" ]; then
+	    E=" >> $ini 2>&1"
+	fi
     fi
     for icFile in $files; do	# recompile all files for aux and link
-	if [ -n $m ] && grep -q RASPBERRYPI $icFile; then
-	    D="$Dbak -D RASPBERRYPI"
-	fi
 	base=${icFile%.ic}
-	if [ -z "$first" ]; then
-	    first=$base
-	    if [ ! -f $first.ica ]; then
-		rm -f $first.ini	# keep $base.ini as $first.ini if $base.ica
+	icaFile="$base.ica"
+	base="$base$DA"			# extend generated files .lst .c by -D options
+	cFile="$base.c"
+	lstFile="$base.lst$l"
+	if [ -z "$exe" ]; then		# change exe and ini only for the first iC file
+	    exe="$base$CA"		# extend executable and .ini by -C options
+	    if [ "$ini" != "$exe.ini" ]; then
+		ini="$exe.ini"		# ini file uses new exe file name as base
+		if [ -n "$E" ]; then
+		    E=" >> $ini 2>&1"
+		fi
+	    fi
+	    if [ ! -f $icaFile ]; then
+		rm -f $ini		# keep $ini if first source is $base.ica
 	    fi
 	fi
 	if [ $q -eq 0 ]; then
 	    if [ $z -eq 1 ]; then echo -n "# "; fi
 	    echo $icFile
 	fi
-	rm -f $base.c		# -f in case read only
+	rm -f $cFile		# -f in case read only
 	if [ $z -eq 1 ]; then
-	    echo "$nice${b}$ICC$v$D$d$aux -o $base.c -l $base.lst$l $icFile$E"
+	    echo "$nice${b}$ICC$v$a$D$d$aux -o $cFile -l $lstFile $icFile$E"
 	fi
 	if [ -n "$E" ]; then
-	    if $nice${b}$ICC$v$D$d$aux -o $base.c -l $base.lst$l $icFile >> $first.ini 2>&1; then e=0; else e=1; fi
+	    if $nice${b}$ICC$v$a$D$d$aux -o $cFile -l $lstFile $icFile >> $ini 2>&1; then e=0; else e=1; fi
 	else
-	    if $nice${b}$ICC$v$D$d$aux -o $base.c -l $base.lst$l $icFile; then e=0; else e=1; fi
+	    if $nice${b}$ICC$v$a$D$d$aux -o $cFile -l $lstFile $icFile; then e=0; else e=1; fi
 	fi
 	if [ $e -eq 1 ]; then
 	    list="$list ERROR:"
 	    let status+=1
 	fi
-	list="$list $base.c"
-	slist="$slist $base.lst$l"
-	D=$Dbak
+	list="$list $cFile"
+	slist="$slist $lstFile"
     done
     if [ $status -eq 0 ]; then
-	rm -f $first
+	rm -f $exe
 	if [ $q -eq 0 ]; then
 	    if [ $z -eq 1 ]; then echo -n "# "; fi
-	    echo "link $first from$list"
+	    echo "link $exe from$list"
 	fi
 	if [ -n "$slist" ]; then
-	    cat $slist > .iC_list0.lst
-	    mv -f .iC_list0.lst $first.lst$l
+	    cat $slist > $exe.tmp	# concatetnate all listings in first listing
+	    mv -f $exe.tmp $exe.lst$l
 	fi
-	echo >> .iC_list2.h	# terminate last line of #define \
+	echo >> .iC_list2.h		# terminate last line of #define \
 	if [ $z -eq 1 ]; then
 	    echo "echo >> .iC_list2.h	# terminate last line of #define \\$E"
-	    echo "$nice$CC$CFL -I.$ldir$C -o $first $list $lib$E"
+	    echo "$nice$CC$CFL -I.$ldir$C -o $exe $list $lib$E"
 	fi
 	if [ -n "$E" ]; then
-	    $nice$CC$CFL -I.$ldir$C -o $first $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $first.ini
+	    $nice$CC$CFL -I.$ldir$C -o $exe $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/' >> $ini
 	else
-	    $nice$CC$CFL -I.$ldir$C -o $first $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
+	    $nice$CC$CFL -I.$ldir$C -o $exe $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
 	fi
-	if [ -x ./$first ]; then
+	if [ -x ./$exe ]; then
 	    if [ -n "$I" ]; then
 		if [ -n "$E" ]; then
-		    if [ $z -eq 1 ]; then echo "./$first -d$I >> $first.ini 2>&1"; fi
-		    if ./$first -d$I >> $first.ini 2> $first.err; then e=0; else e=1; fi
-		    cat $first.err >> $first.ini
-		    rm $first.err
+		    if [ $z -eq 1 ]; then echo "./$exe -d$I >> $ini 2>&1"; fi
+		    if ./$exe -d$I >> $ini 2> $exe.err; then e=0; else e=1; fi
+		    cat $exe.err >> $ini
+		    rm $exe.err
 		else
 		    if [ $z -eq 1 ]; then
-			echo "./$first -d$I >> $first.ini"
+			echo "./$exe -d$I >> $ini"
 		    fi
-		    if ./$first -d$I >> $first.ini; then e=0; else e=1; fi
+		    if ./$exe -d$I >> $ini; then e=0; else e=1; fi
 		fi
 		if [ $e -eq 1 ]; then
 		    if [ -n "$E" ]; then
-			echo "run time error in initial execution of '$first'" >> $first.ini
+			echo "run time error in initial execution of '$exe'" >> $ini
 		    else
-			echo "run time error in initial execution of '$first'" >&2
+			echo "run time error in initial execution of '$exe'" >&2
 		    fi
 		    let status+=1
 		fi
 	    fi
 	else
 	    if [ -n "$E" ]; then
-		echo "$CC compile or link errors in '$list' - no executable '$first' generated" >> $first.ini
+		echo "$CC compile or link errors in '$list' - no executable '$exe' generated" >> $ini
 	    else
-		echo "$CC compile or link errors in '$list' - no executable '$first' generated" >&2
+		echo "$CC compile or link errors in '$list' - no executable '$exe' generated" >&2
 	    fi
 	    let status+=1
 	fi
 
     else
 	if [ -n "$E" ]; then
-	    echo "${b}$ICC$v compile errors in '$list'" >> $first.ini
+	    echo "${b}$ICC$v compile errors in '$list'" >> $ini
 	else
 	    echo "${b}$ICC$v compile errors in '$list'" >&2
 	fi
     fi
-    if [ -f $first.ini -a ! -s $first.ini ]; then rm $first.ini; fi	# delete zero length ini file
+    if [ -f $ini -a ! -s $ini ]; then rm $ini; fi	# delete zero length ini file
 fi
 
 # clean up temporary files generated by immcc compiler unless -x option
@@ -649,8 +666,8 @@ iCmake - make one or more immediate-C applications
 
  iCmake [-[l|o<exe>|i|t|c|b|n]sfgASpRaLjIJ6xqNzh][ -v[<N>]][ -w<dir>]
         [ -k<lim>][ -d<opt>][ -O<level>][ -Dmacro[=defn]...][ -Umacro...]
-	[ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...]
-	[ -W[no-]<warn>...] file ...
+        [ -Cmacro[=defn]...][ -Vmacro...][ -Pmacro[=defn]...]
+        [ -W[no-]<warn>...] file ...
    default: link all iC files file.ic ... into independent executables
             output names are base names of the iC files (file ...)
     -l      link all iC files into one executable (implies -A)
@@ -663,7 +680,7 @@ iCmake - make one or more immediate-C applications
     -c      generate C outputs file.c ... only (-o target.c optional)
     -b      generate both listings and C outputs - no executable
     -n      generate no output, report immcc compile errors only
-    -s	    link with static library libict.a (default libict.so)
+    -s      link with static library libict.a (default libict.so)
     -L<lx>  link extra library(s) eg lm lrt ...(can be used more than once)
     -e      link all targets with -lefence to test with Electric Fence
     -f      force building of new output files
@@ -678,14 +695,18 @@ iCmake - make one or more immediate-C applications
     -O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate
                duplicate arithmetic expressions -O7 all (default)
     -R      no maximum error count (default: abort after 100 errors)
-    -D <macro> predefine <macro> for the iC preprocessor phase
-            -D RASPBERRYPI may be predefined on a Raspberry Pi (armv) processor
-    -U <macro> cancel previous definition of <macro> for the iC phase
-            Note: do not use the same macros for the iC and the C phase
-    -C <macro> predefine <macro> for the C preprocessor phase
-    -V <macro> cancel previous definition of <macro> for the C phase
-    -P <macro> predefine <macro> for immac pre-compiler. iC target base name
-              is extended by the -P option. eg -P B=2 x target is x_B_2.ic
+    -P<macro> predefine <macro> for immac pre-compiler. iC target base name
+              is extended by the -P option. eg -P E=2 x.ica, target is x_E_2.ic
+    -D<macro> predefine <macro> for the iC preprocessor phase
+              iC base name for generated files .lst and .c is extended
+              by the -D option. eg -D F=3 y.ic, list file is y_F_3.lst
+    -U<macro> cancel previous definition of <macro> for the iC phase
+              Note: do not use the same macros for the iC and the C phase
+    -C<macro> predefine <macro> for the C preprocessor phase. Name of executable
+              is extended by the -C option. eg -C G=4 z.ic, executable is z_G_4
+    -V<macro> cancel previous definition of <macro> for the C phase
+    -a      list iC preprocessor commands %define %include etc as comments
+            list iCa FOR loop control lines and %%define etc as comments
     -W[no-]<warn>                  positive/negative warning options
         -W[no-]deprecated-logic    use of && || ! in pure bit expressions
         -W[no-]function-parameter  unused parameters in functions
@@ -694,15 +715,14 @@ iCmake - make one or more immediate-C applications
         -W[no-]undefined-gate      undefined gate
         -W[no-]unused-gate         unused gate
         -W[no-]all                 [no]/all warnings + -Wall for C compile
-    -a      immac: output FOR loop control and %%define lines as comments
     -F      generate auxiliary 'file.log' for debugging immac translation
     -k<lim> highest I/O index (default: no limit; 63 for -c mode)
             if lim <= 63, mixed byte, word and long indices are tested
             default: any index for bit, byte, word or long is allowed
-    -E	    store error output of iC and C compile in file.ini
-    -j	    append output of an initial run to file.ini      (implies -s)
-    -I	    append output of run INITIALIZATION only to file.ini  ( " -s)
-    -J	    append output of full INITIALIZATION info to file.ini ( " -s)
+    -E      store error output of iC and C compile in file.ini
+    -j      append output of an initial run to file.ini      (implies -s)
+    -I      append output of run INITIALIZATION only to file.ini  ( " -s)
+    -J      append output of full INITIALIZATION info to file.ini ( " -s)
     -6      produce logic generation listing file.lst6
     -x      auxiliary files .iC_list1.h .iC_list2.h not deleted
     -q      quiet operation - return status only

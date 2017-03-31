@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.105 $";
+"@(#)$Id: outp.c 1.106 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -186,9 +186,6 @@ mN(Symbol * sp)
     cnt = IEC1131(sp->name, np, BUFS, iqt, xbwl, &byte, &bit, tail);
     return np;
 } /* mN */
-
-unsigned short	iC_aflag;			/* -a on compile to append output */
-unsigned short	iC_lflag;			/* -a build new aux files  */
 
 static unsigned	block_total;			/* total gates   - shared by listNet and buildNet */
 static unsigned	link_count;			/* forward links - shared by listNet and buildNet */
@@ -2270,11 +2267,11 @@ iC_outNet(FILE * iFP, char * outfile)
     linecnt += 11;
 
     /********************************************************************
-     *  if iC_aflag generate auxiliary files .iC_list1.h and .iC_list2.h
+     *  if iC_Lflag generate auxiliary files .iC_list1.h and .iC_list2.h
      *  else write direct to C file
      *******************************************************************/
 
-    if (iC_aflag) {
+    if (iC_Lflag) {
 	/********************************************************************
 	 *  include auxiliary files .iC_list1.h and .iC_list2.h
 	 *******************************************************************/
@@ -2813,7 +2810,7 @@ iC_outNet(FILE * iFP, char * outfile)
 "iC_Gt *		iC_%s_list = %s%s;\n"
     ,  module, sam, nxs);
     linecnt += 2;
-    if (iC_aflag) {
+    if (iC_Lflag) {
 	/********************************************************************
 	 *  iC_list will be built from aux files
 	 *******************************************************************/
@@ -3159,7 +3156,7 @@ iC_outNet(FILE * iFP, char * outfile)
 		}
 		fprintf(Fp, "\n");
 		linecnt++;
-	    } else if (iC_aflag) {		/* appending more modules */
+	    } else if (iC_Lflag) {		/* appending more modules */
 		assert(H1p);
 		if ((typ == TIM || typ == ALIAS) && (sp->em & TM1) != 0) {
 		    fprintf(H1p, "/* TIMER1:\t%s\t%d */\n", sp->name, TM1);	/* declaration header .iC_list1.h */
@@ -3225,7 +3222,7 @@ endm:
     if (iC_debug & 010) {
 	fprintf(iC_outFP, "\nC OUTPUT: %s  (%d lines)\n", outfile, linecnt-1);
     }
-    if (iC_aflag) {
+    if (iC_Lflag) {
 	assert(H2p);
 	fclose(H2p);			/* close list header in case other actions */
 endd:

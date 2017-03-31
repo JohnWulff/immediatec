@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt 1.40 $' >&2
+  echo '$Id: tt 1.41 $' >&2
 }
 
 usage()
@@ -22,7 +22,6 @@ usage()
   echo '	-l	list files which differ (default is full Mdiff output with -e)' >&2
   echo '	-w	whitespace (spaces, tabs, blank lines) are significant' >&2
   echo '		default: all whitespace is ignored (opposite to diff)' >&2
-  echo '	-r	put Rdiff *.lt output in log file' >&2
   echo '	-x<regex>  in each Mdiff ignore changes in lines that match regex' >&2
   echo '	-f<filter> process the first file in an Mdiff by <filter> before diff' >&2
   echo '	-F<filter> process the second file in an Mdiff by <filter> before diff' >&2
@@ -92,7 +91,6 @@ v=""
 d=""
 l="Le"
 x=""
-r=""
 f=""
 F=""
 P=""
@@ -105,6 +103,7 @@ E=""
 I=""
 g=""
 pd="pd"
+pg="pg"
 T="test"
 z=""
 head=""
@@ -113,14 +112,13 @@ test2=""
 Test1='Test1 Test9 Test11 Test12 Test13'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
-while getopts ":cm:d:lwrgASNO:PRseaLEjIJ6x:f:F:t:T:yzvh" opt; do
+while getopts ":cm:d:lwgASNO:PRseaLEjIJ6x:f:F:t:T:yzvh" opt; do
     case $opt in
     c )	c="c";;
     m )	m="$OPTARG";;
     d ) v="$v -d$OPTARG"; d="_$OPTARG";;
     l )	l="${l}l";;
     w )	l="${l}w";;
-    r )	r="1";;
     g )	A="$A -g";;
     A )	A="$A -A";;
     S )	A="$A -S";T="strict";;
@@ -136,7 +134,7 @@ while getopts ":cm:d:lwrgASNO:PRseaLEjIJ6x:f:F:t:T:yzvh" opt; do
     j ) I=" -j";;
     I ) I=" -I";;
     J ) I=" -J";;
-    6 ) A="$A -6";g="6"; pd="p6"; x="$x -Iic[045]\."; d="_6";;
+    6 ) A="$A -6";g="6"; pd="p6"; pg="p6"; x="$x -Iic[045]\."; d="_6";;	# only remove and make p6.lt fiiles
     x )	x="$x -I$OPTARG";;
     f )	f="/home/archiv/bin/$OPTARG"; if [[ ! -x $f ]]; then echo "-f '$f' must be executable" >&2; usage; exit 126; fi; f=" -f$f";;
     F )	F="/home/archiv/bin/$OPTARG"; if [[ ! -x $F ]]; then echo "-F '$F' must be executable" >&2; usage; exit 126; fi; F=" -F$F";;
@@ -151,8 +149,7 @@ while getopts ":cm:d:lwrgASNO:PRseaLEjIJ6x:f:F:t:T:yzvh" opt; do
 done
 
 if [ -z "$test1" -a -z "$test2" ]; then
-    test1=$Test1
-    test2=$Test2
+    test1="$Test1 $Test2"	# do all directories with mm test2=$Test2
 else
     T=""		# do not execute 'make test'
 fi
@@ -178,7 +175,7 @@ shift $(($OPTIND - 1))
 
 l="$l$x$f$F"
 if [ -n "$z" ]; then
-    echo "c = !$c! A = !$A! I = !$I! E = !$E! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! pd = !$pd!"
+    echo "c = !$c! A = !$A! I = !$I! E = !$E! m = !$m! v = !$v! d = !$d! l = !$l! g = !$g! pd = !$pd! pg = !$pg!"
 fi
 
 d1=$1
@@ -231,17 +228,17 @@ if [ -n "$test1" ]; then
 			ae=" -a"
 		    fi
 		    ml
-		    rm -f $(cat p[g$g].lt)
+		    if [ -f $pg.lt -a -s $pg.lt ]; then
+			rm -f $(cat $pg.lt)
+		    fi
 		    echo; echo "========== $t mm$I$E$v$A$L$ae"
 		    mm$I$E$v$A$L$ae	# do twice if -a
 		    ml
 		fi
 		if [ -n "$d1" ]; then
 		    if [ -d "$d1$a$d" ]; then
-			if [ -n "$r" ]; then
-			    Rdiff p*.lt
-			fi
 			echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd$a.lt) $d1$a$d"
+			if ! Mdiff -$l p*.lt $d1$a$d; then echo "**********"; fi
 			Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd$a.lt) $d1$a$d
 		    else
 			mkdir $d1$a$d
@@ -264,6 +261,7 @@ if [ -n "$test1" ]; then
 			else
 			    echo; echo "========== $t cp -p \$(cat $pd$a.lt) $d1$a$d"
 			    cp -p $(cat $pd$a.lt) $d1$a$d
+			    cp -p p*.lt $d1$a$d
 			fi
 		    fi
 		fi
@@ -292,17 +290,17 @@ if [ -n "$test2" ]; then
 	if [ -z "$d2" ]; then
 	    if [ -z "$c" ]; then
 		ml
-		rm -f $(cat p[g$g].lt)
+		if [ -f $pg.lt -a -s $pg.lt ]; then
+		    rm -f $(cat $pg.lt)
+		fi
 		echo; echo "========== $t my$I$E$v$A"
 		my$I$E$v$A
 		ml
 	    fi
 	    if [ -n "$d1" ]; then
 		if [ -d "$d1$d" ]; then
-		    if [ -n "$r" ]; then
-			Rdiff p*.lt
-		    fi
 		    echo; echo "========== $t Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' \$(cat $pd.lt) $d1$d"
+		    if ! Mdiff -$l p*.lt $d1$d; then echo "**********"; fi
 		    Mdiff -k$l$e -I'ic[0-6c]\.' -I'[at]+0x' -I 'ld.returned' -I'(eval' -I 'BLTIN' -I 'FUNCTION' $(cat $pd.lt) $d1$d
 		else
 		    mkdir $d1$d
@@ -325,6 +323,7 @@ if [ -n "$test2" ]; then
 		    else
 			echo; echo "========== $t cp -p \$(cat $pd.lt) $d1$d"
 			cp -p $(cat $pd.lt) $d1$d
+			cp -p p*.lt $d1$d
 		    fi
 		fi
 	    fi

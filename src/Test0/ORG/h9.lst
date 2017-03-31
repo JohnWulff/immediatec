@@ -74,7 +74,7 @@
 ******* C CODE          ************************
 
 007
-008	    #include	<stdio.h>
+008	#include	<stdio.h>
 009
 
 011
@@ -83,7 +83,7 @@
 
 015	(2) { for (d = 0; d <= 2; d++) { printf("%d: Hello world Nr. %d\n", d, 2); } }
 
-016	    { for (d = 0; d <= 2; d++) { printf("%d: Good bye Nr. %d\n", d, 2); } }
+016	{ for (d = 0; d <= 2; d++) { printf("%d: Good bye Nr. %d\n", d, 2); } }
 
 018	(3) { printf("%d: Immediate Nr. %d\n", 0, 2); }
 
@@ -92,19 +92,19 @@
 020	(5) { printf("%d: Immediate Nr. %d\n", 2, 2); }
 
 022	(6) {
-023	    case 0:
+023	case 0:
 024	  for (d = 0; d <= 2; d++) { printf("%d: Low Nr. %d\n", d, 0); }
 025	    break;
-026	    case 1:
+026	case 1:
 027	  for (d = 0; d <= 2; d++) { printf("%d: Med Nr. %d\n", d, 1); }
 028	    break;
-029	    case 2:
+029	case 2:
 030	  for (d = 0; d <= 2; d++) { printf("%d: Hi  Nr. %d\n", d, 2); }
 031	    break;
-032	    default:
+032	default:
 033	  for (d = 0; d <= 2; d++) { printf("%d: Off Nr. %d\n", d, iC_AV(2)); }
 034	    break;
-035	    }
+035	}
 
 ******* NET TOPOLOGY    ************************
 
@@ -132,6 +132,6 @@ TOTAL	      11 blocks
 	      30 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/h9.c  (128 lines)

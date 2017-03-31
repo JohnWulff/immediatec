@@ -67,7 +67,7 @@
 ******* C CODE          ************************
 
 001
-002	    #include	<stdio.h>
+002	#include	<stdio.h>
 003
 
 008	(2) 	return iC_MV(1)?iC_MV(2):5;
@@ -88,7 +88,7 @@
 024	    default:
 025		printf("IB1 is >= 4!!\n");
 026		break;
-027	    }
+027	}
 
 ******* NET TOPOLOGY    ************************
 
@@ -122,6 +122,6 @@ TOTAL	      11 blocks
 	      27 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/if33.c  (93 lines)

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c 1.45 $";
+"@(#)$Id: init.c 1.46 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -1055,7 +1055,7 @@ iC_init(void)
     /********************************************************************
      * Build temporary files for linking multiple sources
      *******************************************************************/
-    if (iC_aflag != 0) {
+    if (iC_Lflag != 0) {
 	if ((H1p = fopen(H1name, "r")) != 0) {			/* scan .iC_list1.h */
 	    while (fgets(lineBuf, sizeof lineBuf, H1p)) {	/* read previous declarations */
 		if (sscanf(lineBuf, "/* %s\t%s\t%d */", tag, ids, &num) == 3) {

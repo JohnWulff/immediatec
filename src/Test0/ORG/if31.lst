@@ -32,24 +32,24 @@
 ******* C CODE          ************************
 
 001
-002	    #include	<stdio.h>
+002	#include	<stdio.h>
 003
 
 005	(2) {
 006	    printf("IX0.0 is TRUE\n");
-007	    }
+007	}
 
-007	    {
+007	{
 008	    printf("IX0.0 is FALSE\n");
-009	    }
+009	}
 
 010	(3) {
 011	    printf("IB1 is TRUE\n");
-012	    }
+012	}
 
-012	    {
+012	{
 013	    printf("IB1 is FALSE\n");
-014	    }
+014	}
 
 ******* NET TOPOLOGY    ************************
 
@@ -71,6 +71,6 @@ TOTAL	       5 blocks
 	      11 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/if31.c  (83 lines)

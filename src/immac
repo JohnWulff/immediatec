@@ -106,7 +106,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.27 $
+$Id: immac 1.28 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -253,16 +253,13 @@ my %keywords = (
     '...'	=>	0x0,	# pseudo keyword around which spaces are kept
 );
 
-my $si = 1;	# $si =  +1  initial value of sense indicator		output	%else or %elif not allowed
-		# $si == +2  #ifdef defined #ifndef !defined #if 1	output	%else or %elif allowed
-		# $si == +1  #else trailing after false			output	%else or %elif not allowed
-		# $si ==  0  #else trailing after true		     no output	%else or %elif not allowed
-		# $si == -1  #ifdef !defined #ifndef defined #if 0   no output	%else or %elif allowed
+my $si = 1;			# initial value of sense indicator	output	%else or %elif not allowed
 
 my %defs = ();
 my %clDefs = ();
 my @stk = ();
 my $argv;
+my $argL;
 my @argInfo = ();
 my $argRef;
 my $in = 'IN';
@@ -289,10 +286,13 @@ if ($argv = shift @ARGV) {
     ($devIn, $inoIn) = stat $argv;	# prevent writing to the input file later
     if ($argv !~ m/\.ica$/ and not $opt_m and not $opt_Y) {
 	$opt_M = 1;			# force macro processing only unless $opt_t
+	$argL = $argv;
+    } elsif ($opt_o) {
+	$argL = $opt_o;			# name for 1st line of generated file
     }
 } else {
     open $in, "<-" or die "Cannot re-open STDIN: $!";
-    $argv = 'STDIN';
+    $argv = $argL = 'STDIN';
     $devIn = $inoIn = -1;		# different to 0
 }
 use strict 'refs';
@@ -331,8 +331,8 @@ if ($opt_t) {
     }
 }
 
-my $opt_m_M_or_Y = ($opt_m or $opt_M or $opt_Y);
-print " opt_m = '$opt_m' opt_M = '$opt_M' opt_Y = '$opt_Y' opt_m_M_or_Y = '$opt_m_M_or_Y'\n" if $opt_T and not $opt_l;
+my $opt_m_M_Y   = ($opt_m or $opt_M or $opt_Y);
+print " opt_m = '$opt_m' opt_M = '$opt_M' opt_Y = '$opt_Y' opt_m_M_Y = '$opt_m_M_Y'\n" if $opt_T and not $opt_l;
 my $CdirectiveRegex = $opt_m ?		# both %%directives and %#directives are excluded - #define and %define (warning)
     qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o    :
 		      $opt_M ?		# %%directives, #directives and %#directives are excluded - %define %if only
@@ -342,6 +342,7 @@ my $CdirectiveRegex = $opt_m ?		# both %%directives and %#directives are exclude
 		      # Else none	# %directives, #directives and %# directives are excluded - only %%directives
     qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
 
+my $commandLineFlag = 0;
 if (@opt_P) {
     my ($df, $val);
     foreach (@opt_P) {
@@ -359,7 +360,10 @@ if (@opt_P) {
 	    } else {
 		$clDefs{ $df } = $defs{ $df };
 		print LOG "### COMMAND LINE -P $identifier=$translate\n" if $opt_l;
-		print "//***** -P $identifier=$translate\n" if $opt_a;
+		if ($opt_a) {
+		    print "//***** -P $identifier=$translate\n";
+		    $commandLineFlag = 1;
+		}
 	    }
 	}
 	if ($r) {
@@ -368,7 +372,7 @@ if (@opt_P) {
 	}
     }
 }
-if ($opt_m_M_or_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -Y
+if ($opt_m_M_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -Y
     if (@opt_D) {			# for compatibility with cpp
 	my ($df, $val);
 	foreach (@opt_D) {
@@ -386,7 +390,10 @@ if ($opt_m_M_or_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M o
 		} else {
 		    $clDefs{ $df } = $defs{ $df };
 		    print LOG "### COMMAND LINE -D $identifier=$translate\n" if $opt_l;
-		    print "//***** -D $identifier=$translate\n" if $opt_a;
+		    if ($opt_a) {
+			print "//***** -D $identifier=$translate\n";
+			$commandLineFlag = 1;
+		    }
 		}
 	    }
 	    if ($r) {
@@ -404,10 +411,14 @@ if ($opt_m_M_or_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M o
 	    undef $clDefs{ $df };
 	    undef $defs{ $df };
 	    print LOG "### COMMAND LINE -U $identifier\n" if $opt_l;
-	    print "//***** -U $identifier\n" if $opt_a;
+	    if ($opt_a) {
+		print "//***** -U $identifier\n";
+		$commandLineFlag = 1;
+	    }
 	}
     }
 }
+print "# 1 \"$argL\"\n" if $commandLineFlag;
 
 $ret = process_file();
 
@@ -658,10 +669,10 @@ sub process_file {
 			$blankLines++;		# count lines not output as blank lines
 			next Line;		# do not output lines in false blocks
 		    }
-		    if (not $opt_m_M_or_Y and (@block or $finBlock or $opt_L)) {
+		    if (not $opt_m_M_Y and (@block or $finBlock or $opt_L)) {
 			push(@block, "\$out .= $_\";\n");
 		    } else {
-			if ($opt_m_M_or_Y and $blankLines) {
+			if ($opt_m_M_Y and $blankLines) {
 			    blanks();		# print blank lines now
 			}
 			print;			# with direct print - cpp handles it
@@ -676,7 +687,7 @@ sub process_file {
 	    ########################################################################
 	    if ($directive or s/^\s*(%%|[%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1$2/) {
 		$mWarn = 1 if $opt_m and $directive eq "" and $1 eq "%";	# output Warning later for -m only
-		$blankLines++ if $opt_m_M_or_Y;	# since %define and #define lines are not output treat them as a blank line
+		$blankLines++ if $opt_m_M_Y;	# since %define and #define lines are not output treat them as a blank line
 		if (s/\\\s*$//) {		# test for and then remove trailing '\'
 		    chomp;			# %define or %undef line terminated by '\'
 		    s!(\s*(/[*/]).*)$! !;	# change C or C++ comment into 1 trailing space
@@ -689,18 +700,6 @@ sub process_file {
 		    $_ = "$directive\n";	# present (concatenated) line for expansion
 		}
 	    }					# treat final directive line as a blank line
-	    ########################################################################
-	    #   If -m -M or -Y then 8 or more blank or directive lines are ignored
-	    #   # $. "file" is output instead (same as cpp)
-	    ########################################################################
-	    elsif ($opt_m_M_or_Y) {
-		if ($_ eq "\n") {
-		    $blankLines++;
-		    next Line;
-		} elsif ($blankLines) {
-		    blanks();			# print blank lines now
-		}
-	    }
 	    ########################################################################
 	    #   use or no strict
 	    ########################################################################
@@ -725,7 +724,7 @@ sub process_file {
 	    #   NOTE: no brace counting is necessary - only look for next opening
 	    #   brace(s) after a FOR IF ELSE or ELSIF.				{
 	    ########################################################################
-	    if (not $opt_m_M_or_Y and
+	    if (not $opt_m_M_Y and
 		(m/(\bFOR\b|\bIF\b|\bELSE\b|\bELSIF\b|}|\[|\])/ or $FORline or $FORend or $SQline)) {
 		if ($FORline) {			# speeds up this scan
 		    s/^\s+//;			# delete leading blanks in follow on lines
@@ -867,14 +866,17 @@ sub process_file {
 		($def, $macro) = split " ", $_, 2;	# split off %define or %undef %if etc from input line
 		chomp $macro;				# does not have leading blanks (because of split)
 		$macro =~ s!\s*(//.*)?$!!;		# delete C++ comment and trailing blanks
-		# print "//* $.:	$def $macro\n" if $opt_T;
 		if ($def =~ m/^(%%|[%#])if(\w*)$/) {	# %%if, %if or #if...
 		    ########################################################################
-		    # $si =  +1  initial value of sense indicator	output	%else or %elif not allowed
-		    # $si == +2  #ifdef defined #ifndef !defined #if 1	output	%else or %elif allowed
-		    # $si == +1  #else trailing after false		output	%else or %elif not allowed
-		    # $si ==  0  #else trailing after true	     no output	%else or %elif not allowed
-		    # $si == -1  #ifdef !defined #ifndef defined #if 0   no output	%else or %elif allowed
+		    # $si =  +1  initial value of sense indicator	output    %else or %elif not allowed
+		    # $si == +2  #ifdef defined #ifndef !defined #if 1	output    %else or %elif allowed
+		    # $si == -1  #ifdef !defined #ifndef defined #if 0	no output %else or %elif allowed
+		    # $si == +2  #elif 1 after false   ($si < 0)	output    %else or %elif allowed
+		    # $si == -1  #elif 0 after false   ($si < 0)	no output %else or %elif allowed
+		    # $si == -2  #elif X after true    ($si > 0)	no output %else or %elif allowed
+		    # $si ==  0  #else (no inversion)  if $si == -2	no output %else or %elif not allowed
+		    # $si == +1  #else after false     if $si != -2	output    %else or %elif not allowed
+		    # $si ==  0  #else after true                    	no output %else or %elif not allowed
 		    ########################################################################
 		    push(@stk, $si);			# remember current sense indicator
 		    if ($si > 0) {			# actually test sense of previous level
@@ -892,21 +894,39 @@ sub process_file {
 			    push(@lnErr, "//* Warning: bad directive $def in $argv at line $. - ignored\n");
 			    $w++;			# warning found
 			}
+			if ($opt_a) {
+			    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+				blanks();		# print blank lines now
+			    }
+			    print "//***** $_";
+			}
 		    } else {
 			$si = -1;			# %ifxx seen - allow %else or %elif again at this level
 		    }
 		}
 		elsif ($def =~ m/^(%%|[%#])elif$/) {		# elif expression
-		    if ($#stk >= 0 and ($si & ~0x1) != 0) {
-			$si = ($stk[$#stk] <= 0 or $si > 0) ? -1 : eval_if($macro);	# eval if previous false else false
+		    if ($#stk >= 0 and ($si & ~0x1) != 0) {	# eval if previous false 0 or -1 else lasting false -2
+			$si = ($stk[$#stk] <= 0 or $si > 0 or $si == -2) ? -2 : eval_if($macro);
+			if ($opt_a and $stk[$#stk] > 0) {	# print elif unless in a previous false block
+			    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+				blanks();		# print blank lines now
+			    }
+			    print "//***** $_";
+			}
 		    } else {
 			push(@lnErr, "//* Warning: %elif after %else in $argv at line $. - ignored\n");
 			$w++;			# warning found
 		    }
 		}
 		elsif ($def =~ m/^(%%|[%#])else$/) {		# else
-		    if ($#stk >= 0 and ($si & ~0x1) != 0) {
-			$si = ($stk[$#stk] <= 0 or $si > 0) ? 0 : 1;	# invert sense indicator marking %else
+		    if ($#stk >= 0 and ($si & ~0x1) != 0) {	# invert sense indicator unless -2 marking %else
+			$si = ($stk[$#stk] <= 0 or $si > 0 or $si == -2) ? 0 : 1;
+			if ($opt_a and $stk[$#stk] > 0) {	# print else unless in a previous false block
+			    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+				blanks();		# print blank lines now
+			    }
+			    print "//***** $_";
+			}
 		    } else {
 			push(@lnErr, "//* Warning: extra %else in $argv at line $. - ignored\n");
 			$w++;			# warning found
@@ -915,6 +935,12 @@ sub process_file {
 		elsif ($def =~ m/^(%%|[%#])endif$/) {		# endif
 		    if ($#stk >= 0) {
 			$si = pop @stk;			# retrieve stacked sense indicator
+			if ($opt_a and $si > 0) {	# print endif if previous block true
+			    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+				blanks();		# print blank lines now
+			    }
+			    print "//***** $_";
+			}
 		    } else {
 			push(@lnErr, "//* Warning: extra %endif in $argv at line $. - ignored\n");
 			$w++;				# warning found
@@ -931,7 +957,12 @@ sub process_file {
 			if ($macro =~ m/^[A-Z_a-z]\w*$/) {
 			    if (exists $defs{ $macro }) {
 				print LOG "### $_" if $opt_l;
-				print "//***** $_" if $opt_a;
+				if ($opt_a) {
+				    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+					blanks();		# print blank lines now
+				    }
+				    print "//***** $_";
+				}
 				delete $defs{ $macro };
 			    }
 			    if (exists $clDefs{ $macro }) {
@@ -976,11 +1007,14 @@ sub process_file {
 no strict 'refs';
 			    if (open($in, $argv)) {
 				print LOG "### $_" if $opt_l;
-				print "//***** $_" if $opt_a;
-				if ($opt_m_M_or_Y) {
-				    if (--$blankLines) {	# $blankLines is at least 1 because it is a directive
+				if ($opt_a) {
+				    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
 					blanks();		# print blank lines now
 				    }
+				    print "//***** $_";
+				}
+				if ($opt_m_M_Y) {
+				    blanks();			# print blank lines now
 				    print "# 1 \"$argv\" 1\n";	# # 1 "file" 1 // open an include file
 				}
 			    } else {
@@ -993,7 +1027,7 @@ use strict 'refs';
 			}
 		    }
 		    elsif ($def =~ m/^(%%|[%#])error$/) {
-			if (not $opt_m_M_or_Y and $def eq "%error") {
+			if (not $opt_m_M_Y and $def eq "%error") {
 			    push(@lnErr, "//* Error: $def $macro\n");
 			    $r++;			# deliberate error
 			    unless ($opt_t) {
@@ -1017,11 +1051,23 @@ use strict 'refs';
 		next Line;				# do not output %define etc directives (already counted as blank)
 	    }
 	    if ($si <= 0) {
-		$blankLines++;				# count lines not output as blank lines
-		next Line;				# do not output lines in false blocks
+		$blankLines++;				# count lines in false conditional blocks as blank lines
+		next Line;				# do not process lines in false blocks
+	    }
+	    ########################################################################
+	    #   If -m -M or -Y then 8 or more blank are ignored
+	    #   # $. "file" is output instead (same as cpp)
+	    ########################################################################
+	    elsif ($opt_m_M_Y) {
+		if ($_ eq "\n") {
+		    $blankLines++;
+		    next Line;
+		} elsif ($blankLines) {
+		    blanks();				# print blank lines now
+		}
 	    }
 	    resolve_line();				# resolve  macros for the rest of the code
-	    if ($opt_m_M_or_Y) {
+	    if ($opt_m_M_Y) {
 		print;					# just output macro processed line for <in.ic>
 		next Line;
 	    }
@@ -1692,7 +1738,7 @@ use strict 'refs';
 	    $argRef = pop(@argInfo);
 	    if (defined $argRef) {
 		($argv, $., $in) = @$argRef;	# restore previous file info
-		if ($opt_m_M_or_Y) {
+		if ($opt_m_M_Y) {
 		    my $l = $. + ((eof $in) ? 0 : 1);
 		    print "# $l \"$argv\" 2\n";	# # 8 "file" 2 // close an include file
 		}
@@ -1704,7 +1750,7 @@ use strict 'refs';
     ########################################################################
     #   If -m -M or -Y then output any blank lines at the end of the file
     ########################################################################
-    if (($opt_m_M_or_Y) and $blankLines) {
+    if (($opt_m_M_Y) and $blankLines) {
 	blanks();				# print blank lines now
     }
     ########################################################################
@@ -1879,7 +1925,7 @@ use warnings;
 		    $w++;			# warning found
 		}
 	    }
-	    if (not $opt_m_M_or_Y and $translate !~ m/^\s*\d+\s*$/ and $translate !~ m/[^ \t()\d*\/%+-]/) {
+	    if (not $opt_m_M_Y and $translate !~ m/^\s*\d+\s*$/ and $translate !~ m/[^ \t()\d*\/%+-]/) {
 		my $tran = eval $translate;	# not -m and not -M and not a constant but a constant expression
 		if ($@) {
 		    push(@lnErr, "//* Error: start of Perl eval File $argv, line $.\n");
@@ -1898,7 +1944,12 @@ use warnings;
 	    $defs{ $identifier } = [ $translate, $pCnt ];	# %define X(a,b) (a * b) is %defs{X} = [ (#1 * #2), 2 ]
 	    if ($def ne '-P') {
 		print LOG "### $_" if $opt_l;
-		print "//***** $_" if $opt_a;
+		if ($opt_a and $.) {
+		    if ($opt_m_M_Y and --$blankLines) {	# $blankLines is at least 1 because it is a directive
+			blanks();		# print blank lines now
+		    }
+		    print "//***** $_";
+		}
 	    }
 	}
 	return ($identifier, $val);
@@ -2261,12 +2312,12 @@ sub remove_comment {
 
 sub blanks {
     print "//* $.:	blankLines = $blankLines\n" if $opt_T;
-    if ($blankLines >= 8 and not $opt_M) {
-	print "# $. \"$argv\"\n";	# # 23 "file" // block of 8 or more blank lines
-    } else {
+    if ($blankLines < 8 or $opt_Y) {	# yacc does not understand # line_no //
 	for (my $n = 0; $n < $blankLines; $n++) {
 	    print "\n";			# output block of 7 or less blank lines as is
 	}
+    } elsif (not eof $in) {
+	print "# $. \"$argv\"\n";	# # 23 "file" // block of 8 or more blank lines
     }
     $blankLines = 0;
 } # blanks
@@ -2303,7 +2354,7 @@ B<immac> [-tmaSNLTh][ -o <out>][ -l <log>][ -e <err>][ -I <path> ...]
     -P <macro> predefine <macro> evaluated directly by this program
                Usually defined with a numeric value eg. -P m=8
                NOTE: command line definitions have precedence over
-		     '%define m 4' in the code (opposite to cpp)
+		     '%%define m 8' in the code (opposite to cpp)
     -D <macro> predefine <macro> evaluated only with -m, -M or <in.ic>
     -U <macro> undefine <macro> evaluated only with -m, -M or <in.ic>
     -a         output FOR IF ELSE ELSIF and %define lines as comments
@@ -2338,9 +2389,9 @@ generation. This produces better error messages.
 
 The B<immac> compiler can be used to test for iCa language constructs
 with the -t option.  If the source contains 'FOR loops', IF ELSE or
-ELSIF control statements or %define macro definitions, the source
+ELSIF control statements or B<%%define> macro definitions, the source
 file is an iCa language file.  Isolated [index expressions] without at
-least one FOR IF ELSE ELSIF or %define are not sufficient to classify
+least one FOR IF ELSE ELSIF or B<%%define> are not sufficient to classify
 a file as an iCa language file.
 
 =head1 EXIT STATUS
@@ -2524,39 +2575,31 @@ inside square bracket will be interpreted:
 The pre-compiler B<immac> provides a full macro facility very similar
 to that provided by the C pre-processor B<cpp>.  Object like macros
 without parameters as well as function like macros with parameters
-in parentheses are supported.  The keyword to introduce an B<immac>
-macro definition is B<%define> not B<#define>; that is reserved
-for B<cpp> or B<immac -m>. The latter is an alternative to B<cpp>
-and is used in conjunction with the full iC compiler B<immcc> to
-resolve C type macro's in embedded C code fragments. B<immac -M>
-on the other hand only handles B<%define> B<%if> etc which can be
-used to handle conditional grammar rules in yacc or bison. Both of
-the latter alternatives do not translate iCa language constructs.
+in parentheses are supported.  When B<immac> is called with an iCa
+input file (.ica) and without the options -m, -M or -Y, the keyword
+to introduce a macro definition is B<%%define> not B<#define>, which
+is reserved for B<cpp> or B<immac -m>.  B<immac> without the options
+-m, -M or -Y, also handles B<%%undef>, B<%%include>, B<%%ifdef>,
+B<%%ifndef>, B<%%if>, B<%%elif>, B<%%endif> and B<%%error> in the
+same way that cpp handles their B<#>directive counterparts.
 
-    %define LENGTH	 4
+    %%define LENGTH	 4
 
 The same macro term LENGTH could also be pre-defined in the
 command line with the -P option:
 
-    immac -P LENGTH=8
+    immac -P LENGTH=8    uuu.ica
 
-For immac -m and immac -M macros are pre-defined in the command line
-with the -D option (just like cpp). The -U option is also available
-in these cases:
-
-    immac -m -D LENGTH=8
-    immac -M -D LENGTH=8
-
-Unlike B<cpp>, the definition in the command line has precedence over
-the definition with a B<%define> line in the program. This allows
-iCa programs to define default values for macro terms, which can be
-re-defined in the command line. It is an error to B<%define> a macro,
-which has been previously defined (except on the command line; the
-new definition is ignored). The command B<%undef X> will undefine
-the macro X, which can then be re-defined. This is important if an
-internal definition is to have precedence over a (possible) command
-line definition.  Do a B<%undef> first. It is not an error to B<%undef>
-a non-existing macro.
+Unlike B<cpp>, the definition in the command line with -P has
+precedence over the definition with a B<%%define> line in the
+program. This allows iCa programs to define default values for macro
+terms, which can be re-defined in the command line. It is an error to
+B<%%define> a macro, which has been previously defined (except on the
+command line; the new definition is ignored). The command B<%%undef
+X> will undefine the macro X, which can then be re-defined. This is
+important if an internal definition is to have precedence over a
+(possible) command line definition.  Do a B<%%undef> first. It is
+not an error to B<%%undef> a non-existing macro.
 
 Macros must be a word starting with a letter or underscore followed
 optionally by letters underscores or decimal digits (same as a C or
@@ -2566,16 +2609,16 @@ can be any sort of text, which may also include previously defined
 macros. For replacement as index values, they should of course reduce
 to numeric values or string constants.
 
-    %define WIDTH	 (5+1)			/* C comment */
-    %define AREA	 (LENGTH * WIDTH)	// C++ comment
+    %%define WIDTH	 (5+1)			/* C comment */
+    %%define AREA	 (LENGTH * WIDTH)	// C++ comment
 
 If a replacement text is longer than one line, each line except the
-last must finish with a backslash '\'.  As shown above B<%define>
+last must finish with a backslash '\'.  As shown above B<%%define>
 lines may be terminated with a C or C++ comment.  Replacement texts may
 also contain embedded C comments, which will be replaced by a single
 space on expansion.  Multiple spaces will be replaced by one space
 (same as B<cpp>).  As with 'FOR loop' control lines, a C comment must
-finish on the B<%define> line. Replacement texts for function like
+finish on the B<%%define> line. Replacement texts for function like
 macros should contain at least one sample of each parameter text. If
 not a warning will be issued.
 
@@ -2591,10 +2634,10 @@ and % as well as ( ) decimal integers and spaces are evaluated in the
 definition. This brings error messages a little closer to the source of
 any erroneous constant expression. The final result is the same though.
 
-For the above macro B<immac> tranlates %define AREA to 48 wheras
-B<immac -m> and B<cpp> translates #define AREA to (8 * (5 + 1)).
+For the above macro B<immac> tranlates B<%%define> AREA to 48 whereas
+B<cpp> and B<immac -m> translates B<#define> AREA to (8 * (5 + 1)).
 
-The B<%define> lines are not copied to the target except as comment
+The B<%%define> lines are not copied to the target except as comment
 lines, if the -a option is active for the B<immac> compiler.
 
 Macro replacements may be made in all parts of the iCa code. They
@@ -2602,23 +2645,41 @@ are of course particularly useful to parametrise the termination
 of a 'FOR loop' and hence the number of blocks of iC code, which is
 generated by the 'FOR loop'.
 
-File inclusion with %include "file" and conditional compilation
-with %ifdef, %ifndef, %if, %elif, %else, %endif and %error are also
-supported using the same rules as cpp. The word 'defined' in an %if
-or %elif expression has the usual cpp meaning - it is set to 1 (true)
-if defined else 0 (false). Identifiers in such an expression which are
-not defined in a previous %define or -P are also set to 0 (false).
+File inclusion with B<%%include> "file" and conditional compilation
+with B<%%ifdef>, B<%%ifndef>, B<%%if>, B<%%elif>, B<%%else>, B<%%endif>
+and B<%%error> are also supported using the same rules as cpp. The
+word 'defined' in an B<%%if> or B<%%elif> expression has the usual cpp
+meaning - it is set to 1 (true) if defined else 0 (false). Identifiers
+in such an expression which are not defined in a previous B<%%define>
+or -P are also set to 0 (false).
 
-When B<immac> is called with the B<-m> option it simply becomes a
-macro processor handling #define, #undef, -D, -U, #include, #if,
-#else etc. No iCa constructs are translated in this mode. Every
-attempt has been made to make B<immac -m> equivalent to B<cpp>.
+=head1 ALTERNATIVE MACRO PROCESSING
 
-When B<immac> is called with the B<-M> option it simply becomes a
-macro processor handling %define, %undef, -D, -U, %include, %if,
-%else etc. Again no iCa constructs or #directives are translated in
-this mode, which is useful for processing conditional grammar rules
-in yacc or bison.
+B<immac -m> is just a macro processor handling B<#define>, B<#undef>,
+-D, -U, B<#include>, B<#if> etc, which makes it an alternative for
+B<cpp> mainly used to pre-process C code. Every attempt has been made
+to make B<immac -m> equivalent to B<cpp>.
+
+B<immac -M> is an alternative macro processor handling B<%define>,
+B<%undef>, -D, -U, B<%include>, B<%if> etc, which is called by
+the iC compiler B<immcc> to resolve macro's in iC code (version
+3). B<#>directives are left untouched. If B<immac> is called with an iC
+(.ic) input file, the -M option is set internally.
+
+A third variation B<immac -Y>  is used to handle conditional grammar
+rules in yacc or bison with B<%if> etc. B<%define> lines are left
+untouched because they may be interpretd by bison.
+
+For B<immac -m> B<immac -M> and B<immac -Y> macros can be pre-defined
+in the command line with the -D option (just like cpp). For B<immac
+-Y> this is the only way to define a macro.
+
+    immac -m -D LENGTH=8     vvv.c
+    immac -M -D LENGTH=8     www.ic
+    immac -Y -D BOOT_COMPILE xxx.y
+
+The -U option is also available in these cases.  All these alternatives
+do not translate iCa language constructs.
 
 =head1 AUTHOR
 

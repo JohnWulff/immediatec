@@ -87,9 +87,9 @@
 ******* C CODE          ************************
 
 010
-011	    int
-012	    cf1(void)
-013	    {
+011	int
+012	cf1(void)
+013	{
 014	    a1 = b3 * a3;	// must be very careful variables are
 
 		= ----	a1	A
@@ -107,7 +107,7 @@
 		= ---'	b2
 
 018	    return a1 + a2;
-019	    } /* cf1 */
+019	} /* cf1 */
 020
 
 021	(2) 	return iC_MV(1)+iC_MV(2);
@@ -167,6 +167,6 @@ TOTAL	      20 blocks
 	      40 links
 
 compiled by:
-@(#)     $Id: c12w.lst,v 1.1 2015/10/09 03:31:12 jw Exp $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/c12w.c  (106 lines)

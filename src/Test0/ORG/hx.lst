@@ -72,7 +72,7 @@
 ******* C CODE          ************************
 
 007
-008	    #include	<stdio.h>
+008	#include	<stdio.h>
 009
 
 011	(2) {
@@ -122,6 +122,6 @@ TOTAL	      10 blocks
 	      30 links
 
 compiled by:
-$Revision: icc_2.6-13-gb7cd1b3-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/hx.c  (120 lines)

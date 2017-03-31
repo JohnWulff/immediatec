@@ -110,11 +110,11 @@
 041	    iC_AA(2, 0,  iC_AV(3) ? : iC_AV(4));		/* compiled as C statement */
 042	    iC_AA(5, 0,  iC_AA(6, 14, 0) ? : iC_AV(4));		/* conditional with side effect */
 043	    iC_AA(7, 0,  iC_AA(8, 14, 0) ? iC_AA(8, 14, 0) : iC_AV(4));	/* conditional with active side effect */
-044	    }
+044	}
 
 046	(4) {
 047	    iC_AA(2, 0,  iC_AA(3, 1,  0));			/* reset a and b */
-048	    }
+048	}
 
 ******* NET TOPOLOGY    ************************
 
@@ -149,6 +149,6 @@ TOTAL	      17 blocks
 	      38 links
 
 compiled by:
-@(#)     $Id: conditional.lst,v 1.1 2015/05/26 14:36:51 jw Exp $ -O7
+$Revision: icc_3.1-dirty $ -O7
 
 C OUTPUT: ./Test0/conditional.c  (96 lines)

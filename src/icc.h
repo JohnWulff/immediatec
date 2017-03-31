@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.81 $";
+"@(#)$Id: icc.h 1.82 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -618,8 +618,9 @@ extern unsigned int	iC_useStackIndex;
 #define iC_Aflag (iC_uses & USE_ALIAS)	/* -A alias - generate ARITH alias nodes */
 #define iC_Sflag (iC_uses & USE_STRICT)	/* -S strict - all imm variables must be declared */
 
-extern unsigned short	iC_aflag;	/* -a flag signals append mode */
-extern unsigned short	iC_lflag;	/* -a build new aux files */
+extern char *		iC_aflag;	/* -a list iC preprocessor commands with immac -Ma */
+extern unsigned short	iC_Lflag;	/* -L append mode - compile with linking information */
+extern unsigned short	iC_lflag;	/* -L build new aux files */
 
 					/*   icc.c   */
 extern char *		iC_progname;	/* name of this executable */

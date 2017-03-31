@@ -4345,7 +4345,7 @@
 ******* C CODE          ************************
 
 001
-002	    static int x = 0;
+002	static int x = 0;
 003
 	#line 139 "init_t.ic"	/* in pre-compiled function block SHR */
 139	(1) 	return iC_MV(1)?iC_MV(2):iC_MV(3);
@@ -4360,19 +4360,19 @@
 
 240	(6) { x++; }
 
-240	    { x--; }
+240	{ x--; }
 
 241	(7) { x++; }
 
-241	    { x--; }
+241	{ x--; }
 
 242	(8) { x++; }
 
-242	    { x--; }
+242	{ x--; }
 
 243	(9) { x++; }
 
-243	    { x--; }
+243	{ x--; }
 
 245	(10) { case 0: x=0; break; default: x++; }
 
@@ -5704,7 +5704,7 @@ TOTAL	    1042 blocks
 	    3731 links
 
 compiled by:
-$Revision: icc_2.6-6-ge1cef2e-dirty $ -O7
+$Revision: icc_3.1-dirty $ -O7
 *** Warning: 13 undefined gates and 43 unused gates. File ./Test0/compTest2a.ic, line 304
 *** ErrorEmit: Action gate 'QX0.6_1' controlled by timer '1' has no clock. File ./Test0/compTest2a.ic, line 304
 *** ErrorEmit: Action gate 'QX0.7_1' controlled by timer '3' has no clock. File ./Test0/compTest2a.ic, line 304
