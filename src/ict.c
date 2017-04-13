@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.70 $";
+"@(#)$Id: ict.c 1.71 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -206,7 +206,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     msgBuf = iC_emalloc(REQUEST);
     iC_outBuf = iC_emalloc(REQUEST);
 #endif	/* EFENCE */
-    iC_initIO();			/* catch memory access signal */
+    signal(SIGSEGV, iC_quit);		/* catch memory access signal */
 
     if (iC_outFP && iC_outFP != stdout) {
 	fclose(iC_outFP);
@@ -263,6 +263,10 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	char		entry[ENTRYSZ];	/* entry "SIX0000-000\0" max length 12 */
 	char *		ep;		/* points to next point in entry */
 	int		el;		/* entry length */
+	char *		qp;		/* points to next entry in msgBuf for equivalence inputs */
+	int		qc;		/* length of filled entries in msgBuf */
+	int		ql;		/* length of individual entry in msgBuf */
+	int		qFlag;
 	const char *	sr[] = { "N", ",SC", ",RD", };	/* name, controller, debugger */
 #ifdef	RASPBERRYPI
 	int		en;		/* number of registration items */
@@ -354,6 +358,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	tbp = regBuf;
 	tbc = REQUEST;
 	el = 0;
+	qp = msgBuf;		/* prepare to collect comma separated list of inputs */
+	qc = REQUEST;		/* for doing all inputs as equivalences with '-e I' command */
+	ql = qFlag = 0;
 	for (i = 0; i < 3; i++) {
 	    tbp += el;
 	    tbc -= el;
@@ -489,8 +496,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	     * **********************************   *************     ***********
 	     *              \              /        \           /
 	     *               \  markings  /          \ channels/
-	     *                                                        
-	     *                                                        
+	     *
+	     *
 	     *  Registration
 	     *
 	     *  After registration gt_live is used for other purposes, so the
@@ -514,7 +521,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	     *    if (!gp && !pfp) Warning();	//	never called for Internal
 	     *    if (gp) traMb(gp, 0);         // RI External
 	     *    if (pfp)) writePF(pfp ...);   // RQ ExtOut
-	     *               
+	     *
 	     *  SIO interrupt provides pfp1 and val
 	     *    channel = pfp1->Ichannel;
 	     *    gp  = Channels[channel].g     // (gp)     gp       -        NULL
@@ -525,7 +532,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	     *        assert(pfp1 == pfp);
 	     *        send_msg(channel ...);    // SI Internal & opt_E or ExtOut
 	     *    }
-	     *               
+	     *
 	     *  GPIO interrupt provides pfp1 and val	TODO
 	     *    channel = pfp1->Ichannel;
 	     *    gp  = Channels[channel].g     // (gp)     gp       -        NULL
@@ -536,7 +543,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	     *        assert(pfp1 == pfp);
 	     *        send_msg(channel ...);    // SI Internal & opt_E or ExtOut
 	     *    }
-	     *               
+	     *
 	     *  iC_output(val, channel)
 	     *    gp  = Channels[channel].g     // gp       (gp)     -        (NULL)
 	     *    pfp = Channels[channel].p     // NULL     pfp E    -        (pfp)
@@ -558,8 +565,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #ifdef	RASPBERRYPI
 		if ((c = RSin[iC_opt_E][marking]) != 'x') {
 		    el = snprintf(ep, ENTRYSZ, ",%c%s", c, gp->gt_ids);	/* register R S x S input/ExtOut send */
+		    if (c == 'R') {
+			ql = snprintf(qp, qc, ",%s", gp->gt_ids);	/* input directly into msgBuf */
+		    }
 		} else {
-		    el = 0;			/* input Internal !opt_E - do not register this input */
+		    el = ql = 0;		/* input Internal !opt_E - do not register this input */
 		    gp->gt_mark |= X_FLAG;	/* flag non-registration in regAck() - allocate virtual channel */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
@@ -569,7 +579,20 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else	/* ! RASPBERRYPI */
 	    	el = snprintf(ep, ENTRYSZ, ",R%s", gp->gt_ids);	/* register R input */
+		ql = snprintf(qp, qc, ",%s", gp->gt_ids);	/* input directly into msgBuf */
 #endif	/* ! RASPBERRYPI */
+		qc -= ql;
+		if (qc > 0) {
+		    qp += ql;			/* ready for next entry */
+		} else {
+		    qc += ql;			/* msgBuf overflowed - ignore for equivalences */
+		    *qp = '\0';			/* delete latest entry - this works in the test case */
+		    if (qFlag == 0) {
+			fprintf(iC_errFP, "WARNING: %s: too many -e equivalences - ignore '%s' and later\n",
+			    iC_progname, gp->gt_ids);
+			qFlag = 1;		/* unlikely to overflow, but code has been tested */
+		    }				/* with small msgBuf[13] trying to fit 14 bytes */
+		}
 		if (gp->gt_fni != TRAB) {
 		    mask = 0x100;		/* block output of used bits for analog I/O */
 		}
@@ -1024,7 +1047,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		"[pos] -1 -1\n"
 		"*-4.343955 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1\n"
 	    , iC_ID, asctime(gmtime(&walltime)), iC_iccNM);	/* zoom, tims.marker, 26 named_markers */
-	    savCode = sav_ftype[GATE];	/* "wire" instead of "event" for iClock */	
+	    savCode = sav_ftype[GATE];	/* "wire" instead of "event" for iClock */
 	    fprintf(iC_savFP,
 		"@%s\n"
 		"%s.iClock\n"		/* display iClock as the first trace */
@@ -1160,7 +1183,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		     *******************************************************************/
 		    if ((code = vcd_ftype[fni]) != NULL) {
 			if (gp->gt_live == iClock_index) {
-			    code = vcd_ftype[GATE];	/* "wire" instead of "event" for iClock */	
+			    code = vcd_ftype[GATE];	/* "wire" instead of "event" for iClock */
 			}
 			if (extended) {
 			    strncpy(modName, ids, len);
@@ -1523,7 +1546,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	  outWAIT:
 	    fprintf(iC_outFP, "======== WAIT ==========\n");
 	    fflush(iC_outFP);
-#ifdef	RASPBERRYPI 
+#ifdef	RASPBERRYPI
 	    if ((slr &= ~0x07) == 0) {	/* stop 350 ms timeout - no 2nd wait message needed */
 		toCntp = toCoff;	/* slr also holds shift direction - not touched */
 	    }
@@ -1573,7 +1596,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 		    toCnt = iC_timeOut;		/* transfer timeout value */
 		}
-#ifdef	RASPBERRYPI 
+#ifdef	RASPBERRYPI
 		if (slr) {			/* most od the time slr == 0, test only once */
 #if YYDEBUG && !defined(_WINDOWS)
 		    /********************************************************************
@@ -2099,7 +2122,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #if YYDEBUG && !defined(_WINDOWS)
 			m1++;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-			if ((val = gpio_read(gpio25FN)) == -1) { 
+			if ((val = gpio_read(gpio25FN)) == -1) {
 			    perror("GPIO25 read");
 			    fprintf(iC_errFP, "ERROR: %s: GPIO25 read failed\n", iC_progname);
 			    break;
@@ -2193,8 +2216,10 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    } else if (c == 'm') {
 			iC_micro++;			/* toggle more micro */
 			if (iC_micro >= 3) iC_micro = 0;
+		    } else if (c == 'T') {
+			iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
 		    } else if (c != '\n') {
-			fprintf(iC_errFP, "no action coded for '%c' - try t, m, or q followed by ENTER\n", c);
+			fprintf(iC_errFP, "no action coded for '%c' - try t, m, T, or q followed by ENTER\n", c);
 #endif	/* YYDEBUG */
 		    }					/* ignore the rest of STDIN */
 		}   /*  end of STDIN interrupt */
@@ -2283,7 +2308,7 @@ iC_output(int val, unsigned short channel)
 		fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
 		    iC_progname, gep->Ggate->gt_ids, bit);
 	    }
-	    diff &= ~mask;				/* clear the bit just processed */	
+	    diff &= ~mask;				/* clear the bit just processed */
 	    if (iC_debug & 04) fprintf(iC_outFP, "***   bit = %hu	mask = 0x%02x	val0&mask = 0x%02x	diff = 0x%02x\n",
 		bit, mask, val0&mask, diff);
 	}
@@ -2519,8 +2544,11 @@ static void
 regAck(Gate ** oStart, Gate ** oEnd)
 {
     Gate **		opp;
-    char *		cp;
     Gate *		gp;
+    char *		cp;
+    char *		ip;
+    int			len;
+    int			bc;
 #ifdef	RASPBERRYPI
     piFaceIO *		pfp;
     gpioIO *		gep;
@@ -2543,6 +2571,68 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	 *  Set all bits to wait for TCP/IP interrupts here
 	 *******************************************************************/
 	FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
+	/********************************************************************
+	 *  Send optional equivalence strings from the command line to iCserver
+	 *  to extend equivalences before registration proper. This is only
+	 *  done once in the first call to this function regAck() before
+	 *  iC_socFN was set by iC_connect_to_server().
+	 *
+	 *  The equivalence string from the command line can be a single IEC
+	 *  name eg -eIX0-1 or simply -eIX0 or a comma separated list of
+	 *  IEC names -eIX0-1,IX1-1 or -eIX0,IX1 or the special equivalence
+	 *  command -eI which equivalences all IEC inputs which are going to
+	 *  be registered by the app.
+	 *
+	 *  Plain IEC strings eg IX0 are equivalenced to IEC=IEC-<instance> from
+	 *  the command line option -i<instance>, if that is set eg:
+	 *      -eIX0,IX1 -i1 produces 'IX0=IX0-1 IX1=IX1-1'
+	 *  If instance is not set the IEC string remains unchanged.
+	 *
+	 *  The total input equivalence list is limited to 1399 bytes before
+	 *  expansion (200 - 250 plain equivalences), which should be plenty.
+	 *
+	 *  If the expanded equivalence list exceeds 1399 bytes, the list is
+	 *  sent to iCserver in sections.
+	 *******************************************************************/
+	if (rpyBuf[0] == ',') {
+	    if (strcmp(rpyBuf, ",I") != 0) {
+		strncpy(msgBuf, rpyBuf, REQUEST);	/* not  -I use command line -e options in rpyBuf */
+	    }						/* else -I use all IEC inputs collected in msgBuf */
+	    strcpy(rpyBuf, "E");			/* 'E' is equivalence command for iCserver */
+	    cp = rpyBuf + 1;				/* bypass initial 'E' */
+	    bc = REPLY  - 1;
+	    for (ip = strtok(msgBuf, ", "); ip; ip = strtok(NULL, ", ")) { /* delimit with ',' or ' ' */
+		if (strcmp(ip, "I") == 0) {
+		    fprintf(iC_errFP, "WARNING: %s: '-e I' ignored in favour of other -e arguments\n",
+			iC_progname);
+		    continue;
+		}
+		do {
+		    if (bc <= 0) {
+			*cp = '\0';			/* buffer oveflowed - remove last entry */
+#if YYDEBUG && !defined(_WINDOWS)
+			if (iC_debug & 0224) fprintf(iC_outFP, "equivalence:%s\n", rpyBuf);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			iC_send_msg_to_server(iC_sockFN, rpyBuf); /* send partial equivalence string */
+			cp = rpyBuf + 1;		/* bypass initial 'E' */
+			bc = REPLY  - 1;
+			assert(len < bc);		/* bombs out if single entry len >= REPLY-1 */
+		    }					/* else infinite loop */
+		    if (strchr(ip, '=') || strlen(iC_iidNM) == 0) {
+			len = snprintf(cp, bc, " %s", ip);
+			/* do not modify if equivalence contains '=' or no instance was set */
+		    } else {
+			len = snprintf(cp, bc, " %s=%s-%s", ip, ip, iC_iidNM);	/* append instance */
+		    }
+		    bc -= len;
+		} while (bc <= 0);
+		cp += len;				/* room for this entry and '\0' terminator */
+	    }
+#if YYDEBUG && !defined(_WINDOWS)
+	    if (iC_debug & 0224) fprintf(iC_outFP, "equivalence:%s\n", rpyBuf);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	    iC_send_msg_to_server(iC_sockFN, rpyBuf);	/* send final equivalence string */
+	}
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has been primed\n");

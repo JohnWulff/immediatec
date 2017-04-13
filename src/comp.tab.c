@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "comp.y"
  static const char comp_y[] =
-"@(#)$Id: comp.tab.c 1.123 $";
+"@(#)$Id: comp.tab.c 1.124 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -779,7 +779,7 @@ static const yytype_uint16 yyrline[] =
     1435,  1445,  1458,  1480,  1502,  1524,  1539,  1554,  1568,  1582,
     1596,  1610,  1624,  1648,  1680,  1720,  1765,  1800,  1823,  1852,
     1862,  1917,  1927,  1941,  1951,  1965,  1975,  1995,  2001,  2026,
-    2081,  2081,  2101,  2101,  2128,  2129,  2130,  2136,  2137,  2138,
+    2084,  2084,  2101,  2101,  2128,  2129,  2130,  2136,  2137,  2138,
     2142,  2151,  2152,  2413,  2413,  2434,  2445,  2445,  2468,  2468,
     2489,  2504,  2512,  2522,  2523,  2535,  2543,  2603,  2618,  2626,
     2636,  2637,  2649,  2657,  2807,  2817,  2824,  2831,  2839,  2849,
@@ -4068,13 +4068,13 @@ yyreduce:
 
   case 140:
 /* Line 1792 of yacc.c  */
-#line 2081 "comp.y"
+#line 2084 "comp.y"
     { ccfrag = '%'; ccFP = T1FP; }
     break;
 
   case 141:
 /* Line 1792 of yacc.c  */
-#line 2082 "comp.y"
+#line 2085 "comp.y"
     { (yyval.sym).v = 0;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) { fprintf(iC_outFP, ">>>lBlock end\n"); fflush(iC_outFP); }
@@ -6019,25 +6019,27 @@ iC_compile(
 	strncpy(inpNM, inpPath, BUFS);
 	r = 0;
 	if (strlen(iC_defines) == 0) {
-	    /* pre-compile if iC files contains any #include, #define etc but not #line or # 1 etc */
-	    /* also pre-compile if iC files contains any %include, %define etc */
+	    /* pre-compile if iC files contains any %include, %define %if etc */
 #ifdef	WIN32
 	    fflush(iC_outFP);
 	    /* CMD.EXE does not know '' but does not interpret $, so use "" */
 	    /* don't use system() because Win98 command.com does not return exit status */
 	    /* use spawn() instead - spawnlp() searches Path */
-	    r = _spawnlp( _P_WAIT, "perl",  "perl",  "-e", "\"$s=1; while (<>) { if (/^\\s*[%#]\\s*[deiu]/) { $s=0; last; } } exit $s;\"", inpPath, NULL );
+	    snprintf(execBuf, BUFS, "\"$s=1; while (<>) { if (m/^\\s*%\\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\\b/) { $s=0; last; } } exit $s;\"");
+	    r = _spawnlp( _P_WAIT, "perl",  "perl",  "-e", execBuf, inpPath, NULL );
 	    if (r < 0) {
 		ierror("cannot spawn perl -e ...", inpPath);
 		perror("spawnlp");
 		return Iindex;			/* error opening input file */
 	    }
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e \"$s=1; print 'perl $s = ', $s, '...'; while (<>) { if (/^\\s*[%%#]\\s*[deiu]/) { $s=0; print 'perl $_ = ', $_, '...'; last; } } print 'perl $s = ', $s, '...'; exit $s;\" %s; $? = %d\n", inpPath, r);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e %s %s; $? = %d\n", execBuf, inpPath, r);
 #endif
 #else	/* not WIN32 */
-	    snprintf(execBuf, BUFS, "perl -e '$s=1; while (<>) { if (/^\\s*[%%#]\\s*[deiu]/) { $s=0; last; } } exit $s;' %s", inpPath);
-	    r = system(execBuf);		/* test with perl script if #include %include etc in input */
+	    snprintf(execBuf, BUFS, "%s %s",
+		"perl -e '$s=1; while (<>) { if (m/^\\s*%\\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\\b/) { $s=0; last; } } exit $s;'",
+		inpPath);
+	    r = system(execBuf);		/* test with perl script if %define %include %if etc in input */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: %s; $? = %d\n", execBuf, r);
 #endif
@@ -6049,8 +6051,8 @@ iC_compile(
 	}
 #endif
 	if (r == 0) {
-	    /* iC_defines is not empty and has -Dyyy or -Uyyy or #if etc etc was found by perl script */
-	    /* pass the input file through the C pre-compiler to resolve #includes and macros */
+	    /* iC_defines is not empty and has -Dyyy or -Uyyy or %include etc was found by perl script */
+	    /* pass the input file through the 'immac -M' to resolve %includes and macros */
 	    if ((fd = mkstemp(T0FN)) < 0 || close(fd) < 0 || unlink(T0FN) < 0) {
 		ierror("compile: cannot make or unlink:", T0FN);
 		perror("unlink");

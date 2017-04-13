@@ -292,7 +292,7 @@ Usage:
 
 Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.67 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.68 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -317,11 +317,11 @@ $argIndex = $blank = 0;
 # print "0 \@ARGV = '@ARGV'\n";
 foreach (@ARGV) {
     if (s/^-R(.*)$/$1/) {
-	$blank = 1 if $_ eq "";		# -R
-	$app = "";			# or -Rapp
+	$blank = 1 if $_ eq "";		# -R <app> <args ...>
+	$app = "";			# or -R<app> <args ...>
 	last;
-    } elsif (s/^(-[^dspiFlwgAR]+)R(.*)$/$1/) {
-	$app = $2;			# -abcR or -abcRapp
+    } elsif (s/^(-[^dspiFlwgALR]+)R(.*)$/$1/) {
+	$app = $2;			# -abcR<app> <args ...> or -abcR<app> <args ...>
 	$argIndex++;
 	last;
     }

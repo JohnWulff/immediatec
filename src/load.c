@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.66 $";
+"@(#)$Id: load.c 1.67 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2015  John E. Wulff
@@ -84,13 +84,13 @@ static const char *	usage =
 #if	YYDEBUG
 "[ -m[m]]"
 #endif	/* YYDEBUG */
-"[ -s <host>][ -p <port>][ -i <inst]"
+"[ -s <host>][ -p <port>][ -i <inst>]"
 #endif	/* TCP */
 "\n          "
 #ifdef	TCP
-"[ -v <file.vcd>]"
+"[ -e I|<equivalence>][ -v <file.vcd>]"
 #endif	/* TCP */
-"[ -n <count>][ -d <debug>][ --]\n"
+"[ -n <count>][ -d <debug>]\n"
 #ifdef	RASPBERRYPI
 "          [ [~]<IEC>[-<IEC>|+[<mask>]][:<pfa>][-<inst>] ...]\n"
 "          [ [~]<IEC>,<gpio>[,<gpio>,...][-<inst>] ...]\n"
@@ -102,9 +102,14 @@ static const char *	usage =
 #endif	/* TCP */
 "\n"
 #ifdef	TCP
-"    -s host IP address of iCserver   (default '%s')\n"
-"    -p port service port of iCserver (default '%s')\n"
-"    -i inst instance of this client  (default '') or 1 to %d digits\n"
+"    -s <host> IP address of iCserver   (default '%s')\n"
+"    -p <port> service port of iCserver (default '%s')\n"
+"    -i <inst> instance of this client  (default '') or 1 to %d digits\n"
+"    -e <equivalence> eg: IX0=IX0-1     (can be used more than once)\n"
+"              or IX0 which is changed to the form above using <inst>\n"
+"              or a comma separated list of either of the above forms\n"
+"              only IEC inputs can be equivalenced (see iCserver)\n"
+"    -e I      equivalence all IEC inputs to the same names-<inst>\n"
 "    -v <file.vcd> output a .vcd and a .sav file for gtkwave\n"
 #endif	/* TCP */
 "    -n <count> maximum oscillator count (default is %d, limit 15)\n"
@@ -238,7 +243,7 @@ static const char *	usage =
 "              +200  display oscillator info\n"
 "              +100  initialisation and run time trace\n"
 #ifdef	TCP
-"	    or     +20  trace only logic inputs as binary bytes\n"
+"        or     +20  trace only logic inputs as binary bytes\n"
 #endif	/* TCP */
 #else	/* YYDEBUG */
 "    -d <debug> 400  exit after initialisation\n"
@@ -249,11 +254,11 @@ static const char *	usage =
 "                +2  trace I/O receive buffer\n"
 "                +1  trace I/O send buffer\n"
 "    -t      trace gate activity (equivalent to -d 1100)\n"
-"            can be toggled at run time by typing t\n"
+"         t  at run time toggles gate activity trace\n"
 #ifdef	TCP
 "    -m      microsecond timing info\n"
 "    -mm     more microsecond timing (internal time base)\n"
-"            can be toggled at run time by typing m\n"
+"         m  at run time toggles microsecond timing trace\n"
 #endif	/* TCP */
 #endif	/* YYDEBUG */
 #ifdef	TCP
@@ -262,6 +267,8 @@ static const char *	usage =
 #endif	/* TCP */
 "    -Z      GIT patch if made with dirty version\n"
 "    -h      this help text\n"
+"         T  at run time displays registrations and equivalences\n"
+"         q  or ctrl+D  at run time stops %s\n"
 "                      EXTRA arguments\n"
 "    --      any further arguments after -- are passed to the app\n"
 "    --h     help with command line options particular to this app\n"
@@ -349,6 +356,10 @@ main(
 #ifdef	TCP
     char *		mqz = "-qz";
     char *		mz  = "-z";
+    char *		qp;			/* points to next entry in rpyBuf for equivalence inputs */
+    int			qc;			/* length of filled entries in rpyBuf */
+    int			ql;			/* length of individual entry in rpyBuf */
+    int			qFlag;
 #endif	/* TCP */
 #ifdef	RASPBERRYPI
     char **		argp;
@@ -443,6 +454,14 @@ main(
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
 
+#ifdef	EFENCE
+    regBuf = iC_emalloc(REQUEST);
+    rpyBuf = iC_emalloc(REPLY);
+#endif	/* EFENCE */
+    qp = rpyBuf;		/* prepare to collect comma separated list of equivalences */
+    qc = REPLY;			/* for -e options */
+    ql = qFlag = 0;
+
     /********************************************************************
      *
      *  Process command line arguments
@@ -480,6 +499,22 @@ main(
 #ifdef	RASPBERRYPI
 			iidN = (unsigned short)atoi(iC_iidNM);	/* internal instance from command line -i<instance> */
 #endif	/* RASPBERRYPI */
+		    }
+		    goto break2;
+		case 'e':
+		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
+		    ql = snprintf(qp, qc, ",%s", *argv);	/* equivalence directly into rpyBuf */
+		    qc -= ql;
+		    if (qc > 0) {
+			qp += ql;			/* ready for next entry */
+		    } else {
+			qc += ql;			/* rpyBuf overflowed - ignore for equivalences */
+			*qp = '\0';			/* delete latest entry - this works in the test case */
+			if (qFlag == 0) {
+			    fprintf(iC_errFP, "WARNING: %s: too many -e equivalences - ignore '%s' and later\n",
+				iC_progname, *argv);
+			    qFlag = 1;			/* unlikely to overflow, but code has been tested */
+			}				/* with small rpyBuf[13] trying to fit 14 bytes */
 		    }
 		    goto break2;
 		case 'v':
@@ -569,7 +604,7 @@ main(
 		     *******************************************************************/
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    *(argv-1) = *argv;	/* move app string to previous argv array member */
-		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */
 		    argv--;		/* start call with app string */
 		    argc = -argc - 1;	/* negative argc signals -R option */
 		    goto break3;
@@ -599,7 +634,7 @@ main(
 #ifdef	RASPBERRYPI
 		    INSTSIZE,
 #endif	/* RASPBERRYPI */
-		    iC_ID);
+		    iC_progname, iC_ID);
 		    exit(-1);
 		default:
 		    fprintf(iC_errFP, "WARNING: %s: unknown option -%c\n", iC_progname, **argv);
@@ -785,7 +820,7 @@ main(
 			if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
 			    value);
 			/********************************************************************
-			 *  Close gpio23/LIRC value 
+			 *  Close gpio23/LIRC value
 			 *******************************************************************/
 			if (gpio23FN > 0) {
 			    close(gpio23FN);		/* close connection to /sys/class/gpio/gpio23/value */
@@ -1042,7 +1077,7 @@ main(
 		    directFlag |= PF | DR;
 		} else {
 		    /********************************************************************
-		     *  GPIO IEC arguments with .<bit>,gpio or ,gpio,gpio,... 
+		     *  GPIO IEC arguments with .<bit>,gpio or ,gpio,gpio,...
 		     *******************************************************************/
 		    if (iqStart != iqEnd || ieStart != ieEnd || iqExtra == 2) {
 			goto illFormed;		/* GPIO argument must be single IXn or QXn */
@@ -2586,7 +2621,7 @@ termQuit(int sig)
 			 *******************************************************************/
 			if (iq == 0) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
 			/********************************************************************
-			 *  Close GPIO N value 
+			 *  Close GPIO N value
 			 *******************************************************************/
 			if ((fn = gep->gpioFN[bit])> 0) {
 			    close(fn);			/* close connection to /sys/class/gpio/gpio_N/value */
@@ -2650,7 +2685,7 @@ termQuit(int sig)
 		}
 	    }
 	    /********************************************************************
-	     *  Close GPIO25/INTB/INTA value 
+	     *  Close GPIO25/INTB/INTA value
 	     *  free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
 	     *******************************************************************/
 	    if (gpio25FN > 0) {

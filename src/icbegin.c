@@ -1,5 +1,5 @@
 static const char icbegin_c[] =
-"@(#)$Id: icbegin.c,v 1.6 2015/11/06 00:47:21 jw Exp $";
+"@(#)$Id: icbegin.c 1.7 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2015  John E. Wulff
@@ -49,7 +49,7 @@ static const char icbegin_c[] =
  *  8) add help lines after "Usage:..." for extra --x command line options.
  *  9) add extra C code before the line containing "End of literal C code".
  *     Usually this is
- *     a) extra %#include lines.
+ *     a) extra #include lines.
  *     b) extra static variable declarations.
  *     c) extra C functions using the new options.
  *******************************************************************/
@@ -58,8 +58,8 @@ static const char icbegin_c[] =
 #include	"icc.h"		/* use <icg.h> in iC app.ic sources */
 
 // %{	/* Start of literal C code */
-// %#include	<stdio.h>
-// %#include	<icg.h>
+// #include	<stdio.h>
+// #include	<icg.h>
 
 static const char *	usage =
 "Usage: %s --[ -h]|[ -R <app ...>]\n"

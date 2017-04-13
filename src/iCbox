@@ -79,7 +79,7 @@ my $named = untaint($0); $named =~ s#.*[/\\]##;
 my $nameo = $named;		# for generating bit map
 format STDERR =
 Usage:
-    @<<<< [-HbdrmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+    @<<<< [-qHbdrtIOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
 	$named
 	  [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
 	  [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
@@ -110,6 +110,7 @@ Usage:
 	-n name registration name (default first full ID)
 	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
 				    $named
+	-q      quiet - do not report clients connecting and disconnecting
 	-c col  maximum number of columns in a row (default 12)
 	-C col  absolute maximum number of columns in a row (default 18)
 	-Q rows absolute maximum number of rows (default 3)
@@ -119,17 +120,18 @@ Usage:
 	-b      use buttons instead of checkboxes for digital I/O
 	-d      display inputs IMn (no change and no ini values allowed)
 	-r      reverse - display inputs IMn, send outputs QMn like inputs
-	-m      display elapsed time in seconds and microseconds
+	    DEBUG options
 	-t      trace debug messages
-	-R      trace rcv messages in Msg.pm
-	-S      trace send messages in Msg.pm
+	-I      trace rcv messages in Msg.pm
+	-O      trace send messages in Msg.pm
+	-m      display elapsed time in seconds and microseconds
 	-T      extra static debug messages
-        -q      quiet - do not report clients connecting and disconnecting
 	-x      exit after analyzing input parameters
 	-h      help, ouput this Usage text only
+	    q   from keyboard or (X) button stops iCserver and all apps
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.60 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.61 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -233,7 +235,7 @@ if ($file) {
 #	Handle all remaining -switch options and non-switch options
 ########################################################################
 
-use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_R $opt_S $opt_T);
+use vars qw($opt_ $opt_b $opt_d $opt_r $opt_H $opt_m $opt_x $opt_t $opt_I $opt_O $opt_T);
 use vars qw($opt_q $opt_z $opt_s $opt_p $opt_n $opt_i $opt_c $opt_C $opt_Q $opt_l $opt_h);
 use Getopt::Long qw(:config no_ignore_case bundling);
 GetOptions (
@@ -246,8 +248,8 @@ GetOptions (
     'm'   => \$opt_m,
     'x'   => \$opt_x,
     't'   => \$opt_t,
-    'R'   => \$opt_R,
-    'S'   => \$opt_S,
+    'I'   => \$opt_I,
+    'O'   => \$opt_O,
     'q'   => \$opt_q,
     'z'   => \$opt_z,
     'T'   => \$opt_T,
@@ -514,7 +516,7 @@ my $port = defined $opt_p ? $opt_p : 8778;
 my $name = untaint($opt_n ? "$opt_n$instance" : $ArgNames[0][0]);	# : $ArgNames [first entry] [$id]
 $named = $name;			# use individual ID for warnings from now on
 
-Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
+Msg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
 my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
 print STDERR "iCbox '$named' connecting at server\n" unless $opt_q;
@@ -1046,7 +1048,7 @@ sub send_input {
     } elsif ($val != $ChannelsIq[$ch]) {
 	$ChannelsIq[$ch] = $val;		# always save latest value sent on this channel for hold
 	print "$named: $ch:$val	< $ChannelNames[$ch]\n" if $opt_t;
-	printf "%s	> %2d:%d\n", $ChannelNames[$ch], $ch, $val if $opt_S;
+	printf "%s	> %2d:%d\n", $ChannelNames[$ch], $ch, $val if $opt_O;
 	$conn->send_now("$ch:$val");		# send latest value
     }
 } # send_input
@@ -1089,7 +1091,7 @@ sub rcvd_msg_from_server {
 			}
 			$ChannelsQ[$channel] = $value;	# ready for next message
 			print "$named: $msg1	> $ChannelNames[$channel]\n" if $opt_t;
-			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_R;
+			printf "%s	< %2d:%d\n", $ChannelNames[$channel], $channel, $value if $opt_I;
 		    }
 		} else {
 		    warn "$named: not registered for $msg1 from iCserver - not OK\n";
@@ -1210,7 +1212,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
 
 =head1 SYNOPSIS
 
- iCbox [-HbdrmtRSTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
+ iCbox [-qHbdrtIOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
        [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
        [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
@@ -1239,6 +1241,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
     -i inst instance ID for this iCbox (1 to 3 numeric digits)
+    -q      quiet - do not report clients connecting and disconnecting
     -c col  maximum number of columns in a row (default 12)
     -C col  absolute maximum number of columns in a row (default 18)
     -Q rows absolute maximum number of rows (default 3)
@@ -1248,13 +1251,15 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -b      use buttons instead of checkboxes for digital I/O
     -d      display inputs IMn (no change and no ini values allowed)
     -r      reverse - display inputs IMn, send outputs QMn like inputs
-    -m      display elapsed time in seconds and microseconds
+        DEBUG options
     -t      trace debug messages
-    -R      trace rcv messages in Msg.pm
-    -S      trace send messages in Msg.pm
+    -I      trace rcv messages in Msg.pm
+    -O      trace send messages in Msg.pm
+    -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages
     -x      exit after analyzing input parameters
     -h      help, ouput this Usage text only
+        q   from keyboard or (X) button stops iCserver and all apps
 
 =head1 DESCRIPTION
 

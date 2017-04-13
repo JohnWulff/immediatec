@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c,v 1.17 2016/01/02 22:54:19 jw Exp $";
+"@(#)$Id: misc.c 1.18 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -19,6 +19,7 @@ static const char misc_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
+#include	<err.h>
 #ifdef	_MSDOS_
 #include	<dos.h>
 #include	<conio.h>
@@ -80,8 +81,8 @@ unsigned char	iC_bitMask[]    = {
 
 #ifdef	TCP
 #ifndef	EFENCE
-char		regBuf[REQUEST];
-char		rpyBuf[REPLY];		/* Buffer in which iCserver input is read to */
+char		regBuf[REQUEST];	/* build registration string */
+char		rpyBuf[REPLY];		/* ack string - also use to collect -e equivalences */
 #else	/* EFENCE */
 char *		regBuf;
 char *		rpyBuf;
@@ -113,7 +114,7 @@ static struct timespec	ms200 = { 0, 200000000, };
  *	Display a string either directly on a PiFaceCAD
  *	or send it via TCP/IP on PFCAD4 to be displayed
  *	  displayString	formatted for display on a PiFaceCAD
- *	  channel	0 = direct display or > 0 && < 0xfff0 iCserver channel 
+ *	  channel	0 = direct display or > 0 && < 0xfff0 iCserver channel
  *
  *******************************************************************/
 
@@ -211,6 +212,7 @@ mkstemp(char * templ)
 /********************************************************************
  *
  * version of malloc() which checks return value and works under Windows
+ * sets allocated memory to '\0'
  *
  *******************************************************************/
 
@@ -223,20 +225,20 @@ iC_emalloc(unsigned	nbytes)		/* check return from malloc */
     GLOBALHANDLE		hglobal;
 
     if ((hglobal = GlobalAlloc(GMEM_FIXED | GMEM_ZEROINIT, nbytes)) == 0) {
-	execerror("out of memory", NS, __FILE__, __LINE__);
+	err(1, "%s", iC_progname);	/* hard ERROR */
     }
     bp = GlobalLock(hglobal);		/* actual pointer */
 #else
     LOCALHANDLE		hlocal;
 
     if ((hlocal = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, nbytes)) == 0) {
-	execerror("out of memory", NS, __FILE__, __LINE__);
+	err(1, "%s", iC_progname);	/* hard ERROR */
     }
     bp = LocalLock(hlocal);		/* actual pointer */
 #endif
 #else
-
     if ((bp = malloc(nbytes)) == NULL) {
+	err(1, "%s", iC_progname);	/* hard ERROR */
     }
 #endif
     memset(bp, 0, nbytes);		/* when free() is used memory can be non zero */
@@ -324,7 +326,7 @@ iC_fork_and_exec(char ** argv)
     uid_t	euid;
     char *	cp;
     char **	cpp = argv;
-#ifdef	TCP 
+#ifdef	TCP
     char **	epp;
     int		extraArgs = 0;
     char *	hostp = NULL;
@@ -456,24 +458,6 @@ iC_cmp_gt_ids( const Gate ** a, const Gate ** b)
 
 /********************************************************************
  *
- *  Initialize IO
- *
- *******************************************************************/
-
-void
-iC_initIO(void)
-{
-#ifdef	TCP
-#ifdef	EFENCE
-    regBuf = iC_emalloc(REQUEST);
-    rpyBuf = iC_emalloc(REPLY);
-#endif	/* EFENCE */
-#endif	/* TCP */
-    signal(SIGSEGV, iC_quit);			/* catch memory access signal */
-} /* iC_initIO */
-
-/********************************************************************
- *
  *  Quit program with 'q' or ctrlC or Break via signal SIGINT
  *  or program abort on detected bugs.
  *
@@ -505,7 +489,7 @@ iC_quit(int sig)
      *******************************************************************/
     if ((sig >= QUIT_TERMINAL || sig == SIGINT)
 	&& iCend() != -1			/* iC termination function */
-    ) {	
+    ) {
 #if	YYDEBUG
 	if (iC_debug & 0100) {
 	    fprintf(iC_outFP, "\n== iCend complete ======\n");

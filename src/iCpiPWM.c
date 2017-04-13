@@ -87,7 +87,7 @@ static const char *	usage =
 "    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).\n"
 "            When the GPIO with this number is used in this app, iCtherm is\n"
 "            permanently blocked to avoid Oops errors in module w1-gpio.\n"
-"    -f      force use of GPIO's required by this program\n" 
+"    -f      force use of GPIO's required by this program\n"
 "                      PIGPIO initialisation arguments\n"
 "    -a val  DMA mode, 0=AUTO, 1=PMAP, 2=MBOX,   default AUTO\n"
 "    -b val  gpio sample buffer in milliseconds, default 120\n"
@@ -152,7 +152,9 @@ static const char *	usage =
 "          No IEC arguments are generated automatically for %s.\n"
 "                      DEBUG options\n"
 "    -t      trace arguments and activity (equivalent to -d100)\n"
+"         t  at run time toggles gate activity trace\n"
 "    -m      display microsecond timing info\n"
+"         m  at run time toggles microsecond timing trace\n"
 "    -d deb  +1   trace TCP/IP send actions\n"
 "            +2   trace TCP/IP rcv  actions\n"
 "            +100 show arguments\n"
@@ -162,13 +164,14 @@ static const char *	usage =
 "    -q      quiet - do not report clients connecting and disconnecting\n"
 "    -z      block keyboard input on this app - used by -R\n"
 "    -h      this help text\n"
-"                    typing q or ctrl+D stops %s\n"
+"         T  at run time displays registrations and equivalences\n"
+"         q  or ctrl+D  at run time stops %s\n"
 "                      AUXILIARY app\n"
 "    -R <app ...> run auxiliary app followed by -z and its arguments\n"
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiPWM.c,v 1.3 2015/11/06 07:56:43 jw Exp $\n"
+"Version	$Id: iCpiPWM.c 1.4 $\n"
 ;
 
 /********************************************************************
@@ -282,6 +285,12 @@ main(
 
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
+
+#ifdef	EFENCE
+    regBuf = iC_emalloc(REQUEST);
+    rpyBuf = iC_emalloc(REPLY);
+#endif	/* EFENCE */
+    signal(SIGSEGV, iC_quit);			/* catch memory access signal */
 
     assert(argc);
     invFlag = 0x00;
@@ -485,7 +494,7 @@ main(
 		     *******************************************************************/
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    *(argv-1) = *argv;	/* move app string to previous argv array member */
-		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */
 		    argv--;			/* start call with app string */
 		    goto break3;
 		missing:
@@ -523,7 +532,7 @@ main(
     }
   break3:
     /********************************************************************
-     *  if argc != 0 then -R and argv points to auxialliary app + arguments 
+     *  if argc != 0 then -R and argv points to auxialliary app + arguments
      *               do not fork and execute aux app until this app has
      *               connected to iCserver and registered all its I/Os
      *******************************************************************/
@@ -1017,7 +1026,7 @@ main(
     }
     if (argc != 0) {
 	/********************************************************************
-	 *  -R and argv points to auxialliary app + arguments 
+	 *  -R and argv points to auxialliary app + arguments
 	 *  This app has now connected to iCserver and registered all its I/Os
 	 *******************************************************************/
 	assert(argv && *argv);
@@ -1177,8 +1186,10 @@ main(
 		    iC_debug ^= 0100;		/* toggle -t flag */
 		} else if (b == 'm') {
 		    iC_micro ^= 1;		/* toggle micro */
+		} else if (b == 'T') {
+		    iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
 		} else if (b != '\n') {
-		    fprintf(iC_errFP, "no action coded for '%c' - try t, m, or q followed by ENTER\n", b);
+		    fprintf(iC_errFP, "no action coded for '%c' - try t, m, T, or q followed by ENTER\n", b);
 		}
 	    }	/*  end of STDIN interrupt */
 	} else {
@@ -1317,7 +1328,7 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
     -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).
             When the GPIO with this number is used in this app, iCtherm is
             permanently blocked to avoid Oops errors in module w1-gpio.
-    -f      force use of GPIO's required by this program\n" 
+    -f      force use of GPIO's required by this program
                       PIGPIO initialisation arguments
     -a val  DMA mode, 0=AUTO, 1=PMAP, 2=MBOX,   default AUTO
     -b val  gpio sample buffer in milliseconds, default 120
@@ -1392,7 +1403,8 @@ iCpiPWM - real PWM analog I/O on a Raspberry Pi for the iC environment
     -q      quiet - do not report clients connecting and disconnecting
     -z      block keyboard input on this app - used by -R
     -h      this help text
-                    typing q or ctrl+D stops iCpiPWM
+         T  at run time displays registrations and equivalences
+         q  or ctrl+D  at run time stops iCpiPWM
                       AUXILIARY app
     -R <app ...> run auxiliary app followed by -z and its arguments
                  as a separate process; -R ... must be last arguments.

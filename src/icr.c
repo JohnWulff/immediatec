@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c,v 1.44 2015/10/31 01:26:33 jw Exp $";
+"@(#)$Id: icr.c 1.45 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -169,7 +169,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     char	ybuf[YSIZE];		/* buffer for number */
     char *	yp;
 
-    iC_initIO();			/* catch memory access signal */
+    signal(SIGSEGV, iC_quit);			/* catch memory access signal */
 #ifdef	_MSDOS_
     oldhandler = NULL;
 #endif	/* _MSDOS_ */
@@ -606,7 +606,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    }
 	} else {
 	    while (cn) {
-		if ((c = getch()) == 'q') {
+		if ((c = getch()) == 'q' || c == 4) {	/* q or ctrl+D */
 		    iC_quit(QUIT_TERMINAL);	/* quit normally */
 		}
 		if (c == EOF) {

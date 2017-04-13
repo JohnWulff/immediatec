@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.79 $";
+"@(#)$Id: icc.c 1.80 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2012  John E. Wulff
@@ -140,17 +140,16 @@ static const char *	usage =
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        iC language source file (extension .ic)\n"
 "                        default: take iC source from stdin\n"
-#if !defined(RUN) && !defined(TCP)
-"        -v              version\n"
-#endif	/* not RUN and not TCP */
 "        -Z              GIT patch if made with dirty version\n"
-"        -h              this help text\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
 "        -B              export EF_PROTECT_BELOW=1 which tests access BELOW \n"
 "        -F              export EF_PROTECT_FREE=1 which tests access FREE\n"
 #endif	/* EFENCE */
-#if defined(RUN) || defined(TCP)
+#if !defined(RUN) && !defined(TCP)
+"        -v              version\n"
+"        -h              this help text\n"
+#else	/* RUN or TCP */
 "Extra options for run mode: (direct interpretation)\n"
 " [-"
 #ifdef	TCP
@@ -180,6 +179,11 @@ static const char *	usage =
 "        -p port         service port of iCserver (not p) (default '%s')\n"
 "        -u unitID       of this client (default base name of <src.ic>)\n"
 "        -i instanceID   of this client (default '%s'; 1 to %d numeric digits)\n"
+"        -e <equivalence> eg: IX0=IX0-1     (can be used more than once)\n"
+"                  or IX0 which is changed to the form above using <inst>\n"
+"                  or a comma separated list of either of the above forms\n"
+"                  only IEC inputs can be equivalenced (see iCserver)\n"
+"        -e I      equivalence all IEC inputs to the same names-<inst>\n"
 "        -v <file.vcd>   output a .vcd and a .sav file for gtkwave\n"
 #endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -195,7 +199,7 @@ static const char *	usage =
 #endif	/* YYDEBUG and not _WINDOWS */
 #if YYDEBUG && !defined(_WINDOWS)
 "        -t              trace gate activity (equivalent to -d 1100)\n"
-"                        can be toggled at run time by typing t\n"
+"                     t  at run time toggles gate activity trace\n"
 #endif	/* YYDEBUG and not _WINDOWS */
 #ifdef RUN
 "        -x              arithmetic info in hexadecimal (default decimal)\n"
@@ -204,10 +208,15 @@ static const char *	usage =
 #ifdef TCP
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
-"                        can be toggled at run time by typing m\n"
+"                     m  at run time toggles microsecond timing trace\n"
 "        -q      quiet - do not report clients connecting and disconnecting\n"
 "        -z      block keyboard input on this app - used by -R\n"
 #endif	/* TCP */
+"        -h      this help text\n"
+#ifdef TCP
+"             T  at run time displays registrations and equivalences\n"
+#endif	/* TCP */
+"             q  or ctrl+D  at run time stops %s\n"
 "                      EXTRA arguments\n"
 "        --      any further arguments after -- are passed to the app\n"
 "        --h     help with command line options particular to this app\n"
@@ -234,7 +243,6 @@ static const char *	usage =
 "\n"
 "      Programmed outputs QX0.0 to QX0.7, QB1, QB2 and QL4 are displayed.\n"
 #endif	/* RUN */
-"      Typing q or ctrl+D quits run mode.\n"
 #endif	/* RUN or TCP */
 "%s\n"
 "Copyright (C) 1985-2017 John E. Wulff     <immediateC@gmail.com>\n"
@@ -448,6 +456,13 @@ main(
 #ifdef	TCP
     char *	mqz = "-qz";
     char *	mz  = "-z";
+    char *	qp;			/* points to next entry in rpyBuf for equivalence inputs */
+    int		qc;			/* length of filled entries in rpyBuf */
+    int		ql;			/* length of individual entry in rpyBuf */
+    int		qFlag;
+    char	iq[2]   = { '\0', '\0' };
+    char	xbwlh[2] = { '\0', '\0' };
+    int		qAdress;
 #endif	/* TCP */
 
     /* Process the arguments */
@@ -470,11 +485,28 @@ main(
     iFunEnd = &iFunBuffer[IBUFSIZE];	/* pointer to end */
 #endif	/* EFENCE */
     writeCexeString(NULL, 0);		/* initialise function use database */
+    iC_aflag = "";			/* don't list iC preprocessor commands with immac -M */
+    iC_Lflag = iC_lflag = 0;		/* don't append for compile */
     T0FP = stdin;			/* input file pointer */
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
-    iC_aflag = "";			/* don't list iC preprocessor commands with immac -M */
-    iC_Lflag = iC_lflag = 0;		/* don't append for compile */
+
+#ifdef	TCP
+#ifdef EFENCE
+    regBuf = iC_emalloc(REQUEST);
+    rpyBuf = iC_emalloc(REPLY);
+#endif	/* EFENCE */
+    qp = rpyBuf;		/* prepare to collect comma separated list of equivalences */
+    qc = REPLY;			/* for -e options */
+    ql = qFlag = 0;
+#endif	/* TCP */
+
+    /********************************************************************
+     *
+     *  Process command line arguments
+     *
+     *******************************************************************/
+
     while (--argc > 0) {
 	if (**++argv == '-') {
 	    ++*argv;
@@ -676,6 +708,25 @@ main(
 		case 'e':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) {
+#ifdef	TCP
+			if (strcmp(*argv, "I") == 0 ||
+			    sscanf(*argv, "%1[IQ]%1[XBWLH]%5d", iq, xbwlh, &qAdress) == 3) {
+			    ql = snprintf(qp, qc, ",%s", *argv);	/* equivalence directly into rpyBuf */
+			    qc -= ql;
+			    if (qc > 0) {
+				qp += ql;			/* ready for next entry */
+			    } else {
+				qc += ql;			/* rpyBuf overflowed - ignore for equivalences */
+				*qp = '\0';			/* delete latest entry - this works in the test case */
+				if (qFlag == 0) {
+				    fprintf(iC_errFP, "WARNING: %s: too many -e equivalences - ignore '%s' and later\n",
+					iC_progname, *argv);
+				    qFlag = 1;			/* unlikely to overflow, but code has been tested */
+				}				/* with small rpyBuf[13] trying to fit 14 bytes */
+			    }
+			    goto break2;
+			}
+#endif	/* TCP */
 #ifdef	WIN32
 			errFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 			strcpy(errFN, *argv);
@@ -917,7 +968,7 @@ main(
 #ifdef	TCP
 		    iC_hostNM, iC_portNM, iC_iidNM, INSTSIZE,
 #endif	/* TCP */
-		    iC_progname, iC_progname, iC_progname,
+		    iC_progname, iC_progname, iC_progname, iC_progname,
 #endif	/* RUN or TCP */
 		    iC_ID);
 		    exit(1);
@@ -1323,7 +1374,7 @@ immcc - the immediate-C to C compiler
     -U <macro> cancel previous definition of <macro> for the iC phase
             Note: do not use the same macros for the iC and the C phase
     -a      list iC preprocessor commands %define %include etc and
-"           command line macros as comments (default: do not list)
+            command line macros as comments (default: do not list)
     -C <macro> predefine <macro> for the C preprocessor phase
     -V <macro> cancel previous definition of <macro> for the C phase
     -W[no-]<warn>                  positive/negative warning options
@@ -1367,44 +1418,52 @@ TCP/IP with B<iCserver> and associated I/O-clients - usually B<iCbox>.
 B<immcc> reads and translates one iC-source eg file.ic. If no options are
 specified, only compilation errors (if any) are reported on 'stderr'.
 
-Before translation starts, file.ic is passed through B<immac -m>
-if it contains any lines starting with '#' or if -D or -U options
-were used in the command line.
-
-Immediate-C code consists of immediate statements and C literal blocks.
-Immediate statements translate into pre-initialised data tables
+I<immediate C> code consists of immediate statements and C literal
+blocks, which are C code enclosed in B<%{> and B<%}> braces.
+I<immediate> statements translate into pre-initialised data tables
 of nodes and their interconnections and C-actions generated by the
-immediate B<if>, B<else> and B<switch> statements. C literal blocks
-are C code enclosed in B<%{> and B<%}> braces.
+immediate B<if>, B<else> and B<switch> statements.
 
-C code in C-actions and in literal blocks is copied nearly verbatim
-into the target C file. Any C-preprocessor statements, such as #define
-etc, in the C-code in C-actions and in literal blocks must have a B<%>
-immediately preceding the leading B<#>, eg B<%#define X 3>. The B<'%'>
-is stripped before being copied to the target.
+C code in C-actions and in C literal blocks is copied verbatim into
+the target C file.  Use standard C pre-processor commands starting
+with # in C literal blocks eg:
 
-The generated C-code is re-grouped into literal blocks first, followed
+    #include <stdio.h>
+    #define  SIZE 4
+    #ifdef etc
+
+Since B<immcc> version 3, C pre-processor commands are written
+without a leading % in C literal blocks, although a % before the
+#, which was mandatory for earlier versions is still stripped for
+backwards compatibility.
+
+The generated C code is re-grouped into literal blocks first, followed
 by C-actions. This is necessary to place all C-declarations in literal
 blocks before any C-actions, which may require them.
 
-In a next pass an integrated special-purpose C compiler is run
-(preceded by a pass through B<immac -m>, if necessary). The special C
-compiler recognizes any immediate variables in the embedded C code.
+If the iC files contains iC pre-processor commands %include, %define
+or %if etc or the command line declared -D iC defines, the iC code
+is piped through B<immac -M>, which resolves all iC pre-processor
+commands.
+
+In a next pass an integrated special-purpose C compiler is run,
+which recognizes any immediate variables in the embedded C code.
 Immediate variables are declared with B<imm bit> or B<imm int>
 in the iC code section.  These variables can be used as values
 anywhere in the C-code and appropriate modification of the C code is
 carried out. Immediate variables which have been declared but not yet
 assigned may be (multiple) assigned to in the C-code.  Such assignment
-expressions are recognised and converted to function calls, which fire
-all immediate expressions dependent in the immediate variable when its
-value changes.  Unless the B<no strict> option (-N) is used for compilation,
-immediate variables to be assigned in C code must be declared with the
-type modifier B<immC> rather than with B<imm>.  This is particularly
-important if an immediate variable assigned to in C code is going to be
-used in another iC source.  If an immediate variable has already been
-(single) assigned to in an immediate statement, an attempt to assign
-to it in the C-code is an error. A syntax check of the embedded C
-code with appropriate error messages is a by-product of this procedure.
+expressions are recognised and converted to function calls, which
+fire all immediate expressions dependent in the immediate variable
+when its value changes.  Unless the B<no strict> option (-N) is used
+for compilation, immediate variables to be assigned in C code must
+be declared with the type modifier B<immC> rather than with B<imm>.
+This is particularly important if an immediate variable assigned to
+in C code is going to be used in another iC source.  If an immediate
+variable has already been (single) assigned to in an immediate
+statement, an attempt to assign to it in the C-code is an error. A
+syntax check of the embedded C code with appropriate error messages
+is a by-product of this procedure.
 
 The iC and C compiler also produces an optional listing (default
 file.lst).  The listing displays the iC source lines with line

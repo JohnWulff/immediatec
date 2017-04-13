@@ -188,15 +188,17 @@ static const char *	usage =
 "    or even iCtherm do not clash with another app (using ~/.iC/gpios.used).\n"
 "                      DEBUG options\n"
 "    -t      trace arguments and activity (equivalent to -d100)\n"
+"         t  at run time toggles gate activity trace\n"
 "    -m      display microsecond timing info\n"
+"         m  at run time toggles microsecond timing trace\n"
 "    -d deb  +1   trace TCP/IP send actions\n"
 "            +2   trace TCP/IP rcv  actions\n"
-#ifdef	TRACE 
+#ifdef	TRACE
 "            +4   trace MCP and HD44780 calls\n"
 #endif	/* TRACE */
 "            +10  trace SIO  input  actions\n"
 "            +20  trace SIO  output actions\n"
-#ifdef	TRACE 
+#ifdef	TRACE
 "            +40  debug MCP and HD44780 calls\n"
 #endif	/* TRACE */
 "            +100 show arguments\n"
@@ -205,13 +207,18 @@ static const char *	usage =
 "    -q      quiet - do not report clients connecting and disconnecting\n"
 "    -z      block keyboard input on this app - used by -R\n"
 "    -h      this help text\n"
-"                    typing q or ctrl+D stops %s\n"
+"         T  at run time displays registrations and equivalences\n"
+#ifdef	TRACE
+"         i  at run time reports MCP23S17 IOCON, GPINTEN settings\n"
+"         I  at run time restores MCP23S17 IOCON, GPINTEN settings\n"
+#endif	/* TRACE */
+"         q  or ctrl+D  at run time stops %s\n"
 "                      AUXILIARY app\n"
 "    -R <app ...> run auxiliary app followed by -z and its arguments\n"
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c,v 1.7 2015/12/26 09:35:24 jw Exp $\n"
+"Version	$Id: iCpiFace.c 1.8 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -336,7 +343,11 @@ main(
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */
 
-    iC_initIO();			/* catch memory access signal */
+#ifdef	EFENCE
+    regBuf = iC_emalloc(REQUEST);
+    rpyBuf = iC_emalloc(REPLY);
+#endif	/* EFENCE */
+    signal(SIGSEGV, iC_quit);			/* catch memory access signal */
 
     /********************************************************************
      *  By default do not invert PiFace and GPIO inputs as well as GPIO outputs
@@ -461,7 +472,7 @@ main(
 		     *******************************************************************/
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    *(argv-1) = *argv;	/* move app string to previous argv array member */
-		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */	
+		    *argv = iC_debug & DQ ?  mqz : mz; /* point to "-qz"  or "-z" in current argv */
 		    argv--;			/* start call with app string */
 		    goto break3;
 		missing:
@@ -500,7 +511,7 @@ main(
     }
   break3:
     /********************************************************************
-     *  if argc != 0 then -R and argv points to auxialliary app + arguments 
+     *  if argc != 0 then -R and argv points to auxialliary app + arguments
      *               do not fork and execute aux app until this app has
      *               connected to iCserver and registered all its I/Os
      *******************************************************************/
@@ -608,7 +619,7 @@ main(
 			if (iC_debug & 0200) fprintf(iC_outFP, "Initial read 23 = %d (PiFaceCAD LIRC output)\n",
 			    value);
 			/********************************************************************
-			 *  Close gpio23/LIRC value 
+			 *  Close gpio23/LIRC value
 			 *******************************************************************/
 			if (gpio23FN > 0) {
 			    close(gpio23FN);		/* close connection to /sys/class/gpio/gpio23/value */
@@ -866,7 +877,7 @@ main(
 		    directFlag |= PF | DR;
 		} else {
 		    /********************************************************************
-		     *  GPIO IEC arguments with .<bit>,gpio or ,gpio,gpio,... 
+		     *  GPIO IEC arguments with .<bit>,gpio or ,gpio,gpio,...
 		     *******************************************************************/
 		    if (iqStart != iqEnd || ieStart != ieEnd || iqExtra == 2) {
 			goto illFormed;		/* GPIO argument must be single IXn or QXn */
@@ -1353,7 +1364,7 @@ main(
 	    assert(regBufLen > ENTRYSZ);	/* accomodates ",SIX123456,RQX123456,Z" */
 	    for (iq = 0; iq < 3; iq++) {
 		if ((np = pfp->s[iq].i.name) != NULL) {
-		    assert(*np == IQ[iq]);	
+		    assert(*np == IQ[iq]);
 		    len = snprintf(cp, regBufLen, ",%c%s", SR[iq], np);
 		    cp += len;			/* input send name or output receive name */
 		    regBufLen -= len;
@@ -1671,7 +1682,7 @@ main(
     }
     if (argc != 0) {
 	/********************************************************************
-	 *  -R and argv points to auxialliary app + arguments 
+	 *  -R and argv points to auxialliary app + arguments
 	 *  This app has now connected to iCserver and registered all its I/Os
 	 *******************************************************************/
 	assert(argv && *argv);
@@ -1890,7 +1901,7 @@ main(
 			}
 		    }
 		    m1++;
-		    if ((val = gpio_read(gpio25FN)) == -1) { 
+		    if ((val = gpio_read(gpio25FN)) == -1) {
 			perror("GPIO25 read");
 			fprintf(iC_errFP, "ERROR: %s: GPIO25 read failed\n", iC_progname);
 			break;
@@ -1971,6 +1982,9 @@ main(
 		    iC_debug ^= 0100;			/* toggle -t flag */
 		} else if (c == 'm') {
 		    iC_micro ^= 1;			/* toggle micro */
+		} else if (c == 'T') {
+		    iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
+#ifdef	TRACE
 		} else if (c == 'i') {
 		    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {	/* report MCP23S17 IOCON, GPINTEN */
 			fprintf(iC_outFP, "%s: un = %d pfa = %d IOCON = 0x%02x GPINTEN = 0x%02x\n",
@@ -1986,8 +2000,9 @@ main(
 			writeByte(pfp->spiFN, pfp->pfa, IOCON, IOCON_SEQOP | IOCON_HAEN | ((iC_npf == 1) ? 0 : IOCON_ODR));
 			writeByte(pfp->spiFN, pfp->pfa, pfp->intf == INTFB ? GPINTENB : GPINTENA, 0xff);
 		    }
+#endif	/* TRACE */
 		} else if (c != '\n') {
-		    fprintf(iC_errFP, "no action coded for '%c' - try t, m, i, I, or q followed by ENTER\n", c);
+		    fprintf(iC_errFP, "no action coded for '%c' - try t, m, T, i, I, or q followed by ENTER\n", c);
 		}
 	    }	/*  end of STDIN interrupt */
 	} else {
@@ -2049,7 +2064,7 @@ writeGPIO(gpioIO * gep, unsigned short channel, int val)
 	    fprintf(iC_errFP, "WARNING: %s: no GPIO associated with %s.%hu\n",
 		iC_progname, gep->Gname, bit);
 	}
-	diff &= ~mask;			/* clear the bit just processed */	
+	diff &= ~mask;			/* clear the bit just processed */
     }
     gep->Gval = val;			/* ready for next output */
 } /* writeGPIO */
@@ -2118,7 +2133,7 @@ termQuit(int sig)
 			 *******************************************************************/
 			if (iq == 1) iC_gpio_pud(gpio, BCM2835_GPIO_PUD_OFF);	/* inputs only */
 			/********************************************************************
-			 *  Close GPIO N value 
+			 *  Close GPIO N value
 			 *******************************************************************/
 			if ((fn = gep->gpioFN[bit])> 0) {
 			    close(fn);			/* close connection to /sys/class/gpio/gpio_N/value */
@@ -2182,7 +2197,7 @@ termQuit(int sig)
 		}
 	    }
 	    /********************************************************************
-	     *  Close GPIO25/INTB/INTA value 
+	     *  Close GPIO25/INTB/INTA value
 	     *  free up the sysfs for gpio 25 unless used by another program (SIGUSR2)
 	     *******************************************************************/
 	    if (gpio25FN > 0) {
@@ -2331,20 +2346,21 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
     or even iCtherm do not clash with another app (using ~/.iC/gpios.used).
                       DEBUG options
     -t      trace arguments and activity (equivalent to -d100)
+         t  at run time toggles gate activity trace
     -m      display microsecond timing info
+         m  at run time toggles microsecond timing trace
     -d deb  +1   trace TCP/IP send actions
             +2   trace TCP/IP rcv  actions
-            +4   trace MCP and HD44780 calls (with TRACE defined)
             +10  trace SIO  input  actions
             +20  trace SIO  output actions
-            +40  debug MCP and HD44780 calls (with TRACE defined)
             +100 show arguments
             +200 show more debugging details
             +400 exit after initialisation
     -q      quiet - do not report clients connecting and disconnecting
     -z      block keyboard input on this app - used by -R
     -h      this help text
-                    typing q or ctrl+D stops iCpiFace
+         T  at run time displays registrations and equivalences
+         q  or ctrl+D  at run time stops iCpiFace
                       AUXILIARY app
     -R <app ...> run auxiliary app followed by -z and its arguments
                  as a separate process; -R ... must be last arguments.
