@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2016  John E. Wulff
+#	Copyright (C) 2000-2017  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -10,13 +10,14 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file
 #
-#	iClive; display for iC sources and listings
+#	iClive; an Integrated Development Environment (IDE) for editing
+#	and debugging iC programs.
 #
 #	A full description is in the POD documentation at the end
 #
-#	For measuring reaction times the Module Time::HiRes is used.
-#	This is activated by the -m option.
-#	Make sure you have installed Time::HiRes
+#	Make sure your system has the Perl Module Time::HiRes installed.
+#	This is required by this program and also activates the -m option
+#	for measuring reaction times.
 #
 ########################################################################
 
@@ -290,9 +291,9 @@ Usage:
     [Help]      Display the @<<<<< man page.                      Alt-h
 			    $named
 
-Copyright (C) 2000-2016  John E. Wulff          <immediateC@gmail.com>
+Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.68 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.69 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1437,7 +1438,7 @@ sub register_at_server {
 		splice(@s, 1, 0, "-z$opt_q", "-k", "-A", "$opt_A");	# block STDIN for chained iCserver
 		print "\@s = '@s'\n" if $opt_T;
 		fork_and_exec(@s);	# start iCserver
-		$server = 1;		# remember that this iCtherm started iCserver
+		$server = 1;		# remember that this iClive started iCserver
 	    }				# try to connect immediately
 	}
     }
@@ -3999,7 +4000,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2012  John E. Wulff
+COPYRIGHT (C) 2000-2017  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

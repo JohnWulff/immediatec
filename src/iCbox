@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2012  John E. Wulff
+#	Copyright (C) 2000-2017  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -10,14 +10,13 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file
 #
-#	iCbox; generic Demo Box
+#	iCbox; generic Virtual Input/Output Widget
 #	adapted from
 #	Example 14-1 Simple UI Code
 #	Sriram Srinivasan: Advanced Perl Programming p. 224
 #
-#	For measuring reaction times the Module Time::HiRes may be used.
-#	This activates the -m option.
-#	Make sure you have installed Time::HiRes (provided in this distribution)
+#	Make sure your system has the Perl Module Time::HiRes installed.
+#	This activates the -m option for measuring reaction times.
 #
 ########################################################################
 
@@ -128,16 +127,22 @@ Usage:
 	-T      extra static debug messages
 	-x      exit after analyzing input parameters
 	-h      help, ouput this Usage text only
-	    q   from keyboard or (X) button stops iCserver and all apps
-Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
+	    AUXILIARY app   - start a Bernstein chain
+	-R <app ...> run one app followed by -z and its arguments as a
+		     separate process; -R ... must be last arguments,
+	    KEYBOARD inputs
+	    q   from keyboard or (X) button: stops iCserver and all apps
+	    Q   from keyboard: exit without stopping iCserver
+Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.61 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.62 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
 ########################################################################
 #	Handle -f option - count leading options up to -f
 #	splice out -f and shift its file_name_argument into @runArgs
+#	including a final -R ... option, which will be extracted later
 ########################################################################
 
 my ($argIndex, $blank, $file, @runArgs);
@@ -149,7 +154,7 @@ foreach (@ARGV) {
 	$blank = 1 if $_ eq "";		# -f <file>
 	$file = "";			# or -f<file>
 	last;
-    } elsif (s/^(-[^spnicCQlf]+)f(.*)$/$1/) {
+    } elsif (s/^(-[^spnicCQlRf]+)f(.*)$/$1/) {
 	$file = $2;			# -abcf <file>
 	$blank = -1 if $file ne "";	# or -abcf<file>
 	$argIndex++;
@@ -232,6 +237,37 @@ if ($file) {
 }
 
 ########################################################################
+#	Handle -R option - count leading options up to -R
+#	splice -R to end - move app and remaining arguments to @runArgs
+########################################################################
+
+my ($app);
+$argIndex = $blank = 0;
+@runArgs = ();
+# print "6 \@ARGV = '@ARGV'\n";
+foreach (@ARGV) {
+    if (s/^-R(.*)$/$1/) {
+	$blank = 1 if $_ eq "";		# -R <app> <args ...>
+	$app = "";			# or -R<app> <args ...>
+	last;
+    } elsif (s/^(-[^spnicCQlR]+)R(.*)$/$1/) {
+	$app = $2;			# -abcR<app> <args ...> or -abcR<app> <args ...>
+	$argIndex++;
+	last;
+    }
+    $argIndex++;
+}
+# no warnings;
+# print "7 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$app = '$app' $#ARGV\n";
+# use warnings;
+@runArgs = splice @ARGV, $argIndex;
+if (defined $app) {
+    shift(@runArgs) if $blank;
+    unshift(@runArgs, $app) if $app ne "";
+}				# append a -z$opt_q later
+# print "8 \@ARGV = '@ARGV'	\@runArgs = '@runArgs'\n"; exit;
+
+########################################################################
 #	Handle all remaining -switch options and non-switch options
 ########################################################################
 
@@ -267,6 +303,12 @@ scalar @ARGV == 0 or die "*** ERROR: $named: '@ARGV' remaining after Getopt::Lon
 
 if ($opt_h) {
     write STDERR; exit 0;	# -h, ouput Usage only
+}
+
+if ($opt_q) {
+    $opt_q = 'q';			# quiet option
+} else {
+    $opt_q = '';			# define $opt_q
 }
 
 my ($t0, $t1, $sec, $usec);
@@ -589,6 +631,16 @@ print "frameCount = $frameCount maxColumn = $maxColumn scroll = $scroll\n" if $o
 exit if $opt_x;	# deliberate exit with -x option
 
 ########################################################################
+#	Optionally run -R option
+########################################################################
+if (@runArgs) {
+    splice(@runArgs, 1, 0, "-s", "$host") unless $host eq "localhost" or $host eq "127.0.0.1";
+    splice(@runArgs, 1, 0, "-p", "$port") unless $port eq "8778";
+    splice(@runArgs, 1, 0, "-z$opt_q",);	# -z not used in iCbox - place holder
+    fork_and_exec(@runArgs);
+}
+
+########################################################################
 #
 #	Create main window
 #	if too big use a scrollable pane (frame) using Tk::Pane
@@ -598,6 +650,7 @@ exit if $opt_x;	# deliberate exit with -x option
 $mw = MainWindow->new(-title => "$name");
 $mw->protocol('WM_DELETE_WINDOW', \&quit_program);	# Windows (X) pressed
 $mw->bind('<Key-q>',      \&quit_program);		# quit and stop iCserver
+$mw->bind('<Key-Q>',      [ \&quit_program, 1 ]);	# quit without stopping iCserver (for testing)
 
 if (($home = untaint($ENV{HOME})) ne '' and
     (-d "$home/.iC" or mkdir "$home/.iC")) {
@@ -999,12 +1052,14 @@ exit(0);
 ########################################################################
 #
 #	Quit program and stop iCserver, which stops all registered apps
+#	unless 'Q' is pressed, which is useful for testing disconnect
 #
 ########################################################################
 
 sub quit_program {
+    my (undef, $flag) = @_;
     print "$named: quit\n" if $opt_T;
-    $conn->send_now("X$named") if $conn;	# stop iCserver
+    $conn->send_now("X$named") if $conn and not $flag;	# stop iCserver unless 'Q'
     $mw->destroy();
     exit(0);
 } # quit_program
@@ -1161,6 +1216,38 @@ sub rcvd_msg_from_server {
 
 ########################################################################
 #
+#	Fork a new process - ignore CHLD signal
+#	Parameters: call + arguments
+#
+########################################################################
+
+sub fork_and_exec {
+    ## ignore CHLD signal of processes forked
+    $SIG{CHLD} = 'IGNORE';		# process can stop without becoming a zombie
+    my $pid;
+    FORK: {
+	if ($pid = fork) {
+	    ## parent process
+	    select undef, undef, undef, 0.2;	# wait for control program to be activated as child process
+	} elsif (defined $pid) {	# $pid is zero if defined
+	    print STDERR "\$ @_ &\n" unless $opt_q;
+	    ## dispatch child process
+	    exec @_;			# does not return unless exec failure
+	    warn "forked child process exited - failure exec '@_'\n";
+	    exec ("$named", '-X');	# cleanly exit overlay child process
+	} elsif ($! =~ /No more process/) {
+	    ## EAGAIN, recoverable fork error
+	    select undef, undef, undef, 5;
+	    redo FORK;
+	} else {
+	    ## weird fork error
+	    die "Can't fork: $!\n";
+	}
+    }
+} # fork_and_exec
+
+########################################################################
+#
 #	Compute and print elapsed microseconds
 #
 ########################################################################
@@ -1215,6 +1302,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
  iCbox [-qHbdrtIOmTxh][ -s <host>][ -p <port>][ -n <name>][ -i <inst>]
        [ -c <col>][ -C <col>][ -Q <rows>][ -l <len>][ -f <file>]
        [ <ID>[-<ID>][-<inst>][=<ini>][,<>[,<>[,<>]]] ...]
+       [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     ID      X0 X1 X2 ... B0 B1 B2 ... W0 W1 W2 ..., L0 L1 L2 ...
             Any ID can be preceded by 'I' or 'Q' in which case
             only that input or output is generated (default is both)
@@ -1259,7 +1347,12 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -T      extra static debug messages
     -x      exit after analyzing input parameters
     -h      help, ouput this Usage text only
-        q   from keyboard or (X) button stops iCserver and all apps
+        AUXILIARY app   - start a Bernstein chain
+    -R <app ...> run one app followed by -z and its arguments as a
+                 separate process; -R ... must be last arguments,
+	KEYBOARD inputs
+        q   from keyboard or (X) button: stops iCserver and all apps
+        Q   from keyboard: exit without stopping iCserver
 
 =head1 DESCRIPTION
 
@@ -1406,7 +1499,7 @@ L<immcc(1)>, L<iClive(1)>, L<iCserver(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2012  John E. Wulff
+COPYRIGHT (C) 2000-2017  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

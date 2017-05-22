@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2012  John E. Wulff
+#	Copyright (C) 2000-2017  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -10,14 +10,14 @@
 #   For more information about this program, or for information on how
 #   to contact the author, see the README file
 #
-#	iCserver
+#	iCserver; the TCP/IP server for iC clients - both apps and I/O's
 #
 #	The full specification is in the POD documentation at the end
 #
 #	For measuring reaction times the Module Time::HiRes is used.
 #	Time::HiRes is also used to delay the Autovivify action.
 #	Time::HiRes is activated by the -m and the -a options.
-#	Make sure you have installed Time::HiRes (provided in this distribution)
+#	Make sure you have installed the Perl Module Time::HiRes
 #
 ########################################################################
 
@@ -26,34 +26,37 @@ use Msg;		# Messaging Toolkit: from Advanced Perl Programming
 use strict;
 use warnings;
 
-my %Clients = ();	# indexed by $name - existence of named client (duplicate clients)
-my %Channels = ();	# indexed by $name - points to correct channel (duplicate channels)
-my %Equivalences = ();	# indexed by $base - points to equivalent names with same channel as base name
-			# [ 0: channel, 1: name1, 2: name2 ... ]
-my %EquivBase = ();	# indexed by $name - points to base name on same channel (even own name if base)
-my %ClientNames = ();	# indexed by $conn - points to client name for a connection
-my @Sender = ();	# indexed by $channel ... stores send connections    [ conn1,  conn2  ... ]
-my @SenderName = ();	# indexed by $channel ... stores send names          [ name1,  name2  ... ]
-my @SenderValue = ();	# indexed by $channel ... stores send current values [ value1, value2 ... ]
-my @Receivers = ();	# indexed by $channel ... stores receive connections [ conn1,  conn2  ... ]
-my @ReceiverNames = ();	# indexed by $channel ... stores receive names       [ name1,  name2  ... ]
-my %ReceiverData = ();	# indexed by $conn - built in pushReceiverData() - sent at end of rcvd_msg_from_client()
-			# [ 0: conn, 1: msg1:ch1, 2: msg2:ch2 ... ]
+my %Clients = ();	# indexed by $name - existence of registered N<name> client (duplicate clients)
+my %Channels = ();	# indexed by $name - points to correct channel of I/O S<name> and R<name> (duplicate channels)
+my %Equivalences = ();	# hashed by $base - points to equivalent names with same or different channel as base
+my %EquivBase = ();	# hashed by $name - points to base name of equivalenced names (even own name if base)
+my %ClientNames = ();	# hashed by $conn - points to client name for a connection
+my @Sender = ();	# indexed by $channel ... stores send connection       conn                 for channel
+my @SenderName = ();	# indexed by $channel ... stores send names            name
+my @SenderValue = ();	# indexed by $channel ... stores send current values   value1
+my @Receivers = ();	# indexed by $channel ... stores receiver connections [ conn1,  conn2  ... ] for primary channel
+my %AltReceivers = ();	# hashed by $channel  ... stores secondary channel and receiver connections for an alternate channel
+			# [ [ channel1, conn3, conn4 ... ],  [ channel2, conn5, conn6 ... ] ... ]
+my @ReceiverNames = ();	# indexed by $channel ... stores receiver names [ name1, name2, name3, ... ] for primary channel
+my %AltRecrNames = ();	# hashed by $channel  ... stores receiver names for an alternate channel
+			# [ [ name3, name4 ... ],  [ name5, name6 ... ] ... ]
+my %ReceiverData = ();	# hashed by $conn - built in pushReceiverData() - sent at end of rcvd_msg_from_client()
+			# [ conn,ch1:val1,ch2:val2 ... ]
 my $numberOfConnections = 0;
 my $maxChannel = 0;
 my $regFlag = 0;
 my $ackString = '';
 my $iniString = '';
 my $ioName = '';
-my $AutoDelay = 1000;	# 1 ms for normal autovivify delay
+my $AutoDelay = 50_000;	# 50 ms for normal autovivify delay (4 ms is just sufficient to catch 2nd connection)
 my %AutoVivify = ();
 my $AutoDebug = '';
 my %sortOrder = (	# determines in which order iCboxes ar autovivified
-    IX => 0, QX => 1,
-    IB => 2, QB => 3,
-    IW => 4, QW => 5,
-    IL => 6, QL => 7,
-    IH => 8, QH => 9,
+    IX => 0, QX => 5,
+    IB => 1, QB => 6,
+    IW => 2, QW => 7,
+    IL => 3, QL => 8,
+    IH => 4, QH => 9,
 );
 my @argv = ();
 
@@ -98,19 +101,24 @@ Usage:
 	-m	display elapsed time in seconds and microseconds
 	-T      extra static debug messages
 	-h	help, ouput this Usage text only
-	    OLD STYLE CALLS - also used in -f initialisation scripts
-	<list of equivalences>
-		eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
-	<list of client calls>
+	    OLD STYLE CALLS
+	<equivalences> - deprecated - use -e <equivalences> instead
+		eg: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
+	<client calls> - deprecated - use -R <app ...> instead
 		eg: 'iCbox X0-X3 X10' sort
 		if a client call has arguments, the call must be quoted
 	    AUXILIARY app   - start a Bernstein chain
 	-R <app ...> run one app followed by -z and its arguments as a
 		     separate process; -R ... must be last arguments,
 		     which do not need to be quoted.
-Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
+		eg: -R iCbox X0-X3 X10 -R sort
+	    KEYBOARD inputs
+	    T   output table of all registered client I/Os and channels
+	    q   from keyboard: stops @<<<<<<< and all apps
+				$named
+Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.53 $
+$Id: iCserver 1.54 $
 .
 
 ########################################################################
@@ -128,7 +136,7 @@ foreach (@ARGV) {
 	$blank = 1 if $_ eq "";		# -f <file>
 	$file = "";			# or -f<file>
 	last;
-    } elsif (s/^(-[^espfAGR]+)f(.*)$/$1/) {
+    } elsif (s/^(-[^espAGRf]+)f(.*)$/$1/) {
 	$file = $2;			# -abcf <file>
 	$blank = -1 if $file ne "";	# or -abcf<file>
 	$argIndex++;
@@ -229,7 +237,7 @@ foreach (@ARGV) {
 	$blank = 1 if $_ eq "";		# -R <app> <args ...>
 	$app = "";			# or -R<app> <args ...>
 	last;
-    } elsif (s/^(-[^dspiFlwgALR]+)R(.*)$/$1/) {
+    } elsif (s/^(-[^espAGR]+)R(.*)$/$1/) {
 	$app = $2;			# -abcR<app> <args ...> or -abcR<app> <args ...>
 	$argIndex++;
 	last;
@@ -381,7 +389,7 @@ while ($argv = shift @argv) {
 ########################################################################
 if (@runArgs) {
     $AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with more than 1 process
-    splice @runArgs, 1, 0, "-z" unless defined $opt_z;
+    splice @runArgs, 1, 0, "-z" unless defined $opt_z;	# spliced in at fork_and_exec() if defined -z
     fork_and_exec(join " ", @runArgs);	# new style -R start of Bernstein chain
 }
 
@@ -499,6 +507,9 @@ sub catch_zap {
 sub login_proc {
     my ($conn, $host, $port) = @_;
     print STDERR "Connection $host:$port at $named\n" unless $opt_q;
+    if (%AutoVivify) {
+	$AutoDelay = 2_000_000;		# a new connection has come in before previous Autovivify
+    }
     return \&rcvd_msg_from_client;
 } # login_proc
 
@@ -509,12 +520,14 @@ sub login_proc {
 #	undef $Sender[$channel] for all channels at this $conn
 #	splice out all @{$Receivers[$channel]} entries with this $conn
 #	splice out all @{$ReceiverNames[$channel]} entries with this $conn
+#	as well as similar elements in %AltReceivers and %AltRecrNames
 #
 ########################################################################
 
 sub disconnect {
     my ($conn, $sender) = @_;
-    my ($channel, $con, $rflag);
+    my ($channel, $con, $rflag, $aref, $nref, $ch, $i, $j, $in);
+    my ($name, $base, $primCh, $secCh);
     $sender = $ClientNames{$conn} unless defined $sender;
     if (defined $sender) {
 	print "$sender: client no. $numberOfConnections unregistering now\n" if $opt_t;
@@ -536,20 +549,64 @@ sub disconnect {
 			pushReceiverData($con, "$channel:0");	# reset receiver
 		    }
 		}
-	    }
-	    my $i = 0;
-	    foreach $con (@{$Receivers[$channel]}) {
-		if ($con eq $conn) {
-		    print "$sender: R $ReceiverNames[$channel][$i]	$channel spliced out\n" if $opt_t;
-		    splice @{$Receivers[$channel]}, $i, 1;
-		    splice @{$ReceiverNames[$channel]}, $i, 1;
-		    ############################################################
-		    ## checked that there are no multiple Receiver entries
-		    ## with the same $conn when registering
-		    ############################################################
-		    last;
+		if (exists $AltReceivers{$channel}) {
+		    foreach $aref (@{$AltReceivers{$channel}}) {
+			$ch = $aref->[0];				# alternate channel
+			foreach $con (@{$aref}[1 .. $#{$aref}]) {
+			    pushReceiverData($con, "$ch:0");	# reset message to alternate channel
+			}
+		    }
 		}
-		$i++;		# index of next entry to be spliced out
+	    }
+	    ############################################################
+	    ## Do not use foreach when splicing out entries
+	    ############################################################
+	    if ($Receivers[$channel]) {
+		for ($i = 0; $i < @{$Receivers[$channel]}; $i++) {
+		    $con = $Receivers[$channel][$i];
+		    if ($con eq $conn) {
+			$nref = $ReceiverNames[$channel];
+			$name = $nref->[$i];
+			$EquivBase{$name}->[2] = 0 if $EquivBase{$name};	# clear secondary channel to flag no registration
+			print "$sender: R $name	$channel spliced out\n" if $opt_t;
+			splice @{$Receivers[$channel]}, $i, 1;	# splice out connection
+			splice @{$nref}, $i, 1;			# splice out name
+			############################################################
+			## Checked that there are no multiple Receiver entries
+			## with the same $conn when registering. Nevertheless scan
+			## to the end to keep $i correct for @AltReceivers
+			############################################################
+			$i--;			# adjust index of next entry and name to be spliced out
+		    }
+		}
+	    }
+	    if (exists $AltReceivers{$channel}) {
+		for ($j = 0; $j < @{$AltReceivers{$channel}}; $j++) {
+		    $aref = $AltReceivers{$channel}[$j];
+		    $secCh = $aref->[0];
+		    for ($i = 1; $i < @{$aref}; $i++) {
+			$con = $aref->[$i];
+			if ($con eq $conn) {
+			    $nref = $AltRecrNames{$channel}->[$j];
+			    $name = $nref->[$i - 1];
+			    $EquivBase{$name}->[2] = 0 if $EquivBase{$name};	# clear secondary channel to flag no registration
+			    print "$sender: R $name	$secCh spliced out\n" if $opt_t;
+			    splice @{$aref}, $i, 1;	# skip extra channel entry
+			    splice @{$nref}, $i - 1, 1;	# splice out name whose index starts at 0
+			    $i--;		# adjust index of next entry and name to be spliced out
+			}
+		    }
+		    if (@{$aref} <= 1) {	# group has no connections left, only alternate channel
+			print "AltReceivers{$channel} group $j spliced out \[$#{$aref}\] '@{$aref}'\n";
+			splice @{$AltReceivers{$channel}}, $j, 1;	# whole group disconnected
+			splice @{$AltRecrNames{$channel}}, $j, 1;	# whole group disconnected
+			$j--;			# adjust index of next group to be spliced out
+		    }
+		}
+		if (@{$AltReceivers{$channel}} == 0) {
+		    delete $AltReceivers{$channel};	# delete whole alternate channel set
+		    delete $AltRecrNames{$channel};
+		}
 	    }
 	}
 	delete $ClientNames{$conn};
@@ -568,20 +625,23 @@ sub disconnect {
 	    @SenderName = ();
 	    @SenderValue = ();
 	    @Receivers = ();
+	    %AltReceivers = ();
 	    @ReceiverNames = ();
+	    %AltRecrNames = ();
 	    $maxChannel = 0;
 	    ############################################################
-	    ## Re-constitute equivalences obtainened from initial ARGV
+	    ## Re-constitute channels of equivalence arguments.
+	    ## All secondary channels in %EquivBase have been set to 0
+	    ## so use %Equivalences to get secondary channels instead.
 	    ############################################################
-	    if (scalar keys %Equivalences) {
-		my ($nm, $nn, $ch, $others);
-		foreach $nm (sort { $Equivalences{$a}[0] <=> $Equivalences{$b}[0] } keys %Equivalences) {
-		    $ch = allocate_channel($nm);	# allocate new channel for first identifier
-		    if ($ch != $Equivalences{$nm}[0]) {
-			warnD("$named: ch: $ch != $Equivalences{$nm}[0] - System error\n");
-		    }
-		    foreach $nn (@{$Equivalences{$nm}}[1 .. $#{$Equivalences{$nm}}]) {
-			allocate_channel($nn, $ch);	# allocate same channel for next identifier
+	    foreach $base (sort keys %Equivalences) {
+		foreach $aref (@{$Equivalences{$base}}) {
+		    if (($secCh = $aref->[0]) > 0) {
+			$nref = $aref->[1];
+			foreach $in (sort keys %$nref) {
+			    $name = $nref->{$in};
+			    allocate_channel($name, $secCh);	# allocate channel for equivalence IEC
+			}
 		    }
 		}
 	    }
@@ -617,7 +677,7 @@ sub warnD {
 #	Allocate a channel to a name
 #
 #	This gives each Sender and Receiver pair an index called
-#	$channel in the working arrays @Sender and @Receivers.
+#	$channel in the arrays @Sender, @Receivers and %AltReceivers.
 #	Each data transmission starts with this channel number.
 #	Some differing names may use the same channel (equivalences).
 #
@@ -639,67 +699,233 @@ sub allocate_channel {
 
 ############################################################
 #
-#	Allocate equivalences in $arg either as a single equivalence
-#	or as a space or comma separated list of eqivalences
+# Allocate equivalences in $arg either as a single equivalence or as a
+# space or comma separated list of simple equivalences IX0=IX0-1=IX0-2
+# or group-equivalences IX0=IX2=IX4, which belong to one instance of
+# an app characterized by having the same connection (this precludes
+# them from being simple equivalences on the same channel).
 #
-#	A single equivalence name is allowed to pre-allocate
-#	a channel to an IEC variable, which will be equivalenced
-#	later in another process in a Bernstein chain. This is
-#	not neccessary if the 2nd process is started later.
+# %Equivalences		# Auxiliary structure only used to build %EquivBase
+# hashed by $base - points to equivalent names with same or different channel as base IX0
+# equivalence group (usually only has one sub-group with the channel of the base name)
+# {
+#  IX0 => [ [ ch0, { IX0, IX0-1, IX0-2 ... } ],	# channel same as base channel
+#           [ ch1, { IX1, IX1-1, IX1-2 ... } ],	# members of another group with a different channel
+#           [ ch2, { IX2, IX2-1, IX2-2 ... } ] ... ],
+#  IX5 => [ [ ch3, { IX5, IX5-1, IX5-2 ... } ] ... ],
+#  ... => ...
+# }
+#
+# %EquivBase		# Used during registration and autovivification
+# hashed by $name - points to base name of equivalenced names (even own name if base)
+# [primaryBase, primaryChannel, secondaryChannel, \$Equivalences{}->[] ]
+# {           [0]  [1]  [2]  [3]
+#  IX0   => [ IX0, ch0, ch0, \$Equivalences{IX0}->[0] ],
+#  IX0-1 => [ IX0, ch0, ch0, \$Equivalences{IX0}->[0] ],
+#  IX0-2 => [ IX0, ch0, ch0, \$Equivalences{IX0}->[0] ],
+#  IX1   => [ IX0, ch0, ch1, \$Equivalences{IX0}->[1] ],
+#  IX1-1 => [ IX0, ch0, ch1, \$Equivalences{IX0}->[1] ],
+#  IX1-2 => [ IX0, ch0, ch1, \$Equivalences{IX0}->[1] ],
+#  IX2   => [ IX0, ch0, ch2, \$Equivalences{IX0}->[2] ],
+#  IX2-1 => [ IX0, ch0, ch2, \$Equivalences{IX0}->[2] ],
+#  IX2-2 => [ IX0, ch0, ch2, \$Equivalences{IX0}->[2] ],
+#  IX5   => [ IX5, ch3, ch3, \$Equivalences{IX5}->[0] ],
+#  IX5-1 => [ IX5, ch3, ch3, \$Equivalences{IX5}->[0] ],
+#  IX5-2 => [ IX5, ch3, ch3, \$Equivalences{IX5}->[0] ],
+#  ...   => ...
+# }
+#
+# If no name in an equivalence is found in %EquivBase start a new
+# equivalence set and group hashed by either the only output name in
+# the set or the first input name in the set as primary base.
+#   else use group in %Equivalences pointed to by $EquivBase->[3].
+# Only one pre-equivalenced name may occurr in a group, but each
+# group of a set may have one pre-equivalenced name.
+# Do not assign a secondary channel until registration.
+#
+# Or if a name in an equivalence group has already been registered it will
+# have a secondary channel. Each equivalence set may only have one pre-
+# registered input name, which will replace the primary base name of the set,
+# even if a different name has already been allocated in previous equivalences.
+# This ensures that the wrong input name is not autovivified on that channel
+# leaving the pre-registered input element as a zombie with no receivers.
+# (The alternative autovivfied input element actually does act correctly on
+# the pre-registered input on the secondary channel originally allocated).
+#
+# Else if simple equivalence add new name to current sub-group -
+# Else start a new sub-group.
+#
+# During registration a check is made that all names in a sub-group have
+# different connections.
 #
 ############################################################
 
 sub allocate_equivalences {
+no warnings;
     my ($arg) = @_;
-    my ($equiv, $nn, $nm, $ch, $name, $channel, @iecEquivs, $iecRef);
+    my ($equiv, $group, $nn, $nm, $in, $ref, $ref1, $firstName, $name, $channel, $iecRef, @equivSet);
+    my ($base, $firstBase, $primBase, $primCh, $secCh, $refEq, $iq, $xbwlh, $outName, $dupFlag, $ch);
     foreach $equiv (split /[, ]+/, $arg) {
 	next unless ($equiv);			# ignore leading spaces or commas
 	print "Equivalence '$equiv'\n" unless $opt_q;
 	undef $channel;
 	$name = '';
-	@iecEquivs = ();
+	@equivSet = ();
+	$dupFlag = 0;
+	$outName = $xbwlh = $ref = $firstBase = $base = undef;
+	$primCh = $secCh = $ch = 0;
+	########################################################################
+	## The following are all part of a set of equivalence groups belonging to
+	## one base IEC name. Scan once to see of this set extends a previous set
+	## by checking in %EquivBase.
+	########################################################################
 	foreach $nn (split /=/, $equiv) {
-	    if ($nn !~ /^[IQ][XBWLH]\d+(-\d{1,3})?$/) {
-		print STDERR "Warning $named: equivalence '$nn' is not an IEC base name - will probably not work!\n";
+	    if ($nn !~ /^([IQ])([XBWLH])\d+((-\d{1,3})?)$/) {
+		print STDERR "Warning $named: '$nn' in '$equiv' is not an IEC name - will probably not work!\n";
 	    } else {
-		$ch = $Channels{$nn};
-		if (defined $ch) {
-		    if (not defined $channel) {
-			$channel = $ch;		# allocated channel found
-			$name    = $nn;
-		    } elsif ($ch != $channel) {
-			print STDERR "Warning $named: cannot equivalence '$nn:$ch' to $name, which is already allocated to channel $channel - will probably not work!\n";
+		$iq = $1;
+		if ($iq eq "Q") {
+		    if ($outName) {
+			if ($outName ne $nn) {
+			    print STDERR "Warning $named: '$nn' in '$equiv' is 2nd output IEC name after $outName - will probably not work!\n";
+			}
+		    } else {
+			$outName = $nn;
 		    }
 		}
-		push @iecEquivs, [ $nn, $ch ];
+		if (defined $xbwlh) {
+		    if ($xbwlh ne $2) {
+			print STDERR "Warning $named: '$nn' in '$equiv' is not the same IEC type - will probably not work!\n";
+		    } else {
+			$xbwlh = $2;
+		    }
+		}
+		$in = defined $3 ? $3 : '';		# instance (may be null string)
+		if (exists $EquivBase{$nn}) {
+		    ($base, $primCh, $secCh, $ref) = @{$EquivBase{$nn}};
+		} else {
+		    $ch = $Channels{$nn};
+		    print "%%% N nn = '$nn' base = '$base' primCh = '$primCh' secCh = '$secCh' ch = '$ch'\n" if $opt_T;
+		    if (not $base or $iq eq "Q" or $ch) {
+			if ($ch and $primCh) {
+			    ########################################################################
+			    ## Encountered a pre-registered input, whose channel has been allocated
+			    ##  1) ignore 2nd and further pre-registered inputs per equivalence
+			    ##  2) move the equivalence set from the previous base to this input name
+			    ##  3) re-assign the new name and channel as base and primary channel in %EquivBase
+			    ##  4) rebase %AltReceivers entries already registered to new primary
+			    ##     channel before any more registrations take place
+			    ##  5) rebase @Receivers entries already registered as secondary channel
+			    ##     entries in %AltReceivers because channels have already been acked
+			    ##  6) delete Autovivify entry for primary input already registered
+			    ########################################################################
+			    if ($dupFlag) {				# 1)
+				print STDERR "Warning $named: cannot have more than 1 pre-registered input '$nn' on ch '$ch' in '$equiv' - ignore\n";
+				next;
+			    }
+			    $dupFlag = 1;
+			    $Equivalences{$nn} = $Equivalences{$base};	# 2) move equivalence set to new base
+			    print "    nn = '$nn' delete \$Equivalences{$base}\n" if $opt_T;
+			    delete $Equivalences{$base};		#    delete old base entry
+			    foreach $name (sort keys %EquivBase) {	# 3)
+				if ($EquivBase{$name}->[1] == $primCh) {	# find old primary channel
+				    $EquivBase{$name}->[0] = $nn;		# re-assign base
+				    $EquivBase{$name}->[1] = $ch;		# re-assign primary channel
+				}
+			    }
+			    if (exists $AltReceivers{$primCh}) {	# 4)
+				$AltReceivers{$ch} = $AltReceivers{$primCh};
+				delete $AltReceivers{$primCh};		# TODO make sure $AltReceivers{$ch} is empty
+				$AltRecrNames{$ch} = $AltRecrNames{$primCh};
+				delete $AltRecrNames{$primCh};
+			    }
+			    if (@{$Receivers[$primCh]}) {		# 5)
+				unshift @{$AltReceivers{$ch}}, [ $primCh, @{$Receivers[$primCh]} ]; 
+				@{$Receivers[$primCh]} = ();
+				unshift @{$AltRecrNames{$ch}}, [ @{$ReceiverNames[$primCh]} ]; 
+				@{$ReceiverNames[$primCh]} = ();
+			    }
+			    print "remove Autovivify entry '$AutoVivify{$base}'\n" if $opt_T;
+			    delete $AutoVivify{$base};			# 6)
+			} else {
+			    $ch = 0;			# no primary channel (or no channel)
+			}
+			$base = $nn;
+			unshift @equivSet, [$nn, $in];	# output or first input name in equivalence set
+		    } else {
+			push @equivSet, [$nn, $in];
+		    }
+		}
 	    }
 	}
-	if (@iecEquivs) {
-	    if (not defined $channel) {
-		$iecRef = shift @iecEquivs or die("$named: algorithmic error - must have one element in \@iecEquivs\n");
-		($nm, $channel) = @{$iecRef};		# called without an allocated IEC name
-		$channel = allocate_channel($nm);	# allocate new channel for first IEC name
-		push @{$Equivalences{$nm}}, $channel;	# channel is first element of @Equivalences
-		$EquivBase{$nm} = $nm;			# used in AutoVivify
+	########################################################################
+	## Now a base IEC name has been determined distribute equivalences
+	## in %Equivalences - also update %EquivBase.
+	########################################################################
+	print "base = $base\n" if $opt_T;
+	foreach $ref (@equivSet) {
+	    ($nn, $in) = @{$ref};
+	    print "    nn = '$nn' in = '$in' primCh = '$primCh' ch = '$ch'\n" if $opt_T;
+	    if ($ch) {
+		$primCh = $secCh = $ch;
 	    } else {
-		$nm = $name;				# new equivalence for previously allocated IEC
-		if (not defined ($ch = $Equivalences{$name}[0])) {
-		    push @{$Equivalences{$name}}, $channel; # channel is first element of new @{Equivalences{$name}}
+		foreach $refEq (@{$Equivalences{$base}}) {	# try all entries
+		    if ($refEq) {
+			$secCh = $refEq->[0];
+			$ref1 = $refEq->[1];
+			unless (exists $ref1->{$in}) {
+			    $ref1->{$in} = $nn;			# extend equivalence group with different instances
+			    allocate_channel($nn, $secCh);	# allocate same channel for next IEC instance
+			    $EquivBase{$nn} = [$base, $primCh, 0, $refEq ];
+			    print "ext \$secCh = $secCh \$nn = $nn\n" if $opt_T;
+			    goto EquivStored;
+			}
+		    }
 		}
+		$secCh = allocate_channel($nn);		# allocate new channel for first IEC name in group
 	    }
-	    while (defined($iecRef = shift @iecEquivs)) {
-		($nn, $ch) = @{$iecRef};
-		unless ($ch) {
-		    allocate_channel($nn, $channel);	# allocate same channel for next IEC name
-		    push @{$Equivalences{$nm}}, $nn;	# equivalent names are further entries in @Equivalences
-		    $EquivBase{$nn} = $nm;		# used in AutoVivify
-		}
+	    undef $ref1;
+	    $ref1->{$in} = $nn;				# new equivalence with instance used in previous group
+	    $primCh = $secCh unless $primCh;
+	    print "new \$secCh = $secCh \$nn = $nn\n" if $opt_T;
+	    $refEq = [ $secCh, $ref1 ];			# secondary channel for equivalence group and first IEC
+	    if ($ch) {
+		unshift @{$Equivalences{$base}}, $refEq;	# new equivalence group for pre-registered input
+		$ch = 0;
+	    } else {
+		push @{$Equivalences{$base}}, $refEq;	# new equivalence group on a different channel
 	    }
-	} else {
-	    warnD("$named: no IEC names in equivalence expression '$equiv'\n");
+	    # [primaryBase, primaryChannel, secondaryChannel, \$Equivalences{}->[] ]
+	    $EquivBase{$nn} = [ $base, $primCh, 0, $refEq ];
+	  EquivStored: ;
 	}
     }
+use warnings;
 } # allocate_equivalences
+
+############################################################
+#
+#	Auxiliary routine for print_tables()
+#
+############################################################
+
+sub print_tail {
+    my ($start, $aref, $nref) = @_;
+    my ($i, $rcon, $rName, @rCons);
+    $i = 0;
+    @rCons = ();
+    foreach $rcon (@{$aref}[$start .. $#{$aref}]) {
+	if ($rcon) {
+	    unless (defined ($rName = $ClientNames{$rcon})) {
+		$rName = "<undef>";
+	    }
+	    push @rCons, $rName, $nref->[$i];
+	}
+	$i++;
+    }
+    $rName = @rCons ? join "\t", @rCons : "<no receivers>";
+    print "$rName\n";
+} # print_tail
 
 ############################################################
 #
@@ -709,51 +935,65 @@ sub allocate_equivalences {
 ############################################################
 
 sub print_tables {
-    my ($con, $channel, $nm, $nn, $others);
+    my ($con, $channel, $nm, $nn, $others, $i, $aref, $nref, $refEq, $ref1, $in);
+    my ($base, $primCh, $secCh);
     print "$named: Table of ClientNames and registered Senders and Receivers\n";
     foreach $con (sort { $ClientNames{$a} cmp $ClientNames{$b} } keys %ClientNames) {
 	print "$ClientNames{$con}\n";
     }
-    if (%Equivalences) {
-	print "ch  Base        Equivalences\n";
-	foreach $nm (sort { $Equivalences{$a}[0] <=> $Equivalences{$b}[0] } keys %Equivalences) {
-	    $others = join "\t", @{$Equivalences{$nm}}[1 .. $#{$Equivalences{$nm}}];
-	    printf "%-3d %-11s %s\n", $Equivalences{$nm}[0], $nm, $others;
+    if (%Equivalences and $opt_T) {
+	print "\n\%Equivalences = {\n";
+	foreach $base (sort keys %Equivalences) {
+	    printf "%-6s => [\n", $base;
+	    foreach $refEq (@{$Equivalences{$base}}) {
+		$secCh = $refEq->[0];
+		$ref1 = $refEq->[1];
+		print "    [ $secCh, {";
+		foreach $in (sort keys %$ref1) {
+		    print " '$in' => $ref1->{$in},";
+		}
+		print " } ],\n";
+	    }
+	    print "],\n";
 	}
+	print "}\n";
     }
     if (%EquivBase) {
-	print "name		EquivBase	ch\n";
-	foreach $nm (sort keys %EquivBase) {
-	    if (($nn = $EquivBase{$nm}) ne $nm) {
-		printf "%-15s %-15s %d\n", $nm, $nn, $Channels{$nm};
-	    }
+	print "\nEquivBase			Channels\n";
+	print "name	base	primCh	secCh	ch\n";
+	foreach $nn (sort keys %EquivBase) {
+	    ($base, $primCh, $secCh) = @{$EquivBase{$nn}};
+	    print "$nn	$base	$primCh	$secCh	$Channels{$nn}\n";
 	}
     }
-    print "ch  Sender          name            value       Receiver[0]	name[0]	Receiver[1]	name[1]	...\n";
+    print "\nch  Sender          name            value       Receiver[0] name[0]	Receiver[1] name[1]	...\n";
     for ($channel = 0; $channel <= $maxChannel; $channel++) {
-	my ($chName, $name, $value, $rcon, $rName, @rCons) = ();
-	if (not defined ($con = $Sender[$channel]) or
-	    not defined ($chName = $ClientNames{$con})) {
-	    $chName = "<no sender>";
-	}
-	unless (defined ($name = $SenderName[$channel])) {
-	    $name = "";
-	}
-	unless (defined ($value = $SenderValue[$channel])) {
-	    $value = "";
-	}
-	my $i = 0;
-	foreach $rcon (@{$Receivers[$channel]}) {
-	    if ($rcon) {
-		unless (defined ($rName = $ClientNames{$rcon})) {
-		    $rName = "<undef>";
-		}
-		push @rCons, $rName, $ReceiverNames[$channel][$i];
+	my ($chName, $name, $value) = ();
+	$aref = $Receivers[$channel];
+	if (defined ($con = $Sender[$channel]) or (defined $aref and @{$aref})) {
+	    if (not defined $con or
+		not defined ($chName = $ClientNames{$con})) {
+		$chName = "<no sender>";
 	    }
-	    $i++;		# index of next entry to be pushed
+	    unless (defined ($name = $SenderName[$channel])) {
+		$name = "";
+	    }
+	    unless (defined ($value = $SenderValue[$channel])) {
+		$value = "";
+	    }
+	    printf "%-3d %-15s %-15s %-11s ", $channel, $chName, $name, $value;
+	    $nref = $ReceiverNames[$channel];
+	    print_tail 0, $aref, $nref;
 	}
-	$rName = @rCons ? join "\t", @rCons : "<no receivers>";
-	printf "%-3d %-15s %-15s %-11s %s\n", $channel, $chName, $name, $value, $rName;
+	if (exists $AltReceivers{$channel}) {
+	    $i = 0;
+	    foreach $aref (@{$AltReceivers{$channel}}) {
+		printf "    %-43d ", $aref->[0];	# secondary channel
+		$nref = $AltRecrNames{$channel}->[$i];
+		print_tail 1, $aref, $nref;
+		$i++;
+	    }
+	}
     }
 } # print_tables
 
@@ -779,21 +1019,25 @@ sub pushReceiverData {
 ########################################################################
 
 sub autoVivify {
-    if (scalar keys %AutoVivify) {
-	my $autovivify = join " ", sort {
+    my ($autovivify, $key, @iCbox_params);
+    if (%AutoVivify) {
+	foreach $key (sort {
 	    my ($ha, $na, $za, $hb, $nb, $zb);
 	    $a =~ /([A-Z]+)(\d+)(.*)/; $ha = $sortOrder{$1}; $na = $2; $za = $3;
 	    $ha = $1 if not defined $ha;
 	    $b =~ /([A-Z]+)(\d+)(.*)/; $hb = $sortOrder{$1}; $nb = $2; $zb = $3;
 	    $hb = $1 if not defined $hb;
 	    ############################################################
-	    ## sort order is number then names in the following order
-	    ## IX QX IB QB IW QW IL QL IH QH .. finally any instances
+	    ## sort order is instance then names in the following order
+	    ## IX IB IW IL IH QX QB QW QL QH .. finally number
 	    ##  0  1  2  3  4  5  6  7  8  9 .. correct for alpha cmp
 	    ## print "$a $ha $na $za	$b $hb $nb $zb\n" if $opt_T;
 	    ############################################################
-	    $na <=> $nb || $ha cmp $hb || $za cmp $zb;
-	} keys %AutoVivify;				# same key could have been entered more than once
+	    $za cmp $zb || $ha cmp $hb || $na <=> $nb;
+	} keys %AutoVivify) {				# same key could have been entered more than once
+	    push @iCbox_params, $AutoVivify{$key};
+	}
+	$autovivify = join " ", @iCbox_params;
 	$autovivify = "$opt_A -n$ioName $autovivify";
 	print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
 	fork_and_exec($autovivify);			# run iCbox or app specified in $opt_A
@@ -828,7 +1072,8 @@ sub autoVivify {
 sub rcvd_msg_from_client {
     my ($conn, $msg, $err) = @_;
     my ($sec, $usec);
-    my ($con, $msg1, $aref, $direction, $name, $bits, $channel, $sender, $rconn, $ini);
+    my ($con, $msg1, $aref, $direction, $name, $bits, $channel, $ch, $sender, $rconn, $ini, $nn);
+    my ($base, $primCh, $secCh);
     if ($opt_m) {
 	$t1 = [gettimeofday];
 	$sec =  $t1->[0] - $t0->[0];
@@ -865,18 +1110,39 @@ use warnings;
 		    $channel = $1;
 		    $con = $Sender[$channel];
 		    warnD("Error $named: data '$msg1' during registration - app spec error") if $regFlag;
-		    if (not defined $con or $con eq $conn) {
+		    if (not defined $con or $con eq $conn) {	# TODO check this does not happen if equiv Q/I on same connection
 			$SenderValue[$channel] = $2;	# latest value in case lost connection
+			undef $rconn;
 			############################################################
-			## Transmit message read on the channel from a sender to each
-			## receiver on that channel - central function of iCserver
+			## Central function of iCserver done at maximum speed.
+			## Transmit message from a sender for a particular channel
+			## to each receiver on that channel - most common case.
 			############################################################
 			if ($aref = $Receivers[$channel]) {
-			    foreach $rconn (@$aref) {
-				pushReceiverData($rconn, $msg1);
+			    foreach $rconn (@{$aref}) {
+				pushReceiverData($rconn, $msg1);	#  message to sender channel
 			    }
 			}
-			if ($opt_t and (not $aref or not @$aref)) {
+			############################################################
+			## Transmit message to each receiver on equivalenced alternate
+			## channels - this is very rare and only happens if several
+			## inputs on the same instance of an app are equivalenced.
+			## Only one statement is added to the execution of the common case.
+			## %AltReceivers hashed by $channel ... receive connections on alternate channel
+			## [ [ channel1, conn3, conn4 ... ],  [ channel2, conn5, conn6 ... ] ... ]
+			## NOTE: $Receivers[$channel] may be empty and $AltReceivers[$channel]
+			## may have an entry for the case where an output from a connection is
+			## equivalenced with an input of the same connection.
+			############################################################
+			if (exists $AltReceivers{$channel}) {
+			    foreach $aref (@{$AltReceivers{$channel}}) {
+				$channel = $aref->[0];			# alternate channel
+				foreach $rconn (@{$aref}[1 .. $#{$aref}]) {
+				    pushReceiverData($rconn, "$channel:$2"); # message to alternate channel
+				}
+			    }
+			}
+			if ($opt_t and not $rconn) {
 			    print "$ClientNames{$conn} $msg1 => dummy\n";	# not registered
 			}
 		    } else {
@@ -927,6 +1193,7 @@ use warnings;
 		    $numberOfConnections++;
 		    $regFlag = 1;			# registration string has started
 		    print STDERR "$name: client no. $numberOfConnections registering now\n" unless $opt_q;
+		    print_tables()if $opt_T;
 		}
 		elsif ($msg1 =~ /^([SR])([\\\/\w]+(-\d*)?)(\((\d+)\))?/) {
 		    ############################################################
@@ -938,11 +1205,67 @@ use warnings;
 		    $name = $2;
 		    $bits = $5;
 		    $channel = allocate_channel($name);
+		    if (exists $EquivBase{$name}) {
+			($base, $primCh, $secCh) = @{$EquivBase{$name}};
+			if (not $secCh) {
+			    $EquivBase{$name}->[2] = $channel;	# assign secondary channel now to flag registration
+			} elsif ($secCh != $channel) {
+			    warnD("$name: equivalenced channel $secCh not allocated channel $channel ???\n");
+			    disconnect($conn);
+			    $ackString = '';
+			    last;
+			}			# $secCh === $channel
+		    } else {
+			($base, $primCh, $secCh) = ($name, $channel, 0);
+		    }
 		    my $ack = $channel;		# used to build acknowledge string
+		    if ($opt_T) {
+			$secCh = 0 unless defined $secCh;
+			print "*** register $direction $name base = $base primCh = $primCh secCh = $secCh channel = $channel ack = $ack\n";
+		    }
 		    if ($direction eq 'S') {
+			if ($primCh != $channel) {
+			    ############################################################
+			    ## A client is trying to register a sender on a channel for
+			    ## an alternate equivalence group
+			    ############################################################
+			    if ($EquivBase{$base}->[2] and 0) {	# secondary channel of base name already registered
+				$ack = -$channel;
+				warnD("$ClientNames{$conn}: trying to register S $name for alternative channel $primCh/$channel - aborted\n");
+				disconnect($conn);
+				$ackString = '';
+				last;
+			    }
+			    ############################################################
+			    ## Locate secondary group in %Equivalences and move it
+			    ## to the primary position - adjust %EquivBase
+			    ############################################################
+			    my $i = 0;
+			    foreach $aref (@{$Equivalences{$base}}) {
+				if ($aref->[0] == $channel) {
+				    goto Found;
+				}
+				$i++;
+			    }
+			    goto NotFound;
+			  Found:
+			    my @temp = splice @{$Equivalences{$base}}, $i, 1;
+			    unshift @{$Equivalences{$base}}, @temp;
+			    $Equivalences{$name} = $Equivalences{$base};	# move equivalence set to new base
+			    print "S delete \$Equivalences{$base}\n" if $opt_T;
+			    delete $Equivalences{$base};			# delete old base entry
+			    foreach $nn (sort keys %EquivBase) {
+				if ($EquivBase{$nn}->[1] == $primCh) {		# find old primary channel
+				    $EquivBase{$nn}->[0] = $name;		# re-assign base
+				    $EquivBase{$nn}->[1] = $channel;		# re-assign primary channel
+				}
+			    }
+			  NotFound: ;
+			}
 			if ($Sender[$channel]) {
 			    ############################################################
-			    ## A client is trying to register a sender twice
+			    ## A client is trying to register a sender twice on the same
+			    ## channel
 			    ############################################################
 			    $ack = -$channel;
 			    warnD("$ClientNames{$conn}: trying to register S $name for channel $channel twice - aborted\n");
@@ -959,27 +1282,28 @@ use warnings;
 			$Sender[$channel] = $conn;
 			$SenderName[$channel] = $name;
 			$SenderValue[$channel] = 0;		# default initial value
-			$aref = $Receivers[$channel];
-			if ($aref and @$aref) {
-			    foreach $rconn (@$aref) {
-				if ($rconn) {
-				    pushReceiverData($rconn, "$channel:0");	# send initial value 0
-				} else {
-				    warn "$named: sender '$name' not connected when registering\n";
+			undef $rconn;
+			foreach $rconn (@{$Receivers[$channel]}) {
+			    pushReceiverData($rconn, "$channel:0");	# reset receiver
+			}
+			if (exists $AltReceivers{$channel}) {
+			    foreach $aref (@{$AltReceivers{$channel}}) {
+				$ch = $aref->[0];			# alternate channel
+				foreach $rconn (@{$aref}[1 .. $#{$aref}]) {
+				    pushReceiverData($rconn, "$ch:0");	# reset message to alternate channel
 				}
 			    }
-			} else {				# no receiver registered
+			}
+			unless ($rconn) {
 			    if ($opt_a and
-				$name =~ /^Q[XBWL]\d+/ and	# not part of an equivalence
-				not $EquivBase{$name}) {	# not even first for senders
+				$name =~ /^Q[XBWL]\d+/) {	# not even first for senders
 				my $iCbox_param = $bits ? "$name,$bits" : $name;
-				$AutoVivify{$iCbox_param}++;
+				$AutoVivify{$name} = $iCbox_param;
 				$ioName = "$ClientNames{$conn}-IO";
 				print "Autovivify sender '$iCbox_param'\n" if $opt_T;
 			    }
 			    if ($opt_g and			# C_channel only as trigger
 				$name =~ /^C([\\\/\w]+)(-(\d*))?$/ and
-				not $EquivBase{$name} and	# not part of an equivalence
 				not $AutoDebug) {		# only 1 per application
 				if (defined $3) {
 				    $AutoDebug = "$opt_G -i$3 $1.ic";
@@ -995,26 +1319,62 @@ use warnings;
 		    } elsif ($direction eq 'R') {
 			############################################################
 			## ignore duplicate Receiver entries for this $conn
+			## TODO remove - this is no longer likely to happen with alternate groups
 			############################################################
-			foreach $rconn (@{$Receivers[$channel]}) {
-			    if ($rconn eq $conn) {
-				# happens if receiver equivalences in the same client
-				$ack = -$channel;		# not an error in iCbox
-				print "Register R $name for channel $channel at '$ClientNames{$conn}' twice\n" if $opt_t;
+			if ($primCh == $channel) {
+			    foreach $rconn (@{$Receivers[$channel]}) {
+				if ($rconn eq $conn) {
+				    # happens if receiver equivalences in the same client
+				    $ack = -$channel;		# not an error in iCbox
+				    warnD("Register R $name for channel $channel at '$ClientNames{$conn}' twice\n");
+				}
+			    }
+			} elsif (exists $AltReceivers{$primCh}) {
+			    foreach $aref (@{$AltReceivers{$channel}}) {
+				$ch = $aref->[0];		# alternate channel
+				foreach $rconn (@{$aref}[1 .. $#{$aref}]) {
+				    if ($rconn eq $conn) {
+					# happens if receiver equivalences in the same client
+					$ack = -$ch;		# not an error in iCbox
+					warnD("Register R $name for channel $primCh/$ch at '$ClientNames{$conn}' twice\n");
+				    }
+				}
 			    }
 			}
 			if ($ack > 0) {
-			    push @{$Receivers[$channel]}, $conn;	# actual R registration
-			    push @{$ReceiverNames[$channel]}, $name;
-			    if ($Sender[$channel]) {	# is sender registered ?
-				$ini = $SenderValue[$channel];	# yes - current value
+			    if ($primCh == $channel) {
+				push @{$Receivers[$channel]}, $conn;	# simple R registration
+				push @{$ReceiverNames[$channel]}, $name;
+			    } else {
+				my $i = 0;
+				my $nref;
+				if (exists $AltReceivers{$primCh}) {
+				    foreach $aref (@{$AltReceivers{$primCh}}) {
+					$secCh = $aref->[0];
+					if ($secCh == $channel) {
+					    push @{$aref}, $conn;	# extend alternate R registration group
+					    $nref = $AltRecrNames{$primCh}->[$i];
+					    push @{$nref}, $name;	# extend alternate R names
+					    goto AltStored;
+					}
+					$i++;
+				    }
+				}
+				$aref = [ $channel, $conn ];		# new alternate R registration
+				push @{$AltReceivers{$primCh}}, $aref;	# in group on a different channel
+				$aref = [ $name ];			# new alternate R name
+				push @{$AltRecrNames{$primCh}}, $aref;
+			      AltStored: ;
+			    }
+			    if ($Sender[$primCh]) {		# is sender registered on primary channel ?
+				$ini = $SenderValue[$primCh];	# yes - current value
 				if ($ini) {
 				    ############################################################
 				    ## sender is registered and has either initial value 0 or other
 				    ## current value - send new receiver value different to 0
 				    ## if sender is already registered
 				    ############################################################
-				    $ini = "$channel:$ini";
+				    $ini = "$channel:$ini";	# message to all secondary channels
 				    if ($iniString) {
 					$iniString = join ',', $iniString, $ini;
 				    } else {
@@ -1022,21 +1382,12 @@ use warnings;
 				    }
 				}
 			    }
-			    elsif ($opt_a and			# no, sender not registered
-				$name =~ /^I[XBWL]\d+/) {
-				my $base = $EquivBase{$name};
-				unless (defined $base) {
-				    $base = $name;
-				}
-				elsif ($base !~ /^I[XBWL]\d+/) {
-				    $base = '';			# not an input
-				}
-				if ($base) {
-				    my $iCbox_param = $bits ? "$base,$bits" : $base;
-				    $AutoVivify{$iCbox_param}++;
-				    $ioName = "$ClientNames{$conn}-IO";
-				    print "Autovivify receiver '$iCbox_param'\n" if $opt_T;
-				}
+			    elsif ($opt_a and			# no, sender not registered on primary channel
+				$base =~ /^I[XBWL]\d+/) {	# from $EquivBase{$name} or own $name
+				my $iCbox_param = $bits ? "$base,$bits" : $base;
+				$AutoVivify{$base} = $iCbox_param;
+				$ioName = "$ClientNames{$conn}-IO";
+				print "Autovivify receiver '$iCbox_param'\n" if $opt_T;
 			    }
 			}
 no warnings;
@@ -1142,7 +1493,7 @@ use warnings;
 			$conn->send_now($iniString);# registration initialisation
 			$iniString = '';
 		    }
-		    if (scalar keys %AutoVivify or $AutoDebug) {
+		    if (%AutoVivify or $AutoDebug) {
 			ualarm($AutoDelay);		# defer the action to allow more registrations
 		    }
 		}
@@ -1211,16 +1562,20 @@ iCserver - the central server for iC clients
     -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages
     -h      help, ouput this Usage text only
-        OLD STYLE CALLS - also used in -f initialisation scripts
-    <list of equivalences>
-            eg: IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
-    <list of client calls>
+        OLD STYLE CALLS
+    <equivalences> - deprecated - use -e <equivalences> instead
+            eg: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
+    <client calls> - deprecated - use -R <app ...> instead
             eg: 'iCbox X0-X3 X10' sort
             if a client call has arguments, the call must be quoted
         AUXILIARY app   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
                  which do not need to be quoted.
+             eg: -R iCbox X0-X3 X10 -R sort
+        KEYBOARD inputs
+        T   output table of all registered client I/Os and channels
+        q   from keyboard: stops iCserver and all apps
 
 =head1 DESCRIPTION
 
@@ -1272,7 +1627,7 @@ Additional functionality in iCserver.
     outputs should be named first though.
 
     Example 1:
-        iCserver QX7-0=IX7-1 QX7-1=IX7-0
+        iCserver -e QX7-0=IX7-1,QX7-1=IX7-0
 
     This connects QX7 of instance 0 with IX7 of instance 1 via a common
     channel and QX7 of instance 1 with IX7 of instance 0 via another
@@ -1284,7 +1639,7 @@ Additional functionality in iCserver.
     connected to the input of more than one iC control application.
 
     Example 2:
-        iCserver IX8=IX8-0=IX8-1 IX9=IX9-0=IX9-1
+        iCserver -e IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
 
     This sets up common inputs IX8 and IX9 to two instances of the same
     controller. Naming the other inputs with the same base IEC-1131
@@ -1310,68 +1665,17 @@ Additional functionality in iCserver.
 
     Formally equivalences consist of two or more IEC base identifiers
     followed by an optional 1 to 3 digit instance specifier separated
-    by an equal sign '='.
+    by an equal sign '='. Several equivalences may be specified in a
+    comma ',' separated list or several equivalence parameters may be
+    used.
 
-    IEC base identifiers match /^[IQ][XBWLH]\d+(-\d{1,3})?$/
+    It is not allowed to equivalence IEC identifiers of different
+    types, since the consequences are not what is expected.
 
-    Although it is possible to equivalence IEC identifiers of different
-    types, this must be done with care since the consequences may not be
-    what is expected.
-
-    All equivalences must be defined before any registrations take
-    place. Since equivalences are declared as iCserver parameters
-    or with the -f option (see c) this will happen automatically at
-    iCserver startup.
-
-    Equivalances can also be defined by an iC app for input IEC
+    Equivalances can also be defined later by an iC app for input IEC
     variables in that app before the variables are registered.
 
- b) client calls - a list of calls with their parameters allow
-    iCserver to start a number of clients as separate processes like
-    a shell.  These are usually all the control application(s) and
-    I/O client(s) to make up a complete control system. By providing
-    this functionality in iCserver, all the information for starting
-    a control system is grouped in one place.
-
-    Client calls consist of a program path optionally followed by a
-    space separated list of parameters.  Calls with parameters must
-    be quoted on the command line and the optional INI file to make
-    them a single parameter for iCserver.
-
-    Example 3:
-        iCserver 'iCbox -n sorter-IO IX0 QX0 QX1' sorter
-
-    This starts iCserver and two clients - iCbox and the control
-    application 'sorter'.
-
- c) -f <option_file> - execute a file with iCserver options at startup.
-    For very large equivalence tables a file defining equivalences and
-    possibly other iCserver switches and options can be used.
-
-        iCserver -f <option_file>
-
-    Format of the option_file:
-        <equivalence_line>
-        <equivalence_line>
-        ...
-        <other_options>
-
-    Example same as Example 1, 2 and 3 above with extra options:
-      QX7-0 = IX7-1 QX7-1 = IX7-0 # equivalences joining 2 instances
-      IX8 = IX8-0 = IX8-1         # input equivalences
-      IX9 = IX9-0 = IX9-1
-      'iCbox -n sorter-IO IX0 QX0 QX1' # quoted client call
-      sorter                      # plain client call
-      -ak                         # extra switches for iCserver
-
-    Individual equivalences and client calls must be written without
-    spaces in the command line unless client calls are quoted.
-    In the INI file white spaces before and after the = may be
-    used in equivalences
-
-    Comments in the INI file are started with #
-
- d) Autovivification
+ b) Autovivification
     -a option - automatic startup of one or more iCbox
     When a control application registers its I/O's, 'iCserver -a' starts up
     a matching 'iCbox' for all complementary I/O's, which have not already
@@ -1410,22 +1714,18 @@ Additional functionality in iCserver.
     Startup and calling order is the same as for the -a option unless the
     -d option is also used - in which case the -d option applies.
 
-    Note: the -a -d and -A option would be incompatible with a scenario,
-    where several control clients communicate via equivalenced channels.
-    To overcome this problem, a heuristic is used, where no outputs QNm
-    are autovivified, if they occur anywhere in an equivalence list.
-    If an Input INm occurs in an equivalence list, the first variable
-    in the equivalence list is autovivified instead, as long as that
-    is also an input.
+    Note: with the -a -d and -A option care is taken to only autovivify
+    the first member of an equivalence list, which is the sender of that
+    list if it is an output or will become the sender if it is an input.
 
- e) -g       - automatically start iClive xxx.ic when SCxxx registers.
+ c) -g       - automatically start iClive xxx.ic when SCxxx registers.
     -G <dbg> - automatically start <dbg> xxx.ic when SCxxx registers.
                usually <dbg> is iClive with options eg -G 'iClive -t'
 
- f) -r option - reset registered receivers when sender disconnects
+ d) -r option - reset registered receivers when sender disconnects
     ie reset outputs of an app when it shuts down (default no change)
 
- g) -k option - if a sender registers with the same name as one already
+ e) -k option - if a sender registers with the same name as one already
     registered, kill the previously registerd sender, rather than
     reporting an error. This allows a recompiled version of an iC
     application to be started, while an old version is still running -
@@ -1439,6 +1739,60 @@ Additional functionality in iCserver.
     I/Os. This situation could be confusing and it would be better to
     start again by stopping iCserver with ctrl-C. When iCserver exits,
     all connected clients are disconnected and closed.
+
+ f) -R <aux_app>[ <aux_app_argument> ...] # must be last arguments
+    Start a Bernstein chain of iC application which are each initialised
+    and then started in parallel - in this case with iCserver.
+    Example 3:
+        iCserver -R iCbox X0-X3 X10 -R sort
+
+ g) client calls (deprecated) - a list of calls with their parameters
+    allow iCserver to start a number of clients as separate processes
+    like a shell.  These are usually all the control application(s)
+    and I/O client(s) to make up a complete control system. By
+    providing this functionality in iCserver, all the information for
+    starting a control system is grouped in one place.
+
+    Client calls consist of a program path optionally followed by a
+    space separated list of parameters.  Calls with parameters must
+    be quoted on the command line and the optional INI file to make
+    them a single parameter for iCserver.
+
+    Example 4:
+        iCserver 'iCbox -n sorter-IO IX0 QX0 QX1' sorter
+
+    This starts iCserver and two clients - iCbox and the control
+    application 'sorter'. Since correct initialisation of the client
+    processes started in parallel is not well controlled leading to
+    bad Autivivication, Bernstein chaining with the -R option is a
+    better choice.
+
+ h) -f <option_file> - execute a file with iCserver options at startup.
+    For very large equivalence tables a file defining equivalences and
+    possibly other iCserver switches and options can be used.
+
+        iCserver -f <option_file>
+
+    Format of the option_file:
+        <equivalence_line>
+        <equivalence_line>
+        ...
+        <other_options>
+
+    Example same as Example 1, 2 and 4 above with extra options:
+      QX7-0 = IX7-1 QX7-1 = IX7-0 # equivalences joining 2 instances
+      IX8 = IX8-0 = IX8-1         # input equivalences
+      IX9 = IX9-0 = IX9-1
+      'iCbox -n sorter-IO IX0 QX0 QX1' # quoted client call
+      sorter                      # plain client call
+      -ak                         # extra switches for iCserver
+
+    Individual equivalences and client calls must be written without
+    spaces in the command line unless client calls are quoted.
+    In the INI file white spaces before and after the = may be
+    used in equivalences
+
+    Comments in the INI file are started with #
 
 =head1 SPECIFICATION
 
@@ -1823,7 +2177,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2000-2016  John E. Wulff
+Copyright (C) 2000-2017  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.
