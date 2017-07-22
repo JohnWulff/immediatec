@@ -1,5 +1,5 @@
 
-			immediate C, iC rev icc_3.1
+			immediate C, iC rev icc_3.2
 
 	Copyright © 1985-2017 John E Wulff <immediatec@gmail.com>
 	SPDX-License-Identifier: GPL-2.0+ OR  Artistic-1.0
@@ -18,7 +18,7 @@
 
 --------------------------------------------------------------------------
 
-    Notes for the installation of iC rev icc_3.1
+    Notes for the installation of iC rev icc_3.2
 
     0)	Pre-requisites. You need the following on your system:
 
@@ -299,7 +299,7 @@
 
     Lots of success with iC
 
-    $Id: README 1.30 $
+    $Id: README 1.31 $
 
     Main development is on openSUSE (currently Leap 42.1) and perlTk
     Tk804.033, which provides fast live updates in iClive. They seem

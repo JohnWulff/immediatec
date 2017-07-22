@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.107 $";
+"@(#)$Id: outp.c 1.108 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -11,7 +11,10 @@ static const char outp_c[] =
  *  to contact the author, see the README file
  *
  *	outp.c
- *	parallel plc - output code or run machine
+ *
+ *	Generate the forward iC network
+ *	Either build a direct execution iC network
+ *	Or     output C code for a compiled iC run-time network
  *
  *******************************************************************/
 
@@ -1612,7 +1615,7 @@ iC_listNet(void)
  *******************************************************************/
 
 int
-iC_buildNet(Gate *** asTable, Gate *** asTend)
+iC_buildNet(void)				/* Gate ** sTable, Gate ** sTend are global */
 {
     Symbol *	sp;
     Symbol *	tsp;
@@ -2082,9 +2085,9 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 	gp->gt_next = e_list;				/* concatenate e_list to tail of g_list */
 	tgp = 0;					/* for correct inError message */
 #endif	/* TCP */
-	*asTable = *asTend = (Gate **)calloc(block_total, sizeof(Gate *));
+	sTable = sTend = (Gate **)calloc(block_total, sizeof(Gate *));
 	for (op = g_list; op; op = op->gt_next) {
-	    *(*asTend)++ = op;				/* enter node into sTable */
+	    *sTend++ = op;				/* enter node into sTable */
 #ifdef	TCP
 	    /********************************************************************
 	     *  arithmetic or logical input linkage to physical I/O (mainly display)
@@ -2139,7 +2142,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 	    }
 #endif	/* TCP */
 	}
-	if ((val = *asTend - *asTable) != block_total) {
+	if ((val = sTend - sTable) != block_total) {
 	    fprintf(iC_errFP,			/* either first or second scan above */
 		"\n%s: line %d: Symbol Table size %d vs block_total %d\n",
 		__FILE__, __LINE__, val, block_total);
@@ -2148,7 +2151,7 @@ iC_buildNet(Gate *** asTable, Gate *** asTend)
 	    /********************************************************************
 	     * Sort the symbol table in order of gt_ids.
 	     *******************************************************************/
-	    qsort(*asTable, val, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
+	    qsort(sTable, val, sizeof(Gate*), (iC_fptr)iC_cmp_gt_ids);
 	}
     }
 

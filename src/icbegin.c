@@ -1,8 +1,8 @@
 static const char icbegin_c[] =
-"@(#)$Id: icbegin.c 1.7 $";
+"@(#)$Id: icbegin.c 1.8 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2015  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -11,7 +11,7 @@ static const char icbegin_c[] =
  *  to contact the author, see the README file
  *
  *	icbegin.c
- *	parallel plc - dummy initialisation routine
+ *	dummy initialisation routine
  *
  *******************************************************************/
 

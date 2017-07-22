@@ -1,8 +1,8 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c 1.45 $";
+"@(#)$Id: icr.c 1.46 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -11,7 +11,7 @@ static const char icr_c[] =
  *  to contact the author, see the README file
  *
  *	icr.c
- *	parallel plc - runtime execution with stdio test input only
+ *	runtime execution with stdio test input only
  *
  *******************************************************************/
 
@@ -27,7 +27,7 @@ static const char icr_c[] =
 #else	/* ! _MSDOS_ Linux */
 #define getch() getchar()
 #define ungetch(x) ungetc(x, stdin)
-#include	<sys/types.h>
+#include	<sys/select.h>
 #include	<sys/time.h>
 #include	<termios.h>
 #include	<unistd.h>
@@ -82,12 +82,12 @@ static void display(int * dis_cntp, int dis_max);
 static int
 kbhit(void)
 {
-    fd_set	iC_infds = selectinfds;
+    fd_set	infds = selectinfds;
     int		stat;
 
     /* Wait until stdin is ready */
     do {
-	readfds = iC_infds;
+	readfds = infds;
 	if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 	    toCnt = iC_timeOut;		/* transfer timeout value */
 	}
@@ -145,7 +145,7 @@ unsigned long	iC_glit_nxt;		/* count glitch scan */
  *******************************************************************/
 
 void
-iC_icc(Gate ** sTable, Gate ** sTend)
+iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 {
     int		i;
     short	pass;

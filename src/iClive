@@ -27,6 +27,8 @@ use Msg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use Tk::Balloon;
 use Tk::Dialog;
+use Tk::DialogBox;
+use Tk::LabEntry;
 use Cwd;
 use strict;
 use warnings;
@@ -51,7 +53,7 @@ my @argv = ();
 #	Uses Tk::After. Flash 2 clocks in a row white. This happens if
 #	CLOCK or TIMER has 2 slave gates which are fired together.
 #
-#	the following 2 arrays are indexed by gt_fni is ftype (see icc.h)
+#	the following 3 arrays are indexed by gt_fni is ftype (see icc.h)
 #
 #	UDFA	ARITH	GATE	GATEX	RI_BIT	S_SH	R_SH	D_SH	0-8
 #	CH_BIT	S_FF	R_FF	D_FF	CH_AR	F_SW	F_CF	F_CE	9-15
@@ -103,7 +105,7 @@ my @tagBackground = ('PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
 my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'black'        , 'red'          ,  # 2 3 ARITH
 		     'black'        , 'white'        ,  # 4 5 CLCKL
-		     'black'        , 'white'        ,  # 6 7 TIMRL
+		     'black'        , 'red'          ,  # 6 7 TIMRL
 							## cs|010 flash glitch
 		     'white'        , 'white'        ,  # 0 1 GATE
 		     'white'        , 'white'        ,  # 2 3 ARITH
@@ -140,7 +142,6 @@ my %keyWords = (
 	for	=> 1,
 	do	=> 1,
 	static	=> 1,
-	iClock	=> 1,		# iC built-in variable
 	FORCE	=> 1,		# iC built-in functions
 	LATCH	=> 1,
 	DLATCH	=> 1,
@@ -218,10 +219,11 @@ Usage:
     -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
                       DEBUG options
     -d deb  extra debug options (see iC-application -h)
+    -d  40  output symbol table received in Live mode
     -t      trace gate activity in target application (-d1100)
     -m      output elapsed time in seconds and microseconds
     -T      trace output static debug messages
-    -q      quiet - do not report clients connecting and disconnecting
+    -q      quiet - do not report apps connecting and disconnecting
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
             rest will be stored in the File menu for later selection.
@@ -256,6 +258,9 @@ Usage:
                 application - which should be built from the text
                 to make a meaningful display. Text is 'read only'
                 in this mode.                                     Alt-e
+            Holding this button down briefly in Live mode will open a
+            menu of options to start and stop Debug mode, which allows
+	    interrupting, single stepping and continuing the programm.
      Edit]      clears live markings in the Text window. In this mode
                 the text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
@@ -278,10 +283,10 @@ Usage:
                 clears hits and the Search Entry window
      <>Go to line       or                                      Alt-RET
                 goes to the line entered in the Search Entry window
+     <>Word match
      <>Exact match
-     <>Ignore case
      <>Regexp match
-     <>Regexp+ignore case
+     []Ignore case
        -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
@@ -293,7 +298,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.69 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.70 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -464,9 +469,16 @@ $SIG{PIPE} = \&catch_sig;	# catch signal in syswrite() in Msg.pm line 103
 my $host = defined $opt_s ? $opt_s : 'localhost';
 my $port = defined $opt_p ? $opt_p : 8778;
 my %symbolTable = ();	# $symbolTable{$symbol} [0, 1]   = ($ftype, $index)
+my @symbolNames = ();	# $symbolNames[$index] = symbol-id (does not include ALIASes or variations)
+my %stepNames   = ();	# iC variables occurring in source
+my %watchPoints = ();	# active Watch and Ignore Points [ 0 state 1 value ]
+my @watchList   = ();	# parallel [ $index, $symbol, $state, $value, $watchCond ] with Listbox $dbLb
+my $lastIndex   = 0;
+my $lastValue   = 0;
+my $breakIndex  = 0;
 my $maxSymbolLength = 4;
 my @activeSymbols;	# $activeSymbols[$index][0 .. 3] = ($ts,$val,$cs,[$sec,$usec])
-my $stIndex = 0;
+my $stIndex = 1;	# Symbol table entry index 0 is never used
 my $conn;
 
 my $info = '';		# info messages in status bar
@@ -497,7 +509,7 @@ my $fileTypes = [
     ['All Files',        ['*',                      ],             ],
 ];
 
-# in scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
+# in do_scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
 # This pattern colours all leading and trailing spaces (used initially)
 # my $scanPattern = '[~\s]*(-\s*\d+|\w[\w\$]*(\s*\.\s*[0-7](_\d+)?|(\s*\[\s*\d+\s*\]))?)\s*((~ )?---|=$)?';
 # This pattern colours only one leading space or tab or '~' and one trailing space or tab; with numbers
@@ -512,11 +524,12 @@ my $pIdx = '';		# Index of previous wordstart
 # has to be global, 'our' not portable yet
 my ($home);
 my (@hits, @groups, $gi, $gl, $centre, $lineCnt);
-my $prevText = '';
+my $prevText  = '';
 my $prevMatch = '';
+my $prevCase  = '';
 my $prevStart = 0;
 my $prevLast  = 0;
-my $server  = 0;
+my $server    = 0;
 
 ########################################################################
 #
@@ -601,7 +614,7 @@ static unsigned char ic_bits[] = {
 EOF
 	    close(INI);
 	} else {
-	    warn "ERROR: Can't open ~/.iC/$named.bit: $!\n";
+	    warn "WARNING: Can't open ~/.iC/$named.bit: $!\n";
 	}
     }
     $mainWindow->iconbitmap("\@$home/.iC/$named.bit");
@@ -640,11 +653,11 @@ $menuFile->command(-label       => 'Save',				# 5
 $menuFile->command(-label       => 'SaveAs',				# 6
 		   -accelerator => 'Alt-a',
 		   -command     => \&saveAs_file);
-$menuFile->separator();							# 7
+$menuFile->separator;				# ---------------------   7
 $menuFile->command(-label       => 'Quit',				# 8
 		   -accelerator => 'Alt-q',
 		   -command     => \&quit_program);
-$menuFile->separator();							# 9
+$menuFile->separator;				# ---------------------   9
 my $menuFileStart = 10;				# first dynamic entry:  # 10
 my @dynamicFiles  = ();				# maintain local dynamic entries
 my $menuFileLim   = 10;				# number of dynamic entries
@@ -688,8 +701,8 @@ my $restartFlag = 0;
 ########################################################################
 my $menuRun  = $menuBar->Button(-text        => 'Run ',
 				-relief      => 'raised',
-				-width       => 4,
 				-borderwidth => 2,
+				-width       => 4,
 				-command     => \&run_file,
 			       )->pack(-side => 'left', -padx => 2);
 
@@ -733,15 +746,67 @@ my $menuInst  = $menuBar->Optionmenu(-command      => \&change_instance,
 				    )->pack(-side => 'left', -padx => 2);
 
 ########################################################################
-#	Live or Edit button
+#	Live button
 ########################################################################
-my $menuScan = $menuBar->Button(-text        => 'Live',
-				-relief      => 'raised',
-				-width       => 4,
-				-borderwidth => 2,
-				-command     => \&scan,
-			       )->pack(-side => 'left', -padx => 2);
-my $scanFlag = 0;		# text is initially cleared
+my $liveButton = $menuBar->Button(-text        => 'Live',
+				  -relief      => 'raised',
+				  -borderwidth => 2,
+				  -width       => 4,
+				  -command     => [ \&scan, 0 ]		# Release-1
+				 )->pack(-side => 'left', -padx => 2);
+my $scanFlag = 0;							# text is initially cleared
+$liveButton->bind('<ButtonPress-1>',	[ \&LiveMenu, \$liveButton ]);	# Press-1
+
+########################################################################
+#	Live menu
+########################################################################
+
+my $liveMenu = $mainWindow->Menu();	# filled dynamically		# 0 - tear off
+my $liveTimer;
+my $debugFlag = 0;							# no DEBUG mode unless manually started in LIVE mode
+my $saveDebug = 0;
+my $stepV     = 0;
+my $nextV     = 0;
+my $continueV = 0;
+my $textDebV  = 0;
+my $microSecV = 0;
+
+$liveMenu->Checkbutton(-label       => 'Debug',				# 1
+		       -accelerator => 'd',
+		       -state       => 'disabled',
+		       -variable    => \$debugFlag,
+		       -command     => [ \&sendDebug, 1, 'd' ]);
+$liveMenu->separator;				# ---------------------   2
+$liveMenu->Checkbutton(-label       => 'Step',				# 3
+		       -accelerator => 's',
+		       -state       => 'disabled',
+		       -variable    => \$stepV,
+		       -command     => [ \&sendDebug, 0, 's' ]);
+$liveMenu->Checkbutton(-label       => 'Next',				# 4
+		       -accelerator => 'n',
+		       -state       => 'disabled',
+		       -variable    => \$nextV,
+		       -command     => [ \&sendDebug, 0, 'n' ]);
+$liveMenu->Checkbutton(-label       => 'Continue',			# 5
+		       -state       => 'disabled',
+		       -accelerator => 'c',
+		       -variable    => \$continueV,
+		       -command     => [ \&sendDebug, 0, 'c' ]);
+$liveMenu->separator;				# ---------------------   6
+$liveMenu->Checkbutton(-label       => 'TextDebug',			# 7
+		       -state       => 'disabled',
+		       -accelerator => 't',
+		       -variable    => \$textDebV,
+		       -command     => [ \&sendDebug, 0, 't' ]);
+$liveMenu->Checkbutton(-label       => 'MicroSec',			# 8
+		       -state       => 'disabled',
+		       -accelerator => 'm',
+		       -variable    => \$microSecV,
+		       -command     => [ \&sendDebug, 0, 'm' ]);
+$liveMenu->separator;				# ---------------------   9
+$liveMenu->command    (-label       => 'Watch points',			# 10
+		       -accelerator => 'w',
+		       -command     => [ \&ListWatchPoints ]);
 
 ########################################################################
 #	Search button
@@ -751,15 +816,16 @@ my $searchButton = $menuBar->Button(-text        => '/',
 				    -borderwidth => 2,
 				    -command     => [ \&search_text, 0, undef, 0 ],	# Release-1
 				   )->pack(-side => 'left', -padx => 2);
-$searchButton->bind('<ButtonPress-1>',	[ \&SearchMenu, \$searchButton, ]);
+$searchButton->bind('<ButtonPress-1>',	[ \&SearchMenu, \$searchButton ]);
 
 ########################################################################
 #	Search menu
 ########################################################################
 
-my $searchMenu = $mainWindow->Menu();	# filled dynamically
+my $searchMenu = $mainWindow->Menu();	# filled dynamically		# 0 - tear off
 my $searchTimer;
-my $matchType = "-exact";		# default, alternatives -nocase -regexp
+my $matchType = 'w';			# default, alternatives -exact -regexp
+my $ignoreCase = '-forwards';		# default place holder, alternative -nocase
 
 $searchMenu->command(-label       => 'Search down',			# 1
 		     -accelerator => 'Return',
@@ -773,40 +839,40 @@ $searchMenu->command(-label       => 'Clear',				# 3
 ########################################################################
 #	Goto line number
 ########################################################################
-$searchMenu->radiobutton(-label    => 'Go to line',			# 4
+$searchMenu->Radiobutton(-label    => 'Go to line',			# 4
 			 -accelerator => 'Alt-Ret',
 			 -value    => 'g',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 1, undef, 2 ]);
 ########################################################################
-#	Exact match
+#	Word march	(default)
 ########################################################################
-$searchMenu->radiobutton(-label    => 'Exact match',			# 5
-			 -value    => '-exact',
+$searchMenu->Radiobutton(-label    => 'Word match',			# 5
+			 -value    => 'w',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 1, undef, 0 ]);
 ########################################################################
-#	Ignore case
+#	Exact match
 ########################################################################
-$searchMenu->radiobutton(-label    => 'Ignore case',			# 6
-			 -value    => '-nocase',
+$searchMenu->Radiobutton(-label    => 'Exact match',			# 6
+			 -value    => '-exact',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 1, undef, 0 ]);
 ########################################################################
 #	Regexp match
 ########################################################################
-$searchMenu->radiobutton(-label    => 'Regexp match',			# 7
+$searchMenu->Radiobutton(-label    => 'Regexp match',			# 7
 			 -value    => '-regexp',
 			 -variable => \$matchType,
 			 -command  => [ \&search_text, 1, undef, 0 ]);
 ########################################################################
-#	Regexp match - Ignore case
+#	Ignore case
 ########################################################################
-$searchMenu->radiobutton(-label    => 'Regexp Ignore case',		# 8
-			 -value    => 'ri',
-			 -variable => \$matchType,
-			 -command  => [ \&search_text, 1, undef, 0 ]);
-$searchMenu->separator();						# 9
+$searchMenu->Checkbutton(-label    => 'Ignore case',			# 8
+			 -offvalue => '-forwards',	# place holder
+			 -onvalue  => '-nocase',
+			 -variable => \$ignoreCase);
+$searchMenu->separator;				# ---------------------   9
 my $searchMenuStart  = 10;			# first dynamic entry:  #10
 my @dynamicSearches  = ();			# maintain local dynamic entries
 my $searchMenuLim    = 10;			# number of dynamic entries
@@ -815,6 +881,8 @@ my $searchMenuLim    = 10;			# number of dynamic entries
 #	Search entry
 ########################################################################
 my $entrySearch = $menuBar->Entry(-width        => 20,
+				  -background   => 'grey94',
+				  -font         => $font,
 				  -textvariable => \$searchText,
 				 )->pack(-side => 'left', -padx => 2);
 
@@ -846,6 +914,88 @@ $menuBar->Button(-text        => 'Help',
 		)->pack(-side => 'right', -padx => 2);
 
 ########################################################################
+#	WatchPoint and IgnorePoint menu
+########################################################################
+my $watchMenu = $mainWindow->Menu(-tearoff => 0);					# 0 - tear off
+my $watchIndex	= 0;
+my $watchState	= 0;
+my $watchValue	= 0;
+my $watchV	= 0;
+my $watchCondV	= 0;
+my $ignoreV	= 0;
+my $disableV	= 0;
+
+$watchMenu->Checkbutton(-label       => 'Watch',			# 1
+			-variable    => \$watchV,
+			-command     => [ \&EnterWatch, 0, 1 ]);
+$watchMenu->Checkbutton(-label       => ' Condition',			# 2
+			-variable    => \$watchCondV,
+			-command     => [ \&EnterWatch, 0, 2 ]);
+$watchMenu->separator;				# ---------------------   3
+$watchMenu->Checkbutton(-label       => 'Ignore',			# 4
+			-variable    => \$ignoreV,
+			-command     => [ \&EnterWatch, 0, 4 ]);
+$watchMenu->separator;				# ---------------------   5
+$watchMenu->Checkbutton(-label       => 'Disable',			# 6
+			-variable    => \$disableV,
+			-command     => [ \&EnterWatch, 0, 6 ]);
+$watchMenu->separator;				# ---------------------   7
+$watchMenu->command    (-label       => 'Cancel',			# 8
+			-command     => [ \&EnterWatch, 0, 8 ]);
+
+########################################################################
+#	Watch word condition DialogBox
+########################################################################
+
+my $watchListTxt;
+my $dbWval;
+my @dbWbuttons = ('change','== X','!= X','< X','<= X','>  X','>=X','% X','!% X','& X','!& X','Cancel');
+my $dbW = $mainWindow->DialogBox(
+	-title => 'Word condition',
+	-buttons => [ @dbWbuttons ]);
+$dbW->add('Label',
+	-textvariable => \$watchListTxt,
+	)->pack(-side => 'left', -fill => 'x');
+my $dbX = $dbW->add('LabEntry',
+	-textvariable => \$dbWval, -width => 20,
+	-label => 'X',
+	-labelPack => [ -side => 'left' ])->pack;
+$dbW->configure(-focus => $dbX);
+# use $answer = $dbW->Show() to display dialog box and to return text of button pressed.
+# $dbWval contains value entered in LabEntry window.
+
+########################################################################
+#	Watch bit condition DialogBox
+########################################################################
+
+my @dbBbuttons = ('change',' == 1 ',' == 0 ','Cancel');
+my $dbB = $mainWindow->DialogBox(
+	-title => 'Bit condition',
+	-buttons => [ @dbBbuttons ]);
+$dbB->add('Label',
+	-textvariable => \$watchListTxt,
+	)->pack(-side => 'left', -fill => 'x');
+# use $answer = $dbB->Show() to display dialog box and to return text of button pressed.
+
+########################################################################
+#	DialogBox containing a Listbox of current Watch points
+########################################################################
+
+my @dbLbuttons = ('Lookup','Watch','Condition','Ignore','Enable','Disable','Delete','Cancel');
+my $dbL = $mainWindow->DialogBox(
+	-title => 'Watch and Ignore points',
+	-buttons => [ @dbLbuttons ]);
+my $dbLb = $dbL->add('Listbox',
+	-selectmode => 'extended',
+	-height => 6,
+	-width => 45,
+	-font => $font,
+	-setgrid => 1,
+	)->pack;
+$dbL->configure(-focus => $dbLb);
+# use $answer = $dbL->Show() to display dialog box and to return text of button pressed.
+
+########################################################################
 #	Ini data for file and search menu lists
 ########################################################################
 my %iniMenuData = (
@@ -873,18 +1023,22 @@ my %iniMenuData = (
 );
 
 my %matchExtensions = (
-    -exact	=> '',
-    -nocase	=> '	i',
-    -regexp	=> '	r',
-    ri		=> '	ri',
-    g		=> '	g',
+    'w-forwards'	=> '',
+    'w-nocase'		=> '	i',
+    '-exact-forwards'	=> '	e',
+    '-exact-nocase'	=> '	ei',
+    '-regexp-forwards'	=> '	r',
+    '-regexp-nocase'	=> '	ri',
+    'g'			=> '	g',
 );
 my %matchRestores = (
-    e		=> '-exact',
-    i		=> '-nocase',
-    r		=> '-regexp',
-    ri		=> 'ri',
-    g		=> 'g',
+    w		=> 'w -forwards',
+    i		=> 'w -nocase',
+    e		=> '-exact -forwards',
+    ei		=> '-exact -nocase',
+    r		=> '-regexp -forwards',
+    ri		=> '-regexp -nocase',
+    g		=> 'g -forwards',
 );
 
 ########################################################################
@@ -963,6 +1117,7 @@ $text      ->bind('<Double-1>',			[ \&pick_word             ]); # select a searc
 $text      ->bind('<Alt-Key-slash>',		[ \&new_search            ]); # simulate vi Search operator /
 ####### Y-Scrollbar bindings ###########################################
 $yScrollbar->bind('<KeyPress>',			[ \&set_shift_control     ]); # Set Shift/Control state
+$yScrollbar->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
 $yScrollbar->bind('<Key-R>',			[ \&reload_file           ]); # active in Live mode
 $yScrollbar->bind('<Alt-Key-R>',		[ \&reload_file           ]); # active in Live mode
 $yScrollbar->bind('<Key-l>',			[ \&open_list             ]); # active in Live mode
@@ -981,8 +1136,17 @@ $yScrollbar->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search d
 $yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
 $yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
 $yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
+$yScrollbar->bind('<Key-d>',			[ \&sendDebug, 'd'        ]); # Debug on active in Live mode
+$yScrollbar->bind('<Key-s>',			[ \&sendDebug, 's'        ]); # Step
+$yScrollbar->bind('<Key-n>',			[ \&sendDebug, 'n'        ]); # Next
+$yScrollbar->bind('<Key-c>',			[ \&sendDebug, 'c'        ]); # Continue
+$yScrollbar->bind('<Key-D>',			[ \&sendDebug, 'D'        ]); # Debug off
+$yScrollbar->bind('<Key-t>',			[ \&sendDebug, 't'        ]); # activate/de-activate debug output in app
+$yScrollbar->bind('<Key-m>',			[ \&sendDebug, 'm'        ]); # activate/de-activate microsecond output in app
+$yScrollbar->bind('<Key-w>',			[ \&ListWatchPoints       ]); # open List Watch points DialogBox
 ####### X-Scrollbar bindings ###########################################
 $xScrollbar->bind('<KeyPress>',			[ \&set_shift_control     ]); # Set Shift/Control state
+$xScrollbar->bind('<KeyRelease>',		[ \&reset_shift_control   ]); # Reset Shift/Control state
 $xScrollbar->bind('<Key-Down>',			[ \&scroll_text, 1        ]); # scroll down
 $xScrollbar->bind('<Key-Up>',			[ \&scroll_text, -1       ]); # scroll up
 $xScrollbar->bind('<Key-Next>',			[ \&scroll_text, $opt_l-2 ]); # next page
@@ -1012,7 +1176,7 @@ $text      ->bind('<Alt-Key-c>',		[ \&build_file, 2         ]); # not active in 
 $text      ->bind('<Alt-Key-r>',		[ \&run_file              ]); # active in Live mode
 $yScrollbar->bind('<Alt-Key-r>',		[ \&run_file              ]);
 $yScrollbar->bind('<Key-r>',			[ \&run_file              ]);
-$yScrollbar->bind('<Key-s>',			[ \&run_file              ]);
+$yScrollbar->bind('<Alt-Key-s>',		[ \&run_file              ]);
 ####### Live/Edit button binding #######################################
 $text      ->bind('<Alt-Key-e>',		[ \&scan                  ]); # active in Live mode
 $yScrollbar->bind('<Alt-Key-e>',		[ \&scan                  ]);
@@ -1072,6 +1236,18 @@ print "$named: initialise program\n" if $opt_T;
 ini_program();
 
 ########################################################################
+#	For mysterious reasons the first Show() of a DialogBox is not
+#	raised in front of mainWindow. After that they show normally.
+#	This Kludge shows each DialogBox behind mainWindow and exits.
+########################################################################
+$mainWindow->after(0, sub { $dbW->Exit(); });
+$dbW->Show();
+$mainWindow->after(0, sub { $dbB->Exit(); });
+$dbB->Show();
+$mainWindow->after(0, sub { $dbL->Exit(); });
+$dbL->Show();
+
+########################################################################
 #	Sit in an infinite loop dispatching incoming events.
 ########################################################################
 MainLoop();
@@ -1123,23 +1299,25 @@ sub display_callback {
 
 ########################################################################
 #
-#	Tag all comments in text with tag 'ctag'	BLUE
+#	Tag all comments in text with tag 'cTag'	BLUE
 #	Tag all keywords in program text with tag 'bd'	BOLD
+#	Collect all words in Symbol Table for     DEBUG STEP
+#	Collect all outputs in Symbol Table for   DEBUG NEXT
 #
 ########################################################################
 
 sub tagComments {
     # Tk::Text->search() does not accept a pre-compiled regex qr/.../
-    my $reg = '(/[/*]|[[*]/|[\'"]|\w+)';	# /* // */ ' " words
-    my $stop = '';
+    my $reg = '(/[/*]|[[*]/|[\'"]|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';	# /* // */ ' " atoms
     my $length = 1;
     my $current = '1.0';	# start of text
     print "tagComments: $current\n" if $opt_T;
-    $text->tagDelete('cTag', 'bd');
+    $text->tagDelete('cTag', 'bd');		# delete all instances of both tags
     $text->tagConfigure('cTag', -foreground => 'blue');
     $text->tagConfigure('bd',   -font       => $boldfont);
     my $cStart = '';
     my $state = "P";		# Program text
+    %stepNames  = ();
     while (1) {
 	$current = $text->search(-count => \$length,
 				 -regexp,
@@ -1150,7 +1328,9 @@ sub tagComments {
 				 'end',		# stop index
 				);
 	last unless $current;
-	my $atom = $text->get($current, "$current + $length char");
+	my $currEnd = $text->index("$current + $length char");
+	my $atom = $text->get($current, $currEnd);
+	last if $atom eq "C" and $text->get($current, $text->index("$current + 23 char")) eq "C CODE          *******";
 	print "tagComments: $current '$atom'\n" if $opt_T;
 	if ($atom eq '"' or $atom eq "'") {
 	    my $c4 = $text->get($text->index("$current - 1 char"));
@@ -1170,10 +1350,8 @@ sub tagComments {
 	    }
 	} elsif ($state eq "C") {	# C comment
 	    if ($atom eq "*/") {
-		$current = $text->index("$current + $length char");
-		$text->tagAdd('cTag', $cStart, $current);
+		$text->tagAdd('cTag', $cStart, $currEnd);
 		$state = "P";		# end of C comment found
-		next;
 	    } elsif ($atom eq "/*") {
 		info_display(2000, 'red', "$named: '$current' /* found during comment");
 	    }
@@ -1186,25 +1364,140 @@ sub tagComments {
 	    $cStart = $current;
 	} elsif ($atom eq "*/") {
 	    info_display(2000, 'red', "$named: '$current' */ found after end of comment");
-	} elsif ($atom eq "//") {
-	    $cStart = $current;		# start of C++ comment found ($state remains "P")
-	    $current = $text->index("$current lineend");
-	    $text->tagAdd('cTag', $cStart, $current);
-	    next;
-	} elsif ($keyWords{$atom}) {
-	    $cStart = $current;		# keyword found ($state remains "P")
-	    $current = $text->index("$current + $length char");
-	    $text->tagAdd('bd', $cStart, $current);
-	    next;
+	} elsif ($atom eq "//") {	# start of C++ comment found ($state remains "P")
+	    $currEnd = $text->index("$current lineend");
+	    $text->tagAdd('cTag', $current, $currEnd);
+	} elsif ($keyWords{$atom}) {	# iC variables outside of comments or strings
+	    $text->tagAdd('bd', $current, $currEnd);		# keywords bold
+	} elsif ($atom !~ m/^TX0/ and $atom ne 'iClock') {	# ignore timer variables and iClock
+	    $stepNames{$atom} |= 0x1;	# cannot check Symbol Table here
+	    if ($atom =~ m/^Q[XBWLH]\d+(\.[0-7])?$/) {
+		$stepNames{"${atom}_0"} |= 0x2;
+	    }
 	}
-	$current = $text->index("$current + $length char");
+	$current = $currEnd;		# continue search after this atom
+    }
+    if (%symbolTable) {
+	print "tagComments: sendStepNext\n" if $opt_T;
+	sendStepNext();			# adjust set and next bits in client
     }
 } # tagComments
 
 ########################################################################
 #
+#	Send list of indexes for each variable and output in %stepNames
+#	to client if it is running, has been registered and its
+#	Symbol Table has been obtained.
+#	Also set up all Watch/Ignore points if in Debug mode
+#
+########################################################################
+
+sub sendStepNext {
+    my ($symbol, $bits, $ftype, $index);
+    my $stepMsg = '';
+    my $nextMsg = '';
+    foreach $symbol (sort keys %stepNames) {
+	if (exists $symbolTable{$symbol}) {
+	    ($ftype, $index) = @{ $symbolTable{$symbol} };
+	    $bits = $stepNames{$symbol};
+	    print "$symbol	$bits	$index\n" if $opt_T;
+	    if ($bits & 0x2) {
+		$nextMsg .= ";$index";		# OUTPUT variable Q..._0
+	    } elsif ($bits & 0x1) {		# do not set both bits
+		$stepMsg .= ";$index";		# ACTIVE variable in this source
+	    }
+	}
+    }
+    print "'$stepMsg'\n'$nextMsg'\n" if $opt_T;
+    sendMsg( 8,  9, $stepMsg) if $stepMsg;	# send step variables
+    sendMsg(10, 11, $nextMsg) if $nextMsg;	# send next outputs
+    if ($debugFlag) {
+	sendWatchRestore(0, 1);			# set all Watch and Ignore points
+    }
+} # sendStepNext
+
+########################################################################
+#
+#	Send a ; separated message string to client in 1 or more sections
+#	The length of each section sent is less than the TCP limit of 1400
+#
+########################################################################
+
+sub sendMsg {
+    my ($d, $e, $msg) = @_;
+    my ($leader, $trailer, $tr1, $tr2);
+    while (length $msg > 1390) {		# REPLY 1400 - 10 in tcpc.h
+	$trailer = substr($msg, 1380);		# tested with 40 30 for limit of 50
+	($tr1, $tr2) = split /;/, $trailer, 2;
+	$leader = substr($msg, 0, 1380) . $tr1;
+	$msg = ";$tr2";
+	print "$D_channel:$d$leader\n" if $opt_T;
+	conn_send_now("$D_channel:$d$leader");	# send intermediate message
+    }
+    print "$D_channel:$e$msg\n" if $opt_T;
+    conn_send_now("$D_channel:$e$msg");		# send last message
+} # sendMsg
+
+########################################################################
+#
+#	Send a ; separated message string of Watch/Ignore points or
+#	none/step/next restore values
+#	The length of each section sent is less than the TCP limit of 1400
+#	although it is very unlikely there will be that many Watch points
+#
+#	p1	0	send values for all indexes in %watchPoints
+#		index	send one index value only
+#	p2	0	restore none/step/next values from %stepNames
+#		1	set Watch/Ignore derived from watchState
+#
+########################################################################
+
+sub sendWatchRestore {
+    my ($index, $set) = @_;
+    my @points = ();
+    my $msg = '';
+    my ($ix, $stateRef, $symbol, $bits);
+    if ($index) {
+	push @points, $index;
+    } else {
+	push @points, keys %watchPoints;
+    }
+    foreach $ix (@points) {
+	if (exists $watchPoints{$ix}) {
+	    $stateRef = \${$watchPoints{$ix}}[0];
+	    if ($set and not $$stateRef & 0x40) {	# set Watch/Ignore if not disabled
+		if ($$stateRef & 0x20) {
+		    $msg .= ";$ix 0";			# Ignore point
+		} elsif ($$stateRef & 0x10) {
+		    $msg .= ";$ix 3";			# Watch point
+		}
+		$$stateRef |= 0x80 if $stateRef;	# set watchSet bit
+	    } elsif ($$stateRef & 0x80) {		# restore set/next if previously watchSet
+		$symbol = $symbolNames[$ix];
+		$bits = $stepNames{$symbol};
+		if (not $bits) {
+		    $msg .= ";$ix 0";			# not an ACTIVE variable
+		} elsif ($bits & 0x2) {
+		    $msg .= ";$ix 2";			# OUTPUT variable Q..._0
+		} elsif ($bits & 0x1) {			# do not set both bits
+		    $msg .= ";$ix 1";			# ACTIVE variable in this source
+		}
+		$$stateRef &= ~0x80 if $stateRef;	# clear watchSet bit
+	    }
+	}
+    }
+    if ($msg) {
+	print "sendWatchRestore index = $index set = $set msg = '$msg'\n" if $opt_T;
+	sendMsg(12, 12, $msg);			# no need for 2 cases
+    }
+} # sendWatchRestore
+
+########################################################################
+#
+#	Called by Button-1 Press or Key Press
+#	In Live mode work on Wath- or Ignore-Points
+#	In Edit mode highlight matching braces, parantheses and square brackets
 #	Report the cursor position in the info bar
-#	Highlight matching braces, parantheses and square brackets
 #
 ########################################################################
 
@@ -1222,11 +1515,14 @@ sub report_cursor {
     my $y = $1;
     my $x = $2 + 1;
     my $current = '';
-    $text->tagDelete('pTag');
-    unless ($scanFlag) {
-	my $x1 = $2 - 1;
-	if ($x1 >= 0) {
-	    my $c = $text->get("$y.$x1");
+    if (not $scanFlag) {
+	########################################################################
+	#  In Edit mode show matching braces, parentheses and square brackets
+	#  not in "strings" or '(' character constants ')'
+	########################################################################
+	$text->tagDelete('pTag');
+	if ($x > 0) {
+	    my $c = $text->get($cursor);
 	    if ($c =~ /[{}()\[\]]/) {
 		$text->tagConfigure('pTag',
 				    -background => 'lightblue',
@@ -1234,8 +1530,8 @@ sub report_cursor {
 				   );
 		$c1 = $c;
 		($c2, $dir, $reg, $stop) = @{ $pGroup{$c1} };
-		$current = $cursor = "$y.$x1";
-		$text->tagAdd('pTag', "$y.$x1");
+		$current = $cursor;
+		$text->tagAdd('pTag', $current);
 		while (1) {
 		    $current = $text->index("$current + 1 char") if $dir eq "-forwards";
 		    $current = $text->search(-count => \$length,
@@ -1269,9 +1565,399 @@ sub report_cursor {
 		}
 	    }
 	}		#    info_display(0, 'black', "$cursor '$c1 $c2' $dir $reg $stop n = $n '$current' $c3");
+    } elsif ($debugFlag) {
+	########################################################################
+	#  In Debug mode if mouse is positioned over a word, which has an active tag,
+	#  open a menu to enter/delete/enable/disable a Watch- or Ignore-Point.
+	########################################################################
+	my ($tag, $index);
+	foreach ($text->tagNames($cursor)) {
+	    if ($_ =~ m/^(\d+)[~=]?$/) {
+		$tag = $_;
+		$index = $1;
+		last;
+	    }
+	}
+	if ($index and
+	    $symbolNames[$index] ne 'iClock') {	# cannot apply Watch point to iClock
+	    $watchIndex = $index;
+	    if (exists $watchPoints{$watchIndex}) {
+		($watchState, $watchValue) = @{$watchPoints{$watchIndex}};
+	    } else {
+		($watchState, $watchValue) = (0, 0);
+	    }
+	    $watchV     = ($watchState & 0x10) ? 1 : 0;
+	    $watchCondV = ($watchState & 0x0f) ? 1 : 0;
+	    $ignoreV    = ($watchState & 0x20) ? 1 : 0;
+	    $disableV   = ($watchState & 0x40) ? 1 : 0;
+	    my ($x, $y) = $mainWindow->pointerxy;
+	    $watchMenu->post($x, $y);		# correct button states are shown
+	}
     }
     info_display(0, 'black', "line $y, char $x");	# 'line 27 char 1'
 } # report_cursor
+
+########################################################################
+#
+#	Enter/Delete/Edit a WatchPoint or
+#	Enter/Delete an IgnorePoint
+#	Disable/Enable a WatchPoint or an IgnorePoint
+#
+#	One of $watchV, $watchCondV, $ignoreV and $disableV has been
+#	modified by a menu button, although this is ignored and the button
+#	parameter is used to manipulate state. Next time the Watch menu is
+#	posted, the button states are evaluated from the current $watchState.
+#
+#	Word conditions can be applied to all gates whose ftype is ARITH, D_SH,
+#	F_SW, TRAB, CH_AR, OUTW as well as TIMRL, whose value is timer count.
+#	No condition can be applied for ftype CLCKL gates - ftype UDFA or F_ERR
+#	gates can never be active in a running iC program.
+#	Bit conditions can be applied for all remaining ftype gates.
+#
+#	Because the watched gate is derived from the index of an active tag,
+#	ALIAS names and immC array references are never entered - always the
+#	undelying symbol, which will be shown in the Search Entry window,
+#	when a WatchPoint strikes.
+#
+########################################################################
+
+sub EnterWatch {
+    if ($scanFlag and $debugFlag) {
+	my $state = $watchState;		# keep previous $watchState
+	my $value = $watchValue;		# keep previous $watchValue
+	my ($dummy, $button) = @_;
+	my $symbol = $symbolNames[$watchIndex];
+	my ($ix, $i) = (0, 0);
+	foreach (sort { $a <=> $b } keys %watchPoints) {
+	    if ($watchIndex <= $_) {		# insert Watch points in ascending index order
+		$ix = $_;
+		last;
+	    }
+	    $i++;
+	}
+	########################################################################
+	#  'Watch' button
+	########################################################################
+	if ($button == 1) {
+	    unless (($state & 0x30) == 0x30 and $state & 0x0f) {
+		$state ^= 0x10;			# enter/delete 'Watch'
+	    }
+	    $state &= ~0x0f unless $state & 0x10; # delete Watch condition when Watch turns off
+	    $state &= ~0x20;			# turn off possible 'Ignore'
+	}
+	########################################################################
+	#  'Condition' button
+	########################################################################
+	elsif ($button == 2) {
+	    my $s;
+	    ($s, $value) = ConditionEdit($i, $ix, $watchIndex, $watchMenu, 'nw');
+	    return if $s < 0;
+	    $state &= ~0x0f;			# clear previous condition
+	    $state |= 0x10 | $s;		# turn on 'Watch' | selected condition
+	    $state &= ~0x20;			# turn off possible 'Ignore'
+	}
+	########################################################################
+	#  'Ignore' button
+	########################################################################
+	elsif ($button == 4) {
+	    $state ^= 0x20;			# enter/delete 'Ignore'
+	    $state &= ~0x10 unless $state & 0x0f; # take away Watch unless condition
+	}
+	########################################################################
+	#  'Disable' button
+	########################################################################
+	elsif ($button == 6) {
+	    $state ^= 0x40;			# disable/enable 'Watch' or 'Ignore'
+	}
+	########################################################################
+	#  'Cancel' button
+	########################################################################
+	else {
+	    return;
+	}
+	########################################################################
+	#  Apply or remove Watch or Ignore points from running app
+	########################################################################
+	ApplyWatchPoint($i, $ix, $watchIndex, $symbol, $state, $value);
+    }
+} # EnterWatch
+
+########################################################################
+#
+#	DialogBox containing a Listbox of current Watch points
+#
+#	Show the DialogBox containing a Listbox containing all current
+#	Watch points and Ignore points, where they can be manipulated
+#	by the following buttons:
+#	('Lookup','Watch','Condition','Ignore','Enable','Disable','Delete','Cancel');
+#
+########################################################################
+
+sub ListWatchPoints {
+    my ($answer, @selected, $symbol);
+    $answer = $dbL->Show(		# Watch point list DialogBox
+	-popover => $liveMenu,
+	-overanchor => 'c',
+	-popanchor => 'nw',
+	-takefocus => 1);
+    return if not $answer or		# (x)
+	      $answer eq 'Cancel';
+    @selected = $dbLb->curselection;	# selected Watch points
+    push @selected, $dbLb->index('active') unless @selected;
+    print "ListWatchPoints: $answer '@selected'\n" if $opt_T;
+    if (@selected) {
+	if ($answer eq 'Delete') {	# probably most frequent selection
+	    foreach (sort {$b <=> $a} @selected) {
+		DeleteWatchPoint($_);	# Delete selected Watchpoints in reverse order
+	    }
+	}
+	elsif ($answer eq 'Lookup') {
+	    $symbol = $watchList[$selected[0]][1];	# first selection only
+	    search_now(1, $symbol, 0);
+	} else {
+	    foreach (@selected) {
+		my ($index, $symbol) = @{$watchList[$_]};
+		if (exists $watchPoints{$index}) {
+		    ($watchState, $watchValue) = @{$watchPoints{$index}};
+		} else {
+		    ($watchState, $watchValue) = (0, 0); # should not happen for List entries
+		}
+		my $state = $watchState;		# keep previous $watchState
+		my $value = $watchValue;		# keep previous $watchValue
+		if ($answer eq 'Watch') {
+		    $state |= 0x10;			# add Watch
+		    $state &= ~0x20;			# take away Ignore
+		}
+		elsif ($answer eq 'Condition') {
+		    my $s;
+		    ($s, $value) = ConditionEdit($_, $index, $index, $liveMenu, 'se');
+		    printf "answer '%s' X = %d state = 0x%02x\n", $answer, $value, $state if $opt_T;
+		    next if $s < 0;
+		    $state &= ~0x0f;			# clear previous condition
+		    $state |= 0x10 | $s;		# turn on 'Watch' | selected condition
+		    $state &= ~0x20;			# turn off possible 'Ignore'
+		}
+		elsif ($answer eq 'Ignore') {
+		    $state |= 0x20;			# add Ignore
+		    $state &= ~0x10 unless $state & 0x0f; # take away Watch unless condition
+		}
+		elsif ($answer eq 'Enable') {
+		    $state &= ~0x40;
+		}
+		elsif ($answer eq 'Disable') {
+		    $state |= 0x40;
+		} else {
+		    die "strange button '$answer' ???\n";
+		}
+		########################################################################
+		#  Apply or remove Watch or Ignore points from running app
+		########################################################################
+		ApplyWatchPoint($_, $index, $index, $symbol, $state, $value);
+	    }
+	}
+    }
+} # ListWatchPoints
+
+########################################################################
+#
+#	Condition Edit
+#
+########################################################################
+
+sub ConditionEdit {
+    my ($i, $ix, $wix, $wm, $oa) = @_;
+    my ($answer, $s, $ftype, $value);
+    my $symbol = $symbolNames[$wix];
+    $ftype = $symbolTable{$symbol}[0];
+    $watchListTxt= "$symbol:" . (($ix != $wix) ? '' :
+		    $watchList[$i][4]);	# stored $watchCond
+    print "watchListTxt '$watchListTxt'\n" if $opt_T;
+    $s = 0;
+    if ($ftype == 0  or			# UDFA
+	$ftype == 21 or			# CLCKL	returns 0 for unconditional Watch
+	$ftype == 23			# F_ERR
+    ) {
+	info_display(0, 'red', "cannot have a Watch condition for '$symbol'");
+    } elsif ($ftype == 1 or		# ARITH
+	$ftype == 7  or			# D_SH
+	$ftype == 12 or			# CH_AR
+	$ftype == 13 or			# F_SW
+	$ftype == 18 or			# TRAB
+	$ftype == 19 or			# OUTW
+	$ftype == 22			# TIMRL
+    ) {
+	$answer = $dbW->Show(		# Watch word condition DialogBox
+	    -popover => $wm,
+	    -overanchor => $oa,
+	    -popanchor => 'nw',
+	    -takefocus => 1);		# $dbWval returns X
+	return unless defined $answer;	# (x)
+	foreach (@dbWbuttons) {
+	    if ($answer eq $_) {
+		last;
+	    }
+	    $s++;
+	}
+	return (-1, 0) if $s >= $#dbWbuttons;	# Cancel is last button
+    } else {				# GATE ... OUTX
+	$answer = $dbB->Show(		# Watch bit condition DialogBox
+	    -popover => $wm,
+	    -overanchor => $oa,
+	    -popanchor => 'nw',
+	    -takefocus => 1);
+	return unless defined $answer;	# (x)
+	if ($answer eq $dbBbuttons[1]) {
+	    $s = 1;			# == 1
+	    $dbWval = 1;		# X = 1
+	} elsif ($answer eq $dbBbuttons[2]) {
+	    $s = 1;			# == 0 ($dbWval undef becomes 0)
+	} elsif ($answer eq $dbBbuttons[3]) {
+	    return (-1, 0);		# Cancel
+	}
+    }
+    $value = convert_nr($dbWval);
+    $dbWval = undef;			# clear LabEntry window
+    return ($s, $value);
+} # ConditionEdit
+
+########################################################################
+#
+#	Apply or remove Watch or Ignore points from running app
+#	%watchPoints [ 0 state 1 value ]
+#	@watchList [ $index, $symbol, $state, $value, $watchCond ]
+#	holds information in parallel with Listbox $dbLb using the same index.
+#  @dbWbuttons = ('change','== X','!= X','< X','<= X','>  X','>=X','% X','!% X','& X','!& X','Cancel');
+#
+########################################################################
+
+sub ApplyWatchPoint {
+    my ($i, $ix, $wix, $symbol, $state, $value) = @_;
+    if ($state != $watchState or $value != $watchValue) {
+	if ($state & 0x30) {		# 'Watch' or 'Ignore'
+	    my ($watchListText, $c, $d, $e, $watchCond);
+	    printf("enter %s	X = %d state = 0x%02x wix = %d\n", $symbol, $value, $state, $wix) if $opt_T;
+	    $watchPoints{$wix} = [ $state, $value ];		# add or change Watch point
+	    if (($c = $state & 0x0f) != 0) {			# Watch condition code
+		$value = sprintf "0x%04x", $value if $c >= 9;	# '&' '!&'
+		$c = $dbWbuttons[$c];	# Watch condition button text eg '== X'
+		$c =~ s/X/$value/;		# replace X from button text by new value
+		if ($c =~ s/!([%&])/$1/) {
+		    $d = '!(';		# bring complement operator ! forward
+		    $e = ')';
+		} else {
+		    $d = '  ';
+		    $e = '';
+		}
+		$watchCond = sprintf(" %s%s %s%s",
+		    $d, ($state & 0x20) ? '...' : $symbol,		# Ignore has no condition
+		    $c, $e);
+		if ($value == 0 and $c =~ m/^%/) {			# '%' '!%'
+		    info_display(0, 'red', "cannot allow modulo division by 0 for '$watchCond'");
+		    $watchPoints{$wix} = [ $watchState, $watchValue ];	# do not change Watch point
+		    return;
+		}
+	    } else {
+		$watchCond = '';
+	    }
+	    $d = $state & 0x40 ? 'D' : ' ';				# 'D' Disabled
+	    $e = $state & 0x20 ? 'I' : $state & 0x10 ? 'W' : '?';	# 'I' Ignore or 'W' Watch
+	    $watchListText = sprintf("%-20s %s %s%s", $symbol, $d, $e, $watchCond);
+	    if ($ix == $wix) {
+		$dbLb->delete($i);					# remove if Watch point change
+		splice @watchList, $i, 1, [ $wix, $symbol, $state, $value, $watchCond ];
+	    } else {
+		splice @watchList, $i, 0, [ $wix, $symbol, $state, $value, $watchCond ];
+	    }
+	    $dbLb->insert($i, $watchListText);			# insert into Watch point Listbox
+	    if ($state & 0x40) {
+		sendWatchRestore($wix, 0);			# Disable was set
+	    } elsif (($state & 0xf0) != ($watchState &0xf0)) {	# ignore 'Condition' changes
+		sendWatchRestore($wix, 1);			# new or changed Watch/Ignore
+	    }
+	    markWatch($state, $wix);
+	} else {
+	    printf("delete %s	X = %d state = 0x%02x wix = %d\n", $symbol, $watchValue, $watchState, $wix) if $opt_T;
+	    die "Deleting Watchpoint $ix != $wix ???\n" unless $ix == $wix;	# test for safety only
+	    DeleteWatchPoint($i);
+	}
+    }
+} # ApplyWatchPoint
+
+########################################################################
+#
+#	Delete a Watchpoint
+#
+########################################################################
+
+sub DeleteWatchPoint {
+    my $i = $_[0];
+    my ($index, $symbol, $state, $value) = @{$watchList[$i]};
+    print "Delete Watch point $i $symbol $index $value\n" if $opt_T;
+    $dbLb->delete($i);
+    splice @watchList, $i, 1;
+    sendWatchRestore($index, 0) unless $state & 0x40;	# unless disabled
+    delete $watchPoints{$index};
+    markWatch(0, $index);
+} # DeleteWatchPoint
+
+########################################################################
+#
+#	Convert a number string obtained with $val to an integer value
+#	Parameter 1:	dec, bin, oct or hex number string - dec may be signed
+#	retun numerical value or 0 if parameter 1 undef or '' or 0
+#
+########################################################################
+
+sub convert_nr {
+    my ($val) = @_;
+    return 0 unless $val;
+    $val = oct($val) if $val =~ /^0/;	# handles 017 0xf 0b1111
+    return int $val;			# initialize to an integer for correct AND/OR
+} # convert_nr
+
+########################################################################
+#
+#	Mark Watch or Ignore for normal and inverted Tags
+#
+########################################################################
+
+sub markWatch {
+    my ($state, $index) = @_;
+    my ($tag);
+    if ($text->tagRanges($index)) {
+	markWatchTag($state, $index);
+    }
+    if ($text->tagRanges($tag = "$index~")) {
+	markWatchTag($state, $tag);
+    }
+} # markWatch
+
+########################################################################
+#
+#	Mark Watch or Ignore for one Tag
+#
+########################################################################
+
+sub markWatchTag {
+    my ($state, $tag) = @_;
+    if ($state & 0x20) {					# Ignore
+	$text->tagConfigure($tag, -underline => 0);		# do first because may have watch edit
+	$text->tagConfigure($tag, -overstrike => 1);
+    } elsif ($state & 0x10) {					# Watch
+	$text->tagConfigure($tag, -underline => 1);
+	$text->tagConfigure($tag, -overstrike => 0);
+    } else {							# Neither
+	$text->tagConfigure($tag, -underline => 0);
+	$text->tagConfigure($tag, -overstrike => 0);
+    }
+    if ($state & 0x40) {
+	$text->tagConfigure($tag, -fgstipple => 'gray25');	# dotted
+    } elsif ($state & 0x0f) {
+	$text->tagConfigure($tag, -fgstipple => 'gray75');	# wiggly
+    } else {
+	$text->tagConfigure($tag, -fgstipple => '');		# full
+    }
+} # markWatchTag
 
 ########################################################################
 #
@@ -1294,8 +1980,9 @@ sub set_shift_control {
 	} else {
 	    $shift_control_state = 0;
 	}	# my $n = $Tk::event->N; info_display(0, 'black', "Press   KeySym=$k, numeric=$n");
+    } else {
+	report_cursor();		# only in Edit mode
     }
-    report_cursor();
 } # set_shift_control
 
 ########################################################################
@@ -1348,7 +2035,7 @@ sub reset_shift_control {
 #	Tested empircally JW 20050404
 #	Failed for very large files, so modified using int	JW 20101016
 #
-#	parameter 1:	$_[0], has HASH ref when callback from bind
+#	parameter 1:	$_[0], has HASH ref when callback from bind (ignore)
 #	parameter 2:	$_[1], do_scan unconditionally if true
 #
 ########################################################################
@@ -1364,12 +2051,16 @@ sub adjust_live {
 	my $last = int $e * $position[1] + 2.5;
 	my $l = $last - 2;
 	$last = $end if $last > $end;
+no warnings;
+	print "start = $start prevStart = $prevStart last = $last prevLast = $prevLast _[1] = '$_[1]'\n" if $opt_T;
+use warnings;
 	if ($start != $prevStart or $last != $prevLast or $_[1]) {
 	    if (@activeSymbols) {
 		deleteAllTags();	# delete tags and all previous active symbols
 		clear_scan();		# clear active symbols in connected iC controller process
 	    }
 	    do_scan("$start.0", "$last.0");
+	    markBreak() if $breakIndex;
 	    $prevStart = $start;
 	    $prevLast  = $last;
 	    printMicroSeconds("adjust live");
@@ -1419,7 +2110,7 @@ sub register_at_server {
 		$mainWindow->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
 		info_display(2000, 'blue', "Connection to '$host:$port'");
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
-		print "$named: '$host:iCserver -p $port -A $opt_A' cannot be started here - start it on $host\n";
+		warn "$named: '$host:iCserver -p $port -A $opt_A' cannot be started here - start it on $host\n";
 		$server = -1;		# no iCserver possible
 		last;
 	    } elsif ($server > 0) {
@@ -1427,7 +2118,7 @@ sub register_at_server {
 		    print "$named: $i: wait 2 seconds for iCserver to start\n" if $opt_T;
 		    select undef, undef, undef, 2;
 		} else {
-		    print "$named: waited 8 seconds for 'iCserver -p $port -A $opt_A' to start - give up\n";
+		    warn "$named: waited 8 seconds for 'iCserver -p $port -A $opt_A' to start - give up\n";
 		    $server = -1;	# something wrong with iCserver
 		    last;
 		}
@@ -1514,17 +2205,26 @@ sub rcvd_msg_from_server {
 	print "($len)$msg< iCserver\n" if $opt_T;
 	if ($len == 0) {
 	    print "$named: rcvd zero length message - disconnect\n" if $opt_T;
+	    sendDebug(0, 'D');			# debug mode off
 	    info_display(2000, 'red', "$named: disconnected by iCserver");
 	    unregister_from_server();
 	    $scanFlag = 0;
-	    $menuScan->configure(-text => 'Live');
+	    $liveButton->configure(-text => 'Live');
+	    $prevText = '\b';			# start a new search
+	    $textDebV = $microSecV = 0;		# stop Text debug output in Edit mode
+	    conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Text debug in app
+	    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
+	    $liveMenu->entryconfigure(7, -state => 'disabled');	# TextDebug
+	    $liveMenu->entryconfigure(8, -state => 'disabled');	# MicroSec
+	    $liveMenu->entryconfigure(10,-state => 'disabled');	# Watch points
 	    $regName = $runName = '';
 	    $menuRun->configure(-text => 'Run ');
 	    print "$named: rcvd_msg_from_server(0) buttons to 'Run ' 'Live'\n" if $opt_T;
 	    $mainWindow->title("$named$u: $fileName$readOnly");
 	    $makeName = '';
-	    $conn->disconnect;		# should only happen when iCserver shuts down
+	    $conn->disconnect;			# should only happen when iCserver shuts down
 	    $conn = 0;
+	    $server = 0;
 	    info_display(2000, 'red', "iCserver has disconnected $named from '$host:$port'");
 	} else {
 	    my ($msg1);
@@ -1541,8 +2241,10 @@ sub rcvd_msg_from_server {
 			## Received Symbol table entries consist of two or three words.
 			## Usually symbol-id and ftype are received. In this
 			## case the ST-offset is the index. (computed by counting)
-			## For ALIASes the index of the Gate to which the
-			## ALIAS resolves is transmitted as a 3rd value.
+			## For ALIASes the index of the Gate to which the ALIAS
+			## resolves is transmitted as a 3rd value.
+			## The actual index of an ALIAS in the ST is never used.
+			## The same applies to immC array members.
 			## For bit I/O names IX0.0 etc, add a second entry IX0_0
 			## For number constants 0 1 etc, add a second entry _0 _1
 			## For negative constants -1 etc, add a second entry __1
@@ -1550,7 +2252,10 @@ sub rcvd_msg_from_server {
 			while ($entry = shift @symbols) {
 			    my ($symbol, $ftype, $index) = split " ", $entry;
 			    my ($l);
-			    $index = $stIndex unless defined $index;
+			    $symbolNames[$stIndex] = $symbol;			# original symbol-id
+			    if (not defined $index) {
+				$index = $stIndex;
+			    }							# else ALIAS or array reference
 			    print "$index\t$symbol\t$ftype\n" if $opt_T;
 			    @{ $symbolTable{$symbol} } = ($ftype, $index);
 			    if ($symbol =~ s/^([IQT]X\d+)\.(\d+(_\d+)?)$/$1_$2/) {
@@ -1568,7 +2273,7 @@ sub rcvd_msg_from_server {
 			    if ($opt_T and ($l = length $symbol) > $maxSymbolLength) {
 				$maxSymbolLength = $l;
 			    }
-			    $stIndex++ unless ($symbol =~ /\[\s*\d+\s*\]/);
+			    $stIndex++ unless ($symbol =~ /\[\s*\d+\s*\]/);	# array references are not in ST
 			}
 		    }
 		    elsif ($entry eq '2') {
@@ -1601,21 +2306,17 @@ no warnings;
 			## Data value entries consist of ST-index and value
 			####################################################
 			my $normalFlag = 0;			# state currently diasabled
+			my ($index, $value, $tRest, $cs, $tNew, $tOld);
 			while ($entry = shift @symbols) {
-			    my ($index, $value) = split " ", $entry;
-			    my ($tRest, $cs, $tNew, $tOld);
+			    ($index, $value) = split " ", $entry;
 			    ($cs, $tOld) = @{ $activeSymbols[$index] }[2, 3];
 			    unless (${$tOld}[0] and ${$tOld}[1]) {
 				$tOld = [gettimeofday()];	# found uninitialised values
 				if ($opt_T) {
 				    my ($symbol, $ft, $ix);
-				    foreach $symbol (keys %symbolTable) {
-					($ft, $ix) = @{ $symbolTable{$symbol} };
-					if ($ix == $index) {
-					    print "$symbol	($ix) ftype: $ft value: $value cs: '$cs' ### uninitialised time\n";
-					    last;		# $symbol becomes undef outside loop
-					}
-				    }
+				    $symbol = $symbolNames[$index];
+				    ($ft, $ix) = @{ $symbolTable{$symbol} };
+				    print "$symbol	($ix) ftype: $ft value: $value cs: '$cs' ### uninitialised time\n";
 				}
 			    }
 			    $activeSymbols[$index][3] = $tNew = [gettimeofday()];
@@ -1663,6 +2364,8 @@ no warnings;
 			    printMicroSeconds("symbol table entry");
 			    print "$index	$value\n" if $opt_t and not $opt_q;
 			}
+			$lastIndex = $index;		# index of last symbol to be updated
+			$lastValue = $value;		# value of last symbol to be updated
 			if ($normalFlag) {
 			    $text->configure(-state => 'disabled');
 			}
@@ -1672,16 +2375,33 @@ use warnings;
 			####################################################
 			## End of Symbol Table
 			####################################################
+			my ($index, $name, $realIndex);
+			if (defined $opt_d && ($opt_d & 040)) {
+			    print "$named$u: '$runName' Symbol Table received\n";
+			    print "index\tname\talias index\n";
+			    print "-----\t----\t-----------\n";
+			    for ($index = 1; $index < $stIndex; $index++) {
+				$name = $symbolNames[$index];
+				$realIndex = $symbolTable{$name}[1];
+				if ($realIndex == $index) {
+				    print "$index\t$name\n";
+				} else {
+				    print "$index\t$name\t$realIndex\n";
+				}
+			    }
+			}
 			info_display(2000, 'blue', "'$runName' Symbol Table received");
-			$stIndex = 0;		# ready for next reception
+			$stIndex = 1;			# ready for next reception
 			printMicroSeconds("symbol table end");
 			print "received '$C_channel:4'\n" if $opt_T;
 			$scanFlag = 1;
+			print "receive Symbol Table: sendStepNext\n" if $opt_T;
+			sendStepNext();			# adjust set and next bits in client
 			adjust_live(-1, -1);
 		    }
 		    elsif ($entry eq '5') {
 			####################################################
-			## Application has stopped - received :5
+			## Application has stopped altogether - received $C_channel:5
 			####################################################
 			print "received '$C_channel:5'\n" if $opt_T;
 			info_display(2000, 'blue', $regName ne '' ?
@@ -1702,26 +2422,87 @@ use warnings;
 			    print "$named: rcvd_msg_from_server received :5 'Run '\n" if $opt_T;
 			}
 			if ($scanFlag) {
-			    $menuScan->configure(-text => 'wait');
-			    print "$named: rcvd_messgae_from_server received :5 'wait'\n" if $opt_T;
+			    $liveButton->configure(-text => 'wait');
+			    $prevText = '\b';					# start a new search
+			    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
+			    $liveMenu->entryconfigure(7, -state => 'disabled');	# TextDebug
+			    $liveMenu->entryconfigure(8, -state => 'disabled');	# MicroSec
+			    $liveMenu->entryconfigure(10,-state => 'disabled');	# Watch points
+			    print "$named: rcvd_msg_from_server received :5 'wait'\n" if $opt_T;
 			}
 		    }
-		    elsif ($entry ne '0') {	# ignore :0 messages
+		    elsif ($entry eq '9') {		# conditional watch point
+			my ($state, $value, $condition);
+			print "$named: watch lastIndex = $lastIndex lastValue = $lastValue '$watchPoints{$lastIndex}'\n" if $opt_T;
+			if (exists $watchPoints{$lastIndex}) {
+			    ($state, $value) = @{$watchPoints{$lastIndex}};
+			    if ($state & 0x10) {	# conditions must line up with @dbWbuttons
+				if (($condition = $state & 0x0f) == 0 or	# unconditional break
+				    ($condition ==  1 and   $lastValue == $value)  or
+				    ($condition ==  2 and   $lastValue != $value)  or
+				    ($condition ==  3 and   $lastValue <  $value)  or
+				    ($condition ==  4 and   $lastValue <= $value)  or
+				    ($condition ==  5 and   $lastValue >  $value)  or
+				    ($condition ==  6 and   $lastValue >= $value)  or
+				    ($condition ==  7 and   $lastValue %  $value)  or
+				    ($condition ==  8 and !($lastValue %  $value)) or
+				    ($condition ==  9 and   $lastValue &  $value)  or
+				    ($condition == 10 and !($lastValue &  $value))
+				) {
+				    goto BreakNow;
+				}
+			    } else {
+				goto BreakError;
+			    }
+			} else {
+			  BreakError:
+			    warn "Watch point '$symbolNames[$lastIndex]' has incorrect or no entry\n";
+			}
+			conn_send_now("$D_channel:99");	# continue (ord('c') is 99)
+		    }
+		    elsif ($entry eq '8') {		# unconditional watch point
+		      BreakNow:
+			####################################################
+			## Application has stopped at a BREAK - received $C_channel:8
+			####################################################
+			if ($scanFlag) {
+			    $entrySearch->configure(-background => 'pink');
+			    $stepV = $nextV = $continueV = 0;	# turn buttons off
+			    $searchText = $symbolNames[$lastIndex];
+			    print "received '$C_channel:$entry' '$searchText'\n" if $opt_T;
+			    while ($lastIndex) {
+				unless ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
+				    $prevText = '';
+				    search_now(1, $searchText, 8);	# search for watch word without adding search tag
+				}
+				if ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
+				    $breakIndex = $lastIndex;
+				    markBreak();
+				} elsif ($searchText =~ s/^(Q[XBWLH]\d+(\.[0-7])?)_0$/$1/) {
+				    $lastIndex = $symbolTable{$searchText}[1];
+				    next;
+				}
+				last;
+			    }
+			    $yScrollbar->focus();		# enable keyboard stepping
+			}	# should never get BREAK message in Edit mode - ignore
+		    }
+		    elsif ($entry ne '0') {	# ignore '$C_channel:0' messages
 			print "received '$C_channel:$entry'\n" if $opt_T;
 			goto Spurious;
 		    }
 		}
-		elsif ($entry =~ /0:(\d+)/) {	# channel 0:1; warning from iCserver
+		elsif ($entry =~ /0:(\d+)/) {	# channel 0 message
 		    if (($entry = $1) eq '1') {
 			####################################################
-			## Warning from iCserver. $msg is 0:1;<warning message>
+			## Warning from iCserver. $msg is '0:1;<warning message>'
 			####################################################
 			$msg =~ /^0:1;(.*)/;
 			print "$named: Warning: $1\n" if $opt_T;
 			info_display(2000, 'red', $1);
 			last;	# used whole of $msg - ignore splits on ',' and ';'
 		    }
-		    elsif ($entry ne '0') {	# ignore :0 messages
+		    elsif ($entry ne '0') {	# ignore '0:0' messages
 			goto Spurious;
 		    }
 		}
@@ -1736,6 +2517,41 @@ use warnings;
 	print "undefined message< iCserver\n" if $opt_T;
     }
 } # rcvd_msg_from_server
+
+########################################################################
+#
+#	Mark BREAK variable through its tag with a raised relief and bold text
+#
+########################################################################
+
+sub markBreak {
+    my ($tag);
+    if ($text->tagRanges($breakIndex)) {
+	$text->tagConfigure($breakIndex, -relief => 'raised', -borderwidth => 3, -font => $boldfont);
+    }
+    if ($text->tagRanges($tag = "$breakIndex~")) {
+	$text->tagConfigure($tag, -relief => 'raised', -borderwidth => 3, -font => $boldfont);
+    }
+} # markBreak
+
+########################################################################
+#
+#	Clear BREAK variable through its tag without relief and normal text
+#
+########################################################################
+
+sub clearBreak {
+    my ($tag);
+    if ($breakIndex) {
+	if ($text->tagRanges($breakIndex)) {
+	    $text->tagConfigure($breakIndex, -relief => 'flat', -borderwidth => 0, -font => $font);
+	}
+	if ($text->tagRanges($tag = "$breakIndex~")) {
+	    $text->tagConfigure($tag, -relief => 'flat', -borderwidth => 0, -font => $font);
+	}
+    }
+    $breakIndex = 0;
+} # clearBreak
 
 ########################################################################
 #
@@ -1814,6 +2630,172 @@ sub pick_word {
 } # pick_word
 
 ########################################################################
+#  iClive D_channel DEBUG messages		Keybord accelerator	at app
+#
+#  'd'	activate DEBUG mode				'd'	set debugFlag
+#	  turn search entry window pale green			(app is executing)
+#	  un-grey STEP/NEXT/CONTINUE				send every symbol as it changes
+#	  make all Watch point symbols break symbols		stops on next Watch point (if any)
+#  	  							hold execution after sending changed symbol
+#
+#  	receive $C_channel:8 BREAK message
+#	  break symbol is the last changed symbol before the BREAK message
+#	  turn search entry window pink				(app execution has stopped)
+#	  show break symbol in pink search entry window
+#	  start search for the break symbol (moves text)
+#	  highlight all occurences of the break symbol by a raised border and bold text
+#
+#  's'	STEP						's'	continue - stops on next active symbol
+#	  make all active symbols break symbols			interrupts at next active symbol if not stopped
+#
+#  'n'	NEXT						'n'	continue - stops on next I/O symbol
+#	  make only I/O symbols break symbols			interrupts at next I/O symbol if not stopped
+#
+#  'c'	CONTINUE					'c'	continue - stops on next Watch point (if any)
+#	  make only Watch point symbols break symbols		runs unless stopped by Watch point, STEP or NEXT
+#
+#  'D'	de-activate DEBUG mode				'D'	clear debugFlag
+#	  turn search entry window grey				continue fast execution exactly as before
+#	  grey STEP/NEXT/CONTINUE				buffer changed symbols marked with live bit
+#
+######	The following are independent of DEBUG mode, but de-activated in Edit mode
+#
+#  't'	activate/de-activate debug output in app	't'	toggle -t flag
+#
+#  'm'	activate/de-activate microsecond output in app	'm'	toggle micro
+#
+######	Secondary menu options when in Live mode
+#
+#  -----------------	Tear Off to isolate this menu
+#  Debug	   d	activate DEBUG mode				send all active symbol as they change
+#  -----------------
+#  Step		   s	make all active symbols break symbols	     \
+#  Next		   n	make only I/O symbols break symbols	      > continue execution till next break
+#  Continue	   c	make only Watch point symbols break symbols  /
+#  -----------------
+#  TextDebug	   t				activate/de-activate debug output in app
+#  MicroSec	   m				activate/de-activate microsecond output in app
+#  -----------------
+#  Watch points    w	list and manipulate all Watch and Ignore points in a Listbox Dialog
+#  -----------------
+#
+#  Active symbols are all words that occur both in the Symbol table and in the current text.
+#  By scanning the text mark ACTIVE bit in xxx for
+#	all iC variables in the source text for .ic files
+#	all iC variables as well as generated intermediate variables for .lst files
+#  By scanning the text mark ACTIVE bit and IO bit in xxx for
+#	all IEC output variables for either .ic or .lst
+#  TX0.x timer input variables are excluded from ACTIVE bits, but they may be
+#  marked as Watch point symbols.
+#
+#  Left click a word	if DEBUG MODE and active symbol	enter as breakpoint
+#
+#  Beakpoints can only be entered while in DEBUG mode, but they are not deleted while not
+#  in DEBUG mode - they simply are not active. Breakpoints can be disabled/enabled/deleted
+#  at any time while in LIVE mode.
+#
+########################################################################
+
+sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
+    my ($k, $accelerator) = @_;
+    my ($acc);
+    if ($scanFlag) {				# only in Live mode
+	$k = 1 if $k;				# Key press
+	if ($accelerator eq 'd') {
+	    $saveDebug = 0;
+	    $accelerator = $liveMenu->entrycget(1, -accelerator);
+	}
+	if ($accelerator eq 'D') {
+	    $liveMenu->entryconfigure(1, -accelerator => 'd');
+	    $liveMenu->entryconfigure(3, -state => 'disabled');	# Step
+	    $liveMenu->entryconfigure(4, -state => 'disabled');	# Next
+	    $liveMenu->entryconfigure(5, -state => 'disabled');	# Continue
+	    $searchText = '';					# clear search entry window
+	    $entrySearch->configure(-background => 'grey94');
+	    $stepV = $nextV = $continueV = 0;
+	    $saveDebug = $debugFlag;
+	    $debugFlag = 0;
+	    sendWatchRestore(0, 0);		# restore set/next to all Watch and Ignore points
+	    adjust_live(-1, -1) if $k;		# remove Watch and Ignore marks
+	} elsif ($accelerator eq 't') {
+	    $accelerator = 'S' if ($textDebV ^= $k) == 0;
+	} elsif ($accelerator eq 'm') {
+	    $accelerator = 'M' if ($microSecV ^= $k) == 0;
+	}
+	if ($debugFlag or $accelerator =~ m/^[dDtSmM]/) {
+	    $acc = ord($accelerator);	# ASCII code of $accelerator for C interptretation
+	    print "sendDebug '$accelerator' $D_channel:$acc\n" if $opt_T;
+	    conn_send_now("$D_channel:$acc");
+	    if ($accelerator !~ m/^[dtSmM]/) {	# 'd' sets background with 'c'
+		clearBreak();
+		unless ($accelerator eq 'D') {
+		    $entrySearch->configure(-background => 'palegreen');
+		}
+	    }
+	}
+	if ($accelerator eq 'd') {
+	    $liveMenu->entryconfigure(1, -accelerator => 'D');
+	    $liveMenu->entryconfigure(3, -state => 'normal');	# Step
+	    $liveMenu->entryconfigure(4, -state => 'normal');	# Next
+	    $liveMenu->entryconfigure(5, -state => 'normal');	# Continue
+	    $continueV = 1;			# initial debug state is Continue
+	    $debugFlag = 1;
+	    sendDebug(1, 'c');
+	    sendWatchRestore(0, 1);		# set all Watch and Ignore points
+	    adjust_live(-1, -1);		# apply Watch and Ignore marks
+	} elsif ($debugFlag) {
+	    if ($accelerator eq 's') {
+		$stepV = 1;
+		$nextV = $continueV = 0;
+	    } elsif ($accelerator eq 'n') {
+		$nextV = 1;
+		$stepV = $continueV = 0;
+	    } elsif ($accelerator eq 'c') {
+		$continueV = 1;
+		$stepV = $nextV = 0;
+	    }
+	}
+	$yScrollbar->focus();			# enable keyboard stepping
+    }
+} # sendDebug
+
+########################################################################
+#
+#	On Live button release in Edit mode start Live mode only.
+#	In Live mode pop up debug menu after 200 ms from Live button press
+#	unless button released beforehand in which case return to Edit mode.
+#
+########################################################################
+
+sub LiveMenu {
+    if ($scanFlag) {
+	my ($dummy, $buttonRef) = @_;
+	my $buttonState = $$buttonRef->cget(-state);
+	my $buttonText  = $$buttonRef->cget(-text);
+	if ($buttonState ne 'disabled') {
+	    my $xWin = $mainWindow->rootx;
+	    my $yWin = $mainWindow->rooty;
+	    print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
+	    $liveTimer = $mainWindow->after(200,
+		sub { $liveMenu->post($xWin - 135, $yWin - 32); });
+	}
+	print "Pop up live button '$buttonText' '$buttonState'\n" if $opt_T;
+    }
+} # LiveMenu
+
+########################################################################
+#
+#	Cancel live menu from live button before 200 ms are up
+#
+########################################################################
+
+sub LiveCancel {
+    $liveMenu->unpost();
+    $liveTimer->cancel() if defined $liveTimer;
+    print "Cancel live\n" if $opt_T;
+} # LiveCancel
+
+########################################################################
 #
 #	Pop up search menu from search button after 200 ms
 #
@@ -1852,8 +2834,8 @@ sub SearchCancel {
 #	when called as a callback from
 #		eg: bind('<KeyPress-Return>', [ \&search_text, undef, 0 ])
 #	the first parameter $_[0] is Tk::Entry=HASH(0x...)
-#	provide a dummy first parameter when called directly.
-#	Use this is buttonFlag.
+#	provide a dummy true (1) first parameter when called directly.
+#	Use first parameter as buttonFlag.
 #
 #		parameter 1:	buttonFlag - false (0) when [/] release else true
 #		parameter 2:	newSearchText
@@ -1862,7 +2844,8 @@ sub SearchCancel {
 #		parameter 3:	0  Search down	(default)
 #		    "		1  Search up	(save searchText when clearing)
 #		    "		2  Go to line
-#		    "		4  Special search down - suppress search statistics
+#		    "		|4 Special search down - suppress search statistics
+#		    "		|8 Special search for Watch points - suppress search tags
 #
 #	search_text() is mostly called from a pop up, which does not close,
 #	until search_text() has completed execution. If the search action
@@ -1885,7 +2868,7 @@ no warnings;
 use warnings;
     unless ($buttonFlag) {
 	SearchCancel();				# do this first - no delays yet
-	if ($searchText eq '' or not defined $searchText) {
+	if (not defined $searchText or $searchText eq '') {
 	    $entrySearch->focus();		# initiate search entry (simulates vi)
 	    return;
 	}
@@ -1895,16 +2878,13 @@ use warnings;
 
 sub search_now {
     my ($buttonFlag, $newSearchText, $direction) = @_;
-    my ($saveText, $saveMatch, $option, $auxiliary, $current, $hl, $length);
+    my ($option, $current, $hl, $length);
     my $tmpText;
-    my $suppress = $direction & 0x04;	# extract additional parameter 3 info
+    my $suppress = $direction;		# extract additional parameter 3 info
     $direction &= 0x03;			# remove suppress bit
     if (defined $newSearchText) {
-	if ($newSearchText eq '' and $direction) {	# save search text when clearing
-	    ($saveText, $saveMatch) = ($searchText, $matchType);
-	}
 	($searchText, $option) = split(/\t/, $newSearchText);
-	$matchType = $option ? $matchRestores{$option} : '-exact';
+	($matchType, $ignoreCase) = $option ? split(" ", $matchRestores{$option}) : ('w', '-forwards');	# default Word search
     }
     $searchText = '' if not defined $searchText;
     $text->tagDelete('gotoTag');
@@ -1923,9 +2903,8 @@ sub search_now {
 	    last;
 	}
 	print "goto: '$searchText' '$current' '$matchType' $direction\n" if $opt_T;
-	$matchType = 'g';
 	$text->see($current);
-	## grey out the whole line - until mouse moves - visible in Edit and Live mode
+	## grey out the whole line - until next search - visible in Edit and Live mode
 	$text->tagConfigure('gotoTag',
 			    -background => 'grey',
 			    -foreground => 'black',
@@ -1933,32 +2912,37 @@ sub search_now {
 	$text->tagAdd('gotoTag', "$current linestart", "$current lineend");
 	$text->markSet('insert', $current);
 	$text->tagLower('gotoTag');	# put any search results in foreground
+	adjust_live();
 	report_cursor();
-	$tmpText = "$searchText$matchExtensions{$matchType}";
+	$tmpText = "$searchText$matchExtensions{'g'}";
 	check_menu($tmpText, 'searches');
-	$prevText = $searchText;
-	$prevMatch = $matchType;
+	($prevText, $prevMatch) = ($searchText, 'g');	# $prevCase not modified
 	return;
     }
-    if ($prevText ne $searchText or $prevMatch ne $matchType) {
+    if ($prevText ne $searchText or $prevMatch ne $matchType or $prevCase ne $ignoreCase) {
 	########################################################################
 	#	Start of a new search
 	########################################################################
-	print "pattern: \$searchText '$searchText' \$matchType '$matchType' \$prevText '$prevText' \$prevMatch '$prevMatch'\n" if $opt_T;
+	print "pattern: \$searchText '$searchText' \$matchType '$matchType' \$ignoreCase '$ignoreCase' \$prevText '$prevText' \$prevMatch '$prevMatch' \$prevCase '$prevCase'\n" if $opt_T;
 	@hits = ();
 	@groups = ();
 	$gl = 0;
 	$text->tagDelete('searchTag') if $prevText;
+	($prevText, $prevMatch, $prevCase) = ($searchText, $matchType, $ignoreCase);
 	$text->tagConfigure('searchTag',
 			    -background => 'black',	# same as 'less' colouring
 			    -foreground => 'white',	# stands out amongst live colours
 			   );				# cannot see live status though except overhang
-	if ($matchType eq 'ri') {
-	    $matchType = '-regexp';
-	    $auxiliary = '-nocase';
-	} else {
-	    $auxiliary = '-forwards';			# fill as placeholder
+	if ($matchType eq 'w') {
+	    if ($searchText =~ m/^(\w+|[IQT][XBWLH]\d+\.[0-7](_\d+)?)$/) {
+		$matchType = '-regexp';
+		$searchText = "\\b$searchText\\b";
+		$searchText =~ s/\./\\./;
+	    } else {
+		$matchType = '-exact';
+	    }
 	}
+	print "searchText '$searchText' matchType '$matchType' ignoreCase '$ignoreCase'\n" if $opt_T;
 	$current = '1.0';
 	$length = '0';
 
@@ -1969,8 +2953,8 @@ sub search_now {
 	while (1) {
 	    eval {
 		$current = $text->search(-count => \$length,	# number of characters matched
-					 $matchType,	# -exact -nocase -regexp
-					 $auxiliary,	# -nocase -forwards (filler), (never search backwards)
+					 $matchType,	# -exact -regexp
+					 $ignoreCase,	# -forwards (filler) -nocase, (never search backwards)
 					 '--',		# forces next argument to be pattern
 					 $searchText,	# search pattern
 					 $current,	# start index - moves with every iteration
@@ -1984,20 +2968,34 @@ sub search_now {
 		last;
 	    }
 	    last unless $current and $length;		# end of pattern search or 0 length match (clear)
-	    if ($opt_T) {
-		my @lineinfo = $text->dlineinfo($current);
-		my $word = $text->get($current, "$current + $length char");
-		print "word: $word $length '@lineinfo'\n";
+	    my $comment = 0;
+	    if ($scanFlag) {
+		foreach ($text->tagNames($current)) {	# in Live mode block hits in comments
+		    if ($_ eq "cTag") {
+			$comment = 1;
+			last;
+		    }
+		}
 	    }
-	    $text->tagAdd('searchTag', $current, "$current + $length char");
-	    $current =~ /(\d+)\.(\d+)/;
-	    push @hits, [ $current, $1, $2, $length, ];
+	    unless ($comment) {
+		if ($opt_T) {
+		    my @lineinfo = $text->dlineinfo($current);
+		    my $word = $text->get($current, "$current + $length char");
+		    print "word: $word $length '@lineinfo'\n";
+		}
+		unless ($suppress & 0x08) {
+		    $text->tagAdd('searchTag', $current, "$current + $length char");
+		}
+		$current =~ /(\d+)\.(\d+)/;
+		push @hits, [ $current, $1, $2, $length, ];
+	    }
 	    $current = $text->index("$current + $length char");	# point bejond hit
 	}
-	$matchType = 'ri' if $auxiliary eq '-nocase';	# otherwise radio button skips
+	($searchText, $matchType) = ($prevText, $prevMatch);	# otherwise radio button skips
 	if (($hl = scalar @hits) > 0) {
-	    if ($searchText ne '^\*\*\* ') {	# regular expression to find errors in listing
-		$tmpText = "$searchText$matchExtensions{$matchType}";
+	    if ($searchText ne '^\*\*\* ') {		# regular expression to find errors in listing
+		$tmpText = "$matchType$ignoreCase";
+		$tmpText = "$searchText$matchExtensions{$tmpText}";
 		check_menu($tmpText, 'searches');
 	    }
 	    ########################################################################
@@ -2044,11 +3042,9 @@ sub search_now {
 	    $gi = -1;				# see index
 	    $gl = scalar @groups;
 	    my $plural = $gl > 1 ? 's' : '';
-	    info_display(1000, 'dark green', "/$searchText/ found $hl times in $gl group$plural") unless $suppress;
+	    info_display(1000, 'dark green', "/$searchText/ found $hl times in $gl group$plural") unless $suppress & 0x04;
 	    $text->tagRaise('searchTag') if $gl;	# put any search results in foreground
 	}
-	$prevText = $searchText;
-	$prevMatch = $matchType;
 	$entrySearch->focus();
     }
     ########################################################################
@@ -2096,9 +3092,6 @@ sub search_now {
 		$text->focus();
 	    }
 	}
-    }
-    if ($saveText) {
-	($searchText, $matchType) = ($saveText, $saveMatch);
     }
 } # search_now
 
@@ -2161,12 +3154,17 @@ sub deleteAllTags {
 ########################################################################
 
 sub scan {
+    my ($buttonFlag) = @_;
+    print "scan buttonFlag = '$buttonFlag' scanFlag = '$scanFlag'\n" if $opt_T;
+    unless ($buttonFlag) {
+	LiveCancel();				# do this first - no delays yet
+    }
     deleteAllTags();		# also clears @activeSymbols
     if ($scanFlag) {
-	reset_scan();
+	reset_scan();		# return to Edit mode
     } elsif ($conn) {
 	$scanFlag = 1;
-	$menuScan->configure(-text => 'wait');
+	$liveButton->configure(-text => 'wait');
 	print "$named: scan 'wait'\n" if $opt_T;
 	if ($runName ne '') {
 	    print "$named: Request Symbol Table '$D_channel:1'.\n" if $opt_T;
@@ -2197,8 +3195,16 @@ sub scan {
 
 sub reset_scan {
     if ($scanFlag) {
+	sendDebug(0, 'D');			# debug mode off
 	$scanFlag = 0;
-	$menuScan->configure(-text => 'Live');
+	$liveButton->configure(-text => 'Live');
+	$prevText = '\b';			# start a new search
+	$textDebV = $microSecV = 0;		# stop Text debug output in Edit mode
+	conn_send_now("$D_channel:83,$D_channel:77");		# 'S' 'M' to stop Text debug in app
+	$liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
+	$liveMenu->entryconfigure(7, -state => 'disabled');	# TextDebug
+	$liveMenu->entryconfigure(8, -state => 'disabled');	# MicroSec
+	$liveMenu->entryconfigure(10,-state => 'disabled');	# Watch points
 	clear_scan(@_);
     }
 } # reset_scan
@@ -2245,6 +3251,8 @@ sub clear_scan {
 #	Balloon processing is detached for a newly loaded file and when
 #	the scan is cleared to allow clean editing.
 #
+#	Called from adjust_live()
+#
 ########################################################################
 
 sub do_scan {
@@ -2280,7 +3288,9 @@ sub do_scan {
 	    info_display(2000, 'red',
 		"WARNING: '$fileName$readOnly' does not match connected control program '$runName'");
 	    $scanFlag = 0;
-	    $menuScan->configure(-text => 'Live');	# no live words scanned yet
+	    $liveButton->configure(-text => 'Live');	# no live words scanned yet
+	    $prevText = '\b';				# start a new search
+	    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
 	    return;
 	}
 	$text->configure(-state => 'normal');
@@ -2295,7 +3305,8 @@ sub do_scan {
 				     $current,
 				     $last);
 	    last if (!$current);
-	    $iw = $i = $text->get($current, "$current + $length char");
+	    my $currEnd = $text->index("$current + $length char");
+	    $iw = $i = $text->get($current, $currEnd);
 	    ########################################################################
 	    # Match simple variables, IEC-1131 and derivatives as well as immC array members
 	    ########################################################################
@@ -2335,29 +3346,28 @@ use warnings;
 			    $activeSymbols[$index][0] |= $ts; # 01|02 leaves 03 for both
 			    colourTag($tag, $cs);	# initial tag colour
 			}
-			$text->tagAdd($tag, $current, "$current + $length char");
+			$text->tagAdd($tag, $current, $currEnd);
 		    }
-		    elsif ($cs == 2 and $iw =~ /[\w.]+(\s*\[\s*\d+\s*\])?\s*=$/) {
+		    elsif (($cs == 2 or $cs == 6) and	# ARITH or TIMRL
+			    $iw =~ /[\w.]+(\s*\[\s*\d+\s*\])?\s*=$/) {
 			########################################################################
-			# only live display in a comment is 'symbol =' at and of a comment line
+			# only live display in a comment is 'symbol =' at end of a comment line
 			########################################################################
 			print "$tag	$word	'$iw' ftype = $ftype\n" if $opt_T;
 			unless ($activeSymbols[$index][0] and $activeSymbols[$index][0] & 04) {
 			    $activeSymbols[$index][0] |= 05; # for analog value display
-			    colourTag($tag, 2);	# ARITH tag colour never changed
+			    colourTag($tag, $cs);	# ARITH or TIMRL tag
 			}
-			$text->tagAdd($tag, $current, "$current + $length char");
+			$text->tagAdd($tag, $current, $currEnd);
 			$tag = "$index=";
-			colourTag($tag, 2);	# ARITH tag colour never changed
-			$current = $text->index("$current + $length char");
-			$text->insert("$current lineend", " 0", $tag);
-			$length = 0;
+			colourTag($tag, $cs);		# ARITH or TIMRL tag
+			$text->insert("$currEnd lineend", " 0", $tag);
 		    }
 		}
 		## ELSE - there may be spurious words in symbolTable with undefined data
 		##        as explained in "Programming Perl 3rd ed. page 254" - IGNORE
 	    }
-	    $current = $text->index("$current + $length char");
+	    $current = $currEnd;		# continue search after this atom
 	}
 
 	####################################################################
@@ -2371,22 +3381,24 @@ use warnings;
 	my $msg = '';
 	foreach $index (0 .. $#activeSymbols) {
 	    if ($activeSymbols[$index][0]) {
-		if ((length($msg) + length($index)) > 1393) {	# REPLY 1400 - (6+1) in tcpc.h
-		    conn_send_now("$D_channel:3$msg");	# send intermediate active symbols
-		    printMicroSeconds("sent one active symbol string to server");
-		    print "sent '$D_channel:3$msg'\n" if $opt_t and not $opt_q;
-		    $msg = '';
-		}
 		print "$index\n" if $opt_T;
-		$msg .= ";$index";			# ch:3 max 6, term 1
+		$msg .= ";$index";
 	    }
 	}
-	if ($msg) {
-	    conn_send_now("$D_channel:4$msg");		# send last active symbols
-	    printMicroSeconds("sent last active symbol string to server");
-	    print "sent '$D_channel:4$msg'\n" if $opt_t and not $opt_q;
+	sendMsg(3, 4, $msg);			# send ; separated list in 1 or more sections
+	conn_send_now("$D_channel:0");		# reset last value in iCserver
+
+	####################################################################
+	## Restore Watch and Ignore point markings
+	####################################################################
+
+	if ($debugFlag) {
+	    foreach $index (keys %watchPoints) {
+		my $state = ${$watchPoints{$index}}[0];
+		printf("%s	index %3d state = 0x%02x\n", $symbolNames[$index], $index, $state) if $opt_T;
+		markWatch($state, $index);
+	    }
 	}
-	conn_send_now("$D_channel:0");			# reset last value in iCserver
 
 	####################################################################
 	## Attach balloon processing
@@ -2440,6 +3452,7 @@ use warnings;
 		    #	Shift_L			1	balloon shows index in S.T. (useful in checking for ALIASES)
 		    #	Control_L		2	balloon shows ftype as mnemonic
 		    #	Shift_L+Control_L	3	balloon shows ftype as number
+		    #	NOTE: iClive window must have focus for KeyPress and KeyRelease to be recognised
 		    ########################################################################
 		    if ($shift_control_state == 0) {
 			$bMsg = "$val";
@@ -2485,12 +3498,19 @@ use warnings;
 
 	$text->tagRaise('searchTag') if $gl;	# put any search results in foreground
 	if ($readOnly) {
-	    $menuScan->configure(-text => 'View');
+	    $liveButton->configure(-text => 'View');
 	} else {
-	    $menuScan->configure(-text => 'Edit');
+	    $liveButton->configure(-text => 'Edit');
 	}
+	$prevText = '\b';					# start a new search
+	$liveMenu->entryconfigure(1, -state => 'normal');	# Debug     enabled
+	sendDebug(1, 'd') if $saveDebug;
+	$liveMenu->entryconfigure(7, -state => 'normal');	# TextDebug enabled
+	$liveMenu->entryconfigure(8, -state => 'normal');	# MicroSec  enabled
+	$liveMenu->entryconfigure(10,-state => 'normal');	# Watch points enabled
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();
+	$text->tagDelete('pTag');
 	$scanFlag = 1;		# scan successful
     } else {
 	info_display(2000, 'red', "no current runnable proces");
@@ -2505,7 +3525,7 @@ use warnings;
 
 sub register_now {
     $scanFlag = 1;
-    $menuScan->configure(-text => 'wait');
+    $liveButton->configure(-text => 'wait');
     print "$named: register_now 'wait'\n" if $opt_T;
     register_at_server();
     # will call do_scan() if connect was successful via Request S.T and :2 reply
@@ -2566,7 +3586,7 @@ sub check_save {
 
 sub new_text {
     deleteAllTags();	# also clears @activeSymbols
-    reset_scan();
+    reset_scan();	# Live => Edit mode
     if (check_save()) {
 	if ($readOnly) {
 	    $text->configure(-state => 'normal');	# allow clearing new file
@@ -2604,11 +3624,6 @@ sub reload_file {
 sub open_list {
     if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
 	if ($4 eq 'ic') {
-	    if ($scanFlag) {
-		deleteAllTags();	# also clears @activeSymbols
-		reset_scan(1);		# must be done before open_file, because live expands text
-		$scanFlag = 1;		# restore $scanFlag
-	    }
 	    open_file(0, "$1.lst");
 	} else {
 	    open_file(1, "$1.ic");	# $1.lst not saved, since generated and RO
@@ -2685,13 +3700,14 @@ use warnings;
 		return 0;			# cancel operation
 	    }
 	}
+	if ($scanFlag) {
+	    deleteAllTags();			# required here to clear = values in text
+	    reset_scan(1);			# $text -state now 'normal' for reading file
+	    $scanFlag = 1;			# restore $scanFlag
+	}
 	if ($unconditional or check_save()) {
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "$fName")) {
-		if ($scanFlag) {
-		    deleteAllTags();		# required here to clear = values in text
-		    clear_scan();		# $text -state now 'normal' for reading file
-		}
 		if ($readOnly) {		# applies to previously opened file
 		    $text->configure(-state => 'normal');	# allow overwriting with new file
 		}
@@ -2730,7 +3746,7 @@ use warnings;
 			adjust_live(-1, -1);
 		    }
 		}
-		$prevText = '';		# start a new search
+		$prevText = '\b';				# start a new search
 		if ($readOnly) {
 		    $text->configure(-state => 'disabled');	# read-only file
 		}
@@ -2854,7 +3870,7 @@ sub saveAs_file {
 		$instName = "$procName$instanceText";
 		change_instance();
 	    }
-	    $prevText = '';		# start a new search
+	    $prevText = '\b';		# start a new search
 	}
     } else {
 	info_display(2000, 'red', "no file saved");
@@ -2926,7 +3942,7 @@ sub build_file {
 		    my $listName = $ret >= 20 ? "$baseName.ic" : "$baseName.lst";
 		    open_file(1, $listName);	# load the generated file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
-		    $prevText = '';		# start a new search
+		    $prevText = '\b';		# start a new search
 		    $matchType = '-regexp';	# NOTE: $fileName has changed
 		    search_now(1, undef, 4);	# carry out the search, setting markers but no info display
 		}
@@ -3142,10 +4158,12 @@ sub run_file {
 sub stop_file {
     info_display(2000, 'blue', "'$runName' stopping");
     if ($scanFlag) {
+	sendDebug(0, 'D');			# debug mode off
 	conn_send_now("$D_channel:5");		# GET_END - clear S.T.
-	$menuScan->configure(-text => 'wait');	# was 'Edit'
+	$liveButton->configure(-text => 'wait');	# was 'Edit'
 	print "$named: stop_file 'wait'\n" if $opt_T;
     }				# leave scanButton as 'Edit' if not $scanFlag
+    $server = 0;
     conn_send_now("$D_channel:6,$D_channel:0");	# STOP_PROGRAM
     # receives "$C_channel:5" from application when it quits - sets 'Run ' then
 } # stop_file
@@ -3161,6 +4179,11 @@ sub change_instance {
 	print "$named: change_instance from '$oldInstance' to '$instanceText'\n" if $opt_T;
 	$instName = "$procName$instanceText";
 	print "$named: from regName '$regName' to instName '$instName'\n" if $opt_T;
+	if ($scanFlag) {
+	    sendDebug(0, 'D');			# debug mode off
+	    $liveButton->configure(-text => 'wait');
+	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
+	}
 	unregister_from_server();
 	register_at_server();
 	####################################################
@@ -3171,10 +4194,6 @@ sub change_instance {
 	$mainWindow->title("$named$u: $fileName$readOnly");
 	print "$named: change_instance 'Run '\n" if $opt_T;
 	$oldInstance = $instanceText;
-	if ($scanFlag) {
-	    $menuScan->configure(-text => 'wait');
-	    print "$named: change_instance scan to 'wait'\n" if $opt_T;
-	}
 	return 1;
     }
     return 0;
@@ -3272,11 +4291,18 @@ sub check_menu {
 #		27.4			# line #
 #		1			# instance
 #	[searches]
-#		pip			# default match type is -exact
-#		[files]			# a curious -exact match
+#		Timer			# default match type is w (Word)
+#					# searches \bTimer\b - ignores Timer_1
 #		timer		i	# match type -nocase (<tab>i)
+#					# matches timer and Timer - ignores Timer_1
+#		pip		e	# match type -exact  (<tab>e)
+#					# matches pip pip_1 - even Apip1
+#		Pip		ei	# match type -exact  (<tab>ei)
+#					# matches Pip pip pip_1 - even Apip1
+#		[files]		e	# a curious -exact match
 #		QX[\d+]\.[\d+]	r	# match type -regexp (<tab>r)
-#		ix[\d+]\.[\d+]	ri	# is resolved to -regexp -nocase
+#		qx[\d+]\.[\d+]	ri	# match type -regexp (<tab>ri)
+#		75		g	# goto line 75       (<tab>g)
 #
 #	since tabs cannot be entered in the search entry box (skips to Text window)
 #	use <tab> followed by search option in the search menu list
@@ -3441,6 +4467,7 @@ sub printMicroSeconds {
 #
 #	Output Symbol Table for debugging purposes
 #	called by extra Build menu items activated by $opt_T
+#	or keyboard T command here or at app.
 #
 #	parameter 1	(ignore)
 #	parameter 2	sorting order: 0 by name	1 by index
@@ -3503,7 +4530,7 @@ __END__
 
 =head1 NAME
 
-iClive - an editor and live debugger for immediate-C clients
+iClive - an editor and live debugger for immediate-C apps
 
 =head1 SYNOPSIS
 
@@ -3525,10 +4552,11 @@ iClive - an editor and live debugger for immediate-C clients
     -L<lx>  link extra library(s) eg -L lm -L rt or -L lm,lrt
                       DEBUG options
     -d deb  extra debug options (see iC-application -h)
+    -d  40  output symbol table received in Live mode
     -t      trace gate activity in target application (-d1100)
     -m      output elapsed time in seconds and microseconds
     -T      trace output static debug messages
-    -q      quiet - do not report clients connecting and disconnecting
+    -q      quiet - do not report apps connecting and disconnecting
     -h      help, ouput this Usage text only
     file ... one or more iC source files. The first will be opened. The
             rest will be stored in the File menu for later selection.
@@ -3563,6 +4591,9 @@ iClive - an editor and live debugger for immediate-C clients
                 application - which should be built from the text
                 to make a meaningful display. Text is 'read only'
                 in this mode.                                     Alt-e
+            Holding this button down briefly in Live mode will open a
+            menu of options to start and stop Debug mode, which allows
+            interrupting, single stepping and continuing the programm.
      Edit]      clears live markings in the Text window. In this mode
                 the text may be edited with the facilities of Tk::Text,
                 which is a full featured editor. The edit facilities
@@ -3584,10 +4615,10 @@ iClive - an editor and live debugger for immediate-C clients
                 clears hits and the Search Entry window
      <>Go to line       or                                      Alt-RET
                 goes to the line entered in the Search Entry window
+     <>Word match
      <>Exact match
-     <>Ignore case
      <>Regexp match
-     <>Regexp+ignore case
+     []Ignore case
        -------- this is followed by a history of previous search
                 strings, which can be selected for a repeat search.
 
@@ -3637,14 +4668,87 @@ after the change.
 
 In B<Live> mode all words in the text which exactly match any token
 in the list are marked with a colour depending on the current state
-of the node.  Logical nodes are B<green/black> for B<false> and
-B<yellow/red> for B<true>.  Logical active words in the list which
-are preceded by ~ or ! or which are followed by ~ show the inverse
-state of the node.  Arithmetic nodes are B<blue>, clocks B<brown>
-and timers B<dark green>.  All coloured nodes are called 'active'
-words, because they display the live state of these nodes in the
-running application.  Clocks and timers as well as data nodes which
-change for less than 50 ms flash briefly (50 ms) every time they fire.
+of the node.  All coloured nodes are called B<Active> words, because
+they display the live state of these nodes in the running application.
+Logical nodes are B<green/black> for B<false> and B<yellow/red> for
+B<true>.  Logical B<Active> words in the list which are preceded by
+B<~> or B<!> or which are followed by B<~> show the inverse state of
+the node.  Arithmetic nodes are B<blue>, clocks B<brown> and timers
+B<dark green>.  Clocks and timers as well as data nodes which change
+for less than 50 ms flash briefly (50 ms) every time they fire.
+
+Holding down the [Edit] button (which indicates B<Live> mode) will open
+another menu with Debug options. It is useful to tear this menu off
+and move it to have it available for debugging.  Initially B<Debug>
+mode is off.  The first button in this menu turns it on.
+
+Pressing Mouse Button-1 while positioned over an B<Active> variable
+while B<Debug> mode is on will open a menu to enter/delete/disable
+a B<WatchPoint> or an B<IgnorePoint>.
+
+  A WatchPoint is the equivalent of a breakpoint in a data driven
+  environment. It triggers when an Active node variable changes
+  (the default condition) or its condition, which may be set in a
+  cascaded dialog, turns true.  WatchPoints are marked in the code
+  by underlining the variable name.
+
+  An IgnorePoint is an Active node variable which will not stop
+  during single step operations 'Step' or 'Next'.  This allows certain
+  sections of the iC code to execute normally without stopping while
+  single stepping.  The Timer variables TX0.2 - TX0.7 are marked as
+  IgnorePoints initially to avoid single stepping to be interrupted
+  regularly by Timer ticks.  IgnorePoints are marked in the code by
+  crossing the variable name with an overstrike.
+
+The following buttons control debug actions:
+
+  Debug     Turn Debug mode on and off. When turned off the Search
+            Entry window is gray. It turns light green when Debug
+            mode is on and the program is running and the following
+            three buttons, which control debug actions are activated:
+
+  Step      run the program until any Active variable contained in
+            the current source changes. Since intermediate variables
+            generated by the compiler are only contained in iC listing
+            files, single stepping on changes of intermediate variables
+            will only work with listing files, where the changes can
+            also be seen.
+
+  Next      run the program until any output variable (Q...) in the
+            current source changes.
+
+  Continue  run the program until a WatchPoint is reached and its
+            condition is satisfied. If there are no WatchPoints the
+            program will run without stopping. This is the initial
+            mode when Debug mode is turned on.
+
+In all three cases, pressing any of the buttons will run the program
+again and turn the Search Entry window pale green. At the next change
+appropriate for the button pressed the program will stop and turn
+the Search Entry window pink.  The name of the variable, whose change
+made the program stop, will be displayed in the Search Entry window.
+This is the B<Break> variable.  All instances of the B<Break> variable
+will be highlighted in the current window by raising the text and
+making it bold. If there are more instances of the B<Break> variable
+outside of the current window, these can be found by initiating a
+search with the [/] button or the Return key.
+
+Three further buttons in the Debug menu are active in Live mode:
+
+  TextDebug toggles a text output of every action of the the data
+            driven execution of the iC code. It is roughly equivalent
+            to the machine language output of an instruction driven
+            debugger.  This output is particularly useful with
+            single stepping.  It shows all the detailed actions of
+            counting Logic nodes, as well as Arithmetic, Clock and
+            Timer actions leading up to a Break.
+
+  MicroSec  show the time in microseconds between significant events
+            during the execution of the program.
+
+  WatchPoints show all Watch and Ignore points in a list. Points
+            may be deleted, disabled, enabled or have their conditions
+            changed from this list.
 
 For B<Live> mode to be effective, the displayed text must be either
 the source of the running iC application or a text derived from that
@@ -3655,11 +4759,11 @@ the logical statements of the source and the colours will show what
 the current state is.  It is easy to inspect such a live listing and
 relate states with the logic of the application.
 
-When the mouse cursor sits on an active word in B<Live> mode the
+When the mouse cursor sits on an B<Active> word in B<Live> mode the
 value of the node is displayed in a balloon window. This is useful for
 displaying the current value of arithmetic nodes.
 
-When the mouse cursor sits on an active word in B<Live> mode and the
+When the mouse cursor sits on an B<Active> word in B<Live> mode and the
 focus is in the Search Entry window (click in it or type '/') and
 the left Shift-Key is pressed the balloon will display the 'index'
 of the variable in the Symbol Table. This is useful to check if an
@@ -3668,7 +4772,7 @@ variable as a normal variable with a different name. The same 'index'
 is used in VCD files for GTKWave.  Simlarly when the left Control-Key
 is pressed the balloon will display the 'ftype' of the variable.
 
-In B<Live> mode an active word in a comment followed by an equal sign
+In B<Live> mode an B<Active> word in a comment followed by an equal sign
 at the very end of the line will show the changing value of the word.
 
     eg.  // offset =
@@ -3680,35 +4784,35 @@ A powerful search facility to find groups of words or regular
 expressions has been implemented on top of Text::Tk.  Activate the
 search by keying '/' or pressing the [/] button briefly.  Enter or
 paste a word into the Search Entry window and key RETURN or press the
-[/] button again.  Searches may be for an exact match or for a full
-Perl-type regular expression. The \bword\b feature to find only whole
-words is particularly useful. Searches are normally case sensitive,
-but a case-insensitive search may be selectd. Once a search has been
-carried out, all the hits are highlighted. A first group of hits is
-displayed in the Text window. The text is moved to display as many
-hits as possible. When the user has analysed the first group of hits,
-hitting RETURN will display the next group of hits in the text and
-so on until the end of the text is reached. Another RETURN will start
-by displaying the first group at the top again. Hitting SHIFT-RETURN
-will reverse the direction of displaying the groups.
+[/] button again.  Searches may be for a whole Word match, an Exact
+match or for a full Perl-type regular expression labelled Regex match.
+Searches are normally case sensitive, but a case-insensitive search
+may be selectd. Once a search has been carried out, all the hits
+are highlighted. A first group of hits is displayed in the Text
+window. The text is moved to display as many hits as possible. When
+the user has analysed the first group of hits, typing RETURN will
+display the next group of hits in the text and so on until the end
+of the text is reached. Another RETURN will start by displaying the
+first group at the top again. Typing SHIFT-RETURN will reverse the
+direction of displaying the groups.
 
 In 'Live' mode, double-clicking with mouse button 1 transfers the
 word under the mouse to the Search Entry window and immediately
 starts a search for that word. This is the quickest and best way to
 start a search.  The search can be continued by clicking on the [/]
-button or pressing RETURN.
+button or pressing RETURN. In 'Live' mode searches are restricted to
+text outside of comments, which means sarches will only return
+actual variables and keywords in program text.
 
 If this quick search action were taken in 'Edit' mode it would
 mask the selection of the text under the mouse (Text Binding [2]).
-To start a quick search in 'Edit' mode, briefly switch to 'Live' mode,
-double-click a word and then revert to 'Edit' mode. Continue search in
-'Edit' mode by clicking on the [/] button.
 
 Double-clicking with mouse button 1 with the cursor in the Search Entry
-window or by pressing ctrl-RETURN will clear the search completely.
+window or by typing ctrl-RETURN will clear the search completely.
 
-Holding down the search key [/] will show the different search options
-for 'Exact match' or 'Regexp match' either case sensitive or not.
+Holding down the search key [/] will open a menu with the different
+search options 'Go to line', 'Word match', 'Exact match' or 'Regexp
+match'. The 'Ignore case' button applies to the 3 search modes.
 This is followed by a history of previous searches - most recent at
 the end, which can be selected for a repeat search. This search menu
 can be detached with the tear line ---------.

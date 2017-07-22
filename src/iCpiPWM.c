@@ -62,6 +62,7 @@
 #undef  BS
 #define BS	1024			/* buffer size for I/O strings */
 
+static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
 static struct timeval	toCnt;				/* A/D measurement repetition timeout counter */
 static struct timeval	toRep    = { 0, 100000 };	/* timeout re-initialising value (default 100 ms) */
 static struct timeval *	toCntp   = NULL;		/* select() timeout initial value off */
@@ -171,7 +172,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiPWM.c 1.4 $\n"
+"Version	$Id: iCpiPWM.c 1.5 $\n"
 ;
 
 /********************************************************************
@@ -833,7 +834,7 @@ main(
      *  correctly (does not STOP mysteriously) when run in the background.
      *
      *  This means that such a process cannot be stopped with q, only with
-     *  ctrl-C, when it has been brought to the foreground with fg.
+     *  ctrl-D, when it has been brought to the foreground with fg.
      *******************************************************************/
     signal(SIGTTIN, SIG_IGN);			/* ignore tty input signal in bg */
 #endif	/* SIGTTIN */
@@ -1035,16 +1036,16 @@ main(
     /********************************************************************
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
-    FD_ZERO(&iC_infds);				/* should be done centrally if more than 1 connect */
-    FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
-    if ((iC_debug & DZ) == 0) FD_SET(0, &iC_infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
+    FD_ZERO(&infds);				/* should be done centrally if more than 1 connect */
+    FD_SET(iC_sockFN, &infds);		/* watch sock for inputs */
+    if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
     if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d\n", iC_sockFN);
     /********************************************************************
      *  External input (TCP/IP via socket and STDIN)
      *  Wait for input in a select statement most of the time
      *******************************************************************/
     for (;;) {
-	if ((retval = iC_wait_for_next_event(toCntp)) == 0)
+	if ((retval = iC_wait_for_next_event(&infds, 0, toCntp)) == 0)
 	{
 	    if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 		toCnt = toRep;			/* re-initialise timeout value */
@@ -1177,7 +1178,7 @@ main(
 	     *******************************************************************/
 	    if (FD_ISSET(0, &iC_rdfds)) {
 		if (fgets(buffer, BS, stdin) == NULL) {
-		    FD_CLR(0, &iC_infds);	/* ignore EOF - happens in bg or file - turn off interrupts */
+		    FD_CLR(0, &infds);		/* ignore EOF - happens in bg or file - turn off interrupts */
 		    buffer[0] = '\0';		/* notify EOF to iC application by zero length buffer */
 		}
 		if ((b = buffer[0]) == 'q' || b == '\0') {

@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h,v 1.21 2015/10/18 23:29:08 jw Exp $";
+"@(#)$Id: tcpc.h 1.22 $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -30,6 +30,7 @@ static const char tcpc_h[] =
 #endif
 
 #include	<sys/types.h>
+#include	<sys/select.h>
 #ifdef	WIN32
 #include	<windows.h>
 #else	/* ! WIN32 */
@@ -64,21 +65,17 @@ extern const char *	iC_portNM;	/* iC_PORT */
 extern char *		iC_iccNM;	/* immcc name qualified with instance */
 extern char *		iC_iidNM;	/* instance ID */
 
+extern int		iC_maxFN;
+extern fd_set		iC_rdfds;
+extern fd_set		iC_exfds;
 extern SOCKET		iC_sockFN;	/* TCP/IP socket file number */
+
 extern SOCKET		iC_connect_to_server(const char* host, const char* port);
-extern int		iC_Xflag;	/* 1 if this process started iCserver */
-extern int		iC_wait_for_next_event(struct timeval * ptv);
+extern int		iC_wait_for_next_event(fd_set * infdsp, fd_set * ixfdsp, struct timeval * ptv);
 extern int		iC_rcvd_msg_from_server(SOCKET sock, char* buf, int maxLen);
 extern void		iC_send_msg_to_server(SOCKET sock, const char* msg);
 
-extern int		iC_maxFN;
-extern fd_set		iC_rdfds;
-extern fd_set		iC_infds;
-#ifdef RASPBERRYPI
-extern fd_set		iC_exfds;
-extern fd_set		iC_ixfds;
-#endif	/* RASPBERRYPI */
-
+extern int		iC_Xflag;	/* 1 if this process started iCserver */
 extern char *		iC_vcd;
 extern int		iC_micro;
 extern void		iC_microPrint(const char * str, int mask);

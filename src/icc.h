@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2011  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.82 $";
+"@(#)$Id: icc.h 1.83 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -599,8 +599,9 @@ extern void	iC_link_cl(		/* link clocked Gate directly to c_list */
 		Gate * gp, Gate * out_list);	/* during pass4 initialisation */
 
 
-extern void	iC_icc(			/* initialise and execute iC load object */
-		Gate ** sTable , Gate ** sTend);
+extern void	iC_icc(void);		/* initialise and execute iC load object */
+extern Gate **	sTable;			/* pointer to Symbol Table */
+extern Gate **	sTend;			/* end of Symbol Table */
 
 extern unsigned short	iC_osc_max;
 extern unsigned short	iC_osc_lim;
@@ -748,9 +749,9 @@ extern unsigned	long	iC_glit_nxt;		/* count glitch scan */
 #endif
 
 #ifdef	TCP
+extern unsigned		iC_linked;		/* link Flag for iC_liveData() */
 #define ENTRYSZ		24			/* accomodates ",SIX123456.7,RQX123456.7" */
 extern unsigned short	C_channel;		/* channel for sending messages to Debug in ict.c */
-extern int		regOffset;		/* for register send */
 #ifndef	EFENCE
 extern char		regBuf[];
 extern char		rpyBuf[];		/* Buffer in which iCserver input is read to */

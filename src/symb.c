@@ -1,8 +1,8 @@
 static const char symb_c[] =
-"@(#)$Id: symb.c 1.24 $";
+"@(#)$Id: symb.c 1.25 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2009  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -11,7 +11,7 @@ static const char symb_c[] =
  *  to contact the author, see the README file
  *
  *	symb.c
- *	parallel plc - symbol table lookup and insert
+ *	symbol table lookup and insert
  *
  *******************************************************************/
 

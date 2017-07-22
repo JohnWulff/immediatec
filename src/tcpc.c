@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c,v 1.27 2015/11/06 22:48:02 jw Exp $";
+"@(#)$Id: tcpc.c 1.28 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -84,11 +84,7 @@ int		iC_Xflag  = 0;			/* 1 if this process started iCserver */
 
 int		iC_maxFN = 0;
 fd_set		iC_rdfds;
-fd_set		iC_infds;
-#ifdef RASPBERRYPI
 fd_set		iC_exfds;
-fd_set		iC_ixfds;
-#endif	/* RASPBERRYPI */
 
 /********************************************************************
  *
@@ -329,27 +325,25 @@ iC_connect_to_server(const char *	host,
 
 /********************************************************************
  *
- *	Wait for next selected event
+ *	Wait for next selected input, optional extra input or timer event
  *
  *******************************************************************/
 
 int
-iC_wait_for_next_event(struct timeval * ptv)
+iC_wait_for_next_event(fd_set * infdsp, fd_set * ixfdsp, struct timeval * ptv)
 {
-    int	retval;
+    fd_set *	exfdsp;
+    int		retval;
 
     do {				/* repeat for caught signal */
-	iC_rdfds = iC_infds;
-#ifdef RASPBERRYPI
-	iC_exfds = iC_ixfds;
-#endif	/* RASPBERRYPI */
-    } while ((retval = select(iC_maxFN + 1, &iC_rdfds, 0,
-#ifdef RASPBERRYPI
-    							&iC_exfds,
-#else	/* !RASPBERRYPI */
-							0,
-#endif	/* RASPBERRYPI */
-					ptv)) == -1 && errno == EINTR);
+	iC_rdfds = *infdsp;
+	if (ixfdsp) {
+	    exfdsp = &iC_exfds;
+	    iC_exfds = *ixfdsp;
+	} else {
+	    exfdsp = 0;
+	}
+    } while ((retval = select(iC_maxFN + 1, &iC_rdfds, 0, exfdsp, ptv)) == -1 && errno == EINTR);
 
 #ifdef	WIN32
     if (retval == -1) {

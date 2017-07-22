@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c,v 1.33 2015/10/24 03:34:03 jw Exp $";
+"@(#)$Id: link.c 1.34 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -41,8 +41,11 @@ iC_link_ol(
     Gate *		ap;
 #endif	/* DEQ */
     unsigned short	diff;
-    int			time;
+    int			tc;
 
+#ifdef TCP
+    iC_linked++;
+#endif	/* TCP */
     if (gp->gt_next) {
 #if YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
 	iC_glit_cnt++;				/* count glitches */
@@ -152,9 +155,9 @@ iC_link_ol(
 			gp->gt_fni != D_SH &&		/* SH */
 			gp->gt_fni != F_SW		/* switch */
 		    ) ||
-		    (time = gp->gt_time->gt_old) <= 0	/* or required delay is 0 or -ve */
+		    (tc = gp->gt_time->gt_old) <= 0	/* or required delay is 0 or -ve */
 		) &&
-		(time = out_list->gt_old) <= 0		/* and preset off time is 0 */
+		(tc = out_list->gt_old) <= 0		/* and preset off time is 0 */
 	    ) {
 		out_list = iC_c_list;			/* put action on 'iClock' list imme */
 	    } else {
@@ -169,19 +172,19 @@ iC_link_ol(
 		 * Negative delays are treated like a 0 delay.
 		 *******************************************************************/
 #if YYDEBUG && !defined(_WINDOWS)
-		if (iC_debug & 0100) fprintf(iC_outFP, "!(%d)", time);	/* delay time or preset time 1 */
+		if (iC_debug & 0100) fprintf(iC_outFP, "!(%d)", tc);	/* delay time or preset time 1 */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		tp = out_list;
 		diff = 0;
 		while ((np = tp->gt_next) != out_list &&
-		    (int)(diff += np->gt_mark) <= time) {
+		    (int)(diff += np->gt_mark) <= tc) {
 		    tp = np;				/* scan along time sorted list */
 		}
 #ifndef DEQ
 		tp->gt_next = gp;			/* old => new */
 		gp->gt_next = np;			/* new => next */
 		diff -= np->gt_mark;			/* full time to previous */
-		gp->gt_mark = time - diff;		/* diff previous to new */
+		gp->gt_mark = tc - diff;		/* diff previous to new */
 		if (np != out_list) {
 		    np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		} else {
@@ -203,10 +206,15 @@ iC_link_ol(
 		if (np != out_list) {
 		    diff -= np->gt_mark;		/* full time to previous */
 		}
-		gp->gt_mark = time - diff;		/* diff previous to new */
+		gp->gt_mark = tc - diff;		/* diff previous to new */
 		np->gt_mark -= gp->gt_mark;		/* adjust diff new to old */
 		/* if np == out_list, out_list->gt_mark gets -diff */
 #endif	/* DEQ */
+#if defined(TCP) || defined(LOAD)
+		if (np == out_list) {
+		    iC_liveData(out_list, tc);		/* VCD and/or iClive */
+		}
+#endif /* defined(TCP) || defined(LOAD) */
 		return;					/* sorted link action complete */
 	    }
 	}

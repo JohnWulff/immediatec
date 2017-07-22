@@ -1,8 +1,8 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.80 $";
+"@(#)$Id: icc.c 1.81 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2012  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -292,6 +292,8 @@ FILE *		iC_outFP;		/* listing file pointer */
 FILE *		iC_errFP;		/* error file pointer */
 
 #if defined(RUN) || defined(TCP)
+Gate **		sTable;			/* pointer to Symbol Table */
+Gate **		sTend;			/* end of Symbol Table */
 static FILE *	excFP;			/* cexe C out file pointer */
 #endif /* defined(RUN) || defined(TCP) */
 static char *	iC_path;		/* default pplstfix on PATH */
@@ -1165,12 +1167,10 @@ main(
 		    fclose(excFP);
 		}
 	    } else if (listFN == 0 && errFN == 0) {
-		Gate **		sTable;		/* pointer to Symbol Table */
-		Gate **		sTend;		/* end of Symbol Table */
 		/********************************************************************
 		 *  Build a network of Gates and links for direct execution
 		 *******************************************************************/
-		if ((r = iC_buildNet(&sTable, &sTend)) == 0) {
+		if ((r = iC_buildNet()) == 0) {	/* Gate ** sTable, Gate ** sTend are global */
 		    Symbol * sp = lookup("iClock");
 		    unlinkTfiles();
 		    /********************************************************************
@@ -1178,7 +1178,7 @@ main(
 		     *******************************************************************/
 		    assert (sp);		/* iClock initialized in init() */
 		    iC_c_list = sp->u_gate;	/* initialise clock list */
-		    iC_icc(sTable, sTend);	/* execute the compiled logic */
+		    iC_icc();			/* execute the compiled logic */
 		    /********************************************************************
 		     * never returns - exits via iC_quit()
 		     *******************************************************************/

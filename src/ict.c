@@ -1,8 +1,8 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.71 $";
+"@(#)$Id: ict.c 1.72 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2011  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -11,7 +11,7 @@ static const char ict_c[] =
  *  to contact the author, see the README file
  *
  *	ict.c
- *	parallel plc - runtime execution with TCP/IP I/O to iCserver
+ *	runtime execution of iC network with TCP/IP I/O to iCserver
  *
  *	Standalone run-time version for TCP/IP communication.
  *	Alternatively to produce compiled applications
@@ -54,9 +54,20 @@ static const char ict_c[] =
 
 #define IOCHANNELS	30		/* initial Channels[] size */
 #define	OSIZ	20
+#define	TSIZ	10
+
+static unsigned short	liveFlag;
+static unsigned short	stepFlag;
+static unsigned short	stepMask;
+static unsigned short	debugFlag;	/* set by iClive in 'd' message, cleared in DEBUG message */
+static unsigned short	debugMask;	/* set by iClive in 's' 'n' message, cleared in 'c' message */
+static unsigned short	debugStop;	/* cleared by iClive in CONT message */
 
 char			iC_stdinBuf[REPLY];	/* store a line of STDIN - notified by TX0.1 */
 static int		stdinFlag = 0;
+static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
+static fd_set		ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
+static fd_set		idfds;			/* initialised file descriptor set for debug iC_wait_for_next_event() */
 struct timeval		iC_timeOut = { 0, 50000 }; /* 50 mS select timeout - may be modified in iCbegin() */
 static struct timeval	toCnt  = { 0, 50000 };	/* actual timeout counter that select uses */
 #ifdef	RASPBERRYPI
@@ -69,6 +80,9 @@ static struct timeval *	toCntp = NULL;		/* select timeout switched off when NULl
 
 static void	regAck(Gate ** oStart, Gate ** oEnd);
 static void	sendOutput(void);
+static void	debugWait(void);
+static void	receiveActiveSymbols(char * cp1);
+static void	receiveWatchOrRestore(char * cp1);
 static void	storeChannel(unsigned short channel, Gate * gp
 #ifdef	RASPBERRYPI
 			    , piFaceIO * pfp, gpioIO * gep, int iq
@@ -76,10 +90,11 @@ static void	storeChannel(unsigned short channel, Gate * gp
 			    );
 static char *
 #if	INT_MAX == 32767 && defined (LONG16)
-convert2binary(char * binBuf, long value, int bitFlag);
+convert2binary(long value, int bitFlag);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-convert2binary(char * binBuf, int value, int bitFlag);
+convert2binary(int value, int bitFlag);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
+static char		binBuf[33];		/* allows 32 bits */
 static iC_Functp *	iC_i_lists[] = { I_LISTS };
 
 /********************************************************************
@@ -103,6 +118,7 @@ Gate *		iC_s_list = &slist;	/* send bit and byte outputs */
 
 short		iC_error_flag;
 
+unsigned	iC_linked;		/* link Flag for iC_liveData() */
 unsigned	iC_scan_cnt;		/* count scan operations */
 unsigned	iC_link_cnt;		/* count link operations */
 #if	YYDEBUG && (!defined(_WINDOWS) || defined(LOAD))
@@ -111,6 +127,7 @@ unsigned long	iC_glit_nxt;		/* count glitch scan */
 #endif	/* YYDEBUG && (!defined(_WINDOWS) || defined(LOAD)) */
 
 static Gate *	timNull[] = { 0, 0, 0, 0, 0, 0, 0, 0, }; /* speeds up tim[] lookup */
+static Gate **	tim = timNull;		/* point to array of 8 null pointers */
 static unsigned short	topChannel = 0;
 static char	buffer[BS];
 #ifdef	RASPBERRYPI
@@ -126,10 +143,14 @@ static Gate **	Channels = NULL;	/* dynamic array to store input gate addresses *
 #endif	/* ! RASPBERRYPI */
 
 static int	ioChannels = 0;		/* allocated size of Channels[] */
-unsigned short	C_channel = 0;		/* channel for sending messages to Debug in ict.c */
+unsigned short	C_channel;		/* channel for sending messages to Debug in ict.c */
+static unsigned short D_channel;	/* channel for receiving messages from Debug in ict.c */
 static Gate	D_gate;			/* Gate on channel for receiving messages from Debug */
-static int	liveOffset = 0;		/* for live header */
-int		regOffset = 0;		/* for register send */
+static int	liveOffset;		/* for live header */
+static int	regOffset;		/* for register send */
+#if	YYDEBUG
+static unsigned int waitCount;		/* for WAIT display */
+#endif	/* YYDEBUG */
 #ifndef	EFENCE
 char		msgBuf[REQUEST];	/* Buffer in which live data is collected */
 char		iC_outBuf[REQUEST];	/* Buffer in which output is collected in iC_output() */
@@ -139,12 +160,10 @@ char *		iC_outBuf;
 #endif	/* EFENCE */
 static char *	outPtr;
 static int	outBufLen = REQUEST;
-static int	msgOffset = 0;		/* for message send */
+static int	msgOffset;		/* for message send */
 extern const char	iC_ID[];
-static char *	iC_sav = NULL;
-static int	liveIndex = 0;
+static char *	iC_sav;
 static long	virtualTime = 0;
-static short	iClock_index;
 FILE *		iC_vcdFP = NULL;
 FILE *		iC_savFP = NULL;
 static char *	vcd_ftype[]	= { VCD_FTYPE };
@@ -157,7 +176,7 @@ static char *	sav_ftype[]	= { SAV_FTYPE };
  *******************************************************************/
 
 void
-iC_icc(Gate ** sTable, Gate ** sTend)
+iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 {
     int			i;
     int			c;
@@ -167,7 +186,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     unsigned short	channel = 0;
     Gate **		opp;
     char *		cp;
-    Gate **		tim = timNull;	/* point to array of 8 null pointers */
     Gate *		gp;
     int			len;
     iC_Functp		init_fa;
@@ -182,8 +200,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     int			val;
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
     unsigned short	index;
+    unsigned short	iClock_index;
+    unsigned short	debugBlock;
     FILE *		vcdFlag;
-    char		binBuf[33];	/* allows 32 bits */
 #ifdef	RASPBERRYPI
     piFaceIO *		pfp;
     iqDetails *		pfq;
@@ -244,16 +263,15 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     /********************************************************************
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
-    FD_ZERO(&iC_infds);			/* should be done centrally if more than 1 connect */
+    FD_ZERO(&infds);			/* should be done centrally if more than 1 connect */
+    FD_ZERO(&idfds);
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 04) fprintf(iC_outFP, "*** all normal interrupts have been cleared\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-#ifdef	RASPBERRYPI
-    FD_ZERO(&iC_ixfds);
+    FD_ZERO(&ixfds);
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 04) fprintf(iC_outFP, "*** all extra interrupts have been cleared\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-#endif	/* RASPBERRYPI */
 
     if ((iC_debug & 0400) == 0 && iC_argh <= 0) {
 	char *		tbp;		/* points to next entry in regBuf */
@@ -669,7 +687,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	if (iC_micro & 06) iC_microPrint("last registration", 0);
 	assert(opp == sTend);
 	regAck(sopp, opp);			/* send/receive last registration */
-	regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
+	snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
 	if (iC_micro & 06) iC_microPrint("Send application name", 0);
 	iC_send_msg_to_server(iC_sockFN, regBuf);		/* Application Name */
 	/********************************************************************
@@ -867,7 +885,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	 *	Set bits to wait for SIO interrupts on GPIO25
 	 *******************************************************************/
 	if (gpio25FN > 0) {
-	    FD_SET(gpio25FN, &iC_ixfds);		/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+	    FD_SET(gpio25FN, &ixfds);		/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 04) fprintf(iC_outFP, "*** SIO interrupt has been primed\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -879,14 +897,14 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	    for (bit = 0; bit <= 7; bit++) {
 		if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 		    assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
-		    FD_SET(gep->gpioFN[bit], &iC_ixfds);	/* watch GPIO N for out-of-band input */
+		    FD_SET(gep->gpioFN[bit], &ixfds);		/* watch GPIO N for out-of-band input */
 		}
 	    }
 	}
 #endif	/* RASPBERRYPI */
 #ifndef	WIN32
 	if ((iC_debug & DZ) == 0) {
-	    FD_SET(0, &iC_infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
+	    FD_SET(0, &infds);			/* watch stdin for inputs unless - FD_CLR on EOF */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has been primed\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -989,11 +1007,44 @@ iC_icc(Gate ** sTable, Gate ** sTend)
      *  correctly (does not STOP mysteriously) when run in the background.
      *
      *  This means that such a process cannot be stopped with q, only with
-     *  ctrl-C, when it has been brought to the foreground with fg.
+     *  ctrl-D, when it has been brought to the foreground with fg.
      *******************************************************************/
     signal(SIGTTIN, SIG_IGN);		/* ignore tty input signal in bg */
 #endif	/* SIGTTIN */
 
+    /********************************************************************
+     *  Prepare index entries first to allow ALIAS back-references
+     *  in VCD file generation and for sending Symbol Table to iClive
+     *  No variable has index 0 - used as a flag in BREAK logic
+     *******************************************************************/
+    index        = 0			/* start with index 1 after initial increment */;
+    iClock_index = 0;
+    debugBlock   = 0x1fff;		/* mask debug and live bits */
+    for (opp = sTable; opp < sTend; opp++) {
+	if (++index == 0x2000) {
+	    debugBlock = 0x7fff;	/* mask live bit only - cannot fit debug bits */
+	} else if (index == 0x8000) {
+	    debugBlock = 0xffff;	/* mask no bits - cannot even fit live bit */
+	}
+	gp = *opp;
+	if (iC_vcd && iC_argh <= 0) {
+	    if (
+#ifdef	LOAD
+		gp == &iClock
+#else	/* LOAD */
+		strcmp(gp->gt_ids, "iClock") == 0
+#endif	/* LOAD */
+	    ) {
+		iClock_index = index;	/* must be set before next loop in case first symbol comes before iClock */
+	    }
+	}
+	if (debugBlock != 0xffff) {	/* prevent setting the live bit */
+	    gp->gt_live = index;	/* index and initial live bit 0 */
+#if	YYDEBUG
+	    if (iC_debug & 040) fprintf(iC_outFP, "%d	%s\n", index, gp->gt_ids);
+#endif	/* YYDEBUG */
+	}
+    }
     /********************************************************************
      *  Generate a VCD file (Value Change Dump), an industry standard
      *  file format specified by IEEE-1364 (initially developed for Verilog).
@@ -1013,275 +1064,259 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	char	modName[ESIZE];
 	char	modPrev[ESIZE] = "";
 
-	time(&walltime);
-	len = 0;
-	if ((iC_vcdFP = fopen(iC_vcd, "w")) == NULL) {
-	    fprintf(iC_errFP, "\n%s: cannot open vcd file '%s'\n", iC_iccNM, iC_vcd);
-	    perror("fopen");
-	    iC_quit(SIGUSR1);
-	}
-	/********************************************************************
-	 *  Generate a SAV file if the VCD file has the extension '.vcd'.
-	 *  Output standard headers for both the SAV and the VCD file.
-	 *******************************************************************/
-	if ((cp = strrchr(iC_vcd, '.')) != NULL && strcmp(++cp, "vcd") == 0) {
-	    iC_sav = iC_emalloc(strlen(iC_vcd)+1);	/* +1 for '\0' */
-	    strcpy(iC_sav, iC_vcd);
-	    cp = strrchr(iC_sav, '.') + 1;
-	    strcpy(cp, "sav");		/* generate xxx.sav only if xxx.vcd */
-	    if ((iC_savFP = fopen(iC_sav, "w")) == NULL) {
-		fprintf(iC_errFP, "\n%s: cannot open sav file '%s'\n", iC_iccNM, iC_sav);
+	if (index >= 10000) {
+	    fprintf(iC_errFP, "\n%s: cannot handle %hu variables in file '%s' - limit 10,000 - not generated\n",
+		iC_iccNM, index, iC_vcd);
+	} else {
+	    time(&walltime);
+	    len = 0;
+	    if ((iC_vcdFP = fopen(iC_vcd, "w")) == NULL) {
+		fprintf(iC_errFP, "\n%s: cannot open vcd file '%s'\n", iC_iccNM, iC_vcd);
 		perror("fopen");
 		iC_quit(SIGUSR1);
 	    }
 	    /********************************************************************
-	     *  initial SAV header
+	     *  Generate a SAV file if the VCD file has the extension '.vcd'.
+	     *  Output standard headers for both the SAV and the VCD file.
 	     *******************************************************************/
-	    fprintf(iC_savFP,
-		"[*]\n"
-		"[*] immediate C %s\n"
-		"[*] %s"
-		"[*]\n"
-		"[dumpfile] \"%s\"\n"
-		"[size] 1024 700\n"
-		"[pos] -1 -1\n"
-		"*-4.343955 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1\n"
-	    , iC_ID, asctime(gmtime(&walltime)), iC_iccNM);	/* zoom, tims.marker, 26 named_markers */
-	    savCode = sav_ftype[GATE];	/* "wire" instead of "event" for iClock */
-	    fprintf(iC_savFP,
-		"@%s\n"
-		"%s.iClock\n"		/* display iClock as the first trace */
-	    , savCode, iC_iccNM);
-	}
-	/********************************************************************
-	 *  initial VCD header
-	 *******************************************************************/
-	fprintf(iC_vcdFP,
-	    "$date\n"
-	    "    %s"
-	    "$end\n"
-	    "$version\n"
-	    "    immediate C %s\n"
-	    "$end\n"
-	    "$timescale\n"
-	    "     1 us\n"
-	    "$end\n"
-	    "\n"
-	    "$scope module %s $end\n"
-	, asctime(gmtime(&walltime)), iC_ID, iC_iccNM);
-	/********************************************************************
-	 *  prepare index entries first to allow ALIAS back-references
-	 *  all gt_live members in Symbol Table entries are overwritten here
-	 *******************************************************************/
-	index = 0;
-	for (opp = sTable; opp < sTend; opp++) {
-	    if (index >= 10000) {
-		fprintf(iC_errFP, "\n%s: cannot handle more than 10,000 variables in file '%s'\n", iC_iccNM, iC_vcd);
-		iC_quit(SIGUSR1);
+	    if ((cp = strrchr(iC_vcd, '.')) != NULL && strcmp(++cp, "vcd") == 0) {
+		iC_sav = iC_emalloc(strlen(iC_vcd)+1);	/* +1 for '\0' */
+		strcpy(iC_sav, iC_vcd);
+		cp = strrchr(iC_sav, '.') + 1;
+		strcpy(cp, "sav");		/* generate xxx.sav only if xxx.vcd */
+		if ((iC_savFP = fopen(iC_sav, "w")) == NULL) {
+		    fprintf(iC_errFP, "\n%s: cannot open sav file '%s'\n", iC_iccNM, iC_sav);
+		    perror("fopen");
+		    iC_quit(SIGUSR1);
+		}
+		/********************************************************************
+		 *  initial SAV header
+		 *******************************************************************/
+		fprintf(iC_savFP,
+		    "[*]\n"
+		    "[*] immediate C %s\n"
+		    "[*] %s"
+		    "[*]\n"
+		    "[dumpfile] \"%s\"\n"
+		    "[size] 1024 700\n"
+		    "[pos] -1 -1\n"
+		    "*-4.343955 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1\n"
+		, iC_ID, asctime(gmtime(&walltime)), iC_iccNM);	/* zoom, tims.marker, 26 named_markers */
+		savCode = sav_ftype[GATE];	/* "wire" instead of "event" for iClock */
+		fprintf(iC_savFP,
+		    "@%s\n"
+		    "%s.iClock\n"		/* display iClock as the first trace */
+		, savCode, iC_iccNM);
 	    }
-	    gp = *opp;
-	    if (
-#ifdef	LOAD
-		gp == &iClock
-#else	/* LOAD */
-		strcmp(gp->gt_ids, "iClock") == 0
-#endif	/* LOAD */
-	    ) {
-		iClock_index = index;	/* must be set before next loop in case first symbol comes before iClock */
-	    }
-	    gp->gt_live = index++;	/* index | live inhibit 0x8000 set to 0x0000 */
-	}
-	liveIndex = 1;
-	dumpPtr = dumpvars = iC_emalloc(index * 8);	/* enough for all integer variables with 4 byte codes */
-	dumpEnd = dumpvars + (index * 7);		/* will be free'd in this routine */
-	/********************************************************************
-	 *  to maintain index correlation handle all symbols
-	 *******************************************************************/
-	for (opp = sTable; opp < sTend; opp++) {
-	    int		fni;
-	    Gate *	gm;
-	    char *	ids;
-	    char *	idsa;
-	    char *	code;
-	    int		size;
-	    char *	prefix;
-	    char	iqt[2];		/* single char buffer - space for 0 terminator */
-	    char	xbwl[2];	/* single char buffer - space for 0 terminator */
-	    int		byte;
-	    int		bit;
-	    char	tail[15];	/* compiler generated suffix .123456_123456 max */
-	    int		inverse = 0;
+	    /********************************************************************
+	     *  initial VCD header
+	     *******************************************************************/
+	    fprintf(iC_vcdFP,
+		"$date\n"
+		"    %s"
+		"$end\n"
+		"$version\n"
+		"    immediate C %s\n"
+		"$end\n"
+		"$timescale\n"
+		"     1 us\n"
+		"$end\n"
+		"\n"
+		"$scope module %s $end\n"
+	    , asctime(gmtime(&walltime)), iC_ID, iC_iccNM);
+	    /* index entries have been entered above to allow ALIAS back-references */
+	    dumpPtr = dumpvars = iC_emalloc(index * 8);	/* enough for all integer variables with 4 byte codes */
+	    dumpEnd = dumpvars + (index * 7);		/* will be free'd in this routine */
+	    /********************************************************************
+	     *  to maintain index correlation handle all symbols
+	     *******************************************************************/
+	    for (opp = sTable; opp < sTend; opp++) {
+		int		fni;
+		Gate *	gm;
+		char *	ids;
+		char *	idsa;
+		char *	code;
+		int		size;
+		char *	prefix;
+		char	iqt[2];		/* single char buffer - space for 0 terminator */
+		char	xbwl[2];	/* single char buffer - space for 0 terminator */
+		int		byte;
+		int		bit;
+		char	tail[15];	/* compiler generated suffix .123456_123456 max */
+		int		inverse = 0;
 
-	    gp = *opp;
-	    if (gp->gt_ini != -NCONST) {		/* do not trace numbers */
-		idsa = ids = gp->gt_ids;
-		fni = gp->gt_fni;
-		if (fni == UDFA && (gp->gt_ini == -ARNC || gp->gt_ini == -LOGC)) {
-		    /********************************************************************
-		     *  Resolve immC array - the array references are like ALIAS'es.
-		     *  Treat the array like a module, whose members are all the array
-		     *  reference names recorded in the VCD file. They are not mentioned
-		     *  in the SAV file. But they can be selected for display later.
-		     *******************************************************************/
-		    if (extFlag) {
-			fprintf(iC_vcdFP, "$upscope $end\n");
-			extFlag = 0;
-		    }
-		    fprintf(iC_vcdFP, "$scope module %s $end\n", ids);	/* use array identifier as module name */
-		    for (i = 0; i < gp->gt_old; i++) {
-			gm = gp->gt_rlist[i];		/* immC member - cannot be an ALIAS itself */
-			fni = MAX_FTY + gm->gt_fni;	/* match iClive */
-			if ((code = vcd_ftype[fni]) != NULL) {
-			    size = *code == 'i' ? 32 : 1;
-			    fprintf(iC_vcdFP, "$var %s %d %d %s[%d] $end\n", code, size, gm->gt_live, ids, i);
-			}
-		    }
-		    fprintf(iC_vcdFP, "$upscope $end\n");
-		} else {
-		    /********************************************************************
-		     *  Resolve ALIAS'es
-		     *******************************************************************/
-		    while (gp->gt_ini == -ALIAS) {
-			if (gp->gt_fni == GATE || gp->gt_fni == GATEX) {
-			    inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
-			}
-			gp = gp->gt_rptr;		/* resolve ALIAS */
-			idsa = gp->gt_ids;		/* alias name */
-			fni = MAX_FTY + gp->gt_fni + (inverse << 1);	/* match iClive */
-		    }
-		    /********************************************************************
-		     *  Ignore variables whose name finishes with _0. They are compiler
-		     *  generated output variables, which always follow their base variable.
-		     *  Determine extended variables, whose name finish with _1 _2 etc.
-		     *  These are generated auxiliary variables, which are not displayed
-		     *  initially. They are grouped in modules, which have the base name
-		     *  of these variables and which may be selected for display later.
-		     *******************************************************************/
-		    extended = 0;
-		    if ((cp = strrchr(ids, '_')) != NULL) {
-			len = cp - ids;		/* length of base for generating module */
-			if (len >= ESIZE) len = ESIZE-1;
-			if (strcmp(++cp, "0") == 0) continue;	/* ignore Qnn_0 */
-			extended = 1;		/* possibly an extended iC variable xxx_1 */
-			while (*cp) {
-			    if (! isdigit(*cp++)) {
-				extended = 0;	/* not an extended iC variable xxx_a */
-				break;
-			    }
-			}
-		    }
-		    /********************************************************************
-		     *  Generate a VCD $var line for each displayable variable, which
-		     *  associates the name of the variable with its display type, size
-		     *  and ID code. Although the ID code can be 1 to 4 bytes of any
-		     *  printable ASCII character, in this immdiate C implementation
-		     *  the ID codes chosen  are made up of 1 to 4 decimal digits only
-		     *  and are in fact the index offset of the internal symbol table
-		     *  stored in gt_live of each gate node for the live display in iClive.
-		     *  Extended variables are bracketed by a $sope module and a $upscope
-		     *  line.
-		     *******************************************************************/
-		    if ((code = vcd_ftype[fni]) != NULL) {
-			if (gp->gt_live == iClock_index) {
-			    code = vcd_ftype[GATE];	/* "wire" instead of "event" for iClock */
-			}
-			if (extended) {
-			    strncpy(modName, ids, len);
-			    *(modName + len) = '\0';	/* generate substring without extension */
-			    if ((cp = strrchr(modName, '.')) != 0) {
-				*cp = '_';		/* modify QX0.0 to QX0_0 for module name */
-			    }
-			    if (strcmp(modPrev, modName) != 0) {
-				if (extFlag) {
-				    fprintf(iC_vcdFP, "$upscope $end\n");	/* change in module name */
-				}
-				fprintf(iC_vcdFP, "$scope module %s $end\n", modName);
-				extFlag = 1;
-				strncpy(modPrev, modName, ESIZE);
-			    }
-			} else if (extFlag) {
+		gp = *opp;
+		if (gp->gt_ini != -NCONST) {		/* do not trace numbers */
+		    idsa = ids = gp->gt_ids;
+		    fni = gp->gt_fni;
+		    if (fni == UDFA && (gp->gt_ini == -ARNC || gp->gt_ini == -LOGC)) {
+			/********************************************************************
+			 *  Resolve immC array - the array references are like ALIAS'es.
+			 *  Treat the array like a module, whose members are all the array
+			 *  reference names recorded in the VCD file. They are not mentioned
+			 *  in the SAV file. But they can be selected for display later.
+			 *******************************************************************/
+			if (extFlag) {
 			    fprintf(iC_vcdFP, "$upscope $end\n");
 			    extFlag = 0;
 			}
-			prefix = "";
-			if (sscanf(ids, "%1[IQT]%1[XBWL]%5d.%5d%7s", iqt, xbwl, &byte, &bit, tail) == 4) {
-			    size = 1;
-			    prefix = "\\";		/* variables containing '.' must be prefixed with '\' in .sav file */
-			} else
-			if (sscanf(idsa, "%1[IQT]%1[BWL]%5d%7s", iqt, xbwl, &byte, tail) >= 3 &&
-			    (! extended || strcmp(tail, "_0") == 0)) {
-			    switch (xbwl[0]) {
-			    case 'B':
-				size = 8;		/* reduce size of QBn although only QBn_0 output is reduced for output */
-				break;		/* NOTE: ALIAS QBn and QWN has size of aliased variable - usually 32 */
-			    case 'W':
-				size = 16;		/* reduce size of QWn although only QWn_0 output is reduced for output */
-				break;
+			fprintf(iC_vcdFP, "$scope module %s $end\n", ids);	/* use array identifier as module name */
+			for (i = 0; i < gp->gt_old; i++) {
+			    gm = gp->gt_rlist[i];	/* immC member - cannot be an ALIAS itself */
+			    fni = MAX_FTY + gm->gt_fni;	/* match iClive */
+			    if ((code = vcd_ftype[fni]) != NULL) {
+				size = *code == 'i' ? 32 : 1;
+				fprintf(iC_vcdFP, "$var %s %d %d %s[%d] $end\n", code, size, gm->gt_live, ids, i);
+			    }
+			}
+			fprintf(iC_vcdFP, "$upscope $end\n");
+		    } else {
+			/********************************************************************
+			 *  Resolve ALIAS'es
+			 *******************************************************************/
+			while (gp->gt_ini == -ALIAS) {
+			    if (gp->gt_fni == GATE || gp->gt_fni == GATEX) {
+				inverse ^= gp->gt_mark;	/* holds ALIAS inversion flag */
+			    }
+			    gp = gp->gt_rptr;		/* resolve ALIAS */
+			    idsa = gp->gt_ids;		/* alias name */
+			    fni = MAX_FTY + gp->gt_fni + (inverse << 1);	/* match iClive */
+			}
+			/********************************************************************
+			 *  Ignore variables whose name finishes with _0. They are compiler
+			 *  generated output variables, which always follow their base variable.
+			 *  Determine extended variables, whose name finish with _1 _2 etc.
+			 *  These are generated auxiliary variables, which are not displayed
+			 *  initially. They are grouped in modules, which have the base name
+			 *  of these variables and which may be selected for display later.
+			 *******************************************************************/
+			extended = 0;
+			if ((cp = strrchr(ids, '_')) != NULL) {
+			    len = cp - ids;		/* length of base for generating module */
+			    if (len >= ESIZE) len = ESIZE-1;
+			    if (strcmp(++cp, "0") == 0) continue;	/* ignore Qnn_0 */
+			    extended = 1;		/* possibly an extended iC variable xxx_1 */
+			    while (*cp) {
+				if (! isdigit(*cp++)) {
+				    extended = 0;	/* not an extended iC variable xxx_a */
+				    break;
+				}
+			    }
+			}
+			/********************************************************************
+			 *  Generate a VCD $var line for each displayable variable, which
+			 *  associates the name of the variable with its display type, size
+			 *  and ID code. Although the ID code can be 1 to 4 bytes of any
+			 *  printable ASCII character, in this immdiate C implementation
+			 *  the ID codes chosen  are made up of 1 to 4 decimal digits only
+			 *  and are in fact the index offset of the internal symbol table
+			 *  stored in gt_live of each gate node for the live display in iClive.
+			 *  Extended variables are bracketed by a $sope module and a $upscope
+			 *  line.
+			 *******************************************************************/
+			if ((code = vcd_ftype[fni]) != NULL) {
+			    if (gp->gt_live == iClock_index) {
+				code = vcd_ftype[GATE];	/* "wire" instead of "event" for iClock */
+			    }
+			    if (extended) {
+				strncpy(modName, ids, len);
+				*(modName + len) = '\0';	/* generate substring without extension */
+				if ((cp = strrchr(modName, '.')) != 0) {
+				    *cp = '_';		/* modify QX0.0 to QX0_0 for module name */
+				}
+				if (strcmp(modPrev, modName) != 0) {
+				    if (extFlag) {
+					fprintf(iC_vcdFP, "$upscope $end\n");	/* change in module name */
+				    }
+				    fprintf(iC_vcdFP, "$scope module %s $end\n", modName);
+				    extFlag = 1;
+				    strncpy(modPrev, modName, ESIZE);
+				}
+			    } else if (extFlag) {
+				fprintf(iC_vcdFP, "$upscope $end\n");
+				extFlag = 0;
+			    }
+			    prefix = "";
+			    if (sscanf(ids, "%1[IQT]%1[XBWL]%5d.%5d%7s", iqt, xbwl, &byte, &bit, tail) == 4) {
+				size = 1;
+				prefix = "\\";		/* variables containing '.' must be prefixed with '\' in .sav file */
+			    } else
+			    if (sscanf(idsa, "%1[IQT]%1[BWL]%5d%7s", iqt, xbwl, &byte, tail) >= 3 &&
+				(! extended || strcmp(tail, "_0") == 0)) {
+				switch (xbwl[0]) {
+				case 'B':
+				    size = 8;		/* reduce size of QBn although only QBn_0 output is reduced for output */
+				    break;		/* NOTE: ALIAS QBn and QWN has size of aliased variable - usually 32 */
+				case 'W':
+				    size = 16;		/* reduce size of QWn although only QWn_0 output is reduced for output */
+				    break;
 #if INT_MAX != 32767 || defined (LONG16)
-			    case 'L':
-				size = 32;
-				break;
+				case 'L':
+				    size = 32;
+				    break;
 #endif	/* INT_MAX != 32767 || defined (LONG16) */
-			    default:
-				assert(0);		/* no valid output word definition */
-			    }
-			} else {
-			    size = *code == 'i' ? 32 : 1;
-			}
-			fprintf(iC_vcdFP, "$var %s %d %d %s $end\n", code, size, gp->gt_live, ids);
-			/********************************************************************
-			 *  Generate $dumpvar initialisation string from values produced in
-			 *  Pass 1 - Pass 4 above. This starts traces of inverted logic and
-			 *  initial arithmetic values correctly.
-			 *******************************************************************/
-			if (fni < MAX_FTY) {			/* no initial $dumpvar for ALIAS */
-			    switch (*code) {
-			    case 'e':				/* event - this still shows as a '1' tick despite value '0' */
-			    case 'w':				/* wire */
-				assert(dumpPtr < dumpEnd - 5);	/* enough for one more entry */
-				dumpPtr += sprintf(dumpPtr, " %d%hu", gp->gt_val < 0 ? 1 : 0, gp->gt_live);
-				break;
-			    case 'i':				/* integer */
-				assert(dumpPtr < dumpEnd - 38);	/* enough for one more entry */
-				convert2binary(binBuf, gp->gt_new, 0);	/* convert to 32 bit binary string */
-				dumpPtr += sprintf(dumpPtr, " b%s %hu", binBuf, gp->gt_live);
-				break;
-			    default:				/* hard error */
-				assert(0);
-				break;
-			    }
-			}
-			/********************************************************************
-			 *  For the SAV file generate a line for each variable to be displayed
-			 *  initially. Precede each group of variables of the same type by the
-			 *  SAV types @24 for a decimal integer, @ 28 and @ 68 for normal and
-			 *  inverted bit types as well as @28 for clock and timer events.
-			 *******************************************************************/
-			if (iC_savFP && ! extended && (code = sav_ftype[fni]) != NULL && gp->gt_live != iClock_index) {
-			    if (strcmp(savCode, code) != 0) {
-				fprintf(iC_savFP, "@%s\n", code);
-				savCode = code;
-			    }
-			    if (size == 1) {
-				fprintf(iC_savFP, "%s.%s%s\n", iC_iccNM, prefix, ids);
+				default:
+				    assert(0);		/* no valid output word definition */
+				}
 			    } else {
-				fprintf(iC_savFP, "%s.%s[%d:0]\n", iC_iccNM, ids, size - 1);
+				size = *code == 'i' ? 32 : 1;
+			    }
+			    fprintf(iC_vcdFP, "$var %s %d %d %s $end\n", code, size, gp->gt_live, ids);
+			    /********************************************************************
+			     *  Generate $dumpvar initialisation string from values produced in
+			     *  Pass 1 - Pass 4 above. This starts traces of inverted logic and
+			     *  initial arithmetic values correctly.
+			     *******************************************************************/
+			    if (fni < MAX_FTY) {			/* no initial $dumpvar for ALIAS */
+				switch (*code) {
+				case 'e':				/* event - this still shows as a '1' tick despite value '0' */
+				case 'w':				/* wire */
+				    assert(dumpPtr < dumpEnd - 5);	/* enough for one more entry */
+				    dumpPtr += sprintf(dumpPtr, " %d%hu", gp->gt_val < 0 ? 1 : 0, gp->gt_live);
+				    break;
+				case 'i':				/* integer */
+				    assert(dumpPtr < dumpEnd - 38);	/* enough for one more entry */
+				    dumpPtr += sprintf(dumpPtr, " b%s %hu",
+					convert2binary(gp->gt_new, 0),	/* convert to 32 bit binary string */
+					gp->gt_live);
+				    break;
+				default:				/* hard error */
+				    assert(0);
+				    break;
+				}
+			    }
+			    /********************************************************************
+			     *  For the SAV file generate a line for each variable to be displayed
+			     *  initially. Precede each group of variables of the same type by the
+			     *  SAV types @24 for a decimal integer, @ 28 and @ 68 for normal and
+			     *  inverted bit types as well as @28 for clock and timer events.
+			     *******************************************************************/
+			    if (iC_savFP && ! extended && (code = sav_ftype[fni]) != NULL && gp->gt_live != iClock_index) {
+				if (strcmp(savCode, code) != 0) {
+				    fprintf(iC_savFP, "@%s\n", code);
+				    savCode = code;
+				}
+				if (size == 1) {
+				    fprintf(iC_savFP, "%s.%s%s\n", iC_iccNM, prefix, ids);
+				} else {
+				    fprintf(iC_savFP, "%s.%s[%d:0]\n", iC_iccNM, ids, size - 1);
+				}
 			    }
 			}
 		    }
 		}
 	    }
+	    if (extFlag) {
+		fprintf(iC_vcdFP, "$upscope $end\n");
+	    }
+	    fprintf(iC_vcdFP,
+		"$upscope $end\n"					/* finalise initial $scope */
+		"$enddefinitions $end\n"
+		"\n"
+	    );
+	    fprintf(iC_vcdFP, "$dumpvars%s $end\n", dumpvars);	/* finally print the $dumpvars string */
+	    free(dumpvars);
 	}
-	if (extFlag) {
-	    fprintf(iC_vcdFP, "$upscope $end\n");
-	}
-	fprintf(iC_vcdFP,
-	    "$upscope $end\n"					/* finalise initial $scope */
-	    "$enddefinitions $end\n"
-	    "\n"
-	);
-	fprintf(iC_vcdFP, "$dumpvars%s $end\n", dumpvars);	/* finally print the $dumpvars string */
-	free(dumpvars);
     } /* end of VCD SAV initialisation */
 
     /********************************************************************
@@ -1310,11 +1345,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\n== end of initialisation\nEOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
 	gp->gt_val = -1;		/* set EOI once as first action */
-	iC_liveData(gp, 1);		/* VCD and/or iClive */
 	iC_link_ol(gp, iC_o_list);	/* fire EOI Input Gate */
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1\n");
 #endif	/* YYDEBUG */
+	iC_liveData(gp, 1);		/* VCD and/or iClive */
     }
 
     /********************************************************************
@@ -1409,6 +1444,10 @@ iC_icc(Gate ** sTable, Gate ** sTend)
     /********************************************************************
      *  Operational loop
      *******************************************************************/
+    regOffset = 0;				/* regBuf is now clean for debugWait() re-transmits */
+#if	YYDEBUG
+    waitCount = 0;
+#endif	/* YYDEBUG */
     for (;;) {
 	/********************************************************************
 	 *  Sequencing of different action lists and New I/O handling
@@ -1528,6 +1567,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	}
 
 #if	YYDEBUG
+	waitCount++;
 	if (iC_debug & 0300) {		/* osc or detailed info */
 	    if ((iC_debug & 0200) &&
 		(iC_a_list->gt_next != iC_a_list || iC_o_list->gt_next != iC_o_list)) {
@@ -1544,7 +1584,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	}
 	if (iC_debug & 0100) {		/* end of cycle */
 	  outWAIT:
-	    fprintf(iC_outFP, "======== WAIT ==========\n");
+	    fprintf(iC_outFP, "== WAIT %5u ==========\n", waitCount);
 	    fflush(iC_outFP);
 #ifdef	RASPBERRYPI
 	    if ((slr &= ~0x07) == 0) {	/* stop 350 ms timeout - no 2nd wait message needed */
@@ -1553,6 +1593,17 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #endif	/* RASPBERRYPI */
 	}
 #endif	/* YYDEBUG */
+
+	/********************************************************************
+	 *  Any input I.. and other data collected during a break in debugWait()
+	 *  is retransmitted to iCserver now to be received again on own channels.
+	 *******************************************************************/
+
+	if (regOffset) {
+	    iC_send_msg_to_server(iC_sockFN, regBuf);
+//    fprintf(iC_outFP, " >> %s >>", regBuf); fflush(iC_outFP);
+	    regOffset = 0;
+	}
 
 	/********************************************************************
 	 *  Input from external input modules and time input (if used)
@@ -1572,11 +1623,11 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		gp->gt_val = 1;			/* set  TX0.1 lo */
-		iC_liveData(gp, 0);		/* VCD and/or iClive */
 		iC_link_ol(gp, iC_o_list);	/* fire TX0.1 lo to terminate notification */
 #if	YYDEBUG
 		if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
+		iC_liveData(gp, 0);		/* VCD and/or iClive */
 		stdinFlag = 0;			/* ready for next STDIN */
 		break;				/* do a scan - no need to increment cnt by using break */
 	    }
@@ -1584,7 +1635,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 	     *  Wait for external inputs or timer
 	     *  Wait for input in a select statement most of the time
 	     *******************************************************************/
-	    retval = iC_wait_for_next_event(iC_osc_flag ? &toCnt : toCntp);
+	    retval = iC_wait_for_next_event(&infds, &ixfds, iC_osc_flag ? &toCnt : toCntp);
 	    if (iC_osc_flag) {
 		cnt++;				/* gates have been linked to alternate list - do a scan */
 		iC_osc_flag = 0;		/* normal timer operation again */
@@ -1597,7 +1648,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    toCnt = iC_timeOut;		/* transfer timeout value */
 		}
 #ifdef	RASPBERRYPI
-		if (slr) {			/* most od the time slr == 0, test only once */
+		if (slr) {			/* most of the time slr == 0, test only once */
 #if YYDEBUG && !defined(_WINDOWS)
 		    /********************************************************************
 		     *  Handle P: debug message timeout of 350 ms
@@ -1663,11 +1714,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;		/* complement input */
-		    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 		    iC_link_ol(gp, iC_o_list);
-		    cnt++;
 #if	YYDEBUG
 		    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+		    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+		    cnt++;
+#if	YYDEBUG
 		skipT4: ;
 #endif	/* YYDEBUG */
 		}
@@ -1699,11 +1752,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;	/* complement input */
-			iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 			iC_link_ol(gp, iC_o_list);
-			cnt++;
 #if	YYDEBUG
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+			iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+			cnt++;
+#if	YYDEBUG
 		    skipT5: ;
 #endif	/* YYDEBUG */
 		    }
@@ -1735,11 +1790,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;	/* complement input */
-			    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 			    iC_link_ol(gp, iC_o_list);
-			    cnt++;
 #if	YYDEBUG
 			    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+			    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+			    cnt++;
+#if	YYDEBUG
 			skipT6: ;
 #endif	/* YYDEBUG */
 			}
@@ -1771,11 +1828,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				gp->gt_val = - gp->gt_val;	/* complement input */
-				iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 				iC_link_ol(gp, iC_o_list);
-				cnt++;
 #if	YYDEBUG
 				if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+				iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+				cnt++;
+#if	YYDEBUG
 			    skipT7: ;
 #endif	/* YYDEBUG */
 			    }
@@ -1788,9 +1847,12 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		 *******************************************************************/
 		if (iC_sockFN > 0 && FD_ISSET(iC_sockFN, &iC_rdfds)) {
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (iC_debug & 04) fprintf(iC_outFP, "*** TCP interrupt has occurred\n");
+		    if (iC_debug & 04) fprintf(iC_outFP, "*ML TCP interrupt");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
+#if YYDEBUG && !defined(_WINDOWS)
+			if (iC_debug & 04) fprintf(iC_outFP, " << %s\n", rpyBuf); fflush(iC_outFP);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			if (iC_micro && !cnt) iC_microPrint("Input received", 0);
 			cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 			if (isdigit(rpyBuf[0])) {
@@ -1802,6 +1864,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				if ((cpe = strchr(++cp, ',')) != NULL) { /* find next comma in input */
 				    *cpe = '\0';	/* split off leading comma separated token */
 				}
+//    fprintf(iC_outFP, " TT %s TT", cp); fflush(iC_outFP);
 				if (
 				    (cps = strchr(cp, ':')) != NULL &&	/* strip only first ':' separating channel and data */
 				    (channel = (unsigned short)atoi(cp)) > 0 &&
@@ -1841,9 +1904,9 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						gp->gt_ids, channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 					    else if (iC_debug & 020) fprintf(iC_outFP, "%s\t%2hu:%s\n",
-						gp->gt_ids, channel, convert2binary(binBuf, gp->gt_new, 1));
+						gp->gt_ids, channel, convert2binary(gp->gt_new, 1));
 #endif	/* YYDEBUG */
-					    cnt += iC_traMb(gp, 0);			/* distribute bits directly */
+					    cnt += iC_traMb(gp, 0);	/* distribute bits directly */
 					} else
 					if (gp->gt_ini == -INPW) {
 #if	YYDEBUG
@@ -1854,7 +1917,6 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>", channel, gp->gt_new, gp->gt_old);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
-					    iC_liveData(gp, gp->gt_new);		/* VCD and/or iClive */
 					    iC_link_ol(gp, iC_a_list);	/* no actions */
 #if	YYDEBUG
 #if	INT_MAX == 32767 && defined (LONG16)
@@ -1865,29 +1927,22 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 #endif	/* YYDEBUG */
 					    cnt++;
 					} else
-					if (gp == &D_gate) {				/* D_gate */
-					    static int	liveFlag = 0;
+					if (gp == &D_gate) {		/* D_gate */
 					    char *	cp1;
 
-					    assert(gp->gt_fni == UDFA);			/* D_gate initialised type */
-					    gp->gt_new = 0;				/* allow repeated 1-6 commands */
+					    assert(gp->gt_fni == UDFA);	/* D_gate initialised type */
+					    gp->gt_new = 0;		/* allow repeated 1-6 commands */
 					    switch (val) {
-					    case 0:					/* IGNORE */
+					    case 0:			/* IGNORE */
 						break;
 
-					    case 1:					/* GET_SYMBOL_TABLE */
+					    case 1:			/* GET_SYMBOL_TABLE */
 #if	YYDEBUG
-						if (iC_debug & 0100) fprintf(iC_outFP, "Symbol Table requested by '%s'\n", iC_iccNM);
+						if (iC_debug & 0140) fprintf(iC_outFP, "Symbol Table requested by '%s'\n", iC_iccNM);
 #endif	/* YYDEBUG */
-						if (! liveIndex) {
-						    /* prepare index entries first to allow ALIAS back-references */
-						    index = 0;
-						    for (opp = sTable; opp < sTend; opp++) {
-							(*opp)->gt_live = index++;	/* index and live inhibit */
-							index &= 0x7fff;		/* rolls over if > 32768 Symbols */
-						    }
-						}
+						/* index entries have been entered to allow ALIAS back-references */
 						regOffset = snprintf(regBuf, REQUEST, "%hu:1", C_channel);
+						assert(regOffset == liveOffset);
 						/* to maintain index correlation send all symbols */
 						for (opp = sTable; opp < sTend; opp++) {
 						    int		len;
@@ -1904,11 +1959,13 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						    fni = gp->gt_fni;
 						    if (fni == UDFA && (gp->gt_ini == -ARNC || gp->gt_ini == -LOGC)) {
 							for (i = 0; i < gp->gt_old; i++) {	/* immC array */
-							    gm = gp->gt_rlist[i];	/* immC member - cannot be an ALIAS itself */
+							    gm = gp->gt_rlist[i];
+							    assert(gm->gt_fni < MAX_FTY);	/* immC member - cannot be an ALIAS itself */
 							    fni = MAX_FTY + gm->gt_fni;	/* match iClive */
 							    while (rest = REQUEST - regOffset, (len =
 								snprintf(&regBuf[regOffset], rest, ";%s[%d] %d %d",
-								ids, i, fni, gm->gt_live)) < 0 || len >= rest) {
+								    ids, i, fni, gm->gt_live & debugBlock)
+								) < 0 || len >= rest) {
 								regBuf[regOffset] = '\0';	/* terminate */
 								if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
 								iC_send_msg_to_server(iC_sockFN, regBuf);
@@ -1926,7 +1983,8 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 							fni = MAX_FTY + gp->gt_fni + (inverse << 1);	/* match iClive */
 						    }
 						    while (rest = REQUEST - regOffset, (len = fni >= MAX_FTY ?
-							snprintf(&regBuf[regOffset], rest, ";%s %d %d", ids, fni, gp->gt_live) :
+							snprintf(&regBuf[regOffset], rest, ";%s %d %d",
+							    ids, fni, gp->gt_live & debugBlock)              :
 							snprintf(&regBuf[regOffset], rest, ";%s %d", ids, fni)
 							) < 0 || len >= rest) {
 							regBuf[regOffset] = '\0';	/* terminate */
@@ -1940,14 +1998,16 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						    if (iC_micro & 06) iC_microPrint("Send Symbols", 0);
 						    iC_send_msg_to_server(iC_sockFN, regBuf);
 						}
+						regOffset = 0;				/* clear for debugWait() */
 						/* end of symbol table - execute scan - follow with '0' to leave in iCserver */
-						regOffset = snprintf(regBuf, REQUEST, "%hu:4,%hu:0", C_channel, C_channel);
+						snprintf(regBuf, REQUEST, "%hu:4,%hu:0", C_channel, C_channel);
 						if (iC_micro & 06) iC_microPrint("Send Scan Command", 0);
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						liveFlag = 1;				/* live inhibit bits are set */
+						stepFlag = 0;				/* requires new step next bits */
 						break;
 
-					    case 2:					/* iClive poll */
+					    case 2:			/* iClive poll */
 						/********************************************************************
 						 *  Receive when re-registering - makes sure, that application is seen
 						 *******************************************************************/
@@ -1958,68 +2018,20 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						    liveFlag = 0;
 						}
 						/* poll iClive with 'ch:2;<name>' */
-						regOffset = snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
+						snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
 						if (iC_micro & 06) iC_microPrint("Send application name", 0);
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
-					    case 3:					/* RECEIVE_ACTIVE_SYMBOLS */
-					    case 4:					/* LAST_ACTIVE_SYMBOLS */
-						if (liveFlag) {
-						    for (opp = sTable; opp < sTend; opp++) {
-							(*opp)->gt_live &= 0x7fff;	/* clear live active */
-						    }
-						    liveFlag = 0;			/* do not set again until case 4 received */
-						}
-						/********************************************************************
-						 *  Send live data just in case there was also an input in this loop
-						 *  (should go straight to scan())
-						 *******************************************************************/
-						if (msgOffset > liveOffset) {
-						    iC_send_msg_to_server(iC_sockFN, msgBuf);
-						}
-						msgOffset = liveOffset;			/* msg = "C_channel:3" */
-						cp1 = rpyBuf;
-						while ((cp1 = strchr(cp1, ';')) != NULL) {
-						    long	value;
-						    int		fni;
-						    index = atoi(++cp1);
-						    assert(index < sTend - sTable);	/* check index is in range */
-						    gp = sTable[index];
-						    gp->gt_live |= 0x8000;		/* set live active */
-						    value = (
-							(fni = gp->gt_fni) == ARITH ||
-							fni == D_SH ||
-							fni == F_SW ||
-							fni == TRAB ||
-							fni == CH_AR)	? gp->gt_new
-									: fni == OUTW	? gp->gt_out
-											: gp->gt_val < 0  ? 1
-													  : 0;
-#if YYDEBUG && !defined(_WINDOWS)
-						    if (iC_debug & 04) fprintf(iC_outFP, "%4hu %-15s %ld\n",
-							index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-						    if (value) {
-							iC_liveData(gp, value);		/* initial active live values */
-						    }
-						}
-						/********************************************************************
-						 *  Send live data collected in msgBuf during RECEIVE_ACTIVE_TELEGRAMS
-						 *  because scan() is only executed when another input occurs.
-						 *  a scan may occurr between received blocks which
-						 *  also sends a live C_channel:3 block
-						 *******************************************************************/
-						if (msgOffset > liveOffset) {
-						    iC_send_msg_to_server(iC_sockFN, msgBuf);
-						}
-						msgOffset = liveOffset;			/* msg = "C_channel:3" */
+					    case 3:			/* RECEIVE_ACTIVE_SYMBOLS */
+					    case 4:			/* LAST_ACTIVE_SYMBOLS */
+						receiveActiveSymbols(rpyBuf);
 						if (val == 4) {
-						    liveFlag = 1;			/* live inhibit bits are correct */
+						    liveFlag = 1;	/* live inhibit bits are correct */
 						}
 						break;
 
-					    case 5:					/* GET_END */
+					    case 5:			/* GET_END */
 						/********************************************************************
 						 *  Receive from iClive when Symbol Table is no longer required
 						 *******************************************************************/
@@ -2029,26 +2041,125 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 						    }
 						    liveFlag = 0;
 						}
-						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
+						snprintf(regBuf, REQUEST, "%hu:0", C_channel);
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
-					    case 6:					/* STOP PROGRAM */
-						iC_quit(QUIT_DEBUGGER);			/* quit normally */
+					    case 6:			/* STOP PROGRAM */
+						iC_quit(QUIT_DEBUGGER);	/* quit normally */
 						break;
 
-					    case 7:					/* DEBUGGER STOPPED */
+					    case 7:			/* DEBUGGER STOPPED */
 #if	YYDEBUG
 						if (iC_debug & 0100) fprintf(iC_outFP, "Debugger has stopped for '%s'\n", iC_iccNM);
 #endif	/* YYDEBUG */
-						regOffset = snprintf(regBuf, REQUEST, "%hu:0", C_channel);
+						snprintf(regBuf, REQUEST, "%hu:0", C_channel);
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
+					    case 8:			/* RECEIVE_STEP_SYMBOLS */
+					    case 9:			/* LAST_STEP_SYMBOLS */
+						stepMask = 0x2000;
+						goto StepOrNext;
+					    case 10:			/* RECEIVE_NEXT_SYMBOLS */
+					    case 11:			/* LAST_NEXT_SYMBOLS */
+						stepMask = 0x4000;
+					      StepOrNext:
+						if (debugBlock != 0x1fff) break;	/* cannot set step and next debug */
+						if (stepFlag & stepMask) {
+						    for (opp = sTable; opp < sTend; opp++) {
+							(*opp)->gt_live &= ~stepMask;	/* clear step or next active */
+						    }
+						    stepFlag &= ~stepMask;		/* do not set again until case 9 or 11 received */
+						}
+						cp1 = rpyBuf;
+						while ((cp1 = strchr(cp1, ';')) != NULL) {
+						    index = atoi(++cp1);
+						    assert(index <= sTend - sTable);	/* check index is in range */
+						    gp = sTable[index-1];		/* index in iClive starts at 1 */
+						    gp->gt_live |= stepMask;		/* set step or next active */
+#if	YYDEBUG
+						    if (iC_debug & 040) fprintf(iC_outFP, "T %3hu	%s	%u %u %3hu\n",
+							index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff); fflush(iC_outFP);
+#endif	/* YYDEBUG */
+						}
+						if (val == 9 || val == 11) {
+						    stepFlag |= stepMask;		/* step or next bits are correct */
+						}
+						break;
+
+					    case 12:			/* RECEIVE_WATCH_OR_RESTORE */
+						if (debugBlock != 0x1fff) break;	/* cannot set step and next debug */
+						receiveWatchOrRestore(rpyBuf);
+						break;
+
+						/********************************************************************
+						 *  DEBUG commands
+						 *******************************************************************/
+					    case 'd':
+						if (debugFlag == 0 && stepFlag == 0x6000) {
+						    debugMask = 0x6000;	/* continue till next breakpoint */
+						    debugStop = 0;	/* TODO should not be set */
+						    debugFlag = 1;	/* start DEBUG mode */
+						}
+						break;
+					    case 's':
+						if (debugFlag != 0) {
+						    debugMask = 0x2000;	/* single step */
+						    debugStop = 0;
+						}
+						break;
+					    case 'n':
+						if (debugFlag != 0) {
+						    debugMask = 0x4000;	/* next IO */
+						    debugStop = 0;
+						}
+						break;
+					    case 'c':
+						if (debugFlag != 0) {
+						    debugMask = 0x6000;	/* continue till next breakpoint */
+						    debugStop = 0;
+						}
+						break;
+					    case 'D':
+						if (debugFlag != 0) {
+						    debugMask = 0x0000;	/* continue */
+						    debugStop = 0;
+						    debugFlag = 0;	/* end DEBUG mode */
+						}
+						break;
+					    case 't':
+						iC_debug |= 01100;	/* block inactive timers - set -t flag */
+						break;
+					    case 'S':			/* cannot use 'T' - already used below */
+						iC_debug &= ~0100;	/* reset -t flag */
+						break;
+					    case 'm':
+						iC_micro = 1;		/* set micro */
+						break;
+					    case 'M':
+						iC_micro = 0;		/* reset micro */
+						break;
+					    case 'T':
+						iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
+						break;
 					    default:
-						goto RcvWarning;			/* unknown C_channel:? case */
+						goto RcvWarning;	/* unknown D_channel:? case */
 					    }
 					} else goto RcvWarning;
+				    }
+				    if (gp->gt_ini == -INPW) {
+					if (iC_linked++ == 0) {		/* 1st change linked, further changes not linked again */
+#if	YYDEBUG
+					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s[\t", gp->gt_ids);
+#if	INT_MAX == 32767 && defined (LONG16)
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==> %ld", channel, gp->gt_new, gp->gt_old, gp->gt_new);
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==> %d", channel, gp->gt_new, gp->gt_old, gp->gt_new);
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+#endif	/* YYDEBUG */
+					}
+					iC_liveData(gp, gp->gt_new);	/* VCD and/or iClive */
 				    }
 #ifdef	RASPBERRYPI
 				  } else {
@@ -2060,6 +2171,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 				    fprintf(iC_errFP, "channel = %hu, topChannel = %hu, gp = %s\n", channel, topChannel, gp ? gp->gt_ids : "null");
 				    goto RcvWarning;
 				}
+//    fprintf(iC_outFP, " EE %s EE", cp); fflush(iC_outFP);
 			    } while ((cp = cpe) != NULL);		/* next token if any */
 			}
 			else {
@@ -2190,7 +2302,7 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 		    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has occurred\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (fgets(iC_stdinBuf, REPLY, stdin) == NULL) {	/* get input before TX0.1 notification */
-			FD_CLR(0, &iC_infds);		/* ignore EOF - happens in bg or file - turn off interrupts */
+			FD_CLR(0, &infds);		/* ignore EOF - happens in bg or file - turn off interrupts */
 			iC_stdinBuf[0] = '\0';		/* notify EOF to iC application by zero length iC_stdinBuf */
 		    }
 		    if ((gp = tim[1]) != NULL) {	/* TX0.1 is used to notify receiving a new line or EOF on STDIN */
@@ -2200,12 +2312,12 @@ iC_icc(Gate ** sTable, Gate ** sTend)
 			    iC_stdinBuf, gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = -1;		/* set  TX0.1 hi */
-			iC_liveData(gp, 1);		/* VCD and/or iClive */
 			iC_link_ol(gp, iC_o_list);	/* fire TX0.1 hi to notify that a new line is available in iC_stdinBuf */
-			cnt++;
 #if	YYDEBUG
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
+			iC_liveData(gp, 1);		/* VCD and/or iClive */
+			cnt++;
 			stdinFlag = 1;			/* arm cycle for turning TX0.1 lo */
 		    } else if ((c = iC_stdinBuf[0]) == 'q' || c == '\0') {
 			iC_quit(QUIT_TERMINAL);		/* quit normally with 'q' or ctrl+D */
@@ -2329,7 +2441,7 @@ iC_output(int val, unsigned short channel)
     if (len) {
 	outPtr += len;
 	outBufLen -= len;
-	if (outBufLen < OSIZ) {				/* holds 65535:-1879048193\0 max (18) */
+	if (outBufLen < OSIZ) {				/* holds 65535:-1879048193\0 MAX 18 characters */
 	    assert(outBufLen >= 0);			/* only fails if this len > OSIZ */
 	    sendOutput();				/* Send output data before it overflows */
 	}
@@ -2397,7 +2509,6 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
     int			invMask = 0;		/* stop warning */
     int			valOld = 0;		/* stop warning */
     char		pgBuf[4];		/* store " P0" to " P7" " D" or " G" */
-    char		binBuf[33];		/* allows 32 bits */
 
     if (pfp) {
 	if (pfp->Igate) {
@@ -2414,7 +2525,7 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 	    snprintf(pgBuf, 4, " D");
 	    if (iC_debug & 0100) fprintf(iC_outFP, "\n");
 	    fprintf(iC_outFP, "Dummy PiFace %d:%hu input %s\n",
-		pfp - iC_pfL, pfp->pfa, convert2binary(binBuf, val, 1));
+		pfp - iC_pfL, pfp->pfa, convert2binary(val, 1));
 	}
     } else if (gep) {
 	assert(gep->Ggate);
@@ -2442,7 +2553,7 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 		gp->gt_ids, channel, gp->gt_new, pgBuf, gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	    else if (iC_debug & 020) fprintf(iC_outFP, "\n%s\t%2hu:%s%s",
-		gp->gt_ids, channel, convert2binary(binBuf, gp->gt_new, 1), pgBuf);
+		gp->gt_ids, channel, convert2binary(gp->gt_new, 1), pgBuf);
 #endif	/* YYDEBUG */
 	    cnt = iC_traMb(gp, 0);		/* distribute bits directly */
 	}
@@ -2570,7 +2681,8 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	/********************************************************************
 	 *  Set all bits to wait for TCP/IP interrupts here
 	 *******************************************************************/
-	FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
+	FD_SET(iC_sockFN, &infds);		/* watch sock for inputs in normal wait */
+	FD_SET(iC_sockFN, &idfds);		/* watch sock for inputs in debugWait() */
 	/********************************************************************
 	 *  Send optional equivalence strings from the command line to iCserver
 	 *  to extend equivalences before registration proper. This is only
@@ -2658,12 +2770,12 @@ regAck(Gate ** oStart, Gate ** oEnd)
 	    cp = strchr(cp, ',');
 	    // D channel - messages from debugger to controller
 	    assert(cp);
-	    channel = atoi(++cp);
-	    assert(channel > 0);
-	    if (channel > topChannel) {
-		topChannel = channel;
+	    D_channel = atoi(++cp);
+	    assert(D_channel > 0);
+	    if (D_channel > topChannel) {
+		topChannel = D_channel;
 	    }
-	    storeChannel(channel, &D_gate	/* ==> Debug input */
+	    storeChannel(D_channel, &D_gate	/* ==> Debug input */
 #ifdef	RASPBERRYPI
 					, NULL, NULL, 0
 #endif	/* RASPBERRYPI */
@@ -2870,7 +2982,195 @@ storeChannel(unsigned short channel, Gate * gp
 
 /********************************************************************
  *
+ *	Wait for TCP events only in DEBUG mode
+ *
+ *  iClive DEBUG system messages		Keybord Accelerator	at app
+ *
+ *  8:	activate DEBUG mode				'd'	set debugFlag
+ *		un-grey INTERRUPT/STEP/NEXT/CONTINUE			send symbol as it changes
+ *		turn search entry window pink				(app is executing)
+ *		make all break point symbols break symbols		stops on next break point (if any)
+ *
+ *  9:	STEP						's'	start execution
+ *		make all active symbols break symbols			stops on next break symbol
+ *  10:	NEXT						'n'	start execution
+ *		make only output symbols break symbols			stops after next output
+ *  11:	CONTINUE					'c'	start execution
+ *		make only break point symbols break symbols		stops on next break point (if any)
+ *
+ *  12:	de-activate DEBUG mode				'D'	clear debugFlag
+ *		grey INTERRUPT/STEP/NEXT/CONTINUE			buffer changed symbols
+ *		turn search entry window clear				start execution
+ *		clear all break symbols (effectively de-activates break points)
+ *
+ *	BREAK execution when changed symbol received		stop execution
+ *		if DEBUG mode and current symbol is a break symbol
+ *		show break symbol in pink search entry window
+ *		start search for the active symbol (moves text)
+ *
+ *  The following are independent of DEBUG mode
+ *
+ *  13:	activate/de-activate debug output in app	't'	toggle -t flag
+ *
+ *  14:	step 3 state microsecond output in app		'm'	toggle more micro
+ *
+ *******************************************************************/
+
+static void
+debugWait(void)
+{
+    char *		cp;
+    int			val;
+    int			retval;
+    unsigned short	channel;
+    char		debugBuf[REPLY];	/* needs local buffer */
+
+    /********************************************************************
+     *  For debug messages wait for TCP inputs only
+     *  Ignore stdin, extra and timer inerrupts
+     *******************************************************************/
+    retval = iC_wait_for_next_event(&idfds, 0, 0);
+    if (retval > 0) {
+	/********************************************************************
+	 *  TCP/IP input from iCserver
+	 *******************************************************************/
+	if (iC_sockFN > 0 && FD_ISSET(iC_sockFN, &iC_rdfds)) {
+#if YYDEBUG && !defined(_WINDOWS)
+	    if (iC_debug & 04) fprintf(iC_outFP, "*DW TCP interrupt");
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	    if (iC_rcvd_msg_from_server(iC_sockFN, debugBuf, REPLY) != 0) {
+#if YYDEBUG && !defined(_WINDOWS)
+		if (iC_debug & 04) fprintf(iC_outFP, " << %s\n", debugBuf); fflush(iC_outFP);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+		cp = debugBuf - 1;	/* increment to first character in debugBuf in first use of cp */
+		if (isdigit(debugBuf[0])) {
+		    char *	cpe;
+		    char *	cps;
+
+		    do {
+			if ((cpe = strchr(++cp, ',')) != NULL) { /* find next comma in input */
+			    *cpe = '\0';	/* split off leading comma separated token */
+			}
+			channel = (unsigned short)atoi(cp);
+			if (channel == D_channel) {
+			    if ((cps = strchr(cp, ':')) == NULL) goto RcvWarning;
+			    val = atoi(++cps);
+			    switch (val) {
+			    case 0:			/* IGNORE */
+			    case 5:			/* GET_END */
+				break;
+			    case 1:			/* GET_SYMBOL_TABLE */
+			    case 2:			/* iClive poll */
+			    case 7:			/* DEBUGGER STOPPED */
+				goto Retransmit;	/* handle in main loop */
+			    case 3:			/* RECEIVE_ACTIVE_SYMBOLS */
+			    case 4:			/* LAST_ACTIVE_SYMBOLS */
+				debugMask = 0x0000;
+				receiveActiveSymbols(debugBuf);
+				if (val == 4) {
+				    liveFlag = 1;	/* live inhibit bits are correct */
+				}
+				break;
+			    case 6:			/* STOP PROGRAM */
+				iC_quit(QUIT_DEBUGGER);	/* quit normally */
+				break;
+			    case 12:			/* RECEIVE_WATCH_OR_RESTORE */
+				receiveWatchOrRestore(debugBuf);
+				break;
+				/********************************************************************
+				 *  DEBUG commands
+				 *******************************************************************/
+			    case 's':
+				if (debugFlag != 0) {
+				    debugMask = 0x2000;	/* single step */
+				    debugStop = 0;
+				}
+			    case 'd':			/* already in debug mode - ignore */
+				break;
+			    case 'n':
+				if (debugFlag != 0) {
+				    debugMask = 0x4000;	/* next IO */
+				    debugStop = 0;
+				}
+				break;
+			    case 'c':
+				if (debugFlag != 0) {
+				    debugMask = 0x6000;	/* continue till next breakpoint */
+				    debugStop = 0;
+				}
+				break;
+			    case 'D':
+				if (debugFlag != 0) {
+				    debugMask = 0x0000;	/* continue */
+				    debugStop = 0;
+				    debugFlag = 0;	/* end DEBUG mode */
+				}
+				break;
+			    case 't':
+				iC_debug |= 01100;	/* block inactive timers - set -t flag */
+				break;
+			    case 'S':			/* cannot use 'T' - already used below */
+				iC_debug &= ~0100;	/* reset -t flag */
+				break;
+			    case 'm':
+				iC_micro = 1;		/* set micro */
+				break;
+			    case 'M':
+				iC_micro = 0;		/* reset micro */
+				break;
+			    case 'T':
+				iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
+				break;
+			    default:
+				goto RcvWarning;	/* unknown D_channel:? case */
+			    }
+			} else {
+			    /********************************************************************
+			     *  Any I.. inputs and other control messages are collected while
+			     *  stopped at a break and transmitted to iCserver just before waiting
+			     *  for new input in the main loop. This means these messages will be
+			     *  received as the next input in the main loop to be processed by
+			     *  the next iC scan. This scheme has the advantage, that there is
+			     *  a minimum of interference with the main loop due to debugging.
+			     *  Timer TX0.x and STDIN interrupts are ignored completely while at
+			     *  a break and also act when waiting for new input in the main loop.
+			     *  The same holds for GPIO interrupts from a RASPBERRYPI.
+			     *******************************************************************/
+			  Retransmit:
+			    if (regOffset == 0) {
+				regOffset = snprintf(regBuf, REQUEST, "%s", cp);
+			    } else {
+				regOffset += snprintf(&regBuf[regOffset], REQUEST - regOffset, ",%s", cp);
+			    }
+//    fprintf(iC_outFP, " $$ %s $$", cp); fflush(iC_outFP);
+			}
+		    } while ((cp = cpe) != NULL);		/* next token if any */
+//    fprintf(iC_outFP, " @"); fflush(iC_outFP);
+		}
+		else {
+		  RcvWarning:
+		    fprintf(iC_errFP, "WARNING: %s: received '%s' in debugWait from iCserver ???\n", iC_iccNM, debugBuf);
+		}
+	    } else {
+		iC_quit(QUIT_SERVER);		/* quit normally with 0 length message from iCserver */
+	    }
+	}   /*  end of TCP/IP interrupt */
+    } else if (retval == 0) {
+	fprintf(iC_errFP, "ERROR: select in debugWait should not interrupt from a timer\n");
+	iC_quit(SIGUSR1);
+    } else {				/* retval -1 */
+	perror("ERROR: select in debugWait failed");
+	iC_quit(SIGUSR1);
+    }
+} /* debugWait */
+
+/********************************************************************
+ *
  *	Output VCD data and/or a live data message during scans
+ *	Handle live data and breaks in execution in DEBUG mode
+ *
+ *	debugMask	set by iClive in CONT message, cleared in DEBUG message
+ *	debugStop	cleared by iClive in CONT message
  *
  *******************************************************************/
 
@@ -2881,54 +3181,240 @@ iC_liveData(Gate * gp, long value)
 iC_liveData(Gate * gp, int value)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 {
-    unsigned short	index;
     int			len;
     int			rest;
     char *		code;
-    char		binBuf[33];	/* allows 32 bits */
+    unsigned short	index;
+    unsigned short	brk;
+    char		tempBuf[TSIZ];
 
-    index = gp->gt_live & 0x7fff;
-    if (iC_vcdFP && (code = vcd_ftype[gp->gt_fni]) != NULL) {
-	fprintf(iC_vcdFP, "#%ld\n", ++virtualTime);
-	switch (*code) {
-	case 'e':			/* event */
-	case 'w':			/* wire */
+//    fprintf(iC_outFP, " ## %s %d (%d) ##", gp->gt_ids, value, iC_linked); fflush(iC_outFP);
+    if (iC_linked) {
+	index = gp->gt_live & 0x1fff;
+	if (iC_vcdFP && (code = vcd_ftype[gp->gt_fni]) != NULL) {
+	    fprintf(iC_vcdFP, "#%ld\n", ++virtualTime);
+	    switch (*code) {
+	    case 'e':					/* event */
+	    case 'w':					/* wire */
 #if	INT_MAX == 32767 && defined (LONG16)
-	    fprintf(iC_vcdFP, "%1.1ld%hu\n", value, index);
+		fprintf(iC_vcdFP, "%1.1ld%hu\n", value, index);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-	    fprintf(iC_vcdFP, "%1.1d%hu\n", value, index);
+		fprintf(iC_vcdFP, "%1.1d%hu\n", value, index);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-	    break;
-	case 'i':			/* integer */
-	    convert2binary(binBuf, value, 0);	/* convert to 32 bit binary string */
-	    fprintf(iC_vcdFP, "b%s %hu\n", binBuf, index);
-	    break;
-	default:			/* hard error */
-	    assert(0);
-	    break;
+		break;
+	    case 'i':					/* integer */
+		fprintf(iC_vcdFP, "b%s %hu\n",
+		    convert2binary(value, 0),		/* convert to 32 bit binary string */
+		    index);
+		break;
+	    default:					/* hard error */
+		assert(0);
+		break;
+	    }
 	}
-    }
-    if (gp->gt_live & 0x8000) {		/* is variable active for iClive ? */
-	while ((len =
-#if	INT_MAX == 32767 && defined (LONG16)
-		snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
-		    ";%hu %ld", index, value)
-#else	/* INT_MAX == 32767 && defined (LONG16) */
-		snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
-		    ";%hu %d", index, value)
-#endif	/* INT_MAX == 32767 && defined (LONG16) */
-		) < 0 || len >= rest
-	) {
+	if (debugMask == 0x0000) {
 	    /********************************************************************
-	     *  Send live data collected in msgBuf before it overflows to iCserver
+	     *  Handle live data in NORMAL mode at maximum speed
+	     *******************************************************************/
+	  noBreak:
+	    if (gp->gt_live & 0x8000) {			/* is variable in window for iClive */
+		while ((len =
+#if	INT_MAX == 32767 && defined (LONG16)
+			snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
+			    ";%hu %ld", index, value)
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+			snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
+			    ";%hu %d", index, value)
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+			) < 0 || len >= rest
+		) {
+		    /********************************************************************
+		     *  Send live data collected in msgBuf before it overflows to iCserver
+		     *******************************************************************/
+		    msgBuf[msgOffset] = '\0';		/* terminate */
+		    iC_send_msg_to_server(iC_sockFN, msgBuf);
+		    msgOffset = liveOffset;		/* msg = "C_channel:3" */
+		}
+		msgOffset += len;
+	    }
+	} else {
+	    /********************************************************************
+	     *  Debug break information is stored in gt_live with index and Live flag:
+	     *    index            1 to 0x1fff
+	     *    IGNORE	00	0x0000	not in current source or ignored (TX0.x)
+	     *	  ACTIVE	01	0x2000	non OUTPUT variable in current source
+	     *	  OUTPUT	10	0x4000	OUTPUT variable Q..._0 independent of source
+	     *	  BREAKPOINT	11	0x6000	breakpoint details handled in iClive
+	     *    Live flag             0x8000
+	     *
+	     *    \   00 |  01    11 |  10   debugMask
+	     *  brk+-----+-----+-----+-----+
+	     *  00 |  X =|     |     |     |	X  if debugMask == 0x0000 (00)   
+	     *   --+-----+-----+-----+-----+
+	     *  01 |  X  |  B =|     |     |	B if brk == debugMask
+	     *     +-----+-----+-----+-----+
+	     *  11 |  X  |  B  |  BP=|  B  |	  or brk == 0x6000 (11)
+	     *   --+-----+-----+-----+-----+
+	     *  10 |  X  |     |     |  B =|	BP if B and debugMask == 0x6000 (11)   
+	     *     +-----+-----+-----+-----+
+	     *
+	     *******************************************************************/
+	    if ((brk = gp->gt_live & 0x6000) != debugMask &&
+		brk != 0x6000) {			/* not a break point */
+		goto noBreak;
+	    }
+	    /********************************************************************
+	     *  B  Break now either unconditionally sending "C_channel:8"
+	     *      debugMask	0x2000	for every non OUTPUT variable or breakpoint      step
+	     *      debugMask	0x4000	for every OUTPUT variable Q..._0 or breakpoint   next
+	     *  BP or break for unconditional or conditional breakpoint sending "C_channel:9"
+	     *      debugMask	0x6000	for every BREAKPOINT only                        continue
+	     *******************************************************************/
+	    if (iC_debug & 0100) fflush(iC_outFP);	/* in case dangling text debug messages without CR */
+	    while ((len =				/* repeat code for speed */
+#if	INT_MAX == 32767 && defined (LONG16)
+		    snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
+			";%hu %ld", index, value)
+#else	/* INT_MAX == 32767 && defined (LONG16) */
+		    snprintf(&msgBuf[msgOffset], rest = REQUEST - msgOffset,
+			";%hu %d", index, value)
+#endif	/* INT_MAX == 32767 && defined (LONG16) */
+		    ) < 0 || len >= rest
+	    ) {
+		/********************************************************************
+		 *  Send live data collected in msgBuf before it overflows to iCserver
+		 *******************************************************************/
+		msgBuf[msgOffset] = '\0';		/* terminate */
+		iC_send_msg_to_server(iC_sockFN, msgBuf);
+		msgOffset = liveOffset;			/* msg = "C_channel:3" */
+	    }
+	    msgOffset += len;
+	    /********************************************************************
+	     *  Send changes now
 	     *******************************************************************/
 	    msgBuf[msgOffset] = '\0';			/* terminate */
 	    iC_send_msg_to_server(iC_sockFN, msgBuf);
 	    msgOffset = liveOffset;			/* msg = "C_channel:3" */
+	    if (debugStop == 0) {
+		snprintf(tempBuf, TSIZ, "%hu:%d",		/* BREAK message */
+		    C_channel, debugMask == 0x6000 ? 9 : 8);	/* BP : B */
+		iC_send_msg_to_server(iC_sockFN, tempBuf);
+		debugStop = 1;
+	    }
+	    while (debugStop != 0) {
+		debugWait();				/* this by-passes iC scan */
+		/********************************************************************
+		 *  debugWait() has returned --- which has
+		 *	either received 't' 'm' 'T' or an I.. input to be re-transmitted
+		 *	    debugStop != 0         --- so wait here again
+		 *	or received 'd' 's' 'n' 'c' or 'D'
+		 *	    debugStop == 0         --- return to continue scan
+		 *******************************************************************/
+	    }
 	}
-	msgOffset += len;
+	iC_linked = 0;
     }
 } /* iC_liveData */
+
+/********************************************************************
+ *
+ *	Receive active symbols to set up Live bits and send initial data
+ *
+ *******************************************************************/
+
+static void
+receiveActiveSymbols(char * cp1)
+{
+    Gate **		opp;
+    unsigned short	debugMaskSave;
+    Gate *		gp;
+    int			index;
+    long		value;
+    int			fni;
+
+    if (liveFlag) {
+	for (opp = sTable; opp < sTend; opp++) {
+	    (*opp)->gt_live &= 0x7fff;	/* clear live active */
+	}
+	liveFlag = 0;			/* do not set again until case 4 received */
+    }
+    /********************************************************************
+     *  Send live data just in case there was also an input in this loop
+     *  (should go straight to scan())
+     *******************************************************************/
+    if (msgOffset > liveOffset) {
+	iC_send_msg_to_server(iC_sockFN, msgBuf);
+    }
+    msgOffset = liveOffset;		/* msg = "C_channel:3" */
+    debugMaskSave = debugMask;
+    debugMask = 0x0000;
+    while ((cp1 = strchr(cp1, ';')) != NULL) {
+	index = atoi(++cp1);
+	assert(index <= sTend - sTable);/* check index is in range */
+	gp = sTable[index-1];		/* index in iClive starts at 1 */
+	gp->gt_live |= 0x8000;		/* set live active */
+	value = (
+	    (fni = gp->gt_fni) == ARITH ||
+	    fni == D_SH ||
+	    fni == F_SW ||
+	    fni == TRAB ||
+	    fni == CH_AR)   ? gp->gt_new
+			    : fni == OUTW   ? gp->gt_out
+					    : gp->gt_val < 0  ? 1
+							      : 0;
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_debug & 04) fprintf(iC_outFP, "%4d %-15s %ld\n",
+	    index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	if (value) {
+	    iC_linked++;			/* pretend it was linked */
+	    iC_liveData(gp, value);		/* initial active live values */
+	}
+    }
+    debugMask = debugMaskSave;
+    /********************************************************************
+     *  Send live data collected in msgBuf during RECEIVE_ACTIVE_SYMBOLS
+     *  because scan() is only executed when another input occurs.
+     *  a scan may occurr between received blocks which
+     *  also sends a live C_channel:3 block
+     *******************************************************************/
+    if (msgOffset > liveOffset) {
+	iC_send_msg_to_server(iC_sockFN, msgBuf);
+    }
+    msgOffset = liveOffset;			/* msg = "C_channel:3" */
+} /* receiveActiveSymbols */
+
+/********************************************************************
+ *
+ *	Receive Watch or restore values
+ *	Format is <D_channel:12;<index> <value>;...
+ *
+ *******************************************************************/
+
+static void
+receiveWatchOrRestore(char * cp1)
+{
+    Gate *	gp;
+    int		index;
+    int		value;
+
+    while ((cp1 = strchr(cp1, ';')) != NULL) {
+	index = atoi(++cp1);
+	assert(index <= sTend - sTable);	/* check index is in range */
+	cp1 = strchr(cp1, ' ');
+	assert(cp1 != NULL);
+	value = atoi(++cp1);
+	assert(value <= 3);
+	gp = sTable[index-1];			/* index in iClive starts at 1 */
+	gp->gt_live &= ~0x6000;			/* clear step/next or watch/ignore bits */
+	gp->gt_live |= value << 13;		/* set watch/ignore or restore step/next */
+#if	YYDEBUG
+	if (iC_debug & 040) fprintf(iC_outFP, "W %3d	%s	%u %u %3hu\n",
+	    index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff);
+	fflush(iC_outFP);
+#endif	/* YYDEBUG */
+    }
+} /* receiveWatchOrRestore */
 
 /********************************************************************
  *
@@ -2943,9 +3429,9 @@ iC_liveData(Gate * gp, int value)
 
 static char *
 #if	INT_MAX == 32767 && defined (LONG16)
-convert2binary(char * binBuf, long value, int binFlag)
+convert2binary(long value, int binFlag)
 #else	/* INT_MAX == 32767 && defined (LONG16) */
-convert2binary(char * binBuf, int value, int binFlag)
+convert2binary(int value, int binFlag)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 {
     char *		binPtr;

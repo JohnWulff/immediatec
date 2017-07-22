@@ -1,8 +1,8 @@
 static const char p_channel_c[] =
-"@(#)$Id: p_channel.c,v 1.2 2015/10/16 12:33:47 jw Exp $";
+"@(#)$Id: p_channel.c 1.3 $";
 /********************************************************************
  *
- *	Copyright (C) 2015  John E. Wulff
+ *	Copyright (C) 2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -11,7 +11,7 @@ static const char p_channel_c[] =
  *  to contact the author, see the README file
  *
  *	p_channel.c
- *	parallel plc - dummy initialisation of P_channel
+ *	dummy initialisation of P_channel
  *
  ********************************************************************
  *  

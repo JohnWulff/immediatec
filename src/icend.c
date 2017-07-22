@@ -1,8 +1,8 @@
 static const char icend_c[] =
-"@(#)$Id: icend.c,v 1.4 2015/10/31 03:40:08 jw Exp $";
+"@(#)$Id: icend.c 1.5 $";
 /********************************************************************
  *
- *	Copyright (C) 1985-2015  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -11,7 +11,7 @@ static const char icend_c[] =
  *  to contact the author, see the README file
  *
  *	icend.c
- *	parallel plc - dummy termination routine
+ *	dummy termination routine
  *
  *******************************************************************/
 

@@ -1,6 +1,6 @@
 /********************************************************************
  *
- *	Copyright (C) 1985-2011  John E. Wulff
+ *	Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.73 $";
+"@(#)$Id: comp.h 1.74 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -390,10 +390,9 @@ extern int	iC_toIEC1131(char * name, char * buf, int bufLen,
 			  char * iqt, char * xbwl, int * bytep,
 			  int * bitp, char * tail);
 
-extern int	iC_listNet(void);			/* list generated network */
+extern int	iC_listNet(void);	/* list generated network */
 #if defined(RUN) || defined(TCP)
-extern int	iC_buildNet(
-		Gate *** asTable, Gate *** asTend);	/* generate execution network */
+extern int	iC_buildNet(void);	/* generate execution network */
 #endif /* defined(RUN) || defined(TCP) */
 extern int	iC_outNet(FILE * iFP, char * outfile);	/* generate network as C file */
 extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);

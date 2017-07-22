@@ -1,8 +1,8 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.67 $";
+"@(#)$Id: load.c 1.68 $";
 /********************************************************************
  *
- *  Copyright (C) 1985-2015  John E. Wulff
+ *  Copyright (C) 1985-2017  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -298,6 +298,8 @@ char		iC_fos[]        = FOPS;
 char *		iC_useText[4]	= { USE_TEXT };
 
 Gate *		iC_TX0p;		/* pointer to bit System byte Gates */
+Gate **		sTable;			/* pointer to dynamic Symbol Table array */
+Gate **		sTend;			/* end of dynamic Symbol Table array */
 
 /********************************************************************
  *
@@ -327,8 +329,6 @@ main(
 {
     Gate *		op;
     Gate *		gp;
-    Gate **		sTable;		/* pointer to dynamic array */
-    Gate **		sTend;		/* end of dynamic array */
     Gate ***		oppp;
     Gate **		opp;
     Gate **		lp;
@@ -2549,7 +2549,7 @@ main(
     /********************************************************************
      * Execute iC load object
      *******************************************************************/
-    iC_icc(sTable, sTend);
+    iC_icc();				/* Gate ** sTable, Gate ** sTend are global */
     /********************************************************************
      * never returns - exits via iC_quit()
      *******************************************************************/

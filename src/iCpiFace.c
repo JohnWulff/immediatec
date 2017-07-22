@@ -70,6 +70,8 @@ typedef union	chS {
     gpioIO *	gep;
 } chS;
 
+static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
+static fd_set		ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
 static struct timeval	toCini = { 0,  50000 };	/* 50 ms select() timeout - initial value */
 static struct timeval	toC750 = { 0, 750000 };	/* 750 ms select() timeout - re-iniialising value */
 static struct timeval	toCnt  = { 0,  50000 };	/* 50 ms select() timeout */
@@ -218,7 +220,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.8 $\n"
+"Version	$Id: iCpiFace.c 1.9 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -1333,7 +1335,7 @@ main(
      *  correctly (does not STOP mysteriously) when run in the background.
      *
      *  This means that such a process cannot be stopped with q, only with
-     *  ctrl-C, when it has been brought to the foreground with fg.
+     *  ctrl-D, when it has been brought to the foreground with fg.
      *******************************************************************/
     signal(SIGTTIN, SIG_IGN);			/* ignore tty input signal in bg */
 #endif	/* SIGTTIN */
@@ -1691,10 +1693,10 @@ main(
     /********************************************************************
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
-    FD_ZERO(&iC_infds);				/* should be done centrally if more than 1 connect */
-    FD_ZERO(&iC_ixfds);				/* should be done centrally if more than 1 connect */
-    FD_SET(iC_sockFN, &iC_infds);		/* watch sock for inputs */
-    if (iC_npf) FD_SET(gpio25FN, &iC_ixfds);	/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
+    FD_ZERO(&infds);				/* should be done centrally if more than 1 connect */
+    FD_ZERO(&ixfds);				/* should be done centrally if more than 1 connect */
+    FD_SET(iC_sockFN, &infds);			/* watch sock for inputs */
+    if (iC_npf) FD_SET(gpio25FN, &ixfds);	/* watch GPIO25 for out-of-band input - do after iC_connect_to_server() */
     /********************************************************************
      *  Set all GPIO IXn input bits for interrupts
      *******************************************************************/
@@ -1702,11 +1704,11 @@ main(
 	for (bit = 0; bit <= 7; bit++) {
 	    if ((gpio = gep->gpioNr[bit]) != 0xffff) {
 		assert(gep->gpioFN[bit] > 0);		/* make sure it has been opened */
-		FD_SET(gep->gpioFN[bit], &iC_ixfds);	/* watch GPIO N for out-of-band input */
+		FD_SET(gep->gpioFN[bit], &ixfds);	/* watch GPIO N for out-of-band input */
 	    }
 	}
     }
-    if ((iC_debug & DZ) == 0) FD_SET(0, &iC_infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
+    if ((iC_debug & DZ) == 0) FD_SET(0, &infds);	/* watch stdin for inputs unless - FD_CLR on EOF */
     if (iC_debug & 0200) fprintf(iC_outFP, "iC_sockFN = %d	gpio25FN = %d spidFN[0] = %d spidFN[1] = %d\n",
 	iC_sockFN, gpio25FN, spidFN[0], spidFN[1]);
     /********************************************************************
@@ -1717,7 +1719,7 @@ main(
     slr = 0;
     cbc = 0x03;					/* first input will switch to cursor/blink off */
     for (;;) {
-	if ((retval = iC_wait_for_next_event(toCntp)) == 0)
+	if ((retval = iC_wait_for_next_event(&infds, &ixfds, toCntp)) == 0)
 	{
 	    if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 		toCnt = toC750;			/* re-initialise timeout value */
@@ -1973,7 +1975,7 @@ main(
 	     *******************************************************************/
 	    if (FD_ISSET(0, &iC_rdfds)) {
 		if (fgets(iC_stdinBuf, REPLY, stdin) == NULL) {	/* get input before TX0.1 notification */
-		    FD_CLR(0, &iC_infds);		/* ignore EOF - happens in bg or file - turn off interrupts */
+		    FD_CLR(0, &infds);			/* ignore EOF - happens in bg or file - turn off interrupts */
 		    iC_stdinBuf[0] = '\0';		/* notify EOF to iC application by zero length iC_stdinBuf */
 		}
 		if ((c = iC_stdinBuf[0]) == 'q' || c == '\0') {

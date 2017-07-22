@@ -50,6 +50,7 @@ my $iniString = '';
 my $ioName = '';
 my $AutoDelay = 50_000;	# 50 ms for normal autovivify delay (4 ms is just sufficient to catch 2nd connection)
 my %AutoVivify = ();
+my %AutoVivified = ();
 my $AutoDebug = '';
 my %sortOrder = (	# determines in which order iCboxes ar autovivified
     IX => 0, QX => 5,
@@ -118,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.54 $
+$Id: iCserver 1.55 $
 .
 
 ########################################################################
@@ -611,6 +612,7 @@ sub disconnect {
 	}
 	delete $ClientNames{$conn};
 	delete $Clients{$sender};
+	delete $AutoVivified{$sender} if exists $AutoVivified{$sender};
 	print "Disconnected '$sender'\n" unless $opt_q;
 	$numberOfConnections--;
 	if ($numberOfConnections <= 0) {
@@ -1037,13 +1039,16 @@ sub autoVivify {
 	} keys %AutoVivify) {				# same key could have been entered more than once
 	    push @iCbox_params, $AutoVivify{$key};
 	}
+	%AutoVivify = ();
 	$autovivify = join " ", @iCbox_params;
 	$autovivify = "$opt_A -n$ioName $autovivify";
-	print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
-	fork_and_exec($autovivify);			# run iCbox or app specified in $opt_A
-	%AutoVivify = ();
-	$opt_a = undef if $opt_A =~ m/\s-\w*d\w*\b/;	# stop recursive exec of iCbox -d
-    }							# other iCbox switches are ignored
+	unless (exists $AutoVivified{$ioName}) {
+	    $AutoVivified{$ioName}++;
+	    print "AUTOVIVIFY: '$autovivify'\n" if $opt_t;
+	    fork_and_exec($autovivify);			# run iCbox or app specified in $opt_A
+	    $opt_a = undef if $opt_A =~ m/\s-\w*d\w*\b/;# stop recursive exec of iCbox -d
+	}						# other iCbox switches are ignored
+    }
     if ($AutoDebug) {
 	print "AUTODEBUG: '$AutoDebug'\n" if $opt_t;
 	fork_and_exec($AutoDebug);			# run iClive or app specified in $opt_G
@@ -1108,46 +1113,47 @@ use warnings;
 		if ($msg1 =~ /^(\d+):(.*)$/s) {	# data message, which may include new lines
 		    ## $1 is channel : $2 is value
 		    $channel = $1;
-		    $con = $Sender[$channel];
 		    warnD("Error $named: data '$msg1' during registration - app spec error") if $regFlag;
-		    if (not defined $con or $con eq $conn) {	# TODO check this does not happen if equiv Q/I on same connection
-			$SenderValue[$channel] = $2;	# latest value in case lost connection
-			undef $rconn;
-			############################################################
-			## Central function of iCserver done at maximum speed.
-			## Transmit message from a sender for a particular channel
-			## to each receiver on that channel - most common case.
-			############################################################
-			if ($aref = $Receivers[$channel]) {
-			    foreach $rconn (@{$aref}) {
-				pushReceiverData($rconn, $msg1);	#  message to sender channel
+		    ############################################################
+		    ## Allow message to be received from any connection, not just
+		    ## from $con = $Sender[$channel];
+		    ## This allows apps to re-transmit received messages for debugging
+		    ############################################################
+		    $SenderValue[$channel] = $2;	# latest value in case lost connection
+		    my $sendFlag = 0;
+		    ############################################################
+		    ## Central function of iCserver done at maximum speed.
+		    ## Transmit message from a sender for a particular channel
+		    ## to each receiver on that channel - most common case.
+		    ############################################################
+		    if ($aref = $Receivers[$channel]) {
+			foreach $rconn (@{$aref}) {
+			    pushReceiverData($rconn, $msg1);	#  message to sender channel
+			    $sendFlag++;
+			}
+		    }
+		    ############################################################
+		    ## Transmit message to each receiver on equivalenced alternate
+		    ## channels - this is very rare and only happens if several
+		    ## inputs on the same instance of an app are equivalenced.
+		    ## Only one statement is added to the execution of the common case.
+		    ## %AltReceivers hashed by $channel ... receive connections on alternate channel
+		    ## [ [ channel1, conn3, conn4 ... ],  [ channel2, conn5, conn6 ... ] ... ]
+		    ## NOTE: $Receivers[$channel] may be empty and $AltReceivers[$channel]
+		    ## may have an entry for the case where an output from a connection is
+		    ## equivalenced with an input of the same connection.
+		    ############################################################
+		    if (exists $AltReceivers{$channel}) {
+			foreach $aref (@{$AltReceivers{$channel}}) {
+			    $channel = $aref->[0];			# alternate channel
+			    foreach $rconn (@{$aref}[1 .. $#{$aref}]) {
+				pushReceiverData($rconn, "$channel:$2"); # message to alternate channel
+				$sendFlag++;
 			    }
 			}
-			############################################################
-			## Transmit message to each receiver on equivalenced alternate
-			## channels - this is very rare and only happens if several
-			## inputs on the same instance of an app are equivalenced.
-			## Only one statement is added to the execution of the common case.
-			## %AltReceivers hashed by $channel ... receive connections on alternate channel
-			## [ [ channel1, conn3, conn4 ... ],  [ channel2, conn5, conn6 ... ] ... ]
-			## NOTE: $Receivers[$channel] may be empty and $AltReceivers[$channel]
-			## may have an entry for the case where an output from a connection is
-			## equivalenced with an input of the same connection.
-			############################################################
-			if (exists $AltReceivers{$channel}) {
-			    foreach $aref (@{$AltReceivers{$channel}}) {
-				$channel = $aref->[0];			# alternate channel
-				foreach $rconn (@{$aref}[1 .. $#{$aref}]) {
-				    pushReceiverData($rconn, "$channel:$2"); # message to alternate channel
-				}
-			    }
-			}
-			if ($opt_t and not $rconn) {
-			    print "$ClientNames{$conn} $msg1 => dummy\n";	# not registered
-			}
-		    } else {
-			print STDERR "conn = $conn, channel [0] = $Sender[$channel]\n";
-			warnD("$ClientNames{$Sender[$channel]} $msg1 received on wrong connection $ClientNames{$conn}\n");
+		    }
+		    if ($opt_t and not $sendFlag) {
+			print "$ClientNames{$conn} $msg1 => dummy\n";	# not registered
 		    }
 		}
 		elsif ($msg1 =~ /^N(.+)/) {	# name part of registration
