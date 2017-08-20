@@ -65,7 +65,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "gram.y"
  static const char gram_y[] =
-"@(#)$Id: gram.tab.c 1.36 $";
+"@(#)$Id: gram.tab.c 1.37 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -725,27 +725,27 @@ static const yytype_uint16 yyrline[] =
      478,   483,   491,   496,   512,   517,   525,   530,   535,   544,
      549,   554,   559,   567,   572,   580,   586,   591,   600,   605,
      611,   617,   624,   633,   638,   646,   651,   659,   665,   674,
-     690,   709,   714,   721,   726,   732,   737,   743,   748,   754,
-     762,   771,   779,   788,   796,   808,   819,   824,   829,   834,
-     842,   847,   855,   860,   868,   873,   881,   886,   894,   900,
-     908,   914,   923,   928,   933,   939,   944,   953,   958,   966,
-     971,   979,   984,   989,   997,  1002,  1008,  1013,  1019,  1024,
-    1030,  1035,  1041,  1046,  1052,  1057,  1063,  1068,  1074,  1079,
-    1085,  1090,  1099,  1104,  1109,  1114,  1119,  1124,  1132,  1138,
-    1143,  1151,  1156,  1161,  1170,  1175,  1181,  1186,  1192,  1197,
-    1203,  1208,  1217,  1222,  1230,  1235,  1240,  1248,  1253,  1258,
-    1263,  1268,  1273,  1278,  1283,  1288,  1293,  1301,  1307,  1312,
-    1317,  1322,  1327,  1336,  1341,  1349,  1355,  1361,  1386,  1392,
-    1398,  1404,  1410,  1416,  1422,  1428,  1434,  1440,  1446,  1455,
-    1460,  1466,  1480,  1488,  1493,  1501,  1506,  1514,  1519,  1527,
-    1532,  1540,  1545,  1553,  1558,  1563,  1571,  1576,  1581,  1586,
-    1591,  1599,  1604,  1609,  1617,  1622,  1627,  1635,  1640,  1645,
-    1650,  1658,  1663,  1668,  1673,  1682,  1687,  1692,  1697,  1702,
-    1707,  1712,  1721,  1734,  1756,  1778,  1783,  1809,  1814,  1819,
-    1824,  1829,  1834,  1842,  1847,  1852,  1858,  1863,  1869,  1874,
-    1880,  1886,  1892,  1897,  1905,  1918,  1940,  1965,  1979,  2001,
-    2010,  2016,  2021,  2026,  2031,  2037,  2042,  2051,  2056,  2064,
-    2069,  2077,  2099,  2125,  2148
+     684,   697,   702,   709,   714,   720,   725,   731,   736,   742,
+     750,   759,   767,   776,   784,   796,   807,   812,   817,   822,
+     830,   835,   843,   848,   856,   861,   869,   874,   882,   888,
+     896,   902,   911,   916,   921,   927,   932,   941,   946,   954,
+     959,   967,   972,   977,   985,   990,   996,  1001,  1007,  1012,
+    1018,  1023,  1029,  1034,  1040,  1045,  1051,  1056,  1062,  1067,
+    1073,  1078,  1087,  1092,  1097,  1102,  1107,  1112,  1120,  1126,
+    1131,  1139,  1144,  1149,  1158,  1163,  1169,  1174,  1180,  1185,
+    1191,  1196,  1205,  1210,  1218,  1223,  1228,  1236,  1241,  1246,
+    1251,  1256,  1261,  1266,  1271,  1276,  1281,  1289,  1295,  1300,
+    1305,  1310,  1315,  1324,  1329,  1337,  1343,  1349,  1368,  1374,
+    1380,  1386,  1392,  1398,  1404,  1410,  1416,  1422,  1428,  1437,
+    1442,  1448,  1462,  1470,  1475,  1483,  1488,  1496,  1501,  1509,
+    1514,  1522,  1527,  1535,  1540,  1545,  1553,  1558,  1563,  1568,
+    1573,  1581,  1586,  1591,  1599,  1604,  1609,  1617,  1622,  1627,
+    1632,  1640,  1645,  1650,  1655,  1664,  1669,  1674,  1679,  1684,
+    1689,  1694,  1703,  1716,  1732,  1748,  1753,  1773,  1778,  1783,
+    1788,  1793,  1798,  1806,  1811,  1816,  1822,  1827,  1833,  1838,
+    1844,  1850,  1856,  1861,  1869,  1882,  1898,  1917,  1931,  1947,
+    1956,  1962,  1967,  1972,  1977,  1983,  1988,  1997,  2002,  2010,
+    2015,  2023,  2039,  2059,  2076
 };
 #endif
 
@@ -3095,13 +3095,7 @@ yyreduce:
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
 	    (yyval.tok).symbol = (yyvsp[(1) - (1)].tok).symbol;
 #ifndef LMAIN
-	    if ((yyvsp[(1) - (1)].tok).symbol->type < MAX_LS &&
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(1) - (1)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(1) - (1)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(1) - (1)].tok).symbol->type < MAX_LS && (yyvsp[(1) - (1)].tok).symbol->u_blist == 0 || (yyvsp[(1) - (1)].tok).symbol->type == NCONST) {
 		immVarRemove((yyvsp[(1) - (1)].tok).start, (yyvsp[(1) - (1)].tok).end, (yyvsp[(1) - (1)].tok).symbol);
 	    }
 #endif	/* LMAIN */
@@ -3110,19 +3104,13 @@ yyreduce:
 
   case 80:
 /* Line 1792 of yacc.c  */
-#line 690 "gram.y"
+#line 684 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
 	    (yyval.tok).symbol = (yyvsp[(2) - (2)].tok).symbol;
 #ifndef LMAIN
-	    if ((yyvsp[(2) - (2)].tok).symbol->type < MAX_LS &&
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(2) - (2)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(2) - (2)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(2) - (2)].tok).symbol->type < MAX_LS && (yyvsp[(2) - (2)].tok).symbol->u_blist == 0 || (yyvsp[(2) - (2)].tok).symbol->type == NCONST) {
 		immVarRemove((yyvsp[(2) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(2) - (2)].tok).symbol);
 	    }
 #endif	/* LMAIN */
@@ -3131,7 +3119,7 @@ yyreduce:
 
   case 81:
 /* Line 1792 of yacc.c  */
-#line 709 "gram.y"
+#line 697 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3141,7 +3129,7 @@ yyreduce:
 
   case 82:
 /* Line 1792 of yacc.c  */
-#line 714 "gram.y"
+#line 702 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3153,7 +3141,7 @@ yyreduce:
 
   case 83:
 /* Line 1792 of yacc.c  */
-#line 721 "gram.y"
+#line 709 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3163,7 +3151,7 @@ yyreduce:
 
   case 84:
 /* Line 1792 of yacc.c  */
-#line 726 "gram.y"
+#line 714 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3174,7 +3162,7 @@ yyreduce:
 
   case 85:
 /* Line 1792 of yacc.c  */
-#line 732 "gram.y"
+#line 720 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3184,7 +3172,7 @@ yyreduce:
 
   case 86:
 /* Line 1792 of yacc.c  */
-#line 737 "gram.y"
+#line 725 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3195,7 +3183,7 @@ yyreduce:
 
   case 87:
 /* Line 1792 of yacc.c  */
-#line 743 "gram.y"
+#line 731 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3205,7 +3193,7 @@ yyreduce:
 
   case 88:
 /* Line 1792 of yacc.c  */
-#line 748 "gram.y"
+#line 736 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -3216,7 +3204,7 @@ yyreduce:
 
   case 89:
 /* Line 1792 of yacc.c  */
-#line 754 "gram.y"
+#line 742 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3229,7 +3217,7 @@ yyreduce:
 
   case 90:
 /* Line 1792 of yacc.c  */
-#line 762 "gram.y"
+#line 750 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3243,7 +3231,7 @@ yyreduce:
 
   case 91:
 /* Line 1792 of yacc.c  */
-#line 771 "gram.y"
+#line 759 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3256,7 +3244,7 @@ yyreduce:
 
   case 92:
 /* Line 1792 of yacc.c  */
-#line 779 "gram.y"
+#line 767 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3270,7 +3258,7 @@ yyreduce:
 
   case 93:
 /* Line 1792 of yacc.c  */
-#line 788 "gram.y"
+#line 776 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3283,7 +3271,7 @@ yyreduce:
 
   case 94:
 /* Line 1792 of yacc.c  */
-#line 796 "gram.y"
+#line 784 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3297,7 +3285,7 @@ yyreduce:
 
   case 95:
 /* Line 1792 of yacc.c  */
-#line 808 "gram.y"
+#line 796 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3310,7 +3298,7 @@ yyreduce:
 
   case 96:
 /* Line 1792 of yacc.c  */
-#line 819 "gram.y"
+#line 807 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3320,7 +3308,7 @@ yyreduce:
 
   case 97:
 /* Line 1792 of yacc.c  */
-#line 824 "gram.y"
+#line 812 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3330,7 +3318,7 @@ yyreduce:
 
   case 98:
 /* Line 1792 of yacc.c  */
-#line 829 "gram.y"
+#line 817 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3340,7 +3328,7 @@ yyreduce:
 
   case 99:
 /* Line 1792 of yacc.c  */
-#line 834 "gram.y"
+#line 822 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3350,7 +3338,7 @@ yyreduce:
 
   case 100:
 /* Line 1792 of yacc.c  */
-#line 842 "gram.y"
+#line 830 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3360,7 +3348,7 @@ yyreduce:
 
   case 101:
 /* Line 1792 of yacc.c  */
-#line 847 "gram.y"
+#line 835 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3370,7 +3358,7 @@ yyreduce:
 
   case 102:
 /* Line 1792 of yacc.c  */
-#line 855 "gram.y"
+#line 843 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3380,7 +3368,7 @@ yyreduce:
 
   case 103:
 /* Line 1792 of yacc.c  */
-#line 860 "gram.y"
+#line 848 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3390,7 +3378,7 @@ yyreduce:
 
   case 104:
 /* Line 1792 of yacc.c  */
-#line 868 "gram.y"
+#line 856 "gram.y"
     {			/* K&R C parameter list without types */
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3400,7 +3388,7 @@ yyreduce:
 
   case 105:
 /* Line 1792 of yacc.c  */
-#line 873 "gram.y"
+#line 861 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3410,7 +3398,7 @@ yyreduce:
 
   case 106:
 /* Line 1792 of yacc.c  */
-#line 881 "gram.y"
+#line 869 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3420,7 +3408,7 @@ yyreduce:
 
   case 107:
 /* Line 1792 of yacc.c  */
-#line 886 "gram.y"
+#line 874 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3430,7 +3418,7 @@ yyreduce:
 
   case 108:
 /* Line 1792 of yacc.c  */
-#line 894 "gram.y"
+#line 882 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3441,7 +3429,7 @@ yyreduce:
 
   case 109:
 /* Line 1792 of yacc.c  */
-#line 900 "gram.y"
+#line 888 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3451,7 +3439,7 @@ yyreduce:
 
   case 110:
 /* Line 1792 of yacc.c  */
-#line 908 "gram.y"
+#line 896 "gram.y"
     {				/* K&R C parameter list without types */
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3462,7 +3450,7 @@ yyreduce:
 
   case 111:
 /* Line 1792 of yacc.c  */
-#line 914 "gram.y"
+#line 902 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3473,7 +3461,7 @@ yyreduce:
 
   case 112:
 /* Line 1792 of yacc.c  */
-#line 923 "gram.y"
+#line 911 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3483,7 +3471,7 @@ yyreduce:
 
   case 113:
 /* Line 1792 of yacc.c  */
-#line 928 "gram.y"
+#line 916 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3493,7 +3481,7 @@ yyreduce:
 
   case 114:
 /* Line 1792 of yacc.c  */
-#line 933 "gram.y"
+#line 921 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3504,7 +3492,7 @@ yyreduce:
 
   case 115:
 /* Line 1792 of yacc.c  */
-#line 939 "gram.y"
+#line 927 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3514,7 +3502,7 @@ yyreduce:
 
   case 116:
 /* Line 1792 of yacc.c  */
-#line 944 "gram.y"
+#line 932 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -3525,7 +3513,7 @@ yyreduce:
 
   case 117:
 /* Line 1792 of yacc.c  */
-#line 953 "gram.y"
+#line 941 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3535,7 +3523,7 @@ yyreduce:
 
   case 118:
 /* Line 1792 of yacc.c  */
-#line 958 "gram.y"
+#line 946 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3545,7 +3533,7 @@ yyreduce:
 
   case 119:
 /* Line 1792 of yacc.c  */
-#line 966 "gram.y"
+#line 954 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3555,7 +3543,7 @@ yyreduce:
 
   case 120:
 /* Line 1792 of yacc.c  */
-#line 971 "gram.y"
+#line 959 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3565,7 +3553,7 @@ yyreduce:
 
   case 121:
 /* Line 1792 of yacc.c  */
-#line 979 "gram.y"
+#line 967 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3575,7 +3563,7 @@ yyreduce:
 
   case 122:
 /* Line 1792 of yacc.c  */
-#line 984 "gram.y"
+#line 972 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3585,7 +3573,7 @@ yyreduce:
 
   case 123:
 /* Line 1792 of yacc.c  */
-#line 989 "gram.y"
+#line 977 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3595,7 +3583,7 @@ yyreduce:
 
   case 124:
 /* Line 1792 of yacc.c  */
-#line 997 "gram.y"
+#line 985 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3605,7 +3593,7 @@ yyreduce:
 
   case 125:
 /* Line 1792 of yacc.c  */
-#line 1002 "gram.y"
+#line 990 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3616,7 +3604,7 @@ yyreduce:
 
   case 126:
 /* Line 1792 of yacc.c  */
-#line 1008 "gram.y"
+#line 996 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3626,7 +3614,7 @@ yyreduce:
 
   case 127:
 /* Line 1792 of yacc.c  */
-#line 1013 "gram.y"
+#line 1001 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3637,7 +3625,7 @@ yyreduce:
 
   case 128:
 /* Line 1792 of yacc.c  */
-#line 1019 "gram.y"
+#line 1007 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3647,7 +3635,7 @@ yyreduce:
 
   case 129:
 /* Line 1792 of yacc.c  */
-#line 1024 "gram.y"
+#line 1012 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3658,7 +3646,7 @@ yyreduce:
 
   case 130:
 /* Line 1792 of yacc.c  */
-#line 1030 "gram.y"
+#line 1018 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3668,7 +3656,7 @@ yyreduce:
 
   case 131:
 /* Line 1792 of yacc.c  */
-#line 1035 "gram.y"
+#line 1023 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3679,7 +3667,7 @@ yyreduce:
 
   case 132:
 /* Line 1792 of yacc.c  */
-#line 1041 "gram.y"
+#line 1029 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3689,7 +3677,7 @@ yyreduce:
 
   case 133:
 /* Line 1792 of yacc.c  */
-#line 1046 "gram.y"
+#line 1034 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -3700,7 +3688,7 @@ yyreduce:
 
   case 134:
 /* Line 1792 of yacc.c  */
-#line 1052 "gram.y"
+#line 1040 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3710,7 +3698,7 @@ yyreduce:
 
   case 135:
 /* Line 1792 of yacc.c  */
-#line 1057 "gram.y"
+#line 1045 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3721,7 +3709,7 @@ yyreduce:
 
   case 136:
 /* Line 1792 of yacc.c  */
-#line 1063 "gram.y"
+#line 1051 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3731,7 +3719,7 @@ yyreduce:
 
   case 137:
 /* Line 1792 of yacc.c  */
-#line 1068 "gram.y"
+#line 1056 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3742,7 +3730,7 @@ yyreduce:
 
   case 138:
 /* Line 1792 of yacc.c  */
-#line 1074 "gram.y"
+#line 1062 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3752,7 +3740,7 @@ yyreduce:
 
   case 139:
 /* Line 1792 of yacc.c  */
-#line 1079 "gram.y"
+#line 1067 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3763,7 +3751,7 @@ yyreduce:
 
   case 140:
 /* Line 1792 of yacc.c  */
-#line 1085 "gram.y"
+#line 1073 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3773,7 +3761,7 @@ yyreduce:
 
   case 141:
 /* Line 1792 of yacc.c  */
-#line 1090 "gram.y"
+#line 1078 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -3784,7 +3772,7 @@ yyreduce:
 
   case 142:
 /* Line 1792 of yacc.c  */
-#line 1099 "gram.y"
+#line 1087 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3794,7 +3782,7 @@ yyreduce:
 
   case 143:
 /* Line 1792 of yacc.c  */
-#line 1104 "gram.y"
+#line 1092 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3804,7 +3792,7 @@ yyreduce:
 
   case 144:
 /* Line 1792 of yacc.c  */
-#line 1109 "gram.y"
+#line 1097 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3814,7 +3802,7 @@ yyreduce:
 
   case 145:
 /* Line 1792 of yacc.c  */
-#line 1114 "gram.y"
+#line 1102 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3824,7 +3812,7 @@ yyreduce:
 
   case 146:
 /* Line 1792 of yacc.c  */
-#line 1119 "gram.y"
+#line 1107 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3834,7 +3822,7 @@ yyreduce:
 
   case 147:
 /* Line 1792 of yacc.c  */
-#line 1124 "gram.y"
+#line 1112 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3844,7 +3832,7 @@ yyreduce:
 
   case 148:
 /* Line 1792 of yacc.c  */
-#line 1132 "gram.y"
+#line 1120 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3855,7 +3843,7 @@ yyreduce:
 
   case 149:
 /* Line 1792 of yacc.c  */
-#line 1138 "gram.y"
+#line 1126 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3865,7 +3853,7 @@ yyreduce:
 
   case 150:
 /* Line 1792 of yacc.c  */
-#line 1143 "gram.y"
+#line 1131 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3875,7 +3863,7 @@ yyreduce:
 
   case 151:
 /* Line 1792 of yacc.c  */
-#line 1151 "gram.y"
+#line 1139 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -3885,7 +3873,7 @@ yyreduce:
 
   case 152:
 /* Line 1792 of yacc.c  */
-#line 1156 "gram.y"
+#line 1144 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3895,7 +3883,7 @@ yyreduce:
 
   case 153:
 /* Line 1792 of yacc.c  */
-#line 1161 "gram.y"
+#line 1149 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3906,7 +3894,7 @@ yyreduce:
 
   case 154:
 /* Line 1792 of yacc.c  */
-#line 1170 "gram.y"
+#line 1158 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -3916,7 +3904,7 @@ yyreduce:
 
   case 155:
 /* Line 1792 of yacc.c  */
-#line 1175 "gram.y"
+#line 1163 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3927,7 +3915,7 @@ yyreduce:
 
   case 156:
 /* Line 1792 of yacc.c  */
-#line 1181 "gram.y"
+#line 1169 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3937,7 +3925,7 @@ yyreduce:
 
   case 157:
 /* Line 1792 of yacc.c  */
-#line 1186 "gram.y"
+#line 1174 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3948,7 +3936,7 @@ yyreduce:
 
   case 158:
 /* Line 1792 of yacc.c  */
-#line 1192 "gram.y"
+#line 1180 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -3958,7 +3946,7 @@ yyreduce:
 
   case 159:
 /* Line 1792 of yacc.c  */
-#line 1197 "gram.y"
+#line 1185 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3969,7 +3957,7 @@ yyreduce:
 
   case 160:
 /* Line 1792 of yacc.c  */
-#line 1203 "gram.y"
+#line 1191 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -3979,7 +3967,7 @@ yyreduce:
 
   case 161:
 /* Line 1792 of yacc.c  */
-#line 1208 "gram.y"
+#line 1196 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -3990,7 +3978,7 @@ yyreduce:
 
   case 162:
 /* Line 1792 of yacc.c  */
-#line 1217 "gram.y"
+#line 1205 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4000,7 +3988,7 @@ yyreduce:
 
   case 163:
 /* Line 1792 of yacc.c  */
-#line 1222 "gram.y"
+#line 1210 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4010,7 +3998,7 @@ yyreduce:
 
   case 164:
 /* Line 1792 of yacc.c  */
-#line 1230 "gram.y"
+#line 1218 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -4020,7 +4008,7 @@ yyreduce:
 
   case 165:
 /* Line 1792 of yacc.c  */
-#line 1235 "gram.y"
+#line 1223 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (7)].tok).start;
 	    (yyval.tok).end = (yyvsp[(7) - (7)].tok).end;
@@ -4030,7 +4018,7 @@ yyreduce:
 
   case 166:
 /* Line 1792 of yacc.c  */
-#line 1240 "gram.y"
+#line 1228 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -4040,7 +4028,7 @@ yyreduce:
 
   case 167:
 /* Line 1792 of yacc.c  */
-#line 1248 "gram.y"
+#line 1236 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -4050,7 +4038,7 @@ yyreduce:
 
   case 168:
 /* Line 1792 of yacc.c  */
-#line 1253 "gram.y"
+#line 1241 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (7)].tok).start;
 	    (yyval.tok).end = (yyvsp[(7) - (7)].tok).end;
@@ -4060,7 +4048,7 @@ yyreduce:
 
   case 169:
 /* Line 1792 of yacc.c  */
-#line 1258 "gram.y"
+#line 1246 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (6)].tok).start;
 	    (yyval.tok).end = (yyvsp[(6) - (6)].tok).end;
@@ -4070,7 +4058,7 @@ yyreduce:
 
   case 170:
 /* Line 1792 of yacc.c  */
-#line 1263 "gram.y"
+#line 1251 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (7)].tok).start;
 	    (yyval.tok).end = (yyvsp[(7) - (7)].tok).end;
@@ -4080,7 +4068,7 @@ yyreduce:
 
   case 171:
 /* Line 1792 of yacc.c  */
-#line 1268 "gram.y"
+#line 1256 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (7)].tok).start;
 	    (yyval.tok).end = (yyvsp[(7) - (7)].tok).end;
@@ -4090,7 +4078,7 @@ yyreduce:
 
   case 172:
 /* Line 1792 of yacc.c  */
-#line 1273 "gram.y"
+#line 1261 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (8)].tok).start;
 	    (yyval.tok).end = (yyvsp[(8) - (8)].tok).end;
@@ -4100,7 +4088,7 @@ yyreduce:
 
   case 173:
 /* Line 1792 of yacc.c  */
-#line 1278 "gram.y"
+#line 1266 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (7)].tok).start;
 	    (yyval.tok).end = (yyvsp[(7) - (7)].tok).end;
@@ -4110,7 +4098,7 @@ yyreduce:
 
   case 174:
 /* Line 1792 of yacc.c  */
-#line 1283 "gram.y"
+#line 1271 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (8)].tok).start;
 	    (yyval.tok).end = (yyvsp[(8) - (8)].tok).end;
@@ -4120,7 +4108,7 @@ yyreduce:
 
   case 175:
 /* Line 1792 of yacc.c  */
-#line 1288 "gram.y"
+#line 1276 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (8)].tok).start;
 	    (yyval.tok).end = (yyvsp[(8) - (8)].tok).end;
@@ -4130,7 +4118,7 @@ yyreduce:
 
   case 176:
 /* Line 1792 of yacc.c  */
-#line 1293 "gram.y"
+#line 1281 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (9)].tok).start;
 	    (yyval.tok).end = (yyvsp[(9) - (9)].tok).end;
@@ -4140,7 +4128,7 @@ yyreduce:
 
   case 177:
 /* Line 1792 of yacc.c  */
-#line 1301 "gram.y"
+#line 1289 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4151,7 +4139,7 @@ yyreduce:
 
   case 178:
 /* Line 1792 of yacc.c  */
-#line 1307 "gram.y"
+#line 1295 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4161,7 +4149,7 @@ yyreduce:
 
   case 179:
 /* Line 1792 of yacc.c  */
-#line 1312 "gram.y"
+#line 1300 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4171,7 +4159,7 @@ yyreduce:
 
   case 180:
 /* Line 1792 of yacc.c  */
-#line 1317 "gram.y"
+#line 1305 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4181,7 +4169,7 @@ yyreduce:
 
   case 181:
 /* Line 1792 of yacc.c  */
-#line 1322 "gram.y"
+#line 1310 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4191,7 +4179,7 @@ yyreduce:
 
   case 182:
 /* Line 1792 of yacc.c  */
-#line 1327 "gram.y"
+#line 1315 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -4202,7 +4190,7 @@ yyreduce:
 
   case 183:
 /* Line 1792 of yacc.c  */
-#line 1336 "gram.y"
+#line 1324 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4212,7 +4200,7 @@ yyreduce:
 
   case 184:
 /* Line 1792 of yacc.c  */
-#line 1341 "gram.y"
+#line 1329 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4222,7 +4210,7 @@ yyreduce:
 
   case 185:
 /* Line 1792 of yacc.c  */
-#line 1349 "gram.y"
+#line 1337 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4232,7 +4220,7 @@ yyreduce:
 
   case 186:
 /* Line 1792 of yacc.c  */
-#line 1355 "gram.y"
+#line 1343 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4242,7 +4230,7 @@ yyreduce:
 
   case 187:
 /* Line 1792 of yacc.c  */
-#line 1361 "gram.y"
+#line 1349 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4254,13 +4242,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "assignment_expression: imm_lvalue <%u> assignment_expression %u (%u) %u <%u> %s\n",
 	    	(yyvsp[(2) - (3)].tok).inds, (yyvsp[(1) - (3)].tok).start, (yyvsp[(2) - (3)].tok).start, (yyvsp[(3) - (3)].tok).end, (yyvsp[(2) - (3)].tok).inds, (yyvsp[(1) - (3)].tok).symbol->name);	/* NOTE: assignment_operator.inds is ppi */
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(1) - (3)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(1) - (3)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(1) - (3)].tok).symbol->u_blist == 0 || (yyvsp[(1) - (3)].tok).symbol->type == NCONST) {
 		immAssignFound((yyvsp[(1) - (3)].tok).start, (yyvsp[(2) - (3)].tok).start, (yyvsp[(3) - (3)].tok).end, (yyvsp[(1) - (3)].tok).symbol, (yyvsp[(2) - (3)].tok).inds);
 	    }
 #endif	/* LMAIN */
@@ -4269,7 +4251,7 @@ yyreduce:
 
   case 188:
 /* Line 1792 of yacc.c  */
-#line 1386 "gram.y"
+#line 1368 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4280,7 +4262,7 @@ yyreduce:
 
   case 189:
 /* Line 1792 of yacc.c  */
-#line 1392 "gram.y"
+#line 1374 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4291,7 +4273,7 @@ yyreduce:
 
   case 190:
 /* Line 1792 of yacc.c  */
-#line 1398 "gram.y"
+#line 1380 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4302,7 +4284,7 @@ yyreduce:
 
   case 191:
 /* Line 1792 of yacc.c  */
-#line 1404 "gram.y"
+#line 1386 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4313,7 +4295,7 @@ yyreduce:
 
   case 192:
 /* Line 1792 of yacc.c  */
-#line 1410 "gram.y"
+#line 1392 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4324,7 +4306,7 @@ yyreduce:
 
   case 193:
 /* Line 1792 of yacc.c  */
-#line 1416 "gram.y"
+#line 1398 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4335,7 +4317,7 @@ yyreduce:
 
   case 194:
 /* Line 1792 of yacc.c  */
-#line 1422 "gram.y"
+#line 1404 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4346,7 +4328,7 @@ yyreduce:
 
   case 195:
 /* Line 1792 of yacc.c  */
-#line 1428 "gram.y"
+#line 1410 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4357,7 +4339,7 @@ yyreduce:
 
   case 196:
 /* Line 1792 of yacc.c  */
-#line 1434 "gram.y"
+#line 1416 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4368,7 +4350,7 @@ yyreduce:
 
   case 197:
 /* Line 1792 of yacc.c  */
-#line 1440 "gram.y"
+#line 1422 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4379,7 +4361,7 @@ yyreduce:
 
   case 198:
 /* Line 1792 of yacc.c  */
-#line 1446 "gram.y"
+#line 1428 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4390,7 +4372,7 @@ yyreduce:
 
   case 199:
 /* Line 1792 of yacc.c  */
-#line 1455 "gram.y"
+#line 1437 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4400,7 +4382,7 @@ yyreduce:
 
   case 200:
 /* Line 1792 of yacc.c  */
-#line 1460 "gram.y"
+#line 1442 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -4410,7 +4392,7 @@ yyreduce:
 
   case 201:
 /* Line 1792 of yacc.c  */
-#line 1466 "gram.y"
+#line 1448 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -4426,7 +4408,7 @@ yyreduce:
 
   case 202:
 /* Line 1792 of yacc.c  */
-#line 1480 "gram.y"
+#line 1462 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4436,7 +4418,7 @@ yyreduce:
 
   case 203:
 /* Line 1792 of yacc.c  */
-#line 1488 "gram.y"
+#line 1470 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4446,7 +4428,7 @@ yyreduce:
 
   case 204:
 /* Line 1792 of yacc.c  */
-#line 1493 "gram.y"
+#line 1475 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4456,7 +4438,7 @@ yyreduce:
 
   case 205:
 /* Line 1792 of yacc.c  */
-#line 1501 "gram.y"
+#line 1483 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4466,7 +4448,7 @@ yyreduce:
 
   case 206:
 /* Line 1792 of yacc.c  */
-#line 1506 "gram.y"
+#line 1488 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4476,7 +4458,7 @@ yyreduce:
 
   case 207:
 /* Line 1792 of yacc.c  */
-#line 1514 "gram.y"
+#line 1496 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4486,7 +4468,7 @@ yyreduce:
 
   case 208:
 /* Line 1792 of yacc.c  */
-#line 1519 "gram.y"
+#line 1501 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4496,7 +4478,7 @@ yyreduce:
 
   case 209:
 /* Line 1792 of yacc.c  */
-#line 1527 "gram.y"
+#line 1509 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4506,7 +4488,7 @@ yyreduce:
 
   case 210:
 /* Line 1792 of yacc.c  */
-#line 1532 "gram.y"
+#line 1514 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4516,7 +4498,7 @@ yyreduce:
 
   case 211:
 /* Line 1792 of yacc.c  */
-#line 1540 "gram.y"
+#line 1522 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4526,7 +4508,7 @@ yyreduce:
 
   case 212:
 /* Line 1792 of yacc.c  */
-#line 1545 "gram.y"
+#line 1527 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4536,7 +4518,7 @@ yyreduce:
 
   case 213:
 /* Line 1792 of yacc.c  */
-#line 1553 "gram.y"
+#line 1535 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4546,7 +4528,7 @@ yyreduce:
 
   case 214:
 /* Line 1792 of yacc.c  */
-#line 1558 "gram.y"
+#line 1540 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4556,7 +4538,7 @@ yyreduce:
 
   case 215:
 /* Line 1792 of yacc.c  */
-#line 1563 "gram.y"
+#line 1545 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4566,7 +4548,7 @@ yyreduce:
 
   case 216:
 /* Line 1792 of yacc.c  */
-#line 1571 "gram.y"
+#line 1553 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4576,7 +4558,7 @@ yyreduce:
 
   case 217:
 /* Line 1792 of yacc.c  */
-#line 1576 "gram.y"
+#line 1558 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4586,7 +4568,7 @@ yyreduce:
 
   case 218:
 /* Line 1792 of yacc.c  */
-#line 1581 "gram.y"
+#line 1563 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4596,7 +4578,7 @@ yyreduce:
 
   case 219:
 /* Line 1792 of yacc.c  */
-#line 1586 "gram.y"
+#line 1568 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4606,7 +4588,7 @@ yyreduce:
 
   case 220:
 /* Line 1792 of yacc.c  */
-#line 1591 "gram.y"
+#line 1573 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4616,7 +4598,7 @@ yyreduce:
 
   case 221:
 /* Line 1792 of yacc.c  */
-#line 1599 "gram.y"
+#line 1581 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4626,7 +4608,7 @@ yyreduce:
 
   case 222:
 /* Line 1792 of yacc.c  */
-#line 1604 "gram.y"
+#line 1586 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4636,7 +4618,7 @@ yyreduce:
 
   case 223:
 /* Line 1792 of yacc.c  */
-#line 1609 "gram.y"
+#line 1591 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4646,7 +4628,7 @@ yyreduce:
 
   case 224:
 /* Line 1792 of yacc.c  */
-#line 1617 "gram.y"
+#line 1599 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4656,7 +4638,7 @@ yyreduce:
 
   case 225:
 /* Line 1792 of yacc.c  */
-#line 1622 "gram.y"
+#line 1604 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4666,7 +4648,7 @@ yyreduce:
 
   case 226:
 /* Line 1792 of yacc.c  */
-#line 1627 "gram.y"
+#line 1609 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4676,7 +4658,7 @@ yyreduce:
 
   case 227:
 /* Line 1792 of yacc.c  */
-#line 1635 "gram.y"
+#line 1617 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4686,7 +4668,7 @@ yyreduce:
 
   case 228:
 /* Line 1792 of yacc.c  */
-#line 1640 "gram.y"
+#line 1622 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4696,7 +4678,7 @@ yyreduce:
 
   case 229:
 /* Line 1792 of yacc.c  */
-#line 1645 "gram.y"
+#line 1627 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4706,7 +4688,7 @@ yyreduce:
 
   case 230:
 /* Line 1792 of yacc.c  */
-#line 1650 "gram.y"
+#line 1632 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -4716,7 +4698,7 @@ yyreduce:
 
   case 231:
 /* Line 1792 of yacc.c  */
-#line 1658 "gram.y"
+#line 1640 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4726,7 +4708,7 @@ yyreduce:
 
   case 232:
 /* Line 1792 of yacc.c  */
-#line 1663 "gram.y"
+#line 1645 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4736,7 +4718,7 @@ yyreduce:
 
   case 233:
 /* Line 1792 of yacc.c  */
-#line 1668 "gram.y"
+#line 1650 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -4746,7 +4728,7 @@ yyreduce:
 
   case 234:
 /* Line 1792 of yacc.c  */
-#line 1673 "gram.y"
+#line 1655 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -4757,7 +4739,7 @@ yyreduce:
 
   case 235:
 /* Line 1792 of yacc.c  */
-#line 1682 "gram.y"
+#line 1664 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4767,7 +4749,7 @@ yyreduce:
 
   case 236:
 /* Line 1792 of yacc.c  */
-#line 1687 "gram.y"
+#line 1669 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4777,7 +4759,7 @@ yyreduce:
 
   case 237:
 /* Line 1792 of yacc.c  */
-#line 1692 "gram.y"
+#line 1674 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4787,7 +4769,7 @@ yyreduce:
 
   case 238:
 /* Line 1792 of yacc.c  */
-#line 1697 "gram.y"
+#line 1679 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4797,7 +4779,7 @@ yyreduce:
 
   case 239:
 /* Line 1792 of yacc.c  */
-#line 1702 "gram.y"
+#line 1684 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4807,7 +4789,7 @@ yyreduce:
 
   case 240:
 /* Line 1792 of yacc.c  */
-#line 1707 "gram.y"
+#line 1689 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -4817,7 +4799,7 @@ yyreduce:
 
   case 241:
 /* Line 1792 of yacc.c  */
-#line 1712 "gram.y"
+#line 1694 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -4828,7 +4810,7 @@ yyreduce:
 
   case 242:
 /* Line 1792 of yacc.c  */
-#line 1721 "gram.y"
+#line 1703 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4846,7 +4828,7 @@ yyreduce:
 
   case 243:
 /* Line 1792 of yacc.c  */
-#line 1734 "gram.y"
+#line 1716 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4858,13 +4840,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: ++ imm_unary_expression %u (%u) %u <12> %s\n",
 	    	(yyvsp[(2) - (2)].tok).start, (yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(2) - (2)].tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(2) - (2)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(2) - (2)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(2) - (2)].tok).symbol->u_blist == 0 || (yyvsp[(2) - (2)].tok).symbol->type == NCONST) {
 		immAssignFound((yyvsp[(2) - (2)].tok).start, (yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(2) - (2)].tok).symbol, 12);	/* ++x */
 	    }
 #endif	/* LMAIN */
@@ -4873,7 +4849,7 @@ yyreduce:
 
   case 244:
 /* Line 1792 of yacc.c  */
-#line 1756 "gram.y"
+#line 1732 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4885,13 +4861,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: -- imm_unary_expression %u (%u) %u <13> %s\n",
 	    	(yyvsp[(2) - (2)].tok).start, (yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(2) - (2)].tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(2) - (2)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(2) - (2)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(2) - (2)].tok).symbol->u_blist == 0 || (yyvsp[(2) - (2)].tok).symbol->type == NCONST) {
 		immAssignFound((yyvsp[(2) - (2)].tok).start, (yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(2) - (2)].tok).symbol, 13);	/* --x */
 	    }
 #endif	/* LMAIN */
@@ -4900,7 +4870,7 @@ yyreduce:
 
   case 245:
 /* Line 1792 of yacc.c  */
-#line 1778 "gram.y"
+#line 1748 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4910,7 +4880,7 @@ yyreduce:
 
   case 246:
 /* Line 1792 of yacc.c  */
-#line 1783 "gram.y"
+#line 1753 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(2) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -4923,13 +4893,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: sizeof imm_unary_expression %u (%u) %u %s\n",
 	    	(yyvsp[(2) - (2)].tok).start, (yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(2) - (2)].tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyval.tok).symbol->v_glist == 0
-#else
-		(yyval.tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyval.tok).symbol->u_blist == 0 || (yyval.tok).symbol->type == NCONST) {
 		immVarFound((yyval.tok).start, (yyval.tok).end, (yyval.tok).inds, (yyval.tok).inde, NULL);	/* adjust pEnd, set inds 0 inde early */
 	    }
 #endif	/* LMAIN */
@@ -4938,7 +4902,7 @@ yyreduce:
 
   case 247:
 /* Line 1792 of yacc.c  */
-#line 1809 "gram.y"
+#line 1773 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4948,7 +4912,7 @@ yyreduce:
 
   case 248:
 /* Line 1792 of yacc.c  */
-#line 1814 "gram.y"
+#line 1778 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4958,7 +4922,7 @@ yyreduce:
 
   case 249:
 /* Line 1792 of yacc.c  */
-#line 1819 "gram.y"
+#line 1783 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4968,7 +4932,7 @@ yyreduce:
 
   case 250:
 /* Line 1792 of yacc.c  */
-#line 1824 "gram.y"
+#line 1788 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4978,7 +4942,7 @@ yyreduce:
 
   case 251:
 /* Line 1792 of yacc.c  */
-#line 1829 "gram.y"
+#line 1793 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4988,7 +4952,7 @@ yyreduce:
 
   case 252:
 /* Line 1792 of yacc.c  */
-#line 1834 "gram.y"
+#line 1798 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -4998,7 +4962,7 @@ yyreduce:
 
   case 253:
 /* Line 1792 of yacc.c  */
-#line 1842 "gram.y"
+#line 1806 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5008,7 +4972,7 @@ yyreduce:
 
   case 254:
 /* Line 1792 of yacc.c  */
-#line 1847 "gram.y"
+#line 1811 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -5018,7 +4982,7 @@ yyreduce:
 
   case 255:
 /* Line 1792 of yacc.c  */
-#line 1852 "gram.y"
+#line 1816 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -5029,7 +4993,7 @@ yyreduce:
 
   case 256:
 /* Line 1792 of yacc.c  */
-#line 1858 "gram.y"
+#line 1822 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -5039,7 +5003,7 @@ yyreduce:
 
   case 257:
 /* Line 1792 of yacc.c  */
-#line 1863 "gram.y"
+#line 1827 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -5050,7 +5014,7 @@ yyreduce:
 
   case 258:
 /* Line 1792 of yacc.c  */
-#line 1869 "gram.y"
+#line 1833 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -5060,7 +5024,7 @@ yyreduce:
 
   case 259:
 /* Line 1792 of yacc.c  */
-#line 1874 "gram.y"
+#line 1838 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -5071,7 +5035,7 @@ yyreduce:
 
   case 260:
 /* Line 1792 of yacc.c  */
-#line 1880 "gram.y"
+#line 1844 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -5082,7 +5046,7 @@ yyreduce:
 
   case 261:
 /* Line 1792 of yacc.c  */
-#line 1886 "gram.y"
+#line 1850 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -5093,7 +5057,7 @@ yyreduce:
 
   case 262:
 /* Line 1792 of yacc.c  */
-#line 1892 "gram.y"
+#line 1856 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -5103,7 +5067,7 @@ yyreduce:
 
   case 263:
 /* Line 1792 of yacc.c  */
-#line 1897 "gram.y"
+#line 1861 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -5113,7 +5077,7 @@ yyreduce:
 
   case 264:
 /* Line 1792 of yacc.c  */
-#line 1905 "gram.y"
+#line 1869 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5131,7 +5095,7 @@ yyreduce:
 
   case 265:
 /* Line 1792 of yacc.c  */
-#line 1918 "gram.y"
+#line 1882 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -5143,13 +5107,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_postfix_expression ++ %u (%u) %u <14> %s\n",
 	    	(yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(1) - (2)].tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(1) - (2)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(1) - (2)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(1) - (2)].tok).symbol->u_blist == 0 || (yyvsp[(1) - (2)].tok).symbol->type == NCONST) {
 		immAssignFound((yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(1) - (2)].tok).symbol, 14);	/* x++ */
 	    }
 #endif	/* LMAIN */
@@ -5158,7 +5116,7 @@ yyreduce:
 
   case 266:
 /* Line 1792 of yacc.c  */
-#line 1940 "gram.y"
+#line 1898 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -5170,13 +5128,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_postfix_expression -- %u (%u) %u <15> %s\n",
 	    	(yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(1) - (2)].tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyvsp[(1) - (2)].tok).symbol->v_glist == 0
-#else
-		(yyvsp[(1) - (2)].tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyvsp[(1) - (2)].tok).symbol->u_blist == 0 || (yyvsp[(1) - (2)].tok).symbol->type == NCONST) {
 		immAssignFound((yyvsp[(1) - (2)].tok).start, (yyvsp[(2) - (2)].tok).start, (yyvsp[(2) - (2)].tok).end, (yyvsp[(1) - (2)].tok).symbol, 15);	/* x-- */
 	    }
 #endif	/* LMAIN */
@@ -5185,7 +5137,7 @@ yyreduce:
 
   case 267:
 /* Line 1792 of yacc.c  */
-#line 1965 "gram.y"
+#line 1917 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5203,7 +5155,7 @@ yyreduce:
 
   case 268:
 /* Line 1792 of yacc.c  */
-#line 1979 "gram.y"
+#line 1931 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -5215,13 +5167,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_lvalue: imm_array_identifier %u %u %s[%u %u]\n",
 		(yyval.tok).start, (yyval.tok).end, (yyval.tok).symbol->name, (yyval.tok).inds, (yyval.tok).inde);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyval.tok).symbol->v_glist == 0
-#else
-		(yyval.tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyval.tok).symbol->u_blist == 0 || (yyval.tok).symbol->type == NCONST) {
 		immVarFound((yyval.tok).start, (yyval.tok).end, (yyval.tok).inds, (yyval.tok).inde, NULL);	/* adjust pEnd, set inds inde */
 	    }
 #endif	/* LMAIN */
@@ -5230,7 +5176,7 @@ yyreduce:
 
   case 269:
 /* Line 1792 of yacc.c  */
-#line 2001 "gram.y"
+#line 1947 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (5)].tok).start;
 	    (yyval.tok).end = (yyvsp[(5) - (5)].tok).end;
@@ -5241,7 +5187,7 @@ yyreduce:
 
   case 270:
 /* Line 1792 of yacc.c  */
-#line 2010 "gram.y"
+#line 1956 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5252,7 +5198,7 @@ yyreduce:
 
   case 271:
 /* Line 1792 of yacc.c  */
-#line 2016 "gram.y"
+#line 1962 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5262,7 +5208,7 @@ yyreduce:
 
   case 272:
 /* Line 1792 of yacc.c  */
-#line 2021 "gram.y"
+#line 1967 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5272,7 +5218,7 @@ yyreduce:
 
   case 273:
 /* Line 1792 of yacc.c  */
-#line 2026 "gram.y"
+#line 1972 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -5282,7 +5228,7 @@ yyreduce:
 
   case 274:
 /* Line 1792 of yacc.c  */
-#line 2031 "gram.y"
+#line 1977 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -5293,7 +5239,7 @@ yyreduce:
 
   case 275:
 /* Line 1792 of yacc.c  */
-#line 2037 "gram.y"
+#line 1983 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -5303,7 +5249,7 @@ yyreduce:
 
   case 276:
 /* Line 1792 of yacc.c  */
-#line 2042 "gram.y"
+#line 1988 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (4)].tok).start;
 	    (yyval.tok).end = (yyvsp[(4) - (4)].tok).end;
@@ -5314,7 +5260,7 @@ yyreduce:
 
   case 277:
 /* Line 1792 of yacc.c  */
-#line 2051 "gram.y"
+#line 1997 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5324,7 +5270,7 @@ yyreduce:
 
   case 278:
 /* Line 1792 of yacc.c  */
-#line 2056 "gram.y"
+#line 2002 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
 	    (yyval.tok).end = (yyvsp[(3) - (3)].tok).end;
@@ -5334,7 +5280,7 @@ yyreduce:
 
   case 279:
 /* Line 1792 of yacc.c  */
-#line 2064 "gram.y"
+#line 2010 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5344,7 +5290,7 @@ yyreduce:
 
   case 280:
 /* Line 1792 of yacc.c  */
-#line 2069 "gram.y"
+#line 2015 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (2)].tok).start;
 	    (yyval.tok).end = (yyvsp[(2) - (2)].tok).end;
@@ -5354,7 +5300,7 @@ yyreduce:
 
   case 281:
 /* Line 1792 of yacc.c  */
-#line 2077 "gram.y"
+#line 2023 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5366,13 +5312,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: IMM_IDENTIFIER %u %u %s\n",
 	    	(yyval.tok).start, (yyval.tok).end, (yyval.tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyval.tok).symbol->v_glist == 0
-#else
-		(yyval.tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyval.tok).symbol->u_blist == 0 || (yyval.tok).symbol->type == NCONST) {
 		immVarFound((yyval.tok).start, (yyval.tok).end, (yyval.tok).inds, (yyval.tok).inde, (yyval.tok).symbol);
 	    }
 #endif	/* LMAIN */
@@ -5381,7 +5321,7 @@ yyreduce:
 
   case 282:
 /* Line 1792 of yacc.c  */
-#line 2099 "gram.y"
+#line 2039 "gram.y"
     {
 	    /* stops this being a primary_expression which would lead to C assignment */
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
@@ -5394,13 +5334,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: (imm_identifier) %u %u %s\n",
 	    	(yyval.tok).start, (yyval.tok).end, (yyval.tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyval.tok).symbol->v_glist == 0
-#else
-		(yyval.tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyval.tok).symbol->u_blist == 0 || (yyval.tok).symbol->type == NCONST) {
 		immVarFound((yyval.tok).start, (yyval.tok).end, (yyval.tok).inds, (yyval.tok).inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	    }
 #endif	/* LMAIN */
@@ -5409,7 +5343,7 @@ yyreduce:
 
   case 283:
 /* Line 1792 of yacc.c  */
-#line 2125 "gram.y"
+#line 2059 "gram.y"
     {
 	    (yyval.tok).start = (yyvsp[(1) - (1)].tok).start;
 	    (yyval.tok).end = (yyvsp[(1) - (1)].tok).end;
@@ -5422,13 +5356,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_array_identifier: IMM_ARRAY_IDENTIFIER %u %u %s\n",
 	    	(yyval.tok).start, (yyval.tok).end, (yyval.tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyval.tok).symbol->v_glist == 0
-#else
-		(yyval.tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyval.tok).symbol->u_blist == 0 || (yyval.tok).symbol->type == NCONST) {
 		immVarFound((yyval.tok).start, (yyval.tok).end, (yyval.tok).inds, (yyval.tok).inde, (yyval.tok).symbol);
 	    }
 #endif	/* LMAIN */
@@ -5437,7 +5365,7 @@ yyreduce:
 
   case 284:
 /* Line 1792 of yacc.c  */
-#line 2148 "gram.y"
+#line 2076 "gram.y"
     {
 	    /* stops this being a primary_expression which would lead to C assignment */
 	    (yyval.tok).start = (yyvsp[(1) - (3)].tok).start;
@@ -5450,13 +5378,7 @@ yyreduce:
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_array_identifier: (imm_array_identifier) %u %u %s\n",
 	    	(yyval.tok).start, (yyval.tok).end, (yyval.tok).symbol->name);
 #endif
-	    if (
-#if YYDEBUG && ! defined(SYUNION)
-		(yyval.tok).symbol->v_glist == 0
-#else
-		(yyval.tok).symbol->v_cnt <= 2		/* v_cnt instead of v_glist for SYUNION */
-#endif
-	    ) {
+	    if ((yyval.tok).symbol->u_blist == 0 || (yyval.tok).symbol->type == NCONST) {
 		immVarFound((yyval.tok).start, (yyval.tok).end, (yyval.tok).inds, (yyval.tok).inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	    }
 #endif	/* LMAIN */
@@ -5465,7 +5387,7 @@ yyreduce:
 
 
 /* Line 1792 of yacc.c  */
-#line 5469 "gram.tab.c"
+#line 5391 "gram.tab.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -5697,7 +5619,7 @@ yyreturn:
 
 
 /* Line 2055 of yacc.c  */
-#line 2178 "gram.y"
+#line 2100 "gram.y"
 
 
 #ifdef LMAIN

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l 1.35 $";
+"@(#)$Id: lexc.l 1.36 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -530,15 +530,9 @@ check_type(YYSTYPE* u, int qtoken)
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
 	    if ((lexflag & C_BLOCK1) == 0) {
 		if ((lexflag & C_PARA) == C_PARA) {
-		    markParaList(sp);	/* mark Symbol as parameter on glist */
+		    markParaList(sp);	/* mark Symbol as parameter on blist */
 		}
-		if (
-#if YYDEBUG && ! defined(SYUNION)
-		    sp->v_glist
-#else
-		    sp->v_cnt > 2	/* v_cnt instead of v_glist for SYUNION */
-#endif
-		) {
+		if (sp->u_blist) {
 		    u->tok.symbol = sp;
 		    return IDENTIFIER;	/* name of imm variable temporarily C parameter */
 		}
@@ -615,7 +609,7 @@ delete_sym(Token* tokp)
 /********************************************************************
  *
  *	Mark an imm Symbol as a parameter or function internal C variable
- *	on glist. The immediate Symbol is hidden till the end of the
+ *	on blist. The immediate Symbol is hidden till the end of the
  *	current C-function, when clearParaList() will clear the list.
  *	The same Symbol may appear several times - check for duplicates.
  *
@@ -628,17 +622,11 @@ void
 markParaList(Symbol * sp)
 {
     assert(sp && sp->type < IFUNCT);		/* allows IFUNCT to use union v.cnt */
-    if (
-#if YYDEBUG && ! defined(SYUNION)
-	sp->v_glist == 0
-#else
-	sp->v_cnt <= 2				/* v_cnt instead of v_glist for SYUNION */
-#endif
-    ) {
+    if (sp->u_blist == 0) {
 	if ((lexflag & C_FUNCTION) == 0) {
-	    sp->v_glist = &markerSymbol;	/* mark C globally */
+	    sp->u_blist = (List_e *)(&markerSymbol);	/* mark C globally */
 	} else {
-	    sp->v_glist = paraList;		/* mark on paraList */
+	    sp->u_blist = (List_e *)paraList;		/* mark on paraList */
 	    paraList = sp;
 	}
     }
@@ -656,9 +644,9 @@ clearParaList(int flag)
     Symbol * sp;
 
     while (paraList != &markerSymbol) {
-	sp = paraList->v_glist;
+	sp = (Symbol *)paraList->u_blist;
 	assert(sp && sp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
-	paraList->v_glist = 0;
+	paraList->u_blist = 0;
 	paraList = sp;
     }
     if (flag) {

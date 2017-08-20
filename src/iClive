@@ -190,20 +190,24 @@ my %keyWords = (
 
 my $named = $0; $named =~ s#.*[/\\]##;
 use vars qw($opt_ $opt_T $opt_q $opt_z $opt_S $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i);
-use vars qw($opt_F $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
+use vars qw($opt_D $opt_F $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
 
 format STDERR =
 Usage:
-@<<<<< [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -F <font>][ -l <num>]
- $named
-       [ -w <num>][ -g <geometry>][ -A <cmd>][ -d <deb>][ <file> ...]
+@<<<<< [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -D [@]IXy.z]
+ $named,							'~'
+       [ -F <font>][ -l <num>][ -w <num>][ -g <geometry>][ -A <cmd>]
+       [ -d <deb>][ <file> ...]
        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
+    -D IXy.z optional Debug Stop output to control moving parts in a plant
+    -D @IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
+    '~'
     -F font font or font size to use in Text window (default '20')
     -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default @<<)
@@ -298,7 +302,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.70 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.71 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -364,6 +368,7 @@ GetOptions (
     's=s' => \$opt_s,
     'p=s' => \$opt_p,
     'i=i' => \$opt_i,
+    'D=s' => \$opt_D,
     'F=s' => \$opt_F,
     'l=i' => \$opt_l,
     'w=i' => \$opt_w,
@@ -407,7 +412,24 @@ if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
     $u = ' -u';			# show -u option in title when editing
 }
-
+my $B_stop    = 0;		# sender value for Debug Stop signal when program stopped
+my $B_cont    = 0;		# sender value for Debug Stop signal when program running
+my $B_stopped = 0;		# flag delayed Debug Stop when program restarted
+my $B_timer;			# timer for delayed Debug Stop
+my $debugStop = '';		# IEC name of optional Debug Stop signal
+if (defined $opt_D) {
+    if ($opt_D =~ /^(\~)?(IX\d+)\.(\d+)$/ and $3 < 8) {
+	$debugStop = $2;
+	$B_stop = 1 << $3;	# 0x01 to 0x80 for .0 to .7
+	if ($1) {		# '~'
+	    $B_cont = $B_stop;
+	    $B_stop = 0;
+	}
+	print "debugStop = $debugStop.$3 B_stop = $B_stop Bcont = $B_cont\n" if $opt_T;
+    } else {
+	warn "-D '$opt_D' is a bad IEC input string - ignored - no Debug Stop\n";
+    }
+}
 my ($fontSize, $font_t, $boldfont_t, $font, $boldfont);
 if (defined $opt_F) {
     if ($opt_F =~ /^\d+$/) {
@@ -490,10 +512,11 @@ my $fileTime = 0;	# last modified time of currently loaded file
 my $readOnly = '';	# set ' (RO)' - true - if file in buffer is read-only
 my $procName = '';	# name of runnable iC control program
 my $instName = '';	# name of runnable iC control program with instance extension
-my $regName = '';
-my $runName = '';	# name of running iC control program
+my $regName  = '';
+my $runName  = '';	# name of running iC control program
 my $C_channel = 0;	# receiver channel from control program
 my $D_channel = 0;	# sender channel to control program
+my $B_channel = 0;	# sender channel for optional Debug Stop signal
 my $searchText = '';
 my $oldContents = '';
 my $newName = 'unknown.ic';
@@ -988,7 +1011,7 @@ my $dbL = $mainWindow->DialogBox(
 my $dbLb = $dbL->add('Listbox',
 	-selectmode => 'extended',
 	-height => 6,
-	-width => 45,
+	-width => 48,
 	-font => $font,
 	-setgrid => 1,
 	)->pack;
@@ -1234,6 +1257,7 @@ if (@runArgs) {
 ########################################################################
 print "$named: initialise program\n" if $opt_T;
 ini_program();
+conn_send_now("$B_channel:$B_cont") if $B_channel and $B_cont;	# program running
 
 ########################################################################
 #	For mysterious reasons the first Show() of a DialogBox is not
@@ -1650,7 +1674,7 @@ sub EnterWatch {
 	########################################################################
 	elsif ($button == 2) {
 	    my $s;
-	    ($s, $value) = ConditionEdit($i, $ix, $watchIndex, $watchMenu, 'nw');
+	    ($s, $value) = ConditionEdit($i, $ix, $watchIndex, $symbol, $watchMenu, 'nw');
 	    return if $s < 0;
 	    $state &= ~0x0f;			# clear previous condition
 	    $state |= 0x10 | $s;		# turn on 'Watch' | selected condition
@@ -1730,7 +1754,7 @@ sub ListWatchPoints {
 		}
 		elsif ($answer eq 'Condition') {
 		    my $s;
-		    ($s, $value) = ConditionEdit($_, $index, $index, $liveMenu, 'se');
+		    ($s, $value) = ConditionEdit($_, $index, $index, $symbol, $liveMenu, 'se');
 		    printf "answer '%s' X = %d state = 0x%02x\n", $answer, $value, $state if $opt_T;
 		    next if $s < 0;
 		    $state &= ~0x0f;			# clear previous condition
@@ -1765,9 +1789,8 @@ sub ListWatchPoints {
 ########################################################################
 
 sub ConditionEdit {
-    my ($i, $ix, $wix, $wm, $oa) = @_;
+    my ($i, $ix, $wix, $symbol, $wm, $oa) = @_;
     my ($answer, $s, $ftype, $value);
-    my $symbol = $symbolNames[$wix];
     $ftype = $symbolTable{$symbol}[0];
     $watchListTxt= "$symbol:" . (($ix != $wix) ? '' :
 		    $watchList[$i][4]);	# stored $watchCond
@@ -1834,13 +1857,14 @@ sub ApplyWatchPoint {
     my ($i, $ix, $wix, $symbol, $state, $value) = @_;
     if ($state != $watchState or $value != $watchValue) {
 	if ($state & 0x30) {		# 'Watch' or 'Ignore'
-	    my ($watchListText, $c, $d, $e, $watchCond);
+	    my ($watchListText, $c, $d, $e, $f, $v, $watchCond, $ftype);
 	    printf("enter %s	X = %d state = 0x%02x wix = %d\n", $symbol, $value, $state, $wix) if $opt_T;
 	    $watchPoints{$wix} = [ $state, $value ];		# add or change Watch point
 	    if (($c = $state & 0x0f) != 0) {			# Watch condition code
-		$value = sprintf "0x%04x", $value if $c >= 9;	# '&' '!&'
+		$v = ($c >= 9) ? sprintf("0x%04x", $value)	# '&' '!&'
+			       : $value;
 		$c = $dbWbuttons[$c];	# Watch condition button text eg '== X'
-		$c =~ s/X/$value/;		# replace X from button text by new value
+		$c =~ s/X/$v/;		# replace X from button text by entered decimal or hex value
 		if ($c =~ s/!([%&])/$1/) {
 		    $d = '!(';		# bring complement operator ! forward
 		    $e = ')';
@@ -1861,7 +1885,20 @@ sub ApplyWatchPoint {
 	    }
 	    $d = $state & 0x40 ? 'D' : ' ';				# 'D' Disabled
 	    $e = $state & 0x20 ? 'I' : $state & 0x10 ? 'W' : '?';	# 'I' Ignore or 'W' Watch
-	    $watchListText = sprintf("%-20s %s %s%s", $symbol, $d, $e, $watchCond);
+	    $ftype = $symbolTable{$symbol}[0];
+	    $f = ($ftype == 1  or	# ARITH
+		  $ftype == 7  or	# D_SH
+		  $ftype == 12 or	# CH_AR
+		  $ftype == 13 or	# F_SW
+		  $ftype == 18 or	# TRAB
+		  $ftype == 19		# OUTW
+		 )		? 'i' :
+		 ($ftype == 21) ? 'c' :	# CLCKL
+		 ($ftype == 22) ? 't' :	# TIMRL
+		 ($ftype == 23) ? '?' :	# F_ERR
+		 ($ftype == 0)  ? 'u' :	# UDFA
+		 		  'b';	# GATE etc
+	    $watchListText = sprintf("%-20s %s %s %s%s", $symbol, $d, $e, $f, $watchCond);
 	    if ($ix == $wix) {
 		$dbLb->delete($i);					# remove if Watch point change
 		splice @watchList, $i, 1, [ $wix, $symbol, $state, $value, $watchCond ];
@@ -2137,7 +2174,9 @@ sub register_at_server {
 	if ($conn) {
 	    if ($regName eq '') {
 		my $ret = '';
-		my $Registrations = "N-$instName,RC$instName,SD$instName,Z";
+		my $Registrations = "N-$instName,RC$instName,SD$instName";
+		$Registrations .= ",S$debugStop" if $debugStop;	# optional Debug Stop signal
+		$Registrations .= ",Z";
 		$regName = $instName;		# register but may not connect to application
 		print "$named: Registrations: $Registrations\n" if $opt_T;
 		conn_send_now($Registrations);
@@ -2147,7 +2186,7 @@ no warnings;
 		print "$named: Reply: '$tmsg' err = '$terr'\n" if $opt_T;
 		$i = 1;
 		REPEAT:
-		if ($tmsg !~ /^(\d+),(\d+)$/) {	# analyse registration reply now
+		if ($tmsg !~ /^(\d+),(\d+)(,(\d+))?$/) {	# analyse registration reply from iCserver now
 		    rcvd_msg_from_server($conn, $tmsg, $terr);
 		    unless ($conn) {
 			print "$named: failed to register on attempt $i\n" if $opt_T;
@@ -2161,7 +2200,8 @@ no warnings;
 use warnings;
 		$C_channel = $1;	# receiver channel from control program
 		$D_channel = $2;	# sender channel to control program
-		print "$named: registered: C_channel = $C_channel, D_channel = $D_channel\n" if $opt_T;
+		$B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
+		print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
 		conn_send_now("$D_channel:2");	# poll application to see if it is live
 	    }
 	} else {
@@ -2210,7 +2250,9 @@ sub rcvd_msg_from_server {
 	    unregister_from_server();
 	    $scanFlag = 0;
 	    $liveButton->configure(-text => 'Live');
-	    $prevText = '\b';			# start a new search
+	    $prevText = '';			# start a new search
+	    $gl = 0;
+	    $text->tagDelete('searchTag');
 	    $textDebV = $microSecV = 0;		# stop Text debug output in Edit mode
 	    conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Text debug in app
 	    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
@@ -2423,7 +2465,9 @@ use warnings;
 			}
 			if ($scanFlag) {
 			    $liveButton->configure(-text => 'wait');
-			    $prevText = '\b';					# start a new search
+			    $prevText = '';					# start a new search
+			    $gl = 0;
+			    $text->tagDelete('searchTag');
 			    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
 			    $liveMenu->entryconfigure(7, -state => 'disabled');	# TextDebug
 			    $liveMenu->entryconfigure(8, -state => 'disabled');	# MicroSec
@@ -2472,11 +2516,20 @@ use warnings;
 			    print "received '$C_channel:$entry' '$searchText'\n" if $opt_T;
 			    while ($lastIndex) {
 				unless ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
-				    $prevText = '';
+				    $prevText = '';			# start a new search
+				    $gl = 0;
+				    $text->tagDelete('searchTag');
 				    search_now(1, $searchText, 8);	# search for watch word without adding search tag
 				}
 				if ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
 				    $breakIndex = $lastIndex;
+				    if ($B_channel) {
+					$B_timer->cancel() if defined $B_timer;
+					unless ($B_stopped) {
+					    $B_stopped = 1;
+					    conn_send_now("$B_channel:$B_stop");	# program stopped - stop movements
+					}
+				    }
 				    markBreak();
 				} elsif ($searchText =~ s/^(Q[XBWLH]\d+(\.[0-7])?)_0$/$1/) {
 				    $lastIndex = $symbolTable{$searchText}[1];
@@ -2711,7 +2764,7 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	    $liveMenu->entryconfigure(4, -state => 'disabled');	# Next
 	    $liveMenu->entryconfigure(5, -state => 'disabled');	# Continue
 	    $searchText = '';					# clear search entry window
-	    $entrySearch->configure(-background => 'grey94');
+	    $entrySearch->configure(-background => 'grey94');	# indicates non-debug mode
 	    $stepV = $nextV = $continueV = 0;
 	    $saveDebug = $debugFlag;
 	    $debugFlag = 0;
@@ -2727,8 +2780,16 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	    print "sendDebug '$accelerator' $D_channel:$acc\n" if $opt_T;
 	    conn_send_now("$D_channel:$acc");
 	    if ($accelerator !~ m/^[dtSmM]/) {	# 'd' sets background with 'c'
+		if ($B_channel and $B_stopped) {
+		    $B_timer = $mainWindow->after(50,		# delay by 50 ms to complete all
+			sub {					# further Watch points and single steps
+			    $B_stopped = 0;
+			    conn_send_now("$B_channel:$B_cont");	# program running for >= 50 ms
+			}
+		    );
+		}
 		clearBreak();
-		unless ($accelerator eq 'D') {
+		unless ($accelerator eq 'D') {	# 'D' set 'grey94' above
 		    $entrySearch->configure(-background => 'palegreen');
 		}
 	    }
@@ -3198,7 +3259,9 @@ sub reset_scan {
 	sendDebug(0, 'D');			# debug mode off
 	$scanFlag = 0;
 	$liveButton->configure(-text => 'Live');
-	$prevText = '\b';			# start a new search
+	$prevText = '';			# start a new search
+	$gl = 0;
+	$text->tagDelete('searchTag');
 	$textDebV = $microSecV = 0;		# stop Text debug output in Edit mode
 	conn_send_now("$D_channel:83,$D_channel:77");		# 'S' 'M' to stop Text debug in app
 	$liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
@@ -3289,7 +3352,9 @@ sub do_scan {
 		"WARNING: '$fileName$readOnly' does not match connected control program '$runName'");
 	    $scanFlag = 0;
 	    $liveButton->configure(-text => 'Live');	# no live words scanned yet
-	    $prevText = '\b';				# start a new search
+	    $prevText = '';				# start a new search
+	    $gl = 0;
+	    $text->tagDelete('searchTag');
 	    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
 	    return;
 	}
@@ -3502,7 +3567,6 @@ use warnings;
 	} else {
 	    $liveButton->configure(-text => 'Edit');
 	}
-	$prevText = '\b';					# start a new search
 	$liveMenu->entryconfigure(1, -state => 'normal');	# Debug     enabled
 	sendDebug(1, 'd') if $saveDebug;
 	$liveMenu->entryconfigure(7, -state => 'normal');	# TextDebug enabled
@@ -3746,7 +3810,9 @@ use warnings;
 			adjust_live(-1, -1);
 		    }
 		}
-		$prevText = '\b';				# start a new search
+		$prevText = '';					# start a new search
+		$gl = 0;
+		$text->tagDelete('searchTag');
 		if ($readOnly) {
 		    $text->configure(-state => 'disabled');	# read-only file
 		}
@@ -3870,7 +3936,9 @@ sub saveAs_file {
 		$instName = "$procName$instanceText";
 		change_instance();
 	    }
-	    $prevText = '\b';		# start a new search
+	    $prevText = '';				# start a new search
+	    $gl = 0;
+	    $text->tagDelete('searchTag');
 	}
     } else {
 	info_display(2000, 'red', "no file saved");
@@ -3942,7 +4010,9 @@ sub build_file {
 		    my $listName = $ret >= 20 ? "$baseName.ic" : "$baseName.lst";
 		    open_file(1, $listName);	# load the generated file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
-		    $prevText = '\b';		# start a new search
+		    $prevText = '';		# start a new search
+		    $gl = 0;
+		    $text->tagDelete('searchTag');
 		    $matchType = '-regexp';	# NOTE: $fileName has changed
 		    search_now(1, undef, 4);	# carry out the search, setting markers but no info display
 		}
@@ -4534,12 +4604,15 @@ iClive - an editor and live debugger for immediate-C apps
 
 =head1 SYNOPSIS
 
- iClive [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -F <font>][ -l <num>]
-        [ -w <num>][ -g <geometry>][ -A <cmd>][ -d <deb>][ <file> ...]
+ iClive [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -D [~]IXy.z]
+        [ -F <font>][ -l <num>][ -w <num>][ -g <geometry>][ -A <cmd>]
+        [ -d <deb>][ <file> ...]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
+    -D IXy.z optional Debug Stop output to control moving parts in a plant
+    -D ~IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
     -F font font or font size to use in Text window (default '20')
     -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default 35)
@@ -4703,7 +4776,7 @@ a B<WatchPoint> or an B<IgnorePoint>.
 The following buttons control debug actions:
 
   Debug     Turn Debug mode on and off. When turned off the Search
-            Entry window is gray. It turns light green when Debug
+            Entry window is gray. It turns pale green when Debug
             mode is on and the program is running and the following
             three buttons, which control debug actions are activated:
 

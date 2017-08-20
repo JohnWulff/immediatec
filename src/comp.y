@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.124 $";
+"@(#)$Id: comp.y 1.125 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -3508,7 +3508,6 @@ immCarray
 		    listGenOut(sp, -2, &v);			/* list immC array node with const parameter size */
 		    assert(sp->list == 0);
 		    sp->list = sp->v_elist;			/* transfer dynamic size expression pointer */
-		    sp->v_elist = 0;				/* must be cleared for gram.y */
 		} else {
 		    if (sp->v_cnt == 0) {
 			ierror("must specify array size since there is no member initialiser list:", $$.f);
@@ -3558,7 +3557,6 @@ immCarray
 			listGenOut(NULL, 1, 0);		/* terminate immC array node list */
 		    }
 		}
-		sp->v_cnt = 0;				/* must be cleared for gram.y */
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
@@ -3628,7 +3626,6 @@ immCarray
 		    assert(tlp == NULL && i == sp->v_cnt);
 		    sp->list = $4.v;				/* head of the member list - inherits initialiser count */
 		}
-		sp->v_cnt = 0;					/* must be cleared for gram.y */
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
@@ -3874,7 +3871,6 @@ extimmCarray
 			}
 		    }
 		}
-		sp->v_cnt = 0;				/* must be cleared for gram.y */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead", &$$);
 #endif
@@ -3928,7 +3924,6 @@ extimmCarray
 		    }
 		    sp->list = $4.v;				/* head of the member list - inherits initialiser count */
 		}
-		sp->v_cnt = 0;					/* must be cleared for gram.y */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead = { immCini }", &$$);
 #endif

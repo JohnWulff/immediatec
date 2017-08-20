@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.62 $";
+"@(#)$Id: rsff.c 1.63 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1522,11 +1522,11 @@ iC_timerSfn(					/* Timer function */
 	    np->gt_prev = gs;			/* gs <== new new */
 #endif	/* DEQ */
 	}
-    }
 #if defined(TCP) || defined(LOAD)
-    iC_linked++;
-    iC_liveData(gs, tc);			/* VCD and/or iClive */
+	iC_linked++;
+	iC_liveData(gs, tc);			/* VCD and/or iClive */
 #endif /* defined(TCP) || defined(LOAD) */
+    }
 } /* iC_timerSfn */
 
 /********************************************************************

@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "comp.y"
  static const char comp_y[] =
-"@(#)$Id: comp.tab.c 1.124 $";
+"@(#)$Id: comp.tab.c 1.125 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -787,9 +787,9 @@ static const yytype_uint16 yyrline[] =
     2929,  2933,  2946,  2950,  2955,  2967,  2978,  2979,  2980,  2984,
     2985,  3001,  3002,  3003,  3006,  3016,  3044,  3056,  3073,  3128,
     3142,  3153,  3193,  3220,  3263,  3270,  3286,  3293,  3309,  3316,
-    3333,  3343,  3376,  3377,  3378,  3381,  3391,  3495,  3577,  3650,
-    3651,  3655,  3681,  3726,  3727,  3731,  3732,  3733,  3734,  3738,
-    3749,  3827,  3882,  3939,  3966,  4027
+    3333,  3343,  3376,  3377,  3378,  3381,  3391,  3495,  3575,  3647,
+    3648,  3652,  3678,  3723,  3724,  3728,  3729,  3730,  3731,  3735,
+    3746,  3824,  3878,  3934,  3961,  4022
 };
 #endif
 
@@ -5144,7 +5144,6 @@ yyreduce:
 		    listGenOut(sp, -2, &v);			/* list immC array node with const parameter size */
 		    assert(sp->list == 0);
 		    sp->list = sp->v_elist;			/* transfer dynamic size expression pointer */
-		    sp->v_elist = 0;				/* must be cleared for gram.y */
 		} else {
 		    if (sp->v_cnt == 0) {
 			ierror("must specify array size since there is no member initialiser list:", (yyval.sym).f);
@@ -5194,7 +5193,6 @@ yyreduce:
 			listGenOut(NULL, 1, 0);		/* terminate immC array node list */
 		    }
 		}
-		sp->v_cnt = 0;				/* must be cleared for gram.y */
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
@@ -5214,7 +5212,7 @@ yyreduce:
 
   case 228:
 /* Line 1792 of yacc.c  */
-#line 3577 "comp.y"
+#line 3575 "comp.y"
     {
 		Symbol *	sp;
 		Symbol *	tsp;
@@ -5269,7 +5267,6 @@ yyreduce:
 		    assert(tlp == NULL && i == sp->v_cnt);
 		    sp->list = (yyvsp[(4) - (5)].list).v;				/* head of the member list - inherits initialiser count */
 		}
-		sp->v_cnt = 0;					/* must be cleared for gram.y */
 		if (iFunSymExt) {
 		    char *	cp;
 		    Symbol *	sp1;
@@ -5289,19 +5286,19 @@ yyreduce:
 
   case 229:
 /* Line 1792 of yacc.c  */
-#line 3650 "comp.y"
+#line 3647 "comp.y"
     { (yyval.vap).v.lfl = (yyval.vap).v.nuv = 0; }
     break;
 
   case 230:
 /* Line 1792 of yacc.c  */
-#line 3651 "comp.y"
+#line 3648 "comp.y"
     { (yyval.vap) = (yyvsp[(1) - (1)].vap); }
     break;
 
   case 231:
 /* Line 1792 of yacc.c  */
-#line 3655 "comp.y"
+#line 3652 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (5)].typ).f; (yyval.sym).l = (yyvsp[(5) - (5)].vai).l;
@@ -5332,7 +5329,7 @@ yyreduce:
 
   case 232:
 /* Line 1792 of yacc.c  */
-#line 3681 "comp.y"
+#line 3678 "comp.y"
     {
 		int		typ;			/* gets here when IMMCARRAY was */
 		Symbol *	sp;			/* previously declared extern */
@@ -5375,43 +5372,43 @@ yyreduce:
 
   case 233:
 /* Line 1792 of yacc.c  */
-#line 3726 "comp.y"
+#line 3723 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 234:
 /* Line 1792 of yacc.c  */
-#line 3727 "comp.y"
+#line 3724 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (2)].list); }
     break;
 
   case 235:
 /* Line 1792 of yacc.c  */
-#line 3731 "comp.y"
+#line 3728 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 236:
 /* Line 1792 of yacc.c  */
-#line 3732 "comp.y"
+#line 3729 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 237:
 /* Line 1792 of yacc.c  */
-#line 3733 "comp.y"
+#line 3730 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 238:
 /* Line 1792 of yacc.c  */
-#line 3734 "comp.y"
+#line 3731 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 239:
 /* Line 1792 of yacc.c  */
-#line 3738 "comp.y"
+#line 3735 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v);			/* first link in member list */
@@ -5427,7 +5424,7 @@ yyreduce:
 
   case 240:
 /* Line 1792 of yacc.c  */
-#line 3749 "comp.y"
+#line 3746 "comp.y"
     {
 		List_e *	lp;
 
@@ -5449,7 +5446,7 @@ yyreduce:
 
   case 241:
 /* Line 1792 of yacc.c  */
-#line 3827 "comp.y"
+#line 3824 "comp.y"
     {	/* automatic declaration of members */
 		Symbol *	sp;
 		Symbol *	tsp;
@@ -5500,7 +5497,6 @@ yyreduce:
 			}
 		    }
 		}
-		sp->v_cnt = 0;				/* must be cleared for gram.y */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead", &(yyval.sym));
 #endif
@@ -5509,7 +5505,7 @@ yyreduce:
 
   case 242:
 /* Line 1792 of yacc.c  */
-#line 3882 "comp.y"
+#line 3878 "comp.y"
     {
 		Symbol *	sp;
 		List_e *	lp;
@@ -5559,7 +5555,6 @@ yyreduce:
 		    }
 		    sp->list = (yyvsp[(4) - (5)].list).v;				/* head of the member list - inherits initialiser count */
 		}
-		sp->v_cnt = 0;					/* must be cleared for gram.y */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(SYM, "extimmCarray: extimmCarrayHead = { immCini }", &(yyval.sym));
 #endif
@@ -5568,7 +5563,7 @@ yyreduce:
 
   case 243:
 /* Line 1792 of yacc.c  */
-#line 3939 "comp.y"
+#line 3934 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (5)].typ).f; (yyval.sym).l = (yyvsp[(5) - (5)].vai).l;
@@ -5600,7 +5595,7 @@ yyreduce:
 
   case 244:
 /* Line 1792 of yacc.c  */
-#line 3966 "comp.y"
+#line 3961 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (5)].typ).f; (yyval.sym).l = (yyvsp[(5) - (5)].vai).l;
 		char *	cp;
@@ -5645,7 +5640,7 @@ yyreduce:
 
   case 245:
 /* Line 1792 of yacc.c  */
-#line 4027 "comp.y"
+#line 4022 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (4)].sym).f; (yyval.sym).l = (yyvsp[(4) - (4)].vai).l;
 		Symbol *	sp;
@@ -5697,7 +5692,7 @@ yyreduce:
 
 
 /* Line 1792 of yacc.c  */
-#line 5701 "comp.tab.c"
+#line 5696 "comp.tab.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -5929,7 +5924,7 @@ yyreturn:
 
 
 /* Line 2055 of yacc.c  */
-#line 4082 "comp.y"
+#line 4077 "comp.y"
 
 
 #ifdef NEWSTYLE

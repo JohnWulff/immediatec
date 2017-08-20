@@ -44,7 +44,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: simLift.ic 1.4 $
+ *  $Id: simLift.ic 1.5 $
  *
  *******************************************************************/
 
@@ -52,6 +52,13 @@ use strict;
 
 imm timer t50 = TIMER(TX0.4, ~TX0.4);
 imm bit   eoi = TX0.0;				// end of initialisation
+
+/********************************************************************
+ *  iClive sends the Debug Stop signal (usually on IX99.0) when in
+ *  debug mode and stopped at a Watch point or a single step.
+ *******************************************************************/
+
+imm bit debugStop		= IX99.0;	// Stop all motors during Watch point BREAK
 
 /********************************************************************
  *  Simulated internal panel buttons
@@ -112,10 +119,10 @@ imm bit I_GOING_UP_LIGHT	= IX42.1;	// Lift "going up" light inside lift
 // Equivalence inputs for Device Address 3 outputs QX0.3 - QX3.6
 
 imm bit RingBell		= IX43.0;	// <100ms active high pulse
-imm bit LiftMotor1		= IX43.1;	// 2 bits to control 3 motor states
-imm bit LiftMotor2     		= IX43.2;
-imm bit DoorMotor3		= IX43.3;	// 2 bits to control 3 motor states
-imm bit DoorMotor4     		= IX43.4; 
+imm bit LiftMotor1		= IX43.1 | debugStop;	// 2 bits to control 3 motor states
+imm bit LiftMotor2		= IX43.2 | debugStop;	// Hi when stopped by debugStop
+imm bit DoorMotor3		= IX43.3 | debugStop;	// 2 bits to control 3 motor states
+imm bit DoorMotor4		= IX43.4 | debugStop;	// Hi when stopped by debugStop 
 imm bit I_AT_LIGHT5		= IX43.5;	// 2 bits multiplexed to drive one of four lights
 imm bit I_AT_LIGHT6    		= IX43.6; 
 
@@ -127,11 +134,14 @@ imm bit RESETALARM	= IX34.7 | IX43.7;	// Reset cage and door alarms from button 
  *      from floor 1 at 10 to floor 4 at 40
  *******************************************************************/
 
-imm bit   f		= cds > 0;		// manual/automatic
+imm bit   ResetAlarm	= ST(RESETALARM | CHANGE(cds) | RISE(eoi), t50,5);
+imm bit   f		= cds > 0 & (		// manual/automatic
+			  (LiftMotor1 ^ LiftMotor2) |
+			  (DoorMotor3 ^ DoorMotor4) |
+			  ResetAlarm);		// clock only when needed
 imm int   i		= cds ? 1 : 5;		// manual step 5, automatic step 1 per clock
 imm bit   b		= D(~b & f, t50, cds)  | manualClk & ~f;
 imm clock c		= CLOCK(b);		// clock cage and door counters
-imm bit   ResetAlarm	= ST(RESETALARM | FALL(f) | RISE(eoi), c);
 
 imm int CageMovement	= SH( ResetAlarm               ? (IB24 ? (IB24-1)%40+1 : 10) :
 			      LiftMotor1 & ~LiftMotor2 ?  CageMovement + i :
@@ -160,12 +170,12 @@ imm int DoorMovement	= SH( ResetAlarm               ? (IB24%10 || IB24 > 40 ? 60
 			      DoorMovement, c);	// hold position if both hi	// DoorMovement =
 
 imm bit DoorMotorAlarm	= SR(~DoorMotor3 & ~DoorMotor4, ResetAlarm);
-imm bit DoorUnderAlarm	= SR( DoorMovement < 60, ResetAlarm);
+imm bit DoorUnderAlarm	= SR( DoorMovement < 62, ResetAlarm);
 
-imm bit DOOR_SHUT	= DoorMovement == 60;	// Lift doors in closed position
-imm bit DOOR_OPEN	= DoorMovement == 70;	// Lift doors in open position
+imm bit DOOR_SHUT	= DoorMovement <= 60;	// Lift doors in closed position
+imm bit DOOR_OPEN	= DoorMovement >= 70;	// Lift doors in open position
 
-imm bit DoorOverAlarm	= SR( DoorMovement > 70, ResetAlarm);
+imm bit DoorOverAlarm	= SR( DoorMovement > 72, ResetAlarm);
 
 /********************************************************************
  *  Make a short sound (bell.oga takes about 150 ms)

@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.12 $
+ *  $Id: kbLift.ic 1.13 $
  *
  *******************************************************************/
 
@@ -114,7 +114,7 @@ imm bit StargetUp2 , Starget2   , StargetUp3 , StargetDn3  , Starget3 , StargetD
  *******************************************************************/
 imm int doorDelay	= IB3 * 2 ? : 50 * 2;		// default 5 seconds
 imm bit doorOpenMin	= D(DOOR_OPEN & ~sameFloor, t50, doorDelay);	// doorDelay =
-imm bit goingDn		= ~goingUp;
+imm bit goingDn		= ~goingUp;					// t50 =
 
 /********************************************************************
  *  Gates used for blocking the setting of reqFloorUp/Dn2/3
@@ -353,15 +353,14 @@ imm bit approachDn2	= targetDn2 & ~StargetUp2 | StargetDn2;
 
 imm bit cageUp		= targetPosition >  cagePosition;	// cagePosition   =
 imm bit cageDn		= targetPosition <  cagePosition;	// targetPosition =
-imm bit atTarget	= ~cageUp & ~cageDn;
+imm bit atTarget	= targetPosition == cagePosition;
 
-imm bit cageSTOP	= atTarget          |		// hard stop when at target
-			 ~DOOR_SHUT         |		// hard stop when door not shut
+imm bit cageSTOP	= ~DOOR_SHUT        |		// hard stop when door not shut
 			  cageDn & LIFT_AT1 |		// hard stop at floor 1 going down
 			  cageUp & LIFT_AT4 ;		// hard stop at floor 4 going up
 
-imm bit LiftMotor1	= D(cageUp | cageSTOP);		// Lift cage up or hard stop for any reason
-imm bit LiftMotor2	= D(cageDn | cageSTOP);		// Lift cage down or hard stop for any reason
+imm bit LiftMotor1	= D(~cageDn | cageSTOP);	// Lift cage up or hard stop for any reason
+imm bit LiftMotor2	= D(~cageUp | cageSTOP);	// Lift cage down or hard stop for any reason
 
 imm bit sameFloorUp	= RISE(nextUp2 | nextUp3);
 imm bit sameFloorDn	= RISE(nextDn2 | nextDn3);
@@ -397,6 +396,7 @@ imm bit I_GOING_DOWN_LIGHT = SR(Rgoing_dn, Rgoing_up | FnotWaiting);
  *         select next target again
  *  Stop opening door   DOOR_OPEN
  *  atTarget is delayed by 1 iClock from DOOR_SHUT - use D(DOOR_SHUT)
+ *  Stop cage before starting to open door
  *******************************************************************/
 imm bit atTargetShut	= atTarget & D(DOOR_SHUT);	// also used to block selecting new target
 
@@ -417,13 +417,12 @@ imm bit RingBell	= ST(openDoor | sameFloor, t50, 2);	// <100ms active high pulse
 imm bit closeDoor	= SR(doorOpenMin & ~sameFloor & newTarget & ~I_REQUEST_OPEN,
 			     DOOR_SHUT | I_REQUEST_OPEN);
 
-imm bit doorSTOP	= ~(openDoor ^ closeDoor) |	// hard stop when both off (or both on)
-			  ~at_a_floor             |	// hard stop when not at a floor
+imm bit doorSTOP	= ~at_a_floor             |	// hard stop when not at a floor
 			   openDoor  & DOOR_OPEN  |	// hard stop when openening and fully open
 			   doorShut               ;	// hard stop when closing and fully shut
 
-imm bit DoorMotor3	= D(openDoor  | doorSTOP);	// open door or hard stop for any reason
-imm bit DoorMotor4	= D(closeDoor | doorSTOP);	// close door or hard stop for any reason
+imm bit DoorMotor3	= D(~closeDoor | doorSTOP);	// open door or hard stop for any reason
+imm bit DoorMotor4	= D(~openDoor  | doorSTOP);	// close door or hard stop for any reason
 
 /********************************************************************
  *  Multiplex inside lift floor indicators

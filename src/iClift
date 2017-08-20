@@ -47,6 +47,7 @@ my @hide_next   = (1, 2, 0);
 my @normal_hide = ('normal', 'hidden', 'normal');
 my @transp_show = ('transparent', 'transparent', undef);
 my $server      = 0;
+my $debugStop	= 0;	# stops door and cage movements at iClive Watch and single step breaks
 
 my @masks       = (1, 2, 4, 8, 16, 32, 64, 128);
 my @bitIndex    = (
@@ -186,7 +187,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift 1.17 $ uses Tk-@<<<<<<
+$Id: iClift 1.18 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -1382,6 +1383,7 @@ sub misc_fun1 {
 sub misc_fun2 {
     my ($dummy, $bit, $l, $f) = @_;	# QX1.2
     print "misc_fun2: $bit lift = $l, floor = $f\n" if $opt_t;
+    $debugStop = $bit;			# stops door and cage movements at iClive Watch and single step breaks
 } # misc_fun2
 
 sub misc_fun3 {
@@ -1534,7 +1536,7 @@ sub move_door {
 	    }
 	    print ": time = $tim\n" if $opt_t;
 	}
-    } else {				# execute timed repeat
+    } elsif (not $debugStop) { 		# execute timed repeat
 	my $target = $doorTarg[$lift][$f];
 	$inc *= $rev;
 	$canv->move($backDoor,  $backInc  * $inc, 0);
@@ -1850,7 +1852,7 @@ sub move_cage {
 	    }
 	    print ": time = $tim\n" if $opt_t;
 	}
-    } else {				# execute timed repeat
+    } elsif (not $debugStop) {		# execute timed repeat
 	my $target = $cageTarg[$cagePosn[$l]];
 	$inc *= $rev;
 	$canv->move($basicCage, 0, -$inc);

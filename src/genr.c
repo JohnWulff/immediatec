@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.89 $";
+"@(#)$Id: genr.c 1.90 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1506,7 +1506,9 @@ op_asgn(				/* assign List_e stack to links */
 #if ! YYDEBUG || defined(SYUNION)
 		(nlp = 0, gp->v_cnt) > 2 &&
 #endif
-		(nlp = gp->v_elist) != 0 && (gp->fm & FT) == 0) {	/* not marked symbol */
+		gp->ftype != UDFA &&		/* not an immC array */
+		(nlp = gp->v_elist) != 0 &&	/* not marked symbol */
+		(gp->fm & FT) == 0) {
 		/********************************************************************
 		 * A feedback element has occurred in the middle of an expression
 		 * reduction. Since this element will not be assigned to a differnt

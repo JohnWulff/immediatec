@@ -220,7 +220,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.9 $\n"
+"Version	$Id: iCpiFace.c 1.10 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -2089,7 +2089,7 @@ convert_nr(const char * str, char ** endptr)
 {
     long	val;
 
-    errno = 0;				/* to distinguisg success/failure after call */
+    errno = 0;				/* to distinguish success/failure after call */
     if (*str == '0' && (*(str + 1) == 'b' || *(str + 1) == 'B')) {
 	val = strtol(str+2, endptr, 2);	/* convert base 2 binary */
     } else {
