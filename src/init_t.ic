@@ -20,22 +20,14 @@
  * execute the following after making a compiler with -D BOOT_COMPILE
  *	immcc -d20000 init_t.ic | init_t.pl > init_t.out
  *	vi init_t.out init.c	# insert the new code appropriately
- *	# init_t.ic has the definitions of the buil-in functions with
- *	# mangled names in an appropriate alphabetical order
- *	# init_t.pl translates the mangled names to their proper names
- *	# and moves the block of static Symbols ahead of the link
- *	# definitions, so that addresses of static Symbols can be used
- *	# in some links.
- *	# use the modified init.c to make a new immcc compiler.
- *	# (the original was produced manually and was used to check
- *	# that this generated code produces the right results - now
- *	# the automatic generator can be used to vary the built-ins)
+ *	# see init_t.pl for more - line 139 must be kept in place
  *
- * $Id: init_t.ic,v 1.4 2014/11/03 11:01:00 jw Exp $
+ * $Id: init_t.ic 1.5 $
  *******************************************************************/
 
 use strict;
 
+/* the following mangled names must be in sorted order and the correct length */
 /* low level built-in functions - functions which cannot be compiled as function blocks */
      /* FORCE() */
 imm bit Aorce(bit arg1, bit on, bit off) {
@@ -45,21 +37,25 @@ imm bit Aorce(bit arg1, bit on, bit off) {
 imm bit B(bit expr, clock dcl) {
     this = D(expr, dcl);
 }
-     /* SR_() */
-imm bit Cr_(bit set, clock scl, bit res, clock rcl) {
-    this = SR_(set, scl, res, rcl);
+     /* DS_() */
+imm bit Bs_(bit expr, clock dcl, bit set, clock scl) {
+    this = DS_(expr, dcl, set, scl);
 }
      /* DR_() */
-imm bit Dr_(bit expr, clock dcl, bit res, clock rcl) {
+imm bit Cr_(bit expr, clock dcl, bit res, clock rcl) {
     this = DR_(expr, dcl, res, rcl);
 }
-     /* SRR_() */
-imm bit Err_(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) {
-    this = SRR_(set, scl, res, rcl, res2, r2cl);
-}
      /* DSR_() */
-imm bit Fsr_(bit expr, clock dcl, bit set, clock scl, bit res, clock rcl) {
+imm bit Csr_(bit expr, clock dcl, bit set, clock scl, bit res, clock rcl) {
     this = DSR_(expr, dcl, set, scl, res, rcl);
+}
+     /* SR_() */
+imm bit Dr_(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(set, scl, res, rcl);
+}
+     /* SRR_() */
+imm bit Drr_(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) {
+    this = SRR_(set, scl, res, rcl, res2, r2cl);
 }
      /* SH() */
 imm int Gh(int dat, clock dcl) {
@@ -110,32 +106,36 @@ imm timer Mimer12(bit trig, clock clk, bit trig2, clock clk2) {
     this = TIMER1(trig, clk, trig2, clk2);
 }
 /* extended built-in functions - previously compiled as system function blocks at start up */
-     /* SR() */
-imm bit Nr(bit set, clock scl, bit res, clock rcl) {
-    this = SR_(set, scl, res, rcl);
-}
-     /* SRX() */
-imm bit Orx(bit set, clock scl, bit res, clock rcl) {
-    this = SR_(set & ~res, scl, ~set & res, rcl);
-}
-     /* JK() */
-imm bit Pk(bit set, clock scl, bit res, clock rcl) {
-    this = SR_(~this & set, scl, this & res, rcl);
-}
-     /* SRR() */
-imm bit Qrr(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) {
-    this = SRR_(set, scl, res, rcl, res2, r2cl);
+     /* DS() */
+imm bit Ns(bit dat, clock dcl, bit set, clock scl) {
+    imm bit i = D(set, scl); this = DS_(dat & ~i | this & i, dcl, set, scl);
 }
      /* DR() */
-imm bit Rr(bit dat, clock dcl, bit res, clock rcl) {
+imm bit Or(bit dat, clock dcl, bit res, clock rcl) {
     this = DR_(dat & ~res | this & res, dcl, res, rcl);
 }
      /* DSR() */
-imm bit Ssr(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {
-    imm bit i = set | res; this = DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl);
+imm bit Osr(bit dat, clock dcl, bit set, clock scl, bit res, clock rcl) {
+    imm bit i = D(set, scl) | res; this = DSR_(dat & ~i | this & i, dcl, set & ~res, scl, ~set & res, rcl);
+}
+     /* SR() */
+imm bit Pr(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(set, scl, res, rcl);
+}
+     /* SRR() */
+imm bit Prr(bit set, clock scl, bit res, clock rcl, bit res2, clock r2cl) {
+    this = SRR_(set, scl, res, rcl, res2, r2cl);
+}
+     /* SRX() */
+imm bit Prx(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(set & ~res, scl, ~set & res, rcl);
+}
+     /* JK() */
+imm bit Qk(bit set, clock scl, bit res, clock rcl) {
+    this = SR_(~this & set, scl, this & res, rcl);
 }
      /* SHR() */
-imm int Thr(int dat, clock dcl, bit res, clock rcl) {
+imm int Uhr(int dat, clock dcl, bit res, clock rcl) {
     this = SHR_( res ? this : dat, dcl, res, rcl);	/* #line 139 "init_t.ic" */
 }
      /* SHSR() */

@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.74 $";
+"@(#)$Id: comp.h 1.75 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -213,6 +213,7 @@ extern const char * cexeString[];	/* case or function string */
  * F_LITERAL	010	imm reference generated in a literal block
  * F_ARRAY	020	imm reference to an iC array
  * F_SIZE	040	imm reference to a sizeof operator
+ * F_LOHI	0100	constants LO and HI used in C expression
  *******************************************************************/
 
 #define F_CALLED	01
@@ -221,6 +222,7 @@ extern const char * cexeString[];	/* case or function string */
 #define F_LITERAL	010
 #define F_ARRAY		020
 #define F_SIZE		040
+#define F_LOHI		0100
 
 typedef struct FuUse {			/* Function call count and C expression */
     int		c_cnt;			/* call count */

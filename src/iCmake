@@ -113,11 +113,11 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.51 $' >&2
+  echo '	$Id: iCmake 1.52 $' >&2
 }
 
 lwsock32=""
-if [ "$OS" = Windows_NT ]; then
+if [ "$OS" = "Windows_NT" ]; then
     lwsock32=" -lwsock32"
 fi
 link=0
@@ -411,20 +411,26 @@ for arg in $*; do
 		    else
 			$nice$CC$CFL -I.$ldir$C -o $exe $cFile $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
 		    fi
-		    if [ -x ./$exe ]; then
+		    long=${exe##*/}
+		    if [ "$long" = "$exe" ]; then
+			exp="./$exe"	# avoid testing exe on another PATH
+		    else
+			exp="$exe"
+		    fi
+		    if [ -x $exp ]; then
 			if [ -n "$I" ]; then
 			    if [ -n "$E" ]; then
 				if [ $z -eq 1 ]; then
-				    echo "./$exe -d$I >> $ini 2>&1"
+				    echo "$exp -d$I >> $ini 2>&1"
 				fi
-				if ./$exe -d$I >> $ini 2> $exe.err; then e=0; else e=1; fi
+				if $exp -d$I >> $ini 2> $exe.err; then e=0; else e=1; fi
 				cat $exe.err >> $ini
 				rm $exe.err
 			    else
 				if [ $z -eq 1 ]; then
-				    echo "./$exe -d$I >> $ini"
+				    echo "$exp -d$I >> $ini"
 				fi
-				if ./$exe -d$I >> $ini; then e=0; else e=1; fi
+				if $exp -d$I >> $ini; then e=0; else e=1; fi
 			    fi
 			    if [ $e -eq 1 ]; then
 				if [ -n "$E" ]; then
@@ -606,18 +612,24 @@ if [ $link -eq 1 -a -z "$ic" -a -n "$list" ]; then
 	else
 	    $nice$CC$CFL -I.$ldir$C -o $exe $list $lib 2>&1 | sed -e 's/\/tmp\/[a-zA-Z][a-zA-Z_0-9]*/\/tmp\/x/'
 	fi
-	if [ -x ./$exe ]; then
+	long=${exe##*/}
+	if [ "$long" = "$exe" ]; then
+	    exp="./$exe"		# avoid testing exe on another PATH
+	else
+	    exp="$exe"
+	fi
+	if [ -x $exp ]; then
 	    if [ -n "$I" ]; then
 		if [ -n "$E" ]; then
-		    if [ $z -eq 1 ]; then echo "./$exe -d$I >> $ini 2>&1"; fi
-		    if ./$exe -d$I >> $ini 2> $exe.err; then e=0; else e=1; fi
+		    if [ $z -eq 1 ]; then echo "$exp -d$I >> $ini 2>&1"; fi
+		    if $exp -d$I >> $ini 2> $exe.err; then e=0; else e=1; fi
 		    cat $exe.err >> $ini
 		    rm $exe.err
 		else
 		    if [ $z -eq 1 ]; then
-			echo "./$exe -d$I >> $ini"
+			echo "$exp -d$I >> $ini"
 		    fi
-		    if ./$exe -d$I >> $ini; then e=0; else e=1; fi
+		    if $exp -d$I >> $ini; then e=0; else e=1; fi
 		fi
 		if [ $e -eq 1 ]; then
 		    if [ -n "$E" ]; then

@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.90 $";
+"@(#)$Id: genr.c 1.91 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2609,7 +2609,7 @@ evalConstExpr(Lis * lv)
 			    if (len == 0) len = 1;	/* flags constant parameter in expression */
 			} else {
 			    len = 2;			/* a non const in the expression blocks other const */
-			    sp1->em |= EU;		/* mark variable as used to supress warning */
+			    sp1->em |= EU;		/* mark variable as used to suppress warning */
 			}
 			if ((sp1->fm & FU) <= 1) {	/* target not used more than once */
 			    sp1->fm++;			/* count use of parameter*/

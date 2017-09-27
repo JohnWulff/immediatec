@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.83 $";
+"@(#)$Id: icc.h 1.84 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -580,7 +580,9 @@ extern unsigned char	iC_ftypes[];	/* { FTYPES } */
 extern char		iC_os[];	/* OPS */
 extern char		iC_fos[];	/* FOPS */
 extern char *		iC_useText[4];	/* USE_TEXT */
-extern FILE *		iC_outFP;	/* output file pointer */
+extern FILE *		iC_outFP;	/* listing file pointer */
+extern FILE *		iC_lstFP;	/* backup of iC_outFP for restoring when listing is unblocked */
+extern FILE *		iC_nulFP;	/* listing file pointer to /dev/null when listing is blocked */
 extern FILE *		iC_errFP;	/* error file pointer */
 extern void *		iC_emalloc(unsigned);	/* check return from malloc */
 
@@ -607,17 +609,19 @@ extern unsigned short	iC_osc_max;
 extern unsigned short	iC_osc_lim;
 extern unsigned short	iC_osc_flag;
 
-#define USE_ALIAS	01
-#define USE_STRICT	02
-#define MAXUSETYPE	2
+#define USE_ALIAS	(1<<0)
+#define USE_STRICT	(1<<1)
+#define USE_LIST	(1<<2)
+#define MAXUSETYPE	3
 #define USESTACKSZ	32		/* nested includes - should do */
 
-extern unsigned int	iC_uses;	/* 01=alias 02=strict as bit field */
+extern unsigned int	iC_uses;	/* 01=alias 02=strict 04=list as bit field */
 extern unsigned int	iC_useStack[USESTACKSZ];
 extern unsigned int	iC_useStackIndex;
 
 #define iC_Aflag (iC_uses & USE_ALIAS)	/* -A alias - generate ARITH alias nodes */
-#define iC_Sflag (iC_uses & USE_STRICT)	/* -S strict - all imm variables must be declared */
+#define iC_Sflag (iC_uses & USE_STRICT)	/* -S strict - all imm variables must be declared - default */
+#define iC_Zflag (iC_uses & USE_LIST)	/* no command line option - use list is default */
 
 extern char *		iC_aflag;	/* -a list iC preprocessor commands with immac -Ma */
 extern unsigned short	iC_Lflag;	/* -L append mode - compile with linking information */

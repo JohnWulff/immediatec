@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.37 $";
+"@(#)$Id: gram.y 1.38 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -97,7 +97,7 @@ static void		yyerror(const char *s, ...);
     Token		tok;
 }
 
-%token	<tok> IDENTIFIER IMM_IDENTIFIER IMM_ARRAY_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
+%token	<tok> IDENTIFIER IMM_IDENTIFIER IMM_ARRAY_IDENTIFIER CONSTANT BIT_CONSTANT STRING_LITERAL SIZEOF
 %token	<tok> PTR_OP INC_OP DEC_OP LEFT_SH RIGHT_SH LE_OP GE_OP EQ_OP NE_OP
 %token	<tok> AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	<tok> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
@@ -676,7 +676,7 @@ declarator					/* 25 */
 	    $$.end = $1.end;
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
-	    if ($1.symbol->type < MAX_LS && $1.symbol->u_blist == 0 || $1.symbol->type == NCONST) {
+	    if (($1.symbol->type < MAX_LS && $1.symbol->u_blist == 0) || $1.symbol->type == NCONST) {
 		immVarRemove($1.start, $1.end, $1.symbol);
 	    }
 #endif	/* LMAIN */
@@ -686,7 +686,7 @@ declarator					/* 25 */
 	    $$.end = $2.end;
 	    $$.symbol = $2.symbol;
 #ifndef LMAIN
-	    if ($2.symbol->type < MAX_LS && $2.symbol->u_blist == 0 || $2.symbol->type == NCONST) {
+	    if (($2.symbol->type < MAX_LS && $2.symbol->u_blist == 0) || $2.symbol->type == NCONST) {
 		immVarRemove($2.start, $2.end, $2.symbol);
 	    }
 #endif	/* LMAIN */
@@ -1964,6 +1964,18 @@ primary_expression				/* 66 */
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
 	}
+	| BIT_CONSTANT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = $1.symbol;
+#ifndef LMAIN
+	    functionUse[0].c_cnt |= F_LOHI;	/* #define LO 0, #define HI 1 required in C code */
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "primary_expression: BIT_CONSTANT %u %u %s\n",
+		$$.start, $$.end, $$.symbol->name);
+#endif
+#endif	/* LMAIN */
+	}
 	| string_literal {
 	    $$.start = $1.start;
 	    $$.end = $1.end;
@@ -2673,7 +2685,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    assert(vend <= end);
 	    if (start < vstart) {
 		assert(c == '(');		/* parenthesised imm_identifier or imm_array_identifier */
-		endop = vstart;			/* supress output of this paranthesis */
+		endop = vstart;			/* suppress output of this paranthesis */
 		pFlag = 0;
 		parend = vend;			/* marks closing parenthesis which is also supressed */
 		parcnt = 1;			/* could be more than 1 ( */
@@ -2841,7 +2853,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    parnxt = bytePos+1;			/* set to LARGE at endop - terminates counting */
 	}
 	if (bytePos == parend) {
-	    parend = endop = bytePos+1;		/* supress output of closing parantheses and spaces */
+	    parend = endop = bytePos+1;		/* suppress output of closing parantheses and spaces */
 	    if (c == ')' && --parcnt <= 0) {	/* parenthesised imm_identifier or imm_array_identifier */
 		    parend = LARGE;		/* count down ) until the required number */
 	    }

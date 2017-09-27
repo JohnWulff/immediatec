@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.108 $";
+"@(#)$Id: outp.c 1.109 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -223,6 +223,7 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
 
 #ifdef BOOT_COMPILE
 #define SI	20				/* shift index in le_val */
+#define SCNT	10				/* up to 10 statements - increase if more required */
 /********************************************************************
  *
  *	Output links for the pre-compiled functions
@@ -244,16 +245,17 @@ errorEmit(FILE* Fp, char* errorMsg, unsigned* lcp)
  *******************************************************************/
 
 static void
-out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * headNM)
+out_link(List_e * lp, int * picnt, int * pbcnt, int * pvcnt, int vflag, int pass, char * headNM)
 {
     Symbol *		sp;
     static Symbol *	ssp;
-    static Symbol *	vsp;
+    static Symbol *	vsp[SCNT];
     static List_e *	vlp;
     char *		name;
     int			funNo;
     int			tlink;
-    static int		vlink;
+    int			i;
+    static int		vlink[SCNT];
     static int		acnt;
     static char		auxName[TSIZE];
     static char		auxVal [TSIZE];
@@ -262,7 +264,16 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 
     if (*pbcnt == 0) {
 	vlp = NULL;
-	vsp = NULL;
+    }
+    if (*pvcnt == SCNT) {
+	fprintf(stderr, "out_link: more than %d statements in function block is too many - increase SCNT in outp.c\n", SCNT);
+	fflush(stderr);
+	exit(1);
+    } else if (*pvcnt > SCNT) {
+	for (i = 0; i < SCNT; i++) {
+	    vsp[i] = NULL;
+	}
+	*pvcnt = 0;
     }
     if (pass == 0) {
 	/********************************************************************
@@ -274,7 +285,7 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 	if (lp->le_next) {
 	    vlp = lp;				/* new forward link for next iteration */
 	}
-    } else {
+    } else {	/* pass == 1 */
 	/********************************************************************
 	 *  Generate the actual link output
 	 *******************************************************************/
@@ -289,7 +300,6 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 	    if  (name) {
 		if (vflag == 2) {
 		    ssp = sp;			/* points to XX@ Symbol - this (or internal assignment head) */
-		    vsp = NULL;
 		}
 		if (vflag == 1 || (vflag == 0 && sp == ssp)) {
 		    if ((tlink = (sp->v_cnt & 0777000) >> 9) != 0) {
@@ -305,9 +315,10 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 		    sp->v_cnt |= *pbcnt & 0777;	/* set link1 - possibly a 2nd or more times */
 		}
 	    } else if (vflag == 3) {
-		assert(vsp == NULL);
-		vsp = sp;			/* address of first var list Symbol */
-		vlink = *pbcnt;			/* var list link */
+		assert(vsp[*pvcnt] == NULL);
+		vsp[*pvcnt] = sp;		/* address of first var list Symbol */
+		vlink[*pvcnt] = *pbcnt;		/* var list link */
+		(*pvcnt)++;
 		name = "var list";
 	    } else {
 		assert(vflag == 0 && headNM);
@@ -315,14 +326,16 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 		acnt++;
 		sp->name = iC_emalloc(strlen(auxName));	/* already 1 byte longer */
 		strcpy(sp->name, auxName+1);	/* pass name without leading '&' */
-		if (sp == vsp) {
-		    snprintf(auxTlnk, TSIZE, "(char*)&l[%d]", vlink);	/* transfer to t_first */
-		    vsp = NULL;
+		for (i = 0; i < *pvcnt; i++) {
+		    if (sp == vsp[i]) {		/* find var list entry among possibly several */
+			snprintf(auxTlnk, TSIZE, "(char*)&l[%d]", vlink[i]);	/* transfer to t_first */
+			vsp[i] = NULL;
+		    }
 		}
 	    }
 	} else {
 	    name = "no var list";
-	    vsp = NULL;
+	    vsp[*pvcnt] = NULL;
 	}
 	if ((funNo = lp->le_val >> FUN_OFFSET) == 0) {
 	    snprintf(auxVal, TSIZE, "%d", lp->le_val);	/* simple mumerical value */
@@ -346,13 +359,13 @@ out_link(List_e * lp, int * picnt, int * pbcnt, int vflag, int pass, char * head
 	    lp->le_last = NULL;
 	}
 	fprintf(iC_outFP, "/* %3d */ { %-11s, %-9s, %-7s, %-14s, 0 },	/* ==> %s%s */\n",
-	    *pbcnt,
-	    auxName,
-	    auxVal,
-	    auxLink,
-	    auxTlnk,
+	    *pbcnt,				/* index */
+	    auxName,				/* le_sym */
+	    auxVal,				/* le_val */
+	    auxLink,				/* le_next */
+	    auxTlnk,				/* le_first */
 	    vflag <= 1 && (lp->le_val == NOT) ? "~" : " ",
-	    name ? name : auxName+1);
+	    name ? name : auxName+1);		/* target name */
 	assert(lp->le_val < 1 << SI);		/* make sure shifted index fits */
 	lp->le_val |= *pbcnt << SI;			/* save own index in l[] */
 	if (picnt) (*picnt)++;			/* count Symbol in S.T. */
@@ -572,6 +585,7 @@ iC_listNet(void)
 	 *******************************************************************/
 	static int	icnt;
 	static int	bcnt;
+	static int	vcnt;
 
 	Symbol *	functionHead;
 	List_e *	slp;
@@ -633,14 +647,19 @@ iC_listNet(void)
 	 * with a BOOT_COMPILE old style iC compiler to produce a template for
 	 * each function which is printed by the following code
 	 *******************************************************************/
-	for (pass = 0; pass <= 1; pass++) {
+	for (pass = 0; pass < 2; pass++) {			/* 2 passes 0 and 1 */
 	    icnt = bcnt = 0;
+	    vcnt = SCNT+1;
 	    for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 		for (functionHead = *hsp; functionHead; functionHead = functionHead->next) {
 		    if (functionHead->type == IFUNCT) {
 			head = functionHead->name;
 			if (pass == 1) {
+			    /********************************************************************
+			     * Handle functions with 2 alternate parameter ramps
+			     *******************************************************************/
 			    fprintf(iC_outFP,  "\n");		/* function head found */
+			    vcnt = SCNT+1;
 			    if (strcasecmp(head+1, "hange") == 0) {
 				functionHead->fm = 0x01;/* 1 bit signature for CHANGE set manually */
 				indexChange = icnt;	/* save index in b[] for CHANGE2 */
@@ -672,13 +691,13 @@ iC_listNet(void)
 			    assert(sp);			/* do not handle functions with immC arrays */
 			    lp = sp->list;		/* at generation all except XX@ have 0 list */
 			    if (lp) {			/* link to function head ? */
-				out_link(lp, &icnt, &bcnt, 0, pass, head);	/* output feedback link to function head */
+				out_link(lp, &icnt, &bcnt, &vcnt, 0, pass, head);	/* output feedback link to function head */
 				assert(lp->le_next == 0);/* has no follow ups */
 			    }
-			    out_link(slp, &icnt, &bcnt, 2, pass, head);	/* output statement list link */
+			    out_link(slp, &icnt, &bcnt, &vcnt, 2, pass, head);	/* output statement list link */
 			    vlp = slp->le_next;		/* next varList link */
 			    assert(vlp);		/* statement list is in pairs */
-			    out_link(vlp, 0, &bcnt, 3, pass, head);		/* output var list link */
+			    out_link(vlp, 0, &bcnt, &vcnt, 3, pass, head);		/* output var list link */
 			    slp = vlp->le_next;		/* next statement link */
 			}
 			/********************************************************************
@@ -692,7 +711,7 @@ iC_listNet(void)
 			    sp = slp->le_sym;		/* formal satement head Symbol */
 			    lp = sp->u_blist;		/* cloned expression links */
 			    while (lp) {
-				out_link(lp, 0, &bcnt, 0, pass, head);	/* output first level expression link */
+				out_link(lp, 0, &bcnt, &vcnt, 0, pass, head);	/* output first level expression link */
 				lp = lp->le_next;	/* next expression link */
 			    }
 			    vlp = slp->le_next;		/* next varList link */
@@ -700,7 +719,7 @@ iC_listNet(void)
 			    while (vsp) {		/* varList may be empty */
 				lp = vsp->u_blist;	/* cloned expression links */
 				while (lp) {
-				    out_link(lp, 0, &bcnt, 0, pass, head);	/* output var expression link */
+				    out_link(lp, 0, &bcnt, &vcnt, 0, pass, head);	/* output var expression link */
 				    lp = lp->le_next;	/* next expression link */
 				}
 				vsp = vsp->next;	/* next varList Symbol */
@@ -715,7 +734,7 @@ iC_listNet(void)
 			assert(slp);
 			parCnt = 0;
 			while (slp) {
-			    out_link(slp, &icnt, &bcnt, 1, pass, head);	/* output parameter link */
+			    out_link(slp, &icnt, &bcnt, &vcnt, 1, pass, head);	/* output parameter link */
 			    if (slp->le_sym->ftype < MIN_ACT) {
 				parCnt += 2;		/* count bit and int parameters in steps of 2 */
 			    }
@@ -900,10 +919,11 @@ iC_listNet(void)
 "  /* name	     type   ftype  uVal	*/\n"
 "  { \"FORCE\",	     KEYW,  0,     BFORCE, 0    , 0      , 0      , 0 },	/* FORCE function - generates LATCH */\n"
 "  { \"D\",	     KEYW,  D_FF,  BLTIN1, 0    , 0      , 0      , 0 },	/* D flip-flop */\n"
-"  { \"SR_\",	     KEYW,  S_FF,  BLTIN2, 0    , 0      , 0      , 0 },	/* SR flip-flop with simple set/reset */\n"
+"  { \"DS_\",	     KEYW,  D_FF,  BLTINS, 0    , 0      , 0      , 0 },	/* D flip-flop with simple set */\n"
 "  { \"DR_\",	     KEYW,  D_FF,  BLTIN2, 0    , 0      , 0      , 0 },	/* D flip-flop with simple reset */\n"
-"  { \"SRR_\",	     KEYW,  S_FF,  BLTIN3, 0    , 0      , 0      , 0 },	/* SRR flip-flop with simple set/2xreset */\n"
 "  { \"DSR_\",	     KEYW,  D_FF,  BLTIN3, 0    , 0      , 0      , 0 },	/* D flip-flop with simple set/reset */\n"
+"  { \"SR_\",	     KEYW,  S_FF,  BLTIN2, 0    , 0      , 0      , 0 },	/* SR flip-flop with simple set/reset */\n"
+"  { \"SRR_\",	     KEYW,  S_FF,  BLTIN3, 0    , 0      , 0      , 0 },	/* SRR flip-flop with simple set/2xreset */\n"
 "  { \"SH\",	     KEYW,  D_SH,  BLTIN1, 0    , 0      , 0      , 0 },	/* arithmetic sample and hold */\n"
 "  { \"SHR_\",	     KEYW,  D_SH,  BLTIN2, 0    , 0      , 0      , 0 },	/* sample and hold with simple reset */\n"
 "  { \"SHSR_\",	     KEYW,  D_SH,  BLTIN3, 0    , 0      , 0      , 0 },	/* sample and hold with simple set/reset */\n"
@@ -922,7 +942,8 @@ iC_listNet(void)
 "  { \"no\",	     KEYW,  0,     USE,    0    , 0      , 0      , 0 },	/* turn off PRAGMA */\n"
 "  { \"use\",	     KEYW,  1,     USE,    0    , 0      , 0      , 0 },	/* turn on PRAGMA */\n"
 "  { \"alias\",	     KEYW,  0,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - check that USETYPE < MAXUSETYPE */\n"
-"  { \"strict\",	     KEYW,  1,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - MAXUSETYPE 2 */\n"
+"  { \"strict\",	     KEYW,  1,     USETYPE,0    , 0      , 0      , 0 },\n"
+"  { \"list\",	     KEYW,  2,     USETYPE,0    , 0      , 0      , 0 },	/* PRAGMA - MAXUSETYPE 3 */\n"
 "  { \"imm\",	     KEYW,  0,     IMM,    0    , 0      , 0      , 0 },\n"
 "  { \"immC\",	     KEYW,  1,     IMMC,   0    , 0      , 0      , 0 },\n"
 "  { \"void\",	     KEYW,  UDFA,  VOID,   0    , 0      , 0      , 0 },\n"
@@ -2841,6 +2862,13 @@ iC_outNet(FILE * iFP, char * outfile)
 " *******************************************************************/\n"
 "\n"
 	); linecnt += 7;
+	if (functionUse[0].c_cnt & F_LOHI) {
+	    fprintf(Fp,				/* must be here so ALIASes in Gate list are safe */
+"#define LO	0\n"
+"#define HI	1\n"
+"\n"
+	    ); linecnt += 3;
+	}
 
 	/* copy C intermediate file up to EOF to C output file */
 	/* translate any imm variables and ALIAS references of type 'QB1_0' */

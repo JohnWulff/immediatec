@@ -1,10 +1,10 @@
 " Vim syntax file
 " Language:	iC
 " Maintainer:	John E. Wulff <wulff.johne@gmail.com>
-" Last Change:	2007 Apr 11 - 2015 Apr 6
-" $Id: ic.vim 1.11 $
+" Last Change:	2007 Apr 11 - 2015 Apr 6 - 2017 Sept 19
+" $Id: ic.vim 1.12 $
 " for openSUSE ic.vim must be in /usr/share/vim/current/syntax
-" NOTE: current -> vim70 for 10.2 and -> v71 for 11.0
+" NOTE: current -> vim70 for 10.2 and -> v71 for 11.0; vim74 for Leap 4.3
 " local filetype.vim must be in ~/.vim (ic.vim does not work there)
 " for Raspian copy ic.vim to /usr/share/vim/vim73/syntax/ic.vim
 
@@ -45,8 +45,8 @@ syn region	cDefine		start="[0-9\s]*\(%%\|%\|#\)\s*\(define\|undef\)\>" skip="\\$
 syn region	cPreProc	start="[0-9\s]*\(%%\|%\|#\)\s*\(pragma\>\|line\>\|warning\>\|warn\>\|error\>\)" skip="\\$" end="$" keepend contains=ALLBUT,@cPreProcGroup,@Spell
 
 " iC extentions
-syn keyword icStatement		this use no restore alias strict
-syn keyword icStatement		iConst iClock
+syn keyword icStatement		this use no alias strict
+syn keyword icStatement		iClock
 syn keyword icType		bit clock timer iC_Gt Gate
 syn match icIO			"\<\(I\|Q\|T\)X\([0-9][0-9]*\)\.\([0-7]\)\(_[0-9][0-9]*\)*\>"
 syn match icIO			"\<\(I\|Q\)\(B\|W\|L\)\([0-9][0-9]*\)\(_[0-9][0-9]*\)*\>"
@@ -63,11 +63,11 @@ syn match icError		"\m---?\M"
 syn match icError		"? ---\&?"
 syn keyword icStorageClass	assign
 syn keyword icStructure		imm immC
-syn keyword icBoolean		true false
+syn keyword icBoolean		LO HI
 syn match icConstant		"D\s*(\&D"
 syn match icConstant		"SH\s*(\&SH"
-syn keyword icConstant		DR_ DSR_ SHR_ SHSR_ CHANGE RISE SR SR_ SRR SRR_ CLOCK TIMER TIMER1 FORCE
-syn keyword icConstant		SHR SHSR ST SRT SRX JK DR DSR FALL LATCH DLATCH
+syn keyword icConstant		DR_ DS_ DSR_ SHR_ SHSR_ CHANGE RISE SR SR_ SRR SRR_ CLOCK TIMER TIMER1 FORCE
+syn keyword icConstant		SHR SHSR ST SRT SRX JK DR DS DSR FALL LATCH DLATCH EOI STDIN
 
 " iCa extentions
 syn keyword icRepeat		FOR IF ELSIF ELSE

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.72 $";
+"@(#)$Id: ict.c 1.73 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -244,10 +244,10 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     if (iC_micro) iC_microReset(0);	/* start timing */
 
     if ((gp = iC_TX0p) != 0) {		/* are EOI or TX0 timers programmed */
-	tim = gp->gt_list;		/* TX0.0 - TX0.7 */
-	assert(tim);
-	for (cnt = 2; cnt < 8; cnt++) {	/* TX0.1 is used to report receiving a new line on STDIN */
-	    if (tim[cnt] != NULL) {	/* any of the 6 timers 1 ms - 60 seconds programmed ? */
+	tim = gp->gt_list;		/* TX0.0 - TX0.7, TX0.0 is EOI - end of initialisation */
+	assert(tim);			/* TX0.1 is used to report receiving a new line on STDIN */
+	for (cnt = 3; cnt < 8; cnt++) {	/* TX0.2 is used as a fixed bit LO, ~TX0.2 as fixed bit HI */
+	    if (tim[cnt] != NULL) {	/* any of the 5 timers 10 ms - 60 seconds programmed ? */
 		if (cnt < TLIMIT) {
 		    fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_iccNM, cnt);
 		    iC_quit(SIGUSR1);
@@ -1320,27 +1320,30 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     } /* end of VCD SAV initialisation */
 
     /********************************************************************
-     *  0 Carry out one clock scan of all master gates with inverted inputs
-     *    before EOI so that inverted timer delays can be masked with EOI
-     *******************************************************************/
-    if (iC_c_list != iC_c_list->gt_next) {
-	if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
-	    iC_mark_stamp++;		/* leave out zero */
-	}
-	if (iC_vcdFP) {
-	    fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
-	    vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
-	}
-	iC_scan_clk(iC_c_list);		/* ignore f_list entries can only occurr here */
-	if (iC_vcdFP) {
-	    fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
-	}
-	if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }	/* execute f_list entries */
-    }
-    /********************************************************************
-     *  1 Set and fire "End Of Initialisation" if TX0.0 is in the program
+     *  if TX0.0 - EOI - "End of Initialisation" is used in the program
      *******************************************************************/
     if ((gp = tim[0]) != NULL) {
+	/********************************************************************
+	 *  0 Carry out one clock scan of all master gates with inverted inputs
+	 *    before EOI so that inverted timer delays can be masked with EOI
+	 *******************************************************************/
+	if (iC_c_list != iC_c_list->gt_next) {
+	    if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
+		iC_mark_stamp++;		/* leave out zero */
+	    }
+	    if (iC_vcdFP) {
+		fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
+		vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
+	    }
+	    iC_scan_clk(iC_c_list);		/* ignore f_list entries can only occurr here */
+	    if (iC_vcdFP) {
+		fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
+	    }
+	    if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }	/* execute f_list entries */
+	}
+	/********************************************************************
+	 *  1 Set and fire "End Of Initialisation"
+	 *******************************************************************/
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, "\n== end of initialisation\nEOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
@@ -1454,8 +1457,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	 *
 	 ****** INITIALISATION *****
 	 * -1          build ini string
-	 *  0          scan c_list for inverted ini inputs unless c_list empty
-	 *  1          put EOI on o_list
+	 *  0          scan c_list for inverted ini inputs unless c_list empty if TX0.0
+	 *  1          put EOI on o_list                                       if TX0.0
 	 *    Loop:
 	 *  2          ++mark_stamp to control oscillations
 	 ****** COMBINATORIAL PHASE *****

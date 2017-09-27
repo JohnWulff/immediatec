@@ -11,6 +11,8 @@
  *
  *******************************************************************/
 
+no strict;	// strict is default
+
 T100M =	TX0.4;	// alias for 100 ms builtin timing source
 T1S   =	TX0.5;	// alias for 1 second builtin timing source
 

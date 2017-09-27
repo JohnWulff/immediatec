@@ -146,6 +146,8 @@ my %keyWords = (
 	LATCH	=> 1,
 	DLATCH	=> 1,
 	D	=> 1,
+	DS	=> 1,
+	DS_	=> 1,
 	DR	=> 1,
 	DR_	=> 1,
 	DSR	=> 1,
@@ -171,9 +173,12 @@ my %keyWords = (
 	TIMER1	=> 1,
 	use	=> 1,		# iC pragmas
 	no	=> 1,
-	restore	=> 1,
 	alias	=> 1,
 	strict	=> 1,
+	EOI	=> 1,		# imm bit aliases
+	STDIN	=> 1,
+	LO	=> 1,		# imm bit constants
+	HI	=> 1,
 	FOR	=> 1,		# iCa keywords
 	IF	=> 1,
 	ELSE	=> 1,
@@ -189,8 +194,11 @@ my %keyWords = (
 ########################################################################
 
 my $named = $0; $named =~ s#.*[/\\]##;
+my $LC_CTYPE = $ENV{LC_CTYPE};
+$LC_CTYPE =~ s/[\w_]+\.//;
+$LC_CTYPE = 'utf-8' unless $LC_CTYPE;
 use vars qw($opt_ $opt_T $opt_q $opt_z $opt_S $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i);
-use vars qw($opt_D $opt_F $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
+use vars qw($opt_D $opt_F $opt_E $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
 $= = 1000;			# stop page overflow (default 60 lines)
 select($ofh);			# retore old file handle
@@ -199,8 +207,8 @@ format STDERR =
 Usage:
 @<<<<< [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -D [@]IXy.z]
  $named,							'~'
-       [ -F <font>][ -l <num>][ -w <num>][ -g <geometry>][ -A <cmd>]
-       [ -d <deb>][ <file> ...]
+       [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
+       [ -A <cmd>][ -d <deb>][ <file> ...]
        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
@@ -208,7 +216,9 @@ Usage:
     -D IXy.z optional Debug Stop output to control moving parts in a plant
     -D @IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
     '~'
-    -F font font or font size to use in Text window (default '20')
+    -F font font or font size to use in Text window  (default '20')
+    -E code encoding eg. ISO-8859-1 - from locale default is @<<<<<<<<<
+							     $LC_CTYPE
     -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default @<<)
 					$opt_l
@@ -302,7 +312,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.71 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.72 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -370,6 +380,7 @@ GetOptions (
     'i=i' => \$opt_i,
     'D=s' => \$opt_D,
     'F=s' => \$opt_F,
+    'E=s' => \$opt_E,
     'l=i' => \$opt_l,
     'w=i' => \$opt_w,
     'g=s' => \$opt_g,
@@ -430,7 +441,7 @@ if (defined $opt_D) {
 	warn "-D '$opt_D' is a bad IEC input string - ignored - no Debug Stop\n";
     }
 }
-my ($fontSize, $font_t, $boldfont_t, $font, $boldfont);
+my ($fontSize, $font_t, $boldfont_t, $font, $boldfont, $encoding);
 if (defined $opt_F) {
     if ($opt_F =~ /^\d+$/) {
 	$fontSize = $opt_F;
@@ -458,8 +469,14 @@ change_font(0, 0);		# set initial font size to $fontSize
 
 @opt_L = split(/,/, join(',', @opt_L));	# allow -L lm,rt instead of -L lm -L rt
 
+if ($Tk::VERSION >= 803) {
+    $encoding = $opt_E ? ":encoding($opt_E)" : ":encoding($LC_CTYPE)";
+} else {
+    $encoding = '';		# no Unicode or other encoding (default is ISO-8859-1)
+}
+
 no warnings;
-print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
+print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\nencoding     = '$encoding'\n" if $opt_T;
 use warnings;
 
 ########################################################################
@@ -2337,6 +2354,12 @@ sub rcvd_msg_from_server {
 				%symbolTable = ();
 				print "$named: Request Symbol Table '$D_channel:1'.\n" if $opt_T;
 				conn_send_now("$D_channel:1");	# request Symbol Table
+				if ($textDebV) {
+				    conn_send_now("$D_channel:116");	# 't' TextDebug is on - activate in app
+				}
+				if ($microSecV) {
+				    conn_send_now("$D_channel:109");	# 'm' MicroSec  is on - activate in app
+				}
 			    }
 			}
 		    }
@@ -3337,7 +3360,11 @@ sub do_scan {
 	    my $dialogBar = $dialog->Label(-textvariable => \$makeName,
 					   -relief       => 'ridge',
 					  )->pack(-side => 'bottom', -fill => 'x');
-	    my $answer = $dialog->Show();
+	    my $answer = $dialog->Show(
+		    -popover => $mainWindow,
+		    -overanchor => 'c',
+		    -popanchor => 'nw',
+		    -takefocus => 1);
 	    if ($answer eq 'Cancel') {
 		return 0;			# cancel operation
 	    } elsif ($answer eq 'Yes') {
@@ -3629,7 +3656,11 @@ sub check_save {
 	my $dialogBar = $dialog->Label(-textvariable => \$fileName,
 				       -relief       => 'ridge',
 				      )->pack(-side => 'bottom', -fill => 'x');
-	my $answer = $dialog->Show();
+	my $answer = $dialog->Show(
+		-popover => $mainWindow,
+		-overanchor => 'c',
+		-popanchor => 'nw',
+		-takefocus => 1);
 	if ($answer eq 'Yes') {
 	    return save_file(0, 1);	# Yes - save modified $fileName
 	} elsif ($answer eq 'No') {
@@ -3752,7 +3783,11 @@ use warnings;
 	    my $dialogBar = $dialog->Label(-textvariable => \$runName,
 					   -relief       => 'ridge',
 					  )->pack(-side => 'bottom', -fill => 'x');
-	    my $answer = $dialog->Show();
+	    my $answer = $dialog->Show(
+		    -popover => $mainWindow,
+		    -overanchor => 'c',
+		    -popanchor => 'nw',
+		    -takefocus => 1);
 	    if ($answer eq 'Yes') {
 		print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
 		stop_file();			# $runName = ''
@@ -3771,11 +3806,11 @@ use warnings;
 	}
 	if ($unconditional or check_save()) {
 	    stat($fName);
-	    if (-f _ and -r _ and open(FH, "$fName")) {
+	    if (-f _ and -r _ and open(FH, "<$encoding", $fName)) {	# :encoding($opt_E) calls stat()
 		if ($readOnly) {		# applies to previously opened file
 		    $text->configure(-state => 'normal');	# allow overwriting with new file
 		}
-		$readOnly = (-w _) ? '' : ' (RO)';	# set new read-only flag correctly
+		$readOnly = (-w $fName) ? '' : ' (RO)';	# set new read-only flag correctly; new stat() because of encoding()
 		print "$fName is read-only\n" if $readOnly and $opt_T;
 		$text->tagDelete('cTag', 'bd');	# ->delete really slow if not done
 		$text->delete("1.0", "end");	# clear the text area
@@ -3820,7 +3855,7 @@ use warnings;
 	    } else {
 		print "open_file: $unconditional ERROR: Could not open $fName\n" if $opt_T;
 		check_menu($fName, 'files', 1);		# delete fName in the menu
-		info_display(2000, 'red', "ERROR: Could not open $fName");
+		info_display(2000, 'red', "-f and -r and open(FH, \"<$encoding\", $fName) failed ($?)");
 	    }
 	}
 	adjust_live();
@@ -3852,10 +3887,14 @@ sub save_file {
 	    my $dialogBar = $dialog->Label(-textvariable => \$fileName,
 					   -relief       => 'ridge',
 					  )->pack(-side => 'bottom', -fill => 'x');
-	    my $answer = $dialog->Show();
+	    my $answer = $dialog->Show(
+		    -popover => $mainWindow,
+		    -overanchor => 'c',
+		    -popanchor => 'nw',
+		    -takefocus => 1);
 	    if ($answer ne 'Yes') {
 		info_display(2000, 'red', "'$fileName$readOnly' modified in background - not written");
-		return 0;	# No or Cancel - report error
+		return 0;	# No - report error
 	    }
 	    $unconditional = 1;	# definitely write to modified file
 	}
@@ -3873,7 +3912,7 @@ sub save_file {
 		info_display(2000, 'red', "ERROR: Could not rename backup to '$fileName.bak'");
 		$ret = 0;	# error return
 	    }
-	    elsif (open(FH, ">$fileName")) {
+	    elsif (open(FH, ">$encoding", $fileName)) {
 		$oldContents = $contents;
 		my $length = length $oldContents;
 		print FH $oldContents;
@@ -3882,7 +3921,7 @@ sub save_file {
 		    $text->configure(-state => 'normal');	# new writable file
 		    $readOnly = '';				# can modify text
 		}
-		## read last modified time from new stat now as it changed since last stat
+		## read last modified time from new stat now as it changed since last stat and :encoding()
 		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
 		tagComments();					# comments and/or keywords may have changed
@@ -4605,15 +4644,16 @@ iClive - an editor and live debugger for immediate-C apps
 =head1 SYNOPSIS
 
  iClive [ -umtTqh][ -s <host>][ -p <port>][ -i <inst>][ -D [~]IXy.z]
-        [ -F <font>][ -l <num>][ -w <num>][ -g <geometry>][ -A <cmd>]
-        [ -d <deb>][ <file> ...]
+        [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
+        [ -A <cmd>][ -d <deb>][ <file> ...]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
     -s host host name of server    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -D IXy.z optional Debug Stop output to control moving parts in a plant
     -D ~IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
-    -F font font or font size to use in Text window (default '20')
+    -F font font or font size to use in Text window  (default '20')
+    -E code encoding eg. ISO-8859-1                  (default 'UTF-8')
     -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default 35)
     -w num  width  of the Text window (default 85) -w0 is terminal width

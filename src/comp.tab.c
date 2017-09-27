@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "comp.y"
  static const char comp_y[] =
-"@(#)$Id: comp.tab.c 1.125 $";
+"@(#)$Id: comp.tab.c 1.126 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -112,6 +112,7 @@ int		gnerrs;			/* count of ierror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 static int	copyCfrag(char, char, char, FILE*);	/* copy C action */
 static void	ffexprCompile(char *, List_e *, int);	/* c_compile cBlock */
+static void	blockUnblockListing(void);
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
@@ -139,7 +140,7 @@ char *		iCstmtp;		/* manipulated in yylex() (reset in clrBuf()) */
 static void	clrBuf(void);
 
 /* Line 371 of yacc.c  */
-#line 143 "comp.tab.c"
+#line 144 "comp.tab.c"
 
 # ifndef YY_NULL
 #  if defined __cplusplus && 201103L <= __cplusplus
@@ -236,7 +237,7 @@ extern int iCdebug;
 typedef union ICSTYPE
 {
 /* Line 387 of yacc.c  */
-#line 68 "comp.y"
+#line 69 "comp.y"
 		/* stack type */
     Sym		sym;			/* symbol table pointer */
     Lis		list;			/* linked list elements */
@@ -248,7 +249,7 @@ typedef union ICSTYPE
 
 
 /* Line 387 of yacc.c  */
-#line 252 "comp.tab.c"
+#line 253 "comp.tab.c"
 } ICSTYPE;
 # define ICSTYPE_IS_TRIVIAL 1
 # define iCstype ICSTYPE /* obsolescent; will be withdrawn */
@@ -275,7 +276,7 @@ int iCparse ();
 
 /* Copy the second part of user declarations.  */
 /* Line 390 of yacc.c  */
-#line 78 "comp.y"
+#line 79 "comp.y"
 
 static void
 clrBuf(void)
@@ -375,7 +376,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 #endif
 
 /* Line 390 of yacc.c  */
-#line 379 "comp.tab.c"
+#line 380 "comp.tab.c"
 
 #ifdef short
 # undef short
@@ -765,31 +766,31 @@ static const yytype_int16 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   230,   230,   235,   240,   249,   250,   254,   255,   259,
-     260,   265,   272,   273,   274,   278,   282,   286,   290,   294,
-     298,   299,   300,   301,   302,   303,   307,   308,   309,   310,
-     311,   315,   316,   317,   321,   322,   326,   327,   331,   332,
-     333,   340,   341,   345,   346,   350,   351,   355,   356,   360,
-     361,   421,   434,   488,   509,   521,   534,   542,   560,   582,
-     602,   610,   611,   612,   615,   616,   619,   634,   635,   641,
-     723,   735,   786,   787,   791,   822,   829,   882,   907,   941,
-    1002,  1027,  1061,  1076,  1082,  1088,  1094,  1103,  1113,  1145,
-    1158,  1173,  1183,  1210,  1217,  1235,  1275,  1290,  1297,  1312,
-    1319,  1334,  1350,  1360,  1377,  1391,  1398,  1407,  1416,  1425,
-    1435,  1445,  1458,  1480,  1502,  1524,  1539,  1554,  1568,  1582,
-    1596,  1610,  1624,  1648,  1680,  1720,  1765,  1800,  1823,  1852,
-    1862,  1917,  1927,  1941,  1951,  1965,  1975,  1995,  2001,  2026,
-    2084,  2084,  2101,  2101,  2128,  2129,  2130,  2136,  2137,  2138,
-    2142,  2151,  2152,  2413,  2413,  2434,  2445,  2445,  2468,  2468,
-    2489,  2504,  2512,  2522,  2523,  2535,  2543,  2603,  2618,  2626,
-    2636,  2637,  2649,  2657,  2807,  2817,  2824,  2831,  2839,  2849,
-    2850,  2853,  2863,  2885,  2886,  2887,  2888,  2889,  2902,  2916,
-    2929,  2933,  2946,  2950,  2955,  2967,  2978,  2979,  2980,  2984,
-    2985,  3001,  3002,  3003,  3006,  3016,  3044,  3056,  3073,  3128,
-    3142,  3153,  3193,  3220,  3263,  3270,  3286,  3293,  3309,  3316,
-    3333,  3343,  3376,  3377,  3378,  3381,  3391,  3495,  3575,  3647,
-    3648,  3652,  3678,  3723,  3724,  3728,  3729,  3730,  3731,  3735,
-    3746,  3824,  3878,  3934,  3961,  4022
+       0,   231,   231,   236,   241,   250,   251,   255,   256,   260,
+     261,   266,   273,   274,   275,   279,   283,   287,   291,   295,
+     299,   300,   301,   302,   303,   304,   308,   309,   310,   311,
+     312,   316,   317,   318,   322,   323,   327,   328,   332,   333,
+     334,   341,   342,   346,   347,   351,   352,   356,   357,   361,
+     362,   439,   453,   508,   529,   541,   554,   562,   580,   602,
+     622,   630,   631,   632,   635,   636,   639,   654,   655,   661,
+     743,   755,   806,   807,   811,   842,   849,   902,   927,   961,
+    1022,  1047,  1081,  1096,  1102,  1108,  1114,  1123,  1133,  1165,
+    1178,  1193,  1203,  1230,  1237,  1255,  1295,  1310,  1317,  1332,
+    1339,  1354,  1370,  1380,  1397,  1411,  1418,  1427,  1436,  1445,
+    1455,  1465,  1478,  1500,  1522,  1544,  1559,  1574,  1588,  1602,
+    1616,  1630,  1644,  1668,  1700,  1740,  1785,  1820,  1843,  1872,
+    1882,  1937,  1947,  1961,  1971,  1985,  1995,  2015,  2021,  2046,
+    2104,  2104,  2121,  2121,  2148,  2149,  2150,  2156,  2157,  2158,
+    2162,  2171,  2172,  2465,  2465,  2486,  2497,  2497,  2520,  2520,
+    2541,  2556,  2564,  2574,  2575,  2587,  2595,  2655,  2670,  2678,
+    2688,  2689,  2701,  2709,  2859,  2869,  2876,  2883,  2891,  2901,
+    2902,  2905,  2915,  2937,  2938,  2939,  2940,  2941,  2954,  2968,
+    2981,  2985,  2998,  3002,  3007,  3019,  3030,  3031,  3032,  3036,
+    3037,  3053,  3054,  3055,  3058,  3068,  3096,  3108,  3125,  3180,
+    3194,  3205,  3245,  3272,  3315,  3322,  3338,  3345,  3361,  3368,
+    3385,  3395,  3428,  3429,  3430,  3433,  3443,  3547,  3627,  3699,
+    3700,  3704,  3730,  3775,  3776,  3780,  3781,  3782,  3783,  3787,
+    3798,  3876,  3930,  3986,  4013,  4074
 };
 #endif
 
@@ -2090,7 +2091,7 @@ yyreduce:
     {
         case 2:
 /* Line 1792 of yacc.c  */
-#line 230 "comp.y"
+#line 231 "comp.y"
     {
 		(yyval.sym).f = (yyval.sym).l = 0;
 		(yyval.sym).v = 0;
@@ -2100,7 +2101,7 @@ yyreduce:
 
   case 3:
 /* Line 1792 of yacc.c  */
-#line 235 "comp.y"
+#line 236 "comp.y"
     {
 		(yyval.sym)   = (yyvsp[(2) - (2)].sym);
 		(yyval.sym).f = (yyval.sym).l = 0;
@@ -2110,7 +2111,7 @@ yyreduce:
 
   case 4:
 /* Line 1792 of yacc.c  */
-#line 240 "comp.y"
+#line 241 "comp.y"
     {
 		(yyval.sym).f = (yyval.sym).l = 0;
 		(yyval.sym).v = 0;
@@ -2121,13 +2122,13 @@ yyreduce:
 
   case 5:
 /* Line 1792 of yacc.c  */
-#line 249 "comp.y"
+#line 250 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (2)].sym); }
     break;
 
   case 6:
 /* Line 1792 of yacc.c  */
-#line 250 "comp.y"
+#line 251 "comp.y"
     {			/* if or switch */
 		(yyval.sym).f = (yyvsp[(1) - (2)].list).f; (yyval.sym).l = (yyvsp[(1) - (2)].list).l;
 		(yyval.sym).v = op_asgn(0, &(yyvsp[(1) - (2)].list), GATE);		/* returns 0 for missing slave gate in ffexpr */
@@ -2136,25 +2137,25 @@ yyreduce:
 
   case 7:
 /* Line 1792 of yacc.c  */
-#line 254 "comp.y"
+#line 255 "comp.y"
     { (yyval.sym).v = 0;  }
     break;
 
   case 8:
 /* Line 1792 of yacc.c  */
-#line 255 "comp.y"
+#line 256 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 9:
 /* Line 1792 of yacc.c  */
-#line 259 "comp.y"
+#line 260 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (2)].sym); }
     break;
 
   case 10:
 /* Line 1792 of yacc.c  */
-#line 260 "comp.y"
+#line 261 "comp.y"
     {			/* if or switch */
 		(yyval.sym).f = (yyvsp[(1) - (2)].list).f; (yyval.sym).l = (yyvsp[(1) - (2)].list).l;
 		(yyval.sym).v = op_asgn(0, &(yyvsp[(1) - (2)].list), GATE);		/* returns 0 for missing slave gate in ffexpr */
@@ -2164,7 +2165,7 @@ yyreduce:
 
   case 11:
 /* Line 1792 of yacc.c  */
-#line 265 "comp.y"
+#line 266 "comp.y"
     {			/* function return statement */
 		(yyval.sym) = (yyvsp[(1) - (2)].sym);
 		collectStatement((yyvsp[(1) - (2)].sym).v);
@@ -2173,19 +2174,19 @@ yyreduce:
 
   case 12:
 /* Line 1792 of yacc.c  */
-#line 272 "comp.y"
+#line 273 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 13:
 /* Line 1792 of yacc.c  */
-#line 273 "comp.y"
+#line 274 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 14:
 /* Line 1792 of yacc.c  */
-#line 274 "comp.y"
+#line 275 "comp.y"
     {			/* imm declaration */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);
 		iFunSyText = 0;
@@ -2194,7 +2195,7 @@ yyreduce:
 
   case 15:
 /* Line 1792 of yacc.c  */
-#line 278 "comp.y"
+#line 279 "comp.y"
     {			/* " new style for immac which can generate ,; */
 		(yyval.sym)   = (yyvsp[(1) - (2)].sym);
 		iFunSyText = 0;
@@ -2203,7 +2204,7 @@ yyreduce:
 
   case 16:
 /* Line 1792 of yacc.c  */
-#line 282 "comp.y"
+#line 283 "comp.y"
     {			/* immC declaration */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);
 		iFunSyText = 0;
@@ -2212,7 +2213,7 @@ yyreduce:
 
   case 17:
 /* Line 1792 of yacc.c  */
-#line 286 "comp.y"
+#line 287 "comp.y"
     {			/* " new style for immac which can generate ,; */
 		(yyval.sym)   = (yyvsp[(1) - (2)].sym);
 		iFunSyText = 0;
@@ -2221,7 +2222,7 @@ yyreduce:
 
   case 18:
 /* Line 1792 of yacc.c  */
-#line 290 "comp.y"
+#line 291 "comp.y"
     {			/* declare and initialise an immC array */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);
 		iFunSyText = 0;
@@ -2230,7 +2231,7 @@ yyreduce:
 
   case 19:
 /* Line 1792 of yacc.c  */
-#line 294 "comp.y"
+#line 295 "comp.y"
     {			/* " new style for immac which can generate ,; */
 		(yyval.sym)   = (yyvsp[(1) - (2)].sym);
 		iFunSyText = 0;
@@ -2239,127 +2240,127 @@ yyreduce:
 
   case 20:
 /* Line 1792 of yacc.c  */
-#line 298 "comp.y"
+#line 299 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 21:
 /* Line 1792 of yacc.c  */
-#line 299 "comp.y"
+#line 300 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (2)].sym); }
     break;
 
   case 22:
 /* Line 1792 of yacc.c  */
-#line 300 "comp.y"
+#line 301 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 23:
 /* Line 1792 of yacc.c  */
-#line 301 "comp.y"
+#line 302 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (2)].sym); }
     break;
 
   case 24:
 /* Line 1792 of yacc.c  */
-#line 302 "comp.y"
+#line 303 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 25:
 /* Line 1792 of yacc.c  */
-#line 303 "comp.y"
+#line 304 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (2)].sym); }
     break;
 
   case 26:
 /* Line 1792 of yacc.c  */
-#line 307 "comp.y"
+#line 308 "comp.y"
     { (yyval.sym).v =  0; }
     break;
 
   case 27:
 /* Line 1792 of yacc.c  */
-#line 308 "comp.y"
+#line 309 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 28:
 /* Line 1792 of yacc.c  */
-#line 309 "comp.y"
+#line 310 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 29:
 /* Line 1792 of yacc.c  */
-#line 310 "comp.y"
+#line 311 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 30:
 /* Line 1792 of yacc.c  */
-#line 311 "comp.y"
+#line 312 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 31:
 /* Line 1792 of yacc.c  */
-#line 315 "comp.y"
+#line 316 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 32:
 /* Line 1792 of yacc.c  */
-#line 316 "comp.y"
+#line 317 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 33:
 /* Line 1792 of yacc.c  */
-#line 317 "comp.y"
+#line 318 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 34:
 /* Line 1792 of yacc.c  */
-#line 321 "comp.y"
+#line 322 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 35:
 /* Line 1792 of yacc.c  */
-#line 322 "comp.y"
+#line 323 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 36:
 /* Line 1792 of yacc.c  */
-#line 326 "comp.y"
+#line 327 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 37:
 /* Line 1792 of yacc.c  */
-#line 327 "comp.y"
+#line 328 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 38:
 /* Line 1792 of yacc.c  */
-#line 331 "comp.y"
+#line 332 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 39:
 /* Line 1792 of yacc.c  */
-#line 332 "comp.y"
+#line 333 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 40:
 /* Line 1792 of yacc.c  */
-#line 333 "comp.y"
+#line 334 "comp.y"
     {			/* numeric constant */
 		(yyval.sym).f = (yyvsp[(1) - (1)].vai).f; (yyval.sym).l = (yyvsp[(1) - (1)].vai).l;
 		(yyval.sym).v = 0;				/* no node, do not need value */
@@ -2368,103 +2369,105 @@ yyreduce:
 
   case 41:
 /* Line 1792 of yacc.c  */
-#line 340 "comp.y"
+#line 341 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 42:
 /* Line 1792 of yacc.c  */
-#line 341 "comp.y"
+#line 342 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 43:
 /* Line 1792 of yacc.c  */
-#line 345 "comp.y"
+#line 346 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 44:
 /* Line 1792 of yacc.c  */
-#line 346 "comp.y"
+#line 347 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 45:
 /* Line 1792 of yacc.c  */
-#line 350 "comp.y"
+#line 351 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 46:
 /* Line 1792 of yacc.c  */
-#line 351 "comp.y"
+#line 352 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 47:
 /* Line 1792 of yacc.c  */
-#line 355 "comp.y"
+#line 356 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 48:
 /* Line 1792 of yacc.c  */
-#line 356 "comp.y"
+#line 357 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 49:
 /* Line 1792 of yacc.c  */
-#line 360 "comp.y"
+#line 361 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 50:
 /* Line 1792 of yacc.c  */
-#line 361 "comp.y"
+#line 362 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 51:
 /* Line 1792 of yacc.c  */
-#line 421 "comp.y"
+#line 439 "comp.y"
     {
 		unsigned int usetype, use;
 		(yyval.sym) = (yyvsp[(1) - (2)].sym);
 		use = (yyvsp[(1) - (2)].sym).v->ftype;			/* 0=no or 1=use */
 		assert(use <= 1);
-		usetype = (yyvsp[(2) - (2)].sym).v->ftype;			/* 0=alias 1=strict */
+		usetype = (yyvsp[(2) - (2)].sym).v->ftype;			/* 0=alias 1=strict 2=list */
 		assert(usetype < MAXUSETYPE);
 		if (use) {
-		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag */
+		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag or iC_Zflag */
 		} else {
-		    iC_uses &= ~(1<<usetype);		/* reset */
+		    iC_uses &= ~(1<<usetype);		/* reset iC_Aflag or iC_Sflag or iC_Zflag */
 		}
+		blockUnblockListing();			/* block or unblock listing depending on iC_Zflag */
 	    }
     break;
 
   case 52:
 /* Line 1792 of yacc.c  */
-#line 434 "comp.y"
+#line 453 "comp.y"
     {
 		unsigned int usetype, use;
 		(yyval.sym) = (yyvsp[(1) - (3)].sym);
 		use = (yyvsp[(1) - (3)].sym).v->ftype;			/* 0=no or 1=use */
 		assert(use <= 1);
-		usetype = (yyvsp[(3) - (3)].sym).v->ftype;			/* 0=alias 1=strict */
+		usetype = (yyvsp[(3) - (3)].sym).v->ftype;			/* 0=alias 1=strict 2=list */
 		assert(usetype < MAXUSETYPE);
 		if (use) {
-		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag */
+		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag or unblock list output */
 		} else {
-		    iC_uses &= ~(1<<usetype);		/* reset */
+		    iC_uses &= ~(1<<usetype);		/* reset iC_Aflag or iC_Sflag or block list output */
 		}
+		blockUnblockListing();
 	    }
     break;
 
   case 53:
 /* Line 1792 of yacc.c  */
-#line 488 "comp.y"
+#line 508 "comp.y"
     {
 		if ((yyvsp[(2) - (2)].sym).v->ftype == UDFA) {		/* if not previously declared as imm */
 		    (yyvsp[(2) - (2)].sym).v->type = CWORD;			/* no longer an imm variable */
@@ -2490,7 +2493,7 @@ yyreduce:
 
   case 54:
 /* Line 1792 of yacc.c  */
-#line 509 "comp.y"
+#line 529 "comp.y"
     {
 		(yyvsp[(2) - (5)].sym).v->type = CWORD;			/* no longer an imm variable */
 		(yyvsp[(2) - (5)].sym).v->u_val = CNAME;			/* yacc type */
@@ -2507,7 +2510,7 @@ yyreduce:
 
   case 55:
 /* Line 1792 of yacc.c  */
-#line 521 "comp.y"
+#line 541 "comp.y"
     {
 		(yyvsp[(2) - (6)].sym).v->type = CWORD;			/* no longer an imm variable */
 		(yyvsp[(2) - (6)].sym).v->u_val = CNAME;			/* yacc type */
@@ -2525,7 +2528,7 @@ yyreduce:
 
   case 56:
 /* Line 1792 of yacc.c  */
-#line 534 "comp.y"
+#line 554 "comp.y"
     {
 		if (iC_Sflag) {
 		    ierror("strict: erroneous re-declaration of a C function - no ( parameters ):", (yyvsp[(2) - (2)].sym).v->name);
@@ -2538,7 +2541,7 @@ yyreduce:
 
   case 57:
 /* Line 1792 of yacc.c  */
-#line 542 "comp.y"
+#line 562 "comp.y"
     {
 		if ((yyvsp[(2) - (5)].sym).v->v_cnt != (yyvsp[(4) - (5)].vai).v) {
 		    char	tempBuf[TSIZE];
@@ -2561,7 +2564,7 @@ yyreduce:
 
   case 58:
 /* Line 1792 of yacc.c  */
-#line 560 "comp.y"
+#line 580 "comp.y"
     {
 		if ((yyvsp[(2) - (6)].sym).v->v_cnt != (yyvsp[(4) - (6)].vai).v) {
 		    char	tempBuf[TSIZE];
@@ -2585,7 +2588,7 @@ yyreduce:
 
   case 59:
 /* Line 1792 of yacc.c  */
-#line 582 "comp.y"
+#line 602 "comp.y"
     {
 		if ((yyvsp[(2) - (2)].sym).v->ftype != ARITH) {
 		    if ((yyvsp[(2) - (2)].sym).v->ftype == GATE) {
@@ -2610,7 +2613,7 @@ yyreduce:
 
   case 60:
 /* Line 1792 of yacc.c  */
-#line 602 "comp.y"
+#line 622 "comp.y"
     {
 		(yyval.typ).v = stype;	/* first TYPE */
 #if YYDEBUG == 2
@@ -2621,37 +2624,37 @@ yyreduce:
 
   case 61:
 /* Line 1792 of yacc.c  */
-#line 610 "comp.y"
+#line 630 "comp.y"
     { (yyval.vai).v =  0; }
     break;
 
   case 62:
 /* Line 1792 of yacc.c  */
-#line 611 "comp.y"
+#line 631 "comp.y"
     { (yyval.vai).v =  0; }
     break;
 
   case 63:
 /* Line 1792 of yacc.c  */
-#line 612 "comp.y"
+#line 632 "comp.y"
     { (yyval.vai)   = (yyvsp[(1) - (1)].vai); }
     break;
 
   case 64:
 /* Line 1792 of yacc.c  */
-#line 615 "comp.y"
+#line 635 "comp.y"
     { (yyval.vai).v = 1; }
     break;
 
   case 65:
 /* Line 1792 of yacc.c  */
-#line 616 "comp.y"
+#line 636 "comp.y"
     { (yyval.vai).v = (yyvsp[(1) - (3)].vai).v + 1; }
     break;
 
   case 66:
 /* Line 1792 of yacc.c  */
-#line 619 "comp.y"
+#line 639 "comp.y"
     {
 		if ((yyvsp[(1) - (2)].sym).v->ftype != ARITH) {
 		    if ((yyvsp[(1) - (2)].sym).v->ftype == GATE) {
@@ -2669,13 +2672,13 @@ yyreduce:
 
   case 67:
 /* Line 1792 of yacc.c  */
-#line 634 "comp.y"
+#line 654 "comp.y"
     { (yyval.sym).v = 0; }
     break;
 
   case 68:
 /* Line 1792 of yacc.c  */
-#line 635 "comp.y"
+#line 655 "comp.y"
     {
 		if ((yyvsp[(1) - (1)].sym).v->ftype == UDFA) {	/* if not previously declared as imm */
 		    uninstall((yyvsp[(1) - (1)].sym).v);		/* delete dummy Symbol */
@@ -2686,13 +2689,13 @@ yyreduce:
 
   case 69:
 /* Line 1792 of yacc.c  */
-#line 641 "comp.y"
+#line 661 "comp.y"
     { (yyval.sym).v = 0; }
     break;
 
   case 70:
 /* Line 1792 of yacc.c  */
-#line 723 "comp.y"
+#line 743 "comp.y"
     {
 		(yyval.sym).v = (yyvsp[(2) - (2)].sym).v;
 		(yyval.sym).v->ftype = (yyvsp[(1) - (2)].typ).v.ftype;
@@ -2709,7 +2712,7 @@ yyreduce:
 
   case 71:
 /* Line 1792 of yacc.c  */
-#line 735 "comp.y"
+#line 755 "comp.y"
     {		/* LVAR AVAR LVARC AVARC LOUT AOUT CVAR TVAR Constant */
 		int		typ1;
 		int		typ2;
@@ -2763,19 +2766,19 @@ yyreduce:
 
   case 72:
 /* Line 1792 of yacc.c  */
-#line 786 "comp.y"
+#line 806 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 73:
 /* Line 1792 of yacc.c  */
-#line 787 "comp.y"
+#line 807 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 74:
 /* Line 1792 of yacc.c  */
-#line 791 "comp.y"
+#line 811 "comp.y"
     {
 		int		typ;
 		int		ftyp;
@@ -2811,7 +2814,7 @@ yyreduce:
 
   case 75:
 /* Line 1792 of yacc.c  */
-#line 822 "comp.y"
+#line 842 "comp.y"
     {
 		(yyval.typ).v = stype;			/* first TYPE */
 		iFunSyText = 0;			/* no function symbols for extern */
@@ -2823,7 +2826,7 @@ yyreduce:
 
   case 76:
 /* Line 1792 of yacc.c  */
-#line 829 "comp.y"
+#line 849 "comp.y"
     {
 		(yyval.typ).v = stype;			/* first TYPE */
 		iFunSyText = 0;			/* no function symbols for extern */
@@ -2835,7 +2838,7 @@ yyreduce:
 
   case 77:
 /* Line 1792 of yacc.c  */
-#line 882 "comp.y"
+#line 902 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (2)].typ).f; (yyval.sym).l = (yyvsp[(2) - (2)].sym).l;
@@ -2865,7 +2868,7 @@ yyreduce:
 
   case 78:
 /* Line 1792 of yacc.c  */
-#line 907 "comp.y"
+#line 927 "comp.y"
     {		/* LVAR AVAR LOUT AOUT CVAR TVAR Constant */
 		int		typ1;		/* not LVARC AVARC */
 		int		typ2;
@@ -2904,7 +2907,7 @@ yyreduce:
 
   case 79:
 /* Line 1792 of yacc.c  */
-#line 941 "comp.y"
+#line 961 "comp.y"
     {	/* ARNC LOGC */
 		Symbol *	sp;		/* not LVAR AVAR LOUT AOUT CVAR TVAR Constant */
 		(yyval.sym).f = (yyvsp[(1) - (2)].typ).f; (yyval.sym).l = (yyvsp[(2) - (2)].sym).l;
@@ -2916,7 +2919,7 @@ yyreduce:
 
   case 80:
 /* Line 1792 of yacc.c  */
-#line 1002 "comp.y"
+#line 1022 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (2)].typ).f; (yyval.sym).l = (yyvsp[(2) - (2)].sym).l;
@@ -2946,7 +2949,7 @@ yyreduce:
 
   case 81:
 /* Line 1792 of yacc.c  */
-#line 1027 "comp.y"
+#line 1047 "comp.y"
     {		/* LVARC AVARC LOUT AOUT */
 		int		typ2;		/* not LVAR AVAR CVAR TVAR Constant */
 		int		typ1;
@@ -2985,7 +2988,7 @@ yyreduce:
 
   case 82:
 /* Line 1792 of yacc.c  */
-#line 1061 "comp.y"
+#line 1081 "comp.y"
     {		/* LVAR AVAR CVAR TVAR Constant */
 		Symbol *	sp;		/* not LVARC AVARC LOUT AOUT */
 		int		typ2;
@@ -3003,7 +3006,7 @@ yyreduce:
 
   case 83:
 /* Line 1792 of yacc.c  */
-#line 1076 "comp.y"
+#line 1096 "comp.y"
     {		/* imm declaration */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);			/* not strictly necessary - stype holds data */
 		if (iFunSymExt) {
@@ -3014,7 +3017,7 @@ yyreduce:
 
   case 84:
 /* Line 1792 of yacc.c  */
-#line 1082 "comp.y"
+#line 1102 "comp.y"
     {		/* declaration data assignment */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);			/* not strictly necessary - stype holds data */
 		if (iFunSymExt) {
@@ -3025,7 +3028,7 @@ yyreduce:
 
   case 85:
 /* Line 1792 of yacc.c  */
-#line 1088 "comp.y"
+#line 1108 "comp.y"
     {		/* declaration clock assignment */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);			/* not strictly necessary - stype holds data */
 		if (iFunSymExt) {
@@ -3036,7 +3039,7 @@ yyreduce:
 
   case 86:
 /* Line 1792 of yacc.c  */
-#line 1094 "comp.y"
+#line 1114 "comp.y"
     {		/* declaration timer assignment */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);			/* not strictly necessary - stype holds data */
 		if (iFunSymExt) {
@@ -3047,7 +3050,7 @@ yyreduce:
 
   case 87:
 /* Line 1792 of yacc.c  */
-#line 1103 "comp.y"
+#line 1123 "comp.y"
     {		/* immC declaration */
 		(yyval.sym)   = (yyvsp[(1) - (1)].sym);			/* not strictly necessary - stype holds data */
 		listGenOut((yyvsp[(1) - (1)].sym).v, 1, 0);		/* list immC node without initialisation */
@@ -3062,7 +3065,7 @@ yyreduce:
 
   case 88:
 /* Line 1792 of yacc.c  */
-#line 1113 "comp.y"
+#line 1133 "comp.y"
     {		/* make immC variable ALIAS of return from const expression */
 		List_e *	lp;
 		Symbol *	sp;
@@ -3099,7 +3102,7 @@ yyreduce:
 
   case 89:
 /* Line 1792 of yacc.c  */
-#line 1145 "comp.y"
+#line 1165 "comp.y"
     {
 		(yyval.sym)   = (yyvsp[(1) - (3)].sym);			/* not strictly necessary - stype holds data */
 		listGenOut((yyvsp[(1) - (3)].sym).v, -1, &((yyvsp[(3) - (3)].vap).v));	/* list immC node with initialiser value */
@@ -3114,7 +3117,7 @@ yyreduce:
 
   case 90:
 /* Line 1792 of yacc.c  */
-#line 1158 "comp.y"
+#line 1178 "comp.y"
     {
 		(yyval.typ).f = (yyval.typ).l = (yyvsp[(2) - (2)].sym).l;		/* do not include in expression string */
 		assert((yyvsp[(1) - (2)].sym).v->ftype == 0);	/* imm in init.c */
@@ -3134,7 +3137,7 @@ yyreduce:
 
   case 91:
 /* Line 1792 of yacc.c  */
-#line 1173 "comp.y"
+#line 1193 "comp.y"
     {
 		(yyval.typ).f = (yyvsp[(1) - (2)].sym).f; (yyval.typ).l = (yyvsp[(1) - (2)].sym).l;
 		(yyval.typ).v = stype;			/* first TYPE */
@@ -3146,7 +3149,7 @@ yyreduce:
 
   case 92:
 /* Line 1792 of yacc.c  */
-#line 1183 "comp.y"
+#line 1203 "comp.y"
     {
 		int		typ;
 		int		ftyp;
@@ -3178,7 +3181,7 @@ yyreduce:
 
   case 93:
 /* Line 1792 of yacc.c  */
-#line 1210 "comp.y"
+#line 1230 "comp.y"
     {
 		(yyval.typ).f = (yyvsp[(1) - (2)].sym).f; (yyval.typ).l = (yyvsp[(1) - (2)].sym).l;
 		(yyval.typ).v = stype;			/* first TYPE */
@@ -3190,7 +3193,7 @@ yyreduce:
 
   case 94:
 /* Line 1792 of yacc.c  */
-#line 1217 "comp.y"
+#line 1237 "comp.y"
     {
 		(yyval.typ).f = (yyvsp[(1) - (2)].sym).f; (yyval.typ).l = (yyvsp[(1) - (2)].sym).l;
 		(yyval.typ).v = stype;			/* first TYPE */
@@ -3202,7 +3205,7 @@ yyreduce:
 
   case 95:
 /* Line 1792 of yacc.c  */
-#line 1235 "comp.y"
+#line 1255 "comp.y"
     {		/* dasgn is NOT an aexpr */
 		char *	name;
 		int	ioTyp;
@@ -3239,7 +3242,7 @@ yyreduce:
 
   case 96:
 /* Line 1792 of yacc.c  */
-#line 1275 "comp.y"
+#line 1295 "comp.y"
     {		/* asgn is an aexpr */
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (3)].sym).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
@@ -3259,7 +3262,7 @@ yyreduce:
 
   case 97:
 /* Line 1792 of yacc.c  */
-#line 1290 "comp.y"
+#line 1310 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (3)].sym).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
 		if (((yyval.sym).v = assignExpression(&(yyvsp[(1) - (3)].sym), &(yyvsp[(3) - (3)].list), 0)) == 0) YYERROR;
@@ -3271,7 +3274,7 @@ yyreduce:
 
   case 98:
 /* Line 1792 of yacc.c  */
-#line 1297 "comp.y"
+#line 1317 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (3)].sym).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
@@ -3291,7 +3294,7 @@ yyreduce:
 
   case 99:
 /* Line 1792 of yacc.c  */
-#line 1312 "comp.y"
+#line 1332 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (3)].sym).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
 		if (((yyval.sym).v = assignExpression(&(yyvsp[(1) - (3)].sym), &(yyvsp[(3) - (3)].list), OUTX)) == 0) YYERROR;
@@ -3303,7 +3306,7 @@ yyreduce:
 
   case 100:
 /* Line 1792 of yacc.c  */
-#line 1319 "comp.y"
+#line 1339 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (3)].sym).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
@@ -3323,7 +3326,7 @@ yyreduce:
 
   case 101:
 /* Line 1792 of yacc.c  */
-#line 1334 "comp.y"
+#line 1354 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (3)].vai).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
 		ierror("assignment to a number is illegal:", (yyval.sym).f);
@@ -3336,7 +3339,7 @@ yyreduce:
 
   case 102:
 /* Line 1792 of yacc.c  */
-#line 1350 "comp.y"
+#line 1370 "comp.y"
     {
 		(yyval.list) = (yyvsp[(1) - (1)].list);
 		if ((yyval.list).v != 0) {
@@ -3351,7 +3354,7 @@ yyreduce:
 
   case 103:
 /* Line 1792 of yacc.c  */
-#line 1360 "comp.y"
+#line 1380 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = sy_push((yyvsp[(1) - (1)].sym).v);
@@ -3365,7 +3368,7 @@ yyreduce:
 
   case 104:
 /* Line 1792 of yacc.c  */
-#line 1377 "comp.y"
+#line 1397 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v);
@@ -3384,7 +3387,7 @@ yyreduce:
 
   case 105:
 /* Line 1792 of yacc.c  */
-#line 1391 "comp.y"
+#line 1411 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].vai).f; (yyval.list).l = (yyvsp[(1) - (1)].vai).l;	/* no node, value not used */
 		(yyval.list).v = 0;			/* mark as illegal in bit expressions */
@@ -3396,7 +3399,7 @@ yyreduce:
 
   case 106:
 /* Line 1792 of yacc.c  */
-#line 1398 "comp.y"
+#line 1418 "comp.y"
     {		/* LVAR LVARC AVAR AVARC */
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v);
@@ -3410,7 +3413,7 @@ yyreduce:
 
   case 107:
 /* Line 1792 of yacc.c  */
-#line 1407 "comp.y"
+#line 1427 "comp.y"
     {		/* immC array member variable */
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v);
@@ -3424,7 +3427,7 @@ yyreduce:
 
   case 108:
 /* Line 1792 of yacc.c  */
-#line 1416 "comp.y"
+#line 1436 "comp.y"
     {		/* LOUT AOUT */
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = sy_push((yyvsp[(1) - (1)].sym).v);
@@ -3438,7 +3441,7 @@ yyreduce:
 
   case 109:
 /* Line 1792 of yacc.c  */
-#line 1425 "comp.y"
+#line 1445 "comp.y"
     {
 		(yyval.list) = (yyvsp[(1) - (1)].list);
 		if ((yyval.list).v) {
@@ -3453,7 +3456,7 @@ yyreduce:
 
   case 110:
 /* Line 1792 of yacc.c  */
-#line 1435 "comp.y"
+#line 1455 "comp.y"
     {
 		(yyval.list) = (yyvsp[(1) - (1)].list);
 		if ((yyval.list).v) {
@@ -3468,7 +3471,7 @@ yyreduce:
 
   case 111:
 /* Line 1792 of yacc.c  */
-#line 1445 "comp.y"
+#line 1465 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (3)].vai).f; (yyval.list).l = (yyvsp[(3) - (3)].vai).l;
 		if (((yyval.list).v = (yyvsp[(2) - (3)].list).v) != 0) {
@@ -3483,7 +3486,7 @@ yyreduce:
 
   case 112:
 /* Line 1792 of yacc.c  */
-#line 1458 "comp.y"
+#line 1478 "comp.y"
     {			/* binary | */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3510,7 +3513,7 @@ yyreduce:
 
   case 113:
 /* Line 1792 of yacc.c  */
-#line 1480 "comp.y"
+#line 1500 "comp.y"
     {			/* binary ^ */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3537,7 +3540,7 @@ yyreduce:
 
   case 114:
 /* Line 1792 of yacc.c  */
-#line 1502 "comp.y"
+#line 1522 "comp.y"
     {			/* binary & */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3564,7 +3567,7 @@ yyreduce:
 
   case 115:
 /* Line 1792 of yacc.c  */
-#line 1524 "comp.y"
+#line 1544 "comp.y"
     {				/* < <= > >= */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3584,7 +3587,7 @@ yyreduce:
 
   case 116:
 /* Line 1792 of yacc.c  */
-#line 1539 "comp.y"
+#line 1559 "comp.y"
     {				/* == != */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3604,7 +3607,7 @@ yyreduce:
 
   case 117:
 /* Line 1792 of yacc.c  */
-#line 1554 "comp.y"
+#line 1574 "comp.y"
     {			/* binary * */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3623,7 +3626,7 @@ yyreduce:
 
   case 118:
 /* Line 1792 of yacc.c  */
-#line 1568 "comp.y"
+#line 1588 "comp.y"
     {			/* / % */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3642,7 +3645,7 @@ yyreduce:
 
   case 119:
 /* Line 1792 of yacc.c  */
-#line 1582 "comp.y"
+#line 1602 "comp.y"
     {			/* binary + */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3661,7 +3664,7 @@ yyreduce:
 
   case 120:
 /* Line 1792 of yacc.c  */
-#line 1596 "comp.y"
+#line 1616 "comp.y"
     {			/* binary - */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3680,7 +3683,7 @@ yyreduce:
 
   case 121:
 /* Line 1792 of yacc.c  */
-#line 1610 "comp.y"
+#line 1630 "comp.y"
     {		/* << */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3699,7 +3702,7 @@ yyreduce:
 
   case 122:
 /* Line 1792 of yacc.c  */
-#line 1624 "comp.y"
+#line 1644 "comp.y"
     {		/* >> */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3718,7 +3721,7 @@ yyreduce:
 
   case 123:
 /* Line 1792 of yacc.c  */
-#line 1648 "comp.y"
+#line 1668 "comp.y"
     {			/* binary && */
 		Symbol *	sp;
 		int		typ;
@@ -3755,7 +3758,7 @@ yyreduce:
 
   case 124:
 /* Line 1792 of yacc.c  */
-#line 1680 "comp.y"
+#line 1700 "comp.y"
     {			/* binary || */
 		Symbol *	sp;
 		int		typ;
@@ -3792,7 +3795,7 @@ yyreduce:
 
   case 125:
 /* Line 1792 of yacc.c  */
-#line 1720 "comp.y"
+#line 1740 "comp.y"
     {		/* ? : */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3813,7 +3816,7 @@ yyreduce:
 
   case 126:
 /* Line 1792 of yacc.c  */
-#line 1765 "comp.y"
+#line 1785 "comp.y"
     {			/* ? : */
 		List_e *	lpL;
 		List_e *	lpR;
@@ -3836,7 +3839,7 @@ yyreduce:
 
   case 127:
 /* Line 1792 of yacc.c  */
-#line 1800 "comp.y"
+#line 1820 "comp.y"
     {			/* unary ~ */
 		Symbol *	sp;
 		(yyval.list).f = (yyvsp[(1) - (2)].vai).f; (yyval.list).l = (yyvsp[(2) - (2)].list).l;
@@ -3864,7 +3867,7 @@ yyreduce:
 
   case 128:
 /* Line 1792 of yacc.c  */
-#line 1823 "comp.y"
+#line 1843 "comp.y"
     {			/* unary ! */
 		Symbol *	sp;
 		(yyval.list).f = (yyvsp[(1) - (2)].vai).f; (yyval.list).l = (yyvsp[(2) - (2)].list).l;
@@ -3895,7 +3898,7 @@ yyreduce:
 
   case 129:
 /* Line 1792 of yacc.c  */
-#line 1852 "comp.y"
+#line 1872 "comp.y"
     {			/* unary + */
 		(yyval.list).f = (yyvsp[(1) - (2)].vai).f; (yyval.list).l = (yyvsp[(2) - (2)].list).l;
 		if (((yyval.list).v = op_push(0, ARN, op_force((yyvsp[(2) - (2)].list).v, ARITH))) != 0) {
@@ -3910,7 +3913,7 @@ yyreduce:
 
   case 130:
 /* Line 1792 of yacc.c  */
-#line 1862 "comp.y"
+#line 1882 "comp.y"
     {			/* unary - */
 		(yyval.list).f = (yyvsp[(1) - (2)].vai).f; (yyval.list).l = (yyvsp[(2) - (2)].list).l;
 		if (((yyval.list).v = op_push(0, ARN, op_force((yyvsp[(2) - (2)].list).v, ARITH))) != 0) {
@@ -3925,7 +3928,7 @@ yyreduce:
 
   case 131:
 /* Line 1792 of yacc.c  */
-#line 1917 "comp.y"
+#line 1937 "comp.y"
     {			/* comma expression */
 		(yyval.list) = (yyvsp[(1) - (1)].list);
 		if ((yyval.list).v != 0) {
@@ -3940,7 +3943,7 @@ yyreduce:
 
   case 132:
 /* Line 1792 of yacc.c  */
-#line 1927 "comp.y"
+#line 1947 "comp.y"
     {		/* asgn casgn tasgn and vFunCall before , */
 		(yyval.list) = (yyvsp[(3) - (3)].list);				/* only the last expression is returned */
 		if ((yyval.list).v != 0) {
@@ -3956,7 +3959,7 @@ yyreduce:
 
   case 133:
 /* Line 1792 of yacc.c  */
-#line 1941 "comp.y"
+#line 1961 "comp.y"
     {			/* cexpr comma expression */
 		(yyval.list) = (yyvsp[(1) - (1)].list);
 		if ((yyval.list).v != 0) {
@@ -3971,7 +3974,7 @@ yyreduce:
 
   case 134:
 /* Line 1792 of yacc.c  */
-#line 1951 "comp.y"
+#line 1971 "comp.y"
     {		/* asgn casgn tasgn and vFunCall before , */
 		(yyval.list) = (yyvsp[(3) - (3)].list);				/* only the last expression is returned */
 		if ((yyval.list).v != 0) {
@@ -3987,7 +3990,7 @@ yyreduce:
 
   case 135:
 /* Line 1792 of yacc.c  */
-#line 1965 "comp.y"
+#line 1985 "comp.y"
     {			/* texpr comma expression */
 		(yyval.list) = (yyvsp[(1) - (1)].list);
 		if ((yyval.list).v != 0) {
@@ -4002,7 +4005,7 @@ yyreduce:
 
   case 136:
 /* Line 1792 of yacc.c  */
-#line 1975 "comp.y"
+#line 1995 "comp.y"
     {		/* asgn casgn tasgn and vFunCall before , */
 		(yyval.list) = (yyvsp[(3) - (3)].list);				/* only the last expression is returned */
 		if ((yyval.list).v != 0) {
@@ -4018,7 +4021,7 @@ yyreduce:
 
   case 137:
 /* Line 1792 of yacc.c  */
-#line 1995 "comp.y"
+#line 2015 "comp.y"
     {
 		(yyval.vai) = (yyvsp[(1) - (1)].vai);
 #if YYDEBUG
@@ -4029,7 +4032,7 @@ yyreduce:
 
   case 138:
 /* Line 1792 of yacc.c  */
-#line 2001 "comp.y"
+#line 2021 "comp.y"
     {				/* sizeof array */
 		(yyval.vai).f = (yyvsp[(1) - (2)].sym).f; (yyval.vai).l = (yyvsp[(2) - (2)].sym).l;
 		List_e *	lp;
@@ -4056,7 +4059,7 @@ yyreduce:
 
   case 139:
 /* Line 1792 of yacc.c  */
-#line 2026 "comp.y"
+#line 2046 "comp.y"
     {
 		(yyval.vap).f = (yyvsp[(1) - (1)].list).f; (yyval.vap).l = (yyvsp[(1) - (1)].list).l;
 		(yyval.vap).v = evalConstExpr(&(yyvsp[(1) - (1)].list));		/* returns a Valp */
@@ -4068,13 +4071,13 @@ yyreduce:
 
   case 140:
 /* Line 1792 of yacc.c  */
-#line 2084 "comp.y"
+#line 2104 "comp.y"
     { ccfrag = '%'; ccFP = T1FP; }
     break;
 
   case 141:
 /* Line 1792 of yacc.c  */
-#line 2085 "comp.y"
+#line 2105 "comp.y"
     { (yyval.sym).v = 0;
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) { fprintf(iC_outFP, ">>>lBlock end\n"); fflush(iC_outFP); }
@@ -4085,13 +4088,13 @@ yyreduce:
 
   case 142:
 /* Line 1792 of yacc.c  */
-#line 2101 "comp.y"
+#line 2121 "comp.y"
     { ccfrag = '{'; ccFP = T4FP; }
     break;
 
   case 143:
 /* Line 1792 of yacc.c  */
-#line 2102 "comp.y"
+#line 2122 "comp.y"
     {
 		(yyval.vai) = (yyvsp[(3) - (4)].vai);				/* function # is yacc token */
 		cBlockFlag = 1;				/* hold up get() till another token found */
@@ -4103,37 +4106,37 @@ yyreduce:
 
   case 144:
 /* Line 1792 of yacc.c  */
-#line 2128 "comp.y"
+#line 2148 "comp.y"
     { (yyval.list).v = sy_push(iclock); }
     break;
 
   case 145:
 /* Line 1792 of yacc.c  */
-#line 2129 "comp.y"
+#line 2149 "comp.y"
     { (yyval.list).v = sy_push(iclock); }
     break;
 
   case 146:
 /* Line 1792 of yacc.c  */
-#line 2130 "comp.y"
+#line 2150 "comp.y"
     { (yyval.list) = (yyvsp[(2) - (2)].list); }
     break;
 
   case 147:
 /* Line 1792 of yacc.c  */
-#line 2136 "comp.y"
+#line 2156 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 148:
 /* Line 1792 of yacc.c  */
-#line 2137 "comp.y"
+#line 2157 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (2)].list); }
     break;
 
   case 149:
 /* Line 1792 of yacc.c  */
-#line 2138 "comp.y"
+#line 2158 "comp.y"
     {			/* timer */
 		(yyval.list).f = (yyvsp[(1) - (1)].list).f; (yyval.list).l = (yyvsp[(1) - (1)].list).l;
 		(yyval.list).v = delayOne((yyvsp[(1) - (1)].list).v);			/* with implicit delay of 1 */
@@ -4142,7 +4145,7 @@ yyreduce:
 
   case 150:
 /* Line 1792 of yacc.c  */
-#line 2142 "comp.y"
+#line 2162 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (2)].list).f; (yyval.list).l = (yyvsp[(2) - (2)].vai).l;
 		(yyval.list).v = delayOne((yyvsp[(1) - (2)].list).v);			/* with implicit delay of 1 */
@@ -4151,13 +4154,13 @@ yyreduce:
 
   case 151:
 /* Line 1792 of yacc.c  */
-#line 2151 "comp.y"
+#line 2171 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 152:
 /* Line 1792 of yacc.c  */
-#line 2152 "comp.y"
+#line 2172 "comp.y"
     {			/* timer with delay expression */
 		(yyval.list) = (yyvsp[(1) - (3)].list); (yyval.list).l = (yyvsp[(3) - (3)].list).l;
 		if (checkConstExpr((yyvsp[(3) - (3)].list).v) == NULL) {
@@ -4171,7 +4174,7 @@ yyreduce:
 
   case 153:
 /* Line 1792 of yacc.c  */
-#line 2413 "comp.y"
+#line 2465 "comp.y"
     {		/* if (expr) { x++; } */
 		if (iC_openT4T5(1)) ierror("IF: cannot open:", T4FN); /* rewind if necessary */
 		writeCexeString(T4FP, ++c_number);	/* and record for copying */
@@ -4185,7 +4188,7 @@ yyreduce:
 
   case 154:
 /* Line 1792 of yacc.c  */
-#line 2422 "comp.y"
+#line 2474 "comp.y"
     {		/* { x++; } */
 		(yyval.list).v = bltin(&(yyvsp[(1) - (7)].sym), &(yyvsp[(3) - (7)].list), &(yyvsp[(4) - (7)].list), 0, 0, 0, 0, &(yyvsp[(7) - (7)].vai));
 	    }
@@ -4193,7 +4196,7 @@ yyreduce:
 
   case 155:
 /* Line 1792 of yacc.c  */
-#line 2434 "comp.y"
+#line 2486 "comp.y"
     {		/* if (expr) { x++; } */
 		(yyval.list).v = (yyvsp[(1) - (1)].list).v;
 		ffexprCompile("IF", (yyval.list).v, c_number);	/* c_compile cBlock */
@@ -4202,7 +4205,7 @@ yyreduce:
 
   case 156:
 /* Line 1792 of yacc.c  */
-#line 2445 "comp.y"
+#line 2497 "comp.y"
     {		/* { x++; } else */
 		Symbol *	sp;
 		List_e *	lp;
@@ -4219,7 +4222,7 @@ yyreduce:
 
   case 157:
 /* Line 1792 of yacc.c  */
-#line 2457 "comp.y"
+#line 2509 "comp.y"
     {		/* { x--; } */
 		(yyval.list).v = (yyvsp[(1) - (4)].list).v;
 		ffexprCompile("IF ELSE", (yyval.list).v, c_number); /* c_compile cBlock's */
@@ -4228,7 +4231,7 @@ yyreduce:
 
   case 158:
 /* Line 1792 of yacc.c  */
-#line 2468 "comp.y"
+#line 2520 "comp.y"
     {	/* switch (expr) { case ...; } */
 		if (iC_openT4T5(1)) ierror("SWITCH: cannot open:", T4FN); /* rewind if necessary */
 		writeCexeString(T4FP, ++c_number);	/* and record for copying */
@@ -4242,7 +4245,7 @@ yyreduce:
 
   case 159:
 /* Line 1792 of yacc.c  */
-#line 2477 "comp.y"
+#line 2529 "comp.y"
     {	/* { x++; } */
 		(yyval.list).v = bltin(&(yyvsp[(1) - (7)].sym), &(yyvsp[(3) - (7)].list), &(yyvsp[(4) - (7)].list), 0, 0, 0, 0, &(yyvsp[(7) - (7)].vai));
 		ffexprCompile("SWITCH", (yyval.list).v, c_number); /* c_compile cBlock */
@@ -4251,7 +4254,7 @@ yyreduce:
 
   case 160:
 /* Line 1792 of yacc.c  */
-#line 2489 "comp.y"
+#line 2541 "comp.y"
     {			/* dcasgn is NOT an cexpr */
 		if ((yyvsp[(1) - (3)].sym).v == 0 || (yyvsp[(1) - (3)].sym).v->ftype != CLCKL) {
 		    ierror("assigning clock to variable declared differently:", (yyvsp[(1) - (3)].sym).v->name);
@@ -4269,7 +4272,7 @@ yyreduce:
 
   case 161:
 /* Line 1792 of yacc.c  */
-#line 2504 "comp.y"
+#line 2556 "comp.y"
     {
 		(yyvsp[(1) - (3)].sym).v->ftype = CLCKL;
 		(yyval.sym).v = assignExpression(&(yyvsp[(1) - (3)].sym), &(yyvsp[(3) - (3)].list), 0);	/* not strict */
@@ -4282,7 +4285,7 @@ yyreduce:
 
   case 162:
 /* Line 1792 of yacc.c  */
-#line 2512 "comp.y"
+#line 2564 "comp.y"
     {
 		if ((yyvsp[(1) - (3)].sym).v->type != UDF && (yyvsp[(1) - (3)].sym).v->type != ERR) {
 		    ierror("multiple assignment clock:", (yyvsp[(1) - (3)].sym).v->name);
@@ -4295,19 +4298,19 @@ yyreduce:
 
   case 163:
 /* Line 1792 of yacc.c  */
-#line 2522 "comp.y"
+#line 2574 "comp.y"
     { (yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 164:
 /* Line 1792 of yacc.c  */
-#line 2523 "comp.y"
+#line 2575 "comp.y"
     { (yyval.list).v = sy_push((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 165:
 /* Line 1792 of yacc.c  */
-#line 2535 "comp.y"
+#line 2587 "comp.y"
     {
 		Symbol *	sp = &nSym;
 		if ((yyvsp[(1) - (1)].list).v == 0 || (sp = (yyvsp[(1) - (1)].list).v->le_sym) == 0 || sp->ftype != CLCKL) {
@@ -4320,7 +4323,7 @@ yyreduce:
 
   case 166:
 /* Line 1792 of yacc.c  */
-#line 2543 "comp.y"
+#line 2595 "comp.y"
     {
 		Symbol *	sp = &nSym;
 		(yyval.list).f = (yyvsp[(1) - (3)].vai).f; (yyval.list).l = (yyvsp[(3) - (3)].vai).l;
@@ -4339,7 +4342,7 @@ yyreduce:
 
   case 167:
 /* Line 1792 of yacc.c  */
-#line 2603 "comp.y"
+#line 2655 "comp.y"
     {			/* dtasgn is NOT an texpr */
 		if ((yyvsp[(1) - (3)].sym).v == 0 || (yyvsp[(1) - (3)].sym).v->ftype != TIMRL) {
 		    ierror("assigning timer to variable declared differently:", (yyvsp[(1) - (3)].sym).v->name);
@@ -4357,7 +4360,7 @@ yyreduce:
 
   case 168:
 /* Line 1792 of yacc.c  */
-#line 2618 "comp.y"
+#line 2670 "comp.y"
     {
 		(yyvsp[(1) - (3)].sym).v->ftype = TIMRL;
 		(yyval.sym).v = assignExpression(&(yyvsp[(1) - (3)].sym), &(yyvsp[(3) - (3)].list), 0);	/* not strict */
@@ -4370,7 +4373,7 @@ yyreduce:
 
   case 169:
 /* Line 1792 of yacc.c  */
-#line 2626 "comp.y"
+#line 2678 "comp.y"
     {
 		if ((yyvsp[(1) - (3)].sym).v->type != UDF && (yyvsp[(1) - (3)].sym).v->type != ERR) {
 		    ierror("multiple assignment timer:", (yyvsp[(1) - (3)].sym).v->name);
@@ -4383,19 +4386,19 @@ yyreduce:
 
   case 170:
 /* Line 1792 of yacc.c  */
-#line 2636 "comp.y"
+#line 2688 "comp.y"
     { (yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 171:
 /* Line 1792 of yacc.c  */
-#line 2637 "comp.y"
+#line 2689 "comp.y"
     { (yyval.list).v = sy_push((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 172:
 /* Line 1792 of yacc.c  */
-#line 2649 "comp.y"
+#line 2701 "comp.y"
     {
 		Symbol *	sp = &nSym;
 		if ((yyvsp[(1) - (1)].list).v == 0 || (sp = (yyvsp[(1) - (1)].list).v->le_sym) == 0 || sp->ftype != TIMRL) {
@@ -4408,7 +4411,7 @@ yyreduce:
 
   case 173:
 /* Line 1792 of yacc.c  */
-#line 2657 "comp.y"
+#line 2709 "comp.y"
     {
 		Symbol *	sp = &nSym;
 		(yyval.list).f = (yyvsp[(1) - (3)].vai).f; (yyval.list).l = (yyvsp[(3) - (3)].vai).l;
@@ -4427,7 +4430,7 @@ yyreduce:
 
   case 174:
 /* Line 1792 of yacc.c  */
-#line 2807 "comp.y"
+#line 2859 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = cCallCount((yyvsp[(1) - (1)].sym).v, NULL, -1);
@@ -4442,7 +4445,7 @@ yyreduce:
 
   case 175:
 /* Line 1792 of yacc.c  */
-#line 2817 "comp.y"
+#line 2869 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (4)].sym).f; (yyval.list).l = (yyvsp[(4) - (4)].vai).l;
 		(yyval.list).v = cCallCount((yyvsp[(1) - (4)].sym).v, (yyvsp[(3) - (4)].list).v, (yyvsp[(3) - (4)].list).v ? (yyvsp[(3) - (4)].list).v->le_val : 0);
@@ -4454,7 +4457,7 @@ yyreduce:
 
   case 176:
 /* Line 1792 of yacc.c  */
-#line 2824 "comp.y"
+#line 2876 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (4)].sym).f; (yyval.list).l = (yyvsp[(4) - (4)].vai).l;
 		(yyval.list).v = cCallCount((yyvsp[(1) - (4)].sym).v, (yyvsp[(3) - (4)].list).v, (yyvsp[(3) - (4)].list).v ? (yyvsp[(3) - (4)].list).v->le_val : 0);
@@ -4466,7 +4469,7 @@ yyreduce:
 
   case 177:
 /* Line 1792 of yacc.c  */
-#line 2831 "comp.y"
+#line 2883 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (5)].sym).f; (yyval.list).l = (yyvsp[(5) - (5)].vai).l;
 		(yyval.list).v = cCallCount((yyvsp[(1) - (5)].sym).v, (yyvsp[(3) - (5)].list).v, (yyvsp[(3) - (5)].list).v ? (yyvsp[(3) - (5)].list).v->le_val : 0);
@@ -4479,7 +4482,7 @@ yyreduce:
 
   case 178:
 /* Line 1792 of yacc.c  */
-#line 2839 "comp.y"
+#line 2891 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (5)].sym).f; (yyval.list).l = (yyvsp[(5) - (5)].vai).l;
 		(yyval.list).v = cCallCount((yyvsp[(1) - (5)].sym).v, (yyvsp[(3) - (5)].list).v, (yyvsp[(3) - (5)].list).v ? (yyvsp[(3) - (5)].list).v->le_val : 0);
@@ -4492,19 +4495,19 @@ yyreduce:
 
   case 179:
 /* Line 1792 of yacc.c  */
-#line 2849 "comp.y"
+#line 2901 "comp.y"
     { (yyval.list).v =  0; }
     break;
 
   case 180:
 /* Line 1792 of yacc.c  */
-#line 2850 "comp.y"
+#line 2902 "comp.y"
     { (yyval.list)   = (yyvsp[(1) - (1)].list); }
     break;
 
   case 181:
 /* Line 1792 of yacc.c  */
-#line 2853 "comp.y"
+#line 2905 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].list).f; (yyval.list).l = (yyvsp[(1) - (1)].list).l;
 		if (((yyval.list).v = cListCount(0, (yyvsp[(1) - (1)].list).v)) != 0) {
@@ -4519,7 +4522,7 @@ yyreduce:
 
   case 182:
 /* Line 1792 of yacc.c  */
-#line 2863 "comp.y"
+#line 2915 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (3)].list).f; (yyval.list).l = (yyvsp[(3) - (3)].list).l;
 		if (((yyval.list).v = cListCount((yyvsp[(1) - (3)].list).v, (yyvsp[(3) - (3)].list).v)) != 0) {
@@ -4534,37 +4537,37 @@ yyreduce:
 
   case 183:
 /* Line 1792 of yacc.c  */
-#line 2885 "comp.y"
+#line 2937 "comp.y"
     { (yyval.sym) = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 184:
 /* Line 1792 of yacc.c  */
-#line 2886 "comp.y"
+#line 2938 "comp.y"
     { (yyval.sym) = (yyvsp[(1) - (1)].sym); (yyval.sym).v = clearFunDef((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 185:
 /* Line 1792 of yacc.c  */
-#line 2887 "comp.y"
+#line 2939 "comp.y"
     { (yyval.sym) = (yyvsp[(1) - (1)].sym); (yyval.sym).v = clearFunDef((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 186:
 /* Line 1792 of yacc.c  */
-#line 2888 "comp.y"
+#line 2940 "comp.y"
     { (yyval.sym) = (yyvsp[(1) - (1)].sym); (yyval.sym).v = clearFunDef((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 187:
 /* Line 1792 of yacc.c  */
-#line 2889 "comp.y"
+#line 2941 "comp.y"
     { (yyval.sym) = (yyvsp[(1) - (1)].sym); (yyval.sym).v = clearFunDef((yyvsp[(1) - (1)].sym).v); }
     break;
 
   case 188:
 /* Line 1792 of yacc.c  */
-#line 2902 "comp.y"
+#line 2954 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (3)].typ).f; (yyval.sym).l = (yyvsp[(3) - (3)].vai).l;
 		if ((yyvsp[(1) - (3)].typ).v.type == ARNC || (yyvsp[(1) - (3)].typ).v.type == LOGC) {
@@ -4576,7 +4579,7 @@ yyreduce:
 
   case 189:
 /* Line 1792 of yacc.c  */
-#line 2916 "comp.y"
+#line 2968 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (4)].sym).f; (yyval.sym).l = (yyvsp[(4) - (4)].vai).l;
 		if ((yyvsp[(1) - (4)].sym).v->ftype == 1) {		/* immC in init.c */
@@ -4588,7 +4591,7 @@ yyreduce:
 
   case 190:
 /* Line 1792 of yacc.c  */
-#line 2929 "comp.y"
+#line 2981 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (6)].sym).f; (yyval.sym).l = (yyvsp[(6) - (6)].vai).l;
 		(yyval.sym).v = functionDefinition((yyvsp[(1) - (6)].sym).v, (yyvsp[(2) - (6)].list).v);
@@ -4597,7 +4600,7 @@ yyreduce:
 
   case 191:
 /* Line 1792 of yacc.c  */
-#line 2933 "comp.y"
+#line 2985 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (7)].sym).f; (yyval.sym).l = (yyvsp[(7) - (7)].vai).l;
 		(yyval.sym).v = functionDefinition((yyvsp[(1) - (7)].sym).v, (yyvsp[(2) - (7)].list).v);
@@ -4607,7 +4610,7 @@ yyreduce:
 
   case 192:
 /* Line 1792 of yacc.c  */
-#line 2946 "comp.y"
+#line 2998 "comp.y"
     {
 		(yyval.list).v = 0; (yyval.list).f = (yyval.list).l = 0;
 		clrBuf();
@@ -4616,7 +4619,7 @@ yyreduce:
 
   case 193:
 /* Line 1792 of yacc.c  */
-#line 2950 "comp.y"
+#line 3002 "comp.y"
     {
 		(yyval.list).v = 0;			/* $$.v is not required */
 		(yyval.list).f = (yyval.list).l = 0;
@@ -4626,7 +4629,7 @@ yyreduce:
 
   case 194:
 /* Line 1792 of yacc.c  */
-#line 2955 "comp.y"
+#line 3007 "comp.y"
     {
 		(yyval.list).v = 0; (yyval.list).f = (yyval.list).l = 0;
 		clrBuf();
@@ -4636,7 +4639,7 @@ yyreduce:
 
   case 195:
 /* Line 1792 of yacc.c  */
-#line 2967 "comp.y"
+#line 3019 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(2) - (2)].list).f; (yyval.sym).l = (yyvsp[(2) - (2)].list).l;		/* TD $$.f should be func$ */
 		(yyval.sym).v = returnStatement(&(yyvsp[(2) - (2)].list));
@@ -4648,31 +4651,31 @@ yyreduce:
 
   case 196:
 /* Line 1792 of yacc.c  */
-#line 2978 "comp.y"
+#line 3030 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 197:
 /* Line 1792 of yacc.c  */
-#line 2979 "comp.y"
+#line 3031 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 198:
 /* Line 1792 of yacc.c  */
-#line 2980 "comp.y"
+#line 3032 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 199:
 /* Line 1792 of yacc.c  */
-#line 2984 "comp.y"
+#line 3036 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 200:
 /* Line 1792 of yacc.c  */
-#line 2985 "comp.y"
+#line 3037 "comp.y"
     {
 		Symbol *	sp;
 
@@ -4687,25 +4690,25 @@ yyreduce:
 
   case 201:
 /* Line 1792 of yacc.c  */
-#line 3001 "comp.y"
+#line 3053 "comp.y"
     { (yyval.list).v =  0; }
     break;
 
   case 202:
 /* Line 1792 of yacc.c  */
-#line 3002 "comp.y"
+#line 3054 "comp.y"
     { (yyval.list)   = (yyvsp[(1) - (1)].list); }
     break;
 
   case 203:
 /* Line 1792 of yacc.c  */
-#line 3003 "comp.y"
+#line 3055 "comp.y"
     { (yyval.list)   = (yyvsp[(1) - (2)].list); }
     break;
 
   case 204:
 /* Line 1792 of yacc.c  */
-#line 3006 "comp.y"
+#line 3058 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = sy_push((yyvsp[(1) - (1)].sym).v);			/* first link in parameter list */
@@ -4720,7 +4723,7 @@ yyreduce:
 
   case 205:
 /* Line 1792 of yacc.c  */
-#line 3016 "comp.y"
+#line 3068 "comp.y"
     {
 		List_e *	lp;
 
@@ -4741,7 +4744,7 @@ yyreduce:
 
   case 206:
 /* Line 1792 of yacc.c  */
-#line 3044 "comp.y"
+#line 3096 "comp.y"
     {
 		(yyval.sym) = (yyvsp[(3) - (3)].sym);				/* formal assign parameter Symbol */
 		(yyval.sym).v->ftype = (yyvsp[(2) - (3)].typ).v.ftype;		/* TYPE bit int clock timer */
@@ -4758,7 +4761,7 @@ yyreduce:
 
   case 207:
 /* Line 1792 of yacc.c  */
-#line 3056 "comp.y"
+#line 3108 "comp.y"
     {
 		int	ft;
 
@@ -4780,7 +4783,7 @@ yyreduce:
 
   case 208:
 /* Line 1792 of yacc.c  */
-#line 3073 "comp.y"
+#line 3125 "comp.y"
     {
 		int		typ;
 		int		ftyp;
@@ -4840,7 +4843,7 @@ yyreduce:
 
   case 209:
 /* Line 1792 of yacc.c  */
-#line 3128 "comp.y"
+#line 3180 "comp.y"
     {
 		(yyval.sym) = (yyvsp[(2) - (2)].sym);				/* formal constant parameter Symbol */
 		assert((yyvsp[(1) - (2)].typ).v.ftype == ARITH);
@@ -4856,7 +4859,7 @@ yyreduce:
 
   case 210:
 /* Line 1792 of yacc.c  */
-#line 3142 "comp.y"
+#line 3194 "comp.y"
     {
 		(yyval.typ).f = (yyval.typ).l = (yyvsp[(1) - (1)].sym).l;			/* do not include in expression string */
 		(yyval.typ).v.ftype = (yyvsp[(1) - (1)].sym).v->ftype;		/* ARITH GATE CLCKL TIMRL */
@@ -4872,7 +4875,7 @@ yyreduce:
 
   case 211:
 /* Line 1792 of yacc.c  */
-#line 3153 "comp.y"
+#line 3205 "comp.y"
     {
 		int		typ;
 		int		ftyp;
@@ -4905,7 +4908,7 @@ yyreduce:
 
   case 212:
 /* Line 1792 of yacc.c  */
-#line 3193 "comp.y"
+#line 3245 "comp.y"
     {
 		(yyval.typ).f = (yyval.typ).l = (yyvsp[(2) - (2)].sym).l;			/* do not include in expression string */
 		switch ((yyvsp[(2) - (2)].sym).v->ftype) {
@@ -4937,7 +4940,7 @@ yyreduce:
 
   case 213:
 /* Line 1792 of yacc.c  */
-#line 3220 "comp.y"
+#line 3272 "comp.y"
     {
 		(yyval.typ).f = (yyval.typ).l = (yyvsp[(3) - (3)].sym).l;			/* do not include in expression string */
 		if ((yyvsp[(1) - (3)].sym).v->ftype == 1) {			/* immC in init.c */
@@ -4973,7 +4976,7 @@ yyreduce:
 
   case 214:
 /* Line 1792 of yacc.c  */
-#line 3263 "comp.y"
+#line 3315 "comp.y"
     {
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		(yyval.list) = cloneFunction(&(yyvsp[(1) - (4)].sym), &(yyvsp[(3) - (4)].sym), &(yyvsp[(4) - (4)].vai));	/* clone function from call head */
@@ -4985,7 +4988,7 @@ yyreduce:
 
   case 215:
 /* Line 1792 of yacc.c  */
-#line 3270 "comp.y"
+#line 3322 "comp.y"
     {
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		(yyval.list) = cloneFunction(&(yyvsp[(1) - (5)].sym), &(yyvsp[(3) - (5)].sym), &(yyvsp[(5) - (5)].vai));	/* clone function from call head */
@@ -4998,7 +5001,7 @@ yyreduce:
 
   case 216:
 /* Line 1792 of yacc.c  */
-#line 3286 "comp.y"
+#line 3338 "comp.y"
     {
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		(yyval.list) = cloneFunction(&(yyvsp[(1) - (4)].sym), &(yyvsp[(3) - (4)].sym), &(yyvsp[(4) - (4)].vai));	/* clone function from call head */
@@ -5010,7 +5013,7 @@ yyreduce:
 
   case 217:
 /* Line 1792 of yacc.c  */
-#line 3293 "comp.y"
+#line 3345 "comp.y"
     {
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		(yyval.list) = cloneFunction(&(yyvsp[(1) - (5)].sym), &(yyvsp[(3) - (5)].sym), &(yyvsp[(5) - (5)].vai));	/* clone function from call head */
@@ -5023,7 +5026,7 @@ yyreduce:
 
   case 218:
 /* Line 1792 of yacc.c  */
-#line 3309 "comp.y"
+#line 3361 "comp.y"
     {
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		(yyval.list) = cloneFunction(&(yyvsp[(1) - (4)].sym), &(yyvsp[(3) - (4)].sym), &(yyvsp[(4) - (4)].vai));	/* clone function from call head */
@@ -5035,7 +5038,7 @@ yyreduce:
 
   case 219:
 /* Line 1792 of yacc.c  */
-#line 3316 "comp.y"
+#line 3368 "comp.y"
     {
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
 		(yyval.list) = cloneFunction(&(yyvsp[(1) - (5)].sym), &(yyvsp[(3) - (5)].sym), &(yyvsp[(5) - (5)].vai));	/* clone function from call head */
@@ -5048,7 +5051,7 @@ yyreduce:
 
   case 220:
 /* Line 1792 of yacc.c  */
-#line 3333 "comp.y"
+#line 3385 "comp.y"
     {
 		Lis	lis;
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
@@ -5063,7 +5066,7 @@ yyreduce:
 
   case 221:
 /* Line 1792 of yacc.c  */
-#line 3343 "comp.y"
+#line 3395 "comp.y"
     {
 		Lis	lis;
 		/* adjust $$.f and $$.l to possibly modified arithmetic text in cloneFunction */
@@ -5079,25 +5082,25 @@ yyreduce:
 
   case 222:
 /* Line 1792 of yacc.c  */
-#line 3376 "comp.y"
+#line 3428 "comp.y"
     { (yyval.sym).v =  0; }
     break;
 
   case 223:
 /* Line 1792 of yacc.c  */
-#line 3377 "comp.y"
+#line 3429 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 224:
 /* Line 1792 of yacc.c  */
-#line 3378 "comp.y"
+#line 3430 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (2)].sym); (yyval.sym).l = (yyvsp[(2) - (2)].vai).l; }
     break;
 
   case 225:
 /* Line 1792 of yacc.c  */
-#line 3381 "comp.y"
+#line 3433 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (1)].list).f; (yyval.sym).l = (yyvsp[(1) - (1)].list).l;
 		if (checkConstExpr((yyvsp[(1) - (1)].list).v) == NULL) {
@@ -5112,7 +5115,7 @@ yyreduce:
 
   case 226:
 /* Line 1792 of yacc.c  */
-#line 3391 "comp.y"
+#line 3443 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (3)].sym).f; (yyval.sym).l = (yyvsp[(3) - (3)].list).l;
 		if (checkConstExpr((yyvsp[(3) - (3)].list).v) == NULL) {			/* must extract value from aexpr */
@@ -5127,7 +5130,7 @@ yyreduce:
 
   case 227:
 /* Line 1792 of yacc.c  */
-#line 3495 "comp.y"
+#line 3547 "comp.y"
     {		/* automatic declaration of members */
 		Symbol *	sp;
 		Symbol *	tsp;
@@ -5212,7 +5215,7 @@ yyreduce:
 
   case 228:
 /* Line 1792 of yacc.c  */
-#line 3575 "comp.y"
+#line 3627 "comp.y"
     {
 		Symbol *	sp;
 		Symbol *	tsp;
@@ -5286,19 +5289,19 @@ yyreduce:
 
   case 229:
 /* Line 1792 of yacc.c  */
-#line 3647 "comp.y"
+#line 3699 "comp.y"
     { (yyval.vap).v.lfl = (yyval.vap).v.nuv = 0; }
     break;
 
   case 230:
 /* Line 1792 of yacc.c  */
-#line 3648 "comp.y"
+#line 3700 "comp.y"
     { (yyval.vap) = (yyvsp[(1) - (1)].vap); }
     break;
 
   case 231:
 /* Line 1792 of yacc.c  */
-#line 3652 "comp.y"
+#line 3704 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (5)].typ).f; (yyval.sym).l = (yyvsp[(5) - (5)].vai).l;
@@ -5329,7 +5332,7 @@ yyreduce:
 
   case 232:
 /* Line 1792 of yacc.c  */
-#line 3678 "comp.y"
+#line 3730 "comp.y"
     {
 		int		typ;			/* gets here when IMMCARRAY was */
 		Symbol *	sp;			/* previously declared extern */
@@ -5372,43 +5375,43 @@ yyreduce:
 
   case 233:
 /* Line 1792 of yacc.c  */
-#line 3723 "comp.y"
+#line 3775 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (1)].list); }
     break;
 
   case 234:
 /* Line 1792 of yacc.c  */
-#line 3724 "comp.y"
+#line 3776 "comp.y"
     { (yyval.list) = (yyvsp[(1) - (2)].list); }
     break;
 
   case 235:
 /* Line 1792 of yacc.c  */
-#line 3728 "comp.y"
+#line 3780 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 236:
 /* Line 1792 of yacc.c  */
-#line 3729 "comp.y"
+#line 3781 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 237:
 /* Line 1792 of yacc.c  */
-#line 3730 "comp.y"
+#line 3782 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 238:
 /* Line 1792 of yacc.c  */
-#line 3731 "comp.y"
+#line 3783 "comp.y"
     { (yyval.sym)   = (yyvsp[(1) - (1)].sym); }
     break;
 
   case 239:
 /* Line 1792 of yacc.c  */
-#line 3735 "comp.y"
+#line 3787 "comp.y"
     {
 		(yyval.list).f = (yyvsp[(1) - (1)].sym).f; (yyval.list).l = (yyvsp[(1) - (1)].sym).l;
 		(yyval.list).v = checkDecl((yyvsp[(1) - (1)].sym).v);			/* first link in member list */
@@ -5424,7 +5427,7 @@ yyreduce:
 
   case 240:
 /* Line 1792 of yacc.c  */
-#line 3746 "comp.y"
+#line 3798 "comp.y"
     {
 		List_e *	lp;
 
@@ -5446,7 +5449,7 @@ yyreduce:
 
   case 241:
 /* Line 1792 of yacc.c  */
-#line 3824 "comp.y"
+#line 3876 "comp.y"
     {	/* automatic declaration of members */
 		Symbol *	sp;
 		Symbol *	tsp;
@@ -5505,7 +5508,7 @@ yyreduce:
 
   case 242:
 /* Line 1792 of yacc.c  */
-#line 3878 "comp.y"
+#line 3930 "comp.y"
     {
 		Symbol *	sp;
 		List_e *	lp;
@@ -5563,7 +5566,7 @@ yyreduce:
 
   case 243:
 /* Line 1792 of yacc.c  */
-#line 3934 "comp.y"
+#line 3986 "comp.y"
     {
 		Symbol *	sp;
 		(yyval.sym).f = (yyvsp[(1) - (5)].typ).f; (yyval.sym).l = (yyvsp[(5) - (5)].vai).l;
@@ -5595,7 +5598,7 @@ yyreduce:
 
   case 244:
 /* Line 1792 of yacc.c  */
-#line 3961 "comp.y"
+#line 4013 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (5)].typ).f; (yyval.sym).l = (yyvsp[(5) - (5)].vai).l;
 		char *	cp;
@@ -5640,7 +5643,7 @@ yyreduce:
 
   case 245:
 /* Line 1792 of yacc.c  */
-#line 4022 "comp.y"
+#line 4074 "comp.y"
     {
 		(yyval.sym).f = (yyvsp[(1) - (4)].sym).f; (yyval.sym).l = (yyvsp[(4) - (4)].vai).l;
 		Symbol *	sp;
@@ -5692,7 +5695,7 @@ yyreduce:
 
 
 /* Line 1792 of yacc.c  */
-#line 5696 "comp.tab.c"
+#line 5699 "comp.tab.c"
       default: break;
     }
   /* User semantic actions sometimes alter yychar, and that requires
@@ -5924,7 +5927,7 @@ yyreturn:
 
 
 /* Line 2055 of yacc.c  */
-#line 4077 "comp.y"
+#line 4129 "comp.y"
 
 
 #ifdef NEWSTYLE
@@ -5995,18 +5998,20 @@ iC_compile(
 
     lineno = 0;
 #if YYDEBUG
-    if ((iC_debug & 0402) != 0402)
+    if ((iC_debug & 0402) != 0402)		/* unless logic generation */
 #endif
-    lexflag = C_FIRST;				/* supress initial pre-processor lines */
+	lexflag = C_FIRST;			/* suppress initial pre-processor lines */
     lineflag = 1;				/* previous line was complete */
 
-    if (lstNM &&
-	((chmod(lstNM, 0644) &&			/* make list file writable */
-	errno != ENOENT) ||			/* if it exists */
-	(iC_outFP = fopen(lstNM, "w+")) == NULL)) {
-	perror("chmod or fopen");
-	return Lindex;
-    }
+    if (lstNM) {				/* list file nominated ? */
+	if ((chmod(lstNM, 0644) &&		/* yes - make list file writable */
+	errno != ENOENT) ||			/* if it exists - so it can be re-opened */
+	(iC_outFP = fopen(lstNM, "w")) == NULL) {
+	    perror("chmod or fopen");
+	    return Lindex;
+	}
+    }						/* else iC_outFP = stdout from initialisation */
+    iC_lstFP = iC_outFP;			/* back up iC_outFP for restoring after 'no list' */
     outFlag = outNM != 0;			/* global flag for compiled output */
     errFilename = errNM;			/* open on first error */
     iC_init();					/* install constants and built-ins - allows ierror() */
@@ -6333,6 +6338,7 @@ get(FILE* fp, int x)
 			} else {
 			    assert(iC_useStackIndex > 0);
 			    iC_uses = iC_useStack[--iC_useStackIndex]; /* restore use values */
+			    blockUnblockListing();
 #if YYDEBUG
 			    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "<<< get: # %3d  %-10s << %-10s, useStackIndex = %d, uses = %o\n", temp1, inpNM, prevNM, iC_useStackIndex, iC_uses);
 #endif
@@ -6825,12 +6831,63 @@ yylex(void)
 		 *******************************************************************/
 		if (iC_Pflag >= 2) typ = ERR;
 		warning("'$' character(s) in identifier:", iCtext);
+	    } else if (strcmp(iCtext, "EOI") == 0) {
+		/********************************************************************
+		 *  The iC language defines an input variable TX0.0 which is initially
+		 *  lo and goes hi when initialisation finishes.
+		 *  The folowing defines an ALIAS EOI for TX0.0 (end of initialisation).
+		 *  EOI can not be used in C code.
+		 *******************************************************************/
+		if ((symp = lookup(iCtext)) == 0) {	/* EOI */
+		    symp = install(iCtext, ALIAS, GATE);
+		    if ((sp = lookup("TX0.0")) == 0) {	/* TX0.0 is end of initialisation */
+			sp = install("TX0.0", INPX, GATE);
+		    }
+		    symp->list = lp = sy_push(sp);	/* EOI is normal ALIAS of TX0.0 */
+		}
+	    } else if (strcmp(iCtext, "STDIN") == 0) {
+		/********************************************************************
+		 *  The iC language defines an input variable TX0.1 which goes hi
+		 *  every time a LF terminated line has been received from stdin.
+		 *  The folowing defines an ALIAS STDIN for TX0.1 (stdin line received).
+		 *  STDIN can not be used in C code.
+		 *******************************************************************/
+		if ((symp = lookup(iCtext)) == 0) {	/* STDIN */
+		    symp = install(iCtext, ALIAS, GATE);
+		    if ((sp = lookup("TX0.1")) == 0) {	/* TX0.1 is stdin line received */
+			sp = install("TX0.1", INPX, GATE);
+		    }
+		    symp->list = lp = sy_push(sp);	/* STDIN is normal ALIAS of TX0.1 */
+		}
+	    } else if (strcmp(iCtext, "LO") == 0 || strcmp(iCtext, "HI") == 0) {
+		/********************************************************************
+		 *  The iC language does not allow constants in logical bit expressions.
+		 *  In very rare instances a fixed lo or hi bit is required. A case is
+		 *  a parameter of a function block call, whose formal parameter is a
+		 *  bit, but the call does not need that input. In that case use LO or
+		 *  HI, which generate a normal or inverting ALIAS to input TX0.2,
+		 *  which is permanently lo.
+		 *  In C code LO and HI generates 0 and 1 (see lexc.l).
+		 *******************************************************************/
+		if ((symp = lookup(iCtext)) == 0) {	/* LO or HI */
+		    symp = install(iCtext, ALIAS, GATE);
+		    if ((sp = lookup("TX0.2")) == 0) {	/* TX0.2 is permanent bit LO */
+			sp = install("TX0.2", INPX, GATE);
+		    }
+		    symp->list = lp = sy_push(sp);	/* LO is normal ALIAS of TX0.2 */
+		    if (*iCtext == 'H') {
+			lp->le_val = NOT;		/* HI is inverting ALIAS of TX0.2 */
+		    }
+		}					/* ALIAS resolved 2 blocks down */
 	    }
 	    if (symp == 0) {
+		/********************************************************************
+		 *  Lookup or install all other names as undefined Gates
+		 *******************************************************************/
 		if ((symp = lookup(iCtext)) == 0) {
 		    symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
 		} else if (typ == ERR) {
-		    symp->type = ERR;		/* mark ERROR in QX%d_%d */
+		    symp->type = ERR;			/* mark ERROR in QX%d_%d */
 		}
 	    }
 #if YYDEBUG
@@ -6840,11 +6897,14 @@ yylex(void)
 		fflush(iC_outFP);
 	    }
 #endif
-	    iClval.sym.v = symp;		/* return actual symbol */
+	    iClval.sym.v = symp;			/* return actual symbol */
+	    /********************************************************************
+	     *  resolve all ALIASes
+	     *******************************************************************/
 	    while ( (typ = symp->type) == ALIAS &&
 		    (lp = symp->list) != 0 &&
 		    (sp = lp->le_sym) != 0) {
-		symp = sp;			/* with token of original */
+		symp = sp;				/* with token of original */
 	    }
 	    /********************************************************************
 	     *  no need to clear sp->em	- check - this refers to very old code Jw 20120515
@@ -7353,6 +7413,12 @@ eof_error:
     return 0;					/* EOF */
 } /* copyCfrag */
 
+/********************************************************************
+ *
+ *	Compile if, if else or switch
+ *
+ *******************************************************************/
+
 static void
 ffexprCompile(char * txt, List_e * lp, int cn)
 {
@@ -7374,3 +7440,26 @@ ffexprCompile(char * txt, List_e * lp, int cn)
     lexflag = saveLexflag;			/* restore iC compile state */
     lineno  = saveLineno;
 } /* ffexprCompile */
+
+/********************************************************************
+ *
+ *	If iC_Zflag is set, restore iC_outFP from iC_lstFP, which
+ *	enables listing output.
+ *	else open iC_nulFP to /dev/null unless it was already opened,
+ *	copy it to iC_outFP, which blocks listing output.
+ *
+ *******************************************************************/
+
+static void
+blockUnblockListing(void)
+{
+    if (iC_Zflag) {
+	iC_outFP = iC_lstFP;	/* listing output is now unblocked */
+    } else {
+	if (iC_nulFP == NULL && (iC_nulFP = fopen("/dev/null", "w")) == NULL) {
+	    perror("fopen /dev/null");		/* unlikely to fail */
+	    ierror("blocking listing failed:", NS);
+	}
+	iC_outFP = iC_nulFP;	/* listing output is now blocked */
+    }
+} /* blockUnblockListing */

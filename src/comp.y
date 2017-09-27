@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.125 $";
+"@(#)$Id: comp.y 1.126 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -38,6 +38,7 @@ int		gnerrs;			/* count of ierror() calls */
 		/* NOTE iCnerrs is reset for every call to yaccpar() */
 static int	copyCfrag(char, char, char, FILE*);	/* copy C action */
 static void	ffexprCompile(char *, List_e *, int);	/* c_compile cBlock */
+static void	blockUnblockListing(void);
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
@@ -182,7 +183,7 @@ pd(const char * token, Symbol * ss, Type s1, Symbol * s2)
 
 %token	<sym>	UNDEF IMMCARRAY AVARC AVAR AOUT LVARC LVAR LOUT CVAR TVAR
 %ifdef	BOOT_COMPILE
-%token	<sym>	BFORCE BLTIN1 BLTINC BLTIN2 BLTIN3 CBLTIN TBLTIN TBLTI1
+%token	<sym>	BFORCE BLTIN1 BLTINC BLTINS BLTIN2 BLTIN3 CBLTIN TBLTIN TBLTI1
 %endif	/* BOOT_COMPILE */
 %token	<sym>	IF ELSE SWITCH EXTERN ASSIGN RETURN USE USETYPE IMM IMMC VOID CONST TYPE SIZEOF
 %token	<sym>	IFUNCTION CFUNCTION TFUNCTION VFUNCTION CNAME
@@ -363,13 +364,16 @@ outVariable
 
 	/************************************************************
 	 *
-	 * USE flags postset options for compiling code
+	 * Pragmas or USE flags, which postset options for compiling code
 	 *
 	 *	use alias;		// equivalent to -A option
 	 *	no alias;		// turns off -A option
 	 *
 	 *	use strict;		// equivalent to -S option - default - JW 20160925
 	 *	no strict;		// equivalent to -N option
+	 *
+	 *	use list;		// restore listing output from the next line - default
+	 *	no list;		// suppresses listing output from the next line
 	 *
 	 *	use strict, alias;	// equivalent to -AS option
 	 *	no alias, strict;	// turn off both options
@@ -390,8 +394,8 @@ outVariable
 	 * turned off with 'no strict' or the -N command line option.
 	 *
 	 * Nevertheless very simple legacy iC programs with mainly bit nodes
-	 * can still be run without the 'strict' flag by compiling such a
-	 * program with the new -N option or writing 'no strict'.
+	 * can still be compiled without the 'strict' flag by compiling such a
+	 * program with the new -N command line option or writing 'no strict'.
 	 *
 	 * The 'no strict' option should be avoided and is only included for
 	 * completeness. It should be very easy to add extra declarations to
@@ -416,6 +420,20 @@ outVariable
 	 * which include a header file, which uses "strict" syntax, will not
 	 * report errors, because they do not follow the "strict" syntax.
 	 *
+	 * The 'no list' pragma stops listing output from the next line
+	 * until a 'use list' statement starts listing output again.
+	 * This pragma would mainly be used to suppress listing output of
+	 * function block definitions, which may be regarded as clutter.
+	 * Typical use:
+	 *
+	 *	no list;		// %include "adconvert.ih"
+	 *	%include "adconvert.ih"
+	 *	use list;
+	 *
+	 * Listing output is the 'no list' line only. The comment is
+	 * recommended telling what has not been listed, which is the
+	 * whole of the 'adconvert.ih' file plus the 'use list' line.
+	 *
 	 ***********************************************************/
 
 useFlag	: USE USETYPE		{
@@ -423,26 +441,28 @@ useFlag	: USE USETYPE		{
 		$$ = $1;
 		use = $1.v->ftype;			/* 0=no or 1=use */
 		assert(use <= 1);
-		usetype = $2.v->ftype;			/* 0=alias 1=strict */
+		usetype = $2.v->ftype;			/* 0=alias 1=strict 2=list */
 		assert(usetype < MAXUSETYPE);
 		if (use) {
-		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag */
+		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag or iC_Zflag */
 		} else {
-		    iC_uses &= ~(1<<usetype);		/* reset */
+		    iC_uses &= ~(1<<usetype);		/* reset iC_Aflag or iC_Sflag or iC_Zflag */
 		}
+		blockUnblockListing();			/* block or unblock listing depending on iC_Zflag */
 	    }
 	| useFlag ',' USETYPE	{
 		unsigned int usetype, use;
 		$$ = $1;
 		use = $1.v->ftype;			/* 0=no or 1=use */
 		assert(use <= 1);
-		usetype = $3.v->ftype;			/* 0=alias 1=strict */
+		usetype = $3.v->ftype;			/* 0=alias 1=strict 2=list */
 		assert(usetype < MAXUSETYPE);
 		if (use) {
-		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag */
+		    iC_uses |= 1<<usetype;		/* set iC_Aflag or iC_Sflag or unblock list output */
 		} else {
-		    iC_uses &= ~(1<<usetype);		/* reset */
+		    iC_uses &= ~(1<<usetype);		/* reset iC_Aflag or iC_Sflag or block list output */
 		}
+		blockUnblockListing();
 	    }
 	;
 
@@ -2205,6 +2225,38 @@ fexpr	: BLTIN1 '(' aexpr cref ')' {			/* D(expr); SH(expr); RISE(expr) */
 		$$.v = bltin(&$1, &$3, &$4, 0, 0, 0, 0, 0);
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTINC", &$$);
+#endif
+	    }
+	/************************************************************
+	 * DS(aexpr,aexpr[,(cexpr|texpr[,aexpr])])
+	 *	DS(expr,set)
+	 *	DS(expr,set,clkExprSet
+	 *	DS(expr,set,timExprSet
+	 *	DS(expr,set,timExprSetdelayExprSet
+	 ***********************************************************/
+	| BLTINS '(' aexpr ',' aexpr cref ')' {		/* DS(expr,set) */
+		$$.f = $1.f; $$.l = $7.l;
+		$$.v = bltin(&$1, &$3, 0, &$5, &$6, 0, 0, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTINS", &$$);
+#endif
+	    }
+	/************************************************************
+	 * DS(aexpr,(cexpr|texpr,aexpr),aexpr[,(cexpr|texpr[,aexpr])])
+	 *	DS(expr,clkExpr,          set)
+	 *	DS(expr,clkExpr,          set,clkSet
+	 *	DS(expr,clkExpr,          set,timSet
+	 *	DS(expr,clkExpr,          set,timSetdelaySet
+	 *	DS(expr,timExpr,delayExpr,set)
+	 *	DS(expr,timExpr,delayExpr,set,clkSet
+	 *	DS(expr,timExpr,delayExpr,set,timSet
+	 *	DS(expr,timExpr,delayExpr,set,timSetdelaySet
+	 ***********************************************************/
+	| BLTINS '(' aexpr ',' ctdref ',' aexpr cref ')' {
+		$$.f = $1.f; $$.l = $9.l;
+		$$.v = bltin(&$1, &$3, &$5, &$7, &$8, 0, 0, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "fexpr: BLTINS", &$$);
 #endif
 	    }
 	/************************************************************
@@ -4144,18 +4196,20 @@ iC_compile(
 
     lineno = 0;
 #if YYDEBUG
-    if ((iC_debug & 0402) != 0402)
+    if ((iC_debug & 0402) != 0402)		/* unless logic generation */
 #endif
-    lexflag = C_FIRST;				/* supress initial pre-processor lines */
+	lexflag = C_FIRST;			/* suppress initial pre-processor lines */
     lineflag = 1;				/* previous line was complete */
 
-    if (lstNM &&
-	((chmod(lstNM, 0644) &&			/* make list file writable */
-	errno != ENOENT) ||			/* if it exists */
-	(iC_outFP = fopen(lstNM, "w+")) == NULL)) {
-	perror("chmod or fopen");
-	return Lindex;
-    }
+    if (lstNM) {				/* list file nominated ? */
+	if ((chmod(lstNM, 0644) &&		/* yes - make list file writable */
+	errno != ENOENT) ||			/* if it exists - so it can be re-opened */
+	(iC_outFP = fopen(lstNM, "w")) == NULL) {
+	    perror("chmod or fopen");
+	    return Lindex;
+	}
+    }						/* else iC_outFP = stdout from initialisation */
+    iC_lstFP = iC_outFP;			/* back up iC_outFP for restoring after 'no list' */
     outFlag = outNM != 0;			/* global flag for compiled output */
     errFilename = errNM;			/* open on first error */
     iC_init();					/* install constants and built-ins - allows ierror() */
@@ -4482,6 +4536,7 @@ get(FILE* fp, int x)
 			} else {
 			    assert(iC_useStackIndex > 0);
 			    iC_uses = iC_useStack[--iC_useStackIndex]; /* restore use values */
+			    blockUnblockListing();
 #if YYDEBUG
 			    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "<<< get: # %3d  %-10s << %-10s, useStackIndex = %d, uses = %o\n", temp1, inpNM, prevNM, iC_useStackIndex, iC_uses);
 #endif
@@ -4974,12 +5029,63 @@ yylex(void)
 		 *******************************************************************/
 		if (iC_Pflag >= 2) typ = ERR;
 		warning("'$' character(s) in identifier:", iCtext);
+	    } else if (strcmp(iCtext, "EOI") == 0) {
+		/********************************************************************
+		 *  The iC language defines an input variable TX0.0 which is initially
+		 *  lo and goes hi when initialisation finishes.
+		 *  The folowing defines an ALIAS EOI for TX0.0 (end of initialisation).
+		 *  EOI can not be used in C code.
+		 *******************************************************************/
+		if ((symp = lookup(iCtext)) == 0) {	/* EOI */
+		    symp = install(iCtext, ALIAS, GATE);
+		    if ((sp = lookup("TX0.0")) == 0) {	/* TX0.0 is end of initialisation */
+			sp = install("TX0.0", INPX, GATE);
+		    }
+		    symp->list = lp = sy_push(sp);	/* EOI is normal ALIAS of TX0.0 */
+		}
+	    } else if (strcmp(iCtext, "STDIN") == 0) {
+		/********************************************************************
+		 *  The iC language defines an input variable TX0.1 which goes hi
+		 *  every time a LF terminated line has been received from stdin.
+		 *  The folowing defines an ALIAS STDIN for TX0.1 (stdin line received).
+		 *  STDIN can not be used in C code.
+		 *******************************************************************/
+		if ((symp = lookup(iCtext)) == 0) {	/* STDIN */
+		    symp = install(iCtext, ALIAS, GATE);
+		    if ((sp = lookup("TX0.1")) == 0) {	/* TX0.1 is stdin line received */
+			sp = install("TX0.1", INPX, GATE);
+		    }
+		    symp->list = lp = sy_push(sp);	/* STDIN is normal ALIAS of TX0.1 */
+		}
+	    } else if (strcmp(iCtext, "LO") == 0 || strcmp(iCtext, "HI") == 0) {
+		/********************************************************************
+		 *  The iC language does not allow constants in logical bit expressions.
+		 *  In very rare instances a fixed lo or hi bit is required. A case is
+		 *  a parameter of a function block call, whose formal parameter is a
+		 *  bit, but the call does not need that input. In that case use LO or
+		 *  HI, which generate a normal or inverting ALIAS to input TX0.2,
+		 *  which is permanently lo.
+		 *  In C code LO and HI generates 0 and 1 (see lexc.l).
+		 *******************************************************************/
+		if ((symp = lookup(iCtext)) == 0) {	/* LO or HI */
+		    symp = install(iCtext, ALIAS, GATE);
+		    if ((sp = lookup("TX0.2")) == 0) {	/* TX0.2 is permanent bit LO */
+			sp = install("TX0.2", INPX, GATE);
+		    }
+		    symp->list = lp = sy_push(sp);	/* LO is normal ALIAS of TX0.2 */
+		    if (*iCtext == 'H') {
+			lp->le_val = NOT;		/* HI is inverting ALIAS of TX0.2 */
+		    }
+		}					/* ALIAS resolved 2 blocks down */
 	    }
 	    if (symp == 0) {
+		/********************************************************************
+		 *  Lookup or install all other names as undefined Gates
+		 *******************************************************************/
 		if ((symp = lookup(iCtext)) == 0) {
 		    symp = install(iCtext, typ, ftyp); /* usually UDF UDFA */
 		} else if (typ == ERR) {
-		    symp->type = ERR;		/* mark ERROR in QX%d_%d */
+		    symp->type = ERR;			/* mark ERROR in QX%d_%d */
 		}
 	    }
 #if YYDEBUG
@@ -4989,11 +5095,14 @@ yylex(void)
 		fflush(iC_outFP);
 	    }
 #endif
-	    iClval.sym.v = symp;		/* return actual symbol */
+	    iClval.sym.v = symp;			/* return actual symbol */
+	    /********************************************************************
+	     *  resolve all ALIASes
+	     *******************************************************************/
 	    while ( (typ = symp->type) == ALIAS &&
 		    (lp = symp->list) != 0 &&
 		    (sp = lp->le_sym) != 0) {
-		symp = sp;			/* with token of original */
+		symp = sp;				/* with token of original */
 	    }
 	    /********************************************************************
 	     *  no need to clear sp->em	- check - this refers to very old code Jw 20120515
@@ -5502,6 +5611,12 @@ eof_error:
     return 0;					/* EOF */
 } /* copyCfrag */
 
+/********************************************************************
+ *
+ *	Compile if, if else or switch
+ *
+ *******************************************************************/
+
 static void
 ffexprCompile(char * txt, List_e * lp, int cn)
 {
@@ -5523,3 +5638,26 @@ ffexprCompile(char * txt, List_e * lp, int cn)
     lexflag = saveLexflag;			/* restore iC compile state */
     lineno  = saveLineno;
 } /* ffexprCompile */
+
+/********************************************************************
+ *
+ *	If iC_Zflag is set, restore iC_outFP from iC_lstFP, which
+ *	enables listing output.
+ *	else open iC_nulFP to /dev/null unless it was already opened,
+ *	copy it to iC_outFP, which blocks listing output.
+ *
+ *******************************************************************/
+
+static void
+blockUnblockListing(void)
+{
+    if (iC_Zflag) {
+	iC_outFP = iC_lstFP;	/* listing output is now unblocked */
+    } else {
+	if (iC_nulFP == NULL && (iC_nulFP = fopen("/dev/null", "w")) == NULL) {
+	    perror("fopen /dev/null");		/* unlikely to fail */
+	    ierror("blocking listing failed:", NS);
+	}
+	iC_outFP = iC_nulFP;	/* listing output is now blocked */
+    }
+} /* blockUnblockListing */

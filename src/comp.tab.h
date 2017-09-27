@@ -107,7 +107,7 @@ extern int iCdebug;
 typedef union ICSTYPE
 {
 /* Line 2058 of yacc.c  */
-#line 68 "comp.y"
+#line 69 "comp.y"
 		/* stack type */
     Sym		sym;			/* symbol table pointer */
     Lis		list;			/* linked list elements */

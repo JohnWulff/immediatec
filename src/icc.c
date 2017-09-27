@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.81 $";
+"@(#)$Id: icc.c 1.82 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -41,7 +41,7 @@ extern const char	iC_ID[];
 extern const char	iC_PATCH[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
 
-unsigned int		iC_uses = USE_STRICT;	/* 01=alias 02=strict; strict is default */
+unsigned int		iC_uses = USE_STRICT | USE_LIST; /* 01=alias 02=strict 04=strict; strict and list is default */
 unsigned int		iC_useStack[USESTACKSZ];
 unsigned int		iC_useStackIndex = 0;
 
@@ -133,7 +133,7 @@ static const char *	usage =
 "                    +1  iC bison debug info (on stderr only) (+4001 C bison info)\n"
 #endif	/* YACC */
 #endif	/* RUN or TCP */
-"                 +4000  supress listing alias post processor (save temp files)\n"
+"                 +4000  suppress listing alias post processor (save temp files)\n"
 #ifdef BOOT_COMPILE
 "                +20000  generate pre-compiled function blocks for init.c\n"
 #endif	/* BOOT_COMPILE */
@@ -289,6 +289,8 @@ char *		iC_Cdefines;
 #endif	/* EFENCE */
 
 FILE *		iC_outFP;		/* listing file pointer */
+FILE *		iC_lstFP;		/* backup of iC_outFP for restoring when listing is unblocked */
+FILE *		iC_nulFP;		/* listing file pointer to /dev/null when listing is blocked */
 FILE *		iC_errFP;		/* error file pointer */
 
 #if defined(RUN) || defined(TCP)
@@ -1397,7 +1399,7 @@ immcc - the immediate-C to C compiler
                               DEBUG options
          +2  logic generation                     (+4002 Symbol Table)
          +1  iC yacc debug info  (on stdout only) (+4001 C yacc info)
-      +4000  supress listing alias post processor (save temp files)
+      +4000  suppress listing alias post processor (save temp files)
      +20000  generate pre-compiled function blocks for init.c (BOOT_COMPILE)
 
     <src.ic> iC language source file (extension .ic)

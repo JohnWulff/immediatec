@@ -26,9 +26,6 @@ use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
 use Tk::Dialog;
 use warnings;
-use Encode;		# http://perlmonks.org/node_id=698074
-my $enc = 'utf-8';	# suggested by Kardan
-# use utf8;		# <- makes everything worse
 
 my $named = $0; $named =~ s#.*[/\\]##;
 use vars qw($opt_c $opt_n $opt_k $opt_f $opt_F $opt_l $opt_w $opt_g $opt_r $opt_T $opt_M $opt_X $opt_h);
@@ -124,7 +121,7 @@ Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman 1.24 $ uses Tk-@<<<<<<<<<
+$Id: iCman 1.25 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -716,9 +713,11 @@ my $tail = '';
 unless ($opt_r) {
     if ($opt_k) {
 	check_menu("-k $opt_k", 'pages');	# apropos: man -k <key>
+	$initialPage = "-k $opt_k" unless $initialPage;
     }
     if ($opt_f) {
 	check_menu("-f $opt_f", 'pages');	# whatis:  man -f <page>
+	$initialPage = "-f $opt_f" unless $initialPage;
     }
     print "$named: \@ARGV '@ARGV'\n" if $opt_T;
   Arg:
@@ -868,7 +867,7 @@ sub seeCentre {
 
 sub show_man {
     my ($dummy, $hFlag, $forkFlag) = @_;
-    my ($entry, $ret, $man, $section, $cmdLine, $i, $s, $idx, $position);
+    my ($entry, $man, $section, $cmdLine, $i, $s, $idx, $position);
     $lineCnt = 0;
 no warnings;
     if ($opt_T) {
@@ -947,18 +946,19 @@ use warnings;
     }
     # UI is clean now. Open the file
     ($s = $section) =~ s/[()]//g;	# remove parens (will pass '' unchanged)
-    $cmdLine = $opt ? "man $opt $man 2>/dev/null | sort -u |"	# output of apropos or whatis
-			 : "man $s $man 2>/dev/null |";
-    print "open (F, '$cmdLine')\n" if $opt_T;
-    if ($ret = open (F, $cmdLine)) {
-	printf ("\$ret = '0x%x'\n", $ret) if $opt_T;
+    $cmdLine = $opt ? "man $opt $man 2>/dev/null | sort -u"	# output of apropos or whatis
+		    : "man $s $man 2>/dev/null";
+    my $encoding = ($Tk::VERSION >= 803) ? ":encoding(UTF-8)"
+    					 : "";	# no UTF-8 for old version
+    print "open (FH, \"-|$encoding\", $cmdLine)\n" if $opt_T;
+    if (open (FH, "-|$encoding", $cmdLine)) {	# open pipe from man command
 	if ($opt_M) {
-	    open(M, ">$opt_M") or die "Can't create debugging man file '$opt_M': $!";
+	    open(MH, ">$opt_M") or die "Can't create debugging man file '$opt_M': $!";
 	}
 	my $lineFlag = 0;
 	my ($line, $mark, $prev, $tag, $pos, $ppos, %atoms, $atom, $more, %tags, $len, @seq);
-	while ($line = <F>) {
-	    print M $line if $opt_M;
+	while ($line = <FH>) {
+	    print MH $line if $opt_M;
 	    if ($lineFlag == 0) {
 		########################################################################
 		# First line - if open has error it reads a null file and never gets here
@@ -985,7 +985,7 @@ use warnings;
 		foreach $i (2, 3, 6, 7) {
 		    $tagArray[$i]->[0] = 'hy';	# hyper-links if not line 1 or -k or -l
 		}
-	    } elsif (not $opt and eof(F)) {
+	    } elsif (not $opt and eof(FH)) {
 		foreach $i (2, 3, 6, 7) {
 		    $tagArray[$i]->[0] = '';	# no hyper-link in last line unless -k or -l
 		}
@@ -1020,18 +1020,6 @@ use warnings;
 					-command => [ sub { seeCentre($_[0]) }, $index ],
 				       );
 	    } else {				# -k or -l or first line or not section heading
-		if ($Tk::VERSION =~ /800/) {
-		    $line =~ s/\342\224\202/|/g;# man translates '|' into 226 148 130 ?! SuSE 9.1
-		    $line =~ s/\302\255/-/g;	# precedes '-' for word syllabification from 'man' SuSE 9.1
-		    $line =~ s/\342\200\220/-/g;# precedes '-' for word syllabification from 'man' SuSE 9.3 and later
-		    $line =~ s/\342\213\205/°/g;# bullet
-		    $line =~ s/\302\264/´/g;	# acute accent
-		    $line =~ s/\303\327/x/g;	# multiplication sign
-		    print "show_man:$lineCnt: VERSION 800: '$line'\n" if $opt_T;
-		} else {	# Tk-804.xxx
-		    $line = decode($enc, $line);	# take care of utf-8 chars
-		    print "show_man:$lineCnt: decode:  '$line'\n" if $opt_T;
-		}
 		########################################################################
 		# State machine to convert Boldfacing, Underliningg with ^H to
 		# ESC sequences
@@ -1162,8 +1150,8 @@ use warnings;
 		}
 	    }
 	}
-	close(M) if $opt_M;
-	$ret = close(F);	# fails with $?/256 == 16 - page does not exist
+	close(MH) if $opt_M;
+	close(FH);					# fails with $?/256 == 16 - page does not exist
 	if ($lineFlag) {
 	    $mainWindow->title("$named: $entry");
 	    $text->configure (-cursor => 'left_ptr');
@@ -1218,7 +1206,7 @@ use warnings;
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();
     } else {
-	info_display('red', "'$cmdLine' returned '$ret' ($?)");
+	info_display('red', "open (FH, \"-|$encoding\", $cmdLine) failed ($?)");
     }
 } # show_man
 
@@ -1969,7 +1957,7 @@ sub ini_program {
     if ($initialPage eq '') {
 	($laterPage) = keys %lastPageEntries;	# may be empty
 	if (defined $laterPage) {
-	    print "ini_program: \$laterPpage = '$laterPage' keys \%lastPageEntries = '@{[keys %lastPageEntries]}'\n" if $opt_T;
+	    print "ini_program: \$laterPage = '$laterPage' keys \%lastPageEntries = '@{[keys %lastPageEntries]}'\n" if $opt_T;
 	    $laterPage =~ s/([^\t]+)(\t(.*))?/$1/;
 	    $initialPage = $laterPage;
 	    $pos = $3;
@@ -2017,7 +2005,11 @@ sub quit_program {
 				-default_button => 'No',
 				-buttons => [qw(Yes No)],
 			       );
-    my $answer = $dialog->Show();
+    my $answer = $dialog->Show(
+	    -popover => $mainWindow,
+	    -overanchor => 'c',
+	    -popanchor => 'nw',
+	    -takefocus => 1);
     print "$named: answer is '$answer'\n" if $opt_T;
     if ($answer ne 'Yes') {
 	return;				# cancel operation
@@ -2254,28 +2246,18 @@ Acknowledgments to Sriram Srinivasan (see below)
 
 =head1 BUGS
 
-B<iCman> cannot display Unicode characters used in SuSE Linux 9.3.
-This is a problem with Tk::Text version Tk-800.024. Some tests done
-with Tk804.027 showed its Tk::Text to be much slower in updating
-tags - which is a cornerstone of the iC-range of programs.
-B<man> produces some Unicode characters for a few man pages. In the
-Unicode environment of SuSE Linux 9.3, these are not translated with
-or without the man -7 option. (the -7 option is therefore not used).
-The most important characters - in particular the special hyphen used
-in B<man> for word syllabification and '|' are substituted by code.
+B<iCman> could not display Unicode characters used in SuSE Linux 9.3.
+This is a problem with Tk::Text version Tk-800.024.
 
-Tk::Text version Tk-804.028 distributed with openSUSE Linux 11.1
-handles the above characters correctly. Therefore the above translations
-have been made conditional for Tk-800.024 (match 800). Proper UTF-8
-translation with decode('utf-8', <line>) has also been introduced.
-The only problem remaining is a bug in B<pod2man>, which replaces
-all non ASCII-7 characters with rubbish.
+Proper UTF-8 translation has been introduced for Tk::VERSION >= 803 with
+open (FH, "-|:encoding(UTF-8)", "man $section $man 2>/dev/null");
+
+There was a bug in B<pod2man>, which replaced all non ASCII-7
+characters with rubbish.
 
 This has now been fixed for UTF-8 sources if an early line in the pod
 source is C<=encoding utf8> and B<pod2man> is called with the -u or
---utf8 option.  B<iCman> will then show UTF-8 characters correctly
-but only if each text line is passed through  decode('utf-8', <line>),
-which has been done.
+--utf8 option.  B<iCman> then shows UTF-8 characters correctly.
 
 Example: German Umlaut characters Ä Ö Ü ä ö ü ß, which should be
 A O U a o u with Diaresis plus a sharp s.

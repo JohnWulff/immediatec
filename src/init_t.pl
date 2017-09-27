@@ -36,7 +36,7 @@
 #   from v 1.3 to 1.4 do the following:
 #   perl -e 'while (<>) { s/0xc([12])/0x8$1/g; s/TIMER02/TIMER2/g; print; }' init_t.out | diff -wB - init.c | less
 #
-# $Id: init_t.pl,v 1.4 2014/11/05 23:31:22 jw Exp $
+# $Id: init_t.pl 1.5 $
 ########################################################################
 
 use strict;
@@ -46,13 +46,15 @@ my $save = 0;
 my $line;
 my @block = ();
 my %xlate = (
+# the following mangled names must be in sorted order and the correct length
 # low level built-in functions - functions which cannot be compiled as function blocks
     Aorce	=> "FORCE",
     B		=> "D",
-    Cr_		=> "SR_",
-    Dr_		=> "DR_",
-    Err_	=> "SRR_",
-    Fsr_	=> "DSR_",
+    Bs_		=> "DS_",
+    Cr_		=> "DR_",
+    Csr_	=> "DSR_",
+    Dr_		=> "SR_",
+    Drr_	=> "SRR_",
     Gh		=> "SH",
     Hhr_	=> "SHR_",
     Ihsr_	=> "SHSR_",
@@ -61,13 +63,14 @@ my %xlate = (
     Llock	=> "CLOCK",
     Mimer	=> "TIMER",
 # extended built-in functions - previously compiled as system function blocks at start up
-    Nr		=> "SR",
-    Orx		=> "SRX",
-    Pk		=> "JK",
-    Qrr		=> "SRR",
-    Rr		=> "DR",
-    Ssr		=> "DSR",
-    Thr		=> "SHR",
+    Ns		=> "DS",
+    Or		=> "DR",
+    Osr		=> "DSR",
+    Pr		=> "SR",
+    Prr		=> "SRR",
+    Prx		=> "SRX",
+    Qk		=> "JK",
+    Uhr		=> "SHR",
     Uhsr	=> "SHSR",
     Vt		=> "ST",
     Wrt		=> "SRT",

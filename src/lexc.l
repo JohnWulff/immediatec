@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l 1.36 $";
+"@(#)$Id: lexc.l 1.37 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -122,6 +122,8 @@ static Symbol *	paraList = &markerSymbol;
 (__)?restrict(__)?	{ count(&yylval);		/* ignore */ }
 "__LINE__"		{ count(&yylval); return CONSTANT;	/* no need to identify octal */ }
 "__FILE__"		{ count(&yylval); return STRING_LITERAL; }
+"LO"			{ count(&yylval); return BIT_CONSTANT; }
+"HI"			{ count(&yylval); return BIT_CONSTANT; }
 
 	/* allow white space because Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1 */
 (I|Q|T)X{D}+{WS}*\.{WS}*{D}+(_{D}+)?	{ count(&yylval); return check_type(&yylval, 2); }

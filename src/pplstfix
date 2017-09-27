@@ -60,7 +60,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix,v 1.26 2015/05/17 05:53:25 jw Exp $
+$Id: pplstfix 1.27 $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -337,7 +337,7 @@ sub processFile {
 			    ([\w\$][\w.\$]* | -\d+)	# $1
 			/xg)
 		    {
-			if (defined($symbols{$1})) {
+			if (defined($symbols{$1}) and $1 ne "LO" and $1 ne "HI") {
 			    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
 			}
 			print LOG "$.:	$1\n" if $opt_l;

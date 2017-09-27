@@ -16,6 +16,8 @@
  *
  *******************************************************************/
 
+no strict;			// strict is default
+
 imm timer t = TIMER(TX0.4);
 
 imm int d0 = IB1;			// IB1 =
