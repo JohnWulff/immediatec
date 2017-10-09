@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.73 $";
+"@(#)$Id: ict.c 1.74 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -49,9 +49,6 @@ static const char ict_c[] =
 #include	"pifacecad.h"
 #endif	/* RASPBERRYPI */
 
-#define D10	10			/* 1/10 second select timeout under Linux */
-#define TLIMIT	4			/* TX0.4 is fastest timer */
-
 #define IOCHANNELS	30		/* initial Channels[] size */
 #define	OSIZ	20
 #define	TSIZ	10
@@ -68,8 +65,9 @@ static int		stdinFlag = 0;
 static fd_set		infds;			/* initialised file descriptor set for normal iC_wait_for_next_event() */
 static fd_set		ixfds;			/* initialised extra descriptor set for normal iC_wait_for_next_event() */
 static fd_set		idfds;			/* initialised file descriptor set for debug iC_wait_for_next_event() */
-struct timeval		iC_timeOut = { 0, 50000 }; /* 50 mS select timeout - may be modified in iCbegin() */
-static struct timeval	toCnt  = { 0, 50000 };	/* actual timeout counter that select uses */
+struct timeval		iC_timeOut = { 0, 49850 }; /* 50 mS select timeout - 5 ms if TX0.3 programmed */
+static struct timeval	toCnt  = { 0, 4850 };	/* fast timeout counter that select uses for 5 ms */
+static int		t5msFlag = 0;		/* set if 5 ms timer TX0.3 is programmed */
 #ifdef	RASPBERRYPI
 static struct timeval *	toCoff = NULL;		/* select() timeout off when NULl pointer for PiFaceCad and debug timeout */
 static piFaceIO *	pfCADpfp = NULL;	/* for PiFaceCAD string via PFCAD4 */
@@ -189,9 +187,10 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     Gate *		gp;
     int			len;
     iC_Functp		init_fa;
-    int			tcnt1  = 1;
-    int			tcnt10 = 1;
-    int			tcnt60 = 1;
+    int			t50m  = 1;
+    int			t500m = 1;
+    int			t5s   = 1;
+    int			t30s  = 1;
     int			retval;
     int			mask;
 #if	INT_MAX == 32767 && defined (LONG16)
@@ -243,14 +242,15 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     iC_errFP = stderr;			/* standard error from here */
     if (iC_micro) iC_microReset(0);	/* start timing */
 
-    if ((gp = iC_TX0p) != 0) {		/* are EOI or TX0 timers programmed */
+    if ((gp = iC_TX0p) != 0) {		/* are EOI etc or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7, TX0.0 is EOI - end of initialisation */
 	assert(tim);			/* TX0.1 is used to report receiving a new line on STDIN */
-	for (cnt = 3; cnt < 8; cnt++) {	/* TX0.2 is used as a fixed bit LO, ~TX0.2 as fixed bit HI */
-	    if (tim[cnt] != NULL) {	/* any of the 5 timers 10 ms - 60 seconds programmed ? */
-		if (cnt < TLIMIT) {
-		    fprintf(iC_errFP, "\n%s: Timer TX0.%d is not supported\n", iC_iccNM, cnt);
-		    iC_quit(SIGUSR1);
+					/* TX0.2 is used as a fixed bit LO, ~TX0.2 as fixed bit HI */
+	for (i = 3; i < 8; i++) {	/* TX0.2 is used as a fixed bit LO, ~TX0.2 as fixed bit HI */
+	    if (tim[i] != NULL) {	/* any of the 5 timers 5ms ms - 30 seconds programmed ? */
+		if (i == 3) {
+		    t5msFlag = 1;	/* 5 ms timer is programmed */
+		    iC_timeOut = toCnt;	/* { 0, 5000 } initially */
 		}
 #ifdef	RASPBERRYPI
 		toCoff =		/* permanent select timeout for PiFaceCAD shift and debug timeout */
@@ -260,6 +260,10 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    }
 	}
     }
+#if YYDEBUG && !defined(_WINDOWS)
+    if (iC_debug & 04) fprintf(iC_outFP, "t5msFlag  %d, iC_timeout  %d:%d\n",
+	t5msFlag, (int)iC_timeOut.tv_sec, (int)iC_timeOut.tv_usec);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     /********************************************************************
      *  Clear and then set all bits to wait for interrupts
      *******************************************************************/
@@ -1604,7 +1608,6 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 
 	if (regOffset) {
 	    iC_send_msg_to_server(iC_sockFN, regBuf);
-//    fprintf(iC_outFP, " >> %s >>", regBuf); fflush(iC_outFP);
 	    regOffset = 0;
 	}
 
@@ -1635,8 +1638,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		break;				/* do a scan - no need to increment cnt by using break */
 	    }
 	    /********************************************************************
-	     *  Wait for external inputs or timer
-	     *  Wait for input in a select statement most of the time
+	     *  Wait for input or timer interrupts in a select() statement
+	     *  most of the time
 	     *******************************************************************/
 	    retval = iC_wait_for_next_event(&infds, &ixfds, iC_osc_flag ? &toCnt : toCntp);
 	    if (iC_osc_flag) {
@@ -1649,197 +1652,238 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		 *******************************************************************/
 		if (toCnt.tv_sec == 0 && toCnt.tv_usec == 0) {
 		    toCnt = iC_timeOut;		/* transfer timeout value */
-		}
-#ifdef	RASPBERRYPI
-		if (slr) {			/* most of the time slr == 0, test only once */
-#if YYDEBUG && !defined(_WINDOWS)
-		    /********************************************************************
-		     *  Handle P: debug message timeout of 350 ms
-		     *******************************************************************/
-		    if ((slr & 0x07) != 0) {
-			if ((--slr & 0x07) == 0) {	/* 350 ms timer (7*50ms) */
-			    fprintf(iC_outFP, "\n======== WAIT ==========\n");
-			    fflush(iC_outFP);
-			    if (slr == 0) {		/* slr holds shift direction */
-				toCntp = toCoff;	/* stop 350 ms timeout unless iC TX0 uses it */
-			    }
-			}
-		    }
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
-		    /********************************************************************
-		     *  Handle PiFaceCAD shift every 750 ms
-		     *******************************************************************/
-		    if ((slr & 0x18) && --tcnt_750 <= 0) {
-			tcnt_750 = 15;			/* 750 ms timer (15*50ms) */
-			if (slr & 0x08) {
-			    pifacecad_lcd_move_left();	/* move text left every 750 ms */
-			} else {
-			    pifacecad_lcd_move_right();	/* move text right every 750 ms */
-			}
-		    }
-		}
-#endif	/* RASPBERRYPI */
-		/********************************************************************
-		 *  TIMERS here every 50 milliseconds - ~54 ms for MSDOS
-		 *
-		 *  The iC_debug facility -d1000 stops linking the 100 ms to 60 second
-		 *  TIMERS tim[4] to tim[7] when they are connected directly to
-		 *  the slave input of a clock or timer Gate and that clock or timer
-		 *  has no Gates on the clock list it controls - ie nothing will happen.
-		 *  This stops continuous output when tracing logic (-d100 or -t) when
-		 *  these internal TIMERS produce no change.
-		 *  It also reduces the data traffic to iClive and reduces flashing of
-		 *  clocks and timers controlled by internal TIMERS.
-		 *******************************************************************/
-		if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
-#if	YYDEBUG
-		    if (iC_debug & 01000) {
-			Gate **	lp;
-			Gate *	tp;
-			int	cn1 = 2;
-			lp = gp->gt_list;		/* test if any clock or timer is active */
-			do {				/* for normal and inverted */
-			    while ((tp = *lp++) != 0) {
-				if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
-				    tp = tp->gt_funct;
-				    if (tp->gt_next != tp) {
-					goto linkT4;	/* found an active clock or timer */
-				    }
-				} else {
-				    goto linkT4;	/* found a link to non clock or timer */
-				}
-			    }
-			} while (--cn1);
-			goto skipT4;			/* excuse spaghetti - faster without flag */
-		    }
-		linkT4:
-		    if (iC_micro && !cnt) iC_microPrint("Timer TX0.4 received", 0);
-		    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
-		    gp->gt_val = - gp->gt_val;		/* complement input */
-		    iC_link_ol(gp, iC_o_list);
-#if	YYDEBUG
-		    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
-		    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
-		    cnt++;
-#if	YYDEBUG
-		skipT4: ;
-#endif	/* YYDEBUG */
-		}
-		if (--tcnt1 <= 0) {
-		    tcnt1 = D10;			/* 10 under Linux, 9 under MSDOS */
-		    if ((gp = tim[5]) != 0) {		/* 1 second timer */
+		    if (t5msFlag == 0) goto T50;		/* if no 10 ms timer iC_timeOut is 50ms */
+		    if ((gp = tim[3]) != 0) {			/* 10 millisecond timer */
 #if	YYDEBUG
 			if (iC_debug & 01000) {
 			    Gate **	lp;
 			    Gate *	tp;
 			    int	cn1 = 2;
-			    lp = gp->gt_list;		/* test if any clock or timer is active */
-			    do {			/* for normal and inverted */
+			    lp = gp->gt_list;			/* test if any clock or timer is active */
+			    do {				/* for normal and inverted */
 				while ((tp = *lp++) != 0) {
 				    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
 					tp = tp->gt_funct;
 					if (tp->gt_next != tp) {
-					    goto linkT5;	/* found an active clock or timer */
+					    goto linkT3;	/* found an active clock or timer */
 					}
 				    } else {
-					goto linkT5;	/* found a link to non clock or timer */
+					goto linkT3;	/* found a link to non clock or timer */
 				    }
 				}
 			    } while (--cn1);
-			    goto skipT5;		/* excuse spaghetti - faster without flag */
+			    goto skipT3;			/* excuse spaghetti - faster without flag */
 			}
-		    linkT5:
-			if (iC_micro && !cnt) iC_microPrint("Timer TX0.5 received", 0);
+		    linkT3:
+			if (iC_micro && !cnt) iC_microPrint("Timer TX0.3 received", 0);
 			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
-			gp->gt_val = - gp->gt_val;	/* complement input */
-			iC_link_ol(gp, iC_o_list);
+			gp->gt_val = - gp->gt_val;		/* complement input */
+			iC_link_ol(gp, iC_o_list);		/* 5 ms on, 5 ms off is 10ms */
 #if	YYDEBUG
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
 			iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 			cnt++;
 #if	YYDEBUG
-		    skipT5: ;
+		    skipT3: ;
 #endif	/* YYDEBUG */
 		    }
-		    if (--tcnt10 <= 0) {
-			tcnt10 = 10;
-			if ((gp = tim[6]) != 0) {	/* 10 second timer */
+		    if (--t50m <= 0) {
+			t50m = 10;
+		      T50:
+#ifdef	RASPBERRYPI
+			if (slr) {			/* most of the time slr == 0, test only once */
+#if YYDEBUG && !defined(_WINDOWS)
+			    /********************************************************************
+			     *  Handle P: debug message timeout of 350 ms
+			     *******************************************************************/
+			    if ((slr & 0x07) != 0) {
+				if ((--slr & 0x07) == 0) {	/* 350 ms timer (7*50ms) */
+				    fprintf(iC_outFP, "\n======== WAIT ==========\n");
+				    fflush(iC_outFP);
+				    if (slr == 0) {		/* slr holds shift direction */
+					toCntp = toCoff;	/* stop 350 ms timeout unless iC TX0 uses it */
+				    }
+				}
+			    }
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+			    /********************************************************************
+			     *  Handle PiFaceCAD shift every 750 ms
+			     *******************************************************************/
+			    if ((slr & 0x18) && --tcnt_750 <= 0) {
+				tcnt_750 = 15;			/* 750 ms timer (15*50ms) */
+				if (slr & 0x08) {
+				    pifacecad_lcd_move_left();	/* move text left every 750 ms */
+				} else {
+				    pifacecad_lcd_move_right();	/* move text right every 750 ms */
+				}
+			    }
+			}
+#endif	/* RASPBERRYPI */
+			/********************************************************************
+			 *  TIMERS here every 100 milliseconds
+			 *
+			 *  The iC_debug facility -d1000 stops linking the 10 ms to 60 second
+			 *  TIMERS tim[3] to tim[7] when they are connected directly to
+			 *  the slave input of a clock or timer Gate and that clock or timer
+			 *  has no Gates on the clock list it controls - ie nothing will happen.
+			 *  This stops continuous output when tracing logic (-d100 or -t) when
+			 *  these internal TIMERS produce no change.
+			 *  It also reduces the data traffic to iClive and reduces flashing of
+			 *  clocks and timers controlled by internal TIMERS.
+			 *******************************************************************/
+			if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
 #if	YYDEBUG
 			    if (iC_debug & 01000) {
 				Gate **	lp;
 				Gate *	tp;
 				int	cn1 = 2;
-				lp = gp->gt_list;	/* test if any clock or timer is active */
-				do {			/* for normal and inverted */
+				lp = gp->gt_list;		/* test if any clock or timer is active */
+				do {				/* for normal and inverted */
 				    while ((tp = *lp++) != 0) {
 					if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
 					    tp = tp->gt_funct;
 					    if (tp->gt_next != tp) {
-						goto linkT6;/* found an active clock or timer */
+						goto linkT4;	/* found an active clock or timer */
 					    }
 					} else {
-					    goto linkT6;/* found a link to non clock or timer */
+					    goto linkT4;	/* found a link to non clock or timer */
 					}
 				    }
 				} while (--cn1);
-				goto skipT6;		/* excuse spaghetti - faster without flag */
+				goto skipT4;			/* excuse spaghetti - faster without flag */
 			    }
-			linkT6:
-			    if (iC_micro && !cnt) iC_microPrint("Timer TX0.6 received", 0);
+			linkT4:
+			    if (iC_micro && !cnt) iC_microPrint("Timer TX0.4 received", 0);
 			    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
-			    gp->gt_val = - gp->gt_val;	/* complement input */
-			    iC_link_ol(gp, iC_o_list);
+			    gp->gt_val = - gp->gt_val;		/* complement input */
+			    iC_link_ol(gp, iC_o_list);		/* 50 ms on, 50 ms off is 100ms */
 #if	YYDEBUG
 			    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
 			    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 			    cnt++;
 #if	YYDEBUG
-			skipT6: ;
+			skipT4: ;
 #endif	/* YYDEBUG */
 			}
-			if (--tcnt60 <= 0) {
-			    tcnt60 = 6;
-			    if ((gp = tim[7]) != 0) {	/* 60 second timer */
+			if (--t500m <= 0) {
+			    t500m = 10;
+			    if ((gp = tim[5]) != 0) {		/* 1 second timer */
 #if	YYDEBUG
 				if (iC_debug & 01000) {
 				    Gate **	lp;
 				    Gate *	tp;
 				    int	cn1 = 2;
-				    lp = gp->gt_list;	/* test if any clock or timer is active */
-				    do {		/* for normal and inverted */
+				    lp = gp->gt_list;		/* test if any clock or timer is active */
+				    do {			/* for normal and inverted */
 					while ((tp = *lp++) != 0) {
 					    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
 						tp = tp->gt_funct;
 						if (tp->gt_next != tp) {
-						    goto linkT7;/* found an active clock or timer */
+						    goto linkT5;	/* found an active clock or timer */
 						}
 					    } else {
-						goto linkT7;/* found a link to non clock or timer */
+						goto linkT5;	/* found a link to non clock or timer */
 					    }
 					}
 				    } while (--cn1);
-				    goto skipT7;	/* excuse spaghetti - faster without flag */
+				    goto skipT5;		/* excuse spaghetti - faster without flag */
 				}
-			    linkT7:
-				if (iC_micro && !cnt) iC_microPrint("Timer TX0.7 received", 0);
+			    linkT5:
+				if (iC_micro && !cnt) iC_microPrint("Timer TX0.5 received", 0);
 				if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				gp->gt_val = - gp->gt_val;	/* complement input */
-				iC_link_ol(gp, iC_o_list);
+				iC_link_ol(gp, iC_o_list);	/* 500 ms on, 500 ms off is 1 second */
 #if	YYDEBUG
 				if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
 				iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 				cnt++;
 #if	YYDEBUG
-			    skipT7: ;
+			    skipT5: ;
 #endif	/* YYDEBUG */
+			    }
+			    if (--t5s <= 0) {
+				t5s = 10;
+				if ((gp = tim[6]) != 0) {	/* 10 second timer */
+#if	YYDEBUG
+				    if (iC_debug & 01000) {
+					Gate **	lp;
+					Gate *	tp;
+					int	cn1 = 2;
+					lp = gp->gt_list;	/* test if any clock or timer is active */
+					do {			/* for normal and inverted */
+					    while ((tp = *lp++) != 0) {
+						if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+						    tp = tp->gt_funct;
+						    if (tp->gt_next != tp) {
+							goto linkT6;/* found an active clock or timer */
+						    }
+						} else {
+						    goto linkT6;/* found a link to non clock or timer */
+						}
+					    }
+					} while (--cn1);
+					goto skipT6;		/* excuse spaghetti - faster without flag */
+				    }
+				linkT6:
+				    if (iC_micro && !cnt) iC_microPrint("Timer TX0.6 received", 0);
+				    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
+#endif	/* YYDEBUG */
+				    gp->gt_val = - gp->gt_val;	/* complement input */
+				    iC_link_ol(gp, iC_o_list);	/* 5 sec on, 5 sec off is 10 sec */
+#if	YYDEBUG
+				    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+				    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+				    cnt++;
+#if	YYDEBUG
+				skipT6: ;
+#endif	/* YYDEBUG */
+				}
+				if (--t30s <= 0) {
+				    t30s = 6;
+				    if ((gp = tim[7]) != 0) {	/* 60 second timer */
+#if	YYDEBUG
+					if (iC_debug & 01000) {
+					    Gate **	lp;
+					    Gate *	tp;
+					    int	cn1 = 2;
+					    lp = gp->gt_list;	/* test if any clock or timer is active */
+					    do {		/* for normal and inverted */
+						while ((tp = *lp++) != 0) {
+						    if (tp->gt_fni == CLCK || tp->gt_fni == TIMR) {
+							tp = tp->gt_funct;
+							if (tp->gt_next != tp) {
+							    goto linkT7;/* found an active clock or timer */
+							}
+						    } else {
+							goto linkT7;/* found a link to non clock or timer */
+						    }
+						}
+					    } while (--cn1);
+					    goto skipT7;	/* excuse spaghetti - faster without flag */
+					}
+				    linkT7:
+					if (iC_micro && !cnt) iC_microPrint("Timer TX0.7 received", 0);
+					if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
+#endif	/* YYDEBUG */
+					gp->gt_val = - gp->gt_val;	/* complement input */
+					iC_link_ol(gp, iC_o_list);	/* 30 sec on, 30 sec off is 60 sec */
+#if	YYDEBUG
+					if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
+#endif	/* YYDEBUG */
+					iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
+					cnt++;
+#if	YYDEBUG
+				    skipT7: ;
+#endif	/* YYDEBUG */
+				    }
+				}
 			    }
 			}
 		    }

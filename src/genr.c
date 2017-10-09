@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.91 $";
+"@(#)$Id: genr.c 1.92 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -1017,9 +1017,10 @@ copyArithmetic(List_e * lp, Symbol * sp, Symbol * gp, int x, int sflag, int cFn)
 	if (liveDisp && (sflag & 0200) && (
 	    sp->ftype == ARITH  ||
 	    sp->ftype == D_SH   ||
+	    sp->ftype == CH_AR  ||		/* only arithmetic CHANGE */
 	    sp->ftype == F_SW   ||
 	    sp->ftype == OUTW   ||
-	    sp->ftype == CH_AR)) {		/* only arithmetic CHANGE */
+	    sp->ftype == TIMRL)) {		/* timers display count state */
 	    fprintf(iC_outFP, "\t\t//\t%s\t=", sp->name);
 	}
 	fprintf(iC_outFP, "\n");		/* all non Arithmetic and delay */
