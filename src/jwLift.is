@@ -1,0 +1,40 @@
+########################################################################
+#
+#	kbLift.ic	iC program to run Keith Burstons Meccano Lift
+#	jwLift.ic	iC program to transfer I/O from kbLift to iClift
+#
+#  iCserver script to link these 2 programs for testing without Meccano
+#	and start iClift and iCboxes for remaining inputs and monitoring
+#
+#  Lift inputs and outputs X0-X3 and X40-X43 to kbLift.ic are reversed.
+#
+#  Call: iCserver -f jwLift.is
+#
+#  $Id: jwLift.is 1.1 $
+#
+########################################################################
+
+# Extra option
+-k
+
+# Equivalences:
+QX40=IX0-0 QX41=IX1-0 QX42=IX2-0 QX43=IX3-0
+IX40=QX0-0 IX41=QX1-0 IX42=QX2-0 IX43=QX3-0 IB43=QB3-0
+# Debug Stop from iClive -i0 -D IX99.0 kbLift.ic
+IX99=IX99-0
+
+# iCboxes:
+# IB3 maximum delay to keep door open * 0.1 second (for kbLift -i0)
+'iCbox -njwLift-IO -c 16 IB3-0 QX20,222 QX21,30 QX30,14 QX31,14 QX35,28 QX36,28 QX37,222 QX38,127'
+
+# monitor inputs and outputs equivalenced from jwLift and kbLift inputs and outputs
+'iCbox -d -nkbLift-IO IX0-0,31 QX0-0 QX1-0 IX2-0 QX2-0,3 IX3-0,15 QX3-0 QB3-0 QX40,31 IX40 IX41 QX42 IX42,3 QX43,15 IX43 IB43'
+
+# iClift app
+'iClift -I -L 1 -F B0,1,4'	# American floor numbering 1 - 4 like Keith Burstons lift
+
+# monitor inputs and outputs to iClift
+'iClift -I -L 1 -F B0,1,4 -B iClift.box; iCbox -niClift-IO -d IX99-0,1 -f iClift.box'
+
+# iC control apps snd iClive delayed by 5 seconds to allow iClift to initialise
+'sleep 5; rm iClift.box; jwLift -z -R kbLift -i0 -R iClive -i0 -D IX99.0 kbLift.ic'

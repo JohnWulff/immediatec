@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.68 $";
+"@(#)$Id: load.c 1.69 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2017  John E. Wulff
@@ -189,7 +189,7 @@ static const char *	usage =
 "    IEC,<gpio-list> Associate the bits of a particular input or output IEC\n"
 "          with a list of gpio numbers.  The IEC must start with either\n"
 "          I or Q in this case and no IEC range is allowed.  Up to 8\n"
-"          gpio numbers can be given in a comma seperated list. The\n"
+"          gpio numbers can be given in a comma separated list. The\n"
 "          first gpio number will be aassociated with bit 0, the second\n"
 "          with bit 1 etc and the eighth with bit 7. If the list is\n"
 "          shorter than 8 the trailing bits are not used. The letter\n"
@@ -2032,7 +2032,7 @@ main(
  *******************************************************************/
 
     if (df) { fprintf(iC_outFP, "PASS 2 - symbol table: name inputs outputs delay-references\n"); fflush(iC_outFP); }
-    /* iClock is sorted into Symbol table and does not need to be reported seperately */
+    /* iClock is sorted into Symbol table and does not need to be reported separately */
     for (opp = sTable; opp < sTend; opp++) {
 	op = *opp;
 	if (op->gt_ini != -ALIAS) {

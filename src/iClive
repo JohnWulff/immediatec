@@ -179,6 +179,11 @@ my %keyWords = (
 	STDIN	=> 1,
 	LO	=> 1,		# imm bit constants
 	HI	=> 1,
+	T10ms	=> 1,		# imm bit timer aliases
+	T100ms	=> 1,
+	T1sec	=> 1,
+	T10sec	=> 1,
+	T1min	=> 1,
 	FOR	=> 1,		# iCa keywords
 	IF	=> 1,
 	ELSE	=> 1,
@@ -313,7 +318,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.73 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.74 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -423,24 +428,6 @@ my $u = '';
 if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
     $u = ' -u';			# show -u option in title when editing
-}
-my $B_stop    = 0;		# sender value for Debug Stop signal when program stopped
-my $B_cont    = 0;		# sender value for Debug Stop signal when program running
-my $B_stopped = 0;		# flag delayed Debug Stop when program restarted
-my $B_timer;			# timer for delayed Debug Stop
-my $debugStop = '';		# IEC name of optional Debug Stop signal
-if (defined $opt_D) {
-    if ($opt_D =~ /^(\~)?(IX\d+)\.(\d+)$/ and $3 < 8) {
-	$debugStop = $2;
-	$B_stop = 1 << $3;	# 0x01 to 0x80 for .0 to .7
-	if ($1) {		# '~'
-	    $B_cont = $B_stop;
-	    $B_stop = 0;
-	}
-	print "debugStop = $debugStop.$3 B_stop = $B_stop Bcont = $B_cont\n" if $opt_T;
-    } else {
-	warn "-D '$opt_D' is a bad IEC input string - ignored - no Debug Stop\n";
-    }
 }
 my ($fontSize, $font_t, $boldfont_t, $font, $boldfont, $encoding);
 if (defined $opt_F) {
@@ -786,6 +773,25 @@ my $menuInst  = $menuBar->Optionmenu(-command      => \&change_instance,
 				     -variable     => \$instance,
 				     -options      => \@instanceOptions
 				    )->pack(-side => 'left', -padx => 2);
+
+my $B_stop    = 0;		# sender value for Debug Stop signal when program stopped
+my $B_cont    = 0;		# sender value for Debug Stop signal when program running
+my $B_stopped = 0;		# flag delayed Debug Stop when program restarted
+my $B_timer;			# timer for delayed Debug Stop
+my $debugStop = '';		# IEC name of optional Debug Stop signal
+if (defined $opt_D) {
+    if ($opt_D =~ /^(\~)?(IX\d+)\.(\d+)$/ and $3 < 8) {
+	$debugStop = "$2$instanceText";
+	$B_stop = 1 << $3;	# 0x01 to 0x80 for .0 to .7
+	if ($1) {		# '~'
+	    $B_cont = $B_stop;
+	    $B_stop = 0;
+	}
+	print "debugStop = $debugStop.$3 B_stop = $B_stop Bcont = $B_cont\n" if $opt_T;
+    } else {
+	warn "-D '$opt_D' is a bad IEC input string - ignored - no Debug Stop\n";
+    }
+}
 
 ########################################################################
 #	Live or Edit button

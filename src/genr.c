@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.92 $";
+"@(#)$Id: genr.c 1.93 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2331,14 +2331,25 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
     int		ftyp;
     Symbol *	rsp;
     Symbol *	sp = sv->v;
+    Symbol *	sp1;
+    List_e *	lp;
+    Valp	v;
 
     assert(sp);
     ftyp = sp->ftype;
     if (lv->v == 0) {
-	if (ftyp != ARITH) {
-	    if (ftyp == GATE) {
-		ierror("constant assignment to imm bit:", sp->name);
-	    } else if (ftyp == CLCKL) {
+	if (ftyp == GATE) {
+	    if ((sp1 = lookup("TX0.2")) == 0) {
+		sp1 = install("TX0.2", INPX, GATE);
+	    }
+	    lp = sy_push(sp1);			/* TX0.2 is permanent bit LO */
+	    v = evalConstExpr(lv);
+	    if (v.nuv) {
+		lp->le_val = NOT;		/* ~TX0.2 is permanent bit HI */
+	    }
+	    lv->v = lp;
+	} else if (ftyp != ARITH) {
+	    if (ftyp == CLCKL) {
 		ierror("constant assignment to imm clock:", sp->name);
 	    } else if (ftyp == TIMRL) {
 		ierror("constant assignment to imm timer:", sp->name);
@@ -2541,6 +2552,10 @@ evalConstExpr(Lis * lv)
 #endif
     } else
     if ((sp = lp->le_sym) != 0) {
+	while ( sp->type == ALIAS &&
+		(lp = sp->list) != 0 &&
+		(sp = lp->le_sym) != 0) {
+	}
 	if (sp->type == NCONST) {
 	    v.nuv = sp->u_val;			/* value of constant for immCindex and immC ini */
 #if YYDEBUG
@@ -2641,6 +2656,16 @@ evalConstExpr(Lis * lv)
 		    goto NotConstant;
 		}
 	    }
+	} else if (sp->type == INPX) {
+	    /********************************************************************
+	     *  Convert bit constant TX0.2 and its alias LO to 0
+	     *  Convert bit constant ~TX0.2 and its alias HI to 1
+	     *******************************************************************/
+	    if (strcmp(sp->name, "TX0.2") == 0) {
+		v.nuv = lp->le_val;
+	    } else {
+		goto NotConstant;
+	    }
 	} else {
 	    goto NotConstant;
 	}
@@ -2648,7 +2673,8 @@ evalConstExpr(Lis * lv)
       NotConstant:
 	v.lfl = 2;				/* mark as error */
 	v.nuv = 0;				/* do not mark sp with ERR - it is OK */
-	ierror("constExpr is not a constant:", sp->name);
+	if (sp) ierror("constExpr is not a constant:", sp->name);
+	else ierror("constExpr is not a constant:", NULL);
     }
     return v;
 } /* evalConstExpr */
@@ -3209,18 +3235,39 @@ collectStatement(Symbol * funcStatement)
  *******************************************************************/
 
 Symbol *
-returnStatement(Lis * actexpr)
+returnStatement(Lis * lv)
 {
     Symbol *	sp;
+    List_e *	lp;
+    Valp	v;
     int		ftyp;
 
-    if (iRetSymbol.v) {
-	ftyp = iRetSymbol.v->ftype;
-	if (actexpr->v == 0) {
-	    if (ftyp != ARITH)            { errBit(); return 0;	/* YYERROR */ }
-	    else if (const_push(actexpr)) { errInt(); return 0;	/* YYERROR */ }
+    if ((sp = iRetSymbol.v) != NULL) {
+	ftyp = sp->ftype;
+	if (lv->v == 0) {
+	    if (ftyp == GATE) {
+		if ((sp = lookup("TX0.2")) == 0) {
+		    sp = install("TX0.2", INPX, GATE);
+		}
+		lp = sy_push(sp);		/* TX0.2 is permanent bit LO */
+		v = evalConstExpr(lv);
+		if (v.nuv) {
+		    lp->le_val = NOT;		/* ~TX0.2 is permanent bit HI */
+		}
+		lv->v = lp;
+	    }
+	    else if (ftyp != ARITH) {
+		if (ftyp == CLCKL) {
+		    ierror("constant assignment to imm clock:", sp->name);
+		} else if (ftyp == TIMRL) {
+		    ierror("constant assignment to imm timer:", sp->name);
+		} else {
+		    ierror("constant assignment to wrong imm type:", sp->name);
+		}
+		return 0;				/* YYERROR */
+	    } else if (const_push(lv)) { errInt(); return 0;	/* YYERROR */ }
 	}
-	if ((sp = actexpr->v->le_sym) == 0) {
+	if ((sp = lv->v->le_sym) == 0) {
 	    ierror("no expression to return:", iFunBuffer);
 	} else {
 	    switch (ftyp) {
@@ -3241,7 +3288,7 @@ returnStatement(Lis * actexpr)
 		break;
 	    }
 	}
-	sp = op_asgn(&iRetSymbol, actexpr, ftyp);
+	sp = op_asgn(&iRetSymbol, lv, ftyp);
     } else {
 	sp = 0;
 	ierror("return statement in void function:", iFunBuffer);

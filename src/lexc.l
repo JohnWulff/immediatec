@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l 1.37 $";
+"@(#)$Id: lexc.l 1.38 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -451,7 +451,7 @@ check_type(YYSTYPE* u, int qtoken)
 	iC_toIEC1131(yytext, buffer, BUFS, iqt, xbwl, &byte, &bit, tail);
 	/********************************************************************
 	 *  the Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1
-	 *  Generally if yacc were to handle the '.' as a seperate token,
+	 *  Generally if yacc were to handle the '.' as a separate token,
 	 *  white space would be allowed as it would in C for the operator '.'
 	 *  If we allow white space here we will have the same effect without
 	 *  changing the grammar.

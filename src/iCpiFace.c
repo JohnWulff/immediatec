@@ -153,7 +153,7 @@ static const char *	usage =
 "    IEC,<gpio-list> Associate the bits of a particular input or output IEC\n"
 "          with a list of gpio numbers.  The IEC must start with either\n"
 "          I or Q in this case and no IEC range is allowed.  Up to 8\n"
-"          gpio numbers can be given in a comma seperated list. The\n"
+"          gpio numbers can be given in a comma separated list. The\n"
 "          first gpio number will be aassociated with bit 0, the second\n"
 "          with bit 1 etc and the eighth with bit 7. If the list is\n"
 "          shorter than 8 the trailing bits are not used. The letter\n"
@@ -220,7 +220,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.10 $\n"
+"Version	$Id: iCpiFace.c 1.11 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -2313,7 +2313,7 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
     IEC,<gpio-list> Associate the bits of a particular input or output IEC
           with a list of gpio numbers.  The IEC must start with either
           I or Q in this case and no IEC range is allowed.  Up to 8
-          gpio numbers can be given in a comma seperated list. The
+          gpio numbers can be given in a comma separated list. The
           first gpio number will be aassociated with bit 0, the second
           with bit 1 etc and the eighth with bit 7. If the list is
           shorter than 8 the trailing bits are not used. The letter

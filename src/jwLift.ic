@@ -1,0 +1,408 @@
+/********************************************************************
+ *
+ *	Transfer logic from kbLift.ic to iClift
+ *
+ *	Use X40-43 equivalenced to X0-X3 as in simLift.ic
+ *	Do the button resets in this transfer logic
+ *
+ * $Id: jwLift.ic 1.1 $
+ *
+ ********************************************************************/
+
+use strict;
+
+imm timer t50	= TIMER(TX0.4, ~TX0.4);		// t50 =
+imm bit   eoi	= TX0.0;			// end of initialisation
+
+/********************************************************************
+ * 	iClive sends the Debug Stop signal (usually on IX99.0) when in
+ *	debug mode and stopped at a Watch point or a single step.
+ *******************************************************************/
+
+imm bit debugStop		= IX99.0;	// Stop all motors during Watch point BREAK
+
+// OUTPUTS - Port A
+
+// Equivalence inputs for Device Address 0 outputs QX0.0 - QX0.7
+imm bit I_REQUEST_4_LIGHT	= IX40.0;	// Level 4 requested from inside lift
+imm bit I_REQUEST_3_LIGHT	= IX40.1;	// Level 3 requested from inside lift
+imm bit I_REQUEST_2_LIGHT	= IX40.2;	// Level 2 requested from inside lift
+imm bit I_REQUEST_1_LIGHT	= IX40.3;	// Level 1 requested from inside lift
+imm bit GOING_DOWN4		= IX40.4;	// On level 4 indicating lift going down
+imm bit CALL_DOWN_4_LIGHT	= IX40.5;	// Down requested on level 4
+imm bit GOING_UP3		= IX40.6;	// On level 3 indicating lift going up
+imm bit GOING_DOWN3		= IX40.7;	// On level 3 indicating lift going down
+
+// Equivalence inputs for Device Address 1 outputs QX1.0 - QX1.7
+imm bit CALL_UP_3_LIGHT		= IX41.0;	// Up requested on level 3
+imm bit CALL_DOWN_3_LIGHT	= IX41.1;	// Down requested on level 3
+imm bit GOING_UP2		= IX41.2;	// On level 2 indicating lift going up
+imm bit GOING_DOWN2		= IX41.3;	// On level 2 indicating lift going down
+imm bit CALL_UP_2_LIGHT		= IX41.4;	// Up requested on level 2
+imm bit CALL_DOWN_2_LIGHT	= IX41.5;	// Down requested on level 2
+imm bit GOING_UP1		= IX41.6;	// On level 1 indicating lift going up
+imm bit CALL_UP_1_LIGHT		= IX41.7;	// Up requested on level 1
+
+// Equivalence inputs for Device Address 2 outputs QX2.0 - QX2.1
+imm bit I_GOING_DOWN_LIGHT	= IX42.0;	// Lift "going down" light inside lift
+imm bit I_GOING_UP_LIGHT	= IX42.1;	// Lift "going up" light inside lift
+
+// Equivalence inputs for Device Address 3 outputs QX0.3 - QX3.6
+
+imm bit RingBell		= IX43.0;	// <100ms active high pulse
+imm bit LiftMotor1		= IX43.1 | debugStop;	// 2 bits to control 3 motor states
+imm bit LiftMotor2		= IX43.2 | debugStop;	// Hi when stopped by debugStop
+imm bit DoorMotor3		= IX43.3 | debugStop;	// 2 bits to control 3 motor states
+imm bit DoorMotor4		= IX43.4 | debugStop;	// Hi when stopped by debugStop 
+imm bit I_AT_LIGHT5		= IX43.5;	// 2 bits multiplexed to drive one of four lights
+imm bit I_AT_LIGHT6		= IX43.6; 
+
+// imm bit RESETALARM		= IX43.7;	// Reset cage and door alarms from button or lift control
+imm int targPosn0		= IB43;		// from kbLift to control cage movement
+
+/********************************************************************
+ *  Interface to iClift -L1 -F4
+ *  # Arg,mask       #  ch only valid if iClift is first app to be run
+ *  IB0              #   1 Cage 0: current cage position
+ *  IX0              #   2 Debug0: IX0.0 - IX0.7
+ *  QX0              #   3 Lift 0: 0 show up   1 down 2 open inside door 3 close 4 fast 5 cage up   6 down 7 fast
+ *  IX1              #   4 Lift 0: 0 cage near 1 home 2 inside door posn 3 near  4 home 5 AL button 6 ><   7 <>
+ *  QX1              #   5 Lift 0: 0 - 4 misc_fun0 - misc_fun4        5 AL button reset 6 >< reset  7 <> reset
+ *  IX2,0b1111       #   6 Cage 0: floor 0 - 3 select buttons
+ *  QX2,0b1111       #   7 Cage 0: floor 0 - 3 select button resets
+ *  IX3,0b1111       #   8 Lift 0: floor 0 - 3 up buttons
+ *  QX3,0b1111       #   9 Lift 0: floor 0 - 3 up button resets
+ *  IX4,0b1111       #  10 Lift 0: floor 0 - 3 down buttons
+ *  QX4,0b1111       #  11 Lift 0: floor 0 - 3 down button resets
+ *  IX5,0b1111       #  12 Lift 0: floor 0 - 3 outside door posn
+ *  QX5,0b1111       #  13 Lift 0: floor 0 - 3 open outside door
+ *  IX6,0b1111       #  14 Lift 0: floor 0 - 3 outside door near
+ *  QX6,0b1111       #  15 Lift 0: floor 0 - 3 close outside door
+ *  IX7,0b1111       #  16 Lift 0: floor 0 - 3 outside door home
+ *  QX7,0b1111       #  17 Lift 0: floor 0 - 3 move outside door fast
+ *  QX8,0b1111       #  18 Lift 0: floor 0 - 3 outside up indicator
+ *  QX9,0b1111       #  19 Lift 0: floor 0 - 3 outside down indicator
+ *******************************************************************/
+
+/********************************************************************
+ ********************************************************************
+ **	Lift '1' inputs from iClift
+ ********************************************************************
+ ********************************************************************/
+
+imm int cagePosn0	=  IB0;
+imm bit cageNear0	= ~IX1.0;
+imm bit cageHome0	= ~IX1.1;
+imm bit doorPosn0	=  IX1.2;
+imm bit doorNear0	= ~IX1.3;
+imm bit doorHome0	= ~IX1.4;
+imm bit cageAlarm0	=  IX1.5;	// AL cage alarm button
+imm bit closeDoor0	=  IX1.6;	// >< door close button
+imm bit openDoor0	=  IX1.7;	// <> door open button
+
+imm bit underIn0	=  IX0.0;	// inside door undershoot
+imm bit overIn0		=  IX0.1;	// inside door overshoot
+imm bit underOut0	=  IX0.4;	// outside door undershoot
+imm bit overOut0	=  IX0.5;	// outside door overshoot
+
+imm bit butCg0x0	=  IX2.0;	// Floor '0' select button inside cage
+imm bit butUp0x0	=  IX3.0;	// Floor '0' select button up on outside wall
+imm bit doorPosn0x0	=  IX5.0;
+imm bit doorNear0x0	= ~IX6.0;
+imm bit doorHome0x0	= ~IX7.0;
+
+imm bit butCg0x1	=  IX2.1;	// Floor '1' select button inside cage
+imm bit butUp0x1	=  IX3.1;	// Floor '1' select button up on outside wall
+imm bit butDn0x1	=  IX4.1;	// Floor '1' select button down on outside wall
+imm bit doorPosn0x1	=  IX5.1;
+imm bit doorNear0x1	= ~IX6.1;
+imm bit doorHome0x1	= ~IX7.1;
+
+imm bit butCg0x2	=  IX2.2;	// Floor '2' select button inside cage
+imm bit butUp0x2	=  IX3.2;	// Floor '2' select button up on outside wall
+imm bit butDn0x2	=  IX4.2;	// Floor '2' select button down on outside wall
+imm bit doorPosn0x2	=  IX5.2;
+imm bit doorNear0x2	= ~IX6.2;
+imm bit doorHome0x2	= ~IX7.2;
+
+imm bit butCg0x3	=  IX2.3;	// Floor '3' select button inside cage
+imm bit butDn0x3	=  IX4.3;	// Floor '3' select button down on outside wall
+imm bit doorPosn0x3	=  IX5.3;
+imm bit doorNear0x3	= ~IX6.3;
+imm bit doorHome0x3	= ~IX7.3;
+
+imm bit reset0		= IX4.0;	// reset from iClift startup via Floor '0' non-existent down
+QX4.0	= reset0;		// down button bit, which does not exist
+QX1.5	= D(cageAlarm0);	// AL button reset
+QX1.1	= D(underIn0 | overIn0 | underOut0 | overOut0);		// misc_fun1() turn continuous testing off
+// QX1.2	= D(debugStop);		// misc_fun2() stops door and cage movements at iClive Watch and single step breaks
+QX1.2	= debugStop;		// misc_fun2() stops door and cage movements at iClive Watch and single step breaks
+
+imm bit doorOpened0;
+QX1.0	= ST(doorOpened0, t50, 5); // misc_fun0(0,0,0,4) set a random floor button
+
+/********************************************************************
+ *	Lift '1' cage control
+ ********************************************************************/
+
+imm int prevPosn0;						// prevPosn0 =
+imm bit upSlow0		= LiftMotor1 & ~LiftMotor2;		// cagePosn0 =
+imm bit downSlow0	= LiftMotor2 & ~LiftMotor1;		// targPosn0 =
+imm bit cageFast0	= (upSlow0 | downSlow0) & (~cageNear0 | cagePosn0 != prevPosn0);
+imm int prevPosn0	= SH(targPosn0, CLOCK(cageFast0));
+
+imm bit down0		= I_GOING_DOWN_LIGHT;	// Lift "going down" light inside lift
+imm bit up0		= I_GOING_UP_LIGHT  ;	// Lift "going up" light inside lift
+
+QX0.0	= up0;		// show cage up indicator (optional)
+QX0.1	= down0;		// show cage down indicator (optional)
+QX0.5	= upSlow0;	// move cage up slow
+QX0.6	= downSlow0;	// move cage down slow
+QX0.7	= cageFast0;	// move cage fast
+
+/********************************************************************
+ *	Lift '1' inside door control
+ ********************************************************************/
+
+imm bit doorClosed0	= ~doorPosn0 & doorNear0 & doorHome0;
+imm bit doorOpened0	=  doorPosn0 & doorNear0 & doorHome0;
+
+imm bit ButDoorClose0	= closeDoor0 & doorClosed0;		// >< door close button
+imm bit ButDoorOpen0	= openDoor0  & doorOpened0;		// <> door open button
+imm bit I_REQUEST_OPEN	= ST(openDoor0, t50,5);
+imm bit DOOR_OPEN	= doorOpened0;
+imm bit DOOR_SHUT	= doorClosed0;
+
+imm bit openSlow0	= DoorMotor3 & ~DoorMotor4;
+imm bit closeSlow0	= DoorMotor4 & ~DoorMotor3;
+imm bit doorFast0	= (openSlow0 | closeSlow0) & ~doorNear0;
+
+QX0.2	= openSlow0;	// open inside door slow
+QX0.3	= closeSlow0;	// close inside door slow
+QX0.4	= doorFast0;	// move inside door fast
+QX1.6	= ButDoorClose0;	// >< door close button
+QX1.7	= ButDoorOpen0;	// <> door open button
+
+/********************************************************************
+ *	Lift '1' Floor '0' outside door control
+ ********************************************************************/
+
+imm bit LIFT_AT1	= (cagePosn0 == 0)  & cageHome0;
+
+imm bit I_REQUEST1	= ST(butCg0x0, t50,5);
+imm bit CALL_UP1	= ST(butUp0x0, t50,5);
+imm bit ButCg0x0	= ST(RISE(butCg0x0) & LIFT_AT1 & ~I_REQUEST_1_LIGHT |
+			     FALL(I_REQUEST_1_LIGHT), t50, 2);	// Floor '0' select button inside cage
+imm bit ButUp0x0	= ST(RISE(butUp0x0) & LIFT_AT1 & ~CALL_UP_1_LIGHT   |
+			     FALL(CALL_UP_1_LIGHT  ), t50, 2);	// Floor '0' select button up on outside wall
+
+imm bit doorClosed0x0	= ~doorPosn0x0 & doorNear0x0 & doorHome0x0;
+imm bit doorOpened0x0	=  doorPosn0x0 & doorNear0x0 & doorHome0x0;
+imm bit openSlow0x0	= SR(LIFT_AT1 & openSlow0 , doorOpened0x0);
+imm bit closeSlow0x0	= SR(LIFT_AT1 & closeSlow0, doorClosed0x0);
+imm bit doorFast0x0	= (openSlow0x0 | closeSlow0x0) & ~doorNear0x0;
+imm bit up0x0		= GOING_UP1;
+imm bit down0x0		= ~eoi;				// always off
+
+QX2.0	= ButCg0x0;	// Floor '0' select button inside cage
+QX3.0	= ButUp0x0;	// Floor '0' select button up on outside wall
+QX5.0	= openSlow0x0;	// open outside door slow
+QX6.0	= closeSlow0x0;	// close outside door slow
+QX7.0	= doorFast0x0;	// move outside door fast
+QX8.0	= up0x0;		// show outside up indicator
+QX9.0	= down0x0;	// show outside down indicator
+
+/********************************************************************
+ *	Lift '1' Floor '1' outside door control
+ ********************************************************************/
+
+imm bit LIFT_AT2	= (cagePosn0 == 1)  & cageHome0;
+
+imm bit I_REQUEST2	= ST(butCg0x1, t50,5);
+imm bit CALL_UP2	= ST(butUp0x1, t50,5);
+imm bit CALL_DOWN2	= ST(butDn0x1, t50,5);
+imm bit ButCg0x1	= ST(RISE(butCg0x1) & LIFT_AT2 & ~I_REQUEST_2_LIGHT |
+			     FALL(I_REQUEST_2_LIGHT), t50, 2);	// Floor '1' select button inside cage
+imm bit ButUp0x1	= ST(RISE(butUp0x1) & LIFT_AT2 & ~CALL_UP_2_LIGHT   |
+			     FALL(CALL_UP_2_LIGHT  ), t50, 2);	// Floor '1' select button up on outside wall
+imm bit ButDn0x1	= ST(RISE(butDn0x1) & LIFT_AT2 & ~CALL_DOWN_2_LIGHT |
+			     FALL(CALL_DOWN_2_LIGHT), t50, 2);	// Floor '1' select button down on outside wall
+
+imm bit doorClosed0x1	= ~doorPosn0x1 & doorNear0x1 & doorHome0x1;
+imm bit doorOpened0x1	=  doorPosn0x1 & doorNear0x1 & doorHome0x1;
+imm bit openSlow0x1	= SR(LIFT_AT2 & openSlow0 , doorOpened0x1);
+imm bit closeSlow0x1	= SR(LIFT_AT2 & closeSlow0, doorClosed0x1);
+imm bit doorFast0x1	= (openSlow0x1 | closeSlow0x1) & ~doorNear0x1;
+imm bit up0x1		= GOING_UP2;
+imm bit down0x1		= GOING_DOWN2;
+
+QX2.1	= ButCg0x1;	// Floor '1' select button inside cage
+QX3.1	= ButUp0x1;	// Floor '1' select button up on outside wall
+QX4.1	= ButDn0x1;	// Floor '1' select button down on outside wall
+QX5.1	= openSlow0x1;	// open outside door slow
+QX6.1	= closeSlow0x1;	// close outside door slow
+QX7.1	= doorFast0x1;	// move outside door fast
+QX8.1	= up0x1;		// show outside up indicator
+QX9.1	= down0x1;	// show outside down indicator
+
+/********************************************************************
+ *	Lift '1' Floor '2' outside door control
+ ********************************************************************/
+
+imm bit LIFT_AT3	= (cagePosn0 == 2)  & cageHome0;
+
+imm bit I_REQUEST3	= ST(butCg0x2, t50,5);
+imm bit CALL_UP3	= ST(butUp0x2, t50,5);
+imm bit CALL_DOWN3	= ST(butDn0x2, t50,5);
+imm bit ButCg0x2	= ST(RISE(butCg0x2) & LIFT_AT3 & ~I_REQUEST_3_LIGHT |
+			     FALL(I_REQUEST_3_LIGHT), t50, 2);	// Floor '2' select button inside cage
+imm bit ButUp0x2	= ST(RISE(butUp0x2) & LIFT_AT3 & ~CALL_UP_3_LIGHT   |
+			     FALL(CALL_UP_3_LIGHT  ), t50, 2);	// Floor '2' select button up on outside wall
+imm bit ButDn0x2	= ST(RISE(butDn0x2) & LIFT_AT3 & ~CALL_DOWN_3_LIGHT |
+			     FALL(CALL_DOWN_3_LIGHT), t50, 2);	// Floor '2' select button down on outside wall
+
+imm bit doorClosed0x2	= ~doorPosn0x2 & doorNear0x2 & doorHome0x2;
+imm bit doorOpened0x2	=  doorPosn0x2 & doorNear0x2 & doorHome0x2;
+imm bit openSlow0x2	= SR(LIFT_AT3 & openSlow0 , doorOpened0x2);
+imm bit closeSlow0x2	= SR(LIFT_AT3 & closeSlow0, doorClosed0x2);
+imm bit doorFast0x2	= (openSlow0x2 | closeSlow0x2) & ~doorNear0x2;
+imm bit up0x2		= GOING_UP3;
+imm bit down0x2		= GOING_DOWN3;
+
+QX2.2	= ButCg0x2;	// Floor '2' select button inside cage
+QX3.2	= ButUp0x2;	// Floor '2' select button up on outside wall
+QX4.2	= ButDn0x2;	// Floor '2' select button down on outside wall
+QX5.2	= openSlow0x2;	// open outside door slow
+QX6.2	= closeSlow0x2;	// close outside door slow
+QX7.2	= doorFast0x2;	// move outside door fast
+QX8.2	= up0x2;		// show outside up indicator
+QX9.2	= down0x2;	// show outside down indicator
+
+/********************************************************************
+ *	Lift '1' Floor '3' outside door control
+ ********************************************************************/
+
+imm bit LIFT_AT4	= (cagePosn0 == 3)  & cageHome0;
+
+imm bit I_REQUEST4	= ST(butCg0x3, t50,5);
+imm bit CALL_DOWN4	= ST(butDn0x3, t50,5);
+imm bit ButCg0x3	= ST(RISE(butCg0x3) & LIFT_AT4 & ~I_REQUEST_4_LIGHT |
+			     FALL(I_REQUEST_4_LIGHT), t50, 2);	// Floor '3' select button inside cage
+imm bit ButDn0x3	= ST(RISE(butDn0x3) & LIFT_AT4 & ~CALL_DOWN_4_LIGHT |
+			     FALL(CALL_DOWN_4_LIGHT), t50, 2);	// Floor '3' select button down on outside wall
+
+imm bit doorClosed0x3	= ~doorPosn0x3 & doorNear0x3 & doorHome0x3;
+imm bit doorOpened0x3	=  doorPosn0x3 & doorNear0x3 & doorHome0x3;
+imm bit openSlow0x3	= SR(LIFT_AT4 & openSlow0 , doorOpened0x3);
+imm bit closeSlow0x3	= SR(LIFT_AT4 & closeSlow0, doorClosed0x3);
+imm bit doorFast0x3	= (openSlow0x3 | closeSlow0x3) & ~doorNear0x3;
+imm bit up0x3		= ~eoi;				// always off
+imm bit down0x3		= GOING_DOWN4;
+
+QX2.3	= ButCg0x3;	// Floor '3' select button inside cage
+QX4.3	= ButDn0x3;	// Floor '3' select button down on outside wall
+QX5.3	= openSlow0x3;	// open outside door slow
+QX6.3	= closeSlow0x3;	// close outside door slow
+QX7.3	= doorFast0x3;	// move outside door fast
+QX8.3	= up0x3;		// show outside up indicator
+QX9.3	= down0x3;	// show outside down indicator
+
+/********************************************************************
+ ********************************************************************
+ **	End control
+ ********************************************************************
+ ********************************************************************/
+
+/********************************************************************
+ *  Make a short sound (bell.oga takes about 150 ms)
+ *  better sound is complete.oga but it takes 1.1 seconds to execute
+ *******************************************************************/
+
+if (RingBell) { system("play -q /usr/share/sounds/freedesktop/stereo/complete.oga &"); }
+
+/********************************************************************
+ *  Simulated internal panel indicators
+ *******************************************************************/
+QX20.1	= ~I_AT_LIGHT5 & ~I_AT_LIGHT6;		// On level 1 light inside lift
+QX20.2	= ~I_AT_LIGHT5 &  I_AT_LIGHT6;		// On level 2 light inside lift
+QX20.3	=  I_AT_LIGHT5 & ~I_AT_LIGHT6;		// On level 3 light inside lift
+QX20.4	=  I_AT_LIGHT5 &  I_AT_LIGHT6;		// On level 4 light inside lift
+
+QX20.6	= I_GOING_DOWN_LIGHT;			// Lift "going down" light inside lift
+QX20.7	= I_GOING_UP_LIGHT;			// Lift "going up" light inside lift
+
+QX21.1	= I_REQUEST_1_LIGHT;			// Level 1 requested from inside lift
+QX21.2	= I_REQUEST_2_LIGHT;			// Level 2 requested from inside lift
+QX21.3	= I_REQUEST_3_LIGHT;			// Level 3 requested from inside lift
+QX21.4	= I_REQUEST_4_LIGHT;			// Level 4 requested from inside lift
+
+/********************************************************************
+ *  Simulated wall UP indicators
+ *******************************************************************/
+QX30.1	= GOING_UP1;				// On level 1 indicating lift going up
+QX30.2	= GOING_UP2;				// On level 2 indicating lift going up
+QX30.3	= GOING_UP3;				// On level 3 indicating lift going up
+
+QX31.1	= CALL_UP_1_LIGHT;			// Up requested on level 1
+QX31.2	= CALL_UP_2_LIGHT;			// Up requested on level 2
+QX31.3	= CALL_UP_3_LIGHT;			// Up requested on level 3
+
+/********************************************************************
+ *  Simulated wall DOWN indicators
+ *******************************************************************/
+QX35.2	= CALL_DOWN_2_LIGHT;			// Down requested on level 2
+QX35.3	= CALL_DOWN_3_LIGHT;			// Down requested on level 3
+QX35.4	= CALL_DOWN_4_LIGHT;			// Down requested on level 4
+
+QX36.2	= GOING_DOWN2;				// On level 2 indicating lift going down
+QX36.3	= GOING_DOWN3;				// On level 3 indicating lift going down
+QX36.4	= GOING_DOWN4;				// On level 4 indicating lift going down
+
+/********************************************************************
+ *  Simulated mechanical switch outputs
+ *******************************************************************/
+QX37.1	= LIFT_AT1;				// Lift aligned with level 1
+QX37.2	= LIFT_AT2;				// Lift aligned with level 2
+QX37.3	= LIFT_AT3;				// Lift aligned with level 3
+QX37.4	= LIFT_AT4;				// Lift aligned with level 4
+
+QX37.6	= DOOR_SHUT;				// Lift doors in closed position
+QX37.7	= DOOR_OPEN;				// Lift doors in open position
+
+/********************************************************************
+ *  Simulated control inputs
+ *******************************************************************/
+QX38.0	= RingBell;				// <100ms active high pulse
+QX38.1	= LiftMotor1;				// 2 bits to control 3 motor states
+QX38.2	= LiftMotor2;
+QX38.3	= DoorMotor3;				// 2 bits to control 3 motor states
+QX38.4	= DoorMotor4;
+QX38.5	= I_AT_LIGHT5;				// 2 bits multiplexed to drive one of four lights
+QX38.6	= I_AT_LIGHT6;				// NOTE not used by iClift
+
+// INPUTS - Port B
+
+// Equivalence outputs for Device Address 0 inputs IX0.0 - IX0.4
+QX40.0	= LIFT_AT2;				// Lift aligned with level 2
+QX40.1	= CALL_UP2;				// Request up from level 2
+QX40.2	= CALL_DOWN2;				// Request down from level 2
+QX40.3	= LIFT_AT1;				// Lift aligned with level 1
+QX40.4	= CALL_UP1;				// Request up from level 1
+
+// Device Address 1				// not used
+
+// Equivalence outputs for Device Address 2 inputs IX2.0 - IX2.7
+QX42.0	= I_REQUEST_OPEN;			// Open door button inside lift
+QX42.1	= I_REQUEST4;				// Lift to level 4 request inside lift
+QX42.2	= I_REQUEST3;				// Lift to level 3 request inside lift
+QX42.3	= I_REQUEST2;				// Lift to level 2 request inside lift
+QX42.4	= I_REQUEST1;				// Lift to level 1 request inside lift
+QX42.5	= CALL_DOWN3;				// Request down from level 3
+QX42.6	= CALL_UP3;				// Request up from level 3
+QX42.7	= LIFT_AT3;				// Lift aligned with level 3
+
+// Equivalence outputs for Device Address 3 inputs IX3.0 - IX3.3
+QX43.0	= DOOR_OPEN;				// Lift door in open position
+QX43.1	= LIFT_AT4;				// Lift aligned with level 4
+QX43.2	= CALL_DOWN4;				// Request down from level 4
+QX43.3	= DOOR_SHUT;				// Lift doors in closed position

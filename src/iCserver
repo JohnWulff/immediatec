@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.55 $
+$Id: iCserver 1.56 $
 .
 
 ########################################################################
@@ -428,6 +428,12 @@ sub readStdin {
 #
 #	Fork and exec another process
 #
+#	If the command is a ';' separated list, it is a list of processes
+#	which are executed just like in a shell, waiting for each process
+#	except the last to complete before the next one is started
+#	eg: sleep 5; jwLift	# wait 5 seconds in background process
+#				# before starting jwLift
+#
 ########################################################################
 
 sub fork_and_exec {
@@ -437,7 +443,15 @@ sub fork_and_exec {
 	select undef, undef, undef, 1 if defined $pid;	# delay if previous fork
 	return if ($pid = fork);
 	if (defined $pid) {	# $pid is zero if defined
-	    ## dispatch child process
+	    ## dispatch child process - possibly in a ; separated list
+	    my @proc = split /; */, $argv;
+	    while ($#proc > 0) {
+		$argv = shift @proc;
+		print STDERR "\$ $argv;\n" unless $opt_q;
+		system $argv;		# wait for process to complete
+		print STDERR "\$ $argv; end\n" unless $opt_q;
+	    }
+	    $argv = shift @proc;	# last process goes to background
 	    my @call = split " ", $argv;
 	    my $n = 1;
 	    if ($call[0] eq "perl") {	# only needed for WIN32
@@ -1861,7 +1875,7 @@ Additional functionality in iCserver.
         (also maximum buffer size) - it will be sent in more than one
         transmission if it is too long.
 
-    In summary: the registration string consists of a comma seperated
+    In summary: the registration string consists of a comma separated
     list beginning with 'Nname' followed by one or more individual
     sender and receiver registration codes starting with 'S' or 'R'
     and terminated with a single 'Z'. The whole is sent in one or

@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.126 $";
+"@(#)$Id: comp.y 1.127 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -39,15 +39,28 @@ int		gnerrs;			/* count of ierror() calls */
 static int	copyCfrag(char, char, char, FILE*);	/* copy C action */
 static void	ffexprCompile(char *, List_e *, int);	/* c_compile cBlock */
 static void	blockUnblockListing(void);
+static List_e *	op_adjust(Lis * lv);	/* adjust logic expression with constant */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
 static Type	stype;			/* to save TYPE in decl */
 %ifdef	BOOT_COMPILE
 static Val	val1 = { 0, 0, 1, };	/* preset off 1 value for TIMER1 */
+static void	errBit(void);
 %endif	/* BOOT_COMPILE */
 static Symbol	nSym = { "", ERR, GATE, };
 static int	cFn = 0;
+static char *	TaliasList[9][2] = {
+	    { "EOI",	"TX0.0"  },	// end of initialisation
+	    { "STDIN",	"TX0.1"  },	// stdin line received
+	    { "LO",	"TX0.2"  },	// constant bit LO
+	    { "HI",	"~TX0.2" },	// constant bit HI
+	    { "T10ms",	"TX0.3"  },	// 10 ms internal timer
+	    { "T100ms",	"TX0.4"  },	// 100 ms internal timer
+	    { "T1sec",	"TX0.5"  },	// 1 second internal timer
+	    { "T10sec",	"TX0.6"  },	// 10 second internal timer
+	    { "T1min",	"TX0.7"  },	// 1 minute internal timer
+};
 
 #ifndef EFENCE
 char		iCbuf[IMMBUFSIZE];	/* buffer to build imm statement */
@@ -1410,7 +1423,7 @@ expr	: UNDEF			{
 	    }
 	| Constant		{
 		$$.f = $1.f; $$.l = $1.l;	/* no node, value not used */
-		$$.v = 0;			/* mark as illegal in bit expressions */
+		$$.v = 0;			/* uses TX0.2 in bit expressions */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: Constant", &$$);
 #endif
@@ -1482,11 +1495,9 @@ expr	: UNDEF			{
 		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise | */
-		} else if ($1.v == 0 || $3.v == 0) {
-		    errBit(); YYERROR;
 		} else {
-		    lpR = op_force($3.v, GATE);
-		    lpL = op_force($1.v, GATE);
+		    lpL = op_adjust(&$1);
+		    lpR = op_adjust(&$3);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		}
 		if ($$.v) {
@@ -1504,11 +1515,9 @@ expr	: UNDEF			{
 		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise ^ */
-		} else if ($1.v == 0 || $3.v == 0) {
-		    errBit(); YYERROR;
 		} else {
-		    lpR = op_force($3.v, GATE);
-		    lpL = op_force($1.v, GATE);
+		    lpL = op_adjust(&$1);
+		    lpR = op_adjust(&$3);
 		    $$.v = op_push(lpL, XOR, lpR);	/* logical ^ */
 		}
 		if ($$.v) {
@@ -1526,11 +1535,9 @@ expr	: UNDEF			{
 		if (($1.v == 0 || $1.v->le_sym->ftype == ARITH) &&
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise & */
-		} else if ($1.v == 0 || $3.v == 0) {
-		    errBit(); YYERROR;
 		} else {
-		    lpR = op_force($3.v, GATE);
-		    lpL = op_force($1.v, GATE);
+		    lpL = op_adjust(&$1);
+		    lpR = op_adjust(&$3);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		}
 		if ($$.v) {
@@ -2051,7 +2058,6 @@ constExpr
 #endif
 	    }
 	;
-
 %ifdef	BOOT_COMPILE
 
 	/************************************************************
@@ -2550,6 +2556,9 @@ dcasgn	: decl '=' cexpr	{			/* dcasgn is NOT an cexpr */
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 		if ($1.v) $$.v = assignExpression(&$1, &$3, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "dcasgn: decl = cexpr", &$$);
+#endif
 	    }
 	;
 
@@ -2560,6 +2569,9 @@ casgn	: UNDEF '=' cexpr	{
 		    ierror("strict: assignment to an undeclared 'imm clock':", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "casgn: UNDEF = cexpr", &$$);
+#endif
 	    }
 	| CVAR '=' cexpr	{
 		if ($1.v->type != UDF && $1.v->type != ERR) {
@@ -2568,11 +2580,21 @@ casgn	: UNDEF '=' cexpr	{
 		}
 		assert($1.v->ftype == CLCKL);
 		$$.v = assignExpression(&$1, &$3, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "casgn: CVAR = cexpr", &$$);
+#endif
 	    }
 	;
 
 cexpr	: CVAR			{ $$.v = checkDecl($1.v); }
 	| casgn			{ $$.v = sy_push($1.v); }
+	| Constant		{
+		$$.f = $1.f; $$.l = $1.l;	/* no node, value not used */
+		$$.v = 0;			/* mark as illegal in clock expressions */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "cexpr: Constant", &$$);
+#endif
+	    }
 %ifdef	BOOT_COMPILE
 	| cfexpr		{
 		Symbol *	sp = $1.v->le_sym;
@@ -2664,6 +2686,9 @@ dtasgn	: decl '=' texpr	{			/* dtasgn is NOT an texpr */
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
 		if ($1.v) $$.v = assignExpression(&$1, &$3, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "dtasgn: decl = texpr", &$$);
+#endif
 	    }
 	;
 
@@ -2674,6 +2699,9 @@ tasgn	: UNDEF '=' texpr	{
 		    ierror("strict: assignment to an undeclared 'imm timer':", $1.v->name);
 		    $1.v->type = ERR;			/* cannot execute properly */
 		}
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "tasgn: UNDEF = texpr", &$$);
+#endif
 	    }
 	| TVAR '=' texpr	{
 		if ($1.v->type != UDF && $1.v->type != ERR) {
@@ -2682,11 +2710,21 @@ tasgn	: UNDEF '=' texpr	{
 		}
 		assert($1.v->ftype == TIMRL);
 		$$.v = assignExpression(&$1, &$3, 0);
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(SYM, "tasgn: TVAR = texpr", &$$);
+#endif
 	    }
 	;
 
 texpr	: TVAR			{ $$.v = checkDecl($1.v); }
 	| tasgn			{ $$.v = sy_push($1.v); }
+	| Constant		{
+		$$.f = $1.f; $$.l = $1.l;	/* no node, value not used */
+		$$.v = 0;			/* mark as illegal in timer expressions */
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) pu(LIS, "texpr: Constant", &$$);
+#endif
+	    }
 %ifdef	BOOT_COMPILE
 	| tfexpr		{
 		Symbol *	sp = $1.v->le_sym;
@@ -4804,7 +4842,7 @@ yylex(void)
 		} else {			/* QX, IX or TX */
 		    /********************************************************************
 		     *  the Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1
-		     *  Generally if yacc were to handle the '.' as a seperate token,
+		     *  Generally if yacc were to handle the '.' as a separate token,
 		     *  white space would be allowed as it would in C for the operator '.'
 		     *  If we allow white space here we will have the same effect without
 		     *  changing the grammar.
@@ -5029,54 +5067,45 @@ yylex(void)
 		 *******************************************************************/
 		if (iC_Pflag >= 2) typ = ERR;
 		warning("'$' character(s) in identifier:", iCtext);
-	    } else if (strcmp(iCtext, "EOI") == 0) {
+	    } else if (strpbrk(iCtext, "EHLST") == iCtext) {	/* speeds up search */
 		/********************************************************************
-		 *  The iC language defines an input variable TX0.0 which is initially
-		 *  lo and goes hi when initialisation finishes.
-		 *  The folowing defines an ALIAS EOI for TX0.0 (end of initialisation).
-		 *  EOI can not be used in C code.
+		 *  The iC language defines internal input variables TX0.0 - TX0.7
+		 *  The first 3 have special functionality and the remaining 5 are timers.
+		 *  The following table defines aliases for these internal inputs.
+		 *	static char *	TaliasList[9][2] = {
+		 *	    { "EOI",	"TX0.0"  },	// end of initialisation
+		 *	    { "STDIN",	"TX0.1"  },	// stdin line received
+		 *	    { "LO",	"TX0.2"  },	// constant bit LO
+		 *	    { "HI",	"~TX0.2" },	// constant bit HI
+		 *	    { "T10ms",	"TX0.3"  },	// 10 ms internal timer
+		 *	    { "T100ms",	"TX0.4"  },	// 100 ms internal timer
+		 *	    { "T1sec",	"TX0.5"  },	// 1 second internal timer
+		 *	    { "T10sec",	"TX0.6"  },	// 10 second internal timer
+		 *	    { "T1min",	"TX0.7"  },	// 1 minute internal timer
+		 *	};
 		 *******************************************************************/
-		if ((symp = lookup(iCtext)) == 0) {	/* EOI */
-		    symp = install(iCtext, ALIAS, GATE);
-		    if ((sp = lookup("TX0.0")) == 0) {	/* TX0.0 is end of initialisation */
-			sp = install("TX0.0", INPX, GATE);
+		int	i;
+		int	invFlag = 0;
+		char *	TXp;
+		for (i = 0; i < 9; i++) {
+		    if (strcmp(iCtext, TaliasList[i][0]) == 0) {
+			if ((symp = lookup(iCtext)) == 0) {	/* lookup/install ALIAS */
+			    symp = install(iCtext, ALIAS, GATE);
+			    if (*(TXp = TaliasList[i][1]) == '~') {
+				TXp++;
+				invFlag = 1;
+			    }
+			    if ((sp = lookup(TXp)) == 0) {	/* lookup/install TX0.x */
+				sp = install(TXp, INPX, GATE);
+			    }
+			    symp->list = lp = sy_push(sp);	/* complete ALIAS to TX0.x */
+			    if (invFlag) {
+				lp->le_val = NOT;		/* HI is inverting ALIAS of TX0.2 */
+			    }
+			}
+			break;
 		    }
-		    symp->list = lp = sy_push(sp);	/* EOI is normal ALIAS of TX0.0 */
 		}
-	    } else if (strcmp(iCtext, "STDIN") == 0) {
-		/********************************************************************
-		 *  The iC language defines an input variable TX0.1 which goes hi
-		 *  every time a LF terminated line has been received from stdin.
-		 *  The folowing defines an ALIAS STDIN for TX0.1 (stdin line received).
-		 *  STDIN can not be used in C code.
-		 *******************************************************************/
-		if ((symp = lookup(iCtext)) == 0) {	/* STDIN */
-		    symp = install(iCtext, ALIAS, GATE);
-		    if ((sp = lookup("TX0.1")) == 0) {	/* TX0.1 is stdin line received */
-			sp = install("TX0.1", INPX, GATE);
-		    }
-		    symp->list = lp = sy_push(sp);	/* STDIN is normal ALIAS of TX0.1 */
-		}
-	    } else if (strcmp(iCtext, "LO") == 0 || strcmp(iCtext, "HI") == 0) {
-		/********************************************************************
-		 *  The iC language does not allow constants in logical bit expressions.
-		 *  In very rare instances a fixed lo or hi bit is required. A case is
-		 *  a parameter of a function block call, whose formal parameter is a
-		 *  bit, but the call does not need that input. In that case use LO or
-		 *  HI, which generate a normal or inverting ALIAS to input TX0.2,
-		 *  which is permanently lo.
-		 *  In C code LO and HI generates 0 and 1 (see lexc.l).
-		 *******************************************************************/
-		if ((symp = lookup(iCtext)) == 0) {	/* LO or HI */
-		    symp = install(iCtext, ALIAS, GATE);
-		    if ((sp = lookup("TX0.2")) == 0) {	/* TX0.2 is permanent bit LO */
-			sp = install("TX0.2", INPX, GATE);
-		    }
-		    symp->list = lp = sy_push(sp);	/* LO is normal ALIAS of TX0.2 */
-		    if (*iCtext == 'H') {
-			lp->le_val = NOT;		/* HI is inverting ALIAS of TX0.2 */
-		    }
-		}					/* ALIAS resolved 2 blocks down */
 	    }
 	    if (symp == 0) {
 		/********************************************************************
@@ -5416,12 +5445,14 @@ warning(					/* print warning message */
  *	Common error messages
  *
  *******************************************************************/
+%ifdef	BOOT_COMPILE
 
-void
+static void
 errBit(void)
 {
     ierror("no constant allowed in bit expression", NS);
 } /* errBit */
+%endif	/* BOOT_COMPILE */
 
 void
 errInt(void)
@@ -5661,3 +5692,31 @@ blockUnblockListing(void)
 	iC_outFP = iC_nulFP;	/* listing output is now blocked */
     }
 } /* blockUnblockListing */
+
+/********************************************************************
+ *
+ *	Adjust logic expression with arithmetic or constant expression
+ *
+ *******************************************************************/
+
+static List_e *
+op_adjust(Lis * lv)
+{
+    List_e *	lp;
+    Symbol *	sp;
+    Valp	v;
+
+    if ((lp = lv->v) == NULL) {			/* constant expression ? */
+	if ((sp = lookup("TX0.2")) == 0) {	/* yes */
+	    sp = install("TX0.2", INPX, GATE);
+	}
+	lp = sy_push(sp);			/* TX0.2 is permanent bit LO */
+	v = evalConstExpr(lv);
+	if (v.nuv) {
+	    lp->le_val = NOT;			/* ~TX0.2 is permanent bit HI */
+	}
+    } else {
+	lp = op_force(lp, GATE);		/* no - adjust possible arithmetic expression */
+    }
+    return lp;
+} /* op_adjust */

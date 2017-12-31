@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.75 $";
+"@(#)$Id: comp.h 1.76 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -133,7 +133,6 @@ typedef struct BuiltIn {	/* initial Symbol info in init.c */
 extern int  iC_compile(char *, char *,
 		    char *, char *);	/* compile iC language source */
 extern void errmess(char *, char *, char *);	/* actual error message */
-extern void errBit(void);		/* no constant allowed in bit expression */
 extern void errInt(void);		/* no imm variable to trigger arithmetic expression */
 extern void ierror(char *, char *);	/* print error message */
 extern void warning(char *, char *);	/* print warning message */

@@ -106,7 +106,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.28 $
+$Id: immac 1.29 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -547,7 +547,7 @@ exit $ret;
 #   Literal blocks starting with '%{' mark the start of embedded C code.
 #   A closing '%}' always marks the return to iC code independent of the
 #   brace nesting of the C code in the literal block. This means that
-#   %{ and %} are counted seperately and error messages are output if any
+#   %{ and %} are counted separately and error messages are output if any
 #   nesting is attempted. Literal block (fragments) may be nested in a
 #   FOR block (even only the start or the end). It would be pretty daft
 #   to do so, but go figure - (quoting Larry Wall). In any case there
@@ -1358,7 +1358,7 @@ use strict 'refs';
 				    ########################################################################
 				    #   If IF occurs before a FOR, then only the block marked by its double
 				    #   braces is eval'd. A following ELSE and its block will be eval'd
-				    #   seperately, which will cause a Perl error (else without previous if).
+				    #   separately, which will cause a Perl error (else without previous if).
 				    #   To make sure it executes correctly $opt_L is set after seeing IF, which
 				    #   will put the rest of the code in one eval, which is OK.
 				    ########################################################################
@@ -1813,7 +1813,7 @@ sub scan_define {
 	    (				# $3 $arguments
 	      ([A-Z_a-z]\w*)		# $4 1st argument
 	      (				# $5
-		\s*,\s*([A-Z_a-z]\w*)	# $6 2nd or further comma seperated arguments
+		\s*,\s*([A-Z_a-z]\w*)	# $6 2nd or further comma separated arguments
 	      )*			#    further arguments are optional
 	    )*				#    arguments in paraenthese are optional (cpp)
 	    \s*				#    space after arguments is optional
@@ -2488,7 +2488,7 @@ produces the following straight immediate C output
 which is not brilliant code, but shows the pattern.
 
 Both in C and by analogy in immediate C with arrays (iCa), index
-expressions surrounded by square brackets may be seperated from their
+expressions surrounded by square brackets may be separated from their
 array variables by white space. Because the idea of the iCa compiler
 is to generate individual iC variables from index expressions, this
 white space is removed. Array variables and their index expressions

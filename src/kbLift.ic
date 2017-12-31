@@ -71,9 +71,9 @@ imm bit   deBounce(bit contact)
  * Processor inputs
  *******************************************************************/
 
-imm timer t50  = TIMER(TX0.4, ~TX0.4);		// 50 ms timer
-imm bit   Deoi = D(TX0.0, t50, 3);		// 100 ms delay at end of initialisation
-imm bit   eoi  = TX0.0 & ~Deoi;			// pulse at end of initialisation
+imm timer t50  = TIMER(T100ms, ~T100ms);	// 50 ms timer
+imm bit   Deoi = D(EOI, t50, 3);		// 100 ms delay at end of initialisation
+imm bit   eoi  = EOI & ~Deoi;			// pulse at end of initialisation
 
 /********************************************************************
  * INPUTS - Port B
@@ -355,12 +355,14 @@ imm bit cageUp		= targetPosition >  cagePosition;	// cagePosition   =
 imm bit cageDn		= targetPosition <  cagePosition;	// targetPosition =
 imm bit atTarget	= targetPosition == cagePosition;
 
+imm bit openDoor;
 imm bit cageSTOP	= ~DOOR_SHUT        |		// hard stop when door not shut
 			  cageDn & LIFT_AT1 |		// hard stop at floor 1 going down
-			  cageUp & LIFT_AT4 ;		// hard stop at floor 4 going up
+			  cageUp & LIFT_AT4 |		// hard stop at floor 4 going up
+			  openDoor;			// hard stop when opening door
 
-imm bit LiftMotor1	= D(~cageDn | cageSTOP);	// Lift cage up or hard stop for any reason
-imm bit LiftMotor2	= D(~cageUp | cageSTOP);	// Lift cage down or hard stop for any reason
+imm bit LiftMotor1	= D(~cageDn) | cageSTOP;	// Lift cage up or hard stop for any reason
+imm bit LiftMotor2	= D(~cageUp) | cageSTOP;	// Lift cage down or hard stop for any reason
 
 imm bit sameFloorUp	= RISE(nextUp2 | nextUp3);
 imm bit sameFloorDn	= RISE(nextDn2 | nextDn3);
