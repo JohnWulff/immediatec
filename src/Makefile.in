@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.72 $
+# @(#)$Id: Makefile.in 1.73 $
 
 #######################################################################
 #
@@ -118,12 +118,16 @@ LOBJ =	link.$(O) rsff.$(O) scan.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 PSRC =	$(srcdir)/rpi_rev.c $(srcdir)/rpi_gpio.c $(srcdir)/mcp23s17.c $(srcdir)/pifacecad.c
 POBJ =	rpi_rev.$(O) rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O)
+# Bison 2.5 < 2.6 now obsolete
+compPREFIX = --name-prefix=iC
+consPREFIX = --name-prefix=cn
 else
 PSRC =
 POBJ =
-endif
+# Bison 2.7
 compPREFIX = -Dapi.prefix=iC
 consPREFIX = -Dapi.prefix=cn
+endif
 gramPREFIX =
 
 #### Standalone versions ##############################################

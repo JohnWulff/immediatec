@@ -1,5 +1,5 @@
 %{ static const char cons_y[] =
-"@(#)$Id: cons.y 1.4 $";
+"@(#)$Id: cons.y 1.5 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -54,7 +54,7 @@
  *
  *  This auxiliary grammar allows all iC arithmetic operators for constant
  *  expressions. This is good because some constants are returned by
- *  function blocks and other are macros defined in the command line.
+ *  function blocks and others are macros defined in the command line.
  *  This is probably overkill, but it avoids unnecessary error messages.
  *
  *******************************************************************/
@@ -80,28 +80,6 @@ static char *	in;
 static char *	inp;
 static int	suppressErrorMsg = 0;
 static int	stxFlag = 0;
-
-/********************************************************************
- *
- *	Parse a constant expression text and return its numerical value
- *		in int* valp
- *
- *	return	0 if parsing was successful (constant numeric expression)
- *		1 if non numeric and r == 0
- *		if r != 0 suppress yacc syntax (and other) error messages
- *
- *	parseConstantExpression() is used in comp.y
- *
- *******************************************************************/
-
-int
-parseConstantExpression(char * expressionText, int * valp, int r)
-{
-    in = inp = expressionText;		/* ready for yylex */
-    suppressErrorMsg = r;
-    *valp = 0;
-    return yyparse(valp);
-} /* parseConstantExpression */
 
 /* use default YYSTYPE int */
 %}
@@ -237,6 +215,28 @@ constExpr
 #include	<stdlib.h>
 #include	<string.h>
 #include	<ctype.h>
+
+/********************************************************************
+ *
+ *	Parse a constant expression text and return its numerical value
+ *		in int* valp
+ *
+ *	return	0 if parsing was successful (constant numeric expression)
+ *		1 if non numeric and r == 0
+ *		if r != 0 suppress yacc syntax (and other) error messages
+ *
+ *	parseConstantExpression() is used in comp.y
+ *
+ *******************************************************************/
+
+int
+parseConstantExpression(char * expressionText, int * valp, int r)
+{
+    in = inp = expressionText;		/* ready for yylex */
+    suppressErrorMsg = r;
+    *valp = 0;
+    return cnparse(valp);
+} /* parseConstantExpression */
 
 /********************************************************************
  *

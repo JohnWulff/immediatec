@@ -28,7 +28,7 @@ use strict;
 
 eval '$'.$1.'$2;' while $ARGV[0] =~ /^([A-Za-z_0-9]+=)(.*)/ && shift;
 			# process any FOO=bar switches
-my $rev = '@(#)     $Id: pawk.pl 1.8 $';
+my $rev = '@(#)     $Id: pawk.pl 1.9 $';
 my $name = 'iC_ID';
 my $X = '';
 my $mod = '';
@@ -47,7 +47,7 @@ while (<>) {
 	    if ($describe = qx(git describe --always --dirty 2> /dev/null)) {
 		chomp $describe;
 		print "\t\"\$$RV $describe \$\";\n";
-		if ($patch = qx(git diff HEAD)) {
+		if ($patch = qx(git diff --diff-filter=d HEAD)) {
 		    $patch =~ s/\\/\\\\/g;
 		    $patch =~ s/"/\\"/g;
 		    $patch =~ s/\n/\\n"\n"/g;

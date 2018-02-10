@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.76 $";
+"@(#)$Id: comp.h 1.77 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -396,14 +396,17 @@ extern int	iC_listNet(void);	/* list generated network */
 extern int	iC_buildNet(void);	/* generate execution network */
 #endif /* defined(RUN) || defined(TCP) */
 extern int	iC_outNet(FILE * iFP, char * outfile);	/* generate network as C file */
+
+					/*   gram.y   */
 extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 
-					/*   gram.y   */
-extern void	copyAdjust(FILE* iFP, FILE* oFP, List_e* lp);
-
 					/*   lexc.l   */
-extern size_t	yyleng;			/* defined in lexc.c */
+#ifdef RASPBERRYPI
+extern int	yyleng;			/* defined in lex.yy.c for Raspberry Pi */
+#else
+extern size_t	yyleng;			/* defined in lex.yy.c */
+#endif
 extern int	column;
 extern int	gramOffset;		/* count input in lex */
 extern void	delete_sym(Token* tokp);
