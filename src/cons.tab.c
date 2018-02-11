@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "cons.y"
  static const char cons_y[] =
-"@(#)$Id: cons.tab.c 1.5 $";
+"@(#)$Id: cons.tab.c 1.6 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff

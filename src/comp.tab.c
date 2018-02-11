@@ -73,7 +73,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "comp.y"
  static const char comp_y[] =
-"@(#)$Id: comp.tab.c 1.127 $";
+"@(#)$Id: comp.tab.c 1.128 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff

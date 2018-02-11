@@ -65,7 +65,7 @@
 /* Line 371 of yacc.c  */
 #line 1 "gram.y"
  static const char gram_y[] =
-"@(#)$Id: gram.tab.c 1.39 $";
+"@(#)$Id: gram.tab.c 1.40 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public

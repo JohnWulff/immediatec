@@ -701,7 +701,7 @@ char *yytext;
 #line 1 "lexc.l"
 #line 2 "lexc.l"
 static const char lexc_c[] =
-"@(#)$Id: lex.yy.c 1.38 $";
+"@(#)$Id: lex.yy.c 1.39 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
