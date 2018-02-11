@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.14 $
+# $Id: gaIdke-pre-commit 1.15 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -17,12 +17,13 @@
 #
 #         Increment the last number in <ver> of any $Id: <path> <ver>
 #         line in the file, which will be committed as modified.
-#         <path> is obtained from a 'git diff --name-only --cached'
-#         command, which is the list of files staged for commit.
+#         <path> is obtained from a 'git diff --name-only --diff-filter=d --cached'
+#         command, which is the list of files staged for commit excluding files
+#         to be deleted.
 #         If a file has been renamed, the new path is written in the
 #         $Id: string.
 #
-#         Create a new version 1.1 for a line containing $Id: gaIdke-pre-commit 1.2 $ to start
+#         Create a new version 1.1 for a line containing $Id$ to start
 #         the process.
 #
 #         The above applies if the commit is executed in the master branch.
@@ -72,7 +73,7 @@ if (length(qx(git branch)) == 0) {
 chomp $gBranch;
 print STDERR "pre-commit	branch = $gBranch\n" if $ga =~ m/\bv/i;		# v[erbose]
 
-foreach $path (split " ", qx(git diff --name-only --cached)) {
+foreach $path (split " ", qx(git diff --name-only --diff-filter=d --cached)) {
     next if $dirtyHash{$path} or not -f $path;	# skip dirty or non-existing files - will be comitted without $Id increment
     qx(mv -f "$path" "$path.gaidke");
     open IN, "$path.gaidke" or die "Cannot open '$path.gaidke': $!";
