@@ -106,7 +106,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.29 $
+$Id: immac 1.30 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -748,7 +748,7 @@ sub process_file {
 		print "$.*FOR*IF*	$_" if $opt_T and not $opt_l;
 		@atoms = ();				# repeat scan if line has been extended
 		$sqNest = $sqNestSv = $offset = 0;	# $sqNest is used independently here and in full analysis
-		while (m/((\\\\)*)(\\?("|'|\[|\]|\n)|\/\*|\/\/|\*\/|#|%?{{?|%?}}?|\w+|;)/g) {
+		while (m/((\\\\)*)(\\?("|'|\[|\]|\n)|\/\*|\/\/|\*\/|#|%?\{\{?|%?}}?|\w+|;)/g) {
 		    push @atoms, [ length($`)+length($1), $3 ];	# [ $pos, $atom ]
 		}
 		for (my $aix = 0; $aix < @atoms; $aix++) {
@@ -1128,7 +1128,7 @@ use strict 'refs';
 				)	|
 				%?		#    with optional leading %
 				(		# ($5)
-				    {{?	|	#    { {{ %{ (%{{)
+				    \{\{? |	#    { {{ %{ (%{{)
 				    }}?		#    } }} %} (%}})
 				)
 					|	#    rest with no extra leading characters
@@ -1370,7 +1370,7 @@ use strict 'refs';
 				    $spOfs = 1;
 				    $forFlag = 2;		# proper control statement
 				}
-			    } elsif ($atom =~ m"^{{?$") {
+			    } elsif ($atom =~ m"^\{\{?$") {
     no warnings;
 				push(@lnErr, "### OPEN_BRACE: $argv line $.: $atom \$compound = '$compound', \$braceCount = '$braceCount', \$twinCount = '@{[$twinCount-0x100]}'\n") if $opt_T and not $opt_l;
     use warnings;
@@ -1552,8 +1552,8 @@ use strict 'refs';
     no warnings;
 		    push(@lnErr, "### END_ANALYSIS: $argv line $.: \$compound = '$compound', \$braceCount = '$braceCount', \$twinCount = '@{[$twinCount-0x100]}'\n") if $opt_T and not $opt_l;
     use warnings;
-		    if (m/(\@{\[|\]})/) {
-			while (m/([\w.]+)(\s+)\@{\[/g) {
+		    if (m/(\@\{\[|\]})/) {
+			while (m/([\w.]+)(\s+)\@\{\[/g) {
 			    unless (defined $keywords{$1}) {
 				$save = pos($_);
 				pos($_) -= length($2) + 3;
@@ -1569,11 +1569,11 @@ use strict 'refs';
 				pos($_) = $save;	# .. and ... are declared as keywords - leave spaces
 			    }
 			}		# {
-			if (s/\]}\s*\@{\[/]}x\@{[/g) {	# insert x for multi-dimensional arrays
-			    s/x(\@{\[[^\]]*"[^\]]*\]})/$1/g;# remove x before [exp?",":""] special
+			if (s/\]}\s*\@\{\[/]}x\@{[/g) {	# insert x for multi-dimensional arrays
+			    s/x(\@\{\[[^\]]*"[^\]]*\]})/$1/g;# remove x before [exp?",":""] special
 			}				# }
-			if (s/(\d)\@{\[/${1}y\@{[/g) {	# insert y for array name ending in numerals }
-			    s/y(\@{\[[^\]]*"[^\]]*\]})/$1/g;# remove y before [exp?",":""] special
+			if (s/(\d)\@\{\[/${1}y\@{[/g) {	# insert y for array name ending in numerals }
+			    s/y(\@\{\[[^\]]*"[^\]]*\]})/$1/g;# remove y before [exp?",":""] special
 			}				# }
 		    }
 		    if ($control or $forFlag) {
@@ -1677,10 +1677,10 @@ use strict 'refs';
 		    if (not $finBlock and @block and not $lfFlag and not $opt_L) {
 			eval_block(\@block, "BLOCK @{[++$evalBlock]} at ", $el);
 		    }
-		} elsif (m/(\@{\[|\]}|\\$)/		# look for iCa index expressions and back slash outside block
+		} elsif (m/(\@\{\[|\]}|\\$)/		# look for iCa index expressions and back slash outside block
 		    and not $opt_t			# do not return for [] outside 'FOR loop' - could be in comment
 		) {					# can select either alternatives above or below
-		    while (m/([\w.]+)(\s+)\@{\[/g) {
+		    while (m/([\w.]+)(\s+)\@\{\[/g) {
 			unless (defined $keywords{$1}) {
 			    $save = pos($_);
 			    pos($_) -= length($2) + 3;
@@ -1696,8 +1696,8 @@ use strict 'refs';
 			    pos($_) = $save;	# .. and ... are declared as keywords - leave spaces
 			}
 		    }				# {
-		    s/\]}\s*\@{\[/]}x\@{[/g;	# insert x for multi-dimensional arrays
-		    s/(\d)\@{\[/${1}y\@{[/g;	# insert y for array name ending in numerals
+		    s/\]}\s*\@\{\[/]}x\@{[/g;	# insert x for multi-dimensional arrays
+		    s/(\d)\@\{\[/${1}y\@{[/g;	# insert y for array name ending in numerals
 		    s/\\/\\\\/g;		# protect interpolated \ in string
 		    s/"/\\"/g;			# protect interpolated " in string
 		    s/\]}\[/]}"."[/g;		# insert something between ]}[ - needed for Perl interpretation

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.74 $";
+"@(#)$Id: ict.c 1.75 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1898,7 +1898,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-			if (iC_debug & 04) fprintf(iC_outFP, " << %s\n", rpyBuf); fflush(iC_outFP);
+			if (iC_debug & 04) { fprintf(iC_outFP, " << %s\n", rpyBuf); fflush(iC_outFP); }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 			if (iC_micro && !cnt) iC_microPrint("Input received", 0);
 			cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
@@ -3087,7 +3087,7 @@ debugWait(void)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    if (iC_rcvd_msg_from_server(iC_sockFN, debugBuf, REPLY) != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
-		if (iC_debug & 04) fprintf(iC_outFP, " << %s\n", debugBuf); fflush(iC_outFP);
+		if (iC_debug & 04) { fprintf(iC_outFP, " << %s\n", debugBuf); fflush(iC_outFP); }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		cp = debugBuf - 1;	/* increment to first character in debugBuf in first use of cp */
 		if (isdigit(debugBuf[0])) {

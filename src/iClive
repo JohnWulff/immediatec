@@ -94,13 +94,13 @@ my @colourSelect  = ( 0,2,0,0,0,0,0,2,0,0,0,0,2,2,0,0,0,0,2,2,0,4,6, # cs[ftype]
 #  live colouring     lo 0             hi 1               cs  ftype
 my @tagBackground = ('PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
-		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
-		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
+		     'chocolate1'   , 'chocolate1'   ,  # 4 5 CLCKL
+		     'CadetBlue3'   , 'CadetBlue3'   ,  # 6 7 TIMRL
 							## cs|010 no change
 		     'PaleGreen1'   , 'yellow2'      ,  # 0 1 GATE
 		     'LightSkyBlue1', 'LightSkyBlue1',  # 2 3 ARITH
-		     'chocolate2'   , 'chocolate2'   ,  # 4 5 CLCKL
-		     'CadetBlue'    , 'CadetBlue'    ,  # 6 7 TIMRL
+		     'chocolate1'   , 'chocolate1'   ,  # 4 5 CLCKL
+		     'CadetBlue3'   , 'CadetBlue3'   ,  # 6 7 TIMRL
 		    );
 my @tagForeground = ('black'        , 'red'          ,  # 0 1 GATE
 		     'black'        , 'red'          ,  # 2 3 ARITH
@@ -318,7 +318,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.74 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.75 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -399,7 +399,7 @@ print "\@argv = '@argv'	\@runArgs = '@runArgs'\n" if $opt_T;
 
 ########################################################################
 
-exit(-1) if $opt_X;		# $named -X called in forked process if first exec fails
+exit if $opt_X;				# $named -X called in forked process if first exec fails
 
 my $size = `stty size`;
 chomp $size;
@@ -413,7 +413,7 @@ $opt_w = 85 unless $opt_w;		# 85 just allows all buttons to fit in the top menu 
 					# also gives a bit more room for oversize texts
 print "opt_l = '$opt_l' opt_w = '$opt_w'\n" if $opt_T;
 if ($opt_h) {
-    write STDERR; exit 0;	# -h, ouput Usage only
+    write STDERR; exit;			# -h, ouput Usage only
 }
 
 if ($opt_q) {
@@ -912,6 +912,7 @@ my $liveMenu = $menuBar->Menubutton(-text               => 'Debug',
 				   )->pack(-side => 'left', -padx => 2);
 my $debugFlag = 0;							# no DEBUG mode unless manually started in LIVE mode
 my $saveDebug = 0;
+my $breakFlag = 0;
 my $stepV     = 0;
 my $nextV     = 0;
 my $continueV = 0;
@@ -1183,7 +1184,7 @@ $yScrollbar->bind('<ButtonRelease>',		[ \&adjust_live           ]);
 $yScrollbar->bind('<KeyRelease>',		[ \&adjust_live           ]);
 $yScrollbar->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
 $yScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
-$yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
+$yScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear search
 $yScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
 $yScrollbar->bind('<Key-d>',			[ \&sendDebug, 'd'        ]); # Debug on active in Live mode
 $yScrollbar->bind('<Key-s>',			[ \&sendDebug, 's'        ]); # Step
@@ -1205,7 +1206,7 @@ $xScrollbar->bind('<Key-End>',			[ \&position_text, 'end'  ]); # end
 $xScrollbar->bind('<ButtonRelease>',		[ \&adjust_live           ]);
 $xScrollbar->bind('<KeyPress-Return>',		[ \&search_now, undef, 0  ]); # search down
 $xScrollbar->bind('<Shift-KeyPress-Return>',	[ \&search_now, undef, 1  ]); # search up
-$xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear
+$xScrollbar->bind('<Control-KeyPress-Return>',	[ \&search_now, '',    0  ]); # clear search
 $xScrollbar->bind('<Alt-KeyPress-Return>',	[ \&search_now, undef, 2  ]); # go to line
 ########################################################################
 #	The Tk::Text Widget uses no Alt bindings - so we use them here
@@ -1301,7 +1302,7 @@ $dbL->Show();
 #	Sit in an infinite loop dispatching incoming events.
 ########################################################################
 MainLoop();
-exit(0);
+exit;
 
 ####### End of main program ############################################
 
@@ -1766,6 +1767,7 @@ sub ListWatchPoints {
 	elsif ($answer eq 'Lookup') {
 	    $symbol = $watchList[$selected[0]][1];	# first selection only
 	    search_now(1, $symbol, 0);
+	    return;				# Close DialogBox to allow search to continue, scroll, main exit
 	} else {
 	    foreach (@selected) {
 		my ($index, $symbol) = @{$watchList[$_]};
@@ -2522,7 +2524,7 @@ use warnings;
 			    } else {
 				goto BreakError;
 			    }
-			} else {
+			} elsif (defined $lastIndex) {
 			  BreakError:
 			    warn "Watch point '$symbolNames[$lastIndex]' has incorrect or no entry\n";
 			}
@@ -2535,6 +2537,7 @@ use warnings;
 			####################################################
 			if ($scanFlag) {
 			    $entrySearch->configure(-background => 'pink');
+			    $breakFlag = 1;
 			    $stepV = $nextV = $continueV = 0;	# turn buttons off
 			    $searchText = $symbolNames[$lastIndex];
 			    print "received '$C_channel:$entry' '$searchText'\n" if $opt_T;
@@ -2543,7 +2546,7 @@ use warnings;
 				    $prevText = '';			# start a new search
 				    $gl = 0;
 				    $text->tagDelete('searchTag');
-				    search_now(1, $searchText, 8);	# search for watch word without adding search tag
+				    search_now(1, $searchText, 0);	# search for watch word (no search tag with $breakFlag set)
 				}
 				if ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
 				    $breakIndex = $lastIndex;
@@ -2781,6 +2784,7 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	if ($accelerator eq 'd') {
 	    $saveDebug = 0;
 	    $accelerator = $liveMenu->entrycget(1, -accelerator);
+	    search_now(1, '', 0);		# clear search
 	}
 	if ($accelerator eq 'D') {
 	    $liveMenu->entryconfigure(1, -accelerator => 'd');
@@ -2789,7 +2793,7 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	    $liveMenu->entryconfigure(5, -state => 'disabled');	# Continue
 	    $searchText = '';					# clear search entry window
 	    $entrySearch->configure(-background => 'grey94');	# indicates non-debug mode
-	    $stepV = $nextV = $continueV = 0;
+	    $breakFlag = $stepV = $nextV = $continueV = 0;
 	    $saveDebug = $debugFlag;
 	    $debugFlag = 0;
 	    sendWatchRestore(0, 0);		# restore set/next to all Watch and Ignore points
@@ -2814,8 +2818,10 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 		}
 		clearBreak();
 		unless ($accelerator eq 'D') {	# 'D' set 'grey94' above
+		    $searchText = '';				# clear search entry window
 		    $entrySearch->configure(-background => 'palegreen');
 		}
+		$breakFlag = 0;
 	    }
 	}
 	if ($accelerator eq 'd') {
@@ -2894,7 +2900,6 @@ sub SearchCancel {
 #		    "		1  Search up	(save searchText when clearing)
 #		    "		2  Go to line
 #		    "		|4 Special search down - suppress search statistics
-#		    "		|8 Special search for Watch points - suppress search tags
 #
 #	search_text() is mostly called from a pop up, which does not close,
 #	until search_text() has completed execution. If the search action
@@ -3032,7 +3037,7 @@ sub search_now {
 		    my $word = $text->get($current, "$current + $length char");
 		    print "word: $word $length '@lineinfo'\n";
 		}
-		unless ($suppress & 0x08) {
+		unless ($breakFlag) {
 		    $text->tagAdd('searchTag', $current, "$current + $length char");
 		}
 		$current =~ /(\d+)\.(\d+)/;
@@ -4434,8 +4439,9 @@ use warnings;
 
 ########################################################################
 #
-#	Quit program after checking if file needs saving
-#	and current file and search menu lists have been written
+#	Quit program after checking if file needs saving.
+#	If debug mode is set clear all watch points and exit debug mode.
+#	Save file list and search menu list for next start.
 #
 #	Care has been taken, that the hash indices $fileName, $position
 #	and $instance can never be the same - they have different signatures
@@ -4452,6 +4458,7 @@ sub quit_program {
     deleteAllTags();	# also clears @activeSymbols
     clear_scan();
     if (check_save()) {
+	reset_scan();		# also turn debug mode off and clear set/next/watch points
 	@lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
 	if (defined $fileName and $fileName ne $newName and $fileName ne '') {
 	    push(@lastFile, ($fileName, $text->index('insert')));
@@ -4491,9 +4498,12 @@ sub quit_program {
 	    ####################################################
 	}
 	print "quit_program() \$maindWindow->destroy()\n" if $opt_T;
+	$dbW->Exit() if Exists $dbW;		# if any of these windows Show causes
+	$dbB->Exit() if Exists $dbB;		# Tk::error "WM_DELETE_WINDOW" window manager protocol
+	$dbL->Exit() if Exists $dbL;		# when $mainWindow is destroyed
 	$mainWindow->destroy();
-	print "quit_program() exit(0)\n" if $opt_T;
-	exit(0);
+	print "quit_program() exit\n" if $opt_T;
+	exit;
     }
     ## continue if check_save() was cancelled
 } # quit_program

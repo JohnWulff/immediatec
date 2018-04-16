@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c 1.34 $";
+"@(#)$Id: link.c 1.35 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -212,7 +212,8 @@ iC_link_ol(
 #endif	/* DEQ */
 #if defined(TCP) || defined(LOAD)
 		if (np == out_list) {
-		    iC_liveData(out_list, tc);		/* VCD and/or iClive */
+		    iC_liveData(out_list, tc);		/* timer starting count to VCD and/or iClive (clears iC_linked) */
+		    iC_linked++;			/* iC_liveData() for timed Master Gate linked to timer */
 		}
 #endif /* defined(TCP) || defined(LOAD) */
 		return;					/* sorted link action complete */

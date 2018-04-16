@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.127 $";
+"@(#)$Id: comp.y 1.128 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -5489,6 +5489,8 @@ execerror(					/* recover from run-time error */
  *	Called from yacc parser on error (mostly syntax error)
  *
  *******************************************************************/
+
+extern int	yyleng;			/* declare in comp.y to make it independent of lex.yy.c */
 
 void
 yyerror(const char *	s)
