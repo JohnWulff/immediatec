@@ -37,9 +37,9 @@ usage ()
     echo '	-C	make immcc only; generate an empty cexe.c' >&2
     echo '	-L	make libict.a only' >&2
     echo '	-S	make libict.so without YYDEBUG if OSTYPE ~= linux' >&2
-    echo '	-P	make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only' >&2
+    echo '	-P	make iCpiFace digital I/O for RASPBERRYPI, YYDEBUG only' >&2
     echo '	-G	make iCgpioPUD for RASPBERRYPI as SUID auxiliary program' >&2
-    echo '	-V	make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program' >&2
+    echo '	-V	make iCpiPWM analog I/O for RASPBERRYPI, PWM, serVo and ADC' >&2
     echo '	-R	make icr only without modifying cexe.c' >&2
     echo '	-T	make ict only without modifying cexe.c' >&2
     echo '	-N	make const test internal constant expression compiler only' >&2
@@ -60,7 +60,7 @@ usage ()
     echo '	-z	echo compiler calls with all options for debugging (not -q)' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
-    echo '	$Id: makeAll 1.43 $' >&2
+    echo '	$Id: makeAll 1.44 $' >&2
 }
 
 makeLib ()
@@ -368,9 +368,9 @@ makeAll - supports Makefile in immediate-C develeopment
     -C      make immcc only; generate an empty cexe.c
     -L      make libict.a only
     -S      make libict.so without YYDEBUG if OSTYPE ~= linux
-    -P      make iCpiFace for RASPBERRYPI PiFace with YYDEBUG only
+    -P	    make iCpiFace digital I/O for RASPBERRYPI, YYDEBUG only
     -G	    make iCgpioPUD for RASPBERRYPI as SUID auxiliary program
-    -V	    make iCpiPWM for RASPBERRYPI as SUID PWM and serVo program
+    -V	    make iCpiPWM analog I/O for RASPBERRYPI, PWM, serVo and ADC
     -R      make icr only without modifying cexe.c
     -T      make ict only without modifying cexe.c
     -N      make const test internal constant expression compiler
@@ -419,8 +419,15 @@ output and possibly error messages.
 as well as an optional PiFaceCAD attached to a Raspberry Pi. Each PiFace
 has an 8 bit input and an 8 bit output. The PiFaceCAD has 8 input buttons
 and a 2x16 character text display, which can be modified over the iC network.
-'iCpiFace' also supports all available GPIO pins either as inputs or outputs.
+'iCpiFace' also supports all available GPIO pins as digital inputs or outputs.
 (Only useful for armv6l, armv7l etc processors)
+
+B<iCpiPWM> is an I/O client for iCserver in the immediate C environment
+of a Raspberry Pi handling analog output to one or more direct GPIO
+pins on the Raspberry Pi either as servo pulses in the range 500
+to 2500 microseconds at 20 ms intervals (50 Hz) or as PWM pulses at
+different frequencies with a duty cycle in the range 0 to 100.
+B<iCpiPWM> also handles analog input from an MCP3008 ADC.
 
 'makeAll' keeps the directories 'LibObjs' 'SharedObjs' 'IcrObjs' 'IctObjs'
 'ConstObjs' 'LmainObjs' 'PiFaceObjs' to save object files which differ for

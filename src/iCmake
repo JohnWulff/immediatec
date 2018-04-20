@@ -113,7 +113,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.52 $' >&2
+  echo '	$Id: iCmake 1.53 $' >&2
 }
 
 lwsock32=""
@@ -755,7 +755,7 @@ sources using the B<immac> and B<immcc> compilers.  These in turn
 are compiled and linked into an executable iC applications by a C
 compiler - currently B<gcc> (this can be changed).
 
-If a source file contains 'FOR loops', 'IF statements' or %define
+If a source file contains 'FOR loops', 'IF statements' or %%define
 macro definitions, it is an iCa language file and should be named
 <source>.ica.  This is translated to an iC source file using the
 B<immac> pre-compiler, which is then translated into a C source by the

@@ -200,8 +200,11 @@ my %keyWords = (
 
 my $named = $0; $named =~ s#.*[/\\]##;
 my $LC_CTYPE = $ENV{LC_CTYPE};
-$LC_CTYPE =~ s/[\w_]+\.//;
-$LC_CTYPE = 'utf-8' unless $LC_CTYPE;
+if ($LC_CTYPE) {
+    $LC_CTYPE =~ s/[\w_]+\.//;
+} else {
+    $LC_CTYPE = 'utf-8';
+}
 use vars qw($opt_ $opt_T $opt_q $opt_z $opt_S $opt_t $opt_m $opt_d $opt_s $opt_p $opt_i);
 use vars qw($opt_D $opt_F $opt_E $opt_l $opt_w $opt_g $opt_A @opt_L $opt_u $opt_X $opt_h);
 my $ofh = select(STDERR);	# save old file handle
@@ -222,7 +225,7 @@ Usage:
     -D @IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
     '~'
     -F font font or font size to use in Text window  (default '20')
-    -E code encoding eg. ISO-8859-1 - from locale default is @<<<<<<<<<
+    -E code encoding eg. ISO-8859-1 -  (locale value is @<<<<<<<<<)
 							     $LC_CTYPE
     -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default @<<)
@@ -318,7 +321,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.75 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.76 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 

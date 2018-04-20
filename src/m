@@ -31,12 +31,12 @@ usage()
     echo '	-W<OPT>	compile all C sources with -W<OPT> (useful for -Wall)' >&2
     echo "	-I	execute chmod +s /usr/bin/install /usr/bin/ranlib as su once" >&2
     echo "		this is required to run make install as an ordinary user" >&2
-    echo '	-i	make install after makeAll' >&2
+    echo '	-i	make install after ./makeAll' >&2
     echo '	-h	this help text' >&2
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.21 $' >&2
+    echo '$Id: m 1.22 $' >&2
 }
 
 name=${0##*/}
@@ -89,14 +89,14 @@ shift $(($OPTIND - 1))
 
 if [ -n "$N" -o -n "$P" -o -n "$G" -o -n "$V" ]; then
     echo "### make Const and/or iCpiFace and/or iCgpioPUD and/or iCpiPWM"
-    makeAll -qg$N$P$G$V$pudsyez$dw
+    ./makeAll -qg$N$P$G$V$pudsyez$dw
 elif [ -z "$clSrtm" ]; then
     clSrtm="cl"
 fi
 
 if [ -n "$clSrtm" ]; then
-    echo "### makeAll -qg$clSrtm$pudsyez$dw"
-    makeAll -qg$clSrtm$pudsyez$dw
+    echo "### ./makeAll -qg$clSrtm$pudsyez$dw"
+    ./makeAll -qg$clSrtm$pudsyez$dw
 fi
 
 if [ -n "$i" ]; then
@@ -105,7 +105,7 @@ if [ -n "$i" ]; then
 	tail=${cpu#"armv"}
 	if [[ "$cpu" != "$tail" ]]; then
 	    echo "### make iCpiFace, iCpiPUD and iCgpioPWM"
-	    makeAll -qgPGV$pudsyez$dw
+	    ./makeAll -qgPGV$pudsyez$dw
 	    o=" OPT=\"-DRASPBERRYPI\""
 	fi
     fi

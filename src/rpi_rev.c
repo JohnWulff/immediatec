@@ -1,5 +1,5 @@
 static const char rpi_rev_c[] =
-"$Id: rpi_rev.c,v 1.3 2015/09/29 06:55:10 jw Exp $";
+"$Id: rpi_rev.c 1.4 $";
 /********************************************************************
  *
  *	Copyright (C) 2015  John E. Wulff
@@ -11,38 +11,69 @@ static const char rpi_rev_c[] =
  *  to contact the author, see the README file
  *
  *	rpi_rev.c
- *	adapted from raspberryalphaomega.org.uk by John E. Wulff 2015
+
+ *	Determine the RPi Board Revision and use it to Validate gpio pins for that board
+ *
+ *	according to https://elinux.org/RPi_HardwareHistory (updated 17/04/2018)
+ *
+ *	Board Revision History
+ *
+ *	The reliable way to find out your board revision is to use the following command:
+ *		cat /proc/cpuinfo
+ *	You will see your device data including:
+ *		Hardware	: BCM2708
+ *		Revision	: 0003
+ *
+ *	If you see a "1000" at the front of the Revision, e.g. 10000002
+ *	then it indicates[1] that your Raspberry Pi has been over-volted,
+ *	and your board revision is simply the last 4 digits (i.e. 0002 in this example).
+ *
+ *	The previous way to extract "boardrev=0003" from /proc/cmdline no longer works with RPi 3B+
+ *
+ *    Revision 	Release Date 	Model 	PCB Rev	Memory 	Notes
+ *	Beta 	Q1 2012 	B (Beta) ? 	256 MB 	Beta Board
+ *	0002 	Q1 2012 	B 	1.0 	256 MB
+ *	0003 	Q3 2012 	B	1.0 	256 MB  (ECN0001) Fuses mod and D14 removed
+ *	0004 	Q3 2012 	B 	2.0 	256 MB 	(Mfg by Sony)
+ *	0005 	Q4 2012 	B 	2.0 	256 MB 	(Mfg by Qisda)
+ *	0006 	Q4 2012 	B 	2.0 	256 MB 	(Mfg by Egoman)
+ *	0007 	Q1 2013 	A 	2.0 	256 MB 	(Mfg by Egoman)
+ *	0008 	Q1 2013 	A 	2.0 	256 MB 	(Mfg by Sony)
+ *	0009 	Q1 2013 	A 	2.0 	256 MB 	(Mfg by Qisda)
+ *	000d 	Q4 2012 	B 	2.0 	512 MB 	(Mfg by Egoman)
+ *	000e 	Q4 2012 	B 	2.0 	512 MB 	(Mfg by Sony)
+ *	000f 	Q4 2012 	B 	2.0 	512 MB 	(Mfg by Qisda)
+ *	0010 	Q3 2014 	B+ 	1.0 	512 MB 	(Mfg by Sony)
+ *	0011 	Q2 2014 Compute Module1	1.0 	512 MB 	(Mfg by Sony)
+ *	0012 	Q4 2014 	A+ 	1.1 	256 MB 	(Mfg by Sony)
+ *	0013 	Q1 2015 	B+ 	1.2 	512 MB 	(Mfg by Embest)
+ *	0014 	Q2 2014 Compute Module1	1.0	512 MB 	(Mfg by Embest)
+ *	0015 	 ? 		A+ 	1.1 256/512 MB 	(Mfg by Embest)
+ *	a01040 	Unknown 	2 B 	1.0 	1 GB 	(Mfg by Sony)
+ *	a01041 	Q1 2015 	2 B 	1.1 	1 GB 	(Mfg by Sony)
+ *	a21041 	Q1 2015 	2 B 	1.1 	1 GB 	(Mfg by Embest)
+ *	a22042 	Q3 2016 	2 B 	1.2 	1 GB 	(Mfg by Embest) (with BCM2837)
+ *	900021 	Q3 2016 	A+ 	1.1 	512 MB 	(Mfg by Sony)
+ *	900032 	Q2 2016? 	B+ 	1.2 	512 MB 	(Mfg by Sony)
+ *	900092 	Q4 2015 	Zero 	1.2 	512 MB 	(Mfg by Sony)
+ *	900093 	Q2 2016 	Zero 	1.3 	512 MB 	(Mfg by Sony)
+ *	920093 	Q4 2016? 	Zero 	1.3 	512 MB 	(Mfg by Embest)
+ *	9000c1 	Q1 2017 	Zero W 	1.1 	512 MB 	(Mfg by Sony)
+ *	a02082 	Q1 2016 	3 B 	1.2 	1 GB 	(Mfg by Sony)
+ *	a020a0 	Q1 2017 Compute Module3	1.0 	1 GB 	(Mfg by Sony) (and CM3 Lite)
+ *	a22082 	Q1 2016 	3 B 	1.2 	1 GB 	(Mfg by Embest)
+ *	a32082 	Q4 2016 	3 B 	1.2 	1 GB 	(Mfg by Sony Japan)
+ *	a020d3 	Q1 2018 	3 B+ 	1.3 	1 GB 	(Mfg by Sony)
+ *
+ *	Other models need to be checked as they become available
  *
  *	Returns the following board revisions for differen Raspberry Pi models
  *		0	(8  0x08)	Rpi A
  *		1	(15 0x0e)	Rpi B	tested by JW
  *		2	(16 0x10)	Rpi B+	tested by JW
- *		2	(0xa21041)	Rpi 2B	tested by JW
- *
- *	according to http://elinux.org/RPi_HardwareHistory
- *
- *    Revision 	Release Date 	Model 	PCB Rev	Memory 	Notes
- *	Beta 	Q1 2012 	B  	 ? 	256MB 	Beta Board
- *	0002 	Q1 2012 	B 	1.0 	256MB 	
- *	0003 	Q3 2012 	B  	1.0 	256MB 	(ECN0001) Fuses mod and D14 removed
- *	0004 	Q3 2012 	B 	2.0 	256MB 	(Mfg by Sony)
- *	0005 	Q4 2012 	B 	2.0 	256MB 	(Mfg by Qisda)
- *	0006 	Q4 2012 	B 	2.0 	256MB 	(Mfg by Egoman)
- *	0007 	Q1 2013 	A 	2.0 	256MB 	(Mfg by Egoman)
- *	0008 	Q1 2013 	A 	2.0 	256MB 	(Mfg by Sony)
- *	0009 	Q1 2013 	A 	2.0 	256MB 	(Mfg by Qisda)
- *	000d 	Q4 2012 	B 	2.0 	512MB 	(Mfg by Egoman)
- *	000e 	Q4 2012 	B 	2.0 	512MB 	(Mfg by Sony)
- *	000f 	Q4 2012 	B 	2.0 	512MB 	(Mfg by Qisda)
- *	0010 	Q3 2014 	B+ 	1.0 	512MB 	(Mfg by Sony)
- *	0011 	Q2 2014  Compute Module	1.0 	512MB 	(Mfg by Sony)
- *	0012 	Q4 2014 	A+ 	1.0 	256MB 	(Mfg by Sony) 
- *	a21041 			2B 		1024MB
- *	If you see a "1000" at the front of the Revision, e.g. 10000002
- *	then it indicates[1] that your Raspberry Pi has been over-volted,
- *	and your board revision is simply the last 4 digits (i.e. 0002 in this example).
- *
- *	Other models need to be checked as they become available
+ *		2	(0xa21041)	Rpi 2B	tested by JW (checked 17/04/2018)
+ *		2	(0xa22082)	Rpi 3B	tested by JW (checked 17/04/2018)
+ *		2	(0xa020d3)	Rpi 3B+	tested by JW (checked 17/04/2018)
  *
  *******************************************************************/
 
@@ -64,62 +95,55 @@ static const char rpi_rev_c[] =
 #else	/* RASPBERRYPI */
 
 /********************************************************************
- *	Validate gpio pins for different processors
+ *	Validate gpio pins for different RPi boards
  *******************************************************************/
 static long long	gpioValid[] = {
-    0x000000000bc6cf93LL,	/* proc == 0 for Raspberry Pi A  (rev = 0x8  or 8) */
+    0x000000000bc6cf93LL,	/* proc == 0 for Raspberry Pi A  (rev = 0x8  or 8 ) */
     0x00000000fbc6cf9cLL,	/* proc == 1 for Raspberry Pi B  (rev = 0xe  or 15) */
     0x000080480ffffffcLL,	/* proc == 2 for Raspberry Pi B+ (rev = 0x10 or 16) */
-    				/* 	  or for Raspberry Pi 2B (rev = 0xa21041) */
+				/* 	  or for Raspberry Pi 2B (rev = 0xa21041  ) */
+				/* 	  or for Raspberry Pi 3B (rev = 0xa22082  ) */
+				/* 	  or for Raspberry Pi 3B+(rev = 0xa020d3  ) */
 };
 
 int
 boardrev(void) {
     FILE*	f;
     int 	rev;
-    char	buf[1024];
+    char	buf[2048];
     char *	needle;
     int		proc;
 
-    if ((f = fopen("/proc/cmdline", "r")) == NULL) {
-	perror("rpi_rev: fopen(/proc/cmdline\")");
+    if ((f = fopen("/proc/cpuinfo", "r")) == NULL) {
+	perror("rpi_rev: fopen(/proc/cpuinfo)");
 	exit(-1);
     }
-    fread(buf, 1, 1023, f);
+    fread(buf, 2047, 1, f);
     fclose(f);
-    if ((needle = strstr(buf, "boardrev")) == NULL ||
-	sscanf(needle, "boardrev=0x%x", &rev) != 1) {
-	fprintf(stderr, "rpi_rev: cannot find \"boardrev\" in:\n%s\n", buf);
+    if ((needle = strstr(buf, "Revision")) == NULL ||
+	sscanf(needle, "Revision : %x", &rev) != 1) {
+	fprintf(stderr, "rpi_rev: cannot find \"Revision\" in:\n%s\n", buf);
 	exit(-1);
     }
     switch (rev & 0xffff) {	/* ignore overvolting */
     /* Revision   Release Date Model  PCB Rev	Memory	Notes */
-    case 0x02:	/* Q1 2012 	B 	1.0 	256MB	 */
-    case 0x03:	/* Q3 2012 	B  	1.0 	256MB 	(ECN0001) Fuses mod and D14 removed */
-    case 0x04:	/* Q3 2012 	B 	2.0 	256MB 	(Mfg by Sony) */
-    case 0x05:	/* Q4 2012 	B 	2.0 	256MB 	(Mfg by Qisda) */
-    case 0x06:	/* Q4 2012 	B 	2.0 	256MB 	(Mfg by Egoman) */
-	proc = 1;	/* Rpi B */
-	break;
     case 0x07:	/* Q1 2013 	A 	2.0 	256MB 	(Mfg by Egoman) */
     case 0x08:	/* Q1 2013 	A 	2.0 	256MB 	(Mfg by Sony) */
     case 0x09:	/* Q1 2013 	A 	2.0 	256MB 	(Mfg by Qisda) */
 	proc = 0;	/* Rpi A */
 	break;
+    case 0x02:	/* Q1 2012 	B 	1.0 	256MB	 */
+    case 0x03:	/* Q3 2012 	B  	1.0 	256MB 	(ECN0001) Fuses mod and D14 removed */
+    case 0x04:	/* Q3 2012 	B 	2.0 	256MB 	(Mfg by Sony) */
+    case 0x05:	/* Q4 2012 	B 	2.0 	256MB 	(Mfg by Qisda) */
+    case 0x06:	/* Q4 2012 	B 	2.0 	256MB 	(Mfg by Egoman) */
     case 0x0d:	/* Q4 2012 	B 	2.0 	512MB 	(Mfg by Egoman) */
     case 0x0e:	/* Q4 2012 	B 	2.0 	512MB 	(Mfg by Sony) */
     case 0x0f:	/* Q4 2012 	B 	2.0 	512MB 	(Mfg by Qisda) */
 	proc = 1;	/* Rpi B */
 	break;
-    case 0x10:	/* Q3 2014 	B+ 	1.0 	512MB 	(Mfg by Sony) */
-	proc = 2;	/* Rpi B+ */
-	break;
-    case 0x11:	/* Q2 2014  Comp Module	1.0 	512MB 	(Mfg by Sony) */
-	proc = 2;	/* Rpi Compute Module? */
-	break;
-    case 0x12:	/* Q4 2014 	A+ 	1.0 	256MB 	(Mfg by Sony)  */
     default:
-	proc = 2;	/* Rpi 2B (a21041) same GPIO pins as B+ */
+	proc = 2;	/* Rpi A+ Zero B+ 2B 3B 3B+ same GPIO 40 pins as B+ */
 	break;
     }
     return proc;
