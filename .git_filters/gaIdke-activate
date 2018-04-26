@@ -1,7 +1,7 @@
 #!/bin/bash
 ########################################################################
 #
-# $Id: gaIdke-activate 1.4 $
+# $Id: gaIdke-activate 1.5 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -116,5 +116,5 @@ if [ -n "$git_base" ]; then
     echo "'Automatic GIT Id Keyword Expansion' gaIdke has been activated" >&2
     cd $mywd
 else
-    echo "Oops, you are not in a GIT project" >&2
+    echo "Error: gaIdke-activate: you are not in a GIT project" >&2
 fi

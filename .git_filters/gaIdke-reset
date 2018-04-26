@@ -1,7 +1,7 @@
 #!/bin/sh
 ########################################################################
 #
-# $Id: gaIdke-reset 1.1 $
+# $Id: gaIdke-reset 1.2 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -80,5 +80,5 @@ if [ -n "$git_base" ]; then
     fi
     cd $mywd
 else
-    echo "Oops, you are not in a GIT project" >&2
+    echo "Error: gaIdke-reset: you are not in a GIT project" >&2
 fi

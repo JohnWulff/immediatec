@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-post-commit 1.9 $
+# $Id: gaIdke-post-commit 1.10 $
 # $IdBlockFurtherExpansion$
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -25,6 +25,10 @@
 #         different to the committed file, which also removes it, because
 #         the checked out file overwrites it with the committed file.
 #
+#         If called via 'post-checkout', there is no backup file $path.gaidke.
+#         To smudge correctly for GIT >= 2.6.6, $path in working directory
+#         must be removed.
+#
 ########################################################################
 
 if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $Ids
@@ -33,9 +37,11 @@ if (open SMUDGE, ".gitSmudgeList") {	# ignore if pre-commit had no files with $I
 	($path, $remainder) = split " ", $_, 2;
 	print STDERR "post-commit	$path\n" if $ga =~ m/\bv/i;	# v[erbose]
 	if (-f "$path.gaidke") {
-	    qx(mv -f "$path.gaidke" $path);
+	    qx(mv -f "$path.gaidke" "$path");	# remove backup file when called from commit
+	} else {
+	    qx(rm -f "$path");		# allow checkout of committed file with smudge
 	}
-	qx(git checkout HEAD $path);	# overwrite old file and smudge committed file
+	qx(git checkout HEAD "$path");	# overwrite old file and smudge committed file
     }
     close SMUDGE;
     qx(rm -f .gitSmudgeList);		# do only once at end of commit

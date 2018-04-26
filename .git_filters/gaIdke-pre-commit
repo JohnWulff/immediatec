@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.15 $
+# $Id: gaIdke-pre-commit 1.16 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -65,7 +65,7 @@ if (length(qx(git branch)) == 0) {
 	$gBranch = qx(cat $git_base/.git/HEAD);
 	$gBranch =~ s#([^/]*/)*##;
     } else {
-	die "Oops - no '.git/HEAD'\n";
+	die "Error: gaIdke-pre-commit: - no '.git/HEAD'\n";
     }
 } else {
     $gBranch = qx(git rev-parse --abbrev-ref HEAD);	# current GIT branch
