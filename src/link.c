@@ -1,5 +1,5 @@
 static const char link_c[] =
-"@(#)$Id: link.c 1.35 $";
+"@(#)$Id: link.c 1.36 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -62,11 +62,11 @@ iC_link_ol(
 		/********************************************************************
 		 * find glitch in alternate list - rare
 		 *
-		 * the list heads for o_list and a_list and their alternate
+		 * the list heads for iC_oList and iC_aList and their alternate
 		 * list heads have pointers to their respective alternate
 		 * list heads in gt_rlist.
 		 *
-		 * all clock or timer nodes are list heads which have *c_list as
+		 * all clock or timer nodes are list heads which have *iC_cList as
 		 * their alternate in gt_rlist.
 		 *
 		 * *clist (iClock) has 0 in gt_rlist for termination
@@ -159,7 +159,7 @@ iC_link_ol(
 		) &&
 		(tc = out_list->gt_old) <= 0		/* and preset off time is 0 */
 	    ) {
-		out_list = iC_c_list;			/* put action on 'iClock' list imme */
+		out_list = iC_cList;			/* put action on 'iClock' list imme */
 	    } else {
 		/********************************************************************
 		 * 'HI' action gate clocked by timer,delay (delay >= 1)

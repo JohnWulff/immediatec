@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.63 $";
+"@(#)$Id: rsff.c 1.64 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -71,7 +71,7 @@ static const char rsff_c[] =
  *		out_list 2nd argument	used in D_SH, CH_BIT, F_SW and OUTW
  *					to select logic ar arithmetic input
  *		out_list 2nd argument	used in IF ELSE and SWITCH to select
- *					deferred action f_list
+ *					deferred action iC_fList
  *
  *******************************************************************/
 
@@ -123,7 +123,7 @@ iC_sSff(					/* S_FF slave action on FF */
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %+d S=>", gs->gt_ids, gs->gt_val);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = -1;			/* set slave output */
-	iC_link_ol(gs, iC_o_list);
+	iC_link_ol(gs, iC_oList);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -181,7 +181,7 @@ iC_rSff(					/* R_FF slave action on FF */
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %+d R=>", gs->gt_ids, gs->gt_val);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output */
-	iC_link_ol(gs, iC_o_list);
+	iC_link_ol(gs, iC_oList);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -237,7 +237,7 @@ iC_dSff(					/* D_FF slave action on FF */
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%+d\t%s %+d D=>", val, gs->gt_ids, gs->gt_val);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = val;			/* transfer val to slave */
-	iC_link_ol(gs, iC_o_list);
+	iC_link_ol(gs, iC_oList);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gs->gt_val);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -282,7 +282,7 @@ iC_dMsh(					/* D_SH master action on SH */
 {
     Gate *	gs;
 
-    if (out_list == iC_o_list) {
+    if (out_list == iC_oList) {
 	/* called from logic scan - convert d to a */
 	gm->gt_new = gm->gt_val < 0 ? 1 : 0;
 	/********************************************************************
@@ -337,7 +337,7 @@ iC_dSsh(					/* D_SH slave action on SH */
      * since gm is still on clock list gt_new must differ from gt_old
      *******************************************************************/
     gs->gt_new = gm->gt_old = gm->gt_new;	/* transfer value to slave */
-    iC_link_ol(gs, iC_a_list);			/* fire new arithmetic action */
+    iC_link_ol(gs, iC_aList);			/* fire new arithmetic action */
 
 #if YYDEBUG && !defined(_WINDOWS)
 #if INT_MAX == 32767 && defined (LONG16)
@@ -403,7 +403,7 @@ iC_sSsh(					/* S_SH slave action on SH */
 #endif
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_new = -1;			/* set SH slave output */
-	iC_link_ol(gs, iC_a_list);
+	iC_link_ol(gs, iC_aList);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -465,7 +465,7 @@ iC_rSsh(					/* R_SH slave action on SH */
 #endif
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_new = 0;				/* reset SH slave output */
-	iC_link_ol(gs, iC_a_list);
+	iC_link_ol(gs, iC_aList);
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " 0");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -529,7 +529,7 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
     unsigned int	mask;			/* action bit mask */
     char		opt;
 
-    if (gm != iC_c_list) {			/* iClock has no inputs */
+    if (gm != iC_cList) {			/* iClock has no inputs */
 	mask = iC_bit2[iC_ftypes[typ]] & ~ONCE_M;/* action bit mask required */
 	opt = iC_os[typ];
 	/* accept only the right number of compatible inputs */
@@ -563,9 +563,9 @@ i_ff3(Gate * gm, int typ)			/* Pass3 init on FF etc. */
     } else {
 	gm->gt_val = 0;				/* used in visualization */
 	Out_init(gm);				/* link as clock or timer list */
-	if (gm != iC_c_list) {
-	    gm->gt_rptr = iC_c_list;		/* c_list is alternate for link */
-	}					/* except c_list which has 0 */
+	if (gm != iC_cList) {
+	    gm->gt_rptr = iC_cList;		/* iC_cList is alternate for link */
+	}					/* except iC_cList which has 0 */
     }
     if (gm->gt_fni != OUTW && gm->gt_fni != OUTX) {
 	gm->gt_mark = 0;			/* clear for stamp and diff in actions */
@@ -616,7 +616,7 @@ iC_riMbit(					/* RI_BIT master action on EF */
 	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_gx->gt_val = gm->gt_val;		/* immediate (glitch resets here if linked) */
-	iC_link_ol(iC_gx, iC_o_list);		/* set (reset) slave output now - reset when clocked*/
+	iC_link_ol(iC_gx, iC_oList);		/* set (reset) slave output now - reset when clocked*/
     } else {
 #if defined(TCP) || defined(LOAD)
 	iC_linked++;				/* show change even when no action */
@@ -644,7 +644,7 @@ iC_riSbit(					/* RI_BIT slave action */
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t-1\t%s %+d E=>", gs->gt_ids, gs->gt_val);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output to LO */
-	iC_link_ol(gs, iC_o_list);		/* on startup a reset action comes when EF is LO */
+	iC_link_ol(gs, iC_oList);		/* on startup a reset action comes when EF is LO */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -675,7 +675,7 @@ iC_chMbit(					/* CH_BIT master action on VF */
 {
     Gate **	ma;
 
-    assert (out_list == iC_o_list);		/* logic change */
+    assert (out_list == iC_oList);		/* logic change */
     iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
     iC_link_ol(gm, ma[FL_CLK]);			/* ignore input - master action */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -697,7 +697,7 @@ iC_chMbit(					/* CH_BIT master action on VF */
     }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch resets here if linked) */
-    iC_link_ol(iC_gx, iC_o_list);		/* set (glitch reset) slave output now - reset when clocked*/
+    iC_link_ol(iC_gx, iC_oList);		/* set (glitch reset) slave output now - reset when clocked*/
 } /* iC_chMbit */
 
 /********************************************************************
@@ -720,7 +720,7 @@ iC_chSbit(					/* CH_BIT slave action */
 	if (iC_debug & 0100) fprintf(iC_outFP, "\t%+d\t%s %+d V=>", gm->gt_val, gs->gt_ids, gs->gt_val);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output to LO */
-	iC_link_ol(gs, iC_o_list);		/* on startup a reset action comes when VF is LO */
+	iC_link_ol(gs, iC_oList);		/* on startup a reset action comes when VF is LO */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -750,7 +750,7 @@ iC_chMar(					/* CH_AR master action on VF */
 {
     Gate **	ma;
 
-    assert (out_list == iC_a_list);		/* arithmetic change */
+    assert (out_list == iC_aList);		/* arithmetic change */
     if ((gm->gt_new != gm->gt_old) ^ (gm->gt_next != 0)) {
 	iC_gx = (ma = gm->gt_list)[FL_GATE];	/* gm->gt_funct */
 	iC_link_ol(gm, ma[FL_CLK]);		/* ignore input - master action */
@@ -777,7 +777,7 @@ iC_chMar(					/* CH_AR master action on VF */
 	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_gx->gt_val = -iC_gx->gt_val;		/* immediate (glitch resets here if linked) */
-	iC_link_ol(iC_gx, iC_o_list);		/* set (reset) slave output now - reset when clocked*/
+	iC_link_ol(iC_gx, iC_oList);		/* set (reset) slave output now - reset when clocked*/
     }
 } /* iC_chMar */
 
@@ -812,7 +812,7 @@ iC_chSar(					/* CH_AR slave action */
 	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gs->gt_val = 1;				/* reset slave output to LO */
-	iC_link_ol(gs, iC_o_list);		/* on startup a reset action comes when VF is LO */
+	iC_link_ol(gs, iC_oList);		/* on startup a reset action comes when VF is LO */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " +1");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
@@ -833,7 +833,7 @@ iC_fMsw(					/* F_SW master action */
     Gate *	gm,
     Gate *	out_list)
 {
-    if (out_list == iC_o_list) {
+    if (out_list == iC_oList) {
 	/* called from logic scan - convert d to a */
 	gm->gt_new = gm->gt_val < 0 ? 1 : 0;
     }
@@ -861,14 +861,14 @@ iC_fSsw(					/* F_SW slave action on SW */
     Gate *	gm,
     Gate *	out_list)
 {
-    if (out_list == iC_c_list) {
-	/* defer execution until f_list is scanned */
+    if (out_list == iC_cList) {
+	/* defer execution until iC_fList is scanned */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\tdefer () ");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	iC_link_ol(gm, iC_f_list);
+	iC_link_ol(gm, iC_fList);
     } else {
-	assert(out_list == iC_f_list);
+	assert(out_list == iC_fList);
 	gm->gt_old = gm->gt_new;		/* now new value is fixed */
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
@@ -958,14 +958,14 @@ iC_fScf(					/* F_CF and F_CE slave action on CF */
     Gate *	gm,
     Gate *	out_list)
 {
-    if (out_list == iC_c_list) {
-	/* defer execution until f_list is scanned */
+    if (out_list == iC_cList) {
+	/* defer execution until iC_fList is scanned */
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\tdefer {} ");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
-	iC_link_ol(gm, iC_f_list);
+	iC_link_ol(gm, iC_fList);
     } else {
-	assert(out_list == iC_f_list);
+	assert(out_list == iC_fList);
 	/* execute C function as action procedure with side effects */
 #ifdef LOAD
 #if YYDEBUG && !defined(_WINDOWS)
@@ -1024,7 +1024,7 @@ iC_traMb(					/* TRAB master action */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    if (gs->gt_val != val) {
 		gs->gt_val = val;
-		iC_link_ol(gs, iC_o_list);	/* fire input bit Gate */
+		iC_link_ol(gs, iC_oList);	/* fire input bit Gate */
 		count++;			/* count Gates linked */
 	    }
 #if YYDEBUG && !defined(_WINDOWS)
@@ -1062,16 +1062,16 @@ iC_traMb(					/* TRAB master action */
  *	they may be any logical or arithmetic expression including INPUT.
  *
  *	An ftype OUTW node QXx is also acted on by all bit outputs QXx.y
- *	These execute outMx(), which links its output directly to s_list.
+ *	These execute outMx(), which links its output directly to iC_sList.
  *	These extra nodes are generated at load time - not compiled.
  *
  *	NOTE: This action does not act on a clocked slave object.
- *	      It was linked to s_list, which is scanned only once when
+ *	      It was linked to iC_sList, which is scanned only once when
  *	      all other lists have been scanned. This ensures each output
  *	      is only sent once to the external I/O's per cycle when it
  *	      really changes. Glitches do not appear in the output.
  *
- *		out_list 2nd argument	used to defer action to s_list
+ *		out_list 2nd argument	used to defer action to iC_sList
  *
  *******************************************************************/
 
@@ -1090,19 +1090,19 @@ iC_outMw(					/* NEW OUTW master action */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     unsigned short	channel;
 
-    if (out_list == iC_a_list) {
-	/* defer execution until s_list is scanned */
+    if (out_list == iC_aList) {
+	/* defer execution until iC_sList is scanned */
 	if (
 	    (gm->gt_old != gm->gt_new)		/* any change */
 	    ^ (gm->gt_next != 0)		/* xor glitch */
 	) {
-	    iC_link_ol(gm, iC_s_list);		/* master action to send list */
+	    iC_link_ol(gm, iC_sList);		/* master action to send list */
 	}
     } else {
 	/********************************************************************
 	 * Enter here from iC_scan_snd() directly for QBx_0, QWx_0, QLx_0
 	 * or from iC_outMx() for QXx, which stores bits QXx.0 - QXx.7
-	 * Since we are now at the head of iC_s_list no changes due to glitches
+	 * Since we are now at the head of iC_sList no changes due to glitches
 	 * will occur any more - so gt_new and gt_old can be manipulated.
 	 * Signed char and signed short values are sign extended in val for
 	 * byte and word outputs. This value is stored in gt_out, which is in
@@ -1114,7 +1114,7 @@ iC_outMw(					/* NEW OUTW master action */
 	 * Changes in value are transmitted to iC_live at the end of iC_outMw(),
 	 * where val has the correct signed value for byte and word.
 	 *******************************************************************/
-	assert(out_list == iC_s_list);
+	assert(out_list == iC_sList);
 	assert(gm->gt_new != gm->gt_old);
 	assert(gm->gt_mark & (W_MASK | X_MASK));
 
@@ -1179,7 +1179,7 @@ iC_outMx(					/* NEW OUTX master action */
 	(gs->gt_old != gs->gt_new)		/* any change - maybe further change in same byte */
 	^ (gs->gt_next != 0)			/* in which case node is not linked again - xor glitch */
     ) {
-	iC_link_ol(gs, iC_s_list);		/* master action to send list */
+	iC_link_ol(gs, iC_sList);		/* master action to send list */
     }
 } /* iC_outMx */
 #else /* defined(TCP) || defined(LOAD) */
@@ -1232,7 +1232,7 @@ iC_outMw(					/* OLD OUTW master action */
 	assert(slot < min(IXD, 64) && mask);	/* IXD must be <= 64 for this scheme */
 	cage = slot >> 3;			/* test here because of cage algorithm */
 #ifdef MIXED
-	if (out_list == iC_o_list) {
+	if (out_list == iC_oList) {
 	    /* called from logic scan - convert d to a */
 	    /* MIXED mode is currently not compiled - ERROR */
 	    gm->gt_new = gm->gt_val < 0 ? 1 : 0;
@@ -1314,7 +1314,7 @@ iC_outMx(					/* OLD OUTX master action */
     assert(slot < min(IXD, 64) && mask);/* IXD must be <= 64 for this scheme */
     cage = slot >> 3;				/* test here because of cage algorithm */
 #ifdef MIXED
-    if (out_list == iC_a_list) {
+    if (out_list == iC_aList) {
 	/* called from arithmetic scan - convert a to d */
 	/* MIXED mode is currently not compiled - ERROR */
 	gm->gt_val = gm->gt_new ? -1 : 1;
@@ -1421,17 +1421,17 @@ iC_clockSfn(					/* Clock function */
 	}
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifndef DEQ
-	iC_c_list->gt_ptr->gt_next = gs->gt_next;
-	iC_c_list->gt_ptr = gs->gt_ptr; 	/* link gs */
-	iC_c_list->gt_ptr->gt_next = iC_c_list;	/* to c_list */
+	iC_cList->gt_ptr->gt_next = gs->gt_next;
+	iC_cList->gt_ptr = gs->gt_ptr; 	/* link gs */
+	iC_cList->gt_ptr->gt_next = iC_cList;	/* to iC_cList */
 #else	/* DEQ */
-	/* link chain of Gates on clock list gs to end of c_list */
-	tp = iC_c_list->gt_prev;		/* save c_list.previous */
-	tp->gt_next = np = gs->gt_next;		/* c_list.last ==> new */
-	np->gt_prev = tp;			/* c_list.last <== new */
+	/* link chain of Gates on clock list gs to end of iC_cList */
+	tp = iC_cList->gt_prev;		/* save iC_cList.previous */
+	tp->gt_next = np = gs->gt_next;		/* iC_cList.last ==> new */
+	np->gt_prev = tp;			/* iC_cList.last <== new */
 	tp = gs->gt_prev;			/* save gs.previous */
-	tp->gt_next = iC_c_list;		/* gs.last ==> c_list */
-	iC_c_list->gt_prev = tp;		/* gs.last <== c_list */
+	tp->gt_next = iC_cList;		/* gs.last ==> iC_cList */
+	iC_cList->gt_prev = tp;		/* gs.last <== iC_cList */
 #endif	/* DEQ */
 #if defined(TCP) || defined(LOAD)
     iC_linked++;
@@ -1486,10 +1486,10 @@ iC_timerSfn(					/* Timer function */
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	if (tc == 0) {
 #ifdef DEQ
-	    /* DEQ link head of timer chain gs to end of c_list */
-	    tp = iC_c_list->gt_prev;		/* save c_list.previous */
-	    tp->gt_next = np;			/* c_list.last ==> new */
-	    np->gt_prev = tp;			/* c_list.last <== new */
+	    /* DEQ link head of timer chain gs to end of iC_cList */
+	    tp = iC_cList->gt_prev;		/* save iC_cList.previous */
+	    tp->gt_next = np;			/* iC_cList.last ==> new */
+	    np->gt_prev = tp;			/* iC_cList.last <== new */
 #endif
 	    do {
 		tp = np;
@@ -1506,17 +1506,17 @@ iC_timerSfn(					/* Timer function */
 		}
 	    } while (np->gt_mark == 0);		/* unlink sequence of 0 time entries */
 #ifndef DEQ
-	    iC_c_list->gt_ptr->gt_next = gs->gt_next;/* => new */
+	    iC_cList->gt_ptr->gt_next = gs->gt_next;/* => new */
 	    gs->gt_next = np;			/* timer => rest */
-	    iC_c_list->gt_ptr = tp;		/* clock last => new last */
-	    tp->gt_next = iC_c_list;    	/* new last => c_list */
+	    iC_cList->gt_ptr = tp;		/* clock last => new last */
+	    tp->gt_next = iC_cList;    	/* new last => iC_cList */
 	    if (np == gs) {			/* last entry ? */
 		gs->gt_ptr = np;		/* yes - fix timer last */
 	    }
 #else	/* DEQ */
-	    /* DEQ link tail of timer chain which is due to c_list */
-	    tp->gt_next = iC_c_list;		/* gs.last ==> c_list */
-	    iC_c_list->gt_prev = tp;		/* gs.last <== c_list */
+	    /* DEQ link tail of timer chain which is due to iC_cList */
+	    tp->gt_next = iC_cList;		/* gs.last ==> iC_cList */
+	    iC_cList->gt_prev = tp;		/* gs.last <== iC_cList */
 	    /* the re-linking of gs works correctly also if np == gs */
 	    gs->gt_next = np;			/* gs ==> new new */
 	    np->gt_prev = gs;			/* gs <== new new */
@@ -1535,9 +1535,9 @@ iC_timerSfn(					/* Timer function */
  *	assignment as well as pre/post increment/decrement operators
  *	and all the assignment operators.
  *
- *	The node is linked to a_list when rv != new && new == old.
+ *	The node is linked to iC_aList when rv != new && new == old.
  *	If a second assignment occurs while node is still linked to
- *	a_list (new != old), if rv != old new is simply updated
+ *	iC_aList (new != old), if rv != old new is simply updated
  *	else node is unlinked and new updated, making new == old.
  *	When rv == new, there is no change at all.
  *
@@ -1672,7 +1672,7 @@ iC_assignA(Gate * glv, int ppi, int rv) {
     if (nv != glv->gt_new) {
 	if (glv->gt_new == glv->gt_old ||	/* first arithmetic change */
 	    nv == glv->gt_old) {		/* or glitch to old value */
-	    iC_link_ol(glv, iC_a_list);
+	    iC_link_ol(glv, iC_aList);
 	}
 	glv->gt_new = nv;			/* first or later change */
     }
@@ -1699,7 +1699,7 @@ iC_assignA(Gate * glv, int ppi, int rv) {
  *	The other operators are of doubtful utility for immC bits but
  *	are included anyway for completeness.
  *
- *	The node is linked to o_list when rv, interpreted as a logic
+ *	The node is linked to iC_oList when rv, interpreted as a logic
  *	value (0 is rv == 0, 1 is rv != 0) changes from its previous
  *	value.
  *
@@ -1798,7 +1798,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     if (glv->gt_val != val) {
 	glv->gt_val = val;
-	iC_link_ol(glv, iC_o_list);	/* logic change or glitch */
+	iC_link_ol(glv, iC_oList);	/* logic change or glitch */
     }
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {

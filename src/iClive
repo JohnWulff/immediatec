@@ -321,7 +321,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.76 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.77 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -914,7 +914,6 @@ my $liveMenu = $menuBar->Menubutton(-text               => 'Debug',
 				    -tearoff            => 1,		# 0 - tear off
 				   )->pack(-side => 'left', -padx => 2);
 my $debugFlag = 0;							# no DEBUG mode unless manually started in LIVE mode
-my $saveDebug = 0;
 my $breakFlag = 0;
 my $stepV     = 0;
 my $nextV     = 0;
@@ -1005,6 +1004,7 @@ my $dbWval;
 my @dbWbuttons = ('change','== X','!= X','< X','<= X','>  X','>=X','% X','!% X','& X','!& X','Cancel');
 my $dbW = $mainWindow->DialogBox(
 	-title => 'Word condition',
+	-takefocus => 1,
 	-buttons => [ @dbWbuttons ]);
 $dbW->add('Label',
 	-textvariable => \$watchListTxt,
@@ -1024,6 +1024,7 @@ $dbW->configure(-focus => $dbX);
 my @dbBbuttons = ('change',' == 1 ',' == 0 ','Cancel');
 my $dbB = $mainWindow->DialogBox(
 	-title => 'Bit condition',
+	-takefocus => 1,
 	-buttons => [ @dbBbuttons ]);
 $dbB->add('Label',
 	-textvariable => \$watchListTxt,
@@ -1037,6 +1038,7 @@ $dbB->add('Label',
 my @dbLbuttons = ('Lookup','Watch','Condition','Ignore','Enable','Disable','Delete','Close');
 my $dbL = $mainWindow->DialogBox(
 	-title => 'Watch and Ignore points',
+	-takefocus => 1,
 	-buttons => [ @dbLbuttons ]);
 my $dbLb = $dbL->add('Listbox',
 	-selectmode => 'extended',
@@ -1259,6 +1261,9 @@ my $balloonAttached = 0;
 ########################################################################
 # $mainWindow->OnDestroy(sub { $balloon->destroy; });
 $mainWindow->bind('<Configure>',		[ \&adjust_live           ]);
+$dbL       ->bind('<FocusOut>',			[ \&lowerMain, $dbL       ]); # Watch window has lost focus
+$dbW       ->bind('<FocusOut>',			[ \&lowerMain, $dbW       ]); # Word window has lost focus
+$dbB       ->bind('<FocusOut>',			[ \&lowerMain, $dbB       ]); # Bit window has lost focus
 
 ########################################################################
 #	Connect to iCserver
@@ -1755,8 +1760,10 @@ sub ListWatchPoints {
 	    -overanchor => 'sw',
 	    -popanchor  => 'ne',
 	    -takefocus  => 1);
-	return if not $answer or		# (x)
-		  $answer eq 'Close';		# Close DialogBox
+	if (not $answer or			# (x)
+	    $answer eq 'Close') {		# Close DialogBox
+	    return;
+	}
 
 	@selected = $dbLb->curselection;	# selected Watch points
 	push @selected, $dbLb->index('active') unless @selected;	# use underlined entry
@@ -1769,6 +1776,7 @@ sub ListWatchPoints {
 	}
 	elsif ($answer eq 'Lookup') {
 	    $symbol = $watchList[$selected[0]][1];	# first selection only
+	    sendDebug(1, 'D') if $debugFlag;		# debug mode off
 	    search_now(1, $symbol, 0);
 	    return;				# Close DialogBox to allow search to continue, scroll, main exit
 	} else {
@@ -1818,6 +1826,9 @@ sub ListWatchPoints {
 ########################################################################
 #
 #	Condition Edit
+#			my (    $i, $ix, $wix,        $symbol, $wm,        $oa,  $pa) = @_;
+#  ($s, $value) = ConditionEdit($i, $ix, $watchIndex, $symbol, $watchMenu, 'nw', 'nw');	# from EnterWatch
+#  ($s, $value) = ConditionEdit($_, $index, $index,   $symbol, $liveMenu,  'se', 'ne');	# from ListWatchPoints
 #
 ########################################################################
 
@@ -1875,6 +1886,21 @@ sub ConditionEdit {
     $dbWval = undef;			# clear LabEntry window
     return ($s, $value);
 } # ConditionEdit
+
+########################################################################
+#
+#	Lower Main Window with respect to a descendant window
+#	which keeps descendant in view although it looses focus
+#
+########################################################################
+
+sub lowerMain {
+    my ($win) = @_;
+    if ($win->ismapped) {
+	print "lowerMain from $win\n" if $opt_t;
+	$mainWindow->lower($win);
+    }
+} #lowerMain
 
 ########################################################################
 #
@@ -2781,12 +2807,13 @@ sub pick_word {
 
 sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
     my ($k, $accelerator) = @_;
+    print "sendDebug($k, $accelerator, \$debugFlag = $debugFlag)\n" if $opt_t;
     my ($acc);
     if ($scanFlag) {				# only in Live mode
 	$k = 1 if $k;				# Key press
 	if ($accelerator eq 'd') {
-	    $saveDebug = 0;
 	    $accelerator = $liveMenu->entrycget(1, -accelerator);
+	    print "sendDebug($k, $accelerator from entrycget)\n" if $opt_t;
 	    search_now(1, '', 0);		# clear search
 	}
 	if ($accelerator eq 'D') {
@@ -2797,7 +2824,6 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	    $searchText = '';					# clear search entry window
 	    $entrySearch->configure(-background => 'grey94');	# indicates non-debug mode
 	    $breakFlag = $stepV = $nextV = $continueV = 0;
-	    $saveDebug = $debugFlag;
 	    $debugFlag = 0;
 	    sendWatchRestore(0, 0);		# restore set/next to all Watch and Ignore points
 	    adjust_live(-1, -1) if $k;		# remove Watch and Ignore marks
@@ -2820,7 +2846,7 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 		    );
 		}
 		clearBreak();
-		unless ($accelerator eq 'D') {	# 'D' set 'grey94' above
+		unless ($accelerator eq 'D') {			# 'D' set 'grey94' above
 		    $searchText = '';				# clear search entry window
 		    $entrySearch->configure(-background => 'palegreen');
 		}
@@ -3559,7 +3585,6 @@ use warnings;
 	    $liveButton->configure(-text => 'Edit');
 	}
 	$liveMenu->entryconfigure(1, -state => 'normal');	# Debug     enabled
-	sendDebug(1, 'd') if $saveDebug;
 	$liveMenu->entryconfigure(7, -state => 'normal');	# Watch points enabled
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();

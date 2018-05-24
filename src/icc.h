@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.84 $";
+"@(#)$Id: icc.h 1.85 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -597,7 +597,7 @@ typedef int		(*iC_CFunctp)(Gate *);	/* external C functions */
 extern void	iC_link_ol(		/* link a gate block into */
 		Gate * gp, Gate * out_list);	/* an output or clock list */
 
-extern void	iC_link_cl(		/* link clocked Gate directly to c_list */
+extern void	iC_link_cl(		/* link clocked Gate directly to iC_cList */
 		Gate * gp, Gate * out_list);	/* during pass4 initialisation */
 
 
@@ -653,11 +653,11 @@ extern unsigned char	iC_pdata[];	/* rest used only locally */
 extern Gate *		iC_TX0p;	/* pointer to bit System Gates */
 #endif					/* END NEW I/O */
 
-extern Gate *		iC_a_list;
-extern Gate *		iC_o_list;
-extern Gate *		iC_c_list;
-extern Gate *		iC_f_list;
-extern Gate *		iC_s_list;	/* send bit and byte outputs */
+extern Gate *		iC_aList;
+extern Gate *		iC_oList;
+extern Gate *		iC_cList;
+extern Gate *		iC_fList;
+extern Gate *		iC_sList;	/* send bit and byte outputs */
 
 extern unsigned int	iC_bit2[];
 extern Gate *		iC_gx;		/* points to action Gate in chMbit and riMbit */

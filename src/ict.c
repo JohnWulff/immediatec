@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.75 $";
+"@(#)$Id: ict.c 1.76 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -103,16 +103,16 @@ static iC_Functp *	iC_i_lists[] = { I_LISTS };
 /* these lists are toggled (initialised dynamically) */
 static Gate	alist0 = { 0, 0, 0, 0, "alist0", };
 static Gate	alist1 = { 0, 0, 0, 0, "alist1", };
-Gate *		iC_a_list;		/* arithmetic output action list */
+Gate *		iC_aList;		/* arithmetic output action list */
 static Gate	olist0 = { 0, 0, 0, 0, "olist0", };
 static Gate	olist1 = { 0, 0, 0, 0, "olist1", };
-Gate *		iC_o_list;		/* logic output action list */
+Gate *		iC_oList;		/* logic output action list */
 /* these lists are not toggled (static initialisation here) */
-Gate *		iC_c_list;		/* main clock list "iClock" */
+Gate *		iC_cList;		/* main clock list "iClock" */
 static Gate	flist = { 0, 0, 0, 0, "flist", };
-Gate *		iC_f_list = &flist;	/* deferred function action list (init in load) */
+Gate *		iC_fList = &flist;	/* deferred function action list (init in load) */
 static Gate	slist = { 0, 0, 0, 0, "slist", };
-Gate *		iC_s_list = &slist;	/* send bit and byte outputs */
+Gate *		iC_sList = &slist;	/* send bit and byte outputs */
 
 short		iC_error_flag;
 
@@ -923,20 +923,20 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
  *******************************************************************/
 
     iC_error_flag = 0;
-    alist0.gt_rptr = iC_a_list = &alist1;	/* initialise alternate */
-    Out_init(iC_a_list);
-    alist1.gt_rptr = iC_a_list = &alist0;	/* start with alist0 */
-    Out_init(iC_a_list);
-    olist0.gt_rptr = iC_o_list = &olist1;	/* initialise alternate */
-    Out_init(iC_o_list);
-    olist1.gt_rptr = iC_o_list = &olist0;	/* start with olist0 */
-    Out_init(iC_o_list);
+    alist0.gt_rptr = iC_aList = &alist1;	/* initialise alternate */
+    Out_init(iC_aList);
+    alist1.gt_rptr = iC_aList = &alist0;	/* start with alist0 */
+    Out_init(iC_aList);
+    olist0.gt_rptr = iC_oList = &olist1;	/* initialise alternate */
+    Out_init(iC_oList);
+    olist1.gt_rptr = iC_oList = &olist0;	/* start with olist0 */
+    Out_init(iC_oList);
 #ifdef	LOAD
-    iC_c_list = &iClock;				/* system clock list */
-    Out_init(iC_c_list);
+    iC_cList = &iClock;				/* system clock list */
+    Out_init(iC_cList);
 #endif	/* LOAD */
-    Out_init(iC_f_list);
-    Out_init(iC_s_list);
+    Out_init(iC_fList);
+    Out_init(iC_sList);
 #if	YYDEBUG
     if (iC_debug & 0100) {
 	if (iC_debug & DQ) {
@@ -1331,7 +1331,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	 *  0 Carry out one clock scan of all master gates with inverted inputs
 	 *    before EOI so that inverted timer delays can be masked with EOI
 	 *******************************************************************/
-	if (iC_c_list != iC_c_list->gt_next) {
+	if (iC_cList != iC_cList->gt_next) {
 	    if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
 		iC_mark_stamp++;		/* leave out zero */
 	    }
@@ -1339,11 +1339,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
 		vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
 	    }
-	    iC_scan_clk(iC_c_list);		/* ignore f_list entries can only occurr here */
+	    iC_scan_clk(iC_cList);		/* ignore iC_fList entries can only occurr here */
 	    if (iC_vcdFP) {
 		fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
 	    }
-	    if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }	/* execute f_list entries */
+	    if (iC_fList != iC_fList->gt_next) { iC_scan_clk(iC_fList); }	/* execute iC_fList entries */
 	}
 	/********************************************************************
 	 *  1 Set and fire "End Of Initialisation"
@@ -1352,7 +1352,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	if (iC_debug & 0100) fprintf(iC_outFP, "\n== end of initialisation\nEOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
 	gp->gt_val = -1;		/* set EOI once as first action */
-	iC_link_ol(gp, iC_o_list);	/* fire EOI Input Gate */
+	iC_link_ol(gp, iC_oList);	/* fire EOI Input Gate */
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1\n");
 #endif	/* YYDEBUG */
@@ -1461,42 +1461,42 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	 *
 	 ****** INITIALISATION *****
 	 * -1          build ini string
-	 *  0          scan c_list for inverted ini inputs unless c_list empty if TX0.0
-	 *  1          put EOI on o_list                                       if TX0.0
+	 *  0          scan iC_cList for inverted ini inputs unless iC_cList empty if TX0.0
+	 *  1          put EOI on iC_oList                                       if TX0.0
 	 *    Loop:
 	 *  2          ++mark_stamp to control oscillations
 	 ****** COMBINATORIAL PHASE *****
-	 *  3          scan a_list unless a_list empty
-	 *                 INPW ARITH expr results to a_list
-	 *                 comparisons, &&, || to o_list
-	 *                 clocked actions to c_list via own clock list
-	 *  4        { scan o_list; goto Loop } unless o_list empty
-	 *                 bit actions to o_list
-	 *                 bits used in arithmetic to a_list (less common)
-	 *                 clocked actions to c_list via own clock list
+	 *  3          scan iC_aList unless iC_aList empty
+	 *                 INPW ARITH expr results to iC_aList
+	 *                 comparisons, &&, || to iC_oList
+	 *                 clocked actions to iC_cList via own clock list
+	 *  4        { scan iC_oList; goto Loop } unless iC_oList empty
+	 *                 bit actions to iC_oList
+	 *                 bits used in arithmetic to iC_aList (less common)
+	 *                 clocked actions to iC_cList via own clock list
 	 ****** CLOCK PHASE *******
 	 * 5         { ++mark_stamp to control oscillations
-	 *             scan c_list; DO 5; goto Loop } unless c_list empty
-	 *                 transfer ARITH master values as slave values to a_list
-	 *                 transfer GATE master values as slave values to o_list
+	 *             scan iC_cList; DO 5; goto Loop } unless iC_cList empty
+	 *                 transfer ARITH master values as slave values to iC_aList
+	 *                 transfer GATE master values as slave values to iC_oList
 	 *                 (does not use any combinatorial ARITH or GATE values)
-	 *                 transfer master entries on slave clock lists to c_list
-	 *                 (continue scanning c_list until all these have been handled)
-	 *                 defer 'if else switch' slave C actions to f_list
+	 *                 transfer master entries on slave clock lists to iC_cList
+	 *                 (continue scanning iC_cList until all these have been handled)
+	 *                 defer 'if else switch' slave C actions to iC_fList
 	 ****** COMBINATORIAL PHASE *****
-	 *  6        { scan f_list; goto Loop } unless f_list empty
+	 *  6        { scan iC_fList; goto Loop } unless iC_fList empty
 	 *                 C actions can use and generate combinatotrial ARITH and
 	 *                 GATE values, which is start of a new combinatorial scan
 	 ****** SEND PHASE *****
-	 *  7        { scan s_list; } unless s_list empty # only one scan is required
+	 *  7        { scan iC_sList; } unless iC_sList empty # only one scan is required
 	 *                 do OUTW and OUTX Gates building send string from channels
 	 *  8          send output string with final outputs only (also ini string)
-	 *  9          switch to alternate a_list and o_list
+	 *  9          switch to alternate iC_aList and iC_oList
 	 ****** IDLE PHASE *****
 	 * 10          wait for next input or timer
 	 ****** INPUT PHASE *****
-	 * 11          read new input and link INPW Gates directly to a_list
-	 *             or via traMb to o_list
+	 * 11          read new input and link INPW Gates directly to iC_aList
+	 *             or via traMb to iC_oList
 	 *    goto Loop
 	 *******************************************************************/
 	if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
@@ -1504,9 +1504,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	}
 	vcdFlag = iC_vcdFP;
 	for (;;) {
-	    if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);           }
-	    if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); continue; }
-	    if (iC_c_list != iC_c_list->gt_next) {
+	    if (iC_aList != iC_aList->gt_next) { iC_scan_ar (iC_aList);           }
+	    if (iC_oList != iC_oList->gt_next) { iC_scan    (iC_oList); continue; }
+	    if (iC_cList != iC_cList->gt_next) {
 		if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
 		    iC_mark_stamp++;		/* leave out zero */
 		}
@@ -1514,17 +1514,17 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
 		    vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
 		}
-		iC_scan_clk(iC_c_list);		/* new f_list entries can only occurr here */
+		iC_scan_clk(iC_cList);		/* new iC_fList entries can only occurr here */
 		if (iC_vcdFP) {
 		    fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
 		}
-		if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }	/* execute f_list entries */
+		if (iC_fList != iC_fList->gt_next) { iC_scan_clk(iC_fList); }	/* execute iC_fList entries */
 		continue;
 	    } else if (vcdFlag) {
 		fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark non active iClock in VCD output */
 		fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end non active iClock in VCD output */
 	    }
-	    if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);           }
+	    if (iC_sList != iC_sList->gt_next) { iC_scan_snd(iC_sList);           }
 	    break;
 	}
 	sendOutput();				/* Send last (usually only) block of output data */
@@ -1537,8 +1537,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	 *  MARKMAX times. These are oscillators which wil be
 	 *  scanned again in the next cycle.
 	 *******************************************************************/
-	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
-	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
+	iC_aList = iC_aList->gt_rptr;	/* alternate arithmetic list */
+	iC_oList = iC_oList->gt_rptr;	/* alternate logic list */
 
 	/********************************************************************
 	 *  Send live data collected in msgBuf during initialisation
@@ -1577,12 +1577,12 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	waitCount++;
 	if (iC_debug & 0300) {		/* osc or detailed info */
 	    if ((iC_debug & 0200) &&
-		(iC_a_list->gt_next != iC_a_list || iC_o_list->gt_next != iC_o_list)) {
+		(iC_aList->gt_next != iC_aList || iC_oList->gt_next != iC_oList)) {
 		fprintf(iC_outFP, "OSC =");
-		for (gp = iC_a_list->gt_next; gp != iC_a_list; gp = gp->gt_next) {
+		for (gp = iC_aList->gt_next; gp != iC_aList; gp = gp->gt_next) {
 		    fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 		}
-		for (gp = iC_o_list->gt_next; gp != iC_o_list; gp = gp->gt_next) {
+		for (gp = iC_oList->gt_next; gp != iC_oList; gp = gp->gt_next) {
 		    fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 		}
 		fprintf(iC_outFP, "\n");
@@ -1629,7 +1629,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		gp->gt_val = 1;			/* set  TX0.1 lo */
-		iC_link_ol(gp, iC_o_list);	/* fire TX0.1 lo to terminate notification */
+		iC_link_ol(gp, iC_oList);	/* fire TX0.1 lo to terminate notification */
 #if	YYDEBUG
 		if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -1679,7 +1679,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;		/* complement input */
-			iC_link_ol(gp, iC_o_list);		/* 5 ms on, 5 ms off is 10ms */
+			iC_link_ol(gp, iC_oList);		/* 5 ms on, 5 ms off is 10ms */
 #if	YYDEBUG
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -1759,7 +1759,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;		/* complement input */
-			    iC_link_ol(gp, iC_o_list);		/* 50 ms on, 50 ms off is 100ms */
+			    iC_link_ol(gp, iC_oList);		/* 50 ms on, 50 ms off is 100ms */
 #if	YYDEBUG
 			    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -1797,7 +1797,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				gp->gt_val = - gp->gt_val;	/* complement input */
-				iC_link_ol(gp, iC_o_list);	/* 500 ms on, 500 ms off is 1 second */
+				iC_link_ol(gp, iC_oList);	/* 500 ms on, 500 ms off is 1 second */
 #if	YYDEBUG
 				if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -1835,7 +1835,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 				    gp->gt_val = - gp->gt_val;	/* complement input */
-				    iC_link_ol(gp, iC_o_list);	/* 5 sec on, 5 sec off is 10 sec */
+				    iC_link_ol(gp, iC_oList);	/* 5 sec on, 5 sec off is 10 sec */
 #if	YYDEBUG
 				    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -1873,7 +1873,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 					if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 					gp->gt_val = - gp->gt_val;	/* complement input */
-					iC_link_ol(gp, iC_o_list);	/* 30 sec on, 30 sec off is 60 sec */
+					iC_link_ol(gp, iC_oList);	/* 30 sec on, 30 sec off is 60 sec */
 #if	YYDEBUG
 					if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -1964,7 +1964,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>", channel, gp->gt_new, gp->gt_old);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 #endif	/* YYDEBUG */
-					    iC_link_ol(gp, iC_a_list);	/* no actions */
+					    iC_link_ol(gp, iC_aList);	/* no actions */
 #if	YYDEBUG
 #if	INT_MAX == 32767 && defined (LONG16)
 					    if (iC_debug & 0100) fprintf(iC_outFP, " %ld", gp->gt_new);
@@ -2359,7 +2359,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			    iC_stdinBuf, gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = -1;		/* set  TX0.1 hi */
-			iC_link_ol(gp, iC_o_list);	/* fire TX0.1 hi to notify that a new line is available in iC_stdinBuf */
+			iC_link_ol(gp, iC_oList);	/* fire TX0.1 hi to notify that a new line is available in iC_stdinBuf */
 #if	YYDEBUG
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
 #endif	/* YYDEBUG */
@@ -2506,7 +2506,7 @@ iC_output(int val, unsigned short channel)
  *	Can send more than one block sequentially to iCserver.
  *	The output data will be distributed correctly.  If there is more than
  *	1 block, early blocks are sent directly in iC_output(), which executes
- *	in iC_scan_snd(iC_s_list) directly before the break in the Operational
+ *	in iC_scan_snd(iC_sList) directly before the break in the Operational
  *	loop just before this point.
  *
  *	More than one block is very unlikely except for deliberate strange

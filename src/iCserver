@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.56 $
+$Id: iCserver 1.57 $
 .
 
 ########################################################################
@@ -1109,10 +1109,10 @@ sub rcvd_msg_from_client {
     } elsif ($opt_t) {
 	print "S: ";
     }
-    if (defined $msg) {
+    if (defined $msg) {				# ignore undefined message (unlikely)
 	my $len = length $msg;
+	$sender = $ClientNames{$conn};		# set when name registered for this $conn
 no warnings;
-	$sender = $ClientNames{$conn};
 	print "($len)$msg< '$sender'\n" if $opt_T;
 use warnings;
 	if ($len == 0) {
@@ -1167,7 +1167,7 @@ use warnings;
 			}
 		    }
 		    if ($opt_t and not $sendFlag) {
-			print "$ClientNames{$conn} $msg1 => dummy\n";	# not registered
+			print "$sender $msg1 => dummy\n";		# not registered
 		    }
 		}
 		elsif ($msg1 =~ /^N(.+)/) {	# name part of registration
@@ -1196,7 +1196,7 @@ use warnings;
 			}
 		    }
 		    $Clients{$name} = $conn;		# client by this name exists now
-		    $ClientNames{$conn} = $name;	# name may change for iClive connections
+		    $ClientNames{$conn} = $sender = $name;	# name may change for iClive connections
 		    if ($name =~ /^-/) {
 			my $i = 0;
 			foreach $con (@{$Receivers[0]}) {
@@ -1251,7 +1251,7 @@ use warnings;
 			    ############################################################
 			    if ($EquivBase{$base}->[2] and 0) {	# secondary channel of base name already registered
 				$ack = -$channel;
-				warnD("$ClientNames{$conn}: trying to register S $name for alternative channel $primCh/$channel - aborted\n");
+				warnD("$sender: trying to register S $name for alternative channel $primCh/$channel - aborted\n");
 				disconnect($conn);
 				$ackString = '';
 				last;
@@ -1288,7 +1288,7 @@ use warnings;
 			    ## channel
 			    ############################################################
 			    $ack = -$channel;
-			    warnD("$ClientNames{$conn}: trying to register S $name for channel $channel twice - aborted\n");
+			    warnD("$sender: trying to register S $name for channel $channel twice - aborted\n");
 			    # has registered name and may already have registered some receivers
 			    disconnect($conn);
 			    $ackString = '';
@@ -1319,7 +1319,7 @@ use warnings;
 				$name =~ /^Q[XBWL]\d+/) {	# not even first for senders
 				my $iCbox_param = $bits ? "$name,$bits" : $name;
 				$AutoVivify{$name} = $iCbox_param;
-				$ioName = "$ClientNames{$conn}-IO";
+				$ioName = "$sender-IO";
 				print "Autovivify sender '$iCbox_param'\n" if $opt_T;
 			    }
 			    if ($opt_g and			# C_channel only as trigger
@@ -1333,9 +1333,7 @@ use warnings;
 				print "AutoDebug: '$AutoDebug' for sender '$name'\n" if $opt_T;
 			    }
 			}
-no warnings;
-			print "$ClientNames{$conn}: $direction $name	ack = $ack\n" if $opt_t;
-use warnings;
+			print "$sender: S $name	ack = $ack\n" if $opt_t;
 		    } elsif ($direction eq 'R') {
 			############################################################
 			## ignore duplicate Receiver entries for this $conn
@@ -1346,7 +1344,7 @@ use warnings;
 				if ($rconn eq $conn) {
 				    # happens if receiver equivalences in the same client
 				    $ack = -$channel;		# not an error in iCbox
-				    warnD("Register R $name for channel $channel at '$ClientNames{$conn}' twice\n");
+				    warnD("Register R $name for channel $channel at '$sender' twice\n");
 				}
 			    }
 			} elsif (exists $AltReceivers{$primCh}) {
@@ -1356,7 +1354,7 @@ use warnings;
 				    if ($rconn eq $conn) {
 					# happens if receiver equivalences in the same client
 					$ack = -$ch;		# not an error in iCbox
-					warnD("Register R $name for channel $primCh/$ch at '$ClientNames{$conn}' twice\n");
+					warnD("Register R $name for channel $primCh/$ch at '$sender' twice\n");
 				    }
 				}
 			    }
@@ -1406,13 +1404,14 @@ use warnings;
 				$base =~ /^I[XBWL]\d+/) {	# from $EquivBase{$name} or own $name
 				my $iCbox_param = $bits ? "$base,$bits" : $base;
 				$AutoVivify{$base} = $iCbox_param;
-				$ioName = "$ClientNames{$conn}-IO";
+				$ioName = "$sender-IO";
 				print "Autovivify receiver '$iCbox_param'\n" if $opt_T;
 			    }
 			}
-no warnings;
-			print "$ClientNames{$conn}: $direction $name	ack = $ack	ini = '$ini'\n" if $opt_t;
-use warnings;
+			if ($opt_t) {
+			    $ini = '' unless defined $ini;
+			    print "$sender: R $name	ack = $ack	ini = '$ini'\n";
+			}
 		    }
 		    if ($ackString ne '') {
 			$ackString = join ',', $ackString, $ack;
@@ -1426,29 +1425,29 @@ use warnings;
 		    }
 		    $regFlag = 0;		# registration string has terminated
 		}
-		elsif ($msg1 =~ /^n(.+)/) {
+		elsif ($msg1 =~ /^n(.+)/) {	# must happen after s and/or r
 		    $name = $1;
-		    $con = $Clients{$name};
-		    unless ($con) {
+		    if ($Clients{$name}) {
+			print "$name: client no. $numberOfConnections unregistering now\n" if $opt_t;
+			delete $ClientNames{$conn};
+			delete $Clients{$name};
+			$numberOfConnections--;
+		    } else {
 			############################################################
 			## no client with this name was previously registered
 			############################################################
 			warnD("$name: no client with n $name was previously registered\n");
 		    }
-		    print "$name: client no. $numberOfConnections unregistering now\n" if $opt_t;
-		    delete $ClientNames{$conn};
-		    delete $Clients{$name};
-		    $numberOfConnections--;
 		}
 		elsif ($msg1 =~ /^([sr])(.+)/) {
 		    $direction  = $1;
 		    $name = $2;
 		    unless (defined ($channel = $Channels{$name})) {
-			warnD("$ClientNames{$conn}: trying to unregister $name not previously registered - aborted\n");
+			warnD("sender: trying to unregister $name not previously registered - aborted\n");
 		    }
 		    if ($direction eq 's') {
 			unless ($Sender[$channel]) {
-			    warnD("$ClientNames{$conn}: trying to unregister s $name not registered as sender - aborted\n");
+			    warnD("sender: trying to unregister s $name not registered as sender - aborted\n");
 			}
 			############################################################
 			## Unregister a previously registered Sender
@@ -1457,7 +1456,7 @@ use warnings;
 			    $Sender[$channel] = undef;	# no need to splice out only array entry
 			    print "$sender: s $SenderName[$channel]	$channel undef\n" if $opt_t;
 			} else {
-			    warnD("$ClientNames{$conn}: trying to unregister s $name not registered as sender - aborted\n");
+			    warnD("sender: trying to unregister s $name not registered as sender - aborted\n");
 			}
 			## leave name
 			$SenderValue[$channel] = 0;	# reset initial value
@@ -1501,7 +1500,6 @@ use warnings;
 		    warn "$named: strange msg1 '$msg1' in received msg '$msg'\n";
 		}
 	    }
-	    $sender = $ClientNames{$conn};
 	    if ($ackString ne '') {
 		print "ACK: $ackString => $sender\n" if $opt_t;
 		$conn->send_now($ackString);	# registration acknowledgment

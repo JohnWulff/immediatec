@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.83 $";
+"@(#)$Id: icc.c 1.84 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1179,7 +1179,7 @@ main(
 		     *  Execute the compiled iC logic directly
 		     *******************************************************************/
 		    assert (sp);		/* iClock initialized in init() */
-		    iC_c_list = sp->u_gate;	/* initialise clock list */
+		    iC_cList = sp->u_gate;	/* initialise clock list */
 		    iC_icc();			/* execute the compiled logic */
 		    /********************************************************************
 		     * never returns - exits via iC_quit()

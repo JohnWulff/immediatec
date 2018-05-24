@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.128 $";
+"@(#)$Id: comp.y 1.129 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1688,7 +1688,12 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
-			warning("Use of '&&' with imm bit variables is deprecated (use '&'):", sp->name);
+			if (iC_Sflag) {
+			    ierror("strict: Use of '&&' with imm bit variables not allowed (use '&'):", sp->name);
+			    sp->type = ERR;		/* cannot execute properly */
+			} else {
+			    warning("Use of '&&' with imm bit variables is deprecated (use '&'):", sp->name);
+			}
 		    }
 		} else {
 		    lpL = op_force($1.v, ARITH);
@@ -1720,7 +1725,12 @@ expr	: UNDEF			{
 		    lpR = op_force($3.v, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
-			warning("Use of '||' with imm bit variables is deprecated (use '|'):", sp->name);
+			if (iC_Sflag) {
+			    ierror("strict: Use of '||' with imm bit variables not allowed (use '|'):", sp->name);
+			    sp->type = ERR;		/* cannot execute properly */
+			} else {
+			    warning("Use of '||' with imm bit variables is deprecated (use '|'):", sp->name);
+			}
 		    }
 		} else {
 		    lpL = op_force($1.v, ARITH);
@@ -1832,16 +1842,16 @@ expr	: UNDEF			{
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
 			(((typ = sp->type) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
-							/* logical negation */
+							/* logical complement */
 			$$.v = op_not(op_force($2.v, GATE));
 		    } else {
-							/* bitwise negation */
+							/* bitwise complement */
 			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
 		    }
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		} else {
-		    $$.v = 0;				/* constant negation */
+		    $$.v = 0;				/* constant complement */
 		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: ~expr", &$$);
@@ -1855,19 +1865,24 @@ expr	: UNDEF			{
 		    if ((sp = $2.v->le_sym)->ftype != ARITH &&
 			(((typ = sp->type) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
-							/* logical negation */
+							/* logical complement */
 			$$.v = op_not(op_force($2.v, GATE));
 			if (iC_Wflag & W_DEPRECATED_LOGIC) {
-			    warning("Use of '!' with an imm bit variable is deprecated (use '~'):", sp->name);
+			    if (iC_Sflag) {
+				ierror("strict: Use of '!' with an imm bit variable not allowed (use '~'):", sp->name);
+				sp->type = ERR;		/* cannot execute properly */
+			    } else {
+				warning("Use of '!' with an imm bit variable is deprecated (use '~'):", sp->name);
+			    }
 			}
 		    } else {
-							/* arithmetic negation */
+							/* arithmetic complement */
 			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
 		    }
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		} else {
-		    $$.v = 0;				/* constant negation */
+		    $$.v = 0;				/* constant complement */
 		}
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: !expr", &$$);

@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c 1.46 $";
+"@(#)$Id: icr.c 1.47 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -114,16 +114,16 @@ static iC_Functp * iC_i_lists[] = { I_LISTS };
 /* these lists are toggled (initialised dynamically) */
 static Gate	alist0 = { 0, 0, 0, 0, "alist0", };
 static Gate	alist1 = { 0, 0, 0, 0, "alist1", };
-Gate *		iC_a_list;		/* arithmetic output action list */
+Gate *		iC_aList;		/* arithmetic output action list */
 static Gate	olist0 = { 0, 0, 0, 0, "olist0", };
 static Gate	olist1 = { 0, 0, 0, 0, "olist1", };
-Gate *		iC_o_list;		/* logic output action list */
+Gate *		iC_oList;		/* logic output action list */
 /* these lists are not toggled (static initialisation here) */
-Gate *		iC_c_list;		/* main clock list "iClock" */
+Gate *		iC_cList;		/* main clock list "iClock" */
 static Gate	flist = { 0, 0, 0, 0, "flist", };
-Gate *		iC_f_list = &flist;	/* deferred function action list (init in load) */
+Gate *		iC_fList = &flist;	/* deferred function action list (init in load) */
 static Gate	slist = { 0, 0, 0, 0, "slist", };
-Gate *		iC_s_list = &slist;	/* send bit and byte outputs */
+Gate *		iC_sList = &slist;	/* send bit and byte outputs */
 
 unsigned char	iC_QM_[IXD/8];		/* Output slot mask per cage */
 unsigned char	iC_QMM;			/* Output cage mask for 1 rack */
@@ -219,16 +219,16 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
  *******************************************************************/
 
     iC_error_flag = 0;
-    alist0.gt_rptr = iC_a_list = &alist1;	/* initialise alternate */
-    Out_init(iC_a_list);
-    alist1.gt_rptr = iC_a_list = &alist0;	/* start with alist0 */
-    Out_init(iC_a_list);
-    olist0.gt_rptr = iC_o_list = &olist1;	/* initialise alternate */
-    Out_init(iC_o_list);
-    olist1.gt_rptr = iC_o_list = &olist0;	/* start with olist0 */
-    Out_init(iC_o_list);
-    Out_init(iC_f_list);
-    Out_init(iC_s_list);
+    alist0.gt_rptr = iC_aList = &alist1;	/* initialise alternate */
+    Out_init(iC_aList);
+    alist1.gt_rptr = iC_aList = &alist0;	/* start with alist0 */
+    Out_init(iC_aList);
+    olist0.gt_rptr = iC_oList = &olist1;	/* initialise alternate */
+    Out_init(iC_oList);
+    olist1.gt_rptr = iC_oList = &olist0;	/* start with olist0 */
+    Out_init(iC_oList);
+    Out_init(iC_fList);
+    Out_init(iC_sList);
 #if	YYDEBUG
     if (iC_debug & 0100) fprintf(iC_outFP, "\nINITIALISATION\n");
 #endif	/* YYDEBUG */
@@ -296,7 +296,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	if (iC_debug & 0100) fprintf(iC_outFP, "EOI:\t%s  1 ==>", gp->gt_ids);
 #endif	/* YYDEBUG */
 	gp->gt_val = -1;		/* set EOI once as first action */
-	iC_link_ol(gp, iC_o_list);	/* fire EOI Input Gate */
+	iC_link_ol(gp, iC_oList);	/* fire EOI Input Gate */
 #if	YYDEBUG
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1\n");
 #endif	/* YYDEBUG */
@@ -333,55 +333,55 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	/********************************************************************
 	 *  Sequencing of different action lists and Old I/O handling
 	 *
-	 *  1   initialisation - put EOI on o_list
+	 *  1   initialisation - put EOI on iC_oList
 	 *      # actions after an idle period:
 	 *  2   Loop:  ++mark_stamp to control oscillations
 	 ****** COMBINATORIAL PHASE *****
-	 *             scan a_list unless a_list empty
-	 *                 INPW ARITH expr results to a_list
-	 *                 comparisons, &&, || to o_list
-	 *                 clocked actions to c_list via own clock list
-	 *  3        { scan o_list; goto Loop } unless o_list empty
-	 *                 bit actions to o_list
-	 *                 bits used in arithmetic to a_list (less common)
-	 *                 clocked actions to c_list via own clock list
+	 *             scan iC_aList unless iC_aList empty
+	 *                 INPW ARITH expr results to iC_aList
+	 *                 comparisons, &&, || to iC_oList
+	 *                 clocked actions to iC_cList via own clock list
+	 *  3        { scan iC_oList; goto Loop } unless iC_oList empty
+	 *                 bit actions to iC_oList
+	 *                 bits used in arithmetic to iC_aList (less common)
+	 *                 clocked actions to iC_cList via own clock list
 	 ****** CLOCK PHASE *******
 	 *  4        { ++mark_stamp to control oscillations
-	 *             scan c_list; DO 5; goto Loop } unless c_list empty
-	 *                 transfer ARITH master values as slave values to a_list
-	 *                 transfer GATE master values as slave values to o_list
+	 *             scan iC_cList; DO 5; goto Loop } unless iC_cList empty
+	 *                 transfer ARITH master values as slave values to iC_aList
+	 *                 transfer GATE master values as slave values to iC_oList
 	 *                 (does not use any combinatorial ARITH or GATE values)
-	 *                 transfer master entries on slave clock lists to c_list
-	 *                 (continue scanning c_list until all these have been handled)
-	 *                 defer 'if else switch' slave C actions to f_list
+	 *                 transfer master entries on slave clock lists to iC_cList
+	 *                 (continue scanning iC_cList until all these have been handled)
+	 *                 defer 'if else switch' slave C actions to iC_fList
 	 ****** COMBINATORIAL PHASE *****
-	 *  5        { scan f_list; } unless f_list empty
+	 *  5        { scan iC_fList; } unless iC_fList empty
 	 *                 C actions can use and generate combinatotrial ARITH and
 	 *                 GATE values, which is start of a new combinatorial scan
-	 *  6   scan s_list			# only one scan is required
+	 *  6   scan iC_sList			# only one scan is required
 	 *          do OUTW and OUTX Gates via slot and cage
 	 *  7   distribute slots
-	 *  8   switch to alternate a_list and o_list
+	 *  8   switch to alternate iC_aList and iC_oList
 	 *  9   IDLE - wait for next input
-	 * 10   read new input and link INPW Gates directly to a_list
-	 *      link INPX Gates directly to o_list; goto Loop
+	 * 10   read new input and link INPW Gates directly to iC_aList
+	 *      link INPX Gates directly to iC_oList; goto Loop
 	 *******************************************************************/
 	if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
 	    iC_mark_stamp++;		/* leave out zero */
 	}
 	time_cnt = 0;			/* clear time count */
 	for (;;) {
-	    if (iC_a_list != iC_a_list->gt_next) { iC_scan_ar (iC_a_list);           }
-	    if (iC_o_list != iC_o_list->gt_next) { iC_scan    (iC_o_list); continue; }
-	    if (iC_c_list != iC_c_list->gt_next) {
+	    if (iC_aList != iC_aList->gt_next) { iC_scan_ar (iC_aList);           }
+	    if (iC_oList != iC_oList->gt_next) { iC_scan    (iC_oList); continue; }
+	    if (iC_cList != iC_cList->gt_next) {
 		if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
 		    iC_mark_stamp++;		/* leave out zero */
 		}
-		iC_scan_clk(iC_c_list);		/* new flist entries can only occurr here */
-		if (iC_f_list != iC_f_list->gt_next) { iC_scan_clk(iC_f_list); }
+		iC_scan_clk(iC_cList);		/* new flist entries can only occurr here */
+		if (iC_fList != iC_fList->gt_next) { iC_scan_clk(iC_fList); }
 		continue;
 	    }
-	    if (iC_s_list != iC_s_list->gt_next) { iC_scan_snd(iC_s_list);           }
+	    if (iC_sList != iC_sList->gt_next) { iC_scan_snd(iC_sList);           }
 	    break;
 	}
 
@@ -408,8 +408,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	 *  MARKMAX times. These are oscillators which wil be
 	 *  scanned again in the next cycle.
 	 *******************************************************************/
-	iC_a_list = iC_a_list->gt_rptr;	/* alternate arithmetic list */
-	iC_o_list = iC_o_list->gt_rptr;	/* alternate logic list */
+	iC_aList = iC_aList->gt_rptr;	/* alternate arithmetic list */
+	iC_oList = iC_oList->gt_rptr;	/* alternate logic list */
 
 	if (iC_osc_gp) {
 	    fprintf(iC_outFP,
@@ -420,12 +420,12 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 
 #if	YYDEBUG
 	if ((iC_debug & 0200) &&		/* osc info */
-	    (iC_a_list->gt_next != iC_a_list || iC_o_list->gt_next != iC_o_list)) {
+	    (iC_aList->gt_next != iC_aList || iC_oList->gt_next != iC_oList)) {
 	    fprintf(iC_outFP, "OSC =");
-	    for (gp = iC_a_list->gt_next; gp != iC_a_list; gp = gp->gt_next) {
+	    for (gp = iC_aList->gt_next; gp != iC_aList; gp = gp->gt_next) {
 		fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
-	    for (gp = iC_o_list->gt_next; gp != iC_o_list; gp = gp->gt_next) {
+	    for (gp = iC_oList->gt_next; gp != iC_oList; gp = gp->gt_next) {
 		fprintf(iC_outFP, " %s(#%d),", gp->gt_ids, gp->gt_mcnt);
 	    }
 	    fprintf(iC_outFP, "\n");
@@ -481,7 +481,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		gp->gt_val = - gp->gt_val;		/* complement input */
-		iC_link_ol(gp, iC_o_list);
+		iC_link_ol(gp, iC_oList);
 		cn = 0;					/* TX0.4 changed */
 		cnt++;
 #if	YYDEBUG
@@ -516,7 +516,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 		    gp->gt_val = - gp->gt_val;		/* complement input */
-		    iC_link_ol(gp, iC_o_list);
+		    iC_link_ol(gp, iC_oList);
 		    cn = 0;				/* TX0.5 changed */
 		    cnt++;
 #if	YYDEBUG
@@ -551,7 +551,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			gp->gt_val = - gp->gt_val;	/* complement input */
-			iC_link_ol(gp, iC_o_list);
+			iC_link_ol(gp, iC_oList);
 			cn = 0;				/* TX0.6 changed */
 			cnt++;
 #if	YYDEBUG
@@ -586,7 +586,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			    if (iC_debug & 0100) fprintf(iC_outFP, "%s %+d ^=>", gp->gt_ids, gp->gt_val);
 #endif	/* YYDEBUG */
 			    gp->gt_val = - gp->gt_val;	/* complement input */
-			    iC_link_ol(gp, iC_o_list);
+			    iC_link_ol(gp, iC_oList);
 			    cn = 0;			/* TX0.7 changed */
 			    cnt++;
 #if	YYDEBUG
@@ -619,7 +619,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    if ((gp = iC_IX_[c - '0']) != 0) {
 			putc('+', iC_outFP);	/* acknowledge input */
 			gp->gt_val = -gp->gt_val; /* complement input */
-			iC_link_ol(gp, iC_o_list);
+			iC_link_ol(gp, iC_oList);
 #if	YYDEBUG
 			if (iC_debug & 0100) {
 			    putc(gp->gt_val < 0 ? '1' : '0', iC_outFP);
@@ -709,7 +709,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			if (val != gp->gt_new && /* first change or glitch */
 			((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
 			    /* arithmetic master action */
-			    iC_link_ol(gp, iC_a_list);	/* no actions */
+			    iC_link_ol(gp, iC_aList);	/* no actions */
 			}
 			cn--;
 			cnt++;				/* count inputs */
