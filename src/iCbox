@@ -22,7 +22,7 @@
 
 use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
-use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use strict;
 use warnings;
@@ -121,8 +121,8 @@ Usage:
 	-r      reverse - display inputs IMn, send outputs QMn like inputs
 	    DEBUG options
 	-t      trace debug messages
-	-I      trace rcv messages in Msg.pm
-	-O      trace send messages in Msg.pm
+	-I      trace rcv messages in iCmsg.pm
+	-O      trace send messages in iCmsg.pm
 	-m      display elapsed time in seconds and microseconds
 	-T      extra static debug messages
 	-x      exit after analyzing input parameters
@@ -135,7 +135,7 @@ Usage:
 	    Q   from keyboard: exit without stopping iCserver
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.62 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.63 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -558,8 +558,8 @@ my $port = defined $opt_p ? $opt_p : 8778;
 my $name = untaint($opt_n ? "$opt_n$instance" : $ArgNames[0][0]);	# : $ArgNames [first entry] [$id]
 $named = $name;			# use individual ID for warnings from now on
 
-Msg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
-my $conn = Msg->connect($host, $port, \&rcvd_msg_from_server);
+iCmsg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
+my $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server);
 die "Client '$named' could not connect to $host:$port\n" unless $conn;
 print STDERR "iCbox '$named' connecting at server\n" unless $opt_q;
 
@@ -611,7 +611,7 @@ $frameCount != 0 or
 $register = 0;
 ############# correct number of registration replies #######
 
-my ($frame, $ch, $maxColumn, $mw, $pane, $home);
+my ($frame, $ch, $maxColumn, $mw, $pane);
 my ($row, $column, $scroll) = (0, 0, 0);
 
 $frameCount++ if $opt_H;			# extra Hold frame
@@ -652,73 +652,62 @@ $mw->protocol('WM_DELETE_WINDOW', \&quit_program);	# Windows (X) pressed
 $mw->bind('<Key-q>',      \&quit_program);		# quit and stop iCserver
 $mw->bind('<Key-Q>',      [ \&quit_program, 1 ]);	# quit without stopping iCserver (for testing)
 
-if (($home = untaint($ENV{HOME})) ne '' and
-    (-d "$home/.iC" or mkdir "$home/.iC")) {
-    if ($opt_T or not -f "$home/.iC/$nameo.bit") {
-	if (open(INI, ">$home/.iC/$nameo.bit")) {
-	    print "$nameo: generate a new minimise icon file\n";
-	    print INI << "EOF";
-/* minimise icon 'i/o' for iCbox */
-\#define ic_width 48
-\#define ic_height 48
-static unsigned char ic_bits[] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x80, 0x0f, 0x00, 0x00,
-    0x00, 0x00, 0x80, 0x07, 0x00, 0x00,
-    0xe0, 0x00, 0x80, 0x07, 0x00, 0x00,
-    0xf0, 0x01, 0xc0, 0x07, 0x00, 0x00,
-    0xf8, 0x03, 0xc0, 0x03, 0x00, 0x00,
-    0xf8, 0x03, 0xc0, 0x03, 0x00, 0x00,
-    0xf8, 0x03, 0xe0, 0x03, 0x00, 0x00,
-    0xf0, 0x01, 0xe0, 0x01, 0x00, 0x00,
-    0xe0, 0x00, 0xe0, 0x01, 0x00, 0x00,
-    0x00, 0x00, 0xf0, 0x01, 0x00, 0x00,
-    0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0xf0, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0xf8, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x78, 0x80, 0x3f, 0x00,
-    0xf8, 0x01, 0x78, 0xe0, 0xff, 0x00,
-    0xf8, 0x01, 0x7c, 0xf0, 0xff, 0x01,
-    0xf8, 0x01, 0x3c, 0xf8, 0xff, 0x03,
-    0xf0, 0x01, 0x3c, 0xfc, 0xff, 0x07,
-    0xf0, 0x01, 0x3e, 0x7c, 0xc0, 0x07,
-    0xf0, 0x01, 0x1e, 0x3e, 0x80, 0x0f,
-    0xf0, 0x01, 0x1e, 0x3e, 0x80, 0x0f,
-    0xf0, 0x01, 0x1f, 0x3e, 0x80, 0x0f,
-    0xf0, 0x01, 0x0f, 0x1f, 0x00, 0x1f,
-    0xf0, 0x01, 0x0f, 0x1f, 0x00, 0x1f,
-    0xf0, 0x81, 0x0f, 0x1f, 0x00, 0x1f,
-    0xf0, 0x81, 0x07, 0x1f, 0x00, 0x1f,
-    0xf0, 0x81, 0x07, 0x1f, 0x00, 0x1f,
-    0xf0, 0xc1, 0x07, 0x1f, 0x00, 0x1f,
-    0xf0, 0xc1, 0x03, 0x1f, 0x00, 0x1f,
-    0xf0, 0xc1, 0x03, 0x3e, 0x80, 0x0f,
-    0xf0, 0xe1, 0x03, 0x3e, 0x80, 0x0f,
-    0xf0, 0xe1, 0x01, 0x3e, 0x80, 0x0f,
-    0xf0, 0xe1, 0x01, 0x7c, 0xc0, 0x07,
-    0xf0, 0xf1, 0x01, 0xfc, 0xff, 0x07,
-    0xf0, 0xf1, 0x00, 0xf8, 0xff, 0x03,
-    0xf8, 0xf3, 0x00, 0xf0, 0xff, 0x01,
-    0xf8, 0xfb, 0x00, 0xe0, 0xff, 0x00,
-    0xf8, 0x7b, 0x00, 0x80, 0x3f, 0x00,
-    0x00, 0x78, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x7c, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
-EOF
-	    close(INI);
-	} else {
-	    warn "ERROR: Can't open ~/.iC/$nameo.bit: $!\n";
-	}
-    }
-    $mw->iconbitmap("\@$home/.iC/$nameo.bit");
-}
+########################################################################
+#	Create and display an icon bitmap
+########################################################################
+
+my $icon = pack("b48" x 48,
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    "................................................",
+    ".......................11111....................",
+    ".......................1111.....................",
+    ".....111...............1111.....................",
+    "....11111.............11111.....................",
+    "...1111111............1111......................",
+    "...1111111............1111......................",
+    "...1111111...........11111......................",
+    "....11111............1111.......................",
+    ".....111.............1111.......................",
+    "....................11111.......................",
+    "....................1111........................",
+    "....................1111........................",
+    "...................11111........................",
+    "...................1111........1111111..........",
+    "...111111..........1111......11111111111........",
+    "...111111.........11111.....1111111111111.......",
+    "...111111.........1111.....111111111111111......",
+    "....11111.........1111....11111111111111111.....",
+    "....11111........11111....11111.......11111.....",
+    "....11111........1111....11111.........11111....",
+    "....11111........1111....11111.........11111....",
+    "....11111.......11111....11111.........11111....",
+    "....11111.......1111....11111...........11111...",
+    "....11111.......1111....11111...........11111...",
+    "....11111......11111....11111...........11111...",
+    "....11111......1111.....11111...........11111...",
+    "....11111......1111.....11111...........11111...",
+    "....11111.....11111.....11111...........11111...",
+    "....11111.....1111......11111...........11111...",
+    "....11111.....1111.......11111.........11111....",
+    "....11111....11111.......11111.........11111....",
+    "....11111....1111........11111.........11111....",
+    "....11111....1111.........11111.......11111.....",
+    "....11111...11111.........11111111111111111.....",
+    "....11111...1111...........111111111111111......",
+    "...1111111..1111............1111111111111.......",
+    "...1111111.11111.............11111111111........",
+    "...1111111.1111................1111111..........",
+    "...........1111.................................",
+    "..........11111.................................",
+    "................................................",
+    "................................................",
+    "................................................",
+);
+$mw->DefineBitmap('icon' => 48, 48, $icon);
+$mw->iconbitmap("icon");	# could use built in bitmap like "Tk" instead
 
 if ($scroll) {
     use Tk::Pane;
@@ -1036,7 +1025,7 @@ foreach $argNameRef (@ArgNames) {
 #
 ########################################################################
 
-$mw->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+$mw->fileevent($conn->{sock}, 'readable', sub { iCmsg->event_loop(1); });
 
 ########################################################################
 #
@@ -1341,8 +1330,8 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     -r      reverse - display inputs IMn, send outputs QMn like inputs
         DEBUG options
     -t      trace debug messages
-    -I      trace rcv messages in Msg.pm
-    -O      trace send messages in Msg.pm
+    -I      trace rcv messages in iCmsg.pm
+    -O      trace send messages in iCmsg.pm
     -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages
     -x      exit after analyzing input parameters

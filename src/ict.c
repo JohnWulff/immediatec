@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.76 $";
+"@(#)$Id: ict.c 1.77 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -245,7 +245,6 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     if ((gp = iC_TX0p) != 0) {		/* are EOI etc or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7, TX0.0 is EOI - end of initialisation */
 	assert(tim);			/* TX0.1 is used to report receiving a new line on STDIN */
-					/* TX0.2 is used as a fixed bit LO, ~TX0.2 as fixed bit HI */
 	for (i = 3; i < 8; i++) {	/* TX0.2 is used as a fixed bit LO, ~TX0.2 as fixed bit HI */
 	    if (tim[i] != NULL) {	/* any of the 5 timers 5ms ms - 30 seconds programmed ? */
 		if (i == 3) {
@@ -1382,6 +1381,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	}
 #endif	/* YYDEBUG */
     }
+    if (iC_argh > 0) iC_quit(-3);	/* in case --h does not quit in iCbegin() - no iCserver running */
     outPtr = iC_outBuf;			/* used in folowing initialisation and operational loop only */
     outBufLen = REQUEST;
 

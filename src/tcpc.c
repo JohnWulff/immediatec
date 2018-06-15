@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.28 $";
+"@(#)$Id: tcpc.c 1.29 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -32,7 +32,7 @@ static const char RCS_Id[] =
  *	involve a burst of several messages as a result of the same trigger.
  *	Nagle's algorithm sends the first if these bursts and delays the
  *	rest for up to 500 ms or when an unrelated return message comes,
- *	which is much too late.	(Also changed for Perl code in Msg.pm)
+ *	which is much too late.	(Also changed for Perl code in iCmsg.pm)
  *
  *   Modification John Wulff 1.24 2014.03.31 - change from select() to poll().
  *	This change is required for Raspberry Pi GPIO interrupts, because
@@ -55,11 +55,15 @@ static const char RCS_Id[] =
  *		Insecure $ENV{PATH} while running setuid at
  *		/usr/local/bin/iCserver line 254.
  *
+ *   Modification John Wulff 1.29 2018.06.04 - when starting iCserver
+ *	do not use -a (autovivify) if stdin is not a terminal.
+ *	This allows starting an auxiliary iC app with piped input.
+ *
  *******************************************************************/
 
 #include	<stdio.h>
 #include	<signal.h>
-#include	<poll.h>
+#include	<unistd.h>
 #include	<netinet/tcp.h>
 #ifdef	WIN32
 #include	<Time.h>
@@ -179,6 +183,8 @@ iC_microPrint(const char * str, int mask)
  *
  *******************************************************************/
 
+#define TLEN	100
+
 SOCKET
 iC_connect_to_server(const char *	host,
 		     const char *	port)
@@ -189,7 +195,8 @@ iC_connect_to_server(const char *	host,
     struct sockaddr_in	server;
     int			flag = 1;		// support setting TCP_NODELAY
     int			r;
-    char *		cp;
+    int			len;
+    char 		cp[TLEN];
 #ifdef	WIN32
     WORD		wVersionRequested;
     WSADATA		wsaData;
@@ -293,8 +300,11 @@ iC_connect_to_server(const char *	host,
 	if (r < 50 ||  errno != ECONNREFUSED) {	/* wait 10 seconds max - will break within 200 ms of connecting */
 	    if (r == 0) {
 		if (strcmp(inet_ntoa(server.sin_addr), "127.0.0.1") == 0) {
-		    cp = (iC_debug & DQ) ? "iCserver -akqz" : "iCserver -akz";
-		    iC_fork_and_exec(iC_string2argv(cp, 2));	/* fork iCserver -ak[q]z block STDIN [quiet] */
+		    len = snprintf(cp, TLEN, "iCserver -kz%s%s",
+		        (isatty(fileno(stdin))) ? "a" : "",	/* [autovivify] if stdin is a terminal (not pipe) */
+			(iC_debug & DQ)         ? "q" : "");	/* [quiet] */
+		    assert(len < sizeof cp);		/* unlikely since message is fixed size */
+		    iC_fork_and_exec(iC_string2argv(cp, 2));	/* fork iCserver -kz[a][q] block STDIN */
 		    iC_Xflag = 1;		/* this process started iCserver */
 		} else {
 		    fprintf(iC_errFP, "ERROR: %s: '%s:iCserver -p %s -akz' cannot be started here - start it on '%s' to connect\n",

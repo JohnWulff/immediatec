@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.69 $";
+"@(#)$Id: load.c 1.70 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2017  John E. Wulff
@@ -267,20 +267,20 @@ static const char *	usage =
 #endif	/* TCP */
 "    -Z      GIT patch if made with dirty version\n"
 "    -h      this help text\n"
-"         T  at run time displays registrations and equivalences\n"
-"         q  or ctrl+D  at run time stops %s\n"
-"                      EXTRA arguments\n"
-"    --      any further arguments after -- are passed to the app\n"
-"    --h     help with command line options particular to this app\n"
 #ifdef	TCP
 "                      AUXILIARY app\n"
 "    -R <app ...> run auxiliary app followed by -z and its arguments\n"
 "                 as a separate process; -R ... must be last arguments.\n"
 #endif	/* TCP */
-"compiled by:\n"
-"%s\n"
-"Copyright (C) 1985-2015 John E. Wulff     <immediateC@gmail.com>\n"
-;
+"         T  at run time displays registrations and equivalences\n"
+"         q  or ctrl+D  at run time stops %s\n"
+"\n"
+"compiled by: %s\n"
+"Copyright (C) 1985-2018 John E. Wulff     <immediateC@gmail.com>\n"
+"\n"
+"                      EXTRA arguments\n"
+"    --      any further arguments after -- are passed to the app\n"
+;	/* end of usage */
 
 /********************************************************************
  *
@@ -635,7 +635,10 @@ main(
 		    INSTSIZE,
 #endif	/* RASPBERRYPI */
 		    iC_progname, iC_ID);
-		    exit(-1);
+		    --*argv;			/* back to -h */
+		    iCbegin(++argc, --argv);	/* extra usage for this iC app */
+		    fprintf(iC_errFP, "WARNING: %s: iCbegin() does not support --h and probably not -R option ???\n", iC_progname);
+		    exit(-1);			/* iCbegin never returns after -h unless switch handling is missing */
 		default:
 		    fprintf(iC_errFP, "WARNING: %s: unknown option -%c\n", iC_progname, **argv);
 		    break;
@@ -695,7 +698,7 @@ main(
 		do {
 		    switch (**argv) {
 		    case 'R':
-			if (!iC_argh) iC_argh = -32768;	/* stop acting on --h in this app */
+			if (!iC_argh) iC_argh = -32768;	/* stop acting on --h in another app */
 			break;
 		    case 'h':
 		    case '?':

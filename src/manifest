@@ -1,4 +1,4 @@
-$Id: manifest 1.29 $
+$Id: manifest 1.30 $
 doc/iC.odt
 doc/iC.pdf
 include/pigpio.h
@@ -21,7 +21,7 @@ src/AuxTools/ml
 src/AuxTools/wulff.vim
 src/COPYING
 src/Makefile.in
-src/Msg.pm
+src/iCmsg.pm
 src/README
 src/README.RPi
 src/Test0

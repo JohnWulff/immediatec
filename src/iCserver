@@ -21,7 +21,7 @@
 #
 ########################################################################
 
-use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use strict;
 use warnings;
@@ -97,8 +97,8 @@ Usage:
 	-z      block keyboard input
 	    DEBUG options
 	-t	trace messages for debugging
-	-I      trace rcv messages in Msg.pm
-	-O      trace send messages in Msg.pm
+	-I      trace rcv messages in iCmsg.pm
+	-O      trace send messages in iCmsg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T      extra static debug messages
 	-h	help, ouput this Usage text only
@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.57 $
+$Id: iCserver 1.58 $
 .
 
 ########################################################################
@@ -342,8 +342,8 @@ if ($opt_t) {
 my $host = defined $opt_s ? $opt_s : '0.0.0.0';
 my $port = defined $opt_p ? $opt_p : 8778;
 
-Msg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
-Msg->new_server($host, $port, \&login_proc);
+iCmsg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
+iCmsg->new_server($host, $port, \&login_proc);
 print STDERR "$named created. Waiting for events\n" unless $opt_q;
 
 ########################################################################
@@ -404,8 +404,8 @@ if (@runArgs) {
 #	if connected to iCserver
 #
 ########################################################################
-Msg->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_z;
-Msg->event_loop();
+iCmsg->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_z;
+iCmsg->event_loop();
 
 ####### End of main program ############################################
 
@@ -1575,8 +1575,8 @@ iCserver - the central server for iC clients
     -z      block keyboard input
         DEBUG options
     -t      trace messages for debugging
-    -I      trace rcv messages in Msg.pm
-    -O      trace send messages in Msg.pm
+    -I      trace rcv messages in iCmsg.pm
+    -O      trace send messages in iCmsg.pm
     -m      display elapsed time in seconds and microseconds
     -T      extra static debug messages
     -h      help, ouput this Usage text only

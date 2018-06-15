@@ -58,7 +58,7 @@
 
 	this copies the executables to /usr/local/bin, the include file
 	icg.h to /usr/local/include, libict.a, libict.so to /usr/local/lib or
-	/usr/local/lib64 and Msg.pm to /usr/lib/perl5/site...
+	/usr/local/lib64 and iCmsg.pm to /usr/lib/perl5/site...
 
 	    make uninstall		     # remove all these files
 
@@ -299,7 +299,7 @@
 
     Lots of success with iC
 
-    $Id: README 1.31 $
+    $Id: README 1.32 $
 
     Main development is on openSUSE (currently Leap 42.1) and perlTk
     Tk804.033, which provides fast live updates in iClive. They seem

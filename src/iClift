@@ -24,7 +24,7 @@
 
 use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
-use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 			## modified by John Wulff to inhibit Nagle's algorithm
 			## which is essential for this application
@@ -138,8 +138,8 @@ Usage:
 	-y pix	door sensor offset         (default @<< pixels)
 						$opt_y
 	-t	trace debug messages
-	-R	trace rcv messages in Msg.pm
-	-S	trace send messages in Msg.pm
+	-R	trace rcv messages in iCmsg.pm
+	-S	trace send messages in iCmsg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-q	quiet - do not report clients connecting and disconnecting
@@ -187,7 +187,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift 1.18 $ uses Tk-@<<<<<<
+$Id: iClift 1.19 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -1045,7 +1045,7 @@ $mw->bind('<Key-w>',      \&hide_next_wall);
 #
 ########################################################################
 
-$mw->fileevent($conn->{sock}, 'readable', sub { Msg->event_loop(1); });
+$mw->fileevent($conn->{sock}, 'readable', sub { iCmsg->event_loop(1); });
 
 ########################################################################
 #
@@ -2230,8 +2230,8 @@ sub connect_to_server {
     my $i = 0;
     if ($server >= 0) {
 	until ($conn) {
-	    Msg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
-	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
+	    iCmsg->inhibit_nagle(1, $opt_R, $opt_S);	# inhibit Nagle's algorithm for real time response
+	    $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
 		print STDERR "iClift '$named' connecting at server\n" unless $opt_q;
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
@@ -2378,8 +2378,8 @@ iClift -simulation of the physics and appearance of lifts in a building
 	-j pix	door height                (default 137 pixels)
 	-y pix	door sensor offset         (default   5 pixels)
 	-t	trace debug messages
-	-R      trace rcv messages in Msg.pm
-	-S      trace send messages in Msg.pm
+	-R      trace rcv messages in iCmsg.pm
+	-S      trace send messages in iCmsg.pm
 	-m	display elapsed time in seconds and microseconds
 	-T	extra static debug messages
 	-q	quiet - do not report clients connecting and disconnecting

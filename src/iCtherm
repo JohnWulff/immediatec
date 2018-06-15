@@ -21,7 +21,7 @@
 #
 ########################################################################
 
-use Msg;		# Messaging Toolkit: from Advanced Perl Programming
+use iCmsg;		# Messaging Toolkit: from Advanced Perl Programming
 			##                   by Sriram Srinivasan
 use Time::HiRes qw(alarm gettimeofday sleep);
 use Fcntl qw(:flock);	# import LOCK_* constants
@@ -95,7 +95,7 @@ Usage:
         -l      list connected thermometer identifications
         -m      display elapsed time in seconds and microseconds
         -t      trace debug messages
-	-d <i>  trace 1=send 2=rcv 3=both messages in Msg.pm
+	-d <i>  trace 1=send 2=rcv 3=both messages in iCmsg.pm
         -T      extra static debug messages
         -x      exit after analyzing input parameters
 	-q      quiet - do not report clients connecting and disconnecting
@@ -106,7 +106,7 @@ Usage:
                      as a separate process; -R ... must be last arguments.
 Copyright (C) 2014  John E. Wulff              <immediateC@gmail.com>
 							'@'
-$Id: iCtherm,v 1.5 2016/01/02 22:52:34 jw Exp $
+$Id: iCtherm 1.6 $
 .
 
 ########################################################################
@@ -594,11 +594,11 @@ if ($lenArgNames) {
     my $i = 0;
     if ($server >= 0) {
 	print "send = '@{[defined $opt_d and ($opt_d & 1)]}' recv = '@{[defined $opt_d and ($opt_d & 2)]}'\n" if $opt_T;
-	Msg->inhibit_nagle(1,		# inhibit Nagle's algorithm for real time response
+	iCmsg->inhibit_nagle(1,		# inhibit Nagle's algorithm for real time response
 	    defined $opt_d && ($opt_d & 2),	# trace recv messages
 	    defined $opt_d && ($opt_d & 1));	# trace send messages
 	until ($conn) {
-	    $conn = Msg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
+	    $conn = iCmsg->connect($host, $port, \&rcvd_msg_from_server, 1); # return imme if connect fails
 	    if ($conn) {
 		print STDERR "iCtherm '$named' connecting at server\n" unless $opt_q;
 	    } elsif ($host ne "localhost" and $host ne "127.0.0.1") {
@@ -713,8 +713,8 @@ if ($conn) {
     #	if connected to iCserver
     #
     ########################################################################
-    Msg->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_;
-    Msg->event_loop();	# NOTE: no iCserver events for this app
+    iCmsg->set_event_handler(*STDIN, "read" => \&readStdin) unless $opt_;
+    iCmsg->event_loop();	# NOTE: no iCserver events for this app
 } else {		#       only SIG ALRM for timed measurements
     ########################################################################
     #
@@ -1076,7 +1076,7 @@ iCtherm - an iC driver or standalone program supplying temperature values
         -l      list connected thermometer identifications
         -m      display elapsed time in seconds and microseconds
         -t      trace debug messages
-	-d <i>  trace 1=send 2=rcv 3=both messages in Msg.pm
+	-d <i>  trace 1=send 2=rcv 3=both messages in iCmsg.pm
         -T      extra static debug messages
         -x      exit after analyzing input parameters
 	-q      quiet - do not report clients connecting and disconnecting

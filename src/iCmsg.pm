@@ -1,4 +1,4 @@
-# $Id: Msg.pm,v 1.6 2015/03/06 00:28:04 jw Exp $
+# $Id: iCmsg.pm 1.7 $
 
 ########################################################################
 #
@@ -88,9 +88,12 @@
 #	$time_out_inhibit undef or 0	# retry 3 connects at 2 sec intervals
 #	$time_out_inhibit 1		# returns immediately if connect fails
 #
+#   Modification John Wulff 2018.06.03 - output rcv and send trace messages to STDERR
+#       rename package to iCmsg in file iCmsg.pm because of the many changes
+#
 ########################################################################
 
-package Msg;
+package iCmsg;
 use strict;
 use IO::Select;
 use IO::Socket;
@@ -157,7 +160,7 @@ sub connect {
         my $callback = sub {_rcv($conn, 0)};
         set_event_handler ($sock, "read" => $callback);
     }
-    print "Msg.pm:connect\n" if $trace_rcv or $trace_send;
+    print STDERR "iCmsg.pm:connect\n" if $trace_rcv or $trace_send;
     return $conn;
 }
 
@@ -165,21 +168,21 @@ sub disconnect {
     my $conn = shift;
     my $sock = delete $conn->{sock};
     return unless defined($sock);
-    print "Msg.pm:disconnect\n" if $trace_rcv or $trace_send;
+    print STDERR "iCmsg.pm:disconnect\n" if $trace_rcv or $trace_send;
     set_event_handler ($sock, "read" => undef, "write" => undef);
     close($sock);
 }
 
 sub send_now {
     my ($conn, $msg) = @_;
-    print "Msg.pm:send_now    $msg\n" if $trace_send;
+    print STDERR "iCmsg.pm:send_now    $msg\n" if $trace_send;
     _enqueue ($conn, $msg);
     $conn->_send (1); # 1 ==> $flush
 }
 
 sub send_later {
     my ($conn, $msg) = @_;
-    print "Msg.pm:send_later  $msg\n" if $trace_send;
+    print STDERR "iCmsg.pm:send_later  $msg\n" if $trace_send;
     _enqueue($conn, $msg);
     my $sock = $conn->{sock};
     return unless defined($sock);
@@ -190,7 +193,7 @@ sub _enqueue {
     my ($conn, $msg) = @_;
     # prepend length (encoded as network long)
     my $len = length($msg);
-    print "Msg.pm:_enqueue [$len]$msg\n" if $trace_send;
+    print STDERR "iCmsg.pm:_enqueue [$len]$msg\n" if $trace_send;
     $msg = pack ('N', $len) . $msg;
     push (@{$conn->{sendQueue}}, $msg);
 }
@@ -224,7 +227,7 @@ sub _send {
     if ($conn->{sendBusy}++) {
 	my $msg = $sq->[0];
 	my ($l, $m) = unpack "N A*", $msg;
-	print "Msg.pm:_send*0  [$l]$m sendBusy $conn->{sendBusy}\n" if $trace_send;
+	print STDERR "iCmsg.pm:_send*0  [$l]$m sendBusy $conn->{sendBusy}\n" if $trace_send;
 	return 1;			# $msg is queued out of turn and sywrite not complete
     }
     while (@$sq) {
@@ -233,10 +236,10 @@ sub _send {
         my $bytes_written  = 0;
         while ($bytes_to_write) {
 	    my ($l, $m) = unpack "N A*", $msg;
-	    print "Msg.pm:_send*1  [$l]$m\n" if $trace_send;
+	    print STDERR "iCmsg.pm:_send*1  [$l]$m\n" if $trace_send;
             $bytes_written = syswrite ($sock, $msg,
                                        $bytes_to_write, $offset);
-	    print "Msg.pm:_send*2  [$l]$m\n" if $trace_send;
+	    print STDERR "iCmsg.pm:_send*2  [$l]$m\n" if $trace_send;
             if (!defined($bytes_written)) {
                 if (_err_will_block($!)) {
                     # Should happen only in deferred mode. Record how
@@ -258,7 +261,7 @@ sub _send {
         $offset = 0;
         last unless $flush;	# Go back to select and wait for it to fire again if $flush == 0
     }
-    print "Msg.pm:_send*end	sendBusy $conn->{sendBusy}\n" if $trace_send and $conn->{sendBusy} > 1;
+    print STDERR "iCmsg.pm:_send*end	sendBusy $conn->{sendBusy}\n" if $trace_send and $conn->{sendBusy} > 1;
     $conn->{sendBusy} = 0;		# early syswrite $msg completed - later queued $msg picked up in loop
     # Call me back if queue has not been drained.
     if (@$sq) {
@@ -290,7 +293,7 @@ sub set_blocking {
     }
 }
 sub handle_send_err {
-   # For more meaningful handling of send errors, subclass Msg and
+   # For more meaningful handling of send errors, subclass iCmsg and
    # rebless $conn.
    my ($conn, $err_msg) = @_;
    warn "Error while sending: $err_msg\n";
@@ -303,7 +306,7 @@ sub handle_send_err {
 my ($g_login_proc,$g_pkg);
 my $main_socket = 0;
 sub new_server {
-    @_ == 4 || die "Msg->new_server (myhost, myport, login_proc)\n";
+    @_ == 4 || die "iCmsg->new_server (myhost, myport, login_proc)\n";
     my ($pkg, $my_host, $my_port, $login_proc) = @_;
 
     $main_socket = IO::Socket::INET->new (
@@ -313,7 +316,7 @@ sub new_server {
                                           Proto     => 'tcp',
                                           Reuse     => 1);
     die "Could not create socket: $! \n" unless $main_socket;
-    print "Msg.pm:new_server\n" if $trace_rcv or $trace_send;
+    print STDERR "iCmsg.pm:new_server\n" if $trace_rcv or $trace_send;
     set_event_handler ($main_socket, "read" => \&_new_client);
     $g_login_proc = $login_proc; $g_pkg = $pkg;
 }
@@ -321,7 +324,7 @@ sub new_server {
 sub rcv_now {
     my ($conn) = @_;
     my ($msg, $err) = _rcv ($conn, 1); # 1 ==> rcv now
-    print "Msg.pm:rcv_now     $msg\n" if $trace_rcv;
+    print STDERR "iCmsg.pm:rcv_now     $msg\n" if $trace_rcv;
     return wantarray ? ($msg, $err) : $msg;
 }
 
@@ -336,7 +339,7 @@ sub _rcv {                     # Complement to _send
         $offset        = length($msg);      # sysread appends to it. (- 1 incorrect according to Errata)
         $bytes_to_read = $conn->{bytes_to_read};
         delete $conn->{'msg'};              # have made a copy
-	print "Msg.pm:_rcv*0   [$offset]$msg\n" if $trace_rcv;
+	print STDERR "iCmsg.pm:_rcv*0   [$offset]$msg\n" if $trace_rcv;
     } else {
         # The typical case ...
         $msg           = "";                # Otherwise -w complains
@@ -356,7 +359,7 @@ sub _rcv {                     # Complement to _send
     }
     $conn->set_non_blocking() unless $rcv_now;
     while ($bytes_to_read) {
-	print "Msg.pm:_rcv*1   [$bytes_to_read]$msg\n" if $trace_rcv;
+	print STDERR "iCmsg.pm:_rcv*1   [$bytes_to_read]$msg\n" if $trace_rcv;
         $bytes_read = sysread ($sock, $msg, $bytes_to_read, $offset);
         if (defined ($bytes_read)) {
             if ($bytes_read == 0) {
@@ -369,7 +372,7 @@ sub _rcv {                     # Complement to _send
                 # Should come here only in non-blocking mode
                 $conn->{msg}           = $msg;
                 $conn->{bytes_to_read} = $bytes_to_read;
-		print "Msg.pm:_rcv*x   [$bytes_to_read]$msg\n" if $trace_rcv;
+		print STDERR "iCmsg.pm:_rcv*x   [$bytes_to_read]$msg\n" if $trace_rcv;
                 return ;   # .. _rcv will be called later
                            # when socket is readable again
             } else {
@@ -377,7 +380,7 @@ sub _rcv {                     # Complement to _send
             }
         }
     }
-    print "Msg.pm:_rcv*2   [$offset]$msg\n" if $trace_rcv;
+    print STDERR "iCmsg.pm:_rcv*2   [$offset]$msg\n" if $trace_rcv;
 
   FINISH:
     if (length($msg) == 0) {
@@ -390,15 +393,15 @@ sub _rcv {                     # Complement to _send
     my $rq = $conn->{rcvQueue};
     if ($conn->{rcvBusy}++) {
 	my $m = $rq->[0];
-	print "Msg.pm:_rcv*0       $m	rcvBusy $conn->{rcvBusy}\n" if $trace_rcv;
+	print STDERR "iCmsg.pm:_rcv*0       $m	rcvBusy $conn->{rcvBusy}\n" if $trace_rcv;
 	return 1;			# rcvd_notification_proc not complete - $msg is queued out of turn
     }
     while (@$rq) {			# process all queued received messages in reception order
 	my $msg = shift @$rq;
-	print "Msg.pm:_rcv*3       $msg\n" if $trace_rcv;
+	print STDERR "iCmsg.pm:_rcv*3       $msg\n" if $trace_rcv;
 	&{$conn->{rcvd_notification_proc}}($conn, $msg, $!);
     }
-    print "Msg.pm:_rcv*end		rcvBusy $conn->{rcvBusy}\n" if $trace_rcv and $conn->{rcvBusy} > 1;
+    print STDERR "iCmsg.pm:_rcv*end		rcvBusy $conn->{rcvBusy}\n" if $trace_rcv and $conn->{rcvBusy} > 1;
     $conn->{rcvBusy} = 0;		# later queued $msg picked up in above loop
 }
 
@@ -418,7 +421,7 @@ sub _new_client {
     } else {  # Login failed
         $conn->disconnect();
     }
-    print "Msg.pm:_new_client\n" if $trace_rcv or $trace_send;
+    print STDERR "iCmsg.pm:_new_client\n" if $trace_rcv or $trace_send;
 }
 
 #----------------------------------------------------
