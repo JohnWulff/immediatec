@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.93 $";
+"@(#)$Id: genr.c 1.94 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -73,7 +73,7 @@ static char *	tfirst;			/* start of replacement arithmetic string */
 static char *	tlast;			/* rll was set up early in cloneFunction */
 #endif
 static char *	ttp;			/* pointer into extended arithmetic text */
-#ifndef	NOCONSTLIST 
+#ifndef	NOCONSTLIST
 static char *	constExprString;
 #endif	/* NOCONSTLIST */
 
@@ -205,47 +205,63 @@ atSymbol(void)
 
 /********************************************************************
  *
- *	force linked Symbol to correct ftype
+ *	Force linked Symbol to correct ftype
+ *	Constant expression is forced to a logical expression by linking
+ *	to LO for 0 or ~LO for 1 (!= 0) (ignore possible constant sp)
  *
  *******************************************************************/
 
 List_e *
 op_force(				/* force linked Symbol to correct ftype */
-    List_e *		lp,
+    Lis *		lv,
     unsigned char	ftyp)
 {
     Symbol *		sp;
+    List_e *		lp = lv->v;
     List_e *		lp1;
+    Valp		v;
     int			typ;
     unsigned char	ft;
 
-    if (lp && (sp = lp->le_sym) != 0 && sp->ftype != ftyp && sp->type != NCONST) {
-	if (sp->u_blist == 0	||	/* not a @ symbol or */
-	    sp->type >= MAX_GT	||	/* SH, FF, EF, VF, SW, CF or */
-	    (sp->type == LATCH && sp->u_blist->le_sym == sp)		/* LATCH(set,res) */
-	) {
-	    if ((typ = iC_types[ft = sp->ftype]) == ERR ||
-		ft == OUTW ||
-		ft == OUTX) {
-		ierror("cannot force from", iC_full_ftype[ft]);		/* OUTW OUTX CLCKL or TIMRL */
-		typ = ERR;
+    if (lp && (sp = lp->le_sym) != 0 && (ftyp != GATE || sp->type != NCONST)) {
+	if (sp->ftype != ftyp) {
+	    if (sp->u_blist == 0   ||	/* not a @ symbol or */
+		sp->type >= MAX_GT ||	/* SH, FF, EF, VF, SW, CF or */
+		(sp->type == LATCH && sp->u_blist->le_sym == sp)	/* LATCH(set,res) */
+	    ) {
+		if ((typ = iC_types[ft = sp->ftype]) == ERR ||
+		    ft == OUTW ||
+		    ft == OUTX) {
+		    ierror("cannot force from", iC_full_ftype[ft]);	/* OUTW OUTX CLCKL or TIMRL */
+		    typ = ERR;
+		}
+		lp1 = op_push(0, typ, lp);
+		assert(lp1);
+		assert(lp->le_first == 0 || (lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]));
+		lp1->le_first = lp->le_first;
+		lp1->le_last = lp->le_last;
+		lp = lp1;		/* create a new @ symbol linked to old */
+		sp = lp->le_sym;
 	    }
-	    lp1 = op_push(0, typ, lp);
-	    assert(lp1);
-	    assert(lp->le_first == 0 || (lp->le_first >= iCbuf && lp->le_last < &iCbuf[IMMBUFSIZE]));
-	    lp1->le_first = lp->le_first;
-	    lp1->le_last = lp->le_last;
-	    lp = lp1;			/* create a new @ symbol linked to old */
-	    sp = lp->le_sym;
-	}
 #if YYDEBUG
-	if ((iC_debug & 0402) == 0402) {
-	    fprintf(iC_outFP, "op_force: %s from %s to %s\n",
-		sp->name, iC_full_ftype[sp->ftype], iC_full_ftype[ftyp]);
-	    fflush(iC_outFP);
-	}
+	    if ((iC_debug & 0402) == 0402) {
+		fprintf(iC_outFP, "op_force: %s from %s to %s\n",
+		    sp->name, iC_full_ftype[sp->ftype], iC_full_ftype[ftyp]);
+		fflush(iC_outFP);
+	    }
 #endif
-	sp->ftype = ftyp;		/* convert old or new to ftyp */
+	    sp->ftype = ftyp;		/* convert old or new to ftyp */
+	}
+    } else if (ftyp == GATE) {
+	/* lp == NULL || (ftyp == GATE && sp->type == NCONST) */
+	if ((sp = lookup("LO")) == 0) {	/* constant expression used in logic */
+	    sp = install("LO", OR, GATE);
+	}
+	lp = sy_push(sp);		/* LO is permanent bit 0 */
+	v = evalConstExpr(lv);
+	if (v.nuv) {
+	    lp->le_val = NOT;		/* ~LO is permanent bit 1 */
+	}
     }
     return lp;				/* return 0 or link to old or new Symbol */
 } /* op_force */
@@ -584,7 +600,7 @@ static List_e *
 constExpr_push(char * exprBuf, int r)
 {
     Symbol *	sp;
-#ifndef	NOCONSTLIST 
+#ifndef	NOCONSTLIST
     char *	cp;
     char *	dp;
     int		stxFlag;
@@ -611,7 +627,7 @@ constExpr_push(char * exprBuf, int r)
     } else if (sp->type != NCONST || sp->ftype != ARITH || sp->u_val != (unsigned int)value) {
 	ierror("use of a constant which was previously used for a different purpose:", buf);
     }
-#ifndef	NOCONSTLIST 
+#ifndef	NOCONSTLIST
     constExprString = strdup(exprBuf);
     stxFlag = 0;
     for (cp = dp = constExprString; (c = *cp) != 0; cp++) {
@@ -1163,7 +1179,7 @@ op_asgn(				/* assign List_e stack to links */
 	return var;
     }
     assert(varList == 0);		/* checks that collectStatement has been executed */
-    right = op_force(rl->v, ft);	/* force Symbol on right to ftype ft */
+    right = op_force(rl, ft);		/* force Symbol on right to ftype ft */
     if (iFunSymExt && strncmp(var->name, iFunBuffer, iFunSymExt - iFunBuffer) != 0) {
 	ierror("assignment to a variable which does not belong to this function:", var->name);
 	var->type = ERR;		/* reduce anyway to clear list */
@@ -1235,7 +1251,7 @@ op_asgn(				/* assign List_e stack to links */
 		iC_os[var->type], var->name);	/* type is ALIAS or ERR */
 	    if (var->ftype != GATE) {
 		fprintf(iC_outFP, "\t%c", iC_fos[var->ftype]);
-#ifndef	NOCONSTLIST 
+#ifndef	NOCONSTLIST
 		if (constExprString && rsp->type == NCONST) {
 		    fprintf(iC_outFP, "\t%s", constExprString);
 		    free(constExprString);
@@ -1373,6 +1389,7 @@ op_asgn(				/* assign List_e stack to links */
 	char *		cp;
 	int		gt_input;
 	int		gt_count;
+	int		gt_flag;
 	unsigned int	val;
 	unsigned int	val1;
 	int		cFn = 0;
@@ -1389,6 +1406,25 @@ op_asgn(				/* assign List_e stack to links */
 	memset(cBuf, '\0', EBSIZE);
 	memset(gBuf, '\0', EBSIZE);
 	memset(tBuf, '\0', EBSIZE);
+	/********************************************************************
+	 * Check if any input Symbols to a non ARITH are not NCONST.
+	 * If only NCONST inputs to a non ARITH those input(s) must be treated
+	 * like a regular input later to have proper type conversion node.
+	 *******************************************************************/
+	gt_flag = 1;			/* accept most cases for arithmetic expression */
+	if ((sp->type == ARN || sp->type == ARNF) && sp->ftype != ARITH) {
+	    gt_flag = 0;
+	    for (lp = sp->u_blist; lp; lp = lp->le_next) {
+		gp = lp->le_sym;
+		val = lp->le_val;
+		if (gp->ftype == ARITH &&
+		    val != (unsigned)-1 &&
+		    (gp->type != NCONST || val)) {	/* dont need gt_input */
+		    gt_flag++;				/* one non NCONST found */
+		    break;				/* do arithmetic expression */
+		}
+	    }
+	}
 	/********************************************************************
 	 * Prepare a list of input Symbol pointers in caList[].s for
 	 * copyArithmetic, while the list is not reversed yet to allow
@@ -1415,7 +1451,7 @@ op_asgn(				/* assign List_e stack to links */
 			    fprintf(iC_outFP, "op_asgn: caList[%d] increase\n", caSize);
 #endif
 		    }
-		    if ((gp->type != NCONST && ++gt_input) || val) {
+		    if (((gp->type != NCONST || gt_flag == 0) && ++gt_input) || val) {	/* gt_input always true if incremented */
 			gt_count++;			/* count all gate inputs */
 			if (gp->type != NCONST) {
 			    caList[gt_count].l = lp;	/* for re-numbering optimisation */
@@ -1476,7 +1512,11 @@ op_asgn(				/* assign List_e stack to links */
 	    }
 #endif	/* BOOT_COMPILE */
 	    assert(gp && gp->type < IFUNCT);	/* allows IFUNCT to use union v.cnt */
-	    if (gp->type == NCONST && lp->le_val != (unsigned)-1 && !fflag && (sflag & 01) == 0) {
+	    if (gp->type == NCONST &&
+		gt_flag != 0 &&			/* dont add lone NCONST for GATE to arith expression */
+		lp->le_val != (unsigned)-1 &&
+		!fflag &&
+		(sflag & 01) == 0) {
 		if ((val = lp->le_val >> FUN_OFFSET) > 0) {
 		    if (cFn == 0) {
 			cFn = val;		/* case number from function */
@@ -1958,7 +1998,8 @@ op_asgn(				/* assign List_e stack to links */
 			}
 		    } else {			/* CLONED TRANSFER */
 			z1 = cFn;
-			if ((strcmp(gBuf, functionUse[z1].c.expr)) != 0 ||	/* has C expression changed ? */
+			if (functionUse[z1].c.expr == 0 ||
+			    strcmp(gBuf, functionUse[z1].c.expr) != 0 ||	/* has C expression changed ? */
 			    iC_gflag) {				/* or clone indpendent functions for gdb debugging */
 			    z1 = ++c_number;			/* YES */
 			    if ((iC_optimise & 04) != 0) {	/* for full optimising */
@@ -2331,23 +2372,12 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
     int		ftyp;
     Symbol *	rsp;
     Symbol *	sp = sv->v;
-    Symbol *	sp1;
-    List_e *	lp;
-    Valp	v;
 
     assert(sp);
     ftyp = sp->ftype;
     if (lv->v == 0) {
-	if (ftyp == GATE) {
-	    if ((sp1 = lookup("TX0.2")) == 0) {
-		sp1 = install("TX0.2", INPX, GATE);
-	    }
-	    lp = sy_push(sp1);			/* TX0.2 is permanent bit LO */
-	    v = evalConstExpr(lv);
-	    if (v.nuv) {
-		lp->le_val = NOT;		/* ~TX0.2 is permanent bit HI */
-	    }
-	    lv->v = lp;
+	if (ftyp == GATE) {			/* constant expression */
+	    lv->v = op_force(lv, GATE);		/* LO or ~LO for 0 or 1 */
 	} else if (ftyp != ARITH) {
 	    if (ftyp == CLCKL) {
 		ierror("constant assignment to imm clock:", sp->name);
@@ -2357,7 +2387,7 @@ assignExpression(Sym * sv, Lis * lv, int ioTyp)
 		ierror("constant assignment to wrong imm type:", sp->name);
 	    }
 	    return 0;				/* YYERROR */
-	} else if (const_push(lv)) {
+	} else if (const_push(lv)) {		/* constant to arithmetic expression */
 	    ierror("no imm variable to trigger arithmetic assignment", sp->name);
 	    return 0;				/* YYERROR */
 	}
@@ -2531,6 +2561,7 @@ evalConstExpr(Lis * lv)
     Symbol *	sp1;
     char *	cp;
     int		len;
+    int		inv;
     int		mal;
     Valp	v;
     char	buf[TSIZE];
@@ -2552,9 +2583,12 @@ evalConstExpr(Lis * lv)
 #endif
     } else
     if ((sp = lp->le_sym) != 0) {
+	inv = lp->le_val;
 	while ( sp->type == ALIAS &&
 		(lp = sp->list) != 0 &&
 		(sp = lp->le_sym) != 0) {
+	    lp->le_val ^= inv;
+	    inv = lp->le_val;
 	}
 	if (sp->type == NCONST) {
 	    v.nuv = sp->u_val;			/* value of constant for immCindex and immC ini */
@@ -2656,16 +2690,15 @@ evalConstExpr(Lis * lv)
 		    goto NotConstant;
 		}
 	    }
-	} else if (sp->type == INPX) {
+	} else
+	if (sp->name && strcmp(sp->name, "LO") == 0) {
 	    /********************************************************************
-	     *  Convert bit constant TX0.2 and its alias LO to 0
-	     *  Convert bit constant ~TX0.2 and its alias HI to 1
+	     *  Convert bit constant LO to 0
+	     *  Convert bit constant ~LO or its alias HI to 1
 	     *******************************************************************/
-	    if (strcmp(sp->name, "TX0.2") == 0) {
-		v.nuv = lp->le_val;
-	    } else {
-		goto NotConstant;
-	    }
+	    assert(sp->type == OR);		/* alias HI has been resolved above */
+	    sp->em |= EU;			/* LO has been used */
+	    v.nuv = inv;			/* bit value 0 or 1 */
 	} else {
 	    goto NotConstant;
 	}
@@ -2751,7 +2784,7 @@ evalConstParameter(List_e * lp)
 	ierror("const parameter expression is mal-formed:", buf);
 	value = 0;
     }
-#ifndef	NOCONSTLIST 
+#ifndef	NOCONSTLIST
     constExprString = strdup(buf);
 #endif	/* NOCONSTLIST */
     return value;
@@ -2983,18 +3016,21 @@ cCallCount(Symbol * cName, List_e * cParams, int pcnt)
  *******************************************************************/
 
 List_e *
-cListCount(List_e * cPlist, List_e * aexpr)
+cListCount(List_e * cPlist, Lis * lv)
 {
+    List_e *	aexpr;
     int		pcnt = 0;
 
     if (cPlist) {
 	pcnt = cPlist->le_val;	/* count from cPlist before sy_pop in op_push */
 	cPlist->le_val = 0;		/* restore so that expression is correct */
     }
-    if (aexpr == NULL) {
-	aexpr = sy_push(NULL);		/* dummy link for counting */
+    if (lv->v == NULL) {
+	lv->v = sy_push(NULL);		/* dummy link for counting */
+    } else {
+	aexpr = lv->v;
     }
-    aexpr = op_push(cPlist, ARN, op_force(aexpr, ARITH));
+    aexpr = op_push(cPlist, ARN, op_force(lv, ARITH));
     assert(aexpr);
     aexpr->le_val = pcnt + 1;
 #if YYDEBUG
@@ -3238,23 +3274,13 @@ Symbol *
 returnStatement(Lis * lv)
 {
     Symbol *	sp;
-    List_e *	lp;
-    Valp	v;
     int		ftyp;
 
     if ((sp = iRetSymbol.v) != NULL) {
 	ftyp = sp->ftype;
 	if (lv->v == 0) {
-	    if (ftyp == GATE) {
-		if ((sp = lookup("TX0.2")) == 0) {
-		    sp = install("TX0.2", INPX, GATE);
-		}
-		lp = sy_push(sp);		/* TX0.2 is permanent bit LO */
-		v = evalConstExpr(lv);
-		if (v.nuv) {
-		    lp->le_val = NOT;		/* ~TX0.2 is permanent bit HI */
-		}
-		lv->v = lp;
+	    if (ftyp == GATE) {			/* constant expression */
+		lv->v = op_force(lv, GATE);	/* LO or ~LO for 0 or 1 */
 	    }
 	    else if (ftyp != ARITH) {
 		if (ftyp == CLCKL) {
@@ -3264,8 +3290,11 @@ returnStatement(Lis * lv)
 		} else {
 		    ierror("constant assignment to wrong imm type:", sp->name);
 		}
-		return 0;				/* YYERROR */
-	    } else if (const_push(lv)) { errInt(); return 0;	/* YYERROR */ }
+		return 0;			/* YYERROR */
+	    } else if (const_push(lv)) {	/* constant to arithmetic expression */
+		ierror("no imm variable to trigger arithmetic assignment", sp->name);
+		return 0;			/* YYERROR */
+	    }
 	}
 	if ((sp = lv->v->le_sym) == 0) {
 	    ierror("no expression to return:", iFunBuffer);
@@ -4107,6 +4136,7 @@ handleRealParameter(List_e * plp, List_e * lp)
     List_e *	flp;				/* link to formal array member */
     List_e *	tlp;				/* link to real array member */
     int		i;
+    Lis		sl;
 
     if (lp == 0) {				/* final call from cloneFunction() */
 	if (plp) {				/* to clear unresolved formal parameters */
@@ -4126,6 +4156,14 @@ handleRealParameter(List_e * plp, List_e * lp)
 	rsp = rlp->le_sym;			/* current real parameter Symbol */
     }
     assert(rsp);
+    if (rsp->type == NCONST) {
+	assert(rsp->name && (isdigit(rsp->name[0]) || rsp->name[0] == '-'));
+	sl.f = rsp->name;			/* provides a numeric string for evalConstExpr */
+	sl.l = rsp->name + strspn(rsp->name, "-012345689");	/* even if dummy timer delay 1 */
+    } else {
+	sl.f = rlp->le_first; sl.l = rlp->le_last;
+    }
+    sl.v = rlp;					/* allows evalConstExpr in op_force */
 
     while (iFormCurr) {
 	fsp = iFormCurr->le_sym;		/* current formal parameter Symbol */
@@ -4196,13 +4234,20 @@ handleRealParameter(List_e * plp, List_e * lp)
 		 *  A formal const parameter must be matched by a real parameter with
 		 *  type NCONST, which is either a constant number or a constant expression
 		 *******************************************************************/
-		if ((fsp->em & EI) && rsp->type != NCONST) {
+		if ((fsp->em & EI) &&
+		    rsp->type != NCONST &&
+		    ! (rsp->name &&
+		       (strcmp(rsp->name, "LO") == 0 ||	/* GATE constant LO will be forced to ARITH 0 */
+		        strcmp(rsp->name, "HI") == 0	/* GATE constant HI will be forced to ARITH 1 */
+		       )
+		      )
+		   ) {
 		    ierror("formal const parameter not matched by a constant expression:", rsp->name);
 		    rsp->type = ERR;		/* check for ERR when using this parameter */
 		}	/* could use else here because bit clock or timer will not be NCONST (?) */
 		if (rsp->ftype == GATE) {
 		    if (fsp->u_blist == 0) {	/* assign parameter forced in op_asgn */
-			rlp = op_force(rlp, ARITH);	/* force value parameter to int */
+			rlp = op_force(&sl, ARITH);	/* force value parameter to int */
 		    }
 		} else
 		if (rsp->ftype != ARITH) {
@@ -4217,7 +4262,7 @@ handleRealParameter(List_e * plp, List_e * lp)
 	    case GATE:
 		if (rsp->ftype == ARITH) {
 		    if (fsp->u_blist == 0) {	/* assign parameter forced in op_asgn */
-			rlp = op_force(rlp, GATE);	/* force value parameter to bit */
+			rlp = op_force(&sl, GATE); /* force value parameter or constant to bit */
 		    }
 		} else
 		if (rsp->ftype != GATE) {
@@ -4447,7 +4492,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Val * par)
 	fflush(iC_outFP);
     }
 #endif
-#ifndef	NOCONSTLIST 
+#ifndef	NOCONSTLIST
     constExprString = NULL;
 #endif	/* NOCONSTLIST */
     rll.v = 0;					/* return link */
@@ -4555,7 +4600,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Val * par)
 	 * if list != 0 clone the expression head associated with this statement.
 	 *   By doing this after varList, cloned head is at front of templist.
 	 * if list == 0 indicates a function internal Symbol - only generate
-	 *   simple immC variables with our without fixed or dynamic initialiser 
+	 *   simple immC variables with our without fixed or dynamic initialiser
 	 *   and immC arrays with fixed or dynamic size.
 	 * The remaining internal statement head Symbols are not cloned till Pass2.
 	 * They then come even earlier on templist. This is necessary because

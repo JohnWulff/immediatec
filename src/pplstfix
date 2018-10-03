@@ -46,6 +46,10 @@
 #   V1.24: 18.02.13 add 'v' to $FOPS and $LOPS - is additional ftype CH_AR
 #   V1.25: 01.07.13 start processing after ******* to process null.lst correctly
 #   V1.26: 17.05.15 Replace " by ' in $OPS for LOGC marker - cleaner listing
+#   V1.27: 17.09.27 ignore LO and HI for alias translation
+#   V1.28: 18.09.12 block translation of alias names which are also fos markers
+#          18.09.21 block translation of fos marker names in NET TOPOLOGY also
+#          18.10.02 output pplstfix.temp instead of pplstfix.<gen> in warnings
 #
 #################################################################
 
@@ -60,7 +64,7 @@ Usage:	@<<<<<<< [-h][ -o out_file][ -l log_file] in_file ...
 	-l log	produce log file, usually 'pplstfix.log'
 	-h	help, ouput this Usage text only
 	called from immcc, icr or ict compiler to adjust listing output
-$Id: pplstfix 1.27 $
+$Id: pplstfix 1.28 $
 .
 
 use vars qw($opt_o $opt_l $opt_h);
@@ -226,7 +230,7 @@ sub processFile {
 		    if ($4 and $name ne $xlate) {
 			$symbols{$name} = [ $line, $xlate, $type, $ftype, $inver ];
 		    } else {
-			warn "*** $named $ARGV $.: ERROR ALIAS '$name' translates to itself '$xlate'\n";
+			warn "*** $named $named.temp $.: ERROR ALIAS '$name' translates to itself '$xlate'\n";
 			print LOG "$.:**$_\n" if $opt_l;
 		    }
 		    if ($8 eq '!1') {
@@ -237,7 +241,7 @@ sub processFile {
 		    $maxLength = $len;
 		}
 		if (exists $lengths{$name}) {
-		    warn "*** $named $ARGV $.: ERROR '$name' occurs twice in NET TOPOLOGY\n";
+		    warn "*** $named $named.temp $.: ERROR '$name' occurs twice in NET TOPOLOGY\n";
 		    print LOG "$.:**$_\n" if $opt_l;
 		    $tlen = $lengths{$name};		# previous length
 		} else {
@@ -327,20 +331,26 @@ sub processFile {
 			    ([\w\$][\w.@\$]* | -\d+)	# $1
 			/xg)
 		    {
-			if (defined($symbols{$1})) {
-			    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
-			}
-			print LOG "$.:	$1\n" if $opt_l;
+			my $t = $1;			# block translation of alias names which are also fos markers
+			if (defined($symbols{$t}) and
+			    $t !~ m/^$FOPS$/o) {	# A B C D E F G H I R S T U V W X Y Z e r s v
+			    push @array, $t, pos($_), length $t;# $word, $wpos and $wlen
+			}				# fails to translate if those aliases are assigned after use
+			print LOG "$.:	$t\n" if $opt_l;
 		    }
 		} else {
 		    while (/				# non listing line or C CODE
 			    ([\w\$][\w.\$]* | -\d+)	# $1
 			/xg)
 		    {
-			if (defined($symbols{$1}) and $1 ne "LO" and $1 ne "HI") {
-			    push @array, $1, pos($_), length $1;# $word, $wpos and $wlen
+			my $t = $1;			# block translation of alias names which are also fos markers
+			if (defined($symbols{$t}) and
+			    $t ne "LO" and
+			    $t ne "HI" and
+			    $t !~ m/^$FOPS$/o) {	# A B C D E F G H I R S T U V W X Y Z e r s v
+			    push @array, $t, pos($_), length $t;# $word, $wpos and $wlen
 			}
-			print LOG "$.:	$1\n" if $opt_l;
+			print LOG "$.:	$t\n" if $opt_l;
 		    }
 		}
 	      Array:
@@ -427,21 +437,21 @@ sub processFile {
 			    if ($nodeName ne $target) {
 				$nodeName = $target;
 			    } else {
-				warn "*** $named $ARGV $.: ERROR '$target' occurs twice\n";
+				warn "*** $named $named.temp $.: ERROR '$target' occurs twice\n";
 				print LOG "$.:**$_\n" if $opt_l;
 				@logicBlock = @{$hashRef->{$target}}; # continue to fill same array
 			    }
 			}
 			if (defined $timer1{$name}) {
 			    if (substr($type, 0, 1) ne '!') {
-				warn "*** $named $ARGV $.: ERROR '$name' has no '!' although TIMER1\n";
+				warn "*** $named $named.temp $.: ERROR '$name' has no '!' although TIMER1\n";
 				print LOG "$.:**$_\n" if $opt_l;
 			    }
 			    substr($type, 0, 2) = '!1';		# avoid regex to keep $1 - $13
 			}
 			if (defined $7 and defined $timer1{$target}) {
 			    if (substr($ftype, 0, 1) ne '!') {
-				warn "*** $named $ARGV $.: ERROR '$target' has no '!' although TIMER1\n";
+				warn "*** $named $named.temp $.: ERROR '$target' has no '!' although TIMER1\n";
 				print LOG "$.:**$_\n" if $opt_l;
 			    }
 			    $ftype = '!1';

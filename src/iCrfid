@@ -79,9 +79,12 @@ Usage:
 	-O      trace rcv messages in iCmsg.pm
 	-t	trace activity for debugging
 	-h	help, ouput this Usage text only
+    This app is an input and indicator for the iC program 'rfid'
+    Starting sequence:
+	iCrfid | rfid
 Copyright (C) 2018  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCrfid 1.1 $ uses Tk-@<<<<<<<<<
+$Id: iCrfid 1.2 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 

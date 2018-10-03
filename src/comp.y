@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.129 $";
+"@(#)$Id: comp.y 1.130 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -39,7 +39,6 @@ int		gnerrs;			/* count of ierror() calls */
 static int	copyCfrag(char, char, char, FILE*);	/* copy C action */
 static void	ffexprCompile(char *, List_e *, int);	/* c_compile cBlock */
 static void	blockUnblockListing(void);
-static List_e *	op_adjust(Lis * lv);	/* adjust logic expression with constant */
 static unsigned char ccfrag;		/* flag for CCFRAG syntax */
 static int	cBlockFlag;		/* flag to contol ffexpr termination */
 static FILE *	ccFP;			/* FILE * for CCFRAG destination */
@@ -50,11 +49,10 @@ static void	errBit(void);
 %endif	/* BOOT_COMPILE */
 static Symbol	nSym = { "", ERR, GATE, };
 static int	cFn = 0;
-static char *	TaliasList[9][2] = {
+static char *	TaliasList[][2] = {
 	    { "EOI",	"TX0.0"  },	// end of initialisation
 	    { "STDIN",	"TX0.1"  },	// stdin line received
-	    { "LO",	"TX0.2"  },	// constant bit LO
-	    { "HI",	"~TX0.2" },	// constant bit HI
+//	    { "T1ms",	"TX0.2"  },	// 1 ms internal timer (TODO implement)
 	    { "T10ms",	"TX0.3"  },	// 10 ms internal timer
 	    { "T100ms",	"TX0.4"  },	// 100 ms internal timer
 	    { "T1sec",	"TX0.5"  },	// 1 second internal timer
@@ -1423,7 +1421,7 @@ expr	: UNDEF			{
 	    }
 	| Constant		{
 		$$.f = $1.f; $$.l = $1.l;	/* no node, value not used */
-		$$.v = 0;			/* uses TX0.2 in bit expressions */
+		$$.v = 0;			/* uses LO in bit expressions */
 #if YYDEBUG
 		if ((iC_debug & 0402) == 0402) pu(LIS, "expr: Constant", &$$);
 #endif
@@ -1496,8 +1494,8 @@ expr	: UNDEF			{
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise | */
 		} else {
-		    lpL = op_adjust(&$1);
-		    lpR = op_adjust(&$3);
+		    lpL = op_force(&$1, GATE);
+		    lpR = op_force(&$3, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		}
 		if ($$.v) {
@@ -1516,8 +1514,8 @@ expr	: UNDEF			{
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise ^ */
 		} else {
-		    lpL = op_adjust(&$1);
-		    lpR = op_adjust(&$3);
+		    lpL = op_force(&$1, GATE);
+		    lpR = op_force(&$3, GATE);
 		    $$.v = op_push(lpL, XOR, lpR);	/* logical ^ */
 		}
 		if ($$.v) {
@@ -1536,8 +1534,8 @@ expr	: UNDEF			{
 		    ($3.v == 0 || $3.v->le_sym->ftype == ARITH)) {
 		    $$.v = op_push($1.v, ARN, $3.v);	/* bitwise & */
 		} else {
-		    lpL = op_adjust(&$1);
-		    lpR = op_adjust(&$3);
+		    lpL = op_force(&$1, GATE);
+		    lpR = op_force(&$3, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		}
 		if ($$.v) {
@@ -1552,10 +1550,10 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
-		    $$.v = op_force($$.v, GATE);	/* default output */
+		    $$.v = op_force(&$$, GATE);	/* default output */
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -1567,10 +1565,10 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
-		    $$.v = op_force($$.v, GATE);	/* default output */
+		    $$.v = op_force(&$$, GATE);	/* default output */
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -1582,8 +1580,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1596,8 +1594,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1610,8 +1608,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1624,8 +1622,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1638,8 +1636,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1652,8 +1650,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $3.l;
-		lpR = op_force($3.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$3, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1684,8 +1682,8 @@ expr	: UNDEF			{
 		    $3.v &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist)) {
-		    lpL = op_force($1.v, GATE);
-		    lpR = op_force($3.v, GATE);
+		    lpL = op_force(&$1, GATE);
+		    lpR = op_force(&$3, GATE);
 		    $$.v = op_push(lpL, AND, lpR);	/* logical & */
 		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			if (iC_Sflag) {
@@ -1696,10 +1694,10 @@ expr	: UNDEF			{
 			}
 		    }
 		} else {
-		    lpL = op_force($1.v, ARITH);
-		    lpR = op_force($3.v, ARITH);
+		    lpL = op_force(&$1, ARITH);
+		    lpR = op_force(&$3, ARITH);
 		    $$.v = op_push(lpL, ARN, lpR);	/* arithmetic && */
-		    $$.v = op_force($$.v, GATE);	/* default GATE output */
+		    $$.v = op_force(&$$, GATE);	/* default GATE output */
 		}
 		if ($$.v) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
@@ -1721,8 +1719,8 @@ expr	: UNDEF			{
 		    $3.v &&
 		    (sp = $3.v->le_sym)->ftype != ARITH &&
 		    ((typ = sp->type) > ARN || typ == UDF || !sp->u_blist)) {
-		    lpL = op_force($1.v, GATE);
-		    lpR = op_force($3.v, GATE);
+		    lpL = op_force(&$1, GATE);
+		    lpR = op_force(&$3, GATE);
 		    $$.v = op_push(lpL, OR, lpR);	/* logical | */
 		    if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			if (iC_Sflag) {
@@ -1733,10 +1731,10 @@ expr	: UNDEF			{
 			}
 		    }
 		} else {
-		    lpL = op_force($1.v, ARITH);
-		    lpR = op_force($3.v, ARITH);
+		    lpL = op_force(&$1, ARITH);
+		    lpR = op_force(&$3, ARITH);
 		    $$.v = op_push(lpL, ARN, lpR);	/* arithmetic || */
-		    $$.v = op_force($$.v, GATE);	/* default GATE output */
+		    $$.v = op_force(&$$, GATE);	/* default GATE output */
 		}
 		if ($$.v) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
@@ -1758,10 +1756,10 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $5.l;
-		lpR = op_force($5.v, ARITH);
-		lpL = op_force($3.v, ARITH);
+		lpR = op_force(&$5, ARITH);
+		lpL = op_force(&$3, ARITH);
 		lpR = op_push(lpL, ARN, lpR);
-		lpL = op_force($1.v, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1803,8 +1801,8 @@ expr	: UNDEF			{
 		List_e *	lpL;
 		List_e *	lpR;
 		$$.f = $1.f; $$.l = $4.l;
-		lpR = op_force($4.v, ARITH);
-		lpL = op_force($1.v, ARITH);
+		lpR = op_force(&$4, ARITH);
+		lpL = op_force(&$1, ARITH);
 		if (($$.v = op_push(lpL, ARN, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1843,10 +1841,10 @@ expr	: UNDEF			{
 			(((typ = sp->type) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical complement */
-			$$.v = op_not(op_force($2.v, GATE));
+			$$.v = op_not(op_force(&$2, GATE));
 		    } else {
 							/* bitwise complement */
-			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
+			$$.v = op_push(0, ARN, op_force(&$2, ARITH));
 		    }
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1866,7 +1864,7 @@ expr	: UNDEF			{
 			(((typ = sp->type) != ARNC && typ != ARNF && typ != ARN &&
 			typ != SH) || sp->u_blist == 0)) {
 							/* logical complement */
-			$$.v = op_not(op_force($2.v, GATE));
+			$$.v = op_not(op_force(&$2, GATE));
 			if (iC_Wflag & W_DEPRECATED_LOGIC) {
 			    if (iC_Sflag) {
 				ierror("strict: Use of '!' with an imm bit variable not allowed (use '~'):", sp->name);
@@ -1877,7 +1875,7 @@ expr	: UNDEF			{
 			}
 		    } else {
 							/* arithmetic complement */
-			$$.v = op_push(0, ARN, op_force($2.v, ARITH));
+			$$.v = op_push(0, ARN, op_force(&$2, ARITH));
 		    }
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -1893,7 +1891,7 @@ expr	: UNDEF			{
 	 ***********************************************************/
 	| '+' expr %prec '!'	{			/* unary + */
 		$$.f = $1.f; $$.l = $2.l;
-		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
+		if (($$.v = op_push(0, ARN, op_force(&$2, ARITH))) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -1903,7 +1901,7 @@ expr	: UNDEF			{
 	    }
 	| '-' expr %prec '!'	{			/* unary - */
 		$$.f = $1.f; $$.l = $2.l;
-		if (($$.v = op_push(0, ARN, op_force($2.v, ARITH))) != 0) {
+		if (($$.v = op_push(0, ARN, op_force(&$2, ARITH))) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -1936,7 +1934,7 @@ expr	: UNDEF			{
 	| BFORCE '(' aexpr ',' lexpr ')'	{	/* FORCE(expr,hi,lo) */
 		$$.f = $1.f; $$.l = $6.l;
 		if ($3.v == 0) { $$.v = 0; errBit(); YYERROR; }
-		$$.v = op_push(op_force($3.v, GATE), LOGC, $5.v);
+		$$.v = op_push(op_force(&$3, GATE), LOGC, $5.v);
 		$$.v->le_sym->type = LATCH;
 		assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		$$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -2087,8 +2085,8 @@ lexpr	: aexpr ',' aexpr		{
 		$$.f = $1.f; $$.l = $3.l;
 		if ($1.v == 0) { $$.v = $3.v; errBit(); YYERROR; }
 		if ($3.v == 0) { $$.v = $1.v; errBit(); YYERROR; }
-		lpR = op_not(op_force($3.v, GATE));
-		lpL = op_force($1.v, GATE);
+		lpR = op_not(op_force(&$3, GATE));
+		lpL = op_force(&$1, GATE);
 		if (($$.v = op_push(lpL, LOGC, lpR)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
@@ -2195,7 +2193,7 @@ ctdref	: cexpr			{ $$ = $1; }		/* clock */
 		if (checkConstExpr($3.v) == NULL) {
 		    if (const_push(&$3)) { errInt(); YYERROR; }
 		}
-		$3.v = op_force($3.v, ARITH);
+		$3.v = op_force(&$3, ARITH);
 		$3.v->le_val = (unsigned)-1;		/* mark link as timer value */
 		$$.v = op_push($1.v, TIM, $3.v);
 	    }
@@ -2957,7 +2955,7 @@ cParams	: /* nothing */		{ $$.v =  0; }
 
 cPlist	: aexpr			{
 		$$.f = $1.f; $$.l = $1.l;
-		if (($$.v = cListCount(0, $1.v)) != 0) {
+		if (($$.v = cListCount(0, &$1)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -2967,7 +2965,7 @@ cPlist	: aexpr			{
 	    }
 	| cPlist ',' aexpr	{
 		$$.f = $1.f; $$.l = $3.l;
-		if (($$.v = cListCount($1.v, $3.v)) != 0) {
+		if (($$.v = cListCount($1.v, &$3)) != 0) {
 		    assert($$.f == 0 || ($$.f >= iCbuf && $$.l < &iCbuf[IMMBUFSIZE]));
 		    $$.v->le_first = $$.f; $$.v->le_last = $$.l;
 		}
@@ -5082,16 +5080,28 @@ yylex(void)
 		 *******************************************************************/
 		if (iC_Pflag >= 2) typ = ERR;
 		warning("'$' character(s) in identifier:", iCtext);
-	    } else if (strpbrk(iCtext, "EHLST") == iCtext) {	/* speeds up search */
+	    } else if (strcmp(iCtext, "LO") == 0) {
+		if ((symp = lookup("LO")) == 0) {	/* lookup/install permanent bit 0 gate LO */
+		    symp = install("LO", OR, GATE);	/* defined but never changes */
+		}
+	    } else if (strcmp(iCtext, "HI") == 0) {
+		if ((symp = lookup("HI")) == 0) {	/* lookup/install permanent bit 1 alias HI */
+		    symp = install("HI", ALIAS, GATE);
+		    if ((sp = lookup("LO")) == 0) {	/* lookup/install permanent bit 0 gate */
+			sp = install("LO", OR, GATE);	/* defined but never changes */
+		    }
+		    symp->list = lp = sy_push(sp);	/* complete ALIAS to LO */
+		    lp->le_val = NOT;			/* HI is inverting alias of LO */
+		}
+	    } else if (strpbrk(iCtext, "EST") == iCtext) {	/* speeds up search */
 		/********************************************************************
 		 *  The iC language defines internal input variables TX0.0 - TX0.7
-		 *  The first 3 have special functionality and the remaining 5 are timers.
+		 *  The first 2 have special functionality and the last 6 are timers.
 		 *  The following table defines aliases for these internal inputs.
-		 *	static char *	TaliasList[9][2] = {
+		 *	static char *	TaliasList[][2] = {
 		 *	    { "EOI",	"TX0.0"  },	// end of initialisation
 		 *	    { "STDIN",	"TX0.1"  },	// stdin line received
-		 *	    { "LO",	"TX0.2"  },	// constant bit LO
-		 *	    { "HI",	"~TX0.2" },	// constant bit HI
+		 *  //	    { "T1ms",	"TX0.2"  },	// 1 ms internal timer (TODO implement)
 		 *	    { "T10ms",	"TX0.3"  },	// 10 ms internal timer
 		 *	    { "T100ms",	"TX0.4"  },	// 100 ms internal timer
 		 *	    { "T1sec",	"TX0.5"  },	// 1 second internal timer
@@ -5100,23 +5110,15 @@ yylex(void)
 		 *	};
 		 *******************************************************************/
 		int	i;
-		int	invFlag = 0;
 		char *	TXp;
-		for (i = 0; i < 9; i++) {
+		for (i = 0; i < sizeof TaliasList / sizeof TaliasList[0]; i++) {
 		    if (strcmp(iCtext, TaliasList[i][0]) == 0) {
 			if ((symp = lookup(iCtext)) == 0) {	/* lookup/install ALIAS */
 			    symp = install(iCtext, ALIAS, GATE);
-			    if (*(TXp = TaliasList[i][1]) == '~') {
-				TXp++;
-				invFlag = 1;
-			    }
-			    if ((sp = lookup(TXp)) == 0) {	/* lookup/install TX0.x */
+			    if ((sp = lookup(TXp = TaliasList[i][1])) == 0) {	/* lookup/install TX0.x */
 				sp = install(TXp, INPX, GATE);
 			    }
 			    symp->list = lp = sy_push(sp);	/* complete ALIAS to TX0.x */
-			    if (invFlag) {
-				lp->le_val = NOT;		/* HI is inverting ALIAS of TX0.2 */
-			    }
 			}
 			break;
 		    }
@@ -5709,31 +5711,3 @@ blockUnblockListing(void)
 	iC_outFP = iC_nulFP;	/* listing output is now blocked */
     }
 } /* blockUnblockListing */
-
-/********************************************************************
- *
- *	Adjust logic expression with arithmetic or constant expression
- *
- *******************************************************************/
-
-static List_e *
-op_adjust(Lis * lv)
-{
-    List_e *	lp;
-    Symbol *	sp;
-    Valp	v;
-
-    if ((lp = lv->v) == NULL) {			/* constant expression ? */
-	if ((sp = lookup("TX0.2")) == 0) {	/* yes */
-	    sp = install("TX0.2", INPX, GATE);
-	}
-	lp = sy_push(sp);			/* TX0.2 is permanent bit LO */
-	v = evalConstExpr(lv);
-	if (v.nuv) {
-	    lp->le_val = NOT;			/* ~TX0.2 is permanent bit HI */
-	}
-    } else {
-	lp = op_force(lp, GATE);		/* no - adjust possible arithmetic expression */
-    }
-    return lp;
-} /* op_adjust */

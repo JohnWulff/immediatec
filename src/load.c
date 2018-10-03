@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.70 $";
+"@(#)$Id: load.c 1.71 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2017  John E. Wulff
@@ -2057,7 +2057,8 @@ main(
 		op->gt_ini != -LOGC &&
 		op->gt_ini != -INPB &&
 		op->gt_ini != -INPW &&
-		op->gt_ini != -INPX) {
+		op->gt_ini != -INPX &&
+		strcmp(op->gt_ids, "LO") != 0) {
 		fprintf(iC_errFP, "WARNING '%s' has no input\n", op->gt_ids);
 		if (df) fprintf(iC_outFP, "*** Warning: '%s' has no input\n", op->gt_ids);
 	    }

@@ -31,7 +31,7 @@
 019	imm bit Sub44() {
 020	    this = 4 & 4;
 
-	TX0.2   ~ ---@  Sub44@
+	LO      ~ ---@  Sub44@
 
 021	}
 022
@@ -70,7 +70,7 @@
 036	imm bit Nest4(bit i3, bit i4) {
 037	    this = Sub44() & Sub33(i3, i4);
 
-	TX0.2    ~ ---&  Nest4@
+	LO       ~ ---&  Nest4@
 	Nest4@i3   ---&
 	Nest4@i4   ---&
 
@@ -80,7 +80,7 @@
 
 	Nest5@i3   ---&  Nest5@
 	Nest5@i4   ---&
-	TX0.2    ~ ---&
+	LO       ~ ---&
 
 041	}
 042	imm bit Nest6() {
@@ -102,7 +102,7 @@
 047	QX0.2 = Sub4() & Nest2(Sub44(), Nest6());
 
 	IX0.4     ---&  QX0.2
-	TX0.2   ~ ---&
+	LO      ~ ---&
 	IX0.5     ---&
 
 
@@ -112,14 +112,14 @@
 
 	IX0.4     ---&  QX0.3
 	IX0.5     ---&
-	TX0.2   ~ ---&
+	LO      ~ ---&
 
 
 	QX0.3     ---|  QX0.3_0 X
 
 049	QX0.4 = Sub44() & Nest4(Sub44(), Nest6());
 
-	TX0.2   ~ ---&  QX0.4
+	LO      ~ ---&  QX0.4
 	IX0.4     ---&
 	IX0.5     ---&
 
@@ -128,7 +128,7 @@
 
 050	QX0.5 = Nest5(Sub44(), Nest6()) & Sub44();
 
-	TX0.2   ~ ---&  QX0.5
+	LO      ~ ---&  QX0.5
 	IX0.4     ---&
 	IX0.5     ---&
 
@@ -148,6 +148,7 @@
 
 IX0.4   <     QX0.1&  QX0.2&  QX0.3&  QX0.4&  QX0.5&  QX0.6&
 IX0.5   <     QX0.1&  QX0.2&  QX0.3&  QX0.4&  QX0.5&  QX0.6&
+LO      |    ~QX0.2& ~QX0.3& ~QX0.4& ~QX0.5&
 QX0.1   &     QX0.1_0|
 QX0.1_0 |  X
 QX0.2   &     QX0.2_0|
@@ -160,18 +161,17 @@ QX0.5   &     QX0.5_0|
 QX0.5_0 |  X
 QX0.6   &     QX0.6_0|
 QX0.6_0 |  X
-TX0.2   <    ~QX0.2& ~QX0.3& ~QX0.4& ~QX0.5&
 
 ******* NET STATISTICS  ************************
 
 AND	&      6 blocks
-OR	|      6 blocks
-INPX	<      3 blocks
+OR	|      7 blocks
+INPX	<      2 blocks
 
 TOTAL	      15 blocks
 	      40 links
 
 compiled by:
-$Revision: icc_3.1-8-g9af405e-dirty $ -O7
+$Revision: icc_3.3-3-g66463bf-dirty $ -O7
 
-C OUTPUT: ./Test0/aa4z8.c  (59 lines)
+C OUTPUT: ./Test0/aa4z8.c  (60 lines)

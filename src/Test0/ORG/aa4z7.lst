@@ -8,14 +8,14 @@
 007	imm bit Sub44() {
 008	    this = 4 & 4;
 
-	TX0.2   ~ ---@  Sub44@
+	LO      ~ ---@  Sub44@
 
 009	}
 010
 011	QX0.0 = IX0.1 & Sub44();
 
 	IX0.1     ---&  QX0.0
-	TX0.2   ~ ---&
+	LO      ~ ---&
 
 
 	QX0.0     ---|  QX0.0_0 X
@@ -24,20 +24,20 @@
 ******* NET TOPOLOGY    ************************
 
 IX0.1   <     QX0.0&
+LO      |    ~QX0.0&
 QX0.0   &     QX0.0_0|
 QX0.0_0 |  X
-TX0.2   <    ~QX0.0&
 
 ******* NET STATISTICS  ************************
 
 AND	&      1 blocks
-OR	|      1 blocks
-INPX	<      2 blocks
+OR	|      2 blocks
+INPX	<      1 blocks
 
 TOTAL	       4 blocks
 	       9 links
 
 compiled by:
-$Revision: icc_3.1-8-g9af405e-dirty $ -O7
+$Revision: icc_3.3-3-g66463bf-dirty $ -O7
 
-C OUTPUT: ./Test0/aa4z7.c  (38 lines)
+C OUTPUT: ./Test0/aa4z7.c  (39 lines)

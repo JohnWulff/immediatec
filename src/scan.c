@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c 1.45 $";
+"@(#)$Id: scan.c 1.46 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -19,6 +19,7 @@ static const char scan_c[] =
 /* J.E. Wulff	3-Mar-85 */
 
 #include	<stdio.h>
+#include	<string.h>
 #include	<signal.h>
 #include	"icc.h"
 
@@ -657,7 +658,7 @@ static void
 gate3(Gate * gp, int typ)				/* Pass3 init on gates */
 {
     unsigned char opt = iC_os[typ];
-    if (gp->gt_mcnt == 0 && typ != LOGC && typ != ARNC) {
+    if (gp->gt_mcnt == 0 && typ != LOGC && typ != ARNC && strcmp(gp->gt_ids, "LO") != 0) {
 	fprintf(iC_outFP,
 	    "\nWarning:    %c	%s\thas no input connections",
 	    opt, gp->gt_ids);

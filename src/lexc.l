@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l 1.38 $";
+"@(#)$Id: lexc.l 1.39 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -122,8 +122,6 @@ static Symbol *	paraList = &markerSymbol;
 (__)?restrict(__)?	{ count(&yylval);		/* ignore */ }
 "__LINE__"		{ count(&yylval); return CONSTANT;	/* no need to identify octal */ }
 "__FILE__"		{ count(&yylval); return STRING_LITERAL; }
-"LO"			{ count(&yylval); return BIT_CONSTANT; }
-"HI"			{ count(&yylval); return BIT_CONSTANT; }
 
 	/* allow white space because Intel C/C++ v8.1 pre-compiler expands IX0.1 to IX0 .1 */
 (I|Q|T)X{D}+{WS}*\.{WS}*{D}+(_{D}+)?	{ count(&yylval); return check_type(&yylval, 2); }
@@ -406,6 +404,9 @@ count(YYSTYPE* u)
  *	Else if token is an immediate variable of ftype ARITH or GATE
  *		return IMM_IDENTIFIER with pointer to Symbol in tok
  *		for any other imm variable return YYERRCODE
+ *	Else if token is "LO" or "HI" which have not been used before
+ *		generate GATE "LO" and ALIAS "HI" linked to "LO"
+ *		return IMM_IDENTIFIER with pointer to Symbol in tok
  *	Else token is a CWORD
  *		create a new Symbol and return CWORD
  *		when this Symbol is recognised as a CTYPE it is
@@ -418,6 +419,8 @@ static int
 check_type(YYSTYPE* u, int qtoken)
 {
     Symbol *	sp = 0;
+    List_e *	lp;
+    int		inv;
     int		n;
     char	iqt[2];			/* char buffers - space for 0 terminator */
     char	xbwl[2];
@@ -478,6 +481,7 @@ check_type(YYSTYPE* u, int qtoken)
 	}
     }
 #endif
+    inv = 0;				/* start with no ALIAS inversion */
     if (
 #ifndef LMAIN
 	sp == 0 &&
@@ -501,7 +505,7 @@ check_type(YYSTYPE* u, int qtoken)
 	    }
 	    if (n == 4) {		/* QX, IX or TX */
 		if (bit < 8) {
-		    foundQIT:
+		  foundQIT:
 		    ftyp = GATE - wplus;	/* GATE or ARITH */
 		    if (iqt[0] != 'Q') {
 			typ = INPX - wplus;	/* INPX or INPW */
@@ -514,7 +518,7 @@ check_type(YYSTYPE* u, int qtoken)
 			if (iqt[0] == 'Q') {
 			    sp->em |= EO;	/* marks variable as Q... */
 			}
-			goto foundSymbol;
+			goto foundSymbol;	/* newly installed Q... output */
 		    } else {
 			char errorMsg[41];	/* length of message + 5 digit number + \0 */
 			snprintf(errorMsg, 40, "I/O byte address must be less than %d", ixd);
@@ -524,9 +528,9 @@ check_type(YYSTYPE* u, int qtoken)
 		    YY_FATAL_ERROR( "I/O bit address must be less than 8" );\
 		}
 	    }
-	}
+	}					/* unknown token - generate LO HI or IDENTIFIER */
     } else {
-	foundSymbol:
+      foundSymbol:				/* imm Symbol previously declared or new Q... output */
 	if (sp->type < MAX_LS && (sp->fm & FM) == 0) {	/* only imm types */
 #ifndef LMAIN
 	    if (lexflag & C_NO_COUNT) goto inInclude;	/* ignore imm in C includes */
@@ -541,10 +545,18 @@ check_type(YYSTYPE* u, int qtoken)
 	    }
 #endif
 	    while (sp->type == ALIAS) {
-		sp = sp->list->le_sym;	/* with token of original */
+		lp = sp->list;
+		inv ^= lp->le_val;	/* ignore inv if final target is not GATE */
+		sp = lp->le_sym;	/* with token of original */
 	    }
+#ifndef LMAIN
+	  genToken:
+#endif
 	    u->tok.symbol = sp;
 	    if (sp->ftype == ARITH || sp->ftype == GATE) {
+		if (inv && sp->ftype == GATE) {
+		    u->tok.start |= INVERT;	/* cannot mark sp */
+		}
 		return IMM_IDENTIFIER;	/* analyze type errors in parser */
 	    } else if (sp->ftype == UDFA && (sp->type == ARNC || sp->type == LOGC)) {
 		return IMM_ARRAY_IDENTIFIER;	/* immC array */
@@ -565,8 +577,28 @@ check_type(YYSTYPE* u, int qtoken)
 	return YYERRCODE;		/* internal imm node is an error */
     }
 #ifndef LMAIN
+    if (strcmp(yytext, "LO") == 0) {
+	if ((sp = lookup("LO")) == 0) {		/* lookup/install permanent bit 0 gate LO */
+	    sp = install("LO", OR, GATE);	/* defined but never changes */
+	}
+	goto genToken;				/* return IMM_IDENTIFIER LO (inv is 0) */
+    }
+    if (strcmp(yytext, "HI") == 0) {
+	Symbol *	symp;
+	if ((symp = lookup("HI")) == 0) {	/* lookup/install permanent bit 1 alias HI */
+	    symp = install("HI", ALIAS, GATE);
+	    if ((sp = lookup("LO")) == 0) {	/* lookup/install permanent bit 0 gate */
+		sp = install("LO", OR, GATE);	/* defined but never changes */
+	    }
+	    symp->list = lp = sy_push(sp);	/* complete ALIAS to LO */
+	    lp->le_val = NOT;			/* HI is inverting alias of LO */
+	}
+	inv = 1;				/* skip while loop */
+	goto genToken;				/* return IMM_IDENTIFIER LO with inv 1 */
+    }
   inInclude:
 #endif
+    /* generate a CWORD Symbol which is not installed in the iC symbol table */
     sp = (Symbol *) iC_emalloc(sizeof(Symbol));
     sp->name = iC_emalloc(yyleng + 1);	/* +1 for '\0' */
     strcpy(sp->name, yytext);

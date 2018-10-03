@@ -16,7 +16,7 @@
 #ifndef COMP_H
 #define COMP_H
 static const char comp_h[] =
-"@(#)$Id: comp.h 1.78 $";
+"@(#)$Id: comp.h 1.79 $";
 
 #include	<setjmp.h>
 #include	"icc.h"		/* fir definition of struct Gate */
@@ -212,7 +212,6 @@ extern const char * cexeString[];	/* case or function string */
  * F_LITERAL	010	imm reference generated in a literal block
  * F_ARRAY	020	imm reference to an iC array
  * F_SIZE	040	imm reference to a sizeof operator
- * F_LOHI	0100	constants LO and HI used in C expression
  *******************************************************************/
 
 #define F_CALLED	01
@@ -221,7 +220,6 @@ extern const char * cexeString[];	/* case or function string */
 #define F_LITERAL	010
 #define F_ARRAY		020
 #define F_SIZE		040
-#define F_LOHI		0100
 
 typedef struct FuUse {			/* Function call count and C expression */
     int		c_cnt;			/* call count */
@@ -283,7 +281,7 @@ extern Symbol *	resolveAlias(		/* resolve possible alias chain */
 extern List_e *	cCallCount(		/* check parameter count in 'cCall' */
 	    Symbol * cName, List_e * cParams, int pcnt);
 extern List_e *	cListCount(		/* count parameters in 'cList' */
-	    List_e * cPlist, List_e * aexpr);
+	    List_e * cPlist, Lis * lv);
 extern Symbol *	functionDefHead(	/* set up the function definition head */
 	    unsigned int ftyp, Symbol * funTrigger);
 extern List_e *	collectStatement(	/* collect statements in the function body */
@@ -304,7 +302,7 @@ extern void	initcode(void);		/* initialize for code generation */
 extern List_e *	sy_push(Symbol *);	/* create List element for variable */
 extern Symbol *	sy_pop(List_e *);	/* delete List element left over */
 extern List_e * op_force(		/* force linked Symbol to ftype */
-	    List_e *, unsigned char);	/*   lp, ftyp    */
+	    Lis * lv, unsigned char ftyp);
 extern List_e *	op_push(List_e *,	/* reduce List_e stack to links */
 	    unsigned char, List_e *);	/*   left, typ, right   */
 extern int	const_push(Lis * expr);	/* numeric constant push */
@@ -402,6 +400,8 @@ extern int	iC_c_compile(FILE * iFP, FILE * oFP, int flag, List_e * lp);
 extern int	iC_copyXlate(FILE * iFP, FILE * oFP, char * outfile, unsigned * lcp, int mode);
 
 					/*   lexc.l   */
+#define LARGE		(~0U>>2)	/* 0x3ffffff marks start and end very large */
+#define INVERT		(LARGE+1)	/* 0x4000000 or to end to mark inverting alias token */
 //extern int	yyleng;			/* declare in comp.y to make it independent of lex.yy.c */
 //extern size_t	yyleng;			/* defined in lex.yy.c 2.5.37 2.5.39 */
 extern int	column;

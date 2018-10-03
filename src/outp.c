@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.110 $";
+"@(#)$Id: outp.c 1.111 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -2858,13 +2858,6 @@ iC_outNet(FILE * iFP, char * outfile)
 " *******************************************************************/\n"
 "\n"
 	); linecnt += 7;
-	if (functionUse[0].c_cnt & F_LOHI) {
-	    fprintf(Fp,				/* must be here so ALIASes in Gate list are safe */
-"#define LO	0\n"
-"#define HI	1\n"
-"\n"
-	    ); linecnt += 3;
-	}
 
 	/* copy C intermediate file up to EOF to C output file */
 	/* translate any imm variables and ALIAS references of type 'QB1_0' */

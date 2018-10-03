@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.39 $";
+"@(#)$Id: gram.y 1.40 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -42,7 +42,6 @@
 #define AUXBUFSIZE	256
 // #define LEAS		2
 #define LEAI		170
-#define LARGE		(~0U>>2)
 
 extern int		yylex(void);		/* produced by lexc.l */
 static const char	idOp[] = "+-+-";	/* increment/decrement operator selection */
@@ -69,6 +68,7 @@ typedef struct LineEntry {
     unsigned int	vEnd;
     unsigned int	pEnd;
     unsigned int	ppi;
+    unsigned int	inv;
     Symbol *		sp;
 } LineEntry;
 
@@ -82,7 +82,7 @@ static unsigned int	udfCount = LEAI;	/* 170 is approx 4 kB */
 static unsigned int *	endStack = NULL;	/* these values will cause dynamic */
 static unsigned int *	esp = NULL;		/* allocation of first stack block */
 static int		endStackSize = 0;
-static void		immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, Symbol* sp);
+static void		immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, unsigned int invert, Symbol* sp);
 static void		immVarRemove(unsigned int start, unsigned int end, Symbol* sp);
 static void		immAssignFound(unsigned int start, unsigned int operator,
 			    unsigned int end, Symbol* sp, unsigned int ppi);
@@ -97,7 +97,7 @@ static void		yyerror(const char *s, ...);
     Token		tok;
 }
 
-%token	<tok> IDENTIFIER IMM_IDENTIFIER IMM_ARRAY_IDENTIFIER CONSTANT BIT_CONSTANT STRING_LITERAL SIZEOF
+%token	<tok> IDENTIFIER IMM_IDENTIFIER IMM_ARRAY_IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
 %token	<tok> PTR_OP INC_OP DEC_OP LEFT_SH RIGHT_SH LE_OP GE_OP EQ_OP NE_OP
 %token	<tok> AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token	<tok> SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
@@ -1763,7 +1763,7 @@ imm_unary_expression				/* 63a */
 	    	$2.start, $1.start, $2.end, $2.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
-		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* adjust pEnd, set inds 0 inde early */
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* adjust pEnd, set inds 0 inde early */
 	    }
 #endif	/* LMAIN */
 	}
@@ -1940,7 +1940,7 @@ imm_lvalue					/* 65b */
 		$$.start, $$.end, $$.symbol->name, $$.inds, $$.inde);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
-		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* adjust pEnd, set inds inde */
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* adjust pEnd, set inds inde */
 	    }
 #endif	/* LMAIN */
 	}
@@ -1963,18 +1963,6 @@ primary_expression				/* 66 */
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;
-	}
-	| BIT_CONSTANT {
-	    $$.start = $1.start;
-	    $$.end = $1.end;
-	    $$.symbol = $1.symbol;
-#ifndef LMAIN
-	    functionUse[0].c_cnt |= F_LOHI;	/* #define LO 0, #define HI 1 required in C code */
-#if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "primary_expression: BIT_CONSTANT %u %u %s\n",
-		$$.start, $$.end, $$.symbol->name);
-#endif
-#endif	/* LMAIN */
 	}
 	| string_literal {
 	    $$.start = $1.start;
@@ -2033,18 +2021,24 @@ string_literal					/* 68 */
 
 imm_identifier					/* 69 */
 	: IMM_IDENTIFIER {
+#ifndef LMAIN
+	    unsigned int invert;
+	    invert = $1.start & INVERT;		/* inverted alias if set */
+	    $$.start = $1.start & ~INVERT;	/* clear invert flag immediately */
+#else	/* LMAIN */
 	    $$.start = $1.start;
+#endif	/* LMAIN */
 	    $$.end = $1.end;
 	    $$.inds = LARGE;
 	    $$.inde = LARGE;
 	    $$.symbol = $1.symbol;
 #ifndef LMAIN
 #if YYDEBUG
-	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: IMM_IDENTIFIER %u %u %s\n",
-	    	$$.start, $$.end, $$.symbol->name);
+	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: IMM_IDENTIFIER %u %u %c%s\n",
+		$$.start, $$.end, invert ? '~' : ' ', $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
-		immVarFound($$.start, $$.end, $$.inds, $$.inde, $$.symbol);
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, invert, $$.symbol);
 	    }
 #endif	/* LMAIN */
 	}
@@ -2061,7 +2055,7 @@ imm_identifier					/* 69 */
 	    	$$.start, $$.end, $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
-		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* moves pStart and pEnd without changing vStart vEnd inv */
 	    }
 #endif	/* LMAIN */
 	}
@@ -2081,7 +2075,7 @@ imm_array_identifier				/* 70 */
 	    	$$.start, $$.end, $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
-		immVarFound($$.start, $$.end, $$.inds, $$.inde, $$.symbol);
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, $$.symbol);
 	    }
 #endif	/* LMAIN */
 	}
@@ -2098,7 +2092,7 @@ imm_array_identifier				/* 70 */
 	    	$$.start, $$.end, $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
-		immVarFound($$.start, $$.end, $$.inds, $$.inde, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
+		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
 	    }
 #endif	/* LMAIN */
 	}
@@ -2156,7 +2150,7 @@ static char*	cMacro[] = { CMACRO_NAMES };
  *******************************************************************/
 
 static void
-immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, Symbol* sp)
+immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned int inde, unsigned int invert, Symbol* sp)
 {
     LineEntry *	p;
     LineEntry *	newArray;
@@ -2169,6 +2163,7 @@ immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned in
 	p->inde   = inde;			/* array index (usually LARGE) */
 	p->vEnd   = p->pEnd   = end;		/* of an imm variable */
 	p->ppi    = 0;
+	p->inv    = invert;			/* inverted alias if set */
 	p->sp     = sp;
 	if (sp->ftype != ARITH && sp->ftype != GATE &&
 	    (sp->ftype != UDFA || (sp->type != ARNC && sp->type != LOGC))
@@ -2207,8 +2202,8 @@ immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned in
     }
 #if YYDEBUG
     if ((iC_debug & 0402) == 0402) {
-	fprintf(iC_outFP, "immVarFound: %u (%u %u) %u [%u %u] %s\n",
-	    p->pStart, p->vStart, p->vEnd, p->pEnd, p->inds, p->inde, p->sp->name);
+	fprintf(iC_outFP, "immVarFound: %u (%u %u) %u [%u %u] %c%s\n",
+	    p->pStart, p->vStart, p->vEnd, p->pEnd, p->inds, p->inde, p->inv ? '~' : ' ', p->sp->name);
     }
 #endif
     if (lep > &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
@@ -2511,6 +2506,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #ifdef LEAS
     Symbol **		hsp;
 #endif
+    char *		invp;
     int			ml;
     int			ftypa;
     Symbol *		fsp = 0;
@@ -2653,8 +2649,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    pushEndStack(end << 1);		/* push previous end (with 0 marker for end) */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		fprintf(iC_outFP, "\n= %u(%u [%u %u] %u %u)%u <%u> %s\n",
-		    p->pStart, p->vStart, p->inds, p->inde, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi, p->sp->name);
+		fprintf(iC_outFP, "\n= %u(%u [%u %u] %u %u)%u <%u> %c%s\n",
+		    p->pStart, p->vStart, p->inds, p->inde, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi, p->inv ? '~' : ' ', p->sp->name);
 	    }
 #endif
 	    vstart = p->vStart;			/* start of actual variable */
@@ -2666,6 +2662,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    ppi    = p->ppi;			/* pre/post-inc/dec character value */
 	    sp     = p->sp;			/* associated Symbol */
 	    assert(sp);
+	    invp   = (p->inv) ? "~" : "";	/* found inverting alias */
 	    ml     = lp ? 0		 : CMACRO_LITERAL;	/*       0 or      9 */
 	    ftypa  = (sp->type == ERR)	 ? UDFA
 		   : (inds == 0)	 ? CMACRO_SIZE		/* sizeof macro */
@@ -2676,14 +2673,14 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    /* assignment cMacro must be printed outside of enclosing parentheses */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		fprintf(iC_outFP, "strt bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%s\n",
-		    bytePos, inds, inde, earlyop, equop, ppi, sp->name);
-		obp += snprintf(obp, OUTBUFEND-obp, "%s", cMacro[ml+ftypa]);
+		fprintf(iC_outFP, "strt bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%c%s\n",
+		    bytePos, inds, inde, earlyop, equop, ppi, p->inv ? '~' : ' ', sp->name);
+		obp += snprintf(obp, OUTBUFEND-obp, "%s%s", invp, cMacro[ml+ftypa]);
 		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		changeFlag++;
 	    }
 #endif
-	    fprintf(oFP, "%s", cMacro[ml+ftypa]);	/* entry found - output cMacro start */
+	    fprintf(oFP, "%s%s", invp, cMacro[ml+ftypa]);	/* entry found - output cMacro start */
 	    assert(start <= vstart);
 	    assert(vstart < vend);
 	    assert(vend <= end);

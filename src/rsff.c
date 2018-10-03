@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.64 $";
+"@(#)$Id: rsff.c 1.65 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1780,7 +1780,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
     default:
 	nv = rv;
     }
-    val = nv ? -1 : 1;
+    val = (nv & 0x01) ? -1 : 1;
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
 	if (ppi < 12) {
@@ -1806,7 +1806,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
     }
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #if defined(TCP) || defined(LOAD)
-    iC_liveData(glv, nv ? 1 : 0);	/* VCD and/or iClive */
+    iC_liveData(glv, (val < 0) ? 1 : 0);	/* VCD and/or iClive */
 #endif /* defined(TCP) || defined(LOAD) */
     return rv != 0;			/* change to logic value 0 or 1 */
 } /* iC_assignL */

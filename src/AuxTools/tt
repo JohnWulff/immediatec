@@ -9,7 +9,7 @@
 version()
 {
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: tt 1.41 $' >&2
+  echo '$Id: tt 1.42 $' >&2
 }
 
 usage()
@@ -45,7 +45,7 @@ usage()
   echo '	-I	append output of run INITIALIZATION only to file.ini  ( " -s)' >&2
   echo '	-J	append output of full INITIALIZATION info to file.ini ( " -s)' >&2
   echo '	-6	produce logic generation listing file.lst6 and file.cc=(cexe.c)' >&2
-  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 Test12 Test13' >&2
+  echo '	-t <string of directory names for Test1 group> default Test1 Test9 Test11 - Test14' >&2
   echo '	-T <string of directory names for Test2 group> default Test2 - Test8, Test10' >&2
   echo '	-y	No nice with calls of immcc and gcc compilers (default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
@@ -55,7 +55,7 @@ usage()
   echo >&2
   echo "	$name must be called from a directory .T, which is a sub-directory of the" >&2
   echo "	directory in which the iC system is made and in which 'make test' must be called." >&2
-  echo "	.T has a number of sub-directories Test1, Test2, Test3 .. Test13 containg iC sources." >&2
+  echo "	.T has a number of sub-directories Test1, Test2, Test3 .. Test14 containg iC sources." >&2
   echo "	Each iC source is made with iCmake, generating different files." >&2
   echo >&2
   echo "	<dir1> or <dir1>_<opt> are sub-directories of directory" >&2
@@ -109,7 +109,7 @@ z=""
 head=""
 test1=""
 test2=""
-Test1='Test1 Test9 Test11 Test12 Test13'
+Test1='Test1 Test9 Test11 Test12 Test13 Test14'
 Test2='Test2 Test3 Test4 Test5 Test6 Test7 Test8 Test10'
 
 while getopts ":cm:d:lwgASNO:PRseaLEjIJ6x:f:F:t:T:yzvh" opt; do

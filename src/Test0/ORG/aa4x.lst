@@ -36,14 +36,14 @@
 021	imm bit Sub2() {
 022	    return 2;
 
-	TX0.2   ~ ---@  Sub2@
+	LO      ~ ---@  Sub2@
 
 023	}
 024
 025	imm bit Sub22() {
 026	    this = 2 + 2;
 
-	TX0.2   ~ ---@  Sub22@
+	LO      ~ ---@  Sub22@
 
 027	}
 028
@@ -125,27 +125,27 @@ IX0.0   <     QX0.0&
 IX0.1   <     QX0.0&
 IX0.2   <     QX0.0&
 IX0.3   <     QX0.0&
+LO      |
+*** Warning: unused    imm bit: LO File ./Test0/aa4x.ic, line 48
 QB1     +  A  QB1_0+
 QB1_0   +  W
 QB2     +  A  QB2_0+
 QB2_0   +  W
 QX0.0   &     QX0.0_0|
 QX0.0_0 |  X
-TX0.2   <
-*** Warning: unused    imm bit: TX0.2 File ./Test0/aa4x.ic, line 48
 
 ******* NET STATISTICS  ************************
 
 ARN	+      4 blocks
 AND	&      1 blocks
-OR	|      1 blocks
+OR	|      2 blocks
 INPW	[      4 blocks
-INPX	<      5 blocks
+INPX	<      4 blocks
 
 TOTAL	      15 blocks
 	      35 links
 
 compiled by:
-$Revision: icc_3.1-8-g9af405e-dirty $ -O7
+$Revision: icc_3.3-3-g66463bf-dirty $ -O7
 *** Warning: 1 unused gate. File ./Test0/aa4x.ic, line 48
 *** Error: 2 syntax and 4 generate errors - cannot execute. File ./Test0/aa4x.ic, line 48
