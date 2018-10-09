@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.65 $";
+"@(#)$Id: rsff.c 1.65.b.1 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1695,41 +1695,58 @@ iC_assignA(Gate * glv, int ppi, int rv) {
  *	assignment as well as pre/post increment/decrement operators
  *	and all the assignment operators.
  *
- *	The straight assignment makes a lot of sense for bit variables.
- *	The other operators are of doubtful utility for immC bits but
- *	are included anyway for completeness.
+ *	Straight assignment makes a lot of sense for bit variables.
+ *	It also makes sense to interpret the complement operator '~'
+ *	as applying to the input rv interpreted as a bit with values
+ *	0 and 1 whose complement ~rv is 1 and 0. This means the
+ *	    value assigned is 0 if rv == 0 or rv == ~1 (-2)
+ *	    value assigned is 1 if rv == 1 or rv == ~0 (-1) or any
+ *	    value except 0 or -2
+ *	This fudge is now only relevant if the value rv to be assigned
+ *	is a numerical 0 or 1 for lo or hi or an imm or immc int variable,
+ *	because the output of all complement operations with the ~ operator
+ *	on imm or immC bit values in C code is now carried out by leaving
+ *	out the '~' operator and supplying an extra parameter inv to all
+ *	bit manipulation macros and this function, which causes the output
+ *	to be the proper bit complement if inv == 1.
  *
- *	The node is linked to iC_oList when rv, interpreted as a logic
- *	value (0 is rv == 0, 1 is rv != 0) changes from its previous
- *	value.
+ *	Other assignment operators are of doubtful utility for immC bits
+ *	but are included anyway for completeness. In this case input rv
+ *	is treated normally as in C for the "!" operator
+ *	    value assigned is 0 if rv == 0
+ *	    value assigned is 1 if rv != 0
+ *
+ *	The node is linked to iC_oList when rv, interpreted as above
+ *	changes from its previous value.
  *
  *	If glv->gt_fni == UDFA, an out of range Warning was issued on
  *	the console and no assignment occurs here. This is done so that
  *	iC programs keep running despite an attempted out of range array
  *	reference.
  *
- *	Return value is the logic value 0 or 1 assigned or 0 if index was
- *	out of range.
+ *	Return is the assigned value converted to the bit value 0 or 1
+ *	or the complemented bit value 1 or 0 if the input parameter inv is 1
+ *	or 0 if index was out of range.
  *
  *******************************************************************/
 
 #if INT_MAX == 32767 && defined (LONG16)
 long
-iC_assignL(Gate * glv, int ppi, long rv) {	/* } */
+iC_assignL(Gate * glv, int inv, int ppi, long rv) {	/* } */
     long nv;
 #if YYDEBUG && !defined(_WINDOWS)
     long iv = rv;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #else
 int
-iC_assignL(Gate * glv, int ppi, int rv) {
+iC_assignL(Gate * glv, int inv, int ppi, int rv) {
     int nv;
 #if YYDEBUG && !defined(_WINDOWS)
     int iv = rv;
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif
     signed char val;
-    if (glv->gt_fni == UDFA) return 0;		/* index out of range */
+    if (glv->gt_fni == UDFA) return 0;	/* index out of range */
     assert(glv->gt_ini == -LOGC);
     nv = glv->gt_val < 0 ? 1 : 0;
     switch (ppi) {
@@ -1778,9 +1795,10 @@ iC_assignL(Gate * glv, int ppi, int rv) {
     case 0:
     case 1:
     default:
+	if (rv == ~1) rv = 0;		/* bit 0 for straight assignment of ~1 */
 	nv = rv;
     }
-    val = (nv & 0x01) ? -1 : 1;
+    val = nv ? -1 : 1;
 #if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
 	if (ppi < 12) {
@@ -1808,7 +1826,7 @@ iC_assignL(Gate * glv, int ppi, int rv) {
 #if defined(TCP) || defined(LOAD)
     iC_liveData(glv, (val < 0) ? 1 : 0);	/* VCD and/or iClive */
 #endif /* defined(TCP) || defined(LOAD) */
-    return rv != 0;			/* change to logic value 0 or 1 */
+    return (rv != 0) ^ inv;	/* change to logic value 0 or 1 or its complement */
 } /* iC_assignL */
 
 /********************************************************************

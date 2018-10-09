@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.111 $";
+"@(#)$Id: outp.c 1.111.b.1 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -2541,16 +2541,16 @@ iC_outNet(FILE * iFP, char * outfile)
 	if (functionUse[0].c_cnt & F_FFEXPR) {
 	    fprintf(Fp,
 "#define " AV "(n)	iC_gf->gt_list[n]->gt_new\n"
-"#define " LV "(n)	(iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)\n"
+"#define " LV "(n,c)	((iC_gf->gt_list[n]->gt_val < 0) ^ c ? 1 : 0)\n"
 "#define " AA "(n,p,v)	iC_assignA(iC_gf->gt_list[n], p, v)\n"
-"#define " LA "(n,p,v)	iC_assignL(iC_gf->gt_list[n], p, v)\n"
+"#define " LA "(n,c,p,v)	iC_assignL(iC_gf->gt_list[n], c, p, v)\n"
 	    ); linecnt += 4;
 	    if (functionUse[0].c_cnt & F_ARRAY) {
 		fprintf(Fp,
 "#define " AVI "(n,i)	iC_index(iC_gf->gt_list[n], i)->gt_new\n"
-"#define " LVI "(n,i)	(iC_index(iC_gf->gt_list[n], i)->gt_val < 0 ? 1 : 0)\n"
+"#define " LVI "(n,c,i)	((iC_index(iC_gf->gt_list[n], i)->gt_val < 0) ^ c ? 1 : 0)\n"
 "#define " AAI "(n,i,p,v)	iC_assignA(iC_index(iC_gf->gt_list[n], i), p, v)\n"
-"#define " LAI "(n,i,p,v)	iC_assignL(iC_index(iC_gf->gt_list[n], i), p, v)\n"
+"#define " LAI "(n,c,i,p,v)	iC_assignL(iC_index(iC_gf->gt_list[n], i), c, p, v)\n"
 		); linecnt += 4;
 	    }
 	    if (functionUse[0].c_cnt & F_SIZE) {
@@ -2562,16 +2562,16 @@ iC_outNet(FILE * iFP, char * outfile)
 	if (functionUse[0].c_cnt & F_LITERAL) {
 	    fprintf(Fp,
 "#define " AVL "(n)	_f0_1.gt_list[n]->gt_new\n"
-"#define " LVL "(n)	(_f0_1.gt_list[n]->gt_val < 0 ? 1 : 0)\n"
+"#define " LVL "(n,c)	((_f0_1.gt_list[n]->gt_val < 0) ^ c ? 1 : 0)\n"
 "#define " AAL "(n,p,v)	iC_assignA(_f0_1.gt_list[n], p, v)\n"
-"#define " LAL "(n,p,v)	iC_assignL(_f0_1.gt_list[n], p, v)\n"
+"#define " LAL "(n,c,p,v)	iC_assignL(_f0_1.gt_list[n], c, p, v)\n"
 	    ); linecnt += 4;
 	    if (functionUse[0].c_cnt & F_ARRAY) {
 		fprintf(Fp,
 "#define " AVIL "(n,i)	iC_index(_f0_1.gt_list[n], i)->gt_new\n"
-"#define " LVIL "(n,i)	(iC_index(_f0_1.gt_list[n], i)->gt_val < 0 ? 1 : 0)\n"
+"#define " LVIL "(n,c,i)	((iC_index(_f0_1.gt_list[n], i)->gt_val < 0) ^ c ? 1 : 0)\n"
 "#define " AAIL "(n,i,p,v)	iC_assignA(iC_index(_f0_1.gt_list[n], i), p, v)\n"
-"#define " LAIL "(n,i,p,v)	iC_assignL(iC_index(_f0_1.gt_list[n], i), p, v)\n"
+"#define " LAIL "(n,c,i,p,v)	iC_assignL(iC_index(_f0_1.gt_list[n], i), c, p, v)\n"
 		); linecnt += 4;
 	    }
 	    if (functionUse[0].c_cnt & F_SIZE) {

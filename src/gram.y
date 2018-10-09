@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.40 $";
+"@(#)$Id: gram.y 1.40.b.1 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -31,6 +31,7 @@
 #include	<assert.h>
 #include	<stdarg.h>
 #include	<string.h>
+#include	<ctype.h>
 #ifndef LMAIN
 #undef	yyerror
 #define yyerror	iCerror				/* use full yyerror in comp.y */
@@ -1355,10 +1356,10 @@ assignment_expression				/* 48 */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "assignment_expression: imm_lvalue <%u> assignment_expression %u (%u) %u <%u> %s\n",
-	    	$2.inds, $1.start, $2.start, $3.end, $2.inds, $1.symbol->name);	/* NOTE: assignment_operator.inds is ppi */
+		$2.inds, $1.start, $2.start, $3.end, $2.inds, $1.symbol->name);
 #endif
 	    if ($1.symbol->u_blist == 0 || $1.symbol->type == NCONST) {
-		immAssignFound($1.start, $2.start, $3.end, $1.symbol, $2.inds);
+		immAssignFound($1.start, $2.start, $3.end, $1.symbol, $2.inds);	/* NOTE: assignment_operator.inds is ppi */
 	    }
 #endif	/* LMAIN */
 	}
@@ -2322,6 +2323,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    p->equOp  = operator;		/* position of operator marks an assignment expression */
 	    p->pEnd   = end;			/* end position of expression assigned from */
 	    p->ppi    = ppi;			/* assignment operator or pre/post-inc/dec */
+	    p->inv    = 0;			/* start return value of assignment with no inversion */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "= %u(%u %u %u)%u <%u>\n",
 		p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi);
@@ -2497,6 +2499,8 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
     unsigned int	bytePos;
     unsigned int	i;
     int			pFlag;
+    int			ic;
+    int			cc;
     Symbol *		sp;
     Symbol *		tsp;
     List_e *		lp1;
@@ -2506,7 +2510,6 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #ifdef LEAS
     Symbol **		hsp;
 #endif
-    char *		invp;
     int			ml;
     int			ftypa;
     Symbol *		fsp = 0;
@@ -2601,7 +2604,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
      *	Read input file
      *******************************************************************/
 
-    bytePos = 0;
+    bytePos = ic = cc = 0;
     while ((c = getc(iFP)) != EOF) {
 #if YYDEBUG
 	if ((iC_debug & 0402) == 0402) {
@@ -2645,7 +2648,71 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		break;				/* will be popped at inde now restored */
 	    }
 	}
-	if (bytePos >= start) {
+	/********************************************************************
+	 *  Branch "b" handling bitwise complement outside of the grammar.
+	 *
+	 *  Count occurences of '~' in ic and '(' following in cc. Do not
+	 *  output yet. Output number of '~' counted and one '(' if counted
+	 *  if any non-white space character is found, which is neither a '~'
+	 *  or a first '(' or the first character of a logical imm variable,
+	 *  which is either an imm or immC bit variable (ftype == GATE) or
+	 *  an immC bit array variable (ftype == UDFA && type == LOGC).
+	 *  Exclude operator 'sizeof' for an immC bit array variable, which
+	 *  is characterised by p->inds == 0.
+	 *
+	 *  When the macro for one of these logical variables is output an
+	 *  additional 2nd parameter c is output which is 0 for an even number
+	 *  of '~' operators found preceding the variable (including none) or
+	 *  1 for an odd number of '~' operators. The '~' and '(' characters
+	 *  skipped in the input are not output. The correct complement
+	 *  operation is executed in one of the logical macros or in the
+	 *  iC_assignL(n, c, p, v) function called in the assign macros.
+	 *******************************************************************/
+	if (c == '~') {
+	    ic++;				/* count occurence of '~' */
+	    bytePos++;
+	    continue;				/* don't output yet */
+	}
+	if (ic > 0) {
+	    if (c == '(') {
+		if (++cc > 1) {
+		    goto outputComplement;
+		}
+		bytePos++;
+		continue;			/* don't output yet */
+	    }
+	    if (! (isspace(c) ||				/* skip white space - output normally */
+		(bytePos == p->vStart &&
+		    (p->sp->ftype == GATE ||	/* or skip logic gate - '~' handled by macro */
+			(p->sp->ftype == UDFA && p->sp->type == LOGC && p->inds != 0)	/* array but not sizeof */
+		    )
+		))) {
+	      outputComplement:
+		while (ic--) {
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) {
+			if (obp < OUTBUFEND) *obp++ = '~';
+			changeFlag++;
+		    }
+#endif
+		    putc('~', oFP);			/* output 1 or more '~' now */
+		}
+		if (cc) {
+#if YYDEBUG
+		    if ((iC_debug & 0402) == 0402) {
+			if (obp < OUTBUFEND) *obp++ = '(';
+			changeFlag++;
+		    }
+#endif
+		    putc('(', oFP);			/* output 1 '(' now */
+		}
+		ic = cc = 0;
+	    }
+	}
+	/********************************************************************
+	 *  End of the bulk of the code for branch "b".
+	 *******************************************************************/
+	if (bytePos >= start) {			/* ic and cc may still be set for GATE */
 	    pushEndStack(end << 1);		/* push previous end (with 0 marker for end) */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
@@ -2660,9 +2727,9 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    equop  = inds ? p->equOp : LARGE;	/* operator in this entry unless sizeof */
 	    end    = p->pEnd;			/* end of this entry */
 	    ppi    = p->ppi;			/* pre/post-inc/dec character value */
+	    if (p->inv) ic++;			/* another inversion for inverting alias */
 	    sp     = p->sp;			/* associated Symbol */
 	    assert(sp);
-	    invp   = (p->inv) ? "~" : "";	/* found inverting alias */
 	    ml     = lp ? 0		 : CMACRO_LITERAL;	/*       0 or      9 */
 	    ftypa  = (sp->type == ERR)	 ? UDFA
 		   : (inds == 0)	 ? CMACRO_SIZE		/* sizeof macro */
@@ -2675,23 +2742,37 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    if ((iC_debug & 0402) == 0402) {
 		fprintf(iC_outFP, "strt bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%c%s\n",
 		    bytePos, inds, inde, earlyop, equop, ppi, p->inv ? '~' : ' ', sp->name);
-		obp += snprintf(obp, OUTBUFEND-obp, "%s%s", invp, cMacro[ml+ftypa]);
-		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
-		changeFlag++;
 	    }
 #endif
-	    fprintf(oFP, "%s%s", invp, cMacro[ml+ftypa]);	/* entry found - output cMacro start */
+	    assert(cc == 0 || sp->ftype == GATE || (sp->ftype == UDFA && sp->type == LOGC && inds != 0));	/* cc == 0 unless GATE */
 	    assert(start <= vstart);
 	    assert(vstart < vend);
 	    assert(vend <= end);
 	    if (start < vstart) {
-		assert(c == '(');		/* parenthesised imm_identifier or imm_array_identifier */
+		assert(c == '(' || cc);		/* parenthesised imm_identifier or imm_array_identifier */
 		endop = vstart;			/* suppress output of this paranthesis */
 		pFlag = 0;
 		parend = vend;			/* marks closing parenthesis which is also supressed */
 		parcnt = 1;			/* could be more than 1 ( */
 		parnxt = bytePos + 1;		/* allows counting of ( and spaces up to vstart */
+	    } else if (cc) {
+#if YYDEBUG
+		if ((iC_debug & 0402) == 0402) {
+		    if (obp < OUTBUFEND) *obp++ = '(';
+		    changeFlag++;
+		}
+#endif
+		putc('(', oFP);			/* output 1 '(' now */
 	    }
+	    cc = 0;
+#if YYDEBUG
+	    if ((iC_debug & 0402) == 0402) {
+		obp += snprintf(obp, OUTBUFEND-obp, "%s", cMacro[ml+ftypa]);
+		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
+		changeFlag++;
+	    }
+#endif
+	    fprintf(oFP, "%s", cMacro[ml+ftypa]);	/* entry found - output cMacro start */
 	    p++;				/* next entry to locate possible earlyop */
 	    assert(bytePos < p->pStart);
 	    start = p->pStart;			/* start of next entry */
@@ -2758,11 +2839,24 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
 		obp += snprintf(obp, OUTBUFEND-obp, "%d", sNr);
+		if (sp->ftype == GATE || (sp->ftype == UDFA && sp->type == LOGC && inds != 0)) {
+		    obp += snprintf(obp, OUTBUFEND-obp, ", %d", ic & 0x1);
+		}
 		if (obp > OUTBUFEND) obp = OUTBUFEND;	/* catch buffer overflow */
 		changeFlag++;
 	    }
 #endif
 	    fprintf(oFP, "%d", sNr);		/* output Symbol pointer offset instead of variable */
+	    /********************************************************************
+	     *  Output of the complement parameter for logic variables in branch "b".
+	     *******************************************************************/
+	    if (sp->ftype == GATE || (sp->ftype == UDFA && sp->type == LOGC && inds != 0)) {
+		fprintf(oFP, ", %d", ic & 0x1);	/* count of '~' complements preceding logic variable */
+	    }
+	    ic = cc = 0;
+	    /********************************************************************
+	     *  End of this section of code for branch "b".
+	     *******************************************************************/
 	}
 	if (bytePos == earlyop) {
 #if YYDEBUG

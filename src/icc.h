@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.85 $";
+"@(#)$Id: icc.h 1.85.b.1 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -207,10 +207,10 @@ extern iC_Gt		iClock;		/* System clock */
 
 #if INT_MAX == 32767 && defined (LONG16)
 extern long		iC_assignA(iC_Gt * glv, int ppi, long rv);
-extern long		iC_assignL(iC_Gt * glv, int ppi, long rv);
+extern long		iC_assignL(iC_Gt * glv, int inv, int ppi, long rv);
 #else
 extern int		iC_assignA(iC_Gt * glv, int ppi, int rv);
-extern int		iC_assignL(iC_Gt * glv, int ppi, int rv);
+extern int		iC_assignL(iC_Gt * glv, int inv, int ppi, int rv);
 #endif
 extern iC_Gt *		iC_index(iC_Gt * gm, int index);
 extern struct timeval	iC_timeOut;	/* 50 mS select timeout - may be modified in iCbegin() */
