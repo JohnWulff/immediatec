@@ -40,7 +40,7 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: mm 1.28.b.1 $' >&2
+  echo '$Id: mm 1.29 $' >&2
 }
 
 A=" -f"

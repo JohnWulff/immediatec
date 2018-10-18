@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.40.b.2 $";
+"@(#)$Id: gram.y 1.41 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public

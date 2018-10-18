@@ -19,7 +19,7 @@ static const char cexe_part1[] =
 " *******************************************************************/\n"
 "\n"
 "static const char cexe_h[] =\n"
-"\"@(#)$Id: cexe.h 1.31.b.1 $\";\n"
+"\"@(#)$Id: cexe.h 1.32 $\";\n"
 "\n"
 "#include	<stdio.h>\n"
 "#include	<signal.h>\n"

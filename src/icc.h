@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.85.b.1 $";
+"@(#)$Id: icc.h 1.86 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
