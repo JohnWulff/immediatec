@@ -6,19 +6,19 @@
  *******************************************************************/
 
 static const char	iC_compiler[] =
-"@(#)     $Id: sortm28.c,v 1.1 2015/11/03 02:59:25 jw Exp $ -O7";
+"$Revision: icc_3.3-5-gc2c370a-dirty $ -O7";
 
 #include	<icg.h>
 
 #define iC_MV(n)	iC_gf->gt_rlist[n]->gt_new
 #define iC_AV(n)	iC_gf->gt_list[n]->gt_new
-#define iC_LV(n)	(iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)
+#define iC_LV(n,c)	((iC_gf->gt_list[n]->gt_val < 0) ^ c ? 1 : 0)
 #define iC_AA(n,p,v)	iC_assignA(iC_gf->gt_list[n], p, v)
-#define iC_LA(n,p,v)	iC_assignL(iC_gf->gt_list[n], p, v)
+#define iC_LA(n,c,p,v)	iC_assignL(iC_gf->gt_list[n], c, p, v)
 #define iC_AVI(n,i)	iC_index(iC_gf->gt_list[n], i)->gt_new
-#define iC_LVI(n,i)	(iC_index(iC_gf->gt_list[n], i)->gt_val < 0 ? 1 : 0)
+#define iC_LVI(n,c,i)	((iC_index(iC_gf->gt_list[n], i)->gt_val < 0) ^ c ? 1 : 0)
 #define iC_AAI(n,i,p,v)	iC_assignA(iC_index(iC_gf->gt_list[n], i), p, v)
-#define iC_LAI(n,i,p,v)	iC_assignL(iC_index(iC_gf->gt_list[n], i), p, v)
+#define iC_LAI(n,c,i,p,v)	iC_assignL(iC_index(iC_gf->gt_list[n], i), c, p, v)
 static iC_Gt *	iC_l_[];
 
 /********************************************************************
@@ -242,13 +242,13 @@ static int iC_5(iC_Gt * iC_gf) {
     if (iC_gf->gt_val < 0)
 #line 129 "./Test0/sortm28.ic"
 {
-    iC_LAI(2, temp = iC_AV(3) , 0,  1);
+    iC_LAI(2, 0, temp = iC_AV(3) , 0,  1);
 }
 #line 248 "./Test0/sortm28.c"
     else
 #line 131 "./Test0/sortm28.ic"
 {
-    iC_LAI(2, temp , 0,  0);	/* temp is changed on the next rising trig */
+    iC_LAI(2, 0, temp , 0,  0);	/* temp is changed on the next rising trig */
 }
 #line 254 "./Test0/sortm28.c"
     return 0;

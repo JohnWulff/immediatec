@@ -6,15 +6,15 @@
  *******************************************************************/
 
 static const char	iC_compiler[] =
-"@(#)     $Id: c12w.c,v 1.1 2015/05/24 00:51:50 jw Exp $ -O7";
+"$Revision: icc_3.3-5-gc2c370a-dirty $ -O7";
 
 #include	<icg.h>
 
 #define iC_MV(n)	iC_gf->gt_rlist[n]->gt_new
 #define iC_AVL(n)	_f0_1.gt_list[n]->gt_new
-#define iC_LVL(n)	(_f0_1.gt_list[n]->gt_val < 0 ? 1 : 0)
+#define iC_LVL(n,c)	((_f0_1.gt_list[n]->gt_val < 0) ^ c ? 1 : 0)
 #define iC_AAL(n,p,v)	iC_assignA(_f0_1.gt_list[n], p, v)
-#define iC_LAL(n,p,v)	iC_assignL(_f0_1.gt_list[n], p, v)
+#define iC_LAL(n,c,p,v)	iC_assignL(_f0_1.gt_list[n], c, p, v)
 static iC_Gt *	iC_l_[];
 
 /********************************************************************
@@ -64,10 +64,10 @@ iC_Gt **	iC_list[] = { &iC___Test0_c12w_list, 0, };
 int
 cf1(void)
 {
-    iC_AAL(0, 0,  iC_LVL(1) * iC_AVL(2));	// must be very careful variables are
+    iC_AAL(0, 0,  iC_LVL(1, 0) * iC_AVL(2));	// must be very careful variables are
     iC_AAL(3, 0,  iC_AVL(0) + iC_AVL(2));	// updated sequentially
-    iC_LAL(4, 0,  iC_AVL(3) < 10);	// if a2 is evaluated before a1, a2 will be wrong
-    iC_LAL(5, 0,  iC_AVL(3) < 20 || iC_LVL(1));
+    iC_LAL(4, 0, 0,  iC_AVL(3) < 10);	// if a2 is evaluated before a1, a2 will be wrong
+    iC_LAL(5, 0, 0,  iC_AVL(3) < 20 || iC_LVL(1, 0));
     return iC_AVL(0) + iC_AVL(3);
 } /* cf1 */
 

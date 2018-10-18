@@ -8,14 +8,15 @@
 usage ()
 {
   echo "Usage:	${0##*/} [-gASNRaLjIJxyzh][ -v<N>][ -d<opt>][ -O<level>]" >&2
-  echo '	-v<N>	use ict<N> eg ict1 ict2 ... with libict1.a libict2.a ...' >&2
-  echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-g	each expression has its own C code for debugging with gdb' >&2
   echo '	-A	compile output ARITHMETIC ALIAS nodes for symbol debugging' >&2
   echo '	-S	use strict - immediate variables must be declared (default)' >&2
   echo '	-N	no strict - deprecated style - undeclared variables imm bit' >&2
   echo '	-P	pedantic: warning if variable contains $ (default $ allowed)' >&2
   echo '	-PP	pedantic-error: error if variable contains $' >&2
+  echo '	-v<N>	use immac<N>, immcc<N>, pplstfix<N> and libict<N>.a in local' >&2
+  echo '		directory' >&2
+  echo '	-d<opt>	call immcc with extra -d<opt> orred into normal -d474' >&2
   echo '	-O <level> optimisation -O0 none -O1 bit -O2 arithmetic -O4 eliminate' >&2
   echo '		duplicate arithmetic expressions -O7 all (default)' >&2
   echo '	-R      no maximum error count (default: abort after 100 errors)' >&2
@@ -39,7 +40,7 @@ usage ()
   echo '	which has mostly individual lines naming one source eg. xxx.ic' >&2
   echo '	but may also have lines like "-l a.ic a1.ic a2.ic" for linking' >&2
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-  echo '$Id: mm 1.28 $' >&2
+  echo '$Id: mm 1.28.b.1 $' >&2
 }
 
 A=" -f"
@@ -50,7 +51,7 @@ E=""
 I=""
 g=""
 
-while getopts ":d:gASNO:PRseaLEjIJ6yxzh" opt; do
+while getopts ":gASNv:d:O:PRseaLEjIJ6yxzh" opt; do
     case $opt in
     v )	A="$A -v$OPTARG";;
     d ) A="$A -d$OPTARG";;
@@ -87,7 +88,7 @@ if [ -f pm.lt ]; then
 		break
 	    fi
 	    if [ -n "$z" ]; then
-		echo "iCmake$I$E$A $line" >&2
+		echo "iCmake$I$E$A $line"
 	    fi
 	    iCmake$I$E$A $line
 	done < pm$a.lt 2>&1 | sed '/^\/tmp\/[a-z_A-Z][a-z_A-Z0-9]*\./ s//\/tmp\/x./' > Init.out
@@ -103,14 +104,14 @@ if [ -f pm.lt ]; then
 	    f=${line%.*}	# no cexe.c made for $line with -l linked files
 	    f=${f##* }		# remove leading options -P ...
 	    if [ -n "$z" ]; then
-		echo "iCmake$I$E$A -6t $line" >&2
+		echo "iCmake$I$E$A -6t $line"
 	    fi
 	    rm -f cexe.c
 	    iCmake$I$E$A -6t $line
 	    if test -f cexe.c &&
 		! diff -q -I'was built with' cexe.c /tmp/cexe.c > /dev/null; then
 		if [ -n "$z" ]; then
-		    echo "mv cexe.c $f.cc" >&2
+		    echo "mv cexe.c $f.cc"
 		fi
 		mv cexe.c $f.cc;
 	    fi

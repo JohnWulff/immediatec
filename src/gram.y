@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.40.b.1 $";
+"@(#)$Id: gram.y 1.40.b.2 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -45,6 +45,7 @@
 #define LEAI		170
 
 extern int		yylex(void);		/* produced by lexc.l */
+extern char *		yytext;			/* defined in lexc.l */
 static const char	idOp[] = "+-+-";	/* increment/decrement operator selection */
 
 static Symbol		typedefSymbol = { "typedef", UDF, UDFA, };
@@ -1710,7 +1711,7 @@ imm_unary_expression				/* 63a */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: imm_postfix_expression %u %u %s\n",
-	    	$$.start, $$.end, $$.symbol->name);
+		$$.start, $$.end, $$.symbol->name);
 #endif
 #endif	/* LMAIN */
 	}
@@ -1723,7 +1724,7 @@ imm_unary_expression				/* 63a */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: ++ imm_unary_expression %u (%u) %u <12> %s\n",
-	    	$2.start, $1.start, $2.end, $2.symbol->name);
+		$2.start, $1.start, $2.end, $2.symbol->name);
 #endif
 	    if ($2.symbol->u_blist == 0 || $2.symbol->type == NCONST) {
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 12);	/* ++x */
@@ -1739,7 +1740,7 @@ imm_unary_expression				/* 63a */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: -- imm_unary_expression %u (%u) %u <13> %s\n",
-	    	$2.start, $1.start, $2.end, $2.symbol->name);
+		$2.start, $1.start, $2.end, $2.symbol->name);
 #endif
 	    if ($2.symbol->u_blist == 0 || $2.symbol->type == NCONST) {
 		immAssignFound($2.start, $1.start, $2.end, $2.symbol, 13);	/* --x */
@@ -1761,7 +1762,7 @@ imm_unary_expression				/* 63a */
 	    $$.inde = $1.start;			/* used to set earlyop to blank out sizeof */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_unary_expression: sizeof imm_unary_expression %u (%u) %u %s\n",
-	    	$2.start, $1.start, $2.end, $2.symbol->name);
+		$2.start, $1.start, $2.end, $2.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* adjust pEnd, set inds 0 inde early */
@@ -1876,7 +1877,7 @@ imm_postfix_expression				/* 65a */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_lvalue %u %u %s\n",
-	    	$$.start, $$.end, $$.symbol->name);
+		$$.start, $$.end, $$.symbol->name);
 #endif
 #endif	/* LMAIN */
 	}
@@ -1889,7 +1890,7 @@ imm_postfix_expression				/* 65a */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_postfix_expression ++ %u (%u) %u <14> %s\n",
-	    	$1.start, $2.start, $2.end, $1.symbol->name);
+		$1.start, $2.start, $2.end, $1.symbol->name);
 #endif
 	    if ($1.symbol->u_blist == 0 || $1.symbol->type == NCONST) {
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 14);	/* x++ */
@@ -1905,7 +1906,7 @@ imm_postfix_expression				/* 65a */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_postfix_expression: imm_postfix_expression -- %u (%u) %u <15> %s\n",
-	    	$1.start, $2.start, $2.end, $1.symbol->name);
+		$1.start, $2.start, $2.end, $1.symbol->name);
 #endif
 	    if ($1.symbol->u_blist == 0 || $1.symbol->type == NCONST) {
 		immAssignFound($1.start, $2.start, $2.end, $1.symbol, 15);	/* x-- */
@@ -2053,7 +2054,7 @@ imm_identifier					/* 69 */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_identifier: (imm_identifier) %u %u %s\n",
-	    	$$.start, $$.end, $$.symbol->name);
+		$$.start, $$.end, $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* moves pStart and pEnd without changing vStart vEnd inv */
@@ -2073,7 +2074,7 @@ imm_array_identifier				/* 70 */
 	    functionUse[0].c_cnt |= F_ARRAY;	/* immC array macro required */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_array_identifier: IMM_ARRAY_IDENTIFIER %u %u %s\n",
-	    	$$.start, $$.end, $$.symbol->name);
+		$$.start, $$.end, $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, $$.symbol);
@@ -2090,7 +2091,7 @@ imm_array_identifier				/* 70 */
 #ifndef LMAIN
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "imm_array_identifier: (imm_array_identifier) %u %u %s\n",
-	    	$$.start, $$.end, $$.symbol->name);
+		$$.start, $$.end, $$.symbol->name);
 #endif
 	    if ($$.symbol->u_blist == 0 || $$.symbol->type == NCONST) {
 		immVarFound($$.start, $$.end, $$.inds, $$.inde, 0, NULL);	/* moves pStart and pEnd without changing vStart vEnd */
@@ -2172,6 +2173,15 @@ immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned in
 	    ierror("C-statement tries to access an imm type not bit or int:", sp->name);
 	    if (! iFunSymExt) sp->type = ERR;	/* cannot execute properly */
 	}
+	if (lep >= &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
+	    newArray = (LineEntry*)realloc(lineEntryArray,
+		(udfCount + LEAI) * sizeof(LineEntry));
+	    assert(newArray);
+	    memset(&newArray[udfCount], '\0', LEAI * sizeof(LineEntry));
+	    udfCount += LEAI;			/* increase the size of the array */
+	    lep += newArray - lineEntryArray;	/* lep needs adjusting - cannot realloc lineEntryArray directly */
+	    lineEntryArray = newArray;		/* Array has been successfully resized */
+	}
 	lep++;
     } else {
 #if YYDEBUG
@@ -2207,15 +2217,6 @@ immVarFound(unsigned int start, unsigned int end, unsigned int inds, unsigned in
 	    p->pStart, p->vStart, p->vEnd, p->pEnd, p->inds, p->inde, p->inv ? '~' : ' ', p->sp->name);
     }
 #endif
-    if (lep > &lineEntryArray[udfCount-2]) {	/* allow for 2 guard entries at end */
-	newArray = (LineEntry*)realloc(lineEntryArray,
-	    (udfCount + LEAI) * sizeof(LineEntry));
-	assert(newArray);
-	memset(&newArray[udfCount], '\0', LEAI * sizeof(LineEntry));
-	udfCount += LEAI;			/* increase the size of the array */
-	lep += newArray - lineEntryArray;	/* lep needs adjusting - cannot realloc lineEntryArray directly */
-	lineEntryArray = newArray;		/* Array has been successfully resized */
-    }
 } /* immVarFound */
 
 /********************************************************************
@@ -2319,7 +2320,8 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "--%u(%u %u %u)%u <%u>\n",
 	    p->pStart, p->vStart, p->equOp==LARGE?0:p->equOp, p->vEnd, p->pEnd, p->ppi);
 #endif
-	if (p->pStart == start) {		/* start position of imm variable assigned to */
+	if (p->pStart == start &&		/* start position of imm variable assigned to */
+	    p->equOp == LARGE) {		/* not an lvalue if previously assigned */
 	    p->equOp  = operator;		/* position of operator marks an assignment expression */
 	    p->pEnd   = end;			/* end position of expression assigned from */
 	    p->ppi    = ppi;			/* assignment operator or pre/post-inc/dec */
@@ -2392,7 +2394,7 @@ immAssignFound(unsigned int start, unsigned int operator, unsigned int end, Symb
 	    p->ppi = 1;				/* are used even if themselves assigned to */
 	}
     }
-    execerror("immAssignFound: Symbol not found ???", sp->name, __FILE__, __LINE__);
+    ierror("C-assignment to an imm expression, not an LVALUE:", yytext - end + start);
 } /* immAssignFound */
 
 /********************************************************************
@@ -2649,7 +2651,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    }
 	}
 	/********************************************************************
-	 *  Branch "b" handling bitwise complement outside of the grammar.
+	 *  Bitwise complement outside of the grammar.
 	 *
 	 *  Count occurences of '~' in ic and '(' following in cc. Do not
 	 *  output yet. Output number of '~' counted and one '(' if counted
@@ -2697,7 +2699,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #endif
 		    putc('~', oFP);			/* output 1 or more '~' now */
 		}
-		if (cc) {
+		if (cc && start >= p->vStart) {		/* parenthesised assignment and not variable */
 #if YYDEBUG
 		    if ((iC_debug & 0402) == 0402) {
 			if (obp < OUTBUFEND) *obp++ = '(';
@@ -2710,7 +2712,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    }
 	}
 	/********************************************************************
-	 *  End of the bulk of the code for branch "b".
+	 *  End of the bulk of the code for bitwise complement
 	 *******************************************************************/
 	if (bytePos >= start) {			/* ic and cc may still be set for GATE */
 	    pushEndStack(end << 1);		/* push previous end (with 0 marker for end) */
@@ -2740,7 +2742,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    /* assignment cMacro must be printed outside of enclosing parentheses */
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
-		fprintf(iC_outFP, "strt bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%c%s\n",
+		fprintf(iC_outFP, "start bytePos = %u [%u %u] earlyop = %u, equop = %u, ppi = %u, sp =>%c%s\n",
 		    bytePos, inds, inde, earlyop, equop, ppi, p->inv ? '~' : ' ', sp->name);
 	    }
 #endif
@@ -2749,7 +2751,6 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 	    assert(vstart < vend);
 	    assert(vend <= end);
 	    if (start < vstart) {
-		assert(c == '(' || cc);		/* parenthesised imm_identifier or imm_array_identifier */
 		endop = vstart;			/* suppress output of this paranthesis */
 		pFlag = 0;
 		parend = vend;			/* marks closing parenthesis which is also supressed */
@@ -2834,7 +2835,7 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 		sp->name, inds < LARGE ? "[]	" : "", sp->em);
 #endif
 	    endop = (equop != LARGE && equop > vend)
-	    	? equop : vend;			/* suppress variable name, which is replaced by cMacro */
+		? equop : vend;			/* suppress variable name, which is replaced by cMacro */
 	    pFlag = 0;
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) {
@@ -2848,14 +2849,14 @@ copyAdjust(FILE* iFP, FILE* oFP, List_e* lp)
 #endif
 	    fprintf(oFP, "%d", sNr);		/* output Symbol pointer offset instead of variable */
 	    /********************************************************************
-	     *  Output of the complement parameter for logic variables in branch "b".
+	     *  Output of the complement parameter for logic variables
 	     *******************************************************************/
 	    if (sp->ftype == GATE || (sp->ftype == UDFA && sp->type == LOGC && inds != 0)) {
 		fprintf(oFP, ", %d", ic & 0x1);	/* count of '~' complements preceding logic variable */
 	    }
 	    ic = cc = 0;
 	    /********************************************************************
-	     *  End of this section of code for branch "b".
+	     *  End
 	     *******************************************************************/
 	}
 	if (bytePos == earlyop) {

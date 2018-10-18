@@ -794,11 +794,11 @@
 119	(13)?iC_MV(14):iC_MV(15)?iC_MV(16):0;
 
 129	(5) {
-130	    iC_LAI(2, temp = iC_AV(3) , 0,  1);
+130	    iC_LAI(2, 0, temp = iC_AV(3) , 0,  1);
 131	}
 
 131	{
-132	    iC_LAI(2, temp , 0,  0);	/* temp is changed on the next rising trig */
+132	    iC_LAI(2, 0, temp , 0,  0);	/* temp is changed on the next rising trig */
 133	}
 
 ******* NET TOPOLOGY    ************************
@@ -1005,6 +1005,6 @@ TOTAL	     164 blocks
 	     631 links
 
 compiled by:
-$Revision: icc_3.1-dirty $ -O7
+$Revision: icc_3.3-5-gc2c370a-dirty $ -O7
 
 C OUTPUT: ./Test0/sortm28.c  (374 lines)

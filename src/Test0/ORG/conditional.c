@@ -6,15 +6,15 @@
  *******************************************************************/
 
 static const char	iC_compiler[] =
-"@(#)     $Id: conditional.c,v 1.1 2015/05/26 14:36:51 jw Exp $ -O7";
+"$Revision: icc_3.3-5-gc2c370a-dirty $ -O7";
 
 #include	<icg.h>
 
 #define iC_MV(n)	iC_gf->gt_rlist[n]->gt_new
 #define iC_AV(n)	iC_gf->gt_list[n]->gt_new
-#define iC_LV(n)	(iC_gf->gt_list[n]->gt_val < 0 ? 1 : 0)
+#define iC_LV(n,c)	((iC_gf->gt_list[n]->gt_val < 0) ^ c ? 1 : 0)
 #define iC_AA(n,p,v)	iC_assignA(iC_gf->gt_list[n], p, v)
-#define iC_LA(n,p,v)	iC_assignL(iC_gf->gt_list[n], p, v)
+#define iC_LA(n,c,p,v)	iC_assignL(iC_gf->gt_list[n], c, p, v)
 static iC_Gt *	iC_l_[];
 
 /********************************************************************
