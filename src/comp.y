@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.130 $";
+"@(#)$Id: comp.y 1.131 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -4582,11 +4582,19 @@ get(FILE* fp, int x)
 #if YYDEBUG
 			    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, ">>> get: # %3d  %-10s >> %-10s, useStackIndex = %d, uses = %o\n", temp1, prevNM, inpNM, iC_useStackIndex, iC_uses);
 #endif
-			    assert(iC_useStackIndex < USESTACKSZ);
-			    iC_useStack[iC_useStackIndex++] = iC_uses; /* save use values */
+			    if (iC_useStackIndex >= USESTACKSZ) {
+				ierror("too many (32) nested includes in", prevNM);
+				goto ignoreInclude;
+			    } else {
+				iC_useStack[iC_useStackIndex++] = iC_uses; /* save use values */
+			    }
 			} else {
-			    assert(iC_useStackIndex > 0);
-			    iC_uses = iC_useStack[--iC_useStackIndex]; /* restore use values */
+			    if (iC_useStackIndex <= 0) {
+				ierror("file not included in", prevNM);
+				goto ignoreInclude;
+			    } else {
+				iC_uses = iC_useStack[--iC_useStackIndex]; /* restore use values */
+			    }
 			    blockUnblockListing();
 #if YYDEBUG
 			    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "<<< get: # %3d  %-10s << %-10s, useStackIndex = %d, uses = %o\n", temp1, inpNM, prevNM, iC_useStackIndex, iC_uses);
@@ -4594,6 +4602,7 @@ get(FILE* fp, int x)
 			}
 			strncpy(prevNM, inpNM, BUFS);	/* inpNM has been modified */
 		    }
+		  ignoreInclude:
 		    getp[x] = NULL;		/* bypass parsing this line in iC */
 		}
 	    } else

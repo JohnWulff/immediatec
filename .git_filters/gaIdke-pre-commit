@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 ########################################################################
 #
-# $Id: gaIdke-pre-commit 1.16 $
+# $Id: gaIdke-pre-commit 1.17 $
 # $IdBlockFurtherExpansion$	# this file has descriptive $Id$ entries
 #
 #  Copyright © 2016 John E Wulff <immediatec@gmail.com>
@@ -95,21 +95,21 @@ foreach $path (split " ", qx(git diff --name-only --diff-filter=d --cached)) {
 		$mod = $filename ne $1 ? " <- $1" : "";
 		@versions = split /\./, $2;
 		$vCnt = scalar @versions;
-		if ($vCnt == 1) {
-		    unshift @versions, "";	# special case for imported single SVN version number
-		    $vCnt = 2;
+		if (($vCnt % 2) == 1) {
+		    unshift @versions, "";	# special case for SVN version number
+		    $vCnt++;			# will always be even now
 		}
-		if ($vCnt and ($vCnt % 2) == 0) {	# elements must be in pairs - else ignore
+		if ($vCnt) {
 		    if ($gBranch eq "master") {
-			$branch = $versions[0];	# first major version identifies master branch
+			$branch = $versions[0];	# first major version identifies master branch (may be "" for SVN)
 		    }
 		    $numeric = 1;
 		    $versionHead = "";
 		    for ($i = 0; $i < $vCnt; $i += 2) {
-			$versionHead .= "$versions[$i].";
+			$versionHead .= "$versions[$i]." unless $versions[$i] eq "";
 			$minorVersion = $versions[$i+1];
 			if ($minorVersion !~ m/^\d+$/) {
-			    $numeric = 0;	# minor versions must be numeric - ignore this Id
+			    $minorVersion = $numeric = 0;	# minor versions must be numeric - ignore this Id
 			    last;
 			}
 			if ($branch ne $versions[$i]) {

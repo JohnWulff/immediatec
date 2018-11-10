@@ -46,7 +46,7 @@
 #ifndef RPI_REV_H
 #define RPI_REV_H
 static const char rpi_rev_h[] =
-"$Id: rpi_rev.h,v 1.3 2015/09/29 06:55:10 jw Exp $";
+"$Id: rpi_rev.h 1.4 $";
 
 typedef struct Used {
     long long	used;
@@ -59,7 +59,6 @@ typedef struct ProcValidUsed {
     Used	u;
 } ProcValidUsed;
 
-extern int		boardrev(void);
 extern ProcValidUsed *	openLockGpios(int force);
 extern int		writeUnlockCloseGpios(void);
 
