@@ -18,7 +18,7 @@
 
 no strict;			// strict is default
 
-imm timer t = TIMER(TX0.4);
+imm timer t = TIMER(T100ms);		// t   =
 
 imm int d0 = IB1;			// IB1 =
 imm int a;				// a   =

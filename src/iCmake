@@ -113,7 +113,7 @@ usage ()
   echo '		(default: nice)' >&2
   echo '	-z	echo compiler calls with all options for debugging' >&2
   echo '	-h	this help text' >&2
-  echo '	$Id: iCmake 1.53 $' >&2
+  echo '	$Id: iCmake 1.54 $' >&2
 }
 
 lwsock32=""
@@ -298,7 +298,7 @@ for arg in $*; do
 	    fi
 	    if [ $q -eq 0 ]; then
 		if [ $z -eq 1 ]; then echo -n "# "; fi
-		echo $icaFile
+		echo $icFile
 	    fi
 	    if [ $z -eq 1 ]; then
 		echo "$nice${b}$IAC$v$a$S$N$P$F -o $icFile $icaFile$E"	# may be copy if no iCa constructs

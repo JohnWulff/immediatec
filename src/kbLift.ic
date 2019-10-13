@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.13 $
+ *  $Id: kbLift.ic 1.14 $
  *
  *******************************************************************/
 
@@ -130,8 +130,10 @@ imm bit goingDn2	= LIFT_AT2 & goingDn;
  *  goingUp/Dn, which change when switching direction while still at
  *  a floor different to the next target floor.
  *******************************************************************/
+imm bit Rlift_at1	= RISE(LIFT_AT1);
 imm bit Rlift_at2	= RISE(LIFT_AT2);
 imm bit Rlift_at3	= RISE(LIFT_AT3);
+imm bit Rlift_at4	= RISE(LIFT_AT4);
 
 imm bit RgoingUp2	= Rlift_at2 & goingUp;
 imm bit RgoingUp3	= Rlift_at3 & goingUp;
@@ -371,20 +373,20 @@ imm bit sameFloor	= sameFloorUp  | sameFloorDn;
 /********************************************************************
  *  goingUp/Dn value for controlling requests etc
  *******************************************************************/
-imm bit goingUp		= SR(RISE(LIFT_AT1) |		// up
-			     sameFloorUp    |
+imm bit goingUp		= SR(Rlift_at1   |		// up
+			     sameFloorUp |
 			     newRequest & ~sameUp2 & ~sameUp3 & (targetUp2 | targetUp3 | target4  )
 			    ,
-			     RISE(LIFT_AT4) |		// down
-			     sameFloorDn    |
+			     Rlift_at4   |		// down
+			     sameFloorDn |
 			     newRequest & ~sameDn2 & ~sameDn3 & (target1   | targetDn2 | targetDn3)
 			    );
 
 /********************************************************************
  *  True direction for controlling lights inside cage
  *******************************************************************/
-imm bit Rgoing_up	= RISE(LIFT_AT1) | RISE(cageUp);
-imm bit Rgoing_dn	= RISE(LIFT_AT4) | RISE(cageDn);
+imm bit Rgoing_up	= Rlift_at1 | RISE(cageUp);
+imm bit Rgoing_dn	= Rlift_at4 | RISE(cageDn);
 
 imm bit I_GOING_UP_LIGHT   = SR(Rgoing_up, Rgoing_dn | FnotWaiting);
 imm bit I_GOING_DOWN_LIGHT = SR(Rgoing_dn, Rgoing_up | FnotWaiting);

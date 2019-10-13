@@ -321,7 +321,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.78 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.79 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -2558,15 +2558,15 @@ use warnings;
 			    $entrySearch->configure(-background => 'pink');
 			    $breakFlag = 1;
 			    $stepV = $nextV = $continueV = 0;	# turn buttons off
-			    $searchText = $symbolNames[$lastIndex];
+			    $searchText = $symbolNames[$lastIndex];	# display symbol name in search entry window
 			    print "received '$C_channel:$entry' '$searchText'\n" if $opt_T;
 			    while ($lastIndex) {
 				unless ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
-				    $prevText = '';			# start a new search
+				    $prevText = '';		# start a new search
 				    $gl = 0;
-				    $text->tagDelete('searchTag');
-				    search_now(1, $searchText, 0);	# search for watch word (no search tag with $breakFlag set)
-				}
+				    $text->tagDelete('searchTag');	# no search tag with $breakFlag set
+				    search_now(1, $searchText, 0);	# search for watch word
+				}					# search puts $lastIndex to @activeSymbols
 				if ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
 				    $breakIndex = $lastIndex;
 				    if ($B_channel) {
@@ -2579,10 +2579,11 @@ use warnings;
 				    markBreak();
 				} elsif ($searchText =~ s/^(Q[XBWLH]\d+(\.[0-7])?)_0$/$1/) {
 				    $lastIndex = $symbolTable{$searchText}[1];
-				    next;
+				    next;			# repeat while loop a 2nd time
 				}
-				last;
+				last;				# do while loop only once
 			    }
+			    $searchText .= " = $lastValue";	# concatenate " = value" in search entry window
 			    $yScrollbar->focus();		# enable keyboard stepping
 			}	# should never get BREAK message in Edit mode - ignore
 		    }
@@ -2799,7 +2800,7 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
     my ($k, $accelerator) = @_;
     print "sendDebug($k, $accelerator, \$debugFlag = $debugFlag)\n" if $opt_t;
     my ($acc);
-    if ($scanFlag) {				# only in Live mode
+    if ($scanFlag or $accelerator =~ m/^[tm]/) {		# only in Live mode except 't' or 'm'
 	$k = 1 if $k;				# Key press
 	if ($accelerator eq 'd') {
 	    $accelerator = $liveMenu->entrycget(1, -accelerator);
@@ -2912,7 +2913,7 @@ sub SearchCancel {
 #	Use first parameter as buttonFlag.
 #
 #		parameter 1:	buttonFlag - false (0) when [/] release else true
-#		parameter 2:	newSearchText
+#		parameter 2:	newSearchText	(searchText tab search option)
 #		    "		undef	use $searchText from Entry widget
 #		    "		''	clear the search
 #		parameter 3:	0  Search down	(default)
@@ -2958,6 +2959,8 @@ sub search_now {
     if (defined $newSearchText) {
 	($searchText, $option) = split(/\t/, $newSearchText);
 	($matchType, $ignoreCase) = $option ? split(" ", $matchRestores{$option}) : ('w', '-forwards');	# default Word search
+    } else {
+	$searchText =~ s/ = \d+$//;	# remove " = value" concatenated at a watch break
     }
     $searchText = '' if not defined $searchText;
     $text->tagDelete('gotoTag');
@@ -3433,7 +3436,7 @@ use warnings;
 			$text->tagAdd($tag, $current, $currEnd);
 			$tag = "$index=";
 			colourTag($tag, $cs);		# ARITH or TIMRL tag
-			$text->insert("$currEnd lineend", " 0", $tag);
+			$text->insert("$currEnd lineend", " 0", $tag);	# default display value 0
 		    }
 		}
 		## ELSE - there may be spurious words in symbolTable with undefined data
@@ -4001,7 +4004,7 @@ sub build_file {
 	    if ($par2 == 1 or $mtime < $ftime) {
 		## system() requires signal CHLD to notify completion
 		$SIG{CHLD} = 'DEFAULT';
-		my @args = ("iCmake", "-qfasAd200", $fileName, "2>&1");	# -A useful for live display
+		my @args = ("iCmake", "-fsAd200", $fileName, "2>&1");	# -A useful for live display
 		if ($par2 == 2) {		# link with static (debug) library - generate // x =
 		    splice(@args, 1, 0, '-b');	# iCmake -b to suppress making executable
 		} else {
@@ -4827,15 +4830,15 @@ The following buttons control debug actions:
             mode when Debug mode is turned on.
 
 In all three cases, pressing any of the buttons will run the program
-again and turn the Search Entry window pale green. At the next change
-appropriate for the button pressed the program will stop and turn
-the Search Entry window pink.  The name of the variable, whose change
-made the program stop, will be displayed in the Search Entry window.
-This is the B<Break> variable.  All instances of the B<Break> variable
-will be highlighted in the current window by raising the text and
-making it bold. If there are more instances of the B<Break> variable
-outside of the current window, these can be found by initiating a
-search with the [/] button or the Return key.
+again and turn the Search Entry window pale green. At the next
+change appropriate for the button pressed the program will stop and
+turn the Search Entry window pink.  The name of the variable, whose
+change made the program stop, and its value will be displayed in the
+Search Entry window.  This is the B<Break> variable.  All instances
+of the B<Break> variable will be highlighted in the current window
+by raising the text and making it bold. If there are more instances
+of the B<Break> variable outside of the current window, these can be
+found by initiating a search with the [/] button or the Return key.
 
 There are three further buttons in the Debug menu:
 

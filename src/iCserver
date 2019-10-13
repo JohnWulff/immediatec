@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.58 $
+$Id: iCserver 1.59 $
 .
 
 ########################################################################
@@ -1613,18 +1613,17 @@ to named I/O locations or debugging information.  As far as iCserver
 is concerned I/O locations could have any name, but the iC language
 calls for I/O names or addresses according to the IEC-1131 standard.
 Data values can be 8 bit bytes (eg: IB1 QB9), 16 bit words (IW2 QW10),
-32 bit long words (IL4 QL12) or 64 bit huge words (IH8 QH16), although
-thes have not been implemented in any client so far.  Bit values
-like IX0.0 IX0.1 QX8.2 QX8.3 are always transmitted as bytes - in
-this case via IX0 and QX8, which are the names used for registration.
-Whenever any bit in the byte changes, the whole byte is transmitted.
-Each client registers the I/O names it requires on connection
-to iCserver. Each unique name is stored in a Hash in iCserver,
-whose value is a channel number, which is used for all actual data
-transfers. The Hash is only required for registration. Each channel
-allows the naming of one Sender for data on the channel (or I/O name)
-and one or more Receivers for the data. A detailed description follows
-in the Specification below.
+32 bit long words (IL4 QL12) or 64 bit huge words (IH8 QH16 - these
+have not been implemented in any client so far).  Bit values like IX0.0
+IX0.1 QX8.2 QX8.3 are always transmitted as bytes - in this case via
+IX0 and QX8, which are the names used for registration.  Whenever any
+bit in the byte changes, the whole byte is transmitted.  Each client
+registers the I/O names it requires on connection to iCserver. Each
+unique name is stored in a Hash in iCserver, whose value is a channel
+number, which is used for all actual data transfers. The Hash is only
+required for registration. Each channel allows the naming of one Sender
+for data on the channel (or I/O name) and one or more Receivers for
+the data. A detailed description follows in the Specification below.
 
 Additional functionality in iCserver.
 

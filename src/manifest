@@ -1,6 +1,10 @@
-$Id: manifest 1.30 $
+$Id: manifest 1.31 $
 doc/iC.odt
 doc/iC.pdf
+doc/iC.txt
+doc/iC_prog.odt
+doc/iC_prog.pdf
+doc/iC_prog.txt
 include/pigpio.h
 include/pigpiod_if.h
 lib/libpigpio.a

@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.78 $";
+"@(#)$Id: ict.c 1.79 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1894,7 +1894,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		 *******************************************************************/
 		if (iC_sockFN > 0 && FD_ISSET(iC_sockFN, &iC_rdfds)) {
 #if YYDEBUG && !defined(_WINDOWS)
-		    if (iC_debug & 04) fprintf(iC_outFP, "*ML TCP interrupt");
+		    if (iC_debug & 04) fprintf(iC_outFP, "*** Main Loop TCP interrupt ");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
@@ -3083,7 +3083,7 @@ debugWait(void)
 	 *******************************************************************/
 	if (iC_sockFN > 0 && FD_ISSET(iC_sockFN, &iC_rdfds)) {
 #if YYDEBUG && !defined(_WINDOWS)
-	    if (iC_debug & 04) fprintf(iC_outFP, "*DW TCP interrupt");
+	    if (iC_debug & 04) fprintf(iC_outFP, "*** Debug Wait TCP interrupt" );
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    if (iC_rcvd_msg_from_server(iC_sockFN, debugBuf, REPLY) != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
@@ -3375,6 +3375,7 @@ receiveActiveSymbols(char * cp1)
     Gate **		opp;
     unsigned short	debugMaskSave;
     Gate *		gp;
+    Gate *		np;
     int			index;
     long		value;
     int			fni;
@@ -3399,16 +3400,18 @@ receiveActiveSymbols(char * cp1)
 	index = atoi(++cp1);
 	assert(index <= sTend - sTable);/* check index is in range */
 	gp = sTable[index-1];		/* index in iClive starts at 1 */
+	assert(gp);
 	gp->gt_live |= 0x8000;		/* set live active */
-	value = (
-	    (fni = gp->gt_fni) == ARITH ||
-	    fni == D_SH ||
-	    fni == F_SW ||
-	    fni == TRAB ||
-	    fni == CH_AR)   ? gp->gt_new
-			    : fni == OUTW   ? gp->gt_out
-					    : gp->gt_val < 0  ? 1
-							      : 0;
+	value = ((fni = gp->gt_fni)	/* current value for different ftype's */
+		== ARITH ||
+	    fni == D_SH  ||
+	    fni == CH_AR ||
+	    fni == F_SW  ||
+	    fni == TRAB  )    ? gp->gt_new
+	    : fni == TIMRL    ? ((np = gp->gt_next) ? np->gt_mark : 0)
+	    : fni == OUTW     ? gp->gt_out
+	    : gp->gt_val < 0  ? 1
+			      : 0;
 #if YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 04) fprintf(iC_outFP, "%4d %-15s %ld\n",
 	    index, gp->gt_ids, value);	/* only INT_MAX != 32767 */
