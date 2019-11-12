@@ -321,7 +321,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.79 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.80 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -896,55 +896,58 @@ $menuBar->Button(-text        => '+',
 ########################################################################
 #	Debug menu
 ########################################################################
-my $liveMenu = $menuBar->Menubutton(-text               => 'Debug',
-				    -relief             => 'raised',
-				    -borderwidth        => 2,
-				    -takefocus          => 1,
-				    -highlightthickness => 1,
-				    -tearoff            => 1,		# 0 - tear off
-				   )->pack(-side => 'left', -padx => 2);
-my $debugFlag = 0;							# no DEBUG mode unless manually started in LIVE mode
+my $debugButton = $menuBar->Button(-text               => 'Debug',
+				   -relief             => 'raised',
+				   -borderwidth        => 2,
+				   -takefocus          => 1,
+				   -highlightthickness => 1,
+			          )->pack(-side => 'left', -padx => 2);
+$debugButton->bind('<ButtonPress-1>',	[ \&showDebug, \$debugButton ]);
+my $debugFlag = 0;		# no DEBUG mode unless manually started in LIVE mode
 my $breakFlag = 0;
 my $stepV     = 0;
 my $nextV     = 0;
 my $continueV = 0;
 my $traceDebV = 0;
 my $microSecV = 0;
+my $menuBox;
 
-$liveMenu->checkbutton(-label       => 'Debug',				# 1
-		       -accelerator => 'd',
-		       -state       => 'disabled',
-		       -variable    => \$debugFlag,
-		       -command     => [ \&sendDebug, 1, 'd' ]);
-$liveMenu->separator;				# ---------------------   2
-$liveMenu->checkbutton(-label       => 'Step',				# 3
-		       -accelerator => 's',
-		       -state       => 'disabled',
-		       -variable    => \$stepV,
-		       -command     => [ \&sendDebug, 0, 's' ]);
-$liveMenu->checkbutton(-label       => 'Next',				# 4
-		       -accelerator => 'n',
-		       -state       => 'disabled',
-		       -variable    => \$nextV,
-		       -command     => [ \&sendDebug, 0, 'n' ]);
-$liveMenu->checkbutton(-label       => 'Continue',			# 5
-		       -state       => 'disabled',
-		       -accelerator => 'c',
-		       -variable    => \$continueV,
-		       -command     => [ \&sendDebug, 0, 'c' ]);
-$liveMenu->separator;				# ---------------------   6
-$liveMenu->command    (-label       => 'Watch points',			# 7
-		       -accelerator => 'w',
-		       -command     => [ \&ListWatchPoints ]);
-$liveMenu->separator;				# ---------------------   8
-$liveMenu->checkbutton(-label       => 'Trace',				# 9
-		       -accelerator => 't',
-		       -variable    => \$traceDebV,
-		       -command     => [ \&sendDebug, 0, 't' ]);
-$liveMenu->checkbutton(-label       => 'MicroSec',			# 10
-		       -accelerator => 'm',
-		       -variable    => \$microSecV,
-		       -command     => [ \&sendDebug, 0, 'm' ]);
+my $debugMenu = $mainWindow->Menu(-tearoff => 0);	# NOTE next index is 0
+
+$debugMenu->checkbutton(-label       => 'Debug',			# 0
+			-accelerator => 'd',
+			-state       => 'disabled',
+			-variable    => \$debugFlag,
+			-command     => [ \&sendDebug, 1, 'd' ]);
+$debugMenu->separator;				# ---------------------   1
+$debugMenu->checkbutton(-label       => 'Step',				# 2
+			-accelerator => 's',
+			-state       => 'disabled',
+			-variable    => \$stepV,
+			-command     => [ \&sendDebug, 0, 's' ]);
+$debugMenu->checkbutton(-label       => 'Next',				# 3
+			-accelerator => 'n',
+			-state       => 'disabled',
+			-variable    => \$nextV,
+			-command     => [ \&sendDebug, 0, 'n' ]);
+$debugMenu->checkbutton(-label       => 'Continue',			# 4
+			-state       => 'disabled',
+			-accelerator => 'c',
+			-variable    => \$continueV,
+			-command     => [ \&sendDebug, 0, 'c' ]);
+$debugMenu->separator;				# ---------------------   5
+$debugMenu->command    (-label       => 'Watch points',			# 6
+			-accelerator => 'w',
+			-command     => [ \&ListWatchPoints ]);
+$debugMenu->separator;				# ---------------------   7
+$debugMenu->checkbutton(-label       => 'Trace',			# 8
+			-accelerator => 't',
+			-variable    => \$traceDebV,
+			-command     => [ \&sendDebug, 0, 't' ]);
+$debugMenu->checkbutton(-label       => 'MicroSec',			# 9
+			-accelerator => 'm',
+			-variable    => \$microSecV,
+			-command     => [ \&sendDebug, 0, 'm' ]);
 
 ########################################################################
 #	Help button
@@ -1746,8 +1749,8 @@ sub ListWatchPoints {
     while ($dbLb->index('end') != 0) {
 	my ($answer, @selected, $symbol);	# List Box not empty
 	$answer = $dbL->Show(			# Watch point list DialogBox
-	    -popover    => $liveMenu,
-	    -overanchor => 'sw',
+	    -popover    => $entrySearch,	# slightly over left margin
+	    -overanchor => 'se',		# to allow retrieval when hidden
 	    -popanchor  => 'ne',
 	    -takefocus  => 1);
 	if (not $answer or			# (x)
@@ -1785,7 +1788,7 @@ sub ListWatchPoints {
 		}
 		elsif ($answer eq 'Condition') {
 		    my $s;
-		    ($s, $value) = ConditionEdit($_, $index, $index, $symbol, $liveMenu, 'se', 'ne');
+		    ($s, $value) = ConditionEdit($_, $index, $index, $symbol, $dbLb, 'nw', 'nw');
 		    printf "answer '%s' X = %d state = 0x%02x\n", $answer, $value, $state if $opt_T;
 		    next if $s < 0;
 		    $state &= ~0x0f;		# clear previous condition
@@ -1818,7 +1821,7 @@ sub ListWatchPoints {
 #	Condition Edit
 #			my (    $i, $ix, $wix,        $symbol, $wm,        $oa,  $pa) = @_;
 #  ($s, $value) = ConditionEdit($i, $ix, $watchIndex, $symbol, $watchMenu, 'nw', 'nw');	# from EnterWatch
-#  ($s, $value) = ConditionEdit($_, $index, $index,   $symbol, $liveMenu,  'se', 'ne');	# from ListWatchPoints
+#  ($s, $value) = ConditionEdit($_, $index, $index,   $symbol, $debugMenu, 'se', 'ne');	# from ListWatchPoints
 #
 ########################################################################
 
@@ -2304,8 +2307,8 @@ sub rcvd_msg_from_server {
 	    $text->tagDelete('searchTag');
 	    $traceDebV = $microSecV = 0;		# stop Trace and MicroSec output in Edit mode
 	    conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Trace and MicroSec in app
-	    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
-	    $liveMenu->entryconfigure(7, -state => 'disabled');	# Watch points
+	    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
+	    $debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
 	    $regName = $runName = '';
 	    $menuRun->configure(-text => 'Run ');
 	    print "$named: rcvd_msg_from_server(0) buttons to 'Run ' 'Live'\n" if $opt_T;
@@ -2515,8 +2518,8 @@ use warnings;
 			    $prevText = '';					# start a new search
 			    $gl = 0;
 			    $text->tagDelete('searchTag');
-			    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
-			    $liveMenu->entryconfigure(7, -state => 'disabled');	# Watch points
+			    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
+			    $debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
 			    print "$named: rcvd_msg_from_server received :5 'wait'\n" if $opt_T;
 			}
 		    }
@@ -2803,15 +2806,15 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
     if ($scanFlag or $accelerator =~ m/^[tm]/) {		# only in Live mode except 't' or 'm'
 	$k = 1 if $k;				# Key press
 	if ($accelerator eq 'd') {
-	    $accelerator = $liveMenu->entrycget(1, -accelerator);
+	    $accelerator = $debugMenu->entrycget(0, -accelerator);
 	    print "sendDebug($k, $accelerator from entrycget)\n" if $opt_t;
 	    search_now(1, '', 0);		# clear search
 	}
 	if ($accelerator eq 'D') {
-	    $liveMenu->entryconfigure(1, -accelerator => 'd');
-	    $liveMenu->entryconfigure(3, -state => 'disabled');	# Step
-	    $liveMenu->entryconfigure(4, -state => 'disabled');	# Next
-	    $liveMenu->entryconfigure(5, -state => 'disabled');	# Continue
+	    $debugMenu->entryconfigure(0, -accelerator => 'd');
+	    $debugMenu->entryconfigure(2, -state => 'disabled');	# Step
+	    $debugMenu->entryconfigure(3, -state => 'disabled');	# Next
+	    $debugMenu->entryconfigure(4, -state => 'disabled');	# Continue
 	    $searchText = '';					# clear search entry window
 	    $entrySearch->configure(-background => 'grey94');	# indicates non-debug mode
 	    $breakFlag = $stepV = $nextV = $continueV = 0;
@@ -2845,10 +2848,10 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	    }
 	}
 	if ($accelerator eq 'd') {
-	    $liveMenu->entryconfigure(1, -accelerator => 'D');
-	    $liveMenu->entryconfigure(3, -state => 'normal');	# Step
-	    $liveMenu->entryconfigure(4, -state => 'normal');	# Next
-	    $liveMenu->entryconfigure(5, -state => 'normal');	# Continue
+	    $debugMenu->entryconfigure(0, -accelerator => 'D');
+	    $debugMenu->entryconfigure(2, -state => 'normal');	# Step
+	    $debugMenu->entryconfigure(3, -state => 'normal');	# Next
+	    $debugMenu->entryconfigure(4, -state => 'normal');	# Continue
 	    $continueV = 1;			# initial debug state is Continue
 	    $debugFlag = 1;
 	    sendDebug(1, 'c');
@@ -2872,6 +2875,26 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 
 ########################################################################
 #
+#	Pop up debug menu as a standalone transient toplevel $menuBox
+#	as it shows when displayed as a tearoff
+#
+########################################################################
+
+sub showDebug {
+    my ($dummy, $buttonRef) = @_;
+    my $buttonState = $$buttonRef->cget(-state);
+    my $buttonText  = $$buttonRef->cget(-text);
+    if ($buttonState ne 'disabled' and not Tk::Exists($menuBox)) {
+	my $xWin = $mainWindow->rootx;
+	my $yWin = $mainWindow->rooty;
+	print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
+	$menuBox = Tk::Menu::tearOffMenu($debugMenu, $xWin +645, $yWin + 32); # EUREKA
+    }
+    print "Pop up debug menu '$buttonText' '$buttonState'\n" if $opt_T;
+} # showDebug
+
+########################################################################
+#
 #	Pop up search menu from search button after 200 ms
 #
 ########################################################################
@@ -2887,7 +2910,7 @@ sub SearchMenu {
 	$searchTimer = $mainWindow->after(200,
 	    sub { $searchMenu->post($xWin + 276, $yWin +  32); });
     }
-    print "Pop up search button '$buttonText' '$buttonState'\n" if $opt_T;
+    print "Pop up search menu '$buttonText' '$buttonState'\n" if $opt_T;
 } # SearchMenu
 
 ########################################################################
@@ -3272,8 +3295,8 @@ sub reset_scan {
 	$prevText = '';				# start a new search
 	$gl = 0;
 	$text->tagDelete('searchTag');
-	$liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
-	$liveMenu->entryconfigure(7, -state => 'disabled');	# Watch points
+	$debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
+	$debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
 	clear_scan(@_);
     }
 } # reset_scan
@@ -3365,7 +3388,7 @@ sub do_scan {
 	    $prevText = '';				# start a new search
 	    $gl = 0;
 	    $text->tagDelete('searchTag');
-	    $liveMenu->entryconfigure(1, -state => 'disabled');	# Debug
+	    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
 	    return;
 	}
 	$text->configure(-state => 'normal');
@@ -3577,8 +3600,8 @@ use warnings;
 	} else {
 	    $liveButton->configure(-text => 'Edit');
 	}
-	$liveMenu->entryconfigure(1, -state => 'normal');	# Debug     enabled
-	$liveMenu->entryconfigure(7, -state => 'normal');	# Watch points enabled
+	$debugMenu->entryconfigure(0, -state => 'normal');	# Debug     enabled
+	$debugMenu->entryconfigure(6, -state => 'normal');	# Watch points enabled
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();
 	$text->tagDelete('pTag');

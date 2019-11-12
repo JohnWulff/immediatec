@@ -121,7 +121,7 @@ Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman 1.26 $ uses Tk-@<<<<<<<<<
+$Id: iCman 1.27 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -340,7 +340,7 @@ my $manMenu = $menuBar->Menubutton(-text               => 'man',
 				   -borderwidth        => 2,
 				   -takefocus          => 1,
 				   -highlightthickness => 1,
-				   -tearoff            => 1,	# tear off line 0
+				   -tearoff            => 1,	# tear-off line 0
 				  )->pack(-side => 'left', -padx => 2);
 
 $manMenu->command(-label       => 'Show in this window',		# 1
@@ -989,13 +989,13 @@ use warnings;
 	    $prev = $mark;
 	    ########################################################################
 	    # If first character is a capital letter, it's likely a Heading
-	    # unless it is the first line (standard man heading)
+	    # unless it is the first line (standard man heading) (Esc bold sequence optional)
 	    ########################################################################
-	    if ($lineCnt++ and not $opt and $line =~ s/^(\e\[(\d+)m)?([A-Z][\w :]*)(\e\[(\d+)m)?$/$3/) {
+	    if ($lineCnt++ and not $opt and $line =~ s/^(\e\[(\d+)m)?([A-Z][\w :.\b-]*)(\e\[(\d+)m)?$/$3/) {
 		# Likely a section heading
 		print "show_man:$lineCnt: Heading: '$line'\n" if $opt_T;
 		$mark = $line;			# $mark has section title
-		$mark =~ s/.//g;		# take out possible bold and underline repeats
+		$mark =~ s/.[\b]//g;		# take out possible bold and underline repeats
 		chomp $mark;
 		my $index = $text->index('end');	# note current end location
 		# Give 'heading' tag to the Heading
@@ -1009,14 +1009,14 @@ use warnings;
 				       );
 	    } else {				# -k or -l or first line or not section heading
 		########################################################################
-		# State machine to convert Boldfacing, Underliningg with ^H to
+		# State machine to convert Boldfacing and Underlining with ^H to
 		# ESC sequences
 		########################################################################
 		$ppos = -1;
 		$more = 0;
 		%atoms = ();
-		$line =~ s/(.)(\1)*/$1/g;	# replace more than one .^H by one .^H
-		while ($line =~ m/(.)(.)/g) {
+		$line =~ s/(.)[\b](\1[\b])*/$1\b/g;	# replace more than one .^H by one .^H
+		while ($line =~ m/(.)[\b](.)/g) {
 		    $atoms{ length $` } = $1;	# each element has length 3
 		}
 		foreach $pos (sort { $a <=> $b } keys %atoms) {
@@ -1987,21 +1987,27 @@ use warnings;
 ########################################################################
 
 sub quit_program {
-    my $dialog = $text->Dialog (-title   => 'Quit',
-				-bitmap  => 'question',
-				-text    => 'Really quit?',
-				-default_button => 'No',
-				-buttons => [qw(Yes No)],
-			       );
-    my $answer = $dialog->Show(
-	    -popover => $mainWindow,
-	    -overanchor => 'c',
-	    -popanchor => 'nw',
-	    -takefocus => 1);
-    print "$named: answer is '$answer'\n" if $opt_T;
-    if ($answer ne 'Yes') {
-	return;				# cancel operation
-    }
+    my ($conditional) = @_;
+no warnings;
+    print "$named: quit_program: \$conditional = '$conditional'\n" if $opt_T;
+use warnings;
+    if (not defined $conditional or $conditional =~ m/^Tk::/) {
+	my $dialog = $text->Dialog (-title   => 'Quit',
+				    -bitmap  => 'question',
+				    -text    => 'Really quit?',
+				    -default_button => 'No',
+				    -buttons => [qw(Yes No)],
+				   );
+	my $answer = $dialog->Show(
+		-popover => $mainWindow,
+		-overanchor => 'c',
+		-popanchor => 'nw',
+		-takefocus => 1);		# left mouse or space on [Yes] is 'Yes'
+	print "$named: answer is '$answer'\n" if $opt_T;
+	if ($answer ne 'Yes') {
+	    return;				# cancel operation
+	}
+    }	# signals on shutdown return 'HUP' or 'TERM' and quit unconditionally
     my ($menuKey, $menuData, $entry, $home);
     my ($menuRef, $menuEntries, $menuStart, $menuIndex, $menuLen, $menuLim,
 	$menuAge, $menuInc, $commandRef);
@@ -2047,7 +2053,7 @@ __END__
 
 =head1 NAME
 
-iCman - an interface to the on-line reference manuals
+iCman - a browser like reader for unix man page reference manuals
 
 =head1 SYNOPSIS
 
@@ -2132,13 +2138,14 @@ iCman - an interface to the on-line reference manuals
 =head1 DESCRIPTION
 
 B<iCman> provides a read-only window in which man pages can be
-displayed. Each page argument given to B<man> is normally the name of a
-program, utility or function. The manual page associated with each of
-these arguments is then found and displayed. A section, if provided,
-will direct B<iCman> to look only in that section of the manual. The
-default action is to search in all of the available sections, following
-a pre-defined order in the underlying 'man' call and to show only
-the first page found, even if pages exist in several sections.
+displayed. Each man page argument given to B<man> is normally the
+name of a program, utility or function. The manual page associated
+with each of these arguments is then found and displayed. A section,
+if provided, will direct B<iCman> to look only in that section of
+the manual. The default action is to search in all of the available
+sections, following a pre-defined order in the underlying 'man'
+call and to show only the first page found, even if pages exist in
+several sections.
 
 Other manual pages may be opened either by entering the name of a
 manual page optionally followed by a section in parentheses in the
@@ -2165,7 +2172,7 @@ a page by that name as well as a hyper-link to each page.
 
 Holding down the [man] button shows extra man page options including a
 history of previously opened man pages. The 'man menu' can be detached
-with the tear line ---------.
+with the tear-off line ---------.
 
 With the previous and next buttons [<=] and [=>] it is possible to
 scroll through the history like a browser.
@@ -2175,11 +2182,16 @@ by the scroll bar(s) or the usual up/down/prior/next/home/end keys.
 A useful feature is the use of the middle mouse button to fast scroll
 in all 4 directions through the text.
 
-Other shortcuts are the 'p' and 'n' key to load the previous or next
-entry in the history.  The 'r' key reloads the current manpage,
-which is useful if the manpage is being developed and has been
-re-made externally.  'h' displays the B<iCman> manual page and 'q'
-quits the program.
+Other shortcuts are the 'p' and 'n' key to load the previous or
+next entry in the history.  The 'r' key reloads the current manpage,
+which is useful if the manpage is being developed and has been re-made
+externally.  'h' displays the B<iCman> manual page and 'q', 'Alt-q'
+and the (X) button quits the program. 'Alt-q' also quits when the
+focus is in the search entry window. In all these cases the program
+is not terminated immediately, but a dialog box is opened asking for
+[Yes] comfirmation to Really quit.  The [Yes] button can also be
+activated via the keyboard by moving the focus from [No] to [Yes]
+with 'Shift-tab' and confirming with the 'space' key (not 'enter').
 
 The search facility is much more powerful than that of 'less',
 the usual man page viewer. Activate the search by keying '/' or
@@ -2208,7 +2220,7 @@ Holding down the search key [/] will show the different search options
 for 'Exact match' or 'Regexp match' either case sensitive or not.
 This is followed by a history of previous searches - most recent at
 the end, which can be selected for a repeat search. This search menu
-can be detached with the tear line ---------.
+can be detached with the tear-off line ---------.
 
 Tk::Text will open a dialog box when clicking the right mouse button
 in the text window. The features provided are self explanatory. It
@@ -2220,7 +2232,7 @@ of every section in all directories of $MANPATH or the execution
 of /usr/bin/manpath are obtained.  Since this may take some time,
 particularly if the system is busy, the result of the scan is cached in
 ~/.iC/iCman.sec.  A full scan is carried out each new day. This should
-be sufficient to catch any new man entries. Alternetively 'iCman -c'
+be sufficient to catch any new man entries. Alternatively 'iCman -c'
 may be used to build a new cache after new software has been installed.
 
 =head1 AUTHOR
@@ -2263,3 +2275,8 @@ This program is a major extension of B<perlman>, the man page viewer
 from the O'Reilly Book "Advanced Perl Programming" by Sriram Srinivasan.
 The work of Sriram Srinivasan is gratefully acknowledged.  Some ideas
 were also used from the version of B<perlman> extended by H.Merijn Brand.
+
+=head1 TTeesstt bbaacckkssppaaccee ccoonnvveerrssiioonn..
+
+_t_e_s_t _u_n_d_e_r_l_i_n_e tteesstt bboolldd
+ttttrrrriiiipppplllleeee bbbbaaaacccckkkkssssppppaaaacccceeee bbbboooolllldddd
