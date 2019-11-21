@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.71 $";
+"@(#)$Id: load.c 1.72 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2017  John E. Wulff
@@ -434,9 +434,9 @@ main(
      *******************************************************************/
 
     if ((iC_progname = strrchr(*argv, '/')) == NULL
-#ifdef	WIN32
+#ifdef	_WIN32
 	&& (iC_progname = strrchr(*argv, '\\')) == NULL
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
     ) {
 	iC_progname = *argv;
     } else {
@@ -445,11 +445,11 @@ main(
 #ifdef	TCP
     iC_iccNM = iC_emalloc(strlen(iC_progname)+INSTSIZE+2);	/* +2 for '-...\0' */
     strcpy(iC_iccNM, iC_progname);
-#ifdef	WIN32
+#ifdef	_WIN32
     if ((cp = strrchr(iC_iccNM, '.')) != 0 && strcmp(cp, ".exe") == 0) {
 	*cp = '\0';			/* terminate at trailing extension .exe */
     }
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 #endif	/* TCP */
     iC_outFP = stdout;			/* listing file pointer */
     iC_errFP = stderr;			/* error file pointer */

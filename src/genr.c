@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.94 $";
+"@(#)$Id: genr.c 1.95 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -15,14 +15,9 @@ static const char genr_c[] =
  *
  *******************************************************************/
 
-#ifdef _WINDOWS
-#include	<windows.h>
-#endif
 #include	<stdio.h>
 #include	<stddef.h>
-#ifndef	WIN32
 #include	<stdlib.h>
-#endif	/* WIN32 */
 #include	<string.h>
 #include	<assert.h>
 #include	<ctype.h>

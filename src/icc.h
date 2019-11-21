@@ -16,7 +16,7 @@
 #ifndef ICC_H
 #define ICC_H
 static const char icc_h[] =
-"@(#)$Id: icc.h 1.86 $";
+"@(#)$Id: icc.h 1.87 $";
 
 /* STARTFILE "icg.h" */
 /********************************************************************
@@ -933,9 +933,9 @@ extern void (interrupt *oldhandler)(void);
 extern int		ttyparmFlag;
 extern struct termios	ttyparms;
 #endif	/* ! _MSDOS_ Linux */
-#ifdef	WIN32
+#ifdef	_WIN32
 #define snprintf	 _snprintf
 extern int		mkstemp(char * template);
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
 #endif	/* ICC_H */

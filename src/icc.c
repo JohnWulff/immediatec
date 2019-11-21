@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.84 $";
+"@(#)$Id: icc.c 1.85 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -22,9 +22,9 @@ static const char icc_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<sys/stat.h>
-#ifndef	WIN32
+#ifndef	_WIN32
 #include	<unistd.h>
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 #include	<string.h>
 #include	<setjmp.h>
 #include	<assert.h>
@@ -630,15 +630,15 @@ main(
 #endif /* defined(RUN) || defined(TCP) */
 			if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 			if (strlen(*argv)) {
-#ifdef	WIN32
+#ifdef	_WIN32
 			    outFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 			    strcpy(outFN, *argv);
 			    while ((cp = strchr(outFN, '\\')) != 0) {
-				*cp = '/';		/* convert '\' to '/' under WIN32 */
+				*cp = '/';		/* convert '\' to '/' under _WIN32 */
 			    }
-#else	/* not WIN32 */
+#else	/* ! _WIN32 Linux */
 			    outFN = *argv;		/* compiler output file name */
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 			} else goto missing;
 			goto break2;
 #if defined(RUN) || defined(TCP)
@@ -656,15 +656,15 @@ main(
 		    }
 		    if (strlen(*argv) && (cp = strrchr(*argv, '.')) != 0) {
 			if (memcmp(cp, ".lst", 3) == 0) {	/* accept .lst6 etc */
-    #ifdef	WIN32
+    #ifdef	_WIN32
 			    listFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 			    strcpy(listFN, *argv);
 			    while ((cp = strchr(listFN, '\\')) != 0) {
-				*cp = '/';		/* convert '\' to '/' under WIN32 */
+				*cp = '/';		/* convert '\' to '/' under _WIN32 */
 			    }
-    #else	/* not WIN32 */
+    #else	/* ! _WIN32 Linux */
 			    listFN = *argv;		/* listing file name */
-    #endif	/* WIN32 */
+    #endif	/* _WIN32 */
 			} else if (strcmp(cp, ".ic") == 0) {
 #ifdef	TCP
 			    if (outFN == 0 && excFN == 0) {
@@ -731,15 +731,15 @@ main(
 			    goto break2;
 			}
 #endif	/* TCP */
-#ifdef	WIN32
+#ifdef	_WIN32
 			errFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 			strcpy(errFN, *argv);
 			while ((cp = strchr(errFN, '\\')) != 0) {
-			    *cp = '/';		/* convert '\' to '/' under WIN32 */
+			    *cp = '/';		/* convert '\' to '/' under _WIN32 */
 			}
-#else	/* not WIN32 */
+#else	/* ! _WIN32 Linux */
 			errFN = *argv;		/* error file name */
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 		    } else goto missing;
 		    goto break2;
 		case 'k':
@@ -987,15 +987,15 @@ main(
 	  setInpFN:
 #endif	/* TCP */
 	    if (strlen(*argv)) {
-#ifdef	WIN32
+#ifdef	_WIN32
 		inpFN = iC_emalloc(strlen(*argv)+1);	/* +1 for '\0' */
 		strcpy(inpFN, *argv);
 		while ((cp = strchr(inpFN, '\\')) != 0) {
-		    *cp = '/';		/* convert '\' to '/' under WIN32 */
+		    *cp = '/';		/* convert '\' to '/' under _WIN32 */
 		}
-#else	/* not WIN32 */
+#else	/* ! _WIN32 Linux */
 		inpFN = *argv;
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 	    }
 #ifdef	TCP
 	    if (strcmp(iC_iccNM, "stdin") == 0) {

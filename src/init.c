@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c 1.47 $";
+"@(#)$Id: init.c 1.48 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -1097,11 +1097,11 @@ iC_init(void)
 	fprintf(T1FP, "	return %s;\n", lineBuf);/* intial iC_x() text for SHR() and SHSR() */
 	writeCexeTail(T1FP, "%##\n", c_number);
 	if (sscanf(cp,
-#ifdef	WIN32
+#ifdef	_WIN32
 	    " # line %d \"%[-/:A-Za-z_.0-9<>]\"	%s",
-#else	/* not WIN32 */
+#else	/* ! _WIN32 Linux */
 	    " # line %d \"%[-/A-Za-z_.0-9<>]\"	%s",
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 	    &num, ids, lineBuf) < 2) {
 	    assert(0);				/* error in generating code in outp.c */
 	}

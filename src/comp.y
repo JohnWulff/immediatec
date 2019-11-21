@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.131 $";
+"@(#)$Id: comp.y 1.132 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -18,11 +18,11 @@
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<sys/stat.h>
-#ifdef WIN32
+#ifdef _WIN32
 #include	<process.h>
-#else	/* WIN32 */
+#else	/* _WIN32 */
 #include	<unistd.h>
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 #include	<string.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -4269,7 +4269,7 @@ iC_compile(
 	r = 0;
 	if (strlen(iC_defines) == 0) {
 	    /* pre-compile if iC files contains any %include, %define %if etc */
-#ifdef	WIN32
+#ifdef	_WIN32
 	    fflush(iC_outFP);
 	    /* CMD.EXE does not know '' but does not interpret $, so use "" */
 	    /* don't use system() because Win98 command.com does not return exit status */
@@ -4284,7 +4284,7 @@ iC_compile(
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: perl -e %s %s; $? = %d\n", execBuf, inpPath, r);
 #endif
-#else	/* not WIN32 */
+#else	/* ! _WIN32 Linux */
 	    snprintf(execBuf, BUFS, "%s %s",
 		"perl -e '$s=1; while (<>) { if (m/^\\s*%\\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\\b/) { $s=0; last; } } exit $s;'",
 		inpPath);
@@ -4292,7 +4292,7 @@ iC_compile(
 #if YYDEBUG
 	    if ((iC_debug & 0402) == 0402) fprintf(iC_outFP, "####### test: %s; $? = %d\n", execBuf, r);
 #endif
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 	}
 #if YYDEBUG
 	else {
@@ -4534,14 +4534,14 @@ get(FILE* fp, int x)
 		lineno = savedLineno;
 	    }
 	    /********************************************************
-	     *  WIN32 - cl pre-processor
+	     *  _WIN32 - cl pre-processor
 	     *    handle C-pre-processor #line 1 "c:\\usr\\include\\stdio.h"
 	     *  Linux or Cygnus - gcc or Intel icc pre-processor
 	     *    handle C-pre-processor # 1 "/usr/include/stdio.h"
 	     ********************************************************/
 	    if ((lexflag & C_PARSE) == 0) {
 		/* iC parse only */
-#ifdef	WIN32
+#ifdef	_WIN32
 		if (strchr(chbuf[x], '\\') != 0) {
 		    int	    c;
 		    int	    slFlag;
@@ -4555,7 +4555,7 @@ get(FILE* fp, int x)
 			    *destp++ = c;
 			    slFlag = 0;		/* copy '\' after another character */
 			} else if (slFlag == 0) {
-			    *destp++ = '/';	/* convert '\\' to '/' under WIN32 */
+			    *destp++ = '/';	/* convert '\\' to '/' under _WIN32 */
 			    slFlag = 1;		/* skip 2nd, 4th ... '\' */
 			} else {
 			    slFlag = 0;		/* copy 3rd, 5th ... '\' */
@@ -4565,13 +4565,13 @@ get(FILE* fp, int x)
 		}
 		/********************************************************
 		 *  iC-compile
-		 *  handle pre-processor #line 1 "file.ic"	// WIN32
+		 *  handle pre-processor #line 1 "file.ic"	// _WIN32
 		 *  handle pre-processor # 1 "file.ic"		// GCC
 		 ********************************************************/
-		if (sscanf(chbuf[x], " # line %d \"%[-/:A-Za-z_.0-9<>]\"",.&temp1, inpNM) == 2)
-#else	/* not WIN32 */
+		if (sscanf(chbuf[x], " # line %d \"%[-/:A-Za-z_.0-9<>]\"",&temp1, inpNM) == 2)
+#else	/* ! _WIN32 Linux */
 		if (sscanf(chbuf[x], " # %d \"%[-/A-Za-z_.0-9<>]\"", &temp1, inpNM) == 2)
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 		{
 		    lineno = temp1 - 1;		/* handled in iC-code */
 		    lexflag |= C_LINE;
@@ -4625,11 +4625,11 @@ get(FILE* fp, int x)
 	     *  handle pre-processor #line 1 "file.ic"
 	     ********************************************************/
 	    if ((slen = sscanf(chbuf[x],
-#ifdef	WIN32
+#ifdef	_WIN32
 		" # line %d \"%[-/:A-Za-z_.0-9<>]\"	%s",
-#else	/* not WIN32 */
+#else	/* ! _WIN32 Linux */
 		" # line %d \"%[-/A-Za-z_.0-9<>]\"	%s",
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 		&temp1, tempNM, tempBuf)) >= 2) {
 		savedLineno = lineno;
 		lineno = temp1 - 1;

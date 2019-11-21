@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h 1.22 $";
+"@(#)$Id: tcpc.h 1.23 $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -30,16 +30,17 @@ static const char tcpc_h[] =
 #endif
 
 #include	<sys/types.h>
-#include	<sys/select.h>
-#ifdef	WIN32
+#ifdef	_WIN32
+#include	<winsock2.h>
 #include	<windows.h>
-#else	/* ! WIN32 */
+#else	/* ! _WIN32 Linux */
+#include	<sys/select.h>
 #include	<unistd.h>
 #include	<sys/socket.h>
 #include	<netinet/in.h>
 #include	<arpa/inet.h>
 #define SOCKET   int
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>

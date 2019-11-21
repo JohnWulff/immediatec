@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.79 $";
+"@(#)$Id: ict.c 1.80 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -33,11 +33,11 @@ static const char ict_c[] =
 #include	<time.h>
 #include	<errno.h>
 #include	<sys/types.h>
-#ifdef	WIN32
+#ifdef	_WIN32
 #include	<Time.h>
-#else	/* WIN32 */
+#else	/* ! _WIN32 Linux */
 #include	<sys/time.h>
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 #include	<signal.h>
 #include	<ctype.h>
 #include	<assert.h>
@@ -905,14 +905,14 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    }
 	}
 #endif	/* RASPBERRYPI */
-#ifndef	WIN32
+#ifndef	_WIN32
 	if ((iC_debug & DZ) == 0) {
 	    FD_SET(0, &infds);			/* watch stdin for inputs unless - FD_CLR on EOF */
 #if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 04) fprintf(iC_outFP, "*** stdin interrupt has been primed\n");
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}	/* can only use sockets, not file descriptors under WINDOWS - use kbhit() */
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
     }
 
 /********************************************************************

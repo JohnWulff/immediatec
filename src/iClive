@@ -321,7 +321,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.80 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.81 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -887,6 +887,7 @@ $menuBar->Button(-text        => '-',
 ########################################################################
 #	Zoom out button
 ########################################################################
+my $zoomOut =
 $menuBar->Button(-text        => '+',
 		 -relief      => 'raised',
 		 -borderwidth => 2,
@@ -896,12 +897,13 @@ $menuBar->Button(-text        => '+',
 ########################################################################
 #	Debug menu
 ########################################################################
-my $debugButton = $menuBar->Button(-text               => 'Debug',
-				   -relief             => 'raised',
-				   -borderwidth        => 2,
-				   -takefocus          => 1,
-				   -highlightthickness => 1,
-			          )->pack(-side => 'left', -padx => 2);
+my $debugButton =
+$menuBar->Button(-text               => 'Debug',
+		 -relief             => 'raised',
+		 -borderwidth        => 2,
+		 -takefocus          => 1,
+		 -highlightthickness => 1,
+		)->pack(-side => 'left', -padx => 2);
 $debugButton->bind('<ButtonPress-1>',	[ \&showDebug, \$debugButton ]);
 my $debugFlag = 0;		# no DEBUG mode unless manually started in LIVE mode
 my $breakFlag = 0;
@@ -961,7 +963,7 @@ $menuBar->Button(-text        => 'Help',
 ########################################################################
 #	WatchPoint and IgnorePoint menu
 ########################################################################
-my $watchMenu = $mainWindow->Menu(-tearoff => 0);					# 0 - tear off
+my $watchMenu = $mainWindow->Menu(-tearoff => 0);	# NOTE next index is 0
 my $watchIndex	= 0;
 my $watchState	= 0;
 my $watchValue	= 0;
@@ -970,22 +972,22 @@ my $watchCondV	= 0;
 my $ignoreV	= 0;
 my $disableV	= 0;
 
-$watchMenu->Checkbutton(-label       => 'Watch',			# 1
+$watchMenu->Checkbutton(-label       => 'Watch',			# 0
 			-variable    => \$watchV,
 			-command     => [ \&EnterWatch, 0, 1 ]);
-$watchMenu->Checkbutton(-label       => ' Condition',			# 2
+$watchMenu->Checkbutton(-label       => ' Condition',			# 1
 			-variable    => \$watchCondV,
 			-command     => [ \&EnterWatch, 0, 2 ]);
-$watchMenu->separator;				# ---------------------   3
-$watchMenu->Checkbutton(-label       => 'Ignore',			# 4
+$watchMenu->separator;				# ---------------------   2
+$watchMenu->Checkbutton(-label       => 'Ignore',			# 3
 			-variable    => \$ignoreV,
 			-command     => [ \&EnterWatch, 0, 4 ]);
-$watchMenu->separator;				# ---------------------   5
-$watchMenu->Checkbutton(-label       => 'Disable',			# 6
+$watchMenu->separator;				# ---------------------   4
+$watchMenu->Checkbutton(-label       => 'Disable',			# 5
 			-variable    => \$disableV,
 			-command     => [ \&EnterWatch, 0, 6 ]);
-$watchMenu->separator;				# ---------------------   7
-$watchMenu->command    (-label       => 'Cancel',			# 8
+$watchMenu->separator;				# ---------------------   6
+$watchMenu->command    (-label       => 'Cancel',			# 7
 			-command     => [ \&EnterWatch, 0, 8 ]);
 
 ########################################################################
@@ -1007,6 +1009,7 @@ my $dbX = $dbW->add('LabEntry',
 	-label => 'X',
 	-labelPack => [ -side => 'left' ])->pack;
 $dbW->configure(-focus => $dbX);
+$dbW->attributes(-topmost => 1);
 # use $answer = $dbW->Show() to display dialog box and to return text of button pressed.
 # $dbWval contains value entered in LabEntry window.
 
@@ -1022,6 +1025,7 @@ my $dbB = $mainWindow->DialogBox(
 $dbB->add('Label',
 	-textvariable => \$watchListTxt,
 	)->pack(-side => 'left', -fill => 'x');
+$dbB->attributes(-topmost => 1);
 # use $answer = $dbB->Show() to display dialog box and to return text of button pressed.
 
 ########################################################################
@@ -1041,6 +1045,7 @@ my $dbLb = $dbL->add('Listbox',
 	-setgrid => 1,
 	)->pack;
 $dbL->configure(-focus => $dbLb);
+$dbL->attributes(-topmost => 1);
 # use $answer = $dbL->Show() to display dialog box and to return text of button pressed.
 
 ########################################################################
@@ -1749,8 +1754,8 @@ sub ListWatchPoints {
     while ($dbLb->index('end') != 0) {
 	my ($answer, @selected, $symbol);	# List Box not empty
 	$answer = $dbL->Show(			# Watch point list DialogBox
-	    -popover    => $entrySearch,	# slightly over left margin
-	    -overanchor => 'se',		# to allow retrieval when hidden
+	    -popover    => $zoomOut,
+	    -overanchor => 'sw',
 	    -popanchor  => 'ne',
 	    -takefocus  => 1);
 	if (not $answer or			# (x)
@@ -1821,7 +1826,7 @@ sub ListWatchPoints {
 #	Condition Edit
 #			my (    $i, $ix, $wix,        $symbol, $wm,        $oa,  $pa) = @_;
 #  ($s, $value) = ConditionEdit($i, $ix, $watchIndex, $symbol, $watchMenu, 'nw', 'nw');	# from EnterWatch
-#  ($s, $value) = ConditionEdit($_, $index, $index,   $symbol, $debugMenu, 'se', 'ne');	# from ListWatchPoints
+#  ($s, $value) = ConditionEdit($_, $index, $index,   $symbol, $dbLb,      'nw', 'nw');	# from ListWatchPoints
 #
 ########################################################################
 

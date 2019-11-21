@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.41 $";
+"@(#)$Id: gram.y 1.42 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -2107,9 +2107,9 @@ imm_array_identifier				/* 70 */
  *******************************************************************/
 %%
 
-#ifndef	WIN32
+#ifndef	_WIN32
 #include	<unistd.h>
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
 #ifdef LMAIN
 static void

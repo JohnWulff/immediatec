@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.29 $";
+"@(#)$Id: tcpc.c 1.30 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -65,12 +65,12 @@ static const char RCS_Id[] =
 #include	<signal.h>
 #include	<unistd.h>
 #include	<netinet/tcp.h>
-#ifdef	WIN32
+#ifdef	_WIN32
 #include	<Time.h>
-#else	/* WIN32 */
+#else	/* ! _WIN32 Linux */
 #include	<netdb.h>
 #include	<sys/time.h>
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 #include	<ctype.h>
 #include	<errno.h>
 #include	<assert.h>
@@ -107,15 +107,15 @@ typedef struct NetBuffer {
     char	buffer[REPLY];
 } NetBuffer;
 
-#ifdef	WIN32
+#ifdef	_WIN32
 static int	freqFlag;
 static double	frequency;
 static LARGE_INTEGER freq, start, end;
-#else	/* ! WIN32 */
+#else	/* not  _WIN32 */
 static struct timeval	mt0;
 static struct timeval	mt1;
 static struct timespec	ms200 = { 0, 200000000, };
-#endif	/* ! WIN32 */
+#endif	/* _WIN32 */
 
 /********************************************************************
  *
@@ -127,11 +127,11 @@ static struct timespec	ms200 = { 0, 200000000, };
 void
 iC_microReset(int mask)
 {
-#ifdef	WIN32
+#ifdef	_WIN32
     QueryPerformanceCounter(&start);
-#else	/* WIN32 */
+#else	/* ! _WIN32 Linux */
     gettimeofday(&mt0, 0);			/* reset for next measurement */
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
     iC_micro |= mask;
 } /* iC_microReset */
 
@@ -139,7 +139,7 @@ void
 iC_microPrint(const char * str, int mask)
 {
     if (iC_debug & 0100) fprintf(iC_outFP, "\n");
-#ifdef	WIN32
+#ifdef	_WIN32
     double fi;
 
     if (freqFlag == 0 && QueryPerformanceFrequency(&freq)) {
@@ -157,7 +157,7 @@ iC_microPrint(const char * str, int mask)
     } else {
         fprintf(iC_outFP, "micro: %s\n", str);
     }
-#else	/* WIN32 */
+#else	/* ! _WIN32 Linux */
     long	sec;
     long	usec;
 
@@ -171,7 +171,7 @@ iC_microPrint(const char * str, int mask)
 	fprintf(iC_outFP, "%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
     gettimeofday(&mt0, 0);			/* start of next measurement without print time */
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
     iC_micro &= ~mask;
 } /* iC_microPrint */
 
@@ -197,7 +197,7 @@ iC_connect_to_server(const char *	host,
     int			r;
     int			len;
     char 		cp[TLEN];
-#ifdef	WIN32
+#ifdef	_WIN32
     WORD		wVersionRequested;
     WSADATA		wsaData;
     int			err;
@@ -235,15 +235,15 @@ iC_connect_to_server(const char *	host,
     }
 
     /* The WinSock DLL is acceptable. Proceed. */
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
     if (isdigit(*host)) {
-#ifdef	WIN32
+#ifdef	_WIN32
 	/* inet_addr() obselete under Linux because of 255.255.255.255 error return */
 	if ((sin_addr.S_un.S_addr = inet_addr(host)) == INADDR_NONE)
-#else	/* WIN32 */
+#else	/* ! _WIN32 Linux */
 	if (inet_aton(host, &sin_addr) == 0)
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 	{
 	    fprintf(iC_errFP, "inet_aton with '%s' failed\n", host);
 	    iC_quit(SIGUSR1);
@@ -270,17 +270,17 @@ iC_connect_to_server(const char *	host,
 	sin_port = pServ->s_port;
     }
 
-#ifdef	WIN32
+#ifdef	_WIN32
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
 	fprintf(iC_errFP, "socket failed: %d\n", WSAGetLastError());
 	iC_quit(SIGUSR1);
     }
-#else	/* WIN32 */
+#else	/* ! _WIN32 Linux */
     if ((sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
 	perror("socket failed");
 	iC_quit(SIGUSR1);
     }
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
     if (setsockopt(sock,		/* SOCKET affected */
 		   IPPROTO_TCP,		/* at tcp level */
@@ -312,11 +312,11 @@ iC_connect_to_server(const char *	host,
 		    iC_quit(SIGUSR1);
 		}
 	    }
-#ifdef	WIN32
+#ifdef	_WIN32
 	    Sleep(200);				/* 200 ms in ms */
-#else	/* ! WIN32 */
+#else	/* ! _WIN32 Linux */
 	    nanosleep(&ms200, NULL);
-#endif	/* ! WIN32 */
+#endif	/* _WIN32 */
 	} else {
 	    fprintf(iC_errFP, "ERROR in %s: client could not be connected to server '%s:%d'\n",
 		iC_iccNM, inet_ntoa(server.sin_addr), ntohs(server.sin_port));
@@ -355,12 +355,12 @@ iC_wait_for_next_event(fd_set * infdsp, fd_set * ixfdsp, struct timeval * ptv)
 	}
     } while ((retval = select(iC_maxFN + 1, &iC_rdfds, 0, exfdsp, ptv)) == -1 && errno == EINTR);
 
-#ifdef	WIN32
+#ifdef	_WIN32
     if (retval == -1) {
 	fprintf(iC_errFP, "ERROR: select failed: %d\n", WSAGetLastError());
 	iC_quit(SIGUSR1);
     }
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
     return retval;
 } /* iC_wait_for_next_event */

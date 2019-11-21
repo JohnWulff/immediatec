@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.18 $";
+"@(#)$Id: misc.c 1.19 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -19,14 +19,16 @@ static const char misc_c[] =
 #include	<stdio.h>
 #include	<stdlib.h>
 #include	<string.h>
-#include	<err.h>
-#ifdef	_MSDOS_
+#ifdef	_WIN32
+#include	<errno.h>
+#include	<windows.h>
 #include	<dos.h>
 #include	<conio.h>
-#else	/* ! _MSDOS_ Linux */
+#else	/* ! _WIN32 Linux */
+#include	<err.h>
 #include	<termios.h>
 #include	<unistd.h>
-#endif	/* ! _MSDOS_ Linux */
+#endif	/* _WIN32 */
 #include	<signal.h>
 #include	<assert.h>
 #ifdef	TCP
@@ -103,10 +105,10 @@ int		spidFN[2] = { -1, -1 };	/* /dev/spidev0.0, /dev/spidev0.1 SPI file numbers 
 piFaceIO	iC_pfL[MAXPF];		/* piFace names/gates and channels */
 gpioIO *	iC_gpL[2];		/* GPIO names/gates and channels */
 #endif	/* RASPBERRYPI */
-#if	defined(LOAD) && ! defined(WIN32)
+#if	defined(LOAD) && ! defined(_WIN32)
 #include	<time.h>
 static struct timespec	ms200 = { 0, 200000000, };
-#endif	/* defined(LOAD) && ! defined(WIN32) */
+#endif	/* defined(LOAD) && ! defined(_WIN32) */
 
 /********************************************************************
  *
@@ -185,12 +187,7 @@ iC_gpio_pud(int gpio, int pud)
 #endif	/* PWM */
 #endif	/* TCP */
 
-#ifndef	_MSDOS_
-int		ttyparmFlag = 0;
-struct termios	ttyparms;
-#endif	/* ! _MSDOS_ Linux */
-
-#ifdef	WIN32
+#ifdef	_WIN32
 #include	<io.h>
 #include	<fcntl.h>
 #include	<sys/stat.h>
@@ -207,7 +204,10 @@ mkstemp(char * templ)
     /* must use _S_IWRITE, otherwise newly created file will be read only when closed */
     return open(mktemp(templ), _O_CREAT | _O_RDWR | _O_TRUNC, _S_IWRITE);
 }
-#endif	/* WIN32 */
+#else	/* ! _WIN32 Linux */
+int		ttyparmFlag = 0;
+struct termios	ttyparms;
+#endif	/* _WIN32 */
 
 /********************************************************************
  *
@@ -220,31 +220,22 @@ void *
 iC_emalloc(unsigned	nbytes)		/* check return from malloc */
 {
     void *	bp;
-#ifdef _WINDOWS
-#if defined(_LARGE_) || defined(_HUGE_)
-    GLOBALHANDLE		hglobal;
-
-    if ((hglobal = GlobalAlloc(GMEM_FIXED | GMEM_ZEROINIT, nbytes)) == 0) {
-	err(1, "%s", iC_progname);	/* hard ERROR */
-    }
-    bp = GlobalLock(hglobal);		/* actual pointer */
-#else
+#ifdef	_WIN32
     LOCALHANDLE		hlocal;
 
     if ((hlocal = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, nbytes)) == 0) {
-	err(1, "%s", iC_progname);	/* hard ERROR */
+	fprintf(iC_errFP, "%s: %s\n", iC_progname, strerror(errno));	/* hard ERROR */
     }
     bp = LocalLock(hlocal);		/* actual pointer */
-#endif
-#else
+#else	/* ! _WIN32 Linux */
     if ((bp = malloc(nbytes)) == NULL) {
 	err(1, "%s", iC_progname);	/* hard ERROR */
     }
-#endif
     memset(bp, 0, nbytes);		/* when free() is used memory can be non zero */
+#endif	/* _WIN32 */
     return bp;
 } /* iC_emalloc */
-#ifdef _WINDOWS
+#ifdef	_WIN32
 
 /********************************************************************
  *
@@ -255,21 +246,13 @@ iC_emalloc(unsigned	nbytes)		/* check return from malloc */
 void
 iC_efree(void *	p)
 {
-#if defined(_LARGE_) || defined(_HUGE_)
-    GLOBALHANDLE		hglobal;
-
-    hglobal = GlobalHandle(p);		/* retrieve the handle */
-    GlobalUnlock(hglobal);
-    GlobalFree(hglobal);		/* big deal */
-#else
     LOCALHANDLE		hlocal;
 
     hlocal = LocalHandle(p);		/* retrieve the handle */
     LocalUnlock(hlocal);
     LocalFree(hlocal);			/* big deal */
-#endif
 } /* iC_efree */
-#endif
+#endif	/* _WIN32 */
 #if defined(RUN) || defined (TCP) || defined(LOAD)
 
 /********************************************************************
@@ -496,19 +479,19 @@ iC_quit(int sig)
 	}
 #endif	/* YYDEBUG */
     }
-#ifdef TCP
+#ifdef	TCP
     if (iC_sockFN > 0) {
 	if (sig < SIGUSR1 || sig == QUIT_TERMINAL || sig == QUIT_DEBUGGER) {	/* but not QUIT_SERVER */
-#ifdef LOAD
+#ifdef	LOAD
 	    if (C_channel) {
 		/* disconnect iClive - follow with '0' for iCserver */
 		snprintf(regBuf, REQUEST, "%hu:5,%hu:0", C_channel, C_channel);
 		iC_send_msg_to_server(iC_sockFN, regBuf);
-#ifdef	WIN32
+#ifdef	_WIN32
 		Sleep(200);			/* 200 ms in ms */
-#else	/* WIN32 */
+#else	/* _WIN32 */
 		nanosleep(&ms200, NULL);
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 		if (iC_micro) iC_microPrint("Disconnected", 0);
 	    }
 #endif /* LOAD */
@@ -554,7 +537,7 @@ iC_quit(int sig)
 	fclose(iC_vcdFP);
     }
 #endif /* defined(TCP) && defined(LOAD) */
-#ifdef	_MSDOS_
+#ifdef	_WIN32
     if (oldhandler && iC_debug & 03000) {
 	/* reset the old interrupt handler */
 #ifdef	MSC
@@ -563,11 +546,11 @@ iC_quit(int sig)
 	setvect(INTR, oldhandler);
 #endif	/* MSC */
     }
-#else	/* ! _MSDOS_ Linux */
+#else	/* ! _WIN32 Linux */
     if (ttyparmFlag) {
 	if (tcsetattr(0, TCSAFLUSH, &ttyparms) == -1) exit(-1);
     }
-#endif	/* ! _MSDOS_ Linux */
+#endif	/* _WIN32 */
     if (iC_errFP != stderr) {
 	fflush(iC_errFP);
 	fclose(iC_errFP);

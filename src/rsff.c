@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.66 $";
+"@(#)$Id: rsff.c 1.67 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -24,9 +24,9 @@ static const char rsff_c[] =
 #include	<assert.h>
 #include	"icc.h"
 
-#ifndef	WIN32
+#ifndef	_WIN32
 #define min(x,y) ((x) < (y) ? (x) : (y))
-#endif	/* WIN32 */
+#endif	/* _WIN32 */
 
 /********************************************************************
  *
