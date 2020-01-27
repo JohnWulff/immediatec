@@ -5,11 +5,15 @@
  *	Use X40-43 equivalenced to X0-X3 as in simLift.ic
  *	Do the button resets in this transfer logic
  *
- * $Id: jwLift.ic 1.1 $
+ * $Id: jwLift.ic 1.2 $
  *
  ********************************************************************/
 
 use strict;
+
+%{
+#include	<stdlib.h>			// declares system()
+%}
 
 imm timer t50	= TIMER(TX0.4, ~TX0.4);		// t50 =
 imm bit   eoi	= TX0.0;			// end of initialisation
@@ -318,7 +322,11 @@ QX9.3	= down0x3;	// show outside down indicator
  *  better sound is complete.oga but it takes 1.1 seconds to execute
  *******************************************************************/
 
+%ifdef	RASPBERRYPI
 if (RingBell) { system("play -q /usr/share/sounds/freedesktop/stereo/complete.oga &"); }
+%else
+if (RingBell) { system("ogg123 -q /usr/share/sounds/freedesktop/stereo/complete.oga &"); }
+%endif
 
 /********************************************************************
  *  Simulated internal panel indicators

@@ -4,11 +4,15 @@
  *	2  April 2015	v15	operate via PFCAD4 over network
  *	14 October 2015	v17	add full command line analysis
  *
- * @(#)$Id: pfcad.ic 1.3 $
+ * @(#)$Id: pfcad.ic 1.4 $
  *
  *******************************************************************/
 
 use strict;
+
+%{
+#include	<stdlib.h>			// declares system()
+%}
 
 imm timer t = TIMER(TX0.4, ~TX0.4);	/* 50 ms timer clock */
 

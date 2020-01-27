@@ -7,9 +7,13 @@
  *	11 March 2017		change to iC version 3
  *	 3 June  2018		use EOI and T100ms
  *
- * @(#)$Id: rfid.ic 1.5 $
+ * @(#)$Id: rfid.ic 1.6 $
  *
  *******************************************************************/
+
+%{
+#include	<stdlib.h>			// declares system()
+%}
 
 imm timer t = TIMER(T100ms);	// 100 ms
 

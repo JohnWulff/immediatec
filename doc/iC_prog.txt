@@ -29,7 +29,7 @@ Sc.
 
 
 
-Copyright © 1985-2019 John E Wulff
+Copyright © 1985-2020 John E Wulff
 
 
 
@@ -53,7 +53,7 @@ immediateC@gmail.com
 
 
 
-$Id: iC_prog.odt 1.10  2019/08/13
+$Id: iC_prog.odt 1.10
 
 Preface
 
@@ -198,7 +198,7 @@ Preface	2
 
 1.8  Built-in Function Blocks	12
 
-1.9  Counting	13
+1.9  Counting in C code with immC variables	13
 
 1.10  User defined Function Blocks	15
 
@@ -250,13 +250,13 @@ Preface	2
 
 3.10  immC Arrays	23
 
-4  Literal Blocks, immediate Conditional Statements and Pragmas	25
+4  immediate Conditional Statements Literal Blocks, and Pragmas	25
 
-4.1  Literal blocks	25
+4.1  immediate conditional if else statement	25
 
-4.2  immediate conditional if else statement	26
+4.2  immediate switch statement	25
 
-4.3  immediate switch statement	26
+4.3  Literal blocks	26
 
 4.4  Pragmas	26
 
@@ -1039,7 +1039,7 @@ Modify airconx.ic by introducing the alias cooling for ~heating as shown above.
 Build and Run this version and show its listing.
 The last 4 auxiliary expressions should be identical to the listing of aircon.ic showing the variable name ~heating, which is used for execution, and not its alias cooling, which is just a bit of syntactic sugar.
 
- Counting
+ Counting in C code with immC variables
 
 Counting is very important for all types of iC programs and implementing counters in iC opens up a number of aspects which are different from ordinary imperative programming.
 What you cannot do is simply increment an immediate variable like this:
@@ -1640,7 +1640,7 @@ A leading 0 on an integer constant means octal; a leading 0x or 0X means hexadec
 A character constant is an integer, written as one character in single quotes such as ʹaʹ.
 Constants in logical bit expressions may be  0 or 1, which are equivalent to LO or HI, which are special bit constants that do not change.
 
-If an expression consists only of constants or const int parameters in a function block and no immediate variables it is a constant expression evaluated at compile time.
+If an expression consists only of constants or const int parameters in a function block and no immediate variables, it is a constant expression evaluated at compile time.
 Constant expressions may be assigned to value variables of type imm int or imm bit (after conversion to bit), which become aliases of the constant value of the expressions, executed at compile time, which obviously never change and are themselves constants.
 Constant expressions may be used to index members of immC arrays in iC code, to initialise immC variables following their declaration (similar to global initialisation in C) and in function block calls to satisfy const int formal parameters.
 
@@ -1789,7 +1789,7 @@ sizeof may be used to test index values to produce own error strategies.
 
 To sum up: each use of an indexed immC array member like cc[2] in iC code or cc[x] in C code is itself an immC variable – namely the indexed immC member of the array cc[]  – and has all the properties of a simple immC variable.
 
- Literal Blocks, immediate Conditional Statements and Pragmas
+  immediate Conditional Statements Literal Blocks, and Pragmas
 
 An immediate conditional if else statement and an immediate switch statement are the only control  constructs available in iC.
 The syntax of both statement types is similar to their C counterpart, except that braces around the C statements are mandatory.
@@ -1816,46 +1816,6 @@ If more than a fragment of C code is involved, it is good practice to code this 
 Long blocks of C code would make the purpose of those statements unclear.
 Depending on the time critical nature of the application, C code should not take too long to execute, because during the execution of such C fragments the processing of other immediate events is held up.
 Consider forking blocks of C code.
-
- Literal blocks
-
-Literal blocks are sections of C code enclosed in special braces %{ and %}.
-They may occur before, between and after any immediate statement.
-Literal blocks are copied verbatim to the front of the generated C output code (without the special braces).
-Literal blocks are useful to declare any C variables, define macros and to declare and define auxiliary C functions to support the application.
-Since iC Version 3 any C pre-processor commands such as #include, #define or #ifdef etc.
-in a literal block are written in standard C form.
-
-
-%{
-	#include <math.h>	/* standard C-pre-processor syntax */
-	int x, y, z;	/* declarations in a literal block */
-	int abs(int);	/* C function declaration */
-%}
-
-Literal blocks and their embedded C pre-processor commands are resolved during C compilation, which follows the iC compilation.
-Pre-processor commands for the iC sections of code are %include, %define or %ifdef etc.
-These are resolved before the iC compilation.
-
-The run-time system will call the function iCbegin() when an iC application is started before any immediate processing.
-This function can be provided by the user in a literal block.
-If it is not provided, a nearly empty function iCbegin() returning 0 is provided by the system.
-User implementations should return 1.
-Uses of iCbegin() are to initialise immC variables and additional –help output.
-It may even contain a fork() call to spawn a child process, which will run in parallel with normal immediate processing.
-This opens up the way to build mixed applications using conventional multi-process or multi-threaded control strategies in parallel with immediate C code, which leaves a lot of CPU time to do other things.
-
-The complementary function iCend() is called by the run-time system when an iC application is terminated externally (iC applications never terminate by themselves, unless iC_quit() is called in embedded C code).
-iCend() could be used to free memory allocated with malloc or new.
-
-
-%{ 
-int iCbegin()	{ ...; return 1; } /* optional C initialisation */
-int iCend()	{ ...; return 1; } /* optional C termination */
-%}
-
-If the code in literal blocks, or code in C blocks controlled by an immediate if else or switch, is specifically C++ code, then the generated code must be compiled by a C++ compiler.
-The Code generated from the iC statements is pure C code.
 
  immediate conditional if else statement
 
@@ -1902,6 +1862,46 @@ switch (brightness, cl) {
 	case BRIGHT:	lightVoltage(24);	break;
 	default:	lightVoltage(24);	break;
 } // end of immediate switch statement 
+
+ Literal blocks
+
+Literal blocks are sections of C code enclosed in special braces %{ and %}.
+They may occur before, between and after any immediate statement.
+Literal blocks are copied verbatim to the front of the generated C output code (without the special braces).
+Literal blocks are useful to declare any C variables, define macros and to declare and define auxiliary C functions to support the application.
+Since iC Version 3 any C pre-processor commands such as #include, #define or #ifdef etc.
+in a literal block are written in standard C form.
+
+
+%{
+	#include <math.h>	/* standard C-pre-processor syntax */
+	int x, y, z;	/* declarations in a literal block */
+	int abs(int);	/* C function declaration */
+%}
+
+Literal blocks and their embedded C pre-processor commands are resolved during C compilation, which follows the iC compilation.
+Pre-processor commands for the iC sections of code are %include, %define or %ifdef etc.
+These are resolved before the iC compilation.
+
+The run-time system will call the function iCbegin() when an iC application is started before any immediate processing.
+This function can be provided by the user in a literal block.
+If it is not provided, a nearly empty function iCbegin() returning 0 is provided by the system.
+User implementations should return 1.
+Uses of iCbegin() are to initialise immC variables and additional –help output.
+It may even contain a fork() call to spawn a child process, which will run in parallel with normal immediate processing.
+This opens up the way to build mixed applications using conventional multi-process or multi-threaded control strategies in parallel with immediate C code, which leaves a lot of CPU time to do other things.
+
+The complementary function iCend() is called by the run-time system when an iC application is terminated externally (iC applications never terminate by themselves, unless iC_quit() is called in embedded C code).
+iCend() could be used to free memory allocated with malloc or new.
+
+
+%{ 
+int iCbegin()	{ ...; return 1; } /* optional C initialisation */
+int iCend()	{ ...; return 1; } /* optional C termination */
+%}
+
+If the code in literal blocks, or code in C blocks controlled by an immediate if else or switch statement, is specifically C++ code, then the generated code must be compiled by a C++ compiler.
+The Code generated from the iC statements is pure C code.
 
  Pragmas
 
@@ -2229,7 +2229,7 @@ imm bit m9 = ST(s, t, 5);	// iClock for s - t is not optional
 iC has a number of built-in functions, which are so central to the operation of the system, that they have been made a part of the language.
 They are implemented as efficient building blocks in the supporting run time package.
 All built-in functions are defined internally as pre compiled Function Blocks.
-(parameter types shown are all immediate – the keyword imm is optional for Function Block definitions and is left out in this description for clarity).
+(parameter types shown are all immediate – the keyword imm is optional for Function Block parameter definitions and is left out in this description for clarity).
 All except the LATCH and the FORCE functions are clocked, which is analogous to similar functionality in hardware IC's.
 Clocking overcomes the negative effects of race conditions.
 
@@ -2289,7 +2289,7 @@ In iC this looks as follows:	imm bit set, reset, Q, Qbar;
 	Q  = set & ~reset | ~Qbar;	
 	Qbar = reset & ~set | ~Q;
 
-The disadvantage of this implementation is the fact that four gate nodes are used and that its function as a latch memory element is hidden.
+The disadvantage of this implementation is the fact that four gate nodes are required and that its function as a latch memory element is hidden.
 LATCH clearly shows its function.
 
  FORCE function
@@ -2366,7 +2366,7 @@ The LATCH function is generated by the more fundamental FORCE function as follow
 imm bit LATCH(bit set, bit reset)
 	{ this = FORCE(this, set, reset) }
 
-Feedback of its own output ‘this’ is used to hold that value at its input, unless the ‘on‘ or ‘off‘ inputs force the output to a different value, which is then maintained.
+Feedback of its own output this is used to hold that value at its input, unless the set or reset inputs force the output to a different value, which is then maintained.
 
  Race conditions, Glitches and Clocking
 
@@ -2414,21 +2414,31 @@ B
 
 glitch
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ~(A & HI)
+
+1
+
+
+
+
+
+
+
+&
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2516,6 +2526,7 @@ f = SR(a & b, c, d & e, c)
 
 
 
+&
 
 
 
@@ -2529,6 +2540,15 @@ f = SR(a & b, c, d & e, c)
 
 
 
+
+
+
+
+
+
+
+
+&
 
 
 
@@ -2591,7 +2611,7 @@ Qn
 
 
 
-A version with one set input and two reset inputs is provided (mainly to implement the full SRT mono-flop as a function block).
+An alternate version SRR with one set input and two reset inputs is provided (mainly to implement the full SRT mono-flop as a function block).
 
 imm bit SRR(bit set, clock sc, bit reset1, clock rc1, 
 			  bit reset2, clock rc2);
@@ -2609,8 +2629,8 @@ They toggle their output on every clock pulse, when J and K are both "one".
 In recent years even these have not been listed in the IC data books.
 A JK flip-flop has been implemented in iC: 
 
-imm bit JK(bit set, bit reset, clock c);
-equivalent to  SR(set & ~Q, reset & Q, c);
+imm bit JK(bit set, clock sc, bit reset, clock rc);
+equivalent to  SR(set & ~Q, clock sc, reset & Q, rc);
 
 set
 
@@ -6029,7 +6049,7 @@ The mental translation between indexed array references and the resolved iC name
 
 Straight immediate C code is usually made up of short statements declaring the relationship between input and intermediate variables to output or intermediate variables - very similar to PLC code, which is easy to understand by technicians.
 It presents a clean picture of control expressions acting on control variables, which build up to a clear picture of the interactions with the plant to be controlled.
-This interaction is most clearly visible when a live display is active, where individual changes in the real plant parameters show up as state information in the code.
+This interaction is most clearly visible when a live display is active, where individual changes in the real plant parameters show up as colour coded state information in the code.
 This PLC style of coding is a very important aspect of producing immediately understandable and straight forward control programs.
 This was the most important design consideration for the immediate C language.
 

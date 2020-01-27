@@ -44,11 +44,15 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: simLift.ic 1.5 $
+ *  $Id: simLift.ic 1.6 $
  *
  *******************************************************************/
 
 use strict;
+
+%{
+#include	<stdlib.h>			// declares system()
+%}
 
 imm timer t50 = TIMER(TX0.4, ~TX0.4);
 imm bit   eoi = TX0.0;				// end of initialisation
@@ -182,7 +186,11 @@ imm bit DoorOverAlarm	= SR( DoorMovement > 72, ResetAlarm);
  *  better sound is complete.oga but it takes 1.1 seconds to execute
  *******************************************************************/
 
+%ifdef	RASPBERRYPI
 if (RingBell) { system("play -q /usr/share/sounds/freedesktop/stereo/complete.oga &"); }
+%else
+if (RingBell) { system("ogg123 -q /usr/share/sounds/freedesktop/stereo/complete.oga &"); }
+%endif
 
 /********************************************************************
  *  Simulated internal panel indicators

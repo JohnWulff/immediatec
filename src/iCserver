@@ -104,22 +104,22 @@ Usage:
 	-h	help, ouput this Usage text only
 	    OLD STYLE CALLS
 	<equivalences> - deprecated - use -e <equivalences> instead
-		eg: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
+		eg deprecated old style: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
 	<client calls> - deprecated - use -R <app ...> instead
-		eg: 'iCbox X0-X3 X10' sort
+		eg deprecated: 'iCbox -n sorter-IO X0-X3 X10' sorter
 		if a client call has arguments, the call must be quoted
 	    AUXILIARY app   - start a Bernstein chain
 	-R <app ...> run one app followed by -z and its arguments as a
 		     separate process; -R ... must be last arguments,
 		     which do not need to be quoted.
-		eg: -R iCbox X0-X3 X10 -R sort
+		eg: -R iCbox -n sorter-IO X0-X3 X10 -R sorter
 	    KEYBOARD inputs
 	    T   output table of all registered client I/Os and channels
 	    q   from keyboard: stops @<<<<<<< and all apps
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.59 $
+$Id: iCserver 1.60 $
 .
 
 ########################################################################
@@ -331,20 +331,8 @@ if ($opt_t) {
     $SIG{USR2} = 'IGNORE';	# signal 12	(stop -12 iCserver)
 }
 
-########################################################################
-#
-#	Server
-#
-#	Inhibit Nagle's algorithm
-#
-########################################################################
-
 my $host = defined $opt_s ? $opt_s : '0.0.0.0';
 my $port = defined $opt_p ? $opt_p : 8778;
-
-iCmsg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
-iCmsg->new_server($host, $port, \&login_proc);
-print STDERR "$named created. Waiting for events\n" unless $opt_q;
 
 ########################################################################
 #
@@ -393,6 +381,17 @@ if (@runArgs) {
     splice @runArgs, 1, 0, "-z" unless defined $opt_z;	# spliced in at fork_and_exec() if defined -z
     fork_and_exec(join " ", @runArgs);	# new style -R start of Bernstein chain
 }
+
+########################################################################
+#
+#	Server
+#
+#	Inhibit Nagle's algorithm
+#
+########################################################################
+iCmsg->inhibit_nagle(1, $opt_I, $opt_O);	# inhibit Nagle's algorithm for real time response
+iCmsg->new_server($host, $port, \&login_proc);
+print STDERR "$named created. Waiting for events\n" unless $opt_q;
 
 ########################################################################
 #
@@ -1555,8 +1554,8 @@ iCserver - the central server for iC clients
     -s host address of server - clients must specify the same address
             unless (default '0.0.0.0' which accepts any client host)
     -p port service port of server for all clients  (default '8778')
-    -e <equivalences> eg: IX0=IX0-1     (can be used more than once)
-            or a comma separated list eg: IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
+    -e <equivalences> eg: -e IX0=IX0-1     (can be used more than once)
+            or a comma separated list eg: -e IX0=IX0-1,QX0=QX0-1,IB1=IB1-1
     -f file read options, equivalences and client calls from this file
     -q      quiet - do not report clients connecting and disconnecting
     -a      autovivify I/O clients 'iCbox' for missing I/O's (any number
@@ -1582,15 +1581,15 @@ iCserver - the central server for iC clients
     -h      help, ouput this Usage text only
         OLD STYLE CALLS
     <equivalences> - deprecated - use -e <equivalences> instead
-            eg: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
+            eg deprecated old style: IX8=IX8-0=IX8-1,IX9=IX9-0=IX9-1
     <client calls> - deprecated - use -R <app ...> instead
-            eg: 'iCbox X0-X3 X10' sort
+            eg deprecated: 'iCbox X0-X3 X10' sorter
             if a client call has arguments, the call must be quoted
         AUXILIARY app   - start a Bernstein chain
     -R <app ...> run one app followed by -z and its arguments as a
                  separate process; -R ... must be last arguments,
                  which do not need to be quoted.
-             eg: -R iCbox X0-X3 X10 -R sort
+             eg: -R iCbox X0-X3 X10 -R sorter
         KEYBOARD inputs
         T   output table of all registered client I/Os and channels
         q   from keyboard: stops iCserver and all apps
@@ -1759,9 +1758,9 @@ Additional functionality in iCserver.
 
  f) -R <aux_app>[ <aux_app_argument> ...] # must be last arguments
     Start a Bernstein chain of iC application which are each initialised
-    and then started in parallel - in this case with iCserver.
+    serially and then run in parallel - in this case with iCserver.
     Example 3:
-        iCserver -R iCbox X0-X3 X10 -R sort
+        iCserver -R iCbox -n sorter-IO IX0 QX0 QX1 -R sorter
 
  g) client calls (deprecated) - a list of calls with their parameters
     allow iCserver to start a number of clients as separate processes
@@ -1775,14 +1774,14 @@ Additional functionality in iCserver.
     be quoted on the command line and the optional INI file to make
     them a single parameter for iCserver.
 
-    Example 4:
+    Example 4: (deprecated) - use Example 3 above
         iCserver 'iCbox -n sorter-IO IX0 QX0 QX1' sorter
 
     This starts iCserver and two clients - iCbox and the control
-    application 'sorter'. Since correct initialisation of the client
-    processes started in parallel is not well controlled leading to
-    bad Autivivication, Bernstein chaining with the -R option is a
-    better choice.
+    application 'sorter'. Correct initialisation of the client
+    processes started in parallel is not well controlled leading to bad
+    Autovivication (that is why direct client calls are deprecated).
+    Bernstein chaining with the -R option is a better choice.
 
  h) -f <option_file> - execute a file with iCserver options at startup.
     For very large equivalence tables a file defining equivalences and
@@ -1791,18 +1790,19 @@ Additional functionality in iCserver.
         iCserver -f <option_file>
 
     Format of the option_file:
-        <equivalence_line>
-        <equivalence_line>
-        ...
+        -e <equivalence_line>
+        ...                       # more equivalences
         <other_options>
+        -R <client call>
+        ...                       # only further -R calls
 
-    Example same as Example 1, 2 and 4 above with extra options:
+    Example same as Example 1, 2 and 3 above with extra options:
       QX7-0 = IX7-1 QX7-1 = IX7-0 # equivalences joining 2 instances
       IX8 = IX8-0 = IX8-1         # input equivalences
       IX9 = IX9-0 = IX9-1
-      'iCbox -n sorter-IO IX0 QX0 QX1' # quoted client call
-      sorter                      # plain client call
       -ak                         # extra switches for iCserver
+      -R iCbox -n sorter-IO IX0 QX0 QX1 # client call with multiple arguments
+      -R sorter                   # plain client call
 
     Individual equivalences and client calls must be written without
     spaces in the command line unless client calls are quoted.
