@@ -20,7 +20,8 @@ use strict;
 # 5	Dynamic change of font size with Alt- Alt+ and [-] [+] buttons
 # 6	Handle whatis with '-f <page>'
 # 7	Introduce paleblue hyper-links which double-click to that page
-# 8	Change man menu to hold history and manage <= and => buttons
+# 8	Change man menu to save history and manage <= and => buttons
+# 9	hyper-link definition must have a non-empty section in parentheses
 ########################################################################
 use Tk;			# The graphical user interface toolkit perl/Tk
 			##                   by Nick Ing-Simmons
@@ -117,11 +118,11 @@ Usage:
     [Help]      Display the @<<<< man page.                         h
 			    $named
 
-Copyright (C) 2000-2013  John E. Wulff          <immediateC@gmail.com>
+Copyright (C) 2000-2020  John E. Wulff          <immediateC@gmail.com>
 							  '@'
 The core of this program is from 'perlman' by Sriram Srinivasan
 published in 'Advanced Perl Programming' - gratefully acknowledged.
-$Id: iCman 1.27 $ uses Tk-@<<<<<<<<<
+$Id: iCman 1.28 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1075,28 +1076,28 @@ use warnings;
 		# 0  ==> &= ~5	stop Bold and Underline
 		# hy ==> &= ~2	stop hyper-link
 		########################################################################
-		$tags{ 0 } = 0;					# start line at $pos = 0 with no Bold/Undeline/hyper-link tag
-		$tags{ length $line } = 0;			# finish at end of line with no Bold/Undeline/hyper-link tag
+		$tags{ 0 } = 0;				# start line at $pos = 0 with no Bold/Undeline/hyper-link tag
+		$tags{ length $line } = 0;		# finish at end of line with no Bold/Undeline/hyper-link tag
 		foreach $pos (sort { $a <=> $b } keys %atoms) {
 		    ($len, $atom) = @{ $atoms{ $pos } };	# process atoms in sequence
 		    substr($line, $pos + $more, $len) = "";	# remove all ESC sequences
 		    if ($atom == 0) {
-			$tag = 0;				# no hyper-link yet - stop all ANSI ESC actions
+			$tag = 0;			# no hyper-link yet - stop all ANSI ESC actions
 		    } elsif ($atom <= 4) {
-			$tag |= $atom;				# start Bold or Underline
+			$tag |= $atom;			# start Bold or Underline
 		    } elsif ($atom == 22) {
-			$tag &= ~1;				# stop Bold only
+			$tag &= ~1;			# stop Bold only
 		    } elsif ($atom == 24) {
-			$tag &= ~4;				# stop Underline only
-		    } elsif ($opt_M) {				# 30-37 are colours - used in smb.conf(5)
+			$tag &= ~4;			# stop Underline only
+		    } elsif ($opt_M) {			# 30-37 are colours - used in smb.conf(5)
 			warn "WARNING: $lineCnt: bad ANSI ESC sequence 'ESC [ $atom m' for man page - ignored\n";
 		    }
-		    $tags{ $pos + $more } = $tag;		# maintains independent Bold and Underline tags
-		    push(@seq, $pos + $more);			# allows retrieval of previous tag in position
+		    $tags{ $pos + $more } = $tag;	# maintains independent Bold and Underline tags
+		    push(@seq, $pos + $more);		# allows retrieval of previous tag in position
 		    $more -= $len;
 		}
 		print "HYPER-LINK LEN: @{[length $line]} '$line'\n" if $opt_T;
-		push(@seq, length $line);			# have at least one entry higer than any hyper-link position
+		push(@seq, length $line);		# have at least one entry higher than any hyper-link position
 		########################################################################
 		# Generate hyper-links in plain text and text with now removed ESCs
 		# do not check for valid sections - whatis and apropos sometimes provide
@@ -1105,7 +1106,7 @@ use warnings;
 		# interpolate hyper-links in %tags with previously generated ESC tags
 		########################################################################
 		$ppos = $pos = 0;
-		while($line=~m/([A-Za-z][\w:+.-]*\s*\(\s*[pmn\d]*\s*\))/g) {
+		while($line=~m/([A-Za-z][\w:+.-]*\s*\(\s*[\dpmn]+\s*\))/g) {
 		    $len = length $`;
 		    while ($pos <= $len) {
 			$tags{ $pos } &= ~2 if $pos < $len; # update previous Bold/Underline tag with stop hyper-link
@@ -1242,7 +1243,7 @@ sub pick_word {
 	    $entrySearch->focus();		# initiate search entry
 	    search_now(2, $1, 0);		# search for first word only
 	}
-    } else {					# mouse control-double-click 1
+    } else {					# hyper-link tag or control left mouse - double-click 1
 	my ($manPage, $dummy, $section) = ($line =~ /^(\w[\w:+.-]*)(\s*\(\s*(\w+)\s*\))?/);
 no warnings;
 	print "pick_word: page = '$manPage' section = '$section'\n" if $opt_T;
@@ -2237,7 +2238,7 @@ may be used to build a new cache after new software has been installed.
 
 =head1 AUTHOR
 
-Copyright 2003-2013, John E. Wulff (immediateC@gmail.com)
+Copyright 2003-2020, John E. Wulff (immediateC@gmail.com)
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
@@ -2257,7 +2258,7 @@ characters with rubbish.
 
 This has now been fixed for UTF-8 sources if an early line in the pod
 source is C<=encoding utf8> and B<pod2man> is called with the -u or
---utf8 option.  B<iCman> then shows UTF-8 characters correctly.
+--utf8 option.  B<iCman> I<then shows UTF-8 characters correctly>.
 
 Example: German Umlaut characters Ä Ö Ü ä ö ü ß, which should be
 A O U a o u with Diaresis plus a sharp s.

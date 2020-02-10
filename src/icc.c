@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.85 $";
+"@(#)$Id: icc.c 1.86 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -183,7 +183,7 @@ static const char *	usage =
 "                  or IX0 which is changed to the form above using <inst>\n"
 "                  or a comma separated list of either of the above forms\n"
 "                  only IEC inputs can be equivalenced (see iCserver)\n"
-"        -e I      equivalence all IEC inputs to the same names-<inst>\n"
+"        -e I      equivalence all IEC input names to the same names-<inst>\n"
 "        -v <file.vcd>   output a .vcd and a .sav file for gtkwave\n"
 #endif	/* TCP */
 #if YYDEBUG && !defined(_WINDOWS)

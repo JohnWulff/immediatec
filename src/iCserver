@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.60 $
+$Id: iCserver 1.61 $
 .
 
 ########################################################################
@@ -128,9 +128,10 @@ $Id: iCserver 1.60 $
 #	including a final -R ... option, which will be extracted later
 ########################################################################
 
-my ($argIndex, $blank, $file, @runArgs);
+my ($argIndex, $blank, $file, @runArgs, @fileArgs);
 $argIndex = $blank = 0;
 @runArgs = ();
+@fileArgs = ();
 # print "0 \@ARGV = '@ARGV'\n";
 foreach (@ARGV) {
     if (s/^-f(.*)$/$1/) {
@@ -147,7 +148,6 @@ foreach (@ARGV) {
 }
 # no warnings;
 # print "1 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$file = '$file' $#ARGV\n";
-# use warnings;
 @runArgs = splice(@ARGV, $argIndex, 1 + $blank);
 if (defined $file) {
     shift(@runArgs) if $blank > 0;
@@ -218,11 +218,12 @@ if ($file) {
 	foreach $arg (@newArgs) {
 	    $arg =~ s/\036+/ /g;	# replace space for ASCII RS after split()
 	}
-	push(@ARGV, @newArgs);		# concatenate new Args to existing ARGV
+	push(@fileArgs, @newArgs);	# concatenate newArgs to fileArgs
     }
     close INI;
+    splice(@ARGV, $argIndex, 0, @fileArgs);	# attach fileArgs to iCserver options before -R
 }
-# print "5 ARGV: ", join(':', @ARGV), ":\n";
+# print "5 \@ARGV = '@ARGV'	\@fileArgs = '@fileArgs'\n";
 
 ########################################################################
 #	Handle -R option - count leading options up to -R
@@ -245,10 +246,9 @@ foreach (@ARGV) {
     }
     $argIndex++;
 }
-# no warnings;
 # print "7 \@ARGV = '@ARGV'	\$argIndex = $argIndex	\$app = '$app' $#ARGV\n";
 # use warnings;
-@runArgs = splice @ARGV, $argIndex;
+@runArgs = splice(@ARGV, $argIndex);	# extract first app and all further options
 if (defined $app) {
     shift(@runArgs) if $blank;
     unshift(@runArgs, $app) if $app ne "";
@@ -366,8 +366,8 @@ while ($argv = shift @argv) {
     if ($argv =~ /^[IQ][XBWLH]\d+(-\d{1,3})?/) {
 	print "Equivalences '$argv' from command line\n" if $opt_T;
 	allocate_equivalences($argv);
-	$AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with equivalences
     } else {
+	$AutoDelay = 2_000_000;		# 2 seconds for autovivify delay with more than 1 process
 	$argv =~ s/['"]//g;		# for this mode call and args are quoted
 	fork_and_exec($argv);		# old style start of client call (deprecated - use -R)
     }					# particularly if starting more than 1 process
@@ -779,7 +779,9 @@ sub allocate_equivalences {
 no warnings;
     my ($arg) = @_;
     my ($equiv, $group, $nn, $nm, $in, $ref, $ref1, $firstName, $name, $channel, $iecRef, @equivSet);
-    my ($base, $firstBase, $primBase, $primCh, $secCh, $refEq, $iq, $xbwlh, $outName, $dupFlag, $ch);
+    my ($base, $firstBase, $primBase, $primCh, $secCh, $refEq, $iq, $xbwlh, $outName, $dupFlag, $ch, $errFlag);
+    $errFlag = 0;
+    $AutoDelay = 2_000_000;	# 2 seconds for autovivify delay with equivalences
     foreach $equiv (split /[, ]+/, $arg) {
 	next unless ($equiv);			# ignore leading spaces or commas
 	print "Equivalence '$equiv'\n" unless $opt_q;
@@ -796,13 +798,15 @@ no warnings;
 	########################################################################
 	foreach $nn (split /=/, $equiv) {
 	    if ($nn !~ /^([IQ])([XBWLH])\d+((-\d{1,3})?)$/) {
-		print STDERR "Warning $named: '$nn' in '$equiv' is not an IEC name - will probably not work!\n";
+		print STDERR "ERROR $named: '$nn' in '$equiv' is not an IEC name - will not work!\n";
+		$errFlag = 1;
 	    } else {
 		$iq = $1;
 		if ($iq eq "Q") {
 		    if ($outName) {
 			if ($outName ne $nn) {
-			    print STDERR "Warning $named: '$nn' in '$equiv' is 2nd output IEC name after $outName - will probably not work!\n";
+			    print STDERR "ERROR $named: '$nn' in '$equiv' is 2nd output IEC name after $outName - will not work!\n";
+			    $errFlag = 1;
 			}
 		    } else {
 			$outName = $nn;
@@ -810,10 +814,11 @@ no warnings;
 		}
 		if (defined $xbwlh) {
 		    if ($xbwlh ne $2) {
-			print STDERR "Warning $named: '$nn' in '$equiv' is not the same IEC type - will probably not work!\n";
-		    } else {
-			$xbwlh = $2;
+			print STDERR "ERROR $named: '$nn' in '$equiv' is not the same IEC type - will not work!\n";
+			$errFlag = 1;
 		    }
+		} else {
+		    $xbwlh = $2;			# IEC type of first equivalence entry
 		}
 		$in = defined $3 ? $3 : '';		# instance (may be null string)
 		if (exists $EquivBase{$nn}) {
@@ -915,6 +920,7 @@ no warnings;
 	  EquivStored: ;
 	}
     }
+    die "Hard error in equivalence specifications\n" if $errFlag;
 use warnings;
 } # allocate_equivalences
 
@@ -1078,12 +1084,14 @@ sub autoVivify {
 #	. undefined		ignore
 #	. zero length		client has signalled shutdown
 #	. comma separated list	break up into individual items $msg1
-#	each item $msg1 has the following charecteristics:
-#	. matches /^[NnSsRrZ]/	registration item
-#	. matches /\d+:\d+/	split into $channel and $value, send
-#				value to all receivers for the channel
-#	. matches /^[XT]/	special actions
-#	. else eror
+#	  each item $msg1 has the following charecteristics:
+#	  . matches /^\d+:.+$/	  split into $channel and $value, send
+#				  value to all receivers for the channel
+#	  . matches /^[NnSsRrZ]/  registration item
+#	  . matches /^E.*$/	  equivalance message from an app
+#	  . matches /^[XT]/	  special actions
+#	  . equals ''		  ignore empty message before leading comma 
+#	  . else eror
 #
 ########################################################################
 
@@ -1485,7 +1493,6 @@ use warnings;
 		elsif ($msg1 =~ /^E(.*)$/) {	# Equivalance message from an app
 		    print "Equivalences '$1' from app\n" if $opt_T;
 		    allocate_equivalences($1);
-		    $AutoDelay = 2_000_000;	# 2 seconds for autovivify delay with equivalences
 		}
 		elsif ($msg1 =~ /^X(.*)$/) {	# termination by named parent
 		    $name = $1 ? "'$1'" : "parent";
@@ -1596,18 +1603,20 @@ iCserver - the central server for iC clients
 
 =head1 DESCRIPTION
 
-iCserver acts as a router for a number of iC clients in a network, who
-send data to each other. Each client connects via TCP/IP to iCserver on
-a specified port (8778 default at the moment).  Only one iCserver on one
-port may run in a network.  It is possible to run several iCservers on
-different ports.  Clients can connect either via 'localhost' (default
-for iC clients) when they run on the same processor as iCserver or via
-the host address of the processor iCserver is running on.  On connection
-each client registers itself with iCserver.
+B<iCserver> acts as a router for a number of iC clients in a network,
+who send data to each other. Each client connects via TCP/IP to
+iCserver on a specified port (default 8778).  Normally only one
+iCserver on one port runs in a network.  It is possible to run several
+iCservers on different ports, but clients registered with one of the
+iCservers cannot communicate with clients registered with the others.
+Clients can connect either via 'localhost' when they run on the same
+processor as iCserver (default for iC clients) or via the host address
+of the processor iCserver is running on.  On connection each client
+registers itself and all its inputs and outputs with iCserver.
 
-Clients for iCserver are iC control applications, I/O clients such
-as iCbox or similar real I/O clients and debugging programs such as
-iClive. These clients either send or receive data values from and
+Clients for B<iCserver> are I<iC control applications>, I/O clients such
+as B<iCbox> or similar real I/O clients and debugging programs such as
+B<iClive>. These clients either send or receive data values from and
 to named I/O locations or debugging information.  As far as iCserver
 is concerned I/O locations could have any name, but the iC language
 calls for I/O names or addresses according to the IEC-1131 standard.
@@ -1622,11 +1631,12 @@ unique name is stored in a Hash in iCserver, whose value is a channel
 number, which is used for all actual data transfers. The Hash is only
 required for registration. Each channel allows the naming of one Sender
 for data on the channel (or I/O name) and one or more Receivers for
-the data. A detailed description follows in the Specification below.
+the data. A detailed description follows in the SPECIFICATION below.
 
-Additional functionality in iCserver.
+Additional functionality in B<iCserver>.
 
- a) equivalence - or interconnection of different I/O addresses in
+ a) Equivalences
+    -e option - or interconnection of different I/O addresses in
     iCserver. This option puts two or more entries in the Hash and
     assigns them a common channel number. Send or receive entries
     associated with the channel are undefined at this stage. Then
@@ -1665,9 +1675,9 @@ Additional functionality in iCserver.
     place for a channel, until a receiver has been registered for that
     channel and all other registrations have taken place.
 
-    Equivalencing two or more output addresses (Q...) will lead to
-    an error, if both output addresses register as senders in an iC
-    control application - this would lead to two or more senders on the
+    Equivalencing two or more output addresses (Q...) in an iC control
+    application will lead to an error. Both output addresses try to
+    register as senders - this leads to two or more senders on the
     same channel. When the second or later output sender registers,
     the error will be reported. A similar error will be reported
     if a second external input device in an equivalence chain is
@@ -1685,11 +1695,32 @@ Additional functionality in iCserver.
     comma ',' separated list or several equivalence parameters may be
     used.
 
-    It is not allowed to equivalence IEC identifiers of different
-    types, since the consequences are not what is expected.
+    It is not allowed to equivalence IEC identifiers of different types
+    X B W L or H, since the consequences are not what is expected.
 
-    Equivalances can also be defined later by an iC app for input IEC
-    variables in that app before the variables are registered.
+*   I<Equivalances can also be defined later by iC control applications>
+    for input IEC variables in that application before the variables are
+    registered using the -e option. The same calling sequence described
+    for iCserver above applies.
+
+    For control applications for which several instances are
+    instantiated, there is an extra -e option:
+
+        -eI # equivalence all IEC input names to the same names-<inst>
+
+    This option for the control application only makes sense if an
+    instance is also specified eg: -i1
+
+    The control application bar generated from bar.ic defines 3 IEC
+    inputs: IB1, IX0 and IX2. Calling bar as follows:
+
+        bar -i1 -eI
+
+    generates the following 3 equivalences:
+
+        Equivalence 'IB1=IB1-1'
+        Equivalence 'IX0=IX0-1'
+        Equivalence 'IX2=IX2-1'
 
  b) Autovivification
     -a option - automatic startup of one or more iCbox
@@ -1706,7 +1737,7 @@ Additional functionality in iCserver.
     iii)iC control application(s), which causes iCserver to autovivify
         any missing I/O's as iCboxes with appropriate ranges for each app.
 
-    Alternatively starting an iC
+    Alternatively autovififying for monitoring real I/O's
     -d option - automatic startup of one iCbox -d
     When a control application registers its I/O's, 'iCserver -d' starts up
     a matching 'iCbox -d' for all complementary I/O's for monitoring.
@@ -1722,8 +1753,8 @@ Additional functionality in iCserver.
 
     iii)any manually started I/O's with real I/O or virtual I/O. Care must
         be taken to ensure that all missing inputs for the app are present,
-        since no further missing I/O's are autovivified. Missing outputs
-        are optional.
+        since no further missing IEC inputs are autovivified. Missing
+        outputs are optional, since they show up in the autovivified iCbox.
 
     -A <cmd> - automatic startup of one or more <cmd>
                usually <cmd> is iCbox with extra options eg -A 'iCbox -C19'
@@ -1774,7 +1805,7 @@ Additional functionality in iCserver.
     be quoted on the command line and the optional INI file to make
     them a single parameter for iCserver.
 
-    Example 4: (deprecated) - use Example 3 above
+    Example 4: (deprecated - use -R as in Example 3 above)
         iCserver 'iCbox -n sorter-IO IX0 QX0 QX1' sorter
 
     This starts iCserver and two clients - iCbox and the control
@@ -1810,6 +1841,12 @@ Additional functionality in iCserver.
     used in equivalences
 
     Comments in the INI file are started with #
+
+B<iCserver -a> is started as a forked process by the first I<iC control
+application> or B<iClive> unless it is already running, which means
+that for most cases B<iCserver> does not need to be started separately,
+unless special options are needed.  Equivalences can also be specified
+by I<iC control applications> with the -e option as described in a)* above.
 
 =head1 SPECIFICATION
 
@@ -2091,7 +2128,7 @@ Additional functionality in iCserver.
         channel. <send_receive_op> selects the correct entries in
         that array.
 
-        iCserver maps each code against the Hash %clientNames,
+        iCserver maps each code against the Hash %Channels,
         which returns the correct channel number if it has already
         been allocated. All further data transfers in iCserver and
         the clients use the channel number to identify a particular
@@ -2185,7 +2222,7 @@ not been implemented yet (-w option).
 
 Mixed instance warning not yet implemented.
 
-The Specification supplements the Description of iCserver and may be
+The SPECIFICATION supplements the DESCRIPTION of B<iCserver> and may be
 useful in understanding its workings.
 
 =head1 SEE ALSO
@@ -2194,7 +2231,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iClive(1)>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2000-2017  John E. Wulff
+Copyright (C) 2000-2020  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.
