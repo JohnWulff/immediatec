@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.73 $";
+"@(#)$Id: load.c 1.74 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2017  John E. Wulff
@@ -2066,6 +2066,7 @@ main(
 		op->gt_old == 0 &&
 		op->gt_ini != -ARNC &&
 		op->gt_ini != -LOGC &&
+		op->gt_ini != -NCONST &&
 		op->gt_fni != TRAB &&
 		op->gt_fni != OUTW &&
 		op->gt_fni != OUTX &&
