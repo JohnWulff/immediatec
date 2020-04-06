@@ -101,7 +101,7 @@ static const char *	usage =
 "            when a switch on the input is pressed it goes lo - 0. Therefore\n"
 "            it is appropriate to invert inputs and outputs. When inverted\n"
 "            a switch pressed on an input generates a 1 for the IEC inputs and\n"
-"            a 1 on on IEC output turns a LED and relay on, which is natural.\n"
+"            a 1 on an IEC output turns a LED and relay on, which is natural.\n"
 "    NOTE: the supplied PiFace driver inverts outputs but not inputs - go figure\n"
 "    -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).\n"
 "            When the GPIO with this number is used in this app, iCtherm is\n"
@@ -220,7 +220,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.11 $\n"
+"Version	$Id: iCpiFace.c 1.12 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -738,8 +738,8 @@ main(
 		 *  A much simpler solution is to activate the 60 Kohm pullup resistor
 		 *  on the GPIO25 output of the RPI. Then open_drain on INTB can be used
 		 *  in both cases.
-		 ********************************************************************
-		 *  Execute the SUID root progran iCgpioPUD(25, 2) to to this.
+		 *
+		 *  Execute the SUID root progran iCgpioPUD(25, 2) to do this.
 		 *******************************************************************/
 		iC_gpio_pud(25, BCM2835_GPIO_PUD_UP);	/* Enable Pull Up */
 	    } else {
@@ -2261,7 +2261,7 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
             when a switch on the input is pressed it goes lo - 0. Therefore
             it is appropriate to invert inputs and outputs. When inverted
             a switch pressed on an input generates a 1 for the IEC inputs and
-            a 1 on on IEC output turns a LED and relay on, which is natural.
+            a 1 on an IEC output turns a LED and relay on, which is natural.
     NOTE: the supplied PiFace driver inverts outputs but not inputs - go figure
     -W GPIO number used by the w1-gpio kernel module (default 4, maximum 31).
             When the GPIO with this number is used in this app, iCtherm is
@@ -2294,7 +2294,7 @@ iCpiFace - real digital I/O on a Raspberry Pi for the iC environment
             By choosing X1-X3:1 for 3 PiFaces, the IEC numbers will
           be the same as the PiFace addresses which are 1 to 3. This
           would be good programming practice. On the other hand there
-          are good reasons to choose different IEC IEC's to fit in with
+          are good reasons to choose different IEC's to fit in with
           the iC application code and other I/O's.
     D ID QD may be used as dummy IEC's instead of Xn IXn QXn to exclude a
           PiFace unit or an individual PiFace input or output.

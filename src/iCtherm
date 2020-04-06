@@ -86,7 +86,7 @@ Usage:
                 Such an appended instance code takes precedence over the
                 general instance specified with the -i <inst> (see below).
         -S server +options+equivalences  (default 'iCserver -ak')
-        -s host host name of iCserver    (default 'localhost')
+        -s host name of iCserver host    (default 'localhost')
         -p port service port of iCserver (default '8778')
         -n name registration name        (default first full IEC)
         -i inst instance ID for this iCtherm (1 to 3 numeric digits)
@@ -106,7 +106,7 @@ Usage:
                      as a separate process; -R ... must be last arguments.
 Copyright (C) 2014  John E. Wulff              <immediateC@gmail.com>
 							'@'
-$Id: iCtherm 1.6 $
+$Id: iCtherm 1.7 $
 .
 
 ########################################################################
@@ -857,7 +857,7 @@ sub rcvd_msg_from_server {
 #	degree) * 10 transmitted to iCserver as a 16 bit signed integer
 #
 #	-w -o <out> -d
-#	default output is in in degrees Centigrade rounded to 1/10 degree C.
+#	default output is in degrees Centigrade rounded to 1/10 degree C.
 #	-F output is degrees Fahrenhet rounded to 1/10 degree F. This is
 #	1/18 degree C, which is close to the measurement accuracy of 1/16.
 #
@@ -1068,7 +1068,7 @@ iCtherm - an iC driver or standalone program supplying temperature values
                 Such an appended instance code takes precedence over the
                 general instance specified with the -i <inst> (see below).
         -S server +options+equivalences  (default 'iCserver -ak')
-        -s host host name of iCserver    (default 'localhost')
+        -s host name of iCserver host    (default 'localhost')
         -p port service port of iCserver (default '8778')
         -n name registration name        (default first full IEC)
         -i inst instance ID for this iCtherm (1 to 3 numeric digits)
@@ -1149,11 +1149,11 @@ the -l option.
 =head1 ELECTRICAL CONNECTIONS
 
 B<DS18B20> 1-Wire digital thermometers are connected to the Raspberry
-PI by connecting the the red wire (Vcc) to 3.3 volts, the green wire
-(Gnd) to 0 volts and the yellow wire (DQ0 to GPIO4 (pin 7). A 4.7
-kohm pull up resistor must also be connected from GPIO4 to Vcc. The
-program was tested with 10 DS18B20 thermometers. All 3 wires are each
-connected in parallel.
+PI by connecting the red wire (Vcc) to 3.3 volts, the green wire (Gnd)
+to 0 volts and the yellow wire (DQ0 to GPIO4 (pin 7). A 4.7 kohm pull
+up resistor must also be connected from GPIO4 to Vcc. The program was
+tested with 10 DS18B20 thermometers. All 3 wires are each connected
+in parallel.
 
 =head1 AUTHOR
 

@@ -1,6 +1,6 @@
 %{
 static const char lexc_c[] =
-"@(#)$Id: lexc.l 1.39 $";
+"@(#)$Id: lexc.l 1.40 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -20,7 +20,7 @@ static const char lexc_c[] =
  *	Kernighan and Ritchie "The C Programming Language" 2nd Ed. A13.
  *
  *	This lexer was expanded to support most of the latest extensions
- *	used in gcc.
+ *	used in gcc including _Floatn types.
  *
  *	lexc.l
  *	C lexer for immcc compiler
@@ -94,6 +94,10 @@ static Symbol *	paraList = &markerSymbol;
 "enum"			{ count(&yylval); return ENUM; }
 "extern"		{ count(&yylval); return EXTERN; }
 "float"			{ count(&yylval); return FLOAT; }
+"_Float16"		{ count(&yylval); return FLOAT16; }
+"_Float32"		{ count(&yylval); return FLOAT32; }
+"_Float64"		{ count(&yylval); return FLOAT64; }
+"_Float128"		{ count(&yylval); return FLOAT128; }
 "for"			{ count(&yylval); return FOR; }
 "goto"			{ count(&yylval); return GOTO; }
 "if"			{ count(&yylval); return IF; }

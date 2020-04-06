@@ -122,74 +122,107 @@ my %pGroup = (	'{' => [ '}', '-forwards',  '[{}\'"]',     'end', ],
 		']' => [ '[', '-backwards', '[\\[\\]\'"]', '1.0', ],
 	     );
 
-my %keyWords = (
-	imm	=> 1,		# iC type modifiers
-	immC	=> 1,
-	bit	=> 1,		# iC types
-	int	=> 1,
-	clock	=> 1,
-	timer	=> 1,
-	void	=> 1,
-	assign	=> 1,		# iC parameter modifiers
-	const	=> 1,
-	if	=> 1,		# iC keywords
-	else	=> 1,
-	switch	=> 1,
-	this	=> 1,
-	return	=> 1,
-	extern	=> 1,
-	while	=> 1,		# only used in C code
-	for	=> 1,
-	do	=> 1,
-	static	=> 1,
-	FORCE	=> 1,		# iC built-in functions
-	LATCH	=> 1,
-	DLATCH	=> 1,
-	D	=> 1,
-	DS	=> 1,
-	DS_	=> 1,
-	DR	=> 1,
-	DR_	=> 1,
-	DSR	=> 1,
-	DSR_	=> 1,
-	SR	=> 1,
-	SR_	=> 1,
-	SRX	=> 1,
-	SRR	=> 1,
-	SRR_	=> 1,
-	ST	=> 1,
-	SRT	=> 1,
-	JK	=> 1,
-	SH	=> 1,
-	SHR	=> 1,
-	SHR_	=> 1,
-	SHSR	=> 1,
-	SHSR_	=> 1,
-	RISE	=> 1,
-	FALL	=> 1,
-	CHANGE	=> 1,
-	CLOCK	=> 1,
-	TIMER	=> 1,
-	TIMER1	=> 1,
-	use	=> 1,		# iC pragmas
-	no	=> 1,
-	alias	=> 1,
-	strict	=> 1,
-	EOI	=> 1,		# imm bit aliases
-	STDIN	=> 1,
-	LO	=> 1,		# imm bit constants
-	HI	=> 1,
-	T10ms	=> 1,		# imm bit timer aliases
-	T100ms	=> 1,
-	T1sec	=> 1,
-	T10sec	=> 1,
-	T1min	=> 1,
-	FOR	=> 1,		# iCa keywords
-	IF	=> 1,
-	ELSE	=> 1,
-	ELSIF	=> 1,
-	"{{"	=> 1,
-	"}}"	=> 1,
+# Tk::Text->search() does not accept a pre-compiled regex qr/.../
+# ^# ^% ^%% ^%{ ^%} /* // */ ' " [ ] %{ %} { } {{ }} word \n$
+my $regx = '(^\d*\s*[#%][%{}]?\s*|/[/*]|\*/|[\[\'"\]]|%?\{\{?|%?\}\}?|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';
+
+my %keyWords = (		# $kw & 0x0001 iC only, 0x0002 C only, 0x0003 iC and C
+	imm	=> 0x0001,	# iC type modifiers
+	immC	=> 0x0001,
+	bit	=> 0x0001,	# iC types
+	int	=> 0x0083,	# $kw & 0x0080 allows int after FOR
+	clock	=> 0x0001,
+	timer	=> 0x0001,
+	void	=> 0x0003,
+	assign	=> 0x0001,	# iC parameter modifiers
+	const	=> 0x0003,
+	this	=> 0x0001,	# iC keywords
+	return	=> 0x0003,
+	extern	=> 0x0003,
+	sizeof	=> 0x0003,
+	switch	=> 0x0007,	# $kw & 0x0004 next { ... } block is C code
+	if	=> 0x0107,	# $kw & 0x0100 #if %if %%if pre-processor commands
+	else	=> 0x0107,	# $kw & 0x0100 #else %else %%else pre-processor commands
+	auto	=> 0x0002,	# C keywords
+	break	=> 0x0002,
+	case	=> 0x0002,
+	continue=> 0x0002,
+	default	=> 0x0002,
+	do	=> 0x0002,
+	enum	=> 0x0002,
+	for	=> 0x0002,
+	goto	=> 0x0002,
+	register=> 0x0002,
+	typedef	=> 0x0002,
+	while	=> 0x0002,
+	static	=> 0x0002,	# C type modifiers
+	struct	=> 0x0002,
+	union	=> 0x0002,
+	signed	=> 0x0002,
+	unsigned=> 0x0002,
+	volatile=> 0x0002,
+	char	=> 0x0002,	# C types
+	short	=> 0x0002,
+	long	=> 0x0002,
+	float	=> 0x0002,
+	double	=> 0x0002,
+	FORCE	=> 0x0001,	# iC built-in functions
+	LATCH	=> 0x0001,
+	DLATCH	=> 0x0001,
+	D	=> 0x0001,
+	DS	=> 0x0001,
+	DS_	=> 0x0001,
+	DR	=> 0x0001,
+	DR_	=> 0x0001,
+	DSR	=> 0x0001,
+	DSR_	=> 0x0001,
+	SR	=> 0x0001,
+	SR_	=> 0x0001,
+	SRX	=> 0x0001,
+	SRR	=> 0x0001,
+	SRR_	=> 0x0001,
+	ST	=> 0x0001,
+	SRT	=> 0x0001,
+	JK	=> 0x0001,
+	SH	=> 0x0001,
+	SHR	=> 0x0001,
+	SHR_	=> 0x0001,
+	SHSR	=> 0x0001,
+	SHSR_	=> 0x0001,
+	RISE	=> 0x0001,
+	FALL	=> 0x0001,
+	CHANGE	=> 0x0001,
+	CLOCK	=> 0x0001,
+	TIMER	=> 0x0001,
+	TIMER1	=> 0x0001,
+	use	=> 0x0001,	# iC pragmas
+	no	=> 0x0001,
+	alias	=> 0x0001,
+	strict	=> 0x0001,
+	EOI	=> 0x0009,	# $kw & 0x0008 imm bit aliases
+	STDIN	=> 0x0009,
+	LO	=> 0x0009,	# imm bit constants
+	HI	=> 0x0009,
+	T1ms	=> 0x0009,	# imm bit timer aliases
+	T10ms	=> 0x0009,
+	T100ms	=> 0x0009,
+	T1sec	=> 0x0009,
+	T10sec	=> 0x0009,
+	T1min	=> 0x0009,
+	FOR	=> 0x0010,	# $kw & 0x0010 "FOR" iCa keywords
+	IF	=> 0x0020,	# $kw & 0x0020 "IF" "ELSIF"
+	ELSIF	=> 0x0020,
+	ELSE	=> 0x0040,	# $kw & 0x0040 "ELSE"
+	include	=> 0x0100,	# $kw & 0x0100 cpp or immac pre-processor commands
+	define	=> 0x0200,	# $kw & 0x0200 #define %define %%define generate macros
+	undef	=> 0x0400,	# $kw & 0x0400 #undef  %undef  %%undef  removes macros
+	line	=> 0x0100,
+	error	=> 0x0100,
+	pragma	=> 0x0100,
+	ifdef	=> 0x0100,	# #if is marked above
+	ifndef	=> 0x0100,
+	elif	=> 0x0100,	# #else is marked above
+	endif	=> 0x0100,
 );
 
 ########################################################################
@@ -218,13 +251,13 @@ Usage:
        [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
        [ -A <cmd>][ -d <deb>][ <file> ...]
        [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host host name of server    (default 'localhost')
+    -s host name of server host    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -D IXy.z optional Debug Stop output to control moving parts in a plant
     -D @IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
     '~'
-    -F font font or font size to use in Text window  (default '20')
+    -F font or font size to use in Text window  (default '20')
     -E code encoding eg. ISO-8859-1 -  (locale value is @<<<<<<<<<)
 							     $LC_CTYPE
     -u      use edit undo facility (not recommended if using Live display)
@@ -321,7 +354,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.82 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.83 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -432,7 +465,8 @@ if ($opt_u) {
     use Tk::TextUndo;		# 7 times slower for live display and jerky
     $u = ' -u';			# show -u option in title when editing
 }
-my ($fontSize, $font_t, $boldfont_t, $font, $boldfont, $encoding);
+my ($fontSize, $font_t, $boldfont_t, $italicfont_t, $bolditfont_t);
+my ($font, $boldfont, $italicfont, $bolditfont, $encoding);
 if (defined $opt_F) {
     if ($opt_F =~ /^\d+$/) {
 	$fontSize = $opt_F;
@@ -445,16 +479,20 @@ unless ($font_t) {
     if ($ENV{COMSPEC}) {	# defined on Windows 98 and Windows XP
 	$fontSize = 12 unless $fontSize;
 	$font_t = "{Lucida Console} fontSize normal";
-    } else {			# Linux
+    } else {			# Linux - select with X program 'xfontsel'
 	$fontSize = 20 unless $fontSize;
 	$font_t = "-adobe-courier-medium-r-normal--fontSize-100-100-100-m-90-iso8859-1";
     }
 }
-if ($font_t =~ /medium/) {
-    $boldfont_t = $font_t;
-    $boldfont_t =~ s/medium/bold/;
+if ($font_t =~ /medium-r/) {
+    $boldfont_t = $italicfont_t = $bolditfont_t = $font_t;
+    $boldfont_t =~ s/medium-r/bold-r/;
+    $italicfont_t =~ s/medium-r/medium-o/;
+    $bolditfont_t =~ s/medium-r/bold-o/;
 } else {
-    $boldfont_t = "-adobe-courier-bold-r-normal--fontSize-100-100-100-m-90-iso8859-1";
+    $boldfont_t   = "-adobe-courier-bold-r-normal--fontSize-100-100-100-m-90-iso8859-1";
+    $italicfont_t = "-adobe-courier-medium-o-normal--fontSize-100-100-100-m-90-iso8859-1";
+    $bolditfont_t = "-adobe-courier-bold-o-normal--fontSize-100-100-100-m-90-iso8859-1";
 }
 change_font(0, 0);		# set initial font size to $fontSize
 
@@ -515,10 +553,12 @@ my $info = '';		# info messages in status bar
 my $infoDisplaying = 0;
 my @infoMessages = ();
 
-my $fileName = '';	# name of currently loaded file (should be iC or derivative)
+my $fileName = '';	# name of currently loaded file (should be iC, iCa or derivative)
 my $fileTime = 0;	# last modified time of currently loaded file
 my $readOnly = '';	# set ' (RO)' - true - if file in buffer is read-only
-my $procName = '';	# name of runnable iC control program
+my $processName = '';	# full name of runnable iC control program with path
+my $extnName = '';	# extension of current iC or iCa program or derivative
+my $procName = '';	# name of runnable iC control program without path
 my $instName = '';	# name of runnable iC control program with instance extension
 my $regName  = '';
 my $runName  = '';	# name of running iC control program
@@ -526,6 +566,8 @@ my $C_channel = 0;	# receiver channel from control program
 my $D_channel = 0;	# sender channel to control program
 my $B_channel = 0;	# sender channel for optional Debug Stop signal
 my $searchText = '';
+my $breakText = '';
+my $break     = 0;
 my $oldContents = '';
 my $newName = 'unknown.ic';
 my $cwd = cwd;
@@ -533,12 +575,22 @@ print "cwd = $cwd\n" if $opt_T;
 
 my $fileTypes = [
     ['iC Source Files',  ['.ic',  '.ica',  '.ih',   ], ['TEXT', ], ],
-    ['iC Listing Files', ['.lst',                   ], ['TEXT', ], ],
+    ['iC Listing Files', ['.lst', '.lst6',          ], ['TEXT', ], ],
     ['C  Source Files',  ['.c',   '.h',             ], ['TEXT', ], ],
     ['Text Files',       ['.txt', '.text',          ],             ],
     ['Text Files',       ['',                       ], ['TEXT', ], ],
     ['All Files',        ['*',                      ],             ],
 ];
+
+my %extnBits = (
+    'ic'	=> 001,
+    'ica'	=> 002,
+    'lst'	=> 004,
+    'lst6'	=> 004,
+    'c'		=> 010,
+    'h'		=> 020,
+    'ini'	=> 040,
+);
 
 # in do_scan() Tk::Text->search() does not accept a pre-compiled regex qr/.../
 # This pattern colours all leading and trailing spaces (used initially)
@@ -553,7 +605,7 @@ my $wIdx = '';		# Index of current wordstart
 my $pIdx = '';		# Index of previous wordstart
 
 # has to be global, 'our' not portable yet
-my (@hits, @groups, $gi, $gl, $centre, $lineCnt);
+my (@hits, @groups, $gi, $gl, $centre, $lineCnt, $afterId);
 my $prevText  = '';
 my $prevMatch = '';
 my $prevCase  = '';
@@ -906,7 +958,6 @@ $menuBar->Button(-text               => 'Debug',
 		)->pack(-side => 'left', -padx => 2);
 $debugButton->bind('<ButtonPress-1>',	[ \&showDebug, \$debugButton ]);
 my $debugFlag = 0;		# no DEBUG mode unless manually started in LIVE mode
-my $breakFlag = 0;
 my $stepV     = 0;
 my $nextV     = 0;
 my $continueV = 0;
@@ -1303,6 +1354,7 @@ $mainWindow->after(0, sub { $dbB->Exit(); });
 $dbB->Show();
 $mainWindow->after(0, sub { $dbL->Exit(); });
 $dbL->Show();
+tagDeleteRestore_searchTag(1);		# configure initial 'searchTag'
 
 ########################################################################
 #	Sit in an infinite loop dispatching incoming events.
@@ -1357,88 +1409,608 @@ sub display_callback {
 ########################################################################
 #
 #	Tag all comments in text with tag 'cTag'	BLUE
+#	Tag all C code in text with tag 'CTag'	  LIGHT GREY background
+#	Tag all iCa lines in text with tag 'icaTag' LightPink background
+#	Tag all iCa lines in text with tag 'sqbTag' Yellow    background
 #	Tag all keywords in program text with tag 'bd'	BOLD
+#	Tag all FOR control variables with tag 'cv'	BOLD raised relief
+#	Tag all pre-proccessor commands with tag 'bt'	BOLD ITALICS
+#	Tag all macros with tag 'it'			ITALICS
+#	Tag all errors in program text with tag   'er'	BOLD RED
+#
 #	Collect all words in Symbol Table for     DEBUG STEP
 #	Collect all outputs in Symbol Table for   DEBUG NEXT
+#
+#	Called in open_file() and save_file()
+#	Inderectly in saveAs_file, build_file() and check_save()
+#
+#	return number of syntax errors (0 if none)
 #
 ########################################################################
 
 sub tagComments {
-    # Tk::Text->search() does not accept a pre-compiled regex qr/.../
-    my $reg = '(/[/*]|[[*]/|[\'"]|[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?)';	# /* // */ ' " atoms
+    my $err = 0;		# good outcome if 0 syntax errors
     my $length = 1;
     my $current = '1.0';	# start of text
+    my $currEnd = '1.0';
+    my $atom = '';
+    my $extn = $extnName ? $extnBits{$extnName} : 000;
+    $extn = 000 unless $extn;	# extnName not .ic 001 .ica 002 .lst .lst6 004 .c 010 .h 020 .ini 040
     print "tagComments: $current\n" if $opt_T;
-    $text->tagDelete('cTag', 'bd');		# delete all instances of both tags
+    $text->tagDelete('cTag', 'CTag', 'icaTag', 'sqbTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete all special tags
     $text->tagConfigure('cTag', -foreground => 'blue');
+    $text->tagConfigure('CTag', -background => 'gray90');
+    $text->tagConfigure('icaTag', -background => 'LightPink');
+    $text->tagConfigure('sqbTag', -background => 'gold');
     $text->tagConfigure('bd',   -font       => $boldfont);
+    $text->tagConfigure('er',   -font       => $boldfont, -background => 'red', -foreground => 'white');
+    $text->tagConfigure('cv', -relief => 'raised', -borderwidth => 3, -font => $boldfont);
+    $text->tagConfigure('it',  -font => $italicfont);
+    $text->tagConfigure('bt',  -font => $bolditfont);
     my $cStart = '';
-    my $state = "P";		# Program text
+    my $pStart = '';
+    my $state = "P";
+    my $condFlag = 0;
+    my $braceCount = 0;
+    my $CbraceCount = 0;
+    my $CStart = '';
+    my $BraceCount = 0;
+    my $FdF = 0;
+    my $icaStart = '';
+    my %FORcontrol = ();
+    my $icaLoop = 0;
+    my %macro = ();
     %stepNames  = ();
+    my ($kw, $lv);
+    my $pp = '';
+    my $ppC = '';
+    my $ppI = '';
+    my $sqbStart = '';
+    my $endFlag = 0;
+    my ($l);
+    if ($extn & 030) {
+	$state = "C";		# .c or .h file
+	$CbraceCount = 1;
+	$text->tagAdd('CTag', '1.0', 'end');
+    }
     while (1) {
+	my $prevEnd = $currEnd;
+	my $prevAtom = $atom;
 	$current = $text->search(-count => \$length,
 				 -regexp,
 				 -forwards,
 				 '--',
-				 $reg,		# search regular expression
+				 $regx,		# search regular expression
 				 $current,	# start index
 				 'end',		# stop index
 				);
-	last unless $current;
-	my $currEnd = $text->index("$current + $length char");
-	my $atom = $text->get($current, $currEnd);
-	last if $atom eq "C" and $text->get($current, $text->index("$current + 23 char")) eq "C CODE          *******";
-	print "tagComments: $current '$atom'\n" if $opt_T;
+	if ($current) {
+	    $currEnd = $text->index("$current + $length chars");
+	} else {
+	    last if $endFlag++ >= ($state eq "p" or $state eq "Cp");
+	    $currEnd = $current = 'end';
+	    $length = 0;
+	}
+	my $space = $text->get($prevEnd, $current);	# text since end of previous search
+	$atom = $text->get($current, $currEnd);		# text returned by current search
+	print "tagComments: \t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	last if $prevAtom eq "NET" and $space eq " " and $atom eq "STATISTICS";
+	my $current1 = $text->index("$current + 1 chars");	# visible char position in line for warn
 	if ($atom eq '"' or $atom eq "'") {
-	    my $c4 = $text->get($text->index("$current - 1 char"));
-	    my $c5 = $text->get($text->index("$current - 2 char"));
+	    my $c4 = $text->get("$current - 1 chars");
+	    my $c5 = $text->get("$current - 2 chars");
 	    if (($c4 eq "\\" and $c5 ne "\\") ||	# ignore \" and \' but not \\" and \\'
 		($atom eq "'" and $c4 eq "-" and $c5 ne "'")) {
 		$atom = '';		# also ignore -' LOGC flag in listing but not '-' and -"
 	    }
 	}
-	if ($state eq "S") {		# string constant
+	########################################################################
+	#  A pre-processor command starting with '#' must be either at the
+	#  beginning of a line or immediately following %{ starting C code (%})
+	#  %{ #include <stdio.h> %} // is allowed
+	########################################################################
+	if ($prevAtom =~ m/^(\d*\s*)%\{\s*$/ and $space =~ m/^\s*(#|%%?)\s*$/) {
+	    $atom = $space;		# %{ followed by # allowed on same line (%})
+	    $length = length $atom;	# move tagging region back to start of new $atom
+	    $currEnd = $current;	# repeat search without previous space
+	    $current = $text->index("$currEnd - $length chars");
+	    print "backtrack %{:\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	}
+	########################################################################
+	#  A C++ comment with embedded atoms requires '\n' to be found as $atom
+	#  $text->search does not allow regx /.../s or /.../m (many errors)
+	#  Extract '\n' out of $space and backtrack.
+	########################################################################
+	if (($state eq "p" or $state eq "Cp") and $space =~ m/.*?(\n)(.*)/s) {
+	    $atom = $1;			# "\n"
+	    $length = length $2;	# move tagging region back to start of new $atom
+	    $currEnd = $text->index("$current - $length chars");
+	    $current = $text->index("$currEnd - 1 chars");
+	    print "backtrack \\n:\t$prevEnd\t$current\t$currEnd\t'$prevAtom'\t'$space'\t'$atom'\n" if $opt_T;
+	}
+	if ($state eq "S") {		# string constant in iC code
 	    if ($atom eq '"') {
+		$sqbStart = $current if $sqbStart;	# end of string in square brackets - tag gold again
 		$state = "P";
 	    }
-	} elsif ($state eq "H") {	# character constant
+	} elsif ($state eq "H") {	# character constant in iC code
 	    if ($atom eq "'") {
 		$state = "P";
 	    }
-	} elsif ($state eq "C") {	# C comment
+	} elsif ($state eq "c") {	# C style comment in iC code
 	    if ($atom eq "*/") {
 		$text->tagAdd('cTag', $cStart, $currEnd);
-		$state = "P";		# end of C comment found
+		$state = "P";		# end of C style comment in iC code found
 	    } elsif ($atom eq "/*") {
-		info_display(2000, 'red', "$named: '$current' /* found during comment");
+		warn "$fileName$readOnly:$current1: /* found in comment\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$err++;
 	    }
-	} elsif ($atom eq '"') {	# $state eq "P"
-	    $state = "S";		# start of string found
+	} elsif ($state eq "p") {	# C++ style comment in iC code
+	    if ($atom eq "\n") {
+		$text->tagAdd('cTag', $pStart, $currEnd);
+		$state = "P";		# end of C++ style comment in iC code found
+	    }
+	} elsif ($state eq "CS") { 	# string constant in C code
+	    if ($atom eq '"') {
+		$sqbStart = $current if $sqbStart;	# end of string in square brackets - tag gold again
+		$state = "C";
+	    }
+	} elsif ($state eq "CH") {	# character constant in C code
+	    if ($atom eq "'") {
+		$state = "C";
+	    }
+	} elsif ($state eq "Cc") {	# C style comment in C code
+	    if ($atom eq "*/") {
+		$text->tagAdd('cTag', $cStart, $currEnd);
+		$state = "C";		# end of C style comment in C code found
+	    } elsif ($atom eq "/*") {
+		warn "$fileName$readOnly:$current1: /* found in comment\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$err++;
+	    }
+	} elsif ($state eq "Cp") {	# C++ style comment in C code
+	    if ($atom eq "\n") {
+		$text->tagAdd('cTag', $pStart, $currEnd);
+		$state = "C";		# end of C++ style comment in C code found
+	    }
+	} elsif ($state eq "C") {	# C code after if else switch or in literal block
+	    ########################################################################
+	    #  $state eq "C" C code
+	    ########################################################################
+	    if ($atom eq "{") {
+		$CbraceCount++ if $CbraceCount > 0;
+	    } elsif ($atom eq "}") {
+		if ($CbraceCount > 0 and --$CbraceCount == 0) {
+		    $l = 0;
+		    goto EndC;
+		} elsif ($CbraceCount <= 0) {
+		    warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in C code\n";
+		    $text->tagAdd('er', $current, $currEnd);
+		    $CbraceCount--;
+		    $err++;
+		}
+	    } elsif ($atom =~ m/^(\d*\s*)%\}\s*$/) {
+		$l = length $1; $l = 0 unless $l;
+		$CbraceCount--;		# "%}" end of C literal block found
+	  EndC:	$text->tagAdd('CTag', $CStart, $currEnd);
+		$state = "P";		# end of C code found
+		if ($CbraceCount != 0 or $BraceCount != 0) {
+		    $CbraceCount = $BraceCount = 0;
+		    warn "$fileName$readOnly:$current1: } single or double braces do not match in C code\n";
+		    $text->tagAdd('er', "$current + $l chars", $currEnd);
+		    $err++;
+		} else {
+		    $text->tagAdd('bd', "$current + $l chars", $currEnd);	# bold brace at end of C code (optional)
+		}
+	    } elsif ($atom =~ m/^(\d*\s*)%\{\s*$/) {
+		$l = length $1; $l = 0 unless $l;
+		warn "$fileName$readOnly:$current1: '$atom' found in literal block\n";
+		$text->tagAdd('er', "$current + $l chars", $currEnd);
+		$err++;
+	    } elsif ($atom =~ m/[A-Z_a-z][\w\$]*/) {	# C variable names
+		if ($kw = $keyWords{$atom}) {
+		    if ($kw & 0x0070) {	# "FOR" 0x0010, "IF", or "ELSIF" 0x0020 "ELSE" 0x0040
+			if ($icaStart) {
+			    warn "$fileName$readOnly:$current1: '$atom' follows previous iCa keyword not followed by {{\n";
+			    $text->tagAdd('er', $current, $currEnd);
+			    $err++;
+			} else {
+			    $text->tagAdd('bd', $current, $currEnd);	# iCa keyword in C code bold
+			}
+			$icaStart = $current;
+			$BraceCount++;	# start counting at the iCa keyword - not at opening braces
+			if ($kw & 0x0010) {	# "FOR"
+			    $FdF = 1;	# start looking for FOR loop control variable
+			}
+		    } elsif ($pp and $kw & 0x0700) {	# pre-processor commands tested before keywords
+			if ($ppC) {			# may contain #if or #else
+			    $text->tagAdd('bt', $ppC, $currEnd);	# pp command in C code bold italics
+			    if ($kw & 0x0200) {
+				$FdF = 2;		# #define found in C code - look for macro
+			    } elsif ($kw & 0x0400) {
+				$FdF = 3;		# #undef found in C code - look for macro
+			    }
+			} elsif ($ppI) {
+			    warn "$fileName$readOnly:$current1: '$pp$atom' iC or iCa pre-processor command in C code\n";
+			    $text->tagAdd('er', $ppI, $currEnd);
+			    $err++;
+			}			# logic error in %keyWords table if neither (ignore)
+			$pp = $ppC = $ppI = '';
+		    } elsif ($kw & 0x0002) {		# C variables outside of comments or strings
+			$text->tagAdd('bd', $current, $currEnd);	# C keyword in C code bold
+		    } elsif (!($kw & 0x0708)) {		# ignore preprocessor keywords not after $pp
+			warn "$fileName$readOnly:$current1: iC keyword '$atom' found in C code\n";
+			$text->tagAdd('er', $current, $currEnd);	# iC keyword in C code error
+			$err++;
+		    }
+		} elsif ($FdF) {
+		    print "$current	space = '$space'	atom = '$atom'\n" if $opt_T;
+		    if ($space =~ m/^\s*\(*\s*$/) {	# only ( and white space allowed before control variable
+			if ($FdF == 1) {
+			    $FORcontrol{$atom} = $BraceCount;	# first non-keyword after FOR is control variable
+			    $text->tagAdd('cv', $current, $currEnd);	# FOR control variable raised
+			} elsif ($FdF & 2) {		# 2 or 3
+			    if ($FdF == 2) {
+				$macro{$atom} = 1;		# first non-keyword after #define (may be re-defined)
+			    } elsif ($FdF == 3) {
+				delete $macro{$atom}	# delete first non-keyword after #undef
+			    }
+			    $text->tagAdd('it', $current, $currEnd);	# macro in C code in italics
+			}
+		    } else {
+			warn "$fileName$readOnly:$current1: '$prevAtom' followed by strange text '$space' before '$atom' in C code\n";
+			$text->tagAdd('er', $prevEnd, $current);
+			$err++;
+		    }
+		    $FdF = 0;
+		} elsif ($lv = $FORcontrol{$atom}) {
+		    if ($lv <= $BraceCount) {
+			$text->tagAdd('cv', $current, $currEnd);	# FOR control variable raised in rest of loop
+		    } else {
+			warn "$fileName$readOnly:$current1: FOR control variable '$atom' is not in scope\n";
+			$text->tagAdd('er', $current, $currEnd);
+			$err++;
+		    }
+		} elsif ($macro{$atom}) {
+		    $text->tagAdd('it', $current, $currEnd);	# macro in C code in italics
+		} elsif ($icaStart and not $FORcontrol{$atom} and not $macro{$atom}) {
+		    warn "$fileName$readOnly:$current1: FOR IF or ELSIF followed by non control variable or macro '$atom' in C code'\n";
+		    $text->tagAdd('er', $current, $currEnd);
+		    $err++;
+		}
+		if ($CStart and $space eq " " and (
+		    ($prevAtom eq "NET" and $atom eq "TOPOLOGY") or
+		    ($prevAtom eq "Large" and $atom eq "AND"))) {
+		    $text->tagAdd('CTag', $CStart, "$currEnd lineend");
+		    $state = "P";		# ******* NET TOPOLOGY    ******* Large AND or OR
+		    $CStart = '';
+		}
+	    } elsif ($atom eq '"') {
+		$state = "CS";		# start of string in C code found
+		if ($sqbStart) {
+		    $text->tagAdd('sqbTag', $sqbStart, $currEnd);	# tag up to " with gold tag
+		    $sqbStart = $currEnd;
+		}
+	    } elsif ($atom eq "'") {
+		$state = "CH";		# start of character constant in C code found
+	    } elsif ($atom eq "/*") {
+		$state = "Cc";		# start of C style comment in C code found
+		$cStart = $current;
+	    } elsif ($atom eq "//") {
+		$state = "Cp";		# start of C++ style comment in C code found
+		$pStart = $current;
+	    } elsif ($atom eq "*/") {
+		warn "$fileName$readOnly:$current1: */ found outside of comment\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$err++;
+	    } elsif ($atom eq "{{") {
+		if (not $icaStart or $FdF == 1) {
+		    warn "$fileName$readOnly:$current1: {{ not preceded by iCa keyword or FOR control variable\n";
+		    $text->tagAdd('er', $current, $currEnd);
+		    $FdF = 0;
+		    $err++;
+		} else {
+		    $text->tagAdd('bd', $current, $currEnd);	# "{{"
+		    $text->tagAdd('icaTag', $icaStart, $currEnd);
+		    $icaLoop = 1;
+		    $icaStart = '';
+		}
+	    } elsif ($atom eq "}}") {
+		if ($icaStart) {
+		    warn "$fileName$readOnly:$current1: }} follows previous iCa keyword not followed by {{\n";
+		    $text->tagAdd('er', $current, $currEnd);
+		    $err++;
+		} elsif ($BraceCount <= 0) {
+		    warn "$fileName$readOnly:$current1: }} not in scope - too many closing double braces\n";
+		    $text->tagAdd('er', $current, $currEnd);
+		    $BraceCount--;
+		    $err++;
+		} else {
+		    $text->tagAdd('bd', $current, $currEnd);	# "}}"
+		    $text->tagAdd('icaTag', $current, $currEnd);
+		    if (--$BraceCount == 0) {
+			$icaLoop = 0;
+		    }
+		}
+	    } elsif ($atom =~ m/^(\d*\s*)#\s*$/) {
+		$l = length $1; $l = 0 unless $l;
+		$pp = $atom;		# lead-in for C pre-processor commands #define etc
+		$ppC = "$current + $l chars";
+		print "ppC '$atom' found in C code\n" if $opt_T;
+		goto NextAtom;		# do not clear $pp $ppC
+	    } elsif ($atom =~ m/^(\d*\s*)%%?\s*$/) {
+		$l = length $1; $l = 0 unless $l;
+		$pp = $atom;		# lead-in for iC or iCa pre-processor commands %define %%define etc
+		$ppI = "$current + $l chars";
+		print "ppI '$atom' found in C code\n" if $opt_T;
+		goto NextAtom;		# do not clear $pp $ppI
+	    }				# end of  $state eq "C" C code
+	} elsif ($atom =~ m/[A-Z_a-z][\w\$]*(\.[0-7](_\d+)?)?/) {	# iC variable names
+	    ########################################################################
+	    #  $state eq "P" iC code
+	    ########################################################################
+	    if ($kw = $keyWords{$atom}) {	# keywords outside of comments or strings in iC
+		if ($kw & 0x0070) {		# "FOR" 0x0010, "IF", or "ELSIF" 0x0020 "ELSE" 0x0040
+		    if ($icaStart) {
+			warn "$fileName$readOnly:$current1: '$atom' follows previous iCa keyword not followed by {{\n";
+			$text->tagAdd('er', $current, $currEnd);
+			$err++;
+		    } else {
+			$text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
+		    }
+		    $icaStart = $current;
+		    $BraceCount++;		# start counting at the iCa keyword - not at opening braces
+		    if ($kw & 0x0010) {	# "FOR"
+			$FdF = 1;	# start looking for FOR loop control variable
+		    }
+		} elsif ($pp and $kw & 0x0700) {	# pre-processor commands tested before keywords
+		    if ($ppI) {			# may contain %if or %%else
+			$text->tagAdd('bt', $ppI, $currEnd);	# pp command in iC or iCa code bold
+			if ($kw & 0x0200) {
+			    $FdF = 2;	# %define or %%define found in iC or iCa code - look for macro
+			} elsif ($kw & 0x0400) {
+			    $FdF = 3;	# %undef or %%undef found in iC or iCa code - look for macro
+			}
+		    } elsif ($ppC) {
+			warn "$fileName$readOnly:$current1: '$pp$atom' C pre-processor command in iC or iCa code\n";
+			$text->tagAdd('er', $ppC, $currEnd);
+			$err++;
+		    }			# logic error in %keyWords table if neither (ignore)
+		    $pp = $ppC = $ppI = '';
+		} elsif ($kw & 0x0001) {
+		    $text->tagAdd('bd', $current, $currEnd);	# iC keyword in iC code bold
+		    if ($kw & 0x0004) {	# "if", "else" or "switch"
+			$condFlag = 1;	# enter $state = "C" at next open brace "{"
+		    } elsif ($kw & 0x0008) {
+			markStepNames($atom);		# iC alias and constant keywords
+		    }
+		} elsif (!($kw & 0x0708)) {		# ignore preprocessor keywords not after $pp
+		    warn "$fileName$readOnly:$current1: C keyword '$atom' found in iC code\n";
+		    $text->tagAdd('er', $current, $currEnd);	# C keyword in iC code error
+		    $err++;
+		}
+	    } else {
+		if ($atom =~ m/[A-Z_a-z][\w\$]*/) {	# simple names, keywords excluded
+		    if ($FdF) {
+			print "$current	space = '$space'	atom = '$atom'\n" if $opt_T;
+			if ($space =~ m/^\s*\(*\s*$/) {	# only ( and white space allowed before control variable
+			    if ($FdF == 1) {
+				$FORcontrol{$atom} = $BraceCount;	# first non-keyword after FOR is control variable
+				$text->tagAdd('cv', $current, $currEnd);	# FOR control variable raised
+			    } elsif ($FdF & 2) {		# 2 or 3
+				if ($FdF == 2) {
+				    $macro{$atom} = 1;		# first non-keyword after #define (may be re-defined)
+				} elsif ($FdF == 3) {
+				    delete $macro{$atom}	# delete first non-keyword after #undef
+				}
+				$text->tagAdd('it', $current, $currEnd);	# macro in iC code in italics
+			    }
+			} else {
+			    warn "$fileName$readOnly:$current1: '$prevAtom' followed by strange text '$space' before '$atom' in iC code\n";
+			    $text->tagAdd('er', $prevEnd, $current);
+			    $err++;
+			}
+			$FdF = 0;
+		    } elsif ($lv = $FORcontrol{$atom}) {
+			if ($lv <= $BraceCount) {
+			    $text->tagAdd('cv', $current, $currEnd);	# FOR control variable raised in rest of loop
+			} else {
+			    warn "$fileName$readOnly:$current1: FOR control variable '$atom' is not in scope\n";
+			    $text->tagAdd('er', $current, $currEnd);
+			    $err++;
+			}
+		    } elsif ($macro{$atom}) {
+			$text->tagAdd('it', $current, $currEnd);		# macro in iC code in italics
+		    } elsif ($icaStart) {
+			warn "$fileName$readOnly:$current1: FOR IF or ELSIF followed by non control variable or macro '$atom' in iC code'\n";
+			$text->tagAdd('er', $current, $currEnd);
+			$err++;
+		    }
+		}
+		if ($atom !~ m/^TX0/ and $atom ne 'iClock') {	# ignore timer variables, iClock and keywords
+		  markStepNames($atom);				# except iC alias and constant keywords marked above
+		}
+		if ($prevAtom eq "C" and $space eq " " and $atom eq "CODE") {
+		    $state = "C";		# ******* C CODE          ************************
+		    $CbraceCount = 1;
+		    $CStart = $current;
+		    $CStart = "$current linestart";
+		}
+	    }
+	} elsif ($atom eq '"') {
+	    $state = "S";		# start of string in iC code found
+	    if ($sqbStart) {
+		$text->tagAdd('sqbTag', $sqbStart, $currEnd);	# tag up to " with gold tag
+		$sqbStart = $currEnd;
+	    }
 	} elsif ($atom eq "'") {
-	    $state = "H";		# start of character constant found
+	    $state = "H";		# start of character constant in iC code found
 	} elsif ($atom eq "/*") {
-	    $state = "C";		# start of C comment found
+	    $state = "c";		# start of C style comment in iC code found
 	    $cStart = $current;
+	} elsif ($atom eq "//") {
+	    $state = "p";		# start of C++ style comment in iC code found
+	    $pStart = $current;
 	} elsif ($atom eq "*/") {
-	    info_display(2000, 'red', "$named: '$current' */ found after end of comment");
-	} elsif ($atom eq "//") {	# start of C++ comment found ($state remains "P")
-	    $currEnd = $text->index("$current lineend");
-	    $text->tagAdd('cTag', $current, $currEnd);
-	} elsif ($keyWords{$atom}) {	# iC variables outside of comments or strings
-	    $text->tagAdd('bd', $current, $currEnd);		# keywords bold
-	} elsif ($atom !~ m/^TX0/ and $atom ne 'iClock') {	# ignore timer variables and iClock
-	    $stepNames{$atom} |= 0x1;	# cannot check Symbol Table here
-	    if ($atom =~ m/^Q[XBWLH]\d+(\.[0-7])?$/) {
-		$stepNames{"${atom}_0"} |= 0x2;
+	    warn "$fileName$readOnly:$current1: */ found outside of comment\n";
+	    $text->tagAdd('er', $current, $currEnd);
+	    $err++;
+	} elsif ($atom eq "{{") {
+	    if (not $icaStart or $FdF == 1) {
+		warn "$fileName$readOnly:$current1: {{ not preceded by iCa keyword or FOR control variable\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$FdF = 0;
+		$err++;
+	    } else {
+		$text->tagAdd('bd', $current, $currEnd);	# "{{"
+		$text->tagAdd('icaTag', $icaStart, $currEnd);
+		$icaStart = '';
+		$icaLoop = 1;
+	    }
+	} elsif ($atom eq "}}") {
+	    if ($icaStart) {
+		warn "$fileName$readOnly:$current1: }} follows previous iCa keyword not followed by {{\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$err++;
+	    } elsif ($BraceCount <= 0) {
+		warn "$fileName$readOnly:$current1: }} not in scope - too many closing double braces\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$BraceCount--;
+		$err++;
+	    } else {
+		$text->tagAdd('bd', $current, $currEnd);	# "}}"
+		$text->tagAdd('icaTag', $current, $currEnd);
+		if (--$BraceCount == 0) {
+		    $icaLoop = 0;
+		}
+	    }
+	} elsif ($atom =~ m/^(\d*\s*)%\{\s*$/) {
+	    $l = length $1; $l = 0 unless $l;
+    StartC: $state = "C";		# "%{" start of C literal block found
+	    $CbraceCount = 1;
+	    $text->tagAdd('bd', "$current + $l chars", $currEnd);	# bold brace at start of C code (optional)
+	    $CStart = $current;
+	} elsif ($atom =~ m/^(\d*\s*)%\}\s*$/) {
+	    $l = length $1; $l = 0 unless $l;
+	    warn "$fileName$readOnly:$current1: '$atom' found outside of literal block\n";
+	    $text->tagAdd('er', "$current + $l chars", $currEnd);
+	    $err++;
+	} elsif ($atom eq "{") {
+	    if ($condFlag) {
+		$condFlag = $l = 0;	# start of C code after if else or switch
+		goto StartC;
+	    } else {
+		$braceCount++;		# single brace "{" in iC code
+	    }
+	} elsif ($atom eq "}") {
+	    if (--$braceCount < 0) {
+		warn "$fileName$readOnly:$current1: } not in scope - too many closing single braces in iC code\n";
+		$text->tagAdd('er', $current, $currEnd);
+		$err++;
+	    }
+	} elsif ($atom =~ m/^(\d*\s*)#\s*$/) {
+	    $l = length $1; $l = 0 unless $l;
+	    $pp = $atom;		# lead-in for C pre-processor commands #define etc
+	    $ppC = $current;
+	    print "ppC '$atom' found in iC code\n" if $opt_T;
+	    goto NextAtom;		# do not clear $pp $ppC
+	} elsif ($atom =~ m/^(\d*\s*)%%?\s*$/) {
+	    $l = length $1; $l = 0 unless $l;
+	    $pp = $atom;		# lead-in for iC or iCa pre-processor commands %define %%define etc
+	    $ppI = "$current + $l chars";
+	    print "ppI '$atom' found in iC code\n" if $opt_T;
+	    goto NextAtom;		# do not clear $pp $ppI
+	}
+	if ($pp) {
+	    if ($ppC) {			# incorrectly placed pre-processor lead-in or special
+		$ppI = $ppC;
+	    }
+	    if ($atom eq '"' and $space =~ m/(\d+) /) {
+		print "$fileName$readOnly:$current1: '$pp$space$atom' special preprocessor output\n" if $opt_T;
+		$text->tagAdd('bd', $ppI, $current);
+	    } else {
+		warn "$fileName$readOnly:$current1: '$pp$space$atom' incorrect C, iC or iCa pre-processor command\n";
+		if ($ppC) {		# incorrectly placed pre-processor lead-in
+		    $ppI = $ppC;
+		}
+		$text->tagAdd('er', $ppI, $currEnd);
+		$err++;
+	    }
+	    $pp = $ppC = $ppI = '';	# pre-processor lead-in must be followed by a pp command
+	}
+	########################################################################
+	#  Square bracket expressions may be placed inside or outside comments
+	#  as well as string or character constants in iC or C code, except in
+	#  C code the square bracket expression must contain a FOR loop control
+	#  variable to be marked, whereas in iC code this is not necessary.
+	#
+	#  Only square bracket expressions are marked
+	#    1)  if the file name has the extension .ica
+	#    2)  or after the occurence of a FOR or IF iCa command
+	#    3)  or after the occurence of a %% iCa pre-processor command
+	#    4)  for the innermost square bracket expression in a set of nested
+	#        square brackets.
+	########################################################################
+	if ($atom eq "[" and
+	    (
+		$icaLoop or (
+		    $state ne "C"  and	# exclude C code outside outermost FOR loop
+		    $state ne "CS" and
+		    $state ne "CH" and
+		    $state ne "Cc" and
+		    $state ne "Cp"
+		)
+	    )
+	) {
+	    $sqbStart = $current;	# nesting advances $sqbStart
+	    if ($state eq "S") {
+		warn "$fileName$readOnly:$current1: in iC '[' is not allowed in a string in an index expression\n";
+		$text->tagAdd('er', $sqbStart, $currEnd);
+		$err++;
+	    }
+	} elsif ($atom eq "]" and $sqbStart) {
+	    if ($state eq "S") {
+		my $er = $text->get($sqbStart, $currEnd);	# error text
+		warn "$fileName$readOnly:$current1: in iC '$er' is not allowed in a string in an index expression\n";
+		$text->tagAdd('er', $sqbStart, $currEnd);
+		$err++;
+	    } elsif ($state ne "CS") {
+		$text->tagAdd('sqbTag', $sqbStart, $currEnd);	# tag square bracket expression with gold tag
+		$sqbStart = "";		# end of innermost square bracket pair
 	    }
 	}
+      NextAtom:				# TODO placing label here excludes [] in macros
 	$current = $currEnd;		# continue search after this atom
     }
-    if (%symbolTable) {
-	print "tagComments: sendStepNext\n" if $opt_T;
-	sendStepNext();			# adjust set and next bits in client
+    if (($extn & 03) and ($braceCount or $CbraceCount or $BraceCount)) {	# only in .ic and .ica files
+	warn "$fileName$readOnly: single { ... } or double braces {{ ... }} do not match at end of file\n";
+	$text->tagAdd('er', "end - 2 lines linestart", "end - 1 chars lineend");
+	$err++;
     }
+    if (not $err and %symbolTable) {
+	print "tagComments: sendStepNext\n" if $opt_T;
+	sendStepNext();			# adjust 'set' and 'next' bits in client
+    }
+    return $err;			# report number of syntax errors
 } # tagComments
+
+########################################################################
+#
+#	Mark an iC variable or alias keyword or constant passed to $atom
+#	from tagComments() for setting up 'step' and 'next' lists
+#	for 'debug' mode.
+#	Parameter 1:	current atom
+#
+########################################################################
+
+sub markStepNames {
+    my ($atom) = @_;
+    $stepNames{$atom} |= 0x1;		# iC variables - cannot check Symbol Table here
+    if ($atom =~ m/^Q[XBWLH]\d+(\.[0-7])?$/) {
+	$stepNames{"${atom}_0"} |= 0x2;	# iC output variables
+    }
+} # markStepNames
 
 ########################################################################
 #
@@ -1468,8 +2040,8 @@ sub sendStepNext {
 	}
     }
     print "'$stepMsg'\n'$nextMsg'\n" if $opt_T;
-    sendMsg( 8,  9, $stepMsg) if $stepMsg;	# send step variables
-    sendMsg(10, 11, $nextMsg) if $nextMsg;	# send next outputs
+    sendMsg( 8,  9, $stepMsg);		# send step variables (unlikely to be null)
+    sendMsg(10, 11, $nextMsg);		# send next outputs even if null
     if ($debugFlag) {
 	sendWatchRestore(0, 1);			# set all Watch and Ignore points
     }
@@ -1592,7 +2164,7 @@ sub report_cursor {
 		$current = $cursor;
 		$text->tagAdd('pTag', $current);
 		while (1) {
-		    $current = $text->index("$current + 1 char") if $dir eq "-forwards";
+		    $current = $text->index("$current + 1 chars") if $dir eq "-forwards";
 		    $current = $text->search(-count => \$length,
 					     -regexp,
 					     $dir,	# -backwards or -forwards
@@ -1613,8 +2185,8 @@ sub report_cursor {
 			    last;		# matching brace found
 			}
 		    } elsif ($c3 eq '"' or $c3 eq "'") {
-			my $c4 = $text->get($text->index("$current - 1 char"));
-			my $c5 = $text->get($text->index("$current - 2 char"));
+			my $c4 = $text->get($text->index("$current - 1 chars"));
+			my $c5 = $text->get($text->index("$current - 2 chars"));
 			if ($c3 eq '"') {
 			    $n ^= 0x80 unless ($n & 0x100) or ($c4 eq '\\' and $c5 ne '\\');	# must be greater than nesting depth limit
 			} else {
@@ -1650,7 +2222,9 @@ sub report_cursor {
 	    $ignoreV    = ($watchState & 0x20) ? 1 : 0;
 	    $disableV   = ($watchState & 0x40) ? 1 : 0;
 	    my ($x, $y) = $mainWindow->pointerxy;
-	    $watchMenu->post($x, $y);		# correct button states are shown
+	    $afterId = $text->after(350, sub {
+		$watchMenu->post($x, $y);	# correct button states are shown
+	    });
 	}
     }
     info_display(0, 'black', "line $y, char $x");	# 'line 27 char 1'
@@ -2311,7 +2885,7 @@ sub rcvd_msg_from_server {
 	    $liveButton->configure(-text => 'Live');
 	    $prevText = '';			# start a new search
 	    $gl = 0;
-	    $text->tagDelete('searchTag');
+	    tagDeleteRestore_searchTag();
 	    $traceDebV = $microSecV = 0;		# stop Trace and MicroSec output in Edit mode
 	    conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Trace and MicroSec in app
 	    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
@@ -2524,7 +3098,7 @@ use warnings;
 			    $liveButton->configure(-text => 'wait');
 			    $prevText = '';					# start a new search
 			    $gl = 0;
-			    $text->tagDelete('searchTag');
+			    tagDeleteRestore_searchTag();
 			    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
 			    $debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
 			    print "$named: rcvd_msg_from_server received :5 'wait'\n" if $opt_T;
@@ -2566,17 +3140,18 @@ use warnings;
 			####################################################
 			if ($scanFlag) {
 			    $entrySearch->configure(-background => 'pink');
-			    $breakFlag = 1;
+			    $gl = 0;
+			    tagDeleteRestore_searchTag();	# no searchTag showing at BREAK
 			    $stepV = $nextV = $continueV = 0;	# turn buttons off
-			    $searchText = $symbolNames[$lastIndex];	# display symbol name in search entry window
+			    $breakText = $searchText = "$symbolNames[$lastIndex] = $lastValue";
+			    $break = 1;				# start a new search
 			    print "received '$C_channel:$entry' '$searchText'\n" if $opt_T;
 			    while ($lastIndex) {
+				# unless already showing move text to show watch word in window
 				unless ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
-				    $prevText = '';		# start a new search
 				    $gl = 0;
-				    $text->tagDelete('searchTag');	# no search tag with $breakFlag set
-				    search_now(1, $searchText, 0);	# search for watch word
-				}					# search puts $lastIndex to @activeSymbols
+				    search_now(1, undef, 0);	# search for watch word
+				}				# search puts $lastIndex to @activeSymbols
 				if ($activeSymbols[$lastIndex] and $activeSymbols[$lastIndex][0]) {
 				    $breakIndex = $lastIndex;
 				    if ($B_channel) {
@@ -2587,14 +3162,14 @@ use warnings;
 					}
 				    }
 				    markBreak();
-				} elsif ($searchText =~ s/^(Q[XBWLH]\d+(\.[0-7])?)_0$/$1/) {
-				    $lastIndex = $symbolTable{$searchText}[1];
+				} elsif ($searchText =~ s/^(Q[XBWLH]\d+(\.[0-7])?)_0\b/$1/) {
+				    $lastIndex = $symbolTable{$1}[1];	# output driver GATE
 				    next;			# repeat while loop a 2nd time
 				}
 				last;				# do while loop only once
 			    }
-			    $searchText .= " = $lastValue";	# concatenate " = value" in search entry window
 			    $yScrollbar->focus();		# enable keyboard stepping
+			    info_display(2000, 'DeepPink4', "Watch Point: $breakText");
 			}	# should never get BREAK message in Edit mode - ignore
 		    }
 		    elsif ($entry ne '0') {	# ignore '$C_channel:0' messages
@@ -2718,25 +3293,26 @@ sub restoreTag {
 #
 #	Double-click pick_word works well in Live mode, where the above
 #	is not a problem. For this reason this feature is only active
-#	in Live mode.
+#	in Live mode or Edit mode but not in Edit Undo (-u option).
 #
-#	You may prefer to allow this in Edit mode
-#	- simply comment if ($scanflag) { and matching } lines
+#	You may prefer to allow this in Edit Undo mode
+#	- simply comment if ($scanflag ...) { and matching } lines
 #
 ########################################################################
 
 sub pick_word {
-    if ($scanFlag) {	### comment to allow pick_word in Edit mode
+    if ($scanFlag or not $opt_u) {	### comment to allow pick_word in Edit mode
 	my $start_index = $text->index('insert wordstart');
 	my $end_index = $text->index('insert lineend');
 	my $line = $text->get($start_index, $end_index);
 	$line =~ m/^([\w.]+)/;
 	if (defined $1) {
+	    $afterId->cancel if $afterId;	# cancel $watchMenu->post()
 	    print "pick_word '$1'\n" if $opt_T;
 	    $entrySearch->focus();		# initiate search entry
 	    search_now(1, $1, 0);		# search for first word only
 	}
-    }			### comment to allow pick_word in Edit mode
+    }					### comment to allow pick_word in Edit mode
 } # pick_word
 
 ########################################################################
@@ -2822,9 +3398,9 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 	    $debugMenu->entryconfigure(2, -state => 'disabled');	# Step
 	    $debugMenu->entryconfigure(3, -state => 'disabled');	# Next
 	    $debugMenu->entryconfigure(4, -state => 'disabled');	# Continue
-	    $searchText = '';					# clear search entry window
+	    $breakText = $searchText = '';			# clear search entry window
 	    $entrySearch->configure(-background => 'grey94');	# indicates non-debug mode
-	    $breakFlag = $stepV = $nextV = $continueV = 0;
+	    $stepV = $nextV = $continueV = 0;
 	    $debugFlag = 0;
 	    sendWatchRestore(0, 0);		# restore set/next to all Watch and Ignore points
 	    adjust_live(-1, -1) if $k;		# remove Watch and Ignore marks
@@ -2848,10 +3424,9 @@ sub sendDebug {					# 'd' 's' 'n' 'c' 'D' 't' 'm'
 		}
 		clearBreak();
 		unless ($accelerator eq 'D') {			# 'D' set 'grey94' above
-		    $searchText = '';				# clear search entry window
+		    $breakText = $searchText = '';		# clear search entry window
 		    $entrySearch->configure(-background => 'palegreen');
 		}
-		$breakFlag = 0;
 	    }
 	}
 	if ($accelerator eq 'd') {
@@ -2891,12 +3466,19 @@ sub showDebug {
     my ($dummy, $buttonRef) = @_;
     my $buttonState = $$buttonRef->cget(-state);
     my $buttonText  = $$buttonRef->cget(-text);
-    if ($buttonState ne 'disabled' and not Tk::Exists($menuBox)) {
-	my $xWin = $mainWindow->rootx;
-	my $yWin = $mainWindow->rooty;
-	print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
-	$menuBox = Tk::Menu::tearOffMenu($debugMenu, $xWin +645, $yWin + 32); # EUREKA
+    if ($buttonState ne 'disabled') {
+	if (not Tk::Exists($menuBox)) {
+	    my $xWin = $mainWindow->rootx;
+	    my $yWin = $mainWindow->rooty;
+	    print "button '$buttonText' xWin = '$xWin' yWin = '$yWin'\n" if $opt_T;
+	    $menuBox = Tk::Menu::tearOffMenu($debugMenu, $xWin +645, $yWin + 32); # EUREKA
+	    $menuBox->protocol('WM_DELETE_WINDOW', sub { $menuBox->withdraw; sendDebug(0, 'D'); });
+	} else {
+	    $menuBox->deiconify();
+	    $menuBox->raise();
+	}
     }
+    sendDebug(1, 'd');				# start with Debug mode on - toggle later
     print "Pop up debug menu '$buttonText' '$buttonState'\n" if $opt_T;
 } # showDebug
 
@@ -2984,6 +3566,10 @@ sub search_now {
     my ($buttonFlag, $newSearchText, $direction) = @_;
     my ($option, $current, $hl, $length);
     my $tmpText;
+    my $breakFlag = index($searchText, " = ") > 0 && ! $newSearchText;
+no warnings;
+    print "\$newSearchText = '$newSearchText' \$searchText = '$searchText' \$breakFlag = '$breakFlag'\n" if $opt_T;
+use warnings;
     my $suppress = $direction;		# extract additional parameter 3 info
     $direction &= 0x03;			# remove suppress bit
     if (defined $newSearchText) {
@@ -3010,20 +3596,24 @@ sub search_now {
 	}
 	print "goto: '$searchText' '$current' '$matchType' $direction\n" if $opt_T;
 	$text->see($current);
-	## grey out the whole line - until next search - visible in Edit and Live mode
+	## mark the whole line - until next search - visible in Edit and Live mode
 	$text->tagConfigure('gotoTag',
-			    -background => 'grey',
-			    -foreground => 'black',
+			    -background => 'yellow1',
 			   );
 	$text->tagAdd('gotoTag', "$current linestart", "$current lineend");
 	$text->markSet('insert', $current);
 	$text->tagLower('gotoTag');	# put any search results in foreground
+	$text->tagLower('CTag');	# but visible in C code
 	adjust_live();
 	report_cursor();
 	$tmpText = "$searchText$matchExtensions{'g'}";
 	check_menu($tmpText, 'searches');
 	($prevText, $prevMatch) = ($searchText, 'g');	# $prevCase not modified
 	return;
+    }
+    if ($break) {
+	$prevText = '';			# start a new search after a watch point BREAK
+	$break = 0;
     }
     if ($prevText ne $searchText or $prevMatch ne $matchType or $prevCase ne $ignoreCase) {
 	########################################################################
@@ -3033,12 +3623,8 @@ sub search_now {
 	@hits = ();
 	@groups = ();
 	$gl = 0;
-	$text->tagDelete('searchTag') if $prevText;
+	tagDeleteRestore_searchTag() if $prevText;
 	($prevText, $prevMatch, $prevCase) = ($searchText, $matchType, $ignoreCase);
-	$text->tagConfigure('searchTag',
-			    -background => 'black',	# same as 'less' colouring
-			    -foreground => 'white',	# stands out amongst live colours
-			   );				# cannot see live status though except overhang
 	if ($matchType eq 'w') {
 	    if ($searchText =~ m/^(\w+|[IQT][XBWLH]\d+\.[0-7](_\d+)?)$/) {
 		$matchType = '-regexp';
@@ -3054,7 +3640,7 @@ sub search_now {
 
 	########################################################################
 	#	Actual searches storing results in @hits
-	#	for every hit set a 'searchTag'
+	#	for every hit add black 'searchTag' unless searching watch word
 	########################################################################
 	while (1) {
 	    eval {
@@ -3086,16 +3672,16 @@ sub search_now {
 	    unless ($comment) {
 		if ($opt_T) {
 		    my @lineinfo = $text->dlineinfo($current);
-		    my $word = $text->get($current, "$current + $length char");
+		    my $word = $text->get($current, "$current + $length chars");
 		    print "word: $word $length '@lineinfo'\n";
 		}
 		unless ($breakFlag) {
-		    $text->tagAdd('searchTag', $current, "$current + $length char");
+		    $text->tagAdd('searchTag', $current, "$current + $length chars");
 		}
-		$current =~ /(\d+)\.(\d+)/;
+		$current =~ /(\d+)\.(\d+)/;		# y and x coordinates of current hit
 		push @hits, [ $current, $1, $2, $length, ];
 	    }
-	    $current = $text->index("$current + $length char");	# point bejond hit
+	    $current = $text->index("$current + $length chars");	# point bejond hit
 	}
 	($searchText, $matchType) = ($prevText, $prevMatch);	# otherwise radio button skips
 	if (($hl = scalar @hits) > 0) {
@@ -3153,6 +3739,11 @@ sub search_now {
 	}
 	$entrySearch->focus();
     }
+    my $pos = index($breakText, $searchText . " = ");
+    print "\$searchText = '$searchText' \$breakText = '$breakText' \$pos = $pos\n" if $opt_T;
+    if ($pos == 0) {
+	$searchText = $breakText;			# restore Search Entry window at BREAK
+    }
     ########################################################################
     #	Use @groups to scroll over the groups forwards or backwards.
     #	Initial group index is $gi = -1. Used to determine scroll start for
@@ -3189,6 +3780,7 @@ sub search_now {
 	adjust_live();
     } elsif ($gl == 0 and not $@) {	# do not overwrite search eval error message
 	if ($searchText ne '') {
+	    print "\$searchText = '$searchText' \$breakText = '$breakText' not found\n" if $opt_T;
 	    info_display(0, 'red', "/$searchText/ not found");	# report every time
 	} else {
 	    info_display(0, 'dark red', "search cleared");
@@ -3301,7 +3893,7 @@ sub reset_scan {
 	$liveButton->configure(-text => 'Live');
 	$prevText = '';				# start a new search
 	$gl = 0;
-	$text->tagDelete('searchTag');
+	tagDeleteRestore_searchTag();
 	$debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
 	$debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
 	clear_scan(@_);
@@ -3394,7 +3986,7 @@ sub do_scan {
 	    $liveButton->configure(-text => 'Live');	# no live words scanned yet
 	    $prevText = '';				# start a new search
 	    $gl = 0;
-	    $text->tagDelete('searchTag');
+	    tagDeleteRestore_searchTag();
 	    $debugMenu->entryconfigure(0, -state => 'disabled');	# Debug
 	    return;
 	}
@@ -3410,7 +4002,7 @@ sub do_scan {
 				     $current,
 				     $last);
 	    last if (!$current);
-	    my $currEnd = $text->index("$current + $length char");
+	    my $currEnd = $text->index("$current + $length chars");
 	    $iw = $i = $text->get($current, $currEnd);
 	    ########################################################################
 	    # Match simple variables, IEC-1131 and derivatives as well as immC array members
@@ -3600,7 +4192,6 @@ use warnings;
 	####################################################################
 	## change text on scan button to 'View' (RO) or 'Edit'
 	####################################################################
-
 	$text->tagRaise('searchTag') if $gl;	# put any search results in foreground
 	if ($readOnly) {
 	    $liveButton->configure(-text => 'View');
@@ -3620,6 +4211,31 @@ use warnings;
 
 ########################################################################
 #
+#	Optionally Delete and Restore 'searchTag'
+#
+#	Deleting 'searchTag' is the easiest way to restore original
+#	text format of all regions tagged with 'searchText'.
+#
+#	This routine makes sure that 'searchTag' is always active, which
+#	avoids TK::Error when 'searchTag' is raised and not present.
+#
+#	1st parameter:	false	delete and create tag again
+#			true	create tag only
+#
+########################################################################
+
+sub tagDeleteRestore_searchTag {
+    unless ($_[0]) {
+	$text->tagDelete('searchTag');
+    }
+    $text->tagConfigure('searchTag',
+			-background => 'black',	# same as 'less' colouring
+			-foreground => 'white',	# stands out amongst live colours
+		       );			# cannot see live status though except overhang
+} # tagDeleteRestore_searchTag
+
+########################################################################
+#
 #	Register_now
 #
 ########################################################################
@@ -3631,6 +4247,7 @@ sub register_now {
     register_at_server();
     # will call do_scan() if connect was successful via Request S.T and :2 reply
 } # register_now
+
 
 ########################################################################
 #
@@ -3697,6 +4314,7 @@ sub new_text {
 	    $text->configure(-state => 'normal');	# allow clearing new file
 	    $readOnly = '';				# can modify text
 	}
+	$text->tagDelete('cTag', 'CTag', 'icaTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete all special tags
 	$text->delete("1.0", "end");
 	$oldContents = '';
 	$fileName = $newName;
@@ -3712,7 +4330,7 @@ sub new_text {
 ########################################################################
 
 sub reload_file {
-    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
+    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst6?|c|h|ini)$/) {
 	open_file(1, "$1.ic");
     } else {
 	info_display(2000, 'red', "ERROR: no file matching '$fileName$readOnly'");
@@ -3727,7 +4345,7 @@ sub reload_file {
 ########################################################################
 
 sub open_list {
-    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
+    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst6?|c|h|ini)$/) {
 	if ($4 eq 'ic') {
 	    open_file(0, "$1.lst");
 	} else {
@@ -3822,7 +4440,7 @@ use warnings;
 		}
 		$readOnly = (-w $fName) ? '' : ' (RO)';	# set new read-only flag correctly; new stat() because of encoding()
 		print "$fName is read-only\n" if $readOnly and $opt_T;
-		$text->tagDelete('cTag', 'bd');	# ->delete really slow if not done
+		$text->tagDelete('cTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete really slow if not done
 		$text->delete("1.0", "end");	# clear the text area
 		$oldContents = '';
 		while (<FH>) {
@@ -3835,20 +4453,22 @@ use warnings;
 		my $length = length $oldContents;
 		$fileName = $fName;	# alter global $fileName
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
-		tagComments();
-		info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
-		if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
-		    my ($s1, $s3, $s4) = ($1, $3, $4);
-		    $procName = $s3;
-		    if ($s4 eq 'ic') {
-			$menuFile->entryconfigure(4, -label => "$s1.lst");
-			check_menu($fileName, 'files');		# save ic name in file menu
+		my $m = $fileName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(\w+)$/;
+		($processName, $procName, $extnName) = ($1, $3, $4);	# used globally
+		my $r;
+		if ($r = tagComments()) {
+		    info_display(2000, 'red', "WARNING: $r syntax errors in $fileName$readOnly - not registered");
+		    $no = 1;		# do not register this file
+		} else {
+		    info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
+		}
+		if ($m and $extnName =~ m/^(ic|ica|lst6?|c|h|ini)$/) {
+		    if ($extnName eq 'ic') {
+			$menuFile->entryconfigure(4, -label => "$processName.lst");
 		    } else {
-			$menuFile->entryconfigure(4, -label => "$s1.ic");
-			if ($s4 eq 'ica') {
-			    check_menu($fileName, 'files');	# save ica name in file menu
-			}
+			$menuFile->entryconfigure(4, -label => "$processName.ic");
 		    }
+		    check_menu($fileName, 'files');		# save files with known extensions in file menu
 		    unless ($no) {
 			$instName = "$procName$instanceText";	# previous executable was stopped
 			$ci = change_instance();
@@ -3857,7 +4477,7 @@ use warnings;
 		}
 		$prevText = '';					# start a new search
 		$gl = 0;
-		$text->tagDelete('searchTag');
+		tagDeleteRestore_searchTag();
 		if ($readOnly) {
 		    $text->configure(-state => 'disabled');	# read-only file
 		}
@@ -3882,8 +4502,13 @@ use warnings;
 ########################################################################
 
 sub save_file {
+    my $r;
     my $ret = 1;		# good return
-    if (defined $fileName and $fileName ne $newName and $fileName ne '') {
+    if ($r = tagComments()) {		# comments and/or keywords may have changed
+	info_display(2000, 'red', "ERROR: $r syntax errors in modified file - not saved");
+	$ret = 0;	# error return
+    }
+    elsif (defined $fileName and $fileName ne $newName and $fileName ne '') {
 	my ($unconditional) = $_[1];	# optional 2nd parameter
 	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
 	## allow non existing file to be written by setting to $fileTime if undef
@@ -3934,7 +4559,6 @@ sub save_file {
 		## read last modified time from new stat now as it changed since last stat and :encoding()
 		$fileTime = (stat($fileName))[9]; $fileTime = 0 unless defined $fileTime;
 		$mainWindow->title("$named$u: $fileName$readOnly $runName");
-		tagComments();					# comments and/or keywords may have changed
 		info_display(2000, 'black', "File $fileName$readOnly, $length bytes saved (backup $fileName.bak)");
 		check_menu($fileName, 'files');
 	    } else {
@@ -3979,15 +4603,16 @@ sub saveAs_file {
 	    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 	    $ret = 0;
 	} elsif ($fileName ne $oldName) {
-	    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
-		$procName = $3;
+	    my $m = $fileName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(\w+)$/;
+	    ($processName, $procName, $extnName) = ($1, $3, $4);	# used globally
+	    if ($m and $extnName =~ m/^(ic|ica|lst6?|c|h|ini)$/) {
 		$instanceText = $instance = '';		# reset instance
-		$instName = "$procName$instanceText";
+		$instName = $procName;
 		change_instance();
 	    }
 	    $prevText = '';				# start a new search
 	    $gl = 0;
-	    $text->tagDelete('searchTag');
+	    tagDeleteRestore_searchTag();
 	}
     } else {
 	info_display(2000, 'red', "no file saved");
@@ -4061,7 +4686,7 @@ sub build_file {
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
 		    $gl = 0;
-		    $text->tagDelete('searchTag');
+		    tagDeleteRestore_searchTag();
 		    $matchType = '-regexp';	# NOTE: $fileName has changed
 		    search_now(1, undef, 4);	# carry out the search, setting markers but no info display
 		}
@@ -4148,7 +4773,7 @@ sub position_text {
 #	Increase or decrease font size
 #
 #	change normal text font (includes underline text)
-#	change 'bd' tagged words which are bold
+#	change 'bd' and 'er' tagged words which are bold
 #	do not change miscellanous button text fonts
 #
 ########################################################################
@@ -4162,11 +4787,19 @@ sub change_font {
 	print "font increment = '$increment' size = '$fontSize'\n" if $opt_T;
 	$font       = $font_t;
 	$boldfont   = $boldfont_t;
+	$italicfont = $italicfont_t;
+	$bolditfont = $bolditfont_t;
 	$font       =~ s/fontSize/$fontSize/;	# no change if -F was a specified font
 	$boldfont   =~ s/fontSize/$fontSize/;
+	$italicfont =~ s/fontSize/$fontSize/;
+	$bolditfont =~ s/fontSize/$fontSize/;
 	if ($increment) {
 	    $text->configure(-font => $font);	# re-configure only for changed fonts
 	    $text->tagConfigure('bd',  -font => $boldfont);
+	    $text->tagConfigure('er',  -font => $boldfont, -background => 'red');
+	    $text->tagConfigure('cv', -relief => 'raised', -borderwidth => 3, -font => $boldfont);
+	    $text->tagConfigure('it',  -font => $italicfont);
+	    $text->tagConfigure('bt',  -font => $bolditfont);
 	    info_display(0, 'black', "font size $fontSize");
 	}
     }
@@ -4224,16 +4857,17 @@ sub fork_help {
 ########################################################################
 
 sub run_file {
+    my $m;
     if ($runName ne '') {
 	## running - stop application
 	stop_file();
-    } elsif ($fileName !~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst?|c|ini)$/) {
-	info_display(2000, 'blue', "WARNING: cannot run '$fileName$readOnly' (must end in .ic .ica .lst .c or .ini)");
-    } elsif ($4 ne 'ic' or check_save()) {
-	my $processName = $1;		# full path name of executable
-	$procName = $3;			# execuatble without directory path
+    } elsif ($m = $fileName =~ m/^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(\w+)$/,
+	    ($processName, $procName, $extnName) = ($1, $3, $4),	# used globally
+	    ! $m or $extnName !~ m/^(ic|ica|lst6?|c|h|ini)$/) {
+	info_display(2000, 'blue', "WARNING: cannot run '$fileName$readOnly' (must end in .ic .ica .lst .lst6 .c .h or .ini)");
+    } elsif ($extnName ne 'ic' or check_save()) {
 	if ($processName eq $procName) {
-	    $processName = "./$processName";	# in case . is not in $PATH
+	    $processName = "./$procName";	# in case . is not in $PATH
 	}
 	deleteAllTags();		# also clears @activeSymbols
 	clear_scan(1);
@@ -4496,7 +5130,7 @@ use warnings;
 #
 #	Care has been taken, that the hash indices $fileName, $position
 #	and $instance can never be the same - they have different signatures
-#		$fileName	\w+\.(ic|lst|c)
+#		$fileName	\w+\.(ic|lst|c|h)
 #		$position	\d+\.\d+
 #		$instance	\d+
 #	It is of course possible to fudge a filename like "0", which clashes
@@ -4662,12 +5296,12 @@ iClive - an editor and live debugger for immediate-C apps
         [ -F <font>][ -E <code>][ -l <num>][ -w <num>][ -g <geometry>]
         [ -A <cmd>][ -d <deb>][ <file> ...]
         [ -R <aux_app>[ <aux_app_argument> ...]] # must be last arguments
-    -s host host name of server    (default 'localhost')
+    -s host name of server host    (default 'localhost')
     -p port service port of server (default '8778')
     -i inst initial instance selection (default ''; 1 to 3 numeric chars)
     -D IXy.z optional Debug Stop output to control moving parts in a plant
     -D ~IXy.z inverted Debug Stop output 0 (non-inverted Stop is 1)
-    -F font font or font size to use in Text window  (default '20')
+    -F font or font size to use in Text window  (default '20')
     -E code encoding eg. ISO-8859-1                  (default 'UTF-8')
     -u      use edit undo facility (not recommended if using Live display)
     -l num  height of the Text window (default 35)
@@ -4769,12 +5403,87 @@ correct B<iCbox> when an application is started with the B<Run>
 button. An alternative command to autovivify may be entered with
 the B<-A> option: eg B<-A iClift> or B<-A 'iCbox -H'> If B<iClive>
 started B<iCserver>, it will also stop B<iCserver> when it is stopped,
-which automaticaly stops all running applications and IO's.
+which automatically stops all running applications and IO's.
 
-In B<Edit> mode B<iClive> provides an edit window in which the text
-of an iC source can be displayed, edited and saved and a matching
-listing can be displayed.  B<iClive> uses the Tk::Text widget whose
-features are described under the heading "KEYBOARD BINDINGS" below.
+B<iClive> can execute in two major modes: B<Edit> mode and B<Live> mode.
+The program starts in B<Edit> mode, which – as the name implies –
+provides full text edit functions for any text in the main window.
+This functionality is provided by the Tk::Text widget of the Perl/Tk
+tool kit, on which B<iClive> is based.  The edit functions provided by
+Tk::Text are very similar to the basic functions of Notepad or WinWord
+under Windows or Kate or LibreOffice Writer under Linux.  A detailed
+description can be found under the Heading ‘KEYBOARD BINDINGS’
+in the B<iClive> man page, which is shown with the Help button.
+
+The text in the B<Edit> window is assumed to be an iC or iCa program or
+listing with some optional embedded C code.  When opening a new file
+or saving a modified text, the following formatting is done:
+
+  * Any C or C++ style comments in iC and C code are coloured blue.
+
+  * Any embedded C code in a literal block bounded by %{ C code %}
+    braces as well as C code blocks initiated by the iC operators if
+    else or switch and bounded by matching simple braces are marked
+    pale grey. Also C code in generated .lst listing files and
+    generated .c C files are als marked pale grey.
+
+  * All iC keywords and built-in function block names in iC code
+    and C keywords in C code are made bold.  C keywords not also iC
+    keywords in iC code are errors and coloured red and vice versa.
+
+  * All C pre-processor commands #include, #define etc in C code, as
+    well as all iC and iCa commands %define and %%define etc in iC or
+    iCa code are made bold italics.  Macro names defined with #define,
+    %define or %%define are displayed in italics throughout the code.
+
+  * The following colouring is done to make iCa code more readable:
+
+    * FOR and IF ELSE statements up to and including the opening
+      double brace {{ as well as the closing double brace }} are
+      coloured with pink background.
+
+    * The first non-keyword after FOR, which is the loop control
+      variable, is marked bold with a raised relief.  Every occurrence
+      of a FOR loop control variable is marked similarly in the scope
+      of the loop.  FOR loop control variables thus raised should
+      only occur in inner FOR  and IF control statements marked pink
+      or index expressions marked gold.
+
+    * Every inner pair of matching square brackets enclosing an index
+      expression is coloured gold eg [I+1].  Outer pairs of nested
+      square brackets, which will be transferred unchanged to the
+      iC or C code are left untouched eg immC bit array[[SIZE]].
+      Also string constants in parentheses in an index expression
+      eg [I ? " & " : " &\n"] are not tagged gold, since the text
+      in the strings is iC code.
+
+    * There should be no iC variables and hence no index expressions
+      – indeed no variable which is not a FOR loop control variable
+      or a macro - in FOR and IF control statements with a pink
+      background.  If they do occur they are a syntax error and will
+      be marked in red.
+
+    * A side effect of this colouring strategy is that the square
+      bracketed index elements if immediate arrays in plain iC code
+      are also coloured gold eg var = array[0].  These markings only
+      highlight immediate array elements and are not index expression
+      like in iCa code.
+
+  * In analysing the program text for this formatting quite a number
+    of syntax errors are detected.  The error elements are marked
+    bright red and appropriate warnings are output to STDERR.  At the
+    end of the analysis the number of syntax errors is reported in
+    the status bar at the bottom of the IDE Window.  This helps to
+    avoid simple syntax errors when writing iCa code.
+
+  * The above colouring and syntax checking is done when opening or
+    saving a file. When syntax errors are detected, files are not
+    registered or saved.
+
+  * All these measures help to visually disentangle iC code, which
+    is made up of four intirely different languages - iC, C,
+    C pre-processor and iCa.
+
 An extension Tk::TextUndo may be used to provide an UNDO facility
 while editing. This extension used to be problematic for the 'live
 display' - it was 7 times slower in making arithmetic updates and it
@@ -4796,19 +5505,35 @@ which then provides updates to B<iClive> as soon as possible after
 any change of a node in that list.
 
 In B<Live> mode all words in the text which exactly match any B<Active>
-word in the list are marked with a colour depending on the current
-state of the node.  Logical nodes are B<green/black> for B<lo>
-and B<yellow/red> for B<hi>.  Logical B<Active> words in the list
-which are preceded by B<~> or B<!> or which are followed by B<~>
-show the inverse state of the node.  Arithmetic nodes are B<blue>,
-clocks B<brown> and timers B<dark green>.  Clocks and timers as well
-as data nodes which change for less than 50 ms flash B<white> briefly
-(50 ms) every time they fire.
+word in the list are tagged with a colour depending on the current
+state of the node.  Logical nodes are B<green/black> for B<LO (0)>
+and B<yellow/red> for B<HI (1)>.  Logical B<Active> words in the list
+which are preceded by B<~>, which means logical inversion, show the
+inverse state of the node. This quickly shows the correct logical
+relationships in AND or OR expressions.  Also logical B<Active>
+words which are followed by B<~> are inverted. This shows the correct
+relationships in the expanded logical expressions in listing files.
+Arithmetic nodes are B<blue>, clocks B<brown> and timers B<dark green>.
+Clocks and timers as well as data nodes which change for less than
+50 ms flash B<white> briefly (50 ms) every time they fire.
 
-Pressing the B<Debug> button opens a menu with debug options. It
-is useful to press the tear off line to make this menu permanently
-available for debugging.  Initially B<Debug> mode is off.  The first
-button in this menu turns it on.
+When the mouse cursor sits on an B<Active> word in B<Live> mode the
+value of the node is displayed in a balloon window. This is a quick
+way for displaying the current value of arithmetic nodes which is
+always available. Also the current timer count is displeyed for timer
+nodes.
+
+When the mouse cursor sits on an B<Active> word in B<Live> mode and the
+focus is in the Search Entry window (click in it or type '/') and
+the left Shift-Key is pressed the balloon will display the 'index'
+of the variable in the Symbol Table. This is useful to check if an
+Alias or an immC array member has the same 'index' and is thus the same
+variable as a normal variable with a different name. The same 'index'
+is used in VCD files for GTKWave.  Simlarly when the left Control-Key
+is pressed the balloon will display the 'ftype' of the variable.
+
+Pressing the B<Debug> button opens a semi-permanent menu with debug
+options.  B<Debug> mode is turned on immediately.
 
 While B<Debug> mode is on, pressing Mouse Button-1 while positioned
 over an B<Active> variable in the program text will open a menu to
@@ -4876,15 +5601,16 @@ There are three further buttons in the Debug menu:
 	    be deleted, disabled, enabled or have their conditions
 	    changed from this list. The 'Lookup' button starts a full
 	    search for all instances of a selected Watch or Ignore
-	    point in the program.
+	    point in the program. ('Lookup' turns Debug mode off).
 
-  Trace     toggles a trace output of every action of the the data
-            driven execution of the iC code. It is roughly equivalent
-            to the machine language output of an instruction driven
-            debugger.  This output is particularly useful with
-            single stepping.  It shows all the detailed actions of
-            counting Logic nodes, as well as Arithmetic, Clock and
-            Timer actions leading up to a Break.
+  Trace     toggles a trace output of every action of the data driven
+            execution of the iC code in the terminal window iClive
+            was called from. It is roughly equivalent to the machine
+            language output of an instruction driven debugger.
+            This output is particularly useful with single stepping.
+            It shows all the detailed actions of counting Logic nodes,
+            Arithmetic actions, as well as Clock and Timer actions
+            leading up to a Break.
 
   MicroSec  show the time in microseconds between significant events
             during the execution of the program.
@@ -4911,48 +5637,40 @@ This is the best way to display the state of arithmetic variables, but
 it does require typing appropriate comments in the source code, which
 is easy to do quickly in Edit mode.
 
-When the mouse cursor sits on an B<Active> word in B<Live> mode the
-value of the node is displayed in a balloon window. This is a quick
-way for displaying the current value of arithmetic nodes which is
-always available.
-
-When the mouse cursor sits on an B<Active> word in B<Live> mode and the
-focus is in the Search Entry window (click in it or type '/') and
-the left Shift-Key is pressed the balloon will display the 'index'
-of the variable in the Symbol Table. This is useful to check if an
-Alias or an immC array member has the same 'index' and is thus the same
-variable as a normal variable with a different name. The same 'index'
-is used in VCD files for GTKWave.  Simlarly when the left Control-Key
-is pressed the balloon will display the 'ftype' of the variable.
-
 =head1 SEARCH FACILITY
 
 A powerful search facility to find whole words, exact parts of a
 string or Perl type regular expressions has been implemented on top
 of Text::Tk.  Activate the search by typing '/' or pressing the [/]
-button briefly.  Enter or paste a word into the Search Entry window
-and type RETURN or press the [/] button again.  Searches may be for
-a whole Word match, an Exact match or for a full Perl-type regular
-expression labelled Regex match.  Searches are normally case sensitive,
-but a case-insensitive search may be selectd. Once a search has been
-carried out, all the hits are highlighted. A first group of hits is
-displayed in the Text window. The text is moved to display as many
-hits as possible. When the user has analysed the first group of hits,
-typing RETURN will display the next group of hits in the text and so
-on until the end of the text is reached. Another RETURN will start
-by displaying the first group at the top again. Typing SHIFT-RETURN
-will reverse the direction of displaying the groups.
+button briefly.  Enter or paste a word into the Search Entry window and
+type RETURN or press the [/] button again.  Searches may be for a whole
+Word match, an Exact match or for a full Perl-type regular expression
+labelled Regex match.  Searches are normally case sensitive, but a
+case-insensitive search may be selectd. Once a search has been carried
+out, all the hits are highlighted (black with white text). A first
+group of hits is displayed in the Text window. The text is moved to
+display as many hits as possible. When the user has analysed the first
+group of hits, typing RETURN will display the next group of hits in the
+text and so on until the end of the text is reached. Another RETURN
+will start by displaying the first group at the top again. Typing
+SHIFT-RETURN will reverse the direction of displaying the groups.
 
-In 'Live' mode, double-clicking with mouse button 1 transfers the
-word under the mouse to the Search Entry window and immediately
-starts a search for that word. This is the quickest and best way to
-start a search.  The search can be continued by clicking on the [/]
-button or pressing RETURN. In 'Live' mode searches are restricted to
-text outside of comments, which means sarches will only return
-actual variables and keywords in program text.
+In 'Live' mode searches are restricted to text outside of comments,
+which means sarches will only return actual variables and keywords
+in program text.
 
-If this quick search action were taken in 'Edit' mode it would
-mask the selection of the text under the mouse (Text Binding [2]).
+In 'Live' and 'Edit' mode but not in 'Edit Undo' mode (-u option),
+double-clicking with mouse button 1 transfers the word under the
+mouse to the Search Entry window and immediately starts a search
+for that word. This is the quickest and best way to start a search.
+The search can be continued by clicking on the [/] button or pressing
+RETURN.
+
+This quick search action in 'Edit' mode masks the selection of the text
+under the mouse (Text Binding [2]).  Since selection of text can be
+accomplished easily by swiping a word or stepping over the word with
+the Shift-Left key it was felt the quick search action is more often
+called for. The quick search action is not active for 'Edit Undo' mode.
 
 Double-clicking with mouse button 1 with the cursor in the Search Entry
 window or by typing ctrl-RETURN will clear the search completely.
@@ -4991,12 +5709,14 @@ characters, or any single character other than these. (from Tk::Text)
 [2] Double-clicking with mouse button 1 selects the word under the
    mouse and positions the insertion cursor at the beginning of the
    word.  Dragging after a double click will stroke out a selection
-   consisting of whole words.
+   consisting of whole words. (Overloaded by quick search except in
+   'Edit Undo' mode).
 
 [3] Triple-clicking with mouse button 1 selects the line under the
    mouse and positions the insertion cursor at the beginning of the
    line.  Dragging after a triple click will stroke out a selection
-   consisting of whole lines.
+   consisting of whole lines. (Also overloaded by quick search except
+   in 'Edit Undo' mode).
 
 [4] The ends of the selection can be adjusted by dragging with mouse
    button 1 while the Shift key is down;  this will adjust the end
@@ -5188,7 +5908,7 @@ The following extra Bindings have been defined for iClive:
    Alt +   Dynamically increase font size
    Alt -   Dynamically decrease font size
 
-If the widget is disabled, as it is in 'Live' mode, then its view can
+If the widget is read-only, as it is in 'Live' mode, then its view can
 still be adjusted and text can still be selected, but no insertion
 cursor will be displayed and no text modifications will take place.
 In 'Live' mode the focus is normally on the y-Scrollbar or on the

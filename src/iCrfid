@@ -67,7 +67,7 @@ Usage:
  @<<<<<[ -bqIOth][ -s <iChost>][ -p <iCport>][ -n <name>][ -i <inst>][ [IQ]Xn]
 	$named
 	[IQ]Xn	one of Xn or IXn and QXn    (default X2)
-	-s host host name of iCserver       (default 'localhost')
+	-s host name of iCserver host       (default 'localhost')
 	-p port service Port of iCserver    (default '8778')
 	-n name registration Name           (default RFID_2)
 	-i inst instance ID for this @<<<<< (1 to 3 numeric digits)
@@ -84,7 +84,7 @@ Usage:
 	iCrfid | rfid
 Copyright (C) 2018  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCrfid 1.2 $ uses Tk-@<<<<<<<<<
+$Id: iCrfid 1.3 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -589,7 +589,7 @@ iCrfid - GUI to control and indicate I/O from the app rfid
 
  iCrfid[ -bqIOth][ -s <iChost>][ -p <iCport>][ -n <name>][ -i <inst>][ [IQ]Xn]
 	[IQ]Xn	one of Xn or IXn and QXn    (default X2)
-	-s host host name of iCserver       (default 'localhost')
+	-s host name of iCserver host       (default 'localhost')
 	-p port service Port of iCserver    (default '8778')
 	-n name registration Name           (default RFID_2)
 	-i inst instance ID for this iCrfid (1 to 3 numeric digits)

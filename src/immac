@@ -106,7 +106,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.30 $
+$Id: immac 1.31 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -334,13 +334,13 @@ if ($opt_t) {
 my $opt_m_M_Y   = ($opt_m or $opt_M or $opt_Y);
 print " opt_m = '$opt_m' opt_M = '$opt_M' opt_Y = '$opt_Y' opt_m_M_Y = '$opt_m_M_Y'\n" if $opt_T and not $opt_l;
 my $CdirectiveRegex = $opt_m ?		# both %%directives and %#directives are excluded - #define and %define (warning)
-    qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o    :
+    qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o    :
 		      $opt_M ?		# %%directives, #directives and %#directives are excluded - %define %if only
-    qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
+    qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o :
 		      $opt_Y ?		# additionally %define %undef %include are excluded - %define only (no %if)
-    qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o :
+    qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)|%(define|undef|include))\b/o :
 		      # Else none	# %directives, #directives and %# directives are excluded - only %%directives
-    qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
+    qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o ;
 
 my $commandLineFlag = 0;
 if (@opt_P) {
@@ -654,13 +654,13 @@ sub process_file {
 	    ########################################################################
 	    #       $CdirectiveRegex =
 	    #   If -m then both %%directives and %#directives are excluded - #define and %define (warning)
-	    #       qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o    :
+	    #       qr/^\s*%[%#]\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o    :
 	    #   Else if -M %%directives, #directives and %#directives are excluded - %define %if only
-	    #       qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o :
+	    #       qr/^\s*(%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o :
 	    #   Else if -Y additionally %define %undef %include are excluded - %define only (no %if)
-	    #       qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)|%(define|undef|include))\b/o :
+	    #       qr/^\s*((%%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)|%(define|undef|include))\b/o :
 	    #   Else if none of the above %directives, #directives and %# directives are excluded - only %%directives
-	    #       qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/o ;
+	    #       qr/^\s*(%|%?#)\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/o ;
 	    ########################################################################
 	    if ($Cdirective or m/$CdirectiveRegex/) {
 		$Cdirective = m/\\$/ ? 1 : 0;	# #define or %define etc output as is up to line without trailing \
@@ -685,7 +685,7 @@ sub process_file {
 	    #   From now on treat %%directives, %directives and #directives equivalently
 	    #	except warn if %directive used in straight iC file or in immac -m call
 	    ########################################################################
-	    if ($directive or s/^\s*(%%|[%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error)\b/$1$2/) {
+	    if ($directive or s/^\s*(%%|[%#])\s*(define|undef|include|ifdef|ifndef|if|elif|else|endif|error|warning|line)\b/$1$2/) {
 		$mWarn = 1 if $opt_m and $directive eq "" and $1 eq "%";	# output Warning later for -m only
 		$blankLines++ if $opt_m_M_Y;	# since %define and #define lines are not output treat them as a blank line
 		if (s/\\\s*$//) {		# test for and then remove trailing '\'
@@ -722,7 +722,7 @@ sub process_file {
 	    #   The same applies for IF ELSE or ELSIF control statements.
 	    #
 	    #   NOTE: no brace counting is necessary - only look for next opening
-	    #   brace(s) after a FOR IF ELSE or ELSIF.				{
+	    #   brace(s) after a FOR IF ELSE or ELSIF.			{ balance
 	    ########################################################################
 	    if (not $opt_m_M_Y and
 		(m/(\bFOR\b|\bIF\b|\bELSE\b|\bELSIF\b|}|\[|\])/ or $FORline or $FORend or $SQline)) {
@@ -746,7 +746,7 @@ sub process_file {
 		}
 		$st0Save = $state0;
 		print "$.*FOR*IF*	$_" if $opt_T and not $opt_l;
-		@atoms = ();				# repeat scan if line has been extended
+		@atoms = ();				# repeat scan if line has been extended   {{ balance
 		$sqNest = $sqNestSv = $offset = 0;	# $sqNest is used independently here and in full analysis
 		while (m/((\\\\)*)(\\?("|'|\[|\]|\n)|\/\*|\/\/|\*\/|#|%?\{\{?|%?}}?|\w+|;)/g) {
 		    push @atoms, [ length($`)+length($1), $3 ];	# [ $pos, $atom ]
@@ -1026,21 +1026,30 @@ no strict 'refs';
 use strict 'refs';
 			}
 		    }
-		    elsif ($def =~ m/^(%%|[%#])error$/) {
-			if (not $opt_m_M_Y and $def eq "%error") {
+		    elsif ($def =~ m/^(%%|[%#])(error|warning)$/) {
+			my $er_wa = $2;
+			if (not $opt_m_M_Y and $def eq "%$er_wa") {
 			    push(@lnErr, "//* Error: $def $macro\n");
-			    $r++;			# deliberate error
+			    $r++ if $er_wa eq "error";		# deliberate error
 			    unless ($opt_t) {
 				if (@block or $finBlock or $opt_L) {
 				    $macro =~ s/"/\\"/g;
-				    push(@block, "\$out .= \"%{\\n#error $macro\\n%}\\n\";\n");
+				    push(@block, "\$out .= \"%{\\n#$er_wa $macro\\n%}\\n\";\n");
 				} else {
-				    print "%{\n#error $macro\n%}\n";
+				    print "%{\n#$er_wa $macro\n%}\n";
 				}
 			    }
-			} else {			# -m or -M or "#error"
-			    print STDERR "$argv:$.:2: error: $def $macro\n";
-			    exit 1;			# deliberate error - emulate cpp
+			} else {			# -m or -M or #error or #warning
+			    print STDERR "$argv:$.:2: $er_wa: $def $macro\n";
+			    exit 1 if $er_wa eq "error";	# deliberate error - emulate cpp
+			}
+		    }
+		    elsif ($def =~ m/^(%%|[%#])line$/) {
+			my $d = $1;
+			if ($macro =~ m/^\s*(\d+)\s+(".+")(.*)$/) {
+			    print "$d $1 $2";
+			} else {
+			    print STDERR "$argv:$.: '$def $macro' malformed\n";
 			}
 		    } else {
 			push(@lnErr, "//* Warning: $argv line $.: $def '$macro' unknown iCa directive - ignored\n");
@@ -1128,7 +1137,7 @@ use strict 'refs';
 				)	|
 				%?		#    with optional leading %
 				(		# ($5)
-				    \{\{? |	#    { {{ %{ (%{{)
+				    \{\{? |	#    { {{ %{ (%{{)    {{ balance
 				    }}?		#    } }} %} (%}})
 				)
 					|	#    rest with no extra leading characters
@@ -1548,7 +1557,7 @@ use strict 'refs';
 		#   Generate Perl code for an eval block
 		########################################################################
 		if ($finBlock) {
-		    $finBlock = $inBlock;
+		    $finBlock = $inBlock;		# { balance
     no warnings;
 		    push(@lnErr, "### END_ANALYSIS: $argv line $.: \$compound = '$compound', \$braceCount = '$braceCount', \$twinCount = '@{[$twinCount-0x100]}'\n") if $opt_T and not $opt_l;
     use warnings;
@@ -1560,7 +1569,7 @@ use strict 'refs';
 				s/\G\s+//;		# remove spaces after array name and . unless keyword
 				pos($_) = $save;	# .. and ... are declared as keywords - leave spaces
 			    }
-			}
+			}				# { balnce
 			while (m/\]}(\s+)([\w.]+)/g) {
 			    unless (defined $keywords{$2}) {
 				$save = pos($_);
@@ -1568,13 +1577,13 @@ use strict 'refs';
 				s/\G\s+//;		# and before array continuation and . unless keyword
 				pos($_) = $save;	# .. and ... are declared as keywords - leave spaces
 			    }
-			}		# {
-			if (s/\]}\s*\@\{\[/]}x\@{[/g) {	# insert x for multi-dimensional arrays
+			}				# {{ balance
+			if (s/\]}\s*\@\{\[/]}x\@{[/g) {	# insert x for multi-dimensional arrays { balance
 			    s/x(\@\{\[[^\]]*"[^\]]*\]})/$1/g;# remove x before [exp?",":""] special
-			}				# }
-			if (s/(\d)\@\{\[/${1}y\@{[/g) {	# insert y for array name ending in numerals }
+			}				# } balance
+			if (s/(\d)\@\{\[/${1}y\@{[/g) {	# insert y for array name ending in numerals { balance
 			    s/y(\@\{\[[^\]]*"[^\]]*\]})/$1/g;# remove y before [exp?",":""] special
-			}				# }
+			}				# } balance
 		    }
 		    if ($control or $forFlag) {
 			if ($opt_a) {
@@ -1677,7 +1686,8 @@ use strict 'refs';
 		    if (not $finBlock and @block and not $lfFlag and not $opt_L) {
 			eval_block(\@block, "BLOCK @{[++$evalBlock]} at ", $el);
 		    }
-		} elsif (m/(\@\{\[|\]}|\\$)/		# look for iCa index expressions and back slash outside block
+		}				# { balance
+		elsif (m/(\@\{\[|\]}|\\$)/		# look for iCa index expressions and back slash outside block
 		    and not $opt_t			# do not return for [] outside 'FOR loop' - could be in comment
 		) {					# can select either alternatives above or below
 		    while (m/([\w.]+)(\s+)\@\{\[/g) {
@@ -1687,7 +1697,7 @@ use strict 'refs';
 			    s/\G\s+//;		# remove spaces after array name and . unless keyword
 			    pos($_) = $save;	# .. and ... are declared as keywords - leave spaces
 			}
-		    }
+		    }				# { balance
 		    while (m/\]}(\s+)([\w.]+)/g) {
 			unless (defined $keywords{$2}) {
 			    $save = pos($_);
@@ -1695,7 +1705,7 @@ use strict 'refs';
 			    s/\G\s+//;		# and before array continuation and . unless keyword
 			    pos($_) = $save;	# .. and ... are declared as keywords - leave spaces
 			}
-		    }				# {
+		    }				# {{{ balance
 		    s/\]}\s*\@\{\[/]}x\@{[/g;	# insert x for multi-dimensional arrays
 		    s/(\d)\@\{\[/${1}y\@{[/g;	# insert y for array name ending in numerals
 		    s/\\/\\\\/g;		# protect interpolated \ in string

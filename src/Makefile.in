@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.75 $
+# @(#)$Id: Makefile.in 1.76 $
 
 #######################################################################
 #
@@ -187,7 +187,7 @@ iCpiFace:	$(srcdir)/Makefile iCpiFace.$(O) misc.$(O) icend.$(O) tcpc.$(O) $(POBJ
 iCgpioPUD:	$(srcdir)/Makefile iCgpioPUD.$(O) bcm2835.$(O)
 	$(CC) $(LDFLAGS) -o iCgpioPUD iCgpioPUD.$(O) bcm2835.$(O) -lrt $(EL)
 
-#### iCpiPWM real real serVo and PWM I/O for Raspberry Pi #############
+#### iCpiPWM real serVo and PWM I/O for Raspberry Pi ##################
 ####  install with set user ID ########################################
 
 ${libdir}/${libprefix}libpigpio.a:	$(srcdir)/../lib/libpigpio.a

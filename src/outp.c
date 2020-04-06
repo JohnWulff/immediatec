@@ -1,5 +1,5 @@
 static const char outp_c[] =
-"@(#)$Id: outp.c 1.112 $";
+"@(#)$Id: outp.c 1.113 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -1027,10 +1027,10 @@ iC_listNet(void)
      *  Increment v_cnt in each target gate of type AND or OR
      *  If v_cnt > PPGATESIZE store gate details and set a general flag szFlag.
      *  Keep a list of these gates and generate auxiliary gates at
-     *  the end of this Pass (can only only install them between scans)
+     *  the end of this Pass (can only install them between scans)
      *
      *  Check if iClock is referenced in an ALIAS
-     *  Change ARNF nodes to to ARN
+     *  Change ARNF nodes to ARN
      *  Check the usage of non-function NCONST targets
      *  Check the usage of variables in the lists passed to C literal blocks
      *  and if else switch C blocks for checking in the NET TOPOLOGY pass
@@ -1250,29 +1250,28 @@ iC_listNet(void)
 	 *******************************************************************/
 	for (hsp = symlist; hsp < &symlist[HASHSIZ]; hsp++) {
 	    for (sp = *hsp; sp; sp = sp->next) {
-		if (sp->type < MAX_LS) {		/* allows IFUNCT to use union v.cnt */
-		    if (sp->ftype == GATE) {
-			for (lp = sp->list; lp; lp = lp->le_next) {
-			    tsp = lp->le_sym;	/* logical target */
-			    if (tsp->v_cnt++ >= PPGATESIZE) {	/* count logical inputs of original target */
-				/********************************************************************
-				 *  Pick correct auxiliary gate computed by tsp->v_cnt relative to total size
-				 *  Must keep the orignal list so the Symbols can be link to S.T.
-				 *******************************************************************/
-				for (i = 0; i < szCount; i++) {
-				    if (szList[i].target == tsp) {
-					break;		/* correct target found */
-				    }
+		if (sp->ftype == GATE && sp->type < MAX_LS) {	/* allows IFUNCT to use union v.cnt ??? */
+		    for (lp = sp->list; lp; lp = lp->le_next) {
+			tsp = lp->le_sym;	/* logical target */
+			if (tsp->type < MAX_LV &&		/* allows IFUNCT to use union v.cnt */
+			    tsp->v_cnt++ >= PPGATESIZE) {	/* count logical inputs of original target */
+			    /********************************************************************
+			     *  Pick correct auxiliary gate computed by tsp->v_cnt relative to total size
+			     *  Must keep the orignal list so the Symbols can be link to S.T.
+			     *******************************************************************/
+			    for (i = 0; i < szCount; i++) {
+				if (szList[i].target == tsp) {
+				    break;		/* correct target found */
 				}
-				assert(i < szCount);	/* means target has been found */
-				spAux = szList[i].curr;
-				if (spAux->v_cnt >= PPGATESIZE) {	/* count logical inputs in auxiliary */
-				    spAux = szList[i].curr = spAux->next;	/* next auxiliary */
-				    assert(spAux);
-				}
-				lp->le_sym = spAux;	/* some misc input now linked to this auxiliary */
-				spAux->v_cnt++;
 			    }
+			    assert(i < szCount);	/* fails if target has not been found */
+			    spAux = szList[i].curr;
+			    if (spAux->v_cnt >= PPGATESIZE) {	/* count logical inputs in auxiliary */
+				spAux = szList[i].curr = spAux->next;	/* next auxiliary */
+				assert(spAux);
+			    }
+			    lp->le_sym = spAux;	/* some misc input now linked to this auxiliary */
+			    spAux->v_cnt++;
 			}
 		    }
 		}

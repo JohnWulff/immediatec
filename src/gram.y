@@ -1,5 +1,5 @@
 %{ static const char gram_y[] =
-"@(#)$Id: gram.y 1.42 $";
+"@(#)$Id: gram.y 1.43 $";
 /********************************************************************
  *
  *  You may distribute under the terms of either the GNU General Public
@@ -21,8 +21,19 @@
  *	This grammar was expanded to support most of the latest extensions
  *	used in gcc.
  *
+ *	Modification John Wulff 2020.04.05 - add types _Floatn. The 2020
+ *	version of "Using the GNU Compiler Collection (GCC)" #6.12 says:
+ *	ISO/IEC TS 18661-3:2015 defines C support for additional floating
+ *	types _Floatn and _Floatnx, and GCC supports these type names.
+ *	It is expected in future versions of GCC that _Float128 and
+ *	__float128 will be enabled automatically. (That is the case now).
+ *
+ *	The <math.h> failed in iC programs because type _Float128 was used
+ *	in the declartion of extern functions, which would not compile.
+ *
  *	gram.y
- *	C grammar for immcc compiler
+ *	C grammar for supporting the immcc compiler to extract iC elements
+ *	from embedded C code in iC sources.
  *
  *******************************************************************/
 
@@ -107,6 +118,7 @@ static void		yyerror(const char *s, ...);
 
 %token	<tok> TYPEDEF TYPEOF EXTERN STATIC AUTO REGISTER
 %token	<tok> CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE CONST VOLATILE VOID
+%token	<tok> FLOAT16 FLOAT32 FLOAT64 FLOAT128
 %token	<tok> STRUCT UNION ENUM ELIPSIS
 
 %token	<tok> CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
@@ -347,6 +359,26 @@ type_specifier					/* 9 */
 	    $$.symbol = NULL;
 	}
 	| FLOAT {
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| FLOAT16 {				/* _Float16 */
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| FLOAT32 {				/* _Float32 */
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| FLOAT64 {				/* _Float64 */
+	    $$.start = $1.start;
+	    $$.end = $1.end;
+	    $$.symbol = NULL;
+	}
+	| FLOAT128 {				/* _Float128 */
 	    $$.start = $1.start;
 	    $$.end = $1.end;
 	    $$.symbol = NULL;

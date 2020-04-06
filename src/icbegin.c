@@ -1,5 +1,5 @@
 static const char icbegin_c[] =
-"@(#)$Id: icbegin.c 1.8 $";
+"@(#)$Id: icbegin.c 1.9 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -36,7 +36,7 @@ static const char icbegin_c[] =
  *  2) remove the // coments from the first three lines and the last line.
  *  3) add extra "case 'x':" lines for extra --x command line options after
  *     "switch (**argv) {". ('x' may any letter except 'h' or 'R').
- *  4) follow the the new "case" line with individual code - usually
+ *  4) follow the new "case" line with individual code - usually
  *     setting a flag: eg "opt_x = 1;"
  *  5) follow this with a "break;" for a -x command line switch without
  *     arguments. If an argument is required see example code in main()

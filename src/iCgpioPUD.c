@@ -34,7 +34,7 @@
  *  Set the pullup resistor on gpio25/INTB to allow open-drain interrupts.
  *  These actions are reversed in iC_quit().
  *
- *  This means the the program must be run as SUID root.  This spoils
+ *  This means the program must be run as SUID root.  This spoils
  *  debugging, but this is why we made this very simple aux program.
  *
  *******************************************************************/
@@ -60,7 +60,7 @@ static const char *	usage =
 "    NOTE:   This program must be suid root to run\n"
 "\n"
 "Copyright (C) 2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCgpioPUD.c,v 1.2 2015/04/11 09:30:33 jw Exp $\n"
+"Version	$Id: iCgpioPUD.c 1.3 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */

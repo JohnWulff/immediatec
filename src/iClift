@@ -187,7 +187,7 @@ Usage:
 
 Copyright (C) 2000-2012  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iClift 1.19 $ uses Tk-@<<<<<<
+$Id: iClift 1.20 $ uses Tk-@<<<<<<
 							$Tk::VERSION
 .
 
@@ -1543,7 +1543,7 @@ sub move_door {
 	$canv->move($frontDoor, $frontInc * $inc, 0);
 	$doorPosn += $inc;
 	$$door[1] = $doorPosn;
-	if ($doorPosn > 75 or $doorPosn < -20) {				# absolute absolute limits
+	if ($doorPosn > 75 or $doorPosn < -20) {				# absolute limits
 	    $$idR->cancel() if $$idR;		# stop continuous door movement when reversing
 	    $$idR = undef;
 	    $$door[6] = 1;			# $rev normal for next iteration

@@ -4,7 +4,7 @@
   
    Author: Mike McCauley
    Copyright (C) 2011-2013 Mike McCauley
-   $Id: bcm2835.h,v 1.19 2015/03/30 23:01:11 jw Exp $
+   $Id: bcm2835.h 1.20 $
 */
 
 /*! \mainpage C library for Broadcom BCM 2835 as used in Raspberry Pi
@@ -416,7 +416,7 @@
 #ifndef BCM2835_H
 #define BCM2835_H
 static const char bcm2835_h[] =
-"$Id: bcm2835.h,v 1.19 2015/03/30 23:01:11 jw Exp $";
+"$Id: bcm2835.h 1.20 $";
 
 #include <stdint.h>
 
@@ -1393,7 +1393,7 @@ extern "C" {
       Asserts the currently selected CS pins (as previously set by bcm2835_spi_chipSelect) 
       during the transfer.
       Clocks the len 8 bit bytes out on MOSI, and simultaneously clocks in data from MISO. 
-      The data read read from the slave is placed into rbuf. rbuf must be at least len bytes long
+      The data read from the slave is placed into rbuf. rbuf must be at least len bytes long
       Uses polled transfer as per section 10.6.1 of the BCM 2835 ARM Peripherls manual
       \param[in] tbuf Buffer of bytes to send. 
       \param[out] rbuf Received bytes will by put in this buffer

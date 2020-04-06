@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.132 $";
+"@(#)$Id: comp.y 1.133 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -3512,7 +3512,7 @@ rPlist	: ractexpr			{
 	 *	in the declaration, the call will automatically generate a list of
 	 *	'immC' nodes of the same type as the array being declared. The names
 	 *	of the members are given the name of the array with a number 0 to n-1
-	 *	appended, where n is the the size of the array, which must be specified
+	 *	appended, where n is the size of the array, which must be specified
 	 *	in this case. The number appended to the array base name is the index
 	 *	of that member in the array (similar to iCa arrays).
 	 *

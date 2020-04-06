@@ -104,7 +104,7 @@ Usage:
 	ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
 	B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
 	B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-	-s host host name of server    (default 'localhost')
+	-s host name of server host    (default 'localhost')
 	-p port service port of server (default '8778')
 	-n name registration name (default first full ID)
 	-i inst instance ID for this @<<<<<< (1 to 3 numeric digits)
@@ -135,7 +135,7 @@ Usage:
 	    Q   from keyboard: exit without stopping iCserver
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.63 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.64 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -480,7 +480,7 @@ while ($argv = shift @argv) {
 		$from = convert_nr($from, 0xff, $argv);	# digital I/O default bit mask for all 8 bits
 		$ini &= $from;				# $ini should not have more bits than defined bits
 		if ($start_iq and $start_iq eq 'Q' and defined $to) {
-		    warn "$named: $argv: digital output argument cannot cannot have a time delay - used 0\n";
+		    warn "$named: $argv: digital output argument cannot have a time delay - used 0\n";
 		    $to = 0;
 		} else {
 		    $to = convert_nr($to, 0, $argv);	# default 0 is normal Input on/off button
@@ -1314,7 +1314,7 @@ iCbox - a TK-widget to provide virtual digital and analog I/O
     ID,<start_range>,<end_range>,<resolution> of an analog I/O B0 W0 etc
     B2,-50,50 range of an analog scale is -50 to 50 (default resolution 1)
     B2,0,500,10 range 0 to 500 with resolution of 10 (default B2,0,100,1)
-    -s host host name of server    (default 'localhost')
+    -s host name of server host    (default 'localhost')
     -p port service port of server (default '8778')
     -n name registration name (default first full ID)
     -i inst instance ID for this iCbox (1 to 3 numeric digits)
