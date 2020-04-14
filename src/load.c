@@ -1,8 +1,8 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.75 $";
+"@(#)$Id: load.c 1.76 $";
 /********************************************************************
  *
- *  Copyright (C) 1985-2017  John E. Wulff
+ *  Copyright (C) 1985-2020  John E. Wulff
  *
  *  You may distribute under the terms of either the GNU General Public
  *  License or the Artistic License, as specified in the README file.
@@ -276,7 +276,7 @@ static const char *	usage =
 "         q  or ctrl+D  at run time stops %s\n"
 "\n"
 "compiled by: %s\n"
-"Copyright (C) 1985-2018 John E. Wulff     <immediateC@gmail.com>\n"
+"Copyright (C) 1985-2020 John E. Wulff     <immediateC@gmail.com>\n"
 "\n"
 "                      EXTRA arguments\n"
 "    --      any further arguments after -- are passed to the app\n"

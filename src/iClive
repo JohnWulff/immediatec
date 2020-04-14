@@ -354,7 +354,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.83 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.84 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1682,7 +1682,7 @@ sub tagComments {
 		if ($CStart and $space eq " " and (
 		    ($prevAtom eq "NET" and $atom eq "TOPOLOGY") or
 		    ($prevAtom eq "Large" and $atom eq "AND"))) {
-		    $text->tagAdd('CTag', $CStart, "$currEnd lineend");
+		    $text->tagAdd('CTag', $CStart, "$currEnd linestart");
 		    $state = "P";		# ******* NET TOPOLOGY    ******* Large AND or OR
 		    $CStart = '';
 		}
@@ -2125,14 +2125,26 @@ sub sendWatchRestore {
 
 ########################################################################
 #
-#	Called by Button-1 Press or Key Press
+#	Called by Button-1 Press or Key Press or Double-1 via pick_word.
 #	In Live mode work on Wath- or Ignore-Points
 #	In Edit mode highlight matching braces, parantheses and square brackets
+#
+#	If report_cursor is called via pick_word(2) by pressing Double-1 on
+#	a brace, parenthesis or square bracket causes the insert cursor to
+#	switch to the matching brace etc, which may involve moving the text.
+#
+#	In all other cases parameter 1 is undefined or "Tk..." from Button-1
+#	Press and nothing is done except highlight the match.
+#
 #	Report the cursor position in the info bar
 #
 ########################################################################
 
 sub report_cursor {
+    my ($p0) = $_[0];
+no warnings;
+    print "report_cursor: 1st parameter = '$p0'\n" if $opt_T;
+use warnings;
     my $c1 = '';
     my $c2 = '';
     my $c3 = '';
@@ -2149,7 +2161,7 @@ sub report_cursor {
     if (not $scanFlag) {
 	########################################################################
 	#  In Edit mode show matching braces, parentheses and square brackets
-	#  not in "strings" or '(' character constants ')'
+	#  not in "strings" or 'character constants'
 	########################################################################
 	$text->tagDelete('pTag');
 	if ($x > 0) {
@@ -2180,9 +2192,17 @@ sub report_cursor {
 			$n++ if $n < 0x7f;	# nesting depth limit 127
 		    } elsif ($c3 eq $c2) {
 			if ($n < 0x7f and $n-- <= 0) {
-			    print "\n" if $opt_T;
-			    $text->tagAdd('pTag', $current);
-			    last;		# matching brace found
+			    print "$cursor '$c1 $c2' $current match found\n" if $opt_T;
+			    $p0 = 0 unless $p0;
+			    if ($p0 == 2) {		# Double-1 via pick_word(2)
+				$text->see($current);	# see matching brace, parenthesis or bracket
+				$text->markSet('insert', $current);	# move insert cursor to match
+				$current =~ m/(\d+)\.(\d+)/;
+				$y = $1;
+				$x = $2 + 1;
+			    }
+			    $text->tagAdd('pTag', $current);	# colour match
+			    last;			# matching brace found
 			}
 		    } elsif ($c3 eq '"' or $c3 eq "'") {
 			my $c4 = $text->get($text->index("$current - 1 chars"));
@@ -3289,11 +3309,15 @@ sub restoreTag {
 #	In practice pick_word() is executed first and marks the selection
 #	in black (search found). Underneath the Text selection is also
 #	there and can be shown and used for editing by clearing the search
-#	with ctrl-Return.
+#	with ctrl-Return or double clicking in the search entry window.
 #
 #	Double-click pick_word works well in Live mode, where the above
 #	is not a problem. For this reason this feature is only active
 #	in Live mode or Edit mode but not in Edit Undo (-u option).
+#
+#	Double-click on a brace, parenthesis or square bracket calls
+#	report_sursor(2), which causes the insert cursor to switch to
+#	the matching brace etc, which may involving moving the text.
 #
 #	You may prefer to allow this in Edit Undo mode
 #	- simply comment if ($scanflag ...) { and matching } lines
@@ -3305,12 +3329,15 @@ sub pick_word {
 	my $start_index = $text->index('insert wordstart');
 	my $end_index = $text->index('insert lineend');
 	my $line = $text->get($start_index, $end_index);
-	$line =~ m/^([\w.]+)/;
-	if (defined $1) {
+	$line =~ m/^(([\w.]+)|([{}()\[\]]))/;
+	if (defined $2) {
 	    $afterId->cancel if $afterId;	# cancel $watchMenu->post()
-	    print "pick_word '$1'\n" if $opt_T;
+	    print "pick_word '$2'\n" if $opt_T;
 	    $entrySearch->focus();		# initiate search entry
 	    search_now(1, $1, 0);		# search for first word only
+	} elsif (not $scanFlag and defined $3) {
+	    print "pick_word '$3'\n" if $opt_T;
+	    report_cursor(2);			# switch to matching brace etc
 	}
     }					### comment to allow pick_word in Edit mode
 } # pick_word
@@ -5655,6 +5682,13 @@ text and so on until the end of the text is reached. Another RETURN
 will start by displaying the first group at the top again. Typing
 SHIFT-RETURN will reverse the direction of displaying the groups.
 
+Holding down the search button [/] will open a menu with the different
+search options 'Go to line', 'Word match', 'Exact match' or 'Regexp
+match'. The 'Ignore case' button applies to the 3 search modes.
+This is followed by a history of previous searches - most recent at
+the end, which can be selected for a repeat search. This search menu
+can be detached with the tear line ---------.
+
 In 'Live' mode searches are restricted to text outside of comments,
 which means sarches will only return actual variables and keywords
 in program text.
@@ -5666,21 +5700,22 @@ for that word. This is the quickest and best way to start a search.
 The search can be continued by clicking on the [/] button or pressing
 RETURN.
 
+Double-clicking with mouse button 1 with the cursor in the Search Entry
+window or by typing ctrl-RETURN will clear the search completely.
+
 This quick search action in 'Edit' mode masks the selection of the text
 under the mouse (Text Binding [2]).  Since selection of text can be
 accomplished easily by swiping a word or stepping over the word with
 the Shift-Left key it was felt the quick search action is more often
 called for. The quick search action is not active for 'Edit Undo' mode.
 
-Double-clicking with mouse button 1 with the cursor in the Search Entry
-window or by typing ctrl-RETURN will clear the search completely.
+Double-clicking with mouse button 1 with the cursor on a brace,
+parenthesis or square bracket character will move the insert cursor to
+the matching brace, parenthesis or square bracket, which may involve
+moving the text.
 
-Holding down the search button [/] will open a menu with the different
-search options 'Go to line', 'Word match', 'Exact match' or 'Regexp
-match'. The 'Ignore case' button applies to the 3 search modes.
-This is followed by a history of previous searches - most recent at
-the end, which can be selected for a repeat search. This search menu
-can be detached with the tear line ---------.
+Single-clicking or moving the insert cursor over a brace, parenthesis
+or square bracket will simply highlight matching braces etc.
 
 The position of the displayed text may be manipulated by the scroll
 bar(s) or the usual up/down/prior/next/home/end keys.  A useful

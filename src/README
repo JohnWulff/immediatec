@@ -1,7 +1,7 @@
 
-			immediate C, iC rev icc_3.2
+			immediate C, iC rev icc_3.4
 
-	Copyright © 1985-2017 John E Wulff <immediatec@gmail.com>
+	Copyright © 1985-2020 John E Wulff <immediatec@gmail.com>
 	SPDX-License-Identifier: GPL-2.0+ OR  Artistic-1.0
 
     Acknowledgments to Larry Wall, whose README I used as a template.
@@ -18,7 +18,7 @@
 
 --------------------------------------------------------------------------
 
-    Notes for the installation of iC rev icc_3.2
+    Notes for the installation of iC rev icc_3.4
 
     0)	Pre-requisites. You need the following on your system:
 
@@ -136,7 +136,8 @@
 		    type q		# to stop hello, iCserver and iCbox
 
     12)	Bernstein chaining.  If several different iC applications, or different
-	instances of the same application are to be started together, they must
+	instances of the same application are to be started togetheri, their
+	initialisation sequences must be run sequentially, but after that they must
 	all run in parallel as separate processes (and in parallel with iCserver,
 	iCbox and iClive).  This is difficult to achieve with shell commands.
 
@@ -152,12 +153,12 @@
 	Bernstein chaining has been implemented with the -R option
 	for every iC app and for all iC drivers.
 
-		    bar -R bar -i1	# starts bar and bar -i1 in parallel
-					# with well sequenced initialisation
+		    bar -R bar -i1	# starts bar and bar -i1 with well sequenced
+					# initialisation and then in parallel
 
 		    bar -l -R bar -i1 -R bar -i2 -R bar -i3	# starts:	
 			    iCserver -z -ak	
-			    iClive			# from -l	
+			    iClive bar.ic			# from -l	
 			    bar -z -i1 -R bar -i2 -R bar -i3	
 			    bar -z -i2 -R bar -i3	
 			    bar -z -i3	
@@ -299,10 +300,10 @@
 
     Lots of success with iC
 
-    $Id: README 1.32 $
+    $Id: README 1.33 $
 
-    Main development is on openSUSE (currently Leap 42.1) and perlTk
-    Tk804.033, which provides fast live updates in iClive. They seem
+    Main development is on openSUSE (currently Leap 15.1) and perlTk
+    Tk804.034, which provides fast live updates in iClive. They seem
     to be as fast as with Tk800.24. A Test with Knoppix and Tk804.25,
     which is still available for Debian also provided good performance
     with fast live updates in iClive.
