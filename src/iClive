@@ -130,7 +130,7 @@ my %keyWords = (		# $kw & 0x0001 iC only, 0x0002 C only, 0x0003 iC and C
 	imm	=> 0x0001,	# iC type modifiers
 	immC	=> 0x0001,
 	bit	=> 0x0001,	# iC types
-	int	=> 0x0083,	# $kw & 0x0080 allows int after FOR
+	int	=> 0x0803,	# $kw & 0x0800 allows int after FOR
 	clock	=> 0x0001,
 	timer	=> 0x0001,
 	void	=> 0x0003,
@@ -210,9 +210,9 @@ my %keyWords = (		# $kw & 0x0001 iC only, 0x0002 C only, 0x0003 iC and C
 	T10sec	=> 0x0009,
 	T1min	=> 0x0009,
 	FOR	=> 0x0010,	# $kw & 0x0010 "FOR" iCa keywords
-	IF	=> 0x0020,	# $kw & 0x0020 "IF" "ELSIF"
-	ELSIF	=> 0x0020,
-	ELSE	=> 0x0040,	# $kw & 0x0040 "ELSE"
+	IF	=> 0x0020,	# $kw & 0x0020 "IF"
+	ELSIF	=> 0x0040,	# $kw & 0x0040 "ELSIF"
+	ELSE	=> 0x0080,	# $kw & 0x0080 "ELSE"
 	include	=> 0x0100,	# $kw & 0x0100 cpp or immac pre-processor commands
 	define	=> 0x0200,	# $kw & 0x0200 #define %define %%define generate macros
 	undef	=> 0x0400,	# $kw & 0x0400 #undef  %undef  %%undef  removes macros
@@ -354,7 +354,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.84 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.85 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1422,7 +1422,7 @@ sub display_callback {
 #	Collect all outputs in Symbol Table for   DEBUG NEXT
 #
 #	Called in open_file() and save_file()
-#	Inderectly in saveAs_file, build_file() and check_save()
+#	Indirectly in saveAs_file, build_file() and check_save()
 #
 #	return number of syntax errors (0 if none)
 #
@@ -1462,6 +1462,7 @@ sub tagComments {
     my %macro = ();
     %stepNames  = ();
     my ($kw, $lv);
+    my $prevKw = 0x0000;
     my $pp = '';
     my $ppC = '';
     my $ppI = '';
@@ -1610,18 +1611,22 @@ sub tagComments {
 		$err++;
 	    } elsif ($atom =~ m/[A-Z_a-z][\w\$]*/) {	# C variable names
 		if ($kw = $keyWords{$atom}) {
-		    if ($kw & 0x0070) {	# "FOR" 0x0010, "IF", or "ELSIF" 0x0020 "ELSE" 0x0040
-			if ($icaStart) {
-			    warn "$fileName$readOnly:$current1: '$atom' follows previous iCa keyword not followed by {{\n";
-			    $text->tagAdd('er', $current, $currEnd);
-			    $err++;
+		    if ($kw & 0x00f0) {		# "FOR" 0x0010, "IF", 0x0020 "ELSE" 0x0040, "ELSIF" 0x0080
+			if ($prevKw == 0x0080 and $kw == 0x0020) {	# allow ELSE IF
+			    $text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
 			} else {
-			    $text->tagAdd('bd', $current, $currEnd);	# iCa keyword in C code bold
-			}
-			$icaStart = $current;
-			$BraceCount++;	# start counting at the iCa keyword - not at opening braces
-			if ($kw & 0x0010) {	# "FOR"
-			    $FdF = 1;	# start looking for FOR loop control variable
+			    if ($icaStart) {
+				warn "$fileName$readOnly:$current1: '$atom' follows previous iCa keyword not followed by {{\n";
+				$text->tagAdd('er', $current, $currEnd);
+				$err++;
+			    } else {
+				$text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
+			    }
+			    $icaStart = $current;
+			    $BraceCount++;		# start counting at the iCa keyword - not at opening braces
+			    if ($kw & 0x0010) {	# "FOR"
+				$FdF = 1;	# start looking for FOR loop control variable
+			    }
 			}
 		    } elsif ($pp and $kw & 0x0700) {	# pre-processor commands tested before keywords
 			if ($ppC) {			# may contain #if or #else
@@ -1637,6 +1642,12 @@ sub tagComments {
 			    $err++;
 			}			# logic error in %keyWords table if neither (ignore)
 			$pp = $ppC = $ppI = '';
+		    } elsif ($FdF) {
+			unless ($FdF == 1 and $kw == 0x803) {	# FOR followed by int is allowed
+			    warn "$fileName$readOnly:$current1: $prevAtom command followed by keyword '$atom' in C code'\n";
+			    $text->tagAdd('er', $current, $currEnd);
+			    $err++;
+			}
 		    } elsif ($kw & 0x0002) {		# C variables outside of comments or strings
 			$text->tagAdd('bd', $current, $currEnd);	# C keyword in C code bold
 		    } elsif (!($kw & 0x0708)) {		# ignore preprocessor keywords not after $pp
@@ -1644,6 +1655,7 @@ sub tagComments {
 			$text->tagAdd('er', $current, $currEnd);	# iC keyword in C code error
 			$err++;
 		    }
+		    $prevKw = $kw;
 		} elsif ($FdF) {
 		    print "$current	space = '$space'	atom = '$atom'\n" if $opt_T;
 		    if ($space =~ m/^\s*\(*\s*$/) {	# only ( and white space allowed before control variable
@@ -1751,18 +1763,22 @@ sub tagComments {
 	    #  $state eq "P" iC code
 	    ########################################################################
 	    if ($kw = $keyWords{$atom}) {	# keywords outside of comments or strings in iC
-		if ($kw & 0x0070) {		# "FOR" 0x0010, "IF", or "ELSIF" 0x0020 "ELSE" 0x0040
-		    if ($icaStart) {
-			warn "$fileName$readOnly:$current1: '$atom' follows previous iCa keyword not followed by {{\n";
-			$text->tagAdd('er', $current, $currEnd);
-			$err++;
-		    } else {
+		if ($kw & 0x00f0) {		# "FOR" 0x0010, "IF", 0x0020 "ELSE" 0x0040, "ELSIF" 0x0080
+		    if ($prevKw == 0x0080 and $kw == 0x0020) {	# allow ELSE IF
 			$text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
-		    }
-		    $icaStart = $current;
-		    $BraceCount++;		# start counting at the iCa keyword - not at opening braces
-		    if ($kw & 0x0010) {	# "FOR"
-			$FdF = 1;	# start looking for FOR loop control variable
+		    } else {
+			if ($icaStart) {
+			    warn "$fileName$readOnly:$current1: '$atom' follows previous iCa keyword not followed by {{\n";
+			    $text->tagAdd('er', $current, $currEnd);
+			    $err++;
+			} else {
+			    $text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
+			}
+			$icaStart = $current;
+			$BraceCount++;		# start counting at the iCa keyword - not at opening braces
+			if ($kw & 0x0010) {	# "FOR"
+			    $FdF = 1;	# start looking for FOR loop control variable
+			}
 		    }
 		} elsif ($pp and $kw & 0x0700) {	# pre-processor commands tested before keywords
 		    if ($ppI) {			# may contain %if or %%else
@@ -1778,6 +1794,12 @@ sub tagComments {
 			$err++;
 		    }			# logic error in %keyWords table if neither (ignore)
 		    $pp = $ppC = $ppI = '';
+		} elsif ($FdF) {
+		    unless ($FdF == 1 and $kw == 0x803) {	# FOR followed by int is allowed
+			warn "$fileName$readOnly:$current1: $prevAtom command followed by keyword '$atom' in iC code'\n";
+			$text->tagAdd('er', $current, $currEnd);
+			$err++;
+		    }
 		} elsif ($kw & 0x0001) {
 		    $text->tagAdd('bd', $current, $currEnd);	# iC keyword in iC code bold
 		    if ($kw & 0x0004) {	# "if", "else" or "switch"
@@ -1790,6 +1812,7 @@ sub tagComments {
 		    $text->tagAdd('er', $current, $currEnd);	# C keyword in iC code error
 		    $err++;
 		}
+		$prevKw = $kw;
 	    } else {
 		if ($atom =~ m/[A-Z_a-z][\w\$]*/) {	# simple names, keywords excluded
 		    if ($FdF) {
@@ -3957,6 +3980,30 @@ sub clear_scan {
 
 ########################################################################
 #
+#	Common subroutine to ask a Yes/No/Cancel question and provide an answer
+#
+########################################################################
+
+sub askYesNo {
+    my ($Title, $Text, $Textvariable) = @_;
+    my $dialog = $text->Dialog (-title   => $Title,
+				-bitmap  => 'question',
+				-text    => $Text,
+				-buttons => [qw(Yes No Cancel)],
+			       );
+    my $dialogBar = $dialog->Label(-textvariable => $Textvariable,
+				   -relief       => 'ridge',
+				  )->pack(-side => 'bottom', -fill => 'x');
+    my $answer = $dialog->Show(
+	    -popover    => $mainWindow,
+	    -overanchor => 'c',
+	    -popanchor  => 'nw',
+	    -takefocus  => 1);
+    return $answer;
+} # askYesNo
+
+########################################################################
+#
 #	Scan text for symbols in %symbolTable, adding a tag for each
 #	symbol found and another for the inverted symbol, if required.
 #
@@ -3984,19 +4031,7 @@ sub do_scan {
 	    return;
 	}
 	if (defined $makeName and $makeName ne '') {
-	    my $dialog = $text->Dialog (-title   => 'Modified build',
-					-bitmap  => 'question',
-					-text    => 'Start up to date build?',
-					-buttons => [qw(Yes No Cancel)],
-				       );
-	    my $dialogBar = $dialog->Label(-textvariable => \$makeName,
-					   -relief       => 'ridge',
-					  )->pack(-side => 'bottom', -fill => 'x');
-	    my $answer = $dialog->Show(
-		    -popover    => $mainWindow,
-		    -overanchor => 'c',
-		    -popanchor  => 'nw',
-		    -takefocus  => 1);
+	    my $answer = askYesNo('Modified build', 'Start up to date build?', \$makeName);
 	    if ($answer eq 'Cancel') {
 		return 0;			# cancel operation
 	    } elsif ($answer eq 'Yes') {
@@ -4302,19 +4337,7 @@ sub check_save {
 	    my $l2 = length $oldContents;
 	    print "length contents = $l1, length oldContents = $l2\n";
 	}
-	my $dialog = $text->Dialog (-title   => 'Modified file',
-				    -bitmap  => 'question',
-				    -text    => 'Save modified file?',
-				    -buttons => [qw(Yes No Cancel)],
-				   );
-	my $dialogBar = $dialog->Label(-textvariable => \$fileName,
-				       -relief       => 'ridge',
-				      )->pack(-side => 'bottom', -fill => 'x');
-	my $answer = $dialog->Show(
-		-popover    => $mainWindow,
-		-overanchor => 'c',
-		-popanchor  => 'nw',
-		-takefocus  => 1);
+	my $answer = askYesNo('Modified file', 'Save modified file?', \$fileName);
 	if ($answer eq 'Yes') {
 	    return save_file(0, 1);	# Yes - save modified $fileName
 	} elsif ($answer eq 'No') {
@@ -4430,19 +4453,7 @@ use warnings;
 	if ($rName and $fName !~ /^$rName/) {
 	    # old file is running and is not derived from new file
 	    info_display(2000, 'red', "'$runName' is still running - should be stopped unless compatible with '$fName'");
-	    my $dialog = $text->Dialog (-title   => 'Still running',
-					-bitmap  => 'question',
-					-text    => 'Stop executable?',
-					-buttons => [qw(Yes No Cancel)],
-				       );
-	    my $dialogBar = $dialog->Label(-textvariable => \$runName,
-					   -relief       => 'ridge',
-					  )->pack(-side => 'bottom', -fill => 'x');
-	    my $answer = $dialog->Show(
-		    -popover    => $mainWindow,
-		    -overanchor => 'c',
-		    -popanchor  => 'nw',
-		    -takefocus  => 1);
+	    my $answer = askYesNo('Still running', 'Stop executable?', \$runName);
 	    if ($answer eq 'Yes') {
 		print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
 		stop_file();			# $runName = ''
@@ -4532,31 +4543,23 @@ sub save_file {
     my $r;
     my $ret = 1;		# good return
     if ($r = tagComments()) {		# comments and/or keywords may have changed
-	info_display(2000, 'red', "ERROR: $r syntax errors in modified file - not saved");
-	$ret = 0;	# error return
+	info_display(2000, 'red', "ERROR: $r syntax errors in file");
+	my $answer = askYesNo('Syntax errors in file', 'Really save this file?', \$fileName);
+	if ($answer ne 'Yes') {
+	    info_display(2000, 'red', "ERROR: $r syntax errors in file - not saved");
+	    return 0;		# No or Cancel - report error
+	}
     }
-    elsif (defined $fileName and $fileName ne $newName and $fileName ne '') {
+    if (defined $fileName and $fileName ne $newName and $fileName ne '') {
 	my ($unconditional) = $_[1];	# optional 2nd parameter
 	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
 	## allow non existing file to be written by setting to $fileTime if undef
 	if ($ftime != $fileTime) {
 	    info_display(2000, 'red', "'$fileName$readOnly' modified in background");
-	    my $dialog = $text->Dialog (-title   => 'Modified since reading file',
-					-bitmap  => 'question',
-					-text    => 'Save to modified file?',
-					-buttons => [qw(Yes No)],
-				       );
-	    my $dialogBar = $dialog->Label(-textvariable => \$fileName,
-					   -relief       => 'ridge',
-					  )->pack(-side => 'bottom', -fill => 'x');
-	    my $answer = $dialog->Show(
-		    -popover    => $mainWindow,
-		    -overanchor => 'c',
-		    -popanchor  => 'nw',
-		    -takefocus  => 1);
+	    my $answer = askYesNo('Modified since reading file', 'Save to modified file?', \$fileName);
 	    if ($answer ne 'Yes') {
 		info_display(2000, 'red', "'$fileName$readOnly' modified in background - not written");
-		return 0;	# No - report error
+		return 0;	# No or Cancel - report error
 	    }
 	    $unconditional = 1;	# definitely write to modified file
 	}

@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2017  John E. Wulff
+#	Copyright (C) 2000-2020  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -55,6 +55,31 @@
 #   The filter 'Auxfiles/filter_iC2toiC3' converts iC and iCa vers 2 files
 #   to version 3 files.
 #
+#   Modification John Wulff 2020.04.16 - change variable $out to $FOR
+#       in the Perl code for generating iC code.
+#       The previous version of immac fails if the word 'out' was used as a
+#       FOR loop control variable, which generates $out for eval code.
+#       But immac used its own variable $out to collect the generated Perl
+#       code to be executed by an eval. This caused errors in executing the eval.
+#       $FOR is a better choice, because 'FOR' could never be used as a FOR
+#       loop control variable. That was already flagged as a syntax error.
+#
+#       The following iCa code used to fail:
+#           FOR (out = 0; out < 5; out++) {{
+#           QX0.[out] = IX0.[out];
+#           }}
+#       because it used to generate this:
+#           for (my $out = 0; $out < 5; $out++) {
+#           $out .= "QX0.@{[$out]} = IX0.@{[$out]};\n";
+#           }
+#           print $out if $out;
+#       The new code generates this, which is OK:
+#           for (my $out = 0; $out < 5; $out++) {
+#           $FOR .= "QX0.@{[$out]} = IX0.@{[$out]};\n";
+#           }
+#           print $FOR if $FOR;
+#   There are no other Perl variables used in the generated eval code.
+#
 ########################################################################
 
 use strict;
@@ -106,7 +131,7 @@ Usage:
     Pre-compiler to convert "immediate C" source files containing arrays
     and object like or function like macros into straight "immediate C".
 
-$Id: immac 1.31 $
+$Id: immac 1.32 $
 .
 
 use vars qw($opt_a $opt_S $opt_N $opt_L $opt_o $opt_l $opt_e);
@@ -352,7 +377,7 @@ if (@opt_P) {
 	$translate = '1' unless defined $translate;		# when translation is missing (just #define X)
 	($df, $val) = scan_define(0, "-P", "$identifier $translate");	# scan and save -P macro in %defs
 	if (@lnErr) {
-	    output_error(0, "-P $_") if @lnErr;
+	    output_error(0, "-P $_");
 	} else {
 	    if ($df eq $val) {
 		warn "//* Warning: '-P $identifier=$translate' does not change anything ???\n";
@@ -382,7 +407,7 @@ if ($opt_m_M_Y) {			# -D -U only processed for <in>.ic iC files or if -m -M or -
 	    $translate = '1' unless defined $translate;		# when translation is missing (just #define X)
 	    ($df, $val) = scan_define(0, "-D", "$identifier $translate");	# scan and save -D macro in %defs
 	    if (@lnErr) {
-		output_error(0, "-D $_") if @lnErr;
+		output_error(0, "-D $_");
 	    } else {
 		if ($df eq $val) {
 		    warn "//* Warning: '-D $identifier=$translate' does not change anything ???\n";
@@ -618,7 +643,7 @@ exit $ret;
 ########################################################################
 
 sub process_file {
-    print LOG "##### $named $argv\nuse strict; use integer;\nmy \$out;\n" if $opt_l;
+    print LOG "##### $named $argv\nuse strict; use integer;\nmy \$FOR;\n" if $opt_l;
     my ($identifier, %identifiers, $atom, @atoms, @block, $offset, $lookfor, $pos, $pos1, $prevPos, $prevAtom);
     my ($translate, $def, $macro, @nlTabs, $control, $finBlock, $inBlock, $braceCount, $evalBlock, $comment, @ids, $id, $idPop, $el);
     my ($ARtranslate, $lfFlag, $spOfs, $Cdirective, $directive, $mWarn, $FORline, $FORend, $compound, $state0, $st0Save, $state, $error);
@@ -670,7 +695,7 @@ sub process_file {
 			next Line;		# do not output lines in false blocks
 		    }
 		    if (not $opt_m_M_Y and (@block or $finBlock or $opt_L)) {
-			push(@block, "\$out .= $_\";\n");
+			push(@block, "\$FOR .= $_\";\n");
 		    } else {
 			if ($opt_m_M_Y and $blankLines) {
 			    blanks();		# print blank lines now
@@ -1034,7 +1059,7 @@ use strict 'refs';
 			    unless ($opt_t) {
 				if (@block or $finBlock or $opt_L) {
 				    $macro =~ s/"/\\"/g;
-				    push(@block, "\$out .= \"%{\\n#$er_wa $macro\\n%}\\n\";\n");
+				    push(@block, "\$FOR .= \"%{\\n#$er_wa $macro\\n%}\\n\";\n");
 				} else {
 				    print "%{\n#$er_wa $macro\n%}\n";
 				}
@@ -1592,11 +1617,11 @@ use strict 'refs';
 			    chomp $comment;
 			    if ($comment) {
 				if ($lfFlag) {
-				    $commentOut = "\$out .= \"\\n//***** $comment\\n\";\n";
+				    $commentOut = "\$FOR .= \"\\n//***** $comment\\n\";\n";
 				    $commentLfFlag = 1;
 				    $lfFlag = 0;	# lines terminated by '\' are now terminated by LF in LOG
 				} else {
-				    $commentOut = "\$out .= \"//***** $comment\\n\";\n";
+				    $commentOut = "\$FOR .= \"//***** $comment\\n\";\n";
 				    $commentLfFlag = 0;
 				}
 			    }
@@ -1612,14 +1637,14 @@ use strict 'refs';
 				s/^(\s*)(\s)/ /) {	# repeat with single space unless there were none
 				my $space = $1 . ($2 eq "\t" ? "       " : "");
 				if ($space) {
-				    splice(@block, @block - $spOfs, 0, "\$out .= \"$space\";\n");
+				    splice(@block, @block - $spOfs, 0, "\$FOR .= \"$space\";\n");
 				    print LOG "###### splice: $block[@block-$spOfs]" if $opt_l and $opt_T;
 				}
 			    }
-			    $_ = "\$out .= \"$_\";\n";	# output line without LF in the FOR loop when eval'd
+			    $_ = "\$FOR .= \"$_\";\n";	# output line without LF in the FOR loop when eval'd
 			    $lfFlag = 1;		# terminate the last line in the block with LF
 			} else {
-			    $_ = "\$out .= \"$_\\n\";\n";	# output line with LF in the FOR loop when eval'd
+			    $_ = "\$FOR .= \"$_\\n\";\n";	# output line with LF in the FOR loop when eval'd
 			    $lfFlag = 0;		# line already terminated wih LF
 			}
 			$spOfs = 0;			# was set in 'FOR line and brace'
@@ -1656,8 +1681,8 @@ use strict 'refs';
 				    $commentEndEnd = 0;
 				} else {
 				    if ($commentEndPos < scalar @block and not $idPop and $commentOut =~ s/= "\\n/= "/) {
-					print LOG "####2# splice @{[scalar @block]} $commentEndPos end='\$out .= \"\\n\";'\n" if $opt_l and $opt_T;
-					splice(@block, $commentEndPos, 0, "\$out .= \"\\n\";\n");	# splice LF in block
+					print LOG "####2# splice @{[scalar @block]} $commentEndPos end='\$FOR .= \"\\n\";'\n" if $opt_l and $opt_T;
+					splice(@block, $commentEndPos, 0, "\$FOR .= \"\\n\";\n");	# splice LF in block
 					$commentEndEnd = 1;
 				    }
 				    if ($comment =~ m/(ELSE|ELSIF)/) {
@@ -1672,8 +1697,8 @@ use strict 'refs';
 			    }
 			} elsif ($control == 0x2 and $lfFlag) {
 			    $endPos = scalar @block;
-			    push(@block, "\$out .= \"\\n\";\n");
-			    print LOG "#+++++ \$_=\$out .= \"\\n\";\n" if $opt_l and $opt_T;
+			    push(@block, "\$FOR .= \"\\n\";\n");
+			    print LOG "#+++++ \$_=\$FOR .= \"\\n\";\n" if $opt_l and $opt_T;
 			    $lfFlag = 0;		# lines terminated by '\' are now terminated by LF
 			} elsif ($control == 0x3 and not $lfFlag and $endPos) {
 			    my $b = splice(@block, $endPos, 1);
@@ -1713,10 +1738,10 @@ use strict 'refs';
 		    s/\]}\[/]}"."[/g;		# insert something between ]}[ - needed for Perl interpretation
 		    chomp;
 		    if (s/\\\\$//) {		# is line terminated by a back slash ? (remove it)
-			$_ = "\$out .= \"$_\";\n";	# yes - output line without LF in the FOR loop when eval'd
+			$_ = "\$FOR .= \"$_\";\n";	# yes - output line without LF in the FOR loop when eval'd
 			$lfFlag = 1;		# terminate the last line in the block with LF
 		    } else {
-			$_ = "\$out .= \"$_\\n\";\n";	# no -  output line with LF in the FOR loop when eval'd
+			$_ = "\$FOR .= \"$_\\n\";\n";	# no -  output line with LF in the FOR loop when eval'd
 			$lfFlag = 0;		# line already terminated wih LF
 		    }
 		    push(@block, $_);		# push the modified line for eval
@@ -1724,10 +1749,10 @@ use strict 'refs';
 		    if (@block or $lfFlag or $opt_L) {
 			s/'/\\'/g;
 			if (chomp) {
-			    push(@block, "\$out .= '$_\n';\n");	# push the modified line for eval with LF
+			    push(@block, "\$FOR .= '$_\n';\n");	# push the modified line for eval with LF
 			    $lfFlag = 0;
 			} else {
-			    push(@block, "\$out .= '$_';\n");	# or without LF
+			    push(@block, "\$FOR .= '$_';\n");	# or without LF
 			}
 		    } else {
 			print;			# no iCa index expressions - faster if direct print
@@ -2229,8 +2254,8 @@ sub resolve {
 
 sub eval_block {
     my ($Rblock, $msg, $el) = @_;
-    my $out = '';
-    print LOG "\$out = '';\n### eval ${msg}LINE $.\n", @$Rblock if $opt_l;
+    my $FOR = '';
+    print LOG "\$FOR = '';\n### eval ${msg}LINE $.\n", @$Rblock if $opt_l;
 no warnings;				# warnings in eval are rather spurious
     eval "@$Rblock";			# evaluate code block
 use warnings;
@@ -2248,11 +2273,11 @@ use warnings;
 	$r++;				# eval error return
     }
     @$Rblock = ();			# end of this eval block
-    if ($out ne '') {
-	$out =~ s/,(\s*;)/$1/g;		# remove comma from ,; in generated code
-	print $out;			# actual output of this eval block
+    if ($FOR ne '') {
+	$FOR =~ s/,(\s*;)/$1/g;		# remove comma from ,; in generated code
+	print $FOR;			# actual output of this eval block
     }					# ignore empty output from eval - is algorithmically ok
-    print LOG "print \$out if \$out;\n" if $opt_l;
+    print LOG "print \$FOR if \$FOR;\n" if $opt_l;
 } # eval_block
 
 ########################################################################
@@ -2590,8 +2615,9 @@ input file (.ica) and without the options -m, -M or -Y, the keyword
 to introduce a macro definition is B<%%define> not B<#define>, which
 is reserved for B<cpp> or B<immac -m>.  B<immac> without the options
 -m, -M or -Y, also handles B<%%undef>, B<%%include>, B<%%ifdef>,
-B<%%ifndef>, B<%%if>, B<%%elif>, B<%%endif> and B<%%error> in the
-same way that cpp handles their B<#>directive counterparts.
+B<%%ifndef>, B<%%if>, B<%%elif>, B<%%endif>, B<%%error>, B<%%warning>
+and B<%%line> in the same way that cpp handles their B<#>directive
+counterparts.
 
     %%define LENGTH	 4
 
@@ -2656,12 +2682,12 @@ of a 'FOR loop' and hence the number of blocks of iC code, which is
 generated by the 'FOR loop'.
 
 File inclusion with B<%%include> "file" and conditional compilation
-with B<%%ifdef>, B<%%ifndef>, B<%%if>, B<%%elif>, B<%%else>, B<%%endif>
-and B<%%error> are also supported using the same rules as cpp. The
-word 'defined' in an B<%%if> or B<%%elif> expression has the usual cpp
-meaning - it is set to 1 (true) if defined else 0 (false). Identifiers
-in such an expression which are not defined in a previous B<%%define>
-or -P are also set to 0 (false).
+with B<%%ifdef>, B<%%ifndef>, B<%%if>, B<%%elif>, B<%%else>,
+B<%%endif>, B<%%error>, B<%%warning> and B<%%line> are also supported
+using the same rules as cpp. The word 'defined' in an B<%%if> or
+B<%%elif> expression has the usual cpp meaning - it is set to 1 (true)
+if defined else 0 (false). Identifiers in such an expression which are
+not defined in a previous B<%%define> or -P are also set to 0 (false).
 
 =head1 ALTERNATIVE MACRO PROCESSING
 
