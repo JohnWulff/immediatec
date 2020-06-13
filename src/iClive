@@ -354,7 +354,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.85 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.86 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -713,7 +713,7 @@ $menuFile->command(-label       => 'New',				# 1
 		   -command     => \&new_text);
 $menuFile->command(-label       => 'Open',				# 2
 		   -accelerator => 'Alt-o',
-		   -command     => \&open_file);
+		   -command     => [ \&open_file, 1, '' ]);
 $menuFile->command(-label       => 'Reload',				# 3
 		   -accelerator => 'Alt-R',
 		   -command     => \&reload_file);
@@ -1611,7 +1611,7 @@ sub tagComments {
 		$err++;
 	    } elsif ($atom =~ m/[A-Z_a-z][\w\$]*/) {	# C variable names
 		if ($kw = $keyWords{$atom}) {
-		    if ($kw & 0x00f0) {		# "FOR" 0x0010, "IF", 0x0020 "ELSE" 0x0040, "ELSIF" 0x0080
+		    if ($kw & 0x00f0) {		# "FOR" 0x0010, "IF", 0x0020 "ELSIF" 0x0040, "ELSE" 0x0080
 			if ($prevKw == 0x0080 and $kw == 0x0020) {	# allow ELSE IF
 			    $text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
 			} else {
@@ -1728,6 +1728,7 @@ sub tagComments {
 		    $icaLoop = 1;
 		    $icaStart = '';
 		}
+		$prevKw = 0x0000;
 	    } elsif ($atom eq "}}") {
 		if ($icaStart) {
 		    warn "$fileName$readOnly:$current1: }} follows previous iCa keyword not followed by {{\n";
@@ -1763,7 +1764,7 @@ sub tagComments {
 	    #  $state eq "P" iC code
 	    ########################################################################
 	    if ($kw = $keyWords{$atom}) {	# keywords outside of comments or strings in iC
-		if ($kw & 0x00f0) {		# "FOR" 0x0010, "IF", 0x0020 "ELSE" 0x0040, "ELSIF" 0x0080
+		if ($kw & 0x00f0) {		# "FOR" 0x0010, "IF", 0x0020 "ELSIF" 0x0040, "ELSE" 0x0080
 		    if ($prevKw == 0x0080 and $kw == 0x0020) {	# allow ELSE IF
 			$text->tagAdd('bd', $current, $currEnd);	# iCa keyword in iCa code bold
 		    } else {
@@ -1891,6 +1892,7 @@ sub tagComments {
 		$icaStart = '';
 		$icaLoop = 1;
 	    }
+	    $prevKw = 0x0000;
 	} elsif ($atom eq "}}") {
 	    if ($icaStart) {
 		warn "$fileName$readOnly:$current1: }} follows previous iCa keyword not followed by {{\n";
@@ -4375,16 +4377,13 @@ sub new_text {
 ########################################################################
 #
 #	Reload the currently loaded iC $fileName unconditionally
-#	because it was (possibly) altered externally (usually by vi)
+#	because it was (possibly) altered externally, usually by vi
+#	if a source file or iCmake if a generated file.
 #
 ########################################################################
 
 sub reload_file {
-    if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst6?|c|h|ini)$/) {
-	open_file(1, "$1.ic");
-    } else {
-	info_display(2000, 'red', "ERROR: no file matching '$fileName$readOnly'");
-    }
+    open_file(0, $fileName);
 } # reload_file
 
 ########################################################################
@@ -4392,25 +4391,32 @@ sub reload_file {
 #	Open the list file (file.lst) for the currently loaded iC $fileName
 #	Alternatively open the corresponding file.ic
 #
+#	For iCa $fileName open the iC file and then the list file and then
+#	the iCa file again
+#
 ########################################################################
 
 sub open_list {
     if ($fileName =~ /^(([\w\.\$]*[\\\/])*([\w\.\$]+))\.(ic|ica|lst6?|c|h|ini)$/) {
-	if ($4 eq 'ic') {
-	    open_file(0, "$1.lst");
+	if ($4 eq "ic") {
+	    open_file(1, "$1.lst");
+	} elsif ($4 eq "ica") {
+	    open_file(1, "$1.ic");
+	} elsif (-w "$1.ica") {
+	    open_file(0, "$1.ica");
 	} else {
-	    open_file(1, "$1.ic");	# $1.lst not saved, since generated and RO
+	    open_file(0, "$1.ic");	# $1.lst not saved, since generated and RO
 	}
     } else {
-	info_display(2000, 'red', "ERROR: no list file matching '$fileName$readOnly'");
+	info_display(2000, 'red', "ERROR: no file matching '$fileName$readOnly'");
     }
 } # open_list
 
 ########################################################################
 #
 #	Opens a file if possible; then loads the contents
-#		parameter 1:	1:          load unconditionally (discard changes)
-#				0 or undef: save first if text is altered (default)
+#		parameter 1:	0 or undef: load unconditionally (discard changes)
+#				1:          save first if text is altered
 #		parameter 2:	file_name
 #				'' use getOpenFile from Tk::FBox (default)
 #	$fileName is assigned new file_name if successfully opened
@@ -4429,48 +4435,46 @@ sub open_list {
 ########################################################################
 
 sub open_file {
-    my ($unconditional, $fName) = @_;	# optional parameters
-no warnings;
-    print "open_file: \$unconditional = '$unconditional' \$fName = '$fName'\n" if $opt_T;
-use warnings;
-    $unconditional = 0 unless $unconditional;	# stops trace errors
+    my ($conditional, $fName) = @_;	# optional parameters
+    $conditional = 0 unless $conditional;	# stops trace errors
+    print "open_file: \$conditional = '$conditional' \$fName = '$fName'\n" if $opt_T;
     my $ci = 0;
     my $no = 0;
-    unless (defined $fName and $fName ne '') {
-	$fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
+    if (not $conditional or check_save()) {
 	unless (defined $fName and $fName ne '') {
-	    print "open_file: $unconditional no file selected\n" if $opt_T;
-	    info_display(2000, 'red', "no file selected");
-	    return;			# global $fileName is not altered
-	}
-	$fName =~ s#^C:/cygwin## or $fName =~ s#^([A-Z]):#/cygdrive/\l$1#;
-	$fName =~ s#^$cwd/##;
-    }
-    if ($unconditional or $fName ne $fileName) {
-	print "open_file: $unconditional $fName\n" if $opt_T;
-	my $rName = $runName;
-	$rName =~ s/-\d+//;		# check without instance number
-	if ($rName and $fName !~ /^$rName/) {
-	    # old file is running and is not derived from new file
-	    info_display(2000, 'red', "'$runName' is still running - should be stopped unless compatible with '$fName'");
-	    my $answer = askYesNo('Still running', 'Stop executable?', \$runName);
-	    if ($answer eq 'Yes') {
-		print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
-		stop_file();			# $runName = ''
-	    } elsif ($answer eq 'No') {
-		print "open_file: open '$fName' leave '$runName'\n" if $opt_T;
-		$no = 1;
-	    } else {				# 'Cancel'
-		info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
-		return 0;			# cancel operation
+	    $fName = $mainWindow->getOpenFile(-filetypes => $fileTypes);
+	    unless (defined $fName and $fName ne '') {
+		print "open_file: $conditional no file selected\n" if $opt_T;
+		info_display(2000, 'red', "no file selected");
+		return;			# global $fileName is not altered
 	    }
+	    $fName =~ s#^C:/cygwin## or $fName =~ s#^([A-Z]):#/cygdrive/\l$1#;
+	    $fName =~ s#^$cwd/##;
 	}
-	if ($scanFlag) {
-	    deleteAllTags();			# required here to clear = values in text
-	    reset_scan(1);			# $text -state now 'normal' for reading file
-	    $scanFlag = 1;			# restore $scanFlag
-	}
-	if ($unconditional or check_save()) {
+	if (not $conditional or $fName ne $fileName) {
+	    print "open_file: $conditional $fName\n" if $opt_T;
+	    my $rName = $runName;
+	    $rName =~ s/-\d+//;		# check without instance number
+	    if ($rName and $fName !~ /^$rName/) {
+		# old file is running and is not derived from new file
+		info_display(2000, 'red', "'$runName' is still running - should be stopped unless compatible with '$fName'");
+		my $answer = askYesNo('Still running', 'Stop executable?', \$runName);
+		if ($answer eq 'Yes') {
+		    print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
+		    stop_file();			# $runName = ''
+		} elsif ($answer eq 'No') {
+		    print "open_file: open '$fName' leave '$runName'\n" if $opt_T;
+		    $no = 1;
+		} else {				# 'Cancel'
+		    info_display(2000, 'blue', "'$fName' was not loaded - '$runName' is still running");
+		    return 0;			# cancel operation
+		}
+	    }
+	    if ($scanFlag) {
+		deleteAllTags();			# required here to clear = values in text
+		reset_scan(1);			# $text -state now 'normal' for reading file
+		$scanFlag = 1;			# restore $scanFlag
+	    }
 	    stat($fName);
 	    if (-f _ and -r _ and open(FH, "<$encoding", $fName)) {	# :encoding($opt_E) calls stat()
 		if ($readOnly) {		# applies to previously opened file
@@ -4501,8 +4505,12 @@ use warnings;
 		    info_display(2000, 'black', "File $fileName$readOnly, $length bytes loaded");
 		}
 		if ($m and $extnName =~ m/^(ic|ica|lst6?|c|h|ini)$/) {
-		    if ($extnName eq 'ic') {
+		    if ($extnName eq "ic") {
 			$menuFile->entryconfigure(4, -label => "$processName.lst");
+		    } elsif ($extnName eq "ica") {
+			$menuFile->entryconfigure(4, -label => "$processName.ic");
+		    } elsif (-w "$processName.ica") {
+			$menuFile->entryconfigure(4, -label => "$processName.ica");
 		    } else {
 			$menuFile->entryconfigure(4, -label => "$processName.ic");
 		    }
@@ -4521,12 +4529,12 @@ use warnings;
 		}
 		return if $ci;		# global $fileName and application has altered
 	    } else {
-		print "open_file: $unconditional ERROR: Could not open $fName\n" if $opt_T;
+		print "open_file: $conditional ERROR: Could not open $fName\n" if $opt_T;
 		check_menu($fName, 'files', 1);		# delete fName in the menu
 		info_display(2000, 'red', "-f and -r and open(FH, \"<$encoding\", $fName) failed ($?)");
 	    }
+	    adjust_live();
 	}
-	adjust_live();
     }
     return;
 } # open_file
@@ -4712,7 +4720,7 @@ sub build_file {
 		    select undef, undef, undef, 2;
 		    # iCmake += 20 for immac errors : += 1 for immcc errors
 		    my $listName = $ret >= 20 ? "$baseName.ic" : "$baseName.lst";
-		    open_file(1, $listName);	# load the generated file (iC is up to date)
+		    open_file(0, $listName);	# load the generated file (iC is up to date)
 		    $searchText = '^\*\*\* ';	# regular expression to find errors in listing
 		    $prevText = '';		# start a new search
 		    $gl = 0;
