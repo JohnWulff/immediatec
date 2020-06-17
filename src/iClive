@@ -354,7 +354,7 @@ Usage:
 
 Copyright (C) 2000-2017  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.86 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.87 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -1596,9 +1596,9 @@ sub tagComments {
 		$CbraceCount--;		# "%}" end of C literal block found
 	  EndC:	$text->tagAdd('CTag', $CStart, $currEnd);
 		$state = "P";		# end of C code found
-		if ($CbraceCount != 0 or $BraceCount != 0) {
-		    $CbraceCount = $BraceCount = 0;
-		    warn "$fileName$readOnly:$current1: } single or double braces do not match in C code\n";
+		if ($CbraceCount != 0 or $braceCount != 0) {
+		    $CbraceCount = $braceCount = 0;
+		    warn "$fileName$readOnly:$current1: } single braces do not match in C code\n";
 		    $text->tagAdd('er', "$current + $l chars", $currEnd);
 		    $err++;
 		} else {
@@ -1629,12 +1629,18 @@ sub tagComments {
 			    }
 			}
 		    } elsif ($pp and $kw & 0x0700) {	# pre-processor commands tested before keywords
-			if ($ppC) {			# may contain #if or #else
-			    $text->tagAdd('bt', $ppC, $currEnd);	# pp command in C code bold italics
-			    if ($kw & 0x0200) {
-				$FdF = 2;		# #define found in C code - look for macro
-			    } elsif ($kw & 0x0400) {
-				$FdF = 3;		# #undef found in C code - look for macro
+			if ($ppC) {		# may contain #if or #else
+			    if ($BraceCount == 0) {
+				$text->tagAdd('bt', $ppC, $currEnd);	# pp command in C code bold italics
+				if ($kw & 0x0200) {
+				    $FdF = 2;		# #define found in C code - look for macro
+				} elsif ($kw & 0x0400) {
+				    $FdF = 3;		# #undef found in C code - look for macro
+				}
+			    } else {
+				warn "$fileName$readOnly:$current1: '$pp$atom' in FOR loop not handled by immac in C code\n";
+				$text->tagAdd('er', $ppC, $currEnd);
+				$err++;
 			    }
 			} elsif ($ppI) {
 			    warn "$fileName$readOnly:$current1: '$pp$atom' iC or iCa pre-processor command in C code\n";
@@ -1783,11 +1789,17 @@ sub tagComments {
 		    }
 		} elsif ($pp and $kw & 0x0700) {	# pre-processor commands tested before keywords
 		    if ($ppI) {			# may contain %if or %%else
-			$text->tagAdd('bt', $ppI, $currEnd);	# pp command in iC or iCa code bold
-			if ($kw & 0x0200) {
-			    $FdF = 2;	# %define or %%define found in iC or iCa code - look for macro
-			} elsif ($kw & 0x0400) {
-			    $FdF = 3;	# %undef or %%undef found in iC or iCa code - look for macro
+			if ($BraceCount == 0) {
+			    $text->tagAdd('bt', $ppI, $currEnd);	# pp command in iC or iCa code bold italics
+			    if ($kw & 0x0200) {
+				$FdF = 2;	# %define or %%define found in iC or iCa code - look for macro
+			    } elsif ($kw & 0x0400) {
+				$FdF = 3;	# %undef or %%undef found in iC or iCa code - look for macro
+			    }
+			} else {
+			    warn "$fileName$readOnly:$current1: '$pp$atom' in FOR loop not handled by immac in iC or iCa code\n";
+			    $text->tagAdd('er', $ppI, $currEnd);
+			    $err++;
 			}
 		    } elsif ($ppC) {
 			warn "$fileName$readOnly:$current1: '$pp$atom' C pre-processor command in iC or iCa code\n";
@@ -2000,12 +2012,12 @@ sub tagComments {
 		warn "$fileName$readOnly:$current1: in iC '$er' is not allowed in a string in an index expression\n";
 		$text->tagAdd('er', $sqbStart, $currEnd);
 		$err++;
-	    } elsif ($state ne "CS") {
+	    } else {
 		$text->tagAdd('sqbTag', $sqbStart, $currEnd);	# tag square bracket expression with gold tag
-		$sqbStart = "";		# end of innermost square bracket pair
 	    }
+	    $sqbStart = "";		# end of innermost square bracket pair
 	}
-      NextAtom:				# TODO placing label here excludes [] in macros
+      NextAtom:
 	$current = $currEnd;		# continue search after this atom
     }
     if (($extn & 03) and ($braceCount or $CbraceCount or $BraceCount)) {	# only in .ic and .ica files
