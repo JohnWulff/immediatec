@@ -27,7 +27,7 @@ version()
   echo 'These lists are exclusive subsets of the complete set of selected files.'
   echo
   echo 'Author:	John E. Wulff        <immediateC@gmail.com>'
-  echo '$Id: Mdiff 2.15 $'
+  echo '$Id: Mdiff 2.16 $'
   echo
 }
 
@@ -179,7 +179,7 @@ process()
 				    echo "$sfile"	# -le or -el option (symbolic link)
 				fi
 			    fi
-			elif [[ $sfile -ef $cfile ]]; then	# check if same device and inode
+			elif [[ "$sfile" -ef "$cfile" ]]; then	# check if same device and inode
 			    if [[ $q -eq 0 ]]; then
 				if [[ $i -eq 1 ]]; then
 				    header "$spath" "$cdir"
@@ -191,24 +191,26 @@ process()
 			elif [[ $li -eq 3 && $e -ne 0 ]]; then
 			    echo "$sfile"		# -lE or -lEi (not identity)
 			else
-			    sf=$sfile
-			    cf=$cfile
+			    sf="$sfile"
+			    cf="$cfile"
 			    if [[ $filter -ne 0 ]]; then
 				if [[ -n $f ]]; then
 				    tmp1=$(mktemp) || exit 11
 				    test $T -eq 1 && echo "eval $f $sfile >> $tmp1"
-				    eval $f $sfile >> $tmp1
+				    sf=${sfile// /'\ '}
+				    eval $f "$sf" >> $tmp1
 				    sf=$tmp1
 				fi
 				if [[ -n $F ]]; then
 				    tmp2=$(mktemp) || exit 12
 				    test $T -eq 1 && echo "eval $F $cfile >> $tmp2"
-				    eval $F $cfile >> $tmp2
+				    cf=${cfile// /'\ '}
+				    eval $F "$cf" >> $tmp2
 				    cf=$tmp2
 				fi
 				test $T -eq 1 && echo "diff$w$k$context -- $sf $cf"
 			    fi
-			    if diff -q$w$k -- $sf $cf > /dev/null; then
+			    if diff -q$w$k -- "$sf" "$cf" > /dev/null; then
 				if [[ $q -eq 0 ]]; then
 				    if [[ $i -eq 1 ]]; then
 					header "$spath" "$cdir"
@@ -226,10 +228,10 @@ process()
 				    header "$spath" "$cdir"
 				    echo "########## $sfile ##########"
 				    if [[ -z "$context" ]]; then
-					ls -lL -- $sfile
-					ls -lL -- $cfile
+					ls -lL -- "$sfile"
+					ls -lL -- "$cfile"
 				    fi
-				    diff$w$k$context -- $sf $cf
+				    diff$w$k$context -- "$sf" "$cf"
 				elif [[ $li -eq 1 && $e -ne 1 ]]; then
 				    echo "$sfile"		# -l or -el option
 				fi
@@ -248,10 +250,10 @@ process()
 			    else
 				echo "########## $sfile **********"
 				if [[ -z "$context" ]]; then
-				    ls -lL -- $sfile
+				    ls -lL -- "$sfile"
 				    ls -lL -- /tmp/0
 				fi
-				diff$w$k$context -- $sfile /tmp/0
+				diff$w$k$context -- "$sfile" /tmp/0
 			    fi
 			elif [[ $li -eq 1 ]]; then
 			    echo "$sfile"		# -le or -el option
