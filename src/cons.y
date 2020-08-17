@@ -1,5 +1,5 @@
 %{ static const char cons_y[] =
-"@(#)$Id: cons.y 1.5 $";
+"@(#)$Id: cons.y 1.6 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -74,17 +74,16 @@ int		iC_Wflag = W_DEPRECATED_LOGIC;
 static int	suppressWarning = 1;		/* suppress warnings for constant expression compiler */
 extern void	iCerror(const char * s);	/* use full yyerror in comp.y */
 #endif	/* TESTCONS */
-static void	yyerror (int * retValue, const char * msg);
+static void	yyerror (const char * msg);
 static int	yylex(void);
 static char *	in;
 static char *	inp;
+static int	parseReturn = 0;
 static int	suppressErrorMsg = 0;
 static int	stxFlag = 0;
 
 /* use default YYSTYPE int */
 %}
-
-%parse-param {int * retValue}
 
 %token	NUMBER
 %token	'(' ')'
@@ -103,7 +102,7 @@ static int	stxFlag = 0;
 
 %%
 constValue
-	: constExpr		{ *retValue = $1; }
+	: constExpr		{ parseReturn = $1; }
 	;
 
 constExpr
@@ -232,10 +231,12 @@ constExpr
 int
 parseConstantExpression(char * expressionText, int * valp, int r)
 {
+    int er;
     in = inp = expressionText;		/* ready for yylex */
     suppressErrorMsg = r;
-    *valp = 0;
-    return cnparse(valp);
+    er = cnparse();
+    *valp = er ? 0 : parseReturn;
+    return er;
 } /* parseConstantExpression */
 
 /********************************************************************
@@ -432,14 +433,12 @@ yylex(void)
 
 /********************************************************************
  *
- *	Since yyerror for this parser has an extra int return value
- *	must use this wrapper to call the full yyerror() for immcc
- *	without retValue, which is useless for syntax error messages.
+ *	Wrapper to call the full yyerror() for immcc
  *
  *******************************************************************/
 
 static void
-cnerror (int * retValue, const char * msg)
+cnerror (const char * msg)
 {
     if (suppressErrorMsg == 0) {
 	iCerror("cons syntax error");				/* use full yyerror in comp.y */
@@ -466,7 +465,7 @@ warning(char * warnMsg, char * msg)
  *******************************************************************/
 
 static void
-yyerror (int * retValue, const char * msg)
+yyerror (const char * msg)
 {
     printf("*** %s for return value %d\n", msg, *retValue);
 } /* yyerror */

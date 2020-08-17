@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.76 $
+# @(#)$Id: Makefile.in 1.77 $
 
 #######################################################################
 #
@@ -97,8 +97,8 @@ manext = 1
 manprefix =
 
 REV  = $(shell perl -e 'while (<>) { if ( m/\$$(Revision: icc_|Id: icc.v(,v)? )(\d+)\.(\d+)\b/ ) { print "$$3.$$4"; last; } }' $(srcdir)/icc.v)
-PMOD = perl -e 'while (<>) { if ( m /^\/tmp\/[a-z_A-Z]\w*\.o(\(\.data\+0x[a-f\d]+\))*:/ ) { s //\/tmp\/x.o:/; } print; }'
 PADD = perl -e 'while (<>) { if ( m /^[a-z_A-Z]/ ) { s /^/icc_$(REV)\//; print; } }'
+TKGE803 = $(shell perl -e 'use Tk; if ($$Tk::VERSION >= 803) { print "true"; }')
 
 #### End of system configuration section. ####
 
@@ -118,16 +118,12 @@ LOBJ =	link.$(O) rsff.$(O) scan.$(O)
 ifeq ($(findstring RASPBERRYPI,$(OPT)),RASPBERRYPI)
 PSRC =	$(srcdir)/rpi_rev.c $(srcdir)/rpi_gpio.c $(srcdir)/mcp23s17.c $(srcdir)/pifacecad.c
 POBJ =	rpi_rev.$(O) rpi_gpio.$(O) mcp23s17.$(O) pifacecad.$(O)
-# Bison 2.5 < 2.6 now obsolete
-compPREFIX = --name-prefix=iC
-consPREFIX = --name-prefix=cn
 else
 PSRC =
 POBJ =
-# Bison 2.7
-compPREFIX = -Dapi.prefix=iC
-consPREFIX = -Dapi.prefix=cn
 endif
+compPREFIX = -piC
+consPREFIX = -pcn
 gramPREFIX =
 
 #### Standalone versions ##############################################
@@ -221,7 +217,11 @@ $(srcdir)/%.tab.c:	$(srcdir)/%.y
     endif
 
 %.1.gz:	%
+    ifeq ($(TKGE803),true)
 	@pod2man -u -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
+    else
+	@pod2man -n $* -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $*.1
+    endif
 	@gzip -f $*.1
 
 $(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/icc.c $(srcdir)/misc.c $(CSRC) $(srcdir)/pawk.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(LSRC) $(PSRC)
@@ -232,7 +232,11 @@ $(srcdir)/cexe.c:	$(srcdir)/cexe_t.c
 	chmod +w $(srcdir)/cexe.c
 
 $(srcdir)/immcc.1.gz:	$(srcdir)/icc.c $(srcdir)/scid.c
+    ifeq ($(TKGE803),true)
 	@pod2man -u -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
+    else
+	@pod2man -n immcc -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/immcc.1
+    endif
 	@gzip -f $(srcdir)/immcc.1
 
 $(srcdir)/iCbox.1.gz:	$(srcdir)/iCbox $(srcdir)/scid.c
@@ -256,15 +260,27 @@ $(srcdir)/immax.1.gz:	$(srcdir)/immax $(srcdir)/scid.c
 $(srcdir)/makeAll.1.gz:	$(srcdir)/makeAll $(srcdir)/scid.c
 
 $(srcdir)/Mdiff.1.gz:	$(srcdir)/AuxTools/Mdiff $(srcdir)/scid.c
+    ifeq ($(TKGE803),true)
 	@pod2man -u -n Mdiff -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/Mdiff.1
+    else
+	@pod2man -n Mdiff -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/Mdiff.1
+    endif
 	@gzip -f $(srcdir)/Mdiff.1
 
 $(srcdir)/iCpiFace.1.gz:	$(srcdir)/iCpiFace.c $(srcdir)/scid.c
+    ifeq ($(TKGE803),true)
 	@pod2man -u -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
+    else
+	@pod2man -n iCpiFace -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiFace.1
+    endif
 	@gzip -f $(srcdir)/iCpiFace.1
 
 $(srcdir)/iCpiPWM.1.gz:	$(srcdir)/iCpiPWM.c $(srcdir)/scid.c
+    ifeq ($(TKGE803),true)
 	@pod2man -u -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
+    else
+	@pod2man -n iCpiPWM -c 'iC Project Documentation' -r "icc.v $(REV)" $< > $(srcdir)/iCpiPWM.1
+    endif
 	@gzip -f $(srcdir)/iCpiPWM.1
 
 $(srcdir)/iCrfid.1.gz:	$(srcdir)/iCrfid $(srcdir)/scid.c
