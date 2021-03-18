@@ -2,7 +2,7 @@
 
 ########################################################################
 #
-#	Copyright (C) 2000-2020  John E. Wulff
+#	Copyright (C) 2000-2021  John E. Wulff
 #
 #   You may distribute under the terms of either the GNU General Public
 #   License or the Artistic License, as specified in the README file.
@@ -30,6 +30,7 @@ use Tk::Dialog;
 use Tk::DialogBox;
 use Tk::LabEntry;
 use Cwd;
+my $cwd = getcwd();	#  current working directory
 use strict;
 use warnings;
 use Time::HiRes qw(sleep gettimeofday tv_interval);
@@ -352,9 +353,9 @@ Usage:
     [Help]      Display the @<<<<< man page.                      Alt-h
 			    $named
 
-Copyright (C) 2000-2020  John E. Wulff          <immediateC@gmail.com>
+Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.88 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.89 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -505,7 +506,7 @@ if ($Tk::VERSION >= 803) {
 }
 
 no warnings;
-print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\nencoding     = '$encoding'\n" if $opt_T;
+print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\nencoding     = '$encoding'\ncwd = '$cwd'\n" if $opt_T;
 use warnings;
 
 ########################################################################
@@ -569,9 +570,7 @@ my $searchText = '';
 my $breakText = '';
 my $break     = 0;
 my $oldContents = '';
-my $newName = 'unknown.ic';
-my $cwd = cwd;
-print "cwd = $cwd\n" if $opt_T;
+my $unknown = 'unknown.ic';
 
 my $fileTypes = [
     ['iC Source Files',  ['.ic',  '.ica',  '.ih',   ], ['TEXT', ], ],
@@ -756,17 +755,16 @@ $menuBuild->command(-label       => 'Save &Build unconditionally',
 $menuBuild->command(-label       => 'Build C file only',
 		    -accelerator => 'Alt-c',
 		    -command     => [ \&build_file, 0, 2 ]);
-if ($opt_T) {
-    $menuBuild->separator;
-    $menuBuild->command(-label   => 'Symbol Table by name',
-			-command => [ \&output_symbol_table, 0, 0 ]);
-    $menuBuild->command(-label   => 'Symbol Table by index',
-			-command => [ \&output_symbol_table, 0, 1 ]);
-    $menuBuild->command(-label   => 'T to iCserver',			# iCserver prints table
-			-command => sub { conn_send_now('T') if $conn; });
-    $menuBuild->command(-label   => 'X to iCserver',			# stop iCserver
-			-command => sub { conn_send_now('X') if $conn; });
-}
+$menuBuild->separator;							# miscellaneous commands
+$menuBuild->command(-label       => 'Symbol Table by name',
+		    -command     => [ \&output_symbol_table, 0, 0 ]);
+$menuBuild->command(-label       => 'Symbol Table by index',
+		    -command     => [ \&output_symbol_table, 0, 1 ]);
+$menuBuild->command(-label       => 'iCserver Client Tables',
+		    -command     => sub { conn_send_now('T') if $conn; });
+$menuBuild->command(-label       => 'Stop iCserver and all iC apps',
+		    -command     => sub { conn_send_now('X') if $conn; });
+
 my $makeName = '';
 my $restartFlag = 0;
 
@@ -1157,9 +1155,6 @@ my $infoBar = $mainWindow->Label(-textvariable => \$info,
 #	Text window
 ########################################################################
 my $text;
-no warnings;
-print "opt_F = '$opt_F' fontSize = '$fontSize'\nfont     = '$font'\n" if $opt_T;
-use warnings;
 if ($opt_u) {
     $text = $mainWindow->Scrolled('TextUndo',
 				     -scrollbars => 'osoe',
@@ -4296,7 +4291,7 @@ use warnings;
 #	This routine makes sure that 'searchTag' is always active, which
 #	avoids TK::Error when 'searchTag' is raised and not present.
 #
-#	1st parameter:	false	delete and create tag again
+#	parameter 1:	false	delete and create tag again
 #			true	create tag only
 #
 ########################################################################
@@ -4329,22 +4324,25 @@ sub register_now {
 ########################################################################
 #
 #	Check if a file has been modified and needs to be saved
+#	parameter 1:	0 or undef: Save contents if Button'Yes'
+#			1:          SaveAs contents if Button'Yes'
 #
 #	IF contents has changed
 #	    IF Button 'Yes' is pressed
-#		saves $fileName
-#		changes entry box text to $fileName if successful
+#		Save $fileName or SaveAs if parameter 1 is true
+#		changes entry box text to $fileName if Save successful
 #		return 1 if successful else 0
 #	    ELSIF Button 'No' is pressed
-#		return 0
-#	    ELSIF Button 'Cancel' is pressed
 #		return -1
+#	    ELSIF Button 'Cancel' is pressed
+#		return 0
 #	ELSE
 #	    return 1
 #
 ########################################################################
 
 sub check_save {
+    my $par1 = $_[0];
     my $contents = $text->get("1.0", "end - 1 chars");	# whole text
     if ($contents ne $oldContents) {
 	if ($opt_T) {
@@ -4352,9 +4350,14 @@ sub check_save {
 	    my $l2 = length $oldContents;
 	    print "length contents = $l1, length oldContents = $l2\n";
 	}
-	my $answer = askYesNo('Modified file', 'Save modified file?', \$fileName);
+	my $As = $par1 ? 'As' : '';
+	my $answer = askYesNo("Modified file", "Save$As modified file?", \$fileName);
 	if ($answer eq 'Yes') {
-	    return save_file(0, 1);	# Yes - save modified $fileName
+	    if ($par1) {
+		return saveAs_file();	# Yes - save modified file under new name
+	    } else {
+		return save_file(0, 1);	# Yes - save modified $fileName
+	    }
 	} elsif ($answer eq 'No') {
 	    return -1;			# No - abort saving
 	} elsif ($answer eq 'Cancel') {
@@ -4382,21 +4385,27 @@ sub new_text {
 	$text->tagDelete('cTag', 'CTag', 'icaTag', 'bd', 'er', 'cv', 'it', 'bt');	# delete all special tags
 	$text->delete("1.0", "end");
 	$oldContents = '';
-	$fileName = $newName;
+	$fileName = $unknown;
 	$mainWindow->title("$named$u: $fileName$readOnly $runName");
     }
 } # new_text
 
 ########################################################################
 #
-#	Reload the currently loaded iC $fileName unconditionally
-#	because it was (possibly) altered externally, usually by vi
-#	if a source file or iCmake if a generated file.
+#	Reload the currently loaded iC $fileName because it was
+#	(possibly) altered externally, usually by vi if a source file
+#	or iCmake if a generated file.
+#	If file has been modified SaveAs instead of Save file if answer
+#	to check_save is Yes.
 #
 ########################################################################
 
 sub reload_file {
-    open_file(0, $fileName);
+    my $fileRname = $fileName;
+    if (check_save(1)) {		# SaveAs
+	$fileName = $fileRname;
+	open_file(0, $fileName);
+    }
 } # reload_file
 
 ########################################################################
@@ -4555,8 +4564,9 @@ sub open_file {
 ########################################################################
 #
 #	Saves the file previously loaded or last saved
-#		2nd parameter:	1 overwrite file unconditionally (new destination)
-#				0 or '' overwrite if contents has changed (default)
+#		parameter 1:	(ignore)
+#		parameter 2:	0 or '' overwrite if contents has changed (default)
+#				1 overwrite file unconditionally (new destination)
 #
 ########################################################################
 
@@ -4571,7 +4581,7 @@ sub save_file {
 	    return 0;		# No or Cancel - report error
 	}
     }
-    if (defined $fileName and $fileName ne $newName and $fileName ne '') {
+    if (defined $fileName and $fileName ne $unknown and $fileName ne '') {
 	my ($unconditional) = $_[1];	# optional 2nd parameter
 	my $ftime = (stat($fileName))[9]; $ftime = $fileTime unless defined $ftime;
 	## allow non existing file to be written by setting to $fileTime if undef
@@ -5196,7 +5206,7 @@ sub quit_program {
     if (check_save()) {
 	reset_scan();		# also turn debug mode off and clear set/next/watch points
 	@lastFile = ();		# in case not fully shifted in ini_program due to $opt_i
-	if (defined $fileName and $fileName ne $newName and $fileName ne '') {
+	if (defined $fileName and $fileName ne $unknown and $fileName ne '') {
 	    push(@lastFile, ($fileName, $text->index('insert')));
 	    if (defined $instance and $instance ne '') {
 		push(@lastFile, $instance);
@@ -5332,7 +5342,6 @@ sub output_symbol_table {
     }
 } # output_symbol_table
 __END__
-
 ############ POD to generate man page ##################################
 
 =encoding utf8
@@ -5697,7 +5706,7 @@ button briefly.  Enter or paste a word into the Search Entry window and
 type RETURN or press the [/] button again.  Searches may be for a whole
 Word match, an Exact match or for a full Perl-type regular expression
 labelled Regex match.  Searches are normally case sensitive, but a
-case-insensitive search may be selectd. Once a search has been carried
+case-insensitive search may be selected. Once a search has been carried
 out, all the hits are highlighted (black with white text). A first
 group of hits is displayed in the Text window. The text is moved to
 display as many hits as possible. When the user has analysed the first
@@ -5714,7 +5723,7 @@ the end, which can be selected for a repeat search. This search menu
 can be detached with the tear line ---------.
 
 In 'Live' mode searches are restricted to text outside of comments,
-which means sarches will only return actual variables and keywords
+which means searches will only return actual variables and keywords
 in program text.
 
 In 'Live' and 'Edit' mode but not in 'Edit Undo' mode (-u option),
@@ -5724,25 +5733,24 @@ for that word. This is the quickest and best way to start a search.
 The search can be continued by clicking on the [/] button or pressing
 RETURN.
 
-Double-clicking with mouse button 1 with the cursor in the Search Entry
-window or by typing ctrl-RETURN will clear the search completely.
-
 This quick search action in 'Edit' mode masks the selection of the text
 under the mouse (Text Binding [2]).  Since selection of text can be
 accomplished easily by swiping a word or stepping over the word with
 the Shift-Left key it was felt the quick search action is more often
 called for. The quick search action is not active for 'Edit Undo' mode.
 
-Double-clicking with mouse button 1 with the cursor on a brace,
-parenthesis or square bracket character will move the insert cursor to
-the matching brace, parenthesis or square bracket, which may involve
-moving the text.
+Double-clicking with mouse button 1 with the cursor in the Search Entry
+window or by typing ctrl-RETURN will clear the search completely.
 
-Single-clicking or moving the insert cursor over a brace, parenthesis
-or square bracket will simply highlight matching braces etc.
+In 'Edit' mode single-clicking with mouse button 1 or moving the
+insert cursor with the keyboard over a brace, parenthesis or square
+bracket will simply highlight matching braces, parentheses or square
+brackets.  Double-clicking with the cursor on a brace, parenthesis or
+square bracket character will move the insert cursor to the matching
+braces etc.
 
 The position of the displayed text may be manipulated by the scroll
-bar(s) or the usual up/down/prior/next/home/end keys.  A useful
+bars or the usual up/down/prior/next/home/end keys.  A useful
 feature is the use of the middle mouse button to fast scroll in all
 4 directions through the text.
 
@@ -6030,7 +6038,7 @@ L<immcc(1)>, L<iCbox(1)>, L<iCserver(1)>, L<iCmake(1)>, L<iCman(1)>
 
 =head1 COPYRIGHT
 
-COPYRIGHT (C) 2000-2020  John E. Wulff
+COPYRIGHT (C) 2000-2021  John E. Wulff
 
 You may distribute under the terms of either the GNU General Public
 License or the Artistic License, as specified in the README file.

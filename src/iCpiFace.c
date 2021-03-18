@@ -21,7 +21,7 @@
  *	All GPIO pins on a Raspberry Pi A, B or B+ may be selected as
  *	either input bits or output bits independent of whether PiFaces
  *	are present or not, except GPIO 25 if PiFaces are also processed.
- *	All GPIO inputs are handled by interrups.
+ *	All GPIO inputs are handled by interrupts.
  *
  *	If no PiFace controllers are found or if the program is called
  *	with the name iCpiGPIO, only GPIO pins will be handled.
@@ -220,7 +220,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.12 $\n"
+"Version	$Id: iCpiFace.c 1.13 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
@@ -2379,7 +2379,7 @@ Text panel for a PiFaceCAD.
 All GPIO pins on a Raspberry Pi A, B or B+ may be selected as either
 an input bit or output bit independent of whether PiFaces are present
 or not, except GPIO 7-11 and GPIO 25 if PiFaces are also processed.
-All GPIO inputs are handled by interrups.
+All GPIO inputs are handled by interrupts.
 
 If no PiFace controllers are found or if the program is called with -G
 or with the alternate name B<iCpiGPIO>, only GPIO pins will be handled.
@@ -2393,7 +2393,7 @@ button inputs and a 2 line x 16 character LCD display. The PiFaceCAD
 fits neatly as the last controller on a PiRack or can be mounted on
 its own on the Raspberry Pi.
 
-Similar I/O operations for both PiFaces and Rspberry Pi GPIOs can be
+Similar I/O operations for both PiFaces and Raspberry Pi GPIOs can be
 obtained by linking the driver directly to an iC app, in which case
 these I/O operations are not handled by iCserver.
 
@@ -2596,7 +2596,7 @@ subject field.
 
 =head1 SEE ALSO
 
-L<iCserver(1)>, L<iCbox(1)>, L<makeAll(1)>, L<select(2)>
+L<iCpiPWM(1)>, L<iCtherm(1)>, L<iCserver(1)>, L<iCbox(1)>, L<makeAll(1)>, L<select(2)>
 
 =head1 COPYRIGHT
 

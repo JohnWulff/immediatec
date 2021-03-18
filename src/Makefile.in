@@ -1,4 +1,4 @@
-# @(#)$Id: Makefile.in 1.77 $
+# @(#)$Id: Makefile.in 1.78 $
 
 #######################################################################
 #
@@ -224,8 +224,8 @@ $(srcdir)/%.tab.c:	$(srcdir)/%.y
     endif
 	@gzip -f $*.1
 
-$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/icc.c $(srcdir)/misc.c $(CSRC) $(srcdir)/pawk.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(LSRC) $(PSRC)
-	@rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
+$(srcdir)/scid.c:	$(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/misc.c $(CSRC) $(srcdir)/pawk.pl $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix $(LSRC) $(PSRC)
+	@rm -f $(srcdir)/scid.c; perl $(srcdir)/pawk.pl -O '$(OPT)' $(srcdir)/icc.v $(srcdir)/Makefile.in $(srcdir)/init_t.ic $(srcdir)/init_t.pl $(srcdir)/pplstfix > $(srcdir)/scid.c; chmod -w $(srcdir)/scid.c
 
 $(srcdir)/cexe.c:	$(srcdir)/cexe_t.c
 	cp -f $(srcdir)/cexe_t.c $(srcdir)/cexe.c
@@ -419,7 +419,7 @@ symb.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h
 comp.$(O):	$(srcdir)/comp.tab.c $(srcdir)/icc.h $(srcdir)/comp.h
 	$(CC) -I. $(CFLAGS_COMPILE_ONLY) -DYYERROR_VERBOSE $(CPPFLAGS) $(CFLAGS) -o $@ $(srcdir)/comp.tab.c
 
-icc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h
+icc.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h $(srcdir)/cexe.h $(srcdir)/scid.c
 
 outp.$(O):	$(srcdir)/icc.h $(srcdir)/comp.h gram.tab.c
 

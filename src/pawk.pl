@@ -28,7 +28,7 @@ use strict;
 
 eval '$'.$1.'$2;' while $ARGV[0] =~ /^([A-Za-z_0-9]+=)(.*)/ && shift;
 			# process any FOO=bar switches
-my $rev = '@(#)     $Id: pawk.pl 1.9 $';
+my $rev = '@(#)     $Id: pawk.pl 1.10 $';
 my $name = 'iC_ID';
 my $X = '';
 my $mod = '';
@@ -36,6 +36,12 @@ my $ID = "Id:";
 my $describe = '';
 my $patch = '';
 my $RV = "Revision:";
+
+use vars qw(@opt_O);
+use Getopt::Long;
+GetOptions (
+    'O=s' => \@opt_O,
+);
 
 while (<>) {
     chomp;	# strip record separator
@@ -66,3 +72,5 @@ while (<>) {
 print "#endif\n";
 printf "%sconst char %s%s[] =\n", $mod, $name, $X;
 printf "\t\"%s\";\n", $rev;
+printf "const char iC_OPT[] =\n";
+printf "\t\"%s\";\n", "@opt_O";

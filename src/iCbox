@@ -135,7 +135,7 @@ Usage:
 	    Q   from keyboard: exit without stopping iCserver
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCbox 1.64 $ uses Tk-@<<<<<<<<<
+$Id: iCbox 1.65 $ uses Tk-@<<<<<<<<<
 							$Tk::VERSION
 .
 
@@ -365,13 +365,13 @@ if (defined $opt_i and $opt_i ne '') {
 #	IW10=-100	initialises IW10 with -100
 #
 #	An initialiser may be placed after the second parameter of a range.
-#	Every input in the range will be initalised to the same value.
+#	Every input in the range will be initialised to the same value.
 #	IW20-IW27=100	initialises IW20 IW21 .. IW27 with 100
 #	X20-X27=0x3a	initialises IX20 IX21 .. IX27 with 0x3a
 #	Outputs cannot be initialised.
 #
 #	All digital parameters or parameter ranges may optionally be followed
-#	by one number separated by a comma representing a bitmask defining,
+#	by one number separated by a comma representing a bit-mask defining,
 #	whether a particular bit .0 to .7 is defined and should be implemented.
 #	Default ',255' which defines all 8 bits. The easiest way to declare
 #	the bit mask is as a binary number, eg: ',0b10001111'. This declares
@@ -382,7 +382,7 @@ if (defined $opt_i and $opt_i ne '') {
 #	by two or three comma-separated numbers naming the start, finish
 #	and optionally the resolution of the numbers displayed by the analog
 #	scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
-#	resoltion reverses the direction of the slider. (0 not allowed)
+#	resolution reverses the direction of the slider. (0 not allowed)
 #
 #	ID-parameter, range, initialiser and number-range must be written
 #	without spaces in the command line unless they are quoted. In the
@@ -582,7 +582,7 @@ foreach $argNameRef (@ArgNames) {
 	die "$named: invalid argument '$id' - internal error";
     }
     if ($opt_r and $id =~ /^.X/ and $from < 255) {
-	$id .= "($from)";				# bitmask for digital I/Os only if -r
+	$id .= "($from)";				# bit-mask for digital I/Os only if -r
     }
     if ((length($UnitRegistrations) + length($id)) > 1396) {	# REPLY 1400 - (1+2+1) in tcpc.h
 	print "$named: UnitRegistrations: $UnitRegistrations\n" if $opt_t;
@@ -1383,7 +1383,7 @@ a red background and only display the value received by the widget.
  IW10=-70 initialises IW10 with -70 (IW10=-70,-100,0 to be useful)
 
 An optional initialiser may be placed after the second parameter
-of a range.  Every input in the range will be initalised to the
+of a range.  Every input in the range will be initialised to the
 same value.  Outputs cannot be initialised.
 
  IW20-IW27=50  initialises IW20 IW21 .. IW27 with 50
@@ -1398,13 +1398,13 @@ All analog parameters or parameter ranges may optionally be followed
 by two or three comma-separated numbers naming the start, finish
 and optionally the resolution of the numbers displayed by the analog
 scale. Default ',0,100' which is equivalent to ',0,100,1'.  A negative
-resoltion reverses the direction of the slider. (0 is not allowed)
+resolution reverses the direction of the slider. (0 is not allowed)
 
 All digital parameters or parameter ranges may optionally be followed
 by one, two or three comma-separated numbers. Two consecutive commas
 or any numbers missing at the end will be filled with a default.
 
- Number 1) is a bitmask defining, whether a particular bit .0 to .7
+ Number 1) is a bit-mask defining, whether a particular bit .0 to .7
            is defined and should be implemented.  Default ',255'
            defines all 8 bits. The easiest way to declare the bit mask
            is as a binary number, eg: ',0b10001111'. This declares that
@@ -1412,14 +1412,14 @@ or any numbers missing at the end will be filled with a default.
            and should be implemented. The bits which are not defined
            are left blank. Default 0b11111111 - all bits are defined.
 
- Number 2) is a delay value in milli-seconds. Any value 50 and above
+ Number 2) is a delay value in milliseconds. Any value 50 and above
 	   is used to reset the button internally after that many
-	   milli-second, which makes it a push-button that only
+	   milliseconds, which makes it a push-button that only
 	   needs to be clicked once with the left mouse button.
 	   Non-zero values less than 50 (including negative values)
 	   are set to 50 ms. Default 0 - normal on/off button.
 
- Number 3) is a bitmask defining, whether a particular bit .0 to .7
+ Number 3) is a bit-mask defining, whether a particular bit .0 to .7
 	   is a push-button or is a normal on/off button. This is only
 	   useful if a delay value has been specified. This optional
 	   mask lets you select which bits in one group are to be

@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.86 $";
+"@(#)$Id: icc.c 1.87 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -39,6 +39,7 @@ static const char icc_c[] =
 
 extern const char	iC_ID[];
 extern const char	iC_PATCH[];
+extern const char	iC_OPT[];
 unsigned short		iC_gflag = 0;		/* -g independent C code for gdb debugging */
 
 unsigned int		iC_uses = USE_STRICT | USE_LIST; /* 01=alias 02=strict 04=strict; strict and list is default */
@@ -140,7 +141,8 @@ static const char *	usage =
 #endif	/* YYDEBUG and not _WINDOWS */
 "        <src.ic>        iC language source file (extension .ic)\n"
 "                        default: take iC source from stdin\n"
-"        -Z              GIT patch if made with dirty version\n"
+"        -T              output compile options\n"
+"        -Z              output GIT patch if made with dirty version\n"
 #ifdef EFENCE
 "        -E              test Electric Fence ABOVE - SIGSEGV signal unless\n"
 "        -B              export EF_PROTECT_BELOW=1 which tests access BELOW \n"
@@ -960,6 +962,9 @@ main(
 		missing:
 		    fprintf(iC_errFP, "ERROR: %s: missing value after '-%1.1s'\n", iC_progname, ((*--argv)--, *argv));
 		    exit(1);
+		case 'T':
+		    fprintf(iC_outFP, "compile options: %s\n", iC_OPT);
+		    exit(0);		/* output compile options */
 		case 'Z':
 		    fprintf(iC_outFP, "%s", iC_PATCH);
 		    exit(0);		/* output GIT patch if made with dirty version */
@@ -1404,8 +1409,9 @@ immcc - the immediate-C to C compiler
 
     <src.ic> iC language source file (extension .ic)
              default: take iC source from stdin
-    -v       version\n"
-    -Z       GIT patch if made with dirty version\n"
+    -v       version
+    -T       output compile options
+    -Z       output GIT patch if made with dirty version
     -h       this help text
 
 =head1 DESCRIPTION

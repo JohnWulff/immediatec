@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.76 $";
+"@(#)$Id: load.c 1.77 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2020  John E. Wulff
@@ -33,6 +33,7 @@ static const char load_c[] =
 
 extern const char	iC_ID[];
 extern const char	iC_PATCH[];
+extern const char	iC_OPT[];
 
 Gate		iClock = { -1, -CLK, CLCKL, 0, "iClock" };	/* active */
 
@@ -265,7 +266,8 @@ static const char *	usage =
 "    -q      quiet - do not report clients connecting and disconnecting\n"
 "    -z      block keyboard input on this app - used by -R\n"
 #endif	/* TCP */
-"    -Z      GIT patch if made with dirty version\n"
+"    -T      output compile options\n"
+"    -Z      output GIT patch if made with dirty version\n"
 "    -h      this help text\n"
 #ifdef	TCP
 "                      AUXILIARY app\n"
@@ -592,6 +594,9 @@ main(
 		case 'z':
 		    iC_debug |= DZ;	/* -z    block all STDIN interrupts for this app */
 		    break;
+		case 'T':
+		    fprintf(iC_outFP, "compile options: %s\n", iC_OPT);
+		    exit(0);
 		case 'Z':
 		    fprintf(iC_outFP, "%s", iC_PATCH);
 		    exit(0);		/* output GIT patch if made with dirty version */

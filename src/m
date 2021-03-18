@@ -36,12 +36,12 @@ usage()
     echo '	NOTE: if any option is changed, make clean is automatically executed' >&2
     echo "	<iC_sources>  list of iC source files which will be made with iCmake" >&2
     echo 'Author:	John E. Wulff        <immediateC@gmail.com>' >&2
-    echo '$Id: m 1.22 $' >&2
+    echo '$Id: m 1.23 $' >&2
 }
 
 name=${0##*/}
 clSrtm=''
-pudsyez=''
+gpudsyez=''
 dw=''
 i=''
 N=''
@@ -51,7 +51,7 @@ V=''
 z=0
 o=''
 
-while getopts ":clSNPGVrtmpudsyezD:W:Iih" opt; do
+while getopts ":clSNPGVrtmgpudsyezD:W:Iih" opt; do
     case $opt in
     c ) clSrtm="${clSrtm}c";;
     l ) clSrtm="${clSrtm}l";;
@@ -59,13 +59,14 @@ while getopts ":clSNPGVrtmpudsyezD:W:Iih" opt; do
     r ) clSrtm="${clSrtm}r";;
     t ) clSrtm="${clSrtm}t";;
     m ) clSrtm="${clSrtm}m";;
-    p ) pudsyez="${pudsyez}p";;
-    u ) pudsyez="${pudsyez}u";;
-    d ) pudsyez="${pudsyez}d";;
-    s ) pudsyez="${pudsyez}s";;
-    y ) pudsyez="${pudsyez}y";;
-    e ) pudsyez="${pudsyez}e";;
-    z )	pudsyez="${pudsyez}z";z=1;;
+    g ) gpudsyez="${gpudsyez}g";;
+    p ) gpudsyez="${gpudsyez}p";;
+    u ) gpudsyez="${gpudsyez}u";;
+    d ) gpudsyez="${gpudsyez}d";;
+    s ) gpudsyez="${gpudsyez}s";;
+    y ) gpudsyez="${gpudsyez}y";;
+    e ) gpudsyez="${gpudsyez}e";;
+    z )	gpudsyez="${gpudsyez}z";z=1;;
     D ) dw="$dw -D$OPTARG";;
     W ) dw="$dw -W$OPTARG";;
     N ) N="N";;
@@ -89,14 +90,14 @@ shift $(($OPTIND - 1))
 
 if [ -n "$N" -o -n "$P" -o -n "$G" -o -n "$V" ]; then
     echo "### make Const and/or iCpiFace and/or iCgpioPUD and/or iCpiPWM"
-    ./makeAll -qg$N$P$G$V$pudsyez$dw
+    ./makeAll -qg$N$P$G$V$gpudsyez$dw
 elif [ -z "$clSrtm" ]; then
     clSrtm="cl"
 fi
 
 if [ -n "$clSrtm" ]; then
-    echo "### ./makeAll -qg$clSrtm$pudsyez$dw"
-    ./makeAll -qg$clSrtm$pudsyez$dw
+    echo "### ./makeAll -qg$clSrtm$gpudsyez$dw"
+    ./makeAll -qg$clSrtm$gpudsyez$dw
 fi
 
 if [ -n "$i" ]; then
@@ -105,7 +106,7 @@ if [ -n "$i" ]; then
 	tail=${cpu#"armv"}
 	if [[ "$cpu" != "$tail" ]]; then
 	    echo "### make iCpiFace, iCpiPUD and iCgpioPWM"
-	    ./makeAll -qgPGV$pudsyez$dw
+	    ./makeAll -qgPGV$gpudsyez$dw
 	    o=" OPT=\"-DRASPBERRYPI\""
 	fi
     fi

@@ -10,7 +10,7 @@
 #
 #  Call: iCserver -f jwLift.is
 #
-#  $Id: jwLift.is 1.1 $
+#  $Id: jwLift.is 1.2 $
 #
 ########################################################################
 
@@ -27,8 +27,8 @@ IX99=IX99-0
 # IB3 maximum delay to keep door open * 0.1 second (for kbLift -i0)
 'iCbox -njwLift-IO -c 16 IB3-0 QX20,222 QX21,30 QX30,14 QX31,14 QX35,28 QX36,28 QX37,222 QX38,127'
 
-# monitor inputs and outputs equivalenced from jwLift and kbLift inputs and outputs
-'iCbox -d -nkbLift-IO IX0-0,31 QX0-0 QX1-0 IX2-0 QX2-0,3 IX3-0,15 QX3-0 QB3-0 QX40,31 IX40 IX41 QX42 IX42,3 QX43,15 IX43 IB43'
+# monitor outputs equivalenced from jwLift and kbLift inputs and outputs
+'iCbox -d -nkbLift-IO QX40,31 IX40 IX41 QX42 IX42,3 QX43,15 IX43 IB43'
 
 # iClift app
 'iClift -I -L 1 -F B0,1,4'	# American floor numbering 1 - 4 like Keith Burstons lift
