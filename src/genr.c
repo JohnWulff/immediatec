@@ -1,5 +1,5 @@
 static const char genr_c[] =
-"@(#)$Id: genr.c 1.95 $";
+"@(#)$Id: genr.c 1.96 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -2623,7 +2623,7 @@ evalConstExpr(Lis * lv)
 			    strncat(buf, temp, TSIZE);		/* append saved remaining expression */
 			    sp1->em |= EU;			/* mark immC variable as used */
 			} else {
-			    mal++;			/* each function text must occurr for each member of the expression */
+			    mal++;			/* each function text must occur for each member of the expression */
 			}
 		    } else {
 			mal++;				/* no non const function calls in expression */
@@ -2771,7 +2771,7 @@ evalConstParameter(List_e * lp)
 	    strncat(buf, callName, TSIZE);
 	    strncat(buf, temp, TSIZE);	/* replace formal name by call name in expression */
 	} else {
-	    mal++;			/* each formal name must occurr for each member of the expression */
+	    mal++;			/* each formal name must occur for each member of the expression */
 	}
     }
     if (mal || parseConstantExpression(buf, &value, 0)) { /* determine numerical value of constant expression */
@@ -4695,7 +4695,7 @@ cloneFunction(Sym * fhs, Sym * hsym, Val * par)
 		cp = iFunBuffer + strlen(iFunBuffer);		/* end of new var name */
 		while (lookup(iFunBuffer) != 0) {		/* accepts original name for first instance */
 		    /********************************************************************
-		     * Different instances of the same extension can occurr for multiple
+		     * Different instances of the same extension can occur for multiple
 		     * calls of the same function in one function definition or for the
 		     * same name used in different functions called in the definition.
 		     * This heuristic assumes there are not hundreds of instances in

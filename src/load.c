@@ -1,5 +1,5 @@
 static const char load_c[] =
-"@(#)$Id: load.c 1.77 $";
+"@(#)$Id: load.c 1.78 $";
 /********************************************************************
  *
  *  Copyright (C) 1985-2020  John E. Wulff
@@ -41,7 +41,9 @@ unsigned	errCount;
 char *		iC_progname;		/* name of this executable */
 char *		iC_vcd = NULL;
 short		iC_debug = 0;
+#if YYDEBUG && !defined(_WINDOWS)
 int		iC_micro = 0;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 unsigned short	iC_osc_max = 0;		/* 0 during Initialisation, when no oscillations */
 unsigned short	iC_osc_lim = MARKMAX;
 unsigned short	iC_osc_flag = 0;
@@ -71,9 +73,9 @@ static short	errorFlag = 0;
 
 static const char *	usage =
 "Usage: %s\n          [-"
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 "t"
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifdef	RASPBERRYPI
 "PGEBLIf"
 #endif	/* RASPBERRYPI */
@@ -82,9 +84,9 @@ static const char *	usage =
 #endif	/* TCP */
 "h]"
 #ifdef	TCP
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 "[ -m[m]]"
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 "[ -s <host>][ -p <port>][ -i <inst>]"
 #endif	/* TCP */
 "\n          "
@@ -237,7 +239,7 @@ static const char *	usage =
 #endif	/* RASPBERRYPI */
 #endif	/* TCP */
 "                      DEBUG options\n"
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 "    -d <debug>2000  display scan_cnt and link_cnt\n"
 "             +1000  do not trace non-active timers TX0.n\n"
 "              +400  exit after initialisation\n"
@@ -246,12 +248,12 @@ static const char *	usage =
 #ifdef	TCP
 "        or     +20  trace only logic inputs as binary bytes\n"
 #endif	/* TCP */
-#else	/* YYDEBUG */
+#else	/* YYDEBUG && !defined(_WINDOWS) */
 "    -d <debug> 400  exit after initialisation\n"
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 "               +40  load listing\n"
 "                +4  extra install debug info\n"
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 "                +2  trace I/O receive buffer\n"
 "                +1  trace I/O send buffer\n"
 "    -t      trace gate activity (equivalent to -d 1100)\n"
@@ -261,7 +263,7 @@ static const char *	usage =
 "    -mm     more microsecond timing (internal time base)\n"
 "         m  at run time toggles microsecond timing trace\n"
 #endif	/* TCP */
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifdef	TCP
 "    -q      quiet - do not report clients connecting and disconnecting\n"
 "    -z      block keyboard input on this app - used by -R\n"
@@ -523,9 +525,11 @@ main(
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) iC_vcd = *argv; else goto missing;
 		    goto break2;	/* output vcd dump file for gtkwave */
+#if	YYDEBUG && !defined(_WINDOWS)
 		case 'm':
 		    iC_micro++;		/* microsecond info */
 		    break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		case 'l':
 		    iC_opt_l = 1;	/* start iClive with correct source */
 #ifdef	RASPBERRYPI
@@ -577,9 +581,11 @@ main(
 		    iC_debug |= df;	/* short */
 		    df &= 040;		/* load listing */
 		    goto break2;
+#if	YYDEBUG && !defined(_WINDOWS)
 		case 't':
 		    iC_debug |= 01100;	/* trace gate activity */
 		    break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		case 'n':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) iC_osc_lim = atoi(*argv); else goto missing;
@@ -775,13 +781,13 @@ main(
 	     *  GPIO 7 - 11 (CE1 CE0 MISO MOSI SPI_CLK) are used during SPI and MCP23S17
 	     *  setup, but are left unchanged if no PiFaces are found. TODO check
 	     *  If a PiFace is found and they are in use by another app this will
-	     *  show up in the next section (iC_npf > 0) and an error will occurr.
+	     *  show up in the next section (iC_npf > 0) and an error will occur.
 	     *  It is up to the user to also stop those other apps and the error message
 	     *  will point this out. There is no use trying to use GPIO 7 - 11 with
 	     *  PiFace hardware present, which will interfere. This can be attempted
 	     *  by using the -G switch (opt_G set) with PiFace hardware. It may work.
 	     *
-	     *  If no PiFaces are found proceed with opt_G set. An error will then occurr
+	     *  If no PiFaces are found proceed with opt_G set. An error will then occur
 	     *  only if an argument requesting PiFace IO (Xn or Xn:<pfa>) is found.
 	     *
 	     *  Initialisation of /dev/spidev0.0 and/or /dev/spidev0.1 for SPI
@@ -1754,7 +1760,7 @@ main(
  *  These are space for the activity list terminators.
  *
  *  Resolve inputs from ARITH and GATE ALIAS nodes and OUTW nodes,
- *  which may occurr because of multiple modules linked together.
+ *  which may occur because of multiple modules linked together.
  *  In particular adjust each member of an ARITH ALIAS chain, so that
  *  it points to the final input. This is needed for execution of
  *  cexe_n() functions, where inputs can only resolve 1 level of ALIAS.
@@ -1818,7 +1824,7 @@ main(
 		    fprintf(iC_outFP, " %-8s%6s%7s:", op->gt_ids,
 			iC_full_type[-op->gt_ini], iC_full_ftype[op->gt_fni]);
 		} else {
-		    /* should no longer occurr because of above test */
+		    /* should no longer occur because of above test */
 		    fprintf(iC_outFP, "*** Warning: wrong gt_ini: %-8s%6d%7s:",
 			op->gt_ids, op->gt_ini, iC_full_ftype[op->gt_fni]);
 		}

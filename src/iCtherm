@@ -106,7 +106,7 @@ Usage:
                      as a separate process; -R ... must be last arguments.
 Copyright (C) 2014  John E. Wulff              <immediateC@gmail.com>
 							'@'
-$Id: iCtherm 1.7 $
+$Id: iCtherm 1.8 $
 .
 
 ########################################################################
@@ -153,7 +153,7 @@ GetOptions (
     'w'   => \$opt_w,
     'o=s' => \$opt_o,
     'd:i' => \$opt_d,		# -d # output date -d1 # trace send -d2 # trace recv
-    'I=s' => \@opt_I,		# -I option may occurr more than once
+    'I=s' => \@opt_I,		# -I option may occur more than once
     'l'   => \$opt_l,
     'C'   => \$opt_C,
     'F'   => \$opt_F,

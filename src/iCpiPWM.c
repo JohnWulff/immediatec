@@ -152,10 +152,12 @@ static const char *	usage =
 "    NOTE: there must be at least 1 IEC QW<x> or IW<x> argument.\n"
 "          No IEC arguments are generated automatically for %s.\n"
 "                      DEBUG options\n"
+#if YYDEBUG && !defined(_WINDOWS)
 "    -t      trace arguments and activity (equivalent to -d100)\n"
 "         t  at run time toggles gate activity trace\n"
 "    -m      display microsecond timing info\n"
 "         m  at run time toggles microsecond timing trace\n"
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 "    -d deb  +1   trace TCP/IP send actions\n"
 "            +2   trace TCP/IP rcv  actions\n"
 "            +100 show arguments\n"
@@ -172,7 +174,7 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiPWM.c 1.5 $\n"
+"Version	$Id: iCpiPWM.c 1.6 $\n"
 ;
 
 /********************************************************************
@@ -200,7 +202,9 @@ typedef struct	gpioAD {
 char *		iC_progname;		/* name of this executable */
 static char *	iC_path;
 short		iC_debug = 0;
+#if YYDEBUG && !defined(_WINDOWS)
 int		iC_micro = 0;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 unsigned short	iC_osc_lim = 1;
 int		iC_opt_B = 0;
 static unsigned short	topChannel = 0;
@@ -478,9 +482,14 @@ main(
 		    }
 		    iC_debug |= i;	/* short */
 		    goto break2;
+#if YYDEBUG && !defined(_WINDOWS)
 		case 't':
 		    iC_debug |= 0100;	/* trace arguments and activity */
 		    break;
+		case 'm':
+		    iC_micro++;		/* microsecond info */
+		    break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		case 'q':
 		    iC_debug |= DQ;	/* -q    quiet operation of all apps and iCserver */
 		    break;
@@ -812,7 +821,9 @@ main(
     }
     iC_iccNM = iC_emalloc(len + 1);
     strcpy(iC_iccNM, buffer);
+#if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microReset(0);		/* start timing */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     if (iC_debug & 0200) fprintf(iC_outFP, "host = %s, port = %s, name = %s\n", iC_hostNM, iC_portNM, iC_iccNM);
     if (iC_debug & 0400) iC_quit(0);
     signal(SIGINT, iC_quit);			/* catch ctrlC and Break */
@@ -867,7 +878,9 @@ main(
     if (iC_debug & 0200) fprintf(iC_outFP, "regBufLen = %d\n", regBufLen);
     snprintf(cp, regBufLen, ",Z");		/* Z terminator */
     if (iC_debug & 0200) fprintf(iC_outFP, "register:%s\n", regBuf);
+#if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("send registration", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_send_msg_to_server(iC_sockFN, regBuf);	/* register IOs with iCserver */
     /********************************************************************
      *  Receive a channel number for each I/O name sent in registration
@@ -875,7 +888,9 @@ main(
      *******************************************************************/
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
 	int	ntok;
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("ack received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 	if (iC_opt_B) {				/* prepare to execute iCbox -d */
 	    len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
@@ -1108,7 +1123,9 @@ main(
 	     *******************************************************************/
 	    if (FD_ISSET(iC_sockFN, &iC_rdfds)) {
 		if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (iC_micro) iC_microPrint("TCP input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    assert(Units);
 		    cp = rpyBuf - 1;		/* increment to first character in rpyBuf in first use of cp */
 		    if (isdigit(rpyBuf[0])) {
@@ -1183,10 +1200,12 @@ main(
 		}
 		if ((b = buffer[0]) == 'q' || b == '\0') {
 		    iC_quit(QUIT_TERMINAL);	/* quit normally with 'q' or ctrl+D */
+#if YYDEBUG && !defined(_WINDOWS)
 		} else if (b == 't') {
 		    iC_debug ^= 0100;		/* toggle -t flag */
 		} else if (b == 'm') {
 		    iC_micro ^= 1;		/* toggle micro */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		} else if (b == 'T') {
 		    iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
 		} else if (b != '\n') {

@@ -22,7 +22,7 @@
 #ifndef TCPC_H
 #define TCPC_H
 static const char tcpc_h[] =
-"@(#)$Id: tcpc.h 1.23 $";
+"@(#)$Id: tcpc.h 1.24 $";
 
 /* INT_MAX is set to the system value in sys/socket.h via bits/socket.h via limits.h */
 #if INT_MAX == 32767
@@ -78,7 +78,9 @@ extern void		iC_send_msg_to_server(SOCKET sock, const char* msg);
 
 extern int		iC_Xflag;	/* 1 if this process started iCserver */
 extern char *		iC_vcd;
+#if YYDEBUG && !defined(_WINDOWS)
 extern int		iC_micro;
 extern void		iC_microPrint(const char * str, int mask);
 extern void		iC_microReset(int mask);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif	/* TCPC_H */

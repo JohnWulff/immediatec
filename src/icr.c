@@ -1,5 +1,5 @@
 static const char icr_c[] =
-"@(#)$Id: icr.c 1.47 $";
+"@(#)$Id: icr.c 1.48 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -377,7 +377,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		if (++iC_mark_stamp == 0) {	/* next generation for oscillator check */
 		    iC_mark_stamp++;		/* leave out zero */
 		}
-		iC_scan_clk(iC_cList);		/* new flist entries can only occurr here */
+		iC_scan_clk(iC_cList);		/* new flist entries can only occur here */
 		if (iC_fList != iC_fList->gt_next) { iC_scan_clk(iC_fList); }
 		continue;
 	    }

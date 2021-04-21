@@ -119,7 +119,7 @@ Usage:
 				$named
 Copyright (C) 2000-2017  John E. Wulff		<immediateC@gmail.com>
 							  '@'
-$Id: iCserver 1.61 $
+$Id: iCserver 1.62 $
 .
 
 ########################################################################
@@ -754,7 +754,7 @@ sub allocate_channel {
 # equivalence set and group hashed by either the only output name in
 # the set or the first input name in the set as primary base.
 #   else use group in %Equivalences pointed to by $EquivBase->[3].
-# Only one pre-equivalenced name may occurr in a group, but each
+# Only one pre-equivalenced name may occur in a group, but each
 # group of a set may have one pre-equivalenced name.
 # Do not assign a secondary channel until registration.
 #

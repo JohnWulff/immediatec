@@ -1,5 +1,5 @@
 static const char RCS_Id[] =
-"@(#)$Id: tcpc.c 1.30 $";
+"@(#)$Id: tcpc.c 1.31 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -116,6 +116,7 @@ static struct timeval	mt0;
 static struct timeval	mt1;
 static struct timespec	ms200 = { 0, 200000000, };
 #endif	/* _WIN32 */
+#if YYDEBUG && !defined(_WINDOWS)
 
 /********************************************************************
  *
@@ -127,11 +128,7 @@ static struct timespec	ms200 = { 0, 200000000, };
 void
 iC_microReset(int mask)
 {
-#ifdef	_WIN32
-    QueryPerformanceCounter(&start);
-#else	/* ! _WIN32 Linux */
     gettimeofday(&mt0, 0);			/* reset for next measurement */
-#endif	/* _WIN32 */
     iC_micro |= mask;
 } /* iC_microReset */
 
@@ -139,25 +136,6 @@ void
 iC_microPrint(const char * str, int mask)
 {
     if (iC_debug & 0100) fprintf(iC_outFP, "\n");
-#ifdef	_WIN32
-    double fi;
-
-    if (freqFlag == 0 && QueryPerformanceFrequency(&freq)) {
-	freqFlag = 1;
-	frequency = freq.HighPart * 4294967296.0 + freq.LowPart;
-        // fprintf(iC_outFP, "frequency is %f\n", frequency);
-    }
-    if (freqFlag && QueryPerformanceCounter(&end)) {
-	// fprintf(iC_outFP, "start %d.%u\n", start.HighPart, start.LowPart);
-	// fprintf(iC_outFP, "end   %d.%u\n", end.HighPart, end.LowPart);
-	fi = ((double)(end.LowPart - start.LowPart) +
-	     (double)(end.HighPart - start.HighPart) * 4294967296.0) / frequency;
-	fprintf(iC_outFP, "%10.6f: %s\n", fi, str);
-        QueryPerformanceCounter(&start);	/* start of next measurement without print time */
-    } else {
-        fprintf(iC_outFP, "micro: %s\n", str);
-    }
-#else	/* ! _WIN32 Linux */
     long	sec;
     long	usec;
 
@@ -171,9 +149,9 @@ iC_microPrint(const char * str, int mask)
 	fprintf(iC_outFP, "%3ld.%03ld,%03ld: %s\n", sec, usec/1000, usec%1000, str);
     }
     gettimeofday(&mt0, 0);			/* start of next measurement without print time */
-#endif	/* _WIN32 */
     iC_micro &= ~mask;
 } /* iC_microPrint */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 /********************************************************************
  *
@@ -414,11 +392,11 @@ iC_rcvd_msg_from_server(SOCKET sock, char * buf, int maxLen)
 	if ((len = rcvd_buffer_from_server(sock, netBuf.buffer, maxLen)) == maxLen) {
 	    memcpy(buf, netBuf.buffer, len);
 	    buf[len] = '\0';
-#if YYDEBUG
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 02) {
 		fprintf(iC_outFP, "%s < '%s'\n", iC_iccNM, buf);	/* trace recv buffer */
 	    }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
     }
     return len;
@@ -438,11 +416,11 @@ iC_send_msg_to_server(SOCKET sock, const char * msg)
     size_t	len = strlen(msg);
 
     assert(len < sizeof netBuf.buffer);		/* check when sending - should not trunctate message */
-#if YYDEBUG
+#if YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 01) {
 	fprintf(iC_outFP, "%s > '%s'\n", iC_iccNM, msg);	/* trace send buffer */
     }
-#endif
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     netBuf.length = htonl(len);
     memcpy(netBuf.buffer, msg, len + 1);
     len += sizeof netBuf.length;

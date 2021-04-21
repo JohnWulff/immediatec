@@ -1,5 +1,5 @@
 %{ static const char comp_y[] =
-"@(#)$Id: comp.y 1.133 $";
+"@(#)$Id: comp.y 1.134 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -723,12 +723,12 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 * If a variable is declared extern in several sources which will
 	 * later be linked and that variable is erroneously declared and
 	 * assigned, either in immediate assignments or C assignments in
-	 * more than one source module, a linker error will occurr.
+	 * more than one source module, a linker error will occur.
 	 * (Multiple definition of the variable in C code).
 	 *
 	 * If a variable is declared extern and is never assigned in this
 	 * module (after a simple declaration) or in another module,
-	 * then a linker error will occurr. (Undefined reference).
+	 * then a linker error will occur. (Undefined reference).
 	 *
 	 * In the extern type declaration, bits EM and EX are set in em,
 	 * declaring that this variable was declared extern. If it is
@@ -745,7 +745,7 @@ dVar	: /* nothing */		{ $$.v = 0; }
 	 * In particulat iFunSyText is not set for an extDecl and thus the
 	 * variables declared extern keep their unchanged global names.
 	 *
-	 * If an extDecl occurrs in a function block definition, a check is
+	 * If an extDecl occurs in a function block definition, a check is
 	 * made that the name does not clash with one of the local names in
 	 * the function block.
 	 *
@@ -994,7 +994,7 @@ decl	: declHead UNDEF	{
 	 * Apart from that an immC Gate object may only be assigned in C code
 	 * but may be used as an immediate rvalue in iC as well as in C code.
 	 * By defining an object, no C assignment in the current source is
-	 * necessary. An assignment can occurr in another source, in which
+	 * necessary. An assignment can occur in another source, in which
 	 * the same variable is declared with an 'extern immC' declaration.
 	 * An assignment in some source should take place (initialisation
 	 * will do) to avoid an algorithmic error. The load module detects
@@ -1014,7 +1014,7 @@ decl	: declHead UNDEF	{
 	 *
 	 * Apart from initialisation with a constant expression, 'immC' type
 	 * declarations may not be combined with a dasgn, since no immediate
-	 * assignment may occurr if a variable has been declared and defined
+	 * assignment may occur if a variable has been declared and defined
 	 * as an ARNC or LOGC type with 'immC'. Such an attempted assignment
 	 * is flagged as a hard error.
 	 *

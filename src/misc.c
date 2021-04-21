@@ -1,5 +1,5 @@
 static const char misc_c[] =
-"@(#)$Id: misc.c 1.19 $";
+"@(#)$Id: misc.c 1.20 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2011  John E. Wulff
@@ -140,11 +140,11 @@ writePiFaceCAD(const char * displayString, unsigned short channel)
 	if (snprintf(buf, 100, "%hu:%s", channel, displayString) > 100) {
 	    buf[100] = '\0';			/* terminate in case of overflow (unlikely) */
 	}
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0200) {
 	    fprintf(iC_outFP, "writePiFaceCAD: '%s'\n", buf);	/* terminate with a CR in case last line has none */
 	}
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	while ((cp = strchr(cp+1 , ',')) != NULL) {	/* no commas in channel: */
 	    *cp = '\036';			/* replace every comma by ASCII RS */
 	}
@@ -174,9 +174,9 @@ iC_gpio_pud(int gpio, int pud)
     char	buf[100];
 
     snprintf(buf, 100, "iCgpioPUD -g %d -p %d", gpio, pud);	/* execute iCgpioPUD as a separate process */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0200) { fprintf(iC_outFP, "*** %s: '%s'\n", iC_progname, buf); fflush(iC_outFP); }
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     if ((r = system(buf)) != 0) {
 	perror("iCgpioPUD");
 	fprintf(iC_errFP, "WARNING: %s: system(\"%s\") could not be executed $? = %d - ignore\n",
@@ -263,7 +263,7 @@ iC_efree(void *	p)
  *
  *	There must be at least one token string (the call) in callString
  *	and argc must be the exact number of space separated strings in argv
- *	otherwise a hard error will occurr (assert(0))
+ *	otherwise a hard error will occur (assert(0))
  *
  *	This routine can be called in iCbegin() to support iC_fork_and_exec()
  *
@@ -473,11 +473,11 @@ iC_quit(int sig)
     if ((sig >= QUIT_TERMINAL || sig == SIGINT)
 	&& iCend() != -1			/* iC termination function */
     ) {
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
 	    fprintf(iC_outFP, "\n== iCend complete ======\n");
 	}
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 #ifdef	TCP
     if (iC_sockFN > 0) {
@@ -492,7 +492,9 @@ iC_quit(int sig)
 #else	/* _WIN32 */
 		nanosleep(&ms200, NULL);
 #endif	/* _WIN32 */
+#if YYDEBUG && !defined(_WINDOWS)
 		if (iC_micro) iC_microPrint("Disconnected", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    }
 #endif /* LOAD */
 	    if (iC_Xflag) {			/* stop iCserver if this process started it */

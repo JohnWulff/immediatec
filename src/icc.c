@@ -1,5 +1,5 @@
 static const char icc_c[] =
-"@(#)$Id: icc.c 1.87 $";
+"@(#)$Id: icc.c 1.88 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -208,9 +208,11 @@ static const char *	usage =
 "                        can be changed at run time by typing x or d\n"
 #endif	/* RUN */
 #ifdef TCP
+#if YYDEBUG && !defined(_WINDOWS)
 "        -m              microsecond timing info\n"
 "        -mm             more microsecond timing (internal time base)\n"
 "                     m  at run time toggles microsecond timing trace\n"
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 "        -q      quiet - do not report clients connecting and disconnecting\n"
 "        -z      block keyboard input on this app - used by -R\n"
 #endif	/* TCP */
@@ -253,7 +255,9 @@ static const char *	usage =
 char *		iC_progname;		/* name of this executable */
 char *		iC_vcd = NULL;
 short		iC_debug = 0;
+#if YYDEBUG && !defined(_WINDOWS)
 int		iC_micro = 0;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 int		iC_Pflag = 0;		/* pedantic warning/error flag */
 int		iC_Wflag = W_ALL;	/* by default all warnings are on */
 char *		iC_aflag;			/* -a list iC preprocessor commands with immac -Ma */
@@ -267,10 +271,10 @@ unsigned short	iC_osc_flag = 0;
 int		iC_argc;		/* extra options passed to iCbegin(int argc, char** argv) */
 char **		iC_argv;
 int		iC_argh = 0;		/* block running iCserver before iCbegin() */
-#if YYDEBUG
+#if YYDEBUG && !defined(_WINDOWS)
 extern	int	iCdebug;
 extern	int	yydebug;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 #define errFN	szNames[2]		/* error file name */
 #define listFN	szNames[3]		/* list file name */
@@ -586,15 +590,17 @@ main(
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if (strlen(*argv)) iC_vcd = *argv; else goto missing;
 		    goto break2;	/* output vcd dump file for gtkwave */
+#if YYDEBUG && !defined(_WINDOWS)
 		case 'm':
 		    iC_micro++;		/* microsecond info */
 		    break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #endif	/* TCP */
-#if YYDEBUG
+#if YYDEBUG && !defined(_WINDOWS)
 		case 't':
 		    iC_debug |= 01100;	/* trace gate activity */
 		    break;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifdef RUN
 		case 'x':
 		    iC_xflag = 1;	/* start with hexadecimal display */
@@ -616,7 +622,7 @@ main(
 #if !defined(RUN) && !defined(TCP)
 		    iC_debug |= 0400;	/* always stops */
 #endif	/* not RUN and not TCP */
-#if YYDEBUG
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (iC_debug & 0400) {
 			if (iC_debug & 04000) {
 			    yydebug = iC_debug & 01;
@@ -624,7 +630,7 @@ main(
 			    iCdebug = iC_debug & 01;
 			}
 		    }
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    goto break2;
 		case 'o':
 #if defined(RUN) || defined(TCP)
@@ -1273,7 +1279,7 @@ unlinkTfiles(void)
 /********************************************************************
  *
  *	Wrapper to call perl script 'pplstfix' as a post-processor
- *	to modify listings to resolve aliases. These occurr in the
+ *	to modify listings to resolve aliases. These occur in the
  *	listing if an output is used, before it is defined as an alias.
  *
  *	In particular the automatic alias allocation associated with
@@ -1483,7 +1489,7 @@ completely eliminated from the executable code, and should therefore
 not confuse readers of the listings. A correction is carried out by
 passing the listing - and only the listing through the perlscript
 'pplstfix', which resolves aliases in the listing of a single source
-file. Aliases will still occurr for iC-applications spanning several
+file. Aliases will still occur for iC-applications spanning several
 source files. Here the reader must resolve any aliases.
 
 =head1 DEVELOPER INFORMATION

@@ -355,7 +355,7 @@ Usage:
 
 Copyright (C) 2000-2021  John E. Wulff          <immediateC@gmail.com>
 						    '@'
-$Id: iClive 1.89 $ uses Tk-@<<<<<<<<<
+$Id: iClive 1.90 $ uses Tk-@<<<<<<<<<
 						    $Tk::VERSION
 .
 
@@ -513,21 +513,9 @@ use warnings;
 #
 #	Handle signals
 #
-#	NOTE: a signal to be caught by one of the callbacks below will
-#	not be processed, until this application receives focus or handles
-#	some other event internally (Problem with Tk::MainLoop())
-#
 ########################################################################
 
-## $SIG{QUIT} = \&quit_program;	# catch signal from (X) button
-## $SIG{TERM} = \&quit_program;	# catch signal from signal 15
-
-## $SIG{HUP} = \&catch_sig;	# catch signal 1
-## $SIG{INT} = \&catch_sig;	# catch signal 2
-## $SIG{QUIT} = \&catch_sig;	# catch signal 3
-## $SIG{TERM} = \&catch_sig;	# catch signal 15
-
-$SIG{PIPE} = \&catch_sig;	# catch signal in syswrite() in iCmsg.pm line 103
+$SIG{PIPE} = 'IGNORE';		# ignore signal in syswrite() in iCmsg.pm line 103
 
 ########################################################################
 #
@@ -744,25 +732,28 @@ my $menuBuild = $menuBar->Menubutton(-text               => 'Build',
 				     -borderwidth        => 2,
 				     -takefocus          => 1,
 				     -highlightthickness => 1,
-				     -tearoff            => 1,		# tear off
+				     -tearoff            => 1,		# 0 - tear off
 				    )->pack(-side => 'left', -padx => 2);
-$menuBuild->command(-label       => 'Build executable',
+$menuBuild->command(-label       => 'Build executable',			# 1
 		    -accelerator => 'Alt-b',
 		    -command     => [ \&build_file, 0, 0 ]);
-$menuBuild->command(-label       => 'Save &Build unconditionally',
+$menuBuild->command(-label       => 'Save &Build unconditionally',	# 2
 		    -accelerator => 'Alt-u',
 		    -command     => [ \&build_file, 0, 1 ]);
-$menuBuild->command(-label       => 'Build C file only',
+$menuBuild->command(-label       => 'Build C file only',		# 3
 		    -accelerator => 'Alt-c',
 		    -command     => [ \&build_file, 0, 2 ]);
-$menuBuild->separator;							# miscellaneous commands
-$menuBuild->command(-label       => 'Symbol Table by name',
+$menuBuild->separator;							# 4 - miscellaneous commands
+$menuBuild->command(-label       => 'Symbol Table by name',		# 5
+		    -state       => 'disabled',
 		    -command     => [ \&output_symbol_table, 0, 0 ]);
-$menuBuild->command(-label       => 'Symbol Table by index',
+$menuBuild->command(-label       => 'Symbol Table by index',		# 6
+		    -state       => 'disabled',
 		    -command     => [ \&output_symbol_table, 0, 1 ]);
-$menuBuild->command(-label       => 'iCserver Client Tables',
+$menuBuild->command(-label       => 'iCserver Client Tables',		#7
+		    -state       => 'disabled',
 		    -command     => sub { conn_send_now('T') if $conn; });
-$menuBuild->command(-label       => 'Stop iCserver and all iC apps',
+$menuBuild->command(-label       => 'Stop iCserver and all iC apps',	# 8
 		    -command     => sub { conn_send_now('X') if $conn; });
 
 my $makeName = '';
@@ -1359,15 +1350,6 @@ MainLoop();
 exit;
 
 ####### End of main program ############################################
-
-########################################################################
-#	Catch miscellaneous signals
-########################################################################
-
-sub catch_sig {
-    my $signame = shift;
-    die "$named: Somebody sent me a SIG$signame: $!";
-} # catch_sig
 
 ########################################################################
 #
@@ -2888,7 +2870,11 @@ use warnings;
 		$D_channel = $2;	# sender channel to control program
 		$B_channel = $4 if $3;	# sender channel for optional Debug Stop signal
 		print "$named: registered: C_channel = $C_channel D_channel = $D_channel B_channel = $B_channel\n" if $opt_T;
-		conn_send_now("$D_channel:2");	# poll application to see if it is live
+		conn_send_now("$D_channel:2");			# poll application to see if it is live
+		$traceDebV = $microSecV = 0;			# stop Trace and MicroSec output
+		conn_send_now("$D_channel:83,$D_channel:77");	# 'S' 'M' to stop Trace and MicroSec in app
+		$debugMenu->entryconfigure(8, -state => 'normal');	# Trace
+		$debugMenu->entryconfigure(9, -state => 'normal');	# MicroSec
 	    }
 	} else {
 	    FAILED_TO_REGISTER: info_display(2000, 'red',
@@ -2919,7 +2905,7 @@ sub unregister_from_server {
 ########################################################################
 #
 #	Receive message from server - adjust outputs
-#	(these will only occurr if $conn and read events registered)
+#	(these will only occur if $conn and read events registered)
 #
 ########################################################################
 
@@ -2945,6 +2931,9 @@ sub rcvd_msg_from_server {
 	    $debugMenu->entryconfigure(6, -state => 'disabled');	# Watch points
 	    $regName = $runName = '';
 	    $menuRun->configure(-text => 'Run ');
+	    $menuBuild->entryconfigure(5, -state => 'disabled');	# Symbol Table by name
+	    $menuBuild->entryconfigure(6, -state => 'disabled');	# Symbol Table by index
+	    $menuBuild->entryconfigure(7, -state => 'disabled');	# iCserver Client Tables
 	    print "$named: rcvd_msg_from_server(0) buttons to 'Run ' 'Live'\n" if $opt_T;
 	    $mainWindow->title("$named$u: $fileName$readOnly");
 	    $makeName = '';
@@ -2996,7 +2985,7 @@ sub rcvd_msg_from_server {
 				print "$index\t$symbol\t$ftype\n" if $opt_T;
 				@{ $symbolTable{$symbol} } = ($ftype, $index);
 			    }
-			    if ($opt_T and ($l = length $symbol) > $maxSymbolLength) {
+			    if (($l = length $symbol) > $maxSymbolLength) {
 				$maxSymbolLength = $l;
 			    }
 			    $stIndex++ unless ($symbol =~ /\[\s*\d+\s*\]/);	# array references are not in ST
@@ -3016,6 +3005,7 @@ sub rcvd_msg_from_server {
 			    $mainWindow->title("$named$u: $fileName$readOnly $runName");
 			    info_display(2000, 'blue', "'$runName' is running");
 			    $menuRun->configure(-text => 'Stop');
+			    $menuBuild->entryconfigure(7, -state => 'normal');	# iCserver Client Tables
 			    print "$named: rcvd_msg_from_server received :2 'Stop' scanFlag = '$scanFlag'\n" if $opt_T;
 			    if ($scanFlag) {
 				%symbolTable = ();
@@ -3145,6 +3135,9 @@ use warnings;
 			    ## change text on run button to 'Run '
 			    ####################################################
 			    $menuRun->configure(-text => 'Run ');
+			    $menuBuild->entryconfigure(5, -state => 'disabled');	# Symbol Table by name
+			    $menuBuild->entryconfigure(6, -state => 'disabled');	# Symbol Table by index
+			    $menuBuild->entryconfigure(7, -state => 'disabled');	# iCserver Client Tables
 			    print "$named: rcvd_msg_from_server received :5 'Run '\n" if $opt_T;
 			}
 			if ($scanFlag) {
@@ -3157,7 +3150,18 @@ use warnings;
 			    print "$named: rcvd_msg_from_server received :5 'wait'\n" if $opt_T;
 			}
 		    }
-		    elsif ($entry eq '9') {		# conditional watch point
+		    elsif ($entry eq '6') {
+			####################################################
+			## Block 't' and 'm' in Debug menu for production code - received $C_channel:6
+			####################################################
+			print "received '$C_channel:6'\n" if $opt_T;
+			$debugMenu->entryconfigure(8, -state => 'disabled');	# Trace
+			$debugMenu->entryconfigure(9, -state => 'disabled');	# MicroSec
+		    }
+		    elsif ($entry eq '9') {
+			####################################################
+			## Conditional watch point - received $C_channel:9
+			####################################################
 			my ($state, $value, $condition);
 			print "$named: watch lastIndex = $lastIndex lastValue = $lastValue '$watchPoints{$lastIndex}'\n" if $opt_T;
 			if (exists $watchPoints{$lastIndex}) {
@@ -3186,7 +3190,10 @@ use warnings;
 			}
 			conn_send_now("$D_channel:99");	# continue (ord('c') is 99)
 		    }
-		    elsif ($entry eq '8') {		# unconditional watch point
+		    elsif ($entry eq '8') {
+			####################################################
+			## Unconditional watch point - received $C_channel:8
+			####################################################
 		      BreakNow:
 			####################################################
 			## Application has stopped at a BREAK - received $C_channel:8
@@ -4272,6 +4279,8 @@ use warnings;
 	}
 	$debugMenu->entryconfigure(0, -state => 'normal');	# Debug     enabled
 	$debugMenu->entryconfigure(6, -state => 'normal');	# Watch points enabled
+	$menuBuild->entryconfigure(5, -state => 'normal');	# Symbol Table by name
+	$menuBuild->entryconfigure(6, -state => 'normal');	# Symbol Table by index
 	$text->configure(-state => 'disabled');
 	$yScrollbar->focus();
 	$text->tagDelete('pTag');
@@ -4483,6 +4492,7 @@ sub open_file {
 		my $answer = askYesNo('Still running', 'Stop executable?', \$runName);
 		if ($answer eq 'Yes') {
 		    print "open_file: open '$fName' stop '$runName'\n" if $opt_T;
+		    conn_send_now('X') if $conn;
 		    stop_file();			# $runName = ''
 		} elsif ($answer eq 'No') {
 		    print "open_file: open '$fName' leave '$runName'\n" if $opt_T;
@@ -5004,6 +5014,9 @@ sub change_instance {
 	## change text on run button to 'Run '
 	####################################################
 	$menuRun->configure(-text => 'Run ');
+	$menuBuild->entryconfigure(5, -state => 'disabled');	# Symbol Table by name
+	$menuBuild->entryconfigure(6, -state => 'disabled');	# Symbol Table by index
+	$menuBuild->entryconfigure(7, -state => 'disabled');	# iCserver Client Tables
 	$runName = '';		# if :2 is received will change back to <name>
 	$mainWindow->title("$named$u: $fileName$readOnly");
 	print "$named: change_instance 'Run '\n" if $opt_T;

@@ -189,10 +189,12 @@ static const char *	usage =
 "    Care is taken that any GPIOs or PiFaces used in one app, iCpiFace, iCpiPWM\n"
 "    or even iCtherm do not clash with another app (using ~/.iC/gpios.used).\n"
 "                      DEBUG options\n"
+#if YYDEBUG && !defined(_WINDOWS)
 "    -t      trace arguments and activity (equivalent to -d100)\n"
 "         t  at run time toggles gate activity trace\n"
 "    -m      display microsecond timing info\n"
 "         m  at run time toggles microsecond timing trace\n"
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 "    -d deb  +1   trace TCP/IP send actions\n"
 "            +2   trace TCP/IP rcv  actions\n"
 #ifdef	TRACE
@@ -220,13 +222,15 @@ static const char *	usage =
 "                 as a separate process; -R ... must be last arguments.\n"
 "\n"
 "Copyright (C) 2014-2015 John E. Wulff     <immediateC@gmail.com>\n"
-"Version	$Id: iCpiFace.c 1.13 $\n"
+"Version	$Id: iCpiFace.c 1.14 $\n"
 ;
 
 char *		iC_progname;		/* name of this executable */
 static char *	iC_path;
 short		iC_debug = 0;
+#if YYDEBUG && !defined(_WINDOWS)
 int		iC_micro = 0;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 unsigned short	iC_osc_lim = 1;
 
 /********************************************************************
@@ -443,9 +447,14 @@ main(
 		case 'f':
 		    forceFlag = 1;	/* force use of GPIO interrupts - in particular GPIO 25 */
 		    break;
+#if YYDEBUG && !defined(_WINDOWS)
+		case 't':
+		    iC_debug |= 0100;	/* trace arguments and activity */
+		    break;
 		case 'm':
 		    iC_micro++;		/* microsecond info */
 		    break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		case 'd':
 		    if (! *++*argv) { --argc; if(! *++argv) goto missing; }
 		    if ((slen = strlen(*argv)) != strspn(*argv, "01234567") ||	/* octal digits only */
@@ -457,9 +466,6 @@ main(
 		    }
 		    iC_debug |= df;	/* short */
 		    goto break2;
-		case 't':
-		    iC_debug |= 0100;	/* trace arguments and activity */
-		    break;
 		case 'q':
 		    iC_debug |= DQ;	/* -q    quiet operation of all apps and iCserver */
 		    break;
@@ -568,13 +574,13 @@ main(
 	     *  GPIO 7 - 11 (CE1 CE0 MISO MOSI SPI_CLK) are used during SPI and MCP23S17
 	     *  setup, but are left unchanged if no PiFaces are found. TODO check
 	     *  If a PiFace is found and they are in use by another app this will
-	     *  show up in the next section (iC_npf > 0) and an error will occurr.
+	     *  show up in the next section (iC_npf > 0) and an error will occur.
 	     *  It is up to the user to also stop those other apps and the error message
 	     *  will point this out. There is no use trying to use GPIO 7 - 11 with
 	     *  PiFace hardware present, which will interfere. This can be attempted
 	     *  by using the -G switch (opt_G set) with PiFace hardware. It may work.
 	     *
-	     *  If no PiFaces are found proceed with opt_G set. An error will then occurr
+	     *  If no PiFaces are found proceed with opt_G set. An error will then occur
 	     *  only if an argument requesting PiFace IO (Xn or Xn:<pfa>) is found.
 	     *
 	     *  Initialisation of /dev/spidev0.0 and/or /dev/spidev0.1 for SPI
@@ -1313,7 +1319,9 @@ main(
     }
     iC_iccNM = iC_emalloc(len + 1);
     strcpy(iC_iccNM, buffer);
+#if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microReset(0);		/* start timing */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     if (iC_debug & 0200) fprintf(iC_outFP, "host = %s, port = %s, name = %s\n", iC_hostNM, iC_portNM, iC_iccNM);
     if (iC_debug & 0400) iC_quit(0);
     signal(SIGINT, iC_quit);			/* catch ctrlC and Break */
@@ -1404,7 +1412,9 @@ main(
     if (iC_debug & 0200)  fprintf(iC_outFP, "regBufLen = %d\n", regBufLen);
     snprintf(cp, regBufLen, ",Z");		/* Z terminator */
     if (iC_debug & 0200)  fprintf(iC_outFP, "register:%s\n", regBuf);
+#if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microPrint("send registration", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_send_msg_to_server(iC_sockFN, regBuf);		/* register IOs with iCserver */
     /********************************************************************
      *  Receive a channel number for each I/O name sent in registration
@@ -1412,7 +1422,9 @@ main(
      *******************************************************************/
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
 	chS	sel;				/* can store either NULL or gpioIO* and un/mask */
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("ack received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	if (iC_debug & 0200) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 	if (iC_opt_B) {				/* prepare to execute iCbox -d */
 	    len = snprintf(buffer, BS, "iCbox -dz%s -n %s-DI", (iC_debug & DQ) ? "q" : "", iC_iccNM);
@@ -1609,7 +1621,9 @@ main(
 	assert(gpio25FN > 0);
 	if (iC_debug & 0200) fprintf(iC_outFP, "### Initialise %d unit(s)\n", iC_npf);
 	gpio_read(gpio25FN);			/* dummy read to clear interrupt on /dev/class/gpio25/value */
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("SPI initialise", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 	    if (((pfa = pfp->pfa) != 4 || pfp->intf != INTFA) && pfp->Qname) {	/* PiFace */
 		writeByte(pfp->spiFN, pfa, OLATA, pfp->Qinv);	/* normally write inverted data to PiFace A output */
@@ -1735,7 +1749,9 @@ main(
 	     *******************************************************************/
 	    if (FD_ISSET(iC_sockFN, &iC_rdfds)) {
 		if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (iC_micro) iC_microPrint("TCP input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    assert(Units);
 		    cp = rpyBuf - 1;		/* increment to first character in rpyBuf in first use of cp */
 		    if (isdigit(rpyBuf[0])) {
@@ -1862,7 +1878,9 @@ main(
 	     *******************************************************************/
 	    if (gpio25FN > 0 && FD_ISSET(gpio25FN, &iC_exfds)) {	/* watch for out-of-band GPIO25 input */
 		m1 = 0;
+#if YYDEBUG && !defined(_WINDOWS)
 		if (iC_micro) iC_microPrint("SPI input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		cp = regBuf;
 		regBufLen = REPLY;
 		if (iC_debug & 0300) {
@@ -1949,7 +1967,9 @@ main(
 				    iC_progname, gpio, n);		/* should not happen */
 			    }
 			    m++;
+#if YYDEBUG && !defined(_WINDOWS)
 			    if (m1++ == 0 && iC_micro) iC_microPrint("GPIO input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			}
 		    }
 		}
@@ -1980,10 +2000,12 @@ main(
 		}
 		if ((c = iC_stdinBuf[0]) == 'q' || c == '\0') {
 		    iC_quit(QUIT_TERMINAL);		/* quit normally with 'q' or ctrl+D */
+#if YYDEBUG && !defined(_WINDOWS)
 		} else if (c == 't') {
 		    iC_debug ^= 0100;			/* toggle -t flag */
 		} else if (c == 'm') {
 		    iC_micro ^= 1;			/* toggle micro */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		} else if (c == 'T') {
 		    iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
 #ifdef	TRACE
@@ -2503,10 +2525,10 @@ Raspberry Pi via four different paths:
 
     When INTFB from several PiFaces are scanned in the interrupt
     handler, it sometimes happens that another change of input
-    (usually due to fast bounces from a pushbutton contact) occurrs
+    (usually due to fast bounces from a pushbutton contact) occurs
     before the last PiFace has been dealt with sending its INTFB low
     again. This means that INTB will remain low after the last PiFace
-    has been dealt with. Since the GPIO25 interrupt only occurrs on
+    has been dealt with. Since the GPIO25 interrupt only occurs on
     a falling edge, no interrupt will be seen for the latest change
     and the system hangs with INTB permanently low. That is why it is
     important to read the GPIO25 value after all Pifaces have been

@@ -1,5 +1,5 @@
 static const char scan_c[] =
-"@(#)$Id: scan.c 1.46 $";
+"@(#)$Id: scan.c 1.47 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -110,7 +110,7 @@ iC_scan_ar(Gate *	out_list)
 	 * caused this Gate to be unlinked (glitch), resulting in the
 	 * following update executions of arithmetic functions not
 	 * being done. They are then no longer necessary, since no
-	 * change in the function results would occurr.
+	 * change in the function results would occur.
 	 *******************************************************************/
 	op->gt_old = op->gt_new;			/* now new value is fixed */
 #if YYDEBUG && !defined(_WINDOWS)
@@ -257,7 +257,7 @@ iC_scan(Gate *	out_list)
 	 * inverted targets are coded twice (identically) to speed up
 	 * exeution a little.
 	 *
-	 * GATE logical types AND OR LATCH (LOGC never occurrs)
+	 * GATE logical types AND OR LATCH (LOGC never occurs)
 	 * op->gt_val is either -1 or +1 when a gate fires and it is
 	 * linked to the tail of the action list.
 	 * By the time the gate has reached the head of the action
@@ -276,7 +276,6 @@ iC_scan(Gate *	out_list)
 	    /********************************************************************
 	     * ftype == GATE - no targets will be XOR
 	     *******************************************************************/
-	    /* do twice: once with val, then whith -val */
 	    while ((gp = *lp++) != 0) {			/* scan non-inverted targets */
 		iC_scan_cnt++;				/* count scan operations */
 		iC_gx = gp;				/* save old gp in iC_gx */
@@ -292,8 +291,8 @@ iC_scan(Gate *	out_list)
 		/************************************************************
 		 * GATE logical types AND OR LATCH for normal targets
 		 ***********************************************************/
-		if ((gp->gt_val += val) == 0) {		/* gate function */
-		    gp->gt_val = val;			/* val is logic value */
+		if ((gp->gt_val += val) == 0) {		/* normal logic */
+		    gp->gt_val = val;			/* step past 0 */
 		    (*masterAct[gp->gt_fni])(gp, iC_oList);/* master action */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
@@ -307,7 +306,6 @@ iC_scan(Gate *	out_list)
 	    /************************************************************
 	     * GATE logical types AND OR LATCH for inverted targets
 	     ***********************************************************/
-	    val = -val;					/* invert logic value */
 	    while ((gp = *lp++) != 0) {			/* scan inverted targets */
 		iC_scan_cnt++;				/* count scan operations */
 		iC_gx = gp;				/* save old gp in iC_gx */
@@ -323,8 +321,8 @@ iC_scan(Gate *	out_list)
 		/************************************************************
 		 * GATE logical types AND OR LATCH for inverted targets
 		 ***********************************************************/
-		if ((gp->gt_val += val) == 0) {		/* gate function */
-		    gp->gt_val = val;			/* val is inverted value */
+		if ((gp->gt_val -= val) == 0) {		/* inverted logic */
+		    gp->gt_val = -val;			/* step past 0 */
 		    (*masterAct[gp->gt_fni])(gp, iC_oList);/* master action */
 		}
 #if YYDEBUG && !defined(_WINDOWS)
@@ -341,7 +339,6 @@ iC_scan(Gate *	out_list)
 	     * ftype == GATEX - some targets may be XOR - set at load time
 	     * or direct execution, in which case ftype GATE handles XOR AND ...
 	     *******************************************************************/
-	    /* do twice: once with val, then whith -val */
 	    while ((gp = *lp++) != 0) {			/* scan non-inverted targets */
 		iC_scan_cnt++;				/* count scan operations */
 		iC_gx = gp;				/* save old gp in iC_gx */
@@ -362,8 +359,8 @@ iC_scan(Gate *	out_list)
 		    /************************************************************
 		     * GATE logical types AND OR LATCH for normal targets
 		     ***********************************************************/
-		    if ((gp->gt_val += val) == 0) {	/* gate function */
-			gp->gt_val = val;		/* val is logic value */
+		    if ((gp->gt_val += val) == 0) {	/* normal logic */
+			gp->gt_val = val;		/* step past 0 */
 			(*masterAct[gp->gt_fni])(gp, iC_oList);/* master action */
 		    }
 		} else {
@@ -393,7 +390,6 @@ iC_scan(Gate *	out_list)
 	    /************************************************************
 	     * GATE logical types AND OR LATCH for inverted targets
 	     ***********************************************************/
-	    val = -val;					/* invert logic value */
 	    while ((gp = *lp++) != 0) {			/* scan inverted targets */
 		iC_scan_cnt++;				/* count scan operations */
 		iC_gx = gp;				/* save old gp in iC_gx */
@@ -414,8 +410,8 @@ iC_scan(Gate *	out_list)
 		    /************************************************************
 		     * GATE logical types AND OR LATCH for inverted targets
 		     ***********************************************************/
-		    if ((gp->gt_val += val) == 0) {	/* gate function */
-			gp->gt_val = val;		/* val is inverted value */
+		    if ((gp->gt_val -= val) == 0) {	/* inverted logic */
+			gp->gt_val = -val;		/* step past 0 */
 			(*masterAct[gp->gt_fni])(gp, iC_oList);/* master action */
 		    }
 		} else {

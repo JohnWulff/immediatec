@@ -1,5 +1,5 @@
 static const char ict_c[] =
-"@(#)$Id: ict.c 1.80 $";
+"@(#)$Id: ict.c 1.81 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -146,9 +146,9 @@ static unsigned short D_channel;	/* channel for receiving messages from Debug in
 static Gate	D_gate;			/* Gate on channel for receiving messages from Debug */
 static int	liveOffset;		/* for live header */
 static int	regOffset;		/* for register send */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 static unsigned int waitCount;		/* for WAIT display */
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 #ifndef	EFENCE
 char		msgBuf[REQUEST];	/* Buffer in which live data is collected */
 char		iC_outBuf[REQUEST];	/* Buffer in which output is collected in iC_output() */
@@ -240,7 +240,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	fclose(iC_errFP);
     }
     iC_errFP = stderr;			/* standard error from here */
+#if YYDEBUG && !defined(_WINDOWS)
     if (iC_micro) iC_microReset(0);	/* start timing */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
     if ((gp = iC_TX0p) != 0) {		/* are EOI etc or TX0 timers programmed */
 	tim = gp->gt_list;		/* TX0.0 - TX0.7, TX0.0 is EOI - end of initialisation */
@@ -665,7 +667,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    /********************************************************************
 		     * buffer is about to overflow
 		     *******************************************************************/
+#if YYDEBUG && !defined(_WINDOWS)
 		    if (iC_micro & 06) iC_microPrint("partial registration", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    regAck(sopp, opp);		/* send/receive partial registration */
 		    sopp = opp;
 		    tbp = regBuf;		/* start new string */
@@ -687,12 +691,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
       if (en || iC_opt_L) {			/* Do TCP/IP I/O only if needed */
 #endif	/* RASPBERRYPI */
 	strncpy(tbp + el, ",Z", tbc - el);	/* place termination in regBuf - 2 bytes are free */
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro & 06) iC_microPrint("last registration", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	assert(opp == sTend);
 	regAck(sopp, opp);			/* send/receive last registration */
-	snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
-	if (iC_micro & 06) iC_microPrint("Send application name", 0);
-	iC_send_msg_to_server(iC_sockFN, regBuf);		/* Application Name */
 	/********************************************************************
 	 * Fork iClive
 	 *******************************************************************/
@@ -707,6 +710,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    }
 	    iC_fork_and_exec(iC_string2argv(buffer, 3));	/* fork iClive -zq app.ic */
 	}
+	snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);	/* C_channel assigned in regAck() */
+#if YYDEBUG && !defined(_WINDOWS)
+	if (iC_micro & 06) iC_microPrint("Send application name", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+	iC_send_msg_to_server(iC_sockFN, regBuf);		/* Application Name */
 #ifdef	RASPBERRYPI
       }
 	if (iC_opt_P) {
@@ -936,7 +944,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 #endif	/* LOAD */
     Out_init(iC_fList);
     Out_init(iC_sList);
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
 	if (iC_debug & DQ) {
 	    fprintf(iC_outFP, "== Init scan ===========");
@@ -944,7 +952,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    fprintf(iC_outFP, "\nINITIALISATION\n");
 	}
     }
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
     /* if (iC_debug & 0400) == 0 then no live bits are set in gt_live | 0x8000 */
     /* header for live data */
@@ -960,9 +968,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
      *  Carry out 4 Passes to initialise all Gates
      *******************************************************************/
     for (pass = 0; pass < 4; pass++) {
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if ((iC_debug & (DQ|0100)) == 0100) fprintf(iC_outFP, "\n== Pass %d:", pass + 1);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	for (opp = sTable; opp < sTend; opp++) {
 	    gp = *opp;
 	    typ = gp->gt_ini > 0 ? AND : -gp->gt_ini;
@@ -974,11 +982,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
     }
     iC_osc_max = iC_osc_lim;		/* during Init oscillations were not checked */
 
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
     if (iC_debug & 0100) {
 	fprintf(iC_outFP, "\n== Init complete =======\n");
     }
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
     if (iC_error_flag) {
 	if (iC_error_flag >= 2) {
@@ -1043,9 +1051,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	}
 	if (debugBlock != 0xffff) {	/* prevent setting the live bit */
 	    gp->gt_live = index;	/* index and initial live bit 0 */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	    if (iC_debug & 040) fprintf(iC_outFP, "%d	%s\n", index, gp->gt_ids);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	}
     }
     /********************************************************************
@@ -1338,7 +1346,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
 		vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
 	    }
-	    iC_scan_clk(iC_cList);		/* ignore iC_fList entries can only occurr here */
+	    iC_scan_clk(iC_cList);		/* ignore iC_fList entries can only occur here */
 	    if (iC_vcdFP) {
 		fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
 	    }
@@ -1347,14 +1355,14 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	/********************************************************************
 	 *  1 Set and fire "End Of Initialisation"
 	 *******************************************************************/
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, "\n== end of initialisation\nEOI:\t%s  1 ==>", gp->gt_ids);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	gp->gt_val = -1;		/* set EOI once as first action */
 	iC_link_ol(gp, iC_oList);	/* fire EOI Input Gate */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) fprintf(iC_outFP, " -1\n");
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	iC_liveData(gp, 1);		/* VCD and/or iClive */
     }
 
@@ -1375,11 +1383,11 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
      *  spawned, which will run in parallel with immediate processing.
      *******************************************************************/
     if (iCbegin(iC_argc, iC_argv) != -1) {	/* initialisation function */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 0100) {
 	    fprintf(iC_outFP, "\n== iCbegin complete ====\n");
 	}
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
     if (iC_argh > 0) iC_quit(-3);	/* in case --h does not quit in iCbegin() - no iCserver running */
     outPtr = iC_outBuf;			/* used in folowing initialisation and operational loop only */
@@ -1395,7 +1403,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    assert(gpio25FN > 0);
 	    if (iC_debug & 0200) fprintf(iC_outFP, "== Initialise active PiFace units\n");
 	    gpio_read(gpio25FN);		/* dummy read to clear interrupt on /dev/class/gpio25/value */
+#if YYDEBUG && !defined(_WINDOWS)
 	    if (iC_micro) iC_microPrint("SPI initialise", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    for (pfp = iC_pfL; pfp < &iC_pfL[iC_npf]; pfp++) {
 		if (pfp->Qgate) {
 		    val = 0;				/* initialise with logical 0 */
@@ -1452,9 +1462,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
      *  Operational loop
      *******************************************************************/
     regOffset = 0;				/* regBuf is now clean for debugWait() re-transmits */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
     waitCount = 0;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     for (;;) {
 	/********************************************************************
 	 *  Sequencing of different action lists and New I/O handling
@@ -1514,7 +1524,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    fprintf(iC_vcdFP, "#%ld\n1%hu\n", ++virtualTime, iClock_index);	/* mark active iClock in VCD output */
 		    vcdFlag = NULL;		/* no 2nd empty clock scan vcd output */
 		}
-		iC_scan_clk(iC_cList);		/* new iC_fList entries can only occurr here */
+		iC_scan_clk(iC_cList);		/* new iC_fList entries can only occur here */
 		if (iC_vcdFP) {
 		    fprintf(iC_vcdFP, "#%ld\n0%hu\n", ++virtualTime, iClock_index);	/* end active iClock in VCD output */
 		}
@@ -1549,9 +1559,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    iC_send_msg_to_server(iC_sockFN, msgBuf);
 	    msgOffset = liveOffset;			/* msg = "C_channel:3" */
 	}
+#if YYDEBUG && !defined(_WINDOWS)
 	if (iC_micro) iC_microPrint("Scan complete", 0);
-
-#if	YYDEBUG
 	if (iC_scan_cnt || iC_link_cnt) {
 	    if (iC_debug & 0100) fprintf(iC_outFP, "\n");
 	    if (iC_debug & 02000) {
@@ -1565,7 +1574,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    iC_glit_cnt = iC_glit_nxt =
 	    iC_scan_cnt = iC_link_cnt = 0;
 	}
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	if (iC_osc_gp) {
 	    fprintf(iC_outFP,
 		"*** Warning: %s has oscillated %d times - check iC program!!!\n",
@@ -1573,7 +1582,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    iC_osc_gp = NULL;
 	}
 
-#if	YYDEBUG
+#if YYDEBUG && !defined(_WINDOWS)
 	waitCount++;
 	if (iC_debug & 0300) {		/* osc or detailed info */
 	    if ((iC_debug & 0200) &&
@@ -1599,7 +1608,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    }
 #endif	/* RASPBERRYPI */
 	}
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 
 	/********************************************************************
 	 *  Any input I.. and other data collected during a break in debugWait()
@@ -1625,14 +1634,14 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 	    if (stdinFlag) {
 		gp = tim[1];			/* TX0.1 */
 		assert(gp && gp->gt_val == -1);	/* must be programmed if stdinFlag was set */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		gp->gt_val = 1;			/* set  TX0.1 lo */
 		iC_link_ol(gp, iC_oList);	/* fire TX0.1 lo to terminate notification */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 		if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		iC_liveData(gp, 0);		/* VCD and/or iClive */
 		stdinFlag = 0;			/* ready for next STDIN */
 		break;				/* do a scan - no need to increment cnt by using break */
@@ -1654,7 +1663,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    toCnt = iC_timeOut;		/* transfer timeout value */
 		    if (t5msFlag == 0) goto T50;		/* if no 10 ms timer iC_timeOut is 50ms */
 		    if ((gp = tim[3]) != 0) {			/* 10 millisecond timer */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			if (iC_debug & 01000) {
 			    Gate **	lp;
 			    Gate *	tp;
@@ -1677,17 +1686,17 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    linkT3:
 			if (iC_micro && !cnt) iC_microPrint("Timer TX0.3 received", 0);
 			if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			gp->gt_val = - gp->gt_val;		/* complement input */
 			iC_link_ol(gp, iC_oList);		/* 5 ms on, 5 ms off is 10ms */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 			cnt++;
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 		    skipT3: ;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    }
 		    if (--t50m <= 0) {
 			t50m = 10;
@@ -1734,7 +1743,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			 *  clocks and timers controlled by internal TIMERS.
 			 *******************************************************************/
 			if ((gp = tim[4]) != 0) {		/* 100 millisecond timer */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			    if (iC_debug & 01000) {
 				Gate **	lp;
 				Gate *	tp;
@@ -1757,22 +1766,22 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			linkT4:
 			    if (iC_micro && !cnt) iC_microPrint("Timer TX0.4 received", 0);
 			    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			    gp->gt_val = - gp->gt_val;		/* complement input */
 			    iC_link_ol(gp, iC_oList);		/* 50 ms on, 50 ms off is 100ms */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 			    cnt++;
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			skipT4: ;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			}
 			if (--t500m <= 0) {
 			    t500m = 10;
 			    if ((gp = tim[5]) != 0) {		/* 1 second timer */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 				if (iC_debug & 01000) {
 				    Gate **	lp;
 				    Gate *	tp;
@@ -1795,22 +1804,22 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 			    linkT5:
 				if (iC_micro && !cnt) iC_microPrint("Timer TX0.5 received", 0);
 				if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 				gp->gt_val = - gp->gt_val;	/* complement input */
 				iC_link_ol(gp, iC_oList);	/* 500 ms on, 500 ms off is 1 second */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 				if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 				iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 				cnt++;
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			    skipT5: ;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			    }
 			    if (--t5s <= 0) {
 				t5s = 10;
 				if ((gp = tim[6]) != 0) {	/* 10 second timer */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 				    if (iC_debug & 01000) {
 					Gate **	lp;
 					Gate *	tp;
@@ -1833,22 +1842,22 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				linkT6:
 				    if (iC_micro && !cnt) iC_microPrint("Timer TX0.6 received", 0);
 				    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 				    gp->gt_val = - gp->gt_val;	/* complement input */
 				    iC_link_ol(gp, iC_oList);	/* 5 sec on, 5 sec off is 10 sec */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 				    if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 				    iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 				    cnt++;
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 				skipT6: ;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 				}
 				if (--t30s <= 0) {
 				    t30s = 6;
 				    if ((gp = tim[7]) != 0) {	/* 60 second timer */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 					if (iC_debug & 01000) {
 					    Gate **	lp;
 					    Gate *	tp;
@@ -1871,17 +1880,17 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				    linkT7:
 					if (iC_micro && !cnt) iC_microPrint("Timer TX0.7 received", 0);
 					if (iC_debug & 0100) fprintf(iC_outFP, "\n%s %+d ^=>", gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 					gp->gt_val = - gp->gt_val;	/* complement input */
 					iC_link_ol(gp, iC_oList);	/* 30 sec on, 30 sec off is 60 sec */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 					if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 					iC_liveData(gp, gp->gt_val < 0 ? 1 : 0);	/* VCD and/or iClive */
 					cnt++;
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 				    skipT7: ;
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 				    }
 				}
 			    }
@@ -1899,8 +1908,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {
 #if YYDEBUG && !defined(_WINDOWS)
 			if (iC_debug & 04) { fprintf(iC_outFP, " << %s\n", rpyBuf); fflush(iC_outFP); }
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			if (iC_micro && !cnt) iC_microPrint("Input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
 			if (isdigit(rpyBuf[0])) {
 			    char *	cpe;
@@ -1911,7 +1920,6 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				if ((cpe = strchr(++cp, ',')) != NULL) { /* find next comma in input */
 				    *cpe = '\0';	/* split off leading comma separated token */
 				}
-//    fprintf(iC_outFP, " TT %s TT", cp); fflush(iC_outFP);
 				if (
 				    (cps = strchr(cp, ':')) != NULL &&	/* strip only first ':' separating channel and data */
 				    (channel = (unsigned short)atoi(cp)) > 0 &&
@@ -1942,7 +1950,7 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				    ((gp->gt_new = val) != gp->gt_old) ^ (gp->gt_next != 0)) {
 					/* arithmetic master action */
 					if (gp->gt_fni == TRAB) {
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 #if	INT_MAX == 32767 && defined (LONG16)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t%hu:%ld\t0x%02lx ==>> 0x%02lx",
 						gp->gt_ids, channel, gp->gt_new, gp->gt_old, gp->gt_new);
@@ -1952,26 +1960,26 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 					    else if (iC_debug & 020) fprintf(iC_outFP, "%s\t%2hu:%s\n",
 						gp->gt_ids, channel, convert2binary(gp->gt_new, 1));
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 					    cnt += iC_traMb(gp, 0);	/* distribute bits directly */
 					} else
 					if (gp->gt_ini == -INPW) {
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s[\t", gp->gt_ids);
 #if	INT_MAX == 32767 && defined (LONG16)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==>", channel, gp->gt_new, gp->gt_old);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==>", channel, gp->gt_new, gp->gt_old);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 					    iC_link_ol(gp, iC_aList);	/* no actions */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 #if	INT_MAX == 32767 && defined (LONG16)
 					    if (iC_debug & 0100) fprintf(iC_outFP, " %ld", gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 					    if (iC_debug & 0100) fprintf(iC_outFP, " %d", gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 					    cnt++;
 					} else
 					if (gp == &D_gate) {		/* D_gate */
@@ -1984,9 +1992,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 						break;
 
 					    case 1:			/* GET_SYMBOL_TABLE */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 						if (iC_debug & 0140) fprintf(iC_outFP, "Symbol Table requested by '%s'\n", iC_iccNM);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						/* index entries have been entered to allow ALIAS back-references */
 						regOffset = snprintf(regBuf, REQUEST, "%hu:1", C_channel);
 						assert(regOffset == liveOffset);
@@ -2014,7 +2022,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 								    ids, i, fni, gm->gt_live & debugBlock)
 								) < 0 || len >= rest) {
 								regBuf[regOffset] = '\0';	/* terminate */
+#if YYDEBUG && !defined(_WINDOWS)
 								if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 								iC_send_msg_to_server(iC_sockFN, regBuf);
 								regOffset = liveOffset;
 							    }
@@ -2035,20 +2045,26 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 							snprintf(&regBuf[regOffset], rest, ";%s %d", ids, fni)
 							) < 0 || len >= rest) {
 							regBuf[regOffset] = '\0';	/* terminate */
+#if YYDEBUG && !defined(_WINDOWS)
 							if (iC_micro & 06) iC_microPrint("Send Symbols intermediate", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 							iC_send_msg_to_server(iC_sockFN, regBuf);
 							regOffset = liveOffset;
 						    }
 						    regOffset += len;
 						}
 						if (regOffset > liveOffset) {
+#if YYDEBUG && !defined(_WINDOWS)
 						    if (iC_micro & 06) iC_microPrint("Send Symbols", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						    iC_send_msg_to_server(iC_sockFN, regBuf);
 						}
 						regOffset = 0;				/* clear for debugWait() */
 						/* end of symbol table - execute scan - follow with '0' to leave in iCserver */
 						snprintf(regBuf, REQUEST, "%hu:4,%hu:0", C_channel, C_channel);
+#if YYDEBUG && !defined(_WINDOWS)
 						if (iC_micro & 06) iC_microPrint("Send Scan Command", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						liveFlag = 1;				/* live inhibit bits are set */
 						stepFlag = 0;				/* requires new step next bits */
@@ -2066,7 +2082,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 						}
 						/* poll iClive with 'ch:2;<name>' */
 						snprintf(regBuf, REQUEST, "%hu:2;%s", C_channel, iC_iccNM);
+#if YYDEBUG && !defined(_WINDOWS)
 						if (iC_micro & 06) iC_microPrint("Send application name", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
 
@@ -2097,9 +2115,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 						break;
 
 					    case 7:			/* DEBUGGER STOPPED */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 						if (iC_debug & 0100) fprintf(iC_outFP, "Debugger has stopped for '%s'\n", iC_iccNM);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						snprintf(regBuf, REQUEST, "%hu:0", C_channel);
 						iC_send_msg_to_server(iC_sockFN, regBuf);
 						break;
@@ -2125,10 +2143,10 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 						    assert(index <= sTend - sTable);	/* check index is in range */
 						    gp = sTable[index-1];		/* index in iClive starts at 1 */
 						    gp->gt_live |= stepMask;		/* set step or next active */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 						    if (iC_debug & 040) fprintf(iC_outFP, "T %3hu	%s	%u %u %3hu\n",
 							index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff); fflush(iC_outFP);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						}
 						if (val == 9 || val == 11) {
 						    stepFlag |= stepMask;		/* step or next bits are correct */
@@ -2175,17 +2193,25 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 						    debugFlag = 0;	/* end DEBUG mode */
 						}
 						break;
+#if	YYDEBUG && !defined(_WINDOWS)
 					    case 't':
 						iC_debug |= 01100;	/* block inactive timers - set -t flag */
-						break;
-					    case 'S':			/* cannot use 'T' - already used below */
-						iC_debug &= ~0100;	/* reset -t flag */
 						break;
 					    case 'm':
 						iC_micro = 1;		/* set micro */
 						break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
+					    case 'S':			/* cannot use 'T' - already used below */
+						iC_debug &= ~0100;	/* reset -t flag */
+#if	! YYDEBUG || defined(_WINDOWS)
+						snprintf(regBuf, REQUEST, "%hu:6", C_channel);	/* block 't' and 'm' in Debug menu */
+						iC_send_msg_to_server(iC_sockFN, regBuf);	/* for production code */
+#endif	/* ! YYDEBUG || defined(_WINDOWS) */
+						break;
 					    case 'M':
+#if YYDEBUG && !defined(_WINDOWS)
 						iC_micro = 0;		/* reset micro */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 						break;
 					    case 'T':
 						iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
@@ -2197,14 +2223,14 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				    }
 				    if (gp->gt_ini == -INPW) {
 					if (iC_linked++ == 0) {		/* 1st change linked, further changes not linked again */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s[\t", gp->gt_ids);
 #if	INT_MAX == 32767 && defined (LONG16)
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%ld\t%ld ==> %ld", channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #else	/* INT_MAX == 32767 && defined (LONG16) */
 					    if (iC_debug & 0100) fprintf(iC_outFP, "%hu:%d\t%d ==> %d", channel, gp->gt_new, gp->gt_old, gp->gt_new);
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 					}
 					iC_liveData(gp, gp->gt_new);	/* VCD and/or iClive */
 				    }
@@ -2218,7 +2244,6 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 				    fprintf(iC_errFP, "channel = %hu, topChannel = %hu, gp = %s\n", channel, topChannel, gp ? gp->gt_ids : "null");
 				    goto RcvWarning;
 				}
-//    fprintf(iC_outFP, " EE %s EE", cp); fflush(iC_outFP);
 			    } while ((cp = cpe) != NULL);		/* next token if any */
 			}
 			else {
@@ -2245,8 +2270,8 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    int		m1 = 0;
 		    int		m;
 		    if (iC_debug & 04) fprintf(iC_outFP, "*** SIO interrupt has occurred\n");
-#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    if (iC_micro) iC_microPrint("SPI input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    assert(outPtr == iC_outBuf);	/* was cleared after send loop */
 		    do {
 			/********************************************************************
@@ -2318,7 +2343,9 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 					iC_progname, gpio, b);		/* should not happen */
 				}
 				m++;
+#if YYDEBUG && !defined(_WINDOWS)
 				if (m1++ == 0 && iC_micro) iC_microPrint("GPIO input received", 0);
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			    }
 			}
 		    }
@@ -2354,32 +2381,32 @@ iC_icc(void)				/* Gate ** sTable, Gate ** sTend are global */
 		    }
 		    if ((gp = tim[1]) != NULL) {	/* TX0.1 is used to notify receiving a new line or EOF on STDIN */
 			assert(stdinFlag == 0 && gp->gt_val == 1);	/* TX0.1 lo */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			if (iC_debug & 0100) fprintf(iC_outFP, "*** %s\n%s %+d ^=>",
 			    iC_stdinBuf, gp->gt_ids, gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			gp->gt_val = -1;		/* set  TX0.1 hi */
 			iC_link_ol(gp, iC_oList);	/* fire TX0.1 hi to notify that a new line is available in iC_stdinBuf */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 			if (iC_debug & 0100) fprintf(iC_outFP, " %+d", gp->gt_val);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			iC_liveData(gp, 1);		/* VCD and/or iClive */
 			cnt++;
 			stdinFlag = 1;			/* arm cycle for turning TX0.1 lo */
 		    } else if ((c = iC_stdinBuf[0]) == 'q' || c == '\0') {
 			iC_quit(QUIT_TERMINAL);		/* quit normally with 'q' or ctrl+D */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 		    } else if (c == 't') {
 			iC_debug |= 01000;		/* block inactive timers */
 			iC_debug ^= 0100;		/* toggle -t flag */
 		    } else if (c == 'm') {
 			iC_micro++;			/* toggle more micro */
 			if (iC_micro >= 3) iC_micro = 0;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 		    } else if (c == 'T') {
 			iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
 		    } else if (c != '\n') {
-			fprintf(iC_errFP, "no action coded for '%c' - try t, m, T, or q followed by ENTER\n", c);
-#endif	/* YYDEBUG */
+			fprintf(iC_errFP, "no action coded for '%c'\n", c);
 		    }					/* ignore the rest of STDIN */
 		}   /*  end of STDIN interrupt */
 	    } else {				/* retval -1 */
@@ -2591,7 +2618,7 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 	if ((gp = Channels[channel].g) != NULL) {	/* I Internal */
 	    assert(gp->gt_fni == TRAB);
 	    gp->gt_new = val;
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 #if	INT_MAX == 32767 && defined (LONG16)
 	    if (iC_debug & 0100) fprintf(iC_outFP, "\n%s<\t%hu:%ld%s\t0x%02lx ==>> 0x%02lx",
 		gp->gt_ids, channel, gp->gt_new, pgBuf, gp->gt_old, gp->gt_new);
@@ -2601,7 +2628,7 @@ fireInput(piFaceIO * pfp, gpioIO * gep, int val)
 #endif	/* INT_MAX == 32767 && defined (LONG16) */
 	    else if (iC_debug & 020) fprintf(iC_outFP, "\n%s\t%2hu:%s%s",
 		gp->gt_ids, channel, convert2binary(gp->gt_new, 1), pgBuf);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 	    cnt = iC_traMb(gp, 0);		/* distribute bits directly */
 	}
 	if (gp == NULL || iC_opt_E) {		/* SI ExtOut or Internal && opt_E */
@@ -2802,8 +2829,8 @@ regAck(Gate ** oStart, Gate ** oEnd)
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
     iC_send_msg_to_server(iC_sockFN, regBuf);	/* register controller and IOs */
     if (iC_rcvd_msg_from_server(iC_sockFN, rpyBuf, REPLY) != 0) {	/* busy wait for acknowledgment reply */
-	if (iC_micro & 06) iC_microPrint("reply from server", 0);
 #if YYDEBUG && !defined(_WINDOWS)
+	if (iC_micro & 06) iC_microPrint("reply from server", 0);
 	if (iC_debug & 0224) fprintf(iC_outFP, "reply:%s\n", rpyBuf);
 #endif	/* YYDEBUG && !defined(_WINDOWS) */
 	cp = rpyBuf - 1;	/* increment to first character in rpyBuf in first use of cp */
@@ -3100,7 +3127,7 @@ debugWait(void)
 			}
 			channel = (unsigned short)atoi(cp);
 			if (channel == D_channel) {
-			    if ((cps = strchr(cp, ':')) == NULL) goto RcvWarning;
+			    if ((cps = strchr(cp, ':')) == NULL) goto DbgWarning;
 			    val = atoi(++cps);
 			    switch (val) {
 			    case 0:			/* IGNORE */
@@ -3153,23 +3180,25 @@ debugWait(void)
 				    debugFlag = 0;	/* end DEBUG mode */
 				}
 				break;
+#if	YYDEBUG && !defined(_WINDOWS)
 			    case 't':
 				iC_debug |= 01100;	/* block inactive timers - set -t flag */
-				break;
-			    case 'S':			/* cannot use 'T' - already used below */
-				iC_debug &= ~0100;	/* reset -t flag */
 				break;
 			    case 'm':
 				iC_micro = 1;		/* set micro */
 				break;
+			    case 'S':			/* cannot use 'T' - already used below */
+				iC_debug &= ~0100;	/* reset -t flag */
+				break;
 			    case 'M':
 				iC_micro = 0;		/* reset micro */
 				break;
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
 			    case 'T':
 				iC_send_msg_to_server(iC_sockFN, "T");	/* print iCserver tables */
 				break;
 			    default:
-				goto RcvWarning;	/* unknown D_channel:? case */
+				goto DbgWarning;	/* unknown D_channel:? case */
 			    }
 			} else {
 			    /********************************************************************
@@ -3189,13 +3218,11 @@ debugWait(void)
 			    } else {
 				regOffset += snprintf(&regBuf[regOffset], REQUEST - regOffset, ",%s", cp);
 			    }
-//    fprintf(iC_outFP, " $$ %s $$", cp); fflush(iC_outFP);
 			}
 		    } while ((cp = cpe) != NULL);		/* next token if any */
-//    fprintf(iC_outFP, " @"); fflush(iC_outFP);
 		}
 		else {
-		  RcvWarning:
+		  DbgWarning:
 		    fprintf(iC_errFP, "WARNING: %s: received '%s' in debugWait from iCserver ???\n", iC_iccNM, debugBuf);
 		}
 	    } else {
@@ -3235,7 +3262,6 @@ iC_liveData(Gate * gp, int value)
     unsigned short	brk;
     char		tempBuf[TSIZ];
 
-//    fprintf(iC_outFP, " ## %s %d (%d) ##", gp->gt_ids, value, iC_linked); fflush(iC_outFP);
     if (iC_linked) {
 	index = gp->gt_live & 0x1fff;
 	if (iC_vcdFP && (code = vcd_ftype[gp->gt_fni]) != NULL) {
@@ -3425,7 +3451,7 @@ receiveActiveSymbols(char * cp1)
     /********************************************************************
      *  Send live data collected in msgBuf during RECEIVE_ACTIVE_SYMBOLS
      *  because scan() is only executed when another input occurs.
-     *  a scan may occurr between received blocks which
+     *  a scan may occur between received blocks which
      *  also sends a live C_channel:3 block
      *******************************************************************/
     if (msgOffset > liveOffset) {
@@ -3458,11 +3484,11 @@ receiveWatchOrRestore(char * cp1)
 	gp = sTable[index-1];			/* index in iClive starts at 1 */
 	gp->gt_live &= ~0x6000;			/* clear step/next or watch/ignore bits */
 	gp->gt_live |= value << 13;		/* set watch/ignore or restore step/next */
-#if	YYDEBUG
+#if	YYDEBUG && !defined(_WINDOWS)
 	if (iC_debug & 040) fprintf(iC_outFP, "W %3d	%s	%u %u %3hu\n",
 	    index, gp->gt_ids, gp->gt_live >> 15, (gp->gt_live >> 13) & 0x3, gp->gt_live & 0x1fff);
 	fflush(iC_outFP);
-#endif	/* YYDEBUG */
+#endif	/* YYDEBUG && !defined(_WINDOWS) */
     }
 } /* receiveWatchOrRestore */
 

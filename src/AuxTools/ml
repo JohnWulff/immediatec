@@ -63,15 +63,15 @@ if no argument list is given, all iC and iCa files in current direcrory are used
 	-s	output only base with .ic or .ica or .ih or .iha extension
 		output .ic only if not generated from .ica (all primary sources)
 	-S	output only base with .ica or .iha extension (iCa sources)
-	-m	output only base with .ic or .ica unless they occurr in file px.lt
+	-m	output only base with .ic or .ica unless they occur in file px.lt
 		in which case insert execution lines from px.lt instead
-	-M	output only base with .ica unless they occurr in file px.lt
+	-M	output only base with .ica unless they occur in file px.lt
 		in which case insert execution lines from px.lt instead
 		or if .ic or .ica contains %directives or if px.lt line contains -D or -P
 debugging and help
 	-T	trace output
 	-h	this help text
-	$Id: ml 1.20 $
+	$Id: ml 1.21 $
 .
 
 use vars qw($opt_g $opt_n $opt_r $opt_d $opt_D $opt_G $opt_e $opt_c $opt_i $opt_l $opt_L);
@@ -367,9 +367,9 @@ elsif ($opt_g or $opt_n or $opt_r) {
 #   -s	output only base with .ic or .ica or .ih or .iha extension
 #	output .ic only if not derived from .ica (all primary sources)
 #   -S	output only base with .ica or .iha extension (iCa sources)
-#   -m	output only base with .ic or .ica unless they occurr in file px.lt
+#   -m	output only base with .ic or .ica unless they occur in file px.lt
 #	in which case insert execution lines from px.lt instead
-#   -M	output only base with .ica unless they occurr in file px.lt
+#   -M	output only base with .ica unless they occur in file px.lt
 #	in which case insert execution lines from px.lt instead
 #	or if .ic or .ica contains %directives or if px.lt line contains -D or -P
 #   " "	output all .ic and .ica files and those derived from them

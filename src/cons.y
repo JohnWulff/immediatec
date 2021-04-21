@@ -1,5 +1,5 @@
 %{ static const char cons_y[] =
-"@(#)$Id: cons.y 1.6 $";
+"@(#)$Id: cons.y 1.7 $";
 /********************************************************************
  *
  *	Copyright (C) 2016  John E. Wulff
@@ -149,7 +149,7 @@ constExpr
 	    }
 	/********************************************************************
 	 * Additional operators, which are not normally considered for
-	 * constant expressions, but which may occurr in a function block
+	 * constant expressions, but which may occur in a function block
 	 * and might as well be evaluated rather than causing an error.
 	 * (uses exact C precedence to be compatible with other C expressions)
 	 *******************************************************************/

@@ -1,7 +1,7 @@
 
-			immediate C, iC rev icc_3.4
+			immediate C, iC rev icc_3.6
 
-	Copyright © 1985-2020 John E Wulff <immediatec@gmail.com>
+	Copyright © 1985-2021 John E Wulff <immediatec@gmail.com>
 	SPDX-License-Identifier: GPL-2.0+ OR  Artistic-1.0
 
     Acknowledgments to Larry Wall, whose README I used as a template.
@@ -18,7 +18,7 @@
 
 --------------------------------------------------------------------------
 
-    Notes for the installation of iC rev icc_3.4
+    Notes for the installation of iC rev icc_3.6
 
     0)	Pre-requisites. You need the following on your system:
 
@@ -35,7 +35,7 @@
     2)	Execute the following:
 
 	    configure	OR  ./configure      # it helps to put . in your PATH
-	    m -I			     # do once as SU
+	    sudo m -I			     # do once as SU
 		this executes chmod +s /usr/bin/install /usr/bin/ranlib
 		to allow running make install as an ordinary user
 
@@ -54,13 +54,13 @@
 
     4)	To install immcc, libraries and scripts do (unless m -clSi above)
 
-	    make install		     ### SU Password required  ###
+	    sudo make install		     ### SU Password required  ###
 
 	this copies the executables to /usr/local/bin, the include file
 	icg.h to /usr/local/include, libict.a, libict.so to /usr/local/lib or
 	/usr/local/lib64 and iCmsg.pm to /usr/lib/perl5/site...
 
-	    make uninstall		     # remove all these files
+	    sudo make uninstall		     # remove all these files
 
     5)	To use the Perl support programs, it is mandatory that you install the
 	Perl packages Tk804.029 or later and Time::HiRes unless they are alreadys
@@ -89,15 +89,14 @@
 	The application also explores the use of programmable time delays, giving
 	some idea of the scope of the iC language.
 
-	Running 'iClive bar.ic' as a separate process, while 'bar' is running,
-	will display the source listing (in the edit window), connects to iCServer
-	as an auxiliary client to receive updates of all variables from the running
-	iC program (bar). These updates will change the colours of all words,
-	which are immediate variables.  (green/black = 0, yellow/red = 1)
-	This 'live display' shows the current state of logical relationships in
-	visible statements of the iC program. Arithmetic variables are displayed
-	in a balloon, when the cursor rests on a variable.
-	(Arithmetic variables have a blue background).
+	Running 'iClive bar.ic' as a separate process, while 'bar' is running will
+	display the source file in the edit window, connects to iCserver as an
+	auxiliary client to receive updates of all variables from the running iC
+	program (bar). In 'Live' mode these updates will change the colours of all
+	words which are immediate variables.  This 'Live display' shows the current
+	state of logical relationships in visible statements of the iC program as
+	green/black = 0, yellow/red = 1. Arithmetic variables are blue and their
+	value can be displayed in a balloon, when the cursor rests on the variable.
 
 	In 'Live' mode, when a 'live display' is shown, the text is read only.
 	When the 'Edit' button is pressed 'iClive' is a full featured editor.
@@ -136,7 +135,7 @@
 		    type q		# to stop hello, iCserver and iCbox
 
     12)	Bernstein chaining.  If several different iC applications, or different
-	instances of the same application are to be started togetheri, their
+	instances of the same application are to be started together, their
 	initialisation sequences must be run sequentially, but after that they must
 	all run in parallel as separate processes (and in parallel with iCserver,
 	iCbox and iClive).  This is difficult to achieve with shell commands.
@@ -300,9 +299,9 @@
 
     Lots of success with iC
 
-    $Id: README 1.33 $
+    $Id: README 1.34 $
 
-    Main development is on openSUSE (currently Leap 15.1) and perlTk
+    Main development is on openSUSE (currently Leap 15.2) and perlTk
     Tk804.034, which provides fast live updates in iClive. They seem
     to be as fast as with Tk800.24. A Test with Knoppix and Tk804.25,
     which is still available for Debian also provided good performance

@@ -1,5 +1,5 @@
 static const char init_c[] =
-"@(#)$Id: init.c 1.48 $";
+"@(#)$Id: init.c 1.49 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2009  John E. Wulff
@@ -1025,7 +1025,7 @@ iC_init(void)
      *  Install pre-defined Symbols in S.T.
      *******************************************************************/
     for (io = 0; b[io].name; io++) {
-	/* no name may occurr twice - otherwise install fails */
+	/* no name may occur twice - otherwise install fails */
 	sp = install(b[io].name, b[io].type, b[io].ftype);
 #ifndef BOOT_COMPILE
 	if ((lp = b[io].link1) == 0) {		/* reserved word */

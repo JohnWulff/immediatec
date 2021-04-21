@@ -48,7 +48,7 @@
  *                 IX40=QX0 IX41=QX1 IX42=QX2 IX43=QX3
  *  or with iCserver -f kbLift.is         // script with full setup
  *
- *  $Id: kbLift.ic 1.14 $
+ *  $Id: kbLift.ic 1.15 $
  *
  *******************************************************************/
 
@@ -353,9 +353,9 @@ imm bit approachDn2	= targetDn2 & ~StargetUp2 | StargetDn2;
  *      or door not shut or reached lower or upper limit (safety measure)
  *******************************************************************/
 
-imm bit cageUp		= targetPosition >  cagePosition;	// cagePosition   =
-imm bit cageDn		= targetPosition <  cagePosition;	// targetPosition =
-imm bit atTarget	= targetPosition == cagePosition;
+imm bit cageUp		=  cagePosition < targetPosition;	// cagePosition   =
+imm bit cageDn		=  cagePosition > targetPosition;	// targetPosition =
+imm bit atTarget	= ~cageUp & ~cageDn;
 
 imm bit openDoor;
 imm bit cageSTOP	= ~DOOR_SHUT        |		// hard stop when door not shut

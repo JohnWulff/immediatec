@@ -1,5 +1,5 @@
 static const char rsff_c[] =
-"@(#)$Id: rsff.c 1.67 $";
+"@(#)$Id: rsff.c 1.68 $";
 /********************************************************************
  *
  *	Copyright (C) 1985-2017  John E. Wulff
@@ -482,7 +482,7 @@ iC_rSsh(					/* R_SH slave action on SH */
  *
  *	Each action Gate ors a bit reserved for its action in gt_mcnt
  *	of the function Gate on which it acts. If ONCE_M is set, that
- *	action may only occurr once.
+ *	action may only occur once.
  *
  *	In Pass 3 every function Gate will contain a bit for every
  *	action which acts on that function.
@@ -497,7 +497,7 @@ iC_i_ff2(Gate * gm, int typ)			/* called via output lists */
 
     if ((gs = gm->gt_funct) != 0) {
 	mask = iC_bit2[gm->gt_fni];
-	/* with this test D actions must occurr before S and R actions */
+	/* with this test D actions must occur before S and R actions */
 	if ((mask & ONCE_M) && gs->gt_mcnt == (mask &= ~ONCE_M)) {
 	    fprintf(iC_outFP,
 	"\nError:    %c\t%s\thas %c input action more than once (%.4x:%.4x)",
